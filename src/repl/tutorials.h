@@ -37,12 +37,26 @@
 
 #include <limits.h>
 
-/* Maximum tutorial step count and tracked-line cap. Lives here
- * (rather than in subsystems/tutorial/tutorial_state.h) so the catalog
- * validator can use it without taking a dependency on widget
- * runtime state — the catalog defines the upper bound and the
- * widget-side state arrays consume it. */
-#define TUTORIAL_LOCKED_LINE_MAX 64
+#include "c_compat.h"           /* STATIC_ASSERT */
+#include "repl/catalog_tags.h"  /* repl_catalog_tag_bit_for_count */
+
+/* TUTORIAL_MAX_STEPS bounds the step count per tutorial: the catalog
+ * validator rejects entries above this, and the per-step state arrays
+ * (e.g. `instruction_line_for_step[]`) size off it.
+ *
+ * TUTORIAL_LOCKED_LINE_MAX bounds how many source lines the runtime
+ * can hold "locked" against edits at once.
+ *
+ * The two used to be one constant. They're equal today and sized 64
+ * because a tutorial with N steps can produce up to N locked lines in
+ * the worst case, but the meanings are independent — a future audit
+ * that lowers the step ceiling shouldn't silently shrink the lock
+ * table. The static-assert below pins the today-relationship without
+ * fusing the constants. */
+#define TUTORIAL_MAX_STEPS         64
+#define TUTORIAL_LOCKED_LINE_MAX   64
+STATIC_ASSERT(TUTORIAL_LOCKED_LINE_MAX >= TUTORIAL_MAX_STEPS,
+              "Locked-line capacity must hold every possible per-step lock");
 
 typedef enum {
     TUTORIAL_STEP_APPEND = 0,
@@ -152,10 +166,7 @@ int                       repl_tutorial_visible_tag_count(void);
 int                       repl_tutorial_visible_tag_at(int dense_idx);
 
 static inline unsigned int repl_tutorial_tag_bit(int tag_idx) {
-    if (tag_idx < 0 || tag_idx >= repl_tutorial_tag_count() ||
-        tag_idx >= (int)(sizeof(unsigned int) * CHAR_BIT))
-        return 0u;
-    return 1u << (unsigned int)tag_idx;
+    return repl_catalog_tag_bit_for_count(tag_idx, repl_tutorial_tag_count());
 }
 
 /* Subheading API. Returns the tutorial's free-form section label or NULL
@@ -183,7 +194,7 @@ const char               *repl_tutorial_subheading(int tutorial_idx);
  *   - TUTORIAL_STEP_LABEL has a non-null non-empty target_label that
  *     names an earlier non-empty label in the same tutorial (forward
  *     references rejected).
- *   - Step count stays within TUTORIAL_LOCKED_LINE_MAX. */
+ *   - Step count stays within TUTORIAL_MAX_STEPS. */
 int repl_tutorial_validate(int idx, char *err, int err_size);
 
 /* Validate an out-of-catalog TutorialEntry. Same rules as above; the

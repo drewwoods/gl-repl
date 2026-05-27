@@ -28,7 +28,7 @@ int glr_ctrl_apply_tag_defaults(unsigned int tag_mask,
 /* Full-world reset: REPL state + editor + UI + peer subsystems +
  * autocomplete provider registration + UI chrome mirror. Production
  * startup and tests that exercise cross-module behavior call this
- * instead of the REPL-only repl_state_init_defaults / repl_state_reset_program. */
+ * instead of the REPL-only repl_state_reset_program. */
 void glr_ctrl_reset_all(void);
 
 /* Drop camera / menu / picker / code-panel-drag transient state in

@@ -68,9 +68,8 @@ typedef struct {
      * the command it describes. -1 until the step's instruction
      * has been emitted. Shifted alongside locked_lines and
      * fade_line_idx by tutorial_shift_tracked_lines_from. Sized to
-     * TUTORIAL_LOCKED_LINE_MAX to match the existing tracked-line
-     * cap. */
-    int                   instruction_line_for_step[TUTORIAL_LOCKED_LINE_MAX];
+     * TUTORIAL_MAX_STEPS (one slot per catalog step). */
+    int                   instruction_line_for_step[TUTORIAL_MAX_STEPS];
     int                   in_enter_step;
     ReplConfigBag         baseline_bag;
     int                   baseline_valid;

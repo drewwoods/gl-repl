@@ -28,9 +28,10 @@
 
 ## Status summary (updated 2026-05-27)
 
-82 findings total. 55 closed (✅), 27 still open. All open findings verified against
-current HEAD. Tier letters now cover the whole open backlog — no unclassified rows
-remain.
+82 findings total. 65 closed (✅), 17 still open. All open findings verified against
+current HEAD. Tier letters cover the whole open backlog — no unclassified rows
+remain. Tier A is empty: the 2026-05-27 Tier A close pass landed all ten
+(#26, #27, #43, #70, #72, #76, #77, #78, #79, #81).
 
 | # | Sev | Tier | Status | Finding (short) |
 |---|-----|------|--------|-----------------|
@@ -59,8 +60,8 @@ remain.
 | 23 | 🟡 | B | Open | Executor writes status messages to live REPL state |
 | 24 | 🔵 | B | Open | CMD_IF_BEGIN evaluator duplicated (flatten vs executor) |
 | 25 | 🟡 | B | ✅ Done | `WRITE_TEXT` macro — third "write text" pattern |
-| 26 | 🟡 | A | Open | `REPL_FUNC_SLOT_LIST` hard-codes 10 entries |
-| 27 | 🟡 | A | Open | Stray `func0(var0)` autocomplete row |
+| 26 | 🟡 | A | ✅ Done | `REPL_FUNC_SLOT_LIST` hard-codes 10 entries |
+| 27 | 🟡 | A | ✅ Done | Stray `func0(var0)` autocomplete row |
 | 28 | 🔵 | B | Open | `replay_apply_state_cmd` parallel to executor dispatch |
 | 29 | 🟡 | B | ✅ Done | `g_pre_example.valid` still a parallel scalar |
 | 30 | 🟡 | B | Open | `g_pending_workspace_dir` write-then-caller-reads |
@@ -76,7 +77,7 @@ remain.
 | 40 | 🔵 | — | ✅ Done | Predef-var capture/restore duplicated 5× |
 | 41 | 🟡 | C | Open | Tutorial GRID_THEME literals decoupled |
 | 42 | 🔵 | B | Open | CatalogTagOps glue remains after closed #12 |
-| 43 | 🔵 | A | Open | `tag_bit` byte-identical inlines |
+| 43 | 🔵 | A | ✅ Done | `tag_bit` byte-identical inlines |
 | 44 | 🟡 | B | ✅ Done | `cmd_emit` silently drops rows past cap |
 | 45 | 🟡 | B | ✅ Done | `help_group_header` switch drops new groups |
 | 46 | 🟡 | A | ✅ Done | `g_tabs[3]` / `tab_count=3` hand-agreement |
@@ -103,22 +104,22 @@ remain.
 | 67 | 🟢 | A | ✅ Done | Stale phase-N.M comment crumbs |
 | 68 | 🔵 | C | Open | `repl_execute_program` 324-line god switch |
 | 69 | 🔵 | C | ✅ Done | `export.c` split into export.c + import.c |
-| 70 | 🟡 | A | Open | `eval.h` `MAX_EXPR_VARS` doc references deleted modules |
+| 70 | 🟡 | A | ✅ Done | `eval.h` `MAX_EXPR_VARS` doc references deleted modules |
 | 71 | 🟡 | C | Open | `g_predef_vars` macros route reads through `_mut()` |
-| 72 | 🟢 | A | Open | `repl_state_init_defaults` one-line forwarder |
+| 72 | 🟢 | A | ✅ Done | `repl_state_init_defaults` one-line forwarder |
 | 73 | 🟡 | B | Open | `repl_state_get_defaults()` hidden mutation |
 | 74 | 🟢 | A | ✅ Done | `first_non_decl` leaks `CMD_VAR_DECLARE` policy |
 | 75 | 🟡 | D | Open | `repl_dispatch_*` 4 of 12 tutorial-only trampolines |
-| 76 | 🟡 | A | Open | `WORKSPACE_DIR_MAX` alias + `+256` magic |
-| 77 | 🟢 | A | Open | "Observably overwritten" no-op comment |
-| 78 | 🟡 | A | Open | `scroll_to_display_function` string-matches `"void display()"` |
-| 79 | 🟢 | A | Open | Dead `case 5:`/`case 6:` in `format_evaluated_cmd` |
+| 76 | 🟡 | A | ✅ Done | `WORKSPACE_DIR_MAX` alias + `+256` magic |
+| 77 | 🟢 | A | ✅ Done | "Observably overwritten" no-op comment |
+| 78 | 🟡 | A | ✅ Done | `scroll_to_display_function` string-matches `"void display()"` |
+| 79 | 🟢 | A | ✅ Done | Dead `case 5:`/`case 6:` in `format_evaluated_cmd` |
 | 80 | 🟡 | D | Open | `s_replay_text_view` file-level set-then-read state |
-| 81 | 🟡 | A | Open | `TUTORIAL_LOCKED_LINE_MAX` doubles as cap and validator ceiling |
+| 81 | 🟡 | A | ✅ Done | `TUTORIAL_LOCKED_LINE_MAX` doubles as cap and validator ceiling |
 | 82 | 🔵 | B | Open | `tutorial_step_at()` O(N) sentinel walk |
 
-**By severity (open only):** 0 🔴, 14 🟡, 3 🟢, 10 🔵 = 27 open.
-**By tier (open only):** A: 10, B: 9, C: 6, D: 2, unclassified: 0.
+**By severity (open only):** 0 🔴, 8 🟡, 0 🟢, 9 🔵 = 17 open.
+**By tier (open only):** A: 0, B: 9, C: 6, D: 2, unclassified: 0.
 
 ## How to read this
 
@@ -1068,6 +1069,11 @@ to 12, the funcN autocomplete table silently misses 2 slots.
 **Fix:** `STATIC_ASSERT(REPL_FUNC_SLOT_COUNT == 10, ...)` next to
 the macro, or codegen via a different idiom.
 
+**Status (2026-05-27):** ✅ Closed. Added a `STATIC_ASSERT` against
+`REPL_FUNC_SLOT_COUNT == 10` directly above `REPL_FUNC_SLOT_LIST`
+in `src/repl/command_spec.c` so any future bump of the constant
+fails the build instead of silently dropping autocomplete rows.
+
 ### 27. Stray `"func0(var0) {"` autocomplete row between the two macro-generated runs
 
 **Where:** `src/repl/command_spec.c:268-270`
@@ -1079,6 +1085,11 @@ extraction.
 
 **Fix:** Either remove (boilerplate is enough) or replicate the
 parameterized hint for func1..9 via macro.
+
+**Status (2026-05-27):** ✅ Closed via removal. The hand-written
+`func0(var0)` row is gone from `src/repl/command_spec.c`; the 10+10
+macro-generated rows now stand alone so every slot has identical
+autocomplete shape.
 
 ### 28. `replay_apply_state_cmd`'s CmdType list is parallel to `repl_execute_program`'s dispatch arms
 
@@ -1429,6 +1440,14 @@ callers use the ops pointer.
 **Fix:** Move the bit math into `catalog_tags.h`'s ops struct (have
 `tag_bit(int)` supplied automatically given `tag_count()`), or
 expose a single helper that both call.
+
+**Status (2026-05-27):** ✅ Closed via the single-helper path. Added
+`repl_catalog_tag_bit_for_count(int tag_idx, int tag_count)` (an
+inline) in `src/repl/catalog_tags.h`. `repl_example_tag_bit` and
+`repl_tutorial_tag_bit` both collapsed to one-line wrappers that
+call through. Each header now `#include`s `repl/catalog_tags.h` so
+the inline expands at every consumer.
+
 
 ### 44. `cmd_emit` silently drops rows past `HELP_CMD_LINES_MAX`
 
@@ -1861,6 +1880,12 @@ glr_ctrl.c` (replay is now `src/subsystems/replay/replay.c`), and
 **Fix:** Swap the two macro labels, update three paths, drop the
 `FlatScope` reference.
 
+**Status (2026-05-27):** ✅ Closed. The first heading in `src/repl/eval.h`
+now reads `MAX_PREDEF_VARS — global user-declared variables` (the body
+description it owns). The three module paths and the FlatScope reference
+were already corrected in the Tier A follow-up; this label flip closes
+the residual mismatch flagged by the audit.
+
 ### 71. `g_predef_vars` macros always route reads through `_mut()`
 
 **Where:** `src/repl/eval.h:172-173`
@@ -1881,6 +1906,11 @@ outside writer helpers becomes possible.
 the other. The names imply different semantics that don't exist.
 
 **Fix:** Delete one; collapse the 4-5 callers.
+
+**Status (2026-05-27):** ✅ Closed via delete. `repl_state_init_defaults`
+is gone from `src/repl/state.{c,h}`; the four `tools/repl_demo/repl_demo.c`
+callers now invoke `repl_state_reset_program` directly. The doc comments
+in `src/app/glr_ctrl.h` and `src/repl/core.c` were trimmed to match.
 
 ### 73. `repl_state_get_defaults()` has a hidden mutation side effect
 
@@ -1929,6 +1959,13 @@ never references the actual limit.
 **Fix:** Delete the alias. Replace `+ 256` with `+ NAME_MAX + 1`
 (after `#include <limits.h>`) or a named constant.
 
+**Status (2026-05-27):** ✅ Closed. Deleted the `WORKSPACE_DIR_MAX`
+alias from `src/repl/scenes.c`; every call site now references
+`REPL_WORKSPACE_DIR_MAX` directly. The `+ 256` filename slack at the
+workspace-load path was replaced with `+ NAME_MAX + 1` after adding
+`#include <limits.h>`. Byte-equivalent on POSIX (`NAME_MAX = 255`)
+but now self-documenting.
+
 ### 77. `scenes.c` "Observably overwritten…" comment marks a no-op call kept "for future-proofing"
 
 **Where:** `src/repl/scenes.c:308-312`
@@ -1939,6 +1976,15 @@ parse the comment to know whether they can delete the line.
 
 **Fix:** Either delete the call (add a comment about when it'd be
 needed) or commit to the sparse-cfg change as a real plan.
+
+**Status (2026-05-27):** ✅ Closed via delete. The
+`restore_pre_example_cfg_if_valid()` call in
+`src/repl/scenes.c::load_scene_from_slot` is gone — the bridge's
+`apply(scene_cfg(idx))` immediately below it already overwrites every
+slug. The replacement comment names the precise future condition
+(scene_cfg going sparse / inherited-aware) that would require putting
+the restore back, so a later author knows where to re-insert it
+without re-deriving the history.
 
 ### 78. `core.c::scroll_to_display_function` brittlely string-matches `"void display() {"`
 
@@ -1952,6 +1998,13 @@ breaks.
 in `export.h` referenced from both sides, or add a "display function
 start index" accessor.
 
+**Status (2026-05-27):** ✅ Closed. Added
+`REPL_EXPORT_DISPLAY_OPEN_LINE "void display() {"` to
+`src/repl/export.h`; `g_display_header[0]` (export.c) and the
+`strcmp` needle in `scroll_to_display_function`
+(`src/repl/core.c`) both reference the macro, so a future rename
+of the line text changes one place and both sites stay in sync.
+
 ### 79. `format_evaluated_cmd`: dead `case 5:` / `case 6:` mask a future single-arg drop
 
 **Where:** `src/repl/replay_annotations.c:1061-1070`
@@ -1964,6 +2017,14 @@ single-arg drop.
 
 **Fix:** Replace the whole switch with a loop or single `vsnprintf`
 over `cmd->args[0..nargs-1]`. `assert(nargs >= 1 && nargs <= 4)`.
+
+**Status (2026-05-27):** ✅ Closed via case removal. The dead
+`case 5:` / `case 6:` arms in `src/repl/replay_annotations.c::
+format_evaluated_cmd` are gone; the `default:` returns 0, and a
+comment on the switch records `eval_fmt_for_type` only ever
+returns `nargs ∈ {0..4}`. The vsnprintf-loop alternative was
+not taken — the explicit 1-4 case shape is still the clearest
+read.
 
 ### 80. `s_replay_text_view` is hidden file-level state with set-then-read semantics
 
@@ -1988,6 +2049,18 @@ agreement is structural rather than enforced.
 
 **Fix:** Split into `TUTORIAL_MAX_STEPS` and `TUTORIAL_LOCKED_LINE_MAX`;
 pin the relationship via STATIC_ASSERT if it must hold.
+
+**Status (2026-05-27):** ✅ Closed. `src/repl/tutorials.h` now defines
+both `TUTORIAL_MAX_STEPS` (the catalog validator ceiling and per-step
+state-array bound) and `TUTORIAL_LOCKED_LINE_MAX` (the runtime locked-
+line cap), with a `STATIC_ASSERT(TUTORIAL_LOCKED_LINE_MAX >=
+TUTORIAL_MAX_STEPS, ...)` pinning the today-relationship. Call sites
+were sorted by meaning: the catalog-validator branch and the
+`instruction_line_for_step[]` array reference `TUTORIAL_MAX_STEPS`;
+the `locked_lines[]` array and runtime cap checks keep
+`TUTORIAL_LOCKED_LINE_MAX`. The constants are equal today, so the
+split is behaviour-preserving but lets future audits move one
+without silently breaking the other.
 
 ### 82. `tutorial_step_at()` does O(N) sentinel walk per accessor call
 
@@ -2063,15 +2136,9 @@ Following the Tier A/B/C/D system the prior audit landed. The
 2026-05-27 classification pass tiered every previously-unclassified
 finding so the backlog can be scheduled without re-reading each body.
 
-- **Tier A (small, near-zero risk):** #26 (`REPL_FUNC_SLOT_LIST`
-  STATIC_ASSERT), #27 (stray `func0(var0)` row), #43 (`tag_bit`
-  inlines extraction), #70 (`eval.h` doc swap + module paths),
-  #72 (`repl_state_init_defaults` forwarder delete), #76
-  (`WORKSPACE_DIR_MAX` alias + `+256` → `NAME_MAX`), #77
-  ("Observably overwritten" comment cleanup), #78
-  (`scroll_to_display_function` header constant), #79 (dead
-  `case 5:`/`case 6:` in `format_evaluated_cmd`), #81
-  (`TUTORIAL_LOCKED_LINE_MAX` split into two constants).
+- **Tier A (small, near-zero risk):** none currently open — the
+  2026-05-27 close pass landed #26, #27, #43, #70, #72, #76, #77,
+  #78, #79, and #81.
 - **Tier B (moderate, focused pass):** #22 (executor includes
   `subsystems/replay/*` — add `finalize_tess` to options), #23
   (executor status messages — route through `ReplExecutionResult`),

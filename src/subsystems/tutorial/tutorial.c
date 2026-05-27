@@ -233,7 +233,7 @@ static void tutorial_shift_tracked_lines_from(int pos, int delta) {
         !skip_expected_commit_shift) {
         state->expected_commit_line += delta;
     }
-    for (int i = 0; i < TUTORIAL_LOCKED_LINE_MAX; i++) {
+    for (int i = 0; i < TUTORIAL_MAX_STEPS; i++) {
         if (state->instruction_line_for_step[i] >= 0 &&
             state->instruction_line_for_step[i] >= pos)
             state->instruction_line_for_step[i] += delta;
@@ -300,7 +300,7 @@ static int tutorial_emit_instruction_comment(const char *comment,
      * later label-targeted step can splice ABOVE this comment
      * (rather than between the comment and the user's commit row),
      * keeping the original (instruction, command) pair adjacent. */
-    if (state->step >= 0 && state->step < TUTORIAL_LOCKED_LINE_MAX)
+    if (state->step >= 0 && state->step < TUTORIAL_MAX_STEPS)
         state->instruction_line_for_step[state->step] = instruction_line;
 
     /* Cursor + expected_commit_line are set by the COMMAND branch in
@@ -390,7 +390,7 @@ static int tutorial_step_instruction_line(int tutorial_idx, int step,
     }
 
     TutorialRuntimeState state = tutorial_state_view();
-    if (target_step >= TUTORIAL_LOCKED_LINE_MAX) {
+    if (target_step >= TUTORIAL_MAX_STEPS) {
         repl_set_status("Tutorial step target step index out of bounds");
         return 0;
     }

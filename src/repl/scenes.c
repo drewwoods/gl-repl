@@ -12,6 +12,7 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <limits.h>          /* NAME_MAX */
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -132,8 +133,6 @@ static void scene_cfg_reset_all(void) {
         repl_config_bag_clear(&g_user_scenes[i].cfg);
     pre_example_cfg_clear();
 }
-
-#define WORKSPACE_DIR_MAX REPL_WORKSPACE_DIR_MAX
 
 /* Default home-scene name -- used when slot 0 is captured on first example load. */
 #define USER_SCENE_HOME_NAME "My Scene"
@@ -296,11 +295,12 @@ static void load_scene_from_slot(int idx) {
         if (s->func_aliases[slot][0])
             repl_func_alias_set(slot, s->func_aliases[slot]);
     }
-    /* Roll back any example sandbox before stamping in the user
-     * scene's saved cfg. Observably overwritten by the apply below
-     * today (scene_cfg covers all keys); becomes load-bearing if a
-     * future change makes scene_cfg sparse / inherited-aware. */
-    restore_pre_example_cfg_if_valid();
+    /* Stamp in the saved per-scene cfg. The bridge's apply walks the
+     * full slug subset so this overwrites whatever an in-flight example
+     * sandbox had set; if a future change makes scene_cfg sparse /
+     * inherited-aware, a `restore_pre_example_cfg_if_valid()` call
+     * needs to come back in front of this apply so unsaved slugs roll
+     * back instead of leaking from the example. */
     {
         const ReplConfigBridge *bridge = repl_config_bridge();
         if (bridge && bridge->apply)
@@ -591,15 +591,15 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
                            repl_dispatch_edit_line_get());
     }
 
-    char prev_workspace_dir[WORKSPACE_DIR_MAX];
+    char prev_workspace_dir[REPL_WORKSPACE_DIR_MAX];
     snprintf(prev_workspace_dir, sizeof(prev_workspace_dir), "%s",
              g_workspace_dir);
-    snprintf(g_workspace_dir, WORKSPACE_DIR_MAX, "%s", dir);
+    snprintf(g_workspace_dir, REPL_WORKSPACE_DIR_MAX, "%s", dir);
 
     UserScene *stash = scene_scratch_alloc();
     if (!stash) {
         repl_set_status_error("Workspace save: out of memory");
-        snprintf(g_workspace_dir, WORKSPACE_DIR_MAX, "%s", prev_workspace_dir);
+        snprintf(g_workspace_dir, REPL_WORKSPACE_DIR_MAX, "%s", prev_workspace_dir);
         return -1;
     }
     stash_live_state(stash);
@@ -612,7 +612,7 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
         char slug[USER_SCENE_NAME_MAX];
         scene_filename_slug_for_slot(s, slug, sizeof(slug));
 
-        char path[WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
+        char path[REPL_WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
         snprintf(path, sizeof(path), "%s/%s.c", dir, slug);
 
         g_export_scene_name_hint = g_user_scenes[s].name;
@@ -620,7 +620,7 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
             g_export_scene_name_hint = NULL;
             restore_live_from_stash(stash);
             scene_scratch_free(stash);
-            snprintf(g_workspace_dir, WORKSPACE_DIR_MAX, "%s",
+            snprintf(g_workspace_dir, REPL_WORKSPACE_DIR_MAX, "%s",
                      prev_workspace_dir);
             return -1;
         }
@@ -651,10 +651,10 @@ void repl_save_active_scene(const ReplExportLayout *layout) {
     char slug[USER_SCENE_NAME_MAX];
     scene_filename_slug_for_slot(slot, slug, sizeof(slug));
 
-    char path[WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
+    char path[REPL_WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
     if (g_workspace_dir[0]) {
         if (mkdir(g_workspace_dir, 0755) != 0 && errno != EEXIST) {
-            char emsg[WORKSPACE_DIR_MAX + 48];
+            char emsg[REPL_WORKSPACE_DIR_MAX + 48];
             snprintf(emsg, sizeof(emsg),
                      "Save scene: cannot create %s", g_workspace_dir);
             repl_set_status_error(emsg);
@@ -675,7 +675,7 @@ void repl_save_active_scene(const ReplExportLayout *layout) {
     /* repl_export_save_output hardcodes its success status to
      * "...output.c"; mask it with the real path, same as
      * repl_save_workspace does for its per-slot writes. */
-    char msg[WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 48];
+    char msg[REPL_WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 48];
     snprintf(msg, sizeof(msg), "Saved %s (%d commands)",
              path, repl_state_document_count());
     repl_set_status(msg);
@@ -753,7 +753,7 @@ int repl_load_workspace(const char *dir) {
         if (name[0] == '.') continue;
         if (!has_dot_c_ext(name)) continue;
 
-        char path[WORKSPACE_DIR_MAX + 256];
+        char path[REPL_WORKSPACE_DIR_MAX + NAME_MAX + 1];
         snprintf(path, sizeof(path), "%s/%s", dir, name);
         if (load_scene_file_into_slot(path) >= 0)
             loaded++;
@@ -765,7 +765,7 @@ int repl_load_workspace(const char *dir) {
     g_example_idx       = stash_example;
     g_active_user_scene = -1;
 
-    snprintf(g_workspace_dir, WORKSPACE_DIR_MAX, "%s", dir);
+    snprintf(g_workspace_dir, REPL_WORKSPACE_DIR_MAX, "%s", dir);
 
     char msg[REPL_STATUS_TEXT_MAX];
     snprintf(msg, sizeof(msg), "Loaded %d scene%s from %s",
@@ -933,7 +933,7 @@ static int evict_scene_to_workspace(int slot) {
     char slug[USER_SCENE_NAME_MAX];
     scene_filename_slug_for_slot(slot, slug, sizeof(slug));
 
-    char path[WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
+    char path[REPL_WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
     snprintf(path, sizeof(path), "%s/%s.c", g_workspace_dir, slug);
 
     g_export_scene_name_hint = g_user_scenes[slot].name;
@@ -1054,7 +1054,7 @@ const char *repl_workspace_dir(void) {
 
 void repl_set_workspace_dir(const char *dir) {
     if (!dir) { g_workspace_dir[0] = '\0'; return; }
-    snprintf(g_workspace_dir, WORKSPACE_DIR_MAX, "%s", dir);
+    snprintf(g_workspace_dir, REPL_WORKSPACE_DIR_MAX, "%s", dir);
 }
 
 int repl_user_scene_rename(int slot, const char *new_name) {

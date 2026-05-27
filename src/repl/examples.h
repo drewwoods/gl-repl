@@ -41,6 +41,8 @@
 
 #include <limits.h>
 
+#include "repl/catalog_tags.h"  /* repl_catalog_tag_bit_for_count */
+
 /* Query the source line array for an example. Returns a null-terminated array
  * of REPL command strings (ready to feed through the commit pipeline). Index
  * must be in range [0, repl_example_count()). The returned pointer is valid
@@ -94,10 +96,7 @@ int repl_example_visible_tag_at(int dense_idx);
 const char *repl_example_subheading(int example_idx);
 
 static inline unsigned int repl_example_tag_bit(int tag_idx) {
-    if (tag_idx < 0 || tag_idx >= repl_example_tag_count() ||
-        tag_idx >= (int)(sizeof(unsigned int) * CHAR_BIT))
-        return 0u;
-    return 1u << (unsigned int)tag_idx;
+    return repl_catalog_tag_bit_for_count(tag_idx, repl_example_tag_count());
 }
 
 #endif /* REPL_EXAMPLES_H */

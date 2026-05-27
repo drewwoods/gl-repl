@@ -527,12 +527,12 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
             /* sentinel */
             break;
         }
-        if (step_count >= TUTORIAL_LOCKED_LINE_MAX) {
+        if (step_count >= TUTORIAL_MAX_STEPS) {
             if (err_size > 0)
                 snprintf(err, (size_t)err_size,
                          "tutorial '%s' has more than %d steps",
                          entry->name ? entry->name : "?",
-                         TUTORIAL_LOCKED_LINE_MAX);
+                         TUTORIAL_MAX_STEPS);
             return 0;
         }
         /* Kind-aware shape check. Slug *validity* (is the bridge aware

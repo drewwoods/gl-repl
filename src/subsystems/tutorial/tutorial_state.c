@@ -17,7 +17,7 @@ static void tutorial_state_init_defaults(TutorialRuntimeState *s) {
     s->pending.step_idx = -1;
     s->pending.commit_line = -1;
     s->pending.doc_count_before = -1;
-    for (int i = 0; i < TUTORIAL_LOCKED_LINE_MAX; i++)
+    for (int i = 0; i < TUTORIAL_MAX_STEPS; i++)
         s->instruction_line_for_step[i] = -1;
     s->in_enter_step = 0;
     repl_config_bag_clear(&s->baseline_bag);

@@ -195,14 +195,14 @@ static void seed_for_loop_program(void) {
 
 static int load_text_lines(const char *const *lines) {
     /* Reset state before each program so the two samples don't smear.
-     * Includes the demo-local host cursor: repl_state_init_defaults +
+     * Includes the demo-local host cursor: repl_state_reset_program +
      * source_document_clear zero the REPL document and the source
      * lines, but the host cursor (file-static g_demo_edit_line backing
      * the dispatcher) is independent of both. Without resetting it
      * here, the previous sample's final cursor value would leak into
      * the new sample's load loop and onward into flatten / highlight
      * focus when the user cycles between samples. */
-    repl_state_init_defaults();
+    repl_state_reset_program();
     source_document_clear();
     repl_dispatch_edit_line_set(0);
 
@@ -267,7 +267,7 @@ static void seed_variable_driven_program(void) {
      * source_document storage). */
     repl_dispatch_edit_line_set(0);
 
-    /* `t` is created by repl_state_init_defaults() -> ... ->
+    /* `t` is created by repl_state_reset_program() -> ... ->
      * repl_eval_init_predef_vars(). Add `r`. */
     char err[64] = "";
     if (repl_eval_declare_predef_var("r", err, sizeof(err)) < 0) {
@@ -421,7 +421,7 @@ static int   g_render_paused = 0;
 
 /* Load whichever sample is currently selected into REPL state. */
 static void render_load_current_sample(void) {
-    repl_state_init_defaults();
+    repl_state_reset_program();
     switch (g_render_sample) {
     case 1:
         load_text_lines(SAMPLE_TRIANGLE);
@@ -626,7 +626,7 @@ int main(int argc, char **argv) {
         execute_against_stubs();
 
     printf("\n=== sample 2: hand-built for-loop ===\n");
-    repl_state_init_defaults();
+    repl_state_reset_program();
     seed_for_loop_program();
     print_source_summary("for-loop", repl_state_document_count());
     print_flat_summary();
@@ -637,7 +637,7 @@ int main(int argc, char **argv) {
      * has_vars expressions re-evaluating with REPL-owned variables, and
      * the only way to observe that is to execute and read back args[]. */
     printf("\n=== sample 3: variable-driven re-evaluation ===\n");
-    repl_state_init_defaults();
+    repl_state_reset_program();
     seed_variable_driven_program();
     print_source_summary("var-driven", repl_state_document_count());
     /* Set r once via the eval API; bump t and re-execute four times to

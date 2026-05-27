@@ -40,7 +40,7 @@
 #endif
 
 /*
- *  MAX_EXPR_VARS - global user-declared variables
+ *  MAX_PREDEF_VARS — global user-declared variables
  *  -------------
  *  This sizes the predefined-variable table populated by float t;, float radius;, etc. It's the global identifier table the user sees.
  *
