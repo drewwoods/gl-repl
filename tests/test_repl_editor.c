@@ -1065,10 +1065,10 @@ int main() {
 
         /* Make a wholesale replacement which increments g_undo_generation */
         editor_undo_note_wholesale_replacement();
-        
+
         /* Clear the live document commands so we can verify if restore actually recreates them */
         editor_delete_cmd_range(0, 1, "test");
-        
+
         /* Now the document is empty after manual delete */
         ASSERT_INT("snapshot restore cross-gen: document count after wholesale replacement",
                    repl_state_document_count(), 0);
