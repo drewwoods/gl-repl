@@ -504,12 +504,17 @@ static void scene_execute_adapter(const SceneExecuteContext *ctx,
     }
 
     glPushAttrib(GL_ALL_ATTRIB_BITS);
+    char exec_status[REPL_DIAG_TEXT_MAX] = "";
     repl_execute_program(&(ReplExecutionOptions){
         .flat_cmd_count = count,
         .program        = repl_state_flat_program_view(),
         .text           = source_document_view(),
+        .status_out     = exec_status,
+        .status_out_sz  = (int)sizeof(exec_status),
     });
     glPopAttrib();
+    if (exec_status[0])
+        repl_set_status_error(exec_status);
 
     if (suppress_side_effects) {
         repl_restore_predef_values(saved_predef, MAX_PREDEF_VARS);
