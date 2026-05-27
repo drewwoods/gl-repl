@@ -45,7 +45,22 @@ typedef struct TessVertex {
  * (typically the full count, or the replay PC if replay is active),
  * and a source-text view used to resolve display text for status
  * messages (goto-label resolution etc.). The view is non-owning and
- * stays valid for the duration of the execute call. */
+ * stays valid for the duration of the execute call.
+ *
+ * `suppress_tess_finalize` skips the trailing gluTessEndContour /
+ * gluTessEndPolygon cleanup at the end of repl_execute_program.
+ * Default 0 = finalize, which is correct for the live frame path and
+ * for replay's POLYGON mode. Replay's VERTEX-mode fade batches set
+ * it to 1 because each batch is a partial slice of the original
+ * tess sequence; finalizing each slice would emit incomplete
+ * geometry.
+ *
+ * `status_out` / `status_out_sz` give the executor a place to record
+ * a non-fatal diagnostic (currently only the goto-loop-limit case).
+ * If `status_out` is NULL, the executor drops the message; otherwise
+ * it snprintfs up to `status_out_sz - 1` chars + NUL. Callers decide
+ * whether to forward the captured text to the status bar
+ * (controller live-frame: yes; replay/test/demo: no). */
 typedef struct {
     int             flat_cmd_count;
     FlatProgramView program;
@@ -53,6 +68,9 @@ typedef struct {
     float           fade_alpha_scale;
     int             skip_geom_before_pc;
     int             has_fade_context;
+    int             suppress_tess_finalize;
+    char           *status_out;
+    int             status_out_sz;
 } ReplExecutionOptions;
 
 /* Get a view over the live flat program (g_flat_cmds, g_flat_local_vars).

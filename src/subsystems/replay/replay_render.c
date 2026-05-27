@@ -72,13 +72,21 @@ void replay_render_fade_batches(const ReplayFadePlan *plan) {
         prof_accum_end(PROF_SCENE_3D_FADE_BATCH_PREP);
 
         prof_begin(PROF_SCENE_3D_FADE_BATCH_EXEC);
+        /* VERTEX-mode fade batches replay partial tess sequences,
+         * so each batch must skip the executor's trailing
+         * gluTessEndContour / gluTessEndPolygon cleanup — finalizing
+         * a half-applied tess would emit incomplete geometry. The
+         * POLYGON-mode path doesn't slice mid-tess, so it lets the
+         * default finalize run. */
+        int suppress_tess = (replay_mode() == REPLAY_MODE_VERTEX);
         repl_execute_program(&(ReplExecutionOptions){
-            .flat_cmd_count      = batch->new_pc,
-            .program             = program,
-            .text                = text,
-            .fade_alpha_scale    = alpha,
-            .skip_geom_before_pc = plan->skip_limits[batch_idx],
-            .has_fade_context    = 1,
+            .flat_cmd_count         = batch->new_pc,
+            .program                = program,
+            .text                   = text,
+            .fade_alpha_scale       = alpha,
+            .skip_geom_before_pc    = plan->skip_limits[batch_idx],
+            .has_fade_context       = 1,
+            .suppress_tess_finalize = suppress_tess,
         });
         prof_accum_end(PROF_SCENE_3D_FADE_BATCH_EXEC);
 

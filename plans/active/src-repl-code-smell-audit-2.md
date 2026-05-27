@@ -29,7 +29,7 @@
 ## Status summary (updated 2026-05-27)
 
 83 findings total (82 from the original audit + 1 review-discovered).
-66 closed (✅), 17 still open. All open findings verified against
+69 closed (✅), 14 still open. All open findings verified against
 current HEAD. Tier letters cover the whole open backlog — no unclassified rows
 remain. Tier A is empty: the 2026-05-27 Tier A close pass landed all ten
 (#26, #27, #43, #70, #72, #76, #77, #78, #79, #81), and the review pass that
@@ -58,13 +58,13 @@ added #83 closed it in the same commit.
 | 19 | 🔵 | B | ✅ Done | Five slug/walk duplicates missed by closed #14 |
 | 20 | 🔵 | B | ✅ Done | Two near-identical identifier walkers in `eval.c` |
 | 21 | 🔵 | B | ✅ Done | REPL↔C function map duplicated three ways |
-| 22 | 🟡 | B | Open | Executor includes `subsystems/replay/*` (layering) |
-| 23 | 🟡 | B | Open | Executor writes status messages to live REPL state |
+| 22 | 🟡 | B | ✅ Done | Executor includes `subsystems/replay/*` (layering) |
+| 23 | 🟡 | B | ✅ Done | Executor writes status messages to live REPL state |
 | 24 | 🔵 | B | Open | CMD_IF_BEGIN evaluator duplicated (flatten vs executor) |
 | 25 | 🟡 | B | ✅ Done | `WRITE_TEXT` macro — third "write text" pattern |
 | 26 | 🟡 | A | ✅ Done | `REPL_FUNC_SLOT_LIST` hard-codes 10 entries |
 | 27 | 🟡 | A | ✅ Done | Stray `func0(var0)` autocomplete row |
-| 28 | 🔵 | B | Open | `replay_apply_state_cmd` parallel to executor dispatch |
+| 28 | 🔵 | B | ✅ Done | `replay_apply_state_cmd` parallel to executor dispatch |
 | 29 | 🟡 | B | ✅ Done | `g_pre_example.valid` still a parallel scalar |
 | 30 | 🟡 | B | Open | `g_pending_workspace_dir` write-then-caller-reads |
 | 31 | 🟡 | B | ✅ Done | `text_helpers.c` has no `.h` |
@@ -121,8 +121,8 @@ added #83 closed it in the same commit.
 | 82 | 🔵 | B | Open | `tutorial_step_at()` O(N) sentinel walk |
 | 83 | 🔴 | A | ✅ Done | `@declare` import treats failed `repl_eval_declare_predef_var` as success |
 
-**By severity (open only):** 0 🔴, 8 🟡, 0 🟢, 9 🔵 = 17 open.
-**By tier (open only):** A: 0, B: 9, C: 6, D: 2, unclassified: 0.
+**By severity (open only):** 0 🔴, 6 🟡, 0 🟢, 8 🔵 = 14 open.
+**By tier (open only):** A: 0, B: 6, C: 6, D: 2, unclassified: 0.
 
 ## How to read this
 
@@ -1012,6 +1012,21 @@ to check replay's mode is exactly the layering creep the executor's
 sets it to 0 for VERTEX-mode batches; live frame path sets it to 1
 (the default). Drop both `subsystems/replay/*` includes.
 
+**Status (2026-05-27):** ✅ Closed. Added
+`int suppress_tess_finalize;` to `ReplExecutionOptions` (zero-init
+default = finalize, matching the prior live-frame behavior).
+`subsystems/replay/replay_render.c::replay_render_fade_batches`
+reads `replay_mode()` itself and sets the flag to 1 when in
+`REPL_MODE_VERTEX`, preserving the old "skip finalize for partial
+VERTEX-mode slices" semantic. Both
+`#include "subsystems/replay/replay.h"` and
+`#include "subsystems/replay/replay_state.h"` are gone from
+`src/repl/executor.c` — the executor no longer reaches across to
+its peer subsystem. (I used the inverted-sense
+`suppress_tess_finalize` rather than the audit's `finalize_tess`
+so the zero-init default keeps the live behavior; the meaning is
+equivalent.)
+
 ### 23. Executor writes status messages directly to live REPL state
 
 **Where:** `src/repl/executor.c:615`
@@ -1023,6 +1038,25 @@ result struct like `ReplFlattenResult.status[]`).
 
 **Fix:** Add `char status[REPL_DIAG_TEXT_MAX];` to a
 `ReplExecutionResult`; controller posts it after the call.
+
+**Status (2026-05-27):** ✅ Closed (via `ReplExecutionOptions`
+extension rather than a separate result struct — see the note
+below). Added `char *status_out;` + `int status_out_sz;` to
+`ReplExecutionOptions`. The executor writes the goto-loop-limit
+diagnostic into the caller's buffer via `snprintf` (no-op when
+the buffer pointer is NULL). The `repl_set_status_error` call in
+`src/repl/executor.c` is gone; the controller live-frame path in
+`src/app/glr_ctrl.c::repl_apply_flat_program_to_gl` declares a
+local `char exec_status[REPL_DIAG_TEXT_MAX]` and posts via
+`repl_set_status_error` after the call. The replay / test / demo
+call sites don't pass a buffer, so they silently drop diagnostics
+the same way the audit's `ReplExecutionResult` would have allowed.
+
+Chose options-extension over a separate result struct because the
+status is the only output; threading a `ReplExecutionResult *` for
+one field would have rippled across five call sites with no other
+fields paying their freight. If a second result field appears later
+the right move is still the dedicated struct.
 
 ### 24. CMD_IF_BEGIN evaluator is duplicated between flatten and executor
 
@@ -1106,6 +1140,19 @@ that delegates back. A new state CmdType needs both updates.
 **Fix:** Let the main switch's default fall through to a
 `repl_apply_state_cmd(&flat_cmds[pc], …)` attempt; `return 1`
 means "handled."
+
+**Status (2026-05-27):** ✅ Closed. Removed the three explicit
+state-cmd case-label cascades from
+`src/repl/executor.c::repl_execute_program` (CMD_ENABLE..CMD_LIGHT_MODEL_I,
+CMD_FRONT_FACE..CMD_COLOR_MASK, CMD_POINT_PARAMETER_FV..CMD_CLEAR_COLOR)
+and added a `default:` arm that calls
+`repl_apply_state_cmd(&flat_cmds[pc], alpha_scale)`. A new state
+cmd added to `repl_apply_state_cmd`'s switch is now picked up by
+the main switch automatically. The explicit no-op cases
+(CMD_COMMENT, CMD_EMPTY, CMD_VAR_DECLARE, CMD_TYPE_COUNT,
+CMD_FOR_*, CMD_FUNC_*, CMD_CALL) stay distinct from `default` so
+they continue to skip apply_state_cmd. A comment above `default`
+names every CmdType the fall-through is meant to catch.
 
 ### 29. `g_pre_example.valid` is still a parallel scalar — Tier B #44 left it half-done
 

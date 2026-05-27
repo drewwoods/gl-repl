@@ -6,8 +6,6 @@
 #include "repl/core.h"
 #include "repl/core_internal.h"
 #include "repl/state_owners.h"
-#include "subsystems/replay/replay.h"
-#include "subsystems/replay/replay_state.h"
 
 /* Camera-distance source for the point-size fallback used when the
  * runtime GL context lacks glPointParameterfv. The executor used to
@@ -456,24 +454,9 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                       flat_cmds[pc].args[2],
                       flat_cmds[pc].args[3] * alpha_scale);
             break;
-        case CMD_ENABLE:
-        case CMD_DISABLE:
-        case CMD_SHADE_MODEL:
-        case CMD_COLOR_MATERIAL:
-        case CMD_MATERIALFV:
-        case CMD_MATERIALF:
-        case CMD_LIGHT_MODEL_I:
-            repl_apply_state_cmd(&flat_cmds[pc], alpha_scale);
-            break;
         case CMD_VERTEX2F:
             if (in_begin)
                 glVertex2f(flat_cmds[pc].args[0], flat_cmds[pc].args[1]);
-            break;
-        case CMD_FRONT_FACE:
-        case CMD_DEPTH_FUNC:
-        case CMD_DEPTH_MASK:
-        case CMD_COLOR_MASK:
-            repl_apply_state_cmd(&flat_cmds[pc], alpha_scale);
             break;
         /* The CMD_*-not-in-begin block below relies on the parser
          * rejecting these commands inside glBegin/glEnd
@@ -484,11 +467,6 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             break;
         case CMD_LINE_WIDTH:
             glLineWidth(flat_cmds[pc].args[0]);
-            break;
-        case CMD_POINT_PARAMETER_FV:
-        case CMD_BLEND_FUNC:
-        case CMD_CLEAR_COLOR:
-            repl_apply_state_cmd(&flat_cmds[pc], alpha_scale);
             break;
         case CMD_GLUT_TORUS:
             glutSolidTorus((double)flat_cmds[pc].args[0],
@@ -602,7 +580,9 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                                          label_name, sizeof(label_name)))
                 break;
             if (goto_count++ > REPL_GOTO_LOOP_LIMIT) {
-                repl_set_status_error("goto: loop limit reached");
+                if (options && options->status_out && options->status_out_sz > 0)
+                    snprintf(options->status_out, (size_t)options->status_out_sz,
+                             "goto: loop limit reached");
                 goto execute_done;
             }
             for (int label_idx = 0; label_idx < flat_cmd_count; label_idx++) {
@@ -688,12 +668,23 @@ void repl_execute_program(const ReplExecutionOptions *options) {
         case CMD_VAR_DECLARE:
         case CMD_TYPE_COUNT:
             break;
+        /* Anything not handled explicitly above is a state-mutating
+         * cmd routed through repl_apply_state_cmd (CMD_ENABLE,
+         * CMD_DISABLE, CMD_SHADE_MODEL, CMD_COLOR_MATERIAL,
+         * CMD_MATERIALFV / _MATERIALF, CMD_LIGHT_MODEL_I,
+         * CMD_FRONT_FACE, CMD_DEPTH_FUNC / _MASK, CMD_COLOR_MASK,
+         * CMD_POINT_PARAMETER_FV, CMD_BLEND_FUNC, CMD_CLEAR_COLOR).
+         * Adding a new state cmd to repl_apply_state_cmd plugs into
+         * the main switch automatically. */
+        default:
+            repl_apply_state_cmd(&flat_cmds[pc], alpha_scale);
+            break;
         }
         pc++;
     }
 execute_done:
     if (in_begin) glEnd();
-    if (!(replay_active() && replay_mode() == REPLAY_MODE_VERTEX)) {
+    if (!(options && options->suppress_tess_finalize)) {
         if (tess_depth == 2 && g_tess) { gluTessEndContour(g_tess); tess_depth = 1; }
         if (tess_depth == 1 && g_tess) { gluTessEndPolygon(g_tess); }
     }
