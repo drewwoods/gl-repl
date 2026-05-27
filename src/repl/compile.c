@@ -1778,19 +1778,20 @@ ReplCompileResult repl_compile_func_def_resolve_alias(const ReplCompileContext *
     return REPL_COMPILE_OK;
 }
 
-ReplCompileResult repl_compile_func_def(const char *input,
-                                        const ReplCompileContext *ctx,
-                                        ReplCompiledChange *out,
-                                        char *err, int err_size) {
+ReplCompileResult repl_compile_func_def_kernel(const char *input,
+                                               const ReplCompileContext *ctx,
+                                               int allow_overwrite_at_pos,
+                                               ReplFuncDefKernel *out,
+                                               char *err, int err_size) {
     if (!ctx || !out) return REPL_COMPILE_ERROR;
-    repl_compiled_change_init(out);
+    memset(out, 0, sizeof(*out));
 
     /* Quick-reject inputs that look like function calls (have `(` and
      * no `{`). They go through the normal command parser. */
     const char *trimmed = input ? input : "";
     while (*trimmed && isspace((unsigned char)*trimmed)) trimmed++;
     if (strchr(trimmed, '(') != NULL && strchr(trimmed, '{') == NULL) {
-        out->kind = REPL_COMPILED_NO_CHANGE;
+        out->valid = 0;
         return REPL_COMPILE_OK;
     }
 
@@ -1798,84 +1799,103 @@ ReplCompileResult repl_compile_func_def(const char *input,
      *
      * parse_repl_func_signature recognises the bare `funcN` form plus
      * already-registered aliases, so to parse a brand-new identifier
-     * we have to register the alias before calling the parser. That
-     * mutates global state during what's nominally a pure compile, so:
-     *
-     *   - record the slot we registered and its previous contents
-     *   - if the parse / duplicate-check / format steps below fail,
-     *     restore the previous alias state before returning so the
-     *     global table doesn't leak a name with no matching CMD_FUNC_DEF
-     *     or lose an existing alias during a failed rewrite.
+     * we have to register the alias before calling the parser. The
+     * resolve_alias helper writes its bookkeeping into a temporary
+     * ReplCompiledChange; we copy the alias fields into the kernel
+     * struct and bridge to repl_compiled_change_rollback_alias on
+     * downstream rejection.
      *
      * [P1] regression: previously the alias_set call could leak on
      * parse failure (or apply failure further upstream); the rollback
      * below covers parse-side failures and the published rollback
      * fields cover downstream preflight/apply failures. */
+    ReplCompiledChange alias_state;
+    repl_compiled_change_init(&alias_state);
     int rejected_keyword = 0;
-    ReplCompileResult alias_res = repl_compile_func_def_resolve_alias(ctx, trimmed, out, &rejected_keyword, err, err_size);
+    ReplCompileResult alias_res = repl_compile_func_def_resolve_alias(
+        ctx, trimmed, &alias_state, &rejected_keyword, err, err_size);
     if (alias_res != REPL_COMPILE_OK)
         return alias_res;
-    if (rejected_keyword)
+    if (rejected_keyword) {
+        out->rejected_keyword = 1;
         return REPL_COMPILE_OK;
+    }
+    out->newly_aliased_slot = alias_state.newly_aliased_slot;
+    out->had_previous_alias = alias_state.had_previous_alias;
+    snprintf(out->previous_alias, sizeof(out->previous_alias),
+             "%s", alias_state.previous_alias);
 
-    int newly_aliased_slot = out->newly_aliased_slot;
-
-    int fn = -1;
-    int param_count = 0;
-    char param_names[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
-    if (!parse_repl_func_signature(input ? input : "", &fn,
-                                   param_names, MAX_EXPR_VARS, &param_count)) {
-        repl_compiled_change_rollback_alias(out);
-        out->kind = REPL_COMPILED_NO_CHANGE;
+    if (!parse_repl_func_signature(input ? input : "", &out->fn,
+                                   out->param_names, MAX_EXPR_VARS,
+                                   &out->param_count)) {
+        repl_compiled_change_rollback_alias(&alias_state);
+        out->newly_aliased_slot = -1;
+        out->valid = 0;
         return REPL_COMPILE_OK;
     }
 
-    /* Reject duplicate funcN definitions: an existing CMD_FUNC_DEF for
-     * the same fn anywhere in the document means the new line is a
-     * second definition that would shadow the first. The editor's
-     * editor_compile_func_def has the same check (src/editor/commit.c
-     * lines 670-681) so editor_feed_line rejects this; the lean loader path
-     * needs to match.
-     *
-     * Note: this validator is the line-by-line load case, so we don't
-     * have an "overwriting an existing func line" branch (the editor
-     * does, for in-place renames). [P2] regression. */
+    /* Reject duplicate funcN definitions. The loader passes
+     * allow_overwrite_at_pos = -1 to reject any duplicate; the editor
+     * passes its edit_pos when it has detected an in-place rewrite so
+     * the dup-at-cursor case is exempt. */
     for (int ei = 0; ei < ctx->document_count; ei++) {
         const GLCmd *c = &ctx->document_cmds[ei];
         if (!c->valid) continue;
         if (c->type != CMD_FUNC_DEF) continue;
-        if ((int)c->args[0] != fn) continue;
+        if ((int)c->args[0] != out->fn) continue;
+        if (ei == allow_overwrite_at_pos) continue;
         snprintf(err, (size_t)err_size,
-                 "func%d already defined (line %d)", fn, ei + 1);
-        repl_compiled_change_rollback_alias(out);
+                 "func%d already defined (line %d)", out->fn, ei + 1);
+        repl_compiled_change_rollback_alias(&alias_state);
+        out->newly_aliased_slot = -1;
         return REPL_COMPILE_ERROR;
     }
 
-    int pos = compile_insert_pos(ctx);
+    out->pos = compile_insert_pos(ctx);
 
-    char indent[REPL_INDENT_TEXT_MAX];
-    repl_source_scope_cmd_indent(pos, indent, sizeof(indent));
+    repl_source_scope_cmd_indent(out->pos, out->indent, sizeof(out->indent));
 
-    GLCmd fd;
-    memset(&fd, 0, sizeof(fd));
-    fd.type = CMD_FUNC_DEF;
-    fd.args[0] = (float)fn;
-    fd.num_args = param_count;
-    fd.valid = 1;
+    out->fd.type     = CMD_FUNC_DEF;
+    out->fd.args[0]  = (float)out->fn;
+    out->fd.num_args = out->param_count;
+    out->fd.valid    = 1;
 
-    char fd_text[MAX_LINE_LEN];
-    format_func_header(fd_text, (int)sizeof(fd_text),
-                       indent, fn, param_names, param_count);
+    format_func_header(out->fd_text, (int)sizeof(out->fd_text),
+                       out->indent, out->fn, out->param_names, out->param_count);
+
+    out->valid = 1;
+    return REPL_COMPILE_OK;
+}
+
+ReplCompileResult repl_compile_func_def(const char *input,
+                                        const ReplCompileContext *ctx,
+                                        ReplCompiledChange *out,
+                                        char *err, int err_size) {
+    if (!ctx || !out) return REPL_COMPILE_ERROR;
+    repl_compiled_change_init(out);
+
+    ReplFuncDefKernel kernel;
+    /* Loader path: reject every duplicate. */
+    ReplCompileResult r = repl_compile_func_def_kernel(input, ctx, -1, &kernel,
+                                                       err, err_size);
+    if (r != REPL_COMPILE_OK) return r;
+    if (kernel.rejected_keyword || !kernel.valid) {
+        out->kind = REPL_COMPILED_NO_CHANGE;
+        return REPL_COMPILE_OK;
+    }
 
     out->kind  = REPL_COMPILED_INSERT_ONE;
-    out->pos   = pos;
+    out->pos   = kernel.pos;
     out->count = 1;
     out->adjust_edit_line = 1;
-    out->cmds[0] = fd;
-    snprintf(out->text[0], sizeof(out->text[0]), "%s", fd_text);
+    out->cmds[0] = kernel.fd;
+    snprintf(out->text[0], sizeof(out->text[0]), "%s", kernel.fd_text);
     /* Publish the alias slot (if any) so callers can roll back the
      * registration on preflight/apply failure downstream. */
-    out->newly_aliased_slot = newly_aliased_slot;
+    out->newly_aliased_slot = kernel.newly_aliased_slot;
+    out->had_previous_alias = kernel.had_previous_alias;
+    snprintf(out->previous_alias, sizeof(out->previous_alias),
+             "%s", kernel.previous_alias);
     return REPL_COMPILE_OK;
 }
 

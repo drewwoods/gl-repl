@@ -460,52 +460,10 @@ ReplCompileResult editor_compile_func_def(const char *input,
     editor_commit_plan_init(out);
     editor_compile_clear_err(err, err_size);
 
-    int fn = -1;
-    int param_count = 0;
-    char param_names[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
-
-    /* Quick-reject inputs that look like func *calls* (have `(` and
-     * no `{`). The live guard returns 0 from editor_try_commit_func_def
-     * for those so the dispatch chain falls through to
-     * parse_command, which classifies them as CMD_CALL. */
-    const char *trimmed = input ? input : "";
-    while (*trimmed && isspace((unsigned char)*trimmed)) trimmed++;
-    if (strchr(trimmed, '(') != NULL && strchr(trimmed, '{') == NULL) {
-        out->change.kind = REPL_COMPILED_NO_CHANGE;
-        return REPL_COMPILE_OK;
-    }
-
-    /* Alias-aware pre-step: parse_repl_func_signature only knows the
-     * bare `funcN` form plus already-registered aliases. New user
-     * names (`drawCube { ... }`) are unregistered the first time the
-     * user types them, so we register them up front before invoking
-     * the parser.
-     *
-     * Slot picking: if the cursor is on an existing CMD_FUNC_DEF and
-     * we're not in insert mode, the rename targets that line's slot
-     * (so `drawCube` -> `drawSphere` reuses slot N). Otherwise pick
-     * the next free slot. The bare-funcN branch is a no-op fast path.
-     *
-     * The pre-step mutates the global alias table; the rollback at
-     * each downstream failure path (parse, dup, format) makes that
-     * speculative. The success path publishes the touched slot and its
-     * previous contents via out->change so editor_commit_apply_plan can
-     * roll it back if its own preflight fails. [P2 editor] regression. */
-    int rejected_keyword = 0;
-    ReplCompileResult alias_res = repl_compile_func_def_resolve_alias(ctx, trimmed, &out->change, &rejected_keyword, err, err_size);
-    if (alias_res != REPL_COMPILE_OK)
-        return alias_res;
-    if (rejected_keyword)
-        return REPL_COMPILE_OK;
-
-    if (!parse_repl_func_signature(input ? input : "", &fn,
-                                   param_names, MAX_EXPR_VARS,
-                                   &param_count)) {
-        repl_compiled_change_rollback_alias(&out->change);
-        out->change.kind = REPL_COMPILED_NO_CHANGE;
-        return REPL_COMPILE_OK;
-    }
-
+    /* Compute the edit position + overwrite-mode flag BEFORE calling
+     * the kernel — the kernel needs `allow_overwrite_at_pos` to know
+     * whether the duplicate-funcN guard should exempt the cursor row
+     * (editor in-place rewrites of `drawCube` -> `drawSphere`). */
     int edit_pos = ctx->insert_mode ? ctx->edit_line :
                    (ctx->edit_line < ctx->document_count
                         ? ctx->edit_line : ctx->document_count);
@@ -513,38 +471,46 @@ ReplCompileResult editor_compile_func_def(const char *input,
                             edit_pos < ctx->document_count &&
                             ctx->document_cmds[edit_pos].type == CMD_FUNC_DEF);
 
-    /* Reject duplicate-funcN definitions; overwriting the existing
-     * line is allowed. */
-    for (int ei = 0; ei < ctx->document_count; ei++) {
-        const GLCmd *c = &ctx->document_cmds[ei];
-        if (!c->valid) continue;
-        if (c->type != CMD_FUNC_DEF) continue;
-        if ((int)c->args[0] != fn) continue;
-        if (overwriting_func && ei == edit_pos) continue;
-        repl_compiled_change_rollback_alias(&out->change);
-        return editor_compile_error(err, err_size,
-                                    "func%d already defined (line %d)", fn, ei + 1);
+    ReplFuncDefKernel kernel;
+    ReplCompileResult kr = repl_compile_func_def_kernel(
+        input, ctx,
+        overwriting_func ? edit_pos : -1,
+        &kernel, err, err_size);
+    if (kr != REPL_COMPILE_OK)
+        return kr;
+    if (kernel.rejected_keyword || !kernel.valid) {
+        out->change.kind = REPL_COMPILED_NO_CHANGE;
+        return REPL_COMPILE_OK;
     }
 
-    /* Overwrite-header branch: REPLACE_ONE at the cursor line. */
-    if (overwriting_func) {
-        char indent[REPL_INDENT_TEXT_MAX];
-        repl_source_scope_cmd_indent(edit_pos, indent, sizeof(indent));
+    int   fn          = kernel.fn;
+    int   param_count = kernel.param_count;
 
+    /* Publish the alias bookkeeping on out->change so
+     * editor_commit_apply_plan can roll back the registration if its
+     * own preflight fails downstream. */
+    out->change.newly_aliased_slot = kernel.newly_aliased_slot;
+    out->change.had_previous_alias = kernel.had_previous_alias;
+    snprintf(out->change.previous_alias, sizeof(out->change.previous_alias),
+             "%s", kernel.previous_alias);
+
+    /* Overwrite-header branch: REPLACE_ONE at the cursor line. The
+     * kernel built the fd cmd + fd_text against the kernel-computed
+     * `pos` (which equals edit_pos in this branch by construction),
+     * but the editor wants the updated GLCmd to inherit the existing
+     * line's other fields, so build the REPLACE_ONE cmd locally and
+     * carry the kernel's fd_text + indent through. */
+    if (overwriting_func) {
         GLCmd updated = ctx->document_cmds[edit_pos];
-        updated.args[0] = (float)fn;
+        updated.args[0]  = (float)fn;
         updated.num_args = param_count;
 
-        char fd_text[MAX_LINE_LEN];
-        format_func_header(fd_text, (int)sizeof(fd_text),
-                           indent, fn, param_names, param_count);
-
-        out->change.kind  = REPL_COMPILED_REPLACE_ONE;
-        out->change.pos   = edit_pos;
-        out->change.count = 1;
+        out->change.kind    = REPL_COMPILED_REPLACE_ONE;
+        out->change.pos     = edit_pos;
+        out->change.count   = 1;
         out->change.cmds[0] = updated;
         snprintf(out->change.text[0], sizeof(out->change.text[0]),
-                 "%s", fd_text);
+                 "%s", kernel.fd_text);
 
         out->effects.cursor_target      = edit_pos + 1;
         out->effects.insert_mode_target = 1;
@@ -579,20 +545,18 @@ ReplCompileResult editor_compile_func_def(const char *input,
 
     /* A func decl always lives at depth 0, so its indent is the
      * depth-0 indent regardless of the (post-delete) insert position
-     * computed below — query the source-scope helper at pos 0. */
+     * the kernel computed — query the source-scope helper at pos 0
+     * and re-format the header against that indent. The kernel's
+     * fd / fd_text are built against `kernel.pos` (the current edit
+     * cursor), which can be nested for the relocation case. */
     char indent[REPL_INDENT_TEXT_MAX];
     repl_source_scope_cmd_indent(0, indent, sizeof(indent));
 
-    GLCmd fd;
-    memset(&fd, 0, sizeof(fd));
-    fd.type = CMD_FUNC_DEF;
-    fd.args[0] = (float)fn;
-    fd.num_args = param_count;
-    fd.valid = 1;
+    GLCmd fd = kernel.fd;
 
     char fd_text[MAX_LINE_LEN];
     format_func_header(fd_text, (int)sizeof(fd_text),
-                       indent, fn, param_names, param_count);
+                       indent, fn, kernel.param_names, param_count);
 
     GLCmd fe;
     memset(&fe, 0, sizeof(fe));
