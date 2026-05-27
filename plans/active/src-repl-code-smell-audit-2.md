@@ -20,7 +20,7 @@
 > #43, #45, #46; Tier B 2026-05-24 closed #41 and #44; the
 > follow-up [P2]/[P3] pass swept the `var_idx`/parallel-cfg leftovers.
 > Tier A follow-up 2026-05-27 closed #13, #18, #34, #35, #36, #38,
-> #39, #46, and #54–#67.
+> #39, #40, #46, #52, #53, and #54–#67.
 > Two helpers landed during this work: `src/repl/text_helpers.c` (from
 > the original #38) and `src/repl/cfg_baseline.{c,h}` (from the
 > subsystems audit's #30). `export.c` is still the heaviest file at
@@ -28,9 +28,9 @@
 
 ## Status summary (updated 2026-05-27)
 
-82 findings total. 36 closed (✅), 46 still open. Status changes since
-the audit was produced: #13, #18, #34, #35, #36, #38, #39, #46, and
-#54-#67 are now closed against current HEAD.
+82 findings total. 37 closed (✅), 45 still open. Status changes since
+the audit was produced: #13, #18, #34, #35, #36, #38, #39, #40, #46,
+#52, #53, and #54-#67 are now closed against current HEAD.
 
 | # | Sev | Tier | Status | Finding (short) |
 |---|-----|------|--------|-----------------|
@@ -73,7 +73,7 @@ the audit was produced: #13, #18, #34, #35, #36, #38, #39, #46, and
 | 37 | 🔵 | C | Open | `GLCmd.text[64]` + `var_names[8][16]` per command |
 | 38 | 🟢 | A | ✅ Done | `examples.h` / `example_loader.c` parallel API names |
 | 39 | 🔵 | A | ✅ Done | Three bridge ternary patterns |
-| 40 | 🔵 | — | Open | Predef-var capture/restore duplicated 5× |
+| 40 | 🔵 | — | ✅ Done | Predef-var capture/restore duplicated 5× |
 | 41 | 🟡 | C | Open | Tutorial GRID_THEME literals decoupled |
 | 42 | 🔵 | — | Open | CatalogTagOps glue remains after closed #12 |
 | 43 | 🔵 | — | Open | `tag_bit` byte-identical inlines |
@@ -85,8 +85,8 @@ the audit was produced: #13, #18, #34, #35, #36, #38, #39, #46, and
 | 49 | 🔴 | B | ✅ Done | `repl_apply_can_apply_compiled_change` preflight gap |
 | 50 | 🟡 | B | Open | `MAX_SCRATCH_OPS_PER_COMMIT` wildly oversized |
 | 51 | 🔵 | B | Open | Five file-level statics in executor.c |
-| 52 | 🟡 | — | Open | `command_spec.c` terminator positional zeros |
-| 53 | 🟢 | A | Open | Six of seven `repl_format_*` functions dead |
+| 52 | 🟡 | — | ✅ Done | `command_spec.c` terminator positional zeros |
+| 53 | 🟢 | A | ✅ Done | Six of seven `repl_format_*` functions dead |
 | 54 | 🟢 | A | ✅ Done | `compile_scope_indent` one-line forwarder |
 | 55 | 🟢 | A | ✅ Done | `make_auto_normal` dead `insert_pos` param |
 | 56 | 🟢 | A | ✅ Done | `flatten_get_for_var_name` dead `cmd` param |
@@ -117,8 +117,8 @@ the audit was produced: #13, #18, #34, #35, #36, #38, #39, #46, and
 | 81 | 🟡 | — | Open | `TUTORIAL_LOCKED_LINE_MAX` doubles as cap and validator ceiling |
 | 82 | 🔵 | — | Open | `tutorial_step_at()` O(N) sentinel walk |
 
-**By severity (open only):** 0 🔴, 25 🟡, 19 🟢, 24 🔵 = 68 open.
-**By tier (open only):** A: 22, B: 18, C: 6, D: 2, unclassified: 20.
+**By severity (open only):** 0 🔴, 25 🟡, 3 🟢, 17 🔵 = 45 open.
+**By tier (open only):** A: 0, B: 15, C: 6, D: 2, unclassified: 22.
 
 ## How to read this
 
@@ -1204,6 +1204,14 @@ use them directly.
 `repl_eval_snapshot_for_userscene(UserScene *)` to absorb the
 alias-copy + scratch-array dance.
 
+**Status (2026-05-27):** ✅ Closed. `src/repl/scenes.c` now routes all
+five scene/live-state capture and restore sites through
+`repl_eval_copy_predef_vars()` / `repl_eval_restore_predef_vars()`
+instead of open-coded slot loops, so the user-scene snapshots share the
+same evaluator-owned predef-var copy contract as the rest of the layer.
+Validated with `build/release/test_repl_core_extra` and
+`build/release/test_repl_core_io --run-tests`.
+
 ### 41. Tutorial GRID_THEME literals decoupled from `src/scene/themes.h` enum
 
 **Where:** `src/repl/tutorials.c:164, 167`
@@ -1434,6 +1442,11 @@ patterns in the same file.
 **Fix:** Use `{ NULL }` (C99 zero-fill) or `{ .name = NULL }` to
 mirror the designator style.
 
+**Status (2026-05-27):** ✅ Closed. The terminator row now uses
+`{ .name = NULL }`, matching the surrounding designated style without
+changing behavior. Validated with `make check-c99` and the full
+`make test-stubs` gate.
+
 ## 🟢 Dead code / dead fields
 
 ### 53. Six of seven `repl_format_*` functions have zero production callers — `format.c` is mostly dead
@@ -1457,6 +1470,13 @@ evaporates.
 `autonormal.c::normal_indent`) onto these helpers, or (b) delete
 the dead seven + reduce `format.{c,h}` to `_reindent_from_parsed`
 only and inline into core.c (its sole caller).
+
+**Status (2026-05-27):** ✅ Closed via option (b). `src/repl/format.c`
+and `src/repl/format.h` now keep only the live
+`repl_format_reindent_from_parsed()` helper, and `tests/test_format.c`
+was reduced to the surviving behavior. Validated with
+`build/release/test_format`, `build/release/test_repl_core_format`, and
+the full `make test-stubs` gate.
 
 ### 54. `compile_scope_indent` is a one-line forwarder with a stale comment
 
@@ -1612,8 +1632,9 @@ test to assert behavior through the public setter; #58 removed the dead
 impossible guard; #60 dropped the unused loader-side `vis_total` path;
 #61, #62, and #63 removed vestigial export-side dead code; #64 and #65
 simplified replay-annotation plumbing; #66 deleted the 13 unused
-`state.c` macros; and #67 swept the stale phase-history breadcrumbs from
-the REPL headers/comments. #53 remains open; the rest of this dead-code
+`state.c` macros; #67 swept the stale phase-history breadcrumbs from
+the REPL headers/comments; and #53 reduced `format.{c,h}` to the lone
+live `repl_format_reindent_from_parsed()` helper. This dead-code
 cluster is now closed.
 
 ## 🔵 Structural concerns
@@ -1813,9 +1834,9 @@ the pointer. Keep the per-field getters as inline shims.
    dead-code/dead-macros cleanup.
 8. **#67** — phase-N.M comment sweep across the layer.
 
-**Status (2026-05-27):** #13, #18, #34, #35, #36, #38, #39, #46,
-and #54-#67 are now closed. The remaining unlanded Tier A items from
-this pass are #40, #52, and #53.
+**Status (2026-05-27):** #13, #18, #34, #35, #36, #38, #39, #40,
+#46, #52, #53, and #54-#67 are now closed. The one-afternoon Tier A
+pass is fully landed; no Tier A items remain from this slice.
 
 (*#10 `flatten_source_lighting_enabled` is a real correctness
 fix but touches the flatten contract enough to be Tier B —
@@ -1868,7 +1889,7 @@ The dominant work is **closing the `_mut()`-for-reads regression
 
 Following the Tier A/B/C/D system the prior audit landed:
 
-- **Tier A (small, near-zero risk):** #40, #52, #53.
+- **Tier A (small, near-zero risk):** none currently open.
 - **Tier B (moderate, focused pass):** #2, #4, #5, #6, #8, #10,
   #15, #29, #31, #32, #33, #44, #45, #48, #50, #51, plus the
   per-file parts of #14.

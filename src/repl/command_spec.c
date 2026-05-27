@@ -381,7 +381,7 @@ static const ReplEnumCommandSpec k_enum_command_specs[] = {
                   ENUM_SLOT_TOK(k_material_params, "pname: GL_DIFFUSE, GL_AMBIENT, GL_SPECULAR, GL_SHININESS") } },
     { "glShadeModel",    CMD_SHADE_MODEL,    1, "%sglShadeModel(%s);",       0,
         .args = { ENUM_SLOT_TOK(k_shade_models, "Try GL_SMOOTH or GL_FLAT") } },
-    { NULL, 0, 0, NULL, 0 }
+    { .name = NULL }
 };
 
 static const ReplStdCommandSpec k_std_command_specs[] = {
