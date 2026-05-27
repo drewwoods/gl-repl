@@ -658,12 +658,12 @@ void repl_reformat_program(void) {
                                                 fmt_text, sizeof(fmt_text))) {
                 int off = snprintf(fmt_text, sizeof(fmt_text), "%sfloat ", ind_s);
                 for (int decl_idx = 0;
-                     decl_idx < orig.var_decl_count && off < (int)sizeof(fmt_text) - 4;
+                     decl_idx < orig.payload.decl.count && off < (int)sizeof(fmt_text) - 4;
                      decl_idx++) {
                     if (decl_idx > 0)
                         off += snprintf(fmt_text + off, sizeof(fmt_text) - off, ", ");
                     off += snprintf(fmt_text + off, sizeof(fmt_text) - off,
-                                    "%s", orig.var_names[decl_idx]);
+                                    "%s", orig.payload.decl.names[decl_idx]);
                 }
                 snprintf(fmt_text + off, sizeof(fmt_text) - off, ";");
             }

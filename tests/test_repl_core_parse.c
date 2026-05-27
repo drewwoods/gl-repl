@@ -370,7 +370,7 @@ int main(void) {
                     cmd.type == CMD_LABEL);
         ASSERT_TRUE("label num_args", cmd.num_args == 0);
         ASSERT_TRUE("label fmt stored",
-                    strcmp(cmd.text, "hello") == 0);
+                    strcmp(cmd.payload.label.fmt, "hello") == 0);
         ASSERT_TRUE("label canonical text",
                     strstr(text, "\"hello\"") != NULL);
     }
@@ -384,7 +384,7 @@ int main(void) {
         ASSERT_TRUE("label one %f num_args", cmd.num_args == 1);
         ASSERT_TRUE("label one %f sub arg", cmd.args[0] == 3.5f);
         ASSERT_TRUE("label one %f fmt stored",
-                    strcmp(cmd.text, "v=%f") == 0);
+                    strcmp(cmd.payload.label.fmt, "v=%f") == 0);
     }
 
     {
@@ -406,7 +406,7 @@ int main(void) {
         ASSERT_TRUE("label %% literal parse ok", ok == 1);
         ASSERT_TRUE("label %% literal num_args", cmd.num_args == 0);
         ASSERT_TRUE("label %% literal fmt stored",
-                    strcmp(cmd.text, "100%% done") == 0);
+                    strcmp(cmd.payload.label.fmt, "100%% done") == 0);
     }
 
     /* label: error cases. Each must surface a graceful

@@ -83,9 +83,9 @@ static const CapRow rows[] = {
 
     /* Names per `float a, b, c;` declaration. */
     { "MAX_NAMES_PER_DECL", MAX_NAMES_PER_DECL,
-      sizeof(ExprVar) * 2 /* GLCmd.var_names slots in document + flat */
+      sizeof(ExprVar) * 2 /* GLCmd.payload.decl.names slots in document + flat */
         + sizeof(ExprVar) * 0, /* nominally inside MAX_COMMANDS too */
-      "GLCmd.var_names[][16]; effective cost folds into MAX_COMMANDS" },
+      "GLCmd.payload.decl.names[][16]; effective cost folds into MAX_COMMANDS" },
 
     /* User-scene slots. Each slot holds a full document copy. */
     { "MAX_USER_SCENES", MAX_USER_SCENES,

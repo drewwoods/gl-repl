@@ -295,8 +295,8 @@ static void test_overwrite_decl_with_assign_preserves_set_value(void) {
     int y_row = -1;
     for (int i = 0; i < repl_state_document_count(); i++) {
         const GLCmd *c = &repl_state_document_cmds_mut()[i];
-        if (c->type == CMD_VAR_DECLARE && c->var_decl_count == 1 &&
-            strcmp(c->var_names[0], "Y") == 0) {
+        if (c->type == CMD_VAR_DECLARE && c->payload.decl.count == 1 &&
+            strcmp(c->payload.decl.names[0], "Y") == 0) {
             y_row = i;
             break;
         }
@@ -368,8 +368,8 @@ static void test_overwrite_earlier_decl_with_later_assign_rebases_slot(void) {
     int x_row = -1;
     for (int i = 0; i < repl_state_document_count(); i++) {
         const GLCmd *c = &repl_state_document_cmds_mut()[i];
-        if (c->type == CMD_VAR_DECLARE && c->var_decl_count == 1 &&
-            strcmp(c->var_names[0], "X") == 0) {
+        if (c->type == CMD_VAR_DECLARE && c->payload.decl.count == 1 &&
+            strcmp(c->payload.decl.names[0], "X") == 0) {
             x_row = i;
             break;
         }
@@ -449,10 +449,10 @@ static void test_capacity_failure_is_atomic(void) {
     change.adjust_edit_line = 1;
     change.cmds[0].type = CMD_VAR_DECLARE;
     change.cmds[0].valid = 1;
-    change.cmds[0].var_decl_count = 1;
-    strncpy(change.cmds[0].var_names[0], "ghost",
-            sizeof(change.cmds[0].var_names[0]) - 1);
-    change.cmds[0].var_names[0][sizeof(change.cmds[0].var_names[0]) - 1] = '\0';
+    change.cmds[0].payload.decl.count = 1;
+    strncpy(change.cmds[0].payload.decl.names[0], "ghost",
+            sizeof(change.cmds[0].payload.decl.names[0]) - 1);
+    change.cmds[0].payload.decl.names[0][sizeof(change.cmds[0].payload.decl.names[0]) - 1] = '\0';
     strncpy(change.text[0], "  static float ghost;", sizeof(change.text[0]) - 1);
     change.text[0][sizeof(change.text[0]) - 1] = '\0';
     /* Add a predef-op that, if replayed, would register a new

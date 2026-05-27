@@ -499,7 +499,7 @@ static int parse_label(const char *args, GLCmd *cmd,
     for (int i = 0; i < sub_count; i++) cmd->args[i] = subs[i];
     cmd->num_args = sub_count;
     cmd->has_vars = input_has_any_visible_vars(post_args, vars, num_vars);
-    repl_copy_string_fits(cmd->text, sizeof(cmd->text), fmt_str);
+    repl_copy_string_fits(cmd->payload.label.fmt, sizeof(cmd->payload.label.fmt), fmt_str);
 
     if (text_out && text_sz > 0) {
         int off = snprintf(text_out, (size_t)text_sz,

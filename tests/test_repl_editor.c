@@ -1736,8 +1736,8 @@ int main() {
         ASSERT_INT("float_decl no-semi: accepted", result, 1);
         ASSERT_INT("float_decl no-semi: cmd added", repl_state_document_count(), 1);
         ASSERT_INT("float_decl no-semi: type", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
-        ASSERT_INT("float_decl no-semi: var_decl_count", repl_state_document_cmds_mut()[0].var_decl_count, 1);
-        ASSERT_STR("float_decl no-semi: var name", repl_state_document_cmds_mut()[0].var_names[0], "tmp");
+        ASSERT_INT("float_decl no-semi: payload.decl.count", repl_state_document_cmds_mut()[0].payload.decl.count, 1);
+        ASSERT_STR("float_decl no-semi: var name", repl_state_document_cmds_mut()[0].payload.decl.names[0], "tmp");
         ASSERT_TRUE("float_decl no-semi: predef registered",
                      repl_eval_find_predef_var_idx("tmp") >= 0);
     }
@@ -1748,7 +1748,7 @@ int main() {
         editor_feed_line("float abc;");
         ASSERT_INT("float_decl with-semi: cmd added", repl_state_document_count(), 1);
         ASSERT_INT("float_decl with-semi: type", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
-        ASSERT_STR("float_decl with-semi: var name", repl_state_document_cmds_mut()[0].var_names[0], "abc");
+        ASSERT_STR("float_decl with-semi: var name", repl_state_document_cmds_mut()[0].payload.decl.names[0], "abc");
         ASSERT_TRUE("float_decl with-semi: predef registered",
                      repl_eval_find_predef_var_idx("abc") >= 0);
     }
@@ -1771,7 +1771,7 @@ int main() {
         ASSERT_INT("float_decl init no-semi: accepted", result, 1);
         ASSERT_INT("float_decl init no-semi: cmd added", repl_state_document_count(), 1);
         ASSERT_INT("float_decl init no-semi: type", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
-        ASSERT_STR("float_decl init no-semi: var name", repl_state_document_cmds_mut()[0].var_names[0], "tmp");
+        ASSERT_STR("float_decl init no-semi: var name", repl_state_document_cmds_mut()[0].payload.decl.names[0], "tmp");
         int idx = repl_eval_find_predef_var_idx("tmp");
         ASSERT_TRUE("float_decl init no-semi: predef registered", idx >= 0);
         if (idx >= 0)
@@ -1785,7 +1785,7 @@ int main() {
         editor_feed_line("float radius = 2.5;");
         ASSERT_INT("float_decl init expr: cmd added", repl_state_document_count(), 1);
         ASSERT_INT("float_decl init expr: type", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
-        ASSERT_STR("float_decl init expr: var name", repl_state_document_cmds_mut()[0].var_names[0], "radius");
+        ASSERT_STR("float_decl init expr: var name", repl_state_document_cmds_mut()[0].payload.decl.names[0], "radius");
         int idx = repl_eval_find_predef_var_idx("radius");
         ASSERT_TRUE("float_decl init expr: registered", idx >= 0);
         if (idx >= 0)
@@ -1810,8 +1810,8 @@ int main() {
         int result = editor_try_commit_float_decl();
         ASSERT_INT("float_decl multi no-semi: accepted", result, 1);
         ASSERT_INT("float_decl multi no-semi: cmd added", repl_state_document_count(), 1);
-        ASSERT_INT("float_decl multi no-semi: var_decl_count",
-                   repl_state_document_cmds_mut()[0].var_decl_count, 3);
+        ASSERT_INT("float_decl multi no-semi: payload.decl.count",
+                   repl_state_document_cmds_mut()[0].payload.decl.count, 3);
         ASSERT_TRUE("float_decl multi no-semi: a registered",
                      repl_eval_find_predef_var_idx("a") >= 0);
         ASSERT_TRUE("float_decl multi no-semi: b registered",
@@ -1825,8 +1825,8 @@ int main() {
         glr_ctrl_reset_all();
         editor_feed_line("float x = 1, y = 2;");
         ASSERT_INT("float_decl multi init: cmd added", repl_state_document_count(), 1);
-        ASSERT_INT("float_decl multi init: var_decl_count",
-                   repl_state_document_cmds_mut()[0].var_decl_count, 2);
+        ASSERT_INT("float_decl multi init: payload.decl.count",
+                   repl_state_document_cmds_mut()[0].payload.decl.count, 2);
         int xi = repl_eval_find_predef_var_idx("x");
         int yi = repl_eval_find_predef_var_idx("y");
         ASSERT_TRUE("float_decl multi init: x registered", xi >= 0);
@@ -1856,9 +1856,9 @@ int main() {
         editor_feed_line("float tmp = 40;");
         ASSERT_INT("decl-top: 4 cmds after float tmp", repl_state_document_count(), 4);
         ASSERT_INT("decl-top: repl_state_document_cmds_mut()[0] is float n", repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
-        ASSERT_STR("decl-top: repl_state_document_cmds_mut()[0] name", repl_state_document_cmds_mut()[0].var_names[0], "n");
+        ASSERT_STR("decl-top: repl_state_document_cmds_mut()[0] name", repl_state_document_cmds_mut()[0].payload.decl.names[0], "n");
         ASSERT_INT("decl-top: repl_state_document_cmds_mut()[1] is float tmp", repl_state_document_cmds_mut()[1].type, CMD_VAR_DECLARE);
-        ASSERT_STR("decl-top: repl_state_document_cmds_mut()[1] name", repl_state_document_cmds_mut()[1].var_names[0], "tmp");
+        ASSERT_STR("decl-top: repl_state_document_cmds_mut()[1] name", repl_state_document_cmds_mut()[1].payload.decl.names[0], "tmp");
         ASSERT_INT("decl-top: repl_state_document_cmds_mut()[2] is assign", repl_state_document_cmds_mut()[2].type, CMD_VAR_ASSIGN);
         ASSERT_INT("decl-top: repl_state_document_cmds_mut()[3] is glBegin", repl_state_document_cmds_mut()[3].type, CMD_BEGIN);
     }
@@ -1889,7 +1889,7 @@ int main() {
         ASSERT_INT("decl-top mid: repl_state_document_cmds_mut()[0] is decl",
                    repl_state_document_cmds_mut()[0].type, CMD_VAR_DECLARE);
         ASSERT_STR("decl-top mid: repl_state_document_cmds_mut()[0] name",
-                   repl_state_document_cmds_mut()[0].var_names[0], "radius");
+                   repl_state_document_cmds_mut()[0].payload.decl.names[0], "radius");
         ASSERT_INT("decl-top mid: repl_state_document_cmds_mut()[1] preserved glBegin",
                    repl_state_document_cmds_mut()[1].type, CMD_BEGIN);
         ASSERT_INT("decl-top mid: repl_state_document_cmds_mut()[2] preserved glEnd",
@@ -1922,9 +1922,9 @@ int main() {
         int result = editor_try_commit_float_decl();
         ASSERT_INT("overwrite shared: accepted", result, 1);
         ASSERT_INT("overwrite shared: still 1 cmd", repl_state_document_count(), 1);
-        ASSERT_INT("overwrite shared: var_decl_count", repl_state_document_cmds_mut()[0].var_decl_count, 2);
-        ASSERT_STR("overwrite shared: slot 0 is a", repl_state_document_cmds_mut()[0].var_names[0], "a");
-        ASSERT_STR("overwrite shared: slot 1 is c", repl_state_document_cmds_mut()[0].var_names[1], "c");
+        ASSERT_INT("overwrite shared: payload.decl.count", repl_state_document_cmds_mut()[0].payload.decl.count, 2);
+        ASSERT_STR("overwrite shared: slot 0 is a", repl_state_document_cmds_mut()[0].payload.decl.names[0], "a");
+        ASSERT_STR("overwrite shared: slot 1 is c", repl_state_document_cmds_mut()[0].payload.decl.names[1], "c");
         ASSERT_TRUE("overwrite shared: a still registered",
                     repl_eval_find_predef_var_idx("a") >= 0);
         ASSERT_TRUE("overwrite shared: c registered",
@@ -1955,8 +1955,8 @@ int main() {
 
         int result = editor_try_commit_float_decl();
         ASSERT_INT("drop b: accepted", result, 1);
-        ASSERT_INT("drop b: var_decl_count now 1", repl_state_document_cmds_mut()[0].var_decl_count, 1);
-        ASSERT_STR("drop b: slot 0 is n", repl_state_document_cmds_mut()[0].var_names[0], "n");
+        ASSERT_INT("drop b: payload.decl.count now 1", repl_state_document_cmds_mut()[0].payload.decl.count, 1);
+        ASSERT_STR("drop b: slot 0 is n", repl_state_document_cmds_mut()[0].payload.decl.names[0], "n");
         ASSERT_TRUE("drop b: n still registered",
                     repl_eval_find_predef_var_idx("n") >= 0);
         ASSERT_TRUE("drop b: b unregistered",
@@ -1986,9 +1986,9 @@ int main() {
         ASSERT_INT("drop referenced b: handler consumed input", result, 1);
         /* Overwrite must have been rejected: decl still has both names */
         ASSERT_INT("drop referenced b: decl unchanged",
-                   repl_state_document_cmds_mut()[0].var_decl_count, 2);
+                   repl_state_document_cmds_mut()[0].payload.decl.count, 2);
         ASSERT_STR("drop referenced b: b preserved",
-                   repl_state_document_cmds_mut()[0].var_names[1], "b");
+                   repl_state_document_cmds_mut()[0].payload.decl.names[1], "b");
         ASSERT_TRUE("drop referenced b: status mentions 'b'",
                     strstr(g_status, "'b'") != NULL);
         ASSERT_TRUE("drop referenced b: status does not mention 'n'",
@@ -2223,7 +2223,7 @@ int main() {
         int result = editor_try_commit_float_decl();
         ASSERT_INT("expand decl: accepted", result, 1);
         ASSERT_INT("expand decl: still 4 cmds", repl_state_document_count(), 4);
-        ASSERT_INT("expand decl: var_decl_count is 4", repl_state_document_cmds_mut()[0].var_decl_count, 4);
+        ASSERT_INT("expand decl: payload.decl.count is 4", repl_state_document_cmds_mut()[0].payload.decl.count, 4);
 
         ai = repl_eval_find_predef_var_idx("a");
         bi = repl_eval_find_predef_var_idx("b");

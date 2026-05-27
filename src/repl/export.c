@@ -1079,7 +1079,7 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
                 (p[5] == ' ' || p[5] == '\t')) {
                 p += 5;
                 int idx = 0;
-                while (*p && *p != ';' && idx < cmd->var_decl_count) {
+                while (*p && *p != ';' && idx < cmd->payload.decl.count) {
                     while (*p && isspace((unsigned char)*p)) p++;
                     while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
                     while (*p && isspace((unsigned char)*p)) p++;
@@ -1101,13 +1101,13 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
             }
         }
         fprintf(f, "  // @%s", k_snippet_directive_declare);
-        for (int di = 0; di < cmd->var_decl_count; di++) {
+        for (int di = 0; di < cmd->payload.decl.count; di++) {
             if (has_init[di]) {
                 char vbuf[32];
                 export_format_decl_float(vbuf, sizeof(vbuf), inits[di]);
-                fprintf(f, " %s=%s", cmd->var_names[di], vbuf);
+                fprintf(f, " %s=%s", cmd->payload.decl.names[di], vbuf);
             } else
-                fprintf(f, " %s", cmd->var_names[di]);
+                fprintf(f, " %s", cmd->payload.decl.names[di]);
         }
         fprintf(f, "\n");
         break;

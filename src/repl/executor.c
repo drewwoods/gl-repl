@@ -503,7 +503,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
              * it, so the call composes cleanly with whatever
              * modelview/raster state the user has set up.
              *
-             * Format substitution walks cmd.text, expanding %f from
+             * Format substitution walks cmd.payload.label.fmt, expanding %f from
              * args[0..3] and %% to a literal '%'. The flatten pass
              * keeps args[] in sync with current variable values for
              * has_vars commands, so we use them directly. */
@@ -512,7 +512,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             if (sub_count < 0) sub_count = 0;
             int sub_idx = 0;
             int off = 0;
-            const char *fmt = flat_cmds[pc].text;
+            const char *fmt = flat_cmds[pc].payload.label.fmt;
             while (*fmt && off < (int)sizeof(buf) - 1) {
                 if (fmt[0] == '%' && fmt[1] == 'f' && sub_idx < sub_count) {
                     off += snprintf(buf + off, sizeof(buf) - (size_t)off,
