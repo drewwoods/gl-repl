@@ -940,10 +940,12 @@ int main() {
         ASSERT_INT("count unchanged after oversized key",
                    repl_config_bag_count(&bag), 1);
 
-        /* REPL_CFG_VALUE_MAX = 16, so a 20-char value is 4 over the limit. */
+        /* REPL_CFG_VALUE_MAX = 32, so a 36-char value is 4 over the
+         * limit. The width was bumped from 16 to 32 to fit symbolic
+         * enum names like "SCENE_BACKDROP_CITY_AND_STARS". */
         char long_value[64];
         memset(long_value, 'v', sizeof(long_value) - 1);
-        long_value[20] = '\0';
+        long_value[36] = '\0';
         ASSERT_INT("set fail: oversized value returns 0",
                    repl_config_bag_set(&bag, "axes", long_value), 0);
         ASSERT_INT("count unchanged after oversized value",

@@ -13,6 +13,7 @@
 #include "ui/app/layout.h"      /* CODE_PANEL_LAYOUT_* enum values */
 #include "ui/app/state.h"
 #include "scene/render.h"
+#include "scene/themes.h"       /* GRID_THEME_*, AXES_THEME_*, SCENE_BACKDROP_* */
 #include "app/glr_defaults.h"   /* CFG_DEFAULT_* */
 
 #define g_accum_aa_enabled    (glr_state_render_mut()->accum_aa_enabled)
