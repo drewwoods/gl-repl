@@ -354,91 +354,20 @@ ReplCompileResult editor_compile_if_block(const char *input,
     editor_commit_plan_init(out);
     editor_compile_clear_err(err, err_size);
 
-    const char *p = input ? input : "";
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (strncmp(p, "if(", 3) != 0 && strncmp(p, "if (", 4) != 0) {
+    ReplIfBlockKernel kernel;
+    ReplCompileResult kr = repl_compile_if_block_kernel(input, ctx, &kernel,
+                                                        err, err_size);
+    if (kr != REPL_COMPILE_OK)
+        return kr;
+    if (!kernel.valid) {
         out->change.kind = REPL_COMPILED_NO_CHANGE;
         return REPL_COMPILE_OK;
     }
 
-    int pos = ctx->insert_mode ? ctx->edit_line :
-              (ctx->edit_line < ctx->document_count
-                   ? ctx->edit_line : ctx->document_count);
-
-    ExprVar visible_vars[MAX_EXPR_VARS];
-    int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS, NULL);
-
-    /* Skip past `if` to the opening `(`. */
-    while (*p && *p != '(') p++;
-    if (!*p)
-        return editor_compile_error(err, err_size, "if syntax: if(expr) {");
-    p++;
-
-    char cond_text[MAX_LINE_LEN];
-    int  clen;
-    {
-        int paren = 1;
-        const char *expr_start = p;
-        while (*p && paren > 0) {
-            if (*p == '(')      paren++;
-            else if (*p == ')') paren--;
-            if (paren > 0) p++;
-        }
-        if (paren != 0)
-            return editor_compile_error(err, err_size, "if syntax: if(expr) {");
-        clen = (int)(p - expr_start);
-        if (clen > (int)sizeof(cond_text) - 1)
-            clen = (int)sizeof(cond_text) - 1;
-        memcpy(cond_text, expr_start, (size_t)clen);
-        cond_text[clen] = '\0';
-    }
-
-    {
-        char verr[REPL_DIAG_TEXT_MAX];
-        if (!repl_eval_validate_expression_idents(cond_text,
-                                                  visible_nv > 0 ? visible_vars : NULL,
-                                                  visible_nv,
-                                                  verr, sizeof(verr)))
-            return editor_compile_error(err, err_size, "%s", verr);
-    }
-
-    float cond_val = 0.0f;
-    {
-        float cond_args[1];
-        int neval = repl_eval_parse_exprs(cond_text, cond_args, 1,
-                                          visible_nv > 0 ? visible_vars : NULL,
-                                          visible_nv);
-        cond_val = (neval >= 1) ? cond_args[0] : 0.0f;
-    }
-
-    /* Skip past `)`. */
-    p++;
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (*p != '{' && *p != '\0')
-        return editor_compile_error(err, err_size, "if syntax: if(expr) {");
-
-    char indent[REPL_INDENT_TEXT_MAX];
-    repl_source_scope_cmd_indent(pos, indent, sizeof(indent));
-
-    /* Build CMD_IF_BEGIN. */
-    GLCmd ib;
-    memset(&ib, 0, sizeof(ib));
-    ib.type = CMD_IF_BEGIN;
-    ib.args[0] = cond_val;
-    ib.valid = 1;
-    ib.has_vars = input_has_any_visible_vars(cond_text, visible_vars, visible_nv);
-
-    /* Format the begin line text. cond_text gets trimmed in place. */
-    char ib_text[MAX_LINE_LEN];
-    {
-        char *ct = cond_text;
-        int ctlen;
-        while (*ct && isspace((unsigned char)*ct)) ct++;
-        ctlen = (int)strlen(ct);
-        while (ctlen > 0 && isspace((unsigned char)ct[ctlen - 1]))
-            ct[--ctlen] = '\0';
-        snprintf(ib_text, sizeof(ib_text), "%sif(%s) {", indent, ct);
-    }
+    int   pos    = kernel.pos;
+    GLCmd ib     = kernel.ib;
+    const char *indent  = kernel.indent;
+    const char *ib_text = kernel.ib_text;
 
     /* Header-replace branch: cursor sits on an existing CMD_IF_BEGIN
      * in non-insert mode → REPLACE_ONE. */

@@ -1557,24 +1557,25 @@ ReplCompileResult repl_compile_close_brace(const char *input,
     return REPL_COMPILE_OK;
 }
 
-ReplCompileResult repl_compile_if_block(const char *input,
-                                        const ReplCompileContext *ctx,
-                                        ReplCompiledChange *out,
-                                        char *err, int err_size) {
+ReplCompileResult repl_compile_if_block_kernel(const char *input,
+                                               const ReplCompileContext *ctx,
+                                               ReplIfBlockKernel *out,
+                                               char *err, int err_size) {
     if (!ctx || !out) return REPL_COMPILE_ERROR;
-    repl_compiled_change_init(out);
+    memset(out, 0, sizeof(*out));
 
     const char *p = input ? input : "";
     while (*p && isspace((unsigned char)*p)) p++;
     if (strncmp(p, "if(", 3) != 0 && strncmp(p, "if (", 4) != 0) {
-        out->kind = REPL_COMPILED_NO_CHANGE;
+        out->valid = 0;
         return REPL_COMPILE_OK;
     }
 
-    int pos = compile_insert_pos(ctx);
+    out->pos = compile_insert_pos(ctx);
 
     ExprVar visible_vars[MAX_EXPR_VARS];
-    int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS, NULL);
+    int visible_nv = collect_visible_vars(out->pos, visible_vars,
+                                          MAX_EXPR_VARS, NULL);
 
     /* Skip past `if` to the opening `(`. */
     while (*p && *p != '(') p++;
@@ -1602,15 +1603,13 @@ ReplCompileResult repl_compile_if_block(const char *input,
     memcpy(cond_text, expr_start, (size_t)clen);
     cond_text[clen] = '\0';
 
-    {
-        char verr[REPL_DIAG_TEXT_MAX];
-        if (!repl_eval_validate_expression_idents(cond_text,
-                                                  visible_nv > 0 ? visible_vars : NULL,
-                                                  visible_nv,
-                                                  verr, sizeof(verr))) {
-            snprintf(err, (size_t)err_size, "%s", verr);
-            return REPL_COMPILE_ERROR;
-        }
+    char verr[REPL_DIAG_TEXT_MAX];
+    if (!repl_eval_validate_expression_idents(cond_text,
+                                              visible_nv > 0 ? visible_vars : NULL,
+                                              visible_nv,
+                                              verr, sizeof(verr))) {
+        snprintf(err, (size_t)err_size, "%s", verr);
+        return REPL_COMPILE_ERROR;
     }
 
     float cond_val = 0.0f;
@@ -1630,15 +1629,13 @@ ReplCompileResult repl_compile_if_block(const char *input,
         return REPL_COMPILE_ERROR;
     }
 
-    char indent[REPL_INDENT_TEXT_MAX];
-    repl_source_scope_cmd_indent(pos, indent, sizeof(indent));
+    repl_source_scope_cmd_indent(out->pos, out->indent, sizeof(out->indent));
 
-    GLCmd ib;
-    memset(&ib, 0, sizeof(ib));
-    ib.type = CMD_IF_BEGIN;
-    ib.args[0] = cond_val;
-    ib.valid = 1;
-    ib.has_vars = input_has_any_visible_vars(cond_text, visible_vars, visible_nv);
+    out->ib.type    = CMD_IF_BEGIN;
+    out->ib.args[0] = cond_val;
+    out->ib.valid   = 1;
+    out->ib.has_vars = input_has_any_visible_vars(cond_text,
+                                                  visible_vars, visible_nv);
 
     /* Trim cond_text in place for canonical formatting. */
     char *ct = cond_text;
@@ -1648,18 +1645,38 @@ ReplCompileResult repl_compile_if_block(const char *input,
     while (ctlen > 0 && isspace((unsigned char)ct[ctlen - 1]))
         ct[--ctlen] = '\0';
 
-    char ib_text[MAX_LINE_LEN];
-    if (!repl_format_fits(ib_text, sizeof(ib_text), "%sif(%s) {", indent, ct)) {
+    if (!repl_format_fits(out->ib_text, sizeof(out->ib_text),
+                          "%sif(%s) {", out->indent, ct)) {
         snprintf(err, (size_t)err_size, "Command too long");
         return REPL_COMPILE_ERROR;
     }
 
+    out->valid = 1;
+    return REPL_COMPILE_OK;
+}
+
+ReplCompileResult repl_compile_if_block(const char *input,
+                                        const ReplCompileContext *ctx,
+                                        ReplCompiledChange *out,
+                                        char *err, int err_size) {
+    if (!ctx || !out) return REPL_COMPILE_ERROR;
+    repl_compiled_change_init(out);
+
+    ReplIfBlockKernel kernel;
+    ReplCompileResult r = repl_compile_if_block_kernel(input, ctx, &kernel,
+                                                       err, err_size);
+    if (r != REPL_COMPILE_OK) return r;
+    if (!kernel.valid) {
+        out->kind = REPL_COMPILED_NO_CHANGE;
+        return REPL_COMPILE_OK;
+    }
+
     out->kind  = REPL_COMPILED_INSERT_ONE;
-    out->pos   = pos;
+    out->pos   = kernel.pos;
     out->count = 1;
     out->adjust_edit_line = 1;
-    out->cmds[0] = ib;
-    snprintf(out->text[0], sizeof(out->text[0]), "%s", ib_text);
+    out->cmds[0] = kernel.ib;
+    snprintf(out->text[0], sizeof(out->text[0]), "%s", kernel.ib_text);
     return REPL_COMPILE_OK;
 }
 
