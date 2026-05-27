@@ -715,7 +715,7 @@ flowchart LR
 
     subgraph peers["2b. Peer subsystems (own state + controller)"]
         vpanel["src/subsystems/variable_panel/variable_panel_state.c + src/subsystems/variable_panel/variable_panel_drag.c<br/>(was repl_var_drag)<br/>visibility + drag transaction"]
-        replay_sys["src/subsystems/replay/replay.c + src/subsystems/replay/replay_state.c<br/>(was repl_replay)<br/>state machine · fades"]
+      replay_sys["src/subsystems/replay/replay_playback.c + replay_fade.c + replay_input.c<br/>+ replay.c + replay_state.c<br/>(was repl_replay)<br/>state machine · fades · walkers"]
         cpicker["src/subsystems/color_picker/color_picker_state.c<br/>(was inside ui_color_picker)<br/>HSV/alpha state · lifecycle · writeback"]
         tutorial_sys["src/subsystems/tutorial/tutorial.c + src/subsystems/tutorial/tutorial_state.c<br/>(catalog in src/repl/tutorials.c)<br/>runner · step state · locks · fade timing"]
         camera["src/app/glr_camera.c<br/>orbit/pan/zoom transform"]

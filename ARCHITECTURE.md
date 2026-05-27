@@ -104,8 +104,9 @@ When a module starts owning mutable REPL state, follow the Stage-1 template:
    UI inputs from REPL state, calls the scene renderer, then calls UI renderers.
    This role belongs in `src/app/glr_ctrl.c`.
 6. **Replay is REPL policy.** Replay state machine, PC, mode, baseline values,
-   and fade/highlight decisions belong in `src/subsystems/replay/replay.c` or follow-up replay
-   planning code. Any scene use of replay data should be via snapshots or
+  and fade/highlight decisions belong in `src/subsystems/replay/` (primarily
+  `replay_playback.c`, `replay_fade.c`, and `replay.c`). Any scene use of
+  replay data should be via snapshots or
    documented transitional helpers.
 
 ## Target Frame Pipeline
