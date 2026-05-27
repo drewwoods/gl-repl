@@ -28,10 +28,12 @@
 
 ## Status summary (updated 2026-05-27)
 
-82 findings total. 65 closed (✅), 17 still open. All open findings verified against
+83 findings total (82 from the original audit + 1 review-discovered).
+66 closed (✅), 17 still open. All open findings verified against
 current HEAD. Tier letters cover the whole open backlog — no unclassified rows
 remain. Tier A is empty: the 2026-05-27 Tier A close pass landed all ten
-(#26, #27, #43, #70, #72, #76, #77, #78, #79, #81).
+(#26, #27, #43, #70, #72, #76, #77, #78, #79, #81), and the review pass that
+added #83 closed it in the same commit.
 
 | # | Sev | Tier | Status | Finding (short) |
 |---|-----|------|--------|-----------------|
@@ -117,6 +119,7 @@ remain. Tier A is empty: the 2026-05-27 Tier A close pass landed all ten
 | 80 | 🟡 | D | Open | `s_replay_text_view` file-level set-then-read state |
 | 81 | 🟡 | A | ✅ Done | `TUTORIAL_LOCKED_LINE_MAX` doubles as cap and validator ceiling |
 | 82 | 🔵 | B | Open | `tutorial_step_at()` O(N) sentinel walk |
+| 83 | 🔴 | A | ✅ Done | `@declare` import treats failed `repl_eval_declare_predef_var` as success |
 
 **By severity (open only):** 0 🔴, 8 🟡, 0 🟢, 9 🔵 = 17 open.
 **By tier (open only):** A: 0, B: 9, C: 6, D: 2, unclassified: 0.
@@ -2074,6 +2077,54 @@ tutorial paint.
 **Fix:** Expose `const TutorialStep *repl_tutorial_step_get(int, int)`
 returning the whole struct; let the menu reader walk fields off
 the pointer. Keep the per-field getters as inline shims.
+
+### 83. ✅ `@declare` import treats failed `repl_eval_declare_predef_var` as success
+
+**Where:** `src/repl/import.c:418` and (the demo mirror)
+`tools/repl_demo/repl_demo.c:273`.
+
+**Smell:**
+```c
+if (repl_eval_declare_predef_var(name, NULL, 0) < 0) {
+    if (warnings) (*warnings)++;
+    continue;
+}
+```
+`repl_eval_declare_predef_var` returns 1 on success / 0 on failure
+(`src/repl/eval.c:811-814`), not idx-or-(-1). The `< 0` check can
+never fire, so on a full predef table (`MAX_PREDEF_VARS` reached) or
+an invalid name, import silently treats the failure as success: the
+name lands in the reconstructed `CMD_VAR_DECLARE` even though the
+predef-var slot was never allocated, leaving the source document and
+the predef table out of sync.
+
+The eval.h header doc at L264-265 reinforced the bug — it said
+"returns index, or -1 on duplicate/error", which is the contract of
+the `_with_value` sibling, not this function.
+
+**Why it matters:** The `tests/test_repl_core_internal.c` suite
+caps at well under `MAX_PREDEF_VARS`, so no test surfaces the table-
+full path. In production a workspace with too many `@var` headers
+(or one that triggers the `_with_value` validators — reserved-name
+collision, invalid first char, name too long) imports as if it
+worked. The `CMD_VAR_DECLARE` carries a name the runtime predef
+table doesn't have; downstream evaluation of that name falls through
+to `0.0f` (silent default) instead of either honoring the saved value
+or surfacing a diagnostic.
+
+**Fix:** Either rewrite the call sites to use `!repl_eval_declare_predef_var(...)`
+(success-bool check) or migrate them to `_with_value` and check
+`< 0`. Also fix the eval.h doc so future readers see the actual
+return contract.
+
+**Status (2026-05-27, reviewer):** ✅ Closed. Flipped the two `< 0`
+checks to `!` at `src/repl/import.c:418` and
+`tools/repl_demo/repl_demo.c:273`, and rewrote the `repl_eval_declare_predef_var`
+doc comment in `src/repl/eval.h` to spell out the 1/0 return shape
+(distinct from the `_with_value` sibling that returns idx-or-(-1)).
+The two functions intentionally keep different return shapes —
+callers that need the slot index go through `_with_value`; callers
+that only need success/failure use the thin wrapper.
 
 ## Sequencing
 

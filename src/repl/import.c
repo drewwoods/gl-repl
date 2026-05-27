@@ -415,7 +415,7 @@ static int parse_snippet_declare(const char *args, int *loaded,
          * copy overflow, source/cmd-store insert failure) bails. */
         int was_registered = (repl_eval_find_predef_var_idx(name) >= 0);
         if (!was_registered) {
-            if (repl_eval_declare_predef_var(name, NULL, 0) < 0) {
+            if (!repl_eval_declare_predef_var(name, NULL, 0)) {
                 if (warnings) (*warnings)++;
                 continue;
             }

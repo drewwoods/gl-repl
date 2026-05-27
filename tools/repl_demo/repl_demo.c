@@ -270,7 +270,7 @@ static void seed_variable_driven_program(void) {
     /* `t` is created by repl_state_reset_program() -> ... ->
      * repl_eval_init_predef_vars(). Add `r`. */
     char err[64] = "";
-    if (repl_eval_declare_predef_var("r", err, sizeof(err)) < 0) {
+    if (!repl_eval_declare_predef_var("r", err, sizeof(err))) {
         fprintf(stderr, "  declare_predef_var(r) failed: %s\n", err);
         return;
     }

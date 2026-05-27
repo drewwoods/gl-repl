@@ -261,11 +261,14 @@ int  repl_eval_is_builtin_function(const char *name);
 int  repl_eval_input_has_predef_vars(const char *s);
 /* Look up a variable by name; returns index in g_predef_vars, or -1 if not found. */
 int  repl_eval_find_predef_var_idx(const char *name);
-/* Declare a new predefined variable; returns index, or -1 on duplicate/error.
- * Errors are written to the err buffer (errsz bytes). */
+/* Declare a new predefined variable; returns 1 on success, 0 on
+ * duplicate/error. Errors are written to the err buffer (errsz bytes).
+ * Callers that need the slot index should use the _with_value variant
+ * below — this one drops it. */
 int  repl_eval_declare_predef_var(const char *name, char *err, int errsz);
-/* Declare a new predefined variable with a starting value; returns index, or -1 on duplicate/error.
- * Errors are written to the err buffer (errsz bytes). */
+/* Declare a new predefined variable with a starting value; returns the
+ * new slot index, or -1 on duplicate/error. Errors are written to the
+ * err buffer (errsz bytes). */
 int  repl_eval_declare_predef_var_with_value(const char *name, float value, char *err, int errsz);
 /* Unregister a predefined variable by name (safe no-op if not found). */
 void repl_eval_undeclare_predef_var(const char *name);
