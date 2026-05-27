@@ -417,12 +417,10 @@ void glr_cfg_cycle_row(int row, int delta) {
      * machinery rather than flipping the int directly. Both directions
      * collapse to "toggle". */
     if (item->key == GLR_CONFIG_REPLAY) {
-        if (glr_config_get(GLR_CONFIG_REPLAY)) {
-            replay_stop();
+        int turn_on = !glr_config_get(GLR_CONFIG_REPLAY);
+        glr_config_set(GLR_CONFIG_REPLAY, turn_on);
+        if (!turn_on)
             repl_set_status("Replay: off");
-        } else {
-            replay_start();
-        }
         return;
     }
 
