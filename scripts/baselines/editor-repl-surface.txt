@@ -37,8 +37,15 @@
 # (Finding #39, replacing the last input-side parse dispatch shim and
 # deleting src/editor/services.{c,h}).
 #
+# 2026-05-27: commit_c tightened 35 -> 27. The dedup work in commits
+# 9fa578f / 7cb010c / 9479d3a / and the four kernel-extraction
+# commits closing #15 retired eight direct repl_* surface symbols
+# (swatch helpers were consolidated; the cfg_baseline bridge ate
+# what was direct call sites). No commit since had to expand it, so
+# the baseline is brought to the new low.
+#
 # Ratchet down as migrations land. The plan target
 # (plans/done/editor-demo.md) is ~5 per file.
 
 input_c: 24
-commit_c: 35
+commit_c: 27

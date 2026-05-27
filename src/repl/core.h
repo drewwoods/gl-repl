@@ -224,15 +224,17 @@ void        repl_mark_source_dirty(void);
 #define USER_SCENE_NAME_MAX 64
 #endif
 
-/* Query the built-in example library. Examples are immutable snapshots
- * of documented GL patterns; editing an example auto-promotes it to a
- * user scene on first edit (via repl_promote_example_if_needed()). */
-int  repl_example_count(void);
-const char *repl_example_name(int idx);
-/* Returns the post-load cursor target (= document line count after
- * the example body emits). Caller applies the value via
- * editor_state_edit_line_set() above the β boundary (implemented in
- * phase 3.6.4 of plans/in-review/edit-line-ownership.md). */
+/* Built-in example library. Examples are immutable snapshots of
+ * documented GL patterns; editing an example auto-promotes it to a
+ * user scene on first edit (via repl_promote_example_if_needed()).
+ * Query API (repl_example_count / repl_example_name / _lines /
+ * _subheading / tag accessors) lives in src/repl/examples.h —
+ * include that header directly rather than re-declaring here.
+ *
+ * repl_load_example returns the post-load cursor target (= document
+ * line count after the example body emits). Caller applies the value
+ * via editor_state_edit_line_set() above the β boundary (implemented
+ * in phase 3.6.4 of plans/in-review/edit-line-ownership.md). */
 int  repl_load_example(int idx);
 
 /* User scenes: persistent named snapshots (up to MAX_USER_SCENES slots).

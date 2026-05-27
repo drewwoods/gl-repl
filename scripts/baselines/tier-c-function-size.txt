@@ -8,5 +8,10 @@
 # When you extract a sub-handler, lower the baseline to the new count
 # so the ratchet tightens behind you.
 
-parse_command: 456
+# 2026-05-27: parse_command tightened 456 -> 361 to lock in the
+# block-handler extractions from the #15/#16 work (close-brace,
+# for-loop, if-block, func-def kernels lifted into compile.c). The
+# residual 361 is the dispatch + per-command-spec parse path.
+
+parse_command: 361
 flatten_range: 160

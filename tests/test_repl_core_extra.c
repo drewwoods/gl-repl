@@ -5,6 +5,7 @@
 #include "config.h"                  /* DEFAULT_SCENE_FILE */
 #include "repl/command_spec.h"  /* cmd_type_name */
 #include "repl/core.h"
+#include "repl/examples.h"     /* repl_example_count, repl_example_name */
 #include "editor/input.h"
 #include "repl/core_internal.h"
 #include "app/glr_debug.h"
