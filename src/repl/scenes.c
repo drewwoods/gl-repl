@@ -1014,7 +1014,7 @@ int repl_promote_example_if_needed(void) {
         }
     }
 
-    const char *example_name = repl_examples_name(g_example_idx);
+    const char *example_name = repl_example_name(g_example_idx);
     char unique[USER_SCENE_NAME_MAX];
     derive_unique_scene_name(unique, sizeof(unique),
                              example_name ? example_name : "Scene", -1);

@@ -357,7 +357,7 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("replay expand restored", replay_state_view().expand_args, 0);
     ASSERT_INT("active example restored", repl_state_scenes().active_example_idx, 3);
     ASSERT_STR("workspace restored",
-               repl_state_workspace_dir(),
+               repl_workspace_dir(),
                "/tmp/repl-state-stage1");
     ASSERT_STR("pending scene restored",
                repl_state_import_export().pending_scene_name,
@@ -413,7 +413,7 @@ static void test_reset_all_restores_default_runtime(void) {
     ASSERT_INT("reset_all panel scroll", editor_scroll(), 0);
     ASSERT_INT("reset_all replay mode", replay_state_view().mode, REPLAY_MODE_VERTEX);
     ASSERT_INT("reset_all replay expand", replay_state_view().expand_args, 1);
-    ASSERT_STR("reset_all workspace dir", repl_state_workspace_dir(), "");
+    ASSERT_STR("reset_all workspace dir", repl_workspace_dir(), "");
     ASSERT_INT("reset_all workspace header count",
                repl_state_import_export().workspace_header_line_count,
                defaults.import_export.workspace_header_line_count);

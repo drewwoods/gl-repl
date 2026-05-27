@@ -19,7 +19,7 @@
  *
  * Apply-side mutations (predef declare / undeclare, command-store
  * shift, editor-buffer write) are performed by src/repl/apply.c and
- * orchestrated by editor_commit (implemented in Phase C commits 20-21).
+ * orchestrated by the editor commit path.
  *
  * Reading guide — entry points and what they emit:
  *   repl_compile_float_decl         INSERT_ONE / REPLACE_ONE  +
@@ -168,9 +168,8 @@ ReplCompileContext repl_compile_context_from_live(int edit_line_idx) {
      * insert mode is editor state, not REPL state, so the REPL
      * pipeline doesn't reach for it.
      *
-     * edit_line_idx is supplied by the caller (β: REPL pipeline does
-     * not reach into editor_state_* for the cursor), implemented in
-     * phase 3.6.1 of plans/in-review/edit-line-ownership.md. */
+     * edit_line_idx is supplied by the caller because the REPL
+     * pipeline does not reach into editor_state_* for the cursor. */
     ReplCompileContext ctx = {
         .edit_line       = edit_line_idx,
         .document_count  = repl_state_document_count(),
@@ -179,11 +178,6 @@ ReplCompileContext repl_compile_context_from_live(int edit_line_idx) {
         .document_cmds   = repl_state_document_cmds(),
     };
     return ctx;
-}
-
-/* Compile-time analog of editor_commit.c's static fill_scope_indent. */
-static void compile_scope_indent(int pos, char *buf, int buf_sz) {
-    repl_source_scope_cmd_indent(pos, buf, buf_sz);
 }
 
 /* Insert/replace position for ctx: the edit line in insert mode;
@@ -564,7 +558,7 @@ static ReplCompileResult parse_float_name_list(const char *input,
             if (!repl_eval_validate_expression_idents(init_expr, NULL, 0,
                                                       verr, sizeof(verr)))
                 return compile_set_err(err, err_size, "%s", verr);
-            ExprCtx eval_ctx = { init_expr, g_predef_vars, g_num_predef_vars };
+            ExprCtx eval_ctx = { init_expr, g_predef_vars, g_num_predef_vars, NULL, 0 };
             parsed->init_vals[parsed->count] = repl_eval_expr(&eval_ctx);
             parsed->has_init[parsed->count] = 1;
         }
@@ -974,7 +968,7 @@ ReplCompileResult repl_compile_var_assign(const char *input,
 
     /* Format text using the scope indent at the insert position. */
     char indent[REPL_INDENT_TEXT_MAX];
-    compile_scope_indent(insert_idx, indent, sizeof(indent));
+    repl_source_scope_cmd_indent(insert_idx, indent, sizeof(indent));
     char assign_text[MAX_LINE_LEN];
     if (index_expr[0]) {
         if (!repl_format_fits(assign_text, sizeof(assign_text),

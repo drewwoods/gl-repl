@@ -531,7 +531,7 @@ static char *join_canonical_definition_lines(char **lines, int count) {
 }
 
 static char *collect_example_definition_lines(int idx) {
-    const char *const *lines = repl_examples_lines(idx);
+    const char *const *lines = repl_example_lines(idx);
     char **canon_lines;
     int count = 0;
     char *joined;

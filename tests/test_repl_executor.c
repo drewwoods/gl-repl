@@ -440,20 +440,8 @@ static float test_camera_distance_source(void) {
 }
 
 static void test_executor_camera_distance_source(void) {
-    /* Default state: no source installed; getter returns NULL. */
+    /* Default state: no source installed. */
     repl_executor_install_camera_distance_source(NULL);
-    ASSERT_TRUE("default camera-distance source is NULL",
-                repl_executor_camera_distance_source() == NULL);
-
-    /* Install + readback. */
-    repl_executor_install_camera_distance_source(test_camera_distance_source);
-    ASSERT_TRUE("install + getter round-trips the same fn",
-                repl_executor_camera_distance_source() == test_camera_distance_source);
-
-    /* Clearing via NULL install reverts to default. */
-    repl_executor_install_camera_distance_source(NULL);
-    ASSERT_TRUE("install(NULL) clears the source",
-                repl_executor_camera_distance_source() == NULL);
 
     /* Runtime point-parameter capability (replaces the compile-time
      * NO_POINT_PARAMETER macro). Two cases, observed through the

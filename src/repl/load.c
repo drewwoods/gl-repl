@@ -19,8 +19,6 @@
 #include "repl/core.h"           /* repl_dispatch_edit_line_get / _set */
 #include "repl/core_internal.h"  /* collect_visible_vars, repl_format_fits, etc. */
 #include "repl/eval.h"
-#include "repl/parser.h"
-#include "repl/state_owners.h"
 #include "source_document.h"     /* source_document_apply_change, _insert_line */
 
 #include <ctype.h>
@@ -174,9 +172,8 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
                          ? ctx.edit_line : ctx.document_count;
 
     ExprVar vis_vars[MAX_EXPR_VARS];
-    int vis_total = 0;
     int num_vis_vars = collect_visible_vars(insert_idx, vis_vars,
-                                            MAX_EXPR_VARS, &vis_total);
+                                            MAX_EXPR_VARS, NULL);
 
     GLCmd cmd;
     char cmd_text[MAX_LINE_LEN] = "";

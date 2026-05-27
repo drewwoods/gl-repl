@@ -11,7 +11,6 @@
  *     to src/repl/scenes.c.
  *   - current_begin_mode() / count_vertices() — pending move to
  *     src/repl/executor.c.
- *   - Diagnostic dumps — pending move to src/repl/state.c or a repl_debug owner.
  *
  * For the live module map see MODULES.md. Editor input dispatch lives in
  * src/editor/input.c; cross-subsystem routing lives in glr_ctrl.c; commit

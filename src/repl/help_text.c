@@ -407,6 +407,6 @@ const ReplHelpContent *repl_help_text_build(void) {
 
     g_content.title     = "HELP";
     g_content.tabs      = g_tabs;
-    g_content.tab_count = 3;
+    g_content.tab_count = (int)(sizeof(g_tabs) / sizeof(g_tabs[0]));
     return &g_content;
 }

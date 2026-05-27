@@ -11,7 +11,6 @@
 #define REPL_STATE_OWNERS_H
 
 #include "repl/state_views.h"
-#include "repl/cfg_baseline.h"
 
 ReplDocumentState       *repl_state_document_mut(void);
 const GLCmd *repl_state_document_cmds(void);
@@ -92,7 +91,6 @@ void                   repl_state_render_reset_defaults(void);
 ReplSceneRuntimeState    repl_state_scenes(void);
 ReplSceneRuntimeState       *repl_state_scenes_mut(void);
 void                         repl_state_workspace_set_dir(const char *dir);
-const char                  *repl_state_workspace_dir(void);
 
 ReplImportExportView        repl_state_import_export(void);
 ReplImportExportState       *repl_state_import_export_mut(void);
