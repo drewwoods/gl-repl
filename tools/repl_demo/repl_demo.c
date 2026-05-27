@@ -275,7 +275,7 @@ static void seed_variable_driven_program(void) {
         return;
     }
     int r_idx = repl_eval_find_predef_var_idx("r");
-    g_predef_vars[r_idx].value = 1.5f;
+    g_predef_vars_mut[r_idx].value = 1.5f;
 
     /* Parse with preserve_expr=1 so the canonical text keeps the
      * original `r * sin(t)` form rather than the evaluated literal.
@@ -341,7 +341,7 @@ static int headless_executor_safe(void) {
 
 static void tick_and_execute(float t_value) {
     int t_idx = repl_eval_find_predef_var_idx("t");
-    g_predef_vars[t_idx].value = t_value;
+    g_predef_vars_mut[t_idx].value = t_value;
     repl_state_mark_flat_dirty();
     repl_flatten_commands(repl_dispatch_edit_line_get());
     if (!headless_executor_safe())
@@ -460,7 +460,7 @@ static void render_display_func(void) {
     if (g_render_sample == 3) {
         int t_idx = repl_eval_find_predef_var_idx("t");
         if (t_idx >= 0)
-            g_predef_vars[t_idx].value = g_render_t;
+            g_predef_vars_mut[t_idx].value = g_render_t;
         repl_state_mark_flat_dirty();
     }
     repl_flatten_commands(repl_dispatch_edit_line_get());

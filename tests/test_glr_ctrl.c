@@ -106,7 +106,7 @@ int test_scene_render_3d_scene(SceneRendererState *state,
 
     if (g_t_idx >= 0) {
         g_predef_value_seen_in_scene = g_predef_vars[g_t_idx].value;
-        g_predef_vars[g_t_idx].value = g_mutated_predef_value;
+        g_predef_vars_mut[g_t_idx].value = g_mutated_predef_value;
     }
     repl_eval_scratch_get(0, 0, &g_scratch_value_seen_in_scene);
     repl_eval_scratch_set(0, 0, g_mutated_scratch_value);
@@ -208,7 +208,7 @@ static void prepare_display_fixture(void) {
     g_t_idx = repl_eval_find_predef_var_idx("t");
     ASSERT_TRUE("t predef exists", g_t_idx >= 0);
     if (g_t_idx >= 0)
-        g_predef_vars[g_t_idx].value = 9.0f;
+        g_predef_vars_mut[g_t_idx].value = 9.0f;
     repl_eval_scratch_set(0, 0, 4.0f);
 
     replay_start();
@@ -1373,7 +1373,7 @@ static void test_depth_probe_does_not_mutate_repl_state(void) {
      * post-execute value depends on what predef state was live when
      * flatten last ran. Forcing probevar=0 and A[0]=0 before the
      * re-flatten pins the per-execute advancement to exactly +1. */
-    g_predef_vars[probevar_idx].value = 0.0f;
+    g_predef_vars_mut[probevar_idx].value = 0.0f;
     float scratch_zero[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN] = {0};
     repl_eval_restore_scratch_arrays(scratch_zero);
     repl_flatten_commands(0);
@@ -1405,7 +1405,7 @@ static void test_depth_probe_does_not_mutate_repl_state(void) {
      * to the baseline that flatten saw so the test's before/after
      * deltas are clean. The flat program's args[0] still encodes
      * "what probevar/A[0] would become after one execute" = 1. */
-    g_predef_vars[probevar_idx].value = 0.0f;
+    g_predef_vars_mut[probevar_idx].value = 0.0f;
     repl_eval_restore_scratch_arrays(scratch_zero);
 
     float scratch_before;

@@ -286,7 +286,7 @@ static void test_replay_var_assign_uses_flatten_args(void) {
     ASSERT_TRUE("t predef exists", t_idx >= 0);
 
     /* Set t before feeding so commit-time eval sees t=1, giving args[0]=5. */
-    g_predef_vars[t_idx].value = 1.0f;
+    g_predef_vars_mut[t_idx].value = 1.0f;
 
     editor_feed_line("float u;");
     editor_feed_line("u = (t - 0.5) * 10;");
@@ -320,7 +320,7 @@ static void test_replay_var_assign_uses_flatten_args(void) {
     /* Mutate t after flatten — replay never re-flattens, so the live
      * executor keeps using args[0]=5 frozen above. A re-evaluation
      * against this baseline would give (10-0.5)*10=95. */
-    g_predef_vars[t_idx].value = 10.0f;
+    g_predef_vars_mut[t_idx].value = 10.0f;
 
     replay_start();
     ASSERT_TRUE("replay started", g_replay_active);
@@ -369,7 +369,7 @@ static void test_replay_single_arg_shape_gets_eval_annotation(void) {
 
     t_idx = repl_eval_find_predef_var_idx("t");
     ASSERT_TRUE("t predef exists", t_idx >= 0);
-    g_predef_vars[t_idx].value = 0.25f;
+    g_predef_vars_mut[t_idx].value = 0.25f;
 
     editor_feed_line("glutSolidCube(t);");
 
@@ -428,9 +428,9 @@ static void test_replay_baseline_restore_survives_predef_reshape(void) {
     ASSERT_TRUE("Y declared", y_idx >= 0);
     ASSERT_TRUE("Z declared", z_idx >= 0);
 
-    g_predef_vars[x_idx].value = 10.0f;
-    g_predef_vars[y_idx].value = 20.0f;
-    g_predef_vars[z_idx].value = 30.0f;
+    g_predef_vars_mut[x_idx].value = 10.0f;
+    g_predef_vars_mut[y_idx].value = 20.0f;
+    g_predef_vars_mut[z_idx].value = 30.0f;
 
     replay_start();
     ASSERT_TRUE("replay active", g_replay_active);
@@ -447,8 +447,8 @@ static void test_replay_baseline_restore_survives_predef_reshape(void) {
     ASSERT_TRUE("Y is gone", repl_eval_find_predef_var_idx("Y") < 0);
 
     /* Clobber the live values; the restore should overwrite. */
-    g_predef_vars[x_idx2].value = 99.0f;
-    g_predef_vars[z_idx2].value = 99.0f;
+    g_predef_vars_mut[x_idx2].value = 99.0f;
+    g_predef_vars_mut[z_idx2].value = 99.0f;
 
     replay_restore_baseline_predef_values();
 

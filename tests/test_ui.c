@@ -324,9 +324,9 @@ static void test_variable_panel(void) {
     ASSERT_TRUE("var panel hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
 
     variable_panel_state_mut()->visible = 1;
-    g_num_predef_vars = 1;
+    g_num_predef_vars_mut = 1;
     strcpy(g_predef_vars[0].name, "x");
-    g_predef_vars[0].value = 1.0f;
+    g_predef_vars_mut[0].value = 1.0f;
 
     gl_stub_counts_reset();
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_variable_panel_render(&s); }
@@ -588,9 +588,9 @@ static void test_ui_variable_panel_hit_test(void) {
 
     /* Visible panel with one declared variable. */
     variable_panel_state_mut()->visible = 1;
-    g_num_predef_vars = 1;
+    g_num_predef_vars_mut = 1;
     strcpy(g_predef_vars[0].name, "x");
-    g_predef_vars[0].value = 1.0f;
+    g_predef_vars_mut[0].value = 1.0f;
 
     int px, py, pw, ph;
     ui_variable_panel_rect_for_count(NULL, 1, &px, &py, &pw, &ph);
@@ -618,9 +618,9 @@ static void test_ui_panels_hit_test_dispatch(void) {
     /* Variable panel should win over the scene-region fallback when
      * a click lands on its rect. */
     variable_panel_state_mut()->visible = 1;
-    g_num_predef_vars = 1;
+    g_num_predef_vars_mut = 1;
     strcpy(g_predef_vars[0].name, "x");
-    g_predef_vars[0].value = 1.0f;
+    g_predef_vars_mut[0].value = 1.0f;
     int px, py, pw, ph;
     ui_variable_panel_rect_for_count(NULL, 1, &px, &py, &pw, &ph);
     int my_var = ui_state_viewport().window_h - (py + 10);

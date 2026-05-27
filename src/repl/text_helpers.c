@@ -480,7 +480,7 @@ int split_top_level_args(const char *src, char args[][MAX_LINE_LEN], int max_arg
 }
 
 float repl_eval_if_condition(const char *src_text,
-                             ExprVar *vars, int num_vars,
+                             const ExprVar *vars, int num_vars,
                              float fallback) {
     char paren_text[MAX_LINE_LEN];
     if (!repl_extract_paren_payload(src_text, paren_text, sizeof(paren_text)))

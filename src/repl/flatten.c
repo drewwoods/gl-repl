@@ -488,7 +488,7 @@ static void flatten_range(FlattenContext *ctx,
                     local_rhs_vars = input_has_expr_vars(rhs, vars, nv);
             }
             if (var_idx >= 0 && var_idx < g_num_predef_vars)
-                g_predef_vars[var_idx].value = value;
+                g_predef_vars_mut[var_idx].value = value;
             {
                 GLCmd tmp = *src_cmd;
                 tmp.args[0] = value;

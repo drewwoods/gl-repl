@@ -164,15 +164,22 @@ typedef struct {
 
 /* ---- Predefined variables (global scope) ------------------------------- */
 
-/* Compatibility access to the predefined-variable table. In the REPL binary
- * these names resolve to ReplRuntimeState.variables; standalone evaluator
- * tests use src/repl/eval.c's fallback storage. */
-ExprVar *repl_eval_predef_vars_mut(void);
-int     *repl_eval_predef_count_mut(void);
-void     repl_eval_bind_predef_storage(ExprVar *vars, int *count_ptr);
+/* Predefined-variable table access. In the REPL binary these names
+ * resolve to ReplRuntimeState.variables; standalone evaluator tests
+ * use src/repl/eval.c's fallback storage. Reads go through the const
+ * accessors below; the `_mut` siblings stay reserved for the writer
+ * helpers in eval.c / state.c / executor.c / apply.c / flatten.c /
+ * import.c (the only places that legitimately mutate the table). */
+const ExprVar *repl_eval_predef_vars(void);
+int            repl_eval_predef_count(void);
+ExprVar       *repl_eval_predef_vars_mut(void);
+int           *repl_eval_predef_count_mut(void);
+void           repl_eval_bind_predef_storage(ExprVar *vars, int *count_ptr);
 
-#define g_predef_vars     (repl_eval_predef_vars_mut())
-#define g_num_predef_vars (*repl_eval_predef_count_mut())
+#define g_predef_vars         (repl_eval_predef_vars())
+#define g_num_predef_vars     (repl_eval_predef_count())
+#define g_predef_vars_mut     (repl_eval_predef_vars_mut())
+#define g_num_predef_vars_mut (*repl_eval_predef_count_mut())
 
 typedef struct {
     const ExprVar *vars;
@@ -293,7 +300,7 @@ float repl_eval_expr(ExprCtx *ctx);
  * using the provided variables. Returns the number of expressions parsed
  * (up to max). */
 int   repl_eval_parse_exprs(const char *s, float *out, int max,
-                            ExprVar *vars, int num_vars);
+                            const ExprVar *vars, int num_vars);
 
 /* Evaluate the parenthesized condition expression on an `if (...)` source
  * line. Extracts the paren payload via repl_extract_paren_payload, runs
@@ -306,7 +313,7 @@ int   repl_eval_parse_exprs(const char *s, float *out, int max,
  * so goto loops back into the body see updated vars. The kernel is
  * identical, so a shared helper keeps the two sides from drifting. */
 float repl_eval_if_condition(const char *src_text,
-                             ExprVar *vars, int num_vars,
+                             const ExprVar *vars, int num_vars,
                              float fallback);
 
 /* Advance past one comma-separated argument and return the pointer to the
@@ -363,7 +370,7 @@ int repl_eval_parse_for_header(const char *input, char *var_name, int var_sz,
                                 const char **body_start);
 int repl_eval_parse_for_header_with_vars(const char *input, char *var_name, int var_sz,
                                           float *start, float *end, float *step,
-                                          ExprVar *vars, int num_vars,
+                                          const ExprVar *vars, int num_vars,
                                           const char **body_start);
 
 /* Parse C for-loop header: for (float var = start; var < end; var += step) {

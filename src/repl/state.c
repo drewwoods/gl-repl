@@ -392,7 +392,7 @@ void repl_state_time_advance(float dt) {
     ensure_t_var_idx();
     g_anim_time += dt;
     if (g_t_playing && g_t_var_idx >= 0) {
-        g_predef_vars[g_t_var_idx].value += dt;
+        g_predef_vars_mut[g_t_var_idx].value += dt;
         g_flat_dirty = 1;
     }
 }
@@ -402,7 +402,7 @@ void repl_state_time_reset_to_zero(void) {
     if (g_t_var_idx < 0)
         return;
 
-    g_predef_vars[g_t_var_idx].value = 0.0f;
+    g_predef_vars_mut[g_t_var_idx].value = 0.0f;
     g_flat_dirty = 1;
 }
 

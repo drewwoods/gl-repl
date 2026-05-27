@@ -43,7 +43,7 @@ static void test_begin_captures_drag_metadata(void) {
 
     glr_ctrl_reset_all();
 
-    g_predef_vars[0].value = 5.0f;
+    g_predef_vars_mut[0].value = 5.0f;
     variable_panel_handle_drag_begin(0, 0, 100);
     drag = variable_panel_drag();
 
@@ -68,7 +68,7 @@ static void test_linear_motion_emits_request_without_mutation(void) {
     VariablePanelValueChange change;
 
     glr_ctrl_reset_all();
-    g_predef_vars[0].value = 5.0f;
+    g_predef_vars_mut[0].value = 5.0f;
 
     variable_panel_handle_drag_begin(0, 0, 100);
     ASSERT_INT("linear motion emits request",
@@ -83,7 +83,7 @@ static void test_log_motion_emits_request_without_mutation(void) {
     VariablePanelValueChange change;
 
     glr_ctrl_reset_all();
-    g_predef_vars[0].value = 10.0f;
+    g_predef_vars_mut[0].value = 10.0f;
 
     variable_panel_handle_drag_begin(0, 1, 300);
     ASSERT_INT("log motion emits request",
@@ -97,7 +97,7 @@ static void test_log_near_zero_bootstrap_emits_request(void) {
     VariablePanelValueChange change;
 
     glr_ctrl_reset_all();
-    g_predef_vars[0].value = 1e-7f;
+    g_predef_vars_mut[0].value = 1e-7f;
 
     variable_panel_handle_drag_begin(0, 1, 100);
     ASSERT_INT("near-zero log motion emits request",
@@ -111,7 +111,7 @@ static void test_motion_without_active_drag_is_noop(void) {
     VariablePanelValueChange change;
 
     glr_ctrl_reset_all();
-    g_predef_vars[0].value = 5.0f;
+    g_predef_vars_mut[0].value = 5.0f;
     snprintf(change.name, sizeof(change.name), "%s", "stale");
     change.value = 99.0f;
 
@@ -124,7 +124,7 @@ static void test_motion_without_active_drag_is_noop(void) {
 static void test_reset_clears_drag_state_and_undo_flag(void) {
     glr_ctrl_reset_all();
 
-    g_predef_vars[0].value = 5.0f;
+    g_predef_vars_mut[0].value = 5.0f;
     variable_panel_handle_drag_begin(0, 1, 100);
     variable_panel_drag_mark_undo_snapshot_pushed();
     ASSERT_INT("undo flag set before reset", variable_panel_drag_undo_snapshot_pushed(), 1);
@@ -146,7 +146,7 @@ static void test_request_uses_dragged_variable_name(void) {
     x_idx = repl_eval_find_predef_var_idx("x");
     ASSERT_TRUE("x declared", x_idx >= 0);
 
-    g_predef_vars[x_idx].value = 3.0f;
+    g_predef_vars_mut[x_idx].value = 3.0f;
     variable_panel_handle_drag_begin(x_idx, 0, 100);
     ASSERT_INT("named drag emits request",
                variable_panel_handle_drag_motion(120, &change), 1);
@@ -159,14 +159,14 @@ static void test_sequential_drags_reanchor_to_new_start_value(void) {
 
     glr_ctrl_reset_all();
 
-    g_predef_vars[0].value = 5.0f;
+    g_predef_vars_mut[0].value = 5.0f;
     variable_panel_handle_drag_begin(0, 0, 100);
     ASSERT_INT("first drag emits request",
                variable_panel_handle_drag_motion(120, &change), 1);
     ASSERT_FLOAT("first drag request", change.value, 6.0f, 1e-5f);
 
     variable_panel_handle_drag_reset();
-    g_predef_vars[0].value = 10.0f;
+    g_predef_vars_mut[0].value = 10.0f;
     variable_panel_handle_drag_begin(0, 0, 50);
     ASSERT_INT("second drag emits request",
                variable_panel_handle_drag_motion(100, &change), 1);

@@ -273,7 +273,7 @@ static BenchResult bench_flatten_examples(int iters) {
                  * evaluation workload. The restore is a 16-float copy,
                  * dwarfed by flatten itself. */
                 for (int i = 0; i < saved_n; i++)
-                    g_predef_vars[i].value = saved_vals[i];
+                    g_predef_vars_mut[i].value = saved_vals[i];
                 /* repl_flatten_commands(editor_state_edit_line()) -> flatten_commands() rebuilds
                  * unconditionally (resets repl_state_flat_program_count() and walks
                  * repl_state_document_cmds_mut()[]), so we don't need to toggle any dirty flag
@@ -338,12 +338,12 @@ static BenchResult bench_spike_flatten_largest(int iters) {
 
     for (int it = 0; it < iters; it++) {
         for (int i = 0; i < saved_n; i++)
-            g_predef_vars[i].value = saved_vals[i];
+            g_predef_vars_mut[i].value = saved_vals[i];
 
         double t0 = now_seconds();
         for (int k = 0; k < inner; k++) {
             for (int i = 0; i < saved_n; i++)
-                g_predef_vars[i].value = saved_vals[i];
+                g_predef_vars_mut[i].value = saved_vals[i];
             repl_flatten_commands(editor_state_edit_line());
         }
         double dt = now_seconds() - t0;
@@ -472,7 +472,7 @@ static BenchResult bench_replay_long(int iters) {
         long long steps = 0;
 
         for (int i = 0; i < saved_n; i++)
-            g_predef_vars[i].value = saved_vals[i];
+            g_predef_vars_mut[i].value = saved_vals[i];
         repl_mark_source_dirty();
         double t0 = now_seconds();
 
