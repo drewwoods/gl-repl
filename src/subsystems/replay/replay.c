@@ -755,22 +755,34 @@ static int replay_prev_limit(int current_pc) {
     return prev_pc;
 }
 
+static void replay_update_after_pc_change(ReplayRuntimeState *state, int num_flat_cmds, int search_begin) {
+    if (state->pc < 0)
+        state->pc = 0;
+    if (state->pc > num_flat_cmds)
+        state->pc = num_flat_cmds;
+
+    replay_set_src_line(replay_last_meaningful_src(search_begin, state->pc));
+
+    if (state->pc >= num_flat_cmds && num_flat_cmds > 0) {
+        if (state->state == REPLAY_PLAYING) {
+            state->state = REPLAY_DONE;
+            repl_set_status("Replay: done");
+        } else {
+            state->state = REPLAY_DONE;
+        }
+    }
+}
+
 void replay_seek(int new_pc) {
     FlatProgramView flat_program = repl_state_flat_program_view();
     int num_flat_cmds = flat_program.cmd_count;
     ReplayRuntimeState *state = replay_state_mut();
-    if (new_pc < 0)
-        new_pc = 0;
-    if (new_pc > num_flat_cmds)
-        new_pc = num_flat_cmds;
 
     state->pc = new_pc;
     state->accum = 0.0f;
     replay_clear_fade_batches();
-    replay_set_src_line(replay_last_meaningful_src(0, new_pc));
-    state->state = (new_pc >= num_flat_cmds && num_flat_cmds > 0)
-                 ? REPLAY_DONE
-                 : REPLAY_PAUSED;
+    state->state = REPLAY_PAUSED;
+    replay_update_after_pc_change(state, num_flat_cmds, 0);
 }
 
 int replay_seek_to_src_line(int target_line) {
@@ -879,7 +891,6 @@ void replay_advance(FlatProgramView flat_program) {
     ReplayRuntimeState *state = replay_state_mut();
     int old_pc;
     int next_pc;
-    int src_line = -1;
 
     if (!replay_active())
         return;
@@ -896,19 +907,10 @@ void replay_advance(FlatProgramView flat_program) {
 
     if (next_pc <= old_pc)
         next_pc = num_flat_cmds;
-    if (next_pc > num_flat_cmds)
-        next_pc = num_flat_cmds;
 
     state->pc = next_pc;
-    replay_push_fade_batch(old_pc, next_pc);
-
-    src_line = replay_last_meaningful_src(old_pc, next_pc);
-    replay_set_src_line(src_line);
-
-    if (state->pc >= num_flat_cmds) {
-        state->state = REPLAY_DONE;
-        repl_set_status("Replay: done");
-    }
+    replay_update_after_pc_change(state, num_flat_cmds, old_pc);
+    replay_push_fade_batch(old_pc, state->pc);
 }
 
 void replay_step_back(void) {

@@ -62,6 +62,23 @@ void variable_panel_handle_drag_reset(void) {
     drag->undo_snapshot_pushed = 0;
 }
 
+static float drag_log_value(float start_value, int dx) {
+    float dx_total = (float)dx;
+    float mag = fabsf(start_value);
+    if (mag < VAR_DRAG_ZERO_EPS) {
+        /* Bootstrap from zero: treat first pixels as linear, then log. */
+        return dx_total * VAR_DRAG_ZERO_BOOTSTRAP_RATE;
+    } else {
+        float sign = (start_value >= 0.0f) ? 1.0f : -1.0f;
+        return sign * mag * expf(dx_total * (logf(10.0f) / VAR_DRAG_PX_PER_DECADE));
+    }
+}
+
+static float drag_linear_value(float start_value, int dx) {
+    float delta = (float)dx * VAR_DRAG_LINEAR_UNITS_PER_PX;
+    return start_value + delta;
+}
+
 int variable_panel_handle_drag_motion(int x, VariablePanelValueChange *out) {
     VariablePanelDragState *drag = variable_panel_drag_mut();
     float new_val;
@@ -73,24 +90,11 @@ int variable_panel_handle_drag_motion(int x, VariablePanelValueChange *out) {
     if (drag->var_idx < 0)
         return 0;
 
+    int dx = x - g_drag_start_x;
     if (drag->log_mode) {
-        /* Logarithmic drag: ×10 / ÷10 per 200 pixels.
-         * Preserves sign; near-zero start falls back to a linear
-         * bootstrap because the exponential path needs a non-zero
-         * magnitude to scale from. */
-        float dx_total = (float)(x - g_drag_start_x);
-        float mag = fabsf(drag->start_value);
-        if (mag < VAR_DRAG_ZERO_EPS) {
-            /* Bootstrap from zero: treat first pixels as linear, then log. */
-            new_val = dx_total * VAR_DRAG_ZERO_BOOTSTRAP_RATE;
-        } else {
-            float sign = (drag->start_value >= 0.0f) ? 1.0f : -1.0f;
-            new_val = sign * mag *
-                      expf(dx_total * (logf(10.0f) / VAR_DRAG_PX_PER_DECADE));
-        }
+        new_val = drag_log_value(drag->start_value, dx);
     } else {
-        float delta = (float)(x - g_drag_start_x) * VAR_DRAG_LINEAR_UNITS_PER_PX;
-        new_val = drag->start_value + delta;
+        new_val = drag_linear_value(drag->start_value, dx);
     }
 
     if (out) {

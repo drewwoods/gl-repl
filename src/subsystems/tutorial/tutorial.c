@@ -67,7 +67,7 @@ static void tutorial_cfg_baseline_record_one(const char *slug) {
  *   - Tutorial-specific slugs referenced by entry `@cfg` or step
  *     SET/REQUIRE (e.g. `view_mode`, which is intentionally outside
  *     the scene subset). */
-static void tutorial_capture_cfg_baseline(int idx) {
+static void tutorial_baseline_capture(int idx) {
     tutorial_cfg_baseline_clear();
     const ReplConfigBridge *b = repl_config_bridge();
     TutorialRuntimeState *state = tutorial_state_mut();
@@ -98,10 +98,22 @@ static void tutorial_capture_cfg_baseline(int idx) {
     state->baseline_valid = 1;
 }
 
+static void tutorial_baseline_apply(int idx) {
+    /* Reset scene-presentation chrome to defaults, then apply any
+     * tutorial leading `@cfg` lines. Note: We pass 0 rather than the tag
+     * mask to avoid conflict between disjoint tutorial/example tag namespaces. */
+    repl_dispatch_example_presentation_reset(0);
+
+    const char *const *cfg = repl_tutorial_cfg_lines(idx);
+    for (int i = 0; cfg && cfg[i]; i++)
+        repl_state_parse_workspace_header_line(cfg[i]);
+    repl_export_apply_pending_cfg();
+}
+
 /* Restore captured baseline configuration. Order sensitivity: tutorial_teardown
  * deactivates the active flag BEFORE this runs, so restoring slug values
  * doesn't trigger state-change auto-advancement mid-teardown. */
-static void tutorial_cfg_baseline_restore(void) {
+static void tutorial_baseline_restore(void) {
     TutorialRuntimeState state = tutorial_state_view();
     if (!state.baseline_valid) return;
     const ReplConfigBridge *b = repl_config_bridge();
@@ -568,22 +580,14 @@ void tutorial_start(int idx) {
 
     /* Snapshot the user's true pre-tutorial config baseline before making any
      * tutorial mutations, so we can restore it cleanly on teardown/exit. */
-    tutorial_capture_cfg_baseline(idx);
+    tutorial_baseline_capture(idx);
 
     repl_scenes_enter_transient_scene();
     repl_scenes_reset_for_transient();
     repl_dispatch_completion_clear();
     tutorial_state_reset_except_baseline();
 
-    /* Reset scene-presentation chrome to defaults, then apply any
-     * tutorial leading `@cfg` lines. Note: We pass 0 rather than the tag
-     * mask to avoid conflict between disjoint tutorial/example tag namespaces. */
-    repl_dispatch_example_presentation_reset(0);
-
-    const char *const *cfg = repl_tutorial_cfg_lines(idx);
-    for (int i = 0; cfg && cfg[i]; i++)
-        repl_state_parse_workspace_header_line(cfg[i]);
-    repl_export_apply_pending_cfg();
+    tutorial_baseline_apply(idx);
 
     TutorialRuntimeState *state = tutorial_state_mut();
     state->active = 1;
@@ -601,7 +605,7 @@ void tutorial_teardown(void) {
     /* Deactivate active status BEFORE restoring config to prevent step
      * auto-advancement side effects during config restore writes. */
     tutorial_state_mut()->active = 0;
-    tutorial_cfg_baseline_restore();
+    tutorial_baseline_restore();
     tutorial_state_reset();
 }
 
