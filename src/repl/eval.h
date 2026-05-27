@@ -295,6 +295,20 @@ float repl_eval_expr(ExprCtx *ctx);
 int   repl_eval_parse_exprs(const char *s, float *out, int max,
                             ExprVar *vars, int num_vars);
 
+/* Evaluate the parenthesized condition expression on an `if (...)` source
+ * line. Extracts the paren payload via repl_extract_paren_payload, runs
+ * it through repl_eval_c_expr_to_repl, then through repl_eval_expr with
+ * the provided variable scope. Returns `fallback` when the extract step
+ * fails (treat as "no eval performed"). Two callers exercise this with
+ * different inputs and at different times — flatten_if_block evaluates
+ * at flatten time to decide whether to unroll the body into the flat
+ * program; the executor's CMD_IF_BEGIN handler re-evaluates per-iteration
+ * so goto loops back into the body see updated vars. The kernel is
+ * identical, so a shared helper keeps the two sides from drifting. */
+float repl_eval_if_condition(const char *src_text,
+                             ExprVar *vars, int num_vars,
+                             float fallback);
+
 /* Advance past one comma-separated argument and return the pointer to the
  * next top-level `,`, `)`, or `\0`. Treats nested `(...)` as a unit so
  * args containing function calls or grouped sub-expressions are spanned

@@ -335,16 +335,12 @@ static void flatten_if_block(FlattenContext *ctx,
                              int call_src_cmd_idx, int root_call_src_cmd_idx,
                              unsigned int func_scope_mask,
                              int if_end) {
-    char cond_text[MAX_LINE_LEN];
-    const char *src_text = flatten_src_text(ctx->text, i);
-    float cond = src_cmd->args[0];
-
-    if (repl_extract_paren_payload(src_text, cond_text, sizeof(cond_text))) {
-        char repl_cond[MAX_LINE_LEN];
-        repl_eval_c_expr_to_repl(cond_text, repl_cond, sizeof(repl_cond));
-        ExprCtx expr_ctx = { repl_cond, vars, nv, NULL, 0 };
-        cond = repl_eval_expr(&expr_ctx);
-    }
+    /* Flatten-time eval decides whether to unroll the body into the
+     * flat program. The executor re-evaluates per iteration so goto
+     * loops back into the body see updated vars — same kernel, two
+     * different times; see repl_eval_if_condition's doc. */
+    float cond = repl_eval_if_condition(flatten_src_text(ctx->text, i),
+                                        vars, nv, src_cmd->args[0]);
 
     if (cond != 0.0f)
         flatten_range(ctx, i + 1, if_end, vars, nv,
