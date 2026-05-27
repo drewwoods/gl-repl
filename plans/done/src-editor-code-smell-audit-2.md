@@ -26,6 +26,28 @@
 > `help_session.c` and `completion.c` are still appropriately thin —
 > no logic creep since 2026-05-25.
 
+## Status update — 2026-05-27 final pass (`editor-smells-2` complete)
+
+The final pass closed the remaining Tier A/B residual items under the approved implementation plan:
+
+- **#1 (asymmetric modal capture)** — resolved by introducing missing modal checks (`editor_input_file_prompt_capture_key` and `_special`) in the editor's keyboard/special handlers, securing the hard modal contracts during direct dispatches.
+- **#5 / #21 (status unified & opt-in status publishing)** — standardized on a single `commit_message` inside `ReplCompiledChange`, removing duplicate fields from `EditorCommitPlan`, and implemented `publish_status` opt-in flag to keep framerate-hot dragging actions silent.
+- **#6 (preflight transactional safety)** — added `repl_apply_can_apply_compiled_change` preflight guard at the top of `apply_compiled_change_full` in `commit.c` to prevent partial commits from corrupting state boundaries, and clamped indices in `state.c` to avoid uninitialized memory reads.
+- **#8 / #35 (clean layering Escape routing)** — routed the Escape key through the controller router (`glr_ctrl_router_handle_escape_key`), completely decoupling editor input dispatch from peer subsystems and UI help visible states.
+- **#11 (shared tail extraction)** — factored out the identical document reset tail in `editor_clear_all_cmds` and `editor_reset_for_new_scene` into `editor_reset_document_to_empty` in `input.c`.
+- **#26 (merged alias pre-step)** — merged speculatively duplicated function alias registration logic into the unified `repl_compile_func_def_resolve_alias` helper in `src/repl/compile.c`. Added robust `rejected_keyword` signaling to prevent premature early exits for bare predefined functions (like `func0() {`).
+- **#28 / #29 (undo ring generation safety)** — introduced `generation` tracking to `EditorUndoRingState` and `EditorUndoSnapshot` to prevent cross-scene or cross-workspace undo leakage, and clarified side-effects in `undo.h`.
+- **#32 / #43 (clipboard clear canonicalization)** — standardized on the canonical `editor_state_clipboard_clear()` API.
+- **#34 (inline rename re-entry)** — aligned inline rename modals under the `g_rename_active` conservative re-entry check.
+- **#37 (reset scene docstring)** — documented the programmatic scene reset logic cleanly in `input.h`.
+- **#42 / #45 / #46 / #47 (trimmed public surface)** — deleted completely callerless getters, mutators, and structural views (`editor_state_buffer_mut`, `editor_state_virtual_lines_count_for`, `editor_state_document`, `editor_state_document_mut`, `editor_state_document_reset`, `EditorDocumentView`, and `editor_help_session_mut`), and clearly documented test-only scaffolding APIs as such.
+
+With all planned Tier A and Tier B residual items successfully completed, **the entire audit has graduated to `plans/done/`**. The remaining open items are all Tier C structural work.
+
+Validated for the final complete slice:
+- `make check-c99 && make test-stubs` → `7606 / 7606 passed`
+- `make test` → `6492 / 6492 passed`
+
 ## Status update — 2026-05-26 follow-up (`editor-smells-2`, residual pass)
 
 A second commit on this branch closed the remaining Tier A items
@@ -262,17 +284,17 @@ Validation:
 
 | # | Sev | Tier | Status | Finding (short) |
 |---|---|---|---|---|
-| 1 | 🔴 | B | open | Asymmetric modal-capture (rename vs file-prompt) |
+| 1 | 🔴 | B | ✅ closed | Asymmetric modal-capture (rename vs file-prompt) |
 | 2 | 🔴 | A | ✅ closed | `_mut()` for read-only `memcmp` |
 | 3 | 🔴 | A | ✅ closed | Double-eval `needs_navigation_commit` |
 | 4 | 🔴 | A | ✅ closed | Open-coded input clear in `_then_insert` |
-| 5 | 🔴 | B | open | `apply_external_change` callers must publish status |
-| 6 | 🔴 | B | open | `apply_compiled_change_full` partial commit on bad input |
+| 5 | 🔴 | B | ✅ closed | `apply_external_change` callers must publish status |
+| 6 | 🔴 | B | ✅ closed | `apply_compiled_change_full` partial commit on bad input |
 | 7 | 🔴 | B | ✅ closed | Missing `accept` test on completion provider |
-| 8 | 🟡 | B | open | Editor reaches into peer subsystems from input dispatch |
+| 8 | 🟡 | B | ✅ closed | Editor reaches into peer subsystems from input dispatch |
 | 9 | 🟡 | A | ✅ closed | `parse_for_overwrite_enter` name mismatch |
 | 10 | 🟡 | A | ✅ closed | Doc-comment detached from its function |
-| 11 | 🟡 | B | open | `clear_all_cmds` / `reset_for_new_scene` shared tail dup |
+| 11 | 🟡 | B | ✅ closed | `clear_all_cmds` / `reset_for_new_scene` shared tail dup |
 | 12 | 🟡 | A | ✅ closed | `editor_committed_line_text` no-op wrapper |
 | 13 | 🟡 | A | ✅ closed | `enter_parse_err` vs `editor_parse_err` naming |
 | 14 | 🟡 | A | ✅ closed | Insert-mode parse error uses wrong status sink |
@@ -282,33 +304,33 @@ Validation:
 | 18 | 🟡 | B | open | Sixth `collect_visible_vars` site in `compile_for_loop` |
 | 19 | 🟡 | A | ✅ closed | `commit.c` file header describes pre-services flow |
 | 20 | 🟡 | A | ✅ closed | `apply_compiled_three_halves` misnamed (4 ops) |
-| 21 | 🟡 | B | open | Two `commit_message` fields, no layering doc |
+| 21 | 🟡 | B | ✅ closed | Two `commit_message` fields, no layering doc |
 | 22 | 🟡 | B | ✅ closed | `_then_insert` asymmetric arms undocumented |
 | 23 | 🟡 | A | ✅ closed | `end_type` docstring claims nonexistent consumer |
 | 24 | 🟡 | A | ✅ closed | `commit.h` return-shape doc literally wrong |
 | 25 | 🟡 | B | ✅ closed | `editor_compile_*` err-buffer null-check diverges |
-| 26 | 🟡 | B | open | Func-def alias pre-step duplicated editor/repl |
+| 26 | 🟡 | B | ✅ closed | Func-def alias pre-step duplicated editor/repl |
 | 27 | 🟡 | A | ✅ closed | Stale "no cross-TU wrapper" comment |
-| 28 | 🟡 | B | open | `editor_undo_snapshot_restore` bypasses generation check |
-| 29 | 🟡 | B | open | `editor_undo_snapshot_restore` undocumented side effects |
+| 28 | 🟡 | B | ✅ closed | `editor_undo_snapshot_restore` bypasses generation check |
+| 29 | 🟡 | B | ✅ closed | `editor_undo_snapshot_restore` undocumented side effects |
 | 30 | 🟡 | B | ✅ closed | `editor_state_clipboard()` returns ~1 MB by value |
 | 31 | 🟡 | B | ✅ closed | `editor_state_autocomplete()` returns ~2 KB by value |
-| 32 | 🟡 | B | open | `_count_set(0)` and `_clear()` are aliases |
+| 32 | 🟡 | B | ✅ closed | `_count_set(0)` and `_clear()` are aliases |
 | 33 | 🟡 | C | open | `editor → ui` layering inversion via UI typedefs |
-| 34 | 🟡 | B | open | Inline-modal `begin` re-entry semantics diverge |
-| 35 | 🟡 | B | open | Help-overlay-close logic duplicated + layering trap |
+| 34 | 🟡 | B | ✅ closed | Inline-modal `begin` re-entry semantics diverge |
+| 35 | 🟡 | B | ✅ closed | Help-overlay-close logic duplicated + layering trap |
 | 36 | 🟡 | A | ✅ closed | Inline-overlay active predicates inconsistent sentinels |
-| 37 | 🟢 | A | open | `editor_reset_for_new_scene` exported with no docstring |
+| 37 | 🟢 | A | ✅ closed | `editor_reset_for_new_scene` exported with no docstring |
 | 38 | 🟢 | A | ✅ closed | `editor_take_input_effects` hidden reset side effect |
 | 39 | 🟢 | B | ✅ closed | `EditorServices` down to 1 method on 4 sites |
 | 40 | 🟢 | A | ✅ closed | `_take` / `_set` could be static to `commit.c` |
 | 41 | 🟢 | A | ✅ closed | Redundant `newly_aliased_slot` assignment |
-| 42 | 🟢 | B | open | 8 `editor_state_*` pairs with zero production callers |
-| 43 | 🟢 | B | open | `editor_state_clipboard_clear()` zero production callers |
+| 42 | 🟢 | B | ✅ closed | 8 `editor_state_*` pairs with zero production callers |
+| 43 | 🟢 | B | ✅ closed | `editor_state_clipboard_clear()` zero production callers |
 | 44 | 🟢 | A | ✅ closed | Vestigial forward-decl block in `state.c` |
-| 45 | 🟢 | B | open | `editor_help_session_mut()` zero callers |
-| 46 | 🟢 | B | open | `help_session_capture/_restore` test-only |
-| 47 | 🟢 | B | open | `editor_completion_provider()` test-only |
+| 45 | 🟢 | B | ✅ closed | `editor_help_session_mut()` zero callers |
+| 46 | 🟢 | B | ✅ closed | `help_session_capture/_restore` test-only |
+| 47 | 🟢 | B | ✅ closed | `editor_completion_provider()` test-only |
 | 48 | 🔵 | C | open | `commit_current_input` god-function (219 lines) |
 | 49 | 🔵 | C | open | `parse_for_overwrite_enter` 50% structural dup |
 | 50 | 🔵 | C | open | `compile_func_def` (267L) and `compile_for_loop` (249L) |
@@ -320,11 +342,11 @@ Validation:
 | 56 | 🔵 | C | open | Dead O(N) per-line override lookup |
 | 57 | 🔵 | C | open | `inline_rename.c` / `inline_file_prompt.c` 90% dup |
 
-**Totals:** 27 closed, 1 withdrawn, 29 open.
+**Totals:** 45 closed, 1 withdrawn, 11 open.
 
-By severity (open only): 3 🔴, 11 🟡, 6 🟢, 9 🔵.
+By severity (open only): 0 🔴, 2 🟡, 0 🟢, 9 🔵.
 
-By tier (open only): 1 Tier A (#37), 18 Tier B, 10 Tier C, 0 Tier D.
+By tier (open only): 0 Tier A, 1 Tier B (#18), 10 Tier C, 0 Tier D.
 
 All Tier A items have landed. The remaining open items are Tier B / Tier C work.
 

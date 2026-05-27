@@ -26,10 +26,6 @@ EditorHelpSession editor_help_session_view(void) {
     return g_help_session;
 }
 
-EditorHelpSession *editor_help_session_mut(void) {
-    return &g_help_session;
-}
-
 int editor_help_session_tab_idx(void) {
     return g_help_session.tab_idx;
 }

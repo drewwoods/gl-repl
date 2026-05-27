@@ -3124,7 +3124,7 @@ int main() {
     {
         /* 1. Help visible */
         ui_state_help_mut()->visible = 1;
-        editor_handle_key(27, 0, 0);
+        glr_ctrl_router_handle_escape_key(27);
         ASSERT_TRUE("Esc: help closed", !ui_state_help().visible);
 
         /* 2. Autocomplete active */

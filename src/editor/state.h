@@ -173,10 +173,6 @@ typedef struct {
 } EditorDocumentState;
 
 typedef struct {
-    int edit_line_idx;
-} EditorDocumentView;
-
-typedef struct {
     EditorBuffer      buffer;
     EditorInputState  input;
     EditorSelectionState    selection;
@@ -207,11 +203,9 @@ void editor_state_capture(EditorState *snapshot);
 void editor_state_restore(const EditorState *snapshot);
 void editor_state_reset(void);
 
-/* Struct-level access to the live buffer. Low-level editor-owned call sites
- * that need the whole struct use `_mut`; most readers and writers should use
+/* Struct-level access to the live buffer. Most readers and writers should use
  * the slice-level API below. */
 const EditorBuffer *editor_state_buffer(void);
-EditorBuffer       *editor_state_buffer_mut(void);
 
 /* Slice-level editor_buffer API. This is the preferred public surface for
  * line access and mutation; callers pair it with repl_command_store when a
@@ -354,10 +348,6 @@ int                  editor_state_edit_line(void);
 void                 editor_state_edit_line_set(int line);
 void                 editor_state_edit_line_clamp(void);
 
-EditorDocumentView   editor_state_document(void);
-EditorDocumentState *editor_state_document_mut(void);
-void                 editor_state_document_reset(void);
-
 /* Selection slice API. The canonical "no selection" state is
  * anchor=-1, end=-1. */
 EditorSelectionState  editor_state_selection(void);
@@ -422,10 +412,6 @@ int                          editor_state_virtual_lines_append(int after_line_id
                                                                UiVirtualLineStyle style,
                                                                const char *text,
                                                                const char *aux);
-/* Count virtual rows anchored after the given source line. Used by
- * code-panel layout to extend row-height accounting; the editor stays
- * agnostic to which feature pushed the rows. */
-int                          editor_state_virtual_lines_count_for(int after_line_idx);
 
 /* Per-line text override slice. Controller pushes overrides each
  * frame for source lines whose displayed text should differ from the

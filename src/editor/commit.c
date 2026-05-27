@@ -88,6 +88,8 @@ static ReplCompileResult editor_compile_error(char *err, int err_size,
  * contract; cursor ownership moved editor-side in Phase 1 of
  * plans/in-review/edit-line-ownership.md). */
 static void apply_compiled_change_full(const ReplCompiledChange *change) {
+    if (!repl_apply_can_apply_compiled_change(change))
+        return;
     repl_apply_predef_ops(change);
     repl_apply_scratch_ops(change);
     editor_buffer_apply_compiled_change(change);
@@ -103,7 +105,8 @@ static ReplCompileContext editor_compile_context_live(void) {
 }
 
 int editor_commit_apply_external_change(const struct ReplCompiledChange_s *change,
-                                        int capture_undo) {
+                                        int capture_undo,
+                                        int publish_status) {
     if (!change)
         return 0;
     if (!repl_apply_can_apply_compiled_change(change)) {
@@ -117,6 +120,10 @@ int editor_commit_apply_external_change(const struct ReplCompiledChange_s *chang
         editor_undo_push_snapshot();
 
     apply_compiled_change_full(change);
+
+    if (publish_status && change->commit_message[0])
+        repl_set_status(change->commit_message);
+
     return 1;
 }
 
@@ -204,8 +211,8 @@ int editor_commit_apply_plan(const EditorCommitPlan *plan) {
     /* Editor post-effects. */
     apply_post_effects(&plan->effects);
 
-    if (plan->commit_message_valid && plan->commit_message[0])
-        repl_set_status(plan->commit_message);
+    if (plan->change.commit_message[0])
+        repl_set_status(plan->change.commit_message);
 
     return 1;
 }
@@ -322,9 +329,8 @@ ReplCompileResult editor_compile_close_brace(const char *input,
         out->effects.clear_pending_newline = 1;
     }
 
-    snprintf(out->commit_message, sizeof(out->commit_message),
+    snprintf(out->change.commit_message, sizeof(out->change.commit_message),
              "%s block closed", label);
-    out->commit_message_valid = 1;
 
     return REPL_COMPILE_OK;
 }
@@ -451,9 +457,8 @@ ReplCompileResult editor_compile_if_block(const char *input,
         out->effects.clear_input         = 1;
         out->effects.clear_autocomplete  = 1;
 
-        snprintf(out->commit_message, sizeof(out->commit_message),
+        snprintf(out->change.commit_message, sizeof(out->change.commit_message),
                  "if condition updated");
-        out->commit_message_valid = 1;
         return REPL_COMPILE_OK;
     }
 
@@ -480,9 +485,8 @@ ReplCompileResult editor_compile_if_block(const char *input,
     out->effects.insert_mode_target = 1;
     out->effects.clear_input        = 1;
 
-    snprintf(out->commit_message, sizeof(out->commit_message),
+    snprintf(out->change.commit_message, sizeof(out->change.commit_message),
              "if-block: type body lines, press Esc when done");
-    out->commit_message_valid = 1;
     return REPL_COMPILE_OK;
 }
 
@@ -590,68 +594,12 @@ ReplCompileResult editor_compile_func_def(const char *input,
      * speculative. The success path publishes the touched slot and its
      * previous contents via out->change so editor_commit_apply_plan can
      * roll it back if its own preflight fails. [P2 editor] regression. */
-    {
-        const char *p = trimmed;
-        if (!(strncmp(p, "func", 4) == 0 && p[4] >= '0' && p[4] <= '9' &&
-              !repl_eval_is_ident_continue((unsigned char)p[5])) &&
-            repl_eval_is_ident_start((unsigned char)*p)) {
-            char ident[REPL_FUNC_NAME_MAX];
-            int len = 0;
-            while (*p && repl_eval_is_ident_continue((unsigned char)*p)) {
-                if (len >= REPL_FUNC_NAME_MAX - 1) { ident[0] = '\0'; break; }
-                ident[len++] = *p++;
-            }
-            if (len > 0) {
-                ident[len] = '\0';
-                while (*p && isspace((unsigned char)*p)) p++;
-                if (*p == '{' || *p == '(') {
-                    int existing = repl_func_alias_lookup_slot(ident);
-                    if (existing < 0) {
-                        /* Reject reserved / control-flow names by
-                         * FALLING THROUGH (NO_CHANGE) so the next
-                         * commit handler in the chain (if-block,
-                         * close-brace, etc.) can claim the input.
-                         * Erroring here would block legitimate
-                         * `if(cond) {` syntax. */
-                        if (!repl_func_alias_name_is_valid(ident)) {
-                            out->change.kind = REPL_COMPILED_NO_CHANGE;
-                            return REPL_COMPILE_OK;
-                        }
-                        int target_slot = -1;
-                        int ep = ctx->insert_mode ? ctx->edit_line :
-                                 (ctx->edit_line < ctx->document_count
-                                      ? ctx->edit_line : ctx->document_count);
-                        if (!ctx->insert_mode &&
-                            ep < ctx->document_count &&
-                            ctx->document_cmds[ep].type == CMD_FUNC_DEF) {
-                            target_slot = (int)ctx->document_cmds[ep].args[0];
-                        }
-                        if (target_slot < 0)
-                            target_slot = repl_func_alias_first_free_slot();
-                        if (target_slot < 0)
-                            return editor_compile_error(err, err_size,
-                                                        "no free function slots (max %d)",
-                                                        REPL_FUNC_SLOT_COUNT);
-                        char prev_alias[REPL_FUNC_NAME_MAX] = "";
-                        const char *prev_alias_live = repl_func_alias_get(target_slot);
-                        if (prev_alias_live)
-                            snprintf(prev_alias, sizeof(prev_alias),
-                                     "%s", prev_alias_live);
-                        if (!repl_func_alias_set(target_slot, ident))
-                            return editor_compile_error(err, err_size,
-                                                        "name '%s' already used", ident);
-                        out->change.newly_aliased_slot = target_slot;
-                        out->change.had_previous_alias =
-                            prev_alias[0] ? 1 : 0;
-                        if (out->change.had_previous_alias)
-                            snprintf(out->change.previous_alias,
-                                     sizeof(out->change.previous_alias),
-                                     "%s", prev_alias);
-                    }
-                }
-            }
-        }
-    }
+    int rejected_keyword = 0;
+    ReplCompileResult alias_res = repl_compile_func_def_resolve_alias(ctx, trimmed, &out->change, &rejected_keyword, err, err_size);
+    if (alias_res != REPL_COMPILE_OK)
+        return alias_res;
+    if (rejected_keyword)
+        return REPL_COMPILE_OK;
 
     if (!parse_repl_func_signature(input ? input : "", &fn,
                                    param_names, MAX_EXPR_VARS,
@@ -706,9 +654,8 @@ ReplCompileResult editor_compile_func_def(const char *input,
         out->effects.clear_input        = 1;
         out->effects.clear_autocomplete = 1;
 
-        snprintf(out->commit_message, sizeof(out->commit_message),
+        snprintf(out->change.commit_message, sizeof(out->change.commit_message),
                  "func def header updated");
-        out->commit_message_valid = 1;
         return REPL_COMPILE_OK;
     }
 
@@ -801,9 +748,8 @@ ReplCompileResult editor_compile_func_def(const char *input,
     out->effects.insert_mode_target = 1;
     out->effects.clear_input        = 1;
 
-    snprintf(out->commit_message, sizeof(out->commit_message),
+    snprintf(out->change.commit_message, sizeof(out->change.commit_message),
              "func def: type body lines, press Esc when done");
-    out->commit_message_valid = 1;
 
     return REPL_COMPILE_OK;
 }
@@ -954,9 +900,8 @@ ReplCompileResult editor_compile_for_loop(const char *input,
             out->effects.clear_input        = 1;
             out->effects.clear_autocomplete = 1;
 
-            snprintf(out->commit_message, sizeof(out->commit_message),
+            snprintf(out->change.commit_message, sizeof(out->change.commit_message),
                      "for-loop header updated");
-            out->commit_message_valid = 1;
             return REPL_COMPILE_OK;
         }
 
@@ -974,9 +919,8 @@ ReplCompileResult editor_compile_for_loop(const char *input,
         out->effects.insert_mode_target = 1;
         out->effects.clear_input        = 1;
 
-        snprintf(out->commit_message, sizeof(out->commit_message),
+        snprintf(out->change.commit_message, sizeof(out->change.commit_message),
                  "for-loop: type body lines, press Esc when done");
-        out->commit_message_valid = 1;
         return REPL_COMPILE_OK;
     }
 
@@ -1053,9 +997,8 @@ ReplCompileResult editor_compile_for_loop(const char *input,
     out->effects.clear_input           = 1;
     out->effects.clear_pending_newline = 1;
 
-    snprintf(out->commit_message, sizeof(out->commit_message),
+    snprintf(out->change.commit_message, sizeof(out->change.commit_message),
              "for-loop: %s from %g to %g", var_name, start, end);
-    out->commit_message_valid = 1;
     return REPL_COMPILE_OK;
 }
 
@@ -1161,11 +1104,7 @@ int editor_try_commit_float_decl(void) {
         if (!ctx.insert_mode && new_edit_line < doc_count_after)
             plan.effects.load_line_after_apply = 1;
     }
-    if (plan.change.commit_message[0]) {
-        snprintf(plan.commit_message, sizeof(plan.commit_message),
-                 "%s", plan.change.commit_message);
-        plan.commit_message_valid = 1;
-    }
+
 
     if (!editor_commit_apply_plan(&plan)) {
         repl_set_status_error("Command buffer full!");
@@ -1204,11 +1143,7 @@ int editor_try_commit_assign_variable(void) {
             plan.effects.cursor_target = ctx.document_count + 1;
         }
     }
-    if (plan.change.commit_message[0]) {
-        snprintf(plan.commit_message, sizeof(plan.commit_message),
-                 "%s", plan.change.commit_message);
-        plan.commit_message_valid = 1;
-    }
+
 
     if (!editor_commit_apply_plan(&plan)) {
         repl_set_status_error("Command buffer full!");
@@ -1241,7 +1176,7 @@ static int editor_try_commit_block(EditorBlockCompileFn compile) {
                                   err, sizeof(err));
     if (r == REPL_COMPILE_OK &&
         plan.change.kind == REPL_COMPILED_NO_CHANGE &&
-        !plan.commit_message_valid)
+        !plan.change.commit_message[0])
         return 0;
     if (r != REPL_COMPILE_OK) {
         repl_set_status_error(err);
@@ -1364,7 +1299,7 @@ int editor_commit_apply_swatch_change(int edit_line, int direction) {
     memcpy(change.text[0], pl.text, (size_t)text_len);
     change.text[0][text_len] = '\0';
 
-    if (editor_commit_apply_external_change(&change, 1)) {
+    if (editor_commit_apply_external_change(&change, 1, 0)) {
         editor_load_line_to_input(edit_line);
         {
             EditorInputView reloaded = editor_state_input();

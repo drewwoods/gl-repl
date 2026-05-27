@@ -53,7 +53,8 @@
  *
  * Does not call set_status; callers surface diagnostics. */
 int editor_commit_apply_external_change(const struct ReplCompiledChange_s *change,
-                                        int capture_undo);
+                                        int capture_undo,
+                                        int publish_status);
 
 /* ---- Editor commit plan: REPL change + editor side-effects ----- */
 /*
@@ -140,8 +141,6 @@ typedef struct EditorCommitPostEffects_s {
 typedef struct EditorCommitPlan_s {
     ReplCompiledChange      change;
     EditorCommitPostEffects effects;
-    int                     commit_message_valid;
-    char                    commit_message[REPL_STATUS_TEXT_MAX];
 } EditorCommitPlan;
 
 /* Initialize a plan to neutral defaults: NO_CHANGE on the REPL
