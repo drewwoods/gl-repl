@@ -846,10 +846,13 @@ static int load_initial_commands(const char *import_file) {
                 scroll_to_display_function();
                 return repl_state_document_count();
             }
-        } else if (repl_export_load_from_file(import_file)) {
-            repl_scenes_activate_home_slot();
-            scroll_to_display_function();
-            return repl_state_document_count();
+        } else {
+            ReplImportResult import_result;
+            if (repl_export_load_from_file(import_file, &import_result)) {
+                repl_scenes_activate_home_slot(import_result.scene_name);
+                scroll_to_display_function();
+                return repl_state_document_count();
+            }
         }
     }
 
@@ -859,7 +862,7 @@ static int load_initial_commands(const char *import_file) {
      * to emit (see glr_ctrl_bootstrap_repl); pipeline TUs do not own
      * display-string side effects. */
     int example_edit_line = repl_load_example(0);
-    repl_scenes_activate_home_slot();
+    repl_scenes_activate_home_slot(NULL);
     scroll_to_display_function();
     return example_edit_line;
 }

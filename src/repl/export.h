@@ -43,6 +43,7 @@
 #include <stdio.h>
 #include "source_document.h"
 #include "repl/cfg_baseline.h"
+#include "repl/state_views.h"   /* REPL_WORKSPACE_DIR_MAX, USER_SCENE_NAME_MAX */
 
 /* Apply the current batch of parsed `// @cfg` lines, then clear the accumulator.
  * Importers call this after finishing a header batch; example loading uses the
@@ -207,13 +208,23 @@ int repl_export_save_output(const char *filename, SourceTextView text,
 /* Code-panel dumps used by debug output and test fixtures. */
 void repl_dump_code_panel_text(FILE *out, SourceTextView text);
 
+/* Caller-supplied scratch for repl_export_load_from_file to populate
+ * with the metadata it parsed (or empty strings if the file didn't
+ * carry the corresponding directives). The buffers stay valid for the
+ * caller; nothing inside the import path retains a pointer past
+ * return. Pass NULL to drop the metadata. */
+typedef struct {
+    char scene_name[USER_SCENE_NAME_MAX];
+    char workspace_dir[REPL_WORKSPACE_DIR_MAX];
+} ReplImportResult;
+
 /* Import a C source file saved by save_output(). Parses workspace header directives,
  * camera state, function definitions, and geometry commands. Feeds geometry lines
  * through repl_load_apply_line() (the lean non-editor source-load path from step
  * 5b) for normal parsing. Returns 1 on success, 0 on error (parse failure, open
- * failure). Pending scene-name and workspace-dir directives remain in import/export
- * state for the caller to consume after return. */
-int  repl_export_load_from_file(const char *filename);
+ * failure). When `result` is non-NULL, the parsed scene-name and workspace-dir
+ * directives (if any) are copied into it before return; pass NULL to drop them. */
+int  repl_export_load_from_file(const char *filename, ReplImportResult *result);
 
 /* Refresh the export header text from current state. Pre-builds the header metadata
  * lines (@var, @cfg, @scene-name, @workspace-dir) from the current predefined

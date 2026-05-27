@@ -1356,7 +1356,11 @@ static void repl_export_load_reset_accumulators(void) {
     import_cfg_accumulator_reset();
 }
 
-int repl_export_load_from_file(const char *filename) {
+int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
+    if (result) {
+        result->scene_name[0]    = '\0';
+        result->workspace_dir[0] = '\0';
+    }
     FILE *f = fopen(filename, "r");
     if (!f) return 0;
 
@@ -1426,6 +1430,13 @@ int repl_export_load_from_file(const char *filename) {
      * accumulator is dropped silently — that's the architectural goal
      * (no glr_config dependency from src/repl/import.c). */
     import_cfg_accumulator_apply_and_reset();
+
+    if (result) {
+        snprintf(result->scene_name, sizeof(result->scene_name),
+                 "%s", g_pending_scene_name);
+        snprintf(result->workspace_dir, sizeof(result->workspace_dir),
+                 "%s", g_pending_workspace_dir);
+    }
 
     if (state.loaded > 0) {
         repl_source_scope_depth_cache_invalidate();

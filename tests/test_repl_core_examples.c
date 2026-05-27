@@ -1637,7 +1637,7 @@ int main(int argc, char **argv) {
 
         glr_ctrl_reset_all();
         pin_code_panel_state();
-        roundtrip_loaded = repl_export_load_from_file(export_path);
+        roundtrip_loaded = repl_export_load_from_file(export_path, NULL);
         snprintf(label, sizeof(label), "example %02d export imports", idx);
         ASSERT_TRUE(label, roundtrip_loaded == 1);
 

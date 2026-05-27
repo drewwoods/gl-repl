@@ -273,7 +273,7 @@ int main(void) {
                 find_init_line_substr("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") >= 0);
 
     glr_ctrl_reset_all(); declare_test_vars();
-    ASSERT_TRUE("load saved output", repl_export_load_from_file(path) == 1);
+    ASSERT_TRUE("load saved output", repl_export_load_from_file(path, NULL) == 1);
     ASSERT_TRUE("roundtrip cmd count", repl_state_document_count() == before_n);
     for (int i = 0; i < before_n; i++) {
         char label[64];
@@ -353,7 +353,7 @@ int main(void) {
     }
 
     glr_ctrl_reset_all(); declare_test_vars();
-    ASSERT_TRUE("load scratch output", repl_export_load_from_file(scratch_path) == 1);
+    ASSERT_TRUE("load scratch output", repl_export_load_from_file(scratch_path, NULL) == 1);
     ASSERT_TRUE("scratch roundtrip command count", repl_state_document_count() == 4);
     ASSERT_TRUE("scratch roundtrip keeps assign type",
                 repl_state_document_cmds_mut()[2].type == CMD_SCRATCH_ASSIGN);
@@ -391,7 +391,7 @@ int main(void) {
         ASSERT_TRUE("alias cleared after reset",
                     repl_func_alias_lookup_slot("drawCube") == -1);
         ASSERT_TRUE("load alias output",
-                    repl_export_load_from_file(alias_path) == 1);
+                    repl_export_load_from_file(alias_path, NULL) == 1);
         ASSERT_TRUE("alias restored on import",
                     repl_func_alias_lookup_slot("drawCube") == 0);
         const char *post_import = repl_func_alias_get(0);
@@ -421,12 +421,12 @@ int main(void) {
 
         glr_ctrl_reset_all(); declare_test_vars();
         ASSERT_TRUE("direct import aliased file succeeds",
-                    repl_export_load_from_file(alias_path) == 1);
+                    repl_export_load_from_file(alias_path, NULL) == 1);
         ASSERT_TRUE("alias present after direct aliased import",
                     repl_func_alias_lookup_slot("drawCube") == 0);
 
         ASSERT_TRUE("direct import plain file succeeds",
-                    repl_export_load_from_file(plain_path) == 1);
+                    repl_export_load_from_file(plain_path, NULL) == 1);
         ASSERT_TRUE("plain direct import clears stale alias",
                     repl_func_alias_lookup_slot("drawCube") == -1);
 
@@ -473,7 +473,7 @@ int main(void) {
 
         glr_ctrl_reset_all(); declare_test_vars();
         ASSERT_TRUE("load expr-alias output",
-                    repl_export_load_from_file(alias_path) == 1);
+                    repl_export_load_from_file(alias_path, NULL) == 1);
         ASSERT_TRUE("expr-alias restored on import",
                     repl_func_alias_lookup_slot("spin") == 0);
 
@@ -533,7 +533,7 @@ int main(void) {
         glr_camera_set_distance(5.0f);
         glr_camera_set_pan(0.0f, 0.0f, 0.0f);
         glr_ctrl_reset_all(); declare_test_vars();
-        ASSERT_TRUE("load camera output", repl_export_load_from_file(path) == 1);
+        ASSERT_TRUE("load camera output", repl_export_load_from_file(path, NULL) == 1);
         ASSERT_TRUE("camera rx restored",   fabsf(glr_camera().rx   - saved_rx)   < 1e-2f);
         ASSERT_TRUE("camera ry restored",   fabsf(glr_camera().ry   - saved_ry)   < 1e-2f);
         ASSERT_TRUE("camera dist restored", fabsf(glr_camera().dist - saved_dist) < 1e-2f);
@@ -584,7 +584,7 @@ int main(void) {
     }
 
     glr_ctrl_reset_all(); declare_test_vars();
-    ASSERT_TRUE("load saved param func output", repl_export_load_from_file(func_path) == 1);
+    ASSERT_TRUE("load saved param func output", repl_export_load_from_file(func_path, NULL) == 1);
     ASSERT_TRUE("param func roundtrip cmd count", repl_state_document_count() == func_n);
     {
         int have_var = 0, have_def = 0, have_body = 0, have_end = 0, have_call = 0;
@@ -626,7 +626,7 @@ int main(void) {
     }
 
     glr_ctrl_reset_all();
-    ASSERT_TRUE("load saved param loop output", repl_export_load_from_file(param_loop_path) == 1);
+    ASSERT_TRUE("load saved param loop output", repl_export_load_from_file(param_loop_path, NULL) == 1);
     {
         int have_bound = 0;
         for (int i = 0; i < repl_state_document_count(); i++) {
@@ -660,7 +660,7 @@ int main(void) {
 
     glr_ctrl_reset_all(); declare_test_vars();
     ASSERT_TRUE("load decl plus promoted func output",
-                repl_export_load_from_file(decl_func_path) == 1);
+                repl_export_load_from_file(decl_func_path, NULL) == 1);
     ASSERT_TRUE("decl plus func cmd count", repl_state_document_count() == 7);
     ASSERT_TRUE("imported decl remains first", repl_state_document_cmds_mut()[0].type == CMD_VAR_DECLARE);
     ASSERT_TRUE("imported func follows decl", repl_state_document_cmds_mut()[1].type == CMD_FUNC_DEF);
@@ -682,7 +682,7 @@ int main(void) {
 
     glr_ctrl_reset_all(); declare_test_vars();
     ASSERT_TRUE("load decl blank plus func output",
-                repl_export_load_from_file(decl_func_blank_path) == 1);
+                repl_export_load_from_file(decl_func_blank_path, NULL) == 1);
     ASSERT_TRUE("decl blank plus func cmd count", repl_state_document_count() == 7);
     ASSERT_TRUE("imported decl stays first with blank func prelude",
                 repl_state_document_cmds_mut()[0].type == CMD_VAR_DECLARE);
@@ -732,7 +732,7 @@ int main(void) {
     }
 
     glr_ctrl_reset_all(); declare_test_vars();
-    ASSERT_TRUE("load saved shape output", repl_export_load_from_file(shape_path) == 1);
+    ASSERT_TRUE("load saved shape output", repl_export_load_from_file(shape_path, NULL) == 1);
     ASSERT_TRUE("shape roundtrip cmd count", repl_state_document_count() == 6);
     ASSERT_TRUE("loaded shape assign first",  repl_state_document_cmds_mut()[0].type == CMD_VAR_ASSIGN);
     ASSERT_TRUE("loaded shape sphere second", repl_state_document_cmds_mut()[1].type == CMD_GLUT_SPHERE);
@@ -1101,7 +1101,7 @@ int main(void) {
 
         glr_ctrl_reset_all(); declare_test_vars();
         ASSERT_TRUE("precision export re-imports",
-                    repl_export_load_from_file(precision_path) == 1);
+                    repl_export_load_from_file(precision_path, NULL) == 1);
         x_idx = repl_eval_find_predef_var_idx("x");
         ASSERT_TRUE("re-imported header value round-trips exactly",
                     x_idx >= 0 && g_predef_vars[x_idx].value == precise_x);
@@ -1135,7 +1135,7 @@ int main(void) {
 
         glr_ctrl_reset_all(); declare_test_vars();
         ASSERT_TRUE("truncated physical line fails import",
-                    repl_export_load_from_file(trunc_path) == 0);
+                    repl_export_load_from_file(trunc_path, NULL) == 0);
         ASSERT_INT("truncated physical line loads no commands",
                    repl_state_document_count(), 0);
         remove(trunc_path);
@@ -1204,7 +1204,7 @@ int main(void) {
 
         /* (3) Re-import. */
         ASSERT_TRUE("import succeeded",
-                    repl_export_load_from_file(import_cursor_path) == 1);
+                    repl_export_load_from_file(import_cursor_path, NULL) == 1);
 
         /* (4) The post-import cursor must reflect the import's final
          *     ImportState.edit_line — i.e., the next-line slot above
@@ -1281,7 +1281,7 @@ int main(void) {
 
             glr_ctrl_reset_all(); declare_test_vars();
             ASSERT_TRUE("old-fmt import succeeds",
-                        repl_export_load_from_file(cam_old_path) == 1);
+                        repl_export_load_from_file(cam_old_path, NULL) == 1);
             ASSERT_TRUE("old-fmt rx restored",
                         fabsf(glr_camera().rx - 25.0f) < 1e-2f);
             ASSERT_TRUE("old-fmt ry restored",
@@ -1380,7 +1380,7 @@ int main(void) {
 
         glr_ctrl_reset_all(); declare_test_vars();
         ASSERT_TRUE("cam idem: load A succeeds",
-                    repl_export_load_from_file(path_a) == 1);
+                    repl_export_load_from_file(path_a, NULL) == 1);
         repl_export_save_output(path_b, source_document_view(), NULL);
 
         char buf_a[16384], buf_b[16384];
@@ -1430,13 +1430,13 @@ int main(void) {
      * the load had succeeded. Post-fix the function reports failure. */
     {
         glr_ctrl_reset_all(); declare_test_vars();
-        int rc = repl_export_load_from_file("/tmp");
+        int rc = repl_export_load_from_file("/tmp", NULL);
         ASSERT_INT("load from a directory returns failure", rc, 0);
 
         /* Sibling sanity check: loading a missing file still fails too
          * (this path predates #9 — fopen returns NULL — but pin it so
          * a refactor doesn't silently flip the error contract). */
-        rc = repl_export_load_from_file("/tmp/repl_core_io_nope_NOT_A_FILE.c");
+        rc = repl_export_load_from_file("/tmp/repl_core_io_nope_NOT_A_FILE.c", NULL);
         ASSERT_INT("load of missing file returns failure", rc, 0);
     }
 
@@ -1470,7 +1470,7 @@ int main(void) {
         glr_ctrl_reset_all(); declare_test_vars();
         glr_state_presentation_mut()->wireframe = 0;
 
-        int rc = repl_export_load_from_file(leak_path);
+        int rc = repl_export_load_from_file(leak_path, NULL);
         ASSERT_INT("leak fixture import fails (truncated line)", rc, 0);
 
         /* Reset live wireframe back to 0 so a leaked accumulator
@@ -1529,7 +1529,7 @@ int main(void) {
         if (capture_fd >= 0)
             dup2(capture_fd, STDERR_FILENO);
 
-        (void)repl_export_load_from_file(fail_path);
+        (void)repl_export_load_from_file(fail_path, NULL);
         fflush(stderr);
 
         /* Restore fd 2 and close the capture descriptor. */
@@ -1589,7 +1589,7 @@ int main(void) {
 
         glr_ctrl_reset_all();
         ASSERT_TRUE("p83 load completes",
-                    repl_export_load_from_file(p83_path) == 1);
+                    repl_export_load_from_file(p83_path, NULL) == 1);
         ASSERT_INT("p83 reserved name is not registered as predef",
                    repl_eval_find_predef_var_idx("PI"), -1);
         int decl_with_pi = 0;

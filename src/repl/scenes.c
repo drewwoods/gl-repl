@@ -691,15 +691,16 @@ static int load_scene_file_into_slot(const char *path) {
     repl_eval_init_predef_vars();
     repl_func_alias_clear_all();
 
-    if (!repl_export_load_from_file(path)) return -1;
+    ReplImportResult import_result;
+    if (!repl_export_load_from_file(path, &import_result)) return -1;
 
     int slot = find_free_user_scene_slot();
     if (!g_user_scenes[0].used) slot = 0;
     if (slot < 0) return -1;
 
     char scene_name[USER_SCENE_NAME_MAX];
-    if (g_pending_scene_name[0]) {
-        snprintf(scene_name, sizeof(scene_name), "%s", g_pending_scene_name);
+    if (import_result.scene_name[0]) {
+        snprintf(scene_name, sizeof(scene_name), "%s", import_result.scene_name);
     } else {
         scene_name_from_filename(path, scene_name, sizeof(scene_name));
         if (!scene_name[0])
@@ -1097,9 +1098,9 @@ void repl_scenes_mark_example_active(void) {
     g_active_user_scene = -1;
 }
 
-void repl_scenes_activate_home_slot(void) {
-    const char *name = g_pending_scene_name[0] ? g_pending_scene_name
-                                               : USER_SCENE_HOME_NAME;
+void repl_scenes_activate_home_slot(const char *scene_name_hint) {
+    const char *name = (scene_name_hint && scene_name_hint[0]) ? scene_name_hint
+                                                              : USER_SCENE_HOME_NAME;
     char unique[USER_SCENE_NAME_MAX];
     derive_unique_scene_name(unique, sizeof(unique), name, 0);
     /* Drop any pending example sandbox: workspace import / explicit

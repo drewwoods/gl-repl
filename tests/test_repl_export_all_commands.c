@@ -271,7 +271,7 @@ int main(void) {
     /* Reimport from file */
     glr_ctrl_reset_all();
     declare_test_vars();
-    ASSERT_TRUE("import succeeded", repl_export_load_from_file(path1) == 1);
+    ASSERT_TRUE("import succeeded", repl_export_load_from_file(path1, NULL) == 1);
 
     /* Verify command count preserved */
     int cmd_count_after = repl_state_document_count();
@@ -304,7 +304,7 @@ int main(void) {
     repl_export_save_output(path2, source_document_view(), NULL);
     glr_ctrl_reset_all();
     declare_test_vars();
-    ASSERT_TRUE("re-import succeeded", repl_export_load_from_file(path2) == 1);
+    ASSERT_TRUE("re-import succeeded", repl_export_load_from_file(path2, NULL) == 1);
 
     code_reexport = dump_code_panel();
     ASSERT_TRUE("code after re-export captured", code_reexport != NULL);
