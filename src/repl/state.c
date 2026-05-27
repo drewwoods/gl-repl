@@ -461,10 +461,6 @@ ReplSceneRuntimeState *repl_state_scenes_mut(void) {
     return &g_repl_state.scenes;
 }
 
-void repl_state_workspace_set_dir(const char *dir) {
-    repl_set_workspace_dir(dir);
-}
-
 ReplImportExportView repl_state_import_export(void) {
     return (ReplImportExportView){
         .workspace_header_lines = g_repl_state.import_export.workspace_header_lines,

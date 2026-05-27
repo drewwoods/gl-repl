@@ -30,7 +30,7 @@ static void test_reindent_from_parsed(void) {
 
     /* 6-space parsed (glu command inside tess+begin), raw has 2-space.
      * This is the key case: gluNormal/gluColor/gluVertex get 6-space from
-     * parse_command (using repl_format_tess_leaf_indent), and we preserve that. */
+     * parse_command, and we preserve that. */
     repl_format_reindent_from_parsed("      gluVertex(0, 1, 0);",
                              "  gluVertex(x, y, z);", out, sizeof(out));
     ASSERT_STR("reindent_from_parsed 6-space glu", out, "      gluVertex(x, y, z);");

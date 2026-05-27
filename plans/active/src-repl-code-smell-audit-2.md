@@ -1182,14 +1182,29 @@ in `cfg_baseline.c` does exactly this.
 **Fix:** Replace all three sites with `repl_cfg_get_int(slug, default)`.
 
 **Status (2026-05-27):** ✅ Closed. #34 removed the redundant
-`repl_state_workspace_*` shim surface and switched the remaining callers
-to `repl_workspace_dir()`. #35 trimmed the stale `src/repl/core.c`
+`repl_state_workspace_*` shim surface (both getter and setter halves)
+and switched the remaining callers — including the lone
+`tests/test_repl_state.c` setter site — to `repl_workspace_dir()` /
+`repl_set_workspace_dir()`. #35 trimmed the stale `src/repl/core.c`
 header comment. #36 deleted the dead `repl_command_store_source_to_line`
 inline helper, removed the public `repl_command_store_first_non_decl`
 hook, and localized the only policy use in `export.c`. #38 renamed the
 built-in example query trio to singular `repl_example_*`, deleted the
 `example_loader.c` trampolines, and updated callers/docs. #39 replaced
-the remaining bridge ternaries with `repl_cfg_get_int(...)`.
+the remaining bridge ternaries — including `export_count_enabled_passes`'s
+`if (g_export_cfg_bridge && g_export_cfg_bridge->get_int) { … }` block —
+with `repl_cfg_get_int(...)`.
+
+**Follow-up (2026-05-27, reviewer):** the first revision of this status
+block over-claimed #34 (the setter shim `repl_state_workspace_set_dir`
+plus its one `tests/test_repl_state.c` caller had been left behind) and
+#39 (the third cited bridge site at `export_count_enabled_passes` had
+not been converted). Both are now genuinely closed against current HEAD.
+The same follow-up pass also restored a `repl_executor_point_parameter_supported()`
+consumer line in `src/repl/executor.h`'s comment that #57 had trimmed
+incorrectly (the export.c reader still exists at L574), and dropped a
+deleted `repl_format_tess_leaf_indent` name from a `tests/test_format.c`
+comment introduced as part of #53.
 
 ### 40. Predef-var capture/restore code is duplicated 5× across scenes.c
 

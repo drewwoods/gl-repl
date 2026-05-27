@@ -199,7 +199,7 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
 
     scenes = repl_state_scenes_mut();
     scenes->active_example_idx = 3;
-    repl_state_workspace_set_dir("/tmp/repl-state-stage1");
+    repl_set_workspace_dir("/tmp/repl-state-stage1");
     io = repl_state_import_export_mut();
     io->export_scene_name_hint = scene_hint;
     snprintf(io->pending_scene_name, sizeof(io->pending_scene_name), "%s",

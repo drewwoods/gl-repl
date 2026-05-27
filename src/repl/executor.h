@@ -115,9 +115,11 @@ void repl_executor_install_camera_distance_source(ReplExecutorCameraDistanceFn f
  * GL context is current (glr_ctrl_init_gl) and sets this; everything
  * else defaults to supported. When unsupported, CMD_POINT_PARAMETER_FV
  * is a no-op in the executor and point sizes fall back to the
- * camera-distance approximation above; the scene controller mirrors
- * this into SceneRenderConfig so the star backdrop's direct call can
- * be gated too. */
+ * camera-distance approximation above. export.c consults
+ * repl_executor_point_parameter_supported() to decide whether to
+ * apply/emit the point-attenuation init bootstrap entry, and the scene
+ * controller mirrors it into SceneRenderConfig so the star backdrop's
+ * direct call can be gated too. */
 void repl_executor_set_point_parameter_supported(int supported);
 int  repl_executor_point_parameter_supported(void);
 
