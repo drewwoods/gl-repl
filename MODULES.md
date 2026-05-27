@@ -128,7 +128,7 @@ Consequences:
 | `replay` peer | Replay state machine: PC, mode, speed, accum, fade speed, src_line_idx, total_flat_cmds, expand_args. Storage in `src/subsystems/replay/replay_state.c`. | Editor text behavior, REPL grammar |
 | `editor_help_session` peer | Help-overlay session state: tab_idx, scroll. Storage in `src/editor/help_session.c`. Visibility flag stays on `UiState.help` as chrome. | Help content (provided by content provider) |
 | `color_picker` peer | Floating color-picker state, lifecycle, slider input handlers, source-line writeback through editor commit. Storage in `src/subsystems/color_picker/color_picker_state.c`; peer view + `ColorPickerInputResult` in `src/subsystems/color_picker/color_picker_state.h`. | Picker rendering / hit-test (lives on `src/ui/app/color_picker.c`) |
-| `tutorial` peer | Tutorial runtime state: active flag, tutorial idx, current step, locked-line array, fade timing, last match result. Storage in `src/subsystems/tutorial/tutorial_state.c`. Runner orchestration in `src/subsystems/tutorial/tutorial.c`. | Editor text behavior, REPL grammar, tutorial catalog (`src/repl/tutorials.c`) |
+| `tutorial` peer | Tutorial runtime state: active flag, tutorial idx, current step, locked-line array, fade timing, last match result. Storage in `src/subsystems/tutorial/tutorial_state.c`. Runner orchestration lives in `src/subsystems/tutorial/tutorial_runner.c`; command matching and ghost-text helpers live in `src/subsystems/tutorial/tutorial_match.c`; fade timing math lives in `src/subsystems/tutorial/tutorial_animation.c`. | Editor text behavior, REPL grammar, tutorial catalog (`src/repl/tutorials.c`) |
 
 > The legacy forwarders (`ui_state_variable_panel*`, `editor_state_variable_drag*`,
 > `repl_state_replay*`) were retired in Phases J5–J7. Production callers and
@@ -715,9 +715,9 @@ flowchart LR
 
     subgraph peers["2b. Peer subsystems (own state + controller)"]
         vpanel["src/subsystems/variable_panel/variable_panel_state.c + src/subsystems/variable_panel/variable_panel_drag.c<br/>(was repl_var_drag)<br/>visibility + drag transaction"]
-      replay_sys["src/subsystems/replay/replay_playback.c + replay_fade.c + replay_input.c<br/>+ replay.c + replay_state.c<br/>(was repl_replay)<br/>state machine · fades · walkers"]
+        replay_sys["src/subsystems/replay/replay_playback.c + replay_fade.c + replay_input.c<br/>+ replay.c + replay_state.c<br/>(was repl_replay)<br/>state machine · fades · walkers"]
         cpicker["src/subsystems/color_picker/color_picker_state.c<br/>(was inside ui_color_picker)<br/>HSV/alpha state · lifecycle · writeback"]
-        tutorial_sys["src/subsystems/tutorial/tutorial.c + src/subsystems/tutorial/tutorial_state.c<br/>(catalog in src/repl/tutorials.c)<br/>runner · step state · locks · fade timing"]
+        tutorial_sys["src/subsystems/tutorial/tutorial_runner.c + tutorial_animation.c + tutorial_match.c<br/>+ src/subsystems/tutorial/tutorial_state.c<br/>(catalog in src/repl/tutorials.c)<br/>runner · matching · fade timing"]
         camera["src/app/glr_camera.c<br/>orbit/pan/zoom transform"]
     end
 

@@ -33,7 +33,9 @@
         "src/editor/inline_rename.c",
         "src/subsystems/variable_panel/variable_panel_drag.c",
         "src/subsystems/color_picker/color_picker_state.c",
-        "src/subsystems/tutorial/tutorial.c",
+        "src/subsystems/tutorial/tutorial_runner.c",
+        "src/subsystems/tutorial/tutorial_animation.c",
+        "src/subsystems/tutorial/tutorial_match.c",
         "src/app/glr_actions.c",
         "src/app/glr_camera.c"
       ]
