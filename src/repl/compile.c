@@ -1844,6 +1844,121 @@ ReplCompileResult repl_compile_func_def(const char *input,
     return REPL_COMPILE_OK;
 }
 
+ReplCompileResult repl_compile_for_loop_kernel(const char *input,
+                                               const ReplCompileContext *ctx,
+                                               ReplForLoopKernel *out,
+                                               char *err, int err_size) {
+    if (!ctx || !out) return REPL_COMPILE_ERROR;
+    memset(out, 0, sizeof(*out));
+
+    const char *p = input ? input : "";
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (strncmp(p, "for(", 4) != 0 && strncmp(p, "for (", 5) != 0) {
+        out->valid = 0;
+        return REPL_COMPILE_OK;
+    }
+
+    out->pos = compile_insert_pos(ctx);
+
+    out->visible_nv = collect_visible_vars(out->pos, out->visible_vars,
+                                           MAX_EXPR_VARS, NULL);
+
+    if (!repl_eval_parse_for_header_with_vars(p, out->var_name,
+                                              sizeof(out->var_name),
+                                              &out->start, &out->end, &out->step,
+                                              out->visible_vars, out->visible_nv,
+                                              &out->body_start)) {
+        snprintf(err, (size_t)err_size,
+                 "for syntax: for(var, start, end[, step]) body;");
+        return REPL_COMPILE_ERROR;
+    }
+
+    repl_source_scope_cmd_indent(out->pos, out->indent, sizeof(out->indent));
+
+    out->fb.type    = CMD_FOR_BEGIN;
+    out->fb.args[0] = out->start;
+    out->fb.args[1] = out->end;
+    out->fb.args[2] = out->step;
+    out->fb.valid   = 1;
+
+    /* Re-walk the input to extract the args expression text so the
+     * formatted line preserves the user's symbolic form when args
+     * reference visible vars. */
+    const char *raw = p;
+    while (*raw && *raw != '(') raw++;
+    if (*raw) raw++;
+    while (*raw && isspace((unsigned char)*raw)) raw++;
+    while (*raw && (isalnum((unsigned char)*raw) || *raw == '_')) raw++;
+    while (*raw && isspace((unsigned char)*raw)) raw++;
+    if (*raw == ',') raw++;
+
+    const char *args_start = raw;
+    int paren = 1;
+    const char *ap = args_start;
+    while (*ap && paren > 0) {
+        if (*ap == '(')      paren++;
+        else if (*ap == ')') paren--;
+        if (paren > 0) ap++;
+    }
+    int rlen = (int)(ap - args_start);
+    char raw_args[MAX_LINE_LEN];
+    if (rlen > (int)sizeof(raw_args) - 1)
+        rlen = (int)sizeof(raw_args) - 1;
+    memcpy(raw_args, args_start, (size_t)rlen);
+    raw_args[rlen] = '\0';
+    while (rlen > 0 && isspace((unsigned char)raw_args[rlen - 1]))
+        raw_args[--rlen] = '\0';
+
+    char *ra = raw_args;
+    while (*ra && isspace((unsigned char)*ra)) ra++;
+
+    char verr[REPL_DIAG_TEXT_MAX];
+    if (!repl_eval_validate_expression_idents(ra, out->visible_vars,
+                                              out->visible_nv,
+                                              verr, sizeof(verr))) {
+        snprintf(err, (size_t)err_size, "%s", verr);
+        return REPL_COMPILE_ERROR;
+    }
+
+    if (input_has_any_visible_vars(ra, out->visible_vars, out->visible_nv)) {
+        out->fb.has_vars = 1;
+        if (!repl_format_fits(out->fb_text, sizeof(out->fb_text),
+                              "%sfor(%s, %s) {",
+                              out->indent, out->var_name, ra)) {
+            snprintf(err, (size_t)err_size, "Command too long");
+            return REPL_COMPILE_ERROR;
+        }
+    } else if (out->step != 1.0f) {
+        char start_buf[32];
+        char end_buf[32];
+        char step_buf[32];
+        repl_format_source_float(start_buf, sizeof(start_buf), out->start);
+        repl_format_source_float(end_buf,   sizeof(end_buf),   out->end);
+        repl_format_source_float(step_buf,  sizeof(step_buf),  out->step);
+        if (!repl_format_fits(out->fb_text, sizeof(out->fb_text),
+                              "%sfor(%s, %s, %s, %s) {",
+                              out->indent, out->var_name,
+                              start_buf, end_buf, step_buf)) {
+            snprintf(err, (size_t)err_size, "Command too long");
+            return REPL_COMPILE_ERROR;
+        }
+    } else {
+        char start_buf[32];
+        char end_buf[32];
+        repl_format_source_float(start_buf, sizeof(start_buf), out->start);
+        repl_format_source_float(end_buf,   sizeof(end_buf),   out->end);
+        if (!repl_format_fits(out->fb_text, sizeof(out->fb_text),
+                              "%sfor(%s, %s, %s) {",
+                              out->indent, out->var_name, start_buf, end_buf)) {
+            snprintf(err, (size_t)err_size, "Command too long");
+            return REPL_COMPILE_ERROR;
+        }
+    }
+
+    out->valid = 1;
+    return REPL_COMPILE_OK;
+}
+
 ReplCompileResult repl_compile_for_loop(const char *input,
                                         const ReplCompileContext *ctx,
                                         ReplCompiledChange *out,
@@ -1851,121 +1966,21 @@ ReplCompileResult repl_compile_for_loop(const char *input,
     if (!ctx || !out) return REPL_COMPILE_ERROR;
     repl_compiled_change_init(out);
 
-    const char *p = input ? input : "";
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (strncmp(p, "for(", 4) != 0 && strncmp(p, "for (", 5) != 0) {
+    ReplForLoopKernel kernel;
+    ReplCompileResult r = repl_compile_for_loop_kernel(input, ctx, &kernel,
+                                                       err, err_size);
+    if (r != REPL_COMPILE_OK) return r;
+    if (!kernel.valid) {
         out->kind = REPL_COMPILED_NO_CHANGE;
         return REPL_COMPILE_OK;
     }
 
-    int pos = compile_insert_pos(ctx);
-
-    ExprVar visible_vars[MAX_EXPR_VARS];
-    int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS, NULL);
-
-    char var_name[REPL_PREDEF_NAME_MAX];
-    float start, end, step;
-    const char *body_start = NULL;
-    if (!repl_eval_parse_for_header_with_vars(p, var_name, sizeof(var_name),
-                                              &start, &end, &step,
-                                              visible_vars, visible_nv,
-                                              &body_start)) {
-        snprintf(err, (size_t)err_size,
-                 "for syntax: for(var, start, end[, step]) body;");
-        return REPL_COMPILE_ERROR;
-    }
-
-    char indent[REPL_INDENT_TEXT_MAX];
-    repl_source_scope_cmd_indent(pos, indent, sizeof(indent));
-
-    GLCmd fb;
-    memset(&fb, 0, sizeof(fb));
-    fb.type = CMD_FOR_BEGIN;
-    fb.args[0] = start;
-    fb.args[1] = end;
-    fb.args[2] = step;
-    fb.valid = 1;
-
-    /* Re-walk the input to extract the args expression text so the
-     * formatted line preserves the user's symbolic form when args
-     * reference visible vars. Same approach as editor_compile_for_loop. */
-    char fb_text[MAX_LINE_LEN];
-    {
-        const char *raw = p;
-        while (*raw && *raw != '(') raw++;
-        if (*raw) raw++;
-        while (*raw && isspace((unsigned char)*raw)) raw++;
-        while (*raw && (isalnum((unsigned char)*raw) || *raw == '_')) raw++;
-        while (*raw && isspace((unsigned char)*raw)) raw++;
-        if (*raw == ',') raw++;
-
-        const char *args_start = raw;
-        int paren = 1;
-        const char *ap = args_start;
-        while (*ap && paren > 0) {
-            if (*ap == '(')      paren++;
-            else if (*ap == ')') paren--;
-            if (paren > 0) ap++;
-        }
-        int rlen = (int)(ap - args_start);
-        char raw_args[MAX_LINE_LEN];
-        if (rlen > (int)sizeof(raw_args) - 1)
-            rlen = (int)sizeof(raw_args) - 1;
-        memcpy(raw_args, args_start, (size_t)rlen);
-        raw_args[rlen] = '\0';
-        while (rlen > 0 && isspace((unsigned char)raw_args[rlen - 1]))
-            raw_args[--rlen] = '\0';
-
-        char *ra = raw_args;
-        while (*ra && isspace((unsigned char)*ra)) ra++;
-
-        char verr[REPL_DIAG_TEXT_MAX];
-        if (!repl_eval_validate_expression_idents(ra, visible_vars, visible_nv,
-                                                  verr, sizeof(verr))) {
-            snprintf(err, (size_t)err_size, "%s", verr);
-            return REPL_COMPILE_ERROR;
-        }
-
-        if (input_has_any_visible_vars(ra, visible_vars, visible_nv)) {
-            fb.has_vars = 1;
-            if (!repl_format_fits(fb_text, sizeof(fb_text),
-                                  "%sfor(%s, %s) {", indent, var_name, ra)) {
-                snprintf(err, (size_t)err_size, "Command too long");
-                return REPL_COMPILE_ERROR;
-            }
-        } else if (step != 1.0f) {
-            char start_buf[32];
-            char end_buf[32];
-            char step_buf[32];
-            repl_format_source_float(start_buf, sizeof(start_buf), start);
-            repl_format_source_float(end_buf, sizeof(end_buf), end);
-            repl_format_source_float(step_buf, sizeof(step_buf), step);
-            if (!repl_format_fits(fb_text, sizeof(fb_text),
-                                  "%sfor(%s, %s, %s, %s) {",
-                                  indent, var_name, start_buf, end_buf, step_buf)) {
-                snprintf(err, (size_t)err_size, "Command too long");
-                return REPL_COMPILE_ERROR;
-            }
-        } else {
-            char start_buf[32];
-            char end_buf[32];
-            repl_format_source_float(start_buf, sizeof(start_buf), start);
-            repl_format_source_float(end_buf, sizeof(end_buf), end);
-            if (!repl_format_fits(fb_text, sizeof(fb_text),
-                                  "%sfor(%s, %s, %s) {",
-                                  indent, var_name, start_buf, end_buf)) {
-                snprintf(err, (size_t)err_size, "Command too long");
-                return REPL_COMPILE_ERROR;
-            }
-        }
-    }
-
     out->kind  = REPL_COMPILED_INSERT_ONE;
-    out->pos   = pos;
+    out->pos   = kernel.pos;
     out->count = 1;
     out->adjust_edit_line = 1;
-    out->cmds[0] = fb;
-    snprintf(out->text[0], sizeof(out->text[0]), "%s", fb_text);
+    out->cmds[0] = kernel.fb;
+    snprintf(out->text[0], sizeof(out->text[0]), "%s", kernel.fb_text);
     return REPL_COMPILE_OK;
 }
 
