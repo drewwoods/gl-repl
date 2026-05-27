@@ -325,6 +325,9 @@ SRCS = \
 	src/ui/app/variable_panel.c \
 	src/subsystems/color_picker/color_picker_state.c \
 	src/subsystems/replay/replay.c \
+	src/subsystems/replay/replay_fade.c \
+	src/subsystems/replay/replay_input.c \
+	src/subsystems/replay/replay_playback.c \
 	src/subsystems/replay/replay_state.c \
 	src/subsystems/tutorial/tutorial.c \
 	src/subsystems/tutorial/tutorial_state.c \
@@ -499,6 +502,9 @@ CORE_TEST_SRCS = \
 	src/ui/app/variable_panel.c \
 	src/subsystems/color_picker/color_picker_state.c \
 	src/subsystems/replay/replay.c \
+	src/subsystems/replay/replay_fade.c \
+	src/subsystems/replay/replay_input.c \
+	src/subsystems/replay/replay_playback.c \
 	src/subsystems/replay/replay_state.c \
 	src/subsystems/tutorial/tutorial.c \
 	src/subsystems/tutorial/tutorial_state.c \
@@ -543,6 +549,9 @@ SCENE_DEMO_DEP_SRCS = $(SCENE_SRCS) src/support/prof.c
 REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/support/prof.c \
                      src/subsystems/replay/replay.c \
+                     src/subsystems/replay/replay_fade.c \
+                     src/subsystems/replay/replay_input.c \
+                     src/subsystems/replay/replay_playback.c \
                      src/subsystems/replay/replay_state.c \
                      src/subsystems/tutorial/tutorial_state.c \
 					 src/repl/apply.c \
