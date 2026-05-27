@@ -240,11 +240,15 @@ ReplCompileResult repl_compile_var_assign(const char *input,
                                           ReplCompiledChange *out,
                                           char *err, int err_size);
 
-/* Compile dispatcher: walks the registered compile handlers in
+/* Compile dispatcher: walks all six per-kind compile validators in
  * canonical order and returns the first one that produces a
  * non-NO_CHANGE result. NO_CHANGE means the input didn't match any
- * handler — the caller decides whether that is "fall through to the
- * next dispatcher" or "no commit happened".
+ * handler — the caller decides whether that is "fall through to a
+ * generic-command parser" (e.g. repl_load_apply_line punts back to
+ * repl_parser_parse_command) or "no commit happened".
+ *
+ * Coverage: float_decl → var_assign → close_brace → for_loop →
+ * func_def → if_block.
  *
  * Handler order is load-bearing: `repl_compile_float_decl` must run
  * before `repl_compile_var_assign`, otherwise `float x;` would parse

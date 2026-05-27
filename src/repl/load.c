@@ -25,27 +25,6 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Try one of the structured-block validators. Returns 1 if the line
- * was consumed (kind != NO_CHANGE) or if the validator returned an
- * error. Returns 0 if the line wasn't this block's shape (caller
- * should fall through to the next handler). */
-static int load_try_block(ReplCompileResult (*compile)(const char *,
-                                                       const ReplCompileContext *,
-                                                       ReplCompiledChange *,
-                                                       char *, int),
-                          const char *line,
-                          const ReplCompileContext *ctx,
-                          ReplCompiledChange *out,
-                          char *err, int err_size,
-                          int *failed_out) {
-    ReplCompileResult r = compile(line, ctx, out, err, err_size);
-    if (r == REPL_COMPILE_ERROR) {
-        if (failed_out) *failed_out = 1;
-        return 1;  /* claimed but failed */
-    }
-    return out->kind != REPL_COMPILED_NO_CHANGE;
-}
-
 int repl_load_apply_line(const char *line, char *err, int err_size,
                          int *edit_line_inout) {
     if (!line) return 0;
@@ -77,39 +56,18 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
     ReplCompileContext ctx = repl_compile_context_from_live(*edit_line_inout);
     ReplCompiledChange change;
     repl_compiled_change_init(&change);
-    int failed = 0;
 
-    /* (1) float decl + var assign via dispatcher. */
+    /* All six block/decl compile validators run in canonical order
+     * via repl_compile_dispatch (#16): float_decl → var_assign →
+     * close_brace → for_loop → func_def → if_block. The first
+     * matching grammar wins. */
     {
         ReplCompileResult r = repl_compile_dispatch(line, &ctx, &change,
                                                     err, err_size);
         if (r == REPL_COMPILE_ERROR) return 0;
     }
 
-    /* (2) structured-block validators in canonical try_commit order:
-     * close_brace → for_loop → func_def → if_block. */
-    if (change.kind == REPL_COMPILED_NO_CHANGE &&
-        load_try_block(repl_compile_close_brace, line, &ctx, &change,
-                       err, err_size, &failed)) {
-        if (failed) return 0;
-    }
-    if (change.kind == REPL_COMPILED_NO_CHANGE &&
-        load_try_block(repl_compile_for_loop, line, &ctx, &change,
-                       err, err_size, &failed)) {
-        if (failed) return 0;
-    }
-    if (change.kind == REPL_COMPILED_NO_CHANGE &&
-        load_try_block(repl_compile_func_def, line, &ctx, &change,
-                       err, err_size, &failed)) {
-        if (failed) return 0;
-    }
-    if (change.kind == REPL_COMPILED_NO_CHANGE &&
-        load_try_block(repl_compile_if_block, line, &ctx, &change,
-                       err, err_size, &failed)) {
-        if (failed) return 0;
-    }
-
-    /* (3) Apply the structured/decl/assign change if any was produced.
+    /* Apply the structured/decl/assign change if any was produced.
      *
      * Force adjust_edit_line=1 so insert ops auto-advance edit_line.
      * The compile validators leave it 0 because the editor wrapper
