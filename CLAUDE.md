@@ -653,7 +653,10 @@ Key details:
 - `CMD_VAR_DECLARE` is a no-op in `repl_execute_program()` and
   `flatten_range()` — registration into the predefined-variable table happens at
   commit time via `repl_eval_declare_predef_var()`
-- `GLCmd` fields: `var_names[MAX_NAMES_PER_DECL][16]`, `var_decl_count`
+- `GLCmd` fields (tagged-union payload, keyed on `type`):
+  `payload.decl.names[MAX_NAMES_PER_DECL][16]`, `payload.decl.count`
+  (active for `CMD_VAR_DECLARE`); `payload.label.fmt[GLUT_BITMAP_FMT_MAX]`
+  (active for `CMD_LABEL`). Other types must not read the payload.
 - Editing an existing `CMD_VAR_DECLARE` line works: the overwrite
   detection runs before the "already declared" validation loop, and
   names carried over from the old decl are exempted from the duplicate

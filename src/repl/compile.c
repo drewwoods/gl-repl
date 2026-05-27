@@ -265,8 +265,8 @@ static int compile_find_var_decl(const ReplCompileContext *ctx,
         const GLCmd *cmd = &ctx->document_cmds[cmd_idx];
         if (!cmd->valid || cmd->type != CMD_VAR_DECLARE)
             continue;
-        for (int decl_idx = 0; decl_idx < cmd->var_decl_count; decl_idx++) {
-            if (strcmp(cmd->var_names[decl_idx], name) == 0)
+        for (int decl_idx = 0; decl_idx < cmd->payload.decl.count; decl_idx++) {
+            if (strcmp(cmd->payload.decl.names[decl_idx], name) == 0)
                 return cmd_idx;
         }
     }
@@ -612,8 +612,8 @@ static ReplCompileResult validate_decl_names(const FloatDeclParse *parsed,
         if (repl_eval_find_predef_var_idx(nm) >= 0) {
             int in_old_decl = 0;
             if (old_decl) {
-                for (int d = 0; d < old_decl->var_decl_count; d++) {
-                    if (strcmp(old_decl->var_names[d], nm) == 0) {
+                for (int d = 0; d < old_decl->payload.decl.count; d++) {
+                    if (strcmp(old_decl->payload.decl.names[d], nm) == 0) {
                         in_old_decl = 1;
                         break;
                     }
@@ -629,7 +629,7 @@ static ReplCompileResult validate_decl_names(const FloatDeclParse *parsed,
             return compile_set_err(err, err_size, "invalid identifier '%s'", nm);
     }
 
-    int old_count = old_decl ? old_decl->var_decl_count : 0;
+    int old_count = old_decl ? old_decl->payload.decl.count : 0;
     if (g_num_predef_vars + parsed->count - old_count > MAX_PREDEF_VARS)
         return compile_set_err(err, err_size,
             "variable table full (max %d)", MAX_PREDEF_VARS);
@@ -675,8 +675,8 @@ static void build_decl_predef_ops(const FloatDeclParse *parsed,
     int op_count = 0;
 
     if (old_decl) {
-        for (int d = 0; d < old_decl->var_decl_count; d++) {
-            const char *nm = old_decl->var_names[d];
+        for (int d = 0; d < old_decl->payload.decl.count; d++) {
+            const char *nm = old_decl->payload.decl.names[d];
             int kept = 0;
             for (int v = 0; v < parsed->count; v++) {
                 if (strcmp(parsed->names[v], nm) == 0) { kept = 1; break; }
@@ -768,8 +768,8 @@ ReplCompileResult repl_compile_float_decl(const char *input,
      * elsewhere in the document. Replacement is rejected outright
      * rather than auto-deleting the references. */
     if (overwriting_decl) {
-        for (int d = 0; d < old_decl->var_decl_count; d++) {
-            const char *nm = old_decl->var_names[d];
+        for (int d = 0; d < old_decl->payload.decl.count; d++) {
+            const char *nm = old_decl->payload.decl.names[d];
             int kept = 0;
             for (int v = 0; v < parsed.count; v++) {
                 if (strcmp(parsed.names[v], nm) == 0) { kept = 1; break; }
@@ -790,10 +790,10 @@ ReplCompileResult repl_compile_float_decl(const char *input,
     memset(&cmd, 0, sizeof(cmd));
     cmd.type = CMD_VAR_DECLARE;
     cmd.valid = 1;
-    cmd.var_decl_count = parsed.count;
+    cmd.payload.decl.count = parsed.count;
     for (int v = 0; v < parsed.count; v++) {
-        if (!repl_copy_string_fits(cmd.var_names[v],
-                                   sizeof(cmd.var_names[v]),
+        if (!repl_copy_string_fits(cmd.payload.decl.names[v],
+                                   sizeof(cmd.payload.decl.names[v]),
                                    parsed.names[v]))
             return compile_set_err(err, err_size, "invalid identifier (max 15 chars)");
     }
@@ -1027,8 +1027,8 @@ ReplCompileResult repl_compile_var_assign(const char *input,
      * CMD_VAR_ASSIGN slot to the post-undeclare index before publish. */
     int op_count = out->predef_op_count;
     if (overwriting_decl) {
-        for (int decl_idx = 0; decl_idx < old_decl->var_decl_count; decl_idx++) {
-            const char *nm = old_decl->var_names[decl_idx];
+        for (int decl_idx = 0; decl_idx < old_decl->payload.decl.count; decl_idx++) {
+            const char *nm = old_decl->payload.decl.names[decl_idx];
             for (int cmd_idx = 0; cmd_idx < ctx->document_count; cmd_idx++) {
                 if (cmd_idx == insert_idx) continue;
                 const char *line = source_text_line(ctx->text, cmd_idx);
@@ -1172,8 +1172,8 @@ static ReplCompileResult compile_collect_undeclare_for_range(
     for (int i = range_start; i < range_end; i++) {
         const GLCmd *cmd = &ctx->document_cmds[i];
         if (cmd->type != CMD_VAR_DECLARE) continue;
-        for (int d = 0; d < cmd->var_decl_count; d++) {
-            const char *nm = cmd->var_names[d];
+        for (int d = 0; d < cmd->payload.decl.count; d++) {
+            const char *nm = cmd->payload.decl.names[d];
             for (int j = 0; j < n; j++) {
                 if (j >= range_start && j < range_end) continue;
                 if (ctx->document_cmds[j].type == CMD_COMMENT) continue;
@@ -1190,14 +1190,14 @@ static ReplCompileResult compile_collect_undeclare_for_range(
     for (int i = range_start; i < range_end; i++) {
         const GLCmd *cmd = &ctx->document_cmds[i];
         if (cmd->type != CMD_VAR_DECLARE) continue;
-        for (int d = 0; d < cmd->var_decl_count; d++) {
+        for (int d = 0; d < cmd->payload.decl.count; d++) {
             if (out->predef_op_count >= MAX_PREDEF_OPS_PER_COMMIT)
                 return compile_set_err(err, err_size,
                                        "Too many declarations in range");
             ReplPredefOp *op = &out->predef_ops[out->predef_op_count++];
             op->kind = REPL_PREDEF_OP_UNDECLARE;
             repl_copy_string_fits(op->name, sizeof(op->name),
-                                  cmd->var_names[d]);
+                                  cmd->payload.decl.names[d]);
         }
     }
     return REPL_COMPILE_OK;

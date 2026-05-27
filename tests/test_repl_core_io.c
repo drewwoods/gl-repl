@@ -1566,7 +1566,7 @@ int main(void) {
      * repl_eval_declare_predef_var (which actually returns 1/0, not
      * idx-or-(-1)). On a reserved or otherwise-invalid name the
      * failure was silently swallowed: the bad name still landed in
-     * the reconstructed CMD_VAR_DECLARE.var_names[] and the
+     * the reconstructed CMD_VAR_DECLARE.payload.decl.names[] and the
      * canonical decl_line, leaving source/cmd-state out of sync
      * with the predef table. Post-fix the `!` check catches it and
      * the directive is dropped. */
@@ -1596,8 +1596,8 @@ int main(void) {
         for (int i = 0; i < repl_state_document_count(); i++) {
             const GLCmd *c = &repl_state_document_cmds()[i];
             if (!c->valid || c->type != CMD_VAR_DECLARE) continue;
-            for (int n = 0; n < c->var_decl_count; n++) {
-                if (strcmp(c->var_names[n], "PI") == 0)
+            for (int n = 0; n < c->payload.decl.count; n++) {
+                if (strcmp(c->payload.decl.names[n], "PI") == 0)
                     decl_with_pi++;
             }
         }

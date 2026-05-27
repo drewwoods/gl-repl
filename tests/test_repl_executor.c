@@ -363,7 +363,7 @@ static void test_glut_bitmap_string(void) {
     cmds[0].type = CMD_LABEL;
     cmds[0].valid = 1;
     cmds[0].num_args = 0;
-    strcpy(cmds[0].text, "hi");
+    strcpy(cmds[0].payload.label.fmt, "hi");
 
     ReplExecutionOptions opts = {0};
     opts.flat_cmd_count = 1;
@@ -389,7 +389,7 @@ static void test_glut_bitmap_string(void) {
     cmds[1].type = CMD_LABEL;
     cmds[1].valid = 1;
     cmds[1].num_args = 0;
-    strcpy(cmds[1].text, "hi");
+    strcpy(cmds[1].payload.label.fmt, "hi");
     opts.flat_cmd_count = 2;
     opts.program.cmd_count = 2;
     repl_execute_program(&opts);
@@ -408,7 +408,7 @@ static void test_glut_bitmap_string(void) {
     cmds[0].valid = 1;
     cmds[0].args[0] = 1.25f;
     cmds[0].num_args = 1;
-    strcpy(cmds[0].text, "v=%f");
+    strcpy(cmds[0].payload.label.fmt, "v=%f");
     opts.flat_cmd_count = 1;
     opts.program.cmd_count = 1;
     repl_execute_program(&opts);
@@ -422,7 +422,7 @@ static void test_glut_bitmap_string(void) {
     cmds[0].type = CMD_LABEL;
     cmds[0].valid = 1;
     cmds[0].num_args = 0;
-    strcpy(cmds[0].text, "100%% done");
+    strcpy(cmds[0].payload.label.fmt, "100%% done");
 
     repl_execute_program(&opts);
 

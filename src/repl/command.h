@@ -98,9 +98,25 @@ typedef struct {
     int      valid;                 /* Deleted commands remain allocated but skipped */
     int      is_auto;               /* Auto-generated helper, e.g. synthesized normals */
     int      has_vars;              /* Source must be preserved/re-evaluated from text */
-    char     var_names[MAX_NAMES_PER_DECL][16];
-    int      var_decl_count;        /* Number of names in a CMD_VAR_DECLARE line */
-    char     text[GLUT_BITMAP_FMT_MAX]; /* Format string for CMD_LABEL (no quotes) */
+    /* Tagged-union payload for cmd-type-specific fields. Saves ~64 bytes
+     * per command vs. keeping the decl-name table and label format
+     * string side-by-side as separate top-level fields (audit #37).
+     *
+     * Active member is keyed by `type`:
+     *   CMD_VAR_DECLARE  -> payload.decl
+     *   CMD_LABEL        -> payload.label
+     *   anything else    -> zeroed; do not read.
+     *
+     * Writers must zero/init the relevant member before touching it. */
+    union {
+        struct {
+            char names[MAX_NAMES_PER_DECL][16];
+            int  count;             /* Number of names in a CMD_VAR_DECLARE line */
+        } decl;
+        struct {
+            char fmt[GLUT_BITMAP_FMT_MAX]; /* Format string for CMD_LABEL (no quotes) */
+        } label;
+    } payload;
     int      src_cmd_idx;           /* Owning source command for flat->source mapping */
     int      call_src_cmd_idx;      /* Immediate call site that expanded this command */
     int      root_call_src_cmd_idx; /* Outermost call site in nested expansion */

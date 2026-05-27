@@ -433,8 +433,8 @@ static int parse_snippet_declare(const char *args, int *loaded,
             newly_declared[new_count][len] = '\0';
             new_count++;
         }
-        if (!repl_copy_string_fits(cmd.var_names[count],
-                                   sizeof(cmd.var_names[count]), name)) {
+        if (!repl_copy_string_fits(cmd.payload.decl.names[count],
+                                   sizeof(cmd.payload.decl.names[count]), name)) {
             /* Roll back the just-declared entry so the predef table
              * doesn't carry a name the document never gets. */
             if (!was_registered) {
@@ -461,7 +461,7 @@ static int parse_snippet_declare(const char *args, int *loaded,
         return 0;
     }
     snprintf(decl_line + off, sizeof(decl_line) - (size_t)off, ";");
-    cmd.var_decl_count = count;
+    cmd.payload.decl.count = count;
 
     /* Insert the command directly, bypassing editor_try_commit_float_decl so we
      * don't reject vars that are already registered.  Keep declarations in the

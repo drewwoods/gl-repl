@@ -29,7 +29,7 @@
 ## Status summary (updated 2026-05-27)
 
 83 findings total (82 from the original audit + 1 review-discovered).
-79 closed (✅), 4 still open. All open findings verified against
+80 closed (✅), 3 still open. All open findings verified against
 current HEAD. Tier letters cover the whole open backlog — no unclassified rows
 remain. Tier A is empty: the 2026-05-27 Tier A close pass landed all ten
 (#26, #27, #43, #70, #72, #76, #77, #78, #79, #81), and the review pass that
@@ -75,7 +75,7 @@ full slug-to-int route (bridge + X-macro symbol tables in
 | 34 | 🟢 | A | ✅ Done | `repl_workspace_dir` / `repl_state_workspace_dir` dual name |
 | 35 | 🟢 | A | ✅ Done | `core.c` header comment stale |
 | 36 | 🟢 | A | ✅ Done | `command_store.h` dead inline + policy query |
-| 37 | 🔵 | C | Open | `GLCmd.text[64]` + `var_names[8][16]` per command |
+| 37 | 🔵 | C | ✅ Done | `GLCmd.text[64]` + `var_names[8][16]` per command |
 | 38 | 🟢 | A | ✅ Done | `examples.h` / `example_loader.c` parallel API names |
 | 39 | 🔵 | A | ✅ Done | Three bridge ternary patterns |
 | 40 | 🔵 | — | ✅ Done | Predef-var capture/restore duplicated 5× |
@@ -1412,21 +1412,51 @@ redistribution" framing.
 **Fix:** Delete the inline helper. Move `first_non_decl` into
 `command_store_policy.h` or fold into the export.c caller as static.
 
-### 37. `GLCmd.text[64]` + `var_names[8][16]` carried by every command for CmdType-specific use
+### 37. `GLCmd.text[64]` + `var_names[8][16]` carried by every command for CmdType-specific use — CLOSED
 
-**Where:** `src/repl/command.h:101-103`
+**Where (original):** `src/repl/command.h:101-103`
 
-**Smell:** `sizeof(GLCmd) == 268`; `text[64]` is written once in
-CMD_LABEL; `var_names[8][16]` (+ `var_decl_count`) used only by
-CMD_VAR_DECLARE. ~196 bytes of per-command overhead that 99% of
-commands don't use. Across MAX_COMMANDS × 8 user scenes that's ~14
-MB of dead feature overhead.
+**Smell (original):** `sizeof(GLCmd) == 268`; `text[64]` was written
+once in `CMD_LABEL`; `var_names[8][16]` (+ `var_decl_count`) was used
+only by `CMD_VAR_DECLARE`. ~196 bytes per command that 99% of commands
+didn't use, compounding with #5 (UserScene stack pressure).
 
-**Why it matters:** Compounds with #5 (UserScene stack pressure).
+**Resolution (2026-05-27):**
 
-**Fix:** Tagged union — `union { struct { char text[64]; } label;
-struct { char names[8][16]; int count; } decl; }` keyed on
-`CmdType`. Drops `sizeof(GLCmd)` ~50%. Invasive; long-term win.
+`GLCmd` now carries a single tagged-union `payload` keyed on `type`:
+
+```c
+union {
+    struct {
+        char names[MAX_NAMES_PER_DECL][16];
+        int  count;
+    } decl;        /* CMD_VAR_DECLARE */
+    struct {
+        char fmt[GLUT_BITMAP_FMT_MAX];
+    } label;       /* CMD_LABEL */
+} payload;
+```
+
+`sizeof(GLCmd) == 268 → 204` (verified with a one-shot offsetof
+print). The union arm is 132 bytes (decl side dominates), down from
+the prior 192 bytes of side-by-side fields. The savings compound:
+8 user-scene snapshots + flat program + undo/redo rings × 4096 cmds
+each ≈ several MB off the working set.
+
+Access pattern changes across the codebase:
+- `cmd.var_names[i]`     → `cmd.payload.decl.names[i]`
+- `cmd.var_decl_count`   → `cmd.payload.decl.count`
+- `cmd.text`             → `cmd.payload.label.fmt`
+
+Touched files: `src/repl/command.h` (the union itself);
+`src/repl/{compile,import,export,core,parser,executor}.c` (the eight
+writer + reader sites for the decl arm, plus the one reader and one
+writer for the label arm); `tools/capacity_matrix.c` (doc string);
+`CLAUDE.md` (architecture section); 5 test files
+(`test_repl_compile.c`, `test_repl_core_io.c`, `test_repl_core_parse.c`,
+`test_repl_editor.c`, `test_repl_executor.c`).
+
+6451/6451 tests pass; 7576/7576 stub tests pass; `make check` green.
 
 ### 38. `examples.h` and `example_loader.c` expose parallel singular/plural API names
 
