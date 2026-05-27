@@ -1503,27 +1503,26 @@ static void compile_close_brace_indent(int pos, char *buf, int buf_sz) {
     buf[len] = '\0';
 }
 
-ReplCompileResult repl_compile_close_brace(const char *input,
-                                           const ReplCompileContext *ctx,
-                                           ReplCompiledChange *out,
-                                           char *err, int err_size) {
+ReplCompileResult repl_compile_close_brace_kernel(const char *input,
+                                                  const ReplCompileContext *ctx,
+                                                  ReplCloseBraceKernel *out,
+                                                  char *err, int err_size) {
     if (!ctx || !out) return REPL_COMPILE_ERROR;
-    repl_compiled_change_init(out);
+    memset(out, 0, sizeof(*out));
 
     const char *p = input ? input : "";
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != '}') {
-        out->kind = REPL_COMPILED_NO_CHANGE;
+        out->valid = 0;
         return REPL_COMPILE_OK;
     }
 
-    int pos = compile_insert_pos(ctx);
+    out->pos = compile_insert_pos(ctx);
 
-    CmdType open_type = repl_source_scope_nearest_open_block_at(pos);
-    CmdType end_type;
-    if (open_type == CMD_FOR_BEGIN)      end_type = CMD_FOR_END;
-    else if (open_type == CMD_FUNC_DEF)  end_type = CMD_FUNC_END;
-    else if (open_type == CMD_IF_BEGIN)  end_type = CMD_IF_END;
+    out->open_type = repl_source_scope_nearest_open_block_at(out->pos);
+    if (out->open_type == CMD_FOR_BEGIN)      out->end_type = CMD_FOR_END;
+    else if (out->open_type == CMD_FUNC_DEF)  out->end_type = CMD_FUNC_END;
+    else if (out->open_type == CMD_IF_BEGIN)  out->end_type = CMD_IF_END;
     else {
         if (err && err_size > 0)
             snprintf(err, (size_t)err_size, "unmatched '}'");
@@ -1531,29 +1530,48 @@ ReplCompileResult repl_compile_close_brace(const char *input,
     }
 
     /* Matched-existing-end branch: close-brace lands on a row that's
-     * already the right end marker. No source mutation. (Editor cursor
-     * effects live on the editor wrapper.) */
-    if (pos < ctx->document_count &&
-        ctx->document_cmds[pos].type == end_type) {
-        out->kind = REPL_COMPILED_NO_CHANGE;
+     * already the right end marker. */
+    if (out->pos < ctx->document_count &&
+        ctx->document_cmds[out->pos].type == out->end_type) {
+        out->matched_existing = 1;
+        out->valid = 1;
         return REPL_COMPILE_OK;
     }
 
     /* Insert-new-end-marker branch. */
     char indent[REPL_INDENT_TEXT_MAX];
-    compile_close_brace_indent(pos, indent, sizeof(indent));
+    compile_close_brace_indent(out->pos, indent, sizeof(indent));
 
-    GLCmd fe;
-    memset(&fe, 0, sizeof(fe));
-    fe.type = end_type;
-    fe.valid = 1;
+    out->fe.type  = out->end_type;
+    out->fe.valid = 1;
+    snprintf(out->fe_text, sizeof(out->fe_text), "%s}", indent);
+    out->matched_existing = 0;
+    out->valid = 1;
+    return REPL_COMPILE_OK;
+}
+
+ReplCompileResult repl_compile_close_brace(const char *input,
+                                           const ReplCompileContext *ctx,
+                                           ReplCompiledChange *out,
+                                           char *err, int err_size) {
+    if (!ctx || !out) return REPL_COMPILE_ERROR;
+    repl_compiled_change_init(out);
+
+    ReplCloseBraceKernel kernel;
+    ReplCompileResult r = repl_compile_close_brace_kernel(input, ctx, &kernel,
+                                                          err, err_size);
+    if (r != REPL_COMPILE_OK) return r;
+    if (!kernel.valid || kernel.matched_existing) {
+        out->kind = REPL_COMPILED_NO_CHANGE;
+        return REPL_COMPILE_OK;
+    }
 
     out->kind  = REPL_COMPILED_INSERT_ONE;
-    out->pos   = pos;
+    out->pos   = kernel.pos;
     out->count = 1;
     out->adjust_edit_line = 1;
-    out->cmds[0] = fe;
-    snprintf(out->text[0], sizeof(out->text[0]), "%s}", indent);
+    out->cmds[0] = kernel.fe;
+    snprintf(out->text[0], sizeof(out->text[0]), "%s", kernel.fe_text);
     return REPL_COMPILE_OK;
 }
 

@@ -219,21 +219,6 @@ int editor_commit_apply_plan(const EditorCommitPlan *plan) {
 
 /* ---- editor_compile_close_brace --------------------------------- */
 
-static void close_brace_indent(int pos, char *buf, int buf_sz) {
-    repl_source_scope_cmd_indent(pos, buf, buf_sz);
-    int len = (int)strlen(buf);
-    /* Dedent one level (2 spaces) so the closing `}` lines up under its
-     * block opener rather than under the block body. */
-    if (len >= 2)
-        len -= 2;
-    else
-        len = 0;
-    if (len > buf_sz - 1)
-        len = buf_sz - 1;
-    memset(buf, ' ', (size_t)len);
-    buf[len] = '\0';
-}
-
 /* CONTRACT (audit #11): context-pure for document data, live-state-
  * coupled for scope queries. The ReplCompileContext snapshot is
  * authoritative for ctx->document_cmds / _count / edit_line, but the
@@ -250,33 +235,20 @@ ReplCompileResult editor_compile_close_brace(const char *input,
     editor_commit_plan_init(out);
     editor_compile_clear_err(err, err_size);
 
-    const char *p = input ? input : "";
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (*p != '}') {
+    ReplCloseBraceKernel kernel;
+    ReplCompileResult kr = repl_compile_close_brace_kernel(input, ctx, &kernel,
+                                                           err, err_size);
+    if (kr != REPL_COMPILE_OK) return kr;
+    if (!kernel.valid) {
         out->change.kind = REPL_COMPILED_NO_CHANGE;
         return REPL_COMPILE_OK;
     }
 
-    int pos = ctx->insert_mode ? ctx->edit_line :
-              (ctx->edit_line < ctx->document_count
-                   ? ctx->edit_line : ctx->document_count);
-
-    CmdType open_type = repl_source_scope_nearest_open_block_at(pos);
-    CmdType end_type;
-    const char *label;
-
-    if (open_type == CMD_FOR_BEGIN) {
-        end_type = CMD_FOR_END;
-        label = "for-loop";
-    } else if (open_type == CMD_FUNC_DEF) {
-        end_type = CMD_FUNC_END;
-        label = "func def";
-    } else if (open_type == CMD_IF_BEGIN) {
-        end_type = CMD_IF_END;
-        label = "if-block";
-    } else {
-        return editor_compile_error(err, err_size, "unmatched '}'");
-    }
+    int     pos      = kernel.pos;
+    CmdType end_type = kernel.end_type;
+    const char *label = (end_type == CMD_FOR_END) ? "for-loop" :
+                        (end_type == CMD_FUNC_END) ? "func def" :
+                        "if-block";
 
     /* Read the func-decl resume delta. The delta is one-shot and only
      * a CMD_FUNC_END close-brace consumes it; peek + conditional take
@@ -299,31 +271,27 @@ ReplCompileResult editor_compile_close_brace(const char *input,
     out->effects.insert_mode_target       = keep_inserting ? 1 : 0;
     out->effects.clear_input              = 1;
 
-    /* Reuse-existing-end branch: cursor target advances past the
-     * existing CMD_FOR_END / CMD_FUNC_END / CMD_IF_END and we
-     * reload g_input from the new edit-line's text. */
-    if (pos < ctx->document_count &&
-        ctx->document_cmds[pos].type == end_type) {
-        out->change.kind = REPL_COMPILED_NO_CHANGE;
+    if (kernel.matched_existing) {
+        /* Reuse-existing-end branch: cursor target advances past the
+         * existing CMD_*_END and we reload g_input from the new
+         * edit-line's text. */
+        out->change.kind                   = REPL_COMPILED_NO_CHANGE;
         out->effects.cursor_target         = pos + 1;
         out->effects.load_line_after_apply = 1;
     } else {
-        /* Insert-new-end-marker branch. */
-        char indent[REPL_INDENT_TEXT_MAX];
-        close_brace_indent(pos, indent, sizeof(indent));
-
-        GLCmd fe;
-        memset(&fe, 0, sizeof(fe));
-        fe.type = end_type;
-        fe.valid = 1;
-
-        out->change.kind  = REPL_COMPILED_INSERT_ONE;
-        out->change.pos   = pos;
-        out->change.count = 1;
+        /* Insert-new-end-marker branch. The kernel already built the
+         * GLCmd + text; the editor only needs to wire up the change
+         * record and cursor effect. The editor's INSERT_ONE keeps
+         * adjust_edit_line = 0 (distinct from the loader, which uses
+         * 1) because the editor moves the cursor explicitly through
+         * effects.cursor_target. */
+        out->change.kind             = REPL_COMPILED_INSERT_ONE;
+        out->change.pos              = pos;
+        out->change.count            = 1;
         out->change.adjust_edit_line = 0;
-        out->change.cmds[0] = fe;
+        out->change.cmds[0]          = kernel.fe;
         snprintf(out->change.text[0], sizeof(out->change.text[0]),
-                 "%s}", indent);
+                 "%s", kernel.fe_text);
 
         out->effects.cursor_target         = pos + 1;
         out->effects.clear_pending_newline = 1;

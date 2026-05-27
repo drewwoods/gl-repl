@@ -363,6 +363,31 @@ ReplCompileResult repl_compile_if_block_kernel(const char *input,
                                                ReplIfBlockKernel *out,
                                                char *err, int err_size);
 
+/* Shared kernel for `}`. No expression parse — just the
+ * open-block scope lookup and the matched-existing-end vs insert-
+ * new-end-marker decision. Both wrappers consume:
+ *   - end_type to thread label strings and (for the editor) the
+ *     func-decl-resume one-shot.
+ *   - matched_existing == 1 means the close-brace landed on a row
+ *     that's already the right end marker; the loader emits
+ *     NO_CHANGE; the editor advances the cursor without writing.
+ *   - When matched_existing == 0 the kernel populates `fe` + `fe_text`
+ *     + `pos` for an INSERT_ONE. */
+typedef struct {
+    int      valid;
+    int      pos;
+    CmdType  open_type;                 /* CMD_FOR_BEGIN / FUNC_DEF / IF_BEGIN */
+    CmdType  end_type;                  /* CMD_FOR_END / FUNC_END / IF_END */
+    int      matched_existing;          /* 1 = NO_CHANGE; 0 = INSERT_ONE */
+    GLCmd    fe;                        /* meaningful only when !matched_existing */
+    char     fe_text[MAX_LINE_LEN];
+} ReplCloseBraceKernel;
+
+ReplCompileResult repl_compile_close_brace_kernel(const char *input,
+                                                  const ReplCompileContext *ctx,
+                                                  ReplCloseBraceKernel *out,
+                                                  char *err, int err_size);
+
 /* repl_load_apply_line moved to src/repl/load.h to keep this header pure
  * (compile descriptors only; no apply orchestration). */
 
