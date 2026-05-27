@@ -2205,14 +2205,15 @@ static void test_baseline_captures_view_mode_even_when_unreferenced(void) {
                repl_cfg_get_int("view_mode", -1), 1);
 }
 
-/* Audit #41: tutorial catalogs hardcode integer grid-theme values in
- * their SET steps (`{"grid", 10}` for RADAR, `{"grid", 6}` for FOCUS in
- * the Feature Tour). Without a test, reordering `SceneGridTheme` in
- * src/scene/themes.h would silently shift the showcase to different
- * themes. Locate the Feature Tour by name (don't pin its catalog
- * index), find the grid SET steps in catalog order, and assert each
- * value matches the named enum. */
-static void test_feature_tour_grid_steps_match_named_enums(void) {
+/* Audit #41: catalog grid-theme SET steps must use symbolic value
+ * names (via STEP_SET_SYM) so reordering `SceneGridTheme` in
+ * src/scene/themes.h cannot silently shift the showcase to a
+ * different theme. Locate the Feature Tour by name, find the two
+ * grid SET steps in catalog order, and assert each is symbolic
+ * with the expected name. (The bridge's resolve_text — pinned by
+ * `test_apply_cfg_text_resolves_symbolic_grid_theme` — separately
+ * locks "GRID_THEME_RADAR" → GRID_THEME_RADAR, etc.) */
+static void test_feature_tour_grid_steps_use_symbolic_names(void) {
     int n = repl_tutorial_count();
     int tour_idx = -1;
     for (int i = 0; i < n; i++) {
@@ -2238,17 +2239,23 @@ static void test_feature_tour_grid_steps_match_named_enums(void) {
     ASSERT_INT("Feature Tour has two grid SET steps", grid_step_count, 2);
     if (grid_step_count < 2) return;
 
-    ASSERT_INT("first grid SET step == GRID_THEME_RADAR",
-               repl_tutorial_step_cfg_value(tour_idx, grid_step_idx[0]),
-               GRID_THEME_RADAR);
-    ASSERT_INT("second grid SET step == GRID_THEME_FOCUS",
-               repl_tutorial_step_cfg_value(tour_idx, grid_step_idx[1]),
-               GRID_THEME_FOCUS);
+    const char *first_name = repl_tutorial_step_cfg_value_name(
+            tour_idx, grid_step_idx[0]);
+    const char *second_name = repl_tutorial_step_cfg_value_name(
+            tour_idx, grid_step_idx[1]);
+    ASSERT_TRUE("first grid SET step uses cfg_value_name", first_name != NULL);
+    ASSERT_TRUE("second grid SET step uses cfg_value_name", second_name != NULL);
+    ASSERT_STR("first grid SET step == GRID_THEME_RADAR",
+               first_name ? first_name : "(null)",
+               "GRID_THEME_RADAR");
+    ASSERT_STR("second grid SET step == GRID_THEME_FOCUS",
+               second_name ? second_name : "(null)",
+               "GRID_THEME_FOCUS");
 }
 
 int main(void) {
     tutorial_state_init_explicit();
-    test_feature_tour_grid_steps_match_named_enums();
+    test_feature_tour_grid_steps_use_symbolic_names();
     test_exit_on_require_does_not_autoadvance();
     test_restart_during_tutorial_preserves_original_baseline();
     test_baseline_captures_view_mode_even_when_unreferenced();

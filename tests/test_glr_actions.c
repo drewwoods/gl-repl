@@ -24,6 +24,8 @@
 #include "ui/app/layout.h"                /* CODE_PANEL_LAYOUT_* */
 #include "repl/eval.h"                    /* g_predef_vars, repl_eval_find_predef_var_idx */
 #include "subsystems/color_picker/color_picker_state.h"
+#include "repl/cfg_baseline.h"             /* repl_cfg_set_text, repl_cfg_resolve_text */
+#include "scene/themes.h"                  /* GRID_THEME_*, AXES_THEME_*, SCENE_BACKDROP_* */
 #include "support/test_harness.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -956,6 +958,63 @@ static void test_vertex_label_modes(void) {
                glr_state_presentation().show_vertex_labels, GLR_VERTEX_LABEL_OFF);
 }
 
+/* Audit #41: the cfg bridge accepts symbolic value names so catalogs
+ * can write "@cfg grid = GRID_THEME_RADAR" instead of a magic 10.
+ * Pin each scene-enum slug end-to-end (resolve_text + apply via
+ * repl_cfg_set_text), plus the legacy integer path that still has
+ * to round-trip from older saved files. */
+static void test_cfg_bridge_resolves_symbolic_names(void) {
+    test_apply_defaults();  /* installs g_glr_export_cfg_bridge */
+
+    int out = -1;
+    ASSERT_TRUE("resolve grid: GRID_THEME_RADAR",
+                repl_cfg_resolve_text("grid", "GRID_THEME_RADAR", &out));
+    ASSERT_INT("  -> GRID_THEME_RADAR", out, GRID_THEME_RADAR);
+
+    out = -1;
+    ASSERT_TRUE("resolve grid: GRID_THEME_FOCUS",
+                repl_cfg_resolve_text("grid", "GRID_THEME_FOCUS", &out));
+    ASSERT_INT("  -> GRID_THEME_FOCUS", out, GRID_THEME_FOCUS);
+
+    out = -1;
+    ASSERT_TRUE("resolve axes: AXES_THEME_COMPASS",
+                repl_cfg_resolve_text("axes", "AXES_THEME_COMPASS", &out));
+    ASSERT_INT("  -> AXES_THEME_COMPASS", out, AXES_THEME_COMPASS);
+
+    out = -1;
+    ASSERT_TRUE("resolve backdrop: SCENE_BACKDROP_CITY_AND_STARS",
+                repl_cfg_resolve_text("backdrop", "SCENE_BACKDROP_CITY_AND_STARS", &out));
+    ASSERT_INT("  -> SCENE_BACKDROP_CITY_AND_STARS", out,
+               SCENE_BACKDROP_CITY_AND_STARS);
+
+    /* Unknown name on a known slug must fail (don't fall back to
+     * strtol — "GRID_THEME_XYZ" must NOT silently land as 0). */
+    out = -42;
+    ASSERT_TRUE("unknown symbol fails resolve",
+                !repl_cfg_resolve_text("grid", "GRID_THEME_XYZ", &out));
+    ASSERT_INT("  out untouched on failure", out, -42);
+
+    /* Apply via repl_cfg_set_text — proves the bridge wires the
+     * resolved int into glr_export_cfg_apply, not just the lookup. */
+    repl_cfg_set_text("grid", "GRID_THEME_TRON");
+    ASSERT_INT("set_text grid -> presentation.grid_theme",
+               glr_state_presentation().grid_theme, GRID_THEME_TRON);
+    repl_cfg_set_text("axes", "AXES_THEME_NEON");
+    ASSERT_INT("set_text axes -> presentation.axes_theme",
+               glr_state_presentation().axes_theme, AXES_THEME_NEON);
+    repl_cfg_set_text("backdrop", "SCENE_BACKDROP_STARS");
+    ASSERT_INT("set_text backdrop -> presentation.backdrop_mode",
+               glr_state_presentation().backdrop_mode, SCENE_BACKDROP_STARS);
+
+    /* Legacy integer-form @cfg lines must still load — the apply
+     * path tries resolve_text first, then falls back to strtol.
+     * Drives the same bag/apply edge repl_cfg_set_text uses, just
+     * with an integer-string value instead of a symbolic name. */
+    repl_cfg_set_text("grid", "4");  /* GRID_THEME_EMBER */
+    ASSERT_INT("integer-form '4' still resolves to GRID_THEME_EMBER",
+               glr_state_presentation().grid_theme, GRID_THEME_EMBER);
+}
+
 int main(void) {
     test_apply_defaults();
     test_cursor_actions();
@@ -980,6 +1039,7 @@ int main(void) {
     test_cfg_cycle_auto_time_shift_resets_time();
     test_cfg_cycle_panel_hidden_closes_overlays();
     test_vertex_label_modes();
+    test_cfg_bridge_resolves_symbolic_names();
 
     return test_harness_report(&g_harness, "test_repl_actions");
 }

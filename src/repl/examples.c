@@ -16,7 +16,7 @@
  *
  * Predefined examples can optionally start with contiguous scene-presentation
  * config metadata lines using the exported-file format:
- *   "// @cfg axes = 4"
+ *   "// @cfg axes = AXES_THEME_COMPASS"
  *   "// @cfg vertex_outlines = 0"
  * Supported slugs are limited to visual scene settings such as wireframe,
  * grid, axes, vertex overlays, backdrop, and camera_rotate. These metadata
@@ -545,7 +545,7 @@ static const char *const g_example_assign_2d[] = {
 static const char *const g_example_glow_particles[] = {
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
-    "// @cfg grid = 4",
+    "// @cfg grid = GRID_THEME_EMBER",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -5.0f);",
     "glRotatef(15.0f, 1.0f, 0.0f, 0.0f);",
@@ -831,7 +831,7 @@ static const char *const g_example_snowfall[] = {
     "// @cfg vertex_points = 0",
     "// @cfg light_indicators = 0",
     "// @cfg poly_highlight = 0",
-    "// @cfg grid = 0",
+    "// @cfg grid = GRID_THEME_OFF",
     "// @cfg msaa = 1",
     "// @cfg line_smooth = 0",
     "// @cfg variable_panel = 0",
@@ -871,11 +871,11 @@ static const char *const g_example_snowfall[] = {
  * multiple functions, recursion, conditionals, variables, tessellation,
  * GLU primitives, matrix stack, animation, and long line count. */
 static const char *const g_example_stress[] = {
-    "// @cfg axes = 4",
+    "// @cfg axes = AXES_THEME_COMPASS",
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
-    "// @cfg backdrop = 1",
-    "// @cfg grid = 7",
+    "// @cfg backdrop = SCENE_BACKDROP_CITYSCAPE",
+    "// @cfg grid = GRID_THEME_OCEAN",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -12.5f);",
     "glRotatef(27.5f, 1.0f, 0.0f, 0.0f);",
