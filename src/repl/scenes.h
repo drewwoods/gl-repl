@@ -54,9 +54,11 @@ void repl_scenes_capture_pre_example_cfg_if_entering(void);
  * already set by the loader; this updates derived state). */
 void repl_scenes_mark_example_active(void);
 
-/* Activate the pinned home slot (slot 0). Used when the user cycles
- * back through F12. */
-void repl_scenes_activate_home_slot(void);
+/* Activate the pinned home slot (slot 0). `scene_name_hint` is the
+ * `@scene-name` directive value parsed from a freshly-loaded file
+ * (or NULL/"" for the no-import path); when non-empty it becomes
+ * the slot 0 name, otherwise the slot picks the built-in default. */
+void repl_scenes_activate_home_slot(const char *scene_name_hint);
 
 /* Drop all user-scene state. Called from glr_ctrl_reset_all. */
 void repl_scenes_reset(void);

@@ -60,7 +60,7 @@ int main(void) {
 
     glr_ctrl_reset_all();
     declare_test_vars();
-    ASSERT_TRUE("load from file", repl_export_load_from_file(tmp_path) == 1);
+    ASSERT_TRUE("load from file", repl_export_load_from_file(tmp_path, NULL) == 1);
     ASSERT_TRUE("load inserted one", repl_state_document_count() == 1);
     ASSERT_TRUE("load matches interactive",
                 strcmp(editor_buffer_line(0), interactive_text) == 0);
@@ -90,7 +90,7 @@ int main(void) {
 
     glr_ctrl_reset_all();
     declare_test_vars();
-    ASSERT_TRUE("load loop file", repl_export_load_from_file(tmp_loop_path) == 1);
+    ASSERT_TRUE("load loop file", repl_export_load_from_file(tmp_loop_path, NULL) == 1);
     ASSERT_TRUE("loop imported 3 cmds", repl_state_document_count() == 3);
     ASSERT_TRUE("loop header type", repl_state_document_cmds_mut()[0].type == CMD_FOR_BEGIN);
     ASSERT_TRUE("loop body type", repl_state_document_cmds_mut()[1].type == CMD_VERTEX3F);

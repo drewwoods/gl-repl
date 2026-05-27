@@ -179,7 +179,7 @@ void test_io() {
     glr_ctrl_reset_all(); declare_test_vars();
     ASSERT_INT("num_cmds after reset", repl_count_vertices(), 0);
 
-    int r = repl_export_load_from_file(tmpf);
+    int r = repl_export_load_from_file(tmpf, NULL);
     ASSERT_INT("load_from_file return", r, 1);
     repl_flatten_commands(editor_state_edit_line());
     ASSERT_INT("count_vertices after load", repl_count_vertices(), 1);
@@ -1266,7 +1266,7 @@ void test_activate_home_slot_no_duplicate_name() {
      * writes target the same slot, so the name must stay plain "My Scene"
      * with no "(2)" suffix. */
     repl_load_example(0);
-    repl_scenes_activate_home_slot();
+    repl_scenes_activate_home_slot(NULL);
 
     ASSERT_INT("slot 0 active after activate_home_slot",
                repl_active_user_scene(), 0);
@@ -1287,7 +1287,7 @@ void test_my_scene_persists_edits_from_startup() {
 
     /* Activate an empty slot 0 as "My Scene" (mirrors the startup path when
      * the live state is empty, e.g. before any example content is shown). */
-    repl_scenes_activate_home_slot();
+    repl_scenes_activate_home_slot(NULL);
     ASSERT_INT("slot 0 active (My Scene mode)", repl_active_user_scene(), 0);
 
     /* User adds a vertex in "My Scene". */
@@ -1315,7 +1315,7 @@ void test_scene_cfg_persists_across_example_switch() {
 
     /* Start in My Scene mode. */
     repl_load_example(0);
-    repl_scenes_activate_home_slot();
+    repl_scenes_activate_home_slot(NULL);
 
     /* Record the default backdrop value, then set a different one. */
     int default_backdrop = glr_config_get(GLR_CONFIG_BACKDROP);
@@ -1347,7 +1347,7 @@ void test_scene_cfg_not_inherited_from_example() {
 
     /* Build a user scene with default cfg (no custom overrides). */
     repl_load_example(0);
-    repl_scenes_activate_home_slot();
+    repl_scenes_activate_home_slot(NULL);
     int scene_backdrop = glr_config_get(GLR_CONFIG_BACKDROP);
 
     /* View an example that has a different backdrop. */
@@ -1375,7 +1375,7 @@ void test_in_example_toggles_dont_leak_to_user_scene() {
     if (repl_example_count() < 1) return;
 
     /* Establish home (slot 0) with a known backdrop. */
-    repl_scenes_activate_home_slot();
+    repl_scenes_activate_home_slot(NULL);
     int home_backdrop = glr_config_get(GLR_CONFIG_BACKDROP);
 
     /* Enter an example, then toggle the backdrop while inside. */

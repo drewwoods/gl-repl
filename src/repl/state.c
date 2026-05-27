@@ -86,18 +86,30 @@ static void repl_state_apply_sentinels(ReplRuntimeState *s) {
 }
 
 /* Lazily-initialised defaults — avoids embedding a 4.6 MB const copy
- * of ReplRuntimeState in the object file.  Also patches the live state
- * on first call so callers that run before an explicit reset_program()
- * still see correct sentinels. */
-static const ReplRuntimeState *repl_state_get_defaults(void) {
+ * of ReplRuntimeState in the object file. Pure read: just fills the
+ * file-static `defaults` buffer on first call and hands back a const
+ * pointer to it. Callers that also need the live g_repl_state
+ * sentinel-patched must invoke repl_state_ensure_sentinels (or any
+ * reset entry, which already chains through it). */
+static const ReplRuntimeState *repl_state_defaults(void) {
     static ReplRuntimeState defaults;
     static int inited;
     if (!inited) {
         repl_state_apply_sentinels(&defaults);
-        repl_state_apply_sentinels(&g_repl_state);
         inited = 1;
     }
     return &defaults;
+}
+
+/* Patch the live g_repl_state with the sentinel/default field values
+ * once per process. Used by callers that may run before an explicit
+ * reset_program() and would otherwise see uninitialized state.
+ * Idempotent — the second-and-later calls are cheap no-ops. */
+static void repl_state_ensure_sentinels(void) {
+    static int patched;
+    if (patched) return;
+    repl_state_apply_sentinels(&g_repl_state);
+    patched = 1;
 }
 
 #define g_cmds                      (g_repl_state.document.cmds)
@@ -444,7 +456,7 @@ ReplRenderState *repl_state_render_mut(void) {
 }
 
 void repl_state_render_reset_defaults(void) {
-    g_repl_state.render = repl_state_get_defaults()->render;
+    g_repl_state.render = repl_state_defaults()->render;
 }
 
 /* The legacy `repl_state_replay` / `_mut` / `_reset` forwarders are
@@ -499,7 +511,7 @@ void repl_state_restore(const ReplRuntimeState *snapshot) {
 }
 
 void repl_state_import_export_reset(void) {
-    g_repl_state.import_export = repl_state_get_defaults()->import_export;
+    g_repl_state.import_export = repl_state_defaults()->import_export;
 }
 
 /* Reset REPL-owned slices to defaults. Peer/editor/UI/autocomplete
@@ -521,7 +533,8 @@ void repl_state_import_export_reset(void) {
  * separation is what lets tools/repl_demo build without stubbing
  * editor / UI / peer reset symbols. */
 void repl_state_reset_program(void) {
-    g_repl_state = *repl_state_get_defaults();
+    g_repl_state = *repl_state_defaults();
+    repl_state_ensure_sentinels();
     repl_state_bind_eval_predef_storage();
     repl_scenes_reset();
     reset_time_state();

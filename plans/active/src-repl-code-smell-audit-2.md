@@ -29,7 +29,7 @@
 ## Status summary (updated 2026-05-27)
 
 83 findings total (82 from the original audit + 1 review-discovered).
-69 closed (✅), 14 still open. All open findings verified against
+71 closed (✅), 12 still open. All open findings verified against
 current HEAD. Tier letters cover the whole open backlog — no unclassified rows
 remain. Tier A is empty: the 2026-05-27 Tier A close pass landed all ten
 (#26, #27, #43, #70, #72, #76, #77, #78, #79, #81), and the review pass that
@@ -66,7 +66,7 @@ added #83 closed it in the same commit.
 | 27 | 🟡 | A | ✅ Done | Stray `func0(var0)` autocomplete row |
 | 28 | 🔵 | B | ✅ Done | `replay_apply_state_cmd` parallel to executor dispatch |
 | 29 | 🟡 | B | ✅ Done | `g_pre_example.valid` still a parallel scalar |
-| 30 | 🟡 | B | Open | `g_pending_workspace_dir` write-then-caller-reads |
+| 30 | 🟡 | B | ✅ Done | `g_pending_workspace_dir` write-then-caller-reads |
 | 31 | 🟡 | B | ✅ Done | `text_helpers.c` has no `.h` |
 | 32 | 🟡 | B | ✅ Done | 🔀 Hardcoded `[16]`/`[64]` widths |
 | 33 | 🟡 | B | ✅ Done | `MAX_DEFERRED_VAR_VALUES=64` vs `MAX_PREDEF_VARS=24` |
@@ -109,7 +109,7 @@ added #83 closed it in the same commit.
 | 70 | 🟡 | A | ✅ Done | `eval.h` `MAX_EXPR_VARS` doc references deleted modules |
 | 71 | 🟡 | C | Open | `g_predef_vars` macros route reads through `_mut()` |
 | 72 | 🟢 | A | ✅ Done | `repl_state_init_defaults` one-line forwarder |
-| 73 | 🟡 | B | Open | `repl_state_get_defaults()` hidden mutation |
+| 73 | 🟡 | B | ✅ Done | `repl_state_get_defaults()` hidden mutation |
 | 74 | 🟢 | A | ✅ Done | `first_non_decl` leaks `CMD_VAR_DECLARE` policy |
 | 75 | 🟡 | D | Open | `repl_dispatch_*` 4 of 12 tutorial-only trampolines |
 | 76 | 🟡 | A | ✅ Done | `WORKSPACE_DIR_MAX` alias + `+256` magic |
@@ -121,8 +121,8 @@ added #83 closed it in the same commit.
 | 82 | 🔵 | B | Open | `tutorial_step_at()` O(N) sentinel walk |
 | 83 | 🔴 | A | ✅ Done | `@declare` import treats failed `repl_eval_declare_predef_var` as success |
 
-**By severity (open only):** 0 🔴, 6 🟡, 0 🟢, 8 🔵 = 14 open.
-**By tier (open only):** A: 0, B: 6, C: 6, D: 2, unclassified: 0.
+**By severity (open only):** 0 🔴, 4 🟡, 0 🟢, 8 🔵 = 12 open.
+**By tier (open only):** A: 0, B: 4, C: 6, D: 2, unclassified: 0.
 
 ## How to read this
 
@@ -1201,6 +1201,23 @@ no compile-time enforcement.
 **Fix:** Return both via an out-pointer pair on `repl_export_load_from_file`
 (or a `ReplImportResult` struct).
 
+**Status (2026-05-27):** ✅ Closed. Added `ReplImportResult { char
+scene_name[USER_SCENE_NAME_MAX]; char workspace_dir[REPL_WORKSPACE_DIR_MAX]; }`
+to `src/repl/export.h`. `repl_export_load_from_file` now takes a
+nullable `ReplImportResult *result` parameter and populates it from
+the parsed @scene-name / @workspace-dir directives before return.
+Production callers updated: `src/repl/scenes.c::load_scene_file_into_slot`
+now consumes `import_result.scene_name` directly (replacing the
+post-call `g_pending_scene_name` read); `src/repl/core.c::load_initial_commands`
+threads the result into the new `repl_scenes_activate_home_slot(const
+char *scene_name_hint)` signature. `g_pending_scene_name` /
+`g_pending_workspace_dir` stay as the import-side parse accumulator
+but no longer cross the API boundary as the contract. Tests that
+don't consume the metadata pass NULL (~15 sites across
+test_repl_core_io.c, test_repl_core_examples.c,
+test_repl_core_extra.c, test_repl_core_format.c,
+test_repl_export_all_commands.c).
+
 ### 31. `text_helpers.c` has no `text_helpers.h`; decls live in `core_internal.h`
 
 **Where:** `src/repl/core_internal.h:62-113` declares; implementations
@@ -1973,6 +1990,17 @@ Comment justifies it; static analyzer / reader won't expect it.
 **Fix:** Split into `repl_state_defaults()` (pure read) and
 `repl_state_ensure_sentinels()` (the side effect path); have
 `repl_state_reset_program` call the second explicitly.
+
+**Status (2026-05-27):** ✅ Closed. Renamed
+`repl_state_get_defaults` → `repl_state_defaults` and stripped its
+hidden side effect — it now just fills a file-static buffer on
+first call and returns a const pointer. The patched-live-state
+half moved to a new `repl_state_ensure_sentinels()` helper (also
+file-static, idempotent). `repl_state_reset_program` calls
+`repl_state_ensure_sentinels()` after the full-state assignment so
+any caller that runs before an explicit reset still sees patched
+g_repl_state. Future readers of `repl_state_defaults` see a
+function that does what its name says.
 
 ### 74. ✅ `command_store.h::repl_command_store_first_non_decl` leaks `CMD_VAR_DECLARE` policy
 
