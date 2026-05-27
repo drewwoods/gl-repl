@@ -420,6 +420,7 @@ HDRS = \
 	src/subsystems/replay/replay_internal.h \
 	src/subsystems/replay/replay.h \
 	src/subsystems/replay/replay_state.h \
+	src/subsystems/tutorial/tutorial_internal.h \
 	src/subsystems/tutorial/tutorial.h \
 	src/subsystems/tutorial/tutorial_state.h \
 	src/subsystems/variable_panel/variable_panel_drag.h \

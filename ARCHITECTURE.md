@@ -860,7 +860,7 @@ full app fills and the demo leaves unset:
    emission/parse — also fronted by the typed live-cfg wrappers
    `repl_cfg_get_int` / `_set_int` / `_known` and the
    `repl_export_extract_cfg_slug` parser in `src/repl/export.c`, used by
-   `src/subsystems/tutorial/tutorial.c` for SET-step apply / REQUIRE-step probe /
+  `src/subsystems/tutorial/tutorial_runner.c` for SET-step apply / REQUIRE-step probe /
    cfg-baseline snapshot/restore), `ReplExportCameraBridge` (camera
    blocks — used by both the importer *and* the example loader),
    `ReplExportProjectionBridge` (the dynamic `reshape()` body — see
