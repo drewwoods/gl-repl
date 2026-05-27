@@ -21,6 +21,7 @@ typedef struct {
 typedef struct {
     ReplConfigItem items[REPL_CFG_MAX_ITEMS];
     int count;
+    int valid;
 } ReplConfigBag;
 
 void        repl_config_bag_clear(ReplConfigBag *cfg);
@@ -58,7 +59,7 @@ void                        repl_config_install_bridge(const ReplConfigBridge *b
 const ReplConfigBridge     *repl_config_bridge(void);
 
 /* Extract the slug from a `// @cfg <slug> [= ...]` line. */
-int  repl_config_extract_slug(const char *line, char *out, size_t out_sz);
+int  repl_config_extract_slug(const char *line, char *out, size_t out_sz, const char **end_out);
 
 /* Typed live-cfg helpers backed by the controller-installed config bridge. */
 int  repl_cfg_get_int(const char *slug, int fallback);

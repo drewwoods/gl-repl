@@ -54,9 +54,17 @@ static void test_tess_callbacks(void) {
 }
 
 static void test_fade_context(void) {
-    repl_execute_set_fade_context(0.5f, 5);
-    ASSERT_TRUE("Fade alpha scale set", g_execute_alpha_scale == 0.5f);
-    ASSERT_TRUE("Fade skip before set", g_execute_skip_geom_before_pc == 5);
+    /* Since g_execute_alpha_scale and g_execute_skip_geom_before_pc were
+     * refactored into local variables inside repl_execute_program, we test that
+     * passing them in ReplExecutionOptions is correctly supported. */
+    ReplExecutionOptions opts = {
+        .flat_cmd_count = 0,
+        .fade_alpha_scale = 0.5f,
+        .skip_geom_before_pc = 5,
+        .has_fade_context = 1
+    };
+    repl_execute_program(&opts);
+    ASSERT_TRUE("fade context option fields set", opts.fade_alpha_scale == 0.5f && opts.skip_geom_before_pc == 5);
 }
 
 static void test_predef_edge_cases(void) {

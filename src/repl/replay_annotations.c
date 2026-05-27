@@ -650,14 +650,14 @@ static int replay_simulate_runtime_until(
             break;
         }
         case CMD_GOTO: {
-            char label[64];
+            char label[REPL_GOTO_LABEL_MAX];
             if (!repl_extract_goto_label(replay_flat_text(pc),
                                          label, sizeof(label)))
                 break;
             if (goto_count++ > REPL_GOTO_LOOP_LIMIT)
                 return 0;
             for (int li = 0; li < repl_state_flat_program_count(); li++) {
-                char target_label[64];
+                char target_label[REPL_GOTO_LABEL_MAX];
                 if (flat_cmds[li].valid &&
                     flat_cmds[li].type == CMD_GOTO_LABEL &&
                     repl_extract_label_name(replay_flat_text(li),

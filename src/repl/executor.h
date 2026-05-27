@@ -50,6 +50,9 @@ typedef struct {
     int             flat_cmd_count;
     FlatProgramView program;
     SourceTextView  text;
+    float           fade_alpha_scale;
+    int             skip_geom_before_pc;
+    int             has_fade_context;
 } ReplExecutionOptions;
 
 /* Get a view over the live flat program (g_flat_cmds, g_flat_local_vars).
@@ -76,9 +79,6 @@ void repl_executor_init_resources(void);
 
 /* One-time cleanup: destroy the shared quadric and tessellator. */
 void repl_executor_destroy_resources(void);
-
-/* Update the executor's fade overlay context before a frame render. */
-void repl_execute_set_fade_context(float alpha_scale, int skip_geom_before_pc);
 
 /* Execute the live flat program against the current editor buffer view. */
 void repl_execute_commands(void);

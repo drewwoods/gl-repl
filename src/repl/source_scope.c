@@ -171,12 +171,12 @@ int repl_source_scope_find_block_end(int begin_idx) {
 }
 
 CmdType repl_source_scope_nearest_open_block_at(int pos) {
-    CmdType stack[64];
+    CmdType stack[REPL_MAX_BLOCK_NEST_DEPTH];
     int depth = 0;
     for (int i = 0; i < pos && i < repl_state_document_count(); i++) {
         CmdType t = repl_state_document_cmds()[i].type;
         if (repl_cmd_is_block_head(t)) {
-            if (depth < 64) stack[depth++] = t;
+            if (depth < REPL_MAX_BLOCK_NEST_DEPTH) stack[depth++] = t;
         } else if (repl_cmd_is_block_end(t)) {
             if (depth > 0) depth--;
         }

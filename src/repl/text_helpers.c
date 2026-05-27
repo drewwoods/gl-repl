@@ -1,4 +1,5 @@
 #include "repl/core_internal.h"
+#include "repl/text_helpers.h"
 
 #include <ctype.h>
 #include <stdlib.h>
@@ -118,7 +119,7 @@ int extract_for_args_text(const char *src,
 }
 
 int repl_parse_identifier_list(const char *src, const char *leading_keyword,
-                               char names[][16], int max_names) {
+                               char names[][REPL_PREDEF_NAME_MAX], int max_names) {
     const char *p = src;
     int count = 0;
     size_t keyword_len = (leading_keyword && leading_keyword[0])
@@ -139,7 +140,7 @@ int repl_parse_identifier_list(const char *src, const char *leading_keyword,
 
         int ni = 0;
         while (*p && (isalnum((unsigned char)*p) || *p == '_')) {
-            if (ni >= 15) return -1;
+            if (ni >= REPL_PREDEF_NAME_MAX - 1) return -1;
             names[count][ni++] = *p++;
         }
         names[count][ni] = '\0';
@@ -215,7 +216,7 @@ int repl_parse_func_name_token(const char **p_inout, int *fn) {
 }
 
 int parse_repl_func_signature(const char *src, int *fn,
-                              char param_names[][16], int max_params,
+                              char param_names[][REPL_PREDEF_NAME_MAX], int max_params,
                               int *param_count) {
     const char *p = src;
     if (!repl_parse_func_name_token(&p, fn)) return 0;
@@ -279,7 +280,7 @@ int extract_func_call_args_text(const char *src, int *fn,
 }
 
 void format_func_header(char *out, int out_sz, const char *indent,
-                        int fn, char param_names[][16], int param_count) {
+                        int fn, char param_names[][REPL_PREDEF_NAME_MAX], int param_count) {
     const char *alias = repl_func_alias_get(fn);
     int written = alias
         ? snprintf(out, out_sz, "%s%s", indent, alias)

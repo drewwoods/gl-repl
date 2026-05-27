@@ -275,4 +275,19 @@
 #define REPLAY_STATUS_MSG_LEN 64
 #endif
 
+/* Maximum length of a goto label (including NUL). */
+#ifndef REPL_GOTO_LABEL_MAX
+#define REPL_GOTO_LABEL_MAX 64
+#endif
+
+/* Maximum nesting depth of begin/end blocks. */
+#ifndef REPL_MAX_BLOCK_NEST_DEPTH
+#define REPL_MAX_BLOCK_NEST_DEPTH 64
+#endif
+
+/* Maximum number of enum arguments. */
+#ifndef REPL_ENUM_ARG_MAX
+#define REPL_ENUM_ARG_MAX 64
+#endif
+
 #endif /* CONFIG_H */

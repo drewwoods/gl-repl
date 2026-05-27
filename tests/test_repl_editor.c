@@ -448,11 +448,13 @@ int main() {
         glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
         ASSERT_INT("parse code_panel cfg",
                    parse_workspace_header_line("// @cfg code_panel = 2"), 1);
+        repl_export_apply_pending_cfg();
         ASSERT_INT("parse code_panel bottom",
                    glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_BOTTOM);
 
         ASSERT_INT("parse code_panel hidden cfg",
                    parse_workspace_header_line("// @cfg code_panel = 3"), 1);
+        repl_export_apply_pending_cfg();
         ASSERT_INT("parse code_panel hidden",
                    glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_HIDDEN);
 
@@ -470,11 +472,13 @@ int main() {
 
         ASSERT_INT("parse legacy top_code_panel cfg",
                    parse_workspace_header_line("// @cfg top_code_panel = 1"), 1);
+        repl_export_apply_pending_cfg();
         ASSERT_INT("legacy top_code_panel maps to top",
                    glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_TOP);
 
         ASSERT_INT("parse legacy top_code_panel off cfg",
                    parse_workspace_header_line("// @cfg top_code_panel = 0"), 1);
+        repl_export_apply_pending_cfg();
         ASSERT_INT("legacy top_code_panel off maps to left",
                    glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
 

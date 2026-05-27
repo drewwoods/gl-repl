@@ -55,17 +55,7 @@ static GLUtesselator *g_tess = NULL;
 static TessVertex     g_tess_verts[TESS_VERT_BUF_SIZE];
 static int            g_tess_vert_count = 0;
 
-/* Execution context adjusted by replay.c for fade-batch rendering. */
-static float g_execute_alpha_scale = 1.0f;
 
-/* Skip expensive geometry-emitting commands (vertices, quadrics, tess) for
- * pc < this value. State-setting commands (transforms, color, enable, var
- * assign, etc.) still run so the GL state at pc == skip_before matches a
- * full walk from 0. Used by the replay fade pass to skip all primitives
- * that sit before the batch's active region; the caller pulls skip_before
- * back to the enclosing CMD_BEGIN / CMD_TESS_BEGIN_POLYGON when vertex-mode
- * batches land mid-primitive, so the full primitive still renders. */
-static int g_execute_skip_geom_before_pc = 0;
 
 /* User-facing point-size emission. When the runtime lacks
  * glPointParameterfv, approximate its distance attenuation by scaling
@@ -177,10 +167,7 @@ void repl_executor_init_resources(void) {
 /* repl_copy_predef_values / repl_restore_predef_values live in eval.c
  * next to the rest of the predef-variable storage helpers. */
 
-void repl_execute_set_fade_context(float alpha_scale, int skip_geom_before_pc) {
-    g_execute_alpha_scale = alpha_scale;
-    g_execute_skip_geom_before_pc = skip_geom_before_pc;
-}
+
 
 static void repl_executor_apply_non_stack_transform_cmd(const GLCmd *cmd) {
     if (!cmd)
@@ -397,7 +384,14 @@ void repl_execute_program(const ReplExecutionOptions *options) {
     GLdouble tess_current_color[4]  = {1.0, 1.0, 1.0, 1.0};
     int goto_count = 0; /* safety guard against infinite goto loops */
 
-    tess_current_color[3] = g_execute_alpha_scale;
+    float alpha_scale = 1.0f;
+    int skip_geom_before_pc = 0;
+    if (options && options->has_fade_context) {
+        alpha_scale = options->fade_alpha_scale;
+        skip_geom_before_pc = options->skip_geom_before_pc;
+    }
+
+    tess_current_color[3] = alpha_scale;
 
     /* The light-indicator overlay reads lights[].enabled for its on/off
      * visual. GL's real default — and scene_lights_setup() — is
@@ -416,14 +410,14 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             pc++;
             continue;
         }
-        if (pc < g_execute_skip_geom_before_pc) {
+        if (pc < skip_geom_before_pc) {
             /* Prefix walk: accumulate state but skip the expensive geometry.
              * Structural commands (CMD_BEGIN, CMD_END, CMD_TESS_BEGIN_POLYGON,
              * CMD_TESS_BEGIN_CONTOUR, CMD_TESS_END) are preserved so that in
              * REPLAY_MODE_VERTEX - where old_pc/new_pc may fall inside an open
              * begin/tess block - execute_commands still enters the right scope
              * before emitting the incremental vertices that live at
-             * pc >= g_execute_skip_geom_before_pc. */
+             * pc >= skip_geom_before_pc. */
             switch (flat_cmds[pc].type) {
             case CMD_VERTEX3F:
             case CMD_VERTEX2F:
@@ -459,12 +453,12 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             break;
         case CMD_COLOR3F:
             glColor4f(flat_cmds[pc].args[0], flat_cmds[pc].args[1],
-                      flat_cmds[pc].args[2], g_execute_alpha_scale);
+                      flat_cmds[pc].args[2], alpha_scale);
             break;
         case CMD_COLOR4F:
             glColor4f(flat_cmds[pc].args[0], flat_cmds[pc].args[1],
                       flat_cmds[pc].args[2],
-                      flat_cmds[pc].args[3] * g_execute_alpha_scale);
+                      flat_cmds[pc].args[3] * alpha_scale);
             break;
         case CMD_ENABLE:
         case CMD_DISABLE:
@@ -473,7 +467,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
         case CMD_MATERIALFV:
         case CMD_MATERIALF:
         case CMD_LIGHT_MODEL_I:
-            repl_apply_state_cmd(&flat_cmds[pc], g_execute_alpha_scale);
+            repl_apply_state_cmd(&flat_cmds[pc], alpha_scale);
             break;
         case CMD_VERTEX2F:
             if (in_begin)
@@ -483,7 +477,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
         case CMD_DEPTH_FUNC:
         case CMD_DEPTH_MASK:
         case CMD_COLOR_MASK:
-            repl_apply_state_cmd(&flat_cmds[pc], g_execute_alpha_scale);
+            repl_apply_state_cmd(&flat_cmds[pc], alpha_scale);
             break;
         /* The CMD_*-not-in-begin block below relies on the parser
          * rejecting these commands inside glBegin/glEnd
@@ -498,7 +492,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
         case CMD_POINT_PARAMETER_FV:
         case CMD_BLEND_FUNC:
         case CMD_CLEAR_COLOR:
-            repl_apply_state_cmd(&flat_cmds[pc], g_execute_alpha_scale);
+            repl_apply_state_cmd(&flat_cmds[pc], alpha_scale);
             break;
         case CMD_GLUT_TORUS:
             glutSolidTorus((double)flat_cmds[pc].args[0],
@@ -585,7 +579,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             tess_current_color[2] = flat_cmds[pc].args[2];
             tess_current_color[3] = ((flat_cmds[pc].num_args >= 4)
                                    ? flat_cmds[pc].args[3] : 1.0)
-                                  * g_execute_alpha_scale;
+                                  * alpha_scale;
             break;
         case CMD_TESS_VERTEX:
             if (g_tess && tess_depth == 2 && g_tess_vert_count < TESS_VERT_BUF_SIZE) {
@@ -607,7 +601,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
              * reliable for control flow and assignments. Variable-driven GL
              * commands still use the args baked into flat_cmds[]. Replay also
              * cannot follow the dynamic jump trace. */
-            char label_name[64];
+            char label_name[REPL_GOTO_LABEL_MAX];
             if (!repl_extract_goto_label(execution_flat_text(text, &flat_cmds[pc]),
                                          label_name, sizeof(label_name)))
                 break;
@@ -618,7 +612,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             for (int label_idx = 0; label_idx < flat_cmd_count; label_idx++) {
                 if (flat_cmds[label_idx].valid &&
                     flat_cmds[label_idx].type == CMD_GOTO_LABEL) {
-                    char target_label[64];
+                    char target_label[REPL_GOTO_LABEL_MAX];
                     if (repl_extract_label_name(execution_flat_text(text, &flat_cmds[label_idx]),
                                                 target_label,
                                                 sizeof(target_label)) &&
