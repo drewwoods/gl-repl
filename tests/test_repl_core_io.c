@@ -1561,6 +1561,51 @@ int main(void) {
         remove(stderr_path);
     }
 
+    /* Regression for #83 in plans/done/src-repl-code-smell-audit-2.md:
+     * parse_snippet_declare used to use a `< 0` check on
+     * repl_eval_declare_predef_var (which actually returns 1/0, not
+     * idx-or-(-1)). On a reserved or otherwise-invalid name the
+     * failure was silently swallowed: the bad name still landed in
+     * the reconstructed CMD_VAR_DECLARE.var_names[] and the
+     * canonical decl_line, leaving source/cmd-state out of sync
+     * with the predef table. Post-fix the `!` check catches it and
+     * the directive is dropped. */
+    {
+        const char *p83_path = "/tmp/repl_core_declare_reserved_name.c";
+        FILE *f = fopen(p83_path, "w");
+        ASSERT_TRUE("p83 fixture fopen", f != NULL);
+        if (f) {
+            fprintf(f, "static void render_repl_geometry(void) {\n");
+            fprintf(f, "  // Snippet start\n");
+            /* `PI` is in k_reserved_identifiers, so the underlying
+             * _declare_predef_var_with_value returns -1 and the thin
+             * wrapper returns 0. */
+            fprintf(f, "  // @declare PI\n");
+            fprintf(f, "  glVertex3f(1, 2, 3);\n");
+            fprintf(f, "  // Snippet end\n");
+            fprintf(f, "}\n");
+            fclose(f);
+        }
+
+        glr_ctrl_reset_all();
+        ASSERT_TRUE("p83 load completes",
+                    repl_export_load_from_file(p83_path) == 1);
+        ASSERT_INT("p83 reserved name is not registered as predef",
+                   repl_eval_find_predef_var_idx("PI"), -1);
+        int decl_with_pi = 0;
+        for (int i = 0; i < repl_state_document_count(); i++) {
+            const GLCmd *c = &repl_state_document_cmds()[i];
+            if (!c->valid || c->type != CMD_VAR_DECLARE) continue;
+            for (int n = 0; n < c->var_decl_count; n++) {
+                if (strcmp(c->var_names[n], "PI") == 0)
+                    decl_with_pi++;
+            }
+        }
+        ASSERT_INT("p83 reserved name dropped from CMD_VAR_DECLARE",
+                   decl_with_pi, 0);
+        remove(p83_path);
+    }
+
     printf("repl_core_io: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.run == g_harness.passed) ? 0 : 1;
 }
