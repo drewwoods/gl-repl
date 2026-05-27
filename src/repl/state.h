@@ -19,6 +19,14 @@
  * src/subsystems/replay/replay_state.c; callers that need a full-world snapshot pair
  * those owners' capture helpers with this one. The slice split came from step
  * 7a of feature/decouple-repl-from-gl-repl-alt.md and the replay peer move.
+ *
+ * Scope of `scenes` here is narrow: ReplSceneRuntimeState carries only the
+ * `active_example_idx` and the workspace directory. The user-scene catalog
+ * itself — `g_user_scenes[]`, `g_active_user_scene`, `g_user_scene_tick`,
+ * and `g_pre_example` — lives as file-statics in src/repl/scenes.c and is
+ * NOT covered by this snapshot. Only tests call this pair today; if a
+ * future caller wires capture/restore into undo or session-save, those
+ * scene-catalog statics need to come along (see plans/active audit #6).
  */
 typedef struct {
     ReplDocumentState         document;

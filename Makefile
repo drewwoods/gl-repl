@@ -286,6 +286,7 @@ SRCS = \
 	src/repl/export.c \
 	src/repl/flatten.c \
 	src/repl/help_text.c \
+	src/repl/import.c \
 	src/repl/load.c \
 	src/repl/parser.c \
 	src/repl/replay_annotations.c \
@@ -459,6 +460,7 @@ CORE_TEST_SRCS = \
 	src/repl/export.c \
 	src/repl/flatten.c \
 	src/repl/help_text.c \
+	src/repl/import.c \
 	src/repl/load.c \
 	src/repl/parser.c \
 	src/repl/replay_annotations.c \
@@ -556,6 +558,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/repl/executor.c \
                      src/repl/export.c \
                      src/repl/flatten.c \
+                     src/repl/import.c \
                      src/repl/load.c \
                      src/repl/parser.c \
                      src/repl/replay_annotations.c \
