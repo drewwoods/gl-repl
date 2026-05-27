@@ -1013,6 +1013,23 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     repl_cfg_set_text("grid", "4");  /* GRID_THEME_EMBER */
     ASSERT_INT("integer-form '4' still resolves to GRID_THEME_EMBER",
                glr_state_presentation().grid_theme, GRID_THEME_EMBER);
+
+    /* A typo'd symbolic value name must NOT silently land at 0
+     * (GRID_THEME_OFF). The strtol fallback was tightened to skip
+     * identifier-shaped tokens precisely so a misspelled catalog
+     * literal fails to apply instead of muting the showcase. */
+    glr_state_presentation_mut()->grid_theme = GRID_THEME_PLANES;
+    repl_cfg_set_text("grid", "GRID_THEME_RADRA");  /* typo */
+    ASSERT_INT("typo'd symbol leaves grid_theme unchanged",
+               glr_state_presentation().grid_theme, GRID_THEME_PLANES);
+    glr_state_presentation_mut()->axes_theme = AXES_THEME_PULSE;
+    repl_cfg_set_text("axes", "AXES_THEME_COMPSS");  /* typo */
+    ASSERT_INT("typo'd axes symbol leaves axes_theme unchanged",
+               glr_state_presentation().axes_theme, AXES_THEME_PULSE);
+    glr_state_presentation_mut()->backdrop_mode = SCENE_BACKDROP_STARS;
+    repl_cfg_set_text("backdrop", "SCENE_BACKDROP_CITISCAPE");  /* typo */
+    ASSERT_INT("typo'd backdrop symbol leaves backdrop_mode unchanged",
+               glr_state_presentation().backdrop_mode, SCENE_BACKDROP_STARS);
 }
 
 int main(void) {

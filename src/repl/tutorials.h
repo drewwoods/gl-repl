@@ -146,6 +146,13 @@ int                       repl_tutorial_count(void);
 const char               *repl_tutorial_name(int idx);
 int                       repl_tutorial_step_count(int idx);
 
+/* Return the raw catalog entry at `idx`, or NULL for out-of-range.
+ * Exposed so the bridge-based validators in
+ * src/subsystems/tutorial/tutorial.c can be exercised against
+ * out-of-catalog synthetic entries from tests without per-field
+ * shimming. */
+const TutorialEntry      *repl_tutorial_entry(int idx);
+
 /* Return a pointer to the i-th step's struct, or NULL on out-of-range.
  * Performs the O(step_idx) sentinel walk once; callers that need
  * multiple fields off the same step should hold this pointer rather

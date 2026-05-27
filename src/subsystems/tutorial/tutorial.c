@@ -426,15 +426,65 @@ TutorialMatchResult tutorial_match(const char *expected, const char *got) {
     return result;
 }
 
-/* Runtime slug validation: walk all SET/REQUIRE steps and every entry-
- * level @cfg slug; reject if the controller-installed config bridge
- * doesn't recognise one. Catches typos at tutorial_start time, before
- * any state has been mutated, so the runner never silently no-ops a
- * SET (or stalls a REQUIRE) on an unknown slug. Returns 1 on success;
- * on failure returns 0 and writes a diagnostic into `err`. */
-static int tutorial_validate_slugs(int idx, char *err, int err_size) {
+/* Returns 1 iff the entry-level `@cfg <slug> = <value>` line carries
+ * a symbolic value that the bridge cannot resolve. `cfg_line` is the
+ * raw catalog string (e.g. "// @cfg grid = GRID_THEME_OFF").
+ * `slug` is the already-extracted slug. The output buffer receives a
+ * diagnostic on failure. */
+static int tutorial_cfg_line_value_resolves(const char *cfg_line,
+                                            const char *slug,
+                                            char *value_out,
+                                            size_t value_out_sz) {
+    const char *p = NULL;
+    char tmp[REPL_CFG_VALUE_MAX];
+    if (!repl_config_extract_slug(cfg_line, tmp, sizeof tmp, &p))
+        return 1;  /* shouldn't happen — caller already extracted the slug */
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '=') return 1;  /* slug-only line, nothing to validate */
+    p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    size_t vi = 0;
+    while (*p && !isspace((unsigned char)*p) && vi < sizeof tmp - 1)
+        tmp[vi++] = *p++;
+    tmp[vi] = '\0';
+    if (vi == 0) return 1;
+    /* Numeric literals always resolve via the strtol fallback —
+     * only identifier-shaped values go through resolve_text. */
+    if (!(isalpha((unsigned char)tmp[0]) || tmp[0] == '_'))
+        return 1;
+    int dummy;
+    if (repl_cfg_resolve_text(slug, tmp, &dummy))
+        return 1;
+    if (value_out && value_out_sz > 0) {
+        strncpy(value_out, tmp, value_out_sz - 1);
+        value_out[value_out_sz - 1] = '\0';
+    }
+    return 0;
+}
+
+/* Runtime slug + value validation: walk every entry-level @cfg line
+ * and every SET / REQUIRE step. Reject the tutorial if the
+ * controller-installed config bridge doesn't recognise a slug, or if
+ * a symbolic value name (cfg_value_name on a step, or the right-hand
+ * side of an entry-level @cfg line) can't be resolved to an int.
+ *
+ * Catches both typo'd slugs (`gird` for `grid`) and typo'd enum
+ * names (`GRID_THEME_RADRA`) at tutorial_start time, before any
+ * state has been mutated, so the runner never silently no-ops a SET
+ * or stalls a REQUIRE — and never silently lands the showcase at the
+ * default `*_OFF` value via the strtol fallback path. Returns 1 on
+ * success; on failure returns 0 and writes a diagnostic into `err`. */
+int tutorial_validate_entry_against_bridge(const TutorialEntry *entry,
+                                           char *err, int err_size) {
+    if (!entry) {
+        if (err_size > 0)
+            snprintf(err, (size_t)err_size,
+                     "tutorial entry is NULL");
+        return 0;
+    }
+    const char *name = entry->name ? entry->name : "?";
     char slug[REPL_CFG_KEY_MAX];
-    const char *const *cfg = repl_tutorial_cfg_lines(idx);
+    const char *const *cfg = entry->cfg;
     for (int i = 0; cfg && cfg[i]; i++) {
         if (!repl_config_extract_slug(cfg[i], slug, sizeof slug, NULL))
             continue;  /* mal-shaped @cfg line — repl parser will diag */
@@ -442,27 +492,52 @@ static int tutorial_validate_slugs(int idx, char *err, int err_size) {
             if (err_size > 0)
                 snprintf(err, (size_t)err_size,
                          "tutorial '%s' @cfg uses unknown slug '%s'",
-                         repl_tutorial_name(idx) ? repl_tutorial_name(idx) : "?",
-                         slug);
+                         name, slug);
+            return 0;
+        }
+        char bad_value[REPL_CFG_VALUE_MAX] = "";
+        if (!tutorial_cfg_line_value_resolves(cfg[i], slug,
+                                              bad_value, sizeof bad_value)) {
+            if (err_size > 0)
+                snprintf(err, (size_t)err_size,
+                         "tutorial '%s' @cfg '%s = %s' has unknown symbolic value",
+                         name, slug, bad_value);
             return 0;
         }
     }
-    int n = repl_tutorial_step_count(idx);
-    for (int s = 0; s < n; s++) {
-        TutorialStepKind k = repl_tutorial_step_kind(idx, s);
-        if (k != TUTORIAL_STEP_KIND_SET && k != TUTORIAL_STEP_KIND_REQUIRE)
+    if (!entry->steps) return 1;
+    for (int s = 0; entry->steps[s].comment; s++) {
+        const TutorialStep *step = &entry->steps[s];
+        if (step->kind != TUTORIAL_STEP_KIND_SET &&
+            step->kind != TUTORIAL_STEP_KIND_REQUIRE)
             continue;
-        const char *step_slug = repl_tutorial_step_cfg_slug(idx, s);
+        const char *step_slug = step->cfg_slug;
         if (!step_slug || !repl_cfg_known(step_slug)) {
             if (err_size > 0)
                 snprintf(err, (size_t)err_size,
                          "tutorial '%s' step %d uses unknown cfg slug '%s'",
-                         repl_tutorial_name(idx) ? repl_tutorial_name(idx) : "?",
-                         s, step_slug ? step_slug : "(null)");
+                         name, s, step_slug ? step_slug : "(null)");
             return 0;
+        }
+        const char *value_name = step->cfg_value_name;
+        if (value_name && *value_name) {
+            int dummy;
+            if (!repl_cfg_resolve_text(step_slug, value_name, &dummy)) {
+                if (err_size > 0)
+                    snprintf(err, (size_t)err_size,
+                             "tutorial '%s' step %d uses unknown symbolic "
+                             "value '%s' for slug '%s'",
+                             name, s, value_name, step_slug);
+                return 0;
+            }
         }
     }
     return 1;
+}
+
+static int tutorial_validate_slugs(int idx, char *err, int err_size) {
+    return tutorial_validate_entry_against_bridge(repl_tutorial_entry(idx),
+                                                  err, err_size);
 }
 
 void tutorial_start(int idx) {
