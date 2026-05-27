@@ -6,6 +6,7 @@
 #include "repl/examples.h"
 #include "repl/core.h"
 #include "repl/cfg_baseline.h"   /* ReplConfigBag + bridge for per-scene cfg */
+#include "repl/export.h"          /* ReplExportCameraBlock + camera bridge */
 #include "repl/state_owners.h"
 #include "source_document.h" /* source_document_load_lines */
 #include "config.h"          /* REPL_DIAG_TEXT_MAX */
@@ -82,6 +83,16 @@ typedef struct {
      * and slot-eviction code paths handle cfg by ordinary struct copy
      * instead of maintaining a parallel array. */
     ReplConfigBag cfg;
+    /* Per-slot camera snapshot. The 4-line text block is the opaque
+     * serialization format the controller-installed camera bridge
+     * produces (fill_display_block) and consumes
+     * (apply_capture_block_snap / apply_example_block). Embedded so
+     * tab switches restore the slot's saved camera, and so workspace
+     * iteration writes each saved file with its OWN camera rather
+     * than the live one. `present == 0` = no per-slot camera (the
+     * slot inherits whatever is live, matching the example-loader
+     * default). */
+    ReplExportCameraBlock camera_block;
 } UserScene;
 
 static UserScene g_user_scenes[MAX_USER_SCENES];
@@ -219,6 +230,16 @@ static void save_scene_to_slot(int idx, const char *name, int edit_line) {
         if (bridge && bridge->fill_scene_subset)
             bridge->fill_scene_subset(cfg);
     }
+    /* Capture the live camera into the slot. Without this, the
+     * workspace-save iteration would write every saved file with
+     * the same (active scene's) camera, and tab switching would
+     * land the user on the previous tab's camera. */
+    {
+        memset(&s->camera_block, 0, sizeof(s->camera_block));
+        const ReplExportCameraBridge *cam_bridge = repl_export_camera_bridge();
+        if (cam_bridge && cam_bridge->fill_display_block)
+            cam_bridge->fill_display_block(&s->camera_block);
+    }
     /* Callers re-saving an existing slot pass `g_user_scenes[idx].name`,
      * which aliases s->name. snprintf with overlapping src/dst is UB
      * (glibc with `%s` produces an empty buffer), so only copy when the
@@ -305,6 +326,15 @@ static void load_scene_from_slot(int idx) {
         const ReplConfigBridge *bridge = repl_config_bridge();
         if (bridge && bridge->apply)
             bridge->apply(scene_cfg(idx));
+    }
+    /* Ease to the slot's saved camera (snap would be jarring on a
+     * user-triggered tab switch — same easing examples use via
+     * apply_example_block). No-op when the slot has no captured
+     * camera (camera_block.present == 0). */
+    {
+        const ReplExportCameraBridge *cam_bridge = repl_export_camera_bridge();
+        if (cam_bridge && cam_bridge->apply_example_block)
+            cam_bridge->apply_example_block(&s->camera_block);
     }
     /* Exit insert mode so the next interactive line lands at the new
      * scene's tail, not inside the previous typing context. The full
@@ -399,6 +429,17 @@ static void install_scene_into_live(int slot) {
     const ReplConfigBridge *bridge = repl_config_bridge();
     if (bridge && bridge->apply)
         bridge->apply(scene_cfg(slot));
+    /* Snap-apply the slot's saved camera. The workspace-save
+     * iteration relies on this so the export bridge's
+     * fill_save_block reads the slot's pose, not the live one
+     * (which is whatever the stash captured at the top of the
+     * iteration). Snap (not ease) so the change lands in live
+     * state before the export call. */
+    {
+        const ReplExportCameraBridge *cam_bridge = repl_export_camera_bridge();
+        if (cam_bridge && cam_bridge->apply_capture_block_snap)
+            cam_bridge->apply_capture_block_snap(&s->camera_block);
+    }
 }
 
 /* Captures live state into a UserScene-shaped stash so
@@ -450,6 +491,18 @@ static void stash_live_state(UserScene *dst) {
         if (bridge && bridge->fill_scene_subset)
             bridge->fill_scene_subset(&dst->cfg);
     }
+    /* Snapshot live camera too — restore_live_from_stash brings it
+     * back symmetrically. The workspace-save iteration walks each
+     * slot via install_scene_into_live (which now applies the slot's
+     * own camera); the stash is what we restore live to at the end
+     * of the loop, so the user lands back on the camera they had
+     * before save started. */
+    {
+        memset(&dst->camera_block, 0, sizeof(dst->camera_block));
+        const ReplExportCameraBridge *cam_bridge = repl_export_camera_bridge();
+        if (cam_bridge && cam_bridge->fill_display_block)
+            cam_bridge->fill_display_block(&dst->camera_block);
+    }
 }
 
 static void restore_live_from_stash(const UserScene *src) {
@@ -469,6 +522,11 @@ static void restore_live_from_stash(const UserScene *src) {
         const ReplConfigBridge *bridge = repl_config_bridge();
         if (bridge && bridge->apply)
             bridge->apply(&src->cfg);
+    }
+    {
+        const ReplExportCameraBridge *cam_bridge = repl_export_camera_bridge();
+        if (cam_bridge && cam_bridge->apply_capture_block_snap)
+            cam_bridge->apply_capture_block_snap(&src->camera_block);
     }
 }
 

@@ -195,6 +195,30 @@ static int cam_consume_example_block_now(const ReplExportCameraBlock *block) {
     return 1;
 }
 
+/* Snap-apply a captured 4-line block to live camera. Used by per-slot
+ * stash/restore in src/repl/scenes.c — installs the slot's saved
+ * camera so the export-side bridge reads it on the very next call,
+ * with no easing in between (an ease_to would leave the live
+ * camera unchanged until the next tick, so the export would write
+ * the OLD pose). Symmetric inverse of fill_display_block. */
+static void cam_apply_capture_block_snap(const ReplExportCameraBlock *block) {
+    if (!block || !block->present)
+        return;
+
+    GlrCameraState start;
+    glr_camera_capture(&start);
+
+    cam_reset_import();
+    if (!cam_consume_example_block_now(block)) {
+        cam_reset_import();
+        glr_camera_restore(&start);
+        return;
+    }
+    cam_reset_import();
+    /* cam_consume_example_block_now already wrote rx/ry/dist/tx/ty/tz
+     * straight into live (no ease). Nothing further required. */
+}
+
 static void cam_apply_example_block(const ReplExportCameraBlock *block) {
     GlrCameraState start;
     GlrCameraState target;
@@ -227,12 +251,13 @@ static void cam_apply_example_block(const ReplExportCameraBlock *block) {
 /* ----- Bridge install ------------------------------------------------- */
 
 static const ReplExportCameraBridge g_glr_export_camera_bridge = {
-    .fill_save_block        = cam_format_save_block,
-    .fill_display_block     = cam_format_display_block,
-    .fill_save_preamble     = cam_format_save_preamble,
-    .try_consume_import_line = cam_try_consume_import_line,
-    .reset_import           = cam_reset_import,
-    .apply_example_block    = cam_apply_example_block,
+    .fill_save_block            = cam_format_save_block,
+    .fill_display_block         = cam_format_display_block,
+    .fill_save_preamble         = cam_format_save_preamble,
+    .try_consume_import_line    = cam_try_consume_import_line,
+    .reset_import               = cam_reset_import,
+    .apply_example_block        = cam_apply_example_block,
+    .apply_capture_block_snap   = cam_apply_capture_block_snap,
 };
 
 void glr_camera_export_install_bridge(void) {

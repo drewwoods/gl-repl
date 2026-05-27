@@ -99,6 +99,14 @@ typedef struct {
      * import-line consumption so app bridges can animate example
      * switches while save/workspace imports still restore immediately. */
     void (*apply_example_block)(const ReplExportCameraBlock *block);
+    /* Snap-apply a captured camera block to live state — used by the
+     * workspace-save iteration to stage each slot's saved camera
+     * before the export bridge reads the live state, and by
+     * stash/restore around the iteration. Unlike apply_example_block
+     * this does NOT ease, does NOT set the scene default, and does
+     * NOT record an external 3D pose — it's the symmetric inverse of
+     * fill_display_block. */
+    void (*apply_capture_block_snap)(const ReplExportCameraBlock *block);
 } ReplExportCameraBridge;
 
 /* Install or read the process-wide camera bridge used by export/import and
