@@ -4,8 +4,8 @@
 #include "repl/load.h"           /* repl_load_apply_line — step 5b */
 #include "repl/export.h"         /* ReplExportCameraBridge */
 #include "repl/command_store.h"
-#include "repl/core_internal.h"
 #include "repl/examples.h"
+#include "repl/scenes.h"
 #include "repl/core.h"
 #include "repl/state_owners.h"
 #include "source_document.h"     /* source_document_clear */
@@ -451,13 +451,13 @@ static int load_example_lines(const char *const *lines,
 }
 
 static int load_example(int idx) {
-    int count = repl_examples_count();
+    int count = repl_example_count();
     const char *const *lines;
     const char *name;
 
     if (idx < 0 || idx >= count) return 0;
-    lines = repl_examples_lines(idx);
-    name = repl_examples_name(idx);
+    lines = repl_example_lines(idx);
+    name = repl_example_name(idx);
     if (!lines || !name) return 0;
 
     /* Preserve the user's work (once, into slot 0) before overwriting with
@@ -477,14 +477,6 @@ static int load_example(int idx) {
              idx + 1, count, name);
     repl_set_status(msg);
     return new_edit_line;
-}
-
-int repl_example_count(void) {
-    return repl_examples_count();
-}
-
-const char *repl_example_name(int idx) {
-    return repl_examples_name(idx);
 }
 
 int repl_load_example(int idx) {

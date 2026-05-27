@@ -4,7 +4,7 @@
 #include "repl/core.h"
 #include "repl/command_store.h"
 #include "repl/source_scope.h"
-#include "repl/state.h"
+#include "repl/state_owners.h"
 #include "source_document.h"   /* source_document_insert_line / _replace_line */
 #include "config.h"            /* REPL_INDENT_TEXT_MAX */
 
@@ -33,8 +33,7 @@ static void face_normal(const float *a, const float *b, const float *c,
     else { n[0] = 0; n[1] = 0; n[2] = 0; }
 }
 
-static GLCmd make_auto_normal(float nx, float ny, float nz,
-                              int insert_pos) {
+static GLCmd make_auto_normal(float nx, float ny, float nz) {
     GLCmd c;
     memset(&c, 0, sizeof(c));
     c.type = CMD_NORMAL3F;
@@ -44,8 +43,6 @@ static GLCmd make_auto_normal(float nx, float ny, float nz,
     c.num_args = 3;
     c.valid = 1;
     c.is_auto = 1;
-
-    (void)insert_pos;  /* indent computed in make_auto_normal_text */
     return c;
 }
 
@@ -258,7 +255,7 @@ void repl_recompute_autonormals(int autonormal_enabled,
                 repl_state_document_cmds()[vidx - 1].type == CMD_NORMAL3F) {
                 if (repl_state_document_cmds()[vidx - 1].is_auto) {
                     ReplCommandStore store = repl_command_store_live();
-                    GLCmd auto_normal = make_auto_normal(nx, ny, nz, vidx - 1);
+                    GLCmd auto_normal = make_auto_normal(nx, ny, nz);
                     char line[MAX_LINE_LEN];
 
                     make_auto_normal_text(vidx - 1, nx, ny, nz, line, sizeof(line));
@@ -273,7 +270,7 @@ void repl_recompute_autonormals(int autonormal_enabled,
                 continue;
             }
 
-            GLCmd nc = make_auto_normal(nx, ny, nz, vidx);
+            GLCmd nc = make_auto_normal(nx, ny, nz);
             insert_cmd_at(vidx, &nc, nx, ny, nz, edit_line_inout);
             offset++;
             block_end++;

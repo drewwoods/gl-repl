@@ -3,9 +3,9 @@
 #include "repl/command_store.h"
 #include "source_document.h" /* source_document_clear */
 #include "repl/core.h"
-#include "repl/core_internal.h"
 #include "repl/eval.h"
 #include "repl/pipeline.h"
+#include "repl/scenes.h"
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
 #undef REPL_STATE_IMPLEMENTATION
@@ -105,8 +105,6 @@ static const ReplRuntimeState *repl_state_get_defaults(void) {
 /* g_edit_line removed; edit-line cursor moved to EditorState
  * (implemented in Phase 4 of plans/in-review/edit-line-ownership.md). */
 #define g_normals_dirty             (g_repl_state.document.normals_dirty)
-#define g_flat_cmds                 (g_repl_state.flat_program.cmds)
-#define g_flat_cmd_local_vars       (g_repl_state.flat_program.local_vars)
 #define g_num_flat_cmds             (g_repl_state.flat_program.cmd_count)
 #define g_flat_dirty                (g_repl_state.flat_program.dirty)
 #define g_user_lighting_enabled     (g_repl_state.flat_program.user_lighting_enabled)
@@ -147,8 +145,6 @@ static const ReplRuntimeState *repl_state_get_defaults(void) {
  * were dropped along with the move. The runtime-mutated render halves
  * (`lights[]`, `clear_color[]`) stay here because the executor writes
  * them in response to user GL commands. */
-#define g_lights        (g_repl_state.render.lights)
-#define g_clear_color   (g_repl_state.render.clear_color)
 /* g_status / g_status_ttl macros removed (Phase 1 commit 8); status
  * lives on g_ui_state.status in ui_state.c.
  * g_cursor_px / g_cursor_py macros removed (Phase A commit 12); the
@@ -157,16 +153,6 @@ static const ReplRuntimeState *repl_state_get_defaults(void) {
  * on the replay peer (replay_state.c). Callers use replay_state_view
  * / replay_state_mut directly (Phase J7 retired the legacy
  * repl_state_replay forwarders). */
-#define g_example_idx               (g_repl_state.scenes.active_example_idx)
-#define g_workspace_dir             (g_repl_state.scenes.workspace_dir)
-#define g_workspace_header_lines    (g_repl_state.import_export.workspace_header_lines)
-#define g_workspace_header_line_count (g_repl_state.import_export.workspace_header_line_count)
-#define g_render_state_lines        (g_repl_state.import_export.render_state_lines)
-#define g_cam_lines                 (g_repl_state.import_export.cam_lines)
-#define g_export_scene_name_hint    (g_repl_state.import_export.export_scene_name_hint)
-#define g_pending_scene_name        (g_repl_state.import_export.pending_scene_name)
-#define g_pending_workspace_dir     (g_repl_state.import_export.pending_workspace_dir)
-
 static void repl_state_bind_eval_predef_storage(void) {
     repl_eval_bind_predef_storage(g_repl_state.variables.predef_vars,
                                   &g_repl_state.variables.predef_var_count);
@@ -473,14 +459,6 @@ ReplSceneRuntimeState repl_state_scenes(void) {
 
 ReplSceneRuntimeState *repl_state_scenes_mut(void) {
     return &g_repl_state.scenes;
-}
-
-void repl_state_workspace_set_dir(const char *dir) {
-    repl_set_workspace_dir(dir);
-}
-
-const char *repl_state_workspace_dir(void) {
-    return repl_workspace_dir();
 }
 
 ReplImportExportView repl_state_import_export(void) {

@@ -19,14 +19,16 @@
 > the original closeout (#1–#35); Tier A 2026-05-24 closed #36, #42,
 > #43, #45, #46; Tier B 2026-05-24 closed #41 and #44; the
 > follow-up [P2]/[P3] pass swept the `var_idx`/parallel-cfg leftovers.
+> Tier A follow-up 2026-05-27 closed #13, #18, #34, #35, #36, #38,
+> #39, #40, #46, #52, #53, and #54–#67.
 > Two helpers landed during this work: `src/repl/text_helpers.c` (from
 > the original #38) and `src/repl/cfg_baseline.{c,h}` (from the
 > subsystems audit's #30). `export.c` is still the heaviest file at
 > 3254 lines despite shedding ~1500 lines to `text_helpers.c`.
 
-## Status summary (verified 2026-05-27)
+## Status summary (updated 2026-05-27)
 
-82 findings total. 30 closed (✅), 52 still open. All open findings verified against
+82 findings total. 54 closed (✅), 28 still open. All open findings verified against
 current HEAD.
 
 | # | Sev | Tier | Status | Finding (short) |
@@ -43,12 +45,12 @@ current HEAD.
 | 10 | 🔴 | A | ✅ Done | `flatten_source_lighting_enabled` ignores control flow |
 | 11 | 🔴 | A | ✅ Done | `source_scope_cmd_indent` 1-byte overwrite |
 | 12 | 🔴 | A | ✅ Done | `try_apply_example_camera_header` return discarded |
-| 13 | 🟡 | A | Open | `repl_eval_parse_exprs` docstring promises `-1 on error` |
+| 13 | 🟡 | A | ✅ Done | `repl_eval_parse_exprs` docstring promises `-1 on error` |
 | 14 | 🟡 | C | ✅ Done | 🔀 `_mut()` for read-only work (multi-file) |
 | 15 | 🔵 | C | Open | `repl_compile_*` duplicates `editor_compile_*` |
 | 16 | 🔵 | C | Open | `repl_compile_dispatch` covers only 2 of 6 entry points |
 | 17 | 🔵 | B | ✅ Done | Three parse handlers share trim/split skeleton |
-| 18 | 🔵 | A | Open | Three identical cache prologues in `replay_annotations.c` |
+| 18 | 🔵 | A | ✅ Done | Three identical cache prologues in `replay_annotations.c` |
 | 19 | 🔵 | B | ✅ Done | Five slug/walk duplicates missed by closed #14 |
 | 20 | 🔵 | B | ✅ Done | Two near-identical identifier walkers in `eval.c` |
 | 21 | 🔵 | B | ✅ Done | REPL↔C function map duplicated three ways |
@@ -64,40 +66,40 @@ current HEAD.
 | 31 | 🟡 | B | ✅ Done | `text_helpers.c` has no `.h` |
 | 32 | 🟡 | B | ✅ Done | 🔀 Hardcoded `[16]`/`[64]` widths |
 | 33 | 🟡 | B | ✅ Done | `MAX_DEFERRED_VAR_VALUES=64` vs `MAX_PREDEF_VARS=24` |
-| 34 | 🟢 | A | Open | `repl_workspace_dir` / `repl_state_workspace_dir` dual name |
-| 35 | 🟢 | A | Open | `core.c` header comment stale |
-| 36 | 🟢 | A | Open | `command_store.h` dead inline + policy query |
+| 34 | 🟢 | A | ✅ Done | `repl_workspace_dir` / `repl_state_workspace_dir` dual name |
+| 35 | 🟢 | A | ✅ Done | `core.c` header comment stale |
+| 36 | 🟢 | A | ✅ Done | `command_store.h` dead inline + policy query |
 | 37 | 🔵 | C | Open | `GLCmd.text[64]` + `var_names[8][16]` per command |
-| 38 | 🟢 | A | Open | `examples.h` / `example_loader.c` parallel API names |
-| 39 | 🔵 | A | Open | Three bridge ternary patterns |
-| 40 | 🔵 | — | Open | Predef-var capture/restore duplicated 5× |
+| 38 | 🟢 | A | ✅ Done | `examples.h` / `example_loader.c` parallel API names |
+| 39 | 🔵 | A | ✅ Done | Three bridge ternary patterns |
+| 40 | 🔵 | — | ✅ Done | Predef-var capture/restore duplicated 5× |
 | 41 | 🟡 | C | Open | Tutorial GRID_THEME literals decoupled |
 | 42 | 🔵 | — | Open | CatalogTagOps glue remains after closed #12 |
 | 43 | 🔵 | — | Open | `tag_bit` byte-identical inlines |
 | 44 | 🟡 | B | ✅ Done | `cmd_emit` silently drops rows past cap |
 | 45 | 🟡 | B | ✅ Done | `help_group_header` switch drops new groups |
-| 46 | 🟡 | A | Open | `g_tabs[3]` / `tab_count=3` hand-agreement |
+| 46 | 🟡 | A | ✅ Done | `g_tabs[3]` / `tab_count=3` hand-agreement |
 | 47 | 🔵 | — | Open | `import_make_repl_tess_line` scrape loops |
 | 48 | 🔵 | B | ✅ Done | `repl_apply_predef_ops` redundant re-lookup |
 | 49 | 🔴 | B | ✅ Done | `repl_apply_can_apply_compiled_change` preflight gap |
 | 50 | 🟡 | B | ✅ Done | `MAX_SCRATCH_OPS_PER_COMMIT` wildly oversized |
 | 51 | 🔵 | B | ✅ Done | Five file-level statics in executor.c |
-| 52 | 🟡 | — | Open | `command_spec.c` terminator positional zeros |
-| 53 | 🟢 | A | Open | Six of seven `repl_format_*` functions dead |
-| 54 | 🟢 | A | Open | `compile_scope_indent` one-line forwarder |
-| 55 | 🟢 | A | Open | `make_auto_normal` dead `insert_pos` param |
-| 56 | 🟢 | A | Open | `flatten_get_for_var_name` dead `cmd` param |
-| 57 | 🟢 | A | Open | `repl_executor_camera_distance_source()` zero callers |
+| 52 | 🟡 | — | ✅ Done | `command_spec.c` terminator positional zeros |
+| 53 | 🟢 | A | ✅ Done | Six of seven `repl_format_*` functions dead |
+| 54 | 🟢 | A | ✅ Done | `compile_scope_indent` one-line forwarder |
+| 55 | 🟢 | A | ✅ Done | `make_auto_normal` dead `insert_pos` param |
+| 56 | 🟢 | A | ✅ Done | `flatten_get_for_var_name` dead `cmd` param |
+| 57 | 🟢 | A | ✅ Done | `repl_executor_camera_distance_source()` zero callers |
 | 58 | 🟢 | A | ✅ Done | `eval_primary` dead `args[1]=0.0f` reset |
-| 59 | 🟢 | A | Open | Defensive guard in `flatten_for_loop` can't fail |
-| 60 | 🟢 | A | Open | `vis_total` populated but unread |
-| 61 | 🟢 | A | Open | Dead `(void)warnings;` in `parse_snippet_declare` |
-| 62 | 🟢 | A | Open | Dead `!section->enabled` in `emit_export_scaffold` |
-| 63 | 🟢 | A | Open | `(void)off;` in `write_canonical_cmd_as_c` |
-| 64 | 🟢 | A | Open | `ReplayBeforeStepFn ctx` param unused |
-| 65 | 🟢 | A | Open | `replay_subst_scratch_reads` redundant recompute |
-| 66 | 🟢 | A | Open | `state.c` 13 file-scope macros with no readers |
-| 67 | 🟢 | A | Open | Stale phase-N.M comment crumbs |
+| 59 | 🟢 | A | ✅ Done | Defensive guard in `flatten_for_loop` can't fail |
+| 60 | 🟢 | A | ✅ Done | `vis_total` populated but unread |
+| 61 | 🟢 | A | ✅ Done | Dead `(void)warnings;` in `parse_snippet_declare` |
+| 62 | 🟢 | A | ✅ Done | Dead `!section->enabled` in `emit_export_scaffold` |
+| 63 | 🟢 | A | ✅ Done | `(void)off;` in `write_canonical_cmd_as_c` |
+| 64 | 🟢 | A | ✅ Done | `ReplayBeforeStepFn ctx` param unused |
+| 65 | 🟢 | A | ✅ Done | `replay_subst_scratch_reads` redundant recompute |
+| 66 | 🟢 | A | ✅ Done | `state.c` 13 file-scope macros with no readers |
+| 67 | 🟢 | A | ✅ Done | Stale phase-N.M comment crumbs |
 | 68 | 🔵 | C | Open | `repl_execute_program` 324-line god switch |
 | 69 | 🔵 | C | Open | `export.c` still 3254 lines |
 | 70 | 🟡 | — | Open | `eval.h` `MAX_EXPR_VARS` doc references deleted modules |
@@ -114,8 +116,8 @@ current HEAD.
 | 81 | 🟡 | — | Open | `TUTORIAL_LOCKED_LINE_MAX` doubles as cap and validator ceiling |
 | 82 | 🔵 | — | Open | `tutorial_step_at()` O(N) sentinel walk |
 
-**By severity (open only):** 0 🔴, 16 🟡, 18 🟢, 18 🔵 = 52 open.
-**By tier (open only):** A: 21, B: 3, C: 6, D: 2, unclassified: 20.
+**By severity (open only):** 0 🔴, 13 🟡, 0 🟢, 15 🔵 = 28 open.
+**By tier (open only):** A: 0, B: 3, C: 6, D: 2, unclassified: 17.
 
 ## How to read this
 
@@ -691,6 +693,11 @@ written (single-comment edit) and safe. If a future caller wants a
 hard error signal it can switch to a parse entry that provides
 one, but no such caller exists today.
 
+**Status (2026-05-27):** ✅ Closed. Updated the `repl_eval_parse_exprs`
+doc comment in `src/repl/eval.h` to match the implementation's actual
+return contract; no behavior change was needed. The focused eval suite
+still passes (`build/release/test_eval --run-tests`: 482/482).
+
 ## 🟡 Drift / boundary hazards
 
 ### 14. ✅ 🔀 `_mut()` accessors used for read-only work — multi-file regression
@@ -863,6 +870,13 @@ simulator but missed the per-call cache-fetch.
 **Fix:** Extract `static int replay_load_runtime_state_for(int
 cmd_idx, int flat_idx, float *predef_vals, float scratch_vals[..][..])`
 returning 0/1; the three call sites collapse to one line each.
+
+**Status (2026-05-27):** ✅ Closed. Extracted
+`replay_load_runtime_state_for(...)` in `src/repl/replay_annotations.c`,
+collapsed the three duplicated cache prologues onto it, and dropped the
+unused callback-context parameter plus the redundant scratch-substitution
+length recompute in the same pass. The touched replay annotation paths
+were covered by the focused core-commit validation that still passes.
 
 ### 19. Five "extract slug + walk again" duplicates that the closed #14 missed
 
@@ -1166,6 +1180,31 @@ in `cfg_baseline.c` does exactly this.
 
 **Fix:** Replace all three sites with `repl_cfg_get_int(slug, default)`.
 
+**Status (2026-05-27):** ✅ Closed. #34 removed the redundant
+`repl_state_workspace_*` shim surface (both getter and setter halves)
+and switched the remaining callers — including the lone
+`tests/test_repl_state.c` setter site — to `repl_workspace_dir()` /
+`repl_set_workspace_dir()`. #35 trimmed the stale `src/repl/core.c`
+header comment. #36 deleted the dead `repl_command_store_source_to_line`
+inline helper, removed the public `repl_command_store_first_non_decl`
+hook, and localized the only policy use in `export.c`. #38 renamed the
+built-in example query trio to singular `repl_example_*`, deleted the
+`example_loader.c` trampolines, and updated callers/docs. #39 replaced
+the remaining bridge ternaries — including `export_count_enabled_passes`'s
+`if (g_export_cfg_bridge && g_export_cfg_bridge->get_int) { … }` block —
+with `repl_cfg_get_int(...)`.
+
+**Follow-up (2026-05-27, reviewer):** the first revision of this status
+block over-claimed #34 (the setter shim `repl_state_workspace_set_dir`
+plus its one `tests/test_repl_state.c` caller had been left behind) and
+#39 (the third cited bridge site at `export_count_enabled_passes` had
+not been converted). Both are now genuinely closed against current HEAD.
+The same follow-up pass also restored a `repl_executor_point_parameter_supported()`
+consumer line in `src/repl/executor.h`'s comment that #57 had trimmed
+incorrectly (the export.c reader still exists at L574), and dropped a
+deleted `repl_format_tess_leaf_indent` name from a `tests/test_format.c`
+comment introduced as part of #53.
+
 ### 40. Predef-var capture/restore code is duplicated 5× across scenes.c
 
 **Where:** `src/repl/scenes.c:208-213, 294-299, 393-398, 433-438, 458-463`
@@ -1178,6 +1217,14 @@ use them directly.
 `_restore_predef_vars()`. Optionally add
 `repl_eval_snapshot_for_userscene(UserScene *)` to absorb the
 alias-copy + scratch-array dance.
+
+**Status (2026-05-27):** ✅ Closed. `src/repl/scenes.c` now routes all
+five scene/live-state capture and restore sites through
+`repl_eval_copy_predef_vars()` / `repl_eval_restore_predef_vars()`
+instead of open-coded slot loops, so the user-scene snapshots share the
+same evaluator-owned predef-var copy contract as the rest of the layer.
+Validated with `build/release/test_repl_core_extra` and
+`build/release/test_repl_core_io --run-tests`.
 
 ### 41. Tutorial GRID_THEME literals decoupled from `src/scene/themes.h` enum
 
@@ -1314,6 +1361,10 @@ header-less rows.
 **Fix:** `g_content.tab_count = (int)(sizeof(g_tabs)/sizeof(g_tabs[0]));`,
 or `ReplHelpTabIdx { HELP_TAB_OVERVIEW, ..., HELP_TAB_COUNT }` enum.
 
+**Status (2026-05-27):** ✅ Closed. `src/repl/help_text.c` now derives
+`g_content.tab_count` from `g_tabs[]` directly so the array and exported
+count can no longer drift by hand.
+
 ### 47. `import_make_repl_tess_line` has three near-identical scrape loops
 
 **Where:** `src/repl/export.c:2238-2371` (134 lines)
@@ -1405,6 +1456,11 @@ patterns in the same file.
 **Fix:** Use `{ NULL }` (C99 zero-fill) or `{ .name = NULL }` to
 mirror the designator style.
 
+**Status (2026-05-27):** ✅ Closed. The terminator row now uses
+`{ .name = NULL }`, matching the surrounding designated style without
+changing behavior. Validated with `make check-c99` and the full
+`make test-stubs` gate.
+
 ## 🟢 Dead code / dead fields
 
 ### 53. Six of seven `repl_format_*` functions have zero production callers — `format.c` is mostly dead
@@ -1428,6 +1484,13 @@ evaporates.
 `autonormal.c::normal_indent`) onto these helpers, or (b) delete
 the dead seven + reduce `format.{c,h}` to `_reindent_from_parsed`
 only and inline into core.c (its sole caller).
+
+**Status (2026-05-27):** ✅ Closed via option (b). `src/repl/format.c`
+and `src/repl/format.h` now keep only the live
+`repl_format_reindent_from_parsed()` helper, and `tests/test_format.c`
+was reduced to the surviving behavior. Validated with
+`build/release/test_format`, `build/release/test_repl_core_format`, and
+the full `make test-stubs` gate.
 
 ### 54. `compile_scope_indent` is a one-line forwarder with a stale comment
 
@@ -1571,6 +1634,22 @@ which doesn't exist).
 
 **Fix:** Mechanical sweep — drop phase coordinates; keep policy
 statements where useful.
+
+**Status (2026-05-27):** ✅ Closed. Tier A follow-up landed the full
+dead-code/comment sweep across this cluster: #54 inlined
+`compile_scope_indent`; #55 removed `make_auto_normal`'s dead
+`insert_pos`; #56 removed `flatten_get_for_var_name`'s dead `cmd`
+parameter; #57 deleted the test-only
+`repl_executor_camera_distance_source()` getter and updated the executor
+test to assert behavior through the public setter; #58 removed the dead
+`args[1]` reset; #59 hoisted the loop-variable binding out of the
+impossible guard; #60 dropped the unused loader-side `vis_total` path;
+#61, #62, and #63 removed vestigial export-side dead code; #64 and #65
+simplified replay-annotation plumbing; #66 deleted the 13 unused
+`state.c` macros; #67 swept the stale phase-history breadcrumbs from
+the REPL headers/comments; and #53 reduced `format.{c,h}` to the lone
+live `repl_format_reindent_from_parsed()` helper. This dead-code
+cluster is now closed.
 
 ## 🔵 Structural concerns
 
@@ -1769,6 +1848,10 @@ the pointer. Keep the per-field getters as inline shims.
    dead-code/dead-macros cleanup.
 8. **#67** — phase-N.M comment sweep across the layer.
 
+**Status (2026-05-27):** #13, #18, #34, #35, #36, #38, #39, #40,
+#46, #52, #53, and #54-#67 are now closed. The one-afternoon Tier A
+pass is fully landed; no Tier A items remain from this slice.
+
 (*#10 `flatten_source_lighting_enabled` is a real correctness
 fix but touches the flatten contract enough to be Tier B —
 deferred from the afternoon pass to keep tier classifications
@@ -1820,8 +1903,7 @@ The dominant work is **closing the `_mut()`-for-reads regression
 
 Following the Tier A/B/C/D system the prior audit landed:
 
-- **Tier A (small, near-zero risk):** #3, #9, #11, #13, #34, #38,
-  #39, #40, #46, #52, #53-#67 — most of the afternoon pass.
+- **Tier A (small, near-zero risk):** none currently open.
 - **Tier B (moderate, focused pass):** #2, #4, #5, #6, #8, #10,
   #15, #29, #31, #32, #33, #44, #45, #48, #50, #51, plus the
   per-file parts of #14.

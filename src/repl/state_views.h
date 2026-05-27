@@ -163,7 +163,6 @@ ReplVariableView repl_state_variables(void);
  * phase 1 and step 7a). */
 
 ReplSceneRuntimeState     repl_state_scenes(void);
-const char *repl_state_workspace_dir(void);
 
 ReplImportExportView repl_state_import_export(void);
 

@@ -26,8 +26,7 @@
 /* The parser writes diagnostics to ctx->err_buf when available, and
  * otherwise no-ops; diagnostics never leave the parser as side effects
  * on REPL state. A hard guard prevents set_status calls from returning
- * to src/repl/parser.c (implemented across phase H.5 commit 40 and
- * phase I commits 42a/42b/42c). */
+ * to src/repl/parser.c. */
 static void parser_emit_error_v(const ReplParseContext *ctx,
                                 const char *fmt, va_list ap) {
     if (!ctx || !ctx->err_buf || ctx->err_sz <= 0) {
@@ -891,6 +890,12 @@ static void write_text(char *out, int sz, const char *fmt, ...) {
 static int parse_command(const char *line, GLCmd *cmd,
                          char *text_out, int text_sz,
                          const ReplParseContext *ctx) {
+    /* All production / test callers pass a non-NULL context (the
+     * legacy no-ctx wrappers were retired earlier). The
+     * `repl_state_edit_line()` fallback that lived here — it was
+     * confirmed dead code, and keeping it would force the parser to
+     * reach into REPL-state for cursor info that has no business
+     * being parser-internal. */
     if (!ctx) return 0;
     int source_line_idx = ctx->source_line_idx;
     ExprVar *vars = ctx->vars;

@@ -25,10 +25,6 @@ void repl_executor_install_camera_distance_source(ReplExecutorCameraDistanceFn f
     g_camera_distance_source = fn;
 }
 
-ReplExecutorCameraDistanceFn repl_executor_camera_distance_source(void) {
-    return g_camera_distance_source;
-}
-
 /* Runtime point-parameter capability. Replaces the old compile-time
  * NO_POINT_PARAMETER macro: glPointParameterfv is core GL 1.4 but
  * absent on some legacy contexts, which is a property of the runtime
@@ -643,7 +639,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                     cond_text[0]) {
                     char repl_cond[MAX_LINE_LEN];
                     repl_eval_c_expr_to_repl(cond_text, repl_cond, sizeof(repl_cond));
-                    ExprCtx ctx = { repl_cond, eval_vars, eval_num_vars };
+                    ExprCtx ctx = { repl_cond, eval_vars, eval_num_vars, NULL, 0 };
                     cond = repl_eval_expr(&ctx);
                 }
             }

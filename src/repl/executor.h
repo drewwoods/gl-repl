@@ -109,17 +109,17 @@ int  repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale);
  * unconditionally. */
 typedef float (*ReplExecutorCameraDistanceFn)(void);
 void repl_executor_install_camera_distance_source(ReplExecutorCameraDistanceFn fn);
-ReplExecutorCameraDistanceFn repl_executor_camera_distance_source(void);
 
 /* Runtime point-parameter capability (replaces the old compile-time
  * NO_POINT_PARAMETER macro). The controller detects support after the
  * GL context is current (glr_ctrl_init_gl) and sets this; everything
  * else defaults to supported. When unsupported, CMD_POINT_PARAMETER_FV
  * is a no-op in the executor and point sizes fall back to the
- * camera-distance approximation above. export.c reads the getter to
- * decide whether to apply/emit the point-attenuation init bootstrap
- * entry; the scene controller mirrors it into SceneRenderConfig so the
- * star backdrop's direct call can be gated too. */
+ * camera-distance approximation above. export.c consults
+ * repl_executor_point_parameter_supported() to decide whether to
+ * apply/emit the point-attenuation init bootstrap entry, and the scene
+ * controller mirrors it into SceneRenderConfig so the star backdrop's
+ * direct call can be gated too. */
 void repl_executor_set_point_parameter_supported(int supported);
 int  repl_executor_point_parameter_supported(void);
 

@@ -31,8 +31,8 @@
  * user scene via F12 does not restore the example state — user edits are
  * independent once promoted.
  *
- * Query API: repl_examples_count() returns the total number of examples;
- * repl_examples_name() retrieves an example's display name; repl_examples_lines()
+ * Query API: repl_example_count() returns the total number of examples;
+ * repl_example_name() retrieves an example's display name; repl_example_lines()
  * retrieves the source line array for loading. Used by the UI to populate the
  * Example dropdown and by src/repl/core.c to load and feed examples.
  */
@@ -43,18 +43,18 @@
 
 /* Query the source line array for an example. Returns a null-terminated array
  * of REPL command strings (ready to feed through the commit pipeline). Index
- * must be in range [0, repl_examples_count()). The returned pointer is valid
+ * must be in range [0, repl_example_count()). The returned pointer is valid
  * for the lifetime of the program. Used by src/repl/core.c to load examples. */
-const char *const *repl_examples_lines(int idx);
+const char *const *repl_example_lines(int idx);
 
 /* Query the display name of an example (shown in the Example dropdown and menu).
  * Returns a pointer to a constant string. Index must be in range [0,
- * repl_examples_count()). Used by the Example dropdown UI and by F12 cycling. */
-const char *repl_examples_name(int idx);
+ * repl_example_count()). Used by the Example dropdown UI and by F12 cycling. */
+const char *repl_example_name(int idx);
 
 /* Query the total number of built-in examples. Used by the Example dropdown and
  * F12 cycling to determine the range of valid example indices. */
-int repl_examples_count(void);
+int repl_example_count(void);
 
 /* Curated metadata tags used by the Scene menu. Examples keep their flat
  * identity; tags are only a secondary discovery index. Tag index 0 is the
