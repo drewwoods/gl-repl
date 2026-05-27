@@ -22,7 +22,6 @@ static void tutorial_state_init_defaults(TutorialRuntimeState *s) {
      * re-initialized in tutorial_start() before any step is evaluated or read. */
     for (int i = 0; i < TUTORIAL_MAX_STEPS; i++)
         s->instruction_line_for_step[i] = -1;
-    s->in_enter_step = 0;
     repl_config_bag_clear(&s->baseline_bag);
     s->baseline_valid = 0;
 }

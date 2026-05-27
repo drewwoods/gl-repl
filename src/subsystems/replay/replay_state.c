@@ -77,6 +77,8 @@ int replay_src_line(void) {
 }
 
 int replay_total_flat(void) {
+    if (!g_replay_runtime_state.active)
+        return 0;
     return g_replay_runtime_state.total_flat_cmds;
 }
 

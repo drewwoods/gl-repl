@@ -70,7 +70,6 @@ typedef struct {
      * fade_line_idx by tutorial_shift_tracked_lines_from. Sized to
      * TUTORIAL_MAX_STEPS (one slot per catalog step). */
     int                   instruction_line_for_step[TUTORIAL_MAX_STEPS];
-    int                   in_enter_step;
     ReplConfigBag         baseline_bag;
     int                   baseline_valid;
 } TutorialRuntimeState;

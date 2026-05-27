@@ -820,6 +820,32 @@ void replay_restart_from_beginning(void) {
     state->last_src_line = -1;
 }
 
+static void replay_snapshot_baseline(ReplayRuntimeState *state) {
+    /* Full predef snapshot (vals + names + count). Required so the
+     * fade plan's later restore can route through repl_eval_restore_predef_vars
+     * and assign by NAME — replay spans multiple frames and the live
+     * predef table can be reshaped (workspace switch, scene load,
+     * undo across @declare) between this start and the eventual
+     * restore. */
+    repl_eval_copy_predef_vars(state->baseline_predef_vals,
+                               state->baseline_predef_names,
+                               &state->baseline_predef_count);
+    repl_eval_copy_scratch_arrays(state->baseline_scratch_arrays);
+    state->saved_t_playing = repl_state_variables().time_playing;
+    repl_dispatch_set_time_playing(0);
+}
+
+static void replay_init_playback_state(ReplayRuntimeState *state, int num_flat_cmds) {
+    state->active = 1;
+    state->state = REPLAY_PLAYING;
+    state->pc = 0;
+    state->accum = 0.0f;
+    replay_clear_fade_batches();
+    state->src_line_idx = -1;
+    state->total_flat_cmds = num_flat_cmds;
+    state->last_src_line = -1;
+}
+
 void replay_start(void) {
     FlatProgramView flat_program;
     int num_flat_cmds;
@@ -834,27 +860,8 @@ void replay_start(void) {
     }
 
     ReplayRuntimeState *state = replay_state_mut();
-    /* Full predef snapshot (vals + names + count). Required so the
-     * fade plan's later restore can route through repl_eval_restore_predef_vars
-     * and assign by NAME — replay spans multiple frames and the live
-     * predef table can be reshaped (workspace switch, scene load,
-     * undo across @declare) between this start and the eventual
-     * restore. */
-    repl_eval_copy_predef_vars(state->baseline_predef_vals,
-                               state->baseline_predef_names,
-                               &state->baseline_predef_count);
-    repl_eval_copy_scratch_arrays(state->baseline_scratch_arrays);
-    state->saved_t_playing = repl_state_variables().time_playing;
-    repl_dispatch_set_time_playing(0);
-
-    state->active = 1;
-    state->state = REPLAY_PLAYING;
-    state->pc = 0;
-    state->accum = 0.0f;
-    replay_clear_fade_batches();
-    state->src_line_idx = -1;
-    state->total_flat_cmds = num_flat_cmds;
-    state->last_src_line = -1;
+    replay_snapshot_baseline(state);
+    replay_init_playback_state(state, num_flat_cmds);
     repl_set_status("Replay: playing");
 }
 
