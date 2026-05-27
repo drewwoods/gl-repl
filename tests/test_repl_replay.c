@@ -100,7 +100,7 @@ static void test_replay_stepping(void) {
     g_replay_state = REPLAY_PAUSED;
 
     int initial_pc = g_replay_pc;
-    replay_advance();
+    replay_advance(repl_state_flat_program_view());
     ASSERT_TRUE("advance moves pc", g_replay_pc > initial_pc);
 
     replay_step_back();
@@ -129,14 +129,14 @@ static void test_replay_tessellation_stepping(void) {
     replay_start();
     g_replay_mode = REPLAY_MODE_POLYGON;
 
-    replay_advance();
+    replay_advance(repl_state_flat_program_view());
     ASSERT_TRUE("tess poly advance", g_replay_pc > 0);
 
     replay_step_back();
     ASSERT_TRUE("tess poly back", g_replay_pc == 0);
 
     g_replay_mode = REPLAY_MODE_VERTEX;
-    replay_advance();
+    replay_advance(repl_state_flat_program_view());
     ASSERT_TRUE("tess vert advance", g_replay_pc > 0);
 }
 
@@ -158,7 +158,7 @@ static void test_replay_fade_batches(void) {
     ASSERT_TRUE("batch alpha updated", replay_batch_alpha(&view.batches[0]) > 0.0f);
 
     int limits[5];
-    int lcount = replay_compute_fade_skip_limits(limits, 5);
+    int lcount = replay_compute_fade_skip_limits(repl_state_flat_program_view(), limits, 5);
     ASSERT_TRUE("fade skip limits computed", lcount >= 0);
 
     replay_tick_fade_batches(10.0f); // Age completely
@@ -247,10 +247,10 @@ static void test_misc_helpers(void) {
     int limit = replay_exec_limit();
     ASSERT_TRUE("exec limit", limit >= 0);
 
-    int fill_base = replay_fill_base_limit();
+    int fill_base = replay_fill_base_limit(repl_state_flat_program_view());
     ASSERT_TRUE("fill base limit", fill_base >= 0);
 
-    replay_prepare_frame(1);
+    replay_prepare_frame(repl_state_flat_program_view(), 1);
 
     float dummy[MAX_PREDEF_VARS];
     float scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
@@ -330,7 +330,7 @@ static void test_replay_var_assign_uses_flatten_args(void) {
      * focus-candidate command (the glVertex3f). */
     int safety = 1024;
     while (g_replay_pc < g_replay_total_flat && safety-- > 0)
-        replay_advance();
+        replay_advance(repl_state_flat_program_view());
 
     ASSERT_TRUE("replay reached end without runaway", safety > 0);
     ASSERT_TRUE("expand_args on by default", g_replay_expand_args == 1);
@@ -381,7 +381,7 @@ static void test_replay_single_arg_shape_gets_eval_annotation(void) {
     ASSERT_TRUE("replay started for single-arg shape", g_replay_active);
 
     while (g_replay_pc < g_replay_total_flat)
-        replay_advance();
+        replay_advance(repl_state_flat_program_view());
 
     SourceTextView text = source_document_view();
     ReplReplayAnnotationOutput out;

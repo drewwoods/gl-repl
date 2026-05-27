@@ -382,7 +382,7 @@ static BenchResult bench_replay_examples(int iters) {
             int safety = repl_state_flat_program_count() + 1;
             ReplayRuntimeState replay = replay_state_view();
             while (replay.state == REPLAY_PLAYING && safety-- > 0) {
-                replay_advance();
+                replay_advance(repl_state_flat_program_view());
                 steps++;
             }
             replay_stop();
@@ -480,7 +480,7 @@ static BenchResult bench_replay_long(int iters) {
         int safety = repl_state_flat_program_count() + 1;
         ReplayRuntimeState replay = replay_state_view();
         while (replay.state == REPLAY_PLAYING && safety-- > 0) {
-            replay_advance();
+            replay_advance(repl_state_flat_program_view());
             steps++;
         }
         replay_stop();
@@ -593,7 +593,7 @@ static void bench_render_one_fade_batch(int new_pc, int skip_pc, float alpha,
 /* Refresh the fade plan from the live replay state — bench reinstalls
  * fade batches every iteration, so the plan it walks must be rebuilt
  * each time. */
-static int bench_refresh_fade_plan(ReplayFadePlan *plan, int *base_limit_out) {
+static int bench_refresh_fade_plan(FlatProgramView program, ReplayFadePlan *plan, int *base_limit_out) {
     memset(plan, 0, sizeof(*plan));
     *base_limit_out = 0;
 
@@ -603,10 +603,10 @@ static int bench_refresh_fade_plan(ReplayFadePlan *plan, int *base_limit_out) {
     if (!replay_has_active_fades())
         return 0;
 
-    *base_limit_out = replay_fill_base_limit();
+    *base_limit_out = replay_fill_base_limit(program);
 
     ReplayFadeBatchView fade_batches = replay_fade_batches_view();
-    int batch_count = replay_compute_fade_skip_limits(plan->skip_limits,
+    int batch_count = replay_compute_fade_skip_limits(program, plan->skip_limits,
                                                            REPLAY_FADE_BATCH_MAX);
     if (batch_count > REPLAY_FADE_BATCH_MAX)
         batch_count = REPLAY_FADE_BATCH_MAX;
@@ -674,7 +674,7 @@ static BenchResult bench_fade_batches(int iters) {
              * age past REPLAY_FADE_DURATION doesn't silently reduce
              * the measured workload. */
             replay_bench_fade_install(old_pcs, new_pcs, installed_count, age);
-            int batch_count = bench_refresh_fade_plan(&plan, &base_limit);
+            int batch_count = bench_refresh_fade_plan(program, &plan, &base_limit);
             for (int b = 0; b < batch_count; b++) {
                 float alpha = plan.batch_alpha[b];
                 if (alpha <= 0.0f) continue;

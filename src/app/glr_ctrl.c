@@ -247,7 +247,7 @@ static SceneGuideSnapshot glr_ctrl_build_guide_snapshot(const SceneRenderConfig 
  * the post_fill_fn hook (to render the fading-batch overlay). */
 static ReplayFadePlan g_replay_fade_plan;
 
-static void glr_ctrl_build_replay_fade_plan(int replaying) {
+static void glr_ctrl_build_replay_fade_plan(FlatProgramView flat_program, int replaying) {
     ReplayFadeBatchView fade_batches;
     int batch_count;
 
@@ -268,9 +268,9 @@ static void glr_ctrl_build_replay_fade_plan(int replaying) {
     if (!replay_has_active_fades())
         return;
 
-    g_replay_fade_plan.base_limit = replay_fill_base_limit();
+    g_replay_fade_plan.base_limit = replay_fill_base_limit(flat_program);
     fade_batches = replay_fade_batches_view();
-    batch_count = replay_compute_fade_skip_limits(g_replay_fade_plan.skip_limits,
+    batch_count = replay_compute_fade_skip_limits(flat_program, g_replay_fade_plan.skip_limits,
                                                        REPLAY_FADE_BATCH_MAX);
     if (batch_count > REPLAY_FADE_BATCH_MAX)
         batch_count = REPLAY_FADE_BATCH_MAX;
@@ -696,7 +696,7 @@ static void glr_ctrl_tick_view_transition(float dt) {
     glr_ctrl_sync_camera_control_mode();
 }
 
-static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
+static void glr_ctrl_build_scene_config(FlatProgramView flat_program, SceneRenderConfig *config) {
     GlrRenderState render = glr_state_render();
     ReplRenderState repl_render = repl_state_render();
     GlrPresentationState presentation = glr_state_presentation();
@@ -845,7 +845,7 @@ static void glr_ctrl_build_scene_config(SceneRenderConfig *config) {
      * the polygon-mode tess-preview wireframe) install our post_fill_fn
      * so the scene calls back between the user-geometry fill and the
      * grid/axes/backdrop helpers. */
-    glr_ctrl_build_replay_fade_plan(replaying);
+    glr_ctrl_build_replay_fade_plan(flat_program, replaying);
     g_replay_fade_plan.tess_preview_active = replaying &&
                                              replay_mode() == REPLAY_MODE_VERTEX;
     if (g_replay_fade_plan.active || g_replay_fade_plan.tess_preview_active) {
@@ -1225,15 +1225,20 @@ void glr_ctrl_display_frame(void) {
     saved_flat_count = num_flat_cmds;
     repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
     repl_eval_copy_scratch_arrays(live_scratch_arrays);
-    if (replay_active())
-        repl_state_flat_program_set_count(replay_prepare_frame(saved_flat_count));
+    if (replay_active()) {
+        repl_state_flat_program_set_count(replay_prepare_frame(flat_program, saved_flat_count));
+        int post_prep_src_line = replay_src_line();
+        if (post_prep_src_line >= 0 && post_prep_src_line != frame_replay.src_line_idx) {
+            editor_scroll_follow_cursor_set(1);
+        }
+    }
 
     repl_refresh_render_state_strings();
     repl_refresh_camera_lines();
     prof_end(PROF_SNAPSHOT_PREP);
 
     prof_begin(PROF_SNAPSHOT_SCENE_CONFIG);
-    glr_ctrl_build_scene_config(&scene_config);
+    glr_ctrl_build_scene_config(flat_program, &scene_config);
     prof_end(PROF_SNAPSHOT_SCENE_CONFIG);
 
     prof_begin(PROF_SNAPSHOT_UI);
@@ -1546,6 +1551,10 @@ static const char *glr_ctrl_host_editor_input_get(void) {
     return editor_state_input().input;
 }
 
+static void glr_ctrl_host_set_time_playing(int playing) {
+    repl_state_variables_mut()->time_playing = playing;
+}
+
 /* The host-effect bridge routing core pipeline events to the UI and editor state. */
 static const ReplHostEffects g_glr_host_effects = {
     .status                     = ui_state_status_set,
@@ -1562,6 +1571,7 @@ static const ReplHostEffects g_glr_host_effects = {
     .completion_clear           = glr_ctrl_host_completion_clear,
     .completion_update          = glr_ctrl_host_completion_update,
     .host_input_get             = glr_ctrl_host_editor_input_get,
+    .set_time_playing           = glr_ctrl_host_set_time_playing,
 };
 
 /* Seed both overlay fade machines to the current presentation theme at steady full opacity. */
@@ -3440,10 +3450,11 @@ void glr_ctrl_tick(void) {
 
         if (replay->active && replay->state == REPLAY_PLAYING) {
             replay->accum += replay->speed * GLR_FRAME_DT_SECS;
+            FlatProgramView flat_program = repl_state_flat_program_view();
             while (replay->accum >= 1.0f &&
                    replay->state == REPLAY_PLAYING) {
                 replay->accum -= 1.0f;
-                replay_advance();
+                replay_advance(flat_program);
             }
         }
     }

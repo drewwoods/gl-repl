@@ -186,6 +186,7 @@ typedef struct {
     void (*completion_clear)(void);
     void (*completion_update)(void);
     const char *(*host_input_get)(void);
+    void (*set_time_playing)(int playing);
 } ReplHostEffects;
 
 void                   repl_install_host_effects(const ReplHostEffects *effects);
@@ -206,6 +207,7 @@ void        repl_dispatch_host_cursor_park(int line, int insert_mode);
 void        repl_dispatch_completion_clear(void);
 void        repl_dispatch_completion_update(void);
 const char *repl_dispatch_host_input_get(void);
+void        repl_dispatch_set_time_playing(int playing);
 
 const char *repl_mode_name(GLenum mode);
 GLenum      repl_current_begin_mode(void);

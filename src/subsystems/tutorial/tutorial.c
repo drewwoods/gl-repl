@@ -5,10 +5,10 @@
 #include <string.h>
 
 #include "repl/core.h"
-#include "repl/cfg_baseline.h"
+#include "repl/cfg_baseline.h" /* For repl_cfg_get_int, repl_cfg_set_int, and repl_cfg_known */
 #include "repl/load.h"
 #include "repl/scenes.h"
-#include "repl/state_owners.h" /* For repl_state_mark_flat_dirty, repl_state_mark_source_dirty, repl_state_parse_workspace_header_line, repl_cfg_get_int, repl_cfg_set_int, and repl_cfg_known */
+#include "repl/state_notify.h" /* For repl_state_mark_flat_dirty, repl_state_mark_source_dirty, and repl_state_parse_workspace_header_line */
 #include "repl/tutorials.h"
 #include "repl/export.h"
 #include "config.h"            /* REPL_DIAG_TEXT_MAX */

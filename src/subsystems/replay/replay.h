@@ -54,7 +54,7 @@ typedef enum {
 
 void replay_start(void);                /* Enter PLAYING state */
 void replay_stop(void);                 /* Enter OFF state, clear history */
-void replay_advance(void);              /* Increment PC by 1 */
+void replay_advance(FlatProgramView flat_program);              /* Increment PC by 1 */
 void replay_tick_fade_batches(float dt);/* Age and decay active fades */
 
 /* --- Seek operations --------------------------------------------------- */
@@ -76,18 +76,18 @@ void replay_toggle_play_pause(void);
 
 int  replay_exec_limit(void);           /* Current PC (what executor renders to) */
 int  replay_has_active_fades(void);     /* Any fades currently visible? */
-int  replay_fill_base_limit(void);      /* Highest PC reached so far */
+int  replay_fill_base_limit(FlatProgramView flat_program);      /* Highest PC reached so far */
 
 /* Compute skip limits for performance: scene_render.c can skip rendering
  * commands in ranges where no fade is active (optimization). */
-int  replay_compute_fade_skip_limits(int *out_limits, int max_count);
+int  replay_compute_fade_skip_limits(FlatProgramView flat_program, int *out_limits, int max_count);
 
 ReplayFadeBatchView replay_fade_batches_view(void);
 float replay_batch_alpha(const ReplayFadeBatch *batch);
 
 /* Per-frame: updates exec_limit based on speed multiplier and pause state,
  * captures geometry snapshots for new fades. Called each frame. */
-int  replay_prepare_frame(int full_flat_count);
+int  replay_prepare_frame(FlatProgramView flat_program, int full_flat_count);
 
 /* --- Vertex-overlay walk (vertex numbers / normal vectors / vertex dots) -
  *

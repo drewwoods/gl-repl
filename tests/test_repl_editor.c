@@ -2407,17 +2407,17 @@ int main() {
 
         replay_mode = REPLAY_MODE_VERTEX;
         replay_start();
-        replay_advance();
+        replay_advance(repl_state_flat_program_view());
         ASSERT_INT("replay vertex mode focuses first gluVertex",
                    replay_src_line, 2);
-        replay_advance();
+        replay_advance(repl_state_flat_program_view());
         ASSERT_INT("replay vertex mode focuses next gluVertex",
                    replay_src_line, 3);
         replay_stop();
 
         replay_mode = REPLAY_MODE_POLYGON;
         replay_start();
-        replay_advance();
+        replay_advance(repl_state_flat_program_view());
         ASSERT_INT("replay polygon mode focuses tess vertex",
                    replay_src_line, 4);
         replay_stop();

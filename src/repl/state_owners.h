@@ -11,6 +11,7 @@
 #define REPL_STATE_OWNERS_H
 
 #include "repl/state_views.h"
+#include "repl/state_notify.h"
 
 ReplDocumentState       *repl_state_document_mut(void);
 const GLCmd *repl_state_document_cmds(void);
@@ -53,8 +54,6 @@ void              repl_state_flat_program_set_current_block(int begin_idx,
                                                             int source_line_idx);
 void              repl_state_flat_program_clear_current_block(void);
 void              repl_state_flat_program_reset(void);
-void              repl_state_mark_flat_dirty(void);
-void              repl_state_mark_source_dirty(void);
 FlatProgramView   repl_state_flat_program_view(void);
 
 ReplVariableView         repl_state_variables(void);
@@ -95,7 +94,6 @@ ReplImportExportView        repl_state_import_export(void);
 ReplImportExportState       *repl_state_import_export_mut(void);
 void                         repl_state_import_export_reset(void);
 void                         repl_state_refresh_workspace_header_lines(void);
-int                          repl_state_parse_workspace_header_line(const char *line);
 
 
 

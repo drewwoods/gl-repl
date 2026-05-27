@@ -153,8 +153,6 @@ static void replay_set_src_line(int src_line) {
     state->src_line_idx = src_line;
     if (src_line != state->last_src_line) {
         state->last_src_line = src_line;
-        if (src_line >= 0)
-            repl_dispatch_follow_cursor(1);
     }
 }
 
@@ -174,8 +172,7 @@ ReplayFadeBatchView replay_fade_batches_view(void) {
     return view;
 }
 
-int replay_compute_fade_skip_limits(int *out_limits, int max_count) {
-    FlatProgramView flat_program = repl_state_flat_program_view();
+int replay_compute_fade_skip_limits(FlatProgramView flat_program, int *out_limits, int max_count) {
     const GLCmd *flat_cmds = flat_program.cmds;
     int num_flat_cmds = flat_program.cmd_count;
     ReplayFadeBatchView fade_batches = replay_fade_batches_view();
@@ -306,8 +303,7 @@ int replay_has_active_fades(void) {
     return state.active && state.fade_batch_count > 0;
 }
 
-int replay_fill_base_limit(void) {
-    FlatProgramView flat_program = repl_state_flat_program_view();
+int replay_fill_base_limit(FlatProgramView flat_program) {
     int num_flat_cmds = flat_program.cmd_count;
 
     if (!replay_has_active_fades())
@@ -849,7 +845,7 @@ void replay_start(void) {
                                &state->baseline_predef_count);
     repl_eval_copy_scratch_arrays(state->baseline_scratch_arrays);
     state->saved_t_playing = repl_state_variables().time_playing;
-    repl_state_variables_mut()->time_playing = 0;
+    repl_dispatch_set_time_playing(0);
 
     state->active = 1;
     state->state = REPLAY_PLAYING;
@@ -864,15 +860,14 @@ void replay_start(void) {
 
 void replay_stop(void) {
     ReplayRuntimeState *state = replay_state_mut();
-    repl_state_variables_mut()->time_playing = state->saved_t_playing;
+    repl_dispatch_set_time_playing(state->saved_t_playing);
     state->active = 0;
     state->state = REPLAY_OFF;
     /* pc, accum, total_flat_cmds, last_src_line, and src_line_idx are re-initialized in replay_start() before any playback read, so they do not need to be zeroed here. */
     replay_clear_fade_batches();
 }
 
-void replay_advance(void) {
-    FlatProgramView flat_program = repl_state_flat_program_view();
+void replay_advance(FlatProgramView flat_program) {
     int num_flat_cmds = flat_program.cmd_count;
     ReplayRuntimeState *state = replay_state_mut();
     int old_pc;
@@ -959,8 +954,7 @@ void replay_toggle_play_pause(void) {
     }
 }
 
-int replay_prepare_frame(int full_flat_count) {
-    FlatProgramView flat_program = repl_state_flat_program_view();
+int replay_prepare_frame(FlatProgramView flat_program, int full_flat_count) {
     int num_flat_cmds = flat_program.cmd_count;
     ReplayRuntimeState *state = replay_state_mut();
     if (!state->active)
@@ -1149,7 +1143,7 @@ int replay_handle_special(int key) {
         return 1;
     }
     if (key == GLUT_KEY_RIGHT) {
-        replay_advance();
+        replay_advance(repl_state_flat_program_view());
         return 1;
     }
     if (key == GLUT_KEY_UP) {
