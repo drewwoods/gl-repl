@@ -194,16 +194,6 @@ void editor_buffer_clear(void) {
 int editor_buffer_apply_compiled_change(const struct ReplCompiledChange_s *change) {
     if (!change) return 0;
 
-    int count = change->count;
-    if (count > MAX_COMMIT_CMDS)
-        count = MAX_COMMIT_CMDS;
-
-    /* Build a const char *[] view of the change's text array — the
-     * editor_buffer_* mutators take a list of pointers. */
-    const char *line_ptrs[MAX_COMMIT_CMDS];
-    for (int i = 0; i < count; i++)
-        line_ptrs[i] = change->text[i];
-
     /* Optional pre-insert delete fires first to mirror the cmd-store
      * apply ordering. `change->pos` is interpreted in post-delete
      * coordinates. */
@@ -218,12 +208,22 @@ int editor_buffer_apply_compiled_change(const struct ReplCompiledChange_s *chang
         return 1;
     case REPL_COMPILED_INSERT_ONE:
         return editor_buffer_insert_line(change->pos, change->text[0]);
-    case REPL_COMPILED_INSERT_MANY:
-        return editor_buffer_insert_lines(change->pos, line_ptrs, count);
+    case REPL_COMPILED_INSERT_MANY: {
+        /* Build a const char *[] view of the change's text array — the
+         * editor_buffer_* mutators take a list of pointers. We clamp to
+         * MAX_COMMIT_CMDS when copying to avoid out-of-bounds reads. */
+        const char *line_ptrs[MAX_COMMIT_CMDS];
+        int insert_count = change->count;
+        if (insert_count > MAX_COMMIT_CMDS)
+            insert_count = MAX_COMMIT_CMDS;
+        for (int i = 0; i < insert_count; i++)
+            line_ptrs[i] = change->text[i];
+        return editor_buffer_insert_lines(change->pos, line_ptrs, insert_count);
+    }
     case REPL_COMPILED_REPLACE_ONE:
         return editor_buffer_replace_line(change->pos, change->text[0]);
     case REPL_COMPILED_DELETE_RANGE:
-        return editor_buffer_delete_range(change->pos, count);
+        return editor_buffer_delete_range(change->pos, change->count);
     }
     return 0;
 }
