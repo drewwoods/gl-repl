@@ -24,6 +24,100 @@
 > subsystems audit's #30). `export.c` is still the heaviest file at
 > 3254 lines despite shedding ~1500 lines to `text_helpers.c`.
 
+## Status summary (verified 2026-05-27)
+
+82 findings total. 14 closed (✅), 68 still open. No status changes
+since the audit was produced — all open findings verified against
+current HEAD.
+
+| # | Sev | Tier | Status | Finding (short) |
+|---|-----|------|--------|-----------------|
+| 1 | 🔴 | A | ✅ Done | `help_text.c` app/ include (layering inversion) |
+| 2 | 🟡 | B | Open | `parse_cfg` double-applies `@cfg` lines |
+| 3 | 🔴 | A | ✅ Done | `repl_copy/restore_predef_values` shape assumption |
+| 4 | 🔴 | B | ✅ Done | `repl_config_bag_set` silently truncates |
+| 5 | 🔴 | B | ✅ Done | `UserScene` stack allocations exceed thread stacks |
+| 6 | 🟡 | — | Open | `repl_state_capture/restore` excludes `g_user_scenes[]` |
+| 7 | 🟡 | A | ✅ Done | `source_scope.c` reads through `_mut()` |
+| 8 | 🔴 | A | ✅ Done | `import_feed_one_line` ignores `load_err` |
+| 9 | 🔴 | A | ✅ Done | `repl_export_load_from_file` swallows fclose/ferror |
+| 10 | 🔴 | A | ✅ Done | `flatten_source_lighting_enabled` ignores control flow |
+| 11 | 🔴 | A | ✅ Done | `source_scope_cmd_indent` 1-byte overwrite |
+| 12 | 🔴 | A | ✅ Done | `try_apply_example_camera_header` return discarded |
+| 13 | 🟡 | A | Open | `repl_eval_parse_exprs` docstring promises `-1 on error` |
+| 14 | 🟡 | C | ✅ Done | 🔀 `_mut()` for read-only work (multi-file) |
+| 15 | 🔵 | C | Open | `repl_compile_*` duplicates `editor_compile_*` |
+| 16 | 🔵 | C | Open | `repl_compile_dispatch` covers only 2 of 6 entry points |
+| 17 | 🔵 | B | Open | Three parse handlers share trim/split skeleton |
+| 18 | 🔵 | A | Open | Three identical cache prologues in `replay_annotations.c` |
+| 19 | 🔵 | B | Open | Five slug/walk duplicates missed by closed #14 |
+| 20 | 🔵 | B | Open | Two near-identical identifier walkers in `eval.c` |
+| 21 | 🔵 | B | Open | REPL↔C function map duplicated three ways |
+| 22 | 🟡 | — | Open | Executor includes `subsystems/replay/*` (layering) |
+| 23 | 🟡 | — | Open | Executor writes status messages to live REPL state |
+| 24 | 🔵 | — | Open | CMD_IF_BEGIN evaluator duplicated (flatten vs executor) |
+| 25 | 🟡 | B | Open | `WRITE_TEXT` macro — third "write text" pattern |
+| 26 | 🟡 | — | Open | `REPL_FUNC_SLOT_LIST` hard-codes 10 entries |
+| 27 | 🟡 | — | Open | Stray `func0(var0)` autocomplete row |
+| 28 | 🔵 | — | Open | `replay_apply_state_cmd` parallel to executor dispatch |
+| 29 | 🟡 | B | Open | `g_pre_example.valid` still a parallel scalar |
+| 30 | 🟡 | — | Open | `g_pending_workspace_dir` write-then-caller-reads |
+| 31 | 🟡 | B | Open | `text_helpers.c` has no `.h` |
+| 32 | 🟡 | B | Open | 🔀 Hardcoded `[16]`/`[64]` widths |
+| 33 | 🟡 | B | Open | `MAX_DEFERRED_VAR_VALUES=64` vs `MAX_PREDEF_VARS=24` |
+| 34 | 🟢 | A | Open | `repl_workspace_dir` / `repl_state_workspace_dir` dual name |
+| 35 | 🟢 | A | Open | `core.c` header comment stale |
+| 36 | 🟢 | A | Open | `command_store.h` dead inline + policy query |
+| 37 | 🔵 | C | Open | `GLCmd.text[64]` + `var_names[8][16]` per command |
+| 38 | 🟢 | A | Open | `examples.h` / `example_loader.c` parallel API names |
+| 39 | 🔵 | A | Open | Three bridge ternary patterns |
+| 40 | 🔵 | — | Open | Predef-var capture/restore duplicated 5× |
+| 41 | 🟡 | C | Open | Tutorial GRID_THEME literals decoupled |
+| 42 | 🔵 | — | Open | CatalogTagOps glue remains after closed #12 |
+| 43 | 🔵 | — | Open | `tag_bit` byte-identical inlines |
+| 44 | 🟡 | B | Open | `cmd_emit` silently drops rows past cap |
+| 45 | 🟡 | B | Open | `help_group_header` switch drops new groups |
+| 46 | 🟡 | A | Open | `g_tabs[3]` / `tab_count=3` hand-agreement |
+| 47 | 🔵 | — | Open | `import_make_repl_tess_line` scrape loops |
+| 48 | 🔵 | B | Open | `repl_apply_predef_ops` redundant re-lookup |
+| 49 | 🔴 | B | ✅ Done | `repl_apply_can_apply_compiled_change` preflight gap |
+| 50 | 🟡 | B | Open | `MAX_SCRATCH_OPS_PER_COMMIT` wildly oversized |
+| 51 | 🔵 | B | Open | Five file-level statics in executor.c |
+| 52 | 🟡 | — | Open | `command_spec.c` terminator positional zeros |
+| 53 | 🟢 | A | Open | Six of seven `repl_format_*` functions dead |
+| 54 | 🟢 | A | Open | `compile_scope_indent` one-line forwarder |
+| 55 | 🟢 | A | Open | `make_auto_normal` dead `insert_pos` param |
+| 56 | 🟢 | A | Open | `flatten_get_for_var_name` dead `cmd` param |
+| 57 | 🟢 | A | Open | `repl_executor_camera_distance_source()` zero callers |
+| 58 | 🟢 | A | Open | `eval_primary` dead `args[1]=0.0f` reset |
+| 59 | 🟢 | A | Open | Defensive guard in `flatten_for_loop` can't fail |
+| 60 | 🟢 | A | Open | `vis_total` populated but unread |
+| 61 | 🟢 | A | Open | Dead `(void)warnings;` in `parse_snippet_declare` |
+| 62 | 🟢 | A | Open | Dead `!section->enabled` in `emit_export_scaffold` |
+| 63 | 🟢 | A | Open | `(void)off;` in `write_canonical_cmd_as_c` |
+| 64 | 🟢 | A | Open | `ReplayBeforeStepFn ctx` param unused |
+| 65 | 🟢 | A | Open | `replay_subst_scratch_reads` redundant recompute |
+| 66 | 🟢 | A | Open | `state.c` 13 file-scope macros with no readers |
+| 67 | 🟢 | A | Open | Stale phase-N.M comment crumbs |
+| 68 | 🔵 | C | Open | `repl_execute_program` 324-line god switch |
+| 69 | 🔵 | C | Open | `export.c` still 3254 lines |
+| 70 | 🟡 | — | Open | `eval.h` `MAX_EXPR_VARS` doc references deleted modules |
+| 71 | 🟡 | — | Open | `g_predef_vars` macros route reads through `_mut()` |
+| 72 | 🟢 | — | Open | `repl_state_init_defaults` one-line forwarder |
+| 73 | 🟡 | — | Open | `repl_state_get_defaults()` hidden mutation |
+| 74 | 🟡 | — | Open | `first_non_decl` leaks `CMD_VAR_DECLARE` policy |
+| 75 | 🟡 | D | Open | `repl_dispatch_*` 4 of 12 tutorial-only trampolines |
+| 76 | 🟡 | — | Open | `WORKSPACE_DIR_MAX` alias + `+256` magic |
+| 77 | 🟢 | — | Open | "Observably overwritten" no-op comment |
+| 78 | 🟡 | — | Open | `scroll_to_display_function` string-matches `"void display()"` |
+| 79 | 🟢 | — | Open | Dead `case 5:`/`case 6:` in `format_evaluated_cmd` |
+| 80 | 🟡 | D | Open | `s_replay_text_view` file-level set-then-read state |
+| 81 | 🟡 | — | Open | `TUTORIAL_LOCKED_LINE_MAX` doubles as cap and validator ceiling |
+| 82 | 🔵 | — | Open | `tutorial_step_at()` O(N) sentinel walk |
+
+**By severity (open only):** 0 🔴, 25 🟡, 19 🟢, 24 🔵 = 68 open.
+**By tier (open only):** A: 22, B: 18, C: 6, D: 2, unclassified: 20.
+
 ## How to read this
 
 Severity grouping mirrors the previous audits:

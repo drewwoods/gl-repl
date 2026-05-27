@@ -258,6 +258,78 @@ Validation:
 - ./scripts/check-editor-repl-surface.sh
 ```
 
+## Status summary (verified 2026-05-27)
+
+| # | Sev | Tier | Status | Finding (short) |
+|---|---|---|---|---|
+| 1 | 🔴 | B | open | Asymmetric modal-capture (rename vs file-prompt) |
+| 2 | 🔴 | A | ✅ closed | `_mut()` for read-only `memcmp` |
+| 3 | 🔴 | A | ✅ closed | Double-eval `needs_navigation_commit` |
+| 4 | 🔴 | A | ✅ closed | Open-coded input clear in `_then_insert` |
+| 5 | 🔴 | B | open | `apply_external_change` callers must publish status |
+| 6 | 🔴 | B | open | `apply_compiled_change_full` partial commit on bad input |
+| 7 | 🔴 | B | ✅ closed | Missing `accept` test on completion provider |
+| 8 | 🟡 | B | open | Editor reaches into peer subsystems from input dispatch |
+| 9 | 🟡 | A | ✅ closed | `parse_for_overwrite_enter` name mismatch |
+| 10 | 🟡 | A | ✅ closed | Doc-comment detached from its function |
+| 11 | 🟡 | B | open | `clear_all_cmds` / `reset_for_new_scene` shared tail dup |
+| 12 | 🟡 | A | ✅ closed | `editor_committed_line_text` no-op wrapper |
+| 13 | 🟡 | A | ✅ closed | `enter_parse_err` vs `editor_parse_err` naming |
+| 14 | 🟡 | A | ✅ closed | Insert-mode parse error uses wrong status sink |
+| 15 | 🟡 | A | ✅ closed | `EditorUndoRingState` docstring claims test-only |
+| 16 | 🟡 | A | ✅ closed | `editor_feed_line` open-codes `editor_input_set_text` |
+| 17 | 🟡 | A | ✅ closed | `edit_ops.h` docstring drift on `_delete_left` |
+| 18 | 🟡 | B | open | Sixth `collect_visible_vars` site in `compile_for_loop` |
+| 19 | 🟡 | A | ✅ closed | `commit.c` file header describes pre-services flow |
+| 20 | 🟡 | A | ✅ closed | `apply_compiled_three_halves` misnamed (4 ops) |
+| 21 | 🟡 | B | open | Two `commit_message` fields, no layering doc |
+| 22 | 🟡 | B | ✅ closed | `_then_insert` asymmetric arms undocumented |
+| 23 | 🟡 | A | ✅ closed | `end_type` docstring claims nonexistent consumer |
+| 24 | 🟡 | A | ✅ closed | `commit.h` return-shape doc literally wrong |
+| 25 | 🟡 | B | ✅ closed | `editor_compile_*` err-buffer null-check diverges |
+| 26 | 🟡 | B | open | Func-def alias pre-step duplicated editor/repl |
+| 27 | 🟡 | A | ✅ closed | Stale "no cross-TU wrapper" comment |
+| 28 | 🟡 | B | open | `editor_undo_snapshot_restore` bypasses generation check |
+| 29 | 🟡 | B | open | `editor_undo_snapshot_restore` undocumented side effects |
+| 30 | 🟡 | B | ✅ closed | `editor_state_clipboard()` returns ~1 MB by value |
+| 31 | 🟡 | B | ✅ closed | `editor_state_autocomplete()` returns ~2 KB by value |
+| 32 | 🟡 | B | open | `_count_set(0)` and `_clear()` are aliases |
+| 33 | 🟡 | C | open | `editor → ui` layering inversion via UI typedefs |
+| 34 | 🟡 | B | open | Inline-modal `begin` re-entry semantics diverge |
+| 35 | 🟡 | B | open | Help-overlay-close logic duplicated + layering trap |
+| 36 | 🟡 | A | ✅ closed | Inline-overlay active predicates inconsistent sentinels |
+| 37 | 🟢 | A | open | `editor_reset_for_new_scene` exported with no docstring |
+| 38 | 🟢 | A | ✅ closed | `editor_take_input_effects` hidden reset side effect |
+| 39 | 🟢 | B | ✅ closed | `EditorServices` down to 1 method on 4 sites |
+| 40 | 🟢 | A | ✅ closed | `_take` / `_set` could be static to `commit.c` |
+| 41 | 🟢 | A | ✅ closed | Redundant `newly_aliased_slot` assignment |
+| 42 | 🟢 | B | open | 8 `editor_state_*` pairs with zero production callers |
+| 43 | 🟢 | B | open | `editor_state_clipboard_clear()` zero production callers |
+| 44 | 🟢 | A | ✅ closed | Vestigial forward-decl block in `state.c` |
+| 45 | 🟢 | B | open | `editor_help_session_mut()` zero callers |
+| 46 | 🟢 | B | open | `help_session_capture/_restore` test-only |
+| 47 | 🟢 | B | open | `editor_completion_provider()` test-only |
+| 48 | 🔵 | C | open | `commit_current_input` god-function (219 lines) |
+| 49 | 🔵 | C | open | `parse_for_overwrite_enter` 50% structural dup |
+| 50 | 🔵 | C | open | `compile_func_def` (267L) and `compile_for_loop` (249L) |
+| 51 | 🔵 | C | open | `apply_swatch_change` wrong neighborhood |
+| 52 | 🔵 | D | withdrawn | `editor_state_input()` not a 1 KB copy (factually wrong) |
+| 53 | 🔵 | C | open | `state.h` 466-line junk drawer |
+| 54 | 🔵 | C | open | Five different slice-getter shapes |
+| 55 | 🔵 | C | open | `editor_state_capture/restore` test-only 3.2 MB |
+| 56 | 🔵 | C | open | Dead O(N) per-line override lookup |
+| 57 | 🔵 | C | open | `inline_rename.c` / `inline_file_prompt.c` 90% dup |
+
+**Totals:** 27 closed, 1 withdrawn, 29 open.
+
+By severity (open only): 3 🔴, 11 🟡, 6 🟢, 9 🔵.
+
+By tier (open only): 1 Tier A (#37), 18 Tier B, 10 Tier C, 0 Tier D.
+
+All Tier A items have landed. The remaining open items are Tier B / Tier C work.
+
+---
+
 ## Headline take
 
 57 findings total; #52 withdrawn (factually wrong — see finding),
