@@ -21,6 +21,7 @@
 #define g_line_smooth_enabled (glr_state_render_mut()->line_smooth_enabled)
 
 #include "support/test_harness.h"
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -827,6 +828,40 @@ static void test_example_subheading_metadata(void) {
  *
  * Precedence chain under test: example `@cfg` > tag default > global
  * default. */
+/* Audit #41: example catalogs must use symbolic value names for
+ * scene-enum slugs (grid, axes, backdrop) so reordering the matching
+ * enum in src/scene/themes.h can't silently shift an example to a
+ * different theme. Scan every example's leading metadata block; any
+ * `@cfg <slug> = <val>` that targets a scene-enum slug must have a
+ * non-digit value (i.e., a symbolic name, not a raw integer). */
+static void test_example_cfg_uses_symbolic_names(void) {
+    static const char *const enum_slugs[] = { "grid", "axes", "backdrop" };
+    int n = repl_example_count();
+    for (int i = 0; i < n; i++) {
+        const char *const *lines = repl_example_lines(i);
+        if (!lines) continue;
+        for (int li = 0; lines[li]; li++) {
+            const char *line = lines[li];
+            if (strncmp(line, "// @cfg ", 8) != 0) break;  /* end of metadata */
+            const char *body = line + 8;
+            for (int s = 0; s < (int)(sizeof(enum_slugs) / sizeof(*enum_slugs)); s++) {
+                size_t slen = strlen(enum_slugs[s]);
+                if (strncmp(body, enum_slugs[s], slen) != 0) continue;
+                const char *p = body + slen;
+                while (*p == ' ') p++;
+                if (*p != '=') continue;
+                p++;
+                while (*p == ' ') p++;
+                char buf[160];
+                snprintf(buf, sizeof(buf),
+                         "example '%s' line '%s' uses symbolic value (not a digit)",
+                         repl_example_name(i), line);
+                ASSERT_TRUE(buf, !isdigit((unsigned char)*p));
+            }
+        }
+    }
+}
+
 static void test_example_tag_default_cfg(void) {
     int bezier_idx     = find_example_index_by_name("Bezier curve with guides");
     int cube_idx       = find_example_index_by_name("Lit cube");
@@ -1113,6 +1148,7 @@ int main(int argc, char **argv) {
     test_example_subheading_metadata();
     test_example_tag_default_cfg();
     test_example_tag_default_dispatch();
+    test_example_cfg_uses_symbolic_names();
 
     {
         static const char *const no_cfg_reset_example[] = {

@@ -175,19 +175,19 @@ static const TutorialStep g_tutorial_feature_tour_steps[] = {
     STEP_REQUIRE(NULL,
         "// Press F7 to turn on vertex outlines; they trace each edge.",
         "vertex_outlines", 1),
-    STEP_SET(NULL,
+    STEP_SET_SYM(NULL,
         "// The Radar grid backdrop looks like this.",
-        "grid", 10 /* GRID_THEME_RADAR */),
-    STEP_SET(NULL,
+        "grid", "GRID_THEME_RADAR"),
+    STEP_SET_SYM(NULL,
         "// And the Focus grid backdrop looks like this.",
-        "grid", 6 /* GRID_THEME_FOCUS */),
+        "grid", "GRID_THEME_FOCUS"),
     STEP_SENTINEL,
 };
 
 static const char *const g_tutorial_feature_tour_cfg[] = {
     "// @cfg view_mode = 0",        /* 3D — depth gives the grid themes context */
     "// @cfg vertex_outlines = 0",  /* baseline: REQUIRE will ask the user to turn this on */
-    "// @cfg grid = 0",             /* baseline: SET steps will showcase Radar then Focus */
+    "// @cfg grid = GRID_THEME_OFF", /* baseline: SET steps will showcase Radar then Focus */
     NULL,
 };
 
