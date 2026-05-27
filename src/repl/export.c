@@ -1458,10 +1458,8 @@ static void write_render_body_range_as_c(FILE *f, int start, int end_idx,
  * exports stay zero-overhead. */
 static int export_count_enabled_passes(void) {
     int count = 1;
-    if (g_export_cfg_bridge && g_export_cfg_bridge->get_int) {
-        if (g_export_cfg_bridge->get_int(k_cfg_slug_vertex_outlines, 0)) count++;
-        if (g_export_cfg_bridge->get_int(k_cfg_slug_vertex_points, 0)) count++;
-    }
+    if (repl_cfg_get_int(k_cfg_slug_vertex_outlines, 0)) count++;
+    if (repl_cfg_get_int(k_cfg_slug_vertex_points, 0)) count++;
     return count;
 }
 

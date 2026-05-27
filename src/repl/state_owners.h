@@ -90,7 +90,6 @@ void                   repl_state_render_reset_defaults(void);
 
 ReplSceneRuntimeState    repl_state_scenes(void);
 ReplSceneRuntimeState       *repl_state_scenes_mut(void);
-void                         repl_state_workspace_set_dir(const char *dir);
 
 ReplImportExportView        repl_state_import_export(void);
 ReplImportExportState       *repl_state_import_export_mut(void);
