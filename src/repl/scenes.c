@@ -206,12 +206,9 @@ static void save_scene_to_slot(int idx, const char *name, int edit_line) {
                               source_text_line(text, i));
     s->num_cmds        = repl_state_document_count();
     s->edit_line       = edit_line;
-    s->num_predef_vars = g_num_predef_vars;
-    for (int i = 0; i < g_num_predef_vars; i++) {
-        s->predef_vals[i] = g_predef_vars[i].value;
-        memcpy(s->predef_names[i], g_predef_vars[i].name,
-               sizeof(s->predef_names[i]));
-    }
+    repl_eval_copy_predef_vars(s->predef_vals,
+                               s->predef_names,
+                               &s->num_predef_vars);
     repl_eval_copy_scratch_arrays(s->scratch_arrays);
     for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {
         const char *alias = repl_func_alias_get(slot);
@@ -292,12 +289,9 @@ static void load_scene_from_slot(int idx) {
     if (!load_commands_into_live(s->cmds, s->lines, s->num_cmds, s->edit_line))
         return;
     repl_state_flat_program_set_count(0);
-    g_num_predef_vars = s->num_predef_vars;
-    for (int i = 0; i < s->num_predef_vars; i++) {
-        g_predef_vars[i].value = s->predef_vals[i];
-        memcpy(g_predef_vars[i].name, s->predef_names[i],
-               sizeof(g_predef_vars[i].name));
-    }
+    repl_eval_restore_predef_vars(s->predef_vals,
+                                  s->predef_names,
+                                  s->num_predef_vars);
     repl_eval_restore_scratch_arrays(s->scratch_arrays);
     /* Restore the per-scene func-alias table. Each scene owns its own
      * mapping so renaming `drawCube` in scene A doesn't reach into B. */
@@ -391,12 +385,9 @@ static void install_scene_into_live(int slot) {
     if (!s->used) return;
     if (!load_commands_into_live(s->cmds, s->lines, s->num_cmds, s->edit_line))
         return;
-    g_num_predef_vars = s->num_predef_vars;
-    for (int i = 0; i < s->num_predef_vars; i++) {
-        g_predef_vars[i].value = s->predef_vals[i];
-        memcpy(g_predef_vars[i].name, s->predef_names[i],
-               sizeof(g_predef_vars[i].name));
-    }
+    repl_eval_restore_predef_vars(s->predef_vals,
+                                  s->predef_names,
+                                  s->num_predef_vars);
     repl_eval_restore_scratch_arrays(s->scratch_arrays);
     repl_func_alias_clear_all();
     for (int alias_slot = 0; alias_slot < REPL_FUNC_SLOT_COUNT; alias_slot++) {
@@ -447,12 +438,9 @@ static void stash_live_state(UserScene *dst) {
                               source_text_line(text, i));
     dst->num_cmds        = repl_state_document_count();
     dst->edit_line       = repl_dispatch_edit_line_get();
-    dst->num_predef_vars = g_num_predef_vars;
-    for (int i = 0; i < g_num_predef_vars; i++) {
-        dst->predef_vals[i] = g_predef_vars[i].value;
-        memcpy(dst->predef_names[i], g_predef_vars[i].name,
-               sizeof(dst->predef_names[i]));
-    }
+    repl_eval_copy_predef_vars(dst->predef_vals,
+                               dst->predef_names,
+                               &dst->num_predef_vars);
     repl_eval_copy_scratch_arrays(dst->scratch_arrays);
     for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {
         const char *alias = repl_func_alias_get(slot);
@@ -472,12 +460,9 @@ static void restore_live_from_stash(const UserScene *src) {
     if (!load_commands_into_live(src->cmds, src->lines, src->num_cmds,
                                  src->edit_line))
         return;
-    g_num_predef_vars = src->num_predef_vars;
-    for (int i = 0; i < src->num_predef_vars; i++) {
-        g_predef_vars[i].value = src->predef_vals[i];
-        memcpy(g_predef_vars[i].name, src->predef_names[i],
-               sizeof(g_predef_vars[i].name));
-    }
+    repl_eval_restore_predef_vars(src->predef_vals,
+                                  src->predef_names,
+                                  src->num_predef_vars);
     repl_eval_restore_scratch_arrays(src->scratch_arrays);
     repl_func_alias_clear_all();
     for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {
