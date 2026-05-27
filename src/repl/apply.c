@@ -152,11 +152,8 @@ void repl_apply_predef_ops(const ReplCompiledChange *change) {
     for (int op_idx = 0; op_idx < change->predef_op_count; op_idx++) {
         const ReplPredefOp *op = &change->predef_ops[op_idx];
         if (op->kind == REPL_PREDEF_OP_DECLARE) {
-            repl_eval_declare_predef_var(op->name, NULL, 0);
-            if (op->has_value) {
-                int idx = repl_eval_find_predef_var_idx(op->name);
-                if (idx >= 0) g_predef_vars[idx].value = op->value;
-            }
+            float val = op->has_value ? op->value : 0.0f;
+            repl_eval_declare_predef_var_with_value(op->name, val, NULL, 0);
         } else if (op->kind == REPL_PREDEF_OP_SET_VALUE && op->has_value) {
             int idx = repl_eval_find_predef_var_idx(op->name);
             if (idx >= 0) g_predef_vars[idx].value = op->value;

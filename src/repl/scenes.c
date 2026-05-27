@@ -89,11 +89,8 @@ static uint32_t  g_user_scene_tick = 0;
 
 /* Captured scene-presentation cfg from before the user loaded an example,
  * used to restore the pre-example state when they leave the example. The
- * `valid` flag distinguishes "no capture yet" from "captured empty bag". */
-static struct {
-    ReplConfigBag cfg;
-    int              valid;
-} g_pre_example;
+ * `valid` flag inside ReplConfigBag distinguishes "no capture yet" from "captured empty bag". */
+static ReplConfigBag g_pre_example;
 
 static ReplConfigBag *scene_cfg_mut(int slot) {
     if (slot < 0 || slot >= MAX_USER_SCENES) return NULL;
@@ -111,16 +108,15 @@ static void scene_cfg_clear(int slot) {
 }
 
 static ReplConfigBag *pre_example_cfg_mut(void) {
-    return &g_pre_example.cfg;
+    return &g_pre_example;
 }
 
 static const ReplConfigBag *pre_example_cfg(void) {
-    return &g_pre_example.cfg;
+    return &g_pre_example;
 }
 
 static void pre_example_cfg_clear(void) {
-    repl_config_bag_clear(&g_pre_example.cfg);
-    g_pre_example.valid = 0;
+    repl_config_bag_clear(&g_pre_example);
 }
 
 static int pre_example_cfg_valid(void) {

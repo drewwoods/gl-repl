@@ -10,6 +10,7 @@
 #include "repl/scenes.h"
 #include "repl/state_owners.h" /* For repl_state_mark_flat_dirty, repl_state_mark_source_dirty, and repl_state_parse_workspace_header_line */
 #include "repl/tutorials.h"
+#include "repl/export.h"
 #include "config.h"            /* REPL_DIAG_TEXT_MAX */
 
 static float clamp01(float value) {
@@ -85,7 +86,7 @@ static void tutorial_capture_cfg_baseline(int idx) {
     char slug[REPL_CFG_KEY_MAX];
     const char *const *cfg = repl_tutorial_cfg_lines(idx);
     for (int i = 0; cfg && cfg[i]; i++) {
-        if (repl_config_extract_slug(cfg[i], slug, sizeof slug))
+        if (repl_config_extract_slug(cfg[i], slug, sizeof slug, NULL))
             tutorial_cfg_baseline_record_one(slug);
     }
     int n = repl_tutorial_step_count(idx);
@@ -435,7 +436,7 @@ static int tutorial_validate_slugs(int idx, char *err, int err_size) {
     char slug[REPL_CFG_KEY_MAX];
     const char *const *cfg = repl_tutorial_cfg_lines(idx);
     for (int i = 0; cfg && cfg[i]; i++) {
-        if (!repl_config_extract_slug(cfg[i], slug, sizeof slug))
+        if (!repl_config_extract_slug(cfg[i], slug, sizeof slug, NULL))
             continue;  /* mal-shaped @cfg line — repl parser will diag */
         if (!repl_cfg_known(slug)) {
             if (err_size > 0)
@@ -515,6 +516,7 @@ void tutorial_start(int idx) {
     const char *const *cfg = repl_tutorial_cfg_lines(idx);
     for (int i = 0; cfg && cfg[i]; i++)
         repl_state_parse_workspace_header_line(cfg[i]);
+    repl_export_apply_pending_cfg();
 
     TutorialRuntimeState *state = tutorial_state_mut();
     state->active = 1;

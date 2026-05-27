@@ -103,6 +103,7 @@ typedef enum {
     REPL_HELP_GROUP_GLUT_SHAPES, /* "GLUT Solid Shapes:" */
     REPL_HELP_GROUP_GLU_TESS,    /* "GLU Tessellator (concave / complex polygons):" */
     REPL_HELP_GROUP_MATH,        /* "Math Functions:" */
+    REPL_HELP_GROUP_COUNT
 } ReplHelpGroup;
 
 typedef struct {

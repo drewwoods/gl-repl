@@ -175,40 +175,12 @@ static void reset_example_presentation_defaults(unsigned int tag_mask) {
 
 static int example_cfg_extract_slug(const char *text,
                                     char *slug, int slug_sz) {
-    const char *p = text;
-    int slug_len = 0;
-
-    if (!text || !slug || slug_sz < 2)
+    const char *end_p = NULL;
+    if (!repl_config_extract_slug(text, slug, (size_t)slug_sz, &end_p))
         return 0;
-
-    p = example_cam_skip_ws(p);
-    if (p[0] != '/' || p[1] != '/')
-        return 0;
-    p += 2;
-    while (*p && isspace((unsigned char)*p))
-        p++;
-    if (*p != '@')
-        return 0;
-    p++;
-
-    if (strncmp(p, "cfg", 3) != 0 || !isspace((unsigned char)p[3]))
-        return 0;
-    p += 4;
-    while (*p && isspace((unsigned char)*p))
-        p++;
-    if (*p != '_' && !isalnum((unsigned char)*p))
-        return 0;
-
-    while ((*p == '_' || isalnum((unsigned char)*p)) &&
-           slug_len < slug_sz - 1)
-        slug[slug_len++] = *p++;
-    slug[slug_len] = '\0';
-    if (slug_len == 0)
-        return 0;
-
-    while (*p && isspace((unsigned char)*p))
-        p++;
-    return *p == '=';
+    while (*end_p && isspace((unsigned char)*end_p))
+        end_p++;
+    return *end_p == '=';
 }
 
 #include "repl/cfg_baseline.h"

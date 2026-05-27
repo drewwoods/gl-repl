@@ -306,6 +306,7 @@ typedef float (*ExprBuiltinFn)(const float *args);
 
 typedef struct {
     const char    *name;
+    const char    *c_name;
     int            arity_min;
     int            arity_max;
     ExprBuiltinFn  eval;
@@ -330,20 +331,20 @@ static float builtin_rand(const float *args)  { return expr_rand01(args[0], args
 static float builtin_rand2(const float *args) { return expr_rand_signed(args[0], args[1]); }
 
 static const ExprBuiltin k_expr_builtins[] = {
-    { "sin",   1, 1, builtin_sin   },
-    { "cos",   1, 1, builtin_cos   },
-    { "tan",   1, 1, builtin_tan   },
-    { "sqrt",  1, 1, builtin_sqrt  },
-    { "abs",   1, 1, builtin_abs   },
-    { "pow",   2, 2, builtin_pow   },
-    { "min",   2, 2, builtin_min   },
-    { "max",   2, 2, builtin_max   },
-    { "floor", 1, 1, builtin_floor },
-    { "ceil",  1, 1, builtin_ceil  },
-    { "fmod",  2, 2, builtin_fmod  },
-    { "rem",   2, 2, builtin_rem   },
-    { "rand",  1, 2, builtin_rand  },
-    { "rand2", 1, 2, builtin_rand2 },
+    { "sin",   "sinf",       1, 1, builtin_sin   },
+    { "cos",   "cosf",       1, 1, builtin_cos   },
+    { "tan",   "tanf",       1, 1, builtin_tan   },
+    { "sqrt",  "sqrtf",      1, 1, builtin_sqrt  },
+    { "abs",   "fabsf",      1, 1, builtin_abs   },
+    { "pow",   "powf",       2, 2, builtin_pow   },
+    { "min",   "fminf",      2, 2, builtin_min   },
+    { "max",   "fmaxf",      2, 2, builtin_max   },
+    { "floor", "floorf",     1, 1, builtin_floor },
+    { "ceil",  "ceilf",      1, 1, builtin_ceil  },
+    { "fmod",  "fmodf",      2, 2, builtin_fmod  },
+    { "rem",   "remainderf", 2, 2, builtin_rem   },
+    { "rand",  "repl_randf", 1, 2, builtin_rand  },
+    { "rand2", "repl_rand2f", 1, 2, builtin_rand2 },
 };
 
 static const char *const k_reserved_identifiers[] = {
@@ -578,13 +579,17 @@ static void expr_rewrite_scratch_subscripts_to_repl(const char *src,
     *out = '\0';
 }
 
-static int expr_range_has_runtime_values(const char *src, const char *end,
-                                         const ExprVar *vars, int num_vars) {
-    const char *s = src;
+static const char *expr_walk_next_ident(const char **s_inout, const char *end,
+                                        char *name_out, size_t name_sz,
+                                        const char **q_out, int *too_long) {
+    const char *s = *s_inout;
+    *too_long = 0;
 
     while (s && *s && (!end || s < end)) {
-        if (s[0] == '/' && (!end || s + 1 < end) && s[1] == '/')
-            break;
+        if (s[0] == '/' && (!end || s + 1 < end) && s[1] == '/') {
+            *s_inout = s;
+            return NULL;
+        }
 
         if (isdigit((unsigned char)*s) ||
             (*s == '.' && (!end || s + 1 < end) && isdigit((unsigned char)s[1]))) {
@@ -602,20 +607,41 @@ static int expr_range_has_runtime_values(const char *src, const char *end,
             continue;
         }
 
-        s = ident_end;
+        int len = (int)(ident_end - start);
+        if (len >= (int)name_sz) {
+            *too_long = 1;
+            *s_inout = ident_end;
+            return start;
+        }
 
-        int len = (int)(s - start);
-        char name[REPL_PREDEF_NAME_MAX];
-        if (len <= 0 || len >= (int)sizeof(name))
+        memcpy(name_out, start, (size_t)len);
+        name_out[len] = '\0';
+
+        *s_inout = ident_end;
+        if (q_out) {
+            *q_out = skip_ws_ptr(ident_end);
+        }
+        return start;
+    }
+
+    *s_inout = s;
+    return NULL;
+}
+
+static int expr_range_has_runtime_values(const char *src, const char *end,
+                                         const ExprVar *vars, int num_vars) {
+    const char *s = src;
+    char name[REPL_PREDEF_NAME_MAX];
+    const char *q = NULL;
+    int too_long = 0;
+
+    while (expr_walk_next_ident(&s, end, name, sizeof(name), &q, &too_long)) {
+        if (too_long)
             return 1;
-
-        memcpy(name, start, (size_t)len);
-        name[len] = '\0';
 
         if (strcmp(name, "PI") == 0 || strcmp(name, "TAU") == 0)
             continue;
 
-        const char *q = skip_ws_ptr(s);
         if (repl_eval_scratch_array_index(name) >= 0)
             return 1;
         if (*q == '(')
@@ -636,46 +662,21 @@ static int validate_expression_idents_range(const char *src, const char *end,
                                             const ExprVar *vars, int num_vars,
                                             char *err, int errsz) {
     const char *s = src;
+    char name[REPL_PREDEF_NAME_MAX];
+    const char *q = NULL;
+    int too_long = 0;
 
-    while (s && *s && (!end || s < end)) {
-        if (s[0] == '/' && (!end || s + 1 < end) && s[1] == '/')
-            break;
-
-        if (isdigit((unsigned char)*s) ||
-            (*s == '.' && (!end || s + 1 < end) && isdigit((unsigned char)s[1]))) {
-            const char *next = skip_numeric_literal(s);
-            if (next != s) {
-                s = next;
-                continue;
-            }
-        }
-
-        const char *start = NULL;
-        const char *ident_end = repl_eval_eat_identifier(s, &start);
-        if (!ident_end) {
-            s++;
-            continue;
-        }
-
-        s = ident_end;
-
-        int len = (int)(s - start);
-        char name[REPL_PREDEF_NAME_MAX];
-        if (len >= (int)sizeof(name)) {
+    while (expr_walk_next_ident(&s, end, name, sizeof(name), &q, &too_long)) {
+        if (too_long) {
             if (err)
                 snprintf(err, (size_t)errsz, "identifier too long");
             return 0;
         }
 
-        memcpy(name, start, (size_t)len);
-        name[len] = '\0';
-
         if (strcmp(name, "PI") == 0 || strcmp(name, "TAU") == 0)
             continue;
 
-        const char *q = skip_ws_ptr(s);
         int scratch_idx = repl_eval_scratch_array_index(name);
-
         if (scratch_idx >= 0) {
             if (*q != '[') {
                 if (err)
@@ -761,49 +762,55 @@ int repl_eval_is_reserved_ident(const char *name) {
     return 0;
 }
 
-int repl_eval_declare_predef_var(const char *name, char *err, int errsz) {
+int repl_eval_declare_predef_var_with_value(const char *name, float value, char *err, int errsz) {
     if (!name || !name[0]) {
         if (err) snprintf(err, errsz, "empty variable name");
-        return 0;
+        return -1;
     }
     if (!repl_eval_is_ident_start((unsigned char)name[0])) {
         if (err) snprintf(err, errsz, "invalid identifier '%s'", name);
-        return 0;
+        return -1;
     }
     for (const char *p = name; *p; p++) {
         if (!repl_eval_is_ident_continue((unsigned char)*p)) {
             if (err) snprintf(err, errsz, "invalid identifier '%s'", name);
-            return 0;
+            return -1;
         }
     }
     if (strlen(name) >= sizeof(g_predef_vars[0].name)) {
         if (err) snprintf(err, errsz, "name '%s' too long (max %d chars)",
                           name, (int)sizeof(g_predef_vars[0].name) - 1);
-        return 0;
+        return -1;
     }
     if (repl_eval_is_reserved_ident(name)) {
         if (err) snprintf(err, errsz, "'%s' is reserved", name);
-        return 0;
+        return -1;
     }
     if (repl_eval_find_predef_var_idx(name) >= 0) {
         if (err) snprintf(err, errsz, "'%s' already declared", name);
-        return 0;
+        return -1;
     }
     if (repl_func_alias_lookup_slot(name) >= 0) {
         if (err) snprintf(err, errsz,
                           "'%s' is in use as a function name", name);
-        return 0;
+        return -1;
     }
     if (g_num_predef_vars >= MAX_PREDEF_VARS) {
         if (err) snprintf(err, errsz, "variable table full (max %d)", MAX_PREDEF_VARS);
-        return 0;
+        return -1;
     }
     strncpy(g_predef_vars[g_num_predef_vars].name, name,
             sizeof(g_predef_vars[0].name) - 1);
     g_predef_vars[g_num_predef_vars].name[sizeof(g_predef_vars[0].name) - 1] = '\0';
-    g_predef_vars[g_num_predef_vars].value = 0.0f;
+    g_predef_vars[g_num_predef_vars].value = value;
+    int idx = g_num_predef_vars;
     g_num_predef_vars++;
-    return 1;
+    return idx;
+}
+
+int repl_eval_declare_predef_var(const char *name, char *err, int errsz) {
+    int idx = repl_eval_declare_predef_var_with_value(name, 0.0f, err, errsz);
+    return idx >= 0 ? 1 : 0;
 }
 
 void repl_eval_undeclare_predef_var(const char *name) {
@@ -1028,10 +1035,6 @@ static float eval_primary(ExprCtx *ctx) {
                 expr_write_err(ctx, "unsupported arity for '%s'", name);
                 return 0.0f;
             }
-            if (builtin->arity_min == 1 && builtin->arity_max == 2 &&
-                arg_count == 1) {
-                args[1] = 0.0f;
-            }
             return builtin->eval(args);
         }
 
@@ -1253,25 +1256,10 @@ void repl_eval_format_swatch_number(float v, char *out, int out_sz) {
 /* ========================================================================= */
 
 void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
-    static const struct { const char *from; const char *to; int is_func; } map[] = {
-        { "sin",   "sinf",   1 },
-        { "cos",   "cosf",   1 },
-        { "tan",   "tanf",   1 },
-        { "sqrt",  "sqrtf",  1 },
-        { "abs",   "fabsf",  1 },
-        { "pow",   "powf",   1 },
-        { "min",   "fminf",  1 },
-        { "max",   "fmaxf",  1 },
-        { "floor", "floorf", 1 },
-        { "ceil",  "ceilf",  1 },
-        { "fmod",  "fmodf",  1 },
-        { "rem",   "remainderf", 1 },
-        { "rand",  "repl_randf", 1 },
-        { "rand2", "repl_rand2f", 1 },
-        { "TAU",   "(2*M_PI)", 0 },
-        { "PI",    "M_PI",     0 },
+    static const struct { const char *from; const char *to; } k_const_expr_to_c[] = {
+        { "TAU", "(2*M_PI)" },
+        { "PI",  "M_PI" }
     };
-    int nmap = (int)(sizeof(map) / sizeof(map[0]));
     const char *p = in;
     char *dst = out;
     char *end = out + out_sz - 1;
@@ -1282,18 +1270,35 @@ void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
         if (id_end) {
             int id_len = (int)(id_end - id_start);
             int found = 0;
-            for (int i = 0; i < nmap; i++) {
-                if ((int)strlen(map[i].from) == id_len &&
-                    strncmp(id_start, map[i].from, id_len) == 0) {
-                    int rlen = (int)strlen(map[i].to);
+
+            for (size_t i = 0; i < sizeof(k_const_expr_to_c) / sizeof(k_const_expr_to_c[0]); i++) {
+                if ((int)strlen(k_const_expr_to_c[i].from) == id_len &&
+                    strncmp(id_start, k_const_expr_to_c[i].from, id_len) == 0) {
+                    int rlen = (int)strlen(k_const_expr_to_c[i].to);
                     if (dst + rlen < end) {
-                        memcpy(dst, map[i].to, rlen);
+                        memcpy(dst, k_const_expr_to_c[i].to, rlen);
                         dst += rlen;
                     }
                     found = 1;
                     break;
                 }
             }
+
+            if (!found) {
+                for (size_t i = 0; i < sizeof(k_expr_builtins) / sizeof(k_expr_builtins[0]); i++) {
+                    if ((int)strlen(k_expr_builtins[i].name) == id_len &&
+                        strncmp(id_start, k_expr_builtins[i].name, id_len) == 0) {
+                        int rlen = (int)strlen(k_expr_builtins[i].c_name);
+                        if (dst + rlen < end) {
+                            memcpy(dst, k_expr_builtins[i].c_name, rlen);
+                            dst += rlen;
+                        }
+                        found = 1;
+                        break;
+                    }
+                }
+            }
+
             if (!found) {
                 if (dst + id_len < end) {
                     memcpy(dst, id_start, id_len);
@@ -1424,24 +1429,9 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
     }
 
     /* Identifier-aware replacement: sinf->sin, M_PI->PI, etc. */
-    static const struct { const char *from; const char *to; } map[] = {
-        { "sinf",   "sin"   },
-        { "cosf",   "cos"   },
-        { "tanf",   "tan"   },
-        { "sqrtf",  "sqrt"  },
-        { "fabsf",  "abs"   },
-        { "powf",   "pow"   },
-        { "fminf",  "min"   },
-        { "fmaxf",  "max"   },
-        { "floorf", "floor" },
-        { "ceilf",  "ceil"  },
-        { "fmodf",  "fmod"  },
-        { "remainderf", "rem" },
-        { "repl_rand2f", "rand2" },
-        { "repl_randf", "rand" },
-        { "M_PI",   "PI"    },
+    static const struct { const char *from; const char *to; } k_const_c_to_expr[] = {
+        { "M_PI", "PI" }
     };
-    int nmap = (int)(sizeof(map) / sizeof(map[0]));
     const char *p = tmp;
     char *dst = out;
     char *end = out + out_sz - 1;
@@ -1452,18 +1442,35 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
         if (id_end) {
             int id_len = (int)(id_end - id_start);
             int found = 0;
-            for (int i = 0; i < nmap; i++) {
-                if ((int)strlen(map[i].from) == id_len &&
-                    strncmp(id_start, map[i].from, id_len) == 0) {
-                    int rlen = (int)strlen(map[i].to);
+
+            for (size_t i = 0; i < sizeof(k_const_c_to_expr) / sizeof(k_const_c_to_expr[0]); i++) {
+                if ((int)strlen(k_const_c_to_expr[i].from) == id_len &&
+                    strncmp(id_start, k_const_c_to_expr[i].from, id_len) == 0) {
+                    int rlen = (int)strlen(k_const_c_to_expr[i].to);
                     if (dst + rlen < end) {
-                        memcpy(dst, map[i].to, rlen);
+                        memcpy(dst, k_const_c_to_expr[i].to, rlen);
                         dst += rlen;
                     }
                     found = 1;
                     break;
                 }
             }
+
+            if (!found) {
+                for (size_t i = 0; i < sizeof(k_expr_builtins) / sizeof(k_expr_builtins[0]); i++) {
+                    if ((int)strlen(k_expr_builtins[i].c_name) == id_len &&
+                        strncmp(id_start, k_expr_builtins[i].c_name, id_len) == 0) {
+                        int rlen = (int)strlen(k_expr_builtins[i].name);
+                        if (dst + rlen < end) {
+                            memcpy(dst, k_expr_builtins[i].name, rlen);
+                            dst += rlen;
+                        }
+                        found = 1;
+                        break;
+                    }
+                }
+            }
+
             if (!found) {
                 if (dst + id_len < end) {
                     memcpy(dst, id_start, id_len);

@@ -494,8 +494,6 @@ static void scene_execute_adapter(const SceneExecuteContext *ctx,
     if (g_replay_fade_plan.active)
         count = g_replay_fade_plan.base_limit;
 
-    repl_execute_set_fade_context(1.0f, 0);
-
     float saved_predef[MAX_PREDEF_VARS];
     float saved_scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     ReplRenderState saved_render = {0};

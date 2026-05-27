@@ -262,6 +262,9 @@ int  repl_eval_find_predef_var_idx(const char *name);
 /* Declare a new predefined variable; returns index, or -1 on duplicate/error.
  * Errors are written to the err buffer (errsz bytes). */
 int  repl_eval_declare_predef_var(const char *name, char *err, int errsz);
+/* Declare a new predefined variable with a starting value; returns index, or -1 on duplicate/error.
+ * Errors are written to the err buffer (errsz bytes). */
+int  repl_eval_declare_predef_var_with_value(const char *name, float value, char *err, int errsz);
 /* Unregister a predefined variable by name (safe no-op if not found). */
 void repl_eval_undeclare_predef_var(const char *name);
 /* Check whether a name is reserved (e.g. a function name or keyword). */

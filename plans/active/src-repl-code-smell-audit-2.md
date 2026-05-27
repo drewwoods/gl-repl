@@ -26,14 +26,13 @@
 
 ## Status summary (verified 2026-05-27)
 
-82 findings total. 14 closed (✅), 68 still open. No status changes
-since the audit was produced — all open findings verified against
+82 findings total. 30 closed (✅), 52 still open. All open findings verified against
 current HEAD.
 
 | # | Sev | Tier | Status | Finding (short) |
 |---|-----|------|--------|-----------------|
 | 1 | 🔴 | A | ✅ Done | `help_text.c` app/ include (layering inversion) |
-| 2 | 🟡 | B | Open | `parse_cfg` double-applies `@cfg` lines |
+| 2 | 🟡 | B | ✅ Done | `parse_cfg` double-applies `@cfg` lines |
 | 3 | 🔴 | A | ✅ Done | `repl_copy/restore_predef_values` shape assumption |
 | 4 | 🔴 | B | ✅ Done | `repl_config_bag_set` silently truncates |
 | 5 | 🔴 | B | ✅ Done | `UserScene` stack allocations exceed thread stacks |
@@ -48,23 +47,23 @@ current HEAD.
 | 14 | 🟡 | C | ✅ Done | 🔀 `_mut()` for read-only work (multi-file) |
 | 15 | 🔵 | C | Open | `repl_compile_*` duplicates `editor_compile_*` |
 | 16 | 🔵 | C | Open | `repl_compile_dispatch` covers only 2 of 6 entry points |
-| 17 | 🔵 | B | Open | Three parse handlers share trim/split skeleton |
+| 17 | 🔵 | B | ✅ Done | Three parse handlers share trim/split skeleton |
 | 18 | 🔵 | A | Open | Three identical cache prologues in `replay_annotations.c` |
-| 19 | 🔵 | B | Open | Five slug/walk duplicates missed by closed #14 |
-| 20 | 🔵 | B | Open | Two near-identical identifier walkers in `eval.c` |
-| 21 | 🔵 | B | Open | REPL↔C function map duplicated three ways |
+| 19 | 🔵 | B | ✅ Done | Five slug/walk duplicates missed by closed #14 |
+| 20 | 🔵 | B | ✅ Done | Two near-identical identifier walkers in `eval.c` |
+| 21 | 🔵 | B | ✅ Done | REPL↔C function map duplicated three ways |
 | 22 | 🟡 | — | Open | Executor includes `subsystems/replay/*` (layering) |
 | 23 | 🟡 | — | Open | Executor writes status messages to live REPL state |
 | 24 | 🔵 | — | Open | CMD_IF_BEGIN evaluator duplicated (flatten vs executor) |
-| 25 | 🟡 | B | Open | `WRITE_TEXT` macro — third "write text" pattern |
+| 25 | 🟡 | B | ✅ Done | `WRITE_TEXT` macro — third "write text" pattern |
 | 26 | 🟡 | — | Open | `REPL_FUNC_SLOT_LIST` hard-codes 10 entries |
 | 27 | 🟡 | — | Open | Stray `func0(var0)` autocomplete row |
 | 28 | 🔵 | — | Open | `replay_apply_state_cmd` parallel to executor dispatch |
-| 29 | 🟡 | B | Open | `g_pre_example.valid` still a parallel scalar |
+| 29 | 🟡 | B | ✅ Done | `g_pre_example.valid` still a parallel scalar |
 | 30 | 🟡 | — | Open | `g_pending_workspace_dir` write-then-caller-reads |
-| 31 | 🟡 | B | Open | `text_helpers.c` has no `.h` |
-| 32 | 🟡 | B | Open | 🔀 Hardcoded `[16]`/`[64]` widths |
-| 33 | 🟡 | B | Open | `MAX_DEFERRED_VAR_VALUES=64` vs `MAX_PREDEF_VARS=24` |
+| 31 | 🟡 | B | ✅ Done | `text_helpers.c` has no `.h` |
+| 32 | 🟡 | B | ✅ Done | 🔀 Hardcoded `[16]`/`[64]` widths |
+| 33 | 🟡 | B | ✅ Done | `MAX_DEFERRED_VAR_VALUES=64` vs `MAX_PREDEF_VARS=24` |
 | 34 | 🟢 | A | Open | `repl_workspace_dir` / `repl_state_workspace_dir` dual name |
 | 35 | 🟢 | A | Open | `core.c` header comment stale |
 | 36 | 🟢 | A | Open | `command_store.h` dead inline + policy query |
@@ -75,21 +74,21 @@ current HEAD.
 | 41 | 🟡 | C | Open | Tutorial GRID_THEME literals decoupled |
 | 42 | 🔵 | — | Open | CatalogTagOps glue remains after closed #12 |
 | 43 | 🔵 | — | Open | `tag_bit` byte-identical inlines |
-| 44 | 🟡 | B | Open | `cmd_emit` silently drops rows past cap |
-| 45 | 🟡 | B | Open | `help_group_header` switch drops new groups |
+| 44 | 🟡 | B | ✅ Done | `cmd_emit` silently drops rows past cap |
+| 45 | 🟡 | B | ✅ Done | `help_group_header` switch drops new groups |
 | 46 | 🟡 | A | Open | `g_tabs[3]` / `tab_count=3` hand-agreement |
 | 47 | 🔵 | — | Open | `import_make_repl_tess_line` scrape loops |
-| 48 | 🔵 | B | Open | `repl_apply_predef_ops` redundant re-lookup |
+| 48 | 🔵 | B | ✅ Done | `repl_apply_predef_ops` redundant re-lookup |
 | 49 | 🔴 | B | ✅ Done | `repl_apply_can_apply_compiled_change` preflight gap |
-| 50 | 🟡 | B | Open | `MAX_SCRATCH_OPS_PER_COMMIT` wildly oversized |
-| 51 | 🔵 | B | Open | Five file-level statics in executor.c |
+| 50 | 🟡 | B | ✅ Done | `MAX_SCRATCH_OPS_PER_COMMIT` wildly oversized |
+| 51 | 🔵 | B | ✅ Done | Five file-level statics in executor.c |
 | 52 | 🟡 | — | Open | `command_spec.c` terminator positional zeros |
 | 53 | 🟢 | A | Open | Six of seven `repl_format_*` functions dead |
 | 54 | 🟢 | A | Open | `compile_scope_indent` one-line forwarder |
 | 55 | 🟢 | A | Open | `make_auto_normal` dead `insert_pos` param |
 | 56 | 🟢 | A | Open | `flatten_get_for_var_name` dead `cmd` param |
 | 57 | 🟢 | A | Open | `repl_executor_camera_distance_source()` zero callers |
-| 58 | 🟢 | A | Open | `eval_primary` dead `args[1]=0.0f` reset |
+| 58 | 🟢 | A | ✅ Done | `eval_primary` dead `args[1]=0.0f` reset |
 | 59 | 🟢 | A | Open | Defensive guard in `flatten_for_loop` can't fail |
 | 60 | 🟢 | A | Open | `vis_total` populated but unread |
 | 61 | 🟢 | A | Open | Dead `(void)warnings;` in `parse_snippet_declare` |
@@ -115,8 +114,8 @@ current HEAD.
 | 81 | 🟡 | — | Open | `TUTORIAL_LOCKED_LINE_MAX` doubles as cap and validator ceiling |
 | 82 | 🔵 | — | Open | `tutorial_step_at()` O(N) sentinel walk |
 
-**By severity (open only):** 0 🔴, 25 🟡, 19 🟢, 24 🔵 = 68 open.
-**By tier (open only):** A: 22, B: 18, C: 6, D: 2, unclassified: 20.
+**By severity (open only):** 0 🔴, 16 🟡, 18 🟢, 18 🔵 = 52 open.
+**By tier (open only):** A: 21, B: 3, C: 6, D: 2, unclassified: 20.
 
 ## How to read this
 

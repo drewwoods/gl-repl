@@ -72,11 +72,13 @@ void replay_render_fade_batches(const ReplayFadePlan *plan) {
         prof_accum_end(PROF_SCENE_3D_FADE_BATCH_PREP);
 
         prof_begin(PROF_SCENE_3D_FADE_BATCH_EXEC);
-        repl_execute_set_fade_context(alpha, plan->skip_limits[batch_idx]);
         repl_execute_program(&(ReplExecutionOptions){
-            .flat_cmd_count = batch->new_pc,
-            .program        = program,
-            .text           = text,
+            .flat_cmd_count      = batch->new_pc,
+            .program             = program,
+            .text                = text,
+            .fade_alpha_scale    = alpha,
+            .skip_geom_before_pc = plan->skip_limits[batch_idx],
+            .has_fade_context    = 1,
         });
         prof_accum_end(PROF_SCENE_3D_FADE_BATCH_EXEC);
 
@@ -84,7 +86,6 @@ void replay_render_fade_batches(const ReplayFadePlan *plan) {
     }
 
     prof_begin(PROF_SCENE_3D_FADE_BATCH_POST);
-    repl_execute_set_fade_context(1.0f, 0);
     glPopAttrib();
     prof_accum_end(PROF_SCENE_3D_FADE_BATCH_POST);
 

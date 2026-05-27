@@ -117,7 +117,7 @@ typedef struct {
 #endif
 
 #ifndef MAX_SCRATCH_OPS_PER_COMMIT
-#define MAX_SCRATCH_OPS_PER_COMMIT MAX_COMMIT_CMDS
+#define MAX_SCRATCH_OPS_PER_COMMIT 1
 #endif
 
 typedef struct ReplCompiledChange_s {

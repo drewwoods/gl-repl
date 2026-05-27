@@ -190,7 +190,7 @@ const char *g_display_header[] = {
  * the snippet is processed so that // @declare markers in the snippet can
  * undeclare and re-declare variables (creating CMD_VAR_DECLARE commands)
  * without losing the saved values from the workspace header. */
-#define MAX_DEFERRED_VAR_VALUES 64
+#define MAX_DEFERRED_VAR_VALUES MAX_PREDEF_VARS
 typedef struct { char name[REPL_PREDEF_NAME_MAX]; float value; } DeferredVar;
 static DeferredVar g_deferred_var_values[MAX_DEFERRED_VAR_VALUES];
 static int         g_deferred_var_count = 0;
@@ -399,28 +399,16 @@ static void emit_func_aliases(int *n) {
 
 static int parse_cfg(const char *args) {
     char slug[32];
-    if (!repl_config_extract_slug(args, slug, sizeof(slug)))
+    const char *p = NULL;
+    if (!repl_config_extract_slug(args, slug, sizeof(slug), &p))
         return 0;
-    const char *p = args;
-    while (*p && (isalnum((unsigned char)*p) || *p == '_'))
-        p++;
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != '=') return 0;
     p++;
     while (*p && isspace((unsigned char)*p)) p++;
     int val = (int)strtol(p, NULL, 10);
-    /* Apply immediately via the bridge: callers (tests, the importer,
-     * the example loader) expect line-by-line @cfg parsing to update
-     * live state synchronously. We also accumulate so callers that
-     * want to drain at the end of a batch (repl_export_apply_pending_cfg)
-     * see the same set of (slug, val) pairs — but the live state has
-     * already been updated by the per-line apply. */
-    if (g_export_cfg_bridge && g_export_cfg_bridge->apply) {
-        ReplConfigBag single;
-        repl_config_bag_clear(&single);
-        repl_config_bag_set_int(&single, slug, val);
-        g_export_cfg_bridge->apply(&single);
-    }
+    /* Accumulate config in the accumulator. The end of load drain
+     * (repl_export_apply_pending_cfg) will apply the full bag to the live state. */
     repl_config_bag_set_int(&g_import_cfg_accumulator, slug, val);
     return 1;
 }

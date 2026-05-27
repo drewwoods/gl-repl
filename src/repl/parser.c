@@ -21,7 +21,7 @@
  * Sizes the scratch arrays that hold one positional argument's raw source
  * text and its canonicalized emit text. Wide enough for the longest GL
  * enum token (~30 chars) plus inline expressions. */
-#define ENUM_SLOT_TEXT_MAX 64
+#define ENUM_SLOT_TEXT_MAX REPL_ENUM_ARG_MAX
 
 /* The parser writes diagnostics to ctx->err_buf when available, and
  * otherwise no-ops; diagnostics never leave the parser as side effects
@@ -514,37 +514,75 @@ static int parse_label(const char *args, GLCmd *cmd,
     return 1;
 }
 
+static void trim_and_copy(char *dst, int dst_sz, const char *src, int src_len) {
+    if (dst_sz <= 0) return;
+    while (src_len > 0 && isspace((unsigned char)*src)) {
+        src++;
+        src_len--;
+    }
+    while (src_len > 0 && isspace((unsigned char)src[src_len - 1])) {
+        src_len--;
+    }
+    if (src_len >= dst_sz) {
+        src_len = dst_sz - 1;
+    }
+    memcpy(dst, src, (size_t)src_len);
+    dst[src_len] = '\0';
+}
+
+static int split_three_args(const char *args,
+                             char *a1, int a1_sz,
+                             char *a2, int a2_sz,
+                             char *rest, int rest_sz) {
+    const char *comma1 = strchr(args, ',');
+    if (!comma1) return 0;
+    const char *comma2 = strchr(comma1 + 1, ',');
+    if (!comma2) return 0;
+
+    trim_and_copy(a1, a1_sz, args, (int)(comma1 - args));
+    trim_and_copy(a2, a2_sz, comma1 + 1, (int)(comma2 - (comma1 + 1)));
+    trim_and_copy(rest, rest_sz, comma2 + 1, (int)strlen(comma2 + 1));
+    return 1;
+}
+
+static int split_two_args(const char *args,
+                           char *a1, int a1_sz,
+                           char *rest, int rest_sz) {
+    const char *comma = strchr(args, ',');
+    if (!comma) return 0;
+
+    trim_and_copy(a1, a1_sz, args, (int)(comma - args));
+    trim_and_copy(rest, rest_sz, comma + 1, (int)strlen(comma + 1));
+    return 1;
+}
+
+static int parse_canonical_float_list(const char *text, float *out_args, int max_args,
+                                      ExprVar *vars, int num_vars,
+                                      const ReplParseContext *ctx) {
+    char verr[REPL_DIAG_TEXT_MAX];
+    if (!repl_eval_validate_expression_idents(text, vars, num_vars, verr, sizeof(verr))) {
+        parser_emit_error_static(ctx, verr);
+        return -1;
+    }
+    return repl_eval_parse_exprs(text, out_args, max_args, vars, num_vars);
+}
+
 static int parse_materialfv(const char *args, GLCmd *cmd,
                             char *text_out, int text_sz,
                             const char *indent,
                             const ReplParseContext *ctx) {
     ExprVar *vars = ctx->vars;
     int num_vars = ctx->num_vars;
-    char face_arg[64] = "", pname_arg[64] = "", val_arg[MAX_LINE_LEN] = "";
-    char *comma1 = strchr(args, ',');
-    char *comma2 = comma1 ? strchr(comma1 + 1, ',') : NULL;
+    char face_str[REPL_ENUM_ARG_MAX] = "";
+    char pname_str[REPL_ENUM_ARG_MAX] = "";
+    char val_arg[MAX_LINE_LEN] = "";
 
-    if (!comma1 || !comma2) {
+    if (!split_three_args(args, face_str, sizeof(face_str),
+                          pname_str, sizeof(pname_str),
+                          val_arg, sizeof(val_arg))) {
         parser_emit_error_static(ctx, "Usage: glMaterialfv(face, pname, (GLfloat[]){...})");
         return 0;
     }
-
-    int face_len = (int)(comma1 - args);
-    if (face_len >= (int)sizeof(face_arg)) face_len = (int)sizeof(face_arg) - 1;
-    strncpy(face_arg, args, face_len); face_arg[face_len] = '\0';
-
-    int pname_len = (int)(comma2 - (comma1 + 1));
-    if (pname_len >= (int)sizeof(pname_arg)) pname_len = (int)sizeof(pname_arg) - 1;
-    strncpy(pname_arg, comma1 + 1, pname_len); pname_arg[pname_len] = '\0';
-
-    strncpy(val_arg, comma2 + 1, sizeof(val_arg) - 1);
-
-    char *face_str = face_arg; while (*face_str == ' ') face_str++;
-    int face_end = (int)strlen(face_str);
-    while (face_end > 0 && face_str[face_end-1] == ' ') face_str[--face_end] = '\0';
-    char *pname_str = pname_arg; while (*pname_str == ' ') pname_str++;
-    int pname_end = (int)strlen(pname_str);
-    while (pname_end > 0 && pname_str[pname_end-1] == ' ') pname_str[--pname_end] = '\0';
 
     GLenum face = 0, pname = 0;
     int found1 = 0, found2 = 0;
@@ -561,14 +599,12 @@ static int parse_materialfv(const char *args, GLCmd *cmd,
     if (!found1) { parser_emit_error_static(ctx, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"); return 0; }
     if (!found2) { parser_emit_error_static(ctx, "pname: GL_DIFFUSE, GL_AMBIENT, GL_SPECULAR, GL_SHININESS..."); return 0; }
 
-    const char *to_parse;
+    const char *to_parse = val_arg;
     char interior_buf[MAX_LINE_LEN];
-    char *vp = val_arg;
-    while (*vp == ' ' || *vp == '\t') vp++;
     static const char k_compound_prefix[] = "(GLfloat[]){";
     const size_t k_compound_prefix_len = sizeof k_compound_prefix - 1;
-    if (strncmp(vp, k_compound_prefix, k_compound_prefix_len) == 0) {
-        const char *istart = vp + k_compound_prefix_len;
+    if (strncmp(val_arg, k_compound_prefix, k_compound_prefix_len) == 0) {
+        const char *istart = val_arg + k_compound_prefix_len;
         int brace_depth = 1;
         const char *q = istart;
         while (*q && brace_depth > 0) {
@@ -591,18 +627,12 @@ static int parse_materialfv(const char *args, GLCmd *cmd,
             parser_emit_error_static(ctx, "Trailing content after (GLfloat[]){...} compound literal");
             return 0;
         }
-    } else {
-        to_parse = vp;
     }
 
-    {
-        char verr[REPL_DIAG_TEXT_MAX];
-        if (!repl_eval_validate_expression_idents(to_parse, vars, num_vars, verr, sizeof(verr))) {
-            parser_emit_error_static(ctx, verr); return 0;
-        }
-    }
     float parsed_args[8];
-    int num_parsed = repl_eval_parse_exprs(to_parse, parsed_args, 8, vars, num_vars);
+    int num_parsed = parse_canonical_float_list(to_parse, parsed_args, 8, vars, num_vars, ctx);
+    if (num_parsed < 0) return 0;
+
     if (num_parsed != 1 && num_parsed != 4) {
         parser_emit_error_static(ctx, "Expected 1 or 4 float values");
         return 0;
@@ -640,31 +670,16 @@ static int parse_materialf(const char *args, GLCmd *cmd,
                            const ReplParseContext *ctx) {
     ExprVar *vars = ctx->vars;
     int num_vars = ctx->num_vars;
-    char face_arg[64] = "", pname_arg[64] = "", val_arg[MAX_LINE_LEN] = "";
-    char *comma1 = strchr(args, ',');
-    char *comma2 = comma1 ? strchr(comma1 + 1, ',') : NULL;
+    char face_str[REPL_ENUM_ARG_MAX] = "";
+    char pname_str[REPL_ENUM_ARG_MAX] = "";
+    char val_arg[MAX_LINE_LEN] = "";
 
-    if (!comma1 || !comma2) {
+    if (!split_three_args(args, face_str, sizeof(face_str),
+                          pname_str, sizeof(pname_str),
+                          val_arg, sizeof(val_arg))) {
         parser_emit_error_static(ctx, "Usage: glMaterialf(face, GL_SHININESS, value)");
         return 0;
     }
-
-    int face_len = (int)(comma1 - args);
-    if (face_len >= (int)sizeof(face_arg)) face_len = (int)sizeof(face_arg) - 1;
-    strncpy(face_arg, args, face_len); face_arg[face_len] = '\0';
-
-    int pname_len = (int)(comma2 - (comma1 + 1));
-    if (pname_len >= (int)sizeof(pname_arg)) pname_len = (int)sizeof(pname_arg) - 1;
-    strncpy(pname_arg, comma1 + 1, pname_len); pname_arg[pname_len] = '\0';
-
-    strncpy(val_arg, comma2 + 1, sizeof(val_arg) - 1);
-
-    char *face_str = face_arg; while (*face_str == ' ') face_str++;
-    int face_end = (int)strlen(face_str);
-    while (face_end > 0 && face_str[face_end-1] == ' ') face_str[--face_end] = '\0';
-    char *pname_str = pname_arg; while (*pname_str == ' ') pname_str++;
-    int pname_end = (int)strlen(pname_str);
-    while (pname_end > 0 && pname_str[pname_end-1] == ' ') pname_str[--pname_end] = '\0';
 
     GLenum face = 0;
     int found1 = 0;
@@ -683,14 +698,10 @@ static int parse_materialf(const char *args, GLCmd *cmd,
         return 0;
     }
 
-    {
-        char verr[REPL_DIAG_TEXT_MAX];
-        if (!repl_eval_validate_expression_idents(val_arg, vars, num_vars, verr, sizeof(verr))) {
-            parser_emit_error_static(ctx, verr); return 0;
-        }
-    }
     float parsed_args[2];
-    int num_parsed = repl_eval_parse_exprs(val_arg, parsed_args, 2, vars, num_vars);
+    int num_parsed = parse_canonical_float_list(val_arg, parsed_args, 2, vars, num_vars, ctx);
+    if (num_parsed < 0) return 0;
+
     if (num_parsed != 1) {
         parser_emit_error_static(ctx, "Expected 1 float value");
         return 0;
@@ -716,26 +727,20 @@ static int parse_point_parameter_fv(const char *args, GLCmd *cmd,
                                     const ReplParseContext *ctx) {
     ExprVar *vars = ctx->vars;
     int num_vars = ctx->num_vars;
-    char a1[64] = "", rest[MAX_LINE_LEN] = "";
-    char *comma = strchr(args, ',');
-    if (!comma) {
+    char pname_str[REPL_ENUM_ARG_MAX] = "";
+    char rest[MAX_LINE_LEN] = "";
+
+    if (!split_two_args(args, pname_str, sizeof(pname_str), rest, sizeof(rest))) {
         parser_emit_error_static(ctx,
             "Usage: glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)");
         return 0;
     }
-    int l1 = (int)(comma - args);
-    if (l1 >= (int)sizeof(a1)) l1 = (int)sizeof(a1) - 1;
-    strncpy(a1, args, l1); a1[l1] = '\0';
-    strncpy(rest, comma + 1, sizeof(rest) - 1);
-
-    char *p1 = a1; while (*p1 == ' ') p1++;
-    int e1 = (int)strlen(p1); while (e1 > 0 && p1[e1 - 1] == ' ') p1[--e1] = '\0';
 
     GLenum pname = 0;
     int found = 0;
     const ReplEnumEntry *point_param_pnames = repl_point_param_pname_entries();
     for (int i = 0; point_param_pnames[i].name; i++) {
-        if (strcmp(p1, point_param_pnames[i].name) == 0) {
+        if (strcmp(pname_str, point_param_pnames[i].name) == 0) {
             pname = point_param_pnames[i].value;
             found = 1;
             break;
@@ -746,14 +751,10 @@ static int parse_point_parameter_fv(const char *args, GLCmd *cmd,
         return 0;
     }
 
-    {
-        char verr[REPL_DIAG_TEXT_MAX];
-        if (!repl_eval_validate_expression_idents(rest, vars, num_vars, verr, sizeof(verr))) {
-            parser_emit_error_static(ctx, verr); return 0;
-        }
-    }
     float parsed_args[4];
-    int num_parsed = repl_eval_parse_exprs(rest, parsed_args, 4, vars, num_vars);
+    int num_parsed = parse_canonical_float_list(rest, parsed_args, 4, vars, num_vars, ctx);
+    if (num_parsed < 0) return 0;
+
     if (num_parsed != 3) {
         parser_emit_error_static(ctx,
             "Expected 3 floats: const, linear, quadratic attenuation coefficients");
@@ -772,7 +773,7 @@ static int parse_point_parameter_fv(const char *args, GLCmd *cmd,
     if (text_out && text_sz > 0)
         snprintf(text_out, (size_t)text_sz,
                  "%sglPointParameterfv(%s, (GLfloat[]){%g, %g, %g});",
-                 indent, p1, parsed_args[0], parsed_args[1], parsed_args[2]);
+                 indent, pname_str, parsed_args[0], parsed_args[1], parsed_args[2]);
     return 1;
 }
 
@@ -878,16 +879,18 @@ static int parse_func_call(const char *args, int fn, GLCmd *cmd,
  * provides one. The legacy no-ctx wrappers surface to status; the
  * parser core itself never calls set_status.
  */
+static void write_text(char *out, int sz, const char *fmt, ...) {
+    if (out && sz > 0) {
+        va_list ap;
+        va_start(ap, fmt);
+        vsnprintf(out, (size_t)sz, fmt, ap);
+        va_end(ap);
+    }
+}
+
 static int parse_command(const char *line, GLCmd *cmd,
                          char *text_out, int text_sz,
                          const ReplParseContext *ctx) {
-    /* All production / test callers pass a non-NULL context (the
-     * legacy no-ctx wrappers were retired earlier). The
-     * `repl_state_edit_line()` fallback that lived here — it was
-     * confirmed dead code, and keeping it would force the parser to
-     * reach into REPL-state for cursor info that has no business
-     * being parser-internal (implemented in phase 3.6.3; see the
-     * edit-line-ownership plan doc). */
     if (!ctx) return 0;
     int source_line_idx = ctx->source_line_idx;
     ExprVar *vars = ctx->vars;
@@ -898,10 +901,7 @@ static int parse_command(const char *line, GLCmd *cmd,
 /* Every call passes at least one variadic arg after fmt, so plain
  * __VA_ARGS__ suffices — no GNU `, ##__VA_ARGS__` comma-elision (which
  * -std=c99 -pedantic-errors rejects). */
-#define WRITE_TEXT(fmt, ...) do { \
-    if (text_out && text_sz > 0) \
-        snprintf(text_out, (size_t)text_sz, fmt, __VA_ARGS__); \
-} while (0)
+#define WRITE_TEXT(fmt, ...) write_text(text_out, text_sz, fmt, __VA_ARGS__)
     strncpy(buf, line, sizeof(buf) - 1);
     buf[sizeof(buf) - 1] = '\0';
 
@@ -982,7 +982,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->type = CMD_END;
         cmd->valid = 1;
         {
-            char end_ind[32];
+            char end_ind[REPL_INDENT_TEXT_MAX];
             repl_source_scope_begin_indent(source_line_idx, end_ind,
                                            sizeof(end_ind));
             WRITE_TEXT("%sglEnd();", end_ind);
@@ -1179,8 +1179,8 @@ static int parse_command(const char *line, GLCmd *cmd,
         const char *lname = p + 5;
         while (*lname && isspace((unsigned char)*lname)) lname++;
         /* Extract clean label name (strip trailing ; or whitespace) */
-        char clean_lname[64]; int ll = 0;
-        while (ll < 63 && lname[ll] && lname[ll] != ';' && !isspace((unsigned char)lname[ll])) {
+        char clean_lname[REPL_GOTO_LABEL_MAX]; int ll = 0;
+        while (ll < REPL_GOTO_LABEL_MAX - 1 && lname[ll] && lname[ll] != ';' && !isspace((unsigned char)lname[ll])) {
             clean_lname[ll] = lname[ll]; ll++;
         }
         clean_lname[ll] = '\0';
@@ -1206,7 +1206,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         if (p[0] == ':') {
             WRITE_TEXT("%s:", p + 1);
         } else {
-            char label[64];
+            char label[REPL_GOTO_LABEL_MAX];
             int n = 0;
             while (n < (int)sizeof(label) - 1 &&
                    p[n] && p[n] != ':' && !isspace((unsigned char)p[n])) {
@@ -1214,8 +1214,6 @@ static int parse_command(const char *line, GLCmd *cmd,
                 n++;
             }
             label[n] = '\0';
-            if (n <= 0)
-                return 0;
             WRITE_TEXT("%s:", label);
         }
         return 1;

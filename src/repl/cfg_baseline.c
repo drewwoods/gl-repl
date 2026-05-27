@@ -19,6 +19,7 @@ STATIC_ASSERT(REPL_CFG_VALUE_MAX >= 12,
 void repl_config_bag_clear(ReplConfigBag *cfg) {
     if (!cfg) return;
     cfg->count = 0;
+    cfg->valid = 0;
 }
 
 /* Detect snprintf truncation. snprintf returns the number of bytes it
@@ -102,7 +103,7 @@ const ReplConfigBridge *repl_config_bridge(void) {
     return g_cfg_bridge;
 }
 
-int repl_config_extract_slug(const char *line, char *out, size_t out_sz) {
+int repl_config_extract_slug(const char *line, char *out, size_t out_sz, const char **end_out) {
     if (!line || !out || out_sz == 0) return 0;
     const char *p = line;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -126,6 +127,7 @@ int repl_config_extract_slug(const char *line, char *out, size_t out_sz) {
     while (*p && (isalnum((unsigned char)*p) || *p == '_') && out_i + 1 < out_sz)
         out[out_i++] = *p++;
     out[out_i] = '\0';
+    if (end_out) *end_out = p;
     return out_i > 0;
 }
 

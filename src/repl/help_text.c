@@ -14,6 +14,7 @@
 #include "repl/command_spec.h"   /* MAX_FUNC_HINT_PARAMS */
 #include "repl/eval.h"           /* REPL_SCRATCH_ARRAY_LEN */
 
+#include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -265,6 +266,7 @@ static ReplHelpContent g_content;
 
 static const char *help_group_header(ReplHelpGroup g) {
     switch (g) {
+    case REPL_HELP_GROUP_NONE:        assert(0); return NULL;
     case REPL_HELP_GROUP_GEOMETRY:    return "Vertices, Normals & Color:";
     case REPL_HELP_GROUP_PRIMITIVE:   return "Primitive Blocks:";
     case REPL_HELP_GROUP_STATE:       return "Render State:";
@@ -276,7 +278,7 @@ static const char *help_group_header(ReplHelpGroup g) {
     case REPL_HELP_GROUP_GLUT_SHAPES: return "GLUT Solid Shapes:";
     case REPL_HELP_GROUP_GLU_TESS:    return "GLU Tessellator (concave / complex polygons):";
     case REPL_HELP_GROUP_MATH:        return "Math Functions (use anywhere floats are expected):";
-    default:                          return NULL;
+    default:                          assert(0); return NULL;
     }
 }
 
@@ -288,7 +290,14 @@ static const char *help_group_footer(ReplHelpGroup g) {
 }
 
 static int cmd_emit(int n, const char *fmt, ...) {
-    if (n >= HELP_CMD_LINES_MAX) return n;
+    if (n >= HELP_CMD_LINES_MAX) {
+        static int warned = 0;
+        if (!warned) {
+            fprintf(stderr, "repl_help: warning: HELP_CMD_LINES_MAX (%d) exceeded, help text truncated.\n", HELP_CMD_LINES_MAX);
+            warned = 1;
+        }
+        return n;
+    }
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(g_cmd_strbuf[n], HELP_CMD_LINE_BUF, fmt, ap);
@@ -334,17 +343,9 @@ const ReplHelpContent *repl_help_text_build(void) {
     /* --- Commands tab: per-command sections from the spec, then the
      * hand-written language sections. --- */
     int nc = 0;
-    nc = cmd_emit_group(nc, REPL_HELP_GROUP_GEOMETRY);
-    nc = cmd_emit_group(nc, REPL_HELP_GROUP_PRIMITIVE);
-    nc = cmd_emit_group(nc, REPL_HELP_GROUP_STATE);
-    nc = cmd_emit_group(nc, REPL_HELP_GROUP_RASTER);
-    nc = cmd_emit_group(nc, REPL_HELP_GROUP_BLEND);
-    nc = cmd_emit_group(nc, REPL_HELP_GROUP_TRANSFORM);
-    nc = cmd_emit_group(nc, REPL_HELP_GROUP_DEPTH_MASK);
-    nc = cmd_emit_group(nc, REPL_HELP_GROUP_LIGHTING);
-    nc = cmd_emit_group(nc, REPL_HELP_GROUP_GLUT_SHAPES);
-    nc = cmd_emit_group(nc, REPL_HELP_GROUP_GLU_TESS);
-    nc = cmd_emit_group(nc, REPL_HELP_GROUP_MATH);
+    for (int g = 1; g < REPL_HELP_GROUP_COUNT; g++) {
+        nc = cmd_emit_group(nc, (ReplHelpGroup)g);
+    }
     /* Language sections: copy pointers verbatim from the static array
      * (these strings are immortal so we can hand them to the renderer
      * directly without copying into g_cmd_strbuf). */

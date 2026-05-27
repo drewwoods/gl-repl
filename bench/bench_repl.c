@@ -582,10 +582,12 @@ static int populate_late_batches(int flat_cmds, int *old_pcs, int *new_pcs,
  * always repl_execute_program. */
 static void bench_render_one_fade_batch(int new_pc, int skip_pc, float alpha,
                                         FlatProgramView program) {
-    repl_execute_set_fade_context(alpha, skip_pc);
     repl_execute_program(&(ReplExecutionOptions){
-        .flat_cmd_count = new_pc,
-        .program        = program,
+        .flat_cmd_count      = new_pc,
+        .program             = program,
+        .fade_alpha_scale    = alpha,
+        .skip_geom_before_pc = skip_pc,
+        .has_fade_context    = 1,
     });
 }
 
@@ -681,7 +683,6 @@ static BenchResult bench_fade_batches(int iters) {
                                             plan.skip_limits[b],
                                             alpha, program);
             }
-            repl_execute_set_fade_context(1.0f, 0);
         }
         double dt = now_seconds() - t0;
         if (dt < r.min_sec) r.min_sec = dt;
