@@ -107,7 +107,7 @@ This directory is largely healthy after the prior round.
 
 ## Progress Update (2026-05-27)
 
-All 18 Tier A findings and 9 targeted Tier B findings (#4, #5, #6, #9, #16, #19, #29, #30, #31) have been fully addressed and verified as of 2026-05-27.
+All 18 Tier A findings and 12 targeted Tier B findings (#4, #5, #6, #9, #16, #19, #29, #30, #31, #32, #33, #34) have been fully addressed and verified as of 2026-05-27.
 
 | Finding | Tier | Description | Status | Resolution |
 |---------|------|-------------|--------|------------|
@@ -138,6 +138,9 @@ All 18 Tier A findings and 9 targeted Tier B findings (#4, #5, #6, #9, #16, #19,
 | #29 | B | Replay has two near-identical "unrecognized key stops replay" sites | **[RESOLVED]** | Centralized unrecognized key cancel path via `replay_cancel_on_unrecognized()` in Tier A. |
 | #30 | B | Replay `replay_start` is 30+ lines mixing state init, snapshot, and side effects | **[RESOLVED]** | Split `replay_start()` modularly into `replay_snapshot_baseline()` and `replay_init_playback_state()`. |
 | #31 | B | Tutorial `tutorial_enter_step` is ~100 lines with nested control flow | **[RESOLVED]** | Verified that per-kind step helpers have been cleanly extracted and dispatched via a `switch` statement. |
+| #32 | B | Tutorial cfg baseline save/restore is split across three functions | **[RESOLVED]** | Consolidated baseline management into `tutorial_baseline_capture` / `_restore` pair and extracted `tutorial_baseline_apply`. |
+| #33 | B | Replay seek/advance/step functions share a "clamp PC and update src_line" postamble | **[RESOLVED]** | Extracted `replay_update_after_pc_change` shared postamble and applied it. |
+| #34 | B | Variable panel drag has two scaling modes inlined in one function | **[RESOLVED]** | Extracted `drag_linear_value` and `drag_log_value` helpers. |
 
 ---
 
@@ -756,6 +759,8 @@ cognitive load.
 `tutorial_baseline_capture()` / `_restore()` pair called from start
 and teardown. (Tier B)
 
+**Status:** [RESOLVED] (Tier B pass, 2026-05-27) - Consolidated tutorial baseline management into a `tutorial_baseline_capture` and `tutorial_baseline_restore` pair, and extracted config application into `tutorial_baseline_apply`.
+
 ---
 
 ### 33. Replay seek/advance/step functions share a "clamp PC and update src_line" postamble
@@ -767,6 +772,8 @@ and teardown. (Tier B)
 helper would deduplicate.
 
 **Fix:** Extract the shared postamble. (Tier B)
+
+**Status:** [RESOLVED] (Tier B pass, 2026-05-27) - Extracted the `replay_update_after_pc_change` shared postamble in `replay.c` and applied it to `replay_seek` and `replay_advance`.
 
 ---
 
@@ -781,6 +788,8 @@ Each is ~15 lines with different math. They share no code.
 
 **Fix:** Extract `drag_linear_value()` and `drag_log_value()` helpers.
 (Tier B)
+
+**Status:** [RESOLVED] (Tier B pass, 2026-05-27) - Extracted the `drag_linear_value` and `drag_log_value` helpers in `variable_panel_drag.c`.
 
 ---
 
