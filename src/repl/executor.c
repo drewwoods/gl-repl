@@ -667,16 +667,46 @@ void repl_execute_program(const ReplExecutionOptions *options) {
         case CMD_VAR_DECLARE:
         case CMD_TYPE_COUNT:
             break;
-        /* Anything not handled explicitly above is a state-mutating
-         * cmd routed through repl_apply_state_cmd (CMD_ENABLE,
-         * CMD_DISABLE, CMD_SHADE_MODEL, CMD_COLOR_MATERIAL,
-         * CMD_MATERIALFV / _MATERIALF, CMD_LIGHT_MODEL_I,
-         * CMD_FRONT_FACE, CMD_DEPTH_FUNC / _MASK, CMD_COLOR_MASK,
-         * CMD_POINT_PARAMETER_FV, CMD_BLEND_FUNC, CMD_CLEAR_COLOR).
-         * Adding a new state cmd to repl_apply_state_cmd plugs into
-         * the main switch automatically. */
-        default:
-            repl_apply_state_cmd(&flat_cmds[pc], alpha_scale);
+        /* State-mutating cmds: enumerated explicitly so this switch is
+         * exhaustive over CmdType. Without enumeration, a `default:`
+         * would silently swallow any newly-added CmdType (the prior
+         * shape routed the default through repl_apply_state_cmd, whose
+         * own default returns 0 — the "you forgot to handle this"
+         * signal was lost in both layers). With no default and -Wall
+         * (which enables -Wswitch), adding a new CmdType emits a
+         * compile-time warning here. Adding a new entry to
+         * repl_apply_state_cmd still only requires one new case below;
+         * the cluster delegates uniformly. */
+        case CMD_ENABLE:
+        case CMD_DISABLE:
+        case CMD_SHADE_MODEL:
+        case CMD_COLOR_MATERIAL:
+        case CMD_MATERIALFV:
+        case CMD_MATERIALF:
+        case CMD_LIGHT_MODEL_I:
+        case CMD_FRONT_FACE:
+        case CMD_DEPTH_FUNC:
+        case CMD_DEPTH_MASK:
+        case CMD_COLOR_MASK:
+        case CMD_POINT_PARAMETER_FV:
+        case CMD_BLEND_FUNC:
+        case CMD_CLEAR_COLOR:
+            /* repl_apply_state_cmd returns 0 if the cmd isn't in its
+             * own switch — which would mean the executor enumerated
+             * it here but the apply helper hasn't caught up yet. Log
+             * loudly once per type so the asymmetry surfaces in dev
+             * builds instead of as a silent visual regression. */
+            if (!repl_apply_state_cmd(&flat_cmds[pc], alpha_scale)) {
+                static int s_warned_unhandled[CMD_TYPE_COUNT];
+                int t = (int)flat_cmds[pc].type;
+                if (t >= 0 && t < CMD_TYPE_COUNT && !s_warned_unhandled[t]) {
+                    fprintf(stderr,
+                            "repl_executor: state cmd %d enumerated in "
+                            "executor switch but not in "
+                            "repl_apply_state_cmd\n", t);
+                    s_warned_unhandled[t] = 1;
+                }
+            }
             break;
         }
         pc++;
