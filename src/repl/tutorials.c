@@ -274,7 +274,7 @@ static const TutorialEntry *tutorial_entry_at(int idx) {
     return &g_tutorials[idx];
 }
 
-static const TutorialStep *tutorial_step_at(int idx, int step_idx) {
+const TutorialStep *repl_tutorial_step_get(int idx, int step_idx) {
     const TutorialEntry *entry = tutorial_entry_at(idx);
     if (!entry || !entry->steps || step_idx < 0)
         return NULL;
@@ -312,45 +312,12 @@ int repl_tutorial_step_count(int idx) {
     return count;
 }
 
-const char *repl_tutorial_step_comment(int idx, int step_idx) {
-    const TutorialStep *step = tutorial_step_at(idx, step_idx);
-    return step ? step->comment : NULL;
-}
-
-const char *repl_tutorial_step_expected(int idx, int step_idx) {
-    const TutorialStep *step = tutorial_step_at(idx, step_idx);
-    return step ? step->expected : NULL;
-}
-
-TutorialStepPlacementKind repl_tutorial_step_placement(int idx, int step_idx) {
-    const TutorialStep *step = tutorial_step_at(idx, step_idx);
-    return step ? step->placement : TUTORIAL_STEP_APPEND;
-}
-
-const char *repl_tutorial_step_label(int idx, int step_idx) {
-    const TutorialStep *step = tutorial_step_at(idx, step_idx);
-    return step ? step->label : NULL;
-}
-
-const char *repl_tutorial_step_target_label(int idx, int step_idx) {
-    const TutorialStep *step = tutorial_step_at(idx, step_idx);
-    return step ? step->target_label : NULL;
-}
-
-TutorialStepKind repl_tutorial_step_kind(int idx, int step_idx) {
-    const TutorialStep *step = tutorial_step_at(idx, step_idx);
-    return step ? step->kind : TUTORIAL_STEP_KIND_COMMAND;
-}
-
-const char *repl_tutorial_step_cfg_slug(int idx, int step_idx) {
-    const TutorialStep *step = tutorial_step_at(idx, step_idx);
-    return step ? step->cfg_slug : NULL;
-}
-
-int repl_tutorial_step_cfg_value(int idx, int step_idx) {
-    const TutorialStep *step = tutorial_step_at(idx, step_idx);
-    return step ? step->cfg_value : 0;
-}
+/* The eight per-field step accessors are now `static inline` in
+ * tutorials.h and call repl_tutorial_step_get() once each. Callers
+ * that need more than one field per step (e.g. the tutorial-menu
+ * row renderer) should call repl_tutorial_step_get directly and
+ * walk fields off the returned pointer to avoid O(N) walks per
+ * field. */
 
 const char *const *repl_tutorial_cfg_lines(int idx) {
     const TutorialEntry *entry = tutorial_entry_at(idx);
