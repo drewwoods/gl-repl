@@ -1115,6 +1115,40 @@ static void run_tests(void) {
 
         r = repl_eval_numeric_arg_at_cursor("glVertex3f(1.0, 2.0, 3.0)", 0);
         ASSERT_TRUE("cursor before paren not found", !r.found);
+
+        /* Boundary positions inside an arg slot: in front of the digits,
+         * in the middle, and after — with and without surrounding
+         * whitespace. "glVertex3f(1.0, 2.5, 3.0)" — ( at 10, , at 14, ,
+         * at 19, ) at 24. */
+        r = repl_eval_numeric_arg_at_cursor("glVertex3f(1.0, 2.5, 3.0)", 11);
+        ASSERT_TRUE("cursor in front of first arg", r.found);
+        TEST_ASSERT_FLOAT(&g_harness, "front of first arg value", r.value, 1.0f, 1e-4f);
+
+        r = repl_eval_numeric_arg_at_cursor("glVertex3f(1.0, 2.5, 3.0)", 13);
+        ASSERT_TRUE("cursor on last digit of first arg", r.found);
+        TEST_ASSERT_FLOAT(&g_harness, "last digit value", r.value, 1.0f, 1e-4f);
+
+        r = repl_eval_numeric_arg_at_cursor("glVertex3f(1.0, 2.5, 3.0)", 14);
+        ASSERT_TRUE("cursor on trailing comma (no space)", r.found);
+        TEST_ASSERT_FLOAT(&g_harness, "trailing comma value", r.value, 1.0f, 1e-4f);
+
+        r = repl_eval_numeric_arg_at_cursor("glVertex3f(1.0, 2.5, 3.0)", 15);
+        ASSERT_TRUE("cursor in leading space of second arg", r.found);
+        TEST_ASSERT_FLOAT(&g_harness, "leading space value", r.value, 2.5f, 1e-4f);
+
+        r = repl_eval_numeric_arg_at_cursor("glVertex3f(1.0, 2.5, 3.0)", 24);
+        ASSERT_TRUE("cursor on closing paren of last arg", r.found);
+        TEST_ASSERT_FLOAT(&g_harness, "closing paren value", r.value, 3.0f, 1e-4f);
+
+        /* Trailing whitespace inside a slot: "glVertex3f(1.0 , 2.5, 3.0)"
+         * — ( at 10, ' ' at 14, , at 15. */
+        r = repl_eval_numeric_arg_at_cursor("glVertex3f(1.0 , 2.5, 3.0)", 14);
+        ASSERT_TRUE("cursor in trailing space after first arg", r.found);
+        TEST_ASSERT_FLOAT(&g_harness, "trailing-space value", r.value, 1.0f, 1e-4f);
+
+        r = repl_eval_numeric_arg_at_cursor("glVertex3f(1.0 , 2.5, 3.0)", 15);
+        ASSERT_TRUE("cursor on comma after trailing space", r.found);
+        TEST_ASSERT_FLOAT(&g_harness, "comma-after-space value", r.value, 1.0f, 1e-4f);
     }
 
     /* ---- swatch_step ---- */
