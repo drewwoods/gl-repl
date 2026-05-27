@@ -682,11 +682,17 @@ static TutorialStepResult tutorial_enter_step_set(int idx, int step, int instruc
      * comment we just inserted; otherwise the editor renders the
      * empty input-buffer overlay on top of the comment row and the
      * instruction is invisible until the user presses a key. */
-    const char *slug = repl_tutorial_step_cfg_slug(idx, step);
-    int value = repl_tutorial_step_cfg_value(idx, step);
+    const char *slug       = repl_tutorial_step_cfg_slug(idx, step);
+    const char *value_name = repl_tutorial_step_cfg_value_name(idx, step);
+    int         value      = repl_tutorial_step_cfg_value(idx, step);
 
     state->in_enter_step = 1;
-    repl_cfg_set_int(slug, value);
+    if (value_name)
+        /* Symbolic value (e.g. "GRID_THEME_RADAR"). Bridge resolves
+         * the name to int via resolve_text inside apply. */
+        repl_cfg_set_text(slug, value_name);
+    else
+        repl_cfg_set_int(slug, value);
     state->in_enter_step = 0;
 
     state->expected_commit_line = -1;
@@ -709,8 +715,14 @@ static TutorialStepResult tutorial_enter_step_require(int idx, int step, int ins
      * target. If already satisfied on entry, signal auto-advance to
      * the surrounding loop (no recursion — a chain of already-
      * satisfied REQUIREs can't blow the stack). */
-    const char *slug = repl_tutorial_step_cfg_slug(idx, step);
+    const char *slug       = repl_tutorial_step_cfg_slug(idx, step);
+    const char *value_name = repl_tutorial_step_cfg_value_name(idx, step);
     int target = repl_tutorial_step_cfg_value(idx, step);
+    if (value_name) {
+        int resolved;
+        if (repl_cfg_resolve_text(slug, value_name, &resolved))
+            target = resolved;
+    }
     state->expected_commit_line = -1;
     if (tutorial_cfg_matches_target(slug, target))
         return TUTORIAL_STEP_AUTOADVANCE;  /* auto-advance via the loop */

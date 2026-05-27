@@ -234,10 +234,20 @@ static int parse_cfg(const char *args) {
     if (*p != '=') return 0;
     p++;
     while (*p && isspace((unsigned char)*p)) p++;
-    int val = (int)strtol(p, NULL, 10);
-    /* Accumulate config in the accumulator. The end of load drain
-     * (repl_export_apply_pending_cfg) will apply the full bag to the live state. */
-    repl_config_bag_set_int(&g_import_cfg_accumulator, slug, val);
+    /* Copy the raw value token (trimmed). Used to be strtol →
+     * snprintf("%d") here; now passed through verbatim so the bridge
+     * can resolve symbolic enum names like "GRID_THEME_RADAR"
+     * alongside legacy integer-form workspaces. The bridge's
+     * resolve_text / strtol fallback runs at apply time. */
+    char value[REPL_CFG_VALUE_MAX];
+    int vi = 0;
+    while (*p && !isspace((unsigned char)*p) &&
+           vi < (int)sizeof(value) - 1) {
+        value[vi++] = *p++;
+    }
+    value[vi] = '\0';
+    if (vi == 0) return 0;
+    repl_config_bag_set(&g_import_cfg_accumulator, slug, value);
     return 1;
 }
 

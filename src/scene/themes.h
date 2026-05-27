@@ -11,37 +11,56 @@
 #ifndef SCENE_THEMES_H
 #define SCENE_THEMES_H
 
+/* X-macro lists drive the enum *and* any cfg-symbol string table that
+ * needs to round-trip the value name (see cfg_grid_theme_symbols et al.
+ * in src/app/glr_actions.c). Adding a new theme/backdrop here picks it
+ * up everywhere automatically. */
+#define GRID_THEME_LIST(X) \
+    X(OFF)                 \
+    X(CLASSIC)             \
+    X(FOG)                 \
+    X(TRON)                \
+    X(EMBER)               \
+    X(FAINT)               \
+    X(FOCUS)               \
+    X(OCEAN)               \
+    X(XZRULER)             \
+    X(PLANES)              \
+    X(RADAR)
+
 typedef enum {
-    GRID_THEME_OFF = 0,
-    GRID_THEME_CLASSIC,
-    GRID_THEME_FOG,
-    GRID_THEME_TRON,
-    GRID_THEME_EMBER,
-    GRID_THEME_FAINT,
-    GRID_THEME_FOCUS,
-    GRID_THEME_OCEAN,
-    GRID_THEME_XZRULER,
-    GRID_THEME_PLANES,
-    GRID_THEME_RADAR,
+#define GRID_THEME_ENUM_ENTRY(name) GRID_THEME_##name,
+    GRID_THEME_LIST(GRID_THEME_ENUM_ENTRY)
+#undef GRID_THEME_ENUM_ENTRY
     GRID_THEME_COUNT
 } SceneGridTheme;
 
+#define AXES_THEME_LIST(X) \
+    X(OFF)                 \
+    X(CLASSIC)             \
+    X(PULSE)               \
+    X(NEON)                \
+    X(COMPASS)             \
+    X(GIZMO)               \
+    X(RULER)
+
 typedef enum {
-    AXES_THEME_OFF = 0,
-    AXES_THEME_CLASSIC,
-    AXES_THEME_PULSE,
-    AXES_THEME_NEON,
-    AXES_THEME_COMPASS,
-    AXES_THEME_GIZMO,
-    AXES_THEME_RULER,
+#define AXES_THEME_ENUM_ENTRY(name) AXES_THEME_##name,
+    AXES_THEME_LIST(AXES_THEME_ENUM_ENTRY)
+#undef AXES_THEME_ENUM_ENTRY
     AXES_THEME_COUNT
 } SceneAxesTheme;
 
+#define SCENE_BACKDROP_LIST(X) \
+    X(OFF)                     \
+    X(CITYSCAPE)               \
+    X(STARS)                   \
+    X(CITY_AND_STARS)
+
 typedef enum {
-    SCENE_BACKDROP_OFF = 0,
-    SCENE_BACKDROP_CITYSCAPE,
-    SCENE_BACKDROP_STARS,
-    SCENE_BACKDROP_CITY_AND_STARS,
+#define SCENE_BACKDROP_ENUM_ENTRY(name) SCENE_BACKDROP_##name,
+    SCENE_BACKDROP_LIST(SCENE_BACKDROP_ENUM_ENTRY)
+#undef SCENE_BACKDROP_ENUM_ENTRY
     SCENE_BACKDROP_COUNT
 } SceneBackdropMode;
 

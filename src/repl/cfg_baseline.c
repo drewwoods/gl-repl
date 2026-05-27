@@ -151,3 +151,19 @@ int repl_cfg_known(const char *slug) {
     if (!slug || !b || !b->is_known) return 0;
     return b->is_known(slug);
 }
+
+void repl_cfg_set_text(const char *slug, const char *value_name) {
+    const ReplConfigBridge *b = g_cfg_bridge;
+    if (!slug || !value_name || !b || !b->apply) return;
+    ReplConfigBag single;
+    repl_config_bag_clear(&single);
+    if (!repl_config_bag_set(&single, slug, value_name)) return;
+    b->apply(&single);
+}
+
+int repl_cfg_resolve_text(const char *slug, const char *value_name,
+                          int *out) {
+    const ReplConfigBridge *b = g_cfg_bridge;
+    if (!slug || !value_name || !out || !b || !b->resolve_text) return 0;
+    return b->resolve_text(slug, value_name, out);
+}

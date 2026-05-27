@@ -12,6 +12,7 @@
 #include "repl/state_owners.h"
 #include "repl/state_views.h"
 #include "repl/tutorials.h"
+#include "scene/themes.h"        /* GRID_THEME_*, AXES_THEME_*, SCENE_BACKDROP_* */
 #include "source_document.h"
 #include "support/test_harness.h"
 #include "ui/app/state.h"
@@ -2204,8 +2205,50 @@ static void test_baseline_captures_view_mode_even_when_unreferenced(void) {
                repl_cfg_get_int("view_mode", -1), 1);
 }
 
+/* Audit #41: tutorial catalogs hardcode integer grid-theme values in
+ * their SET steps (`{"grid", 10}` for RADAR, `{"grid", 6}` for FOCUS in
+ * the Feature Tour). Without a test, reordering `SceneGridTheme` in
+ * src/scene/themes.h would silently shift the showcase to different
+ * themes. Locate the Feature Tour by name (don't pin its catalog
+ * index), find the grid SET steps in catalog order, and assert each
+ * value matches the named enum. */
+static void test_feature_tour_grid_steps_match_named_enums(void) {
+    int n = repl_tutorial_count();
+    int tour_idx = -1;
+    for (int i = 0; i < n; i++) {
+        if (strcmp(repl_tutorial_name(i), "Feature Tour") == 0) {
+            tour_idx = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("Feature Tour exists in tutorial catalog", tour_idx >= 0);
+    if (tour_idx < 0) return;
+
+    int step_count = repl_tutorial_step_count(tour_idx);
+    int grid_step_idx[8];
+    int grid_step_count = 0;
+    for (int i = 0; i < step_count; i++) {
+        const char *slug = repl_tutorial_step_cfg_slug(tour_idx, i);
+        if (slug && strcmp(slug, "grid") == 0 &&
+            repl_tutorial_step_kind(tour_idx, i) == TUTORIAL_STEP_KIND_SET) {
+            if (grid_step_count < 8)
+                grid_step_idx[grid_step_count++] = i;
+        }
+    }
+    ASSERT_INT("Feature Tour has two grid SET steps", grid_step_count, 2);
+    if (grid_step_count < 2) return;
+
+    ASSERT_INT("first grid SET step == GRID_THEME_RADAR",
+               repl_tutorial_step_cfg_value(tour_idx, grid_step_idx[0]),
+               GRID_THEME_RADAR);
+    ASSERT_INT("second grid SET step == GRID_THEME_FOCUS",
+               repl_tutorial_step_cfg_value(tour_idx, grid_step_idx[1]),
+               GRID_THEME_FOCUS);
+}
+
 int main(void) {
     tutorial_state_init_explicit();
+    test_feature_tour_grid_steps_match_named_enums();
     test_exit_on_require_does_not_autoadvance();
     test_restart_during_tutorial_preserves_original_baseline();
     test_baseline_captures_view_mode_even_when_unreferenced();

@@ -299,11 +299,93 @@ static const GlrConfigItem *glr_export_cfg_find_item_by_slug(const char *slug) {
     return NULL;
 }
 
+/* Symbolic-name → enum-value tables. Built-in catalogs (examples,
+ * tutorials) record values like "GRID_THEME_RADAR" rather than the raw
+ * `10`; this lookup resolves them at apply time so reordering the
+ * underlying enum (src/scene/themes.h) doesn't silently shift which
+ * value the catalog selects.
+ *
+ * The slug→table map below covers every enum-valued slug the catalogs
+ * actually use today (grid / axes / backdrop). Other enum-shaped slugs
+ * — replay, code_panel_layout, vertex_label, etc. — stay integer-only
+ * in their saved form because no catalog literal carries them
+ * symbolically. Add a table here if a new catalog needs symbolic
+ * support for one of those slugs.
+ *
+ * Each table is keyed by enum index so STATIC_ASSERT can pin
+ * length-against-count, catching "new enum value but missed the
+ * table" at build time. */
+/* The string tables share their entry list with the enum definitions
+ * in src/scene/themes.h via X-macros, so adding a theme/backdrop there
+ * adds its symbol here automatically. */
+static const char *cfg_grid_theme_symbols[GRID_THEME_COUNT] = {
+#define GRID_THEME_SYMBOL_ENTRY(name) [GRID_THEME_##name] = "GRID_THEME_" #name,
+    GRID_THEME_LIST(GRID_THEME_SYMBOL_ENTRY)
+#undef GRID_THEME_SYMBOL_ENTRY
+};
+static const char *cfg_axes_theme_symbols[AXES_THEME_COUNT] = {
+#define AXES_THEME_SYMBOL_ENTRY(name) [AXES_THEME_##name] = "AXES_THEME_" #name,
+    AXES_THEME_LIST(AXES_THEME_SYMBOL_ENTRY)
+#undef AXES_THEME_SYMBOL_ENTRY
+};
+static const char *cfg_backdrop_mode_symbols[SCENE_BACKDROP_COUNT] = {
+#define SCENE_BACKDROP_SYMBOL_ENTRY(name) [SCENE_BACKDROP_##name] = "SCENE_BACKDROP_" #name,
+    SCENE_BACKDROP_LIST(SCENE_BACKDROP_SYMBOL_ENTRY)
+#undef SCENE_BACKDROP_SYMBOL_ENTRY
+};
+
+static int glr_cfg_symbol_table_lookup(const char *value_name,
+                                       const char *const *table,
+                                       int count, int *out_value) {
+    if (!value_name || !table || !out_value) return 0;
+    for (int i = 0; i < count; i++) {
+        if (table[i] && strcmp(value_name, table[i]) == 0) {
+            *out_value = i;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int glr_export_cfg_resolve_text(const char *slug,
+                                       const char *value_name,
+                                       int *out_value) {
+    if (!slug || !value_name || !out_value) return 0;
+    if (strcmp(slug, "grid") == 0)
+        return glr_cfg_symbol_table_lookup(value_name,
+                                           cfg_grid_theme_symbols,
+                                           GRID_THEME_COUNT, out_value);
+    if (strcmp(slug, "axes") == 0)
+        return glr_cfg_symbol_table_lookup(value_name,
+                                           cfg_axes_theme_symbols,
+                                           AXES_THEME_COUNT, out_value);
+    if (strcmp(slug, "backdrop") == 0)
+        return glr_cfg_symbol_table_lookup(value_name,
+                                           cfg_backdrop_mode_symbols,
+                                           SCENE_BACKDROP_COUNT, out_value);
+    return 0;
+}
+
+/* Resolve a bag value to its integer form. Tries the symbolic
+ * resolver first (so catalog literals like "GRID_THEME_RADAR" land at
+ * the right enum value); falls back to strtol so legacy
+ * integer-form saved files keep loading. Treats "0" as a valid int
+ * — strtol returning 0 with the input being "0" is success, not
+ * "no conversion." */
+static int glr_export_cfg_resolve_value(const char *slug,
+                                        const char *value_text) {
+    int resolved;
+    if (glr_export_cfg_resolve_text(slug, value_text, &resolved))
+        return resolved;
+    return (int)strtol(value_text, NULL, 10);
+}
+
 static void glr_export_cfg_apply(const ReplConfigBag *cfg) {
     if (!cfg) return;
     for (int idx = 0; idx < cfg->count; idx++) {
-        const char *slug = cfg->items[idx].key;
-        int val = (int)strtol(cfg->items[idx].value, NULL, 10);
+        const char *slug  = cfg->items[idx].key;
+        const char *value = cfg->items[idx].value;
+        int val = glr_export_cfg_resolve_value(slug, value);
         if (strcmp(slug, "top_code_panel") == 0) {
             val = val ? CODE_PANEL_LAYOUT_TOP : CODE_PANEL_LAYOUT_LEFT;
         }
@@ -338,6 +420,7 @@ const ReplConfigBridge g_glr_export_cfg_bridge = {
     .get_int           = glr_export_cfg_get_int,
     .is_known          = glr_export_cfg_is_known,
     .slug_is_scene_subset = glr_export_cfg_slug_is_scene_subset,
+    .resolve_text      = glr_export_cfg_resolve_text,
 };
 
 void glr_actions_install_export_cfg_bridge(void) {

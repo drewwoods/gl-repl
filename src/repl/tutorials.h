@@ -83,6 +83,13 @@ typedef struct {
     TutorialStepKind          kind;
     const char               *cfg_slug;
     int                       cfg_value;
+    /* Optional symbolic value name (e.g. "GRID_THEME_RADAR"). When
+     * non-NULL the runner resolves the name through the
+     * controller-installed bridge at apply time (SET) or compare time
+     * (REQUIRE) instead of using the raw `cfg_value` integer. Lets the
+     * catalog name the enum constant rather than encoding magic
+     * numbers — see plans/done/src-repl-code-smell-audit-2.md #41. */
+    const char               *cfg_value_name;
 } TutorialStep;
 
 /* Curated metadata tags used by the Tutorials menu. Tutorials keep their
@@ -181,6 +188,10 @@ static inline const char *repl_tutorial_step_cfg_slug(int idx, int step_idx) {
 static inline int repl_tutorial_step_cfg_value(int idx, int step_idx) {
     const TutorialStep *step = repl_tutorial_step_get(idx, step_idx);
     return step ? step->cfg_value : 0;
+}
+static inline const char *repl_tutorial_step_cfg_value_name(int idx, int step_idx) {
+    const TutorialStep *step = repl_tutorial_step_get(idx, step_idx);
+    return step ? step->cfg_value_name : NULL;
 }
 
 /* The tutorial's leading `@cfg` strings (NULL-terminated array), or NULL

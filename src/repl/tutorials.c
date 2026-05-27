@@ -10,31 +10,47 @@
 
 #define STEP_APPEND(label, c, e) \
     { (label), (c), (e), TUTORIAL_STEP_APPEND, NULL, \
-      TUTORIAL_STEP_KIND_COMMAND, NULL, 0 }
+      TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL }
 
 #define STEP_AT(label, c, e, target) \
     { (label), (c), (e), TUTORIAL_STEP_LABEL, (target), \
-      TUTORIAL_STEP_KIND_COMMAND, NULL, 0 }
+      TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL }
 
 /* Showcase step: on entry apply cfg_slug=cfg_value so the user sees the
  * effect, show a "press Enter to continue" prompt, advance on ack key.
  * `expected` is NULL — there is no command to type. */
 #define STEP_SET(label, c, slug, val) \
     { (label), (c), NULL, TUTORIAL_STEP_APPEND, NULL, \
-      TUTORIAL_STEP_KIND_SET, (slug), (val) }
+      TUTORIAL_STEP_KIND_SET, (slug), (val), NULL }
+
+/* Symbolic-value variant of STEP_SET. The runner passes `val_name`
+ * (e.g. "GRID_THEME_RADAR") through the controller-installed bridge's
+ * resolve_text at apply time so the catalog reads the enum constant
+ * rather than encoding a magic number. `cfg_value` stays 0 here as
+ * the back-compat fallback in case a future caller resolves the name
+ * and writes the int back. */
+#define STEP_SET_SYM(label, c, slug, val_name) \
+    { (label), (c), NULL, TUTORIAL_STEP_APPEND, NULL, \
+      TUTORIAL_STEP_KIND_SET, (slug), 0, (val_name) }
 
 /* Check step: advance when the user themselves makes cfg_slug == cfg_value
  * (via F-key/menu/etc.). Auto-advances if already satisfied on entry.
  * `expected` is NULL. */
 #define STEP_REQUIRE(label, c, slug, val) \
     { (label), (c), NULL, TUTORIAL_STEP_APPEND, NULL, \
-      TUTORIAL_STEP_KIND_REQUIRE, (slug), (val) }
+      TUTORIAL_STEP_KIND_REQUIRE, (slug), (val), NULL }
+
+/* Symbolic-value variant of STEP_REQUIRE. The runner resolves
+ * `val_name` to int via the bridge's resolve_text at compare time. */
+#define STEP_REQUIRE_SYM(label, c, slug, val_name) \
+    { (label), (c), NULL, TUTORIAL_STEP_APPEND, NULL, \
+      TUTORIAL_STEP_KIND_REQUIRE, (slug), 0, (val_name) }
 
 /* Sentinel: comment == NULL is the only field the terminator scan reads
  * (SET/REQUIRE legitimately have NULL `expected`, so the old
  * comment&&expected check would misread the first SET as a sentinel). */
 #define STEP_SENTINEL { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL, \
-                        TUTORIAL_STEP_KIND_COMMAND, NULL, 0 }
+                        TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL }
 
 static const TutorialStep g_tutorial_first_triangle_steps[] = {
     STEP_APPEND(NULL,
