@@ -56,9 +56,8 @@ static void flatten_fail(FlattenContext *ctx, const char *msg) {
 }
 
 static void flatten_get_for_var_name(SourceTextView text,
-                                     const GLCmd *cmd, int cmd_idx,
+                                     int cmd_idx,
                                      char *var, int var_sz) {
-    (void)cmd;
     const char *p = flatten_src_text(text, cmd_idx);
     while (*p && *p != '(') p++;
     if (*p) p++;
@@ -208,7 +207,7 @@ static void flatten_for_loop(FlattenContext *ctx,
     float end_val   = src_cmd->args[1];
     float step_val  = src_cmd->args[2];
     const char *src_text = flatten_src_text(ctx->text, i);
-    flatten_get_for_var_name(ctx->text, src_cmd, i, var_name, sizeof(var_name));
+    flatten_get_for_var_name(ctx->text, i, var_name, sizeof(var_name));
 
     if (src_cmd->has_vars) {
         const char *unused_body;
@@ -236,13 +235,11 @@ static void flatten_for_loop(FlattenContext *ctx,
         if (ctx->abort) return;
         ExprVar lvars[MAX_EXPR_VARS];
         int lnv = 0;
-        if (lnv < MAX_EXPR_VARS) {
-            repl_copy_string_fits(lvars[lnv].name,
-                                  sizeof(lvars[lnv].name),
-                                  var_name);
-            lvars[lnv].value = val;
-            lnv++;
-        }
+        repl_copy_string_fits(lvars[lnv].name,
+                              sizeof(lvars[lnv].name),
+                              var_name);
+        lvars[lnv].value = val;
+        lnv++;
         if (vars)
             for (int v = 0; v < nv && lnv < MAX_EXPR_VARS; v++)
                 lvars[lnv++] = vars[v];
@@ -345,7 +342,7 @@ static void flatten_if_block(FlattenContext *ctx,
     if (repl_extract_paren_payload(src_text, cond_text, sizeof(cond_text))) {
         char repl_cond[MAX_LINE_LEN];
         repl_eval_c_expr_to_repl(cond_text, repl_cond, sizeof(repl_cond));
-        ExprCtx expr_ctx = { repl_cond, vars, nv };
+        ExprCtx expr_ctx = { repl_cond, vars, nv, NULL, 0 };
         cond = repl_eval_expr(&expr_ctx);
     }
 
@@ -489,7 +486,7 @@ static void flatten_range(FlattenContext *ctx,
                                               rhs, sizeof(rhs)) && rhs[0]) {
                 char repl_rhs[MAX_LINE_LEN];
                 repl_eval_c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
-                ExprCtx expr_ctx = { repl_rhs, vars, nv };
+                ExprCtx expr_ctx = { repl_rhs, vars, nv, NULL, 0 };
                 value = repl_eval_expr(&expr_ctx);
                 if (vars && nv > 0)
                     local_rhs_vars = input_has_expr_vars(rhs, vars, nv);

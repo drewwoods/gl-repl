@@ -35,7 +35,7 @@
  * non-NULL, the parser writes any error message into
  * the buffer instead of calling set_status() directly, so the editor
  * (or whatever orchestrates the commit) decides whether and how to
- * surface the diagnostic (introduced in phase H.5 commit 40). */
+ * surface the diagnostic. */
 typedef struct {
     int source_line_idx;
     ExprVar *vars;
@@ -59,10 +59,9 @@ typedef struct {
  * parse, editor commit, the lean loader, tests — already
  * constructs a context. The former NULL
  * fallback (which read repl_state_edit_line() for source_line_idx)
- * since β forbids REPL pipeline code from reaching back into the
- * cursor accessor; the fallback was confirmed dead code, not just
- * a defensive vestige (implemented in phase 3.6.3; see the
- * edit-line-ownership plan doc).
+ * is gone because parser code does not reach back into REPL cursor
+ * accessors; the fallback was confirmed dead code, not just a
+ * defensive vestige.
  *
  * Returns 1 on success, 0 on parse error or NULL ctx. On success,
  * out->cmd holds the parsed command and out->text holds the

@@ -53,8 +53,8 @@
  *  The REPL UI shows all declared variables in the "Predefined Variables" section of the code panel, and they are available for use in expressions.
  *  Used in:
  *  - src/repl/eval.c — the table itself.
- *  - editor_undo.h — undo snapshots capture all MAX_PREDEF_VARS slots' names + values.
- *  - replay.c / glr_ctrl.c — replay baselines copy/restore all MAX_PREDEF_VARS values across mode transitions.
+ *  - src/editor/undo.c — undo snapshots capture all MAX_PREDEF_VARS slots' names + values.
+ *  - replay and controller baselines — mode transitions copy/restore all MAX_PREDEF_VARS values.
  *  - src/repl/state_views.h — the by-value snapshot the UI reads from.
  *
  *
@@ -65,7 +65,9 @@
  *  resolve identifiers like i, j, function parameters, and predef vars at
  *  evaluation time without taking out a global lock.
  *
- *  - Storage: per-call stack arrays — ExprVar vis[MAX_EXPR_VARS] in src/repl/compile.c, ExprVar vars[MAX_EXPR_VARS] in src/repl/flatten.h's FlatScope, params[MAX_EXPR_VARS] in autocomplete hint generation.
+ *  - Storage: per-call stack arrays — ExprVar vis[MAX_EXPR_VARS] in src/repl/compile.c,
+ *    ExprVar vars[MAX_EXPR_VARS] in src/repl/flatten.c, and params[MAX_EXPR_VARS]
+ *    in autocomplete hint generation.
  *  - Populated by collect_visible_vars() walking the active for-loop / function-def scope.
  *  - Includes function-call parameters, for-loop iterator vars, and visible predef vars.
  *  - Acts as a name-resolution snapshot during one parse/eval call; not persistent state.
@@ -283,7 +285,7 @@ float repl_eval_expr(ExprCtx *ctx);
 
 /* Parse a comma-separated list of expressions from string s. Evaluates each
  * using the provided variables. Returns the number of expressions parsed
- * (up to max), -1 on error. */
+ * (up to max). */
 int   repl_eval_parse_exprs(const char *s, float *out, int max,
                             ExprVar *vars, int num_vars);
 

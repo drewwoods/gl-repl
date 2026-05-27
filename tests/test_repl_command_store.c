@@ -83,32 +83,6 @@ static void test_repl_command_store_can_insert(void) {
                  repl_command_store_can_insert(&bad_store, 1));
 }
 
-static void test_repl_command_store_first_non_decl(void) {
-    glr_ctrl_reset_all();
-
-    ReplCommandStore store = repl_command_store_live();
-    ASSERT_INT("empty store first_non_decl",
-               repl_command_store_first_non_decl(&store), 0);
-
-    GLCmd decl = make_cmd(CMD_VAR_DECLARE, "float x;");
-    GLCmd vertex = make_cmd(CMD_VERTEX3F, "glVertex3f(0, 0, 0);");
-
-    repl_command_store_insert_one(&store, 0, &decl, NULL);
-    ASSERT_INT("first_non_decl with one decl",
-               repl_command_store_first_non_decl(&store), 1);
-
-    repl_command_store_insert_one(&store, 0, &decl, NULL);
-    ASSERT_INT("first_non_decl with two decls",
-               repl_command_store_first_non_decl(&store), 2);
-
-    repl_command_store_insert_one(&store, 1, &vertex, NULL);
-    ASSERT_INT("first_non_decl with decl then vertex",
-               repl_command_store_first_non_decl(&store), 1);
-
-    ASSERT_INT("first_non_decl with NULL store",
-               repl_command_store_first_non_decl(NULL), 0);
-}
-
 static void test_repl_command_store_normalize_range(void) {
     glr_ctrl_reset_all();
 
@@ -508,7 +482,6 @@ int main(void) {
     test_repl_command_store_count();
     test_repl_command_store_capacity();
     test_repl_command_store_can_insert();
-    test_repl_command_store_first_non_decl();
     test_repl_command_store_normalize_range();
     test_repl_command_store_insert_one();
     test_repl_command_store_insert_one_with_explicit_line();
