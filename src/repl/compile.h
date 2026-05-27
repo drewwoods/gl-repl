@@ -343,6 +343,26 @@ ReplCompileResult repl_compile_for_loop_kernel(const char *input,
                                                ReplForLoopKernel *out,
                                                char *err, int err_size);
 
+/* Shared kernel for `if(expr) {`. Same contract as the for-loop
+ * kernel: OK + valid=0 means "input isn't an if-block, fall through";
+ * OK + valid=1 means out is populated; ERROR means err filled.
+ *
+ * Editor wraps with header-replace REPLACE_ONE and INSERT_MANY count=2
+ * (paired begin + end); the loader emits INSERT_ONE for just the
+ * begin (the `}` end-marker arrives as a separate file line). */
+typedef struct {
+    int    valid;
+    int    pos;
+    GLCmd  ib;                          /* CMD_IF_BEGIN, args[0] = cond_val */
+    char   ib_text[MAX_LINE_LEN];
+    char   indent[REPL_INDENT_TEXT_MAX];
+} ReplIfBlockKernel;
+
+ReplCompileResult repl_compile_if_block_kernel(const char *input,
+                                               const ReplCompileContext *ctx,
+                                               ReplIfBlockKernel *out,
+                                               char *err, int err_size);
+
 /* repl_load_apply_line moved to src/repl/load.h to keep this header pure
  * (compile descriptors only; no apply orchestration). */
 
