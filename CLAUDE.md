@@ -338,7 +338,11 @@ state-machine level, not buried in the doc body.
 | `src/repl/flatten.h` | Flatten public API (`repl_flatten_program`, cursor-highlight refresh) |
 | `src/repl/pipeline.h` | Pipeline and lifecycle surface for frame orchestration (flatten, autonormal, replay snapshots) |
 | `src/repl/autonormal.c` | Auto-generated `glNormal3f` maintenance for source commands |
-| `src/subsystems/replay/replay.c` | Replay state machine: PC, mode (OFF/PLAYING/PAUSED/DONE), speed, fade-batch ring |
+| `src/subsystems/replay/replay.c` | Replay-side walkers for tess preview and user-vertex traversal |
+| `src/subsystems/replay/replay_fade.c` | Fade batch ring ownership, skip-limit planning, and fade lifecycle |
+| `src/subsystems/replay/replay_input.c` | Replay keyboard and special-key routing |
+| `src/subsystems/replay/replay_internal.h` | Replay-private shared constants and helpers for the split translation units |
+| `src/subsystems/replay/replay_playback.c` | Replay state machine: start/stop, seek/advance, speed, and baseline snapshots |
 | `src/subsystems/replay/replay.h` | Replay public API (`replay_start`, `replay_toggle_play_pause`, etc.) |
 | `src/editor/search.c` | Case-insensitive substring search state and match navigation |
 | `src/editor/search.h` | Search query helpers and input routing API |
@@ -786,9 +790,13 @@ changing example-metadata behavior.
 
 ### Replay System
 
-Step-by-step execution visualization in `src/subsystems/replay/replay.c`:
-- `ReplReplayRuntimeState` (via `replay_state_view()`) tracks state
+Step-by-step execution visualization in `src/subsystems/replay/`:
+- `ReplayRuntimeState` (via `replay_state_view()`) tracks state
   (OFF/PLAYING/PAUSED/DONE), program counter, and speed multiplier
+- `replay_playback.c` owns start/stop, seek, advance, and speed control
+- `replay_fade.c` owns the fade batch ring, skip limits, and fade decay
+- `replay_input.c` routes replay-specific keyboard handling
+- `replay.c` keeps the tess-preview and user-vertex walkers used by render paths
 - During playback, the flat command count is clamped to `replay_exec_limit()`
   so only commands up to the PC render
 - Fade batch ring buffer — fading geometry snapshots; old geometry fades out

@@ -415,6 +415,7 @@ HDRS = \
 	src/ui/core/theme.h \
 	src/ui/app/variable_panel.h \
 	src/subsystems/color_picker/color_picker_state.h \
+	src/subsystems/replay/replay_internal.h \
 	src/subsystems/replay/replay.h \
 	src/subsystems/replay/replay_state.h \
 	src/subsystems/tutorial/tutorial.h \
