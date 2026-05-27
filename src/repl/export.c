@@ -34,6 +34,18 @@ static const char k_cfg_slug_line_smooth[] = "line_smooth";
 static const char k_cfg_slug_vertex_outlines[] = "vertex_outlines";
 static const char k_cfg_slug_vertex_points[] = "vertex_points";
 
+static int export_first_non_decl(const ReplCommandStore *store) {
+    int pos = 0;
+
+    if (!store || !store->cmds || !store->count)
+        return 0;
+
+    while (pos < *store->count &&
+           store->cmds[pos].type == CMD_VAR_DECLARE)
+        pos++;
+    return pos;
+}
+
 /* Camera bridge — same shape as the cfg bridge. Step 4a moved camera-block
  * emission and parsing through this interface so src/repl/export.c no longer
  * references glr_camera_*. The default bridge is installed by
@@ -270,7 +282,7 @@ static int parse_workspace_dir(const char *args) {
 }
 
 static void emit_workspace_dir(int *n) {
-    const char *workspace_dir = repl_state_workspace_dir();
+    const char *workspace_dir = repl_workspace_dir();
 
     if (workspace_dir[0] && *n < MAX_WORKSPACE_HEADER_LINES) {
         snprintf(g_workspace_header_lines[(*n)++], WORKSPACE_HEADER_LINE_LEN,
@@ -314,7 +326,7 @@ static int parse_var(const char *args) {
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != '=') return 0;
     p++;
-    ExprCtx ctx = { p, NULL, 0 };
+    ExprCtx ctx = { p, NULL, 0, NULL, 0 };
     float val = repl_eval_expr(&ctx);
     int idx = repl_eval_find_predef_var_idx(name);
     if (idx < 0) {
@@ -858,12 +870,8 @@ void repl_refresh_render_state_strings(void) {
      * install a bridge, so the toggles fall back to "Enable" /
      * "Disable" defaults below; the demo never exports anyway
      * (implemented in step 7a). */
-    int msaa_on        = g_export_cfg_bridge && g_export_cfg_bridge->get_int
-                         ? g_export_cfg_bridge->get_int(k_cfg_slug_msaa, 1)
-                         : 1;
-    int line_smooth_on = g_export_cfg_bridge && g_export_cfg_bridge->get_int
-                         ? g_export_cfg_bridge->get_int(k_cfg_slug_line_smooth, 0)
-                         : 0;
+    int msaa_on = repl_cfg_get_int(k_cfg_slug_msaa, 1);
+    int line_smooth_on = repl_cfg_get_int(k_cfg_slug_line_smooth, 0);
     snprintf(g_render_state_lines[0], sizeof(g_render_state_lines[0]),
              "  gl%s(GL_MULTISAMPLE);",
              msaa_on ? "Enable" : "Disable");
@@ -1274,16 +1282,15 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
                 }
             }
         }
-        int off = fprintf(f, "  // @%s", k_snippet_directive_declare);
+        fprintf(f, "  // @%s", k_snippet_directive_declare);
         for (int di = 0; di < cmd->var_decl_count; di++) {
             if (has_init[di]) {
                 char vbuf[32];
                 export_format_decl_float(vbuf, sizeof(vbuf), inits[di]);
-                off += fprintf(f, " %s=%s", cmd->var_names[di], vbuf);
+                fprintf(f, " %s=%s", cmd->var_names[di], vbuf);
             } else
-                off += fprintf(f, " %s", cmd->var_names[di]);
+                fprintf(f, " %s", cmd->var_names[di]);
         }
-        (void)off;
         fprintf(f, "\n");
         break;
     }
@@ -1439,10 +1446,8 @@ static void write_render_body_range_as_c(FILE *f, int start, int end_idx,
  * exports stay zero-overhead. */
 static int export_count_enabled_passes(void) {
     int count = 1;
-    if (g_export_cfg_bridge && g_export_cfg_bridge->get_int) {
-        if (g_export_cfg_bridge->get_int(k_cfg_slug_vertex_outlines, 0)) count++;
-        if (g_export_cfg_bridge->get_int(k_cfg_slug_vertex_points, 0)) count++;
-    }
+    if (repl_cfg_get_int(k_cfg_slug_vertex_outlines, 0)) count++;
+    if (repl_cfg_get_int(k_cfg_slug_vertex_points, 0)) count++;
     return count;
 }
 
@@ -1699,7 +1704,7 @@ static int import_parse_predef_decl(const char *line) {
         if (*p != '=') break;
         p++;
 
-        ExprCtx ctx = { p, NULL, 0 };
+        ExprCtx ctx = { p, NULL, 0, NULL, 0 };
         float val = repl_eval_expr(&ctx);
         p = ctx.p;
 
@@ -1827,7 +1832,7 @@ static int parse_snippet_declare(const char *args, int *loaded,
      * exported // @declare markers are encountered later in the snippet. */
     {
         ReplCommandStore store = repl_command_store_live();
-        int decl_pos = repl_command_store_first_non_decl(&store);
+        int decl_pos = export_first_non_decl(&store);
 
         /* Source text first; cmd-store second so a text-write failure
          * leaves no orphan GLCmd row. cmd-store failure rolls the
@@ -1863,7 +1868,6 @@ static int parse_snippet_declare(const char *args, int *loaded,
         }
         (*loaded)++;
     }
-    (void)warnings;
     return 1;
 }
 
@@ -2268,7 +2272,7 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
             const char *eq = strchr(np, '=');
             if (!eq) break;
             eq++;
-            ExprCtx ctx = { eq, NULL, 0 };
+            ExprCtx ctx = { eq, NULL, 0, NULL, 0 };
             nv[component_idx] = repl_eval_expr(&ctx);
             np = ctx.p;
         }
@@ -2309,7 +2313,7 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
             const char *eq = strchr(cp, '=');
             if (!eq) break;
             eq++;
-            ExprCtx ctx = { eq, NULL, 0 };
+            ExprCtx ctx = { eq, NULL, 0, NULL, 0 };
             cv[component_idx] = repl_eval_expr(&ctx);
             cp = ctx.p;
         }
@@ -2346,7 +2350,7 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
             const char *eq = strchr(vp, '=');
             if (!eq) break;
             eq++;
-            ExprCtx ctx = { eq, NULL, 0 };
+            ExprCtx ctx = { eq, NULL, 0, NULL, 0 };
             vv[component_idx] = repl_eval_expr(&ctx);
             vp = ctx.p;
         }
@@ -2673,12 +2677,8 @@ static void emit_export_display_geometry(FILE *f) {
      * pipeline. Demo case (no bridge installed) falls back to "off",
      * which is fine because the demo doesn't export (implemented in
      * step 7a). */
-    int outlines_on = g_export_cfg_bridge && g_export_cfg_bridge->get_int
-                      ? g_export_cfg_bridge->get_int(k_cfg_slug_vertex_outlines, 0)
-                      : 0;
-    int vpoints_on  = g_export_cfg_bridge && g_export_cfg_bridge->get_int
-                      ? g_export_cfg_bridge->get_int(k_cfg_slug_vertex_points, 0)
-                      : 0;
+    int outlines_on = repl_cfg_get_int(k_cfg_slug_vertex_outlines, 0);
+    int vpoints_on = repl_cfg_get_int(k_cfg_slug_vertex_points, 0);
     const ExportDisplayPassSpec passes[] = {
         { "Vertex Fill Pass",    1,               NULL },
         { "Vertex Outline Pass", outlines_on, emit_export_outline_pass_setup },
@@ -2746,34 +2746,12 @@ static void emit_export_display(FILE *f, const ExportNeeds *needs,
     emit_export_display_tail(f, needs, layout);
 }
 
-typedef int  (*ExportScaffoldSectionEnabledFn)(const ExportScaffoldContext *ctx);
 typedef void (*ExportScaffoldSectionEmitFn)(FILE *f,
                                             const ExportScaffoldContext *ctx);
 
 typedef struct {
-    const char                       *name;
-    ExportScaffoldSectionEmitFn       emit;
-    ExportScaffoldSectionEnabledFn    enabled;
+    ExportScaffoldSectionEmitFn emit;
 } ExportScaffoldSectionSpec;
-
-static int export_section_always(const ExportScaffoldContext *ctx) {
-    (void)ctx;
-    return 1;
-}
-
-static int export_section_needs_rand(const ExportScaffoldContext *ctx) {
-    return ctx && ctx->needs.needs_rand;
-}
-
-static int export_section_needs_scratch(const ExportScaffoldContext *ctx) {
-    return ctx && (ctx->needs.needs_scratch_a ||
-                   ctx->needs.needs_scratch_b ||
-                   ctx->needs.needs_scratch_c);
-}
-
-static int export_section_needs_tess(const ExportScaffoldContext *ctx) {
-    return ctx && ctx->needs.needs_tess;
-}
 
 static void emit_export_workspace_metadata_section(FILE *f,
                                                    const ExportScaffoldContext *ctx) {
@@ -2815,34 +2793,34 @@ static void emit_export_scratch_globals_section(FILE *f,
 
 static void emit_export_rand_helper_section(FILE *f,
                                             const ExportScaffoldContext *ctx) {
+    if (!ctx || !ctx->needs.needs_rand)
+        return;
     (void)ctx;
     write_rand_helper(f);
 }
 
-static int export_section_needs_label(const ExportScaffoldContext *ctx) {
-    return ctx && ctx->needs.needs_label;
-}
-
 static void emit_export_label_helper_section(FILE *f,
                                              const ExportScaffoldContext *ctx) {
+    if (!ctx || !ctx->needs.needs_label)
+        return;
     (void)ctx;
     write_label_helper(f);
 }
 
 static void emit_export_tess_preamble_section(FILE *f,
                                               const ExportScaffoldContext *ctx) {
+    if (!ctx || !ctx->needs.needs_tess)
+        return;
     (void)ctx;
     write_tess_preamble(f);
 }
 
-static int export_section_needs_save_restore(const ExportScaffoldContext *ctx) {
-    (void)ctx;
-    return export_count_enabled_passes() > 1 &&
-           export_has_persistent_predef_vars();
-}
-
 static void emit_export_save_restore_section(FILE *f,
                                              const ExportScaffoldContext *ctx) {
+    (void)ctx;
+    if (export_count_enabled_passes() <= 1 ||
+        !export_has_persistent_predef_vars())
+        return;
     (void)ctx;
     write_save_restore_helpers(f);
 }
@@ -2866,25 +2844,23 @@ static void emit_export_display_section(FILE *f,
 
 /* Section order is the exported C ABI: imports and compile tests assume it. */
 static const ExportScaffoldSectionSpec EXPORT_SCAFFOLD_SECTIONS[] = {
-    { "workspace metadata", emit_export_workspace_metadata_section, export_section_always },
-    { "header",             emit_export_header_section,             export_section_always },
-    { "predef globals",     emit_export_predef_globals_section,     export_section_always },
-    { "scratch globals",    emit_export_scratch_globals_section,    export_section_needs_scratch },
-    { "rand helper",        emit_export_rand_helper_section,        export_section_needs_rand },
-    { "label helper",       emit_export_label_helper_section,       export_section_needs_label },
-    { "tess preamble",      emit_export_tess_preamble_section,      export_section_needs_tess },
-    { "save/restore vars",  emit_export_save_restore_section,       export_section_needs_save_restore },
-    { "functions",          emit_export_functions_section,          export_section_always },
-    { "render helper",      emit_export_render_helper_section,      export_section_always },
-    { "display",            emit_export_display_section,            export_section_always },
+    { emit_export_workspace_metadata_section },
+    { emit_export_header_section },
+    { emit_export_predef_globals_section },
+    { emit_export_scratch_globals_section },
+    { emit_export_rand_helper_section },
+    { emit_export_label_helper_section },
+    { emit_export_tess_preamble_section },
+    { emit_export_save_restore_section },
+    { emit_export_functions_section },
+    { emit_export_render_helper_section },
+    { emit_export_display_section },
 };
 
 static void emit_export_scaffold(FILE *f, const ExportScaffoldContext *ctx) {
     for (size_t i = 0; i < sizeof(EXPORT_SCAFFOLD_SECTIONS) /
                            sizeof(EXPORT_SCAFFOLD_SECTIONS[0]); i++) {
-        const ExportScaffoldSectionSpec *section = &EXPORT_SCAFFOLD_SECTIONS[i];
-        if (!section->enabled || section->enabled(ctx))
-            section->emit(f, ctx);
+        EXPORT_SCAFFOLD_SECTIONS[i].emit(f, ctx);
     }
 }
 

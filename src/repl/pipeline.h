@@ -16,7 +16,6 @@ void repl_ensure_init_bootstrap_ready(void);
 void repl_apply_init_bootstrap(void);
 void repl_ensure_flat_program_with_live_vars(int edit_line_idx);
 
-/* repl_copy_predef_values / repl_restore_predef_values now live in
- * src/repl/eval.h, next to the rest of the predef-variable helpers. */
+/* Predef-value copy/restore helpers are declared in repl/eval.h. */
 
 #endif /* REPL_PIPELINE_H */

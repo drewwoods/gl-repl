@@ -1418,7 +1418,7 @@ static const ReplExampleEntry g_example_entries[] = {
 };
 
 static int example_catalog_entry_count(void) {
-    return repl_examples_count();
+    return repl_example_count();
 }
 
 static int example_catalog_tag_count(void) {
@@ -1437,18 +1437,18 @@ static const ReplCatalogTagOps g_example_tag_ops = {
     example_catalog_tag_bit,
 };
 
-int repl_examples_count(void) {
+int repl_example_count(void) {
     return (int)(sizeof(g_example_entries) / sizeof(g_example_entries[0]));
 }
 
-const char *repl_examples_name(int idx) {
-    if (idx < 0 || idx >= repl_examples_count())
+const char *repl_example_name(int idx) {
+    if (idx < 0 || idx >= repl_example_count())
         return NULL;
     return g_example_entries[idx].name;
 }
 
-const char *const *repl_examples_lines(int idx) {
-    if (idx < 0 || idx >= repl_examples_count())
+const char *const *repl_example_lines(int idx) {
+    if (idx < 0 || idx >= repl_example_count())
         return NULL;
     return g_example_entries[idx].lines;
 }
@@ -1462,7 +1462,7 @@ const char *repl_example_tag_label(int tag_idx) {
 }
 
 unsigned int repl_example_tag_mask(int example_idx) {
-    if (example_idx < 0 || example_idx >= repl_examples_count())
+    if (example_idx < 0 || example_idx >= repl_example_count())
         return 0u;
     /* Fold in the synthetic "All" membership so every tag query derives
      * it uniformly; entry literals stay free of an explicit ALL bit. */
@@ -1490,7 +1490,7 @@ int repl_example_visible_tag_at(int dense_idx) {
 }
 
 const char *repl_example_subheading(int example_idx) {
-    if (example_idx < 0 || example_idx >= repl_examples_count())
+    if (example_idx < 0 || example_idx >= repl_example_count())
         return NULL;
     return g_example_entries[example_idx].subheading;
 }

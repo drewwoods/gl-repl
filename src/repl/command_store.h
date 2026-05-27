@@ -36,9 +36,6 @@
 #ifndef REPL_COMMAND_STORE_H
 #define REPL_COMMAND_STORE_H
 
-#include <ctype.h>
-#include <string.h>
-
 #include "repl/command.h"
 
 /* Facade over the live source-command array. Points to the current command
@@ -52,32 +49,6 @@ typedef struct {
     int   *count;
     int    capacity;
 } ReplCommandStore;
-
-static inline void repl_command_store_source_to_line(char *dst, int dst_sz,
-                                                     const char *source) {
-    int len;
-
-    if (!dst || dst_sz <= 0)
-        return;
-
-    if (!source)
-        source = "";
-    while (*source && isspace((unsigned char)*source))
-        source++;
-
-    len = (int)strlen(source);
-    while (len > 0 && isspace((unsigned char)source[len - 1]))
-        len--;
-    while (len > 0 && source[len - 1] == ';')
-        len--;
-    while (len > 0 && isspace((unsigned char)source[len - 1]))
-        len--;
-
-    if (len >= dst_sz)
-        len = dst_sz - 1;
-    memcpy(dst, source, (size_t)len);
-    dst[len] = '\0';
-}
 
 /* Flags for insert operations. REPL_COMMAND_STORE_ADJUST_EDIT_LINE gates
  * the cursor shift on insert ops (delete and replace ignore it). When set
@@ -116,12 +87,6 @@ int  repl_command_store_capacity(const ReplCommandStore *store);
  * overflow. Returns 1 if there's space, 0 if full. Used for pre-flight checks
  * before insertion. */
 int  repl_command_store_can_insert(const ReplCommandStore *store, int count);
-
-/* Find the first non-CMD_VAR_DECLARE command index. Used by insertion logic to
- * enforce the rule that variable declarations always occupy the top of the
- * command array (before any other code). New non-decl code is inserted at this
- * index; new decls are inserted before it. */
-int  repl_command_store_first_non_decl(const ReplCommandStore *store);
 
 /* Normalize a (start, count) range into valid bounds. Clamps to array bounds
  * and returns the adjusted (out_start, out_count). Returns 1 if the resulting

@@ -17,7 +17,7 @@
  *       touch ReplState. Does not touch status.
  *
  * The editor commit orchestration drives all three inside one undo
- * transaction (implemented in Phase C commits 20-21).
+ * transaction.
  *
  * ReplCompiledChange is a *source-command* description, not a flat
  * program. Flattening still happens downstream in src/repl/flatten.c.
@@ -28,7 +28,7 @@
 #include "config.h"          /* MAX_COMMIT_CMDS, MAX_LINE_LEN */
 #include "repl/command.h"    /* GLCmd */
 #include "repl/eval.h"       /* MAX_NAMES_PER_DECL, ExprVar */
-#include "source_document.h" /* SourceTextView (Phase 1 of feature/source-document-port.md) */
+#include "source_document.h" /* SourceTextView */
 
 /* Source-command level shape of a compiled change. The `kind` field
  * picks which fields are meaningful:
@@ -76,7 +76,7 @@ typedef enum {
  * for context, but no duplicate define. */
 
 /* Predef-variable side-effects produced by compile. The apply step
- * (Phase C commit 20) replays these atomically:
+ * replays these atomically:
  *
  *   REPL_PREDEF_OP_DECLARE   register a new name (or no-op if already
  *                            registered with same slot).
@@ -178,8 +178,7 @@ typedef struct ReplCompiledChange_s {
  *
  * Today's transitional state: compile functions still read predef
  * vars through the shared eval table because that table is ReplState-
- * adjacent and not yet threaded through context. Phase D ties the
- * remaining loose ends.
+ * adjacent and not yet threaded through context.
  */
 typedef struct {
     int               edit_line;        /* current cursor source-cmd idx */
@@ -211,11 +210,9 @@ void repl_compiled_change_to_text_change(const ReplCompiledChange *in,
 
 /* Build a compile context from the live REPL state + a
  * caller-supplied edit-line index. The caller passes the value
- * because β forbids REPL pipeline code from calling
- * editor_state_edit_line(); callers above the boundary
- * (controllers, editor commit code, tests) read the cursor and
- * pass it in (implemented in phase 3.6.1; see the
- * edit-line-ownership plan doc). */
+ * because REPL pipeline code does not call editor_state_edit_line();
+ * callers above that boundary (controllers, editor commit code,
+ * tests) read the cursor and pass it in. */
 ReplCompileContext repl_compile_context_from_live(int edit_line_idx);
 
 /* Compile a `float name[, name2 ...][ = expr];` declaration into a

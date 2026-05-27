@@ -165,7 +165,7 @@ static const TraceProgram g_curated[] = {
 static const int g_curated_count = (int)(sizeof(g_curated)/sizeof(g_curated[0]));
 
 /* Expected-fail annotations for built-in examples (consulted in --full
- * mode). Keyed by repl_examples_name(). A mismatch on an annotated
+ * mode). Keyed by repl_example_name(). A mismatch on an annotated
  * example is reported as XFAIL (quiet, doesn't fail the test). A *match*
  * on an annotated example is reported as XPASS, which DOES fail the
  * test — the annotation has gone stale and needs to be removed. Keeping
@@ -300,7 +300,7 @@ static int compare_counts(const char *case_name,
 static ParityResult run_one_case(const TraceProgram *prog) {
     pid_t pid = getpid();
     /* Example names can contain spaces, parens, slashes — anything goes
-     * via repl_examples_name(). Build a safe path stem by mapping every
+    * via repl_example_name(). Build a safe path stem by mapping every
      * non-alnum/dot/dash to '_'. Keeps the temp paths immune to shell
      * quoting surprises across the system() compile + run invocations. */
     char safe_name[128];
@@ -448,14 +448,14 @@ static void tally(ParityTotals *t, ParityResult r) {
     }
 }
 
-/* --full: walk repl_examples_*. Each example is constructed on the fly
+/* --full: walk repl_example_*. Each example is constructed on the fly
  * from the (name, lines) pair plus an XFAIL annotation looked up in
  * g_example_xfail. */
 static void run_examples(ParityTotals *totals) {
-    int n = repl_examples_count();
+    int n = repl_example_count();
     for (int i = 0; i < n; i++) {
-        const char *name = repl_examples_name(i);
-        const char *const *lines = repl_examples_lines(i);
+        const char *name = repl_example_name(i);
+        const char *const *lines = repl_example_lines(i);
         TraceProgram p = { name, lines, expected_fail_for_example(name) };
         tally(totals, run_one_case(&p));
     }
@@ -496,7 +496,7 @@ static void print_help(const char *argv0) {
 "\n"
 "Options:\n"
 "  --full          After the curated table, also run every built-in\n"
-"                  example via repl_examples_*. Slow: one cc invocation\n"
+"                  example via repl_example_*. Slow: one cc invocation\n"
 "                  per program. See plans/not-started/gl-stub-extensions.md.\n"
 "  --keep-traces   On real FAIL, leave the .repl.tr and .child.tr trace\n"
 "                  files in /tmp for inspection. XFAIL traces are still\n"

@@ -39,7 +39,6 @@
 
 #include "editor/state.h"         /* editor_state_edit_line */
 #include "repl/core.h"
-#include "repl/core_internal.h"
 #include "repl/eval.h"
 #include "repl/example_loader.h"  /* repl_load_example_lines_for_test */
 #include "repl/examples.h"
@@ -140,7 +139,7 @@ static void fresh_repl(void) {
 }
 
 static int example_line_count(int idx) {
-    const char *const *lines = repl_examples_lines(idx);
+    const char *const *lines = repl_example_lines(idx);
     int n = 0;
     if (!lines) return 0;
     while (lines[n]) n++;
@@ -149,7 +148,7 @@ static int example_line_count(int idx) {
 
 static long long total_example_lines(void) {
     long long total = 0;
-    int n = repl_examples_count();
+    int n = repl_example_count();
     for (int i = 0; i < n; i++)
         total += example_line_count(i);
     return total;
@@ -164,12 +163,12 @@ static BenchResult bench_parse_lines(int iters) {
     /* Build a flat array of lines from every example so we touch every
      * grammar branch (vertices, transforms, gluXxx, for, func, if, vars,
      * comments, blank lines). */
-    int n_examples = repl_examples_count();
+    int n_examples = repl_example_count();
     long long total_lines = total_example_lines();
     const char **flat = (const char **)malloc(sizeof(*flat) * (size_t)total_lines);
     long long flat_n = 0;
     for (int e = 0; e < n_examples; e++) {
-        const char *const *ls = repl_examples_lines(e);
+        const char *const *ls = repl_example_lines(e);
         if (!ls) continue;
         for (int i = 0; ls[i]; i++)
             flat[flat_n++] = ls[i];
@@ -187,7 +186,7 @@ static BenchResult bench_parse_lines(int iters) {
                       .min_sec = 1e18 };
     GLCmd cmd;
 
-    ReplParseContext bench_ctx = { 0, NULL, 0, 0 };
+    ReplParseContext bench_ctx = { 0, NULL, 0, 0, NULL, 0 };
     ReplParsedLine pl;
     for (int it = 0; it < iters; it++) {
         double t0 = now_seconds();
@@ -210,7 +209,7 @@ static BenchResult bench_parse_lines(int iters) {
 /* ---- bench: full editor_feed_line path on every example ---------------------- */
 
 static BenchResult bench_feed_examples(int iters) {
-    int n_examples = repl_examples_count();
+    int n_examples = repl_example_count();
     long long lines_per_iter = total_example_lines();
 
     BenchResult r = { .name = "feed_examples", .unit = "lines",
@@ -224,7 +223,7 @@ static BenchResult bench_feed_examples(int iters) {
     for (int it = 0; it < iters; it++) {
         double t0 = now_seconds();
         for (int e = 0; e < n_examples; e++) {
-            repl_load_example_lines_for_test(repl_examples_lines(e));
+            repl_load_example_lines_for_test(repl_example_lines(e));
         }
         double dt = now_seconds() - t0;
         if (dt < r.min_sec) r.min_sec = dt;
@@ -238,7 +237,7 @@ static BenchResult bench_feed_examples(int iters) {
 /* ---- bench: flatten cost on each example ------------------------------ */
 
 static BenchResult bench_flatten_examples(int iters) {
-    int n_examples = repl_examples_count();
+    int n_examples = repl_example_count();
 
     BenchResult r = { .name = "flatten_examples", .unit = "examples",
                       .min_sec = 1e18 };
@@ -255,7 +254,7 @@ static BenchResult bench_flatten_examples(int iters) {
         for (int e = 0; e < n_examples; e++) {
             /* load_example_lines() resets cmd state itself; no separate
              * fresh_repl() is needed. */
-            repl_load_example_lines_for_test(repl_examples_lines(e));
+            repl_load_example_lines_for_test(repl_example_lines(e));
 
             /* Snapshot post-load predef values. flatten_range() writes
              * g_predef_vars[].value on CMD_VAR_ASSIGN (src/repl/core.c:2624),
@@ -305,7 +304,7 @@ static BenchResult bench_flatten_examples(int iters) {
  * regression shows up directly even without the threshold.
  */
 static BenchResult bench_spike_flatten_largest(int iters) {
-    int n_examples = repl_examples_count();
+    int n_examples = repl_example_count();
     int worst_idx = 0;
     int worst_flat = 0;
     float saved_vals[MAX_PREDEF_VARS];
@@ -314,7 +313,7 @@ static BenchResult bench_spike_flatten_largest(int iters) {
      * "Lines" alone underestimates: a short for-loop unrolls into many
      * flat commands, and that's what flatten actually walks. */
     for (int e = 0; e < n_examples; e++) {
-        repl_load_example_lines_for_test(repl_examples_lines(e));
+        repl_load_example_lines_for_test(repl_example_lines(e));
         repl_flatten_commands(editor_state_edit_line());
         int n = repl_state_flat_program_count();
         if (n > worst_flat) {
@@ -324,7 +323,7 @@ static BenchResult bench_spike_flatten_largest(int iters) {
     }
 
     /* Reload the chosen example as the timed fixture. */
-    repl_load_example_lines_for_test(repl_examples_lines(worst_idx));
+    repl_load_example_lines_for_test(repl_example_lines(worst_idx));
 
     int saved_n = g_num_predef_vars;
     for (int i = 0; i < saved_n; i++)
@@ -364,7 +363,7 @@ static BenchResult bench_spike_flatten_largest(int iters) {
 /* ---- bench: replay every example end-to-end --------------------------- */
 
 static BenchResult bench_replay_examples(int iters) {
-    int n_examples = repl_examples_count();
+    int n_examples = repl_example_count();
 
     BenchResult r = { .name = "replay_examples", .unit = "steps",
                       .min_sec = 1e18 };
@@ -377,7 +376,7 @@ static BenchResult bench_replay_examples(int iters) {
         long long steps = 0;
         double t0 = now_seconds();
         for (int e = 0; e < n_examples; e++) {
-            repl_load_example_lines_for_test(repl_examples_lines(e));
+            repl_load_example_lines_for_test(repl_example_lines(e));
 
             replay_start();
             int safety = repl_state_flat_program_count() + 1;
@@ -798,7 +797,7 @@ int main(int argc, char **argv) {
         print_csv_header();
     } else {
         printf("REPL benchmarks (iters=%d, examples=%d, total_lines=%lld)\n",
-               iters, repl_examples_count(), total_example_lines());
+               iters, repl_example_count(), total_example_lines());
     }
 
     if (wants(only, "parse_lines"))

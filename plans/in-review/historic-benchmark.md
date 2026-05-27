@@ -113,6 +113,33 @@ Why this matters:
 
 `fade_batches` calls `bench_gl_context_init` (`bench/bench_repl.c:818`). Under `USE_GL_STUBS=1` the GL init is a no-op and every `glBegin`/`glVertex` becomes a counter-incrementing inline stub. So the sub-benchmark measures *CPU* work only, not GPU time. This is fine for tracking REPL-side fade scheduling regressions but is **not** comparable across machines with different GL drivers, and shouldn't be read as a graphics-performance signal. The plan accepts this trade-off because (a) it lets the sampler run on the headless `gracemont` box and (b) the regressions we actually care about (parser, flatten, executor) are CPU-bound anyway. The viewer's existing NaN/series-gap handling already covers a SHA where `fade_batches` is absent entirely.
 
+### Historical-build caveats — required patches and skip rules
+
+Older SHAs cannot be built with a plain `make bench_repl` checkout, for three independent reasons. The sampler must apply or detect each before invoking the historical build. **Always consult `git log -p bench/bench_repl.c` (and the pre-2026-05 root-level `bench_repl.c` for the older history segment) when extending the skip / patch policy — that history is the source of truth for which SHAs need which treatment.**
+
+**1. `scripts/build-historical.sh` is mandatory, not optional.**
+
+The mention at the top of this plan ("Everything is C. No Python, no shell glue beyond the existing `scripts/build-historical.sh`") understates the dependency — the sampler **cannot** invoke a bare `make bench_repl USE_GL_STUBS=1` against an old SHA. Before April 2026 the REPL lived inside OpenGL-Vibe, and the historical Makefile resolves `PROJECT_ROOT := $(abspath ../../..)` expecting the OpenGL-Vibe parent directory to supply `gl_includes.h` and `miniaudio.h`. After the hoist those paths point nowhere; any `make` invocation against a pre-hoist SHA dies immediately on the missing header. `scripts/build-historical.sh` exists to bridge this — it creates a private worktree under `.compat-scratch/worktrees/<short-sha>/` and splices in compat headers so the historical Makefile's path math resolves. The sampler must drive the build via `scripts/build-historical.sh --at <sha> bench_repl USE_GL_STUBS=1` for every SHA, modern and historical; the modern path is a degenerate case of the same script (the script no-ops the splice when the SHA already vendors the headers).
+
+**2. Replay-long / fade_batches scene-size patch (MAX_COMMANDS = 4096).**
+
+`bench_repl.c`'s `replay_long` and `fade_batches` sub-benches each loop 600 iterations emitting 11-12 flat commands per iter, totalling ~7200 flat commands. The project capped `MAX_COMMANDS` at 4096 in commit `804d794` ("config: reduce max commands"). At SHAs *after* `804d794` but *before* `61daa23` (the fix), the bench compiles cleanly but produces *silently wrong output*: `flatten_append_cmd` hits the cap, sets `ctx->abort = 1`, and `repl_flatten_program` zeros `flat_count` — the bench then reports `ops=0` / `flat_cmds=0` for those two sub-benches at every SHA in that range.
+
+A zero-ops row is not a useful data point — it's noise that distorts the trend curve. The sampler must either:
+
+  a. Detect the bug (post-process the CSV: if `replay_long.ops == 0` or `fade_batches.ops == 0`, drop those columns from the row before write and log `<sha> replay_long/fade_batches cap-truncated` to `trend_broken.txt`); or
+  b. Apply the iter-count patch in the private worktree before the build (the fix in `61daa23` shrinks `replay_long` to 340 iters / `fade_batches` to 370 iters). The patch is small (~21+/-14 across one file) and applies cleanly to every pre-fix SHA that compiles at all.
+
+Option (a) is simpler — no patch maintenance, no risk of merge skew across the SHA range — and is consistent with the existing `trend_broken.txt` skip convention. Option (b) gives complete trend coverage at the cost of carrying a patch file. The default recommendation is (a); the comment block at the patch-application site should reference commit `61daa23` so a future maintainer can adopt (b) if `replay_long` / `fade_batches` trend coverage becomes load-bearing.
+
+**3. Bench-compile failures at certain SHAs (skip-only).**
+
+Some historical SHAs fail to compile `bench_repl.c` outright — typically because the bench references a REPL symbol that was renamed or moved in a refactor that didn't update the bench in lockstep. These are not patchable without per-SHA case logic (the symbol shapes differ across each break window) and are not worth the maintenance burden.
+
+The sampler should treat a non-zero exit from `scripts/build-historical.sh --at <sha> bench_repl USE_GL_STUBS=1` as "skip this SHA" and log `<sha> bench compile failure` to `trend_broken.txt`. The build script's stdout is captured to the same log line so the next maintainer can see whether it was a missing-symbol error, a header-path mismatch the compat splice didn't catch, or a genuine source bug. The existing CSV-unsupported and binary-not-found skip paths use the same shape; this is a third row in the same skip-reason taxonomy.
+
+The bench file's `git log` (and the pre-hoist root-level `bench_repl.c` history) is the canonical reference for which SHAs need which treatment — including future skip-reason additions. The `trend_broken.txt` file is the operational record of which SHAs were skipped at sample time.
+
 ### Algorithm
 
 1. **Enumerate (inclusive of `<from>`).** Spawn `git log --format='%H %cI' <to> --reverse --first-parent` and drop everything before `<from>` (inclusive). Equivalently, when `<from>` has a parent, `git log <from>^..<to>`; when it's the root commit, `git log <to>`. The default `<from>` (first commit touching `bench/bench_repl.c`) must itself be sampleable, so an exclusive `<from>..<to>` is wrong. First-parent keeps merge bubbles from inflating the sample set.

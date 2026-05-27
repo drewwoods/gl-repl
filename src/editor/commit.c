@@ -3,7 +3,7 @@
  *
  * The orchestration shape is the dual of repl_compile():
  *
- *   editor_commit_apply_external_change(change, capture_undo)
+ *   editor_commit_apply_external_change(change, capture_undo, publish_status)
  *       preflight repl_apply_can_apply_compiled_change(change)
  *       repl_apply_predef_ops(change)                // predef-var cascade
  *       repl_apply_scratch_ops(change)               // scratch-array cascade
