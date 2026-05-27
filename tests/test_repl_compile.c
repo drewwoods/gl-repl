@@ -1443,5 +1443,40 @@ int main(void) {
                    repl_state_document_count(), pre_count + 1);
     }
 
+    /* Test alias resolution and rejected_keyword signal */
+    {
+        glr_ctrl_reset_all();
+        ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
+        ReplCompiledChange change;
+        int rejected_keyword = 0;
+        char err[256];
+
+        /* Case A: Bare predefined function like func0() { — not a custom alias, should return REPL_COMPILE_OK */
+        repl_compiled_change_init(&change);
+        rejected_keyword = 0;
+        ReplCompileResult res = repl_compile_func_def_resolve_alias(&ctx, "func0() {", &change, &rejected_keyword, err, sizeof(err));
+        ASSERT_INT("resolve_alias func0: returns OK", res, REPL_COMPILE_OK);
+        ASSERT_INT("resolve_alias func0: rejected_keyword is false", rejected_keyword, 0);
+
+        /* Case B: Reserved control keyword like if() { — rejected_keyword should be set to 1, out->kind set to NO_CHANGE, returns OK */
+        repl_compiled_change_init(&change);
+        rejected_keyword = 0;
+        res = repl_compile_func_def_resolve_alias(&ctx, "if() {", &change, &rejected_keyword, err, sizeof(err));
+        ASSERT_INT("resolve_alias if: returns OK", res, REPL_COMPILE_OK);
+        ASSERT_INT("resolve_alias if: rejected_keyword is true", rejected_keyword, 1);
+        ASSERT_INT("resolve_alias if: change kind is NO_CHANGE", change.kind, REPL_COMPILED_NO_CHANGE);
+
+        /* Case C: Valid custom function like myfunc() { — should compile and pick a slot successfully */
+        repl_compiled_change_init(&change);
+        rejected_keyword = 0;
+        res = repl_compile_func_def_resolve_alias(&ctx, "myfunc() {", &change, &rejected_keyword, err, sizeof(err));
+        ASSERT_INT("resolve_alias myfunc: returns OK", res, REPL_COMPILE_OK);
+        ASSERT_INT("resolve_alias myfunc: rejected_keyword is false", rejected_keyword, 0);
+        ASSERT_TRUE("resolve_alias myfunc: picked slot", change.newly_aliased_slot >= 0);
+        
+        /* Clean up any speculatively registered alias */
+        repl_compiled_change_rollback_alias(&change);
+    }
+
     return test_harness_report(&g_harness, "test_repl_compile");
 }

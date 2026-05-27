@@ -51,7 +51,7 @@
  *     predef vars, scratch arrays, editor buffer, and cmd-store
  *     are all unchanged.
  *
- * Does not call set_status; callers surface diagnostics. */
+ * Calls set_status automatically if publish_status is non-zero. */
 int editor_commit_apply_external_change(const struct ReplCompiledChange_s *change,
                                         int capture_undo,
                                         int publish_status);
@@ -165,7 +165,7 @@ void editor_commit_plan_init(EditorCommitPlan *plan);
  *      func-decl-resume → insert_mode_target → clear_input →
  *      clear_pending_newline → load_line_after_apply →
  *      clear_autocomplete → func_decl_resume_publish.
- *   4. If `plan->commit_message_valid`, set the status text.
+ *   4. If `plan->change.commit_message[0]` is non-empty, publish the status text.
  *
  * Undo capture is the caller's responsibility — the ;-key / Enter /
  * editor_feed_line dispatch sites push a snapshot before invoking

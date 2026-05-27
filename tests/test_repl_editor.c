@@ -1037,6 +1037,50 @@ int main() {
         ASSERT_STR("delete redo: last survives", editor_buffer_line(1), "  glVertex3f(4, 4, 4);");
     }
 
+    /* 8c2. Delete range of 17+ lines (greater than MAX_COMMIT_CMDS) */
+    {
+        glr_ctrl_reset_all();
+        for (int i = 0; i < 18; i++) {
+            editor_feed_line("glVertex3f(0,0,0)");
+        }
+        ASSERT_INT("large delete setup: 18 lines fed", repl_state_document_count(), 18);
+        ASSERT_INT("large delete setup: editor line_count is 18", editor_buffer_view().line_count, 18);
+
+        /* Delete all 18 lines */
+        editor_delete_cmd_range(0, 18, "Deleted");
+
+        ASSERT_INT("large delete: leaves 0 cmds in repl", repl_state_document_count(), 0);
+        ASSERT_INT("large delete: leaves 0 lines in editor buffer", editor_buffer_view().line_count, 0);
+    }
+
+    /* 8c3. Direct test for editor_undo_snapshot_restore cross-generation no-op */
+    {
+        glr_ctrl_reset_all();
+        editor_feed_line("glVertex3f(1,1,1)");
+        ASSERT_INT("snapshot restore cross-gen: document count before save",
+                   repl_state_document_count(), 1);
+
+        EditorUndoSnapshot snap;
+        editor_undo_snapshot_save(&snap);
+
+        /* Make a wholesale replacement which increments g_undo_generation */
+        editor_undo_note_wholesale_replacement();
+        
+        /* Clear the live document commands so we can verify if restore actually recreates them */
+        editor_delete_cmd_range(0, 1, "test");
+        
+        /* Now the document is empty after manual delete */
+        ASSERT_INT("snapshot restore cross-gen: document count after wholesale replacement",
+                   repl_state_document_count(), 0);
+
+        /* Attempt to restore the snapshot with the old generation */
+        editor_undo_snapshot_restore(&snap);
+
+        /* It should be a no-op, i.e., the document remains empty! */
+        ASSERT_INT("snapshot restore cross-gen: restore of old generation is a no-op",
+                   repl_state_document_count(), 0);
+    }
+
     /* 8d. Copy selected block and paste inside a later block */
     {
         glr_ctrl_reset_all(); declare_test_vars();
