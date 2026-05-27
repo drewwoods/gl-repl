@@ -24,6 +24,38 @@ static inline unsigned int repl_catalog_tag_bit_for_count(int tag_idx,
     return 1u << (unsigned int)tag_idx;
 }
 
+/* Define the six standard per-catalog tag wrappers in one go. Each
+ * delegates to the corresponding `repl_catalog_*` helper bound to the
+ * caller's ops struct. Use as
+ *
+ *   REPL_DEFINE_CATALOG_TAG_WRAPPERS(example,  &g_example_tag_ops)
+ *   REPL_DEFINE_CATALOG_TAG_WRAPPERS(tutorial, &g_tutorial_tag_ops)
+ *
+ * Function-pointer arguments must match the prototypes declared in
+ * the catalog's header (examples.h, tutorials.h). The macro's
+ * synthesized parameter names are deliberately generic — C only
+ * matches signatures at the function level, not by parameter
+ * name. */
+#define REPL_DEFINE_CATALOG_TAG_WRAPPERS(prefix, ops_ptr)                \
+    const char *repl_##prefix##_tag_label(int tag_idx) {                 \
+        return repl_catalog_tag_label((ops_ptr), tag_idx);               \
+    }                                                                    \
+    int repl_##prefix##_has_tag(int entry_idx, int tag_idx) {            \
+        return repl_catalog_has_tag((ops_ptr), entry_idx, tag_idx);      \
+    }                                                                    \
+    int repl_##prefix##_count_for_tag(int tag_idx) {                     \
+        return repl_catalog_count_for_tag((ops_ptr), tag_idx);           \
+    }                                                                    \
+    int repl_##prefix##_index_for_tag(int tag_idx, int ordinal) {        \
+        return repl_catalog_index_for_tag((ops_ptr), tag_idx, ordinal);  \
+    }                                                                    \
+    int repl_##prefix##_visible_tag_count(void) {                        \
+        return repl_catalog_visible_tag_count(ops_ptr);                  \
+    }                                                                    \
+    int repl_##prefix##_visible_tag_at(int dense_idx) {                  \
+        return repl_catalog_visible_tag_at((ops_ptr), dense_idx);        \
+    }
+
 static inline const char *repl_catalog_tag_label(const ReplCatalogTagOps *ops,
                                                  int tag_idx) {
     if (!ops || !ops->tag_count || !ops->tag_labels)

@@ -29,7 +29,7 @@
 ## Status summary (updated 2026-05-27)
 
 83 findings total (82 from the original audit + 1 review-discovered).
-72 closed (✅), 11 still open. All open findings verified against
+74 closed (✅), 9 still open. All open findings verified against
 current HEAD. Tier letters cover the whole open backlog — no unclassified rows
 remain. Tier A is empty: the 2026-05-27 Tier A close pass landed all ten
 (#26, #27, #43, #70, #72, #76, #77, #78, #79, #81), and the review pass that
@@ -78,12 +78,12 @@ added #83 closed it in the same commit.
 | 39 | 🔵 | A | ✅ Done | Three bridge ternary patterns |
 | 40 | 🔵 | — | ✅ Done | Predef-var capture/restore duplicated 5× |
 | 41 | 🟡 | C | Open | Tutorial GRID_THEME literals decoupled |
-| 42 | 🔵 | B | Open | CatalogTagOps glue remains after closed #12 |
+| 42 | 🔵 | B | ✅ Done | CatalogTagOps glue remains after closed #12 |
 | 43 | 🔵 | A | ✅ Done | `tag_bit` byte-identical inlines |
 | 44 | 🟡 | B | ✅ Done | `cmd_emit` silently drops rows past cap |
 | 45 | 🟡 | B | ✅ Done | `help_group_header` switch drops new groups |
 | 46 | 🟡 | A | ✅ Done | `g_tabs[3]` / `tab_count=3` hand-agreement |
-| 47 | 🔵 | B | Open | `import_make_repl_tess_line` scrape loops |
+| 47 | 🔵 | B | ✅ Done | `import_make_repl_tess_line` scrape loops |
 | 48 | 🔵 | B | ✅ Done | `repl_apply_predef_ops` redundant re-lookup |
 | 49 | 🔴 | B | ✅ Done | `repl_apply_can_apply_compiled_change` preflight gap |
 | 50 | 🟡 | B | ✅ Done | `MAX_SCRATCH_OPS_PER_COMMIT` wildly oversized |
@@ -121,8 +121,8 @@ added #83 closed it in the same commit.
 | 82 | 🔵 | B | Open | `tutorial_step_at()` O(N) sentinel walk |
 | 83 | 🔴 | A | ✅ Done | `@declare` import treats failed `repl_eval_declare_predef_var` as success |
 
-**By severity (open only):** 0 🔴, 4 🟡, 0 🟢, 7 🔵 = 11 open.
-**By tier (open only):** A: 0, B: 3, C: 6, D: 2, unclassified: 0.
+**By severity (open only):** 0 🔴, 4 🟡, 0 🟢, 5 🔵 = 9 open.
+**By tier (open only):** A: 0, B: 1, C: 6, D: 2, unclassified: 0.
 
 ## How to read this
 
@@ -1517,6 +1517,19 @@ with the local ops struct.
 `catalog_tags.h`; or expose `repl_catalog_*` directly and let
 callers use the ops pointer.
 
+**Status (2026-05-27):** ✅ Closed via the macro path. Added
+`REPL_DEFINE_CATALOG_TAG_WRAPPERS(prefix, ops_ptr)` to
+`src/repl/catalog_tags.h`; expands into the six wrappers
+(`tag_label`, `has_tag`, `count_for_tag`, `index_for_tag`,
+`visible_tag_count`, `visible_tag_at`). Each .c file now has a
+single line in place of 25 lines of byte-equivalent glue:
+`REPL_DEFINE_CATALOG_TAG_WRAPPERS(example, &g_example_tag_ops)` in
+`src/repl/examples.c`, `REPL_DEFINE_CATALOG_TAG_WRAPPERS(tutorial,
+&g_tutorial_tag_ops)` in `src/repl/tutorials.c`. The catalog-
+specific `_tag_mask` and `_tag_count` stay open-coded because their
+bodies aren't pure pass-throughs (mask folds in the synthetic ALL
+bit; count returns the catalog-local enum sentinel).
+
 ### 43. `repl_example_tag_bit` / `repl_tutorial_tag_bit` are byte-identical inline functions
 
 **Where:** `src/repl/examples.h:96-101` and `src/repl/tutorials.h:154-159`
@@ -1603,6 +1616,21 @@ assignments (`_tn` 3 components, `_tc` 4, `_v->pos` 3). Adding a
 **Fix:** Extract `parse_tess_brace_block(line, key_prefix,
 max_components, out_exprs[][MAX_LINE_LEN], out_count)`; dispatch on
 component count for format string.
+
+**Status (2026-05-27):** ✅ Closed via a small two-helper
+extraction. Added `parse_tess_brace_block(p, key_fmt, n, exprs)`
+(symbolic path — fills `exprs[n][MAX_LINE_LEN]` from the
+`<key>[i] = <expr>;` assignments) and `eval_tess_brace_floats(start,
+n, out)` (numeric fallback — walks N `= <expr>` fragments and evals
+to floats). Each of the three blocks in `import_make_repl_tess_line`
+(`_tn`, `_tc`, `_v->pos`) collapsed from ~25 lines to ~12. The
+output format strings remain explicit at the call sites because
+`gluNormal` / `gluColor` / `gluVertex` differ — and `gluColor` has
+the alpha-1 elision quirk that doesn't generalize. `import_make_repl_tess_line`
+went from 134 lines to ~70.
+
+(File-location note: after the #69 split, the function now lives
+in `src/repl/import.c`, not `src/repl/export.c` as the audit cited.)
 
 ### 48. `repl_apply_predef_ops` DECLARE+SET_VALUE redundantly validates and re-looks-up the slot
 
