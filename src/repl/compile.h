@@ -300,6 +300,49 @@ ReplCompileResult repl_compile_for_loop(const char *input,
                                         ReplCompiledChange *out,
                                         char *err, int err_size);
 
+/* Shared parse/validate kernel for `for(var, start, end[, step]) body;`.
+ *
+ * Both repl_compile_for_loop (the lean-loader path) and
+ * editor_compile_for_loop (which adds header-replace / one-liner-body /
+ * paired-end branches on top) call this kernel. The kernel handles:
+ *   - whitespace + `for(` / `for (` prefix detection
+ *   - visible-var collection at the insert pos
+ *   - for-header parse (var_name, start, end, step, body_start)
+ *   - raw-args extraction + identifier validation
+ *   - indent resolution
+ *   - CMD_FOR_BEGIN assembly (args[0..2] + has_vars)
+ *   - fb_text formatting (symbolic when args contain vars; literal
+ *     via repl_format_source_float otherwise)
+ *
+ * Returns:
+ *   REPL_COMPILE_OK with out->valid == 0 — input wasn't a for-loop.
+ *   REPL_COMPILE_OK with out->valid == 1 — parsed; out is fully populated.
+ *   REPL_COMPILE_ERROR                   — syntax / format error; err set.
+ *
+ * Editor-only concerns (header-replace REPLACE_ONE, paired-end
+ * INSERT_MANY count=2, one-liner-body count=3, effects, commit_message)
+ * stay in editor_compile_for_loop. */
+typedef struct {
+    int        valid;
+    int        pos;
+    char       var_name[REPL_PREDEF_NAME_MAX];
+    float      start, end, step;
+    const char *body_start;             /* points into the caller's input */
+    GLCmd      fb;                      /* CMD_FOR_BEGIN, args + has_vars set */
+    char       fb_text[MAX_LINE_LEN];
+    char       indent[REPL_INDENT_TEXT_MAX];
+    /* Visible-var scope at the insert pos. The editor's one-liner-body
+     * branch parses a body command under (var_name + start) prepended to
+     * this scope; the loader's wrapper ignores it. */
+    ExprVar    visible_vars[MAX_EXPR_VARS];
+    int        visible_nv;
+} ReplForLoopKernel;
+
+ReplCompileResult repl_compile_for_loop_kernel(const char *input,
+                                               const ReplCompileContext *ctx,
+                                               ReplForLoopKernel *out,
+                                               char *err, int err_size);
+
 /* repl_load_apply_line moved to src/repl/load.h to keep this header pure
  * (compile descriptors only; no apply orchestration). */
 

@@ -773,105 +773,29 @@ ReplCompileResult editor_compile_for_loop(const char *input,
     editor_commit_plan_init(out);
     editor_compile_clear_err(err, err_size);
 
-    const char *p = input ? input : "";
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (strncmp(p, "for(", 4) != 0 && strncmp(p, "for (", 5) != 0) {
+    ReplForLoopKernel kernel;
+    ReplCompileResult kr = repl_compile_for_loop_kernel(input, ctx, &kernel,
+                                                        err, err_size);
+    if (kr != REPL_COMPILE_OK)
+        return kr;
+    if (!kernel.valid) {
         out->change.kind = REPL_COMPILED_NO_CHANGE;
         return REPL_COMPILE_OK;
     }
 
-    int pos = ctx->insert_mode ? ctx->edit_line :
-              (ctx->edit_line < ctx->document_count
-                   ? ctx->edit_line : ctx->document_count);
-
-    ExprVar visible_vars[MAX_EXPR_VARS];
-    int visible_nv = collect_visible_vars(pos, visible_vars, MAX_EXPR_VARS, NULL);
-
-    char var_name[REPL_PREDEF_NAME_MAX];
-    float start, end, step;
-    const char *body_start;
-
-    if (!repl_eval_parse_for_header_with_vars(p, var_name, sizeof(var_name),
-                                              &start, &end, &step,
-                                              visible_vars, visible_nv,
-                                              &body_start))
-        return editor_compile_error(err, err_size,
-                                    "for syntax: for(var, start, end[, step]) body;");
-
+    /* Pull the kernel's parsed metadata into local names so the
+     * editor-specific branches read like the original code. */
+    int   pos       = kernel.pos;
+    const char *body_start = kernel.body_start;
     while (*body_start && isspace((unsigned char)*body_start))
         body_start++;
-
-    char indent[REPL_INDENT_TEXT_MAX];
-    repl_source_scope_cmd_indent(pos, indent, sizeof(indent));
-    int ind = (int)strlen(indent);
-
-    /* Build CMD_FOR_BEGIN. */
-    GLCmd fb;
-    memset(&fb, 0, sizeof(fb));
-    fb.type = CMD_FOR_BEGIN;
-    fb.args[0] = start;
-    fb.args[1] = end;
-    fb.args[2] = step;
-    fb.valid = 1;
-
-    char fb_text[MAX_LINE_LEN];
-    {
-        /* Re-walk the input to extract the args between the outer
-         * `(` and `)` so the formatted line preserves the user's
-         * symbolic form when args contain visible vars. */
-        const char *raw = p;
-        while (*raw && *raw != '(') raw++;
-        if (*raw) raw++;
-        while (*raw && isspace((unsigned char)*raw)) raw++;
-        while (*raw && repl_eval_is_ident_continue((unsigned char)*raw)) raw++;
-        while (*raw && isspace((unsigned char)*raw)) raw++;
-        if (*raw == ',') raw++;
-
-        const char *args_start = raw;
-        int paren = 1;
-        const char *ap = args_start;
-        char raw_args[MAX_LINE_LEN];
-        int rlen;
-
-        while (*ap && paren > 0) {
-            if (*ap == '(')      paren++;
-            else if (*ap == ')') paren--;
-            if (paren > 0) ap++;
-        }
-        rlen = (int)(ap - args_start);
-        if (rlen > (int)sizeof(raw_args) - 1)
-            rlen = (int)sizeof(raw_args) - 1;
-        memcpy(raw_args, args_start, (size_t)rlen);
-        raw_args[rlen] = '\0';
-        while (rlen > 0 && isspace((unsigned char)raw_args[rlen - 1]))
-            raw_args[--rlen] = '\0';
-
-        char *ra = raw_args;
-        while (*ra && isspace((unsigned char)*ra)) ra++;
-
-        char verr[REPL_DIAG_TEXT_MAX];
-        if (!repl_eval_validate_expression_idents(ra, visible_vars, visible_nv,
-                                                  verr, sizeof(verr)))
-            return editor_compile_error(err, err_size, "%s", verr);
-
-        if (input_has_any_visible_vars(ra, visible_vars, visible_nv)) {
-            fb.has_vars = 1;
-            if (!repl_format_fits(fb_text, sizeof(fb_text),
-                                  "%sfor(%s, %s) {",
-                                  indent, var_name, ra))
-                return editor_compile_error(err, err_size, "Command too long");
-        } else if (step != 1.0f) {
-            if (!repl_format_fits(fb_text, sizeof(fb_text),
-                                  "%sfor(%s, %.9g, %.9g, %.9g) {",
-                                  indent, var_name, start, end, step))
-                return editor_compile_error(err, err_size, "Command too long");
-        } else {
-            if (!repl_format_fits(fb_text, sizeof(fb_text),
-                                  "%sfor(%s, %.9g, %.9g) {",
-                                  indent, var_name, start, end))
-                return editor_compile_error(err, err_size, "Command too long");
-        }
-    }
+    int   ind       = (int)strlen(kernel.indent);
+    GLCmd fb        = kernel.fb;
+    const char *indent = kernel.indent;
+    const char *fb_text = kernel.fb_text;
+    const char *var_name = kernel.var_name;
+    float start = kernel.start;
+    float end   = kernel.end;
 
     /* Build CMD_FOR_END. */
     GLCmd fe;
@@ -942,8 +866,9 @@ ReplCompileResult editor_compile_for_loop(const char *input,
     repl_copy_string_fits(dv[dvn].name, sizeof(dv[dvn].name), var_name);
     dv[dvn].value = start;
     dvn++;
-    for (int var_idx = 0; var_idx < visible_nv && dvn < MAX_EXPR_VARS; var_idx++)
-        dv[dvn++] = visible_vars[var_idx];
+    for (int var_idx = 0;
+         var_idx < kernel.visible_nv && dvn < MAX_EXPR_VARS; var_idx++)
+        dv[dvn++] = kernel.visible_vars[var_idx];
 
     /* Feed the parser an err buffer so its specific diagnostic
      * propagates to the caller rather than being lost behind a generic
