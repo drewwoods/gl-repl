@@ -29,11 +29,13 @@
 ## Status summary (updated 2026-05-27)
 
 83 findings total (82 from the original audit + 1 review-discovered).
-77 closed (✅), 6 still open. All open findings verified against
+78 closed (✅), 5 still open. All open findings verified against
 current HEAD. Tier letters cover the whole open backlog — no unclassified rows
 remain. Tier A is empty: the 2026-05-27 Tier A close pass landed all ten
 (#26, #27, #43, #70, #72, #76, #77, #78, #79, #81), and the review pass that
-added #83 closed it in the same commit.
+added #83 closed it in the same commit. The 2026-05-27 #41 close ran the
+full slug-to-int route (bridge + X-macro symbol tables in
+`src/scene/themes.h`), leaving the REPL layer scene-agnostic.
 
 | # | Sev | Tier | Status | Finding (short) |
 |---|-----|------|--------|-----------------|
@@ -77,7 +79,7 @@ added #83 closed it in the same commit.
 | 38 | 🟢 | A | ✅ Done | `examples.h` / `example_loader.c` parallel API names |
 | 39 | 🔵 | A | ✅ Done | Three bridge ternary patterns |
 | 40 | 🔵 | — | ✅ Done | Predef-var capture/restore duplicated 5× |
-| 41 | 🟡 | C | Open | Tutorial GRID_THEME literals decoupled |
+| 41 | 🟡 | C | ✅ Done | Tutorial GRID_THEME literals decoupled |
 | 42 | 🔵 | B | ✅ Done | CatalogTagOps glue remains after closed #12 |
 | 43 | 🔵 | A | ✅ Done | `tag_bit` byte-identical inlines |
 | 44 | 🟡 | B | ✅ Done | `cmd_emit` silently drops rows past cap |
@@ -1494,76 +1496,74 @@ same evaluator-owned predef-var copy contract as the rest of the layer.
 Validated with `build/release/test_repl_core_extra` and
 `build/release/test_repl_core_io --run-tests`.
 
-### 41. Tutorial GRID_THEME literals decoupled from `src/scene/themes.h` enum
+### 41. Tutorial GRID_THEME literals decoupled from `src/scene/themes.h` enum — CLOSED
 
-**Where:** `src/repl/tutorials.c:164, 167`
+**Where:** `src/repl/tutorials.c:178-183`, `src/repl/examples.c:548,
+834, 874-878`
 
-**Smell:** Catalog hardcodes integer values for grid themes; comments
-name the symbolic constant but no machine link. Reordering
-`SceneGridTheme` silently breaks the Feature Tour without a build
-failure.
+**Smell (original):** Tutorial + example catalogs hardcoded integer
+values for `grid`/`axes`/`backdrop`. Comments named the symbolic
+constant but no machine link existed. Reordering `SceneGridTheme` /
+`SceneAxesTheme` / `SceneBackdropMode` silently shifted catalogs to
+wrong themes without a build failure.
 
-**Fix:** Add a tutorial-side test in `tests/test_tutorial_runner.c`
-that goes through the **public catalog accessors** (the catalog's
-`g_tutorial_feature_tour_steps[]` array is `static` in
-`src/repl/tutorials.c:143` and is not part of the public API).
-The Feature Tour has **two** consecutive grid SET steps —
-`grid = 10` (`GRID_THEME_RADAR`) at `tutorials.c:164` and
-`grid = 6` (`GRID_THEME_FOCUS`) at `tutorials.c:167` — so the
-test asserts both literals in catalog order:
+**Resolution (full slug-to-int route, two commits):**
 
-```c
-/* Find "Feature Tour" by name; do not assume catalog index. */
-int n = repl_tutorial_count();
-int tour_idx = -1;
-for (int i = 0; i < n; i++) {
-    if (strcmp(repl_tutorial_name(i), "Feature Tour") == 0) {
-        tour_idx = i;
-        break;
-    }
-}
-ASSERT_TRUE("Feature Tour exists", tour_idx >= 0);
+The cleaner alternative noted at the bottom of the original
+write-up — push slug-to-int into the bridge — was taken instead of
+the test-only enum pin. The REPL layer stays scene-agnostic;
+vocabulary lives in `src/app/glr_actions.c`.
 
-/* Collect every "grid" SET step in catalog order. Locating by
- * slug + kind (rather than absolute index) keeps the test robust
- * to step reordering — but the assertion still depends on the
- * showcase order Radar-then-Focus matching the on-screen reveal. */
-int s = repl_tutorial_step_count(tour_idx);
-int grid_steps[8];
-int grid_step_count = 0;
-for (int i = 0; i < s; i++) {
-    const char *slug = repl_tutorial_step_cfg_slug(tour_idx, i);
-    if (slug && strcmp(slug, "grid") == 0 &&
-        repl_tutorial_step_kind(tour_idx, i) ==
-        TUTORIAL_STEP_KIND_SET) {
-        if (grid_step_count < 8)
-            grid_steps[grid_step_count++] = i;
-    }
-}
-ASSERT_INT_EQ("Feature Tour has two grid SET steps",
-              grid_step_count, 2);
+Phase 1 (commit 75a3e5f) — bridge plumbing:
 
-/* Each literal in the catalog must equal the enum value the
- * scene-side header exports. The test TU includes themes.h. */
-ASSERT_INT_EQ("first grid step is GRID_THEME_RADAR",
-              repl_tutorial_step_cfg_value(tour_idx, grid_steps[0]),
-              GRID_THEME_RADAR);
-ASSERT_INT_EQ("second grid step is GRID_THEME_FOCUS",
-              repl_tutorial_step_cfg_value(tour_idx, grid_steps[1]),
-              GRID_THEME_FOCUS);
-```
+- `REPL_CFG_VALUE_MAX` bumped 16 → 32 (fits
+  "SCENE_BACKDROP_CITY_AND_STARS").
+- New `ReplConfigBridge.resolve_text(slug, name, *out)` callback +
+  public wrappers `repl_cfg_set_text` / `repl_cfg_resolve_text` in
+  `src/repl/cfg_baseline.{c,h}`.
+- `src/repl/import.c::parse_cfg` rewritten to pass raw value
+  tokens through to the bag (was `strtol`-then-`snprintf`).
+- `TutorialStep` gains `cfg_value_name`; new `STEP_SET_SYM` /
+  `STEP_REQUIRE_SYM` macros.
+- `src/scene/themes.h` refactored to X-macro lists
+  (`GRID_THEME_LIST(X)` / `AXES_THEME_LIST(X)` / `SCENE_BACKDROP_LIST(X)`)
+  that drive **both** the enum definition and the cfg-symbol string
+  tables in `src/app/glr_actions.c` from a single name list — adding
+  a theme/backdrop extends both at compile time. Mirrors the existing
+  `GL_STUB_COUNTER_LIST(X)` pattern.
+- App-layer resolver `glr_export_cfg_resolve_text` wired into the
+  bridge; `glr_export_cfg_apply` tries resolve_text first, then
+  falls back to `strtol` so legacy integer-form saved files still
+  load. Tutorial runner branches on `cfg_value_name` for both SET
+  (calls `repl_cfg_set_text`) and REQUIRE (calls
+  `repl_cfg_resolve_text`).
 
-If the showcase order changes (Focus-then-Radar) the assertions
-flip rather than silently drift — that's the desired failure
-mode. If a third grid SET step is added later, the
-`grid_step_count == 2` assertion fails loud, prompting the test
-author to decide whether to extend the test or pin the count
-intentionally.
+Phase 2 (commit f4ff371) — flip catalogs:
 
-(Alternative: push slug-to-int into the bridge so the catalog
-records `"GRID_THEME_RADAR"` / `"GRID_THEME_FOCUS"` and the test
-just asserts string equality. Heavier refactor; the
-public-accessor test above is the minimal closure.)
+- `src/repl/examples.c` 5 sites (glow particles, snowfall, stress
+  test) + docstring.
+- `src/repl/tutorials.c` 3 sites (Feature Tour baseline `@cfg` +
+  two `STEP_SET_SYM` lines).
+
+Tests (string equality, end-to-end, three layers):
+
+- `test_feature_tour_grid_steps_use_symbolic_names`
+  (`tests/test_tutorial_runner.c`) — catalog SET steps assert
+  `cfg_value_name` string-equals `"GRID_THEME_RADAR"` /
+  `"GRID_THEME_FOCUS"`. Replaces the integer-equality placeholder.
+- `test_example_cfg_uses_symbolic_names`
+  (`tests/test_repl_core_examples.c`) — scans every example's
+  leading `@cfg` block; any `grid`/`axes`/`backdrop` value that
+  starts with a digit fails CI. Catches a regression in either
+  direction.
+- `test_cfg_bridge_resolves_symbolic_names`
+  (`tests/test_glr_actions.c`) — locks `resolve_text` +
+  `repl_cfg_set_text` for one canonical name per scene enum;
+  unknown-symbol-fails (no silent zero); legacy `"4"` still
+  resolves to `GRID_THEME_EMBER` via the strtol fallback.
+
+6451/6451 tests pass; check-state-ownership green;
+check-repl-no-app green (REPL never includes `scene/themes.h`).
 
 ### 42. 25 lines of per-side CatalogTagOps glue remain after closed #12
 
