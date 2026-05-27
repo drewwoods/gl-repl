@@ -9,25 +9,12 @@
 #   ui_state_includes_repl_views -> 0  (typedefs migrate to a ui-owned
 #     header)
 #
-# The forwarder block in repl_state.c was deleted in Phase A commit
-# 14. All UI-slice callers now talk to `ui_state_*` directly: ui_*.c
-# and the allowlisted controller / repl_actions / repl_editor /
-# repl_export include src/ui/app/state.h, while a handful of non-allowlisted
-# repl_*.c files forward-declare the few accessors they need.
-#
-# The ratchet's grep still counts 3 lines because repl_state.c
-# legitimately calls ui_state_*() outside the (now-deleted) forwarder
-# block:
-#   - ui_state_reset() inside repl_state_reset_all (every test reset
-#     drains all three state structs together).
-#   - ui_state_camera_mut()->auto_rotate writes inside the two
-#     repl_state_presentation_reset_* helpers — the auto_rotate field
-#     is structurally part of the camera slice but conceptually a
-#     presentation toggle. Splitting that field out of GlrCameraState
-#     is a follow-up; until then these calls stay.
-# These are not forwarders. The ratchet still serves its role: the
-# count cannot grow past 3, so any new transitional forwarder fails
-# the check. Tightening the grep itself is a future refinement.
+# History: the forwarder block in repl_state.c was deleted in Phase A
+# commit 14; the ratchet then sat at 3 to admit three legitimate
+# non-forwarder `ui_state_*()` calls (the reset_all sweep and two
+# auto_rotate writes through ui_state_camera_mut). Those calls have
+# since been moved through ui-owned paths and the grep counts zero —
+# baseline tightened to 0 on 2026-05-27 so any reintroduction fails CI.
 #
 # The Phase 5 typedef migration landed: the UI-chrome typedefs
 # (UiCodePanelRuntimeState / UiHelpState / UiProfilePanelState /
@@ -37,5 +24,5 @@
 # variable-panel snapshot view now lives with the variable-panel peer as
 # VariablePanelViewState. The ratchet target reached 0.
 
-ui_forwarder_count: 3
+ui_forwarder_count: 0
 ui_state_includes_repl_views: 0

@@ -83,9 +83,16 @@ flatten_header() {
 dups=$({
     for hdr in $headers; do
         [ -f "$hdr" ] || continue
+        # Skip lines whose first token is a control-flow keyword —
+        # those are bodies of `static inline` helpers (e.g.
+        # `return foo();` inside an inline wrapper). Without this
+        # filter, the call regex would pull `foo` out of any inline
+        # that delegates to another module's helper and false-flag it
+        # as a duplicate declaration.
         funcs=$(flatten_header "$hdr" \
             | grep -E '^[[:space:]]*[A-Za-z_]' \
             | grep -v '^[[:space:]]*#' \
+            | grep -vE '^[[:space:]]*(return|if|while|for|do|switch|case|break|continue|goto)[[:space:](]' \
             | grep -oE '[a-zA-Z_][a-zA-Z0-9_]*[[:space:]]*\([^;{]*\)[[:space:]]*;' \
             | sed -E 's/[[:space:]]*\(.*$//' \
             | sort -u)
