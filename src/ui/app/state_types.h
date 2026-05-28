@@ -3,11 +3,9 @@
  *
  * Defines the lightweight structs shared by `ui_state.h`, `UiRenderSnapshot`,
  * and UI renderers: code-panel chrome, help/profile/status flags, pointer, and
- * viewport size. These are UI-owned values even though several still carry the
- * historical `Repl` prefix for compatibility.
- *
- * `src/repl/state_views.h` re-exports these types for older transitive
- * consumers, but ownership lives here.
+ * viewport size. These are UI-owned values, all `Ui*`-prefixed; ownership
+ * lives here. `src/repl/state_views.h` points readers here in a comment but
+ * does not re-export them.
  */
 #ifndef UI_STATE_TYPES_H
 #define UI_STATE_TYPES_H

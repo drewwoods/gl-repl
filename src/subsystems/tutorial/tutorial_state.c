@@ -53,13 +53,3 @@ void tutorial_state_reset_except_baseline(void) {
 int tutorial_active(void) {
     return g_tutorial_state.active;
 }
-
-void tutorial_state_capture(TutorialRuntimeState *snapshot) {
-    if (!snapshot) return;
-    *snapshot = g_tutorial_state;
-}
-
-void tutorial_state_restore(const TutorialRuntimeState *snapshot) {
-    if (!snapshot) return;
-    g_tutorial_state = *snapshot;
-}

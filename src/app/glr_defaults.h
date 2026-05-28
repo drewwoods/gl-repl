@@ -73,9 +73,6 @@
 #define CFG_DEFAULT_USE_ACCUM         1
 #define CFG_DEFAULT_ACCUM_AA_ENABLED  1
 #define CFG_DEFAULT_ACCUM_SAMPLES     2
-#define CFG_DEFAULT_ACCUM_JITTER_X    0.0f
-#define CFG_DEFAULT_ACCUM_JITTER_Y    0.0f
-#define CFG_DEFAULT_MSAA_SAMPLES      0
 
 /* Tag-keyed presentation defaults applied during example loading,
  * layered between the global reset and the example's own leading

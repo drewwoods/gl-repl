@@ -12,13 +12,13 @@
 
 #include "gl_includes.h"  /* GLUT_BITMAP_* font pointer types */
 
-/* Per-vertex primitive renderers exposed for the controller's overlay
- * orchestration. Each draws ONE label / arrow at a transformed position;
- * iteration of the user's program and applying transforms is the
- * controller's responsibility (it walks the program via
- * replay_walk_user_vertices and calls these primitives at each visit).
- * The controller is also responsible for setting up the surrounding GL
- * state (color, depth disable, push/pop attribs). */
+/* Per-vertex primitive renderers exposed for the edit_overlays
+ * subsystem's overlay orchestration. Each draws ONE label / arrow at a
+ * transformed position; iteration of the user's program and applying
+ * transforms is the src/subsystems/edit_overlays/ responsibility (it walks
+ * the program via replay_walk_user_vertices and calls these primitives at
+ * each visit). That subsystem also sets up the surrounding GL state
+ * (color, depth disable, push/pop attribs). */
 void scene_draw_vertex_label_text(float vx, float vy, float vz,
                                   const char *primary_text,
                                   const char *detail_text);
@@ -35,9 +35,9 @@ void scene_draw_normal_vector_arrow(float vx, float vy, float vz,
 void scene_draw_bitmap_text(void *font, float x, float y, float z,
                             const char *str);
 
-/* Outlines and vertex-point overlays are controller-owned passes, not scene
- * primitives. src/app/glr_ctrl.c re-executes the user's geometry in GL_LINE or
- * GL_POINT mode and chooses the surrounding GL state; src/scene/ only provides
- * the per-vertex label/arrow helpers above. */
+/* Outlines and vertex-point overlays are edit_overlays-subsystem passes, not
+ * scene primitives. src/subsystems/edit_overlays/ re-executes the user's
+ * geometry in GL_LINE or GL_POINT mode and chooses the surrounding GL state;
+ * src/scene/ only provides the per-vertex label/arrow helpers above. */
 
 #endif /* SCENE_OVERLAYS_H */

@@ -27,8 +27,6 @@
 #define g_use_accum            (glr_state_render_mut()->use_accum)
 #define g_accum_aa_enabled     (glr_state_render_mut()->accum_aa_enabled)
 #define g_accum_samples        (glr_state_render_mut()->accum_samples)
-#define g_accum_jitter_x       (glr_state_render_mut()->accum_jitter_x)
-#define g_accum_jitter_y       (glr_state_render_mut()->accum_jitter_y)
 #define g_multisample_enabled  (glr_state_render_mut()->multisample_enabled)
 #define g_line_smooth_enabled  (glr_state_render_mut()->line_smooth_enabled)
 #define g_init_attenuate_points (glr_state_render_mut()->point_attenuation_enabled)
@@ -717,8 +715,6 @@ int main() {
         g_use_accum = 0;
         g_accum_aa_enabled = 0;
         g_accum_samples = 8;
-        g_accum_jitter_x = 0.5f;
-        g_accum_jitter_y = -0.25f;
         g_multisample_enabled = 0;
         g_line_smooth_enabled = 0;
         g_init_attenuate_points = 0;
@@ -734,8 +730,6 @@ int main() {
         ASSERT_INT("render reset use accum", g_use_accum, 1);
         ASSERT_INT("render reset accum aa", g_accum_aa_enabled, 1);
         ASSERT_INT("render reset accum samples", g_accum_samples, 2);
-        ASSERT_TRUE("render reset jitter x", g_accum_jitter_x == 0.0f);
-        ASSERT_TRUE("render reset jitter y", g_accum_jitter_y == 0.0f);
         ASSERT_INT("render reset multisample",
                    g_multisample_enabled, CFG_DEFAULT_MULTISAMPLE);
         ASSERT_INT("render reset line smooth",

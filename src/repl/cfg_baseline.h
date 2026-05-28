@@ -37,11 +37,7 @@ int         repl_config_bag_set(ReplConfigBag *cfg,
 int         repl_config_bag_set_int(ReplConfigBag *cfg,
                                     const char *key, int value);
 const char *repl_config_bag_get(const ReplConfigBag *cfg, const char *key);
-int         repl_config_bag_get_int(const ReplConfigBag *cfg,
-                                    const char *key, int fallback);
 int         repl_config_bag_count(const ReplConfigBag *cfg);
-int         repl_config_bag_at(const ReplConfigBag *cfg, int idx,
-                               const char **key_out, const char **value_out);
 
 /* Controller-installed adapter for cfg save/load. */
 typedef struct {

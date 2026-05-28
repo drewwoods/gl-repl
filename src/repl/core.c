@@ -83,10 +83,6 @@ void repl_install_host_effects(const ReplHostEffects *effects) {
     g_host_effects = effects;
 }
 
-const ReplHostEffects *repl_host_effects(void) {
-    return g_host_effects;
-}
-
 void repl_set_status(const char *msg) {
     if (g_host_effects && g_host_effects->status && msg && msg[0])
         g_host_effects->status(msg);
@@ -119,11 +115,6 @@ void repl_dispatch_insert_mode_off(void) {
 void repl_dispatch_scroll_to_line(int target) {
     if (g_host_effects && g_host_effects->scroll_to_line)
         g_host_effects->scroll_to_line(target);
-}
-
-void repl_dispatch_follow_cursor(int follow) {
-    if (g_host_effects && g_host_effects->follow_cursor)
-        g_host_effects->follow_cursor(follow);
 }
 
 void repl_dispatch_tutorial_teardown(void) {

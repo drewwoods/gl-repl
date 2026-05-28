@@ -140,7 +140,6 @@ typedef struct {
 } ReplExportProjectionBridge;
 
 void                              repl_export_install_projection_bridge(const ReplExportProjectionBridge *bridge);
-const ReplExportProjectionBridge *repl_export_projection_bridge(void);
 
 /* Resolve the reshape projection lines: the installed bridge, else the
  * canonical perspective default. Fills up to REPL_EXPORT_PROJ_LINES

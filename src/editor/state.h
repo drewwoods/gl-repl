@@ -351,7 +351,6 @@ void                 editor_state_edit_line_clamp(void);
 /* Selection slice API. The canonical "no selection" state is
  * anchor=-1, end=-1. */
 EditorSelectionState  editor_state_selection(void);
-EditorSelectionState *editor_state_selection_mut(void);
 void                editor_state_selection_clear(void);
 int                 editor_state_selection_anchor(void);
 int                 editor_state_selection_end_idx(void);
@@ -384,7 +383,6 @@ int         editor_clipboard_input_text_len(void);
  * default (no active query, hits invalidated). */
 const EditorSearchState *editor_state_search(void);
 EditorSearchState *editor_state_search_mut(void);
-void             editor_state_search_clear(void);
 
 /* Autocomplete slice API. The slice is editor-owned; production code outside
  * the registered completion provider should clear it via the provider seam
