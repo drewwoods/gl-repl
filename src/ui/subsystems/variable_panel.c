@@ -24,6 +24,10 @@
 #include "ui/app/state.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 
+#ifndef MIN
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
+#endif
+
 /* Variable-row data presentation + drag-state indicators. Deliberately
  * NOT theme tokens (theme.h "named constant" bucket): the green-name /
  * yellow-value two-tone and the log/linear/idle handle states encode
@@ -61,6 +65,22 @@ static float var_panel_log_scale(const UiVariableList *vars) {
     return max_abs * 1.25f; /* 25% headroom so handle doesn't hug the edge */
 }
 
+static const char *truncate_var_name(const char *name, size_t max_len) {
+    static char buf[64];
+    max_len = MIN(max_len, sizeof(buf) - 1);
+
+    /* truncate name with ellipsis in the middle if necessary */
+    size_t n = strlen(name);
+    if (n > max_len) {
+        size_t half = max_len / 2;
+        snprintf(buf, max_len, "%.*s...%.*s", (int)half - 1, name, (int)(max_len - half - 2), name + n - (max_len - half - 2));
+    } else {
+        strncpy(buf, name, max_len);
+        buf[max_len] = '\0';
+    }
+    return buf;
+}
+
 /* Map a value to slider t in [0,1] using a symmetric asinh (log-like) scale.
  * The "knee" epsilon = 5% of scale is the linear region; beyond that the
  * response is logarithmic.  Zero always maps to 0.5 (centre). */
@@ -73,7 +93,7 @@ static float val_to_slider_t(float val, float scale) {
     return t;
 }
 
-#define VAR_PANEL_W   200
+#define VAR_PANEL_W   275
 #define VAR_PANEL_PAD   6
 #define VAR_TITLE_H    20
 #define VAR_ROW_H      20
@@ -169,6 +189,9 @@ UiHit ui_variable_panel_hit_test(const UiRenderSnapshot *snap, int mx, int my, i
 }
 
 void ui_variable_panel_render(const UiRenderSnapshot *snap) {
+    #define MAX_VAR_NAME_WIDTH pw/3
+    #define MAX_VAR_NAME_CHARS MAX_VAR_NAME_WIDTH / FONT_SMALL_W
+
     if (!snap->variable_panel.visible) return;
 
     const UiVariableList *vars = &snap->variable_panel_vars;
@@ -198,7 +221,7 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
         if (len > max_name_len) max_name_len = len;
     }
     int label_w  = max_name_len * FONT_SMALL_W + FONT_SMALL_W;
-    if (label_w > pw / 3) label_w = pw / 3;
+    if (label_w > MAX_VAR_NAME_WIDTH) label_w = MAX_VAR_NAME_WIDTH;
     int label_x  = px + 6;
     int val_x    = px + 6 + label_w;
     int track_x  = val_x + 66;
@@ -228,8 +251,7 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
 
         /* Label */
         glColor3fv(k_var_name);
-        gl2d_draw_string((float)label_x, (float)text_y,
-                    var->name, FONT_SMALL);
+        gl2d_draw_string((float)label_x, (float)text_y, truncate_var_name(var->name, MAX_VAR_NAME_CHARS), FONT_SMALL);
 
         /* Value */
         char valstr[16]; snprintf(valstr, sizeof(valstr), "%7.3f", (double)val);
@@ -265,4 +287,6 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
 
     glDisable(GL_BLEND);
     gl2d_end();
+
+    #undef MAX_VAR_NAME_WIDTH
 }
