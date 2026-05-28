@@ -672,6 +672,31 @@ static int expr_range_has_runtime_values(const char *src, const char *end,
 static int validate_expression_idents_range(const char *src, const char *end,
                                             const ExprVar *vars, int num_vars,
                                             char *err, int errsz) {
+    /* Reject unbalanced parens up front. The recursive-descent eval
+     * tolerates a missing ')' on a function call (`max(1, 2` returns
+     * 2 silently), so without this check broken input slips through
+     * validation and commits as if it had been closed. */
+    int paren_depth = 0;
+    for (const char *p = src; *p && (!end || p < end); p++) {
+        if (p[0] == '/' && p[1] == '/' && (!end || p + 1 < end))
+            break;
+        if (*p == '(') {
+            paren_depth++;
+        } else if (*p == ')') {
+            if (paren_depth == 0) {
+                if (err)
+                    snprintf(err, (size_t)errsz, "unexpected ')'");
+                return 0;
+            }
+            paren_depth--;
+        }
+    }
+    if (paren_depth != 0) {
+        if (err)
+            snprintf(err, (size_t)errsz, "missing ')'");
+        return 0;
+    }
+
     const char *s = src;
     char name[REPL_PREDEF_NAME_MAX];
     const char *q = NULL;
@@ -1035,8 +1060,12 @@ static float eval_primary(ExprCtx *ctx) {
                 }
             }
             expr_skip_ws(ctx);
-            if (*ctx->p == ')')
+            if (*ctx->p == ')') {
                 ctx->p++;
+            } else {
+                expr_write_err(ctx, "missing ')' for '%s'", name);
+                return 0.0f;
+            }
 
             if (!builtin)
                 return 0.0f;

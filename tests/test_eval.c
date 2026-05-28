@@ -889,6 +889,26 @@ static void run_tests(void) {
 
         /* Identifier too long (>= 16 chars) */
         ASSERT_VALIDATE_FAIL("averylongnamethatoverflows", NULL, 0);
+
+        /* Unbalanced parens. The recursive-descent eval silently
+         * tolerates a missing ')' on a function call (`max(1, 2`
+         * evaluates to 2), so the validator must reject these so a
+         * truncated line never reaches the commit pipeline. */
+        ASSERT_VALIDATE_FAIL("max(1, 2", NULL, 0);
+        ASSERT_VALIDATE_FAIL("floor(2.7", NULL, 0);
+        ASSERT_VALIDATE_FAIL("min(3, 4", NULL, 0);
+        ASSERT_VALIDATE_FAIL("abs(5", NULL, 0);
+        ASSERT_VALIDATE_FAIL("sin(0", NULL, 0);
+        ASSERT_VALIDATE_FAIL("max(min(1,2), 3", NULL, 0);
+        ASSERT_VALIDATE_FAIL("(1 + 2", NULL, 0);
+        /* Stray ')' is also a hard error (would otherwise terminate
+         * eval midway and leave trailing junk). */
+        ASSERT_VALIDATE_FAIL("1 + 2)", NULL, 0);
+        ASSERT_VALIDATE_FAIL("max(1, 2))", NULL, 0);
+        /* Balanced cases still validate. */
+        ASSERT_VALIDATE_OK("max(1, 2)", NULL, 0);
+        ASSERT_VALIDATE_OK("max(min(1,2), 3)", NULL, 0);
+        ASSERT_VALIDATE_OK("((1 + 2) * 3)", NULL, 0);
     }
 
     /* ---- source_uses_ident ---- */
