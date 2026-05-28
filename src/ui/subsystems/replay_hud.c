@@ -7,7 +7,7 @@
  * must not call parser / compile / apply. Enforced by
  * `scripts/check-replay-ui-isolation.sh`.
  */
-#include "ui/app/replay_hud.h"
+#include "ui/subsystems/replay_hud.h"
 #include "ui/app/snapshot.h"
 #include "ui/core/gl_2d.h"
 #include "subsystems/replay/replay.h"

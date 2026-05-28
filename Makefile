@@ -306,7 +306,7 @@ SRCS = \
 	src/scene/render.c \
 	src/scene/scene_transition.c \
 	src/ui/app/autocomplete_panel.c \
-	src/ui/app/color_picker.c \
+	src/ui/subsystems/color_picker.c \
 	src/ui/app/layout.c \
 	src/ui/app/memory_panel.c \
 	src/ui/app/menu_bar.c \
@@ -314,7 +314,7 @@ SRCS = \
 	src/ui/app/panels.c \
 	src/ui/app/profile_panel.c \
 	src/ui/app/repl_code_panel.c \
-	src/ui/app/replay_hud.c \
+	src/ui/subsystems/replay_hud.c \
 	src/ui/app/scene_tabs.c \
 	src/ui/app/state.c \
 	src/ui/core/tabbed_overlay.c \
@@ -322,7 +322,7 @@ SRCS = \
 	src/ui/core/text_panel.c \
 	src/ui/core/text_search.c \
 	src/ui/core/theme.c \
-	src/ui/app/variable_panel.c \
+	src/ui/subsystems/variable_panel.c \
 	src/subsystems/color_picker/color_picker_state.c \
 	src/subsystems/replay/replay.c \
 	src/subsystems/replay/replay_fade.c \
@@ -398,7 +398,7 @@ HDRS = \
 	src/scene/scene_transition.h \
 	src/scene/render_types.h \
 	src/ui/app/autocomplete_panel.h \
-	src/ui/app/color_picker.h \
+	src/ui/subsystems/color_picker.h \
 	src/ui/app/layout.h \
 	src/ui/app/memory_panel.h \
 	src/ui/app/menu_bar.h \
@@ -406,7 +406,7 @@ HDRS = \
 	src/ui/app/panels.h \
 	src/ui/app/profile_panel.h \
 	src/ui/app/repl_code_panel.h \
-	src/ui/app/replay_hud.h \
+	src/ui/subsystems/replay_hud.h \
 	src/ui/app/scene_tabs.h \
 	src/ui/app/state.h \
 	src/ui/app/state_types.h \
@@ -415,7 +415,7 @@ HDRS = \
 	src/ui/core/text_panel.h \
 	src/ui/core/text_search.h \
 	src/ui/core/theme.h \
-	src/ui/app/variable_panel.h \
+	src/ui/subsystems/variable_panel.h \
 	src/subsystems/color_picker/color_picker_state.h \
 	src/subsystems/replay/replay_internal.h \
 	src/subsystems/replay/replay.h \
@@ -487,7 +487,7 @@ CORE_TEST_SRCS = \
 	src/scene/render.c \
 	src/scene/scene_transition.c \
 	src/ui/app/autocomplete_panel.c \
-	src/ui/app/color_picker.c \
+	src/ui/subsystems/color_picker.c \
 	src/ui/app/layout.c \
 	src/ui/app/memory_panel.c \
 	src/ui/app/menu_bar.c \
@@ -495,7 +495,7 @@ CORE_TEST_SRCS = \
 	src/ui/app/panels.c \
 	src/ui/app/profile_panel.c \
 	src/ui/app/repl_code_panel.c \
-	src/ui/app/replay_hud.c \
+	src/ui/subsystems/replay_hud.c \
 	src/ui/app/scene_tabs.c \
 	src/ui/app/state.c \
 	src/ui/core/tabbed_overlay.c \
@@ -503,7 +503,7 @@ CORE_TEST_SRCS = \
 	src/ui/core/text_panel.c \
 	src/ui/core/text_search.c \
 	src/ui/core/theme.c \
-	src/ui/app/variable_panel.c \
+	src/ui/subsystems/variable_panel.c \
 	src/subsystems/color_picker/color_picker_state.c \
 	src/subsystems/replay/replay.c \
 	src/subsystems/replay/replay_fade.c \
@@ -537,7 +537,7 @@ SCENE_DEMO_DEP_SRCS = $(SCENE_SRCS) src/support/prof.c
 # Object list for the standalone repl_demo (the inverse of scene_demo:
 # proves the REPL pipeline links without editor input dispatch
 # (src/editor/input.c), the controller (src/app/glr_ctrl.c + glr_ctrl_router_*),
-# the UI (src/ui/*, src/ui/app/replay_hud.c), or — as of Phase 6 of
+# the UI (src/ui/*, src/ui/subsystems/replay_hud.c), or — as of Phase 6 of
 # feature/source-document-port.md — the editor text store
 # (src/editor/state.c). Per-line text comes from
 # src/editor/state.c, a standalone static line store
@@ -1151,7 +1151,7 @@ check-ui-panels-no-mutators: ## Hard guard: src/ui/app/panels.c references no in
 check-replay-ui-isolation: ## Hard guard: replay_ui_*.c is feature-UI — no editor / REPL mutators or parser/compile/apply calls.
 	@bash scripts/check-replay-ui-isolation.sh
 
-check-color-picker-ui-isolation: ## Strict guard: src/ui/app/color_picker.c is pure renderer/hit-test over ColorPickerView — no mutators, no live state reads, no parser/compile/apply.
+check-color-picker-ui-isolation: ## Strict guard: src/ui/subsystems/color_picker.c is pure renderer/hit-test over ColorPickerView — no mutators, no live state reads, no parser/compile/apply.
 	@bash scripts/check-color-picker-ui-isolation.sh
 
 check-variable-panel-forwarders: ## Ratchet legacy variable_panel forwarder API uses (editor_state_variable_drag*, ui_state_variable_panel*, repl_var_drag_*).

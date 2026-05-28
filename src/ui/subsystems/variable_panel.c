@@ -15,7 +15,7 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "ui/app/variable_panel.h"
+#include "ui/subsystems/variable_panel.h"
 #include "ui/core/gl_2d.h"
 #include "ui/app/layout.h"
 #include "ui/core/metrics.h"

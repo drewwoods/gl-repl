@@ -7,7 +7,7 @@
 #include "repl/eval.h"
 #include "repl/export.h"
 #include "repl/state_views.h"
-#include "ui/app/color_picker.h"
+#include "ui/subsystems/color_picker.h"
 #include "ui/app/numeric_swatch.h"
 #include "ui/core/gl_2d.h"
 #include "ui/app/layout.h"

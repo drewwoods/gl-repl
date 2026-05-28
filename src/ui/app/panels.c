@@ -5,7 +5,7 @@
 #include "ui/app/panels.h"
 
 #include "config.h"
-#include "ui/app/color_picker.h"
+#include "ui/subsystems/color_picker.h"
 #include "ui/app/numeric_swatch.h"
 #include "ui/core/gl_2d.h"
 #include "ui/app/layout.h"
@@ -13,7 +13,7 @@
 #include "ui/core/metrics.h"
 #include "ui/app/repl_code_panel.h"
 #include "ui/app/scene_tabs.h"
-#include "ui/app/variable_panel.h"
+#include "ui/subsystems/variable_panel.h"
 
 #include <math.h>
 #include <stdio.h>

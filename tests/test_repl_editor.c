@@ -33,7 +33,7 @@
 #include "ui/core/metrics.h"
 #include "ui/app/panels.h"
 #include "ui/app/state.h"
-#include "ui/app/variable_panel.h"
+#include "ui/subsystems/variable_panel.h"
 
 #define g_status     (ui_state_status_mut()->text)
 #define g_scroll     (editor_state_scroll_mut()->scroll)
