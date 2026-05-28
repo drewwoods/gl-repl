@@ -241,12 +241,6 @@ int  repl_export_load_from_file(const char *filename, ReplImportResult *result);
  * buffer in sync. */
 void repl_state_refresh_workspace_header_lines(void);
 
-/* Parse a single workspace header directive line (e.g., "@var x=5" or "@cfg wireframe=1").
- * Updates internal state accordingly. Returns 1 if the line was a recognized directive,
- * 0 if it's not a directive (caller should process as regular code). Used during
- * load_from_file() to extract metadata. */
-int  repl_state_parse_workspace_header_line(const char *line);
-
 /* Access the init-section boilerplate lines rendered into the code panel and
  * exported output. */
 int  repl_export_init_section_line_count(void);
