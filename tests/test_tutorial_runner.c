@@ -9,16 +9,20 @@
 #include "editor/undo.h"
 #include "keys.h"
 #include "repl/core.h"
+#include "repl/eval.h"            /* REQUIRE_VAR tests: predef-var declare/lookup */
 #include "repl/state_owners.h"
 #include "repl/state_views.h"
 #include "repl/tutorials.h"
 #include "scene/themes.h"        /* GRID_THEME_*, AXES_THEME_*, SCENE_BACKDROP_* */
 #include "source_document.h"
+#include "subsystems/variable_panel/variable_panel_drag.h"   /* slider-drag plumbing for REQUIRE_VAR test */
+#include "subsystems/variable_panel/variable_panel_state.h"
 #include "support/test_harness.h"
 #include "ui/app/state.h"
 #include "subsystems/tutorial/tutorial.h"
 #include "subsystems/tutorial/tutorial_state.h"
 
+#include <math.h>     /* fabsf for REQUIRE_VAR epsilon checks */
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -2363,6 +2367,283 @@ static void test_validate_rejects_typo_symbolic_value_name(void) {
                                                       err, sizeof err));
 }
 
+/* ------------------------------------------------------------------------- */
+/* REQUIRE_VAR step kind: predef-variable target with either-path                  */
+/* (typed `name = expr;` commit OR variable-panel slider drag).             */
+/* ------------------------------------------------------------------------- */
+
+static void test_validate_accepts_require_var_step(void) {
+    static const TutorialStep steps[] = {
+        { NULL, "// set n to 5", NULL,
+          TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_REQUIRE_VAR, NULL, 0, NULL, "n", 5.0f },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL, NULL, 0.0f },
+    };
+    TutorialEntry entry = { .name = "require_var_ok", .steps = steps };
+    char err[160] = "";
+    ASSERT_TRUE("REQUIRE_VAR with valid var_name validates",
+                repl_tutorial_validate_entry(&entry, err, sizeof(err)));
+    ASSERT_STR("err empty on success", err, "");
+}
+
+static void test_validate_rejects_require_var_with_expected(void) {
+    static const TutorialStep steps[] = {
+        { NULL, "// require with bogus expected", "glBegin(GL_TRIANGLES)",
+          TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_REQUIRE_VAR, NULL, 0, NULL, "n", 5.0f },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL, NULL, 0.0f },
+    };
+    TutorialEntry entry = { .name = "require_var_with_expected", .steps = steps };
+    char err[160] = "";
+    ASSERT_TRUE("REQUIRE_VAR with non-NULL expected rejected",
+                !repl_tutorial_validate_entry(&entry, err, sizeof(err)));
+    ASSERT_TRUE("error mentions expected",
+                err[0] != '\0' && strstr(err, "expected") != NULL);
+}
+
+static void test_validate_rejects_require_var_empty_name(void) {
+    static const TutorialStep steps[] = {
+        { NULL, "// missing var name", NULL,
+          TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_REQUIRE_VAR, NULL, 0, NULL, "", 5.0f },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL, NULL, 0.0f },
+    };
+    TutorialEntry entry = { .name = "require_var_empty_name", .steps = steps };
+    char err[160] = "";
+    ASSERT_TRUE("REQUIRE_VAR with empty var_name rejected",
+                !repl_tutorial_validate_entry(&entry, err, sizeof(err)));
+    ASSERT_TRUE("error mentions var_name",
+                err[0] != '\0' && strstr(err, "var_name") != NULL);
+}
+
+static void test_validate_rejects_require_var_reserved_name(void) {
+    /* `t` is the predefined animation variable — REQUIRE_VAR var_name
+     * must not collide with the reserved-ident set. */
+    static const TutorialStep steps[] = {
+        { NULL, "// reserved name", NULL,
+          TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_REQUIRE_VAR, NULL, 0, NULL, "t", 5.0f },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL, NULL, 0.0f },
+    };
+    TutorialEntry entry = { .name = "require_var_reserved", .steps = steps };
+    char err[160] = "";
+    ASSERT_TRUE("REQUIRE_VAR with reserved var_name rejected",
+                !repl_tutorial_validate_entry(&entry, err, sizeof(err)));
+    ASSERT_TRUE("error mentions reserved",
+                err[0] != '\0' && strstr(err, "reserved") != NULL);
+}
+
+/* Shipped catalog has a "Variable Slider" tutorial that exercises two
+ * REQUIRE_VAR steps. Pin its presence so a future catalog rewrite
+ * either keeps it or updates these tests deliberately. */
+static void test_catalog_includes_variable_slider_tutorial(void) {
+    int idx = find_tutorial_idx("Variable Slider");
+    ASSERT_TRUE("Variable Slider tutorial is in catalog", idx >= 0);
+    if (idx < 0) return;
+    ASSERT_INT("Variable Slider has 2 REQUIRE_VAR steps",
+               repl_tutorial_step_count(idx), 2);
+    ASSERT_INT("step 0 is REQUIRE_VAR",
+               (int)repl_tutorial_step_kind(idx, 0),
+               (int)TUTORIAL_STEP_KIND_REQUIRE_VAR);
+    ASSERT_STR("step 0 watches var n",
+               repl_tutorial_step_var_name(idx, 0), "n");
+    /* Compare via int cast: ASSERT_FLOAT pattern isn't in this file. */
+    ASSERT_TRUE("step 0 target is 5.0",
+                repl_tutorial_step_var_target(idx, 0) == 5.0f);
+    ASSERT_INT("step 1 is REQUIRE_VAR",
+               (int)repl_tutorial_step_kind(idx, 1),
+               (int)TUTORIAL_STEP_KIND_REQUIRE_VAR);
+    ASSERT_TRUE("step 1 target is 10.0",
+                repl_tutorial_step_var_target(idx, 1) == 10.0f);
+}
+
+/* Pre-declaration: tutorial_start auto-declares every var_name named
+ * by a REQUIRE_VAR step, so the user doesn't have to manually
+ * `float n;` before they can satisfy the step. This also makes the
+ * variable-panel slider for `n` available immediately. */
+static void test_require_var_predeclares_var(void) {
+    reset_fixture();
+
+    int idx = find_tutorial_idx("Variable Slider");
+    ASSERT_TRUE("Variable Slider in catalog", idx >= 0);
+    if (idx < 0) return;
+    tutorial_start(idx);
+
+    int n_idx = repl_eval_find_predef_var_idx("n");
+    ASSERT_TRUE("n auto-declared by tutorial start", n_idx >= 0);
+    if (n_idx >= 0)
+        ASSERT_TRUE("n initial value is 0",
+                    g_predef_vars[n_idx].value == 0.0f);
+}
+
+/* A typed `n = 5;` assignment satisfies REQUIRE_VAR on `n`: the
+ * editor commit path runs repl_apply_predef_ops, which the chokepoint
+ * in apply_compiled_change_full notifies after. With n pre-declared
+ * by tutorial_start the user can type the assignment directly. */
+static void test_require_var_advances_on_typed_assignment(void) {
+    reset_fixture();
+
+    int idx = find_tutorial_idx("Variable Slider");
+    ASSERT_TRUE("Variable Slider in catalog", idx >= 0);
+    if (idx < 0) return;
+    tutorial_start(idx);
+    ASSERT_TRUE("tutorial active", tutorial_active());
+    ASSERT_INT("on REQUIRE_VAR step 0", tutorial_state_view().step, 0);
+
+    set_input_text("n = 5");
+    editor_handle_key(';', 0, 0);
+
+    ASSERT_INT("REQUIRE_VAR advanced after matching assignment",
+               tutorial_state_view().step, 1);
+    int n_idx = repl_eval_find_predef_var_idx("n");
+    ASSERT_TRUE("n still declared", n_idx >= 0);
+    if (n_idx >= 0)
+        ASSERT_TRUE("n value is 5",
+                    g_predef_vars[n_idx].value == 5.0f);
+}
+
+/* Slider drag also satisfies REQUIRE_VAR: the variable-panel writeback
+ * path (variable_panel_handle_drag_motion → controller-level apply)
+ * lands through the same repl_apply_predef_ops chokepoint. Drive the
+ * controller-level router directly so the wiring is exercised end-to-end. */
+static void test_require_var_advances_on_slider_drag(void) {
+    reset_fixture();
+
+    int idx = find_tutorial_idx("Variable Slider");
+    ASSERT_TRUE("Variable Slider in catalog", idx >= 0);
+    if (idx < 0) return;
+    tutorial_start(idx);
+    ASSERT_TRUE("tutorial active", tutorial_active());
+    int n_idx = repl_eval_find_predef_var_idx("n");
+    ASSERT_TRUE("n auto-declared", n_idx >= 0);
+    if (n_idx < 0) return;
+
+    /* Begin a linear drag on n starting at value 0, then drag to a
+     * pixel offset that maps to the target (1 px = 0.05 units, so
+     * 100 px → 5.0 units). The motion router applies the writeback
+     * and the notify chokepoint fires. */
+    variable_panel_handle_drag_begin(n_idx, /*log_mode=*/0, /*x=*/0);
+    glr_ctrl_router_handle_variable_panel_motion(/*x=*/100, /*y=*/0);
+
+    ASSERT_INT("REQUIRE_VAR advanced after slider drag to target",
+               tutorial_state_view().step, 1);
+    ASSERT_TRUE("n value reflects drag",
+                fabsf(g_predef_vars[n_idx].value - 5.0f) <= TUTORIAL_VAR_EPS);
+    variable_panel_handle_drag_reset();
+}
+
+/* An assignment to an unrelated variable must NOT advance a REQUIRE_VAR
+ * step that watches `n`. tutorial_advance_after_successful_commit has
+ * a kind-aware bypass for REQUIRE_VAR so the notify hook (not the
+ * commit-side advance) is the sole authority. */
+static void test_require_var_ignores_unrelated_assignment(void) {
+    reset_fixture();
+
+    int idx = find_tutorial_idx("Variable Slider");
+    ASSERT_TRUE("Variable Slider in catalog", idx >= 0);
+    if (idx < 0) return;
+    tutorial_start(idx);
+    /* Declare an unrelated variable so the test commits an assignment
+     * the parser can resolve. */
+    editor_feed_line("float m;");
+    int step_before = tutorial_state_view().step;
+
+    set_input_text("m = 5");
+    editor_handle_key(';', 0, 0);
+
+    ASSERT_INT("unrelated assignment does not advance REQUIRE_VAR",
+               tutorial_state_view().step, step_before);
+}
+
+/* The notify advances at most one step at a time: after the first
+ * matching commit, the runner enters step 1 but must NOT also advance
+ * past step 1 (whose target is n==10, not yet met). Pins the
+ * "commit-side bypass" + "notify-side single advance" pairing. */
+static void test_require_var_pauses_on_next_step_after_match(void) {
+    reset_fixture();
+
+    int idx = find_tutorial_idx("Variable Slider");
+    ASSERT_TRUE("Variable Slider in catalog", idx >= 0);
+    if (idx < 0) return;
+    tutorial_start(idx);
+    ASSERT_TRUE("tutorial active", tutorial_active());
+
+    set_input_text("n = 5");
+    editor_handle_key(';', 0, 0);
+
+    TutorialRuntimeState st = tutorial_state_view();
+    ASSERT_INT("advanced to step 1", st.step, 1);
+    ASSERT_INT("on REQUIRE_VAR step 1",
+               (int)tutorial_current_step_kind(),
+               (int)TUTORIAL_STEP_KIND_REQUIRE_VAR);
+    ASSERT_TRUE("tutorial still active (step 1 didn't auto-advance)",
+                tutorial_active());
+}
+
+/* Epsilon boundary: a value just inside TUTORIAL_VAR_EPS counts as a
+ * match; just outside doesn't. Drives the boundary check through the
+ * notify path so the live comparison in tutorial_var_matches_target
+ * is exercised. */
+static void test_require_var_epsilon_boundary(void) {
+    reset_fixture();
+
+    int idx = find_tutorial_idx("Variable Slider");
+    ASSERT_TRUE("Variable Slider in catalog", idx >= 0);
+    if (idx < 0) return;
+    tutorial_start(idx);
+    int n_idx = repl_eval_find_predef_var_idx("n");
+    ASSERT_TRUE("n auto-declared", n_idx >= 0);
+    if (n_idx < 0) return;
+
+    /* Just outside epsilon → no match. Poke the value directly and fire
+     * the notify; step must stay on 0. (Direct poke is fine for the
+     * boundary check — it isolates the matcher from drag arithmetic
+     * precision.) */
+    g_predef_vars_mut[n_idx].value = 5.0f - 2 * TUTORIAL_VAR_EPS;
+    tutorial_notify_state_changed();
+    ASSERT_INT("just-outside-epsilon does not advance",
+               tutorial_state_view().step, 0);
+
+    /* Just inside epsilon → matches and the step advances. */
+    g_predef_vars_mut[n_idx].value = 5.0f - 0.5f * TUTORIAL_VAR_EPS;
+    tutorial_notify_state_changed();
+    ASSERT_INT("just-inside-epsilon advances",
+               tutorial_state_view().step, 1);
+}
+
+/* The ghost-suffix helper synthesizes "name = target" for REQUIRE_VAR
+ * steps so the autocomplete shadow text passively teaches the typing
+ * path. Verifies both empty input (full ghost) and a prefix match. */
+static void test_require_var_shadow_suffix_synthesizes_assignment(void) {
+    reset_fixture();
+    char ghost[64];
+
+    int idx = find_tutorial_idx("Variable Slider");
+    ASSERT_TRUE("Variable Slider in catalog", idx >= 0);
+    if (idx < 0) return;
+    tutorial_start(idx);
+
+    /* Empty input → full ghost "n = 5". */
+    ghost[0] = '\0';
+    ASSERT_INT("shadow returns 1 on empty input",
+               tutorial_shadow_suffix("", ghost, sizeof ghost), 1);
+    ASSERT_STR("ghost is full synthesized assignment",
+               ghost, "n = 5");
+
+    /* Strict-prefix "n = " → trailing " 5". The prefix walker preserves
+     * the original spacing in the synthesized expected text, so the
+     * returned suffix carries the leading space between `=` and `5`. */
+    ghost[0] = '\0';
+    ASSERT_INT("shadow returns 1 for valid prefix",
+               tutorial_shadow_suffix("n = ", ghost, sizeof ghost), 1);
+    ASSERT_STR("ghost is remainder after prefix",
+               ghost, " 5");
+}
+
 int main(void) {
     tutorial_state_init_explicit();
     test_feature_tour_grid_steps_use_symbolic_names();
@@ -2441,5 +2722,18 @@ int main(void) {
     test_validate_rejects_require_with_expected();
     test_commit_blocked_with_hint_during_set_step();
     test_workspace_load_during_tutorial_restores_baseline();
+    /* REQUIRE_VAR step kind. */
+    test_validate_accepts_require_var_step();
+    test_validate_rejects_require_var_with_expected();
+    test_validate_rejects_require_var_empty_name();
+    test_validate_rejects_require_var_reserved_name();
+    test_catalog_includes_variable_slider_tutorial();
+    test_require_var_predeclares_var();
+    test_require_var_advances_on_typed_assignment();
+    test_require_var_advances_on_slider_drag();
+    test_require_var_ignores_unrelated_assignment();
+    test_require_var_pauses_on_next_step_after_match();
+    test_require_var_epsilon_boundary();
+    test_require_var_shadow_suffix_synthesizes_assignment();
     return test_harness_report(&g_harness, "test_tutorial_runner");
 }

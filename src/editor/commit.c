@@ -36,6 +36,7 @@
 #include "state.h"
 #include "undo.h"
 #include "subsystems/color_picker/color_picker_state.h"
+#include "subsystems/tutorial/tutorial.h"  /* tutorial_notify_state_changed */
 
 #include "repl/apply.h"
 #include "repl/compile.h"
@@ -103,6 +104,13 @@ static void apply_compiled_change_full(const ReplCompiledChange *change) {
     int edit_line = editor_state_edit_line();
     if (repl_apply_compiled_change(change, &edit_line))
         editor_state_edit_line_set(edit_line);
+    /* Single chokepoint for tutorial REQUIRE_VAR notifications: every
+     * predef-var writeback (typed `name = expr;`, slider drag, float-
+     * decl-with-initializer) flows through repl_apply_predef_ops above.
+     * The notify function is slug-/var-scoped and inactive-checked, so
+     * the call is cheap when no REQUIRE_VAR step is active. */
+    if (change->predef_op_count > 0)
+        tutorial_notify_state_changed();
 }
 
 static ReplCompileContext editor_compile_context_live(void) {
