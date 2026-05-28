@@ -1,12 +1,11 @@
 /*
- * ui_memory_panel.c - process memory profiling overlay panel.
+ * ui_memprof.c - process memory profiling overlay panel.
  */
-#include "ui/app/memory_panel.h"
+#include "ui/support/memprof.h"
 #include "ui/core/gl_2d.h"
 #include "ui/app/layout.h"
-#include "ui/app/profile_panel.h"   /* PROFILE_PANEL_W, PROFILE_PANEL_OFF */
+#include "ui/support/cpuprof.h"   /* PROFILE_PANEL_W, PROFILE_PANEL_OFF */
 #include "ui/subsystems/variable_panel.h"  /* ui_variable_panel_rect_for_count */
-#include "ui/core/metrics.h"
 #include "ui/core/theme.h"
 #include "support/memprof.h"
 #include "config.h"                  /* FONT_SMALL, FONT_SMALL_W */
@@ -260,8 +259,8 @@ void ui_memory_panel_render(const UiRenderSnapshot *snap) {
         ui_clr(UI_TOK_TEXT_PLACEHOLDER);
         const char *empty = "(collecting samples)";
         int ew = (int)strlen(empty) * FONT_SMALL_W;
-        gl2d_draw_string((float)(plot_x + (plot_w - ew) / 2),
-                         (float)(plot_y + MEM_GRAPH_H / 2),
+        gl2d_draw_string((float)plot_x + ((float)plot_w - (float)ew) * 0.5f,
+                 (float)plot_y + (float)MEM_GRAPH_H * 0.5f,
                          empty, FONT_SMALL);
         gl2d_end();
         return;
@@ -353,7 +352,7 @@ void ui_memory_panel_render(const UiRenderSnapshot *snap) {
     int rl_w = tiny_text_w(right_lab);
     int ml_w = tiny_text_w(mid_lab);
     gl2d_draw_string((float)plot_x, (float)label_y, left_lab, FONT_TINY);
-    gl2d_draw_string((float)(plot_x + plot_w / 2 - ml_w / 2),
+    gl2d_draw_string((float)plot_x + (float)plot_w * 0.5f - (float)ml_w * 0.5f,
                      (float)label_y, mid_lab, FONT_TINY);
     gl2d_draw_string((float)(plot_x + plot_w - rl_w),
                      (float)label_y, right_lab, FONT_TINY);

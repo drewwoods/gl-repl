@@ -1,5 +1,5 @@
 /*
- * ui_profile_panel.h - CPU profiling overlay panel.
+ * ui_cpuprof.h - CPU profiling overlay panel.
  *
  * Renders a compact overlay showing per-frame CPU time breakdown across major
  * sections (flattening, rendering, UI, physics, etc.). Displays both the
@@ -7,7 +7,7 @@
  * analysis. Used for real-time performance monitoring and bottleneck detection.
  *
  * Profiling infrastructure: The underlying measurement is in
- * src/support/prof.c / src/support/prof.h, which uses platform timers
+ * src/support/cpuprof.c / src/support/cpuprof.h, which uses platform timers
  * (gettimeofday or equivalent) to bracket code sections via
  * prof_begin/prof_end. This module reads those measurements and renders
  * them as an overlay (top-left corner by default, position is
@@ -24,8 +24,8 @@
  * Useful for detecting performance regressions or identifying which features
  * are most expensive to compute.
  */
-#ifndef UI_PROFILE_PANEL_H
-#define UI_PROFILE_PANEL_H
+#ifndef UI_CPUPROF_H
+#define UI_CPUPROF_H
 
 typedef enum {
 	PROFILE_PANEL_OFF = 0,
@@ -41,8 +41,8 @@ typedef enum {
 #include "ui/app/snapshot.h"
 
 /* Render the CPU profile panel overlay once per frame from the supplied
- * snapshot. Reads measurements from src/support/prof.c and displays
+ * snapshot. Reads measurements from src/support/cpuprof.c and displays
  * per-section CPU times. Renders nothing if the profile panel is disabled. */
 void ui_profile_panel_render(const UiRenderSnapshot *snap);
 
-#endif /* UI_PROFILE_PANEL_H */
+#endif /* UI_CPUPROF_H */

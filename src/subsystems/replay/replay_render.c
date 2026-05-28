@@ -5,7 +5,7 @@
 #include "repl/eval.h"
 #include "repl/core.h"
 #include "subsystems/replay/replay.h"
-#include "support/prof.h"
+#include "support/cpuprof.h"
 #include "scene/palette.h"
 #include "source_document.h"
 #include <string.h>

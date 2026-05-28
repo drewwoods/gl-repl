@@ -19,6 +19,6 @@ ui_color_picker.c
 ui_help_overlay.c
 src/ui/app/menu_bar.c
 src/ui/app/panels.c
-src/ui/app/profile_panel.c
+src/ui/support/cpuprof.c
 src/ui/subsystems/variable_panel.c
 src/ui/core/layout.c

@@ -136,7 +136,7 @@ gl_repl.c GLUT display callback (future `glr` shell)
 Profile sections wrap each producer so snapshot construction time is
 visible: `PROF_SNAPSHOT` is the aggregate, with sub-sections for
 transformers, highlights, virtual lines, scene config, and ui snapshot
-(see `src/support/prof.h`).
+(see `src/support/cpuprof.h`).
 
 The scene frame consumes the explicit config:
 
@@ -493,7 +493,7 @@ when a stall happens.
 * **Init trace** (`gl_repl.c`). `main()` calls `init_trace(<phase>)` at
   each startup phase; it prints `[init +N.NNNs] <phase>` with
   wall-clock seconds (`gettimeofday`, not the per-platform timebase in
-  `src/support/prof.c` — ms granularity is enough and this stays portable/C99)
+  `src/support/cpuprof.c` — ms granularity is enough and this stays portable/C99)
   elapsed since the first call. Two granularity levels share one
   stream:
 
@@ -680,7 +680,7 @@ Color falls into three buckets:
    `static const` documented at the use site.
 3. **Left as-is** — computed/domain palettes that must not follow the
    accent: `color_picker.c` HSV math, `repl_code_panel.c`
-   syntax-highlight palette, the `profile_panel.c` FPS gauge (red must
+  syntax-highlight palette, the `cpuprof.c` FPS gauge (red must
    keep meaning "over budget"), `text_panel.c` `k_clr_*` editor
    sub-palette. Each carries a one-line pointer back to theme.h.
 
@@ -822,7 +822,7 @@ The current `REPL_DEMO_DEP_SRCS` link set is REPL-pipeline-only:
 `src/repl/*` (parser, command_store, compile, apply, flatten, executor,
 eval, export, scenes, example_loader, load, autonormal, command_spec,
 source_scope, replay_annotations, core, state, format) plus the replay /
-tutorial peer-state TUs, `src/support/prof.c`, the GL stub counters, and crucially
+tutorial peer-state TUs, `src/support/cpuprof.c`, the GL stub counters, and crucially
 **`tools/repl_demo/source_document.c`** — the editor-free backend for the
 source-document port. No `src/editor/*`, no `src/ui/*`, no `src/app/*`.
 

@@ -4,7 +4,7 @@
  * Tracks current resident set size (RSS) and virtual size (VSZ) of the
  * running process, holds a ring of historical samples taken every
  * MEMPROF_PUSH_INTERVAL_S seconds, and provides a pure formatter for
- * byte counts. Mirrors src/support/prof.{c,h} in conventions: file-scope
+ * byte counts. Mirrors src/support/cpuprof.{c,h} in conventions: file-scope
  * statics with `g_` prefix, no GL/UI deps, platform-conditional reader.
  */
 #ifndef MEMPROF_H

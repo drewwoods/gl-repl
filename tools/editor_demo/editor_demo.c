@@ -14,7 +14,7 @@
  *   - src/ui/core/text_search.c   : case-insensitive text find (linked for the
  *                              text_panel's search-row machinery — find is
  *                              not bound to a key in v1).
- *   - src/support/prof.c     : profiling.
+ *   - src/support/cpuprof.c  : profiling.
  *   - tools/editor_demo/input.c : the demo's own generic key dispatcher.
  *   - tools/editor_demo/menu.c  : the demo's own File menu.
  *

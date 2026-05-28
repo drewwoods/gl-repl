@@ -249,7 +249,7 @@ SRCS = \
 	src/app/glr_audio.c \
 	src/repl/format.c \
 	src/support/memprof.c \
-	src/support/prof.c \
+	src/support/cpuprof.c \
 	gl_repl.c \
 	src/app/glr_actions.c \
 	src/app/glr_camera.c \
@@ -308,11 +308,11 @@ SRCS = \
 	src/ui/app/autocomplete_panel.c \
 	src/ui/subsystems/color_picker.c \
 	src/ui/app/layout.c \
-	src/ui/app/memory_panel.c \
+	src/ui/support/memprof.c \
 	src/ui/app/menu_bar.c \
 	src/ui/app/numeric_swatch.c \
 	src/ui/app/panels.c \
-	src/ui/app/profile_panel.c \
+	src/ui/support/cpuprof.c \
 	src/ui/app/repl_code_panel.c \
 	src/ui/subsystems/replay_hud.c \
 	src/ui/app/scene_tabs.c \
@@ -342,7 +342,7 @@ HDRS = \
 	src/app/glr_audio.h \
 	src/repl/format.h \
 	src/support/memprof.h \
-	src/support/prof.h \
+	src/support/cpuprof.h \
 	gl_repl.h \
 	source_document.h \
 	src/scene/guides/transform_utils.h \
@@ -400,11 +400,11 @@ HDRS = \
 	src/ui/app/autocomplete_panel.h \
 	src/ui/subsystems/color_picker.h \
 	src/ui/app/layout.h \
-	src/ui/app/memory_panel.h \
+	src/ui/support/memprof.h \
 	src/ui/app/menu_bar.h \
 	src/ui/app/numeric_swatch.h \
 	src/ui/app/panels.h \
-	src/ui/app/profile_panel.h \
+	src/ui/support/cpuprof.h \
 	src/ui/app/repl_code_panel.h \
 	src/ui/subsystems/replay_hud.h \
 	src/ui/app/scene_tabs.h \
@@ -431,7 +431,7 @@ CORE_TEST_SRCS = \
 	src/app/glr_audio.c \
 	src/repl/format.c \
 	src/support/memprof.c \
-	src/support/prof.c \
+	src/support/cpuprof.c \
 	src/app/glr_actions.c \
 	src/app/glr_camera.c \
 	src/app/glr_camera_export.c \
@@ -489,11 +489,11 @@ CORE_TEST_SRCS = \
 	src/ui/app/autocomplete_panel.c \
 	src/ui/subsystems/color_picker.c \
 	src/ui/app/layout.c \
-	src/ui/app/memory_panel.c \
+	src/ui/support/memprof.c \
 	src/ui/app/menu_bar.c \
 	src/ui/app/numeric_swatch.c \
 	src/ui/app/panels.c \
-	src/ui/app/profile_panel.c \
+	src/ui/support/cpuprof.c \
 	src/ui/app/repl_code_panel.c \
 	src/ui/subsystems/replay_hud.c \
 	src/ui/app/scene_tabs.c \
@@ -525,14 +525,14 @@ SCENE_SRCS = $(filter src/scene/%.c,$(SRCS))
 UI_SRCS = $(filter src/ui/core/%.c src/ui/app/%.c,$(SRCS))
 SCENE_HDRS = $(filter src/scene/%.h,$(HDRS))
 UI_HDRS = $(filter src/ui/core/%.h src/ui/app/%.h,$(HDRS))
-STATE_NEUTRAL_SRCS = src/repl/format.c src/support/memprof.c src/support/prof.c tests/gl-stubs/gl_stub_counts.c
+STATE_NEUTRAL_SRCS = src/repl/format.c src/support/memprof.c src/support/cpuprof.c tests/gl-stubs/gl_stub_counts.c
 
 # Object lists used to build the standalone scene_demo without dragging in
 # any REPL editor/controller code. Scene + prof — the scene module no
 # longer touches repl_eval (replay-baseline restore is dispatched through a
 # function pointer the controller installs; geometry-guide arg parsing is
 # done in the controller before snapshot is built).
-SCENE_DEMO_DEP_SRCS = $(SCENE_SRCS) src/support/prof.c
+SCENE_DEMO_DEP_SRCS = $(SCENE_SRCS) src/support/cpuprof.c
 
 # Object list for the standalone repl_demo (the inverse of scene_demo:
 # proves the REPL pipeline links without editor input dispatch
@@ -553,7 +553,7 @@ SCENE_DEMO_DEP_SRCS = $(SCENE_SRCS) src/support/prof.c
 # feature/decouple-repl-from-gl-repl-alt.md and
 # feature/source-document-port.md.
 REPL_DEMO_DEP_SRCS = src/repl/format.c \
-                     src/support/prof.c \
+				     src/support/cpuprof.c \
                      src/subsystems/replay/replay.c \
                      src/subsystems/replay/replay_fade.c \
                      src/subsystems/replay/replay_input.c \
@@ -610,7 +610,7 @@ EDITOR_DEMO_DEP_SRCS = src/editor/edit_ops.c \
                        src/ui/core/text_panel.c \
                        src/ui/core/text_search.c \
                        src/ui/core/theme.c \
-                       src/support/prof.c \
+				      src/support/cpuprof.c \
                        tests/gl-stubs/gl_stub_counts.c
 
 OBJDIR = build/$(BUILD)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)
