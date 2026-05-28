@@ -1,24 +1,19 @@
-# View files still allowed to include repl_state*.h during migration.
-# src/ui/app/snapshot.h is the unified UI render snapshot bundle; it embeds the
-# Repl*State value types defined in repl_state_views.h, so the include is
-# legitimate (snapshot is the read boundary, not a per-renderer facade).
-# src/ui/app/state.h embeds the same Repl*State value types as fields on the
-# UiState struct (Phase 1 commit 8); the include is the typedef source,
-# not a state-mutator facade. Phase 5's rename folds the typedefs into
-# editor/ui state headers and this exception goes away.
+# View files (src/ui, src/scene) allowed to include a repl/state*.h
+# header directly. Entries are repo-relative paths matched against the
+# `file:` prefix of a hit. Re-baselined to current reality after the
+# src/ restructure (the guard now scans src/ui + src/scene; the old
+# flat-layout entries ui_color_picker.c / ui_help_overlay.c are gone,
+# and the files that no longer include the header were pruned).
 #
-# Phase H commit 38: src/ui/core/layout.c (formerly repl_layout.c) reads
-# repl_state_presentation() for code_panel_layout. The proper fix is
-# to pass the layout in as a parameter so geometry helpers become
-# pure functions; that's a Phase I cleanup. Until then, the rename
-# would otherwise immediately fail this check.
+# All three remaining includes are repl/state_views.h (the read-only
+# value-type header), pulled in to *name* the Repl*State value types,
+# not to reach a mutator facade:
+#   - snapshot.h        — the unified UI render snapshot embeds the
+#                         Repl*State value types (snapshot is the read
+#                         boundary, not a per-renderer facade).
+#   - menu_bar.c        — reads Repl*State value fields off the snapshot.
+#   - repl_code_panel.c — the REPL-aware code-panel adapter names the
+#                         same value types.
 src/ui/app/snapshot.h
-src/ui/app/state.h
-src/ui/app/autocomplete_panel.c
-ui_color_picker.c
-ui_help_overlay.c
 src/ui/app/menu_bar.c
-src/ui/app/panels.c
-src/ui/support/cpuprof.c
-src/ui/subsystems/variable_panel.c
-src/ui/core/layout.c
+src/ui/app/repl_code_panel.c

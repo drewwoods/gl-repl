@@ -2,3 +2,18 @@
 # Generic ui_* renderers only. Feature-owned UI under prefixes like
 # `replay_ui_*` is audited by its own dedicated guard
 # (`check-replay-ui-isolation.sh`), so it does not appear here.
+#
+# Each name below is a generic UI render entry point whose body the
+# guard parses and scans for forbidden render-time mutations
+# (repl_*_set_*, repl_action_*, repl_state_*_mut, write-through-view).
+ui_panels_render_scene_status
+ui_panels_render_code_panel
+ui_menu_bar_render
+ui_menu_bar_render_search_overlay
+ui_menu_bar_render_example_dropdown
+ui_scene_tabs_render
+ui_repl_code_panel_render_with_chrome
+ui_autocomplete_panel_render
+ui_numeric_swatch_render
+ui_text_panel_render
+ui_tabbed_overlay_render

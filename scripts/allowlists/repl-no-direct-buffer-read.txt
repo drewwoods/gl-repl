@@ -1,8 +1,9 @@
-# Files allowed to call editor_buffer_line() directly. These are
-# editor-side modules that currently live under repl_*.c but rename
-# to editor_*.c in Phase H of done/editor-text-model-controller.md.
-# Once renamed, the editor_*.c files own the buffer and the allowlist
-# can shrink further (or the guard can switch to "no editor_buffer_line
-# calls in repl_*.c except via view").
-repl_editor.c
-repl_code_panel_document.c
+# Files allowed to call editor_buffer_line() directly (relative path,
+# matched against the `file:` prefix of a hit).
+#
+# Empty: the REPL pipeline (src/repl/*.c) reaches editor text only
+# through the source_document port / EditorBufferView parameters, so
+# no src/repl file calls editor_buffer_line() directly. The historical
+# entries (repl_editor.c, repl_code_panel_document.c) were deleted in
+# the editor-text-model split and the src/ restructure; this guard now
+# scans src/repl/*.c and the allowlist stays empty.

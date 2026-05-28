@@ -27,7 +27,7 @@ fi
 # read `editor_buffer_line(...)`. Tolerate that by stripping `//` and
 # `/*` lines before grep.
 violations=$(grep -RIn 'editor_buffer_line(' \
-    repl_*.c 2>/dev/null \
+    src/repl/*.c 2>/dev/null \
     | grep -v '^\./\?\.claude/worktrees/' \
     | grep -vE '^[^:]+:[0-9]+:\s*(//|\*|/\*)' \
     || true)
