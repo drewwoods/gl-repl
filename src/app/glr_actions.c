@@ -92,18 +92,15 @@ static const char *axes_theme_names[AXES_THEME_COUNT] = {
 };
 static char cfg_status_buf[REPL_STATUS_TEXT_MAX];
 
-/* Unified audio cfg: collapses mute + loop mode into one cycling menu entry.
+/* Unified audio cfg: two-state on/off toggle.
  * Indices:
- *   0 = Pause   - paused, loop mode untouched
- *   1 = Once    - playing, loop mode OFF  (playlist plays through)
- *   2 = Song    - playing, loop mode SONG (repeat current track)
- *   3 = All     - playing, loop mode ALL  (playlist, wrap forever)
- * Default 3 matches repl_audio.c's LOOP_ALL default with volume on. */
+ *   0 = Off  - paused
+ *   1 = On   - playing, loop mode ALL (playlist, wrap forever)
+ * Old 4-state ini values (1/2/3) are all remapped to On in
+ * glr_actions_apply_defaults() via the > AUDIO_CFG_ALL clamp. */
 #define AUDIO_CFG_PAUSE 0
-#define AUDIO_CFG_ONCE  1
-#define AUDIO_CFG_SONG  2
-#define AUDIO_CFG_ALL   3
-static const char *audio_cfg_names[] = { "paused", "play once", "loop song", "loop all" };
+#define AUDIO_CFG_ALL   1
+static const char *audio_cfg_names[] = { "off", "on" };
 static const char *syntax_hl_names[] = { "Off", "On", "On+Bold" };
 static const char *view_mode_names[] = { "3D", "2D" };
 static const char *vertex_label_names[GLR_VERTEX_LABEL_COUNT] = {
@@ -183,7 +180,7 @@ const GlrConfigItem g_cfg_items[] = {
     CFG_ITEM("Poly highlight",    0, 0, 0, GLR_CONFIG_POLY_HIGHLIGHT,       2, NULL,                 0),
     CFG_ITEM("---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
     CFG_ITEM("### INTERFACE",     0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
-    CFG_ITEM("Variable panel",    0, 0, 0, GLR_CONFIG_VARIABLE_PANEL,      2, NULL,                 0),
+    CFG_ITEM("Variable panel",    KEY_CTRL_P, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_VARIABLE_PANEL, 2, NULL, 0),
     CFG_ITEM("CPU profile",       KEY_CTRL_W, 0, 0, GLR_CONFIG_CPU_PROFILE, PROFILE_PANEL_MODE_COUNT, profile_panel_mode_names, 0),
     /* Ctrl+Shift+W mirrors CPU profile's Ctrl+W. The two-pass ascii
      * shortcut dispatcher in glr_cfg_handle_ascii_shortcut prefers
@@ -195,7 +192,7 @@ const GlrConfigItem g_cfg_items[] = {
     CFG_ITEM("Syntax highlight",  0, 0, 0, GLR_CONFIG_SYNTAX_HIGHLIGHT,    3, syntax_hl_names,      0),
     CFG_ITEM("---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
     CFG_ITEM("### AUDIO",         0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
-    CFG_ITEM("Audio",             0, 0, 0, GLR_CONFIG_AUDIO_MODE,          4, audio_cfg_names,      0),
+    CFG_ITEM("Audio",             KEY_CTRL_A, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_AUDIO_MODE, 2, audio_cfg_names, 0),
 };
 
 const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
@@ -470,23 +467,11 @@ void glr_actions_set_msaa_label(int samples) {
 }
 
 void glr_actions_apply_audio_cfg_mode(int mode) {
-    switch (mode) {
-    case AUDIO_CFG_PAUSE:
+    if (mode == AUDIO_CFG_PAUSE) {
         glr_audio_set_paused(1);
-        break;
-    case AUDIO_CFG_ONCE:
-        glr_audio_set_paused(0);
-        glr_audio_set_loop_mode(GLR_AUDIO_LOOP_OFF);
-        break;
-    case AUDIO_CFG_SONG:
-        glr_audio_set_paused(0);
-        glr_audio_set_loop_mode(GLR_AUDIO_LOOP_SONG);
-        break;
-    case AUDIO_CFG_ALL:
-    default:
+    } else {
         glr_audio_set_paused(0);
         glr_audio_set_loop_mode(GLR_AUDIO_LOOP_ALL);
-        break;
     }
 }
 
