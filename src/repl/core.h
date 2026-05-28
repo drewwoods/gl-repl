@@ -282,5 +282,22 @@ void repl_reformat_program(void);
 int  repl_flat_cmd_matches_cursor(int flat_idx, int edit_line_idx);
 int  repl_find_feeding_normal_cmd(int line_idx);
 int  repl_find_feeding_color_cmd(int line_idx);
+/* When the cursor sits on a CMD_POP_MATRIX line, returns the source-line
+ * index of the matching CMD_PUSH_MATRIX (the nearest earlier push at the
+ * same nesting level). Returns -1 if the cursor isn't on a pop or no
+ * matching push exists. */
+int  repl_find_matching_push_matrix(int line_idx);
+/* When the cursor sits on a color-consuming line (immediate vertex,
+ * gluVertex, or glutSolid*), fills out_line_idx[] with up to out_cap
+ * source-line indices of the modelview-affecting transforms in scope
+ * at that line: CMD_TRANSLATE3F / CMD_SCALEF / CMD_ROTATEF. Walks the
+ * source array backwards, honors glPushMatrix/glPopMatrix scopes (a
+ * transform inside a popped range is excluded), stops at the nearest
+ * CMD_LOAD_IDENTITY in scope, skips function bodies, and stops at the
+ * enclosing CMD_FUNC_DEF when the cursor lives inside a function.
+ * Returns the number of entries written; 0 if the cursor isn't on a
+ * color-consuming line. */
+#define MAX_AFFECTING_TRANSFORMS 32
+int  repl_find_affecting_transforms(int line_idx, int *out_line_idx, int out_cap);
 
 #endif /* REPL_CORE_H */

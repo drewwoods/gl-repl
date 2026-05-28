@@ -1109,6 +1109,106 @@ int main(void) {
     editor_feed_line("glutSolidCube(0.5);");
     ASSERT_TRUE("no color before glut solid → -1", repl_find_feeding_color_cmd(0) == -1);
 
+    /* repl_find_matching_push_matrix: cursor-on-Pop pairs with its Push. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glPushMatrix();");
+    editor_feed_line("glTranslatef(1, 0, 0);");
+    editor_feed_line("glPushMatrix();");
+    editor_feed_line("glRotatef(45, 0, 0, 1);");
+    editor_feed_line("glPopMatrix();");
+    editor_feed_line("glScalef(2, 2, 2);");
+    editor_feed_line("glPopMatrix();");
+    ASSERT_TRUE("inner pop matches inner push",  repl_find_matching_push_matrix(4) == 2);
+    ASSERT_TRUE("outer pop matches outer push",  repl_find_matching_push_matrix(6) == 0);
+    ASSERT_TRUE("non-pop line → -1",             repl_find_matching_push_matrix(1) == -1);
+    ASSERT_TRUE("push line → -1",                repl_find_matching_push_matrix(0) == -1);
+    ASSERT_TRUE("oob matching push → -1",        repl_find_matching_push_matrix(-1) == -1);
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glPopMatrix();");
+    ASSERT_TRUE("orphan pop → -1", repl_find_matching_push_matrix(0) == -1);
+
+    /* repl_find_affecting_transforms: linear scope, push/pop scope,
+     * load_identity reset, glut-solid cursor, non-consumer cursor. */
+    {
+        int xs[MAX_AFFECTING_TRANSFORMS];
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glTranslatef(1, 0, 0);");
+        editor_feed_line("glRotatef(30, 0, 1, 0);");
+        editor_feed_line("glScalef(2, 2, 2);");
+        editor_feed_line("glVertex3f(0, 0, 0);");
+        int n = repl_find_affecting_transforms(3, xs, MAX_AFFECTING_TRANSFORMS);
+        ASSERT_TRUE("linear transforms count", n == 3);
+        /* Walk is backwards, so order is rotate then translate. */
+        ASSERT_TRUE("linear transforms walk-back order [0]=scale",     xs[0] == 2);
+        ASSERT_TRUE("linear transforms walk-back order [1]=rotate",    xs[1] == 1);
+        ASSERT_TRUE("linear transforms walk-back order [2]=translate", xs[2] == 0);
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glTranslatef(1, 0, 0);");
+        editor_feed_line("glPushMatrix();");
+        editor_feed_line("glRotatef(45, 0, 0, 1);");
+        editor_feed_line("glPopMatrix();");
+        editor_feed_line("glVertex3f(0, 0, 0);");
+        n = repl_find_affecting_transforms(4, xs, MAX_AFFECTING_TRANSFORMS);
+        ASSERT_TRUE("popped rotate excluded; translate in scope",
+                    n == 1 && xs[0] == 0);
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glTranslatef(1, 0, 0);");
+        editor_feed_line("glPushMatrix();");
+        editor_feed_line("glRotatef(45, 0, 0, 1);");
+        editor_feed_line("glVertex3f(0, 0, 0);");
+        editor_feed_line("glPopMatrix();");
+        n = repl_find_affecting_transforms(3, xs, MAX_AFFECTING_TRANSFORMS);
+        ASSERT_TRUE("inside push scope sees parent + own transforms",
+                    n == 2 && xs[0] == 2 && xs[1] == 0);
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glTranslatef(1, 0, 0);");
+        editor_feed_line("glLoadIdentity();");
+        editor_feed_line("glRotatef(45, 0, 0, 1);");
+        editor_feed_line("glVertex3f(0, 0, 0);");
+        n = repl_find_affecting_transforms(3, xs, MAX_AFFECTING_TRANSFORMS);
+        ASSERT_TRUE("load_identity resets walk",
+                    n == 1 && xs[0] == 2);
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glTranslatef(1, 0, 0);");
+        editor_feed_line("glutSolidCube(0.5);");
+        n = repl_find_affecting_transforms(1, xs, MAX_AFFECTING_TRANSFORMS);
+        ASSERT_TRUE("glut solid is a color consumer for transforms",
+                    n == 1 && xs[0] == 0);
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glTranslatef(1, 0, 0);");
+        editor_feed_line("glColor3f(1, 0, 0);");
+        n = repl_find_affecting_transforms(1, xs, MAX_AFFECTING_TRANSFORMS);
+        ASSERT_TRUE("non-consumer cursor → 0", n == 0);
+
+        /* Function bodies are opaque from the call site, and the walk
+         * stops at the enclosing FUNC_DEF when the cursor is inside. */
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("func0() {");
+        editor_feed_line("  glTranslatef(1, 0, 0);");
+        editor_feed_line("  glVertex3f(0, 0, 0);");
+        editor_feed_line("}");
+        n = repl_find_affecting_transforms(2, xs, MAX_AFFECTING_TRANSFORMS);
+        ASSERT_TRUE("inside func body sees own transforms, stops at def",
+                    n == 1 && xs[0] == 1);
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("func0() {");
+        editor_feed_line("  glRotatef(45, 0, 0, 1);");
+        editor_feed_line("}");
+        editor_feed_line("glTranslatef(1, 0, 0);");
+        editor_feed_line("glVertex3f(0, 0, 0);");
+        n = repl_find_affecting_transforms(4, xs, MAX_AFFECTING_TRANSFORMS);
+        ASSERT_TRUE("func body opaque from outside; outer translate only",
+                    n == 1 && xs[0] == 3);
+    }
+
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_TRIANGLES);");
     editor_feed_line("glVertex3f(0, 0, 0);");

@@ -79,6 +79,7 @@ typedef struct {
     int                     highlight_normal_idx;
     int                     highlight_color_idx;
     int                     highlight_tutorial_insertion_idx;
+    int                     highlight_matching_push_idx;
 } ReplCodePanelBuilder;
 
 static const char *repl_code_panel_display_text(const UiRenderSnapshot *snap, int line_idx);
@@ -522,10 +523,12 @@ int ui_repl_code_panel_target_for_doc_line(const UiRenderSnapshot *snap,
 static void repl_code_panel_find_highlight_rows(const UiRenderSnapshot *snap,
                                                 int *out_normal_idx,
                                                 int *out_color_idx,
-                                                int *out_tutorial_insertion_idx) {
+                                                int *out_tutorial_insertion_idx,
+                                                int *out_matching_push_idx) {
     int normal_idx = -1;
     int color_idx = -1;
     int tutorial_insertion_idx = -1;
+    int matching_push_idx = -1;
 
     if (snap && snap->editor_highlights) {
         for (int i = 0; i < snap->editor_highlights->count; i++) {
@@ -536,12 +539,30 @@ static void repl_code_panel_find_highlight_rows(const UiRenderSnapshot *snap,
                 color_idx = highlight->line_idx;
             else if (highlight->kind == HIGHLIGHT_TUTORIAL_INSERTION)
                 tutorial_insertion_idx = highlight->line_idx;
+            else if (highlight->kind == HIGHLIGHT_MATCHING_PUSH_MATRIX)
+                matching_push_idx = highlight->line_idx;
         }
     }
 
     if (out_normal_idx) *out_normal_idx = normal_idx;
     if (out_color_idx) *out_color_idx = color_idx;
     if (out_tutorial_insertion_idx) *out_tutorial_insertion_idx = tutorial_insertion_idx;
+    if (out_matching_push_idx) *out_matching_push_idx = matching_push_idx;
+}
+
+/* HIGHLIGHT_AFFECTING_TRANSFORM is multi-entry per frame, so we scan
+ * the snapshot's highlight list per-line instead of pre-extracting a
+ * single index. List size is bounded (MAX_HIGHLIGHTS=256) and only a
+ * handful are typically transform-kind, so the cost is small. */
+static int repl_code_panel_line_is_affecting_transform(const UiRenderSnapshot *snap,
+                                                       int line_idx) {
+    if (!snap || !snap->editor_highlights || line_idx < 0) return 0;
+    for (int i = 0; i < snap->editor_highlights->count; i++) {
+        const UiHighlight *h = &snap->editor_highlights->items[i];
+        if (h->kind == HIGHLIGHT_AFFECTING_TRANSFORM && h->line_idx == line_idx)
+            return 1;
+    }
+    return 0;
 }
 
 int ui_repl_code_panel_compute_text_x(const UiRenderSnapshot *snap) {
@@ -569,7 +590,8 @@ static int repl_code_panel_init_builder(ReplCodePanelBuilder *builder,
     repl_code_panel_find_highlight_rows(snap,
                                         &builder->highlight_normal_idx,
                                         &builder->highlight_color_idx,
-                                        &builder->highlight_tutorial_insertion_idx);
+                                        &builder->highlight_tutorial_insertion_idx,
+                                        &builder->highlight_matching_push_idx);
 
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (cp_w <= 0 || cp_h <= 0)
@@ -707,6 +729,8 @@ static void repl_code_panel_apply_tutorial_insertion_marker(
 typedef enum {
     MARKER_PRIORITY_NONE = 0,
     MARKER_PRIORITY_REPLAY,
+    MARKER_PRIORITY_AFFECTING_TRANSFORM,
+    MARKER_PRIORITY_MATCHING_PUSH,
     MARKER_PRIORITY_FEEDING_NORMAL,
     MARKER_PRIORITY_FEEDING_COLOR,
     MARKER_PRIORITY_TUTORIAL_INSERTION
@@ -742,6 +766,20 @@ static void repl_code_panel_apply_command_overlays(ReplCodePanelBuilder *builder
         line_idx == builder->snap->replay.src_line_idx) {
         priority = MARKER_PRIORITY_REPLAY;
         color = repl_code_panel_rgba(0.20f, 0.90f, 0.30f, 0.85f);
+    }
+
+    if (repl_code_panel_line_is_affecting_transform(builder->snap, line_idx)) {
+        if (MARKER_PRIORITY_AFFECTING_TRANSFORM > priority) {
+            priority = MARKER_PRIORITY_AFFECTING_TRANSFORM;
+            color = repl_code_panel_rgba(0.95f, 0.65f, 0.40f, 0.85f);
+        }
+    }
+
+    if (line_idx >= 0 && line_idx == builder->highlight_matching_push_idx) {
+        if (MARKER_PRIORITY_MATCHING_PUSH > priority) {
+            priority = MARKER_PRIORITY_MATCHING_PUSH;
+            color = repl_code_panel_rgba(0.80f, 0.70f, 0.95f, 0.85f);
+        }
     }
 
     if (line_idx == builder->highlight_normal_idx) {
