@@ -1435,6 +1435,17 @@ static void glr_ctrl_reset_example_chrome(unsigned int tag_mask) {
         tag_mask, k_example_tag_defaults,
         (int)(sizeof(k_example_tag_defaults) /
               sizeof(k_example_tag_defaults[0])));
+
+    /* glr_state_presentation_reset_example_defaults() writes the
+     * light_theme field directly (it is a pure storage module and
+     * cannot reach scene_lights_apply_theme), so the REPL-state lights[]
+     * positions/colors/eye-space flags are left on the *previous*
+     * theme. Re-seed them from whatever theme the reset + tag defaults
+     * settled on — same call reset_all makes. An example's own leading
+     * `@cfg light_theme = X` runs after this through glr_config_set,
+     * which re-applies via the same path (idempotent). */
+    scene_lights_apply_theme(repl_state_render_mut()->lights,
+                             glr_state_presentation().light_theme);
 }
 
 /* Adapter for repl_executor_install_camera_distance_source. The
