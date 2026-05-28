@@ -223,7 +223,7 @@ static SceneGuideSnapshot glr_ctrl_build_guide_snapshot(const SceneRenderConfig 
     int edit_line = editor_state_edit_line();
 
     SceneGuideSnapshot snapshot = {
-        .show_guides = presentation.show_xform_guides,
+        .show_guides = (presentation.xform_guide_mode != SCENE_XFORM_GUIDE_OFF),
         .replaying = replay_active(),
         .xform_guide_mode = presentation.xform_guide_mode,
         .user_lighting_enabled = config ? config->user_lighting_enabled : 0,

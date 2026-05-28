@@ -155,11 +155,11 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     presentation->show_normal_vectors = 1;
     presentation->show_vertex_indices = 0;
     presentation->show_vertex_points = 0;
-    presentation->show_xform_guides = 0;
+    presentation->xform_guide_mode = SCENE_XFORM_GUIDE_OFF;
     presentation->show_light_indicators = 0;
     presentation->backdrop_mode = 1;
     presentation->highlight_current_poly = 0;
-    presentation->ortho_mode = 1;
+    presentation->ortho_mode = SCENE_VIEW_2D;
     presentation->wrap_at_comma = 0;
     presentation->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
     /* focus_vertex storage was deleted in step 7a — no live readers

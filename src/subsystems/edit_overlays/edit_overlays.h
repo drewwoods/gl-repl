@@ -2,6 +2,7 @@
 #define EDIT_OVERLAYS_H
 
 #include "scene/guides/guides_shared.h"  /* SceneGuideSnapshot */
+#include "scene/view_mode.h"             /* SceneViewMode */
 #include "repl/state_views.h"            /* FlatProgramView, CursorBlockState */
 
 /* Public surface intentionally avoids `#include "app/glr_config.h"`
@@ -25,7 +26,7 @@ typedef struct OverlaySnapshotPack {
     OverlayWalkCtx walk;
     SceneGuideSnapshot snapshot;
     int show_vertex_labels;
-    int ortho_mode;
+    SceneViewMode ortho_mode;
     int show_normal_vectors;
     int multisample_enabled;
     int line_smooth_enabled;

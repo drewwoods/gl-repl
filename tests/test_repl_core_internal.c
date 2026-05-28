@@ -655,14 +655,13 @@ int main() {
         glr_state_presentation_mut()->show_vertex_indices = 1; glr_ctrl_sync_ui_chrome();
         glr_state_presentation_mut()->show_vertex_outlines = 1;
         glr_state_presentation_mut()->show_vertex_points = 1;
-        glr_state_presentation_mut()->show_xform_guides = 1;
-        glr_state_presentation_mut()->xform_guide_mode = 1;
+        glr_state_presentation_mut()->xform_guide_mode = SCENE_XFORM_GUIDE_FRAME;
         glr_state_presentation_mut()->autonormal = 1;
         glr_state_presentation_mut()->show_light_indicators = 0;
         glr_state_presentation_mut()->backdrop_mode = 0;
         glr_camera_mut()->auto_rotate = 1;
         glr_state_presentation_mut()->highlight_current_poly = 0;
-        glr_state_presentation_mut()->ortho_mode = 1;
+        glr_state_presentation_mut()->ortho_mode = SCENE_VIEW_2D;
         glr_state_presentation_mut()->wrap_at_comma = 0;
         glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; glr_ctrl_sync_ui_chrome();
         /* focus_vertex storage was deleted in step 7a — no live
@@ -689,8 +688,6 @@ int main() {
                    glr_state_presentation().show_vertex_outlines, CFG_DEFAULT_VERTEX_OUTLINES);
         ASSERT_INT("presentation reset points",
                    glr_state_presentation().show_vertex_points, CFG_DEFAULT_VERTEX_POINTS);
-        ASSERT_INT("presentation reset guides",
-                   glr_state_presentation().show_xform_guides, CFG_DEFAULT_XFORM_GUIDES);
         ASSERT_INT("presentation reset xform guide",
                    glr_state_presentation().xform_guide_mode, CFG_DEFAULT_XFORM_GUIDE_MODE);
         ASSERT_INT("presentation reset lights",

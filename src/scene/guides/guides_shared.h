@@ -11,11 +11,12 @@
 
 #include "repl/command.h"
 #include "repl/flatten.h"
+#include "scene/guides/xform_guide_mode.h"
 
 typedef struct SceneGuideSnapshot {
     int show_guides;
     int replaying;
-    int xform_guide_mode;
+    SceneXformGuideMode xform_guide_mode;
     int user_lighting_enabled;
     float anim_time;
 

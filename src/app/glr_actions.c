@@ -51,7 +51,11 @@ static const char *backdrop_mode_names[SCENE_BACKDROP_COUNT] = {
     [SCENE_BACKDROP_STARS] = "Stars",
     [SCENE_BACKDROP_CITY_AND_STARS] = "City+Stars",
 };
-static const char *xform_guide_mode_names[] = { "World", "Frame" };
+static const char *xform_guide_mode_names[SCENE_XFORM_GUIDE_COUNT] = {
+    [SCENE_XFORM_GUIDE_OFF]   = "Off",
+    [SCENE_XFORM_GUIDE_WORLD] = "World",
+    [SCENE_XFORM_GUIDE_FRAME] = "Frame",
+};
 static const char *profile_panel_mode_names[] = { "Off", "On", "Details" };
 static const char *memory_panel_mode_names[]  = { "Off", "On" };
 static const char *code_panel_layout_names[] = {
@@ -159,8 +163,8 @@ const GlrConfigItem g_cfg_items[] = {
     CFG_ITEM("Grid major",        KEY_CTRL_O, 0, 0, GLR_CONFIG_GRID_MAJOR, GRID_MAJOR_COUNT, grid_major_names, 0),
     CFG_ITEM("Grid extent",       0, 0, 0, GLR_CONFIG_GRID_EXTENT,         GRID_EXTENT_COUNT, grid_extent_names, 0),
     CFG_ITEM("Axes",              GLUT_KEY_F4, 1, 0, GLR_CONFIG_AXES_THEME, AXES_THEME_COUNT, axes_theme_names, 0),
-    CFG_ITEM("Xform guides",      GLUT_KEY_F8, 1, 0, GLR_CONFIG_XFORM_GUIDES, 2, NULL,            0),
-    CFG_ITEM("Xform guide mode",  0, 0, 0, GLR_CONFIG_XFORM_GUIDE_MODE,     2, xform_guide_mode_names, 0),
+    CFG_ITEM("Xform guides",      GLUT_KEY_F8, 1, 0, GLR_CONFIG_XFORM_GUIDE_MODE,
+             SCENE_XFORM_GUIDE_COUNT, xform_guide_mode_names, 0),
     CFG_ITEM("Light indicators",  GLUT_KEY_F10, 1, 0, GLR_CONFIG_LIGHT_INDICATORS, 2, NULL,       0),
     CFG_ITEM("Backdrop",          0, 0, 0, GLR_CONFIG_BACKDROP,
              SCENE_BACKDROP_COUNT, backdrop_mode_names, 0),
@@ -224,7 +228,6 @@ static int cfg_key_in_scene_subset(GlrConfigKey key) {
     case GLR_CONFIG_NORMAL_VECTORS:
     case GLR_CONFIG_VERTEX_OUTLINES:
     case GLR_CONFIG_VERTEX_POINTS:
-    case GLR_CONFIG_XFORM_GUIDES:
     case GLR_CONFIG_XFORM_GUIDE_MODE:
     case GLR_CONFIG_LIGHT_INDICATORS:
     case GLR_CONFIG_BACKDROP:

@@ -17,6 +17,9 @@
 #ifndef GLR_STATE_H
 #define GLR_STATE_H
 
+#include "scene/guides/xform_guide_mode.h"
+#include "scene/view_mode.h"
+
 /* Scene-presentation policy: what chrome and overlays the app should show, how
  * the code panel should format text, and which view mode/backdrop/filter choices
  * are active for the current session. */
@@ -31,8 +34,7 @@ typedef struct {
     int show_vertex_indices;
     int show_vertex_outlines;
     int show_vertex_points;
-    int show_xform_guides;
-    int xform_guide_mode;
+    SceneXformGuideMode xform_guide_mode;
     int autonormal;
     int show_light_indicators;
     int backdrop_mode;
@@ -40,7 +42,7 @@ typedef struct {
      * Session-level only: Ctrl+N toggles it; never in @cfg / examples. */
     int post_filter_mode;
     int highlight_current_poly;
-    int ortho_mode;
+    SceneViewMode ortho_mode;
     int wrap_at_comma;
     int code_panel_layout;
     int syntax_highlight;   /* 0 = off, 1 = on, 2 = on + fake-bold */

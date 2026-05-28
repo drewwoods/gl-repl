@@ -119,12 +119,11 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_GRID_MAJOR:          return &glr_state_presentation_mut()->grid_major_idx;
     case GLR_CONFIG_GRID_EXTENT:         return &glr_state_presentation_mut()->grid_extent_idx;
     case GLR_CONFIG_AXES_THEME:          return &glr_state_presentation_mut()->axes_theme;
-    case GLR_CONFIG_XFORM_GUIDES:       return &glr_state_presentation_mut()->show_xform_guides;
-    case GLR_CONFIG_XFORM_GUIDE_MODE:    return &glr_state_presentation_mut()->xform_guide_mode;
+    case GLR_CONFIG_XFORM_GUIDE_MODE:    return (int *)&glr_state_presentation_mut()->xform_guide_mode;
     case GLR_CONFIG_LIGHT_INDICATORS:    return &glr_state_presentation_mut()->show_light_indicators;
     case GLR_CONFIG_POLY_HIGHLIGHT:      return &glr_state_presentation_mut()->highlight_current_poly;
     case GLR_CONFIG_BACKDROP:            return &glr_state_presentation_mut()->backdrop_mode;
-    case GLR_CONFIG_ORTHO_MODE:          return &glr_state_presentation_mut()->ortho_mode;
+    case GLR_CONFIG_ORTHO_MODE:          return (int *)&glr_state_presentation_mut()->ortho_mode;
     case GLR_CONFIG_CAMERA_ROTATE:       return &glr_camera_mut()->auto_rotate;
     case GLR_CONFIG_FOCUS_ORIGIN:        return NULL; /* action row: no backing state */
     case GLR_CONFIG_RESET_CAMERA:        return NULL; /* action row: no backing state */
@@ -166,7 +165,6 @@ int glr_config_get(GlrConfigKey key) {
     case GLR_CONFIG_GRID_MAJOR:          return glr_state_presentation().grid_major_idx;
     case GLR_CONFIG_GRID_EXTENT:         return glr_state_presentation().grid_extent_idx;
     case GLR_CONFIG_AXES_THEME:          return glr_state_presentation().axes_theme;
-    case GLR_CONFIG_XFORM_GUIDES:       return glr_state_presentation().show_xform_guides;
     case GLR_CONFIG_XFORM_GUIDE_MODE:    return glr_state_presentation().xform_guide_mode;
     case GLR_CONFIG_LIGHT_INDICATORS:    return glr_state_presentation().show_light_indicators;
     case GLR_CONFIG_POLY_HIGHLIGHT:      return glr_state_presentation().highlight_current_poly;

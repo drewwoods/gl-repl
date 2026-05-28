@@ -21,7 +21,9 @@
 #define GLR_DEFAULTS_H
 
 #include "app/glr_config.h"  /* GlrConfigKey (used by GlrExampleTagDefault) */
+#include "scene/guides/xform_guide_mode.h"
 #include "scene/themes.h"
+#include "scene/view_mode.h"
 #include "ui/app/layout.h"
 
 #define CFG_DEFAULT_WIREFRAME         0
@@ -34,11 +36,10 @@
 #define CFG_DEFAULT_NORMAL_VECTORS    0
 #define CFG_DEFAULT_VERTEX_OUTLINES   1
 #define CFG_DEFAULT_VERTEX_POINTS     1
-#define CFG_DEFAULT_XFORM_GUIDES      1
-#define CFG_DEFAULT_XFORM_GUIDE_MODE  0
+#define CFG_DEFAULT_XFORM_GUIDE_MODE  SCENE_XFORM_GUIDE_WORLD
 #define CFG_DEFAULT_LIGHT_INDICATORS  1
 #define CFG_DEFAULT_BACKDROP_MODE     SCENE_BACKDROP_OFF
-#define CFG_DEFAULT_ORTHO_MODE        0   /* 0 = 3D perspective, 1 = 2D ortho */
+#define CFG_DEFAULT_ORTHO_MODE        SCENE_VIEW_3D
 #define CFG_DEFAULT_CAMERA_ROTATE     0
 #define CFG_DEFAULT_VARIABLE_PANEL    1
 #define CFG_DEFAULT_WRAP_AT_COMMA     1

@@ -176,11 +176,10 @@ static void prepare_display_fixture(void) {
     repl_state_flat_program_set_user_lighting_enabled(1);
 
     presentation = glr_state_presentation_mut();
-    presentation->show_xform_guides = 1;
     presentation->show_vertex_points = 1;
     presentation->show_light_indicators = 1;
     presentation->highlight_current_poly = 1;
-    presentation->xform_guide_mode = 2;
+    presentation->xform_guide_mode = (SceneXformGuideMode)9; /* out-of-range: exercises clamp path */
     presentation->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
 
     repl_state_variables_mut()->anim_time = 4.25f;
@@ -750,7 +749,7 @@ static void test_view_mode_projection_transition_wiring(void) {
     ASSERT_INT("camera controls start 3d",
                glr_camera_control_mode(), GLR_CAMERA_CONTROL_3D);
 
-    glr_state_presentation_mut()->ortho_mode = 1;
+    glr_state_presentation_mut()->ortho_mode = SCENE_VIEW_2D;
     glr_ctrl_tick();
     glr_ctrl_display_frame();
     ASSERT_INT("camera controls switch to 2d",
@@ -788,7 +787,7 @@ static void test_view_mode_projection_transition_wiring(void) {
     ASSERT_FLOAT("projection settles on ortho",
                  g_last_scene_config.projection_mix, 0.0f);
 
-    glr_state_presentation_mut()->ortho_mode = 0;
+    glr_state_presentation_mut()->ortho_mode = SCENE_VIEW_3D;
     glr_ctrl_tick();
     glr_ctrl_display_frame();
     ASSERT_INT("camera controls stay 2d while projection exits ortho",
@@ -837,7 +836,7 @@ static void test_view_mode_3d_to_2d_uses_faster_decay(void) {
     ry_default_step = 22.0f * (1.0f - GLR_CAMERA_TARGET_DECAY);
 
     /* 3D -> 2D: first tick uses the faster decay. */
-    glr_state_presentation_mut()->ortho_mode = 1;
+    glr_state_presentation_mut()->ortho_mode = SCENE_VIEW_2D;
     glr_ctrl_tick();
 
     cam = glr_camera();
@@ -874,7 +873,7 @@ static void test_view_mode_3d_to_2d_uses_faster_decay(void) {
      * then camera_tick), so the camera is already 1 tick into its ease
      * the moment projection settles — that's the sample to measure
      * against the default decay. */
-    glr_state_presentation_mut()->ortho_mode = 0;
+    glr_state_presentation_mut()->ortho_mode = SCENE_VIEW_3D;
     int converged_at = -1;
     for (int i = 0; i < 200; i++) {
         glr_ctrl_tick();
@@ -936,7 +935,7 @@ static void test_view_record_external_3d_pose_tracks_in_ortho(void) {
 
     /* 1) Enter 2D from a non-flat 3D pose; saved snapshot is the
      *    pre-ortho camera (rx=11, ry=22 from prepare_display_fixture). */
-    glr_state_presentation_mut()->ortho_mode = 1;
+    glr_state_presentation_mut()->ortho_mode = SCENE_VIEW_2D;
     tick_until_view_settled(400);
     cam = glr_camera();
     ASSERT_FLOAT("camera flattened to rx=0", cam.rx, 0.0f);
@@ -948,7 +947,7 @@ static void test_view_record_external_3d_pose_tracks_in_ortho(void) {
 
     /* 3) Returning to 3D should ease toward the reported pose, not the
      *    snapshot captured on 2D entry. */
-    glr_state_presentation_mut()->ortho_mode = 0;
+    glr_state_presentation_mut()->ortho_mode = SCENE_VIEW_3D;
     tick_until_view_settled(400);
     cam = glr_camera();
     ASSERT_FLOAT("camera-to-3d uses refreshed rx", cam.rx, 35.0f);
@@ -969,18 +968,18 @@ static void test_view_record_external_3d_pose_noop_in_perspective(void) {
     glr_ctrl_display_frame();
 
     /* Seed a saved snapshot by entering and leaving 2D. */
-    glr_state_presentation_mut()->ortho_mode = 1;
+    glr_state_presentation_mut()->ortho_mode = SCENE_VIEW_2D;
     tick_until_view_settled(400);
-    glr_state_presentation_mut()->ortho_mode = 0;
+    glr_state_presentation_mut()->ortho_mode = SCENE_VIEW_3D;
     tick_until_view_settled(400);
     cam_before = glr_camera();
 
     /* Fire the bridge while in 3D — the saved snapshot must be ignored. */
     glr_ctrl_view_record_external_3d_pose(99.0f, 99.0f, 99.0f);
 
-    glr_state_presentation_mut()->ortho_mode = 1;
+    glr_state_presentation_mut()->ortho_mode = SCENE_VIEW_2D;
     tick_until_view_settled(400);
-    glr_state_presentation_mut()->ortho_mode = 0;
+    glr_state_presentation_mut()->ortho_mode = SCENE_VIEW_3D;
     tick_until_view_settled(400);
     cam_after = glr_camera();
 
