@@ -106,22 +106,23 @@ static float val_to_slider_t(float val, float scale) {
 #define VAR_PANEL_LIFT_EASE 0.22f
 #define VAR_PANEL_LIFT_SNAP_PX 0.25f
 /* Layout constants for variable rows */
-#define VAR_NAME_COL_WIDTH_FRAC 3  /* name column is 1/3 of panel width */
-#define VAR_NAME_COL_PADDING 1     /* extra char width padding for name column */
-#define VAR_VALUE_FMT_WIDTH 7      /* format field width for value display */
-#define VAR_VALUE_FMT_PREC 3       /* decimal precision for value display */
-#define VAR_HANDLE_W 10            /* width of slider handle */
-#define VAR_VALUE_COL_PIXELS (VAR_VALUE_FMT_WIDTH*FONT_SMALL_W + 10) /* pixels reserved for value (empirical spacing) */
-#define VAR_TRACK_RIGHT_MARGIN 8   /* right margin before track edge */
-#define VAR_HANDLE_MIN_TRACK 4     /* minimum track width including handle */
-#define VAR_TRACK_PAD_TOP 6        /* top padding of track from row bounds */
-#define VAR_TRACK_PAD_BOTTOM 6     /* bottom padding of track from row bounds */
-#define VAR_TICK_PAD_TOP 5         /* top padding of center tick */
-#define VAR_TICK_PAD_BOTTOM 5      /* bottom padding of center tick */
-#define VAR_HANDLE_PAD_TOP 4       /* top padding of handle from row bounds */
-#define VAR_HANDLE_PAD_BOTTOM 4    /* bottom padding of handle from row bounds */
-#define MAX_VAR_NAME_PIXELS VAR_PANEL_W / VAR_NAME_COL_WIDTH_FRAC
-#define MAX_VAR_NAME_CHARS MAX_VAR_NAME_PIXELS / FONT_SMALL_W
+#define VAR_NAME_COL_WIDTH_DENOM 3   /* name column gets 1/N of panel width */
+#define VAR_NAME_COL_PAD_CHARS 1     /* extra char-widths of padding for name column */
+#define VAR_VALUE_FMT_WIDTH 7        /* format field width for value display */
+#define VAR_VALUE_FMT_PREC 3         /* decimal precision for value display */
+#define VAR_VALUE_COL_GAP 10         /* gap (px) between value text and track start */
+#define VAR_HANDLE_W 10              /* width of slider handle */
+#define VAR_VALUE_COL_PIXELS (VAR_VALUE_FMT_WIDTH*FONT_SMALL_W + VAR_VALUE_COL_GAP) /* pixels reserved for value column */
+#define VAR_TRACK_PAD_RIGHT 8        /* right padding from track edge to panel edge */
+#define VAR_TRACK_MIN_SLACK 4        /* minimum track width past the handle */
+#define VAR_TRACK_PAD_TOP 6          /* top padding of track from row bounds */
+#define VAR_TRACK_PAD_BOTTOM 6       /* bottom padding of track from row bounds */
+#define VAR_TICK_PAD_TOP 5           /* top padding of center tick */
+#define VAR_TICK_PAD_BOTTOM 5        /* bottom padding of center tick */
+#define VAR_HANDLE_PAD_TOP 4         /* top padding of handle from row bounds */
+#define VAR_HANDLE_PAD_BOTTOM 4      /* bottom padding of handle from row bounds */
+#define VAR_NAME_MAX_PIXELS ((VAR_PANEL_W) / (VAR_NAME_COL_WIDTH_DENOM))
+#define VAR_NAME_MAX_CHARS  ((VAR_NAME_MAX_PIXELS) / (FONT_SMALL_W))
 
 static float var_panel_replay_lift(const UiRenderSnapshot *snap) {
     return snap ? snap->variable_panel.replay_lift_px : variable_panel_view().replay_lift_px;
@@ -234,14 +235,14 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
         int len = (int)strlen(vars->vars[i].name);
         if (len > max_name_len) max_name_len = len;
     }
-    int label_w  = (max_name_len + VAR_NAME_COL_PADDING) * FONT_SMALL_W;
-    label_w      = MIN(label_w, MAX_VAR_NAME_PIXELS);
+    int label_w  = (max_name_len + VAR_NAME_COL_PAD_CHARS) * FONT_SMALL_W;
+    label_w      = MIN(label_w, VAR_NAME_MAX_PIXELS);
     int label_x  = px + VAR_PANEL_PAD;
     int val_x    = px + VAR_PANEL_PAD + label_w;
     int track_x  = val_x + VAR_VALUE_COL_PIXELS;
-    int track_w  = pw - (track_x - px) - VAR_TRACK_RIGHT_MARGIN;
+    int track_w  = pw - (track_x - px) - VAR_TRACK_PAD_RIGHT;
     int handle_w = VAR_HANDLE_W;
-    if (track_w < handle_w + VAR_HANDLE_MIN_TRACK) track_w = handle_w + VAR_HANDLE_MIN_TRACK;
+    if (track_w < handle_w + VAR_TRACK_MIN_SLACK) track_w = handle_w + VAR_TRACK_MIN_SLACK;
 
     /* Shared logarithmic scale: all handles normalized relative to each other. */
     float log_scale = var_panel_log_scale(vars);
@@ -261,7 +262,7 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
 
         /* Label */
         glColor3fv(k_var_name);
-        gl2d_draw_string((float)label_x, (float)text_y, truncate_var_name(var->name, MAX_VAR_NAME_CHARS), FONT_SMALL);
+        gl2d_draw_string((float)label_x, (float)text_y, truncate_var_name(var->name, VAR_NAME_MAX_CHARS), FONT_SMALL);
 
         /* Value */
         char valstr[16];
