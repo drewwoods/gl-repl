@@ -284,14 +284,24 @@ static int find_feeding_state_cmd(int line_idx, int want_normal) {
     if (line_idx < 0 || line_idx >= repl_state_document_count()) return -1;
     if (!repl_state_document_cmds()[line_idx].valid) return -1;
 
-    /* Intentional split, not a candidate for repl_cmd_emits_vertex: gl
-     * vertices look back for CMD_NORMAL3F / CMD_COLOR3F / CMD_COLOR4F,
-     * tess vertices look back for CMD_TESS_NORMAL / CMD_TESS_COLOR.
-     * The two families have separate state-feeder commands. */
+    /* Intentional split, not a uniform predicate: the three target
+     * families consume different state-feeder commands.
+     *   - gl vertices    look back for CMD_NORMAL3F + CMD_COLOR3F/4F
+     *   - tess vertices  look back for CMD_TESS_NORMAL + CMD_TESS_COLOR
+     *   - glutSolid*     look back for CMD_COLOR3F/4F only — they emit
+     *                    their own normals but draw under the current
+     *                    GL color via glColorMaterial / lighting. */
     CmdType target = repl_state_document_cmds()[line_idx].type;
     int is_gl_vtx = (target == CMD_VERTEX3F || target == CMD_VERTEX2F);
     int is_tess_vtx = (target == CMD_TESS_VERTEX);
-    if (!is_gl_vtx && !is_tess_vtx) return -1;
+    int is_glut_solid = (!is_gl_vtx && !is_tess_vtx &&
+                         repl_cmd_consumes_current_color(target));
+
+    if (want_normal) {
+        if (!is_gl_vtx && !is_tess_vtx) return -1;
+    } else {
+        if (!is_gl_vtx && !is_tess_vtx && !is_glut_solid) return -1;
+    }
 
     for (int i = line_idx - 1; i >= 0; i--) {
         if (!repl_state_document_cmds()[i].valid) continue;
@@ -300,7 +310,8 @@ static int find_feeding_state_cmd(int line_idx, int want_normal) {
             if (is_gl_vtx && t == CMD_NORMAL3F) return i;
             if (is_tess_vtx && t == CMD_TESS_NORMAL) return i;
         } else {
-            if (is_gl_vtx && (t == CMD_COLOR3F || t == CMD_COLOR4F)) return i;
+            if ((is_gl_vtx || is_glut_solid) &&
+                (t == CMD_COLOR3F || t == CMD_COLOR4F)) return i;
             if (is_tess_vtx && t == CMD_TESS_COLOR) return i;
         }
     }
