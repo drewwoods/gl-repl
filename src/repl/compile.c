@@ -48,7 +48,6 @@
 #include "repl/compile.h"
 
 #include "repl/core_internal.h"  /* repl_format_fits, repl_extract_assignment_parts, collect_visible_vars */
-#include "repl/parser.h"         /* repl_parser_parse_command_ctx (uncomment fallback) */
 #include "repl/source_scope.h"   /* repl_source_scope_cmd_indent, _find_block_end */
 #include "repl/state_owners.h"
 
@@ -872,6 +871,15 @@ ReplCompileResult repl_compile_var_assign(const char *input,
     char rhs[MAX_LINE_LEN];
     char comment[MAX_LINE_LEN];
 
+    /* Bail out before extraction when the input itself can't fit in a
+     * source line. Otherwise repl_extract_assignment_target_parts would
+     * silently truncate rhs into the MAX_LINE_LEN-sized buffer, which
+     * can land mid-token (e.g. inside `+(0)`) and trip the validator
+     * with a spurious "missing ')'" before the format-fits step gets
+     * to emit the real diagnostic. */
+    if (input && (int)strlen(input) >= MAX_LINE_LEN)
+        return compile_set_err(err, err_size, "Command too long");
+
     if (!repl_extract_assignment_target_parts(input ? input : "",
                                               name, sizeof(name),
                                               index_expr, sizeof(index_expr),
@@ -1411,24 +1419,30 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
             return r;
 
         if (out->kind == REPL_COMPILED_NO_CHANGE) {
-            /* Dispatch didn't recognize. Try the GL-command parser. */
-            ReplParsedLine pl;
-            char parser_err[REPL_STATUS_TEXT_MAX];
-            ReplParseContext parse_ctx = {
-                .source_line_idx = line_idx,
-                .vars            = NULL,
-                .num_vars        = 0,
-                .strict_refs     = 0,
-                .err_buf         = parser_err,
-                .err_sz          = (int)sizeof(parser_err),
-            };
-            parser_err[0] = '\0';
-            if (!repl_parser_parse_command_ctx(stripped, &pl, &parse_ctx))
+            /* Dispatch didn't recognize. Go through the normal commit
+             * pipeline so visible-variable references in the stripped
+             * text are preserved (otherwise `// glVertex3f(t, 0, 0)`
+             * round-trips back as `glVertex3f(0.0000, 0, 0)` — the
+             * parser's canonical text emits args from cmd->args[]
+             * regardless of has_vars). */
+            ExprVar vis[MAX_EXPR_VARS];
+            int vis_n = collect_visible_vars(line_idx, vis, MAX_EXPR_VARS, NULL);
+            int preserve_expr = input_has_any_visible_vars(stripped,
+                                                           vis_n > 0 ? vis : NULL,
+                                                           vis_n);
+            GLCmd parsed_cmd;
+            char parsed_text[MAX_LINE_LEN];
+            memset(&parsed_cmd, 0, sizeof(parsed_cmd));
+            parsed_text[0] = '\0';
+            if (!repl_parse_and_normalize_strict(stripped, line_idx,
+                                                 vis_n > 0 ? vis : NULL, vis_n,
+                                                 preserve_expr, &parsed_cmd,
+                                                 parsed_text, sizeof(parsed_text)))
                 return compile_set_err(err, err_size,
                                        "Cannot uncomment: not a valid command");
             repl_compiled_change_init(out);
-            out->cmds[0] = pl.cmd;
-            repl_copy_string_fits(out->text[0], sizeof(out->text[0]), pl.text);
+            out->cmds[0] = parsed_cmd;
+            repl_copy_string_fits(out->text[0], sizeof(out->text[0]), parsed_text);
         }
 
         /* Coerce dispatch / parser result to REPLACE_ONE at line_idx. */
