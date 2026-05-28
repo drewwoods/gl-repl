@@ -37,6 +37,7 @@ typedef struct {
     SceneXformGuideMode xform_guide_mode;
     int autonormal;
     int show_light_indicators;
+    int light_theme;
     int backdrop_mode;
     /* Experimental scene post-processing (ScenePostFilterMode).
      * Session-level only: Ctrl+N toggles it; never in @cfg / examples. */

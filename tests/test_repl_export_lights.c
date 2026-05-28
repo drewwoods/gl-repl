@@ -8,8 +8,11 @@
  * either surface or rewrites the file emitter to bypass the generator.
  */
 #include "app/glr_ctrl.h"
+#include "app/glr_config.h"
 #include "repl/core.h"
 #include "repl/export.h"
+#include "scene/themes.h"      /* LIGHT_THEME_HEADLIGHT / _DEFAULT for the
+                                  headlight round-trip case */
 
 #include "support/test_harness.h"
 #include <stdio.h>
@@ -107,6 +110,64 @@ int main(void) {
     }
 
     free(text);
+
+    /* Headlight round-trip: switch theme to HEADLIGHT (mirrors what a
+     * saved `@cfg light_theme = HEADLIGHT` load triggers), re-export,
+     * and check that slot-0 POSITION moves from display() to init()
+     * while slots 1..3 stay in display(). */
+    glr_config_set(GLR_CONFIG_LIGHT_THEME, LIGHT_THEME_HEADLIGHT);
+    const char *path_hl = "/tmp/repl_export_lights_headlight.c";
+    repl_export_save_output(path_hl, source_document_view(), NULL);
+    char *text_hl = slurp(path_hl);
+    ASSERT_TRUE("headlight file readable", text_hl != NULL);
+    if (text_hl) {
+        int slot0_in_init = substring_in_window(
+            text_hl, "void init() {", "}\n\nint main",
+            "glLightfv(GL_LIGHT0, GL_POSITION");
+        int slot0_in_display = substring_in_window(
+            text_hl, "void display() {", "glPopAttrib();",
+            "glLightfv(GL_LIGHT0, GL_POSITION");
+        int slot1_in_display = substring_in_window(
+            text_hl, "void display() {", "glPopAttrib();",
+            "glLightfv(GL_LIGHT1, GL_POSITION");
+        ASSERT_TRUE("headlight: GL_LIGHT0 POSITION lives in init()",
+                    slot0_in_init);
+        ASSERT_TRUE("headlight: GL_LIGHT0 POSITION absent from display()",
+                    !slot0_in_display);
+        ASSERT_TRUE("headlight: GL_LIGHT1 POSITION still in display()",
+                    slot1_in_display);
+        free(text_hl);
+    }
+
+    /* Reload the headlight-themed file into a fresh REPL state, then
+     * re-export — the same slot-0-in-init invariant must hold, proving
+     * that @cfg drives the cfg bridge → glr_config_set hook →
+     * scene_lights_apply_theme path on load. */
+    glr_ctrl_reset_all();
+    ReplImportResult import_result;
+    memset(&import_result, 0, sizeof(import_result));
+    repl_export_load_from_file(path_hl, &import_result);
+    const char *path_rt = "/tmp/repl_export_lights_headlight_rt.c";
+    repl_export_save_output(path_rt, source_document_view(), NULL);
+    char *text_rt = slurp(path_rt);
+    ASSERT_TRUE("headlight round-trip file readable", text_rt != NULL);
+    if (text_rt) {
+        int slot0_in_init = substring_in_window(
+            text_rt, "void init() {", "}\n\nint main",
+            "glLightfv(GL_LIGHT0, GL_POSITION");
+        int slot0_in_display = substring_in_window(
+            text_rt, "void display() {", "glPopAttrib();",
+            "glLightfv(GL_LIGHT0, GL_POSITION");
+        ASSERT_TRUE("round-trip: GL_LIGHT0 POSITION still in init()",
+                    slot0_in_init);
+        ASSERT_TRUE("round-trip: GL_LIGHT0 POSITION still absent from display()",
+                    !slot0_in_display);
+        free(text_rt);
+    }
+
+    /* Reset back to default so subsequent test binaries see a clean
+     * theme. (Each test main() owns its global state.) */
+    glr_config_set(GLR_CONFIG_LIGHT_THEME, LIGHT_THEME_DEFAULT);
 
     return test_harness_report(&g_harness, "repl_export_lights");
 }

@@ -722,7 +722,8 @@ int main() {
         g_multisample_enabled = 0;
         g_line_smooth_enabled = 0;
         g_init_attenuate_points = 0;
-        g_lights[0].enabled = 0;
+        g_lights[0].id     = 0;
+        g_lights[0].pos[0] = -99.0f;
         g_clear_color[0] = 0.0f;
         g_clear_color[1] = 0.0f;
         g_clear_color[2] = 0.0f;
@@ -741,7 +742,11 @@ int main() {
                    g_line_smooth_enabled, CFG_DEFAULT_LINE_SMOOTH);
         ASSERT_INT("render reset point attenuation",
                    g_init_attenuate_points, CFG_DEFAULT_ATTENUATE_POINTS);
-        ASSERT_INT("render reset light enabled", g_lights[0].enabled, 1);
+        /* REPL state owns only the slot id (so the executor can route
+         * glEnable(GL_LIGHTn) through lights[n]); positions/colors are
+         * scene-defined and wired in by the controller, not by
+         * repl_state_render_reset_defaults. */
+        ASSERT_INT("render reset light id", (int)g_lights[0].id, GL_LIGHT0);
         ASSERT_TRUE("render reset clear color r", g_clear_color[0] == 0.10f);
         ASSERT_TRUE("render reset clear color g", g_clear_color[1] == 0.10f);
         ASSERT_TRUE("render reset clear color b", g_clear_color[2] == 0.10f);

@@ -20,4 +20,17 @@ void scene_lights_setup(const SceneFrameRenderContext *frame_ctx);
 /* Render light-indicator overlays after the main geometry pass when enabled. */
 void scene_lights_render(const SceneFrameRenderContext *frame_ctx);
 
+/* Overwrite `out` with the SceneLightTheme preset. `.enabled` is left at
+ * 0 — the program's glEnable(GL_LIGHTn) decides which slots light up.
+ * `.pos_is_eye_space` is set per-slot per-theme, so downstream readers
+ * (scene_lights_setup, the exporter, etc.) don't need to know about
+ * theme enums. */
+void scene_lights_apply_theme(SceneLight out[MAX_LIGHTS], int theme);
+
+/* User-facing label table for the cfg menu / status text, indexed by
+ * SceneLightTheme. Length is LIGHT_THEME_COUNT. Pointer type matches
+ * GlrConfigItem.state_names (non-const pointers) so the cfg row can
+ * reference it without a qualifier-discarding cast. */
+extern const char *scene_light_theme_names[];
+
 #endif /* SCENE_LIGHTS_H */

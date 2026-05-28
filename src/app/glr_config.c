@@ -14,6 +14,7 @@
 #include "ui/app/state.h"
 #include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
+#include "scene/lights.h"   /* scene_lights_apply_theme + eye-space init */
 
 static int clamp_int(int v, int lo, int hi) {
     if (v < lo) return lo;
@@ -121,6 +122,7 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_AXES_THEME:          return &glr_state_presentation_mut()->axes_theme;
     case GLR_CONFIG_XFORM_GUIDE_MODE:    return (int *)&glr_state_presentation_mut()->xform_guide_mode;
     case GLR_CONFIG_LIGHT_INDICATORS:    return &glr_state_presentation_mut()->show_light_indicators;
+    case GLR_CONFIG_LIGHT_THEME:         return &glr_state_presentation_mut()->light_theme;
     case GLR_CONFIG_POLY_HIGHLIGHT:      return &glr_state_presentation_mut()->highlight_current_poly;
     case GLR_CONFIG_BACKDROP:            return &glr_state_presentation_mut()->backdrop_mode;
     case GLR_CONFIG_ORTHO_MODE:          return (int *)&glr_state_presentation_mut()->ortho_mode;
@@ -167,6 +169,7 @@ int glr_config_get(GlrConfigKey key) {
     case GLR_CONFIG_AXES_THEME:          return glr_state_presentation().axes_theme;
     case GLR_CONFIG_XFORM_GUIDE_MODE:    return glr_state_presentation().xform_guide_mode;
     case GLR_CONFIG_LIGHT_INDICATORS:    return glr_state_presentation().show_light_indicators;
+    case GLR_CONFIG_LIGHT_THEME:         return glr_state_presentation().light_theme;
     case GLR_CONFIG_POLY_HIGHLIGHT:      return glr_state_presentation().highlight_current_poly;
     case GLR_CONFIG_BACKDROP:            return glr_state_presentation().backdrop_mode;
     case GLR_CONFIG_ORTHO_MODE:          return glr_state_presentation().ortho_mode;
@@ -241,6 +244,14 @@ void glr_config_set(GlrConfigKey key, int value) {
         if (!target)
             return;  /* unknown key — nothing changed, no notify */
         *target = value;
+        /* Light-theme side effect: re-seed REPL render-state lights[]
+         * from the scene preset and re-push eye-space positions.
+         * Reaches every write path (cycle handler, @cfg apply during
+         * load, programmatic glr_config_set) so a saved file with
+         * `@cfg light_theme = HEADLIGHT` arrives with the right
+         * positions/colors and the headlight tracking the camera. */
+        if (key == GLR_CONFIG_LIGHT_THEME)
+            scene_lights_apply_theme(repl_state_render_mut()->lights, value);
     }
 
     /* REQUIRE-step listener — slug-scoped and inactive-checked, so this
