@@ -93,7 +93,7 @@ static float val_to_slider_t(float val, float scale) {
     return t;
 }
 
-#define VAR_PANEL_W   275
+#define VAR_PANEL_W   250
 #define VAR_PANEL_PAD   6
 #define VAR_TITLE_H    20
 #define VAR_ROW_H      20
