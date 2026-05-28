@@ -23,7 +23,7 @@ for raw in allowlist.read_text(encoding="utf-8").splitlines():
     funcs.append(line)
 
 sources = {}
-for path in glob.glob("ui_*.c"):
+for path in glob.glob("src/ui/**/*.c", recursive=True):
     sources[path] = Path(path).read_text(encoding="utf-8")
 
 forbidden = [

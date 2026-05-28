@@ -8,7 +8,7 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-violations=$(grep -nE '\brepl_state_[a-z_]+_(mut|reset|set)\b' glr_state.c 2>/dev/null || true)
+violations=$(grep -nE '\brepl_state_[a-z_]+_(mut|reset|set)\b' src/app/glr_state.c 2>/dev/null || true)
 
 if [ -z "$violations" ]; then
     echo "glr-state-no-repl-mutators OK"
