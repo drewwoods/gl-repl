@@ -1,5 +1,5 @@
 /*
- * ui_memory_panel.h - Process memory overlay panel.
+ * ui_memprof.h - Process memory overlay panel.
  *
  * Sibling of ui_profile_panel that visualizes process RSS over time.
  * Reads samples + baseline from src/support/memprof.c.
@@ -7,8 +7,8 @@
  * Toggle: Config > "Memory profile" and Ctrl+Shift+W (matches the
  * CPU profile panel's Ctrl+W with Shift added).
  */
-#ifndef UI_MEMORY_PANEL_H
-#define UI_MEMORY_PANEL_H
+#ifndef UI_MEMPROF_H
+#define UI_MEMPROF_H
 
 typedef enum {
     MEMORY_PANEL_OFF = 0,
@@ -24,4 +24,4 @@ typedef enum {
  * nothing if the memory panel is disabled. */
 void ui_memory_panel_render(const UiRenderSnapshot *snap);
 
-#endif /* UI_MEMORY_PANEL_H */
+#endif /* UI_MEMPROF_H */

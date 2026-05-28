@@ -38,7 +38,7 @@
 #include "app/glr_debug.h"
 #include "keys.h"
 #include "support/memprof.h"
-#include "support/prof.h"
+#include "support/cpuprof.h"
 #include "repl/core.h"
 #include "repl/examples.h"          /* REPL_EXAMPLE_TAG_* */
 #include "repl/eval.h"
@@ -67,11 +67,11 @@
 #include "ui/app/layout.h"
 #include "ui/app/menu_bar.h"
 #include "ui/core/metrics.h"
-#include "ui/app/memory_panel.h"
+#include "ui/support/memprof.h"
 #include "ui/app/numeric_swatch.h"
 #include "ui/app/panels.h"
 #include "ui/app/repl_code_panel.h"
-#include "ui/app/profile_panel.h"
+#include "ui/support/cpuprof.h"
 #include "ui/app/snapshot.h"
 #include "ui/app/state.h"
 #include "ui/app/state_types.h" /* UI-chrome typedefs (CodePanel/Camera/Help/etc.) */

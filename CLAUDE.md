@@ -119,7 +119,7 @@ this for the project-local set:
 #include "keys.h"            // project-local              — quoted
 #include "gl_includes.h"     // project-local (in include/) — quoted
 #include "c_compat.h"        // project-local (in include/) — quoted
-#include "support/prof.h"    // project-local subdir       — quoted
+#include "support/cpuprof.h"    // project-local subdir       — quoted
 ```
 
 The rule is mechanical: anything that lives in this tree uses `""`. The
@@ -360,8 +360,10 @@ state-machine level, not buried in the doc body.
 | `src/ui/app/editor.h` | Per-frame editor-overlay snapshots (swatches, sliders, highlights) pushed by the controller |
 | `src/ui/subsystems/replay_hud.c` | 2D replay status HUD (feature-UI under the `replay_ui_*` prefix; reads replay peer snapshot) |
 | `src/ui/subsystems/replay_hud.h` | Replay HUD render entrypoint |
-| `src/ui/app/profile_panel.c` | CPU profiling overlay panel (per-frame section timings) |
-| `src/ui/app/profile_panel.h` | Profile panel render entrypoint |
+| `src/ui/support/cpuprof.c` | CPU profiling overlay panel (per-frame section timings) |
+| `src/ui/support/cpuprof.h` | Profile panel render entrypoint |
+| `src/ui/support/memprof.c` | Memory profiling overlay panel (RSS history / baseline / delta) |
+| `src/ui/support/memprof.h` | Memory panel render entrypoint |
 | `src/ui/app/menu_bar.c` | Code-panel menu bar, dropdowns, config right-click handling, search slot |
 | `src/ui/app/menu_bar.h` | Menu/pin hit-test and dropdown state API |
 | `src/ui/app/scene_tabs.c` | Scene tab strip below the menu bar: snapshot-pure render + whole-band hit-test (TAB / inert CHROME); derived each frame, no persistent model |
@@ -407,8 +409,8 @@ state-machine level, not buried in the doc body.
 | `src/repl/export_state.h` | Shared dimensions for import/export state text |
 | `src/app/glr_audio.c` | App-level playlist engine and persisted audio config |
 | `src/app/glr_audio.h` | Audio playback API (`glr_audio_*`) |
-| `src/support/prof.c` | CPU wall-time profiling instrumentation (per-section accumulators, frame tick) |
-| `src/support/prof.h` | Profiling API (`prof_begin`, `prof_end`, `prof_frame_tick`, etc.); no UI dependency |
+| `src/support/cpuprof.c` | CPU wall-time profiling instrumentation (per-section accumulators, frame tick) |
+| `src/support/cpuprof.h` | Profiling API (`prof_begin`, `prof_end`, `prof_frame_tick`, etc.); no UI dependency |
 | `src/scene/render_types.h` | Shared `SceneRgba` / `SceneRenderConfig` / `FrameRenderContext` types for scene helpers |
 | `src/scene/guides/guides_shared.h` | Shared guide snapshot and planning types for REPL-aware 3D overlay passes |
 | `src/scene/guides/geometry_guides.c` | Vertex/primitive guide rendering (input context at cursor) from `SceneGuideSnapshot` |

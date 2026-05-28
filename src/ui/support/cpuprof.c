@@ -1,13 +1,12 @@
 /*
- * ui_profile_panel.c - per-section wall-time profiling overlay panel.
+ * ui_cpuprof.c - per-section wall-time profiling overlay panel.
  */
-#include "ui/app/profile_panel.h"
+#include "ui/support/cpuprof.h"
 #include "ui/core/gl_2d.h"
 #include "ui/app/layout.h"
-#include "ui/core/metrics.h"
 #include "ui/core/theme.h"
 #include "ui/subsystems/variable_panel.h"
-#include "support/prof.h"
+#include "support/cpuprof.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -23,7 +22,7 @@ static const float k_prof_dim[3]   = { 0.30f, 0.30f, 0.38f };
 /* Configuration                                                              */
 /* ========================================================================= */
 
-/* Panel geometry (pixels). PROFILE_PANEL_W lives in profile_panel.h so
+/* Panel geometry (pixels). PROFILE_PANEL_W lives in cpuprof.h so
  * sibling panels (ui_memory_panel) can shift left for side-by-side
  * layout; the local PROF_PANEL_W alias preserves the historical name. */
 #define PROF_PANEL_W        PROFILE_PANEL_W

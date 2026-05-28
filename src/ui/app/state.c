@@ -1,6 +1,6 @@
 #include "ui/app/state.h"
-#include "ui/app/profile_panel.h"
-#include "ui/app/memory_panel.h"
+#include "ui/support/cpuprof.h"
+#include "ui/support/memprof.h"
 #include "ui/app/layout.h"  /* CFG_DEFAULT_PANEL_FRAC */
 
 #include <stddef.h>

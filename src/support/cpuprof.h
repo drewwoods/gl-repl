@@ -1,11 +1,11 @@
 /*
- * prof.h - CPU overhead profiling instrumentation.
+ * cpuprof.h - CPU overhead profiling instrumentation.
  *
  * Measures elapsed wall time spent in major per-frame sections.
  * Instrumentation is generic and does not depend on the UI layer.
  */
-#ifndef PROF_H
-#define PROF_H
+#ifndef CPUPROF_H
+#define CPUPROF_H
 
 /* Sections that are timed each frame (or whenever they run). */
 typedef enum {
@@ -90,4 +90,4 @@ double prof_section_last_us(ProfSection s);
 double prof_section_avg_us(ProfSection s);
 int    prof_section_is_stale(ProfSection s);
 
-#endif /* PROF_H */
+#endif /* CPUPROF_H */

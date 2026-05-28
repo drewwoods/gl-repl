@@ -13,7 +13,7 @@
 #include "palette.h"
 #include "occluded_ghost.h"
 #include "render.h"
-#include "support/prof.h"
+#include "support/cpuprof.h"
 #include "config.h"
 
 #include <errno.h>

@@ -90,7 +90,8 @@
         "src/ui/subsystems/color_picker.c",
         "src/ui/subsystems/variable_panel.c",
         "src/ui/app/autocomplete_panel.c",
-        "src/ui/app/profile_panel.c",
+        "src/ui/support/cpuprof.c",
+        "src/ui/support/memprof.c",
         "src/ui/app/repl_code_panel.c",
         "src/ui/core/tabbed_overlay.c"
       ]

@@ -18,7 +18,7 @@
 #include "app/glr_defaults.h" /* CFG_DEFAULT_* */
 #include "app/glr_state.h"
 #include "keys.h"
-#include "support/prof.h"
+#include "support/cpuprof.h"
 #include "repl/core.h"
 #include "repl/core_internal.h"
 #include "repl/examples.h"     /* repl_example_count */

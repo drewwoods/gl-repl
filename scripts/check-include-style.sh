@@ -8,7 +8,7 @@
 #   #include <miniaudio.h>    — vendored third-party       (angle)
 #   #include "keys.h"         — project-local              (quoted)
 #   #include "gl_includes.h"  — project-local              (quoted)
-#   #include "support/prof.h" — project-local subdir       (quoted)
+#   #include "support/cpuprof.h" — project-local subdir       (quoted)
 #
 # The set below enumerates the project-local headers that have
 # historically been included with angle brackets (because they sit on
@@ -22,7 +22,7 @@ cd "$(git rev-parse --show-toplevel)"
 # Project-local headers that must use "" not <>.
 # (Bare names — these resolve via -I., -Iinclude, or are top-level
 # project files. Subdirectory-namespaced project headers like
-# "support/prof.h" are already disambiguated by the path.)
+# "support/cpuprof.h" are already disambiguated by the path.)
 LOCAL_HEADERS=(c_compat.h gl_includes.h keys.h gl_2d.h)
 
 # Scan tracked .c / .h files only — gitignored output artifacts

@@ -7,7 +7,7 @@
 #include "editor/state.h"
 #include "ui/app/state.h"
 #include "app/glr_camera.h"
-#include "ui/app/profile_panel.h"
+#include "ui/support/cpuprof.h"
 #include "ui/app/layout.h"            /* CODE_PANEL_LAYOUT_* enum values */
 #include "subsystems/variable_panel/variable_panel_state.h"
 #include "subsystems/replay/replay.h"               /* REPLAY_PAUSED, REPLAY_MODE_* enums */
