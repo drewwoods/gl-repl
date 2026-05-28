@@ -188,4 +188,28 @@ static inline int repl_cmd_starts_geometry_emit(CmdType type) {
             type == CMD_TESS_BEGIN_POLYGON);
 }
 
+/* True for commands whose draw reads the current GL color state, so the
+ * cursor-on-cmd code-panel highlight should resolve to the most recent
+ * preceding color line. Covers immediate-mode vertex emitters
+ * (glVertex3f/2f use the current color directly), gluVertex (via the
+ * tess color family), and glutSolid* shapes (which sample the current
+ * color through glColorMaterial / lighting).
+ *
+ * Color and normal walk-back are intentionally *not* symmetric: glut
+ * solids consume the color state but emit their own normals, so they
+ * participate in color linking only — keep the normal walk-back keyed
+ * on repl_cmd_emits_vertex.
+ *
+ * The gl-vs-tess color family split (CMD_COLOR3F/4F vs CMD_TESS_COLOR)
+ * still has to be spelled out at the lookup call site; this predicate
+ * only answers "is the cursor on a color consumer?". */
+static inline int repl_cmd_consumes_current_color(CmdType type) {
+    return (repl_cmd_emits_vertex(type) ||
+            type == CMD_GLUT_TORUS ||
+            type == CMD_GLUT_CUBE ||
+            type == CMD_GLUT_SPHERE ||
+            type == CMD_GLUT_TEAPOT ||
+            type == CMD_GLUT_CONE);
+}
+
 #endif /* REPL_COMMAND_H */

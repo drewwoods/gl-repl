@@ -1085,6 +1085,30 @@ int main(void) {
     ASSERT_TRUE("oob color → -1", repl_find_feeding_color_cmd(-1) == -1);
     ASSERT_TRUE("oob normal → -1", repl_find_feeding_normal_cmd(99) == -1);
 
+    /* glutSolid* shapes consume the current gl-style color (via
+     * glColorMaterial / lighting) and link back to the feeding
+     * glColor* line just like immediate-mode vertices. They emit
+     * their own normals so the normal walk-back stays -1. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glColor3f(1, 0, 0);");
+    editor_feed_line("glutSolidTorus(0.1, 0.3, 12, 24);");
+    editor_feed_line("glColor3f(0, 1, 0);");
+    editor_feed_line("glutSolidCube(0.5);");
+    editor_feed_line("glutSolidSphere(0.4, 16, 12);");
+    editor_feed_line("glColor4f(0, 0, 1, 1);");
+    editor_feed_line("glutSolidTeapot(0.3);");
+    editor_feed_line("glutSolidCone(0.2, 0.4, 12, 8);");
+    ASSERT_TRUE("feeding color for glutSolidTorus",  repl_find_feeding_color_cmd(1) == 0);
+    ASSERT_TRUE("feeding color for glutSolidCube",   repl_find_feeding_color_cmd(3) == 2);
+    ASSERT_TRUE("feeding color for glutSolidSphere", repl_find_feeding_color_cmd(4) == 2);
+    ASSERT_TRUE("feeding color for glutSolidTeapot", repl_find_feeding_color_cmd(6) == 5);
+    ASSERT_TRUE("feeding color for glutSolidCone",   repl_find_feeding_color_cmd(7) == 5);
+    ASSERT_TRUE("normal walk-back skips glut solid", repl_find_feeding_normal_cmd(1) == -1);
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glutSolidCube(0.5);");
+    ASSERT_TRUE("no color before glut solid → -1", repl_find_feeding_color_cmd(0) == -1);
+
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_TRIANGLES);");
     editor_feed_line("glVertex3f(0, 0, 0);");
