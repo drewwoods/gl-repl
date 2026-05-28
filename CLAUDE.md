@@ -256,6 +256,10 @@ Test sources live under `tests/` and shared test-only helpers live under
 
 `make check-state-ownership` runs the full inventory of ownership / contract guards
 (e.g., input/REPL isolation, mutator placement, UI purity). See the Makefile for the full list.
+Two hard-failing guards run *outside* that aggregate: `check-duplicate-api-decls`
+(no duplicate function declarations across public headers) and
+`check-trailing-whitespace` (commits since `origin/main` carry no trailing
+whitespace; also wired into `test-stubs` and the pre-push hook).
 
 ## Plans & audits
 
@@ -302,7 +306,7 @@ state-machine level, not buried in the doc body.
 | `src/repl/command_spec.h` | Command spec query API |
 | `src/repl/command_store.c` | Low-level `GLCmd` array mechanics: insert, delete, replace, bulk-load (no text-buffer writes) |
 | `src/repl/command_store.h` | Command-store public API (`repl_command_store_insert_one`, etc.) |
-| `src/repl/core.h` | Public API (parse, flatten, user scene + workspace); GLUT input-dispatch declarations |
+| `src/repl/core.h` | Public API (parse, flatten, user scene + workspace) plus the neutral `repl_dispatch_*` host-effect hooks (no GLUT input-dispatch declarations) |
 | `src/repl/core_internal.h` | Test-visible internals (normalize/commit pipeline, `editor_feed_line`, `editor_load_line_to_input`, `repl_promote_example_if_needed`) |
 | `src/repl/state.c` | Owns `g_repl_state`, lifecycle, snapshot assembly (`repl_state_capture` / `repl_state_restore`) |
 | `src/repl/state.h` | Typed runtime-state facade, reset helpers, and focused accessors over the live REPL state |
@@ -348,8 +352,8 @@ state-machine level, not buried in the doc body.
 | `src/editor/search.c` | Case-insensitive substring search state and match navigation |
 | `src/editor/search.h` | Search query helpers and input routing API |
 | `src/app/glr_completion.c` | REPL-side completion provider: walks command spec / predef vars / `CMD_FUNC_DEF` for matches, ghost text, parameter hints. Registered via `EditorCompletionProvider`. |
-| `src/ui/core/layout.c` | Pure window layout geometry: scene rect and code-panel rect derivation |
-| `src/ui/core/layout.h` | Layout geometry API (`ui_layout_scene_rect`, `ui_layout_code_panel_rect`) |
+| `src/ui/app/layout.c` | Pure window layout geometry: scene rect and code-panel rect derivation |
+| `src/ui/app/layout.h` | Layout geometry API (`ui_layout_scene_rect`, `ui_layout_code_panel_rect`) |
 | `src/repl/scenes.c` | User-scene slots, LRU eviction, workspace save/load, workspace dir binding |
 | `src/repl/example_loader.c` | Built-in example loading and active-example tracking |
 | `src/app/glr_debug.c` | Diagnostic dumps for CLI flags and tests |
@@ -386,7 +390,9 @@ state-machine level, not buried in the doc body.
 | `src/subsystems/variable_panel/variable_panel_drag.h` | Drag state accessors + begin/motion/reset API |
 | `src/subsystems/variable_panel/variable_panel_state.c` | Variable-panel peer subsystem: owns visibility flag + drag-state storage |
 | `src/subsystems/variable_panel/variable_panel_state.h` | Peer-subsystem facade (`VariablePanelState`, capture/restore/reset, view/drag accessors) |
-| `src/subsystems/replay/replay_state.c` | Replay peer subsystem: owns `ReplReplayRuntimeState` storage |
+| `src/subsystems/replay/replay_state.c` | Replay peer subsystem: owns `ReplayRuntimeState` storage |
+| `src/subsystems/replay/replay_render.c` | Replay fade-batch GL rendering pass (`glPushAttrib`/`glMaterialfv`/`glBegin`), extracted out of `src/scene/render.c` |
+| `src/subsystems/edit_overlays/edit_overlays.c` | Cursor edit-guide + vertex/normal overlay orchestration: owns the cursor-guide snapshot and the flat-program walk that calls the scene overlay primitives; extracted out of `src/app/glr_ctrl.c` |
 | `src/subsystems/replay/replay_state.h` | Peer-subsystem facade (`replay_state_capture/restore/reset/view/mut`) |
 | `src/editor/help_session.c` | Read-only editor session for the help overlay (tab_idx + scroll) |
 | `src/editor/help_session.h` | `EditorHelpSession` API (capture/restore/reset, narrow accessors) |
@@ -739,8 +745,8 @@ these scene-presentation slugs:
 
 `wireframe`, `grid`, `grid_major`, `grid_extent`, `axes`,
 `vertex_labels`, `normal_vectors`, `vertex_outlines`, `vertex_points`,
-`vertex_guides`, `light_indicators`, `backdrop`, `view_mode`,
-`camera_rotate`, `variable_panel`.
+`xform_guides`, `light_indicators`, `light_theme`, `backdrop`,
+`view_mode`, `camera_rotate`, `variable_panel`.
 
 `view_mode` is the 2D/3D projection toggle (slug for the "View mode"
 config row → `GLR_CONFIG_ORTHO_MODE`): `0` = 3D perspective, `1` = 2D
@@ -1010,6 +1016,7 @@ glBegin(MODE), glEnd()
 glVertex3f(x,y,z), glVertex2f(x,y)
 glNormal3f(x,y,z)
 glColor3f(r,g,b), glColor4f(r,g,b,a)
+glClearColor(r,g,b,a)   (sets the background clear color; channels clamped to >= 0.15)
 glTranslatef(x,y,z), glScalef(sx,sy,sz), glRotatef(deg,x,y,z)
 glPushMatrix(), glPopMatrix(), glLoadIdentity()
 glEnable(CAP), glDisable(CAP)
@@ -1070,6 +1077,8 @@ for(var, start, end[, step]) { body }
 func0..func9(params) { body }   (parens always required, even for zero args)
 NAME(params) { body }     (alias: NAME -> next free funcN slot, 10 max)
 if(expr) { body }
+:name  or  name:           (goto label — CMD_GOTO_LABEL; colon syntax, distinct from the label(...) call)
+goto name                  (jump to a label — CMD_GOTO)
 // comment
 float name[, name2, ...];  (variable declaration)
 var = expr;

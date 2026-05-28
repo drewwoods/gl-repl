@@ -567,7 +567,9 @@ Responsibilities:
 * baseline scene lighting and material state
 * grid, axes, backdrop, light indicators, orbit target
 * REPL-aware 3D overlays while they remain under `scene_*`
-* replay fade rendering until the replay simplification follow-up moves it
+* replay fade rendering now lives in the replay peer
+  (`src/subsystems/replay/replay_render.c`); the scene calls it as a
+  fade pass but no longer owns the GL code
 
 Neutral scene modules such as `src/scene/grid.c`, `src/scene/axes.c`,
 `src/scene/backdrop.c`, and `src/scene/lights.c` should remain free of REPL
@@ -648,12 +650,13 @@ discoveries (e.g. the editor cursor pixel computed during the generic
 text-panel pass) flow back through per-frame `Ui*Output` structs that
 the controller actualizes after the render call (Phase J4 introduced
 `UiCodePanelOutput`; the pattern is hard-guarded by
-`check-output-actualization`). Two render-path live reads remain
-(`ui_repl_code_panel_build_layout` / `ui_repl_code_panel_apply_follow_scroll`
-and `replay_code_panel_get_command_display_text`); both produce
-snap-equivalent results because they run after the controller has
-finished updating live state, but converting them to take a snapshot
-pointer is the next layer of cleanup.
+`check-output-actualization`). The previously-noted render-path live
+reads have been converted: `ui_repl_code_panel_build_layout` now takes a
+`const UiRenderSnapshot *` and is driven by the controller
+(`glr_ctrl.c`), `ui_repl_code_panel_apply_follow_scroll` is gone, and
+`replay_code_panel_get_command_display_text` takes an explicit
+`SourceTextView` supplied by the controller's annotation-prep pass
+rather than reading live state.
 
 ### UI Color Theming
 
@@ -740,7 +743,10 @@ src/app/glr_ctrl.c      GLUT modifier reads + cross-layer input routing
                 (took over from the deleted repl_editor.c in Phase J1)
 editor_input.c  glutGetModifiers via editor_get_modifiers (gated behind
                 editor_input_enable_glut_modifier_reads so tests stay safe)
-src/repl/executor.c tessellator callback setup only
+src/repl/executor.c GLUT solid shapes (glutSolidCube/Sphere/Torus/Teapot/Cone)
+                and glutBitmapCharacter for label() text. (Its GLU
+                tessellator setup — gluNewTess/gluTessCallback — is GLU,
+                not GLUT.)
 ```
 
 ### Controller-only scene wiring
@@ -753,10 +759,14 @@ live in neutral headers (`src/app/glr_defaults.h`, `config.h`,
 `src/scene/render_types.h`) that both sides include via existing transitive
 paths.
 
-Remaining `ui_*` include exceptions: `repl_actions.c` and `src/repl/export.c`.
-The `repl_editor.c` exception is gone — that file is deleted (Phase J1).
-The other two require separate cleanup tracks tied to the deferred
-`repl_actions` rename and the export-as-its-own-feature split.
+There are no remaining `ui_*` include exceptions among `repl_*` model
+files. `src/repl/export.c` is UI-free — it pulls app/scene-derived
+values only through controller-installed bridges, guarded by
+`check-repl-export-no-ui-layout` and `check-repl-export-via-bridge`.
+The former `repl_actions.c` now lives at `src/app/glr_actions.c`, an
+app-shell file that may legitimately include `ui_*` headers (so it is
+not a boundary exception). The `repl_editor.c` exception is gone — that
+file is deleted (Phase J1).
 
 ### Scene state access
 
@@ -843,7 +853,7 @@ full app fills and the demo leaves unset:
 2. **`ReplHostEffects` bridge** (`src/repl/core.h`). A single
    controller-installed table of host callbacks — `status`,
    `status_error`, `example_presentation_reset`, `input_reset`,
-   `insert_mode_off`, `scroll_to_line`, `follow_cursor`,
+   `insert_mode_off`, `scroll_to_line`,
    `tutorial_teardown`, `edit_line_get`, `edit_line_set`. Pipeline TUs call
    `repl_set_status()` /
    `repl_dispatch_*()`; the controller installs the table at startup. The
@@ -1205,8 +1215,9 @@ Completed (Phase 1 + most of Phase 2):
   than calling the layout helpers (see *Standalone REPL Demo Coupling*).
 - ✅ **R4** — `src/app/glr_ctrl.c` no longer includes `src/repl/core_internal.h`;
   `src/repl/pipeline.h` exists; `repl_eval_predef_view()` hides
-  `g_predef_vars`. R4d (public-API audit) landed; only `bench_repl.c`
-  retains a `src/repl/core_internal.h` include outside the test/REPL set.
+  `g_predef_vars`. R4d (public-API audit) landed; `bench_repl.c` no
+  longer includes `src/repl/core_internal.h` either, so no non-test/REPL
+  TU pulls it.
 - ✅ **R5** — `SceneRenderConfig` slimmed and reorganized into labeled
   sections; HUD fields moved to `UiReplayHudState`; `ReplayFadePlan` and
   accum-AA fields landed.
@@ -1219,14 +1230,12 @@ Completed (Phase 1 + most of Phase 2):
 
 Still open:
 
-- ⚠️ **R10-phase1** — Phase J1 obsoleted the original framing of this
-  task: `repl_editor.c/h` is deleted. The remaining GLUT-flavored
-  declarations in `src/repl/core.h` should be reviewed against the actual
-  callers in `src/app/glr_ctrl.c` and `editor_input.c`; anything that's
-  no longer reachable can be removed, and anything still in use can
-  move to a more specific home (`editor_input.h` for editor input,
-  `src/app/glr_ctrl.h` for controller routing).
-- ❌ **R10-phase2..phase5** — Dissolve `src/repl/core.c` (~840 lines; it
+- ✅ **R10-phase1** — Phase J1 obsoleted the original framing
+  (`repl_editor.c/h` deleted). `src/repl/core.h` no longer carries any
+  GLUT-flavored input-dispatch declarations; its remaining cross-module
+  entry points are the neutral `repl_dispatch_*` host-effect hooks, which
+  belong there. Nothing left to relocate.
+- ❌ **R10-phase2..phase5** — Dissolve `src/repl/core.c` (~896 lines; it
   grew with the `ReplHostEffects` install/dispatch surface): move
   `repl_parse_and_normalize*` / `normalize_with_indent` /
   `parse_and_normalize_impl` to `src/repl/parser.c`; move `collect_visible_vars`
@@ -1237,8 +1246,9 @@ Still open:
   move `current_begin_mode` / `count_vertices` to `src/repl/executor.c`; move
   debug dumps to `src/repl/state.c` or `repl_debug.c`. The `ReplHostEffects`
   install/dispatch layer is a candidate for its own small TU.
-- ❌ **R11 (tail)** — Shrink the surviving allowlists, mainly the
-  `bench_repl.c` exception for `src/repl/core_internal.h`.
+- ✅ **R11 (tail)** — The `bench_repl.c` `src/repl/core_internal.h`
+  exception is gone (bench no longer includes it); no surviving
+  allowlist of that shape remains.
 - ❌ **R12** — Consolidate truly public REPL APIs into one concise public
   header, grouped by implementation owner; keep internals out.
 - ❌ **R8** — Rename `gl_repl.c` / `gl_repl.h` into the `glr_*` shell
