@@ -23,7 +23,7 @@
 #define KEYS_H
 
 /* Navigation and editing */
-#define KEY_CTRL_A    1    /* jump to line start */
+#define KEY_CTRL_A    1    /* jump to line start; Ctrl+Shift+A: toggle audio */
 #define KEY_CTRL_E    5    /* jump to line end */
 #define KEY_BACKSPACE 8    /* backspace (some platforms deliver here) */
 #define KEY_DELETE    127  /* delete key (macOS terminal) */
@@ -65,7 +65,8 @@
 #define KEY_CTRL_DASH 31   /* decrement accum AA samples (Apple GLUT quirk, Ctrl+-) */
 
 /* Diagnostics */
-#define KEY_CTRL_P    16   /* dump editor state + flat commands to stdout (Ctrl+P) */
+#define KEY_CTRL_P    16   /* dump editor state + flat commands to stdout (Ctrl+P);
+                              Ctrl+Shift+P: toggle variable panel */
 
 /* Other */
 #define KEY_ESC       27   /* escape key (cancel overlays, etc.) */

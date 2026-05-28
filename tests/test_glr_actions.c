@@ -100,9 +100,9 @@ static void run_menu_action_in_temp_dir(const char *label,
 static void test_apply_defaults(void) {
     glr_ctrl_reset_all();
     /* glr_actions_apply_defaults pulls from glr_audio_get_cfg_mode()
-     * which defaults to AUDIO_CFG_ALL (3) if invalid. */
+     * which defaults to AUDIO_CFG_ALL (1 = on) if invalid. */
     glr_actions_apply_defaults();
-    ASSERT_INT("default audio mode is ALL", glr_config_get(GLR_CONFIG_AUDIO_MODE), 3);
+    ASSERT_INT("default audio mode is ALL", glr_config_get(GLR_CONFIG_AUDIO_MODE), 1);
 }
 
 static void test_cursor_actions(void) {
@@ -221,27 +221,17 @@ static void test_cfg_cycling(void) {
     ASSERT_INT("point attenuation ON", glr_config_get(GLR_CONFIG_POINT_ATTENUATION), 1);
     ASSERT_STR("status point attenuation ON", g_last_status, "Point attenuation: ON");
 
-    /* Test Audio modes */
-    glr_config_set(GLR_CONFIG_AUDIO_MODE, 0); // Pause
-    glr_cfg_cycle_row(audio_row, 1); // -> Once
-    ASSERT_INT("audio mode Once", glr_config_get(GLR_CONFIG_AUDIO_MODE), 1);
-    ASSERT_STR("status audio Once", g_last_status, "Audio: play once");
+    /* Test Audio modes (2-state: off/on) */
+    glr_config_set(GLR_CONFIG_AUDIO_MODE, 0); // Off (pause)
+    glr_cfg_cycle_row(audio_row, 1); // -> On
+    ASSERT_INT("audio mode On", glr_config_get(GLR_CONFIG_AUDIO_MODE), 1);
+    ASSERT_STR("status audio On", g_last_status, "Audio: on");
     ASSERT_INT("audio engine not paused", glr_audio_is_paused(), 0);
-    ASSERT_INT("audio engine loop mode OFF", glr_audio_get_loop_mode(), GLR_AUDIO_LOOP_OFF);
-
-    glr_cfg_cycle_row(audio_row, 1); // -> Song
-    ASSERT_INT("audio mode Song", glr_config_get(GLR_CONFIG_AUDIO_MODE), 2);
-    ASSERT_STR("status audio Song", g_last_status, "Audio: loop song");
-    ASSERT_INT("audio engine loop mode SONG", glr_audio_get_loop_mode(), GLR_AUDIO_LOOP_SONG);
-
-    glr_cfg_cycle_row(audio_row, 1); // -> All
-    ASSERT_INT("audio mode All", glr_config_get(GLR_CONFIG_AUDIO_MODE), 3);
-    ASSERT_STR("status audio All", g_last_status, "Audio: loop all");
     ASSERT_INT("audio engine loop mode ALL", glr_audio_get_loop_mode(), GLR_AUDIO_LOOP_ALL);
 
-    glr_cfg_cycle_row(audio_row, 1); // -> Pause
-    ASSERT_INT("audio mode Pause", glr_config_get(GLR_CONFIG_AUDIO_MODE), 0);
-    ASSERT_STR("status audio Pause", g_last_status, "Audio: paused");
+    glr_cfg_cycle_row(audio_row, 1); // -> Off
+    ASSERT_INT("audio mode Off", glr_config_get(GLR_CONFIG_AUDIO_MODE), 0);
+    ASSERT_STR("status audio Off", g_last_status, "Audio: off");
     ASSERT_INT("audio engine paused", glr_audio_is_paused(), 1);
 }
 
@@ -587,8 +577,8 @@ static void test_tutorial_menu_dispatch(void) {
 static void test_audio_config_direct_set(void) {
     glr_ctrl_reset_all();
 
-    glr_config_set(GLR_CONFIG_AUDIO_MODE, 2);
-    ASSERT_INT("direct-set audio mode 2", glr_audio_get_cfg_mode(), 2);
+    glr_config_set(GLR_CONFIG_AUDIO_MODE, 1);
+    ASSERT_INT("direct-set audio mode 1", glr_audio_get_cfg_mode(), 1);
 
     glr_config_set(GLR_CONFIG_AUDIO_MODE, 0);
     ASSERT_INT("direct-set audio mode 0", glr_audio_get_cfg_mode(), 0);
