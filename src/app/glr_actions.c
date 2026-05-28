@@ -232,6 +232,7 @@ static int cfg_key_in_scene_subset(GlrConfigKey key) {
     case GLR_CONFIG_VERTEX_POINTS:
     case GLR_CONFIG_XFORM_GUIDE_MODE:
     case GLR_CONFIG_LIGHT_INDICATORS:
+    case GLR_CONFIG_LIGHT_THEME:
     case GLR_CONFIG_BACKDROP:
     case GLR_CONFIG_ORTHO_MODE:
     case GLR_CONFIG_CAMERA_ROTATE:
