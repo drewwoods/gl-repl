@@ -81,7 +81,7 @@ int main(void) {
          * indentation in some sections. We match the bare text. */
         const char *needle = line;
         while (*needle == ' ') needle++;
-        char label[128];
+        char label[512];
         snprintf(label, sizeof(label),
                  "init line %d appears in init() body: %s", i, needle);
         int found = substring_in_window(text, "void init() {",
@@ -98,7 +98,7 @@ int main(void) {
         repl_export_lights_display_line(i, line, sizeof(line));
         const char *needle = line;
         while (*needle == ' ') needle++;
-        char label[128];
+        char label[512];
         snprintf(label, sizeof(label),
                  "display line %d appears in display() body: %s", i, needle);
         int found = substring_in_window(text, "void display() {",

@@ -44,7 +44,8 @@ STATIC_ASSERT(TUTORIAL_FADE_SETTLE_CHARS + 3 <= UI_TEXT_PANEL_MAX_COLOR_SEGMENTS
               "TUTORIAL_FADE_SETTLE_CHARS too large for color-segment budget");
 
 static UiTextPanelRow g_repl_code_panel_rows[UI_REPL_CODE_PANEL_MAX_ROWS];
-static char g_repl_code_panel_generated_text[UI_REPL_CODE_PANEL_MAX_GENERATED_TEXT_ROWS][MAX_LINE_LEN];
+/* *2 allows room for concatenating virtual_line->text and ->aux. */
+static char g_repl_code_panel_generated_text[UI_REPL_CODE_PANEL_MAX_GENERATED_TEXT_ROWS][MAX_LINE_LEN * 2];
 
 /* Syntax-highlight palette: a deliberate per-category color scheme,
  * intentionally NOT theme tokens (theme.h bucket 3 - it is its own
@@ -1271,7 +1272,7 @@ static void repl_code_panel_add_virtual_rows(ReplCodePanelBuilder *builder,
         if (!row || !text)
             return;
 
-        snprintf(text, MAX_LINE_LEN, "%s%s", virtual_line->text, virtual_line->aux);
+        snprintf(text, MAX_LINE_LEN * 2, "%s%s", virtual_line->text, virtual_line->aux);
         row->text = text;
         row->kind = UI_TEXT_PANEL_ROW_VIRTUAL;
         row->hit_target_line_idx = after_line_idx;

@@ -1,6 +1,8 @@
 #include "editor/state.h"
 #include "app/glr_ctrl.h"
+#ifndef _DEFAULT_SOURCE
 #define _DEFAULT_SOURCE
+#endif
 #include "app/glr_config.h"
 #include "config.h"                  /* DEFAULT_SCENE_FILE */
 #include "repl/command_spec.h"  /* cmd_type_name */
@@ -515,7 +517,7 @@ void test_workspace_save_slug_collisions() {
                     saw_a_b_0_0 = 1;
             }
 
-            char path[256];
+            char path[512];
             snprintf(path, sizeof(path), "%s/%s", made_dir, ent->d_name);
             unlink(path);
         }
@@ -602,7 +604,7 @@ void test_workspace_save_max_slug_collisions() {
                     saw_suffix_0_0 = 1;
             }
 
-            char path[256];
+            char path[512];
             snprintf(path, sizeof(path), "%s/%s", made_dir, ent->d_name);
             unlink(path);
         }
@@ -687,7 +689,7 @@ void test_scene_load_clears_func_aliases_and_saved_workspace_stays_clean() {
         while ((ent = readdir(d)) != NULL) {
             if (ent->d_name[0] == '.')
                 continue;
-            char path[256];
+            char path[512];
             snprintf(path, sizeof(path), "%s/%s", input_dir, ent->d_name);
             unlink(path);
         }
@@ -699,7 +701,7 @@ void test_scene_load_clears_func_aliases_and_saved_workspace_stays_clean() {
         while ((ent = readdir(d)) != NULL) {
             if (ent->d_name[0] == '.')
                 continue;
-            char path[256];
+            char path[512];
             snprintf(path, sizeof(path), "%s/%s", output_dir, ent->d_name);
             unlink(path);
         }
@@ -795,7 +797,7 @@ void test_user_scene_promote_lru_evict() {
             size_t len = strlen(n);
             if (len > 2 && strcmp(n + len - 2, ".c") == 0) {
                 file_count++;
-                char path[256];
+                char path[512];
                 snprintf(path, sizeof(path), "%s/%s", dir, n);
                 FILE *f = fopen(path, "r");
                 if (f) {
@@ -875,7 +877,7 @@ void test_user_scene_load_scratch_alloc_lifecycle(void) {
         struct dirent *ent;
         while ((ent = readdir(d)) != NULL) {
             if (ent->d_name[0] == '.') continue;
-            char path[256];
+            char path[512];
             snprintf(path, sizeof(path), "%s/%s", dir, ent->d_name);
             unlink(path);
         }

@@ -762,10 +762,10 @@ ReplCompileResult editor_compile_for_loop(const char *input,
     }
     GLCmd body_cmd = body_pl.cmd;
 
-    char body_text[MAX_LINE_LEN];
+    /* *2 allows room for the loop body plus prepended indentation. */
+    char body_text[MAX_LINE_LEN * 2];
     {
-        char bind[32];
-        int bi = ind + 2;
+        char bind[64];        int bi = ind + 2;
         if (bi > (int)sizeof(bind) - 1) bi = (int)sizeof(bind) - 1;
         memset(bind, ' ', (size_t)bi);
         bind[bi] = '\0';
@@ -778,12 +778,12 @@ ReplCompileResult editor_compile_for_loop(const char *input,
     out->change.cmds[0] = fb;
     out->change.cmds[1] = body_cmd;
     out->change.cmds[2] = fe;
-    snprintf(out->change.text[0], sizeof(out->change.text[0]),
-             "%s", fb_text);
-    snprintf(out->change.text[1], sizeof(out->change.text[1]),
-             "%s", body_text);
-    snprintf(out->change.text[2], sizeof(out->change.text[2]),
-             "%s", fe_text);
+    repl_copy_string_fits(out->change.text[0], sizeof(out->change.text[0]),
+                          fb_text);
+    repl_copy_string_fits(out->change.text[1], sizeof(out->change.text[1]),
+                          body_text);
+    repl_copy_string_fits(out->change.text[2], sizeof(out->change.text[2]),
+                          fe_text);
 
     out->effects.cursor_target         = pos + 3;
     out->effects.insert_mode_target    = 0;  /* exit insert mode */

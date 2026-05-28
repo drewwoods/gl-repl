@@ -146,7 +146,6 @@ static void test_geometry_hit(void) {
 }
 
 static void test_band_h_lockstep(void) {
-    int flags = UI_TEXT_PANEL_CHROME_STATUSBAR;
     for (int H = 120; H <= 1200; H += 37) {
         int base = ui_text_panel_visible_lines_for_height(H, 22, 0);
         int with = ui_text_panel_visible_lines_for_height(H, 22,

@@ -3,7 +3,9 @@
 #include "app/glr_state.h"
 #include "app/glr_ctrl.h"
 // For linux mkdtemp
+#ifndef _DEFAULT_SOURCE
 #define _DEFAULT_SOURCE
+#endif
 
 #include "repl/core_internal.h"
 #include "repl/example_loader.h"  /* repl_load_example_lines_for_test */

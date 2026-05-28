@@ -1163,7 +1163,8 @@ static int handle_comment_toggle_key_route(unsigned char key) {
 
     if (repl_compile_toggle_comment(line, prefix, &ctx, &change,
                                     err, sizeof(err)) != REPL_COMPILE_OK) {
-        char msg[REPL_STATUS_TEXT_MAX];
+        /* *2 allows prepending "Toggle failed: " to the error message. */
+        char msg[REPL_STATUS_TEXT_MAX * 2];
         snprintf(msg, sizeof(msg), "Toggle failed: %s",
                  err[0] ? err : "not a valid command");
         repl_set_status_error(msg);
