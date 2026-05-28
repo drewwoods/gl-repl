@@ -105,6 +105,23 @@ static float val_to_slider_t(float val, float scale) {
  * animation (cf. config.h's GLR_CAMERA_TARGET_DECAY). */
 #define VAR_PANEL_LIFT_EASE 0.22f
 #define VAR_PANEL_LIFT_SNAP_PX 0.25f
+/* Layout constants for variable rows */
+#define VAR_NAME_COL_WIDTH_FRAC 3  /* name column is 1/3 of panel width */
+#define VAR_NAME_COL_PADDING 1     /* extra char width padding for name column */
+#define VAR_VALUE_FMT_WIDTH 7      /* format field width for value display */
+#define VAR_VALUE_FMT_PREC 3       /* decimal precision for value display */
+#define VAR_HANDLE_W 10            /* width of slider handle */
+#define VAR_VALUE_COL_PIXELS (VAR_VALUE_FMT_WIDTH*FONT_SMALL_W + 10) /* pixels reserved for value (empirical spacing) */
+#define VAR_TRACK_RIGHT_MARGIN 8   /* right margin before track edge */
+#define VAR_HANDLE_MIN_TRACK 4     /* minimum track width including handle */
+#define VAR_TRACK_PAD_TOP 6        /* top padding of track from row bounds */
+#define VAR_TRACK_PAD_BOTTOM 6     /* bottom padding of track from row bounds */
+#define VAR_TICK_PAD_TOP 5         /* top padding of center tick */
+#define VAR_TICK_PAD_BOTTOM 5      /* bottom padding of center tick */
+#define VAR_HANDLE_PAD_TOP 4       /* top padding of handle from row bounds */
+#define VAR_HANDLE_PAD_BOTTOM 4    /* bottom padding of handle from row bounds */
+#define MAX_VAR_NAME_PIXELS VAR_PANEL_W / VAR_NAME_COL_WIDTH_FRAC
+#define MAX_VAR_NAME_CHARS MAX_VAR_NAME_PIXELS / FONT_SMALL_W
 
 static float var_panel_replay_lift(const UiRenderSnapshot *snap) {
     return snap ? snap->variable_panel.replay_lift_px : variable_panel_view().replay_lift_px;
@@ -189,9 +206,6 @@ UiHit ui_variable_panel_hit_test(const UiRenderSnapshot *snap, int mx, int my, i
 }
 
 void ui_variable_panel_render(const UiRenderSnapshot *snap) {
-    #define MAX_VAR_NAME_WIDTH pw/3
-    #define MAX_VAR_NAME_CHARS MAX_VAR_NAME_WIDTH / FONT_SMALL_W
-
     if (!snap->variable_panel.visible) return;
 
     const UiVariableList *vars = &snap->variable_panel_vars;
@@ -210,7 +224,7 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
 
     /* Title */
     ui_clr(UI_TOK_TEXT_PRIMARY);
-    gl2d_draw_string((float)(px + 6),
+    gl2d_draw_string((float)(px + VAR_PANEL_PAD),
                 (float)(py + ph - VAR_PANEL_PAD - 4),
                 "Variables (declared)", FONT_SMALL);
 
@@ -220,18 +234,17 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
         int len = (int)strlen(vars->vars[i].name);
         if (len > max_name_len) max_name_len = len;
     }
-    int label_w  = max_name_len * FONT_SMALL_W + FONT_SMALL_W;
-    if (label_w > MAX_VAR_NAME_WIDTH) label_w = MAX_VAR_NAME_WIDTH;
-    int label_x  = px + 6;
-    int val_x    = px + 6 + label_w;
-    int track_x  = val_x + 66;
-    int track_w  = pw - (track_x - px) - 8;
-    int handle_w = 10;
-    if (track_w < handle_w + 4) track_w = handle_w + 4;
+    int label_w  = (max_name_len + VAR_NAME_COL_PADDING) * FONT_SMALL_W;
+    label_w      = MIN(label_w, MAX_VAR_NAME_PIXELS);
+    int label_x  = px + VAR_PANEL_PAD;
+    int val_x    = px + VAR_PANEL_PAD + label_w;
+    int track_x  = val_x + VAR_VALUE_COL_PIXELS;
+    int track_w  = pw - (track_x - px) - VAR_TRACK_RIGHT_MARGIN;
+    int handle_w = VAR_HANDLE_W;
+    if (track_w < handle_w + VAR_HANDLE_MIN_TRACK) track_w = handle_w + VAR_HANDLE_MIN_TRACK;
 
     /* Shared logarithmic scale: all handles normalized relative to each other. */
     float log_scale = var_panel_log_scale(vars);
-
     int inner_top = py + ph - VAR_PANEL_PAD - VAR_TITLE_H;
 
     for (int i = 0; i < var_count; i++) {
@@ -242,11 +255,8 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
 
         /* Drag highlight - amber tint for log mode, blue for linear */
         if (snap->variable_drag.active_var == i) {
-            if (snap->variable_drag.log_mode)
-                glColor4fv(k_var_drag_log_bg);
-            else
-                glColor4fv(k_var_drag_linear_bg);
-            glRectf((float)(px + 1), (float)row_y, (float)(px + 1) + (float)(pw - 2), (float)row_y + (float)VAR_ROW_H);
+            glColor4fv(snap->variable_drag.log_mode ? k_var_drag_log_bg : k_var_drag_linear_bg);
+            glRectf((float)(px + 1), (float)row_y, (float)(px + pw - 1), (float)(row_y + VAR_ROW_H));
         }
 
         /* Label */
@@ -254,20 +264,22 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
         gl2d_draw_string((float)label_x, (float)text_y, truncate_var_name(var->name, MAX_VAR_NAME_CHARS), FONT_SMALL);
 
         /* Value */
-        char valstr[16]; snprintf(valstr, sizeof(valstr), "%7.3f", (double)val);
+        char valstr[16];
+        snprintf(valstr, sizeof(valstr), "%*.*f", VAR_VALUE_FMT_WIDTH, VAR_VALUE_FMT_PREC, (double)val);
         glColor3fv(k_var_value);
         gl2d_draw_string((float)val_x, (float)text_y, valstr, FONT_SMALL);
 
         /* Slider track */
         ui_clr_a(UI_TOK_MENU_LABEL_ACTIVE_BG, 0.90f);
-        glRectf((float)track_x, (float)(row_y + 6), (float)track_x + (float)track_w, (float)(row_y + 6) + (float)(VAR_ROW_H - 12));
+        glRectf((float)track_x, (float)(row_y + VAR_TRACK_PAD_TOP),
+                (float)(track_x + track_w), (float)(row_y + VAR_ROW_H - VAR_TRACK_PAD_BOTTOM));
 
         /* Centre tick (marks zero on the log scale) */
         float cx = (float)track_x + (float)track_w * 0.5f;
         ui_clr_a(UI_TOK_DIVIDER, 0.70f);
         glBegin(GL_LINES);
-        glVertex2f(cx, (float)(row_y + 5));
-        glVertex2f(cx, (float)(row_y + VAR_ROW_H - 5));
+        glVertex2f(cx, (float)(row_y + VAR_TICK_PAD_TOP));
+        glVertex2f(cx, (float)(row_y + VAR_ROW_H - VAR_TICK_PAD_BOTTOM));
         glEnd();
 
         /* Handle - position computed via shared log-normalized scale.
@@ -275,18 +287,14 @@ void ui_variable_panel_render(const UiRenderSnapshot *snap) {
         float t  = val_to_slider_t(val, log_scale);
         float hx = (float)track_x + t * (float)(track_w - handle_w);
         if (snap->variable_drag.active_var == i) {
-            if (snap->variable_drag.log_mode)
-                glColor4fv(k_var_handle_log);     /* log mode */
-            else
-                glColor4fv(k_var_handle_linear);  /* linear mode */
+            glColor4fv(snap->variable_drag.log_mode ? k_var_handle_log : k_var_handle_linear);
         } else {
-            glColor4fv(k_var_handle_idle);        /* idle */
+            glColor4fv(k_var_handle_idle);
         }
-        glRectf(hx, (float)(row_y + 4), hx + (float)handle_w, (float)(row_y + 4) + (float)(VAR_ROW_H - 8));
+        glRectf(hx, (float)(row_y + VAR_HANDLE_PAD_TOP), hx + (float)handle_w,
+                (float)(row_y + VAR_ROW_H - VAR_HANDLE_PAD_BOTTOM));
     }
 
     glDisable(GL_BLEND);
     gl2d_end();
-
-    #undef MAX_VAR_NAME_WIDTH
 }
