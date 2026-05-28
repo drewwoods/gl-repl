@@ -709,7 +709,7 @@ R1 target from `done/push-architecture-refinement.md` (landed):
 * scene iterates the snapshot and owns the GL pass orchestration without
   calling `replay_*` or `repl_state_*`
 * accumulation-AA settings are `SceneRenderConfig` fields set by the controller
-* 2D replay HUD lives in `src/ui/app/replay_hud.c`, driven by config fields
+* 2D replay HUD lives in `src/ui/subsystems/replay_hud.c`, driven by config fields
 * `scene_*.c` files contain no `repl_state_*` or `replay_*` calls; once
   the relevant Phase 2 slice is complete, Makefile checks keep that true
 
@@ -1179,13 +1179,13 @@ Completed (Phase 1 + most of Phase 2):
   focus/guide snapshot construction, scene-local accumulation jitter, and
   app-shell shim removal (`gl_repl.c` calls `glr_ctrl_*` directly).
 - ✅ **R1** — Replay/HUD migration: controller builds `ReplayFadePlan`; scene
-  iterates it; 2D HUD lives in `src/ui/app/replay_hud.c`. Scene files contain zero
+  iterates it; 2D HUD lives in `src/ui/subsystems/replay_hud.c`. Scene files contain zero
   `replay_*` and `repl_state_*` calls.
 - ✅ **R2** — UI → REPL mutation holes closed end-to-end:
   - `src/ui/app/panels.c` is hit-test only (`check-ui-panels-no-mutators`).
   - The color picker now lives across `src/subsystems/color_picker/color_picker_state.c` (peer state +
     lifecycle + writeback through `editor_commit_apply_external_change`)
-    and `src/ui/app/color_picker.c` (pure renderer + hit-test over a
+    and `src/ui/subsystems/color_picker.c` (pure renderer + hit-test over a
     `ColorPickerView`); the picker UI carries no live state reads, no
     parser/compile/apply, no `set_status`. Locked in by
     `check-color-picker-ui-isolation`.

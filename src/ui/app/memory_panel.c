@@ -5,7 +5,7 @@
 #include "ui/core/gl_2d.h"
 #include "ui/app/layout.h"
 #include "ui/app/profile_panel.h"   /* PROFILE_PANEL_W, PROFILE_PANEL_OFF */
-#include "ui/app/variable_panel.h"  /* ui_variable_panel_rect_for_count */
+#include "ui/subsystems/variable_panel.h"  /* ui_variable_panel_rect_for_count */
 #include "ui/core/metrics.h"
 #include "ui/core/theme.h"
 #include "support/memprof.h"

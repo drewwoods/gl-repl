@@ -76,7 +76,7 @@
         "src/scene/overlays.c",
         "src/scene/guides/geometry_guides.c",
         "src/scene/guides/transform_guides.c",
-        "src/ui/app/replay_hud.c"
+        "src/ui/subsystems/replay_hud.c"
       ]
     },
     {
@@ -87,8 +87,8 @@
         "src/ui/app/panels.c",
         "src/ui/core/layout.c",
         "src/ui/app/menu_bar.c",
-        "src/ui/app/color_picker.c",
-        "src/ui/app/variable_panel.c",
+        "src/ui/subsystems/color_picker.c",
+        "src/ui/subsystems/variable_panel.c",
         "src/ui/app/autocomplete_panel.c",
         "src/ui/app/profile_panel.c",
         "src/ui/app/repl_code_panel.c",

@@ -55,7 +55,7 @@
 #include "subsystems/replay/replay_state.h"
 #include "subsystems/tutorial/tutorial.h"
 #include "subsystems/tutorial/tutorial_state.h"
-#include "ui/app/replay_hud.h"
+#include "ui/subsystems/replay_hud.h"
 #include "scene/overlays.h" /* scene_draw_vertex_label_text / _arrow primitives */
 #include "scene/palette.h" /* scene_clr / scene_clr_a scene-space colors */
 #include "scene/postprocess_filter.h" /* ScenePostFilterMode, mode_name */
@@ -76,7 +76,7 @@
 #include "ui/app/state.h"
 #include "ui/app/state_types.h" /* UI-chrome typedefs (CodePanel/Camera/Help/etc.) */
 #include "ui/core/tabbed_overlay.h"
-#include "ui/app/variable_panel.h"
+#include "ui/subsystems/variable_panel.h"
 #include "subsystems/variable_panel/variable_panel_drag.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 

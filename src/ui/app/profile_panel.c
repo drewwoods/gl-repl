@@ -6,7 +6,7 @@
 #include "ui/app/layout.h"
 #include "ui/core/metrics.h"
 #include "ui/core/theme.h"
-#include "ui/app/variable_panel.h"
+#include "ui/subsystems/variable_panel.h"
 #include "support/prof.h"
 
 #include <stdio.h>

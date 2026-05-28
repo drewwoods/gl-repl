@@ -358,8 +358,8 @@ state-machine level, not buried in the doc body.
 | `src/repl/replay_annotations.h` | Code-panel replay annotation API |
 | `src/ui/app/snapshot.h` | `UiRenderSnapshot` — frame-frozen bundle built once per frame by `glr_ctrl_build_ui_snapshot()` |
 | `src/ui/app/editor.h` | Per-frame editor-overlay snapshots (swatches, sliders, highlights) pushed by the controller |
-| `src/ui/app/replay_hud.c` | 2D replay status HUD (feature-UI under the `replay_ui_*` prefix; reads replay peer snapshot) |
-| `src/ui/app/replay_hud.h` | Replay HUD render entrypoint |
+| `src/ui/subsystems/replay_hud.c` | 2D replay status HUD (feature-UI under the `replay_ui_*` prefix; reads replay peer snapshot) |
+| `src/ui/subsystems/replay_hud.h` | Replay HUD render entrypoint |
 | `src/ui/app/profile_panel.c` | CPU profiling overlay panel (per-frame section timings) |
 | `src/ui/app/profile_panel.h` | Profile panel render entrypoint |
 | `src/ui/app/menu_bar.c` | Code-panel menu bar, dropdowns, config right-click handling, search slot |
@@ -368,14 +368,14 @@ state-machine level, not buried in the doc body.
 | `src/ui/app/scene_tabs.h` | Scene tab strip render/hit/`band_h` API |
 | `src/subsystems/color_picker/color_picker_state.c` | Floating color picker peer: state, lifecycle, slider input handlers, source-line writeback through editor commit |
 | `src/subsystems/color_picker/color_picker_state.h` | Peer API (`ColorPickerView`, `ColorPickerInputResult`, `color_picker_open/close/handle_*`, `color_picker_hsv_to_rgb`) |
-| `src/ui/app/color_picker.c` | Floating color picker renderer + hit-test (pure, takes `ColorPickerView *`) |
-| `src/ui/app/color_picker.h` | Picker UI render/hit-test API + `UI_COLOR_SWATCH_W` |
+| `src/ui/subsystems/color_picker.c` | Floating color picker renderer + hit-test (pure, takes `ColorPickerView *`) |
+| `src/ui/subsystems/color_picker.h` | Picker UI render/hit-test API + `UI_COLOR_SWATCH_W` |
 | `src/ui/core/tabbed_overlay.c` | Generic modal tabbed text overlay renderer (the F1 help overlay's UI shell) |
 | `src/ui/core/tabbed_overlay.h` | Tabbed-overlay render API (`UiOverlayState`, `UiOverlayContent`) |
 | `src/repl/help_text.c` | Builds neutral F1 help text tables (commands, key bindings); `glr_ctrl` adapts them to `UiOverlayContent` |
 | `src/repl/help_text.h` | Help-content public API |
-| `src/ui/app/variable_panel.c` | Floating variable slider panel rendering, geometry, and hit-test |
-| `src/ui/app/variable_panel.h` | Variable panel render/rect/hit API |
+| `src/ui/subsystems/variable_panel.c` | Floating variable slider panel rendering, geometry, and hit-test |
+| `src/ui/subsystems/variable_panel.h` | Variable panel render/rect/hit API |
 | `src/ui/app/autocomplete_panel.c` | Floating autocomplete popup renderer (reads autocomplete state populated by `src/app/glr_completion.c`) |
 | `src/ui/app/autocomplete_panel.h` | Autocomplete popup render entrypoint |
 | `src/editor/inline_rename.c` | Inline scene-rename input buffer and key handling (status-bar overlay) |
@@ -539,7 +539,7 @@ is no shim layer.
    → projection → execute user geometry via `SceneExecuteProgramFn`
    callback → replay fade batches → grid/axes/backdrop/orbit-target →
    polygon-outline, vertex, normal, and guide overlays → 2D replay HUD
-   (renders via `replay_ui_hud_render` from `src/ui/app/replay_hud.c`)
+  (renders via `replay_ui_hud_render` from `src/ui/subsystems/replay_hud.c`)
 4. 2D overlays: code panel, autocomplete popup, example dropdown,
    variable slider panel, config menu, help overlay, search overlay
 
