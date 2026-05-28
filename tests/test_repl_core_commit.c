@@ -181,7 +181,7 @@ static void run_flat_control_flow_only(void) {
                 char cond_text[256];
                 if (repl_extract_paren_payload(flat_cmd_text(pc),
                                                cond_text, sizeof(cond_text))) {
-                    ExprVar *eval_vars = g_predef_vars;
+                    const ExprVar *eval_vars = g_predef_vars;
                     int eval_num_vars = g_num_predef_vars;
                     if (repl_state_flat_program_local_vars_mut()[pc].num_vars > 0) {
                         eval_vars = repl_state_flat_program_local_vars_mut()[pc].vars;

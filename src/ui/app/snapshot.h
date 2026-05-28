@@ -58,6 +58,9 @@ enum { UI_SCENE_TAB_CAP = 9 };         /* == MAX_USER_SCENES + 1 */
 enum { UI_RESHAPE_PROJ_LINES = 4 };    /* == REPL_EXPORT_PROJ_LINES */
 enum { UI_RESHAPE_PROJ_LINE_MAX = 96 };/* == REPL_EXPORT_PROJ_LINE_MAX */
 
+enum { UI_LIGHTS_DISPLAY_MAX = 8 };
+enum { UI_INIT_SECTION_MAX = 32 };
+
 typedef enum { UI_SCENE_TAB_USER = 0, UI_SCENE_TAB_EXAMPLE } UiSceneTabKind;
 typedef struct {
     char           name[UI_SCENE_TAB_NAME_MAX];
@@ -190,11 +193,9 @@ typedef struct UiRenderSnapshot {
         float fade_duration;
     }                           tutorial_fade;
 
-    enum { UI_LIGHTS_DISPLAY_MAX = 8 };
     char                        lights_display_lines[UI_LIGHTS_DISPLAY_MAX][MAX_LINE_LEN];
     int                         lights_display_count;
 
-    enum { UI_INIT_SECTION_MAX = 32 };
     char                        init_section_lines[UI_INIT_SECTION_MAX][MAX_LINE_LEN];
     int                         init_section_count;
 

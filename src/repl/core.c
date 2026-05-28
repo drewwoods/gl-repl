@@ -529,7 +529,9 @@ void repl_reformat_program(void) {
 
         GLCmd orig = document_cmds[cmd_idx];
         GLCmd fmt = orig;
-        char fmt_text[MAX_LINE_LEN] = "";
+        /* *3 allows room for indentation, the canonicalized command text,
+         * and trailing comments without snprintf truncation warnings. */
+        char fmt_text[MAX_LINE_LEN * 3] = "";
 
         /* Canonical text for this command lives in the editor buffer. */
         const char *orig_text = source_text_line(text, cmd_idx);
