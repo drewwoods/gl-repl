@@ -41,27 +41,17 @@ static void repl_state_apply_sentinels(ReplRuntimeState *s) {
     s->variables.time_var_idx  = -1;
     s->variables.time_playing  = 1;
 
-    /* --- render: default lights --- */
-    s->render.lights[0] = (SceneLight){ GL_LIGHT0, 1,
-        { 2.0f, 4.0f, 5.0f, 0.0f },
-        { 0.80f, 0.80f, 0.75f, 1.0f },
-        { 0.10f, 0.10f, 0.12f, 1.0f },
-        { 1.0f, 1.0f, 0.95f, 1.0f } };
-    s->render.lights[1] = (SceneLight){ GL_LIGHT1, 1,
-        { -3.0f, 2.0f, -2.0f, 1.0f },
-        { 0.45f, 0.30f, 0.15f, 1.0f },
-        { 0.05f, 0.03f, 0.02f, 1.0f },
-        { 0.30f, 0.20f, 0.10f, 1.0f } };
-    s->render.lights[2] = (SceneLight){ GL_LIGHT2, 1,
-        { 0.0f, -1.0f, 3.0f, 1.0f },
-        { 0.15f, 0.25f, 0.50f, 1.0f },
-        { 0.02f, 0.03f, 0.06f, 1.0f },
-        { 0.10f, 0.15f, 0.35f, 1.0f } };
-    s->render.lights[3] = (SceneLight){ GL_LIGHT3, 0,
-        { 1.0f, 1.0f, -4.0f, 0.0f },
-        { 0.35f, 0.35f, 0.40f, 1.0f },
-        { 0.05f, 0.05f, 0.06f, 1.0f },
-        { 0.20f, 0.20f, 0.25f, 1.0f } };
+    /* --- render: lights ---
+     * The REPL pipeline owns only what the executor mutates: the
+     * `enabled` flag is set/cleared in response to glEnable(GL_LIGHTn)
+     * / glDisable(GL_LIGHTn). Positions, colors, and the active
+     * lighting theme are *presentation* concerns wired in by the
+     * controller (scene_lights_apply_theme), so we only seed the
+     * minimum the executor needs: a stable GL_LIGHTn id per slot so
+     * apply / dispatch can index lights[] by glEnable's argument. */
+    for (int i = 0; i < MAX_LIGHTS; i++)
+        s->render.lights[i].id = GL_LIGHT0 + i;
+
     s->render.clear_color[0] = 0.10f;
     s->render.clear_color[1] = 0.10f;
     s->render.clear_color[2] = 0.10f;
@@ -123,27 +113,13 @@ static void repl_state_ensure_sentinels(void) {
 #define g_current_block_begin       (g_repl_state.flat_program.current_block_begin_idx)
 #define g_current_block_end         (g_repl_state.flat_program.current_block_end_idx)
 #define g_current_block_line        (g_repl_state.flat_program.current_block_source_line_idx)
-/* g_input / g_cursor_pos / g_newline_buf / g_newline_len / g_inserting
- * macros removed (Phase 1 commit 5). The editor_input slice now lives
- * on g_editor_state.input in editor_state.c, where the dependent
- * convenience getters (editor_input_text, _cursor_pos,
- * _insert_mode, _pending_newline_*, etc.) are also implemented. */
-/* g_clipboard / g_clipboard_count / g_sel_anchor / g_sel_end macros
- * removed (Phase 1 commit 6). The selection + clipboard slices live
- * on g_editor_state.{selection,clipboard} in editor_state.c. */
+/* g_input and related macros removed (Phase 1 commit 5). */
+/* g_clipboard and related macros removed (Phase 1 commit 6). */
 #define g_anim_time                 (g_repl_state.variables.anim_time)
 #define g_t_playing                 (g_repl_state.variables.time_playing)
 #define g_t_var_idx                 (g_repl_state.variables.time_var_idx)
-/* g_panel_frac / g_resizing_panel / g_cursor_on / g_blink_tick /
- * g_cursor_px / g_cursor_py macros removed (Phase A commit 12); the
- * code_panel render-chrome slice lives on g_ui_state.code_panel in
- * ui_state.c. The scroll fields moved earlier (Phase 1 commit 11)
- * onto g_editor_state.scroll in editor_state.c.
- * g_show_help / g_help_tab / g_help_scroll / g_show_var_panel macros
- * removed (Phase 1 commit 8); the help and variable_panel slices live
- * on g_ui_state.{help,variable_panel} in ui_state.c. */
-/* g_drag_* macros removed (Phase 1 commit 9); variable_drag lives on
- * g_editor_state.variable_drag in editor_state.c. */
+/* code_panel, scroll, help, variable_panel macros removed. */
+/* g_drag_* macros removed (Phase 1 commit 9). */
 /* g_show_profile_panel macro removed (Phase 1 commit 8); profile_panel
  * lives on g_ui_state.profile_panel in ui_state.c. */
 /* g_cam_* macros removed (Phase A commit 13); the camera slice lives

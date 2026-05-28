@@ -43,6 +43,7 @@
 #include "editor/inline_rename.h"
 #include "editor/undo.h"
 #include "scene/themes.h"
+#include "scene/lights.h"           /* scene_lights_apply_theme, scene_light_theme_names */
 
 static const char *replay_mode_names[] = { "Polygon", "Vertex" };
 static const char *backdrop_mode_names[SCENE_BACKDROP_COUNT] = {
@@ -166,6 +167,7 @@ const GlrConfigItem g_cfg_items[] = {
     CFG_ITEM("Xform guides",      GLUT_KEY_F8, 1, 0, GLR_CONFIG_XFORM_GUIDE_MODE,
              SCENE_XFORM_GUIDE_COUNT, xform_guide_mode_names, 0),
     CFG_ITEM("Light indicators",  GLUT_KEY_F10, 1, 0, GLR_CONFIG_LIGHT_INDICATORS, 2, NULL,       0),
+    CFG_ITEM("Light theme",       0, 0, 0, GLR_CONFIG_LIGHT_THEME, LIGHT_THEME_COUNT, scene_light_theme_names, 0),
     CFG_ITEM("Backdrop",          0, 0, 0, GLR_CONFIG_BACKDROP,
              SCENE_BACKDROP_COUNT, backdrop_mode_names, 0),
     CFG_ITEM("Auto-normals",      GLUT_KEY_F9, 1, 0, GLR_CONFIG_AUTO_NORMALS, 2, NULL,             0),
@@ -584,6 +586,17 @@ void glr_cfg_cycle_row(int row, int delta) {
         repl_set_status(glr_config_get(GLR_CONFIG_POINT_ATTENUATION) ? "Point attenuation: ON"
                                                                   : "Point attenuation: OFF");
 
+    } else if (item->key == GLR_CONFIG_LIGHT_THEME) {
+        /* scene_lights_apply_theme + eye-space init already ran inside
+         * glr_config_set above (so @cfg-driven theme loads get the
+         * same treatment). The cycle handler just needs to re-apply
+         * the init bootstrap so the exporter / code-panel light lines
+         * pick up the new positions and colors. */
+        repl_apply_init_bootstrap();
+        snprintf(cfg_status_buf, sizeof(cfg_status_buf), "%s: %s",
+                 glr_config_item_display_label(item),
+                 glr_config_state_name(item->key, new_value));
+        repl_set_status(cfg_status_buf);
     } else if (item->state_names) {
         snprintf(cfg_status_buf, sizeof(cfg_status_buf), "%s: %s",
                  glr_config_item_display_label(item),

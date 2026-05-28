@@ -64,6 +64,25 @@ typedef enum {
     SCENE_BACKDROP_COUNT
 } SceneBackdropMode;
 
+/* Lighting environment preset. DEFAULT is the classic three-coloured-key
+ * + disabled rim layout. HEADLIGHT places light 0 in eye space (at the
+ * camera, set with an identity modelview) so the scene self-illuminates
+ * as the camera moves. SOLAR puts light 0 at the world origin so user
+ * geometry orbits a single central source — useful for solar-system /
+ * planet renders. Lights 1..3 fall back to disabled fills in HEADLIGHT
+ * and SOLAR; the program can still glEnable them. */
+#define LIGHT_THEME_LIST(X) \
+    X(DEFAULT)              \
+    X(HEADLIGHT)            \
+    X(SOLAR)
+
+typedef enum {
+#define LIGHT_THEME_ENUM_ENTRY(name) LIGHT_THEME_##name,
+    LIGHT_THEME_LIST(LIGHT_THEME_ENUM_ENTRY)
+#undef LIGHT_THEME_ENUM_ENTRY
+    LIGHT_THEME_COUNT
+} SceneLightTheme;
+
 /* Grid major-tick spacing index. The actual float values live in a table
  * the controller passes through SceneRenderConfig.grid_major_steps. */
 typedef enum {

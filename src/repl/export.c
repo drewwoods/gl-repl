@@ -33,6 +33,16 @@ static const char k_cfg_slug_msaa[] = "msaa";
 static const char k_cfg_slug_line_smooth[] = "line_smooth";
 static const char k_cfg_slug_vertex_outlines[] = "vertex_outlines";
 static const char k_cfg_slug_vertex_points[] = "vertex_points";
+/* True when the slot's POSITION line must be emitted from init() (at
+ * identity modelview) rather than from display() after the camera
+ * transforms. The flag is set by the scene module's theme presets and
+ * mirrored onto SceneLight; the exporter just reads it, which keeps
+ * this TU clean of scene includes (check-controller-boundaries
+ * forbids them in src/repl/). */
+static int export_slot_pos_is_eye_space(int slot) {
+    ReplRenderState render = repl_state_render();
+    return render.lights[slot].pos_is_eye_space;
+}
 
 /* `@declare` marker name emitted by write_canonical_cmd_as_c for each
  * CMD_VAR_DECLARE row. The reader half lives in src/repl/import.c and
@@ -757,8 +767,10 @@ static const char *const k_light_names[MAX_LIGHTS] = {
  * Pure text — the editor renders them as dimmed init/header lines and
  * the export writes them verbatim as C comments. */
 static const char *const k_lights_init_header[] = {
-    "  // Per-light colors. Light POSITION is set in display() after the camera",
-    "  // transforms (glLightfv(GL_POSITION) snapshots the active modelview).",
+    "  // Per-light colors. World-space POSITION is set in display() after the",
+    "  // camera transforms (glLightfv(GL_POSITION) snapshots the active",
+    "  // modelview); eye-space slots (headlight theme) push POSITION here at",
+    "  // identity, before main() drives the first display callback.",
 };
 #define LIGHTS_INIT_HEADER_LINES \
     ((int)(sizeof(k_lights_init_header) / sizeof(k_lights_init_header[0])))
@@ -769,8 +781,56 @@ static const char *const k_lights_display_header[] = {
 #define LIGHTS_DISPLAY_HEADER_LINES \
     ((int)(sizeof(k_lights_display_header) / sizeof(k_lights_display_header[0])))
 
+/* Lines slot `slot` contributes to the init section: 4 base lines plus
+ * an extra POSITION line for eye-space slots (HEADLIGHT slot 0). */
+static int lights_init_slot_line_count(int slot) {
+    return LIGHT_INIT_LINES_PER_LIGHT
+        + (export_slot_pos_is_eye_space(slot) ? 1 : 0);
+}
+
+/* Emit slot `slot`'s `sub` line into buf. The first 4 sub-indices are
+ * always DIFFUSE / AMBIENT / SPECULAR / glDisable; the optional 5th
+ * (only when export_slot_pos_is_eye_space(slot)) is the eye-space
+ * POSITION push. */
+static void lights_init_emit_slot_line(int slot, int sub, char *buf, size_t n) {
+    ReplRenderState render = repl_state_render();
+    const SceneLight *l = &render.lights[slot];
+    const char *ln = k_light_names[slot];
+    switch (sub) {
+    case 0:
+        snprintf(buf, n,
+                 "  glLightfv(%s, GL_DIFFUSE,  (GLfloat[]){%.9g, %.9g, %.9g, %.9g});",
+                 ln, l->diffuse[0], l->diffuse[1], l->diffuse[2], l->diffuse[3]);
+        return;
+    case 1:
+        snprintf(buf, n,
+                 "  glLightfv(%s, GL_AMBIENT,  (GLfloat[]){%.9g, %.9g, %.9g, %.9g});",
+                 ln, l->ambient[0], l->ambient[1], l->ambient[2], l->ambient[3]);
+        return;
+    case 2:
+        snprintf(buf, n,
+                 "  glLightfv(%s, GL_SPECULAR, (GLfloat[]){%.9g, %.9g, %.9g, %.9g});",
+                 ln, l->specular[0], l->specular[1], l->specular[2], l->specular[3]);
+        return;
+    case 3:
+        snprintf(buf, n, "  glDisable(%s);", ln);
+        return;
+    case 4:
+        /* Eye-space POSITION push. The modelview is still identity at
+         * this point in init() so glLightfv snapshots eye coordinates;
+         * the slot will then track the camera as the user orbits. */
+        snprintf(buf, n,
+                 "  glLightfv(%s, GL_POSITION, (GLfloat[]){%.9g, %.9g, %.9g, %.9g});",
+                 ln, l->pos[0], l->pos[1], l->pos[2], l->pos[3]);
+        return;
+    }
+}
+
 int repl_export_lights_init_line_count(void) {
-    return LIGHTS_INIT_HEADER_LINES + MAX_LIGHTS * LIGHT_INIT_LINES_PER_LIGHT;
+    int n = LIGHTS_INIT_HEADER_LINES;
+    for (int s = 0; s < MAX_LIGHTS; s++)
+        n += lights_init_slot_line_count(s);
+    return n;
 }
 
 void repl_export_lights_init_line(int i, char *buf, size_t n) {
@@ -784,35 +844,28 @@ void repl_export_lights_init_line(int i, char *buf, size_t n) {
         return;
     }
     i -= LIGHTS_INIT_HEADER_LINES;
-    int light_idx = i / LIGHT_INIT_LINES_PER_LIGHT;
-    int sub_idx   = i % LIGHT_INIT_LINES_PER_LIGHT;
-    ReplRenderState render = repl_state_render();
-    const SceneLight *l = &render.lights[light_idx];
-    const char *ln = k_light_names[light_idx];
-    switch (sub_idx) {
-    case 0:
-        snprintf(buf, n,
-                 "  glLightfv(%s, GL_DIFFUSE,  (GLfloat[]){%.9g, %.9g, %.9g, %.9g});",
-                 ln, l->diffuse[0], l->diffuse[1], l->diffuse[2], l->diffuse[3]);
-        break;
-    case 1:
-        snprintf(buf, n,
-                 "  glLightfv(%s, GL_AMBIENT,  (GLfloat[]){%.9g, %.9g, %.9g, %.9g});",
-                 ln, l->ambient[0], l->ambient[1], l->ambient[2], l->ambient[3]);
-        break;
-    case 2:
-        snprintf(buf, n,
-                 "  glLightfv(%s, GL_SPECULAR, (GLfloat[]){%.9g, %.9g, %.9g, %.9g});",
-                 ln, l->specular[0], l->specular[1], l->specular[2], l->specular[3]);
-        break;
-    case 3:
-        snprintf(buf, n, "  glDisable(%s);", ln);
-        break;
+    for (int slot = 0; slot < MAX_LIGHTS; slot++) {
+        int slot_lines = lights_init_slot_line_count(slot);
+        if (i < slot_lines) {
+            lights_init_emit_slot_line(slot, i, buf, n);
+            return;
+        }
+        i -= slot_lines;
     }
+    buf[0] = '\0';  /* unreachable: index bounds already enforced */
+}
+
+/* True if slot `slot`'s POSITION line should appear in the display
+ * section. Eye-space slots emit POSITION from init() instead. */
+static int lights_display_slot_visible(int slot) {
+    return !export_slot_pos_is_eye_space(slot);
 }
 
 int repl_export_lights_display_line_count(void) {
-    return LIGHTS_DISPLAY_HEADER_LINES + MAX_LIGHTS;
+    int n = LIGHTS_DISPLAY_HEADER_LINES;
+    for (int s = 0; s < MAX_LIGHTS; s++)
+        if (lights_display_slot_visible(s)) n++;
+    return n;
 }
 
 void repl_export_lights_display_line(int i, char *buf, size_t n) {
@@ -827,11 +880,19 @@ void repl_export_lights_display_line(int i, char *buf, size_t n) {
     }
     i -= LIGHTS_DISPLAY_HEADER_LINES;
     ReplRenderState render = repl_state_render();
-    const SceneLight *l = &render.lights[i];
-    const char *ln = k_light_names[i];
-    snprintf(buf, n,
-             "  glLightfv(%s, GL_POSITION, (GLfloat[]){%.9g, %.9g, %.9g, %.9g});",
-             ln, l->pos[0], l->pos[1], l->pos[2], l->pos[3]);
+    for (int slot = 0; slot < MAX_LIGHTS; slot++) {
+        if (!lights_display_slot_visible(slot)) continue;
+        if (i == 0) {
+            const SceneLight *l = &render.lights[slot];
+            const char *ln = k_light_names[slot];
+            snprintf(buf, n,
+                     "  glLightfv(%s, GL_POSITION, (GLfloat[]){%.9g, %.9g, %.9g, %.9g});",
+                     ln, l->pos[0], l->pos[1], l->pos[2], l->pos[3]);
+            return;
+        }
+        i--;
+    }
+    buf[0] = '\0';  /* unreachable */
 }
 
 static void write_for_begin_as_c(FILE *f, const GLCmd *cmd,

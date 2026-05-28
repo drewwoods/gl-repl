@@ -31,6 +31,7 @@
 #include "editor/state.h"
 #include "editor/undo.h"
 #include "scene/guides/geometry_guides.h" /* scene_geometry_guides_render_for_cursor */
+#include "scene/lights.h"                 /* scene_lights_apply_theme */
 #include "app/glr_actions.h"
 #include "app/glr_config.h"
 #include "app/glr_camera.h"
@@ -1685,6 +1686,14 @@ void glr_ctrl_reset_all(void) {
     /* Reset presentation, rendering, and camera defaults. */
     glr_state_presentation_reset_defaults();
     glr_state_render_reset_defaults();
+    /* Seed the REPL-state light slots with the active theme's
+     * positions / colors. The scene module owns the theme presets;
+     * the controller wires them into ReplRenderState so the executor
+     * (enabled flags) and the exporter (positions / colors) see a
+     * coherent set of lights. State.c only initialises .id; without
+     * this call positions / colors stay zero. */
+    scene_lights_apply_theme(repl_state_render_mut()->lights,
+                             glr_state_presentation().light_theme);
     glr_camera_reset_default();
     g_projection_mix = 1.0f;
     g_view_mode_target_ortho = 0;

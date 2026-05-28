@@ -9,6 +9,7 @@
 #include "gl_includes.h"  /* glColor4f, glutBitmapCharacter (avoid transitive deps) */
 #include <math.h>
 #include <stdio.h>
+#include <string.h>       /* memcpy for theme apply */
 
 static void scene_lights_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -26,17 +27,151 @@ void scene_lights_init_global_ambient(void) {
     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lm_amb);
 }
 
+/* --- Lighting themes ---------------------------------------------------
+ *
+ * Each theme defines the position + color of the four lights. Tones
+ * are intentionally varied so the indicator overlay and the lit
+ * preview both communicate which theme is active at a glance.
+ *
+ * `.enabled` stays 0 across all themes: the program's glEnable
+ * commands decide which slots light up. The bootstrap section in
+ * src/repl/export.c emits one glDisable per slot, and the user (or an
+ * example's @cfg) re-enables the slots they need.
+ *
+ * `.pos_is_eye_space` is 1 for slots whose POSITION must be set at
+ * identity modelview (currently only HEADLIGHT slot 0); the runtime
+ * pushes those positions in scene_render_init_gl, and the exporter
+ * routes their POSITION line to init() instead of display(). */
+static const SceneLight g_light_themes[LIGHT_THEME_COUNT][MAX_LIGHTS] = {
+    /* DEFAULT: warm key + cool fill + orange rim + disabled directional.
+     * Matches the historical 4-light layout. */
+    [LIGHT_THEME_DEFAULT] = {
+        { GL_LIGHT0, 0, 0,
+            {  2.0f,  4.0f,  5.0f, 0.0f },
+            { 0.80f, 0.80f, 0.75f, 1.0f },
+            { 0.10f, 0.10f, 0.12f, 1.0f },
+            { 1.00f, 1.00f, 0.95f, 1.0f } },
+        { GL_LIGHT1, 0, 0,
+            { -3.0f,  2.0f, -2.0f, 1.0f },
+            { 0.45f, 0.30f, 0.15f, 1.0f },
+            { 0.05f, 0.03f, 0.02f, 1.0f },
+            { 0.30f, 0.20f, 0.10f, 1.0f } },
+        { GL_LIGHT2, 0, 0,
+            {  0.0f, -1.0f,  3.0f, 1.0f },
+            { 0.15f, 0.25f, 0.50f, 1.0f },
+            { 0.02f, 0.03f, 0.06f, 1.0f },
+            { 0.10f, 0.15f, 0.35f, 1.0f } },
+        { GL_LIGHT3, 0, 0,
+            {  1.0f,  1.0f, -4.0f, 0.0f },
+            { 0.35f, 0.35f, 0.40f, 1.0f },
+            { 0.05f, 0.05f, 0.06f, 1.0f },
+            { 0.20f, 0.20f, 0.25f, 1.0f } },
+    },
+    /* HEADLIGHT: light 0 rides eye space (pos_is_eye_space=1, set at
+     * identity modelview); the rest are disabled fills the user can
+     * opt into. */
+    [LIGHT_THEME_HEADLIGHT] = {
+        { GL_LIGHT0, 0, 1,
+            {  0.0f,  0.0f,  0.0f, 1.0f },
+            { 0.90f, 0.90f, 0.85f, 1.0f },
+            { 0.10f, 0.10f, 0.10f, 1.0f },
+            { 0.70f, 0.70f, 0.65f, 1.0f } },
+        { GL_LIGHT1, 0, 0,
+            { -3.0f,  2.0f, -2.0f, 1.0f },
+            { 0.30f, 0.30f, 0.30f, 1.0f },
+            { 0.02f, 0.02f, 0.02f, 1.0f },
+            { 0.10f, 0.10f, 0.10f, 1.0f } },
+        { GL_LIGHT2, 0, 0,
+            {  3.0f, -1.0f, -2.0f, 1.0f },
+            { 0.30f, 0.30f, 0.30f, 1.0f },
+            { 0.02f, 0.02f, 0.02f, 1.0f },
+            { 0.10f, 0.10f, 0.10f, 1.0f } },
+        { GL_LIGHT3, 0, 0,
+            {  0.0f,  1.0f,  0.0f, 0.0f },
+            { 0.25f, 0.25f, 0.30f, 1.0f },
+            { 0.02f, 0.02f, 0.02f, 1.0f },
+            { 0.10f, 0.10f, 0.12f, 1.0f } },
+    },
+    /* SOLAR: light 0 at the world origin (positional, no attenuation
+     * tweaks here so user code orbits a central sun). Lights 1..3 are
+     * dim background fill the user can opt into for ambient rim. */
+    [LIGHT_THEME_SOLAR] = {
+        { GL_LIGHT0, 0, 0,
+            {  0.0f,  0.0f,  0.0f, 1.0f },
+            { 1.00f, 0.95f, 0.80f, 1.0f },
+            { 0.30f, 0.28f, 0.20f, 1.0f },
+            { 1.00f, 1.00f, 0.90f, 1.0f } },
+        { GL_LIGHT1, 0, 0,
+            {  5.0f,  0.0f,  0.0f, 0.0f },
+            { 0.10f, 0.10f, 0.15f, 1.0f },
+            { 0.01f, 0.01f, 0.02f, 1.0f },
+            { 0.05f, 0.05f, 0.08f, 1.0f } },
+        { GL_LIGHT2, 0, 0,
+            { -5.0f,  0.0f,  0.0f, 0.0f },
+            { 0.10f, 0.10f, 0.15f, 1.0f },
+            { 0.01f, 0.01f, 0.02f, 1.0f },
+            { 0.05f, 0.05f, 0.08f, 1.0f } },
+        { GL_LIGHT3, 0, 0,
+            {  0.0f,  5.0f,  0.0f, 0.0f },
+            { 0.15f, 0.15f, 0.20f, 1.0f },
+            { 0.01f, 0.01f, 0.02f, 1.0f },
+            { 0.08f, 0.08f, 0.10f, 1.0f } },
+    },
+};
+
+const char *scene_light_theme_names[] = {
+    [LIGHT_THEME_DEFAULT]   = "Default",
+    [LIGHT_THEME_HEADLIGHT] = "Headlight",
+    [LIGHT_THEME_SOLAR]     = "Solar",
+};
+
+void scene_lights_apply_theme(SceneLight out[MAX_LIGHTS], int theme) {
+    if (theme < 0 || theme >= LIGHT_THEME_COUNT)
+        theme = LIGHT_THEME_DEFAULT;
+    memcpy(out, g_light_themes[theme], sizeof(g_light_themes[theme]));
+}
+
+
 /* Set light properties only. User REPL commands still decide whether each
  * light is enabled during command execution. */
 void scene_lights_setup(const SceneFrameRenderContext *frame_ctx) {
     for (int i = 0; i < MAX_LIGHTS; i++) {
         const SceneLight *light = &frame_ctx->config.lights[i];
         glDisable(light->id);
-        glLightfv(light->id, GL_POSITION, light->pos);
+        if (light->pos_is_eye_space) {
+            /* glLightfv(POSITION) snapshots the current modelview at
+             * call time. Eye-space slots want eye coordinates, so push
+             * + identity around the write — that's cheaper than the
+             * alternative (a separate init-time push coordinated with
+             * the cfg cycle handler and the load path) and self-heals
+             * if the caller hadn't pre-positioned the matrix stack. */
+            glMatrixMode(GL_MODELVIEW);
+            glPushMatrix();
+            glLoadIdentity();
+            glLightfv(light->id, GL_POSITION, light->pos);
+            glPopMatrix();
+        } else {
+            glLightfv(light->id, GL_POSITION, light->pos);
+        }
         glLightfv(light->id, GL_DIFFUSE,  light->diffuse);
         glLightfv(light->id, GL_AMBIENT,  light->ambient);
         glLightfv(light->id, GL_SPECULAR, light->specular);
     }
+}
+
+/* Camera origin in world coordinates, derived from the camera fields
+ * SceneRenderConfig carries. Lets scene_lights_render draw indicators
+ * for eye-space slots at the actual camera position instead of (0,0,0).
+ * Matches the forward modelview chain in glr_camera_load_modelview:
+ *   T(0,0,-cam_dist) * Rx(cam_rx) * Ry(cam_ry) * T(-cam_tx,-cam_ty,-cam_tz). */
+static void scene_lights_camera_world_pos(const SceneRenderConfig *cfg,
+                                          float *out_x, float *out_y, float *out_z) {
+    const float deg = 3.14159265358979323846f / 180.0f;
+    float cx = cosf(cfg->cam_rx * deg), sx = sinf(cfg->cam_rx * deg);
+    float cy = cosf(cfg->cam_ry * deg), sy = sinf(cfg->cam_ry * deg);
+    *out_x = cfg->cam_tx - cfg->cam_dist * cx * sy;
+    *out_y = cfg->cam_ty + cfg->cam_dist * sx;
+    *out_z = cfg->cam_tz + cfg->cam_dist * cx * cy;
 }
 
 void scene_lights_render(const SceneFrameRenderContext *frame_ctx) {
@@ -50,15 +185,26 @@ void scene_lights_render(const SceneFrameRenderContext *frame_ctx) {
 
     float breath = sinf(frame_ctx->config.anim_time * 1.2f) * 0.5f + 0.5f;
 
+    float cam_wx = 0.0f, cam_wy = 0.0f, cam_wz = 0.0f;
+    scene_lights_camera_world_pos(&frame_ctx->config, &cam_wx, &cam_wy, &cam_wz);
+
     for (int i = 0; i < MAX_LIGHTS; i++) {
         const SceneLight *light = &frame_ctx->config.lights[i];
         const float *d = light->diffuse;
         const float *p = light->pos;
-        int is_dir = (p[3] == 0.0f);
+        int eye_space = light->pos_is_eye_space;
+        int is_dir = !eye_space && (p[3] == 0.0f);
         int on = light->enabled;
 
         float lx, ly, lz;
-        if (is_dir) {
+        if (eye_space) {
+            /* pos[] is in eye space; the slot rides the camera, so the
+             * world location for the indicator is just the camera's
+             * world position plus any eye-space offset baked into pos. */
+            lx = cam_wx + p[0];
+            ly = cam_wy + p[1];
+            lz = cam_wz + p[2];
+        } else if (is_dir) {
             float len = sqrtf(p[0]*p[0] + p[1]*p[1] + p[2]*p[2]);
             if (len < 1e-6f) continue;
             lx = p[0] / len * 3.5f;
