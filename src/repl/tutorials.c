@@ -1,5 +1,6 @@
 #include "repl/tutorials.h"
 #include "repl/catalog_tags.h"
+#include "repl/eval.h"   /* repl_eval_is_reserved_ident for REQUIRE_VAR validation */
 
 #include <ctype.h>
 #include <stddef.h>
@@ -10,18 +11,18 @@
 
 #define STEP_APPEND(label, c, e) \
     { (label), (c), (e), TUTORIAL_STEP_APPEND, NULL, \
-      TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL }
+      TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL, NULL, 0.0f }
 
 #define STEP_AT(label, c, e, target) \
     { (label), (c), (e), TUTORIAL_STEP_LABEL, (target), \
-      TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL }
+      TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL, NULL, 0.0f }
 
 /* Showcase step: on entry apply cfg_slug=cfg_value so the user sees the
  * effect, show a "press Enter to continue" prompt, advance on ack key.
  * `expected` is NULL — there is no command to type. */
 #define STEP_SET(label, c, slug, val) \
     { (label), (c), NULL, TUTORIAL_STEP_APPEND, NULL, \
-      TUTORIAL_STEP_KIND_SET, (slug), (val), NULL }
+      TUTORIAL_STEP_KIND_SET, (slug), (val), NULL, NULL, 0.0f }
 
 /* Symbolic-value variant of STEP_SET. The runner passes `val_name`
  * (e.g. "GRID_THEME_RADAR") through the controller-installed bridge's
@@ -31,26 +32,34 @@
  * and writes the int back. */
 #define STEP_SET_SYM(label, c, slug, val_name) \
     { (label), (c), NULL, TUTORIAL_STEP_APPEND, NULL, \
-      TUTORIAL_STEP_KIND_SET, (slug), 0, (val_name) }
+      TUTORIAL_STEP_KIND_SET, (slug), 0, (val_name), NULL, 0.0f }
 
 /* Check step: advance when the user themselves makes cfg_slug == cfg_value
  * (via F-key/menu/etc.). Auto-advances if already satisfied on entry.
  * `expected` is NULL. */
 #define STEP_REQUIRE(label, c, slug, val) \
     { (label), (c), NULL, TUTORIAL_STEP_APPEND, NULL, \
-      TUTORIAL_STEP_KIND_REQUIRE, (slug), (val), NULL }
+      TUTORIAL_STEP_KIND_REQUIRE, (slug), (val), NULL, NULL, 0.0f }
 
 /* Symbolic-value variant of STEP_REQUIRE. The runner resolves
  * `val_name` to int via the bridge's resolve_text at compare time. */
 #define STEP_REQUIRE_SYM(label, c, slug, val_name) \
     { (label), (c), NULL, TUTORIAL_STEP_APPEND, NULL, \
-      TUTORIAL_STEP_KIND_REQUIRE, (slug), 0, (val_name) }
+      TUTORIAL_STEP_KIND_REQUIRE, (slug), 0, (val_name), NULL, 0.0f }
+
+/* Predef-var check step: advance when the named predefined variable's
+ * live value matches `target` within TUTORIAL_VAR_EPS. Either a typed
+ * `name = expr;` commit or a variable-panel slider drag satisfies it.
+ * Auto-advances if already satisfied on entry. `expected` is NULL. */
+#define STEP_REQUIRE_VAR(label, c, var, target) \
+    { (label), (c), NULL, TUTORIAL_STEP_APPEND, NULL, \
+      TUTORIAL_STEP_KIND_REQUIRE_VAR, NULL, 0, NULL, (var), (target) }
 
 /* Sentinel: comment == NULL is the only field the terminator scan reads
  * (SET/REQUIRE legitimately have NULL `expected`, so the old
  * comment&&expected check would misread the first SET as a sentinel). */
 #define STEP_SENTINEL { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL, \
-                        TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL }
+                        TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL, NULL, 0.0f }
 
 static const TutorialStep g_tutorial_first_triangle_steps[] = {
     STEP_APPEND(NULL,
@@ -191,6 +200,24 @@ static const char *const g_tutorial_feature_tour_cfg[] = {
     NULL,
 };
 
+/* "Variable Slider" — teaches the REQUIRE_VAR step kind. Two steps,
+ * each waiting on a predef variable hitting a target value. The user
+ * can satisfy each step by typing a `name = value;` assignment OR by
+ * dragging the variable-panel slider once `n` exists (both paths flow
+ * through repl_apply_predef_ops, which fires tutorial_notify_state_changed
+ * after every writeback). The first step asks the user to declare and
+ * raise `n` to 5; the second asks for 10 so the slider becomes the
+ * natural tool. No `@cfg` block — presentation defaults are fine. */
+static const TutorialStep g_tutorial_variable_slider_steps[] = {
+    STEP_REQUIRE_VAR(NULL,
+        "// Declare a variable: type `float n;` and `n = 5;` to advance.",
+        "n", 5.0f),
+    STEP_REQUIRE_VAR(NULL,
+        "// Now bring n to 10 — drag the n slider in the variable panel.",
+        "n", 10.0f),
+    STEP_SENTINEL,
+};
+
 /* REPL_TUTORIAL_TAG_ALL is a synthetic tag: every tutorial is a member.
  * It is not listed in any g_tutorials[] mask literal; instead
  * repl_tutorial_tag_mask() ORs its bit into every entry's mask, so the
@@ -251,6 +278,17 @@ static const TutorialEntry g_tutorials[] = {
         .steps      = g_tutorial_feature_tour_steps,
         .cfg        = g_tutorial_feature_tour_cfg,
         .tags       = TUTORIAL_TAG_GEOMETRY,
+        .subheading = "Beginner",
+    },
+    {
+        /* Placed before "Depth Test Triangle" (Intermediate) so the ALL
+         * flyout walks Beginner-only entries first, then transitions
+         * once to Intermediate at the tail — the subheading contiguity
+         * test (test_catalog_subheading_metadata) requires a single
+         * Beginner→Intermediate transition across the whole catalog. */
+        .name       = "Variable Slider",
+        .steps      = g_tutorial_variable_slider_steps,
+        .tags       = TUTORIAL_TAG_COLOR_TRANSFORMS,
         .subheading = "Beginner",
     },
     {
@@ -533,6 +571,32 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
                              entry->name ? entry->name : "?", i,
                              step->kind == TUTORIAL_STEP_KIND_SET
                                  ? "SET" : "REQUIRE");
+                return 0;
+            }
+        } else if (step->kind == TUTORIAL_STEP_KIND_REQUIRE_VAR) {
+            if (step->expected) {
+                if (err_size > 0)
+                    snprintf(err, (size_t)err_size,
+                             "tutorial '%s' step %d REQUIRE_VAR must leave "
+                             "expected NULL",
+                             entry->name ? entry->name : "?", i);
+                return 0;
+            }
+            if (label_is_empty(step->var_name)) {
+                if (err_size > 0)
+                    snprintf(err, (size_t)err_size,
+                             "tutorial '%s' step %d REQUIRE_VAR needs "
+                             "non-empty var_name",
+                             entry->name ? entry->name : "?", i);
+                return 0;
+            }
+            if (repl_eval_is_reserved_ident(step->var_name)) {
+                if (err_size > 0)
+                    snprintf(err, (size_t)err_size,
+                             "tutorial '%s' step %d REQUIRE_VAR var_name "
+                             "'%s' is reserved",
+                             entry->name ? entry->name : "?", i,
+                             step->var_name);
                 return 0;
             }
         } else {

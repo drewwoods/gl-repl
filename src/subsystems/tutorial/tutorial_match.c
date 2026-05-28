@@ -67,6 +67,7 @@ TutorialMatchResult tutorial_match(const char *expected, const char *got) {
 
 int tutorial_shadow_suffix(const char *input, char *out, size_t out_size) {
     const char *expected;
+    char synth_expected[REPL_PREDEF_NAME_MAX + 32];
 
     if (out && out_size > 0)
         out[0] = '\0';
@@ -76,8 +77,25 @@ int tutorial_shadow_suffix(const char *input, char *out, size_t out_size) {
         return 0;
 
     expected = tutorial_current_expected_text();
-    if (!expected)
-        return 0;
+    if (!expected) {
+        /* REQUIRE_VAR steps carry no fixed expected text — the user can
+         * satisfy them by typing `name = expr;` OR by dragging the
+         * variable-panel slider. Synthesize the canonical `name = target`
+         * here so the autocomplete shadow text passively teaches the
+         * typing path; the slider remains a parallel option the prompt
+         * (instruction comment + status hint) advertises. */
+        TutorialRuntimeState state = tutorial_state_view();
+        if (repl_tutorial_step_kind(state.tutorial_idx, state.step) !=
+            TUTORIAL_STEP_KIND_REQUIRE_VAR)
+            return 0;
+        const char *name = repl_tutorial_step_var_name(state.tutorial_idx, state.step);
+        if (!name || !name[0])
+            return 0;
+        float target = repl_tutorial_step_var_target(state.tutorial_idx, state.step);
+        snprintf(synth_expected, sizeof synth_expected, "%s = %g",
+                 name, (double)target);
+        expected = synth_expected;
+    }
 
     const char *inp_start = input ? input : "";
     const char *inp_end = inp_start + strlen(inp_start);

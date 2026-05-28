@@ -1273,6 +1273,16 @@ static int tutorial_precheck_current_input(void) {
     if (editor_state_input().input[0] == '\0')
         return 0;
 
+    /* REQUIRE_VAR steps don't pin a single expected commit line — the
+     * user is free to type any `name = expr;` (or unrelated source)
+     * anywhere they like; the step advances when the watched predef
+     * variable reaches its target value (notify hook in
+     * apply_compiled_change_full). The expected-line and pending-
+     * commit machinery below is COMMAND-only; let normal commits
+     * through here unchanged. */
+    if (tutorial_current_step_kind() == TUTORIAL_STEP_KIND_REQUIRE_VAR)
+        return 1;
+
     /* The matched commit must land on the current expected line.
      * Anywhere else risks overwriting prior progress or drifting
      * tracked-line indices. */

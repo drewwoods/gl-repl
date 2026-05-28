@@ -1181,6 +1181,190 @@ make gl-repl USE_GL_STUBS=1   # verify stub build still links if step 6 changed
 #   vanilla freeglut succeeds, and on-screen output matches the REPL
 ```
 
+## Adding A New Tutorial Step Kind
+
+Tutorial step kinds (`TutorialStepKind` in `src/repl/tutorials.h`) name the
+contract between a catalog entry and the runtime: what extra fields the
+step carries, what UI it shows, what user action advances it, and which
+guard rails apply. As of 2026-05 the shipped kinds are:
+
+| Kind          | Carrier fields              | Advance signal                            |
+|---------------|-----------------------------|-------------------------------------------|
+| `COMMAND`     | `expected`                  | User commits a line matching `expected`.  |
+| `SET`         | `cfg_slug`, `cfg_value` (`_name`) | Ack key (Enter / Tab / Space) after auto-apply. |
+| `REQUIRE`     | `cfg_slug`, `cfg_value` (`_name`) | Live cfg slug matches target (notify from `glr_config_set`). |
+| `REQUIRE_VAR` | `var_name`, `var_target`    | Live predef variable matches target (notify from `apply_compiled_change_full`). |
+
+Use this section as a checklist when adding a new kind. The
+`REQUIRE_VAR` rollout is the most recent worked example — its commits
+land in roughly the order below.
+
+### 1. Catalog layer (`src/repl/tutorials.{h,c}`)
+
+- Add the new enum value to `TutorialStepKind`.
+- Add any extra fields to `TutorialStep`. **Place new fields AFTER all
+  existing ones** so positional initializers in `STEP_APPEND` / `STEP_AT`
+  / `STEP_SET` / `STEP_REQUIRE` / `STEP_SENTINEL` keep zero-initializing
+  to the new defaults — adding fields mid-struct silently shifts other
+  fields' values.
+- Add a `STEP_<KIND>(label, comment, ...)` macro for catalog authors.
+  Keep the same layout as the sibling macros and zero-init unused
+  trailing fields explicitly so a `// CHECK(...)`-style audit confirms
+  the row's intent at a glance.
+- Extend the per-field accessor shims at the bottom of the header
+  (e.g. `repl_tutorial_step_var_name`). Each shim is one walk through
+  `repl_tutorial_step_get`; bulk readers (the menu paint path) hold the
+  step pointer directly to avoid O(N²) walks.
+- Extend `repl_tutorial_validate_entry` (in `tutorials.c`) with a kind
+  branch. Enforce the new shape rules: which carrier fields must be
+  non-empty, which existing fields must be NULL (e.g. `expected == NULL`
+  for non-COMMAND kinds), and reject reserved / structurally-bad
+  values up front. The validator runs before any state mutation in
+  `tutorial_start`, so a malformed step cannot leave a half-applied
+  transient scene.
+
+### 2. Runner (`src/subsystems/tutorial/tutorial_runner.c`)
+
+- Add a `tutorial_<kind>_matches_target(...)` predicate. For
+  cfg-shaped kinds it reads via `repl_cfg_get_int` / `_resolve_text`;
+  for variable-shaped kinds it reads via
+  `repl_eval_predef_view()` after a `repl_eval_find_predef_var_idx`
+  lookup. Apply any tolerance (e.g. `TUTORIAL_VAR_EPS` from
+  `src/subsystems/tutorial/tutorial.h`) here so the boundary policy
+  lives in one place.
+- Add `tutorial_set_status_<kind>(...)` mirroring the existing
+  `tutorial_set_status_require` / `_ack_set` helpers. Keep the prose
+  describing *both* satisfaction paths if the kind has more than one
+  (the REQUIRE_VAR message names typing AND the slider).
+- Add `tutorial_enter_step_<kind>(idx, step, instruction_line, state)`.
+  Mirror the existing helpers: set `expected_commit_line` (use `-1`
+  unless the kind pins a typing row), return `TUTORIAL_STEP_AUTOADVANCE`
+  if the target is already satisfied on entry, otherwise park the
+  cursor past the instruction comment, emit the status hint, refresh
+  autocomplete, and return `TUTORIAL_STEP_PAUSED`.
+- Add a `case` to the switch in `tutorial_enter_step`. The validator
+  is supposed to keep unknown kinds out, but the default branch still
+  calls `tutorial_teardown()` for safety.
+- Extend `tutorial_notify_state_changed`. Read the current step's
+  kind and dispatch to the matching predicate; advance via
+  `tutorial_advance_step(...)` on match. The function takes no args,
+  so the call sites that fire it (see below) don't need to know what
+  changed — only that *something* did.
+- If the new kind allows typed commits to mutate the document (like
+  REQUIRE_VAR), update `tutorial_guard_source_change` to whitelist it
+  alongside `TUTORIAL_STEP_KIND_COMMAND`; otherwise the
+  freeze-during-non-COMMAND rule will reject every keystroke.
+- If the kind has no expected-commit-line dance (REQUIRE / REQUIRE_VAR),
+  update `tutorial_advance_after_successful_commit` to bypass it for
+  that kind — the commit-side advance is COMMAND-only; the notify hook
+  is the authoritative advance for everything else. Without this
+  bypass an unrelated commit (e.g. `m = 5;` while watching `n`)
+  would skip the step.
+- If the kind needs pre-state on entry (REQUIRE_VAR pre-declares its
+  `var_name` so the variable-panel slider appears immediately and
+  typed assignments compile), add a pass over the step list at the
+  bottom of `tutorial_start` BEFORE `tutorial_advance_loop`. Walk
+  every step of the entered tutorial, filter by kind, and apply the
+  pre-state idempotently.
+
+### 3. Notify call sites
+
+The notify hook is `tutorial_notify_state_changed(void)`. New kinds
+share the function — they only add new *call sites* where the watched
+state can change. Today's sites:
+
+- **`src/app/glr_config.c::glr_config_set`** — fires for cfg-slug-shaped
+  kinds (SET / REQUIRE).
+- **`src/editor/commit.c::apply_compiled_change_full`** — fires once if
+  any predef op landed in the commit. Covers REQUIRE_VAR for typed
+  `name = expr;` assignments, declarations-with-initializer, and
+  variable-panel slider writebacks (the slider flows through
+  `editor_commit_apply_external_change` → the same chokepoint).
+
+If a new kind watches state that no existing site touches, add a
+single call to `tutorial_notify_state_changed()` at the writeback
+chokepoint for that state (mirror the apply-tail placement used by
+the predef path so a multi-op batch fires notify exactly once).
+
+### 4. Editor-side input precheck & ghost text
+
+- `src/editor/input.c::tutorial_precheck_current_input` is the
+  `;`/Enter route's gatekeeper. It assumes COMMAND semantics by
+  default (matched commit must land on `tutorial_expected_commit_line`).
+  Add a short-circuit `return 1` for the new kind early in the
+  function (after the empty-input and noncommand-reject checks) when
+  the kind allows free-form commits — without this, typed commits get
+  blocked with "Move cursor to the tutorial insertion line".
+- `tutorial_reject_noncommand_commit_with_hint` (in
+  `tutorial_runner.c`) decides whether a typed commit attempt is
+  hard-rejected with a kind-specific hint. Return 1 for kinds that
+  forbid typed commits (SET / REQUIRE) and 0 for kinds that allow
+  them (COMMAND / REQUIRE_VAR).
+- `tutorial_handle_ack_key` consumes Enter / Tab / Space only when
+  the current step is SET. Extend if a new kind also wants ack-key
+  advancement.
+- For ghost text: `tutorial_shadow_suffix` returns the untyped
+  portion of `expected`. If the new kind has no fixed `expected` but
+  still benefits from passive guidance, synthesize an expected string
+  at the top of the function (e.g. `"name = target"` for REQUIRE_VAR)
+  and let the existing strict-prefix logic produce the suffix.
+- `src/app/glr_completion.c::update_autocomplete` only computes the
+  shadow when `edit_line == tutorial_expected_commit_line()`. If the
+  new kind has no pinned commit line, add a kind-specific branch that
+  also enables the shadow path (REQUIRE_VAR sets `show_tutorial_ghost`
+  unconditionally while its step is active).
+
+### 5. Catalog content
+
+Ship at least one tutorial that exercises the new kind so the menu
+flyout, instruction-comment fade, and notify wiring are all exercised
+in production — purely synthetic test fixtures miss the menu, the
+status hint, and the autocomplete provider. Adding a tutorial means:
+
+- Pick a tag (`TUTORIAL_TAG_*`) and a subheading consistent with the
+  per-tag contiguous-runs invariant enforced by
+  `test_catalog_subheading_metadata` (see CLAUDE.md's "Tutorials Menu"
+  section). The simplest path is to place the new entry between two
+  same-subheading entries in catalog order.
+- The catalog validator `expected_is_single_command` rejects
+  `float ...;` declarations in `expected` (CMD_VAR_DECLARE is
+  relocated to the top of non-decl code by `editor_try_commit_float_decl`,
+  breaking `pending.commit_line`). If your tutorial needs the user
+  to type `float n;`, prefer pre-declaring via the runner hook
+  (step 2's pre-state pass) instead of a COMMAND step.
+
+### 6. Tests (`tests/test_tutorial_runner.c`)
+
+Add at least:
+
+- Validator acceptance + per-rule rejection (missing carrier, wrong
+  shape, reserved-name collisions). Use designated-initializer
+  `TutorialStep[]` fixtures and call `repl_tutorial_validate_entry`
+  directly — no need to enter the runner.
+- Auto-advance on already-satisfied entry (or, if the kind cannot
+  be pre-satisfied through the test fixture, an indirect proof that
+  the runner *pauses* on the next step rather than advancing through
+  it — see `test_require_var_pauses_on_next_step_after_match`).
+- Each satisfaction path the kind supports (typed commit, slider drag,
+  F-key, …). For each, drive the live entry point (`editor_handle_key`,
+  `glr_ctrl_router_*`, `glr_config_set`) rather than the runner internals
+  so the wiring at the notify chokepoint is exercised end-to-end.
+- Negative case: an unrelated change that should NOT advance.
+- For floating-point or tolerance-keyed predicates, an explicit
+  epsilon-boundary case sized to the production constant so a future
+  tune surfaces here rather than silently changing UX.
+- If you added ghost text: empty-input full-ghost case + strict-prefix
+  suffix case.
+
+### 7. CLAUDE.md
+
+Update the `## Tutorials Menu` and tutorial file-layout descriptions
+in `CLAUDE.md` to mention the new kind. The validator drift test
+already requires non-zero `.tags`, but any new step-shape invariant
+(e.g. "REQUIRE_VAR var_name must be non-reserved") needs a one-line
+mention so future catalog authors don't rediscover it from a test
+failure.
+
 ## Open Refactor Edges
 
 Completed (Phase 1 + most of Phase 2):

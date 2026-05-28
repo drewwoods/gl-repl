@@ -4,8 +4,11 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <math.h>               /* fabsf for REQUIRE_VAR epsilon check */
+
 #include "repl/core.h"
 #include "repl/cfg_baseline.h" /* For repl_cfg_get_int, repl_cfg_set_int, and repl_cfg_known */
+#include "repl/eval.h"          /* repl_eval_find_predef_var_idx + predef-vars view */
 #include "repl/load.h"
 #include "repl/scenes.h"
 #include "repl/state_notify.h" /* For repl_state_mark_flat_dirty, repl_state_mark_source_dirty, and repl_state_parse_workspace_header_line */
@@ -313,6 +316,14 @@ static void tutorial_set_status_require(const char *slug, int target) {
     repl_set_status(msg);
 }
 
+static void tutorial_set_status_require_var(const char *name, float target) {
+    char msg[TUTORIAL_STATUS_MAX];
+    snprintf(msg, sizeof msg,
+             "Set %s = %g (type %s = ...; or drag the slider) to continue",
+             name ? name : "?", (double)target, name ? name : "?");
+    repl_set_status(msg);
+}
+
 /* Resolve where the next instruction comment for tutorial `idx`
  * step `step` should be inserted. For append placement that's the
  * current document_count; for label placement it's the row of the
@@ -527,6 +538,25 @@ void tutorial_start(int idx) {
 
     tutorial_baseline_apply(idx);
 
+    /* Pre-declare every predef variable named by a REQUIRE_VAR step
+     * (value 0). Without this, the user would have to manually
+     * `float n;` before the step could be satisfied — and the
+     * variable-panel slider wouldn't appear until they did. Predef
+     * declaration is also a prerequisite for typed `n = expr;`
+     * assignments to parse. Failures (e.g. table full) are silent;
+     * the step's notify check will simply never match. */
+    int step_count_for_predecl = repl_tutorial_step_count(idx);
+    for (int s = 0; s < step_count_for_predecl; s++) {
+        if (repl_tutorial_step_kind(idx, s) != TUTORIAL_STEP_KIND_REQUIRE_VAR)
+            continue;
+        const char *name = repl_tutorial_step_var_name(idx, s);
+        if (!name || !name[0])
+            continue;
+        if (repl_eval_find_predef_var_idx(name) >= 0)
+            continue;  /* already declared (e.g. earlier REQUIRE_VAR for same var) */
+        repl_eval_declare_predef_var_with_value(name, 0.0f, NULL, 0);
+    }
+
     TutorialRuntimeState *state = tutorial_state_mut();
     state->active = 1;
     state->tutorial_idx = idx;
@@ -717,6 +747,16 @@ static int tutorial_cfg_matches_target(const char *slug, int target) {
     return repl_cfg_get_int(slug, 0) == target;
 }
 
+static int tutorial_var_matches_target(const char *name, float target) {
+    if (!name || !name[0])
+        return 0;
+    int idx = repl_eval_find_predef_var_idx(name);
+    if (idx < 0)
+        return 0;
+    return fabsf(repl_eval_predef_view().vars[idx].value - target) <=
+           TUTORIAL_VAR_EPS;
+}
+
 static TutorialStepResult tutorial_enter_step_require(int idx, int step, int instruction_line, TutorialRuntimeState *state) {
     /* Check: advance when the user themselves sets the slug to the
      * target. If already satisfied on entry, signal auto-advance to
@@ -740,6 +780,32 @@ static TutorialStepResult tutorial_enter_step_require(int idx, int step, int ins
                                    (instruction_line + 1) <
                                    repl_state_document_count());
     tutorial_set_status_require(slug, target);
+    repl_dispatch_completion_update();
+    return TUTORIAL_STEP_PAUSED;
+}
+
+static TutorialStepResult tutorial_enter_step_require_var(int idx, int step,
+                                                          int instruction_line,
+                                                          TutorialRuntimeState *state) {
+    /* Check: advance when the named predefined variable reaches the
+     * target value (typed `name = expr;` commit OR slider drag — both
+     * land through repl_apply_predef_ops, which the editor commit path
+     * notifies after). Auto-advance on entry if already satisfied.
+     *
+     * Unlike SET/REQUIRE, the document stays writable: the user must
+     * be able to type `name = 5;` and have it commit. The
+     * cursor-park sits at instruction_line+1 (the trailing virtual
+     * row) so the input overlay does not paint over the comment. */
+    const char *name   = repl_tutorial_step_var_name(idx, step);
+    float       target = repl_tutorial_step_var_target(idx, step);
+
+    state->expected_commit_line = -1;
+    if (tutorial_var_matches_target(name, target))
+        return TUTORIAL_STEP_AUTOADVANCE;
+    repl_dispatch_host_cursor_park(instruction_line + 1,
+                                   (instruction_line + 1) <
+                                   repl_state_document_count());
+    tutorial_set_status_require_var(name, target);
     repl_dispatch_completion_update();
     return TUTORIAL_STEP_PAUSED;
 }
@@ -785,6 +851,8 @@ static TutorialStepResult tutorial_enter_step(int step) {
         return tutorial_enter_step_set(idx, step, instruction_line, state);
     case TUTORIAL_STEP_KIND_REQUIRE:
         return tutorial_enter_step_require(idx, step, instruction_line, state);
+    case TUTORIAL_STEP_KIND_REQUIRE_VAR:
+        return tutorial_enter_step_require_var(idx, step, instruction_line, state);
     }
     /* Unknown kind — validator should have rejected this. */
     tutorial_teardown();
@@ -808,6 +876,15 @@ static void tutorial_advance_loop(void) {
 void tutorial_advance_after_successful_commit(void) {
     if (!tutorial_active())
         return;
+    /* REQUIRE_VAR uses the predef-writeback notify hook as its sole
+     * advance signal — a successful commit by itself does NOT mean
+     * the watched variable reached its target (e.g. the user typed
+     * `m = 5;` while the step watches `n`). The notify hook fires
+     * inside apply_compiled_change_full and advances iff the match
+     * holds; this commit-side path must stay a no-op for REQUIRE_VAR
+     * so unrelated commits cannot skip the step. */
+    if (tutorial_current_step_kind() == TUTORIAL_STEP_KIND_REQUIRE_VAR)
+        return;
     tutorial_advance_step(tutorial_state_mut());
 }
 
@@ -822,15 +899,23 @@ void tutorial_notify_state_changed(void) {
     if (!tutorial_active())
         return;
     TutorialRuntimeState state = tutorial_state_view();
-    if (repl_tutorial_step_kind(state.tutorial_idx, state.step) !=
-        TUTORIAL_STEP_KIND_REQUIRE)
+    TutorialStepKind kind = repl_tutorial_step_kind(state.tutorial_idx, state.step);
+    int matched = 0;
+    if (kind == TUTORIAL_STEP_KIND_REQUIRE) {
+        const char *slug = repl_tutorial_step_cfg_slug(state.tutorial_idx, state.step);
+        int target = repl_tutorial_step_cfg_value(state.tutorial_idx, state.step);
+        matched = tutorial_cfg_matches_target(slug, target);
+    } else if (kind == TUTORIAL_STEP_KIND_REQUIRE_VAR) {
+        const char *name = repl_tutorial_step_var_name(state.tutorial_idx, state.step);
+        float target = repl_tutorial_step_var_target(state.tutorial_idx, state.step);
+        matched = tutorial_var_matches_target(name, target);
+    } else {
         return;
-    const char *slug = repl_tutorial_step_cfg_slug(state.tutorial_idx, state.step);
-    int target = repl_tutorial_step_cfg_value(state.tutorial_idx, state.step);
-    if (!tutorial_cfg_matches_target(slug, target))
+    }
+    if (!matched)
         return;
-    /* Match: advance. Clear pending (REQUIRE has no commit attempt in
-     * flight, but be defensive). */
+    /* Match: advance. Clear pending (REQUIRE / REQUIRE_VAR have no
+     * commit attempt in flight, but be defensive). */
     tutorial_advance_step(tutorial_state_mut());
 }
 
@@ -915,11 +1000,19 @@ int tutorial_guard_source_change(int pos, int delete_count, int insert_count) {
      * and no locked-line region to anchor to past the last instruction,
      * so paste/delete/comment-toggle/etc. would otherwise slip through
      * after the last locked row. Reject every non-no-op mutation while
-     * a non-COMMAND step is active; the editor precheck pairs this with
+     * a non-writable step is active; the editor precheck pairs this with
      * a kind-aware commit hint
-     * (tutorial_reject_noncommand_commit_with_hint). */
-    if (repl_tutorial_step_kind(state.tutorial_idx, state.step) !=
-        TUTORIAL_STEP_KIND_COMMAND)
+     * (tutorial_reject_noncommand_commit_with_hint).
+     *
+     * REQUIRE_VAR is the exception — the step is satisfied either by a
+     * slider drag (no source mutation) OR by a typed `name = expr;`
+     * commit (a source mutation we must allow). The locked-line /
+     * expected_commit_line checks below still apply, so writes are
+     * permitted only past the last locked instruction comment. */
+    TutorialStepKind step_kind =
+        repl_tutorial_step_kind(state.tutorial_idx, state.step);
+    if (step_kind != TUTORIAL_STEP_KIND_COMMAND &&
+        step_kind != TUTORIAL_STEP_KIND_REQUIRE_VAR)
         return 0;
 
     /* Narrow allow-list for the in-flight matched expected commit:

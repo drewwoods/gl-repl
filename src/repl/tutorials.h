@@ -14,15 +14,22 @@
  * instruction comment above the earlier labeled command line so
  * tutorials can teach "draw first, then insert setup before the batch".
  *
- * Three step kinds exist (TutorialStepKind):
- *   COMMAND   the original "type the expected GL call" step.
- *   SET       apply `cfg_slug = cfg_value` on entry so the user sees
- *             the result; advance on Enter/Tab/Space. `expected` MUST
- *             be NULL.
- *   REQUIRE   advance when the user themselves makes
- *             `cfg_slug == cfg_value` (via F-key/menu/etc.); auto-
- *             advances if already satisfied on entry. `expected` MUST
- *             be NULL.
+ * Four step kinds exist (TutorialStepKind):
+ *   COMMAND      the original "type the expected GL call" step.
+ *   SET          apply `cfg_slug = cfg_value` on entry so the user sees
+ *                the result; advance on Enter/Tab/Space. `expected` MUST
+ *                be NULL.
+ *   REQUIRE      advance when the user themselves makes
+ *                `cfg_slug == cfg_value` (via F-key/menu/etc.); auto-
+ *                advances if already satisfied on entry. `expected` MUST
+ *                be NULL.
+ *   REQUIRE_VAR  advance when the named predefined variable's live
+ *                value matches `var_target` within TUTORIAL_VAR_EPS.
+ *                Either path satisfies it: a typed `name = expr;`
+ *                commit or a variable-panel slider drag. Document
+ *                mutation stays allowed (unlike SET/REQUIRE) so the
+ *                user can type the assignment. `expected` MUST be NULL
+ *                and `var_name` MUST be non-empty.
  *
  * The sentinel that terminates a step array has `comment == NULL`
  * (any kind; expected may be NULL too for COMMAND-only sentinels).
@@ -70,6 +77,11 @@ typedef enum {
     TUTORIAL_STEP_KIND_SET,
     /* Check — wait until user sets cfg_slug to cfg_value, then advance. */
     TUTORIAL_STEP_KIND_REQUIRE,
+    /* Check — wait until the named predef variable's live value matches
+     * var_target within TUTORIAL_VAR_EPS. Either a typed `name = expr;`
+     * commit or a variable-panel slider drag satisfies the step;
+     * document mutation stays allowed. */
+    TUTORIAL_STEP_KIND_REQUIRE_VAR,
 } TutorialStepKind;
 
 typedef struct {
@@ -90,6 +102,13 @@ typedef struct {
      * catalog name the enum constant rather than encoding magic
      * numbers — see plans/done/src-repl-code-smell-audit-2.md #41. */
     const char               *cfg_value_name;
+    /* Predef-variable target (REQUIRE_VAR only). `var_name` names a
+     * predefined variable that must exist when the step is entered;
+     * `var_target` is the float value the step advances on. Trailing
+     * so existing positional initializers (COMMAND/SET/REQUIRE steps)
+     * keep zero-initialising these to NULL/0.0f. */
+    const char               *var_name;
+    float                     var_target;
 } TutorialStep;
 
 /* Curated metadata tags used by the Tutorials menu. Tutorials keep their
@@ -199,6 +218,14 @@ static inline int repl_tutorial_step_cfg_value(int idx, int step_idx) {
 static inline const char *repl_tutorial_step_cfg_value_name(int idx, int step_idx) {
     const TutorialStep *step = repl_tutorial_step_get(idx, step_idx);
     return step ? step->cfg_value_name : NULL;
+}
+static inline const char *repl_tutorial_step_var_name(int idx, int step_idx) {
+    const TutorialStep *step = repl_tutorial_step_get(idx, step_idx);
+    return step ? step->var_name : NULL;
+}
+static inline float repl_tutorial_step_var_target(int idx, int step_idx) {
+    const TutorialStep *step = repl_tutorial_step_get(idx, step_idx);
+    return step ? step->var_target : 0.0f;
 }
 
 /* The tutorial's leading `@cfg` strings (NULL-terminated array), or NULL

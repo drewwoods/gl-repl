@@ -41,6 +41,15 @@
 #define TUTORIAL_FADE_SETTLE_CHARS 6
 #endif
 
+/* Absolute-value tolerance used when a REQUIRE_VAR step compares a
+ * predefined variable's live float value to its `var_target`. Tight
+ * enough that the linear-drag granularity (1 px = 0.05 units) won't
+ * cross the boundary without intent, but loose enough that float
+ * round-trip from a typed `name = 5;` commit always matches. */
+#ifndef TUTORIAL_VAR_EPS
+#define TUTORIAL_VAR_EPS 1e-4f
+#endif
+
 /* Runtime validator: walk every entry-level `@cfg` line and every
  * SET / REQUIRE step in `entry`, and reject the tutorial if the
  * controller-installed config bridge doesn't recognise a slug, or if

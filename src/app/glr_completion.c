@@ -259,9 +259,21 @@ static void update_autocomplete(void) {
      * after the cursor. Empty input + tutorial active yields the
      * full expected line as the ghost. On any other line the user
      * is editing unrelated code, so fall through to the normal
-     * autocomplete path. */
-    if (tutorial_active() &&
-        editor_state_edit_line() == tutorial_expected_commit_line()) {
+     * autocomplete path.
+     *
+     * REQUIRE_VAR has no expected_commit_line (the user is free to
+     * type the satisfying `name = expr;` anywhere), so the cursor
+     * check above doesn't gate it. Show the synthesized ghost on any
+     * row while a REQUIRE_VAR step is active — tutorial_shadow_suffix
+     * builds the `name = target` string for that case. */
+    int show_tutorial_ghost = 0;
+    if (tutorial_active()) {
+        if (editor_state_edit_line() == tutorial_expected_commit_line())
+            show_tutorial_ghost = 1;
+        else if (tutorial_current_step_kind() == TUTORIAL_STEP_KIND_REQUIRE_VAR)
+            show_tutorial_ghost = 1;
+    }
+    if (show_tutorial_ghost) {
         tutorial_shadow_suffix(raw_input, ac->ghost, sizeof(ac->ghost));
         /* Sibling of the shadow suffix: when the typed input fully
          * matches the expected command, refresh the status bar with a
