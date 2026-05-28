@@ -139,7 +139,7 @@ static void seed_nondefault_example_presentation_state(void) {
     glr_state_presentation_mut()->show_normal_vectors = 1;
     glr_state_presentation_mut()->show_vertex_outlines = 0;
     glr_state_presentation_mut()->show_vertex_points = 0;
-    glr_state_presentation_mut()->show_xform_guides = 0;
+    glr_state_presentation_mut()->xform_guide_mode = SCENE_XFORM_GUIDE_OFF;
     glr_state_presentation_mut()->show_light_indicators = 0;
     glr_state_presentation_mut()->backdrop_mode = 1;
     glr_camera_mut()->auto_rotate = 1;
@@ -1185,7 +1185,7 @@ int main(int argc, char **argv) {
         ASSERT_TRUE("no cfg reset points default",
                     glr_state_presentation().show_vertex_points == CFG_DEFAULT_VERTEX_POINTS);
         ASSERT_TRUE("no cfg reset guides default",
-                    glr_state_presentation().show_xform_guides == CFG_DEFAULT_XFORM_GUIDES);
+                    glr_state_presentation().xform_guide_mode == CFG_DEFAULT_XFORM_GUIDE_MODE);
         ASSERT_TRUE("no cfg reset lights default",
                     glr_state_presentation().show_light_indicators == CFG_DEFAULT_LIGHT_INDICATORS);
         ASSERT_TRUE("no cfg reset backdrop default",
@@ -1242,7 +1242,7 @@ int main(int argc, char **argv) {
         ASSERT_TRUE("partial cfg points reset default",
                     glr_state_presentation().show_vertex_points == CFG_DEFAULT_VERTEX_POINTS);
         ASSERT_TRUE("partial cfg guides reset default",
-                    glr_state_presentation().show_xform_guides == CFG_DEFAULT_XFORM_GUIDES);
+                    glr_state_presentation().xform_guide_mode == CFG_DEFAULT_XFORM_GUIDE_MODE);
         ASSERT_TRUE("partial cfg lights reset default",
                     glr_state_presentation().show_light_indicators == CFG_DEFAULT_LIGHT_INDICATORS);
         ASSERT_TRUE("partial cfg camera rotate reset default",
@@ -1286,7 +1286,7 @@ int main(int argc, char **argv) {
 
         repl_load_example_lines_for_test(view_mode_2d_example);
         ASSERT_TRUE("@cfg view_mode = 1 applies 2D (ortho)",
-                    glr_state_presentation().ortho_mode == 1);
+                    glr_state_presentation().ortho_mode == SCENE_VIEW_2D);
 
         /* The reset is the load-bearing assertion: a later example with
          * no @cfg view_mode reverts to default 3D, NOT inherited 2D. */
@@ -1297,10 +1297,10 @@ int main(int argc, char **argv) {
         /* @cfg still wins over the per-load reset. */
         repl_load_example_lines_for_test(view_mode_2d_example);
         ASSERT_TRUE("@cfg view_mode = 1 still applies after a reset",
-                    glr_state_presentation().ortho_mode == 1);
+                    glr_state_presentation().ortho_mode == SCENE_VIEW_2D);
         repl_load_example_lines_for_test(view_mode_3d_example);
         ASSERT_TRUE("@cfg view_mode = 0 overrides any prior 2D",
-                    glr_state_presentation().ortho_mode == 0);
+                    glr_state_presentation().ortho_mode == SCENE_VIEW_3D);
     }
 
     {

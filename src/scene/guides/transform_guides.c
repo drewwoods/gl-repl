@@ -777,7 +777,7 @@ void scene_transform_guides_render_if_due(const SceneGuideSnapshot *snapshot,
     float guide_origin[3];
 
     glPushMatrix();
-    if (snapshot->xform_guide_mode == 1) {
+    if (snapshot->xform_guide_mode == SCENE_XFORM_GUIDE_FRAME) {
         float frame[16];
         float guide_mv[16];
         compute_before_cursor_matrix(snapshot, plan->cursor_flat_idx, frame);
