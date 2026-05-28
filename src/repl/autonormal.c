@@ -326,3 +326,88 @@ int repl_find_feeding_normal_cmd(int line_idx) {
 int repl_find_feeding_color_cmd(int line_idx) {
     return find_feeding_state_cmd(line_idx, 0);
 }
+
+int repl_find_matching_push_matrix(int line_idx) {
+    if (line_idx < 0 || line_idx >= repl_state_document_count()) return -1;
+    const GLCmd *cmds = repl_state_document_cmds();
+    if (!cmds[line_idx].valid || cmds[line_idx].type != CMD_POP_MATRIX) return -1;
+
+    int depth = 1;
+    for (int i = line_idx - 1; i >= 0; i--) {
+        if (!cmds[i].valid) continue;
+        CmdType t = cmds[i].type;
+        if (t == CMD_POP_MATRIX) {
+            depth++;
+        } else if (t == CMD_PUSH_MATRIX) {
+            depth--;
+            if (depth == 0) return i;
+        }
+    }
+    return -1;
+}
+
+/* Walk backwards from line_idx past a CMD_FUNC_END to its matching
+ * CMD_FUNC_DEF. Returns the source index of the matching CMD_FUNC_DEF
+ * (or -1 if unbalanced). The caller passes the index of the FUNC_END
+ * itself; the returned index points at the FUNC_DEF so the outer
+ * loop's i-- moves past it. */
+static int skip_function_body_backward(const GLCmd *cmds, int func_end_idx) {
+    int depth = 1;
+    for (int i = func_end_idx - 1; i >= 0; i--) {
+        if (!cmds[i].valid) continue;
+        if (cmds[i].type == CMD_FUNC_END) {
+            depth++;
+        } else if (cmds[i].type == CMD_FUNC_DEF) {
+            depth--;
+            if (depth == 0) return i;
+        }
+    }
+    return -1;
+}
+
+int repl_find_affecting_transforms(int line_idx, int *out, int out_cap) {
+    if (!out || out_cap <= 0) return 0;
+    int n = repl_state_document_count();
+    if (line_idx < 0 || line_idx >= n) return 0;
+    const GLCmd *cmds = repl_state_document_cmds();
+    if (!cmds[line_idx].valid) return 0;
+    if (!repl_cmd_consumes_current_color(cmds[line_idx].type)) return 0;
+
+    int count = 0;
+    int popped_depth = 0;
+    int i = line_idx - 1;
+    while (i >= 0 && count < out_cap) {
+        if (!cmds[i].valid) { i--; continue; }
+        CmdType t = cmds[i].type;
+
+        if (t == CMD_FUNC_END) {
+            /* Function bodies are opaque: their transforms only run
+             * when the func is called, not at this source position.
+             * Skip from FUNC_END back to the matching FUNC_DEF, then
+             * continue walking the surrounding scope. */
+            int def_idx = skip_function_body_backward(cmds, i);
+            i = (def_idx >= 0) ? def_idx - 1 : -1;
+            continue;
+        }
+        if (t == CMD_FUNC_DEF) {
+            /* The cursor lives inside this function body; the caller's
+             * matrix state is unknown to the static walk. Stop here. */
+            break;
+        }
+        if (t == CMD_POP_MATRIX) {
+            popped_depth++;
+        } else if (t == CMD_PUSH_MATRIX) {
+            /* A push at popped_depth>0 closes one of the popped scopes
+             * we crossed walking back. A push at popped_depth==0 is the
+             * cursor's own scope boundary — keep walking into the
+             * parent, whose transforms still apply. */
+            if (popped_depth > 0) popped_depth--;
+        } else if (t == CMD_LOAD_IDENTITY) {
+            if (popped_depth == 0) break;
+        } else if (t == CMD_TRANSLATE3F || t == CMD_SCALEF || t == CMD_ROTATEF) {
+            if (popped_depth == 0) out[count++] = i;
+        }
+        i--;
+    }
+    return count;
+}

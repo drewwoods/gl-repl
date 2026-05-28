@@ -330,6 +330,21 @@ static void glr_ctrl_push_highlights(void) {
             if (color_idx >= 0)
                 editor_state_highlights_append(color_idx, -1, -1,
                                                     HIGHLIGHT_FEEDING_COLOR);
+
+            if (cmd->type == CMD_POP_MATRIX) {
+                int push_idx = repl_find_matching_push_matrix(edit_line);
+                if (push_idx >= 0)
+                    editor_state_highlights_append(push_idx, -1, -1,
+                                                        HIGHLIGHT_MATCHING_PUSH_MATRIX);
+            }
+
+            int xform_lines[MAX_AFFECTING_TRANSFORMS];
+            int xform_count = repl_find_affecting_transforms(edit_line,
+                                                             xform_lines,
+                                                             MAX_AFFECTING_TRANSFORMS);
+            for (int i = 0; i < xform_count; i++)
+                editor_state_highlights_append(xform_lines[i], -1, -1,
+                                                    HIGHLIGHT_AFFECTING_TRANSFORM);
         }
     }
 

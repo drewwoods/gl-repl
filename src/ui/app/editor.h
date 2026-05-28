@@ -54,7 +54,14 @@ typedef enum {
     HIGHLIGHT_REPLAY_PC,
     HIGHLIGHT_SEARCH_MATCH,
     HIGHLIGHT_SELECTION,
-    HIGHLIGHT_TUTORIAL_INSERTION
+    HIGHLIGHT_TUTORIAL_INSERTION,
+    /* Cursor-on-glPopMatrix highlights the matching glPushMatrix line. */
+    HIGHLIGHT_MATCHING_PUSH_MATRIX,
+    /* Cursor-on-vertex/glutSolid* highlights every modelview transform
+     * (glTranslatef/glScalef/glRotatef) currently in scope, accounting
+     * for push/pop matrix and glLoadIdentity. Multiple highlights of
+     * this kind may be pushed in a single frame. */
+    HIGHLIGHT_AFFECTING_TRANSFORM
 } UiHighlightKind;
 
 typedef struct {
