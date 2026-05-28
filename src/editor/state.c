@@ -479,10 +479,6 @@ EditorSelectionState editor_state_selection(void) {
     return g_editor_state.selection;
 }
 
-EditorSelectionState *editor_state_selection_mut(void) {
-    return &g_editor_state.selection;
-}
-
 void editor_state_selection_clear(void) {
     g_editor_state.selection.anchor_idx = -1;
     g_editor_state.selection.end_idx = -1;
@@ -585,10 +581,6 @@ const EditorSearchState *editor_state_search(void) {
 
 EditorSearchState *editor_state_search_mut(void) {
     return &g_editor_state.search;
-}
-
-void editor_state_search_clear(void) {
-    g_editor_state.search = editor_state_get_defaults()->search;
 }
 
 const EditorAutocompleteState *editor_state_autocomplete(void) {
@@ -747,7 +739,7 @@ void editor_scroll_follow_cursor_set(int follow) {
 }
 
 /* Line-comment prefix. Set explicitly by the controller at startup
- * (e.g., "// " from imrepl_ctrl). NULL / empty disables comment
+ * (e.g., "// " from glr_ctrl). NULL / empty disables comment
  * toggle. The pointer is borrowed; callers pass a string literal or
  * static buffer. */
 static const char *g_line_comment_prefix = NULL;

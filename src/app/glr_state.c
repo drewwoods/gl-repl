@@ -67,10 +67,7 @@ static const float g_grid_extents[GRID_EXTENT_COUNT] = {
         .use_accum                 = CFG_DEFAULT_USE_ACCUM, \
         .accum_aa_enabled          = CFG_DEFAULT_ACCUM_AA_ENABLED, \
         .accum_samples             = CFG_DEFAULT_ACCUM_SAMPLES, \
-        .accum_jitter_x            = CFG_DEFAULT_ACCUM_JITTER_X, \
-        .accum_jitter_y            = CFG_DEFAULT_ACCUM_JITTER_Y, \
         .multisample_enabled       = CFG_DEFAULT_MULTISAMPLE, \
-        .msaa_samples              = CFG_DEFAULT_MSAA_SAMPLES, \
         .line_smooth_enabled       = CFG_DEFAULT_LINE_SMOOTH, \
         .point_attenuation_enabled = CFG_DEFAULT_ATTENUATE_POINTS, \
     }, \

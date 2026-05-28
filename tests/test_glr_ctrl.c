@@ -1489,6 +1489,39 @@ static void test_depth_probe_does_not_mutate_repl_state(void) {
                  scratch_after_fill, scratch_before + 1.0f);
 }
 
+/* Regression: loading an example resets the light_theme *name* to the
+ * default, and that reset must ALSO re-apply the theme to the REPL-state
+ * lights[] (positions / colors / eye-space). Before the fix
+ * glr_ctrl_reset_example_chrome reset the cfg field directly — bypassing
+ * the scene_lights_apply_theme hook in glr_config_set — so the lights[]
+ * array (and the light indicators that read it) stayed on the *previous*
+ * theme: the name said default but the geometry stayed e.g. SOLAR. */
+static void test_example_reset_reapplies_light_theme(void) {
+    printf("--- glr_ctrl example reset re-applies light theme to lights[] ---\n");
+
+    SceneLight expected_default[MAX_LIGHTS];
+    scene_lights_apply_theme(expected_default, LIGHT_THEME_DEFAULT);
+
+    /* Switch to a non-default theme through the real setter, which fires
+     * the scene_lights_apply_theme hook, so lights[] holds the SOLAR preset. */
+    glr_config_set(GLR_CONFIG_LIGHT_THEME, LIGHT_THEME_SOLAR);
+    ASSERT_INT("theme set to SOLAR",
+               glr_config_get(GLR_CONFIG_LIGHT_THEME), LIGHT_THEME_SOLAR);
+    ASSERT_TRUE("lights[] differ from default after switching to SOLAR",
+                memcmp(repl_state_render_mut()->lights, expected_default,
+                       sizeof(expected_default)) != 0);
+
+    /* Example-load presentation reset, with no tag defaults (mask 0 applies
+     * nothing), so light_theme returns to the built-in default. */
+    glr_ctrl_reset_example_chrome(0u);
+
+    ASSERT_INT("light_theme name reset to default",
+               glr_config_get(GLR_CONFIG_LIGHT_THEME), LIGHT_THEME_DEFAULT);
+    ASSERT_TRUE("lights[] re-applied to the default theme after example reset",
+                memcmp(repl_state_render_mut()->lights, expected_default,
+                       sizeof(expected_default)) == 0);
+}
+
 int main(void) {
     printf("--- imrepl_ctrl tests ---\n");
 
@@ -1513,6 +1546,7 @@ int main(void) {
     test_numeric_swatch_no_op_outside_numeric_arg();
     test_numeric_swatch_no_op_in_insert_mode();
     test_depth_probe_does_not_mutate_repl_state();
+    test_example_reset_reapplies_light_theme();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_imrepl_ctrl");

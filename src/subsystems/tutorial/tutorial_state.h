@@ -81,7 +81,5 @@ void                  tutorial_state_reset(void);
 void                  tutorial_state_reset_except_baseline(void);
 void                  tutorial_state_init_explicit(void);
 int                   tutorial_active(void);
-void                  tutorial_state_capture(TutorialRuntimeState *snapshot);
-void                  tutorial_state_restore(const TutorialRuntimeState *snapshot);
 
 #endif /* TUTORIAL_STATE_H */

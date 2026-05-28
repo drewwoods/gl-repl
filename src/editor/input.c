@@ -57,7 +57,6 @@
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
 #include "ui/app/layout.h"
-#include "ui/app/menu_bar.h"
 #include "ui/app/state.h"
 
 #include "config.h"            /* REPL_INDENT_TEXT_MAX */
@@ -175,12 +174,6 @@ void editor_request_redraw(void) {
 void editor_set_cursor(int cursor) {
     g_pending_input_effects.set_cursor = 1;
     g_pending_input_effects.cursor = cursor;
-}
-
-void editor_schedule_timer(unsigned int millis, int value) {
-    g_pending_input_effects.schedule_timer = 1;
-    g_pending_input_effects.timer_millis = millis;
-    g_pending_input_effects.timer_value = value;
 }
 
 void editor_request_close_help(void) {

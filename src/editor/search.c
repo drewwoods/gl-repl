@@ -14,8 +14,8 @@
  * ordinals across navigation by remembering the per-row occurrence index
  * and remapping it after a navigation shifts the row mapping.
  *
- * The module owns search behavior; storage lives in src/repl/state.c and is
- * accessed through the typed search facade.
+ * The module owns search behavior; storage lives in src/editor/state.c
+ * (EditorSearchState) and is accessed through the typed search facade.
  */
 #include "state.h"
 #include "input.h"

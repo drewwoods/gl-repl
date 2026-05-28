@@ -63,17 +63,13 @@ const ReplExportCameraBridge *repl_export_camera_bridge(void) {
     return g_export_camera_bridge;
 }
 
-/* Reshape-projection bridge — same install/getter shape as the camera
- * bridge. NULL on the demo / in tests, where the perspective default is
- * emitted. */
+/* Reshape-projection bridge — same install shape as the camera bridge.
+ * NULL on the demo / in tests, where the perspective default is emitted.
+ * Read internally via the g_export_projection_bridge static. */
 static const ReplExportProjectionBridge *g_export_projection_bridge = NULL;
 
 void repl_export_install_projection_bridge(const ReplExportProjectionBridge *bridge) {
     g_export_projection_bridge = bridge;
-}
-
-const ReplExportProjectionBridge *repl_export_projection_bridge(void) {
-    return g_export_projection_bridge;
 }
 
 /* Resolves to live scene state via the bridge. Callable directly only

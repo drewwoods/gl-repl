@@ -74,23 +74,8 @@ const char *repl_config_bag_get(const ReplConfigBag *cfg, const char *key) {
     return NULL;
 }
 
-int repl_config_bag_get_int(const ReplConfigBag *cfg,
-                               const char *key, int fallback) {
-    const char *s = repl_config_bag_get(cfg, key);
-    if (!s) return fallback;
-    return (int)strtol(s, NULL, 10);
-}
-
 int repl_config_bag_count(const ReplConfigBag *cfg) {
     return cfg ? cfg->count : 0;
-}
-
-int repl_config_bag_at(const ReplConfigBag *cfg, int idx,
-                          const char **key_out, const char **value_out) {
-    if (!cfg || idx < 0 || idx >= cfg->count) return 0;
-    if (key_out)   *key_out   = cfg->items[idx].key;
-    if (value_out) *value_out = cfg->items[idx].value;
-    return 1;
 }
 
 static const ReplConfigBridge *g_cfg_bridge = NULL;

@@ -68,10 +68,6 @@ int replay_mode(void) {
     return g_replay_runtime_state.mode;
 }
 
-float replay_speed(void) {
-    return g_replay_runtime_state.speed;
-}
-
 int replay_src_line(void) {
     return g_replay_runtime_state.src_line_idx;
 }
@@ -80,10 +76,6 @@ int replay_total_flat(void) {
     if (!g_replay_runtime_state.active)
         return 0;
     return g_replay_runtime_state.total_flat_cmds;
-}
-
-int replay_expand_args(void) {
-    return g_replay_runtime_state.expand_args;
 }
 
 void replay_handle_pin_clicked(void) {

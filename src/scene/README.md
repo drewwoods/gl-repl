@@ -76,8 +76,9 @@ geometry.
 Scene renderers **consume snapshots/configs and never read `ReplState`,
 `EditorState`, or `UiState` directly.** The two REPL-aware overlay passes
 under `guides/` (vertex/normal guides at the cursor, transform guides during
-replay) still obey this: the controller resolves their data into a
-`SceneGuideSnapshot` and passes it in. The camera transform is the
+replay) still obey this: the `edit_overlays` peer subsystem
+(`src/subsystems/edit_overlays/`, driven by the controller each frame)
+resolves their data into a `SceneGuideSnapshot` and passes it in. The camera transform is the
 controller's job — `render.c` only brackets sub-renderer push/pop and
 applies a scene-local frustum shift for jitter.
 

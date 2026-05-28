@@ -160,8 +160,6 @@ typedef struct {
     void (*insert_mode_off)(void);
     /* Scroll the code panel so source line `target` is visible. */
     void (*scroll_to_line)(int target);
-    /* Toggle cursor-follow during replay. */
-    void (*follow_cursor)(int follow);
     /* Tear down any active tutorial before wholesale source replacement.
      * The tutorial runner is a peer subsystem; routing this through the
      * host bridge keeps src/repl from linking tutorial.c just to request
@@ -190,7 +188,6 @@ typedef struct {
 } ReplHostEffects;
 
 void                   repl_install_host_effects(const ReplHostEffects *effects);
-const ReplHostEffects *repl_host_effects(void);
 
 /* Pipeline-side dispatchers — invoked by the loader / scene-switch /
  * snippet-import / replay paths. Each is a no-op when the bridge is
@@ -199,7 +196,6 @@ void        repl_dispatch_example_presentation_reset(unsigned int tag_mask);
 void        repl_dispatch_input_reset(void);
 void        repl_dispatch_insert_mode_off(void);
 void        repl_dispatch_scroll_to_line(int target);
-void        repl_dispatch_follow_cursor(int follow);
 void        repl_dispatch_tutorial_teardown(void);
 int         repl_dispatch_edit_line_get(void);
 void        repl_dispatch_edit_line_set(int line);

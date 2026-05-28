@@ -170,8 +170,6 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     glr_render->use_accum = 0;
     glr_render->accum_aa_enabled = 0;
     glr_render->accum_samples = 8;
-    glr_render->accum_jitter_x = 0.25f;
-    glr_render->accum_jitter_y = -0.125f;
     glr_render->multisample_enabled = 0;
     glr_render->line_smooth_enabled = 1;
     glr_render->point_attenuation_enabled = 0;
@@ -342,7 +340,6 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("render use accum restored", glr_state_render().use_accum, 0);
     ASSERT_INT("render accum aa restored", glr_state_render().accum_aa_enabled, 0);
     ASSERT_INT("render samples restored", glr_state_render().accum_samples, 8);
-    ASSERT_TRUE("render jitter restored", glr_state_render().accum_jitter_x == 0.25f);
     ASSERT_INT("render light enabled restored", repl_state_render().lights[1].enabled, 0);
     ASSERT_TRUE("render clear color restored",
                 repl_state_render().clear_color[2] == 0.30f);

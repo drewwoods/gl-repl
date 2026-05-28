@@ -466,8 +466,6 @@ static void glr_ctrl_apply_input_effects(EditorInputDispatchEffects effects) {
         glutSetCursor(effects.cursor);
     if (effects.request_redraw)
         glutPostRedisplay();
-    if (effects.schedule_timer)
-        glutTimerFunc(effects.timer_millis, glr_ctrl_timer, effects.timer_value);
     if (effects.restore_hidden_code_panel)
         glr_ctrl_restore_hidden_code_panel();
     if (effects.close_help_overlay)
@@ -1509,10 +1507,6 @@ static void glr_ctrl_scroll_to_line(int target) {
     editor_scroll_follow_cursor_set(0);
 }
 
-static void glr_ctrl_follow_cursor(int follow) {
-    editor_scroll_follow_cursor_set(follow);
-}
-
 const UiOverlayContent *glr_ctrl_help_overlay_content(void) {
     enum { GLR_HELP_OVERLAY_MAX_TABS = 4 };
     static UiOverlayTab tabs[GLR_HELP_OVERLAY_MAX_TABS];
@@ -1595,7 +1589,6 @@ static const ReplHostEffects g_glr_host_effects = {
     .input_reset                = glr_ctrl_host_input_reset,
     .insert_mode_off            = glr_ctrl_host_insert_mode_off,
     .scroll_to_line             = glr_ctrl_scroll_to_line,
-    .follow_cursor              = glr_ctrl_follow_cursor,
     .tutorial_teardown          = tutorial_teardown,
     .edit_line_get              = editor_state_edit_line,
     .edit_line_set              = editor_state_edit_line_set,
@@ -1897,11 +1890,9 @@ void glr_ctrl_init_gl(void) {
 
     repl_apply_init_bootstrap();
 
-    /* Query actual MSAA sample count from OpenGL */
+    /* Query actual MSAA sample count from OpenGL for the menu label. */
     GLint samples = 0;
     glGetIntegerv(GL_SAMPLES, &samples);
-    glr_state_render_mut()->msaa_samples = (int)samples;
-
     glr_actions_set_msaa_label((int)samples);
 
     /* glutInit has run by the time glr_ctrl_init_gl is called.

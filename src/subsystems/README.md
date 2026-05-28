@@ -27,7 +27,8 @@ subsystems here:
 
 - **`replay/`** — a step-by-step execution visualizer (a tiny transport:
   play / pause / step, a program counter, speed, and a fade-batch ring
-  so old geometry fades as new geometry appears).
+  so old geometry fades as new geometry appears). Its fade-batch GL
+  rendering lives in `replay_render.c`, extracted out of `src/scene/`.
 - **`variable_panel/`** — floating sliders that scrub the REPL's scalar
   variables, with a log/linear drag transaction that writes the new value
   back into the source line.
@@ -35,8 +36,18 @@ subsystems here:
   `glColor*` call under the cursor.
 - **`tutorial/`** — a guided runner that feeds instruction comments, locks
   rows, gates commits, and tracks step progress.
+- **`edit_overlays/`** — cursor edit-guide + vertex/normal overlay
+  orchestration: owns the cursor-guide snapshot and the flat-program walk
+  that drives the scene overlay primitives (plus the GL_LINE / GL_POINT
+  outline passes), extracted out of `src/app/glr_ctrl.c`.
 
-Each subsystem follows the same general shape: either a single co-located file (like `color_picker_state.c`) or a two-file shape consisting of a `*_state.c` that *owns the storage* (a small struct, with capture/restore/reset and narrow accessors) and a `*.c` runner/controller that implements the behavior (like `replay/`, `tutorial/`, `variable_panel/`).
+Subsystem file shapes vary: a single co-located file (like
+`color_picker_state.c`), a `*_state.c` storage file plus a `*.c`
+runner/controller, or a wider multi-file split where the behavior is large
+(`replay/` spans playback / fade / input / render / walkers; `tutorial/`
+spans runner / animation / match). The `*_state.c` always *owns the
+storage* (a small struct with reset and narrow accessors; some peers also
+carry capture/restore for snapshot round-trips).
 
 For subsystems like `variable_panel`, `variable_panel_set_visible` is the canonical public visibility setter for external code, while `variable_panel_state_mut()` provides direct mutable pointers for internal config-mapping and per-frame easing equations (like `replay_lift_px`).
 

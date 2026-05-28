@@ -5,8 +5,8 @@
  * text is surfaced through set_status() into the regular status
  * strip.  This module owns the buffer, the filter for filesystem-
  * unsafe characters, and the Enter/Escape commit path.  The menu
- * item that enters rename mode lives in repl_actions.c /
- * ui_menu_bar.c; the editor's key dispatcher forwards keystrokes
+ * item that enters rename mode lives in src/app/glr_actions.c /
+ * src/ui/app/menu_bar.c; the editor's key dispatcher forwards keystrokes
  * here ahead of its own routing while rename is active.
  */
 #include "inline_rename.h"

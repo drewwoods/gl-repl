@@ -125,10 +125,8 @@ int    replay_active(void);          /* .active */
 int    replay_machine_state(void);   /* .state — REPLAY_OFF/PLAYING/PAUSED/DONE */
 int    replay_pc(void);              /* .pc — current program counter */
 int    replay_mode(void);            /* .mode — REPLAY_MODE_VERTEX/POLYGON */
-float  replay_speed(void);           /* .speed — playback steps/sec */
 int    replay_src_line(void);        /* .src_line_idx — source line of current cmd */
 int    replay_total_flat(void);      /* .total_flat_cmds — captured at start */
-int    replay_expand_args(void);     /* .expand_args — annotation expansion toggle */
 
 /* --- Handler API ---
  *

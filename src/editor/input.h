@@ -31,15 +31,12 @@ typedef int (*EditorCodePanelLayoutProvider)(void);
 
 /* Side-effects accumulated by editor input dispatch and replayed by
  * glr_ctrl_apply_input_effects (request_redraw → glutPostRedisplay,
- * set_cursor → glutSetCursor, schedule_timer → glutTimerFunc,
+ * set_cursor → glutSetCursor,
  * restore_hidden_code_panel → glr_ctrl_restore_hidden_code_panel). */
 typedef struct EditorInputDispatchEffects {
     int request_redraw;
     int set_cursor;
     int cursor;
-    int schedule_timer;
-    unsigned int timer_millis;
-    int timer_value;
     int restore_hidden_code_panel;
     int close_help_overlay;
 } EditorInputDispatchEffects;
@@ -66,7 +63,6 @@ void                     editor_reset_input_effects(void);
 EditorInputDispatchEffects editor_take_and_reset_input_effects(void);
 void                     editor_request_redraw(void);
 void                     editor_set_cursor(int cursor);
-void                     editor_schedule_timer(unsigned int millis, int value);
 void                     editor_request_close_help(void);
 int                      editor_input_active_modifiers(void);
 

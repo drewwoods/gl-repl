@@ -12,8 +12,7 @@
 #include "repl/command.h"   /* MAX_COMMANDS (line-override cap) */
 
 typedef enum {
-    TRANSFORMER_COLOR_PICKER,
-    TRANSFORMER_NUMERIC_SLIDER
+    TRANSFORMER_COLOR_PICKER
 } UiTransformerKind;
 
 typedef struct {
@@ -29,12 +28,6 @@ typedef struct {
             float a;
             int   has_alpha;
         } color;
-        struct {
-            float min;
-            float max;
-            float current;
-            int   is_log;
-        } numeric;
     } state;
 } UiTransformer;
 
