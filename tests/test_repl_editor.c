@@ -2865,6 +2865,50 @@ int main() {
         g_mock_modifiers = saved_mods;
     }
 
+    /* Regression: uncommenting a line that referenced a variable must
+     * preserve the variable name in the source text. Before the fix the
+     * uncomment fallback wrote pl.text (the parser's numeric canonical
+     * form) back into the editor buffer, so `// glVertex3f(t, 0, 0)`
+     * round-tripped to `glVertex3f(0.0000, 0, 0)`. */
+    {
+        int saved_mods = g_mock_modifiers;
+
+        glr_ctrl_reset_all();
+        editor_feed_line("glVertex3f(t, 0, 0);");
+        ASSERT_INT("uncomment vars: setup vertex committed",
+                   repl_state_document_cmds_mut()[0].type, CMD_VERTEX3F);
+        ASSERT_TRUE("uncomment vars: setup line keeps t",
+                    strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "",
+                           "glVertex3f(t") != NULL);
+
+        editor_state_edit_line_set(0);
+        editor_insert_mode_set(0);
+        g_status[0] = '\0';
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        editor_handle_key('/', 0, 0);
+        ASSERT_INT("comment vars: row is comment",
+                   repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
+        ASSERT_TRUE("comment vars: source keeps t",
+                    strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "",
+                           "glVertex3f(t") != NULL);
+
+        editor_state_edit_line_set(0);
+        editor_insert_mode_set(0);
+        g_status[0] = '\0';
+        editor_handle_key('/', 0, 0);
+        ASSERT_INT("uncomment vars: type back to vertex",
+                   repl_state_document_cmds_mut()[0].type, CMD_VERTEX3F);
+        ASSERT_TRUE("uncomment vars: no error status",
+                    strstr(g_status, "Cannot uncomment") == NULL);
+        ASSERT_TRUE("uncomment vars: source still references t (not literal)",
+                    strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "",
+                           "glVertex3f(t") != NULL);
+        ASSERT_TRUE("uncomment vars: has_vars still set",
+                    repl_state_document_cmds_mut()[0].has_vars == 1);
+
+        g_mock_modifiers = saved_mods;
+    }
+
     /* Regression (feedback P1): commenting out an unreferenced
      * float declaration must drop the variable from the predef
      * table, not just turn the row into CMD_COMMENT. Otherwise the
