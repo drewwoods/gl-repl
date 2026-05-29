@@ -86,6 +86,9 @@
 #include "app/glr_ctrl_internal.h"
 #include "subsystems/variable_panel/variable_panel_drag.h"
 
+/* GLR_WHEEL_ZOOM_STEP (per-notch wheel-zoom impulse) is a config.h
+ * tunable; the wheel handlers below read it from there. */
+
 /* ---- Keyboard router helpers ------------------------------------------ */
 
 int glr_ctrl_router_handle_save_key(unsigned char key) {
@@ -589,7 +592,8 @@ int glr_ctrl_router_handle_glut_scroll_wheel_button(int button, int state, int x
     } else if (editor_input_point_in_code_panel(x, y)) {
         editor_input_code_panel_scroll(direction);
     } else {
-        glr_camera_add_zoom_velocity(direction == -1 ? -0.3f : 0.3f);
+        glr_camera_add_zoom_velocity(direction == -1 ? -GLR_WHEEL_ZOOM_STEP
+                                                      :  GLR_WHEEL_ZOOM_STEP);
     }
     editor_request_redraw();
     return 1;
@@ -1493,7 +1497,7 @@ void glr_ctrl_mousewheel(int wheel, int direction, int x, int y) {
         glr_ctrl_apply_input_effects(editor_handle_mousewheel(wheel, direction, x, y));
         return;
     }
-    glr_camera_add_zoom_velocity(-(float)direction * 0.3f);
+    glr_camera_add_zoom_velocity(-(float)direction * GLR_WHEEL_ZOOM_STEP);
     editor_request_redraw();
     glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
 #else

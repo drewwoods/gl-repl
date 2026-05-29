@@ -151,6 +151,30 @@
 #define GLR_VIEW_PROJECTION_TRANSITION_SECS 0.75f
 #endif
 
+/* Mouse-wheel zoom feel (shared by 2D and 3D — the wheel path is
+ * mode-agnostic). One notch injects GLR_WHEEL_ZOOM_STEP into the camera
+ * zoom velocity, which decays by CAM_DECAY_ZOOM each 16 ms tick. So one
+ * notch travels GLR_WHEEL_ZOOM_STEP / (1 - CAM_DECAY_ZOOM) distance
+ * units in total, eased over ~1/(1 - CAM_DECAY_ZOOM) frames, with
+ * (1 - CAM_DECAY_ZOOM) of the motion landing on the first frame.
+ *
+ *   GLR_WHEEL_ZOOM_STEP  magnitude knob — lower = smaller per-notch
+ *                        travel (finer slow scrolls). Rapid notches
+ *                        still stack on the velocity, so fast scrolls
+ *                        travel quickly regardless.
+ *   CAM_DECAY_ZOOM       smoothness knob — lower = snappier but more
+ *                        "stepped" (more of the notch on frame one);
+ *                        higher = smoother but coasts longer. Kept a
+ *                        touch snappier than CAM_DECAY (the orbit/pan
+ *                        decay, still local to src/app/glr_camera.c) so
+ *                        zoom stays responsive, not drifty. */
+#ifndef GLR_WHEEL_ZOOM_STEP
+#define GLR_WHEEL_ZOOM_STEP 0.02f
+#endif
+#ifndef CAM_DECAY_ZOOM
+#define CAM_DECAY_ZOOM 0.82f
+#endif
+
 /* 2D ortho scale reference.
  *
  * The orthographic projection has no single "correct" size — it must

@@ -219,6 +219,71 @@ static void test_scene_projection_modes(void) {
 #endif
 }
 
+/* Mouse-wheel zoom drives cam_dist; in 2D (ortho) the projection must
+ * rescale with it. With a frozen depth-center reference, the live scale
+ * is ref + (cam_dist - cam_dist_at_freeze), so zooming in (smaller
+ * cam_dist) shrinks ortho_top and zooming out grows it. The probe finds
+ * nothing under GL stubs, so we pre-arm a frozen reference and mark
+ * ortho already active; a steady ortho frame in FROZEN mode then holds
+ * it (no re-probe), exercising the zoom-delta path. Under PERFRAME the
+ * pre-arm is clobbered to the cam_dist fallback, which tracks zoom too —
+ * so the directional contract holds either way. */
+static void test_scene_ortho_zoom_rescales(void) {
+    printf("--- 2D ortho scale tracks cam_dist (zoom) ---\n");
+
+#ifdef GL_STUBS
+    SceneRenderConfig cfg = make_test_config();
+    cfg.use_accum = 0;
+    cfg.accum_aa_enabled = 0;
+    cfg.accum_samples = 1;
+    cfg.projection_mix = 0.0f; /* ortho */
+
+    SceneRendererState state;
+    scene_renderer_state_init(&state);
+    /* Pretend we already froze a depth-center of 8.0 at cam_dist 30. */
+    state.ortho_ref_dist = 8.0;
+    state.ortho_ref_cam_dist = 30.0;
+    state.ortho_active = 1;
+
+    SceneProjectionDesc p_base, p_in, p_out;
+
+    cfg.cam_dist = 30.0f; /* no zoom: at the freeze distance */
+    ASSERT_INT("ortho render @ freeze dist",
+               scene_render_3d_scene(&state, &cfg), 0);
+    scene_get_active_projection(&state, &p_base);
+
+    cfg.cam_dist = 27.0f; /* zoom in: closer camera */
+    ASSERT_INT("ortho render @ zoom-in dist",
+               scene_render_3d_scene(&state, &cfg), 0);
+    scene_get_active_projection(&state, &p_in);
+
+    cfg.cam_dist = 33.0f; /* zoom out: farther camera */
+    ASSERT_INT("ortho render @ zoom-out dist",
+               scene_render_3d_scene(&state, &cfg), 0);
+    scene_get_active_projection(&state, &p_out);
+
+    ASSERT_TRUE("zoom in shrinks ortho_top",  p_in.ortho_top  < p_base.ortho_top);
+    ASSERT_TRUE("zoom out grows ortho_top",   p_out.ortho_top > p_base.ortho_top);
+
+    /* Exact ratio is htan-independent and pins the arithmetic. */
+#if GLR_ORTHO_REF_MODE == GLR_ORTHO_REF_FROZEN
+    /* ref = 8 + (cam_dist - 30): 5, 8, 11 -> ratios 5/8 and 11/8. */
+    ASSERT_FLOAT("frozen zoom-in ratio",
+                 (float)(p_in.ortho_top / p_base.ortho_top), 5.0f / 8.0f);
+    ASSERT_FLOAT("frozen zoom-out ratio",
+                 (float)(p_out.ortho_top / p_base.ortho_top), 11.0f / 8.0f);
+#else
+    /* Probe returns nothing under stubs -> ref = cam_dist: 27, 30, 33. */
+    ASSERT_FLOAT("perframe zoom-in ratio",
+                 (float)(p_in.ortho_top / p_base.ortho_top), 27.0f / 30.0f);
+    ASSERT_FLOAT("perframe zoom-out ratio",
+                 (float)(p_out.ortho_top / p_base.ortho_top), 33.0f / 30.0f);
+#endif
+#else
+    ASSERT_TRUE("ortho zoom rescale requires GL stubs", 1);
+#endif
+}
+
 /* Build a test SceneFrameRenderContext. */
 static SceneFrameRenderContext make_test_frame_ctx(void) {
     SceneFrameRenderContext ctx = {0};
@@ -769,6 +834,7 @@ int main(int argc, char **argv) {
     test_scene_renderer_state_independence();
     test_scene_renderer_state_aa_invariant();
     test_scene_projection_modes();
+    test_scene_ortho_zoom_rescales();
     test_frame_ctx_defaults();
     test_grid_theme_uses_fog_predicate();   /* pure; runs in both builds */
     test_light_theme_presets();             /* pure; runs in both builds */

@@ -82,6 +82,14 @@ typedef struct SceneRendererState {
      * 0 means "no usable measurement" and the projection math falls
      * back to config->cam_dist (the old orbit-target-plane behavior). */
     double ortho_ref_dist;
+    /* cam_dist at the instant ortho_ref_dist was sampled. The live 2D
+     * scale reference is ortho_ref_dist + (cam_dist - ortho_ref_cam_dist),
+     * so mouse-wheel zoom (which drives cam_dist) rescales the ortho view
+     * without re-probing — the same eye-distance shift a re-probe would
+     * measure, but without the per-frame breathing under animation that
+     * FROZEN mode exists to avoid. Unused while ortho_ref_dist is 0 (the
+     * fallback path reads cam_dist directly). */
+    double ortho_ref_cam_dist;
     /* Edge tracker for the FROZEN sampling mode — true while ortho is
      * contributing. PERFRAME mode doesn't read this. */
     int    ortho_active;
