@@ -204,7 +204,7 @@ static const char *const k_tab_keys_base[] = {
     "  Left-drag            \tOrbit",
     "  Right-drag           \tPan (XZ)",
     "  Shift+Right-drag     \tPan (Y)",
-    "  Scroll wheel         \tZoom (viewport) / Scroll (code panel)",
+    "  Scroll wheel         \tZoom (viewport) / Scroll (code panel or long menu)",
     "  Ctrl+Shift+O         \tFocus origin (ease target to 0,0,0)",
     "  Ctrl+Shift+C         \tReset camera to default (eased)",
     "  Ctrl+Shift+R         \tToggle camera auto-rotate",

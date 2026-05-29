@@ -97,6 +97,15 @@ UiHit ui_menu_bar_hit_test(int mx, int my);
 
 UiHit ui_menu_bar_handle_config_right_press(int mx, int my);
 
+/* Scroll the open flyout when the pointer (mx, my) is over it and it is
+ * taller than the viewport (e.g. the Config "All" list). `delta` is a
+ * row offset, positive reveals lower rows (same sign convention as
+ * editor_input_code_panel_scroll). Returns 1 if the pointer was over the
+ * open flyout — in which case the wheel event is consumed even when the
+ * flyout is too short to scroll, so it never leaks to the code panel or
+ * camera behind the menu. Returns 0 otherwise. */
+int  ui_menu_bar_handle_wheel_scroll(int mx, int my, int delta);
+
 /* --- State queries --- */
 
 /* Query whether a top-level menu dropdown is currently open (File, Scene, or

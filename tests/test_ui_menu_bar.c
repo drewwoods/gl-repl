@@ -866,6 +866,130 @@ static void test_submenu_cache_invalidates_when_panel_hidden(void) {
                   0);
 }
 
+/* Long-flyout scrolling: the Config "All" flyout (~47 rows) is taller
+ * than a small viewport, so submenu_rect clamps its height and the mouse
+ * wheel pages through the hidden rows. submenu_row_point() addresses rows
+ * by VISIBLE position (0 = topmost on-screen row), so a fixed screen point
+ * maps to a higher absolute ordinal as the flyout scrolls. Pure
+ * geometry/hit-test — runs in both stub and non-stub builds. */
+static void test_config_all_flyout_scroll(void) {
+    int sx, sy, sw, sh;
+    int parent_mx = -1, parent_my = -1;
+    int all_row = glr_config_section_count();   /* synthetic All parent */
+    int visible_rows, max_scroll, mx = -1, my = -1;
+
+    reset_menu_bar_fixture(1000, 600);
+
+    ASSERT_TRUE("All parent point found",
+                find_dropdown_item_point(GLR_MENU_CONFIG, all_row,
+                                         &parent_mx, &parent_my));
+    ASSERT_TRUE("hover opens All flyout",
+                ui_menu_bar_update_pointer_hover(parent_mx, parent_my, 0.0f));
+    ASSERT_TRUE("All flyout rect",
+                ui_menu_bar_submenu_rect_for_test(GLR_MENU_CONFIG, all_row,
+                                                  &sx, &sy, &sw, &sh));
+
+    /* Clamped: fits the 600px viewport AND is genuinely shorter than the
+     * full 47-row natural height (proves the overflow path engaged). */
+    ASSERT_TRUE("All flyout height fits viewport", sh <= 600);
+    ASSERT_TRUE("All flyout height clamped below natural height",
+                sh < CFG_ITEM_COUNT * LINE_H);
+
+    visible_rows = (sh - 2 * DROPDOWN_PAD_Y) / LINE_H;
+    max_scroll   = CFG_ITEM_COUNT - visible_rows;
+    ASSERT_TRUE("flyout overflows (rows hidden)", max_scroll > 0);
+
+    ASSERT_TRUE("point on visible row 1",
+                submenu_row_point(sx, sy, sw, sh, 1, &mx, &my));
+
+    /* A wheel event outside the flyout is NOT consumed (it falls through
+     * to code panel / camera). Pick a column outside the flyout rect. */
+    {
+        int out_mx = (sx >= 5) ? sx - 5 : sx + sw + 5;
+        ASSERT_INT_EQ("wheel outside flyout not consumed",
+                      ui_menu_bar_handle_wheel_scroll(out_mx, my, 1), 0);
+    }
+
+    /* Scroll past the bottom: consumed, clamps at max. The bottom-most
+     * visible row now maps to the last absolute row (CFG_ITEM_COUNT-1). */
+    ASSERT_INT_EQ("wheel over flyout consumed",
+                  ui_menu_bar_handle_wheel_scroll(mx, my, 1000), 1);
+    {
+        int bmx = -1, bmy = -1;
+        UiHit h;
+        ASSERT_TRUE("point on last visible row",
+                    submenu_row_point(sx, sy, sw, sh, visible_rows - 1,
+                                      &bmx, &bmy));
+        h = ui_menu_bar_hit_test(bmx, bmy);
+        ASSERT_INT_EQ("bottom row is a submenu item", h.kind,
+                      UI_HIT_SUBMENU_ITEM);
+        ASSERT_INT_EQ("bottom row is the last config item",
+                      h.item_idx, CFG_ITEM_COUNT - 1);
+    }
+
+    /* Scroll past the top: clamps at 0. Visible row 1 maps to absolute
+     * ordinal 1 again (the second All row). */
+    ui_menu_bar_handle_wheel_scroll(mx, my, -1000);
+    {
+        UiHit h = ui_menu_bar_hit_test(mx, my);
+        ASSERT_INT_EQ("top: visible row 1 is a submenu item", h.kind,
+                      UI_HIT_SUBMENU_ITEM);
+        ASSERT_INT_EQ("top: visible row 1 maps to absolute ordinal 1",
+                      h.line_idx, 1);
+    }
+
+    /* A bounded scroll shifts the mapping by exactly the delta: from the
+     * top, +3 makes the same point show absolute ordinal 4 (both are item
+     * rows in the leading RENDERING section). */
+    ui_menu_bar_handle_wheel_scroll(mx, my, 3);
+    {
+        UiHit h = ui_menu_bar_hit_test(mx, my);
+        ASSERT_INT_EQ("after +3 the row is still an item", h.kind,
+                      UI_HIT_SUBMENU_ITEM);
+        ASSERT_INT_EQ("after +3 the mapping shifts by 3", h.line_idx, 4);
+    }
+}
+
+/* A flyout that fits the viewport must not clamp or scroll, but a wheel
+ * event over it is still consumed (the open menu is modal over the code
+ * panel behind it). */
+static void test_config_short_flyout_consumes_but_no_scroll(void) {
+    int sx, sy, sw, sh;
+    int parent_mx = -1, parent_my = -1;
+    int start = 0, count = 0, mx = -1, my = -1;
+    UiHit before, after;
+
+    reset_menu_bar_fixture(1000, 600);
+
+    ASSERT_TRUE("section-0 parent point",
+                find_dropdown_item_point(GLR_MENU_CONFIG, 0,
+                                         &parent_mx, &parent_my));
+    ASSERT_TRUE("hover opens section-0 flyout",
+                ui_menu_bar_update_pointer_hover(parent_mx, parent_my, 0.0f));
+    ASSERT_TRUE("section-0 flyout rect",
+                ui_menu_bar_submenu_rect_for_test(GLR_MENU_CONFIG, 0,
+                                                  &sx, &sy, &sw, &sh));
+
+    ASSERT_TRUE("section 0 range",
+                glr_config_section_range(0, &start, &count) && count > 0);
+    ASSERT_TRUE("short flyout keeps full (unclamped) height",
+                sh >= count * LINE_H);
+
+    ASSERT_TRUE("point on section-0 row 0",
+                submenu_row_point(sx, sy, sw, sh, 0, &mx, &my));
+    before = ui_menu_bar_hit_test(mx, my);
+    ASSERT_INT_EQ("short flyout row 0 is an item", before.kind,
+                  UI_HIT_SUBMENU_ITEM);
+
+    ASSERT_INT_EQ("wheel over short flyout is still consumed",
+                  ui_menu_bar_handle_wheel_scroll(mx, my, 5), 1);
+    after = ui_menu_bar_hit_test(mx, my);
+    ASSERT_INT_EQ("short flyout did not scroll (kind)",
+                  after.kind, before.kind);
+    ASSERT_INT_EQ("short flyout did not scroll (ordinal)",
+                  after.line_idx, before.line_idx);
+}
+
 int main(void) {
     printf("--- ui_menu_bar tests ---\n");
 
@@ -874,6 +998,8 @@ int main(void) {
     test_dropdown_and_config_press();
     test_config_submenu_right_press();
     test_config_section_labels();
+    test_config_all_flyout_scroll();
+    test_config_short_flyout_consumes_but_no_scroll();
 #ifdef GL_STUBS
     test_msaa_label_dynamic();
     test_dropdown_geometry_pinned();

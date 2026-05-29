@@ -589,6 +589,9 @@ int glr_ctrl_router_handle_glut_scroll_wheel_button(int button, int state, int x
     int direction = (button == 3) ? -1 : 1;
     if (ui_state_help().visible) {
         glr_ctrl_help_scroll_by(direction);
+    } else if (ui_menu_bar_handle_wheel_scroll(x, y, direction)) {
+        /* Consumed by an open, overflowing menu flyout (same offset sign
+         * as the code-panel scroll path below). */
     } else if (editor_input_point_in_code_panel(x, y)) {
         editor_input_code_panel_scroll(direction);
     } else {
@@ -1489,6 +1492,14 @@ void glr_ctrl_mousewheel(int wheel, int direction, int x, int y) {
     editor_reset_input_effects();
     if (ui_state_help().visible) {
         glr_ctrl_help_scroll_by(-direction);
+        editor_request_redraw();
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+        return;
+    }
+    /* An open, overflowing menu flyout scrolls before the code panel /
+     * camera so the wheel never reaches what's behind it. Same offset
+     * sign as the code-panel scroll just below (-direction). */
+    if (ui_menu_bar_handle_wheel_scroll(x, y, -direction)) {
         editor_request_redraw();
         glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
         return;
