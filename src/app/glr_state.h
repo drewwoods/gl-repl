@@ -46,7 +46,7 @@ typedef struct {
     SceneViewMode ortho_mode;
     int wrap_at_comma;
     int code_panel_layout;
-    int syntax_highlight;   /* 0 = off, 1 = on, 2 = on + fake-bold */
+    int syntax_highlight;   /* 0 = off, 1 = on, 2 = on + drop-shadow */
     int code_focus;         /* 1 = hide derived C boilerplate chrome rows */
 } GlrPresentationState;
 

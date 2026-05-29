@@ -98,10 +98,11 @@ typedef struct {
     int              char_start;
     int              char_count;
     UiTextPanelColor color;
-    /* When non-zero the renderer draws this span "fake bold" (a solid
-     * centre pass plus 4 additive 1px-shifted passes). Driven by the
-     * "On + Bold" syntax-highlight config (GLR_CONFIG_SYNTAX_HIGHLIGHT). */
-    int              bold;
+    /* When non-zero the renderer draws this span with a drop shadow: a
+     * dark copy offset by (+1, -1) behind the glyphs, then the colored
+     * text on top. Driven by the "On + Shadow" syntax-highlight config
+     * (GLR_CONFIG_SYNTAX_HIGHLIGHT). */
+    int              shadow;
 } UiTextPanelColorSegment;
 
 /* -------------------------------------------------------------------------

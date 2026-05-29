@@ -227,12 +227,12 @@ static void test_alpha_text_enables_blending(void) {
                 gl_stub_counts[GL_STUB_glBlendFunc] > opaque_blend_func);
 }
 
-/* #30: bold segments no longer query glIsEnabled per-span — the caller
- * threads a blend_on bool instead. Verify bold still renders correctly
- * (enables blend, draws glyphs) without the per-span query. */
-static void test_bold_segment_blend_threaded(void) {
+/* #30: shadow segments no longer query glIsEnabled per-span — the caller
+ * threads a blend_on bool instead. Verify a drop-shadow span still renders
+ * correctly (enables blend, draws glyphs) without the per-span query. */
+static void test_shadow_segment_blend_threaded(void) {
     UiTextPanelRow row = {
-        .text = "bold text here",
+        .text = "shadow text here",
         .kind = UI_TEXT_PANEL_ROW_TEXT,
         .left_gutter_label = 1,
         .source_line_idx = 0,
@@ -245,26 +245,26 @@ static void test_bold_segment_blend_threaded(void) {
 
     row.color_segments[0] = (UiTextPanelColorSegment){
         .char_start = 0,
-        .char_count = 4,
+        .char_count = 6,
         .color = { 0.8f, 0.9f, 1.0f, 1.0f, 0 },
-        .bold = 1,
+        .shadow = 1,
     };
     row.color_segments[1] = (UiTextPanelColorSegment){
-        .char_start = 4,
+        .char_start = 6,
         .char_count = 10,
         .color = { 0.8f, 0.9f, 1.0f, 1.0f, 0 },
-        .bold = 0,
+        .shadow = 0,
     };
     row.color_segment_count = 2;
 
     gl_stub_counts_reset();
     ui_text_panel_render(&snap, &out);
 
-    ASSERT_INT_EQ("bold span does not call glIsEnabled",
+    ASSERT_INT_EQ("shadow span does not call glIsEnabled",
                   (int)gl_stub_counts[GL_STUB_glIsEnabled], 0);
-    ASSERT_TRUE("bold segment enables blend",
+    ASSERT_TRUE("shadow segment enables blend",
                 gl_stub_counts[GL_STUB_glEnable] > 0);
-    ASSERT_TRUE("bold segment draws glyphs",
+    ASSERT_TRUE("shadow segment draws glyphs",
                 gl_stub_counts[GL_STUB_glutBitmapCharacter] > 0);
 }
 
@@ -409,7 +409,7 @@ int main(void) {
     test_wrap_and_hit_are_panel_local();
     test_virtual_row_keeps_hit_target_out_of_generic_hit();
     test_alpha_text_enables_blending();
-    test_bold_segment_blend_threaded();
+    test_shadow_segment_blend_threaded();
     test_row_layout_consistency();
     test_row_layout_shared_across_kinds();
     test_color_segments_enable_blending();
