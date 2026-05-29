@@ -1010,6 +1010,23 @@ static int parse_command(const char *line, GLCmd *cmd,
             memcpy(args, open_p + 1, (size_t)alen);
             args[alen] = '\0';
         }
+
+        /* Reject trailing garbage after the command's ')': only
+         * whitespace, an optional ';', and a '// ...' line comment may
+         * follow. Without this, e.g. `glutSolidSphere(1,10,10)fafa`
+         * silently dropped the `fafa` and committed the command as if it
+         * weren't there. (glMaterialfv has its own compound-literal tail
+         * check; the general `(...)` command path had none.) */
+        {
+            const char *after = close_p + 1;
+            while (*after && isspace((unsigned char)*after)) after++;
+            if (*after == ';') after++;
+            while (*after && isspace((unsigned char)*after)) after++;
+            if (*after != '\0' && !(after[0] == '/' && after[1] == '/')) {
+                parser_emit_error_static(ctx, "unexpected text after ')'");
+                return 0;
+            }
+        }
     } else {
         if (!repl_copy_string_fits(func, sizeof(func), p))
             goto unknown_command;

@@ -1926,6 +1926,41 @@ int main(void) {
         remove(cmt_path);
     }
 
+    /* --- Trailing garbage after ')' is rejected (regression) ---------- */
+    {
+        /* `glutSolidSphere(1,10,10)fafa` used to silently drop the `fafa`
+         * and commit the command. Only whitespace, an optional ';', and a
+         * `// ...` comment may follow a command's close paren. Covers
+         * float-arg, enum, and no-arg `(...)` commands. */
+        const char *garbage[] = {
+            "glutSolidSphere(1, 10, 10)fafa", "glVertex3f(0, 0, 0)fafa",
+            "glBegin(GL_LINES)xyz", "glPushMatrix()junk",
+            "glColor3f(1, 0, 0) oops", "glRotatef(45, 0, 1, 0)1",
+            NULL };
+        for (int i = 0; garbage[i]; i++) {
+            glr_ctrl_reset_all(); declare_test_vars();
+            editor_input_set_text(garbage[i]);
+            editor_handle_key(';', 0, 0);
+            char msg[160];
+            snprintf(msg, sizeof msg, "trailing garbage rejected: %s", garbage[i]);
+            ASSERT_INT(msg, repl_state_document_count(), 0);
+        }
+
+        /* Valid trailing (nothing / ';' / `// ...` comment) still commits. */
+        const char *ok[] = {
+            "glVertex3f(0, 0, 0)", "glVertex3f(0, 0, 0) // note",
+            "glPushMatrix() // save", "glutSolidSphere(1, 10, 10) // ball",
+            NULL };
+        for (int i = 0; ok[i]; i++) {
+            glr_ctrl_reset_all(); declare_test_vars();
+            editor_input_set_text(ok[i]);
+            editor_handle_key(';', 0, 0);
+            char msg[160];
+            snprintf(msg, sizeof msg, "valid command commits: %s", ok[i]);
+            ASSERT_INT(msg, repl_state_document_count(), 1);
+        }
+    }
+
     printf("repl_core_io: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.run == g_harness.passed) ? 0 : 1;
 }
