@@ -243,7 +243,7 @@ static const char *const k_tab_keys_base[] = {
     "  Ctrl+Left            \tPrevious track",
     "  Ctrl+Right           \tNext track",
     "",
-    "F-Key Toggles:",
+    "F-Key Toggles  (Shift+F<n> steps backward):",
     NULL  /* dynamic F-key lines follow */
 };
 

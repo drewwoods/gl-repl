@@ -996,7 +996,8 @@ alongside `.cfg` (see the file-layout table for the shipped catalog).
 | Ctrl+Shift+R | Toggle camera auto-rotate |
 | Ctrl+Shift+V | Toggle View mode (2D / 3D) |
 | F1 | Help overlay — also the clickable statusbar "F1 help" keycap |
-| F2-F10 | Toggle visual overlays |
+| F2-F10 | Toggle visual overlays / step the bound config cycle forward (e.g. F9 = next light theme) |
+| Shift+F2-F10 | Step the bound config cycle backward (toggles flip either way; multi-state cycles like grid/axes/light theme reverse) |
 | F11 | Previous example / scene |
 | F12 | Next example / scene |
 
