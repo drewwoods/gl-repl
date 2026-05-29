@@ -144,7 +144,7 @@ void test_ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) { (v
 void test_ui_variable_panel_render(const UiVariablePanelView *view) { (void)view; }
 void test_ui_panels_render_scene_status(const UiRenderSnapshot *snap) { (void)snap; }
 void test_ui_tabbed_overlay_render(const UiOverlayState *in) { (void)in; }
-void test_ui_profile_panel_render(const UiRenderSnapshot *snap) { (void)snap; }
+void test_ui_profile_panel_render(const UiProfilePanelView *view) { (void)view; }
 void test_ui_memory_panel_render(const UiMemoryPanelView *view)  { (void)view; }
 
 /* Build the variable-panel view from live app state (mirrors the

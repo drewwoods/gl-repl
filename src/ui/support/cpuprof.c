@@ -3,10 +3,7 @@
  */
 #include "ui/support/cpuprof.h"
 #include "ui/core/gl_2d.h"
-#include "ui/app/layout.h"
 #include "ui/core/theme.h"
-#include "ui/subsystems/variable_panel.h"
-#include "ui/app/variable_panel_view.h"
 #include "support/cpuprof.h"
 
 #include <stdio.h>
@@ -33,46 +30,6 @@ static const float k_prof_dim[3]   = { 0.30f, 0.30f, 0.38f };
 #define PROF_BOTTOM_PAD      14
 #define PROF_COL_LABEL_W    150
 #define PROF_COL_LAST_W      72
-
-static int clamp_int(int v, int lo, int hi) {
-    if (hi < lo) return lo;
-    if (v < lo) return lo;
-    if (v > hi) return hi;
-    return v;
-}
-
-static int clamp_profile_y(int y, int scene_y, int scene_h, int panel_h) {
-    int min_y = scene_y + STATUSBAR_H + 4;
-    int max_y = scene_y + scene_h - panel_h - 4;
-
-    if (max_y >= min_y)
-        return clamp_int(y, min_y, max_y);
-    return min_y;
-}
-
-static void profile_panel_rect_for_height(const UiRenderSnapshot *snap, int panel_h, int *out_x, int *out_y) {
-    int scene_x, scene_y, scene_w, scene_h;
-    int panel_x, panel_y;
-
-    ui_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
-
-    if (snap->variable_panel.visible) {
-        panel_x = scene_x + scene_w - PROF_PANEL_W - PROF_PANEL_MARGIN;
-        panel_y = scene_y + scene_h - panel_h - PROF_PANEL_MARGIN;
-    } else {
-        UiVariablePanelView var_view = ui_app_variable_panel_view(snap);
-        int var_x, var_y, var_w, var_h;
-        ui_variable_panel_rect(&var_view, &var_x, &var_y, &var_w, &var_h);
-        panel_x = var_x + var_w - PROF_PANEL_W;
-        panel_y = var_y;
-    }
-
-    panel_x = clamp_int(panel_x, scene_x + 4, scene_x + scene_w - PROF_PANEL_W - 4);
-    panel_y = clamp_profile_y(panel_y, scene_y, scene_h, panel_h);
-
-    if (out_x) *out_x = panel_x;
-    if (out_y) *out_y = panel_y;
-}
 
 /* ========================================================================= */
 /* Helpers                                                                    */
@@ -200,25 +157,34 @@ static int visible_section_count(int profile_mode) {
 /* Rendering                                                                  */
 /* ========================================================================= */
 
-void ui_profile_panel_render(const UiRenderSnapshot *snap) {
-    int profile_mode = snap->profile_panel.mode;
+/* Panel total height for a given mode: header + column headings + one row per
+ * visible section + divider before FRAME_TOTAL + bottom padding. The
+ * controller needs this (via ui_profile_panel_height) to resolve the stacked
+ * anchor; the renderer uses it to size the frame. */
+int ui_profile_panel_height(UiProfilePanelMode mode) {
+    int visible_count = visible_section_count((int)mode);
+    return PROF_HEADER_H
+         + 18                           /* column heading row */
+         + visible_count * PROF_ROW_H
+         + 4                            /* divider before FRAME_TOTAL */
+         + PROF_BOTTOM_PAD
+         + PROF_PANEL_MARGIN;
+}
+
+int ui_profile_panel_width(void) {
+    return PROF_PANEL_W;
+}
+
+void ui_profile_panel_render(const UiProfilePanelView *view) {
+    int profile_mode = view->mode;
     if (profile_mode == PROFILE_PANEL_OFF) return;
 
-    int visible_count = visible_section_count(profile_mode);
+    int panel_h = ui_profile_panel_height((UiProfilePanelMode)profile_mode);
 
-    /* Panel total height: header + column headings + one row per section +
-     * divider before FRAME_TOTAL + bottom padding */
-    int panel_h  = PROF_HEADER_H
-                 + 18                           /* column heading row */
-                 + visible_count * PROF_ROW_H
-                 + 4                            /* divider before FRAME_TOTAL */
-                 + PROF_BOTTOM_PAD
-                 + PROF_PANEL_MARGIN;
+    int panel_x = view->panel_x;
+    int panel_y = view->panel_y;
 
-    int panel_x, panel_y;
-    profile_panel_rect_for_height(snap, panel_h, &panel_x, &panel_y);
-
-    gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
+    gl2d_begin(view->window_w, view->window_h);
 
     /* Background + Border */
     glEnable(GL_BLEND);

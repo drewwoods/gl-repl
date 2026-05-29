@@ -13,6 +13,7 @@ bench_repl
 /memprof_demo
 /variable_panel_demo
 /color_picker_demo
+/cpuprof_demo
 .cache/
 compile_commands.json
 coverage.lcov

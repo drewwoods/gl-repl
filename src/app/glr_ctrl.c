@@ -1230,6 +1230,60 @@ static UiMemoryPanelView glr_ctrl_build_memory_panel_view(const UiRenderSnapshot
     return v;
 }
 
+/* CPU profile panel stacking layout (controller-owned anchor, snapshot-free
+ * renderer). Same scene-relative spacing the panel used internally before it
+ * was narrowed. */
+enum {
+    PROF_PANEL_SCENE_MARGIN_PX = 12, /* gap from scene edge when the variable panel is visible */
+    PROF_PANEL_EDGE_PAD_PX     = 4,  /* min inset from the scene edge after clamping */
+};
+
+/* Resolve the CPU profile panel's stacked anchor (right edge of the scene, or
+ * the variable panel's right edge when it's visible) into the narrow view the
+ * renderer consumes — mirrors glr_ctrl_build_memory_panel_view. */
+static UiProfilePanelView glr_ctrl_build_profile_panel_view(const UiRenderSnapshot *snap) {
+    UiProfilePanelView v;
+    v.window_w = snap->viewport.window_w;
+    v.window_h = snap->viewport.window_h;
+    v.mode     = (UiProfilePanelMode)snap->profile_panel.mode;
+
+    int panel_w = ui_profile_panel_width();
+    int panel_h = ui_profile_panel_height(v.mode);
+
+    int scene_x, scene_y, scene_w, scene_h;
+    ui_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
+
+    int panel_x, panel_y;
+    if (snap->variable_panel.visible) {
+        panel_x = scene_x + scene_w - panel_w - PROF_PANEL_SCENE_MARGIN_PX;
+        panel_y = scene_y + scene_h - panel_h - PROF_PANEL_SCENE_MARGIN_PX;
+    } else {
+        UiVariablePanelView var_view = ui_app_variable_panel_view(snap);
+        int var_x, var_y, var_w, var_h;
+        ui_variable_panel_rect(&var_view, &var_x, &var_y, &var_w, &var_h);
+        panel_x = var_x + var_w - panel_w;
+        panel_y = var_y;
+    }
+
+    int min_x = scene_x + PROF_PANEL_EDGE_PAD_PX;
+    int max_x = scene_x + scene_w - panel_w - PROF_PANEL_EDGE_PAD_PX;
+    if (panel_x < min_x) panel_x = min_x;
+    if (panel_x > max_x) panel_x = max_x;
+
+    int min_y = scene_y + STATUSBAR_H + PROF_PANEL_EDGE_PAD_PX;
+    int max_y = scene_y + scene_h     - panel_h - PROF_PANEL_EDGE_PAD_PX;
+    if (max_y >= min_y) {
+        if (panel_y < min_y) panel_y = min_y;
+        if (panel_y > max_y) panel_y = max_y;
+    } else {
+        panel_y = min_y;
+    }
+
+    v.panel_x = panel_x;
+    v.panel_y = panel_y;
+    return v;
+}
+
 void glr_ctrl_display_frame(void) {
     int saved_flat_count;
     float live_predef_vals[MAX_PREDEF_VARS];
@@ -1424,7 +1478,10 @@ void glr_ctrl_display_frame(void) {
     prof_end(PROF_UI_PANELS);
 
     prof_begin(PROF_PROFILE_PANEL);
-    ui_profile_panel_render(&ui_snap);
+    {
+        UiProfilePanelView prof_view = glr_ctrl_build_profile_panel_view(&ui_snap);
+        ui_profile_panel_render(&prof_view);
+    }
     prof_end(PROF_PROFILE_PANEL);
 
     prof_begin(PROF_MEMORY_PANEL);
