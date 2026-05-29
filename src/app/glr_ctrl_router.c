@@ -1,0 +1,1512 @@
+/*
+ * glr_ctrl_router.c - GLUT input dispatch + UiHit routing for the controller.
+ *
+ * Carved out of glr_ctrl.c (the ~1450-line input half): keyboard / special /
+ * mouse / motion / wheel entry points, the glr_ctrl_router_* handlers, the
+ * UiHit code-panel route_* dispatch + drag/double-click tracking, help-overlay
+ * and scene-cycle routing, and the SIGINT-quit lifecycle. Pure routing — it
+ * calls back into glr_ctrl.c only through the seams in glr_ctrl_internal.h
+ * (drag snapshot, input-effect apply) and the public glr_ctrl.h surface, and
+ * reaches no scene/ header (the one scene-using helper,
+ * glr_ctrl_router_handle_post_filter_key, stays in glr_ctrl.c). It includes
+ * ui/ headers, so it is on the check-controller-boundaries ui allowlist.
+ */
+#include "app/glr_ctrl.h"
+#include "app/glr_ctrl_export.h"
+#include "app/glr_ctrl_replay_annotations.h"
+#include "subsystems/replay/replay_render.h"
+#include "subsystems/edit_overlays/edit_overlays.h"
+#include "c_compat.h"  /* STATIC_ASSERT (C99/C11 portable) */
+#include <ctype.h>
+#include <math.h>
+#include <errno.h>
+#include <signal.h>
+#include "gl_includes.h"
+#include "config.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include "app/glr_audio.h"
+#include "subsystems/color_picker/color_picker_state.h"
+#include "ui/subsystems/color_picker.h"   /* UI_HIT_COLOR_SWATCH routing */
+#include "editor/clipboard.h"
+#include "app/glr_completion.h"
+#include "app/glr_defaults.h"        /* CFG_DEFAULT_* */
+#include "app/glr_state.h"
+#include "editor/commit.h"
+#include "editor/completion.h"
+#include "editor/help_session.h"
+#include "editor/inline_file_prompt.h"
+#include "editor/inline_rename.h"
+#include "editor/input.h"
+#include "editor/search.h"
+#include "editor/state.h"
+#include "editor/undo.h"
+#include "app/glr_actions.h"
+#include "app/glr_config.h"
+#include "app/glr_camera.h"
+#include "app/glr_camera_export.h"
+#include "app/glr_debug.h"
+#include "keys.h"
+#include "support/memprof.h"
+#include "support/cpuprof.h"
+#include "repl/core.h"
+#include "repl/examples.h"          /* REPL_EXAMPLE_TAG_* */
+#include "repl/eval.h"
+#include "repl/parser.h"
+#include "repl/executor.h"
+#include "repl/export.h"
+#include "repl/help_text.h"
+#include "repl/pipeline.h"
+#include "repl/replay_annotations.h"
+#include "repl/source_scope.h"
+#include "repl/state_owners.h"
+#include "repl/tutorials.h"
+#include "subsystems/replay/replay.h"
+#include "subsystems/replay/replay_state.h"
+#include "subsystems/tutorial/tutorial.h"
+#include "subsystems/tutorial/tutorial_state.h"
+#include "ui/subsystems/replay_hud.h"
+#include "ui/app/autocomplete_panel.h"
+#include "ui/app/editor.h"
+#include "ui/app/layout.h"
+#include "ui/app/menu_bar.h"
+#include "ui/core/metrics.h"
+#include "ui/support/memprof.h"
+#include "ui/app/numeric_swatch.h"
+#include "ui/app/panels.h"
+#include "ui/app/repl_code_panel.h"
+#include "ui/support/cpuprof.h"
+#include "ui/app/snapshot.h"
+#include "ui/app/state.h"
+#include "ui/app/state_types.h" /* UI-chrome typedefs (CodePanel/Camera/Help/etc.) */
+#include "ui/core/tabbed_overlay.h"
+#include "ui/subsystems/variable_panel.h"
+#include "ui/app/variable_panel_view.h"
+#include "app/glr_color_picker_bridge.h"
+#include "app/glr_ctrl_internal.h"
+#include "subsystems/variable_panel/variable_panel_drag.h"
+
+/* ---- Keyboard router helpers ------------------------------------------ */
+
+int glr_ctrl_router_handle_save_key(unsigned char key) {
+    if (key == KEY_CTRL_S) {
+        /* Ctrl+S == File > Save Scene: active named scene ->
+         * <workspace>/<slug>.c; example/transient -> ./output.c. */
+        ReplExportLayout layout;
+        glr_ctrl_fill_export_layout(&layout);
+        repl_save_active_scene(&layout);
+        return 1;
+    }
+    return 0;
+}
+
+int glr_ctrl_router_handle_debug_dump_key(unsigned char key) {
+    if (key == KEY_CTRL_P) {
+        glr_debug_dump_editor(stdout, source_document_view());
+        glr_debug_dump_flat_commands_sync(stdout, source_document_view());
+        repl_set_status("Dumped editor + flat commands to stdout");
+        return 1;
+    }
+    return 0;
+}
+
+/* Quit safeguard: Ctrl+Q and SIGINT (Ctrl+C) write a recovery copy to
+ * a DISTINCT, findable file — never the active scene/workspace. The
+ * point is to rescue an unintended exit / forgotten save without
+ * silently clobbering the user's real scene; reload it with
+ * `./gl-repl quit-recovery.c`. (Not /tmp — the user would never find
+ * it; not the scene file — that would defeat the safeguard.) The
+ * filename lives in config.h as QUIT_RECOVERY_FILE. */
+
+static volatile sig_atomic_t g_quit_requested = 0;
+
+/* Async-signal-safe: only sets a sig_atomic_t flag. The actual save +
+ * exit runs on the normal path in glr_ctrl_tick(). */
+void glr_ctrl_request_quit(void) {
+    g_quit_requested = 1;
+}
+
+static void glr_ctrl_save_quit_recovery(void) {
+    ReplExportLayout layout;
+    glr_ctrl_fill_export_layout(&layout);
+    if (repl_export_save_output(QUIT_RECOVERY_FILE, source_document_view(),
+                                &layout)) {
+        printf("Saved recovery copy to %s (reload: ./%s %s)\n",
+               QUIT_RECOVERY_FILE, glr_ctrl_program_name(),
+               QUIT_RECOVERY_FILE);
+    }
+}
+
+int glr_ctrl_router_handle_quit_key(unsigned char key) {
+    if (key == KEY_CTRL_Q) {
+        glr_ctrl_save_quit_recovery();
+        exit(0);
+    }
+    return 0;
+}
+
+/* SET-step ack: while a tutorial SET (showcase) step is waiting, Enter /
+ * Tab / Space advances. Scoped strictly to SET steps inside
+ * tutorial_handle_ack_key so REQUIRE / COMMAND steps never have their
+ * keys swallowed here. Runs AFTER the existing controller routes (so
+ * Ctrl-keys, replay, cfg shortcuts, save, quit keep priority) and
+ * BEFORE editor_handle_key — see the chain in glr_ctrl_keyboard. */
+int glr_ctrl_router_handle_tutorial_ack_key(unsigned char key) {
+    return tutorial_handle_ack_key(key);
+}
+
+int glr_ctrl_router_handle_config_menu_key(unsigned char key) {
+    if (!editor_state_search()->active && key == '`') {
+        if (replay_active())
+            replay_stop();
+        glr_ctrl_restore_hidden_code_panel();
+        ui_menu_bar_open_config(repl_state_variables().anim_time);
+        return 1;
+    }
+    return 0;
+}
+
+int glr_ctrl_router_handle_replay_key(unsigned char key) {
+    return replay_handle_key(key);
+}
+
+int glr_ctrl_router_handle_cfg_shortcut_key(unsigned char key) {
+    return glr_cfg_handle_ascii_shortcut(key);
+}
+
+/* Ctrl+= / Ctrl+- drive the *same* Off->2x->4x->8x->16x cycle the
+ * Config "Accum AA" menu row uses (clamped, no wrap), so the keyboard
+ * and the menu are one coherent model — no latent sample count behind
+ * an "Off" state. Still gated on use_accum: with --noaccum there is no
+ * accumulation buffer to enable. */
+int glr_ctrl_router_handle_accum_samples_key(unsigned char key) {
+    GlrRenderState *rs = glr_state_render_mut();
+    int is_up = (key == '=' || key == '+');
+    int is_down = (key == KEY_CTRL_DASH ||
+                   (key == '-' &&
+                    (editor_input_active_modifiers() & GLUT_ACTIVE_CTRL)));
+
+    if (is_up && !(editor_input_active_modifiers() & GLUT_ACTIVE_CTRL))
+        return 0;
+    if (!is_up && !is_down)
+        return 0;
+
+    if (rs->use_accum) {
+        int n   = glr_config_state_count(GLR_CONFIG_ACCUM_AA);
+        int idx = glr_config_get(GLR_CONFIG_ACCUM_AA);
+        int next = idx + (is_up ? 1 : -1);
+        if (next < 0)     next = 0;
+        if (next > n - 1) next = n - 1;
+        if (next != idx)
+            glr_config_set(GLR_CONFIG_ACCUM_AA, next);
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Accum AA: %s",
+                 glr_config_state_name(GLR_CONFIG_ACCUM_AA, next));
+        repl_set_status(msg);
+    }
+    return 1;
+}
+
+/* Shared by the Ctrl+Shift+F shortcut and the status-bar keycap click.
+ * Toggling collapses the chrome header rows from ~20 to 0 (and back);
+ * the follow-scroll request keeps the active edit row on screen, and
+ * the sync mirrors the new flag into the code-panel UI snapshot. */
+void glr_ctrl_toggle_code_focus(void) {
+    GlrPresentationState *p = glr_state_presentation_mut();
+    p->code_focus = !p->code_focus;
+    glr_ctrl_sync_ui_chrome();
+    editor_scroll_follow_cursor_set(1);
+    repl_set_status(p->code_focus ? "Code focus: ON" : "Code focus: OFF");
+}
+
+/* Ctrl+Shift+F: toggle the code-panel focus view. Ctrl+F (no Shift)
+ * stays the search shortcut handled downstream in editor_handle_key;
+ * the Shift modifier disambiguates, and this router runs ahead of the
+ * editor so search never sees the shifted form. Hidden shortcut only —
+ * no Config row, no @cfg (mirrors the Ctrl+N post-filter pattern). */
+int glr_ctrl_router_handle_code_focus_key(unsigned char key) {
+    if (key != KEY_CTRL_F)
+        return 0;
+    if (!(editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT))
+        return 0;
+    glr_ctrl_toggle_code_focus();
+    return 1;
+}
+
+/* The Ctrl+Shift camera shortcuts (Ctrl+Shift+C reset / +O focus-origin
+ * / +V view mode) have no dedicated router: they are ordinary Config
+ * rows carrying a GLUT_ACTIVE_SHIFT modifier, dispatched by the
+ * two-pass glr_cfg_handle_ascii_shortcut (see glr_actions.c). */
+
+/* ---- Special-key router helpers --------------------------------------- */
+
+int glr_ctrl_router_handle_replay_special(int key) {
+    return replay_handle_special(key);
+}
+
+int glr_ctrl_router_handle_cfg_special_shortcut(int key) {
+    return glr_cfg_handle_special_shortcut(key);
+}
+
+int glr_ctrl_router_handle_horizontal_audio_special(int key) {
+    if (key != GLUT_KEY_LEFT && key != GLUT_KEY_RIGHT)
+        return 0;
+    if (!(editor_input_active_modifiers() & GLUT_ACTIVE_CTRL))
+        return 0;
+    if (key == GLUT_KEY_LEFT)
+        glr_audio_prev_track();
+    else
+        glr_audio_next_track();
+    return 1;
+}
+
+/* Snapshot of the live help overlay for pure geometry queries
+ * (scroll clamp, click hit-test). Mirrors the per-frame state the
+ * renderer is handed in glr_ctrl_display_frame. */
+static UiOverlayState glr_ctrl_help_overlay_state(void) {
+    UiViewportState vp = ui_state_viewport();
+    EditorHelpSession s = editor_help_session_view();
+    UiOverlayState st = {
+        .visible    = ui_state_help().visible,
+        .tab_idx    = s.tab_idx,
+        .scroll     = s.scroll,
+        .viewport_w = vp.window_w,
+        .viewport_h = vp.window_h,
+        .content    = glr_ctrl_help_overlay_content(),
+    };
+    return st;
+}
+
+/* Scroll the help session, then clamp to the active tab's real
+ * bounds so the offset can't run past the end (which would otherwise
+ * have to be "unwound" before an upward scroll did anything). */
+void glr_ctrl_help_scroll_by(int delta) {
+    editor_help_session_scroll_by(delta);
+    UiOverlayState st = glr_ctrl_help_overlay_state();
+    int max_scroll = ui_tabbed_overlay_max_scroll(&st);
+    int scroll = editor_help_session_scroll();
+    if (scroll > max_scroll) scroll = max_scroll;
+    if (scroll < 0) scroll = 0;
+    editor_help_session_set_scroll(scroll);
+}
+
+/* Left-click routing while the modal help overlay is up: tab bar
+ * selects a tab, anywhere outside the panel dismisses, body clicks
+ * are swallowed (the overlay is modal). */
+int glr_ctrl_router_handle_help_click(int button, int state, int x, int y) {
+    if (button != GLUT_LEFT_BUTTON || state != GLUT_DOWN)
+        return 0;
+    if (!ui_state_help().visible)
+        return 0;
+    UiOverlayState st = glr_ctrl_help_overlay_state();
+    UiOverlayHit hit = ui_tabbed_overlay_hit_test(&st, x, y);
+    if (hit.kind == UI_OVERLAY_HIT_OUTSIDE) {
+        glr_ctrl_toggle_help();          /* click-away dismiss */
+        editor_request_redraw();
+        return 1;
+    }
+    if (hit.kind == UI_OVERLAY_HIT_TAB) {
+        editor_help_session_set_tab(hit.tab);
+        editor_help_session_set_scroll(0);
+        editor_request_redraw();
+        return 1;
+    }
+    return 1;                            /* modal: swallow body clicks */
+}
+
+int glr_ctrl_router_handle_help_tab_special(int key) {
+    if (!ui_state_help().visible)
+        return 0;
+    if (key == GLUT_KEY_LEFT) {
+        glr_action_help_tab_prev();
+        return 1;
+    }
+    if (key == GLUT_KEY_RIGHT) {
+        glr_action_help_tab_next();
+        return 1;
+    }
+    return 0;
+}
+
+int glr_ctrl_router_handle_help_scroll_special(int key) {
+    if (!ui_state_help().visible)
+        return 0;
+    switch (key) {
+    case GLUT_KEY_UP:        glr_ctrl_help_scroll_by(-1); return 1;
+    case GLUT_KEY_DOWN:      glr_ctrl_help_scroll_by(1);  return 1;
+    case GLUT_KEY_PAGE_UP:   glr_ctrl_help_scroll_by(-5); return 1;
+    case GLUT_KEY_PAGE_DOWN: glr_ctrl_help_scroll_by(5);  return 1;
+    default: return 0;
+    }
+}
+
+/* Shared by the F1 key and the status-bar "F1 help" keycap click. */
+void glr_ctrl_toggle_help(void) {
+    UiHelpState *help = ui_state_help_mut();
+    help->visible = !help->visible;
+    editor_help_session_set_tab(0);
+    editor_help_session_set_scroll(0);
+}
+
+void glr_ctrl_close_help(void) {
+    UiHelpState *help = ui_state_help_mut();
+    help->visible = 0;
+    editor_help_session_set_tab(0);
+    editor_help_session_set_scroll(0);
+}
+
+int glr_ctrl_router_handle_escape_key(unsigned char key) {
+    if (key != KEY_ESC)
+        return 0;
+    if (color_picker_active_line() >= 0) {
+        color_picker_stop();
+        editor_request_redraw();
+        return 1;
+    }
+    if (ui_state_help().visible) {
+        glr_ctrl_close_help();
+        editor_request_redraw();
+        return 1;
+    }
+    return 0;
+}
+
+int glr_ctrl_router_handle_help_toggle_special(int key) {
+    if (key == GLUT_KEY_F1) {
+        glr_ctrl_toggle_help();
+        return 1;
+    }
+    return 0;
+}
+
+static void cycle_example_or_user_scene_dir(int direction) {
+    glr_ctrl_reset_transients();
+    editor_undo_note_wholesale_replacement();
+    int count = repl_example_count();
+    int active_scene = repl_active_user_scene();
+
+    if (active_scene >= 0) {
+        int start = active_scene + direction;
+        int end = (direction > 0) ? MAX_USER_SCENES : -1;
+        for (int scene_idx = start; scene_idx != end; scene_idx += direction) {
+            if (repl_user_scene_slot_used(scene_idx)) {
+                if (repl_load_user_scene_idx(scene_idx))
+                    editor_load_line_to_input(editor_state_edit_line());
+                return;
+            }
+        }
+        if (count > 0)
+            editor_state_edit_line_set(repl_load_example((direction > 0) ? 0 : count - 1));
+        return;
+    }
+
+    if (count > 0) {
+        int next = repl_state_scenes().active_example_idx + direction;
+        if (next >= 0 && next < count) {
+            editor_state_edit_line_set(repl_load_example(next));
+            return;
+        }
+    }
+
+    int start = (direction > 0) ? 0 : MAX_USER_SCENES - 1;
+    int end = (direction > 0) ? MAX_USER_SCENES : -1;
+    for (int scene_idx = start; scene_idx != end; scene_idx += direction) {
+        if (repl_user_scene_slot_used(scene_idx)) {
+            if (repl_load_user_scene_idx(scene_idx))
+                editor_load_line_to_input(editor_state_edit_line());
+            return;
+        }
+    }
+    if (count > 0)
+        editor_state_edit_line_set(repl_load_example((direction > 0) ? 0 : count - 1));
+}
+
+static void cycle_example_or_user_scene(void) {
+    cycle_example_or_user_scene_dir(1);
+}
+
+static void cycle_example_or_user_scene_prev(void) {
+    cycle_example_or_user_scene_dir(-1);
+}
+
+int glr_ctrl_router_handle_scene_cycle_special(int key) {
+    if (key == GLUT_KEY_F12) {
+        cycle_example_or_user_scene();
+        return 1;
+    }
+    if (key == GLUT_KEY_F11) {
+        cycle_example_or_user_scene_prev();
+        return 1;
+    }
+    return 0;
+}
+
+/* ---- Mouse / motion router helpers ------------------------------------ */
+
+int glr_ctrl_router_handle_variable_panel_drag_begin(int button, int state, int x, int y) {
+    if (state != GLUT_DOWN) return 0;
+    if (!variable_panel_visible()) return 0;
+    if (button != GLUT_LEFT_BUTTON && button != GLUT_RIGHT_BUTTON)
+        return 0;
+    int row_idx;
+    UiVariablePanelView var_view =
+        ui_app_variable_panel_view_live(repl_eval_predef_view().count);
+    if (!ui_variable_panel_hit_row(&var_view, x, y, &row_idx))
+        return 0;
+    if (replay_active())
+        replay_stop();
+    int log_mode = (button == GLUT_RIGHT_BUTTON) ? 1 : 0;
+    variable_panel_handle_drag_begin(row_idx, log_mode, x);
+    editor_request_redraw();
+    return 1;
+}
+
+int glr_ctrl_router_handle_variable_panel_drag_release(int state) {
+    if (state != GLUT_UP) return 0;
+    if (!variable_panel_drag_active()) return 0;
+    variable_panel_handle_drag_reset();
+    editor_request_redraw();
+    return 1;
+}
+
+int glr_ctrl_router_handle_right_config_press(int button, int state, int x, int y) {
+    if (state != GLUT_DOWN || button != GLUT_RIGHT_BUTTON)
+        return 0;
+    UiHit hit = ui_panels_handle_right_press(x, y);
+    if (hit.kind == UI_HIT_SUBMENU_ITEM && hit.cmd_idx == GLR_MENU_CONFIG && hit.item_idx >= 0) {
+        glr_cfg_cycle_row(hit.item_idx, -1);
+        editor_request_redraw();
+        return 1;
+    }
+    return 0;
+}
+
+int glr_ctrl_router_handle_scene_press(int button, int state, int x, int y) {
+    if (state != GLUT_DOWN || button != GLUT_LEFT_BUTTON)
+        return 0;
+    /* The scene region is owned by the camera, but the floating color
+     * picker can overlap it. Give the picker first crack on press; if
+     * the click lands outside its rects the peer dismisses itself
+     * (closed=1) and we redraw but fall through so the camera sees
+     * the event. */
+    ColorPickerInputResult r = color_picker_handle_press(x, y);
+    if (r.closed || r.changed)
+        editor_request_redraw();
+    if (r.consumed)
+        return 1;
+    return 0;
+}
+
+int glr_ctrl_router_handle_camera_mouse(int button, int state, int x, int y) {
+    glr_ctrl_sync_camera_control_mode();
+    if (state == GLUT_DOWN)
+        ui_state_pointer_set(x, y, button);
+    else if (state == GLUT_UP)
+        ui_state_pointer_set(x, y, -1);
+    else
+        ui_state_pointer_set_pos(x, y);
+    glr_camera_mouse_event(button, state, x, y, editor_input_active_modifiers());
+    return 1;
+}
+
+static void glr_ctrl_apply_variable_panel_value_change(
+        const VariablePanelValueChange *value_change) {
+    ReplCompiledChange compiled;
+    ReplCompileContext ctx;
+    VariablePanelDragState drag;
+    char err[REPL_STATUS_TEXT_MAX] = "";
+    int var_idx;
+    int capture_undo;
+
+    if (!value_change || !value_change->name[0])
+        return;
+
+    drag = variable_panel_drag();
+    var_idx = drag.var_idx;
+    ReplPredefView predef = repl_eval_predef_view();
+    if (var_idx < 0 || var_idx >= predef.count)
+        return;
+    if (strcmp(predef.vars[var_idx].name, value_change->name) != 0) {
+        var_idx = repl_eval_find_predef_var_idx(value_change->name);
+        if (var_idx < 0)
+            return;
+    }
+    if (predef.vars[var_idx].value == value_change->value)
+        return;
+
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    /* repl_compile_context_from_live(editor_state_edit_line()) defaults insert_mode to 0
+     * (non-editor convention); the editor-side caller knows the live
+     * value and overrides. */
+    ctx.insert_mode = editor_insert_mode();
+    if (repl_compile_set_predef_value(value_change->name, value_change->value,
+                                      &ctx, &compiled,
+                                      err, sizeof(err)) != REPL_COMPILE_OK) {
+        repl_set_status_error(err[0] ? err : "Variable update failed");
+        return;
+    }
+
+    capture_undo = !variable_panel_drag_undo_snapshot_pushed();
+    if (!editor_commit_apply_external_change(&compiled, capture_undo, 0)) {
+        repl_set_status_error("Command buffer full!");
+        return;
+    }
+    if (capture_undo)
+        variable_panel_drag_mark_undo_snapshot_pushed();
+}
+
+int glr_ctrl_router_handle_variable_panel_motion(int x, int y) {
+    VariablePanelValueChange value_change;
+
+    (void)y;
+    if (!variable_panel_drag_active())
+        return 0;
+    if (variable_panel_handle_drag_motion(x, &value_change))
+        glr_ctrl_apply_variable_panel_value_change(&value_change);
+    editor_request_redraw();
+    return 1;
+}
+
+int glr_ctrl_router_handle_camera_motion(int x, int y) {
+    glr_ctrl_sync_camera_control_mode();
+    glr_camera_drag_motion(x, y);
+    return 1;
+}
+
+int glr_ctrl_router_handle_camera_pointer_set(int x, int y) {
+    glr_camera_pointer_set(x, y);
+    ui_state_pointer_set_pos(x, y);
+    return 1;
+}
+
+int glr_ctrl_router_handle_glut_scroll_wheel_button(int button, int state, int x, int y) {
+#ifdef USE_GLUT
+    if ((button != 3 && button != 4) || state != GLUT_DOWN)
+        return 0;
+    int direction = (button == 3) ? -1 : 1;
+    if (ui_state_help().visible) {
+        glr_ctrl_help_scroll_by(direction);
+    } else if (editor_input_point_in_code_panel(x, y)) {
+        editor_input_code_panel_scroll(direction);
+    } else {
+        glr_camera_add_zoom_velocity(direction == -1 ? -0.3f : 0.3f);
+    }
+    editor_request_redraw();
+    return 1;
+#else
+    (void)button; (void)state; (void)x; (void)y;
+    return 0;
+#endif
+}
+
+/* ---- Code-panel UiHit dispatch --------------------------------------- */
+
+/* Code-panel selection drag tracking. Press handlers set the anchor
+ * to the clicked source-cmd row; motion re-runs ui_panels_hit_test
+ * to derive the drag target and extends the editor selection.
+ * Release on UP clears the active flag. The state lives here (not in
+ * ui_panels.c) because UI input files report hit-test data only. */
+static int g_code_panel_drag_active = 0;
+static int g_code_panel_drag_anchor = -1;
+static int g_code_panel_drag_moved  = 0;
+/* Press char column inside the active-edit-row drag. -1 when the
+ * press wasn't on a code-text row (gutter / insert-line / non-text
+ * hits don't arm an input-row drag). The drag motion handler reads
+ * this to decide between per-char input-buffer selection (drag stays
+ * on the active edit row) and the existing line-range path. */
+static int g_code_panel_drag_char_anchor = -1;
+
+/* Double-click detection: previous UI_HIT_CODE_TEXT press timestamp
+ * and target. A second press at the same (line, char) within
+ * DOUBLE_CLICK_MS reads as a double-click and selects the word under
+ * the cursor. Using line/char instead of pixel coords means small
+ * mouse jitter between presses doesn't break the gesture. */
+#define DOUBLE_CLICK_MS 400u
+static unsigned int g_last_text_press_ms     = 0;
+static int          g_last_text_press_line   = -1;
+static int          g_last_text_press_char   = -1;
+/* Scene-tab double-click: a 2nd press on the same tab display index
+ * within DOUBLE_CLICK_MS triggers inline rename (user tabs only). */
+static unsigned int g_last_tab_press_ms      = 0;
+static int          g_last_tab_press_idx     = -1;
+/* Test clock seam mirrors editor_input_set_modifier_provider_for_test:
+ * tests that drive a double-click without a live GLUT context replace
+ * the clock with a deterministic source. Production code falls back to
+ * glutGet(GLUT_ELAPSED_TIME). */
+static unsigned int (*g_double_click_clock_ms_for_test)(void) = NULL;
+
+void glr_ctrl_router_set_double_click_clock_for_test(
+    unsigned int (*clock_ms)(void)) {
+    g_double_click_clock_ms_for_test = clock_ms;
+    /* Tests typically arrange a fresh clock per case — wipe the
+     * stored press so prior real-time history can't leak across. */
+    g_last_text_press_ms   = 0;
+    g_last_text_press_line = -1;
+    g_last_text_press_char = -1;
+    g_last_tab_press_ms    = 0;
+    g_last_tab_press_idx   = -1;
+}
+
+static unsigned int current_double_click_ms(void) {
+    if (g_double_click_clock_ms_for_test)
+        return g_double_click_clock_ms_for_test();
+    return (unsigned int)glutGet(GLUT_ELAPSED_TIME);
+}
+
+void glr_ctrl_router_reset_code_panel_drag(void) {
+    g_code_panel_drag_active = 0;
+    g_code_panel_drag_anchor = -1;
+    g_code_panel_drag_moved  = 0;
+    g_code_panel_drag_char_anchor = -1;
+}
+
+/* Apply an input-row drag motion: if the press char-anchor is armed
+ * and the drag still hits the active edit row, grow the input-buffer
+ * selection toward target_char. Returns 1 if handled (caller should
+ * stop processing), 0 otherwise (caller falls through to line-range).
+ * Exposed in glr_ctrl.h so tests can drive the per-char logic without
+ * computing pixel coordinates that match the live panel layout. */
+int glr_ctrl_router_apply_input_row_drag(int target_line, int target_char) {
+    if (!g_code_panel_drag_active || g_code_panel_drag_anchor < 0)
+        return 0;
+    if (g_code_panel_drag_char_anchor < 0)
+        return 0;
+    if (target_line != g_code_panel_drag_anchor)
+        return 0;
+    if (target_line != editor_state_edit_line())
+        return 0;
+    if (target_char < 0)
+        return 0;
+    editor_cursor_pos_extend_selection(target_char);
+    g_code_panel_drag_moved = 1;
+    glr_action_cursor_blink_reset();
+    editor_request_redraw();
+    return 1;
+}
+
+/* Common epilog for clicks that move the editor cursor: blink reset,
+ * autocomplete clear, selection clear, redraw. Mirrors the legacy
+ * ui_panels_handle_code_panel_click tail. */
+static void route_code_click_epilog(void) {
+    glr_action_cursor_blink_reset();
+    /* On a click that landed the cursor on the tutorial's expected
+     * commit line, refresh autocomplete so the shadow ghost
+     * reappears; anywhere else, clear to drop stale completions. */
+    if (tutorial_active() &&
+        editor_state_edit_line() == tutorial_expected_commit_line())
+        editor_completion_update();
+    else
+        editor_completion_clear();
+    editor_selection_clear_line_range();
+    editor_request_redraw();
+}
+
+/* Select the word containing (line_idx, char_idx) as an input-buffer
+ * selection. Navigates to the line first (reloads input) so the word
+ * walk runs against the row's actual canonical text. char_idx outside
+ * a word leaves the buffer unselected. Public so tests can drive
+ * double-click selection without faking GLUT_ELAPSED_TIME. */
+void glr_ctrl_router_select_word_at(int line_idx, int char_idx) {
+    if (line_idx < 0)
+        return;
+    editor_navigate_to_line(line_idx);
+
+    const char *text = editor_input_text();
+    int len = editor_input_len();
+    int word_start = char_idx;
+    int word_end   = char_idx;
+    editor_input_word_bounds_at(text, len, char_idx, &word_start, &word_end);
+    if (word_end <= word_start) {
+        /* Clicked between words / on whitespace: leave cursor placed
+         * but no selection. */
+        editor_cursor_pos_set(char_idx);
+        return;
+    }
+    /* Place cursor at word_start, then atomically pin and extend to
+     * word_end. Doing it as two steps with editor_input_anchor_set
+     * would collapse immediately (anchor == cursor) — that's the
+     * footgun the extend helper was added to avoid. */
+    editor_cursor_pos_set(word_start);
+    editor_cursor_pos_extend_selection(word_end);
+}
+
+/* UI_HIT_CODE_TEXT: navigate to clicked line, set cursor column, arm
+ * the selection drag anchor. A press that hits the same (line, char)
+ * as the previous press within DOUBLE_CLICK_MS reads as a double-click
+ * and selects the word at the cursor instead of placing a bare
+ * cursor. */
+static int route_code_text_hit(const UiHit *hit) {
+    /* A non-swatch click on the code panel closes any open color picker
+     * (matches legacy ui_panels_handle_code_panel_press behaviour). */
+    color_picker_stop();
+
+    unsigned int now_ms = current_double_click_ms();
+    int is_double_click = (g_last_text_press_line == hit->line_idx &&
+                           g_last_text_press_char == hit->char_idx &&
+                           hit->line_idx >= 0 &&
+                           hit->char_idx >= 0 &&
+                           now_ms - g_last_text_press_ms < DOUBLE_CLICK_MS);
+    g_last_text_press_ms   = now_ms;
+    g_last_text_press_line = hit->line_idx;
+    g_last_text_press_char = hit->char_idx;
+
+    if (is_double_click) {
+        glr_ctrl_router_select_word_at(hit->line_idx, hit->char_idx);
+        route_code_click_epilog();
+        /* Double-click also arms the drag in case the user starts to
+         * drag-extend the word selection. */
+        if (hit->line_idx >= 0 && hit->line_idx < repl_state_document_count()) {
+            g_code_panel_drag_active = 1;
+            g_code_panel_drag_anchor = hit->line_idx;
+            g_code_panel_drag_moved  = 0;
+            g_code_panel_drag_char_anchor = hit->char_idx;
+        }
+        return 1;
+    }
+
+    if (hit->line_idx >= 0)
+        editor_navigate_to_line(hit->line_idx);
+    if (hit->char_idx >= 0)
+        editor_cursor_pos_set(hit->char_idx);
+    route_code_click_epilog();
+
+    /* Arm drag anchor for committed lines only. */
+    if (hit->line_idx >= 0 && hit->line_idx < repl_state_document_count()) {
+        g_code_panel_drag_active = 1;
+        g_code_panel_drag_anchor = hit->line_idx;
+        g_code_panel_drag_moved  = 0;
+        /* Record the press column so a drag that stays on the active
+         * edit row can build a per-character input-buffer selection.
+         * The press itself moved the cursor to hit->char_idx (and
+         * cleared any anchor as the Phase B default of the
+         * editor-input-selection plan), so on the first drag-motion
+         * the extend helper pins this column. */
+        g_code_panel_drag_char_anchor = hit->char_idx;
+    } else {
+        glr_ctrl_router_reset_code_panel_drag();
+    }
+    return 1;
+}
+
+/* UI_HIT_CODE_INSERT_LINE: insertion virtual row in insert mode. Set
+ * cursor column but do not navigate (matches legacy on_insert_line=1
+ * behaviour). No drag anchor — the insert row is virtual. */
+static int route_code_insert_line_hit(const UiHit *hit) {
+    color_picker_stop();
+    if (hit->char_idx >= 0)
+        editor_cursor_pos_set(hit->char_idx);
+    route_code_click_epilog();
+    glr_ctrl_router_reset_code_panel_drag();
+    return 1;
+}
+
+/* UI_HIT_CODE_GUTTER: clicking the line-number column selects the
+ * row. Same dispatch as CODE_TEXT minus the cursor-column move. */
+static int route_code_gutter_hit(const UiHit *hit) {
+    color_picker_stop();
+    if (hit->line_idx >= 0)
+        editor_navigate_to_line(hit->line_idx);
+    route_code_click_epilog();
+    if (hit->line_idx >= 0 && hit->line_idx < repl_state_document_count()) {
+        g_code_panel_drag_active = 1;
+        g_code_panel_drag_anchor = hit->line_idx;
+        g_code_panel_drag_moved  = 0;
+    } else {
+        glr_ctrl_router_reset_code_panel_drag();
+    }
+    return 1;
+}
+
+/* UI_HIT_CODE_PANEL_CHROME: inert code-panel chrome (e.g. statusbar).
+ * Consume the press so scene/camera handlers do not see it, but do not
+ * move the cursor or selection. */
+static int route_code_panel_chrome_hit(void) {
+    color_picker_stop();
+    glr_ctrl_router_reset_code_panel_drag();
+    editor_request_redraw();
+    return 1;
+}
+
+/* UI_HIT_CODE_FOCUS_TOGGLE: the statusbar "focus" keycap. Same action
+ * as the Ctrl+Shift+F shortcut — go through the shared toggle so both
+ * paths sync chrome, request follow-scroll, and post the status line. */
+static int route_code_focus_toggle_hit(void) {
+    glr_ctrl_toggle_code_focus();
+    glr_ctrl_router_reset_code_panel_drag();
+    editor_request_redraw();
+    return 1;
+}
+
+/* UI_HIT_HELP_TOGGLE: the statusbar "F1 help" keycap. Same action as
+ * the F1 key — go through the shared toggle so the overlay tab/scroll
+ * reset identically. */
+static int route_help_toggle_hit(void) {
+    glr_ctrl_toggle_help();
+    glr_ctrl_router_reset_code_panel_drag();
+    editor_request_redraw();
+    return 1;
+}
+
+/* UI_HIT_INLINE_COLOR_SWATCH: toggle / open the floating color picker
+ * for the swatch's source line. Undo capture is owned by the picker's
+ * writeback path (color_picker_write_cmd → editor_commit_apply_external_change
+ * with capture_undo on the first slider edit per session), so
+ * a session that opens and closes without editing leaves the undo ring
+ * untouched. */
+static int route_inline_color_swatch_hit(const UiHit *hit, int my) {
+    if (hit->line_idx < 0)
+        return 0;
+    if (color_picker_active_line() == hit->line_idx) {
+        color_picker_stop();
+    } else {
+        color_picker_start(hit->line_idx, my);
+    }
+    editor_request_redraw();
+    return 1;
+}
+
+static int route_numeric_swatch_hit(const UiHit *hit) {
+    int edit_line = editor_state_edit_line();
+
+    if (editor_insert_mode() ||
+        edit_line < 0 || edit_line >= repl_state_document_count())
+        return 1;
+
+    if (tutorial_active() &&
+        !tutorial_guard_source_change(edit_line, 1, 1))
+        return 1;
+
+    editor_commit_apply_swatch_change(edit_line, hit->item_idx > 0 ? 1 : -1);
+    return 1;
+}
+
+/* UI_HIT_COLOR_SWATCH: floating picker slider control press. The
+ * picker has its own internal hit-test for SV/hue/alpha regions and
+ * starts a drag on press. */
+static int route_color_picker_control_hit(int x, int y) {
+    ColorPickerInputResult r = color_picker_handle_press(x, y);
+    if (r.changed || r.closed)
+        editor_request_redraw();
+    return r.consumed;
+}
+
+/* UI_HIT_PIN_BUTTON: Search / Replay pinned right-side button. */
+static int route_pin_button_hit(const UiHit *hit) {
+    ui_menu_bar_close();
+    switch (hit->item_idx) {
+    case UI_MENU_BAR_PIN_REPLAY:
+        replay_handle_pin_clicked();
+        break;
+    case UI_MENU_BAR_PIN_SEARCH:
+        editor_search_handle_key(KEY_CTRL_F);
+        ui_menu_bar_note_search_opened(repl_state_variables().anim_time);
+        break;
+    default:
+        break;
+    }
+    editor_request_redraw();
+    return 1;
+}
+
+/* UI_HIT_MENU_BUTTON: top-level menu-bar button. Click on the open
+ * menu's button toggles it closed; click on a different button
+ * switches the open dropdown. */
+static int route_menu_button_hit(const UiHit *hit) {
+    int menu_id = hit->cmd_idx;
+    if (menu_id < 0) return 0;
+
+    int open_menu = ui_menu_bar_open_menu_id();
+    if (open_menu == menu_id)
+        ui_menu_bar_close();
+    else
+        ui_menu_bar_set_open_menu(menu_id, repl_state_variables().anim_time);
+    editor_request_redraw();
+    return 1;
+}
+
+/* UI_HIT_MENU_ITEM: open dropdown row click. Activates the action
+ * via glr_action_menu_item_activate using both menu_id (cmd_idx)
+ * and item_idx from the hit payload. The action returns 1 if the
+ * dropdown should close after activation (most action items) or 0 to
+ * leave it open (cycle / toggle items). */
+static int route_menu_item_hit(const UiHit *hit) {
+    if (hit->cmd_idx < 0 || hit->item_idx < 0) return 0;
+    int close = glr_action_menu_item_activate(hit->cmd_idx, hit->item_idx);
+    if (close)
+        ui_menu_bar_close();
+    editor_request_redraw();
+    return 1;
+}
+
+/* UI_HIT_SUBMENU_ITEM: a flyout row. cmd_idx is the owning menu_id;
+ * item_idx is the absolute target index the provider resolved.
+ *  - MENU_SCENE: item_idx = global flat example index → load it and
+ *    dismiss the menu (a scene pick is a one-shot action).
+ *  - MENU_TUTORIALS: item_idx = global tutorial index → start it via
+ *    tutorial_start (REPL-side; sidesteps glr_action_menu_item_activate,
+ *    whose MENU_TUTORIALS branch only owns the top-level tag-row /
+ *    Restart / Exit dispatch) and dismiss the menu.
+ *  - MENU_CONFIG: item_idx = absolute g_cfg_items[] index → cycle the
+ *    item forward via glr_cfg_cycle_row (NOT through
+ *    glr_action_menu_item_activate, whose Config branch is the inert
+ *    parent-row guard) and KEEP the dropdown + flyout open so repeated
+ *    toggles work, matching the old flat Config dropdown. (Parent-row
+ *    guard added in Step 5 of config-menu-submenu-sections.md.) */
+static int route_submenu_item_hit(const UiHit *hit) {
+    if (hit->item_idx < 0)
+        return 0;
+    if (hit->cmd_idx == GLR_MENU_CONFIG) {
+        glr_cfg_cycle_row(hit->item_idx, 1);
+        editor_request_redraw();
+        return 1;
+    }
+    if (hit->cmd_idx == GLR_MENU_TUTORIALS) {
+        tutorial_start(hit->item_idx);
+        ui_menu_bar_close();
+        editor_request_redraw();
+        return 1;
+    }
+    glr_scene_load_example(hit->item_idx);
+    ui_menu_bar_close();
+    editor_request_redraw();
+    return 1;
+}
+
+/* UI_HIT_CODE_PANEL_TAB: scene tab strip click. Single click switches
+ * scenes through the shared Scene-menu load helpers (reusing the exact
+ * load sequence — no duplication); a 2nd click on the same user tab
+ * within DOUBLE_CLICK_MS opens the existing status-bar inline rename.
+ * The display index is resolved against the *live* scene shape so a
+ * frame-stale click can't misroute. Always consumed. */
+static int route_scene_tab_hit(const UiHit *hit) {
+    int idx           = hit->item_idx;
+    int user_tab_count = repl_user_scene_count();
+    int example_idx   = repl_state_scenes().active_example_idx;
+    int active_slot   = repl_active_user_scene();
+    unsigned int now_ms = current_double_click_ms();
+    int is_double = (g_last_tab_press_idx >= 0 &&
+                     g_last_tab_press_idx == idx &&
+                     now_ms - g_last_tab_press_ms < DOUBLE_CLICK_MS);
+
+    g_last_tab_press_ms  = now_ms;
+    g_last_tab_press_idx = idx;
+
+    if (idx < 0)
+        return 1;  /* stale — consumed no-op */
+
+    if (idx < user_tab_count) {
+        int slot = glr_scene_menu_slot_for_dense_index(idx);
+        if (slot < 0)
+            return 1;  /* stale */
+        if (slot != active_slot)
+            glr_scene_load_user_slot(slot);  /* no-op when already active */
+        if (is_double)
+            editor_inline_rename_begin(slot);
+        editor_request_redraw();
+        return 1;
+    }
+
+    if (idx == user_tab_count && example_idx >= 0) {
+        /* The example tab is active iff no user slot is active. Only
+         * reload when it is not already the active scene; never rename. */
+        if (active_slot >= 0)
+            glr_scene_load_example(example_idx);
+        editor_request_redraw();
+        return 1;
+    }
+
+    return 1;  /* out-of-range stale idx — consumed no-op */
+}
+
+/* UI_HIT_PANEL_DIVIDER: start the panel-resize drag. Motion updates
+ * panel_frac via editor_handle_motion's resizing-panel branch; UP
+ * clears the resizing flag. */
+static int route_panel_divider_hit(const UiHit *hit) {
+    (void)hit;
+    ui_state_code_panel_mut()->resizing_panel = 1;
+    editor_set_cursor(editor_input_code_panel_resize_cursor());
+    return 1;
+}
+
+/* UI_HIT_VARIABLE_SLIDER: variable-panel left-click drag begin. The
+ * J1 helper handles replay-stop + drag start. */
+static int route_variable_slider_hit(int x, int y) {
+    return glr_ctrl_router_handle_variable_panel_drag_begin(GLUT_LEFT_BUTTON,
+                                                               GLUT_DOWN, x, y);
+}
+
+/* Derive a code-panel target line from a hit, mirroring the legacy
+ * code_panel_drag_target. Insert-line drags use edit_line (the line
+ * the cursor is parked on), only falling back to the last committed
+ * line when edit_line is past the document end — preserving the
+ * insertion-point as the drag endpoint when the user is editing
+ * mid-document. Returns -1 if the hit is not a code-panel kind. */
+static int code_panel_target_from_hit(UiHit hit) {
+    switch (hit.kind) {
+    case UI_HIT_CODE_TEXT:
+    case UI_HIT_CODE_GUTTER:
+        return hit.line_idx;
+    case UI_HIT_CODE_INSERT_LINE: {
+        int target = hit.line_idx; /* Target line to focus on. */
+        int doc_count = repl_state_document_count();
+        if (target >= doc_count)
+            target = doc_count - 1;
+        return target;
+    }
+    default:
+        return -1;
+    }
+}
+
+int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
+    /* Inline rename is a hard modal for keystrokes but NOT for the
+     * mouse, so a click otherwise moves the cursor / switches tabs
+     * while typed keys still feed the rename buffer — misleading.
+     * Clicking anywhere cancels the in-progress rename (discard, like
+     * Esc), then the click proceeds normally (cursor lands where the
+     * user clicked, rename mode exits). Begin-rename routes through a
+     * later dispatch in this same call, so rename is not yet active at
+     * entry for the click that starts it — no self-cancel. */
+    if (editor_inline_rename_active())
+        editor_inline_rename_cancel();
+    if (editor_inline_file_prompt_active())
+        editor_inline_file_prompt_cancel();
+
+    /* A click outside the menu bar (anywhere that isn't UI_HIT_MENU_BUTTON,
+     * UI_HIT_MENU_ITEM, or UI_HIT_SUBMENU_ITEM) dismisses an open
+     * dropdown — matches the legacy
+     * "click outside dropdown closes it" behaviour from
+     * ui_panels_handle_code_panel_press. */
+    int dismissed_dropdown = 0;
+    if (hit.kind != UI_HIT_MENU_BUTTON &&
+        hit.kind != UI_HIT_MENU_ITEM &&
+        hit.kind != UI_HIT_SUBMENU_ITEM &&
+        hit.kind != UI_HIT_PIN_BUTTON &&
+        hit.kind != UI_HIT_COLOR_SWATCH &&
+        ui_menu_bar_menu_dropdown_is_open()) {
+        ui_menu_bar_close();
+        dismissed_dropdown = 1;
+    }
+
+    int consumed;
+    switch (hit.kind) {
+    case UI_HIT_COLOR_SWATCH:
+        consumed = route_color_picker_control_hit(x, y); break;
+    case UI_HIT_INLINE_COLOR_SWATCH:
+        consumed = route_inline_color_swatch_hit(&hit, y); break;
+    case UI_HIT_NUMERIC_SWATCH:
+        consumed = route_numeric_swatch_hit(&hit); break;
+    case UI_HIT_PIN_BUTTON:
+        consumed = route_pin_button_hit(&hit); break;
+    case UI_HIT_MENU_BUTTON:
+        consumed = route_menu_button_hit(&hit); break;
+    case UI_HIT_MENU_ITEM:
+        consumed = route_menu_item_hit(&hit); break;
+    case UI_HIT_SUBMENU_ITEM:
+        consumed = route_submenu_item_hit(&hit); break;
+    case UI_HIT_VARIABLE_SLIDER:
+        consumed = route_variable_slider_hit(x, y); break;
+    case UI_HIT_PANEL_DIVIDER:
+        consumed = route_panel_divider_hit(&hit); break;
+    case UI_HIT_CODE_TEXT:
+        consumed = route_code_text_hit(&hit); break;
+    case UI_HIT_CODE_INSERT_LINE:
+        consumed = route_code_insert_line_hit(&hit); break;
+    case UI_HIT_CODE_GUTTER:
+        consumed = route_code_gutter_hit(&hit); break;
+    case UI_HIT_CODE_PANEL_CHROME:
+        consumed = route_code_panel_chrome_hit(); break;
+    case UI_HIT_CODE_FOCUS_TOGGLE:
+        consumed = route_code_focus_toggle_hit(); break;
+    case UI_HIT_HELP_TOGGLE:
+        consumed = route_help_toggle_hit(); break;
+    case UI_HIT_CODE_PANEL_TAB:
+        consumed = route_scene_tab_hit(&hit); break;
+    case UI_HIT_HELP_PANEL:
+    case UI_HIT_REPLAY_BUTTON:
+    case UI_HIT_SCENE:
+    case UI_HIT_NONE:
+    default:
+        consumed = 0;
+    }
+
+    /* A click that only dismissed an open dropdown is consumed by the
+     * dismiss itself; do not fall through to scene-press / camera /
+     * variable-slider drag for the same press. Matches legacy
+     * UI_PANEL_PRESS_CONSUMED behaviour. */
+    if (!consumed && dismissed_dropdown)
+        return 1;
+    return consumed;
+}
+
+int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
+    if (!g_code_panel_drag_active || g_code_panel_drag_anchor < 0)
+        return 0;
+
+    const UiRenderSnapshot *ui_snap = glr_ctrl_drag_hit_test_snapshot();
+
+    UiHit hit = ui_panels_hit_test(ui_snap, x, y, repl_eval_predef_view().count);
+
+    /* Per-character input-buffer drag: as long as the drag stays on
+     * the same source row as the press AND that row is the active
+     * edit line, grow the input-buffer selection toward the current
+     * char column. */
+    if (hit.kind == UI_HIT_CODE_TEXT && hit.char_idx >= 0 &&
+        glr_ctrl_router_apply_input_row_drag(hit.line_idx, hit.char_idx))
+        return 1;
+
+    /* Input-row drag is sticky: once the press armed the char anchor
+     * (g_code_panel_drag_char_anchor >= 0), motion that wanders off
+     * the row is absorbed as a no-op rather than switching to
+     * line-range selection. Input text selection is single-line by
+     * design, so dragging downward shouldn't silently re-target the
+     * selection model. The user has to release and re-press in the
+     * gutter (or on a non-edit row) to start a line-range drag. */
+    if (g_code_panel_drag_char_anchor >= 0)
+        return 1;
+
+    int target = code_panel_target_from_hit(hit);
+    if (target < 0) {
+        /* Drag wandered off the code-panel kinds — clamp the pointer
+         * into the code-panel rect and re-classify so the selection
+         * extends to the nearest visible row. Matches legacy
+         * code_panel_drag_target's [0, visible_lines-1] vis clamp. */
+        int cp_x, cp_y, cp_w, cp_h;
+        ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+        int win_h = ui_state_viewport().window_h;
+        if (cp_w > 0 && cp_h > 0 && win_h > 0) {
+            int gl_y = win_h - y;
+            int cx = x;
+            int cy = y;
+            if (cx < cp_x + 1) cx = cp_x + 1;
+            if (cx > cp_x + cp_w - 1) cx = cp_x + cp_w - 1;
+            if (gl_y < cp_y + 1) cy = win_h - (cp_y + 1);
+            if (gl_y > cp_y + cp_h - 1) cy = win_h - (cp_y + cp_h - 1);
+            UiHit clamped = ui_panels_hit_test(ui_snap, cx, cy,
+                                               repl_eval_predef_view().count);
+            target = code_panel_target_from_hit(clamped);
+        }
+    }
+    if (target < 0)
+        return 1;
+
+    if (target != g_code_panel_drag_anchor || g_code_panel_drag_moved) {
+        g_code_panel_drag_moved = 1;
+        editor_selection_start(g_code_panel_drag_anchor);
+        editor_selection_set_end(target);
+        editor_navigate_to_line(target);
+        glr_action_cursor_blink_reset();
+        editor_request_redraw();
+    }
+    return 1;
+}
+
+/* ===========================================================================
+ * Dispatch entry points
+ *
+ * Each entry point is a fixed sandwich:
+ *   1. Audio gesture once (browser autoplay policy).
+ *   2. Rename modal capture FIRST (hard modal — every key/special key
+ *      goes to the rename buffer).
+ *   3. Controller-owned routes: routing helpers above, in the same
+ *      order as the legacy editor dispatch chain.
+ *   4. Editor's domain: editor_handle_* fires for clicks / keys that
+ *      land in the editor's text-document or code-panel UI rect.
+ *
+ * Effect accumulation is shared with the editor: every helper writes
+ * to the editor_input g_pending_input_effects struct via
+ * editor_request_redraw etc., and apply_input_effects flushes the
+ * accumulated effects through GLUT once per call.
+ * ===========================================================================
+ */
+
+void glr_ctrl_keyboard(unsigned char key, int x, int y) {
+    glr_audio_on_user_gesture();
+
+    /* macOS Cmd+letter normalization happens before any dispatch so
+     * the controller-owned cfg-shortcut chain (Cmd+B / Cmd+S / Cmd+T
+     * etc.) compares against the control-character form (KEY_CTRL_*).
+     * Without this, Cmd+B arrives here as 'b' (0x62), the chain looks
+     * for KEY_CTRL_B (0x02) in g_cfg_items[].key_code, and the
+     * shortcut silently misses. */
+    key = editor_input_normalize_super_to_ctrl(key);
+
+    /* Rename capture: hard modal. */
+    if (editor_input_rename_capture_key(key)) {
+        editor_reset_input_effects();
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+        return;
+    }
+
+    /* File-prompt capture: same hard-modal contract as rename. */
+    if (editor_input_file_prompt_capture_key(key)) {
+        editor_reset_input_effects();
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+        return;
+    }
+
+    if (glr_ctrl_router_handle_escape_key(key)) {
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+        return;
+    }
+
+    editor_reset_input_effects();
+
+    /* Controller-owned routes — config shortcuts run before replay
+     * forwarding so Ctrl+R stays owned by the Replay config row while
+     * non-config replay keys (Ctrl+K, space, +/- and friends) still
+     * forward to replay_handle_key. */
+    if (glr_ctrl_router_handle_config_menu_key(key) ||
+        glr_ctrl_router_handle_cfg_shortcut_key(key) ||
+        glr_ctrl_router_handle_replay_key(key) ||
+        glr_ctrl_router_handle_save_key(key) ||
+        glr_ctrl_router_handle_debug_dump_key(key) ||
+        glr_ctrl_router_handle_accum_samples_key(key) ||
+        glr_ctrl_router_handle_post_filter_key(key) ||
+        glr_ctrl_router_handle_code_focus_key(key) ||
+        glr_ctrl_router_handle_tutorial_ack_key(key) ||
+        glr_ctrl_router_handle_quit_key(key)) {
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+        return;
+    }
+
+    /* Ctrl+F opens search downstream in editor_handle_key. Note the
+     * rising edge here so the search-overlay fade clock is driven from
+     * the controller — symmetric with the menu-pin path in
+     * route_pin_button_hit; the renderer no longer mutates it. */
+    int search_was_active = editor_state_search()->active;
+    EditorInputDispatchEffects kb_effects = editor_handle_key(key, x, y);
+    if (!search_was_active && editor_state_search()->active)
+        ui_menu_bar_note_search_opened(repl_state_variables().anim_time);
+    glr_ctrl_apply_input_effects(kb_effects);
+}
+
+void glr_ctrl_special(int key, int x, int y) {
+    glr_audio_on_user_gesture();
+
+    if (editor_input_rename_capture_special(key)) {
+        editor_reset_input_effects();
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+        return;
+    }
+
+    if (editor_input_file_prompt_capture_special(key)) {
+        editor_reset_input_effects();
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+        return;
+    }
+
+    editor_reset_input_effects();
+
+    if (glr_ctrl_router_handle_replay_special(key) ||
+        glr_ctrl_router_handle_cfg_special_shortcut(key) ||
+        glr_ctrl_router_handle_horizontal_audio_special(key) ||
+        glr_ctrl_router_handle_help_tab_special(key) ||
+        glr_ctrl_router_handle_help_scroll_special(key) ||
+        glr_ctrl_router_handle_help_toggle_special(key) ||
+        glr_ctrl_router_handle_scene_cycle_special(key)) {
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+        return;
+    }
+
+    glr_ctrl_apply_input_effects(editor_handle_special(key, x, y));
+}
+
+/* Mouse routing: hit-test to decide owner before dispatching.
+ *
+ * UP cleanup: the editor first releases its own UP-side state
+ * (ui_panels_handle_mouse_release, panel resize end), then the
+ * variable-panel drag release fires if active.
+ *
+ * DOWN: variable panel hit always wins over code panel because it
+ * owns its own rect that may overlap. Code-panel domain (proper /
+ * divider / dropdown extension) goes to the editor. Scene region
+ * tries the color picker overlay first, then camera. Right-click
+ * dispatches the config dropdown, the variable panel (log mode), or
+ * camera. The freeglut scroll-wheel emulation (buttons 3/4) routes
+ * to help-overlay scroll, code-panel scroll (editor), or camera zoom
+ * velocity. */
+void glr_ctrl_mouse(int button, int state, int x, int y) {
+    glr_audio_on_user_gesture();
+
+    editor_reset_input_effects();
+    if (button == GLUT_LEFT_BUTTON || button == GLUT_MIDDLE_BUTTON ||
+        button == GLUT_RIGHT_BUTTON) {
+        ui_state_pointer_set(x, y, state == GLUT_DOWN ? button : -1);
+    } else {
+        ui_state_pointer_set_pos(x, y);
+    }
+
+    if (state == GLUT_UP) {
+        /* UP cleanup: release floating color picker drag, clear the
+         * code-panel selection drag tracking, fire editor's UP-side
+         * (panel resize end), then variable-panel release, then
+         * camera UP so the orbit/pan/zoom interaction releases. */
+        color_picker_handle_release();
+        glr_ctrl_router_reset_code_panel_drag();
+        glr_ctrl_apply_input_effects(editor_handle_mouse(button, state, x, y));
+        editor_reset_input_effects();
+        if (glr_ctrl_router_handle_variable_panel_drag_release(state)) {
+            glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+            return;
+        }
+        glr_ctrl_router_handle_camera_mouse(button, state, x, y);
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+        return;
+    }
+
+    if (button == GLUT_LEFT_BUTTON) {
+        /* Modal help overlay intercepts left clicks first: tab
+         * select / click-away dismiss / swallow body. */
+        if (glr_ctrl_router_handle_help_click(button, state, x, y)) {
+            glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+            return;
+        }
+        /* Classify the click via the canonical hit-test, then route by
+         * UiHit.kind to the owning subsystem. The hit-test covers
+         * variable panel, color picker, menu bar, code panel (including
+         * divider + inline swatch + insert line) and pin buttons. Only
+         * kinds that don't apply (UI_HIT_SCENE, UI_HIT_NONE,
+         * UI_HIT_HELP_PANEL) fall through to scene press / camera. */
+        UiRenderSnapshot ui_snap;
+        glr_ctrl_build_ui_snapshot(&ui_snap);
+        UiHit hit = ui_panels_hit_test(&ui_snap, x, y,
+                           repl_eval_predef_view().count);
+        if (glr_ctrl_router_handle_code_panel_hit(hit, x, y)) {
+            glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+            return;
+        }
+        if (glr_ctrl_router_handle_scene_press(button, state, x, y)) {
+            glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+            return;
+        }
+        glr_ctrl_router_handle_camera_mouse(button, state, x, y);
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+        return;
+    }
+
+    if (button == GLUT_RIGHT_BUTTON) {
+        if (glr_ctrl_router_handle_right_config_press(button, state, x, y)) {
+            glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+            return;
+        }
+        if (glr_ctrl_router_handle_variable_panel_drag_begin(button, state, x, y)) {
+            glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+            return;
+        }
+        glr_ctrl_router_handle_camera_mouse(button, state, x, y);
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+        return;
+    }
+
+    if (glr_ctrl_router_handle_glut_scroll_wheel_button(button, state, x, y)) {
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+        return;
+    }
+
+    glr_ctrl_router_handle_camera_mouse(button, state, x, y);
+    glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+}
+
+/* Motion routing: UI overlay (color picker drag), variable-panel drag
+ * motion, and camera drag motion are router-side; code-panel resize
+ * tracking and code-panel selection drag are editor's.
+ *
+ * Pointer-state tracking: each non-camera handler updates
+ * ui_state_pointer via glr_camera_pointer_set(x, y) AFTER its own
+ * work so the camera's view of the pointer stays current. The camera
+ * branch deliberately does NOT pre-set the pointer because
+ * glr_camera_drag_motion reads the previous (px, py) to compute
+ * delta and updates the pointer to (x, y) at the end. Pre-setting
+ * here would zero the delta and freeze orbit/pan/zoom drag. */
+void glr_ctrl_motion(int x, int y) {
+    editor_reset_input_effects();
+
+    /* Floating color picker drag tracking (SV / hue / alpha sliders). */
+    {
+        ColorPickerInputResult r = color_picker_handle_motion(x, y);
+        if (r.consumed) {
+            glr_ctrl_router_handle_camera_pointer_set(x, y);
+            editor_request_redraw();
+            glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+            return;
+        }
+    }
+
+    if (glr_ctrl_router_handle_variable_panel_motion(x, y)) {
+        glr_ctrl_router_handle_camera_pointer_set(x, y);
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+        return;
+    }
+
+    /* Code-panel selection drag (controller-owned state). */
+    if (glr_ctrl_router_handle_code_panel_drag(x, y)) {
+        glr_ctrl_router_handle_camera_pointer_set(x, y);
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+        return;
+    }
+
+    /* Editor's domain: panel resize tracking. editor_handle_motion is
+     * a no-op when resizing_panel is clear. */
+    if (ui_state_code_panel().resizing_panel) {
+        EditorInputDispatchEffects pre_editor = editor_take_and_reset_input_effects();
+        glr_ctrl_apply_input_effects(editor_handle_motion(x, y));
+        glr_ctrl_router_handle_camera_pointer_set(x, y);
+        glr_ctrl_apply_input_effects(pre_editor);
+        return;
+    }
+
+    /* Camera drag motion reads pointer = (px, py), computes delta,
+     * then calls pointer_set(x, y) itself. */
+    glr_ctrl_router_handle_camera_motion(x, y);
+    glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+}
+
+void glr_ctrl_passive_motion(int x, int y) {
+    int menu_hover_changed;
+    editor_reset_input_effects();
+    /* Passive motion (no button held) just updates the pointer
+     * position — there's no drag delta to preserve. */
+    glr_ctrl_router_handle_camera_pointer_set(x, y);
+    EditorInputDispatchEffects editor_effects = editor_handle_passive_motion(x, y);
+    menu_hover_changed = ui_menu_bar_update_pointer_hover(x, y,
+                                                          repl_state_variables().anim_time);
+    if (menu_hover_changed)
+        editor_request_redraw();
+    glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+    glr_ctrl_apply_input_effects(editor_effects);
+}
+
+void glr_ctrl_mousewheel(int wheel, int direction, int x, int y) {
+#ifndef USE_GLUT
+    /* freeglut wheel callback: route to help scroll, code-panel scroll
+     * (editor), or camera zoom velocity. */
+    (void)wheel;
+    editor_reset_input_effects();
+    if (ui_state_help().visible) {
+        glr_ctrl_help_scroll_by(-direction);
+        editor_request_redraw();
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+        return;
+    }
+    if (editor_input_point_in_code_panel(x, y)) {
+        glr_ctrl_apply_input_effects(editor_handle_mousewheel(wheel, direction, x, y));
+        return;
+    }
+    glr_camera_add_zoom_velocity(-(float)direction * 0.3f);
+    editor_request_redraw();
+    glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+#else
+    (void)wheel; (void)direction; (void)x; (void)y;
+#endif
+}
+
+/* SIGINT-requested quit, consumed on the normal frame-tick path (the signal
+ * handler only sets the flag, so no stdio/file I/O runs in handler context).
+ * Called from glr_ctrl_tick in glr_ctrl.c via glr_ctrl_internal.h. */
+void glr_ctrl_router_run_pending_quit(void) {
+    if (g_quit_requested) {
+        glr_ctrl_save_quit_recovery();
+        exit(0);
+    }
+}

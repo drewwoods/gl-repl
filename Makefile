@@ -256,6 +256,7 @@ SRCS = \
 	src/app/glr_camera_export.c \
 	src/app/glr_color_picker_bridge.c \
 	src/app/glr_ctrl_view_transition.c \
+	src/app/glr_ctrl_router.c \
 	src/app/glr_completion.c \
 	src/app/glr_config.c \
 	src/app/glr_ctrl.c \
@@ -441,6 +442,7 @@ CORE_TEST_SRCS = \
 	src/app/glr_camera_export.c \
 	src/app/glr_color_picker_bridge.c \
 	src/app/glr_ctrl_view_transition.c \
+	src/app/glr_ctrl_router.c \
 	src/app/glr_completion.c \
 	src/app/glr_config.c \
 	src/app/glr_ctrl.c \
@@ -807,7 +809,7 @@ test_audio_RUN ?= $(BINDIR)/test_audio
 # For tests using the "include-as-unit" pattern (e.g., `#include "file.c"` to test
 # internal static functions), we must filter out the original object file from
 # the CORE_TEST_OBJS link list to prevent duplicate symbol errors.
-test_glr_ctrl_OBJS = $(OBJDIR)/$(TEST_DIR)/test_glr_ctrl.o $(filter-out $(OBJDIR)/src/app/glr_ctrl.o,$(CORE_TEST_OBJS))
+test_glr_ctrl_OBJS = $(OBJDIR)/$(TEST_DIR)/test_glr_ctrl.o $(filter-out $(OBJDIR)/src/app/glr_ctrl.o $(OBJDIR)/src/app/glr_ctrl_router.o,$(CORE_TEST_OBJS))
 
 test_repl_executor_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_executor.o $(filter-out $(OBJDIR)/src/repl/executor.o,$(CORE_TEST_OBJS))
 
@@ -1002,7 +1004,7 @@ check-layer-coupling: ## Verify UI and scene layers don't include each other's h
 
 check-controller-boundaries: ## Verify controller owns the scene/UI wiring boundary.
 	@echo "Checking controller boundaries..."
-	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"scene/' $(REPL_SRCS) src/app/glr_ctrl.c \
+	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"scene/' $(REPL_SRCS) src/app/glr_ctrl.c src/app/glr_ctrl_router.c \
 		| grep -v '^src/app/glr_ctrl\.c$$' || true); \
 	if [ -n "$$bad" ]; then \
 		echo "$(RED)ERROR: scene headers included outside src/app/glr_ctrl.c:$(NC)"; \
@@ -1017,8 +1019,8 @@ check-controller-boundaries: ## Verify controller owns the scene/UI wiring bound
 	@# camera_controls) entries are gone — those files were renamed
 	@# into the glr_* namespace and are no longer matched by
 	@# REPL_SRCS, so the check skips them entirely.
-	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"ui/' $(REPL_SRCS) src/app/glr_ctrl.c \
-		| grep -vE '^src/app/(glr_ctrl|glr_actions)\.c$$|^src/repl/export\.c$$|^repl_editor\.c$$' || true); \
+	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"ui/' $(REPL_SRCS) src/app/glr_ctrl.c src/app/glr_ctrl_router.c \
+		| grep -vE '^src/app/(glr_ctrl|glr_ctrl_router|glr_actions)\.c$$|^src/repl/export\.c$$|^repl_editor\.c$$' || true); \
 	if [ -n "$$bad" ]; then \
 		echo "$(RED)ERROR: new ui headers included outside approved exceptions:$(NC)"; \
 		echo "$$bad"; exit 1; \

@@ -56,6 +56,13 @@ void test_glr_camera_load_modelview(const GlrCameraPose *pose);
 void test_ui_variable_panel_render(const UiVariablePanelView *view);
 
 #include "app/glr_ctrl.c"
+/* The input router was carved out of glr_ctrl.c into glr_ctrl_router.c; this
+ * white-box test drives router entry points and a few router statics
+ * (glr_ctrl_save_quit_recovery, route_numeric_swatch_hit), so include that TU
+ * too while the UI-render mocks are active. glr_ctrl_router.o is filtered out
+ * of test_glr_ctrl_OBJS to avoid a double definition. The router calls no
+ * mocked symbol, so compiling it in this mock context is identical to normal. */
+#include "app/glr_ctrl_router.c"
 
 #undef scene_render_3d_scene
 #undef glr_camera_load_modelview
