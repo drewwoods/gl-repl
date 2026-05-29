@@ -1165,6 +1165,16 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     glr_ctrl_populate_numeric_swatch(snap);
 }
 
+/* Memory-panel stacking layout. The controller owns the anchor (the
+ * renderer is snapshot-free), so these scene-relative margins live here —
+ * distinct from the panel's own internal padding. They mirror the CPU
+ * profile panel's spacing. */
+enum {
+    MEM_PANEL_SCENE_MARGIN_PX = 12, /* gap from scene edge when the variable panel is visible */
+    MEM_PANEL_SIDE_GAP_PX     = 8,  /* gap when shifted left of the CPU profile panel */
+    MEM_PANEL_EDGE_PAD_PX     = 4,  /* min inset from the scene edge after clamping */
+};
+
 /* Resolve the memory panel's stacked anchor and pack it into the narrow
  * view the renderer consumes. Mirrors the CPU profile panel's logic:
  * right-edge of the variable panel (which itself carries the replay lift),
@@ -1185,8 +1195,8 @@ static UiMemoryPanelView glr_ctrl_build_memory_panel_view(const UiRenderSnapshot
 
     int panel_x, panel_y;
     if (snap->variable_panel.visible) {
-        panel_x = scene_x + scene_w - panel_w - 12;  /* == MEM_PANEL_MARGIN */
-        panel_y = scene_y + scene_h - panel_h - 12;
+        panel_x = scene_x + scene_w - panel_w - MEM_PANEL_SCENE_MARGIN_PX;
+        panel_y = scene_y + scene_h - panel_h - MEM_PANEL_SCENE_MARGIN_PX;
     } else {
         int var_x, var_y, var_w, var_h;
         ui_variable_panel_rect_for_count(snap, snap->variable_panel_vars.count,
@@ -1196,15 +1206,15 @@ static UiMemoryPanelView glr_ctrl_build_memory_panel_view(const UiRenderSnapshot
     }
 
     if (snap->profile_panel.mode != PROFILE_PANEL_OFF)
-        panel_x -= (PROFILE_PANEL_W + 8);
+        panel_x -= (PROFILE_PANEL_W + MEM_PANEL_SIDE_GAP_PX);
 
-    int min_x = scene_x + 4;
-    int max_x = scene_x + scene_w - panel_w - 4;
+    int min_x = scene_x + MEM_PANEL_EDGE_PAD_PX;
+    int max_x = scene_x + scene_w - panel_w - MEM_PANEL_EDGE_PAD_PX;
     if (panel_x < min_x) panel_x = min_x;
     if (panel_x > max_x) panel_x = max_x;
 
-    int min_y = scene_y + STATUSBAR_H + 4;
-    int max_y = scene_y + scene_h     - panel_h - 4;
+    int min_y = scene_y + STATUSBAR_H + MEM_PANEL_EDGE_PAD_PX;
+    int max_y = scene_y + scene_h     - panel_h - MEM_PANEL_EDGE_PAD_PX;
     if (max_y >= min_y) {
         if (panel_y < min_y) panel_y = min_y;
         if (panel_y > max_y) panel_y = max_y;
