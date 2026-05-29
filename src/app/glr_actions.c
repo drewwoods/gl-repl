@@ -684,11 +684,19 @@ int glr_cfg_handle_ascii_shortcut(unsigned char key) {
 }
 
 int glr_cfg_handle_special_shortcut(int key) {
+    /* F<n> steps the bound row forward; Shift+F<n> steps it backward.
+     * For 2-state toggles the direction is immaterial (both flip); for
+     * the multi-state cycles (grid / axes / vertex labels / xform
+     * guides / light theme) Shift reverses the wrap. No F-key row uses
+     * the descriptor's `modifiers` field, so Shift is free to mean
+     * "backward" here. Modifiers are read in the actions layer, matching
+     * glr_cfg_handle_ascii_shortcut. */
+    int delta = (editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT) ? -1 : 1;
     for (int i = 0; i < CFG_ITEM_COUNT; i++) {
         const GlrConfigItem *item = glr_config_item_at(i);
         if (item && !item->section_header &&
             item->is_special && item->key_code == key) {
-            glr_cfg_cycle_row(i, 1);
+            glr_cfg_cycle_row(i, delta);
             return 1;
         }
     }

@@ -1047,9 +1047,48 @@ static void test_f9_cycles_light_theme(void) {
                glr_config_get(GLR_CONFIG_LIGHT_THEME), LIGHT_THEME_DEFAULT);
 }
 
+/* Shift+F<n> steps the F-key-bound config rows BACKWARD (plain F<n> steps
+ * forward). Exercised on two multi-state cycles — light theme (F9) and grid
+ * theme (F3) — where the direction is observable; 2-state toggles flip
+ * either way. Modifiers are driven through the editor test seam. */
+static void test_shift_fkey_steps_backward(void) {
+    glr_ctrl_reset_all();
+    printf("--- Shift+F<n> steps shortcuts backward ---\n");
+    editor_input_set_modifier_provider_for_test(test_mods_provider);
+
+    /* Light theme (F9): from the first theme, Shift+F9 wraps to the last. */
+    glr_config_set(GLR_CONFIG_LIGHT_THEME, LIGHT_THEME_DEFAULT);
+    g_test_mods = GLUT_ACTIVE_SHIFT;
+    ASSERT_INT("Shift+F9 handled",
+               glr_cfg_handle_special_shortcut(GLUT_KEY_F9), 1);
+    ASSERT_INT("Shift+F9 wraps backward to the last theme",
+               glr_config_get(GLR_CONFIG_LIGHT_THEME), LIGHT_THEME_COUNT - 1);
+    glr_cfg_handle_special_shortcut(GLUT_KEY_F9);
+    ASSERT_INT("Shift+F9 steps one further back",
+               glr_config_get(GLR_CONFIG_LIGHT_THEME), LIGHT_THEME_COUNT - 2);
+
+    /* Plain F9 (no Shift) steps forward, undoing one backward step. */
+    g_test_mods = 0;
+    glr_cfg_handle_special_shortcut(GLUT_KEY_F9);
+    ASSERT_INT("plain F9 forward undoes one Shift+F9 step",
+               glr_config_get(GLR_CONFIG_LIGHT_THEME), LIGHT_THEME_COUNT - 1);
+
+    /* Grid theme (F3): same backward behavior on a different F-key row. */
+    glr_config_set(GLR_CONFIG_GRID_THEME, 0);
+    g_test_mods = GLUT_ACTIVE_SHIFT;
+    ASSERT_INT("Shift+F3 handled",
+               glr_cfg_handle_special_shortcut(GLUT_KEY_F3), 1);
+    ASSERT_INT("Shift+F3 wraps grid theme backward to the last",
+               glr_config_get(GLR_CONFIG_GRID_THEME), GRID_THEME_COUNT - 1);
+
+    editor_input_set_modifier_provider_for_test(NULL);
+    g_test_mods = 0;
+}
+
 int main(void) {
     test_apply_defaults();
     test_f9_cycles_light_theme();
+    test_shift_fkey_steps_backward();
     test_cursor_actions();
     test_help_tab_actions();
     test_cfg_cycling();
