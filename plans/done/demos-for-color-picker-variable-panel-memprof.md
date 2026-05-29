@@ -1,5 +1,15 @@
 # Isolation Demos for color_picker / variable_panel / memprof
 
+**Status: Shipped** (all three phases landed on `main`). The three demos
+(`tools/{memprof,variable_panel,color_picker}_demo`) build from their allowed
+dirs alone, each enforced by a `check-*-demo-isolation` guard wired into
+`check-state-ownership`. Decoupling went in via the in-place bridge idiom:
+`UiMemoryPanelView` / `UiVariablePanelView` narrow render views (controller
+projects the snapshot), a `VariablePanelValueSource` drag bridge, and a
+`ColorPickerHostBridge` (with the inline swatch relocated to
+`src/ui/app/color_swatch.c`). Along the way: deferred memprof baseline,
+adaptive RSS-graph X axis, named anchor constants.
+
 ## Context
 
 The REPL's subsystems (`src/subsystems/*`) and support/UI helpers
