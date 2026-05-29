@@ -9,6 +9,19 @@
 #ifndef GLR_CTRL_INTERNAL_H
 #define GLR_CTRL_INTERNAL_H
 
+#include "editor/input.h"   /* EditorInputDispatchEffects (by-value seam param) */
+
+struct UiRenderSnapshot;    /* opaque here — only a pointer crosses the seam */
+
+/* ---- Input router seams (src/app/glr_ctrl_router.c <-> glr_ctrl.c) ----
+ *
+ * The router lives in glr_ctrl_router.c and calls back into glr_ctrl.c for the
+ * cached drag snapshot and the post-routing effect apply; glr_ctrl.c's frame
+ * tick calls back into the router to run a pending SIGINT-requested quit. */
+const struct UiRenderSnapshot *glr_ctrl_drag_hit_test_snapshot(void);
+void glr_ctrl_apply_input_effects(EditorInputDispatchEffects effects);
+void glr_ctrl_router_run_pending_quit(void);
+
 /* ---- View-mode 2D/3D transition (src/app/glr_ctrl_view_transition.c) ---- */
 
 /* Advance the projection/camera 2D<->3D transition by dt seconds. Called once
