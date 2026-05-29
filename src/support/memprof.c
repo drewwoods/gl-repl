@@ -23,6 +23,7 @@
 
 static int             g_memprof_initialized = 0;
 static MemSample       g_memprof_baseline    = {0};
+static int             g_memprof_baseline_pending = 0; /* 1 until first push captures it */
 static MemSample       g_memprof_current     = {0};
 static double          g_memprof_t0_seconds  = 0.0;
 static double          g_memprof_last_push_s = 0.0; /* relative to t0 */
@@ -119,8 +120,19 @@ void memprof_init_at(double t0_seconds) {
     g_memprof_t0_seconds  = t0_seconds;
     g_memprof_last_push_s = 0.0;
     MemprofReaderFn reader = g_memprof_reader ? g_memprof_reader : memprof_read;
-    reader(&g_memprof_baseline);
-    g_memprof_current = g_memprof_baseline;
+    /* `current` is live from frame 1 so the RSS row is never blank. */
+    reader(&g_memprof_current);
+    /* The baseline ("init") is DEFERRED to the first sample push rather
+     * than captured here. The reading taken at process init sits well
+     * below the app's warmed-up working set (GL solid-shape display-list
+     * compilation, the macOS first-drawable wait, lazy heap growth), so a
+     * baseline grabbed now lands far under the graph's auto-scaled Y range
+     * — never plotted — and inflates the delta a leak hunter actually
+     * cares about (steady-state growth, not startup cost). Capturing it at
+     * the first push pins it to the first plotted point and makes the delta
+     * meaningful. Until then memprof_baseline() reports 0 ("--"). */
+    g_memprof_baseline.rss_bytes = 0;
+    g_memprof_baseline_pending   = 1;
     g_memprof_initialized = 1;
 }
 
@@ -131,6 +143,7 @@ void memprof_reset(void) {
     g_memprof_count       = 0;
     g_memprof_head        = 0;
     g_memprof_baseline.rss_bytes = 0;
+    g_memprof_baseline_pending   = 0;
     g_memprof_current.rss_bytes  = 0;
     g_memprof_reader = NULL;
     /* Ring contents left as-is; count=0 makes them unreachable. */
@@ -142,6 +155,11 @@ void memprof_frame_tick_at(double now_seconds) {
     MemprofReaderFn reader = g_memprof_reader ? g_memprof_reader : memprof_read;
     reader(&g_memprof_current);
     if (t_rel - g_memprof_last_push_s >= MEMPROF_PUSH_INTERVAL_S) {
+        /* First push establishes the deferred baseline (see memprof_init_at). */
+        if (g_memprof_baseline_pending) {
+            g_memprof_baseline = g_memprof_current;
+            g_memprof_baseline_pending = 0;
+        }
         g_memprof_ring[g_memprof_head]   = g_memprof_current;
         g_memprof_ring_t[g_memprof_head] = t_rel;
         g_memprof_head = (g_memprof_head + 1) % MEMPROF_HISTORY_CAP;

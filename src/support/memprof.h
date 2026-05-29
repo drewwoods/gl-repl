@@ -22,8 +22,10 @@ typedef struct {
     unsigned long long rss_bytes;
 } MemSample;
 
-/* Capture baseline using the module's monotonic clock as t0.
- * Safe to call multiple times - only first call takes. */
+/* Start sampling using the module's monotonic clock as t0. The baseline
+ * ("init") is NOT captured here — it is deferred to the first history push
+ * (see memprof_baseline). Safe to call multiple times; only the first
+ * call takes. */
 void memprof_init(void);
 
 /* Per-frame entry point. Refreshes the cached "current" reading and
@@ -60,6 +62,13 @@ void memprof_set_reader(MemprofReaderFn reader);
 
 /* Cached current reading (always fresh - refreshed in every frame_tick). */
 MemSample memprof_current(void);
+
+/* Baseline ("init") RSS. DEFERRED: reports 0 (rendered "--") from init
+ * until the first history push captures it, so the baseline reflects the
+ * app's warmed-up steady state rather than the cold process-start reading.
+ * Pinning it to the first plotted sample keeps it inside the graph's
+ * auto-scaled range and keeps the current-minus-baseline delta meaningful
+ * for leak detection. */
 MemSample memprof_baseline(void);
 
 /* History ring: oldest-first traversal for the renderer.
