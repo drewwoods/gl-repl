@@ -10,6 +10,9 @@ bench_repl
 /repl_demo
 /editor_demo
 /editor_demo.txt
+/memprof_demo
+/variable_panel_demo
+/color_picker_demo
 .cache/
 compile_commands.json
 coverage.lcov
