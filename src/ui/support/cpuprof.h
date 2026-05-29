@@ -38,11 +38,25 @@ typedef enum {
  * can shift left of this panel for side-by-side layout. */
 #define PROFILE_PANEL_W  320
 
-#include "ui/app/snapshot.h"
+/* Narrow per-frame view (the 2D analog of SceneRenderConfig). The controller
+ * resolves the panel's stacked anchor and bakes it into panel_x/panel_y, so
+ * the renderer needs nothing from UiRenderSnapshot or ui/app — it links from
+ * {support, ui/core} alone (see cpuprof_demo). */
+typedef struct {
+    int                window_w, window_h;
+    UiProfilePanelMode mode;
+    int                panel_x, panel_y;   /* resolved top-left, controller-baked */
+} UiProfilePanelView;
 
-/* Render the CPU profile panel overlay once per frame from the supplied
- * snapshot. Reads measurements from src/support/cpuprof.c and displays
- * per-section CPU times. Renders nothing if the profile panel is disabled. */
-void ui_profile_panel_render(const UiRenderSnapshot *snap);
+/* Render the CPU profile panel overlay once per frame from the supplied view.
+ * Reads measurements from src/support/cpuprof.c and displays per-section CPU
+ * times. Renders nothing if the profile panel is disabled. */
+void ui_profile_panel_render(const UiProfilePanelView *view);
+
+/* Panel footprint in pixels, exposed so the controller (which owns
+ * sibling-panel stacking) can resolve panel_x/panel_y without reaching into
+ * the renderer's geometry. Height depends on the mode's visible row count. */
+int  ui_profile_panel_width(void);
+int  ui_profile_panel_height(UiProfilePanelMode mode);
 
 #endif /* UI_CPUPROF_H */

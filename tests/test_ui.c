@@ -54,6 +54,13 @@ static UiHit vp_hit_test(int count, int mx, int my) {
     return ui_variable_panel_hit_test(&v, mx, my);
 }
 
+/* CPU profile panel view at a fixed anchor (the tests only count GL calls,
+ * which the panel emits unconditionally when mode != OFF). */
+static UiProfilePanelView pp_view(UiProfilePanelMode mode) {
+    UiProfilePanelView v = { 800, 600, mode, 100, 400 };
+    return v;
+}
+
 #define ASSERT_TRUE(label, cond) do { \
     TEST_ASSERT_TRUE(&g_harness, label, cond); \
 } while (0)
@@ -140,25 +147,22 @@ static void test_profile_panel(void) {
     printf("Testing Profile Panel...\n");
     gl_stub_counts_reset();
 
-    ui_state_profile_panel_mut()->mode = PROFILE_PANEL_OFF;
-    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_profile_panel_render(&s); }
+    { UiProfilePanelView v = pp_view(PROFILE_PANEL_OFF); ui_profile_panel_render(&v); }
     ASSERT_TRUE("profile hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
 
-    ui_state_profile_panel_mut()->mode = PROFILE_PANEL_ON;
     prof_frame_tick();
     prof_begin(PROF_FRAME_TOTAL);
     prof_end(PROF_FRAME_TOTAL);
 
     gl_stub_counts_reset();
-    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_profile_panel_render(&s); }
+    { UiProfilePanelView v = pp_view(PROFILE_PANEL_ON); ui_profile_panel_render(&v); }
     ASSERT_GL_CALLS("profile visible -> draws quads", GL_STUB_glBegin, 1);
     ASSERT_GL_CALLS("profile visible -> draws text", GL_STUB_glRasterPos2f, 5);
     ASSERT_GL_CALLS("profile visible -> calls glColor4f", GL_STUB_glColor4f, 1);
 
     /* Test details mode */
-    ui_state_profile_panel_mut()->mode = PROFILE_PANEL_DETAILS;
     gl_stub_counts_reset();
-    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_profile_panel_render(&s); }
+    { UiProfilePanelView v = pp_view(PROFILE_PANEL_DETAILS); ui_profile_panel_render(&v); }
     ASSERT_GL_CALLS("profile details -> draws more text", GL_STUB_glRasterPos2f, 10);
 }
 

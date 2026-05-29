@@ -631,6 +631,16 @@ MEMPROF_DEMO_DEP_SRCS = src/support/memprof.c \
                         src/ui/core/theme.c \
                         tests/gl-stubs/gl_stub_counts.c
 
+# Object list for the standalone cpuprof_demo (isolation demo #7). Twin of
+# memprof_demo: the CPU profile panel (src/ui/support/cpuprof.c) was narrowed
+# off UiRenderSnapshot onto UiProfilePanelView (anchor baked by the
+# controller), so it links from {support, ui/support, ui/core} alone.
+# support/cpuprof.c is the already-pure wall-time sampler.
+CPUPROF_DEMO_DEP_SRCS = src/support/cpuprof.c \
+                        src/ui/support/cpuprof.c \
+                        src/ui/core/theme.c \
+                        tests/gl-stubs/gl_stub_counts.c
+
 # Object list for the standalone variable_panel_demo (isolation demo #5).
 # Proves the variable-panel subsystem links from {subsystems, ui/subsystems,
 # ui/core} alone. The renderer was narrowed off UiRenderSnapshot onto
@@ -734,7 +744,7 @@ CORE_TEST_BINS = $(filter-out test_eval test_format test_memprof test_repl_code_
 # them — benchmarks are timing-sensitive and should be invoked explicitly.
 BENCH_BINS = bench_repl
 
-ROOT_BIN_LINKS = gl-repl scene_demo repl_demo editor_demo memprof_demo variable_panel_demo color_picker_demo
+ROOT_BIN_LINKS = gl-repl scene_demo repl_demo editor_demo memprof_demo variable_panel_demo color_picker_demo cpuprof_demo
 
 .PHONY: $(ROOT_BIN_LINKS) $(TEST_BINS) $(BENCH_BINS)
 
@@ -743,6 +753,7 @@ SCENE_DEMO_BIN = $(BINDIR)/scene_demo
 REPL_DEMO_BIN = $(BINDIR)/repl_demo
 EDITOR_DEMO_BIN = $(BINDIR)/editor_demo
 MEMPROF_DEMO_BIN = $(BINDIR)/memprof_demo
+CPUPROF_DEMO_BIN = $(BINDIR)/cpuprof_demo
 VARIABLE_PANEL_DEMO_BIN = $(BINDIR)/variable_panel_demo
 COLOR_PICKER_DEMO_BIN = $(BINDIR)/color_picker_demo
 
@@ -887,6 +898,19 @@ $(MEMPROF_DEMO_BIN): $(MEMPROF_DEMO_OBJS)
 
 memprof_demo: FORCE $(MEMPROF_DEMO_BIN) ## Build the standalone memory-profiling demo.
 	ln -sfn $(MEMPROF_DEMO_BIN) $@
+
+# Standalone CPU-profiling demo (isolation demo #7). Twin of memprof_demo:
+# a spinning teapot bracketed by prof sections + the live CPU profile panel,
+# from {support, ui/support, ui/core} with no editor/repl/app/ui-app linked in.
+CPUPROF_DEMO_OBJS = $(OBJDIR)/tools/cpuprof_demo/cpuprof_demo.o \
+                    $(addprefix $(OBJDIR)/,$(CPUPROF_DEMO_DEP_SRCS:.c=.o))
+
+$(CPUPROF_DEMO_BIN): $(CPUPROF_DEMO_OBJS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OBJ_CFLAGS) -o $@ $(CPUPROF_DEMO_OBJS) $(GL_LDFLAGS)
+
+cpuprof_demo: FORCE $(CPUPROF_DEMO_BIN) ## Build the standalone CPU-profiling demo.
+	ln -sfn $(CPUPROF_DEMO_BIN) $@
 
 # Standalone variable-panel demo (isolation demo #5). Drives the variable
 # slider panel + drag math from {subsystems, ui/subsystems, ui/core} with no
@@ -1114,6 +1138,9 @@ check-repl-demo-no-editor: ## Forbid editor implementation in the standalone dem
 check-memprof-demo-isolation: ## Forbid app/repl/editor coupling in the memprof demo link set.
 	@bash scripts/check-subsystem-demo-isolation.sh MEMPROF_DEMO_DEP_SRCS tools/memprof_demo memprof_demo
 
+check-cpuprof-demo-isolation: ## Forbid app/repl/editor coupling in the cpuprof demo link set.
+	@bash scripts/check-subsystem-demo-isolation.sh CPUPROF_DEMO_DEP_SRCS tools/cpuprof_demo cpuprof_demo
+
 check-variable-panel-demo-isolation: ## Forbid app/repl/editor coupling in the variable-panel demo link set.
 	@bash scripts/check-subsystem-demo-isolation.sh VARIABLE_PANEL_DEMO_DEP_SRCS tools/variable_panel_demo variable_panel_demo
 
@@ -1187,6 +1214,7 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-repl-no-direct-editor \
 		check-repl-demo-no-editor \
 		check-memprof-demo-isolation \
+		check-cpuprof-demo-isolation \
 		check-variable-panel-demo-isolation \
 		check-color-picker-demo-isolation \
 		check-editor-repl-surface \
@@ -1373,6 +1401,7 @@ test-full: ## Full gate: stub tests + checks + build gl-repl, bench, repl_demo, 
 	$(MAKE) --no-print-directory bench
 	$(MAKE) --no-print-directory scene_demo
 	$(MAKE) --no-print-directory memprof_demo USE_GL_STUBS=1
+	$(MAKE) --no-print-directory cpuprof_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory variable_panel_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory color_picker_demo USE_GL_STUBS=1
 
@@ -1453,7 +1482,7 @@ else
 endif
 
 clean: ## Remove built binaries and object files.
-	rm -rf $(ROOT_BIN_LINKS) gl-repl.dSYM scene_demo.dSYM repl_demo.dSYM editor_demo.dSYM memprof_demo.dSYM variable_panel_demo.dSYM color_picker_demo.dSYM \
+	rm -rf $(ROOT_BIN_LINKS) gl-repl.dSYM scene_demo.dSYM repl_demo.dSYM editor_demo.dSYM memprof_demo.dSYM variable_panel_demo.dSYM color_picker_demo.dSYM cpuprof_demo.dSYM \
 		$(TEST_BINS) $(addsuffix .dSYM,$(TEST_BINS)) \
 		$(BENCH_BINS) $(addsuffix .dSYM,$(BENCH_BINS)) \
 		build/coverage/lcov.info build/coverage/html \
