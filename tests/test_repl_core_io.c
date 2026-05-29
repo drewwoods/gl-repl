@@ -4,6 +4,7 @@
 #include "app/glr_ctrl.h"
 #include "repl/command_store.h"
 #include "repl/core.h"
+#include "repl/text_helpers.h"  /* repl_format_source_float, REPL_SOURCE_FLOAT_TEXT_MAX */
 #include "editor/input.h"
 #include "repl/pipeline.h"
 #include "repl/scenes.h"
@@ -1323,15 +1324,19 @@ int main(void) {
         remove(math_collision_path);
     }
 
-    /* Float persistence should round-trip float32 values without the
-     * 6-digit loss from bare %g. Pin both header metadata and a
-     * generated numeric for-loop line. */
+    /* Float persistence should round-trip float32 values exactly while
+     * emitting the *shortest* exact decimal (repl_format_source_float),
+     * not bare %g's 6-digit loss nor %.9g's redundant padding (0.1234567f
+     * exports as "0.1234567", not "0.123456702"). Pin both header
+     * metadata and a generated numeric for-loop line. */
     {
         const char *precision_path = "/tmp/repl_core_precision_roundtrip.c";
         const float precise_x = 0.1234567f;
         const float loop_start = 0.1234567f;
         const float loop_end = 0.2234567f;
         const float loop_step = 0.0001234567f;
+        char start_s[REPL_SOURCE_FLOAT_TEXT_MAX], end_s[REPL_SOURCE_FLOAT_TEXT_MAX];
+        char step_s[REPL_SOURCE_FLOAT_TEXT_MAX], x_s[REPL_SOURCE_FLOAT_TEXT_MAX];
         char expected_var[128];
         char expected_loop[256];
         char buf[16384];
@@ -1347,15 +1352,22 @@ int main(void) {
         repl_export_save_output(precision_path, source_document_view(), NULL);
         read_text_file(precision_path, buf, sizeof(buf));
 
-        snprintf(expected_var, sizeof(expected_var),
-                 "// @var x = %.9g", (double)precise_x);
-        ASSERT_TRUE("workspace header uses float-safe precision",
+        repl_format_source_float(x_s, sizeof(x_s), precise_x);
+        repl_format_source_float(start_s, sizeof(start_s), loop_start);
+        repl_format_source_float(end_s, sizeof(end_s), loop_end);
+        repl_format_source_float(step_s, sizeof(step_s), loop_step);
+
+        snprintf(expected_var, sizeof(expected_var), "// @var x = %s", x_s);
+        ASSERT_TRUE("workspace header uses shortest exact float",
                     strstr(buf, expected_var) != NULL);
+        /* Guard against a regression to bare %g (lossy 6-digit). */
+        ASSERT_TRUE("workspace header float is not %g-truncated",
+                    strstr(buf, "0.123457") == NULL);
 
         snprintf(expected_loop, sizeof(expected_loop),
-                 "for (float i = %.9g; i < %.9g; i += %.9gf) {",
-                 (double)loop_start, (double)loop_end, (double)loop_step);
-        ASSERT_TRUE("generated loop uses float-safe precision",
+                 "for (float i = %s; i < %s; i += %sf) {",
+                 start_s, end_s, step_s);
+        ASSERT_TRUE("generated loop uses shortest exact float",
                     strstr(buf, expected_loop) != NULL);
 
         glr_ctrl_reset_all(); declare_test_vars();
