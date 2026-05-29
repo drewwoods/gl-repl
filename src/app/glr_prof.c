@@ -43,7 +43,7 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_SCENE_3D_OVERLAY_TRANSFORM_GUIDES] = { "xform guides",    2, 0 },
     [PROF_SCENE_3D_OVERLAY_NORMALS]          = { "normals",         2, 0 },
     [PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS]   = { "vertex nums",     2, 0 },
-    [PROF_SCENE_3D_POST_PROCESS]             = { "postprocess FX",  1, 0 },
+    [PROF_SCENE_3D_POST_PROCESS]             = { "post FX (scene)", 1, 0 },
     [PROF_CODE_PANEL]                        = { "Code Panel",      0, 0 },
     [PROF_CODE_PANEL_LAYOUT]                 = { "layout",          1, 0 },
     [PROF_CODE_PANEL_CHROME]                 = { "chrome",          1, 0 },
@@ -68,6 +68,7 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_REPLAY_HUD]                        = { "Replay HUD",      0, 0 },
     [PROF_PROFILE_PANEL]                     = { "Profile Panel",   0, 0 },
     [PROF_MEMORY_PANEL]                      = { "Memory Panel",    0, 0 },
+    [PROF_COMPOSITOR]                        = { "Compositor FX",   0, 0 },
     [PROF_FRAME_RESTORE]                     = { "Frame Restore",   0, 0 },
     [PROF_FRAME_TOTAL]                       = { "Frame Total",     0, 1 },
 };

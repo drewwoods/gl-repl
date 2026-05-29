@@ -56,6 +56,7 @@ static const float g_grid_extents[GRID_EXTENT_COUNT] = {
         .light_theme            = CFG_DEFAULT_LIGHT_THEME, \
         .backdrop_mode          = CFG_DEFAULT_BACKDROP_MODE, \
         .post_filter_mode       = SCENE_POST_FILTER_OFF, \
+        .compositor_filter_mode = SCENE_POST_FILTER_OFF, \
         .highlight_current_poly = CFG_DEFAULT_HIGHLIGHT_POLY, \
         .ortho_mode             = CFG_DEFAULT_ORTHO_MODE, \
         .wrap_at_comma          = CFG_DEFAULT_WRAP_AT_COMMA, \

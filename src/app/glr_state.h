@@ -42,6 +42,12 @@ typedef struct {
     /* Experimental scene post-processing (ScenePostFilterMode).
      * Session-level only: Ctrl+N toggles it; never in @cfg / examples. */
     int post_filter_mode;
+    /* Experimental whole-frame (compositor) post-processing
+     * (ScenePostFilterMode), applied over the entire composited frame by
+     * the glr_compositor hook at the end of glr_ctrl_display_frame.
+     * Session-level only; the same Ctrl+N cycle drives it, kept mutually
+     * exclusive with post_filter_mode (Off -> scene -> frame -> Off). */
+    int compositor_filter_mode;
     int highlight_current_poly;
     SceneViewMode ortho_mode;
     int wrap_at_comma;

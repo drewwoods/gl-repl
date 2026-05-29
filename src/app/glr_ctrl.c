@@ -20,6 +20,7 @@
 #include "ui/subsystems/color_picker.h"   /* UI_HIT_COLOR_SWATCH routing */
 #include "editor/clipboard.h"
 #include "app/glr_completion.h"
+#include "app/glr_compositor.h"      /* whole-frame post-process hook */
 #include "app/glr_defaults.h"        /* CFG_DEFAULT_* */
 #include "app/glr_state.h"
 #include "editor/commit.h"
@@ -1348,6 +1349,17 @@ void glr_ctrl_display_frame(void) {
     }
     prof_end(PROF_MEMORY_PANEL);
 
+    /* Compositor post-process: the whole-frame filter runs over the
+     * entire composited image (3D scene + every 2D UI layer) now that
+     * all drawing for the frame is done, before the buffer swap in
+     * display_func(). The scene-viewport filter (PROF_SCENE_3D_POST_PROCESS)
+     * is the separate scene-layer pass; this is the compositor stage. */
+    prof_begin(PROF_COMPOSITOR);
+    glr_compositor_postprocess_frame(
+        glr_state_presentation().compositor_filter_mode,
+        ui_snap.viewport.window_w, ui_snap.viewport.window_h);
+    prof_end(PROF_COMPOSITOR);
+
     prof_begin(PROF_FRAME_RESTORE);
     repl_state_flat_program_set_count(saved_flat_count);
     repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
@@ -2001,20 +2013,40 @@ void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
  */
 
 
-/* Ctrl+N: cycle the experimental scene post-processing filter. Hidden
- * shortcut only — no Config row, no @cfg. Session-level state on
- * GlrPresentationState; flows into SceneRenderConfig each frame. */
+/* Ctrl+N: cycle the experimental chromatic-aberration post-process
+ * through three positions, keeping the two mode fields mutually exclusive
+ * so the effect never runs twice in a frame:
+ *
+ *   0  Off
+ *   1  scene viewport  (post_filter_mode -> scene_postprocess_filter, applied
+ *                       inside scene_render_3d_scene over the scene rect)
+ *   2  whole frame     (compositor_filter_mode -> glr_compositor hook, applied
+ *                       over the entire composited frame at frame end)
+ *
+ * Hidden shortcut only — no Config row, no @cfg. Session-level state on
+ * GlrPresentationState. */
 int glr_ctrl_router_handle_post_filter_key(unsigned char key) {
     if (key != KEY_CTRL_N)
         return 0;
 
     GlrPresentationState *p = glr_state_presentation_mut();
-    p->post_filter_mode =
-        (p->post_filter_mode + 1) % SCENE_POST_FILTER_COUNT;
 
-    char msg[64];
-    snprintf(msg, sizeof(msg), "Post filter: %s",
-             scene_postprocess_filter_mode_name(p->post_filter_mode));
+    int state = p->post_filter_mode != SCENE_POST_FILTER_OFF ? 1
+              : p->compositor_filter_mode != SCENE_POST_FILTER_OFF ? 2 : 0;
+    state = (state + 1) % 3;
+
+    p->post_filter_mode = (state == 1)
+        ? SCENE_POST_FILTER_CHROMATIC_ABERRATION : SCENE_POST_FILTER_OFF;
+    p->compositor_filter_mode = (state == 2)
+        ? SCENE_POST_FILTER_CHROMATIC_ABERRATION : SCENE_POST_FILTER_OFF;
+
+    const char *where = state == 1 ? " (scene)"
+                      : state == 2 ? " (frame)" : "";
+    ScenePostFilterMode shown = state == 2 ? p->compositor_filter_mode
+                                           : p->post_filter_mode;
+    char msg[80];
+    snprintf(msg, sizeof(msg), "Post filter: %s%s",
+             scene_postprocess_filter_mode_name(shown), where);
     repl_set_status(msg);
     return 1;
 }
