@@ -82,6 +82,10 @@ typedef double GLclampd;
 #define GL_LINE 0x1B01
 #define GL_FILL 0x1B02
 
+/* Display-list compile modes (glNewList). */
+#define GL_COMPILE 0x1300
+#define GL_COMPILE_AND_EXECUTE 0x1301
+
 #define GL_FLAT 0x1D00
 #define GL_SMOOTH 0x1D01
 
@@ -253,6 +257,11 @@ static inline void glDisable(GLenum cap) { GL_STUB_TRACE_LINE("glDisable %u\n", 
 static inline void glEdgeFlag(GLboolean flag) { GL_STUB_TRACE_LINE("glEdgeFlag %u\n", (unsigned)flag); gl_stub_tick(GL_STUB_glEdgeFlag); }
 static inline void glEnable(GLenum cap) { GL_STUB_TRACE_LINE("glEnable %u\n", (unsigned)cap); gl_stub_tick(GL_STUB_glEnable); }
 static inline void glEnd(void) { GL_STUB_TRACE_LINE("glEnd\n"); gl_stub_tick(GL_STUB_glEnd); }
+static inline GLuint glGenLists(GLsizei range) { GL_STUB_TRACE_LINE("glGenLists %d\n", (int)range); gl_stub_tick(GL_STUB_glGenLists); return 1; }
+static inline void glNewList(GLuint list, GLenum mode) { GL_STUB_TRACE_LINE("glNewList %u %u\n", (unsigned)list, (unsigned)mode); gl_stub_tick(GL_STUB_glNewList); }
+static inline void glEndList(void) { GL_STUB_TRACE_LINE("glEndList\n"); gl_stub_tick(GL_STUB_glEndList); }
+static inline void glCallList(GLuint list) { GL_STUB_TRACE_LINE("glCallList %u\n", (unsigned)list); gl_stub_tick(GL_STUB_glCallList); }
+static inline void glDeleteLists(GLuint list, GLsizei range) { GL_STUB_TRACE_LINE("glDeleteLists %u %d\n", (unsigned)list, (int)range); gl_stub_tick(GL_STUB_glDeleteLists); }
 static inline void glFogf(GLenum pname, GLfloat param) { GL_STUB_TRACE_LINE("glFogf %u %g\n", (unsigned)pname, (double)param); gl_stub_tick(GL_STUB_glFogf); }
 static inline void glFogfv(GLenum pname, const GLfloat *params) { GL_STUB_TRACE_LINE("glFogfv %u\n", (unsigned)pname); gl_stub_tick(GL_STUB_glFogfv); (void)params; }
 static inline void glFogi(GLenum pname, GLint param) { GL_STUB_TRACE_LINE("glFogi %u %d\n", (unsigned)pname, (int)param); gl_stub_tick(GL_STUB_glFogi); }

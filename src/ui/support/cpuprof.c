@@ -78,12 +78,17 @@ static void set_time_color(int is_total, double us) {
     }
 }
 
-/* A "detail" row is a nested child (prof_section_info().depth > 0); the app
- * supplies the nesting so a new sub-section needs no edit here. Detail rows
- * are hidden outside DETAILS mode. */
+/* A row's visibility is the app's call, expressed through prof_section_info():
+ *  - a section with no label (NULL/empty) is not a row at all — it's a catalog
+ *    slot this binary doesn't use (a demo instrumenting a subset returns this
+ *    for the rest), so it's omitted in every mode;
+ *  - a "detail" row is a nested child (depth > 0), hidden outside DETAILS mode.
+ * The app supplies label/depth, so a new sub-section needs no edit here. */
 static int section_visible(int profile_mode, ProfSection s) {
-    if (profile_mode != PROFILE_PANEL_DETAILS &&
-        prof_section_info(s).depth > 0)
+    ProfSectionInfo info = prof_section_info(s);
+    if (info.label == NULL || info.label[0] == '\0')
+        return 0;
+    if (profile_mode != PROFILE_PANEL_DETAILS && info.depth > 0)
         return 0;
     return 1;
 }
