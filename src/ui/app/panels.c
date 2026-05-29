@@ -14,6 +14,7 @@
 #include "ui/app/repl_code_panel.h"
 #include "ui/app/scene_tabs.h"
 #include "ui/subsystems/variable_panel.h"
+#include "ui/app/variable_panel_view.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -271,7 +272,9 @@ UiHit ui_panels_hit_test(const UiRenderSnapshot *snap,
     }
 
     {
-        UiHit variable_hit = ui_variable_panel_hit_test(snap, mx, my, variable_count);
+        UiVariablePanelView var_view = ui_app_variable_panel_view(snap);
+        var_view.var_count = variable_count;   /* honor the caller's count */
+        UiHit variable_hit = ui_variable_panel_hit_test(&var_view, mx, my);
         if (variable_hit.kind != UI_HIT_NONE)
             return variable_hit;
     }

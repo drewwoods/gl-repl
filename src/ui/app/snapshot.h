@@ -24,6 +24,7 @@
 #include "subsystems/color_picker/color_picker_state.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 #include "subsystems/replay/replay_state.h"
+#include "ui/subsystems/variable_panel.h"   /* UiVariable / UiVariableList */
 
 #include "ui/app/state_types.h"
 
@@ -32,17 +33,8 @@
  * builds the value) and the renderer (which reads it). */
 struct UiOverlayContent;
 
-enum { UI_VARIABLE_NAME_MAX = 16 };
-
-typedef struct {
-    char         name[UI_VARIABLE_NAME_MAX];
-    const float *value;
-} UiVariable;
-
-typedef struct {
-    const UiVariable *vars;
-    int               count;
-} UiVariableList;
+/* UiVariable / UiVariableList live in ui/subsystems/variable_panel.h (the
+ * variable-panel renderer owns them); included above. */
 
 /* Scene tab strip view. These constants are repeated locally instead of pulling
  * scene-slot policy macros into the snapshot contract. glr_ctrl.c asserts that

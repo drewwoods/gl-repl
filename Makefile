@@ -317,6 +317,7 @@ SRCS = \
 	src/ui/subsystems/replay_hud.c \
 	src/ui/app/scene_tabs.c \
 	src/ui/app/state.c \
+	src/ui/app/variable_panel_view.c \
 	src/ui/core/tabbed_overlay.c \
 	src/ui/core/text_layout.c \
 	src/ui/core/text_panel.c \
@@ -498,6 +499,7 @@ CORE_TEST_SRCS = \
 	src/ui/subsystems/replay_hud.c \
 	src/ui/app/scene_tabs.c \
 	src/ui/app/state.c \
+	src/ui/app/variable_panel_view.c \
 	src/ui/core/tabbed_overlay.c \
 	src/ui/core/text_layout.c \
 	src/ui/core/text_panel.c \
@@ -625,6 +627,20 @@ MEMPROF_DEMO_DEP_SRCS = src/support/memprof.c \
                         src/ui/core/theme.c \
                         tests/gl-stubs/gl_stub_counts.c
 
+# Object list for the standalone variable_panel_demo (isolation demo #5).
+# Proves the variable-panel subsystem links from {subsystems, ui/subsystems,
+# ui/core} alone. The renderer was narrowed off UiRenderSnapshot onto
+# UiVariablePanelView, and the drag handlers read name+value through an
+# installed VariablePanelValueSource instead of repl/eval — so neither
+# src/repl, src/editor, nor src/ui/app is in the link set. The demo builds
+# the view directly and installs its own in-memory value source.
+# check-variable-panel-demo-isolation enforces the link set.
+VARIABLE_PANEL_DEMO_DEP_SRCS = src/subsystems/variable_panel/variable_panel_state.c \
+                               src/subsystems/variable_panel/variable_panel_drag.c \
+                               src/ui/subsystems/variable_panel.c \
+                               src/ui/core/theme.c \
+                               tests/gl-stubs/gl_stub_counts.c
+
 OBJDIR = build/$(BUILD)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)
 BINDIR = $(OBJDIR)
 OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS)
@@ -702,7 +718,7 @@ CORE_TEST_BINS = $(filter-out test_eval test_format test_memprof test_repl_code_
 # them — benchmarks are timing-sensitive and should be invoked explicitly.
 BENCH_BINS = bench_repl
 
-ROOT_BIN_LINKS = gl-repl scene_demo repl_demo editor_demo memprof_demo
+ROOT_BIN_LINKS = gl-repl scene_demo repl_demo editor_demo memprof_demo variable_panel_demo
 
 .PHONY: $(ROOT_BIN_LINKS) $(TEST_BINS) $(BENCH_BINS)
 
@@ -711,6 +727,7 @@ SCENE_DEMO_BIN = $(BINDIR)/scene_demo
 REPL_DEMO_BIN = $(BINDIR)/repl_demo
 EDITOR_DEMO_BIN = $(BINDIR)/editor_demo
 MEMPROF_DEMO_BIN = $(BINDIR)/memprof_demo
+VARIABLE_PANEL_DEMO_BIN = $(BINDIR)/variable_panel_demo
 
 define core_test_binary
 $(1)_OBJS = $$(OBJDIR)/$$(TEST_DIR)/$(1).o $$(CORE_TEST_OBJS)
@@ -853,6 +870,19 @@ $(MEMPROF_DEMO_BIN): $(MEMPROF_DEMO_OBJS)
 
 memprof_demo: FORCE $(MEMPROF_DEMO_BIN) ## Build the standalone memory-profiling demo.
 	ln -sfn $(MEMPROF_DEMO_BIN) $@
+
+# Standalone variable-panel demo (isolation demo #5). Drives the variable
+# slider panel + drag math from {subsystems, ui/subsystems, ui/core} with no
+# editor/repl/app/ui-app code linked in.
+VARIABLE_PANEL_DEMO_OBJS = $(OBJDIR)/tools/variable_panel_demo/variable_panel_demo.o \
+                           $(addprefix $(OBJDIR)/,$(VARIABLE_PANEL_DEMO_DEP_SRCS:.c=.o))
+
+$(VARIABLE_PANEL_DEMO_BIN): $(VARIABLE_PANEL_DEMO_OBJS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OBJ_CFLAGS) -o $@ $(VARIABLE_PANEL_DEMO_OBJS) $(GL_LDFLAGS)
+
+variable_panel_demo: FORCE $(VARIABLE_PANEL_DEMO_BIN) ## Build the standalone variable-panel demo.
+	ln -sfn $(VARIABLE_PANEL_DEMO_BIN) $@
 
 .SECONDEXPANSION:
 
@@ -1054,6 +1084,9 @@ check-repl-demo-no-editor: ## Forbid editor implementation in the standalone dem
 check-memprof-demo-isolation: ## Forbid app/repl/editor coupling in the memprof demo link set.
 	@bash scripts/check-subsystem-demo-isolation.sh MEMPROF_DEMO_DEP_SRCS tools/memprof_demo memprof_demo
 
+check-variable-panel-demo-isolation: ## Forbid app/repl/editor coupling in the variable-panel demo link set.
+	@bash scripts/check-subsystem-demo-isolation.sh VARIABLE_PANEL_DEMO_DEP_SRCS tools/variable_panel_demo variable_panel_demo
+
 check-source-document-port-owners: ## source_document_* symbols only defined in approved host adapters (Phase 7).
 	@bash scripts/check-source-document-port-owners.sh
 
@@ -1121,6 +1154,7 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-repl-no-direct-editor \
 		check-repl-demo-no-editor \
 		check-memprof-demo-isolation \
+		check-variable-panel-demo-isolation \
 		check-editor-repl-surface \
 		check-edit-ops-pure \
 		check-no-raw-undo-clear \
@@ -1305,6 +1339,7 @@ test-full: ## Full gate: stub tests + checks + build gl-repl, bench, repl_demo, 
 	$(MAKE) --no-print-directory bench
 	$(MAKE) --no-print-directory scene_demo
 	$(MAKE) --no-print-directory memprof_demo USE_GL_STUBS=1
+	$(MAKE) --no-print-directory variable_panel_demo USE_GL_STUBS=1
 
 install-hooks: ## Point this clone's git hooks at the tracked .githooks/ directory.
 	@git config core.hooksPath .githooks
@@ -1383,7 +1418,7 @@ else
 endif
 
 clean: ## Remove built binaries and object files.
-	rm -rf $(ROOT_BIN_LINKS) gl-repl.dSYM scene_demo.dSYM repl_demo.dSYM editor_demo.dSYM memprof_demo.dSYM \
+	rm -rf $(ROOT_BIN_LINKS) gl-repl.dSYM scene_demo.dSYM repl_demo.dSYM editor_demo.dSYM memprof_demo.dSYM variable_panel_demo.dSYM \
 		$(TEST_BINS) $(addsuffix .dSYM,$(TEST_BINS)) \
 		$(BENCH_BINS) $(addsuffix .dSYM,$(BENCH_BINS)) \
 		build/coverage/lcov.info build/coverage/html \

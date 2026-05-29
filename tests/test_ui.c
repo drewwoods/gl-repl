@@ -16,6 +16,7 @@
 #include "ui/subsystems/color_picker.h"
 #include "ui/app/autocomplete_panel.h"
 #include "ui/subsystems/variable_panel.h"
+#include "ui/app/variable_panel_view.h"
 #include "app/glr_actions.h"
 #include "ui/app/menu_bar.h"
 #include "ui/app/panels.h"
@@ -35,6 +36,21 @@
 #include <assert.h>
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
+
+/* Build the variable-panel view from live app state (mirrors the
+ * pre-narrowing NULL-snapshot path) so these tests drive rect/hit by count. */
+static void vp_rect(int count, int *px, int *py, int *pw, int *ph) {
+    UiVariablePanelView v = ui_app_variable_panel_view_live(count);
+    ui_variable_panel_rect(&v, px, py, pw, ph);
+}
+static int vp_hit_row(int count, int gx, int gy, int *row) {
+    UiVariablePanelView v = ui_app_variable_panel_view_live(count);
+    return ui_variable_panel_hit_row(&v, gx, gy, row);
+}
+static UiHit vp_hit_test(int count, int mx, int my) {
+    UiVariablePanelView v = ui_app_variable_panel_view_live(count);
+    return ui_variable_panel_hit_test(&v, mx, my);
+}
 
 #define ASSERT_TRUE(label, cond) do { \
     TEST_ASSERT_TRUE(&g_harness, label, cond); \
@@ -320,7 +336,7 @@ static void test_variable_panel(void) {
     gl_stub_counts_reset();
 
     variable_panel_state_mut()->visible = 0;
-    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_variable_panel_render(&s); }
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); UiVariablePanelView v = ui_app_variable_panel_view(&s); ui_variable_panel_render(&v); }
     ASSERT_TRUE("var panel hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
 
     variable_panel_state_mut()->visible = 1;
@@ -329,7 +345,7 @@ static void test_variable_panel(void) {
     g_predef_vars_mut[0].value = 1.0f;
 
     gl_stub_counts_reset();
-    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_variable_panel_render(&s); }
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); UiVariablePanelView v = ui_app_variable_panel_view(&s); ui_variable_panel_render(&v); }
     ASSERT_GL_CALLS("var panel visible -> draws quads", GL_STUB_glBegin, 1);
     ASSERT_GL_CALLS("var panel visible -> draws text", GL_STUB_glRasterPos2f, 2);
     ASSERT_GL_CALLS("var panel visible -> calls glColor4f", GL_STUB_glColor4f, 1);
@@ -338,13 +354,12 @@ static void test_variable_panel(void) {
     int row = -1;
     ui_state_viewport_set_size(800, 600);
     int px, py, pw, ph;
-    ui_variable_panel_rect_for_count(NULL, 1, &px, &py, &pw, &ph);
+    vp_rect(1, &px, &py, &pw, &ph);
     ASSERT_TRUE("hit test in panel",
-                ui_variable_panel_hit_for_count(NULL,
-                    px + 10, ui_state_viewport().window_h - (py + 10),
-                    1, &row));
+                vp_hit_row(1, px + 10,
+                           ui_state_viewport().window_h - (py + 10), &row));
     ASSERT_TRUE("hit test outside panel",
-                !ui_variable_panel_hit_for_count(NULL, 0, 0, 1, &row));
+                !vp_hit_row(1, 0, 0, &row));
 }
 
 static void test_menu_bar(void) {
@@ -583,7 +598,7 @@ static void test_ui_variable_panel_hit_test(void) {
 
     /* Panel hidden -> always miss. */
     variable_panel_state_mut()->visible = 0;
-    UiHit h_off = ui_variable_panel_hit_test(NULL, 700, 100, 0);
+    UiHit h_off = vp_hit_test(0, 700, 100);
     ASSERT_TRUE("hidden panel -> NONE", h_off.kind == UI_HIT_NONE);
 
     /* Visible panel with one declared variable. */
@@ -593,16 +608,16 @@ static void test_ui_variable_panel_hit_test(void) {
     g_predef_vars_mut[0].value = 1.0f;
 
     int px, py, pw, ph;
-    ui_variable_panel_rect_for_count(NULL, 1, &px, &py, &pw, &ph);
+    vp_rect(1, &px, &py, &pw, &ph);
     int my = ui_state_viewport().window_h - (py + 10);
 
-    UiHit h_row = ui_variable_panel_hit_test(NULL, px + 10, my, 1);
+    UiHit h_row = vp_hit_test(1, px + 10, my);
     ASSERT_TRUE("row hit kind", h_row.kind == UI_HIT_VARIABLE_SLIDER);
     ASSERT_TRUE("row item_idx populated",
                 h_row.item_idx >= 0 && h_row.item_idx < g_num_predef_vars);
 
     /* Click outside the panel rect -> NONE. */
-    UiHit h_out = ui_variable_panel_hit_test(NULL, 0, 0, 1);
+    UiHit h_out = vp_hit_test(1, 0, 0);
     ASSERT_TRUE("outside panel -> NONE", h_out.kind == UI_HIT_NONE);
 }
 
@@ -622,7 +637,7 @@ static void test_ui_panels_hit_test_dispatch(void) {
     strcpy(g_predef_vars_mut[0].name, "x");
     g_predef_vars_mut[0].value = 1.0f;
     int px, py, pw, ph;
-    ui_variable_panel_rect_for_count(NULL, 1, &px, &py, &pw, &ph);
+    vp_rect(1, &px, &py, &pw, &ph);
     int my_var = ui_state_viewport().window_h - (py + 10);
     UiHit h_var = ui_panels_hit_test_current_snapshot(px + 10, my_var, 1);
     ASSERT_TRUE("var panel routed via panels_hit_test",

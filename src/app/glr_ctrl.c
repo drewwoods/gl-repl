@@ -78,6 +78,7 @@
 #include "ui/app/state_types.h" /* UI-chrome typedefs (CodePanel/Camera/Help/etc.) */
 #include "ui/core/tabbed_overlay.h"
 #include "ui/subsystems/variable_panel.h"
+#include "ui/app/variable_panel_view.h"
 #include "subsystems/variable_panel/variable_panel_drag.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 
@@ -1198,9 +1199,9 @@ static UiMemoryPanelView glr_ctrl_build_memory_panel_view(const UiRenderSnapshot
         panel_x = scene_x + scene_w - panel_w - MEM_PANEL_SCENE_MARGIN_PX;
         panel_y = scene_y + scene_h - panel_h - MEM_PANEL_SCENE_MARGIN_PX;
     } else {
+        UiVariablePanelView var_view = ui_app_variable_panel_view(snap);
         int var_x, var_y, var_w, var_h;
-        ui_variable_panel_rect_for_count(snap, snap->variable_panel_vars.count,
-                                         &var_x, &var_y, &var_w, &var_h);
+        ui_variable_panel_rect(&var_view, &var_x, &var_y, &var_w, &var_h);
         panel_x = var_x + var_w - panel_w;
         panel_y = var_y;
     }
@@ -1402,7 +1403,10 @@ void glr_ctrl_display_frame(void) {
     if (cp_out.cursor_valid)
         ui_autocomplete_panel_render(&ui_snap, cp_out.cursor_px, cp_out.cursor_py);
     ui_menu_bar_render_example_dropdown(&ui_snap);
-    ui_variable_panel_render(&ui_snap);
+    {
+        UiVariablePanelView var_view = ui_app_variable_panel_view(&ui_snap);
+        ui_variable_panel_render(&var_view);
+    }
     ui_panels_render_scene_status(&ui_snap);
     {
         UiOverlayState help_overlay = {
@@ -1730,9 +1734,26 @@ static const ReplHelpFkeyProvider g_glr_help_fkey_provider = {
     .fkey_label = glr_ctrl_help_fkey_label,
 };
 
+/* REPL-backed value source for the variable-panel drag handlers. The peer
+ * reads the declared variable's name + value through this bridge instead of
+ * touching the eval table directly, which keeps src/subsystems/variable_panel
+ * linkable from the standalone variable_panel_demo (it installs its own). */
+static int glr_ctrl_var_read_row(int row, char *name_out, int name_cap, float *value_out) {
+    ReplPredefView predef = repl_eval_predef_view();
+    if (row < 0 || row >= predef.count) return 0;
+    snprintf(name_out, (size_t)name_cap, "%s", predef.vars[row].name);
+    *value_out = predef.vars[row].value;
+    return 1;
+}
+static const VariablePanelValueSource g_glr_var_value_source = {
+    glr_ctrl_var_read_row,
+};
+
 static void glr_ctrl_install_app_services(void) {
     /* Install the host-effect bridge (status sink, example presentation, editor effects, tutorial). */
     repl_install_host_effects(&g_glr_host_effects);
+    /* Variable-panel drag value source: name + value reads from the REPL eval table. */
+    variable_panel_install_value_source(&g_glr_var_value_source);
     /* Install the export-config bridge for @cfg headers and per-scene config snapshotting. */
     glr_actions_install_export_cfg_bridge();
     /* Install the export-camera bridge for // camera blocks serialization. */
@@ -2445,8 +2466,9 @@ int glr_ctrl_router_handle_variable_panel_drag_begin(int button, int state, int 
     if (button != GLUT_LEFT_BUTTON && button != GLUT_RIGHT_BUTTON)
         return 0;
     int row_idx;
-    if (!ui_variable_panel_hit_for_count(NULL, x, y, repl_eval_predef_view().count,
-                                         &row_idx))
+    UiVariablePanelView var_view =
+        ui_app_variable_panel_view_live(repl_eval_predef_view().count);
+    if (!ui_variable_panel_hit_row(&var_view, x, y, &row_idx))
         return 0;
     if (replay_active())
         replay_stop();

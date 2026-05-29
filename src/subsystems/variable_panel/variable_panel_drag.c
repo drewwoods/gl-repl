@@ -14,7 +14,6 @@
  */
 #include <math.h>
 #include <stdio.h>
-#include "repl/eval.h"
 #include "subsystems/variable_panel/variable_panel_drag.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 
@@ -27,6 +26,11 @@
 #define VAR_DRAG_ZERO_BOOTSTRAP_RATE  0.001f  /* units/px while |start| ~ 0 */
 
 static int g_drag_start_x = 0;
+static const VariablePanelValueSource *g_value_source = NULL;
+
+void variable_panel_install_value_source(const VariablePanelValueSource *src) {
+    g_value_source = src;
+}
 
 int variable_panel_drag_active(void) {
     return variable_panel_drag().var_idx >= 0;
@@ -41,14 +45,19 @@ int variable_panel_drag_log_mode(void) {
 }
 
 void variable_panel_handle_drag_begin(int row, int log_mode, int x) {
-    ReplPredefView predef = repl_eval_predef_view();
-    if (row < 0 || row >= predef.count) return;
+    char  name[REPL_PREDEF_NAME_MAX] = {0};
+    float value = 0.0f;
+    /* Bridge fills name + value and bounds-checks the row; unset source or
+     * an out-of-range row leaves the drag idle. */
+    if (!g_value_source || !g_value_source->read_row ||
+        !g_value_source->read_row(row, name, (int)sizeof(name), &value))
+        return;
     VariablePanelDragState *drag = variable_panel_drag_mut();
     drag->var_idx = row;
     drag->log_mode = log_mode ? 1 : 0;
-    drag->start_value = predef.vars[row].value;
+    drag->start_value = value;
     g_drag_start_x = x;
-    snprintf(drag->name, sizeof(drag->name), "%s", predef.vars[row].name);
+    snprintf(drag->name, sizeof(drag->name), "%s", name);
     drag->undo_snapshot_pushed = 0;
 }
 
@@ -98,9 +107,8 @@ int variable_panel_handle_drag_motion(int x, VariablePanelValueChange *out) {
     }
 
     if (out) {
-        ReplPredefView predef = repl_eval_predef_view();
-        const char *name = drag->name[0] ? drag->name : predef.vars[drag->var_idx].name;
-        snprintf(out->name, sizeof(out->name), "%s", name);
+        /* drag->name was captured from the value source at drag-begin. */
+        snprintf(out->name, sizeof(out->name), "%s", drag->name);
         out->value = new_val;
     }
     return 1;

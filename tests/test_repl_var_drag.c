@@ -29,6 +29,18 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
     TEST_ASSERT_STR(&g_harness, label, got, exp); \
 } while (0)
 
+/* The drag handlers read the dragged variable's name+value through an
+ * installed value source (so the peer needn't reach the eval table directly).
+ * Back it with the REPL eval table for these tests. */
+static int test_var_read_row(int row, char *name_out, int name_cap, float *value_out) {
+    ReplPredefView predef = repl_eval_predef_view();
+    if (row < 0 || row >= predef.count) return 0;
+    snprintf(name_out, (size_t)name_cap, "%s", predef.vars[row].name);
+    *value_out = predef.vars[row].value;
+    return 1;
+}
+static const VariablePanelValueSource g_test_value_source = { test_var_read_row };
+
 static void test_inactive_queries(void) {
     glr_ctrl_reset_all();
 
@@ -175,6 +187,7 @@ static void test_sequential_drags_reanchor_to_new_start_value(void) {
 }
 
 int main(void) {
+    variable_panel_install_value_source(&g_test_value_source);
     test_inactive_queries();
     test_begin_captures_drag_metadata();
     test_begin_invalid_rows_leave_drag_inactive();
