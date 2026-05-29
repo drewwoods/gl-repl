@@ -249,6 +249,36 @@ static const TutorialStep g_tutorial_variable_slider_steps[] = {
     STEP_SENTINEL,
 };
 
+/* "Lighting Basics" — the first lit-surface tutorial. Six COMMAND steps
+ * stand up the minimal lighting pipeline (depth test, lighting, one
+ * light, color-material) and then draw a GLUT sphere so the shading
+ * gradient across a curved surface is obvious. No entry `@cfg` is needed:
+ * tutorials reset presentation to defaults on start, and the default
+ * view is 3D, so the sphere's falloff reads correctly. Each expected
+ * command is a single call with no braces or declarations, satisfying
+ * the COMMAND placement rule. */
+static const TutorialStep g_tutorial_lighting_basics_steps[] = {
+    STEP_APPEND(NULL,
+        "// Turn on depth testing so nearer surfaces hide the ones behind them.",
+        "glEnable(GL_DEPTH_TEST)"),
+    STEP_APPEND(NULL,
+        "// Enable lighting; OpenGL now shades surfaces instead of using flat color.",
+        "glEnable(GL_LIGHTING)"),
+    STEP_APPEND(NULL,
+        "// Switch on light 0, the default light positioned near the camera.",
+        "glEnable(GL_LIGHT0)"),
+    STEP_APPEND(NULL,
+        "// Let glColor drive the surface material so the next color tints the shape.",
+        "glEnable(GL_COLOR_MATERIAL)"),
+    STEP_APPEND(NULL,
+        "// Choose a warm amber material color for the sphere.",
+        "glColor3f(0.9, 0.6, 0.2)"),
+    STEP_APPEND(NULL,
+        "// Draw a lit sphere; watch the shading fall off from the lit side to the dark side.",
+        "glutSolidSphere(0.7, 32, 24)"),
+    STEP_SENTINEL,
+};
+
 /* REPL_TUTORIAL_TAG_ALL is a synthetic tag: every tutorial is a member.
  * It is not listed in any g_tutorials[] mask literal; instead
  * repl_tutorial_tag_mask() ORs its bit into every entry's mask, so the
@@ -328,6 +358,17 @@ static const TutorialEntry g_tutorials[] = {
         .tags       = TUTORIAL_TAG_GEOMETRY | TUTORIAL_TAG_DEPTH_LIGHTING,
         /* Intermediate: introduces depth-testing as a new GL concept
          * (the previous tutorials were pure geometry/color/transform). */
+        .subheading = "Intermediate",
+    },
+    {
+        /* Appended after Depth Test Triangle so both Intermediate entries
+         * stay contiguous (Beginner run, then Intermediate run) in the ALL
+         * flyout, and the two DEPTH_LIGHTING entries (Depth Test Triangle,
+         * Lighting Basics) form a single Intermediate run in that flyout —
+         * test_catalog_subheading_metadata enforces both. */
+        .name       = "Lighting Basics",
+        .steps      = g_tutorial_lighting_basics_steps,
+        .tags       = TUTORIAL_TAG_DEPTH_LIGHTING,
         .subheading = "Intermediate",
     },
 };

@@ -3,11 +3,24 @@
  *
  * Iteration 1: chromatic aberration. Capture the resolved scene rect
  * into one POT texture, redraw it, then redraw red/blue channel-only
- * passes with a small ±x screen offset. Pure fixed-function GL.
+ * passes with a small ±x screen offset.
+ *
+ * Iteration 2: vignette. A blended elliptical radial gradient drawn
+ * over the rect — transparent at the centre, darkening toward the
+ * corners. No capture needed (it only darkens), so it skips the
+ * texture machinery entirely.
+ *
+ * Both are pure fixed-function GL (no shaders, no FBOs). The same rect
+ * the scene renders into is reused over the whole window by the
+ * app-level glr_compositor, so each effect works at scene-viewport and
+ * full-frame scope alike. scene_postprocess_filter_render() dispatches
+ * on the mode.
  */
 #include "postprocess_filter.h"
 
 #include "gl_includes.h"
+
+#include <math.h>   /* cosf / sinf / sqrtf for the vignette ring */
 
 /* One owned texture, sized to the largest scene rect seen so far. */
 static GLuint g_filter_tex = 0;
@@ -20,6 +33,7 @@ static GLint  g_max_tex_size = 0;
 const char *scene_postprocess_filter_mode_name(ScenePostFilterMode mode) {
     switch (mode) {
     case SCENE_POST_FILTER_CHROMATIC_ABERRATION: return "Chromatic aberration";
+    case SCENE_POST_FILTER_VIGNETTE:             return "Vignette";
     case SCENE_POST_FILTER_OFF:
     case SCENE_POST_FILTER_COUNT:
     default:                                     return "Off";
@@ -113,13 +127,8 @@ static void postprocess_filter_draw_quad(int sw, int sh,
     glEnd();
 }
 
-void scene_postprocess_filter_render(ScenePostFilterMode mode, int sx, int sy,
-                                     int sw, int sh) {
-    if (mode != SCENE_POST_FILTER_CHROMATIC_ABERRATION)
-        return;
-    if (sw <= 0 || sh <= 0)
-        return;
-
+static void postprocess_filter_render_chromatic(int sx, int sy,
+                                                int sw, int sh) {
     if (g_max_tex_size == 0) {
         glGetIntegerv(GL_MAX_TEXTURE_SIZE, &g_max_tex_size);
         if (g_max_tex_size <= 0)
@@ -185,4 +194,68 @@ void scene_postprocess_filter_render(ScenePostFilterMode mode, int sx, int sy,
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
     postprocess_filter_end_2d(saved_matrix_mode);
+}
+
+/* Vignette: a blended elliptical annulus over the rect — transparent at
+ * the inner ellipse, darkening to `edge_alpha` black at the outer one.
+ * The outer ellipse is aspect-matched (radii scaled by sqrt(2)) so it
+ * passes exactly through the four corners; every rect pixel is therefore
+ * inside-or-on it. The inner ellipse leaves the centre untouched. No
+ * frame capture needed — this only darkens what is already on screen. */
+static void postprocess_filter_render_vignette(int sx, int sy,
+                                               int sw, int sh) {
+    GLint saved_matrix_mode = 0;
+    postprocess_filter_begin_2d(sx, sy, sw, sh, &saved_matrix_mode);
+
+    /* begin_2d enables GL_TEXTURE_2D + REPLACE for the chromatic path;
+     * the vignette is a flat-shaded color overlay, so drop texturing and
+     * switch to standard alpha blending. Both are inside the
+     * GL_ALL_ATTRIB_BITS push, so end_2d's glPopAttrib restores them. */
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    const float cx = (float)sw * 0.5f;
+    const float cy = (float)sh * 0.5f;
+    const float corner_k = 1.41421356f;   /* sqrt(2): outer ellipse hits corners */
+    const float rx_out = cx * corner_k;
+    const float ry_out = cy * corner_k;
+    const float rx_in  = rx_out * 0.5f;   /* radius of the untouched centre */
+    const float ry_in  = ry_out * 0.5f;
+    const float edge_alpha = 0.55f;
+    const float two_pi = 6.28318530717958648f;
+    const int   segments = 64;
+
+    glBegin(GL_TRIANGLE_STRIP);
+    for (int i = 0; i <= segments; i++) {
+        float a = two_pi * (float)i / (float)segments;
+        float c = cosf(a);
+        float s = sinf(a);
+        glColor4f(0.0f, 0.0f, 0.0f, 0.0f);
+        glVertex2f(cx + rx_in * c, cy + ry_in * s);
+        glColor4f(0.0f, 0.0f, 0.0f, edge_alpha);
+        glVertex2f(cx + rx_out * c, cy + ry_out * s);
+    }
+    glEnd();
+
+    postprocess_filter_end_2d(saved_matrix_mode);
+}
+
+void scene_postprocess_filter_render(ScenePostFilterMode mode, int sx, int sy,
+                                     int sw, int sh) {
+    if (sw <= 0 || sh <= 0)
+        return;
+
+    switch (mode) {
+    case SCENE_POST_FILTER_CHROMATIC_ABERRATION:
+        postprocess_filter_render_chromatic(sx, sy, sw, sh);
+        break;
+    case SCENE_POST_FILTER_VIGNETTE:
+        postprocess_filter_render_vignette(sx, sy, sw, sh);
+        break;
+    case SCENE_POST_FILTER_OFF:
+    case SCENE_POST_FILTER_COUNT:
+    default:
+        break;
+    }
 }

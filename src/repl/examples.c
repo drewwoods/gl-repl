@@ -1292,6 +1292,38 @@ static const char *const g_example_annotated_orbit_plot[] = {
     NULL
 };
 
+/* Torus knot: a single closed (p, q) curve winding p times around the
+ * torus axis and q times through the hole, drawn as one GL_LINE_LOOP.
+ * Per-vertex color sweeps the hue around the curve and drifts with t, so
+ * a rainbow band flows along the knot. Pure trig in one for-loop. */
+static const char *const g_example_torus_knot[] = {
+    "// @cfg vertex_outlines = 0",
+    "// @cfg vertex_points = 0",
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -9.0f);",
+    "glRotatef(25.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "static float n, p, q, ang, rr, x, y, z; // samples, winds, angle, ring radius, coords",
+    "glClearColor(0.05, 0.05, 0.08, 1.0);",
+    "glLineWidth(2.0);",
+    "n = 400;   // samples around the closed curve",
+    "p = 2;     // turns around the torus axis",
+    "q = 3;     // turns through the torus hole",
+    "glBegin(GL_LINE_LOOP);",
+    "  for(i, 0, n) {",
+    "    ang = TAU * i/n;",
+    "    rr = 2.0 + cos(q*ang);          // distance from the axis",
+    "    x = rr * cos(p*ang);",
+    "    y = rr * sin(p*ang);",
+    "    z = sin(q*ang);",
+    "    glColor3f(0.5 + 0.5*sin(ang + t), 0.5 + 0.5*sin(ang + t + 2.0), 0.5 + 0.5*sin(ang + t + 4.0));",
+    "    glVertex3f(x, y, z);",
+    "  }",
+    "glEnd();",
+    NULL
+};
+
 typedef unsigned int ReplExampleTagMask;
 
 typedef struct {
@@ -1390,6 +1422,9 @@ static const ReplExampleEntry g_example_entries[] = {
       "Curves & surfaces" },
     { "Scratch arrays (de Casteljau curve)", g_example_scratch_casteljau,
       EXAMPLE_TAG_2D | EXAMPLE_TAG_LINES,
+      "Curves & surfaces" },
+    { "Torus knot (animated)", g_example_torus_knot,
+      EXAMPLE_TAG_3D | EXAMPLE_TAG_LINES,
       "Curves & surfaces" },
 
     { "Glow sprites (blend + point attenuation)", g_example_glow_particles,
