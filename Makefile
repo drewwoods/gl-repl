@@ -613,6 +613,18 @@ EDITOR_DEMO_DEP_SRCS = src/editor/edit_ops.c \
 				      src/support/cpuprof.c \
                        tests/gl-stubs/gl_stub_counts.c
 
+# Object list for the standalone memprof_demo (isolation demo #4). Proves
+# the memory-profiling subsystem links cleanly from {support, ui/support,
+# ui/core} alone — no src/ui/app, src/app, src/repl, or src/editor. The
+# panel renderer (src/ui/support/memprof.c) was narrowed off UiRenderSnapshot
+# onto UiMemoryPanelView so it pulls in none of the editor/repl/app headers
+# the snapshot transitively dragged in. check-memprof-demo-isolation.sh
+# enforces the link set.
+MEMPROF_DEMO_DEP_SRCS = src/support/memprof.c \
+                        src/ui/support/memprof.c \
+                        src/ui/core/theme.c \
+                        tests/gl-stubs/gl_stub_counts.c
+
 OBJDIR = build/$(BUILD)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)
 BINDIR = $(OBJDIR)
 OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS)
@@ -690,7 +702,7 @@ CORE_TEST_BINS = $(filter-out test_eval test_format test_memprof test_repl_code_
 # them — benchmarks are timing-sensitive and should be invoked explicitly.
 BENCH_BINS = bench_repl
 
-ROOT_BIN_LINKS = gl-repl scene_demo repl_demo editor_demo
+ROOT_BIN_LINKS = gl-repl scene_demo repl_demo editor_demo memprof_demo
 
 .PHONY: $(ROOT_BIN_LINKS) $(TEST_BINS) $(BENCH_BINS)
 
@@ -698,6 +710,7 @@ SAMPLE_BIN = $(BINDIR)/gl-repl
 SCENE_DEMO_BIN = $(BINDIR)/scene_demo
 REPL_DEMO_BIN = $(BINDIR)/repl_demo
 EDITOR_DEMO_BIN = $(BINDIR)/editor_demo
+MEMPROF_DEMO_BIN = $(BINDIR)/memprof_demo
 
 define core_test_binary
 $(1)_OBJS = $$(OBJDIR)/$$(TEST_DIR)/$(1).o $$(CORE_TEST_OBJS)
@@ -827,6 +840,19 @@ $(EDITOR_DEMO_BIN): $(EDITOR_DEMO_OBJS)
 
 editor_demo: FORCE $(EDITOR_DEMO_BIN) ## Build the standalone editor demo.
 	ln -sfn $(EDITOR_DEMO_BIN) $@
+
+# Standalone memory-profiling demo (isolation demo #4). Drives the
+# memprof sampler + overlay panel from {support, ui/support, ui/core}
+# with no editor/repl/app/ui-app code linked in.
+MEMPROF_DEMO_OBJS = $(OBJDIR)/tools/memprof_demo/memprof_demo.o \
+                    $(addprefix $(OBJDIR)/,$(MEMPROF_DEMO_DEP_SRCS:.c=.o))
+
+$(MEMPROF_DEMO_BIN): $(MEMPROF_DEMO_OBJS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OBJ_CFLAGS) -o $@ $(MEMPROF_DEMO_OBJS) $(GL_LDFLAGS)
+
+memprof_demo: FORCE $(MEMPROF_DEMO_BIN) ## Build the standalone memory-profiling demo.
+	ln -sfn $(MEMPROF_DEMO_BIN) $@
 
 .SECONDEXPANSION:
 
@@ -1025,6 +1051,9 @@ check-ui-core-no-upper-layers: ## Hard guard: src/ui/core/ must not include from
 check-repl-demo-no-editor: ## Forbid editor implementation in the standalone demo (Phase 7).
 	@bash scripts/check-repl-demo-no-editor.sh
 
+check-memprof-demo-isolation: ## Forbid app/repl/editor coupling in the memprof demo link set.
+	@bash scripts/check-subsystem-demo-isolation.sh MEMPROF_DEMO_DEP_SRCS tools/memprof_demo memprof_demo
+
 check-source-document-port-owners: ## source_document_* symbols only defined in approved host adapters (Phase 7).
 	@bash scripts/check-source-document-port-owners.sh
 
@@ -1091,6 +1120,7 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-repl-demo-stubs-shrinking \
 		check-repl-no-direct-editor \
 		check-repl-demo-no-editor \
+		check-memprof-demo-isolation \
 		check-editor-repl-surface \
 		check-edit-ops-pure \
 		check-no-raw-undo-clear \
@@ -1274,6 +1304,7 @@ test-full: ## Full gate: stub tests + checks + build gl-repl, bench, repl_demo, 
 	$(MAKE) --no-print-directory gl-tests
 	$(MAKE) --no-print-directory bench
 	$(MAKE) --no-print-directory scene_demo
+	$(MAKE) --no-print-directory memprof_demo USE_GL_STUBS=1
 
 install-hooks: ## Point this clone's git hooks at the tracked .githooks/ directory.
 	@git config core.hooksPath .githooks
@@ -1352,7 +1383,7 @@ else
 endif
 
 clean: ## Remove built binaries and object files.
-	rm -rf $(ROOT_BIN_LINKS) gl-repl.dSYM scene_demo.dSYM repl_demo.dSYM editor_demo.dSYM \
+	rm -rf $(ROOT_BIN_LINKS) gl-repl.dSYM scene_demo.dSYM repl_demo.dSYM editor_demo.dSYM memprof_demo.dSYM \
 		$(TEST_BINS) $(addsuffix .dSYM,$(TEST_BINS)) \
 		$(BENCH_BINS) $(addsuffix .dSYM,$(BENCH_BINS)) \
 		build/coverage/lcov.info build/coverage/html \

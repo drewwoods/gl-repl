@@ -3,9 +3,6 @@
  */
 #include "ui/support/memprof.h"
 #include "ui/core/gl_2d.h"
-#include "ui/app/layout.h"
-#include "ui/support/cpuprof.h"   /* PROFILE_PANEL_W, PROFILE_PANEL_OFF */
-#include "ui/subsystems/variable_panel.h"  /* ui_variable_panel_rect_for_count */
 #include "ui/core/theme.h"
 #include "support/memprof.h"
 #include "config.h"                  /* FONT_SMALL, FONT_SMALL_W */
@@ -44,11 +41,12 @@ static int tiny_text_w(const char *s) {
     return w;
 }
 
-static int clamp_int(int v, int lo, int hi) {
-    if (hi < lo) return lo;
-    if (v < lo) return lo;
-    if (v > hi) return hi;
-    return v;
+/* Total panel height from the geometry constants above. The controller
+ * needs this (via ui_memory_panel_height) to resolve the stacked anchor;
+ * the renderer uses it to size the frame. */
+static int mem_panel_height(void) {
+    return MEM_HEADER_H + MEM_TEXT_BLOCK_H + MEM_GRAPH_H
+         + MEM_BOTTOM_PAD + MEM_PANEL_MARGIN;
 }
 
 /* ========================================================================= */
@@ -125,61 +123,20 @@ static void fmt_time_offset(char *buf, int buf_sz, double seconds_ago) {
     }
 }
 
-/* Mirror profile_panel_rect_for_height exactly so the panel inherits
- * the CPU profile's anchor logic — including the variable-panel-hidden
- * branch, which routes through ui_variable_panel_rect_for_count() and
- * therefore picks up the replay_lift baked into the variable panel's
- * y when the replay HUD is active. Then apply the side-by-side shift
- * left when the CPU profile panel is visible. */
-static void memory_panel_rect_for_height(const UiRenderSnapshot *snap,
-                                         int panel_h, int *out_x, int *out_y) {
-    int scene_x, scene_y, scene_w, scene_h;
-    int panel_x, panel_y;
-    ui_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
-
-    if (snap->variable_panel.visible) {
-        panel_x = scene_x + scene_w - MEM_PANEL_W - MEM_PANEL_MARGIN;
-        panel_y = scene_y + scene_h - panel_h    - MEM_PANEL_MARGIN;
-    } else {
-        int var_x, var_y, var_w, var_h;
-        ui_variable_panel_rect_for_count(snap, snap->variable_panel_vars.count,
-                                         &var_x, &var_y, &var_w, &var_h);
-        panel_x = var_x + var_w - MEM_PANEL_W;
-        panel_y = var_y;
-    }
-
-    if (snap->profile_panel.mode != PROFILE_PANEL_OFF) {
-        panel_x -= (PROFILE_PANEL_W + 8);
-    }
-
-    panel_x = clamp_int(panel_x, scene_x + 4, scene_x + scene_w - MEM_PANEL_W - 4);
-
-    int min_y = scene_y + STATUSBAR_H + 4;
-    int max_y = scene_y + scene_h     - panel_h - 4;
-    if (max_y >= min_y)
-        panel_y = clamp_int(panel_y, min_y, max_y);
-    else
-        panel_y = min_y;
-
-    if (out_x) *out_x = panel_x;
-    if (out_y) *out_y = panel_y;
-}
-
 /* ========================================================================= */
 /* Rendering                                                                  */
 /* ========================================================================= */
 
-void ui_memory_panel_render(const UiRenderSnapshot *snap) {
-    int mode = snap->memory_panel.mode;
+void ui_memory_panel_render(const UiMemoryPanelView *view) {
+    int mode = view->mode;
     if (mode == MEMORY_PANEL_OFF) return;
 
-    int panel_h = MEM_HEADER_H + MEM_TEXT_BLOCK_H + MEM_GRAPH_H
-                + MEM_BOTTOM_PAD + MEM_PANEL_MARGIN;
+    int panel_h = mem_panel_height();
 
-    int panel_x, panel_y;
-    memory_panel_rect_for_height(snap, panel_h, &panel_x, &panel_y);
+    int panel_x = view->panel_x;
+    int panel_y = view->panel_y;
 
-    gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
+    gl2d_begin(view->window_w, view->window_h);
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -358,4 +315,16 @@ void ui_memory_panel_render(const UiRenderSnapshot *snap) {
                      (float)label_y, right_lab, FONT_TINY);
 
     gl2d_end();
+}
+
+/* ========================================================================= */
+/* Footprint accessors (for controller-side sibling-panel stacking)          */
+/* ========================================================================= */
+
+int ui_memory_panel_width(void) {
+    return MEM_PANEL_W;
+}
+
+int ui_memory_panel_height(void) {
+    return mem_panel_height();
 }
