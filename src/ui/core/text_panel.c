@@ -175,7 +175,7 @@ static void text_panel_draw_colored_span(const UiTextPanelSnapshot *snap,
                                          int span_end,
                                          int line_y,
                                          const UiTextPanelColor *color,
-                                         int bold,
+                                         int shadow,
                                          int blend_on) {
     int span_len;
     int x;
@@ -188,24 +188,25 @@ static void text_panel_draw_colored_span(const UiTextPanelSnapshot *snap,
     span_len = span_end - span_start;
     x = snap->cp_x + wrap_x + (span_start - wrap_start) * FONT_W;
 
-    if (bold) {
-        static const int dx[4] = { -1, 1,  0, 0 };
-        static const int dy[4] = {  0, 0, -1, 1 };
+    if (shadow) {
+        /* Drop shadow: a dark copy offset by (+1, -1) drawn behind the
+         * glyphs, then the colored text on top. Replaces the old additive
+         * "fake bold" pass, which barely registered. The shadow alpha
+         * tracks the span's own alpha so faded spans (tutorial reveal)
+         * keep their shadow in step. */
+        float a = color->has_alpha ? color->a : 1.0f;
+
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glColor4f(1.0f, 1.0f, 1.0f, 0.25f * a);
+        text_panel_draw_segment(x + 1, line_y - 1, text, span_start, span_len,
+                                FONT_MONO);
+        if (!blend_on)
+            glDisable(GL_BLEND);
 
         text_panel_set_color(color);
         text_panel_draw_segment(x, line_y, text, span_start, span_len,
                                 FONT_MONO);
-
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-        glColor4f(color->r, color->g, color->b, 0.15f);
-        for (int p = 0; p < 4; p++)
-            text_panel_draw_segment(x + dx[p], line_y + dy[p], text,
-                                    span_start, span_len, FONT_MONO);
-
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        if (!blend_on)
-            glDisable(GL_BLEND);
         return;
     }
 
@@ -269,7 +270,7 @@ static void text_panel_draw_colored_text(const UiTextPanelSnapshot *snap,
         }
         text_panel_draw_colored_span(snap, text, wrap_start, wrap_x,
                                      seg_start, seg_end, line_y,
-                                     &segment->color, segment->bold,
+                                     &segment->color, segment->shadow,
                                      blend_on);
         if (seg_end > cursor)
             cursor = seg_end;

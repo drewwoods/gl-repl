@@ -1152,7 +1152,7 @@ int ui_repl_code_panel_classify_syntax(const UiRenderSnapshot *snap,
     return n;
 }
 
-/* mode: 0 = off (no spans), 1 = on, 2 = on + fake-bold constants. */
+/* mode: 0 = off (no spans), 1 = on, 2 = on + drop-shadow constants. */
 static void repl_code_panel_apply_syntax_segments(const UiRenderSnapshot *snap,
                                                   const char *text,
                                                   CmdType type,
@@ -1187,9 +1187,9 @@ static void repl_code_panel_apply_syntax_segments(const UiRenderSnapshot *snap,
                 .char_start = spans[i].start,
                 .char_count = spans[i].len,
                 .color = repl_code_panel_rgb(rgb[0], rgb[1], rgb[2]),
-                /* On+Bold mode fake-bolds constants only. */
-                .bold = (mode == 2 &&
-                         spans[i].kind == REPL_SYNTAX_CONSTANT),
+                /* On+Shadow mode drop-shadows constants only. */
+                .shadow = (mode == 2 &&
+                           spans[i].kind == REPL_SYNTAX_CONSTANT),
             };
     }
 }
@@ -1221,7 +1221,7 @@ static void repl_code_panel_apply_trailing_comment_segment(const char *text,
             .char_start = (int)(cmt - text),
             .char_count = (int)strlen(cmt),
             .color = repl_code_panel_rgb(r, g, b),
-            .bold = 0,
+            .shadow = 0,
         };
 }
 

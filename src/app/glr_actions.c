@@ -106,7 +106,7 @@ static char cfg_status_buf[REPL_STATUS_TEXT_MAX];
 #define AUDIO_CFG_PAUSE 0
 #define AUDIO_CFG_ALL   1
 static const char *audio_cfg_names[] = { "off", "on" };
-static const char *syntax_hl_names[] = { "Off", "On", "On+Bold" };
+static const char *syntax_hl_names[] = { "Off", "On", "On+Shadow" };
 static const char *view_mode_names[] = { "3D", "2D" };
 static const char *vertex_label_names[GLR_VERTEX_LABEL_COUNT] = {
     [GLR_VERTEX_LABEL_OFF]       = "Off",
