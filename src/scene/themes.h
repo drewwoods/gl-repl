@@ -69,12 +69,20 @@ typedef enum {
  * camera, set with an identity modelview) so the scene self-illuminates
  * as the camera moves. SOLAR puts light 0 at the world origin so user
  * geometry orbits a single central source — useful for solar-system /
- * planet renders. Lights 1..3 fall back to disabled fills in HEADLIGHT
- * and SOLAR; the program can still glEnable them. */
+ * planet renders. STUDIO is the three-point portrait rig (warm-white key,
+ * cool-blue rim, warm-orange fill) plus a green directional accent,
+ * mirroring the tools/scene_demo lighting. NEON is a vibrant saturated
+ * triad (magenta key, cyan rim, lime fill) plus a dim warm back light,
+ * for showing off colored materials. As with every theme, all four
+ * slots ship `.enabled = 0` — a theme only defines each light's
+ * position/colors; the program's glEnable(GL_LIGHTn) commands (or an
+ * example's @cfg) decide which slots actually light up. */
 #define LIGHT_THEME_LIST(X) \
     X(DEFAULT)              \
     X(HEADLIGHT)            \
-    X(SOLAR)
+    X(SOLAR)               \
+    X(STUDIO)              \
+    X(NEON)
 
 typedef enum {
 #define LIGHT_THEME_ENUM_ENTRY(name) LIGHT_THEME_##name,

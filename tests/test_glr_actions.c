@@ -25,7 +25,7 @@
 #include "repl/eval.h"                    /* g_predef_vars, repl_eval_find_predef_var_idx */
 #include "subsystems/color_picker/color_picker_state.h"
 #include "repl/cfg_baseline.h"             /* repl_cfg_set_text, repl_cfg_resolve_text */
-#include "scene/themes.h"                  /* GRID_THEME_*, AXES_THEME_*, SCENE_BACKDROP_* */
+#include "scene/themes.h"                  /* GRID/AXES/SCENE_BACKDROP/LIGHT_THEME_* */
 #include "support/test_harness.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -1022,8 +1022,34 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
                glr_state_presentation().backdrop_mode, SCENE_BACKDROP_STARS);
 }
 
+/* F9 was reassigned from Auto-normals to cycling the light theme. The
+ * generic special-shortcut dispatch finds the descriptor row by key_code
+ * and cycles it, so F9 must now advance GLR_CONFIG_LIGHT_THEME through all
+ * LIGHT_THEME_COUNT presets (and must no longer touch auto-normals). */
+static void test_f9_cycles_light_theme(void) {
+    glr_ctrl_reset_all();
+    printf("--- F9 cycles the light theme ---\n");
+
+    glr_config_set(GLR_CONFIG_LIGHT_THEME, LIGHT_THEME_DEFAULT);
+    int auto_normals_before = glr_config_get(GLR_CONFIG_AUTO_NORMALS);
+
+    ASSERT_INT("F9 is handled as a special shortcut",
+               glr_cfg_handle_special_shortcut(GLUT_KEY_F9), 1);
+    ASSERT_INT("F9 advances the light theme one step",
+               glr_config_get(GLR_CONFIG_LIGHT_THEME), LIGHT_THEME_HEADLIGHT);
+    ASSERT_INT("F9 no longer toggles auto-normals",
+               glr_config_get(GLR_CONFIG_AUTO_NORMALS), auto_normals_before);
+
+    /* Cycling LIGHT_THEME_COUNT-1 more times wraps back to the first theme. */
+    for (int i = 0; i < LIGHT_THEME_COUNT - 1; i++)
+        glr_cfg_handle_special_shortcut(GLUT_KEY_F9);
+    ASSERT_INT("F9 wraps back to the default theme",
+               glr_config_get(GLR_CONFIG_LIGHT_THEME), LIGHT_THEME_DEFAULT);
+}
+
 int main(void) {
     test_apply_defaults();
+    test_f9_cycles_light_theme();
     test_cursor_actions();
     test_help_tab_actions();
     test_cfg_cycling();
