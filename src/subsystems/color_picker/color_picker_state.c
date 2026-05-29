@@ -4,16 +4,6 @@
  */
 #include "subsystems/color_picker/color_picker_state.h"
 
-#include "config.h"               /* CP_CLEAR_MAX_V */
-#include "editor/commit.h"
-#include "repl/command.h"
-#include "repl/compile.h"
-#include "repl/core.h"             /* repl_set_status */
-#include "repl/parser.h"
-#include "repl/state_views.h"      /* repl_state_document_count / _cmd_at */
-#include "ui/app/layout.h"
-#include "ui/app/state.h"
-
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -52,6 +42,27 @@ static float g_cp_value_max  = 1.0f;
  * undo ring records "before this picker session" state, not every
  * intermediate slider tick. */
 static int   g_cp_undo_captured = 0;
+
+/* Installed host services (document read/write + screen geometry). */
+static const ColorPickerHostBridge *g_host = NULL;
+
+void color_picker_install_host(const ColorPickerHostBridge *host) {
+    g_host = host;
+}
+
+/* Window height via the host (0 if unset) — used for screen-y flips. */
+static int cp_viewport_h(void) {
+    int w = 0, h = 0;
+    if (g_host && g_host->viewport) g_host->viewport(&w, &h);
+    return h;
+}
+
+/* 1 if the active line is still an editable color command per the host. */
+static int cp_line_editable(void) {
+    if (g_cp_line < 0 || !g_host || !g_host->read_color) return 0;
+    float r, g, b, a, vmax; int ha;
+    return g_host->read_color(g_cp_line, &r, &g, &b, &a, &ha, &vmax);
+}
 
 static void cp_compute_rects(int px, int py, ColorPickerRects *r) {
     int sz = CP_SV_SZ;
@@ -94,90 +105,18 @@ static void cp_rgb_to_hsv(float r, float g, float b,
     if (*h < 0.0f) *h += 1.0f;
 }
 
-static const GLCmd *cp_cmd_at(int cmd_idx) {
-    if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
-        return NULL;
-    return repl_state_document_cmd_at(cmd_idx);
-}
-
-/* Push the current slider state through the editor commit pipeline,
- * synthesizing the appropriate glColor* / glClearColor / gluColor
- * source line. Returns 1 if the writeback fired (state actually
- * mutated), 0 if it short-circuited. */
+/* Push the current slider state through the host's writeback. The host owns
+ * the source-line synthesis + parse + commit pipeline; the picker just hands
+ * over the resolved RGBA and the session undo flag. Returns 1 if the
+ * writeback fired (state actually mutated), 0 if it short-circuited. */
 static int color_picker_write_cmd(void) {
-    const GLCmd *cmd = cp_cmd_at(g_cp_line);
+    if (g_cp_line < 0 || !g_host || !g_host->write_color)
+        return 0;
     float r, g, b;
-    char new_line[MAX_LINE_LEN];
-    int written;
-
-    if (!cmd)
-        return 0;
-
     color_picker_hsv_to_rgb(g_cp_hue, g_cp_sat, g_cp_val, &r, &g, &b);
-    if (cmd->type == CMD_CLEAR_COLOR) {
-        /* V is already clamped to CP_CLEAR_MAX_V at the drag sites. */
-        written = snprintf(new_line, sizeof(new_line),
-                           "glClearColor(%g, %g, %g, %g);",
-                           r, g, b, g_cp_alpha);
-    } else if (cmd->type == CMD_COLOR3F) {
-        written = snprintf(new_line, sizeof(new_line),
-                           "glColor3f(%g, %g, %g);", r, g, b);
-    } else if (cmd->type == CMD_COLOR4F) {
-        written = snprintf(new_line, sizeof(new_line),
-                           "glColor4f(%g, %g, %g, %g);",
-                           r, g, b, g_cp_alpha);
-    } else if (cmd->type == CMD_TESS_COLOR) {
-        if (g_cp_has_alpha)
-            written = snprintf(new_line, sizeof(new_line),
-                               "gluColor(%g, %g, %g, %g);",
-                               r, g, b, g_cp_alpha);
-        else
-            written = snprintf(new_line, sizeof(new_line),
-                               "gluColor(%g, %g, %g);", r, g, b);
-    } else {
-        return 0;
-    }
-
-    if (written < 0 || written >= (int)sizeof(new_line)) {
-        repl_set_status("Command too long");
-        return 0;
-    }
-
-    /* Color picker writeback: surface parser errors so a malformed
-     * rewrite (shouldn't happen for synthesized glColor commands but
-     * defends the path) shows in the status bar instead of failing
-     * silently. */
-    char picker_parse_err[REPL_STATUS_TEXT_MAX];
-    picker_parse_err[0] = '\0';
-    ReplParseContext parse_ctx = {
-        .source_line_idx = g_cp_line,
-        .err_buf = picker_parse_err,
-        .err_sz  = (int)sizeof(picker_parse_err),
-    };
-    ReplParsedLine pl;
-    if (!repl_parser_parse_command_ctx(new_line, &pl, &parse_ctx)) {
-        if (picker_parse_err[0])
-            repl_set_status(picker_parse_err);
-        return 0;
-    }
-
-    /* Route the cmd-store + editor-buffer writes through the editor
-     * commit pipeline so the picker is a pure value-emitter and stays
-     * out of the UI input boundary. The first writeback of a session
-     * captures undo; subsequent drags pass capture_undo=0 so each
-     * session lands as one undo entry. */
-    ReplCompiledChange change;
-    repl_compiled_change_init(&change);
-    change.kind  = REPL_COMPILED_REPLACE_ONE;
-    change.pos   = g_cp_line;
-    change.count = 1;
-    change.cmds[0] = pl.cmd;
-    int text_len = (int)strlen(pl.text);
-    if (text_len >= MAX_LINE_LEN) text_len = MAX_LINE_LEN - 1;
-    memcpy(change.text[0], pl.text, (size_t)text_len);
-    change.text[0][text_len] = '\0';
-
-    if (editor_commit_apply_external_change(&change, !g_cp_undo_captured, 0)) {
+    /* The first writeback of a session captures undo; subsequent drags pass
+     * capture_undo=0 so each session lands as one undo entry. */
+    if (g_host->write_color(g_cp_line, r, g, b, g_cp_alpha, !g_cp_undo_captured)) {
         g_cp_undo_captured = 1;
         return 1;
     }
@@ -203,11 +142,13 @@ static int clamp_popup_x(int prefer_right_x, int prefer_left_x,
 }
 
 void color_picker_start(int cmd_idx, int my) {
-    int cp_x, cp_w;
-    const GLCmd *cmd;
-
-    if (!color_picker_can_edit_cmd(cmd_idx))
+    if (!g_host || !g_host->read_color)
         return;
+
+    float r, g, b, a, value_max;
+    int has_alpha;
+    if (!g_host->read_color(cmd_idx, &r, &g, &b, &a, &has_alpha, &value_max))
+        return;  /* not an editable color command */
 
     /* New session (first open, or switching to a different line):
      * arm the next writeback to capture undo. Editing the same line
@@ -218,18 +159,13 @@ void color_picker_start(int cmd_idx, int my) {
     if (g_cp_line != cmd_idx)
         g_cp_undo_captured = 0;
 
-    ui_layout_code_panel_rect(&cp_x, NULL, &cp_w, NULL);
-    cmd = cp_cmd_at(cmd_idx);
-    if (!cmd)
-        return;
+    int cp_x = 0, cp_w = 0;
+    if (g_host->code_panel_rect) g_host->code_panel_rect(&cp_x, &cp_w);
     g_cp_line = cmd_idx;
-    g_cp_has_alpha = (cmd->type == CMD_COLOR4F ||
-                      cmd->type == CMD_TESS_COLOR ||
-                      cmd->type == CMD_CLEAR_COLOR);
-    g_cp_alpha     = g_cp_has_alpha ? cmd->args[3] : 1.0f;
-    g_cp_value_max = (cmd->type == CMD_CLEAR_COLOR) ? CP_CLEAR_MAX_V : 1.0f;
-    cp_rgb_to_hsv(cmd->args[0], cmd->args[1], cmd->args[2],
-                  &g_cp_hue, &g_cp_sat, &g_cp_val);
+    g_cp_has_alpha = has_alpha;
+    g_cp_alpha     = has_alpha ? a : 1.0f;
+    g_cp_value_max = value_max;
+    cp_rgb_to_hsv(r, g, b, &g_cp_hue, &g_cp_sat, &g_cp_val);
     if (g_cp_val > g_cp_value_max)
         g_cp_val = g_cp_value_max;
 
@@ -239,8 +175,8 @@ void color_picker_start(int cmd_idx, int my) {
     int pw = CP_SV_SZ + CP_GAP + CP_HUE_W
            + (g_cp_has_alpha ? CP_GAP + CP_ALPHA_W : 0) + CP_GAP;
     int ph = CP_SV_SZ + CP_GAP + CP_PREV_H + CP_GAP;
-    int win_w = ui_state_viewport().window_w;
-    int win_h = ui_state_viewport().window_h;
+    int win_w = 0, win_h = 0;
+    if (g_host->viewport) g_host->viewport(&win_w, &win_h);
     int ppx = clamp_popup_x(cp_x + cp_w + CP_PANEL_OFFSET, cp_x - pw - CP_SCREEN_MARGIN, pw, win_w, CP_SCREEN_MARGIN);
     /* Center vertically around the trigger point, then clamp so the
      * popup stays fully on-screen in OpenGL's y-up coordinates. */
@@ -268,13 +204,9 @@ int color_picker_active_line(void) {
 }
 
 int color_picker_can_edit_cmd(int cmd_idx) {
-    const GLCmd *cmd = cp_cmd_at(cmd_idx);
-    if (!cmd || !cmd->valid || cmd->has_vars)
-        return 0;
-    return cmd->type == CMD_COLOR3F ||
-           cmd->type == CMD_COLOR4F ||
-           cmd->type == CMD_TESS_COLOR ||
-           cmd->type == CMD_CLEAR_COLOR;
+    if (!g_host || !g_host->read_color) return 0;
+    float r, g, b, a, vmax; int ha;
+    return g_host->read_color(cmd_idx, &r, &g, &b, &a, &ha, &vmax);
 }
 
 ColorPickerView color_picker_view(void) {
@@ -332,8 +264,8 @@ ColorPickerInputResult color_picker_handle_press(int mx, int my) {
     ColorPickerInputResult res = { 0, 0, 0 };
     ColorPickerRects r;
 
-    if (g_cp_line < 0 || !cp_cmd_at(g_cp_line)) return res;
-    int gl_y = ui_state_viewport().window_h - my;
+    if (!cp_line_editable()) return res;
+    int gl_y = cp_viewport_h() - my;
     cp_compute_rects(g_cp_px, g_cp_py, &r);
 
     /* SV square */
@@ -387,8 +319,8 @@ ColorPickerInputResult color_picker_handle_motion(int mx, int my) {
     ColorPickerInputResult res = { 0, 0, 0 };
     ColorPickerRects r;
 
-    if (g_cp_drag == CP_DRAG_NONE || g_cp_line < 0 || !cp_cmd_at(g_cp_line)) return res;
-    int gl_y = ui_state_viewport().window_h - my;
+    if (g_cp_drag == CP_DRAG_NONE || !cp_line_editable()) return res;
+    int gl_y = cp_viewport_h() - my;
     cp_compute_rects(g_cp_px, g_cp_py, &r);
     cp_apply_drag_at(g_cp_drag, mx, gl_y, &r);
     res.changed = color_picker_write_cmd();

@@ -254,6 +254,7 @@ SRCS = \
 	src/app/glr_actions.c \
 	src/app/glr_camera.c \
 	src/app/glr_camera_export.c \
+	src/app/glr_color_picker_bridge.c \
 	src/app/glr_completion.c \
 	src/app/glr_config.c \
 	src/app/glr_ctrl.c \
@@ -318,6 +319,7 @@ SRCS = \
 	src/ui/app/scene_tabs.c \
 	src/ui/app/state.c \
 	src/ui/app/variable_panel_view.c \
+	src/ui/app/color_swatch.c \
 	src/ui/core/tabbed_overlay.c \
 	src/ui/core/text_layout.c \
 	src/ui/core/text_panel.c \
@@ -436,6 +438,7 @@ CORE_TEST_SRCS = \
 	src/app/glr_actions.c \
 	src/app/glr_camera.c \
 	src/app/glr_camera_export.c \
+	src/app/glr_color_picker_bridge.c \
 	src/app/glr_completion.c \
 	src/app/glr_config.c \
 	src/app/glr_ctrl.c \
@@ -500,6 +503,7 @@ CORE_TEST_SRCS = \
 	src/ui/app/scene_tabs.c \
 	src/ui/app/state.c \
 	src/ui/app/variable_panel_view.c \
+	src/ui/app/color_swatch.c \
 	src/ui/core/tabbed_overlay.c \
 	src/ui/core/text_layout.c \
 	src/ui/core/text_panel.c \
@@ -641,6 +645,18 @@ VARIABLE_PANEL_DEMO_DEP_SRCS = src/subsystems/variable_panel/variable_panel_stat
                                src/ui/core/theme.c \
                                tests/gl-stubs/gl_stub_counts.c
 
+# Object list for the standalone color_picker_demo (isolation demo #6). Proves
+# the color-picker subsystem links from {subsystems, ui/subsystems, ui/core}
+# alone. The peer reads the document + writes color edits + answers geometry
+# through an installed ColorPickerHostBridge instead of repl/editor/ui-app, and
+# the inline-swatch renderer (the one UiTransformer user) moved to
+# src/ui/app/color_swatch.c — so none of src/repl, src/editor, or src/ui/app is
+# in the link set. check-color-picker-demo-isolation enforces it.
+COLOR_PICKER_DEMO_DEP_SRCS = src/subsystems/color_picker/color_picker_state.c \
+                             src/ui/subsystems/color_picker.c \
+                             src/ui/core/theme.c \
+                             tests/gl-stubs/gl_stub_counts.c
+
 OBJDIR = build/$(BUILD)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)
 BINDIR = $(OBJDIR)
 OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS)
@@ -718,7 +734,7 @@ CORE_TEST_BINS = $(filter-out test_eval test_format test_memprof test_repl_code_
 # them — benchmarks are timing-sensitive and should be invoked explicitly.
 BENCH_BINS = bench_repl
 
-ROOT_BIN_LINKS = gl-repl scene_demo repl_demo editor_demo memprof_demo variable_panel_demo
+ROOT_BIN_LINKS = gl-repl scene_demo repl_demo editor_demo memprof_demo variable_panel_demo color_picker_demo
 
 .PHONY: $(ROOT_BIN_LINKS) $(TEST_BINS) $(BENCH_BINS)
 
@@ -728,6 +744,7 @@ REPL_DEMO_BIN = $(BINDIR)/repl_demo
 EDITOR_DEMO_BIN = $(BINDIR)/editor_demo
 MEMPROF_DEMO_BIN = $(BINDIR)/memprof_demo
 VARIABLE_PANEL_DEMO_BIN = $(BINDIR)/variable_panel_demo
+COLOR_PICKER_DEMO_BIN = $(BINDIR)/color_picker_demo
 
 define core_test_binary
 $(1)_OBJS = $$(OBJDIR)/$$(TEST_DIR)/$(1).o $$(CORE_TEST_OBJS)
@@ -883,6 +900,19 @@ $(VARIABLE_PANEL_DEMO_BIN): $(VARIABLE_PANEL_DEMO_OBJS)
 
 variable_panel_demo: FORCE $(VARIABLE_PANEL_DEMO_BIN) ## Build the standalone variable-panel demo.
 	ln -sfn $(VARIABLE_PANEL_DEMO_BIN) $@
+
+# Standalone color-picker demo (isolation demo #6). Drives the floating color
+# picker over a row of GLUT shapes from {subsystems, ui/subsystems, ui/core}
+# with no editor/repl/app/ui-app code linked in.
+COLOR_PICKER_DEMO_OBJS = $(OBJDIR)/tools/color_picker_demo/color_picker_demo.o \
+                         $(addprefix $(OBJDIR)/,$(COLOR_PICKER_DEMO_DEP_SRCS:.c=.o))
+
+$(COLOR_PICKER_DEMO_BIN): $(COLOR_PICKER_DEMO_OBJS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OBJ_CFLAGS) -o $@ $(COLOR_PICKER_DEMO_OBJS) $(GL_LDFLAGS)
+
+color_picker_demo: FORCE $(COLOR_PICKER_DEMO_BIN) ## Build the standalone color-picker demo.
+	ln -sfn $(COLOR_PICKER_DEMO_BIN) $@
 
 .SECONDEXPANSION:
 
@@ -1087,6 +1117,9 @@ check-memprof-demo-isolation: ## Forbid app/repl/editor coupling in the memprof 
 check-variable-panel-demo-isolation: ## Forbid app/repl/editor coupling in the variable-panel demo link set.
 	@bash scripts/check-subsystem-demo-isolation.sh VARIABLE_PANEL_DEMO_DEP_SRCS tools/variable_panel_demo variable_panel_demo
 
+check-color-picker-demo-isolation: ## Forbid app/repl/editor coupling in the color-picker demo link set.
+	@bash scripts/check-subsystem-demo-isolation.sh COLOR_PICKER_DEMO_DEP_SRCS tools/color_picker_demo color_picker_demo
+
 check-source-document-port-owners: ## source_document_* symbols only defined in approved host adapters (Phase 7).
 	@bash scripts/check-source-document-port-owners.sh
 
@@ -1155,6 +1188,7 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-repl-demo-no-editor \
 		check-memprof-demo-isolation \
 		check-variable-panel-demo-isolation \
+		check-color-picker-demo-isolation \
 		check-editor-repl-surface \
 		check-edit-ops-pure \
 		check-no-raw-undo-clear \
@@ -1340,6 +1374,7 @@ test-full: ## Full gate: stub tests + checks + build gl-repl, bench, repl_demo, 
 	$(MAKE) --no-print-directory scene_demo
 	$(MAKE) --no-print-directory memprof_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory variable_panel_demo USE_GL_STUBS=1
+	$(MAKE) --no-print-directory color_picker_demo USE_GL_STUBS=1
 
 install-hooks: ## Point this clone's git hooks at the tracked .githooks/ directory.
 	@git config core.hooksPath .githooks
@@ -1418,7 +1453,7 @@ else
 endif
 
 clean: ## Remove built binaries and object files.
-	rm -rf $(ROOT_BIN_LINKS) gl-repl.dSYM scene_demo.dSYM repl_demo.dSYM editor_demo.dSYM memprof_demo.dSYM variable_panel_demo.dSYM \
+	rm -rf $(ROOT_BIN_LINKS) gl-repl.dSYM scene_demo.dSYM repl_demo.dSYM editor_demo.dSYM memprof_demo.dSYM variable_panel_demo.dSYM color_picker_demo.dSYM \
 		$(TEST_BINS) $(addsuffix .dSYM,$(TEST_BINS)) \
 		$(BENCH_BINS) $(addsuffix .dSYM,$(BENCH_BINS)) \
 		build/coverage/lcov.info build/coverage/html \

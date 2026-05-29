@@ -58,6 +58,32 @@ typedef struct {
     int changed;    /* writeback fired (slider edit / new-value commit) */
 } ColorPickerInputResult;
 
+/* Host services the picker reads the document + screen geometry through,
+ * installed by the controller. The peer never touches repl / editor / ui-app
+ * directly, so src/subsystems/color_picker links cleanly in the standalone
+ * color_picker_demo (which installs an in-memory host). Unset = the picker is
+ * inert: can_edit returns 0 and writeback is a silent no-op. */
+typedef struct {
+    /* Read the current color of cmd_idx and classify editability. Returns 0
+     * for out-of-range / non-color / has-vars commands; otherwise fills rgba,
+     * the has-alpha flag, and the max permissible V (clamped below 1 for
+     * clear-color). This is what color_picker_can_edit_cmd reports. */
+    int  (*read_color)(int cmd_idx, float *r, float *g, float *b, float *a,
+                       int *has_alpha, float *value_max);
+    /* Synthesize + parse + commit the new color for cmd_idx. The host owns
+     * the glColor3f / glColor4f / gluColor / glClearColor source shape and the
+     * commit pipeline; capture_undo marks the session's first writeback.
+     * Returns 1 if state actually mutated. */
+    int  (*write_color)(int cmd_idx, float r, float g, float b, float a,
+                        int capture_undo);
+    /* Window pixel size, for popup clamping and screen-y flip. */
+    void (*viewport)(int *w, int *h);
+    /* Code-panel x + width the popup prefers to sit beside (0/0 if none). */
+    void (*code_panel_rect)(int *x, int *w);
+} ColorPickerHostBridge;
+
+void color_picker_install_host(const ColorPickerHostBridge *host);
+
 /* Pure HSV->RGB. h, s, v in [0, 1]; outputs in [0, 1]. */
 void color_picker_hsv_to_rgb(float h, float s, float v,
                              float *r, float *g, float *b);

@@ -17,6 +17,7 @@
 
 #include "app/glr_audio.h"
 #include "subsystems/color_picker/color_picker_state.h"
+#include "ui/subsystems/color_picker.h"   /* UI_HIT_COLOR_SWATCH routing */
 #include "editor/clipboard.h"
 #include "app/glr_completion.h"
 #include "app/glr_defaults.h"        /* CFG_DEFAULT_* */
@@ -79,6 +80,7 @@
 #include "ui/core/tabbed_overlay.h"
 #include "ui/subsystems/variable_panel.h"
 #include "ui/app/variable_panel_view.h"
+#include "app/glr_color_picker_bridge.h"
 #include "subsystems/variable_panel/variable_panel_drag.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 
@@ -1754,6 +1756,8 @@ static void glr_ctrl_install_app_services(void) {
     repl_install_host_effects(&g_glr_host_effects);
     /* Variable-panel drag value source: name + value reads from the REPL eval table. */
     variable_panel_install_value_source(&g_glr_var_value_source);
+    /* Color-picker host: document read/write + screen geometry. */
+    glr_color_picker_install_host();
     /* Install the export-config bridge for @cfg headers and per-scene config snapshotting. */
     glr_actions_install_export_cfg_bridge();
     /* Install the export-camera bridge for // camera blocks serialization. */
