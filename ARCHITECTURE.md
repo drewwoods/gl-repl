@@ -1193,7 +1193,7 @@ guard rails apply. As of 2026-05 the shipped kinds are:
 | `COMMAND`     | `expected`                  | User commits a line matching `expected`.  |
 | `SET`         | `cfg_slug`, `cfg_value` (`_name`) | Ack key (Enter / Tab / Space) after auto-apply. |
 | `REQUIRE`     | `cfg_slug`, `cfg_value` (`_name`) | Live cfg slug matches target (notify from `glr_config_set`). |
-| `REQUIRE_VAR` | `var_name`, `var_target`    | Live predef variable matches target (notify from `apply_compiled_change_full`). |
+| `REQUIRE_VAR` | `var_name`, `var_target`    | Live predef variable matches target (notify at the tail of the predef-writeback commit, after editor post-effects). |
 
 Use this section as a checklist when adding a new kind. The
 `REQUIRE_VAR` rollout is the most recent worked example — its commits
@@ -1255,17 +1255,35 @@ land in roughly the order below.
   alongside `TUTORIAL_STEP_KIND_COMMAND`; otherwise the
   freeze-during-non-COMMAND rule will reject every keystroke.
 - If the kind has no expected-commit-line dance (REQUIRE / REQUIRE_VAR),
-  update `tutorial_advance_after_successful_commit` to bypass it for
-  that kind — the commit-side advance is COMMAND-only; the notify hook
-  is the authoritative advance for everything else. Without this
-  bypass an unrelated commit (e.g. `m = 5;` while watching `n`)
-  would skip the step.
-- If the kind needs pre-state on entry (REQUIRE_VAR pre-declares its
-  `var_name` so the variable-panel slider appears immediately and
-  typed assignments compile), add a pass over the step list at the
-  bottom of `tutorial_start` BEFORE `tutorial_advance_loop`. Walk
-  every step of the entered tutorial, filter by kind, and apply the
-  pre-state idempotently.
+  the commit-side advance must stay a no-op for it: the notify hook is
+  the authoritative advance. The mechanism is `tutorial_advance_if_commit_ok`
+  (in `src/editor/input.c`), which advances ONLY when
+  `tutorial_note_expected_commit_applied()` returns 1 — i.e. a pending
+  COMMAND expected-command attempt was in flight. A free-form REQUIRE_VAR
+  commit sets no pending record, so it returns 0 and the commit path does
+  not advance. This is load-bearing: the REQUIRE_VAR notify fires *inside*
+  the commit and may advance onto a COMMAND step; a second commit-side
+  advance would then skip that COMMAND step entirely (instruction comment
+  shown, command never typed). Checking the current step kind instead of
+  the return value is NOT sufficient — by the time the commit returns the
+  step is already the next (COMMAND) one. (`tutorial_advance_after_successful_commit`
+  also keeps an internal REQUIRE_VAR bypass for direct callers / safety.)
+- If the kind needs a *runtime-derived* entry variant, decide it in
+  `tutorial_enter_step` before emitting the instruction comment.
+  REQUIRE_VAR does this: a step whose `var_name` does not exist yet is
+  a DECLARATION step. The satisfying `float name = ...;` is a decl,
+  which the compiler relocates to the document top (above any comment —
+  see `compile_insert_pos` / `decl_pos`), so a separate locked instruction
+  comment line above it would be stranded and desync locked-line tracking.
+  The runner therefore skips `tutorial_emit_instruction_comment` for
+  declaration steps; the instruction instead rides the autocomplete ghost
+  as `float name = target; <catalog comment>` (synthesized in
+  `tutorial_shadow_suffix`), so the catalog comment commits as a TRAILING
+  comment on the decl line and travels with it to the top — no separate
+  comment to track. The cursor parks on the trailing row
+  (`instruction_line`, since nothing was inserted) rather than
+  `instruction_line + 1`. The tutorial does NOT pre-declare its
+  variables — the user declares them, which is the point of the step.
 
 ### 3. Notify call sites
 
@@ -1275,16 +1293,24 @@ state can change. Today's sites:
 
 - **`src/app/glr_config.c::glr_config_set`** — fires for cfg-slug-shaped
   kinds (SET / REQUIRE).
-- **`src/editor/commit.c::apply_compiled_change_full`** — fires once if
-  any predef op landed in the commit. Covers REQUIRE_VAR for typed
-  `name = expr;` assignments, declarations-with-initializer, and
-  variable-panel slider writebacks (the slider flows through
-  `editor_commit_apply_external_change` → the same chokepoint).
+- **`src/editor/commit.c::notify_tutorial_if_predef_changed`** — fires
+  once if any predef op landed in the commit. Covers REQUIRE_VAR for
+  typed `name = expr;` assignments, `float n = 5;` declarations-with-
+  initializer, and variable-panel slider writebacks (the slider flows
+  through `editor_commit_apply_external_change`; typed commits flow
+  through `editor_commit_apply_plan`). Both entry points call it at
+  their TAIL — after `apply_post_effects` and the status publish — NOT
+  from inside `apply_compiled_change_full`. The notify can advance the
+  step, which inserts the next instruction comment and re-parks the
+  cursor; firing it mid-apply let the in-flight commit's own
+  `cursor_target` clobber that re-park afterward, stranding the cursor
+  on the freshly-inserted locked comment (read-only + the empty input
+  overlay hid the comment).
 
 If a new kind watches state that no existing site touches, add a
 single call to `tutorial_notify_state_changed()` at the writeback
-chokepoint for that state (mirror the apply-tail placement used by
-the predef path so a multi-op batch fires notify exactly once).
+chokepoint for that state, AFTER any cursor/post-effect bookkeeping the
+same operation performs, so the advance sees a settled document.
 
 ### 4. Editor-side input precheck & ghost text
 
@@ -1306,8 +1332,14 @@ the predef path so a multi-op batch fires notify exactly once).
 - For ghost text: `tutorial_shadow_suffix` returns the untyped
   portion of `expected`. If the new kind has no fixed `expected` but
   still benefits from passive guidance, synthesize an expected string
-  at the top of the function (e.g. `"name = target"` for REQUIRE_VAR)
-  and let the existing strict-prefix logic produce the suffix.
+  at the top of the function and let the existing strict-prefix logic
+  produce the suffix. REQUIRE_VAR synthesizes `float name = target;
+  <catalog comment>` while the variable is still undeclared — the
+  declaration the user must type, carrying the step's catalog comment as
+  a trailing comment so it lands as a code comment on the relocated decl
+  line — and the bare `name = target` once the variable exists. The same
+  declared-ness test gates whether the runner emits a separate
+  instruction comment (it does not, for the declaration form).
 - `src/app/glr_completion.c::update_autocomplete` only computes the
   shadow when `edit_line == tutorial_expected_commit_line()`. If the
   new kind has no pinned commit line, add a kind-specific branch that
@@ -1327,11 +1359,17 @@ status hint, and the autocomplete provider. Adding a tutorial means:
   section). The simplest path is to place the new entry between two
   same-subheading entries in catalog order.
 - The catalog validator `expected_is_single_command` rejects
-  `float ...;` declarations in `expected` (CMD_VAR_DECLARE is
+  `float ...;` declarations in a COMMAND `expected` (CMD_VAR_DECLARE is
   relocated to the top of non-decl code by `editor_try_commit_float_decl`,
-  breaking `pending.commit_line`). If your tutorial needs the user
-  to type `float n;`, prefer pre-declaring via the runner hook
-  (step 2's pre-state pass) instead of a COMMAND step.
+  breaking `pending.commit_line`). To teach a declaration like
+  `float n = 5;`, use a REQUIRE_VAR step whose variable does not exist
+  yet (the "Variable Slider" tutorial's step 0): the runner detects the
+  undeclared var and treats it as a declaration step (no separate locked
+  comment; the instruction rides the ghost as a trailing comment on the
+  decl line — see §2), and the typed decl-with-initializer satisfies the
+  target via its DECLARE predef op. Word the step's catalog comment to
+  read as a trailing description of the variable (it commits as
+  `float n = 5; <that comment>`), not as a standalone "type ..." line.
 
 ### 6. Tests (`tests/test_tutorial_runner.c`)
 

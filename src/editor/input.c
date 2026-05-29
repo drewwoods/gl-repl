@@ -702,6 +702,22 @@ static CommitResult commit_current_input(int enter_mode,
         return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
     }
 
+    /* Var statements (float decl / assignment) typed at the trailing
+     * append row with insert mode OFF. The ;-key route reaches these via
+     * editor_try_commit_any; the Enter / navigation route would otherwise
+     * fall through to the GL-command parser below, which rejects
+     * `float n = 1;` — a tutorial REQUIRE_VAR declaration step parks the
+     * cursor exactly here, so Enter (not just ';') must commit the decl.
+     * block_structs already ran above, preserving the Enter "block_structs
+     * first" ordering invariant (#2); the insert-mode branch below keeps
+     * owning its own var-statement commits. */
+    if (!editor_insert_mode() &&
+        editor_state_edit_line() >= repl_state_document_count() &&
+        editor_state_input().input_len > 0 &&
+        editor_try_commit_var_statements()) {
+        return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
+    }
+
     if (editor_insert_mode()) {
         if (editor_state_input().input_len == 0) {
             ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
@@ -1235,7 +1251,18 @@ static int handle_tab_key_route(unsigned char key) {
                 "Replaced input with expected tutorial command; press ; to commit");
             return 1;
         }
-        if (editor_state_autocomplete()->match_count > 0) {
+        /* Accept the autocomplete ghost on Tab. REQUIRE_VAR tutorial
+         * steps populate ac->ghost directly (the synthesized
+         * `float n = 5` / `n = 10` suffix) with NO match-list entry, so
+         * the match_count gate alone would make Tab a silent no-op on
+         * those steps. Gate on a non-empty ghost during a REQUIRE_VAR
+         * step too; editor_completion_accept appends ac->ghost either
+         * way. (REQUIRE_VAR's `expected` is NULL, so the COMMAND
+         * autofill branch above never fires for it.) */
+        if (editor_state_autocomplete()->match_count > 0 ||
+            (tutorial_active() &&
+             tutorial_current_step_kind() == TUTORIAL_STEP_KIND_REQUIRE_VAR &&
+             editor_state_autocomplete()->ghost[0] != '\0')) {
             editor_completion_accept();
             editor_completion_update();
         }
@@ -1320,8 +1347,15 @@ static void tutorial_advance_if_commit_ok(CommitResult result) {
     if (!tutorial_active())
         return;
     if (result == COMMIT_OK) {
-        tutorial_note_expected_commit_applied();
-        tutorial_advance_after_successful_commit();
+        /* Only advance from the commit when a pending COMMAND expected-
+         * command attempt was in flight (the return value). A free-form
+         * REQUIRE_VAR commit sets no pending record and advances via the
+         * predef-writeback notify hook inside the commit instead; if that
+         * notify already advanced onto a COMMAND step, a second advance
+         * here would skip it (instruction comment shown, command never
+         * typed — the `float n = ...;` → glBegin skip). */
+        if (tutorial_note_expected_commit_applied())
+            tutorial_advance_after_successful_commit();
     } else {
         tutorial_cancel_pending();
     }
