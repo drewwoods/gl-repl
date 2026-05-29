@@ -35,15 +35,60 @@ static int fake_reader(MemSample *out) {
 static void test_baseline_nonzero_on_host(void) {
     printf("test_baseline_nonzero_on_host\n");
     memprof_reset();
-    memprof_init();
-    MemSample base = memprof_baseline();
+    /* Real reader (default), virtual clock so we can force the first push. */
+    memprof_init_at(0.0);
 #if defined(__APPLE__) || defined(__linux__)
-    ASSERT_TRUE("baseline RSS > 0 on host", base.rss_bytes > 0);
+    /* Baseline is deferred to the first push: pending (0) right after init. */
+    ASSERT_TRUE("baseline pending (0) right after init",
+                memprof_baseline().rss_bytes == 0);
+    ASSERT_TRUE("current RSS > 0 right after init on host",
+                memprof_current().rss_bytes > 0);
+    /* First push (>= one interval) captures the baseline from the warmed
+     * reading. */
+    memprof_frame_tick_at(MEMPROF_PUSH_INTERVAL_S);
+    ASSERT_TRUE("baseline RSS > 0 after first push on host",
+                memprof_baseline().rss_bytes > 0);
 #else
     /* _WIN32 stub returns zeros in v1; no assertion. */
-    (void)base;
     ASSERT_TRUE("baseline call returned on unsupported platform", 1);
 #endif
+}
+
+/* Deterministic (fake-reader) proof of the deferred-baseline contract:
+ * pending until the first push, then captured from the pushed sample and
+ * sticky thereafter. This is the leak-detector fix — init must track the
+ * warmed-up steady state, not the cold process-start reading. */
+static void test_baseline_deferred_to_first_push(void) {
+    printf("test_baseline_deferred_to_first_push\n");
+    memprof_reset();
+    memprof_set_reader(fake_reader);
+
+    g_test_rss = 100;          /* cold reading at init */
+    memprof_init_at(0.0);
+    ASSERT_TRUE("baseline pending after init", memprof_baseline().rss_bytes == 0);
+    ASSERT_TRUE("current live after init",     memprof_current().rss_bytes == 100);
+
+    /* Sub-interval tick: no push, baseline still pending even as the live
+     * reading climbs (the startup warm-up the fix exists to skip). */
+    g_test_rss = 220;
+    memprof_frame_tick_at(MEMPROF_PUSH_INTERVAL_S * 0.5);
+    ASSERT_TRUE("baseline still pending before first push",
+                memprof_baseline().rss_bytes == 0);
+
+    /* First push captures the baseline from the warmed sample, not the
+     * cold 100 grabbed at init. */
+    g_test_rss = 250;
+    memprof_frame_tick_at(MEMPROF_PUSH_INTERVAL_S);
+    ASSERT_TRUE("baseline captured at first push == 250",
+                memprof_baseline().rss_bytes == 250);
+
+    /* Baseline is sticky once captured. */
+    g_test_rss = 900;
+    memprof_frame_tick_at(2.0 * MEMPROF_PUSH_INTERVAL_S);
+    ASSERT_TRUE("baseline sticky after first capture == 250",
+                memprof_baseline().rss_bytes == 250);
+
+    memprof_set_reader(NULL);
 }
 
 static void test_cadence_honored(void) {
@@ -169,6 +214,7 @@ int main(void) {
     printf("=== memprof tests ===\n\n");
 
     test_baseline_nonzero_on_host();
+    test_baseline_deferred_to_first_push();
     test_cadence_honored();
     test_ring_wraps();
     test_history_latest_t_right_anchored();
