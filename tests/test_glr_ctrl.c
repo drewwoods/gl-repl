@@ -50,6 +50,10 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
  * are reached only through glr_ctrl.c's includes, which the macros
  * cover. */
 void test_glr_camera_load_modelview(const GlrCameraPose *pose);
+/* ui/subsystems/variable_panel.h is pulled in before the #define (via
+ * ui/app/snapshot.h), so its real-name prototype is preserved too;
+ * forward-declare this stub the same way. */
+void test_ui_variable_panel_render(const UiVariablePanelView *view);
 
 #include "app/glr_ctrl.c"
 
@@ -137,11 +141,23 @@ void test_ui_autocomplete_panel_render(const UiRenderSnapshot *snap,
     (void)snap; (void)cursor_px; (void)cursor_py;
 }
 void test_ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap) { (void)snap; }
-void test_ui_variable_panel_render(const UiRenderSnapshot *snap) { (void)snap; }
+void test_ui_variable_panel_render(const UiVariablePanelView *view) { (void)view; }
 void test_ui_panels_render_scene_status(const UiRenderSnapshot *snap) { (void)snap; }
 void test_ui_tabbed_overlay_render(const UiOverlayState *in) { (void)in; }
 void test_ui_profile_panel_render(const UiRenderSnapshot *snap) { (void)snap; }
 void test_ui_memory_panel_render(const UiMemoryPanelView *view)  { (void)view; }
+
+/* Build the variable-panel view from live app state (mirrors the
+ * pre-narrowing NULL-snapshot path) so these tests can drive rect/hit by
+ * count without assembling a full UiRenderSnapshot. */
+static void vp_rect(int count, int *px, int *py, int *pw, int *ph) {
+    UiVariablePanelView v = ui_app_variable_panel_view_live(count);
+    ui_variable_panel_rect(&v, px, py, pw, ph);
+}
+static int vp_hit_row(int count, int gx, int gy, int *row) {
+    UiVariablePanelView v = ui_app_variable_panel_view_live(count);
+    return ui_variable_panel_hit_row(&v, gx, gy, row);
+}
 
 static void prepare_display_fixture(void) {
     GLCmd *doc_cmds;
@@ -450,15 +466,14 @@ static void test_variable_panel_motion_routes_through_compile_and_coalesces_undo
     ASSERT_TRUE("testvar declared", var_idx >= 0);
     ASSERT_FLOAT("testvar starts at 1", g_predef_vars[var_idx].value, 1.0f);
 
-    ui_variable_panel_rect_for_count(NULL, g_num_predef_vars, &px, &py, &pw, &ph);
+    vp_rect(g_num_predef_vars, &px, &py, &pw, &ph);
     window_h = ui_state_viewport().window_h;
     click_x = px + pw / 2;
     click_y = -1;
     for (int gl_y = py; gl_y < py + ph; gl_y++) {
         int candidate_y = window_h - gl_y;
         hit_row = -1;
-        if (ui_variable_panel_hit_for_count(NULL, click_x, candidate_y,
-                                            g_num_predef_vars, &hit_row)
+        if (vp_hit_row(g_num_predef_vars, click_x, candidate_y, &hit_row)
                 && hit_row == var_idx) {
             click_y = candidate_y;
             break;
@@ -519,15 +534,14 @@ static void test_variable_panel_motion_initializes_uninitialized_declaration(voi
     ASSERT_FLOAT("uninitialized testvar starts at 0",
                  g_predef_vars[var_idx].value, 0.0f);
 
-    ui_variable_panel_rect_for_count(NULL, g_num_predef_vars, &px, &py, &pw, &ph);
+    vp_rect(g_num_predef_vars, &px, &py, &pw, &ph);
     window_h = ui_state_viewport().window_h;
     click_x = px + pw / 2;
     click_y = -1;
     for (int gl_y = py; gl_y < py + ph; gl_y++) {
         int candidate_y = window_h - gl_y;
         hit_row = -1;
-        if (ui_variable_panel_hit_for_count(NULL, click_x, candidate_y,
-                                            g_num_predef_vars, &hit_row)
+        if (vp_hit_row(g_num_predef_vars, click_x, candidate_y, &hit_row)
                 && hit_row == var_idx) {
             click_y = candidate_y;
             break;

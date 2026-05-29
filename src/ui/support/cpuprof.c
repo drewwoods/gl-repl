@@ -6,6 +6,7 @@
 #include "ui/app/layout.h"
 #include "ui/core/theme.h"
 #include "ui/subsystems/variable_panel.h"
+#include "ui/app/variable_panel_view.h"
 #include "support/cpuprof.h"
 
 #include <stdio.h>
@@ -59,9 +60,9 @@ static void profile_panel_rect_for_height(const UiRenderSnapshot *snap, int pane
         panel_x = scene_x + scene_w - PROF_PANEL_W - PROF_PANEL_MARGIN;
         panel_y = scene_y + scene_h - panel_h - PROF_PANEL_MARGIN;
     } else {
+        UiVariablePanelView var_view = ui_app_variable_panel_view(snap);
         int var_x, var_y, var_w, var_h;
-        ui_variable_panel_rect_for_count(snap, snap->variable_panel_vars.count,
-                                         &var_x, &var_y, &var_w, &var_h);
+        ui_variable_panel_rect(&var_view, &var_x, &var_y, &var_w, &var_h);
         panel_x = var_x + var_w - PROF_PANEL_W;
         panel_y = var_y;
     }

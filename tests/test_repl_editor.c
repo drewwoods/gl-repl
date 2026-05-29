@@ -34,6 +34,7 @@
 #include "ui/app/panels.h"
 #include "ui/app/state.h"
 #include "ui/subsystems/variable_panel.h"
+#include "ui/app/variable_panel_view.h"
 
 #define g_status     (ui_state_status_mut()->text)
 #define g_scroll     (editor_state_scroll_mut()->scroll)
@@ -61,6 +62,13 @@
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
 static int g_mock_modifiers = 0;
+
+/* Live-state variable-panel rect (mirrors the pre-narrowing NULL-snapshot
+ * path) so these tests can query the panel rect by declared-var count. */
+static void vp_rect(int count, int *px, int *py, int *pw, int *ph) {
+    UiVariablePanelView v = ui_app_variable_panel_view_live(count);
+    ui_variable_panel_rect(&v, px, py, pw, ph);
+}
 
 #define ASSERT_TRUE(label, cond) do { \
     TEST_ASSERT_TRUE(&g_harness, label, cond); \
@@ -686,7 +694,7 @@ int main() {
         glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
         replay_active = 0;
 
-        ui_variable_panel_rect_for_count(NULL, g_num_predef_vars, &x, &y, &w, &h);
+        vp_rect(g_num_predef_vars, &x, &y, &w, &h);
         ASSERT_INT("cramped var panel clears status strip",
                    y, STATUSBAR_H + 4);
 
@@ -3293,7 +3301,7 @@ int main() {
         /* Attempt to hit the variable row. */
         /* ui_variable_panel_rect will place it at the right edge of the scene. */
         int px, py, pw, ph;
-        ui_variable_panel_rect_for_count(NULL, g_num_predef_vars, &px, &py, &pw, &ph);
+        vp_rect(g_num_predef_vars, &px, &py, &pw, &ph);
 
         /* Click in the middle of the first row. */
         int click_x = px + pw / 2;
@@ -3654,7 +3662,7 @@ int main() {
         editor_feed_line("float testvar = 5.0;");
 
         int px, py, pw, ph;
-        ui_variable_panel_rect_for_count(NULL, g_num_predef_vars, &px, &py, &pw, &ph);
+        vp_rect(g_num_predef_vars, &px, &py, &pw, &ph);
         int click_x = px + pw / 2;
         int click_y = 1000 - (py + ph - VAR_PANEL_PAD_INTERNAL - VAR_TITLE_H_INTERNAL / 2);
 
