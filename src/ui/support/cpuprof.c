@@ -31,60 +31,15 @@ static const float k_prof_dim[3]   = { 0.30f, 0.30f, 0.38f };
 #define PROF_COL_LABEL_W    150
 #define PROF_COL_LAST_W      72
 
+/* Visual indentation per nesting level. Labels arrive un-indented; the panel
+ * offsets each row by depth * this, so prof_section_info()'s explicit depth is
+ * the single source of truth (restyling the indent never re-classifies a row).
+ * FONT_SMALL is fixed-width, so 2 cell widths reads as the prior 2-space step. */
+#define PROF_INDENT_W       (FONT_SMALL_W * 2)
+
 /* ========================================================================= */
 /* Helpers                                                                    */
 /* ========================================================================= */
-
-static const char *section_label(ProfSection s) {
-    switch (s) {
-    case PROF_SCENE_3D:    return "Scene 3D";
-    case PROF_SCENE_3D_SETUP:    return "  setup";
-    case PROF_SCENE_3D_FILL:     return "  fill";
-    case PROF_SCENE_3D_FADE:     return "  fade batches";
-    case PROF_SCENE_3D_FADE_BATCH_PREP: return "    batch prep";
-    case PROF_SCENE_3D_FADE_BATCH_EXEC: return "    batch exec";
-    case PROF_SCENE_3D_FADE_BATCH_POST: return "    batch post";
-    case PROF_SCENE_3D_HELPERS:      return "  helpers";
-    case PROF_SCENE_3D_BACKDROP:     return "    backdrop";
-    case PROF_SCENE_3D_GRID:         return "    grid";
-    case PROF_SCENE_3D_AXES:         return "    axes";
-    case PROF_SCENE_3D_ORBIT_TARGET: return "    orbit target";
-    case PROF_SCENE_3D_OVERLAYS: return "  overlays";
-    case PROF_SCENE_3D_OVERLAY_OUTLINES: return "    outlines";
-    case PROF_SCENE_3D_OVERLAY_BUILD_GUIDES: return "    build guides";
-    case PROF_SCENE_3D_OVERLAY_TRANSFORM_GUIDES: return "    xform guides";
-    case PROF_SCENE_3D_OVERLAY_NORMALS: return "    normals";
-    case PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS: return "    vertex nums";
-    case PROF_SCENE_3D_POST_PROCESS:     return "  postprocess FX";
-    case PROF_CODE_PANEL:  return "Code Panel";
-    case PROF_CODE_PANEL_LAYOUT:   return "  layout";
-    case PROF_CODE_PANEL_CHROME:   return "  chrome";
-    case PROF_CODE_PANEL_LINES:    return "  lines";
-    case PROF_CODE_PANEL_LINES_STATIC: return "    static";
-    case PROF_CODE_PANEL_LINES_BODY:   return "    body";
-    case PROF_CODE_PANEL_LINES_BODY_CMDS:    return "      commands";
-    case PROF_CODE_PANEL_LINES_BODY_NEWLINE: return "      newline";
-    case PROF_CODE_PANEL_LINES_FOOTER: return "    footer";
-    case PROF_CODE_PANEL_OVERLAYS: return "  overlays";
-    case PROF_UI_PANELS:   return "UI Panels";
-    case PROF_SNAPSHOT:                return "Snapshot";
-    case PROF_SNAPSHOT_TRANSFORMERS:   return "  transformers";
-    case PROF_SNAPSHOT_HIGHLIGHTS:     return "  highlights";
-    case PROF_SNAPSHOT_VIRTUAL_LINES:  return "  virtual lines";
-    case PROF_SNAPSHOT_PREP:           return "  prep";
-    case PROF_SNAPSHOT_SCENE_CONFIG:   return "  scene config";
-    case PROF_SNAPSHOT_UI:             return "  ui snapshot";
-    case PROF_FLATTEN:        return "Flatten";
-    case PROF_REFORMAT:       return "Reformat";
-    case PROF_AUTONORMAL:     return "Autonormal";
-    case PROF_REPLAY_HUD:     return "Replay HUD";
-    case PROF_PROFILE_PANEL:  return "Profile Panel";
-    case PROF_MEMORY_PANEL:   return "Memory Panel";
-    case PROF_FRAME_RESTORE:  return "Frame Restore";
-    case PROF_FRAME_TOTAL:    return "Frame Total";
-    default:               return "?";
-    }
-}
 
 /* Format µs as "1234 us" or "12.3 ms", whichever is more readable. */
 static void fmt_us(char *buf, int buf_sz, double us) {
@@ -94,33 +49,19 @@ static void fmt_us(char *buf, int buf_sz, double us) {
         snprintf(buf, (size_t)buf_sz, "%.2f ms", us / 1000.0);
 }
 
-/* A "detail" row is an indented child in section_label(): the label
- * indentation reflects true prof-scope enclosure (e.g. PROF_SNAPSHOT_*
- * nest inside PROF_SNAPSHOT, PROF_SCENE_3D_OVERLAY_* inside _OVERLAYS),
- * so deriving detail from the label keeps the two from drifting and a
- * new nested section is a one-line section_label() change.
- *
- * Behavior change vs the previous hand-maintained || list: that list
- * omitted PROF_SNAPSHOT_PREP and PROF_SCENE_3D_OVERLAY_NORMALS, which
- * ARE enclosed children (verified against prof_begin/prof_end
- * nesting). They now fold as detail like their siblings — the
- * intended classification. */
-static int is_detail_section(ProfSection s) {
-    return section_label(s)[0] == ' ';
-}
-
 /* Apply a green/yellow/red color based on section timing thresholds.
- * FRAME_TOTAL uses 1/120s (8.3ms) and 1/60s (16.7ms) breakpoints.
- * All other sections use half those thresholds (4.15ms / 8.3ms). */
+ * The whole-frame total row (is_total) uses 1/120s (8.3ms) and 1/60s
+ * (16.7ms) breakpoints; every other section uses half those thresholds
+ * (4.15ms / 8.3ms). */
 /* FPS gauge: green/yellow/red is a fixed data-viz semantic, NOT theme
  * tokens (theme.h bucket 3 - red must read as "over budget" in every
  * scheme; it must not follow the UI accent). */
-static void set_time_color(ProfSection s, double us) {
+static void set_time_color(int is_total, double us) {
     if (us < 2.0) {
         glColor3f(0.30f, 0.30f, 0.38f);       /* near-zero – same as stale */
         return;
     }
-    if (s == PROF_FRAME_TOTAL) {
+    if (is_total) {
         if (us < 8333.0)
             glColor3f(0.50f, 0.88f, 0.45f);   /* green  – fits in 120 fps */
         else if (us < 16667.0)
@@ -137,9 +78,12 @@ static void set_time_color(ProfSection s, double us) {
     }
 }
 
+/* A "detail" row is a nested child (prof_section_info().depth > 0); the app
+ * supplies the nesting so a new sub-section needs no edit here. Detail rows
+ * are hidden outside DETAILS mode. */
 static int section_visible(int profile_mode, ProfSection s) {
     if (profile_mode != PROFILE_PANEL_DETAILS &&
-        is_detail_section(s))
+        prof_section_info(s).depth > 0)
         return 0;
     return 1;
 }
@@ -234,7 +178,9 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
         ProfSection s = (ProfSection)section_idx;
         if (!section_visible(profile_mode, s)) continue;
 
-        if (s == PROF_FRAME_TOTAL) {
+        ProfSectionInfo info = prof_section_info(s);
+
+        if (info.is_total) {
             /* Divider above totals row */
             ui_clr_a(UI_TOK_DIVIDER, 0.80f);
             glEnable(GL_BLEND);
@@ -249,15 +195,17 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
         int stale = prof_section_is_stale(s);
 
         /* Label */
-        if (s == PROF_FRAME_TOTAL)
+        if (info.is_total)
             ui_clr(UI_TOK_TEXT_PRIMARY);
         else if (stale)
             glColor3fv(k_prof_stale);
-        else if (is_detail_section(s))
+        else if (info.depth > 0)
             ui_clr(UI_TOK_TEXT_SECTION);
         else
             ui_clr(UI_TOK_TEXT_PRIMARY);
-        gl2d_draw_string((float)tx, (float)ty, section_label(s), FONT_SMALL);
+        /* Indentation is derived from depth, not baked into the label. */
+        gl2d_draw_string((float)(tx + info.depth * PROF_INDENT_W),
+                         (float)ty, info.label, FONT_SMALL);
 
         /* Last / avg values */
         char last_buf[24], avg_buf[24];
@@ -270,9 +218,9 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
         } else {
             fmt_us(last_buf, (int)sizeof(last_buf), prof_section_last_us(s));
             fmt_us(avg_buf,  (int)sizeof(avg_buf),  prof_section_avg_us(s));
-            set_time_color(s, prof_section_last_us(s));
+            set_time_color(info.is_total, prof_section_last_us(s));
             gl2d_draw_string((float)col_last, (float)ty, last_buf, FONT_SMALL);
-            set_time_color(s, prof_section_avg_us(s));
+            set_time_color(info.is_total, prof_section_avg_us(s));
             gl2d_draw_string((float)col_avg,  (float)ty, avg_buf,  FONT_SMALL);
         }
 

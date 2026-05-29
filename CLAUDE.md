@@ -331,7 +331,8 @@ state-machine level, not buried in the doc body.
 | `src/app/glr_camera.h` | Camera state + setters (`glr_camera`, `glr_camera_set_*`, `glr_camera_controls_reset`) |
 | `src/app/glr_actions.c` | Config descriptor table, config shortcuts, menu actions |
 | `src/app/glr_actions.h` | Actions public API (`glr_action_menu_item_activate`, etc.) |
-| `config.h` | Project-wide compile-time configuration constants |
+| `config.h` | Project-wide compile-time configuration constants (force-included into every TU via `-include config.h`) |
+| `prof_sections.h` | CPU-profile section catalog: the `ProfSection` enum + `PROF_SECTION_COUNT`, force-included via `-include prof_sections.h`. Keeps `src/support/cpuprof.{c,h}` host-agnostic (they fall back to `typedef int ProfSection` when it's absent). Per-section *labels* are not here — see `src/app/glr_prof.c` |
 | `src/app/glr_defaults.h` | Controller-side scene/presentation defaults (`CFG_DEFAULT_*` macros) |
 | `src/ui/core/text_layout.c` | Pure code-panel wrapping, row counts, segment lookup, cursor-row mapping |
 | `src/ui/core/text_layout.h` | `CodeLayout` / `CodeWrapIter` API shared by UI, export dumps, tests |
@@ -415,8 +416,9 @@ state-machine level, not buried in the doc body.
 | `src/repl/export_state.h` | Shared dimensions for import/export state text |
 | `src/app/glr_audio.c` | App-level playlist engine and persisted audio config |
 | `src/app/glr_audio.h` | Audio playback API (`glr_audio_*`) |
-| `src/support/cpuprof.c` | CPU wall-time profiling instrumentation (per-section accumulators, frame tick) |
-| `src/support/cpuprof.h` | Profiling API (`prof_begin`, `prof_end`, `prof_frame_tick`, etc.); no UI dependency |
+| `src/support/cpuprof.c` | CPU wall-time profiling instrumentation (per-section accumulators, frame tick); host-agnostic — sections are opaque ints, catalog injected via `prof_sections.h` |
+| `src/support/cpuprof.h` | Profiling API (`prof_begin`, `prof_end`, `prof_frame_tick`, etc.); no UI/app dependency — `#ifndef PROF_SECTIONS_PROVIDED` fallback makes it compile with no catalog (`check-cpuprof-standalone`). Declares `prof_section_info()` (per-section label/depth/is_total), implemented per-binary |
+| `src/app/glr_prof.c` | gl-repl's `prof_section_info()` table: per-section `{ label, depth, is_total }` (bare label + explicit nesting depth — the panel derives indentation from depth). The demos implement their own |
 | `src/scene/render_types.h` | Shared `SceneRgba` / `SceneRenderConfig` / `FrameRenderContext` types for scene helpers |
 | `src/scene/guides/guides_shared.h` | Shared guide snapshot and planning types for REPL-aware 3D overlay passes |
 | `src/scene/guides/geometry_guides.c` | Vertex/primitive guide rendering (input context at cursor) from `SceneGuideSnapshot` |
