@@ -10,10 +10,6 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Derived total time span the X axis covers, from cadence constants
- * exposed in memprof.h. */
-#define MEM_TOTAL_SPAN_S    ((double)MEMPROF_HISTORY_CAP * MEMPROF_PUSH_INTERVAL_S)
-
 /* ========================================================================= */
 /* Panel geometry                                                             */
 /* ========================================================================= */
@@ -273,11 +269,21 @@ void ui_memory_panel_render(const UiMemoryPanelView *view) {
         if (step == 0) break;
     }
 
-    /* Plot the RSS history. Anchor to the newest sample's t_rel so the
-     * rightmost point stays pinned to "now" between pushes. */
+    /* Plot the RSS history. The X axis spans the ACTUAL stored window —
+     * the oldest sample's timestamp through the newest's — so it adapts to
+     * whatever cadence the samples arrived at instead of assuming a fixed
+     * MEMPROF_PUSH_INTERVAL_S per slot. The newest sample pins to the right
+     * edge ("now"); the oldest pins to the left. */
     int n = memprof_history_count();
+    double t_latest = memprof_history_latest_t();
+    double span_s = 0.0;
+    if (n > 1) {
+        MemSample s_oldest;
+        double    t_oldest;
+        memprof_history_get(0, &s_oldest, &t_oldest);
+        span_s = t_latest - t_oldest;
+    }
     if (n > 0) {
-        double t_latest = memprof_history_latest_t();
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         ui_clr(UI_TOK_ACCENT);
@@ -287,7 +293,10 @@ void ui_memory_panel_render(const UiMemoryPanelView *view) {
             double    t_rel;
             memprof_history_get(i, &s, &t_rel);
             double age = t_latest - t_rel;
-            float xx = (float)(plot_x + plot_w - (age / MEM_TOTAL_SPAN_S) * plot_w);
+            /* span_s <= 0 means a single sample: pin it to the right edge. */
+            float xx = (span_s > 0.0)
+                     ? (float)(plot_x + plot_w - (age / span_s) * plot_w)
+                     : (float)(plot_x + plot_w);
             double frac = (double)(s.rss_bytes - y_lo)
                         / (double)(y_hi - y_lo);
             if (frac < 0.0) frac = 0.0;
@@ -299,18 +308,24 @@ void ui_memory_panel_render(const UiMemoryPanelView *view) {
         glDisable(GL_BLEND);
     }
 
-    /* X-axis labels: left = -85m, middle = -42m, right = now. */
+    /* X-axis labels reflect the actual stored window: left = oldest sample
+     * age, middle = half, right = now. With under a second of data (a single
+     * sample) only "now" is meaningful, so the left/middle ticks are
+     * suppressed rather than printing a bogus "-0s". */
     ui_clr(UI_TOK_TEXT_MUTED);
-    char left_lab[16], mid_lab[16], right_lab[16];
-    fmt_time_offset(left_lab,  (int)sizeof(left_lab),  MEM_TOTAL_SPAN_S);
-    fmt_time_offset(mid_lab,   (int)sizeof(mid_lab),   MEM_TOTAL_SPAN_S / 2.0);
+    char right_lab[16];
     fmt_time_offset(right_lab, (int)sizeof(right_lab), 0.0);
     int label_y = plot_y - 12;
     int rl_w = tiny_text_w(right_lab);
-    int ml_w = tiny_text_w(mid_lab);
-    gl2d_draw_string((float)plot_x, (float)label_y, left_lab, FONT_TINY);
-    gl2d_draw_string((float)plot_x + (float)plot_w * 0.5f - (float)ml_w * 0.5f,
-                     (float)label_y, mid_lab, FONT_TINY);
+    if (span_s >= 1.0) {
+        char left_lab[16], mid_lab[16];
+        fmt_time_offset(left_lab, (int)sizeof(left_lab), span_s);
+        fmt_time_offset(mid_lab,  (int)sizeof(mid_lab),  span_s / 2.0);
+        int ml_w = tiny_text_w(mid_lab);
+        gl2d_draw_string((float)plot_x, (float)label_y, left_lab, FONT_TINY);
+        gl2d_draw_string((float)plot_x + (float)plot_w * 0.5f - (float)ml_w * 0.5f,
+                         (float)label_y, mid_lab, FONT_TINY);
+    }
     gl2d_draw_string((float)(plot_x + plot_w - rl_w),
                      (float)label_y, right_lab, FONT_TINY);
 
