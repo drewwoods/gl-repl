@@ -255,6 +255,7 @@ SRCS = \
 	src/app/glr_camera.c \
 	src/app/glr_camera_export.c \
 	src/app/glr_color_picker_bridge.c \
+	src/app/glr_ctrl_view_transition.c \
 	src/app/glr_completion.c \
 	src/app/glr_config.c \
 	src/app/glr_ctrl.c \
@@ -439,6 +440,7 @@ CORE_TEST_SRCS = \
 	src/app/glr_camera.c \
 	src/app/glr_camera_export.c \
 	src/app/glr_color_picker_bridge.c \
+	src/app/glr_ctrl_view_transition.c \
 	src/app/glr_completion.c \
 	src/app/glr_config.c \
 	src/app/glr_ctrl.c \
