@@ -146,6 +146,21 @@ int main(void) {
         check_line("decl", t, "k", REPL_SYNTAX_VARIABLE);
     }
 
+    /* A trailing `// ...` ends syntax classification: code tokens before
+     * the comment are still classified, but words inside the comment get
+     * NO span (so they are not syntax-colored, and the comment can be
+     * colored as a comment by repl_code_panel_apply_trailing_comment_segment).
+     * Pre-fix, `max`/`PI` inside the comment were classified as
+     * function/constant. */
+    {
+        const char *t = "glVertex3f(0, 1, 0) // grow max to PI";
+        check_line("trailing-comment", t, "0", REPL_SYNTAX_LITERAL);
+        check_line("trailing-comment", t, "1", REPL_SYNTAX_LITERAL);
+        check_no_span("trailing-comment", t, "max");
+        check_no_span("trailing-comment", t, "PI");
+        check_no_span("trailing-comment", t, "grow");
+    }
+
     /* Comment suppression is category-driven (the wiring skips CMD_COMMENT
      * rows entirely so the whole line keeps the comment color). */
     ASSERT_TRUE("comment category maps to CMD_CAT_COMMENT",

@@ -1051,6 +1051,16 @@ int ui_repl_code_panel_classify_syntax(const UiRenderSnapshot *snap,
     while (text[i] && n < max_spans) {
         unsigned char c = (unsigned char)text[i];
 
+        /* A top-level line comment ends syntax classification: the
+         * trailing `// ...` is colored as a comment by
+         * repl_code_panel_apply_trailing_comment_segment, and its words
+         * must not be syntax-classified (e.g. a `max` in the comment
+         * must not turn into a function color). Strings are consumed
+         * atomically below, so a '//' reached here is outside any
+         * string literal. */
+        if (c == '/' && text[i + 1] == '/')
+            break;
+
         /* Quoted string: the whole run (incl. quotes) is one literal. Do
          * not descend into a label("...") format string. */
         if (c == '"') {
@@ -1184,6 +1194,37 @@ static void repl_code_panel_apply_syntax_segments(const UiRenderSnapshot *snap,
     }
 }
 
+/* Color a command line's trailing `// ...` comment with the comment
+ * category color (matching standalone comment lines) instead of letting
+ * it inherit the command's syntax color. Appended after any syntax spans
+ * — which stop at the '//' — so the segments stay ordered and disjoint;
+ * the renderer fills gaps with row->color. Works in both syntax-highlight
+ * modes: ON (code spans precede it) and OFF (no spans, so the code prefix
+ * renders as the gap in row->color). Fades are handled separately and
+ * never reach here. */
+static void repl_code_panel_apply_trailing_comment_segment(const char *text,
+                                                           UiTextPanelRow *row) {
+    const char *cmt;
+    float r, g, b;
+
+    if (!row || !text)
+        return;
+    cmt = repl_line_trailing_comment(text);
+    if (!cmt || !cmt[0])
+        return;
+    if (row->color_segment_count >= UI_TEXT_PANEL_MAX_COLOR_SEGMENTS)
+        return;  /* dense line already at the span cap; degrade gracefully */
+
+    repl_code_panel_category_rgb(CMD_CAT_COMMENT, &r, &g, &b);
+    row->color_segments[row->color_segment_count++] =
+        (UiTextPanelColorSegment){
+            .char_start = (int)(cmt - text),
+            .char_count = (int)strlen(cmt),
+            .color = repl_code_panel_rgb(r, g, b),
+            .bold = 0,
+        };
+}
+
 static void repl_code_panel_add_static_row(ReplCodePanelBuilder *builder,
                                            const char *text,
                                            UiTextPanelColor color) {
@@ -1274,14 +1315,19 @@ static void repl_code_panel_add_command_row(ReplCodePanelBuilder *builder,
                                      primitive_vnums_exact);
     repl_code_panel_set_right_action(row, builder->snap, line_idx);
     repl_code_panel_apply_command_overlays(builder, line_idx, row);
-    if (repl_code_panel_line_is_fading(builder->snap, line_idx))
+    if (repl_code_panel_line_is_fading(builder->snap, line_idx)) {
         repl_code_panel_apply_fade_segments(builder->snap, line_idx, display_text, row);
-    else
+    } else {
         repl_code_panel_apply_syntax_segments(
             builder->snap,
             display_text,
             builder->snap->document_cmds[line_idx].type,
             builder->snap->code_panel.syntax_highlight, row);
+        /* A command line's trailing `// ...` reads as a comment, not as
+         * part of the command's syntax color. (The fade path is for
+         * whole-line instruction comments, so it is left untouched.) */
+        repl_code_panel_apply_trailing_comment_segment(display_text, row);
+    }
 }
 
 static void repl_code_panel_add_virtual_rows(ReplCodePanelBuilder *builder,
