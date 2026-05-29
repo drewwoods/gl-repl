@@ -19,10 +19,10 @@
 #include <math.h>
 
 /* Orbit/pan momentum decay per frame. Deliberately independent of
- * config.h's GLR_CAMERA_TARGET_DECAY (the ease-to-target decay) —
- * they are different knobs. */
+ * config.h's GLR_CAMERA_TARGET_DECAY (the ease-to-target decay) and
+ * CAM_DECAY_ZOOM (the wheel-zoom decay, a config.h tunable) — they are
+ * different knobs. */
 #define CAM_DECAY 0.88f
-#define CAM_DECAY_ZOOM 0.65f
 #define CAM_TARGET_ANGLE_EPS 0.01f
 #define CAM_TARGET_POS_EPS 0.001f
 #define CAM_MOMENTUM_THRESHOLD 1.0f

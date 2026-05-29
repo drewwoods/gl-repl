@@ -73,6 +73,7 @@ void scene_render_init_gl(void) {
 void scene_renderer_state_init(SceneRendererState *state) {
     if (!state) return;
     state->ortho_ref_dist = 0.0;
+    state->ortho_ref_cam_dist = 0.0;
     state->ortho_active = 0;
     /* Default mirrors the steady 3D frustum so a getter call before
      * the first frame is still sane. */
@@ -288,15 +289,50 @@ static void scene_update_ortho_ref(SceneRendererState *state,
 #if GLR_ORTHO_REF_MODE == GLR_ORTHO_REF_PERFRAME
     (void)state->ortho_active;
     state->ortho_ref_dist = ortho_now ? scene_probe_eye_dist(config) : 0.0;
+    /* The probe just ran at the live cam_dist, so the zoom delta is zero
+     * this frame; record the baseline anyway to keep
+     * scene_effective_ortho_ref's arithmetic correct. */
+    state->ortho_ref_cam_dist = (double)config->cam_dist;
 #else /* GLR_ORTHO_REF_FROZEN */
     {
-        if (ortho_now && !state->ortho_active)
+        if (ortho_now && !state->ortho_active) {
             state->ortho_ref_dist = scene_probe_eye_dist(config);
-        else if (!ortho_now && state->ortho_active)
+            /* Anchor the zoom baseline at the switch: later cam_dist
+             * changes (mouse-wheel zoom) rescale the frozen reference. */
+            state->ortho_ref_cam_dist = (double)config->cam_dist;
+        } else if (!ortho_now && state->ortho_active) {
             state->ortho_ref_dist = 0.0;
+        }
         state->ortho_active = ortho_now;
     }
 #endif
+}
+
+/* Effective 2D ortho scale reference for this frame: the sampled
+ * depth-center plus the live zoom delta accrued since it was sampled,
+ * so mouse-wheel zoom (which drives cam_dist) rescales the ortho view.
+ * Moving the camera by d shifts every vertex's eye distance by d, so
+ * adding (cam_dist - ortho_ref_cam_dist) reconstructs exactly what a
+ * re-probe at the current distance would report — without the per-frame
+ * re-probe (and its animation breathing) that FROZEN mode avoids.
+ *
+ * Falls back to raw cam_dist when there is no usable probe measurement
+ * (empty scene / feedback overflow); that path already tracks zoom.
+ * Clamped to a positive floor so a deep zoom-in can't collapse or
+ * invert the ortho box. Shared by scene_compute_active_projection (the
+ * cached desc) and scene_apply_projection (each AA sample) so the two
+ * never diverge. */
+static double scene_effective_ortho_ref(const SceneRendererState *state,
+                                        const SceneRenderConfig *config) {
+    double ref = 0.0;
+    if (state->ortho_ref_dist > SCENE_PROJECTION_DEPTH_EPSILON)
+        ref = state->ortho_ref_dist
+            + ((double)config->cam_dist - state->ortho_ref_cam_dist);
+    else
+        ref = (double)config->cam_dist;
+    if (ref < SCENE_PROJECTION_DEPTH_EPSILON)
+        ref = SCENE_PROJECTION_DEPTH_EPSILON;
+    return ref;
 }
 
 /* Resolve the canonical (zero-jitter) projection description for this
@@ -315,9 +351,7 @@ static void scene_compute_active_projection(SceneRendererState *state,
     if (mix < 0.0f) mix = 0.0f;
     if (mix > 1.0f) mix = 1.0f;
 
-    double ortho_ref = (state->ortho_ref_dist > SCENE_PROJECTION_DEPTH_EPSILON)
-                           ? state->ortho_ref_dist
-                           : (double)config->cam_dist;
+    double ortho_ref = scene_effective_ortho_ref(state, config);
     state->active_projection = (SceneProjectionDesc){
         .ortho      = (mix < 0.5f) ? 1 : 0,
         .fovy_deg   = SCENE_DEFAULT_FOVY_DEG,
@@ -364,9 +398,7 @@ static void scene_apply_projection(const SceneRendererState *state,
     } else {
         double ortho_near = -far_z;
         double ortho_far = far_z;
-        double ortho_ref = (state->ortho_ref_dist > SCENE_PROJECTION_DEPTH_EPSILON)
-                               ? state->ortho_ref_dist
-                               : (double)config->cam_dist;
+        double ortho_ref = scene_effective_ortho_ref(state, config);
         double ortho_top = ortho_ref * half_fovy_tan;
         double ortho_right = ortho_top * aspect;
         double ortho_dx = (double)accum_jitter_x * 2.0 * ortho_right /

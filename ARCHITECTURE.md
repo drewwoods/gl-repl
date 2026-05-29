@@ -482,6 +482,67 @@ snapshot for the panel, special-case in the consumers.
   `ReplExportConfig`). Complements `check-gl-boundaries` (which already
   bars GL *calls* in the REPL pipeline) and `check-repl-export-no-ui-layout`.
 
+### 2D Orthographic Scale (GL_FEEDBACK probe + zoom)
+
+An orthographic projection has no inherent scale — unlike perspective,
+moving the camera toward the scene changes nothing on screen. So the 2D
+view must *pick* an eye distance whose on-screen size it reproduces, and
+zoom must rescale that pick rather than dolly a camera the projection
+ignores. All of this lives in `src/scene/render.c`; the controller feeds
+only `cam_dist` and `projection_mix` (the 2D↔3D blend) through
+`SceneRenderConfig`.
+
+**The probe runs once per *entry* into 2D — never on zoom.**
+`scene_update_ortho_ref()` calls `scene_probe_eye_dist()` (a
+`GL_FEEDBACK` pass that replays the user geometry through a wide ortho
+box and returns the *depth-center* — the midpoint of the drawn
+geometry's eye-distance span) on exactly one frame: the rising edge
+where ortho starts contributing (`ortho_now && !ortho_active`, i.e. the
+instant a 3D→2D switch begins, or startup directly in 2D). That single
+sample is frozen into `SceneRendererState.ortho_ref_dist`, together with
+the camera distance at that moment (`ortho_ref_cam_dist`). For the entire
+2D dwell after that — including every zoom frame — neither branch of the
+edge test fires, so there is no feedback pass at all. One feedback pass
+per round-trip into 2D, full stop. (This is the default
+`GLR_ORTHO_REF_FROZEN` mode; see `config.h`.)
+
+**Zoom rescales the frozen reference by arithmetic, not a re-probe.**
+`scene_effective_ortho_ref()` returns
+`ortho_ref_dist + (cam_dist - ortho_ref_cam_dist)` — the frozen
+depth-center plus the live camera-distance delta accrued since the
+freeze. The mouse wheel already drives `cam_dist`
+(`glr_camera_add_zoom_velocity` → `glr_camera_tick`), so this alone makes
+the ortho box grow/shrink with the wheel; no other wiring is needed. Both
+projection sites — `scene_compute_active_projection()` (the cached
+`SceneProjectionDesc`) and `scene_apply_projection()` (each AA sample) —
+read this one helper so they can't diverge, and it clamps to a positive
+floor so a deep zoom-in can't collapse or invert the box. Regression:
+`test_scene_ortho_zoom_rescales` in `tests/test_scene_render.c`.
+
+**Why a delta and not a re-probe.** Moving the camera by Δ is a rigid
+translation: it shifts *every* vertex's eye-distance by exactly Δ, so
+`frozen_ref + Δ` reconstructs precisely what a fresh probe at the new
+distance would measure — but without the cost (the ~96K-float feedback
+buffer walk happens once at the switch, not on every wheel tick) and,
+crucially, without *breathing*. A live re-probe would also track
+animation: `t`-driven geometry moving in and out of the depth span would
+wobble the ortho scale every frame even when the user isn't touching
+anything. Freezing the intrinsic depth-center and adding only the camera
+delta gives zoom-tracking without animation-induced wobble. (The
+non-default `GLR_ORTHO_REF_PERFRAME` knob re-probes every ortho frame and
+accepts the breathing in exchange for tracking live scene motion — even
+that is per-frame, not keyed to zoom.)
+
+**Wheel feel.** Two independent `config.h` knobs, shared by 2D *and* 3D
+zoom (the wheel path is mode-agnostic): `GLR_WHEEL_ZOOM_STEP` (per-notch
+velocity impulse) sets magnitude, and `CAM_DECAY_ZOOM` sets smoothness.
+One notch travels
+`GLR_WHEEL_ZOOM_STEP / (1 - CAM_DECAY_ZOOM)` distance units, eased over
+~`1 / (1 - CAM_DECAY_ZOOM)` frames, with `(1 - CAM_DECAY_ZOOM)` of the
+motion on the first frame — lower decay is snappier but more "stepped",
+higher is smoother but coasts longer. Rapid notches stack onto the
+velocity, so fast scrolls still travel quickly.
+
 ### Startup & Audio-Worker Diagnostics
 
 Two always-on stderr diagnostics localise startup stalls and
