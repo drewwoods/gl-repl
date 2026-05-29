@@ -67,7 +67,7 @@ TutorialMatchResult tutorial_match(const char *expected, const char *got) {
 
 int tutorial_shadow_suffix(const char *input, char *out, size_t out_size) {
     const char *expected;
-    char synth_expected[REPL_PREDEF_NAME_MAX + 32];
+    char synth_expected[MAX_LINE_LEN];
 
     if (out && out_size > 0)
         out[0] = '\0';
@@ -79,11 +79,9 @@ int tutorial_shadow_suffix(const char *input, char *out, size_t out_size) {
     expected = tutorial_current_expected_text();
     if (!expected) {
         /* REQUIRE_VAR steps carry no fixed expected text — the user can
-         * satisfy them by typing `name = expr;` OR by dragging the
-         * variable-panel slider. Synthesize the canonical `name = target`
-         * here so the autocomplete shadow text passively teaches the
-         * typing path; the slider remains a parallel option the prompt
-         * (instruction comment + status hint) advertises. */
+         * satisfy them by typing the line OR by dragging the variable-
+         * panel slider. Synthesize the line to teach the typing path; the
+         * slider remains a parallel option the status hint advertises. */
         TutorialRuntimeState state = tutorial_state_view();
         if (repl_tutorial_step_kind(state.tutorial_idx, state.step) !=
             TUTORIAL_STEP_KIND_REQUIRE_VAR)
@@ -92,8 +90,27 @@ int tutorial_shadow_suffix(const char *input, char *out, size_t out_size) {
         if (!name || !name[0])
             return 0;
         float target = repl_tutorial_step_var_target(state.tutorial_idx, state.step);
-        snprintf(synth_expected, sizeof synth_expected, "%s = %g",
-                 name, (double)target);
+        if (repl_eval_find_predef_var_idx(name) < 0) {
+            /* The variable does not exist yet: this is a DECLARATION step.
+             * Teach `float name = target;` and carry the step's catalog
+             * comment as a TRAILING comment on the same line. A declaration
+             * relocates to the document top, so a separate locked comment
+             * line above it can't survive (it would be stranded under the
+             * relocated decl); a trailing comment travels WITH the decl as
+             * one line, so the instruction lands correctly and stays
+             * attached. Tab-accepting the ghost commits the whole line. */
+            const char *cmt = repl_tutorial_step_comment(state.tutorial_idx, state.step);
+            if (cmt && cmt[0])
+                snprintf(synth_expected, sizeof synth_expected,
+                         "float %s = %g; %s", name, (double)target, cmt);
+            else
+                snprintf(synth_expected, sizeof synth_expected,
+                         "float %s = %g", name, (double)target);
+        } else {
+            /* Already declared: an assignment `name = target` advances. */
+            snprintf(synth_expected, sizeof synth_expected, "%s = %g",
+                     name, (double)target);
+        }
         expected = synth_expected;
     }
 

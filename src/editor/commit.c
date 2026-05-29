@@ -104,12 +104,25 @@ static void apply_compiled_change_full(const ReplCompiledChange *change) {
     int edit_line = editor_state_edit_line();
     if (repl_apply_compiled_change(change, &edit_line))
         editor_state_edit_line_set(edit_line);
-    /* Single chokepoint for tutorial REQUIRE_VAR notifications: every
-     * predef-var writeback (typed `name = expr;`, slider drag, float-
-     * decl-with-initializer) flows through repl_apply_predef_ops above.
-     * The notify function is slug-/var-scoped and inactive-checked, so
-     * the call is cheap when no REQUIRE_VAR step is active. */
-    if (change->predef_op_count > 0)
+}
+
+/* Fire the tutorial REQUIRE_VAR notify for any predef-var writeback
+ * (typed `name = expr;`, `float n = 5;` decl-with-initializer, or a
+ * variable-panel slider drag) — but only AFTER the commit's editor
+ * post-effects (cursor park, input clear) have settled.
+ *
+ * The notify may advance the tutorial, which inserts the next step's
+ * instruction comment and re-parks the cursor. Firing it from inside
+ * apply_compiled_change_full — before apply_post_effects ran — let the
+ * in-flight commit's own cursor_target clobber that re-park, stranding
+ * the cursor on the freshly-inserted locked comment row (read-only +
+ * the empty input overlay hid the comment). Both predef-writeback entry
+ * points (editor_commit_apply_external_change, editor_commit_apply_plan)
+ * call this at their tail so the advance always sees a settled document.
+ * The notify is var-scoped and inactive-checked, so it is cheap when no
+ * REQUIRE_VAR step is active. */
+static void notify_tutorial_if_predef_changed(const ReplCompiledChange *change) {
+    if (change && change->predef_op_count > 0)
         tutorial_notify_state_changed();
 }
 
@@ -139,6 +152,7 @@ int editor_commit_apply_external_change(const struct ReplCompiledChange_s *chang
     if (publish_status && change->commit_message[0])
         repl_set_status(change->commit_message);
 
+    notify_tutorial_if_predef_changed(change);
     return 1;
 }
 
@@ -229,6 +243,7 @@ int editor_commit_apply_plan(const EditorCommitPlan *plan) {
     if (plan->change.commit_message[0])
         repl_set_status(plan->change.commit_message);
 
+    notify_tutorial_if_predef_changed(&plan->change);
     return 1;
 }
 

@@ -145,8 +145,15 @@ void                 tutorial_begin_expected_commit_attempt(void);
  * delta to 1, but the math stays general), then record the source
  * row for the just-committed step so a later label-targeted step
  * can resolve a target_label pointing at it. Clears the pending
- * record. */
-void                 tutorial_note_expected_commit_applied(void);
+ * record.
+ *
+ * Returns 1 if a pending COMMAND expected-command attempt was in
+ * flight (i.e. this commit was the matched COMMAND commit), 0 if not
+ * (a free-form REQUIRE_VAR commit, which sets no pending record). The
+ * commit-side advance is gated on this: a REQUIRE_VAR commit advances
+ * via the predef-writeback notify hook, never the commit, so a 0 here
+ * keeps the commit path from double-advancing past the notify. */
+int                  tutorial_note_expected_commit_applied(void);
 
 /* Idempotent: no-op when no pending record is in flight. Call from
  * any commit-rejection path that bypasses

@@ -324,6 +324,19 @@ static void tutorial_set_status_require_var(const char *name, float target) {
     repl_set_status(msg);
 }
 
+/* Status for a REQUIRE_VAR declaration step (the watched variable does
+ * not exist yet). The full line to type — `float name = target;` plus
+ * the catalog comment as a trailing comment — rides the autocomplete
+ * ghost (see tutorial_shadow_suffix), so the status only names the
+ * affordance: type it, or Tab to autocomplete the ghost. */
+static void tutorial_set_status_declare_var(const char *name) {
+    char msg[TUTORIAL_STATUS_MAX];
+    snprintf(msg, sizeof msg,
+             "Declare %s: type the line shown (or press Tab) to continue",
+             name ? name : "?");
+    repl_set_status(msg);
+}
+
 /* Resolve where the next instruction comment for tutorial `idx`
  * step `step` should be inserted. For append placement that's the
  * current document_count; for label placement it's the row of the
@@ -538,25 +551,12 @@ void tutorial_start(int idx) {
 
     tutorial_baseline_apply(idx);
 
-    /* Pre-declare every predef variable named by a REQUIRE_VAR step
-     * (value 0). Without this, the user would have to manually
-     * `float n;` before the step could be satisfied — and the
-     * variable-panel slider wouldn't appear until they did. Predef
-     * declaration is also a prerequisite for typed `n = expr;`
-     * assignments to parse. Failures (e.g. table full) are silent;
-     * the step's notify check will simply never match. */
-    int step_count_for_predecl = repl_tutorial_step_count(idx);
-    for (int s = 0; s < step_count_for_predecl; s++) {
-        if (repl_tutorial_step_kind(idx, s) != TUTORIAL_STEP_KIND_REQUIRE_VAR)
-            continue;
-        const char *name = repl_tutorial_step_var_name(idx, s);
-        if (!name || !name[0])
-            continue;
-        if (repl_eval_find_predef_var_idx(name) >= 0)
-            continue;  /* already declared (e.g. earlier REQUIRE_VAR for same var) */
-        repl_eval_declare_predef_var_with_value(name, 0.0f, NULL, 0);
-    }
-
+    /* No predef pre-declaration: a REQUIRE_VAR step whose variable does
+     * not exist yet is treated as a DECLARATION step (see
+     * tutorial_enter_step), so the user declares it themselves with
+     * `float n = 5;`. Pre-declaring would both make `n` exist before the
+     * user types anything (misleading) and turn the declaration into an
+     * "already declared" error. */
     TutorialRuntimeState *state = tutorial_state_mut();
     state->active = 1;
     state->tutorial_idx = idx;
@@ -786,26 +786,42 @@ static TutorialStepResult tutorial_enter_step_require(int idx, int step, int ins
 
 static TutorialStepResult tutorial_enter_step_require_var(int idx, int step,
                                                           int instruction_line,
+                                                          int declare_step,
                                                           TutorialRuntimeState *state) {
     /* Check: advance when the named predefined variable reaches the
-     * target value (typed `name = expr;` commit OR slider drag — both
-     * land through repl_apply_predef_ops, which the editor commit path
-     * notifies after). Auto-advance on entry if already satisfied.
+     * target value (typed `name = expr;` / `float name = ...;` commit OR
+     * slider drag — both land through repl_apply_predef_ops, which the
+     * editor commit path notifies after). Auto-advance on entry if
+     * already satisfied.
      *
-     * Unlike SET/REQUIRE, the document stays writable: the user must
-     * be able to type `name = 5;` and have it commit. The
-     * cursor-park sits at instruction_line+1 (the trailing virtual
-     * row) so the input overlay does not paint over the comment. */
+     * Unlike SET/REQUIRE, the document stays writable: the user must be
+     * able to type the assignment and have it commit.
+     *
+     * `declare_step` is set by tutorial_enter_step when the variable does
+     * not exist yet. No separate instruction comment is emitted for it:
+     * the satisfying `float name = ...;` is a declaration, which the
+     * compiler relocates to the document top, so a locked comment line
+     * above it would be stranded. Instead the instruction rides the
+     * autocomplete ghost `float name = target; <catalog comment>`
+     * (synthesized in tutorial_shadow_suffix), so the catalog comment
+     * commits as a TRAILING comment on the decl line and travels with it.
+     * The cursor parks on the trailing row (== instruction_line, since
+     * nothing was inserted); a normal REQUIRE_VAR step parks at
+     * instruction_line+1, just below the comment it did emit. */
     const char *name   = repl_tutorial_step_var_name(idx, step);
     float       target = repl_tutorial_step_var_target(idx, step);
 
     state->expected_commit_line = -1;
     if (tutorial_var_matches_target(name, target))
         return TUTORIAL_STEP_AUTOADVANCE;
-    repl_dispatch_host_cursor_park(instruction_line + 1,
-                                   (instruction_line + 1) <
-                                   repl_state_document_count());
-    tutorial_set_status_require_var(name, target);
+
+    int park = declare_step ? instruction_line : instruction_line + 1;
+    repl_dispatch_host_cursor_park(park, park < repl_state_document_count());
+
+    if (declare_step)
+        tutorial_set_status_declare_var(name);
+    else
+        tutorial_set_status_require_var(name, target);
     repl_dispatch_completion_update();
     return TUTORIAL_STEP_PAUSED;
 }
@@ -838,12 +854,30 @@ static TutorialStepResult tutorial_enter_step(int step) {
         tutorial_teardown();
         return TUTORIAL_STEP_TERMINAL;
     }
-    if (!tutorial_emit_instruction_comment(comment, instruction_line)) {
+
+    TutorialStepKind kind = repl_tutorial_step_kind(idx, step);
+
+    /* A REQUIRE_VAR step whose watched variable does not exist yet is a
+     * DECLARATION step: the satisfying `float name = ...;` is a decl,
+     * which the compiler relocates to the top of the document (above any
+     * comment — see compile_insert_pos / decl_pos in src/repl/compile.c).
+     * A locked instruction comment emitted there would be stranded above
+     * the user's own declaration and would desync the tutorial's
+     * locked-line tracking, so skip the code comment for declaration
+     * steps; tutorial_enter_step_require_var delivers the instruction via
+     * the status line + autocomplete ghost instead. Once the variable
+     * exists (step 1+) the satisfying `name = expr;` is an ordinary
+     * assignment that appends below a normal locked comment. */
+    int declare_step = (kind == TUTORIAL_STEP_KIND_REQUIRE_VAR &&
+                        repl_eval_find_predef_var_idx(
+                            repl_tutorial_step_var_name(idx, step)) < 0);
+
+    if (!declare_step &&
+        !tutorial_emit_instruction_comment(comment, instruction_line)) {
         tutorial_teardown();
         return TUTORIAL_STEP_TERMINAL;
     }
 
-    TutorialStepKind kind = repl_tutorial_step_kind(idx, step);
     switch (kind) {
     case TUTORIAL_STEP_KIND_COMMAND:
         return tutorial_enter_step_command(idx, step, instruction_line, state);
@@ -852,7 +886,8 @@ static TutorialStepResult tutorial_enter_step(int step) {
     case TUTORIAL_STEP_KIND_REQUIRE:
         return tutorial_enter_step_require(idx, step, instruction_line, state);
     case TUTORIAL_STEP_KIND_REQUIRE_VAR:
-        return tutorial_enter_step_require_var(idx, step, instruction_line, state);
+        return tutorial_enter_step_require_var(idx, step, instruction_line,
+                                               declare_step, state);
     }
     /* Unknown kind — validator should have rejected this. */
     tutorial_teardown();
@@ -1073,11 +1108,20 @@ void tutorial_cancel_pending(void) {
     tutorial_pending_reset(state);
 }
 
-void tutorial_note_expected_commit_applied(void) {
+int tutorial_note_expected_commit_applied(void) {
     TutorialRuntimeState *state = tutorial_state_mut();
 
+    /* No pending record means this commit was NOT a matched COMMAND
+     * expected-command attempt (e.g. it was a free-form REQUIRE_VAR
+     * commit, whose advance is driven by the predef-writeback notify
+     * hook, not the commit). Report 0 so the caller's commit-side
+     * advance stays a no-op — otherwise, when the notify already
+     * advanced from a REQUIRE_VAR step onto a COMMAND step during this
+     * same commit, a second commit-side advance would skip that COMMAND
+     * step entirely (its instruction comment emitted, its command never
+     * typed). */
     if (state->pending.step_idx < 0)
-        return;
+        return 0;
 
     int delta = repl_state_document_count() - state->pending.doc_count_before;
     if (delta > 0) {
@@ -1093,4 +1137,5 @@ void tutorial_note_expected_commit_applied(void) {
     }
 
     tutorial_pending_reset(state);
+    return 1;
 }

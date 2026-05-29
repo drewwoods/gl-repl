@@ -179,7 +179,7 @@ static const TutorialStep g_tutorial_feature_tour_steps[] = {
         "// Lower-right vertex.",
         "glVertex3f(0.7, -0.5, 0)"),
     STEP_APPEND(NULL,
-        "// Close the batch — the filled triangle appears.",
+        "// Close the batch - the filled triangle appears.",
         "glEnd()"),
     STEP_REQUIRE(NULL,
         "// Press F7 to turn on vertex outlines; they trace each edge.",
@@ -200,20 +200,51 @@ static const char *const g_tutorial_feature_tour_cfg[] = {
     NULL,
 };
 
-/* "Variable Slider" — teaches the REQUIRE_VAR step kind. Two steps,
- * each waiting on a predef variable hitting a target value. The user
- * can satisfy each step by typing a `name = value;` assignment OR by
- * dragging the variable-panel slider once `n` exists (both paths flow
- * through repl_apply_predef_ops, which fires tutorial_notify_state_changed
- * after every writeback). The first step asks the user to declare and
- * raise `n` to 5; the second asks for 10 so the slider becomes the
- * natural tool. No `@cfg` block — presentation defaults are fine. */
+/* "Variable Slider" — teaches the REQUIRE_VAR step kind by driving a
+ * variable that controls a drawn shape. The user declares `n` (the
+ * triangle's size), draws a triangle whose vertices use `n`, then grows
+ * `n` to 10 with the variable-panel slider and watches the triangle
+ * scale. Both a typed commit and a slider drag flow through
+ * repl_apply_predef_ops, which the editor commit path notifies after.
+ * No `@cfg` block — presentation defaults are fine.
+ *
+ * Step 0 is a DECLARATION step: `n` does not exist when the tutorial
+ * starts, so the runner detects the undeclared var (see
+ * tutorial_enter_step) and treats it specially. The satisfying
+ * `float n = 1;` is a declaration, which the compiler relocates to the
+ * TOP of the document, so a separate locked instruction comment line
+ * above it would be stranded (and would desync locked-line tracking).
+ * Instead the instruction rides the autocomplete ghost as
+ * `float n = 1; <this comment>` (synthesized in tutorial_shadow_suffix):
+ * the comment below commits as a TRAILING comment on the decl line and
+ * travels with it to the top. So this catalog string is worded to read
+ * as a trailing description of `n`, not as a standalone instruction.
+ *
+ * The middle COMMAND steps draw the triangle (its vertices reference
+ * `n`). The final step's `n` already exists, so its slider is live and
+ * the instruction is an ordinary locked comment; a slider drag or a
+ * typed `n = 10;` advances it. */
 static const TutorialStep g_tutorial_variable_slider_steps[] = {
     STEP_REQUIRE_VAR(NULL,
-        "// Declare a variable: type `float n;` and `n = 5;` to advance.",
-        "n", 5.0f),
+        "// the triangle's size; the slider will grow it",
+        "n", 1.0f),
+    STEP_APPEND(NULL,
+        "// Open a triangle batch.",
+        "glBegin(GL_TRIANGLES)"),
+    STEP_APPEND(NULL,
+        "// Top vertex.",
+        "glVertex3f(0, n, 0)"),
+    STEP_APPEND(NULL,
+        "// Lower-left vertex.",
+        "glVertex3f(-n, -0.5, 0)"),
+    STEP_APPEND(NULL,
+        "// Lower-right vertex.",
+        "glVertex3f(n, -0.5, 0)"),
+    STEP_APPEND(NULL,
+        "// Close the batch - the filled triangle appears.",
+        "glEnd()"),
     STEP_REQUIRE_VAR(NULL,
-        "// Now bring n to 10 — drag the n slider in the variable panel.",
+        "// Now drag the n slider in the variable panel to bring n to 10.",
         "n", 10.0f),
     STEP_SENTINEL,
 };
