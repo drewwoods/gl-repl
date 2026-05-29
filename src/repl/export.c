@@ -1625,7 +1625,7 @@ static ExportNeeds export_collect_needs(void) {
     return needs;
 }
 
-static void emit_export_outline_pass_setup(FILE *f) {
+static void __attribute__((unused)) emit_export_outline_pass_setup(FILE *f) {
     fprintf(f, "  glEnable(GL_COLOR_MATERIAL);\n");
     fprintf(f, "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);\n");
     fprintf(f, "  glColor3f(0.0f, 0.0f, 0.0f);\n");
@@ -1638,7 +1638,7 @@ static void emit_export_outline_pass_setup(FILE *f) {
     fprintf(f, "  glEnable(GL_LIGHTING);\n");
 }
 
-static void emit_export_point_pass_setup(FILE *f) {
+static void __attribute__((unused)) emit_export_point_pass_setup(FILE *f) {
     fprintf(f, "  glEnable(GL_COLOR_MATERIAL);\n");
     fprintf(f, "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);\n");
     fprintf(f, "  glColor3f(0.0f, 0.0f, 0.0f);\n");
@@ -1707,10 +1707,23 @@ static void emit_export_display_geometry(FILE *f) {
      * step 7a). */
     int outlines_on = repl_cfg_get_int(k_cfg_slug_vertex_outlines, 0);
     int vpoints_on = repl_cfg_get_int(k_cfg_slug_vertex_points, 0);
+
+    /* Disable the outlines for now, they complicate the exported code
+     * and are not one for one with the live REPL's outline pass.
+     *
+     * TODO: adapt both the REPL and export outline passes to use a
+     * shared codegen path so they stay in sync and the export can
+     * emit a matching outline pass setup.  Possibly using a stencil
+     * buffer approach of drawing without color buffer with
+     * polygonmode line and points and then fill the stencil in a
+     * second pass, which would be more robust and simpler than the
+     * current approach of using LIGHTING and setting lights to black
+     * for the outline pass.
+     */
     const ExportDisplayPassSpec passes[] = {
-        { "Vertex Fill Pass",    1,               NULL },
-        { "Vertex Outline Pass", outlines_on, emit_export_outline_pass_setup },
-        { "Vertex Point Pass",   vpoints_on,  emit_export_point_pass_setup },
+        { "Vertex Fill Pass",    1,           NULL },
+        { "Vertex Outline Pass", outlines_on, NULL /* emit_export_outline_pass_setup */ },
+        { "Vertex Point Pass",   vpoints_on,  NULL /* emit_export_point_pass_setup */ },
     };
 
     /* `t` is advanced by the tick() timer at a fixed step (see the

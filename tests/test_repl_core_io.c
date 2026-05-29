@@ -575,12 +575,17 @@ int main(void) {
                     strstr(buf, "render_repl_vpoints_") == NULL);
         ASSERT_TRUE("saved geometry called thrice in display",
                     count_substr(buf, "render_repl_geometry();") == 3);
-        ASSERT_TRUE("saved outline pass polygon mode",
-                    strstr(buf, "glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);") != NULL);
-        ASSERT_TRUE("saved vpoints pass polygon mode",
-                    strstr(buf, "glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);") != NULL);
-        ASSERT_TRUE("saved overlay disables color material",
-                    strstr(buf, "glDisable(GL_COLOR_MATERIAL);") != NULL);
+        /* Outline/point pass setup is intentionally disabled in export
+         * (see emit_export_display_geometry in src/repl/export.c): the
+         * passes still re-run the geometry, but the polygon-mode and
+         * color-material overlay setup is no longer emitted because it
+         * was not one-for-one with the live REPL's outline pass. */
+        ASSERT_TRUE("saved outline pass omits line polygon mode",
+                    strstr(buf, "glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);") == NULL);
+        ASSERT_TRUE("saved vpoints pass omits point polygon mode",
+                    strstr(buf, "glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);") == NULL);
+        ASSERT_TRUE("saved overlay omits color material disable",
+                    strstr(buf, "glDisable(GL_COLOR_MATERIAL);") == NULL);
     }
 
     glr_ctrl_reset_all(); declare_test_vars();
