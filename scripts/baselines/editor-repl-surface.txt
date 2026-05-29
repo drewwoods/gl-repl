@@ -44,8 +44,17 @@
 # what was direct call sites). No commit since had to expand it, so
 # the baseline is brought to the new low.
 #
+# 2026-05-29: input_c bumped +1 for repl_source_scope_matrix_scope_depth_at,
+# the matrix-stack sibling of repl_source_scope_in_begin_block_at and
+# repl_source_scope_block_depth_at already called in the same
+# rewrite_source_text_with_indent helper. glPushMatrix/glPopMatrix now
+# open an indent scope like glBegin/glEnd, so the manual indent rewriter
+# (used for var-bearing body lines) must read matrix depth to match the
+# parser's canonical indent. No new coupling kind — same source_scope
+# depth-query family already in the file.
+#
 # Ratchet down as migrations land. The plan target
 # (plans/done/editor-demo.md) is ~5 per file.
 
-input_c: 24
+input_c: 25
 commit_c: 27

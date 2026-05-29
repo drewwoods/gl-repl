@@ -12,6 +12,7 @@ static int g_depth_cache_dirty = 1;
 static int g_block_depth_prefix[MAX_COMMANDS + 1];
 static int g_begin_depth_prefix[MAX_COMMANDS + 1];
 static int g_tess_depth_prefix[MAX_COMMANDS + 1];
+static int g_matrix_depth_prefix[MAX_COMMANDS + 1];
 
 void repl_source_scope_depth_cache_invalidate(void) {
     g_depth_cache_dirty = 1;
@@ -21,22 +22,25 @@ void repl_source_scope_depth_cache_invalidate(void) {
  * nesting depth *before* command `pos`.  Each array tracks one kind of
  * scope opener/closer:
  *
- *   g_block_depth_prefix - any block (for/func/if) nesting (used for indent)
- *   g_begin_depth_prefix - glBegin/glEnd nesting
- *   g_tess_depth_prefix  - gluBegin/gluEnd nesting
+ *   g_block_depth_prefix  - any block (for/func/if) nesting (used for indent)
+ *   g_begin_depth_prefix  - glBegin/glEnd nesting
+ *   g_tess_depth_prefix   - gluBegin/gluEnd nesting
+ *   g_matrix_depth_prefix - glPushMatrix/glPopMatrix nesting (indents like glBegin)
  *
  * All queries call this first; repl_source_scope_depth_cache_invalidate() marks it dirty. */
 static void depth_cache_rebuild(void) {
     if (!g_depth_cache_dirty) return;
 
-    g_block_depth_prefix[0] = 0;
-    g_begin_depth_prefix[0] = 0;
-    g_tess_depth_prefix[0] = 0;
+    g_block_depth_prefix[0]  = 0;
+    g_begin_depth_prefix[0]  = 0;
+    g_tess_depth_prefix[0]   = 0;
+    g_matrix_depth_prefix[0] = 0;
 
     for (int i = 0; i < repl_state_document_count(); i++) {
-        int block_depth = g_block_depth_prefix[i];
-        int begin_depth = g_begin_depth_prefix[i];
-        int tess_depth  = g_tess_depth_prefix[i];
+        int block_depth  = g_block_depth_prefix[i];
+        int begin_depth  = g_begin_depth_prefix[i];
+        int tess_depth   = g_tess_depth_prefix[i];
+        int matrix_depth = g_matrix_depth_prefix[i];
 
         if (repl_state_document_cmds()[i].valid) {
             CmdType t = repl_state_document_cmds()[i].type;
@@ -49,15 +53,20 @@ static void depth_cache_rebuild(void) {
 
             if (t == CMD_TESS_BEGIN_POLYGON || t == CMD_TESS_BEGIN_CONTOUR) tess_depth++;
             else if (t == CMD_TESS_END) tess_depth--;
+
+            if (t == CMD_PUSH_MATRIX) matrix_depth++;
+            else if (t == CMD_POP_MATRIX) matrix_depth--;
         }
 
-        if (block_depth < 0) block_depth = 0;
-        if (begin_depth < 0) begin_depth = 0;
-        if (tess_depth < 0)  tess_depth = 0;
+        if (block_depth < 0)  block_depth = 0;
+        if (begin_depth < 0)  begin_depth = 0;
+        if (tess_depth < 0)   tess_depth = 0;
+        if (matrix_depth < 0) matrix_depth = 0;
 
-        g_block_depth_prefix[i + 1] = block_depth;
-        g_begin_depth_prefix[i + 1] = begin_depth;
-        g_tess_depth_prefix[i + 1]  = tess_depth;
+        g_block_depth_prefix[i + 1]  = block_depth;
+        g_begin_depth_prefix[i + 1]  = begin_depth;
+        g_tess_depth_prefix[i + 1]   = tess_depth;
+        g_matrix_depth_prefix[i + 1] = matrix_depth;
     }
 
     g_depth_cache_dirty = 0;
@@ -88,7 +97,16 @@ int repl_source_scope_tess_scope_depth_at(int pos) {
     return g_tess_depth_prefix[pos];
 }
 
-/* Normal command indent: 2 + 2*tess + 2*begin + 2*block */
+int repl_source_scope_matrix_scope_depth_at(int pos) {
+    depth_cache_rebuild();
+    if (pos < 0) pos = 0;
+    if (pos > repl_state_document_count()) pos = repl_state_document_count();
+    return g_matrix_depth_prefix[pos];
+}
+
+/* Normal command indent: 2 + 2*tess + 2*begin + 2*block + 2*matrix.
+ * glPushMatrix/glPopMatrix nest, so their bodies indent one level per
+ * open push (mirroring how glBegin opens a level via begin depth). */
 void repl_source_scope_cmd_indent(int pos, char *buf, int buf_sz) {
     if (buf_sz <= 0) return;
     depth_cache_rebuild();
@@ -97,22 +115,25 @@ void repl_source_scope_cmd_indent(int pos, char *buf, int buf_sz) {
     int td = g_tess_depth_prefix[pos];
     int bd = g_begin_depth_prefix[pos];
     int kd = g_block_depth_prefix[pos];
-    int spaces = 2 + 2 * td + 2 * bd + 2 * kd;
+    int md = g_matrix_depth_prefix[pos];
+    int spaces = 2 + 2 * td + 2 * bd + 2 * kd + 2 * md;
     if (spaces > buf_sz - 1) spaces = buf_sz - 1;
     if (spaces < 0) spaces = 0;
     memset(buf, ' ', (size_t)spaces);
     buf[spaces] = '\0';
 }
 
-/* glBegin/glEnd-style indent: 2 + 2*tess + 2*block, with begin-depth
- * deliberately EXCLUDED (the glBegin/glEnd lines are not indented by
- * the block they open). Uses the same public depth queries the parser
- * previously open-coded at two sites, so it is byte-identical to the
- * code it replaces. */
+/* glBegin/glEnd-style indent: 2 + 2*tess + 2*block + 2*matrix, with
+ * begin-depth deliberately EXCLUDED (the glBegin/glEnd lines are not
+ * indented by the block they open). Matrix depth IS included so a
+ * glBegin/glEnd nested inside a glPushMatrix block lands at the right
+ * level. Uses the same public depth queries the parser previously
+ * open-coded at two sites. */
 void repl_source_scope_begin_indent(int pos, char *buf, int buf_sz) {
     int td = repl_source_scope_tess_scope_depth_at(pos);
     int kd = repl_source_scope_block_depth_at(pos);
-    int spaces = 2 + 2 * td + 2 * kd;
+    int md = repl_source_scope_matrix_scope_depth_at(pos);
+    int spaces = 2 + 2 * td + 2 * kd + 2 * md;
     if (buf_sz <= 0) return;
     if (spaces > buf_sz - 1) spaces = buf_sz - 1;
     if (spaces < 0) spaces = 0;
@@ -123,11 +144,33 @@ void repl_source_scope_begin_indent(int pos, char *buf, int buf_sz) {
 void repl_source_scope_tess_close_indent(int pos, char *buf, int buf_sz) {
     int td = repl_source_scope_tess_scope_depth_at(pos);
     int kd = repl_source_scope_block_depth_at(pos);
+    int md = repl_source_scope_matrix_scope_depth_at(pos);
     int spaces;
 
     if (buf_sz <= 0) return;
     if (td > 0) td--;
-    spaces = 2 + 2 * td + 2 * kd;
+    spaces = 2 + 2 * td + 2 * kd + 2 * md;
+    if (spaces > buf_sz - 1) spaces = buf_sz - 1;
+    if (spaces < 0) spaces = 0;
+    memset(buf, ' ', (size_t)spaces);
+    buf[spaces] = '\0';
+}
+
+/* glPopMatrix indent: aligns with its matching glPushMatrix by dropping
+ * one matrix level (the push it closes is still counted in the prefix at
+ * this position). Same shape as a normal command otherwise:
+ * 2 + 2*tess + 2*begin + 2*block + 2*(matrix-1). */
+void repl_source_scope_matrix_close_indent(int pos, char *buf, int buf_sz) {
+    if (buf_sz <= 0) return;
+    depth_cache_rebuild();
+    if (pos < 0) pos = 0;
+    if (pos > repl_state_document_count()) pos = repl_state_document_count();
+    int td = g_tess_depth_prefix[pos];
+    int bd = g_begin_depth_prefix[pos];
+    int kd = g_block_depth_prefix[pos];
+    int md = g_matrix_depth_prefix[pos];
+    if (md > 0) md--;
+    int spaces = 2 + 2 * td + 2 * bd + 2 * kd + 2 * md;
     if (spaces > buf_sz - 1) spaces = buf_sz - 1;
     if (spaces < 0) spaces = 0;
     memset(buf, ' ', (size_t)spaces);
@@ -139,10 +182,11 @@ int repl_source_scope_cmd_indent_chars(int pos) {
     if (pos < 0) pos = 0;
     if (pos > repl_state_document_count()) pos = repl_state_document_count();
     return 2 + 2 * g_tess_depth_prefix[pos] + 2 * g_begin_depth_prefix[pos]
-             + 2 * g_block_depth_prefix[pos];
+             + 2 * g_block_depth_prefix[pos] + 2 * g_matrix_depth_prefix[pos];
 }
 
-/* Tessellator leaf command indent: 2 + 2*tess + 2*block  (begin depth ignored) */
+/* Tessellator leaf command indent: 2 + 2*tess + 2*block + 2*matrix
+ * (begin depth ignored). */
 void repl_source_scope_cmd_tess_indent(int pos, char *buf, int buf_sz) {
     if (buf_sz <= 0) return;
     depth_cache_rebuild();
@@ -150,7 +194,8 @@ void repl_source_scope_cmd_tess_indent(int pos, char *buf, int buf_sz) {
     if (pos > repl_state_document_count()) pos = repl_state_document_count();
     int td = g_tess_depth_prefix[pos];
     int kd = g_block_depth_prefix[pos];
-    int spaces = 2 + 2 * td + 2 * kd;
+    int md = g_matrix_depth_prefix[pos];
+    int spaces = 2 + 2 * td + 2 * kd + 2 * md;
     if (spaces > buf_sz - 1) spaces = buf_sz - 1;
     if (spaces < 0) spaces = 0;
     memset(buf, ' ', (size_t)spaces);

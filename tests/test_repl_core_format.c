@@ -212,5 +212,93 @@ int main(void) {
                      call_line && call_line[4] != ' ');
     }
 
+    /* glPushMatrix/glPopMatrix indent their bodies like glBegin/glEnd:
+     * the push and pop lines sit at the enclosing level, and everything
+     * between them gains one indent level (2 spaces per open push). */
+    glr_ctrl_reset_all();
+    declare_test_vars();
+    editor_feed_line("glPushMatrix();");
+    editor_feed_line("glTranslatef(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glPopMatrix();");
+    {
+        ASSERT_TRUE("push block cmd count", repl_state_document_count() == 4);
+        ASSERT_TRUE("push line type", repl_state_document_cmds_mut()[0].type == CMD_PUSH_MATRIX);
+        ASSERT_TRUE("pop line type", repl_state_document_cmds_mut()[3].type == CMD_POP_MATRIX);
+        ASSERT_TRUE("push line not indented",
+                    strcmp(editor_buffer_line(0), "  glPushMatrix();") == 0);
+        ASSERT_TRUE("push body translate indented",
+                    strcmp(editor_buffer_line(1), "    glTranslatef(1, 0, 0);") == 0);
+        ASSERT_TRUE("push body vertex indented",
+                    strcmp(editor_buffer_line(2), "    glVertex3f(0, 0, 0);") == 0);
+        ASSERT_TRUE("pop line aligns with push",
+                    strcmp(editor_buffer_line(3), "  glPopMatrix();") == 0);
+    }
+
+    /* Nested push: each level adds one more indent; each pop lines up
+     * with its matching push. */
+    glr_ctrl_reset_all();
+    declare_test_vars();
+    editor_feed_line("glPushMatrix();");
+    editor_feed_line("glPushMatrix();");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glPopMatrix();");
+    editor_feed_line("glPopMatrix();");
+    {
+        ASSERT_TRUE("nested push outer", strcmp(editor_buffer_line(0), "  glPushMatrix();") == 0);
+        ASSERT_TRUE("nested push inner", strcmp(editor_buffer_line(1), "    glPushMatrix();") == 0);
+        ASSERT_TRUE("nested push body",  strcmp(editor_buffer_line(2), "      glVertex3f(0, 0, 0);") == 0);
+        ASSERT_TRUE("nested pop inner",  strcmp(editor_buffer_line(3), "    glPopMatrix();") == 0);
+        ASSERT_TRUE("nested pop outer",  strcmp(editor_buffer_line(4), "  glPopMatrix();") == 0);
+    }
+
+    /* glBegin/glEnd nested inside a push block gain the matrix indent;
+     * the body vertices then gain the begin indent on top of it. */
+    glr_ctrl_reset_all();
+    declare_test_vars();
+    editor_feed_line("glPushMatrix();");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("glPopMatrix();");
+    {
+        ASSERT_TRUE("begin-in-push: push", strcmp(editor_buffer_line(0), "  glPushMatrix();") == 0);
+        ASSERT_TRUE("begin-in-push: begin", strcmp(editor_buffer_line(1), "    glBegin(GL_TRIANGLES);") == 0);
+        ASSERT_TRUE("begin-in-push: vertex", strcmp(editor_buffer_line(2), "      glVertex3f(0, 0, 0);") == 0);
+        ASSERT_TRUE("begin-in-push: end", strcmp(editor_buffer_line(3), "    glEnd();") == 0);
+        ASSERT_TRUE("begin-in-push: pop", strcmp(editor_buffer_line(4), "  glPopMatrix();") == 0);
+    }
+
+    /* A body command carrying a predef var routes through the editor's
+     * manual indent rewriter (not the parser's canonical text); it must
+     * still pick up the matrix-depth indent. */
+    glr_ctrl_reset_all();
+    declare_test_vars();
+    editor_feed_line("glPushMatrix();");
+    editor_feed_line("glVertex3f(x, 0, 0);");
+    editor_feed_line("glPopMatrix();");
+    {
+        ASSERT_TRUE("vars body has vars", repl_state_document_cmds_mut()[1].has_vars == 1);
+        ASSERT_TRUE("vars body keeps expression", strstr(editor_buffer_line(1), "x") != NULL);
+        ASSERT_TRUE("vars body indented",
+                    strncmp(editor_buffer_line(1), "    glVertex3f", 14) == 0);
+    }
+
+    /* Reformat (Ctrl+R) re-derives the same indentation from scratch. */
+    glr_ctrl_reset_all();
+    declare_test_vars();
+    editor_feed_line("glPushMatrix();");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glPopMatrix();");
+    editor_buffer_set_line(0, "glPushMatrix()");      /* strip indent + semicolon */
+    editor_buffer_set_line(1, "glVertex3f(0,0,0)");
+    editor_buffer_set_line(2, "glPopMatrix()");
+    editor_reformat_commands();
+    {
+        ASSERT_TRUE("reformat push", strcmp(editor_buffer_line(0), "  glPushMatrix();") == 0);
+        ASSERT_TRUE("reformat push body", strcmp(editor_buffer_line(1), "    glVertex3f(0, 0, 0);") == 0);
+        ASSERT_TRUE("reformat pop", strcmp(editor_buffer_line(2), "  glPopMatrix();") == 0);
+    }
+
     return test_harness_report(&g_harness, "repl_core_format");
 }

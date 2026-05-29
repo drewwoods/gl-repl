@@ -899,6 +899,39 @@ static void write_text(char *out, int sz, const char *fmt, ...) {
     }
 }
 
+/* No-arg matrix-stack commands: glPushMatrix / glPopMatrix / glLoadIdentity.
+ * Returns 1 if `func` matched (cmd + text populated), 0 otherwise.
+ * glPushMatrix opens an indent scope like glBegin, so its body lands one
+ * level deeper (handled by repl_source_scope_cmd_indent via `indent`);
+ * glPopMatrix aligns with its matching glPushMatrix — one matrix level
+ * shallower — mirroring how glEnd lines up with glBegin. */
+static int parse_matrix_stack_cmd(const char *func, GLCmd *cmd,
+                                  char *text_out, int text_sz,
+                                  const char *indent, int source_line_idx) {
+    if (strcmp(func, "glPushMatrix") == 0) {
+        cmd->type = CMD_PUSH_MATRIX;
+        cmd->valid = 1;
+        write_text(text_out, text_sz, "%sglPushMatrix();", indent);
+        return 1;
+    }
+    if (strcmp(func, "glPopMatrix") == 0) {
+        char close_ind[REPL_INDENT_TEXT_MAX];
+        repl_source_scope_matrix_close_indent(source_line_idx, close_ind,
+                                              sizeof(close_ind));
+        cmd->type = CMD_POP_MATRIX;
+        cmd->valid = 1;
+        write_text(text_out, text_sz, "%sglPopMatrix();", close_ind);
+        return 1;
+    }
+    if (strcmp(func, "glLoadIdentity") == 0) {
+        cmd->type = CMD_LOAD_IDENTITY;
+        cmd->valid = 1;
+        write_text(text_out, text_sz, "%sglLoadIdentity();", indent);
+        return 1;
+    }
+    return 0;
+}
+
 static int parse_command(const char *line, GLCmd *cmd,
                          char *text_out, int text_sz,
                          const ReplParseContext *ctx) {
@@ -1093,29 +1126,10 @@ static int parse_command(const char *line, GLCmd *cmd,
     if (strcmp(func, "glPointParameterfv") == 0)
         return parse_point_parameter_fv(args, cmd, text_out, text_sz, indent, ctx);
 
-    /* glPushMatrix() */
-    if (strcmp(func, "glPushMatrix") == 0) {
-        cmd->type = CMD_PUSH_MATRIX;
-        cmd->valid = 1;
-        WRITE_TEXT("%sglPushMatrix();", indent);
+    /* glPushMatrix() / glPopMatrix() / glLoadIdentity() */
+    if (parse_matrix_stack_cmd(func, cmd, text_out, text_sz, indent,
+                               source_line_idx))
         return 1;
-    }
-
-    /* glPopMatrix() */
-    if (strcmp(func, "glPopMatrix") == 0) {
-        cmd->type = CMD_POP_MATRIX;
-        cmd->valid = 1;
-        WRITE_TEXT("%sglPopMatrix();", indent);
-        return 1;
-    }
-
-    /* glLoadIdentity() */
-    if (strcmp(func, "glLoadIdentity") == 0) {
-        cmd->type = CMD_LOAD_IDENTITY;
-        cmd->valid = 1;
-        WRITE_TEXT("%sglLoadIdentity();", indent);
-        return 1;
-    }
 
     {
         int fn = -1;

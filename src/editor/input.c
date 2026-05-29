@@ -392,7 +392,8 @@ static void navigate_to_line_raw_resolved(int target) {
 
 /* Rewrite the canonical source text for g_input with proper indentation.
  * Strips leading whitespace and trailing `;`/whitespace from g_input,
- * prefixes indent (2 outside a glBegin block, 4 inside), then appends `;`.
+ * prefixes indent (2 outside a glBegin block, 4 inside), adds 2 spaces per
+ * open glPushMatrix scope, then appends `;`.
  * With include_block_depth, adds 2 spaces per open for/func/if scope at pos.
  * Writes the result into text_out[text_sz]. */
 static void rewrite_source_text_with_indent(char *text_out, int text_sz,
@@ -405,6 +406,10 @@ static void rewrite_source_text_with_indent(char *text_out, int text_sz,
     memcpy(stripped, sp, (size_t)slen);
     stripped[slen] = '\0';
     int indent_len = repl_source_scope_in_begin_block_at(pos) ? 4 : 2;
+    /* glPushMatrix blocks indent their bodies like glBegin, so a command
+     * with vars (which routes through this manual rewriter instead of the
+     * parser's canonical text) must match the same matrix-depth indent. */
+    indent_len += repl_source_scope_matrix_scope_depth_at(pos) * 2;
     if (include_block_depth)
         indent_len += repl_source_scope_block_depth_at(pos) * 2;
     char indent[REPL_INDENT_TEXT_MAX];
