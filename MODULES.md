@@ -121,7 +121,7 @@ Consequences:
 | State | Owns | Does not own |
 |---|---|---|
 | `ReplState` | Parsed command array, flat program, REPL variable state (scalar predefined vars plus fixed scratch arrays `A/B/C` of `REPL_SCRATCH_ARRAY_LEN` floats and the `func0..func9` user-alias table), scenes, import/export metadata | Render/presentation config (now `glr_state`, app layer), replay runtime state (peer), variable-panel state (peer), help-session state (peer), color-picker state (peer), editable text, cursor, selection, search query, UI visibility, pointer/viewport chrome |
-| `glr_state` (app) | App-level presentation/render toggles (grid/axes themes, wireframe, overlays, backdrop, post-process filter, camera-rotate, etc.). Relocated off `ReplRuntimeState.{presentation,render}`; defaults from `glr_defaults.h` (`CFG_DEFAULT_*`). Read/written through the `glr_config` keyed bridge and per-scene snapshots | Program model, editable text, REPL grammar |
+| `glr_state` (app) | App-level presentation/render toggles (grid/axes themes, wireframe, overlays, backdrop, scene + whole-frame post-process filters, camera-rotate, etc.). Relocated off `ReplRuntimeState.{presentation,render}`; defaults from `glr_defaults.h` (`CFG_DEFAULT_*`). Read/written through the `glr_config` keyed bridge and per-scene snapshots | Program model, editable text, REPL grammar |
 | `EditorState` | Editable text buffer, active input, cursor/edit-line, insert mode, selection, clipboard, search/autocomplete, scroll, **cursor blink** (the editor controls cursor visibility/blink — UI just renders), undo/redo, editor transactions | Variable-panel drag (now on the variable_panel peer), parsed command semantics, GL execution, menu chrome, transient status banners, render-output pixel coordinates |
 | `UiState` | Viewport, pointer, status text TTL, help-overlay visibility (chrome flag), profile-panel visibility, panel-divider geometry (panel_frac + resizing_panel) | Help-session tab/scroll (peer), variable-panel state (peer), camera pose (lives on `glr_camera`), program model, editable text, command validation, cursor blink (editor owns), per-frame render-output (uses `Ui*Output`) |
 | `variable_panel` peer | Variable-panel visibility flag + slider drag transaction (var_idx, log_mode, start_value, start_x). Storage in `src/subsystems/variable_panel/variable_panel_state.c`. | Editor text behavior, REPL grammar |
@@ -465,7 +465,7 @@ never read `ReplState`, `EditorState`, or `UiState` directly.
 | `src/scene/backdrop` | Backdrop/environment rendering |
 | `src/scene/lights` | Baseline lighting and light indicators |
 | `src/scene/overlays` | Tiny per-vertex GL primitives (vertex-number labels, normal arrows). REPL-walking overlays moved out to `src/app/glr_ctrl.c`. |
-| `src/scene/postprocess_filter` | Optional full-frame post-process pass (e.g. chromatic aberration): captures the scene rect to a texture and redraws channel-offset passes. Pure fixed-function GL; driven once per frame by `src/scene/render` |
+| `src/scene/postprocess_filter` | Optional post-process pass (e.g. chromatic aberration): captures a given rect to a texture and redraws channel-offset passes. Pure fixed-function GL. Driven over the **scene-viewport rect** once per frame by `src/scene/render`; the *same primitive* is reused over the **whole window** by the app-level `glr_compositor` (Layer 6) |
 | `src/scene/themes` | Shared scene theme enums (grid/axes themes, backdrop modes, grid spacing/extent) — the vocabulary app/UI config code and scene renderers share (header-only) |
 | `src/scene/guides/geometry_guides.c` | Vertex/primitive guide rendering from a `SceneGuideSnapshot`. The controller fills the snapshot's cursor args from the flat program (funcN-local resolution) before calling in — see CLAUDE.md "Cursor Edit Guides" |
 | `src/scene/guides/transform_guides.c` | Transform-guide rendering from a `SceneGuideSnapshot` (REPL-aware) |
@@ -543,6 +543,7 @@ state.
 | `repl_export` | Save/load, typed export scaffold, workspace headers, code-panel dumps. Reads source via the `source_document` view; camera/cfg formatting delegated to app-side bridges and neutral cfg-baseline helpers |
 | `repl_cfg_baseline` | Neutral cfg bag/bridge and `// @cfg <slug>` parser: owns `ReplConfigBag`, `ReplConfigBridge`, and `repl_config_extract_slug` for export/import, scene snapshots, and tutorial baselines |
 | `src/app/glr_camera_export` | Camera-block format owner: translates camera state ↔ the `// camera` block + `glRotatef`/`glTranslatef` text in saved files. Implements `ReplExportCameraBridge` so `repl_export` never parses/formats GL strings |
+| `src/app/glr_compositor` | App-level compositor post-process hook. Runs a post-process pass over the **entire composited frame** (3D scene + all 2D UI) at the tail of `glr_ctrl_display_frame`, after all drawing and before the buffer swap. Reuses the scene `postprocess_filter` primitive (Layer 4) over the full window rect; the scene's own pass stays scene-viewport-only. Driven by `GlrPresentationState.compositor_filter_mode`; the `Ctrl+N` cycle keeps the two passes mutually exclusive (Off → scene → frame). Timed via `PROF_COMPOSITOR` ("Compositor FX") |
 | `src/app/glr_source_document` | Full-app adapter binding the neutral `source_document` port (read view + insert/replace/load/clear/apply) to the `EditorState` text buffer, so REPL pipeline TUs never reach into editor state directly |
 | `src/app/glr_state` | Storage + accessors for app-level presentation/render state relocated off `ReplRuntimeState`; reached through the `glr_config` keyed bridge |
 | `src/app/glr_audio` | App-level playlist engine and persisted audio config (`glr_audio_*`) |
@@ -584,7 +585,7 @@ flowchart TB
 
     gl_repl["gl_repl.c<br/>(GLUT entry · callback wiring · buffer swap)"]
 
-    app["<b>0. App shell</b><br/>glr_ctrl router · glr_state ·<br/>glr_source_document · glr_camera_export ·<br/>glr_audio · glr_actions · glr_config<br/>(owns app presentation/render state)"]
+    app["<b>0. App shell</b><br/>glr_ctrl router · glr_state ·<br/>glr_source_document · glr_camera_export ·<br/>glr_compositor · glr_audio · glr_actions · glr_config<br/>(owns app presentation/render state)"]
 
     editor["<b>2. Editor</b><br/>input · commit · buffer · undo · selection ·<br/>search · autocomplete · reformat · clipboard ·<br/>inline_rename · inline_file_prompt · help_session<br/>(owns EditorState)"]
 
@@ -688,6 +689,7 @@ flowchart LR
         glrstate["src/app/glr_state.c<br/>app presentation/render state<br/>(moved off ReplState)"]
         glrsrcdoc["src/app/glr_source_document.c<br/>source_document port → EditorState"]
         glrcamexport["src/app/glr_camera_export.c<br/>camera ↔ export-text bridge"]
+        glrcompositor["src/app/glr_compositor.c<br/>whole-frame post-process hook<br/>(reuses scene primitive over full window)"]
     end
 
     subgraph repl_pipeline["1. REPL compiler/program pipeline"]
@@ -767,7 +769,7 @@ flowchart LR
         sbackdrop["src/scene/backdrop.c<br/>backdrop"]
         slights["src/scene/lights.c<br/>lights"]
         soverlays["src/scene/overlays.c<br/>overlay primitives"]
-        spost["src/scene/postprocess_filter.c<br/>post-process pass<br/>(chromatic aberration)"]
+        spost["src/scene/postprocess_filter.c<br/>scene-viewport post-process<br/>(chromatic aberration; reused by glr_compositor)"]
     end
 
     %% gl_repl.c hands raw GLUT events to the controller
@@ -886,6 +888,15 @@ flowchart LR
     sceneR -.-> camera
     sceneR -.-> replay_sys
 
+    %% Whole-frame compositor post-process: glr_ctrl invokes the hook at
+    %% frame end (after all scene + UI drawing, before the buffer swap),
+    %% and it reuses the scene postprocess primitive over the FULL window
+    %% rect. The scene-viewport pass (sceneR i40@--> spost) is the separate
+    %% per-scene stage; the controller keeps the two mutually exclusive
+    %% (Ctrl+N: Off -> scene -> frame).
+    ctrl i43@--> glrcompositor
+    glrcompositor i44@--> spost
+
     %% REPL domain reads
     replay_ann -.-> replay_sys
     replay_ann -.-> state
@@ -910,7 +921,7 @@ flowchart LR
     classDef animateF stroke:#5f0,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
 
     class e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11 animateE
-    class i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31,i32,i33,i34,i35,i36,i37,i38,i39,i40,i41,i42 animateF
+    class i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31,i32,i33,i34,i35,i36,i37,i38,i39,i40,i41,i42,i43,i44 animateF
 ```
 
 Reading the diagram:
@@ -938,6 +949,14 @@ Reading the diagram:
   (`glr_camera_export`); `replay_annotations` still receives an explicit
   `EditorBufferView`. Neither reaches into editor state.
 - UI render is read-only. UI input is hit-test-and-return.
+- Post-processing has **two stages**, both reusing the same
+  fixed-function `postprocess_filter` primitive: the scene-viewport pass
+  (`sceneR i40@--> spost`, inside `scene_render_3d_scene`) and the
+  whole-frame compositor pass (`ctrl i43@--> glrcompositor i44@--> spost`,
+  at frame end after every UI layer). The controller keeps them mutually
+  exclusive via `Ctrl+N` (Off → scene → frame). Each is timed by its own
+  CPU-profile section (`PROF_SCENE_3D_POST_PROCESS` "post FX (scene)" /
+  `PROF_COMPOSITOR` "Compositor FX").
 
 ## Boundary Rules
 
