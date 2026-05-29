@@ -3,62 +3,49 @@
  *
  * Measures elapsed wall time spent in major per-frame sections.
  * Instrumentation is generic and does not depend on the UI layer.
+ *
+ * This file has NO app dependency. A section is just an int index; the catalog
+ * of named sections (the `ProfSection` enum + `PROF_SECTION_COUNT`) is supplied
+ * by the host via prof_sections.h, which the Makefile force-includes into every
+ * TU (`-include prof_sections.h`, beside `-include config.h`). When no catalog
+ * is provided — e.g. these files lifted into another project unchanged — the
+ * fallback below makes ProfSection an opaque int and the timer degenerates to a
+ * single section, so cpuprof.{c,h} still compile and link standalone.
+ *
+ * The per-section *display* (label / nesting depth / is-total flag) is likewise
+ * the host's job, returned by prof_section_info(): src/app/glr_prof.c for the
+ * gl-repl binary, the driver itself for each standalone demo. The generic timer
+ * and the UI panel never hard-code section names.
  */
 #ifndef CPUPROF_H
 #define CPUPROF_H
 
-/* Sections that are timed each frame (or whenever they run). */
-typedef enum {
-    PROF_SCENE_3D = 0,  /* render_3d_scene() */
-    PROF_SCENE_3D_SETUP,     /* projection/camera/lights/material setup */
-    PROF_SCENE_3D_FILL,      /* execute_commands() main fill pass */
-    PROF_SCENE_3D_FADE,      /* replay fade batches pass */
-    PROF_SCENE_3D_FADE_BATCH_PREP,  /* per-batch find-open + color */
-    PROF_SCENE_3D_FADE_BATCH_EXEC,  /* per-batch execute_commands */
-    PROF_SCENE_3D_FADE_BATCH_POST,  /* per-batch post-execute cleanup */
-    PROF_SCENE_3D_HELPERS,      /* backdrop/grid/axes/orbit-target aggregate */
-    PROF_SCENE_3D_BACKDROP,     /* scene_backdrop_render() – stale when off */
-    PROF_SCENE_3D_GRID,         /* scene_grid_render() */
-    PROF_SCENE_3D_AXES,         /* scene_axes_render() */
-    PROF_SCENE_3D_ORBIT_TARGET, /* draw_orbit_target() */
-    PROF_SCENE_3D_OVERLAYS,  /* vertex dots, vertex/normal/transform guides */
-    PROF_SCENE_3D_OVERLAY_OUTLINES,  /* polygon outline + current-block highlight */
-    PROF_SCENE_3D_OVERLAY_BUILD_GUIDES,  /* transform-editing gizmos (translate/rotate/scale) */
-    PROF_SCENE_3D_OVERLAY_TRANSFORM_GUIDES,  /* transform-editing gizmos (translate/rotate/scale) */
-    PROF_SCENE_3D_OVERLAY_NORMALS,        /* normal vector labels */
-    PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS,    /* vertex numbers labels */
-    PROF_SCENE_3D_POST_PROCESS,   /* scene_postprocess_filter_render() */
-    PROF_SCENE_3D_LAST = PROF_SCENE_3D_POST_PROCESS,
-    PROF_CODE_PANEL,    /* render_code_panel() */
-    PROF_CODE_PANEL_LAYOUT,   /* render_code_panel() layout/precompute */
-    PROF_CODE_PANEL_CHROME,   /* background, border, header/search chrome */
-    PROF_CODE_PANEL_LINES,    /* header/body/footer line rendering */
-    PROF_CODE_PANEL_LINES_STATIC,  /* workspace/header static rows */
-    PROF_CODE_PANEL_LINES_BODY,    /* command + insert/newline body rows */
-    PROF_CODE_PANEL_LINES_BODY_CMDS,    /* command loop body */
-    PROF_CODE_PANEL_LINES_BODY_NEWLINE, /* newline slot body */
-    PROF_CODE_PANEL_LINES_FOOTER,  /* footer/static trailing rows */
-    PROF_CODE_PANEL_OVERLAYS, /* scroll/status/color-picker overlays */
-    PROF_UI_PANELS,     /* autocomplete + dropdown + var + config + help */
-    PROF_SNAPSHOT,                 /* aggregate snapshot production by controller */
-    PROF_SNAPSHOT_TRANSFORMERS,    /* push_color_transformers (per-line scan) */
-    PROF_SNAPSHOT_HIGHLIGHTS,      /* push_highlights (feeding cmd + replay PC) */
-    PROF_SNAPSHOT_VIRTUAL_LINES,   /* annotations_prepare + virtual-line refresh */
-    PROF_SNAPSHOT_PREP,            /* replay_prepare_frame + render-state /
-                                    * camera string refresh that sits between
-                                    * virtual-line refresh and scene-config */
-    PROF_SNAPSHOT_SCENE_CONFIG,    /* build_scene_config */
-    PROF_SNAPSHOT_UI,              /* build_ui_snapshot */
-    PROF_FLATTEN,       /* flatten_commands() (only when dirty) */
-    PROF_REFORMAT,      /* repl_reformat_program() (on demand) */
-    PROF_AUTONORMAL,    /* recompute_autonormals() (only when dirty) */
-    PROF_REPLAY_HUD,    /* replay_ui_hud_render() (only when replaying) */
-    PROF_PROFILE_PANEL, /* ui_profile_panel_render() (the panel itself) */
-    PROF_MEMORY_PANEL,  /* ui_memory_panel_render() (the panel itself) */
-    PROF_FRAME_RESTORE, /* post-render flat-count + predef-value restore */
-    PROF_FRAME_TOTAL,   /* entire display callback */
-    PROF_SECTION_COUNT
-} ProfSection;
+/* Fallback catalog: active only when prof_sections.h was not force-included
+ * (PROF_SECTIONS_PROVIDED unset). Keeps the generic timer self-contained. */
+#ifndef PROF_SECTIONS_PROVIDED
+typedef int ProfSection;
+enum { PROF_SECTION_COUNT = 1 };
+#endif
+
+/* Per-section display metadata, supplied by the app (not the generic timer).
+ *  label    — bare section name for the HUD (no indentation baked in).
+ *  depth    — nesting level (0 = top-level); the single source of truth for
+ *             nesting. The panel derives the visual indentation from it and
+ *             treats depth>0 as a "detail" sub-section hidden outside DETAILS
+ *             mode — so restyling the indent never re-classifies a row.
+ *  is_total — nonzero for the single whole-frame total row (drawn with a
+ *             divider above it and its own warn/crit thresholds).
+ *
+ * Implemented by src/app/glr_prof.c for the gl-repl binary, and by each
+ * standalone demo driver for the sections it instruments. The generic timer
+ * and the UI panel never hard-code section names. */
+typedef struct {
+    const char *label;
+    int         depth;
+    int         is_total;
+} ProfSectionInfo;
+
+ProfSectionInfo prof_section_info(ProfSection s);
 
 /* Begin/end a named CPU-time measurement.
  * prof_begin stores the current process CPU clock; prof_end records the

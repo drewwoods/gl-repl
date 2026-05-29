@@ -88,10 +88,14 @@ while IFS= read -r f; do
     # -D_GNU_SOURCE mirrors the real build (Makefile COMMON_CFLAGS):
     # without it, strict -std=c99 hides POSIX decls like
     # CLOCK_MONOTONIC, so the guard must compile the shipped sources
-    # the same way they are actually built.
+    # the same way they are actually built. Likewise the force-includes:
+    # the real build injects config.h + prof_sections.h into every TU via
+    # OBJ_CFLAGS (-include ...), so the instrumentation sites get the
+    # ProfSection catalog with no explicit #include. Mirror that here.
     if ! "$CC" -std=c99 -fsyntax-only \
             -Wall -Wno-deprecated-declarations -Wfloat-conversion \
             -D_GNU_SOURCE -DGL_SILENCE_DEPRECATION $GL_DEFS \
+            -include "$ROOT/config.h" -include "$ROOT/prof_sections.h" \
             -I"$ROOT" -I"$ROOT/src" -I"$ROOT/include" -I"$ROOT/tests" \
             $SYS_GL \
             "$f" 2>> "$LOG"; then

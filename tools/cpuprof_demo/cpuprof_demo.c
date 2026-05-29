@@ -38,6 +38,25 @@ static void burn_work(int iters) {
     g_sink += acc;
 }
 
+/* The demo's half of the cpuprof display contract (gl-repl's half is
+ * src/app/glr_prof.c). The generic panel iterates the whole ProfSection
+ * catalog and asks us to label each row; this driver only instruments three
+ * sections, so it labels those as top-level (depth 0) and reports every other
+ * section as a hidden detail placeholder ("—", depth 1) — present only in the
+ * DETAILS view, absent from the default ON view. */
+ProfSectionInfo prof_section_info(ProfSection s) {
+    ProfSectionInfo info;
+    info.depth = 0;
+    info.is_total = 0;
+    switch (s) {
+    case PROF_FRAME_TOTAL:   info.label = "Frame Total";   info.is_total = 1; break;
+    case PROF_SCENE_3D:      info.label = "Scene 3D";      break;
+    case PROF_PROFILE_PANEL: info.label = "Profile Panel"; break;
+    default:                 info.label = "—"; info.depth = 1; break;
+    }
+    return info;
+}
+
 static void display_func(void) {
     prof_frame_tick();
     prof_begin(PROF_FRAME_TOTAL);

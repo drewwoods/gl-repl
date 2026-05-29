@@ -261,6 +261,7 @@ SRCS = \
 	src/app/glr_config.c \
 	src/app/glr_ctrl.c \
 	src/app/glr_debug.c \
+	src/app/glr_prof.c \
 	src/app/glr_source_document.c \
 	src/app/glr_state.c \
 	src/editor/clipboard.c \
@@ -447,6 +448,7 @@ CORE_TEST_SRCS = \
 	src/app/glr_config.c \
 	src/app/glr_ctrl.c \
 	src/app/glr_debug.c \
+	src/app/glr_prof.c \
 	src/app/glr_source_document.c \
 	src/app/glr_state.c \
 	src/editor/clipboard.c \
@@ -673,7 +675,7 @@ COLOR_PICKER_DEMO_DEP_SRCS = src/subsystems/color_picker/color_picker_state.c \
 
 OBJDIR = build/$(BUILD)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)
 BINDIR = $(OBJDIR)
-OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS)
+OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS) -include config.h -include prof_sections.h
 DEPFLAGS = -MMD -MP
 
 SAMPLE_OBJS = $(addprefix $(OBJDIR)/,$(SRCS:.c=.o))
@@ -1145,6 +1147,9 @@ check-memprof-demo-isolation: ## Forbid app/repl/editor coupling in the memprof 
 check-cpuprof-demo-isolation: ## Forbid app/repl/editor coupling in the cpuprof demo link set.
 	@bash scripts/check-subsystem-demo-isolation.sh CPUPROF_DEMO_DEP_SRCS tools/cpuprof_demo cpuprof_demo
 
+check-cpuprof-standalone: ## Verify the generic CPU-profile timer compiles with no section catalog (fallback path).
+	@bash scripts/check-cpuprof-standalone.sh
+
 check-variable-panel-demo-isolation: ## Forbid app/repl/editor coupling in the variable-panel demo link set.
 	@bash scripts/check-subsystem-demo-isolation.sh VARIABLE_PANEL_DEMO_DEP_SRCS tools/variable_panel_demo variable_panel_demo
 
@@ -1219,6 +1224,7 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-repl-demo-no-editor \
 		check-memprof-demo-isolation \
 		check-cpuprof-demo-isolation \
+		check-cpuprof-standalone \
 		check-variable-panel-demo-isolation \
 		check-color-picker-demo-isolation \
 		check-editor-repl-surface \
