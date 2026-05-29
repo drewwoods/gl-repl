@@ -369,7 +369,7 @@ state-machine level, not buried in the doc body.
 | `src/ui/support/cpuprof.h` | Profile panel render entrypoint |
 | `src/ui/support/memprof.c` | Memory profiling overlay panel (RSS history / baseline / delta) |
 | `src/ui/support/memprof.h` | Memory panel render entrypoint |
-| `src/ui/app/menu_bar.c` | Code-panel menu bar, dropdowns, config right-click handling, search slot |
+| `src/ui/app/menu_bar.c` | Code-panel menu bar, dropdowns, config right-click handling, search slot; mouse-wheel scroll for flyouts taller than the viewport |
 | `src/ui/app/menu_bar.h` | Menu/pin hit-test and dropdown state API |
 | `src/ui/app/scene_tabs.c` | Scene tab strip below the menu bar: snapshot-pure render + whole-band hit-test (TAB / inert CHROME); derived each frame, no persistent model |
 | `src/ui/app/scene_tabs.h` | Scene tab strip render/hit/`band_h` API |
@@ -908,6 +908,17 @@ Declarative toggle system in `src/app/glr_actions.c`:
   `All` row is owned in the menu layer (`config_all_parent_row`), never
   double-counted. The `All` flyout spans the whole table 1:1 with
   `### `/`---` rows rendered as inert chrome (`GlrConfigRowKind`).
+- **Scrolling long flyouts.** A flyout taller than the viewport (the
+  synthetic **All** flyout is ~47 rows, taller than an 800px window) is
+  clamped to fit by `submenu_rect`, and the mouse wheel pages through the
+  hidden rows via a persistent `g_submenu_scroll` row offset
+  (`ui_menu_bar_handle_wheel_scroll`, called first in both wheel paths of
+  `src/app/glr_ctrl_router.c` so it never leaks to the code panel / camera
+  behind the menu). `render_active_submenu` draws only the visible
+  `[scroll, scroll+visible_rows)` window plus a thin right-edge scrollbar
+  hint; the hit-test/hover paths add the same offset. The offset resets to
+  0 when the flyout closes or its parent row changes. Lives in the shared
+  flyout engine, so Scene / Tutorials flyouts get it too.
 - **Click semantics.** Section/All parent rows are inert on click
   (hover-open only): the `GLR_MENU_CONFIG` branch of
   `glr_action_menu_item_activate` is a no-op returning 0, mirroring the

@@ -60,6 +60,11 @@ static int g_menu_item_hover = -1;
 static int   g_submenu_menu_id    = -1;
 static int   g_submenu_parent_row = -1;
 static float g_submenu_open_time  = -1.0f;
+/* Row offset of the open flyout when it is taller than the viewport
+ * (the Config "All" list is ~47 rows, taller than an 800px window).
+ * 0 = top. Driven by the mouse wheel via ui_menu_bar_handle_wheel_scroll;
+ * reset to 0 whenever the flyout closes or its parent row changes. */
+static int   g_submenu_scroll      = 0;
 
 /* Right-hand column a dropdown reserves for the ">" flyout-affordance
  * glyph so a long parent label can't collide with it. */
@@ -547,6 +552,29 @@ static int dropdown_row_for_gl_y(int top, int h, int gl_y) {
     return (top + h - DROPDOWN_PAD_Y - gl_y) / LINE_H;
 }
 
+/* Number of rows that fit in a flyout of GL-space height `sh` — the
+ * inverse of the `height = rows * LINE_H + 2 * DROPDOWN_PAD_Y` formula
+ * submenu_rect uses. At least 1. */
+static int submenu_visible_rows(int sh) {
+    int rows = (sh - 2 * DROPDOWN_PAD_Y) / LINE_H;
+    return rows < 1 ? 1 : rows;
+}
+
+/* The persistent flyout scroll offset (g_submenu_scroll) clamped into
+ * [0, count - visible] for a flyout of height `sh` with `count` rows,
+ * WITHOUT writing it back. Render and hit-test read through this so a
+ * stale offset (e.g. after a resize shrinks the window) self-corrects
+ * without those pure paths mutating chrome state; the wheel handler
+ * clamps and persists separately. */
+static int submenu_effective_scroll(int sh, int count) {
+    int max_scroll = count - submenu_visible_rows(sh);
+    int s = g_submenu_scroll;
+    if (max_scroll < 0) max_scroll = 0;
+    if (s > max_scroll) s = max_scroll;
+    if (s < 0)          s = 0;
+    return s;
+}
+
 /* ---- Polymorphic flyout provider ----------------------------------------
  *
  * A FlyoutProvider resolves (parent_row, ordinal) to a submenu row's
@@ -812,7 +840,17 @@ static int submenu_rect(int menu_id, int parent_row,
         if (max_lbl < 80)
             max_lbl = 80;
         width = max_lbl + DROPDOWN_PAD_X + config_submenu_extra_w(menu_id, parent_row);
-        height = count * LINE_H + 2 * DROPDOWN_PAD_Y;
+        {
+            /* Clamp tall flyouts (the Config "All" list is ~47 rows,
+             * taller than an 800px window) to the viewport so every row
+             * stays on-screen; the mouse wheel pages through the
+             * overflow (g_submenu_scroll). */
+            int max_rows = (win_h - 2 * DROPDOWN_PAD_Y) / LINE_H;
+            int rows = count;
+            if (max_rows < 1) max_rows = 1;
+            if (rows > max_rows) rows = max_rows;
+            height = rows * LINE_H + 2 * DROPDOWN_PAD_Y;
+        }
 
         x = pdx + pdw;
         if (x + width > win_w)
@@ -934,11 +972,14 @@ static UiHit submenu_hit_test(int mx, int my) {
     if (!point_in_rect_gl(mx, my, sx, sy, sw, sh))
         return h;
 
-    ry = ui_state_viewport().window_h - my;
-    ordinal = dropdown_row_for_gl_y(sy, sh, ry);
-    if (ordinal < 0 ||
-        ordinal >= submenu_row_count(g_submenu_menu_id, g_submenu_parent_row))
-        return h;
+    {
+        int count = submenu_row_count(g_submenu_menu_id, g_submenu_parent_row);
+        ry = ui_state_viewport().window_h - my;
+        ordinal = dropdown_row_for_gl_y(sy, sh, ry) +
+                  submenu_effective_scroll(sh, count);
+        if (ordinal < 0 || ordinal >= count)
+            return h;
+    }
 
     /* Inert chrome rows (Config "All" "### "/"---") never produce a hit. */
     if (submenu_row_kind(g_submenu_menu_id, g_submenu_parent_row,
@@ -1035,6 +1076,7 @@ static void submenu_reset(void) {
     g_submenu_menu_id    = -1;
     g_submenu_parent_row = -1;
     g_submenu_open_time  = -1.0f;
+    g_submenu_scroll     = 0;
     g_submenu_cache.valid = 0;
 }
 
@@ -1081,6 +1123,30 @@ UiHit ui_menu_bar_handle_config_right_press(int mx, int my) {
         h.item_idx < 0)
         return ui_hit_none();
     return h;
+}
+
+int ui_menu_bar_handle_wheel_scroll(int mx, int my, int delta) {
+    int sx, sy, sw, sh, count, max_scroll;
+    if (g_open_menu < 0 ||
+        g_submenu_menu_id < 0 || g_submenu_parent_row < 0)
+        return 0;
+    if (!submenu_rect(g_submenu_menu_id, g_submenu_parent_row,
+                      &sx, &sy, &sw, &sh))
+        return 0;
+    if (!point_in_rect_gl(mx, my, sx, sy, sw, sh))
+        return 0;
+    /* Pointer is over the open flyout: consume the wheel so it never
+     * leaks to the code panel / camera behind the menu, even when the
+     * flyout is short enough that there is nothing to scroll. `delta` is
+     * a row offset (positive reveals lower rows), matching the
+     * editor_input_code_panel_scroll convention the call sites use. */
+    count = submenu_row_count(g_submenu_menu_id, g_submenu_parent_row);
+    max_scroll = count - submenu_visible_rows(sh);
+    if (max_scroll < 0) max_scroll = 0;
+    g_submenu_scroll += delta;
+    if (g_submenu_scroll < 0)          g_submenu_scroll = 0;
+    if (g_submenu_scroll > max_scroll) g_submenu_scroll = max_scroll;
+    return 1;
 }
 
 void ui_menu_bar_note_search_opened(float now) {
@@ -1181,12 +1247,14 @@ static int submenu_hover_ordinal(const UiRenderSnapshot *snap) {
                           sx, sy, sw, sh))
         return -1;
 
-    ry = snap->viewport.window_h - snap->pointer.mouse_y;
-    ordinal = dropdown_row_for_gl_y(sy, sh, ry);
-    if (ordinal < 0 ||
-        ordinal >= submenu_row_count(g_submenu_menu_id,
-                                     g_submenu_parent_row))
-        return -1;
+    {
+        int count = submenu_row_count(g_submenu_menu_id, g_submenu_parent_row);
+        ry = snap->viewport.window_h - snap->pointer.mouse_y;
+        ordinal = dropdown_row_for_gl_y(sy, sh, ry) +
+                  submenu_effective_scroll(sh, count);
+        if (ordinal < 0 || ordinal >= count)
+            return -1;
+    }
     return ordinal;
 }
 
@@ -1203,8 +1271,11 @@ static void update_submenu_hover_at(int mx, int my, float now) {
 
     if (menu_row_has_submenu(g_open_menu, g_menu_item_hover)) {
         if (g_submenu_menu_id != g_open_menu ||
-            g_submenu_parent_row != g_menu_item_hover)
+            g_submenu_parent_row != g_menu_item_hover) {
+            /* Switching to a different flyout — restart it at the top. */
             g_submenu_open_time = now;
+            g_submenu_scroll    = 0;
+        }
         g_submenu_menu_id    = g_open_menu;
         g_submenu_parent_row = g_menu_item_hover;
         return;
@@ -1304,8 +1375,16 @@ static void render_active_submenu(const UiRenderSnapshot *snap) {
     glVertex2f((float)sx,        (float)(sy + sh));
     glEnd();
 
+    /* Draw only the rows in the visible window [scroll, last). hover_ordinal
+     * is already absolute (submenu_hover_ordinal added the same offset), so
+     * the row comparisons below stay correct. */
+    int visible_rows = submenu_visible_rows(sh);
+    int scroll       = submenu_effective_scroll(sh, count);
+    int last         = scroll + visible_rows;
+    if (last > count) last = count;
+
     ey = sy + sh - LINE_H + 1;
-    for (int ordinal = 0; ordinal < count; ordinal++) {
+    for (int ordinal = scroll; ordinal < last; ordinal++) {
         const char *name = submenu_row_label(menu_id, parent_row, ordinal);
         GlrConfigRowKind kind = submenu_row_kind(menu_id, parent_row,
                                                  ordinal);
@@ -1345,6 +1424,30 @@ static void render_active_submenu(const UiRenderSnapshot *snap) {
                                      cfg_sc_right, alpha);
 
         ey -= LINE_H;
+    }
+
+    /* Overflow scrollbar hint: a thin track + proportional thumb on the
+     * flyout's right inner edge, shown only when rows are hidden. Purely
+     * a visual cue — the wheel does the scrolling, so there is no hit
+     * region. Sits in the right padding (config columns end at sx+sw-14),
+     * so it never overlaps row text. */
+    if (count > visible_rows) {
+        float bx1       = (float)(sx + sw - 2);
+        float bx0       = bx1 - 3.0f;
+        float track_top = (float)(sy + sh - DROPDOWN_PAD_Y);
+        float track_bot = (float)(sy + DROPDOWN_PAD_Y);
+        float track_h   = track_top - track_bot;
+        float thumb_h   = track_h * (float)visible_rows / (float)count;
+        float max_off, thumb_top;
+        if (thumb_h < 10.0f)    thumb_h = 10.0f;
+        if (thumb_h > track_h)  thumb_h = track_h;
+        max_off   = track_h - thumb_h;
+        thumb_top = track_top -
+                    max_off * (float)scroll / (float)(count - visible_rows);
+        ui_clr_a(UI_TOK_DIVIDER, alpha);
+        glRectf(bx0, track_bot, bx1, track_top);
+        ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
+        glRectf(bx0, thumb_top - thumb_h, bx1, thumb_top);
     }
 }
 
