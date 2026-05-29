@@ -258,6 +258,7 @@ SRCS = \
 	src/app/glr_ctrl_view_transition.c \
 	src/app/glr_ctrl_router.c \
 	src/app/glr_completion.c \
+	src/app/glr_compositor.c \
 	src/app/glr_config.c \
 	src/app/glr_ctrl.c \
 	src/app/glr_debug.c \
@@ -355,6 +356,7 @@ HDRS = \
 	src/app/glr_actions.h \
 	src/app/glr_camera.h \
 	src/app/glr_completion.h \
+	src/app/glr_compositor.h \
 	src/app/glr_config.h \
 	src/app/glr_ctrl.h \
 	src/app/glr_debug.h \
@@ -445,6 +447,7 @@ CORE_TEST_SRCS = \
 	src/app/glr_ctrl_view_transition.c \
 	src/app/glr_ctrl_router.c \
 	src/app/glr_completion.c \
+	src/app/glr_compositor.c \
 	src/app/glr_config.c \
 	src/app/glr_ctrl.c \
 	src/app/glr_debug.c \

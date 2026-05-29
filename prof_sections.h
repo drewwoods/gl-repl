@@ -74,6 +74,9 @@ typedef enum {
     PROF_REPLAY_HUD,    /* replay_ui_hud_render() (only when replaying) */
     PROF_PROFILE_PANEL, /* ui_profile_panel_render() (the panel itself) */
     PROF_MEMORY_PANEL,  /* ui_memory_panel_render() (the panel itself) */
+    PROF_COMPOSITOR,    /* glr_compositor_postprocess_frame() — whole-frame
+                         * (full-screen) post-process; distinct from the
+                         * scene-viewport pass PROF_SCENE_3D_POST_PROCESS */
     PROF_FRAME_RESTORE, /* post-render flat-count + predef-value restore */
     PROF_FRAME_TOTAL,   /* entire display callback */
     PROF_SECTION_COUNT
