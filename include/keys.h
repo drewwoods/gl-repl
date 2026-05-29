@@ -54,6 +54,9 @@
 #define KEY_CTRL_K    11   /* jump replay PC to cursor line (Ctrl+K) */
 
 /* Visualization and overlays */
+#define KEY_CTRL_G    7    /* toggle wireframe (Ctrl+G; byte 7 = BEL, no
+                              whitespace collision, the one free plain Ctrl
+                              slot) */
 #define KEY_CTRL_R    18   /* toggle replay mode (Ctrl+R) */
 #define KEY_CTRL_T    20   /* toggle animated 't' time variable (Shift: reset to 0) */
 #define KEY_CTRL_U    21   /* toggle MSAA (Ctrl+U) */

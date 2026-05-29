@@ -491,10 +491,18 @@ int main() {
     {
         glr_ctrl_reset_all();
 
-        glr_state_presentation_mut()->wireframe = 0;
+        /* F2 cycles Accum AA (a multi-state cycle); wireframe moved to the
+         * plain Ctrl+G ascii shortcut. */
+        int accum_before = glr_config_get(GLR_CONFIG_ACCUM_AA);
         ASSERT_INT("config special shortcut consumed",
                    glr_cfg_handle_special_shortcut(GLUT_KEY_F2), 1);
-        ASSERT_INT("config special shortcut toggles wireframe",
+        ASSERT_TRUE("config special shortcut (F2) cycles Accum AA",
+                    glr_config_get(GLR_CONFIG_ACCUM_AA) != accum_before);
+
+        glr_state_presentation_mut()->wireframe = 0;
+        ASSERT_INT("wireframe ascii shortcut consumed",
+                   glr_cfg_handle_ascii_shortcut(KEY_CTRL_G), 1);
+        ASSERT_INT("Ctrl+G toggles wireframe",
                    glr_state_presentation().wireframe, 1);
 
         glr_state_presentation_mut()->grid_major_idx = 0;
