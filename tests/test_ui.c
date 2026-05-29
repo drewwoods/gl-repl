@@ -14,6 +14,8 @@
 #include "ui/support/cpuprof.h"
 #include "subsystems/color_picker/color_picker_state.h"
 #include "ui/subsystems/color_picker.h"
+#include "ui/app/color_swatch.h"             /* ui_color_picker_render_swatch */
+#include "app/glr_color_picker_bridge.h"     /* glr_color_picker_install_host */
 #include "ui/app/autocomplete_panel.h"
 #include "ui/subsystems/variable_panel.h"
 #include "ui/app/variable_panel_view.h"
@@ -1398,6 +1400,9 @@ int main(void) {
 #endif
 
     glr_ctrl_reset_all();
+    /* The color-picker peer reads/writes the document through an installed
+     * host; wire the REPL/editor-backed one so the picker tests can open. */
+    glr_color_picker_install_host();
 
     test_help_overlay();
     test_profile_panel();
