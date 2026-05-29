@@ -20,6 +20,11 @@ void repl_canonical_input_view(const char *src,
                                const char **out_start,
                                int *out_len);
 
+/* Buffer capacity for one repl_format_source_float result. The shortest
+ * exact-round-trip form of a float32 fits comfortably (sign + up to 9
+ * significant digits + '.'/exponent); 32 leaves generous headroom. */
+#define REPL_SOURCE_FLOAT_TEXT_MAX 32
+
 void repl_format_source_float(char *out, int out_sz, float v);
 int  repl_parse_identifier_list(const char *src, const char *leading_keyword,
                                 char names[][REPL_PREDEF_NAME_MAX], int max_names);

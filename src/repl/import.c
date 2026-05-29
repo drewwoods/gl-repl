@@ -921,8 +921,11 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
         }
         float nv[3] = {0, 0, 1};
         eval_tess_brace_floats(p, 3, nv);
-        snprintf(out, out_sz, "gluNormal(%.9g, %.9g, %.9g);",
-                 nv[0], nv[1], nv[2]);
+        char x[REPL_SOURCE_FLOAT_TEXT_MAX], y[REPL_SOURCE_FLOAT_TEXT_MAX], z[REPL_SOURCE_FLOAT_TEXT_MAX];
+        repl_format_source_float(x, sizeof(x), nv[0]);
+        repl_format_source_float(y, sizeof(y), nv[1]);
+        repl_format_source_float(z, sizeof(z), nv[2]);
+        snprintf(out, out_sz, "gluNormal(%s, %s, %s);", x, y, z);
         return 1;
     }
 
@@ -944,8 +947,13 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
         }
         float cv[4] = {1, 1, 1, 1};
         eval_tess_brace_floats(p, 4, cv);
-        snprintf(out, out_sz, "gluColor(%.9g, %.9g, %.9g, %.9g);",
-                 cv[0], cv[1], cv[2], cv[3]);
+        char r[REPL_SOURCE_FLOAT_TEXT_MAX], g[REPL_SOURCE_FLOAT_TEXT_MAX],
+             b[REPL_SOURCE_FLOAT_TEXT_MAX], a[REPL_SOURCE_FLOAT_TEXT_MAX];
+        repl_format_source_float(r, sizeof(r), cv[0]);
+        repl_format_source_float(g, sizeof(g), cv[1]);
+        repl_format_source_float(b, sizeof(b), cv[2]);
+        repl_format_source_float(a, sizeof(a), cv[3]);
+        snprintf(out, out_sz, "gluColor(%s, %s, %s, %s);", r, g, b, a);
         return 1;
     }
 
@@ -960,8 +968,11 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
         if (!vp) return 0;
         float vv[3] = {0, 0, 0};
         eval_tess_brace_floats(vp, 3, vv);
-        snprintf(out, out_sz, "gluVertex(%.9g, %.9g, %.9g);",
-                 vv[0], vv[1], vv[2]);
+        char x[REPL_SOURCE_FLOAT_TEXT_MAX], y[REPL_SOURCE_FLOAT_TEXT_MAX], z[REPL_SOURCE_FLOAT_TEXT_MAX];
+        repl_format_source_float(x, sizeof(x), vv[0]);
+        repl_format_source_float(y, sizeof(y), vv[1]);
+        repl_format_source_float(z, sizeof(z), vv[2]);
+        snprintf(out, out_sz, "gluVertex(%s, %s, %s);", x, y, z);
         return 1;
     }
 

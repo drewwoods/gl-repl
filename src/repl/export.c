@@ -190,11 +190,37 @@ const char *g_display_header[] = {
  * (implemented in step 4 of the decouple plan). */
 
 static void workspace_format_float(char *buf, size_t n, float v) {
-    snprintf(buf, n, "%.9g", (double)v);
+    /* Shortest exact-round-trip form (e.g. "0.8", not %.9g's
+     * "0.800000012"); reload reproduces the identical float32. */
+    repl_format_source_float(buf, (int)n, v);
 }
 
 static void export_format_decl_float(char *buf, size_t n, float v) {
     repl_format_source_float(buf, (int)n, v);
+}
+
+/* One formatted float uses REPL_SOURCE_FLOAT_TEXT_MAX (text_helpers.h);
+ * a GLfloat[] literal joins up to 4 of them with ", " separators. */
+#define EXPORT_FLOAT_TEXT_MAX REPL_SOURCE_FLOAT_TEXT_MAX
+#define EXPORT_FLOAT_LIST_MAX (4 * EXPORT_FLOAT_TEXT_MAX)
+
+/* Join `count` floats (count <= 4) as "a, b, c, d" using the shortest
+ * exact-round-trip representation (repl_format_source_float) rather than
+ * %.9g. Same bit-exact reload guarantee, but a value of 0.8f reads as
+ * "0.8" instead of %.9g's "0.800000012". Used for the (GLfloat[]){...}
+ * light color/position literals shared by the code panel and export. */
+static void export_format_float_list(char *buf, size_t n,
+                                     const float *v, int count) {
+    if (!buf || n == 0) return;
+    buf[0] = '\0';
+    size_t off = 0;
+    for (int i = 0; i < count && off < n; i++) {
+        char num[EXPORT_FLOAT_TEXT_MAX];
+        repl_format_source_float(num, (int)sizeof(num), v[i]);
+        int w = snprintf(buf + off, n - off, "%s%s", i ? ", " : "", num);
+        if (w < 0) break;
+        off += (size_t)w;
+    }
 }
 
 /* Per-call editor-text view, set by the public entry points
@@ -750,8 +776,10 @@ void repl_refresh_camera_lines(void) {
  *
  * The same text appears in the editor's code panel and the exported C.
  * Format uses inline `(GLfloat[]){...}` literals matching the bootstrap
- * REPL commands' rendered C; `%.9g` keeps float32 round-trip safety
- * while still trimming redundant trailing zeros. */
+ * REPL commands' rendered C; values go through export_format_float_list
+ * (repl_format_source_float) so they keep float32 round-trip safety
+ * while reading as the shortest exact form (0.8f -> "0.8", not the
+ * "0.800000012" a raw %.9g would emit). */
 
 static const char *const k_light_names[MAX_LIGHTS] = {
     "GL_LIGHT0", "GL_LIGHT1", "GL_LIGHT2", "GL_LIGHT3"
@@ -792,21 +820,22 @@ static void lights_init_emit_slot_line(int slot, int sub, char *buf, size_t n) {
     ReplRenderState render = repl_state_render();
     const SceneLight *l = &render.lights[slot];
     const char *ln = k_light_names[slot];
+    char body[EXPORT_FLOAT_LIST_MAX];
     switch (sub) {
     case 0:
+        export_format_float_list(body, sizeof(body), l->diffuse, 4);
         snprintf(buf, n,
-                 "  glLightfv(%s, GL_DIFFUSE,  (GLfloat[]){%.9g, %.9g, %.9g, %.9g});",
-                 ln, l->diffuse[0], l->diffuse[1], l->diffuse[2], l->diffuse[3]);
+                 "  glLightfv(%s, GL_DIFFUSE,  (GLfloat[]){%s});", ln, body);
         return;
     case 1:
+        export_format_float_list(body, sizeof(body), l->ambient, 4);
         snprintf(buf, n,
-                 "  glLightfv(%s, GL_AMBIENT,  (GLfloat[]){%.9g, %.9g, %.9g, %.9g});",
-                 ln, l->ambient[0], l->ambient[1], l->ambient[2], l->ambient[3]);
+                 "  glLightfv(%s, GL_AMBIENT,  (GLfloat[]){%s});", ln, body);
         return;
     case 2:
+        export_format_float_list(body, sizeof(body), l->specular, 4);
         snprintf(buf, n,
-                 "  glLightfv(%s, GL_SPECULAR, (GLfloat[]){%.9g, %.9g, %.9g, %.9g});",
-                 ln, l->specular[0], l->specular[1], l->specular[2], l->specular[3]);
+                 "  glLightfv(%s, GL_SPECULAR, (GLfloat[]){%s});", ln, body);
         return;
     case 3:
         snprintf(buf, n, "  glDisable(%s);", ln);
@@ -815,9 +844,9 @@ static void lights_init_emit_slot_line(int slot, int sub, char *buf, size_t n) {
         /* Eye-space POSITION push. The modelview is still identity at
          * this point in init() so glLightfv snapshots eye coordinates;
          * the slot will then track the camera as the user orbits. */
+        export_format_float_list(body, sizeof(body), l->pos, 4);
         snprintf(buf, n,
-                 "  glLightfv(%s, GL_POSITION, (GLfloat[]){%.9g, %.9g, %.9g, %.9g});",
-                 ln, l->pos[0], l->pos[1], l->pos[2], l->pos[3]);
+                 "  glLightfv(%s, GL_POSITION, (GLfloat[]){%s});", ln, body);
         return;
     }
 }
@@ -881,9 +910,10 @@ void repl_export_lights_display_line(int i, char *buf, size_t n) {
         if (i == 0) {
             const SceneLight *l = &render.lights[slot];
             const char *ln = k_light_names[slot];
+            char body[EXPORT_FLOAT_LIST_MAX];
+            export_format_float_list(body, sizeof(body), l->pos, 4);
             snprintf(buf, n,
-                     "  glLightfv(%s, GL_POSITION, (GLfloat[]){%.9g, %.9g, %.9g, %.9g});",
-                     ln, l->pos[0], l->pos[1], l->pos[2], l->pos[3]);
+                     "  glLightfv(%s, GL_POSITION, (GLfloat[]){%s});", ln, body);
             return;
         }
         i--;
@@ -956,18 +986,21 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd,
     const char *body;
     if (repl_eval_parse_for_header(p, var_name, sizeof(var_name),
                          &start_v, &end_v, &step_v, &body)) {
+        char start_s[EXPORT_FLOAT_TEXT_MAX], end_s[EXPORT_FLOAT_TEXT_MAX];
+        repl_format_source_float(start_s, sizeof(start_s), start_v);
+        repl_format_source_float(end_s, sizeof(end_s), end_v);
         if (step_v == 1.0f) {
-            fprintf(f, "%sfor (float %s = %.9g; %s < %.9g; %s += 1.0f) {\n",
-                    ind, var_name, start_v, var_name, end_v, var_name);
+            fprintf(f, "%sfor (float %s = %s; %s < %s; %s += 1.0f) {\n",
+                    ind, var_name, start_s, var_name, end_s, var_name);
         } else if (step_v == -1.0f) {
-            fprintf(f, "%sfor (float %s = %.9g; %s > %.9g; %s -= 1.0f) {\n",
-                    ind, var_name, start_v, var_name, end_v, var_name);
-        } else if (step_v > 0) {
-            fprintf(f, "%sfor (float %s = %.9g; %s < %.9g; %s += %.9gf) {\n",
-                    ind, var_name, start_v, var_name, end_v, var_name, step_v);
+            fprintf(f, "%sfor (float %s = %s; %s > %s; %s -= 1.0f) {\n",
+                    ind, var_name, start_s, var_name, end_s, var_name);
         } else {
-            fprintf(f, "%sfor (float %s = %.9g; %s > %.9g; %s += %.9gf) {\n",
-                    ind, var_name, start_v, var_name, end_v, var_name, step_v);
+            char step_s[EXPORT_FLOAT_TEXT_MAX];
+            repl_format_source_float(step_s, sizeof(step_s), step_v);
+            fprintf(f, "%sfor (float %s = %s; %s %s %s; %s += %sf) {\n",
+                    ind, var_name, start_s, var_name,
+                    step_v > 0 ? "<" : ">", end_s, var_name, step_s);
         }
     } else {
         fprintf(f, "%s\n", source_text);
@@ -1203,24 +1236,37 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
         break;
     case CMD_TESS_NORMAL:
         if (!write_tess_source_as_c(f, cmd, source_text)) {
-            fprintf(f, "      { _tn[0]=%.9g; _tn[1]=%.9g; _tn[2]=%.9g; }\n",
-                    cmd->args[0], cmd->args[1], cmd->args[2]);
+            char x[EXPORT_FLOAT_TEXT_MAX], y[EXPORT_FLOAT_TEXT_MAX], z[EXPORT_FLOAT_TEXT_MAX];
+            repl_format_source_float(x, sizeof(x), cmd->args[0]);
+            repl_format_source_float(y, sizeof(y), cmd->args[1]);
+            repl_format_source_float(z, sizeof(z), cmd->args[2]);
+            fprintf(f, "      { _tn[0]=%s; _tn[1]=%s; _tn[2]=%s; }\n", x, y, z);
         }
         break;
     case CMD_TESS_COLOR:
         if (!write_tess_source_as_c(f, cmd, source_text)) {
-            fprintf(f, "      { _tc[0]=%.9g; _tc[1]=%.9g; _tc[2]=%.9g; _tc[3]=%.9g; }\n",
-                    cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
+            char r[EXPORT_FLOAT_TEXT_MAX], g[EXPORT_FLOAT_TEXT_MAX],
+                 b[EXPORT_FLOAT_TEXT_MAX], a[EXPORT_FLOAT_TEXT_MAX];
+            repl_format_source_float(r, sizeof(r), cmd->args[0]);
+            repl_format_source_float(g, sizeof(g), cmd->args[1]);
+            repl_format_source_float(b, sizeof(b), cmd->args[2]);
+            repl_format_source_float(a, sizeof(a), cmd->args[3]);
+            fprintf(f, "      { _tc[0]=%s; _tc[1]=%s; _tc[2]=%s; _tc[3]=%s; }\n",
+                    r, g, b, a);
         }
         break;
     case CMD_TESS_VERTEX:
         if (!write_tess_source_as_c(f, cmd, source_text)) {
+            char x[EXPORT_FLOAT_TEXT_MAX], y[EXPORT_FLOAT_TEXT_MAX], z[EXPORT_FLOAT_TEXT_MAX];
+            repl_format_source_float(x, sizeof(x), cmd->args[0]);
+            repl_format_source_float(y, sizeof(y), cmd->args[1]);
+            repl_format_source_float(z, sizeof(z), cmd->args[2]);
             fprintf(f,
                     "      { TessVertex *_v=&_tv[_tv_n++];"
-                    " _v->pos[0]=%.9g;_v->pos[1]=%.9g;_v->pos[2]=%.9g;"
+                    " _v->pos[0]=%s;_v->pos[1]=%s;_v->pos[2]=%s;"
                     " memcpy(_v->normal,_tn,24); memcpy(_v->color,_tc,32);"
                     " gluTessVertex(g_tess,_v->pos,_v); }\n",
-                    cmd->args[0], cmd->args[1], cmd->args[2]);
+                    x, y, z);
         }
         break;
     case CMD_LABEL: {
