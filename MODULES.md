@@ -465,7 +465,7 @@ never read `ReplState`, `EditorState`, or `UiState` directly.
 | `src/scene/backdrop` | Backdrop/environment rendering |
 | `src/scene/lights` | Baseline lighting and light indicators |
 | `src/scene/overlays` | Tiny per-vertex GL primitives (vertex-number labels, normal arrows). REPL-walking overlays moved out to `src/app/glr_ctrl.c`. |
-| `src/scene/postprocess_filter` | Optional post-process pass (e.g. chromatic aberration): captures a given rect to a texture and redraws channel-offset passes. Pure fixed-function GL. Driven over the **scene-viewport rect** once per frame by `src/scene/render`; the *same primitive* is reused over the **whole window** by the app-level `glr_compositor` (Layer 6) |
+| `src/scene/postprocess_filter` | Optional post-process pass: **chromatic aberration** (capture the rect to a texture, redraw channel-offset passes) or **vignette** (blended elliptical darkening; no capture). Pure fixed-function GL, dispatched on `ScenePostFilterMode`. Driven over the **scene-viewport rect** once per frame by `src/scene/render`; the *same primitives* are reused over the **whole window** by the app-level `glr_compositor` (Layer 6) |
 | `src/scene/themes` | Shared scene theme enums (grid/axes themes, backdrop modes, grid spacing/extent) — the vocabulary app/UI config code and scene renderers share (header-only) |
 | `src/scene/guides/geometry_guides.c` | Vertex/primitive guide rendering from a `SceneGuideSnapshot`. The controller fills the snapshot's cursor args from the flat program (funcN-local resolution) before calling in — see CLAUDE.md "Cursor Edit Guides" |
 | `src/scene/guides/transform_guides.c` | Transform-guide rendering from a `SceneGuideSnapshot` (REPL-aware) |
@@ -543,7 +543,7 @@ state.
 | `repl_export` | Save/load, typed export scaffold, workspace headers, code-panel dumps. Reads source via the `source_document` view; camera/cfg formatting delegated to app-side bridges and neutral cfg-baseline helpers |
 | `repl_cfg_baseline` | Neutral cfg bag/bridge and `// @cfg <slug>` parser: owns `ReplConfigBag`, `ReplConfigBridge`, and `repl_config_extract_slug` for export/import, scene snapshots, and tutorial baselines |
 | `src/app/glr_camera_export` | Camera-block format owner: translates camera state ↔ the `// camera` block + `glRotatef`/`glTranslatef` text in saved files. Implements `ReplExportCameraBridge` so `repl_export` never parses/formats GL strings |
-| `src/app/glr_compositor` | App-level compositor post-process hook. Runs a post-process pass over the **entire composited frame** (3D scene + all 2D UI) at the tail of `glr_ctrl_display_frame`, after all drawing and before the buffer swap. Reuses the scene `postprocess_filter` primitive (Layer 4) over the full window rect; the scene's own pass stays scene-viewport-only. Driven by `GlrPresentationState.compositor_filter_mode`; the `Ctrl+N` cycle keeps the two passes mutually exclusive (Off → scene → frame). Timed via `PROF_COMPOSITOR` ("Compositor FX") |
+| `src/app/glr_compositor` | App-level compositor post-process hook. Runs a post-process pass over the **entire composited frame** (3D scene + all 2D UI) at the tail of `glr_ctrl_display_frame`, after all drawing and before the buffer swap. Reuses the scene `postprocess_filter` primitive (Layer 4) over the full window rect; the scene's own pass stays scene-viewport-only. Driven by `GlrPresentationState.compositor_filter_mode`; the table-driven `Ctrl+N` cycle walks each effect through both scopes and keeps the two passes mutually exclusive (Off → CA scene → CA frame → vignette scene → vignette frame). Timed via `PROF_COMPOSITOR` ("Compositor FX") |
 | `src/app/glr_source_document` | Full-app adapter binding the neutral `source_document` port (read view + insert/replace/load/clear/apply) to the `EditorState` text buffer, so REPL pipeline TUs never reach into editor state directly |
 | `src/app/glr_state` | Storage + accessors for app-level presentation/render state relocated off `ReplRuntimeState`; reached through the `glr_config` keyed bridge |
 | `src/app/glr_audio` | App-level playlist engine and persisted audio config (`glr_audio_*`) |
@@ -769,7 +769,7 @@ flowchart LR
         sbackdrop["src/scene/backdrop.c<br/>backdrop"]
         slights["src/scene/lights.c<br/>lights"]
         soverlays["src/scene/overlays.c<br/>overlay primitives"]
-        spost["src/scene/postprocess_filter.c<br/>scene-viewport post-process<br/>(chromatic aberration; reused by glr_compositor)"]
+        spost["src/scene/postprocess_filter.c<br/>scene-viewport post-process<br/>(chromatic aberration / vignette;<br/>reused by glr_compositor)"]
     end
 
     %% gl_repl.c hands raw GLUT events to the controller
@@ -954,7 +954,8 @@ Reading the diagram:
   (`sceneR i40@--> spost`, inside `scene_render_3d_scene`) and the
   whole-frame compositor pass (`ctrl i43@--> glrcompositor i44@--> spost`,
   at frame end after every UI layer). The controller keeps them mutually
-  exclusive via `Ctrl+N` (Off → scene → frame). Each is timed by its own
+  exclusive via `Ctrl+N`, which walks each effect (chromatic aberration,
+  vignette) through both scopes. Each scope is timed by its own
   CPU-profile section (`PROF_SCENE_3D_POST_PROCESS` "post FX (scene)" /
   `PROF_COMPOSITOR` "Compositor FX").
 

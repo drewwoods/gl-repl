@@ -2013,40 +2013,60 @@ void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
  */
 
 
-/* Ctrl+N: cycle the experimental chromatic-aberration post-process
- * through three positions, keeping the two mode fields mutually exclusive
- * so the effect never runs twice in a frame:
+/* Ctrl+N: cycle the experimental post-process effects. One key walks
+ * every (effect, target) position plus Off, keeping the two mode fields
+ * mutually exclusive so an effect never runs twice in one frame:
  *
- *   0  Off
- *   1  scene viewport  (post_filter_mode -> scene_postprocess_filter, applied
- *                       inside scene_render_3d_scene over the scene rect)
- *   2  whole frame     (compositor_filter_mode -> glr_compositor hook, applied
- *                       over the entire composited frame at frame end)
+ *   Off
+ *   -> Chromatic aberration (scene)   post_filter_mode, over the scene rect
+ *   -> Chromatic aberration (frame)   compositor_filter_mode, whole frame
+ *   -> Vignette (scene)
+ *   -> Vignette (frame)
+ *   -> Off ...
  *
- * Hidden shortcut only — no Config row, no @cfg. Session-level state on
+ * The scene slot feeds scene_render_3d_scene's per-scene pass; the frame
+ * slot feeds the glr_compositor hook at frame end. Table-driven so a new
+ * ScenePostFilterMode is two rows, not new branches. Hidden shortcut
+ * only — no Config row, no @cfg. Session-level state on
  * GlrPresentationState. */
 int glr_ctrl_router_handle_post_filter_key(unsigned char key) {
     if (key != KEY_CTRL_N)
         return 0;
 
+    static const struct {
+        ScenePostFilterMode scene;   /* -> post_filter_mode       */
+        ScenePostFilterMode frame;   /* -> compositor_filter_mode */
+        const char         *where;
+    } cycle[] = {
+        { SCENE_POST_FILTER_OFF,                  SCENE_POST_FILTER_OFF,                  ""        },
+        { SCENE_POST_FILTER_CHROMATIC_ABERRATION, SCENE_POST_FILTER_OFF,                  " (scene)" },
+        { SCENE_POST_FILTER_OFF,                  SCENE_POST_FILTER_CHROMATIC_ABERRATION, " (frame)" },
+        { SCENE_POST_FILTER_VIGNETTE,             SCENE_POST_FILTER_OFF,                  " (scene)" },
+        { SCENE_POST_FILTER_OFF,                  SCENE_POST_FILTER_VIGNETTE,             " (frame)" },
+    };
+    int n = (int)(sizeof(cycle) / sizeof(cycle[0]));
+
     GlrPresentationState *p = glr_state_presentation_mut();
 
-    int state = p->post_filter_mode != SCENE_POST_FILTER_OFF ? 1
-              : p->compositor_filter_mode != SCENE_POST_FILTER_OFF ? 2 : 0;
-    state = (state + 1) % 3;
+    /* Locate the current position (default Off if state is somehow
+     * off-cycle), then advance to the next. */
+    int cur = 0;
+    for (int i = 0; i < n; i++) {
+        if (cycle[i].scene == (ScenePostFilterMode)p->post_filter_mode &&
+            cycle[i].frame == (ScenePostFilterMode)p->compositor_filter_mode) {
+            cur = i;
+            break;
+        }
+    }
+    int next = (cur + 1) % n;
+    p->post_filter_mode       = cycle[next].scene;
+    p->compositor_filter_mode = cycle[next].frame;
 
-    p->post_filter_mode = (state == 1)
-        ? SCENE_POST_FILTER_CHROMATIC_ABERRATION : SCENE_POST_FILTER_OFF;
-    p->compositor_filter_mode = (state == 2)
-        ? SCENE_POST_FILTER_CHROMATIC_ABERRATION : SCENE_POST_FILTER_OFF;
-
-    const char *where = state == 1 ? " (scene)"
-                      : state == 2 ? " (frame)" : "";
-    ScenePostFilterMode shown = state == 2 ? p->compositor_filter_mode
-                                           : p->post_filter_mode;
+    ScenePostFilterMode shown = cycle[next].scene != SCENE_POST_FILTER_OFF
+                              ? cycle[next].scene : cycle[next].frame;
     char msg[80];
     snprintf(msg, sizeof(msg), "Post filter: %s%s",
-             scene_postprocess_filter_mode_name(shown), where);
+             scene_postprocess_filter_mode_name(shown), cycle[next].where);
     repl_set_status(msg);
     return 1;
 }
