@@ -117,12 +117,66 @@ static const SceneLight g_light_themes[LIGHT_THEME_COUNT][MAX_LIGHTS] = {
             { 0.01f, 0.01f, 0.02f, 1.0f },
             { 0.08f, 0.08f, 0.10f, 1.0f } },
     },
+    /* STUDIO: the three-point portrait rig from tools/scene_demo.c —
+     * warm-white key (upper right), cool-blue rim (upper left), warm-
+     * orange fill (lower right), and a green directional accent from
+     * below/back. Colors lifted verbatim from scene_demo's seed_lights. */
+    [LIGHT_THEME_STUDIO] = {
+        { GL_LIGHT0, 0, 0,
+            {  5.0f,  6.0f,  4.0f, 1.0f },
+            { 1.00f, 0.95f, 0.85f, 1.0f },
+            { 0.15f, 0.15f, 0.18f, 1.0f },
+            { 1.00f, 0.95f, 0.85f, 1.0f } },
+        { GL_LIGHT1, 0, 0,
+            { -4.0f,  3.0f, -3.0f, 1.0f },
+            { 0.40f, 0.60f, 1.00f, 1.0f },
+            { 0.00f, 0.00f, 0.00f, 1.0f },
+            { 0.40f, 0.60f, 1.00f, 1.0f } },
+        { GL_LIGHT2, 0, 0,
+            {  4.0f, -1.5f,  2.0f, 1.0f },
+            { 1.00f, 0.55f, 0.20f, 1.0f },
+            { 0.00f, 0.00f, 0.00f, 1.0f },
+            { 1.00f, 0.55f, 0.20f, 1.0f } },
+        { GL_LIGHT3, 0, 0,
+            {  0.2f, -1.0f,  0.5f, 0.0f },
+            { 0.55f, 0.95f, 0.55f, 1.0f },
+            { 0.00f, 0.00f, 0.00f, 1.0f },
+            { 0.55f, 0.95f, 0.55f, 1.0f } },
+    },
+    /* NEON: a vibrant saturated triad for colored-material showcases —
+     * magenta key (upper right), cyan rim (upper left), lime fill (from
+     * below), plus a dim warm-amber back light (directional). Low ambient
+     * keeps the hues reading distinctly rather than washing to white. */
+    [LIGHT_THEME_NEON] = {
+        { GL_LIGHT0, 0, 0,
+            {  3.0f,  4.0f,  5.0f, 1.0f },
+            { 0.90f, 0.10f, 0.70f, 1.0f },
+            { 0.10f, 0.00f, 0.08f, 1.0f },
+            { 1.00f, 0.40f, 0.90f, 1.0f } },
+        { GL_LIGHT1, 0, 0,
+            { -4.0f,  2.0f, -3.0f, 1.0f },
+            { 0.10f, 0.80f, 0.90f, 1.0f },
+            { 0.00f, 0.05f, 0.06f, 1.0f },
+            { 0.40f, 0.90f, 1.00f, 1.0f } },
+        { GL_LIGHT2, 0, 0,
+            {  0.0f, -3.0f,  2.0f, 1.0f },
+            { 0.40f, 0.90f, 0.20f, 1.0f },
+            { 0.02f, 0.05f, 0.00f, 1.0f },
+            { 0.50f, 1.00f, 0.30f, 1.0f } },
+        { GL_LIGHT3, 0, 0,
+            {  1.0f,  1.0f, -4.0f, 0.0f },
+            { 0.60f, 0.40f, 0.10f, 1.0f },
+            { 0.00f, 0.00f, 0.00f, 1.0f },
+            { 0.70f, 0.50f, 0.20f, 1.0f } },
+    },
 };
 
 const char *scene_light_theme_names[] = {
     [LIGHT_THEME_DEFAULT]   = "Default",
     [LIGHT_THEME_HEADLIGHT] = "Headlight",
     [LIGHT_THEME_SOLAR]     = "Solar",
+    [LIGHT_THEME_STUDIO]    = "Studio",
+    [LIGHT_THEME_NEON]      = "Neon",
 };
 
 void scene_lights_apply_theme(SceneLight out[MAX_LIGHTS], int theme) {

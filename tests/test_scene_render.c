@@ -347,6 +347,54 @@ static void test_scene_overlays(void) {
     ASSERT_TRUE("scene_draw_normal_vector_arrow did not crash", 1);
 }
 
+/* --- Light theme presets (pure data; runs in both builds) ---------- *
+ * Every theme must produce a distinct, non-degenerate rig; the names
+ * array must be fully populated; the .enabled=0 invariant must hold
+ * (the program's glEnable decides which slots light up); STUDIO must
+ * keep the tools/scene_demo key-light color it was lifted from; and the
+ * eye-space carve-out stays HEADLIGHT-slot-0 only. */
+static void test_light_theme_presets(void) {
+    printf("--- light theme presets ---\n");
+
+    SceneLight themes[LIGHT_THEME_COUNT][MAX_LIGHTS];
+    for (int t = 0; t < LIGHT_THEME_COUNT; t++) {
+        scene_lights_apply_theme(themes[t], t);
+        ASSERT_TRUE("theme name present + non-empty",
+                    scene_light_theme_names[t] != NULL &&
+                    scene_light_theme_names[t][0] != '\0');
+        const float *d = themes[t][0].diffuse;
+        ASSERT_TRUE("theme light0 diffuse is non-zero",
+                    d[0] != 0.0f || d[1] != 0.0f || d[2] != 0.0f);
+        for (int i = 0; i < MAX_LIGHTS; i++)
+            ASSERT_INT("theme slot ships disabled (program enables)",
+                       themes[t][i].enabled, 0);
+    }
+
+    /* No two themes share an identical rig. */
+    for (int a = 0; a < LIGHT_THEME_COUNT; a++)
+        for (int b = a + 1; b < LIGHT_THEME_COUNT; b++)
+            ASSERT_TRUE("themes are pairwise distinct",
+                        memcmp(themes[a], themes[b], sizeof(themes[a])) != 0);
+
+    /* STUDIO key light is the scene_demo warm-white (1.00, 0.95, 0.85). */
+    ASSERT_FLOAT("studio key diffuse r",
+                 themes[LIGHT_THEME_STUDIO][0].diffuse[0], 1.00f);
+    ASSERT_FLOAT("studio key diffuse g",
+                 themes[LIGHT_THEME_STUDIO][0].diffuse[1], 0.95f);
+    ASSERT_FLOAT("studio key diffuse b",
+                 themes[LIGHT_THEME_STUDIO][0].diffuse[2], 0.85f);
+
+    /* Eye-space carve-out is HEADLIGHT slot 0 only. */
+    ASSERT_INT("headlight slot0 is eye-space",
+               themes[LIGHT_THEME_HEADLIGHT][0].pos_is_eye_space, 1);
+    ASSERT_INT("default slot0 is not eye-space",
+               themes[LIGHT_THEME_DEFAULT][0].pos_is_eye_space, 0);
+    ASSERT_INT("studio slot0 is not eye-space",
+               themes[LIGHT_THEME_STUDIO][0].pos_is_eye_space, 0);
+    ASSERT_INT("neon slot0 is not eye-space",
+               themes[LIGHT_THEME_NEON][0].pos_is_eye_space, 0);
+}
+
 /* --- Tests for animation time propagation ----------------------- */
 
 static void test_anim_time_propagation(void) {
@@ -723,6 +771,7 @@ int main(int argc, char **argv) {
     test_scene_projection_modes();
     test_frame_ctx_defaults();
     test_grid_theme_uses_fog_predicate();   /* pure; runs in both builds */
+    test_light_theme_presets();             /* pure; runs in both builds */
 
 #ifndef GL_STUBS
     printf("--- GL-emitting scene smoke checks skipped in real-GL test build ---\n");
