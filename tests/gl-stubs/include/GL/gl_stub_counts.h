@@ -51,6 +51,11 @@ extern "C" {
     X(glEdgeFlag)                      \
     X(glEnable)                        \
     X(glEnd)                           \
+    X(glGenLists)                      \
+    X(glNewList)                       \
+    X(glEndList)                       \
+    X(glCallList)                      \
+    X(glDeleteLists)                   \
     X(glFeedbackBuffer)                \
     X(glFogf)                          \
     X(glFogfv)                         \
