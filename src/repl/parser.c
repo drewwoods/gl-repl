@@ -1293,6 +1293,16 @@ int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,
                           repl_cmd_type_display_name(out->cmd.type));
         return 0;
     }
+
+    /* Carry a trailing `// ...` comment from the input onto the canonical
+     * text. parse_command rebuilds out->text from the parsed args (with
+     * the trailing `;` for needs-semicolon commands) and drops the
+     * comment; re-attaching it here means every consumer of the canonical
+     * text — typed commit, reformat, the inline swatch, Enter/insert
+     * commits, and verbatim C export — preserves the inline comment from
+     * one place. Idempotent: a no-op when out->text already ends in a
+     * comment (e.g. CMD_COMMENT lines, whose whole text is the comment). */
+    repl_append_trailing_comment(out->text, sizeof(out->text), line);
     return 1;
 }
 

@@ -1,10 +1,58 @@
 # Trailing comments on REPL commands — full round-trip
 
-Status: **Design decision recorded — investigation complete, implementation
-not yet started.** Filed in `done/` as the durable rationale (the
-investigation is finished and the architecture fork is settled). The
-"Implementation plan" section is the recipe for if/when the feature is
-built; move this doc to `active/` and update this line when work begins.
+Status: **DONE — implemented as designed (inline-on-the-line, shared
+re-derive helper).** The architecture fork held; no `CMD_TRAILING_COMMENT`
+and no `GLCmd` field. The design rationale below is retained as the
+historical record; the implementation outcome is summarized next.
+
+## Implementation outcome
+
+Full round-trip shipped: a trailing `// ...` on a command survives a typed
+commit (`;` and Enter), Ctrl+R reformat, the inline numeric swatch, and
+export→import.
+
+What landed (and where it differed from the plan):
+
+- **Shared helpers** `repl_line_trailing_comment()` (string-aware top-level
+  `//` finder, skips `label("...")`) and `repl_append_trailing_comment()`
+  (idempotent: a no-op if `dst` already ends in a comment; emits the
+  separator space ONLY when `dst` is non-empty) in `src/repl/eval.c`.
+- **Centralized in the parser, not per-site.** The plan listed commit /
+  reformat / swatch as separate call sites; in practice they all funnel
+  through `repl_parser_parse_command_ctx` and copy its canonical `pl.text`
+  (which already carries the trailing `;`). Appending the comment there
+  covers the typed `;` commit, reformat's general-command case (it
+  re-parses via `repl_parse_and_normalize`), the swatch re-parse, and the
+  Enter/insert no-vars paths — one edit instead of four. It also keeps the
+  editor-layer files' `repl_*` surface unchanged (the
+  `check-editor-repl-surface` ratchet).
+- **has-vars paths** (which rebuild text from the input, bypassing
+  `pl.text`): `normalize_with_indent()` (the `;`-route, `src/repl/core.c`)
+  and `rewrite_source_text_with_indent()` (Enter/insert, `src/editor/input.c`)
+  now split off the comment before the `;`-normalization and re-append it
+  — fixing the pre-existing `code // c;` artifact. The input.c site uses a
+  plain libc `strstr` (label format strings forbid `//`) to avoid adding a
+  `repl_*` symbol to input.c's ratcheted surface.
+- **Export** is free for no-vars commands (`format_cmd_source_as_c` copies
+  verbatim) and made correct for the translate path by teaching
+  `repl_eval_expr_to_c()` to translate only the code and re-attach the raw
+  comment — which ALSO fixes latent word-mangling (a `max`/`PI`/scratch
+  subscript inside a comment was being rewritten to `fmaxf`/`M_PI`/...).
+- **Bug found via the example golden tests:** `repl_eval_expr_to_c` is
+  called on comment-ONLY lines during the code-panel dump; the first cut
+  prepended a separator space (` // c`), shifting nested-comment indent by
+  one. Fixed by the "separator only when `dst` non-empty" rule above.
+- **Tests:** a round-trip block in `tests/test_repl_core_io.c` (commit →
+  reformat → export → import; the has-vars `;`-placement; comment-word
+  non-mangling). Full suite 6673/6673 green; `make check-state-ownership`
+  (incl. check-c99 and editor-repl-surface input.c=25/25 commit.c=27/27)
+  clean.
+
+Deliberately **out of scope** (in-session behavior is fine; export does not
+round-trip these, noted for a follow-up): trailing comments on block-head
+lines (`for(...) { // c`, `funcN() { // c`) and on `CMD_VAR_DECLARE`
+(export uses the `// @declare` marker, which carries names+inits but not the
+decl's trailing comment).
 
 ## TL;DR (the decision)
 

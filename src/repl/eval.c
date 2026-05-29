@@ -1195,6 +1195,53 @@ const char *repl_scan_to_matching_paren(const char *p) {
     return p;
 }
 
+const char *repl_line_trailing_comment(const char *s) {
+    int in_str = 0;
+    if (!s) return NULL;
+    for (const char *p = s; *p; p++) {
+        if (in_str) {
+            if (*p == '\\' && p[1]) { p++; continue; }  /* skip escaped char */
+            if (*p == '"') in_str = 0;
+            continue;
+        }
+        if (*p == '"') { in_str = 1; continue; }
+        if (p[0] == '/' && p[1] == '/') return p;
+    }
+    return NULL;
+}
+
+void repl_append_trailing_comment(char *dst, size_t dst_sz, const char *source) {
+    const char *cmt = repl_line_trailing_comment(source);
+    if (!dst || dst_sz == 0 || !cmt)
+        return;
+    /* Idempotent: if `dst` already carries a trailing comment, leave it.
+     * Lets multiple regeneration sites call this without double-appending
+     * (e.g. the parser already attached it to the canonical text). */
+    if (repl_line_trailing_comment(dst))
+        return;
+
+    /* Trim the comment's own trailing whitespace. */
+    const char *cmt_end = cmt + strlen(cmt);
+    while (cmt_end > cmt && isspace((unsigned char)cmt_end[-1]))
+        cmt_end--;
+    if (cmt_end == cmt)
+        return;
+
+    size_t cur = strnlen(dst, dst_sz);
+    if (cur >= dst_sz - 1)
+        return;  /* dst already full */
+
+    /* A single separator space ONLY when dst already has content — a
+     * comment-only line (empty dst, e.g. repl_eval_expr_to_c translating
+     * a `// ...` line whose code part is empty) must not gain a leading
+     * space. Then the comment span, all bounds-checked. */
+    if (cur > 0)
+        dst[cur++] = ' ';
+    for (const char *p = cmt; p < cmt_end && cur < dst_sz - 1; p++)
+        dst[cur++] = *p;
+    dst[cur] = '\0';
+}
+
 /* ========================================================================= */
 /* Inline numeric swatch helpers                                              */
 /* ========================================================================= */
@@ -1304,7 +1351,14 @@ void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
     char *dst = out;
     char *end = out + out_sz - 1;
 
-    while (*p && dst < end) {
+    /* Translate only the code; a trailing `// ...` comment is appended raw
+     * at the very end so the three rewrite passes below never mangle words
+     * inside it (e.g. an identifier in the comment matching PI / max / a
+     * scratch-array subscript). */
+    const char *expr_end = repl_line_trailing_comment(in);
+    if (!expr_end) expr_end = in + strlen(in);
+
+    while (p < expr_end && dst < end) {
         const char *id_start = NULL;
         const char *id_end = repl_eval_eat_identifier(p, &id_start);
         if (id_end) {
@@ -1440,6 +1494,15 @@ void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
         char scratch_buf[MAX_LINE_LEN];
         expr_rewrite_scratch_subscripts_to_c(out, scratch_buf, sizeof(scratch_buf));
         snprintf(out, (size_t)out_sz, "%s", scratch_buf);
+    }
+
+    /* Re-attach the raw trailing comment (untouched by the passes above).
+     * Trim any code-side trailing whitespace first so the join is a single
+     * space rather than whatever spacing preceded the original `//`. */
+    if (expr_end < in + strlen(in)) {
+        size_t n = strnlen(out, (size_t)out_sz);
+        while (n > 0 && isspace((unsigned char)out[n - 1])) out[--n] = '\0';
+        repl_append_trailing_comment(out, (size_t)out_sz, in);
     }
 }
 

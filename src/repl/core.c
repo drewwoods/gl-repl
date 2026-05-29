@@ -233,6 +233,15 @@ static void normalize_with_indent(const char *raw_expr, int indent_spaces,
     memcpy(body, p, body_len);
     body[body_len] = '\0';
 
+    /* Split off a trailing `// ...` so the ';'-normalization and comma
+     * spacing below act on the code only; the comment is re-appended from
+     * the original line at the end (otherwise the re-added ';' would land
+     * after the comment as `... // c;`). */
+    {
+        const char *bc = repl_line_trailing_comment(body);
+        if (bc) body[bc - body] = '\0';
+    }
+
     int len = (int)strlen(body);
     while (len > 0 && isspace((unsigned char)body[len - 1]))
         body[--len] = '\0';
@@ -266,6 +275,10 @@ static void normalize_with_indent(const char *raw_expr, int indent_spaces,
         spaced[si] = '\0';
         memcpy(body, spaced, (size_t)si + 1);
     }
+
+    /* Re-attach the original line's trailing comment after the normalized
+     * code (a single space separator). No-op if there was none. */
+    repl_append_trailing_comment(body, sizeof(body), raw_expr);
 
     if (indent_spaces < 0) indent_spaces = 0;
     if (indent_spaces > out_sz - 1) indent_spaces = out_sz - 1;
@@ -470,6 +483,9 @@ static int parse_and_normalize_impl(const char *line, int pos,
         out_cmd->has_vars = 1;
     } else {
         if (text_out && text_sz > 0) {
+            /* pl.text already carries any trailing `// ...` comment —
+             * repl_parser_parse_command_ctx re-attaches it to the
+             * canonical text, so copying pl.text preserves it. */
             int n = (int)strlen(pl.text);
             if (n >= text_sz) n = text_sz - 1;
             memcpy(text_out, pl.text, (size_t)n);
