@@ -59,17 +59,28 @@ int  repl_source_scope_in_begin_block(void);
 int  repl_source_scope_block_depth_at(int pos);
 int  repl_source_scope_tess_scope_depth_at(int pos);
 
+/* Matrix-stack scope depth: how many glPushMatrix scopes are open before
+ * the command at pos (glPushMatrix opens a level, glPopMatrix closes it).
+ * Folded into every indent helper so push/pop bodies indent like a
+ * glBegin block. Used by the editor's manual indent rewriter. */
+int  repl_source_scope_matrix_scope_depth_at(int pos);
+
 /* Format indentation for a command at pos. Writes spaces to buf (up to buf_sz)
  * representing the appropriate indentation level. repl_source_scope_cmd_tess_indent()
  * uses tess-aware depth for tessellation callback setup. Used by the formatter
  * and code-panel renderer. */
 void repl_source_scope_cmd_indent(int pos, char *buf, int buf_sz);
 
-/* glBegin/glEnd-style indent (2 + 2*tess + 2*block; begin-depth
+/* glBegin/glEnd-style indent (2 + 2*tess + 2*block + 2*matrix; begin-depth
  * excluded). Used for the glBegin and matching glEnd lines. */
 void repl_source_scope_begin_indent(int pos, char *buf, int buf_sz);
 void repl_source_scope_tess_close_indent(int pos, char *buf, int buf_sz);
 void repl_source_scope_cmd_tess_indent(int pos, char *buf, int buf_sz);
+
+/* glPopMatrix indent: like a normal command but one matrix level shallower,
+ * so the glPopMatrix line aligns with its matching glPushMatrix (mirrors how
+ * glEnd aligns with glBegin via repl_source_scope_begin_indent). */
+void repl_source_scope_matrix_close_indent(int pos, char *buf, int buf_sz);
 
 /* Return the number of indentation characters (spaces) for a command at pos,
  * without writing to a buffer. Used by layout and sizing queries. */

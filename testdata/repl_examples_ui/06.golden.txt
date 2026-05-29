@@ -69,13 +69,13 @@ void display() {
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_NORMALIZE);
   glPushMatrix();
-  glTranslatef(-2.2, 0, 0);
-  shape(0.9, t);
+    glTranslatef(-2.2, 0, 0);
+    shape(0.9, t);
   glPopMatrix();
   glPushMatrix();
-  shape(1.4, t*0.5);
+    shape(1.4, t*0.5);
   glPopMatrix();
   glPushMatrix();
-  glTranslatef(2.2, 0, 0);
-  shape(0.65, -t*0.8);
+    glTranslatef(2.2, 0, 0);
+    shape(0.65, -t*0.8);
   glPopMatrix();

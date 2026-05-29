@@ -80,24 +80,24 @@ void display() {
     if(depth > 0) {
       // Right branch
       glPushMatrix();
-      glTranslatef(0, len, 0);
-      glRotatef(25 + twist*8, 0, 0, 1);
-      glScalef(0.72, 0.72, 0.72);
-      tree(depth - 1, len, twist + 0.3);
+        glTranslatef(0, len, 0);
+        glRotatef(25 + twist*8, 0, 0, 1);
+        glScalef(0.72, 0.72, 0.72);
+        tree(depth - 1, len, twist + 0.3);
       glPopMatrix();
       // Left branch
       glPushMatrix();
-      glTranslatef(0, len, 0);
-      glRotatef(-30 - twist*6, 0, 0, 1);
-      glScalef(0.68, 0.68, 0.68);
-      tree(depth - 1, len, twist + 0.25);
+        glTranslatef(0, len, 0);
+        glRotatef(-30 - twist*6, 0, 0, 1);
+        glScalef(0.68, 0.68, 0.68);
+        tree(depth - 1, len, twist + 0.25);
       glPopMatrix();
       // Forward branch (z-axis splay)
       glPushMatrix();
-      glTranslatef(0, len*0.9, 0);
-      glRotatef(15 + twist*4, 1, 0, 0);
-      glScalef(0.6, 0.6, 0.6);
-      tree(depth - 1, len*0.85, twist + 0.2);
+        glTranslatef(0, len*0.9, 0);
+        glRotatef(15 + twist*4, 1, 0, 0);
+        glScalef(0.6, 0.6, 0.6);
+        tree(depth - 1, len*0.85, twist + 0.2);
       glPopMatrix();
     }
     if(depth <= 0) {
@@ -143,20 +143,20 @@ void display() {
   satellites(count, orbit_r, sat_size, spin) {
     for(i, 0, count) {
       glPushMatrix();
-      glRotatef(i*360/count + spin, 0, 1, 0);
-      glTranslatef(orbit_r, 0, 0);
-      // Sphere body
-      glColor3f(0.8 + 0.2*sin(i + spin*0.02), 0.5, 0.3 + 0.2*cos(i));
-      glutSolidSphere(sat_size, 12, 8);
-      // Antenna cone
-      glColor3f(0.5, 0.5, 0.6);
-      glTranslatef(0, sat_size, 0);
-      glRotatef(-90, 1, 0, 0);
-      glutSolidCone(sat_size*0.15, sat_size*1.5, 8, 1);
-      // Dish ring at top
-      glTranslatef(0, 0, sat_size*1.5);
-      glColor3f(0.9, 0.85, 0.5);
-      glutSolidTorus(0.02*sat_size, sat_size*0.35, 12, 24);
+        glRotatef(i*360/count + spin, 0, 1, 0);
+        glTranslatef(orbit_r, 0, 0);
+        // Sphere body
+        glColor3f(0.8 + 0.2*sin(i + spin*0.02), 0.5, 0.3 + 0.2*cos(i));
+        glutSolidSphere(sat_size, 12, 8);
+        // Antenna cone
+        glColor3f(0.5, 0.5, 0.6);
+        glTranslatef(0, sat_size, 0);
+        glRotatef(-90, 1, 0, 0);
+        glutSolidCone(sat_size*0.15, sat_size*1.5, 8, 1);
+        // Dish ring at top
+        glTranslatef(0, 0, sat_size*1.5);
+        glColor3f(0.9, 0.85, 0.5);
+        glutSolidTorus(0.02*sat_size, sat_size*0.35, 12, 24);
       glPopMatrix();
     }
   }
@@ -180,47 +180,47 @@ void display() {
 
   // Ground: tessellated star floor
   glPushMatrix();
-  glTranslatef(0, -1.8, 0);
-  starfloor(3.0, 0.8);
+    glTranslatef(0, -1.8, 0);
+    starfloor(3.0, 0.8);
   glPopMatrix();
 
   // Wavy parametric surface
   glPushMatrix();
-  glTranslatef(0, x, 0);
-  glRotatef(t*12, 0, 1, 0);
-  surface(n, n, 0.35 + 0.15*sin(t), t*0.5);
+    glTranslatef(0, x, 0);
+    glRotatef(t*12, 0, 1, 0);
+    surface(n, n, 0.35 + 0.15*sin(t), t*0.5);
   glPopMatrix();
 
   // Fractal tree (recursive)
   glPushMatrix();
-  glTranslatef(-2.5, -1.8, 0);
-  glRotatef(-5*sin(t*0.3), 0, 0, 1);
-  tree(3, 0.7, t*0.2);
+    glTranslatef(-2.5, -1.8, 0);
+    glRotatef(-5*sin(t*0.3), 0, 0, 1);
+    tree(3, 0.7, t*0.2);
   glPopMatrix();
 
   // Second tree, mirrored
   glPushMatrix();
-  glTranslatef(2.5, -1.8, 0);
-  glScalef(-1, 1, 1);
-  glRotatef(-5*cos(t*0.25), 0, 0, 1);
-  tree(3, 0.65, t*0.15 + 1);
+    glTranslatef(2.5, -1.8, 0);
+    glScalef(-1, 1, 1);
+    glRotatef(-5*cos(t*0.25), 0, 0, 1);
+    tree(3, 0.65, t*0.15 + 1);
   glPopMatrix();
 
   // Orbiting satellites
   glPushMatrix();
-  glTranslatef(0, y + 1.0, 0);
-  satellites(5, 2.8, 0.18, t*35);
+    glTranslatef(0, y + 1.0, 0);
+    satellites(5, 2.8, 0.18, t*35);
   glPopMatrix();
 
   // Central decoration: torus + sphere
   glPushMatrix();
-  glTranslatef(0, 0.5 + 0.3*sin(t*1.2), 0);
-  glRotatef(t*45, 0, 1, 0);
-  glRotatef(t*20, 1, 0, 0);
-  glColor3f(0.85, 0.6, 0.25);
-  glutSolidTorus(0.12, 0.55, 16, 24);
-  glColor3f(0.95, 0.9, 0.7);
-  glutSolidSphere(0.25, 16, 12);
+    glTranslatef(0, 0.5 + 0.3*sin(t*1.2), 0);
+    glRotatef(t*45, 0, 1, 0);
+    glRotatef(t*20, 1, 0, 0);
+    glColor3f(0.85, 0.6, 0.25);
+    glutSolidTorus(0.12, 0.55, 16, 24);
+    glColor3f(0.95, 0.9, 0.7);
+    glutSolidSphere(0.25, 16, 12);
   glPopMatrix();
 
   // Wireframe accent ring
