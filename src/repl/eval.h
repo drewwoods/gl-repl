@@ -335,6 +335,20 @@ const char *repl_scan_next_arg_delim(const char *s);
  * to distinguish. */
 const char *repl_scan_to_matching_paren(const char *p);
 
+/* Return a pointer to the start of `s`'s trailing line comment (the "//"
+ * itself), or NULL if there is none. Skips "//" inside a double-quoted
+ * string so a label("a // b") format argument is not mistaken for a
+ * comment. Used to preserve a command's trailing `// ...` across the
+ * canonical-text regeneration paths (commit / reformat / swatch / export
+ * to C). */
+const char *repl_line_trailing_comment(const char *s);
+
+/* Append `source`'s trailing line comment (if any) to `dst`, separated by
+ * a single space, trimming the comment's own trailing whitespace. No-op
+ * when `source` has no trailing comment or `dst` is already full. Safe to
+ * call when `dst` already ends in the canonical command text. */
+void repl_append_trailing_comment(char *dst, size_t dst_sz, const char *source);
+
 /* ---- Inline numeric swatch helpers ------------------------------------- */
 
 typedef struct {

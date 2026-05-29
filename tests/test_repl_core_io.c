@@ -1877,6 +1877,55 @@ int main(void) {
         remove(p83_path);
     }
 
+    /* --- Trailing inline comments on commands round-trip --------------- */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        const char *cmt_path = "/tmp/repl_core_trailing_comment_output.c";
+
+        editor_feed_line("glBegin(GL_LINES); // open the batch");
+        editor_feed_line("glVertex3f(0, t, 0); // top, uses max and PI");
+        editor_feed_line("glEnd(); // done");
+
+        SourceTextView doc = source_document_view();
+        /* The trailing comment survives commit, and the ';' sits BEFORE
+         * it (the has-vars path used to emit `... // c;`). */
+        ASSERT_TRUE("no-vars command keeps trailing comment on commit",
+                    strstr(source_text_line(doc, 0), "glBegin(GL_LINES); // open the batch") != NULL);
+        ASSERT_TRUE("has-vars command keeps trailing comment, ';' before it",
+                    strstr(source_text_line(doc, 1), "); // top, uses max and PI") != NULL);
+        ASSERT_TRUE("has-vars command has no ';' after the comment",
+                    strstr(source_text_line(doc, 1), "PI;") == NULL);
+
+        /* Reformat (Ctrl+R) preserves them. */
+        repl_reformat_program();
+        doc = source_document_view();
+        ASSERT_TRUE("reformat keeps no-vars comment",
+                    strstr(source_text_line(doc, 0), "// open the batch") != NULL);
+        ASSERT_TRUE("reformat keeps has-vars comment, ';' before it",
+                    strstr(source_text_line(doc, 1), "); // top, uses max and PI") != NULL);
+
+        /* Export -> import round-trips them, and a builtin-looking word
+         * inside the comment (`max`, `PI`) is NOT expr-translated. */
+        repl_export_save_output(cmt_path, source_document_view(), NULL);
+        glr_ctrl_reset_all(); declare_test_vars();
+        ASSERT_TRUE("trailing-comment file loads",
+                    repl_export_load_from_file(cmt_path, NULL) == 1);
+        doc = source_document_view();
+        int begin_ok = 0, vertex_ok = 0;
+        for (int i = 0; i < repl_state_document_count(); i++) {
+            const char *ln = source_text_line(doc, i);
+            if (!ln) continue;
+            if (strstr(ln, "glBegin(GL_LINES)") && strstr(ln, "// open the batch"))
+                begin_ok = 1;
+            /* comment text intact: not rewritten to fmaxf / M_PI */
+            if (strstr(ln, "glVertex3f") && strstr(ln, "// top, uses max and PI"))
+                vertex_ok = 1;
+        }
+        ASSERT_TRUE("export/import preserves no-vars trailing comment", begin_ok);
+        ASSERT_TRUE("export/import preserves has-vars comment verbatim", vertex_ok);
+        remove(cmt_path);
+    }
+
     printf("repl_core_io: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.run == g_harness.passed) ? 0 : 1;
 }

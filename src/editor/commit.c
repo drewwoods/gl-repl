@@ -1114,6 +1114,8 @@ int editor_commit_apply_swatch_change(int edit_line, int direction) {
     if (text_len >= MAX_LINE_LEN) text_len = MAX_LINE_LEN - 1;
     memcpy(change.text[0], pl.text, (size_t)text_len);
     change.text[0][text_len] = '\0';
+    /* pl.text already carries new_line's trailing `// ...` comment (the
+     * parser re-attaches it), so the swatch commit preserves it. */
 
     if (editor_commit_apply_external_change(&change, 1, 0)) {
         editor_load_line_to_input(edit_line);

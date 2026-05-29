@@ -405,6 +405,35 @@ static void rewrite_source_text_with_indent(char *text_out, int text_sz,
     if (slen >= MAX_LINE_LEN) slen = MAX_LINE_LEN - 1;
     memcpy(stripped, sp, (size_t)slen);
     stripped[slen] = '\0';
+
+    /* Split off a trailing `// ...` so the ';' the formatter re-adds below
+     * lands BEFORE the comment (`code; // c`), not after it (`code // c;`).
+     * The text is the user's input buffer; a label() format string forbids
+     * `//`, so the first `//` here is always the real trailing comment.
+     * Plain strstr (not repl_line_trailing_comment) keeps input.c's REPL
+     * surface unchanged for the check-editor-repl-surface ratchet. */
+    char trailing_comment[MAX_LINE_LEN];
+    trailing_comment[0] = '\0';
+    {
+        char *cmt = strstr(stripped, "//");
+        if (cmt) {
+            const char *ce = cmt + strlen(cmt);
+            while (ce > cmt && isspace((unsigned char)ce[-1])) ce--;
+            int clen = (int)(ce - cmt);
+            if (clen >= (int)sizeof(trailing_comment))
+                clen = (int)sizeof(trailing_comment) - 1;
+            memcpy(trailing_comment, cmt, (size_t)clen);
+            trailing_comment[clen] = '\0';
+            *cmt = '\0';
+        }
+        /* Trim the code's own trailing ';'/whitespace (repl_canonical_input_view
+         * could not, since the comment shielded the line end). */
+        int cl = (int)strlen(stripped);
+        while (cl > 0 && (stripped[cl - 1] == ';' ||
+                          isspace((unsigned char)stripped[cl - 1])))
+            stripped[--cl] = '\0';
+    }
+
     int indent_len = repl_source_scope_in_begin_block_at(pos) ? 4 : 2;
     /* glPushMatrix blocks indent their bodies like glBegin, so a command
      * with vars (which routes through this manual rewriter instead of the
@@ -417,7 +446,11 @@ static void rewrite_source_text_with_indent(char *text_out, int text_sz,
         indent_len = (int)sizeof(indent) - 1;
     memset(indent, ' ', (size_t)indent_len);
     indent[indent_len] = '\0';
-    snprintf(text_out, (size_t)text_sz, "%s%s;", indent, stripped);
+    if (trailing_comment[0])
+        snprintf(text_out, (size_t)text_sz, "%s%s; %s",
+                 indent, stripped, trailing_comment);
+    else
+        snprintf(text_out, (size_t)text_sz, "%s%s;", indent, stripped);
 }
 
 /* Surface MAX_EXPR_VARS truncation as a status when the visible-var
