@@ -537,6 +537,68 @@ when a stall happens.
   REPL, so this detector does not (and cannot) observe playback
   underruns there.
 
+## Keyboard Shortcut Definition Sites
+
+Keyboard shortcuts are **not** defined in one place today. They are
+spread across four layers and resolved in a fixed priority order by the
+controller. This section is the map — and the argument for a future
+centralized keymap.
+
+### Dispatch order (who wins a contested key)
+
+Set in `glr_ctrl_keyboard` / `glr_ctrl_special` (`src/app/glr_ctrl.c`).
+An earlier layer that consumes a key shadows every later one:
+
+* **ASCII keys:** Cmd→Ctrl normalize → rename modal → file-prompt modal
+  → Esc router (color-picker / help close) → config menu (`` ` ``) →
+  **cfg ASCII shortcut** → replay → save (Ctrl+S) → debug dump (Ctrl+P)
+  → accum jitter (Ctrl+= / Ctrl+−) → post-process filter (Ctrl+N) →
+  code focus (Ctrl+Shift+F) → tutorial ack → quit (Ctrl+Q) →
+  **editor (`editor_handle_key`)** as the fallback.
+* **Special keys (F-keys / arrows):** replay → **cfg special (F2–F10)**
+  → audio (Ctrl+Left/Right) → help tab/scroll → help toggle (F1) →
+  scene cycle (F11/F12) → **editor (`editor_handle_special`)**.
+
+Because the cfg layer runs *before* the editor, the config table wins
+any contested Ctrl-letter; the editor only sees what no earlier layer
+claimed.
+
+### The four definition sites
+
+| Layer | Where | What it binds |
+|---|---|---|
+| **Config table** (closest thing to a registry) | `g_cfg_items[]` in `src/app/glr_actions.c`; dispatched by `glr_cfg_handle_ascii_shortcut` / `cfg_match_row` (Ctrl, Ctrl+Shift) and `glr_cfg_handle_special_shortcut` (F2–F10) | Every config toggle/cycle. Each row's `(key_code, is_special, modifiers)` declares its shortcut: F-key = `is_special=1, key_code=GLUT_KEY_F<n>` (and **Shift+F<n> steps the cycle backward**); Ctrl = `is_special=0, key_code=KEY_CTRL_<x>`; Ctrl+Shift adds `GLUT_ACTIVE_SHIFT` (two-pass match: pass A prefers a Shift-required row, pass B the plain row) |
+| **Editor** | `editor_handle_key` / `editor_handle_special` in `src/editor/input.c`; search keys in `src/editor/search.c`; modal capture in `inline_rename.c` / `inline_file_prompt.c` | Text / cursor / selection: `;` commit, Enter, Tab, Esc, Backspace/Delete, arrows, Home/End/PageUp/Down, Ctrl+A/E (cursor), Ctrl+Z/Y (undo/redo), Ctrl+C/X/V (clipboard), Ctrl+D/L (delete/clear), Ctrl+F (search), Ctrl+\ (reformat), Ctrl+/ (comment toggle), printable chars |
+| **Controller router** | `glr_ctrl_keyboard` / `glr_ctrl_special` + `glr_ctrl_router_*` in `src/app/glr_ctrl.c` | Cross-subsystem: Ctrl+S (save), Ctrl+P (debug dump), Ctrl+Q (quit), Ctrl+N (post-process filter), Ctrl+K (replay jump-to-cursor), Ctrl+= / Ctrl+− (accum samples), Ctrl+Shift+F (code focus), Ctrl+Left/Right (audio track), F1 (help), F11/F12 (scene cycle), Esc (close picker/help) |
+| **Peer subsystems** | `src/subsystems/replay/replay_input.c`; tutorial SET-step ack in `src/subsystems/tutorial/tutorial_runner.c` | Active-mode keys that shadow the editor while the subsystem holds focus: replay m/M, space, arrows, Esc; tutorial Enter/Tab/Space during a showcase step |
+
+Key-code constants live in `include/keys.h` (`KEY_CTRL_*`); F-key codes
+come from GLUT (`GLUT_KEY_F<n>`). macOS Cmd+letter is folded to
+Ctrl+letter by `editor_input_normalize_super_to_ctrl` at the top of
+`glr_ctrl_keyboard`, so every downstream layer sees Cmd+B as Ctrl+B.
+
+The F1 help "Keys" tab and CLAUDE.md's *Key Controls* table are
+maintained by hand **except** the F-key section of the help, which is
+generated from the config table via the `ReplHelpFkeyProvider`
+(`glr_ctrl_help_fkey_label` reads each F-key row's label by `key_code`).
+
+### Toward a centralized keymap
+
+The config table is already a declarative registry for *config*
+shortcuts; the editor / router / peer keys are still imperative
+`if (key == …)` chains. A future cleanup could lift every binding into
+one descriptor table — `(key, modifiers, owning layer, action)` —
+that the dispatchers consume in priority order, making the whole keymap
+inspectable in one place and auto-derivable for the help overlay and the
+docs. Two byte-level traps any such table must encode (they constrain
+which keys are even bindable): GLUT delivers Ctrl+letter as control
+bytes 1–26, so **Ctrl+H / Ctrl+I / Ctrl+J / Ctrl+M alias
+Backspace / Tab / LF / CR** and cannot be used; and **Ctrl+Shift+<letter>
+is indistinguishable from Ctrl+<letter>** at the byte level, so a Shift
+binding must explicitly read `glutGetModifiers()` /
+`editor_input_active_modifiers()` (as cfg pass A and the code-focus
+router do).
+
 ## Scene Render Config
 
 `SceneRenderConfig` is the scene's explicit per-frame input. In Option B it is

@@ -987,17 +987,22 @@ alongside `.cfg` (see the file-layout table for the shipped catalog).
 | Click + drag | Per-character selection inside the active input row |
 | Ctrl+C / Ctrl+X / Ctrl+V | Copy / cut / paste — input selection wins over line-range |
 | Ctrl+S | Save to output.c |
-| Ctrl+Z | Undo |
-| Ctrl+R | Reformat all lines |
-| Ctrl+T | Toggle time variable `t` |
+| Ctrl+Z | Undo (Ctrl+Y or Ctrl+Shift+Z to redo) |
+| Ctrl+\ | Reformat all lines |
+| Ctrl+R | Start / stop replay |
+| Ctrl+T | Toggle time variable `t` (Ctrl+Shift+T resets it to 0) |
+| Ctrl+G | Toggle wireframe |
+| Ctrl+Shift+N | Toggle normal vectors |
+| Ctrl+Shift+E | Toggle vertex outlines |
+| Ctrl+Shift+L | Toggle light indicators |
 | Ctrl+Shift+F | Toggle code focus (hide boilerplate chrome) — also the statusbar "focus" keycap |
 | Ctrl+Shift+O | Focus origin — ease the orbit target to (0,0,0) |
 | Ctrl+Shift+C | Reset camera to default (eased) |
 | Ctrl+Shift+R | Toggle camera auto-rotate |
 | Ctrl+Shift+V | Toggle View mode (2D / 3D) |
 | F1 | Help overlay — also the clickable statusbar "F1 help" keycap |
-| F2-F10 | Toggle visual overlays / step the bound config cycle forward (e.g. F9 = next light theme) |
-| Shift+F2-F10 | Step the bound config cycle backward (toggles flip either way; multi-state cycles like grid/axes/light theme reverse) |
+| F2-F10 | Cycle the bound config forward. Each drives a multi-state cycle: F2 Accum AA, F3 Grid, F4 Axes, F5 Vertex labels, F6 Backdrop, F7 Grid extent, F8 Xform guides, F9 Light theme, F10 Syntax highlight |
+| Shift+F2-F10 | Step the bound cycle backward |
 | F11 | Previous example / scene |
 | F12 | Next example / scene |
 

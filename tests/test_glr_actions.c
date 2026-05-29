@@ -1085,10 +1085,70 @@ static void test_shift_fkey_steps_backward(void) {
     g_test_mods = 0;
 }
 
+/* The F-keys were reassigned to the longest cycles (so Shift+F backward
+ * pays off), and the displaced 2-state toggles moved to Ctrl shortcuts.
+ * Verify the new wiring: reassigned F-keys cycle their config, the four
+ * toggles respond to their new Ctrl / Ctrl+Shift keys, and the Shift-gated
+ * ones are NOT claimed by the cfg layer without Shift. */
+static void test_fkey_reassignment_and_alt_shortcuts(void) {
+    glr_ctrl_reset_all();
+    printf("--- F-key reassignment + alternative toggle shortcuts ---\n");
+    editor_input_set_modifier_provider_for_test(test_mods_provider);
+
+    /* Reassigned F-keys now drive the long cycles (plain, no Shift). */
+    g_test_mods = 0;
+    struct { int fkey; GlrConfigKey key; const char *name; } fmap[] = {
+        { GLUT_KEY_F2,  GLR_CONFIG_ACCUM_AA,        "Accum AA"        },
+        { GLUT_KEY_F6,  GLR_CONFIG_BACKDROP,        "Backdrop"        },
+        { GLUT_KEY_F7,  GLR_CONFIG_GRID_EXTENT,     "Grid extent"     },
+        { GLUT_KEY_F10, GLR_CONFIG_SYNTAX_HIGHLIGHT,"Syntax highlight"},
+    };
+    for (unsigned i = 0; i < sizeof(fmap)/sizeof(fmap[0]); i++) {
+        int before = glr_config_get(fmap[i].key);
+        ASSERT_INT("reassigned F-key consumed",
+                   glr_cfg_handle_special_shortcut(fmap[i].fkey), 1);
+        ASSERT_TRUE("reassigned F-key cycles its config",
+                    glr_config_get(fmap[i].key) != before);
+    }
+
+    /* Wireframe -> plain Ctrl+G. */
+    glr_state_presentation_mut()->wireframe = 0;
+    ASSERT_INT("Ctrl+G consumed", glr_cfg_handle_ascii_shortcut(KEY_CTRL_G), 1);
+    ASSERT_INT("Ctrl+G toggles wireframe", glr_state_presentation().wireframe, 1);
+
+    /* The three Ctrl+Shift toggles fire only with Shift held. */
+    g_test_mods = GLUT_ACTIVE_SHIFT;
+    glr_state_presentation_mut()->show_normal_vectors = 0;
+    ASSERT_INT("Ctrl+Shift+N consumed", glr_cfg_handle_ascii_shortcut(KEY_CTRL_N), 1);
+    ASSERT_INT("Ctrl+Shift+N toggles normal vectors",
+               glr_state_presentation().show_normal_vectors, 1);
+
+    glr_state_presentation_mut()->show_vertex_outlines = 0;
+    ASSERT_INT("Ctrl+Shift+E consumed", glr_cfg_handle_ascii_shortcut(KEY_CTRL_E), 1);
+    ASSERT_INT("Ctrl+Shift+E toggles vertex outlines",
+               glr_state_presentation().show_vertex_outlines, 1);
+
+    glr_state_presentation_mut()->show_light_indicators = 0;
+    ASSERT_INT("Ctrl+Shift+L consumed", glr_cfg_handle_ascii_shortcut(KEY_CTRL_L), 1);
+    ASSERT_INT("Ctrl+Shift+L toggles light indicators",
+               glr_state_presentation().show_light_indicators, 1);
+
+    /* Without Shift, the cfg layer must NOT claim Ctrl+N/E/L (they fall
+     * through to the post-filter router / editor cursor-end / clear-all). */
+    g_test_mods = 0;
+    ASSERT_INT("plain Ctrl+N not claimed by cfg", glr_cfg_handle_ascii_shortcut(KEY_CTRL_N), 0);
+    ASSERT_INT("plain Ctrl+E not claimed by cfg", glr_cfg_handle_ascii_shortcut(KEY_CTRL_E), 0);
+    ASSERT_INT("plain Ctrl+L not claimed by cfg", glr_cfg_handle_ascii_shortcut(KEY_CTRL_L), 0);
+
+    editor_input_set_modifier_provider_for_test(NULL);
+    g_test_mods = 0;
+}
+
 int main(void) {
     test_apply_defaults();
     test_f9_cycles_light_theme();
     test_shift_fkey_steps_backward();
+    test_fkey_reassignment_and_alt_shortcuts();
     test_cursor_actions();
     test_help_tab_actions();
     test_cfg_cycling();
