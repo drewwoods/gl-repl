@@ -11,7 +11,11 @@ static int replay_cancel_on_unrecognized(void) {
 int replay_handle_key(unsigned char key) {
     ReplayRuntimeState *state = replay_state_mut();
     if (!state->active) {
-        if (keymap_event_is(key, GLR_REPLAY_JUMP)) {
+        /* GLR_REPLAY_JUMP binds with no modifier, so a bare-key compare
+         * is exact here (matching the `case KM_KEY(GLR_REPLAY_JUMP)`
+         * below) and keeps this peer subsystem free of the editor-layer
+         * keymap_event_is matcher, which repl_demo does not link. */
+        if (key == KM_KEY(GLR_REPLAY_JUMP)) {
             int target_line = repl_dispatch_edit_line_get();
             replay_start();
             if (replay_active()) {
