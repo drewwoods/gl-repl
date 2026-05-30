@@ -75,93 +75,123 @@ static void draw_guide_axis_plane(int free_axis, float v, float sz, float as) {
     glEnd();
 }
 
+/* Per-free-axis color token for the n==2 line guide, indexed by the
+ * single still-unconstrained axis (0=X, 1=Y, 2=Z). */
+static const SceneColorToken k_guide_line_clr[3] = {
+    SCENE_CLR_GUIDE_LINE_X,
+    SCENE_CLR_GUIDE_LINE_Y,
+    SCENE_CLR_GUIDE_LINE_Z,
+};
+
+/* Recognize whether the partial input line is a vertex command. Returns
+ * 1 for glVertex3f / glVertex2f / gluVertex (with at least one char past
+ * the open paren), 0 otherwise. Sets *is_vertex2f for the glVertex2f
+ * form, whose two args already pin a complete 2D vertex at z=0. */
+static int input_is_vertex_kind(const SceneGuideSnapshot *snapshot,
+                                int *is_vertex2f) {
+    *is_vertex2f = 0;
+    if (strncmp(snapshot->input, "glVertex3f(", 11) == 0 &&
+        snapshot->input_len > 11)
+        return 1;
+    if (strncmp(snapshot->input, "glVertex2f(", 11) == 0 &&
+        snapshot->input_len > 11) {
+        *is_vertex2f = 1;
+        return 1;
+    }
+    if (strncmp(snapshot->input, "gluVertex(", 10) == 0 &&
+        snapshot->input_len > 10)
+        return 1;
+    return 0;
+}
+
+/* Solid point marker at (x,y,z) for a fully-determined vertex (0 DOF).
+ * Depth test is temporarily disabled so the mark stays visible through
+ * scene geometry. Caller sets up blend state. */
+static void draw_vertex_point_marker(float x, float y, float z) {
+    int depth = glIsEnabled(GL_DEPTH_TEST);
+    if (depth) glDisable(GL_DEPTH_TEST);
+    scene_clr_a(SCENE_CLR_GUIDE_VERTEX_MARK, 0.9f);
+    glPointSize(8.0f);
+    glBegin(GL_POINTS);
+    glVertex3f(x, y, z);
+    glEnd();
+    glPointSize(1.0f);
+    if (depth) glEnable(GL_DEPTH_TEST);
+}
+
+/* Line locus of a vertex with one coordinate still untyped (1 DOF): the
+ * two filled axes are pinned to vals[], and `free_axis` sweeps the
+ * [-sz, +sz] range. */
+static void draw_vertex_line_guide(int free_axis, const float vals[3], float sz) {
+    float a[3] = { vals[0], vals[1], vals[2] };
+    float b[3] = { vals[0], vals[1], vals[2] };
+    a[free_axis] = -sz;
+    b[free_axis] =  sz;
+
+    scene_clr_a(k_guide_line_clr[free_axis], 0.9f);
+    glLineWidth(2.0f);
+    glBegin(GL_LINES);
+    glVertex3f(a[0], a[1], a[2]);
+    glVertex3f(b[0], b[1], b[2]);
+    glEnd();
+    glLineWidth(1.0f);
+}
+
+/*
+ * Edit guide for the vertex command under the cursor, visualizing the
+ * degrees of freedom (DOF) still open as the user types its coordinates.
+ *
+ * snapshot->vertex_n_filled (see SceneGuideSnapshot) is how many of the
+ * comma-separated coordinate slots have a value so far; vertex_filled[]
+ * flags which specific axes those are (both pre-evaluated by the
+ * controller, so this module never touches repl_eval). The guide shows
+ * where the vertex *could* land given what's typed:
+ *
+ *   1 coord typed  -> 2 DOF -> a plane (perpendicular to the typed axis)
+ *   2 coords typed -> 1 DOF -> a line  (sweeping the one untyped axis)
+ *   all coords     -> 0 DOF -> a point (the exact vertex)
+ *
+ * glVertex2f is special-cased: two typed slots already pin a complete 2D
+ * vertex at z=0, so it draws a point rather than a line.
+ */
 static void draw_vertex_guides(const SceneGuideSnapshot *snapshot) {
     if (!snapshot->show_guides)
         return;
 
-    /* Whether the input is glVertex2f vs the 3-arg variants matters for the
-     * "two slots filled = complete 2D vertex at z=0" branch below. The
-     * argument values themselves arrive pre-parsed in snapshot->vertex_args
-     * so the scene module no longer needs to evaluate REPL expressions. */
     int is_vertex2f = 0;
-    int is_vertex_kind = 0;
-    if (strncmp(snapshot->input, "glVertex3f(", 11) == 0 &&
-        snapshot->input_len > 11) {
-        is_vertex_kind = 1;
-    } else if (strncmp(snapshot->input, "glVertex2f(", 11) == 0 &&
-               snapshot->input_len > 11) {
-        is_vertex_kind = 1;
-        is_vertex2f = 1;
-    } else if (strncmp(snapshot->input, "gluVertex(", 10) == 0 &&
-               snapshot->input_len > 10) {
-        is_vertex_kind = 1;
-    }
-    if (!is_vertex_kind || snapshot->vertex_n_filled < 1)
+    if (!input_is_vertex_kind(snapshot, &is_vertex2f) ||
+        snapshot->vertex_n_filled < 1)
         return;
 
     int n = snapshot->vertex_n_filled;
     float vals[3] = { snapshot->vertex_args[0], snapshot->vertex_args[1],
                       snapshot->vertex_args[2] };
-    int   filled[3] = { snapshot->vertex_filled[0], snapshot->vertex_filled[1],
-                        snapshot->vertex_filled[2] };
-
+    const int *filled = snapshot->vertex_filled;
     float sz = 3.0f;
     float as = snapshot->alpha_scale;
 
     geometry_guides_push_state();
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
-    /* use additive blending to make guides more visible over dark backgrounds, and
-     * also to make overlapping guide elements more visible */
+    /* Additive blend so guides stay visible over dark backgrounds and
+     * overlapping guide elements reinforce rather than occlude. */
     glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 
     if (n == 2 && is_vertex2f) {
-        /* Both x,y filled for glVertex2f — treat as a complete vertex at z=0 */
-        int depth = glIsEnabled(GL_DEPTH_TEST);
-        if (depth) glDisable(GL_DEPTH_TEST);
-        scene_clr_a(SCENE_CLR_GUIDE_VERTEX_MARK, 0.9f);
-        glPointSize(8.0f);
-        glBegin(GL_POINTS);
-        glVertex3f(vals[0], vals[1], 0.0f);
-        glEnd();
-        glPointSize(1.0f);
-        if (depth) glEnable(GL_DEPTH_TEST);
+        /* 0 DOF: x,y typed for a 2D vertex => complete vertex at z=0. */
+        draw_vertex_point_marker(vals[0], vals[1], 0.0f);
     } else if (n == 1) {
+        /* 2 DOF: one axis typed => plane perpendicular to it. */
         if      (filled[0]) draw_guide_axis_plane(0, vals[0], sz, as);
         else if (filled[1]) draw_guide_axis_plane(1, vals[1], sz, as);
         else if (filled[2]) draw_guide_axis_plane(2, vals[2], sz, as);
     } else if (n == 2) {
-        glLineWidth(2.0f);
-        if (!filled[2]) {
-            scene_clr_a(SCENE_CLR_GUIDE_LINE_Z, 0.9f);
-            glBegin(GL_LINES);
-            glVertex3f(vals[0], vals[1], -sz);
-            glVertex3f(vals[0], vals[1],  sz);
-            glEnd();
-        } else if (!filled[1]) {
-            scene_clr_a(SCENE_CLR_GUIDE_LINE_Y, 0.9f);
-            glBegin(GL_LINES);
-            glVertex3f(vals[0], -sz, vals[2]);
-            glVertex3f(vals[0],  sz, vals[2]);
-            glEnd();
-        } else {
-            scene_clr_a(SCENE_CLR_GUIDE_LINE_X, 0.9f);
-            glBegin(GL_LINES);
-            glVertex3f(-sz, vals[1], vals[2]);
-            glVertex3f( sz, vals[1], vals[2]);
-            glEnd();
-        }
-        glLineWidth(1.0f);
+        /* 1 DOF: two axes typed => line along the remaining free axis. */
+        int free_axis = !filled[2] ? 2 : (!filled[1] ? 1 : 0);
+        draw_vertex_line_guide(free_axis, vals, sz);
     } else {
-        int depth = glIsEnabled(GL_DEPTH_TEST);
-        if (depth) glDisable(GL_DEPTH_TEST);
-        scene_clr_a(SCENE_CLR_GUIDE_VERTEX_MARK, 0.9f);
-        glPointSize(8.0f);
-        glBegin(GL_POINTS);
-        glVertex3f(vals[0], vals[1], vals[2]);
-        glEnd();
-        glPointSize(1.0f);
-        if (depth) glEnable(GL_DEPTH_TEST);
+        /* 0 DOF: all coords typed => exact vertex point. */
+        draw_vertex_point_marker(vals[0], vals[1], vals[2]);
     }
 
     glDisable(GL_BLEND);
