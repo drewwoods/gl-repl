@@ -14,6 +14,7 @@
 #include "app/glr_defaults.h"   /* CFG_DEFAULT_* */
 #include "support/test_harness.h"
 #include "scene/render.h"
+#include "subsystems/edit_overlays/edit_overlays.h"  /* OverlayWalkCtx, edit_overlays_render_outlines */
 #include "source_document.h"        /* source_document_insert_line */
 #include "repl/cfg_baseline.h"      /* ReplConfigBag */
 
@@ -765,6 +766,65 @@ int main() {
     #ifdef GL_STUBS
         ASSERT_INT("executor destroy quadric removed", (int)gl_stub_counts[GL_STUB_gluDeleteQuadric], 0);
         ASSERT_INT("executor destroy tess", (int)gl_stub_counts[GL_STUB_gluDeleteTess], 1);
+    #endif
+    }
+
+    /* 14b. GLUT-solid outline overlay: glutSolid* shapes emit no
+     * REPL-tracked vertices, so edit_overlays_render_outlines can't
+     * trace them with glVertex; instead it re-draws each shape under
+     * glPolygonMode(GL_LINE) + polygon offset (the GL_LINE wireframe
+     * redraw pass). Drive the pass and assert the shape is redrawn and
+     * the polygon-mode/offset state is toggled. The render call issues
+     * real GL, so it (and its count assertions) only run under stubs. */
+    {
+        glr_ctrl_reset_all();
+        editor_feed_line("glutSolidCube(0.5);");
+        editor_feed_line("glutSolidSphere(0.3, 8, 8);");
+        repl_flatten_commands(editor_state_edit_line());
+
+    #ifdef GL_STUBS
+        OverlayWalkCtx ctx;
+        memset(&ctx, 0, sizeof(ctx));
+        ctx.program = repl_state_flat_program_view();
+        ctx.cursor.edit_line_idx = -1;          /* no cursor highlight */
+        ctx.cursor.cursor_block_begin = -1;
+        ctx.cursor.cursor_block_end = -1;
+
+        /* outlines on, no current-poly highlight → both shapes redraw */
+        ctx.show_vertex_outlines = 1;
+        ctx.highlight_current_poly = 0;
+        gl_stub_counts_reset();
+        edit_overlays_render_outlines(&ctx, 0, 0);
+        ASSERT_INT("outline redraws the cube wireframe",
+                   (int)gl_stub_counts[GL_STUB_glutSolidCube], 1);
+        ASSERT_INT("outline redraws the sphere wireframe",
+                   (int)gl_stub_counts[GL_STUB_glutSolidSphere], 1);
+        ASSERT_TRUE("outline switches polygon mode (to GL_LINE and back)",
+                    gl_stub_counts[GL_STUB_glPolygonMode] >= 2);
+        ASSERT_TRUE("outline enables polygon offset",
+                    gl_stub_counts[GL_STUB_glPolygonOffset] >= 1);
+
+        /* both link flags off → outer guard skips the redraw entirely */
+        ctx.show_vertex_outlines = 0;
+        ctx.highlight_current_poly = 0;
+        gl_stub_counts_reset();
+        edit_overlays_render_outlines(&ctx, 0, 0);
+        ASSERT_INT("no redraw when outlines + highlight both off (cube)",
+                   (int)gl_stub_counts[GL_STUB_glutSolidCube], 0);
+        ASSERT_INT("no redraw when outlines + highlight both off (sphere)",
+                   (int)gl_stub_counts[GL_STUB_glutSolidSphere], 0);
+
+        /* cursor on the cube line, current-poly highlight on, outlines
+         * off → only the cube redraws (the highlighted shape). */
+        ctx.show_vertex_outlines = 0;
+        ctx.highlight_current_poly = 1;
+        ctx.cursor.edit_line_idx = 0;   /* the glutSolidCube source line */
+        gl_stub_counts_reset();
+        edit_overlays_render_outlines(&ctx, 0, 0);
+        ASSERT_INT("highlight redraws only the cursor's cube",
+                   (int)gl_stub_counts[GL_STUB_glutSolidCube], 1);
+        ASSERT_INT("highlight leaves the non-cursor sphere alone",
+                   (int)gl_stub_counts[GL_STUB_glutSolidSphere], 0);
     #endif
     }
 

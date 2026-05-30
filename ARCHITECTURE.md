@@ -700,6 +700,44 @@ state access. REPL-aware overlays now live under `src/scene/guides/`
 and consume the explicit `SceneGuideSnapshot` rather than pulling globals
 directly.
 
+### Edit Overlays: polygon outlines on geometry
+
+`src/subsystems/edit_overlays/edit_overlays.c` draws the "Vertex
+outlines" (F7, `show_vertex_outlines`) and cursor "highlight current
+polygon" (`highlight_current_poly`) overlays. `edit_overlays_render_outlines`
+sets the shared overlay GL state once — lighting off, depth test on with
+`glDepthMask(GL_FALSE)`, `glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)`, and
+`glEnable(GL_POLYGON_OFFSET_LINE)` with the negative
+`REPL_OUTLINE_POLYGON_OFFSET_{FACTOR,UNITS}` (pulls the wireframe in
+front of the filled surface so edges read cleanly without z-fighting) —
+then runs **three** walk passes over the flat program, each tracking the
+modelview with `apply_tracked_transform` / `unwind_transform_stack`:
+
+1. `render_outlines_glbegin_pass` — re-issues `glBegin`/`glVertex` blocks
+   as line geometry from the REPL-tracked vertices.
+2. `render_outlines_tess_pass` — the same for tessellated polygons
+   (`gluTess*` contours), drawn as `GL_LINE_LOOP`.
+3. `render_outlines_glut_pass` — for `glutSolid*` shapes.
+
+The third pass exists because **GLUT solid shapes emit no REPL-tracked
+vertices** — the geometry is generated inside GLU/freeglut, so the first
+two passes have nothing to trace. Instead, each shape is *re-drawn* under
+the already-active `glPolygonMode(GL_LINE)` + polygon offset, letting the
+GL pipeline rasterize the wireframe itself. The actual `glutSolid*` call
+goes through `repl_executor_draw_glut_solid()` (shared with the live
+render loop in `src/repl/executor.c`, so the dispatch stays in one place
+and the GLUT-symbol call site stays inside the executor TU). The
+membership predicate is `repl_cmd_is_glut_solid()` in `src/repl/command.h`
+— the single source that also feeds `repl_cmd_starts_geometry_emit` and
+`repl_cmd_consumes_current_color` (a new `glutSolid*` `CmdType` joins all
+three at once; `test_is_glut_solid_predicate` in `tests/test_replay_walk.c`
+pins the set). Cursor-on-the-line picks `SCENE_CLR_OUTLINE_ACTIVE` at a
+thicker line; otherwise the standing outline uses `SCENE_CLR_OUTLINE_EDGE`.
+Coverage: `test_draw_glut_solid_dispatch` (executor helper, stub counts)
+and section 14b of `tests/test_repl_core_internal.c` (drives the full pass
+and asserts the shape is redrawn + polygon-mode/offset toggled, gated on
+`GL_STUBS`).
+
 ## UI Layer
 
 The UI layer owns 2D editor rendering.
@@ -869,7 +907,10 @@ editor_input.c  glutGetModifiers via editor_get_modifiers (gated behind
 src/repl/executor.c GLUT solid shapes (glutSolidCube/Sphere/Torus/Teapot/Cone)
                 and glutBitmapCharacter for label() text. (Its GLU
                 tessellator setup — gluNewTess/gluTessCallback — is GLU,
-                not GLUT.)
+                not GLUT.) The glutSolid* call site is centralized in
+                `repl_executor_draw_glut_solid()`; the edit-overlays
+                outline pass re-draws shapes through that helper rather
+                than naming GLUT symbols itself.
 ```
 
 ### Controller-only scene wiring

@@ -218,6 +218,38 @@ void repl_executor_unwind_tracked_transform_stack(int *matrix_depth) {
     }
 }
 
+void repl_executor_draw_glut_solid(const GLCmd *cmd) {
+    if (!cmd)
+        return;
+    switch (cmd->type) {
+    case CMD_GLUT_TORUS:
+        glutSolidTorus((double)cmd->args[0],
+                       (double)cmd->args[1],
+                       (int)cmd->args[2],
+                       (int)cmd->args[3]);
+        break;
+    case CMD_GLUT_CUBE:
+        glutSolidCube((double)cmd->args[0]);
+        break;
+    case CMD_GLUT_SPHERE:
+        glutSolidSphere((double)cmd->args[0],
+                        (int)cmd->args[1],
+                        (int)cmd->args[2]);
+        break;
+    case CMD_GLUT_TEAPOT:
+        glutSolidTeapot((double)cmd->args[0]);
+        break;
+    case CMD_GLUT_CONE:
+        glutSolidCone((double)cmd->args[0],
+                      (double)cmd->args[1],
+                      (int)cmd->args[2],
+                      (int)cmd->args[3]);
+        break;
+    default:
+        break;
+    }
+}
+
 int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
     if (!cmd)
         return 0;
@@ -469,27 +501,11 @@ void repl_execute_program(const ReplExecutionOptions *options) {
             glLineWidth(flat_cmds[pc].args[0]);
             break;
         case CMD_GLUT_TORUS:
-            glutSolidTorus((double)flat_cmds[pc].args[0],
-                           (double)flat_cmds[pc].args[1],
-                           (int)flat_cmds[pc].args[2],
-                           (int)flat_cmds[pc].args[3]);
-            break;
         case CMD_GLUT_CUBE:
-            glutSolidCube((double)flat_cmds[pc].args[0]);
-            break;
         case CMD_GLUT_SPHERE:
-            glutSolidSphere((double)flat_cmds[pc].args[0],
-                            (int)flat_cmds[pc].args[1],
-                            (int)flat_cmds[pc].args[2]);
-            break;
         case CMD_GLUT_TEAPOT:
-            glutSolidTeapot((double)flat_cmds[pc].args[0]);
-            break;
         case CMD_GLUT_CONE:
-            glutSolidCone((double)flat_cmds[pc].args[0],
-                          (double)flat_cmds[pc].args[1],
-                          (int)flat_cmds[pc].args[2],
-                          (int)flat_cmds[pc].args[3]);
+            repl_executor_draw_glut_solid(&flat_cmds[pc]);
             break;
         case CMD_RASTER_POS3F:
             glRasterPos3f(flat_cmds[pc].args[0],

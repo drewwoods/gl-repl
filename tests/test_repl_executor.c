@@ -561,6 +561,61 @@ static void test_executor_matrix_pop_underflow_clamped(void) {
                 gl_stub_counts[GL_STUB_glPopMatrix] == 1);
 }
 
+/* repl_executor_draw_glut_solid dispatches one glutSolid* call per
+ * shape type and is a no-op for any other type. Shared by the live
+ * render loop and the outline overlay's GL_LINE wireframe redraw, so
+ * the dispatch must stay exact. */
+static void test_draw_glut_solid_dispatch(void) {
+    struct { CmdType type; int stub_idx; const char *name; } cases[] = {
+        { CMD_GLUT_TORUS,  GL_STUB_glutSolidTorus,  "torus"  },
+        { CMD_GLUT_CUBE,   GL_STUB_glutSolidCube,   "cube"   },
+        { CMD_GLUT_SPHERE, GL_STUB_glutSolidSphere, "sphere" },
+        { CMD_GLUT_TEAPOT, GL_STUB_glutSolidTeapot, "teapot" },
+        { CMD_GLUT_CONE,   GL_STUB_glutSolidCone,   "cone"   },
+    };
+    int n = (int)(sizeof(cases) / sizeof(cases[0]));
+    for (int i = 0; i < n; i++) {
+        gl_stub_counts_reset();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        cmd.type = cases[i].type;
+        cmd.valid = 1;
+        repl_executor_draw_glut_solid(&cmd);
+
+        char label[64];
+        snprintf(label, sizeof label, "draw %s emits its glutSolid* call",
+                 cases[i].name);
+        ASSERT_TRUE(label, gl_stub_counts[cases[i].stub_idx] == 1);
+
+        /* No cross-talk: exactly one glutSolid* call total. */
+        unsigned long long others =
+            gl_stub_counts[GL_STUB_glutSolidTorus] +
+            gl_stub_counts[GL_STUB_glutSolidCube] +
+            gl_stub_counts[GL_STUB_glutSolidSphere] +
+            gl_stub_counts[GL_STUB_glutSolidTeapot] +
+            gl_stub_counts[GL_STUB_glutSolidCone];
+        snprintf(label, sizeof label, "draw %s emits no other shape",
+                 cases[i].name);
+        ASSERT_TRUE(label, others == 1);
+    }
+
+    /* No-op for non-glut and NULL. */
+    gl_stub_counts_reset();
+    GLCmd vtx;
+    memset(&vtx, 0, sizeof(vtx));
+    vtx.type = CMD_VERTEX3F;
+    vtx.valid = 1;
+    repl_executor_draw_glut_solid(&vtx);
+    repl_executor_draw_glut_solid(NULL);
+    unsigned long long any =
+        gl_stub_counts[GL_STUB_glutSolidTorus] +
+        gl_stub_counts[GL_STUB_glutSolidCube] +
+        gl_stub_counts[GL_STUB_glutSolidSphere] +
+        gl_stub_counts[GL_STUB_glutSolidTeapot] +
+        gl_stub_counts[GL_STUB_glutSolidCone];
+    ASSERT_TRUE("non-glut / NULL draws nothing", any == 0);
+}
+
 /* Regression: lights[].enabled feeds only the light-indicator overlay.
  * It must track what the current program does (glEnable(GL_LIGHTn)),
  * not stay stuck at the default-on / last-run value. repl_execute_program
@@ -636,6 +691,7 @@ int main(void) {
     test_executor_camera_distance_source();
     test_executor_matrix_balance_unwind();
     test_executor_matrix_pop_underflow_clamped();
+    test_draw_glut_solid_dispatch();
     printf("repl_executor: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.passed == g_harness.run) ? 0 : 1;
 }

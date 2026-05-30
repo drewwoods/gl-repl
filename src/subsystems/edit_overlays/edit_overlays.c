@@ -205,6 +205,45 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
     glPopMatrix();
 }
 
+/* glutSolid* shapes emit no REPL-tracked vertices, so the glBegin/tess
+ * passes above can't trace their edges. Instead, re-invoke each shape
+ * under the already-active glPolygonMode(GL_LINE) + polygon offset so
+ * the GL pipeline rasterizes the wireframe itself. Modelview transforms
+ * are tracked exactly like the other passes so each shape lands at its
+ * own matrix. */
+static void render_outlines_glut_pass(const OverlayWalkCtx *ctx) {
+    const GLCmd *cmds = ctx->program.cmds;
+    int cmd_count = ctx->program.cmd_count;
+    int matrix_depth = 0;
+
+    glPushMatrix();
+    for (int i = 0; i < cmd_count; i++) {
+        if (!cmds[i].valid) continue;
+
+        if (repl_cmd_is_transform(cmds[i].type)) {
+            apply_tracked_transform(&cmds[i], &matrix_depth);
+            continue;
+        }
+        if (!repl_cmd_is_glut_solid(cmds[i].type)) continue;
+
+        int is_current = ctx->highlight_current_poly &&
+                         outline_cmd_matches_cursor(i, ctx);
+        if (is_current) {
+            glLineWidth(3.0f);
+            scene_clr(SCENE_CLR_OUTLINE_ACTIVE);
+        } else if (ctx->show_vertex_outlines) {
+            glLineWidth(1.2f);
+            scene_clr(SCENE_CLR_OUTLINE_EDGE);
+        } else {
+            continue;
+        }
+        repl_executor_draw_glut_solid(&cmds[i]);
+        glLineWidth(1.0f);
+    }
+    unwind_transform_stack(&matrix_depth);
+    glPopMatrix();
+}
+
 void edit_overlays_render_outlines(const OverlayWalkCtx *ctx,
                                    int multisample_enabled,
                                    int line_smooth_enabled) {
@@ -225,6 +264,7 @@ void edit_overlays_render_outlines(const OverlayWalkCtx *ctx,
     if (ctx->show_vertex_outlines || ctx->highlight_current_poly) {
         render_outlines_glbegin_pass(ctx);
         render_outlines_tess_pass(ctx);
+        render_outlines_glut_pass(ctx);
     }
 
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);

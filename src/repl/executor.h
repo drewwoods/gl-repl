@@ -106,6 +106,14 @@ void repl_execute_commands(void);
  * once per frame from scene_render.c. */
 void repl_execute_program(const ReplExecutionOptions *options);
 
+/* Draw a single glutSolid* command (CMD_GLUT_TORUS/CUBE/SPHERE/TEAPOT/
+ * CONE) at the current modelview by dispatching the matching freeglut
+ * shape call with the command's args. A no-op for any other type.
+ * Shared by the executor's live render loop and the outline overlay's
+ * GL_LINE wireframe redraw pass (edit_overlays.c), which can't trace
+ * these shapes from REPL-tracked vertices because they emit none. */
+void repl_executor_draw_glut_solid(const GLCmd *cmd);
+
 /* Apply a single state-mutating GL command (enable/disable/color/shade
  * model/blend func/etc.). Used inside the executor's own loop and by
  * the export fade pass to apply scene defaults without driving a full
