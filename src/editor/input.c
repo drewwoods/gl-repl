@@ -167,6 +167,19 @@ int editor_input_active_modifiers(void) {
     return mods;
 }
 
+/* Binding matcher for keymap.h (declared there; homed here so it reads the
+ * canonical modifier accessor above — and so every test's modifier
+ * provider flows through unchanged). binding_mods == 0 matches the key
+ * regardless of held modifiers (the handler may inspect them itself);
+ * a non-zero binding_mods additionally requires those bits to be held. */
+int keymap_event_is(int event_key, int binding_key, int binding_mods) {
+    if (event_key != binding_key)
+        return 0;
+    if (binding_mods == 0)
+        return 1;
+    return (editor_input_active_modifiers() & binding_mods) == binding_mods;
+}
+
 void editor_request_redraw(void) {
     g_pending_input_effects.request_redraw = 1;
 }
@@ -1031,8 +1044,8 @@ static void keyboard_begin_key(unsigned char key) {
 
     /* Cut / copy / backspace / delete preserve any active line-range
      * selection; everything else clears it before processing the key. */
-    if (key != KEY_CTRL_C && key != KEY_CTRL_D && key != KEY_BACKSPACE &&
-        key != KEY_CTRL_X && key != KEY_DELETE)
+    if (!keymap_event_is(key, GLR_COPY) && !keymap_event_is(key, GLR_DELETE_LINE) &&
+        key != KEY_BACKSPACE && !keymap_event_is(key, GLR_CUT) && key != KEY_DELETE)
         editor_selection_clear_line_range();
 
     editor_scroll_follow_cursor_set(1);
@@ -1084,12 +1097,12 @@ static int handle_escape_key_route(unsigned char key) {
 }
 
 static int handle_cursor_endpoint_key_route(unsigned char key) {
-    if (key == KEY_CTRL_A) {
+    if (keymap_event_is(key, GLR_LINE_START)) {
         editor_cursor_pos_set(0);
         editor_completion_update();
         return 1;
     }
-    if (key == KEY_CTRL_E) {
+    if (keymap_event_is(key, GLR_LINE_END)) {
         editor_cursor_pos_set(editor_state_input().input_len);
         editor_completion_update();
         return 1;
@@ -1098,7 +1111,7 @@ static int handle_cursor_endpoint_key_route(unsigned char key) {
 }
 
 static int handle_undo_redo_key_route(unsigned char key) {
-    if (key == KEY_CTRL_Z) {
+    if (keymap_event_is(key, GLR_UNDO)) {
         if (editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT)
             editor_undo_do_redo();
         else
@@ -1106,7 +1119,7 @@ static int handle_undo_redo_key_route(unsigned char key) {
         return 1;
     }
 
-    if (key == KEY_CTRL_Y) {
+    if (keymap_event_is(key, GLR_REDO)) {
         editor_undo_do_redo();
         return 1;
     }
@@ -1114,7 +1127,7 @@ static int handle_undo_redo_key_route(unsigned char key) {
 }
 
 static int handle_line_delete_key_route(unsigned char key) {
-    if (key == KEY_CTRL_D) {
+    if (keymap_event_is(key, GLR_DELETE_LINE)) {
         if (editor_insert_mode()) {
             editor_insert_mode_set(0);
             if (editor_state_edit_line() <= repl_state_document_count())
@@ -1138,12 +1151,12 @@ static int handle_line_delete_key_route(unsigned char key) {
  * Ctrl+\ reformat. The save (Ctrl+S), debug dump (Ctrl+P), and quit
  * (Ctrl+Q) variants are router-side. */
 static int handle_buffer_command_key_route(unsigned char key) {
-    if (key == KEY_CTRL_L) {
+    if (keymap_event_is(key, GLR_CLEAR_ALL)) {
         editor_clear_all_cmds();
         return 1;
     }
 
-    if (key == KEY_CTRL_BACKSLASH) {
+    if (keymap_event_is(key, GLR_REFORMAT)) {
         if (repl_state_document_count() > 0) {
             if (!tutorial_guard_source_change_or_status(
                     0, repl_state_document_count(), repl_state_document_count()))
@@ -1160,7 +1173,7 @@ static int handle_buffer_command_key_route(unsigned char key) {
 }
 
 static int handle_copy_key_route(unsigned char key) {
-    if (key == KEY_CTRL_C) {
+    if (keymap_event_is(key, GLR_COPY)) {
         editor_clipboard_copy_current();
         return 1;
     }
@@ -1168,7 +1181,7 @@ static int handle_copy_key_route(unsigned char key) {
 }
 
 static int handle_cut_key_route(unsigned char key) {
-    if (key == KEY_CTRL_X) {
+    if (keymap_event_is(key, GLR_CUT)) {
         editor_clipboard_cut_current();
         return 1;
     }
@@ -1176,7 +1189,7 @@ static int handle_cut_key_route(unsigned char key) {
 }
 
 static int handle_paste_key_route(unsigned char key) {
-    if (key == KEY_CTRL_V) {
+    if (keymap_event_is(key, GLR_PASTE)) {
         editor_clipboard_paste_current();
         return 1;
     }

@@ -322,7 +322,7 @@ state-machine level, not buried in the doc body.
 | `src/editor/state.c` | Owns `EditorState`: editor buffer, cursor, selection, search, autocomplete, scroll, undo/redo, transformers, highlights, virtual lines |
 | `src/editor/state.h` | `EditorState` typed facade, `EditorBufferView`, `editor_state_input/search/autocomplete` accessors |
 | `src/editor/limits.h` | Shared editor input and autocomplete capacity constants |
-| `keys.h` | ASCII and control-key code constants (Ctrl+A=1 … Ctrl+Z=26, F-key names) |
+| `keys.h` | Physical ASCII / control-key byte constants (Ctrl+A=1 … Ctrl+Z=26, `KEY_ESC`, etc.) in `include/` (project-agnostic). The action→key bindings on top live in `keymap.h` |
 | `src/editor/clipboard.c` | Line selection anchors, command clipboard buffer, copy/cut/paste behavior |
 | `src/editor/clipboard.h` | Clipboard public API |
 | `src/editor/undo.c` | Undo/redo snapshots, history rings, example auto-promote hook before mutation |
@@ -331,7 +331,8 @@ state-machine level, not buried in the doc body.
 | `src/app/glr_camera.h` | Camera state + setters (`glr_camera`, `glr_camera_set_*`, `glr_camera_controls_reset`) |
 | `src/app/glr_actions.c` | Config descriptor table, config shortcuts, menu actions |
 | `src/app/glr_actions.h` | Actions public API (`glr_action_menu_item_activate`, etc.) |
-| `config.h` | Project-wide compile-time configuration constants (force-included into every TU via `-include config.h`) |
+| `config.h` | Project-wide compile-time configuration constants (force-included into every TU via `-include config.h`). Also `#include`s `keymap.h` so the key bindings reach every TU |
+| `keymap.h` | Keyboard shortcut bindings: one `#define GLR_<ACTION>  <key>, <mods>` pair per action — the single place to reassign a shortcut. Matched via `keymap_event_is(key, GLR_X)` (call sites never spell out modifiers); `KM_KEY`/`KM_MODS` extract one element for `case` labels / struct fields. Zero includes (tokens resolve lazily at the dispatch site, like `config.h`'s `FONT_*`); consumed by `g_cfg_items[]` (via variadic `CFG_ITEM`), the `glr_ctrl_router_*` handlers, and the editor input dispatcher. Guarded by `make check-keymap-no-dup`; `make keymap-list` prints bindings + free slots (`scripts/keymap.sh`). Sits at root (project-specific config), not `include/` (project-agnostic) |
 | `prof_sections.h` | CPU-profile section catalog: the `ProfSection` enum + `PROF_SECTION_COUNT`, force-included via `-include prof_sections.h`. Keeps `src/support/cpuprof.{c,h}` host-agnostic (they fall back to `typedef int ProfSection` when it's absent). Per-section *labels* are not here — see `src/app/glr_prof.c` |
 | `src/app/glr_defaults.h` | Controller-side scene/presentation defaults (`CFG_DEFAULT_*` macros) |
 | `src/ui/core/text_layout.c` | Pure code-panel wrapping, row counts, segment lookup, cursor-row mapping |
@@ -513,7 +514,22 @@ state-machine level, not buried in the doc body.
   `strchr(s, ',')` or `*s != ',' && *s != ')'` loop — those are
   paren-naive and stop at the first inner `)` of e.g.
   `cos(i + phase)`, silently truncating the slot.
-- Keyboard bindings: `editor_handle_key()` for ASCII keys (Ctrl+X
+- Keyboard bindings: each action is one `keymap.h` pair macro
+  `#define GLR_<ACTION>  <key>, <mods>` — the single place to reassign a
+  shortcut. Call sites pass the whole pair to the matcher and never spell
+  out modifiers: `keymap_event_is(key, GLR_X)` (it folds in the live
+  modifiers in one place; implemented in `src/editor/input.c` next to the
+  modifier accessor, declared in `keymap.h`). The cfg table feeds the pair
+  through its variadic `CFG_ITEM(...)`; the two sites that need a bare key
+  (a `case` label, the search pin's synthetic dispatch) use `KM_KEY()` /
+  `KM_MODS()`. `keys.h` underneath is the physical byte/special-code layer
+  (`KEY_CTRL_*`); `keymap.h` is the action→key map on top. Guard:
+  `make check-keymap-no-dup` (in the `check-state-ownership` gate) fails on
+  any two bindings sharing a `(key, mods)`; `make keymap-list` prints the
+  bindings and the free Ctrl / Ctrl+Shift / F-key slots (both via
+  `scripts/keymap.sh`, also symlinked at `tools/keymap.sh`). A
+  `g_cfg_items[]` runtime twin lives in `tests/test_glr_actions.c`.
+  `editor_handle_key()` handles ASCII keys (Ctrl+X
   produces ASCII X & 0x1F via standard GLUT), `editor_handle_special()`
   for F-keys/arrows. Cross-subsystem routing (replay / save / config /
   audio / camera / tutorial-ack) lives in `src/app/glr_ctrl.c::glr_ctrl_router_*`

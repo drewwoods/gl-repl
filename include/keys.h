@@ -3,9 +3,10 @@
  *
  * Pure portability header. GLUT delivers Ctrl+<letter> as a single byte
  * (Ctrl+A = 1, Ctrl+B = 2, ..., Ctrl+Z = 26), backspace and delete as
- * special codes, and Escape as 27. These #defines make keyboard dispatch
- * readable and provide a single place to check for conflicts when adding
- * new bindings.
+ * special codes, and Escape as 27. These #defines are the physical
+ * byte/key layer; the action->key bindings built on top of them (which
+ * action each key triggers, and where to reassign one) live in keymap.h
+ * at the repo root.
  *
  * Lives under include/ alongside the other zero-dependency portability
  * headers (c_compat.h, gl_includes.h) so any layer (editor input, ui_*,
