@@ -78,7 +78,7 @@
  * Shift as direction (forward / backward) in the cfg dispatcher, not as a
  * binding requirement, so their mods are 0. */
 #define GLR_HELP             GLUT_KEY_F1, 0    /* toggle help overlay */
-#define GLR_PREV_EXAMPLE     GLUT_KEY_F11, 0   /* previous example / scene */
+#define GLR_PREV_EXAMPLE     GLUT_KEY_F12, GLUT_ACTIVE_SHIFT   /* previous example / scene */
 #define GLR_NEXT_EXAMPLE     GLUT_KEY_F12, 0   /* next example / scene */
 #define GLR_AUDIO_PREV       GLUT_KEY_LEFT,  GLUT_ACTIVE_CTRL  /* prev track */
 #define GLR_AUDIO_NEXT       GLUT_KEY_RIGHT, GLUT_ACTIVE_CTRL  /* next track */

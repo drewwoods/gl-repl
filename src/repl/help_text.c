@@ -380,9 +380,10 @@ const ReplHelpContent *repl_help_text_build(void) {
     g_tab_keys[nk++] = g_fkey_strbuf[0];
 
     /* F2-F10 — pulled from the controller-installed provider so this
-     * module stays free of app/ includes. F11 and F12 are not part of
-     * the config table; they drive the example/scene cycle directly
-     * and are emitted unconditionally below. */
+     * module stays free of app/ includes. F12 / Shift+F12 are not part
+     * of the config table; they drive the example/scene cycle directly
+     * (forward, and backward with Shift) and are emitted unconditionally
+     * below. */
     int di = 1;
     for (int fn = 2; fn <= 10 && di < HELP_FKEY_MAX - 1; fn++) {
         const char *label = (g_fkey_provider && g_fkey_provider->fkey_label)
@@ -394,14 +395,14 @@ const ReplHelpContent *repl_help_text_build(void) {
         g_tab_keys[nk++] = g_fkey_strbuf[di++];
     }
 
-    /* F11 - not in g_cfg_items */
-    snprintf(g_fkey_strbuf[di], sizeof(g_fkey_strbuf[di]),
-             "  F11  \tPrevious example / scene");
-    g_tab_keys[nk++] = g_fkey_strbuf[di++];
-
     /* F12 - not in g_cfg_items */
     snprintf(g_fkey_strbuf[di], sizeof(g_fkey_strbuf[di]),
              "  F12  \tNext example / scene");
+    g_tab_keys[nk++] = g_fkey_strbuf[di++];
+
+    /* Shift+F12 - not in g_cfg_items */
+    snprintf(g_fkey_strbuf[di], sizeof(g_fkey_strbuf[di]),
+             "  Shift+F12  \tPrevious example / scene");
     g_tab_keys[nk++] = g_fkey_strbuf[di];
 
     g_tab_keys[nk++] = "";
