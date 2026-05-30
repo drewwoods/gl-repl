@@ -344,6 +344,11 @@ static void glr_ctrl_push_highlights(void) {
                 if (push_idx >= 0)
                     editor_state_highlights_append(push_idx, -1, -1,
                                                         HIGHLIGHT_MATCHING_PUSH_MATRIX);
+            } else if (cmd->type == CMD_PUSH_MATRIX) {
+                int pop_idx = repl_find_matching_pop_matrix(edit_line);
+                if (pop_idx >= 0)
+                    editor_state_highlights_append(pop_idx, -1, -1,
+                                                        HIGHLIGHT_MATCHING_PUSH_MATRIX);
             }
 
             int xform_lines[MAX_AFFECTING_TRANSFORMS];

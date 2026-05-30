@@ -48,7 +48,9 @@ typedef enum {
     HIGHLIGHT_SEARCH_MATCH,
     HIGHLIGHT_SELECTION,
     HIGHLIGHT_TUTORIAL_INSERTION,
-    /* Cursor-on-glPopMatrix highlights the matching glPushMatrix line. */
+    /* Push/pop bracket match: cursor-on-glPopMatrix highlights the
+     * matching glPushMatrix line, and cursor-on-glPushMatrix highlights
+     * the matching glPopMatrix line. Same gutter color either way. */
     HIGHLIGHT_MATCHING_PUSH_MATRIX,
     /* Cursor-on-vertex/glutSolid* highlights every modelview transform
      * (glTranslatef/glScalef/glRotatef) currently in scope, accounting

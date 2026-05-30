@@ -1124,9 +1124,21 @@ int main(void) {
     ASSERT_TRUE("push line → -1",                repl_find_matching_push_matrix(0) == -1);
     ASSERT_TRUE("oob matching push → -1",        repl_find_matching_push_matrix(-1) == -1);
 
+    /* repl_find_matching_pop_matrix: mirror — cursor-on-Push pairs with
+     * its Pop (same document as above). */
+    ASSERT_TRUE("outer push matches outer pop",  repl_find_matching_pop_matrix(0) == 6);
+    ASSERT_TRUE("inner push matches inner pop",  repl_find_matching_pop_matrix(2) == 4);
+    ASSERT_TRUE("non-push line → -1",            repl_find_matching_pop_matrix(1) == -1);
+    ASSERT_TRUE("pop line → -1",                 repl_find_matching_pop_matrix(4) == -1);
+    ASSERT_TRUE("oob matching pop → -1",         repl_find_matching_pop_matrix(99) == -1);
+
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glPopMatrix();");
     ASSERT_TRUE("orphan pop → -1", repl_find_matching_push_matrix(0) == -1);
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glPushMatrix();");
+    ASSERT_TRUE("orphan push → -1", repl_find_matching_pop_matrix(0) == -1);
 
     /* repl_find_affecting_transforms: linear scope, push/pop scope,
      * load_identity reset, glut-solid cursor, non-consumer cursor. */
