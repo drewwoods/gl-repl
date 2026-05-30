@@ -1014,6 +1014,7 @@ alongside `.cfg` (see the file-layout table for the shipped catalog).
 | Shift+Home/End | Extend input-buffer selection to row start / end |
 | Double-click | Select the word under the cursor (input-buffer selection) |
 | Click + drag | Per-character selection inside the active input row |
+| Shift+click | Extend a selection from the cursor to the click — same row → per-character input-buffer selection; different row → whole-line range (the shift+Up/Down model) |
 | Ctrl+C / Ctrl+X / Ctrl+V | Copy / cut / paste — input selection wins over line-range |
 | Ctrl+S | Save to output.c |
 | Ctrl+Z | Undo (Ctrl+Y or Ctrl+Shift+Z to redo) |

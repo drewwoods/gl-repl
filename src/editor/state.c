@@ -394,6 +394,17 @@ void editor_cursor_pos_extend_selection(int new_pos) {
         in->anchor_pos = old;
 
     cursor_pos_set_internal(new_pos, /*keep_anchor=*/1);
+
+    /* The input-buffer character selection and the whole-line range
+     * selection are mutually exclusive views of "what is selected".
+     * Whenever a character selection is active, drop any line-range so
+     * the two highlight bands never paint at once — e.g. shift+click a
+     * multi-line range, then hold shift and press Left/Right, which
+     * starts a char selection on the current row. This is the single
+     * chokepoint every char-selection path flows through (shift+arrows,
+     * shift+Home/End, shift+click same row, click-drag, double-click). */
+    if (in->anchor_pos >= 0)
+        editor_state_selection_clear();
 }
 
 int editor_input_anchor(void) {
