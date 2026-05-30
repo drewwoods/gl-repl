@@ -233,6 +233,7 @@ endif
 	help-details \
 	install-hooks \
 	lines \
+	lines-test \
 	gl-repl \
 	test \
 	test-detailed \
@@ -1414,16 +1415,16 @@ test-stubs: check-trailing-whitespace check-gl-boundaries check-layer-coupling c
 test-full: ## Full gate: stub tests + checks + build gl-repl, bench, repl_demo, scene_demo, editor_demo.
 	$(MAKE) --no-print-directory repl_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory editor_demo USE_GL_STUBS=1
+	$(MAKE) --no-print-directory memprof_demo USE_GL_STUBS=1
+	$(MAKE) --no-print-directory cpuprof_demo USE_GL_STUBS=1
+	$(MAKE) --no-print-directory variable_panel_demo USE_GL_STUBS=1
+	$(MAKE) --no-print-directory color_picker_demo USE_GL_STUBS=1
+	$(MAKE) --no-print-directory scene_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory check
 	$(MAKE) --no-print-directory test-stubs
 	$(MAKE) --no-print-directory gl-repl
 	$(MAKE) --no-print-directory gl-tests
 	$(MAKE) --no-print-directory bench
-	$(MAKE) --no-print-directory scene_demo
-	$(MAKE) --no-print-directory memprof_demo USE_GL_STUBS=1
-	$(MAKE) --no-print-directory cpuprof_demo USE_GL_STUBS=1
-	$(MAKE) --no-print-directory variable_panel_demo USE_GL_STUBS=1
-	$(MAKE) --no-print-directory color_picker_demo USE_GL_STUBS=1
 
 install-hooks: ## Point this clone's git hooks at the tracked .githooks/ directory.
 	@git config core.hooksPath .githooks
@@ -1459,6 +1460,17 @@ lines: $(SRCS) $(HDRS) ## Count SLOC (code/comment/blank) across source and head
 		exit 1; \
 	fi
 	@cloc $(SRCS) $(HDRS) --by-file
+
+# count lines: test sources + shared test helpers
+TEST_SLOC_SRCS = $(wildcard tests/*.c tests/*.h tests/support/*.c tests/support/*.h)
+lines-test: $(TEST_SLOC_SRCS) ## Count SLOC (code/comment/blank) across test sources.
+	@if ! command -v cloc >/dev/null 2>&1; then \
+		echo "cloc not found. Install it with:"; \
+		echo "  macOS:  brew install cloc"; \
+		echo "  Linux:  sudo apt install cloc"; \
+		exit 1; \
+	fi
+	@cloc $(TEST_SLOC_SRCS) --by-file
 
 debug: ## Clean and rebuild everything with debug/ASan flags.
 	$(MAKE) clean
