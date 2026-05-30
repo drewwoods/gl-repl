@@ -1144,8 +1144,46 @@ static void test_fkey_reassignment_and_alt_shortcuts(void) {
     g_test_mods = 0;
 }
 
+/* No two config rows may claim the same keyboard binding. A binding is
+ * the triple (key_code, modifiers, is_special): the same key with
+ * different modifiers is distinct by design (Ctrl+W = CPU profile vs
+ * Ctrl+Shift+W = Memory profile; the plain-Ctrl / Ctrl+Shift pairs noted
+ * in keymap.h), and an F-key vs a Ctrl byte of equal numeric value are
+ * distinct via is_special. Guards against an accidental double-map when a
+ * keymap.h binding is reused across two rows. Data-driven over
+ * g_cfg_items[] (the enumerable, collision-prone tier — it owns the
+ * shared Ctrl-letters); key_code-0 rows are section chrome or
+ * shortcut-less and are skipped. */
+static void test_no_duplicate_config_bindings(void) {
+    int count = 0, dups = 0;
+    const GlrConfigItem *items = glr_config_items(&count);
+    for (int i = 0; i < count; i++) {
+        if (items[i].key_code == 0)
+            continue;
+        for (int j = i + 1; j < count; j++) {
+            if (items[j].key_code == 0)
+                continue;
+            if (items[i].key_code == items[j].key_code &&
+                items[i].modifiers == items[j].modifiers &&
+                items[i].is_special == items[j].is_special) {
+                char msg[160];
+                snprintf(msg, sizeof msg,
+                         "duplicate binding: '%s' and '%s' share "
+                         "(key=%d, mods=%d, special=%d)",
+                         items[i].label, items[j].label,
+                         items[i].key_code, items[i].modifiers,
+                         items[i].is_special);
+                ASSERT_TRUE(msg, 0);
+                dups++;
+            }
+        }
+    }
+    ASSERT_INT("config rows have no duplicate (key,mods,is_special)", dups, 0);
+}
+
 int main(void) {
     test_apply_defaults();
+    test_no_duplicate_config_bindings();
     test_f9_cycles_light_theme();
     test_shift_fkey_steps_backward();
     test_fkey_reassignment_and_alt_shortcuts();

@@ -1243,7 +1243,8 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-module-prefixes \
 		check-include-style \
 		check-tier-c-function-size \
-		check-no-test-default-output; do \
+		check-no-test-default-output \
+		check-keymap-no-dup; do \
 		printf "  $(YELLOW)▶$(NC) $$target\n"; \
 		$(MAKE) --no-print-directory $$target 2>&1 | sed 's/^/    /' | sed $$'s/ OK / \033[0;32mOK\033[0m /g; s/ OK$$/ \033[0;32mOK\033[0m/' || exit $$?; \
 	done
@@ -1346,6 +1347,12 @@ check-repl-demo-stubs-shrinking: ## Ratchet on tools/repl_demo/stubs.c — must 
 
 check-include-style: ## Hard guard: project-local headers must use "X.h", not <X.h>.
 	@bash scripts/check-include-style.sh
+
+check-keymap-no-dup: ## Hard guard: no two keymap.h bindings share a (key, mods) — a double-map.
+	@bash scripts/keymap.sh check
+
+keymap-list: ## Print current key bindings + the free Ctrl / Ctrl+Shift / F-key slots.
+	@bash scripts/keymap.sh list
 
 check-c99: ## C99 build guard: gl-repl + bench + demo sources must syntax-check under gcc -std=c99 (non-pedantic; tests excluded; in the standard gate).
 	@C99_SRCS='$(SRCS)' bash scripts/check-c99.sh

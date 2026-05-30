@@ -20,6 +20,15 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+/* Keyboard shortcut bindings. Pulled in here so the GLR_*_KEY / _MODS
+ * macros reach every TU (config.h is force-included project-wide) without
+ * each consumer adding an include. Safe despite this file's
+ * dependency-free contract: keymap.h only references GLUT_KEY_* / Ctrl
+ * codes inside macro BODIES (same lazy-expansion pattern as the FONT_*
+ * macros below), so nothing resolves until a dispatch site that already
+ * has the GLUT headers expands it. */
+#include "keymap.h"
+
 /* Shared GLUT bitmap fonts. The fixed-width fonts have compile-time metrics
  * below for menu/layout code; proportional fonts are render-only. */
 #define FONT_TINY       GLUT_BITMAP_HELVETICA_10

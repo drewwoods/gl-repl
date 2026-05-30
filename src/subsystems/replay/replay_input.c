@@ -11,7 +11,7 @@ static int replay_cancel_on_unrecognized(void) {
 int replay_handle_key(unsigned char key) {
     ReplayRuntimeState *state = replay_state_mut();
     if (!state->active) {
-        if (key == KEY_CTRL_K) {
+        if (keymap_event_is(key, GLR_REPLAY_JUMP)) {
             int target_line = repl_dispatch_edit_line_get();
             replay_start();
             if (replay_active()) {
@@ -31,7 +31,7 @@ int replay_handle_key(unsigned char key) {
     }
 
     switch (key) {
-    case KEY_CTRL_K: {
+    case KM_KEY(GLR_REPLAY_JUMP): {
         int landed = replay_seek_to_src_line(repl_dispatch_edit_line_get());
         if (landed < 0) {
             repl_set_status("Jump: no geometry at or after cursor");

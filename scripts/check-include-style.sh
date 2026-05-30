@@ -23,7 +23,7 @@ cd "$(git rev-parse --show-toplevel)"
 # (Bare names — these resolve via -I., -Iinclude, or are top-level
 # project files. Subdirectory-namespaced project headers like
 # "support/cpuprof.h" are already disambiguated by the path.)
-LOCAL_HEADERS=(c_compat.h gl_includes.h keys.h gl_2d.h)
+LOCAL_HEADERS=(c_compat.h gl_includes.h keys.h keymap.h gl_2d.h)
 
 # Scan tracked .c / .h files only — gitignored output artifacts
 # (output.c, my-scene.c, quit-recovery.c) are produced by the running

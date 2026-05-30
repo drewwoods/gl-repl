@@ -403,7 +403,7 @@ static void search_open(void) {
 
 int editor_search_handle_key(unsigned char key) {
     EditorSearchState *srch = editor_state_search_mut();
-    if (key == KEY_CTRL_F) {
+    if (keymap_event_is(key, GLR_SEARCH)) {
         search_open();
         return 1;
     }

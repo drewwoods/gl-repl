@@ -2030,7 +2030,7 @@ void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
  * only — no Config row, no @cfg. Session-level state on
  * GlrPresentationState. */
 int glr_ctrl_router_handle_post_filter_key(unsigned char key) {
-    if (key != KEY_CTRL_N)
+    if (!keymap_event_is(key, GLR_POST_FILTER))
         return 0;
 
     static const struct {

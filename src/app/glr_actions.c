@@ -139,72 +139,86 @@ static const char *accum_aa_names[] = { "Off", "2x", "4x", "8x", "16x" };
  * Both Ctrl-key codes are defined/annotated in keys.h. */
 static const char *g_msaa_display_label = NULL;
 
-#define CFG_ITEM(label, key_code, is_special, modifiers, key, state_count, state_names, section_header) \
+/* A keymap.h binding pair `GLR_X` (= key, mods) sits in a row as a single
+ * token. The variadic forwarder lets it expand to two arguments before the
+ * fixed-arity *_IMPL counts them — a direct macro call would count the
+ * still-unexpanded pair as one argument ("too few arguments"). _IMPL takes
+ * (key_code, modifiers, is_special) so the pair fills the first two slots;
+ * the emitted struct keeps the original field order. CFG_EXPAND() forces the
+ * post-substitution rescan (and keeps the trick portable). Unbound rows and
+ * section chrome pass an explicit 0, 0, 0. */
+#define CFG_EXPAND(x) x
+#define CFG_ITEM_IMPL(label, key_code, modifiers, is_special, key, state_count, state_names, section_header) \
     { label, key_code, is_special, modifiers, key, state_count, state_names, section_header, NULL }
+#define CFG_ITEM(...) CFG_EXPAND(CFG_ITEM_IMPL(__VA_ARGS__))
 
-#define CFG_ITEM_DISPLAY(label, key_code, is_special, modifiers, key, state_count, state_names, section_header, display_label_override) \
+#define CFG_ITEM_DISPLAY_IMPL(label, key_code, modifiers, is_special, key, state_count, state_names, section_header, display_label_override) \
     { label, key_code, is_special, modifiers, key, state_count, state_names, section_header, display_label_override }
+#define CFG_ITEM_DISPLAY(...) CFG_EXPAND(CFG_ITEM_DISPLAY_IMPL(__VA_ARGS__))
 
 const GlrConfigItem g_cfg_items[] = {
     CFG_ITEM("### RENDERING",     0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
-    CFG_ITEM_DISPLAY("MSAA",      KEY_CTRL_U, 0, 0, GLR_CONFIG_MSAA,       2, NULL,                 0, &g_msaa_display_label),
+    CFG_ITEM_DISPLAY("MSAA",      GLR_MSAA, 0, GLR_CONFIG_MSAA,           2, NULL,                 0, &g_msaa_display_label),
     CFG_ITEM("Line smooth",       0, 0, 0, GLR_CONFIG_LINE_SMOOTH,        2, NULL,                 0),
-    CFG_ITEM("Accum AA",          GLUT_KEY_F2, 1, 0, GLR_CONFIG_ACCUM_AA,  5, accum_aa_names,       0),
-    CFG_ITEM("Wireframe",         KEY_CTRL_G, 0, 0, GLR_CONFIG_WIREFRAME,  2, NULL,                0),
+    CFG_ITEM("Accum AA",          GLR_ACCUM_AA, 1, GLR_CONFIG_ACCUM_AA,   5, accum_aa_names,       0),
+    CFG_ITEM("Wireframe",         GLR_WIREFRAME, 0, GLR_CONFIG_WIREFRAME, 2, NULL,                 0),
     CFG_ITEM("Point attenuation", 0, 0, 0, GLR_CONFIG_POINT_ATTENUATION,  2, NULL,                 0),
     CFG_ITEM("---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
     CFG_ITEM("### TIME & REPLAY", 0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
-    CFG_ITEM("Auto time",         KEY_CTRL_T, 0, 0, GLR_CONFIG_AUTO_TIME,  2, NULL,                0),
-    CFG_ITEM("Replay",            KEY_CTRL_R, 0, 0, GLR_CONFIG_REPLAY,     2, NULL,                0),
+    CFG_ITEM("Auto time",         GLR_AUTO_TIME, 0, GLR_CONFIG_AUTO_TIME, 2, NULL,                 0),
+    CFG_ITEM("Replay",            GLR_REPLAY, 0, GLR_CONFIG_REPLAY,       2, NULL,                 0),
     CFG_ITEM("Replay mode",       0, 0, 0, GLR_CONFIG_REPLAY_MODE,         2, replay_mode_names,    0),
     CFG_ITEM("Replay expand",     0, 0, 0, GLR_CONFIG_REPLAY_EXPAND,       2, NULL,                 0),
     CFG_ITEM("---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
     CFG_ITEM("### OVERLAYS & SCENE", 0, 0, 0, GLR_CONFIG_NONE,            0, NULL,                 1),
-    CFG_ITEM("Grid",              GLUT_KEY_F3, 1, 0, GLR_CONFIG_GRID_THEME, GRID_THEME_COUNT, grid_theme_names, 0),
-    CFG_ITEM("Grid major",        KEY_CTRL_O, 0, 0, GLR_CONFIG_GRID_MAJOR, GRID_MAJOR_COUNT, grid_major_names, 0),
-    CFG_ITEM("Grid extent",       GLUT_KEY_F7, 1, 0, GLR_CONFIG_GRID_EXTENT, GRID_EXTENT_COUNT, grid_extent_names, 0),
-    CFG_ITEM("Axes",              GLUT_KEY_F4, 1, 0, GLR_CONFIG_AXES_THEME, AXES_THEME_COUNT, axes_theme_names, 0),
-    CFG_ITEM("Xform guides",      GLUT_KEY_F8, 1, 0, GLR_CONFIG_XFORM_GUIDE_MODE,
+    CFG_ITEM("Grid",              GLR_GRID, 1, GLR_CONFIG_GRID_THEME,     GRID_THEME_COUNT, grid_theme_names, 0),
+    CFG_ITEM("Grid major",        GLR_GRID_MAJOR, 0, GLR_CONFIG_GRID_MAJOR, GRID_MAJOR_COUNT, grid_major_names, 0),
+    CFG_ITEM("Grid extent",       GLR_GRID_EXTENT, 1, GLR_CONFIG_GRID_EXTENT, GRID_EXTENT_COUNT, grid_extent_names, 0),
+    CFG_ITEM("Axes",              GLR_AXES, 1, GLR_CONFIG_AXES_THEME,     AXES_THEME_COUNT, axes_theme_names, 0),
+    CFG_ITEM("Xform guides",      GLR_XFORM_GUIDES, 1, GLR_CONFIG_XFORM_GUIDE_MODE,
              SCENE_XFORM_GUIDE_COUNT, xform_guide_mode_names, 0),
-    CFG_ITEM("Light indicators",  KEY_CTRL_L, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_LIGHT_INDICATORS, 2, NULL, 0),
-    CFG_ITEM("Light theme",       GLUT_KEY_F9, 1, 0, GLR_CONFIG_LIGHT_THEME, LIGHT_THEME_COUNT, scene_light_theme_names, 0),
-    CFG_ITEM("Backdrop",          GLUT_KEY_F6, 1, 0, GLR_CONFIG_BACKDROP,
+    CFG_ITEM("Light indicators",  GLR_LIGHT_INDICATORS, 0, GLR_CONFIG_LIGHT_INDICATORS, 2, NULL, 0),
+    CFG_ITEM("Light theme",       GLR_LIGHT_THEME, 1, GLR_CONFIG_LIGHT_THEME, LIGHT_THEME_COUNT, scene_light_theme_names, 0),
+    CFG_ITEM("Backdrop",          GLR_BACKDROP, 1, GLR_CONFIG_BACKDROP,
              SCENE_BACKDROP_COUNT, backdrop_mode_names, 0),
     CFG_ITEM("Auto-normals",      0, 0, 0, GLR_CONFIG_AUTO_NORMALS, 2, NULL,             0),
     CFG_ITEM("---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
     CFG_ITEM("### CAMERA",        0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
-    CFG_ITEM("View mode",         KEY_CTRL_V, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_ORTHO_MODE,   2, view_mode_names, 0),
-    CFG_ITEM("Camera rotate",     KEY_CTRL_R, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_CAMERA_ROTATE, 2, NULL,          0),
-    CFG_ITEM("Focus origin",      KEY_CTRL_O, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_FOCUS_ORIGIN, 0, NULL, 0),
-    CFG_ITEM("Reset camera",      KEY_CTRL_C, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_RESET_CAMERA, 0, NULL, 0),
+    CFG_ITEM("View mode",         GLR_VIEW_MODE, 0, GLR_CONFIG_ORTHO_MODE, 2, view_mode_names,     0),
+    CFG_ITEM("Camera rotate",     GLR_CAMERA_ROTATE, 0, GLR_CONFIG_CAMERA_ROTATE, 2, NULL,         0),
+    CFG_ITEM("Focus origin",      GLR_FOCUS_ORIGIN, 0, GLR_CONFIG_FOCUS_ORIGIN, 0, NULL,           0),
+    CFG_ITEM("Reset camera",      GLR_RESET_CAMERA, 0, GLR_CONFIG_RESET_CAMERA, 0, NULL,           0),
     CFG_ITEM("---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
     CFG_ITEM("### GEOMETRY",      0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
-    CFG_ITEM("Vertex labels",     GLUT_KEY_F5, 1, 0, GLR_CONFIG_VERTEX_LABELS, GLR_VERTEX_LABEL_COUNT, vertex_label_names, 0),
-    CFG_ITEM("Normal vectors",    KEY_CTRL_N, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_NORMAL_VECTORS, 2, NULL, 0),
-    CFG_ITEM("Vertex outlines",   KEY_CTRL_E, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_VERTEX_OUTLINES, 2, NULL, 0),
+    CFG_ITEM("Vertex labels",     GLR_VERTEX_LABELS, 1, GLR_CONFIG_VERTEX_LABELS, GLR_VERTEX_LABEL_COUNT, vertex_label_names, 0),
+    CFG_ITEM("Normal vectors",    GLR_NORMAL_VECTORS, 0, GLR_CONFIG_NORMAL_VECTORS, 2, NULL,       0),
+    CFG_ITEM("Vertex outlines",   GLR_VERTEX_OUTLINES, 0, GLR_CONFIG_VERTEX_OUTLINES, 2, NULL,     0),
     CFG_ITEM("Vertex points",     0, 0, 0, GLR_CONFIG_VERTEX_POINTS,        2, NULL,                 0),
     CFG_ITEM("Poly highlight",    0, 0, 0, GLR_CONFIG_POLY_HIGHLIGHT,       2, NULL,                 0),
     CFG_ITEM("---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
     CFG_ITEM("### INTERFACE",     0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
-    CFG_ITEM("Variable panel",    KEY_CTRL_P, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_VARIABLE_PANEL, 2, NULL, 0),
-    CFG_ITEM("CPU profile",       KEY_CTRL_W, 0, 0, GLR_CONFIG_CPU_PROFILE, PROFILE_PANEL_MODE_COUNT, profile_panel_mode_names, 0),
+    CFG_ITEM("Variable panel",    GLR_VARIABLE_PANEL, 0, GLR_CONFIG_VARIABLE_PANEL, 2, NULL,       0),
+    CFG_ITEM("CPU profile",       GLR_CPU_PROFILE, 0, GLR_CONFIG_CPU_PROFILE, PROFILE_PANEL_MODE_COUNT, profile_panel_mode_names, 0),
     /* Ctrl+Shift+W mirrors CPU profile's Ctrl+W. The two-pass ascii
      * shortcut dispatcher in glr_cfg_handle_ascii_shortcut prefers
      * Shift-requiring rows when Shift is held, so plain Ctrl+W still
      * routes to CPU profile while Ctrl+Shift+W cycles this row. */
-    CFG_ITEM("Memory profile",    KEY_CTRL_W, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_MEMORY_PROFILE, MEMORY_PANEL_MODE_COUNT, memory_panel_mode_names, 0),
-    CFG_ITEM("Code panel",        KEY_CTRL_B, 0, 0, GLR_CONFIG_CODE_PANEL_LAYOUT, CODE_PANEL_LAYOUT_COUNT, code_panel_layout_names, 0),
+    CFG_ITEM("Memory profile",    GLR_MEMORY_PROFILE, 0, GLR_CONFIG_MEMORY_PROFILE, MEMORY_PANEL_MODE_COUNT, memory_panel_mode_names, 0),
+    CFG_ITEM("Code panel",        GLR_CODE_PANEL, 0, GLR_CONFIG_CODE_PANEL_LAYOUT, CODE_PANEL_LAYOUT_COUNT, code_panel_layout_names, 0),
     CFG_ITEM("Wrap at commas",    0, 0, 0, GLR_CONFIG_WRAP_AT_COMMA,       2, NULL,                 0),
-    CFG_ITEM("Syntax highlight",  GLUT_KEY_F10, 1, 0, GLR_CONFIG_SYNTAX_HIGHLIGHT, 3, syntax_hl_names, 0),
+    CFG_ITEM("Syntax highlight",  GLR_SYNTAX_HL, 1, GLR_CONFIG_SYNTAX_HIGHLIGHT, 3, syntax_hl_names, 0),
     CFG_ITEM("---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
     CFG_ITEM("### AUDIO",         0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
-    CFG_ITEM("Audio",             KEY_CTRL_A, 0, GLUT_ACTIVE_SHIFT, GLR_CONFIG_AUDIO_MODE, 2, audio_cfg_names, 0),
+    CFG_ITEM("Audio",             GLR_AUDIO, 0, GLR_CONFIG_AUDIO_MODE, 2, audio_cfg_names,         0),
 };
 
 const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
 
 #undef CFG_ITEM_DISPLAY
+#undef CFG_ITEM_DISPLAY_IMPL
 #undef CFG_ITEM
+#undef CFG_ITEM_IMPL
+#undef CFG_EXPAND
 
 /* ---- Export-config bridge --------------------------------------------- *
  *

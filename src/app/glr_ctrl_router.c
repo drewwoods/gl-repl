@@ -92,7 +92,7 @@
 /* ---- Keyboard router helpers ------------------------------------------ */
 
 int glr_ctrl_router_handle_save_key(unsigned char key) {
-    if (key == KEY_CTRL_S) {
+    if (keymap_event_is(key, GLR_SAVE)) {
         /* Ctrl+S == File > Save Scene: active named scene ->
          * <workspace>/<slug>.c; example/transient -> ./output.c. */
         ReplExportLayout layout;
@@ -104,7 +104,7 @@ int glr_ctrl_router_handle_save_key(unsigned char key) {
 }
 
 int glr_ctrl_router_handle_debug_dump_key(unsigned char key) {
-    if (key == KEY_CTRL_P) {
+    if (keymap_event_is(key, GLR_DEBUG_DUMP)) {
         glr_debug_dump_editor(stdout, source_document_view());
         glr_debug_dump_flat_commands_sync(stdout, source_document_view());
         repl_set_status("Dumped editor + flat commands to stdout");
@@ -141,7 +141,7 @@ static void glr_ctrl_save_quit_recovery(void) {
 }
 
 int glr_ctrl_router_handle_quit_key(unsigned char key) {
-    if (key == KEY_CTRL_Q) {
+    if (keymap_event_is(key, GLR_QUIT)) {
         glr_ctrl_save_quit_recovery();
         exit(0);
     }
@@ -159,7 +159,7 @@ int glr_ctrl_router_handle_tutorial_ack_key(unsigned char key) {
 }
 
 int glr_ctrl_router_handle_config_menu_key(unsigned char key) {
-    if (!editor_state_search()->active && key == '`') {
+    if (!editor_state_search()->active && keymap_event_is(key, GLR_CONFIG_MENU)) {
         if (replay_active())
             replay_stop();
         glr_ctrl_restore_hidden_code_panel();
@@ -228,9 +228,7 @@ void glr_ctrl_toggle_code_focus(void) {
  * editor so search never sees the shifted form. Hidden shortcut only —
  * no Config row, no @cfg (mirrors the Ctrl+N post-filter pattern). */
 int glr_ctrl_router_handle_code_focus_key(unsigned char key) {
-    if (key != KEY_CTRL_F)
-        return 0;
-    if (!(editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT))
+    if (!keymap_event_is(key, GLR_CODE_FOCUS))
         return 0;
     glr_ctrl_toggle_code_focus();
     return 1;
@@ -252,14 +250,12 @@ int glr_ctrl_router_handle_cfg_special_shortcut(int key) {
 }
 
 int glr_ctrl_router_handle_horizontal_audio_special(int key) {
-    if (key != GLUT_KEY_LEFT && key != GLUT_KEY_RIGHT)
-        return 0;
-    if (!(editor_input_active_modifiers() & GLUT_ACTIVE_CTRL))
-        return 0;
-    if (key == GLUT_KEY_LEFT)
+    if (keymap_event_is(key, GLR_AUDIO_PREV))
         glr_audio_prev_track();
-    else
+    else if (keymap_event_is(key, GLR_AUDIO_NEXT))
         glr_audio_next_track();
+    else
+        return 0;
     return 1;
 }
 
@@ -359,7 +355,7 @@ void glr_ctrl_close_help(void) {
 }
 
 int glr_ctrl_router_handle_escape_key(unsigned char key) {
-    if (key != KEY_ESC)
+    if (!keymap_event_is(key, GLR_ESCAPE))
         return 0;
     if (color_picker_active_line() >= 0) {
         color_picker_stop();
@@ -375,7 +371,7 @@ int glr_ctrl_router_handle_escape_key(unsigned char key) {
 }
 
 int glr_ctrl_router_handle_help_toggle_special(int key) {
-    if (key == GLUT_KEY_F1) {
+    if (keymap_event_is(key, GLR_HELP)) {
         glr_ctrl_toggle_help();
         return 1;
     }
@@ -433,11 +429,11 @@ static void cycle_example_or_user_scene_prev(void) {
 }
 
 int glr_ctrl_router_handle_scene_cycle_special(int key) {
-    if (key == GLUT_KEY_F12) {
+    if (keymap_event_is(key, GLR_NEXT_EXAMPLE)) {
         cycle_example_or_user_scene();
         return 1;
     }
-    if (key == GLUT_KEY_F11) {
+    if (keymap_event_is(key, GLR_PREV_EXAMPLE)) {
         cycle_example_or_user_scene_prev();
         return 1;
     }
@@ -905,7 +901,7 @@ static int route_pin_button_hit(const UiHit *hit) {
         replay_handle_pin_clicked();
         break;
     case UI_MENU_BAR_PIN_SEARCH:
-        editor_search_handle_key(KEY_CTRL_F);
+        editor_search_handle_key(KM_KEY(GLR_SEARCH));
         ui_menu_bar_note_search_opened(repl_state_variables().anim_time);
         break;
     default:
