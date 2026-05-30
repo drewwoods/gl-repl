@@ -743,6 +743,48 @@ static int route_code_text_hit(const UiHit *hit) {
      * (matches legacy ui_panels_handle_code_panel_press behaviour). */
     color_picker_stop();
 
+    /* Shift+click extends a selection from the current cursor to the
+     * clicked location, mirroring shift+arrow keys:
+     *   - same row as the cursor → per-character input-buffer selection
+     *     (the substring between the two columns), via the same anchor
+     *     machinery as shift+Left/Right and click-drag;
+     *   - a different row → whole-line range selection from the cursor's
+     *     line to the clicked line (the shift+Up/Down model). Partial
+     *     first/last lines across a multi-line span are not represented
+     *     by either selection model, so the cross-line case selects full
+     *     lines. */
+    if ((editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT) &&
+        hit->line_idx >= 0 && hit->char_idx >= 0) {
+        if (hit->line_idx == editor_state_edit_line() &&
+            editor_state_edit_line() < repl_state_document_count()) {
+            editor_selection_clear_line_range();
+            editor_cursor_pos_extend_selection(hit->char_idx);
+            /* Arm the drag so a shift-drag keeps growing the same
+             * per-character selection on this row. */
+            g_code_panel_drag_active = 1;
+            g_code_panel_drag_anchor = hit->line_idx;
+            g_code_panel_drag_moved  = 0;
+            g_code_panel_drag_char_anchor = hit->char_idx;
+        } else {
+            if (!editor_clipboard_sel_active())
+                editor_selection_start(editor_state_edit_line());
+            int anchor_line = editor_state_selection_anchor();
+            editor_selection_set_end(hit->line_idx);
+            editor_navigate_to_line(hit->line_idx);
+            /* Arm a line-range drag anchored at the selection's fixed
+             * start so a follow-up shift-drag extends the whole-line
+             * range about the same pivot (drag handler re-runs
+             * editor_selection_start(g_code_panel_drag_anchor)). */
+            g_code_panel_drag_active = 1;
+            g_code_panel_drag_anchor = anchor_line;
+            g_code_panel_drag_moved  = 1;
+            g_code_panel_drag_char_anchor = -1;
+        }
+        glr_action_cursor_blink_reset();
+        editor_request_redraw();
+        return 1;
+    }
+
     unsigned int now_ms = current_double_click_ms();
     int is_double_click = (g_last_text_press_line == hit->line_idx &&
                            g_last_text_press_char == hit->char_idx &&

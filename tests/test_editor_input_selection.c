@@ -898,6 +898,112 @@ int main(void) {
         editor_input_set_modifier_provider_for_test(NULL);
     }
 
+    printf("\n--- shift+click extends selection ---\n");
+    {
+        editor_input_set_modifier_provider_for_test(test_modifiers_provider);
+
+        /* Same row as the cursor → per-character input-buffer selection
+         * of the substring between the cursor and the clicked column. */
+        glr_ctrl_reset_all();
+        editor_feed_line("glVertex3f(1, 2, 3);");
+        editor_navigate_to_line(0);
+        editor_cursor_pos_set(4);
+        ASSERT_INT("shift+click same-row: baseline no anchor",
+                   editor_input_anchor(), -1);
+
+        UiHit hit = ui_hit_none();
+        hit.kind = UI_HIT_CODE_TEXT;
+        hit.line_idx = 0;
+        hit.char_idx = 10;
+        g_test_modifiers = GLUT_ACTIVE_SHIFT;
+        glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+        ASSERT_INT("shift+click same-row: anchor pinned at old cursor",
+                   editor_input_anchor(), 4);
+        ASSERT_INT("shift+click same-row: cursor at clicked col",
+                   editor_cursor_pos(), 10);
+        ASSERT_INT("shift+click same-row: selection lo",
+                   editor_input_selection_lo(), 4);
+        ASSERT_INT("shift+click same-row: selection hi",
+                   editor_input_selection_hi(), 10);
+
+        /* A second shift+click extends the same character selection. */
+        hit.char_idx = 16;
+        glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+        ASSERT_INT("shift+click same-row: anchor unchanged on extend",
+                   editor_input_anchor(), 4);
+        ASSERT_INT("shift+click same-row: cursor follows second click",
+                   editor_cursor_pos(), 16);
+
+        glr_ctrl_router_reset_code_panel_drag();
+
+        /* Different row → whole-line range from the cursor's line to the
+         * clicked line (the shift+Up/Down model). */
+        glr_ctrl_reset_all();
+        editor_feed_line("glVertex3f(1, 2, 3);");
+        editor_feed_line("glColor3f(1, 0, 0);");
+        editor_feed_line("glEnd();");
+        editor_navigate_to_line(0);
+        ASSERT_INT("shift+click cross-row: baseline edit line",
+                   editor_state_edit_line(), 0);
+        ASSERT_INT("shift+click cross-row: baseline no line selection",
+                   editor_clipboard_sel_active(), 0);
+
+        UiHit cross = ui_hit_none();
+        cross.kind = UI_HIT_CODE_TEXT;
+        cross.line_idx = 2;
+        cross.char_idx = 3;
+        g_test_modifiers = GLUT_ACTIVE_SHIFT;
+        glr_ctrl_router_handle_code_panel_hit(cross, 0, 0);
+        ASSERT_INT("shift+click cross-row: line selection active",
+                   editor_clipboard_sel_active(), 1);
+        ASSERT_INT("shift+click cross-row: selection lo",
+                   editor_clipboard_sel_lo(), 0);
+        ASSERT_INT("shift+click cross-row: selection hi",
+                   editor_clipboard_sel_hi(), 2);
+        ASSERT_INT("shift+click cross-row: navigated to clicked line",
+                   editor_state_edit_line(), 2);
+
+        /* Shift+click back upward contracts the range about the same
+         * fixed anchor (line 0). */
+        UiHit up = ui_hit_none();
+        up.kind = UI_HIT_CODE_TEXT;
+        up.line_idx = 1;
+        up.char_idx = 0;
+        glr_ctrl_router_handle_code_panel_hit(up, 0, 0);
+        ASSERT_INT("shift+click cross-row: anchor stays at 0",
+                   editor_clipboard_sel_lo(), 0);
+        ASSERT_INT("shift+click cross-row: end moves to 1",
+                   editor_clipboard_sel_hi(), 1);
+
+        /* After a multi-line range, holding shift and pressing an arrow
+         * starts a per-character selection on the current row and must
+         * drop the line-range so the two highlight bands never coexist
+         * (the reported double-highlight). */
+        glr_ctrl_reset_all();
+        editor_feed_line("glVertex3f(1, 2, 3);");
+        editor_feed_line("glColor3f(1, 0, 0);");
+        editor_feed_line("glEnd();");
+        editor_navigate_to_line(0);
+        g_test_modifiers = GLUT_ACTIVE_SHIFT;
+        { UiHit far = ui_hit_none(); far.kind = UI_HIT_CODE_TEXT;
+          far.line_idx = 2; far.char_idx = 3;
+          glr_ctrl_router_handle_code_panel_hit(far, 0, 0); }
+        ASSERT_INT("range+shift-arrow: line range active before arrow",
+                   editor_clipboard_sel_active(), 1);
+        editor_cursor_pos_set(2);
+        editor_handle_special(GLUT_KEY_RIGHT, 0, 0);
+        ASSERT_INT("range+shift-arrow: line range cleared",
+                   editor_clipboard_sel_active(), 0);
+        ASSERT_INT("range+shift-arrow: char selection active",
+                   editor_input_anchor(), 2);
+        ASSERT_INT("range+shift-arrow: char selection cursor moved",
+                   editor_cursor_pos(), 3);
+
+        g_test_modifiers = 0;
+        glr_ctrl_router_reset_code_panel_drag();
+        editor_input_set_modifier_provider_for_test(NULL);
+    }
+
     printf("\n--- Ctrl+V (LINES) routes through line paste, not input ---\n");
     {
         glr_ctrl_reset_all();
