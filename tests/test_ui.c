@@ -317,6 +317,56 @@ static void test_color_picker(void) {
     ASSERT_GL_CALLS("swatch render -> draws quads", GL_STUB_glBegin, 1);
 }
 
+/* Regression: when the color picker edits the line the cursor is parked
+ * on, the editor input buffer is a live shadow of that line. The
+ * writeback used to update the command store + editor buffer text but
+ * not the shadow, so the code panel kept showing the pre-edit color and
+ * a later navigation re-committed the stale input over the picker's
+ * change (commit_before_navigation), silently reverting it. */
+static void test_color_picker_active_line_no_revert(void) {
+    printf("Testing Color Picker active-line writeback...\n");
+
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(800, 600);
+    repl_load_example(0); /* Lit cube — has glColor3f(1, 1, 1); */
+
+    int ci = -1;
+    for (int i = 0; i < repl_state_document_count(); i++)
+        if (repl_state_document_cmd_at(i)->type == CMD_COLOR3F) { ci = i; break; }
+    ASSERT_TRUE("found a glColor3f line", ci >= 0);
+
+    /* Park the cursor on the color line so its text is loaded into the
+     * input buffer (the shadow). This is the precondition for the bug. */
+    editor_navigate_to_line(ci);
+    ASSERT_INT("cursor parked on color line", editor_state_edit_line(), ci);
+
+    color_picker_start(ci, 300);
+    ColorPickerView view = color_picker_view();
+    int vp_h = ui_state_viewport().window_h;
+    int mx = view.rects.sv_x + 40;
+    int my = vp_h - (view.rects.sv_y + 100);
+    color_picker_handle_press(mx, my);
+    color_picker_handle_motion(mx + 5, my - 5);
+    color_picker_handle_release();
+
+    const GLCmd *c = repl_state_document_cmd_at(ci);
+    float wr = c->args[0], wg = c->args[1], wb = c->args[2];
+    ASSERT_TRUE("picker actually changed the color",
+                wr != 1.0f || wg != 1.0f || wb != 1.0f);
+    /* The input shadow must track the writeback, not stay at (1,1,1). */
+    ASSERT_TRUE("input buffer shadow refreshed (not stale)",
+                strstr(editor_state_input().input, "1, 1, 1") == NULL);
+
+    /* Click away: navigate elsewhere, which runs commit_before_navigation.
+     * The picker's color must survive (not be reverted by a stale input). */
+    color_picker_stop();
+    editor_navigate_to_line(ci + 2);
+    const GLCmd *c2 = repl_state_document_cmd_at(ci);
+    ASSERT_TRUE("color persists after navigating away (r)", c2->args[0] == wr);
+    ASSERT_TRUE("color persists after navigating away (g)", c2->args[1] == wg);
+    ASSERT_TRUE("color persists after navigating away (b)", c2->args[2] == wb);
+}
+
 static void test_autocomplete_panel(void) {
     printf("Testing Autocomplete Panel...\n");
     gl_stub_counts_reset();
@@ -1411,6 +1461,7 @@ int main(void) {
     test_help_overlay();
     test_profile_panel();
     test_color_picker();
+    test_color_picker_active_line_no_revert();
     test_autocomplete_panel();
     test_variable_panel();
     test_menu_bar();

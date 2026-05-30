@@ -12,6 +12,8 @@
 #include "subsystems/color_picker/color_picker_state.h"  /* ColorPickerHostBridge */
 #include "config.h"               /* CP_CLEAR_MAX_V, MAX_LINE_LEN, REPL_STATUS_TEXT_MAX */
 #include "editor/commit.h"        /* editor_commit_apply_external_change */
+#include "editor/input.h"         /* editor_load_line_to_input */
+#include "editor/state.h"         /* editor_state_edit_line */
 #include "repl/command.h"         /* GLCmd, CMD_* */
 #include "repl/compile.h"         /* ReplCompiledChange */
 #include "repl/core.h"            /* repl_set_status */
@@ -111,7 +113,21 @@ static int glr_cp_write_color(int cmd_idx, float r, float g, float b, float a,
     memcpy(change.text[0], pl.text, (size_t)text_len);
     change.text[0][text_len] = '\0';
 
-    return editor_commit_apply_external_change(&change, capture_undo, 0);
+    int applied = editor_commit_apply_external_change(&change, capture_undo, 0);
+
+    /* The editor input buffer is a live shadow of the active edit line.
+     * The REPLACE_ONE above updated the command store + editor buffer
+     * text, but not the input buffer — so when the picker edits the line
+     * the cursor is parked on, the code panel keeps showing the stale
+     * pre-edit text, and a later navigation re-commits that stale input
+     * over the picker's change (commit_before_navigation), silently
+     * reverting it. Reload the shadow whenever we just wrote the active
+     * edit line so the displayed text tracks the picker and navigation
+     * has nothing stale to re-commit. */
+    if (applied && cmd_idx == editor_state_edit_line())
+        editor_load_line_to_input(cmd_idx);
+
+    return applied;
 }
 
 static void glr_cp_viewport(int *w, int *h) {
