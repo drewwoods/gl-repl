@@ -675,6 +675,28 @@ int main() {
         g_show_help = 0;
     }
 
+    /* 0c6b. A bare modifier special key (Ctrl/Shift/Alt/Cmd) is not edit
+     * input: it must not re-arm scroll-follow-cursor (which would snap the
+     * code panel back to the cursor and undo a wheel scroll), while a real
+     * special key still does. */
+    {
+        glr_ctrl_reset_all();
+        editor_feed_line("glVertex3f(0,0,0)");
+        editor_navigate_to_line(0);
+
+        g_scroll_follow_cursor = 0;
+        editor_handle_special(GLUT_KEY_CTRL_L, 0, 0);
+        ASSERT_INT("bare Ctrl_L leaves scroll-follow off", g_scroll_follow_cursor, 0);
+        editor_handle_special(GLUT_KEY_SHIFT_R, 0, 0);
+        ASSERT_INT("bare Shift_R leaves scroll-follow off", g_scroll_follow_cursor, 0);
+        editor_handle_special(GLUT_KEY_SUPER_L, 0, 0);
+        ASSERT_INT("bare Cmd_L leaves scroll-follow off", g_scroll_follow_cursor, 0);
+
+        /* A real navigation special key re-arms follow as before. */
+        editor_handle_special(GLUT_KEY_LEFT, 0, 0);
+        ASSERT_INT("arrow key re-arms scroll-follow", g_scroll_follow_cursor, 1);
+    }
+
     /* 0c7. F12 special route still cycles built-in examples. */
     {
         glr_ctrl_reset_all();

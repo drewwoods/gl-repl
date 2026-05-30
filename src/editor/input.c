@@ -1714,6 +1714,25 @@ static void special_begin_key(void) {
     editor_scroll_follow_cursor_set(1);
 }
 
+/* Bare modifier-key presses (Ctrl / Shift / Alt / Cmd with nothing else)
+ * arrive as their own GLUT special keys on the cocoa freeglut-fork
+ * (flagsChanged -> GLUT_KEY_{CTRL,SHIFT,ALT,SUPER}_{L,R}). They are not
+ * editing input: they must not run special_begin_key's
+ * scroll-follow-cursor, or merely holding Ctrl snaps the code panel back
+ * to the cursor and undoes a wheel scroll. No editor special-key route
+ * acts on them either, so swallow them outright. */
+static int special_key_is_bare_modifier(int key) {
+    switch (key) {
+    case GLUT_KEY_SHIFT_L: case GLUT_KEY_SHIFT_R:
+    case GLUT_KEY_CTRL_L:  case GLUT_KEY_CTRL_R:
+    case GLUT_KEY_ALT_L:   case GLUT_KEY_ALT_R:
+    case GLUT_KEY_SUPER_L: case GLUT_KEY_SUPER_R:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
 int editor_input_rename_capture_special(int key) {
     /* Rename captures arrows and F-keys ahead of replay/search/navigation so
      * modal text entry cannot leak actions into the editor. */
@@ -1875,6 +1894,11 @@ static int handle_page_scroll_special_key_route(int key) {
 static void special_func(int key, int x, int y) {
     (void)x;
     (void)y;
+
+    /* A bare modifier press is not edit input — don't let it reset the
+     * scroll-follow (snapping the view to the cursor) or otherwise act. */
+    if (special_key_is_bare_modifier(key))
+        return;
 
     special_begin_key();
 
