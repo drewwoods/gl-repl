@@ -22,14 +22,19 @@
  *     if (keymap_event_is(key, GLR_CODE_FOCUS)) { ... }
  *         // expands to keymap_event_is(key, KEY_CTRL_F, GLUT_ACTIVE_SHIFT)
  *
- * keymap_event_is(event_key, binding_key, binding_mods):
+ * keymap_event_is(event_key, binding_key, binding_mods) is an EXACT match:
  *   - returns 0 unless event_key == binding_key;
- *   - binding_mods == 0  -> matches regardless of held modifiers
- *     (mods-agnostic; the handler may still inspect modifiers itself, e.g.
- *     Ctrl+Z vs Ctrl+Shift+Z). Plain bindings rely on dispatch ORDER for
- *     their Ctrl+Shift twin to be claimed by an earlier handler (the cfg
- *     two-pass), exactly as before;
- *   - binding_mods != 0  -> also requires those bits to be held.
+ *   - the held modifiers must equal binding_mods, AFTER normalizing away
+ *     the modifier the key already implies — a KEY_CTRL_* byte carries
+ *     Ctrl (and on macOS the Cmd/SUPER alias). So binding_mods == 0 means
+ *     strictly "no extra modifiers": a Shift binding and its plain twin on
+ *     the same key never alias, and the dispatch ORDER of two bindings on
+ *     one key no longer matters. (Ctrl is dropped from the held set unless
+ *     the binding requires it, e.g. the Ctrl+Arrow audio bindings; Shift
+ *     is always significant.)
+ * A handler that wants a key with-or-without a modifier and branches on it
+ * itself (Ctrl+Z vs Ctrl+Shift+Z) matches the bare key via KM_KEY()
+ * instead, NOT this matcher.
  * It reads the live modifiers through the editor's modifier accessor, so
  * it is implemented in src/editor/input.c (next to that accessor) and
  * declared here so every dispatcher — including subsystems that don't

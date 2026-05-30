@@ -168,16 +168,26 @@ int editor_input_active_modifiers(void) {
 }
 
 /* Binding matcher for keymap.h (declared there; homed here so it reads the
- * canonical modifier accessor above — and so every test's modifier
- * provider flows through unchanged). binding_mods == 0 matches the key
- * regardless of held modifiers (the handler may inspect them itself);
- * a non-zero binding_mods additionally requires those bits to be held. */
+ * canonical modifier accessor above — and so every test's modifier provider
+ * flows through unchanged).
+ *
+ * Exact modifier match, so binding_mods == 0 means strictly "no extra
+ * modifiers": a Shift binding and its plain twin on the same key never
+ * alias (Shift is the exact discriminator). Held modifiers are first
+ * normalized to drop the modifier the key already IMPLIES — a KEY_CTRL_*
+ * control byte carries Ctrl, and on macOS the Cmd/SUPER alias that the
+ * accessor mirrors into Ctrl. SUPER is always dropped; Ctrl is dropped
+ * unless the binding explicitly requires it (the Ctrl+Arrow audio
+ * bindings). A handler that instead wants a key with-or-without a modifier
+ * and branches on it itself matches the bare key via KM_KEY() (see the
+ * undo/redo route: Ctrl+Z vs Ctrl+Shift+Z). */
 int keymap_event_is(int event_key, int binding_key, int binding_mods) {
     if (event_key != binding_key)
         return 0;
-    if (binding_mods == 0)
-        return 1;
-    return (editor_input_active_modifiers() & binding_mods) == binding_mods;
+    int held = editor_input_active_modifiers() & ~GLUT_ACTIVE_SUPER;
+    if (!(binding_mods & GLUT_ACTIVE_CTRL))
+        held &= ~GLUT_ACTIVE_CTRL;
+    return held == binding_mods;
 }
 
 void editor_request_redraw(void) {
@@ -1111,7 +1121,10 @@ static int handle_cursor_endpoint_key_route(unsigned char key) {
 }
 
 static int handle_undo_redo_key_route(unsigned char key) {
-    if (keymap_event_is(key, GLR_UNDO)) {
+    /* Match the bare key (not keymap_event_is): Ctrl+Z and Ctrl+Shift+Z
+     * both land here and the Shift inspected below picks undo vs redo, so
+     * this route deliberately accepts the key with or without Shift. */
+    if (key == KM_KEY(GLR_UNDO)) {
         if (editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT)
             editor_undo_do_redo();
         else
