@@ -1169,11 +1169,16 @@ static int handle_undo_redo_key_route(unsigned char key) {
             editor_undo_do_redo();
         else
             editor_undo_pop_snapshot();
+        /* keyboard_begin_key already armed scroll-follow; suppress it so
+         * undo/redo doesn't yank the view to the restored cursor — the
+         * user may be looking at a different region (e.g. color picker). */
+        editor_scroll_follow_cursor_set(0);
         return 1;
     }
 
     if (keymap_event_is(key, GLR_REDO)) {
         editor_undo_do_redo();
+        editor_scroll_follow_cursor_set(0);
         return 1;
     }
     return 0;
