@@ -39,14 +39,33 @@ should be cross-checked under real GCC on Ubuntu.
 ## Build
 
 ```bash
-make gl-repl          # Build main binary (freeglut)
-make glut            # Build with system GLUT (macOS framework)
+make gl-repl          # Build main binary (vendored static freeglut, macOS Cocoa)
+make glut            # Build with system GLUT (macOS Apple framework fallback)
 make test            # Build and run all tests (debug: ASan + UBSan)
 make check-c99       # C99 ratchet (sample + demos + bench)
+make freeglut-clean  # Drop the vendored freeglut CMake build (forces a rebuild)
 make clean           # Remove binaries
 ```
 
-Requires: gcc with C99 support, OpenGL, GLUT/freeglut.
+Requires: gcc with C99 support, OpenGL, GLUT/freeglut. On macOS the build also
+needs **cmake** — `make gl-repl` (and the non-stub `make test`) builds the
+vendored freeglut into a static `libglut.a` on first use.
+
+### Vendored freeglut
+
+On macOS, freeglut is vendored in-tree under `third_party/freeglut/` (full
+upstream source) and built as a **static library with the native Cocoa backend**
+(`-DFREEGLUT_COCOA=ON`), linked by archive path — no out-of-tree checkout, no
+`libglut.dylib` rpath. The CMake build lands in `third_party/freeglut/build/`
+(gitignored; survives `make clean`, so `make freeglut-clean` forces a rebuild).
+`make glut` is the fallback that links Apple's system GLUT framework instead
+(passes `FREEGLUT_VENDOR=0`). On **Linux** nothing is vendored — the build keeps
+using the system `-lglut -lGL -lGLU`.
+
+Re-pin the vendored version with `scripts/vendor-freeglut.sh [<ref>]` (default
+`master`; the resolved SHA is recorded in `third_party/freeglut/VENDORED.txt`),
+then `make freeglut-clean`. Licenses for freeglut and miniaudio are acknowledged
+in `THIRD_PARTY_LICENSES.md`.
 
 The test targets (`test`, `test-detailed`, `test-stubs`, `test-full`)
 default to `BUILD=debug`, which compiles with **AddressSanitizer +

@@ -1213,7 +1213,7 @@ static void test_keymap_event_is_strict(void) {
                keymap_event_is(KEY_CTRL_C, KEY_CTRL_C, GLUT_ACTIVE_SHIFT), 1);
 
     /* (The macOS Cmd/SUPER normalization is only meaningful on the real
-     * freeglut-fork build — GLUT_ACTIVE_SUPER is 0 under the GL stubs — so
+     * freeglut Cocoa build — GLUT_ACTIVE_SUPER is 0 under the GL stubs — so
      * it isn't asserted here; see keymap_event_is in src/editor/input.c.)
      * A binding that explicitly requires Ctrl (audio arrows) needs it. */
     g_test_mods = GLUT_ACTIVE_CTRL;

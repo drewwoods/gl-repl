@@ -66,10 +66,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* macOS Cmd-key support. The freeglut-fork sets GLUT_ACTIVE_SUPER
- * when Cmd is held; mainline freeglut and other GLUT builds don't
- * deliver Cmd at all, so on those platforms the constant is absent.
- * Define it to 0 there so the bitwise checks below compile out to
+/* macOS Cmd-key support. freeglut's Cocoa backend (the vendored
+ * third_party/freeglut we build on macOS) sets GLUT_ACTIVE_SUPER when Cmd is
+ * held, exposing it via <GL/freeglut.h>. The Apple GLUT framework (`make glut`)
+ * and X11/Linux builds don't deliver Cmd, so the constant is absent there;
+ * define it to 0 in that case so the bitwise checks below compile out to
  * no-ops without #ifdef-cluttering the call sites. */
 #ifndef GLUT_ACTIVE_SUPER
 #define GLUT_ACTIVE_SUPER 0
@@ -156,7 +157,7 @@ int editor_input_active_modifiers(void) {
         mods = glutGetModifiers();
     else
         mods = 0;
-    /* Treat Cmd (GLUT_ACTIVE_SUPER on the freeglut-fork) as a Ctrl
+    /* Treat Cmd (GLUT_ACTIVE_SUPER on the freeglut Cocoa backend) as a Ctrl
      * alias so every existing GLUT_ACTIVE_CTRL check fires on macOS
      * Cmd shortcuts (Cmd+/ for comment toggle, mouse-modifier checks,
      * etc.). The SUPER bit stays visible so keyboard_func can do the
@@ -1715,7 +1716,7 @@ static void special_begin_key(void) {
 }
 
 /* Bare modifier-key presses (Ctrl / Shift / Alt / Cmd with nothing else)
- * arrive as their own GLUT special keys on the cocoa freeglut-fork
+ * arrive as their own GLUT special keys on the freeglut Cocoa backend
  * (flagsChanged -> GLUT_KEY_{CTRL,SHIFT,ALT,SUPER}_{L,R}). They are not
  * editing input: they must not run special_begin_key's
  * scroll-follow-cursor, or merely holding Ctrl snaps the code panel back

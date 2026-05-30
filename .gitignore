@@ -5,6 +5,10 @@ gl-repl
 output.c
 output.ply
 build/
+# Vendored freeglut CMake build output (also matched by the bare build/ above;
+# anchored here for clarity). The vendored *source* under third_party/freeglut/
+# is checked in; only its build/ tree is generated.
+third_party/freeglut/build/
 workspace/
 bench_repl
 /scene_demo
