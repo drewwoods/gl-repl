@@ -65,7 +65,10 @@ cleanup on EXIT trap). Usage: `scripts/vendor-freeglut.sh [<ref>]`, **default
    templates the build references. The script **hard-fails** if any allowlisted
    path is missing in the checkout (so an upstream restructure surfaces loudly
    instead of producing a broken vendor tree). Trade-off acknowledged: an upstream
-   layout change may require editing the allowlist — that's intentional.
+   layout change may require editing the allowlist — that's intentional. The
+   hard-fail only guards *listed* paths, not a needed-but-omitted one; the real
+   completeness net is verification #2's clean configure — if cmake errors on a
+   missing `CONFIGURE_FILE`/`include()` input, add that path to the allowlist.
 3. Write `third_party/freeglut/VENDORED.txt`: upstream URL, requested ref, resolved
    SHA, and "produced by scripts/vendor-freeglut.sh".
 4. Print a reminder to update the SHA line in `THIRD_PARTY_LICENSES.md` and to run
@@ -100,8 +103,17 @@ All changes confined to the `ifeq ($(UNAME_S),Darwin)` branch; Linux and
    placed **before** `-I/opt/homebrew/include` (hermeticity — a stray
    `brew install freeglut` must not shadow the vendored `<GL/freeglut.h>` while we
    link the vendored `.a`). Keep `/opt/homebrew/include` for `<GL/gl.h>`/`<glu.h>`/
-   `<glext.h>` (vendored freeglut only ships `<GL/freeglut.h>`). `include/gl_includes.h`
-   needs **no change**.
+   `<glext.h>` (vendored freeglut's `include/GL/` only ships the freeglut headers —
+   `freeglut.h`/`freeglut_std.h`/`freeglut_ext.h`/`glut.h` — *not* `gl.h`/`glu.h`/
+   `glext.h`, so putting it first can't shadow the system GL headers; confirm with
+   the `ls` in verification #1). `include/gl_includes.h` needs **no change**.
+
+   **`make glut` interaction:** the `glut` target overrides `GL_LDFLAGS` and adds
+   `-DUSE_GLUT` but does **not** override `GL_HEADER_CFLAGS`, so the vendored `-I`
+   stays on the compile line. That's harmless: `gl_includes.h` gates on
+   `#if defined(__APPLE__) && defined(USE_GLUT)` and takes the `<GLUT/glut.h>`
+   (Apple framework) path, so `<GL/freeglut.h>` is never `#include`d under
+   `make glut` — the vendored header can't conflict.
 
 2. **New variables + build rule** (near the Darwin block):
    ```make
@@ -111,11 +123,11 @@ All changes confined to the `ifeq ($(UNAME_S),Darwin)` branch; Linux and
    FREEGLUT_VENDOR     ?= 1   # `make glut` passes 0 to skip the vendored build
 
    $(FREEGLUT_STATIC_LIB):
-   	cmake -S $(FREEGLUT_SRC) -B $(FREEGLUT_BUILD) \
-   	  -DFREEGLUT_COCOA=ON -DFREEGLUT_BUILD_STATIC_LIBS=ON \
-   	  -DFREEGLUT_BUILD_SHARED_LIBS=OFF -DFREEGLUT_BUILD_DEMOS=OFF \
-   	  -DCMAKE_BUILD_TYPE=Release
-   	cmake --build $(FREEGLUT_BUILD) --target freeglut_static
+   cmake -S $(FREEGLUT_SRC) -B $(FREEGLUT_BUILD) \
+     -DFREEGLUT_COCOA=ON -DFREEGLUT_BUILD_STATIC_LIBS=ON \
+     -DFREEGLUT_BUILD_SHARED_LIBS=OFF -DFREEGLUT_BUILD_DEMOS=OFF \
+     -DCMAKE_BUILD_TYPE=Release
+   cmake --build $(FREEGLUT_BUILD) --target freeglut_static
    ```
    Built under `third_party/freeglut/build/` (survives `make clean`, which only
    removes the top-level `./build`). **This rule has no dependency on the freeglut
@@ -163,11 +175,22 @@ All changes confined to the `ifeq ($(UNAME_S),Darwin)` branch; Linux and
    endif
    endif
    ```
+   **Placement is load-bearing.** This is a *static* target list (no
+   `.SECONDEXPANSION`), so make expands every target name when it parses the line.
+   `$(SAMPLE_BIN)` + the 7 demo bins are defined ~L760-767 and `$(GL_TEST_BINS)`
+   ~L973 — all *later* than `TEST_BINS`/`BENCH_BINS` (~L755). So the block must go
+   **after `GL_TEST_BINS` is defined — i.e. right after the `gl-tests` rules
+   (~L973-992)**, not at ~L755. (At ~L755 those vars expand to empty and the prereq
+   silently attaches to nothing — `make gl-repl`, every demo, and gl-tests would
+   then link without the prereq, the exact race step 6 exists to prevent.) make
+   accumulates prerequisites across separate lines and the recipes live elsewhere,
+   so the late placement is fine.
    This covers: the 8 sample/demo rules (~L843,855,868,892,905,918,931,944),
-   `test_audio` + all core tests/benches that link `$(GL_LDFLAGS)` via the
-   `core_test_binary`/`bench_binary` templates (placed after `TEST_BINS`/`BENCH_BINS`
-   are defined, ~L755), and the 2 `gl-tests` rules (~L975,983). Listing a few
-   extra non-GL tests as order-only prereqs is harmless (they still don't link it).
+   `test_audio` (it's in `TEST_BINS`, and step 6 uses `TEST_BINS` not the
+   test_audio-excluding `CORE_TEST_BINS`) + all core tests/benches that link
+   `$(GL_LDFLAGS)` via the `core_test_binary`/`bench_binary` templates, and the 2
+   `gl-tests` rules (~L975,983). Listing a few extra non-GL tests as order-only
+   prereqs is harmless (they still don't link it).
 
 7. **`make glut` (~L1512):** keep its `GL_LDFLAGS=$(GLUT_GL_LDFLAGS)` override
    **and** pass **`FREEGLUT_VENDOR=0`** so the prereq line in step 6 is skipped —
@@ -186,6 +209,7 @@ link `$(GL_LDFLAGS)`.
 - **`scripts/check-c99.sh`** (~L68, L72): replace `$HOME/src/freeglut-fork/include`
   with `$ROOT/third_party/freeglut/include` in both the `-isystem` list and the
   `have_real_gl` probe loop, so the macOS C99 ratchet still resolves `<GL/freeglut.h>`.
+  Also fix the cosmetic `homebrew/freeglut-fork` comment at ~L56 in the same edit.
 - **Comment fixes** (the fork-only rationale is now partly false — mainline freeglut's
   Cocoa backend *does* set `GLUT_ACTIVE_SUPER`; the `#ifndef…0` fallback still
   correctly covers the `make glut` Apple-framework path and X11/Linux, which don't):
@@ -227,8 +251,10 @@ recipe `find`s from repo root — but still run the full
 ## Verification
 
 1. **Vendor:** `scripts/vendor-freeglut.sh` (no arg → master tip) populates
-   `third_party/freeglut/` + `VENDORED.txt` with SHA `463cef14…`;
-   `third_party/freeglut/src/cocoa/` present.
+   `third_party/freeglut/` + `VENDORED.txt` with the resolved SHA;
+   `third_party/freeglut/src/cocoa/` present. `ls third_party/freeglut/include/GL/`
+   shows only freeglut headers (no `gl.h`/`glu.h`/`glext.h`) — confirms the
+   vendored `-I` can't shadow system GL headers.
 2. **Build static:** `make gl-repl` → cmake configures/builds `libglut.a`, binary
    links it: `ls third_party/freeglut/build/lib/libglut.a`.
 3. **Static-link proof:** `otool -L gl-repl` shows **no** `libglut*.dylib` — only
