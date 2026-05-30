@@ -111,7 +111,7 @@ static void draw_vertex_point_marker(float x, float y, float z) {
     int depth = glIsEnabled(GL_DEPTH_TEST);
     if (depth) glDisable(GL_DEPTH_TEST);
     scene_clr_a(SCENE_CLR_GUIDE_VERTEX_MARK, 0.9f);
-    glPointSize(8.0f);
+    glPointSize(15.0f);
     glBegin(GL_POINTS);
     glVertex3f(x, y, z);
     glEnd();
