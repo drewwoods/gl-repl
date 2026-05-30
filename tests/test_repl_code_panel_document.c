@@ -91,8 +91,11 @@ int main(void) {
         ASSERT_TRUE("target lookup row offset", row_offset == 0);
     }
 
-    editor_navigate_to_line(1);
-    editor_cursor_pos_set(0);
+    /* Open a virtual insert row below the first command. Cursor > 0 keeps
+     * the "open an empty insert row for typing" behavior (cursor == 0 now
+     * inserts a real blank line above instead). */
+    editor_navigate_to_line(0);
+    editor_cursor_pos_set(1);
     editor_handle_key('\r', 0, 0);
     build_doc(&snap, &layout);
     {

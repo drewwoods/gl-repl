@@ -443,18 +443,17 @@ int main(void) {
     editor_navigate_to_line(1);
     editor_cursor_pos_set(0);
     editor_handle_key('\r', 0, 0);
-    ASSERT_TRUE("enter at line start enters insert mode", editor_insert_mode() == 1);
-    ASSERT_TRUE("enter at line start keeps insertion index", editor_state_edit_line() == 1);
-    {
-        EditorInputState *inp = editor_state_input_mut();
-        strcpy(inp->input, "glColor3f(1, 0, 0)");
-        inp->input_len = (int)strlen(inp->input);
-        editor_cursor_pos_set(inp->input_len);
-    }
-    editor_handle_key('\r', 0, 0);
-    ASSERT_TRUE("inserted line before current cmd count", repl_state_document_count() == 3);
-    ASSERT_TRUE("inserted line before current type", repl_state_document_cmds_mut()[1].type == CMD_COLOR3F);
-    ASSERT_TRUE("original current line shifted down", repl_state_document_cmds_mut()[2].type == CMD_END);
+    /* Enter at column 0 inserts a real, persistent blank line ABOVE the
+     * current line and keeps the cursor on the original content (it
+     * follows the text down one row) — standard "newline before cursor"
+     * semantics, not a transient empty insert row that vanishes on a
+     * same-index click. */
+    ASSERT_TRUE("enter at line start inserts blank above (count)", repl_state_document_count() == 3);
+    ASSERT_TRUE("enter at line start: blank above is empty", repl_state_document_cmds_mut()[1].type == CMD_EMPTY);
+    ASSERT_TRUE("enter at line start: content shifts down", repl_state_document_cmds_mut()[2].type == CMD_END);
+    ASSERT_TRUE("enter at line start: cursor follows content down", editor_state_edit_line() == 2);
+    ASSERT_TRUE("enter at line start: not insert mode", editor_insert_mode() == 0);
+    ASSERT_TRUE("enter at line start: cursor at column 0", editor_cursor_pos() == 0);
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_POINTS);");
