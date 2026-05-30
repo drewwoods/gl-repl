@@ -1181,9 +1181,58 @@ static void test_no_duplicate_config_bindings(void) {
     ASSERT_INT("config rows have no duplicate (key,mods,is_special)", dups, 0);
 }
 
+/* keymap_event_is is an EXACT modifier match (binding_mods == 0 means no
+ * extra modifier), after normalizing away the Ctrl a control byte implies
+ * and the macOS Cmd/SUPER alias. Exercised with explicit (key, mods) args
+ * so it stays independent of how any individual GLR_* binding is set. */
+static void test_keymap_event_is_strict(void) {
+    editor_input_set_modifier_provider_for_test(test_mods_provider);
+
+    /* Shift is exact: a plain (key,0) and its Shift twin never alias. */
+    g_test_mods = 0;
+    ASSERT_INT("plain key, none held -> match",
+               keymap_event_is(GLUT_KEY_F12, GLUT_KEY_F12, 0), 1);
+    ASSERT_INT("Shift binding, none held -> no match",
+               keymap_event_is(GLUT_KEY_F12, GLUT_KEY_F12, GLUT_ACTIVE_SHIFT), 0);
+    g_test_mods = GLUT_ACTIVE_SHIFT;
+    ASSERT_INT("Shift binding, Shift held -> match",
+               keymap_event_is(GLUT_KEY_F12, GLUT_KEY_F12, GLUT_ACTIVE_SHIFT), 1);
+    ASSERT_INT("plain binding, Shift held -> no match (strict)",
+               keymap_event_is(GLUT_KEY_F12, GLUT_KEY_F12, 0), 0);
+
+    /* Ctrl is implicit in a control byte: a (Ctrl-byte, 0) binding matches
+     * with Ctrl held, but adding Shift breaks it; the Ctrl+Shift twin
+     * needs Shift. */
+    g_test_mods = GLUT_ACTIVE_CTRL;
+    ASSERT_INT("Ctrl byte, mods 0, Ctrl held -> match",
+               keymap_event_is(KEY_CTRL_S, KEY_CTRL_S, 0), 1);
+    g_test_mods = GLUT_ACTIVE_CTRL | GLUT_ACTIVE_SHIFT;
+    ASSERT_INT("Ctrl byte, mods 0, Ctrl+Shift held -> no match",
+               keymap_event_is(KEY_CTRL_S, KEY_CTRL_S, 0), 0);
+    ASSERT_INT("Ctrl byte, mods SHIFT, Ctrl+Shift held -> match",
+               keymap_event_is(KEY_CTRL_C, KEY_CTRL_C, GLUT_ACTIVE_SHIFT), 1);
+
+    /* (The macOS Cmd/SUPER normalization is only meaningful on the real
+     * freeglut-fork build — GLUT_ACTIVE_SUPER is 0 under the GL stubs — so
+     * it isn't asserted here; see keymap_event_is in src/editor/input.c.)
+     * A binding that explicitly requires Ctrl (audio arrows) needs it. */
+    g_test_mods = GLUT_ACTIVE_CTRL;
+    ASSERT_INT("Ctrl-required, Ctrl held -> match",
+               keymap_event_is(GLUT_KEY_LEFT, GLUT_KEY_LEFT, GLUT_ACTIVE_CTRL), 1);
+    g_test_mods = 0;
+    ASSERT_INT("Ctrl-required, none held -> no match",
+               keymap_event_is(GLUT_KEY_LEFT, GLUT_KEY_LEFT, GLUT_ACTIVE_CTRL), 0);
+    ASSERT_INT("key mismatch -> no match",
+               keymap_event_is(GLUT_KEY_F11, GLUT_KEY_F12, 0), 0);
+
+    editor_input_set_modifier_provider_for_test(NULL);
+    g_test_mods = 0;
+}
+
 int main(void) {
     test_apply_defaults();
     test_no_duplicate_config_bindings();
+    test_keymap_event_is_strict();
     test_f9_cycles_light_theme();
     test_shift_fkey_steps_backward();
     test_fkey_reassignment_and_alt_shortcuts();
