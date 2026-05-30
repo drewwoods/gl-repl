@@ -725,6 +725,48 @@ static void test_starts_geometry_emit_predicate(void) {
     }
 }
 
+/* --- 9. glut-solid predicate coverage ----------------------------
+ *
+ * repl_cmd_is_glut_solid names the five glutSolid* primitive commands.
+ * It is the single source feeding repl_cmd_starts_geometry_emit and
+ * repl_cmd_consumes_current_color (both OR it in) and the outline
+ * overlay's GL_LINE wireframe redraw pass. Pin the exact set so a new
+ * glutSolid* CmdType can't be added without joining the predicate (and
+ * thus the outline redraw + color-link), and so a non-shape type can't
+ * drift into it. */
+static void test_is_glut_solid_predicate(void) {
+    static const CmdType expected[] = {
+        CMD_GLUT_TORUS,
+        CMD_GLUT_CUBE,
+        CMD_GLUT_SPHERE,
+        CMD_GLUT_TEAPOT,
+        CMD_GLUT_CONE,
+    };
+    const int n_expected = (int)(sizeof expected / sizeof expected[0]);
+
+    for (int t_int = 0; t_int < CMD_TYPE_COUNT; t_int++) {
+        CmdType t = (CmdType)t_int;
+        int is_expected = 0;
+        for (int j = 0; j < n_expected; j++)
+            if (expected[j] == t) { is_expected = 1; break; }
+
+        char label[128];
+        snprintf(label, sizeof label,
+                 "type=%d: repl_cmd_is_glut_solid matches expected set",
+                 t_int);
+        ASSERT_INT(label, repl_cmd_is_glut_solid(t), is_expected);
+
+        /* Every glut solid must also be a geometry-emit anchor and a
+         * color consumer — the two predicates that OR it in. */
+        if (is_expected) {
+            ASSERT_INT("glut solid anchors a draw",
+                       repl_cmd_starts_geometry_emit(t), 1);
+            ASSERT_INT("glut solid consumes current color",
+                       repl_cmd_consumes_current_color(t), 1);
+        }
+    }
+}
+
 int main(void) {
     test_walker_resolves_funcn_args_at_cursor();
     test_walker_fires_on_each_cmd_at_cursor();
@@ -735,6 +777,7 @@ int main(void) {
     test_display_name_for_not_in_begin();
     test_transform_dispatch_drift_guard();
     test_starts_geometry_emit_predicate();
+    test_is_glut_solid_predicate();
 
     printf("test_replay_walk: %d/%d passed\n",
            g_harness.passed, g_harness.run);

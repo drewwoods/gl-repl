@@ -165,6 +165,19 @@ static inline int repl_cmd_is_block_end(CmdType type) {
             type == CMD_IF_END);
 }
 
+/* True for the glutSolid* primitive commands (torus, cube, sphere,
+ * teapot, cone). These render a closed shape from the current matrix
+ * state but emit no REPL-tracked vertex (the geometry is generated
+ * inside GLU/freeglut). Shared by the geometry-emit and color-consume
+ * predicates below and by the outline overlay's GL_LINE redraw pass. */
+static inline int repl_cmd_is_glut_solid(CmdType type) {
+    return (type == CMD_GLUT_TORUS ||
+            type == CMD_GLUT_CUBE ||
+            type == CMD_GLUT_SPHERE ||
+            type == CMD_GLUT_TEAPOT ||
+            type == CMD_GLUT_CONE);
+}
+
 /* True for the commands that *start* GL primitive emission with the
  * current modelview: glBegin (opens a vertex stream), every glutSolid*
  * primitive (renders a closed shape from current matrix state), and
@@ -180,11 +193,7 @@ static inline int repl_cmd_is_block_end(CmdType type) {
  * modelview as a draw anchor. */
 static inline int repl_cmd_starts_geometry_emit(CmdType type) {
     return (type == CMD_BEGIN ||
-            type == CMD_GLUT_TORUS ||
-            type == CMD_GLUT_CUBE ||
-            type == CMD_GLUT_SPHERE ||
-            type == CMD_GLUT_TEAPOT ||
-            type == CMD_GLUT_CONE ||
+            repl_cmd_is_glut_solid(type) ||
             type == CMD_TESS_BEGIN_POLYGON);
 }
 
@@ -205,11 +214,7 @@ static inline int repl_cmd_starts_geometry_emit(CmdType type) {
  * only answers "is the cursor on a color consumer?". */
 static inline int repl_cmd_consumes_current_color(CmdType type) {
     return (repl_cmd_emits_vertex(type) ||
-            type == CMD_GLUT_TORUS ||
-            type == CMD_GLUT_CUBE ||
-            type == CMD_GLUT_SPHERE ||
-            type == CMD_GLUT_TEAPOT ||
-            type == CMD_GLUT_CONE);
+            repl_cmd_is_glut_solid(type));
 }
 
 #endif /* REPL_COMMAND_H */
