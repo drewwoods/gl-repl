@@ -554,6 +554,17 @@ static void repl_code_panel_find_highlight_rows(const UiRenderSnapshot *snap,
  * the snapshot's highlight list per-line instead of pre-extracting a
  * single index. List size is bounded (MAX_HIGHLIGHTS=256) and only a
  * handful are typically transform-kind, so the cost is small. */
+static int repl_code_panel_line_is_unbalanced(const UiRenderSnapshot *snap,
+                                              int line_idx) {
+    if (!snap || !snap->editor_highlights || line_idx < 0) return 0;
+    for (int i = 0; i < snap->editor_highlights->count; i++) {
+        const UiHighlight *h = &snap->editor_highlights->items[i];
+        if (h->kind == HIGHLIGHT_UNBALANCED && h->line_idx == line_idx)
+            return 1;
+    }
+    return 0;
+}
+
 static int repl_code_panel_line_is_affecting_transform(const UiRenderSnapshot *snap,
                                                        int line_idx) {
     if (!snap || !snap->editor_highlights || line_idx < 0) return 0;
@@ -733,6 +744,7 @@ typedef enum {
     MARKER_PRIORITY_MATCHING_PUSH,
     MARKER_PRIORITY_FEEDING_NORMAL,
     MARKER_PRIORITY_FEEDING_COLOR,
+    MARKER_PRIORITY_UNBALANCED,
     MARKER_PRIORITY_TUTORIAL_INSERTION
 } MarkerPriority;
 
@@ -791,6 +803,15 @@ static void repl_code_panel_apply_command_overlays(ReplCodePanelBuilder *builder
         if (MARKER_PRIORITY_FEEDING_COLOR > priority) {
             priority = MARKER_PRIORITY_FEEDING_COLOR;
             color = repl_code_panel_rgba(0.95f, 0.85f, 0.30f, 0.85f);
+        }
+    }
+
+    if (repl_code_panel_line_is_unbalanced(builder->snap, line_idx)) {
+        if (MARKER_PRIORITY_UNBALANCED > priority) {
+            priority = MARKER_PRIORITY_UNBALANCED;
+            /* Warning red — distinct from the violet match / orange
+             * affecting-transform / blue-yellow feeding markers. */
+            color = repl_code_panel_rgba(0.95f, 0.35f, 0.30f, 0.95f);
         }
     }
 
@@ -1714,10 +1735,13 @@ typedef struct {
     char cmds[48];
     char line[64];
     char aa[32];
+    char unbal[32];
     int  cmds_w;
     int  line_w;
     int  aa_w;
+    int  unbal_w;
     int  has_aa;
+    int  has_unbal;
     int  right_edge;
 } ReplStatusbarLeft;
 
@@ -1756,6 +1780,18 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
         L.aa[0] = '\0';
         L.aa_w = 0;
     }
+
+    L.has_unbal = snap->unbalanced_count > 0;
+    if (L.has_unbal) {
+        tx += STATUSBAR_SEP_W;
+        snprintf(L.unbal, sizeof L.unbal, "%d unbalanced", snap->unbalanced_count);
+        L.unbal_w = (int)strlen(L.unbal) * FONT_SMALL_W;
+        tx += L.unbal_w;
+    } else {
+        L.unbal[0] = '\0';
+        L.unbal_w = 0;
+    }
+
     L.right_edge = tx;
     return L;
 }
@@ -1920,6 +1956,13 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
             ui_clr(UI_TOK_TEXT_MUTED);
             gl2d_draw_string((float)tx, (float)text_y, L.aa, FONT_SMALL);
             tx += L.aa_w;
+        }
+
+        if (L.has_unbal) {
+            repl_code_panel_statusbar_sep(&tx, sy, sh);
+            ui_clr(UI_TOK_STATUS_WARN);
+            gl2d_draw_string((float)tx, (float)text_y, L.unbal, FONT_SMALL);
+            tx += L.unbal_w;
         }
 
         /* Right cluster, drawn from the right edge. Each chip is

@@ -104,6 +104,67 @@ int repl_source_scope_matrix_scope_depth_at(int pos) {
     return g_matrix_depth_prefix[pos];
 }
 
+/* Collect the document indices of structurally unbalanced bracket
+ * commands — glPushMatrix/glBegin openers with no matching close, and
+ * orphan glPopMatrix/glEnd closers with no matching open. Matching is
+ * linear (a stack per bracket type), the same relaxed model the
+ * indentation depth uses, so the flagged lines agree with how the body
+ * is indented. Fills `out_lines` (document order for orphans, then the
+ * still-open openers) and returns the count, capped at `max`.
+ *
+ * LIMITATION — linear, block-unaware matching. The walk pairs brackets
+ * purely in source order and does NOT respect for/funcN/if block
+ * boundaries. So a glPushMatrix inside a loop/function body pairs with
+ * the next glPopMatrix in source order even if that pop sits outside the
+ * block (which, once the loop unrolls or the function is inlined, would
+ * actually be unbalanced per iteration/call). This matches the rest of
+ * the editor's source-level scope model (indentation, the push/pop
+ * cursor-link); it is a heuristic for "obviously unbalanced", not a
+ * per-iteration GL-correctness check. Block-scoped matching would be a
+ * follow-up.
+ *
+ * Off-stack static scratch (MAX_COMMANDS deep) mirrors the depth-cache
+ * arrays above and keeps this O(n) single-pass helper allocation-free. */
+static int g_unbal_matrix_stack[MAX_COMMANDS];
+static int g_unbal_begin_stack[MAX_COMMANDS];
+
+int repl_source_scope_collect_unbalanced(int *out_lines, int max) {
+    const GLCmd *cmds = repl_state_document_cmds();
+    int count = repl_state_document_count();
+    int msp = 0, bsp = 0, n = 0;
+
+    if (!out_lines || max <= 0)
+        return 0;
+
+    for (int i = 0; i < count; i++) {
+        if (!cmds[i].valid)
+            continue;
+        switch (cmds[i].type) {
+        case CMD_PUSH_MATRIX:
+            if (msp < MAX_COMMANDS) g_unbal_matrix_stack[msp++] = i;
+            break;
+        case CMD_POP_MATRIX:
+            if (msp > 0)            msp--;                       /* matched */
+            else if (n < max)       out_lines[n++] = i;          /* orphan pop */
+            break;
+        case CMD_BEGIN:
+            if (bsp < MAX_COMMANDS) g_unbal_begin_stack[bsp++] = i;
+            break;
+        case CMD_END:
+            if (bsp > 0)            bsp--;                       /* matched */
+            else if (n < max)       out_lines[n++] = i;          /* orphan end */
+            break;
+        default:
+            break;
+        }
+    }
+
+    /* Whatever is left on each stack never closed. */
+    for (int k = 0; k < msp && n < max; k++) out_lines[n++] = g_unbal_matrix_stack[k];
+    for (int k = 0; k < bsp && n < max; k++) out_lines[n++] = g_unbal_begin_stack[k];
+    return n;
+}
+
 /* Normal command indent: 2 + 2*tess + 2*begin + 2*block + 2*matrix.
  * glPushMatrix/glPopMatrix nest, so their bodies indent one level per
  * open push (mirroring how glBegin opens a level via begin depth). */

@@ -1486,6 +1486,26 @@ int main() {
                    repl_state_document_cmds_mut()[insert_idx2].type, CMD_EMPTY);
     }
 
+    /* 12e. The editor statusbar surfaces a count of structurally
+     * unbalanced bracket commands via snap.unbalanced_count (an unmatched
+     * glPushMatrix + an unmatched glBegin -> 2; balanced -> 0). */
+    {
+        UiRenderSnapshot snap;
+
+        glr_ctrl_reset_all();
+        editor_feed_line("glPushMatrix();");
+        editor_feed_line("glTranslatef(1, 0, 0);");
+        editor_feed_line("glBegin(GL_TRIANGLES);");
+        editor_feed_line("glVertex3f(0, 0, 0);");
+        glr_ctrl_build_ui_snapshot(&snap);
+        ASSERT_INT("statusbar counts 2 unbalanced", snap.unbalanced_count, 2);
+
+        editor_feed_line("glEnd();");
+        editor_feed_line("glPopMatrix();");
+        glr_ctrl_build_ui_snapshot(&snap);
+        ASSERT_INT("statusbar count clears when balanced", snap.unbalanced_count, 0);
+    }
+
     /* 13. editor_try_commit_assign_variable - inserting mode (inserts before cursor) */
     {
         glr_ctrl_reset_all(); declare_test_vars();

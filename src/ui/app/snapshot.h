@@ -114,6 +114,10 @@ typedef struct UiRenderSnapshot {
 
     /* Convenience scalars (mirror editor_input/code_panel for terse access) */
     int                         flat_program_count;
+    /* Count of structurally unbalanced bracket commands (unmatched
+     * glPushMatrix/glBegin openers + orphan glPopMatrix/glEnd closers).
+     * Shown as a warning segment in the editor statusbar; 0 = balanced. */
+    int                         unbalanced_count;
     float                       anim_time;
 
     /* User scenes */

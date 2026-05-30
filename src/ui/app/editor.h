@@ -56,7 +56,12 @@ typedef enum {
      * (glTranslatef/glScalef/glRotatef) currently in scope, accounting
      * for push/pop matrix and glLoadIdentity. Multiple highlights of
      * this kind may be pushed in a single frame. */
-    HIGHLIGHT_AFFECTING_TRANSFORM
+    HIGHLIGHT_AFFECTING_TRANSFORM,
+    /* Structurally unbalanced bracket command: a glPushMatrix/glBegin
+     * with no matching close, or an orphan glPopMatrix/glEnd. Always-on
+     * (not cursor-gated); multiple per frame. The REPL tolerates these,
+     * but export auto-balances them, so they are flagged in the gutter. */
+    HIGHLIGHT_UNBALANCED
 } UiHighlightKind;
 
 typedef struct {
