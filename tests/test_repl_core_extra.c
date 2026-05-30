@@ -58,6 +58,7 @@ static void declare_test_vars(void) {
 /* Some functions are not in internal header but are non-static */
 const char *repl_mode_name(GLenum mode);
 int repl_source_scope_in_begin_block(void);
+int repl_source_scope_collect_unbalanced(int *out_lines, int max);
 int repl_source_scope_cmd_indent_chars(int pos);
 GLenum repl_current_begin_mode(void);
 int repl_count_vertices(void);
@@ -1657,10 +1658,61 @@ void test_time() {
     repl_reset_time_to_zero();
 }
 
+static void test_unbalanced_brackets(void) {
+    int lines[64];
+    printf("--- Unbalanced bracket detection ---\n");
+
+    /* Balanced document: nothing flagged. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glPushMatrix();");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0,0,0);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("glPopMatrix();");
+    ASSERT_INT("balanced -> none flagged",
+               repl_source_scope_collect_unbalanced(lines, 64), 0);
+
+    /* Unclosed glPushMatrix: the opener line is flagged. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glPushMatrix();");       /* 0 */
+    editor_feed_line("glTranslatef(1,0,0);");  /* 1 */
+    ASSERT_INT("unclosed push -> one flagged",
+               repl_source_scope_collect_unbalanced(lines, 64), 1);
+    ASSERT_INT("unclosed push -> opener line", lines[0], 0);
+
+    /* Unclosed glBegin. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glBegin(GL_TRIANGLES);");  /* 0 */
+    editor_feed_line("glVertex3f(0,0,0);");      /* 1 */
+    ASSERT_INT("unclosed begin -> one flagged",
+               repl_source_scope_collect_unbalanced(lines, 64), 1);
+    ASSERT_INT("unclosed begin -> opener line", lines[0], 0);
+
+    /* Orphan closers (no matching opener) are flagged in document order. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glVertex3f(0,0,0);");  /* 0 */
+    editor_feed_line("glPopMatrix();");      /* 1 orphan */
+    editor_feed_line("glEnd();");            /* 2 orphan */
+    ASSERT_INT("orphan closers -> two flagged",
+               repl_source_scope_collect_unbalanced(lines, 64), 2);
+    ASSERT_INT("orphan pop line", lines[0], 1);
+    ASSERT_INT("orphan end line", lines[1], 2);
+
+    /* Nested balanced pairs do not false-positive. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glPushMatrix();");   /* 0 */
+    editor_feed_line("glPushMatrix();");   /* 1 */
+    editor_feed_line("glPopMatrix();");    /* 2 */
+    editor_feed_line("glPopMatrix();");    /* 3 */
+    ASSERT_INT("nested balanced -> none flagged",
+               repl_source_scope_collect_unbalanced(lines, 64), 0);
+}
+
 int main(int argc, char **argv) {
     repl_eval_init_predef_vars();
 
     test_utils();
+    test_unbalanced_brackets();
     test_repl_replay_advanced();
     test_io();
     test_execution();

@@ -65,6 +65,13 @@ int  repl_source_scope_tess_scope_depth_at(int pos);
  * glBegin block. Used by the editor's manual indent rewriter. */
 int  repl_source_scope_matrix_scope_depth_at(int pos);
 
+/* Collect the document indices of structurally unbalanced bracket
+ * commands: glPushMatrix/glBegin openers with no matching close, and
+ * orphan glPopMatrix/glEnd closers with no matching open. Linear stack
+ * matching (the REPL's relaxed model, matching the indentation depth).
+ * Fills out_lines and returns the count, capped at max. */
+int  repl_source_scope_collect_unbalanced(int *out_lines, int max);
+
 /* Format indentation for a command at pos. Writes spaces to buf (up to buf_sz)
  * representing the appropriate indentation level. repl_source_scope_cmd_tess_indent()
  * uses tess-aware depth for tessellation callback setup. Used by the formatter

@@ -361,6 +361,18 @@ static void glr_ctrl_push_highlights(void) {
         }
     }
 
+    /* Always-on: flag structurally unbalanced bracket commands
+     * (unmatched glPushMatrix/glBegin, orphan glPopMatrix/glEnd). Not
+     * cursor-gated — the relaxed REPL tolerates these but export
+     * auto-balances them, so make them visible in the gutter. */
+    {
+        int unbalanced[MAX_HIGHLIGHTS];
+        int nb = repl_source_scope_collect_unbalanced(unbalanced, MAX_HIGHLIGHTS);
+        for (int i = 0; i < nb; i++)
+            editor_state_highlights_append(unbalanced[i], -1, -1,
+                                                HIGHLIGHT_UNBALANCED);
+    }
+
     int src_line = replay_src_line();
     if (replay_active() && src_line >= 0)
         editor_state_highlights_append(src_line, -1, -1,
@@ -916,6 +928,14 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->profile_panel  = ui_state_profile_panel();
     snap->memory_panel   = ui_state_memory_panel();
     snap->status         = ui_state_status();
+    /* Count of structurally unbalanced bracket commands, surfaced as a
+     * persistent segment in the editor statusbar (the gutter markers,
+     * pushed in glr_ctrl_push_highlights, pinpoint the lines). */
+    {
+        int unbalanced[MAX_HIGHLIGHTS];
+        snap->unbalanced_count =
+            repl_source_scope_collect_unbalanced(unbalanced, MAX_HIGHLIGHTS);
+    }
     snap->search         = *editor_state_search();
     snap->autocomplete   = *editor_state_autocomplete();
     snap->pointer        = ui_state_pointer();
