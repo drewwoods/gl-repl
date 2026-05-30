@@ -53,8 +53,8 @@ FILES="$(printf '%s\n' ${SAMPLE_FILES}; \
 # declares every symbol scene_demo/bench/gl-repl use) as -isystem, so
 # their own old-style decls don't fail the guard while our -I'd code
 # stays -I'd. Nonexistent dirs are harmless (the compiler ignores
-# them), so this stays portable across macOS (homebrew/freeglut-fork)
-# and Linux (system /usr/include).
+# them), so this stays portable across macOS (homebrew + vendored
+# third_party/freeglut) and Linux (system /usr/include).
 #
 # Fallback: on a machine with NO system GL dev headers at all, use the
 # repo's vendored stub headers (-DGL_STUBS) instead of hard-failing on
@@ -65,11 +65,11 @@ FILES="$(printf '%s\n' ${SAMPLE_FILES}; \
 SYS_GL="-isystem /usr/include \
         -isystem /usr/local/include \
         -isystem /opt/homebrew/include \
-        -isystem $HOME/src/freeglut-fork/include"
+        -isystem $ROOT/third_party/freeglut/include"
 GL_DEFS=""
 have_real_gl=0
 for d in /usr/include /usr/local/include /opt/homebrew/include \
-         "$HOME/src/freeglut-fork/include"; do
+         "$ROOT/third_party/freeglut/include"; do
     if [ -e "$d/GL/gl.h" ] || [ -e "$d/OpenGL/gl.h" ]; then
         have_real_gl=1
         break

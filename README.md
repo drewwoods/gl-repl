@@ -116,3 +116,10 @@ The config menu (Config button on the code panel header) has an
   `(-4, 0, 0)`.
 
 Toggle guides entirely with the **Vertex guides** config item (F8).
+
+## Third-Party Licenses
+
+This project bundles freeglut (vendored under `third_party/freeglut/`, built as
+a static library with the macOS Cocoa backend) and miniaudio
+(`include/miniaudio.h`). See [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md)
+for attribution and license texts.

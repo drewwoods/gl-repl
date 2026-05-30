@@ -33,15 +33,29 @@ UNAME_S := $(shell uname -s)
 # quiet; empty still fails the `ifeq ($(USE_GL_STUBS),1)` gates below.
 USE_GL_STUBS ?=
 
+# Vendored freeglut (third_party/freeglut), built as a static library with the
+# native macOS Cocoa backend and linked into the GL binaries. macOS-only —
+# Linux keeps the system freeglut path. Re-vendor with scripts/vendor-freeglut.sh;
+# the pinned commit is recorded in third_party/freeglut/VENDORED.txt.
+FREEGLUT_SRC        := third_party/freeglut
+FREEGLUT_BUILD      := $(FREEGLUT_SRC)/build
+FREEGLUT_STATIC_LIB := $(FREEGLUT_BUILD)/lib/libglut.a
+# `make glut` (Apple GLUT framework fallback) passes FREEGLUT_VENDOR=0 to skip
+# building/linking the vendored library.
+FREEGLUT_VENDOR     ?= 1
+
+# FREEGLUT_HEADER_CFLAGS is set per-platform in the Darwin/Linux block below:
+# the vendored include dir on macOS (placed first, so a stray homebrew freeglut
+# can't shadow it), empty on Linux (system <GL/freeglut.h> is on the default path).
 ifeq ($(USE_GL_STUBS),1)
 GL_HEADER_CFLAGS = \
 	-I$(GL_STUB_INCLUDE) \
 	-DGL_STUBS
 else
 GL_HEADER_CFLAGS = \
+	$(FREEGLUT_HEADER_CFLAGS) \
 	-I/usr/include \
-	-I/opt/homebrew/include \
-	-I$(HOME)/src/freeglut-fork/include
+	-I/opt/homebrew/include
 endif
 
 # Language standard: C99, project-wide, no exceptions. Everything
@@ -67,7 +81,7 @@ COMMON_CFLAGS = \
 	-Wall -ggdb -g3 \
 	-Wno-deprecated-declarations -Wfloat-conversion \
 	-std=c99 -D_GNU_SOURCE -Werror=implicit-function-declaration \
-	-DGL_SILENCE_DEPRECATION \
+	-DGL_SILENCE_DEPRECATION -DFREEGLUT_STATIC \
 	$(GL_HEADER_CFLAGS) \
 	-I$(PROJECT_ROOT) \
 	-I$(SRC_DIR) \
@@ -112,18 +126,25 @@ BUILD_CFLAGS = $(RELEASE_CFLAGS)
 endif
 
 ifeq ($(UNAME_S),Darwin)
-# macOS: system frameworks + homebrew / local freeglut fork.
+# macOS: system frameworks + vendored static freeglut (Cocoa backend).
+FREEGLUT_HEADER_CFLAGS = -I$(FREEGLUT_SRC)/include
+ifeq ($(FREEGLUT_VENDOR),1)
+FREEGLUT_LIB := $(FREEGLUT_STATIC_LIB)
+endif
+
 GLUT_GL_LDFLAGS = \
 	-L/opt/homebrew/lib -lm -lpthread \
 	-framework IOKit -framework Cocoa -framework OpenGL -framework GLUT \
 	-framework CoreAudio -framework CoreFoundation -framework AudioToolbox
 
+# Vendored freeglut linked by archive path (no -lglut / no rpath). The Cocoa
+# backend pulls in CoreVideo; a static archive carries no framework deps of its
+# own, so the consumer must list them. FREEGLUT_LIB is empty under `make glut`
+# (FREEGLUT_VENDOR=0), where GLUT_GL_LDFLAGS overrides this anyway.
 GL_LDFLAGS = \
 	-L/opt/homebrew/lib \
-	-L$(HOME)/src/freeglut-fork/build/lib \
-	-Wl,-rpath,$(HOME)/src/freeglut-fork/build/lib \
-	-lglut -lm -lpthread \
-	-framework IOKit -framework Cocoa -framework OpenGL \
+	$(FREEGLUT_LIB) -lm -lpthread \
+	-framework IOKit -framework Cocoa -framework OpenGL -framework CoreVideo \
 	-framework CoreAudio -framework CoreFoundation -framework AudioToolbox
 
 GL_STUB_LDFLAGS = \
@@ -132,6 +153,8 @@ GL_STUB_LDFLAGS = \
 else
 # Linux: system freeglut + GL/GLU. miniaudio dlopen()s pulseaudio/alsa
 # at runtime, so we only need -ldl (plus the existing -lpthread -lm).
+# No vendoring on Linux — system <GL/freeglut.h> is on the default include path.
+FREEGLUT_HEADER_CFLAGS =
 GLUT_GL_LDFLAGS = \
 	-lglut -lGL -lGLU -lm -lpthread -ldl
 
@@ -849,6 +872,21 @@ $(OBJDIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) $(DEPFLAGS) -c -o $@ $<
 
+# Vendored freeglut static library (macOS Cocoa). Built once via CMake into
+# $(FREEGLUT_BUILD), which lives under third_party/ so the top-level `make clean`
+# (rm -rf ./build) leaves it intact. This rule has NO dependency on the freeglut
+# sources, so after re-vendoring run `make freeglut-clean` to force a rebuild.
+$(FREEGLUT_STATIC_LIB):
+	cmake -S $(FREEGLUT_SRC) -B $(FREEGLUT_BUILD) \
+	  -DFREEGLUT_COCOA=ON -DFREEGLUT_BUILD_STATIC_LIBS=ON \
+	  -DFREEGLUT_BUILD_SHARED_LIBS=OFF -DFREEGLUT_BUILD_DEMOS=OFF \
+	  -DCMAKE_BUILD_TYPE=Release
+	cmake --build $(FREEGLUT_BUILD) --target freeglut_static
+
+freeglut-clean: ## Remove the vendored freeglut CMake build (forces a rebuild).
+	rm -rf $(FREEGLUT_BUILD)
+.PHONY: freeglut-clean
+
 $(SAMPLE_BIN): $(SAMPLE_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $(SAMPLE_OBJS) $(GL_LDFLAGS)
@@ -999,6 +1037,25 @@ gl-tests: $(addprefix $(BINDIR)/,$(GL_TEST_BINS)) ## Run real-GL UI state tests 
 	done
 
 .PHONY: gl-tests $(GL_TEST_BINS)
+
+# The vendored static freeglut (macOS) is a build-time artifact, so every binary
+# whose link line embeds its archive path through $(GL_LDFLAGS) must order-only
+# depend on it — otherwise those links run before the archive exists and fail.
+# Placed HERE (after every referenced target var is defined: SAMPLE_BIN + the
+# demos ~earlier, TEST_BINS/BENCH_BINS, and GL_TEST_BINS just above) — a static
+# target list expands at parse time, so an earlier placement would silently
+# attach the prereq to nothing. Skipped under `make glut` (FREEGLUT_VENDOR=0)
+# and on Linux / GL stubs (FREEGLUT_LIB is empty there too).
+ifeq ($(FREEGLUT_VENDOR),1)
+ifeq ($(UNAME_S),Darwin)
+ifneq ($(USE_GL_STUBS),1)
+$(SAMPLE_BIN) $(SCENE_DEMO_BIN) $(REPL_DEMO_BIN) $(EDITOR_DEMO_BIN) \
+$(MEMPROF_DEMO_BIN) $(CPUPROF_DEMO_BIN) $(VARIABLE_PANEL_DEMO_BIN) \
+$(COLOR_PICKER_DEMO_BIN) \
+$(addprefix $(BINDIR)/,$(TEST_BINS) $(BENCH_BINS) $(GL_TEST_BINS)): | $(FREEGLUT_STATIC_LIB)
+endif
+endif
+endif
 
 # Layering boundary enforcement ------------------------------------------
 check-gl-boundaries: ## Verify GL/GLUT calls are isolated to allowed files.
@@ -1381,10 +1438,10 @@ check-trailing-whitespace: ## Verify commits since origin/main contain no traili
 	base=$${CHECK_BASE:-origin/main}; \
 	if git rev-parse --verify "$$base" >/dev/null 2>&1; then \
 		merge_base=$$(git merge-base "$$base" HEAD); \
-		git --no-pager diff --check "$$merge_base"; \
+		git --no-pager diff --check "$$merge_base" -- . ':(exclude)third_party/'; \
 	else \
-		git --no-pager diff --cached --check; \
-		git --no-pager diff --check; \
+		git --no-pager diff --cached --check -- . ':(exclude)third_party/'; \
+		git --no-pager diff --check -- . ':(exclude)third_party/'; \
 	fi; \
 	echo "trailing-whitespace OK"
 
@@ -1535,7 +1592,8 @@ glut: ## Rebuild using the Apple GLUT framework instead of freeglut.
 	$(MAKE) all \
 		BUILD="$(BUILD)" \
 		CFLAGS="$(CFLAGS) -DUSE_GLUT" \
-		GL_LDFLAGS="$(GLUT_GL_LDFLAGS)"
+		GL_LDFLAGS="$(GLUT_GL_LDFLAGS)" \
+		FREEGLUT_VENDOR=0
 
 # Call graph generation targets -----------------------------------------------
 

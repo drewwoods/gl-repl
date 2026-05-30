@@ -453,7 +453,7 @@ void demo_input_handle_key(unsigned char key, int x, int y) {
      *     (Ctrl+A = 0x01, Ctrl+C = 0x03, Ctrl+F = 0x06,
      *     Ctrl+G = 0x07, Ctrl+V = 0x16, Ctrl+X = 0x18).
      *     glutGetModifiers reports GLUT_ACTIVE_CTRL.
-     *   - macOS Cmd: the freeglut-fork reports Cmd as
+     *   - macOS Cmd: freeglut's Cocoa backend reports Cmd as
      *     GLUT_ACTIVE_SUPER (NOT CTRL) and delivers the *letter*
      *     byte ('a'/'c'/'f'/'g'/'v'/'x'). Check both bits so
      *     either real Ctrl or Cmd fires the shortcut; gate on
