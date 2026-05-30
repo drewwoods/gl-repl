@@ -92,6 +92,41 @@ int main() {
                    editor_state_input().input, "x = glVertex3f(");
     }
 
+    /* 1b2. Case-insensitive matching with case correction on accept:
+     * a wrong-case prefix matches the command/enum, and accepting
+     * replaces the typed token with the canonical-cased candidate. */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        set_input_text("glcolor3f");
+        editor_completion_update();
+        ASSERT_TRUE("ci command match count > 0", g_ac_count > 0);
+        ASSERT_STR("ci command first match", g_ac_insert_matches[0], "glColor3f(");
+        glr_completion_accept_autocomplete();
+        ASSERT_STR("ci command accept corrects case",
+                   editor_state_input().input, "glColor3f(");
+
+        /* Mixed case in an assignment RHS. */
+        glr_ctrl_reset_all(); declare_test_vars();
+        set_input_text("x = GLvertex3f");
+        editor_completion_update();
+        ASSERT_TRUE("ci RHS command match count > 0", g_ac_count > 0);
+        glr_completion_accept_autocomplete();
+        ASSERT_STR("ci RHS accept corrects case",
+                   editor_state_input().input, "x = glVertex3f(");
+
+        /* Enum argument matched and corrected case-insensitively (a
+         * partial prefix, since completion only fires when the candidate
+         * is strictly longer than what's typed). */
+        glr_ctrl_reset_all(); declare_test_vars();
+        set_input_text("glBegin(gl_tri");
+        editor_completion_update();
+        ASSERT_TRUE("ci enum match count > 0", g_ac_count > 0);
+        ASSERT_STR("ci enum first match", g_ac_insert_matches[0], "GL_TRIANGLES");
+        glr_completion_accept_autocomplete();
+        ASSERT_STR("ci enum accept corrects case",
+                   editor_state_input().input, "glBegin(GL_TRIANGLES)");
+    }
+
     /* 1c. Assignment via array index (A[0] = ...) and multi-token
      * declaration prefix (float x = ...). */
     {

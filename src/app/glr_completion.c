@@ -37,6 +37,23 @@ static char g_ac_suffix[8] = "";
  * this to compute the ghost's `chars-already-typed` length. */
 static int g_ac_input_offset = 0;
 
+/* Case-insensitive prefix test: 1 if `cand` begins with the first `n`
+ * characters of `pre` (ASCII case-folded). Lets autocomplete match a
+ * command/enum typed in any case (e.g. "glco" -> "glColor3f("); the
+ * canonical-cased candidate is what gets inserted on accept, so the
+ * wrong-case prefix is corrected. A local helper rather than
+ * strncasecmp keeps the old-gcc/-std=c99 build free of <strings.h>. */
+static int ac_prefix_match_ci(const char *cand, const char *pre, int n) {
+    for (int i = 0; i < n; i++) {
+        unsigned char a = (unsigned char)cand[i];
+        if (a == '\0')
+            return 0;
+        if (tolower(a) != tolower((unsigned char)pre[i]))
+            return 0;
+    }
+    return 1;
+}
+
 static void reset_ac_statics(void) {
     g_ac_mode = AC_MODE_NONE;
     g_ac_token_len = 0;
@@ -329,7 +346,7 @@ static void update_autocomplete(void) {
             const char *after = input + plen;
             int alen = input_len - plen;
             for (int j = 0; point_param_pnames[j].name && ac->match_count < MAX_AC_MATCHES; j++) {
-                if (strncmp(point_param_pnames[j].name, after, alen) == 0 &&
+                if (ac_prefix_match_ci(point_param_pnames[j].name, after, alen) &&
                     (int)strlen(point_param_pnames[j].name) > alen) {
                     ac->matches[ac->match_count] = point_param_pnames[j].name;
                     ac->insert_matches[ac->match_count] = point_param_pnames[j].name;
@@ -394,7 +411,7 @@ static void update_autocomplete(void) {
 
         const ReplEnumEntry *tbl = enum_cmds[i].args[slot].enums;
         for (int j = 0; tbl && tbl[j].name && ac->match_count < MAX_AC_MATCHES; j++) {
-            if (strncmp(tbl[j].name, seg, (size_t)seg_len) == 0 &&
+            if (ac_prefix_match_ci(tbl[j].name, seg, seg_len) &&
                 (int)strlen(tbl[j].name) > seg_len) {
                 ac->matches[ac->match_count] = tbl[j].name;
                 ac->insert_matches[ac->match_count] = tbl[j].name;
@@ -422,7 +439,7 @@ static void update_autocomplete(void) {
     /* Complete function names. */
     const ReplFuncCompletion *completions = repl_func_completions();
     for (int i = 0; completions[i].insert_text && ac->match_count < MAX_AC_MATCHES; i++) {
-        if (strncmp(completions[i].insert_text, input, (size_t)input_len) == 0 &&
+        if (ac_prefix_match_ci(completions[i].insert_text, input, input_len) &&
             (int)strlen(completions[i].insert_text) > input_len) {
             ac->matches[ac->match_count] = completions[i].display_text;
             ac->insert_matches[ac->match_count] = completions[i].insert_text;
@@ -441,12 +458,52 @@ static void update_autocomplete(void) {
 
 void glr_completion_accept_autocomplete(void) {
     const EditorAutocompleteState *ac = editor_state_autocomplete();
+    EditorInputState *inp = editor_state_input_mut();
 
-    int ghost_len = (int)strlen(ac->ghost);
-    {
-        EditorInputState *inp = editor_state_input_mut();
+    if (ac->match_count > 0 && ac->insert_matches[ac->selected_idx]) {
+        /* Accept a command/enum completion by REPLACING the already-typed
+         * token with the canonical candidate, not by appending the ghost
+         * suffix. The two are identical when the user typed the right
+         * case, but replacement also corrects the case (matching is
+         * case-insensitive) — e.g. "glco" -> "glColor3f(",
+         * "gl_depth_test" -> "GL_DEPTH_TEST". `already_typed` is the
+         * length of the trailing token the candidate replaces; `suffix`
+         * is the post-candidate text (", " / ")" for an enum slot,
+         * nothing for a function-name completion). */
+        int already_typed;
+        const char *suffix;
+        if (g_ac_mode == AC_MODE_FUNC_PREFIX) {
+            already_typed = inp->input_len - g_ac_input_offset;
+            suffix = "";
+        } else { /* AC_MODE_ENUM_SLOT / AC_MODE_POINT_PARAM */
+            already_typed = g_ac_token_len;
+            suffix = g_ac_suffix;
+        }
+        if (already_typed < 0) already_typed = 0;
+        if (already_typed > inp->input_len) already_typed = inp->input_len;
+
+        const char *cand = ac->insert_matches[ac->selected_idx];
+        int base_len   = inp->input_len - already_typed;
+        int cand_len   = (int)strlen(cand);
+        int suffix_len = (int)strlen(suffix);
+
+        if (base_len + cand_len + suffix_len < MAX_INPUT_LEN - 1) {
+            memcpy(inp->input + base_len, cand, (size_t)cand_len);
+            memcpy(inp->input + base_len + cand_len, suffix, (size_t)suffix_len);
+            inp->input_len = base_len + cand_len + suffix_len;
+            inp->input[inp->input_len] = '\0';
+            editor_cursor_pos_set(inp->input_len);
+        } else {
+            repl_set_status_error("Input buffer full!");
+        }
+    } else {
+        /* No command/enum match: append the ghost verbatim. This is the
+         * tutorial shadow-suffix path (tutorial_shadow_suffix sets
+         * ac->ghost with no matches — e.g. the REQUIRE_VAR declaration's
+         * trailing instruction comment), and any other ghost-only case. */
+        int ghost_len = (int)strlen(ac->ghost);
         if (inp->input_len + ghost_len < MAX_INPUT_LEN - 1) {
-            strcat(inp->input, ac->ghost);
+            memcpy(inp->input + inp->input_len, ac->ghost, (size_t)ghost_len + 1);
             inp->input_len += ghost_len;
             editor_cursor_pos_set(inp->input_len);
         } else {
