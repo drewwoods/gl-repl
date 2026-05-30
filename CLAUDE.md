@@ -1032,8 +1032,8 @@ alongside `.cfg` (see the file-layout table for the shipped catalog).
 | F1 | Help overlay — also the clickable statusbar "F1 help" keycap |
 | F2-F10 | Cycle the bound config forward. Each drives a multi-state cycle: F2 Accum AA, F3 Grid, F4 Axes, F5 Vertex labels, F6 Backdrop, F7 Grid extent, F8 Xform guides, F9 Light theme, F10 Syntax highlight |
 | Shift+F2-F10 | Step the bound cycle backward |
-| F11 | Previous example / scene |
 | F12 | Next example / scene |
+| Shift+F12 | Previous example / scene |
 
 When an input-buffer (character-range) selection is active,
 `Ctrl+C` / `Ctrl+X` copy or cut the substring into a separate

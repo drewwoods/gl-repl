@@ -283,7 +283,7 @@ static const char *menu_item_label(int menu_id, int i) {
     }
     if (menu_id == MENU_SCENE) {
         int tag_count = repl_example_visible_tag_count();
-        if (i == 0)                                            return "### EXAMPLES F11/F12";
+        if (i == 0)                                            return "### EXAMPLES F12/Shift+F12";
         if (i >= 1 && i <= tag_count) {
             int tag_idx = repl_example_visible_tag_at(i - 1);
             return repl_example_tag_label(tag_idx);
