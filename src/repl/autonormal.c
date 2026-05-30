@@ -346,6 +346,26 @@ int repl_find_matching_push_matrix(int line_idx) {
     return -1;
 }
 
+int repl_find_matching_pop_matrix(int line_idx) {
+    int n = repl_state_document_count();
+    if (line_idx < 0 || line_idx >= n) return -1;
+    const GLCmd *cmds = repl_state_document_cmds();
+    if (!cmds[line_idx].valid || cmds[line_idx].type != CMD_PUSH_MATRIX) return -1;
+
+    int depth = 1;
+    for (int i = line_idx + 1; i < n; i++) {
+        if (!cmds[i].valid) continue;
+        CmdType t = cmds[i].type;
+        if (t == CMD_PUSH_MATRIX) {
+            depth++;
+        } else if (t == CMD_POP_MATRIX) {
+            depth--;
+            if (depth == 0) return i;
+        }
+    }
+    return -1;
+}
+
 /* Walk backwards from line_idx past a CMD_FUNC_END to its matching
  * CMD_FUNC_DEF. Returns the source index of the matching CMD_FUNC_DEF
  * (or -1 if unbalanced). The caller passes the index of the FUNC_END

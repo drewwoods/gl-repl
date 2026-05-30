@@ -283,6 +283,11 @@ int  repl_find_feeding_color_cmd(int line_idx);
  * same nesting level). Returns -1 if the cursor isn't on a pop or no
  * matching push exists. */
 int  repl_find_matching_push_matrix(int line_idx);
+/* Mirror of repl_find_matching_push_matrix: when the cursor sits on a
+ * CMD_PUSH_MATRIX line, returns the source-line index of the matching
+ * CMD_POP_MATRIX (the nearest later pop at the same nesting level).
+ * Returns -1 if the cursor isn't on a push or no matching pop exists. */
+int  repl_find_matching_pop_matrix(int line_idx);
 /* When the cursor sits on a color-consuming line (immediate vertex,
  * gluVertex, or glutSolid*), fills out_line_idx[] with up to out_cap
  * source-line indices of the modelview-affecting transforms in scope
