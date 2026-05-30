@@ -1400,6 +1400,70 @@ int main() {
                    repl_source_scope_cmd_indent_chars(2));
     }
 
+    /* 12c. Enter at column 0 of a committed line inserts a real,
+     * persistent blank line ABOVE and keeps the cursor on the original
+     * content (it follows the text down one row) — "newline before the
+     * cursor". No transient insert row that vanishes on a same-index
+     * click. */
+    {
+        glr_ctrl_reset_all();
+        editor_feed_line("glColor3f(1,0,0);");   /* index 0 */
+        editor_feed_line("glEnd();");            /* index 1 (the 'World') */
+
+        editor_navigate_to_line(1);
+        editor_cursor_pos_set(0);
+        editor_handle_key('\r', 0, 0);
+
+        ASSERT_INT("enter-col0: blank inserted immediately", repl_state_document_count(), 3);
+        ASSERT_INT("enter-col0: blank above is empty", repl_state_document_cmds_mut()[1].type, CMD_EMPTY);
+        ASSERT_STR("enter-col0: blank source text empty", editor_buffer_line(1), "");
+        ASSERT_INT("enter-col0: content shifts down", repl_state_document_cmds_mut()[2].type, CMD_END);
+        ASSERT_INT("enter-col0: cursor follows content down", editor_state_edit_line(), 2);
+        ASSERT_INT("enter-col0: not insert mode", editor_insert_mode(), 0);
+        ASSERT_INT("enter-col0: cursor at column 0", editor_cursor_pos(), 0);
+
+        /* Persisted: navigating to the same index does not drop it. */
+        editor_navigate_to_line(2);
+        ASSERT_INT("enter-col0: blank persists after navigation", repl_state_document_count(), 3);
+    }
+
+    /* 12d. An empty insert row (cursor > 0 path) persists as a real blank
+     * line whether the next navigation is a different index (down-arrow)
+     * or the SAME document index (a click on the line directly below,
+     * which hit-tests to the insert row's own index). Previously the
+     * same-index case silently discarded the row. */
+    {
+        /* Same-index navigation (click) commits the blank. */
+        glr_ctrl_reset_all();
+        editor_feed_line("glBegin(GL_POINTS);");
+        editor_feed_line("glColor3f(1,0,0);");
+        editor_feed_line("glEnd();");
+        editor_navigate_to_line(1);
+        editor_cursor_pos_set(2);                /* cursor > 0 → insert row below */
+        editor_handle_key('\r', 0, 0);
+        ASSERT_INT("insert-row setup: insert mode", editor_insert_mode(), 1);
+        ASSERT_INT("insert-row setup: no real line yet", repl_state_document_count(), 3);
+        int insert_idx = editor_state_edit_line();
+        editor_navigate_to_line(insert_idx);     /* "click" the same index */
+        ASSERT_INT("insert-row click(same idx): blank persists", repl_state_document_count(), 4);
+        ASSERT_INT("insert-row click(same idx): blank is empty",
+                   repl_state_document_cmds_mut()[insert_idx].type, CMD_EMPTY);
+
+        /* Down-arrow (different index) is consistent: also persists. */
+        glr_ctrl_reset_all();
+        editor_feed_line("glBegin(GL_POINTS);");
+        editor_feed_line("glColor3f(1,0,0);");
+        editor_feed_line("glEnd();");
+        editor_navigate_to_line(1);
+        editor_cursor_pos_set(2);
+        editor_handle_key('\r', 0, 0);
+        int insert_idx2 = editor_state_edit_line();
+        editor_navigate_to_line(insert_idx2 + 1); /* down-arrow */
+        ASSERT_INT("insert-row down-arrow: blank persists", repl_state_document_count(), 4);
+        ASSERT_INT("insert-row down-arrow: blank is empty",
+                   repl_state_document_cmds_mut()[insert_idx2].type, CMD_EMPTY);
+    }
+
     /* 13. editor_try_commit_assign_variable - inserting mode (inserts before cursor) */
     {
         glr_ctrl_reset_all(); declare_test_vars();

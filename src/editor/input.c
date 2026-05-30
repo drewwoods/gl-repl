@@ -731,8 +731,42 @@ static CommitResult commit_current_input(int enter_mode,
         if (unmodified) {
             if (!enter_mode)
                 return COMMIT_UNCHANGED;
-            if (editor_cursor_pos() > 0)
-                editor_state_edit_line_set(editor_state_edit_line() + 1);
+            /* Cursor at column 0: insert a real, persistent blank line
+             * ABOVE the current line and keep the cursor on the original
+             * content (it follows the text down one row), like a standard
+             * editor's "newline before the cursor". Previously this parked
+             * the cursor on a transient empty insert row that vanished if
+             * the next navigation landed back on the same document index
+             * (e.g. a click on the line below). Cursor > 0 still opens an
+             * empty insert row below for typing a new command. */
+            if (editor_cursor_pos() == 0) {
+                ReplCompileContext ctx =
+                    repl_compile_context_from_live(editor_state_edit_line());
+                ReplCompiledChange change;
+                char err[REPL_STATUS_TEXT_MAX] = "";
+                int insert_pos = editor_state_edit_line();
+
+                if (!tutorial_guard_source_change_or_status(insert_pos, 0, 1))
+                    return COMMIT_REJECTED;
+                if (repl_compile_empty_line(insert_pos, &ctx, &change,
+                                            err, sizeof(err)) != REPL_COMPILE_OK) {
+                    repl_set_status(err[0] ? err : "Cannot insert blank line");
+                    return COMMIT_REJECTED;
+                }
+                editor_undo_push_snapshot();
+                if (!editor_commit_apply_external_change(&change, /*capture_undo=*/0,
+                                                         /*publish_status=*/1)) {
+                    repl_set_status("Command buffer full!");
+                    return COMMIT_REJECTED;
+                }
+                editor_state_edit_line_set(insert_pos + 1);
+                editor_load_line_to_input(insert_pos + 1);
+                editor_cursor_pos_set(0);
+                editor_completion_clear();
+                repl_mark_source_dirty();
+                return COMMIT_OK;
+            }
+            editor_state_edit_line_set(editor_state_edit_line() + 1);
             editor_insert_mode_set(1);
             editor_input_clear();
             editor_completion_clear();
@@ -1004,11 +1038,17 @@ void editor_navigate_to_line(int target) {
     if (target == editor_state_edit_line() && !editor_insert_mode())
         return;
 
-    if (target != editor_state_edit_line()) {
+    /* Commit the pending row before moving. The insert-mode arm fires
+     * even when the target equals the current index: an empty insert row
+     * left behind by Enter must persist as a real blank line no matter
+     * which row the next click/arrow lands on (otherwise clicking the
+     * line directly below — which hit-tests to the same index — would
+     * silently discard it, unlike the arrow keys). */
+    if (target != editor_state_edit_line() || editor_insert_mode()) {
         int inserted_at = editor_state_edit_line();
         int doc_before  = repl_state_document_count();
         (void)commit_before_navigation();
-        if (repl_state_document_count() > doc_before && target > inserted_at)
+        if (repl_state_document_count() > doc_before && target >= inserted_at)
             target++;
     }
 
