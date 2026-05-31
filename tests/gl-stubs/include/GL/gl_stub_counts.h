@@ -47,6 +47,7 @@ extern "C" {
     X(glColorMaterial)                 \
     X(glDepthFunc)                     \
     X(glDepthMask)                     \
+    X(glDepthRange)                    \
     X(glDisable)                       \
     X(glEdgeFlag)                      \
     X(glEnable)                        \

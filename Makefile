@@ -251,6 +251,8 @@ SRCS = \
 	src/repl/format.c \
 	src/support/memprof.c \
 	src/support/cpuprof.c \
+	src/support/mesh_ply.c \
+	src/app/glr_mesh_export.c \
 	gl_repl.c \
 	src/app/glr_actions.c \
 	src/app/glr_camera.c \
@@ -441,6 +443,8 @@ CORE_TEST_SRCS = \
 	src/repl/format.c \
 	src/support/memprof.c \
 	src/support/cpuprof.c \
+	src/support/mesh_ply.c \
+	src/app/glr_mesh_export.c \
 	src/app/glr_actions.c \
 	src/app/glr_camera.c \
 	src/app/glr_camera_export.c \
