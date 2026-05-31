@@ -170,6 +170,9 @@ compatibility wrappers.
 ./gl-repl --dump-code      # Print loaded buffer to stdout
 ./gl-repl --no-audio       # Skip audio init entirely (isolates startup stalls)
 ./gl-repl --detailed-prof  # Add fine-grained init-trace phases (default off)
+./gl-repl --example torus  # Start on a built-in example (name, case-insensitive, or 0-based index)
+./gl-repl --list-examples  # Print the built-in examples and exit
+./gl-repl --example 8 --export-ply out.ply   # Capture an example's geometry to PLY on frame 1, then exit
 GLR_NO_POINT_PARAMETER=1 ./gl-repl   # Force the no-glPointParameterfv path
 GLR_AUDIO_HITCH_MS=10 ./gl-repl      # Lower the audio-worker hitch threshold
 GLR_DETAILED_PROF=1 ./gl-repl        # Same as --detailed-prof, via env

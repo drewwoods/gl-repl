@@ -4,11 +4,14 @@
 #include "repl/executor.h"
 #include "app/glr_audio.h"
 #include "app/glr_mesh_export.h"
+#include "repl/examples.h"           /* repl_example_count / repl_example_name */
 
+#include <ctype.h>
 #include <dirent.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/time.h>
 
 /* Startup stall diagnostic. Each phase logs wall-clock seconds elapsed
@@ -123,11 +126,67 @@ static void print_usage(const char *prog) {
             "               (also via GLR_DETAILED_PROF env var)\n"
             "  --export-ply <file>  Render one frame, capture geometry to <file>\n"
             "               as a PLY mesh, then exit (needs a display)\n"
+            "  --example <name|idx>  Start on a built-in example (name is\n"
+            "               case-insensitive; or a 0-based index)\n"
+            "  --list-examples  Print the built-in examples and exit\n"
             "\n"
             "Arguments:\n"
             "  input.c      Optional saved session to load at startup\n"
             "  workspace/   Optional directory: load every *.c as a user scene\n",
             name);
+}
+
+/* Case-insensitive full compare / substring test (keeps gl_repl.c free of a
+ * <strings.h> / strcasecmp dependency). */
+static int example_ci_equal(const char *a, const char *b) {
+    for (; *a && *b; a++, b++)
+        if (tolower((unsigned char)*a) != tolower((unsigned char)*b))
+            return 0;
+    return *a == '\0' && *b == '\0';
+}
+static int example_ci_contains(const char *hay, const char *needle) {
+    size_t nl = strlen(needle);
+    if (nl == 0) return 0;
+    for (; *hay; hay++) {
+        size_t k = 0;
+        while (hay[k] && needle[k] &&
+               tolower((unsigned char)hay[k]) == tolower((unsigned char)needle[k]))
+            k++;
+        if (k == nl) return 1;
+    }
+    return 0;
+}
+
+static void list_examples(FILE *out) {
+    int n = repl_example_count();
+    fprintf(out, "Built-in examples (%d):\n", n);
+    for (int i = 0; i < n; i++)
+        fprintf(out, "  %2d  %s\n", i, repl_example_name(i));
+}
+
+/* Resolve --example <arg> to a built-in example index. `arg` is either an
+ * index (all digits) or a name (case-insensitive: exact match preferred, else
+ * the first substring match). Returns the index, or -1 if nothing matches. */
+static int resolve_example_index(const char *arg) {
+    int n = repl_example_count();
+    if (n <= 0 || !arg || !arg[0]) return -1;
+
+    int all_digits = 1;
+    for (const char *p = arg; *p; p++)
+        if (!isdigit((unsigned char)*p)) { all_digits = 0; break; }
+    if (all_digits) {
+        int idx = atoi(arg);
+        return (idx >= 0 && idx < n) ? idx : -1;
+    }
+
+    int substr = -1;
+    for (int i = 0; i < n; i++) {
+        const char *name = repl_example_name(i);
+        if (!name) continue;
+        if (example_ci_equal(name, arg)) return i;          /* exact wins */
+        if (substr < 0 && example_ci_contains(name, arg)) substr = i;
+    }
+    return substr;
 }
 
 /* Set by --export-ply <file>: when non-NULL, the first rendered frame
@@ -226,6 +285,7 @@ static void on_sigint(int sig) {
 
 int main(int argc, char **argv) {
     const char *input_file = NULL;
+    const char *example_arg = NULL;
     int dump_code = 0;
     int dump_flat = 0;
     int dump_state_layout = 0;
@@ -265,8 +325,26 @@ int main(int argc, char **argv) {
             g_detailed_prof = 1;
         else if (strcmp(argv[i], "--export-ply") == 0 && i + 1 < argc)
             g_export_ply_path = argv[++i];
+        else if (strcmp(argv[i], "--example") == 0 && i + 1 < argc)
+            example_arg = argv[++i];
+        else if (strcmp(argv[i], "--list-examples") == 0) {
+            list_examples(stdout);
+            return 0;
+        }
         else if (!input_file)
             input_file = argv[i];
+    }
+
+    /* Resolve --example up front: a bad name fails fast (before opening a
+     * window) and the error lists what is available. */
+    int example_index = -1;
+    if (example_arg) {
+        example_index = resolve_example_index(example_arg);
+        if (example_index < 0) {
+            fprintf(stderr, "gl-repl: unknown example \"%s\"\n", example_arg);
+            list_examples(stderr);
+            return 1;
+        }
     }
 
     if (dump_code || dump_flat || dump_state_layout) {
@@ -300,6 +378,8 @@ int main(int argc, char **argv) {
     init_trace("GL init done");
     atexit(repl_executor_destroy_resources);
     glr_ctrl_bootstrap_repl(input_file);
+    if (example_index >= 0)
+        glr_scene_load_example(example_index);
     init_trace("REPL bootstrap done");
     glr_ctrl_set_accum(use_accum);
 
