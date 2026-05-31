@@ -696,6 +696,28 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
     return written;
 }
 
+/* Single source of truth for active-scene export file naming, shared by Save
+ * Scene (.c) and the .ply export so the two can't drift. Builds
+ * "<workspace_dir>/<slug>.<ext>" when `to_workspace_dir` is set, else
+ * "<slug>.<ext>", for the active named user scene — or "output.<ext>" when
+ * there is no active named scene. `ext` has no leading dot. The mkdir / error
+ * policy is the caller's (Save Scene aborts on a failed mkdir; the export
+ * falls back to the cwd); the caller passes the resulting dir-vs-cwd choice. */
+static void format_scene_path(const char *ext, int to_workspace_dir,
+                              char *out, size_t out_sz) {
+    int slot = g_active_user_scene;
+    if (slot < 0 || slot >= MAX_USER_SCENES || !g_user_scenes[slot].used) {
+        snprintf(out, out_sz, "output.%s", ext);
+        return;
+    }
+    char slug[USER_SCENE_NAME_MAX];
+    scene_filename_slug_for_slot(slot, slug, sizeof(slug));
+    if (to_workspace_dir)
+        snprintf(out, out_sz, "%s/%s.%s", g_workspace_dir, slug, ext);
+    else
+        snprintf(out, out_sz, "%s.%s", slug, ext);
+}
+
 void repl_save_active_scene(const ReplExportLayout *layout) {
     int slot = g_active_user_scene;
 
@@ -706,22 +728,18 @@ void repl_save_active_scene(const ReplExportLayout *layout) {
         return;
     }
 
-    char slug[USER_SCENE_NAME_MAX];
-    scene_filename_slug_for_slot(slot, slug, sizeof(slug));
+    /* Save aborts if a bound workspace dir can't be created. */
+    if (g_workspace_dir[0] &&
+        mkdir(g_workspace_dir, 0755) != 0 && errno != EEXIST) {
+        char emsg[REPL_WORKSPACE_DIR_MAX + 48];
+        snprintf(emsg, sizeof(emsg),
+                 "Save scene: cannot create %s", g_workspace_dir);
+        repl_set_status_error(emsg);
+        return;
+    }
 
     char path[REPL_WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
-    if (g_workspace_dir[0]) {
-        if (mkdir(g_workspace_dir, 0755) != 0 && errno != EEXIST) {
-            char emsg[REPL_WORKSPACE_DIR_MAX + 48];
-            snprintf(emsg, sizeof(emsg),
-                     "Save scene: cannot create %s", g_workspace_dir);
-            repl_set_status_error(emsg);
-            return;
-        }
-        snprintf(path, sizeof(path), "%s/%s.c", g_workspace_dir, slug);
-    } else {
-        snprintf(path, sizeof(path), "%s.c", slug);
-    }
+    format_scene_path("c", g_workspace_dir[0] != 0, path, sizeof(path));
 
     g_export_scene_name_hint = g_user_scenes[slot].name;
     if (!repl_export_save_output(path, source_document_view(), layout)) {
@@ -737,6 +755,21 @@ void repl_save_active_scene(const ReplExportLayout *layout) {
     snprintf(msg, sizeof(msg), "Saved %s (%d commands)",
              path, repl_state_document_count());
     repl_set_status(msg);
+}
+
+const char *repl_active_scene_export_path(const char *ext) {
+    static char path[REPL_WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
+    int slot = g_active_user_scene;
+
+    /* Mirror Save Scene's target, best-effort: create the workspace dir if a
+     * named scene will use it, and fall back to the cwd if it can't be made
+     * (the exporter's own fopen reports any remaining failure). */
+    int to_workspace_dir =
+        (slot >= 0 && slot < MAX_USER_SCENES && g_user_scenes[slot].used &&
+         g_workspace_dir[0] &&
+         (mkdir(g_workspace_dir, 0755) == 0 || errno == EEXIST));
+    format_scene_path(ext, to_workspace_dir, path, sizeof(path));
+    return path;
 }
 
 static int load_scene_file_into_slot(const char *path) {

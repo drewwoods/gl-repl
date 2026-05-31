@@ -1040,7 +1040,7 @@ alongside `.cfg` (see the file-layout table for the shipped catalog).
 | F1 | Help overlay — also the clickable statusbar "F1 help" keycap |
 | F2-F10 | Cycle the bound config forward. Each drives a multi-state cycle: F2 Accum AA, F3 Grid, F4 Axes, F5 Vertex labels, F6 Backdrop, F7 Grid extent, F8 Xform guides, F9 Light theme, F10 Syntax highlight |
 | Shift+F2-F10 | Step the bound cycle backward |
-| F11 | Export scene geometry to `output.ply` (also File → Export .ply). On macOS F11 may be claimed by "Show Desktop" — use the menu item then |
+| F11 | Export scene geometry to PLY (also File → Export .ply). File is named after the active scene like Save Scene — `<scene>.ply` (in the workspace dir if bound), else `output.ply`. On macOS F11 may be claimed by "Show Desktop" — use the menu item then |
 | F12 | Next example / scene |
 | Shift+F12 | Previous example / scene |
 
