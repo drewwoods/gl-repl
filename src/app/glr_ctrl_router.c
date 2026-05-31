@@ -13,6 +13,7 @@
  */
 #include "app/glr_ctrl.h"
 #include "app/glr_ctrl_export.h"
+#include "app/glr_mesh_export.h"     /* glr_export_mesh_ply (F11) */
 #include "app/glr_ctrl_replay_annotations.h"
 #include "subsystems/replay/replay_render.h"
 #include "subsystems/edit_overlays/edit_overlays.h"
@@ -435,6 +436,14 @@ int glr_ctrl_router_handle_scene_cycle_special(int key) {
     }
     if (keymap_event_is(key, GLR_PREV_EXAMPLE)) {
         cycle_example_or_user_scene_prev();
+        return 1;
+    }
+    return 0;
+}
+
+int glr_ctrl_router_handle_export_special(int key) {
+    if (keymap_event_is(key, GLR_EXPORT_PLY)) {
+        glr_export_mesh_ply("output.ply");
         return 1;
     }
     return 0;
@@ -1349,7 +1358,8 @@ void glr_ctrl_special(int key, int x, int y) {
         glr_ctrl_router_handle_help_tab_special(key) ||
         glr_ctrl_router_handle_help_scroll_special(key) ||
         glr_ctrl_router_handle_help_toggle_special(key) ||
-        glr_ctrl_router_handle_scene_cycle_special(key)) {
+        glr_ctrl_router_handle_scene_cycle_special(key) ||
+        glr_ctrl_router_handle_export_special(key)) {
         glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
         return;
     }

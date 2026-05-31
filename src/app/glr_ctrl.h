@@ -141,6 +141,7 @@ int glr_ctrl_router_handle_help_toggle_special(int key);            /* F1 */
 int glr_ctrl_router_handle_help_click(int button, int state, int x, int y); /* tab / click-away */
 void glr_ctrl_help_scroll_by(int delta);                            /* clamped help scroll */
 int glr_ctrl_router_handle_scene_cycle_special(int key);            /* F12 */
+int glr_ctrl_router_handle_export_special(int key);                 /* F11 -> .ply export */
 
 int glr_ctrl_router_handle_variable_panel_drag_begin(int button, int state, int x, int y);
 int glr_ctrl_router_handle_variable_panel_drag_release(int state);
