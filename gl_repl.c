@@ -3,6 +3,7 @@
 #include "app/glr_debug.h"
 #include "repl/executor.h"
 #include "app/glr_audio.h"
+#include "app/glr_mesh_export.h"
 
 #include <dirent.h>
 #include <signal.h>
@@ -120,12 +121,18 @@ static void print_usage(const char *prog) {
             "  --dump-state-layout  Print ReplRuntimeState field layout\n"
             "  --detailed-prof  Emit finer-grained startup init traces\n"
             "               (also via GLR_DETAILED_PROF env var)\n"
+            "  --export-ply <file>  Render one frame, capture geometry to <file>\n"
+            "               as a PLY mesh, then exit (needs a display)\n"
             "\n"
             "Arguments:\n"
             "  input.c      Optional saved session to load at startup\n"
             "  workspace/   Optional directory: load every *.c as a user scene\n",
             name);
 }
+
+/* Set by --export-ply <file>: when non-NULL, the first rendered frame
+ * captures the scene to this path (PLY) and the process exits. */
+static const char *g_export_ply_path = NULL;
 
 static void display_func(void) {
     /* Trace the first two frames separately (gated on g_detailed_prof
@@ -153,6 +160,17 @@ static void display_func(void) {
         snprintf(buf, sizeof(buf), "frame %d swap done", frame_num);
         init_trace(buf);
         frames_traced++;
+    }
+
+    /* --export-ply: the scene is now loaded, flattened, and has rendered one
+     * full frame, so the live GL context is ready. Capture geometry to the
+     * requested file (post-context — feedback needs a context, unlike the
+     * pre-context --dump-* paths) and exit. */
+    if (g_export_ply_path) {
+        int n = glr_export_mesh_ply(g_export_ply_path);
+        fprintf(stderr, "[export-ply] %d triangle(s) -> %s\n",
+                n, g_export_ply_path);
+        exit(n < 0 ? 1 : 0);
     }
 }
 
@@ -237,6 +255,8 @@ int main(int argc, char **argv) {
             dump_state_layout = 1;
         else if (strcmp(argv[i], "--detailed-prof") == 0)
             g_detailed_prof = 1;
+        else if (strcmp(argv[i], "--export-ply") == 0 && i + 1 < argc)
+            g_export_ply_path = argv[++i];
         else if (!input_file)
             input_file = argv[i];
     }

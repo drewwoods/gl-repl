@@ -2,21 +2,31 @@
 
 > Line numbers are **approximate**; match by symbol/content.
 
-## Status (branch `feature/ply-mesh-export`)
+## Status (branch `feature/ply-mesh-export`) — COMPLETE
 
 - **Phase 1 — pure `mesh_ply` writer + tests:** ✅ done (`src/support/mesh_ply.{c,h}`,
   `tests/test_mesh_ply.c`, 50 assertions; runs under `make test` and stubs).
 - **Phase 2 — `glr_mesh_export` GL_FEEDBACK capture:** ✅ done
-  (`src/app/glr_mesh_export.{c,h}`; `glDepthRange` stub added; `STATIC_ASSERT`
-  token drift guards). Compiles real-GL + stubs; not runtime-exercised in CI
-  (needs a display).
+  (`src/app/glr_mesh_export.{c,h}`; `glDepthRange` stub; `STATIC_ASSERT` token
+  drift guards).
 - **Phase 3 — triggers + status:** ✅ done (File → Export .ply, F11 binding +
-  router, status messages; CLAUDE.md / MODULES.md updated). Full `make test-stubs`
-  green (48 binaries / 8190 tests); `check-c99` / `check-keymap-no-dup` /
-  `check-gl-boundaries` / `check-state-ownership` green.
-- **Phase 4 — CLI `--export-ply`:** ⏸️ deferred (optional; see below).
-- **Outstanding:** runtime verification on a real display (Verification §3:
-  teapot/solids capture, per-vertex color, no GL-state leak).
+  router, status messages; CLAUDE.md / MODULES.md updated).
+- **Phase 4 — CLI `--export-ply <file>`:** ✅ done (`gl_repl.c`: a deferred request
+  fires from the first `display_func` after a full frame, then `exit()`s — needs a
+  display, post-context unlike `--dump-*`).
+- **Runtime verification (Verification §3): ✅ passed.** `./gl-repl <triangle+teapot
+  scene> --export-ply out.ply` against real freeglut captured **3137 triangles
+  through the single feedback path — the GLUT teapot included** (the headline
+  proof). Per-vertex colors correct (red/green/blue triangle; `0.2/0.7/1.0`→`51 179
+  255` teapot), world-coord inversion to ~1e-4 (the predicted `R·2⁻²³` precision),
+  +Z winding normal on the triangle and smooth-shaded teapot normals, and a
+  structurally valid PLY (1600 verts / 3137 faces, all indices in range). Full
+  `make test-stubs` green (48 binaries / 8190 tests); `check-c99` /
+  `check-keymap-no-dup` / `check-gl-boundaries` / `check-state-ownership` green.
+- **Deferred (optional, future):** bbox-fit of the ortho `R` (decision 2). The
+  interactive "visible frame unchanged after export" no-leak property is correct by
+  construction (`glPushAttrib(GL_ALL_ATTRIB_BITS)` + both matrix stacks); worth a
+  one-time manual eyeball but not blocking.
 
 ## Context
 
