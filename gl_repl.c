@@ -155,22 +155,30 @@ static void display_func(void) {
         snprintf(buf, sizeof(buf), "frame %d render done", frame_num);
         init_trace(buf);
     }
+
+    /* --export-ply: the scene has rendered one full frame, so it is loaded,
+     * flattened, and the GL context is live. Capture geometry to the requested
+     * file (post-context — feedback needs a context, unlike the pre-context
+     * --dump-* paths) and exit. Done BEFORE glutSwapBuffers() so the feedback
+     * pass never re-enters the GL pipeline after a buffer swap (which can race
+     * the display on some drivers); the swap is cosmetic here since we exit. */
+    if (g_export_ply_path) {
+        int n = glr_export_mesh_ply(g_export_ply_path);
+        if (n >= 0)
+            fprintf(stderr, "[export-ply] wrote %d triangle(s) to %s\n",
+                    n, g_export_ply_path);
+        else
+            fprintf(stderr, "[export-ply] failed to export %s "
+                    "(empty scene, unwritable path, or capture overflow)\n",
+                    g_export_ply_path);
+        exit(n < 0 ? 1 : 0);
+    }
+
     glutSwapBuffers();
     if (trace_this) {
         snprintf(buf, sizeof(buf), "frame %d swap done", frame_num);
         init_trace(buf);
         frames_traced++;
-    }
-
-    /* --export-ply: the scene is now loaded, flattened, and has rendered one
-     * full frame, so the live GL context is ready. Capture geometry to the
-     * requested file (post-context — feedback needs a context, unlike the
-     * pre-context --dump-* paths) and exit. */
-    if (g_export_ply_path) {
-        int n = glr_export_mesh_ply(g_export_ply_path);
-        fprintf(stderr, "[export-ply] %d triangle(s) -> %s\n",
-                n, g_export_ply_path);
-        exit(n < 0 ? 1 : 0);
     }
 }
 
