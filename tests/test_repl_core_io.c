@@ -1961,6 +1961,55 @@ int main(void) {
         }
     }
 
+    /* repl_active_scene_export_path: mirrors Save Scene's naming for any
+     * extension (the .ply export uses it). Single source of truth shared with
+     * repl_save_active_scene, so this also pins the no-drift invariant. */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        const char *ws = "/tmp/repl_core_ply_ws";
+
+        /* (1) No active named scene -> output.<ext>. */
+        repl_set_workspace_dir(NULL);
+        ASSERT_INT("export-path no-scene .ply",
+                   strcmp(repl_active_scene_export_path("ply"), "output.ply"), 0);
+        ASSERT_INT("export-path no-scene .c",
+                   strcmp(repl_active_scene_export_path("c"), "output.c"), 0);
+
+        /* Named active user scene (promote an example, then rename). */
+        repl_load_example(0);
+        int slot = repl_promote_example_if_needed();
+        ASSERT_INT("promoted to active user scene", repl_active_user_scene(), slot);
+        repl_user_scene_rename(slot, "My PLY Scene");   /* slug -> my_ply_scene */
+
+        /* (2) Named, no workspace dir -> <slug>.<ext> in the cwd. */
+        repl_set_workspace_dir(NULL);
+        ASSERT_INT("export-path named no-ws .ply",
+                   strcmp(repl_active_scene_export_path("ply"), "my_ply_scene.ply"), 0);
+        ASSERT_INT("export-path named no-ws .c",
+                   strcmp(repl_active_scene_export_path("c"), "my_ply_scene.c"), 0);
+
+        /* (3) Named + workspace dir bound -> <dir>/<slug>.<ext>. */
+        repl_set_workspace_dir(ws);
+        char want_ply[256];
+        snprintf(want_ply, sizeof want_ply, "%s/my_ply_scene.ply", ws);
+        ASSERT_INT("export-path named + workspace .ply",
+                   strcmp(repl_active_scene_export_path("ply"), want_ply), 0);
+
+        /* (4) No-drift parity: the .c path the helper returns is exactly the
+         *     file repl_save_active_scene writes. */
+        char savedc[256];
+        snprintf(savedc, sizeof savedc, "%s", repl_active_scene_export_path("c"));
+        char want_c[256];
+        snprintf(want_c, sizeof want_c, "%s/my_ply_scene.c", ws);
+        ASSERT_INT("export-path .c matches workspace path",
+                   strcmp(savedc, want_c), 0);
+        unlink(savedc);
+        repl_save_active_scene(NULL);
+        ASSERT_INT("Save Scene wrote the helper's .c path",
+                   access(savedc, F_OK), 0);
+        unlink(savedc);
+    }
+
     printf("repl_core_io: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.run == g_harness.passed) ? 0 : 1;
 }
