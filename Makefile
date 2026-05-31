@@ -688,6 +688,7 @@ CORE_TEST_OBJS = $(addprefix $(OBJDIR)/,$(CORE_TEST_SRCS:.c=.o))
 TEST_BINS = \
 	test_eval \
 	test_format \
+	test_mesh_ply \
 	test_memprof \
 	test_repl_state \
 	test_repl_code_panel_layout \
@@ -746,7 +747,7 @@ TEST_BINS += test_replay_walk
 TEST_BINS += test_ui_panels
 endif
 
-CORE_TEST_BINS = $(filter-out test_eval test_format test_memprof test_repl_code_panel_layout test_ui_theme test_scene_palette test_audio,$(TEST_BINS))
+CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_repl_code_panel_layout test_ui_theme test_scene_palette test_audio,$(TEST_BINS))
 
 # Benchmark binaries follow the same linking pattern as core test binaries
 # (they reuse CORE_TEST_OBJS so they work in both real-GL and stubs builds),
@@ -789,6 +790,10 @@ test_eval_RUN = $(BINDIR)/test_eval --run-tests
 test_format_OBJS = $(OBJDIR)/$(TEST_DIR)/test_format.o $(OBJDIR)/src/repl/format.o
 test_format_LDLIBS = -lm
 test_format_RUN ?= $(BINDIR)/test_format
+
+test_mesh_ply_OBJS = $(OBJDIR)/$(TEST_DIR)/test_mesh_ply.o $(OBJDIR)/src/support/mesh_ply.o
+test_mesh_ply_LDLIBS = -lm
+test_mesh_ply_RUN ?= $(BINDIR)/test_mesh_ply
 
 test_memprof_OBJS = $(OBJDIR)/$(TEST_DIR)/test_memprof.o $(OBJDIR)/src/support/memprof.o
 test_memprof_LDLIBS = -lm
