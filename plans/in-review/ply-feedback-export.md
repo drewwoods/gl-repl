@@ -32,8 +32,10 @@ per-primitive or solid-meshing code. This is the explicit design constraint:
   GL_FEEDBACK pass.
 - **Non-goals:** textures/UVs (the project has none); animation (PLY is a static
   snapshot at the current `t`); exporting grid/axes/backdrop/HUD chrome (only the
-  user's geometry is captured); OBJ (the format collector is format-agnostic, but
-  this plan ships PLY only).
+  user's geometry is captured); **non-polygon primitives — `GL_POINTS` and
+  `GL_LINES`/strips/loops feed back as point/line tokens and are dropped, so a
+  wireframe- or point-only scene exports an empty mesh** (PLY here = faces); OBJ
+  (the format collector is format-agnostic, but this plan ships PLY only).
 
 ## Key design decisions (the GL_FEEDBACK specifics)
 
@@ -66,9 +68,23 @@ These are the load-bearing facts; they shape the whole implementation.
      clipped. Make `R` a named constant; an optional later refinement is a cheap
      bounding-box pre-pass to fit `R` exactly (deferred — keeps one path for now).
 
-3. **Color = raw `glColor`, lighting OFF.** Disable `GL_LIGHTING` for the capture
-   so the returned RGBA is the user's immediate color, not scene-lit shading
-   (re-usable base colors). RGBA mode (the app's mode) → 4 color floats/vertex.
+3. **Capture render state: raw `glColor`, lighting OFF, fill mode, cull OFF.**
+   Feedback honors lighting, polygon mode, *and* face culling (all pre-rasterization
+   stages), so the capture forces a known minimal state before running the executor
+   (under the decision-6 `glPushAttrib` bracket, restored after):
+   - `glDisable(GL_LIGHTING)` → returned RGBA is the user's immediate `glColor`, not
+     scene-lit shading (re-usable base colors). RGBA mode (the app's mode) → 4 color
+     floats/vertex.
+   - `glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)` → guarantees polygons feed back as
+     `GL_POLYGON_TOKEN`. Otherwise ambient wireframe state (`GL_LINE`) would make
+     them feed back as *line* tokens and get dropped. `src/scene/render.c` resets to
+     `GL_FILL` after each frame so it is safe today, but forcing it makes the pass
+     self-contained.
+   - `glDisable(GL_CULL_FACE)` for the baseline. **Caveat:** `glEnable(GL_CULL_FACE)`
+     is a supported REPL command; because we run the executor unchanged (decision 4),
+     a user program that enables culling re-enables it mid-capture and feedback omits
+     the culled faces. Inherent to the single-path design — documented as a known
+     limitation, not worked around (see Risks).
 
 4. **What is captured:** only `repl_execute_program(...)` (the user's flat program,
    incl. GLUT solids + tess). Grid/axes/backdrop/HUD are *separate* scene passes we
@@ -86,13 +102,20 @@ These are the load-bearing facts; they shape the whole implementation.
    `glPushAttrib`/`glPopAttrib` bracket already around the executor call in
    `src/app/glr_ctrl.c` (~L548).
 
-7. **Snapshot semantics — respect replay clamp.** Export uses the live flat
-   program (`repl_state_flat_program_view()`), already evaluated at the current
-   `t`/vars. To match "what's on screen": when replay is **active**, the visible
-   render clamps the flat count to `replay_exec_limit()` (`src/subsystems/replay/replay.h:77`);
-   the capture must use the **same clamped count** for `flat_cmd_count`, not the
-   full `program.cmd_count`. When replay is off, use the full count. (So
-   `flat_cmd_count = replay_active() ? replay_exec_limit() : program.cmd_count`.)
+7. **Snapshot semantics — fresh flat program, respect replay clamp.** Export uses
+   the live flat program (`repl_state_flat_program_view()`), already evaluated at the
+   current `t`/vars. Two caveats:
+   - **Freshness:** the per-frame flatten-if-dirty runs *inside*
+     `glr_ctrl_display_frame` (the `repl_state_flat_program_dirty()` →
+     `repl_flatten_commands()` guard), which the export path (a key/menu handler)
+     bypasses. In practice a frame always renders before the user triggers export so
+     the flat program is current — but the capture should defensively rebuild it if
+     dirty, and the Phase 4 CLI path must run *after* that block in `display_func`.
+   - **Replay clamp:** to match "what's on screen", when replay is **active** the
+     visible render clamps the flat count to `replay_exec_limit()`
+     (`src/subsystems/replay/replay.h:77`); the capture must use the **same clamped
+     count** for `flat_cmd_count`, not the full `program.cmd_count`. So
+     `flat_cmd_count = replay_active() ? replay_exec_limit() : program.cmd_count`.
 
 8. **Known, asserted depth range.** The window→world inversion assumes a fixed
    depth range. The capture sets `glDepthRange(0, 1)` (saved/restored with the rest
@@ -175,6 +198,10 @@ Notes:
 
   **Layering:** `src/support/` is the neutral low-level tier (like `cpuprof`); the
   pure writer belongs there. The GL/repl-coupled capture is `glr_*` in `src/app/`.
+  (The writer pulls in `<GL/gl.h>` only for the ~8 token *macros*; if keeping the
+  support tier strictly GL-header-free matters, define those integer constants
+  locally instead — they are stable OpenGL enum values — which also drops the test's
+  stub dependency.)
 
 PLY header emitted:
 ```
@@ -212,26 +239,48 @@ end_header
 
 **Phase 2 — GL_FEEDBACK capture (`glr_mesh_export`).**
 - Implement `src/app/glr_mesh_export.{c,h}` per the design above (state save/
-  restore, ortho/viewport/depth-range, lighting off, buffer grow/retry, run the
-  executor, hand off to `mesh_ply_write`).
-- Add `src/support/mesh_ply.c` + `src/app/glr_mesh_export.c` to the gl-repl object
-  set (they're under `src/`, picked up by the build's `find src -name '*.c'`).
+  restore, identity modelview + `±R` ortho + viewport + `glDepthRange(0,1)`,
+  lighting off + `GL_FILL` polygon mode + cull off, buffer grow/retry that
+  **re-runs the full executor pass** each iteration — the buffer is only populated
+  during rendering — then hand off to `mesh_ply_write`).
+- Register the new files **explicitly**: the Makefile `SRCS` is a hand-maintained
+  list, *not* a `find`/wildcard — add both `src/support/mesh_ply.c` and
+  `src/app/glr_mesh_export.c` to `SRCS` (`mesh_ply.c` is already added for the test
+  in Phase 1).
+- **Extend the GL stubs:** `glr_mesh_export.c` is in the gl-repl object set and
+  builds under `make gl-repl USE_GL_STUBS=1` / `make test-stubs`. Every feedback
+  symbol it needs is already stubbed *except* **`glDepthRange`, which is MISSING** —
+  add it to `tests/gl-stubs/include/GL/gl.h`. (The stub `glRenderMode` returns 0, so
+  the capture gets compile-coverage only under stubs; the pure writer carries the
+  functional tests — consistent with Phase 1.)
+- **Confirm the freeglut solid-capture assumption early** (the headline risk): in
+  the vendored freeglut 3.8 build the teapot is **CPU-tessellated in C** (not
+  evaluators) and every solid draws via `fghDrawGeometrySolid11` — fixed-function
+  client-side vertex arrays (`glVertexPointer`/`glDrawArrays`), no VBO/shader — so
+  feedback captures them. (See Risks for the latent constraint.)
 
 **Phase 3 — triggers + status.**
 - **Menu:** add `GLR_FILE_ITEM_EXPORT_PLY` to the File-menu enum in
   `src/app/glr_actions.h` (after `GLR_FILE_ITEM_RENAME_SCENE`; bump
-  `GLR_FILE_ITEM_COUNT`), its label in the File-menu label table, and a `case` in
-  `glr_action_menu_item_activate()` (`src/app/glr_actions.c`, ~L720) that calls
-  `glr_export_mesh_ply("output.ply")` and reports status. Mirror the
-  `GLR_FILE_ITEM_SAVE_SCENE` (Ctrl+S) wiring.
-- **Key:** bind **F11** (freed by the recent "Shift+F12 → previous example"
-  commit; confirm with `make keymap-list`). Add `#define GLR_EXPORT_PLY GLUT_KEY_F11, 0`
-  to `keymap.h` and route it in the special-key handler in `src/app/glr_ctrl_router.c`
-  to the same export call. `make check-keymap-no-dup` must stay green.
-- **Status:** on success `repl_set_status("Exported N triangles to output.ply")`;
-  on failure `repl_set_status_error(...)` (e.g. feedback overflow at cap, fopen
-  failure, empty scene → "nothing to export"). Default filename `output.ply`
-  (mirrors `output.c`); optionally derive `<scene-name>.ply`.
+  `GLR_FILE_ITEM_COUNT`); add its label string to `menu_item_label()` in
+  **`src/ui/app/menu_bar.c`** (the `MENU_FILE` branch — *not* `glr_actions.c`,
+  which has no label table); and add a `case` in `glr_action_menu_item_activate()`
+  (`src/app/glr_actions.c`) that calls `glr_export_mesh_ply("output.ply")` and
+  reports status. Mirror the `GLR_FILE_ITEM_SAVE_SCENE` (Ctrl+S) wiring.
+- **Key:** bind **F11** (freed by commit `425c36f8`, "Shift+F12 → previous
+  example"; confirm with `make keymap-list`). Add `#define GLR_EXPORT_PLY GLUT_KEY_F11, 0`
+  to `keymap.h` and route it in `src/app/glr_ctrl_router.c` (e.g. alongside
+  `glr_ctrl_router_handle_scene_cycle_special`, matched via
+  `keymap_event_is(key, GLR_EXPORT_PLY)`) to the same export call.
+  `make check-keymap-no-dup` must stay green. **Note:** on macOS F11 defaults to
+  "Show Desktop" and may be swallowed by the OS — the menu item is the reliable
+  trigger; F11 is a convenience.
+- **Status:** `repl_set_status` / `repl_set_status_error` take a **plain `const char *`
+  (no printf formatting)** — `snprintf` into a local buffer first, then pass it. On
+  success `"Exported N triangles to output.ply"`; on failure `repl_set_status_error(...)`
+  (feedback overflow at cap, fopen failure, empty scene → "nothing to export").
+  Default filename `output.ply` (mirrors `output.c`); optionally derive
+  `<scene-name>.ply`.
 
 **Phase 4 — CLI `--export-ply <file>` (optional, deferred).** All current flags
 run *pre-context* (`gl_repl.c` parses before `glutInit`), but feedback needs a
@@ -246,8 +295,10 @@ not required for the core feature. Keep out of Phases 1–3.
 | `src/support/mesh_ply.{c,h}` | **new** — pure: feedback-token → PLY (parse, invert, triangulate, weld, normals) |
 | `src/app/glr_mesh_export.{c,h}` | **new** — GL_FEEDBACK capture + orchestration + status |
 | `tests/test_mesh_ply.c` | **new** — pure unit tests with synthetic feedback buffers |
-| `Makefile` | register `test_mesh_ply` (TEST_BINS + `_OBJS`/`_LDLIBS`) |
-| `src/app/glr_actions.{c,h}` | `GLR_FILE_ITEM_EXPORT_PLY` enum + label + dispatch case |
+| `Makefile` | add `src/support/mesh_ply.c` + `src/app/glr_mesh_export.c` to the explicit `SRCS` list; register `test_mesh_ply` (TEST_BINS/CORE_TEST_BINS + `_OBJS`/`_LDLIBS`) |
+| `tests/gl-stubs/include/GL/gl.h` | **add `glDepthRange`** (the only missing feedback-path symbol) so `USE_GL_STUBS` / `test-stubs` builds compile |
+| `src/app/glr_actions.{c,h}` | `GLR_FILE_ITEM_EXPORT_PLY` enum (bump `_COUNT`) + dispatch `case` |
+| `src/ui/app/menu_bar.c` | add the "Export .ply" label string in `menu_item_label()` (`MENU_FILE` branch) |
 | `keymap.h` | `GLR_EXPORT_PLY GLUT_KEY_F11, 0` |
 | `src/app/glr_ctrl_router.c` | route F11 → `glr_export_mesh_ply` |
 | `CLAUDE.md`, `MODULES.md` | document the two new modules + the export action |
@@ -264,10 +315,11 @@ not required for the core feature. Keep out of Phases 1–3.
      geometry matches, **per-vertex colors present**.
    - A `glutSolidTeapot(1)` scene → exported `.ply` **contains the teapot mesh**
      (the headline proof that the single feedback path captures GLUT solids). Also
-     verify sphere/cone/torus/cube. *(Verify freeglut's solids route through the
-     fixed-function pipeline so feedback captures them — this is the one
-     assumption to confirm early in Phase 2; the teapot uses evaluators and the
-     solids use client vertex arrays, both of which feedback captures.)*
+     verify sphere/cone/torus/cube. *(Confirmed against the vendored freeglut 3.8
+     build: the teapot is **CPU-tessellated in C** — not evaluators — and every
+     solid draws through `fghDrawGeometrySolid11`, i.e. fixed-function client-side
+     vertex arrays with no VBO/shader, all of which feedback captures. Re-confirm if
+     freeglut is ever revendored.)*
    - Confirm the visible window is **unchanged** after export (no GL state leak):
      scene still renders, camera/lighting intact.
 4. **Overflow path:** a large loop scene exercises buffer grow/retry; status shows
@@ -278,11 +330,21 @@ not required for the core feature. Keep out of Phases 1–3.
 - **Normals are synthesized, not from `glNormal3f`** (feedback omits them) — flat
   per-face by default, smoothed across welded verts. Acceptable and standard;
   noted so reviewers don't expect authored normals.
+- **User-enabled face culling drops back faces.** `glEnable(GL_CULL_FACE)` is a
+  supported REPL command; since we run the executor unchanged (one path), a scene
+  that culls re-enables it mid-capture and feedback omits the culled faces. Inherent
+  to the single-path design — documented, not worked around.
+- **Only polygon primitives are exported** — `GL_POINTS`/`GL_LINES` feed back as
+  point/line tokens and are skipped, so wireframe- or point-only scenes export an
+  empty mesh.
 - **`±R` clipping** — geometry beyond ±1000 world units is clipped. `R` is a named
   constant; bbox-fit is the deferred refinement if it ever bites.
 - **GL_FEEDBACK is fixed-function/deprecated** — fine here (the whole app is
   fixed-function freeglut), but it's the reason this approach works at all; it
   would not port to a core-profile rewrite.
-- **freeglut solid capture** — must confirm freeglut's solids/teapot go through the
-  fixed-function transform path (verified early in Phase 2). If a future freeglut
-  used shaders/VBOs they'd bypass feedback — currently they don't.
+- **freeglut solid capture is verified, with a latent constraint.** Confirmed in the
+  vendored freeglut 3.8 build (teapot CPU-tessellated in C; solids via fixed-function
+  client vertex arrays `fghDrawGeometrySolid11`, no VBO/shader). It would break only
+  if (a) freeglut is revendored onto a shader/VBO solid path, or (b) anyone calls
+  `glutSetVertexAttribCoord3/Normal/TexCoord2`, which flips freeglut to its
+  `glVertexAttribPointer` path — the REPL never does today.
