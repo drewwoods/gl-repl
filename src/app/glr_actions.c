@@ -13,6 +13,7 @@
 #include "config.h"                  /* DEFAULT_SCENE_FILE */
 #include "app/glr_ctrl.h"            /* glr_ctrl_sync_ui_chrome */
 #include "app/glr_ctrl_export.h"
+#include "app/glr_mesh_export.h"     /* glr_export_mesh_ply (File -> Export .ply) */
 #include "app/glr_state.h"           /* presentation/render storage */
 #include "app/glr_camera.h"          /* camera focus-origin / reset (eased) */
 #include "ui/app/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
@@ -746,6 +747,9 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             editor_inline_rename_begin(slot);
             return 1;
         }
+        case GLR_FILE_ITEM_EXPORT_PLY:
+            glr_export_mesh_ply("output.ply");
+            return 1;
         case GLR_FILE_ITEM_SAVE_WORKSPACE: {
             const char *dir = repl_workspace_dir();
             if (!dir || !dir[0])

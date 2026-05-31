@@ -276,6 +276,7 @@ static const char *menu_item_label(int menu_id, int i) {
         if (i == GLR_FILE_ITEM_SAVE_SCENE)    return "Save Scene";
         if (i == GLR_FILE_ITEM_LOAD_SCENE)    return "Load Scene";
         if (i == GLR_FILE_ITEM_RENAME_SCENE)  return "Rename Scene";
+        if (i == GLR_FILE_ITEM_EXPORT_PLY)    return "Export .ply";
         if (i == GLR_FILE_ITEM_SCENE_SEP)     return "---";
         if (i == GLR_FILE_ITEM_SAVE_WORKSPACE) return "Save Workspace";
         if (i == GLR_FILE_ITEM_LOAD_WORKSPACE) return "Load Workspace";

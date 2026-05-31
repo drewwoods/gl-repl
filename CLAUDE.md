@@ -417,6 +417,10 @@ state-machine level, not buried in the doc body.
 | `src/repl/export_state.h` | Shared dimensions for import/export state text |
 | `src/app/glr_audio.c` | App-level playlist engine and persisted audio config |
 | `src/app/glr_audio.h` | Audio playback API (`glr_audio_*`) |
+| `src/app/glr_mesh_export.c` | PLY mesh export: one `glRenderMode(GL_FEEDBACK)` capture of the live flat program under a fixed identity-modelview + ortho + viewport transform (lighting/cull off, fill mode), buffer grow/retry, then hands the raw stream to `mesh_ply_write`. Captures user `glVertex`, GLU tess, and the GLUT solids through one path. State saved/restored so the visible frame is undisturbed |
+| `src/app/glr_mesh_export.h` | `glr_export_mesh_ply(path)` — capture + write, returns triangle count or `<0`; sets the status message |
+| `src/support/mesh_ply.c` | **Pure** (no-GL) PLY writer: parses a `GL_3D_COLOR` feedback float stream, inverts ortho+viewport+depth-range → world coords, fan-triangulates, welds + smooths normals, emits ASCII PLY. Feedback token markers defined locally (frozen GL values) so it needs no GL header; `glr_mesh_export.c` `STATIC_ASSERT`s them against `GL_*_TOKEN` |
+| `src/support/mesh_ply.h` | `MeshPlyCapture` / `MeshPlyOptions` + `mesh_ply_write()`; local `MESH_PLY_TOK_*` token enum |
 | `src/support/cpuprof.c` | CPU wall-time profiling instrumentation (per-section accumulators, frame tick); host-agnostic — sections are opaque ints, catalog injected via `prof_sections.h` |
 | `src/support/cpuprof.h` | Profiling API (`prof_begin`, `prof_end`, `prof_frame_tick`, etc.); no UI/app dependency — `#ifndef PROF_SECTIONS_PROVIDED` fallback makes it compile with no catalog (`check-cpuprof-standalone`). Declares `prof_section_info()` (per-section label/depth/is_total), implemented per-binary |
 | `src/app/glr_prof.c` | gl-repl's `prof_section_info()` table: per-section `{ label, depth, is_total }` (bare label + explicit nesting depth — the panel derives indentation from depth). The demos implement their own |
@@ -1033,6 +1037,7 @@ alongside `.cfg` (see the file-layout table for the shipped catalog).
 | F1 | Help overlay — also the clickable statusbar "F1 help" keycap |
 | F2-F10 | Cycle the bound config forward. Each drives a multi-state cycle: F2 Accum AA, F3 Grid, F4 Axes, F5 Vertex labels, F6 Backdrop, F7 Grid extent, F8 Xform guides, F9 Light theme, F10 Syntax highlight |
 | Shift+F2-F10 | Step the bound cycle backward |
+| F11 | Export scene geometry to `output.ply` (also File → Export .ply). On macOS F11 may be claimed by "Show Desktop" — use the menu item then |
 | F12 | Next example / scene |
 | Shift+F12 | Previous example / scene |
 

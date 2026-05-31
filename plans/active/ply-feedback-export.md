@@ -2,6 +2,22 @@
 
 > Line numbers are **approximate**; match by symbol/content.
 
+## Status (branch `feature/ply-mesh-export`)
+
+- **Phase 1 — pure `mesh_ply` writer + tests:** ✅ done (`src/support/mesh_ply.{c,h}`,
+  `tests/test_mesh_ply.c`, 50 assertions; runs under `make test` and stubs).
+- **Phase 2 — `glr_mesh_export` GL_FEEDBACK capture:** ✅ done
+  (`src/app/glr_mesh_export.{c,h}`; `glDepthRange` stub added; `STATIC_ASSERT`
+  token drift guards). Compiles real-GL + stubs; not runtime-exercised in CI
+  (needs a display).
+- **Phase 3 — triggers + status:** ✅ done (File → Export .ply, F11 binding +
+  router, status messages; CLAUDE.md / MODULES.md updated). Full `make test-stubs`
+  green (48 binaries / 8190 tests); `check-c99` / `check-keymap-no-dup` /
+  `check-gl-boundaries` / `check-state-ownership` green.
+- **Phase 4 — CLI `--export-ply`:** ⏸️ deferred (optional; see below).
+- **Outstanding:** runtime verification on a real display (Verification §3:
+  teapot/solids capture, per-vertex color, no GL-state leak).
+
 ## Context
 
 The REPL's design goal is "Export/import is first class… take what you build and
