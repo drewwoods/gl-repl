@@ -40,11 +40,13 @@ per-primitive or solid-meshing code. This is the explicit design constraint:
 These are the load-bearing facts; they shape the whole implementation.
 
 1. **Feedback type `GL_3D_COLOR` → position + color, but NO normals.** Feedback
-   returns, per vertex, `x y z` (window coords) + 4 RGBA floats. Normals are *not*
-   in the stream. **We synthesize normals geometrically** (per-face cross product,
-   averaged across welded vertices for smooth shading). This is standard for mesh
-   export and keeps the single-path goal; the user's `glNormal3f` data is not used
-   for export. PLY stores the computed `nx ny nz`.
+   returns, per vertex, `x y z` (window coords) + 4 RGBA floats =
+   **7 floats/vertex** (name it `FB_FLOATS_PER_VERTEX = 7`; nearly every formula
+   and the skip table below reference it). Normals are *not* in the stream. **We
+   synthesize normals geometrically** (per-face cross product, averaged across
+   welded vertices for smooth shading). This is standard for mesh export and keeps
+   the single-path goal; the user's `glNormal3f` data is not used for export. PLY
+   stores the computed `nx ny nz`.
 
 2. **Recovering world coordinates.** Feedback values are *window* coordinates
    (after modelview × projection × viewport/depth-range). To get world space:
@@ -84,9 +86,44 @@ These are the load-bearing facts; they shape the whole implementation.
    `glPushAttrib`/`glPopAttrib` bracket already around the executor call in
    `src/app/glr_ctrl.c` (~L548).
 
-7. **Snapshot semantics.** Export uses the live flat program
-   (`repl_state_flat_program_view()`), already evaluated at the current `t`/vars —
-   so it's a faithful snapshot of what's on screen this frame.
+7. **Snapshot semantics — respect replay clamp.** Export uses the live flat
+   program (`repl_state_flat_program_view()`), already evaluated at the current
+   `t`/vars. To match "what's on screen": when replay is **active**, the visible
+   render clamps the flat count to `replay_exec_limit()` (`src/subsystems/replay/replay.h:77`);
+   the capture must use the **same clamped count** for `flat_cmd_count`, not the
+   full `program.cmd_count`. When replay is off, use the full count. (So
+   `flat_cmd_count = replay_active() ? replay_exec_limit() : program.cmd_count`.)
+
+8. **Known, asserted depth range.** The window→world inversion assumes a fixed
+   depth range. The capture sets `glDepthRange(0, 1)` (saved/restored with the rest
+   of GL state) and passes `depth_near=0, depth_far=1` to the writer, so the
+   inversion is exact and self-consistent regardless of the app's live depth range.
+
+## Feedback token stream — parser skip table (load-bearing)
+
+The buffer is a flat float array of token records. The parser must consume each
+record's exact length or every subsequent polygon is silently misaligned (the
+classic feedback-parsing bug). For `GL_3D_COLOR` (`FB_FLOATS_PER_VERTEX = 7`):
+
+| Token | Floats *after* the token marker |
+|---|---|
+| `GL_POLYGON_TOKEN` | `1` (vertex count `n`), then `n × 7` — **the only token we emit faces from** |
+| `GL_POINT_TOKEN` | `7` (1 vertex) — skip |
+| `GL_LINE_TOKEN` | `14` (2 vertices) — skip |
+| `GL_LINE_RESET_TOKEN` | `14` (2 vertices) — skip (**emitted for `GL_LINE_STRIP`/`GL_LINE_LOOP`; easy to miss**) |
+| `GL_BITMAP_TOKEN` | `7` (1 vertex) — skip |
+| `GL_DRAW_PIXEL_TOKEN` | `7` (1 vertex) — skip |
+| `GL_COPY_PIXEL_TOKEN` | `7` (1 vertex) — skip |
+| `GL_PASS_THROUGH_TOKEN` | `1` (passthrough value) — skip |
+
+Notes:
+- A `GL_POLYGON_TOKEN` with `n` vertices is fan-triangulated to `n−2` faces; for
+  `n=3` (the GLUT-solid / triangle case) that's one face.
+- An unrecognized token marker is a hard parse error (don't guess a length — bail
+  with an error status), so a corrupt/misaligned stream fails loudly.
+- **All these token defines (and `GL_FEEDBACK`/`GL_3D_COLOR`) already exist in
+  `tests/gl-stubs/include/GL/gl.h`** — confirmed — so the pure parser compiles and
+  is fully testable in stub mode with synthetic buffers.
 
 ## Architecture — two modules (capture is GL-coupled; the writer is pure/testable)
 
@@ -95,30 +132,46 @@ These are the load-bearing facts; they shape the whole implementation.
   ```c
   int glr_export_mesh_ply(const char *path);   /* returns triangle count, or <0 on error */
   ```
-  Saves GL state; sets identity modelview, the `±R` ortho, viewport, depth range;
-  `glDisable(GL_LIGHTING)`; `glFeedbackBuffer(n, GL_3D_COLOR, buf)`;
+  Saves GL state; sets identity modelview (no camera), the `±R` ortho, viewport,
+  and `glDepthRange(0,1)`; `glDisable(GL_LIGHTING)`; `glFeedbackBuffer(n, GL_3D_COLOR, buf)`;
   `glRenderMode(GL_FEEDBACK)`; calls `repl_execute_program(&(ReplExecutionOptions){
-  .flat_cmd_count=…, .program=repl_state_flat_program_view(), .text=… })`
-  (same shape as the render call site); `glRenderMode(GL_RENDER)` → count (grow/
-  retry on overflow); restores state; hands the raw buffer + capture params to the
-  pure module; sets the status message.
+  .flat_cmd_count = replay_active() ? replay_exec_limit() : program.cmd_count,
+  .program = repl_state_flat_program_view(), .text = … })` (same shape as the
+  render call site, but with the replay-clamped count per decision 7);
+  `glRenderMode(GL_RENDER)` → count (grow/retry on overflow); restores state; hands
+  the raw buffer + `MeshPlyCapture` params (`ortho_r`, viewport, `depth_near=0`,
+  `depth_far=1`) to the pure module; sets the status message.
 
 - **`src/support/mesh_ply.{c,h}`** — **pure** (neutral `mesh_ply_` prefix; uses the
   GL token *macros* from `<GL/gl.h>` — which exist in the stubs — but calls **no**
   GL functions). Public:
   ```c
-  typedef struct { float ortho_r; int vp_x, vp_y, vp_w, vp_h; /* depth range */ } MeshPlyCapture;
-  typedef struct { int weld; float weld_eps; int smooth_normals; int triangulate; } MeshPlyOptions;
+  typedef struct {
+      float ortho_r;                  /* glOrtho half-extent R (see decision 2) */
+      int   vp_x, vp_y, vp_w, vp_h;   /* glViewport */
+      float depth_near, depth_far;    /* glDepthRange; capture passes 0,1 (decision 8) */
+  } MeshPlyCapture;
+  typedef struct {
+      int   weld;            /* dedup vertices by (quantized pos, color) */
+      float weld_eps;        /* position quantization grid; ~1e-4 (matches ortho
+                                precision at R=1000); color matched exact after the
+                                8-bit uchar quantization */
+      int   smooth_normals;  /* average face normals across welded verts (else flat) */
+      int   triangulate;     /* fan-triangulate n-gon faces (recommended on) */
+  } MeshPlyOptions;
+  /* Returns the triangle count on success, or NEGATIVE on parse error
+   * (unknown/misaligned token) or I/O error (fwrite/fprintf failure) — same
+   * <0-is-error convention as glr_export_mesh_ply. Partial writes are possible
+   * on mid-stream I/O failure; the caller surfaces an error status. */
   int mesh_ply_write(FILE *out, const float *feedback, int float_count,
-                     const MeshPlyCapture *cap, const MeshPlyOptions *opts); /* -> triangle count */
+                     const MeshPlyCapture *cap, const MeshPlyOptions *opts);
   ```
-  Does: parse the token stream (`GL_POLYGON_TOKEN` → vertex count `n` → `n`×(3 pos
-  + 4 color) floats; skip `GL_POINT_TOKEN`/`GL_LINE_TOKEN`/`GL_PASS_THROUGH_TOKEN`/
-  bitmap/pixel tokens); invert ortho+viewport+depth-range → world coords; fan-
-  triangulate `n>3` faces; weld vertices by (quantized position, color) → index;
-  compute per-face normals (cross product, winding-consistent) and average across
-  shared welded vertices; write the PLY ASCII document. Fully unit-testable with
-  synthetic buffers under the GL stubs.
+  Does: parse the token stream **per the skip table above** (faces only from
+  `GL_POLYGON_TOKEN`); invert ortho + viewport + depth-range → world coords;
+  fan-triangulate `n>3` faces; weld vertices by (quantized position, color) →
+  index; compute per-face normals (cross product, winding-consistent) and average
+  across shared welded vertices; write the PLY ASCII document. Fully unit-testable
+  with synthetic buffers under the GL stubs.
 
   **Layering:** `src/support/` is the neutral low-level tier (like `cpuprof`); the
   pure writer belongs there. The GL/repl-coupled capture is `glr_*` in `src/app/`.
@@ -145,10 +198,13 @@ end_header
   normals → PLY text).
 - `tests/test_mesh_ply.c`: synthetic `GL_3D_COLOR` feedback buffers — a single
   `GL_POLYGON_TOKEN` triangle; a quad (`n=4` → 2 faces); two triangles sharing an
-  edge (weld → 4 verts, averaged normal); interleaved `GL_POINT_TOKEN`/
-  `GL_LINE_TOKEN` (skipped); empty buffer (0/0). Assert vertex/face counts, that
-  a known window-coord input under a known `MeshPlyCapture` inverts to the expected
-  world coords, color 0–1→0–255, and normal direction/winding. Register in
+  edge (weld → 4 verts, averaged normal); **a polygon preceded by skipped
+  `GL_POINT_TOKEN` / `GL_LINE_TOKEN` / `GL_LINE_RESET_TOKEN` / `GL_PASS_THROUGH_TOKEN`
+  records (the alignment test — the trailing polygon must still parse correctly,
+  catching off-by-N skip bugs)**; an unknown/misaligned token (→ negative return);
+  empty buffer (0/0). Assert vertex/face counts, that a known window-coord input
+  under a known `MeshPlyCapture` (including `depth_near/far`) inverts to the
+  expected world coords, color 0–1→0–255, and normal direction/winding. Register in
   `Makefile`: add `test_mesh_ply` to `TEST_BINS`/`CORE_TEST_BINS` with
   `test_mesh_ply_OBJS = $(OBJDIR)/$(TEST_DIR)/test_mesh_ply.o $(OBJDIR)/src/support/mesh_ply.o`
   and `test_mesh_ply_LDLIBS = -lm` (minimal, like `test_format`). Token macros are
