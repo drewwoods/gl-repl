@@ -748,7 +748,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             return 1;
         }
         case GLR_FILE_ITEM_EXPORT_PLY:
-            glr_export_mesh_ply("output.ply");
+            glr_export_mesh_ply(repl_active_scene_export_path("ply"));
             return 1;
         case GLR_FILE_ITEM_SAVE_WORKSPACE: {
             const char *dir = repl_workspace_dir();
