@@ -373,6 +373,9 @@ static int flatten_reparse_line(FlattenContext *ctx,
         .num_vars = has_local_vars ? nv : 0,
         .err_buf = parse_err,
         .err_sz  = (int)sizeof(parse_err),
+        /* Flatten only reads tmp_pl.cmd; the canonical text rendering
+         * (per-arg %g/snprintf) is pure waste on every frame. */
+        .skip_text = 1,
     };
     const char *text = flatten_src_text(ctx->text, i);
     ReplParsedLine tmp_pl;
