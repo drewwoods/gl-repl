@@ -693,6 +693,42 @@ when a stall happens.
   REPL, so this detector does not (and cannot) observe playback
   underruns there.
 
+### Music Asset Resolution
+
+The playlist is `*.mp3` files discovered at startup and played in
+filename order. `build_mp3_playlist()` (`gl_repl.c`) concatenates **three
+sources**, each scanned by `scan_dir_into()` and sorted independently so
+every source keeps its own filename order:
+
+1. **Primary assets dir.** `./assets` relative to the working directory
+   by default. Overridden by `--assets <dir>` (highest precedence) or the
+   `GLR_ASSETS_DIR` env var — `--assets` beats env beats default,
+   resolved in `main()` and passed into `build_mp3_playlist()`. This is
+   the only source the override touches.
+2. **Bundled-beside-the-executable.** `<exe>/../Resources/assets`, with
+   the executable path from `executable_dir()` (`_NSGetExecutablePath` on
+   macOS, `/proc/self/exe` on Linux). This is the macOS `.app` case:
+   `make app` copies `assets/sample.mp3` into `Contents/Resources/assets/`,
+   so a Finder-launched bundle (cwd `/`, where source 1 finds nothing)
+   still ships with music. The bundle subfolder name is fixed; the
+   override does not change it.
+3. **Per-user music folder.** `user_music_dir()` —
+   `~/Library/Application Support/gl-repl/Music` (macOS) or the XDG data
+   home (`$XDG_DATA_HOME/gl-repl/music`, else `~/.local/share/...`)
+   elsewhere — created on first run by `ensure_dir()` (a `mkdir -p`) and
+   announced once on stderr (`repl_audio: add more music in <dir>`) so
+   users have a place to drop their own tracks.
+
+If all three yield zero `.mp3`s, it falls back to the single-file
+`AUDIO_DEFAULT_MUSIC` (`assets/song.mp3`); `--no-audio` skips audio
+entirely. The whole model lives in `gl_repl.c`'s file-private statics —
+no module touches it. The platform branches in `executable_dir` /
+`user_music_dir` are `#ifdef`-guarded and stay C99/portable; the Windows
+arms they still need are tracked in
+[`plans/in-review/windows-port-mingw.md`](plans/in-review/windows-port-mingw.md)
+(§1F). `--assets` / `GLR_ASSETS_DIR` are pure string + `opendir`, so they
+need no per-platform code.
+
 ## Keyboard Shortcut Definition Sites
 
 Keyboard shortcuts are **not** defined in one place today. They are
