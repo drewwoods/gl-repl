@@ -30,6 +30,82 @@
 #define ATTRIB(a) attributes[where++]=(a)
 #define ATTRIB_VAL(a,v) {ATTRIB(a); ATTRIB(v);}
 
+/* Read every display-string capability of one FBConfig into values[],
+ * indexed by FGCapability, so the shared filter/ranking logic can be used. */
+static void fghReadConfigCapabilities(Display *dpy, GLXFBConfig config, int *values)
+{
+    static const int glxAttrib[FG_CAP_COUNT] = {
+        GLX_RED_SIZE, GLX_GREEN_SIZE, GLX_BLUE_SIZE, GLX_ALPHA_SIZE,
+        GLX_DEPTH_SIZE, GLX_STENCIL_SIZE,
+        GLX_ACCUM_RED_SIZE, GLX_ACCUM_GREEN_SIZE,
+        GLX_ACCUM_BLUE_SIZE, GLX_ACCUM_ALPHA_SIZE,
+        GLX_SAMPLES, GLX_AUX_BUFFERS, GLX_BUFFER_SIZE
+    };
+    int i;
+
+    for (i = 0; i < FG_CAP_COUNT; i++)
+    {
+        int value = 0;
+        glXGetFBConfigAttrib(dpy, config, glxAttrib[i], &value);
+        values[i] = value;
+    }
+}
+
+/* Select the matching FBConfig from fbconfigArray according to the parsed
+ * display-string criteria. Returns the chosen index, or -1 if none match. */
+static int fghSelectConfigByCriteria(Display *dpy, GLXFBConfig *fbconfigArray,
+                                     int fbconfigArraySize)
+{
+    const FGDisplayStringCriteria *c = &fgState.DisplayStrCriteria;
+    int (*values)[FG_CAP_COUNT];
+    int *matches;
+    int matchCount = 0;
+    int i, j, chosen;
+
+    values  = malloc((size_t)fbconfigArraySize * sizeof(*values));
+    matches = malloc((size_t)fbconfigArraySize * sizeof(*matches));
+    if (!values || !matches)
+    {
+        free(values);
+        free(matches);
+        return -1;
+    }
+
+    /* Hard filter: keep only configs that satisfy every criterion. */
+    for (i = 0; i < fbconfigArraySize; i++)
+    {
+        fghReadConfigCapabilities(dpy, fbconfigArray[i], values[i]);
+        if (fghCriteriaPass(c, values[i]))
+            matches[matchCount++] = i;
+    }
+
+    if (matchCount == 0)
+    {
+        free(values);
+        free(matches);
+        return -1;
+    }
+
+    /* Rank matches in strict left-to-right criterion precedence. Stable
+     * insertion sort preserves the server's order as the final tie-break. */
+    for (i = 1; i < matchCount; i++)
+    {
+        int key = matches[i];
+        for (j = i - 1;
+             j >= 0 && fghCriteriaCompare(c, values[matches[j]], values[key]) > 0;
+             j--)
+            matches[j + 1] = matches[j];
+        matches[j + 1] = key;
+    }
+
+    /* "num" selects the Nth matching config in ranked order (0 = best). */
+    chosen = (c->num > 0 && c->num < matchCount) ? matches[c->num] : matches[0];
+
+    free(values);
+    free(matches);
+    return chosen;
+}
+
 /* Chooses a visual basing on the current display mode settings */
 
 #ifdef USE_FBCONFIG
@@ -112,8 +188,22 @@ int fghChooseConfig(GLXFBConfig* fbconfig)
         {
             int result __fg_unused;  /* Returned by glXGetFBConfigAttrib, not checked. */
 
+            /* glutInitDisplayString was used: hard-filter then rank all
+             * configs by the criteria, honouring left-to-right precedence. */
+            if (fgState.DisplayStrCriteria.haveDisplayString)
+            {
+                int chosen = fghSelectConfigByCriteria(
+                    fgDisplay.pDisplay.Display, fbconfigArray, fbconfigArraySize );
 
-            if( wantIndexedMode )
+                if (chosen < 0)
+                {
+                    *fbconfig = NULL;
+                    XFree(fbconfigArray);
+                    return 0;
+                }
+                *fbconfig = fbconfigArray[chosen];
+            }
+            else if( wantIndexedMode )
             {
                 /*
                  * In index mode, we want the largest buffer size, i.e. visual
@@ -154,9 +244,14 @@ int fghChooseConfig(GLXFBConfig* fbconfig)
                                                        attributes,
                                                        &fbconfigArraySize );
                 }
-            }
 
-            *fbconfig = fbconfigArray[0];
+                *fbconfig = fbconfigArray[0];
+            }
+            else
+            {
+                /* Standard mode: just use the first config */
+                *fbconfig = fbconfigArray[0];
+            }
         }
         else
         {

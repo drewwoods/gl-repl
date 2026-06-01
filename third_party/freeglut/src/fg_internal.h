@@ -340,6 +340,74 @@ typedef enum
   GLUT_EXEC_STATE_STOP
 } fgExecutionState ;
 
+/* Display string criteria comparators (glutInitDisplayString man page).
+ * Concrete comparators are the contiguous range FG_EQ..FG_MIN; FG_UNSPECIFIED
+ * is a bare token before its documented default is applied, and FG_NONE marks
+ * an empty slot. Keep this ordering: fghCriterionIsConcrete() relies on it. */
+typedef enum {
+    FG_NONE,        /* empty slot                                  */
+    FG_EQ,          /* cap=val                                     */
+    FG_NEQ,         /* cap!=val                                    */
+    FG_LTE,         /* cap<=val  (preferring less)                 */
+    FG_GTE,         /* cap>=val  (preferring more)                 */
+    FG_GT,          /* cap>val   (preferring more)                 */
+    FG_LT,          /* cap<val   (preferring less)                 */
+    FG_MIN,         /* cap~val   (>=val but preferring less)       */
+    FG_UNSPECIFIED  /* bare cap, default not yet resolved          */
+} FGCriterionComparison;
+
+/* Display string criterion for a single capability */
+typedef struct {
+    FGCriterionComparison comparison;
+    int value;
+} FGCriterion;
+
+/* Frame buffer capabilities constrainable through a display string. */
+typedef enum {
+    FG_CAP_RED, FG_CAP_GREEN, FG_CAP_BLUE, FG_CAP_ALPHA,
+    FG_CAP_DEPTH, FG_CAP_STENCIL,
+    FG_CAP_ACCUM_RED, FG_CAP_ACCUM_GREEN, FG_CAP_ACCUM_BLUE, FG_CAP_ACCUM_ALPHA,
+    FG_CAP_SAMPLES, FG_CAP_AUX, FG_CAP_BUFFER,
+    FG_CAP_COUNT
+} FGCapability;
+
+/* One parsed (capability, criterion) pair. Entry order is the display-string
+ * left-to-right order, which defines matching precedence per the man page. */
+typedef struct {
+    FGCapability capability;
+    FGCriterion  criterion;
+} FGCapabilityCriterion;
+
+#define FG_MAX_DISPLAY_CRITERIA 64
+
+typedef struct {
+    FGCapabilityCriterion entries[FG_MAX_DISPLAY_CRITERIA];
+    int       count;
+    int       num;                /* select Nth matching config (0 = best) */
+    GLboolean haveDisplayString;  /* TRUE once glutInitDisplayString was called */
+} FGDisplayStringCriteria;
+
+/* -- Shared display-string helpers (fg_display_string.c) ------------------- */
+
+FGCriterion fghMakeCriterion( FGCriterionComparison comparison, int value );
+
+/* TRUE if the comparator is a real one (not FG_NONE/FG_UNSPECIFIED/invalid). */
+GLboolean fghCriterionIsConcrete( FGCriterionComparison comparison );
+
+/* Append (capability, parsed) resolving an unspecified/invalid comparator to
+ * deflt, so backends only ever see concrete comparators. */
+void fghAddCriterion( FGDisplayStringCriteria *c, FGCapability capability,
+                      FGCriterion parsed, FGCriterion deflt );
+
+/* Hard filter: do all criteria pass? values[] is indexed by FGCapability. */
+GLboolean fghCriteriaPass( const FGDisplayStringCriteria *c, const int *values );
+
+/* Lexicographic ranking in display-string order. Returns <0 if A is the
+ * better match, >0 if B is, 0 if equivalent. Exact comparators (=, !=)
+ * contribute no preference (they only filter). */
+int fghCriteriaCompare( const FGDisplayStringCriteria *c,
+                        const int *aValues, const int *bValues );
+
 /* This structure holds different freeglut settings */
 typedef struct tagSFG_State SFG_State;
 struct tagSFG_State
@@ -410,6 +478,8 @@ struct tagSFG_State
     FGCBUserData     ErrorFuncData;        /* User defined error handler user data */
     FGWarningUC      WarningFunc;          /* User defined warning handler  */
     FGCBUserData     WarningFuncData;      /* User defined warning handler user data */
+
+    FGDisplayStringCriteria DisplayStrCriteria; /* Criteria from glutInitDisplayString */
 };
 
 /* The structure used by display initialization in fg_init.c */

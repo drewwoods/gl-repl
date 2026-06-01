@@ -23,6 +23,8 @@
 
 #import <Cocoa/Cocoa.h>
 
+#include "fg_pixel_format_cocoa.h"
+
 void fghOnReshapeNotify( SFG_Window *window, int width, int height, GLboolean forceNotify );
 void fghOnPositionNotify( SFG_Window *window, int x, int y, GLboolean forceNotify );
 
@@ -99,7 +101,6 @@ static void fghCocoaContentOriginToFreeglut( const SFG_Window *window, NSRect co
 
 - (void)releaseAllKeys;
 @end
-
 /*****************************************************************
  * Window Delegate                                               *
  *****************************************************************/
@@ -936,41 +937,6 @@ void fgPlatformReshapeWindow( SFG_Window *window, int width, int height )
     [view reshape];
 }
 
-BOOL isValidOpenGLContext( int MajorVersion, int MinorVersion, int ContextFlags, int ContextProfile )
-{
-    AUTORELEASE_POOL;
-
-    // Case 1: OpenGL 2.1 or below (Compatibility mode)
-    if ( MajorVersion < 2 || ( MajorVersion == 2 && MinorVersion <= 1 ) ) {
-        if ( ContextProfile != 0 && ContextProfile != GLUT_COMPATIBILITY_PROFILE ) {
-            return NO; // Profile must be compatibility or unspecified for 2.1
-        }
-        return YES; // Valid configuration
-    }
-
-    // Case 2: OpenGL 3.2 through 4.1 (Core Profile only)
-    if ( ( MajorVersion == 3 && MinorVersion >= 2 ) || ( MajorVersion == 4 && MinorVersion <= 1 ) ) {
-
-        // Must be Core Profile
-        if ( ContextProfile != GLUT_CORE_PROFILE ) {
-            return NO; // Only Core Profile is supported for 3.2+
-        }
-        return YES; // Valid configuration
-    }
-
-    // Case 3: OpenGL 3.0-3.1 (not supported on macOS)
-    if ( MajorVersion == 3 && MinorVersion < 2 ) {
-        return NO;
-    }
-
-    // Case 4: OpenGL 4.2+ (not supported on macOS)
-    if ( MajorVersion > 4 || ( MajorVersion == 4 && MinorVersion > 1 ) ) {
-        return NO;
-    }
-
-    return NO; // Any other configuration is invalid
-}
-
 static void fgOpenSubWindow( SFG_Window *window, int x, int y, int w, int h )
 {
     AUTORELEASE_POOL;
@@ -1053,7 +1019,7 @@ void fgPlatformOpenWindow( SFG_Window *window,
         fgState.ContextFlags &= ~GLUT_DEBUG;
     }
 
-    if ( !isValidOpenGLContext(
+    if ( !fgCocoaIsValidContextRequest(
              fgState.MajorVersion, fgState.MinorVersion, fgState.ContextFlags, fgState.ContextProfile ) ) {
         fgError( "ERROR - MacOS only supports Compatibility OpenGL 2.1 and below OR OpenGL Core Profile 3.2 "
                  "through 4.1" );
@@ -1073,63 +1039,10 @@ void fgPlatformOpenWindow( SFG_Window *window,
     }
 
     //
-    // 1. Define pixel format attributes based on fgState.DisplayMode
-    //
-    // TODO: Move this to a separate function to support fgPlatformGlutGet(GLUT_DISPLAY_MODE_POSSIBLE)
+    // 1. Define pixel format attributes
     //
 
-    NSOpenGLPixelFormatAttribute attrs[32];
-    int                          attrIndex = 0;
-    attrs[attrIndex++]                     = NSOpenGLPFAAccelerated; // choose hardware acceleration
-    attrs[attrIndex++]                     = NSOpenGLPFAColorSize;
-    attrs[attrIndex++]                     = 24; // 8 bits per RGB channel
-    attrs[attrIndex++]                     = NSOpenGLPFAAlphaSize;
-    attrs[attrIndex++]                     = 8;
-    if ( fgState.DisplayMode & GLUT_DOUBLE ) {
-        attrs[attrIndex++] = NSOpenGLPFADoubleBuffer;
-    }
-    if ( fgState.DisplayMode & GLUT_DEPTH ) {
-        // TODO make this configurable when glutInitDisplayString implementation is complete eg depth>=24
-        attrs[attrIndex++] = NSOpenGLPFADepthSize;
-        attrs[attrIndex++] = 24;
-    }
-    if ( fgState.DisplayMode & GLUT_STENCIL ) {
-        // TODO make this configurable when glutInitDisplayString implementation is complete eg stencil<=8
-        attrs[attrIndex++] = NSOpenGLPFAStencilSize;
-        attrs[attrIndex++] = 8;
-    }
-    if ( fgState.DisplayMode & GLUT_ACCUM ) {
-        // TODO make this configurable when glutInitDisplayString implementation is complete eg acca~32
-        attrs[attrIndex++] = NSOpenGLPFAAccumSize;
-        attrs[attrIndex++] = 32;
-    }
-    if ( fgState.DisplayMode & GLUT_AUX ) {
-        attrs[attrIndex++] = NSOpenGLPFAAuxBuffers;
-        attrs[attrIndex++] = fghNumberOfAuxBuffersRequested( );
-    }
-    if ( fgState.DisplayMode & GLUT_MULTISAMPLE ) {
-        attrs[attrIndex++] = NSOpenGLPFAMultisample; // boolean
-        attrs[attrIndex++] = NSOpenGLPFASampleBuffers;
-        attrs[attrIndex++] = 1;
-        attrs[attrIndex++] = NSOpenGLPFASamples;
-        attrs[attrIndex++] = fgState.SampleNumber;
-    }
-
-    // Note sRGB framebuffer always enabled, but need
-    // glEnable(GL_FRAMEBUFFER_SRGB) for sRGB encoding to actually take effect
-    // on writes.
-
-    // profile selection
-    attrs[attrIndex++] = NSOpenGLPFAOpenGLProfile;
-    if ( fgState.MajorVersion == 3 && !window->IsMenu )
-        attrs[attrIndex++] = NSOpenGLProfileVersion3_2Core;
-    else if ( fgState.MajorVersion == 4 && !window->IsMenu )
-        attrs[attrIndex++] = NSOpenGLProfileVersion4_1Core;
-    else
-        attrs[attrIndex++] = NSOpenGLProfileVersionLegacy;
-    attrs[attrIndex++] = 0; // Null terminator
-
-    NSOpenGLPixelFormat *pixelFormat = [[NSOpenGLPixelFormat alloc] initWithAttributes:attrs];
+    NSOpenGLPixelFormat *pixelFormat = fgCocoaCreatePixelFormat( window->IsMenu );
     if ( !pixelFormat ) {
         fgError( "Failed to create pixel format" );
     }
