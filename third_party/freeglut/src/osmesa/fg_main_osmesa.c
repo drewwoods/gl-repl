@@ -28,6 +28,7 @@
 #include <GL/freeglut.h>
 #include "fg_internal.h"
 #include <time.h>
+#include <stdlib.h>
 
 /*
  * Defined in the generic fg_main.c but not exported through a shared header;
@@ -60,16 +61,89 @@ void fgPlatformSleepForEvents( fg_time_t msec )
     nanosleep( &ts, NULL );
 }
 
+/*
+ * Cheap content signature of the current OSMesa colour buffer. A single-buffered
+ * backend has no per-display platform hook (the generic glutSwapBuffers() short-
+ * circuits, and fghRedrawWindow() exposes none), so the record mode below runs
+ * once per main-loop iteration and uses this to tell when a *new* frame has been
+ * rendered -- it scatters a few thousand byte reads (FNV-1a), negligible next to
+ * a software render.
+ */
+static unsigned long fghOSMesaFrameSignature( void )
+{
+    OSMesaContext        ctx = OSMesaGetCurrentContext();
+    GLint                w = 0, h = 0, fmt = 0;
+    void                *buffer = NULL;
+    const unsigned char *p;
+    unsigned long        sig = 2166136261UL;
+    size_t               total, step, i;
+
+    if( !ctx || !OSMesaGetColorBuffer( ctx, &w, &h, &fmt, &buffer ) ||
+        !buffer || w <= 0 || h <= 0 )
+        return 0;
+
+    p = (const unsigned char *)buffer;
+    total = (size_t)w * (size_t)h * 4;
+    step = total / 4096;
+    if( step == 0 )
+        step = 1;
+    for( i = 0; i < total; i += step )
+        sig = ( sig ^ p[i] ) * 16777619UL;
+    return sig;
+}
+
 void fgPlatformProcessSingleEvent( void )
 {
-    /* Headless: no window-system events are ever delivered. The one thing that
-     * can arrive asynchronously is a SIGUSR1 frame-capture request. Service it
-     * here -- this runs every main-loop iteration, and the signal interrupts
-     * fgPlatformSleepForEvents's nanosleep, so an *idle* app (one that has
-     * stopped calling glutSwapBuffers) still gets captured. The last completed
-     * frame is still in the colour buffer, so no redraw is needed. The swap
-     * path services the same flag for the actively-animating case; whichever
-     * runs first clears it. */
+    /* Headless: no window-system events are ever delivered. Both frame-capture
+     * paths are serviced here -- this runs every main-loop iteration, just
+     * before that iteration's display work, and SIGUSR1 interrupts the
+     * fgPlatformSleepForEvents nanosleep so even an idle app responds. For a
+     * single-buffered backend this is the only per-frame hook freeglut offers
+     * (glutSwapBuffers short-circuits before the platform swap). */
+
+    /* (1) FREEGLUT_CAPTURE_FRAMES=N record mode: write every newly rendered
+     * frame to a numbered PPM and exit(0) after N. A content signature skips the
+     * pre-first-render buffer and triggers on the first real frame; thereafter
+     * every iteration is captured (the iteration:frame ratio is 1:1 under the
+     * software renderer), so a static scene yields N identical frames and an
+     * animation N distinct ones -- deterministic for offline GIF/MP4 assembly. */
+    {
+        static int           limit = -1;     /* -1 unread; 0 disabled */
+        static int           count = 0;
+        static int           started = 0;
+        static int           primed = 0;
+        static unsigned long prime_sig = 0;
+        if( limit < 0 )
+        {
+            const char *e = getenv( "FREEGLUT_CAPTURE_FRAMES" );
+            limit = ( e && *e ) ? atoi( e ) : 0;
+            if( limit < 0 )
+                limit = 0;
+        }
+        if( limit > 0 )
+        {
+            if( !started )
+            {
+                unsigned long sig = fghOSMesaFrameSignature();
+                if( !primed )
+                {
+                    prime_sig = sig;
+                    primed = 1;
+                }
+                else if( sig != prime_sig )
+                    started = 1;             /* first real frame is rendered */
+            }
+            if( started )
+            {
+                fghOSMesaCaptureFrame();
+                if( ++count >= limit )
+                    exit( 0 );
+            }
+        }
+    }
+
+    /* (2) SIGUSR1 single snapshot, on demand -- captures the current frame even
+     * when the app is idle (the colour buffer still holds the last frame). */
     if( fghOSMesaCaptureRequested )
     {
         fghOSMesaCaptureRequested = 0;

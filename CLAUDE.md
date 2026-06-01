@@ -102,6 +102,16 @@ idle (it reads the last completed colour buffer directly via
 `magick shot-0000.ppm shot.png`. This is a freeglut-fork feature, so it only
 exists in an OSMesa build re-vendored from a fork that carries it.
 
+**Headless animations → GIF/MP4 (`scripts/record-gif.sh`).** `FREEGLUT_CAPTURE_FRAMES=N`
+is the backend's record mode: it captures every rendered frame to a numbered PPM
+and `exit(0)`s after N (serviced from `fgPlatformProcessSingleEvent`, the
+backend's per-frame main-loop hook — the swap path is unreachable on a
+single-buffered window). `scripts/record-gif.sh --example 2 --duration 3 --out ring`
+records that headlessly and assembles `ring.gif` + `ring.mp4` via `ffmpeg`; the
+knob is duration (clip length, fps-invariant). Both the record mode and the
+`SIGUSR1` capture live entirely in the OSMesa backend files — no core freeglut
+change (kept clean for upstreaming).
+
 ### macOS app bundle (`make app`)
 
 `make app` packages the binary into `gl-repl.app` so the Dock/Finder show

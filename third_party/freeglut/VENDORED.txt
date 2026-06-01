@@ -2,7 +2,7 @@ freeglut vendored into this tree.
 
 upstream: /Users/drew/src/freeglut-fork
 ref:      osmesa-backend
-sha:      d15c40c0625a09eca7b6b402506b705bf4a34a6b
+sha:      94c3b9b10971d7c07df990ae7b9640ae8faf278b
 
 Produced by scripts/vendor-freeglut.sh. Do NOT edit the vendored tree by hand;
 re-run the script with a ref to update. After re-vendoring, run

@@ -164,10 +164,27 @@ from a later point in the timeline, set the initial `t` with `--time <secs>`
 GLR_TIME=5 ./build/release-osmesa/gl-repl --example 2 --no-audio & # same, via env
 ```
 
+**Animations → GIF / MP4.** `scripts/record-gif.sh` records a headless run into
+a GIF *and* an MP4. The backend captures every rendered frame
+(`FREEGLUT_CAPTURE_FRAMES`) and `ffmpeg` assembles them. The knob is **duration**
+(clip length, invariant of `--fps`):
+
+```bash
+make gl-repl FREEGLUT_OSMESA=1
+scripts/record-gif.sh --example 2 --duration 3 --out ring        # ring.gif + ring.mp4
+scripts/record-gif.sh --example 8 --duration 4 --fps 30 --scale 600 --time 5 --out torus
+```
+
+`--duration <secs>` × `--fps` sets the frame count; `--scale <w>` downsizes;
+`--time <t0>` starts later in the animation. The clock advances `1/60 s` per
+frame, so playback is `~fps/60`× natural speed — use `--fps 60` for real-time.
+Needs `ffmpeg`. (`scripts/record-gif.sh --help` for all flags.)
+
 This needs a vendored freeglut that carries the OSMesa backend (re-vendor with
 `FREEGLUT_REPO=<path-or-url> scripts/vendor-freeglut.sh <ref>`). See *Headless
 Rendering & Screenshots (OSMesa)* in [`ARCHITECTURE.md`](ARCHITECTURE.md) for the
-full design (build-mode swap, the teardown fix, the signal-driven capture).
+full design (build-mode swap, the teardown fix, the signal-driven capture, the
+record mode).
 
 ## Music
 
