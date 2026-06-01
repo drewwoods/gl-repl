@@ -178,6 +178,8 @@ endif
 	all \
 	app \
 	icon-regen \
+	icon-cube \
+	icon-cube-strong \
 	audit-editor-ownership \
 	bench \
 	bench-csv \
@@ -905,7 +907,8 @@ APP_ICNS = $(MACOS_PKG)/gl-repl.icns
 APP_ICONSET = $(MACOS_PKG)/gl-repl.iconset
 # Icon source SVG. Alternatives in packaging/macos/: gl-repl.svg (flat cube),
 # gl-repl-retro-A.svg (chrome synthwave), -B (gold), -C/-C2 (silver OpenGL),
-# -D (cube+wordmark), gl-repl-soft-cube.svg (soft pastel perspective cube).
+# -D (cube+wordmark), gl-repl-soft-cube.svg (soft pastel perspective cube; used
+# here), gl-repl-soft-cube-strong.svg (same, stronger perspective).
 APP_ICON_SVG = $(MACOS_PKG)/gl-repl-soft-cube.svg
 
 # Regenerate the perspective chrome wordmark SVG from its parametric generator.
@@ -913,6 +916,13 @@ APP_ICON_SVG = $(MACOS_PKG)/gl-repl-soft-cube.svg
 # Tune the look by passing args, e.g.: python3 packaging/macos/gen_retro_a.py 430
 icon-regen: ## Regenerate gl-repl-retro-A.svg from gen_retro_a.py (then `make app`).
 	python3 $(MACOS_PKG)/gen_retro_a.py
+
+# Regenerate the soft pastel perspective-cube SVGs (DIST tunes perspective).
+icon-cube: ## Regenerate gl-repl-soft-cube.svg (subtle perspective) then `make app`.
+	python3 $(MACOS_PKG)/gen_soft_cube.py 8 gl-repl-soft-cube.svg
+
+icon-cube-strong: ## Regenerate gl-repl-soft-cube-strong.svg (stronger perspective).
+	python3 $(MACOS_PKG)/gen_soft_cube.py 5.5 gl-repl-soft-cube-strong.svg
 
 $(APP_ICNS): $(APP_ICON_SVG)
 	@command -v rsvg-convert >/dev/null 2>&1 || { echo "need rsvg-convert: brew install librsvg" >&2; exit 1; }
