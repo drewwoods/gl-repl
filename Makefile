@@ -902,8 +902,11 @@ MACOS_PKG = packaging/macos
 APP_BUNDLE = gl-repl.app
 APP_ICNS = $(MACOS_PKG)/gl-repl.icns
 APP_ICONSET = $(MACOS_PKG)/gl-repl.iconset
+# Icon source SVG. Alternatives in packaging/macos/: gl-repl.svg (cube),
+# gl-repl-retro-A.svg (chrome synthwave), -B (gold), -C/-C2 (silver OpenGL), -D (cube+wordmark).
+APP_ICON_SVG = $(MACOS_PKG)/gl-repl-retro-A.svg
 
-$(APP_ICNS): $(MACOS_PKG)/gl-repl.svg
+$(APP_ICNS): $(APP_ICON_SVG)
 	@command -v rsvg-convert >/dev/null 2>&1 || { echo "need rsvg-convert: brew install librsvg" >&2; exit 1; }
 	rm -rf $(APP_ICONSET)
 	mkdir -p $(APP_ICONSET)
