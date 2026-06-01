@@ -48,32 +48,32 @@
   </g>
 
   <g filter="url(#rglow)">
-      <use href="#word" transform="translate(512 300.0) scale(0.45) translate(-512 -300.0) translate(0 624.0)" fill="#0a0118" />
-      <use href="#word" transform="translate(512 300.0) scale(0.4712) translate(-512 -300.0) translate(0 624.0)" fill="#0e021e" />
-      <use href="#word" transform="translate(512 300.0) scale(0.4923) translate(-512 -300.0) translate(0 624.0)" fill="#130324" />
-      <use href="#word" transform="translate(512 300.0) scale(0.5135) translate(-512 -300.0) translate(0 624.0)" fill="#17042a" />
-      <use href="#word" transform="translate(512 300.0) scale(0.5346) translate(-512 -300.0) translate(0 624.0)" fill="#1b062f" />
-      <use href="#word" transform="translate(512 300.0) scale(0.5558) translate(-512 -300.0) translate(0 624.0)" fill="#200735" />
-      <use href="#word" transform="translate(512 300.0) scale(0.5769) translate(-512 -300.0) translate(0 624.0)" fill="#24083b" />
-      <use href="#word" transform="translate(512 300.0) scale(0.5981) translate(-512 -300.0) translate(0 624.0)" fill="#280941" />
-      <use href="#word" transform="translate(512 300.0) scale(0.6192) translate(-512 -300.0) translate(0 624.0)" fill="#2c0a47" />
-      <use href="#word" transform="translate(512 300.0) scale(0.6404) translate(-512 -300.0) translate(0 624.0)" fill="#310b4d" />
-      <use href="#word" transform="translate(512 300.0) scale(0.6615) translate(-512 -300.0) translate(0 624.0)" fill="#350d52" />
-      <use href="#word" transform="translate(512 300.0) scale(0.6827) translate(-512 -300.0) translate(0 624.0)" fill="#390e58" />
-      <use href="#word" transform="translate(512 300.0) scale(0.7038) translate(-512 -300.0) translate(0 624.0)" fill="#3e0f5e" />
-      <use href="#word" transform="translate(512 300.0) scale(0.725) translate(-512 -300.0) translate(0 624.0)" fill="#421064" />
-      <use href="#word" transform="translate(512 300.0) scale(0.7462) translate(-512 -300.0) translate(0 624.0)" fill="#46116a" />
-      <use href="#word" transform="translate(512 300.0) scale(0.7673) translate(-512 -300.0) translate(0 624.0)" fill="#4b1270" />
-      <use href="#word" transform="translate(512 300.0) scale(0.7885) translate(-512 -300.0) translate(0 624.0)" fill="#4f1376" />
-      <use href="#word" transform="translate(512 300.0) scale(0.8096) translate(-512 -300.0) translate(0 624.0)" fill="#53157b" />
-      <use href="#word" transform="translate(512 300.0) scale(0.8308) translate(-512 -300.0) translate(0 624.0)" fill="#581681" />
-      <use href="#word" transform="translate(512 300.0) scale(0.8519) translate(-512 -300.0) translate(0 624.0)" fill="#5c1787" />
-      <use href="#word" transform="translate(512 300.0) scale(0.8731) translate(-512 -300.0) translate(0 624.0)" fill="#60188d" />
-      <use href="#word" transform="translate(512 300.0) scale(0.8942) translate(-512 -300.0) translate(0 624.0)" fill="#641993" />
-      <use href="#word" transform="translate(512 300.0) scale(0.9154) translate(-512 -300.0) translate(0 624.0)" fill="#691a99" />
-      <use href="#word" transform="translate(512 300.0) scale(0.9365) translate(-512 -300.0) translate(0 624.0)" fill="#6d1c9e" />
-      <use href="#word" transform="translate(512 300.0) scale(0.9577) translate(-512 -300.0) translate(0 624.0)" fill="#711da4" />
-      <use href="#word" transform="translate(512 300.0) scale(0.9788) translate(-512 -300.0) translate(0 624.0)" fill="#761eaa" />
+      <use href="#word" transform="translate(512 370.0) scale(0.48) translate(-512 -370.0) translate(0 624.0)" fill="#0a0118" />
+      <use href="#word" transform="translate(512 370.0) scale(0.5) translate(-512 -370.0) translate(0 624.0)" fill="#0e021e" />
+      <use href="#word" transform="translate(512 370.0) scale(0.52) translate(-512 -370.0) translate(0 624.0)" fill="#130324" />
+      <use href="#word" transform="translate(512 370.0) scale(0.54) translate(-512 -370.0) translate(0 624.0)" fill="#17042a" />
+      <use href="#word" transform="translate(512 370.0) scale(0.56) translate(-512 -370.0) translate(0 624.0)" fill="#1b062f" />
+      <use href="#word" transform="translate(512 370.0) scale(0.58) translate(-512 -370.0) translate(0 624.0)" fill="#200735" />
+      <use href="#word" transform="translate(512 370.0) scale(0.6) translate(-512 -370.0) translate(0 624.0)" fill="#24083b" />
+      <use href="#word" transform="translate(512 370.0) scale(0.62) translate(-512 -370.0) translate(0 624.0)" fill="#280941" />
+      <use href="#word" transform="translate(512 370.0) scale(0.64) translate(-512 -370.0) translate(0 624.0)" fill="#2c0a47" />
+      <use href="#word" transform="translate(512 370.0) scale(0.66) translate(-512 -370.0) translate(0 624.0)" fill="#310b4d" />
+      <use href="#word" transform="translate(512 370.0) scale(0.68) translate(-512 -370.0) translate(0 624.0)" fill="#350d52" />
+      <use href="#word" transform="translate(512 370.0) scale(0.7) translate(-512 -370.0) translate(0 624.0)" fill="#390e58" />
+      <use href="#word" transform="translate(512 370.0) scale(0.72) translate(-512 -370.0) translate(0 624.0)" fill="#3e0f5e" />
+      <use href="#word" transform="translate(512 370.0) scale(0.74) translate(-512 -370.0) translate(0 624.0)" fill="#421064" />
+      <use href="#word" transform="translate(512 370.0) scale(0.76) translate(-512 -370.0) translate(0 624.0)" fill="#46116a" />
+      <use href="#word" transform="translate(512 370.0) scale(0.78) translate(-512 -370.0) translate(0 624.0)" fill="#4b1270" />
+      <use href="#word" transform="translate(512 370.0) scale(0.8) translate(-512 -370.0) translate(0 624.0)" fill="#4f1376" />
+      <use href="#word" transform="translate(512 370.0) scale(0.82) translate(-512 -370.0) translate(0 624.0)" fill="#53157b" />
+      <use href="#word" transform="translate(512 370.0) scale(0.84) translate(-512 -370.0) translate(0 624.0)" fill="#581681" />
+      <use href="#word" transform="translate(512 370.0) scale(0.86) translate(-512 -370.0) translate(0 624.0)" fill="#5c1787" />
+      <use href="#word" transform="translate(512 370.0) scale(0.88) translate(-512 -370.0) translate(0 624.0)" fill="#60188d" />
+      <use href="#word" transform="translate(512 370.0) scale(0.9) translate(-512 -370.0) translate(0 624.0)" fill="#641993" />
+      <use href="#word" transform="translate(512 370.0) scale(0.92) translate(-512 -370.0) translate(0 624.0)" fill="#691a99" />
+      <use href="#word" transform="translate(512 370.0) scale(0.94) translate(-512 -370.0) translate(0 624.0)" fill="#6d1c9e" />
+      <use href="#word" transform="translate(512 370.0) scale(0.96) translate(-512 -370.0) translate(0 624.0)" fill="#711da4" />
+      <use href="#word" transform="translate(512 370.0) scale(0.98) translate(-512 -370.0) translate(0 624.0)" fill="#761eaa" />
     <use href="#word" transform="translate(0 624.0)" fill="none" stroke="#0a0118" stroke-width="11" stroke-linejoin="round" />
     <use href="#word" transform="translate(0 624.0)" fill="url(#face)" stroke="#16264d" stroke-width="2.5" stroke-linejoin="round" />
   </g>
