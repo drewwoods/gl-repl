@@ -3,6 +3,7 @@
 *.ini
 gl-repl
 output.c
+output.ply
 build/
 workspace/
 bench_repl

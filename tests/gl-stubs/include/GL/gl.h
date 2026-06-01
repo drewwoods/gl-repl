@@ -323,6 +323,8 @@ static inline void glMaterialfv(GLenum face, GLenum pname, const GLfloat *params
 static inline void glMatrixMode(GLenum mode) { GL_STUB_TRACE_LINE("glMatrixMode %u\n", (unsigned)mode); gl_stub_tick(GL_STUB_glMatrixMode); }
 static inline void glNormal3dv(const GLdouble *v) { GL_STUB_TRACE_LINE("glNormal3dv\n"); gl_stub_tick(GL_STUB_glNormal3dv); (void)v; }
 static inline void glNormal3f(GLfloat nx, GLfloat ny, GLfloat nz) { GL_STUB_TRACE_LINE("glNormal3f %g %g %g\n", (double)nx, (double)ny, (double)nz); gl_stub_tick(GL_STUB_glNormal3f); }
+static inline void glTexCoord3f(GLfloat s, GLfloat t, GLfloat r) { GL_STUB_TRACE_LINE("glTexCoord3f %g %g %g\n", (double)s, (double)t, (double)r); gl_stub_tick(GL_STUB_glTexCoord3f); }
+static inline void glPassThrough(GLfloat token) { GL_STUB_TRACE_LINE("glPassThrough %g\n", (double)token); gl_stub_tick(GL_STUB_glPassThrough); }
 static inline void glPointParameterfv(GLenum pname, const GLfloat *params) { GL_STUB_TRACE_LINE("glPointParameterfv %u\n", (unsigned)pname); gl_stub_tick(GL_STUB_glPointParameterfv); (void)params; }
 static inline void glPointSize(GLfloat size) { GL_STUB_TRACE_LINE("glPointSize %g\n", (double)size); gl_stub_tick(GL_STUB_glPointSize); }
 static inline void glPolygonMode(GLenum face, GLenum mode) { GL_STUB_TRACE_LINE("glPolygonMode %u %u\n", (unsigned)face, (unsigned)mode); gl_stub_tick(GL_STUB_glPolygonMode); }

@@ -79,6 +79,8 @@ extern "C" {
     X(glMatrixMode)                    \
     X(glNormal3dv)                     \
     X(glNormal3f)                      \
+    X(glTexCoord3f)                    \
+    X(glPassThrough)                   \
     X(glPointParameterfv)              \
     X(glPointSize)                     \
     X(glPolygonMode)                   \

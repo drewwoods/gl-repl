@@ -6,6 +6,7 @@
 #include "repl/core.h"
 #include "repl/core_internal.h"
 #include "repl/state_owners.h"
+#include "support/mesh_ply.h"   /* MESH_PLY_PASS_* feedback normal-encoding markers */
 
 /* Camera-distance source for the point-size fallback used when the
  * runtime GL context lacks glPointParameterfv. The executor used to
@@ -398,12 +399,42 @@ static const char *execution_flat_text(SourceTextView text,
  *
  * Replay and fade passes provide an explicit limit instead of temporarily
  * mutating repl_state_flat_program_count(). */
+/* Transform an object-space normal `n` to world space by the current
+ * modelview `m` (column-major), via the inverse-transpose of its upper-left
+ * 3x3, then normalize. Used by the .ply export to encode world-space normals
+ * into the texcoord channel so they match the world-space vertex positions
+ * (a raw texcoord is not modelview-transformed). Correct for rotation,
+ * translation, and uniform/non-uniform scale; export-only, so the per-vertex
+ * cost is irrelevant. */
+static void exec_normal_to_world(const float m[16], const float n[3],
+                                 float out[3]) {
+    float a = m[0], b = m[4], c = m[8];
+    float d = m[1], e = m[5], f = m[9];
+    float g = m[2], h = m[6], i = m[10];
+    /* Cofactor matrix = inverse-transpose * det. */
+    float c00 = e*i - f*h, c01 = -(d*i - f*g), c02 = d*h - e*g;
+    float c10 = -(b*i - c*h), c11 = a*i - c*g, c12 = -(a*h - b*g);
+    float c20 = b*f - c*e, c21 = -(a*f - c*d), c22 = a*e - b*d;
+    float det = a*c00 + b*c01 + c*c02;
+    /* (inverse-transpose) * n = (cofactor * n) / det. */
+    float ox = c00*n[0] + c01*n[1] + c02*n[2];
+    float oy = c10*n[0] + c11*n[1] + c12*n[2];
+    float oz = c20*n[0] + c21*n[1] + c22*n[2];
+    if (det != 0.0f) { ox /= det; oy /= det; oz /= det; }
+    float len = (float)sqrt((double)(ox*ox + oy*oy + oz*oz));
+    if (len > 0.0f) { ox /= len; oy /= len; oz /= len; }
+    out[0] = ox; out[1] = oy; out[2] = oz;
+}
+
 void repl_execute_program(const ReplExecutionOptions *options) {
     FlatProgramView program = execution_program_from_options(options);
     const GLCmd *flat_cmds = program.cmds;
     int flat_cmd_count = execution_flat_count_from_options(options, program);
     SourceTextView text = options ? options->text : (SourceTextView){0};
     int in_begin = 0;
+    int encode_normals = options && options->encode_feedback_normals;
+    float cur_normal[3] = {0.0f, 0.0f, 1.0f}; /* current normal, for export encoding */
+    float begin_mv[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1}; /* modelview snapshot per begin block */
     int tess_depth = 0; /* 0=outside, 1=in polygon, 2=in contour */
     int matrix_depth = 0;
     GLdouble tess_current_normal[3] = {0.0, 0.0, 1.0};
@@ -461,19 +492,45 @@ void repl_execute_program(const ReplExecutionOptions *options) {
         }
         switch (flat_cmds[pc].type) {
         case CMD_BEGIN:
-            /* Parser rejects nested glBegin via repl_cmd_type_valid_in_begin. */
+            /* Parser rejects nested glBegin via repl_cmd_type_valid_in_begin.
+             * Export: mark the primitive's texcoords as authored normals
+             * (out of band, before glBegin so it is outside Begin/End). */
+            if (encode_normals) {
+                glPassThrough((GLfloat)MESH_PLY_PASS_NORMALS);
+                /* The modelview is constant within a begin/end block (the
+                 * parser rejects transforms inside), and glGet is illegal
+                 * between glBegin/glEnd — so snapshot it here, once, and reuse
+                 * it for every vertex's normal transform in the block. */
+                glGetFloatv(GL_MODELVIEW_MATRIX, begin_mv);
+            }
             glBegin((GLenum)flat_cmds[pc].args[0]);
             in_begin = 1;
             break;
         case CMD_END:
-            if (in_begin) { glEnd(); in_begin = 0; }
+            if (in_begin) {
+                glEnd();
+                in_begin = 0;
+                /* Export: close the normals scope; subsequent solids / tess /
+                 * gaps fall back to synthesized normals. */
+                if (encode_normals)
+                    glPassThrough((GLfloat)MESH_PLY_PASS_NO_NORMALS);
+            }
             break;
         case CMD_VERTEX3F:
-            if (in_begin)
+            if (in_begin) {
+                if (encode_normals) {
+                    float nw[3];
+                    exec_normal_to_world(begin_mv, cur_normal, nw);
+                    glTexCoord3f(nw[0], nw[1], nw[2]);
+                }
                 glVertex3f(flat_cmds[pc].args[0], flat_cmds[pc].args[1],
                            flat_cmds[pc].args[2]);
+            }
             break;
         case CMD_NORMAL3F:
+            cur_normal[0] = flat_cmds[pc].args[0];
+            cur_normal[1] = flat_cmds[pc].args[1];
+            cur_normal[2] = flat_cmds[pc].args[2];
             glNormal3f(flat_cmds[pc].args[0], flat_cmds[pc].args[1],
                        flat_cmds[pc].args[2]);
             break;
@@ -487,8 +544,14 @@ void repl_execute_program(const ReplExecutionOptions *options) {
                       flat_cmds[pc].args[3] * alpha_scale);
             break;
         case CMD_VERTEX2F:
-            if (in_begin)
+            if (in_begin) {
+                if (encode_normals) {
+                    float nw[3];
+                    exec_normal_to_world(begin_mv, cur_normal, nw);
+                    glTexCoord3f(nw[0], nw[1], nw[2]);
+                }
                 glVertex2f(flat_cmds[pc].args[0], flat_cmds[pc].args[1]);
+            }
             break;
         /* The CMD_*-not-in-begin block below relies on the parser
          * rejecting these commands inside glBegin/glEnd

@@ -69,6 +69,13 @@ typedef struct {
     int             skip_geom_before_pc;
     int             has_fade_context;
     int             suppress_tess_finalize;
+    /* When set (the .ply export pass), the executor mirrors each vertex's
+     * current normal — transformed to world space — into the texture
+     * coordinate channel, and brackets user glBegin/glEnd primitives with
+     * glPassThrough(MESH_PLY_PASS_NORMALS / _NO_NORMALS) so the feedback
+     * parser knows which texcoords are authored normals (vs solids / tess,
+     * which fall back to synthesized normals). No effect on the live frame. */
+    int             encode_feedback_normals;
     char           *status_out;
     int             status_out_sz;
 } ReplExecutionOptions;

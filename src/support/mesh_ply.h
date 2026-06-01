@@ -16,8 +16,20 @@
  * lives in src/app/glr_mesh_export.c. See
  * plans/.../ply-feedback-export.md. */
 
-/* Floats per feedback vertex in GL_3D_COLOR + RGBA mode: x y z r g b a. */
-#define MESH_PLY_FLOATS_PER_VERTEX 7
+/* Floats per feedback vertex. GL_3D_COLOR mode = 7 (x y z r g b a). When the
+ * capture also records a per-vertex normal in the texture channel
+ * (GL_3D_COLOR_TEXTURE), each vertex is 11 floats: x y z, r g b a, then the
+ * texcoord (s t r q) with the encoded WORLD-space normal in (s, t, r). */
+#define MESH_PLY_FLOATS_PER_VERTEX     7
+#define MESH_PLY_FLOATS_PER_VERTEX_TEX 11
+
+/* Out-of-band glPassThrough sentinels the executor emits to mark whether the
+ * texcoords of the following polygons carry an encoded normal. The executor is
+ * the only passthrough emitter, so these can't collide with real data (the
+ * whole reason for using an out-of-band marker rather than an in-band tag).
+ * The parser defaults to "synthesize" until it sees a NORMALS marker. */
+#define MESH_PLY_PASS_NORMALS     1.0f   /* following texcoords are normals    */
+#define MESH_PLY_PASS_NO_NORMALS  0.0f   /* synthesize (solids, tess, gaps)    */
 
 /* OpenGL feedback token markers. These are frozen OpenGL spec values
  * (unchanged since GL 1.0), redefined here so the pure writer needs no GL
@@ -45,6 +57,9 @@ typedef struct {
     float ortho_r;                 /* glOrtho half-extent R (cube is [-R, R]^3) */
     int   vp_x, vp_y, vp_w, vp_h;  /* glViewport origin + size */
     float depth_near, depth_far;   /* glDepthRange (capture uses 0, 1) */
+    int   floats_per_vertex;       /* feedback record stride: 7 (GL_3D_COLOR) or
+                                      11 (GL_3D_COLOR_TEXTURE, normals in texcoord).
+                                      0 is treated as 7. */
 } MeshPlyCapture;
 
 typedef struct {
