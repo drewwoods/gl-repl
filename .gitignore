@@ -6,9 +6,10 @@ output.c
 output.ply
 build/
 # Vendored freeglut CMake build output (also matched by the bare build/ above;
-# anchored here for clarity). The vendored *source* under third_party/freeglut/
-# is checked in; only its build/ tree is generated.
-third_party/freeglut/build/
+# anchored here for clarity). build-osmesa/ is the FREEGLUT_OSMESA=1 variant's
+# tree. The vendored *source* under third_party/freeglut/ is checked in; only
+# its build*/ trees are generated.
+third_party/freeglut/build*/
 workspace/
 bench_repl
 /scene_demo

@@ -38,11 +38,28 @@ USE_GL_STUBS ?=
 # Linux keeps the system freeglut path. Re-vendor with scripts/vendor-freeglut.sh;
 # the pinned commit is recorded in third_party/freeglut/VENDORED.txt.
 FREEGLUT_SRC        := third_party/freeglut
-FREEGLUT_BUILD      := $(FREEGLUT_SRC)/build
-FREEGLUT_STATIC_LIB := $(FREEGLUT_BUILD)/lib/libglut.a
 # `make glut` (Apple GLUT framework fallback) passes FREEGLUT_VENDOR=0 to skip
 # building/linking the vendored library.
 FREEGLUT_VENDOR     ?= 1
+
+# FREEGLUT_OSMESA=1 builds the vendored freeglut with its headless OSMesa
+# (off-screen software) backend instead of the macOS Cocoa backend, and links
+# the GL binaries against Mesa's libGL/libGLU + libOSMesa rather than Apple's
+# OpenGL framework. This gives a windowless build that renders through swrast —
+# usable for headless geometry/feedback tests (PLY export, the real-GL tests)
+# with no display. The OSMesa backend lives in the vendored tree only after
+# re-vendoring from a freeglut that carries it (see VENDORED.txt). Build dir and
+# static-lib name are kept distinct from the Cocoa build so the two coexist.
+FREEGLUT_OSMESA     ?= 0
+ifeq ($(FREEGLUT_OSMESA),1)
+FREEGLUT_BUILD          := $(FREEGLUT_SRC)/build-osmesa
+FREEGLUT_STATIC_LIB     := $(FREEGLUT_BUILD)/lib/libglut_osmesa.a
+FREEGLUT_CMAKE_BACKEND  := -DFREEGLUT_OSMESA=ON -DFREEGLUT_GLES=OFF
+else
+FREEGLUT_BUILD          := $(FREEGLUT_SRC)/build
+FREEGLUT_STATIC_LIB     := $(FREEGLUT_BUILD)/lib/libglut.a
+FREEGLUT_CMAKE_BACKEND  := -DFREEGLUT_COCOA=ON
+endif
 
 # FREEGLUT_HEADER_CFLAGS is set per-platform in the Darwin/Linux block below:
 # the vendored include dir on macOS (placed first, so a stray homebrew freeglut
@@ -125,6 +142,34 @@ BUILD_CFLAGS = $(RELEASE_CFLAGS)
 endif
 
 ifeq ($(UNAME_S),Darwin)
+ifeq ($(FREEGLUT_OSMESA),1)
+# macOS headless: vendored static freeglut (OSMesa backend) + Mesa GL/GLU +
+# libOSMesa, no Apple OpenGL/Cocoa frameworks. Mesa comes from Homebrew
+# (`brew install mesa mesa-glu`); the rpaths let the binary find the dylibs
+# without DYLD_LIBRARY_PATH. Audio frameworks stay (unchanged from the Cocoa
+# build). The vendored freeglut include dir is first so its <GL/freeglut.h>
+# wins; <GL/gl.h>/<GL/glu.h> resolve from the Mesa includes.
+MESA_PREFIX     := $(shell brew --prefix mesa 2>/dev/null)
+MESA_GLU_PREFIX := $(shell brew --prefix mesa-glu 2>/dev/null)
+FREEGLUT_HEADER_CFLAGS = -I$(FREEGLUT_SRC)/include -I$(MESA_PREFIX)/include -I$(MESA_GLU_PREFIX)/include
+ifeq ($(FREEGLUT_VENDOR),1)
+FREEGLUT_LIB := $(FREEGLUT_STATIC_LIB)
+endif
+
+OSMESA_GL_LDFLAGS = \
+	$(FREEGLUT_LIB) \
+	-L$(MESA_PREFIX)/lib -lGL -lOSMesa -L$(MESA_GLU_PREFIX)/lib -lGLU \
+	-Wl,-rpath,$(MESA_PREFIX)/lib -Wl,-rpath,$(MESA_GLU_PREFIX)/lib \
+	-lm -lpthread \
+	-framework CoreAudio -framework CoreFoundation -framework AudioToolbox
+
+GLUT_GL_LDFLAGS = $(OSMESA_GL_LDFLAGS)
+GL_LDFLAGS      = $(OSMESA_GL_LDFLAGS)
+
+GL_STUB_LDFLAGS = \
+	-lm -lpthread \
+	-framework CoreAudio -framework CoreFoundation -framework AudioToolbox
+else
 # macOS: system frameworks + vendored static freeglut (Cocoa backend).
 FREEGLUT_HEADER_CFLAGS = -I$(FREEGLUT_SRC)/include
 ifeq ($(FREEGLUT_VENDOR),1)
@@ -148,6 +193,28 @@ GL_LDFLAGS = \
 GL_STUB_LDFLAGS = \
 	-lm -lpthread \
 	-framework CoreAudio -framework CoreFoundation -framework AudioToolbox
+endif
+else
+ifeq ($(FREEGLUT_OSMESA),1)
+# Linux headless: vendored static freeglut (OSMesa backend) + libOSMesa for the
+# GL entry points, system GLU for the tessellator/quadrics. Needs
+# `libosmesa6-dev` (GL/osmesa.h + osmesa.pc + libOSMesa). Unlike the default
+# Linux path, this DOES vendor freeglut (system freeglut has no OSMesa backend),
+# so its include dir supplies <GL/freeglut.h>; <GL/gl.h>/<GL/glu.h> resolve from
+# the system Mesa headers on the default path. libGLU pulls libGL via DT_NEEDED;
+# both share Mesa's libglapi dispatch with libOSMesa, so they coexist.
+FREEGLUT_HEADER_CFLAGS = -I$(FREEGLUT_SRC)/include
+ifeq ($(FREEGLUT_VENDOR),1)
+FREEGLUT_LIB := $(FREEGLUT_STATIC_LIB)
+endif
+
+OSMESA_GL_LDFLAGS = \
+	$(FREEGLUT_LIB) -lOSMesa -lGLU -lGL -lm -lpthread -ldl
+
+GLUT_GL_LDFLAGS = $(OSMESA_GL_LDFLAGS)
+GL_LDFLAGS      = $(OSMESA_GL_LDFLAGS)
+GL_STUB_LDFLAGS = \
+	-lm -lpthread -ldl
 else
 # Linux: system freeglut + GL/GLU. miniaudio dlopen()s pulseaudio/alsa
 # at runtime, so we only need -ldl (plus the existing -lpthread -lm).
@@ -161,6 +228,7 @@ GL_LDFLAGS = \
 
 GL_STUB_LDFLAGS = \
 	-lm -lpthread -ldl
+endif
 endif
 
 ifeq ($(USE_GL_STUBS),1)
@@ -707,7 +775,7 @@ COLOR_PICKER_DEMO_DEP_SRCS = src/subsystems/color_picker/color_picker_state.c \
                              src/ui/core/theme.c \
                              tests/gl-stubs/gl_stub_counts.c
 
-OBJDIR = build/$(BUILD)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)
+OBJDIR = build/$(BUILD)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)$(if $(filter 1,$(FREEGLUT_OSMESA)),-osmesa,)
 BINDIR = $(OBJDIR)
 OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS) -include config.h -include prof_sections.h
 DEPFLAGS = -MMD -MP
@@ -875,13 +943,21 @@ $(OBJDIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) $(DEPFLAGS) -c -o $@ $<
 
-# Vendored freeglut static library (macOS Cocoa). Built once via CMake into
-# $(FREEGLUT_BUILD), which lives under third_party/ so the top-level `make clean`
-# (rm -rf ./build) leaves it intact. This rule has NO dependency on the freeglut
-# sources, so after re-vendoring run `make freeglut-clean` to force a rebuild.
+# Vendored freeglut static library. Built once via CMake into $(FREEGLUT_BUILD),
+# which lives under third_party/ so the top-level `make clean` (rm -rf ./build)
+# leaves it intact. This rule has NO dependency on the freeglut sources, so
+# after re-vendoring run `make freeglut-clean` to force a rebuild. The backend
+# (Cocoa by default, OSMesa under FREEGLUT_OSMESA=1) and build dir/lib name are
+# selected by FREEGLUT_CMAKE_BACKEND / FREEGLUT_BUILD up top. The OSMesa backend
+# resolves libOSMesa via pkg-config; point it at Homebrew's mesa .pc files.
+# On macOS, OSMesa's pkg-config (osmesa.pc) lives under Homebrew's mesa prefix;
+# on Linux libosmesa6-dev puts it on the default pkg-config path, so this stays
+# empty there.
+FREEGLUT_PKG_CONFIG_PATH := $(if $(filter 1,$(FREEGLUT_OSMESA)),$(if $(filter Darwin,$(UNAME_S)),$(shell brew --prefix mesa 2>/dev/null)/lib/pkgconfig),)
 $(FREEGLUT_STATIC_LIB):
+	PKG_CONFIG_PATH="$(FREEGLUT_PKG_CONFIG_PATH):$$PKG_CONFIG_PATH" \
 	cmake -S $(FREEGLUT_SRC) -B $(FREEGLUT_BUILD) \
-	  -DFREEGLUT_COCOA=ON -DFREEGLUT_BUILD_STATIC_LIBS=ON \
+	  $(FREEGLUT_CMAKE_BACKEND) -DFREEGLUT_BUILD_STATIC_LIBS=ON \
 	  -DFREEGLUT_BUILD_SHARED_LIBS=OFF -DFREEGLUT_BUILD_DEMOS=OFF \
 	  -DCMAKE_BUILD_TYPE=Release
 	cmake --build $(FREEGLUT_BUILD) --target freeglut_static
@@ -1106,9 +1182,12 @@ gl-tests: $(addprefix $(BINDIR)/,$(GL_TEST_BINS)) ## Run real-GL UI state tests 
 # demos ~earlier, TEST_BINS/BENCH_BINS, and GL_TEST_BINS just above) — a static
 # target list expands at parse time, so an earlier placement would silently
 # attach the prereq to nothing. Skipped under `make glut` (FREEGLUT_VENDOR=0)
-# and on Linux / GL stubs (FREEGLUT_LIB is empty there too).
+# and on the default Linux path / GL stubs (FREEGLUT_LIB is empty there too).
+# Vendored freeglut is built on macOS (Cocoa or OSMesa) and on Linux ONLY for
+# the OSMesa backend (FREEGLUT_OSMESA=1); the default Linux path uses system
+# freeglut and needs no archive prereq.
 ifeq ($(FREEGLUT_VENDOR),1)
-ifeq ($(UNAME_S),Darwin)
+ifneq ($(filter Darwin,$(UNAME_S))$(filter 1,$(FREEGLUT_OSMESA)),)
 ifneq ($(USE_GL_STUBS),1)
 $(SAMPLE_BIN) $(SCENE_DEMO_BIN) $(REPL_DEMO_BIN) $(EDITOR_DEMO_BIN) \
 $(MEMPROF_DEMO_BIN) $(CPUPROF_DEMO_BIN) $(VARIABLE_PANEL_DEMO_BIN) \

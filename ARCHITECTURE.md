@@ -634,9 +634,62 @@ capture/encode contract can only be exercised end-to-end with a display
 synthetic buffers; the executor's encode contract is covered in stub mode
 via `gl_stub_counts` (`test_export_normal_encoding` in
 `tests/test_repl_executor.c` asserts lighting/cull suppression +
-texcoord/passthrough emission). Verifying real feedback *values* needs
-Xvfb (Linux) or the proposed OSMesa backend
-([`plans/external/freeglut-osmesa-backend.md`](plans/external/freeglut-osmesa-backend.md)).
+texcoord/passthrough emission). Verifying real feedback *values* needs a
+real GL context — Xvfb (Linux) or the **OSMesa backend** below, which renders
+this exact path with no display (`--export-ply` headless matches a native
+capture to ~1e-4).
+
+### Headless Rendering & Screenshots (OSMesa)
+
+`make ... FREEGLUT_OSMESA=1` builds against a freeglut **OSMesa** backend that
+renders into a CPU buffer with no window system at all (no Cocoa/GLX/X11) — a
+software (llvmpipe/swrast) **compatibility** context, so fixed-function GL, the
+GLUT solids, GLU tessellation, and `glRenderMode(GL_FEEDBACK)` all work. This is
+the load-bearing path for headless CI: the real-GL tests (`make gl-tests`) and
+`--export-ply` run with no display, and pixel readback is byte-identical to a
+native render.
+
+**It is a build-mode swap, not a source change.** `gl_includes.h`'s non-Apple
+branch already includes the Mesa headers (`<GL/gl.h>`/`<GL/glu.h>`/
+`<GL/freeglut.h>` — on macOS the Cocoa build *already* compiles against
+Homebrew's `/opt/homebrew/include/GL` headers and only links Apple's GL
+framework). So OSMesa mode just (a) builds the vendored freeglut with
+`-DFREEGLUT_OSMESA=ON` instead of `-DFREEGLUT_COCOA=ON`, and (b) links Mesa
+`libGL`/`libGLU` + `libOSMesa` instead of the Apple frameworks (system GL/GLU +
+`libOSMesa` on Linux). Build dir and objects are suffixed (`build-osmesa/`,
+`build/<cfg>-osmesa/`) so the OSMesa and native builds never collide. The
+`-std=c99` sources and every guard are untouched. Mechanics live in the Makefile
+(`FREEGLUT_OSMESA` ⇒ `FREEGLUT_CMAKE_BACKEND`, the per-platform link block, the
+vendored-archive prereq gate) — see `CLAUDE.md`'s *Headless OSMesa build*.
+
+The backend lives in the **vendored** freeglut only, so OSMesa mode requires
+re-vendoring from a freeglut that carries it
+(`FREEGLUT_REPO=<path-or-url> scripts/vendor-freeglut.sh <ref>`; the source is
+recorded in `third_party/freeglut/VENDORED.txt`). Two fixes in that fork make it
+usable as a library consumer:
+
+- **Teardown.** An app that exits without an explicit `glutDestroyWindow()`
+  destroys its window from freeglut's `atexit(fgDeinitialize)` sweep. On
+  Gallium/swrast that crashed twice (a redundant `OSMesaMakeCurrent` re-bind
+  during destroy faulting in `st_framebuffers_purge`, then `OSMesaDestroyContext`
+  called through a driver vtable the runtime had already finalized at
+  `__cxa_finalize`). The backend now skips the redundant re-bind and, via a
+  LIFO-ordered `atexit` marker, leaks the context at process exit rather than
+  destroying it through dead state. Runtime `glutDestroyWindow` is unaffected.
+
+- **`SIGUSR1` frame capture.** `kill -USR1 <pid>` snapshots the current frame to
+  a numbered PPM — no app-side code, even when the app is idle. The signal
+  handler is async-signal-safe (it only sets a `volatile sig_atomic_t` flag);
+  the flag is serviced on the **main thread** at two safe points — the buffer
+  swap path (`fgPlatformGlutSwapBuffers`, which already `glFinish()`es each
+  frame) for actively-animating apps, and the main-loop tick
+  (`fgPlatformProcessSingleEvent`, which `SIGUSR1` wakes out of its `nanosleep`)
+  for idle ones, reading the last completed frame so no redraw is needed.
+  Capture reads the colour buffer **directly** via `OSMesaGetColorBuffer` (no
+  `glReadPixels` round-trip), packs RGBA→RGB, and emits rows top-to-bottom to
+  invert OSMesa's bottom-up origin. Output prefix from `FREEGLUT_CAPTURE_FILE`
+  (default `freeglut`), files `<prefix>-NNNN.ppm`; convert with e.g.
+  `magick shot-0000.ppm shot.png`. POSIX only (no `SIGUSR1` on Windows).
 
 ### Startup & Audio-Worker Diagnostics
 
