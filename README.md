@@ -154,6 +154,16 @@ kill -USR1 $!                                               # writes /tmp/shot-0
 magick /tmp/shot-0000.ppm shot.png                         # PPM -> PNG to view
 ```
 
+**Starting the animation later.** Animation plays by default, with the time
+variable `t` advancing a fixed `1/60 s` per rendered frame from `0`. To capture
+from a later point in the timeline, set the initial `t` with `--time <secs>`
+(or the `GLR_TIME` env var; `--time` wins):
+
+```bash
+./build/release-osmesa/gl-repl --example 2 --time 5 --no-audio &   # start at t = 5s
+GLR_TIME=5 ./build/release-osmesa/gl-repl --example 2 --no-audio & # same, via env
+```
+
 This needs a vendored freeglut that carries the OSMesa backend (re-vendor with
 `FREEGLUT_REPO=<path-or-url> scripts/vendor-freeglut.sh <ref>`). See *Headless
 Rendering & Screenshots (OSMesa)* in [`ARCHITECTURE.md`](ARCHITECTURE.md) for the

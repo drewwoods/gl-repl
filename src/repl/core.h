@@ -273,6 +273,11 @@ void repl_advance_time(float dt);
  * deterministic time origin. */
 void repl_reset_time_to_zero(void);
 
+/* Set the predefined `t` variable to an explicit value (seconds). Used by
+ * the startup `--time` flag / `GLR_TIME` env override so animations can be
+ * captured starting from a later point in their timeline. */
+void repl_set_time(float value);
+
 /* Returns the post-load cursor target. Caller applies the value
  * via editor_state_edit_line_set() above the β boundary (implemented
  * in phase 3.6.4 of plans/in-review/edit-line-ownership.md). */

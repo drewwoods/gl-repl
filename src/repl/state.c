@@ -374,11 +374,18 @@ void repl_state_time_advance(float dt) {
 }
 
 void repl_state_time_reset_to_zero(void) {
+    repl_state_time_set(0.0f);
+}
+
+void repl_state_time_set(float value) {
     ensure_t_var_idx();
+    /* Keep the free-running accumulator in step with the visible clock so
+     * later pause/resume math stays consistent. */
+    g_anim_time = value;
     if (g_t_var_idx < 0)
         return;
 
-    g_predef_vars_mut[g_t_var_idx].value = 0.0f;
+    g_predef_vars_mut[g_t_var_idx].value = value;
     g_flat_dirty = 1;
 }
 

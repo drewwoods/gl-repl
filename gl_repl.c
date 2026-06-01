@@ -2,6 +2,7 @@
 #include "app/glr_actions.h"
 #include "app/glr_debug.h"
 #include "repl/executor.h"
+#include "repl/core.h"               /* repl_set_time (--time / GLR_TIME) */
 #include "app/glr_audio.h"
 #include "app/glr_mesh_export.h"
 #include "repl/examples.h"           /* repl_example_count / repl_example_name */
@@ -235,6 +236,8 @@ static void print_usage(const char *prog) {
             "  --example <name|idx>  Start on a built-in example (name is\n"
             "               case-insensitive; or a 0-based index)\n"
             "  --list-examples  Print the built-in examples and exit\n"
+            "  --time <secs>  Set the initial animation time t at startup\n"
+            "               (else GLR_TIME; --time wins). Start animations later.\n"
             "\n"
             "Arguments:\n"
             "  input.c      Optional saved session to load at startup\n"
@@ -396,6 +399,7 @@ int main(int argc, char **argv) {
     const char *input_file = NULL;
     const char *example_arg = NULL;
     const char *assets_override = NULL;   /* --assets DIR (else GLR_ASSETS_DIR) */
+    const char *time_arg = NULL;          /* --time SECS (else GLR_TIME) */
     int dump_code = 0;
     int dump_flat = 0;
     int dump_state_layout = 0;
@@ -441,6 +445,8 @@ int main(int argc, char **argv) {
             assets_override = argv[++i];
         else if (strcmp(argv[i], "--example") == 0 && i + 1 < argc)
             example_arg = argv[++i];
+        else if (strcmp(argv[i], "--time") == 0 && i + 1 < argc)
+            time_arg = argv[++i];
         else if (strcmp(argv[i], "--list-examples") == 0) {
             list_examples(stdout);
             return 0;
@@ -494,6 +500,15 @@ int main(int argc, char **argv) {
     glr_ctrl_bootstrap_repl(input_file);
     if (example_index >= 0)
         glr_scene_load_example(example_index);
+    /* Initial animation time: --time SECS wins over GLR_TIME. Applied after
+     * any example load (which resets t to 0) so the override sticks. Lets a
+     * headless capture start the animation from a later point in its
+     * timeline (e.g. skip a long intro before recording). */
+    {
+        const char *t_src = time_arg ? time_arg : getenv("GLR_TIME");
+        if (t_src && *t_src)
+            repl_set_time((float)atof(t_src));
+    }
     init_trace("REPL bootstrap done");
     glr_ctrl_set_accum(use_accum);
 

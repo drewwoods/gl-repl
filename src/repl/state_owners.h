@@ -60,6 +60,7 @@ ReplVariableView         repl_state_variables(void);
 ReplVariableState       *repl_state_variables_mut(void);
 void                     repl_state_time_advance(float dt);
 void                     repl_state_time_reset_to_zero(void);
+void                     repl_state_time_set(float value);
 
 /* Mutable accessor boundary: this header intentionally stops at REPL-owned
  * slices. For other runtime state, use the owner module directly:
