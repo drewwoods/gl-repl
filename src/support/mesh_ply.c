@@ -31,6 +31,16 @@ static unsigned char to_u8(float c) {
     return (unsigned char)lroundf(c * 255.0f);
 }
 
+/* sRGB EOTF: decode a display-referred (sRGB-encoded) channel to linear light.
+ * Used (optionally) before quantizing so color-managed viewers that read PLY
+ * vertex colors as linear don't render them washed out. */
+static float srgb_to_linear(float c) {
+    if (c <= 0.0f) return 0.0f;
+    if (c >= 1.0f) return 1.0f;
+    return (c <= 0.04045f) ? c / 12.92f
+                           : powf((c + 0.055f) / 1.055f, 2.4f);
+}
+
 /* Invert one feedback vertex (window coords + color) to world space. When
  * has_tex, also reads the encoded world-space normal from the texcoord
  * (s, t, r) at v[7..9]; q (v[10]) is unused. Whether that normal is *used*
@@ -156,6 +166,11 @@ int mesh_ply_write(FILE *out, const float *feedback, int float_count,
                 goto done;
             for (int k = 0; k < n; k++) {
                 poly[k] = invert_vertex(cap, &feedback[i + k * stride], has_tex);
+                if (opts->srgb_decode) {
+                    poly[k].r = srgb_to_linear(poly[k].r);
+                    poly[k].g = srgb_to_linear(poly[k].g);
+                    poly[k].b = srgb_to_linear(poly[k].b);  /* alpha stays linear */
+                }
                 if (has_tex && normals_mode) {
                     float l2 = poly[k].anx * poly[k].anx +
                                poly[k].any * poly[k].any +

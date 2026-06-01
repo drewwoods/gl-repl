@@ -321,6 +321,39 @@ static void test_color_clamp(void) {
     ASSERT_INT("clamp high -> 255", p.cb[0], 255);
 }
 
+static void test_srgb_decode(void) {
+    printf("test_srgb_decode\n");
+    /* Same geometry, two passes: default (raw) vs srgb_decode. RGB = (0, .5, 1),
+     * alpha = .5. Decoding the sRGB EOTF maps mid 0.5 -> ~0.214 -> byte 55 on
+     * R/G/B; the 0/1 endpoints are fixed points; alpha stays linear (128). */
+    float buf[64]; int n = 0;
+    push_tok(buf, &n, MESH_PLY_TOK_POLYGON);
+    push_val(buf, &n, 3);
+    push_vert(buf, &n, 0, 0, 0, 0.0f, 0.5f, 1.0f, 0.5f);
+    push_vert(buf, &n, 1, 0, 0, 0.0f, 0.5f, 1.0f, 0.5f);
+    push_vert(buf, &n, 0, 1, 0, 0.0f, 0.5f, 1.0f, 0.5f);
+
+    char text[8192];
+    Ply p;
+
+    /* Default: linear pass-through. Mid 0.5 -> ~128. */
+    int rc = run_writer(buf, n, &OPT_WELD, text, sizeof(text));
+    ASSERT_INT("srgb-off returns 1 triangle", rc, 1);
+    ASSERT_TRUE("srgb-off parses", parse_ply(text, &p));
+    ASSERT_INT("srgb-off mid 0.5 -> ~128", p.cg[0], 128);
+
+    /* srgb_decode on: R 0 -> 0, G 0.5 -> ~55, B 1 -> 255, A 0.5 stays 128. */
+    MeshPlyOptions opt_srgb = OPT_WELD;
+    opt_srgb.srgb_decode = 1;
+    rc = run_writer(buf, n, &opt_srgb, text, sizeof(text));
+    ASSERT_INT("srgb-on returns 1 triangle", rc, 1);
+    ASSERT_TRUE("srgb-on parses", parse_ply(text, &p));
+    ASSERT_INT("srgb-on red 0 stays 0", p.cr[0], 0);
+    ASSERT_INT("srgb-on green 0.5 -> ~55", p.cg[0], 55);
+    ASSERT_INT("srgb-on blue 1 stays 255", p.cb[0], 255);
+    ASSERT_INT("srgb-on alpha stays linear 128", p.ca[0], 128);
+}
+
 static void test_texcoord_normals(void) {
     printf("test_texcoord_normals\n");
     float buf[128]; int n = 0;
@@ -374,6 +407,7 @@ int main(void) {
     test_error_cases();
     test_empty_buffer();
     test_color_clamp();
+    test_srgb_decode();
     test_texcoord_normals();
 
     printf("\n=== Results: ");

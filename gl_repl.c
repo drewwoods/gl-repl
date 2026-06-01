@@ -126,6 +126,8 @@ static void print_usage(const char *prog) {
             "               (also via GLR_DETAILED_PROF env var)\n"
             "  --export-ply <file>  Render one frame, capture geometry to <file>\n"
             "               as a PLY mesh, then exit (needs a display)\n"
+            "  --export-ply-srgb  Decode vertex colors sRGB -> linear on export\n"
+            "               (for color-managed viewers; pair with --export-ply)\n"
             "  --example <name|idx>  Start on a built-in example (name is\n"
             "               case-insensitive; or a 0-based index)\n"
             "  --list-examples  Print the built-in examples and exit\n"
@@ -192,6 +194,9 @@ static int resolve_example_index(const char *arg) {
 /* Set by --export-ply <file>: when non-NULL, the first rendered frame
  * captures the scene to this path (PLY) and the process exits. */
 static const char *g_export_ply_path = NULL;
+/* Set by --export-ply-srgb: decode vertex colors sRGB -> linear on export
+ * (for color-managed viewers that otherwise render them washed out). */
+static int g_export_ply_srgb = 0;
 
 static void display_func(void) {
     /* Trace the first two frames separately (gated on g_detailed_prof
@@ -222,7 +227,7 @@ static void display_func(void) {
      * pass never re-enters the GL pipeline after a buffer swap (which can race
      * the display on some drivers); the swap is cosmetic here since we exit. */
     if (g_export_ply_path) {
-        int n = glr_export_mesh_ply(g_export_ply_path);
+        int n = glr_export_mesh_ply(g_export_ply_path, g_export_ply_srgb);
         if (n >= 0)
             fprintf(stderr, "[export-ply] wrote %d triangle(s) to %s\n",
                     n, g_export_ply_path);
@@ -325,6 +330,8 @@ int main(int argc, char **argv) {
             g_detailed_prof = 1;
         else if (strcmp(argv[i], "--export-ply") == 0 && i + 1 < argc)
             g_export_ply_path = argv[++i];
+        else if (strcmp(argv[i], "--export-ply-srgb") == 0)
+            g_export_ply_srgb = 1;
         else if (strcmp(argv[i], "--example") == 0 && i + 1 < argc)
             example_arg = argv[++i];
         else if (strcmp(argv[i], "--list-examples") == 0) {
