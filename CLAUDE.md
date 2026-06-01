@@ -249,13 +249,23 @@ compatibility wrappers.
 ./gl-repl --detailed-prof  # Add fine-grained init-trace phases (default off)
 ./gl-repl --example torus  # Start on a built-in example (name, case-insensitive, or 0-based index)
 ./gl-repl --list-examples  # Print the built-in examples and exit
+./gl-repl --time 5         # Set the initial animation time t at startup (also GLR_TIME; --time wins)
 ./gl-repl --example 8 --export-ply out.ply   # Capture an example's geometry to PLY on frame 1, then exit
 ./gl-repl --example 8 --export-ply out.ply --export-ply-srgb  # ...decoding vertex colors sRGB -> linear (color-managed viewers)
 GLR_NO_POINT_PARAMETER=1 ./gl-repl   # Force the no-glPointParameterfv path
 GLR_AUDIO_HITCH_MS=10 ./gl-repl      # Lower the audio-worker hitch threshold
 GLR_DETAILED_PROF=1 ./gl-repl        # Same as --detailed-prof, via env
 GLR_ASSETS_DIR=/path/to/music ./gl-repl   # Same as --assets, via env (--assets wins)
+GLR_TIME=5 ./gl-repl                 # Initial animation time t in seconds (--time wins)
 ```
+
+The animation variable `t` starts at `0` and (with animation playing, the
+default) advances by a fixed `1/60 s` per rendered frame. `--time <secs>` /
+`GLR_TIME` set its initial value at startup — applied after any `--example`
+load (which resets `t`), so the override sticks. Useful headless: start an
+animation capture from a later point in its timeline instead of always from
+`t = 0`. Implemented as `repl_set_time()` (`src/repl/core.c` → `repl_state.c`),
+read in `main()` (`gl_repl.c`).
 
 ### Music assets & playlist sources
 

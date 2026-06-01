@@ -691,6 +691,20 @@ usable as a library consumer:
   (default `freeglut`), files `<prefix>-NNNN.ppm`; convert with e.g.
   `magick shot-0000.ppm shot.png`. POSIX only (no `SIGUSR1` on Windows).
 
+**Animation clock & the `--time` / `GLR_TIME` start offset.** The predefined
+`t` variable is a *fixed-timestep* clock: while animation is playing (the
+default — `time_playing` initialises to `1`; Ctrl+T *pauses*), the controller's
+60 Hz timer advances `t` by exactly `GLR_FRAME_DT_SECS` (1/60 s) **per rendered
+frame**, decoupled from wall-clock (`glr_ctrl.c` comment, *"motion speed stays
+decoupled from redraw rate"*). So under the slow software OSMesa renderer `t`
+lags real time, but every frame is a clean 1/60 s step — capture every frame and
+play back at 60 fps for smooth real-time motion. `t` starts at `0`; `--time
+<secs>` (or `GLR_TIME`, with the flag winning) sets the initial value via
+`repl_set_time()` → `repl_state_time_set()` (`src/repl/state.c`), read in
+`main()` *after* any `--example` load (which resets `t`) so the override sticks.
+This lets a headless capture begin from a later point in an animation's timeline
+rather than always from `t = 0`.
+
 ### Startup & Audio-Worker Diagnostics
 
 Two always-on stderr diagnostics localise startup stalls and
