@@ -117,6 +117,27 @@ The config menu (Config button on the code panel header) has an
 
 Toggle guides entirely with the **Vertex guides** config item (F8).
 
+## Mesh Export (PLY)
+
+Press **F11** (or **File → Export .ply**) to capture the current scene as
+an ASCII PLY mesh, named after the active scene (like Save Scene). The
+geometry — your `glVertex` polygons, GLU-tessellated shapes, and the GLUT
+solids (teapot/sphere/cube/cone/torus) — is captured through a single
+`glRenderMode(GL_FEEDBACK)` pass, so everything on screen exports the same
+way. Authored per-vertex normals are preserved; the rest are smoothly
+synthesized.
+
+Headless / scripted capture and an optional conversion:
+
+```bash
+./gl-repl --example 8 --export-ply out.ply               # capture on frame 1, then exit
+./gl-repl --example 8 --export-ply out.ply --export-ply-srgb   # decode colors sRGB -> linear (color-managed viewers)
+```
+
+Line primitives you draw (`glBegin(GL_LINES/LINE_STRIP/LINE_LOOP)`) are
+exported as a PLY `edge` element. See *Mesh Export (PLY via GL_FEEDBACK)*
+in [`ARCHITECTURE.md`](ARCHITECTURE.md) for the capture/encode design.
+
 ## Third-Party Licenses
 
 This project bundles freeglut (vendored under `third_party/freeglut/`, built as

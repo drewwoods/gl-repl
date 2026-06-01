@@ -543,6 +543,101 @@ motion on the first frame — lower decay is snappier but more "stepped",
 higher is smoother but coasts longer. Rapid notches stack onto the
 velocity, so fast scrolls still travel quickly.
 
+### Mesh Export (PLY via GL_FEEDBACK)
+
+The `.ply` exporter (F11 / File → Export .ply / `--export-ply <file>`)
+captures the **live flat program** once through
+`glRenderMode(GL_FEEDBACK)` and writes an ASCII PLY mesh. Everything the
+scene draws — user `glVertex` polygons, GLU-tessellated polygons, and the
+GLUT solids (teapot/sphere/cube/cone/torus, which emit no REPL-tracked
+vertices) — is captured through this **one** path, so the export can't
+drift from what renders.
+
+**Two-module split — GL capture vs. pure writer.** The GL-coupled half is
+`src/app/glr_mesh_export.c` (`glr_export_mesh_ply`); the parsing/writing
+half is `src/support/mesh_ply.c`, which calls **no** GL function and
+includes **no** GL header — it only reads a plain float buffer, so it is
+fully unit-testable with synthetic buffers and no GL context
+(`tests/test_mesh_ply.c`). The pure writer redefines the OpenGL feedback
+token values (`MESH_PLY_TOK_*`) locally; `glr_mesh_export.c`
+`STATIC_ASSERT`s them against the real `GL_*_TOKEN` macros so any drift is
+a compile error.
+
+**Fixed capture transform → invertible window coords.** The capture pass
+installs a known, scene-independent transform so the pure writer can run
+the projection backwards to world space: identity modelview (no camera),
+a containing `glOrtho(-R, R, …)` with `R = 1000` (clips nothing a
+hand-typed scene reaches at ~1e-4 float precision), a `1024²` viewport,
+and `glDepthRange(0, 1)`. The writer inverts exactly this
+(`MeshPlyCapture` carries `ortho_r` / viewport / depth-range) — note
+`glOrtho` maps world `z → -z/R`, so the depth inversion negates. State is
+saved/restored (`glPushAttrib(GL_ALL_ATTRIB_BITS)` + both matrix stacks
+pushed explicitly, since `glPushAttrib` doesn't cover them), and feedback
+produces no fragments, so the visible frame is undisturbed.
+
+**Raw color, all faces.** Feedback honors lighting / polygon-mode / cull,
+so the pass forces `GL_FILL`, disables `GL_CULL_FACE`, and disables
+`GL_LIGHTING` — *and* the executor suppresses the program's own
+`glEnable(GL_LIGHTING / GL_CULL_FACE)` in export mode
+(`ReplExecutionOptions.encode_feedback_normals`). Without that suppression
+a scene that re-enables lighting would feed back per-vertex *lit* colors
+(not the authored `glColor` material) and cull back faces — the bug that
+motivated the encode flag. Vertex color is written linear (pass-through)
+by default; `--export-ply-srgb` (`MeshPlyOptions.srgb_decode`) applies the
+sRGB→linear EOTF to RGB (alpha untouched) for color-managed viewers.
+
+**Authored normals via the texcoord channel.** Feedback's `GL_3D_COLOR`
+mode returns only position + color, so a synthesized geometric normal is
+all that's recoverable. To carry the *authored* per-vertex normal, the
+export pass uses `GL_3D_COLOR_TEXTURE` (11 floats/vertex) and the executor
+mirrors each vertex's world-space normal — inverse-transpose of the
+begin-time modelview 3×3 — into the texcoord `(s,t,r)` under an identity
+texture matrix (so it round-trips un-projected). Whether a given run of
+texcoords *is* a normal is signalled **out of band** by bracketing user
+`glBegin`/`glEnd` with `glPassThrough(MESH_PLY_PASS_NORMALS /
+_NO_NORMALS)` — a passthrough value can't collide with real vertex data
+the way an in-band tag could. Solids / tess (no authored normal) stay in
+the default NO_NORMALS mode and the writer synthesizes + smooths a
+geometric normal instead. (`glPassThrough` and `glGetFloatv` are illegal
+between `glBegin`/`glEnd`, so the modelview is snapshotted once at
+`glBegin`; it is constant within a primitive because transforms are
+rejected mid-primitive.)
+
+**The pure writer is two-pass.** Pass 1 parses the token stream into
+transient `corners[]` (3 per triangle, n-gons fan-triangulated) +
+per-triangle face normals, and collects any **deferred edge endpoints**
+(see below). Pass 2 builds the output vertex set — welded by
+`(quantized pos, 8-bit color)` when `weld && smooth_normals`, else 1:1
+flat — resolves per-vertex normals (authored wins, else
+face-normal-averaged), then resolves edges and writes
+`vertex`/`face`(/`edge`) elements.
+
+**Line edges.** Line geometry is exported as a PLY `edge`
+element (`src/support/mesh_ply.c`; see
+[`plans/done/ply-line-edge-export.md`](plans/done/ply-line-edge-export.md)):
+`glBegin(GL_LINES/LINE_STRIP/LINE_LOOP)` arrive as `GL_LINE` /
+`GL_LINE_RESET` feedback tokens. Their endpoints are collected in pass 1
+(the weld table doesn't exist yet) and resolved in pass 2 against a
+key→index table seeded with the face vertices.
+
+Edges **always weld** — endpoints coincident with a face vertex or
+another endpoint collapse onto it; the rest append as new vertices (with
+a degenerate `(0,0,0)` normal, since they touch no face) — and this holds
+even on the flat face path, so a flat export still gets a coherent edge
+index set. Edges are stored undirected (`a ≤ b`) and deduped by sort +
+unique; `mesh_ply_write` reports the deduped count via an `out_edges`
+out-param (the return value stays the triangle count).
+
+**Coverage gap.** Real feedback needs a live GL context, so the
+capture/encode contract can only be exercised end-to-end with a display
+(the stub `glRenderMode` returns 0). The pure writer is fully covered with
+synthetic buffers; the executor's encode contract is covered in stub mode
+via `gl_stub_counts` (`test_export_normal_encoding` in
+`tests/test_repl_executor.c` asserts lighting/cull suppression +
+texcoord/passthrough emission). Verifying real feedback *values* needs
+Xvfb (Linux) or the proposed OSMesa backend
+([`plans/external/freeglut-osmesa-backend.md`](plans/external/freeglut-osmesa-backend.md)).
+
 ### Startup & Audio-Worker Diagnostics
 
 Two always-on stderr diagnostics localise startup stalls and
