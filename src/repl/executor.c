@@ -770,6 +770,16 @@ void repl_execute_program(const ReplExecutionOptions *options) {
         case CMD_POINT_PARAMETER_FV:
         case CMD_BLEND_FUNC:
         case CMD_CLEAR_COLOR:
+            /* Export pass captures raw glColor + all faces. The capture
+             * disabled GL_LIGHTING and GL_CULL_FACE, but the program's own
+             * glEnable would turn them back on — feedback would then return
+             * per-vertex lit colors (not the material color) and drop culled
+             * back faces. Suppress those two enables during export (lights /
+             * material then no-op on color; both sides are captured). */
+            if (encode_normals && flat_cmds[pc].type == CMD_ENABLE &&
+                ((GLenum)flat_cmds[pc].args[0] == GL_LIGHTING ||
+                 (GLenum)flat_cmds[pc].args[0] == GL_CULL_FACE))
+                break;
             /* repl_apply_state_cmd returns 0 if the cmd isn't in its
              * own switch — which would mean the executor enumerated
              * it here but the apply helper hasn't caught up yet. Log
