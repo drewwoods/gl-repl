@@ -69,12 +69,15 @@ typedef struct {
     int             skip_geom_before_pc;
     int             has_fade_context;
     int             suppress_tess_finalize;
-    /* When set (the .ply export pass), the executor mirrors each vertex's
+    /* When set (the .ply export pass), the executor: (1) mirrors each vertex's
      * current normal — transformed to world space — into the texture
-     * coordinate channel, and brackets user glBegin/glEnd primitives with
-     * glPassThrough(MESH_PLY_PASS_NORMALS / _NO_NORMALS) so the feedback
-     * parser knows which texcoords are authored normals (vs solids / tess,
-     * which fall back to synthesized normals). No effect on the live frame. */
+     * coordinate channel, bracketing user glBegin/glEnd primitives with
+     * glPassThrough(MESH_PLY_PASS_NORMALS / _NO_NORMALS) so the feedback parser
+     * knows which texcoords are authored normals (vs solids / tess, which fall
+     * back to synthesized normals); and (2) suppresses the program's
+     * glEnable(GL_LIGHTING / GL_CULL_FACE) so feedback returns the raw glColor
+     * material color (not per-vertex lit shading) and all faces (not just
+     * front). No effect on the live frame. */
     int             encode_feedback_normals;
     char           *status_out;
     int             status_out_sz;
