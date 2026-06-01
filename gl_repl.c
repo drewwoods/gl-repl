@@ -55,8 +55,9 @@ static void init_trace_detail(const char *phase) {
  * this folder are picked up in filename order as a playlist.
  *
  * The playlist is built from three sources, in order (see
- * build_mp3_playlist): this working-directory "assets" (dev + CLI),
- * the copy bundled beside the executable in a macOS .app
+ * build_mp3_playlist): the primary assets dir — this working-directory
+ * "assets" by default, or the --assets <dir> / GLR_ASSETS_DIR override
+ * — then the copy bundled beside the executable in a macOS .app
  * (<exe>/../Resources/assets — where `make app` puts sample.mp3), and
  * a per-user music folder (user_music_dir) the user can drop more
  * tracks into. */
@@ -182,13 +183,15 @@ static int ensure_dir(const char *path) {
 }
 
 /* Builds the playlist from every candidate music source in priority
- * order: the working-directory assets/ (dev + CLI), the bundled assets
- * beside the executable (macOS .app), then the per-user music folder
- * (created on first run so the user has somewhere to drop tracks).
- * Returns the total number of paths written. */
-static int build_mp3_playlist(char out_paths[][AUDIO_MUSIC_MAX_LEN],
+ * order: `assets_dir` (the working-directory "assets" by default, or
+ * the --assets / GLR_ASSETS_DIR override), the bundled assets beside
+ * the executable (macOS .app), then the per-user music folder (created
+ * on first run so the user has somewhere to drop tracks). Returns the
+ * total number of paths written. */
+static int build_mp3_playlist(const char *assets_dir,
+                              char out_paths[][AUDIO_MUSIC_MAX_LEN],
                               int max_paths) {
-    int n = scan_dir_into(AUDIO_ASSETS_DIR, out_paths, 0, max_paths);
+    int n = scan_dir_into(assets_dir, out_paths, 0, max_paths);
 
     char exedir[AUDIO_MUSIC_MAX_LEN];
     if (executable_dir(exedir, sizeof(exedir))) {
@@ -218,6 +221,8 @@ static void print_usage(const char *prog) {
             "  -h, --help   Show this help text and exit\n"
             "  --noaccum    Disable accumulation buffer antialiasing\n"
             "  --no-audio   Start without audio (disables music entirely)\n"
+            "  --assets <dir>  Music directory to scan for *.mp3 instead of\n"
+            "               ./assets (also via GLR_ASSETS_DIR env var)\n"
             "  --dump-code  Load the session and print the editor buffer\n"
             "  --dump-flat  Load the session and print flattened commands\n"
             "  --dump-state-layout  Print ReplRuntimeState field layout\n"
@@ -390,6 +395,7 @@ static void on_sigint(int sig) {
 int main(int argc, char **argv) {
     const char *input_file = NULL;
     const char *example_arg = NULL;
+    const char *assets_override = NULL;   /* --assets DIR (else GLR_ASSETS_DIR) */
     int dump_code = 0;
     int dump_flat = 0;
     int dump_state_layout = 0;
@@ -431,6 +437,8 @@ int main(int argc, char **argv) {
             g_export_ply_path = argv[++i];
         else if (strcmp(argv[i], "--export-ply-srgb") == 0)
             g_export_ply_srgb = 1;
+        else if (strcmp(argv[i], "--assets") == 0 && i + 1 < argc)
+            assets_override = argv[++i];
         else if (strcmp(argv[i], "--example") == 0 && i + 1 < argc)
             example_arg = argv[++i];
         else if (strcmp(argv[i], "--list-examples") == 0) {
@@ -499,7 +507,14 @@ int main(int argc, char **argv) {
         glr_audio_set_state_file(AUDIO_STATE_FILE);
         static char music_paths[AUDIO_MUSIC_MAX_PATHS]
                                [AUDIO_MUSIC_MAX_LEN];
-        int n = build_mp3_playlist(music_paths, AUDIO_MUSIC_MAX_PATHS);
+        /* --assets wins over GLR_ASSETS_DIR wins over the default. */
+        const char *assets_dir = assets_override;
+        if (!assets_dir) {
+            const char *env = getenv("GLR_ASSETS_DIR");
+            if (env && env[0]) assets_dir = env;
+        }
+        if (!assets_dir) assets_dir = AUDIO_ASSETS_DIR;
+        int n = build_mp3_playlist(assets_dir, music_paths, AUDIO_MUSIC_MAX_PATHS);
         /* opendir/readdir over the candidate music dirs. Cheap when
          * local; worth timing when the working directory lives on
          * iCloud. */
