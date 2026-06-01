@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="gl-repl">
+  <!-- Soft pastel cube in three-quarter perspective: pale lavender faces with a
+       warm peach glow near the front edge, thin dark edges, near-black bg. -->
+  <defs>
+    <radialGradient id="bg" cx="0.5" cy="0.46" r="0.75">
+      <stop offset="0"   stop-color="#15151f" />
+      <stop offset="0.6" stop-color="#0c0c15" />
+      <stop offset="1"   stop-color="#08080f" />
+    </radialGradient>
+    <!-- top face: cool lavender-white, back (bright) -> front -->
+    <linearGradient id="gtop" gradientUnits="userSpaceOnUse" x1="512" y1="132" x2="512" y2="419">
+      <stop offset="0" stop-color="#edeaf4" />
+      <stop offset="1" stop-color="#dcd7e6" />
+    </linearGradient>
+    <!-- left face: cool lavender at the outer edge, warmer toward the center edge -->
+    <linearGradient id="gleft" gradientUnits="userSpaceOnUse" x1="136" y1="450" x2="512" y2="450">
+      <stop offset="0" stop-color="#c7c2d9" />
+      <stop offset="1" stop-color="#ded7e1" />
+    </linearGradient>
+    <!-- right face: mirror -->
+    <linearGradient id="gright" gradientUnits="userSpaceOnUse" x1="888" y1="450" x2="512" y2="450">
+      <stop offset="0" stop-color="#c7c2d9" />
+      <stop offset="1" stop-color="#ded7e1" />
+    </linearGradient>
+    <!-- warm light pooling at the front-center vertex -->
+    <radialGradient id="warm" gradientUnits="userSpaceOnUse" cx="512" cy="500" r="430">
+      <stop offset="0"   stop-color="#f7d4c3" stop-opacity="0.85" />
+      <stop offset="0.45" stop-color="#f0cbc6" stop-opacity="0.40" />
+      <stop offset="1"   stop-color="#f0cbc6" stop-opacity="0" />
+    </radialGradient>
+    <clipPath id="round"><rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" /></clipPath>
+    <clipPath id="cube">
+      <polygon points="512,132 888,247 888,657 512,892 136,657 136,247" />
+    </clipPath>
+  </defs>
+
+  <rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" fill="url(#bg)" />
+
+  <g clip-path="url(#round)">
+    <!-- faces -->
+    <polygon points="136,247 512,132 888,247 512,419" fill="url(#gtop)" />
+    <polygon points="136,247 512,419 512,892 136,657" fill="url(#gleft)" />
+    <polygon points="512,419 888,247 888,657 512,892" fill="url(#gright)" />
+
+    <!-- warm glow, confined to the cube -->
+    <g clip-path="url(#cube)">
+      <rect x="0" y="0" width="1024" height="1024" fill="url(#warm)" />
+    </g>
+
+    <!-- thin dark edges -->
+    <g fill="none" stroke="#1b1b27" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" opacity="0.9">
+      <polyline points="512,132 888,247 888,657 512,892 136,657 136,247 512,132" />
+      <polyline points="136,247 512,419 888,247" />
+      <polyline points="512,419 512,892" />
+    </g>
+  </g>
+</svg>
