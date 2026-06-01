@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="gl-repl">
+  <!-- Garish early-90s alt icon: extruded chrome "gl-repl" WordArt over a
+       neon gradient + cyberspace grid. Iterating; gl-repl.svg is the cube. -->
+  <defs>
+    <linearGradient id="rbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0"   stop-color="#ff2db8" />
+      <stop offset="0.5" stop-color="#6a1ea8" />
+      <stop offset="1"   stop-color="#0a0626" />
+    </linearGradient>
+    <radialGradient id="rsun" cx="0.5" cy="0.42" r="0.55">
+      <stop offset="0"   stop-color="#ffe14d" stop-opacity="0.9" />
+      <stop offset="0.5" stop-color="#ff6a3d" stop-opacity="0.5" />
+      <stop offset="1"   stop-color="#ff6a3d" stop-opacity="0" />
+    </radialGradient>
+    <!-- chrome face: white sky -> cyan -> hard horizon -> deep blue -> reflection -->
+    <linearGradient id="chrome" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#ffffff" />
+      <stop offset="0.40" stop-color="#bfefff" />
+      <stop offset="0.50" stop-color="#2a86d8" />
+      <stop offset="0.52" stop-color="#0b2f6b" />
+      <stop offset="0.88" stop-color="#79d2ff" />
+      <stop offset="1"    stop-color="#ffffff" />
+    </linearGradient>
+    <linearGradient id="grid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#00e5ff" stop-opacity="0" />
+      <stop offset="1" stop-color="#00e5ff" stop-opacity="0.85" />
+    </linearGradient>
+    <filter id="rglow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="6" result="b" />
+      <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+    </filter>
+
+    <!-- The word, defined once; fill is set per <use> for face vs. extrusion. -->
+    <g id="word">
+      <text x="512" y="0" text-anchor="middle"
+            font-family="Futura, 'Helvetica Neue', Helvetica, sans-serif"
+            font-weight="700" font-size="240" letter-spacing="-6">gl-repl</text>
+    </g>
+  </defs>
+
+  <!-- background -->
+  <rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" fill="url(#rbg)" />
+  <rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" fill="url(#rsun)" />
+
+  <!-- cyberspace floor grid (clipped to the rounded square) -->
+  <clipPath id="round"><rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" /></clipPath>
+  <g clip-path="url(#round)" stroke="url(#grid)" stroke-width="3" opacity="0.8">
+    <!-- horizontals -->
+    <line x1="0" y1="720" x2="1024" y2="720" />
+    <line x1="0" y1="760" x2="1024" y2="760" />
+    <line x1="0" y1="812" x2="1024" y2="812" />
+    <line x1="0" y1="876" x2="1024" y2="876" />
+    <line x1="0" y1="952" x2="1024" y2="952" />
+    <!-- verticals converging to vanishing point (512,640) -->
+    <line x1="512" y1="700" x2="-260" y2="1024" />
+    <line x1="512" y1="700" x2="40"   y2="1024" />
+    <line x1="512" y1="700" x2="250"  y2="1024" />
+    <line x1="512" y1="700" x2="410"  y2="1024" />
+    <line x1="512" y1="700" x2="512"  y2="1024" />
+    <line x1="512" y1="700" x2="614"  y2="1024" />
+    <line x1="512" y1="700" x2="774"  y2="1024" />
+    <line x1="512" y1="700" x2="984"  y2="1024" />
+    <line x1="512" y1="700" x2="1284" y2="1024" />
+  </g>
+
+  <!-- extruded chrome word, skewed for that italic WordArt swagger -->
+  <g transform="translate(0 470) skewX(-10)" filter="url(#rglow)">
+    <!-- extrusion body: deepest first, marching down-right -->
+    <use href="#word" transform="translate(36 45)"  fill="#120226" />
+    <use href="#word" transform="translate(33 41)"  fill="#1a0533" />
+    <use href="#word" transform="translate(30 37)"  fill="#22073f" />
+    <use href="#word" transform="translate(27 34)"  fill="#2a0a4b" />
+    <use href="#word" transform="translate(24 30)"  fill="#330c57" />
+    <use href="#word" transform="translate(21 26)"  fill="#3b0f63" />
+    <use href="#word" transform="translate(18 22)"  fill="#44116f" />
+    <use href="#word" transform="translate(15 19)"  fill="#4d147b" />
+    <use href="#word" transform="translate(12 15)"  fill="#561687" />
+    <use href="#word" transform="translate(9 11)"   fill="#5f1893" />
+    <use href="#word" transform="translate(6 7)"    fill="#681b9f" />
+    <use href="#word" transform="translate(3 4)"    fill="#711dab" />
+    <!-- dark contour just behind the face for crisp separation -->
+    <use href="#word" transform="translate(0 0)"    fill="none" stroke="#0a0118" stroke-width="10" stroke-linejoin="round" />
+    <!-- front face -->
+    <use href="#word" transform="translate(0 0)"    fill="url(#chrome)" stroke="#16264d" stroke-width="2.5" stroke-linejoin="round" />
+  </g>
+</svg>

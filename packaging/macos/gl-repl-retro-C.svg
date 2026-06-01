@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="gl-repl">
+  <!-- Variant C: classic OpenGL-logo style. Silver chrome extruded 3D text on black. -->
+  <defs>
+    <radialGradient id="cbg" cx="0.5" cy="0.46" r="0.75">
+      <stop offset="0"   stop-color="#23262b" />
+      <stop offset="0.55" stop-color="#0c0d0f" />
+      <stop offset="1"   stop-color="#000000" />
+    </radialGradient>
+    <!-- silver chrome: bright sky / mid / dark horizon / ground bounce -->
+    <linearGradient id="silver" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#fbfcfe" />
+      <stop offset="0.34" stop-color="#cfd4db" />
+      <stop offset="0.49" stop-color="#6b7178" />
+      <stop offset="0.51" stop-color="#2f3338" />
+      <stop offset="0.64" stop-color="#aeb4bc" />
+      <stop offset="0.86" stop-color="#e9edf1" />
+      <stop offset="1"    stop-color="#9aa0a8" />
+    </linearGradient>
+    <filter id="csoft" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="3.5" result="b" />
+      <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+    </filter>
+    <linearGradient id="reflfade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"   stop-color="#000000" stop-opacity="0" />
+      <stop offset="0.75" stop-color="#000000" stop-opacity="0.85" />
+      <stop offset="1"   stop-color="#000000" stop-opacity="1" />
+    </linearGradient>
+    <g id="word">
+      <text x="512" y="0" text-anchor="middle"
+            font-family="Futura, 'Helvetica Neue', Helvetica, sans-serif"
+            font-weight="600" font-size="226" letter-spacing="-4">gl-repl</text>
+    </g>
+    <clipPath id="cround"><rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" /></clipPath>
+  </defs>
+
+  <rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" fill="url(#cbg)" />
+
+  <g clip-path="url(#cround)">
+    <!-- floor reflection of the word, mirrored below the baseline and faded -->
+    <g transform="translate(0 1010) scale(1 -1)" opacity="0.22">
+      <use href="#word" transform="translate(0 0)" fill="url(#silver)" />
+    </g>
+    <rect x="0" y="505" width="1024" height="520" fill="url(#reflfade)" />
+
+    <!-- main extruded word -->
+    <g transform="translate(0 470)" filter="url(#csoft)">
+      <use href="#word" transform="translate(30.0 24.0)" fill="#070809" />
+      <use href="#word" transform="translate(28.1 22.5)" fill="#0b0c0d" />
+      <use href="#word" transform="translate(26.2 21.0)" fill="#0e1012" />
+      <use href="#word" transform="translate(24.4 19.5)" fill="#121416" />
+      <use href="#word" transform="translate(22.5 18.0)" fill="#16181a" />
+      <use href="#word" transform="translate(20.6 16.5)" fill="#191b1e" />
+      <use href="#word" transform="translate(18.8 15.0)" fill="#1d1f22" />
+      <use href="#word" transform="translate(16.9 13.5)" fill="#202327" />
+      <use href="#word" transform="translate(15.0 12.0)" fill="#24272b" />
+      <use href="#word" transform="translate(13.1 10.5)" fill="#282b2f" />
+      <use href="#word" transform="translate(11.2 9.0)" fill="#2b2f34" />
+      <use href="#word" transform="translate(9.4 7.5)" fill="#2f3338" />
+      <use href="#word" transform="translate(7.5 6.0)" fill="#32363c" />
+      <use href="#word" transform="translate(5.6 4.5)" fill="#363a40" />
+      <use href="#word" transform="translate(3.8 3.0)" fill="#3a3e44" />
+      <use href="#word" transform="translate(1.9 1.5)" fill="#3d4249" />
+      <!-- warm copper rim catching the extrusion edge (OpenGL-logo nod) -->
+      <use href="#word" transform="translate(7 6)" fill="none" stroke="#7a3a1e" stroke-width="3" stroke-linejoin="round" opacity="0.55" />
+      <!-- crisp dark contour -->
+      <use href="#word" transform="translate(0 0)" fill="none" stroke="#08090a" stroke-width="8" stroke-linejoin="round" />
+      <!-- silver face -->
+      <use href="#word" transform="translate(0 0)" fill="url(#silver)" stroke="#3a3f45" stroke-width="1.5" stroke-linejoin="round" />
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="gl-repl">
+  <!-- App icon: a static isometric cube derived from the README hero
+       (glutSolidCube), in the gl-repl dark-teal palette.
+       Faces: orange top, purple left, cyan right; white wireframe edges. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"   stop-color="#0c3a48" />
+      <stop offset="0.55" stop-color="#06222b" />
+      <stop offset="1"   stop-color="#04151b" />
+    </linearGradient>
+    <linearGradient id="face-top" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffb066" />
+      <stop offset="1" stop-color="#ff8833" />
+    </linearGradient>
+    <linearGradient id="face-left" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#b07cff" />
+      <stop offset="1" stop-color="#8a4ce6" />
+    </linearGradient>
+    <linearGradient id="face-right" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5fd6ff" />
+      <stop offset="1" stop-color="#28b6e6" />
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="14" result="b" />
+      <feMerge>
+        <feMergeNode in="b" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Rounded-square background (macOS squircle approximation, r ~= 0.2237*1024) -->
+  <rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" fill="url(#bg)" />
+
+  <!-- Cube faces -->
+  <g filter="url(#glow)">
+    <polygon points="206.4,309.6 512,204 817.6,309.6 512,414.4" fill="url(#face-top)" />
+    <polygon points="206.4,309.6 512,414.4 512,820 206.4,714.4" fill="url(#face-left)" />
+    <polygon points="512,414.4 817.6,309.6 817.6,714.4 512,820" fill="url(#face-right)" />
+
+    <!-- Wireframe edges: outer silhouette + the front Y from the near corner -->
+    <g fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.95">
+      <polyline points="512,204 817.6,309.6 817.6,714.4 512,820 206.4,714.4 206.4,309.6 512,204" />
+      <polyline points="206.4,309.6 512,414.4 817.6,309.6" />
+      <polyline points="512,414.4 512,820" />
+    </g>
+  </g>
+</svg>
