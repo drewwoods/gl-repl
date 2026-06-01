@@ -1,7 +1,20 @@
 # Headless GIF/MP4 generator (OSMesa)
 
-**Status:** in-review — no implementation yet. Lands on branch `osmesa-gif`
-(off `osmesa-support`). Output: **GIF + MP4**, invoked via a shell script.
+**Status:** DONE on branch `osmesa-gif` (off `osmesa-support`). Verified headless
+on macOS (Apple-Silicon Mesa) and gracemont (Linux). Output: **GIF + MP4** via
+`scripts/record-gif.sh`.
+
+**As-built note:** the per-frame capture trigger landed in the backend's
+main-loop tick (`fgPlatformProcessSingleEvent`), *not* the swap path — the
+generic `glutSwapBuffers()` short-circuits before the platform swap for a
+single-buffered window, and `fghRedrawWindow()` exposes no per-display hook, so
+the per-iteration tick (1:1 with the display under the software renderer) is the
+only per-frame hook available without editing core freeglut. A cheap colour-
+buffer content signature skips the pre-first-render frame. An earlier attempt
+that edited core `fg_display.c` was reverted to keep the feature backend-only
+(cleaner to upstream). The script stages frames in a non-hidden dir beside the
+output (not `/tmp`) so a snap/flatpak-confined `ffmpeg` — private `/tmp`, home
+interface blocks dotfiles — can read them.
 
 ## Context
 
