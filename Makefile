@@ -903,9 +903,10 @@ MACOS_PKG = packaging/macos
 APP_BUNDLE = gl-repl.app
 APP_ICNS = $(MACOS_PKG)/gl-repl.icns
 APP_ICONSET = $(MACOS_PKG)/gl-repl.iconset
-# Icon source SVG. Alternatives in packaging/macos/: gl-repl.svg (cube),
-# gl-repl-retro-A.svg (chrome synthwave), -B (gold), -C/-C2 (silver OpenGL), -D (cube+wordmark).
-APP_ICON_SVG = $(MACOS_PKG)/gl-repl-retro-A.svg
+# Icon source SVG. Alternatives in packaging/macos/: gl-repl.svg (flat cube),
+# gl-repl-retro-A.svg (chrome synthwave), -B (gold), -C/-C2 (silver OpenGL),
+# -D (cube+wordmark), gl-repl-soft-cube.svg (soft pastel perspective cube).
+APP_ICON_SVG = $(MACOS_PKG)/gl-repl-soft-cube.svg
 
 # Regenerate the perspective chrome wordmark SVG from its parametric generator.
 # The committed .svg is the source of truth; this just makes it reproducible.
