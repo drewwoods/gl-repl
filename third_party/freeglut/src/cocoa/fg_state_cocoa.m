@@ -22,8 +22,6 @@
 
 #import <Cocoa/Cocoa.h>
 
-#include "fg_pixel_format_cocoa.h"
-
 static int *appendIfUnique( int *array, int *arr_size, int value )
 {
     for ( int i = 0; i < *arr_size; i++ ) {
@@ -65,9 +63,6 @@ int fgPlatformGlutDeviceGet( GLenum eWhat )
 int fgPlatformGlutGet( GLenum eWhat )
 {
     AUTORELEASE_POOL;
-
-    if ( eWhat == GLUT_DISPLAY_MODE_POSSIBLE )
-        return fgCocoaIsDisplayModePossible( GL_FALSE );
 
     if ( !fgStructure.CurrentWindow )
         return 0;
@@ -226,6 +221,10 @@ int fgPlatformGlutGet( GLenum eWhat )
         /* macOS does not have a specific sRGB flag */
         return 0;
     }
+    case GLUT_DISPLAY_MODE_POSSIBLE:
+        /* TODO: Query fgState.ContextFlags to determine if display mode config is possible for now assume it is */
+        return 1;
+
     case GLUT_WINDOW_FORMAT_ID:
         /* macOS does not have a specific format ID */
         return 0;
@@ -250,7 +249,6 @@ int *fgPlatformGlutGetModeValues( GLenum eWhat, int *size )
     }
 
     switch ( eWhat ) {
-    // TODO: check if better to leverage fg_pixel_format_cocoa.m
     case GLUT_AUX: {
         /*
          * Query available auxiliary buffer counts.
@@ -277,7 +275,6 @@ int *fgPlatformGlutGetModeValues( GLenum eWhat, int *size )
         break;
     }
 
-    // TODO: check if better to leverage fg_pixel_format_cocoa.m
     case GLUT_MULTISAMPLE: {
         /*
          * Query available MSAA sample counts

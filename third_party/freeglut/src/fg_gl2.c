@@ -21,7 +21,11 @@
 /* Load OpenGL (ES) 2.0 functions used by fg_geometry */
 
 #include <GL/freeglut.h>
-#include "fg_internal.h"
+#ifdef FREEGLUT_GEOMETRY_STANDALONE
+#  include "standalone/fg_glutshapes_shim.h"
+#else
+#  include "fg_internal.h"
+#endif
 #include "fg_gl2.h"
 
 #ifndef GL_ES_VERSION_2_0

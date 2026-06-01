@@ -1,21 +1,33 @@
 #!/bin/bash
-# vendor-freeglut.sh - vendor upstream freeglut into third_party/freeglut/ at a
-# given ref, so the build is self-contained (no out-of-tree checkout) and the
-# native macOS Cocoa backend can be built statically and linked.
+# vendor-freeglut.sh - vendor a freeglut source tree into third_party/freeglut/
+# at a given ref, so the build is self-contained (no out-of-tree checkout) and
+# the native macOS Cocoa backend can be built statically and linked.
 #
 #   scripts/vendor-freeglut.sh [<ref>]
+#   FREEGLUT_REPO=<url-or-path> scripts/vendor-freeglut.sh [<ref>]
 #
-# <ref> is any git ref or SHA on https://github.com/freeglut/freeglut.git;
-# default `master` (re-pins to the current tip). The exact resolved SHA is
-# recorded in third_party/freeglut/VENDORED.txt for reproducibility.
+# <ref> is any git ref or SHA in the source repo; default `master` (re-pins to
+# the current tip). The source repo defaults to upstream freeglut on GitHub but
+# can be overridden with the FREEGLUT_REPO env var, which accepts any value
+# `git clone` accepts -- another remote URL or a LOCAL PATH to a working clone
+# (e.g. a fork that carries the OSMesa backend):
 #
-# Only a curated ALLOWLIST of the upstream tree is copied (build-essential
-# sources + license files), not the full repo. The script HARD-FAILS if an
-# allowlisted path is missing in the checkout, so an upstream restructure
-# surfaces loudly instead of silently producing a broken vendor tree. The
-# allowlist guards only listed paths, not a needed-but-omitted one: if a later
-# `make gl-repl` cmake configure errors on a missing CONFIGURE_FILE/include()
-# input, add that path to ALLOWLIST below.
+#   FREEGLUT_REPO="$HOME/src/freeglut-fork" \
+#     scripts/vendor-freeglut.sh osmesa-backend
+#
+# A local path is cloned by git, so only COMMITTED state is vendored -- commit
+# your fork changes first. The resolved source + SHA are recorded in
+# third_party/freeglut/VENDORED.txt for reproducibility (note: a local absolute
+# path recorded there is machine-specific; push the fork and re-vendor from its
+# URL for a portable pin).
+#
+# Only a curated ALLOWLIST of the tree is copied (build-essential sources +
+# license files), not the full repo. The script HARD-FAILS if an allowlisted
+# path is missing in the checkout, so a layout change surfaces loudly instead of
+# silently producing a broken vendor tree. The allowlist guards only listed
+# paths, not a needed-but-omitted one: if a later `make gl-repl` cmake configure
+# errors on a missing CONFIGURE_FILE/include() input, add that path to ALLOWLIST
+# below.
 #
 # After vendoring, run `make freeglut-clean` so the static library is rebuilt
 # from the new source (the Makefile lib rule has no dependency on these files),
@@ -24,7 +36,7 @@
 set -euo pipefail
 
 REF="${1:-master}"
-UPSTREAM_URL="https://github.com/freeglut/freeglut.git"
+UPSTREAM_URL="${FREEGLUT_REPO:-https://github.com/freeglut/freeglut.git}"
 
 ROOT="$(git rev-parse --show-toplevel)"
 DEST="$ROOT/third_party/freeglut"

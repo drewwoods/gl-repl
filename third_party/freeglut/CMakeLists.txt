@@ -86,6 +86,15 @@ ENDIF()
 
 OPTION(FREEGLUT_COCOA "Build support for Cocoa" OFF)
 
+# Headless off-screen rendering via OSMesa (no window system at all). OS-agnostic;
+# overrides the native platform on every OS, hence mutually exclusive with the
+# other window-system backends. Guard placed here, before any source-list logic
+# those options mutate (e.g. the GLES font swap further below).
+OPTION(FREEGLUT_OSMESA "Build the headless OSMesa (off-screen) backend" OFF)
+IF(FREEGLUT_OSMESA AND (FREEGLUT_GLES OR FREEGLUT_WAYLAND OR FREEGLUT_COCOA))
+    MESSAGE(FATAL_ERROR "FREEGLUT_OSMESA is mutually exclusive with FREEGLUT_GLES, FREEGLUT_WAYLAND and FREEGLUT_COCOA")
+ENDIF()
+
 # Eventually default to ON when Cocoa is fully supported
 # IF(APPLE)
 #     OPTION(FREEGLUT_COCOA "Build support for Cocoa" ON)
@@ -120,7 +129,6 @@ SET(FREEGLUT_SRCS
     src/fg_callbacks.c
     src/fg_cursor.c
     src/fg_display.c
-    src/fg_display_string.c
     src/fg_ext.c
     src/fg_font_data.c
     src/fg_gamemode.c
@@ -158,7 +166,31 @@ ELSE()
     )
 ENDIF()
 
-IF(WIN32)
+IF(FREEGLUT_OSMESA)
+    # OSMesa is window-system-less: it must override the native platform on
+    # every OS, so this branch comes first in the chain. -DTARGET_HOST_OSMESA
+    # selects the backend internally; -DFREEGLUT_OSMESA (public) bootstraps the
+    # GL header selection in freeglut_std.h for the library and its consumers.
+    ADD_DEFINITIONS(-DTARGET_HOST_OSMESA=1)
+    LIST(APPEND PUBLIC_DEFINITIONS -DFREEGLUT_OSMESA)
+    LIST(APPEND FREEGLUT_SRCS
+        src/osmesa/fg_internal_osmesa.h
+        src/osmesa/fg_init_osmesa.c
+        src/osmesa/fg_window_osmesa.c
+        src/osmesa/fg_display_osmesa.c
+        src/osmesa/fg_state_osmesa.c
+        src/osmesa/fg_main_osmesa.c
+        src/osmesa/fg_structure_osmesa.c
+        src/osmesa/fg_ext_osmesa.c
+        src/osmesa/fg_cursor_osmesa.c
+        src/osmesa/fg_gamemode_osmesa.c
+        src/osmesa/fg_input_devices_osmesa.c
+        src/osmesa/fg_joystick_osmesa.c
+        # public font-handle definitions: platform-agnostic, shared with X11/Wayland
+        src/x11/fg_glutfont_definitions_x11.c
+    )
+
+ELSEIF(WIN32)
     LIST(APPEND FREEGLUT_SRCS
         src/mswin/fg_cursor_mswin.c
         src/mswin/fg_display_mswin.c
@@ -255,8 +287,6 @@ ELSEIF(FREEGLUT_COCOA)
         src/cocoa/fg_internal_cocoa.h
         src/cocoa/fg_joystick_cocoa.m
         src/cocoa/fg_main_cocoa.m
-        src/cocoa/fg_pixel_format_cocoa.h
-        src/cocoa/fg_pixel_format_cocoa.m
         src/cocoa/fg_spaceball_cocoa.m
         src/cocoa/fg_state_cocoa.m
         src/cocoa/fg_window_cocoa.m
@@ -342,7 +372,7 @@ ENDIF()
 
 INCLUDE(CheckIncludeFiles)
 
-IF(UNIX AND NOT(ANDROID OR BLACKBERRY OR FREEGLUT_WAYLAND OR OGC OR FREEGLUT_COCOA))
+IF(UNIX AND NOT(ANDROID OR BLACKBERRY OR FREEGLUT_WAYLAND OR OGC OR FREEGLUT_COCOA OR FREEGLUT_OSMESA))
     FIND_PACKAGE(X11 REQUIRED)
     INCLUDE_DIRECTORIES(${X11_X11_INCLUDE_PATH})
     LIST(APPEND LIBS ${X11_X11_LIB})
@@ -375,7 +405,20 @@ ENDIF()
 # need to be defined in client applications (e.g. through pkg-config),
 # but do use GLES constants directly for all other needs
 # GLES1 and GLES2 libraries are compatible and can be co-linked.
-IF(FREEGLUT_GLES)
+IF(FREEGLUT_OSMESA)
+    # OSMesa provides both the GL context and the GL entry points; no
+    # window-system GL (GLX/EGL/Cocoa) is found or linked.
+    INCLUDE(FindPkgConfig)
+    PKG_CHECK_MODULES(OSMESA osmesa)
+    IF(OSMESA_FOUND)
+        INCLUDE_DIRECTORIES(${OSMESA_INCLUDE_DIRS})
+        LINK_DIRECTORIES(${OSMESA_LIBRARY_DIRS})
+        LIST(APPEND LIBS ${OSMESA_LIBRARIES})
+    ELSE()
+        FIND_LIBRARY(OSMESA_LIBRARY OSMesa REQUIRED)
+        LIST(APPEND LIBS ${OSMESA_LIBRARY})
+    ENDIF()
+ELSEIF(FREEGLUT_GLES)
     LIST(APPEND PUBLIC_DEFINITIONS -DFREEGLUT_GLES)
     if(NOT CMAKE_VERSION VERSION_LESS "3.27")
       FIND_PACKAGE(OpenGL REQUIRED COMPONENTS EGL GLES2 OpenGL)
@@ -643,7 +686,10 @@ ELSE()
     # - the shared library should link to the dependency libraries so that the user
     #   won't have to link them explicitly (they shouldn't have to know that we depend
     #   on Xrandr or Xxf86vm)
-    IF(FREEGLUT_GLES)
+    IF(FREEGLUT_OSMESA)
+        # Distinct name so a headless build coexists with a normal freeglut.
+        SET(LIBNAME glut_osmesa)
+    ELSEIF(FREEGLUT_GLES)
         SET(LIBNAME freeglut-gles)
     ELSE()
         IF(FREEGLUT_REPLACE_GLUT)
@@ -716,11 +762,76 @@ ENDIF()
 INSTALL(FILES ${FREEGLUT_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/GL COMPONENT Devel)
 
 ########################
+# OSMESA SELF-TEST
+########################
+# Built only for the headless backend (the GLU-using progs/ demos are skipped
+# under OSMesa). Links the freeglut library plus OSMesa directly, since the
+# test reads back the colour buffer itself via OSMesaGetColorBuffer().
+# EXISTS guard so a curated checkout that omits progs/ (e.g. a downstream
+# vendor that only wants the library) still configures cleanly.
+IF(FREEGLUT_OSMESA AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/progs/osmesa/osmesa_selftest.c")
+    ADD_EXECUTABLE(osmesa_selftest progs/osmesa/osmesa_selftest.c)
+    IF(FREEGLUT_BUILD_SHARED_LIBS)
+        TARGET_LINK_LIBRARIES(osmesa_selftest freeglut ${LIBS})
+    ELSE()
+        TARGET_LINK_LIBRARIES(osmesa_selftest freeglut_static ${LIBS})
+    ENDIF()
+ENDIF()
+
+########################
+# STANDALONE GEOMETRY+FONT LIBRARY (glutshapes)
+########################
+# A self-contained library of just the geometry/font code (glutSolid*/glutWire*,
+# the teapot, and the stroke/bitmap text), built via the compat shim with NO
+# freeglut windowing/event/context machinery. Intended for environments that
+# already emulate GLUT windowing (e.g. Emscripten + gl4es). Orthogonal to the
+# platform-selection chain above; it pulls no backend and links no window libs.
+OPTION(FREEGLUT_BUILD_GLUTSHAPES "Build the standalone geometry+font library (no windowing)" OFF)
+IF(FREEGLUT_BUILD_GLUTSHAPES)
+    ADD_LIBRARY(glutshapes STATIC
+        src/fg_geometry.c
+        src/fg_teapot.c
+        src/fg_gl2.c
+        src/fg_font.c
+        src/fg_font_data.c
+        src/fg_stroke_roman.c
+        src/fg_stroke_mono_roman.c
+        src/x11/fg_glutfont_definitions_x11.c   # public font-handle definitions (agnostic)
+        src/standalone/fg_glutshapes_shim.c
+    )
+    # FREEGLUT_GEOMETRY_STANDALONE swaps fg_internal.h for the shim; the inherited
+    # ${PUBLIC_DEFINITIONS} (e.g. -DFREEGLUT_OSMESA / -DFREEGLUT_GLES) keeps
+    # freeglut_std.h's GL header selection consistent with the rest of the build.
+    TARGET_COMPILE_DEFINITIONS(glutshapes PRIVATE FREEGLUT_GEOMETRY_STANDALONE ${PUBLIC_DEFINITIONS})
+    TARGET_INCLUDE_DIRECTORIES(glutshapes PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+
+    # Functional test: drive glutshapes with a raw OSMesa context and no freeglut
+    # windowing linked. Only when OSMesa is available to supply that context.
+    IF(FREEGLUT_OSMESA AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/progs/glutshapes/glutshapes_selftest.c")
+        ADD_EXECUTABLE(glutshapes_selftest progs/glutshapes/glutshapes_selftest.c)
+        TARGET_COMPILE_DEFINITIONS(glutshapes_selftest PRIVATE FREEGLUT_OSMESA)
+        TARGET_INCLUDE_DIRECTORIES(glutshapes_selftest PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/include ${OSMESA_INCLUDE_DIRS})
+        TARGET_LINK_LIBRARIES(glutshapes_selftest glutshapes ${OSMESA_LIBRARIES})
+    ENDIF()
+ENDIF()
+
+########################
 # DEMOS
 ########################
 
 # Optionally build demos, on by default.
 option( FREEGLUT_BUILD_DEMOS "Build FreeGLUT demos." ON )
+
+# The demos use GLU and assume a windowing backend; the headless OSMesa build
+# neither finds GLU nor has a window system, so skip them. The dedicated OSMesa
+# self-test (progs/osmesa) is built separately, gated on FREEGLUT_OSMESA.
+IF(FREEGLUT_OSMESA)
+    SET(FREEGLUT_BUILD_DEMOS OFF)
+ENDIF()
 
 if (FREEGLUT_BUILD_DEMOS)
     if (OPENGL_GLU_FOUND)
@@ -779,7 +890,6 @@ ADD_DEMO(accum           progs/demos/accum/accum.c)
 ADD_DEMO(windows         progs/demos/windows/windows.c)
 ADD_DEMO(vsync           progs/demos/vsync/vsync.c)
 ADD_DEMO(fonts           progs/demos/fonts/fonts.c)
-ADD_DEMO(dstrprobe       progs/demos/dstrprobe/dstrprobe.c)
 
 #######################
 # INSTALLATION
