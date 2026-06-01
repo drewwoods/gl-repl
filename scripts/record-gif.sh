@@ -79,7 +79,12 @@ command -v ffmpeg >/dev/null 2>&1 || {
 # N = round(duration * fps); must be >= 1.
 frames="$(awk "BEGIN{ n = $duration * $fps + 0.5; if (n < 1) n = 1; printf \"%d\", n }")"
 
-tmp="$(mktemp -d "${TMPDIR:-/tmp}/glr-gif.XXXXXX")"
+# Stage the intermediate PPMs next to the output, not in /tmp: a snap/flatpak
+# ffmpeg runs with a private /tmp and can't read frames written to the host /tmp,
+# but it can reach the output directory (typically $HOME or the cwd).
+out_dir="$(dirname "$out")"
+[ -d "$out_dir" ] || { echo "record-gif: output dir '$out_dir' does not exist" >&2; exit 1; }
+tmp="$(mktemp -d "$out_dir/.record-gif.XXXXXX")"
 cleanup() { [ "$keep" = 1 ] || rm -rf "$tmp"; }
 trap cleanup EXIT
 
