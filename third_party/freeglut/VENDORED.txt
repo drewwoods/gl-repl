@@ -3,6 +3,7 @@ freeglut vendored into this tree.
 upstream: https://github.com/freeglut/freeglut.git
 ref:      master
 sha:      463cef14281f41a8ae88a86590b64dba55b20846
+patch:    implement-DisplayString-Comparators
 
 Produced by scripts/vendor-freeglut.sh. Do NOT edit the vendored tree by hand;
 re-run the script with a ref to update. After re-vendoring, run

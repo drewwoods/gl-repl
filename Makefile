@@ -54,8 +54,7 @@ GL_HEADER_CFLAGS = \
 else
 GL_HEADER_CFLAGS = \
 	$(FREEGLUT_HEADER_CFLAGS) \
-	-I/usr/include \
-	-I/opt/homebrew/include
+	-I/usr/include
 endif
 
 # Language standard: C99, project-wide, no exceptions. Everything
@@ -133,7 +132,7 @@ FREEGLUT_LIB := $(FREEGLUT_STATIC_LIB)
 endif
 
 GLUT_GL_LDFLAGS = \
-	-L/opt/homebrew/lib -lm -lpthread \
+	-lm -lpthread \
 	-framework IOKit -framework Cocoa -framework OpenGL -framework GLUT \
 	-framework CoreAudio -framework CoreFoundation -framework AudioToolbox
 
@@ -142,7 +141,6 @@ GLUT_GL_LDFLAGS = \
 # own, so the consumer must list them. FREEGLUT_LIB is empty under `make glut`
 # (FREEGLUT_VENDOR=0), where GLUT_GL_LDFLAGS overrides this anyway.
 GL_LDFLAGS = \
-	-L/opt/homebrew/lib \
 	$(FREEGLUT_LIB) -lm -lpthread \
 	-framework IOKit -framework Cocoa -framework OpenGL -framework CoreVideo \
 	-framework CoreAudio -framework CoreFoundation -framework AudioToolbox
