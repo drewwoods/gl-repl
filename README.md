@@ -138,6 +138,27 @@ Line primitives you draw (`glBegin(GL_LINES/LINE_STRIP/LINE_LOOP)`) are
 exported as a PLY `edge` element. See *Mesh Export (PLY via GL_FEEDBACK)*
 in [`ARCHITECTURE.md`](ARCHITECTURE.md) for the capture/encode design.
 
+## Headless Rendering (OSMesa)
+
+For CI or any machine with no display, `make ... FREEGLUT_OSMESA=1` builds
+gl-repl against a software, off-screen **OSMesa** backend — it renders into
+memory with no window. The real-GL tests and `--export-ply` then run headless
+(`make gl-tests FREEGLUT_OSMESA=1`), and you can grab a **screenshot of a
+running headless process** by sending it `SIGUSR1`:
+
+```bash
+brew install mesa mesa-glu                                  # macOS deps (Linux: apt-get install libosmesa6-dev)
+make gl-repl FREEGLUT_OSMESA=1
+FREEGLUT_CAPTURE_FILE=/tmp/shot ./build/release-osmesa/gl-repl --example 8 --no-audio &
+kill -USR1 $!                                               # writes /tmp/shot-0000.ppm
+magick /tmp/shot-0000.ppm shot.png                         # PPM -> PNG to view
+```
+
+This needs a vendored freeglut that carries the OSMesa backend (re-vendor with
+`FREEGLUT_REPO=<path-or-url> scripts/vendor-freeglut.sh <ref>`). See *Headless
+Rendering & Screenshots (OSMesa)* in [`ARCHITECTURE.md`](ARCHITECTURE.md) for the
+full design (build-mode swap, the teardown fix, the signal-driven capture).
+
 ## Music
 
 gl-repl plays background music: any `*.mp3` files it finds at startup,

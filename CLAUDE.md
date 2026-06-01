@@ -65,8 +65,42 @@ using the system `-lglut -lGL -lGLU`.
 
 Re-pin the vendored version with `scripts/vendor-freeglut.sh [<ref>]` (default
 `master`; the resolved SHA is recorded in `third_party/freeglut/VENDORED.txt`),
-then `make freeglut-clean`. Licenses for freeglut and miniaudio are acknowledged
-in `THIRD_PARTY_LICENSES.md`.
+then `make freeglut-clean`. The source repo defaults to upstream but is
+overridable with `FREEGLUT_REPO=<url-or-path>` (accepts a local fork clone) —
+e.g. `FREEGLUT_REPO=~/src/freeglut-fork scripts/vendor-freeglut.sh
+osmesa-backend` re-vendors from a fork carrying the OSMesa backend. Licenses for
+freeglut and miniaudio are acknowledged in `THIRD_PARTY_LICENSES.md`.
+
+### Headless OSMesa build (`make ... FREEGLUT_OSMESA=1`)
+
+`FREEGLUT_OSMESA=1` builds the vendored freeglut with its **headless OSMesa**
+(off-screen software/swrast) backend instead of Cocoa, and links the GL binaries
+against Homebrew Mesa's `libGL`/`libGLU` + `libOSMesa` (rpaths baked, so no
+`DYLD_LIBRARY_PATH` needed) rather than Apple's OpenGL framework. This renders
+with **no window/display** — for headless geometry/feedback tests:
+
+```bash
+brew install mesa mesa-glu                 # one-time: OSMesa + GLU
+make gl-repl FREEGLUT_OSMESA=1             # headless gl-repl
+make gl-tests FREEGLUT_OSMESA=1           # the real-GL tests, headless
+./build/release-osmesa/gl-repl --example 8 --export-ply out.ply --no-audio
+```
+
+It needs an OSMesa-capable vendored tree (re-vendor from a fork that has the
+backend, as above). The OSMesa static lib and objects use distinct
+`build-osmesa/` and `build/<cfg>-osmesa/` dirs, so the OSMesa and Cocoa builds
+coexist without stale-binary collisions. Compatibility GL only (fixed-function +
+GLU tess + `glRenderMode(GL_FEEDBACK)` all work). Pure build-system change — the
+`-std=c99` sources are untouched; `gl_includes.h` already resolves the Mesa
+headers on the non-Apple-GLUT path.
+
+**Headless screenshots (`SIGUSR1`).** The vendored OSMesa backend captures the
+current frame to a PPM on `SIGUSR1` — no app code, works even when the app is
+idle (it reads the last completed colour buffer directly via
+`OSMesaGetColorBuffer`). `kill -USR1 <pid>` writes `<prefix>-NNNN.ppm`
+(`FREEGLUT_CAPTURE_FILE` env sets the prefix, default `freeglut`); convert with
+`magick shot-0000.ppm shot.png`. This is a freeglut-fork feature, so it only
+exists in an OSMesa build re-vendored from a fork that carries it.
 
 ### macOS app bundle (`make app`)
 
