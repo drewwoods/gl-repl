@@ -138,6 +138,29 @@ Line primitives you draw (`glBegin(GL_LINES/LINE_STRIP/LINE_LOOP)`) are
 exported as a PLY `edge` element. See *Mesh Export (PLY via GL_FEEDBACK)*
 in [`ARCHITECTURE.md`](ARCHITECTURE.md) for the capture/encode design.
 
+## Music
+
+gl-repl plays background music: any `*.mp3` files it finds at startup,
+in filename order. It looks in three places (all combined):
+
+- **`./assets`** next to where you run it — the default. Point it
+  somewhere else with `--assets <dir>` (or the `GLR_ASSETS_DIR` env var):
+
+  ```bash
+  ./gl-repl --assets ~/Music/glr       # scan this folder instead of ./assets
+  GLR_ASSETS_DIR=~/Music/glr ./gl-repl # same, via env (--assets wins)
+  ./gl-repl --no-audio                 # start with no music at all
+  ```
+
+- **Bundled with the app** — the macOS `gl-repl.app` (built by `make app`)
+  ships a sample track inside it, so a Finder launch has music.
+- **Your own music folder** — `~/Library/Application Support/gl-repl/Music`
+  on macOS (the XDG data dir on Linux). It's created on first run; drop
+  `.mp3`s in there and they join the playlist.
+
+See *Music Asset Resolution* in [`ARCHITECTURE.md`](ARCHITECTURE.md) for
+the resolution order and precedence.
+
 ## Third-Party Licenses
 
 This project bundles freeglut (vendored under `third_party/freeglut/`, built as
