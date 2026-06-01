@@ -12,6 +12,10 @@
 # block-handler extractions from the #15/#16 work (close-brace,
 # for-loop, if-block, func-def kernels lifted into compile.c). The
 # residual 361 is the dispatch + per-command-spec parse path.
+#
+# 2026-06-01: flatten_range tightened 160 -> 92 after lifting the
+# CMD_VAR_ASSIGN and CMD_SCRATCH_ASSIGN bodies into flatten_var_assign /
+# flatten_scratch_assign (which also host the PROF_FLATTEN_ASSIGN probe).
 
 parse_command: 361
-flatten_range: 160
+flatten_range: 92

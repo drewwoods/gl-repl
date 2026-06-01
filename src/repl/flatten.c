@@ -5,6 +5,7 @@
 #include "repl/core_internal.h"
 #include "repl/parser.h"
 #include "repl/state_owners.h"
+#include "support/cpuprof.h"   /* PROF_FLATTEN_* sub-phase timing */
 #include "config.h"        /* REPL_STATUS_TEXT_MAX */
 
 #define MAX_FLATTEN_CALL_DEPTH 64
@@ -356,7 +357,8 @@ static void flatten_if_block(FlattenContext *ctx,
  * On parse failure in path 3, the original src_cmd is copied through
  * unchanged (the line was already invalid at commit time).
  * Returns 1 on success, 0 if the flat buffer overflowed (caller should
- * return immediately). */
+ * return immediately). Single-exit so the PROF_FLATTEN_REPARSE probe is
+ * one begin/accum_end pair spanning the whole reparse. */
 static int flatten_reparse_line(FlattenContext *ctx,
                                 const GLCmd *src_cmd, int i,
                                 ExprVar *vars, int nv,
@@ -379,7 +381,9 @@ static int flatten_reparse_line(FlattenContext *ctx,
     };
     const char *text = flatten_src_text(ctx->text, i);
     ReplParsedLine tmp_pl;
+    int rv = 1;
 
+    prof_begin(PROF_FLATTEN_REPARSE);
     if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
         GLCmd tmp = tmp_pl.cmd;
         if (has_local_vars)
@@ -390,16 +394,123 @@ static int flatten_reparse_line(FlattenContext *ctx,
             tmp.has_vars = 0;
             tmp.is_auto = src_cmd->is_auto;
         }
-        return flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
-                                  root_call_src_cmd_idx, func_scope_mask,
-                                  has_local_vars ? vars : NULL,
-                                  has_local_vars ? nv : 0);
+        rv = flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
+                                root_call_src_cmd_idx, func_scope_mask,
+                                has_local_vars ? vars : NULL,
+                                has_local_vars ? nv : 0);
+    } else if (!has_local_vars && !src_cmd->has_vars) {
+        rv = flatten_append_cmd(ctx, src_cmd, i, call_src_cmd_idx,
+                                root_call_src_cmd_idx, func_scope_mask,
+                                NULL, 0);
     }
-    if (!has_local_vars && !src_cmd->has_vars)
-        return flatten_append_cmd(ctx, src_cmd, i, call_src_cmd_idx,
-                                  root_call_src_cmd_idx, func_scope_mask,
-                                  NULL, 0);
-    return 1;
+    prof_accum_end(PROF_FLATTEN_REPARSE);
+    return rv;
+}
+
+/* CMD_VAR_ASSIGN: re-evaluate the RHS against current bindings, update the
+ * predefined-var slot, and append the resolved assignment. Returns 1 on
+ * success (caller advances), 0 if the flat buffer overflowed (caller aborts).
+ * Extracted out of flatten_range so the PROF_FLATTEN_ASSIGN probe is one
+ * begin/accum_end pair per call and flatten_range stays under its size cap. */
+static int flatten_var_assign(FlattenContext *ctx, const GLCmd *src_cmd, int i,
+                              ExprVar *vars, int nv, int call_src_cmd_idx,
+                              int root_call_src_cmd_idx,
+                              unsigned int func_scope_mask) {
+    prof_begin(PROF_FLATTEN_VAR_ASSIGN);
+    int rv = 1;
+    int var_idx = src_cmd->var_idx; /* predef var slot */
+    float value = src_cmd->args[0];
+    char rhs[MAX_LINE_LEN] = "";
+    int local_rhs_vars = 0;
+    const char *src_text = flatten_src_text(ctx->text, i);
+
+    if (repl_extract_assignment_parts(src_text, NULL, 0,
+                                      rhs, sizeof(rhs)) && rhs[0]) {
+        char repl_rhs[MAX_LINE_LEN];
+        repl_eval_c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
+        ExprCtx expr_ctx = { repl_rhs, vars, nv, NULL, 0 };
+        value = repl_eval_expr(&expr_ctx);
+        if (vars && nv > 0)
+            local_rhs_vars = input_has_expr_vars(rhs, vars, nv);
+    }
+    if (var_idx >= 0 && var_idx < g_num_predef_vars)
+        g_predef_vars_mut[var_idx].value = value;
+    {
+        GLCmd tmp = *src_cmd;
+        tmp.args[0] = value;
+        tmp.has_vars = src_cmd->has_vars || local_rhs_vars;
+        if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
+                                root_call_src_cmd_idx, func_scope_mask,
+                                vars, nv))
+            rv = 0;
+    }
+    prof_accum_end(PROF_FLATTEN_VAR_ASSIGN);
+    return rv;
+}
+
+/* A[i] = expr scratch-array assignment: re-evaluate index + RHS, write the
+ * scratch cell, and append the resolved command. Returns 1 on success, 0 if
+ * the index is out of range or the flat buffer overflowed (caller aborts). */
+static int flatten_scratch_assign(FlattenContext *ctx, const GLCmd *src_cmd,
+                                  int i, ExprVar *vars, int nv,
+                                  int call_src_cmd_idx,
+                                  int root_call_src_cmd_idx,
+                                  unsigned int func_scope_mask) {
+    prof_begin(PROF_FLATTEN_SCRATCH_ASSIGN);
+    int rv = 1;
+    int array_idx = (int)src_cmd->args[0];
+    int elem_idx = (int)src_cmd->args[1];
+    float value = src_cmd->args[2];
+    char name[REPL_PREDEF_NAME_MAX] = "";
+    char index_expr[MAX_LINE_LEN] = "";
+    char rhs[MAX_LINE_LEN] = "";
+    int local_index_vars = 0;
+    int local_rhs_vars = 0;
+    const char *src_text = flatten_src_text(ctx->text, i);
+
+    if (repl_extract_assignment_target_parts(src_text,
+                                            name, sizeof(name),
+                                            index_expr, sizeof(index_expr),
+                                            rhs, sizeof(rhs))) {
+        char repl_index[MAX_LINE_LEN];
+        char repl_rhs[MAX_LINE_LEN];
+        repl_eval_c_expr_to_repl(index_expr, repl_index, sizeof(repl_index));
+        repl_eval_c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
+
+        ExprCtx index_ctx = { repl_index, vars, nv, NULL, 0 };
+        ExprCtx rhs_ctx = { repl_rhs, vars, nv, NULL, 0 };
+        elem_idx = (int)repl_eval_expr(&index_ctx);
+        value = repl_eval_expr(&rhs_ctx);
+        if (vars && nv > 0) {
+            local_index_vars = input_has_expr_vars(index_expr, vars, nv);
+            local_rhs_vars = input_has_expr_vars(rhs, vars, nv);
+        }
+    }
+
+    if (elem_idx < 0 || elem_idx >= REPL_SCRATCH_ARRAY_LEN) {
+        char msg[REPL_DIAG_TEXT_MAX];
+        snprintf(msg, sizeof(msg),
+                 "scratch array index out of range: %d", elem_idx);
+        flatten_fail(ctx, msg);
+        prof_accum_end(PROF_FLATTEN_SCRATCH_ASSIGN);
+        return 0;
+    }
+
+    repl_eval_scratch_set(array_idx, elem_idx, value);
+    {
+        GLCmd tmp = *src_cmd;
+        tmp.args[0] = (float)array_idx;
+        tmp.args[1] = (float)elem_idx;
+        tmp.args[2] = value;
+        tmp.num_args = 3;
+        tmp.has_vars = src_cmd->has_vars || local_index_vars || local_rhs_vars;
+        if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
+                                root_call_src_cmd_idx, func_scope_mask,
+                                vars, nv))
+            rv = 0;
+    }
+    prof_accum_end(PROF_FLATTEN_SCRATCH_ASSIGN);
+    return rv;
 }
 
 /* Recursively expand source_commands[start..end_idx) into the destination
@@ -475,87 +586,19 @@ static void flatten_range(FlattenContext *ctx,
 
         /* Variable assignments: update predefined var and pass through */
         if (src_cmd->type == CMD_VAR_ASSIGN) {
-            int var_idx = src_cmd->var_idx; /* predef var slot */
-            float value = src_cmd->args[0];
-            char rhs[MAX_LINE_LEN] = "";
-            int local_rhs_vars = 0;
-            const char *src_text = flatten_src_text(ctx->text, i);
-
-            if (repl_extract_assignment_parts(src_text, NULL, 0,
-                                              rhs, sizeof(rhs)) && rhs[0]) {
-                char repl_rhs[MAX_LINE_LEN];
-                repl_eval_c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
-                ExprCtx expr_ctx = { repl_rhs, vars, nv, NULL, 0 };
-                value = repl_eval_expr(&expr_ctx);
-                if (vars && nv > 0)
-                    local_rhs_vars = input_has_expr_vars(rhs, vars, nv);
-            }
-            if (var_idx >= 0 && var_idx < g_num_predef_vars)
-                g_predef_vars_mut[var_idx].value = value;
-            {
-                GLCmd tmp = *src_cmd;
-                tmp.args[0] = value;
-                tmp.has_vars = src_cmd->has_vars || local_rhs_vars;
-                if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
-                                        root_call_src_cmd_idx, func_scope_mask,
-                                        vars, nv))
-                    return;
-            }
+            if (!flatten_var_assign(ctx, src_cmd, i, vars, nv,
+                                    call_src_cmd_idx, root_call_src_cmd_idx,
+                                    func_scope_mask))
+                return;
             i++;
             continue;
         }
 
         if (src_cmd->type == CMD_SCRATCH_ASSIGN) {
-            int array_idx = (int)src_cmd->args[0];
-            int elem_idx = (int)src_cmd->args[1];
-            float value = src_cmd->args[2];
-            char name[REPL_PREDEF_NAME_MAX] = "";
-            char index_expr[MAX_LINE_LEN] = "";
-            char rhs[MAX_LINE_LEN] = "";
-            int local_index_vars = 0;
-            int local_rhs_vars = 0;
-            const char *src_text = flatten_src_text(ctx->text, i);
-
-            if (repl_extract_assignment_target_parts(src_text,
-                                                    name, sizeof(name),
-                                                    index_expr, sizeof(index_expr),
-                                                    rhs, sizeof(rhs))) {
-                char repl_index[MAX_LINE_LEN];
-                char repl_rhs[MAX_LINE_LEN];
-                repl_eval_c_expr_to_repl(index_expr, repl_index, sizeof(repl_index));
-                repl_eval_c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
-
-                ExprCtx index_ctx = { repl_index, vars, nv, NULL, 0 };
-                ExprCtx rhs_ctx = { repl_rhs, vars, nv, NULL, 0 };
-                elem_idx = (int)repl_eval_expr(&index_ctx);
-                value = repl_eval_expr(&rhs_ctx);
-                if (vars && nv > 0) {
-                    local_index_vars = input_has_expr_vars(index_expr, vars, nv);
-                    local_rhs_vars = input_has_expr_vars(rhs, vars, nv);
-                }
-            }
-
-            if (elem_idx < 0 || elem_idx >= REPL_SCRATCH_ARRAY_LEN) {
-                char msg[REPL_DIAG_TEXT_MAX];
-                snprintf(msg, sizeof(msg),
-                         "scratch array index out of range: %d", elem_idx);
-                flatten_fail(ctx, msg);
+            if (!flatten_scratch_assign(ctx, src_cmd, i, vars, nv,
+                                        call_src_cmd_idx, root_call_src_cmd_idx,
+                                        func_scope_mask))
                 return;
-            }
-
-            repl_eval_scratch_set(array_idx, elem_idx, value);
-            {
-                GLCmd tmp = *src_cmd;
-                tmp.args[0] = (float)array_idx;
-                tmp.args[1] = (float)elem_idx;
-                tmp.args[2] = value;
-                tmp.num_args = 3;
-                tmp.has_vars = src_cmd->has_vars || local_index_vars || local_rhs_vars;
-                if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
-                                        root_call_src_cmd_idx, func_scope_mask,
-                                        vars, nv))
-                    return;
-            }
             i++;
             continue;
         }
@@ -636,7 +679,19 @@ int repl_flatten_program(const ReplFlattenOptions *options,
             ctx.func_def_idx[fn] = k;
     }
 
+    /* Accumulate the eval-heavy leaf phases (GL-command reparse, scalar
+     * assignment, scratch-array assignment) across the whole recursive
+     * expansion (for-loops/calls re-enter flatten_range many times), then
+     * commit once so the profile panel shows per-flatten totals under the
+     * PROF_FLATTEN parent. The structural remainder (loop/if/call iteration)
+     * is the unattributed difference, as elsewhere in the panel. */
+    prof_accum_reset(PROF_FLATTEN_REPARSE);
+    prof_accum_reset(PROF_FLATTEN_VAR_ASSIGN);
+    prof_accum_reset(PROF_FLATTEN_SCRATCH_ASSIGN);
     flatten_range(&ctx, 0, ctx.source_count, NULL, 0, -1, -1, 0);
+    prof_accum_commit(PROF_FLATTEN_REPARSE);
+    prof_accum_commit(PROF_FLATTEN_VAR_ASSIGN);
+    prof_accum_commit(PROF_FLATTEN_SCRATCH_ASSIGN);
     if (ctx.abort)
         ctx.flat_count = 0;
 
