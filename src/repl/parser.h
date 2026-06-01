@@ -43,6 +43,13 @@ typedef struct {
     int strict_refs;
     char *err_buf;
     int   err_sz;
+    /* When set, the parser skips emitting the canonical source text into
+     * out->text (out->text is left as ""). Callers that only consume the
+     * parsed GLCmd — notably src/repl/flatten.c, which re-parses every
+     * command on each frame and discards the text — set this to avoid the
+     * per-arg %g/snprintf rendering and trailing-comment scan. Default 0
+     * (emit text) preserves the behavior for commit / reformat / export. */
+    int skip_text;
 } ReplParseContext;
 
 /* Parser output struct. On success, cmd holds the parsed command and text

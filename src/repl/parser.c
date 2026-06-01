@@ -1296,7 +1296,10 @@ int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,
                            const ReplParseContext *ctx) {
     if (!out) return 0;
     memset(out, 0, sizeof(*out));
-    if (!parse_command(line, &out->cmd, out->text, sizeof(out->text), ctx))
+    int skip_text = ctx && ctx->skip_text;
+    char *text_out = skip_text ? NULL : out->text;
+    int   text_sz  = skip_text ? 0 : (int)sizeof(out->text);
+    if (!parse_command(line, &out->cmd, text_out, text_sz, ctx))
         return 0;
 
     /* Reject commands that real GL rejects with GL_INVALID_OPERATION inside
@@ -1319,7 +1322,8 @@ int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,
      * commits, and verbatim C export — preserves the inline comment from
      * one place. Idempotent: a no-op when out->text already ends in a
      * comment (e.g. CMD_COMMENT lines, whose whole text is the comment). */
-    repl_append_trailing_comment(out->text, sizeof(out->text), line);
+    if (!skip_text)
+        repl_append_trailing_comment(out->text, sizeof(out->text), line);
     return 1;
 }
 
