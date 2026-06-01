@@ -947,6 +947,11 @@ app: gl-repl $(APP_ICNS) $(MACOS_PKG)/Info.plist ## Bundle gl-repl into gl-repl.
 	cp "$$(readlink gl-repl || echo gl-repl)" $(APP_BUNDLE)/Contents/MacOS/gl-repl
 	cp $(APP_ICNS) $(APP_BUNDLE)/Contents/Resources/gl-repl.icns
 	cp $(MACOS_PKG)/Info.plist $(APP_BUNDLE)/Contents/Info.plist
+	# Bundle a sample track so a Finder-launched .app has music (cwd is /
+	# there, so the binary finds it via <exe>/../Resources/assets). Users
+	# drop more into ~/Library/Application Support/gl-repl/Music.
+	mkdir -p $(APP_BUNDLE)/Contents/Resources/assets
+	cp assets/sample.mp3 $(APP_BUNDLE)/Contents/Resources/assets/
 	touch $(APP_BUNDLE)
 	@echo "Built $(APP_BUNDLE) — run: open $(APP_BUNDLE)"
 

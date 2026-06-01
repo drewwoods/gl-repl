@@ -12,7 +12,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/time.h>
+#include <unistd.h>
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#include <stdint.h>
+#endif
 
 /* Startup stall diagnostic. Each phase logs wall-clock seconds elapsed
  * since main() started so a slow phase (e.g. ma_engine_init opening the
@@ -46,7 +52,14 @@ static void init_trace_detail(const char *phase) {
 /* Music assets live here. Relative to gl-repl's working directory
  * on native, and to the Emscripten virtual FS mount point set up by
  * --preload-file in emscripten/build.sh. Any *.mp3 files dropped into
- * this folder are picked up in filename order as a playlist. */
+ * this folder are picked up in filename order as a playlist.
+ *
+ * The playlist is built from three sources, in order (see
+ * build_mp3_playlist): this working-directory "assets" (dev + CLI),
+ * the copy bundled beside the executable in a macOS .app
+ * (<exe>/../Resources/assets — where `make app` puts sample.mp3), and
+ * a per-user music folder (user_music_dir) the user can drop more
+ * tracks into. */
 #ifndef AUDIO_ASSETS_DIR
 #define AUDIO_ASSETS_DIR "assets"
 #endif
@@ -83,30 +96,116 @@ static int cmp_mp3_path(const void *a, const void *b) {
     return strcmp((const char *)a, (const char *)b);
 }
 
-/* Scans AUDIO_ASSETS_DIR for *.mp3 files, sorts them by filename,
- * and writes "<dir>/<name>" into out_paths[]. Returns the number of
- * paths written, or 0 on error / empty / missing directory. */
-static int scan_mp3_playlist(char out_paths[][AUDIO_MUSIC_MAX_LEN],
-                              int max_paths) {
-    DIR *d = opendir(AUDIO_ASSETS_DIR);
-    if (!d) return 0;
+/* Scans one directory for *.mp3 files, appending "<dir>/<name>" into
+ * out_paths[] starting at index `start`, and sorts just the slice it
+ * added (so each music source stays in filename order). Returns the
+ * new count. A missing/unreadable dir is a no-op (returns `start`). */
+static int scan_dir_into(const char *dir,
+                         char out_paths[][AUDIO_MUSIC_MAX_LEN],
+                         int start, int max_paths) {
+    DIR *d = opendir(dir);
+    if (!d) return start;
 
-    int count = 0;
+    int count = start;
     struct dirent *ent;
     while ((ent = readdir(d)) != NULL && count < max_paths) {
         const char *name = ent->d_name;
         if (name[0] == '.') continue;
         if (!has_mp3_ext(name)) continue;
-        snprintf(out_paths[count], AUDIO_MUSIC_MAX_LEN, "%s/%s",
-                 AUDIO_ASSETS_DIR, name);
+        snprintf(out_paths[count], AUDIO_MUSIC_MAX_LEN, "%s/%s", dir, name);
         count++;
     }
     closedir(d);
 
-    if (count > 1) {
-        qsort(out_paths, (size_t)count, sizeof(out_paths[0]), cmp_mp3_path);
+    if (count - start > 1) {
+        qsort(out_paths[start], (size_t)(count - start),
+              sizeof(out_paths[0]), cmp_mp3_path);
     }
     return count;
+}
+
+/* Directory holding the running executable, into buf. Lets us find
+ * assets bundled beside it in a macOS .app (<exe>/../Resources/...).
+ * Returns 1 on success, 0 if the path can't be resolved. */
+static int executable_dir(char *buf, size_t buflen) {
+#if defined(__APPLE__)
+    uint32_t sz = (uint32_t)buflen;
+    if (_NSGetExecutablePath(buf, &sz) != 0) return 0;
+#elif defined(__linux__)
+    ssize_t k = readlink("/proc/self/exe", buf, buflen - 1);
+    if (k <= 0) return 0;
+    buf[k] = '\0';
+#else
+    (void)buf; (void)buflen;
+    return 0;
+#endif
+    char *slash = strrchr(buf, '/');
+    if (!slash) return 0;
+    *slash = '\0';                 /* strip the executable filename */
+    return 1;
+}
+
+/* Per-user "drop more music here" folder. macOS uses Application
+ * Support; elsewhere the XDG data home (or ~/.local/share). Fills buf
+ * and returns 1, or 0 if no home directory is known. */
+static int user_music_dir(char *buf, size_t buflen) {
+    const char *home = getenv("HOME");
+#if defined(__APPLE__)
+    if (!home || !home[0]) return 0;
+    snprintf(buf, buflen,
+             "%s/Library/Application Support/gl-repl/Music", home);
+#else
+    const char *xdg = getenv("XDG_DATA_HOME");
+    if (xdg && xdg[0]) {
+        snprintf(buf, buflen, "%s/gl-repl/music", xdg);
+    } else {
+        if (!home || !home[0]) return 0;
+        snprintf(buf, buflen, "%s/.local/share/gl-repl/music", home);
+    }
+#endif
+    return 1;
+}
+
+/* mkdir -p. Returns 1 only when the leaf directory was freshly created
+ * by this call (so the caller can announce it once), 0 otherwise. */
+static int ensure_dir(const char *path) {
+    char tmp[AUDIO_MUSIC_MAX_LEN];
+    snprintf(tmp, sizeof(tmp), "%s", path);
+    for (char *p = tmp + 1; *p; p++) {
+        if (*p == '/') {
+            *p = '\0';
+            mkdir(tmp, 0755);      /* intermediate; ignore EEXIST */
+            *p = '/';
+        }
+    }
+    return mkdir(tmp, 0755) == 0;
+}
+
+/* Builds the playlist from every candidate music source in priority
+ * order: the working-directory assets/ (dev + CLI), the bundled assets
+ * beside the executable (macOS .app), then the per-user music folder
+ * (created on first run so the user has somewhere to drop tracks).
+ * Returns the total number of paths written. */
+static int build_mp3_playlist(char out_paths[][AUDIO_MUSIC_MAX_LEN],
+                              int max_paths) {
+    int n = scan_dir_into(AUDIO_ASSETS_DIR, out_paths, 0, max_paths);
+
+    char exedir[AUDIO_MUSIC_MAX_LEN];
+    if (executable_dir(exedir, sizeof(exedir))) {
+        char bundled[AUDIO_MUSIC_MAX_LEN];
+        snprintf(bundled, sizeof(bundled), "%s/../Resources/%s",
+                 exedir, AUDIO_ASSETS_DIR);
+        n = scan_dir_into(bundled, out_paths, n, max_paths);
+    }
+
+    char udir[AUDIO_MUSIC_MAX_LEN];
+    if (user_music_dir(udir, sizeof(udir))) {
+        if (ensure_dir(udir)) {
+            fprintf(stderr, "repl_audio: add more music in %s\n", udir);
+        }
+        n = scan_dir_into(udir, out_paths, n, max_paths);
+    }
+    return n;
 }
 
 static void print_usage(const char *prog) {
@@ -400,9 +499,10 @@ int main(int argc, char **argv) {
         glr_audio_set_state_file(AUDIO_STATE_FILE);
         static char music_paths[AUDIO_MUSIC_MAX_PATHS]
                                [AUDIO_MUSIC_MAX_LEN];
-        int n = scan_mp3_playlist(music_paths, AUDIO_MUSIC_MAX_PATHS);
-        /* opendir/readdir on assets/. Cheap when the dir is local;
-         * worth timing when the working directory lives on iCloud. */
+        int n = build_mp3_playlist(music_paths, AUDIO_MUSIC_MAX_PATHS);
+        /* opendir/readdir over the candidate music dirs. Cheap when
+         * local; worth timing when the working directory lives on
+         * iCloud. */
         if (g_detailed_prof) {
             char buf[64];
             snprintf(buf, sizeof(buf), "playlist scan done (%d tracks)", n);
