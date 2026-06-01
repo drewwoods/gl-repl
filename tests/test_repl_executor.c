@@ -676,8 +676,59 @@ static void test_light_indicator_tracks_program(void) {
                 light_enabled_by_id(rs.lights, GL_LIGHT0) == 0);
 }
 
+/* The .ply export pass (encode_feedback_normals) must, vs. a normal live
+ * render: (1) suppress the program's glEnable(GL_LIGHTING)/glEnable(GL_CULL_FACE)
+ * so feedback captures the raw glColor material color and all faces, and
+ * (2) emit a per-vertex glTexCoord3f world normal plus glPassThrough markers
+ * bracketing the begin/end block. This is the regression guard for the bug
+ * where a lit scene exported shaded (non-constant) colors. Stub-mode, so it
+ * checks the call contract via gl_stub_counts (real feedback needs a display). */
+static void test_export_normal_encoding(void) {
+    printf("test_export_normal_encoding\n");
+    repl_executor_init_resources();
+
+    GLCmd cmds[8];
+    memset(cmds, 0, sizeof(cmds));
+    int n = 0;
+    cmds[n].type = CMD_ENABLE;   cmds[n].valid = 1; cmds[n].num_args = 1; cmds[n].args[0] = GL_LIGHTING;  n++;
+    cmds[n].type = CMD_ENABLE;   cmds[n].valid = 1; cmds[n].num_args = 1; cmds[n].args[0] = GL_CULL_FACE; n++;
+    cmds[n].type = CMD_BEGIN;    cmds[n].valid = 1; cmds[n].num_args = 1; cmds[n].args[0] = GL_TRIANGLES; n++;
+    cmds[n].type = CMD_NORMAL3F; cmds[n].valid = 1; cmds[n].num_args = 3; cmds[n].args[2] = 1.0f; n++;
+    cmds[n].type = CMD_VERTEX3F; cmds[n].valid = 1; cmds[n].num_args = 3; n++;
+    cmds[n].type = CMD_VERTEX3F; cmds[n].valid = 1; cmds[n].num_args = 3; cmds[n].args[0] = 1.0f; n++;
+    cmds[n].type = CMD_VERTEX3F; cmds[n].valid = 1; cmds[n].num_args = 3; cmds[n].args[1] = 1.0f; n++;
+    cmds[n].type = CMD_END;      cmds[n].valid = 1; n++;
+
+    ReplExecutionOptions opts = {0};
+    opts.program.cmds = cmds;
+    opts.program.cmd_count = n;
+    opts.flat_cmd_count = n;
+
+    /* Live render: the program's two enables fire; no encoding emitted. */
+    gl_stub_counts_reset();
+    opts.encode_feedback_normals = 0;
+    repl_execute_program(&opts);
+    ASSERT_TRUE("live: program glEnable(lighting,cull) both fire",
+                gl_stub_counts[GL_STUB_glEnable] == 2);
+    ASSERT_TRUE("live: no normal texcoords", gl_stub_counts[GL_STUB_glTexCoord3f] == 0);
+    ASSERT_TRUE("live: no passthrough markers", gl_stub_counts[GL_STUB_glPassThrough] == 0);
+
+    /* Export: lighting+cull enables suppressed (raw color + all faces); each
+     * vertex gets a texcoord normal; begin/end bracketed by 2 markers. */
+    gl_stub_counts_reset();
+    opts.encode_feedback_normals = 1;
+    repl_execute_program(&opts);
+    ASSERT_TRUE("export: lighting+cull enables SUPPRESSED",
+                gl_stub_counts[GL_STUB_glEnable] == 0);
+    ASSERT_TRUE("export: 3 vertices get a texcoord normal",
+                gl_stub_counts[GL_STUB_glTexCoord3f] == 3);
+    ASSERT_TRUE("export: begin/end bracketed by 2 passthrough markers",
+                gl_stub_counts[GL_STUB_glPassThrough] == 2);
+}
+
 int main(void) {
     test_tess_callbacks();
+    test_export_normal_encoding();
     test_light_indicator_tracks_program();
     test_fade_context();
     test_predef_edge_cases();
