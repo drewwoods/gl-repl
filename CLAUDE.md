@@ -44,6 +44,7 @@ make glut            # Build with system GLUT (macOS Apple framework fallback)
 make test            # Build and run all tests (debug: ASan + UBSan)
 make check-c99       # C99 ratchet (sample + demos + bench)
 make freeglut-clean  # Drop the vendored freeglut CMake build (forces a rebuild)
+make app             # (macOS) Bundle gl-repl.app with icon + sample.mp3
 make clean           # Remove binaries
 ```
 
@@ -66,6 +67,28 @@ Re-pin the vendored version with `scripts/vendor-freeglut.sh [<ref>]` (default
 `master`; the resolved SHA is recorded in `third_party/freeglut/VENDORED.txt`),
 then `make freeglut-clean`. Licenses for freeglut and miniaudio are acknowledged
 in `THIRD_PARTY_LICENSES.md`.
+
+### macOS app bundle (`make app`)
+
+`make app` packages the binary into `gl-repl.app` so the Dock/Finder show
+a real icon instead of the launching terminal's, and so a Finder launch
+has music. It assembles `Contents/{MacOS/gl-repl, Resources/, Info.plist}`:
+
+- **Icon** — `APP_ICON_SVG` (default `packaging/macos/gl-repl-soft-cube.svg`)
+  is rasterized via `rsvg-convert` (needs `brew install librsvg`) into an
+  `.iconset` and packed with `iconutil` into `gl-repl.icns`. Source SVGs +
+  their generators live in `packaging/macos/` (`gen_soft_cube.py` →
+  `make icon-cube` / `icon-cube-strong`; `gen_retro_a.py` → `make
+  icon-regen`). Swap icons by repointing `APP_ICON_SVG`.
+- **Music** — copies `assets/sample.mp3` into `Contents/Resources/assets/`.
+  The binary finds it via source 2 above (`<exe>/../Resources/assets`),
+  so the bundle ships with a track even though the Finder cwd is `/`. Only
+  `sample.mp3` is bundled (small download; avoids shipping the full
+  playlist); the user folder (source 3) is for adding more.
+
+Build products (`gl-repl.app/`, `gl-repl.icns`, `gl-repl.iconset/`) are
+gitignored; the committed `.svg`s are the source of truth. Pure packaging
+— no source changes — so the `-std=c99` / Linux build is untouched.
 
 The test targets (`test`, `test-detailed`, `test-stubs`, `test-full`)
 default to `BUILD=debug`, which compiles with **AddressSanitizer +
@@ -188,6 +211,7 @@ compatibility wrappers.
 ./gl-repl --noaccum        # Disable accumulation buffer AA
 ./gl-repl --dump-code      # Print loaded buffer to stdout
 ./gl-repl --no-audio       # Skip audio init entirely (isolates startup stalls)
+./gl-repl --assets ~/Music/glr  # Scan this dir for *.mp3 instead of ./assets (also GLR_ASSETS_DIR)
 ./gl-repl --detailed-prof  # Add fine-grained init-trace phases (default off)
 ./gl-repl --example torus  # Start on a built-in example (name, case-insensitive, or 0-based index)
 ./gl-repl --list-examples  # Print the built-in examples and exit
@@ -196,7 +220,41 @@ compatibility wrappers.
 GLR_NO_POINT_PARAMETER=1 ./gl-repl   # Force the no-glPointParameterfv path
 GLR_AUDIO_HITCH_MS=10 ./gl-repl      # Lower the audio-worker hitch threshold
 GLR_DETAILED_PROF=1 ./gl-repl        # Same as --detailed-prof, via env
+GLR_ASSETS_DIR=/path/to/music ./gl-repl   # Same as --assets, via env (--assets wins)
 ```
+
+### Music assets & playlist sources
+
+Music is `*.mp3` files discovered at startup; they play in filename
+order. `build_mp3_playlist()` in `gl_repl.c` scans **three sources** and
+concatenates them (each sorted independently, so each source keeps
+filename order):
+
+1. **Primary assets dir** — `./assets` relative to the working directory
+   by default (the dev/CLI case). Overridden by `--assets <dir>` (highest
+   precedence) or the `GLR_ASSETS_DIR` env var. `--assets` beats the env
+   var beats the default.
+2. **Bundled assets beside the executable** — `<exe>/../Resources/assets`,
+   resolved via `_NSGetExecutablePath` (macOS) / `/proc/self/exe`
+   (Linux). This is the macOS `.app` case: `make app` copies
+   `assets/sample.mp3` into `Contents/Resources/assets/`, so a
+   Finder-launched bundle (whose cwd is `/`, where source 1 finds
+   nothing) still has music. The bundle subfolder name is fixed
+   (`AUDIO_ASSETS_DIR`); `--assets` does not change it.
+3. **Per-user music folder** — `user_music_dir()`:
+   `~/Library/Application Support/gl-repl/Music` on macOS,
+   `$XDG_DATA_HOME/gl-repl/music` (or `~/.local/share/gl-repl/music`)
+   elsewhere. Created on first run (`ensure_dir`) and announced once on
+   stderr (`repl_audio: add more music in <dir>`) so users have a place
+   to drop their own tracks.
+
+If all three turn up zero `.mp3`s, it falls back to the single-file
+`AUDIO_DEFAULT_MUSIC` (`assets/song.mp3`). `--no-audio` skips audio
+entirely. Adding a new candidate source or changing the per-user path is
+a `gl_repl.c` change (all of this lives in that one TU's statics); the
+platform branches in `executable_dir` / `user_music_dir` are
+`#ifdef`-guarded and **must stay C99 / portable** (see *Windows port*
+plan for the Windows branches).
 
 ### Startup & audio-worker diagnostics
 

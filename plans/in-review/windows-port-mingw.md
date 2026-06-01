@@ -109,7 +109,9 @@ without a separate decision).
   for Phase 1. (Only an MSVC port would need a `FindFirstFile` wrapper — out of
   scope.)
 - **`mkdir(dir, 0755)`** — 2-arg POSIX form at `src/repl/scenes.c:~639,733,770,
-  1021`. Windows `_mkdir` is 1-arg. Add, near the includes:
+  1021` **and now `gl_repl.c` `ensure_dir()`** (the per-user music folder —
+  see 1F). Windows `_mkdir` is 1-arg. Add, near the includes of *each* TU that
+  calls it (or in a shared `os_compat.h`):
   ```c
   #if defined(_WIN32)
   #include <direct.h>
@@ -128,8 +130,56 @@ at runtime). No source changes expected. Confirm `MINIAUDIO_IMPLEMENTATION` in
 `src/app/glr_audio.c` compiles under MinGW and that `-lwinmm` (and whatever else
 miniaudio's Windows path references) is on the link line.
 
+### 1F. Audio asset / music-folder discovery — Windows arms (`gl_repl.c`)
+
+The playlist build (`build_mp3_playlist`, with `scan_dir_into` /
+`executable_dir` / `user_music_dir` / `ensure_dir`) gained two
+host-specific helpers that currently have only `__APPLE__` / `__linux__`
+arms and fall through to a no-op (`#else return 0`) on Windows. Add the
+`_WIN32` arms — without them the app still runs and audio still works via
+the cwd-relative source and `--assets`, but the bundled-beside-exe and
+per-user-folder sources silently do nothing on Windows.
+
+- **`executable_dir()`** (the mac `_NSGetExecutablePath` / Linux
+  `/proc/self/exe` ladder): add
+  ```c
+  #elif defined(_WIN32)
+      if (GetModuleFileNameA(NULL, buf, (DWORD)buflen) == 0) return 0;
+  ```
+  Then the filename-strip must also cut a backslash, since
+  `GetModuleFileNameA` returns `\`-separated paths — strip the last `/`
+  **or** `\` (the current code only does `strrchr(buf, '/')`).
+- **Bundled-assets path is mac-`.app`-shaped.** `build_mp3_playlist`
+  forms `<exe>/../Resources/assets` (the bundle layout). Windows has no
+  `.app`; the natural standalone layout is `assets/` **beside the exe**
+  (see Phase 4). Make source 2 platform-aware: `../Resources/assets` on
+  `__APPLE__`, `assets` (i.e. `<exedir>/assets`) on Windows (and this
+  also helps a relocated Linux install). With this in place, a
+  double-clicked `gl-repl.exe` finds its shipped `assets/` regardless of
+  the launch cwd — strictly better than the cwd-only assumption in 4B.
+- **`user_music_dir()`** (`~/Library/Application Support/...` on mac, XDG
+  / `$HOME` otherwise): native-Windows console has no `HOME`/`XDG_*`, so
+  the current `#else` returns 0. Add:
+  ```c
+  #elif defined(_WIN32)
+      const char *appdata = getenv("APPDATA");      /* %APPDATA% */
+      if (!appdata || !appdata[0]) return 0;
+      snprintf(buf, buflen, "%s/gl-repl/Music", appdata);
+  ```
+  Build it with `/` separators (Windows APIs and `_mkdir` accept them) so
+  `ensure_dir`'s `/`-splitting `mkdir -p` loop works unchanged; otherwise
+  it would also need to split on `\`.
+- **`ensure_dir()`** uses 2-arg `mkdir(path, 0755)` — covered by the 1D
+  `_mkdir` shim, which must be in scope in `gl_repl.c` (add the shim
+  there too, or via the shared `os_compat.h`).
+
+`--assets <dir>` / `GLR_ASSETS_DIR` are pure string + `opendir`, so they
+work on MinGW with **no Windows-specific change** — the recommended
+override for Windows users who keep music elsewhere.
+
 **Phase 1 exit:** `make gl-repl` produces `gl-repl.exe` under MinGW-w64; it
-launches, shows a window, accepts commands, plays audio, exports PLY.
+launches, shows a window, accepts commands, plays audio (cwd `assets/`,
+`<exe>/assets`, or the `%APPDATA%\gl-repl\Music` folder), exports PLY.
 
 ---
 
@@ -269,9 +319,16 @@ Requirements for a standalone Windows binary:
 - **Optional polish:** an app icon + version info via a `.rc` resource compiled
   with `windres` into an object linked alongside (gated on the Windows release
   branch only). Lets the exe show an icon and a Properties→Details version.
-- **Bundle assets.** The audio playlist scans `assets/` (`AUDIO_ASSETS_DIR`,
-  `gl_repl.c:~91`) relative to the working directory. Ship `assets/` next to the
-  exe in the zip, mirroring how the macOS bundle carries its resources.
+- **Bundle assets.** The audio playlist now scans three sources
+  (`build_mp3_playlist`, `gl_repl.c`): the cwd `assets/`, an exe-relative
+  copy, and the per-user folder (see 1F). Ship `assets/` (with at least
+  `sample.mp3`, as the macOS bundle does) **next to the exe** in the zip.
+  Once 1F's Windows exe-relative arm resolves `<exe>/assets`, a
+  double-click finds the music regardless of cwd; until then it relies on
+  Explorer launching with cwd = the exe's folder (true for double-click,
+  but `--assets`/`GLR_ASSETS_DIR` is the robust override). The
+  `%APPDATA%\gl-repl\Music` folder (1F) is where end users add their own
+  tracks — document it in the zip's README.
 - **Deliverable.** A zip (`gl-repl-win64.zip`) containing `gl-repl.exe` +
   `assets/` + a short README. No installer needed for "present the binary"; an
   installer (NSIS/Inno) is a later option if desired.
@@ -306,8 +363,9 @@ same.
 | 1A Makefile Windows branch | not started |
 | 1B `gl_includes.h` windows.h ordering | not started |
 | 1C Time-API `_WIN32` arms (4 sites) | not started |
-| 1D Filesystem shims (mkdir/NAME_MAX) | not started |
+| 1D Filesystem shims (mkdir/NAME_MAX; mkdir now also in gl_repl.c) | not started |
 | 1E Audio verify | not started |
+| 1F Audio discovery `_WIN32` arms (executable_dir / user_music_dir / exe-relative assets) | not started |
 | 2A memprof psapi path | not started |
 | 2B Test-suite Windows arms | not started |
 | 2C C99 ratchet on MinGW | not started |
