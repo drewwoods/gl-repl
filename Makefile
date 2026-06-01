@@ -177,6 +177,7 @@ endif
 .PHONY: \
 	all \
 	app \
+	icon-regen \
 	audit-editor-ownership \
 	bench \
 	bench-csv \
@@ -905,6 +906,12 @@ APP_ICONSET = $(MACOS_PKG)/gl-repl.iconset
 # Icon source SVG. Alternatives in packaging/macos/: gl-repl.svg (cube),
 # gl-repl-retro-A.svg (chrome synthwave), -B (gold), -C/-C2 (silver OpenGL), -D (cube+wordmark).
 APP_ICON_SVG = $(MACOS_PKG)/gl-repl-retro-A.svg
+
+# Regenerate the perspective chrome wordmark SVG from its parametric generator.
+# The committed .svg is the source of truth; this just makes it reproducible.
+# Tune the look by passing args, e.g.: python3 packaging/macos/gen_retro_a.py 430
+icon-regen: ## Regenerate gl-repl-retro-A.svg from gen_retro_a.py (then `make app`).
+	python3 $(MACOS_PKG)/gen_retro_a.py
 
 $(APP_ICNS): $(APP_ICON_SVG)
 	@command -v rsvg-convert >/dev/null 2>&1 || { echo "need rsvg-convert: brew install librsvg" >&2; exit 1; }

@@ -32,3 +32,8 @@ callgrind.out*
 *.DS_Store
 my_scene.c
 quit_recovery.c
+
+# macOS app-bundle build products (regenerate via `make app`)
+/gl-repl.app/
+/packaging/macos/gl-repl.icns
+/packaging/macos/gl-repl.iconset/
