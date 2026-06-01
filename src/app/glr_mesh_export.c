@@ -108,7 +108,7 @@ static int capture_feedback(float *buf, int cap_floats, int flat_count) {
     return written;
 }
 
-int glr_export_mesh_ply(const char *path) {
+int glr_export_mesh_ply(const char *path, int srgb_decode) {
     if (!path) {
         repl_set_status_error("No .ply path");
         return -1;
@@ -169,6 +169,7 @@ int glr_export_mesh_ply(const char *path) {
     };
     MeshPlyOptions opts = {
         .weld = 1, .weld_eps = 1e-3f, .smooth_normals = 1, .triangulate = 1,
+        .srgb_decode = srgb_decode,
     };
     int ntris = mesh_ply_write(fp, buf, written, &cap, &opts);
     int close_err = (fclose(fp) != 0);

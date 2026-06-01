@@ -443,7 +443,7 @@ int glr_ctrl_router_handle_scene_cycle_special(int key) {
 
 int glr_ctrl_router_handle_export_special(int key) {
     if (keymap_event_is(key, GLR_EXPORT_PLY)) {
-        glr_export_mesh_ply(repl_active_scene_export_path("ply"));
+        glr_export_mesh_ply(repl_active_scene_export_path("ply"), 0);
         return 1;
     }
     return 0;

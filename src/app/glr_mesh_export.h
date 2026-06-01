@@ -14,8 +14,12 @@
  * Must be called on the GLUT thread with a live GL context (feedback needs a
  * context). Returns the triangle count (>= 0) on success, or < 0 on error
  * (empty scene, feedback buffer cap exceeded, file open / write failure).
- * Sets the REPL status message in every case. See
+ * Sets the REPL status message in every case.
+ *
+ * When `srgb_decode` is non-zero, vertex colors are decoded from sRGB to
+ * linear light before being written (see MeshPlyOptions.srgb_decode) — for
+ * color-managed viewers that would otherwise render them washed out. See
  * plans/.../ply-feedback-export.md. */
-int glr_export_mesh_ply(const char *path);
+int glr_export_mesh_ply(const char *path, int srgb_decode);
 
 #endif /* GLR_MESH_EXPORT_H */

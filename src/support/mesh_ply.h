@@ -71,6 +71,16 @@ typedef struct {
                               applied when both weld and smooth_normals are set;
                               otherwise every face keeps its own (flat) verts. */
     int   triangulate;     /* reserved; n-gons are always fan-triangulated */
+    int   srgb_decode;     /* 1: treat the captured RGB as display-referred
+                              (sRGB-encoded) and decode it to linear light
+                              before quantizing to 8-bit. The REPL has no color
+                              management, so glColor values are effectively
+                              sRGB-encoded; color-managed viewers (Blender,
+                              real-time engines) that read PLY vertex colors as
+                              linear otherwise render them washed out. Applies
+                              to R/G/B only; alpha stays linear. Default 0 =
+                              raw pass-through (matches sRGB-naive viewers and
+                              the on-screen look). */
 } MeshPlyOptions;
 
 /* Parse feedback[0 .. float_count) and write an ASCII PLY mesh to `out`.
