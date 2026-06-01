@@ -1,5 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="gl-repl">
-  <!-- Garish early-90s 3D-WordArt alt icon. gl-repl.svg keeps the cube. -->
+  <!-- Garish early-90s 3D-WordArt icon: chrome "gl-repl" extruded in perspective
+       toward the grid's vanishing point. gl-repl.svg keeps the cube. -->
   <defs>
     <linearGradient id="rbg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0"   stop-color="#ff2db8" />
@@ -21,48 +22,59 @@
       <stop offset="1" stop-color="#00e5ff" stop-opacity="0.9" />
     </linearGradient>
     <filter id="rglow" x="-25%" y="-25%" width="150%" height="150%">
-      <feGaussianBlur stdDeviation="7" result="b" />
+      <feGaussianBlur stdDeviation="6" result="b" />
       <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
     </filter>
     <g id="word">
       <text x="512" y="0" text-anchor="middle"
             font-family="Futura, 'Helvetica Neue', Helvetica, sans-serif"
-            font-weight="700" font-size="258" letter-spacing="-10">gl-repl</text>
+            font-weight="700" font-size="244" letter-spacing="-8">gl-repl</text>
     </g>
     <clipPath id="round"><rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" /></clipPath>
   </defs>
+
   <rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" fill="url(#rbg)" />
   <rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" fill="url(#rsun)" />
+
   <g clip-path="url(#round)" stroke="url(#grid)" stroke-width="3" opacity="0.85">
     <line x1="0" y1="730" x2="1024" y2="730" /><line x1="0" y1="772" x2="1024" y2="772" />
     <line x1="0" y1="826" x2="1024" y2="826" /><line x1="0" y1="892" x2="1024" y2="892" />
     <line x1="0" y1="970" x2="1024" y2="970" />
-    <line x1="512" y1="712" x2="-260" y2="1024" /><line x1="512" y1="712" x2="40" y2="1024" />
-    <line x1="512" y1="712" x2="250" y2="1024" /><line x1="512" y1="712" x2="410" y2="1024" />
-    <line x1="512" y1="712" x2="512" y2="1024" /><line x1="512" y1="712" x2="614" y2="1024" />
-    <line x1="512" y1="712" x2="774" y2="1024" /><line x1="512" y1="712" x2="984" y2="1024" />
-    <line x1="512" y1="712" x2="1284" y2="1024" />
+    <line x1="512" y1="715" x2="-260" y2="1024" /><line x1="512" y1="715" x2="40" y2="1024" />
+    <line x1="512" y1="715" x2="250" y2="1024" /><line x1="512" y1="715" x2="410" y2="1024" />
+    <line x1="512" y1="715" x2="512" y2="1024" /><line x1="512" y1="715" x2="614" y2="1024" />
+    <line x1="512" y1="715" x2="774" y2="1024" /><line x1="512" y1="715" x2="984" y2="1024" />
+    <line x1="512" y1="715" x2="1284" y2="1024" />
   </g>
-  <g transform="translate(0 475) skewX(-11)" filter="url(#rglow)">
-    <use href="#word" transform="translate(52.0 64.0)" fill="#0a0118" />
-    <use href="#word" transform="translate(49.1 60.4)" fill="#100320" />
-    <use href="#word" transform="translate(46.2 56.9)" fill="#160429" />
-    <use href="#word" transform="translate(43.3 53.3)" fill="#1d0631" />
-    <use href="#word" transform="translate(40.4 49.8)" fill="#23083a" />
-    <use href="#word" transform="translate(37.6 46.2)" fill="#290942" />
-    <use href="#word" transform="translate(34.7 42.7)" fill="#2f0b4b" />
-    <use href="#word" transform="translate(31.8 39.1)" fill="#360d53" />
-    <use href="#word" transform="translate(28.9 35.6)" fill="#3c0e5c" />
-    <use href="#word" transform="translate(26.0 32.0)" fill="#421064" />
-    <use href="#word" transform="translate(23.1 28.4)" fill="#48126c" />
-    <use href="#word" transform="translate(20.2 24.9)" fill="#4e1375" />
-    <use href="#word" transform="translate(17.3 21.3)" fill="#55157d" />
-    <use href="#word" transform="translate(14.4 17.8)" fill="#5b1786" />
-    <use href="#word" transform="translate(11.6 14.2)" fill="#61188e" />
-    <use href="#word" transform="translate(8.7 10.7)" fill="#671a97" />
-    <use href="#word" transform="translate(5.8 7.1)" fill="#6e1c9f" />
-    <use href="#word" transform="translate(2.9 3.6)" fill="#741da8" />
-    <use href="#word" transform="translate(0 0)" fill="none" stroke="#0a0118" stroke-width="11" stroke-linejoin="round" />
-    <use href="#word" transform="translate(0 0)" fill="url(#face)" stroke="#16264d" stroke-width="2.5" stroke-linejoin="round" />
+
+  <g filter="url(#rglow)">
+      <use href="#word" transform="translate(512 300.0) scale(0.45) translate(-512 -300.0) translate(0 624.0)" fill="#0a0118" />
+      <use href="#word" transform="translate(512 300.0) scale(0.4712) translate(-512 -300.0) translate(0 624.0)" fill="#0e021e" />
+      <use href="#word" transform="translate(512 300.0) scale(0.4923) translate(-512 -300.0) translate(0 624.0)" fill="#130324" />
+      <use href="#word" transform="translate(512 300.0) scale(0.5135) translate(-512 -300.0) translate(0 624.0)" fill="#17042a" />
+      <use href="#word" transform="translate(512 300.0) scale(0.5346) translate(-512 -300.0) translate(0 624.0)" fill="#1b062f" />
+      <use href="#word" transform="translate(512 300.0) scale(0.5558) translate(-512 -300.0) translate(0 624.0)" fill="#200735" />
+      <use href="#word" transform="translate(512 300.0) scale(0.5769) translate(-512 -300.0) translate(0 624.0)" fill="#24083b" />
+      <use href="#word" transform="translate(512 300.0) scale(0.5981) translate(-512 -300.0) translate(0 624.0)" fill="#280941" />
+      <use href="#word" transform="translate(512 300.0) scale(0.6192) translate(-512 -300.0) translate(0 624.0)" fill="#2c0a47" />
+      <use href="#word" transform="translate(512 300.0) scale(0.6404) translate(-512 -300.0) translate(0 624.0)" fill="#310b4d" />
+      <use href="#word" transform="translate(512 300.0) scale(0.6615) translate(-512 -300.0) translate(0 624.0)" fill="#350d52" />
+      <use href="#word" transform="translate(512 300.0) scale(0.6827) translate(-512 -300.0) translate(0 624.0)" fill="#390e58" />
+      <use href="#word" transform="translate(512 300.0) scale(0.7038) translate(-512 -300.0) translate(0 624.0)" fill="#3e0f5e" />
+      <use href="#word" transform="translate(512 300.0) scale(0.725) translate(-512 -300.0) translate(0 624.0)" fill="#421064" />
+      <use href="#word" transform="translate(512 300.0) scale(0.7462) translate(-512 -300.0) translate(0 624.0)" fill="#46116a" />
+      <use href="#word" transform="translate(512 300.0) scale(0.7673) translate(-512 -300.0) translate(0 624.0)" fill="#4b1270" />
+      <use href="#word" transform="translate(512 300.0) scale(0.7885) translate(-512 -300.0) translate(0 624.0)" fill="#4f1376" />
+      <use href="#word" transform="translate(512 300.0) scale(0.8096) translate(-512 -300.0) translate(0 624.0)" fill="#53157b" />
+      <use href="#word" transform="translate(512 300.0) scale(0.8308) translate(-512 -300.0) translate(0 624.0)" fill="#581681" />
+      <use href="#word" transform="translate(512 300.0) scale(0.8519) translate(-512 -300.0) translate(0 624.0)" fill="#5c1787" />
+      <use href="#word" transform="translate(512 300.0) scale(0.8731) translate(-512 -300.0) translate(0 624.0)" fill="#60188d" />
+      <use href="#word" transform="translate(512 300.0) scale(0.8942) translate(-512 -300.0) translate(0 624.0)" fill="#641993" />
+      <use href="#word" transform="translate(512 300.0) scale(0.9154) translate(-512 -300.0) translate(0 624.0)" fill="#691a99" />
+      <use href="#word" transform="translate(512 300.0) scale(0.9365) translate(-512 -300.0) translate(0 624.0)" fill="#6d1c9e" />
+      <use href="#word" transform="translate(512 300.0) scale(0.9577) translate(-512 -300.0) translate(0 624.0)" fill="#711da4" />
+      <use href="#word" transform="translate(512 300.0) scale(0.9788) translate(-512 -300.0) translate(0 624.0)" fill="#761eaa" />
+    <use href="#word" transform="translate(0 624.0)" fill="none" stroke="#0a0118" stroke-width="11" stroke-linejoin="round" />
+    <use href="#word" transform="translate(0 624.0)" fill="url(#face)" stroke="#16264d" stroke-width="2.5" stroke-linejoin="round" />
   </g>
 </svg>
