@@ -67,7 +67,11 @@
 #undef glutBitmapHelvetica12
 #undef glutBitmapHelvetica18
 
-#include "../fg_internal.h"
+#ifdef FREEGLUT_GEOMETRY_STANDALONE
+#  include "../standalone/fg_glutshapes_shim.h"
+#else
+#  include "../fg_internal.h"
+#endif
 
 struct freeglutStrokeFont
 {

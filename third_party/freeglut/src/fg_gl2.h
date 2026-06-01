@@ -24,7 +24,11 @@
 #define  FG_GL2_H
 
 #include <GL/freeglut.h>
-#include "fg_internal.h"
+#ifdef FREEGLUT_GEOMETRY_STANDALONE
+#  include "standalone/fg_glutshapes_shim.h"
+#else
+#  include "fg_internal.h"
+#endif
 
 #ifdef GL_ES_VERSION_2_0
 /* Use existing functions on GLES 2.0 */

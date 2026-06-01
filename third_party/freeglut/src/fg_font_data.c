@@ -47,7 +47,11 @@
  */
 
 #include <GL/freeglut.h>
-#include "fg_internal.h"
+#ifdef FREEGLUT_GEOMETRY_STANDALONE
+#  include "standalone/fg_glutshapes_shim.h"
+#else
+#  include "fg_internal.h"
+#endif
 
 /*
  * The following bitmapped fonts are defined in this file:

@@ -23,7 +23,11 @@
 /* geometry rendering */
 
 #include <GL/freeglut.h>
-#include "fg_internal.h"
+#ifdef FREEGLUT_GEOMETRY_STANDALONE
+#  include "standalone/fg_glutshapes_shim.h"
+#else
+#  include "fg_internal.h"
+#endif
 #include "fg_gl2.h"
 #include <math.h>
 

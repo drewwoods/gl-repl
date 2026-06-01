@@ -7,11 +7,13 @@ reproduced (or pointed to) below; all are permissive.
 
 ## freeglut
 
-- **Upstream:** <https://github.com/freeglut/freeglut>
-- **Vendored at:** `third_party/freeglut/` (built as a static library on macOS,
-  Cocoa backend). See `third_party/freeglut/VENDORED.txt` for the exact pinned
-  commit; at time of writing it is
-  `463cef14281f41a8ae88a86590b64dba55b20846`.
+- **Upstream:** <https://github.com/freeglut/freeglut> (currently vendored from
+  a fork that adds the headless OSMesa backend; see `VENDORED.txt`).
+- **Vendored at:** `third_party/freeglut/` (built as a static library on macOS —
+  Cocoa backend by default, or the headless OSMesa backend under
+  `make ... FREEGLUT_OSMESA=1`). See `third_party/freeglut/VENDORED.txt` for the
+  exact pinned source + commit; at time of writing it is
+  `9f8d52b0859a53eb447ee9f361876efdc9ca330b`.
 - **License:** X-Consortium / MIT-style (the freeglut license).
 
 The full contributor list lives in `third_party/freeglut/AUTHORS` (current
