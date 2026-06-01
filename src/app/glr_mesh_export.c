@@ -65,6 +65,15 @@ static int capture_feedback(float *buf, int cap_floats, int flat_count) {
     glPushMatrix();
     glLoadIdentity();
 
+    /* Identity texture matrix: the executor encodes per-vertex world-space
+     * normals into the texcoord channel, and feedback returns texcoords
+     * transformed by the texture matrix — identity keeps them verbatim.
+     * (glPushAttrib does not save matrix stacks, so push/pop explicitly.) */
+    glMatrixMode(GL_TEXTURE);
+    glPushMatrix();
+    glLoadIdentity();
+    glMatrixMode(GL_MODELVIEW);
+
     glViewport(0, 0, MESH_EXPORT_VP, MESH_EXPORT_VP);
     glDepthRange(0.0, 1.0);
 
@@ -74,17 +83,23 @@ static int capture_feedback(float *buf, int cap_floats, int flat_count) {
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     glDisable(GL_CULL_FACE);
 
-    glFeedbackBuffer(cap_floats, GL_3D_COLOR, buf);
+    /* GL_3D_COLOR_TEXTURE records x y z + RGBA + 4 texcoords per vertex; the
+     * executor's encode pass stuffs the world-space normal into the texcoord
+     * (s, t, r), bracketed by glPassThrough markers (decision: out-of-band). */
+    glFeedbackBuffer(cap_floats, GL_3D_COLOR_TEXTURE, buf);
     glRenderMode(GL_FEEDBACK);
 
     repl_execute_program(&(ReplExecutionOptions){
-        .flat_cmd_count = flat_count,
-        .program        = repl_state_flat_program_view(),
-        .text           = source_document_view(),
+        .flat_cmd_count          = flat_count,
+        .program                 = repl_state_flat_program_view(),
+        .text                    = source_document_view(),
+        .encode_feedback_normals = 1,
     });
 
     int written = glRenderMode(GL_RENDER);
 
+    glMatrixMode(GL_TEXTURE);
+    glPopMatrix();
     glMatrixMode(GL_MODELVIEW);
     glPopMatrix();
     glMatrixMode(GL_PROJECTION);
@@ -150,6 +165,7 @@ int glr_export_mesh_ply(const char *path) {
         .ortho_r = MESH_EXPORT_ORTHO_R,
         .vp_x = 0, .vp_y = 0, .vp_w = MESH_EXPORT_VP, .vp_h = MESH_EXPORT_VP,
         .depth_near = 0.0f, .depth_far = 1.0f,
+        .floats_per_vertex = MESH_PLY_FLOATS_PER_VERTEX_TEX,  /* GL_3D_COLOR_TEXTURE */
     };
     MeshPlyOptions opts = {
         .weld = 1, .weld_eps = 1e-3f, .smooth_normals = 1, .triangulate = 1,

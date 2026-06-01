@@ -7,10 +7,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define FB_VFLOATS MESH_PLY_FLOATS_PER_VERTEX  /* 7: x y z r g b a */
-
-/* A triangle corner: world-space position + [0,1] RGBA color. */
-typedef struct { float x, y, z, r, g, b, a; } RawVert;
+/* A triangle corner: world-space position + [0,1] RGBA color, plus the
+ * optional authored WORLD-space normal recovered from the texcoord channel
+ * (has_authored == 0 means "synthesize the normal for this corner"). */
+typedef struct {
+    float x, y, z, r, g, b, a;
+    float anx, any, anz;
+    int   has_authored;
+} RawVert;
 typedef struct { float x, y, z; } Vec3;
 
 /* Weld key: position quantized to an integer grid + 8-bit color. Compared
@@ -27,8 +31,11 @@ static unsigned char to_u8(float c) {
     return (unsigned char)lroundf(c * 255.0f);
 }
 
-/* Invert one feedback vertex (window coords + color) to world space. */
-static RawVert invert_vertex(const MeshPlyCapture *cap, const float *v) {
+/* Invert one feedback vertex (window coords + color) to world space. When
+ * has_tex, also reads the encoded world-space normal from the texcoord
+ * (s, t, r) at v[7..9]; q (v[10]) is unused. Whether that normal is *used*
+ * (has_authored) is decided by the caller from the passthrough mode. */
+static RawVert invert_vertex(const MeshPlyCapture *cap, const float *v, int has_tex) {
     RawVert rv;
     float dz = cap->depth_far - cap->depth_near;
     float ndc_x = 2.0f * (v[0] - (float)cap->vp_x) / (float)cap->vp_w - 1.0f;
@@ -39,6 +46,10 @@ static RawVert invert_vertex(const MeshPlyCapture *cap, const float *v) {
     rv.y = ndc_y * cap->ortho_r;
     rv.z = -ndc_z * cap->ortho_r;  /* glOrtho maps world z -> -z/R */
     rv.r = v[3]; rv.g = v[4]; rv.b = v[5]; rv.a = v[6];
+    rv.anx = has_tex ? v[7] : 0.0f;
+    rv.any = has_tex ? v[8] : 0.0f;
+    rv.anz = has_tex ? v[9] : 0.0f;
+    rv.has_authored = 0;
     return rv;
 }
 
@@ -109,6 +120,7 @@ int mesh_ply_write(FILE *out, const float *feedback, int float_count,
 
     /* Output (welded or 1:1) vertices. */
     Vec3 *opos = NULL; unsigned char (*ocol)[4] = NULL; Vec3 *onrm = NULL;
+    Vec3 *oauth = NULL; int *oauth_n = NULL;  /* authored-normal sum + count per vert */
     WeldKey *okey = NULL;
     int *table = NULL;       /* open-addressing index map (vidx + 1; 0 = empty) */
     int *corner_vidx = NULL; /* corner -> output vertex index */
@@ -118,7 +130,18 @@ int mesh_ply_write(FILE *out, const float *feedback, int float_count,
 
     float eps = (opts->weld_eps > 0.0f) ? opts->weld_eps : 1e-4f;
 
-    /* --- Pass 1: parse the token stream, fan-triangulate polygons. ------- */
+    /* Feedback record stride: 7 (GL_3D_COLOR) or 11 (GL_3D_COLOR_TEXTURE, with
+     * the world-space normal encoded in the texcoord channel). */
+    int stride  = (cap->floats_per_vertex >= MESH_PLY_FLOATS_PER_VERTEX_TEX)
+                      ? MESH_PLY_FLOATS_PER_VERTEX_TEX : MESH_PLY_FLOATS_PER_VERTEX;
+    int has_tex = (stride >= MESH_PLY_FLOATS_PER_VERTEX_TEX);
+
+    /* --- Pass 1: parse the token stream, fan-triangulate polygons. -------
+     * normals_mode follows the out-of-band glPassThrough markers: when a
+     * NORMALS marker is in effect, the following polygons' texcoords are
+     * authored world-space normals; otherwise the normal is synthesized
+     * (solids, GLU tess, gaps). Defaults to synthesize until a marker says so. */
+    int normals_mode = 0;
     int i = 0;
     while (i < float_count) {
         int tok = token_at(feedback, i);
@@ -127,13 +150,20 @@ int mesh_ply_write(FILE *out, const float *feedback, int float_count,
             if (i >= float_count) goto done;            /* missing vertex count */
             int n = token_at(feedback, i);
             i++;
-            if (n < 0 || (long)n * FB_VFLOATS > (long)(float_count - i))
+            if (n < 0 || (long)n * stride > (long)(float_count - i))
                 goto done;                              /* truncated / misaligned */
             if (!ensure_cap((void **)&poly, &poly_cap, n, sizeof *poly))
                 goto done;
-            for (int k = 0; k < n; k++)
-                poly[k] = invert_vertex(cap, &feedback[i + k * FB_VFLOATS]);
-            i += n * FB_VFLOATS;
+            for (int k = 0; k < n; k++) {
+                poly[k] = invert_vertex(cap, &feedback[i + k * stride], has_tex);
+                if (has_tex && normals_mode) {
+                    float l2 = poly[k].anx * poly[k].anx +
+                               poly[k].any * poly[k].any +
+                               poly[k].anz * poly[k].anz;
+                    poly[k].has_authored = (l2 > 1e-12f);  /* nonzero = real normal */
+                }
+            }
+            i += n * stride;
             /* Fan-triangulate: (0, k, k+1) for k in 1..n-2. */
             for (int k = 1; k + 1 < n; k++) {
                 if (!ensure_cap((void **)&corners, &corners_cap, ncorners + 3,
@@ -150,14 +180,15 @@ int mesh_ply_write(FILE *out, const float *feedback, int float_count,
             }
         } else if (tok == MESH_PLY_TOK_POINT || tok == MESH_PLY_TOK_BITMAP ||
                    tok == MESH_PLY_TOK_DRAW_PIXEL || tok == MESH_PLY_TOK_COPY_PIXEL) {
-            if (FB_VFLOATS > float_count - i) goto done;
-            i += FB_VFLOATS;                            /* skip 1 vertex */
+            if (stride > float_count - i) goto done;
+            i += stride;                                /* skip 1 vertex */
         } else if (tok == MESH_PLY_TOK_LINE || tok == MESH_PLY_TOK_LINE_RESET) {
-            if (2 * FB_VFLOATS > float_count - i) goto done;
-            i += 2 * FB_VFLOATS;                        /* skip 2 vertices */
+            if (2 * stride > float_count - i) goto done;
+            i += 2 * stride;                            /* skip 2 vertices */
         } else if (tok == MESH_PLY_TOK_PASS_THROUGH) {
             if (1 > float_count - i) goto done;
-            i += 1;                                     /* skip the pass value */
+            normals_mode = (fabsf(feedback[i] - MESH_PLY_PASS_NORMALS) < 0.5f);
+            i += 1;                                     /* the pass-through value */
         } else {
             goto done;                                  /* unknown token -> error */
         }
@@ -219,9 +250,15 @@ int mesh_ply_write(FILE *out, const float *feedback, int float_count,
         }
     }
 
-    /* --- Accumulate + normalize vertex normals. -------------------------- */
-    onrm = calloc((size_t)(nverts > 0 ? nverts : 1), sizeof *onrm);
-    if (!onrm) goto done;
+    /* --- Resolve per-vertex normals. ------------------------------------- *
+     * Authored normals (from the texcoord, where present) win; otherwise
+     * synthesize from face normals. Both are accumulated across welded
+     * vertices and normalized at the end. */
+    int nslots = nverts > 0 ? nverts : 1;
+    onrm    = calloc((size_t)nslots, sizeof *onrm);
+    oauth   = calloc((size_t)nslots, sizeof *oauth);
+    oauth_n = calloc((size_t)nslots, sizeof *oauth_n);
+    if (!onrm || !oauth || !oauth_n) goto done;
     for (int t = 0; t < ntris; t++) {
         Vec3 fn = fnorm[t];
         for (int j = 0; j < 3; j++) {
@@ -229,12 +266,20 @@ int mesh_ply_write(FILE *out, const float *feedback, int float_count,
             onrm[vi].x += fn.x; onrm[vi].y += fn.y; onrm[vi].z += fn.z;
         }
     }
-    for (int v = 0; v < nverts; v++) {
-        float len = sqrtf(onrm[v].x * onrm[v].x + onrm[v].y * onrm[v].y +
-                          onrm[v].z * onrm[v].z);
-        if (len > 0.0f) {
-            onrm[v].x /= len; onrm[v].y /= len; onrm[v].z /= len;
+    for (int c = 0; c < ncorners; c++) {
+        if (corners[c].has_authored) {
+            int vi = corner_vidx[c];
+            oauth[vi].x += corners[c].anx;
+            oauth[vi].y += corners[c].any;
+            oauth[vi].z += corners[c].anz;
+            oauth_n[vi]++;
         }
+    }
+    for (int v = 0; v < nverts; v++) {
+        Vec3 nrm = (oauth_n[v] > 0) ? oauth[v] : onrm[v];   /* authored wins */
+        float len = sqrtf(nrm.x * nrm.x + nrm.y * nrm.y + nrm.z * nrm.z);
+        if (len > 0.0f) { nrm.x /= len; nrm.y /= len; nrm.z /= len; }
+        onrm[v] = nrm;
     }
 
     /* --- Write the PLY document. ----------------------------------------- */
@@ -282,6 +327,8 @@ done:
     free(opos);
     free(ocol);
     free(onrm);
+    free(oauth);
+    free(oauth_n);
     free(okey);
     free(table);
     free(corner_vidx);

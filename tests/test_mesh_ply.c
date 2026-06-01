@@ -26,6 +26,15 @@ static const MeshPlyCapture CAP = {
     .depth_near = 0.0f, .depth_far = 1.0f,
 };
 
+/* Same capture but the GL_3D_COLOR_TEXTURE 11-float stride: each vertex also
+ * carries an encoded world-space normal in the texcoord channel. */
+static const MeshPlyCapture CAP_TEX = {
+    .ortho_r = 1000.0f,
+    .vp_x = 0, .vp_y = 0, .vp_w = 800, .vp_h = 800,
+    .depth_near = 0.0f, .depth_far = 1.0f,
+    .floats_per_vertex = MESH_PLY_FLOATS_PER_VERTEX_TEX,
+};
+
 static const MeshPlyOptions OPT_WELD = {
     .weld = 1, .weld_eps = 1e-3f, .smooth_normals = 1, .triangulate = 1,
 };
@@ -51,6 +60,17 @@ static void push_vert(float *buf, int *n, float wx, float wy, float wz,
     buf[(*n)++] = r; buf[(*n)++] = g; buf[(*n)++] = b; buf[(*n)++] = a;
 }
 
+/* GL_3D_COLOR_TEXTURE vertex (11 floats): the 7-float vertex above plus the
+ * texcoord channel (s,t,r,q). The encoded world normal goes in (s,t,r) raw —
+ * the executor emits it pre-transformed, texture matrix identity, so it is
+ * NOT projected. */
+static void push_vert_tex(float *buf, int *n, float wx, float wy, float wz,
+                          float r, float g, float b, float a,
+                          float nx, float ny, float nz, float q) {
+    push_vert(buf, n, wx, wy, wz, r, g, b, a);
+    buf[(*n)++] = nx; buf[(*n)++] = ny; buf[(*n)++] = nz; buf[(*n)++] = q;
+}
+
 /* ---- PLY readback --------------------------------------------------------- */
 #define MAXV 64
 typedef struct {
@@ -60,18 +80,23 @@ typedef struct {
     int f[MAXV][3];
 } Ply;
 
-/* Run the writer to a tmpfile and slurp the text back into `text`. */
-static int run_writer(const float *buf, int n, const MeshPlyOptions *opt,
-                      char *text, size_t tcap) {
+/* Run the writer to a tmpfile (explicit capture) and slurp the text back. */
+static int run_writer_cap(const float *buf, int n, const MeshPlyCapture *cap,
+                          const MeshPlyOptions *opt, char *text, size_t tcap) {
     FILE *fp = tmpfile();
     if (!fp) return -999;
-    int rc = mesh_ply_write(fp, buf, n, &CAP, opt);
+    int rc = mesh_ply_write(fp, buf, n, cap, opt);
     fflush(fp);
     rewind(fp);
     size_t rd = fread(text, 1, tcap - 1, fp);
     text[rd] = '\0';
     fclose(fp);
     return rc;
+}
+
+static int run_writer(const float *buf, int n, const MeshPlyOptions *opt,
+                      char *text, size_t tcap) {
+    return run_writer_cap(buf, n, &CAP, opt, text, tcap);
 }
 
 /* Parse the subset of PLY we emit. Returns 1 on success. */
@@ -296,6 +321,50 @@ static void test_color_clamp(void) {
     ASSERT_INT("clamp high -> 255", p.cb[0], 255);
 }
 
+static void test_texcoord_normals(void) {
+    printf("test_texcoord_normals\n");
+    float buf[128]; int n = 0;
+
+    /* NORMALS-mode triangle: geometric normal would be +Z (z=0 plane, CCW),
+     * but the texcoord encodes a non-unit +X normal (2,0,0). Authored must
+     * win and be normalized to (1,0,0). */
+    push_tok(buf, &n, MESH_PLY_TOK_PASS_THROUGH);
+    push_val(buf, &n, MESH_PLY_PASS_NORMALS);
+    push_tok(buf, &n, MESH_PLY_TOK_POLYGON);
+    push_val(buf, &n, 3);
+    push_vert_tex(buf, &n, 0, 0, 0, 1, 0, 0, 1,   2, 0, 0, 0);
+    push_vert_tex(buf, &n, 1, 0, 0, 0, 1, 0, 1,   2, 0, 0, 0);
+    push_vert_tex(buf, &n, 0, 1, 0, 0, 0, 1, 1,   2, 0, 0, 0);
+
+    /* NO_NORMALS-mode triangle (z=0 plane, geometric +Z): texcoord is garbage
+     * and must be ignored -> synthesized +Z. */
+    push_tok(buf, &n, MESH_PLY_TOK_PASS_THROUGH);
+    push_val(buf, &n, MESH_PLY_PASS_NO_NORMALS);
+    push_tok(buf, &n, MESH_PLY_TOK_POLYGON);
+    push_val(buf, &n, 3);
+    push_vert_tex(buf, &n, 5, 0, 0, 1, 1, 1, 1,   9, 9, 9, 0);
+    push_vert_tex(buf, &n, 6, 0, 0, 1, 1, 1, 1,   9, 9, 9, 0);
+    push_vert_tex(buf, &n, 5, 1, 0, 1, 1, 1, 1,   9, 9, 9, 0);
+
+    char text[8192];
+    int rc = run_writer_cap(buf, n, &CAP_TEX, &OPT_WELD, text, sizeof text);
+    ASSERT_INT("texcoord-normals returns 2 triangles", rc, 2);
+
+    Ply p;
+    ASSERT_TRUE("texcoord-normals parses", parse_ply(text, &p));
+    ASSERT_INT("texcoord-normals nverts", p.nverts, 6);
+    ASSERT_INT("texcoord-normals nfaces", p.nfaces, 2);
+    for (int v = 0; v < p.nverts; v++) {
+        if (p.vx[v] < 2.0f) {          /* authored triangle -> +X */
+            ASSERT_FLT("authored normal nx=1", p.nx[v], 1.0f);
+            ASSERT_FLT("authored normal nz=0", p.nz[v], 0.0f);
+        } else {                       /* NO_NORMALS triangle -> synthesized +Z */
+            ASSERT_FLT("synthesized normal nz=1", p.nz[v], 1.0f);
+            ASSERT_FLT("synthesized normal nx=0", p.nx[v], 0.0f);
+        }
+    }
+}
+
 int main(void) {
     printf("=== mesh_ply tests ===\n\n");
     test_single_triangle();
@@ -305,6 +374,7 @@ int main(void) {
     test_error_cases();
     test_empty_buffer();
     test_color_clamp();
+    test_texcoord_normals();
 
     printf("\n=== Results: ");
     return test_harness_report(&g_harness, "mesh_ply");
