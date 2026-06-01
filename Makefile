@@ -573,7 +573,8 @@ STATE_NEUTRAL_SRCS = src/repl/format.c src/support/memprof.c src/support/cpuprof
 # longer touches repl_eval (replay-baseline restore is dispatched through a
 # function pointer the controller installs; geometry-guide arg parsing is
 # done in the controller before snapshot is built).
-SCENE_DEMO_DEP_SRCS = $(SCENE_SRCS) src/support/cpuprof.c
+SCENE_DEMO_DEP_SRCS = $(SCENE_SRCS) src/support/cpuprof.c \
+                      tests/gl-stubs/gl_stub_counts.c
 
 # Object list for the standalone repl_demo (the inverse of scene_demo:
 # proves the REPL pipeline links without editor input dispatch
