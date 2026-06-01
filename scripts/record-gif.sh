@@ -1,0 +1,132 @@
+#!/bin/bash
+# record-gif.sh - render a gl-repl animation headlessly (OSMesa) and assemble it
+# into a GIF + MP4. No display required.
+#
+#   scripts/record-gif.sh [options]
+#
+# Drives a FREEGLUT_OSMESA build of gl-repl with the backend record mode
+# (FREEGLUT_CAPTURE_FRAMES): it renders with no window and writes every frame to
+# a numbered PPM, exiting after exactly N frames. ffmpeg then assembles those
+# PPMs into <out>.gif (palette-optimized) and <out>.mp4 (H.264).
+#
+# The user-facing knob is DURATION, not a frame count, so the clip length is
+# invariant of --fps: N = round(duration * fps), and the output is always
+# `duration` seconds long at `fps` frames/sec.
+#
+# Animation-speed note: the engine advances the time variable `t` by a fixed
+# 1/60 s per rendered frame (see GLR_FRAME_DT_SECS), so playback runs at ~fps/60
+# of natural speed. Use --fps 60 for real-time; lower fps gives smooth slow-mo
+# (and smaller GIFs).
+#
+# Options:
+#   --example <name|idx>  Built-in example to record   (default: 2, animated ring)
+#   --duration <secs>     Clip length in seconds        (default: 2)
+#   --fps <n>             Frames/sec of the output clip (default: 50)
+#   --time <secs>         Initial animation time t      (default: 0; start later)
+#   --scale <width>       Scale output to this width px (default: native 1200)
+#   --out <base>          Output base name              (default: out -> out.gif/.mp4)
+#   --bin <path>          gl-repl OSMesa binary
+#                         (default: build/release-osmesa/gl-repl)
+#   --gif-only            Skip the MP4
+#   --mp4-only            Skip the GIF
+#   --keep                Keep the intermediate PPM frames
+#   -h, --help            This help
+#
+# Requires: ffmpeg, and a gl-repl built with `make gl-repl FREEGLUT_OSMESA=1`.
+
+set -euo pipefail
+
+example="2"
+duration="2"
+fps="50"
+t0=""
+scale=""
+out="out"
+bin="build/release-osmesa/gl-repl"
+make_gif=1
+make_mp4=1
+keep=0
+
+usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; }
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+		--example)  example="$2"; shift 2;;
+		--duration) duration="$2"; shift 2;;
+		--fps)      fps="$2"; shift 2;;
+		--time)     t0="$2"; shift 2;;
+		--scale)    scale="$2"; shift 2;;
+		--out)      out="$2"; shift 2;;
+		--bin)      bin="$2"; shift 2;;
+		--gif-only) make_mp4=0; shift;;
+		--mp4-only) make_gif=0; shift;;
+		--keep)     keep=1; shift;;
+		-h|--help)  usage; exit 0;;
+		*) echo "record-gif: unknown option '$1' (try --help)" >&2; exit 2;;
+	esac
+done
+
+command -v ffmpeg >/dev/null 2>&1 || {
+	echo "record-gif: ffmpeg not found (brew install ffmpeg / apt-get install ffmpeg)" >&2
+	exit 1
+}
+[ -x "$bin" ] || {
+	echo "record-gif: gl-repl binary not found at '$bin'" >&2
+	echo "            build it first: make gl-repl FREEGLUT_OSMESA=1" >&2
+	exit 1
+}
+
+# N = round(duration * fps); must be >= 1.
+frames="$(awk "BEGIN{ n = $duration * $fps + 0.5; if (n < 1) n = 1; printf \"%d\", n }")"
+
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/glr-gif.XXXXXX")"
+cleanup() { [ "$keep" = 1 ] || rm -rf "$tmp"; }
+trap cleanup EXIT
+
+echo "record-gif: example=$example duration=${duration}s fps=$fps frames=$frames${t0:+ t0=${t0}s}"
+
+# Record: the backend captures every frame and exit(0)s after $frames. Branch on
+# --time rather than an array so it stays portable to old bash under `set -u`.
+run_fail() { echo "record-gif: gl-repl exited non-zero; log:" >&2; cat "$tmp/run.log" >&2; exit 1; }
+if [ -n "$t0" ]; then
+	FREEGLUT_CAPTURE_FILE="$tmp/f" FREEGLUT_CAPTURE_FRAMES="$frames" \
+		"$bin" --example "$example" --time "$t0" --no-audio >"$tmp/run.log" 2>&1 || run_fail
+else
+	FREEGLUT_CAPTURE_FILE="$tmp/f" FREEGLUT_CAPTURE_FRAMES="$frames" \
+		"$bin" --example "$example" --no-audio >"$tmp/run.log" 2>&1 || run_fail
+fi
+
+got="$(ls "$tmp"/f-*.ppm 2>/dev/null | wc -l | tr -d ' ')"
+[ "$got" -gt 0 ] || { echo "record-gif: no frames captured (is this an OSMesa build?)" >&2; exit 1; }
+echo "record-gif: captured $got frame(s)"
+
+# Optional scale (force even dimensions for H.264 with -2). Build the three
+# filter strings explicitly so the empty-scale case stays valid.
+if [ -n "$scale" ]; then
+	sc="scale=${scale}:-2:flags=lanczos"
+	mp4_vf="${sc},format=yuv420p"
+	pgen_vf="${sc},palettegen"
+	puse_lavfi="[0:v]${sc}[x];[x][1:v]paletteuse"
+else
+	mp4_vf="format=yuv420p"
+	pgen_vf="palettegen"
+	puse_lavfi="paletteuse"
+fi
+
+if [ "$make_mp4" = 1 ]; then
+	ffmpeg -y -loglevel error -framerate "$fps" -start_number 0 -i "$tmp/f-%04d.ppm" \
+		-vf "$mp4_vf" -c:v libx264 -movflags +faststart "$out.mp4"
+	echo "record-gif: wrote $out.mp4"
+fi
+
+if [ "$make_gif" = 1 ]; then
+	# Two-pass palette for clean GIF colors.
+	ffmpeg -y -loglevel error -framerate "$fps" -start_number 0 -i "$tmp/f-%04d.ppm" \
+		-vf "$pgen_vf" "$tmp/palette.png"
+	ffmpeg -y -loglevel error -framerate "$fps" -start_number 0 -i "$tmp/f-%04d.ppm" -i "$tmp/palette.png" \
+		-lavfi "$puse_lavfi" "$out.gif"
+	echo "record-gif: wrote $out.gif"
+fi
+
+[ "$keep" = 1 ] && echo "record-gif: kept frames in $tmp"
+exit 0

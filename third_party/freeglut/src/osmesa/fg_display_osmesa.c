@@ -49,6 +49,9 @@ void fghOSMesaCaptureFrame( void )
 
     if( !ctx )
         return;
+    /* Ensure the frame is fully rendered before read-back (the Gallium OSMesa
+     * driver may defer until a flush); self-contained so callers need not. */
+    glFinish();
     if( !OSMesaGetColorBuffer( ctx, &w, &h, &fmt, &buffer ) || !buffer ||
         w <= 0 || h <= 0 )
         return;
@@ -95,17 +98,13 @@ void fghOSMesaCaptureFrame( void )
 void fgPlatformGlutSwapBuffers( SFG_PlatformDisplay *pDisplayPtr,
                                 SFG_Window *CurrentWindow )
 {
-    /* Single-buffered: there is nothing to swap. glFinish() so that a
-     * subsequent OSMesaGetColorBuffer()/glReadPixels() sees a complete frame. */
+    /* Single-buffered: there is nothing to swap. glFinish() so the front buffer
+     * is complete. NOTE: the generic glutSwapBuffers() early-returns for a
+     * single-buffered window, so this is effectively never reached on OSMesa --
+     * frame capture (SIGUSR1 + FREEGLUT_CAPTURE_FRAMES record mode) is therefore
+     * serviced from the main-loop tick (fgPlatformProcessSingleEvent), which is
+     * the per-frame hook a single-buffered backend actually has. */
     glFinish();
-
-    /* A pending SIGUSR1 capture request is serviced here -- on the main thread,
-     * after the frame is complete -- not in the async signal handler. */
-    if( fghOSMesaCaptureRequested )
-    {
-        fghOSMesaCaptureRequested = 0;
-        fghOSMesaCaptureFrame();
-    }
 }
 
 void fgPlatformInitSwapCtl( void )

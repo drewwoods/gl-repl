@@ -705,6 +705,23 @@ play back at 60 fps for smooth real-time motion. `t` starts at `0`; `--time
 This lets a headless capture begin from a later point in an animation's timeline
 rather than always from `t = 0`.
 
+**Record mode → GIF/MP4 (`FREEGLUT_CAPTURE_FRAMES`).** `scripts/record-gif.sh`
+drives a headless run and assembles the frames with `ffmpeg` into a GIF + MP4.
+Its knob is **duration** (clip length, invariant of `--fps`); it computes
+`N = round(duration × fps)`, passes it as `FREEGLUT_CAPTURE_FRAMES=N`, and the
+backend captures every rendered frame and `exit(0)`s after N. Because `t` is a
+fixed timestep, the N frames are deterministic (`t0 + i/60`) and identical across
+machines — generate slowly (Mac ~2.7 fps, gracemont ~21 fps), play back at any
+fps. The record + `SIGUSR1` capture are both serviced from the backend's
+**main-loop tick** (`fgPlatformProcessSingleEvent`), *not* the swap path: a
+single-buffered window's `glutSwapBuffers()` short-circuits before the platform
+swap, and `fghRedrawWindow()` exposes no per-display hook, so the per-iteration
+tick (1:1 with the display under the software renderer) is the only per-frame
+hook a backend has without editing core freeglut. Record mode uses a cheap
+colour-buffer content signature to skip the pre-first-render buffer and trigger
+on the first real frame. This keeps the whole feature inside the OSMesa backend
+files (clean for upstreaming — no core freeglut change).
+
 ### Startup & Audio-Worker Diagnostics
 
 Two always-on stderr diagnostics localise startup stalls and
