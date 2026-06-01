@@ -334,6 +334,7 @@ static inline void glPopMatrix(void) { GL_STUB_TRACE_LINE("glPopMatrix\n"); gl_s
 static inline void glPushAttrib(GLbitfield mask) { GL_STUB_TRACE_LINE("glPushAttrib %u\n", (unsigned)mask); gl_stub_tick(GL_STUB_glPushAttrib); }
 static inline void glPushMatrix(void) { GL_STUB_TRACE_LINE("glPushMatrix\n"); gl_stub_tick(GL_STUB_glPushMatrix); }
 static inline void glRasterPos2f(GLfloat x, GLfloat y) { GL_STUB_TRACE_LINE("glRasterPos2f %g %g\n", (double)x, (double)y); gl_stub_tick(GL_STUB_glRasterPos2f); }
+static inline void glRasterPos2i(GLint x, GLint y) { GL_STUB_TRACE_LINE("glRasterPos2i %d %d\n", (int)x, (int)y); gl_stub_tick(GL_STUB_glRasterPos2i); }
 static inline void glRasterPos3f(GLfloat x, GLfloat y, GLfloat z) { GL_STUB_TRACE_LINE("glRasterPos3f %g %g %g\n", (double)x, (double)y, (double)z); gl_stub_tick(GL_STUB_glRasterPos3f); }
 static inline void glRectf(GLfloat x1, GLfloat y1, GLfloat x2, GLfloat y2) { GL_STUB_TRACE_LINE("glRectf %g %g %g %g\n", (double)x1, (double)y1, (double)x2, (double)y2); gl_stub_tick(GL_STUB_glRectf); }
 static inline GLint glRenderMode(GLenum mode) { GL_STUB_TRACE_LINE("glRenderMode %u\n", (unsigned)mode); gl_stub_tick(GL_STUB_glRenderMode); return 0; }
@@ -345,6 +346,7 @@ static inline void glTexCoord2f(GLfloat s, GLfloat t) { GL_STUB_TRACE_LINE("glTe
 static inline void glTexEnvi(GLenum target, GLenum pname, GLint param) { GL_STUB_TRACE_LINE("glTexEnvi %u %u %d\n", (unsigned)target, (unsigned)pname, (int)param); gl_stub_tick(GL_STUB_glTexEnvi); }
 static inline void glTranslatef(GLfloat x, GLfloat y, GLfloat z) { GL_STUB_TRACE_LINE("glTranslatef %g %g %g\n", (double)x, (double)y, (double)z); gl_stub_tick(GL_STUB_glTranslatef); }
 static inline void glVertex2f(GLfloat x, GLfloat y) { GL_STUB_TRACE_LINE("glVertex2f %g %g\n", (double)x, (double)y); gl_stub_tick(GL_STUB_glVertex2f); }
+static inline void glVertex2i(GLint x, GLint y) { GL_STUB_TRACE_LINE("glVertex2i %d %d\n", (int)x, (int)y); gl_stub_tick(GL_STUB_glVertex2i); }
 static inline void glVertex3dv(const GLdouble *v) { GL_STUB_TRACE_LINE("glVertex3dv\n"); gl_stub_tick(GL_STUB_glVertex3dv); (void)v; }
 static inline void glVertex3f(GLfloat x, GLfloat y, GLfloat z) { GL_STUB_TRACE_LINE("glVertex3f %g %g %g\n", (double)x, (double)y, (double)z); gl_stub_tick(GL_STUB_glVertex3f); }
 static inline void glVertex3fv(const GLfloat *v) { GL_STUB_TRACE_LINE("glVertex3fv\n"); gl_stub_tick(GL_STUB_glVertex3fv); (void)v; }

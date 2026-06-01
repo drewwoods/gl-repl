@@ -90,6 +90,7 @@ extern "C" {
     X(glPushAttrib)                    \
     X(glPushMatrix)                    \
     X(glRasterPos2f)                   \
+    X(glRasterPos2i)                   \
     X(glRasterPos3f)                   \
     X(glRectf)                         \
     X(glRenderMode)                    \
@@ -101,6 +102,7 @@ extern "C" {
     X(glTexEnvi)                       \
     X(glTranslatef)                    \
     X(glVertex2f)                      \
+    X(glVertex2i)                      \
     X(glVertex3dv)                     \
     X(glVertex3f)                      \
     X(glVertex3fv)                     \
