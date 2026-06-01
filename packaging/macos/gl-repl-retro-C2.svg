@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="gl-repl">
+  <!-- Variant C2: OpenGL-logo style, beefier lit metallic extrusion + grounding shadow. -->
+  <defs>
+    <radialGradient id="cbg" cx="0.5" cy="0.46" r="0.78">
+      <stop offset="0"   stop-color="#262a30" />
+      <stop offset="0.55" stop-color="#0c0d0f" />
+      <stop offset="1"   stop-color="#000000" />
+    </radialGradient>
+    <linearGradient id="silver" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#fbfcfe" />
+      <stop offset="0.34" stop-color="#cfd4db" />
+      <stop offset="0.49" stop-color="#6b7178" />
+      <stop offset="0.51" stop-color="#2f3338" />
+      <stop offset="0.64" stop-color="#aeb4bc" />
+      <stop offset="0.86" stop-color="#e9edf1" />
+      <stop offset="1"    stop-color="#9aa0a8" />
+    </linearGradient>
+    <filter id="csoft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3" result="b" />
+      <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+    </filter>
+    <filter id="cast" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="14" />
+    </filter>
+    <linearGradient id="reflfade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"   stop-color="#000000" stop-opacity="0" />
+      <stop offset="0.72" stop-color="#000000" stop-opacity="0.85" />
+      <stop offset="1"   stop-color="#000000" stop-opacity="1" />
+    </linearGradient>
+    <g id="word">
+      <text x="512" y="0" text-anchor="middle"
+            font-family="Futura, 'Helvetica Neue', Helvetica, sans-serif"
+            font-weight="600" font-size="222" letter-spacing="-4">gl-repl</text>
+    </g>
+    <clipPath id="cround"><rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" /></clipPath>
+  </defs>
+
+  <rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" fill="url(#cbg)" />
+
+  <g clip-path="url(#cround)">
+    <!-- floor reflection -->
+    <g transform="translate(0 1006) scale(1 -1)" opacity="0.20">
+      <use href="#word" transform="translate(0 0)" fill="url(#silver)" />
+    </g>
+    <rect x="0" y="503" width="1024" height="520" fill="url(#reflfade)" />
+
+    <!-- grounding cast shadow under the letters -->
+    <g transform="translate(0 470)">
+      <use href="#word" transform="translate(46 70)" fill="#000000" opacity="0.8" filter="url(#cast)" />
+    </g>
+
+    <!-- main extruded word -->
+    <g transform="translate(0 470)" filter="url(#csoft)">
+      <use href="#word" transform="translate(40.0 30.0)" fill="#171a1e" />
+      <use href="#word" transform="translate(38.2 28.6)" fill="#1c1f23" />
+      <use href="#word" transform="translate(36.4 27.3)" fill="#202428" />
+      <use href="#word" transform="translate(34.5 25.9)" fill="#25292d" />
+      <use href="#word" transform="translate(32.7 24.5)" fill="#2a2e32" />
+      <use href="#word" transform="translate(30.9 23.2)" fill="#2f3337" />
+      <use href="#word" transform="translate(29.1 21.8)" fill="#33373d" />
+      <use href="#word" transform="translate(27.3 20.5)" fill="#383c42" />
+      <use href="#word" transform="translate(25.5 19.1)" fill="#3d4147" />
+      <use href="#word" transform="translate(23.6 17.7)" fill="#42464c" />
+      <use href="#word" transform="translate(21.8 16.4)" fill="#464b51" />
+      <use href="#word" transform="translate(20.0 15.0)" fill="#4b5056" />
+      <use href="#word" transform="translate(18.2 13.6)" fill="#50555b" />
+      <use href="#word" transform="translate(16.4 12.3)" fill="#545a60" />
+      <use href="#word" transform="translate(14.5 10.9)" fill="#595f65" />
+      <use href="#word" transform="translate(12.7 9.5)" fill="#5e646a" />
+      <use href="#word" transform="translate(10.9 8.2)" fill="#63696f" />
+      <use href="#word" transform="translate(9.1 6.8)" fill="#676d75" />
+      <use href="#word" transform="translate(7.3 5.5)" fill="#6c727a" />
+      <use href="#word" transform="translate(5.5 4.1)" fill="#71777f" />
+      <use href="#word" transform="translate(3.6 2.7)" fill="#767c84" />
+      <use href="#word" transform="translate(1.8 1.4)" fill="#7a8189" />
+      <use href="#word" transform="translate(9 7)" fill="none" stroke="#8a4424" stroke-width="3" stroke-linejoin="round" opacity="0.5" />
+      <use href="#word" transform="translate(0 0)" fill="none" stroke="#0a0b0c" stroke-width="7" stroke-linejoin="round" />
+      <use href="#word" transform="translate(0 0)" fill="url(#silver)" stroke="#3a3f45" stroke-width="1.5" stroke-linejoin="round" />
+    </g>
+  </g>
+</svg>

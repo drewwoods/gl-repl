@@ -176,6 +176,7 @@ endif
 
 .PHONY: \
 	all \
+	app \
 	audit-editor-ownership \
 	bench \
 	bench-csv \
@@ -893,6 +894,41 @@ $(SAMPLE_BIN): $(SAMPLE_OBJS)
 gl-repl: FORCE $(SAMPLE_BIN) ## Build the main gl-repl binary using release flags by default.
 	ln -sfn $(SAMPLE_BIN) $@
 
+# macOS .app bundle so the Dock/Finder show the gl-repl cube icon instead of
+# the launching terminal's icon. Pure packaging — no source changes, so the
+# -std=c99 / Linux-portable build stays untouched. Needs rsvg-convert
+# (brew install librsvg) and the Xcode-shipped iconutil.
+MACOS_PKG = packaging/macos
+APP_BUNDLE = gl-repl.app
+APP_ICNS = $(MACOS_PKG)/gl-repl.icns
+APP_ICONSET = $(MACOS_PKG)/gl-repl.iconset
+
+$(APP_ICNS): $(MACOS_PKG)/gl-repl.svg
+	@command -v rsvg-convert >/dev/null 2>&1 || { echo "need rsvg-convert: brew install librsvg" >&2; exit 1; }
+	rm -rf $(APP_ICONSET)
+	mkdir -p $(APP_ICONSET)
+	rsvg-convert -w 16   -h 16   $< -o $(APP_ICONSET)/icon_16x16.png
+	rsvg-convert -w 32   -h 32   $< -o $(APP_ICONSET)/icon_16x16@2x.png
+	rsvg-convert -w 32   -h 32   $< -o $(APP_ICONSET)/icon_32x32.png
+	rsvg-convert -w 64   -h 64   $< -o $(APP_ICONSET)/icon_32x32@2x.png
+	rsvg-convert -w 128  -h 128  $< -o $(APP_ICONSET)/icon_128x128.png
+	rsvg-convert -w 256  -h 256  $< -o $(APP_ICONSET)/icon_128x128@2x.png
+	rsvg-convert -w 256  -h 256  $< -o $(APP_ICONSET)/icon_256x256.png
+	rsvg-convert -w 512  -h 512  $< -o $(APP_ICONSET)/icon_256x256@2x.png
+	rsvg-convert -w 512  -h 512  $< -o $(APP_ICONSET)/icon_512x512.png
+	rsvg-convert -w 1024 -h 1024 $< -o $(APP_ICONSET)/icon_512x512@2x.png
+	iconutil -c icns $(APP_ICONSET) -o $@
+	rm -rf $(APP_ICONSET)
+
+app: gl-repl $(APP_ICNS) $(MACOS_PKG)/Info.plist ## Bundle gl-repl into gl-repl.app with the cube icon (macOS).
+	rm -rf $(APP_BUNDLE)
+	mkdir -p $(APP_BUNDLE)/Contents/MacOS $(APP_BUNDLE)/Contents/Resources
+	cp "$$(readlink gl-repl || echo gl-repl)" $(APP_BUNDLE)/Contents/MacOS/gl-repl
+	cp $(APP_ICNS) $(APP_BUNDLE)/Contents/Resources/gl-repl.icns
+	cp $(MACOS_PKG)/Info.plist $(APP_BUNDLE)/Contents/Info.plist
+	touch $(APP_BUNDLE)
+	@echo "Built $(APP_BUNDLE) — run: open $(APP_BUNDLE)"
+
 # Standalone demo binary that drives the scene module with a teapot callback.
 # Proves the scene/ subtree links cleanly without the editor/UI/controller code.
 SCENE_DEMO_OBJS = $(OBJDIR)/tools/scene_demo/scene_demo.o \
@@ -1584,6 +1620,7 @@ clean: ## Remove built binaries and object files.
 		$(BENCH_BINS) $(addsuffix .dSYM,$(BENCH_BINS)) \
 		build/coverage/lcov.info build/coverage/html \
 		build \
+		gl-repl.app packaging/macos/gl-repl.icns packaging/macos/gl-repl.iconset \
 		callgraph*.mmd callgraph*.dot callgraph*.html callgrind.out*
 
 glut: ## Rebuild using the Apple GLUT framework instead of freeglut.

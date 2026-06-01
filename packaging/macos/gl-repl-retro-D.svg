@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="gl-repl">
+  <!-- Cube + C2 wordmark: isometric glutSolidCube above the silver-chrome "gl-repl" 3D text on black. -->
+  <defs>
+    <radialGradient id="cbg" cx="0.5" cy="0.42" r="0.80">
+      <stop offset="0"   stop-color="#262a30" />
+      <stop offset="0.55" stop-color="#0c0d0f" />
+      <stop offset="1"   stop-color="#000000" />
+    </radialGradient>
+    <linearGradient id="silver" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#fbfcfe" />
+      <stop offset="0.34" stop-color="#cfd4db" />
+      <stop offset="0.49" stop-color="#6b7178" />
+      <stop offset="0.51" stop-color="#2f3338" />
+      <stop offset="0.64" stop-color="#aeb4bc" />
+      <stop offset="0.86" stop-color="#e9edf1" />
+      <stop offset="1"    stop-color="#9aa0a8" />
+    </linearGradient>
+    <linearGradient id="face-top" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffb066" /><stop offset="1" stop-color="#ff8833" />
+    </linearGradient>
+    <linearGradient id="face-left" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#b07cff" /><stop offset="1" stop-color="#8a4ce6" />
+    </linearGradient>
+    <linearGradient id="face-right" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5fd6ff" /><stop offset="1" stop-color="#28b6e6" />
+    </linearGradient>
+    <filter id="cubeglow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="12" result="b" />
+      <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+    </filter>
+    <filter id="csoft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="b" />
+      <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+    </filter>
+    <filter id="cast" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="12" />
+    </filter>
+    <linearGradient id="reflfade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"   stop-color="#000000" stop-opacity="0" />
+      <stop offset="0.7" stop-color="#000000" stop-opacity="0.9" />
+      <stop offset="1"   stop-color="#000000" stop-opacity="1" />
+    </linearGradient>
+    <g id="word">
+      <text x="512" y="0" text-anchor="middle"
+            font-family="Futura, 'Helvetica Neue', Helvetica, sans-serif"
+            font-weight="600" font-size="166" letter-spacing="-3">gl-repl</text>
+    </g>
+    <g id="cube">
+      <polygon points="206.4,309.6 512,204 817.6,309.6 512,414.4" fill="url(#face-top)" />
+      <polygon points="206.4,309.6 512,414.4 512,820 206.4,714.4" fill="url(#face-left)" />
+      <polygon points="512,414.4 817.6,309.6 817.6,714.4 512,820" fill="url(#face-right)" />
+      <g fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" opacity="0.95">
+        <polyline points="512,204 817.6,309.6 817.6,714.4 512,820 206.4,714.4 206.4,309.6 512,204" />
+        <polyline points="206.4,309.6 512,414.4 817.6,309.6" />
+        <polyline points="512,414.4 512,820" />
+      </g>
+    </g>
+    <clipPath id="cround"><rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" /></clipPath>
+  </defs>
+
+  <rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" fill="url(#cbg)" />
+
+  <g clip-path="url(#cround)">
+    <g transform="translate(230.4 -2) scale(0.55)" filter="url(#cubeglow)">
+      <use href="#cube" />
+    </g>
+
+    <g transform="translate(0 1018) scale(1 -1)" opacity="0.18">
+      <use href="#word" transform="translate(0 0)" fill="url(#silver)" />
+    </g>
+    <rect x="0" y="760" width="1024" height="264" fill="url(#reflfade)" />
+
+    <g transform="translate(0 742)">
+      <use href="#word" transform="translate(40 58)" fill="#000000" opacity="0.8" filter="url(#cast)" />
+    </g>
+
+    <g transform="translate(0 742)" filter="url(#csoft)">
+      <use href="#word" transform="translate(32.0 24.0)" fill="#171a1e" />
+      <use href="#word" transform="translate(30.4 22.8)" fill="#1c1f24" />
+      <use href="#word" transform="translate(28.8 21.6)" fill="#212529" />
+      <use href="#word" transform="translate(27.2 20.4)" fill="#272a2f" />
+      <use href="#word" transform="translate(25.6 19.2)" fill="#2c3034" />
+      <use href="#word" transform="translate(24.0 18.0)" fill="#31353a" />
+      <use href="#word" transform="translate(22.4 16.8)" fill="#363a40" />
+      <use href="#word" transform="translate(20.8 15.6)" fill="#3b4045" />
+      <use href="#word" transform="translate(19.2 14.4)" fill="#41454b" />
+      <use href="#word" transform="translate(17.6 13.2)" fill="#464b50" />
+      <use href="#word" transform="translate(16.0 12.0)" fill="#4b5056" />
+      <use href="#word" transform="translate(14.4 10.8)" fill="#50555c" />
+      <use href="#word" transform="translate(12.8 9.6)" fill="#555b61" />
+      <use href="#word" transform="translate(11.2 8.4)" fill="#5b6067" />
+      <use href="#word" transform="translate(9.6 7.2)" fill="#60666c" />
+      <use href="#word" transform="translate(8.0 6.0)" fill="#656b72" />
+      <use href="#word" transform="translate(6.4 4.8)" fill="#6a7078" />
+      <use href="#word" transform="translate(4.8 3.6)" fill="#6f767d" />
+      <use href="#word" transform="translate(3.2 2.4)" fill="#757b83" />
+      <use href="#word" transform="translate(1.6 1.2)" fill="#7a8188" />
+      <use href="#word" transform="translate(8 6)" fill="none" stroke="#8a4424" stroke-width="2.5" stroke-linejoin="round" opacity="0.5" />
+      <use href="#word" transform="translate(0 0)" fill="none" stroke="#0a0b0c" stroke-width="6" stroke-linejoin="round" />
+      <use href="#word" transform="translate(0 0)" fill="url(#silver)" stroke="#3a3f45" stroke-width="1.3" stroke-linejoin="round" />
+    </g>
+  </g>
+</svg>
