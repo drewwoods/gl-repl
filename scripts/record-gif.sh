@@ -81,10 +81,11 @@ frames="$(awk "BEGIN{ n = $duration * $fps + 0.5; if (n < 1) n = 1; printf \"%d\
 
 # Stage the intermediate PPMs next to the output, not in /tmp: a snap/flatpak
 # ffmpeg runs with a private /tmp and can't read frames written to the host /tmp,
-# but it can reach the output directory (typically $HOME or the cwd).
+# but it can reach the output directory (typically $HOME or the cwd). The dir is
+# NOT hidden (no leading dot) because snap's home interface blocks dotfiles.
 out_dir="$(dirname "$out")"
 [ -d "$out_dir" ] || { echo "record-gif: output dir '$out_dir' does not exist" >&2; exit 1; }
-tmp="$(mktemp -d "$out_dir/.record-gif.XXXXXX")"
+tmp="$(mktemp -d "$out_dir/record-gif-frames.XXXXXX")"
 cleanup() { [ "$keep" = 1 ] || rm -rf "$tmp"; }
 trap cleanup EXIT
 
