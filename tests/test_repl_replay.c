@@ -524,6 +524,85 @@ static void test_replay_regression_fixes(void) {
     replay_stop();
 }
 
+static void test_replay_cursor_sync_and_unrecognized_keys(void) {
+    printf("--- replay cursor sync and unrecognized keys ---\n");
+    glr_ctrl_reset_all();
+
+    // Test replay_walk_flat_cmd_matches_cursor
+    GLCmd cmds[5];
+    memset(cmds, 0, sizeof(cmds));
+    for (int i = 0; i < 5; i++) {
+        cmds[i].valid = 1;
+    }
+    FlatProgramView program = { cmds, NULL, 5 };
+
+    // Match via call_src_cmd_idx
+    cmds[0].call_src_cmd_idx = 10;
+    ASSERT_TRUE("replay matches call_src_cmd_idx",
+                replay_walk_flat_cmd_matches_cursor(0, 10, -1, -1, 0, program));
+    cmds[0].call_src_cmd_idx = 0;
+
+    // Match via root_call_src_cmd_idx
+    cmds[0].root_call_src_cmd_idx = 10;
+    ASSERT_TRUE("replay matches root_call_src_cmd_idx",
+                replay_walk_flat_cmd_matches_cursor(0, 10, -1, -1, 0, program));
+    cmds[0].root_call_src_cmd_idx = -1;
+
+    // Match via func_scope_mask
+    cmds[0].func_scope_mask = 2;
+    ASSERT_TRUE("replay matches func_scope_mask",
+                replay_walk_flat_cmd_matches_cursor(0, 10, -1, -1, 2, program));
+    cmds[0].func_scope_mask = 0;
+
+    // Match via cursor block bounds
+    ASSERT_TRUE("replay matches cursor block bounds",
+                replay_walk_flat_cmd_matches_cursor(2, 10, 1, 3, 0, program));
+
+    // Test replay_walk_block_matches_cursor
+    memset(cmds, 0, sizeof(cmds));
+    cmds[0].valid = 1; cmds[0].type = CMD_BEGIN;
+    cmds[1].valid = 1; cmds[1].type = CMD_VERTEX3F; cmds[1].src_cmd_idx = 5;
+    cmds[2].valid = 1; cmds[2].type = CMD_END;
+    program.cmd_count = 3;
+    ASSERT_TRUE("replay block matches cursor",
+                replay_walk_block_matches_cursor(0, 0, 5, -1, -1, 0, program));
+
+    // Test KEY_CTRL_K jump
+    glr_ctrl_reset_all();
+    add_mock_cmd(0, CMD_VERTEX3F);
+    add_mock_cmd(1, CMD_VERTEX3F);
+    repl_state_document_cmds_mut()[0].src_cmd_idx = 0;
+    repl_state_document_cmds_mut()[1].src_cmd_idx = 1;
+    repl_state_mark_flat_dirty();
+    repl_flatten_commands(editor_state_edit_line());
+    repl_state_flat_program_clear_dirty();
+
+    // Jump when replay is inactive
+    editor_state_edit_line_set(1);
+    int consumed = replay_handle_key(KEY_CTRL_K);
+    ASSERT_TRUE("Ctrl+K consumed when inactive", consumed == 1);
+    ASSERT_TRUE("replay started after jump", g_replay_active);
+    ASSERT_TRUE("replay paused after jump", g_replay_state == REPLAY_PAUSED);
+    ASSERT_TRUE("pc moved to 2", g_replay_pc == 2);
+    replay_stop();
+
+    // Test space-restart (when state is REPLAY_DONE)
+    replay_start();
+    g_replay_state = REPLAY_DONE;
+    consumed = replay_handle_key(' ');
+    ASSERT_TRUE("space consumed on done", consumed == 1);
+    ASSERT_TRUE("restarted on space", g_replay_pc == 0 && g_replay_state == REPLAY_PLAYING);
+    replay_stop();
+
+    // Test unrecognized special key cancellation
+    replay_start();
+    consumed = replay_handle_special(999);
+    ASSERT_TRUE("unrecognized special consumed", consumed == 1);
+    ASSERT_TRUE("unrecognized special cancels replay", !g_replay_active);
+    replay_stop();
+}
+
+
 #ifdef GL_STUBS
 static void test_replay_rendering(void) {
     printf("--- replay rendering & HUD callbacks ---\n");
@@ -603,6 +682,7 @@ int main(void) {
     test_replay_single_arg_shape_gets_eval_annotation();
     test_replay_baseline_restore_survives_predef_reshape();
     test_replay_regression_fixes();
+    test_replay_cursor_sync_and_unrecognized_keys();
 #ifdef GL_STUBS
     test_replay_rendering();
 #endif

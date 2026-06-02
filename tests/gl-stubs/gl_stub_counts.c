@@ -21,6 +21,13 @@ unsigned long long gl_stub_counts[GL_STUB_COUNT_MAX];
 
 int g_gl_stub_samples = 4;
 
+float g_gl_stub_modelview_matrix[16] = {
+    1.0f, 0.0f, 0.0f, 0.0f,
+    0.0f, 1.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 1.0f, 0.0f,
+    0.0f, 0.0f, 0.0f, 1.0f
+};
+
 FILE *gl_stub_trace_fp = NULL;
 
 static const char *const g_gl_stub_names[GL_STUB_COUNT_MAX] = {

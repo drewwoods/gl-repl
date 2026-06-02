@@ -846,6 +846,7 @@ TEST_BINS += test_export_trace_parity
 # real GL context.
 TEST_BINS += test_replay_walk
 TEST_BINS += test_ui_panels
+TEST_BINS += test_edit_overlays
 endif
 
 CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_repl_code_panel_layout test_ui_theme test_scene_palette test_audio,$(TEST_BINS))
@@ -931,6 +932,8 @@ test_repl_replay_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_replay.o $(filter-out $(
 # the static cursor_guide_snapshot_with_flat_args helper, so the object
 # must be filtered out the same way test_glr_ctrl does.
 test_replay_walk_OBJS = $(OBJDIR)/$(TEST_DIR)/test_replay_walk.o $(filter-out $(OBJDIR)/src/app/glr_ctrl.o,$(CORE_TEST_OBJS))
+
+test_edit_overlays_OBJS = $(OBJDIR)/$(TEST_DIR)/test_edit_overlays.o $(filter-out $(OBJDIR)/src/subsystems/edit_overlays/edit_overlays.o,$(CORE_TEST_OBJS))
 
 TEST_OBJS = $(foreach test,$(TEST_BINS),$($(test)_OBJS))
 TEST_RUNNER_CASES = $(foreach test,$(TEST_BINS),'$(test):::$($(test)_RUN)')

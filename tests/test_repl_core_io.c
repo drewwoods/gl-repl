@@ -39,6 +39,11 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
     TEST_ASSERT_INT(&g_harness, label, got, expected); \
 } while (0)
 
+#define ASSERT_STR(label, got, expected) do { \
+    TEST_ASSERT_STR(&g_harness, label, got, expected); \
+} while (0)
+
+static void test_import_robustness(void);
 static void declare_test_vars(void) {
     char err[128];
     repl_eval_declare_predef_var("x", err, sizeof(err));
@@ -2010,6 +2015,89 @@ int main(void) {
         unlink(savedc);
     }
 
+    test_import_robustness();
+
     printf("repl_core_io: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.run == g_harness.passed) ? 0 : 1;
+}
+
+static void test_import_robustness(void) {
+    printf("--- import system robustness ---\n");
+
+    const char *test_path = "/tmp/repl_import_robustness.c";
+    FILE *f;
+
+    /* 1. Coords fallback in eval_tess_brace_floats */
+    f = fopen(test_path, "w");
+    fprintf(f, "// Snippet start\n");
+    fprintf(f, "  { _tn[0] = 0.5; _tn[1] = 0.6; _tn[3] = 0.7; }\n"); // fails parse_tess_brace_block because of _tn[3]
+    fprintf(f, "  { _tc[0] = 0.1; _tc[1] = 0.2; _tc[2] = 0.3; _tc[4] = 0.4; }\n"); // fails parse_tess_brace_block because of _tc[4]
+    fprintf(f, "  gluTessVertex(tess, _v->pos[0] = 1.1; _v->pos[1] = 2.2; _v->pos[3] = 3.3;, _v); // TessVertex\n");
+    fprintf(f, "// Snippet end\n");
+    fclose(f);
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    ASSERT_TRUE("load tess fallback file", repl_export_load_from_file(test_path, NULL) == 1);
+    ASSERT_INT("loaded tess fallback count", repl_state_document_count(), 3);
+    ASSERT_TRUE("normal loaded with fallback values",
+                strstr(editor_buffer_line(0), "gluNormal(0.5, 0.6, 0.7);") != NULL);
+    ASSERT_TRUE("color loaded with fallback values",
+                strstr(editor_buffer_line(1), "gluColor(0.1, 0.2, 0.3, 0.4);") != NULL);
+    ASSERT_TRUE("vertex loaded with fallback values",
+                strstr(editor_buffer_line(2), "gluVertex(1.1, 2.2, 3.3);") != NULL);
+
+    /* 2. Truncated Input: EOF mid-block */
+    f = fopen(test_path, "w");
+    fprintf(f, "// Snippet start\n");
+    fprintf(f, "for(i, 0, 10) {\n");
+    fprintf(f, "  glVertex3f(1, 0, 0);\n");
+    // EOF without closing }
+    fclose(f);
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    ASSERT_TRUE("load truncated file", repl_export_load_from_file(test_path, NULL) == 1);
+    ASSERT_INT("truncated file count", repl_state_document_count(), 2);
+    ASSERT_INT("indent cache updated safely", repl_state_document_cmds_mut()[1].type, CMD_VERTEX3F);
+
+    /* 3. Mixed Line Endings (CRLF) */
+    f = fopen(test_path, "wb");
+    fprintf(f, "// Snippet start\r\n");
+    fprintf(f, "glVertex3f(1, 2, 3);\r\n");
+    fprintf(f, "glVertex3f(4, 5, 6);\r\n");
+    fprintf(f, "// Snippet end\r\n");
+    fclose(f);
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    ASSERT_TRUE("load CRLF file", repl_export_load_from_file(test_path, NULL) == 1);
+    ASSERT_INT("CRLF count", repl_state_document_count(), 2);
+    ASSERT_STR("CRLF line 0", editor_buffer_line(0), "  glVertex3f(1, 2, 3);");
+    ASSERT_STR("CRLF line 1", editor_buffer_line(1), "  glVertex3f(4, 5, 6);");
+
+    /* 4. Extremely Long Line (>1000 chars) */
+    f = fopen(test_path, "w");
+    fprintf(f, "// Snippet start\n");
+    fprintf(f, "// ");
+    for (int i = 0; i < 1100; i++) fprintf(f, "a");
+    fprintf(f, "\n");
+    fprintf(f, "glVertex3f(1, 2, 3);\n");
+    fprintf(f, "// Snippet end\n");
+    fclose(f);
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    ASSERT_TRUE("long line fails gracefully", repl_export_load_from_file(test_path, NULL) == 0);
+
+    /* 5. Embedded NUL byte in comment */
+    f = fopen(test_path, "wb");
+    fprintf(f, "// Snippet start\n");
+    fprintf(f, "glVertex3f(1, 2, 3); // comment ");
+    fputc('\0', f);
+    fprintf(f, " with nul\n");
+    fprintf(f, "// Snippet end\n");
+    fclose(f);
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    ASSERT_TRUE("load file with NUL fails gracefully", repl_export_load_from_file(test_path, NULL) == 0);
+    ASSERT_INT("NUL file count", repl_state_document_count(), 0);
+
+    remove(test_path);
 }
