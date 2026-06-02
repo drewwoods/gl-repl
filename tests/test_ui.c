@@ -298,6 +298,144 @@ static void test_color_picker(void) {
     color_picker_stop();
     ASSERT_TRUE("picker closed", color_picker_active_line() == -1);
 
+    /* --- Palettes ------------------------------------------------------ */
+    color_picker_state_reset();   /* back to CP_TAB_BASIC */
+    repl_state_document_count_set(1);
+    repl_state_document_cmds_mut()[0].type = CMD_COLOR3F;
+    repl_state_document_cmds_mut()[0].args[0] = 0.0f;
+    repl_state_document_cmds_mut()[0].args[1] = 0.0f;
+    repl_state_document_cmds_mut()[0].args[2] = 1.0f;   /* blue */
+    repl_state_document_cmds_mut()[0].valid = 1;
+    repl_state_document_cmds_mut()[0].has_vars = 0;
+    color_picker_start(0, 300);
+
+    view = color_picker_view();
+    ASSERT_TRUE("default tab is Basic", view.palette_tab == CP_TAB_BASIC);
+    ASSERT_INT("basic swatch count", view.swatch_count, 10);
+
+    /* Click the Harmony tab segment (rightmost third of the strip). */
+    int harm_seg_x = view.tab_x + view.tab_w * 5 / 6;
+    int tab_my = ui_state_viewport().window_h - (view.tab_y - view.tab_h / 2);
+    ColorPickerInputResult tab_res = color_picker_handle_press(harm_seg_x, tab_my);
+    ASSERT_TRUE("tab click consumed", tab_res.consumed == 1);
+    ASSERT_TRUE("tab click no writeback", tab_res.changed == 0);
+    view = color_picker_view();
+    ASSERT_TRUE("switched to Harmony tab", view.palette_tab == CP_TAB_HARMONY);
+    ASSERT_INT("harmony swatch count", view.swatch_count, 4);
+    /* Swatch 0 of the harmony set is the chosen color (current hue/sat/val). */
+    {
+        float r0, g0, b0;
+        color_picker_hsv_to_rgb(view.hue, view.sat, view.val, &r0, &g0, &b0);
+        TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "harmony[0].r == chosen", view.swatches[0][0], r0);
+        TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "harmony[0].b == chosen", view.swatches[0][2], b0);
+    }
+    /* Hit-test reports a swatch hit over the first harmony cell. */
+    {
+        int sw_mx = view.pal_x + view.pal_cell / 2;
+        int sw_my = ui_state_viewport().window_h - (view.pal_y - view.pal_cell / 2);
+        UiHit hh = ui_color_picker_hit_test_helper(sw_mx, sw_my);
+        ASSERT_TRUE("hit-test over swatch", hh.kind == UI_HIT_COLOR_SWATCH);
+    }
+
+    /* Switch back to Basic and click the red swatch (index 3); writeback
+     * should land red into the document command. */
+    color_picker_state_reset();
+    color_picker_start(0, 300);
+    view = color_picker_view();
+    {
+        int idx = 3;                       /* CP_BASIC red */
+        int c = idx % view.pal_cols, r = idx / view.pal_cols;
+        int sw_mx = view.pal_x + c * (view.pal_cell + view.pal_gap) + view.pal_cell / 2;
+        int sw_top = view.pal_y - r * (view.pal_cell + view.pal_gap);
+        int sw_my = ui_state_viewport().window_h - (sw_top - view.pal_cell / 2);
+        ColorPickerInputResult sr = color_picker_handle_press(sw_mx, sw_my);
+        ASSERT_TRUE("basic swatch click consumed", sr.consumed == 1);
+        const GLCmd *cmd = repl_state_document_cmd_at(0);
+        ASSERT_TRUE("red swatch -> r dominant", cmd->args[0] > 0.6f);
+        ASSERT_TRUE("red swatch -> g small", cmd->args[1] < 0.4f);
+        ASSERT_TRUE("red swatch -> b small", cmd->args[2] < 0.4f);
+    }
+
+    /* glClearColor clamps a bright (white) swatch to CP_CLEAR_MAX_V. */
+    color_picker_state_reset();
+    repl_state_document_cmds_mut()[0].type = CMD_CLEAR_COLOR;
+    repl_state_document_cmds_mut()[0].args[3] = 1.0f;
+    color_picker_start(0, 300);
+    view = color_picker_view();
+    {
+        int idx = 1;                       /* CP_BASIC white */
+        int sw_mx = view.pal_x + idx * (view.pal_cell + view.pal_gap) + view.pal_cell / 2;
+        int sw_my = ui_state_viewport().window_h - (view.pal_y - view.pal_cell / 2);
+        color_picker_handle_press(sw_mx, sw_my);
+        const GLCmd *cmd = repl_state_document_cmd_at(0);
+        ASSERT_TRUE("clearcolor swatch clamps r", cmd->args[0] <= CP_CLEAR_MAX_V + 0.001f);
+    }
+    color_picker_stop();
+    color_picker_state_reset();
+
+    /* --- Hex readout + sticky harmony key ------------------------------ */
+    repl_state_document_count_set(1);
+    repl_state_document_cmds_mut()[0].type = CMD_COLOR3F;
+    repl_state_document_cmds_mut()[0].args[0] = 1.0f;   /* pure red */
+    repl_state_document_cmds_mut()[0].args[1] = 0.0f;
+    repl_state_document_cmds_mut()[0].args[2] = 0.0f;
+    repl_state_document_cmds_mut()[0].valid = 1;
+    repl_state_document_cmds_mut()[0].has_vars = 0;
+    color_picker_start(0, 300);
+    view = color_picker_view();
+    ASSERT_TRUE("hex readout for pure red", strcmp(view.hex, "#FF0000FF") == 0);
+
+    /* Enter the Harmony tab -> key auto-seeds from the current (red) color. */
+    {
+        int harm_x = view.tab_x + view.tab_w * 5 / 6;
+        int tab_my = ui_state_viewport().window_h - (view.tab_y - view.tab_h / 2);
+        color_picker_handle_press(harm_x, tab_my);
+    }
+    view = color_picker_view();
+    ASSERT_TRUE("harmony key seeded", view.key_set == 1);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "key swatch == red r", view.swatches[0][0], 1.0f);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "key swatch == red g", view.swatches[0][1], 0.0f);
+
+    /* Drag the hue bar to change the current color; the key (swatch 0) must
+     * NOT move — the tetrad stays anchored. */
+    {
+        int hue_mx = view.rects.hue_x + 5;
+        int hue_my = ui_state_viewport().window_h - (view.rects.hue_y + 70);
+        color_picker_handle_press(hue_mx, hue_my);
+        color_picker_handle_release();
+    }
+    view = color_picker_view();
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "key unchanged after hue drag", view.swatches[0][0], 1.0f);
+
+    /* Close and reopen on a *different* command color: the key persists
+     * across instances (tab stays Harmony, key not re-seeded). */
+    color_picker_stop();
+    repl_state_document_cmds_mut()[0].args[0] = 0.0f;   /* green */
+    repl_state_document_cmds_mut()[0].args[1] = 1.0f;
+    repl_state_document_cmds_mut()[0].args[2] = 0.0f;
+    color_picker_start(0, 300);
+    view = color_picker_view();
+    ASSERT_TRUE("tab persisted as Harmony", view.palette_tab == CP_TAB_HARMONY);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "key carried across instances", view.swatches[0][0], 1.0f);
+
+    /* Hit-test reports the Set-key button, and pressing it re-anchors the
+     * key to the current (green) color. */
+    {
+        int kb_mx = view.key_btn_x + view.key_btn_w / 2;
+        int kb_my = ui_state_viewport().window_h - (view.key_btn_y - view.key_btn_h / 2);
+        UiHit kh = ui_color_picker_hit_test_helper(kb_mx, kb_my);
+        ASSERT_TRUE("hit-test over set-key button", kh.kind == UI_HIT_COLOR_SWATCH);
+        ColorPickerInputResult kr = color_picker_handle_press(kb_mx, kb_my);
+        ASSERT_TRUE("set-key consumed", kr.consumed == 1);
+        ASSERT_TRUE("set-key no writeback", kr.changed == 0);
+    }
+    view = color_picker_view();
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "key re-anchored to green g", view.swatches[0][1], 1.0f);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "key re-anchored to green r", view.swatches[0][0], 0.0f);
+
+    color_picker_stop();
+    color_picker_state_reset();
+
     /* Test swatch rendering — render reads from a transformer entry, not
      * from the document, so build a minimal one for the test. */
     gl_stub_counts_reset();
