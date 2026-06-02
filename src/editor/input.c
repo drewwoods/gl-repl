@@ -517,6 +517,7 @@ static int parse_input_for_enter_commit(GLCmd *cmd, char *text_out, int text_sz,
         ReplParseContext parse_ctx = {
             .source_line_idx = insert_idx,
             .vars = vis_vars, .num_vars = num_vis_vars,
+            .strict_refs = 1,
             .err_buf = parse_err_buf,
             .err_sz  = (int)sizeof(parse_err_buf),
         };
@@ -529,6 +530,7 @@ static int parse_input_for_enter_commit(GLCmd *cmd, char *text_out, int text_sz,
     } else {
         ReplParseContext parse_ctx = {
             .source_line_idx = insert_idx,
+            .strict_refs = 1,
             .err_buf = parse_err_buf,
             .err_sz  = (int)sizeof(parse_err_buf),
         };
