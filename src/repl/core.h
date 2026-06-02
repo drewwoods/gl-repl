@@ -37,20 +37,21 @@ void repl_save_default_output(const ReplExportLayout *layout);
 
 /* Save the active user scene to a file named after the scene:
  * `<workspace_dir>/<slug>.c` when a workspace dir is bound, else
- * `<slug>.c` in the cwd. When there is no active named user scene
- * (an example / transient document) this falls back to
- * repl_save_default_output() (./output.c). Creates the workspace dir
- * if needed and sets its own status naming the real file (the
+ * `<slug>.c` in the cwd. App/controller callers that need a per-user
+ * fallback directory should bind it before calling. When there is no
+ * active named user scene (an example / transient document) this falls
+ * back to repl_save_default_output() (./output.c). Creates the workspace
+ * dir if needed and sets its own status naming the real file (the
  * underlying writer hardcodes an output.c message). */
 void repl_save_active_scene(const ReplExportLayout *layout);
 
 /* Return the path to use when exporting the active scene to a file with
  * extension `ext` (no leading dot), mirroring repl_save_active_scene's
- * naming: `<workspace_dir>/<slug>.<ext>` (creating the dir) or `<slug>.<ext>`
- * in the cwd for an active named user scene, else `output.<ext>` for an
- * example / transient document. Used by the .ply export so it tracks the scene
- * name the way Save Scene does. Returns a pointer to a static buffer valid
- * until the next call. */
+ * naming: `<workspace_dir>/<slug>.<ext>` (creating the dir) or
+ * `<slug>.<ext>` in the cwd for an active named user scene, else
+ * `output.<ext>` for an example / transient document. Used by the .ply
+ * export so it tracks the scene name the way Save Scene does. Returns a
+ * pointer to a static buffer valid until the next call. */
 const char *repl_active_scene_export_path(const char *ext);
 
 /* Workspace I/O: save every occupied user-scene slot to `<dir>/<slug>.c`.

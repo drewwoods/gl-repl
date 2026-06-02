@@ -3,6 +3,7 @@
 #include "app/glr_debug.h"
 #include "app/glr_audio.h"
 #include "app/glr_mesh_export.h"
+#include "app/glr_paths.h"
 
 #include <ctype.h>
 #include <dirent.h>
@@ -10,7 +11,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <sys/time.h>
 #include <unistd.h>
 #if defined(__APPLE__)
@@ -57,7 +57,7 @@ static void init_trace_detail(const char *phase) {
  * "assets" by default, or the --assets <dir> / GLR_ASSETS_DIR override
  * — then the copy bundled beside the executable in a macOS .app
  * (<exe>/../Resources/assets — where `make app` puts sample.mp3), and
- * a per-user music folder (user_music_dir) the user can drop more
+ * a per-user music folder (glr_paths_user_music_dir) the user can drop more
  * tracks into. */
 #ifndef AUDIO_ASSETS_DIR
 #define AUDIO_ASSETS_DIR "assets"
@@ -144,42 +144,6 @@ static int executable_dir(char *buf, size_t buflen) {
     return 1;
 }
 
-/* Per-user "drop more music here" folder. macOS uses Application
- * Support; elsewhere the XDG data home (or ~/.local/share). Fills buf
- * and returns 1, or 0 if no home directory is known. */
-static int user_music_dir(char *buf, size_t buflen) {
-    const char *home = getenv("HOME");
-#if defined(__APPLE__)
-    if (!home || !home[0]) return 0;
-    snprintf(buf, buflen,
-             "%s/Library/Application Support/gl-repl/Music", home);
-#else
-    const char *xdg = getenv("XDG_DATA_HOME");
-    if (xdg && xdg[0]) {
-        snprintf(buf, buflen, "%s/gl-repl/music", xdg);
-    } else {
-        if (!home || !home[0]) return 0;
-        snprintf(buf, buflen, "%s/.local/share/gl-repl/music", home);
-    }
-#endif
-    return 1;
-}
-
-/* mkdir -p. Returns 1 only when the leaf directory was freshly created
- * by this call (so the caller can announce it once), 0 otherwise. */
-static int ensure_dir(const char *path) {
-    char tmp[AUDIO_MUSIC_MAX_LEN];
-    snprintf(tmp, sizeof(tmp), "%s", path);
-    for (char *p = tmp + 1; *p; p++) {
-        if (*p == '/') {
-            *p = '\0';
-            mkdir(tmp, 0755);      /* intermediate; ignore EEXIST */
-            *p = '/';
-        }
-    }
-    return mkdir(tmp, 0755) == 0;
-}
-
 /* Builds the playlist from every candidate music source in priority
  * order: `assets_dir` (the working-directory "assets" by default, or
  * the --assets / GLR_ASSETS_DIR override), the bundled assets beside
@@ -200,8 +164,9 @@ static int build_mp3_playlist(const char *assets_dir,
     }
 
     char udir[AUDIO_MUSIC_MAX_LEN];
-    if (user_music_dir(udir, sizeof(udir))) {
-        if (ensure_dir(udir)) {
+    if (glr_paths_user_music_dir(udir, sizeof(udir))) {
+        int created = 0;
+        if (glr_paths_ensure_dir(udir, &created) && created) {
             fprintf(stderr, "repl_audio: add more music in %s\n", udir);
         }
         n = scan_dir_into(udir, out_paths, n, max_paths);

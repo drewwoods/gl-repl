@@ -19,6 +19,8 @@
 #ifndef GLR_ACTIONS_H
 #define GLR_ACTIONS_H
 
+#include "app/glr_paths.h"
+
 /* Top-level menu identifiers. Matches the menu bar structure (File / Scene /
  * Tutorials / Config) used by ui_menu_bar and by this module's dispatch. */
 typedef enum {
@@ -67,10 +69,6 @@ enum {
     GLR_TUTORIAL_OFF_EXIT    = 2,
     GLR_TUTORIAL_FIXED_COUNT = 3
 };
-
-/* Default workspace directory for save/load operations. Can be overridden by
- * workspace metadata headers or explicit user selection. */
-#define GLR_DEFAULT_WORKSPACE_DIR "./workspace"
 
 /* Apply initial presentation configuration defaults at startup. Initializes the
  * presentation config toggles and cycles to their default values. Called during

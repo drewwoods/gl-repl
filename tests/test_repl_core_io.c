@@ -1412,9 +1412,9 @@ int main(void) {
         remove(trunc_path);
     }
 
-    /* Scene/workspace callers must preserve export write failures. Use a
-     * regular file as the "workspace dir" so mkdir() sees EEXIST but the
-     * subsequent scene export path cannot be opened for writing. */
+    /* Scene/workspace callers must preserve save failures. Use a regular
+     * file as the "workspace dir" so recursive directory creation rejects
+     * the path before any success status can mask the error. */
     {
         const char *bad_workspace = "/tmp/repl_core_workspace_save_failure";
         const char *prev_workspace = "/tmp/repl_core_previous_workspace";
@@ -1432,8 +1432,8 @@ int main(void) {
         ASSERT_INT("workspace save surfaces export failure",
                    repl_save_workspace(bad_workspace, NULL), -1);
         UiStatusState status = ui_state_status();
-        ASSERT_TRUE("workspace save keeps write error status",
-                    strstr(status.text, "cannot write") != NULL);
+        ASSERT_TRUE("workspace save keeps create error status",
+                    strstr(status.text, "cannot create") != NULL);
         ASSERT_TRUE("workspace save does not overwrite with success",
                     strstr(status.text, "Saved ") == NULL);
         ASSERT_TRUE("workspace save preserves previous workspace binding",
