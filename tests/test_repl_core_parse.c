@@ -478,6 +478,42 @@ int main(void) {
         ASSERT_TRUE("label >4 sub args status",
                     strstr(g_status, "max 4") != NULL);
     }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("label(\"a ( b\")", &cmd);
+        ASSERT_TRUE("label ( forbidden", ok == 0);
+        ASSERT_TRUE("label ( forbidden status",
+                    strstr(g_status, "'('") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("label(\"a ) b\")", &cmd);
+        ASSERT_TRUE("label ) forbidden", ok == 0);
+        ASSERT_TRUE("label ) forbidden status",
+                    strstr(g_status, "')'") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("label(\"1234567890123456789012345678901234567890123456789012345678901234\")", &cmd);
+        ASSERT_TRUE("label 64-char format rejected", ok == 0);
+        ASSERT_TRUE("label 64-char format status",
+                    strstr(g_status, "format too long") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("label(\"123456789012345678901234567890123456789012345678901234567890123\")", &cmd);
+        ASSERT_TRUE("label 63-char format accepted", ok == 1);
+        ASSERT_TRUE("label 63-char format matches",
+                    strcmp(cmd.payload.label.fmt, "123456789012345678901234567890123456789012345678901234567890123") == 0);
+    }
 
     /* Removed GLU quadric shapes should no longer parse. */
     {

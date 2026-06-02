@@ -1717,6 +1717,7 @@ int main(void) {
     ASSERT_TRUE("mutual recursion second x", fabsf(repl_state_flat_program_cmds_mut()[1].args[0] - (-1.0f)) < 1e-6f);
     ASSERT_TRUE("mutual recursion base x", fabsf(repl_state_flat_program_cmds_mut()[2].args[0] - 0.0f) < 1e-6f);
 
+    /* Runaway recursion (depth limit guard) */
     glr_ctrl_reset_all(); declare_test_vars();
     g_status[0] = '\0';
     editor_feed_line("func0(n) {");
@@ -1725,9 +1726,25 @@ int main(void) {
     editor_feed_line("func0(0);");
     repl_flatten_commands(editor_state_edit_line());
     ASSERT_TRUE("runaway recursion emits no flat cmds", repl_state_flat_program_count() == 0);
-    ASSERT_TRUE("runaway recursion depth guard",
-                strstr(g_status, "depth limit") != NULL ||
+    ASSERT_TRUE("runaway recursion specifically hits depth limit",
+                strstr(g_status, "depth limit") != NULL);
+    ASSERT_TRUE("runaway recursion does not hit visit budget",
+                strstr(g_status, "visit budget") == NULL);
+
+    /* Runaway loops (visit budget limit guard) */
+    glr_ctrl_reset_all(); declare_test_vars();
+    g_status[0] = '\0';
+    editor_feed_line("for(i, 0, 1000) {");
+    editor_feed_line("for(j, 0, 1000) {");
+    editor_feed_line("// comment");
+    editor_feed_line("}");
+    editor_feed_line("}");
+    repl_flatten_commands(editor_state_edit_line());
+    ASSERT_TRUE("runaway loops emit no flat cmds", repl_state_flat_program_count() == 0);
+    ASSERT_TRUE("runaway loops specifically hit visit budget",
                 strstr(g_status, "visit budget") != NULL);
+    ASSERT_TRUE("runaway loops do not hit depth limit",
+                strstr(g_status, "depth limit") == NULL);
 
     /* Regression: a second definition of func<N> is rejected with a
      * status message instead of silently creating a duplicate that the
