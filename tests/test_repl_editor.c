@@ -366,6 +366,69 @@ int main() {
                    "pinned = 3");
     }
 
+    /* commit_current_input lenient-block regression (main commit
+     * d704d33 "editor: allow Enter to commit block structs from any
+     * cursor position"). In overwrite mode at a non-last, non-block-
+     * head line, Enter used to try editor_try_commit_block_structs()
+     * only when the cursor already sat on a block-head command. On any
+     * other line (assignment, GL call, ...) an if(...) {, for(...) {,
+     * or funcN() { fell through to the GL parser, which rejected the
+     * trailing `{` with "unexpected text after ')'". The fix moves the
+     * block_structs attempt unconditionally ahead of the var-statement
+     * chain and the GL parser, matching the ;-key path
+     * (editor_try_commit_any). These cases drive the real Enter route
+     * (editor_handle_key('\r', ...)) from a glVertex line — a
+     * non-block-head, non-last cursor — and assert each block head
+     * commits instead of erroring out. */
+    {
+        struct { const char *input; CmdType want; const char *label; } cases[] = {
+            { "if(t < 1) {",   CMD_IF_BEGIN,  "if-block" },
+            { "for(i, 0, 3) {", CMD_FOR_BEGIN, "for-loop" },
+            { "func0() {",     CMD_FUNC_DEF,  "func-def" },
+        };
+        for (int c = 0; c < (int)(sizeof(cases) / sizeof(cases[0])); c++) {
+            char detail[160];
+            glr_ctrl_reset_all();
+            declare_test_vars();
+            /* Two plain GL lines so the cursor parks on a non-last,
+             * non-block-head line. */
+            editor_feed_line("glVertex3f(0,0,0)");
+            editor_feed_line("glVertex3f(1,1,1)");
+            editor_navigate_to_line(0);
+            editor_insert_mode_set(0);
+            /* Enter accepts an active autocomplete before committing;
+             * clear it so we reach the commit path. */
+            g_ac_count = 0;
+            g_ac_sel = 0;
+            g_ac_ghost[0] = '\0';
+            g_ac_hint[0] = '\0';
+
+            snprintf(detail, sizeof(detail), "%s: cursor is non-block-head", cases[c].label);
+            ASSERT_INT(detail, repl_line_is_block_head(editor_state_edit_line()), 0);
+            snprintf(detail, sizeof(detail), "%s: overwrite mode", cases[c].label);
+            ASSERT_INT(detail, editor_insert_mode(), 0);
+            snprintf(detail, sizeof(detail), "%s: cursor not on last line", cases[c].label);
+            ASSERT_INT(detail, editor_state_edit_line() < repl_state_document_count(), 1);
+
+            int before = repl_state_document_count();
+            set_editor_input(cases[c].input);
+            editor_handle_key('\r', 0, 0);
+
+            snprintf(detail, sizeof(detail), "%s: Enter committed (cmd count grew)", cases[c].label);
+            ASSERT_TRUE(detail, repl_state_document_count() > before);
+
+            int found = 0;
+            for (int i = 0; i < repl_state_document_count(); i++)
+                if (repl_state_document_cmds_mut()[i].type == cases[c].want)
+                    found = 1;
+            snprintf(detail, sizeof(detail), "%s: block head command present", cases[c].label);
+            ASSERT_TRUE(detail, found);
+
+            snprintf(detail, sizeof(detail), "%s: no GL parse error", cases[c].label);
+            ASSERT_TRUE(detail, strstr(g_status, "unexpected text") == NULL);
+        }
+    }
+
     /* 0. Code/scene panel geometry supports left, top, bottom, and hidden layouts */
     {
         int x, y, w, h;
