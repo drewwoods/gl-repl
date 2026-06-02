@@ -8,6 +8,13 @@
 #include "source_document.h"
 #include "keys.h"
 #include "support/test_harness.h"
+
+#include "subsystems/replay/replay_render.h"
+#include "ui/subsystems/replay_hud.h"
+#include "ui/app/snapshot.h"
+#ifdef GL_STUBS
+#include <GL/gl_stub_counts.h>
+#endif
 #include <stdio.h>
 #include <string.h>
 
@@ -517,6 +524,72 @@ static void test_replay_regression_fixes(void) {
     replay_stop();
 }
 
+#ifdef GL_STUBS
+static void test_replay_rendering(void) {
+    printf("--- replay rendering & HUD callbacks ---\n");
+
+    /* 1. Setup mock program and fade batches */
+    glr_ctrl_reset_all();
+    add_mock_cmd(0, CMD_VERTEX3F);
+    repl_state_mark_flat_dirty();
+    repl_flatten_commands(editor_state_edit_line());
+
+    replay_start();
+    replay_push_fade_batch(0, 1);
+
+    /* Get the fade plan */
+    ReplayFadePlan plan;
+    memset(&plan, 0, sizeof(plan));
+    replay_copy_baseline_predef_snapshot(
+        plan.baseline_predef_vals,
+        plan.baseline_predef_names,
+        &plan.baseline_predef_count);
+    replay_copy_baseline_scratch_arrays(
+        plan.baseline_scratch_arrays);
+
+    ReplayFadeBatchView fade_batches = replay_fade_batches_view();
+    plan.batch_count = 1;
+    plan.batches[0] = fade_batches.batches[0];
+    plan.batch_alpha[0] = 0.5f;
+    plan.active = 1;
+    plan.tess_preview_active = 1;
+
+    /* 2. Test replay rendering functions */
+    gl_stub_counts_reset();
+    replay_render_fade_batches(&plan);
+    ASSERT_TRUE("render_fade_batches calls GL", gl_stub_counts[GL_STUB_glPushAttrib] > 0);
+
+    gl_stub_counts_reset();
+    replay_render_tess_preview(&plan);
+    ASSERT_TRUE("render_tess_preview calls GL", gl_stub_counts[GL_STUB_glPushAttrib] > 0);
+
+    gl_stub_counts_reset();
+    replay_render_post_fill(&plan);
+    ASSERT_TRUE("render_post_fill runs correctly", gl_stub_counts[GL_STUB_glPushAttrib] > 0);
+
+    /* 3. Test Replay HUD rendering */
+    UiRenderSnapshot hud_snap;
+    memset(&hud_snap, 0, sizeof(hud_snap));
+    hud_snap.replay.active = 1;
+    hud_snap.replay.total_flat_cmds = 1;
+    hud_snap.replay.pc = 0;
+    hud_snap.replay.state = REPLAY_PLAYING;
+    hud_snap.replay.speed = 1.0f;
+    hud_snap.replay.mode = REPLAY_MODE_VERTEX;
+    hud_snap.replay.expand_args = 1;
+    hud_snap.viewport.window_w = 800;
+    hud_snap.viewport.window_h = 600;
+    hud_snap.code_panel.layout_mode = CODE_PANEL_LAYOUT_LEFT;
+
+    gl_stub_counts_reset();
+    replay_ui_hud_render(&hud_snap);
+    ASSERT_TRUE("HUD render calls GL", gl_stub_counts[GL_STUB_glBegin] > 0);
+
+    /* Clean up */
+    replay_stop();
+}
+#endif
+
 int main(void) {
     test_replay_basic_controls();
     test_replay_stepping();
@@ -530,6 +603,9 @@ int main(void) {
     test_replay_single_arg_shape_gets_eval_annotation();
     test_replay_baseline_restore_survives_predef_reshape();
     test_replay_regression_fixes();
+#ifdef GL_STUBS
+    test_replay_rendering();
+#endif
 
     printf("test_repl_replay: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.run == g_harness.passed) ? 0 : 1;

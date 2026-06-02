@@ -1,4 +1,8 @@
 #include "scene/guides/transform_guides.h"
+#include "gl_includes.h"
+#ifdef GL_STUBS
+#include <GL/gl_stub_counts.h>
+#endif
 
 #include "support/test_harness.h"
 #include <stdio.h>
@@ -35,6 +39,141 @@ static SceneGuideSnapshot base_snapshot(const GLCmd *source_cmds,
     snapshot.input_len = (int)strlen(input);
     return snapshot;
 }
+
+#ifdef GL_STUBS
+static void test_transform_guides_render(void) {
+    printf("--- transform guides rendering ---\n");
+
+    /* 1. Translate guide rendering */
+    {
+        GLCmd source_cmds[2] = {0};
+        GLCmd flat_cmds[2] = {0};
+        SceneTransformGuidePlan plan;
+
+        source_cmds[0].type = CMD_TRANSLATE3F;
+        source_cmds[0].valid = 1;
+        source_cmds[0].args[0] = 2.0f;
+        source_cmds[0].args[1] = 0.0f;
+        source_cmds[0].args[2] = 0.0f;
+
+        flat_cmds[0].type = CMD_TRANSLATE3F;
+        flat_cmds[0].valid = 1;
+        flat_cmds[0].src_cmd_idx = 0;
+        flat_cmds[0].args[0] = 2.0f;
+        flat_cmds[0].args[1] = 0.0f;
+        flat_cmds[0].args[2] = 0.0f;
+
+        SceneGuideSnapshot snapshot =
+            base_snapshot(source_cmds, 2, flat_cmds, 1, 0,
+                          "glTranslatef(2,0,0)");
+        snapshot.edit_line_committed_text = "glTranslatef(2,0,0);";
+        snapshot.alpha_scale = 1.0f;
+        snapshot.anim_time = 0.0f;
+        snapshot.xform_guide_mode = SCENE_XFORM_GUIDE_FRAME;
+
+        int prepared = scene_transform_guides_prepare(&snapshot, &plan);
+        ASSERT_INT("translate prepared", prepared, 1);
+
+        float cam_view[16] = {
+            1,0,0,0,
+            0,1,0,0,
+            0,0,1,0,
+            0,0,0,1
+        };
+
+        gl_stub_counts_reset();
+        scene_transform_guides_render_if_due(&snapshot, &plan, 0, cam_view);
+        ASSERT_TRUE("translate rendering calls glBegin", gl_stub_counts[GL_STUB_glBegin] > 0);
+        ASSERT_TRUE("translate rendering calls glPushAttrib", gl_stub_counts[GL_STUB_glPushAttrib] > 0);
+    }
+
+    /* 2. Scale guide rendering */
+    {
+        GLCmd source_cmds[2] = {0};
+        GLCmd flat_cmds[2] = {0};
+        SceneTransformGuidePlan plan;
+
+        source_cmds[0].type = CMD_SCALEF;
+        source_cmds[0].valid = 1;
+        source_cmds[0].args[0] = 2.0f;
+        source_cmds[0].args[1] = 2.0f;
+        source_cmds[0].args[2] = 2.0f;
+
+        flat_cmds[0].type = CMD_SCALEF;
+        flat_cmds[0].valid = 1;
+        flat_cmds[0].src_cmd_idx = 0;
+        flat_cmds[0].args[0] = 2.0f;
+        flat_cmds[0].args[1] = 2.0f;
+        flat_cmds[0].args[2] = 2.0f;
+
+        SceneGuideSnapshot snapshot =
+            base_snapshot(source_cmds, 2, flat_cmds, 1, 0,
+                          "glScalef(2,2,2)");
+        snapshot.edit_line_committed_text = "glScalef(2,2,2);";
+        snapshot.alpha_scale = 1.0f;
+        snapshot.anim_time = 0.0f;
+        snapshot.xform_guide_mode = SCENE_XFORM_GUIDE_FRAME;
+
+        int prepared = scene_transform_guides_prepare(&snapshot, &plan);
+        ASSERT_INT("scale prepared", prepared, 1);
+
+        float cam_view[16] = {
+            1,0,0,0,
+            0,1,0,0,
+            0,0,1,0,
+            0,0,0,1
+        };
+
+        gl_stub_counts_reset();
+        scene_transform_guides_render_if_due(&snapshot, &plan, 0, cam_view);
+        ASSERT_TRUE("scale rendering calls glBegin", gl_stub_counts[GL_STUB_glBegin] > 0);
+    }
+
+    /* 3. Rotate guide rendering */
+    {
+        GLCmd source_cmds[2] = {0};
+        GLCmd flat_cmds[2] = {0};
+        SceneTransformGuidePlan plan;
+
+        source_cmds[0].type = CMD_ROTATEF;
+        source_cmds[0].valid = 1;
+        source_cmds[0].args[0] = 45.0f;
+        source_cmds[0].args[1] = 0.0f;
+        source_cmds[0].args[2] = 1.0f;
+        source_cmds[0].args[3] = 0.0f;
+
+        flat_cmds[0].type = CMD_ROTATEF;
+        flat_cmds[0].valid = 1;
+        flat_cmds[0].src_cmd_idx = 0;
+        flat_cmds[0].args[0] = 45.0f;
+        flat_cmds[0].args[1] = 0.0f;
+        flat_cmds[0].args[2] = 1.0f;
+        flat_cmds[0].args[3] = 0.0f;
+
+        SceneGuideSnapshot snapshot =
+            base_snapshot(source_cmds, 2, flat_cmds, 1, 0,
+                          "glRotatef(45,0,1,0)");
+        snapshot.edit_line_committed_text = "glRotatef(45,0,1,0);";
+        snapshot.alpha_scale = 1.0f;
+        snapshot.anim_time = 0.0f;
+        snapshot.xform_guide_mode = SCENE_XFORM_GUIDE_FRAME;
+
+        int prepared = scene_transform_guides_prepare(&snapshot, &plan);
+        ASSERT_INT("rotate prepared", prepared, 1);
+
+        float cam_view[16] = {
+            1,0,0,0,
+            0,1,0,0,
+            0,0,1,0,
+            0,0,0,1
+        };
+
+        gl_stub_counts_reset();
+        scene_transform_guides_render_if_due(&snapshot, &plan, 0, cam_view);
+        ASSERT_TRUE("rotate rendering calls glBegin", gl_stub_counts[GL_STUB_glBegin] > 0);
+    }
+}
+#endif
 
 int main(void) {
     printf("--- scene guide planner tests ---\n");
@@ -189,6 +328,10 @@ int main(void) {
         ASSERT_INT("after index falls back to flat count",
                    plan.after_flat_idx, 2);
     }
+
+#ifdef GL_STUBS
+    test_transform_guides_render();
+#endif
 
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return g_harness.passed == g_harness.run ? 0 : 1;
