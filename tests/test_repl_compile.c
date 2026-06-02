@@ -1478,5 +1478,54 @@ int main(void) {
         repl_compiled_change_rollback_alias(&change);
     }
 
+    /* Func alias slot exhaustion test */
+    {
+        glr_ctrl_reset_all();
+        repl_func_alias_clear_all();
+
+        /* Register 10 distinct custom aliases to fill up all slots. */
+        for (int i = 0; i < REPL_FUNC_SLOT_COUNT; i++) {
+            char name[32];
+            snprintf(name, sizeof(name), "myfunc%d", i);
+            int set_ok = repl_func_alias_set(i, name);
+            ASSERT_TRUE("fill alias slot", set_ok == 1);
+        }
+
+        /* Verify all 10 slots are occupied. */
+        ASSERT_INT("first free slot after fill", repl_func_alias_first_free_slot(), -1);
+
+        /* Attempt to compile an 11th custom function def. */
+        ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
+        ReplCompiledChange change;
+        repl_compiled_change_init(&change);
+        char err[256] = "";
+        ReplCompileResult r = repl_compile_func_def("myfunc10() {", &ctx, &change, err, sizeof(err));
+
+        /* Verify that it was rejected with the slot exhaustion error. */
+        ASSERT_INT("exhaustion compile result is ERROR", r, REPL_COMPILE_ERROR);
+        ASSERT_TRUE("exhaustion error mentions free slots", strstr(err, "no free function slots") != NULL);
+
+        /* Make sure it didn't leak. */
+        ASSERT_TRUE("myfunc10 slot not registered", repl_func_alias_lookup_slot("myfunc10") < 0);
+    }
+
+    /* Func alias name collision test */
+    {
+        glr_ctrl_reset_all();
+        repl_func_alias_clear_all();
+
+        /* Set an alias in slot 0. */
+        int set_ok = repl_func_alias_set(0, "myfunc0");
+        ASSERT_TRUE("set slot 0 alias", set_ok == 1);
+
+        /* Assign the same alias to a different slot (slot 1).
+         * This should be rejected by repl_func_alias_set. */
+        int collide_ok = repl_func_alias_set(1, "myfunc0");
+        ASSERT_TRUE("collision set is rejected", collide_ok == 0);
+
+        /* Verify that lookup still returns slot 0. */
+        ASSERT_INT("lookup returns slot 0", repl_func_alias_lookup_slot("myfunc0"), 0);
+    }
+
     return test_harness_report(&g_harness, "test_repl_compile");
 }
