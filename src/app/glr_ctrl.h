@@ -11,6 +11,8 @@
 
 void glr_ctrl_init_gl(void);
 void glr_ctrl_bootstrap_repl(const char *input_file);
+void glr_shutdown(void);
+void glr_ctrl_set_time(float value);
 
 /* Apply tag-keyed presentation defaults from a (table, n) policy.
  * For each entry whose tag bit is set in `tag_mask`, call glr_config_set

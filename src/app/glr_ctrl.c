@@ -2007,6 +2007,10 @@ void glr_ctrl_set_accum(int enabled) {
     glr_state_render_mut()->use_accum = enabled ? 1 : 0;
 }
 
+void glr_ctrl_set_time(float value) {
+    repl_set_time(value);
+}
+
 void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
     if (!out) return;
     int sx = 0, sy = 0, sw = 0, sh = 0;
@@ -2214,4 +2218,9 @@ void glr_ctrl_timer(int value) {
     glr_ctrl_tick();
     glutPostRedisplay();
     glutTimerFunc(GLR_FRAME_DT_MS, glr_ctrl_timer, 0);
+}
+
+void glr_shutdown(void) {
+    glr_audio_shutdown();
+    repl_executor_destroy_resources();
 }
