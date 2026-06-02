@@ -72,7 +72,7 @@ static void fmt_delta(char *buf, int buf_sz,
         snprintf(buf, (size_t)buf_sz, "%*.1f MB", MEMPROF_FMT_WIDTH, 0.0);
         return;
     }
-    char tmp[24];
+    char tmp[128];
     unsigned long long mag = (cur > base) ? cur - base : base - cur;
     char sign = (cur > base) ? '+' : '-';
     memprof_format_bytes(tmp, (int)sizeof(tmp), mag);
@@ -160,7 +160,7 @@ void ui_memory_panel_render(const UiMemoryPanelView *view) {
 
     int col_label = tx;
     int col_value = tx + 64;
-    char val_buf[24];
+    char val_buf[256];
 
     ui_clr(UI_TOK_TEXT_SECTION);
     gl2d_draw_string((float)col_label, (float)ty, "RSS",   FONT_SMALL);

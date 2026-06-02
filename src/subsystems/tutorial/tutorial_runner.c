@@ -430,8 +430,7 @@ static int tutorial_cfg_line_value_resolves(const char *cfg_line,
     if (repl_cfg_resolve_text(slug, tmp, &dummy))
         return 1;
     if (value_out && value_out_sz > 0) {
-        strncpy(value_out, tmp, value_out_sz - 1);
-        value_out[value_out_sz - 1] = '\0';
+        snprintf(value_out, value_out_sz, "%s", tmp);
     }
     return 0;
 }

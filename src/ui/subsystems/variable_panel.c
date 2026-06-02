@@ -57,16 +57,25 @@ static float var_panel_log_scale(const UiVariable *vars, int count) {
 
 static const char *truncate_var_name(const char *name, size_t max_len) {
     static char buf[64];
-    max_len = MIN(max_len, sizeof(buf) - 1);
+    /* Ensure max_len fits in buf with room for null terminator. */
+    if (max_len >= sizeof(buf)) max_len = sizeof(buf) - 1;
 
     /* truncate name with ellipsis in the middle if necessary */
     size_t n = strlen(name);
     if (n > max_len) {
-        size_t half = max_len / 2;
-        snprintf(buf, max_len, "%.*s...%.*s", (int)half - 1, name, (int)(max_len - half - 2), name + n - (max_len - half - 2));
+        /* Total length including "..." should be exactly max_len. */
+        if (max_len < 4) {
+            /* degenerate case: not even room for x...x */
+            snprintf(buf, sizeof(buf), "...");
+        } else {
+            size_t avail = max_len - 3;
+            size_t prefix = avail / 2;
+            size_t suffix = avail - prefix;
+            snprintf(buf, sizeof(buf), "%.*s...%.*s", (int)prefix, name, (int)suffix, name + n - suffix);
+        }
     } else {
-        strncpy(buf, name, max_len);
-        buf[max_len] = '\0';
+        strncpy(buf, name, sizeof(buf) - 1);
+        buf[sizeof(buf) - 1] = '\0';
     }
     return buf;
 }

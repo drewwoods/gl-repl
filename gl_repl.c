@@ -157,7 +157,8 @@ static int build_mp3_playlist(const char *assets_dir,
 
     char exedir[AUDIO_MUSIC_MAX_LEN];
     if (executable_dir(exedir, sizeof(exedir))) {
-        char bundled[AUDIO_MUSIC_MAX_LEN];
+        /* Path can be exedir + "/../Resources/" + AUDIO_ASSETS_DIR + null. */
+        char bundled[AUDIO_MUSIC_MAX_LEN + 64];
         snprintf(bundled, sizeof(bundled), "%s/../Resources/%s",
                  exedir, AUDIO_ASSETS_DIR);
         n = scan_dir_into(bundled, out_paths, n, max_paths);
