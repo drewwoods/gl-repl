@@ -508,6 +508,14 @@ int glr_scene_menu_slot_for_dense_index(int scene_idx) {
     return -1;
 }
 
+int glr_scene_example_count(void) {
+    return repl_example_count();
+}
+
+const char *glr_scene_example_name(int idx) {
+    return repl_example_name(idx);
+}
+
 /* Shared scene-load sequences. The Scene menu and the scene tab strip
  * both switch scenes; keep the load sequence (and its load-bearing
  * subtleties) in one place rather than duplicating the statements.

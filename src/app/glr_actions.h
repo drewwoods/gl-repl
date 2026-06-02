@@ -114,6 +114,11 @@ int  glr_cfg_handle_special_shortcut(int key);
  * Called by the menu UI (ui_menu_bar.h). */
 int  glr_action_menu_item_activate(int menu_id, int item_idx);
 
+/* Built-in example metadata exposed through the app layer for CLI and UI
+ * callers that should not include repl/examples.h directly. */
+int         glr_scene_example_count(void);
+const char *glr_scene_example_name(int idx);
+
 /* Map a dense user scene display index to the actual user scene slot number.
  * scene_idx is the position in the displayed menu (0 = first user scene);
  * returns the slot index into g_user_scenes[]. Used by the scene menu renderer

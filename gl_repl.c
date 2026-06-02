@@ -1,11 +1,8 @@
 #include "app/glr_ctrl.h"
 #include "app/glr_actions.h"
 #include "app/glr_debug.h"
-#include "repl/executor.h"
-#include "repl/core.h"               /* repl_set_time (--time / GLR_TIME) */
 #include "app/glr_audio.h"
 #include "app/glr_mesh_export.h"
-#include "repl/examples.h"           /* repl_example_count / repl_example_name */
 
 #include <ctype.h>
 #include <dirent.h>
@@ -267,17 +264,17 @@ static int example_ci_contains(const char *hay, const char *needle) {
 }
 
 static void list_examples(FILE *out) {
-    int n = repl_example_count();
+    int n = glr_scene_example_count();
     fprintf(out, "Built-in examples (%d):\n", n);
     for (int i = 0; i < n; i++)
-        fprintf(out, "  %2d  %s\n", i, repl_example_name(i));
+        fprintf(out, "  %2d  %s\n", i, glr_scene_example_name(i));
 }
 
 /* Resolve --example <arg> to a built-in example index. `arg` is either an
  * index (all digits) or a name (case-insensitive: exact match preferred, else
  * the first substring match). Returns the index, or -1 if nothing matches. */
 static int resolve_example_index(const char *arg) {
-    int n = repl_example_count();
+    int n = glr_scene_example_count();
     if (n <= 0 || !arg || !arg[0]) return -1;
 
     int all_digits = 1;
@@ -290,7 +287,7 @@ static int resolve_example_index(const char *arg) {
 
     int substr = -1;
     for (int i = 0; i < n; i++) {
-        const char *name = repl_example_name(i);
+        const char *name = glr_scene_example_name(i);
         if (!name) continue;
         if (example_ci_equal(name, arg)) return i;          /* exact wins */
         if (substr < 0 && example_ci_contains(name, arg)) substr = i;
@@ -477,9 +474,9 @@ int main(int argc, char **argv) {
         if (dump_code || dump_flat)
             glr_ctrl_bootstrap_repl(input_file);
         if (dump_code)
-            glr_debug_dump_editor(stdout, source_document_view());
+            glr_debug_dump_current_editor(stdout);
         if (dump_flat)
-            glr_debug_dump_flat_commands_sync(stdout, source_document_view());
+            glr_debug_dump_current_flat_commands_sync(stdout);
         if (dump_state_layout)
             glr_debug_dump_runtime_state_layout(stdout);
         return 0;
@@ -495,8 +492,8 @@ int main(int argc, char **argv) {
     init_trace("window created");
 
     glr_ctrl_init_gl();
+    atexit(glr_shutdown);
     init_trace("GL init done");
-    atexit(repl_executor_destroy_resources);
     glr_ctrl_bootstrap_repl(input_file);
     if (example_index >= 0)
         glr_scene_load_example(example_index);
@@ -507,7 +504,7 @@ int main(int argc, char **argv) {
     {
         const char *t_src = time_arg ? time_arg : getenv("GLR_TIME");
         if (t_src && *t_src)
-            repl_set_time((float)atof(t_src));
+            glr_ctrl_set_time((float)atof(t_src));
     }
     init_trace("REPL bootstrap done");
     glr_ctrl_set_accum(use_accum);
@@ -558,7 +555,6 @@ int main(int argc, char **argv) {
          * already populated g_cfg_mode. The action layer maps that UI config
          * value back onto the audio engine before the first frame. */
         glr_actions_apply_defaults();
-        atexit(glr_audio_shutdown);
         init_trace("audio playlist started");
     }
 
