@@ -345,6 +345,7 @@ SRCS = \
 	src/support/memprof.c \
 	src/support/cpuprof.c \
 	src/support/mesh_ply.c \
+	src/app/glr_paths.c \
 	src/app/glr_mesh_export.c \
 	gl_repl.c \
 	src/app/glr_actions.c \
@@ -457,6 +458,7 @@ HDRS = \
 	src/app/glr_ctrl.h \
 	src/app/glr_debug.h \
 	src/app/glr_defaults.h \
+	src/app/glr_paths.h \
 	src/app/glr_state.h \
 	src/editor/clipboard.h \
 	src/editor/commit.h \
@@ -537,6 +539,7 @@ CORE_TEST_SRCS = \
 	src/support/memprof.c \
 	src/support/cpuprof.c \
 	src/support/mesh_ply.c \
+	src/app/glr_paths.c \
 	src/app/glr_mesh_export.c \
 	src/app/glr_actions.c \
 	src/app/glr_camera.c \

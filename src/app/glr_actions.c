@@ -98,6 +98,24 @@ static const char *axes_theme_names[AXES_THEME_COUNT] = {
 };
 static char cfg_status_buf[REPL_STATUS_TEXT_MAX];
 
+static const char *workspace_dir_or_app_default(void) {
+    const char *dir = repl_workspace_dir();
+    if (dir && dir[0])
+        return dir;
+    return glr_paths_default_workspace_dir();
+}
+
+static void bind_app_workspace_for_scene_save_if_needed(void) {
+    const char *dir = repl_workspace_dir();
+    if (dir && dir[0])
+        return;
+    if (repl_active_user_scene() < 0)
+        return;
+    if (glr_paths_cwd_supports_relative_saves())
+        return;
+    repl_set_workspace_dir(glr_paths_default_workspace_dir());
+}
+
 /* Unified audio cfg: two-state on/off toggle.
  * Indices:
  *   0 = Off  - paused
@@ -738,6 +756,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             return 1;
         case GLR_FILE_ITEM_SAVE_SCENE: {
             ReplExportLayout layout;
+            bind_app_workspace_for_scene_save_if_needed();
             glr_ctrl_fill_export_layout(&layout);
             repl_save_active_scene(&layout);
             return 1;
@@ -755,21 +774,18 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             return 1;
         }
         case GLR_FILE_ITEM_EXPORT_PLY:
+            bind_app_workspace_for_scene_save_if_needed();
             glr_export_mesh_ply(repl_active_scene_export_path("ply"), 0);
             return 1;
         case GLR_FILE_ITEM_SAVE_WORKSPACE: {
-            const char *dir = repl_workspace_dir();
-            if (!dir || !dir[0])
-                dir = GLR_DEFAULT_WORKSPACE_DIR;
+            const char *dir = workspace_dir_or_app_default();
             ReplExportLayout layout;
             glr_ctrl_fill_export_layout(&layout);
             repl_save_workspace(dir, &layout);
             return 1;
         }
         case GLR_FILE_ITEM_LOAD_WORKSPACE: {
-            const char *dir = repl_workspace_dir();
-            if (!dir || !dir[0])
-                dir = GLR_DEFAULT_WORKSPACE_DIR;
+            const char *dir = workspace_dir_or_app_default();
             glr_camera_clear_scene_default();
             int n = repl_load_workspace(dir);
             if (n >= 0)
