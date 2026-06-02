@@ -1909,6 +1909,10 @@ static void special_func(int key, int x, int y) {
     restore_hidden_code_panel_for_special(key);
 
     if (editor_search_handle_special(key))   return;
+    if (key == GLUT_KEY_DELETE) {
+        handle_text_delete_key_route(KEY_DELETE);
+        return;
+    }
     if (handle_horizontal_special_key_route(key)) return;
     if (handle_vertical_special_key_route(key)) return;
     if (handle_page_scroll_special_key_route(key)) return;
