@@ -26,6 +26,7 @@
 #define g_ac_hint   (editor_state_autocomplete_mut()->hint)
 #define g_ac_matches (editor_state_autocomplete_mut()->matches)
 
+#include "support/repl_test_support.h"
 #include "support/test_harness.h"
 #include <ctype.h>
 #include <stdio.h>
@@ -36,6 +37,14 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 
 #define ASSERT_TRUE(label, cond) do { \
     TEST_ASSERT_TRUE(&g_harness, label, cond); \
+} while (0)
+
+#define ASSERT_INT(label, got, exp) do { \
+    TEST_ASSERT_INT(&g_harness, label, got, exp); \
+} while (0)
+
+#define ASSERT_FLOAT(label, got, exp) do { \
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, label, got, exp); \
 } while (0)
 
 #define ASSERT_STR(label, got, exp) do { \
@@ -229,8 +238,242 @@ next_pc:
     }
 }
 
+static int test_count_cmd_type(CmdType type) {
+    int count = 0;
+
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        if (repl_state_document_cmds_mut()[i].type == type)
+            count++;
+    }
+    return count;
+}
+
+static void assert_flat_vertex3_x(const char *label, int flat_idx,
+                                  float expected) {
+    ASSERT_TRUE(label, flat_idx >= 0 &&
+                flat_idx < repl_state_flat_program_count() &&
+                repl_state_flat_program_cmds_mut()[flat_idx].type == CMD_VERTEX3F &&
+                fabsf(repl_state_flat_program_cmds_mut()[flat_idx].args[0] -
+                      expected) < 1e-6f);
+}
+
+static void run_program_feed_matrix(void) {
+    reset_repl();
+    ASSERT_TRUE("feed matrix predef assign: feed",
+                feed_program("float n;", "n = 3;"));
+    ASSERT_INT("feed matrix predef assign: doc count",
+               repl_state_document_count(), 2);
+    ASSERT_FLOAT("feed matrix predef assign: n", predef_val("n"), 3.0f);
+
+    reset_repl();
+    ASSERT_TRUE("feed matrix one-line for: feed",
+                feed_program("float n = 3;",
+                             "for(i, 0, n) glVertex3f(i, 0, 0);"));
+    ASSERT_INT("feed matrix one-line for: flat count",
+               repl_state_flat_count(), 3);
+    assert_flat_vertex3_x("feed matrix one-line for: first x", 0, 0.0f);
+    assert_flat_vertex3_x("feed matrix one-line for: second x", 1, 1.0f);
+    assert_flat_vertex3_x("feed matrix one-line for: third x", 2, 2.0f);
+
+    reset_repl();
+    ASSERT_TRUE("feed matrix braced for: feed",
+                feed_program("float n = 3;",
+                             "for(i, 0, n) {",
+                             "glVertex3f(i, 0, 0);",
+                             "}"));
+    ASSERT_INT("feed matrix braced for: flat count",
+               repl_state_flat_count(), 3);
+    assert_flat_vertex3_x("feed matrix braced for: first x", 0, 0.0f);
+    assert_flat_vertex3_x("feed matrix braced for: second x", 1, 1.0f);
+    assert_flat_vertex3_x("feed matrix braced for: third x", 2, 2.0f);
+
+    reset_repl();
+    ASSERT_TRUE("feed matrix false if: feed",
+                feed_program("float n = 0;",
+                             "if(n < 0) {",
+                             "glVertex3f(1, 0, 0);",
+                             "}"));
+    ASSERT_INT("feed matrix false if: flat count",
+               repl_state_flat_count(), 0);
+
+    reset_repl();
+    ASSERT_TRUE("feed matrix true if: feed",
+                feed_program("float n = 1;",
+                             "if(n > 0) {",
+                             "glVertex3f(n, 0, 0);",
+                             "}"));
+    ASSERT_INT("feed matrix true if: flat count",
+               repl_state_flat_count(), 1);
+    assert_flat_vertex3_x("feed matrix true if: x", 0, 1.0f);
+
+    reset_repl();
+    ASSERT_TRUE("feed matrix func call: feed",
+                feed_program("func0(a) {",
+                             "glVertex3f(a, a + 1, 0);",
+                             "}",
+                             "func0(2);"));
+    ASSERT_INT("feed matrix func call: flat count",
+               repl_state_flat_count(), 1);
+    assert_flat_vertex3_x("feed matrix func call: x", 0, 2.0f);
+    ASSERT_FLOAT("feed matrix func call: y",
+                 repl_state_flat_program_cmds_mut()[0].args[1], 3.0f);
+
+    reset_repl();
+    ASSERT_TRUE("feed matrix nested locals: feed",
+                feed_program("func0(n) {",
+                             "for(i, 0, n) glVertex3f(i, n, 0);",
+                             "}",
+                             "func0(3);"));
+    ASSERT_INT("feed matrix nested locals: flat count",
+               repl_state_flat_count(), 3);
+    assert_flat_vertex3_x("feed matrix nested locals: first x", 0, 0.0f);
+    assert_flat_vertex3_x("feed matrix nested locals: third x", 2, 2.0f);
+    ASSERT_FLOAT("feed matrix nested locals: third y",
+                 repl_state_flat_program_cmds_mut()[2].args[1], 3.0f);
+
+    reset_repl();
+    ASSERT_TRUE("feed matrix scratch assign: feed",
+                feed_program("A[0] = 1;",
+                             "A[0] = A[0] + 2;",
+                             "glVertex3f(A[0], 0, 0);"));
+    ASSERT_FLOAT("feed matrix scratch assign: A[0]",
+                 scratch_val("A", 0), 3.0f);
+    ASSERT_FLOAT("feed matrix scratch assign: vertex x",
+                 repl_state_flat_program_cmds_mut()[2].args[0], 3.0f);
+}
+
+typedef enum {
+    TEST_COMMIT_ROUTE_FEED_LINE = 0,
+    TEST_COMMIT_ROUTE_SEMICOLON_APPEND,
+    TEST_COMMIT_ROUTE_ENTER_APPEND,
+    TEST_COMMIT_ROUTE_ENTER_INSERT,
+    TEST_COMMIT_ROUTE_ENTER_OVERWRITE_PLAIN,
+    TEST_COMMIT_ROUTE_NAV_AUTOCOMMIT,
+} TestCommitRoute;
+
+static const char *test_commit_route_name(TestCommitRoute route) {
+    switch (route) {
+    case TEST_COMMIT_ROUTE_FEED_LINE:
+        return "feed_line";
+    case TEST_COMMIT_ROUTE_SEMICOLON_APPEND:
+        return "semicolon_append";
+    case TEST_COMMIT_ROUTE_ENTER_APPEND:
+        return "enter_append";
+    case TEST_COMMIT_ROUTE_ENTER_INSERT:
+        return "enter_insert";
+    case TEST_COMMIT_ROUTE_ENTER_OVERWRITE_PLAIN:
+        return "enter_overwrite_plain";
+    case TEST_COMMIT_ROUTE_NAV_AUTOCOMMIT:
+        return "nav_autocommit";
+    }
+    return "unknown";
+}
+
+static void test_set_route_input(const char *input) {
+    editor_input_set_text(input);
+}
+
+static void test_seed_route_document(void) {
+    reset_repl();
+    ASSERT_TRUE("route matrix seed: n", editor_feed_line("float n = 3;"));
+    ASSERT_TRUE("route matrix seed: color",
+                editor_feed_line("glColor3f(0, 0, 1);"));
+    ASSERT_TRUE("route matrix seed: vertex 0",
+                editor_feed_line("glVertex3f(0, 0, 0);"));
+    ASSERT_TRUE("route matrix seed: vertex 1",
+                editor_feed_line("glVertex3f(1, 0, 0);"));
+}
+
+static void test_commit_input_via_route(TestCommitRoute route,
+                                        const char *input) {
+    switch (route) {
+    case TEST_COMMIT_ROUTE_FEED_LINE:
+        (void)editor_feed_line(input);
+        return;
+    case TEST_COMMIT_ROUTE_SEMICOLON_APPEND:
+        editor_state_edit_line_set(repl_state_document_count());
+        editor_insert_mode_set(0);
+        test_set_route_input(input);
+        editor_handle_key(';', 0, 0);
+        return;
+    case TEST_COMMIT_ROUTE_ENTER_APPEND:
+        editor_state_edit_line_set(repl_state_document_count());
+        editor_insert_mode_set(0);
+        test_set_route_input(input);
+        editor_handle_key('\r', 0, 0);
+        return;
+    case TEST_COMMIT_ROUTE_ENTER_INSERT:
+        editor_state_edit_line_set(1);
+        editor_insert_mode_set(1);
+        test_set_route_input(input);
+        editor_handle_key('\r', 0, 0);
+        return;
+    case TEST_COMMIT_ROUTE_ENTER_OVERWRITE_PLAIN:
+        editor_state_edit_line_set(2);
+        editor_insert_mode_set(0);
+        test_set_route_input(input);
+        editor_handle_key('\r', 0, 0);
+        return;
+    case TEST_COMMIT_ROUTE_NAV_AUTOCOMMIT:
+        editor_state_edit_line_set(2);
+        editor_insert_mode_set(0);
+        test_set_route_input(input);
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        return;
+    }
+}
+
+static void run_editor_commit_route_matrix(void) {
+    static const TestCommitRoute routes[] = {
+        TEST_COMMIT_ROUTE_FEED_LINE,
+        TEST_COMMIT_ROUTE_SEMICOLON_APPEND,
+        TEST_COMMIT_ROUTE_ENTER_APPEND,
+        TEST_COMMIT_ROUTE_ENTER_INSERT,
+        TEST_COMMIT_ROUTE_ENTER_OVERWRITE_PLAIN,
+        TEST_COMMIT_ROUTE_NAV_AUTOCOMMIT,
+    };
+    static const struct {
+        const char *name;
+        const char *input;
+        CmdType expected_type;
+    } cases[] = {
+        { "if",   "if(n > 0) {",       CMD_IF_BEGIN },
+        { "for",  "for(i, 0, n) {",    CMD_FOR_BEGIN },
+        { "func", "func0(a) {",        CMD_FUNC_DEF },
+    };
+
+    int route_count = (int)(sizeof(routes) / sizeof(routes[0]));
+    int case_count = (int)(sizeof(cases) / sizeof(cases[0]));
+
+    for (int ri = 0; ri < route_count; ri++) {
+        for (int ci = 0; ci < case_count; ci++) {
+            char label[192];
+            int before;
+            int after;
+
+            test_seed_route_document();
+            before = test_count_cmd_type(cases[ci].expected_type);
+            g_status[0] = '\0';
+
+            test_commit_input_via_route(routes[ri], cases[ci].input);
+
+            after = test_count_cmd_type(cases[ci].expected_type);
+            snprintf(label, sizeof(label), "route matrix %s/%s: committed type",
+                     test_commit_route_name(routes[ri]), cases[ci].name);
+            ASSERT_INT(label, after, before + 1);
+
+            snprintf(label, sizeof(label), "route matrix %s/%s: no GL parser fallthrough",
+                     test_commit_route_name(routes[ri]), cases[ci].name);
+            ASSERT_TRUE(label, strstr(g_status, "unexpected text after ')'") == NULL);
+        }
+    }
+}
+
 int main(void) {
     repl_eval_init_predef_vars();
+
+    run_program_feed_matrix();
+    run_editor_commit_route_matrix();
 
     glr_ctrl_reset_all(); declare_test_vars();
     {
