@@ -31,6 +31,18 @@ typedef struct {
     int alp_x, alp_y, alp_w, alp_h;
 } ColorPickerRects;
 
+/* Palette tab selector. The picker carries one of these as session state;
+ * the renderer draws a 3-segment tab strip and the matching swatch grid. */
+typedef enum {
+    CP_TAB_BASIC = 0,   /* one row of ~10 common named colors */
+    CP_TAB_FULL,        /* hue x tint/shade grid + greyscale ramp */
+    CP_TAB_HARMONY,     /* chosen color + tetradic set, derived live from HSV */
+    CP_TAB_COUNT
+} CpPaletteTab;
+
+/* Upper bound on swatches surfaced in the view (Full grid = 8x7 = 56). */
+#define CP_MAX_SWATCHES 64
+
 typedef struct {
     int   open;             /* 0 when no picker is active; other fields stale */
     int   active_line;      /* source-cmd index, -1 when !open */
@@ -50,6 +62,35 @@ typedef struct {
      * the renderer doesn't re-declare magic-twin literals. */
     int   gap;
     int   prev_h;
+    /* Whole-popup extent (y-up, top-left == anchor_px/anchor_py + gap).
+     * The renderer draws the background/border from these instead of
+     * recomputing the (now palette-dependent) height. popup_w == the
+     * element span + gap; popup_h grows with the active palette grid. */
+    int   popup_w;
+    int   popup_h;
+
+    /* --- Palette section (below the preview swatch) --------------------- */
+    int   palette_tab;          /* active CpPaletteTab */
+    int   tab_x, tab_y;         /* tab strip top-left (y-up) */
+    int   tab_w, tab_h;         /* tab strip extent (3 equal segments) */
+    int   pal_x, pal_y;         /* swatch grid top-left (y-up) */
+    int   pal_cols, pal_rows;   /* grid shape of the active palette */
+    int   pal_cell, pal_gap;    /* square cell side + inter-cell gap */
+    int   swatch_count;         /* valid entries in swatches[] */
+    float swatches[CP_MAX_SWATCHES][4]; /* peer-resolved RGBA, row-major */
+
+    /* Harmony "key": a persistent base color the tetrad derives from, so a
+     * coordinated set can be applied across several color commands. On the
+     * Harmony tab, swatches[0] IS the key. key_set reflects whether the
+     * session has captured one yet; key_btn_* is the "Set key" affordance
+     * rect (y-up, *_y is the top edge), only valid on the Harmony tab. */
+    int   key_set;
+    int   key_btn_x, key_btn_y, key_btn_w, key_btn_h;
+
+    /* Current color as a 32-bit #RRGGBBAA hex string (alpha is FF for
+     * RGB-only commands). General readout so any picked color is
+     * reproducible later; rendered on the preview strip. */
+    char  hex[12];
 } ColorPickerView;
 
 typedef struct {

@@ -16,6 +16,7 @@
 #include "ui/core/theme.h"
 
 #include <math.h>
+#include <string.h>
 
 void ui_color_picker_render(const ColorPickerView *view,
                             int viewport_w, int viewport_h) {
@@ -34,9 +35,9 @@ void ui_color_picker_render(const ColorPickerView *view,
     int sz = view->rects.sv_sz;
     int hue_w = view->rects.hue_w;
     int alp_w = view->rects.alp_w;
-    int pw = sz + CP_GAP + hue_w
-           + (view->has_alpha ? CP_GAP + alp_w : 0) + CP_GAP;
-    int ph = sz + CP_GAP + CP_PREV_H + CP_GAP;
+    /* Whole-popup extent comes from the peer (palette-dependent height). */
+    int pw = view->popup_w;
+    int ph = view->popup_h;
 
     gl2d_begin(viewport_w, viewport_h);
 
@@ -178,6 +179,103 @@ void ui_color_picker_render(const ColorPickerView *view,
     glVertex2f(px+total_w, swy);           glVertex2f(px,         swy);
     glEnd();
 
+    /* Hex readout (#RRGGBBAA) over the preview strip; text color chosen for
+     * contrast against the preview color's luminance. */
+    if (view->hex[0]) {
+        float lum = 0.299f*pr + 0.587f*pg + 0.114f*pb;
+        if (view->has_alpha) lum *= view->alpha;   /* dark checkerboard shows through */
+        if (lum > 0.55f) glColor3f(0.0f, 0.0f, 0.0f);
+        else             glColor3f(1.0f, 1.0f, 1.0f);
+        float hx_x = (float)px + 4.0f;
+        float hx_y = (float)(swy - CP_PREV_H) + ((float)CP_PREV_H - FONT_SMALL_H) * 0.5f + 2.0f;
+        gl2d_draw_string(hx_x, hx_y, view->hex, FONT_SMALL);
+    }
+
+    /* --- Palette tab strip --------------------------------------------- */
+    static const char *CP_TAB_LABELS[CP_TAB_COUNT] = { "Basic", "Full", "Harmony" };
+    {
+        glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        float seg_w = (float)view->tab_w / (float)CP_TAB_COUNT;
+        for (int s = 0; s < CP_TAB_COUNT; s++) {
+            float tx = (float)view->tab_x + seg_w * (float)s;
+            float ty = (float)view->tab_y - (float)view->tab_h;  /* bottom */
+            int active = (s == view->palette_tab);
+            ui_clr(active ? UI_TOK_MENU_LABEL_ACTIVE_BG : UI_TOK_RAISED);
+            glRectf(tx, ty, tx + seg_w, ty + (float)view->tab_h);
+            const char *lbl = CP_TAB_LABELS[s];
+            int lw = (int)strlen(lbl) * FONT_SMALL_W;
+            float lx = tx + (seg_w - (float)lw) * 0.5f;
+            float ly = ty + ((float)view->tab_h - FONT_SMALL_H) * 0.5f + 2.0f;
+            ui_clr(active ? UI_TOK_TEXT_ON_HILITE : UI_TOK_TEXT_MUTED);
+            gl2d_draw_string(lx, ly, lbl, FONT_SMALL);
+        }
+        glDisable(GL_BLEND);
+        /* Strip border + segment dividers */
+        float t_top = (float)view->tab_y;
+        float t_bot = (float)(view->tab_y - view->tab_h);
+        float t_right = (float)(view->tab_x + view->tab_w);
+        ui_clr(UI_TOK_BORDER);
+        glBegin(GL_LINE_LOOP);
+        glVertex2f((float)view->tab_x, t_top);
+        glVertex2f(t_right,            t_top);
+        glVertex2f(t_right,            t_bot);
+        glVertex2f((float)view->tab_x, t_bot);
+        glEnd();
+        glBegin(GL_LINES);
+        for (int s = 1; s < CP_TAB_COUNT; s++) {
+            float dx = (float)view->tab_x + seg_w * (float)s;
+            glVertex2f(dx, t_top); glVertex2f(dx, t_bot);
+        }
+        glEnd();
+    }
+
+    /* --- Palette swatch grid ------------------------------------------- */
+    {
+        int cell = view->pal_cell, gap = view->pal_gap, cols = view->pal_cols;
+        for (int i = 0; i < view->swatch_count; i++) {
+            int r = i / cols, c = i % cols;
+            float cx = (float)(view->pal_x + c * (cell + gap));
+            float cy_top = (float)(view->pal_y - r * (cell + gap));
+            float cy_bot = cy_top - (float)cell;
+            glColor3f(view->swatches[i][0], view->swatches[i][1], view->swatches[i][2]);
+            glRectf(cx, cy_bot, cx + (float)cell, cy_top);
+            ui_clr(UI_TOK_BORDER);
+            glBegin(GL_LINE_LOOP);
+            glVertex2f(cx, cy_bot); glVertex2f(cx + (float)cell, cy_bot);
+            glVertex2f(cx + (float)cell, cy_top); glVertex2f(cx, cy_top);
+            glEnd();
+            /* Mark the harmony key swatch (index 0) with an accent inset. */
+            if (i == 0 && view->palette_tab == CP_TAB_HARMONY && view->key_set) {
+                ui_clr(UI_TOK_ACCENT);
+                glLineWidth(2.0f);
+                glBegin(GL_LINE_LOOP);
+                glVertex2f(cx + 2,            cy_bot + 2);
+                glVertex2f(cx + (float)cell - 2, cy_bot + 2);
+                glVertex2f(cx + (float)cell - 2, cy_top - 2);
+                glVertex2f(cx + 2,            cy_top - 2);
+                glEnd();
+                glLineWidth(1.0f);
+            }
+        }
+    }
+
+    /* --- Harmony "Set key" button -------------------------------------- */
+    if (view->key_btn_w > 0) {
+        float bx = (float)view->key_btn_x;
+        float by = (float)(view->key_btn_y - view->key_btn_h);  /* bottom */
+        float bw = (float)view->key_btn_w, bh = (float)view->key_btn_h;
+        glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        gl2d_panel_frame(bx, by, bw, bh, UI_TOK_RAISED, 1.0f, UI_TOK_BORDER, 1.0f);
+        glDisable(GL_BLEND);
+        const char *lbl = "Set key from current";
+        int lw = (int)strlen(lbl) * FONT_SMALL_W;
+        float lx = bx + (bw - (float)lw) * 0.5f;
+        if (lx < bx + 2) lx = bx + 2;
+        float ly = by + (bh - FONT_SMALL_H) * 0.5f + 2.0f;
+        ui_clr(UI_TOK_TEXT_PRIMARY);
+        gl2d_draw_string(lx, ly, lbl, FONT_SMALL);
+    }
+
     gl2d_end();
 }
 
@@ -199,6 +297,25 @@ UiHit ui_color_picker_hit_test(const ColorPickerView *view,
                mx >= view->rects.alp_x && mx < view->rects.alp_x + view->rects.alp_w &&
                gl_y >= view->rects.alp_y && gl_y < view->rects.alp_y + view->rects.alp_h) {
         region = 3; /* alpha bar */
+    } else if (mx >= view->tab_x && mx < view->tab_x + view->tab_w &&
+               gl_y <= view->tab_y && gl_y > view->tab_y - view->tab_h) {
+        region = 4; /* palette tab strip */
+    } else if (view->key_btn_w > 0 &&
+               mx >= view->key_btn_x && mx < view->key_btn_x + view->key_btn_w &&
+               gl_y <= view->key_btn_y && gl_y > view->key_btn_y - view->key_btn_h) {
+        region = 6; /* harmony "set key" button */
+    } else {
+        /* Palette swatch grid */
+        int cell = view->pal_cell, gap = view->pal_gap, cols = view->pal_cols;
+        for (int i = 0; i < view->swatch_count; i++) {
+            int r = i / cols, c = i % cols;
+            int cx = view->pal_x + c * (cell + gap);
+            int cy_top = view->pal_y - r * (cell + gap);
+            if (mx >= cx && mx < cx + cell && gl_y <= cy_top && gl_y > cy_top - cell) {
+                region = 5; /* palette swatch */
+                break;
+            }
+        }
     }
     if (region == 0) return h;
 

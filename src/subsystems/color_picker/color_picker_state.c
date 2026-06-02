@@ -19,6 +19,11 @@
 #define CP_SCREEN_MARGIN 4   /* px keep-on-screen margin at window edges */
 #define CP_HUE_MAX   0.999f  /* clamp hue < 1.0 so hsv_to_rgb's sextant
                               * index (int)(h*6) never lands on the wrap */
+#define CP_TAB_H     16      /* palette tab-strip height */
+#define CP_SWATCH_GAP 3      /* gap between palette swatches */
+#define CP_FULL_COLS  8      /* Full palette: hue columns */
+#define CP_FULL_HUE_ROWS 6   /* Full palette: tint->shade rows (+1 grey row) */
+#define CP_FULL_COUNT (CP_FULL_COLS * (CP_FULL_HUE_ROWS + 1))  /* 56 */
 
 typedef enum {
     CP_DRAG_NONE = 0,
@@ -26,6 +31,68 @@ typedef enum {
     CP_DRAG_HUE  = 2,
     CP_DRAG_ALPHA = 3
 } CpDragTarget;
+
+/* Active palette tab. Session state: persists across opens (the user's last
+ * tab choice sticks), cleared only by color_picker_state_reset. */
+static CpPaletteTab g_cp_tab = CP_TAB_BASIC;
+
+/* Harmony key: a persistent base color (HSV) the tetrad derives from. Unlike
+ * the active command's color, it survives close/reopen — so a coordinated set
+ * can be applied across several color commands. Seeded from the current color
+ * the first time the Harmony tab is entered (or via the Set-key button), and
+ * NOT moved when a derived swatch is applied. Cleared by state_reset. */
+static int   g_cp_key_set = 0;
+static float g_cp_key_hue = 0.0f, g_cp_key_sat = 1.0f, g_cp_key_val = 1.0f;
+
+/* Basic palette: ten common colors, one clickable row. */
+static const float CP_BASIC[10][3] = {
+    { 0.00f, 0.00f, 0.00f },   /* black   */
+    { 1.00f, 1.00f, 1.00f },   /* white   */
+    { 0.50f, 0.50f, 0.50f },   /* grey    */
+    { 0.85f, 0.20f, 0.20f },   /* red     */
+    { 0.95f, 0.55f, 0.15f },   /* orange  */
+    { 0.95f, 0.85f, 0.20f },   /* yellow  */
+    { 0.30f, 0.70f, 0.30f },   /* green   */
+    { 0.25f, 0.75f, 0.80f },   /* cyan    */
+    { 0.25f, 0.45f, 0.85f },   /* blue    */
+    { 0.75f, 0.30f, 0.80f },   /* magenta */
+};
+
+/* Full palette: built lazily from HSV the first time it's needed (avoids a
+ * 56-entry literal and keeps the colors in sync with hsv_to_rgb). Rows go
+ * light tint -> pure -> dark shade per hue column, plus a trailing greyscale
+ * row. Index is row-major: idx = row * CP_FULL_COLS + col. */
+static float g_cp_full[CP_FULL_COUNT][3];
+static int   g_cp_full_ready = 0;
+
+static void cp_ensure_full(void) {
+    if (g_cp_full_ready) return;
+    for (int c = 0; c < CP_FULL_COLS; c++) {
+        float h = (float)c / (float)CP_FULL_COLS;
+        if (h >= 1.0f) h = CP_HUE_MAX;
+        for (int r = 0; r < CP_FULL_HUE_ROWS; r++) {
+            float sat, val;
+            if (r <= 2) {            /* light tint -> pure */
+                sat = 0.30f + 0.35f * (float)r;   /* 0.30, 0.65, 1.00 */
+                val = 1.0f;
+            } else {                 /* pure -> dark shade */
+                sat = 1.0f;
+                val = 1.0f - 0.20f * (float)(r - 2);  /* 0.80, 0.60, 0.40 */
+            }
+            int idx = r * CP_FULL_COLS + c;
+            color_picker_hsv_to_rgb(h, sat, val,
+                                    &g_cp_full[idx][0], &g_cp_full[idx][1],
+                                    &g_cp_full[idx][2]);
+        }
+    }
+    /* Trailing greyscale row: white -> black across the columns. */
+    for (int c = 0; c < CP_FULL_COLS; c++) {
+        float g = 1.0f - (float)c / (float)(CP_FULL_COLS - 1);
+        int idx = CP_FULL_HUE_ROWS * CP_FULL_COLS + c;
+        g_cp_full[idx][0] = g; g_cp_full[idx][1] = g; g_cp_full[idx][2] = g;
+    }
+    g_cp_full_ready = 1;
+}
 
 /* g_cp_line >= 0: picker is open for that source-cmd index */
 static int   g_cp_line       = -1;
@@ -42,6 +109,21 @@ static float g_cp_value_max  = 1.0f;
  * undo ring records "before this picker session" state, not every
  * intermediate slider tick. */
 static int   g_cp_undo_captured = 0;
+
+/* Base HSV the harmony tetrad fans out from: the key if captured, else the
+ * live color (so the tab is never empty before a key is set). */
+static void cp_harmony_base(float *h, float *s, float *v) {
+    if (g_cp_key_set) { *h = g_cp_key_hue; *s = g_cp_key_sat; *v = g_cp_key_val; }
+    else              { *h = g_cp_hue;     *s = g_cp_sat;     *v = g_cp_val; }
+}
+
+/* Capture the current color as the harmony key. */
+static void cp_set_key_from_current(void) {
+    g_cp_key_hue = g_cp_hue;
+    g_cp_key_sat = g_cp_sat;
+    g_cp_key_val = g_cp_val;
+    g_cp_key_set = 1;
+}
 
 /* Installed host services (document read/write + screen geometry). */
 static const ColorPickerHostBridge *g_host = NULL;
@@ -74,6 +156,190 @@ static void cp_compute_rects(int px, int py, ColorPickerRects *r) {
     r->alp_y = py - sz;
     r->alp_w = CP_ALPHA_W;
     r->alp_h = sz;
+}
+
+/* Defined further down; the palette-apply helper needs them here. */
+static void cp_rgb_to_hsv(float r, float g, float b,
+                          float *h, float *s, float *v);
+static int  color_picker_write_cmd(void);
+
+/* Width spanned by the SV square + hue bar (+ alpha bar) — the palette and
+ * preview strip stretch across this. */
+static int cp_total_w(void) {
+    return CP_SV_SZ + CP_GAP + CP_HUE_W
+         + (g_cp_has_alpha ? CP_GAP + CP_ALPHA_W : 0);
+}
+
+static int cp_tab_cols(CpPaletteTab t) {
+    if (t == CP_TAB_BASIC)   return 10;
+    if (t == CP_TAB_FULL)    return CP_FULL_COLS;
+    return 4;                            /* harmony: chosen + 3 derived */
+}
+static int cp_tab_rows(CpPaletteTab t) {
+    return (t == CP_TAB_FULL) ? (CP_FULL_HUE_ROWS + 1) : 1;
+}
+static int cp_swatch_count(CpPaletteTab t) {
+    if (t == CP_TAB_BASIC)   return 10;
+    if (t == CP_TAB_FULL)    return CP_FULL_COUNT;
+    return 4;
+}
+/* Square cell side: fit `cols` cells (with gaps) across cp_total_w(). */
+static int cp_cell(CpPaletteTab t) {
+    int cols = cp_tab_cols(t);
+    int c = (cp_total_w() - (cols - 1) * CP_SWATCH_GAP) / cols;
+    return (c < 6) ? 6 : c;
+}
+static int cp_grid_h(CpPaletteTab t) {
+    int rows = cp_tab_rows(t);
+    return rows * cp_cell(t) + (rows - 1) * CP_SWATCH_GAP;
+}
+
+/* Extra height for the Harmony tab's "Set key" button (button + gap). */
+static int cp_keybtn_block(CpPaletteTab t) {
+    return (t == CP_TAB_HARMONY) ? (CP_TAB_H + CP_GAP) : 0;
+}
+
+/* Whole-popup extent. popup_w mirrors the legacy `pw` (element span + gap);
+ * popup_h is the original (SV + preview) height plus the tab strip, the
+ * active palette grid, and the Harmony "Set key" button when shown. */
+static int cp_popup_w(void) { return cp_total_w() + CP_GAP; }
+static int cp_popup_h(void) {
+    return CP_SV_SZ + CP_GAP + CP_PREV_H + CP_GAP
+         + CP_TAB_H + CP_GAP + cp_grid_h(g_cp_tab)
+         + cp_keybtn_block(g_cp_tab) + CP_GAP;
+}
+
+/* Resolve the RGBA the swatch at index `i` of tab `t` writes/draws. Alpha is
+ * cosmetic here (1.0); the actual writeback keeps the session alpha. */
+static void cp_swatch_rgba(CpPaletteTab t, int i, float out[4]) {
+    out[3] = 1.0f;
+    if (t == CP_TAB_HARMONY) {
+        float bh, bs, bv;
+        cp_harmony_base(&bh, &bs, &bv);
+        float h = fmodf(bh + 0.25f * (float)i, 1.0f);
+        color_picker_hsv_to_rgb(h, bs, bv, &out[0], &out[1], &out[2]);
+    } else if (t == CP_TAB_FULL) {
+        cp_ensure_full();
+        out[0] = g_cp_full[i][0]; out[1] = g_cp_full[i][1]; out[2] = g_cp_full[i][2];
+    } else {
+        out[0] = CP_BASIC[i][0]; out[1] = CP_BASIC[i][1]; out[2] = CP_BASIC[i][2];
+    }
+}
+
+/* Tab-strip top edge (y-up) for popup top py. */
+static int cp_tab_top(int py) {
+    return (py - CP_SV_SZ - CP_GAP) - CP_PREV_H - CP_GAP;
+}
+/* Palette-grid top edge (y-up), one tab strip + gap below the tab top. */
+static int cp_pal_top(int py) {
+    return cp_tab_top(py) - CP_TAB_H - CP_GAP;
+}
+/* Harmony "Set key" button top edge (y-up), one gap below the swatch grid. */
+static int cp_keybtn_top(int py) {
+    return cp_pal_top(py) - cp_grid_h(CP_TAB_HARMONY) - CP_GAP;
+}
+
+/* Quantize a [0,1] channel to a clamped 0..255 byte. */
+static int cp_byte(float c) {
+    int b = (int)(c * 255.0f + 0.5f);
+    if (b < 0) b = 0;
+    if (b > 255) b = 255;
+    return b;
+}
+
+/* Fill the view's tab-strip + palette-grid geometry and resolved swatches,
+ * stacked below the preview swatch at popup top-left (px, py). */
+static void cp_compute_palette(int px, int py, ColorPickerView *v) {
+    CpPaletteTab t = g_cp_tab;
+    int tab_top = cp_tab_top(py);
+
+    v->palette_tab = (int)t;
+    v->tab_x = px;  v->tab_y = tab_top;
+    v->tab_w = cp_total_w();  v->tab_h = CP_TAB_H;
+
+    v->pal_x    = px;
+    v->pal_y    = cp_pal_top(py);
+    v->pal_cols = cp_tab_cols(t);
+    v->pal_rows = cp_tab_rows(t);
+    v->pal_cell = cp_cell(t);
+    v->pal_gap  = CP_SWATCH_GAP;
+
+    int n = cp_swatch_count(t);
+    if (n > CP_MAX_SWATCHES) n = CP_MAX_SWATCHES;
+    v->swatch_count = n;
+    for (int i = 0; i < n; i++)
+        cp_swatch_rgba(t, i, v->swatches[i]);
+
+    /* Harmony "Set key" button (only on the Harmony tab). */
+    v->key_set = g_cp_key_set;
+    if (t == CP_TAB_HARMONY) {
+        int btop = cp_keybtn_top(py);
+        v->key_btn_x = px;  v->key_btn_y = btop;
+        v->key_btn_w = cp_total_w();  v->key_btn_h = CP_TAB_H;
+    } else {
+        v->key_btn_x = v->key_btn_y = v->key_btn_w = v->key_btn_h = 0;
+    }
+
+    /* 32-bit #RRGGBBAA readout of the current color (alpha FF when the
+     * command has no alpha channel). */
+    float hr, hg, hb;
+    color_picker_hsv_to_rgb(g_cp_hue, g_cp_sat, g_cp_val, &hr, &hg, &hb);
+    int A = g_cp_has_alpha ? cp_byte(g_cp_alpha) : 255;
+    snprintf(v->hex, sizeof(v->hex), "#%02X%02X%02X%02X",
+             cp_byte(hr), cp_byte(hg), cp_byte(hb), A);
+}
+
+/* Swatch index under (mx, gl_y) for the active palette, or -1. */
+static int cp_palette_hit(int px, int py, int mx, int gl_y) {
+    CpPaletteTab t = g_cp_tab;
+    int cols = cp_tab_cols(t), rows = cp_tab_rows(t);
+    int cell = cp_cell(t), gap = CP_SWATCH_GAP;
+    int pal_x = px;
+    int pal_y = cp_pal_top(py);
+    int count = cp_swatch_count(t);
+    for (int r = 0; r < rows; r++) {
+        int cell_top = pal_y - r * (cell + gap);
+        if (gl_y > cell_top || gl_y < cell_top - cell) continue;
+        for (int c = 0; c < cols; c++) {
+            int cell_x = pal_x + c * (cell + gap);
+            if (mx < cell_x || mx >= cell_x + cell) continue;
+            int idx = r * cols + c;
+            return (idx < count) ? idx : -1;
+        }
+    }
+    return -1;
+}
+
+/* Tab segment under mx within the tab strip, or -1 if mx is off-strip. */
+static int cp_tab_hit(int px, int mx) {
+    int total_w = cp_total_w();
+    if (mx < px || mx >= px + total_w) return -1;
+    int seg = (mx - px) * CP_TAB_COUNT / total_w;
+    if (seg < 0) seg = 0;
+    if (seg >= CP_TAB_COUNT) seg = CP_TAB_COUNT - 1;
+    return seg;
+}
+
+/* Re-clamp the popup's vertical anchor after its height changes (tab switch
+ * to a taller grid) so it stays fully on-screen. */
+static void cp_reclamp_vertical(void) {
+    int win_w = 0, win_h = 0;
+    if (g_host && g_host->viewport) g_host->viewport(&win_w, &win_h);
+    int ph = cp_popup_h();
+    if (g_cp_py > win_h - CP_SCREEN_MARGIN) g_cp_py = win_h - CP_SCREEN_MARGIN;
+    if (g_cp_py - ph < CP_SCREEN_MARGIN)    g_cp_py = ph + CP_SCREEN_MARGIN;
+}
+
+/* Apply a palette swatch click: sync HSV from its RGB, clamp V to the active
+ * command's max, keep the session alpha, and write back. Returns the
+ * writeback result (1 if state mutated). */
+static int cp_apply_swatch(int idx) {
+    float rgba[4];
+    cp_swatch_rgba(g_cp_tab, idx, rgba);
+    cp_rgb_to_hsv(rgba[0], rgba[1], rgba[2], &g_cp_hue, &g_cp_sat, &g_cp_val);
+    if (g_cp_hue >= 1.0f) g_cp_hue = CP_HUE_MAX;
+    if (g_cp_val > g_cp_value_max) g_cp_val = g_cp_value_max;
+    return color_picker_write_cmd();
 }
 
 void color_picker_hsv_to_rgb(float h, float s, float v,
@@ -172,9 +438,8 @@ void color_picker_start(int cmd_idx, int my) {
     /* Prefer to the right of the code panel, then flip left if that
      * would run off-screen; the final clamp keeps a too-wide popup
      * usable even in narrow windows. */
-    int pw = CP_SV_SZ + CP_GAP + CP_HUE_W
-           + (g_cp_has_alpha ? CP_GAP + CP_ALPHA_W : 0) + CP_GAP;
-    int ph = CP_SV_SZ + CP_GAP + CP_PREV_H + CP_GAP;
+    int pw = cp_popup_w();
+    int ph = cp_popup_h();
     int win_w = 0, win_h = 0;
     if (g_host->viewport) g_host->viewport(&win_w, &win_h);
     int ppx = clamp_popup_x(cp_x + cp_w + CP_PANEL_OFFSET, cp_x - pw - CP_SCREEN_MARGIN, pw, win_w, CP_SCREEN_MARGIN);
@@ -197,6 +462,8 @@ int color_picker_stop(void) {
 
 void color_picker_state_reset(void) {
     color_picker_stop();
+    g_cp_tab = CP_TAB_BASIC;
+    g_cp_key_set = 0;
 }
 
 int color_picker_active_line(void) {
@@ -228,7 +495,10 @@ ColorPickerView color_picker_view(void) {
     v.value_max   = g_cp_value_max;
     v.gap         = CP_GAP;
     v.prev_h      = CP_PREV_H;
+    v.popup_w     = cp_popup_w();
+    v.popup_h     = cp_popup_h();
     cp_compute_rects(g_cp_px, g_cp_py, &v.rects);
+    cp_compute_palette(g_cp_px, g_cp_py, &v);
     return v;
 }
 
@@ -297,10 +567,45 @@ ColorPickerInputResult color_picker_handle_press(int mx, int my) {
         return res;
     }
 
-    /* Inside the popup bounds but outside SV/hue/alpha slider rects: consumed-no-op */
-    int pw = CP_SV_SZ + CP_GAP + CP_HUE_W
-           + (g_cp_has_alpha ? CP_GAP + CP_ALPHA_W : 0) + CP_GAP;
-    int ph = CP_SV_SZ + CP_GAP + CP_PREV_H + CP_GAP;
+    /* Palette tab strip */
+    {
+        int seg = cp_tab_hit(g_cp_px, mx);
+        int tab_top = cp_tab_top(g_cp_py);
+        if (seg >= 0 && gl_y <= tab_top && gl_y >= tab_top - CP_TAB_H) {
+            g_cp_tab = (CpPaletteTab)seg;
+            /* Seed the harmony key from the current color the first time the
+             * tab is entered, so the tetrad is never empty; once set it
+             * persists across instances until re-set via the button. */
+            if (g_cp_tab == CP_TAB_HARMONY && !g_cp_key_set)
+                cp_set_key_from_current();
+            cp_reclamp_vertical();
+            res.consumed = 1;
+            return res;
+        }
+    }
+    /* Harmony "Set key" button: capture the current color as the key. */
+    if (g_cp_tab == CP_TAB_HARMONY) {
+        int btop = cp_keybtn_top(g_cp_py);
+        if (mx >= g_cp_px && mx < g_cp_px + cp_total_w() &&
+            gl_y <= btop && gl_y > btop - CP_TAB_H) {
+            cp_set_key_from_current();
+            res.consumed = 1;
+            return res;
+        }
+    }
+    /* Palette swatch */
+    {
+        int idx = cp_palette_hit(g_cp_px, g_cp_py, mx, gl_y);
+        if (idx >= 0) {
+            res.changed = cp_apply_swatch(idx);
+            res.consumed = 1;
+            return res;
+        }
+    }
+
+    /* Inside the popup bounds but outside any interactive rect: consumed-no-op */
+    int pw = cp_popup_w();
+    int ph = cp_popup_h();
     if (mx >= g_cp_px && mx < g_cp_px + pw &&
         gl_y >= g_cp_py - ph && gl_y < g_cp_py) {
         res.consumed = 1;
