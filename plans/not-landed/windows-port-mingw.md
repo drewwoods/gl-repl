@@ -3,6 +3,14 @@
 > Line numbers below are **approximate** (current Makefile/source); match by
 > content/symbol, not by line — earlier edits shift them.
 
+## ⚠️ NOT LANDED — awaiting Windows vetting
+
+The implementation lives on the **`windows-support`** branch and is
+substantially complete, but it has **not been tested on a real Windows
+machine**. The branch is not merged to `main` until a MinGW-w64 build and
+smoke-test run has been verified on actual Windows hardware. Everything
+below describes the design as implemented on that branch.
+
 ## Context
 
 The REPL builds today for macOS (vendored static freeglut, Cocoa backend) and
