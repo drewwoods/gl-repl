@@ -661,6 +661,167 @@ static void run_invalid_commit_atomicity_matrix(void) {
     }
 }
 
+static void run_one_line_for_route_matrix(void) {
+    static const TestCommitRoute routes[] = {
+        TEST_COMMIT_ROUTE_FEED_LINE,
+        TEST_COMMIT_ROUTE_SEMICOLON_APPEND,
+        TEST_COMMIT_ROUTE_ENTER_APPEND,
+        TEST_COMMIT_ROUTE_ENTER_INSERT,
+        TEST_COMMIT_ROUTE_ENTER_OVERWRITE_PLAIN,
+        TEST_COMMIT_ROUTE_NAV_AUTOCOMMIT,
+    };
+    int route_count = (int)(sizeof(routes) / sizeof(routes[0]));
+
+    for (int ri = 0; ri < route_count; ri++) {
+        char label[192];
+        int before_begin;
+        int before_body;
+        int before_end;
+
+        test_seed_route_document();
+        before_begin = test_count_cmd_type(CMD_FOR_BEGIN);
+        before_body = test_count_cmd_type(CMD_VERTEX3F);
+        before_end = test_count_cmd_type(CMD_FOR_END);
+        g_status[0] = '\0';
+
+        test_commit_input_via_route(
+            routes[ri], "for(i, 0, n) glVertex3f(i, n, 0);");
+
+        snprintf(label, sizeof(label), "one-line for route %s: begin inserted",
+                 test_commit_route_name(routes[ri]));
+        ASSERT_INT(label, test_count_cmd_type(CMD_FOR_BEGIN),
+                   before_begin + 1);
+
+        snprintf(label, sizeof(label), "one-line for route %s: body inserted",
+                 test_commit_route_name(routes[ri]));
+        ASSERT_INT(label, test_count_cmd_type(CMD_VERTEX3F),
+                   before_body + 1);
+
+        snprintf(label, sizeof(label), "one-line for route %s: end inserted",
+                 test_commit_route_name(routes[ri]));
+        ASSERT_INT(label, test_count_cmd_type(CMD_FOR_END), before_end + 1);
+
+        snprintf(label, sizeof(label), "one-line for route %s: no body parse error",
+                 test_commit_route_name(routes[ri]));
+        ASSERT_TRUE(label, strstr(g_status, "for-loop body") == NULL);
+    }
+}
+
+static void seed_header_replace_case(CmdType type) {
+    switch (type) {
+    case CMD_IF_BEGIN:
+        ASSERT_TRUE("header replace seed if",
+                    editor_feed_line("if(n > 0) {"));
+        ASSERT_TRUE("header replace seed if body",
+                    editor_feed_line("glVertex3f(1, 0, 0);"));
+        ASSERT_TRUE("header replace seed if close",
+                    editor_feed_line("}"));
+        break;
+    case CMD_FOR_BEGIN:
+        ASSERT_TRUE("header replace seed for",
+                    editor_feed_line("for(i, 0, 3) {"));
+        ASSERT_TRUE("header replace seed for body",
+                    editor_feed_line("glVertex3f(i, 0, 0);"));
+        ASSERT_TRUE("header replace seed for close",
+                    editor_feed_line("}"));
+        break;
+    case CMD_FUNC_DEF:
+        ASSERT_TRUE("header replace seed func",
+                    editor_feed_line("func0(a) {"));
+        ASSERT_TRUE("header replace seed func body",
+                    editor_feed_line("glVertex3f(a, 0, 0);"));
+        ASSERT_TRUE("header replace seed func close",
+                    editor_feed_line("}"));
+        break;
+    default:
+        break;
+    }
+}
+
+static void run_header_replace_route_matrix(void) {
+    static const TestCommitRoute routes[] = {
+        TEST_COMMIT_ROUTE_FEED_LINE,
+        TEST_COMMIT_ROUTE_SEMICOLON_APPEND,
+        TEST_COMMIT_ROUTE_ENTER_OVERWRITE_PLAIN,
+        TEST_COMMIT_ROUTE_NAV_AUTOCOMMIT,
+    };
+    static const struct {
+        const char *name;
+        const char *input;
+        CmdType head_type;
+        CmdType end_type;
+        const char *text_needle;
+    } cases[] = {
+        { "if",   "if(n < 4) {",    CMD_IF_BEGIN,  CMD_IF_END,   "n < 4" },
+        { "for",  "for(i, 1, 4) {", CMD_FOR_BEGIN, CMD_FOR_END,  "i, 1" },
+        { "func", "func0(b) {",     CMD_FUNC_DEF,  CMD_FUNC_END, "b" },
+    };
+    int route_count = (int)(sizeof(routes) / sizeof(routes[0]));
+    int case_count = (int)(sizeof(cases) / sizeof(cases[0]));
+
+    for (int ri = 0; ri < route_count; ri++) {
+        for (int ci = 0; ci < case_count; ci++) {
+            char label[192];
+            int before_count;
+            int before_heads;
+            int before_ends;
+
+            reset_repl();
+            ASSERT_TRUE("header replace seed n",
+                        editor_feed_line("float n = 3;"));
+            seed_header_replace_case(cases[ci].head_type);
+            before_count = repl_state_document_count();
+            before_heads = test_count_cmd_type(cases[ci].head_type);
+            before_ends = test_count_cmd_type(cases[ci].end_type);
+            g_status[0] = '\0';
+
+            /* The seed includes a leading declaration, so the block head is
+             * source line 1. Header replacement must update that row, not
+             * insert a second block head. */
+            editor_state_edit_line_set(1);
+            editor_insert_mode_set(0);
+            test_set_route_input(cases[ci].input);
+            switch (routes[ri]) {
+            case TEST_COMMIT_ROUTE_FEED_LINE:
+                (void)editor_feed_line(cases[ci].input);
+                break;
+            case TEST_COMMIT_ROUTE_SEMICOLON_APPEND:
+                editor_handle_key(';', 0, 0);
+                break;
+            case TEST_COMMIT_ROUTE_ENTER_OVERWRITE_PLAIN:
+                editor_handle_key('\r', 0, 0);
+                break;
+            case TEST_COMMIT_ROUTE_NAV_AUTOCOMMIT:
+                editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+                break;
+            case TEST_COMMIT_ROUTE_ENTER_APPEND:
+            case TEST_COMMIT_ROUTE_ENTER_INSERT:
+                break;
+            }
+
+            snprintf(label, sizeof(label), "header replace %s/%s: doc count",
+                     test_commit_route_name(routes[ri]), cases[ci].name);
+            ASSERT_INT(label, repl_state_document_count(), before_count);
+
+            snprintf(label, sizeof(label), "header replace %s/%s: head count",
+                     test_commit_route_name(routes[ri]), cases[ci].name);
+            ASSERT_INT(label, test_count_cmd_type(cases[ci].head_type),
+                       before_heads);
+
+            snprintf(label, sizeof(label), "header replace %s/%s: end count",
+                     test_commit_route_name(routes[ri]), cases[ci].name);
+            ASSERT_INT(label, test_count_cmd_type(cases[ci].end_type),
+                       before_ends);
+
+            snprintf(label, sizeof(label), "header replace %s/%s: text updated",
+                     test_commit_route_name(routes[ri]), cases[ci].name);
+            ASSERT_TRUE(label,
+                        strstr(editor_buffer_line(1) ? editor_buffer_line(1) : "",
+                               cases[ci].text_needle) != NULL);
+        }
+    }
+}
+
 int main(void) {
     repl_eval_init_predef_vars();
 
@@ -669,6 +830,8 @@ int main(void) {
     run_close_brace_route_matrix();
     run_var_statement_route_matrix();
     run_invalid_commit_atomicity_matrix();
+    run_one_line_for_route_matrix();
+    run_header_replace_route_matrix();
 
     glr_ctrl_reset_all(); declare_test_vars();
     {
