@@ -272,7 +272,10 @@ static inline void glFeedbackBuffer(GLsizei size, GLenum type, GLfloat *buffer) 
 static inline void glGetFloatv(GLenum pname, GLfloat *params) {
     GL_STUB_TRACE_LINE("glGetFloatv %u\n", (unsigned)pname);
     gl_stub_tick(GL_STUB_glGetFloatv);
-    if (pname == GL_MODELVIEW_MATRIX || pname == GL_PROJECTION_MATRIX || pname == GL_TEXTURE_MATRIX) {
+    if (pname == GL_MODELVIEW_MATRIX) {
+        extern float g_gl_stub_modelview_matrix[16];
+        for (int i = 0; i < 16; i++) params[i] = g_gl_stub_modelview_matrix[i];
+    } else if (pname == GL_PROJECTION_MATRIX || pname == GL_TEXTURE_MATRIX) {
         for (int i = 0; i < 16; i++) params[i] = (i % 5) == 0 ? 1.0f : 0.0f;
     } else if (pname == GL_COLOR_CLEAR_VALUE) {
         params[0] = 0.0f;

@@ -15,6 +15,8 @@
 #include "ui/app/layout.h"   /* CODE_PANEL_LAYOUT_* */
 #include "support/test_harness.h"
 
+void glr_color_picker_install_host(void);
+
 static TestHarness g_harness = TEST_HARNESS_INIT;
 
 #define ASSERT_TRUE(label, cond) \
@@ -1543,6 +1545,174 @@ static void test_example_reset_reapplies_light_theme(void) {
                        sizeof(expected_default)) == 0);
 }
 
+static void test_mouse_routing_and_hit_testing(void) {
+    printf("--- imrepl_ctrl mouse routing and hit testing ---\n");
+    prepare_display_fixture();
+    glr_color_picker_install_host();
+
+    /* 1. Simulate mouse left click down on help overlay */
+    ui_state_help_mut()->visible = 1;
+    editor_help_session_set_tab(0);
+    ui_state_viewport_set_size(800, 600);
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, 10, 10);
+    ASSERT_TRUE("help closed on click away", !ui_state_help().visible);
+
+    /* 2. Test menu buttons, items, pin buttons, dividers, and swatch hit routing directly. */
+    UiHit hit = ui_hit_none();
+
+    // Test route_menu_button_hit
+    hit.kind = UI_HIT_MENU_BUTTON;
+    hit.cmd_idx = GLR_MENU_FILE;
+    int rc = route_menu_button_hit(&hit);
+    ASSERT_INT("menu button hit consumed", rc, 1);
+    ASSERT_INT("menu opened", ui_menu_bar_open_menu_id(), GLR_MENU_FILE);
+
+    // Close menu button
+    rc = route_menu_button_hit(&hit);
+    ASSERT_INT("menu button close consumed", rc, 1);
+    ASSERT_INT("menu closed", ui_menu_bar_open_menu_id(), -1);
+
+    // Resolve row index for GLR_CONFIG_GRID_THEME
+    int grid_theme_row = -1;
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        const GlrConfigItem *item = glr_config_item_at(i);
+        if (item && item->key == GLR_CONFIG_GRID_THEME) {
+            grid_theme_row = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("found grid theme row", grid_theme_row >= 0);
+
+    // Test route_submenu_item_hit for GLR_MENU_CONFIG
+    hit.kind = UI_HIT_SUBMENU_ITEM;
+    hit.cmd_idx = GLR_MENU_CONFIG;
+    hit.item_idx = grid_theme_row;
+    int old_grid = glr_config_get(GLR_CONFIG_GRID_THEME);
+    rc = route_submenu_item_hit(&hit);
+    ASSERT_INT("submenu config item consumed", rc, 1);
+    ASSERT_TRUE("grid config changed", glr_config_get(GLR_CONFIG_GRID_THEME) != old_grid);
+
+    // Test route_submenu_item_hit for tutorials
+    hit.cmd_idx = GLR_MENU_TUTORIALS;
+    hit.item_idx = 0;
+    rc = route_submenu_item_hit(&hit);
+    ASSERT_INT("submenu tutorial item consumed", rc, 1);
+
+    // Test route_panel_divider_hit
+    hit.kind = UI_HIT_PANEL_DIVIDER;
+    ui_state_code_panel_mut()->resizing_panel = 0;
+    rc = route_panel_divider_hit(&hit);
+    ASSERT_INT("panel divider hit consumed", rc, 1);
+    ASSERT_INT("panel resizing set", ui_state_code_panel().resizing_panel, 1);
+
+    // Test route_pin_button_hit
+    hit.kind = UI_HIT_PIN_BUTTON;
+    hit.item_idx = UI_MENU_BAR_PIN_REPLAY;
+    replay_state_mut()->state = REPLAY_PAUSED;
+    rc = route_pin_button_hit(&hit);
+    ASSERT_INT("pin button hit consumed", rc, 1);
+    ASSERT_INT("replay state toggled to PLAYING", replay_state_view().state, REPLAY_PLAYING);
+
+    // Test route_inline_color_swatch_hit
+    prepare_display_fixture();
+    glr_color_picker_install_host();
+
+    hit.kind = UI_HIT_INLINE_COLOR_SWATCH;
+    hit.line_idx = 1;
+    color_picker_stop();
+    rc = route_inline_color_swatch_hit(&hit, 300);
+    ASSERT_INT("color swatch hit consumed", rc, 1);
+    ASSERT_INT("color picker started on line 1", color_picker_active_line(), 1);
+    rc = route_inline_color_swatch_hit(&hit, 300);
+    ASSERT_INT("color swatch hit toggle off consumed", rc, 1);
+    ASSERT_TRUE("color picker stopped", color_picker_active_line() < 0);
+
+    /* 3. Simulate glr_ctrl_mousewheel, glr_ctrl_motion, glr_ctrl_passive_motion */
+    glr_ctrl_mousewheel(0, 1, 100, 100);
+    glr_ctrl_passive_motion(150, 150);
+
+    // Let's test GLUT middle / scroll wheel emulation buttons
+    ui_state_help_mut()->visible = 1;
+    editor_help_session_set_scroll(10);
+    glr_ctrl_mouse(3, GLUT_DOWN, 100, 100); // GLUT scroll wheel up (button 3)
+    glr_ctrl_mouse(4, GLUT_DOWN, 100, 100); // GLUT scroll wheel down (button 4)
+
+    // And test cleanup of dragging on UP
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, 100, 100);
+}
+
+static int g_simulated_mods = 0;
+static int simulated_mods_provider(void) {
+    return g_simulated_mods;
+}
+
+static void test_special_key_shortcuts(void) {
+    printf("--- imrepl_ctrl special key shortcuts ---\n");
+    prepare_display_fixture();
+
+    editor_input_set_modifier_provider_for_test(simulated_mods_provider);
+
+    /* 1. Replay special shortcut */
+    replay_state_mut()->active = 1;
+    replay_state_mut()->state = REPLAY_PLAYING;
+    glr_ctrl_special(GLUT_KEY_UP, 0, 0);
+
+    // Stop replay so subsequent keystrokes aren't intercepted by replay_handle_special
+    replay_state_mut()->active = 0;
+    replay_state_mut()->state = REPLAY_OFF;
+
+    /* 2. Config special shortcut */
+    int old_grid = glr_config_get(GLR_CONFIG_GRID_THEME);
+    glr_ctrl_special(GLUT_KEY_F3, 0, 0);
+    ASSERT_TRUE("F3 toggled grid config", glr_config_get(GLR_CONFIG_GRID_THEME) != old_grid);
+
+    /* 3. Audio special shortcuts (Ctrl+Left / Ctrl+Right) */
+    g_simulated_mods = GLUT_ACTIVE_CTRL;
+    int rc = glr_ctrl_router_handle_horizontal_audio_special(GLUT_KEY_LEFT);
+    ASSERT_INT("audio prev handled", rc, 1);
+    rc = glr_ctrl_router_handle_horizontal_audio_special(GLUT_KEY_RIGHT);
+    ASSERT_INT("audio next handled", rc, 1);
+    g_simulated_mods = 0;
+
+
+    /* 4. Help overlay actions */
+    ui_state_help_mut()->visible = 1;
+    editor_help_session_set_tab(1);
+    glr_ctrl_special(GLUT_KEY_LEFT, 0, 0);
+    ASSERT_INT("help tab prev", editor_help_session_tab_idx(), 0);
+    glr_ctrl_special(GLUT_KEY_RIGHT, 0, 0);
+    ASSERT_INT("help tab next", editor_help_session_tab_idx(), 1);
+
+    editor_help_session_set_scroll(10);
+    glr_ctrl_special(GLUT_KEY_UP, 0, 0);
+    ASSERT_TRUE("help scrolled up", editor_help_session_scroll() < 10);
+    glr_ctrl_special(GLUT_KEY_DOWN, 0, 0);
+    ASSERT_TRUE("help scrolled down", editor_help_session_scroll() > 0);
+
+    ui_state_help_mut()->visible = 1;
+    glr_ctrl_special(GLUT_KEY_F1, 0, 0);
+    ASSERT_TRUE("help toggled off via F1", !ui_state_help().visible);
+
+    /* 5. Scene cycle (F12, Shift+F12) */
+    int examples = repl_example_count();
+    if (examples > 1) {
+        repl_load_example(0);
+        g_simulated_mods = 0;
+        glr_ctrl_special(GLUT_KEY_F12, 0, 0); // next
+        ASSERT_INT("cycled to example 1", repl_state_scenes().active_example_idx, 1);
+        g_simulated_mods = GLUT_ACTIVE_SHIFT;
+        glr_ctrl_special(GLUT_KEY_F12, 0, 0); // prev
+        ASSERT_INT("cycled back to example 0", repl_state_scenes().active_example_idx, 0);
+        g_simulated_mods = 0;
+    }
+
+    /* 6. Export special (F11) */
+    rc = glr_ctrl_router_handle_export_special(GLUT_KEY_F11);
+    ASSERT_INT("export special handled", rc, 1);
+
+    editor_input_set_modifier_provider_for_test(NULL);
+}
+
 int main(void) {
     printf("--- imrepl_ctrl tests ---\n");
 
@@ -1568,6 +1738,8 @@ int main(void) {
     test_numeric_swatch_no_op_in_insert_mode();
     test_depth_probe_does_not_mutate_repl_state();
     test_example_reset_reapplies_light_theme();
+    test_mouse_routing_and_hit_testing();
+    test_special_key_shortcuts();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_imrepl_ctrl");

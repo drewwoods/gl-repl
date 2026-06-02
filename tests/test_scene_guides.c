@@ -172,6 +172,211 @@ static void test_transform_guides_render(void) {
         scene_transform_guides_render_if_due(&snapshot, &plan, 0, cam_view);
         ASSERT_TRUE("rotate rendering calls glBegin", gl_stub_counts[GL_STUB_glBegin] > 0);
     }
+
+    /* 4. World-aligned translation guide rendering (exercises compute_after_cursor_origin) */
+    {
+        GLCmd source_cmds[2] = {0};
+        GLCmd flat_cmds[3] = {0};
+        SceneTransformGuidePlan plan;
+
+        source_cmds[0].type = CMD_TRANSLATE3F;
+        source_cmds[0].valid = 1;
+        source_cmds[0].args[0] = 2.0f;
+        source_cmds[0].args[1] = 0.0f;
+        source_cmds[0].args[2] = 0.0f;
+
+        flat_cmds[0].type = CMD_TRANSLATE3F;
+        flat_cmds[0].valid = 1;
+        flat_cmds[0].src_cmd_idx = 0;
+        flat_cmds[0].args[0] = 2.0f;
+        flat_cmds[0].args[1] = 0.0f;
+        flat_cmds[0].args[2] = 0.0f;
+
+        flat_cmds[1].type = CMD_TRANSLATE3F;
+        flat_cmds[1].valid = 1;
+        flat_cmds[1].src_cmd_idx = 1; /* post-cursor */
+        flat_cmds[1].args[0] = 1.0f;
+        flat_cmds[1].args[1] = 2.0f;
+        flat_cmds[1].args[2] = 3.0f;
+
+        SceneGuideSnapshot snapshot =
+            base_snapshot(source_cmds, 2, flat_cmds, 2, 0,
+                          "glTranslatef(2,0,0)");
+        snapshot.edit_line_committed_text = "glTranslatef(2,0,0);";
+        snapshot.alpha_scale = 1.0f;
+        snapshot.anim_time = 0.0f;
+        snapshot.xform_guide_mode = SCENE_XFORM_GUIDE_WORLD;
+
+        int prepared = scene_transform_guides_prepare(&snapshot, &plan);
+        ASSERT_INT("world-aligned translate prepared", prepared, 1);
+        ASSERT_INT("after_flat_idx set correctly", plan.after_flat_idx, 1);
+
+        float cam_view[16] = {
+            1,0,0,0,
+            0,1,0,0,
+            0,0,1,0,
+            0,0,0,1
+        };
+
+        gl_stub_counts_reset();
+        scene_transform_guides_render_if_due(&snapshot, &plan, 0, cam_view);
+        ASSERT_TRUE("world-aligned translate rendering calls glBegin", gl_stub_counts[GL_STUB_glBegin] > 0);
+    }
+
+    /* 5. Rotate guide rendering with non-zero translation origin (exercises build_rotate_arc) */
+    {
+        extern float g_gl_stub_modelview_matrix[16];
+        g_gl_stub_modelview_matrix[12] = 1.0f; /* non-zero translation origin */
+        g_gl_stub_modelview_matrix[13] = 0.0f;
+        g_gl_stub_modelview_matrix[14] = 0.0f;
+
+        GLCmd source_cmds[2] = {0};
+        GLCmd flat_cmds[2] = {0};
+        SceneTransformGuidePlan plan;
+
+        source_cmds[0].type = CMD_ROTATEF;
+        source_cmds[0].valid = 1;
+        source_cmds[0].args[0] = 45.0f;
+        source_cmds[0].args[1] = 0.0f;
+        source_cmds[0].args[2] = 1.0f;
+        source_cmds[0].args[3] = 0.0f;
+
+        flat_cmds[0].type = CMD_ROTATEF;
+        flat_cmds[0].valid = 1;
+        flat_cmds[0].src_cmd_idx = 0;
+        flat_cmds[0].args[0] = 45.0f;
+        flat_cmds[0].args[1] = 0.0f;
+        flat_cmds[0].args[2] = 1.0f;
+        flat_cmds[0].args[3] = 0.0f;
+
+        SceneGuideSnapshot snapshot =
+            base_snapshot(source_cmds, 2, flat_cmds, 1, 0,
+                          "glRotatef(45,0,1,0)");
+        snapshot.edit_line_committed_text = "glRotatef(45,0,1,0);";
+        snapshot.alpha_scale = 1.0f;
+        snapshot.anim_time = 0.0f;
+        snapshot.xform_guide_mode = SCENE_XFORM_GUIDE_WORLD;
+
+        int prepared = scene_transform_guides_prepare(&snapshot, &plan);
+        ASSERT_INT("rotate with origin prepared", prepared, 1);
+
+        float cam_view[16] = {
+            1,0,0,0,
+            0,1,0,0,
+            0,0,1,0,
+            0,0,0,1
+        };
+
+        gl_stub_counts_reset();
+        scene_transform_guides_render_if_due(&snapshot, &plan, 0, cam_view);
+        ASSERT_TRUE("rotate with origin rendering calls glBegin", gl_stub_counts[GL_STUB_glBegin] > 0);
+
+        /* Reset stub matrix to identity */
+        g_gl_stub_modelview_matrix[12] = 0.0f;
+    }
+}
+
+#include "scene/guides/geometry_guides.h"
+
+static void test_geometry_guides_render(void) {
+    printf("--- geometry guides rendering ---\n");
+
+    /* 1. 1-DOF vertex line guide */
+    {
+        SceneGuideSnapshot snapshot = {0};
+        snapshot.show_guides = 1;
+        snapshot.input = "glVertex3f(1.0, 2.0,";
+        snapshot.input_len = (int)strlen(snapshot.input);
+        snapshot.vertex_n_filled = 2;
+        snapshot.vertex_filled[0] = 1;
+        snapshot.vertex_filled[1] = 1;
+        snapshot.vertex_filled[2] = 0;
+        snapshot.vertex_args[0] = 1.0f;
+        snapshot.vertex_args[1] = 2.0f;
+        snapshot.vertex_args[2] = 0.0f;
+        snapshot.alpha_scale = 1.0f;
+
+        gl_stub_counts_reset();
+        scene_geometry_guides_render_for_cursor(&snapshot);
+        ASSERT_TRUE("1-DOF vertex line guide renders", gl_stub_counts[GL_STUB_glBegin] > 0);
+    }
+
+    /* 2. Normal guide with valid base pos (normal_base_pos_valid = 1) */
+    {
+        SceneGuideSnapshot snapshot = {0};
+        snapshot.show_guides = 1;
+        snapshot.input = "glNormal3f(0.0, 1.0, 0.0)";
+        snapshot.input_len = (int)strlen(snapshot.input);
+        snapshot.cursor_pos = 18;
+        snapshot.normal_n_filled = 3;
+        snapshot.normal_args[0] = 0.0f;
+        snapshot.normal_args[1] = 1.0f;
+        snapshot.normal_args[2] = 0.0f;
+        snapshot.normal_base_pos[0] = 1.0f;
+        snapshot.normal_base_pos[1] = 2.0f;
+        snapshot.normal_base_pos[2] = 3.0f;
+        snapshot.normal_base_pos_valid = 1;
+        snapshot.alpha_scale = 1.0f;
+
+        gl_stub_counts_reset();
+        scene_geometry_guides_render_for_cursor(&snapshot);
+        ASSERT_TRUE("normal guide with base pos renders", gl_stub_counts[GL_STUB_glBegin] > 0);
+    }
+
+    /* 3. Normal guide with valid source search fallback */
+    {
+        GLCmd source_cmds[2] = {0};
+        source_cmds[0].type = CMD_NORMAL3F;
+        source_cmds[0].valid = 1;
+        source_cmds[1].type = CMD_VERTEX3F;
+        source_cmds[1].valid = 1;
+        source_cmds[1].args[0] = 4.0f;
+        source_cmds[1].args[1] = 5.0f;
+        source_cmds[1].args[2] = 6.0f;
+
+        SceneGuideSnapshot snapshot = {0};
+        snapshot.show_guides = 1;
+        snapshot.input = "glNormal3f(0.0, 1.0, 0.0)";
+        snapshot.input_len = (int)strlen(snapshot.input);
+        snapshot.cursor_pos = 18;
+        snapshot.normal_n_filled = 3;
+        snapshot.normal_args[0] = 0.0f;
+        snapshot.normal_args[1] = 1.0f;
+        snapshot.normal_args[2] = 0.0f;
+        snapshot.edit_line_idx = 0;
+        snapshot.source_cmds = source_cmds;
+        snapshot.source_cmd_count = 2;
+        snapshot.alpha_scale = 1.0f;
+
+        gl_stub_counts_reset();
+        scene_geometry_guides_render_for_cursor(&snapshot);
+        ASSERT_TRUE("normal guide with source fallback renders", gl_stub_counts[GL_STUB_glBegin] > 0);
+    }
+
+    /* 4. Normal guide with invalid/no anchor found */
+    {
+        GLCmd source_cmds[1] = {0};
+        source_cmds[0].type = CMD_NORMAL3F;
+        source_cmds[0].valid = 1;
+
+        SceneGuideSnapshot snapshot = {0};
+        snapshot.show_guides = 1;
+        snapshot.input = "glNormal3f(0.0, 1.0, 0.0)";
+        snapshot.input_len = (int)strlen(snapshot.input);
+        snapshot.cursor_pos = 18;
+        snapshot.normal_n_filled = 3;
+        snapshot.normal_args[0] = 0.0f;
+        snapshot.normal_args[1] = 1.0f;
+        snapshot.normal_args[2] = 0.0f;
+        snapshot.edit_line_idx = 0;
+        snapshot.source_cmds = source_cmds;
+        snapshot.source_cmd_count = 1;
+        snapshot.alpha_scale = 1.0f;
+
+        gl_stub_counts_reset();
+        scene_geometry_guides_render_for_cursor(&snapshot);
+        ASSERT_INT("normal guide with no vertex does not render", (int)gl_stub_counts[GL_STUB_glBegin], 0);
+    }
 }
 #endif
 
@@ -331,6 +536,7 @@ int main(void) {
 
 #ifdef GL_STUBS
     test_transform_guides_render();
+    test_geometry_guides_render();
 #endif
 
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
