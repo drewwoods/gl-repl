@@ -306,6 +306,67 @@ static void test_menu_actions(void) {
                glr_action_menu_item_activate(GLR_MENU_CONFIG, 1), 0);
 }
 
+/* Regression: the in-app Load Workspace action must land on a loaded
+ * scene (active slot >= 0) AND rescue the pre-load document to the
+ * recovery file. Before the fix, repl_load_workspace left the active
+ * slot at -1 with the (now tabless) pre-load document still live — the
+ * user saw their current scene vanish from the tab strip yet stay
+ * selected/showing in the editor. The CLI bootstrap already activated
+ * the first slot; the menu caller forgot to. */
+static void test_load_workspace_activates_scene(void) {
+    glr_ctrl_reset_all();
+
+    char cwd[1024];
+    char temp_dir[] = "/tmp/test_repl_actions_loadws.XXXXXX";
+    char *made_dir = mkdtemp(temp_dir);
+    int have_cwd = getcwd(cwd, sizeof(cwd)) != NULL;
+    ASSERT_TRUE("loadws mkdtemp", made_dir != NULL);
+    ASSERT_TRUE("loadws getcwd", have_cwd);
+    if (!made_dir || !have_cwd)
+        return;
+    ASSERT_INT("loadws chdir", chdir(made_dir), 0);
+
+    /* Build a one-scene workspace on disk under ./ws (editing an example
+     * promotes the edits into slot 0, which the save then writes out). */
+    editor_feed_line("glVertex3f(1, 1, 1);");
+    repl_load_example(0);
+    ASSERT_INT("loadws workspace slot occupied", repl_user_scene_slot_used(0), 1);
+    ASSERT_TRUE("loadws saved a scene", repl_save_workspace("ws", NULL) >= 1);
+
+    /* Fresh session with a distinctive unsaved pre-load document and no
+     * active scene — exactly the reported repro (fresh start, then Load
+     * Workspace from inside the REPL). */
+    glr_ctrl_reset_all();
+    editor_feed_line("glColor3f(0.9, 0.1, 0.1);");
+    ASSERT_TRUE("loadws pre-load doc non-empty",
+                source_document_view().line_count > 0);
+
+    repl_set_workspace_dir("ws");
+    unlink(QUIT_RECOVERY_FILE);  /* clean slate for the rescue check */
+    ASSERT_INT("Load Workspace action consumed",
+               glr_action_menu_item_activate(GLR_MENU_FILE,
+                                             GLR_FILE_ITEM_LOAD_WORKSPACE),
+               1);
+
+    /* The fix: a workspace tab is actually selected now (was -1 pre-fix). */
+    ASSERT_TRUE("Load Workspace lands on a scene",
+                repl_active_user_scene() >= 0);
+    /* The pre-load document was rescued to the recovery file (the menu
+     * caller did not save recovery at all pre-fix). */
+    ASSERT_INT("Load Workspace wrote recovery file",
+               access(QUIT_RECOVERY_FILE, F_OK), 0);
+
+    unlink(QUIT_RECOVERY_FILE);
+    repl_set_workspace_dir(NULL);
+    ASSERT_INT("loadws restore cwd", chdir(cwd), 0);
+    {
+        char cmd[1100];
+        snprintf(cmd, sizeof(cmd), "rm -rf %s", made_dir);
+        int rc = system(cmd);
+        (void)rc;
+    }
+}
+
 /* Step 5 (Finding #1): every Config top-level row — each "### "
  * section parent and the synthetic "All" row — must be inert on
  * click: glr_action_menu_item_activate returns 0 (menu stays open)
@@ -1243,6 +1304,7 @@ int main(void) {
     test_config_sections();
     test_config_parent_rows_inert();
     test_menu_actions();
+    test_load_workspace_activates_scene();
     test_shortcuts();
     test_ascii_shortcut_modifiers();
     test_tutorial_start_applies_cfg();

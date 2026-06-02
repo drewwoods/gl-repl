@@ -114,13 +114,14 @@ int glr_ctrl_router_handle_debug_dump_key(unsigned char key) {
     return 0;
 }
 
-/* Quit safeguard: Ctrl+Q and SIGINT (Ctrl+C) write a recovery copy to
- * a DISTINCT, findable file — never the active scene/workspace. The
- * point is to rescue an unintended exit / forgotten save without
- * silently clobbering the user's real scene; reload it with
- * `./gl-repl quit-recovery.c`. (Not /tmp — the user would never find
- * it; not the scene file — that would defeat the safeguard.) The
- * filename lives in config.h as QUIT_RECOVERY_FILE. */
+/* Recovery safeguard: Ctrl+Q and SIGINT (Ctrl+C), plus Load Workspace
+ * (which replaces every in-memory slot), write a recovery copy to a
+ * DISTINCT, findable file — never the active scene/workspace. The point
+ * is to rescue an unintended exit / forgotten save / discarded scene
+ * without silently clobbering the user's real scene; reload it with
+ * `./gl-repl recovery.c`. (Not /tmp — the user would never find it; not
+ * the scene file — that would defeat the safeguard.) The filename lives
+ * in config.h as QUIT_RECOVERY_FILE. */
 
 static volatile sig_atomic_t g_quit_requested = 0;
 
@@ -130,11 +131,17 @@ void glr_ctrl_request_quit(void) {
     g_quit_requested = 1;
 }
 
-static void glr_ctrl_save_quit_recovery(void) {
+/* Write the live scene to the recovery file. Shared by the quit
+ * safeguard and Load Workspace. Returns 1 on success, 0 on failure. */
+int glr_ctrl_save_recovery_file(void) {
     ReplExportLayout layout;
     glr_ctrl_fill_export_layout(&layout);
-    if (repl_export_save_output(QUIT_RECOVERY_FILE, source_document_view(),
-                                &layout)) {
+    return repl_export_save_output(QUIT_RECOVERY_FILE, source_document_view(),
+                                   &layout) ? 1 : 0;
+}
+
+static void glr_ctrl_save_quit_recovery(void) {
+    if (glr_ctrl_save_recovery_file()) {
         printf("Saved recovery copy to %s (reload: ./%s %s)\n",
                QUIT_RECOVERY_FILE, glr_ctrl_program_name(),
                QUIT_RECOVERY_FILE);

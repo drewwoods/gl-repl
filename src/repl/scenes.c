@@ -908,6 +908,22 @@ int repl_load_workspace(const char *dir) {
     return loaded;
 }
 
+/* Land the active slot on the first occupied user scene. repl_load_workspace
+ * intentionally leaves active == -1 with the pre-load document live (so the
+ * caller owns the activation policy); both the CLI bootstrap and the
+ * interactive Load Workspace action call this afterward so a workspace tab is
+ * actually selected instead of stranding the user on the now-tabless pre-load
+ * document. Returns the activated slot, or -1 if no slot is occupied. */
+int repl_scenes_activate_first_loaded_slot(void) {
+    for (int slot = 0; slot < MAX_USER_SCENES; slot++) {
+        if (g_user_scenes[slot].used) {
+            repl_load_user_scene_idx(slot);
+            return slot;
+        }
+    }
+    return -1;
+}
+
 static int evict_scene_to_workspace(int slot);  /* defined below */
 static int pick_lru_user_scene_slot(void);      /* defined below */
 

@@ -32,7 +32,7 @@ callgrind.out*
 *.swo
 *.DS_Store
 my_scene.c
-quit_recovery.c
+recovery.c
 
 # macOS app-bundle build products (regenerate via `make app`)
 /gl-repl.app/

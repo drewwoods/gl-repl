@@ -851,12 +851,7 @@ static int load_initial_commands(const char *import_file) {
                  * but none of them active. Land on the first occupied
                  * slot — symmetric with the single-file branch below
                  * (which activates the home slot). */
-                for (int slot = 0; slot < MAX_USER_SCENES; slot++) {
-                    if (repl_user_scene_slot_used(slot)) {
-                        repl_load_user_scene_idx(slot);
-                        break;
-                    }
-                }
+                repl_scenes_activate_first_loaded_slot();
                 scroll_to_display_function();
                 return repl_state_document_count();
             }
