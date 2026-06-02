@@ -49,15 +49,20 @@ keep=0
 
 usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; }
 
+# A value-taking flag given as the last arg (nothing after it) would trip
+# `set -u` with an opaque "$2: unbound variable"; fail with a clear message
+# naming the flag instead. Called as `need_val "$@"` so $# counts what remains.
+need_val() { [ "$#" -ge 2 ] || { echo "record-gif: option '$1' requires a value (try --help)" >&2; exit 2; }; }
+
 while [ $# -gt 0 ]; do
 	case "$1" in
-		--example)  example="$2"; shift 2;;
-		--duration) duration="$2"; shift 2;;
-		--fps)      fps="$2"; shift 2;;
-		--time)     t0="$2"; shift 2;;
-		--scale)    scale="$2"; shift 2;;
-		--out)      out="$2"; shift 2;;
-		--bin)      bin="$2"; shift 2;;
+		--example)  need_val "$@"; example="$2"; shift 2;;
+		--duration) need_val "$@"; duration="$2"; shift 2;;
+		--fps)      need_val "$@"; fps="$2"; shift 2;;
+		--time)     need_val "$@"; t0="$2"; shift 2;;
+		--scale)    need_val "$@"; scale="$2"; shift 2;;
+		--out)      need_val "$@"; out="$2"; shift 2;;
+		--bin)      need_val "$@"; bin="$2"; shift 2;;
 		--gif-only) make_mp4=0; shift;;
 		--mp4-only) make_gif=0; shift;;
 		--keep)     keep=1; shift;;
@@ -65,6 +70,30 @@ while [ $# -gt 0 ]; do
 		*) echo "record-gif: unknown option '$1' (try --help)" >&2; exit 2;;
 	esac
 done
+
+# Validate user-supplied numbers up front (before the environment checks, so a
+# usage typo fails the same way with or without ffmpeg installed). A typo like
+# `--fps 5o` otherwise reads as 0 inside awk and silently yields a 1-frame clip;
+# and since the values are interpolated into the awk program, a non-numeric one
+# could inject awk code. --time is not checked here: it is passed straight to
+# the binary, whose atof() tolerates it (and accepts a leading minus, which this
+# check would reject).
+is_num() { case "$1" in ''|*[!0-9.]*) return 1;; *) return 0;; esac; }
+is_num "$duration" || { echo "record-gif: --duration must be a number (got '$duration')" >&2; exit 2; }
+is_num "$fps"      || { echo "record-gif: --fps must be a number (got '$fps')" >&2; exit 2; }
+[ -z "$scale" ] || is_num "$scale" || { echo "record-gif: --scale must be a number (got '$scale')" >&2; exit 2; }
+
+# N = round(duration * fps); must be >= 1.
+frames="$(awk "BEGIN{ n = $duration * $fps + 0.5; if (n < 1) n = 1; printf \"%d\", n }")"
+
+# The backend numbers PPMs with a 4-digit field (f-%04d.ppm) and ffmpeg reads
+# them back with the same %04d glob, so a capture past frame 9999 would silently
+# drop its tail. Cap with a clear message (9999 frames is ~200s at 50fps).
+if [ "$frames" -gt 9999 ]; then
+	echo "record-gif: $frames frames exceeds the 4-digit capture limit (9999)." >&2
+	echo "            Reduce --duration or --fps so duration*fps <= 9999." >&2
+	exit 2
+fi
 
 command -v ffmpeg >/dev/null 2>&1 || {
 	echo "record-gif: ffmpeg not found (brew install ffmpeg / apt-get install ffmpeg)" >&2
@@ -75,9 +104,6 @@ command -v ffmpeg >/dev/null 2>&1 || {
 	echo "            build it first: make gl-repl FREEGLUT_OSMESA=1" >&2
 	exit 1
 }
-
-# N = round(duration * fps); must be >= 1.
-frames="$(awk "BEGIN{ n = $duration * $fps + 0.5; if (n < 1) n = 1; printf \"%d\", n }")"
 
 # Stage the intermediate PPMs next to the output, not in /tmp: a snap/flatpak
 # ffmpeg runs with a private /tmp and can't read frames written to the host /tmp,
