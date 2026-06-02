@@ -786,10 +786,21 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
         }
         case GLR_FILE_ITEM_LOAD_WORKSPACE: {
             const char *dir = workspace_dir_or_app_default();
+            /* Load Workspace replaces every in-memory slot, so the current
+             * scene is about to be discarded. Rescue it to the recovery file
+             * first (skip an empty buffer — nothing to lose). */
+            if (repl_state_document_count() > 0)
+                glr_ctrl_save_recovery_file();
             glr_camera_clear_scene_default();
             int n = repl_load_workspace(dir);
             if (n >= 0)
                 editor_undo_note_wholesale_replacement();
+            /* repl_load_workspace leaves the active slot at -1 with the
+             * pre-load document still live (now tabless, since the load
+             * dropped its slot). Land on the first loaded scene so a tab
+             * is actually selected — the CLI bootstrap does the same. */
+            if (n > 0)
+                repl_scenes_activate_first_loaded_slot();
             return 1;
         }
         case GLR_FILE_ITEM_SCENE_SEP:

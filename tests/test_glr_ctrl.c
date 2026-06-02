@@ -1023,7 +1023,7 @@ static void test_quit_recovery_file(void) {
     printf("--- imrepl_ctrl quit recovery file ---\n");
 
     ASSERT_STR("QUIT_RECOVERY_FILE value", QUIT_RECOVERY_FILE,
-               "quit_recovery.c");
+               "recovery.c");
 
     glr_ctrl_reset_all();
     editor_feed_line("glVertex3f(1, 2, 3);");

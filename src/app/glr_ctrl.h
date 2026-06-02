@@ -90,6 +90,11 @@ void glr_ctrl_set_accum(int enabled);
  * the normal path in glr_ctrl_tick(). Wired to SIGINT in main(). */
 void glr_ctrl_request_quit(void);
 
+/* Write the live scene to the recovery file (config.h QUIT_RECOVERY_FILE).
+ * Used by the quit safeguard and by Load Workspace before it discards the
+ * current in-memory scene. Returns 1 on success, 0 on failure. */
+int glr_ctrl_save_recovery_file(void);
+
 void glr_ctrl_display_frame(void);
 void glr_ctrl_reshape(int w, int h);
 void glr_ctrl_keyboard(unsigned char key, int x, int y);

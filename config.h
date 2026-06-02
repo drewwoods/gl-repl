@@ -274,12 +274,13 @@
 #define DEFAULT_SCENE_FILE "my_scene.c"
 #endif
 
-/* Quit-safeguard recovery filename. On Ctrl+Q (or SIGINT) the controller
- * writes a recovery copy of the live scene here so an unintended exit
- * never silently clobbers the user's real scene. Reload with
- * `./sample quit-recovery.c`. See src/app/glr_ctrl.c. */
+/* Recovery filename. On Ctrl+Q (or SIGINT), and before Load Workspace
+ * discards the current in-memory scene, the controller writes a recovery
+ * copy of the live scene here so an unintended exit / workspace load never
+ * silently clobbers the user's real scene. Reload with
+ * `./sample recovery.c`. See src/app/glr_ctrl.c. */
 #ifndef QUIT_RECOVERY_FILE
-#define QUIT_RECOVERY_FILE "quit_recovery.c"
+#define QUIT_RECOVERY_FILE "recovery.c"
 #endif
 
 /* Polygon-offset depth-bias constants for the outline pass. Shared by

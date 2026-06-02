@@ -263,6 +263,10 @@ int  repl_user_scene_rename(int slot, const char *new_name);
 int  repl_load_user_scene_idx(int slot);  /* load slot, returns 1 on success */
 int  repl_active_user_scene(void);        /* current slot index, -1 if none */
 
+/* Activate the first occupied slot after repl_load_workspace (which leaves
+ * active == -1 and the pre-load document live). Returns the slot, or -1. */
+int  repl_scenes_activate_first_loaded_slot(void);
+
 /* --- Timekeeping ------------------------------------------------------- */
 
 /* Advance the predefined `t` variable by `dt` seconds. The controller's
