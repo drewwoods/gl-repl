@@ -11,6 +11,14 @@
 #include "scene/guides/geometry_guides.h"
 #include "scene/render.h"
 #include "scene/render_types.h"
+#include "scene/postprocess_filter.h"
+#include "app/glr_mesh_export.h"
+#include "editor/input.h"
+#include "repl/core.h"
+#include "repl/eval.h"
+#include "app/glr_ctrl.h"
+#include "repl/state.h"
+#include "editor/state.h"
 
 #include "support/test_harness.h"
 #include <stdio.h>
@@ -813,6 +821,133 @@ static void test_vertex_label_text(void) {
 #endif
 }
 
+#ifdef GL_STUBS
+static void test_scene_axes_themes_and_opacity(void) {
+    printf("--- axes themes, opacities, and transition fog ---\n");
+    SceneFrameRenderContext ctx = make_test_frame_ctx();
+
+    /* Test all theme permutations */
+    const int themes[] = {
+        AXES_THEME_CLASSIC,
+        AXES_THEME_PULSE,
+        AXES_THEME_NEON,
+        AXES_THEME_COMPASS,
+        AXES_THEME_GIZMO,
+        AXES_THEME_RULER
+    };
+    for (size_t i = 0; i < sizeof(themes)/sizeof(themes[0]); i++) {
+        ctx.config.axes_theme = themes[i];
+
+        /* Render fully opaque */
+        ctx.config.axes_opacity = 1.0f;
+        gl_stub_counts_reset();
+        scene_axes_render(&ctx);
+        ASSERT_TRUE("axes render for theme did not crash", 1);
+        ASSERT_TRUE("axes render calls glColor", gl_stub_counts[GL_STUB_glColor4f] > 0);
+
+        /* Render translucent (exercises transition alpha and fog paths) */
+        ctx.config.axes_opacity = 0.5f;
+        gl_stub_counts_reset();
+        scene_axes_render(&ctx);
+        ASSERT_TRUE("translucent axes render did not crash", 1);
+    }
+}
+
+static void test_scene_lights_indicators(void) {
+    printf("--- lights indicators (on/off/directional/positional/eye-space) ---\n");
+    SceneFrameRenderContext ctx = make_test_frame_ctx();
+    ctx.config.show_light_indicators = 1;
+
+    /* 1. Light 0 positional, enabled */
+    ctx.config.lights[0].enabled = 1;
+    ctx.config.lights[0].pos_is_eye_space = 0;
+    ctx.config.lights[0].pos[3] = 1.0f; /* positional */
+    ctx.config.lights[0].diffuse[0] = 1.0f;
+    ctx.config.lights[0].diffuse[1] = 0.0f;
+    ctx.config.lights[0].diffuse[2] = 0.0f;
+
+    /* 2. Light 1 directional, enabled */
+    ctx.config.lights[1].enabled = 1;
+    ctx.config.lights[1].pos_is_eye_space = 0;
+    ctx.config.lights[1].pos[3] = 0.0f; /* directional */
+    ctx.config.lights[1].pos[0] = 0.0f;
+    ctx.config.lights[1].pos[1] = 1.0f;
+    ctx.config.lights[1].pos[2] = 0.0f;
+
+    /* 3. Light 2 eye-space, enabled */
+    ctx.config.lights[2].enabled = 1;
+    ctx.config.lights[2].pos_is_eye_space = 1;
+
+    /* 4. Light 3 disabled (off-state indicators) */
+    ctx.config.lights[3].enabled = 0;
+
+    gl_stub_counts_reset();
+    scene_lights_render(&ctx);
+    ASSERT_TRUE("lights indicators render did not crash", 1);
+    ASSERT_TRUE("renders indicator points", gl_stub_counts[GL_STUB_glBegin] > 0);
+}
+
+static void test_postprocess_filters(void) {
+    printf("--- postprocess filters (vignette & chromatic aberration) ---\n");
+
+    /* SCENE_POST_FILTER_OFF does nothing */
+    scene_postprocess_filter_render(SCENE_POST_FILTER_OFF, 0, 0, 800, 600);
+
+    /* SCENE_POST_FILTER_CHROMATIC_ABERRATION */
+    gl_stub_counts_reset();
+    scene_postprocess_filter_render(SCENE_POST_FILTER_CHROMATIC_ABERRATION, 0, 0, 800, 600);
+    ASSERT_TRUE("chromatic aberration calls glCopyTexSubImage2D",
+                gl_stub_counts[GL_STUB_glCopyTexSubImage2D] > 0);
+    ASSERT_TRUE("chromatic aberration calls glColorMask",
+                gl_stub_counts[GL_STUB_glColorMask] > 0);
+
+    /* SCENE_POST_FILTER_VIGNETTE */
+    gl_stub_counts_reset();
+    scene_postprocess_filter_render(SCENE_POST_FILTER_VIGNETTE, 0, 0, 800, 600);
+    ASSERT_TRUE("vignette draws triangle strips",
+                gl_stub_counts[GL_STUB_glBegin] > 0);
+
+    /* Test reset function */
+    scene_postprocess_filter_reset();
+    ASSERT_TRUE("reset succeeded without crash", 1);
+
+    /* Mode name strings */
+    ASSERT_TRUE("chromatic name non-NULL",
+                scene_postprocess_filter_mode_name(SCENE_POST_FILTER_CHROMATIC_ABERRATION) != NULL);
+    ASSERT_TRUE("vignette name non-NULL",
+                scene_postprocess_filter_mode_name(SCENE_POST_FILTER_VIGNETTE) != NULL);
+}
+
+static void test_mesh_export_feedback(void) {
+    printf("--- PLY feedback mesh exporter ---\n");
+
+    /* 1. Test invalid arguments / empty program */
+    glr_ctrl_reset_all();
+    repl_eval_init_predef_vars();
+    int r_empty = glr_export_mesh_ply(NULL, 0);
+    ASSERT_INT("export fails on NULL path", r_empty, -1);
+
+    r_empty = glr_export_mesh_ply("test_export_empty.ply", 0);
+    ASSERT_INT("export fails on empty flat program", r_empty, -1);
+
+    /* 2. Populate mock commands and export */
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glEnd();");
+
+    repl_state_mark_flat_dirty();
+    repl_flatten_commands(editor_state_edit_line());
+    ASSERT_TRUE("program is non-empty", repl_state_flat_program_count() > 0);
+
+    int ntris = glr_export_mesh_ply("test_export.ply", 0);
+    ASSERT_TRUE("export returns 0 or more triangles in stub mode", ntris >= 0);
+
+    remove("test_export.ply");
+}
+#endif
+
 int main(int argc, char **argv) {
 #ifdef GL_STUBS
     /* In stub mode these are no-ops, but keeping the calls preserves coverage
@@ -863,6 +998,12 @@ int main(int argc, char **argv) {
     test_vertex_label_text();
     test_scene_grid_fog_matches_predicate();
     test_nv_fog_distance_radial_optin();
+#ifdef GL_STUBS
+    test_scene_axes_themes_and_opacity();
+    test_scene_lights_indicators();
+    test_postprocess_filters();
+    test_mesh_export_feedback();
+#endif
 
     printf("\ntest_scene_render: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.passed == g_harness.run) ? 0 : 1;
