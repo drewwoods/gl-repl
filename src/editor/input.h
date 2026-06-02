@@ -152,11 +152,8 @@ void editor_delete_cmd_range(int start, int count, const char *what);
 /* Clear ALL commands unconditionally (same behavior as Ctrl+L). */
 void editor_clear_all_cmds(void);
 
-/* Programmatic reset for scene/workspace load: drops
- * the document state without taking an undo snapshot, surfacing a
- * status message, or applying the tutorial guard. Used by code paths
- * that bracket the load with their own undo/status policy (see
- * src/app/glr_actions.c::New Scene). For interactive Ctrl+L, use
+/* Programmatic document reset for callers that already own undo/status
+ * policy and scene-slot lifecycle. For interactive Ctrl+L, use
  * editor_clear_all_cmds(). */
 void editor_reset_for_new_scene(void);
 

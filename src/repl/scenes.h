@@ -40,6 +40,12 @@ void repl_scenes_enter_transient_scene(void);
  * `repl_scenes_enter_transient_scene` to detach the slot markers. */
 void repl_scenes_reset_for_transient(void);
 
+/* Create an empty, named user-scene slot and make it active. This is the
+ * File -> New Scene path: unlike tutorial/transient buffers, it must appear
+ * in the scene tab strip immediately. Returns the active slot index, or -1
+ * if every slot is full and no workspace-backed LRU eviction is available. */
+int  repl_scenes_create_empty_user_scene(void);
+
 /* On first example load only, capture the pre-example editor state
  * into the pinned "home" slot (slot 0) so the user can always return
  * to their starting work. */

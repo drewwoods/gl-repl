@@ -731,11 +731,10 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
     case GLR_MENU_FILE:
         switch (item_idx) {
         case GLR_FILE_ITEM_NEW_SCENE:
-            repl_scenes_enter_transient_scene();
-            repl_scenes_reset_for_transient();
-            editor_reset_for_new_scene();
-            editor_undo_note_wholesale_replacement();
-            glr_camera_clear_scene_default();
+            if (repl_scenes_create_empty_user_scene() >= 0) {
+                editor_undo_note_wholesale_replacement();
+                glr_camera_clear_scene_default();
+            }
             return 1;
         case GLR_FILE_ITEM_SAVE_SCENE: {
             ReplExportLayout layout;
