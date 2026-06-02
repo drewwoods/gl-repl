@@ -1694,6 +1694,7 @@ coverage: ## Clean, rebuild tests with coverage, run suite, generate HTML report
 		--output-file build/coverage-gl-stubs/lcov.info \
 		--ignore-errors mismatch,empty \
 		--exclude '*/test_*.c' \
+		--exclude '*/miniaudio.h' \
 		--rc branch_coverage=1
 	genhtml build/coverage-gl-stubs/lcov.info \
 		--output-directory build/coverage-gl-stubs/html \
