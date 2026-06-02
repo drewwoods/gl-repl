@@ -338,6 +338,8 @@ static float builtin_floor(const float *args) { return floorf(args[0]); }
 static float builtin_ceil(const float *args)  { return ceilf(args[0]); }
 static float builtin_fmod(const float *args)  { return fmodf(args[0], args[1]); }
 static float builtin_rem(const float *args)   { return remainderf(args[0], args[1]); }
+static float builtin_log(const float *args)   { return log10f(args[0]); }
+static float builtin_ln(const float *args)    { return logf(args[0]); }
 static float builtin_rand(const float *args)  { return expr_rand01(args[0], args[1]); }
 static float builtin_rand2(const float *args) { return expr_rand_signed(args[0], args[1]); }
 
@@ -348,6 +350,8 @@ static const ExprBuiltin k_expr_builtins[] = {
     { "sqrt",  "sqrtf",      1, 1, builtin_sqrt  },
     { "abs",   "fabsf",      1, 1, builtin_abs   },
     { "pow",   "powf",       2, 2, builtin_pow   },
+    { "log",   "log10f",     1, 1, builtin_log   },
+    { "ln",    "logf",       1, 1, builtin_ln    },
     { "min",   "fminf",      2, 2, builtin_min   },
     { "max",   "fmaxf",      2, 2, builtin_max   },
     { "floor", "floorf",     1, 1, builtin_floor },
@@ -359,7 +363,7 @@ static const ExprBuiltin k_expr_builtins[] = {
 };
 
 static const char *const k_reserved_identifiers[] = {
-    "t", "PI", "TAU", "float", "var", "A", "B", "C", NULL
+    "t", "PI", "TAU", "e", "float", "var", "A", "B", "C", NULL
 };
 
 static const ExprBuiltin *find_expr_builtin(const char *name) {
@@ -650,7 +654,8 @@ static int expr_range_has_runtime_values(const char *src, const char *end,
         if (too_long)
             return 1;
 
-        if (strcmp(name, "PI") == 0 || strcmp(name, "TAU") == 0)
+        if (strcmp(name, "PI") == 0 || strcmp(name, "TAU") == 0 ||
+            strcmp(name, "e") == 0)
             continue;
 
         if (repl_eval_scratch_array_index(name) >= 0)
@@ -709,7 +714,8 @@ static int validate_expression_idents_range(const char *src, const char *end,
             return 0;
         }
 
-        if (strcmp(name, "PI") == 0 || strcmp(name, "TAU") == 0)
+        if (strcmp(name, "PI") == 0 || strcmp(name, "TAU") == 0 ||
+            strcmp(name, "e") == 0)
             continue;
 
         int scratch_idx = repl_eval_scratch_array_index(name);
@@ -988,6 +994,7 @@ static float eval_primary(ExprCtx *ctx) {
         /* Constants */
         if (strcmp(name, "PI") == 0)  return (float)M_PI;
         if (strcmp(name, "TAU") == 0) return (float)(2.0 * M_PI);
+        if (strcmp(name, "e") == 0)   return (float)M_E;
 
         {
             int scratch_idx = repl_eval_scratch_array_index(name);
@@ -1345,7 +1352,8 @@ void repl_eval_format_swatch_number(float v, char *out, int out_sz) {
 void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
     static const struct { const char *from; const char *to; } k_const_expr_to_c[] = {
         { "TAU", "(2*M_PI)" },
-        { "PI",  "M_PI" }
+        { "PI",  "M_PI" },
+        { "e",   "M_E" }
     };
     const char *p = in;
     char *dst = out;
@@ -1531,9 +1539,10 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
         snprintf(tmp, sizeof(tmp), "%s", buf);
     }
 
-    /* Identifier-aware replacement: sinf->sin, M_PI->PI, etc. */
+    /* Identifier-aware replacement: sinf->sin, M_PI->PI, M_E->e, etc. */
     static const struct { const char *from; const char *to; } k_const_c_to_expr[] = {
-        { "M_PI", "PI" }
+        { "M_PI", "PI" },
+        { "M_E",  "e"  }
     };
     const char *p = tmp;
     char *dst = out;

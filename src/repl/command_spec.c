@@ -308,6 +308,10 @@ static const ReplFuncCompletion k_func_completions[] = {
         "IEEE remainder of x/y (rounded to nearest; |result| <= |y|/2). "
         "Useful for centring an angle in [-PI, PI].",
         REPL_HELP_GROUP_MATH },
+    { "log(",                "log(x)",                                                   1, { "x" },
+        "Base-10 logarithm of x", REPL_HELP_GROUP_MATH },
+    { "ln(",                 "ln(x)",                                                    1, { "x" },
+        "Natural logarithm of x (base e)", REPL_HELP_GROUP_MATH },
     { "rand(",               "rand(seed[, iter])",                                       2, { "seed", "iter" },
         "Deterministic pseudo-random float in [0, 1). "
         "Same (seed, iter) -> same value across frames.",
@@ -321,6 +325,8 @@ static const ReplFuncCompletion k_func_completions[] = {
         "3.14159265... (half turn in radians)", REPL_HELP_GROUP_MATH },
     { "TAU",                 "TAU",                                                      0, { NULL },
         "6.28318530... (full turn in radians; 2*PI)", REPL_HELP_GROUP_MATH },
+    { "e",                   "e",                                                        0, { NULL },
+        "2.71828182... (Euler's number; base of natural logarithm)", REPL_HELP_GROUP_MATH },
     { NULL, NULL, 0, { NULL } }
 };
 
