@@ -13,7 +13,7 @@ reproduced (or pointed to) below; all are permissive.
   Cocoa backend by default, or the headless OSMesa backend under
   `make ... FREEGLUT_OSMESA=1`). See `third_party/freeglut/VENDORED.txt` for the
   exact pinned source + commit; at time of writing it is
-  `94c3b9b10971d7c07df990ae7b9640ae8faf278b`.
+  `11d12f6c6967f99b9fdf369a286b43ac13f30dbe`.
 - **License:** X-Consortium / MIT-style (the freeglut license).
 
 The full contributor list lives in `third_party/freeglut/AUTHORS` (current

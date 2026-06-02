@@ -104,13 +104,16 @@ extern int fghOSMesaProcessExiting;
 
 /*
  * Headless frame capture. A SIGUSR1 handler (installed in fg_init_osmesa.c on
- * POSIX) sets fghOSMesaCaptureRequested from async-signal context; the buffer
- * swap path (fg_display_osmesa.c, after its glFinish()) notices the flag at a
+ * POSIX) sets fghOSMesaCaptureRequested from async-signal context; the main-loop
+ * tick (fg_main_osmesa.c, fgPlatformProcessSingleEvent) notices the flag at a
  * safe point and writes the current OSMesa colour buffer to a PPM via
- * fghOSMesaCaptureFrame(). So `kill -USR1 <pid>` snapshots a running headless
- * app with no app-side code. Output path prefix comes from the
- * FREEGLUT_CAPTURE_FILE env var (default "freeglut"); files are numbered
- * <prefix>-NNNN.ppm.
+ * fghOSMesaCaptureFrame() (which does its own glFinish()). The tick, not the
+ * platform swap, is the per-frame hook because a single-buffered window never
+ * reaches the swap path. So `kill -USR1 <pid>` snapshots a running headless app
+ * with no app-side code. The same tick also drives the FREEGLUT_CAPTURE_FRAMES
+ * record mode (capture every frame, exit after N). Output path prefix comes
+ * from the FREEGLUT_CAPTURE_FILE env var (default "freeglut"); files are
+ * numbered <prefix>-NNNN.ppm.
  */
 extern volatile sig_atomic_t fghOSMesaCaptureRequested;
 void fghOSMesaCaptureFrame( void );
