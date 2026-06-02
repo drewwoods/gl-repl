@@ -15,6 +15,7 @@
 #include "repl/examples.h"
 #include "repl/scenes.h"
 #include "repl/state_views.h"
+#include "ui/app/snapshot.h"
 #include "ui/app/state.h"
 #include "support/test_harness.h"
 
@@ -40,19 +41,37 @@ static int seed_user_scene(void) {
     return repl_active_user_scene();
 }
 
-/* [P1] New Scene must fully detach the active user slot (transient
- * lifecycle), else Save Scene would overwrite the old scene's file
- * with the emptied buffer. */
-static void test_new_scene_detaches_active(void) {
+/* File -> New Scene creates a real empty user-scene slot so the scene
+ * tab strip gets a tab immediately. It must not reuse the previous
+ * active slot, or Save Scene would overwrite that scene's file with the
+ * emptied buffer. */
+static void test_new_scene_creates_active_tab(void) {
     reset_fixture();
     int slot = seed_user_scene();
     ASSERT_TRUE("seeded active user scene", slot >= 0);
+    int count_before = repl_user_scene_count();
 
     int handled = glr_action_menu_item_activate(GLR_MENU_FILE,
                                                 GLR_FILE_ITEM_NEW_SCENE);
     ASSERT_TRUE("New Scene handled", handled == 1);
-    ASSERT_INT_EQ("New Scene detaches the user slot",
-                  repl_active_user_scene(), -1);
+    ASSERT_TRUE("New Scene creates an active user slot",
+                repl_active_user_scene() >= 0);
+    ASSERT_TRUE("New Scene does not reuse the old active slot",
+                repl_active_user_scene() != slot);
+    ASSERT_TRUE("New Scene grows the tab set",
+                repl_user_scene_count() > count_before);
+    ASSERT_TRUE("New Scene tab has a name",
+                repl_user_scene_name(repl_active_user_scene()) != NULL);
+    {
+        UiRenderSnapshot snap;
+        glr_ctrl_build_ui_snapshot(&snap);
+        ASSERT_TRUE("New Scene creates a visible active tab",
+                    snap.scene_tabs.active_idx >= 0 &&
+                    snap.scene_tabs.active_idx < snap.scene_tabs.count);
+        ASSERT_TRUE("New Scene visible tab is user scene",
+                    snap.scene_tabs.tabs[snap.scene_tabs.active_idx].kind ==
+                    UI_SCENE_TAB_USER);
+    }
     ASSERT_INT_EQ("New Scene clears the document",
                   repl_state_document_count(), 0);
     ASSERT_INT_EQ("New Scene clears the active example",
@@ -110,8 +129,7 @@ static void test_rename_scene_guard(void) {
                 editor_inline_rename_active());
     editor_inline_rename_cancel();
 
-    /* After New Scene there is no active user scene -> no rename. */
-    glr_action_menu_item_activate(GLR_MENU_FILE, GLR_FILE_ITEM_NEW_SCENE);
+    reset_fixture();
     int h2 = glr_action_menu_item_activate(GLR_MENU_FILE,
                                            GLR_FILE_ITEM_RENAME_SCENE);
     ASSERT_TRUE("Rename Scene handled (none)", h2 == 1);
@@ -145,7 +163,7 @@ static void test_scene_menu_is_selector(void) {
 
 int main(void) {
     printf("--- scene_file_menu tests ---\n");
-    test_new_scene_detaches_active();
+    test_new_scene_creates_active_tab();
     test_save_scene_uses_scene_name();
     test_rename_scene_guard();
     test_scene_menu_is_selector();

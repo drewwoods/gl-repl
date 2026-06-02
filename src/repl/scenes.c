@@ -917,6 +917,48 @@ static void restore_evicted_slot(int slot, const UserScene *stash) {
     memcpy(&g_user_scenes[slot], stash, sizeof(UserScene));
 }
 
+static int reserve_user_scene_slot_for_new(void) {
+    if (!g_user_scenes[0].used)
+        return 0;
+
+    int slot = find_free_user_scene_slot();
+    if (slot >= 0)
+        return slot;
+
+    UserScene *evicted_stash = scene_scratch_alloc();
+    if (!evicted_stash)
+        return -1;
+    int evicted_slot = try_evict_lru(evicted_stash);
+    scene_scratch_free(evicted_stash);
+    return evicted_slot >= 0 ? evicted_slot : -1;
+}
+
+int repl_scenes_create_empty_user_scene(void) {
+    int slot = reserve_user_scene_slot_for_new();
+    if (slot < 0) {
+        repl_set_status_error("All user scene slots full -- save workspace to free a slot");
+        return -1;
+    }
+
+    repl_scenes_save_active_scene_if_any();
+    restore_pre_example_cfg_if_valid();
+    g_export_scene_name_hint = NULL;
+    g_pending_scene_name[0] = '\0';
+
+    repl_scenes_reset_for_transient();
+
+    char unique[USER_SCENE_NAME_MAX];
+    derive_unique_scene_name(unique, sizeof(unique), "New Scene", -1);
+    save_scene_to_slot(slot, unique, repl_dispatch_edit_line_get());
+    g_active_user_scene = slot;
+    g_example_idx       = -1;
+
+    char msg[REPL_DIAG_TEXT_MAX];
+    snprintf(msg, sizeof(msg), "New scene: %s", unique);
+    repl_set_status(msg);
+    return slot;
+}
+
 int repl_load_scene_as_new_slot(const char *path,
                                 ReplSceneLoadStatus *out_reason) {
     if (out_reason) *out_reason = REPL_SCENE_LOAD_OK;

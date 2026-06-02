@@ -13,6 +13,7 @@
 #include "app/glr_audio.h"
 #include "repl/core.h"
 #include "editor/input.h"
+#include "editor/inline_rename.h"
 #include "repl/examples.h"
 #include "repl/tutorials.h"
 #include "subsystems/tutorial/tutorial.h"
@@ -58,7 +59,7 @@ static int test_mods_provider(void) { return g_test_mods; }
 static void run_menu_action_in_temp_dir(const char *label,
                                         int menu_id,
                                         int item_idx,
-                                        int expect_output_file,
+                                        const char *expect_file,
                                         int expect_workspace_dir) {
     char cwd[1024];
     char workspace_dir[REPL_WORKSPACE_DIR_MAX];
@@ -80,10 +81,10 @@ static void run_menu_action_in_temp_dir(const char *label,
         ASSERT_INT(label,
                    glr_action_menu_item_activate(menu_id, item_idx),
                    1);
-        if (expect_output_file) {
-            ASSERT_INT("menu action wrote temp output.c",
-                       access("output.c", F_OK), 0);
-            unlink("output.c");
+        if (expect_file) {
+            ASSERT_INT("menu action wrote expected temp file",
+                       access(expect_file, F_OK), 0);
+            unlink(expect_file);
         }
         if (expect_workspace_dir) {
             ASSERT_INT("menu action wrote temp workspace dir",
@@ -251,12 +252,12 @@ static void test_menu_actions(void) {
     run_menu_action_in_temp_dir("File Save Workspace",
                                 GLR_MENU_FILE,
                                 GLR_FILE_ITEM_SAVE_WORKSPACE,
-                                0,
+                                NULL,
                                 1);
     run_menu_action_in_temp_dir("File Load Workspace",
                                 GLR_MENU_FILE,
                                 GLR_FILE_ITEM_LOAD_WORKSPACE,
-                                0,
+                                NULL,
                                 0);
 
     /* Scene menu - tag rows are hover-only; examples load via submenu hits. */
@@ -269,25 +270,25 @@ static void test_menu_actions(void) {
     }
 
     /* Scene actions now live in the File menu (Scene menu is a pure
-     * selector). New Scene enters the transient lifecycle: it clears
-     * both the active example and any active user slot. (Audit #13) */
+     * selector). New Scene creates a real empty user-scene slot so the
+     * tab strip reflects it immediately. */
     ASSERT_INT("File New Scene", glr_action_menu_item_activate(GLR_MENU_FILE, GLR_FILE_ITEM_NEW_SCENE), 1);
     ASSERT_INT("active example cleared", repl_state_scenes().active_example_idx, -1);
-    ASSERT_INT("active user scene detached", repl_active_user_scene(), -1);
+    ASSERT_TRUE("active user scene created", repl_active_user_scene() >= 0);
     ASSERT_INT("New Scene clears document",
                source_document_view().line_count, 0);
 
-    /* Save Scene with no active named scene falls back to the default
-     * single-file save; run sandboxed so it cannot touch repo output.c. */
+    /* Save Scene writes the active named scene's slug; run sandboxed so
+     * it cannot touch a repo file. */
     run_menu_action_in_temp_dir("File Save Scene",
                                 GLR_MENU_FILE,
                                 GLR_FILE_ITEM_SAVE_SCENE,
-                                1,
+                                "new_scene.c",
                                 0);
 
-    /* Rename Scene with no active user scene -> guarded no-op. */
-    ASSERT_INT("File Rename Scene (none)", glr_action_menu_item_activate(GLR_MENU_FILE, GLR_FILE_ITEM_RENAME_SCENE), 1);
-    ASSERT_STR("Rename status", g_last_status, "No active scene to rename");
+    ASSERT_INT("File Rename Scene (active)", glr_action_menu_item_activate(GLR_MENU_FILE, GLR_FILE_ITEM_RENAME_SCENE), 1);
+    ASSERT_INT("Rename prompt active", editor_inline_rename_active(), 1);
+    editor_inline_rename_cancel();
 
     /* User scenes */
     /* Add a user scene by loading an example first (promotes current scene to slot 0) */
