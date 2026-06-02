@@ -1656,6 +1656,33 @@ void test_time() {
     ASSERT_TRUE("g_anim_time advanced", g_anim_time == 0.5f);
 
     repl_reset_time_to_zero();
+
+    /* repl_set_time(): the --time / GLR_TIME startup override. It sets the
+     * visible `t` var AND the free-running accumulator to an explicit origin,
+     * so a later advance() builds on that origin (the documented pause/resume-
+     * consistency invariant), and reset_to_zero() — which now delegates to
+     * set(0) — clears both. Values are exact in binary float, so == is safe. */
+    {
+        ReplVariableView vv = repl_state_variables();
+        ASSERT_TRUE("t var present for set_time", vv.time_var_idx >= 0);
+
+        repl_set_time(5.0f);
+        vv = repl_state_variables();
+        ASSERT_TRUE("repl_set_time sets visible t",
+                    vv.vars[vv.time_var_idx].value == 5.0f);
+        ASSERT_TRUE("repl_set_time syncs accumulator", g_anim_time == 5.0f);
+
+        /* advance() continues from the set origin (5), not from 0 — only true
+         * because set() synced g_anim_time. */
+        repl_advance_time(0.5f);
+        ASSERT_TRUE("advance builds on set origin", g_anim_time == 5.5f);
+
+        repl_reset_time_to_zero();
+        vv = repl_state_variables();
+        ASSERT_TRUE("reset_to_zero clears visible t",
+                    vv.vars[vv.time_var_idx].value == 0.0f);
+        ASSERT_TRUE("reset_to_zero clears accumulator", g_anim_time == 0.0f);
+    }
 }
 
 static void test_unbalanced_brackets(void) {
