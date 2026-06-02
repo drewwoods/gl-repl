@@ -222,6 +222,12 @@ static void run_tests(void) {
     ASSERT_FLOAT("rem(7,3)", remainderf(7.0f, 3.0f));   /* IEEE round-to-nearest */
     ASSERT_FLOAT("rem(8,3)", remainderf(8.0f, 3.0f));   /* -1, not 2 */
     ASSERT_FLOAT("rem(-7,3)", remainderf(-7.0f, 3.0f));
+    ASSERT_FLOAT("log(100)", 2.0f);          /* base-10 log */
+    ASSERT_FLOAT("log(10)", 1.0f);
+    ASSERT_FLOAT("log(1)", 0.0f);
+    ASSERT_FLOAT("ln(1)", 0.0f);             /* natural log */
+    ASSERT_FLOAT("ln(e)", 1.0f);             /* ln(e) = 1 by definition */
+    ASSERT_FLOAT("e", (float)M_E);           /* Euler's number */
     ASSERT_FLOAT("rand(7,11)", 0.564453f);
     ASSERT_FLOAT("rand(7,11)", 0.564453f); /* deterministic */
     ASSERT_FLOAT("rand(3)", 0.589844f);    /* implicit iter=0 */
@@ -798,8 +804,17 @@ static void run_tests(void) {
         ok = repl_eval_declare_predef_var("sin", err, sizeof(err));
         ASSERT_TRUE("reserved name sin should fail", !ok);
 
+        ok = repl_eval_declare_predef_var("log", err, sizeof(err));
+        ASSERT_TRUE("reserved name log should fail", !ok);
+
+        ok = repl_eval_declare_predef_var("ln", err, sizeof(err));
+        ASSERT_TRUE("reserved name ln should fail", !ok);
+
         ok = repl_eval_declare_predef_var("PI", err, sizeof(err));
         ASSERT_TRUE("reserved name PI should fail", !ok);
+
+        ok = repl_eval_declare_predef_var("e", err, sizeof(err));
+        ASSERT_TRUE("reserved name e should fail", !ok);
 
         ok = repl_eval_declare_predef_var("A", err, sizeof(err));
         ASSERT_TRUE("reserved name A should fail", !ok);
@@ -860,9 +875,12 @@ static void run_tests(void) {
         ASSERT_VALIDATE_OK("3.14", NULL, 0);
         ASSERT_VALIDATE_OK("42 + 1", NULL, 0);
 
-        /* Constants PI and TAU are always allowed */
+        /* Constants PI, TAU, and e are always allowed */
         ASSERT_VALIDATE_OK("PI * 2", NULL, 0);
         ASSERT_VALIDATE_OK("TAU / 4", NULL, 0);
+        ASSERT_VALIDATE_OK("e * 2", NULL, 0);
+        ASSERT_VALIDATE_OK("ln(e)", NULL, 0);
+        ASSERT_VALIDATE_OK("log(100)", NULL, 0);
 
         /* Function calls are allowed (identifier followed by '(') */
         ASSERT_VALIDATE_OK("sin(x)", lv, 2);   /* sin is a function call */
@@ -952,6 +970,10 @@ static void run_tests(void) {
     ASSERT_TO_C("", "");
     ASSERT_TO_C("x + y", "x + y");                    /* passthrough, no substitution */
     ASSERT_TO_C("fmod(x, 3)", "fmodf(x, 3)");   /* fmod keyword -> fmodf */
+    ASSERT_TO_C("log(x)", "log10f(x)");
+    ASSERT_TO_C("ln(x)", "logf(x)");
+    ASSERT_TO_C("e", "M_E");
+    ASSERT_TO_C("ln(e)", "logf(M_E)");
 
     /* ---- c_expr_to_repl additional translations ---- */
     printf("c_expr_to_repl (additional):\n");
@@ -959,6 +981,10 @@ static void run_tests(void) {
     ASSERT_TO_REPL("floorf(x/2)", "floor(x/2)");
     ASSERT_TO_REPL("ceilf(x+1)", "ceil(x+1)");
     ASSERT_TO_REPL("M_PI", "PI");
+    ASSERT_TO_REPL("M_E", "e");
+    ASSERT_TO_REPL("log10f(x)", "log(x)");
+    ASSERT_TO_REPL("logf(x)", "ln(x)");
+    ASSERT_TO_REPL("logf(M_E)", "ln(e)");
     ASSERT_TO_REPL("", "");
     ASSERT_TO_REPL("x + y", "x + y");
 
