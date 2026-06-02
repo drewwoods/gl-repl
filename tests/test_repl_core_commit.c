@@ -469,11 +469,206 @@ static void run_editor_commit_route_matrix(void) {
     }
 }
 
+static void run_close_brace_route_matrix(void) {
+    static const TestCommitRoute routes[] = {
+        TEST_COMMIT_ROUTE_FEED_LINE,
+        TEST_COMMIT_ROUTE_SEMICOLON_APPEND,
+        TEST_COMMIT_ROUTE_ENTER_INSERT,
+        TEST_COMMIT_ROUTE_ENTER_OVERWRITE_PLAIN,
+        TEST_COMMIT_ROUTE_NAV_AUTOCOMMIT,
+    };
+    int route_count = (int)(sizeof(routes) / sizeof(routes[0]));
+
+    for (int ri = 0; ri < route_count; ri++) {
+        char label[192];
+        int before;
+        int after;
+
+        reset_repl();
+        ASSERT_TRUE("close route seed: n", editor_feed_line("float n = 3;"));
+        ASSERT_TRUE("close route seed: for",
+                    editor_feed_line("for(i, 0, n) {"));
+        ASSERT_TRUE("close route seed: body",
+                    editor_feed_line("glVertex3f(i, 0, 0);"));
+        before = test_count_cmd_type(CMD_FOR_END);
+        g_status[0] = '\0';
+
+        switch (routes[ri]) {
+        case TEST_COMMIT_ROUTE_FEED_LINE:
+            editor_state_edit_line_set(2);
+            editor_insert_mode_set(0);
+            (void)editor_feed_line("}");
+            break;
+        case TEST_COMMIT_ROUTE_SEMICOLON_APPEND:
+            editor_state_edit_line_set(2);
+            editor_insert_mode_set(0);
+            test_set_route_input("}");
+            editor_handle_key(';', 0, 0);
+            break;
+        case TEST_COMMIT_ROUTE_ENTER_INSERT:
+            editor_state_edit_line_set(2);
+            editor_insert_mode_set(1);
+            test_set_route_input("}");
+            editor_handle_key('\r', 0, 0);
+            break;
+        case TEST_COMMIT_ROUTE_ENTER_OVERWRITE_PLAIN:
+            editor_state_edit_line_set(2);
+            editor_insert_mode_set(0);
+            test_set_route_input("}");
+            editor_handle_key('\r', 0, 0);
+            break;
+        case TEST_COMMIT_ROUTE_NAV_AUTOCOMMIT:
+            editor_state_edit_line_set(2);
+            editor_insert_mode_set(0);
+            test_set_route_input("}");
+            editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+            break;
+        case TEST_COMMIT_ROUTE_ENTER_APPEND:
+            break;
+        }
+
+        after = test_count_cmd_type(CMD_FOR_END);
+        snprintf(label, sizeof(label), "close route %s: committed close",
+                 test_commit_route_name(routes[ri]));
+        ASSERT_INT(label, after, before + 1);
+
+        snprintf(label, sizeof(label), "close route %s: no unmatched brace",
+                 test_commit_route_name(routes[ri]));
+        ASSERT_TRUE(label, strstr(g_status, "unmatched") == NULL);
+    }
+}
+
+static void run_var_statement_route_matrix(void) {
+    static const TestCommitRoute routes[] = {
+        TEST_COMMIT_ROUTE_FEED_LINE,
+        TEST_COMMIT_ROUTE_SEMICOLON_APPEND,
+        TEST_COMMIT_ROUTE_ENTER_APPEND,
+        TEST_COMMIT_ROUTE_ENTER_OVERWRITE_PLAIN,
+        TEST_COMMIT_ROUTE_NAV_AUTOCOMMIT,
+    };
+    static const struct {
+        const char *name;
+        const char *input;
+        CmdType expected_type;
+        const char *predef_name;
+        float predef_expected;
+        const char *scratch_name;
+        int scratch_elem;
+        float scratch_expected;
+    } cases[] = {
+        {
+            "float_decl", "float m = 4;", CMD_VAR_DECLARE,
+            "m", 4.0f, NULL, -1, 0.0f
+        },
+        {
+            "assign", "n = 4;", CMD_VAR_ASSIGN,
+            "n", 4.0f, NULL, -1, 0.0f
+        },
+        {
+            "scratch", "A[0] = 5;", CMD_SCRATCH_ASSIGN,
+            NULL, 0.0f, "A", 0, 5.0f
+        },
+    };
+    int route_count = (int)(sizeof(routes) / sizeof(routes[0]));
+    int case_count = (int)(sizeof(cases) / sizeof(cases[0]));
+
+    for (int ri = 0; ri < route_count; ri++) {
+        for (int ci = 0; ci < case_count; ci++) {
+            char label[192];
+            int before;
+            int after;
+
+            test_seed_route_document();
+            before = test_count_cmd_type(cases[ci].expected_type);
+            g_status[0] = '\0';
+
+            test_commit_input_via_route(routes[ri], cases[ci].input);
+
+            after = test_count_cmd_type(cases[ci].expected_type);
+            snprintf(label, sizeof(label), "var route %s/%s: committed type",
+                     test_commit_route_name(routes[ri]), cases[ci].name);
+            ASSERT_INT(label, after, before + 1);
+
+            if (cases[ci].predef_name) {
+                snprintf(label, sizeof(label), "var route %s/%s: predef value",
+                         test_commit_route_name(routes[ri]), cases[ci].name);
+                ASSERT_FLOAT(label, predef_val(cases[ci].predef_name),
+                             cases[ci].predef_expected);
+            }
+            if (cases[ci].scratch_name) {
+                snprintf(label, sizeof(label), "var route %s/%s: scratch value",
+                         test_commit_route_name(routes[ri]), cases[ci].name);
+                ASSERT_FLOAT(label,
+                             scratch_val(cases[ci].scratch_name,
+                                         cases[ci].scratch_elem),
+                             cases[ci].scratch_expected);
+            }
+        }
+    }
+}
+
+static void run_invalid_commit_atomicity_matrix(void) {
+    static const TestCommitRoute routes[] = {
+        TEST_COMMIT_ROUTE_FEED_LINE,
+        TEST_COMMIT_ROUTE_SEMICOLON_APPEND,
+        TEST_COMMIT_ROUTE_ENTER_APPEND,
+        TEST_COMMIT_ROUTE_ENTER_OVERWRITE_PLAIN,
+        TEST_COMMIT_ROUTE_NAV_AUTOCOMMIT,
+    };
+    static const struct {
+        const char *name;
+        const char *input;
+    } cases[] = {
+        { "unknown_assign", "ghost = 1;" },
+        { "undefined_call", "func9();" },
+        { "unknown_if",     "if(ghost > 0) {" },
+    };
+    int route_count = (int)(sizeof(routes) / sizeof(routes[0]));
+    int case_count = (int)(sizeof(cases) / sizeof(cases[0]));
+
+    for (int ri = 0; ri < route_count; ri++) {
+        for (int ci = 0; ci < case_count; ci++) {
+            char label[192];
+            int before_count;
+            int before_ghost_idx;
+            float before_scratch;
+
+            test_seed_route_document();
+            before_count = repl_state_document_count();
+            before_ghost_idx = repl_eval_find_predef_var_idx("ghost");
+            before_scratch = scratch_val("A", 0);
+            g_status[0] = '\0';
+
+            test_commit_input_via_route(routes[ri], cases[ci].input);
+
+            snprintf(label, sizeof(label), "invalid route %s/%s: doc unchanged",
+                     test_commit_route_name(routes[ri]), cases[ci].name);
+            ASSERT_INT(label, repl_state_document_count(), before_count);
+
+            snprintf(label, sizeof(label), "invalid route %s/%s: no ghost var",
+                     test_commit_route_name(routes[ri]), cases[ci].name);
+            ASSERT_INT(label, repl_eval_find_predef_var_idx("ghost"),
+                       before_ghost_idx);
+
+            snprintf(label, sizeof(label), "invalid route %s/%s: scratch unchanged",
+                     test_commit_route_name(routes[ri]), cases[ci].name);
+            ASSERT_FLOAT(label, scratch_val("A", 0), before_scratch);
+
+            snprintf(label, sizeof(label), "invalid route %s/%s: status set",
+                     test_commit_route_name(routes[ri]), cases[ci].name);
+            ASSERT_TRUE(label, g_status[0] != '\0');
+        }
+    }
+}
+
 int main(void) {
     repl_eval_init_predef_vars();
 
     run_program_feed_matrix();
     run_editor_commit_route_matrix();
+    run_close_brace_route_matrix();
+    run_var_statement_route_matrix();
+    run_invalid_commit_atomicity_matrix();
 
     glr_ctrl_reset_all(); declare_test_vars();
     {
