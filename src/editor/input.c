@@ -904,18 +904,17 @@ static CommitResult commit_current_input(int enter_mode,
         int can_advance = 1;
 
         if (editor_state_input().input_len > 0) {
-            /* Sticky-edit semantics on a structured-block head: try
-             * the block-shaped commit chain first; if no block-shaped
-             * commit succeeds, hold the cursor on this line so the
-             * user keeps editing the header rather than auto-advancing
-             * past a half-edited block. The CmdType-specific dispatch
-             * collapses into one chain because each try_commit_*
-             * already validates input shape internally. */
-            if (repl_line_is_block_head(editor_state_edit_line())) {
-                if (editor_try_commit_block_structs())
-                    return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
+            /* Always try block-shaped commits first so that if(...),
+             * for(...), func0(...), and } can be committed via Enter
+             * from any cursor position, matching the ;-key path
+             * (editor_try_commit_any). Sticky-edit semantics: if none
+             * succeed on a block-head line, hold the cursor there so
+             * the user keeps editing the header rather than
+             * auto-advancing past a half-edited block. */
+            if (editor_try_commit_block_structs())
+                return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
+            if (repl_line_is_block_head(editor_state_edit_line()))
                 can_advance = 0;
-            }
             if (editor_try_commit_var_statements_then_insert())
                 return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
 
