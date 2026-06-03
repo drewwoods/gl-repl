@@ -42,6 +42,8 @@ enum {
     GLR_FILE_ITEM_SCENE_SEP,         /* "---" non-actionable divider row */
     GLR_FILE_ITEM_SAVE_WORKSPACE,
     GLR_FILE_ITEM_LOAD_WORKSPACE,
+    GLR_FILE_ITEM_QUIT_SEP,          /* "---" non-actionable divider row */
+    GLR_FILE_ITEM_QUIT,              /* Ctrl+Q */
     GLR_FILE_ITEM_COUNT
 };
 

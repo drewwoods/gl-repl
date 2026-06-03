@@ -280,6 +280,8 @@ static const char *menu_item_label(int menu_id, int i) {
         if (i == GLR_FILE_ITEM_SCENE_SEP)     return "---";
         if (i == GLR_FILE_ITEM_SAVE_WORKSPACE) return "Save Workspace";
         if (i == GLR_FILE_ITEM_LOAD_WORKSPACE) return "Load Workspace";
+        if (i == GLR_FILE_ITEM_QUIT_SEP)      return "---";
+        if (i == GLR_FILE_ITEM_QUIT)          return "Quit";
         return NULL;
     }
     if (menu_id == MENU_SCENE) {
@@ -320,6 +322,7 @@ static const char *menu_item_label(int menu_id, int i) {
 
 static const char *menu_item_shortcut(int menu_id, int i) {
     if (menu_id == MENU_FILE && i == GLR_FILE_ITEM_SAVE_SCENE) return "Ctrl+S";
+    if (menu_id == MENU_FILE && i == GLR_FILE_ITEM_QUIT) return "Ctrl+Q";
     if (menu_id == MENU_SCENE) return NULL;
     if (menu_id == MENU_TUTORIALS)
         return NULL;

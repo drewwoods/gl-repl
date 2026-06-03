@@ -85,9 +85,10 @@ int glr_ctrl_code_panel_apply_scroll_follow_for_test(
     int *out_visible_lines);
 void glr_ctrl_set_accum(int enabled);
 
-/* Request a save-and-quit from a signal handler. Async-signal-safe
- * (sets a sig_atomic_t flag only); the recovery save + exit happen on
- * the normal path in glr_ctrl_tick(). Wired to SIGINT in main(). */
+/* Request a deferred save-and-quit. Async-signal-safe (sets a sig_atomic_t
+ * flag only), so it is used by SIGINT and by UI actions that should share
+ * the same recovery-save exit path. The recovery save + exit happen on the
+ * normal path in glr_ctrl_tick(). */
 void glr_ctrl_request_quit(void);
 
 /* Write the live scene to the recovery file (config.h QUIT_RECOVERY_FILE).

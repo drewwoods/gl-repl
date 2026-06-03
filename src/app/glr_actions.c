@@ -806,6 +806,10 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             return 1;
         }
         case GLR_FILE_ITEM_SCENE_SEP:
+        case GLR_FILE_ITEM_QUIT_SEP:
+            return 1;
+        case GLR_FILE_ITEM_QUIT:
+            glr_ctrl_request_quit();
             return 1;
         default:
             /* Out-of-range or unknown file menu item. Return 1 (consumed)
