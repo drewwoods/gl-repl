@@ -366,4 +366,14 @@ int  ui_text_panel_right_action_rect(const UiTextPanelSnapshot *snap,
 int  ui_text_panel_match_paren(const char *s, int len, int cursor,
                                int *self, int *match);
 
+/* Innermost parenthesis pair *enclosing* the caret. Scans left from
+ * `cursor` for the nearest unbalanced '(' then forward for its partner.
+ * On success writes the open/close indices to *open / *close (the pair's
+ * own parens are part of the enclosed span) and returns 1. Returns 0 when
+ * the caret is not inside any pair, or the enclosing '(' has no close.
+ * Pure — no GL, no global state. The renderer dims text outside [open,
+ * close] so the active paren scope stands out. */
+int  ui_text_panel_enclosing_parens(const char *s, int len, int cursor,
+                                     int *open, int *close);
+
 #endif /* UI_TEXT_PANEL_H */

@@ -449,6 +449,43 @@ static void test_match_paren_pairs(void) {
                   ui_text_panel_match_paren(")", 1, 0, &self, &match));
 }
 
+/* ui_text_panel_enclosing_parens: the innermost pair surrounding the
+ * caret, used to dim out-of-scope text. Indices for the literal s
+ * (single-spaced): outer '(' at 0, B "(hello)" 2..8, C '(' at 10,
+ * D "( world )" 20..28, C ')' at 30, outer ')' at 32. */
+static void test_enclosing_parens_scope(void) {
+    const char *s = "( (hello) ( there x ( world ) ) )";
+    int len = (int)strlen(s);
+    int open = -1, close = -1;
+
+    printf("--- enclosing parens ---\n");
+
+    /* Caret in front of 'x' (index 18) sits inside C; the innermost
+     * enclosing pair is C [10, 30] — so "( (hello) " and the trailing
+     * " )" dim, while the nested ( world ) stays bright. */
+    ASSERT_INT_EQ("caret in C has an enclosing pair", 1,
+                  ui_text_panel_enclosing_parens(s, len, 18, &open, &close));
+    ASSERT_INT_EQ("C open index", open, 10);
+    ASSERT_INT_EQ("C close index", close, 30);
+
+    /* Caret inside the nested D ( world ) resolves to the innermost D,
+     * not the outer C. */
+    open = close = -1;
+    ASSERT_INT_EQ("caret in D has an enclosing pair", 1,
+                  ui_text_panel_enclosing_parens(s, len, 22, &open, &close));
+    ASSERT_INT_EQ("D open index", open, 20);
+    ASSERT_INT_EQ("D close index", close, 28);
+
+    /* Caret at the very start is outside every pair. */
+    ASSERT_INT_EQ("caret at start has no enclosing pair", 0,
+                  ui_text_panel_enclosing_parens(s, len, 0, &open, &close));
+
+    /* Unbalanced enclosing '(' has no close → no scope. */
+    ASSERT_INT_EQ("unclosed enclosing pair yields none", 0,
+                  ui_text_panel_enclosing_parens("foo(bar", 7, 5,
+                                                 &open, &close));
+}
+
 int main(void) {
     printf("--- ui_text_panel tests ---\n");
 
@@ -461,6 +498,7 @@ int main(void) {
     test_row_layout_shared_across_kinds();
     test_color_segments_enable_blending();
     test_match_paren_pairs();
+    test_enclosing_parens_scope();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_ui_text_panel");
