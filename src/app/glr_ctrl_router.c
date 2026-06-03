@@ -925,7 +925,19 @@ static int route_inline_color_swatch_hit(const UiHit *hit, int my) {
     return 1;
 }
 
-static int route_numeric_swatch_hit(const UiHit *hit) {
+/* Adjustment magnitude for an inline-swatch press. Mirrors the variable
+ * slider's coarse/fine modifiers: a right-click steps x10 (coarse), and
+ * holding Shift steps x1/5 (fine). They combine (right+Shift = x2). */
+static float numeric_swatch_scale(int is_right_button) {
+    float scale = 1.0f;
+    if (is_right_button)
+        scale *= 10.0f;
+    if (editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT)
+        scale *= 0.2f;
+    return scale;
+}
+
+static int route_numeric_swatch_hit(const UiHit *hit, float scale) {
     int edit_line = editor_state_edit_line();
 
     if (editor_insert_mode() ||
@@ -936,8 +948,25 @@ static int route_numeric_swatch_hit(const UiHit *hit) {
         !tutorial_guard_source_change(edit_line, 1, 1))
         return 1;
 
-    editor_commit_apply_swatch_change(edit_line, hit->item_idx > 0 ? 1 : -1);
+    editor_commit_apply_swatch_change(edit_line, hit->item_idx > 0 ? 1 : -1,
+                                      scale);
     return 1;
+}
+
+/* Right-press over an inline numeric-swatch arrow: coarse (x10) step.
+ * The left-button path reaches the swatch through the canonical
+ * code-panel hit dispatch, but right-click is owned by the config /
+ * variable-panel routers, so it needs its own hit-test here. Returns 0
+ * (not consumed) when the press misses the swatch so the caller falls
+ * through to the config dropdown / camera. */
+static int glr_ctrl_router_handle_right_numeric_swatch_press(int x, int y) {
+    UiRenderSnapshot ui_snap;
+    glr_ctrl_build_ui_snapshot(&ui_snap);
+    UiHit hit = ui_panels_hit_test(&ui_snap, x, y,
+                                   repl_eval_predef_view().count);
+    if (hit.kind != UI_HIT_NUMERIC_SWATCH)
+        return 0;
+    return route_numeric_swatch_hit(&hit, numeric_swatch_scale(1));
 }
 
 /* UI_HIT_COLOR_SWATCH: floating picker slider control press. The
@@ -1155,7 +1184,7 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
     case UI_HIT_INLINE_COLOR_SWATCH:
         consumed = route_inline_color_swatch_hit(&hit, y); break;
     case UI_HIT_NUMERIC_SWATCH:
-        consumed = route_numeric_swatch_hit(&hit); break;
+        consumed = route_numeric_swatch_hit(&hit, numeric_swatch_scale(0)); break;
     case UI_HIT_PIN_BUTTON:
         consumed = route_pin_button_hit(&hit); break;
     case UI_HIT_MENU_BUTTON:
@@ -1447,6 +1476,11 @@ void glr_ctrl_mouse(int button, int state, int x, int y) {
     }
 
     if (button == GLUT_RIGHT_BUTTON) {
+        if (state == GLUT_DOWN &&
+            glr_ctrl_router_handle_right_numeric_swatch_press(x, y)) {
+            glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+            return;
+        }
         if (glr_ctrl_router_handle_right_config_press(button, state, x, y)) {
             glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
             return;

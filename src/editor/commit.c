@@ -1071,7 +1071,7 @@ int editor_try_commit_var_statements_then_insert(void) {
     return 0;
 }
 
-int editor_commit_apply_swatch_change(int edit_line, int direction) {
+int editor_commit_apply_swatch_change(int edit_line, int direction, float scale) {
     EditorInputView in = editor_state_input();
     ReplNumericArgAtCursor d;
     float step, new_value;
@@ -1086,7 +1086,7 @@ int editor_commit_apply_swatch_change(int edit_line, int direction) {
     d = repl_eval_numeric_arg_at_cursor(in.input, in.cursor_pos);
     if (!d.found) return 0;
 
-    step = repl_eval_swatch_step(d.value);
+    step = repl_eval_swatch_step(d.value) * scale;
     new_value = d.value + (direction > 0 ? step : -step);
     repl_eval_format_swatch_number(new_value, buf, sizeof buf);
 

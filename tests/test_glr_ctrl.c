@@ -1328,7 +1328,7 @@ static void test_numeric_swatch_step_commits_line_and_undoes(void) {
 
     hit_up.kind     = UI_HIT_NUMERIC_SWATCH;
     hit_up.item_idx = 1;
-    int rc = route_numeric_swatch_hit(&hit_up);
+    int rc = route_numeric_swatch_hit(&hit_up, 1.0f);
     ASSERT_INT("swatch step-up returns consumed", rc, 1);
 
     buf = editor_buffer_view();
@@ -1352,8 +1352,8 @@ static void test_numeric_swatch_step_commits_line_and_undoes(void) {
     /* Step DOWN three times: from value > 1.5, back below 1.5. */
     hit_down.kind     = UI_HIT_NUMERIC_SWATCH;
     hit_down.item_idx = -1;
-    route_numeric_swatch_hit(&hit_down);
-    route_numeric_swatch_hit(&hit_down);
+    route_numeric_swatch_hit(&hit_down, 1.0f);
+    route_numeric_swatch_hit(&hit_down, 1.0f);
     {
         EditorInputView in_down = editor_state_input();
         ReplNumericArgAtCursor d_down =
@@ -1387,7 +1387,7 @@ static void test_numeric_swatch_no_op_outside_numeric_arg(void) {
 
     hit_up.kind     = UI_HIT_NUMERIC_SWATCH;
     hit_up.item_idx = 1;
-    int rc = route_numeric_swatch_hit(&hit_up);
+    int rc = route_numeric_swatch_hit(&hit_up, 1.0f);
     /* Consumed (returns 1) — the swatch hit is the router's
      * responsibility — but no change to the line. */
     ASSERT_INT("swatch on comment still consumed", rc, 1);
@@ -1411,11 +1411,48 @@ static void test_numeric_swatch_no_op_in_insert_mode(void) {
 
     hit_up.kind     = UI_HIT_NUMERIC_SWATCH;
     hit_up.item_idx = 1;
-    int rc = route_numeric_swatch_hit(&hit_up);
+    int rc = route_numeric_swatch_hit(&hit_up, 1.0f);
     ASSERT_INT("swatch in insert mode still consumed", rc, 1);
     buf = editor_buffer_view();
     ASSERT_STR("swatch in insert mode leaves line unchanged",
                editor_buffer_view_line(buf, 0), before);
+}
+
+/* The scale arg multiplies the value-derived base step: a right-click
+ * passes 10.0 (coarse, x10) and a Shift-held press 0.2 (fine, x1/5).
+ * Pin that one step at scale 10 moves the value ten base-steps, and
+ * scale 0.2 moves a fifth of one base-step. */
+static float swatch_value_after_one_step(const char *line, int cursor,
+                                         float scale) {
+    UiHit hit_up = ui_hit_none();
+    EditorInputView in;
+    ReplNumericArgAtCursor d;
+
+    seed_swatch_fixture(line);
+    editor_cursor_pos_set(cursor);
+    hit_up.kind     = UI_HIT_NUMERIC_SWATCH;
+    hit_up.item_idx = 1;
+    route_numeric_swatch_hit(&hit_up, scale);
+
+    in = editor_state_input();
+    d = repl_eval_numeric_arg_at_cursor(in.input, in.cursor_pos);
+    ASSERT_TRUE("scaled swatch step found numeric arg", d.found);
+    return d.value;
+}
+
+static void test_numeric_swatch_scale_coarse_and_fine(void) {
+    float base, coarse, fine;
+
+    printf("--- imrepl_ctrl numeric swatch coarse/fine scale ---\n");
+
+    /* Base step for a |value| < 10 arg is 0.05 (repl_eval_swatch_step). */
+    base   = swatch_value_after_one_step("glVertex3f(1.5, 0, 0);", 13, 1.0f);
+    coarse = swatch_value_after_one_step("glVertex3f(1.5, 0, 0);", 13, 10.0f);
+    fine   = swatch_value_after_one_step("glVertex3f(1.5, 0, 0);", 13, 0.2f);
+
+    ASSERT_FLOAT("base step is +0.05", base, 1.55f);
+    ASSERT_FLOAT("coarse (x10) step is +0.5", coarse, 2.0f);
+    ASSERT_FLOAT("fine (x1/5) step is +0.01", fine, 1.51f);
 }
 
 /* scene_execute_adapter is called by render.c on both the main fill
@@ -1822,6 +1859,7 @@ int main(void) {
     test_numeric_swatch_step_commits_line_and_undoes();
     test_numeric_swatch_no_op_outside_numeric_arg();
     test_numeric_swatch_no_op_in_insert_mode();
+    test_numeric_swatch_scale_coarse_and_fine();
     test_depth_probe_does_not_mutate_repl_state();
     test_example_reset_reapplies_light_theme();
     test_mouse_routing_and_hit_testing();
