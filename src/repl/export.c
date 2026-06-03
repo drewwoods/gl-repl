@@ -1,4 +1,5 @@
 #include "repl/export.h"
+#include "c_compat.h"            /* STATIC_ASSERT — header-budget guard */
 #include "source_document.h"     /* source_document_insert_line */
 #include "repl/load.h"           /* repl_load_apply_line — step 5b */
 /* glr_camera.h removed in step 4a: the export pipeline no longer
@@ -325,9 +326,20 @@ static void emit_cfgs(int *n) {
     ReplConfigBag cfg;
     repl_config_bag_clear(&cfg);
     g_export_cfg_bridge->fill_all(&cfg);
-    for (int i = 0; i < cfg.count && *n < MAX_WORKSPACE_HEADER_LINES; i++) {
+    int i = 0;
+    for (; i < cfg.count && *n < MAX_WORKSPACE_HEADER_LINES; i++) {
         snprintf(g_workspace_header_lines[(*n)++], WORKSPACE_HEADER_LINE_LEN,
                  "// @cfg %s = %s", cfg.items[i].key, cfg.items[i].value);
+    }
+    /* The header budget is sized (export_state.h) so this never trips,
+     * but warn loudly rather than silently dropping presentation state
+     * if a future cfg/var/func growth ever overflows it. */
+    if (i < cfg.count) {
+        fprintf(stderr,
+                "repl_export: workspace header full (%d lines) — dropped %d "
+                "@cfg line(s) starting at '%s'; those scene settings will "
+                "not round-trip. Raise MAX_WORKSPACE_HEADER_LINES.\n",
+                MAX_WORKSPACE_HEADER_LINES, cfg.count - i, cfg.items[i].key);
     }
 }
 
@@ -347,6 +359,15 @@ static const WorkspaceDirective WORKSPACE_DIRECTIVES[] = {
     ((int)(sizeof(WORKSPACE_DIRECTIVES) / sizeof(WORKSPACE_DIRECTIVES[0])))
 
 #undef WS_DIR
+
+/* Pin the shared header budget against the worst case so adding cfg
+ * items / predef-var slots / func slots can't silently reintroduce the
+ * @cfg truncation. Worst case = 1 banner + 1 @scene-name + 1
+ * @workspace-dir + every @var + every @func + every @cfg (capped by the
+ * bag's own REPL_CFG_MAX_ITEMS). See export_state.h. */
+STATIC_ASSERT(MAX_WORKSPACE_HEADER_LINES >=
+                  3 + MAX_PREDEF_VARS + REPL_FUNC_SLOT_COUNT + REPL_CFG_MAX_ITEMS,
+              "workspace header budget too small for worst-case directives");
 
 void repl_state_refresh_workspace_header_lines(void) {
     int line_count = 0;

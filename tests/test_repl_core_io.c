@@ -45,6 +45,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 
 static void test_import_robustness(void);
 static void test_config_variants_export(void);
+static void test_workspace_header_budget_worst_case(void);
 static void declare_test_vars(void) {
     char err[128];
     repl_eval_declare_predef_var("x", err, sizeof(err));
@@ -2017,6 +2018,7 @@ int main(void) {
     }
 
     test_config_variants_export();
+    test_workspace_header_budget_worst_case();
     test_import_robustness();
 
     printf("repl_core_io: %d/%d passed\n", g_harness.passed, g_harness.run);
@@ -2157,6 +2159,72 @@ static void test_config_variants_export(void) {
     ASSERT_TRUE("Variant 2: saved point_attenuation disabled line is omitted", strstr(buf, "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") == NULL);
     ASSERT_TRUE("Variant 2: saved vertex outlines pass is omitted", strstr(buf, "/* Vertex Outline Pass */") == NULL);
     ASSERT_TRUE("Variant 2: saved vertex points pass is omitted", strstr(buf, "/* Vertex Point Pass */") == NULL);
+
+    remove(export_path);
+}
+
+/* Worst case for the shared workspace-header line budget: fill the
+ * predefined-variable table to its user-declarable max so the @var lines
+ * consume as much of the budget as possible, then confirm every trailing
+ * @cfg line (vertex_outlines among them) still round-trips. With the old
+ * 48-line budget the @var lines crowded the late @cfg lines off the end
+ * and toggles like Vertex outlines silently failed to save. */
+static void test_workspace_header_budget_worst_case(void) {
+    printf("--- workspace header budget (worst case: max vars + all cfg) ---\n");
+
+    glr_actions_install_export_cfg_bridge();
+
+    const char *export_path = "/tmp/repl_header_budget_worst_case.c";
+    static char buf[32768];
+
+    glr_ctrl_reset_all();
+
+    /* Saturate the predef-var table (t is reserved, leaving
+     * MAX_PREDEF_VARS - 1 user slots). */
+    char err[128];
+    int declared = 0;
+    for (int i = 0; i < MAX_PREDEF_VARS + 2; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "v%d", i);
+        if (repl_eval_declare_predef_var(name, err, sizeof(err)))
+            declared++;
+    }
+    ASSERT_INT("filled the full user var table", declared, MAX_PREDEF_VARS - 1);
+
+    /* Turn on toggles that live late in the @cfg emit order — these are
+     * the first to be dropped when the budget is too small. */
+    glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);
+    glr_config_set(GLR_CONFIG_VERTEX_POINTS, 1);
+    glr_config_set(GLR_CONFIG_POLY_HIGHLIGHT, 1);
+
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(1, 2, 3);");
+    editor_feed_line("glEnd();");
+
+    repl_refresh_render_state_strings();
+    repl_export_save_output(export_path, source_document_view(), NULL);
+    read_text_file(export_path, buf, sizeof(buf));
+
+    /* Every late @cfg line must survive even with the var table full. */
+    ASSERT_TRUE("worst case: @cfg vertex_outlines present",
+                strstr(buf, "// @cfg vertex_outlines = 1") != NULL);
+    ASSERT_TRUE("worst case: @cfg vertex_points present",
+                strstr(buf, "// @cfg vertex_points = 1") != NULL);
+    ASSERT_TRUE("worst case: @cfg poly_highlight present",
+                strstr(buf, "// @cfg poly_highlight = 1") != NULL);
+    /* "Audio" is the very last CFG_ITEM in emit order — its presence is
+     * the strongest "nothing fell off the end" check. */
+    ASSERT_TRUE("worst case: last @cfg (audio) present",
+                strstr(buf, "// @cfg audio = ") != NULL);
+
+    /* Round-trip: a fresh state must come back with the toggle restored. */
+    glr_ctrl_reset_all();
+    glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 0);
+    ASSERT_INT("worst case: outlines cleared before load",
+               glr_config_get(GLR_CONFIG_VERTEX_OUTLINES), 0);
+    repl_export_load_from_file(export_path, NULL);
+    ASSERT_INT("worst case: vertex_outlines restored on load",
+               glr_config_get(GLR_CONFIG_VERTEX_OUTLINES), 1);
 
     remove(export_path);
 }
