@@ -596,7 +596,7 @@ static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
      * a paren, tint it and its balanced partner. Suppressed while a
      * range selection is active so the bands don't fight. */
     int paren_self = -1, paren_match = -1;
-    int has_paren_pair = (anchor_pos == cursor_pos) &&
+    int has_paren_pair = snap->paren_match && (anchor_pos == cursor_pos) &&
         ui_text_panel_match_paren(input, input_len, cursor_pos,
                                   &paren_self, &paren_match);
 
@@ -604,7 +604,7 @@ static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
      * text outside that innermost [open, close] span so the active scope
      * stands out. Off while a range selection is active. */
     int enc_open = -1, enc_close = -1;
-    int has_enclosing = (anchor_pos == cursor_pos) &&
+    int has_enclosing = snap->paren_dim && (anchor_pos == cursor_pos) &&
         ui_text_panel_enclosing_parens(input, input_len, cursor_pos,
                                        &enc_open, &enc_close);
 
