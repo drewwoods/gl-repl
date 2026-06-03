@@ -135,6 +135,8 @@ static int demo_build_snapshot(UiTextPanelRow *rows, int rows_cap,
     snap->cp_h           = g_demo_vp_h - DEMO_MENU_BAR_H;
     snap->text_x         = 48;            /* leave room for line numbers */
     snap->wrap_at_comma  = 0;
+    snap->paren_match    = 1;
+    snap->paren_dim      = 1;
     snap->top_chrome_h   = 0;
     snap->rows           = rows;
     snap->row_count      = n;

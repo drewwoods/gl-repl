@@ -2213,8 +2213,14 @@ static void test_workspace_header_budget_worst_case(void) {
     ASSERT_TRUE("worst case: @cfg poly_highlight present",
                 strstr(buf, "// @cfg poly_highlight = 1") != NULL);
     /* "Audio" is the very last CFG_ITEM in emit order — its presence is
-     * the strongest "nothing fell off the end" check. */
-    ASSERT_TRUE("worst case: last @cfg (audio) present",
+     * the strongest "nothing fell off the end" check. If this fails after
+     * adding a config toggle, the emitted @cfg count outgrew a capacity:
+     * raise REPL_CFG_MAX_ITEMS (cfg_baseline.h — the cfg bag silently
+     * drops past it) AND MAX_WORKSPACE_HEADER_LINES (export_state.h, sized
+     * from it; its STATIC_ASSERT in export.c will also flag the shortfall). */
+    ASSERT_TRUE("worst case: last @cfg (audio) present — if failing after a "
+                "new config toggle, raise REPL_CFG_MAX_ITEMS (cfg_baseline.h) "
+                "and MAX_WORKSPACE_HEADER_LINES (export_state.h)",
                 strstr(buf, "// @cfg audio = ") != NULL);
 
     /* Round-trip: a fresh state must come back with the toggle restored. */

@@ -226,6 +226,8 @@ const GlrConfigItem g_cfg_items[] = {
     CFG_ITEM("Code panel",        GLR_CODE_PANEL, 0, GLR_CONFIG_CODE_PANEL_LAYOUT, CODE_PANEL_LAYOUT_COUNT, code_panel_layout_names, 0),
     CFG_ITEM("Wrap at commas",    0, 0, 0, GLR_CONFIG_WRAP_AT_COMMA,       2, NULL,                 0),
     CFG_ITEM("Syntax highlight",  GLR_SYNTAX_HL, 1, GLR_CONFIG_SYNTAX_HIGHLIGHT, 3, syntax_hl_names, 0),
+    CFG_ITEM("Paren match",       0, 0, 0, GLR_CONFIG_PAREN_MATCH,         2, NULL,                 0),
+    CFG_ITEM("Paren dim",         0, 0, 0, GLR_CONFIG_PAREN_DIM,           2, NULL,                 0),
     CFG_ITEM("---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
     CFG_ITEM("### AUDIO",         0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
     CFG_ITEM("Audio",             GLR_AUDIO, 0, GLR_CONFIG_AUDIO_MODE, 2, audio_cfg_names,         0),

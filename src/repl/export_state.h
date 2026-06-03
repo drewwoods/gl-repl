@@ -15,11 +15,11 @@
  *     1   @workspace-dir
  *    24   @var   (MAX_PREDEF_VARS)
  *    10   @func  (REPL_FUNC_SLOT_COUNT)
- *    32   @cfg   (REPL_CFG_MAX_ITEMS — the cfg bag's own cap)
- *   = 69; rounded up for headroom. A STATIC_ASSERT in src/repl/export.c
+ *    40   @cfg   (REPL_CFG_MAX_ITEMS — the cfg bag's own cap)
+ *   = 77; rounded up for headroom. A STATIC_ASSERT in src/repl/export.c
  * pins this against the real constants, and emit_cfgs() warns on stderr
  * if it ever still has to drop a @cfg line. */
-#define MAX_WORKSPACE_HEADER_LINES 72
+#define MAX_WORKSPACE_HEADER_LINES 80
 #define WORKSPACE_HEADER_LINE_LEN   96
 #define CAM_LINE_COUNT 4
 #define CAM_LINE_LEN   96    /* per-line buffer width for cam_lines[] */

@@ -18,7 +18,13 @@
  * enforced at the REPL layer (the bridge is the only TU that needs
  * to know the symbolic names). */
 #define REPL_CFG_VALUE_MAX   32
-#define REPL_CFG_MAX_ITEMS   32
+/* Capacity of a config bag — must stay >= the number of emitted @cfg
+ * toggles (every non-header, non-action g_cfg_items[] row). When a new
+ * config toggle pushes the real count past this, glr_export_cfg_fill_all
+ * silently drops the overflow and the last @cfg lines stop round-tripping
+ * (caught by test_workspace_header_budget_worst_case). Bump this — and
+ * MAX_WORKSPACE_HEADER_LINES in export_state.h, which is sized from it. */
+#define REPL_CFG_MAX_ITEMS   40
 
 typedef struct {
     char key[REPL_CFG_KEY_MAX];      /* opaque slug */

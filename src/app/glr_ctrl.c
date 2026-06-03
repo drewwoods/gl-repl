@@ -1788,6 +1788,8 @@ void glr_ctrl_sync_ui_chrome(void) {
     cp->wrap_at_comma       = p.wrap_at_comma;
     cp->syntax_highlight    = p.syntax_highlight;
     cp->code_focus          = p.code_focus;
+    cp->paren_match         = p.paren_match;
+    cp->paren_dim           = p.paren_dim;
 }
 
 void glr_ctrl_apply_code_panel_follow_scroll(

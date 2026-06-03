@@ -253,6 +253,12 @@ typedef struct {
      * CodeLayout values without consulting app state. */
     int wrap_at_comma;
 
+    /* Active-input-row paren aids (1 = on). paren_match tints the
+     * caret's matching parenthesis; paren_dim greys text outside the
+     * caret's enclosing pair. Independent toggles. */
+    int paren_match;
+    int paren_dim;
+
     /* Generic top-chrome reserve (pixels) the adapter draws above the
      * code rows, e.g. a scene tab strip. Subtracted from the render
      * origin, hit-test origin, both scrollbar expressions, and the

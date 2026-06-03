@@ -37,6 +37,8 @@ typedef struct {
     int   wrap_at_comma;        /* mirror of presentation.wrap_at_comma */
     int   syntax_highlight;     /* mirror of presentation.syntax_highlight */
     int   code_focus;           /* mirror of presentation.code_focus */
+    int   paren_match;          /* mirror of presentation.paren_match */
+    int   paren_dim;            /* mirror of presentation.paren_dim */
 } UiCodePanelRuntimeState;
 
 /* Help-overlay visibility. Tab selection and scroll live in the separate
