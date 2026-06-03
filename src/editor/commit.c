@@ -451,11 +451,13 @@ static int compile_function_decl_insert_pos_after_delete(
     int doc_count = ctx->document_count;
 
     int pos = 0;
-    while (pos < doc_count && cmds[pos].type == CMD_VAR_DECLARE)
-        pos++;
-
     while (pos < doc_count) {
-        if (cmds[pos].type == CMD_COMMENT || cmds[pos].type == CMD_EMPTY) {
+        /* Skip the whole declaration prologue: var decls plus any blank
+         * lines / comments interspersed among them. A blank line between
+         * two float groups must not terminate the walk, or the new func
+         * lands between the groups instead of after all decls. */
+        if (cmds[pos].type == CMD_VAR_DECLARE ||
+            cmds[pos].type == CMD_COMMENT || cmds[pos].type == CMD_EMPTY) {
             pos++;
             continue;
         }

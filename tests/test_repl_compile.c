@@ -873,6 +873,63 @@ static void test_func_def_blank_line_relocation(void) {
                 strstr(editor_buffer_line(2), "continuation") != NULL);
 }
 
+/* Regression: a blank line separating two var-decl groups must not
+ * stop the func-decl insert walk inside the prologue. Pre-fix, the
+ * walk skipped the leading decls, stepped over the blank, then hit the
+ * second decl group and broke — inserting the new func BETWEEN the
+ * float groups instead of after all decls. */
+static void test_func_def_after_blank_separated_decls(void) {
+    glr_ctrl_reset_all();
+
+    /* Build a doc with two var-decl groups split by a blank line:
+     *   [0] float a;
+     *   [1] float b;
+     *   [2] <blank>
+     *   [3] float c;
+     *   [4] float d;
+     * The blank is inserted mid-document (Enter at column 0 above
+     * `float c`) so it genuinely separates two decl groups — feeding a
+     * blank directly would auto-relocate the later decls above it. */
+    editor_feed_line("float a;");
+    editor_feed_line("float b;");
+    editor_feed_line("float c;");
+    editor_feed_line("float d;");
+    editor_navigate_to_line(2);          /* float c */
+    editor_cursor_pos_set(0);
+    editor_handle_key('\r', 0, 0);       /* blank line above float c */
+
+    ASSERT_INT("pre-funcdef decl-group doc count",
+               repl_state_document_count(), 5);
+    ASSERT_INT("pre-funcdef blank between decl groups",
+               repl_state_document_cmds()[2].type, CMD_EMPTY);
+    ASSERT_INT("pre-funcdef second decl group present",
+               repl_state_document_cmds()[3].type, CMD_VAR_DECLARE);
+
+    /* Move the cursor below the decls and define a func. Pre-fix, the
+     * blank at index 2 stopped the insert-pos walk and the func landed
+     * BETWEEN the float groups; the func must land after all decls. */
+    editor_navigate_to_line(repl_state_document_count());
+    set_input("func0() {");
+    editor_try_commit_block_structs();
+
+    ASSERT_INT("post-funcdef decl-group doc count",
+               repl_state_document_count(), 7);
+    ASSERT_INT("decl 0 stays put",
+               repl_state_document_cmds()[0].type, CMD_VAR_DECLARE);
+    ASSERT_INT("decl 1 stays put",
+               repl_state_document_cmds()[1].type, CMD_VAR_DECLARE);
+    ASSERT_INT("blank separator stays put",
+               repl_state_document_cmds()[2].type, CMD_EMPTY);
+    ASSERT_INT("decl 2 stays put (not displaced by func)",
+               repl_state_document_cmds()[3].type, CMD_VAR_DECLARE);
+    ASSERT_INT("decl 3 stays put",
+               repl_state_document_cmds()[4].type, CMD_VAR_DECLARE);
+    ASSERT_INT("func def lands after all decls",
+               repl_state_document_cmds()[5].type, CMD_FUNC_DEF);
+    ASSERT_INT("func end lands after all decls",
+               repl_state_document_cmds()[6].type, CMD_FUNC_END);
+}
+
 /* Resume publish: when a func_def's relocation moves the original
  * cursor position above the inserted block, the apply step
  * publishes the delta so the matching close-brace's compile
@@ -967,6 +1024,7 @@ int main(void) {
     test_orchestration_success_returns_message();
     test_func_def_comment_relocation();
     test_func_def_blank_line_relocation();
+    test_func_def_after_blank_separated_decls();
     test_func_def_resume_publish_consumed_by_close_brace();
 
     /* [P1] regression: alias registration must roll back on parse
