@@ -162,6 +162,14 @@ static void test_dropdown_and_config_press(void) {
                   h_new_scene.kind == UI_HIT_MENU_ITEM ? h_new_scene.item_idx : -1,
                   GLR_FILE_ITEM_NEW_SCENE);
 
+    ASSERT_TRUE("found Quit item point",
+                find_dropdown_item_point(GLR_MENU_FILE, GLR_FILE_ITEM_QUIT,
+                                         &item_mx, &item_my));
+    UiHit h_quit = ui_menu_bar_hit_test(item_mx, item_my);
+    ASSERT_INT_EQ("hit Quit item",
+                  h_quit.kind == UI_HIT_MENU_ITEM ? h_quit.item_idx : -1,
+                  GLR_FILE_ITEM_QUIT);
+
     ui_menu_bar_close();
     UiHit h_closed = ui_menu_bar_hit_test(item_mx, item_my);
     ASSERT_INT_EQ("hit when closed", h_closed.kind == UI_HIT_MENU_ITEM ? h_closed.item_idx : -1, -1);

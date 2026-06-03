@@ -113,9 +113,9 @@ int glr_ctrl_router_handle_debug_dump_key(unsigned char key) {
     return 0;
 }
 
-/* Recovery safeguard: Ctrl+Q and SIGINT (Ctrl+C), plus Load Workspace
- * (which replaces every in-memory slot), write a recovery copy to a
- * DISTINCT, findable file — never the active scene/workspace. The point
+/* Recovery safeguard: Ctrl+Q, File > Quit, and SIGINT (Ctrl+C), plus
+ * Load Workspace (which replaces every in-memory slot), write a recovery
+ * copy to a DISTINCT, findable file — never the active scene/workspace. The point
  * is to rescue an unintended exit / forgotten save / discarded scene
  * without silently clobbering the user's real scene; reload it with
  * `./gl-repl recovery.c`. (Not /tmp — the user would never find it; not
@@ -1604,9 +1604,9 @@ void glr_ctrl_mousewheel(int wheel, int direction, int x, int y) {
 #endif
 }
 
-/* SIGINT-requested quit, consumed on the normal frame-tick path (the signal
- * handler only sets the flag, so no stdio/file I/O runs in handler context).
- * Called from glr_ctrl_tick in glr_ctrl.c via glr_ctrl_internal.h. */
+/* Deferred quit, consumed on the normal frame-tick path. SIGINT only sets
+ * the flag, so no stdio/file I/O runs in handler context. Called from
+ * glr_ctrl_tick in glr_ctrl.c via glr_ctrl_internal.h. */
 void glr_ctrl_router_run_pending_quit(void) {
     if (g_quit_requested) {
         glr_ctrl_save_quit_recovery();
