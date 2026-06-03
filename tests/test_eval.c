@@ -7,6 +7,7 @@
  * Usage:
  *   ./test_eval                    # interactive REPL
  *   ./test_eval --run-tests        # run built-in test suite
+ *   ./test_eval --rand-dist [N]    # print the rand() uniformity table (N samples)
  *
  * Interactive commands:
  *   <expr>                         eval expression: 1+2, sin(PI/4), x*2+1
@@ -16,12 +17,14 @@
  *   for <header>                   parse REPL for:    for for(i, 0, n)
  *   cfor <header>                  parse C for:       cfor for (float i = 0; i < 10; i += 1.0f) {
  *   vars                           show all predefined vars
+ *   randdist [N]                   rand() uniformity table (N samples, default 100000)
  *   quit / q                       exit
  */
 #include "repl/eval.h"
 
 #include "support/test_harness.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <ctype.h>
@@ -29,6 +32,10 @@
 /* ---- Built-in test suite ---------------------------------------------- */
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
+
+/* Defined alongside the rand() distribution table below; run_tests() uses
+ * it for the uniformity regression check. */
+static double rand_dist_chisq(int seed_is_i, int C, long n);
 
 #define ASSERT_TRUE(label, cond) \
     TEST_ASSERT_TRUE(&g_harness, (label), (cond))
@@ -228,12 +235,13 @@ static void run_tests(void) {
     ASSERT_FLOAT("ln(1)", 0.0f);             /* natural log */
     ASSERT_FLOAT("ln(e)", 1.0f);             /* ln(e) = 1 by definition */
     ASSERT_FLOAT("e", (float)M_E);           /* Euler's number */
-    ASSERT_FLOAT("rand(7,11)", 0.564453f);
-    ASSERT_FLOAT("rand(7,11)", 0.564453f); /* deterministic */
-    ASSERT_FLOAT("rand(3)", 0.589844f);    /* implicit iter=0 */
+    ASSERT_FLOAT("rand(7,11)", 0.233398f);
+    ASSERT_FLOAT("rand(7,11)", 0.233398f); /* deterministic */
+    ASSERT_FLOAT("rand(3)", 0.164062f);    /* implicit iter=0 */
     ASSERT_FLOAT("rand(3,1,2)", 0.0f);     /* extra args rejected */
-    ASSERT_FLOAT("rand2(3)", 0.179688f);   /* implicit iter=0 */
+    ASSERT_FLOAT("rand2(3)", -0.671875f);  /* implicit iter=0 */
     ASSERT_FLOAT("rand2(3,1,2)", 0.0f);    /* extra args rejected */
+    ASSERT_FLOAT("rand(0,0)", 0.282227f);  /* seed offset keeps seed 0 off sin()'s zero */
     ASSERT_FLOAT("sin(PI/2)", 1.0f);
     ASSERT_FLOAT("cos(TAU)", 1.0f);
     ASSERT_FLOAT("10/0", 0.0f);  /* div by zero returns 0 */
@@ -1235,12 +1243,141 @@ static void run_tests(void) {
         ASSERT_TRUE("fmt 0", strcmp(buf, "0") == 0);
     }
 
+    /* ---- rand() distribution uniformity ---- */
+    /* Guards expr_rand01()'s seed offset and overall uniformity: each
+     * argument pattern must pass a chi-square goodness-of-fit at the
+     * p=.01 level (df=19 critical value 36.19). Sample size is kept at
+     * 2048 deliberately — the float32 hash has only ~5000 distinct
+     * outputs, so far larger samples saturate that grid and inflate
+     * chi-square past the threshold (see `randdist 100000`). At 2048 the
+     * worst pattern sits near 23, leaving margin for sinf() ULP
+     * differences across platforms. Run `--rand-dist` for the full table. */
+    {
+        const double CHISQ_P01 = 36.19; /* df=19, p=.01 */
+        const long n = 2048;
+        const int Cs[] = { 0, 1, 7 };
+        for (int k = 0; k < 3; k++) {
+            char lbl[64];
+            double chisq = rand_dist_chisq(1, Cs[k], n);
+            snprintf(lbl, sizeof lbl, "rand(i,%d) chi^2 %.1f < %.2f", Cs[k], chisq, CHISQ_P01);
+            ASSERT_TRUE(lbl, chisq < CHISQ_P01);
+        }
+        for (int k = 0; k < 3; k++) {
+            char lbl[64];
+            double chisq = rand_dist_chisq(0, Cs[k], n);
+            snprintf(lbl, sizeof lbl, "rand(%d,i) chi^2 %.1f < %.2f", Cs[k], chisq, CHISQ_P01);
+            ASSERT_TRUE(lbl, chisq < CHISQ_P01);
+        }
+    }
+
     /* ---- Summary ---- */
     printf("\n%d / %d tests passed", g_harness.passed, g_harness.run);
     if (g_harness.passed == g_harness.run)
         printf(" - all OK!\n");
     else
         printf(" - %d FAILED\n", g_harness.run - g_harness.passed);
+}
+
+/* ---- rand() distribution table ---------------------------------------- */
+/* Samples rand(...) through the real evaluator (no duplicated hash, so the
+ * table can never drift from src/repl/eval.c) and prints per-pattern
+ * uniformity stats. Drives the `randdist` interactive command and the
+ * `--rand-dist` CLI mode. */
+
+#define RAND_DIST_BINS 20
+
+static float rand_dist_eval(const char *expr) {
+    ExprCtx ctx = { expr, NULL, 0 };
+    return repl_eval_expr(&ctx);
+}
+
+static int rand_dist_cmp_float(const void *a, const void *b) {
+    float fa = *(const float *)a, fb = *(const float *)b;
+    return (fa > fb) - (fa < fb);
+}
+
+/* Chi-square goodness-of-fit of `n` rand() samples against uniform[0,1)
+ * over RAND_DIST_BINS equal bins. `seed_is_i` selects rand(i, C) vs
+ * rand(C, i). Deterministic for a given (pattern, n); shared by the
+ * printed table and the regression assertion in run_tests(). */
+static double rand_dist_chisq(int seed_is_i, int C, long n) {
+    long bins[RAND_DIST_BINS] = {0};
+    char expr[64];
+    for (long i = 0; i < n; i++) {
+        if (seed_is_i) snprintf(expr, sizeof expr, "rand(%ld,%d)", i, C);
+        else           snprintf(expr, sizeof expr, "rand(%d,%ld)", C, i);
+        float r = rand_dist_eval(expr);
+        int b = (int)(r * RAND_DIST_BINS);
+        if (b < 0) b = 0;
+        if (b >= RAND_DIST_BINS) b = RAND_DIST_BINS - 1;
+        bins[b]++;
+    }
+    double expv = (double)n / RAND_DIST_BINS, chisq = 0;
+    for (int b = 0; b < RAND_DIST_BINS; b++) { double d = bins[b] - expv; chisq += d * d / expv; }
+    return chisq;
+}
+
+/* One uniformity row. `seed_is_i` selects rand(i, C) [seed = loop index,
+ * iter const] vs rand(C, i) [seed const, iter = loop index]. */
+static void rand_dist_row(const char *label, int seed_is_i, int C, long n) {
+    long bins[RAND_DIST_BINS] = {0};
+    double sum = 0, sumsq = 0, mn = 1e9, mx = -1e9;
+    float *vals = (float *)malloc((size_t)n * sizeof *vals);
+    char expr[64];
+    for (long i = 0; i < n; i++) {
+        if (seed_is_i) snprintf(expr, sizeof expr, "rand(%ld,%d)", i, C);
+        else           snprintf(expr, sizeof expr, "rand(%d,%ld)", C, i);
+        float r = rand_dist_eval(expr);
+        if (vals) vals[i] = r;
+        int b = (int)(r * RAND_DIST_BINS);
+        if (b < 0) b = 0;
+        if (b >= RAND_DIST_BINS) b = RAND_DIST_BINS - 1;
+        bins[b]++;
+        sum += r; sumsq += (double)r * r;
+        if (r < mn) mn = r;
+        if (r > mx) mx = r;
+    }
+    double mean = sum / n, var = sumsq / n - mean * mean;
+    double expv = (double)n / RAND_DIST_BINS, chisq = 0;
+    for (int b = 0; b < RAND_DIST_BINS; b++) { double d = bins[b] - expv; chisq += d * d / expv; }
+    long distinct = 0;
+    if (vals) {
+        qsort(vals, (size_t)n, sizeof *vals, rand_dist_cmp_float);
+        distinct = n ? 1 : 0;
+        for (long i = 1; i < n; i++) if (vals[i] != vals[i - 1]) distinct++;
+        free(vals);
+    }
+    printf("\n=== %s  (n=%ld, %d bins) ===\n", label, n, RAND_DIST_BINS);
+    printf("mean     = %.5f   (ideal 0.50000)\n", mean);
+    printf("var      = %.5f   (ideal 0.08333)\n", var);
+    printf("min/max  = %.5f / %.5f\n", mn, mx);
+    printf("distinct = %ld (%.1f%%)\n", distinct, 100.0 * distinct / (double)n);
+    printf("chi^2    = %.2f   (df=19; >30.14 fails p=.05, >36.19 fails p=.01)\n", chisq);
+    double unit = expv / 25.0;
+    for (int b = 0; b < RAND_DIST_BINS; b++) {
+        printf("  [%.2f,%.2f) %7ld ", b / (double)RAND_DIST_BINS,
+               (b + 1) / (double)RAND_DIST_BINS, bins[b]);
+        long bars = unit > 0 ? (long)(bins[b] / unit) : 0;
+        for (long k = 0; k < bars && k < 60; k++) putchar('#');
+        putchar('\n');
+    }
+}
+
+static void rand_dist_table(long n) {
+    static const int Cs[] = { 0, 1, 7 };
+    if (n < 1) n = 100000;
+    printf("rand() uniformity table  (%ld samples per pattern, seed offset %.2f)\n",
+           n, 0.5);
+    for (int k = 0; k < 3; k++) {
+        char lbl[64];
+        snprintf(lbl, sizeof lbl, "rand(i, %d)  [seed varies, iter const]", Cs[k]);
+        rand_dist_row(lbl, 1, Cs[k], n);
+    }
+    for (int k = 0; k < 3; k++) {
+        char lbl[64];
+        snprintf(lbl, sizeof lbl, "rand(%d, i)  [seed const, iter varies]", Cs[k]);
+        rand_dist_row(lbl, 0, Cs[k], n);
+    }
 }
 
 /* ---- Interactive REPL ------------------------------------------------- */
@@ -1267,7 +1404,14 @@ static void interactive(void) {
             printf("  for <header>     parse REPL for-header\n");
             printf("  cfor <header>    parse C for-header\n");
             printf("  vars             show predefined variables\n");
+            printf("  randdist [N]     rand() uniformity table (N samples, default 100000)\n");
             printf("  quit / q         exit\n");
+            continue;
+        }
+
+        if (strcmp(line, "randdist") == 0 || strncmp(line, "randdist ", 9) == 0) {
+            long n = (line[8] == ' ') ? strtol(line + 9, NULL, 10) : 0;
+            rand_dist_table(n);
             continue;
         }
 
@@ -1344,6 +1488,11 @@ int main(int argc, char *argv[]) {
     if (argc > 1 && strcmp(argv[1], "--run-tests") == 0) {
         run_tests();
         return (g_harness.passed == g_harness.run) ? 0 : 1;
+    }
+
+    if (argc > 1 && strcmp(argv[1], "--rand-dist") == 0) {
+        rand_dist_table(argc > 2 ? strtol(argv[2], NULL, 10) : 0);
+        return 0;
     }
 
     interactive();
