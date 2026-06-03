@@ -450,7 +450,7 @@ static void test_match_paren_pairs(void) {
 }
 
 /* ui_text_panel_enclosing_parens: the innermost pair surrounding the
- * caret, used to dim out-of-scope text. Indices for the literal s
+ * caret, used to highlight the in-scope text. Indices for the literal s
  * (single-spaced): outer '(' at 0, B "(hello)" 2..8, C '(' at 10,
  * D "( world )" 20..28, C ')' at 30, outer ')' at 32. */
 static void test_enclosing_parens_scope(void) {
@@ -461,8 +461,8 @@ static void test_enclosing_parens_scope(void) {
     printf("--- enclosing parens ---\n");
 
     /* Caret in front of 'x' (index 18) sits inside C; the innermost
-     * enclosing pair is C [10, 30] — so "( (hello) " and the trailing
-     * " )" dim, while the nested ( world ) stays bright. */
+     * enclosing pair is C [10, 30] — so the band spans that range while
+     * "( (hello) " and the trailing " )" stay outside it. */
     ASSERT_INT_EQ("caret in C has an enclosing pair", 1,
                   ui_text_panel_enclosing_parens(s, len, 18, &open, &close));
     ASSERT_INT_EQ("C open index", open, 10);

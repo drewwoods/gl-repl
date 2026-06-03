@@ -136,7 +136,7 @@ static int demo_build_snapshot(UiTextPanelRow *rows, int rows_cap,
     snap->text_x         = 48;            /* leave room for line numbers */
     snap->wrap_at_comma  = 0;
     snap->paren_match    = 1;
-    snap->paren_dim      = 1;
+    snap->paren_scope    = 1;
     snap->top_chrome_h   = 0;
     snap->rows           = rows;
     snap->row_count      = n;
