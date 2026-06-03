@@ -356,4 +356,14 @@ int  ui_text_panel_right_action_rect(const UiTextPanelSnapshot *snap,
                                     int line_y,
                                     int *out_sx, int *out_sy, int *out_sw);
 
+/* Parenthesis matching for the active input row. If the character "in
+ * front of" the caret (s[cursor], i.e. the one immediately to the right
+ * of the insertion point) is a '(' or ')', writes that character's index
+ * to *self and its balanced partner's index to *match, then returns 1.
+ * Returns 0 when s[cursor] is not a parenthesis or the pair is unbalanced
+ * (no partner within [0, len)). Pure — no GL, no global state. The
+ * renderer uses it to tint the matching pair on the active row. */
+int  ui_text_panel_match_paren(const char *s, int len, int cursor,
+                               int *self, int *match);
+
 #endif /* UI_TEXT_PANEL_H */
