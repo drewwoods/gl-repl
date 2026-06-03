@@ -2,6 +2,7 @@
  * tests/test_edit_overlays.c - Unit tests for edit overlays subsystem.
  */
 #include "editor/state.h"
+#include "editor/input.h"
 #include "repl/state_views.h"
 #include "repl/state_owners.h"
 #include "repl/core.h"
@@ -21,6 +22,80 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 
 #define ASSERT_INT(label, got, exp) \
     TEST_ASSERT_INT(&g_harness, label, got, exp)
+
+/* ---------------------------------------------------------------------------
+ * GL-stub call trace harness.
+ *
+ * The stub GL/GLU/GLUT headers (under tests/gl-stubs/include/GL/) record every
+ * call's scalar arguments to a trace file when gl_stub_trace_open() is
+ * active — e.g. glVertex3f(1, 2, 3) writes the line "glVertex3f 1 2 3"
+ * (floats via %g, C locale). The render functions below emit raw
+ * command args straight into glVertex3f/glVertex2f (the no-op stubs apply
+ * no modelview transform), so we can assert the *exact* coordinates the
+ * overlay passes feed to GL. We pair that with the per-symbol counters in
+ * gl_stub_counts[] for "was this path taken at all" checks.
+ * ------------------------------------------------------------------------- */
+#define TRACE_PATH "build/test_edit_overlays_trace.txt"
+
+typedef struct {
+    char lines[2048][128];
+    int  n;
+} TraceLog;
+
+static void trace_begin(void) {
+    gl_stub_counts_reset();
+    gl_stub_trace_open(TRACE_PATH);
+}
+
+static void trace_end(TraceLog *log) {
+    gl_stub_trace_close();
+    log->n = 0;
+    FILE *f = fopen(TRACE_PATH, "r");
+    if (!f) return;
+    char buf[256];
+    while (log->n < 2048 && fgets(buf, sizeof(buf), f)) {
+        size_t len = strlen(buf);
+        if (len && buf[len - 1] == '\n') buf[--len] = '\0';
+        strncpy(log->lines[log->n], buf, sizeof(log->lines[0]) - 1);
+        log->lines[log->n][sizeof(log->lines[0]) - 1] = '\0';
+        log->n++;
+    }
+    fclose(f);
+}
+
+/* Count trace lines that match `exact` verbatim (e.g. "glVertex3f 1 2 3"). */
+static int trace_count_line(const TraceLog *log, const char *exact) {
+    int c = 0;
+    for (int i = 0; i < log->n; i++)
+        if (strcmp(log->lines[i], exact) == 0) c++;
+    return c;
+}
+
+/* Count trace lines whose symbol is `sym` (args ignored). */
+static int trace_count_sym(const TraceLog *log, const char *sym) {
+    size_t sl = strlen(sym);
+    int c = 0;
+    for (int i = 0; i < log->n; i++) {
+        if (strncmp(log->lines[i], sym, sl) == 0 &&
+            (log->lines[i][sl] == '\0' || log->lines[i][sl] == ' '))
+            c++;
+    }
+    return c;
+}
+
+/* Initialize one valid GLCmd of `type` with up to three float args. */
+static void mk_cmd(GLCmd *c, CmdType type, float a0, float a1, float a2) {
+    memset(c, 0, sizeof(*c));
+    c->type = type;
+    c->valid = 1;
+    c->args[0] = a0;
+    c->args[1] = a1;
+    c->args[2] = a2;
+    c->num_args = 3;
+    c->src_cmd_idx = -1;
+    c->call_src_cmd_idx = -1;
+    c->root_call_src_cmd_idx = -1;
+}
 
 static void test_outline_begin_mode_has_overlay(void) {
     printf("--- edit_overlays outline_begin_mode_has_overlay ---\n");
@@ -145,12 +220,518 @@ static void test_build_vertex_walk_context(void) {
     ASSERT_INT("func_scope_mask starts at 0", walk.cursor.cursor_func_scope_mask, 0u);
 }
 
+/* edit_overlays_render_vertex_points: walks the flat program and emits one
+ * glBegin(GL_POINTS)/glVertex3f/glEnd per vertex, with glPointSize keyed on
+ * whether the enclosing primitive is a line mode. Validate the exact
+ * coordinates and the point sizes via the call trace. */
+static void test_render_vertex_points(void) {
+    printf("--- edit_overlays edit_overlays_render_vertex_points ---\n");
+
+    GLCmd cmds[4];
+    mk_cmd(&cmds[0], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&cmds[1], CMD_VERTEX3F, 1.0f, 2.0f, 3.0f);
+    mk_cmd(&cmds[2], CMD_VERTEX2F, 0.5f, -0.5f, 0);  /* z forced to 0 */
+    mk_cmd(&cmds[3], CMD_END, 0, 0, 0);
+
+    OverlayWalkCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = cmds;
+    ctx.program.cmd_count = 4;
+    ctx.show_vertex_points = 1;
+
+    TraceLog log;
+    trace_begin();
+    edit_overlays_render_vertex_points(&ctx);
+    trace_end(&log);
+
+    ASSERT_INT("emits glVertex3f for the 3f vertex",
+               trace_count_line(&log, "glVertex3f 1 2 3"), 1);
+    ASSERT_INT("emits glVertex3f for the 2f vertex (z=0)",
+               trace_count_line(&log, "glVertex3f 0.5 -0.5 0"), 1);
+    ASSERT_INT("two point batches drawn",
+               trace_count_sym(&log, "glVertex3f"), 2);
+    ASSERT_INT("triangle vertices use the large point size",
+               trace_count_line(&log, "glPointSize 7"), 2);
+    ASSERT_INT("counter agrees with trace",
+               (int)gl_stub_counts[GL_STUB_glVertex3f], 2);
+
+    /* Neither show_vertex_points nor replay_vertex_points -> early return. */
+    ctx.show_vertex_points = 0;
+    trace_begin();
+    edit_overlays_render_vertex_points(&ctx);
+    trace_end(&log);
+    ASSERT_INT("disabled -> no vertices emitted",
+               trace_count_sym(&log, "glVertex3f"), 0);
+    ASSERT_INT("disabled -> no glPushAttrib (returned before any GL)",
+               trace_count_sym(&log, "glPushAttrib"), 0);
+
+    /* Line primitive -> the smaller point size. replay_vertex_points path. */
+    GLCmd line_cmds[3];
+    mk_cmd(&line_cmds[0], CMD_BEGIN, (float)GL_LINE_STRIP, 0, 0);
+    mk_cmd(&line_cmds[1], CMD_VERTEX3F, 4.0f, 5.0f, 6.0f);
+    mk_cmd(&line_cmds[2], CMD_END, 0, 0, 0);
+    ctx.program.cmds = line_cmds;
+    ctx.program.cmd_count = 3;
+    ctx.replay_vertex_points = 1;
+    trace_begin();
+    edit_overlays_render_vertex_points(&ctx);
+    trace_end(&log);
+    ASSERT_INT("line-mode vertex uses the small point size",
+               trace_count_line(&log, "glPointSize 2"), 1);
+    ASSERT_INT("line-mode vertex coords emitted",
+               trace_count_line(&log, "glVertex3f 4 5 6"), 1);
+
+    /* A leading transform is tracked during the walk (the matrix is the
+     * point's modelview, even though the no-op stub doesn't transform the
+     * recorded coordinate). */
+    GLCmd xf_cmds[3];
+    mk_cmd(&xf_cmds[0], CMD_TRANSLATE3F, 9.0f, 0.0f, 0.0f);
+    mk_cmd(&xf_cmds[1], CMD_VERTEX3F, 0.0f, 0.0f, 0.0f);
+    mk_cmd(&xf_cmds[2], CMD_END, 0, 0, 0);
+    ctx.program.cmds = xf_cmds;
+    ctx.program.cmd_count = 3;
+    trace_begin();
+    edit_overlays_render_vertex_points(&ctx);
+    trace_end(&log);
+    ASSERT_INT("vertex-points walk tracks the transform",
+               trace_count_line(&log, "glTranslatef 9 0 0"), 1);
+}
+
+/* render_outlines_glbegin_pass (via the public entry): traces an outline
+ * around overlay-eligible primitives but leaves line modes alone. */
+static void test_render_outlines_glbegin(void) {
+    printf("--- edit_overlays render_outlines (glBegin pass) ---\n");
+
+    GLCmd cmds[4];
+    mk_cmd(&cmds[0], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&cmds[1], CMD_VERTEX3F, 0.1f, 0.2f, 0.3f);
+    mk_cmd(&cmds[2], CMD_VERTEX2F, 0.4f, 0.5f, 0);
+    mk_cmd(&cmds[3], CMD_END, 0, 0, 0);
+
+    OverlayWalkCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = cmds;
+    ctx.program.cmd_count = 4;
+    ctx.cursor.edit_line_idx = -1;
+    ctx.cursor.cursor_block_begin = -1;
+    ctx.cursor.cursor_block_end = -1;
+    ctx.show_vertex_outlines = 1;
+
+    TraceLog log;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+
+    ASSERT_INT("outline traces the 3f vertex",
+               trace_count_line(&log, "glVertex3f 0.1 0.2 0.3"), 1);
+    ASSERT_INT("outline traces the 2f vertex",
+               trace_count_line(&log, "glVertex2f 0.4 0.5"), 1);
+    ASSERT_INT("edge outline width applied",
+               trace_count_line(&log, "glLineWidth 1.2"), 1);
+    ASSERT_INT("polygon mode toggled to lines and back",
+               trace_count_sym(&log, "glPolygonMode") >= 2, 1);
+
+    /* GL_LINES has no overlay: with only show_vertex_outlines, the begin
+     * block is skipped entirely (no vertices traced). */
+    mk_cmd(&cmds[0], CMD_BEGIN, (float)GL_LINES, 0, 0);
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 1, 1);
+    trace_end(&log);
+    ASSERT_INT("line primitive draws no outline vertices",
+               trace_count_sym(&log, "glVertex3f"), 0);
+
+    /* highlight_current_poly: the block matching the cursor gets the
+     * thick active-outline width even for a line primitive. */
+    mk_cmd(&cmds[0], CMD_BEGIN, (float)GL_LINES, 0, 0);
+    cmds[1].src_cmd_idx = 7;
+    ctx.show_vertex_outlines = 0;
+    ctx.highlight_current_poly = 1;
+    ctx.cursor.edit_line_idx = 7;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("current-poly highlight uses the thick width",
+               trace_count_line(&log, "glLineWidth 3"), 1);
+    ASSERT_INT("current-poly highlight still traces its vertex",
+               trace_count_line(&log, "glVertex3f 0.1 0.2 0.3"), 1);
+
+    /* A begin block left open at end of program triggers the trailing
+     * glEnd cleanup after the loop. */
+    GLCmd open_cmds[2];
+    mk_cmd(&open_cmds[0], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&open_cmds[1], CMD_VERTEX3F, 0.6f, 0.7f, 0.8f);
+    OverlayWalkCtx octx;
+    memset(&octx, 0, sizeof(octx));
+    octx.program.cmds = open_cmds;
+    octx.program.cmd_count = 2;
+    octx.cursor.edit_line_idx = -1;
+    octx.cursor.cursor_block_begin = -1;
+    octx.cursor.cursor_block_end = -1;
+    octx.show_vertex_outlines = 1;
+    trace_begin();
+    edit_overlays_render_outlines(&octx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("unterminated begin still traces its vertex",
+               trace_count_line(&log, "glVertex3f 0.6 0.7 0.8"), 1);
+    ASSERT_TRUE("unterminated begin is closed by trailing glEnd",
+                trace_count_sym(&log, "glEnd") >= 1);
+}
+
+/* render_outlines_tess_pass: draws each tess contour as a GL_LINE_LOOP. */
+static void test_render_outlines_tess(void) {
+    printf("--- edit_overlays render_outlines (tess pass) ---\n");
+
+    GLCmd cmds[5];
+    mk_cmd(&cmds[0], CMD_TESS_BEGIN_POLYGON, 0, 0, 0);
+    mk_cmd(&cmds[1], CMD_TESS_BEGIN_CONTOUR, 0, 0, 0);
+    mk_cmd(&cmds[2], CMD_TESS_VERTEX, 1.5f, 2.5f, 3.5f);
+    mk_cmd(&cmds[3], CMD_TESS_VERTEX, -1.0f, -2.0f, 0.0f);
+    mk_cmd(&cmds[4], CMD_TESS_END, 0, 0, 0);
+
+    OverlayWalkCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = cmds;
+    ctx.program.cmd_count = 5;
+    ctx.cursor.edit_line_idx = -1;
+    ctx.cursor.cursor_block_begin = -1;
+    ctx.cursor.cursor_block_end = -1;
+    ctx.show_vertex_outlines = 1;
+
+    TraceLog log;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+
+    ASSERT_INT("tess contour vertex 0 traced",
+               trace_count_line(&log, "glVertex3f 1.5 2.5 3.5"), 1);
+    ASSERT_INT("tess contour vertex 1 traced",
+               trace_count_line(&log, "glVertex3f -1 -2 0"), 1);
+    ASSERT_INT("contour outline width applied",
+               trace_count_line(&log, "glLineWidth 1.5"), 1);
+
+    /* replay_tess_preview suppresses the tess outline entirely. */
+    ctx.replay_tess_preview = 1;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("tess preview suppresses contour vertices",
+               trace_count_sym(&log, "glVertex3f"), 0);
+
+    /* A two-contour polygon with the polygon matching the cursor: the
+     * second BEGIN_CONTOUR closes the first loop, and the active-poly
+     * highlight color is used. */
+    GLCmd poly[7];
+    mk_cmd(&poly[0], CMD_TESS_BEGIN_POLYGON, 0, 0, 0);
+    poly[0].src_cmd_idx = 3;
+    mk_cmd(&poly[1], CMD_TESS_BEGIN_CONTOUR, 0, 0, 0);
+    mk_cmd(&poly[2], CMD_TESS_VERTEX, 0.0f, 0.0f, 0.0f);
+    mk_cmd(&poly[3], CMD_TESS_BEGIN_CONTOUR, 0, 0, 0);
+    mk_cmd(&poly[4], CMD_TESS_VERTEX, 1.0f, 1.0f, 1.0f);
+    mk_cmd(&poly[5], CMD_TESS_END, 0, 0, 0);
+    poly[6] = poly[5]; /* unused padding */
+
+    OverlayWalkCtx tctx;
+    memset(&tctx, 0, sizeof(tctx));
+    tctx.program.cmds = poly;
+    tctx.program.cmd_count = 6;
+    tctx.cursor.edit_line_idx = 3;     /* matches the polygon's src line */
+    tctx.cursor.cursor_block_begin = -1;
+    tctx.cursor.cursor_block_end = -1;
+    tctx.highlight_current_poly = 1;
+    trace_begin();
+    edit_overlays_render_outlines(&tctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("first contour vertex traced", trace_count_sym(&log, "glVertex3f") >= 2, 1);
+    ASSERT_TRUE("multi-contour opens two line loops",
+                trace_count_line(&log, "glLineWidth 1.5") >= 2);
+}
+
+/* render_outlines_glut_pass: re-draws glutSolid* shapes in wireframe under
+ * the active polygon-line mode. The shape call is the observable effect. */
+static void test_render_outlines_glut(void) {
+    printf("--- edit_overlays render_outlines (glut pass) ---\n");
+
+    GLCmd cmds[2];
+    mk_cmd(&cmds[0], CMD_TRANSLATE3F, 2.0f, 0.0f, 0.0f);
+    mk_cmd(&cmds[1], CMD_GLUT_CUBE, 1.0f, 0, 0);
+
+    OverlayWalkCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = cmds;
+    ctx.program.cmd_count = 2;
+    ctx.cursor.edit_line_idx = -1;
+    ctx.cursor.cursor_block_begin = -1;
+    ctx.cursor.cursor_block_end = -1;
+    ctx.show_vertex_outlines = 1;
+
+    TraceLog log;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+
+    ASSERT_INT("glut solid re-drawn for wireframe outline",
+               (int)gl_stub_counts[GL_STUB_glutSolidCube], 1);
+    /* render_outlines runs all three passes (glbegin/tess/glut), each of
+     * which tracks the transform, so the translate is seen once per pass. */
+    ASSERT_INT("modelview transform tracked before the shape",
+               trace_count_line(&log, "glTranslatef 2 0 0") >= 1, 1);
+
+    /* highlight_current_poly: a glut solid matching the cursor gets the
+     * thick active outline width. */
+    cmds[1].src_cmd_idx = 5;
+    ctx.show_vertex_outlines = 0;
+    ctx.highlight_current_poly = 1;
+    ctx.cursor.edit_line_idx = 5;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("active glut solid still drawn",
+               (int)gl_stub_counts[GL_STUB_glutSolidCube], 1);
+    ASSERT_TRUE("active glut solid uses the thick width",
+                trace_count_line(&log, "glLineWidth 3") >= 1);
+}
+
+/* find_next_vertex_args_in_flat: scans forward for the next vertex, stopping
+ * at block boundaries. Pure function — assert the recovered coords directly. */
+static void test_find_next_vertex_args(void) {
+    printf("--- edit_overlays find_next_vertex_args_in_flat ---\n");
+
+    GLCmd cmds[4];
+    mk_cmd(&cmds[0], CMD_NORMAL3F, 0, 0, 1);
+    mk_cmd(&cmds[1], CMD_COLOR3F, 1, 1, 1);
+    mk_cmd(&cmds[2], CMD_VERTEX2F, 3.0f, 4.0f, 99.0f); /* 2f -> z forced 0 */
+    mk_cmd(&cmds[3], CMD_END, 0, 0, 0);
+
+    FlatProgramView flat = { .cmds = cmds, .local_vars = NULL, .cmd_count = 4 };
+    float out[3] = { -1, -1, -1 };
+    ASSERT_INT("finds the next vertex after a normal",
+               find_next_vertex_args_in_flat(&flat, 0, out), 1);
+    ASSERT_TRUE("recovered x", out[0] == 3.0f);
+    ASSERT_TRUE("recovered y", out[1] == 4.0f);
+    ASSERT_TRUE("2f vertex z forced to zero", out[2] == 0.0f);
+
+    /* A CMD_END before any vertex stops the scan. */
+    mk_cmd(&cmds[1], CMD_END, 0, 0, 0);
+    out[0] = -1;
+    ASSERT_INT("block boundary stops the scan",
+               find_next_vertex_args_in_flat(&flat, 0, out), 0);
+
+    /* NULL guards. */
+    ASSERT_INT("NULL flat returns 0",
+               find_next_vertex_args_in_flat(NULL, 0, out), 0);
+    ASSERT_INT("NULL out returns 0",
+               find_next_vertex_args_in_flat(&flat, 0, NULL), 0);
+}
+
+/* cursor_guide_snapshot_with_flat_args: overrides vertex/normal args from
+ * the flat command, and for a normal command anchors normal_base_pos at the
+ * next vertex. */
+static void test_cursor_guide_snapshot_with_flat_args(void) {
+    printf("--- edit_overlays cursor_guide_snapshot_with_flat_args ---\n");
+
+    SceneGuideSnapshot base;
+    memset(&base, 0, sizeof(base));
+
+    /* Vertex command -> vertex_args populated. */
+    GLCmd v;
+    mk_cmd(&v, CMD_VERTEX3F, 7.0f, 8.0f, 9.0f);
+    SceneGuideSnapshot s = cursor_guide_snapshot_with_flat_args(&base, &v, 0);
+    ASSERT_TRUE("vertex arg x copied", s.vertex_args[0] == 7.0f);
+    ASSERT_TRUE("vertex arg y copied", s.vertex_args[1] == 8.0f);
+    ASSERT_TRUE("vertex arg z copied", s.vertex_args[2] == 9.0f);
+
+    /* 2f vertex -> z forced to 0. */
+    mk_cmd(&v, CMD_VERTEX2F, 1.0f, 2.0f, 3.0f);
+    s = cursor_guide_snapshot_with_flat_args(&base, &v, 0);
+    ASSERT_TRUE("2f vertex z forced to 0", s.vertex_args[2] == 0.0f);
+
+    /* Normal command followed by a vertex -> normal_args + base pos. */
+    GLCmd prog[2];
+    mk_cmd(&prog[0], CMD_NORMAL3F, 0.0f, 1.0f, 0.0f);
+    mk_cmd(&prog[1], CMD_VERTEX3F, 5.0f, 6.0f, 7.0f);
+    base.flat_program.cmds = prog;
+    base.flat_program.cmd_count = 2;
+    s = cursor_guide_snapshot_with_flat_args(&base, &prog[0], 0);
+    ASSERT_TRUE("normal arg y copied", s.normal_args[1] == 1.0f);
+    ASSERT_INT("normal base pos located", s.normal_base_pos_valid, 1);
+    ASSERT_TRUE("normal base anchored at next vertex",
+                s.normal_base_pos[0] == 5.0f && s.normal_base_pos[2] == 7.0f);
+
+    /* NULL flat returns the snapshot unchanged. */
+    s = cursor_guide_snapshot_with_flat_args(&base, NULL, 0);
+    ASSERT_INT("NULL flat leaves base pos unset", s.normal_base_pos_valid, 0);
+}
+
+/* on_vertex_number_label callback: builds the index / index+pos label text
+ * and forwards it to the scene text helper (observable as a glRasterPos3f at
+ * the vertex). Also exercise the mode guard. */
+static void test_on_vertex_number_label_callback(void) {
+    printf("--- edit_overlays on_vertex_number_label ---\n");
+
+    ReplayVertexWalkState state;
+    memset(&state, 0, sizeof(state));
+    state.vertex_idx_in_block = 2;
+
+    TraceLog log;
+
+    /* INDEX mode (3D): a single label drawn at the vertex. */
+    VertexLabelCtx idx_ctx = { .mode = GLR_VERTEX_LABEL_INDEX, .is_ortho = 0 };
+    trace_begin();
+    on_vertex_number_label(&state, 1.0f, 2.0f, 3.0f, &idx_ctx);
+    trace_end(&log);
+    ASSERT_INT("index label sets raster pos at the vertex",
+               trace_count_line(&log, "glRasterPos3f 1 2 3"), 1);
+
+    /* INDEX_POS mode (2D ortho): still anchored at the vertex. */
+    VertexLabelCtx pos_ctx = { .mode = GLR_VERTEX_LABEL_INDEX_POS, .is_ortho = 1 };
+    trace_begin();
+    on_vertex_number_label(&state, 4.0f, 5.0f, 6.0f, &pos_ctx);
+    trace_end(&log);
+    ASSERT_INT("index+pos label sets raster pos at the vertex",
+               trace_count_line(&log, "glRasterPos3f 4 5 6"), 1);
+
+    /* OFF mode and NULL ctx draw nothing. */
+    VertexLabelCtx off_ctx = { .mode = GLR_VERTEX_LABEL_OFF, .is_ortho = 0 };
+    trace_begin();
+    on_vertex_number_label(&state, 1.0f, 2.0f, 3.0f, &off_ctx);
+    on_vertex_number_label(&state, 1.0f, 2.0f, 3.0f, NULL);
+    trace_end(&log);
+    ASSERT_INT("off / NULL ctx draws nothing",
+               trace_count_sym(&log, "glRasterPos3f"), 0);
+}
+
+/* on_normal_vector_arrow callback: draws a GL_LINES arrow from the vertex to
+ * vertex + normal*scale (see scene_draw_normal_vector_arrow). */
+static void test_on_normal_vector_arrow_callback(void) {
+    printf("--- edit_overlays on_normal_vector_arrow ---\n");
+
+    ReplayVertexWalkState state;
+    memset(&state, 0, sizeof(state));
+    state.normal[0] = 0.0f;
+    state.normal[1] = 0.0f;
+    state.normal[2] = 1.0f;
+
+    float scale = 2.0f;
+    TraceLog log;
+    trace_begin();
+    on_normal_vector_arrow(&state, 1.0f, 1.0f, 1.0f, &scale);
+    trace_end(&log);
+
+    ASSERT_INT("arrow starts at the vertex",
+               trace_count_line(&log, "glVertex3f 1 1 1"), 1);
+    /* The tip (vertex + normal*scale = (1,1,1)+(0,0,1)*2) is emitted twice:
+     * once as the line endpoint, once as the arrowhead point. */
+    ASSERT_INT("arrow tip at vertex + normal*scale",
+               trace_count_line(&log, "glVertex3f 1 1 3"), 2);
+}
+
+/* End-to-end: feed a real REPL program, flatten it, then drive the
+ * replay-walk-based overlays (vertex numbers, normals, cursor guides) and
+ * the post_overlays orchestrator. Validates the overlays render the live
+ * flattened vertex coordinates. */
+static void test_render_via_repl_program(void) {
+    printf("--- edit_overlays overlays over a real flattened program ---\n");
+
+    glr_ctrl_reset_all();
+    editor_feed_line("glNormal3f(0, 0, 1);");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0.25, 0.5, 0.75);");
+    editor_feed_line("glVertex3f(-0.25, -0.5, 0);");
+    editor_feed_line("glEnd();");
+    repl_flatten_commands(editor_state_edit_line());
+
+    TraceLog log;
+
+    /* edit_overlays_render_vertex_numbers walks with selected_block_only=1,
+     * so only vertices in the cursor's "current block" are labelled. Mark
+     * the whole flat program as the current block so the triangle is in
+     * scope. */
+    repl_state_flat_program_set_current_block(
+        0, repl_state_flat_program_view().cmd_count - 1, 0);
+
+    /* Vertex numbers: a raster-positioned label per vertex. */
+    trace_begin();
+    edit_overlays_render_vertex_numbers(GLR_VERTEX_LABEL_INDEX_POS, 0);
+    trace_end(&log);
+    ASSERT_INT("vertex-number label at first vertex",
+               trace_count_line(&log, "glRasterPos3f 0.25 0.5 0.75"), 1);
+    ASSERT_INT("vertex-number label at second vertex",
+               trace_count_line(&log, "glRasterPos3f -0.25 -0.5 0"), 1);
+
+    /* Normal vectors: arrow base at each vertex (scale GLR_NORMAL_ARROW_SCALE). */
+    trace_begin();
+    edit_overlays_render_normal_vectors();
+    trace_end(&log);
+    ASSERT_INT("normal arrow anchored at first vertex",
+               trace_count_line(&log, "glVertex3f 0.25 0.5 0.75"), 1);
+    ASSERT_TRUE("normal arrows draw line segments",
+                trace_count_sym(&log, "glVertex3f") >= 2);
+
+    /* Cursor guides: place the cursor on the first vertex line and render. */
+    SceneGuideSnapshot snap;
+    memset(&snap, 0, sizeof(snap));
+    snap.show_guides = 1;
+    snap.flat_program = repl_state_flat_program_view();
+    snap.source_cmds = repl_state_document_cmds();
+    snap.source_cmd_count = repl_state_document_count();
+    snap.input = "";
+    snap.edit_line_idx = editor_state_edit_line();
+    trace_begin();
+    edit_overlays_render_cursor_guides(&snap);
+    trace_end(&log);
+    ASSERT_INT("cursor guides save/restore the modelview",
+               trace_count_sym(&log, "glPushMatrix"),
+               trace_count_sym(&log, "glPopMatrix"));
+
+    /* show_guides == 0 is an early return (no GL at all). */
+    snap.show_guides = 0;
+    trace_begin();
+    edit_overlays_render_cursor_guides(&snap);
+    trace_end(&log);
+    ASSERT_INT("guides off -> no GL emitted",
+               trace_count_sym(&log, "glPushAttrib"), 0);
+
+    /* post_overlays orchestrator: runs outlines + points + guides + labels
+     * + normals in one pass. Build the snapshot pack and verify it emits the
+     * flattened vertices through at least one overlay path. */
+    OverlaySnapshotPack pack;
+    memset(&pack, 0, sizeof(pack));
+    pack.walk.program = repl_state_flat_program_view();
+    pack.walk.cursor.edit_line_idx = -1;
+    pack.walk.cursor.cursor_block_begin = -1;
+    pack.walk.cursor.cursor_block_end = -1;
+    pack.walk.show_vertex_outlines = 1;
+    pack.walk.show_vertex_points = 1;
+    pack.snapshot.show_guides = 0;
+    pack.show_vertex_labels = GLR_VERTEX_LABEL_INDEX;
+    pack.show_normal_vectors = 1;
+    trace_begin();
+    edit_overlays_post_overlays(&pack);
+    trace_end(&log);
+    ASSERT_TRUE("post_overlays emits the flattened vertices",
+                trace_count_line(&log, "glVertex3f 0.25 0.5 0.75") >= 1);
+    ASSERT_INT("post_overlays draws vertex-number labels",
+               trace_count_sym(&log, "glRasterPos3f") >= 1, 1);
+
+    /* NULL pack is a safe no-op. */
+    edit_overlays_post_overlays(NULL);
+}
+
 int main(void) {
     printf("--- edit_overlays tests ---\n");
     test_outline_begin_mode_has_overlay();
     test_outline_cmd_matches_cursor();
     test_outline_block_matches_cursor();
     test_build_vertex_walk_context();
+    test_render_vertex_points();
+    test_render_outlines_glbegin();
+    test_render_outlines_tess();
+    test_render_outlines_glut();
+    test_find_next_vertex_args();
+    test_cursor_guide_snapshot_with_flat_args();
+    test_on_vertex_number_label_callback();
+    test_on_normal_vector_arrow_callback();
+    test_render_via_repl_program();
 
     return test_harness_report(&g_harness, "test_edit_overlays");
 }
