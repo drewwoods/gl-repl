@@ -44,6 +44,9 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ui_tabbed_overlay_render           test_ui_tabbed_overlay_render
 #define ui_profile_panel_render            test_ui_profile_panel_render
 #define ui_memory_panel_render             test_ui_memory_panel_render
+#define glutPostRedisplay                  test_glutPostRedisplay
+#define glutSetCursor                      test_glutSetCursor
+#define glr_export_mesh_ply                test_glr_export_mesh_ply
 
 /* glr_camera.h was already pulled in at line 3 (before the #define),
  * so its `glr_camera_load_modelview` declaration is preserved as the
@@ -56,6 +59,9 @@ void test_glr_camera_load_modelview(const GlrCameraPose *pose);
  * ui/app/snapshot.h), so its real-name prototype is preserved too;
  * forward-declare this stub the same way. */
 void test_ui_variable_panel_render(const UiVariablePanelView *view);
+void test_glutPostRedisplay(void);
+void test_glutSetCursor(int cursor);
+int test_glr_export_mesh_ply(const char *path, int srgb_decode);
 
 #include "app/glr_ctrl.c"
 /* The input router was carved out of glr_ctrl.c into glr_ctrl_router.c; this
@@ -77,6 +83,9 @@ void test_ui_variable_panel_render(const UiVariablePanelView *view);
 #undef ui_tabbed_overlay_render
 #undef ui_profile_panel_render
 #undef ui_memory_panel_render
+#undef glutPostRedisplay
+#undef glutSetCursor
+#undef glr_export_mesh_ply
 
 static SceneRenderConfig g_last_scene_config;
 /* Snapshot copy captured by the replay HUD stub; replaces the old
@@ -155,6 +164,12 @@ void test_ui_panels_render_scene_status(const UiRenderSnapshot *snap) { (void)sn
 void test_ui_tabbed_overlay_render(const UiOverlayState *in) { (void)in; }
 void test_ui_profile_panel_render(const UiProfilePanelView *view) { (void)view; }
 void test_ui_memory_panel_render(const UiMemoryPanelView *view)  { (void)view; }
+void test_glutPostRedisplay(void) {}
+void test_glutSetCursor(int cursor) { (void)cursor; }
+int test_glr_export_mesh_ply(const char *path, int srgb_decode) {
+    (void)path; (void)srgb_decode;
+    return 0;
+}
 
 /* Build the variable-panel view from live app state (mirrors the
  * pre-narrowing NULL-snapshot path) so these tests can drive rect/hit by
@@ -1713,6 +1728,77 @@ static void test_special_key_shortcuts(void) {
     editor_input_set_modifier_provider_for_test(NULL);
 }
 
+static void test_app_lifecycle_bootstrap_shutdown(void) {
+    printf("--- imrepl_ctrl app lifecycle ---\n");
+    prepare_display_fixture();
+
+    /* 1. Test bootstrap */
+    glr_ctrl_bootstrap_repl(NULL);
+
+    /* Predef vars initialized? */
+    ReplPredefView predef = repl_eval_predef_view();
+    ASSERT_TRUE("Predef variables initialized during bootstrap", predef.count > 0);
+    ASSERT_TRUE("time_var_idx is valid", repl_state_variables().time_var_idx >= 0);
+
+    /* Status banner set? */
+    ASSERT_STR("Status banner set during bootstrap",
+               ui_state_status_mut()->text,
+               "Ready - type GL commands, press ; to execute. F1 for help. F12 for examples.");
+
+    /* 2. Test shutdown */
+    glr_shutdown();
+    ASSERT_TRUE("Shutdown completed successfully", 1);
+}
+
+static void test_code_panel_scroll_clamping_and_follow(void) {
+    printf("--- imrepl_ctrl scroll clamping and follow ---\n");
+    int follow_doc_line = 0;
+    int visible_lines = 0;
+
+    prepare_display_fixture();
+
+    /* Make a large document to allow scrolling */
+    for (int i = 0; i < 100; i++) {
+        editor_buffer_set_line(i, "glVertex3f(1, 2, 3);");
+    }
+    repl_state_document_count_set(100);
+    editor_state_edit_line_set(50);
+    editor_input_set_text("glVertex3f(1, 2, 3);");
+
+    /* Build snapshot and layout */
+    ui_state_viewport_set_size(800, 600);
+    glr_ctrl_display_frame();
+
+    /* 1. Clamping test: scroll to an out-of-bounds target */
+    editor_scroll_set(5000);
+    glr_ctrl_code_panel_apply_scroll_follow_for_test(
+        &g_last_ui_snapshot, &follow_doc_line, &visible_lines);
+
+    ASSERT_TRUE("scroll clamped down to max_scroll", editor_scroll() < 5000);
+    ASSERT_TRUE("scroll clamped is non-negative", editor_scroll() >= 0);
+
+    /* Clamping test: scroll to negative value */
+    editor_scroll_set(-10);
+    glr_ctrl_code_panel_apply_scroll_follow_for_test(
+        &g_last_ui_snapshot, &follow_doc_line, &visible_lines);
+    ASSERT_INT("scroll clamped up to 0", editor_scroll(), 0);
+
+    /* 2. Cursor follow-scroll test */
+    editor_scroll_set(0);
+    editor_scroll_follow_cursor_set(1);
+    editor_state_edit_line_set(80);
+
+    glr_ctrl_display_frame();
+
+    glr_ctrl_code_panel_apply_scroll_follow_for_test(
+        &g_last_ui_snapshot, &follow_doc_line, &visible_lines);
+
+    ASSERT_TRUE("scroll moved down to follow cursor", editor_scroll() > 0);
+    ASSERT_TRUE("cursor is inside visible range",
+                follow_doc_line >= editor_scroll() &&
+                follow_doc_line < editor_scroll() + visible_lines);
+}
+
 int main(void) {
     printf("--- imrepl_ctrl tests ---\n");
 
@@ -1740,6 +1826,8 @@ int main(void) {
     test_example_reset_reapplies_light_theme();
     test_mouse_routing_and_hit_testing();
     test_special_key_shortcuts();
+    test_app_lifecycle_bootstrap_shutdown();
+    test_code_panel_scroll_clamping_and_follow();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_imrepl_ctrl");

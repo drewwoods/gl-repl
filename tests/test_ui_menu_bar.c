@@ -5,6 +5,7 @@
 #include "app/glr_config.h"
 #include "repl/core.h"
 #include "repl/examples.h"
+#include "repl/tutorials.h"
 #include "repl/state_owners.h"
 #include "subsystems/replay/replay.h"
 #include "ui/app/state.h"
@@ -488,6 +489,89 @@ static void test_config_submenu_with_stubs(void) {
         ASSERT_INT_EQ("All flyout header is inert chrome",
                       ah.kind, UI_HIT_CODE_PANEL_CHROME);
     }
+}
+
+static void test_tutorial_submenu_with_stubs(void) {
+    UiRenderSnapshot snap;
+    UiHit hit;
+    int tag_idx;
+    int tutorial_idx;
+    int tag_mx = -1;
+    int tag_my = -1;
+    int sx = 0, sy = 0, sw = 0, sh = 0;
+    int sub_mx = -1, sub_my = -1;
+    unsigned long long base_raster_calls;
+    unsigned long long hover_raster_calls;
+
+    reset_menu_bar_fixture(1000, 600);
+    make_test_ui_snapshot(&snap);
+    snap.tutorial.visible_tag_count = repl_tutorial_visible_tag_count();
+
+    tag_idx = repl_tutorial_visible_tag_at(0);
+    ASSERT_TRUE("first visible tutorial tag exists", tag_idx >= 0);
+    ASSERT_TRUE("found first Tutorial tag hover point",
+                find_dropdown_item_point(GLR_MENU_TUTORIALS, 0, &tag_mx, &tag_my));
+
+    snap.pointer.mouse_x = ui_state_viewport().window_w - 1;
+    snap.pointer.mouse_y = ui_state_viewport().window_h - 1;
+    gl_stub_counts_reset();
+    ui_menu_bar_render_example_dropdown(&snap);
+    base_raster_calls = gl_stub_counts[GL_STUB_glRasterPos2f];
+
+    ASSERT_TRUE("Tutorial tag hover update opens submenu",
+                ui_menu_bar_update_pointer_hover(tag_mx, tag_my, snap.anim_time));
+    ASSERT_TRUE("Tutorial submenu rect available after hover update",
+                ui_menu_bar_submenu_rect_for_test(GLR_MENU_TUTORIALS,
+                                                   ui_menu_bar_tutorial_parent_row_for_tag(tag_idx),
+                                                   &sx, &sy, &sw, &sh));
+
+    tutorial_idx = repl_tutorial_index_for_tag(tag_idx, 0);
+    ASSERT_TRUE("first submenu tutorial exists", tutorial_idx >= 0);
+
+    /* Walk submenu ordinals to find the first ITEM row. */
+    int first_item_ord = -1;
+    for (int o = 0; o < 64; o++) {
+        int mx, my;
+        if (!submenu_row_point(sx, sy, sw, sh, o, &mx, &my))
+            break;
+        UiHit probe = ui_menu_bar_hit_test(mx, my);
+        if (probe.kind == UI_HIT_SUBMENU_ITEM) {
+            first_item_ord = o;
+            sub_mx = mx;
+            sub_my = my;
+            break;
+        }
+    }
+    ASSERT_TRUE("found first Tutorial submenu ITEM row", first_item_ord >= 0);
+
+    hit = ui_menu_bar_hit_test(sub_mx, sub_my);
+    ASSERT_INT_EQ("hover update makes Tutorial submenu hittable",
+                  hit.kind, UI_HIT_SUBMENU_ITEM);
+    ASSERT_INT_EQ("hit_test: Tutorial submenu carries menu_id",
+                  hit.cmd_idx, GLR_MENU_TUTORIALS);
+    ASSERT_INT_EQ("hit_test: Tutorial submenu tutorial index",
+                  hit.item_idx, tutorial_idx);
+    ASSERT_INT_EQ("hit_test: Tutorial submenu ordinal",
+                  hit.line_idx, first_item_ord);
+
+    snap.pointer.mouse_x = tag_mx;
+    snap.pointer.mouse_y = tag_my;
+    gl_stub_counts_reset();
+    ui_menu_bar_render_example_dropdown(&snap);
+    hover_raster_calls = gl_stub_counts[GL_STUB_glRasterPos2f];
+    ASSERT_TRUE("Tutorial tag hover renders submenu rows",
+                hover_raster_calls >=
+                base_raster_calls +
+                (unsigned long long)repl_tutorial_count_for_tag(tag_idx));
+
+    snap.pointer.mouse_x = sub_mx;
+    snap.pointer.mouse_y = sub_my;
+    snap.tutorial.active = 1;
+    snap.tutorial.tutorial_idx = tutorial_idx;
+    gl_stub_counts_reset();
+    ui_menu_bar_render_example_dropdown(&snap);
+    ASSERT_TRUE("Tutorial submenu active tutorial render path draws",
+                gl_stub_counts[GL_STUB_glRasterPos2f] > 0);
 }
 
 /* Audit #3 (Bug, fd70b4e) regression: ui_menu_bar_render_example_dropdown
@@ -1011,6 +1095,7 @@ int main(void) {
 #ifdef GL_STUBS
     test_scene_submenu_with_stubs();
     test_config_submenu_with_stubs();
+    test_tutorial_submenu_with_stubs();
     test_render_does_not_mutate_hover();
     test_render_paths_with_stubs();
 #endif

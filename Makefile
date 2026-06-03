@@ -827,7 +827,8 @@ TEST_BINS = \
 	test_repl_replay \
 	test_repl_compile \
 	test_tutorial_match \
-	test_tutorial_runner
+	test_tutorial_runner \
+	test_glr_camera
 
 ifeq ($(USE_GL_STUBS),1)
 TEST_BINS += test_ui
