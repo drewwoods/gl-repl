@@ -44,6 +44,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 } while (0)
 
 static void test_import_robustness(void);
+static void test_config_variants_export(void);
 static void declare_test_vars(void) {
     char err[128];
     repl_eval_declare_predef_var("x", err, sizeof(err));
@@ -2015,6 +2016,7 @@ int main(void) {
         unlink(savedc);
     }
 
+    test_config_variants_export();
     test_import_robustness();
 
     printf("repl_core_io: %d/%d passed\n", g_harness.passed, g_harness.run);
@@ -2100,4 +2102,61 @@ static void test_import_robustness(void) {
     ASSERT_INT("NUL file count", repl_state_document_count(), 0);
 
     remove(test_path);
+}
+
+void glr_actions_install_export_cfg_bridge(void);
+
+static void test_config_variants_export(void) {
+    printf("--- config-variants export tests ---\n");
+
+    /* Install config bridge so config changes map to the export layer */
+    glr_actions_install_export_cfg_bridge();
+
+    const char *export_path = "/tmp/repl_config_variants_export.c";
+    char buf[16384];
+
+    /* We must have some document lines to trigger geometry rendering if we want to check vertex outline/point export */
+    glr_ctrl_reset_all(); declare_test_vars();
+
+    /* Test variant 1: MSAA enabled, Line smooth enabled, outlines enabled, points enabled, point attenuation enabled */
+    glr_config_set(GLR_CONFIG_MSAA, 1);
+    glr_config_set(GLR_CONFIG_LINE_SMOOTH, 1);
+    glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);
+    glr_config_set(GLR_CONFIG_VERTEX_POINTS, 1);
+    glr_config_set(GLR_CONFIG_POINT_ATTENUATION, 1);
+
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(1, 2, 3);");
+    editor_feed_line("glEnd();");
+
+    /* Refresh and save */
+    repl_refresh_render_state_strings();
+    repl_export_save_output(export_path, source_document_view(), NULL);
+    read_text_file(export_path, buf, sizeof(buf));
+
+    ASSERT_TRUE("Variant 1: saved MSAA enabled line exists", strstr(buf, "glEnable(GL_MULTISAMPLE);") != NULL);
+    ASSERT_TRUE("Variant 1: saved LINE_SMOOTH enabled line exists", strstr(buf, "glEnable(GL_LINE_SMOOTH);") != NULL);
+    ASSERT_TRUE("Variant 1: saved point_attenuation enabled line exists", strstr(buf, "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") != NULL);
+    ASSERT_TRUE("Variant 1: saved vertex outlines pass exists", strstr(buf, "/* Vertex Outline Pass */") != NULL);
+    ASSERT_TRUE("Variant 1: saved vertex points pass exists", strstr(buf, "/* Vertex Point Pass */") != NULL);
+
+    /* Test variant 2: MSAA disabled, Line smooth disabled, outlines disabled, points disabled, point attenuation disabled */
+    glr_config_set(GLR_CONFIG_MSAA, 0);
+    glr_config_set(GLR_CONFIG_LINE_SMOOTH, 0);
+    glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 0);
+    glr_config_set(GLR_CONFIG_VERTEX_POINTS, 0);
+    glr_config_set(GLR_CONFIG_POINT_ATTENUATION, 0);
+
+    /* Refresh and save */
+    repl_refresh_render_state_strings();
+    repl_export_save_output(export_path, source_document_view(), NULL);
+    read_text_file(export_path, buf, sizeof(buf));
+
+    ASSERT_TRUE("Variant 2: saved MSAA disabled line exists", strstr(buf, "glDisable(GL_MULTISAMPLE);") != NULL);
+    ASSERT_TRUE("Variant 2: saved LINE_SMOOTH disabled line exists", strstr(buf, "glDisable(GL_LINE_SMOOTH);") != NULL);
+    ASSERT_TRUE("Variant 2: saved point_attenuation disabled line is omitted", strstr(buf, "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") == NULL);
+    ASSERT_TRUE("Variant 2: saved vertex outlines pass is omitted", strstr(buf, "/* Vertex Outline Pass */") == NULL);
+    ASSERT_TRUE("Variant 2: saved vertex points pass is omitted", strstr(buf, "/* Vertex Point Pass */") == NULL);
+
+    remove(export_path);
 }

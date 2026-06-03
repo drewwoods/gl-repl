@@ -231,14 +231,19 @@ static double worker_now_ms(void) {
     return (double)ts.tv_sec * 1e3 + (double)ts.tv_nsec / 1e6;
 }
 
+static double g_worker_hitch_threshold = -1.0;
+
 static double worker_hitch_threshold_ms(void) {
-    static double cached = -1.0;
-    if (cached < 0.0) {
+    if (g_worker_hitch_threshold < 0.0) {
         const char *env = getenv("GLR_AUDIO_HITCH_MS");
-        cached = (env && *env) ? atof(env) : 50.0;
-        if (cached < 0.0) cached = 0.0;
+        g_worker_hitch_threshold = (env && *env) ? atof(env) : 50.0;
+        if (g_worker_hitch_threshold < 0.0) g_worker_hitch_threshold = 0.0;
     }
-    return cached;
+    return g_worker_hitch_threshold;
+}
+
+double glr_audio_hitch_threshold_ms_for_test(void) {
+    return worker_hitch_threshold_ms();
 }
 
 /* ------------------------------------------------------------------ */
@@ -700,6 +705,7 @@ int glr_audio_init(void) {
 }
 
 void glr_audio_shutdown(void) {
+    g_worker_hitch_threshold = -1.0;
     if (!g_inited) return;
 
     if (g_worker_running) {
@@ -724,6 +730,7 @@ void glr_audio_shutdown(void) {
 
     ma_engine_uninit(&g_engine);
     reset_audio_module_state();
+    g_worker_hitch_threshold = -1.0;
 }
 
 int glr_audio_set_playlist(const char *const *paths, int count) {

@@ -1,7 +1,10 @@
 #include "app/glr_audio.h"
 #include "support/test_harness.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+
+double glr_audio_hitch_threshold_ms_for_test(void);
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
 
@@ -75,6 +78,43 @@ int main() {
         /* These are void and should not crash */
         glr_audio_tick();
         glr_audio_on_user_gesture();
+        glr_audio_shutdown();
+    }
+
+    /* 5b. Test GLR_AUDIO_HITCH_MS environment variable parsing */
+    {
+        /* Test default threshold (50ms) when env var is not set */
+        unsetenv("GLR_AUDIO_HITCH_MS");
+        ASSERT_TRUE("hitch: default threshold before init is 50.0",
+                    glr_audio_hitch_threshold_ms_for_test() == 50.0);
+
+        /* Test custom positive threshold */
+        setenv("GLR_AUDIO_HITCH_MS", "125.5", 1);
+        /* Since the previous call initialized the static cache, wait! We reset the cache
+         * on shutdown, so we must call shutdown (or we didn't call init yet, so it was
+         * evaluated. Wait, worker_hitch_threshold_ms evaluates when cached is < 0.
+         * Since we didn't reset it yet because we haven't inited/shutdown, let's call shutdown
+         * to force it to reset, or just do it in the loop with init/shutdown).
+         * Actually, glr_audio_shutdown resets g_worker_hitch_threshold to -1.0.
+         * So if we call glr_audio_shutdown(), it will reset the cache! */
+        glr_audio_shutdown();
+        ASSERT_TRUE("hitch: custom threshold parses correctly",
+                    glr_audio_hitch_threshold_ms_for_test() == 125.5);
+
+        /* Test boundary threshold (negative value clamps to 0) */
+        setenv("GLR_AUDIO_HITCH_MS", "-25.0", 1);
+        glr_audio_shutdown();
+        ASSERT_TRUE("hitch: negative threshold clamps to 0",
+                    glr_audio_hitch_threshold_ms_for_test() == 0.0);
+
+        /* Test empty string threshold (defaults to 50.0) */
+        setenv("GLR_AUDIO_HITCH_MS", "", 1);
+        glr_audio_shutdown();
+        ASSERT_TRUE("hitch: empty threshold defaults to 50.0",
+                    glr_audio_hitch_threshold_ms_for_test() == 50.0);
+
+        /* Restore clean environment */
+        unsetenv("GLR_AUDIO_HITCH_MS");
         glr_audio_shutdown();
     }
 

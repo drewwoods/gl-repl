@@ -364,6 +364,39 @@ static ParityResult run_one_case(const TraceProgram *prog) {
         return PARITY_FAIL;
     }
 
+    /* Standalone compilation and execution test (Priority 8) */
+    {
+        char standalone_bin[256], standalone_log[256];
+        snprintf(standalone_bin, sizeof standalone_bin, "/tmp/test_trace_%d_%s_standalone.bin", (int)pid, safe_name);
+        snprintf(standalone_log, sizeof standalone_log, "/tmp/test_trace_%d_%s_standalone.log", (int)pid, safe_name);
+        char standalone_cmd[1024];
+        snprintf(standalone_cmd, sizeof standalone_cmd,
+            "cc -Wall -std=c99 -O0 -g "
+            "-DGL_STUBS -DGL_SILENCE_DEPRECATION -Wno-deprecated-declarations "
+            "-Wno-unused-function -Wno-unused-variable "
+            "-Itests/gl-stubs/include -Iinclude -I. -Isrc "
+            "'%s' tests/gl-stubs/gl_stub_counts.c -lm -o '%s' >'%s' 2>&1",
+            temp_c, standalone_bin, standalone_log);
+        int rc_standalone = system(standalone_cmd);
+        if (rc_standalone != 0) {
+            fprintf(stderr, "  [%s] Standalone compilation failed (rc=%d). cmd:\n    %s\n  log: %s\n",
+                    prog->name, rc_standalone, standalone_cmd, standalone_log);
+            unlink(standalone_log);
+            return PARITY_FAIL;
+        }
+        char run_cmd[512];
+        snprintf(run_cmd, sizeof run_cmd, "'%s' >/dev/null 2>&1", standalone_bin);
+        int run_rc = system(run_cmd);
+        if (run_rc != 0) {
+            fprintf(stderr, "  [%s] Standalone binary execution failed (rc=%d).\n", prog->name, run_rc);
+            unlink(standalone_bin);
+            unlink(standalone_log);
+            return PARITY_FAIL;
+        }
+        unlink(standalone_bin);
+        unlink(standalone_log);
+    }
+
     snprintf(cmd, sizeof cmd, "'%s' '%s' '%s'",
              temp_bin, temp_out, temp_child_tr);
     rc = system(cmd);
