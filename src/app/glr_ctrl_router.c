@@ -87,8 +87,7 @@
 #include "app/glr_ctrl_internal.h"
 #include "subsystems/variable_panel/variable_panel_drag.h"
 
-/* GLR_WHEEL_ZOOM_STEP (per-notch wheel-zoom impulse) is a config.h
- * tunable; the wheel handlers below read it from there. */
+/* GLR_WHEEL_ZOOM_STEP lives with the camera owner in glr_camera.h. */
 
 /* ---- Keyboard router helpers ------------------------------------------ */
 

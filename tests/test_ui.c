@@ -5,6 +5,7 @@
 #include "ui/core/metrics.h"
 #include "ui/app/state.h"
 #include "repl/state.h"
+#include "repl/color_limits.h"
 #include "subsystems/replay/replay_state.h"
 #include "repl/core.h"
 #include "editor/input.h"
@@ -356,7 +357,7 @@ static void test_color_picker(void) {
         ASSERT_TRUE("red swatch -> b small", cmd->args[2] < 0.4f);
     }
 
-    /* glClearColor clamps a bright (white) swatch to CP_CLEAR_MAX_V. */
+    /* glClearColor clamps a bright (white) swatch to REPL_CLEAR_COLOR_MAX_V. */
     color_picker_state_reset();
     repl_state_document_cmds_mut()[0].type = CMD_CLEAR_COLOR;
     repl_state_document_cmds_mut()[0].args[3] = 1.0f;
@@ -368,7 +369,8 @@ static void test_color_picker(void) {
         int sw_my = ui_state_viewport().window_h - (view.pal_y - view.pal_cell / 2);
         color_picker_handle_press(sw_mx, sw_my);
         const GLCmd *cmd = repl_state_document_cmd_at(0);
-        ASSERT_TRUE("clearcolor swatch clamps r", cmd->args[0] <= CP_CLEAR_MAX_V + 0.001f);
+        ASSERT_TRUE("clearcolor swatch clamps r",
+                    cmd->args[0] <= REPL_CLEAR_COLOR_MAX_V + 0.001f);
     }
     color_picker_stop();
     color_picker_state_reset();

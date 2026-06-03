@@ -17,7 +17,25 @@
 #ifndef SCENE_OVERLAY_XN_H
 #define SCENE_OVERLAY_XN_H
 
-#include "config.h"  /* GRID_AXES_XN_FADE / GRID_AXES_XN_FOG style enum */
+/* Style selects how controller-owned opacity becomes a visual:
+ *   GRID_AXES_XN_FADE  plain alpha fade
+ *   GRID_AXES_XN_FOG   recede into clear-color fog, with an alpha knee
+ *                      near opacity 0 for the final vanish. */
+#define GRID_AXES_XN_FADE 0
+#define GRID_AXES_XN_FOG  1
+
+#ifndef GRID_XN_STYLE
+#define GRID_XN_STYLE GRID_AXES_XN_FOG
+#endif
+#ifndef AXES_XN_STYLE
+#define AXES_XN_STYLE GRID_AXES_XN_FADE
+#endif
+
+/* Frequency multiplier for shared grid/axes "breathing" glow:
+ * sinf(anim_time * SCENE_BREATH_FREQ) * 0.5 + 0.5. */
+#ifndef SCENE_BREATH_FREQ
+#define SCENE_BREATH_FREQ 0.8f
+#endif
 
 typedef struct SceneOverlayXn {
     int   draw;     /* 0 = skip the entire pass; opacity hit zero */

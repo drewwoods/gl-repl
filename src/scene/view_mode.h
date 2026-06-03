@@ -21,4 +21,10 @@ typedef enum {
     SCENE_VIEW_COUNT
 } SceneViewMode;
 
+/* Orthographic/perspective projection blend duration, in seconds, for callers
+ * that animate between SceneViewMode values. */
+#ifndef GLR_VIEW_PROJECTION_TRANSITION_SECS
+#define GLR_VIEW_PROJECTION_TRANSITION_SECS 0.75f
+#endif
+
 #endif /* SCENE_VIEW_MODE_H */

@@ -3,7 +3,6 @@
  */
 #include "axes.h"
 #include "overlay_xn.h"  /* SceneOverlayXn + shared resolve helper */
-#include "config.h"
 #include "occluded_ghost.h"  /* SCENE_OCCLUDED_GHOST_STIPPLE */
 #include <math.h>            /* sinf, cosf, fmodf, M_PI (via gl_includes.h) */
 

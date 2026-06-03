@@ -29,15 +29,13 @@
 #ifndef REPL_EVAL_H
 #define REPL_EVAL_H
 
+#include "config.h"
+
 #include <ctype.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#ifndef MAX_LINE_LEN
-#define MAX_LINE_LEN 256
-#endif
 
 /*
  *  MAX_PREDEF_VARS — global user-declared variables
@@ -79,7 +77,7 @@
  *  - MAX_EXPR_VARS caps how many identifiers a single expression's lexical scope can hold while it's being parsed.
  *
  *  They are independent limits (MAX_PREDEF_VARS and MAX_EXPR_VARS need not
- *  be equal — see the values below) and not the same constraint:
+ *  be equal — see config.h) and not the same constraint:
  *
  *  - MAX_EXPR_VARS actually needs to be MAX_PREDEF_VARS + worst-case nested
  *    locals to be fully correct. With deeply nested for-loops each declaring
@@ -88,12 +86,6 @@
  *    property, but the headroom between the two values hides it in practice.)
  *  - MAX_PREDEF_VARS is the user-facing "how many float x; can I have" limit.
  */
-#ifndef MAX_EXPR_VARS
-#define MAX_EXPR_VARS 32
-#endif
-#ifndef MAX_PREDEF_VARS
-#define MAX_PREDEF_VARS 24
-#endif
 
 #ifndef MAX_NAMES_PER_DECL
 #define MAX_NAMES_PER_DECL 8
@@ -124,18 +116,7 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-#if MAX_PREDEF_VARS > MAX_EXPR_VARS
-#error "MAX_PREDEF_VARS must be <= MAX_EXPR_VARS to avoid silent truncation of the visible-variable list during parsing."
-#endif
-
 /* ---- Types ------------------------------------------------------------ */
-
-/* REPL_PREDEF_NAME_MAX lives in config.h; fallback here mirrors the
- * MAX_LINE_LEN pattern so eval.h stays self-contained for single-TU
- * test builds that skip config.h. */
-#ifndef REPL_PREDEF_NAME_MAX
-#define REPL_PREDEF_NAME_MAX 16
-#endif
 
 static inline int repl_eval_is_ident_start(unsigned char c) {
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';

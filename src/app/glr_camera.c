@@ -15,12 +15,10 @@
 #include "app/glr_defaults.h"  /* CFG_DEFAULT_CAMERA_ROTATE */
 
 #include "gl_includes.h"      /* GLUT_*BUTTON constants, M_PI fallback */
-#include "config.h"
 #include <math.h>
 
 /* Orbit/pan momentum decay per frame. Deliberately independent of
- * config.h's GLR_CAMERA_TARGET_DECAY (the ease-to-target decay) and
- * CAM_DECAY_ZOOM (the wheel-zoom decay, a config.h tunable) — they are
+ * GLR_CAMERA_TARGET_DECAY and CAM_DECAY_ZOOM in glr_camera.h; they are
  * different knobs. */
 #define CAM_DECAY 0.88f
 #define CAM_TARGET_ANGLE_EPS 0.01f

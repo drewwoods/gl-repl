@@ -680,7 +680,7 @@ static void test_overlay_transition_machine_wiring(void) {
     /* Ticks to fully complete an OUT then IN at the *configured* grid
      * durations (glr_ctrl_tick advances a fixed 0.016s). Derived from
      * the constants, not hardcoded, so retuning GRID_FADE_*_SECS in
-     * config.h doesn't break this test. +6 ticks of margin. */
+     * scene_transition.h doesn't break this test. +6 ticks of margin. */
     const int settle = (int)((GRID_FADE_OUT_SECS + GRID_FADE_IN_SECS)
                              / 0.016f) + 6;
 

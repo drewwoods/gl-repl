@@ -65,6 +65,23 @@ typedef struct SceneProjectionDesc {
     double ortho_far;    /* ortho far clip */
 } SceneProjectionDesc;
 
+/* 2D ortho scale reference mode.
+ *
+ * The orthographic projection picks one eye distance whose on-screen scale it
+ * reproduces. Both modes probe drawn geometry and pivot on the midpoint of its
+ * eye-distance span (the depth-center):
+ *
+ *   GLR_ORTHO_REF_FROZEN   sample once at the perspective->ortho edge and
+ *                          hold that reference until perspective returns.
+ *   GLR_ORTHO_REF_PERFRAME re-probe every frame while ortho contributes.
+ *
+ * A probe that finds nothing falls back to cam_dist. */
+#define GLR_ORTHO_REF_FROZEN   0
+#define GLR_ORTHO_REF_PERFRAME 1
+#ifndef GLR_ORTHO_REF_MODE
+#define GLR_ORTHO_REF_MODE GLR_ORTHO_REF_FROZEN
+#endif
+
 /* Per-renderer state the scene module needs to persist across frames.
  * Replaces the file-static g_ortho_ref_dist / g_ortho_active /
  * g_active_projection trio in render.c. Each caller (controller,
@@ -78,7 +95,7 @@ typedef struct SceneProjectionDesc {
 typedef struct SceneRendererState {
     /* 2D ortho scale reference (depth-center of the drawn geometry).
      * How it's sampled — once at the switch vs. every frame — is
-     * selected at compile time by GLR_ORTHO_REF_MODE in config.h.
+     * selected at compile time by GLR_ORTHO_REF_MODE above.
      * 0 means "no usable measurement" and the projection math falls
      * back to config->cam_dist (the old orbit-target-plane behavior). */
     double ortho_ref_dist;

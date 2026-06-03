@@ -8,11 +8,12 @@
 #include "repl/parser.h"
 
 #include "repl/command_spec.h"
+#include "repl/color_limits.h"
 #include "repl/core_internal.h"
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
 
-#include "config.h" /* CP_CLEAR_MAX_V */
+#include "config.h" /* REPL_ENUM_ARG_MAX */
 
 #include <stdarg.h>
 #include <stdlib.h>  /* strtod (strict bool-slot numeric literal) */
@@ -1095,8 +1096,8 @@ static int parse_command(const char *line, GLCmd *cmd,
                 if (def->type == CMD_CLEAR_COLOR) {
                     int clamped = 0;
                     for (int ci = 0; ci < 3; ci++) {
-                        if (cmd->args[ci] > CP_CLEAR_MAX_V) {
-                            cmd->args[ci] = CP_CLEAR_MAX_V;
+                        if (cmd->args[ci] > REPL_CLEAR_COLOR_MAX_V) {
+                            cmd->args[ci] = REPL_CLEAR_COLOR_MAX_V;
                             clamped = 1;
                         }
                     }

@@ -3,7 +3,6 @@
  */
 #include "grid.h"
 #include "overlay_xn.h"  /* SceneOverlayXn + shared resolve helper */
-#include "config.h"   /* GRID_XN_STYLE / GRID_AXES_XN_* */
 #include <math.h>     /* sinf, cosf, sqrtf, fabsf, fmodf, M_PI (via gl_includes.h) */
 
 #define GRID_LOOP_EPSILON 0.01f

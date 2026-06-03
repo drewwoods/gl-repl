@@ -24,6 +24,7 @@
 #include "config.h"
 #include "scene/render.h"
 #include "scene/render_types.h"
+#include "scene/view_mode.h"  /* GLR_VIEW_PROJECTION_TRANSITION_SECS */
 
 #include <errno.h>
 #include <math.h>
