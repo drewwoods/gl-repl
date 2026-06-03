@@ -270,8 +270,8 @@ static double scene_probe_eye_dist(const SceneRenderConfig *config) {
 
 /* Refresh the ortho scale reference for this frame. mix == 1 is pure
  * perspective; anything below means ortho is contributing (a switch is
- * in progress or we are dwelling in 2D). Sampling strategy is chosen at
- * compile time by GLR_ORTHO_REF_MODE.
+ * in progress or we are dwelling in 2D). Sampling strategy is chosen by
+ * GLR_ORTHO_REF_MODE in render.h.
  *
  * FROZEN: capture once on the perspective->ortho edge, release on the
  * ortho->perspective edge. The controller sequences the 3D->2D switch as

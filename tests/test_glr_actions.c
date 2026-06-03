@@ -773,7 +773,7 @@ static void test_replay_config_set_uses_lifecycle(void) {
 /* Audit #59 (Tier B, closeout) regression: ui_state_status_set_kind must
  * drop empty messages, not stamp them with full TTL. Without this guard
  * a stray repl_set_status("") (or any caller passing "") would overwrite
- * the live amber banner with a blank rect held for REPL_STATUS_MESSAGE_TTL
+ * the live amber banner with a blank rect held for UI_STATUS_MESSAGE_TTL
  * ticks. Reverting the early-return would silently regress because no
  * caller asserts on the banner contents after an empty set. */
 static void test_status_set_drops_empty_message(void) {

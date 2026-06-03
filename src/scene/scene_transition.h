@@ -38,6 +38,22 @@ typedef struct {
     float        opacity;  /* 0..1 */
 } SceneXnState;
 
+/* Grid/axes show/hide durations in seconds. The transition machine ticks on
+ * dt seconds; each overlay has independent in/out timing. Kept here with the
+ * scene transition owner, not in global config. */
+#ifndef GRID_FADE_IN_SECS
+#define GRID_FADE_IN_SECS  0.25f
+#endif
+#ifndef GRID_FADE_OUT_SECS
+#define GRID_FADE_OUT_SECS 0.20f
+#endif
+#ifndef AXES_FADE_IN_SECS
+#define AXES_FADE_IN_SECS  0.15f
+#endif
+#ifndef AXES_FADE_OUT_SECS
+#define AXES_FADE_OUT_SECS 0.10f
+#endif
+
 /* Seed/snap to `theme` fully shown, no animation. Use at program init
  * and on world reset (a zero-init machine would animate the default
  * theme in on frame 1). */

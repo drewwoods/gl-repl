@@ -61,7 +61,7 @@ static void ui_state_status_set_kind(const char *message, int kind) {
     strncpy(g_ui_state.status.text, message,
             sizeof(g_ui_state.status.text) - 1);
     g_ui_state.status.text[sizeof(g_ui_state.status.text) - 1] = '\0';
-    g_ui_state.status.ttl = REPL_STATUS_MESSAGE_TTL;
+    g_ui_state.status.ttl = UI_STATUS_MESSAGE_TTL;
     g_ui_state.status.kind = kind;
 }
 

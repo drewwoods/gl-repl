@@ -1,10 +1,9 @@
 /*
  * config.h - Project-wide compile-time configuration constants.
  *
- * Home for shared, namespace-agnostic limits and sizes used across
- * REPL / editor / UI / scene boundaries — anywhere a single number
- * needs to be visible to multiple subsystems without dragging in
- * domain-specific headers.
+ * Home for shared, dependency-free limits and the small set of app-wide
+ * compile-time defaults that intentionally cross REPL / editor / UI /
+ * scene boundaries without dragging in domain-specific headers.
  *
  * Stays dependency-free on purpose: REPL-pipeline files (parse,
  * compile, apply, flatten, export) include this just for
@@ -29,6 +28,8 @@
  * has the GLUT headers expands it. */
 #include "keymap.h"
 
+/* ---- Shared UI primitives --------------------------------------------- */
+
 /* Shared GLUT bitmap fonts. The fixed-width fonts have compile-time metrics
  * below for menu/layout code; proportional fonts are render-only. */
 #define FONT_TINY       GLUT_BITMAP_HELVETICA_10
@@ -38,6 +39,8 @@
 #define FONT_H          15
 #define FONT_SMALL_W    8
 #define FONT_SMALL_H    13
+
+/* ---- App-wide defaults retained in config.h --------------------------- */
 
 /* Default code-panel fraction (panel width / total viewport width) on
  * startup and scene load. User-toggleable at runtime via the "Panel
@@ -50,14 +53,7 @@
 #define CFG_PANEL_FRAC_MIN 0.1f
 #define CFG_PANEL_FRAC_MAX 0.9f
 
-/* Code-panel input metrics: rows scrolled per PageUp/PageDown, and the
- * pixel half-width of the resize-divider hit zone. */
-#define CP_PAGE_SCROLL_ROWS 5
-#define CP_DIVIDER_HIT_PX   10
-
-/* Max brightness (V in HSV) allowed for glClearColor channels.
- * Since max(r,g,b) == V, capping V caps all channels. */
-#define CP_CLEAR_MAX_V 0.1f
+/* ---- Text and diagnostics --------------------------------------------- */
 
 /* Status / diagnostic text buffer size. Compile entries write into
  * `err[REPL_STATUS_TEXT_MAX]`; ReplCompiledChange.commit_message and
@@ -73,145 +69,7 @@
  * Also the on-the-wire width of ReplFlattenResult.status. */
 #define REPL_DIAG_TEXT_MAX 128
 
-/* How long a status-bar message stays visible, in frames (~60 fps, so
- * 360 ≈ 6 s). Interim value bumped from 240 so messages linger longer
- * until the recent-messages viewer lands
- * (plans/in-review/status-message-history.md). */
-#define REPL_STATUS_MESSAGE_TTL 360
-
-/* Width of the status-bar message's alpha fade ramp at the ends of its
- * life, in frames. A sibling of the TTL above (the full lifetime); kept
- * here so the lifetime and its fade share a home. */
-#define REPL_STATUS_FADE_FRAMES 60
-
-/* Grid/axes show/hide transitions (see
- * plans/done/grid-axes-transitions.md). The two overlays are fully
- * independent: each has its own in/out durations (seconds; the
- * transition machine ticks on dt seconds) and its own visual style.
- *
- * Style selects how the controller-owned opacity becomes a visual,
- * resolved at compile time in src/scene/grid.c / src/scene/axes.c:
- *   GRID_AXES_XN_FADE  plain alpha fade (default; original behavior)
- *   GRID_AXES_XN_FOG   recede into clear-color fog on the way out /
- *                      emerge from it on the way in, with an alpha
- *                      knee near opacity 0 so even near-origin
- *                      geometry (axis lines, grid origin) fully
- *                      vanishes. Fog is distance-based, so this is a
- *                      strong look for the grid and a subtle haze for
- *                      the near-origin axes. */
-#define GRID_AXES_XN_FADE 0
-#define GRID_AXES_XN_FOG  1
-
-/* Each selector is overridable from the build (e.g.
- * `make sample CPPFLAGS=-DGRID_XN_STYLE=GRID_AXES_XN_FOG`) without
- * editing this file. */
-#ifndef GRID_FADE_IN_SECS
-#define GRID_FADE_IN_SECS  0.25f
-#endif
-#ifndef GRID_FADE_OUT_SECS
-#define GRID_FADE_OUT_SECS 0.20f
-#endif
-#ifndef GRID_XN_STYLE
-#define GRID_XN_STYLE      GRID_AXES_XN_FOG
-#endif
-
-#ifndef AXES_FADE_IN_SECS
-#define AXES_FADE_IN_SECS  0.15f
-#endif
-#ifndef AXES_FADE_OUT_SECS
-#define AXES_FADE_OUT_SECS 0.10f
-#endif
-#ifndef AXES_XN_STYLE
-#define AXES_XN_STYLE      GRID_AXES_XN_FADE
-#endif
-
-/* Frequency multiplier on anim_time for the shared grid/axes "breathing"
- * glow oscillation: sinf(anim_time * SCENE_BREATH_FREQ) * 0.5 + 0.5. Used by
- * the grid themes (src/scene/grid.c) and the animated axes themes
- * (src/scene/axes.c) so both pulse in lockstep. The light-indicator glow in
- * src/scene/lights.c intentionally keeps its own, faster rate. */
-#ifndef SCENE_BREATH_FREQ
-#define SCENE_BREATH_FREQ 0.8f
-#endif
-
-/* View-mode transitions.
- *
- * GLR_CAMERA_TARGET_DECAY is the per-frame decay used by
- * glr_camera_ease_to: at the default 0.93, each 16 ms tick applies
- * 7% of the remaining distance to the target. Lower values move
- * faster; higher values move slower.
- *
- * GLR_VIEW_PROJECTION_TRANSITION_SECS controls the orthographic <->
- * perspective matrix blend duration once its sequential phase starts. */
-#ifndef GLR_CAMERA_TARGET_DECAY
-#define GLR_CAMERA_TARGET_DECAY 0.93f
-#endif
-
-/* Faster decay used specifically for the 3D->2D camera flattening leg
- * of the view-mode transition. The default 0.93 makes the orbit
- * collapse feel laggy when paired with the subsequent projection
- * blend; 0.85 (~15% of remaining per frame) settles in roughly half
- * the time without overshooting. Experimental knob; adjust freely. */
-#ifndef GLR_VIEW_CAMERA_TO_2D_DECAY
-#define GLR_VIEW_CAMERA_TO_2D_DECAY 0.85f
-#endif
-
-#ifndef GLR_VIEW_PROJECTION_TRANSITION_SECS
-#define GLR_VIEW_PROJECTION_TRANSITION_SECS 0.75f
-#endif
-
-/* Mouse-wheel zoom feel (shared by 2D and 3D — the wheel path is
- * mode-agnostic). One notch injects GLR_WHEEL_ZOOM_STEP into the camera
- * zoom velocity, which decays by CAM_DECAY_ZOOM each 16 ms tick. So one
- * notch travels GLR_WHEEL_ZOOM_STEP / (1 - CAM_DECAY_ZOOM) distance
- * units in total, eased over ~1/(1 - CAM_DECAY_ZOOM) frames, with
- * (1 - CAM_DECAY_ZOOM) of the motion landing on the first frame.
- *
- *   GLR_WHEEL_ZOOM_STEP  magnitude knob — lower = smaller per-notch
- *                        travel (finer slow scrolls). Rapid notches
- *                        still stack on the velocity, so fast scrolls
- *                        travel quickly regardless.
- *   CAM_DECAY_ZOOM       smoothness knob — lower = snappier but more
- *                        "stepped" (more of the notch on frame one);
- *                        higher = smoother but coasts longer. Kept a
- *                        touch snappier than CAM_DECAY (the orbit/pan
- *                        decay, still local to src/app/glr_camera.c) so
- *                        zoom stays responsive, not drifty. */
-#ifndef GLR_WHEEL_ZOOM_STEP
-#define GLR_WHEEL_ZOOM_STEP 0.02f
-#endif
-#ifndef CAM_DECAY_ZOOM
-#define CAM_DECAY_ZOOM 0.82f
-#endif
-
-/* 2D ortho scale reference.
- *
- * The orthographic projection has no single "correct" size — it must
- * pick one eye distance whose on-screen scale it reproduces. Both modes
- * probe the drawn geometry via a GL_FEEDBACK pass and pivot on the
- * midpoint of its eye-distance span (the depth-center), so the middle
- * of the scene holds its size across the 2D/3D switch while nearer
- * (perspective-magnified) geometry shrinks inward and farther geometry
- * grows off-screen. They differ only in WHEN that reference is sampled:
- *
- *   GLR_ORTHO_REF_FROZEN   sample once, the instant a 2D/3D switch
- *                          begins, and hold it for the whole 2D dwell
- *                          and the blend back. Rock-stable: the 2D view
- *                          never breathes even if the scene animates.
- *                          Does not track post-switch motion.
- *
- *   GLR_ORTHO_REF_PERFRAME re-probe every frame ortho is contributing.
- *                          Tracks animation and camera moves live, at
- *                          the cost of one extra geometry pass per
- *                          frame while ortho is on screen.
- *
- * Either way a probe that finds nothing (empty scene / feedback buffer
- * overflow) falls back to cam_dist, the old orbit-target-plane behavior. */
-#define GLR_ORTHO_REF_FROZEN   0
-#define GLR_ORTHO_REF_PERFRAME 1
-#ifndef GLR_ORTHO_REF_MODE
-#define GLR_ORTHO_REF_MODE GLR_ORTHO_REF_FROZEN
-#endif
+/* ---- Build-time UI selection ------------------------------------------ */
 
 /* Active UI color scheme, resolved at compile time. A bare integer
  * index into the UiTheme table in src/ui/theme.h (kept type-free here
@@ -223,6 +81,8 @@
 #ifndef UI_THEME_DEFAULT
 #define UI_THEME_DEFAULT 0
 #endif
+
+/* ---- Shared storage capacities ---------------------------------------- */
 
 /* Storage capacity of the source command document and the matching
  * editor buffer. Surfaces here (not in src/repl/command.h) so neutral
@@ -257,6 +117,26 @@
 #define REPL_PREDEF_NAME_MAX 16
 #endif
 
+/*
+ * MAX_PREDEF_VARS - global user-declared REPL variables
+ * MAX_EXPR_VARS   - local lexical scope at parse/eval time
+ *
+ * They are independent limits: MAX_PREDEF_VARS caps persistent `float x;`
+ * slots (one is reserved for built-in `t`), while MAX_EXPR_VARS caps a
+ * single expression's visible identifier snapshot, including locals and
+ * visible predef vars. Keep MAX_EXPR_VARS >= MAX_PREDEF_VARS so parsing
+ * does not silently truncate the global variable table out of scope.
+ */
+#ifndef MAX_EXPR_VARS
+#define MAX_EXPR_VARS 32
+#endif
+#ifndef MAX_PREDEF_VARS
+#define MAX_PREDEF_VARS 24
+#endif
+#if MAX_PREDEF_VARS > MAX_EXPR_VARS
+#error "MAX_PREDEF_VARS must be <= MAX_EXPR_VARS."
+#endif
+
 /* Capacity (including NUL) of a stack-allocated indent string buffer.
  * Sized to comfortably hold any indent produced by the source-scope and
  * format helpers (2 + 2*tess_depth + 2*begin_depth + per-block-nesting)
@@ -266,6 +146,8 @@
 #ifndef REPL_INDENT_TEXT_MAX
 #define REPL_INDENT_TEXT_MAX 32
 #endif
+
+/* ---- App-wide file/render/timing defaults ----------------------------- */
 
 /* Default filename suggested by the "Load Scene…" file prompt
  * (File menu → Load Scene, src/app/glr_actions.c). Also the seed value
@@ -308,6 +190,8 @@
 #ifndef REPLAY_STATUS_MSG_LEN
 #define REPLAY_STATUS_MSG_LEN 64
 #endif
+
+/* ---- REPL parser limits ------------------------------------------------ */
 
 /* Maximum length of a goto label (including NUL). */
 #ifndef REPL_GOTO_LABEL_MAX

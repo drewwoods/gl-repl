@@ -162,9 +162,9 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
         if (!status_strip_begin(snap, &f))
             return;
 
-        alpha = status.ttl > REPL_STATUS_FADE_FRAMES
+        alpha = status.ttl > UI_STATUS_FADE_FRAMES
                     ? 1.0f
-                    : (float)status.ttl / (float)REPL_STATUS_FADE_FRAMES;
+                    : (float)status.ttl / (float)UI_STATUS_FADE_FRAMES;
         if (status.kind == UI_STATUS_ERROR) {
             bg_rgb   = k_status_bar_bg_err;
             edge_rgb = k_status_bar_edge_err;

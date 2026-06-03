@@ -16,6 +16,7 @@
 #ifndef UI_VARIABLE_PANEL_H
 #define UI_VARIABLE_PANEL_H
 
+#include "config.h"     /* MAX_PREDEF_VARS */
 #include "ui/core/hit.h"
 
 /* Hit kind this renderer emits. Owned here (not in ui/app/hit.h) as a fixed
@@ -25,9 +26,8 @@
 enum { UI_HIT_VARIABLE_SLIDER = UI_HIT_CORE_COUNT + 64 };
 
 /* Max slider rows the panel will draw. Mirrors the predefined-variable
- * table size (MAX_PREDEF_VARS in src/repl/eval.h); the equivalence is
- * STATIC_ASSERTed in src/ui/app/variable_panel_view.c, which can see both. */
-enum { UI_VARIABLE_PANEL_MAX_ROWS = 24 };
+ * table size from the global REPL variable-table contract. */
+enum { UI_VARIABLE_PANEL_MAX_ROWS = MAX_PREDEF_VARS };
 
 enum { UI_VARIABLE_NAME_MAX = 16 };
 

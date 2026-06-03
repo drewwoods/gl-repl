@@ -76,6 +76,10 @@
 #define GLUT_ACTIVE_SUPER 0
 #endif
 
+/* Code-panel input metrics local to the editor dispatcher. */
+#define CP_PAGE_SCROLL_ROWS 5
+#define CP_DIVIDER_HIT_PX   10
+
 /* Forward declarations. */
 static void keyboard_func(unsigned char key, int x, int y);
 static void special_func(int key, int x, int y);

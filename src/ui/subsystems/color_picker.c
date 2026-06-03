@@ -74,8 +74,7 @@ void ui_color_picker_render(const ColorPickerView *view,
     glColor4f(0,0,0,1); glVertex2f(px,    py-sz);
     glEnd();
     glDisable(GL_BLEND);
-    /* Shade the V > value_max zone to mark it off-limits (used by
-     * CMD_CLEAR_COLOR which clamps to CP_CLEAR_MAX_V). */
+    /* Shade the V > value_max zone to mark command-specific color limits. */
     if (view->value_max < 1.0f) {
         float lim_y = py - (1.0f - view->value_max) * (float)sz;
         glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

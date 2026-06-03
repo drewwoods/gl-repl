@@ -12,6 +12,14 @@
 
 #include "config.h"          /* REPL_STATUS_TEXT_MAX */
 
+/* How long a status-bar message stays visible, in frames (~60 fps, so
+ * 360 is roughly 6 s). */
+#define UI_STATUS_MESSAGE_TTL 360
+
+/* Width of the status-bar message alpha fade ramp at the end of its life,
+ * in frames. */
+#define UI_STATUS_FADE_FRAMES 60
+
 /* Code-panel render chrome: panel divider and per-frame mirrors
  * of the presentation flags renderers need.
  *

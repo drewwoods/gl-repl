@@ -13,6 +13,14 @@
 
 struct UiRenderSnapshot;    /* opaque here — only a pointer crosses the seam */
 
+/* View-mode transition tuning.
+ *
+ * GLR_VIEW_CAMERA_TO_2D_DECAY is a faster per-ease decay used only for the
+ * 3D->2D camera flattening leg before projection blending starts. */
+#ifndef GLR_VIEW_CAMERA_TO_2D_DECAY
+#define GLR_VIEW_CAMERA_TO_2D_DECAY 0.85f
+#endif
+
 /* ---- Input router seams (src/app/glr_ctrl_router.c <-> glr_ctrl.c) ----
  *
  * The router lives in glr_ctrl_router.c and calls back into glr_ctrl.c for the

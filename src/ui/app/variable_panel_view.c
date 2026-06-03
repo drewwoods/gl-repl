@@ -5,7 +5,7 @@
 
 #include "ui/app/layout.h"   /* ui_layout_scene_rect, STATUSBAR_H, CODE_PANEL_LAYOUT_TOP */
 #include "ui/app/state.h"    /* ui_state_viewport */
-#include "repl/eval.h"       /* MAX_PREDEF_VARS (for the row-cap assert) */
+#include "config.h"          /* MAX_PREDEF_VARS (for the row-cap assert) */
 #include "c_compat.h"        /* STATIC_ASSERT */
 #include "subsystems/variable_panel/variable_panel_state.h" /* variable_panel_view/_visible */
 

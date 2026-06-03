@@ -10,10 +10,11 @@
 #include "app/glr_color_picker_bridge.h"
 
 #include "subsystems/color_picker/color_picker_state.h"  /* ColorPickerHostBridge */
-#include "config.h"               /* CP_CLEAR_MAX_V, MAX_LINE_LEN, REPL_STATUS_TEXT_MAX */
+#include "config.h"               /* MAX_LINE_LEN, REPL_STATUS_TEXT_MAX */
 #include "editor/commit.h"        /* editor_commit_apply_external_change */
 #include "editor/input.h"         /* editor_load_line_to_input */
 #include "editor/state.h"         /* editor_state_edit_line */
+#include "repl/color_limits.h"    /* REPL_CLEAR_COLOR_MAX_V */
 #include "repl/command.h"         /* GLCmd, CMD_* */
 #include "repl/compile.h"         /* ReplCompiledChange */
 #include "repl/core.h"            /* repl_set_status */
@@ -47,7 +48,9 @@ static int glr_cp_read_color(int cmd_idx, float *r, float *g, float *b, float *a
     if (b) *b = cmd->args[2];
     if (a) *a = ha ? cmd->args[3] : 1.0f;
     if (has_alpha) *has_alpha = ha;
-    if (value_max) *value_max = (cmd->type == CMD_CLEAR_COLOR) ? CP_CLEAR_MAX_V : 1.0f;
+    if (value_max)
+        *value_max = (cmd->type == CMD_CLEAR_COLOR)
+                   ? REPL_CLEAR_COLOR_MAX_V : 1.0f;
     return 1;
 }
 
@@ -60,7 +63,7 @@ static int glr_cp_write_color(int cmd_idx, float r, float g, float b, float a,
     char new_line[MAX_LINE_LEN];
     int written;
     if (cmd->type == CMD_CLEAR_COLOR) {
-        /* V is already clamped to CP_CLEAR_MAX_V at the picker's drag sites. */
+        /* V is already clamped at the picker's drag sites. */
         written = snprintf(new_line, sizeof(new_line),
                            "glClearColor(%g, %g, %g, %g);", r, g, b, a);
     } else if (cmd->type == CMD_COLOR3F) {
