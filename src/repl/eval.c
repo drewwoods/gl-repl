@@ -935,8 +935,15 @@ static void expr_skip_ws(ExprCtx *ctx) {
     while (*ctx->p && isspace((unsigned char)*ctx->p)) ctx->p++;
 }
 
+/* GLSL-classic fract(sin(...)*k) hash. The 0.5 phase offset on the seed
+ * keeps seed == 0 off the sin() zero crossing: without it rand(0, 0) == 0
+ * exactly and rand(0, iter) collapses to a pure 1-D sweep (its uniformity
+ * is the worst of any argument pattern). See `randdist` in tests/test_eval.c
+ * for the distribution table this was tuned against. */
+#define EXPR_RAND_SEED_OFFSET 0.5f
+
 static float expr_rand01(float seed, float iter) {
-    float h = sinf(seed * 12.9898f + iter * 78.233f) * 43758.5453f;
+    float h = sinf((seed + EXPR_RAND_SEED_OFFSET) * 12.9898f + iter * 78.233f) * 43758.5453f;
     float frac = h - floorf(h);
     if (frac < 0.0f) frac += 1.0f;
     return frac;
