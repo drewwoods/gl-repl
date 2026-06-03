@@ -23,6 +23,7 @@ static const GLfloat k_clr_ghost_text[4]     = { 0.50f, 0.55f, 0.65f, 0.55f };
 static const GLfloat k_clr_hint_text[4]      = { 0.56f, 0.62f, 0.72f, 0.38f };
 static const GLfloat k_clr_cursor_caret[4]   = { 0.90f, 0.80f, 0.25f, 0.85f };
 static const GLfloat k_clr_paren_match[4]    = { 0.30f, 0.80f, 0.50f, 0.45f };
+static const GLfloat k_clr_input_dim[3]      = { 0.42f, 0.42f, 0.40f };
 
 /* text_panel chrome that has no clean theme-token twin: a very dim
  * gutter/indent-guide tier and a specific dark action-chip ring. Kept
@@ -465,6 +466,41 @@ int ui_text_panel_match_paren(const char *s, int len, int cursor,
     return 0;
 }
 
+int ui_text_panel_enclosing_parens(const char *s, int len, int cursor,
+                                   int *open, int *close) {
+    int i, depth, o = -1;
+
+    if (!s)
+        return 0;
+    if (cursor < 0) cursor = 0;
+    if (cursor > len) cursor = len;
+
+    /* Nearest unbalanced '(' to the left of the caret. */
+    depth = 0;
+    for (i = cursor - 1; i >= 0; i--) {
+        if (s[i] == ')') depth++;
+        else if (s[i] == '(') {
+            if (depth == 0) { o = i; break; }
+            depth--;
+        }
+    }
+    if (o < 0)
+        return 0;
+
+    /* Its matching ')'. */
+    depth = 0;
+    for (i = o; i < len; i++) {
+        if (s[i] == '(') depth++;
+        else if (s[i] == ')') depth--;
+        if (depth == 0) {
+            if (open)  *open = o;
+            if (close) *close = i;
+            return 1;
+        }
+    }
+    return 0;
+}
+
 /* Tint one matched parenthesis char with a single-cell band, clamped to
  * the wrap row [wrap_start, wrap_start + wrap_len). Drawn behind the text
  * glyphs (called before the input segment) so the character stays legible
@@ -483,6 +519,40 @@ static void text_panel_draw_paren_cell(const UiTextPanelSnapshot *snap,
     glRectf(bx, (float)(line_y - 3),
             bx + (float)FONT_W, (float)(line_y - 3 + LINE_H));
     glDisable(GL_BLEND);
+}
+
+/* Draw one input wrap row [wrap_start, wrap_start+wrap_len), dimming the
+ * characters outside the enclosing-paren span [dim_keep_lo, dim_keep_hi]
+ * (inclusive). When dim_keep_hi < dim_keep_lo there is no bright span, so
+ * the whole row dims; the single-color fast path (whole row bright) is
+ * handled by the caller when there is no enclosing pair. */
+static void text_panel_draw_input_dimmed(const UiTextPanelSnapshot *snap,
+                                         int wrap_x, int wrap_start,
+                                         int wrap_len, int line_y,
+                                         const char *input,
+                                         int keep_lo, int keep_hi) {
+    int wrap_end = wrap_start + wrap_len;
+    int base_x = snap->cp_x + wrap_x;
+    /* Bright sub-range within this wrap row (keep_hi is inclusive). */
+    int b_lo = keep_lo > wrap_start ? keep_lo : wrap_start;
+    int b_hi = (keep_hi + 1) < wrap_end ? (keep_hi + 1) : wrap_end;
+    if (b_hi < b_lo) b_hi = b_lo;
+
+    if (b_lo > wrap_start) {
+        glColor3fv(k_clr_input_dim);
+        text_panel_draw_segment(base_x, line_y, input,
+                                wrap_start, b_lo - wrap_start, FONT_MONO);
+    }
+    if (b_hi > b_lo) {
+        glColor3fv(k_clr_input_text);
+        text_panel_draw_segment(base_x + (b_lo - wrap_start) * FONT_W, line_y,
+                                input, b_lo, b_hi - b_lo, FONT_MONO);
+    }
+    if (wrap_end > b_hi) {
+        glColor3fv(k_clr_input_dim);
+        text_panel_draw_segment(base_x + (b_hi - wrap_start) * FONT_W, line_y,
+                                input, b_hi, wrap_end - b_hi, FONT_MONO);
+    }
 }
 
 static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
@@ -529,6 +599,14 @@ static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
     int has_paren_pair = (anchor_pos == cursor_pos) &&
         ui_text_panel_match_paren(input, input_len, cursor_pos,
                                   &paren_self, &paren_match);
+
+    /* Scope dimming: when the caret sits inside a paren pair, dim the
+     * text outside that innermost [open, close] span so the active scope
+     * stands out. Off while a range selection is active. */
+    int enc_open = -1, enc_close = -1;
+    int has_enclosing = (anchor_pos == cursor_pos) &&
+        ui_text_panel_enclosing_parens(input, input_len, cursor_pos,
+                                       &enc_open, &enc_close);
 
     code_layout_wrap_iter_init(&wrap_it, input, &layout);
     while (code_layout_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
@@ -584,9 +662,15 @@ static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
                                            wrap_len, *io_line_y, paren_match);
             }
 
-            glColor3fv(k_clr_input_text);
-            text_panel_draw_segment(snap->cp_x + wrap_x, *io_line_y, input,
-                                    wrap_start, wrap_len, FONT_MONO);
+            if (has_enclosing) {
+                text_panel_draw_input_dimmed(snap, wrap_x, wrap_start,
+                                             wrap_len, *io_line_y, input,
+                                             enc_open, enc_close);
+            } else {
+                glColor3fv(k_clr_input_text);
+                text_panel_draw_segment(snap->cp_x + wrap_x, *io_line_y, input,
+                                        wrap_start, wrap_len, FONT_MONO);
+            }
 
             if (wrap_row == cursor_row) {
                 int cursor_x = snap->cp_x + wrap_x + cursor_col * FONT_W;
