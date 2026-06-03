@@ -246,7 +246,11 @@ ReplCompileResult editor_compile_for_loop(const char *input,
 
 void editor_commit_reset_transients(void);
 int  editor_commit_resolve_insert_exit_target(int target);
-int  editor_commit_apply_swatch_change(int edit_line, int direction);
+/* Step the numeric arg under the cursor by `direction` (+1/-1) times the
+ * value-derived base step scaled by `scale` (1.0 = base; the controller
+ * passes 10.0 for a right-click coarse step and 0.2 for a Shift-held fine
+ * step, mirroring the variable slider's coarse/fine modifiers). */
+int  editor_commit_apply_swatch_change(int edit_line, int direction, float scale);
 
 /* Func-decl resume bookkeeping: a CMD_FUNC_DEF commit publishes a
  * delta via the file-static publisher in commit.c; the matching
