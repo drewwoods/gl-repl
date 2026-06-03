@@ -22,6 +22,7 @@ static const GLfloat k_clr_search_hit[4]     = { 0.95f, 0.65f, 0.18f, 0.55f };
 static const GLfloat k_clr_ghost_text[4]     = { 0.50f, 0.55f, 0.65f, 0.55f };
 static const GLfloat k_clr_hint_text[4]      = { 0.56f, 0.62f, 0.72f, 0.38f };
 static const GLfloat k_clr_cursor_caret[4]   = { 0.90f, 0.80f, 0.25f, 0.85f };
+static const GLfloat k_clr_paren_match[4]    = { 0.30f, 0.80f, 0.50f, 0.45f };
 
 /* text_panel chrome that has no clean theme-token twin: a very dim
  * gutter/indent-guide tier and a specific dark action-chip ring. Kept
@@ -431,6 +432,59 @@ static void text_panel_draw_search_highlights(const UiTextPanelSnapshot *snap,
 }
 
 
+int ui_text_panel_match_paren(const char *s, int len, int cursor,
+                              int *self, int *match) {
+    int i, depth;
+
+    if (!s || cursor < 0 || cursor >= len)
+        return 0;
+
+    if (s[cursor] == '(') {
+        depth = 0;
+        for (i = cursor; i < len; i++) {
+            if (s[i] == '(') depth++;
+            else if (s[i] == ')') depth--;
+            if (depth == 0) {
+                if (self)  *self = cursor;
+                if (match) *match = i;
+                return 1;
+            }
+        }
+    } else if (s[cursor] == ')') {
+        depth = 0;
+        for (i = cursor; i >= 0; i--) {
+            if (s[i] == ')') depth++;
+            else if (s[i] == '(') depth--;
+            if (depth == 0) {
+                if (self)  *self = cursor;
+                if (match) *match = i;
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+/* Tint one matched parenthesis char with a single-cell band, clamped to
+ * the wrap row [wrap_start, wrap_start + wrap_len). Drawn behind the text
+ * glyphs (called before the input segment) so the character stays legible
+ * on top. No-op when the char lies on a different wrap row. */
+static void text_panel_draw_paren_cell(const UiTextPanelSnapshot *snap,
+                                       int wrap_x, int wrap_start,
+                                       int wrap_len, int line_y, int pos) {
+    float bx;
+
+    if (pos < wrap_start || pos >= wrap_start + wrap_len)
+        return;
+
+    bx = (float)(snap->cp_x + wrap_x + (pos - wrap_start) * FONT_W);
+    glEnable(GL_BLEND);
+    glColor4fv(k_clr_paren_match);
+    glRectf(bx, (float)(line_y - 3),
+            bx + (float)FONT_W, (float)(line_y - 3 + LINE_H));
+    glDisable(GL_BLEND);
+}
+
 static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
                                      const UiTextPanelRow *row,
                                      int visible_rows,
@@ -467,6 +521,14 @@ static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
                                                  &cursor_seg_len,
                                                  &cursor_seg_x);
     cursor_col = cursor_pos - cursor_seg_start;
+
+    /* Parenthesis-pair highlight: when the char in front of the caret is
+     * a paren, tint it and its balanced partner. Suppressed while a
+     * range selection is active so the bands don't fight. */
+    int paren_self = -1, paren_match = -1;
+    int has_paren_pair = (anchor_pos == cursor_pos) &&
+        ui_text_panel_match_paren(input, input_len, cursor_pos,
+                                  &paren_self, &paren_match);
 
     code_layout_wrap_iter_init(&wrap_it, input, &layout);
     while (code_layout_wrap_iter_next(&wrap_it, &wrap_start, &wrap_len, &wrap_x)) {
@@ -513,6 +575,13 @@ static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
                             bx + bw, (float)(*io_line_y - 3 + LINE_H));
                     glDisable(GL_BLEND);
                 }
+            }
+
+            if (has_paren_pair) {
+                text_panel_draw_paren_cell(snap, wrap_x, wrap_start,
+                                           wrap_len, *io_line_y, paren_self);
+                text_panel_draw_paren_cell(snap, wrap_x, wrap_start,
+                                           wrap_len, *io_line_y, paren_match);
             }
 
             glColor3fv(k_clr_input_text);

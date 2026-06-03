@@ -402,6 +402,53 @@ static void test_color_segments_enable_blending(void) {
                 gl_stub_counts[GL_STUB_glBlendFunc] > base_blend_func);
 }
 
+/* ui_text_panel_match_paren: the char "in front of" the caret (s[cursor])
+ * drives the pair. Covers both directions, nesting, the no-paren case,
+ * unbalanced input, and the caret-at-end boundary. */
+static void test_match_paren_pairs(void) {
+    const char *s = "glVertex3f(cos(t), 0, 0)";
+    int self = -1, match = -1;
+    int self2 = -1, match2 = -1;
+
+    printf("--- match paren ---\n");
+
+    /* Caret in front of the outer '(' at index 10. */
+    ASSERT_INT_EQ("outer open is a paren", 1,
+                  ui_text_panel_match_paren(s, (int)strlen(s), 10,
+                                            &self, &match));
+    ASSERT_INT_EQ("outer open self idx", self, 10);
+    ASSERT_INT_EQ("outer open matches final ')'", match, 23);
+
+    /* Caret in front of the final ')' at index 23 scans backward. */
+    ASSERT_INT_EQ("outer close is a paren", 1,
+                  ui_text_panel_match_paren(s, (int)strlen(s), 23,
+                                            &self2, &match2));
+    ASSERT_INT_EQ("outer close self idx", self2, 23);
+    ASSERT_INT_EQ("outer close matches outer '('", match2, 10);
+
+    /* Nested: the inner '(' at index 14 pairs with the ')' at 16. */
+    ASSERT_INT_EQ("inner open is a paren", 1,
+                  ui_text_panel_match_paren(s, (int)strlen(s), 14,
+                                            &self, &match));
+    ASSERT_INT_EQ("inner open matches inner ')'", match, 16);
+
+    /* Non-paren char in front of caret: no pair. */
+    ASSERT_INT_EQ("letter is not a paren", 0,
+                  ui_text_panel_match_paren(s, (int)strlen(s), 0,
+                                            &self, &match));
+
+    /* Caret at end of string (cursor == len): nothing in front. */
+    ASSERT_INT_EQ("caret at end has no char in front", 0,
+                  ui_text_panel_match_paren(s, (int)strlen(s),
+                                            (int)strlen(s), &self, &match));
+
+    /* Unbalanced: a lone '(' has no partner. */
+    ASSERT_INT_EQ("unbalanced open has no match", 0,
+                  ui_text_panel_match_paren("foo(", 4, 3, &self, &match));
+    ASSERT_INT_EQ("unbalanced close has no match", 0,
+                  ui_text_panel_match_paren(")", 1, 0, &self, &match));
+}
+
 int main(void) {
     printf("--- ui_text_panel tests ---\n");
 
@@ -413,6 +460,7 @@ int main(void) {
     test_row_layout_consistency();
     test_row_layout_shared_across_kinds();
     test_color_segments_enable_blending();
+    test_match_paren_pairs();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_ui_text_panel");
