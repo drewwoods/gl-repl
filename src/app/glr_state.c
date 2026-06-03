@@ -64,7 +64,7 @@ static const float g_grid_extents[GRID_EXTENT_COUNT] = {
         .syntax_highlight       = CFG_DEFAULT_SYNTAX_HIGHLIGHT, \
         .code_focus             = CFG_DEFAULT_CODE_FOCUS, \
         .paren_match            = CFG_DEFAULT_PAREN_MATCH, \
-        .paren_dim              = CFG_DEFAULT_PAREN_DIM, \
+        .paren_scope            = CFG_DEFAULT_PAREN_SCOPE, \
     }, \
     .render = { \
         .use_accum                 = CFG_DEFAULT_USE_ACCUM, \

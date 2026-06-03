@@ -254,10 +254,11 @@ typedef struct {
     int wrap_at_comma;
 
     /* Active-input-row paren aids (1 = on). paren_match tints the
-     * caret's matching parenthesis; paren_dim greys text outside the
-     * caret's enclosing pair. Independent toggles. */
+     * caret's matching parenthesis; paren_scope draws a faint background
+     * band behind the text inside the caret's enclosing pair (glyph
+     * colors untouched). Independent toggles. */
     int paren_match;
-    int paren_dim;
+    int paren_scope;
 
     /* Generic top-chrome reserve (pixels) the adapter draws above the
      * code rows, e.g. a scene tab strip. Subtracted from the render
@@ -377,8 +378,8 @@ int  ui_text_panel_match_paren(const char *s, int len, int cursor,
  * On success writes the open/close indices to *open / *close (the pair's
  * own parens are part of the enclosed span) and returns 1. Returns 0 when
  * the caret is not inside any pair, or the enclosing '(' has no close.
- * Pure — no GL, no global state. The renderer dims text outside [open,
- * close] so the active paren scope stands out. */
+ * Pure — no GL, no global state. The renderer draws a faint background
+ * band behind [open, close] so the active paren scope stands out. */
 int  ui_text_panel_enclosing_parens(const char *s, int len, int cursor,
                                      int *open, int *close);
 

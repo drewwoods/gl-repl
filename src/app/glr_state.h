@@ -55,7 +55,7 @@ typedef struct {
     int syntax_highlight;   /* 0 = off, 1 = on, 2 = on + drop-shadow */
     int code_focus;         /* 1 = hide derived C boilerplate chrome rows */
     int paren_match;        /* 1 = tint the caret's matching parenthesis */
-    int paren_dim;          /* 1 = dim text outside the caret's parentheses */
+    int paren_scope;        /* 1 = highlight text inside the caret's parens */
 } GlrPresentationState;
 
 /* App-owned render policy toggles. Runtime values emitted directly by user GL

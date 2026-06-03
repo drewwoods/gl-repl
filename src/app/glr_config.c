@@ -142,7 +142,7 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_AUDIO_MODE:          return NULL; /* audio module owns this one */
     case GLR_CONFIG_SYNTAX_HIGHLIGHT:    return &glr_state_presentation_mut()->syntax_highlight;
     case GLR_CONFIG_PAREN_MATCH:         return &glr_state_presentation_mut()->paren_match;
-    case GLR_CONFIG_PAREN_DIM:           return &glr_state_presentation_mut()->paren_dim;
+    case GLR_CONFIG_PAREN_SCOPE:         return &glr_state_presentation_mut()->paren_scope;
     case GLR_CONFIG_NONE:
     case GLR_CONFIG_COUNT:
     default:
@@ -190,7 +190,7 @@ int glr_config_get(GlrConfigKey key) {
     case GLR_CONFIG_WRAP_AT_COMMA:       return glr_state_presentation().wrap_at_comma;
     case GLR_CONFIG_SYNTAX_HIGHLIGHT:    return glr_state_presentation().syntax_highlight;
     case GLR_CONFIG_PAREN_MATCH:         return glr_state_presentation().paren_match;
-    case GLR_CONFIG_PAREN_DIM:           return glr_state_presentation().paren_dim;
+    case GLR_CONFIG_PAREN_SCOPE:         return glr_state_presentation().paren_scope;
     default:                             return 0;
     }
 }

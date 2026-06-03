@@ -48,7 +48,7 @@
 #define CFG_DEFAULT_SYNTAX_HIGHLIGHT  0   /* off by default */
 #define CFG_DEFAULT_CODE_FOCUS        1   /* focus view by default */
 #define CFG_DEFAULT_PAREN_MATCH       1   /* matching-paren highlight on */
-#define CFG_DEFAULT_PAREN_DIM         1   /* dim out-of-scope text on */
+#define CFG_DEFAULT_PAREN_SCOPE       1   /* in-scope highlight band on */
 
 /* Neutral default clear color used by the controller when the flat
  * program contains no user glClearColor command. Keep the luminance
