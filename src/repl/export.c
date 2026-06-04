@@ -7,6 +7,7 @@
  * controller-installed ReplExportCameraBridge (see src/repl/export.h).
  * glr_config.h was already dropped in step 4 for the same reason. */
 #include "config.h"             /* REPL_OUTLINE_POLYGON_OFFSET_{FACTOR,UNITS} */
+#include <assert.h>             /* @tune save-path injection anchor checks */
 #include "repl/command_store.h"
 #include "repl/core.h"
 #include "repl/core_internal.h"
@@ -1220,6 +1221,11 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
             } else
                 fprintf(f, " %s", cmd->payload.decl.names[di]);
         }
+        /* Round-trip the @tune knob tag: import re-attaches `// @tune` to the
+         * reconstructed decl line. Import's name loop stops at `@`, so the
+         * trailing token detaches cleanly. */
+        if (repl_eval_line_has_tune_tag(source_text))
+            fprintf(f, " @tune");
         fprintf(f, "\n");
         break;
     }
@@ -1626,6 +1632,13 @@ typedef struct {
     int needs_scratch_a;
     int needs_scratch_b;
     int needs_scratch_c;
+    /* @tune knobs: names point into the live decl payloads (valid for the
+     * duration of one export). tune_count is what we emit (capped at
+     * REPL_TUNE_MAX_KNOBS); tune_total is the full tagged count for the
+     * "capped at N" note. */
+    int         tune_count;
+    int         tune_total;
+    const char *tune_names[REPL_TUNE_MAX_KNOBS];
 } ExportNeeds;
 
 typedef struct {
@@ -1688,6 +1701,11 @@ static ExportNeeds export_collect_needs(void) {
         if (export_text_uses_token(src, "B["))    needs.needs_scratch_b = 1;
         if (export_text_uses_token(src, "C["))    needs.needs_scratch_c = 1;
     }
+
+    needs.tune_count = repl_collect_tuned_vars(
+        repl_state_document_cmds(), repl_state_document_count(),
+        s_export_text_view, needs.tune_names, REPL_TUNE_MAX_KNOBS,
+        &needs.tune_total);
 
     return needs;
 }
@@ -1818,20 +1836,127 @@ static void emit_export_display_geometry(FILE *f) {
     }
 }
 
+/* QWERTY column pairs: knob i raises with k_tune_up_keys[i], lowers with
+ * k_tune_down_keys[i]. Index-aligned; length REPL_TUNE_MAX_KNOBS. */
+static const char k_tune_up_keys[]   = "qwertyuio";
+static const char k_tune_down_keys[] = "asdfghjkl";
+
+STATIC_ASSERT(sizeof(k_tune_up_keys) - 1 == REPL_TUNE_MAX_KNOBS,
+              tune_up_key_count);
+STATIC_ASSERT(sizeof(k_tune_down_keys) - 1 == REPL_TUNE_MAX_KNOBS,
+              tune_down_key_count);
+
+/* Prologue: window-size globals (captured in reshape, read by the HUD),
+ * the swatch-step mirror, and the HUD draw pass. Emitted only when at least
+ * one variable is @tune-tagged. */
+static void write_tune_helpers(FILE *f, const ExportNeeds *needs) {
+    if (needs->tune_total > needs->tune_count)
+        fprintf(f,
+            "\n/* @tune: %d variables tagged; capped at %d keyboard knobs. */\n",
+            needs->tune_total, REPL_TUNE_MAX_KNOBS);
+    fprintf(f,
+        "\n#include <stdio.h>\n"
+        "\n/* @tune knobs: keyboard-adjustable variables + HUD, generated"
+        " because\n"
+        " * one or more `float` decls carried a `// @tune` tag. */\n"
+        "static int g_tune_window_width  = 800;\n"
+        "static int g_tune_window_height = 600;\n"
+        "\n/* Mirror of repl_eval_swatch_step() (src/repl/eval.c); pinned by the\n"
+        " * swatch-parity test in tests/test_repl_tune.c so it can't silently"
+        " drift. */\n"
+        "static float tune_compute_step(float v){ float m = fabsf(v);\n"
+        "  float e = (m < 10.0f) ? 0.0f : floorf(log10f(m));"
+        " return 0.05f * powf(10.0f, e); }\n"
+        "\nstatic void draw_tunable_overlay(void){\n"
+        "  int w = g_tune_window_width, h = g_tune_window_height;\n"
+        "  glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity();\n"
+        "  glOrtho(0, w, 0, h, -1, 1);\n"
+        "  glMatrixMode(GL_MODELVIEW); glPushMatrix(); glLoadIdentity();\n"
+        "  glPushAttrib(GL_ALL_ATTRIB_BITS);\n"
+        "  glDisable(GL_LIGHTING); glDisable(GL_DEPTH_TEST);\n"
+        "  glColor3f(1.0f, 1.0f, 1.0f);\n"
+        "  float y = (float)h - 18.0f;\n"
+        "  char ln[96];\n");
+    for (int i = 0; i < needs->tune_count; i++) {
+        fprintf(f,
+            "  snprintf(ln, sizeof ln, \"%c/%c  %s = %%.4g\", (double)%s);\n"
+            "  glRasterPos2f(8.0f, y);\n"
+            "  for (const char *p = ln; *p; p++)"
+            " glutBitmapCharacter(GLUT_BITMAP_9_BY_15, (unsigned char)*p);\n"
+            "  y -= 16.0f;\n",
+            k_tune_up_keys[i], k_tune_down_keys[i],
+            needs->tune_names[i], needs->tune_names[i]);
+    }
+    fprintf(f,
+        "  glPopAttrib();\n"
+        "  glMatrixMode(GL_PROJECTION); glPopMatrix();\n"
+        "  glMatrixMode(GL_MODELVIEW); glPopMatrix();\n"
+        "}\n");
+}
+
+/* Injected into the exported keyboard() body: decode the key (folding Shift
+ * uppercase and Ctrl control-codes back to the base letter) and apply the
+ * swatch step, Shift = fine x0.2, Ctrl = coarse x10 — mirroring the in-app
+ * numeric swatch. */
+static void emit_tune_keyboard_handlers(FILE *f, const ExportNeeds *needs) {
+    fprintf(f,
+        "  int __tmod = glutGetModifiers();\n"
+        "  unsigned char __tk = key;\n"
+        "  if ((__tmod & GLUT_ACTIVE_CTRL) && __tk >= 1 && __tk <= 26)"
+        " __tk = (unsigned char)(__tk - 1 + 'a');\n"
+        "  else if (__tk >= 'A' && __tk <= 'Z')"
+        " __tk = (unsigned char)(__tk + ('a' - 'A'));\n"
+        "  float __tsc = 1.0f;\n"
+        "  if (__tmod & GLUT_ACTIVE_SHIFT) __tsc *= 0.2f;\n"
+        "  if (__tmod & GLUT_ACTIVE_CTRL)  __tsc *= 10.0f;\n");
+    for (int i = 0; i < needs->tune_count; i++) {
+        const char *v = needs->tune_names[i];
+        fprintf(f,
+            "  if (__tk == '%c') %s += tune_compute_step(%s) * __tsc;\n"
+            "  if (__tk == '%c') %s -= tune_compute_step(%s) * __tsc;\n",
+            k_tune_up_keys[i], v, v, k_tune_down_keys[i], v, v);
+    }
+}
+
 static void emit_export_display_tail(FILE *f, const ExportNeeds *needs,
                                      const ReplExportLayout *layout) {
     int include_tess = needs ? needs->needs_tess : 0;
+    int knobs = needs ? needs->tune_count : 0;
+    int hit_reshape = 0, hit_keyboard = 0, hit_hud = 0;
 
     for (int line_idx = 0; g_footer_pre_init[line_idx]; line_idx++) {
-        if (strcmp(g_footer_pre_init[line_idx],
-                   REPL_EXPORT_RESHAPE_PROJ_SENTINEL) == 0) {
+        const char *line = g_footer_pre_init[line_idx];
+        if (strcmp(line, REPL_EXPORT_RESHAPE_PROJ_SENTINEL) == 0) {
             const char *proj[REPL_EXPORT_PROJ_LINES];
             int pn = repl_export_reshape_projection_lines(proj);
             for (int j = 0; j < pn; j++)
                 fprintf(f, "%s\n", proj[j]);
             continue;
         }
-        fprintf(f, "%s\n", g_footer_pre_init[line_idx]);
+        /* HUD draw goes just before the display() buffer swap. */
+        if (knobs > 0 && strcmp(line, "  glPopAttrib();") == 0) {
+            fprintf(f, "  draw_tunable_overlay();\n");
+            hit_hud = 1;
+        }
+        fprintf(f, "%s\n", line);
+        /* Capture live window size for the HUD's 2D ortho. */
+        if (knobs > 0 && strcmp(line, "void reshape(int w, int h) {") == 0) {
+            fprintf(f, "  g_tune_window_width = w; g_tune_window_height = h;\n");
+            hit_reshape = 1;
+        }
+        /* Knob key handling, after the keyboard() arg-unused line. */
+        if (knobs > 0 && strcmp(line, "  (void)x; (void)y;") == 0) {
+            emit_tune_keyboard_handlers(f, needs);
+            hit_keyboard = 1;
+        }
+    }
+    /* The injection keys off footer literal strings; if a future edit to
+     * g_footer_pre_init[] breaks an anchor, fail loudly rather than silently
+     * emit zero knobs. The export-content test is the regression guard. */
+    if (knobs > 0) {
+        assert(hit_reshape && hit_keyboard && hit_hud &&
+               "@tune injection anchor missing in g_footer_pre_init[]");
+        (void)hit_reshape; (void)hit_keyboard; (void)hit_hud;
     }
     emit_export_init_section_to_file(f, include_tess);
 
@@ -1945,12 +2070,21 @@ static void emit_export_render_helper_section(FILE *f,
     write_render_helper_as_c(f, "render_repl_geometry");
 }
 
+static void emit_export_tune_section(FILE *f,
+                                     const ExportScaffoldContext *ctx) {
+    if (!ctx || ctx->needs.tune_count <= 0)
+        return;
+    write_tune_helpers(f, &ctx->needs);
+}
+
 static void emit_export_display_section(FILE *f,
                                         const ExportScaffoldContext *ctx) {
     emit_export_display(f, &ctx->needs, ctx->layout);
 }
 
-/* Section order is the exported C ABI: imports and compile tests assume it. */
+/* Section order is the exported C ABI: imports and compile tests assume it.
+ * The tune helpers must precede the display section so display()/keyboard()/
+ * reshape() can reference tune_compute_step/draw_tunable_overlay/the globals. */
 static const ExportScaffoldSectionSpec EXPORT_SCAFFOLD_SECTIONS[] = {
     { emit_export_workspace_metadata_section },
     { emit_export_header_section },
@@ -1962,6 +2096,7 @@ static const ExportScaffoldSectionSpec EXPORT_SCAFFOLD_SECTIONS[] = {
     { emit_export_save_restore_section },
     { emit_export_functions_section },
     { emit_export_render_helper_section },
+    { emit_export_tune_section },
     { emit_export_display_section },
 };
 

@@ -235,6 +235,14 @@ void ui_variable_panel_render(const UiVariablePanelView *view) {
             glRectf((float)(px + 1), (float)row_y, (float)(px + pw - 1), (float)(row_y + VAR_ROW_H));
         }
 
+        /* @tune badge: accent bar on the row's left edge marks a tagged var
+         * (one exported as a keyboard knob). */
+        if (var->tuned) {
+            ui_clr(UI_TOK_ACCENT);
+            glRectf((float)(px + 1), (float)(row_y + 2),
+                    (float)(px + 3), (float)(row_y + VAR_ROW_H - 2));
+        }
+
         /* Label */
         glColor3fv(k_var_name);
         gl2d_draw_string((float)label_x, (float)text_y, truncate_var_name(var->name, VAR_NAME_MAX_CHARS), FONT_SMALL);

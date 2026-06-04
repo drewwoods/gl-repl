@@ -364,6 +364,20 @@ static int import_parse_predef_decl(const char *line) {
     return updated;
 }
 
+/* 1 if `s` carries a whole-token `@tune` (the trailing knob tag the exporter
+ * appends to a `// @declare` marker), else 0. Bounded by whitespace/end so it
+ * never matches a name like `@tuned`. */
+static int declare_args_have_tune_tag(const char *s) {
+    for (const char *q = s; (q = strstr(q, "@tune")) != NULL; q += 5) {
+        char prev = (q == s) ? ' ' : q[-1];
+        char next = q[5];
+        if (isspace((unsigned char)prev) &&
+            (next == '\0' || isspace((unsigned char)next)))
+            return 1;
+    }
+    return 0;
+}
+
 /* Parse a snippet-scoped `@declare` marker written by write_canonical_cmd_as_c()
  * and reconstruct the corresponding CMD_VAR_DECLARE command. Variables that are
  * already registered in g_predef_vars (e.g. from @var auto-declare or from
@@ -460,7 +474,13 @@ static int parse_snippet_declare(const char *args, int *loaded,
             repl_eval_undeclare_predef_var(newly_declared[i]);
         return 0;
     }
-    snprintf(decl_line + off, sizeof(decl_line) - (size_t)off, ";");
+    /* Re-attach the @tune knob tag so the reconstructed decl line is the
+     * in-app source of truth (badge + re-export both read the trailing
+     * comment). */
+    if (declare_args_have_tune_tag(args))
+        snprintf(decl_line + off, sizeof(decl_line) - (size_t)off, "; // @tune");
+    else
+        snprintf(decl_line + off, sizeof(decl_line) - (size_t)off, ";");
     cmd.payload.decl.count = count;
 
     /* Insert the command directly, bypassing editor_try_commit_float_decl so we
