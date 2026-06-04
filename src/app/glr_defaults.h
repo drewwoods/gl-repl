@@ -45,7 +45,7 @@
 #define CFG_DEFAULT_VARIABLE_PANEL    1
 #define CFG_DEFAULT_WRAP_AT_COMMA     1
 #define CFG_DEFAULT_CODE_PANEL_LAYOUT CODE_PANEL_LAYOUT_TOP
-#define CFG_DEFAULT_SYNTAX_HIGHLIGHT  0   /* off by default */
+#define CFG_DEFAULT_SYNTAX_HIGHLIGHT  1   /* 0 = off, 1 = on, 2 = on + drop-shadow */
 #define CFG_DEFAULT_CODE_FOCUS        1   /* focus view by default */
 #define CFG_DEFAULT_PAREN_MATCH       1   /* matching-paren highlight on */
 #define CFG_DEFAULT_PAREN_SCOPE       1   /* in-scope highlight band on */
