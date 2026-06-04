@@ -371,6 +371,11 @@ static const char *cfg_backdrop_mode_symbols[SCENE_BACKDROP_COUNT] = {
     SCENE_BACKDROP_LIST(SCENE_BACKDROP_SYMBOL_ENTRY)
 #undef SCENE_BACKDROP_SYMBOL_ENTRY
 };
+static const char *cfg_light_theme_symbols[LIGHT_THEME_COUNT] = {
+#define LIGHT_THEME_SYMBOL_ENTRY(name) [LIGHT_THEME_##name] = "LIGHT_THEME_" #name,
+    LIGHT_THEME_LIST(LIGHT_THEME_SYMBOL_ENTRY)
+#undef LIGHT_THEME_SYMBOL_ENTRY
+};
 
 static int glr_cfg_symbol_table_lookup(const char *value_name,
                                        const char *const *table,
@@ -401,6 +406,10 @@ static int glr_export_cfg_resolve_text(const char *slug,
         return glr_cfg_symbol_table_lookup(value_name,
                                            cfg_backdrop_mode_symbols,
                                            SCENE_BACKDROP_COUNT, out_value);
+    if (strcmp(slug, "light_theme") == 0)
+        return glr_cfg_symbol_table_lookup(value_name,
+                                           cfg_light_theme_symbols,
+                                           LIGHT_THEME_COUNT, out_value);
     return 0;
 }
 
