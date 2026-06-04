@@ -184,6 +184,35 @@ Flattened commands are the execution, replay, export, and 3D annotation model.
 Code outside the command pipeline should use `FlatProgramView` or a snapshot
 derived from it instead of poking raw global arrays.
 
+### Flatten cache and render-pass reuse
+
+`repl_flatten_commands()` is the expensive interpreter boundary. It expands
+loops/functions/conditionals, evaluates expressions and variable/scratch
+assignments against the current bindings, and stores resolved `GLCmd` records
+in the flat program. For example:
+
+```c
+x = 2;
+y = pow(2, x);
+glVertex2f(x, y);
+```
+
+is cached as numeric flat commands: assignment records whose `args[]` carry
+`2` and `4`, followed by a `CMD_VERTEX2F` whose `args[]` are `{ 2, 4 }`.
+The cache is not an OpenGL display list, VBO, or already-submitted driver
+command stream; `src/repl/executor.c` still walks the cached `GLCmd[]` and
+emits calls such as `glVertex2f(cmd.args[0], cmd.args[1])`.
+
+`glr_ctrl_display_frame()` rebuilds the flat program only when it is dirty.
+While animation is playing, advancing `t` marks the flat program dirty, so
+expressions that depend on `t` re-evaluate once for that frame. Accumulation
+AA, replay overlay passes, and vertex outlines reuse the same frame-level
+`FlatProgramView`/snapshot instead of reparsing, reflattening, or re-evaluating
+expressions per sample. Those passes may reapply precomputed assignment
+commands from `args[]` while walking the flat stream, but the frame/probe
+side-effect brackets restore predefined variables and scratch arrays so
+self-referential assignments do not compound across AA samples.
+
 ### Editor-owned text (post `feature/editor-owns-text.md` + `feature/source-document-port.md`)
 
 `GLCmd` is a pure parse-result struct: `type`, `args[]`, validity / vars
@@ -933,6 +962,12 @@ modelview with `apply_tracked_transform` / `unwind_transform_stack`:
 2. `render_outlines_tess_pass` — the same for tessellated polygons
    (`gluTess*` contours), drawn as `GL_LINE_LOOP`.
 3. `render_outlines_glut_pass` — for `glutSolid*` shapes.
+
+These passes consume `OverlayWalkCtx.program`, populated once per frame from
+`repl_state_flat_program_view()` by the controller's overlay snapshot pack.
+With accumulation AA the outline hook runs once per jitter sample, so the flat
+program walks repeat per sample, but the source interpreter, expression
+evaluator, and flattener are not re-entered.
 
 The third pass exists because **GLUT solid shapes emit no REPL-tracked
 vertices** — the geometry is generated inside GLU/freeglut, so the first
