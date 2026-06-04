@@ -200,7 +200,7 @@ static void text_panel_draw_colored_span(const UiTextPanelSnapshot *snap,
 
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glColor4f(1.0f, 1.0f, 1.0f, 0.25f * a);
+        glColor4f(1.0f, 1.0f, 1.0f, UI_TEXT_PANEL_SHADOW_ALPHA * a);
         text_panel_draw_segment(x + 1, line_y - 1, text, span_start, span_len,
                                 FONT_MONO);
         if (!blend_on)
