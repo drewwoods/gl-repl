@@ -94,6 +94,12 @@ typedef struct {
  */
 #define UI_TEXT_PANEL_MAX_COLOR_SEGMENTS 16
 
+/* Drop-shadow opacity for syntax-highlight "On+Shadow" mode: the white
+ * shadow copy is drawn at this fraction of the span's own alpha (so faded
+ * spans keep their shadow in step). Bump it to make the halo more visible.
+ * Used by text_panel_draw_colored_span. */
+#define UI_TEXT_PANEL_SHADOW_ALPHA 0.35f
+
 typedef struct {
     int              char_start;
     int              char_count;
