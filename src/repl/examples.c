@@ -1292,6 +1292,75 @@ static const char *const g_example_annotated_orbit_plot[] = {
     NULL
 };
 
+/* 3D raster-text demo: unlike the planar orbit plot above, the labels here
+ * ride genuine 3D positions under a rotated, depth-tested camera. Axis tips
+ * carry X/Y/Z captions, and a marker spiralling on a helix trails a live
+ * height readout — glRasterPos3f transforms each anchor through the same
+ * modelview as the geometry, so the bitmap text tracks the scene in depth. */
+static const char *const g_example_label_axes_3d[] = {
+    "// @cfg vertex_outlines = 0",
+    "// @cfg vertex_points = 0",
+    "// @cfg light_indicators = 0",
+    "// @cfg axes = AXES_THEME_OFF",
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -8.0f);",
+    "glRotatef(22.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(-30.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "static float n, ang, x, z, hgt;",
+    "glClearColor(0.05, 0.06, 0.09, 1);",
+    "glDisable(GL_LIGHTING);",
+    "glEnable(GL_DEPTH_TEST);",
+    "glLineWidth(2.0);",
+    "// three colored axes drawn in 3D",
+    "glBegin(GL_LINES);",
+    "  glColor3f(0.95, 0.35, 0.35);",
+    "  glVertex3f(0, 0, 0);",
+    "  glVertex3f(2.5, 0, 0);",
+    "  glColor3f(0.35, 0.95, 0.4);",
+    "  glVertex3f(0, 0, 0);",
+    "  glVertex3f(0, 2.5, 0);",
+    "  glColor3f(0.45, 0.55, 1.0);",
+    "  glVertex3f(0, 0, 0);",
+    "  glVertex3f(0, 0, 2.5);",
+    "glEnd();",
+    "// axis-tip captions anchored at their 3D positions",
+    "glColor3f(1, 1, 1);",
+    "glRasterPos3f(2.65, 0, 0);",
+    "label(\"X\");",
+    "glRasterPos3f(0, 2.65, 0);",
+    "label(\"Y\");",
+    "glRasterPos3f(0, 0, 2.65);",
+    "label(\"Z\");",
+    "// a rising helix of points winding around the Y axis",
+    "n = 72;",
+    "glPointSize(6);",
+    "glBegin(GL_POINTS);",
+    "  for(i, 0, n) {",
+    "    ang = i*TAU/n*3 + t;",
+    "    hgt = i/n*2.4 - 1.2;",
+    "    x = cos(ang)*1.4;",
+    "    z = sin(ang)*1.4;",
+    "    glColor3f(0.5 + 0.5*sin(ang), 0.7, 0.5 + 0.5*cos(ang));",
+    "    glVertex3f(x, hgt, z);",
+    "  }",
+    "glEnd();",
+    "// marker orbiting in 3D, trailing a live height readout",
+    "ang = t*1.3;",
+    "hgt = sin(t)*1.2;",
+    "x = cos(ang)*1.4;",
+    "z = sin(ang)*1.4;",
+    "glPointSize(13);",
+    "glColor3f(0.1, 0.95, 1.0);",
+    "glBegin(GL_POINTS);",
+    "  glVertex3f(x, hgt, z);",
+    "glEnd();",
+    "glColor3f(1, 1, 1);",
+    "glRasterPos3f(x + 0.12, hgt + 0.18, z);",
+    "label(\"y=%f\", hgt);",
+    NULL
+};
+
 /* Torus knot: a single closed (p, q) curve winding p times around the
  * torus axis and q times through the hole, drawn as one GL_LINE_LOOP.
  * Per-vertex color sweeps the hue around the curve and drifts with t, so
@@ -1448,6 +1517,9 @@ static const ReplExampleEntry g_example_entries[] = {
       EXAMPLE_TAG_2D | EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS | EXAMPLE_TAG_LINES,
       "Showcase" },
     { "Annotated orbit plot (labels)", g_example_annotated_orbit_plot,
+      EXAMPLE_TAG_3D | EXAMPLE_TAG_LINES,
+      "Showcase" },
+    { "3D axis labels (raster text + depth)", g_example_label_axes_3d,
       EXAMPLE_TAG_3D | EXAMPLE_TAG_LINES,
       "Showcase" },
 };
