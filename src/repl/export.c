@@ -487,10 +487,13 @@ const char *g_footer_pre_init[] = {
     "  glMatrixMode(GL_MODELVIEW);",
     "}",
     "",
-    "void keyboard(unsigned char key, int x, int y) {",
-    "  (void)x; (void)y;",
-    "  if (key == ' ') g_rotating = !g_rotating;",
-    "  if (key == 27) exit(0);",
+    "void keyboard(unsigned char repl_export_keyboard_key_code,",
+    "              int repl_export_keyboard_mouse_x,",
+    "              int repl_export_keyboard_mouse_y) {",
+    "  (void)repl_export_keyboard_mouse_x;",
+    "  (void)repl_export_keyboard_mouse_y;",
+    "  if (repl_export_keyboard_key_code == ' ') g_rotating = !g_rotating;",
+    "  if (repl_export_keyboard_key_code == 27) exit(0);",
     "}",
     "",
     "void tick(int v) {",
@@ -1904,22 +1907,30 @@ static void write_tune_helpers(FILE *f, const ExportNeeds *needs) {
         "  float e = (m < 10.0f) ? 0.0f : floorf(log10f(m));"
         " return 0.05f * powf(10.0f, e); }\n"
         "\nstatic void draw_tunable_overlay(void){\n"
-        "  int w = g_tune_window_width, h = g_tune_window_height;\n"
+        "  int repl_tune_overlay_window_width_px = g_tune_window_width;\n"
+        "  int repl_tune_overlay_window_height_px = g_tune_window_height;\n"
         "  glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity();\n"
-        "  glOrtho(0, w, 0, h, -1, 1);\n"
+        "  glOrtho(0, repl_tune_overlay_window_width_px, 0,\n"
+        "          repl_tune_overlay_window_height_px, -1, 1);\n"
         "  glMatrixMode(GL_MODELVIEW); glPushMatrix(); glLoadIdentity();\n"
         "  glPushAttrib(GL_ALL_ATTRIB_BITS);\n"
         "  glDisable(GL_LIGHTING); glDisable(GL_DEPTH_TEST);\n"
         "  glColor3f(1.0f, 1.0f, 1.0f);\n"
-        "  float y = (float)h - 18.0f;\n"
-        "  char ln[96];\n");
+        "  float repl_tune_overlay_text_y =\n"
+        "      (float)repl_tune_overlay_window_height_px - 18.0f;\n"
+        "  char repl_tune_overlay_line_text[96];\n");
     for (int i = 0; i < needs->tune_count; i++) {
         fprintf(f,
-            "  snprintf(ln, sizeof ln, \"%c/%c  %s = %%.4g\", (double)%s);\n"
-            "  glRasterPos2f(8.0f, y);\n"
-            "  for (const char *p = ln; *p; p++)"
-            " glutBitmapCharacter(GLUT_BITMAP_9_BY_15, (unsigned char)*p);\n"
-            "  y -= 16.0f;\n",
+            "  snprintf(repl_tune_overlay_line_text,\n"
+            "           sizeof repl_tune_overlay_line_text,\n"
+            "           \"%c/%c  %s = %%.4g\", (double)%s);\n"
+            "  glRasterPos2f(8.0f, repl_tune_overlay_text_y);\n"
+            "  for (const char *repl_tune_overlay_char_ptr =\n"
+            "           repl_tune_overlay_line_text;\n"
+            "       *repl_tune_overlay_char_ptr; repl_tune_overlay_char_ptr++)\n"
+            "    glutBitmapCharacter(GLUT_BITMAP_9_BY_15,\n"
+            "                        (unsigned char)*repl_tune_overlay_char_ptr);\n"
+            "  repl_tune_overlay_text_y -= 16.0f;\n",
             k_tune_up_keys[i], k_tune_down_keys[i],
             needs->tune_names[i], needs->tune_names[i]);
     }
@@ -1936,20 +1947,30 @@ static void write_tune_helpers(FILE *f, const ExportNeeds *needs) {
  * numeric swatch. */
 static void emit_tune_keyboard_handlers(FILE *f, const ExportNeeds *needs) {
     fprintf(f,
-        "  int __tmod = glutGetModifiers();\n"
-        "  unsigned char __tk = key;\n"
-        "  if ((__tmod & GLUT_ACTIVE_CTRL) && __tk >= 1 && __tk <= 26)"
-        " __tk = (unsigned char)(__tk - 1 + 'a');\n"
-        "  else if (__tk >= 'A' && __tk <= 'Z')"
-        " __tk = (unsigned char)(__tk + ('a' - 'A'));\n"
-        "  float __tsc = 1.0f;\n"
-        "  if (__tmod & GLUT_ACTIVE_SHIFT) __tsc *= 0.2f;\n"
-        "  if (__tmod & GLUT_ACTIVE_CTRL)  __tsc *= 10.0f;\n");
+        "  int repl_tune_keyboard_modifiers = glutGetModifiers();\n"
+        "  unsigned char repl_tune_keyboard_key_code =\n"
+        "      repl_export_keyboard_key_code;\n"
+        "  if ((repl_tune_keyboard_modifiers & GLUT_ACTIVE_CTRL) &&\n"
+        "      repl_tune_keyboard_key_code >= 1 &&\n"
+        "      repl_tune_keyboard_key_code <= 26)\n"
+        "    repl_tune_keyboard_key_code =\n"
+        "        (unsigned char)(repl_tune_keyboard_key_code - 1 + 'a');\n"
+        "  else if (repl_tune_keyboard_key_code >= 'A' &&\n"
+        "           repl_tune_keyboard_key_code <= 'Z')\n"
+        "    repl_tune_keyboard_key_code =\n"
+        "        (unsigned char)(repl_tune_keyboard_key_code + ('a' - 'A'));\n"
+        "  float repl_tune_keyboard_scale = 1.0f;\n"
+        "  if (repl_tune_keyboard_modifiers & GLUT_ACTIVE_SHIFT)\n"
+        "    repl_tune_keyboard_scale *= 0.2f;\n"
+        "  if (repl_tune_keyboard_modifiers & GLUT_ACTIVE_CTRL)\n"
+        "    repl_tune_keyboard_scale *= 10.0f;\n");
     for (int i = 0; i < needs->tune_count; i++) {
         const char *v = needs->tune_names[i];
         fprintf(f,
-            "  if (__tk == '%c') %s += tune_compute_step(%s) * __tsc;\n"
-            "  if (__tk == '%c') %s -= tune_compute_step(%s) * __tsc;\n",
+            "  if (repl_tune_keyboard_key_code == '%c')\n"
+            "    %s += tune_compute_step(%s) * repl_tune_keyboard_scale;\n"
+            "  if (repl_tune_keyboard_key_code == '%c')\n"
+            "    %s -= tune_compute_step(%s) * repl_tune_keyboard_scale;\n",
             k_tune_up_keys[i], v, v, k_tune_down_keys[i], v, v);
     }
 }
@@ -1981,7 +2002,8 @@ static void emit_export_display_tail(FILE *f, const ExportNeeds *needs,
             hit_reshape = 1;
         }
         /* Knob key handling, after the keyboard() arg-unused line. */
-        if (knobs > 0 && strcmp(line, "  (void)x; (void)y;") == 0) {
+        if (knobs > 0 &&
+            strcmp(line, "  (void)repl_export_keyboard_mouse_y;") == 0) {
             emit_tune_keyboard_handlers(f, needs);
             hit_keyboard = 1;
         }
@@ -2225,4 +2247,3 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
 
     fflush(dst);
 }
-
