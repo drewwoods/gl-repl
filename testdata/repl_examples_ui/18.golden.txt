@@ -44,7 +44,8 @@ void display() {
   glTranslatef(-0.0000f, -0.9000f, -0.0000f);
 --- header_post ---
 --- source ---
-  static float bladeCount = 72, field = 7.5; // blade count and half-width
+  static float bladeCount = 72; // @tune
+  static float field = 7.5; // half-width
   static float x, z, h, w, angle, phase, flex;
   static float wind, wave, bend, u, cx, cz, halfW, shade;
   blade(seed, x0, z0, height, width, ang, ph, stiffness) {

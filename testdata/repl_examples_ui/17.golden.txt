@@ -44,6 +44,7 @@ void display() {
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
+  static float flakeCount = 550; // @tune
   static float flakeX, flakeY; // particle position
   static float drift, fall; // per-flake horizontal drift, vertical fall speed
   static float depth; // [0,1] random; depth and shade both derive from it
@@ -55,7 +56,7 @@ void display() {
   glEnable(GL_DEPTH_TEST);
   glPointSize(10);
   glBegin(GL_POINTS);
-    for(p, 0, 550) {
+    for(p, 0, flakeCount) {
       drift = driftMax * rand2(p, 1);
       flakeX = rem(wrapX * rand2(p,4) + t * drift, 2 * wrapX);
 
