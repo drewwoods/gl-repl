@@ -50,11 +50,20 @@ the first 9 and emit a `/* … N tagged, capped at 9 */` note (requires the
 collector to report the *total* match count, not just the emitted count — see
 collector API below).
 
+### Generated identifier names (must not collide with user symbols)
+User variable names and function aliases are valid up to **15 chars**
+(`compile.c:527`, `eval.h:112`) and exported as file-scope C identifiers
+(`export.c:1426`). A scene with `float tune_step;` or alias `draw_tune_hud()`
+would collide once the helper section is enabled. **Every generated identifier
+is therefore >15 chars**, which structurally cannot collide:
+`g_tune_window_width`, `g_tune_window_height`, `tune_compute_step`,
+`draw_tunable_overlay`. The export-content test pins these names.
+
 ### Exported keyboard math (mirrors swatch)
-Generate a C helper replicating `repl_eval_swatch_step` (`src/repl/eval.c:1344`,
-verified byte-identical):
+Generate a C helper replicating `repl_eval_swatch_step` (`src/repl/eval.c:1344`)
+— emit `fabsf` (not a manual abs) so the body is genuinely byte-identical:
 ```c
-static float tune_step(float v){ float m=(v<0)?-v:v;
+static float tune_compute_step(float v){ float m=fabsf(v);
   float e=(m<10.0f)?0.0f:floorf(log10f(m)); return 0.05f*powf(10.0f,e); }
 ```
 `fabsf/floorf/log10f/powf` are covered by `<math.h>` (already in the exported
@@ -66,19 +75,19 @@ keys (Backspace=8→`h`, Tab=9→`i`, Enter→`j`) don't alias onto knob letters
 ```c
 int m = glutGetModifiers();
 unsigned char k = key;
-if (m & GLUT_ACTIVE_CTRL && k>=1 && k<=26) k = (unsigned char)(k-1+'a'); /* Ctrl+letter */
-else if (k>='A' && k<='Z')                  k = (unsigned char)(k+('a'-'A')); /* Shift+letter */
+if ((m & GLUT_ACTIVE_CTRL) && k>=1 && k<=26) k = (unsigned char)(k-1+'a'); /* Ctrl+letter */
+else if (k>='A' && k<='Z')                   k = (unsigned char)(k+('a'-'A')); /* Shift+letter */
 float scale = 1.0f;
 if (m & GLUT_ACTIVE_SHIFT) scale *= 0.2f;   /* fine  */
 if (m & GLUT_ACTIVE_CTRL)  scale *= 10.0f;  /* coarse */
-/* per-knob: if (k=='q') amp += tune_step(amp)*scale; if (k=='a') amp -= ...; */
+/* per-knob: if (k=='q') amp += tune_compute_step(amp)*scale; if (k=='a') amp -= ...; */
 glutPostRedisplay();
 ```
 No clamping (bare `@tune` has no range).
 
 ### Exported HUD (self-contained 2D pass — model on `replay_hud.c`, NOT `label()`)
 `label()` relies on a user `glRasterPos3f` in world space; the HUD must set up
-its **own** pass. Generate `static void draw_tune_hud(void)` that: pushes
+its **own** pass. Generate `static void draw_tunable_overlay(void)` that: pushes
 projection+modelview, loads an ortho matching the window, disables
 lighting+depth, draws one `glRasterPos2f`+`glutBitmapCharacter` line per knob
 (`q/a  amp = 1.23`), then restores all state — mirroring
@@ -87,9 +96,10 @@ lighting+depth, draws one `glRasterPos2f`+`glutBitmapCharacter` line per knob
 **Window size without `glutGet(GLUT_WINDOW_WIDTH/HEIGHT)`** — the stub GLUT
 header only defines `GLUT_ELAPSED_TIME` in that query group, so a `glutGet`
 window-size call would fail the stub compile gate. Instead, record dimensions
-in `reshape(w,h)`: add `static int g_win_w = 800, g_win_h = 600;` to the
-generated globals and set them at the top of the exported `reshape()`. The HUD
-reads those globals. Works identically under stubs and real GLUT.
+in `reshape(w,h)`: add `static int g_tune_window_width = 800,
+g_tune_window_height = 600;` to the generated globals and set them at the top of
+the exported `reshape()`. The HUD reads those globals. Works identically under
+stubs and real GLUT.
 
 ### tune_step / swatch parity
 The generated formula is a frozen copy of `repl_eval_swatch_step`; standalone C
@@ -126,7 +136,8 @@ edit that flags the export update.
 2. **Prologue section.** New `emit_export_tune_section(f, ctx)` registered in
    `EXPORT_SCAFFOLD_SECTIONS[]` **before** `emit_export_display_section`
    (helpers must precede `display()`). Gated on collector count `> 0`: emits
-   `g_win_w`/`g_win_h` globals, `tune_step()`, and `draw_tune_hud()`.
+   `g_tune_window_width`/`g_tune_window_height` globals, `tune_compute_step()`,
+   and `draw_tunable_overlay()`.
 3. **Inject into the SAVE PATH ONLY — do not touch `g_footer_pre_init[]`.**
    The shared array is also iterated by the on-screen panel renderer
    (`src/ui/app/repl_code_panel.c:235,1515`), which expands **only** the
@@ -134,12 +145,18 @@ edit that flags the export update.
    chrome row. `repl_dump_code_panel_text` does not emit the footer at all. So
    adding sentinels there would create a panel bug for zero benefit. Instead,
    in `emit_export_display_tail` (`src/repl/export.c:1821`), when knobs exist:
-   - set `g_win_w/g_win_h` at the top of the emitted `reshape()` body,
-   - emit `  draw_tune_hud();` just before the `glPopAttrib();` line,
+   - set `g_tune_window_width/_height` at the top of the emitted `reshape()`
+     body,
+   - emit `  draw_tunable_overlay();` just before the `glPopAttrib();` line,
    - emit the modifier-read + per-knob `if (k=='q') …` block inside the
      emitted `keyboard()` body (after `(void)x;(void)y;`, keeping the existing
      `' '`/`27` handlers).
-   When no vars are tagged, output is byte-for-byte the current footer. The
+   These injections key off footer literal strings (`"void reshape(int w, int
+   h) {"`, `"  (void)x; (void)y;"`, `"  glPopAttrib();"`). The injector
+   **asserts each anchor was found** (rather than silently emitting zero knobs)
+   so a future footer edit fails loudly; the export-content test below is the
+   regression guard. When no vars are tagged, output is byte-for-byte the
+   current footer. The
    "code panel == export output" parity is explicitly **dropped** (it was a
    nice-to-have, not a requirement); panel + `--dump-code` stay unchanged.
 
@@ -165,14 +182,18 @@ the panel badge both see it.
   `repl_eval_line_has_tune_tag` is true. Add a negative case: `// @tuned=5`
   must NOT match.
 - **Export content** (new focused `tests/test_repl_tune.c`): with one tagged
-  var, exported text contains `tune_step`, `draw_tune_hud`, a `draw_tune_hud();`
-  call, `g_win_w`/`g_win_h`, and an `if (k=='q')` handler; with zero tagged
-  vars, none appear and the footer is unchanged. Verify key assignment for 3
-  tagged vars (q/a, w/s, e/d) and that tagging 10 vars emits 9 knobs + the cap
-  note (exercises `*total_out`).
+  var, exported text contains `tune_compute_step`, `draw_tunable_overlay`, a
+  `draw_tunable_overlay();` call, `g_tune_window_width`, and an `if (k=='q')`
+  handler; with zero tagged vars, none appear and the footer is unchanged.
+  Verify key assignment for 3 tagged vars (q/a, w/s, e/d) and that tagging 10
+  vars emits 9 knobs + the cap note (exercises `*total_out`). This test is also
+  the guard against footer-anchor drift in the save-path injector.
 - **Swatch parity**: pin `repl_eval_swatch_step` at a few magnitudes (e.g.
   0.5→0.05, 5→0.05, 50→0.5, 500→5) so any change to the in-app formula forces a
-  conscious test edit (the comment in the export generator points here).
+  conscious test edit (the comment in the export generator points here). For
+  stricter end-to-end parity, the compile-gate test (which already runs the
+  exported binary) can drive `keyboard('q', 0, 0)` on a value like 50 and assert
+  the resulting delta equals `repl_eval_swatch_step(50)`.
 - **Compile gate**: generate an export with knobs to a temp `.c` and compile it
   against the GL stub headers with at least
   `gcc -std=c99 -Werror=implicit-function-declaration -fsyntax-only` (mirror
@@ -184,8 +205,9 @@ the panel badge both see it.
 ## End-to-end verification
 1. `make gl-repl && ./gl-repl` — load an example, add `float k = 1; // @tune`,
    confirm the variable panel shows the badge. `Ctrl+S`, inspect `output.c`:
-   `// @declare k=1 @tune`, `g_win_w/g_win_h`, a `draw_tune_hud()`, and
-   `if (k=='q')` in `keyboard()`. Reload (`./gl-repl output.c`) and confirm the
+   `// @declare k=1 @tune`, `g_tune_window_width/_height`, a
+   `draw_tunable_overlay()`, and `if (k=='q')` in `keyboard()`. Reload
+   (`./gl-repl output.c`) and confirm the
    tag survived (badge still present).
 2. Compile + run the exported `output.c` standalone against freeglut; press
    `q`/`a` to move `k`, `Shift+q` for fine, `Ctrl+q` for coarse; confirm the
