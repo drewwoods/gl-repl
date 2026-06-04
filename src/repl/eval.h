@@ -330,6 +330,12 @@ const char *repl_line_trailing_comment(const char *s);
  * call when `dst` already ends in the canonical command text. */
 void repl_append_trailing_comment(char *dst, size_t dst_sz, const char *source);
 
+/* 1 if `line`'s trailing comment carries a whole-token `@tune` marker (the
+ * tag that promotes a float decl to an exported keyboard knob), else 0.
+ * Token-bounded: matches `// @tune` but NOT `// @tuned=5`. Pure string
+ * predicate — no command/state access (keeps eval a leaf). */
+int repl_eval_line_has_tune_tag(const char *line);
+
 /* ---- Inline numeric swatch helpers ------------------------------------- */
 
 typedef struct {

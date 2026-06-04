@@ -26,6 +26,7 @@
 #include "repl/command_spec.h"
 #include "repl/command_store.h"
 #include "repl/core_internal.h"
+#include "repl/eval.h"
 #include "repl/export.h"
 #include "repl/flatten.h"
 #include "repl/parser.h"
@@ -900,3 +901,29 @@ void repl_set_time(float value) {
  * feature/decouple-repl-from-gl-repl-alt.md. Tests and callers that
  * want full-world reset call glr_ctrl_reset_all() (declared in
  * glr_ctrl.h). REPL-only callers can use repl_state_reset_program(). */
+
+/* ========================================================================= */
+/* Tunable-variable (@tune) collection                                        */
+/* ========================================================================= */
+
+int repl_collect_tuned_vars(const GLCmd *cmds, int count, SourceTextView text,
+                            const char **out, int max, int *total_out) {
+    int written = 0;
+    int total = 0;
+    if (!cmds || count < 0)
+        count = 0;
+    for (int i = 0; i < count; i++) {
+        if (cmds[i].type != CMD_VAR_DECLARE)
+            continue;
+        if (!repl_eval_line_has_tune_tag(source_text_line(text, i)))
+            continue;
+        for (int n = 0; n < cmds[i].payload.decl.count; n++) {
+            total++;
+            if (out && written < max)
+                out[written++] = cmds[i].payload.decl.names[n];
+        }
+    }
+    if (total_out)
+        *total_out = total;
+    return written;
+}

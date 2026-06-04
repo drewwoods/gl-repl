@@ -768,6 +768,14 @@ static void glr_ctrl_fill_ui_variable_panel_vars(UiRenderSnapshot *snap,
     if (count > MAX_PREDEF_VARS)
         count = MAX_PREDEF_VARS;
 
+    /* Which predef vars carry a `// @tune` tag (badged in the panel as
+     * exported keyboard knobs). Query all matches (not just the knob cap) so
+     * every tagged row is badged. */
+    const char *tuned_names[MAX_PREDEF_VARS];
+    int tuned_count = repl_collect_tuned_vars(
+        repl_state_document_cmds(), repl_state_document_count(),
+        source_document_view(), tuned_names, MAX_PREDEF_VARS, NULL);
+
     snap->variable_panel_vars.vars = snap->variable_panel_var_storage;
     snap->variable_panel_vars.count = count;
     for (int i = 0; i < count; i++) {
@@ -775,6 +783,14 @@ static void glr_ctrl_fill_ui_variable_panel_vars(UiRenderSnapshot *snap,
                  sizeof(snap->variable_panel_var_storage[i].name),
                  "%s", predef.vars[i].name);
         snap->variable_panel_var_storage[i].value = &predef.vars[i].value;
+        int tuned = 0;
+        for (int t = 0; t < tuned_count; t++) {
+            if (strcmp(tuned_names[t], predef.vars[i].name) == 0) {
+                tuned = 1;
+                break;
+            }
+        }
+        snap->variable_panel_var_storage[i].tuned = tuned;
     }
 }
 

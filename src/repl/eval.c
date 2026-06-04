@@ -1224,6 +1224,23 @@ const char *repl_line_trailing_comment(const char *s) {
     return NULL;
 }
 
+int repl_eval_line_has_tune_tag(const char *line) {
+    const char *cmt = repl_line_trailing_comment(line);
+    if (!cmt)
+        return 0;
+    /* Scan the comment body for a whole-token "@tune": preceded by start or
+     * whitespace, followed by end or whitespace. Rejects "@tuned=5". */
+    for (const char *p = cmt; (p = strstr(p, "@tune")) != NULL; p += 5) {
+        char prev = (p == cmt) ? ' ' : p[-1];
+        char next = p[5];
+        if (isspace((unsigned char)prev) || prev == '/') {
+            if (next == '\0' || isspace((unsigned char)next))
+                return 1;
+        }
+    }
+    return 0;
+}
+
 void repl_append_trailing_comment(char *dst, size_t dst_sz, const char *source) {
     const char *cmt = repl_line_trailing_comment(source);
     if (!dst || dst_sz == 0 || !cmt)

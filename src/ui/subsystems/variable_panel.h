@@ -36,6 +36,7 @@ enum { UI_VARIABLE_NAME_MAX = 16 };
 typedef struct {
     char         name[UI_VARIABLE_NAME_MAX];
     const float *value;
+    int          tuned;   /* 1 if @tune-tagged (exported as a keyboard knob) */
 } UiVariable;
 
 typedef struct {
