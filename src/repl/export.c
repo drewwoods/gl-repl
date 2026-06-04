@@ -671,6 +671,30 @@ void repl_export_init_section_line(int i, char *buf, size_t n) {
     buf[0] = '\0';
 }
 
+/* Idea A clear-color hoist: scan the document for the LAST CMD_CLEAR_COLOR
+ * and return its (literal, commit-time) args. The exported per-frame glClear
+ * runs before render_repl_geometry() and inside the glPushAttrib(GL_ALL)
+ * bracket — so a glClearColor in the body can never drive the visible clear
+ * (it runs after the clear and is reverted by glPopAttrib). Mirroring the
+ * controller's "last clear color wins" pre-scan (src/app/glr_ctrl.c), we
+ * emit that value as init()'s glClearColor instead of the bootstrap default,
+ * making it the pushed/restored baseline the clear actually uses. Constant
+ * colors only (the common case); an animated/expression clear color is
+ * frozen at its current value here. Returns 1 + fills out[4], else 0. */
+static int export_document_last_clear_color(float out[4]) {
+    int found = 0;
+    int count = repl_state_document_count();
+    const GLCmd *cmds = repl_state_document_cmds();
+    for (int i = 0; i < count; i++) {
+        if (!cmds[i].valid || cmds[i].type != CMD_CLEAR_COLOR)
+            continue;
+        for (int k = 0; k < 4; k++)
+            out[k] = cmds[i].args[k];
+        found = 1;
+    }
+    return found;
+}
+
 static void emit_export_init_section_to_file(FILE *f, int include_tess) {
     char line[MAX_LINE_LEN];
 
@@ -693,6 +717,18 @@ static void emit_export_init_section_to_file(FILE *f, int include_tess) {
             continue;
         if (entry->toggle_slug && !init_bootstrap_toggle_get(entry->toggle_slug, 1))
             continue;
+        /* Hoist a body clear color into the init() default (Idea A). */
+        if (g_init_bootstrap_cmds[bootstrap_idx].cmd.type == CMD_CLEAR_COLOR) {
+            float cc[4];
+            if (export_document_last_clear_color(cc)) {
+                char s[4][EXPORT_FLOAT_TEXT_MAX];
+                for (int k = 0; k < 4; k++)
+                    repl_format_source_float(s[k], sizeof(s[k]), cc[k]);
+                fprintf(f, "  glClearColor(%s, %s, %s, %s);\n",
+                        s[0], s[1], s[2], s[3]);
+                continue;
+            }
+        }
         format_cmd_source_as_c(line, sizeof(line),
                                g_init_bootstrap_cmds[bootstrap_idx].text,
                                0);
