@@ -995,16 +995,18 @@ static void repl_code_panel_apply_fade_segments(const UiRenderSnapshot *snap,
 
 /* Argument shades are derived from the command's class color *only* — no
  * independent per-kind hue (that produced cross-hue clashes / a rainbow).
- * The keyword keeps the full class color; literals/constants/variables are
- * dimmer/desaturated tiers of that same hue, so the class stays recognizable
- * and a line never clashes with itself. Kinds differ only in brightness and
- * saturation, not hue. {brightness, saturation} multipliers, all <= the
- * keyword so it stays dominant; tuned against the (0.06,0.06,0.10) panel
- * background and guarded by test_repl_code_panel_syntax's contrast check. */
+ * The keyword keeps the full class color; the other kinds are separate
+ * {brightness, saturation} tiers of that same hue, so the class stays
+ * recognizable and a line never clashes with itself. Kinds differ only in
+ * brightness and saturation, not hue. The constant tier sits just below the
+ * keyword; variables and literals are boosted above 1.0 (clamped toward
+ * white) so they read as the brightest tokens on the line. Tuned against the
+ * (0.06,0.06,0.10) panel background and guarded by test_repl_code_panel_syntax's
+ * contrast check. */
 static const float k_syntax_shade[REPL_SYNTAX_KIND_COUNT][2] = {
     [REPL_SYNTAX_CONSTANT] = { 0.90f, 0.72f },  /* vivid-ish, slightly dim */
-    [REPL_SYNTAX_VARIABLE] = { 0.78f, 0.52f },  /* muted, mid brightness */
-    [REPL_SYNTAX_LITERAL]  = { 0.66f, 0.36f },  /* most muted + dimmest */
+    [REPL_SYNTAX_VARIABLE] = { 1.38f, 1.52f },  /* boosted, brighter than keyword */
+    [REPL_SYNTAX_LITERAL]  = { 2.85f, 2.97f },  /* most boosted + brightest */
 };
 
 static float repl_clamp01(float v) {

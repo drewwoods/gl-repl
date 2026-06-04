@@ -167,7 +167,10 @@ int main(void) {
                 repl_cmd_type_category(CMD_COMMENT) == CMD_CAT_COMMENT);
 
     /* Color model: shades derive from the class color only — same hue,
-     * three brightness tiers (constant > variable > literal). */
+     * three brightness tiers (literal > variable > constant). Variables and
+     * literals are boosted above 1.0, so on saturated classes they clamp to
+     * the channel ceiling and become indistinguishable; the constant tier
+     * stays below the keyword. */
     {
         float lit[3];
         float con[3];
@@ -182,10 +185,12 @@ int main(void) {
         ui_repl_code_panel_syntax_kind_rgb(REPL_SYNTAX_VARIABLE,
                                            CMD_CAT_DEFAULT, var);
 
-        ASSERT_TRUE("literal = class * 0.66 brightness",
-                    fabsf(lit[0] - 0.70f * 0.66f) < 1e-4f);
-        ASSERT_TRUE("brightness tiers constant > variable > literal",
-                    con[0] > var[0] + 0.03f && var[0] > lit[0] + 0.03f);
+        ASSERT_TRUE("constant = class * 0.90 brightness",
+                    fabsf(con[0] - 0.70f * 0.90f) < 1e-4f);
+        ASSERT_TRUE("literal boosted past white (clamps to 1.0)",
+                    fabsf(lit[0] - 1.0f) < 1e-4f);
+        ASSERT_TRUE("brightness tiers literal > variable > constant",
+                    lit[0] > var[0] + 0.001f && var[0] > con[0] + 0.03f);
 
         /* Colored class (VERTEX green 0.40,0.90,0.40): every kind stays
          * green-dominant — hue is preserved, only brightness changes. */
@@ -201,8 +206,10 @@ int main(void) {
                     con[1] > con[0] && con[1] > con[2]);
         ASSERT_TRUE("vertex hue preserved (variable green-dominant)",
                     var[1] > var[0] && var[1] > var[2]);
-        ASSERT_TRUE("vertex tiers constant > variable > literal",
-                    con[1] > var[1] && var[1] > lit[1]);
+        /* On the saturated green channel both boosted tiers clamp to 1.0, so
+         * literal and variable are equal there; constant stays below. */
+        ASSERT_TRUE("vertex tiers literal >= variable > constant",
+                    lit[1] >= var[1] && var[1] > con[1] + 0.03f);
     }
 
     /* Optional contrast guard: every (kind x class) final color that can
