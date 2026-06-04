@@ -1,0 +1,142 @@
+--- header_pre ---
+#define j0 _j0
+#define j1 _j1
+#define jn _jn
+#define y0 _y0
+#define y1 _y1
+#define yn _yn
+#define gamma _gamma
+#define lgamma _lgamma
+#define tgamma _tgamma
+#include "gl_includes.h"
+#include <math.h>
+#include <stdlib.h>
+#undef j0
+#undef j1
+#undef jn
+#undef y0
+#undef y1
+#undef yn
+#undef gamma
+#undef lgamma
+#undef tgamma
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+static float g_angle = 0.0f;
+static int   g_rotating = 0;
+
+--- display_header ---
+void display() {
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glLoadIdentity();
+  glPushAttrib(GL_ALL_ATTRIB_BITS);
+  float A[8], B[8], C[8];
+--- render_state ---
+  glEnable(GL_MULTISAMPLE);
+  glDisable(GL_LINE_SMOOTH);
+--- camera ---
+  glTranslatef(0.0000f, 0.0000f, -9.5000f);
+  glRotatef(28.0000f, 1.0f, 0.0f, 0.0f);
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);
+--- header_post ---
+--- source ---
+  static float incl, th, px, py, pz;
+  func0(rad, tilt) {
+    glBegin(GL_LINE_LOOP);
+      for(i, 0, 64) {
+        glVertex3f(cos(i*TAU/64)*rad, sin(i*TAU/64)*rad*sin(tilt), sin(i*TAU/64)*rad*cos(tilt));
+      }
+    glEnd();
+  }
+  glClearColor(0.02, 0.02, 0.05, 1);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_NORMALIZE);
+  // faint orbit rings (unlit lines); func0 = one inclined ring
+  glDisable(GL_LIGHTING);
+  glColor3f(0.22, 0.24, 0.34);
+  glLineWidth(1.2);
+  func0(1.3, 0.18);
+  func0(2.1, 0.06);
+  func0(2.9, 0.0);
+  func0(3.7, 0.22);
+  // the sun: drawn unlit so it glows (it sits on the SOLAR light at origin)
+  glColor3f(1, 0.85, 0.3);
+  glutSolidSphere(0.5, 24, 24);
+  glColor3f(1, 0.9, 0.5);
+  glRasterPos3f(0.6, 0.55, 0);
+  label("Sun");
+  // planets: lit by the central SOLAR light, color via glColor
+  glEnable(GL_LIGHT0);
+  glEnable(GL_COLOR_MATERIAL);
+  // Mercury (0.38 Earth radii)
+  incl = 0.18;
+  th = t*1.6;
+  px = cos(th)*1.3;
+  py = sin(th)*1.3*sin(incl);
+  pz = sin(th)*1.3*cos(incl);
+  glEnable(GL_LIGHTING);
+  glColor3f(0.7, 0.6, 0.5);
+  glPushMatrix();
+    glTranslatef(px, py, pz);
+    glutSolidSphere(0.069, 16, 16);
+  glPopMatrix();
+  glDisable(GL_LIGHTING);
+  glColor3f(0.9, 0.75, 0.6);
+  glRasterPos3f(px + 0.12, py + 0.14, pz);
+  label("Mercury");
+  // Venus (0.95 Earth radii)
+  incl = 0.06;
+  th = t*1.15 + 1.0;
+  px = cos(th)*2.1;
+  py = sin(th)*2.1*sin(incl);
+  pz = sin(th)*2.1*cos(incl);
+  glEnable(GL_LIGHTING);
+  glColor3f(0.95, 0.8, 0.5);
+  glPushMatrix();
+    glTranslatef(px, py, pz);
+    glutSolidSphere(0.171, 16, 16);
+  glPopMatrix();
+  glDisable(GL_LIGHTING);
+  glColor3f(1, 0.9, 0.65);
+  glRasterPos3f(px + 0.14, py + 0.16, pz);
+  label("Venus");
+  // Earth (1.0, the reference radius)
+  incl = 0.0;
+  th = t*0.85 + 2.5;
+  px = cos(th)*2.9;
+  py = sin(th)*2.9*sin(incl);
+  pz = sin(th)*2.9*cos(incl);
+  glEnable(GL_LIGHTING);
+  glColor3f(0.35, 0.55, 1);
+  glPushMatrix();
+    glTranslatef(px, py, pz);
+    glutSolidSphere(0.18, 16, 16);
+  glPopMatrix();
+  glDisable(GL_LIGHTING);
+  glColor3f(0.6, 0.8, 1);
+  glRasterPos3f(px + 0.16, py + 0.18, pz);
+  label("Earth");
+  // Mars (0.53 Earth radii)
+  incl = 0.22;
+  th = t*0.62 + 4.0;
+  px = cos(th)*3.7;
+  py = sin(th)*3.7*sin(incl);
+  pz = sin(th)*3.7*cos(incl);
+  glEnable(GL_LIGHTING);
+  glColor3f(0.9, 0.45, 0.3);
+  glPushMatrix();
+    glTranslatef(px, py, pz);
+    glutSolidSphere(0.096, 16, 16);
+  glPopMatrix();
+  glDisable(GL_LIGHTING);
+  glColor3f(1, 0.6, 0.45);
+  glRasterPos3f(px + 0.13, py + 0.15, pz);
+  label("Mars");
+  // live readout: Earth's orbital phase, anchored in 3D below the system
+  glColor3f(0.75, 0.8, 0.9);
+  glRasterPos3f(-1.6, -3, 0);
+  label("Earth phase = %f", fmod(t*0.85 + 2.5, TAU));
