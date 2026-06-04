@@ -43,6 +43,24 @@ static int contains(const char *hay, const char *needle) {
     return hay && strstr(hay, needle) != NULL;
 }
 
+static int compile_generated_file(const char *path, const char *log) {
+    char cmd[1024];
+    snprintf(cmd, sizeof cmd,
+        "cc -std=c99 -fsyntax-only -Werror=implicit-function-declaration "
+        "-DGL_STUBS -DGL_SILENCE_DEPRECATION -Wno-deprecated-declarations "
+        "-Wno-unused-function -Wno-unused-variable "
+        "-Itests/gl-stubs/include -Iinclude -I. -Isrc "
+        "'%s' >'%s' 2>&1",
+        path, log);
+    int rc = system(cmd);
+    if (rc != 0) {
+        printf("  compile-gate output (%s):\n", log);
+        char *l = read_file(log);
+        if (l) { fputs(l, stdout); free(l); }
+    }
+    return rc;
+}
+
 static void reset_repl(void) {
     repl_eval_init_predef_vars();
     glr_ctrl_reset_all();
@@ -108,15 +126,22 @@ static void test_collector_and_export(void) {
     ASSERT_TRUE("captures window size in reshape",
                 contains(c, "g_tune_window_width = w; g_tune_window_height = h;"));
     ASSERT_TRUE("fabsf (not manual abs) in step", contains(c, "fabsf(v)"));
-    ASSERT_TRUE("knob q raises amp", contains(c, "if (__tk == 'q') amp += tune_compute_step(amp)"));
-    ASSERT_TRUE("knob a lowers amp", contains(c, "if (__tk == 'a') amp -= tune_compute_step(amp)"));
-    ASSERT_TRUE("knob w raises freq", contains(c, "if (__tk == 'w') freq += tune_compute_step(freq)"));
-    ASSERT_TRUE("Shift fine x0.2", contains(c, "__tsc *= 0.2f"));
-    ASSERT_TRUE("Ctrl coarse x10", contains(c, "__tsc *= 10.0f"));
+    ASSERT_TRUE("knob q raises amp",
+                contains(c, "if (repl_tune_keyboard_key_code == 'q')\n"
+                            "    amp += tune_compute_step(amp) * repl_tune_keyboard_scale"));
+    ASSERT_TRUE("knob a lowers amp",
+                contains(c, "if (repl_tune_keyboard_key_code == 'a')\n"
+                            "    amp -= tune_compute_step(amp) * repl_tune_keyboard_scale"));
+    ASSERT_TRUE("knob w raises freq",
+                contains(c, "if (repl_tune_keyboard_key_code == 'w')\n"
+                            "    freq += tune_compute_step(freq) * repl_tune_keyboard_scale"));
+    ASSERT_TRUE("Shift fine x0.2", contains(c, "repl_tune_keyboard_scale *= 0.2f"));
+    ASSERT_TRUE("Ctrl coarse x10", contains(c, "repl_tune_keyboard_scale *= 10.0f"));
     ASSERT_TRUE("round-trip marker amp", contains(c, "@declare amp=1.5 @tune"));
     ASSERT_TRUE("round-trip marker freq", contains(c, "@declare freq=2 @tune"));
     /* baseline keyboard handlers stay */
-    ASSERT_TRUE("keeps space-toggle", contains(c, "if (key == ' ')"));
+    ASSERT_TRUE("keeps space-toggle",
+                contains(c, "if (repl_export_keyboard_key_code == ' ')"));
     free(c);
 }
 
@@ -139,7 +164,8 @@ static void test_untagged_baseline(void) {
     ASSERT_TRUE("export readable (none)", c != NULL);
     ASSERT_TRUE("no HUD when untagged", !contains(c, "draw_tunable_overlay"));
     ASSERT_TRUE("no tune_compute_step when untagged", !contains(c, "tune_compute_step"));
-    ASSERT_TRUE("no knob decode when untagged", !contains(c, "__tk"));
+    ASSERT_TRUE("no knob decode when untagged",
+                !contains(c, "repl_tune_keyboard_key_code"));
     free(c);
 }
 
@@ -204,14 +230,59 @@ static void test_key_assignment_and_cap(void) {
     char *c = read_file(path);
     ASSERT_TRUE("export readable (cap)", c != NULL);
     /* Key assignment q/a, w/s, e/d for the first three. */
-    ASSERT_TRUE("knob0 -> q/a", contains(c, "if (__tk == 'q') knob0 +="));
-    ASSERT_TRUE("knob1 -> w/s", contains(c, "if (__tk == 'w') knob1 +="));
-    ASSERT_TRUE("knob2 -> e/d", contains(c, "if (__tk == 'e') knob2 +="));
+    ASSERT_TRUE("knob0 -> q/a",
+                contains(c, "if (repl_tune_keyboard_key_code == 'q')\n"
+                            "    knob0 +="));
+    ASSERT_TRUE("knob1 -> w/s",
+                contains(c, "if (repl_tune_keyboard_key_code == 'w')\n"
+                            "    knob1 +="));
+    ASSERT_TRUE("knob2 -> e/d",
+                contains(c, "if (repl_tune_keyboard_key_code == 'e')\n"
+                            "    knob2 +="));
     /* 9th knob is o/l; the 10th must be dropped (no p key, knob9 absent). */
-    ASSERT_TRUE("knob8 -> o/l", contains(c, "if (__tk == 'o') knob8 +="));
+    ASSERT_TRUE("knob8 -> o/l",
+                contains(c, "if (repl_tune_keyboard_key_code == 'o')\n"
+                            "    knob8 +="));
     ASSERT_TRUE("knob9 dropped (capped)", !contains(c, "knob9 +="));
     ASSERT_TRUE("cap note emitted", contains(c, "capped at 9 keyboard knobs"));
     free(c);
+}
+
+static void test_generated_names_do_not_shadow_tuned_vars(void) {
+    const char *path = "/tmp/repl_tune_shadow.c";
+    const char *log  = "/tmp/repl_tune_shadow.log";
+    reset_repl();
+
+    editor_feed_line("float key = 1; // @tune");
+    editor_feed_line("float x = 2; // @tune");
+    editor_feed_line("float y = 3; // @tune");
+    editor_feed_line("float w = 4; // @tune");
+    editor_feed_line("float h = 5; // @tune");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(key, x, y);");
+    editor_feed_line("glVertex3f(w, h, 0);");
+    editor_feed_line("glEnd();");
+    repl_export_save_output(path, source_document_view(), NULL);
+
+    char *c = read_file(path);
+    ASSERT_TRUE("shadow export readable", c != NULL);
+    ASSERT_TRUE("keyboard callback key param cannot shadow globals",
+                contains(c, "void keyboard(unsigned char repl_export_keyboard_key_code,"));
+    ASSERT_TRUE("old keyboard params absent",
+                !contains(c, "void keyboard(unsigned char key, int x, int y)"));
+    ASSERT_TRUE("old overlay w/h locals absent",
+                !contains(c, "int w = g_tune_window_width"));
+    ASSERT_TRUE("old overlay y local absent",
+                !contains(c, "float y = (float)h"));
+    ASSERT_TRUE("old overlay ln local absent", !contains(c, "char ln[96]"));
+    ASSERT_TRUE("tuned key still adjusted",
+                contains(c, "key += tune_compute_step(key) * repl_tune_keyboard_scale"));
+    ASSERT_TRUE("tuned h still adjusted",
+                contains(c, "h += tune_compute_step(h) * repl_tune_keyboard_scale"));
+    free(c);
+
+    ASSERT_INT("shadow-collision export compiles against stubs",
+               compile_generated_file(path, log), 0);
 }
 
 /* Compile the generated knob file against the GL stub headers with the
@@ -228,20 +299,7 @@ static void test_compile_gate(void) {
     editor_feed_line("glEnd();");
     repl_export_save_output(path, source_document_view(), NULL);
 
-    char cmd[1024];
-    snprintf(cmd, sizeof cmd,
-        "cc -std=c99 -fsyntax-only -Werror=implicit-function-declaration "
-        "-DGL_STUBS -DGL_SILENCE_DEPRECATION -Wno-deprecated-declarations "
-        "-Wno-unused-function -Wno-unused-variable "
-        "-Itests/gl-stubs/include -Iinclude -I. -Isrc "
-        "'%s' >'%s' 2>&1",
-        path, log);
-    int rc = system(cmd);
-    if (rc != 0) {
-        printf("  compile-gate output (%s):\n", log);
-        char *l = read_file(log);
-        if (l) { fputs(l, stdout); free(l); }
-    }
+    int rc = compile_generated_file(path, log);
     ASSERT_INT("generated knob file compiles against stubs", rc, 0);
 }
 
@@ -252,6 +310,7 @@ int main(void) {
     test_untagged_baseline();
     test_roundtrip();
     test_key_assignment_and_cap();
+    test_generated_names_do_not_shadow_tuned_vars();
     test_compile_gate();
     return test_harness_report(&g_harness, "test_repl_tune");
 }
