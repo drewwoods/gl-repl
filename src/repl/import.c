@@ -28,6 +28,8 @@
  * dispatcher table here pairs each name with its reader only, and
  * export.c carries its own emit-only table.
  */
+#include <stdarg.h>
+#include <stdio.h>
 #include "repl/export.h"          /* public reader API */
 #include "source_document.h"      /* source_document_insert_line */
 #include "repl/load.h"            /* repl_load_apply_line — step 5b */
@@ -132,6 +134,22 @@ typedef struct {
 
 static const char k_snippet_directive_declare[] = "declare";
 
+/* Emit one import diagnostic to stderr with the shared "Warning: " prefix
+ * and trailing newline. Centralises the format so the @var / @func /
+ * @declare / scene-name / workspace-dir overflow notices read identically
+ * (and a future routing change has a single site). The header-directive
+ * parsers (parse_var / parse_func_alias / ...) can't reach
+ * ImportState.warnings, so these print but are not added to the
+ * "(N warnings)" tally; the snippet parsers additionally bump that counter. */
+static void import_warn(const char *fmt, ...) {
+    va_list ap;
+    fputs("Warning: ", stderr);
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+    fputc('\n', stderr);
+}
+
 /* --- workspace-dir --------------------------------------------------------- */
 
 static int parse_workspace_dir(const char *args) {
@@ -139,6 +157,11 @@ static int parse_workspace_dir(const char *args) {
     while (*args && char_idx < REPL_WORKSPACE_DIR_MAX - 1)
         g_pending_workspace_dir[char_idx++] = *args++;
     g_pending_workspace_dir[char_idx] = '\0';
+    /* More source left over the cap means the path was clipped — a
+     * truncated path points at the wrong directory, so don't do it silently. */
+    if (*args)
+        import_warn("@workspace-dir path exceeds the %d-char limit; truncated",
+                    (int)REPL_WORKSPACE_DIR_MAX - 1);
     while (char_idx > 0 && isspace((unsigned char)g_pending_workspace_dir[char_idx - 1]))
         g_pending_workspace_dir[--char_idx] = '\0';
     return 1;
@@ -151,6 +174,9 @@ static int parse_scene_name(const char *args) {
     while (*args && char_idx < USER_SCENE_NAME_MAX - 1)
         g_pending_scene_name[char_idx++] = *args++;
     g_pending_scene_name[char_idx] = '\0';
+    if (*args)
+        import_warn("@scene-name exceeds the %d-char limit; truncated to '%s'",
+                    (int)USER_SCENE_NAME_MAX - 1, g_pending_scene_name);
     while (char_idx > 0 && isspace((unsigned char)g_pending_scene_name[char_idx - 1]))
         g_pending_scene_name[--char_idx] = '\0';
     return 1;
@@ -166,6 +192,16 @@ static int parse_var(const char *args) {
            name_char_idx < (int)sizeof(name) - 1)
         name[name_char_idx++] = *p++;
     name[name_char_idx] = '\0';
+    /* Name longer than the predef-name buffer: it was clipped to `name`.
+     * Warn, then skip the overflow so the `= value` still parses and the
+     * (truncated) var registers — in-code references truncate identically,
+     * so the variable stays usable, just under the shorter name. Pre-fix the
+     * leftover chars broke the `=` parse and the whole @var was dropped. */
+    if (*p && (isalnum((unsigned char)*p) || *p == '_')) {
+        import_warn("@var name exceeds the %d-char limit; truncated to '%s'",
+                    REPL_PREDEF_NAME_MAX - 1, name);
+        while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
+    }
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != '=') return 0;
     p++;
@@ -174,8 +210,14 @@ static int parse_var(const char *args) {
     int idx = repl_eval_find_predef_var_idx(name);
     if (idx < 0) {
         char err[REPL_DIAG_TEXT_MAX];
-        if (!repl_eval_declare_predef_var(name, err, sizeof(err)))
+        err[0] = '\0';
+        if (!repl_eval_declare_predef_var(name, err, sizeof(err))) {
+            /* e.g. reserved name or predef table full. Pre-fix this `err`
+             * was computed and thrown away — surface it. */
+            import_warn("@var '%s' could not be declared: %s",
+                        name, err[0] ? err : "rejected");
             return 0;
+        }
         idx = repl_eval_find_predef_var_idx(name);
         if (idx < 0)
             return 0;
@@ -225,10 +267,9 @@ static int parse_func_alias(const char *args) {
      * (the historical behaviour) — the only fix is a shorter func name or a
      * larger REPL_FUNC_NAME_MAX. */
     if (*p && (isalnum((unsigned char)*p) || *p == '_'))
-        fprintf(stderr,
-                "Warning: @func %d alias '%s' exceeds the %d-char name limit; "
-                "its definition will be dropped on import\n",
-                slot, name, REPL_FUNC_NAME_MAX - 1);
+        import_warn("@func %d alias '%s' exceeds the %d-char name limit; "
+                    "its definition will be dropped on import",
+                    slot, name, REPL_FUNC_NAME_MAX - 1);
     repl_func_alias_set(slot, name);
     return 1;
 }
@@ -428,7 +469,20 @@ static int parse_snippet_declare(const char *args, int *loaded,
         const char *start = p;
         while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
         int len = (int)(p - start);
-        if (len <= 0 || len >= REPL_PREDEF_NAME_MAX || count >= MAX_NAMES_PER_DECL) break;
+        if (len <= 0) break;  /* no more names */
+        if (len >= REPL_PREDEF_NAME_MAX) {
+            import_warn("@declare name '%.*s' exceeds the %d-char limit; "
+                        "dropped (with any names after it)",
+                        len, start, REPL_PREDEF_NAME_MAX - 1);
+            if (warnings) (*warnings)++;
+            break;
+        }
+        if (count >= MAX_NAMES_PER_DECL) {
+            import_warn("@declare lists more than %d names; the rest are dropped",
+                        MAX_NAMES_PER_DECL);
+            if (warnings) (*warnings)++;
+            break;
+        }
         char name[REPL_PREDEF_NAME_MAX];
         memcpy(name, start, (size_t)len);
         name[len] = '\0';
