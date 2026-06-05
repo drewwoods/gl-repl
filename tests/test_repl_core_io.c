@@ -681,13 +681,14 @@ int main(void) {
                     strstr(buf, "render_repl_outline_") == NULL);
         ASSERT_TRUE("saved no vpoint helper variants",
                     strstr(buf, "render_repl_vpoints_") == NULL);
-        ASSERT_TRUE("saved geometry called thrice in display",
-                    count_substr(buf, "render_repl_geometry();") == 3);
-        /* Outline/point pass setup is intentionally disabled in export
-         * (see emit_export_display_geometry in src/repl/export.c): the
-         * passes still re-run the geometry, but the polygon-mode and
-         * color-material overlay setup is no longer emitted because it
-         * was not one-for-one with the live REPL's outline pass. */
+        ASSERT_TRUE("saved geometry called once in display",
+                    count_substr(buf, "render_repl_geometry();") == 1);
+        /* Outline/point pass specs are intentionally disabled in export
+         * (see export_build_display_passes in src/repl/export.c), even
+         * when the cfg flags are on. Multipass save/restore follows the
+         * pass specs rather than the cfg flags. */
+        ASSERT_TRUE("saved overlay-disabled export omits save/restore",
+                    strstr(buf, "save_repl_vars") == NULL);
         ASSERT_TRUE("saved outline pass omits line polygon mode",
                     strstr(buf, "glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);") == NULL);
         ASSERT_TRUE("saved vpoints pass omits point polygon mode",
@@ -905,13 +906,8 @@ int main(void) {
                     count_substr(buf, "func0(2.0);") == 1);
         ASSERT_TRUE("saved tess export includes tess global",
                     strstr(buf, "static GLUtesselator *g_tess = NULL;") != NULL);
-        /* Multipass export (vertex_outlines + vertex_points enabled
-         * earlier) emits the save/restore helpers, and the tess
-         * preamble must come before them so the helpers can reference
-         * any tess-related state without forward-decl issues. */
-        ASSERT_TRUE("saved tess preamble before save/restore helpers",
-                    appears_before(buf, "static GLUtesselator *g_tess = NULL;",
-                                   "static void save_repl_vars(void)"));
+        ASSERT_TRUE("saved tess export omits save/restore when pass specs disabled",
+                    strstr(buf, "save_repl_vars") == NULL);
         ASSERT_TRUE("saved tess export includes tess init",
                     strstr(buf, "g_tess = gluNewTess();") != NULL);
         ASSERT_TRUE("saved tess export includes tess callback",
@@ -2409,8 +2405,9 @@ static void test_config_variants_export(void) {
     ASSERT_TRUE("Variant 1: saved MSAA enabled line exists", strstr(buf, "glEnable(GL_MULTISAMPLE);") != NULL);
     ASSERT_TRUE("Variant 1: saved LINE_SMOOTH enabled line exists", strstr(buf, "glEnable(GL_LINE_SMOOTH);") != NULL);
     ASSERT_TRUE("Variant 1: saved point_attenuation enabled line exists", strstr(buf, "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") != NULL);
-    ASSERT_TRUE("Variant 1: saved vertex outlines pass exists", strstr(buf, "/* Vertex Outline Pass */") != NULL);
-    ASSERT_TRUE("Variant 1: saved vertex points pass exists", strstr(buf, "/* Vertex Point Pass */") != NULL);
+    ASSERT_TRUE("Variant 1: saved vertex outlines pass is omitted while disabled in export", strstr(buf, "/* Vertex Outline Pass */") == NULL);
+    ASSERT_TRUE("Variant 1: saved vertex points pass is omitted while disabled in export", strstr(buf, "/* Vertex Point Pass */") == NULL);
+    ASSERT_TRUE("Variant 1: saved save/restore helpers omitted for single enabled pass", strstr(buf, "save_repl_vars") == NULL);
 
     /* Test variant 2: MSAA disabled, Line smooth disabled, outlines disabled, points disabled, point attenuation disabled */
     glr_config_set(GLR_CONFIG_MSAA, 0);
