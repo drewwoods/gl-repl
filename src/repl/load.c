@@ -150,7 +150,7 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
     }
     if (!parsed) {
         if (err && err_size > 0 && err[0] == '\0')
-            snprintf(err, (size_t)err_size, "could not parse line: %s", line);
+            snprintf(err, (size_t)err_size, "parse error");
         return 0;
     }
 
