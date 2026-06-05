@@ -1332,13 +1332,34 @@ static int import_try_camera(const char *p) {
     return import_parse_cam_line(p);
 }
 
+/* Net { - } over a line's code portion, ignoring braces inside string
+ * and char literals and a // line-comment — a brace in a trailing
+ * comment (e.g. `glEnd(); // close the { block`) must not move
+ * function-body nesting depth. Mirrors scan_code_line's literal /
+ * comment skipping. */
+static int code_brace_delta(const char *p) {
+    int in_str = 0, in_chr = 0, delta = 0;
+    for (int i = 0; p[i]; i++) {
+        char c = p[i];
+        if (in_str || in_chr) {
+            if (c == '\\' && p[i + 1]) { i++; continue; }
+            if (in_str && c == '"')  in_str = 0;
+            if (in_chr && c == '\'') in_chr = 0;
+            continue;
+        }
+        if (c == '/' && p[i + 1] == '/') break; /* line comment */
+        if (c == '"')  { in_str = 1; continue; }
+        if (c == '\'') { in_chr = 1; continue; }
+        if (c == '{') delta++;
+        else if (c == '}') delta--;
+    }
+    return delta;
+}
+
 static int import_try_function_body(ImportState *s, const char *p) {
     if (s->func_depth <= 0) return 0;
     import_feed_one_line(s, p);
-    for (const char *bp = p; *bp; bp++) {
-        if      (*bp == '{') s->func_depth++;
-        else if (*bp == '}') s->func_depth--;
-    }
+    s->func_depth += code_brace_delta(p);
     return 1;
 }
 
