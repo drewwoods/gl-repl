@@ -95,7 +95,7 @@ static const ReplRuntimeState *repl_state_defaults(void) {
  * once per process. Used by callers that may run before an explicit
  * reset_program() and would otherwise see uninitialized state.
  * Idempotent — the second-and-later calls are cheap no-ops. */
-static void repl_state_ensure_sentinels(void) {
+void repl_state_ensure_sentinels(void) {
     static int patched;
     if (patched) return;
     repl_state_apply_sentinels(&g_repl_state);

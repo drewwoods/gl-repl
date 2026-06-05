@@ -105,4 +105,13 @@ void                         repl_state_refresh_workspace_header_lines(void);
  * glr_ctrl_reset_all instead. */
 void repl_state_reset_program(void);
 
+/* Patch the live REPL state with its non-zero sentinel defaults (most
+ * importantly the document/flat-program capacities, which are 0 under raw
+ * BSS zero-fill and would otherwise reject every command-store insert).
+ * Idempotent and process-global: a no-op once any reset entry has run.
+ * For callers that load into the store WITHOUT a prior reset_program /
+ * glr_ctrl_reset_all — e.g. the --dump-code / --dump-flat CLI path, which
+ * skips glr_ctrl_init_gl. */
+void repl_state_ensure_sentinels(void);
+
 #endif /* REPL_STATE_OWNERS_H */

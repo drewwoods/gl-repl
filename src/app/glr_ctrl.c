@@ -2005,6 +2005,14 @@ void glr_ctrl_bootstrap_repl(const char *input_file) {
      * (Originally the Step 4 [P2] fix in
      * feature/decouple-repl-from-gl-repl-alt.md.) */
     glr_ctrl_install_app_services();
+    /* The windowed path patches REPL-state sentinels via
+     * glr_ctrl_init_gl -> glr_ctrl_reset_all -> repl_state_reset_program
+     * before reaching here. The dump-only paths skip init_gl, so without
+     * this the document/flat capacities stay 0 (raw BSS) and every load
+     * insert is rejected with a misleading "command store at capacity"
+     * — i.e. --dump-code / --dump-flat would print an empty buffer for any
+     * non-empty file. Idempotent, so the windowed path is unaffected. */
+    repl_state_ensure_sentinels();
     repl_eval_init_predef_vars();
     ReplPredefView predef = repl_eval_predef_view();
     for (int i = 0; i < predef.count; i++) {
