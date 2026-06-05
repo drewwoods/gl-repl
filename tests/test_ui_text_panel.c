@@ -447,6 +447,213 @@ static void test_match_paren_pairs(void) {
                   ui_text_panel_match_paren("foo(", 4, 3, &self, &match));
     ASSERT_INT_EQ("unbalanced close has no match", 0,
                   ui_text_panel_match_paren(")", 1, 0, &self, &match));
+
+    /* Curly braces match independently of parens. In "if(t) { f(1) }"
+     * the '{' at 6 pairs with the '}' at 13, ignoring the nested "(1)". */
+    {
+        const char *b = "if(t) { f(1) }";
+        int len = (int)strlen(b);
+        int bs = -1, bm = -1;
+
+        ASSERT_INT_EQ("open brace is a bracket", 1,
+                      ui_text_panel_match_paren(b, len, 6, &bs, &bm));
+        ASSERT_INT_EQ("open brace self idx", bs, 6);
+        ASSERT_INT_EQ("open brace matches close brace", bm, 13);
+
+        bs = bm = -1;
+        ASSERT_INT_EQ("close brace is a bracket", 1,
+                      ui_text_panel_match_paren(b, len, 13, &bs, &bm));
+        ASSERT_INT_EQ("close brace self idx", bs, 13);
+        ASSERT_INT_EQ("close brace matches open brace", bm, 6);
+
+        /* Caret on the '(' at 9 still pairs with ')' at 11, not a brace. */
+        bs = bm = -1;
+        ASSERT_INT_EQ("nested paren still matches its paren", 1,
+                      ui_text_panel_match_paren(b, len, 9, &bs, &bm));
+        ASSERT_INT_EQ("nested paren matches close paren", bm, 11);
+    }
+
+    /* Nested braces pick the balanced partner. In "{ a { b } c }" the
+     * outer '{' at 0 matches '}' at 12, the inner '{' at 4 matches '}' at 8. */
+    {
+        const char *n = "{ a { b } c }";
+        int len = (int)strlen(n);
+        int bs = -1, bm = -1;
+
+        ASSERT_INT_EQ("outer brace matches outer close", 1,
+                      ui_text_panel_match_paren(n, len, 0, &bs, &bm));
+        ASSERT_INT_EQ("outer brace close idx", bm, 12);
+
+        bs = bm = -1;
+        ASSERT_INT_EQ("inner brace matches inner close", 1,
+                      ui_text_panel_match_paren(n, len, 4, &bs, &bm));
+        ASSERT_INT_EQ("inner brace close idx", bm, 8);
+    }
+
+    /* Unbalanced brace has no partner. */
+    ASSERT_INT_EQ("unbalanced open brace has no match", 0,
+                  ui_text_panel_match_paren("foo{", 4, 3, &self, &match));
+    ASSERT_INT_EQ("unbalanced close brace has no match", 0,
+                  ui_text_panel_match_paren("}", 1, 0, &self, &match));
+}
+
+/* ui_text_panel_match_bracket_multiline: the caret's '{' / '}' on the
+ * active input row pairs with its partner brace, possibly on another row
+ * (the if / for case). Chrome / non-code rows are skipped; parens are not
+ * matched across rows. self_row is the INPUT row, whose text comes from
+ * snap.input.input. */
+static void test_match_bracket_multiline(void) {
+    int mr = -1, mc = -1;
+
+    printf("--- match bracket multiline ---\n");
+
+    /* Caret on the open brace of a for-header; close brace two rows down. */
+    {
+        UiTextPanelRow rows[3] = {
+            { .text = "", .kind = UI_TEXT_PANEL_ROW_INPUT },
+            { .text = "glVertex3f(i, 0, 0)", .kind = UI_TEXT_PANEL_ROW_TEXT },
+            { .text = "}", .kind = UI_TEXT_PANEL_ROW_TEXT },
+        };
+        UiTextPanelSnapshot snap = make_snapshot(rows, 3, 0, 0, 800, 600, 0);
+        snap.paren_match = 1;
+        snap.input.input = "for(i, 0, 5) {";   /* '{' at index 13 */
+        snap.input.input_len = (int)strlen(snap.input.input);
+        snap.input.cursor = 13;
+        snap.input.anchor = 13;
+
+        mr = mc = -1;
+        ASSERT_INT_EQ("open brace finds a partner", 1,
+                      ui_text_panel_match_bracket_multiline(&snap, 0, 13,
+                                                            &mr, &mc));
+        ASSERT_INT_EQ("open brace match row", mr, 2);
+        ASSERT_INT_EQ("open brace match char", mc, 0);
+    }
+
+    /* Caret on the close brace; open brace two rows up. */
+    {
+        UiTextPanelRow rows[3] = {
+            { .text = "for(i, 0, 5) {", .kind = UI_TEXT_PANEL_ROW_TEXT },
+            { .text = "glVertex3f(i, 0, 0)", .kind = UI_TEXT_PANEL_ROW_TEXT },
+            { .text = "", .kind = UI_TEXT_PANEL_ROW_INPUT },
+        };
+        UiTextPanelSnapshot snap = make_snapshot(rows, 3, 0, 0, 800, 600, 0);
+        snap.paren_match = 1;
+        snap.input.input = "}";
+        snap.input.input_len = 1;
+        snap.input.cursor = 0;
+        snap.input.anchor = 0;
+
+        mr = mc = -1;
+        ASSERT_INT_EQ("close brace finds a partner", 1,
+                      ui_text_panel_match_bracket_multiline(&snap, 2, 0,
+                                                            &mr, &mc));
+        ASSERT_INT_EQ("close brace match row", mr, 0);
+        ASSERT_INT_EQ("close brace match char", mc, 13);
+    }
+
+    /* Nesting: the outer open brace skips the inner pair and lands on the
+     * outer close. */
+    {
+        UiTextPanelRow rows[5] = {
+            { .text = "", .kind = UI_TEXT_PANEL_ROW_INPUT },
+            { .text = "for(j, 0, 5) {", .kind = UI_TEXT_PANEL_ROW_TEXT },
+            { .text = "glVertex3f(i, j, 0)", .kind = UI_TEXT_PANEL_ROW_TEXT },
+            { .text = "}", .kind = UI_TEXT_PANEL_ROW_TEXT },
+            { .text = "}", .kind = UI_TEXT_PANEL_ROW_TEXT },
+        };
+        UiTextPanelSnapshot snap = make_snapshot(rows, 5, 0, 0, 800, 600, 0);
+        snap.paren_match = 1;
+        snap.input.input = "for(i, 0, 5) {";
+        snap.input.input_len = (int)strlen(snap.input.input);
+        snap.input.cursor = 13;
+        snap.input.anchor = 13;
+
+        mr = mc = -1;
+        ASSERT_INT_EQ("outer open matches outer close", 1,
+                      ui_text_panel_match_bracket_multiline(&snap, 0, 13,
+                                                            &mr, &mc));
+        ASSERT_INT_EQ("outer open match row (skips inner)", mr, 4);
+        ASSERT_INT_EQ("outer open match char", mc, 0);
+    }
+
+    /* Chrome / non-code rows are skipped: a STATIC row's stray '}' must not
+     * steal the match from the real close brace below it. */
+    {
+        UiTextPanelRow rows[4] = {
+            { .text = "", .kind = UI_TEXT_PANEL_ROW_INPUT },
+            { .text = "// chrome }", .kind = UI_TEXT_PANEL_ROW_STATIC },
+            { .text = "glColor3f(1, 0, 0)", .kind = UI_TEXT_PANEL_ROW_TEXT },
+            { .text = "}", .kind = UI_TEXT_PANEL_ROW_TEXT },
+        };
+        UiTextPanelSnapshot snap = make_snapshot(rows, 4, 0, 0, 800, 600, 0);
+        snap.paren_match = 1;
+        snap.input.input = "if(t > 0) {";    /* '{' at index 10 */
+        snap.input.input_len = (int)strlen(snap.input.input);
+        snap.input.cursor = 10;
+        snap.input.anchor = 10;
+
+        mr = mc = -1;
+        ASSERT_INT_EQ("brace match skips chrome row", 1,
+                      ui_text_panel_match_bracket_multiline(&snap, 0, 10,
+                                                            &mr, &mc));
+        ASSERT_INT_EQ("brace match lands on real close row", mr, 3);
+        ASSERT_INT_EQ("brace match char", mc, 0);
+    }
+
+    /* Same-row inline body resolves through the multiline path too. */
+    {
+        UiTextPanelRow rows[1] = {
+            { .text = "", .kind = UI_TEXT_PANEL_ROW_INPUT },
+        };
+        UiTextPanelSnapshot snap = make_snapshot(rows, 1, 0, 0, 800, 600, 0);
+        snap.paren_match = 1;
+        snap.input.input = "x { y } z";       /* '{' at 2, '}' at 6 */
+        snap.input.input_len = (int)strlen(snap.input.input);
+        snap.input.cursor = 2;
+        snap.input.anchor = 2;
+
+        mr = mc = -1;
+        ASSERT_INT_EQ("same-row brace pairs on its own row", 1,
+                      ui_text_panel_match_bracket_multiline(&snap, 0, 2,
+                                                            &mr, &mc));
+        ASSERT_INT_EQ("same-row match row", mr, 0);
+        ASSERT_INT_EQ("same-row match char", mc, 6);
+    }
+
+    /* Unbalanced (open brace, no close anywhere) → no match. */
+    {
+        UiTextPanelRow rows[2] = {
+            { .text = "", .kind = UI_TEXT_PANEL_ROW_INPUT },
+            { .text = "glVertex3f(i, 0, 0)", .kind = UI_TEXT_PANEL_ROW_TEXT },
+        };
+        UiTextPanelSnapshot snap = make_snapshot(rows, 2, 0, 0, 800, 600, 0);
+        snap.paren_match = 1;
+        snap.input.input = "for(i, 0, 5) {";
+        snap.input.input_len = (int)strlen(snap.input.input);
+        snap.input.cursor = 13;
+        snap.input.anchor = 13;
+
+        ASSERT_INT_EQ("unbalanced open brace has no match", 0,
+                      ui_text_panel_match_bracket_multiline(&snap, 0, 13,
+                                                            &mr, &mc));
+    }
+
+    /* A paren is not matched across rows (single-row only). */
+    {
+        UiTextPanelRow rows[1] = {
+            { .text = "", .kind = UI_TEXT_PANEL_ROW_INPUT },
+        };
+        UiTextPanelSnapshot snap = make_snapshot(rows, 1, 0, 0, 800, 600, 0);
+        snap.paren_match = 1;
+        snap.input.input = "foo(bar)";        /* '(' at 3 */
+        snap.input.input_len = (int)strlen(snap.input.input);
+        snap.input.cursor = 3;
+        snap.input.anchor = 3;
+
+        ASSERT_INT_EQ("multiline matcher ignores parens", 0,
+                      ui_text_panel_match_bracket_multiline(&snap, 0, 3,
+                                                            &mr, &mc));
+    }
 }
 
 /* ui_text_panel_enclosing_parens: the innermost pair surrounding the
@@ -498,6 +705,7 @@ int main(void) {
     test_row_layout_shared_across_kinds();
     test_color_segments_enable_blending();
     test_match_paren_pairs();
+    test_match_bracket_multiline();
     test_enclosing_parens_scope();
 
     printf("\n");

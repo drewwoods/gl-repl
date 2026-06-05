@@ -435,30 +435,108 @@ static void text_panel_draw_search_highlights(const UiTextPanelSnapshot *snap,
 
 int ui_text_panel_match_paren(const char *s, int len, int cursor,
                               int *self, int *match) {
+    char open, close;
     int i, depth;
 
     if (!s || cursor < 0 || cursor >= len)
         return 0;
 
-    if (s[cursor] == '(') {
+    /* Resolve the bracket pair from the char in front of the caret.
+     * '(' / ')' and '{' / '}' are matched independently — depth counts
+     * only the active pair's own brackets, so the other kind nested
+     * between them is ignored. */
+    if (s[cursor] == '(' || s[cursor] == ')') {
+        open = '('; close = ')';
+    } else if (s[cursor] == '{' || s[cursor] == '}') {
+        open = '{'; close = '}';
+    } else {
+        return 0;
+    }
+
+    if (s[cursor] == open) {
         depth = 0;
         for (i = cursor; i < len; i++) {
-            if (s[i] == '(') depth++;
-            else if (s[i] == ')') depth--;
+            if (s[i] == open) depth++;
+            else if (s[i] == close) depth--;
             if (depth == 0) {
                 if (self)  *self = cursor;
                 if (match) *match = i;
                 return 1;
             }
         }
-    } else if (s[cursor] == ')') {
+    } else {  /* s[cursor] == close */
         depth = 0;
         for (i = cursor; i >= 0; i--) {
-            if (s[i] == ')') depth++;
-            else if (s[i] == '(') depth--;
+            if (s[i] == close) depth++;
+            else if (s[i] == open) depth--;
             if (depth == 0) {
                 if (self)  *self = cursor;
                 if (match) *match = i;
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+int ui_text_panel_match_bracket_multiline(const UiTextPanelSnapshot *snap,
+                                          int self_row, int self_char,
+                                          int *match_row, int *match_char) {
+    const char *self_text;
+    int self_len;
+    char inc_char, dec_char;   /* depth ++ / -- in the scan direction */
+    int dir;                   /* +1 forward (open), -1 backward (close) */
+    int r, depth, first;
+
+    if (!snap || self_row < 0 || self_row >= snap->row_count)
+        return 0;
+
+    self_text = text_panel_row_text(snap, &snap->rows[self_row]);
+    self_len  = text_panel_row_text_len(snap, &snap->rows[self_row]);
+    if (self_char < 0 || self_char >= self_len)
+        return 0;
+
+    /* Only curly braces match across rows; parens are single-row and
+     * resolved by ui_text_panel_match_paren. */
+    if (self_text[self_char] == '{') {
+        dir = +1; inc_char = '{'; dec_char = '}';
+    } else if (self_text[self_char] == '}') {
+        dir = -1; inc_char = '}'; dec_char = '{';
+    } else {
+        return 0;
+    }
+
+    /* Walk char-by-char through the editable rows (TEXT / INPUT) in
+     * document order, skipping chrome / virtual / placeholder rows so
+     * only the user's source braces count. */
+    depth = 0;
+    first = 1;
+    for (r = self_row; r >= 0 && r < snap->row_count; r += dir) {
+        const UiTextPanelRow *row = &snap->rows[r];
+        const char *t;
+        int len, c;
+
+        if (r != self_row &&
+            row->kind != UI_TEXT_PANEL_ROW_TEXT &&
+            row->kind != UI_TEXT_PANEL_ROW_INPUT)
+            continue;
+
+        t   = text_panel_row_text(snap, row);
+        len = text_panel_row_text_len(snap, row);
+
+        if (first) {
+            c = self_char;
+            first = 0;
+        } else {
+            c = (dir > 0) ? 0 : len - 1;
+        }
+
+        for (; c >= 0 && c < len; c += dir) {
+            if (t[c] == inc_char) depth++;
+            else if (t[c] == dec_char) depth--;
+            if (depth == 0) {
+                if (match_row)  *match_row = r;
+                if (match_char) *match_char = c;
                 return 1;
             }
         }
@@ -501,7 +579,21 @@ int ui_text_panel_enclosing_parens(const char *s, int len, int cursor,
     return 0;
 }
 
-/* Tint one matched parenthesis char with a single-cell band, clamped to
+/* Resolved bracket-pair highlight for the frame. self_* is the caret's
+ * bracket (always on the input row); match_* is its balanced partner,
+ * which for '{' / '}' may sit on a different row. self_row == match_row
+ * for a same-row pair (every '(' / ')' pair, and inline '{ }'). Both
+ * cells are tinted wherever their owning row is drawn, so the partner
+ * stays visible across an if / for block. */
+typedef struct {
+    int active;
+    int self_row;
+    int self_char;
+    int match_row;
+    int match_char;
+} TextPanelBracketHL;
+
+/* Tint one matched bracket char with a single-cell band, clamped to
  * the wrap row [wrap_start, wrap_start + wrap_len). Drawn behind the text
  * glyphs (called before the input segment) so the character stays legible
  * on top. No-op when the char lies on a different wrap row. */
@@ -519,6 +611,24 @@ static void text_panel_draw_paren_cell(const UiTextPanelSnapshot *snap,
     glRectf(bx, (float)(line_y - 3),
             bx + (float)FONT_W, (float)(line_y - 3 + LINE_H));
     glDisable(GL_BLEND);
+}
+
+/* Tint whichever of the self / match bracket cells fall on row_idx for the
+ * current wrap segment. text_panel_draw_paren_cell no-ops the cells that
+ * land off this wrap row, so both can be offered unconditionally. */
+static void text_panel_draw_bracket_cells(const UiTextPanelSnapshot *snap,
+                                          const TextPanelBracketHL *hl,
+                                          int row_idx, int wrap_x,
+                                          int wrap_start, int wrap_len,
+                                          int line_y) {
+    if (!hl || !hl->active)
+        return;
+    if (hl->self_row == row_idx)
+        text_panel_draw_paren_cell(snap, wrap_x, wrap_start, wrap_len,
+                                   line_y, hl->self_char);
+    if (hl->match_row == row_idx)
+        text_panel_draw_paren_cell(snap, wrap_x, wrap_start, wrap_len,
+                                   line_y, hl->match_char);
 }
 
 /* Faint background band behind the in-scope characters [lo, hi] (inclusive)
@@ -547,6 +657,8 @@ static void text_panel_draw_paren_scope_band(const UiTextPanelSnapshot *snap,
 
 static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
                                      const UiTextPanelRow *row,
+                                     int row_idx,
+                                     const TextPanelBracketHL *hl,
                                      int visible_rows,
                                      int *io_cur,
                                      int *io_line_y,
@@ -582,13 +694,9 @@ static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
                                                  &cursor_seg_x);
     cursor_col = cursor_pos - cursor_seg_start;
 
-    /* Parenthesis-pair highlight: when the char in front of the caret is
-     * a paren, tint it and its balanced partner. Suppressed while a
-     * range selection is active so the bands don't fight. */
-    int paren_self = -1, paren_match = -1;
-    int has_paren_pair = snap->paren_match && (anchor_pos == cursor_pos) &&
-        ui_text_panel_match_paren(input, input_len, cursor_pos,
-                                  &paren_self, &paren_match);
+    /* Bracket-pair highlight (self + partner cells) is resolved once per
+     * frame by the caller and threaded in via `hl`; this row tints any of
+     * those cells that land on it. Scope highlight stays input-row-local. */
 
     /* Scope highlight: when the caret sits inside a paren pair, draw a
      * faint background band behind that innermost [open, close] span so
@@ -645,19 +753,15 @@ static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
                 }
             }
 
-            /* Background bands first (scope band under the matched-paren
+            /* Background bands first (scope band under the matched-bracket
              * cells), then the glyphs on top at their full color. */
             if (has_enclosing) {
                 text_panel_draw_paren_scope_band(snap, wrap_x, wrap_start,
                                                  wrap_len, *io_line_y,
                                                  enc_open, enc_close);
             }
-            if (has_paren_pair) {
-                text_panel_draw_paren_cell(snap, wrap_x, wrap_start,
-                                           wrap_len, *io_line_y, paren_self);
-                text_panel_draw_paren_cell(snap, wrap_x, wrap_start,
-                                           wrap_len, *io_line_y, paren_match);
-            }
+            text_panel_draw_bracket_cells(snap, hl, row_idx, wrap_x,
+                                          wrap_start, wrap_len, *io_line_y);
 
             glColor3fv(k_clr_input_text);
             text_panel_draw_segment(snap->cp_x + wrap_x, *io_line_y, input,
@@ -714,6 +818,8 @@ static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
 
 static int text_panel_draw_regular_row(const UiTextPanelSnapshot *snap,
                                        const UiTextPanelRow *row,
+                                       int row_idx,
+                                       const TextPanelBracketHL *hl,
                                        int visible_rows,
                                        int *io_cur,
                                        int *io_line_y) {
@@ -751,6 +857,10 @@ static int text_panel_draw_regular_row(const UiTextPanelSnapshot *snap,
             text_panel_draw_search_highlights(snap, row, text,
                                               wrap_start, wrap_len,
                                               wrap_x, *io_line_y);
+            /* Matching-bracket cell (behind the glyphs) when this row owns
+             * the caret's partner brace on another line. */
+            text_panel_draw_bracket_cells(snap, hl, row_idx, wrap_x,
+                                          wrap_start, wrap_len, *io_line_y);
             text_panel_draw_colored_text(snap, row, text,
                                          wrap_start, wrap_len,
                                          wrap_x, *io_line_y);
@@ -993,9 +1103,68 @@ int ui_text_panel_input_row_y(const UiTextPanelSnapshot *snap,
     return 0;
 }
 
+/* Resolve the active-input-row bracket-pair highlight for this frame.
+ * The caret's '(' / ')' pairs within the input row; its '{' / '}' may
+ * pair across rows (if / for blocks). Suppressed when the paren_match
+ * aid is off, a range selection is active, or the caret is not on a
+ * bracket. */
+static TextPanelBracketHL text_panel_resolve_bracket_hl(
+    const UiTextPanelSnapshot *snap) {
+    TextPanelBracketHL hl = {0};
+    const char *in;
+    int in_len, cursor, anchor, input_row = -1, i;
+    char ch;
+
+    if (!snap->paren_match)
+        return hl;
+
+    for (i = 0; i < snap->row_count; i++) {
+        if (snap->rows[i].kind == UI_TEXT_PANEL_ROW_INPUT) {
+            input_row = i;
+            break;
+        }
+    }
+    if (input_row < 0)
+        return hl;
+
+    in     = snap->input.input ? snap->input.input : "";
+    in_len = snap->input.input_len >= 0 ? snap->input.input_len
+                                        : (int)strlen(in);
+    cursor = snap->input.cursor;
+    anchor = snap->input.anchor < 0 ? cursor : snap->input.anchor;
+
+    /* Char "in front of" the caret drives the pair; suppress under a
+     * range selection so the bands do not fight. */
+    if (anchor != cursor || cursor < 0 || cursor >= in_len)
+        return hl;
+
+    ch = in[cursor];
+    if (ch == '(' || ch == ')') {
+        int s, m;
+        if (ui_text_panel_match_paren(in, in_len, cursor, &s, &m)) {
+            hl.active = 1;
+            hl.self_row = hl.match_row = input_row;
+            hl.self_char = s;
+            hl.match_char = m;
+        }
+    } else if (ch == '{' || ch == '}') {
+        int mr, mc;
+        if (ui_text_panel_match_bracket_multiline(snap, input_row, cursor,
+                                                  &mr, &mc)) {
+            hl.active = 1;
+            hl.self_row = input_row;
+            hl.self_char = cursor;
+            hl.match_row = mr;
+            hl.match_char = mc;
+        }
+    }
+    return hl;
+}
+
 void ui_text_panel_render(const UiTextPanelSnapshot *snap,
                           UiTextPanelOutput         *out) {
     TextPanelViewportMetrics metrics;
+    TextPanelBracketHL bracket_hl;
     int line_y;
     int cur = 0;
     int total_rows = 0;
@@ -1046,16 +1215,17 @@ void ui_text_panel_render(const UiTextPanelSnapshot *snap,
     glScissor(snap->cp_x, snap->cp_y, snap->cp_w, snap->cp_h);
 
     line_y = metrics.first_line_y;
+    bracket_hl = text_panel_resolve_bracket_hl(snap);
 
     for (int i = 0; i < snap->row_count; i++) {
         const UiTextPanelRow *row = &snap->rows[i];
 
         if (row->kind == UI_TEXT_PANEL_ROW_INPUT)
-            total_rows += text_panel_draw_input_row(snap, row,
+            total_rows += text_panel_draw_input_row(snap, row, i, &bracket_hl,
                                                     metrics.visible_rows,
                                                     &cur, &line_y, out);
         else
-            total_rows += text_panel_draw_regular_row(snap, row,
+            total_rows += text_panel_draw_regular_row(snap, row, i, &bracket_hl,
                                                       metrics.visible_rows,
                                                       &cur, &line_y);
     }

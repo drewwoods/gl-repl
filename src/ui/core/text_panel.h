@@ -260,9 +260,10 @@ typedef struct {
     int wrap_at_comma;
 
     /* Active-input-row paren aids (1 = on). paren_match tints the
-     * caret's matching parenthesis; paren_scope draws a faint background
-     * band behind the text inside the caret's enclosing pair (glyph
-     * colors untouched). Independent toggles. */
+     * caret's matching bracket — '(' / ')' or '{' / '}'; paren_scope
+     * draws a faint background band behind the text inside the caret's
+     * enclosing '(' / ')' pair (glyph colors untouched). Independent
+     * toggles. */
     int paren_match;
     int paren_scope;
 
@@ -369,15 +370,32 @@ int  ui_text_panel_right_action_rect(const UiTextPanelSnapshot *snap,
                                     int line_y,
                                     int *out_sx, int *out_sy, int *out_sw);
 
-/* Parenthesis matching for the active input row. If the character "in
+/* Bracket matching for the active input row. If the character "in
  * front of" the caret (s[cursor], i.e. the one immediately to the right
- * of the insertion point) is a '(' or ')', writes that character's index
- * to *self and its balanced partner's index to *match, then returns 1.
- * Returns 0 when s[cursor] is not a parenthesis or the pair is unbalanced
- * (no partner within [0, len)). Pure — no GL, no global state. The
- * renderer uses it to tint the matching pair on the active row. */
+ * of the insertion point) is a '(' / ')' or '{' / '}', writes that
+ * character's index to *self and its balanced partner's index to *match,
+ * then returns 1. The two bracket kinds are matched independently (depth
+ * counts only the active pair's own brackets). Returns 0 when s[cursor]
+ * is not a bracket or the pair is unbalanced (no partner within
+ * [0, len)). Pure — no GL, no global state. The renderer uses it to tint
+ * the matching pair on the active row. */
 int  ui_text_panel_match_paren(const char *s, int len, int cursor,
                                int *self, int *match);
+
+/* Multi-row curly-brace matching. Given the caret's bracket at
+ * (self_row, self_char) — where the row's text holds a '{' or '}' at
+ * self_char — scans the editable rows (UI_TEXT_PANEL_ROW_TEXT /
+ * _ROW_INPUT, skipping chrome / virtual rows) in document order: forward
+ * for '{', backward for '}', counting brace depth. On the balancing
+ * bracket writes its row index to *match_row and char index to
+ * *match_char and returns 1. Returns 0 when the caret is not on a curly
+ * brace ('(' / ')' are single-row — use ui_text_panel_match_paren) or the
+ * brace is unbalanced across the document. Pure — reads only the snapshot
+ * rows + input text, no GL or global state. Lets the renderer tint the
+ * partner brace of an if / for block on its own line. */
+int  ui_text_panel_match_bracket_multiline(const UiTextPanelSnapshot *snap,
+                                           int self_row, int self_char,
+                                           int *match_row, int *match_char);
 
 /* Innermost parenthesis pair *enclosing* the caret. Scans left from
  * `cursor` for the nearest unbalanced '(' then forward for its partner.
