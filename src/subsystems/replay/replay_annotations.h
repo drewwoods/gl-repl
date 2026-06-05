@@ -1,5 +1,5 @@
 /*
- * src/repl/replay_annotations.h - Replay-time source annotations and variable substitution.
+ * src/subsystems/replay/replay_annotations.h - Replay-time source annotations and variable substitution.
  *
  * During replay, the code panel shows annotated versions of source lines:
  * variable values substituted into expressions and the result of evaluating

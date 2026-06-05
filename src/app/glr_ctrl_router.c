@@ -58,7 +58,7 @@
 #include "repl/export.h"
 #include "repl/help_text.h"
 #include "repl/pipeline.h"
-#include "repl/replay_annotations.h"
+#include "subsystems/replay/replay_annotations.h"
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
 #include "repl/tutorials.h"

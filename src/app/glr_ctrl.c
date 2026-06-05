@@ -50,7 +50,7 @@
 #include "repl/export.h"
 #include "repl/help_text.h"
 #include "repl/pipeline.h"
-#include "repl/replay_annotations.h"
+#include "subsystems/replay/replay_annotations.h"
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
 #include "repl/tutorials.h"
@@ -295,6 +295,15 @@ static void glr_ctrl_build_replay_fade_plan(FlatProgramView flat_program, int re
 
 static OverlaySnapshotPack g_overlay_pack;
 
+static OverlayVertexLabelMode glr_ctrl_overlay_vertex_label_mode(int mode) {
+    switch (mode) {
+    case GLR_VERTEX_LABEL_INDEX:     return OVERLAY_VERTEX_LABEL_INDEX;
+    case GLR_VERTEX_LABEL_INDEX_POS: return OVERLAY_VERTEX_LABEL_INDEX_POS;
+    case GLR_VERTEX_LABEL_OFF:
+    default:                         return OVERLAY_VERTEX_LABEL_OFF;
+    }
+}
+
 static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const SceneRenderConfig *cfg) {
     GlrPresentationState presentation = glr_state_presentation();
     int replaying = replay_active();
@@ -313,7 +322,7 @@ static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const SceneRe
     pack->walk.replay_vertex_points = replay_mode_vertex;
 
     pack->snapshot = glr_ctrl_build_guide_snapshot(cfg);
-    pack->show_vertex_labels = presentation.show_vertex_labels;
+    pack->vertex_label_mode = glr_ctrl_overlay_vertex_label_mode(presentation.show_vertex_labels);
     pack->ortho_mode = presentation.ortho_mode;
     pack->show_normal_vectors = presentation.show_normal_vectors;
     pack->multisample_enabled = cfg ? cfg->multisample_enabled : 0;

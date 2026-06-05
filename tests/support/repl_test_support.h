@@ -7,7 +7,7 @@
 #include "editor/state.h"   /* editor_state_edit_line */
 #include "repl/core.h"      /* repl_flatten_commands */
 #include "repl/eval.h"
-#include "repl/replay_annotations.h" /* ReplReplayAnnotationOutput */
+#include "subsystems/replay/replay_annotations.h" /* ReplReplayAnnotationOutput */
 #include "repl/state.h"              /* repl_state_* views */
 #include "source_document.h"         /* source_document_view */
 

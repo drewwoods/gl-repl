@@ -1,12 +1,8 @@
 #include "subsystems/edit_overlays/edit_overlays.h"
-#include "app/glr_config.h"  /* GlrVertexLabelMode, GLR_VERTEX_LABEL_* (kept .c-private; see edit_overlays.h) */
 #include "gl_includes.h"
-#include "editor/state.h"
-#include "repl/state_views.h"
 #include "repl/core.h"
 #include "subsystems/replay/replay.h"
 #include "repl/executor.h"
-#include "repl/eval.h"
 #include "scene/palette.h"
 #include "scene/overlays.h"
 #include "scene/guides/geometry_guides.h"
@@ -323,7 +319,7 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
 }
 
 typedef struct {
-    GlrVertexLabelMode mode;
+    OverlayVertexLabelMode mode;
     int is_ortho;
 } VertexLabelCtx;
 
@@ -335,12 +331,12 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
     char pos_buf[48];
     const char *detail_text = NULL;
 
-    if (!ctx || (ctx->mode != GLR_VERTEX_LABEL_INDEX &&
-                 ctx->mode != GLR_VERTEX_LABEL_INDEX_POS))
+    if (!ctx || (ctx->mode != OVERLAY_VERTEX_LABEL_INDEX &&
+                 ctx->mode != OVERLAY_VERTEX_LABEL_INDEX_POS))
         return;
 
     snprintf(idx_buf, sizeof(idx_buf), " v%d", state->vertex_idx_in_block);
-    if (ctx->mode == GLR_VERTEX_LABEL_INDEX_POS) {
+    if (ctx->mode == OVERLAY_VERTEX_LABEL_INDEX_POS) {
         if (ctx->is_ortho)
             snprintf(pos_buf, sizeof(pos_buf), " (%.2f, %.2f)", vx, vy);
         else
@@ -362,21 +358,33 @@ static void on_normal_vector_arrow(const ReplayVertexWalkState *state,
                                    scale);
 }
 
-static ReplayVertexWalkContext edit_overlays_build_vertex_walk_context(int selected_block_only) {
-    ReplayVertexWalkContext ctx = {
-        .program                = repl_state_flat_program_view(),
-        .cursor = {
-            .edit_line_idx          = editor_state_edit_line(),
-            .cursor_block_begin     = repl_state_flat_program_current_block_begin(),
-            .cursor_block_end       = repl_state_flat_program_current_block_end(),
-            .cursor_func_scope_mask = 0,
-        },
-        .selected_block_only    = selected_block_only,
-    };
-    return ctx;
+static ReplayVertexWalkContext edit_overlays_build_vertex_walk_context(
+    const OverlayWalkCtx *ctx,
+    int selected_block_only) {
+    ReplayVertexWalkContext walk;
+
+    memset(&walk, 0, sizeof(walk));
+    if (!ctx)
+        return walk;
+
+    walk.program = ctx->program;
+    walk.cursor = ctx->cursor;
+    walk.selected_block_only = selected_block_only;
+    return walk;
 }
 
-void edit_overlays_render_vertex_numbers(int mode, int is_ortho) {
+void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
+                                         OverlayVertexLabelMode mode,
+                                         int is_ortho) {
+    ReplayVertexWalkContext ctx;
+
+    if (mode == OVERLAY_VERTEX_LABEL_OFF)
+        return;
+
+    ctx = edit_overlays_build_vertex_walk_context(walk_ctx, 1);
+    if (!ctx.program.cmds || ctx.program.cmd_count <= 0)
+        return;
+
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
@@ -385,8 +393,7 @@ void edit_overlays_render_vertex_numbers(int mode, int is_ortho) {
     static const ReplayVertexWalkCallbacks cb = {
         .on_vertex = on_vertex_number_label,
     };
-    VertexLabelCtx label_ctx = { .mode = (GlrVertexLabelMode)mode, .is_ortho = is_ortho };
-    ReplayVertexWalkContext ctx = edit_overlays_build_vertex_walk_context(1);
+    VertexLabelCtx label_ctx = { .mode = mode, .is_ortho = is_ortho };
     replay_walk_user_vertices(&ctx, &cb, &label_ctx);
 
     glPopAttrib();
@@ -394,7 +401,13 @@ void edit_overlays_render_vertex_numbers(int mode, int is_ortho) {
 
 #define GLR_NORMAL_ARROW_SCALE 0.35f
 
-void edit_overlays_render_normal_vectors(void) {
+void edit_overlays_render_normal_vectors(const OverlayWalkCtx *walk_ctx) {
+    ReplayVertexWalkContext ctx;
+
+    ctx = edit_overlays_build_vertex_walk_context(walk_ctx, 0);
+    if (!ctx.program.cmds || ctx.program.cmd_count <= 0)
+        return;
+
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
@@ -404,7 +417,6 @@ void edit_overlays_render_normal_vectors(void) {
         .on_vertex = on_normal_vector_arrow,
     };
     float scale = GLR_NORMAL_ARROW_SCALE;
-    ReplayVertexWalkContext ctx = edit_overlays_build_vertex_walk_context(0);
     replay_walk_user_vertices(&ctx, &cb, &scale);
 
     glPopAttrib();
@@ -488,8 +500,15 @@ static void on_cmd_render_cursor_guides(const ReplayVertexWalkState *state,
         ctx->early_stop = 1;
 }
 
-void edit_overlays_render_cursor_guides(const SceneGuideSnapshot *snapshot) {
+void edit_overlays_render_cursor_guides(const SceneGuideSnapshot *snapshot,
+                                        const OverlayWalkCtx *walk_ctx) {
+    ReplayVertexWalkContext walk;
+
     if (!snapshot || !snapshot->show_guides) return;
+
+    walk = edit_overlays_build_vertex_walk_context(walk_ctx, 0);
+    if (!walk.program.cmds || walk.program.cmd_count <= 0)
+        return;
 
     CursorGuideRenderCtx ctx;
     ctx.snapshot = snapshot;
@@ -508,7 +527,6 @@ void edit_overlays_render_cursor_guides(const SceneGuideSnapshot *snapshot) {
     static const ReplayVertexWalkCallbacks cb = {
         .on_each_cmd = on_cmd_render_cursor_guides,
     };
-    ReplayVertexWalkContext walk = edit_overlays_build_vertex_walk_context(0);
     walk.stop_flag = &ctx.early_stop;
     replay_walk_user_vertices(&walk, &cb, &ctx);
 
@@ -526,18 +544,19 @@ void edit_overlays_post_overlays(void *user_data) {
     prof_accum_end(PROF_SCENE_3D_OVERLAY_OUTLINES);
 
     prof_begin(PROF_SCENE_3D_OVERLAY_TRANSFORM_GUIDES);
-    edit_overlays_render_cursor_guides(&pack->snapshot);
+    edit_overlays_render_cursor_guides(&pack->snapshot, &pack->walk);
     prof_accum_end(PROF_SCENE_3D_OVERLAY_TRANSFORM_GUIDES);
 
-    if (pack->show_vertex_labels) {
+    if (pack->vertex_label_mode != OVERLAY_VERTEX_LABEL_OFF) {
         prof_begin(PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS);
-        edit_overlays_render_vertex_numbers(pack->show_vertex_labels,
+        edit_overlays_render_vertex_numbers(&pack->walk,
+                                            pack->vertex_label_mode,
                                             pack->ortho_mode);
         prof_accum_end(PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS);
     }
     if (pack->show_normal_vectors) {
         prof_begin(PROF_SCENE_3D_OVERLAY_NORMALS);
-        edit_overlays_render_normal_vectors();
+        edit_overlays_render_normal_vectors(&pack->walk);
         prof_accum_end(PROF_SCENE_3D_OVERLAY_NORMALS);
     }
 }

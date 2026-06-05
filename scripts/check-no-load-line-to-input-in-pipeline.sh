@@ -38,7 +38,7 @@ files=(
     src/repl/export.c
     repl_autocomplete.c
     src/repl/help_text.c
-    src/repl/replay_annotations.c
+    src/subsystems/replay/replay_annotations.c
 )
 
 # Match call shape only; skip lines that are inside C block comments

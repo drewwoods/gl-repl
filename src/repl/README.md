@@ -96,8 +96,7 @@ proves by supplying its own line store).
 
 Beyond the core pipeline, this directory also owns program-adjacent data and
 services: built-in `examples.c`, the `tutorials.c` catalog, save/load and
-workspace I/O in `export.c`, replay source annotations, and the neutral F1
-`help_text.c` tables.
+workspace I/O in `export.c`, and the neutral F1 `help_text.c` tables.
 
 ## File map
 
@@ -120,7 +119,6 @@ workspace I/O in `export.c`, replay source annotations, and the neutral F1
 | `scenes.c`, `examples.c`, `example_loader.c` | User-scene slots, built-in example data + loading |
 | `tutorials.c`, `help_text.c` | Tutorial catalog, F1 help-text tables |
 | `export.c` / `.h`, `export_state.h`, `load.c` | Save/load, workspace headers, single-file round-trip |
-| `replay_annotations.c` / `.h` | Replay-time source annotations / virtual lines |
 
 **Boundary:** `src/repl` owns the program model and compiler. It does **not**
 own editor state, UI state, replay *runtime* state (a `src/subsystems/` peer), or

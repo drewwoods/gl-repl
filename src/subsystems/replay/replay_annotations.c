@@ -1,12 +1,12 @@
 /*
- * src/repl/replay_annotations.c -- Code-panel replay variable annotations.
+ * src/subsystems/replay/replay_annotations.c -- Code-panel replay variable annotations.
  */
 #include "repl/core_internal.h"
 #include "repl/parser.h"
 #include "subsystems/replay/replay.h"
 #include "repl/state_owners.h"
 #include "subsystems/replay/replay_state.h"
-#include "repl/replay_annotations.h"
+#include "subsystems/replay/replay_annotations.h"
 #include "config.h"        /* REPL_STATUS_TEXT_MAX */
 
 /* Inline-comment scratch buffer for display-text formatting. Local to

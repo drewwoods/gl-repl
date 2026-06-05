@@ -424,6 +424,7 @@ controllers; UI may render them; their input routes to them through
 | `replay_state` | Peer subsystem: owns `ReplayRuntimeState` storage in `src/subsystems/replay/replay_state.c`. Narrow accessors (`replay_active`, `replay_pc`, `replay_mode`, …) plus `replay_state_view()` for the per-frame snapshot fill |
 | `replay` | Replay state machine implementation behind `replay_state`: PC stepping, mode toggling, fade batches. Routes via `replay_handle_pin_clicked` / `replay_handle_key` / `replay_handle_special` |
 | `replay_render` | Replay fade-batch GL rendering pass (`glPushAttrib` / `glMaterialfv` / `glBegin`) in `src/subsystems/replay/replay_render.c`, extracted out of the scene layer (`src/scene/render.c`) |
+| `replay_annotations` | Replay annotation cache and virtual-line production; takes `SourceTextView` explicitly |
 | `editor_help_session` | Peer subsystem: read-only editor session for the help overlay (tab_idx, scroll). Visibility flag stays on `UiState.help` as chrome |
 | `color_picker` | Peer subsystem: floating HSV/alpha picker. Owns `g_cp_*` state, lifecycle (`color_picker_start` / `_stop` / `_active_line` / `_can_edit_cmd`), input handlers (`color_picker_handle_press` / `_motion` / `_release` returning `ColorPickerInputResult`), and source-line writeback through `editor_commit_apply_external_change`. Exposes `color_picker_view()` for renderers and `color_picker_hsv_to_rgb` as a shared color-math helper. Storage lives in `src/subsystems/color_picker/color_picker_state.c`; renderer lives separately in `src/ui/subsystems/color_picker.c` |
 | `tutorial_state` | Peer subsystem: owns `TutorialRuntimeState` storage in `src/subsystems/tutorial/tutorial_state.c`. Narrow accessor (`tutorial_active`) plus `tutorial_state_view()` for the per-frame snapshot fill. No capture/restore pair — tutorials remain linear and undo-blocked while active, so tutorial state is never part of a snapshot round-trip. |
@@ -448,7 +449,6 @@ Program-side state that is not the source command array itself.
 | `repl_examples` | Built-in example source data + catalog metadata: `ReplExampleEntry` carries a tag bitmask (`repl_example_tag_*` query API) and an optional `.subheading` (`repl_example_subheading`) that drives Scene flyout grouping. Symmetric with the tutorial catalog axes |
 | `repl_autonormal` | Auto-generated `glNormal3f` maintenance and feeding-command lookup |
 | `repl_replay` | Replay state machine, replay PC/mode, fade batches, replay timing |
-| `replay_annotations` | Replay annotation cache and virtual-line production; takes `EditorBufferView` explicitly |
 | `repl_debug` | Program/debug dump helpers; takes editor text views when it needs source text |
 
 These modules may consume editor text through the neutral
@@ -601,7 +601,7 @@ flowchart TB
 
     repl["<b>1. REPL pipeline</b> (pure compiler/program)<br/>compile · apply · load · parser ·<br/>source_scope · command_spec · command_store ·<br/>flatten · executor · eval"]
 
-    models["<b>3. REPL domain models</b><br/>ReplState · scenes · examples ·<br/>example_loader · autonormal · replay_annotations"]
+    models["<b>3. REPL domain models</b><br/>ReplState · scenes · examples ·<br/>example_loader · autonormal"]
 
     srcdoc["<b>source_document port</b><br/>(neutral REPL ↔ host text seam;<br/>full-app impl = glr_source_document)"]
 
@@ -728,7 +728,7 @@ flowchart LR
 
     subgraph peers["2b. Peer subsystems (own state + controller)"]
         vpanel["src/subsystems/variable_panel/variable_panel_state.c + src/subsystems/variable_panel/variable_panel_drag.c<br/>(was repl_var_drag)<br/>visibility + drag transaction"]
-        replay_sys["src/subsystems/replay/replay_playback.c + replay_fade.c + replay_input.c<br/>+ replay.c + replay_render.c + replay_state.c<br/>(was repl_replay)<br/>state machine · fades · fade GL render · walkers"]
+        replay_sys["src/subsystems/replay/replay_playback.c + replay_fade.c + replay_input.c<br/>+ replay.c + replay_render.c + replay_state.c<br/>+ replay_annotations.c<br/>(was repl_replay)<br/>state machine · fades · fade GL render · walkers · annotations"]
         cpicker["src/subsystems/color_picker/color_picker_state.c<br/>(was inside ui_color_picker)<br/>HSV/alpha state · lifecycle · writeback"]
         tutorial_sys["src/subsystems/tutorial/tutorial_runner.c + tutorial_animation.c + tutorial_match.c<br/>+ src/subsystems/tutorial/tutorial_state.c<br/>(catalog in src/repl/tutorials.c)<br/>runner · matching · fade timing"]
         edit_overlays["src/subsystems/edit_overlays/edit_overlays.c<br/>(extracted from glr_ctrl)<br/>cursor edit-guide + vertex/normal overlay walk"]
@@ -738,7 +738,6 @@ flowchart LR
     subgraph models["3. REPL domain models"]
         state["src/repl/state.c<br/>ReplState"]
         scenes["src/repl/scenes.c<br/>user scenes · workspace"]
-        replay_ann["src/repl/replay_annotations.c<br/>takes EditorBufferView"]
         autonormal["src/repl/autonormal.c<br/>autonormals · feeding cmds"]
     end
 
@@ -877,7 +876,6 @@ flowchart LR
     ctrl -.-> estate
     ctrl -.-> uistate
     ctrl -.-> autonormal
-    ctrl -.-> replay_ann
     ctrl -.-> vpanel
     ctrl -.-> replay_sys
     ctrl -.-> camera
@@ -906,8 +904,6 @@ flowchart LR
     glrcompositor i44@--> spost
 
     %% REPL domain reads
-    replay_ann -.-> replay_sys
-    replay_ann -.-> state
     autonormal -.-> scope
     autonormal -.-> state
     replay_sys i31@--> exec
@@ -954,8 +950,8 @@ Reading the diagram:
   effects.
 - `repl_export` reads source through the `source_document` view and
   delegates camera/cfg text formatting to the app-side bridges
-  (`glr_camera_export`); `replay_annotations` still receives an explicit
-  `EditorBufferView`. Neither reaches into editor state.
+  (`glr_camera_export`); `replay_annotations` receives an explicit
+  `SourceTextView`. Neither reaches into editor state.
 - UI render is read-only. UI input is hit-test-and-return.
 - Post-processing has **two stages**, both reusing the same
   fixed-function `postprocess_filter` primitive: the scene-viewport pass

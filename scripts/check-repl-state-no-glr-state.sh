@@ -38,7 +38,7 @@ files=(
     src/repl/examples.c
     src/repl/export.c
     repl_autocomplete.c
-    src/repl/replay_annotations.c
+    src/subsystems/replay/replay_annotations.c
 )
 
 # Match include lines + symbol references. Skip lines whose first
