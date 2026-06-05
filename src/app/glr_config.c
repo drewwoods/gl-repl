@@ -248,14 +248,14 @@ void glr_config_set(GlrConfigKey key, int value) {
         if (!target)
             return;  /* unknown key — nothing changed, no notify */
         *target = value;
-        /* Light-theme side effect: re-seed REPL render-state lights[]
+        /* Light-theme side effect: re-seed the app render-state lights[]
          * from the scene preset and re-push eye-space positions.
          * Reaches every write path (cycle handler, @cfg apply during
          * load, programmatic glr_config_set) so a saved file with
          * `@cfg light_theme = HEADLIGHT` arrives with the right
          * positions/colors and the headlight tracking the camera. */
         if (key == GLR_CONFIG_LIGHT_THEME)
-            scene_lights_apply_theme(repl_state_render_mut()->lights, value);
+            scene_lights_apply_theme(glr_state_render_mut()->lights, value);
     }
 
     /* REQUIRE-step listener — slug-scoped and inactive-checked, so this

@@ -616,64 +616,85 @@ static void test_draw_glut_solid_dispatch(void) {
     ASSERT_TRUE("non-glut / NULL draws nothing", any == 0);
 }
 
-/* Regression: lights[].enabled feeds only the light-indicator overlay.
+/* Regression: light_enabled_mask feeds only the light-indicator overlay.
  * It must track what the current program does (glEnable(GL_LIGHTn)),
  * not stay stuck at the default-on / last-run value. repl_execute_program
- * resets it each walk; this guards that reset + selective re-enable. */
-static int light_enabled_by_id(const SceneLight *lights, int id) {
-    for (int i = 0; i < MAX_LIGHTS; i++)
-        if (lights[i].id == id)
-            return lights[i].enabled;
-    return -1;
+ * resets it each walk; this guards that reset + selective re-enable, plus
+ * the glDisable path. The dimensional light data is app-owned now, so the
+ * executor touches only this bitmask. */
+static void run_one_cmd(CmdType type, double arg0) {
+    GLCmd cmds[1];
+    ReplExecutionOptions opts = {0};
+    memset(cmds, 0, sizeof(cmds));
+    cmds[0].type = type;
+    cmds[0].args[0] = arg0;
+    cmds[0].num_args = (type == CMD_VERTEX3F) ? 3 : 1;
+    cmds[0].valid = 1;
+    opts.flat_cmd_count = 1;
+    opts.program.cmds = cmds;
+    opts.program.cmd_count = 1;
+    repl_execute_program(&opts);
 }
 
 static void test_light_indicator_tracks_program(void) {
-    SceneLight *L = repl_state_render_mut()->lights;
-    GLCmd cmds[1];
-    ReplExecutionOptions opts = {0};
     ReplRenderState rs;
 
-    /* Simulate the old sticky / default-on bookkeeping. */
-    for (int i = 0; i < MAX_LIGHTS; i++) {
-        L[i].id = GL_LIGHT0 + i;
-        L[i].enabled = 1;
-    }
+    /* Simulate the old sticky / default-on bookkeeping: all four slots
+     * left enabled from a previous run. */
+    repl_state_render_mut()->light_enabled_mask = 0xFu;
 
     /* Program enables only GL_LIGHT0. */
-    memset(cmds, 0, sizeof(cmds));
-    cmds[0].type = CMD_ENABLE;
-    cmds[0].args[0] = GL_LIGHT0;
-    cmds[0].num_args = 1;
-    cmds[0].valid = 1;
-    opts.flat_cmd_count = 1;
-    opts.program.cmds = cmds;
-    opts.program.cmd_count = 1;
-    repl_execute_program(&opts);
+    run_one_cmd(CMD_ENABLE, GL_LIGHT0);
 
     rs = repl_state_render();
     ASSERT_TRUE("GL_LIGHT0 enabled by program",
-                light_enabled_by_id(rs.lights, GL_LIGHT0) == 1);
+                repl_light_enabled(rs.light_enabled_mask, 0) == 1);
     ASSERT_TRUE("GL_LIGHT1 reset off (program did not enable)",
-                light_enabled_by_id(rs.lights, GL_LIGHT1) == 0);
+                repl_light_enabled(rs.light_enabled_mask, 1) == 0);
     ASSERT_TRUE("GL_LIGHT2 reset off (program did not enable)",
-                light_enabled_by_id(rs.lights, GL_LIGHT2) == 0);
+                repl_light_enabled(rs.light_enabled_mask, 2) == 0);
     ASSERT_TRUE("GL_LIGHT3 reset off",
-                light_enabled_by_id(rs.lights, GL_LIGHT3) == 0);
+                repl_light_enabled(rs.light_enabled_mask, 3) == 0);
 
-    /* A subsequent program with no light commands must clear the
+    /* glDisable(GL_LIGHT0) within the same program clears just that bit. */
+    {
+        GLCmd cmds[2];
+        ReplExecutionOptions opts = {0};
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].type = CMD_ENABLE;  cmds[0].args[0] = GL_LIGHT2;
+        cmds[0].num_args = 1;       cmds[0].valid = 1;
+        cmds[1].type = CMD_ENABLE;  cmds[1].args[0] = GL_LIGHT0;
+        cmds[1].num_args = 1;       cmds[1].valid = 1;
+        opts.flat_cmd_count = 2;
+        opts.program.cmds = cmds;
+        opts.program.cmd_count = 2;
+        repl_execute_program(&opts);
+        rs = repl_state_render();
+        ASSERT_TRUE("enable LIGHT0+LIGHT2 -> mask 0b0101",
+                    rs.light_enabled_mask == 0x5u);
+
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].type = CMD_ENABLE;   cmds[0].args[0] = GL_LIGHT0;
+        cmds[0].num_args = 1;        cmds[0].valid = 1;
+        cmds[1].type = CMD_DISABLE;  cmds[1].args[0] = GL_LIGHT0;
+        cmds[1].num_args = 1;        cmds[1].valid = 1;
+        opts.flat_cmd_count = 2;
+        opts.program.cmds = cmds;
+        opts.program.cmd_count = 2;
+        repl_execute_program(&opts);
+        rs = repl_state_render();
+        ASSERT_TRUE("enable then disable LIGHT0 -> mask 0",
+                    rs.light_enabled_mask == 0u);
+    }
+
+    /* Re-enable, then a program with no light commands must clear the
      * previously-enabled light (the sticky bug). */
-    memset(cmds, 0, sizeof(cmds));
-    cmds[0].type = CMD_VERTEX3F;
-    cmds[0].valid = 1;
-    cmds[0].num_args = 3;
-    opts.flat_cmd_count = 1;
-    opts.program.cmds = cmds;
-    opts.program.cmd_count = 1;
-    repl_execute_program(&opts);
+    run_one_cmd(CMD_ENABLE, GL_LIGHT0);
+    run_one_cmd(CMD_VERTEX3F, 0.0);
 
     rs = repl_state_render();
     ASSERT_TRUE("GL_LIGHT0 cleared when next program omits glEnable",
-                light_enabled_by_id(rs.lights, GL_LIGHT0) == 0);
+                repl_light_enabled(rs.light_enabled_mask, 0) == 0);
 }
 
 /* The .ply export pass (encode_feedback_normals) must, vs. a normal live

@@ -76,16 +76,18 @@ void                     repl_state_time_set(float value);
  * directly (implemented in Phase 1 of the state split and step 7a of
  * feature/decouple-repl-from-gl-repl-alt.md). */
 
-/* Runtime-mutated render tail only: executor writes `lights[]` and
- * `clear_color[]` in response to user GL commands, so those bytes remain
- * REPL-owned. Policy toggles such as msaa, line smoothing, accumulation AA, and
- * point-attenuation enablement are app-owned in glr_state. */
+/* Runtime-mutated render tail only: executor writes `light_enabled_mask`
+ * and `clear_color[]` in response to user GL commands, so those bytes remain
+ * REPL-owned. The dimensional per-light data (positions/colors/eye-space) is
+ * app-owned in glr_state (GlrRenderState.lights), as are policy toggles such
+ * as msaa, line smoothing, accumulation AA, and point-attenuation enablement. */
 ReplRenderState        repl_state_render(void);
 ReplRenderState       *repl_state_render_mut(void);
-/* Reset the runtime-mutated render halves (`lights[]`, `clear_color[]`)
- * to defaults. The render-config toggles (msaa, line_smooth, accum_*)
- * moved to glr_state — call `glr_state_render_reset_defaults()` for
- * those. Both reset paths fire from `glr_ctrl_reset_all`. */
+/* Reset the runtime-mutated render halves (`light_enabled_mask`,
+ * `clear_color[]`) to defaults. The render-config toggles (msaa,
+ * line_smooth, accum_*) and the dimensional `lights[]` table moved to
+ * glr_state — call `glr_state_render_reset_defaults()` for those. Both
+ * reset paths fire from `glr_ctrl_reset_all`. */
 void                   repl_state_render_reset_defaults(void);
 
 ReplSceneRuntimeState    repl_state_scenes(void);

@@ -1565,12 +1565,15 @@ static void test_depth_probe_does_not_mutate_repl_state(void) {
 }
 
 /* Regression: loading an example resets the light_theme *name* to the
- * default, and that reset must ALSO re-apply the theme to the REPL-state
+ * default, and that reset must ALSO re-apply the theme to the app-state
  * lights[] (positions / colors / eye-space). Before the fix
  * glr_ctrl_reset_example_chrome reset the cfg field directly — bypassing
  * the scene_lights_apply_theme hook in glr_config_set — so the lights[]
  * array (and the light indicators that read it) stayed on the *previous*
- * theme: the name said default but the geometry stayed e.g. SOLAR. */
+ * theme: the name said default but the geometry stayed e.g. SOLAR.
+ *
+ * The dimensional light table is app-owned (GlrRenderState.lights); the
+ * REPL pipeline owns only the enable bitmask, so this checks app state. */
 static void test_example_reset_reapplies_light_theme(void) {
     printf("--- glr_ctrl example reset re-applies light theme to lights[] ---\n");
 
@@ -1583,7 +1586,7 @@ static void test_example_reset_reapplies_light_theme(void) {
     ASSERT_INT("theme set to SOLAR",
                glr_config_get(GLR_CONFIG_LIGHT_THEME), LIGHT_THEME_SOLAR);
     ASSERT_TRUE("lights[] differ from default after switching to SOLAR",
-                memcmp(repl_state_render_mut()->lights, expected_default,
+                memcmp(glr_state_render_mut()->lights, expected_default,
                        sizeof(expected_default)) != 0);
 
     /* Example-load presentation reset, with no tag defaults (mask 0 applies
@@ -1593,8 +1596,80 @@ static void test_example_reset_reapplies_light_theme(void) {
     ASSERT_INT("light_theme name reset to default",
                glr_config_get(GLR_CONFIG_LIGHT_THEME), LIGHT_THEME_DEFAULT);
     ASSERT_TRUE("lights[] re-applied to the default theme after example reset",
-                memcmp(repl_state_render_mut()->lights, expected_default,
+                memcmp(glr_state_render_mut()->lights, expected_default,
                        sizeof(expected_default)) == 0);
+}
+
+/* The light-split contract: SceneRenderConfig.lights[] is assembled per frame
+ * from two owners — the app-owned theme-seeded dimensional data
+ * (GlrRenderState.lights: position / color / id / eye-space) merged with the
+ * REPL-owned enable bitmask (ReplRenderState.light_enabled_mask). This drives
+ * a frame (scene render is stubbed, so the executor never re-derives the mask)
+ * and checks each slot's `.enabled` tracks the mask while the rest tracks the
+ * theme. */
+static void test_display_frame_merges_light_theme_and_enable_mask(void) {
+    printf("--- imrepl_ctrl light merge (theme + enable mask) ---\n");
+    prepare_display_fixture();
+
+    SceneLight theme[MAX_LIGHTS];
+    scene_lights_apply_theme(theme, LIGHT_THEME_SOLAR);
+
+    /* App side: the theme seeds positions/colors. REPL side: only slots 0
+     * and 2 are enabled by the program. */
+    glr_config_set(GLR_CONFIG_LIGHT_THEME, LIGHT_THEME_SOLAR);
+    repl_state_render_mut()->light_enabled_mask = (1u << 0) | (1u << 2);
+
+    glr_ctrl_display_frame();
+
+    ASSERT_INT("scene render called once", g_scene_render_calls, 1);
+    /* `.enabled` comes from the REPL mask. */
+    ASSERT_INT("merge: L0 enabled from mask", g_last_scene_config.lights[0].enabled, 1);
+    ASSERT_INT("merge: L1 disabled (mask bit clear)", g_last_scene_config.lights[1].enabled, 0);
+    ASSERT_INT("merge: L2 enabled from mask", g_last_scene_config.lights[2].enabled, 1);
+    ASSERT_INT("merge: L3 disabled (mask bit clear)", g_last_scene_config.lights[3].enabled, 0);
+    /* Dimensional data comes from the app-owned theme. */
+    ASSERT_INT("merge: L0 id from theme",
+               (int)g_last_scene_config.lights[0].id, (int)theme[0].id);
+    ASSERT_TRUE("merge: L0 diffuse from theme",
+                g_last_scene_config.lights[0].diffuse[0] == theme[0].diffuse[0] &&
+                g_last_scene_config.lights[0].diffuse[1] == theme[0].diffuse[1] &&
+                g_last_scene_config.lights[0].diffuse[2] == theme[0].diffuse[2]);
+    ASSERT_TRUE("merge: L2 position from theme",
+                g_last_scene_config.lights[2].pos[0] == theme[2].pos[0] &&
+                g_last_scene_config.lights[2].pos[1] == theme[2].pos[1] &&
+                g_last_scene_config.lights[2].pos[2] == theme[2].pos[2]);
+}
+
+/* The exporter is scene/app-free and reads the dimensional light data through
+ * the controller-installed light bridge. Verify the installed bridge copies
+ * the live app-owned light table verbatim, so exported glLightfv blocks match
+ * the active theme. */
+static void test_export_light_bridge_reads_app_state(void) {
+    printf("--- imrepl_ctrl export light bridge reads app-owned lights ---\n");
+    prepare_display_fixture();
+    glr_config_set(GLR_CONFIG_LIGHT_THEME, LIGHT_THEME_STUDIO);
+
+    const ReplExportLightBridge *b = repl_export_light_bridge();
+    ASSERT_TRUE("light bridge installed", b != NULL && b->fill_slot != NULL);
+    if (!b || !b->fill_slot) return;
+
+    GlrRenderState render = glr_state_render();
+    for (int slot = 0; slot < MAX_LIGHTS; slot++) {
+        ReplExportLightInfo info;
+        memset(&info, 0xAB, sizeof(info)); /* bridge must overwrite all fields */
+        b->fill_slot(slot, &info);
+        const SceneLight *l = &render.lights[slot];
+        ASSERT_TRUE("bridge diffuse matches app light",
+                    info.diffuse[0] == l->diffuse[0] && info.diffuse[3] == l->diffuse[3]);
+        ASSERT_TRUE("bridge ambient matches app light",
+                    info.ambient[0] == l->ambient[0]);
+        ASSERT_TRUE("bridge specular matches app light",
+                    info.specular[0] == l->specular[0]);
+        ASSERT_TRUE("bridge position matches app light",
+                    info.pos[0] == l->pos[0] && info.pos[3] == l->pos[3]);
+        ASSERT_INT("bridge eye-space matches app light",
+                   info.pos_is_eye_space, l->pos_is_eye_space);
+    }
 }
 
 static void test_mouse_routing_and_hit_testing(void) {
@@ -1862,6 +1937,8 @@ int main(void) {
     test_numeric_swatch_scale_coarse_and_fine();
     test_depth_probe_does_not_mutate_repl_state();
     test_example_reset_reapplies_light_theme();
+    test_display_frame_merges_light_theme_and_enable_mask();
+    test_export_light_bridge_reads_app_state();
     test_mouse_routing_and_hit_testing();
     test_special_key_shortcuts();
     test_app_lifecycle_bootstrap_shutdown();

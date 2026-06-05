@@ -43,14 +43,13 @@ static void repl_state_apply_sentinels(ReplRuntimeState *s) {
 
     /* --- render: lights ---
      * The REPL pipeline owns only what the executor mutates: the
-     * `enabled` flag is set/cleared in response to glEnable(GL_LIGHTn)
-     * / glDisable(GL_LIGHTn). Positions, colors, and the active
-     * lighting theme are *presentation* concerns wired in by the
-     * controller (scene_lights_apply_theme), so we only seed the
-     * minimum the executor needs: a stable GL_LIGHTn id per slot so
-     * apply / dispatch can index lights[] by glEnable's argument. */
-    for (int i = 0; i < MAX_LIGHTS; i++)
-        s->render.lights[i].id = GL_LIGHT0 + i;
+     * light-enable bitmask, set/cleared in response to glEnable(GL_LIGHTn)
+     * / glDisable(GL_LIGHTn) and recomputed each walk (defaults to 0 via
+     * the zero-init above — no light is enabled until the program says so).
+     * Positions, colors, eye-space, and the active lighting theme are
+     * *presentation* concerns owned by the app shell (GlrRenderState.lights,
+     * seeded by the controller via scene_lights_apply_theme). */
+    s->render.light_enabled_mask = 0;
 
     s->render.clear_color[0] = 0.10f;
     s->render.clear_color[1] = 0.10f;

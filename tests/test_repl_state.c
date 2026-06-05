@@ -175,8 +175,8 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     glr_render->point_attenuation_enabled = 0;
 
     render = repl_state_render_mut();
-    render->lights[1].enabled = 0;
-    render->lights[2].pos[0] = 7.5f;
+    render->light_enabled_mask = (1u << 1);  /* GL_LIGHT1 enabled */
+    glr_render->lights[2].pos[0] = 7.5f;     /* dimensional data is app-owned now */
     render->clear_color[0] = 0.20f;
     render->clear_color[1] = 0.25f;
     render->clear_color[2] = 0.30f;
@@ -340,7 +340,10 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("render use accum restored", glr_state_render().use_accum, 0);
     ASSERT_INT("render accum aa restored", glr_state_render().accum_aa_enabled, 0);
     ASSERT_INT("render samples restored", glr_state_render().accum_samples, 8);
-    ASSERT_INT("render light enabled restored", repl_state_render().lights[1].enabled, 0);
+    ASSERT_INT("render light enable mask restored",
+               (int)repl_state_render().light_enabled_mask, (int)(1u << 1));
+    ASSERT_TRUE("render light pos restored (app-owned)",
+                glr_state_render().lights[2].pos[0] == 7.5f);
     ASSERT_TRUE("render clear color restored",
                 repl_state_render().clear_color[2] == 0.30f);
     ASSERT_INT("replay active restored", replay_state_view().active, 1);
