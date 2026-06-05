@@ -457,6 +457,19 @@ int glr_ctrl_router_handle_export_special(int key) {
 
 /* ---- Mouse / motion router helpers ------------------------------------ */
 
+static int glr_ctrl_shift_fine_modifier_active(void) {
+    return (editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT) != 0;
+}
+
+static float glr_ctrl_adjustment_modifier_scale(int coarse, int fine) {
+    float scale = 1.0f;
+    if (coarse)
+        scale *= GLR_ADJUST_COARSE_SCALE;
+    if (fine)
+        scale *= GLR_ADJUST_FINE_SCALE;
+    return scale;
+}
+
 int glr_ctrl_router_handle_variable_panel_drag_begin(int button, int state, int x, int y) {
     if (state != GLUT_DOWN) return 0;
     if (!variable_panel_visible()) return 0;
@@ -575,8 +588,16 @@ int glr_ctrl_router_handle_variable_panel_motion(int x, int y) {
     (void)y;
     if (!variable_panel_drag_active())
         return 0;
-    if (variable_panel_handle_drag_motion(x, &value_change))
+    if (variable_panel_handle_drag_motion(x, &value_change)) {
+        VariablePanelDragState drag = variable_panel_drag();
+        if (!drag.log_mode) {
+            float scale = glr_ctrl_adjustment_modifier_scale(
+                0, glr_ctrl_shift_fine_modifier_active());
+            value_change.value = drag.start_value +
+                (value_change.value - drag.start_value) * scale;
+        }
         glr_ctrl_apply_variable_panel_value_change(&value_change);
+    }
     editor_request_redraw();
     return 1;
 }
@@ -929,12 +950,8 @@ static int route_inline_color_swatch_hit(const UiHit *hit, int my) {
  * slider's coarse/fine modifiers: a right-click steps x10 (coarse), and
  * holding Shift steps x1/5 (fine). They combine (right+Shift = x2). */
 static float numeric_swatch_scale(int is_right_button) {
-    float scale = 1.0f;
-    if (is_right_button)
-        scale *= 10.0f;
-    if (editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT)
-        scale *= 0.2f;
-    return scale;
+    return glr_ctrl_adjustment_modifier_scale(
+        is_right_button, glr_ctrl_shift_fine_modifier_active());
 }
 
 static int route_numeric_swatch_hit(const UiHit *hit, float scale) {

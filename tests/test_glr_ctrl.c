@@ -104,6 +104,11 @@ static const float g_mutated_predef_value = 123.0f;
 static const int g_mutated_flat_count = 99;
 static const float g_mutated_scratch_value = 77.0f;
 
+static int g_simulated_mods = 0;
+static int simulated_mods_provider(void) {
+    return g_simulated_mods;
+}
+
 static void set_cmd3(GLCmd *cmd, CmdType type, int src_idx,
                      const char *source, float a, float b, float c) {
     memset(cmd, 0, sizeof(*cmd));
@@ -536,6 +541,66 @@ static void test_variable_panel_motion_routes_through_compile_and_coalesces_undo
     ASSERT_STR("undo restores declaration source",
                editor_buffer_line(0), "  static float testvar = 1;");
     ASSERT_FLOAT("undo restores live predef value", g_predef_vars[var_idx].value, 1.0f);
+}
+
+static void test_variable_panel_shift_left_drag_uses_fine_scale(void) {
+    int px, py, pw, ph;
+    int click_x, click_y;
+    int hit_row;
+    int window_h;
+    int var_idx;
+
+    printf("--- imrepl_ctrl variable panel shift fine drag ---\n");
+
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(1000, 1000);
+    variable_panel_set_visible(1);
+    editor_feed_line("float testvar = 1.0;");
+
+    var_idx = repl_eval_find_predef_var_idx("testvar");
+    ASSERT_TRUE("fine testvar declared", var_idx >= 0);
+    ASSERT_FLOAT("fine testvar starts at 1", g_predef_vars[var_idx].value, 1.0f);
+
+    vp_rect(g_num_predef_vars, &px, &py, &pw, &ph);
+    window_h = ui_state_viewport().window_h;
+    click_x = px + pw / 2;
+    click_y = -1;
+    for (int gl_y = py; gl_y < py + ph; gl_y++) {
+        int candidate_y = window_h - gl_y;
+        hit_row = -1;
+        if (vp_hit_row(g_num_predef_vars, click_x, candidate_y, &hit_row)
+                && hit_row == var_idx) {
+            click_y = candidate_y;
+            break;
+        }
+    }
+    ASSERT_TRUE("found click target for fine testvar row", click_y >= 0);
+
+    editor_input_set_modifier_provider_for_test(simulated_mods_provider);
+    g_simulated_mods = GLUT_ACTIVE_SHIFT;
+
+    ASSERT_INT("fine drag begin handled",
+               glr_ctrl_router_handle_variable_panel_drag_begin(
+                   GLUT_LEFT_BUTTON, GLUT_DOWN, click_x, click_y),
+               1);
+    ASSERT_TRUE("fine drag active after begin", variable_panel_drag_active());
+
+    ASSERT_INT("fine drag motion handled",
+               glr_ctrl_router_handle_variable_panel_motion(click_x + 100, click_y),
+               1);
+    ASSERT_FLOAT("fine drag applies shared fine scale",
+                 g_predef_vars[var_idx].value,
+                 1.0f + 5.0f * GLR_ADJUST_FINE_SCALE);
+    ASSERT_STR("fine drag rewrites declaration source",
+               editor_buffer_line(0), "  static float testvar = 2;");
+
+    ASSERT_INT("fine drag release handled",
+               glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP),
+               1);
+    ASSERT_TRUE("fine drag inactive after release", !variable_panel_drag_active());
+
+    g_simulated_mods = 0;
+    editor_input_set_modifier_provider_for_test(NULL);
 }
 
 static void test_variable_panel_motion_preserves_reset_assignment_without_declaration(void) {
@@ -1480,10 +1545,9 @@ static void test_numeric_swatch_no_op_in_insert_mode(void) {
                editor_buffer_view_line(buf, 0), before);
 }
 
-/* The scale arg multiplies the value-derived base step: a right-click
- * passes 10.0 (coarse, x10) and a Shift-held press 0.2 (fine, x1/5).
- * Pin that one step at scale 10 moves the value ten base-steps, and
- * scale 0.2 moves a fifth of one base-step. */
+/* The scale arg multiplies the value-derived base step. Pin that one
+ * step at the shared coarse scale moves the value ten base-steps, and
+ * the shared fine scale moves a fifth of one base-step. */
 static float swatch_value_after_one_step(const char *line, int cursor,
                                          float scale) {
     UiHit hit_up = ui_hit_none();
@@ -1509,8 +1573,10 @@ static void test_numeric_swatch_scale_coarse_and_fine(void) {
 
     /* Base step for a |value| < 10 arg is 0.05 (repl_eval_swatch_step). */
     base   = swatch_value_after_one_step("glVertex3f(1.5, 0, 0);", 13, 1.0f);
-    coarse = swatch_value_after_one_step("glVertex3f(1.5, 0, 0);", 13, 10.0f);
-    fine   = swatch_value_after_one_step("glVertex3f(1.5, 0, 0);", 13, 0.2f);
+    coarse = swatch_value_after_one_step(
+        "glVertex3f(1.5, 0, 0);", 13, GLR_ADJUST_COARSE_SCALE);
+    fine   = swatch_value_after_one_step(
+        "glVertex3f(1.5, 0, 0);", 13, GLR_ADJUST_FINE_SCALE);
 
     ASSERT_FLOAT("base step is +0.05", base, 1.55f);
     ASSERT_FLOAT("coarse (x10) step is +0.5", coarse, 2.0f);
@@ -1830,11 +1896,6 @@ static void test_mouse_routing_and_hit_testing(void) {
     glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, 100, 100);
 }
 
-static int g_simulated_mods = 0;
-static int simulated_mods_provider(void) {
-    return g_simulated_mods;
-}
-
 static void test_special_key_shortcuts(void) {
     printf("--- imrepl_ctrl special key shortcuts ---\n");
     prepare_display_fixture();
@@ -1980,6 +2041,7 @@ int main(void) {
     test_reshape_clamps_height();
     test_display_frame_profile_coverage();
     test_variable_panel_motion_routes_through_compile_and_coalesces_undo();
+    test_variable_panel_shift_left_drag_uses_fine_scale();
     test_variable_panel_motion_preserves_reset_assignment_without_declaration();
     test_variable_panel_motion_initializes_uninitialized_declaration();
     test_variable_drag_snapshot_wiring();

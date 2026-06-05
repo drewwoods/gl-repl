@@ -53,6 +53,17 @@
 #define CFG_PANEL_FRAC_MIN 0.1f
 #define CFG_PANEL_FRAC_MAX 0.9f
 
+/* Shared adjustment multipliers for fine/coarse numeric controls:
+ * in-app numeric swatches, variable-panel drag modifiers, and exported
+ * @tune keyboard callbacks. Keep these here so interaction rates do not
+ * drift across live and exported control paths. */
+#ifndef GLR_ADJUST_COARSE_SCALE
+#define GLR_ADJUST_COARSE_SCALE 10.0f
+#endif
+#ifndef GLR_ADJUST_FINE_SCALE
+#define GLR_ADJUST_FINE_SCALE 0.2f
+#endif
+
 /* ---- Text and diagnostics --------------------------------------------- */
 
 /* Status / diagnostic text buffer size. Compile entries write into
