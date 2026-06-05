@@ -237,11 +237,11 @@ Landed cleanup:
 The dependency is now one-way: replay depends on the REPL program model; REPL
 no longer depends on replay runtime state.
 
-### 4. REPL/scene has a type-vocabulary cycle, not a live-state cycle
+### 4. REPL/scene type-vocabulary cycle — light half removed
 
-Evidence:
+Evidence (original):
 
-- `src/repl/state_views.h` includes `scene/render_types.h` for `SceneLight`.
+- `src/repl/state_views.h` included `scene/render_types.h` for `SceneLight`.
 - `src/scene/guides/guides_shared.h` includes `repl/command.h` and
   `repl/flatten.h`.
 - `src/scene/guides/transform_utils.h` includes `repl/command.h` and applies
@@ -261,11 +261,45 @@ render contracts and REPL-aware guide overlays. Still, it complicates a strict
 
 Difficulty: medium, but lower urgency than app/UI and editor/UI.
 
-Likely cleanup path:
+#### Landed cleanup (light split — Option C)
 
-- Move the `SceneLight` contract used by both executor and scene into a smaller
-  neutral header, or split `ReplRenderState` so REPL does not include the full
-  scene render contract.
+Date: 2026-06-05
+
+The `SceneLight` half of this edge is gone. `src/repl/state_views.h` no longer
+includes `scene/render_types.h`. The split followed the audit recommendation
+to "split `ReplRenderState` so REPL does not include the full scene render
+contract", drawn on the line where REPL's interpretation actually stops:
+
+- **REPL owns only the enable fact.** `ReplRenderState.lights[MAX_LIGHTS]`
+  (a full `SceneLight[]`) became `unsigned light_enabled_mask`. The executor
+  was the only REPL reader/writer, and it only ever consumed `.id` (to key the
+  slot) and `.enabled`. It now sets/clears mask bits for `GL_LIGHT0+i` and
+  resets the mask each walk. `state_views.h` defines `REPL_LIGHT_SLOT_COUNT`
+  (a small REPL-owned count, scene-include-free) and a `repl_light_enabled()`
+  inline; `src/app/glr_ctrl.c` `STATIC_ASSERT`s it equals scene's `MAX_LIGHTS`.
+- **App owns the dimensional data.** Positions/colors/eye-space moved to
+  `GlrRenderState.lights[MAX_LIGHTS]` (app may depend on scene), seeded by the
+  theme. The three `scene_lights_apply_theme(...)` call sites now target app
+  state. The per-frame controller merge in `glr_ctrl_build_scene_config`
+  zips app dimensional data with the REPL enable mask into
+  `SceneRenderConfig.lights[]`.
+- **Export goes through a bridge.** `src/repl/export.c` is GL/scene/app-free,
+  so it no longer reads `repl_state_render().lights`. A new
+  `ReplExportLightBridge` (neutral float struct, same shape as the existing
+  camera/projection bridges) is installed by the controller and reads the
+  app-owned light table. `check-repl-export-via-bridge` stays green.
+
+Tests: `test_repl_executor` (enable/disable mask tracking + walk reset),
+`test_repl_state` (mask + app-owned pos round-trip through capture/restore),
+`test_repl_core_internal` (render-reset split across owners), `test_glr_ctrl`
+(per-frame merge of theme + mask; installed light bridge reads app state).
+Verified `make test-stubs` (52/52 binaries, 9430/9430), `check-state-ownership`,
+`check-c99`, and the real `make gl-repl` link.
+
+#### Remaining (guides vocabulary)
+
+Still open, lower urgency — the guide overlays keep REPL-aware code in scene:
+
 - Consider moving REPL-aware guide snapshot/walk helpers out of `src/scene`
   into `src/subsystems/edit_overlays` or another feature-bridge module. Scene
   would then render pre-resolved primitives/configs, while REPL command walking
@@ -398,8 +432,10 @@ contracts / deferred cleanup:
 3. Decide whether `ui/app` is allowed to be app-coupled. If not, introduce a
    controller-built menu/config view model.
 4. Replace UI's direct editor type imports with UI-owned snapshot/view types.
-5. Optionally split the REPL/scene shared vocabulary so guide overlays stop
-   living in `src/scene` as REPL-aware code.
+5. The REPL/scene `SceneLight` vocabulary is now split (finding 4, Option C):
+   REPL owns an enable bitmask, the dimensional light table is app-owned, and
+   `state_views.h` no longer includes `scene/render_types.h`. Remaining: the
+   guide-overlay vocabulary still living in `src/scene` as REPL-aware code.
 
 Minimum viable documentation-only path:
 

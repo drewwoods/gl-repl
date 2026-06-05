@@ -19,6 +19,7 @@
 
 #include "scene/guides/xform_guide_mode.h"
 #include "scene/view_mode.h"
+#include "scene/render_types.h"   /* SceneLight, MAX_LIGHTS for the theme-seeded lights[] */
 
 /* Scene-presentation policy: what chrome and overlays the app should show, how
  * the code panel should format text, and which view mode/backdrop/filter choices
@@ -58,21 +59,26 @@ typedef struct {
     int paren_scope;        /* 1 = highlight text inside the caret's parens */
 } GlrPresentationState;
 
-/* App-owned render policy toggles. Runtime values emitted directly by user GL
- * commands, such as `lights[]` and `clear_color[]`, stay on ReplRenderState so
- * src/repl/executor.c can mutate them without depending on glr_state. */
+/* App-owned render policy toggles plus the theme-seeded light table. The
+ * runtime-mutated halves written by the executor — the light-enable bitmask
+ * and `clear_color[]` — stay on `ReplRenderState` since `src/repl/executor.c`
+ * is a REPL pipeline TU and cannot include `glr_state.h`. The dimensional
+ * per-light data (positions/colors/eye-space) is presentation state seeded
+ * here from a scene light theme (scene_lights_apply_theme), so it lives on the
+ * app side; the controller merges it with the REPL enable bitmask each frame
+ * when building SceneRenderConfig.lights[]. */
 typedef struct {
-    /* User-config toggles. The runtime-mutated halves of the render
-     * slice — `lights[]` and `clear_color[]`, written by the executor
-     * in response to glEnable(GL_LIGHTn) / glClearColor commands —
-     * stay on `ReplRenderState` since `src/repl/executor.c` is a REPL
-     * pipeline TU and cannot include `glr_state.h`. */
     int   use_accum;
     int   accum_aa_enabled;
     int   accum_samples;
     int   multisample_enabled;
     int   line_smooth_enabled;
     int   point_attenuation_enabled;
+    /* Theme-seeded light slots. The `.enabled` field here is unused (the
+     * REPL pipeline owns enable state via ReplRenderState.light_enabled_mask);
+     * `.id` is seeded to GL_LIGHT0+i, and positions/colors/eye-space come
+     * from the active light theme. */
+    SceneLight lights[MAX_LIGHTS];
 } GlrRenderState;
 
 /* Whole app-side state bundle captured/restored alongside REPL/editor/UI peers

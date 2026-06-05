@@ -86,6 +86,14 @@
 #include "subsystems/variable_panel/variable_panel_drag.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 
+/* The REPL pipeline tracks light-enable state for REPL_LIGHT_SLOT_COUNT
+ * slots (state_views.h, scene-include-free); the scene render contract sizes
+ * its light table by MAX_LIGHTS. The controller is the one TU that sees both,
+ * so it pins the two counts together — the per-frame merge in
+ * glr_ctrl_build_scene_config indexes both by the same i. */
+STATIC_ASSERT(REPL_LIGHT_SLOT_COUNT == MAX_LIGHTS,
+              "REPL light-slot count must match scene MAX_LIGHTS");
+
 static int glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(
     const UiRenderSnapshot *snap,
     int *out_follow_doc_line,
@@ -686,9 +694,16 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, SceneRende
     config->accum_aa_enabled = render.accum_aa_enabled;
     config->accum_samples = render.accum_samples;
 
-    /* --- Lighting --- */
+    /* --- Lighting ---
+     * Merge the app-owned dimensional light data (theme-seeded positions /
+     * colors / eye-space, in glr_state) with the REPL-owned enable bitmask
+     * (light_enabled_mask, written by the executor as the program runs).
+     * The light-indicator overlay reads the `.enabled` flags from here. */
     config->user_lighting_enabled = repl_state_flat_program_user_lighting_enabled();
-    memcpy(config->lights, repl_render.lights, sizeof(config->lights));
+    for (int i = 0; i < MAX_LIGHTS; i++) {
+        config->lights[i] = render.lights[i];
+        config->lights[i].enabled = repl_light_enabled(repl_render.light_enabled_mask, i);
+    }
     config->show_light_indicators = presentation.show_light_indicators;
 
     /* --- Environment --- */
@@ -1483,13 +1498,13 @@ static void glr_ctrl_reset_example_chrome(unsigned int tag_mask) {
 
     /* glr_state_presentation_reset_example_defaults() writes the
      * light_theme field directly (it is a pure storage module and
-     * cannot reach scene_lights_apply_theme), so the REPL-state lights[]
+     * cannot reach scene_lights_apply_theme), so the app-state lights[]
      * positions/colors/eye-space flags are left on the *previous*
      * theme. Re-seed them from whatever theme the reset + tag defaults
      * settled on — same call reset_all makes. An example's own leading
      * `@cfg light_theme = X` runs after this through glr_config_set,
      * which re-applies via the same path (idempotent). */
-    scene_lights_apply_theme(repl_state_render_mut()->lights,
+    scene_lights_apply_theme(glr_state_render_mut()->lights,
                              glr_state_presentation().light_theme);
 }
 
@@ -1529,6 +1544,27 @@ static void glr_ctrl_export_reshape_projection(ReplExportProjectionBlock *blk) {
 
 static const ReplExportProjectionBridge g_export_projection_bridge_impl = {
     glr_ctrl_export_reshape_projection
+};
+
+/* Adapter for the export light bridge. Copies the app-owned theme-seeded
+ * light data (GlrRenderState.lights) into the exporter's neutral float
+ * struct so src/repl/export.c can emit the glLightfv init/display blocks
+ * without including scene/app headers. Enable state is intentionally not
+ * carried — the export bootstrap disables every slot and the program's own
+ * glEnable(GL_LIGHTn) re-enables in display(). */
+static void glr_ctrl_export_fill_light(int slot, ReplExportLightInfo *out) {
+    if (slot < 0 || slot >= MAX_LIGHTS) return;  /* out is pre-zeroed by caller */
+    GlrRenderState render = glr_state_render();
+    const SceneLight *l = &render.lights[slot];
+    memcpy(out->pos, l->pos, sizeof(out->pos));
+    memcpy(out->diffuse, l->diffuse, sizeof(out->diffuse));
+    memcpy(out->ambient, l->ambient, sizeof(out->ambient));
+    memcpy(out->specular, l->specular, sizeof(out->specular));
+    out->pos_is_eye_space = l->pos_is_eye_space;
+}
+
+static const ReplExportLightBridge g_export_light_bridge_impl = {
+    glr_ctrl_export_fill_light
 };
 
 /* Editor-input cleanup that the REPL loaders used to do inline now
@@ -1742,6 +1778,8 @@ static void glr_ctrl_install_app_services(void) {
     repl_executor_install_camera_distance_source(glr_ctrl_camera_distance);
     /* Reshape-projection bridge: queries the active 2D/3D projection for export and layout calculations. */
     repl_export_install_projection_bridge(&g_export_projection_bridge_impl);
+    /* Light bridge: feeds the app-owned theme-seeded light data to the exporter's glLightfv blocks. */
+    repl_export_install_light_bridge(&g_export_light_bridge_impl);
     /* Help-overlay F-key label provider so src/repl/help_text.c can
      * walk F2..F10 labels without including app/glr_config.h (audit #1). */
     repl_help_text_install_fkey_provider(&g_glr_help_fkey_provider);
@@ -1756,13 +1794,14 @@ void glr_ctrl_reset_all(void) {
     /* Reset presentation, rendering, and camera defaults. */
     glr_state_presentation_reset_defaults();
     glr_state_render_reset_defaults();
-    /* Seed the REPL-state light slots with the active theme's
+    /* Seed the app-state light slots with the active theme's
      * positions / colors. The scene module owns the theme presets;
-     * the controller wires them into ReplRenderState so the executor
-     * (enabled flags) and the exporter (positions / colors) see a
-     * coherent set of lights. State.c only initialises .id; without
-     * this call positions / colors stay zero. */
-    scene_lights_apply_theme(repl_state_render_mut()->lights,
+     * the controller wires them into GlrRenderState so the merge in
+     * glr_ctrl_build_scene_config (dimensional data + REPL enable mask)
+     * and the export light bridge see a coherent set of lights.
+     * glr_state defaults only seed .id; without this call positions /
+     * colors stay zero. */
+    scene_lights_apply_theme(glr_state_render_mut()->lights,
                              glr_state_presentation().light_theme);
     glr_camera_reset_default();
     glr_ctrl_view_reset();

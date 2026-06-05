@@ -25,6 +25,11 @@
 #include "app/glr_defaults.h"    /* CFG_DEFAULT_* */
 #include "scene/themes.h"    /* GRID_MAJOR_*, GRID_EXTENT_*, SceneGridTheme defaults */
 #include "scene/postprocess_filter.h" /* SCENE_POST_FILTER_OFF */
+#include "c_compat.h"        /* STATIC_ASSERT */
+
+/* The render defaults below seed exactly four GL_LIGHTn ids by hand, so the
+ * initializer would silently under-seed if the light count ever changed. */
+STATIC_ASSERT(MAX_LIGHTS == 4, "glr_state light-id seed assumes MAX_LIGHTS == 4");
 
 static const float g_grid_major_steps[GRID_MAJOR_COUNT] = {
     [GRID_MAJOR_1]  = 1.0f,
@@ -73,6 +78,11 @@ static const float g_grid_extents[GRID_EXTENT_COUNT] = {
         .multisample_enabled       = CFG_DEFAULT_MULTISAMPLE, \
         .line_smooth_enabled       = CFG_DEFAULT_LINE_SMOOTH, \
         .point_attenuation_enabled = CFG_DEFAULT_ATTENUATE_POINTS, \
+        /* Seed the stable GL_LIGHTn ids; positions/colors/eye-space are \
+         * filled by scene_lights_apply_theme when the controller applies \
+         * the active light theme (at init and on every example reset). */ \
+        .lights = { { .id = GL_LIGHT0 }, { .id = GL_LIGHT1 }, \
+                    { .id = GL_LIGHT2 }, { .id = GL_LIGHT3 } }, \
     }, \
 }
 

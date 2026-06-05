@@ -35,15 +35,39 @@ static const char k_cfg_slug_msaa[] = "msaa";
 static const char k_cfg_slug_line_smooth[] = "line_smooth";
 static const char k_cfg_slug_vertex_outlines[] = "vertex_outlines";
 static const char k_cfg_slug_vertex_points[] = "vertex_points";
+/* Light bridge — the controller installs an adapter that copies the live
+ * app-owned theme-seeded light data (positions/colors/eye-space) into the
+ * neutral ReplExportLightInfo. This TU stays clean of scene/app includes
+ * (check-repl-export-via-bridge / controller-boundary guards). NULL on the
+ * demo and in tests, where lights export as zeroed + disabled. */
+static const ReplExportLightBridge *g_export_light_bridge = NULL;
+
+void repl_export_install_light_bridge(const ReplExportLightBridge *bridge) {
+    g_export_light_bridge = bridge;
+}
+
+const ReplExportLightBridge *repl_export_light_bridge(void) {
+    return g_export_light_bridge;
+}
+
+/* Resolve slot `slot`'s dimensional light data through the bridge, or zero
+ * it when no bridge is installed. */
+static void export_light_info(int slot, ReplExportLightInfo *out) {
+    memset(out, 0, sizeof(*out));
+    if (g_export_light_bridge && g_export_light_bridge->fill_slot)
+        g_export_light_bridge->fill_slot(slot, out);
+}
+
 /* True when the slot's POSITION line must be emitted from init() (at
  * identity modelview) rather than from display() after the camera
  * transforms. The flag is set by the scene module's theme presets and
- * mirrored onto SceneLight; the exporter just reads it, which keeps
+ * carried across the light bridge; the exporter just reads it, which keeps
  * this TU clean of scene includes (check-controller-boundaries
  * forbids them in src/repl/). */
 static int export_slot_pos_is_eye_space(int slot) {
-    ReplRenderState render = repl_state_render();
-    return render.lights[slot].pos_is_eye_space;
+    ReplExportLightInfo info;
+    export_light_info(slot, &info);
+    return info.pos_is_eye_space;
 }
 
 /* `@declare` marker name emitted by write_canonical_cmd_as_c for each
@@ -842,7 +866,7 @@ void repl_refresh_camera_lines(void) {
  * while reading as the shortest exact form (0.8f -> "0.8", not the
  * "0.800000012" a raw %.9g would emit). */
 
-static const char *const k_light_names[MAX_LIGHTS] = {
+static const char *const k_light_names[REPL_LIGHT_SLOT_COUNT] = {
     "GL_LIGHT0", "GL_LIGHT1", "GL_LIGHT2", "GL_LIGHT3"
 };
 
@@ -878,23 +902,23 @@ static int lights_init_slot_line_count(int slot) {
  * (only when export_slot_pos_is_eye_space(slot)) is the eye-space
  * POSITION push. */
 static void lights_init_emit_slot_line(int slot, int sub, char *buf, size_t n) {
-    ReplRenderState render = repl_state_render();
-    const SceneLight *l = &render.lights[slot];
+    ReplExportLightInfo l;
+    export_light_info(slot, &l);
     const char *ln = k_light_names[slot];
     char body[EXPORT_FLOAT_LIST_MAX];
     switch (sub) {
     case 0:
-        export_format_float_list(body, sizeof(body), l->diffuse, 4);
+        export_format_float_list(body, sizeof(body), l.diffuse, 4);
         snprintf(buf, n,
                  "  glLightfv(%s, GL_DIFFUSE,  (GLfloat[]){%s});", ln, body);
         return;
     case 1:
-        export_format_float_list(body, sizeof(body), l->ambient, 4);
+        export_format_float_list(body, sizeof(body), l.ambient, 4);
         snprintf(buf, n,
                  "  glLightfv(%s, GL_AMBIENT,  (GLfloat[]){%s});", ln, body);
         return;
     case 2:
-        export_format_float_list(body, sizeof(body), l->specular, 4);
+        export_format_float_list(body, sizeof(body), l.specular, 4);
         snprintf(buf, n,
                  "  glLightfv(%s, GL_SPECULAR, (GLfloat[]){%s});", ln, body);
         return;
@@ -905,7 +929,7 @@ static void lights_init_emit_slot_line(int slot, int sub, char *buf, size_t n) {
         /* Eye-space POSITION push. The modelview is still identity at
          * this point in init() so glLightfv snapshots eye coordinates;
          * the slot will then track the camera as the user orbits. */
-        export_format_float_list(body, sizeof(body), l->pos, 4);
+        export_format_float_list(body, sizeof(body), l.pos, 4);
         snprintf(buf, n,
                  "  glLightfv(%s, GL_POSITION, (GLfloat[]){%s});", ln, body);
         return;
@@ -914,7 +938,7 @@ static void lights_init_emit_slot_line(int slot, int sub, char *buf, size_t n) {
 
 int repl_export_lights_init_line_count(void) {
     int n = LIGHTS_INIT_HEADER_LINES;
-    for (int s = 0; s < MAX_LIGHTS; s++)
+    for (int s = 0; s < REPL_LIGHT_SLOT_COUNT; s++)
         n += lights_init_slot_line_count(s);
     return n;
 }
@@ -930,7 +954,7 @@ void repl_export_lights_init_line(int i, char *buf, size_t n) {
         return;
     }
     i -= LIGHTS_INIT_HEADER_LINES;
-    for (int slot = 0; slot < MAX_LIGHTS; slot++) {
+    for (int slot = 0; slot < REPL_LIGHT_SLOT_COUNT; slot++) {
         int slot_lines = lights_init_slot_line_count(slot);
         if (i < slot_lines) {
             lights_init_emit_slot_line(slot, i, buf, n);
@@ -949,7 +973,7 @@ static int lights_display_slot_visible(int slot) {
 
 int repl_export_lights_display_line_count(void) {
     int n = LIGHTS_DISPLAY_HEADER_LINES;
-    for (int s = 0; s < MAX_LIGHTS; s++)
+    for (int s = 0; s < REPL_LIGHT_SLOT_COUNT; s++)
         if (lights_display_slot_visible(s)) n++;
     return n;
 }
@@ -965,14 +989,14 @@ void repl_export_lights_display_line(int i, char *buf, size_t n) {
         return;
     }
     i -= LIGHTS_DISPLAY_HEADER_LINES;
-    ReplRenderState render = repl_state_render();
-    for (int slot = 0; slot < MAX_LIGHTS; slot++) {
+    for (int slot = 0; slot < REPL_LIGHT_SLOT_COUNT; slot++) {
         if (!lights_display_slot_visible(slot)) continue;
         if (i == 0) {
-            const SceneLight *l = &render.lights[slot];
+            ReplExportLightInfo l;
+            export_light_info(slot, &l);
             const char *ln = k_light_names[slot];
             char body[EXPORT_FLOAT_LIST_MAX];
-            export_format_float_list(body, sizeof(body), l->pos, 4);
+            export_format_float_list(body, sizeof(body), l.pos, 4);
             snprintf(buf, n,
                      "  glLightfv(%s, GL_POSITION, (GLfloat[]){%s});", ln, body);
             return;

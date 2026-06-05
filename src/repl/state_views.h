@@ -12,7 +12,6 @@
 
 #include "repl/export_state.h"
 #include "config.h"          /* REPL_STATUS_TEXT_MAX */
-#include "scene/render_types.h"
 #include "repl/flatten.h"
 
 #ifndef REPL_WORKSPACE_DIR_MAX
@@ -22,6 +21,21 @@
 #ifndef USER_SCENE_NAME_MAX
 #define USER_SCENE_NAME_MAX 64
 #endif
+
+/* Number of GL light slots the REPL tracks enable/disable for: GL_LIGHT0
+ * through GL_LIGHT0+REPL_LIGHT_SLOT_COUNT-1. The dimensional light data
+ * (positions / colors / eye-space) is presentation state owned by the app
+ * shell (GlrRenderState.lights, seeded from a scene light theme); the REPL
+ * pipeline owns only which slots the program enabled, as a bitmask, so this
+ * header no longer needs to include the scene render-type vocabulary. The
+ * controller STATIC_ASSERTs this count equals scene's MAX_LIGHTS. */
+#define REPL_LIGHT_SLOT_COUNT 4
+
+/* Non-zero when slot `slot` (0..REPL_LIGHT_SLOT_COUNT-1) is enabled in the
+ * given light-enable bitmask. */
+static inline int repl_light_enabled(unsigned mask, int slot) {
+    return (int)((mask >> slot) & 1u);
+}
 
 /* Source document storage: canonical source commands and the
  * source-level auto-normal dirty flag. The edit-line cursor lives
@@ -92,12 +106,16 @@ typedef struct {
  * owning modules. This header keeps only the REPL-owned render tail that the
  * executor mutates directly (implemented in phase 1 of the state split
  * and step 7a of feature/decouple-repl-from-gl-repl-alt.md). */
-/* REPL-owned render tail: mutable per-light state and clear color written by
- * user GL commands. Policy toggles such as msaa, line smoothing, point
- * attenuation enablement, and grid/axes visibility are app-owned in glr_state. */
+/* REPL-owned render tail: the light-enable bitmask and clear color written by
+ * user GL commands. `light_enabled_mask` bit i is set while the program's
+ * glEnable(GL_LIGHT0+i) is in effect (recomputed each executor walk); the
+ * light-indicator overlay reads it. Positions/colors/eye-space for each slot
+ * are presentation state on the app shell (GlrRenderState.lights). Policy
+ * toggles such as msaa, line smoothing, point attenuation enablement, and
+ * grid/axes visibility are app-owned in glr_state. */
 typedef struct {
-    SceneLight lights[MAX_LIGHTS];
-    float      clear_color[4];
+    unsigned light_enabled_mask;
+    float    clear_color[4];
 } ReplRenderState;
 
 

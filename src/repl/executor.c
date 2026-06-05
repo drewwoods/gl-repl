@@ -43,8 +43,17 @@ int repl_executor_point_parameter_supported(void) {
 }
 
 #define EXEC_RENDER (repl_state_render_mut())
-#define g_lights      (EXEC_RENDER->lights)
 #define g_clear_color (EXEC_RENDER->clear_color)
+
+/* Slot index (0..REPL_LIGHT_SLOT_COUNT-1) for a glEnable/glDisable cap, or
+ * -1 if `cap` is not one of the tracked GL_LIGHTn ids. The executor records
+ * which light slots the program enabled in EXEC_RENDER->light_enabled_mask;
+ * the dimensional light data lives in app state, so the executor never
+ * touches positions/colors here. */
+static int repl_exec_light_slot_for_cap(GLenum cap) {
+    int slot = (int)cap - (int)GL_LIGHT0;
+    return (slot >= 0 && slot < REPL_LIGHT_SLOT_COUNT) ? slot : -1;
+}
 
 static GLUtesselator *g_tess = NULL;
 static TessVertex     g_tess_verts[TESS_VERT_BUF_SIZE];
@@ -259,17 +268,17 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
     case CMD_ENABLE: {
         GLenum cap = (GLenum)cmd->args[0];
         glEnable(cap);
-        for (int light_idx = 0; light_idx < MAX_LIGHTS; light_idx++)
-            if (g_lights[light_idx].id == cap)
-                g_lights[light_idx].enabled = 1;
+        int slot = repl_exec_light_slot_for_cap(cap);
+        if (slot >= 0)
+            EXEC_RENDER->light_enabled_mask |= (1u << slot);
         return 1;
     }
     case CMD_DISABLE: {
         GLenum cap = (GLenum)cmd->args[0];
         glDisable(cap);
-        for (int light_idx = 0; light_idx < MAX_LIGHTS; light_idx++)
-            if (g_lights[light_idx].id == cap)
-                g_lights[light_idx].enabled = 0;
+        int slot = repl_exec_light_slot_for_cap(cap);
+        if (slot >= 0)
+            EXEC_RENDER->light_enabled_mask &= ~(1u << slot);
         return 1;
     }
     case CMD_SHADE_MODEL:
@@ -450,14 +459,13 @@ void repl_execute_program(const ReplExecutionOptions *options) {
 
     tess_current_color[3] = alpha_scale;
 
-    /* The light-indicator overlay reads lights[].enabled for its on/off
+    /* The light-indicator overlay reads light_enabled_mask for its on/off
      * visual. GL's real default — and scene_lights_setup() — is
      * all-lights-disabled; only the program's glEnable(GL_LIGHTn) turns
      * one on. Reset the bookkeeping at the start of every walk so the
      * indicator tracks what the program actually does, instead of the
      * sticky, default-on value that never reflected enable/disable. */
-    for (int li = 0; li < MAX_LIGHTS; li++)
-        g_lights[li].enabled = 0;
+    EXEC_RENDER->light_enabled_mask = 0;
 
     int pc = 0;
     while (pc < flat_cmd_count) {

@@ -23,15 +23,17 @@
 #endif
 
 /* Render-config toggles (msaa, line_smooth, accum_*, point_attenuation)
- * moved to glr_state.render in step 7a. lights[] / clear_color[] stay
- * on repl_state.render because the executor mutates them. */
+ * moved to glr_state.render in step 7a, and the dimensional lights[] table
+ * (positions/colors/eye-space) moved there too in the light-split. The REPL
+ * render slice now keeps only the executor-mutated halves: the light-enable
+ * bitmask and clear_color[]. */
 #define g_use_accum            (glr_state_render_mut()->use_accum)
 #define g_accum_aa_enabled     (glr_state_render_mut()->accum_aa_enabled)
 #define g_accum_samples        (glr_state_render_mut()->accum_samples)
 #define g_multisample_enabled  (glr_state_render_mut()->multisample_enabled)
 #define g_line_smooth_enabled  (glr_state_render_mut()->line_smooth_enabled)
 #define g_init_attenuate_points (glr_state_render_mut()->point_attenuation_enabled)
-#define g_lights               (repl_state_render_mut()->lights)
+#define g_lights               (glr_state_render_mut()->lights)
 #define g_clear_color          (repl_state_render_mut()->clear_color)
 
 #include <stdio.h>
@@ -737,10 +739,11 @@ int main() {
                    g_line_smooth_enabled, CFG_DEFAULT_LINE_SMOOTH);
         ASSERT_INT("render reset point attenuation",
                    g_init_attenuate_points, CFG_DEFAULT_ATTENUATE_POINTS);
-        /* REPL state owns only the slot id (so the executor can route
-         * glEnable(GL_LIGHTn) through lights[n]); positions/colors are
-         * scene-defined and wired in by the controller, not by
-         * repl_state_render_reset_defaults. */
+        /* The dimensional light table is app-owned now; its slot ids are
+         * seeded by glr_state defaults and restored by
+         * glr_state_render_reset_defaults (positions/colors come from the
+         * controller's scene_lights_apply_theme). The REPL render reset
+         * only zeroes the enable bitmask + clear_color. */
         ASSERT_INT("render reset light id", (int)g_lights[0].id, GL_LIGHT0);
         ASSERT_TRUE("render reset clear color r", g_clear_color[0] == 0.10f);
         ASSERT_TRUE("render reset clear color g", g_clear_color[1] == 0.10f);

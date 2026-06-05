@@ -141,6 +141,33 @@ typedef struct {
 
 void                              repl_export_install_projection_bridge(const ReplExportProjectionBridge *bridge);
 
+/* Neutral light seam (same install shape as the camera/projection bridges).
+ *
+ * The exported init()/display() bodies emit one glLightfv block per light
+ * slot, but the dimensional light data (positions / colors / eye-space) is
+ * presentation state owned by the app shell (GlrRenderState.lights, seeded
+ * from a scene light theme). src/repl/export.c is scene/app-free, so the
+ * controller installs a bridge that copies the live per-slot values into this
+ * neutral float struct. No bridge installed (scene_demo, tests) => the
+ * exporter emits zeroed/disabled lights. This carries only the dimensional
+ * fields; whether a slot is *enabled* is decided by the program's own
+ * glEnable(GL_LIGHTn) in display(), so the export bootstrap disables every
+ * slot regardless and never consults this. */
+typedef struct {
+    float pos[4];
+    float diffuse[4];
+    float ambient[4];
+    float specular[4];
+    int   pos_is_eye_space;
+} ReplExportLightInfo;
+
+typedef struct {
+    void (*fill_slot)(int slot, ReplExportLightInfo *out);
+} ReplExportLightBridge;
+
+void                         repl_export_install_light_bridge(const ReplExportLightBridge *bridge);
+const ReplExportLightBridge *repl_export_light_bridge(void);
+
 /* Resolve the reshape projection lines: the installed bridge, else the
  * canonical perspective default. Fills up to REPL_EXPORT_PROJ_LINES
  * pointers into out[] and returns the count. Returned pointers reference
