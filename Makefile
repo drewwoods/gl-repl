@@ -428,6 +428,7 @@ SRCS = \
 	src/ui/subsystems/variable_panel.c \
 	src/subsystems/color_picker/color_picker_state.c \
 	src/subsystems/replay/replay.c \
+	src/subsystems/replay/replay_annotations.c \
 	src/subsystems/replay/replay_fade.c \
 	src/subsystems/replay/replay_input.c \
 	src/subsystems/replay/replay_playback.c \
@@ -864,7 +865,7 @@ BENCH_BINS = bench_repl
 
 ROOT_BIN_LINKS = gl-repl scene_demo repl_demo editor_demo memprof_demo variable_panel_demo color_picker_demo cpuprof_demo
 
-.PHONY: $(ROOT_BIN_LINKS) $(TEST_BINS) $(BENCH_BINS)
+.PHONY: sample $(ROOT_BIN_LINKS) $(TEST_BINS) $(BENCH_BINS)
 
 SAMPLE_BIN = $(BINDIR)/gl-repl
 SCENE_DEMO_BIN = $(BINDIR)/scene_demo
@@ -983,6 +984,8 @@ $(SAMPLE_BIN): $(SAMPLE_OBJS)
 
 gl-repl: FORCE $(SAMPLE_BIN) ## Build the main gl-repl binary using release flags by default.
 	ln -sfn $(SAMPLE_BIN) $@
+
+sample: gl-repl ## Alias for the main gl-repl sample binary.
 
 # macOS .app bundle so the Dock/Finder show the gl-repl cube icon instead of
 # the launching terminal's icon. Pure packaging — no source changes, so the
