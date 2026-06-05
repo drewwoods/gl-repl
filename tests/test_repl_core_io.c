@@ -2352,6 +2352,27 @@ static void test_import_robustness(void) {
     ASSERT_TRUE("single line 1 keeps its own trailing comment",
                 strstr(editor_buffer_line(1), "glVertex3f(0, 0, 0); // origin") != NULL);
 
+    /* 7. A brace inside a // comment in a function body must not move
+     * function-nesting depth. Pre-fix, the stray `{` left func_depth
+     * stuck above 0, so the next function definition was swallowed as
+     * a body line (loading 4 commands with warnings instead of 6). */
+    f = fopen(test_path, "w");
+    fprintf(f, "static void func0(void) {\n");
+    fprintf(f, "  glVertex3f(1, 1, 1); // brace { in comment\n");
+    fprintf(f, "}\n");
+    fprintf(f, "static void func1(void) {\n");
+    fprintf(f, "  glVertex3f(2, 2, 2);\n");
+    fprintf(f, "}\n");
+    fclose(f);
+    glr_ctrl_reset_all(); declare_test_vars();
+    ASSERT_TRUE("load brace-in-comment funcbody file",
+                repl_export_load_from_file(test_path, NULL) == 1);
+    ASSERT_INT("comment brace did not swallow the next function",
+               repl_state_document_count(), 6);
+    ASSERT_TRUE("func0 defined", strstr(editor_buffer_line(0), "func0") != NULL);
+    ASSERT_TRUE("func1 still defined (not swallowed)",
+                strstr(editor_buffer_line(3), "func1") != NULL);
+
     remove(test_path);
 }
 
