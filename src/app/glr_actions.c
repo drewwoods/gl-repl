@@ -25,6 +25,7 @@
 #include "repl/scenes.h"
 #include "app/glr_config.h"
 #include "editor/input.h"
+#include "editor/commit.h"
 #include "editor/completion.h"
 #include "keys.h"
 #include "repl/help_text.h"
@@ -787,6 +788,9 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
         case GLR_FILE_ITEM_EXPORT_PLY:
             bind_app_workspace_for_scene_save_if_needed();
             glr_export_mesh_ply(repl_active_scene_export_path("ply"), 0);
+            return 1;
+        case GLR_FILE_ITEM_SPLIT_DECL:
+            editor_split_decl_at_cursor();
             return 1;
         case GLR_FILE_ITEM_SAVE_WORKSPACE: {
             const char *dir = workspace_dir_or_app_default();

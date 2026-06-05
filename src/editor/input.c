@@ -1233,6 +1233,14 @@ static int handle_buffer_command_key_route(unsigned char key) {
         }
         return 1;
     }
+
+    if (keymap_event_is(key, GLR_SPLIT_DECL)) {
+        /* Splits the multi-var decl under the cursor one-per-line; a
+         * no-op (with a hint) anywhere else. Owns its own undo + tutorial
+         * guard, so consume the key regardless of outcome. */
+        editor_split_decl_at_cursor();
+        return 1;
+    }
     return 0;
 }
 

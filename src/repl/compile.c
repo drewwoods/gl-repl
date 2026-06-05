@@ -774,6 +774,87 @@ ReplCompileResult repl_compile_float_decl(const char *input,
     return REPL_COMPILE_OK;
 }
 
+ReplCompileResult repl_compile_split_decl(const ReplCompileContext *ctx,
+                                          int line_idx,
+                                          ReplCompiledChange *out,
+                                          char *err, int err_size) {
+    if (!ctx || !out)
+        return REPL_COMPILE_ERROR;
+
+    repl_compiled_change_init(out);
+
+    if (line_idx < 0 || line_idx >= ctx->document_count ||
+        ctx->document_cmds[line_idx].type != CMD_VAR_DECLARE) {
+        out->kind = REPL_COMPILED_NO_CHANGE;
+        return REPL_COMPILE_OK;
+    }
+
+    /* Recover names + initializers + trailing comment from the line's
+     * canonical source text. A committed decl stores evaluated literals
+     * (commit already evaluated any init expression), so re-parsing and
+     * re-emitting is lossless. */
+    const char *line = source_text_line(ctx->text, line_idx);
+    FloatDeclParse parsed;
+    int recognized = 0;
+    ReplCompileResult r =
+        parse_float_name_list(line ? line : "", &parsed, &recognized,
+                              err, err_size);
+    if (r != REPL_COMPILE_OK)
+        return r;
+    if (!recognized || parsed.count < 2) {
+        /* Single-name (or unparseable) decl: nothing to split. */
+        out->kind = REPL_COMPILED_NO_CHANGE;
+        return REPL_COMPILE_OK;
+    }
+    if (parsed.count > MAX_COMMIT_CMDS)
+        return compile_set_err(err, err_size,
+            "too many names to split (%d > %d)", parsed.count, MAX_COMMIT_CMDS);
+
+    for (int i = 0; i < parsed.count; i++) {
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        cmd.type  = CMD_VAR_DECLARE;
+        cmd.valid = 1;
+        cmd.payload.decl.count = 1;
+        repl_copy_string_fits(cmd.payload.decl.names[0],
+                              sizeof(cmd.payload.decl.names[0]),
+                              parsed.names[i]);
+        out->cmds[i] = cmd;
+
+        /* A single-name view drives format_decl_text so each line gets
+         * its own `= value`; the original line's trailing comment rides
+         * the first line only, leaving the rest clean for per-variable
+         * // @tune tags. */
+        FloatDeclParse one;
+        memset(&one, 0, sizeof(one));
+        one.count = 1;
+        repl_copy_string_fits(one.names[0], sizeof(one.names[0]),
+                              parsed.names[i]);
+        one.has_init[0]  = parsed.has_init[i];
+        one.init_vals[0] = parsed.init_vals[i];
+        if (i == 0)
+            repl_copy_string_fits(one.decl_comment, sizeof(one.decl_comment),
+                                  parsed.decl_comment);
+        format_decl_text(&one, out->text[i], (int)sizeof(out->text[i]));
+    }
+
+    /* Replace the one decl line in place: delete it, then insert the N
+     * single-name decls at the same index. `pos` is in post-delete
+     * coordinates (compile.h convention); deleting one line at line_idx
+     * leaves line_idx as the insert point. No predef ops — the
+     * variables stay declared with their current values. */
+    out->kind             = REPL_COMPILED_INSERT_MANY;
+    out->pos              = line_idx;
+    out->count            = parsed.count;
+    out->delete_pos       = line_idx;
+    out->delete_count     = 1;
+    out->adjust_edit_line = 0;
+
+    snprintf(out->commit_message, sizeof(out->commit_message),
+             "Split declaration into %d lines", parsed.count);
+    return REPL_COMPILE_OK;
+}
+
 static int compile_rebase_var_assign_slot_after_undeclares(
         const char *name,
         int original_slot,

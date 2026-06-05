@@ -1158,6 +1158,7 @@ alongside `.cfg` (see the file-layout table for the shipped catalog).
 | Ctrl+S | Save to output.c |
 | Ctrl+Z | Undo (Ctrl+Y or Ctrl+Shift+Z to redo) |
 | Ctrl+\ | Reformat all lines |
+| Ctrl+Shift+S | Split the multi-variable declaration under the cursor into one per line (also File → Split Declaration) |
 | Ctrl+R | Start / stop replay |
 | Ctrl+T | Toggle time variable `t` (Ctrl+Shift+T resets it to 0) |
 | Ctrl+G | Toggle wireframe |

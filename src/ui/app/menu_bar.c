@@ -277,6 +277,7 @@ static const char *menu_item_label(int menu_id, int i) {
         if (i == GLR_FILE_ITEM_LOAD_SCENE)    return "Load Scene";
         if (i == GLR_FILE_ITEM_RENAME_SCENE)  return "Rename Scene";
         if (i == GLR_FILE_ITEM_EXPORT_PLY)    return "Export .ply";
+        if (i == GLR_FILE_ITEM_SPLIT_DECL)    return "Split Declaration";
         if (i == GLR_FILE_ITEM_SCENE_SEP)     return "---";
         if (i == GLR_FILE_ITEM_SAVE_WORKSPACE) return "Save Workspace";
         if (i == GLR_FILE_ITEM_LOAD_WORKSPACE) return "Load Workspace";
@@ -322,6 +323,7 @@ static const char *menu_item_label(int menu_id, int i) {
 
 static const char *menu_item_shortcut(int menu_id, int i) {
     if (menu_id == MENU_FILE && i == GLR_FILE_ITEM_SAVE_SCENE) return "Ctrl+S";
+    if (menu_id == MENU_FILE && i == GLR_FILE_ITEM_SPLIT_DECL) return "Ctrl+Shift+S";
     if (menu_id == MENU_FILE && i == GLR_FILE_ITEM_QUIT) return "Ctrl+Q";
     if (menu_id == MENU_SCENE) return NULL;
     if (menu_id == MENU_TUTORIALS)

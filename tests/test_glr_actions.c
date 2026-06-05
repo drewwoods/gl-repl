@@ -13,6 +13,7 @@
 #include "app/glr_audio.h"
 #include "repl/core.h"
 #include "editor/input.h"
+#include "editor/state.h"                /* editor_state_edit_line_set */
 #include "editor/inline_rename.h"
 #include "repl/examples.h"
 #include "repl/tutorials.h"
@@ -304,6 +305,21 @@ static void test_menu_actions(void) {
      * one is an inert no-op that keeps the dropdown open (returns 0). */
     ASSERT_INT("Config parent-row activate is inert (returns 0)",
                glr_action_menu_item_activate(GLR_MENU_CONFIG, 1), 0);
+}
+
+/* File > Split Declaration routes to the editor split entry: a multi-var
+ * decl under the cursor splits one-per-line. */
+static void test_split_decl_menu_action(void) {
+    glr_ctrl_reset_all();
+
+    editor_feed_line("float grid, extent;");
+    editor_state_edit_line_set(0);   /* cursor on the decl */
+
+    ASSERT_INT("File Split Declaration consumed",
+               glr_action_menu_item_activate(GLR_MENU_FILE, GLR_FILE_ITEM_SPLIT_DECL), 1);
+    ASSERT_INT("decl split into two lines", source_document_view().line_count, 2);
+    ASSERT_STR("split line 0", editor_buffer_line(0), "  static float grid;");
+    ASSERT_STR("split line 1", editor_buffer_line(1), "  static float extent;");
 }
 
 /* Regression: the in-app Load Workspace action must land on a loaded
@@ -1304,6 +1320,7 @@ int main(void) {
     test_config_sections();
     test_config_parent_rows_inert();
     test_menu_actions();
+    test_split_decl_menu_action();
     test_load_workspace_activates_scene();
     test_shortcuts();
     test_ascii_shortcut_modifiers();
