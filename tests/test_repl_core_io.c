@@ -1931,7 +1931,8 @@ int main(void) {
             fclose(rd);
         }
         ASSERT_TRUE("stderr captured Warning line",
-                    strstr(captured, "Warning: could not parse line") != NULL);
+                    strstr(captured, "Warning:") != NULL &&
+                    strstr(captured, "could not parse line") != NULL);
         ASSERT_TRUE("stderr captured the load_err detail",
                     strstr(captured, "(command store at capacity") != NULL);
 

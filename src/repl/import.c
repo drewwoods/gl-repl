@@ -58,6 +58,16 @@
 
 #include "repl/cfg_baseline.h"
 
+#ifndef NO_COLOR_OUTPUT
+#define COLOR_WARNING_START "\033[33m"
+#define COLOR_WARNING_END   "\033[0m"
+#else
+#define COLOR_WARNING_START ""
+#define COLOR_WARNING_END   ""
+#endif
+
+static const char kWarningPrefix[] = COLOR_WARNING_START "Warning:" COLOR_WARNING_END " could not parse line:";
+
 #define g_import_cfg_bridge (repl_config_bridge())
 
 /* Pending @cfg accumulator: parse_cfg() during import populates this; the
@@ -1238,10 +1248,9 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings,
          * and similar import failures showed up as the generic
          * "could not parse line" with no clue why. */
         if (load_err[0])
-            fprintf(stderr, "Warning: could not parse line: %s (%s)\n",
-                    line, load_err);
+            fprintf(stderr, "%s %s (%s)\n", kWarningPrefix, line, load_err);
         else
-            fprintf(stderr, "Warning: could not parse line: %s\n", line);
+            fprintf(stderr, "%s %s\n", kWarningPrefix, line);
         (*warnings)++;
     }
 }
@@ -1348,10 +1357,9 @@ static int import_try_function_header(ImportState *s, const char *p, const char 
     if (!handled) {
         /* See import_feed_one_line for the load_err rationale. */
         if (load_err[0])
-            fprintf(stderr, "Warning: could not parse line: %s (%s)\n",
-                    raw, load_err);
+            fprintf(stderr, "%s %s (%s)\n", kWarningPrefix, raw, load_err);
         else
-            fprintf(stderr, "Warning: could not parse line: %s\n", raw);
+            fprintf(stderr, "%s %s\n", kWarningPrefix, raw);
         s->warnings++;
     }
     s->func_depth = 1;
