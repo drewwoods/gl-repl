@@ -1773,7 +1773,7 @@ static ExportNeeds export_collect_needs(void) {
     return needs;
 }
 
-static void __attribute__((unused)) emit_export_outline_pass_setup(FILE *f) {
+static void emit_export_outline_pass_setup(FILE *f) {
     fprintf(f, "  glEnable(GL_COLOR_MATERIAL);\n");
     fprintf(f, "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);\n");
     fprintf(f, "  glColor3f(0.0f, 0.0f, 0.0f);\n");
@@ -1786,7 +1786,7 @@ static void __attribute__((unused)) emit_export_outline_pass_setup(FILE *f) {
     fprintf(f, "  glEnable(GL_LIGHTING);\n");
 }
 
-static void __attribute__((unused)) emit_export_point_pass_setup(FILE *f) {
+static void emit_export_point_pass_setup(FILE *f) {
     fprintf(f, "  glEnable(GL_COLOR_MATERIAL);\n");
     fprintf(f, "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);\n");
     fprintf(f, "  glColor3f(0.0f, 0.0f, 0.0f);\n");
@@ -1853,8 +1853,8 @@ static void emit_export_display_geometry(FILE *f) {
      * pipeline. Demo case (no bridge installed) falls back to "off",
      * which is fine because the demo doesn't export (implemented in
      * step 7a). */
-    int outlines_on = repl_cfg_get_int(k_cfg_slug_vertex_outlines, 0);
-    int vpoints_on = repl_cfg_get_int(k_cfg_slug_vertex_points, 0);
+    int __attribute__((unused)) outlines_on = repl_cfg_get_int(k_cfg_slug_vertex_outlines, 0);
+    int __attribute__((unused)) vpoints_on = repl_cfg_get_int(k_cfg_slug_vertex_points, 0);
 
     /* Disable the outlines for now, they complicate the exported code
      * and are not one for one with the live REPL's outline pass.
@@ -1870,8 +1870,8 @@ static void emit_export_display_geometry(FILE *f) {
      */
     const ExportDisplayPassSpec passes[] = {
         { "Vertex Fill Pass",    1,           NULL },
-        { "Vertex Outline Pass", outlines_on, NULL /* emit_export_outline_pass_setup */ },
-        { "Vertex Point Pass",   vpoints_on,  NULL /* emit_export_point_pass_setup */ },
+        { "Vertex Outline Pass", 0 /* outlines_on */, emit_export_outline_pass_setup },
+        { "Vertex Point Pass",   0 /* vpoints_on */, emit_export_point_pass_setup },
     };
 
     /* `t` is advanced by the tick() timer at a fixed step (see the
