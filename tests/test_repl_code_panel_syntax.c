@@ -9,6 +9,7 @@
  */
 #include "repl/command_spec.h"
 #include "ui/app/repl_code_panel.h"
+#include "ui/core/text_panel.h"
 #include "support/test_harness.h"
 
 #include <math.h>
@@ -19,7 +20,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 
 #define ASSERT_TRUE(name, cond) TEST_ASSERT_TRUE(&g_harness, name, cond)
 
-#define MAX_SPANS 32
+#define MAX_SPANS UI_TEXT_PANEL_MAX_COLOR_SEGMENTS
 
 /* Exact whole-token lookup: return the first span whose text equals tok.
  * Safe because spans are only emitted for argument tokens (never for the
@@ -35,6 +36,35 @@ static const UiSyntaxSpan *find_tok(const char *text,
             return &spans[i];
     }
     return NULL;
+}
+
+static const UiSyntaxSpan *find_span_covering(const UiSyntaxSpan *spans,
+                                              int n,
+                                              int pos,
+                                              UiSyntaxKind kind) {
+    for (int i = 0; i < n; i++) {
+        if (spans[i].kind == kind &&
+            pos >= spans[i].start &&
+            pos < spans[i].start + spans[i].len)
+            return &spans[i];
+    }
+    return NULL;
+}
+
+static int last_index_of(const char *text, const char *needle) {
+    const char *hit = NULL;
+    const char *p;
+
+    if (!text || !needle || !needle[0])
+        return -1;
+
+    p = text;
+    while ((p = strstr(p, needle)) != NULL) {
+        hit = p;
+        p++;
+    }
+
+    return hit ? (int)(hit - text) : -1;
 }
 
 static void check_line(const char *label, const char *text,
@@ -165,6 +195,26 @@ int main(void) {
      * rows entirely so the whole line keeps the comment color). */
     ASSERT_TRUE("comment category maps to CMD_CAT_COMMENT",
                 repl_cmd_type_category(CMD_COMMENT) == CMD_CAT_COMMENT);
+
+    /* Regression: the long wave-surface normal expression used to fill the
+     * 16-span render budget part-way through the row, so syntax coloring
+     * visibly stopped before the tail of the line. Drive the classifier
+     * through the real render cap and assert the final zPhase*t still has a
+     * variable span. */
+    {
+        const char *t =
+            "invGradMag = 1.0/sqrt(1 + amp*amp*freq*freq*(cos(x*freq + t)*cos(x*freq + t)*cos(z*freq + zPhase*t)*cos(z*freq + zPhase*t) + sin(x*freq + t)*sin(x*freq + t)*sin(z*freq + zPhase*t)*sin(z*freq + zPhase*t)));";
+        UiSyntaxSpan spans[MAX_SPANS];
+        int n = ui_repl_code_panel_classify_syntax(NULL, t, spans, MAX_SPANS);
+        int tail = last_index_of(t, "zPhase*t");
+        int tail_t = tail >= 0 ? tail + (int)strlen("zPhase*") : -1;
+
+        ASSERT_TRUE("long syntax row exceeds old 16-span budget", n > 16);
+        ASSERT_TRUE("long syntax row reaches final tail token",
+                    tail_t >= 0 &&
+                    find_span_covering(spans, n, tail_t,
+                                       REPL_SYNTAX_VARIABLE) != NULL);
+    }
 
     /* Color model: shades derive from the class color only — same hue,
      * three brightness tiers (literal > variable > constant). Variables and
