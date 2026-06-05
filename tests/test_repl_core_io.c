@@ -1961,6 +1961,10 @@ int main(void) {
         ASSERT_TRUE("long @var import still succeeds", rc_a == 1);
         ASSERT_TRUE("long @var name warns instead of dropping silently",
                     strstr(cap, "@var name exceeds") != NULL);
+        /* The header-directive warning is folded into the load summary's
+         * "(N warnings)" tally (it used to print but not count). */
+        ASSERT_TRUE("long @var counted in the load summary",
+                    strstr(cap, "(1 warnings)") != NULL);
 
         /* (b) @var with a reserved name: the declare fails and pre-fix the
          * error string from repl_eval_declare_predef_var was discarded. */
@@ -2001,6 +2005,8 @@ int main(void) {
         ASSERT_TRUE("clean import succeeds", rc_d == 1);
         ASSERT_TRUE("clean import emits no Warning",
                     strstr(cap, "Warning:") == NULL);
+        ASSERT_TRUE("clean import summary shows no warning count",
+                    strstr(cap, "warnings)") == NULL);
     }
 
     /* Regression for #83 in plans/done/src-repl-code-smell-audit-2.md:
