@@ -219,6 +219,16 @@ static int parse_func_alias(const char *args) {
     }
     name[len] = '\0';
     if (len == 0) return 0;
+    /* The alias name is longer than a slot can hold: it was just truncated,
+     * so the matching `static void <name>(...)` definition below will fail to
+     * map back to this slot and be dropped. Warn rather than drop in silence
+     * (the historical behaviour) — the only fix is a shorter func name or a
+     * larger REPL_FUNC_NAME_MAX. */
+    if (*p && (isalnum((unsigned char)*p) || *p == '_'))
+        fprintf(stderr,
+                "Warning: @func %d alias '%s' exceeds the %d-char name limit; "
+                "its definition will be dropped on import\n",
+                slot, name, REPL_FUNC_NAME_MAX - 1);
     repl_func_alias_set(slot, name);
     return 1;
 }
