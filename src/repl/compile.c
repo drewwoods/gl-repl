@@ -27,10 +27,10 @@
  *   repl_compile_var_assign         INSERT_ONE / REPLACE_ONE  +
  *                                   SET_VALUE (+ UNDECLARE on
  *                                   decl-row overwrite)
- *   repl_compile_set_predef_value   REPLACE_ONE on the literal
- *                                   assign or decl initializer
- *                                   that backs the named variable;
- *                                   pure SET_VALUE if neither exists
+ *   repl_compile_set_predef_value   REPLACE_ONE on the decl
+ *                                   initializer that backs the named
+ *                                   variable; pure SET_VALUE if no
+ *                                   declaration exists
  *   repl_compile_empty_line         INSERT_ONE
  *   repl_compile_delete_range       DELETE_RANGE + UNDECLARE for any
  *                                   decl rows in the range
@@ -222,39 +222,6 @@ static void compile_copy_leading_ws(const char *text, char *out, int out_sz) {
     out[off] = '\0';
 }
 
-static int compile_find_last_literal_assign(const ReplCompileContext *ctx,
-                                            int var_idx) {
-    int found = -1;
-
-    if (!ctx || !ctx->document_cmds)
-        return -1;
-
-    for (int cmd_idx = 0; cmd_idx < ctx->document_count; cmd_idx++) {
-        const GLCmd *cmd = &ctx->document_cmds[cmd_idx];
-        if (!cmd->valid || cmd->type != CMD_VAR_ASSIGN)
-            continue;
-        if (cmd->var_idx != var_idx || cmd->has_vars)
-            continue;
-        found = cmd_idx;
-    }
-    return found;
-}
-
-static int compile_has_any_assign(const ReplCompileContext *ctx,
-                                  int var_idx) {
-    if (!ctx || !ctx->document_cmds)
-        return 0;
-
-    for (int cmd_idx = 0; cmd_idx < ctx->document_count; cmd_idx++) {
-        const GLCmd *cmd = &ctx->document_cmds[cmd_idx];
-        if (!cmd->valid || cmd->type != CMD_VAR_ASSIGN)
-            continue;
-        if (cmd->var_idx == var_idx)
-            return 1;
-    }
-    return 0;
-}
-
 static int compile_find_var_decl(const ReplCompileContext *ctx,
                                  const char *name) {
     if (!ctx || !ctx->document_cmds || !name || !name[0])
@@ -302,31 +269,6 @@ static int compile_append_span(char *out, int out_sz, int *off,
     *off += len;
     out[*off] = '\0';
     return 1;
-}
-
-static int compile_build_literal_assign_change(const ReplCompileContext *ctx,
-                                               int cmd_idx,
-                                               const char *name,
-                                               float value,
-                                               ReplCompiledChange *out) {
-    char indent[REPL_INDENT_TEXT_MAX];
-
-    if (!ctx || !out || !name || cmd_idx < 0 || cmd_idx >= ctx->document_count)
-        return 0;
-
-    compile_copy_leading_ws(source_text_line(ctx->text, cmd_idx),
-                            indent, sizeof(indent));
-
-    out->kind = REPL_COMPILED_REPLACE_ONE;
-    out->pos = cmd_idx;
-    out->count = 1;
-    out->adjust_edit_line = 0;
-    out->cmds[0] = ctx->document_cmds[cmd_idx];
-    out->cmds[0].args[0] = value;
-    out->cmds[0].has_vars = 0;
-
-    return snprintf(out->text[0], sizeof(out->text[0]), "%s%s = %g;",
-                    indent, name, (double)value) < (int)sizeof(out->text[0]);
 }
 
 /* Rewrite the initializer for one name in a multi-name decl line.
@@ -1073,8 +1015,6 @@ ReplCompileResult repl_compile_set_predef_value(const char *name,
                                                 ReplCompiledChange *out,
                                                 char *err, int err_size) {
     int var_idx;
-    int literal_assign_idx;
-    int has_any_assign;
     int decl_idx;
 
     if (!ctx || !out || !name || !name[0])
@@ -1097,18 +1037,6 @@ ReplCompileResult repl_compile_set_predef_value(const char *name,
     out->predef_op_count = 1;
     snprintf(out->commit_message, sizeof(out->commit_message),
              "%s = %g", name, (double)value);
-
-    literal_assign_idx = compile_find_last_literal_assign(ctx, var_idx);
-    if (literal_assign_idx >= 0) {
-        if (!compile_build_literal_assign_change(ctx, literal_assign_idx,
-                                                 name, value, out))
-            return compile_set_err(err, err_size, "Command too long");
-        return REPL_COMPILE_OK;
-    }
-
-    has_any_assign = compile_has_any_assign(ctx, var_idx);
-    if (has_any_assign)
-        return REPL_COMPILE_OK;
 
     decl_idx = compile_find_var_decl(ctx, name);
     if (decl_idx >= 0) {
