@@ -1071,6 +1071,52 @@ int editor_try_commit_var_statements_then_insert(void) {
     return 0;
 }
 
+/* Split the multi-variable declaration under the cursor into one
+ * single-name decl per line (`float a, b, c;` -> three lines). Shared
+ * entry point for the Ctrl+Shift+S keybinding and the File-menu item.
+ * Returns 1 when it consumed the request (split applied, or a status
+ * was published), 0 when the cursor isn't on a multi-name decl so the
+ * caller can decide what else to do. */
+int editor_split_decl_at_cursor(void) {
+    int line = editor_state_edit_line();
+    ReplCompileContext ctx = editor_compile_context_live();
+    EditorCommitPlan plan;
+    editor_commit_plan_init(&plan);
+    char err[REPL_STATUS_TEXT_MAX];
+
+    /* Compile is pure, so it's safe to run before the undo push — the
+     * snapshot is only taken once we know a split will actually apply. */
+    ReplCompileResult r = repl_compile_split_decl(&ctx, line, &plan.change,
+                                                  err, sizeof(err));
+    if (r != REPL_COMPILE_OK) {
+        repl_set_status_error(err);
+        return 1;
+    }
+    if (plan.change.kind == REPL_COMPILED_NO_CHANGE) {
+        repl_set_status("Put the cursor on a multi-variable declaration to split it");
+        return 0;
+    }
+
+    /* Respect tutorial locked lines, like every other source mutation. */
+    if (!tutorial_guard_source_change(line, 1, plan.change.count)) {
+        repl_set_status_error("Tutorial line is read-only");
+        return 1;
+    }
+
+    /* Land on the first split line with its (now single-var) text loaded. */
+    plan.effects.cursor_target         = line;
+    plan.effects.insert_mode_target    = 0;
+    plan.effects.load_line_after_apply = 1;
+
+    editor_undo_push_snapshot();
+    if (!editor_commit_apply_plan(&plan)) {
+        repl_set_status_error("Command buffer full!");
+        return 1;
+    }
+    repl_mark_source_dirty();
+    return 1;
+}
+
 int editor_commit_apply_swatch_change(int edit_line, int direction, float scale) {
     EditorInputView in = editor_state_input();
     ReplNumericArgAtCursor d;

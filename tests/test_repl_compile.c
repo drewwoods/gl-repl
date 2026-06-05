@@ -17,6 +17,7 @@
 #include "editor/commit.h"
 #include "editor/reformat.h"
 #include "editor/state.h"
+#include "editor/undo.h"
 #include "repl/apply.h"
 #include "repl/command_store.h"
 #include "repl/compile.h"
@@ -207,6 +208,104 @@ static void test_float_decl_add_comment_to_existing(void) {
                editor_buffer_line(0), "  static float n = 1; // @tune");
     ASSERT_TRUE("existing decl is now @tune-tagged",
                 repl_eval_line_has_tune_tag(editor_buffer_line(0)));
+}
+
+/* repl_compile_split_decl turns `float a, b, c;` into one decl per line,
+ * in place, without touching the predef table (the vars stay declared). */
+static void test_split_decl_basic(void) {
+    glr_ctrl_reset_all();
+    editor_feed_line("float grid, extent, x;");
+    ASSERT_STR("baseline multi-name decl",
+               editor_buffer_line(0), "  static float grid, extent, x;");
+    int predefs_before = g_num_predef_vars;
+
+    ReplCompileContext ctx = repl_compile_context_from_live(0);
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompileResult r = repl_compile_split_decl(&ctx, 0, &change, err, sizeof(err));
+    ASSERT_INT("split compile OK", r, REPL_COMPILE_OK);
+    ASSERT_INT("split is INSERT_MANY", change.kind, REPL_COMPILED_INSERT_MANY);
+    ASSERT_INT("split inserts 3", change.count, 3);
+    ASSERT_INT("split deletes the old line", change.delete_count, 1);
+    ASSERT_INT("split delete pos", change.delete_pos, 0);
+    ASSERT_INT("split emits no predef ops", change.predef_op_count, 0);
+    ASSERT_STR("split line 0", change.text[0], "  static float grid;");
+    ASSERT_STR("split line 1", change.text[1], "  static float extent;");
+    ASSERT_STR("split line 2", change.text[2], "  static float x;");
+
+    ASSERT_INT("split apply OK",
+               editor_commit_apply_external_change(&change, 0, 0), 1);
+    ASSERT_INT("document now has 3 decl lines", repl_state_document_count(), 3);
+    ASSERT_STR("applied line 0", editor_buffer_line(0), "  static float grid;");
+    ASSERT_STR("applied line 2", editor_buffer_line(2), "  static float x;");
+    ASSERT_INT("predef count unchanged by split", g_num_predef_vars, predefs_before);
+    ASSERT_TRUE("grid still declared", repl_eval_find_predef_var_idx("grid") >= 0);
+    ASSERT_TRUE("extent still declared", repl_eval_find_predef_var_idx("extent") >= 0);
+}
+
+/* Initializers are preserved per-name; the line's trailing comment rides
+ * the first split line only. */
+static void test_split_decl_inits_and_comment(void) {
+    glr_ctrl_reset_all();
+    editor_feed_line("float a = 1, b = 2; // hello");
+
+    ReplCompileContext ctx = repl_compile_context_from_live(0);
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompileResult r = repl_compile_split_decl(&ctx, 0, &change, err, sizeof(err));
+    ASSERT_INT("split inits compile OK", r, REPL_COMPILE_OK);
+    ASSERT_INT("split inits count", change.count, 2);
+    ASSERT_STR("init + comment on first line",
+               change.text[0], "  static float a = 1; // hello");
+    ASSERT_STR("init kept, comment dropped on rest",
+               change.text[1], "  static float b = 2;");
+}
+
+/* A single-name decl has nothing to split. */
+static void test_split_decl_single_name_no_change(void) {
+    glr_ctrl_reset_all();
+    editor_feed_line("float solo;");
+
+    ReplCompileContext ctx = repl_compile_context_from_live(0);
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompileResult r = repl_compile_split_decl(&ctx, 0, &change, err, sizeof(err));
+    ASSERT_INT("single-name split compile OK", r, REPL_COMPILE_OK);
+    ASSERT_INT("single-name split is NO_CHANGE", change.kind, REPL_COMPILED_NO_CHANGE);
+}
+
+/* A non-declaration line is not a split target. */
+static void test_split_decl_non_decl_no_change(void) {
+    glr_ctrl_reset_all();
+    editor_feed_line("glVertex3f(0, 0, 0);");
+
+    ReplCompileContext ctx = repl_compile_context_from_live(0);
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompileResult r = repl_compile_split_decl(&ctx, 0, &change, err, sizeof(err));
+    ASSERT_INT("non-decl split compile OK", r, REPL_COMPILE_OK);
+    ASSERT_INT("non-decl split is NO_CHANGE", change.kind, REPL_COMPILED_NO_CHANGE);
+}
+
+/* The editor entry point splits at the cursor as one undoable step. */
+static void test_split_decl_via_editor_entry(void) {
+    glr_ctrl_reset_all();
+    editor_feed_line("float p, q;");
+    editor_feed_line("glVertex3f(p, q, 0);");
+    editor_state_edit_line_set(0);   /* cursor on the decl */
+
+    ASSERT_INT("editor split consumed", editor_split_decl_at_cursor(), 1);
+    ASSERT_INT("doc grew by one line", repl_state_document_count(), 3);
+    ASSERT_STR("split line 0", editor_buffer_line(0), "  static float p;");
+    ASSERT_STR("split line 1", editor_buffer_line(1), "  static float q;");
+    ASSERT_TRUE("trailing command preserved",
+                strstr(editor_buffer_line(2), "glVertex3f") != NULL);
+
+    /* One undo restores the single multi-name decl line. */
+    editor_undo_pop_snapshot();
+    ASSERT_INT("undo restores single decl line", repl_state_document_count(), 2);
+    ASSERT_STR("undo restores multi-name decl",
+               editor_buffer_line(0), "  static float p, q;");
 }
 
 /* repl_compile_var_assign is pure on the failure path. */
@@ -1126,6 +1225,11 @@ int main(void) {
     test_compile_float_decl_failure_is_pure();
     test_compile_float_decl_trailing_comment_no_semicolon();
     test_float_decl_add_comment_to_existing();
+    test_split_decl_basic();
+    test_split_decl_inits_and_comment();
+    test_split_decl_single_name_no_change();
+    test_split_decl_non_decl_no_change();
+    test_split_decl_via_editor_entry();
     test_compile_var_assign_failure_is_pure();
     test_compile_no_change_leaves_state();
     test_compile_apply_updates_both();

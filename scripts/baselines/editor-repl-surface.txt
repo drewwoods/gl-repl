@@ -53,8 +53,14 @@
 # parser's canonical indent. No new coupling kind — same source_scope
 # depth-query family already in the file.
 #
+# 2026-06-06: commit_c bumped +1 for repl_compile_split_decl, the pure
+# compiler behind the new "Split Declaration" editor entry
+# (editor_split_decl_at_cursor). Same shape as every other
+# editor_try_commit_* helper, which each call their repl_compile_*
+# partner — not a new coupling kind, just one more compile entry point.
+#
 # Ratchet down as migrations land. The plan target
 # (plans/done/editor-demo.md) is ~5 per file.
 
 input_c: 25
-commit_c: 27
+commit_c: 28

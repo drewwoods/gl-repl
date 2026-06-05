@@ -231,6 +231,19 @@ ReplCompileResult repl_compile_float_decl(const char *input,
                                           ReplCompiledChange *out,
                                           char *err, int err_size);
 
+/* Compile a "split this declaration" request for the CMD_VAR_DECLARE at
+ * `line_idx`: replace it in place with one single-name CMD_VAR_DECLARE
+ * per declared name (`float a, b, c;` -> three lines). Purely a source-
+ * representation change — the variables are already declared with their
+ * current values, so no predef ops are emitted. The original line's
+ * trailing comment rides the first emitted line. Same purity contract as
+ * repl_compile_float_decl. Returns REPL_COMPILED_NO_CHANGE when line_idx
+ * is not a CMD_VAR_DECLARE with at least two names. */
+ReplCompileResult repl_compile_split_decl(const ReplCompileContext *ctx,
+                                          int line_idx,
+                                          ReplCompiledChange *out,
+                                          char *err, int err_size);
+
 /* Compile a `name = expr;` assignment into a ReplCompiledChange.
  * Same purity contract as `repl_compile_float_decl`. Returns
  * REPL_COMPILED_NO_CHANGE if `input` doesn't look like an

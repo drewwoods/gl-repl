@@ -122,6 +122,7 @@
 #define GLR_VARIABLE_PANEL   KEY_CTRL_P, GLUT_ACTIVE_SHIFT  /* plain Ctrl+P = Debug dump */
 #define GLR_MEMORY_PROFILE   KEY_CTRL_W, GLUT_ACTIVE_SHIFT  /* plain Ctrl+W = CPU profile */
 #define GLR_AUDIO            KEY_CTRL_A, GLUT_ACTIVE_SHIFT  /* plain Ctrl+A = Line start */
+#define GLR_SPLIT_DECL       KEY_CTRL_S, GLUT_ACTIVE_SHIFT  /* plain Ctrl+S = Save */
 
 /* ---- Editor text-editing bindings (src/editor/input.c) --------------- *
  * Plain Ctrl bytes; the Ctrl+Shift twin of several is a config row above,

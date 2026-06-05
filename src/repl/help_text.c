@@ -201,6 +201,7 @@ static const char *const k_tab_keys_base[] = {
     "  Ctrl+D               \tDelete line or selection",
     "  Ctrl+L               \tClear all commands",
     "  Ctrl+\\              \tReformat buffer",
+    "  Ctrl+Shift+S         \tSplit multi-variable declaration at cursor (one per line)",
     "  Ctrl+/               \tToggle comment on line",
     "  Ctrl+P               \tDump debug state to stdout",
     "  Ctrl+S               \tSave to output.c",
