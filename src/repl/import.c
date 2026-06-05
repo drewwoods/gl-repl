@@ -1462,6 +1462,30 @@ static void repl_export_load_reset_accumulators(void) {
     import_cfg_accumulator_reset();
 }
 
+static int is_line_comment_or_directive(const char *line) {
+    const char *p = line;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p == '\0') return 1; /* blank */
+    if (p[0] == '/' && p[1] == '/') return 1; /* comment or snippet directive */
+    if (*p == '#') return 1; /* preprocessor directive */
+    return 0;
+}
+
+static char get_last_code_char(const char *line) {
+    int len = (int)strlen(line);
+    const char *comment = strstr(line, "//");
+    if (comment) {
+        len = (int)(comment - line);
+    }
+    while (len > 0 && isspace((unsigned char)line[len - 1])) {
+        len--;
+    }
+    if (len > 0) {
+        return line[len - 1];
+    }
+    return '\0';
+}
+
 int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
     if (result) {
         result->scene_name[0]    = '\0';
@@ -1479,6 +1503,8 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
 
     char line[MAX_LINE_LEN];
     int truncated_line = 0;
+    char accum[MAX_LINE_LEN * 4] = "";
+    int accum_line_no = 0;
     while (fgets(line, sizeof(line), f)) {
         state.line_no++;
         size_t raw_len = strlen(line);
@@ -1495,9 +1521,68 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
         int len = (int)raw_len;
         while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r'))
             line[--len] = '\0';
-        const char *p = line;
+
+        if (is_line_comment_or_directive(line)) {
+            if (accum[0]) {
+                int saved_line_no = state.line_no;
+                state.line_no = accum_line_no;
+                const char *p = accum;
+                while (*p && isspace((unsigned char)*p)) p++;
+                import_process_line(&state, p, accum);
+                state.line_no = saved_line_no;
+                accum[0] = '\0';
+            }
+            const char *p = line;
+            while (*p && isspace((unsigned char)*p)) p++;
+            import_process_line(&state, p, line);
+        } else {
+            if (!accum[0]) {
+                accum_line_no = state.line_no;
+            }
+            size_t accum_len = strlen(accum);
+            const char *app_line = line;
+            while (*app_line && isspace((unsigned char)*app_line)) app_line++;
+
+            if (accum_len > 0 && accum[accum_len - 1] != ' ') {
+                if (accum_len + 1 < sizeof(accum)) {
+                    accum[accum_len++] = ' ';
+                    accum[accum_len] = '\0';
+                }
+            }
+            if (accum_len + strlen(app_line) < sizeof(accum)) {
+                strcpy(accum + accum_len, app_line);
+            } else {
+                int saved_line_no = state.line_no;
+                state.line_no = accum_line_no;
+                const char *p = accum;
+                while (*p && isspace((unsigned char)*p)) p++;
+                import_process_line(&state, p, accum);
+                state.line_no = saved_line_no;
+
+                accum_line_no = state.line_no;
+                strncpy(accum, app_line, sizeof(accum) - 1);
+                accum[sizeof(accum) - 1] = '\0';
+            }
+            char last = get_last_code_char(line);
+            if (last == ';' || last == '{' || last == '}' || last == ':') {
+                int saved_line_no = state.line_no;
+                state.line_no = accum_line_no;
+                const char *p = accum;
+                while (*p && isspace((unsigned char)*p)) p++;
+                import_process_line(&state, p, accum);
+                state.line_no = saved_line_no;
+                accum[0] = '\0';
+            }
+        }
+    }
+
+    if (accum[0]) {
+        int saved_line_no = state.line_no;
+        state.line_no = accum_line_no;
+        const char *p = accum;
         while (*p && isspace((unsigned char)*p)) p++;
-        import_process_line(&state, p, line);
+        import_process_line(&state, p, accum);
+        state.line_no = saved_line_no;
     }
 
     /* Mirror the save-side ferror/fclose pair: fgets returning NULL
