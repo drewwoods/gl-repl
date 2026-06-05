@@ -1471,19 +1471,62 @@ static int is_line_comment_or_directive(const char *line) {
     return 0;
 }
 
-static char get_last_code_char(const char *line) {
-    int len = (int)strlen(line);
-    const char *comment = strstr(line, "//");
-    if (comment) {
-        len = (int)(comment - line);
+/* Scan one physical line's *code* portion — everything up to an
+ * unquoted "//" line-comment — advancing the running bracket-nesting
+ * depth (counts () and [], not {} which delimit blocks) while skipping
+ * string and char literals so brackets and slashes inside them can't
+ * confuse the scan. *code_len gets the trimmed code length (trailing
+ * whitespace removed); the return value is the last non-space code
+ * char, or '\0' when the line has no code. Together the depth and last
+ * char let the caller tell a continued statement (open bracket, or no
+ * terminator yet) from a complete one — which is what makes multi-line
+ * statements with interleaved comments / blank lines and split compound
+ * literals reassemble correctly. */
+static char scan_code_line(const char *line, int *depth, int *code_len) {
+    int in_str = 0, in_chr = 0, last = -1, i = 0;
+    for (; line[i]; i++) {
+        char c = line[i];
+        if (in_str || in_chr) {
+            if (c == '\\' && line[i + 1]) { i++; continue; }
+            if (in_str && c == '"')  in_str = 0;
+            if (in_chr && c == '\'') in_chr = 0;
+            last = i;
+            continue;
+        }
+        if (c == '/' && line[i + 1] == '/') break; /* line comment */
+        if (c == '"')  { in_str = 1; last = i; continue; }
+        if (c == '\'') { in_chr = 1; last = i; continue; }
+        if (c == '(' || c == '[') (*depth)++;
+        else if ((c == ')' || c == ']') && *depth > 0) (*depth)--;
+        if (!isspace((unsigned char)c)) last = i;
     }
-    while (len > 0 && isspace((unsigned char)line[len - 1])) {
-        len--;
+    *code_len = last + 1; /* 0 when the line has no code */
+    return last >= 0 ? line[last] : '\0';
+}
+
+static int is_stmt_terminator(char c) {
+    return c == ';' || c == '{' || c == '}' || c == ':';
+}
+
+/* Emit the accumulated logical statement through import_process_line,
+ * restoring the line number to where the statement began so a warning
+ * points at its first physical line. accum is built from already
+ * left-trimmed segments, so no leading-whitespace skip is needed.
+ * Clears the accumulator (and its truncation flag). */
+static void import_flush_accum(ImportState *s, char *accum, int accum_line_no,
+                               int *truncated) {
+    if (!accum[0]) return;
+    int saved = s->line_no;
+    s->line_no = accum_line_no;
+    if (*truncated) {
+        fprintf(stderr, "%s (line %d): statement exceeded %d chars, truncated\n",
+                kWarningPrefix, accum_line_no, (int)MAX_LINE_LEN);
+        s->warnings++;
     }
-    if (len > 0) {
-        return line[len - 1];
-    }
-    return '\0';
+    import_process_line(s, accum, accum);
+    s->line_no = saved;
+    accum[0]   = '\0';
+    *truncated = 0;
 }
 
 int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
@@ -1503,8 +1546,10 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
 
     char line[MAX_LINE_LEN];
     int truncated_line = 0;
-    char accum[MAX_LINE_LEN * 4] = "";
-    int accum_line_no = 0;
+    char accum[MAX_LINE_LEN] = "";
+    int accum_line_no   = 0;
+    int accum_depth     = 0;
+    int accum_truncated = 0;
     while (fgets(line, sizeof(line), f)) {
         state.line_no++;
         size_t raw_len = strlen(line);
@@ -1523,67 +1568,66 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
             line[--len] = '\0';
 
         if (is_line_comment_or_directive(line)) {
-            if (accum[0]) {
-                int saved_line_no = state.line_no;
-                state.line_no = accum_line_no;
-                const char *p = accum;
-                while (*p && isspace((unsigned char)*p)) p++;
-                import_process_line(&state, p, accum);
-                state.line_no = saved_line_no;
-                accum[0] = '\0';
-            }
+            /* A blank, comment, or directive line that falls inside an
+             * in-progress statement (open bracket, or no terminator
+             * seen yet) is dropped — keep accumulating rather than
+             * flushing a half-built statement. With nothing in progress
+             * it is a standalone line, processed as before. */
+            if (accum[0]) continue;
             const char *p = line;
             while (*p && isspace((unsigned char)*p)) p++;
             import_process_line(&state, p, line);
-        } else {
-            if (!accum[0]) {
-                accum_line_no = state.line_no;
-            }
-            size_t accum_len = strlen(accum);
-            const char *app_line = line;
-            while (*app_line && isspace((unsigned char)*app_line)) app_line++;
+            continue;
+        }
 
-            if (accum_len > 0 && accum[accum_len - 1] != ' ') {
-                if (accum_len + 1 < sizeof(accum)) {
-                    accum[accum_len++] = ' ';
-                    accum[accum_len] = '\0';
-                }
-            }
-            if (accum_len + strlen(app_line) < sizeof(accum)) {
-                strcpy(accum + accum_len, app_line);
+        const char *app = line;
+        while (*app && isspace((unsigned char)*app)) app++;
+
+        if (!accum[0]) {
+            accum_line_no   = state.line_no;
+            accum_depth     = 0;
+            accum_truncated = 0;
+        }
+
+        size_t accum_len = strlen(accum);
+        if (accum_len > 0 && accum[accum_len - 1] != ' ') {
+            if (accum_len + 1 < sizeof(accum)) {
+                accum[accum_len++] = ' ';
+                accum[accum_len]   = '\0';
             } else {
-                int saved_line_no = state.line_no;
-                state.line_no = accum_line_no;
-                const char *p = accum;
-                while (*p && isspace((unsigned char)*p)) p++;
-                import_process_line(&state, p, accum);
-                state.line_no = saved_line_no;
+                accum_truncated = 1;
+            }
+        }
 
-                accum_line_no = state.line_no;
-                strncpy(accum, app_line, sizeof(accum) - 1);
-                accum[sizeof(accum) - 1] = '\0';
-            }
-            char last = get_last_code_char(line);
-            if (last == ';' || last == '{' || last == '}' || last == ':') {
-                int saved_line_no = state.line_no;
-                state.line_no = accum_line_no;
-                const char *p = accum;
-                while (*p && isspace((unsigned char)*p)) p++;
-                import_process_line(&state, p, accum);
-                state.line_no = saved_line_no;
-                accum[0] = '\0';
-            }
+        int code_len = 0;
+        char last = scan_code_line(app, &accum_depth, &code_len);
+        /* Complete when no bracket is open and the last code char closes
+         * a statement (`;`), opens/closes a block (`{`/`}`), or ends a
+         * label (`:`). The depth gate is what stops a split compound
+         * literal — `(GLfloat[]){` — or a ternary `:` from flushing
+         * mid-expression. */
+        int complete = accum_depth <= 0 && is_stmt_terminator(last);
+
+        /* On a continuation line, append only the code portion so a
+         * trailing `// ...` can't bleed into the rest of the statement.
+         * On the line that completes the statement, append it whole,
+         * including any trailing comment — the parser keeps inline
+         * comments on a command. */
+        size_t seg_len = complete ? strlen(app) : (size_t)code_len;
+        size_t avail   = sizeof(accum) - 1 - accum_len;
+        size_t take    = seg_len <= avail ? seg_len : avail;
+        if (take < seg_len) accum_truncated = 1;
+        memcpy(accum + accum_len, app, take);
+        accum[accum_len + take] = '\0';
+
+        if (complete) {
+            import_flush_accum(&state, accum, accum_line_no, &accum_truncated);
+            accum_depth = 0;
         }
     }
 
-    if (accum[0]) {
-        int saved_line_no = state.line_no;
-        state.line_no = accum_line_no;
-        const char *p = accum;
-        while (*p && isspace((unsigned char)*p)) p++;
-        import_process_line(&state, p, accum);
-        state.line_no = saved_line_no;
-    }
+    if (!truncated_line)
+        import_flush_accum(&state, accum, accum_line_no, &accum_truncated);
 
     /* Mirror the save-side ferror/fclose pair: fgets returning NULL
      * conflates EOF with read error, so the read-loop above can't
