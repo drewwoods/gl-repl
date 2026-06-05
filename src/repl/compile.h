@@ -434,13 +434,12 @@ ReplCompileResult repl_compile_func_def_kernel(const char *input,
  * variable.
  *
  * Source policy:
- *   - Prefer the last literal CMD_VAR_ASSIGN for the variable and
- *     replace it with canonical `name = %g;` text.
- *   - Otherwise, if a CMD_VAR_DECLARE line contains the variable,
- *     rewrite just that declarator's initializer while preserving
- *     the other declarators and any trailing comment.
+ *   - If a CMD_VAR_DECLARE line contains the variable, rewrite just
+ *     that declarator's initializer while preserving the other
+ *     declarators and any trailing comment.
  *   - Otherwise emit REPL_COMPILED_NO_CHANGE and only carry the
- *     REPL_PREDEF_OP_SET_VALUE side effect.
+ *     REPL_PREDEF_OP_SET_VALUE side effect. Assignment rows are not
+ *     source rewrite targets.
  *
  * This entry is pure like the other compile helpers: it never
  * mutates editor text, command arrays, predef storage, status, or

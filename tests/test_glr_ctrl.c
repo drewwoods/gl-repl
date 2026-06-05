@@ -538,6 +538,68 @@ static void test_variable_panel_motion_routes_through_compile_and_coalesces_undo
     ASSERT_FLOAT("undo restores live predef value", g_predef_vars[var_idx].value, 1.0f);
 }
 
+static void test_variable_panel_motion_preserves_reset_assignment_without_declaration(void) {
+    int px, py, pw, ph;
+    int click_x, click_y;
+    int hit_row;
+    int window_h;
+    int var_idx;
+    EditorUndoRingState undo_state;
+
+    printf("--- imrepl_ctrl variable panel preserves reset assignment ---\n");
+
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(1000, 1000);
+    variable_panel_set_visible(1);
+    editor_feed_line("t = 0;");
+
+    var_idx = repl_eval_find_predef_var_idx("t");
+    ASSERT_TRUE("t is predefined", var_idx >= 0);
+    ASSERT_FLOAT("t starts at reset value", g_predef_vars[var_idx].value, 0.0f);
+
+    vp_rect(g_num_predef_vars, &px, &py, &pw, &ph);
+    window_h = ui_state_viewport().window_h;
+    click_x = px + pw / 2;
+    click_y = -1;
+    for (int gl_y = py; gl_y < py + ph; gl_y++) {
+        int candidate_y = window_h - gl_y;
+        hit_row = -1;
+        if (vp_hit_row(g_num_predef_vars, click_x, candidate_y, &hit_row)
+                && hit_row == var_idx) {
+            click_y = candidate_y;
+            break;
+        }
+    }
+    ASSERT_TRUE("found click target for t row", click_y >= 0);
+
+    ASSERT_INT("reset drag begin handled",
+               glr_ctrl_router_handle_variable_panel_drag_begin(
+                   GLUT_LEFT_BUTTON, GLUT_DOWN, click_x, click_y),
+               1);
+    ASSERT_TRUE("reset drag active after begin", variable_panel_drag_active());
+
+    ASSERT_INT("reset drag motion handled",
+               glr_ctrl_router_handle_variable_panel_motion(click_x + 100, click_y),
+               1);
+
+    editor_undo_ring_state_capture(&undo_state);
+    ASSERT_INT("reset drag captures one undo snapshot",
+               undo_state.undo_count, 1);
+    ASSERT_STR("reset assignment source preserved",
+               editor_buffer_line(0), "  t = 0;");
+    ASSERT_FLOAT("reset drag updates live t value", g_predef_vars[var_idx].value, 5.0f);
+
+    ASSERT_INT("reset drag release handled",
+               glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP),
+               1);
+    ASSERT_TRUE("reset drag inactive after release", !variable_panel_drag_active());
+
+    editor_undo_pop_snapshot();
+    ASSERT_STR("undo keeps reset assignment source",
+               editor_buffer_line(0), "  t = 0;");
+    ASSERT_FLOAT("undo restores live t value", g_predef_vars[var_idx].value, 0.0f);
+}
+
 static void test_variable_panel_motion_initializes_uninitialized_declaration(void) {
     int px, py, pw, ph;
     int click_x, click_y;
@@ -1918,6 +1980,7 @@ int main(void) {
     test_reshape_clamps_height();
     test_display_frame_profile_coverage();
     test_variable_panel_motion_routes_through_compile_and_coalesces_undo();
+    test_variable_panel_motion_preserves_reset_assignment_without_declaration();
     test_variable_panel_motion_initializes_uninitialized_declaration();
     test_variable_drag_snapshot_wiring();
     test_pointer_state_tracks_controller_mouse_routes();

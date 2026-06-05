@@ -548,7 +548,7 @@ static void test_reformat_keeps_buffer_and_store_aligned(void) {
     }
 }
 
-static void test_set_predef_value_prefers_last_literal_assign(void) {
+static void test_set_predef_value_rewrites_decl_not_assignments(void) {
     glr_ctrl_reset_all();
 
     editor_feed_line("float x = 1, y;");
@@ -562,23 +562,30 @@ static void test_set_predef_value_prefers_last_literal_assign(void) {
 
     ReplCompileResult r = repl_compile_set_predef_value(
         "x", 4.5f, &ctx, &change, err, sizeof(err));
-    ASSERT_INT("set_predef literal compile OK", r, REPL_COMPILE_OK);
-    ASSERT_INT("set_predef literal replace kind", change.kind,
+    ASSERT_INT("set_predef decl-first compile OK", r, REPL_COMPILE_OK);
+    ASSERT_INT("set_predef decl-first replace kind", change.kind,
                REPL_COMPILED_REPLACE_ONE);
-    ASSERT_INT("set_predef literal replace pos", change.pos, 3);
-    ASSERT_STR("set_predef literal text", change.text[0], "  x = 4.5;");
-    ASSERT_INT("set_predef literal predef op count", change.predef_op_count, 1);
-    ASSERT_INT("set_predef literal op kind", change.predef_ops[0].kind,
+    ASSERT_INT("set_predef decl-first replace pos", change.pos, 0);
+    ASSERT_STR("set_predef decl-first text",
+               change.text[0], "  static float x = 4.5, y;");
+    ASSERT_INT("set_predef decl-first predef op count", change.predef_op_count, 1);
+    ASSERT_INT("set_predef decl-first op kind", change.predef_ops[0].kind,
                REPL_PREDEF_OP_SET_VALUE);
 
-    ASSERT_INT("set_predef literal apply OK",
+    ASSERT_INT("set_predef decl-first apply OK",
                editor_commit_apply_external_change(&change, 0, 0), 1);
-    ASSERT_STR("set_predef literal buffer line updated",
-               editor_buffer_line(3), "  x = 4.5;");
+    ASSERT_STR("set_predef decl-first buffer line updated",
+               editor_buffer_line(0), "  static float x = 4.5, y;");
+    ASSERT_STR("set_predef literal assignment preserved",
+               editor_buffer_line(1), "  x = 2;");
+    ASSERT_STR("set_predef expression assignment preserved",
+               editor_buffer_line(2), "  x = y + 1;");
+    ASSERT_STR("set_predef reset assignment preserved",
+               editor_buffer_line(3), "  x = 3;");
     {
         int x_idx = repl_eval_find_predef_var_idx("x");
-        ASSERT_TRUE("set_predef literal x exists", x_idx >= 0);
-        ASSERT_FLOAT("set_predef literal live value",
+        ASSERT_TRUE("set_predef decl-first x exists", x_idx >= 0);
+        ASSERT_FLOAT("set_predef decl-first live value",
                      g_predef_vars[x_idx].value, 4.5f, 1e-6f);
     }
 }
@@ -634,7 +641,7 @@ static void test_set_predef_value_adds_declaration_initializer(void) {
                editor_buffer_line(0), "  static float x = 2.5;");
 }
 
-static void test_set_predef_value_keeps_expression_sources(void) {
+static void test_set_predef_value_rewrites_declaration_and_keeps_expression_sources(void) {
     glr_ctrl_reset_all();
 
     editor_feed_line("float x;");
@@ -648,20 +655,50 @@ static void test_set_predef_value_keeps_expression_sources(void) {
     ReplCompileResult r = repl_compile_set_predef_value(
         "x", 8.0f, &ctx, &change, err, sizeof(err));
     ASSERT_INT("set_predef expr compile OK", r, REPL_COMPILE_OK);
-    ASSERT_INT("set_predef expr source untouched kind", change.kind,
-               REPL_COMPILED_NO_CHANGE);
+    ASSERT_INT("set_predef expr rewrites decl kind", change.kind,
+               REPL_COMPILED_REPLACE_ONE);
+    ASSERT_STR("set_predef expr decl text",
+               change.text[0], "  static float x = 8;");
 
     ASSERT_INT("set_predef expr apply OK",
                editor_commit_apply_external_change(&change, 0, 0), 1);
     ASSERT_STR("set_predef expr formula preserved",
                editor_buffer_line(2), "  x = y + 1;");
-    ASSERT_STR("set_predef expr decl preserved",
-               editor_buffer_line(0), "  static float x;");
+    ASSERT_STR("set_predef expr decl updated",
+               editor_buffer_line(0), "  static float x = 8;");
     {
         int x_idx = repl_eval_find_predef_var_idx("x");
         ASSERT_TRUE("set_predef expr x exists", x_idx >= 0);
         ASSERT_FLOAT("set_predef expr live value",
                      g_predef_vars[x_idx].value, 8.0f, 1e-6f);
+    }
+}
+
+static void test_set_predef_value_does_not_rewrite_assignment_without_decl(void) {
+    glr_ctrl_reset_all();
+
+    editor_feed_line("t = 0;");
+
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    ReplCompileResult r = repl_compile_set_predef_value(
+        "t", 3.5f, &ctx, &change, err, sizeof(err));
+    ASSERT_INT("set_predef assignment-only compile OK", r, REPL_COMPILE_OK);
+    ASSERT_INT("set_predef assignment-only source untouched kind", change.kind,
+               REPL_COMPILED_NO_CHANGE);
+    ASSERT_INT("set_predef assignment-only predef op count", change.predef_op_count, 1);
+
+    ASSERT_INT("set_predef assignment-only apply OK",
+               editor_commit_apply_external_change(&change, 0, 0), 1);
+    ASSERT_STR("set_predef assignment-only reset preserved",
+               editor_buffer_line(0), "  t = 0;");
+    {
+        int t_idx = repl_eval_find_predef_var_idx("t");
+        ASSERT_TRUE("set_predef assignment-only t exists", t_idx >= 0);
+        ASSERT_FLOAT("set_predef assignment-only live value",
+                     g_predef_vars[t_idx].value, 3.5f, 1e-6f);
     }
 }
 
@@ -1014,10 +1051,11 @@ int main(void) {
     test_overwrite_earlier_decl_with_later_assign_rebases_slot();
     test_capacity_failure_is_atomic();
     test_reformat_keeps_buffer_and_store_aligned();
-    test_set_predef_value_prefers_last_literal_assign();
+    test_set_predef_value_rewrites_decl_not_assignments();
     test_set_predef_value_rewrites_declaration_initializer();
     test_set_predef_value_adds_declaration_initializer();
-    test_set_predef_value_keeps_expression_sources();
+    test_set_predef_value_rewrites_declaration_and_keeps_expression_sources();
+    test_set_predef_value_does_not_rewrite_assignment_without_decl();
     test_set_predef_value_live_only_without_source();
     test_orchestration_compile_failure_returns_diagnostic();
     test_orchestration_no_change_falls_through();
