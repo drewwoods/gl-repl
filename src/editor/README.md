@@ -36,9 +36,11 @@ are reusable; the key bindings and commit semantics are app-specific.**
 [`tools/editor_demo/`](../../tools/editor_demo/) is a **generic plain-text
 editor** built from the reusable half of this module only. It links
 `state.c` (the document model) and `edit_ops.c` (the primitives), plus the
-generic text panel from `src/ui` — and drives them with its *own* input
+generic text panel from `src/ui/core` — and drives them with its *own* input
 dispatcher (`tools/editor_demo/input.c`) and its *own* File menu
-(`tools/editor_demo/menu.c`).
+(`tools/editor_demo/menu.c`). It must not link `src/ui/app`: the REPL
+code-panel adapter, menu bar, `UiRenderSnapshot`, `UiState`, and app chrome are
+part of the full app composition, not the generic editor proof.
 
 ```bash
 make editor_demo                # real GL: opens a minimal text-editor window
@@ -55,7 +57,9 @@ The demo's value is what it *refuses* to link: `input.c`, `commit.c`,
 recognized as the **REPL editor's** controllers, not generic ones. By
 standing up a working editor without them, the demo proves the document
 model and edit primitives are genuinely application-free — the boundary
-between "text editing" and "REPL editing" is real, not aspirational.
+between "text editing" and "REPL editing" is real, not aspirational. If a new
+editor feature needs `src/ui/app` or `src/app` to make `editor_demo` link, first
+extract a smaller `src/ui/core` primitive or pass a neutral view into the demo.
 
 ## In the REPL app
 

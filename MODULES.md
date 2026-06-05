@@ -165,7 +165,10 @@ source-backed module.
 ## Standalone Demo Binaries (Layer Independence Proofs)
 
 Three binaries under `tools/` build with deliberately slim object
-lists to make the layer boundaries observable:
+lists to make the layer boundaries observable. These demos should stay
+mostly `src/app`-free: each demo may own a tiny local shell, but it should
+not quietly import `glr_ctrl`, `glr_actions`, `glr_config`, or other app
+composition code to make a boundary problem disappear.
 
 - **`make scene_demo`** (`tools/scene_demo/scene_demo.c`) — drives
   `src/scene/` with a non-REPL geometry callback. Proves `scene_*`
@@ -202,7 +205,11 @@ lists to make the layer boundaries observable:
   `src/editor/edit_ops.c` (generic primitives — char insert/delete,
   selection consume, used by both `src/editor/input.c` and
   `tools/editor_demo/input.c`), `src/ui/core/text_panel.c` + its layout
-  / search helpers, `src/support/cpuprof.c`. The demo is shim-free as of
+  / search/theme helpers, `src/support/cpuprof.c`. It deliberately does
+  **not** link `src/ui/app`: the demo proves the editor model can render
+  through generic UI primitives without the REPL code-panel adapter,
+  `UiRenderSnapshot`, menu bar, app chrome, or `UiState`. The demo is
+  shim-free as of
   `plans/done/edit-line-ownership.md` Phase 5 — edit-line ownership
   moved to `EditorState.document.edit_line_idx`, the
   `tools/editor_demo/repl_shim.c` ledger file is gone, and the
