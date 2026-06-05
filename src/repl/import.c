@@ -90,6 +90,14 @@ typedef struct { char name[REPL_PREDEF_NAME_MAX]; float value; } DeferredVar;
 static DeferredVar g_deferred_var_values[MAX_DEFERRED_VAR_VALUES];
 static int         g_deferred_var_count = 0;
 
+/* Warnings emitted by the workspace-header directive parsers (parse_var /
+ * parse_func_alias / parse_scene_name / parse_workspace_dir). They run via
+ * repl_state_parse_workspace_header_line, which can't reach
+ * ImportState.warnings, so they tally here instead; load_from_file folds
+ * this into the per-load total. Reset per load in
+ * repl_export_load_reset_accumulators. */
+static int         g_import_header_warnings = 0;
+
 static int import_first_non_decl(const ReplCommandStore *store) {
     int pos = 0;
 
@@ -136,18 +144,31 @@ static const char k_snippet_directive_declare[] = "declare";
 
 /* Emit one import diagnostic to stderr with the shared "Warning: " prefix
  * and trailing newline. Centralises the format so the @var / @func /
- * @declare / scene-name / workspace-dir overflow notices read identically
- * (and a future routing change has a single site). The header-directive
- * parsers (parse_var / parse_func_alias / ...) can't reach
- * ImportState.warnings, so these print but are not added to the
- * "(N warnings)" tally; the snippet parsers additionally bump that counter. */
+ * @declare / scene-name / workspace-dir overflow notices read identically. */
+static void import_vwarn(const char *fmt, va_list ap) {
+    fputs("Warning: ", stderr);
+    vfprintf(stderr, fmt, ap);
+    fputc('\n', stderr);
+}
+
 static void import_warn(const char *fmt, ...) {
     va_list ap;
-    fputs("Warning: ", stderr);
     va_start(ap, fmt);
-    vfprintf(stderr, fmt, ap);
+    import_vwarn(fmt, ap);
     va_end(ap);
-    fputc('\n', stderr);
+}
+
+/* Like import_warn, but also counts toward the per-load "(N warnings)"
+ * total. For the workspace-header directive parsers, which run via
+ * repl_state_parse_workspace_header_line and so can't reach
+ * ImportState.warnings; the snippet parsers use import_warn + their own
+ * (*warnings)++ instead. */
+static void import_header_warn(const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    import_vwarn(fmt, ap);
+    va_end(ap);
+    g_import_header_warnings++;
 }
 
 /* --- workspace-dir --------------------------------------------------------- */
@@ -160,8 +181,8 @@ static int parse_workspace_dir(const char *args) {
     /* More source left over the cap means the path was clipped — a
      * truncated path points at the wrong directory, so don't do it silently. */
     if (*args)
-        import_warn("@workspace-dir path exceeds the %d-char limit; truncated",
-                    (int)REPL_WORKSPACE_DIR_MAX - 1);
+        import_header_warn("@workspace-dir path exceeds the %d-char limit; truncated",
+                           (int)REPL_WORKSPACE_DIR_MAX - 1);
     while (char_idx > 0 && isspace((unsigned char)g_pending_workspace_dir[char_idx - 1]))
         g_pending_workspace_dir[--char_idx] = '\0';
     return 1;
@@ -175,8 +196,8 @@ static int parse_scene_name(const char *args) {
         g_pending_scene_name[char_idx++] = *args++;
     g_pending_scene_name[char_idx] = '\0';
     if (*args)
-        import_warn("@scene-name exceeds the %d-char limit; truncated to '%s'",
-                    (int)USER_SCENE_NAME_MAX - 1, g_pending_scene_name);
+        import_header_warn("@scene-name exceeds the %d-char limit; truncated to '%s'",
+                           (int)USER_SCENE_NAME_MAX - 1, g_pending_scene_name);
     while (char_idx > 0 && isspace((unsigned char)g_pending_scene_name[char_idx - 1]))
         g_pending_scene_name[--char_idx] = '\0';
     return 1;
@@ -198,8 +219,8 @@ static int parse_var(const char *args) {
      * so the variable stays usable, just under the shorter name. Pre-fix the
      * leftover chars broke the `=` parse and the whole @var was dropped. */
     if (*p && (isalnum((unsigned char)*p) || *p == '_')) {
-        import_warn("@var name exceeds the %d-char limit; truncated to '%s'",
-                    REPL_PREDEF_NAME_MAX - 1, name);
+        import_header_warn("@var name exceeds the %d-char limit; truncated to '%s'",
+                           REPL_PREDEF_NAME_MAX - 1, name);
         while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
     }
     while (*p && isspace((unsigned char)*p)) p++;
@@ -214,8 +235,8 @@ static int parse_var(const char *args) {
         if (!repl_eval_declare_predef_var(name, err, sizeof(err))) {
             /* e.g. reserved name or predef table full. Pre-fix this `err`
              * was computed and thrown away — surface it. */
-            import_warn("@var '%s' could not be declared: %s",
-                        name, err[0] ? err : "rejected");
+            import_header_warn("@var '%s' could not be declared: %s",
+                               name, err[0] ? err : "rejected");
             return 0;
         }
         idx = repl_eval_find_predef_var_idx(name);
@@ -267,9 +288,9 @@ static int parse_func_alias(const char *args) {
      * (the historical behaviour) — the only fix is a shorter func name or a
      * larger REPL_FUNC_NAME_MAX. */
     if (*p && (isalnum((unsigned char)*p) || *p == '_'))
-        import_warn("@func %d alias '%s' exceeds the %d-char name limit; "
-                    "its definition will be dropped on import",
-                    slot, name, REPL_FUNC_NAME_MAX - 1);
+        import_header_warn("@func %d alias '%s' exceeds the %d-char name limit; "
+                           "its definition will be dropped on import",
+                           slot, name, REPL_FUNC_NAME_MAX - 1);
     repl_func_alias_set(slot, name);
     return 1;
 }
@@ -1425,6 +1446,7 @@ static void import_process_line(ImportState *s, const char *p, const char *raw) 
  * stale slugs from the failed import). */
 static void repl_export_load_reset_accumulators(void) {
     g_deferred_var_count       = 0;
+    g_import_header_warnings   = 0;
     g_pending_scene_name[0]    = '\0';
     g_pending_workspace_dir[0] = '\0';
     import_cfg_accumulator_reset();
@@ -1504,6 +1526,11 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
      * accumulator is dropped silently — that's the architectural goal
      * (no glr_config dependency from src/repl/import.c). */
     import_cfg_accumulator_apply_and_reset();
+
+    /* Fold the workspace-header directive warnings (tallied separately,
+     * since those parsers can't reach state.warnings) into the per-load
+     * total so the "(N warnings)" summary below is accurate. */
+    state.warnings += g_import_header_warnings;
 
     if (result) {
         snprintf(result->scene_name, sizeof(result->scene_name),
