@@ -89,10 +89,11 @@ typedef struct {
  * over-long list to this cap, so callers may emit more spans than fit and
  * the surplus simply degrades to UiTextPanelRow.color (no breakage).
  *
- * 16 comfortably covers real REPL lines (MAX_LINE_LEN == 256); denser lines
- * fall back to the row's class color past the cap.
+ * 64 covers dense expression rows within MAX_LINE_LEN == 256, including the
+ * built-in wave-surface normal math. Truly pathological rows still fall back
+ * to the row's class color past the cap.
  */
-#define UI_TEXT_PANEL_MAX_COLOR_SEGMENTS 16
+#define UI_TEXT_PANEL_MAX_COLOR_SEGMENTS 64
 
 /* Drop-shadow opacity for syntax-highlight "On+Shadow" mode: the white
  * shadow copy is drawn at this fraction of the span's own alpha (so faded
