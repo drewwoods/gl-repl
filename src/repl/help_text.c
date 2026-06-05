@@ -179,7 +179,7 @@ static const char *const k_tab_keys_base[] = {
     "  Click + drag (text)  \tSelect characters within the active input row",
     "  Click + drag (gutter)\tSelect lines (line-range)",
     "  Double-click         \tSelect the word under the cursor",
-    "  Caret on ( or )      \tHighlights the matching parenthesis",
+    "  Caret on ( ) or { }  \tHighlights the matching bracket",
     "  Caret inside ( )      \tHighlights text inside the enclosing parentheses",
     "  PgUp / PgDn         \tScroll active panel/overlay",
     "",
