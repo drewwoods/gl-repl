@@ -15,6 +15,11 @@ GL_STUB_INCLUDE := $(abspath tests/gl-stubs/include)
 TEST_DIR := tests
 BENCH_DIR := bench
 
+# Parallel builds by default, but not too aggressively
+ifeq ($(filter -j%,$(MAKEFLAGS)),)
+MAKEFLAGS += -j3
+endif
+
 # Color codes for output. ESC holds a real escape byte (not the two-char
 # "\033" text) so plain `echo` in recipes — macOS /bin/sh echo does not
 # interpret backslash escapes — emits real color, not literal "\033[...".
