@@ -446,7 +446,12 @@ static ReplCompileResult parse_float_name_list(const char *input,
 
     while (*p) {
         while (*p && isspace((unsigned char)*p)) p++;
-        if (*p == ';' || *p == '\0') break;
+        /* A trailing `// comment` ends the name list just like `;` or
+         * end-of-string — the comment-capture below reads it. This lets
+         * an interactive decl carry a comment without a typed semicolon
+         * (`float n // @tune`), since the `;` key commits before the user
+         * can type one; mirrors repl_compile_var_assign's `//` handling. */
+        if (*p == ';' || *p == '\0' || (p[0] == '/' && p[1] == '/')) break;
         if (parsed->count > 0) {
             /* Subsequent name must be preceded by ','. A non-comma
              * here means the line was float-shaped through `float `
@@ -476,9 +481,10 @@ static ReplCompileResult parse_float_name_list(const char *input,
         parsed->names[parsed->count][len] = '\0';
 
         /* Optional `= expr`. Stop at unparenthesized comma so the
-         * outer name loop picks up the next decl. `==` is left for
-         * the eval validator to reject — a literal `=` followed by
-         * `=` is not a decl initializer. */
+         * outer name loop picks up the next decl, and at a top-level
+         * `//` so `float n = 1 // @tune` keeps the comment out of the
+         * initializer. `==` is left for the eval validator to reject —
+         * a literal `=` followed by `=` is not a decl initializer. */
         while (*p && isspace((unsigned char)*p)) p++;
         if (*p == '=' && p[1] != '=') {
             p++;
@@ -492,6 +498,7 @@ static ReplCompileResult parse_float_name_list(const char *input,
                 if (*p == '(') depth++;
                 else if (*p == ')') depth--;
                 else if (*p == ',' && depth == 0) break;
+                else if (p[0] == '/' && p[1] == '/' && depth == 0) break;
                 p++;
             }
 

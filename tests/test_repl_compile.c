@@ -128,6 +128,87 @@ static void test_compile_float_decl_failure_is_pure(void) {
                 fingerprint_equal(&before, &after));
 }
 
+/* A float decl can carry a trailing `// comment` even when the input
+ * has no semicolon — the interactive case, since the `;` key commits
+ * before a comment can be typed. Mirrors the var-assign `//` handling.
+ * The comment is the vehicle for the `@tune` knob tag, so this is what
+ * lets an interactively-declared variable be tagged tunable. */
+static void test_compile_float_decl_trailing_comment_no_semicolon(void) {
+    glr_ctrl_reset_all();
+
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    /* init + comment, no `;` */
+    ReplCompileResult r = repl_compile_float_decl(
+        "float n = 1 // @tune", &ctx, &change, err, sizeof(err));
+    ASSERT_INT("decl init+comment compile OK", r, REPL_COMPILE_OK);
+    ASSERT_INT("decl init+comment is INSERT_ONE", change.kind,
+               REPL_COMPILED_INSERT_ONE);
+    ASSERT_STR("decl init+comment text",
+               change.text[0], "  static float n = 1; // @tune");
+    ASSERT_TRUE("decl init+comment text is @tune-tagged",
+                repl_eval_line_has_tune_tag(change.text[0]));
+
+    /* no init, comment only, no `;` */
+    glr_ctrl_reset_all();
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    r = repl_compile_float_decl(
+        "float m // @tune knob", &ctx, &change, err, sizeof(err));
+    ASSERT_INT("decl no-init comment compile OK", r, REPL_COMPILE_OK);
+    ASSERT_STR("decl no-init comment text",
+               change.text[0], "  static float m; // @tune knob");
+
+    /* multi-name with init + comment, no `;` */
+    glr_ctrl_reset_all();
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    r = repl_compile_float_decl(
+        "float a = 1, b // @tune", &ctx, &change, err, sizeof(err));
+    ASSERT_INT("decl multi+comment compile OK", r, REPL_COMPILE_OK);
+    ASSERT_STR("decl multi+comment text",
+               change.text[0], "  static float a = 1, b; // @tune");
+
+    /* A single `/` (division) in the initializer is NOT a comment. */
+    glr_ctrl_reset_all();
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    r = repl_compile_float_decl(
+        "float h = 1/2 // @tune", &ctx, &change, err, sizeof(err));
+    ASSERT_INT("decl division+comment compile OK", r, REPL_COMPILE_OK);
+    ASSERT_STR("decl division initializer kept, comment split",
+               change.text[0], "  static float h = 0.5; // @tune");
+}
+
+/* Adding a comment to an existing decl that had none round-trips
+ * through the editor. After editor_load_line_to_input the loaded
+ * buffer has the trailing `;` stripped, so appending ` // @tune`
+ * yields a no-semicolon input that overwrites the decl in place. */
+static void test_float_decl_add_comment_to_existing(void) {
+    glr_ctrl_reset_all();
+
+    editor_feed_line("float n = 1;");
+    ASSERT_STR("baseline decl has no comment",
+               editor_buffer_line(0), "  static float n = 1;");
+
+    /* Re-commit the same decl with a comment appended, as the editor
+     * would after loading the line (no trailing `;` in the input). */
+    set_input("static float n = 1 // @tune");
+    ReplCompileContext ctx = repl_compile_context_from_live(0);
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompileResult r = repl_compile_float_decl(
+        "static float n = 1 // @tune", &ctx, &change, err, sizeof(err));
+    ASSERT_INT("add-comment compile OK", r, REPL_COMPILE_OK);
+    ASSERT_INT("add-comment replaces in place", change.kind,
+               REPL_COMPILED_REPLACE_ONE);
+    ASSERT_INT("add-comment apply OK",
+               editor_commit_apply_external_change(&change, 0, 0), 1);
+    ASSERT_STR("existing decl now carries the comment",
+               editor_buffer_line(0), "  static float n = 1; // @tune");
+    ASSERT_TRUE("existing decl is now @tune-tagged",
+                repl_eval_line_has_tune_tag(editor_buffer_line(0)));
+}
+
 /* repl_compile_var_assign is pure on the failure path. */
 static void test_compile_var_assign_failure_is_pure(void) {
     glr_ctrl_reset_all();
@@ -1043,6 +1124,8 @@ static void test_func_def_resume_publish_consumed_by_close_brace(void) {
 
 int main(void) {
     test_compile_float_decl_failure_is_pure();
+    test_compile_float_decl_trailing_comment_no_semicolon();
+    test_float_decl_add_comment_to_existing();
     test_compile_var_assign_failure_is_pure();
     test_compile_no_change_leaves_state();
     test_compile_apply_updates_both();
