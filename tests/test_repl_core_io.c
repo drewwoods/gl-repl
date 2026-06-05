@@ -408,6 +408,68 @@ int main(void) {
         remove(alias_path);
     }
 
+    /* Long func-alias roundtrip (regression): a 21-char alias name must
+     * survive export -> import without truncation. With REPL_FUNC_NAME_MAX
+     * at its old value of 16 the stored alias was clipped to 15 chars and
+     * the matching `static void <name>(...)` definition failed to map back
+     * to its slot, so the whole function was dropped on reload. */
+    {
+        const char *long_path = "/tmp/repl_core_func_alias_long.c";
+        const char *long_name = "computeVerticalMotion"; /* 21 chars */
+        ASSERT_TRUE("test name within current func-name limit",
+                    (int)strlen(long_name) < REPL_FUNC_NAME_MAX);
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("computeVerticalMotion {");
+        editor_feed_line("  glVertex3f(0, 0, 0);");
+        editor_feed_line("}");
+        editor_feed_line("computeVerticalMotion();");
+        ASSERT_TRUE("long alias decl assigned slot 0",
+                    repl_func_alias_lookup_slot(long_name) == 0);
+        const char *long_post_decl = repl_func_alias_get(0);
+        ASSERT_TRUE("long alias stored untruncated post-decl",
+                    long_post_decl && strcmp(long_post_decl, long_name) == 0);
+        repl_export_save_output(long_path, source_document_view(), NULL);
+        {
+            char buf[16384];
+            read_text_file(long_path, buf, sizeof(buf));
+            ASSERT_TRUE("long alias workspace directive emitted",
+                        strstr(buf, "// @func 0 = computeVerticalMotion") != NULL);
+            ASSERT_TRUE("long alias used as C function name",
+                        strstr(buf, "static void computeVerticalMotion(") != NULL);
+        }
+        glr_ctrl_reset_all(); declare_test_vars();
+        ASSERT_TRUE("long alias cleared after reset",
+                    repl_func_alias_lookup_slot(long_name) == -1);
+        ASSERT_TRUE("load long alias output",
+                    repl_export_load_from_file(long_path, NULL) == 1);
+        ASSERT_TRUE("long alias restored on import (not dropped)",
+                    repl_func_alias_lookup_slot(long_name) == 0);
+        const char *long_post_import = repl_func_alias_get(0);
+        ASSERT_TRUE("long alias name matches untruncated on reload",
+                    long_post_import && strcmp(long_post_import, long_name) == 0);
+        remove(long_path);
+    }
+
+    /* Truncation boundary (invariant): a name that exactly fills the alias
+     * buffer (REPL_FUNC_NAME_MAX - 1 chars) is a valid func alias, but one
+     * char longer overflows and is rejected. This is the cap that import's
+     * parse_func_alias truncates against (and now warns about) — the reason
+     * the long alias above was dropped before REPL_FUNC_NAME_MAX was bumped. */
+    {
+        char at_limit[REPL_FUNC_NAME_MAX];        /* MAX-1 'a's + NUL */
+        char over_limit[REPL_FUNC_NAME_MAX + 1];  /* MAX   'a's + NUL */
+        memset(at_limit,   'a', sizeof(at_limit)   - 1);
+        memset(over_limit, 'a', sizeof(over_limit) - 1);
+        at_limit[sizeof(at_limit)     - 1] = '\0';
+        over_limit[sizeof(over_limit) - 1] = '\0';
+        ASSERT_TRUE("func name filling the buffer is accepted",
+                    (int)strlen(at_limit) == REPL_FUNC_NAME_MAX - 1 &&
+                    repl_func_alias_name_is_valid(at_limit) == 1);
+        ASSERT_TRUE("func name one char over the limit is rejected",
+                    (int)strlen(over_limit) == REPL_FUNC_NAME_MAX &&
+                    repl_func_alias_name_is_valid(over_limit) == 0);
+    }
+
     /* Direct file import should reset the alias table before reading
      * @func directives from the new file. Otherwise an aliased import
      * followed by a plain import leaves the old alias live even though

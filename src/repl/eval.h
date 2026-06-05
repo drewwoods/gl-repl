@@ -108,8 +108,12 @@
 #define REPL_FUNC_SLOT_COUNT 10
 #endif
 
+/* Buffer size for a func-slot alias name: 24 usable chars + NUL. Used as
+ * both the storage width (g_active_func_aliases, UserScene snapshots) and
+ * the parse cap in repl_parse_func_name_token / parse_func_alias, so all
+ * three stay in lock-step off this one macro. */
 #ifndef REPL_FUNC_NAME_MAX
-#define REPL_FUNC_NAME_MAX 16
+#define REPL_FUNC_NAME_MAX 25
 #endif
 
 #ifndef M_PI
