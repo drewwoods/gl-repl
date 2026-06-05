@@ -66,7 +66,7 @@
 #define COLOR_WARNING_END   ""
 #endif
 
-static const char kWarningPrefix[] = COLOR_WARNING_START "Warning:" COLOR_WARNING_END " could not parse line:";
+static const char kWarningPrefix[] = COLOR_WARNING_START "Warning:" COLOR_WARNING_END " could not parse line";
 
 #define g_import_cfg_bridge (repl_config_bridge())
 
@@ -1206,8 +1206,34 @@ static int import_make_repl_glut_bitmap_string(const char *line,
                             fmt, post_repl[0] ? ", " : "", post_repl);
 }
 
-static void import_feed_one_line(const char *line, int *loaded, int *warnings,
-                                 int *edit_line_inout) {
+#define IMPORT_MAX_PENDING_COMMENTS 16
+
+typedef struct {
+    int in_snippet;
+    int past_snippet;
+    int func_depth;                   /* depth inside a function definition */
+    int loaded;
+    int warnings;
+    int edit_line;                    /* caller-owned cursor (Phase 3.6.4) */
+    char pending_comments[IMPORT_MAX_PENDING_COMMENTS][MAX_LINE_LEN];
+    int  pending_comment_count;
+    int  pending_blank_run;
+    int  line_no;
+} ImportState;
+
+static void import_state_init(ImportState *s) {
+    s->in_snippet = 0;
+    s->past_snippet = 0;
+    s->func_depth = 0;
+    s->loaded = 0;
+    s->warnings = 0;
+    s->edit_line = 0;
+    s->pending_comment_count = 0;
+    s->pending_blank_run = 0;
+    s->line_no = 0;
+}
+
+static void import_feed_one_line(ImportState *s, const char *line) {
     char repl_line[MAX_LINE_LEN];
     int before = repl_state_document_count();
     int handled = 0;
@@ -1215,8 +1241,8 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings,
     /* Snippet directives such as @declare are written by
      * write_canonical_cmd_as_c() and must be handled before the generic
      * C-to-REPL path. */
-    if (import_parse_snippet_directive(line, loaded, warnings,
-                                       edit_line_inout))
+    if (import_parse_snippet_directive(line, &s->loaded, &s->warnings,
+                                       &s->edit_line))
         return;
 
     /* Feed lines through the non-editor source-load API
@@ -1226,20 +1252,20 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings,
     char load_err[REPL_STATUS_TEXT_MAX] = "";
     if (import_make_repl_for_header(line, repl_line, sizeof(repl_line))) {
         handled = repl_load_apply_line(repl_line, load_err, (int)sizeof(load_err),
-                                       edit_line_inout);
+                                       &s->edit_line);
     } else if (import_make_repl_tess_line(line, repl_line, sizeof(repl_line)) ||
                import_make_repl_point_parameter_line(line, repl_line, sizeof(repl_line)) ||
                import_make_repl_label(line, repl_line, sizeof(repl_line)) ||
                import_make_repl_glut_bitmap_string(line, repl_line, sizeof(repl_line))) {
         handled = repl_load_apply_line(repl_line, load_err, (int)sizeof(load_err),
-                                       edit_line_inout);
+                                       &s->edit_line);
     } else {
         repl_eval_c_expr_to_repl(line, repl_line, sizeof(repl_line));
         handled = repl_load_apply_line(repl_line, load_err, (int)sizeof(load_err),
-                                       edit_line_inout);
+                                       &s->edit_line);
     }
 
-    if (repl_state_document_count() > before) *loaded += (repl_state_document_count() - before);
+    if (repl_state_document_count() > before) s->loaded += (repl_state_document_count() - before);
     if (!handled) {
         /* Surface repl_load_apply_line's per-line diagnostic (e.g.
          * "command store at capacity", a parse-error reason)
@@ -1248,10 +1274,10 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings,
          * and similar import failures showed up as the generic
          * "could not parse line" with no clue why. */
         if (load_err[0])
-            fprintf(stderr, "%s %s (%s)\n", kWarningPrefix, line, load_err);
+            fprintf(stderr, "%s (line %d): %s (%s)\n", kWarningPrefix, s->line_no, line, load_err);
         else
-            fprintf(stderr, "%s %s\n", kWarningPrefix, line);
-        (*warnings)++;
+            fprintf(stderr, "%s (line %d): %s\n", kWarningPrefix, s->line_no, line);
+        s->warnings++;
     }
 }
 
@@ -1266,30 +1292,6 @@ static void import_feed_one_line(const char *line, int *loaded, int *warnings,
 /* past the snippet (ignored tail).                                           */
 /* ========================================================================= */
 
-#define IMPORT_MAX_PENDING_COMMENTS 16
-
-typedef struct {
-    int in_snippet;
-    int past_snippet;
-    int func_depth;                   /* depth inside a function definition */
-    int loaded;
-    int warnings;
-    int edit_line;                    /* caller-owned cursor (Phase 3.6.4) */
-    char pending_comments[IMPORT_MAX_PENDING_COMMENTS][MAX_LINE_LEN];
-    int  pending_comment_count;
-    int  pending_blank_run;
-} ImportState;
-
-static void import_state_init(ImportState *s) {
-    s->in_snippet = 0;
-    s->past_snippet = 0;
-    s->func_depth = 0;
-    s->loaded = 0;
-    s->warnings = 0;
-    s->edit_line = 0;
-    s->pending_comment_count = 0;
-    s->pending_blank_run = 0;
-}
 
 static void import_reset_pending_function_prelude(ImportState *s) {
     s->pending_comment_count = 0;
@@ -1332,7 +1334,7 @@ static int import_try_camera(const char *p) {
 
 static int import_try_function_body(ImportState *s, const char *p) {
     if (s->func_depth <= 0) return 0;
-    import_feed_one_line(p, &s->loaded, &s->warnings, &s->edit_line);
+    import_feed_one_line(s, p);
     for (const char *bp = p; *bp; bp++) {
         if      (*bp == '{') s->func_depth++;
         else if (*bp == '}') s->func_depth--;
@@ -1347,7 +1349,7 @@ static int import_try_function_header(ImportState *s, const char *p, const char 
     import_flush_pending_blank_run(s);
     /* Feed accumulated pending comments before the function header. */
     for (int comment_idx = 0; comment_idx < s->pending_comment_count; comment_idx++)
-        import_feed_one_line(s->pending_comments[comment_idx], &s->loaded, &s->warnings, &s->edit_line);
+        import_feed_one_line(s, s->pending_comments[comment_idx]);
     import_reset_pending_function_prelude(s);
     int before = repl_state_document_count();
     char load_err[REPL_STATUS_TEXT_MAX] = "";
@@ -1357,9 +1359,9 @@ static int import_try_function_header(ImportState *s, const char *p, const char 
     if (!handled) {
         /* See import_feed_one_line for the load_err rationale. */
         if (load_err[0])
-            fprintf(stderr, "%s %s (%s)\n", kWarningPrefix, raw, load_err);
+            fprintf(stderr, "%s (line %d): %s (%s)\n", kWarningPrefix, s->line_no, raw, load_err);
         else
-            fprintf(stderr, "%s %s\n", kWarningPrefix, raw);
+            fprintf(stderr, "%s (line %d): %s\n", kWarningPrefix, s->line_no, raw);
         s->warnings++;
     }
     s->func_depth = 1;
@@ -1405,7 +1407,7 @@ static int import_try_blank(ImportState *s, const char *p) {
     if (*p != '\0')
         return 0;
 
-    import_feed_one_line(p, &s->loaded, &s->warnings, &s->edit_line);
+    import_feed_one_line(s, p);
     return 1;
 }
 
@@ -1414,7 +1416,7 @@ static int import_try_predef_decl(const char *p) {
 }
 
 static int import_try_snippet_body_line(ImportState *s, const char *p) {
-    import_feed_one_line(p, &s->loaded, &s->warnings, &s->edit_line);
+    import_feed_one_line(s, p);
     return 1;
 }
 
@@ -1478,6 +1480,7 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
     char line[MAX_LINE_LEN];
     int truncated_line = 0;
     while (fgets(line, sizeof(line), f)) {
+        state.line_no++;
         size_t raw_len = strlen(line);
         if (raw_len > 0 &&
             line[raw_len - 1] != '\n' &&
