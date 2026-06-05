@@ -6,7 +6,7 @@
  * references glr_camera_*. Camera state flows through the
  * controller-installed ReplExportCameraBridge (see src/repl/export.h).
  * glr_config.h was already dropped in step 4 for the same reason. */
-#include "config.h"             /* REPL_OUTLINE_POLYGON_OFFSET_{FACTOR,UNITS} */
+#include "config.h"             /* shared export/runtime constants */
 #include <assert.h>             /* @tune save-path injection anchor checks */
 #include "repl/command_store.h"
 #include "repl/core.h"
@@ -1967,8 +1967,8 @@ static void write_tune_helpers(FILE *f, const ExportNeeds *needs) {
 
 /* Injected into the exported keyboard() body: decode the key (folding Shift
  * uppercase and Ctrl control-codes back to the base letter) and apply the
- * swatch step, Shift = fine x0.2, Ctrl = coarse x10 — mirroring the in-app
- * numeric swatch. */
+ * swatch step, Shift = fine and Ctrl = coarse — mirroring the in-app numeric
+ * swatch and variable-panel adjustment multipliers. */
 static void emit_tune_keyboard_handlers(FILE *f, const ExportNeeds *needs) {
     fprintf(f,
         "  int repl_tune_keyboard_modifiers = glutGetModifiers();\n"
@@ -1985,9 +1985,11 @@ static void emit_tune_keyboard_handlers(FILE *f, const ExportNeeds *needs) {
         "        (unsigned char)(repl_tune_keyboard_key_code + ('a' - 'A'));\n"
         "  float repl_tune_keyboard_scale = 1.0f;\n"
         "  if (repl_tune_keyboard_modifiers & GLUT_ACTIVE_SHIFT)\n"
-        "    repl_tune_keyboard_scale *= 0.2f;\n"
+        "    repl_tune_keyboard_scale *= "
+            REPL_EXPORT_STRINGIFY(GLR_ADJUST_FINE_SCALE) ";\n"
         "  if (repl_tune_keyboard_modifiers & GLUT_ACTIVE_CTRL)\n"
-        "    repl_tune_keyboard_scale *= 10.0f;\n");
+        "    repl_tune_keyboard_scale *= "
+            REPL_EXPORT_STRINGIFY(GLR_ADJUST_COARSE_SCALE) ";\n");
     for (int i = 0; i < needs->tune_count; i++) {
         const char *v = needs->tune_names[i];
         fprintf(f,

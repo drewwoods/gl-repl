@@ -10,6 +10,7 @@
  */
 #include "repl/core.h"
 #include "repl/eval.h"
+#include "repl/export.h"
 #include "editor/input.h"
 #include "source_document.h"
 
@@ -135,8 +136,12 @@ static void test_collector_and_export(void) {
     ASSERT_TRUE("knob w raises freq",
                 contains(c, "if (repl_tune_keyboard_key_code == 'w')\n"
                             "    freq += tune_compute_step(freq) * repl_tune_keyboard_scale"));
-    ASSERT_TRUE("Shift fine x0.2", contains(c, "repl_tune_keyboard_scale *= 0.2f"));
-    ASSERT_TRUE("Ctrl coarse x10", contains(c, "repl_tune_keyboard_scale *= 10.0f"));
+    ASSERT_TRUE("Shift fine uses shared scale",
+                contains(c, "repl_tune_keyboard_scale *= "
+                         REPL_EXPORT_STRINGIFY(GLR_ADJUST_FINE_SCALE)));
+    ASSERT_TRUE("Ctrl coarse uses shared scale",
+                contains(c, "repl_tune_keyboard_scale *= "
+                         REPL_EXPORT_STRINGIFY(GLR_ADJUST_COARSE_SCALE)));
     ASSERT_TRUE("round-trip marker amp", contains(c, "@declare amp=1.5 @tune"));
     ASSERT_TRUE("round-trip marker freq", contains(c, "@declare freq=2 @tune"));
     /* baseline keyboard handlers stay */
