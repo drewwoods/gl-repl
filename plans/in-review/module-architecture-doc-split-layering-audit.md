@@ -112,6 +112,26 @@ All passed. There is no separate `editor_demo` no-`src/ui/app` guard target
 yet; the stub `editor_demo` build link set remains limited to
 `tools/editor_demo`, `src/editor`, `src/ui/core`, and support code.
 
+Follow-up verification after the main sample link check:
+
+- Added `src/subsystems/replay/replay_annotations.c` to the main `SRCS` list.
+  The first cleanup commit had moved the file into the test/demo source lists
+  but missed the release `gl-repl` link set, which left
+  `replay_annotations_prepare` and
+  `replay_code_panel_get_command_display_text` undefined in `make gl-repl`.
+- Added a phony `make sample` alias for the main `gl-repl` sample target.
+- Verified:
+
+```bash
+make gl-repl
+make sample
+make test-full
+```
+
+`make test-full` passed after running outside the sandbox for the real-GL
+GLUT/Cocoa tests. The sandboxed first attempt passed all 52 stub test binaries
+but failed in `gl-tests` while creating a real Cocoa GL window.
+
 Demo constraints to preserve:
 
 - The `tools/*_demo` binaries are layer-independence proofs. They should stay
