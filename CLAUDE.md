@@ -495,8 +495,8 @@ state-machine level, not buried in the doc body.
 | `src/repl/example_loader.c` | Built-in example loading and active-example tracking |
 | `src/app/glr_debug.c` | Diagnostic dumps for CLI flags and tests |
 | `src/app/glr_debug.h` | Debug dump public API |
-| `src/repl/replay_annotations.c` | Replay-time source annotations, variable substitution, evaluated command display text |
-| `src/repl/replay_annotations.h` | Code-panel replay annotation API |
+| `src/subsystems/replay/replay_annotations.c` | Replay-time source annotations, variable substitution, evaluated command display text |
+| `src/subsystems/replay/replay_annotations.h` | Code-panel replay annotation API |
 | `src/ui/app/snapshot.h` | `UiRenderSnapshot` — frame-frozen bundle built once per frame by `glr_ctrl_build_ui_snapshot()` |
 | `src/ui/app/editor.h` | Per-frame editor-overlay snapshots (swatches, sliders, highlights) pushed by the controller |
 | `src/ui/subsystems/replay_hud.c` | 2D replay status HUD (feature-UI under the `replay_ui_*` prefix; reads replay peer snapshot) |

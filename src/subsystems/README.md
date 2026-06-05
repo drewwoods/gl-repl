@@ -85,6 +85,7 @@ virtual lines), but it never *becomes* editor-owned.
 | File | Responsibility |
 |---|---|
 | `replay/replay.c` / `.h` | Replay state machine: PC, mode (OFF/PLAYING/PAUSED/DONE), speed, fade-batch ring |
+| `replay/replay_annotations.c` / `.h` | Replay-time source annotations / virtual lines |
 | `replay/replay_state.c` / `.h` | Owns `ReplayRuntimeState` storage + narrow accessors / snapshot view |
 | `variable_panel/variable_panel_drag.c` / `.h` | Slider drag transaction: begin/motion/reset, linear/log value writeback |
 | `variable_panel/variable_panel_state.c` / `.h` | Owns the variable-panel visibility flag + drag-state storage |

@@ -42,7 +42,8 @@ Proposed doc shape:
 The caveat: a module-local doc split should not pretend every dependency is
 already one-way. The current tree has no project-local file-level include
 cycles, but it does have module-level cycles caused by shared snapshot types,
-feature UI, replay annotations, and a few live-state reads.
+feature UI, and a few live-state reads. The original sweep also found a
+REPL/replay edge through replay annotations; that cheap cleanup is now landed.
 
 ## Sweep Method
 
@@ -75,6 +76,41 @@ High-level result:
 - `src/repl` and `src/editor` have zero app includes under the existing
   ratchets.
 - The real cleanup is module-level coupling, not C preprocessor cycles.
+
+## Landed Cleanup Sweep
+
+Date: 2026-06-05
+
+Implemented the first two cheap cleanups from this audit:
+
+- `src/subsystems/edit_overlays` no longer reaches into `src/app` or
+  `src/editor` for vertex-label policy or cursor state. `glr_ctrl` now maps
+  app config into the subsystem-local `OverlayVertexLabelMode` and passes the
+  current `FlatProgramView` / cursor block through `OverlayWalkCtx`.
+- `replay_annotations.{c,h}` moved from `src/repl/` to
+  `src/subsystems/replay/`, so replay annotations live with the replay peer
+  instead of making the REPL module own replay presentation behavior.
+- Makefile source lists, include paths, guard scripts, callgraph grouping,
+  tests, and architecture docs were updated to the new ownership.
+
+Verification:
+
+```bash
+make test_edit_overlays USE_GL_STUBS=1
+./build/release-gl-stubs/test_edit_overlays
+make test_repl_replay USE_GL_STUBS=1
+./build/release-gl-stubs/test_repl_replay
+make test_repl_core_commit USE_GL_STUBS=1
+./build/release-gl-stubs/test_repl_core_commit
+make repl_demo editor_demo USE_GL_STUBS=1
+make check-state-ownership
+make check-c99
+git diff --check
+```
+
+All passed. There is no separate `editor_demo` no-`src/ui/app` guard target
+yet; the stub `editor_demo` build link set remains limited to
+`tools/editor_demo`, `src/editor`, `src/ui/core`, and support code.
 
 Demo constraints to preserve:
 
@@ -151,7 +187,7 @@ Likely cleanup path:
 This preserves the intended direction: editor owns text behavior; UI owns view
 shapes; app/controller copies between them once per frame.
 
-### 3. REPL/replay is cyclic through replay annotations
+### 3. REPL/replay annotation cycle removed
 
 Evidence:
 
@@ -159,31 +195,27 @@ Evidence:
   `src/subsystems/replay/replay*.c` includes `repl/core.h`,
   `repl/pipeline.h`, `repl/state_owners.h`, `repl/eval.h`, and
   `repl/flatten.h`.
-- REPL also depends on replay:
-  `src/repl/replay_annotations.c` includes `subsystems/replay/replay.h` and
-  `subsystems/replay/replay_state.h`.
+- This cleanup has landed: `replay_annotations.{c,h}` now live under
+  `src/subsystems/replay/`, so `src/repl` no longer carries this replay
+  presentation dependency.
 
 Impact:
 
 Replay annotations are a replay presentation feature, not core language
-pipeline. Keeping them in `src/repl` makes the REPL module doc less clean:
-the REPL doc has to explain a peer subsystem's runtime state.
+pipeline. Keeping them in `src/repl` made the REPL module doc less clean; the
+file now lives with the replay peer.
 
 Difficulty: low-medium.
 
-Likely cleanup path:
+Landed cleanup:
 
-- Move `replay_annotations.{c,h}` into `src/subsystems/replay/`, or into an
-  app/controller-adjacent module if the ownership is "presentation bridge."
-- Keep the current neutral output shape (`ReplReplayAnnotationOutput`, or a
-  renamed `ReplayAnnotationOutput`) so the controller still publishes virtual
-  lines to the editor.
-- Update includes, Makefile object lists, and tests.
+- Moved `replay_annotations.{c,h}` into `src/subsystems/replay/`.
+- Kept the neutral output shape (`ReplReplayAnnotationOutput`) so the
+  controller still publishes virtual lines to the editor.
+- Updated includes, Makefile object lists, and tests.
 
-This is mostly a file move, not an API redesign: no `src/repl` public header
-pulls replay, and the full-app consumer is the controller. Moving it would make
-the dependency one-way: replay depends on the REPL program model; REPL no
-longer depends on replay runtime state.
+The dependency is now one-way: replay depends on the REPL program model; REPL
+no longer depends on replay runtime state.
 
 ### 4. REPL/scene has a type-vocabulary cycle, not a live-state cycle
 
@@ -221,32 +253,31 @@ Likely cleanup path:
 - Treat `transform_utils.h` as REPL-aware GL walker support, not generic scene
   renderer infrastructure.
 
-### 5. `edit_overlays` is the easiest peer-cycle cleanup
+### 5. `edit_overlays` peer-cycle cleanup landed
 
 Evidence:
 
 - App includes `subsystems/edit_overlays/edit_overlays.h`, which is expected.
-- `src/subsystems/edit_overlays/edit_overlays.c` includes
-  `app/glr_config.h` privately for `GLR_VERTEX_LABEL_*`.
-- The same file includes `editor/state.h` and calls `editor_state_edit_line()`.
-- It also reads live REPL flat-program state while building vertex-walk
-  contexts.
+- This cleanup has landed: `src/subsystems/edit_overlays/edit_overlays.c` no
+  longer includes `app/glr_config.h` or `editor/state.h`.
+- The controller maps app vertex-label config into the local
+  `OverlayVertexLabelMode` enum and passes cursor / `FlatProgramView` through
+  `OverlayWalkCtx`.
 
 Impact:
 
-This creates both `app <-> subsystems` and `editor <-> subsystems` cycles at
-module level. It is also inconsistent with the otherwise good public header,
-which already tries to avoid pulling app config into the transitive API.
+The former `app <-> subsystems` and `editor <-> subsystems` cycles through
+`edit_overlays` are gone. The public header stayed subsystem-owned and now
+the implementation follows the same direction.
 
 Difficulty: low.
 
-Likely cleanup path:
+Landed cleanup:
 
-- Pass label-display policy as booleans or a local overlay enum instead of
-  comparing app config enum values inside the subsystem.
-- Pass the cursor and `FlatProgramView` into the overlay render functions from
-  the controller. `OverlayWalkCtx` already points in this direction.
-- Keep all live editor/REPL reads in `glr_ctrl` snapshot construction.
+- Added a local overlay enum for vertex-label modes.
+- Passed cursor and `FlatProgramView` into overlay render functions from the
+  controller.
+- Kept all live editor/REPL reads in `glr_ctrl` snapshot construction.
 
 ### 6. `ui/app` and `ui/subsystems` are internally cyclic
 
@@ -335,11 +366,11 @@ Root-level material to keep:
 
 ## Suggested Cleanup Order
 
-If the goal is strict one-way module docs, do the two cheap cleanups before
-the doc split:
+The two cheap cleanups have landed, so the doc split can treat those edges as
+already one-way:
 
-1. Clean `edit_overlays` live reads and app enum dependency.
-2. Move `replay_annotations` out of `src/repl`.
+1. `edit_overlays` live reads and app enum dependency are gone.
+2. `replay_annotations` moved out of `src/repl`.
 
 Then split the docs while documenting the remaining heavier edges as current
 contracts / deferred cleanup:
@@ -352,8 +383,9 @@ contracts / deferred cleanup:
 
 Minimum viable documentation-only path:
 
-- Split the docs now, but explicitly label the app/UI, editor/UI, REPL/replay,
-  and REPL/scene edges as current cross-module contracts.
+- Split the docs now, but explicitly label the app/UI, editor/UI,
+  replay-consumes-REPL, and REPL/scene edges as current cross-module
+  contracts.
 - Add cleanup bullets to the affected module docs so future work does not
   mistake current coupling for the target architecture.
 - In every module-local doc that mentions a demo, state the demo dependency

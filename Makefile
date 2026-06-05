@@ -391,7 +391,6 @@ SRCS = \
 	src/repl/import.c \
 	src/repl/load.c \
 	src/repl/parser.c \
-	src/repl/replay_annotations.c \
 	src/repl/scenes.c \
 	src/repl/source_scope.c \
 	src/repl/state.c \
@@ -486,7 +485,6 @@ HDRS = \
 	src/repl/help_text.h \
 	src/repl/parser.h \
 	src/repl/pipeline.h \
-	src/repl/replay_annotations.h \
 	src/repl/scenes.h \
 	src/repl/source_scope.h \
 	src/repl/state.h \
@@ -525,6 +523,7 @@ HDRS = \
 	src/subsystems/color_picker/color_picker_state.h \
 	src/subsystems/replay/replay_internal.h \
 	src/subsystems/replay/replay.h \
+	src/subsystems/replay/replay_annotations.h \
 	src/subsystems/replay/replay_state.h \
 	src/subsystems/tutorial/tutorial_internal.h \
 	src/subsystems/tutorial/tutorial.h \
@@ -584,7 +583,6 @@ CORE_TEST_SRCS = \
 	src/repl/import.c \
 	src/repl/load.c \
 	src/repl/parser.c \
-	src/repl/replay_annotations.c \
 	src/repl/scenes.c \
 	src/repl/source_scope.c \
 	src/repl/state.c \
@@ -622,6 +620,7 @@ CORE_TEST_SRCS = \
 	src/ui/subsystems/variable_panel.c \
 	src/subsystems/color_picker/color_picker_state.c \
 	src/subsystems/replay/replay.c \
+	src/subsystems/replay/replay_annotations.c \
 	src/subsystems/replay/replay_fade.c \
 	src/subsystems/replay/replay_input.c \
 	src/subsystems/replay/replay_playback.c \
@@ -693,7 +692,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/repl/import.c \
                      src/repl/load.c \
                      src/repl/parser.c \
-                     src/repl/replay_annotations.c \
+                     src/subsystems/replay/replay_annotations.c \
                      src/repl/scenes.c \
                      src/repl/source_scope.c \
                      src/repl/state.c \

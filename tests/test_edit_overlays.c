@@ -207,16 +207,18 @@ static void test_outline_block_matches_cursor(void) {
 
 static void test_build_vertex_walk_context(void) {
     printf("--- edit_overlays edit_overlays_build_vertex_walk_context ---\n");
-    glr_ctrl_reset_all();
+    OverlayWalkCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program = repl_state_flat_program_view();
+    ctx.cursor.edit_line_idx = 42;
+    ctx.cursor.cursor_block_begin = 10;
+    ctx.cursor.cursor_block_end = 20;
 
-    editor_state_edit_line_set(42);
-    repl_state_flat_program_set_current_block(10, 20, 0);
-
-    ReplayVertexWalkContext walk = edit_overlays_build_vertex_walk_context(1);
+    ReplayVertexWalkContext walk = edit_overlays_build_vertex_walk_context(&ctx, 1);
     ASSERT_INT("selected block only matches input", walk.selected_block_only, 1);
-    ASSERT_INT("edit_line_idx matches editor state", walk.cursor.edit_line_idx, 42);
-    ASSERT_INT("block begin matches program state", walk.cursor.cursor_block_begin, 10);
-    ASSERT_INT("block end matches program state", walk.cursor.cursor_block_end, 20);
+    ASSERT_INT("edit_line_idx matches input ctx", walk.cursor.edit_line_idx, 42);
+    ASSERT_INT("block begin matches input ctx", walk.cursor.cursor_block_begin, 10);
+    ASSERT_INT("block end matches input ctx", walk.cursor.cursor_block_end, 20);
     ASSERT_INT("func_scope_mask starts at 0", walk.cursor.cursor_func_scope_mask, 0u);
 }
 
@@ -575,7 +577,7 @@ static void test_on_vertex_number_label_callback(void) {
     TraceLog log;
 
     /* INDEX mode (3D): a single label drawn at the vertex. */
-    VertexLabelCtx idx_ctx = { .mode = GLR_VERTEX_LABEL_INDEX, .is_ortho = 0 };
+    VertexLabelCtx idx_ctx = { .mode = OVERLAY_VERTEX_LABEL_INDEX, .is_ortho = 0 };
     trace_begin();
     on_vertex_number_label(&state, 1.0f, 2.0f, 3.0f, &idx_ctx);
     trace_end(&log);
@@ -583,7 +585,7 @@ static void test_on_vertex_number_label_callback(void) {
                trace_count_line(&log, "glRasterPos3f 1 2 3"), 1);
 
     /* INDEX_POS mode (2D ortho): still anchored at the vertex. */
-    VertexLabelCtx pos_ctx = { .mode = GLR_VERTEX_LABEL_INDEX_POS, .is_ortho = 1 };
+    VertexLabelCtx pos_ctx = { .mode = OVERLAY_VERTEX_LABEL_INDEX_POS, .is_ortho = 1 };
     trace_begin();
     on_vertex_number_label(&state, 4.0f, 5.0f, 6.0f, &pos_ctx);
     trace_end(&log);
@@ -591,7 +593,7 @@ static void test_on_vertex_number_label_callback(void) {
                trace_count_line(&log, "glRasterPos3f 4 5 6"), 1);
 
     /* OFF mode and NULL ctx draw nothing. */
-    VertexLabelCtx off_ctx = { .mode = GLR_VERTEX_LABEL_OFF, .is_ortho = 0 };
+    VertexLabelCtx off_ctx = { .mode = OVERLAY_VERTEX_LABEL_OFF, .is_ortho = 0 };
     trace_begin();
     on_vertex_number_label(&state, 1.0f, 2.0f, 3.0f, &off_ctx);
     on_vertex_number_label(&state, 1.0f, 2.0f, 3.0f, NULL);
@@ -651,7 +653,14 @@ static void test_render_via_repl_program(void) {
 
     /* Vertex numbers: a raster-positioned label per vertex. */
     trace_begin();
-    edit_overlays_render_vertex_numbers(GLR_VERTEX_LABEL_INDEX_POS, 0);
+    OverlayWalkCtx walk;
+    memset(&walk, 0, sizeof(walk));
+    walk.program = repl_state_flat_program_view();
+    walk.cursor.edit_line_idx = editor_state_edit_line();
+    walk.cursor.cursor_block_begin = repl_state_flat_program_current_block_begin();
+    walk.cursor.cursor_block_end = repl_state_flat_program_current_block_end();
+
+    edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX_POS, 0);
     trace_end(&log);
     ASSERT_INT("vertex-number label at first vertex",
                trace_count_line(&log, "glRasterPos3f 0.25 0.5 0.75"), 1);
@@ -660,7 +669,7 @@ static void test_render_via_repl_program(void) {
 
     /* Normal vectors: arrow base at each vertex (scale GLR_NORMAL_ARROW_SCALE). */
     trace_begin();
-    edit_overlays_render_normal_vectors();
+    edit_overlays_render_normal_vectors(&walk);
     trace_end(&log);
     ASSERT_INT("normal arrow anchored at first vertex",
                trace_count_line(&log, "glVertex3f 0.25 0.5 0.75"), 1);
@@ -677,7 +686,7 @@ static void test_render_via_repl_program(void) {
     snap.input = "";
     snap.edit_line_idx = editor_state_edit_line();
     trace_begin();
-    edit_overlays_render_cursor_guides(&snap);
+    edit_overlays_render_cursor_guides(&snap, &walk);
     trace_end(&log);
     ASSERT_INT("cursor guides save/restore the modelview",
                trace_count_sym(&log, "glPushMatrix"),
@@ -686,7 +695,7 @@ static void test_render_via_repl_program(void) {
     /* show_guides == 0 is an early return (no GL at all). */
     snap.show_guides = 0;
     trace_begin();
-    edit_overlays_render_cursor_guides(&snap);
+    edit_overlays_render_cursor_guides(&snap, &walk);
     trace_end(&log);
     ASSERT_INT("guides off -> no GL emitted",
                trace_count_sym(&log, "glPushAttrib"), 0);
@@ -697,13 +706,13 @@ static void test_render_via_repl_program(void) {
     OverlaySnapshotPack pack;
     memset(&pack, 0, sizeof(pack));
     pack.walk.program = repl_state_flat_program_view();
-    pack.walk.cursor.edit_line_idx = -1;
-    pack.walk.cursor.cursor_block_begin = -1;
-    pack.walk.cursor.cursor_block_end = -1;
+    pack.walk.cursor.edit_line_idx = editor_state_edit_line();
+    pack.walk.cursor.cursor_block_begin = repl_state_flat_program_current_block_begin();
+    pack.walk.cursor.cursor_block_end = repl_state_flat_program_current_block_end();
     pack.walk.show_vertex_outlines = 1;
     pack.walk.show_vertex_points = 1;
     pack.snapshot.show_guides = 0;
-    pack.show_vertex_labels = GLR_VERTEX_LABEL_INDEX;
+    pack.vertex_label_mode = OVERLAY_VERTEX_LABEL_INDEX;
     pack.show_normal_vectors = 1;
     trace_begin();
     edit_overlays_post_overlays(&pack);

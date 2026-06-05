@@ -235,7 +235,7 @@ reads and mutates source text through the neutral port in
   `const char (*lines)[MAX_LINE_LEN]` + count), sliced by
   `source_text_line(view, idx)` (out-of-range returns `""`). Consumers:
   `executor.c` (display text), `export.c`, `flatten.c`/`core.c` (reparse),
-  `compile.c`, `replay_annotations.c`.
+  `compile.c`, `src/subsystems/replay/replay_annotations.c`.
 * Mutations go through `source_document_apply_change()` /
   `source_document_insert_line()` / `_replace_line()` / `_load_lines()` /
   `_clear()`, driven by a `SourceTextChange` descriptor.
@@ -1242,11 +1242,12 @@ app/editor/UI symbol dependency. `check-repl-demo-stubs-shrinking`
 ratchets the count and `check-repl-demo-no-editor` forbids editor/UI/app
 symbols in the demo link set.
 
-The current `REPL_DEMO_DEP_SRCS` link set is REPL-pipeline-only:
+The current `REPL_DEMO_DEP_SRCS` link set is REPL-pipeline plus peer replay
+annotation support:
 `src/repl/*` (parser, command_store, compile, apply, flatten, executor,
 eval, export, scenes, example_loader, load, autonormal, command_spec,
-source_scope, replay_annotations, core, state, format) plus the replay /
-tutorial peer-state TUs, `src/support/cpuprof.c`, the GL stub counters, and crucially
+source_scope, core, state, format) plus `src/subsystems/replay/replay_annotations.c`,
+the replay / tutorial peer-state TUs, `src/support/cpuprof.c`, the GL stub counters, and crucially
 **`tools/repl_demo/source_document.c`** — the editor-free backend for the
 source-document port. No `src/editor/*`, no `src/ui/*`, no `src/app/*`.
 
@@ -1479,7 +1480,7 @@ case CMD_GLUT_CUBE:
     break;
 ```
 
-### 4. `src/repl/replay_annotations.c` — replay display format
+### 4. `src/subsystems/replay/replay_annotations.c` — replay display format
 
 Add a `case` that sets `*nargs_out` and returns a `printf`-style format string
 for the replay annotation overlay.

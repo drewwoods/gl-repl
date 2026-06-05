@@ -36,7 +36,7 @@ files=(
     src/repl/export.c
     src/repl/import.c
     repl_autocomplete.c
-    src/repl/replay_annotations.c
+    src/subsystems/replay/replay_annotations.c
 )
 
 # Match `editor_feed_line(` as a function call. Skip pure comment lines so

@@ -5,12 +5,11 @@
 #include "scene/view_mode.h"             /* SceneViewMode */
 #include "repl/state_views.h"            /* FlatProgramView, CursorBlockState */
 
-/* Public surface intentionally avoids `#include "app/glr_config.h"`
- * to keep subsystems → app dependencies off the .h's transitive
- * include surface; the enum-valued `mode` argument of
- * edit_overlays_render_vertex_numbers is passed as a plain int and
- * reinterpreted by the .c (which is free to include glr_config.h
- * privately for the GLR_VERTEX_LABEL_* constants). */
+typedef enum OverlayVertexLabelMode {
+    OVERLAY_VERTEX_LABEL_OFF = 0,
+    OVERLAY_VERTEX_LABEL_INDEX,
+    OVERLAY_VERTEX_LABEL_INDEX_POS,
+} OverlayVertexLabelMode;
 
 typedef struct OverlayWalkCtx {
     FlatProgramView  program;
@@ -25,7 +24,7 @@ typedef struct OverlayWalkCtx {
 typedef struct OverlaySnapshotPack {
     OverlayWalkCtx walk;
     SceneGuideSnapshot snapshot;
-    int show_vertex_labels;
+    OverlayVertexLabelMode vertex_label_mode;
     SceneViewMode ortho_mode;
     int show_normal_vectors;
     int multisample_enabled;
@@ -38,14 +37,14 @@ void edit_overlays_render_outlines(const OverlayWalkCtx *ctx,
 
 void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx);
 
-/* `mode` is a GlrVertexLabelMode value, passed as `int` here to
- * avoid pulling app/glr_config.h into this header — see file header
- * comment. */
-void edit_overlays_render_vertex_numbers(int mode, int is_ortho);
+void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *ctx,
+                                         OverlayVertexLabelMode mode,
+                                         int is_ortho);
 
-void edit_overlays_render_normal_vectors(void);
+void edit_overlays_render_normal_vectors(const OverlayWalkCtx *ctx);
 
-void edit_overlays_render_cursor_guides(const SceneGuideSnapshot *snapshot);
+void edit_overlays_render_cursor_guides(const SceneGuideSnapshot *snapshot,
+                                        const OverlayWalkCtx *ctx);
 
 void edit_overlays_post_overlays(void *user_data);
 

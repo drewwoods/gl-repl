@@ -1,7 +1,7 @@
 #ifndef GLR_CTRL_REPLAY_ANNOTATIONS_H
 #define GLR_CTRL_REPLAY_ANNOTATIONS_H
 
-#include "repl/replay_annotations.h"
+#include "subsystems/replay/replay_annotations.h"
 
 /* Publish a prepared replay-annotation list to the editor's virtual-line
  * storage. The full app uses this bridge so the REPL annotation builder

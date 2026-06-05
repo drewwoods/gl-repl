@@ -12,7 +12,7 @@
 #include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
 #include "ui/app/state.h"
-#include "repl/replay_annotations.h"
+#include "subsystems/replay/replay_annotations.h"
 #include "ui/app/panels.h"
 #include "ui/app/layout.h"
 #include "ui/core/metrics.h"
