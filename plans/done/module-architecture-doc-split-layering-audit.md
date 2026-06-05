@@ -19,10 +19,25 @@ The root `ARCHITECTURE.md` should merge with `MODULES.md` into a higher-level
 map: ownership roles, frame/data pipeline, and cross-module contracts. The
 module-local docs should explain architecture through that module's lens.
 
-This is a good direction. The repo already has `src/*/README.md` files with
-module-local ownership summaries, so the documentation shape exists; the next
-step is to move the deeper architectural detail out of the root doc and into
-the owner directories.
+This is a good direction, but the doc tiers need to be simplified before the
+split grows more pages. Today the tree already has overlapping architecture
+material in `ARCHITECTURE.md`, `MODULES.md`, and `src/*/README.md`. The split
+should dedupe those layers, not add `src/*/ARCHITECTURE.md` as a fourth live
+copy of the same contracts.
+
+Proposed doc shape:
+
+- Root `ARCHITECTURE.md` + `MODULES.md` collapse into one high-level map:
+  ownership roles, frame/data pipeline, module index, cross-cutting workflows,
+  and links to canonical per-module contracts.
+- Each module directory has one living deep doc. Either
+  `src/<module>/ARCHITECTURE.md` replaces the current README detail and the
+  README becomes a short pointer, or the README remains the module doc and no
+  second file is added there. Do not keep two deep docs per module.
+- Cross-cutting recipes stay outside any one module doc. Workflows like
+  "Adding a New Command" or "Adding a Tutorial Step Kind" span parser/spec,
+  executor, help, export, UI/replay annotations, stubs, and tests; they belong
+  in the root doc or a `docs/recipes/` area, with module docs linking to them.
 
 The caveat: a module-local doc split should not pretend every dependency is
 already one-way. The current tree has no project-local file-level include
@@ -154,7 +169,7 @@ Replay annotations are a replay presentation feature, not core language
 pipeline. Keeping them in `src/repl` makes the REPL module doc less clean:
 the REPL doc has to explain a peer subsystem's runtime state.
 
-Difficulty: medium.
+Difficulty: low-medium.
 
 Likely cleanup path:
 
@@ -165,8 +180,10 @@ Likely cleanup path:
   lines to the editor.
 - Update includes, Makefile object lists, and tests.
 
-This would make the dependency one-way: replay depends on the REPL program
-model; REPL no longer depends on replay runtime state.
+This is mostly a file move, not an API redesign: no `src/repl` public header
+pulls replay, and the full-app consumer is the controller. Moving it would make
+the dependency one-way: replay depends on the REPL program model; REPL no
+longer depends on replay runtime state.
 
 ### 4. REPL/scene has a type-vocabulary cycle, not a live-state cycle
 
@@ -221,7 +238,7 @@ This creates both `app <-> subsystems` and `editor <-> subsystems` cycles at
 module level. It is also inconsistent with the otherwise good public header,
 which already tries to avoid pulling app config into the transitive API.
 
-Difficulty: low-medium.
+Difficulty: low.
 
 Likely cleanup path:
 
@@ -275,10 +292,14 @@ Difficulty: low and mostly mechanical if desired:
 ## Documentation Recommendation
 
 The doc split can start before all cycles are removed, but the docs should use
-two categories:
+three hard rules:
 
 1. **Owner contract:** what this module owns and what it may mutate.
 2. **Cross-module contracts:** explicit dependencies it consumes or produces.
+3. **One canonical home per contract:** document a contract once on the owner /
+   producer side and link from consumers. Do not restate the source-document
+   port, `UiHit`, `SceneRenderConfig`, `ReplCompiledChange`, editor overlay
+   snapshots, or export bridges in every module that touches them.
 
 For example:
 
@@ -301,13 +322,28 @@ For example:
 - `src/subsystems/ARCHITECTURE.md` should document each peer's state, input
   routing, UI view, and program writeback path.
 
+Root-level material to keep:
+
+- The module index and ownership DAG.
+- The frame pipeline from GLUT callback through controller, scene, UI, and
+  restore paths.
+- Cross-cutting recipes that intentionally span multiple modules, such as
+  adding a command, adding a tutorial step kind, adding export scaffolding, or
+  adding a new UI interaction.
+- A contract index that links to the producer-side canonical section for each
+  cross-module contract.
+
 ## Suggested Cleanup Order
 
-If the goal is strict one-way module docs, do the smaller code cleanups before
-or during the doc split:
+If the goal is strict one-way module docs, do the two cheap cleanups before
+the doc split:
 
 1. Clean `edit_overlays` live reads and app enum dependency.
 2. Move `replay_annotations` out of `src/repl`.
+
+Then split the docs while documenting the remaining heavier edges as current
+contracts / deferred cleanup:
+
 3. Decide whether `ui/app` is allowed to be app-coupled. If not, introduce a
    controller-built menu/config view model.
 4. Replace UI's direct editor type imports with UI-owned snapshot/view types.
@@ -324,3 +360,9 @@ Minimum viable documentation-only path:
   contract alongside the behavior it exercises. In particular, pin
   `editor_demo` to `src/ui/core` and keep `tools/*_demo` app-shell-free by
   default.
+
+Guard idea once the split exists:
+
+- Add a small check that every intended module doc exists and that the root map
+  links to it. Keep it structural only: it should prevent orphan docs, not try
+  to lint prose.
