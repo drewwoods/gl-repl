@@ -712,7 +712,10 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
 # controller half (input.c, commit.c, clipboard.c, undo.c, reformat.c,
 # search.c, completion.c, plus the inline overlays). The demo links
 # only the generic half plus the REPL-free UI render layer
-# (text_panel, text_layout, text_search). The REPL-flavored
+# (text_panel, text_layout, text_search, theme). It intentionally does
+# not link src/ui/app or src/app; the demo is the proof that the generic
+# editor model can be rendered through ui/core without UiRenderSnapshot,
+# UiState, menu/app chrome, or the REPL code-panel adapter. The REPL-flavored
 # controllers are not linked at all; the demo provides its own
 # generic input dispatcher (tools/editor_demo/input.c) and File menu
 # (tools/editor_demo/menu.c). Phase 5 of
@@ -1068,7 +1071,8 @@ repl_demo: FORCE $(REPL_DEMO_BIN) ## Build the standalone REPL pipeline demo.
 # Standalone generic text editor demo. Inverse of repl_demo: proves
 # that the editor data model (src/editor/state.c) and the generic
 # text-editing primitives (src/editor/edit_ops.c) link cleanly into a
-# non-REPL controller. The demo's own dispatcher
+# non-REPL controller using src/ui/core only, with no src/ui/app or
+# src/app. The demo's own dispatcher
 # (tools/editor_demo/input.c) and File menu (tools/editor_demo/menu.c)
 # stand in for the REPL-flavored controller files
 # (src/editor/{input,commit,clipboard,undo,reformat,search,completion}.c

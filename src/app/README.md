@@ -32,8 +32,8 @@ shim in between.)
 
 ## How it is exercised — the inverse of the demos
 
-This module has no demo of its own, and that is the point. The three
-standalone demos are each defined by **excluding this layer**:
+This module has no demo of its own, and that is the point. The standalone
+demos are each defined by **excluding this layer**:
 
 - `repl_demo` drives `src/repl` *without* `glr_ctrl` or its router family.
 - `editor_demo` drives `src/editor`'s model with its *own* input dispatcher
@@ -46,6 +46,13 @@ glue** — the code that is *not* reusable because it encodes how *this*
 particular program is composed. If you were to lift a subsystem into your own
 engine (a stated design goal of this project), `src/app` is the part you
 would replace.
+
+That independence is intentional documentation, not just a build
+optimization. A demo should stay `src/app`-free unless a new exception is
+explicitly justified in its object-list comment and local docs. Pulling in
+`glr_ctrl`, `glr_actions`, `glr_config`, or `UiRenderSnapshot` to make a demo
+easier usually means the owner module is missing a smaller contract or view
+type.
 
 ## In the REPL app
 

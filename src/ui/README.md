@@ -40,7 +40,8 @@ This split is reflected on the filesystem with two subdirectories:
   helpers (`gl_2d.h`, `metrics.h`, `theme.h`, `hit.h`). These TUs are
   guarded against picking up REPL / editor knowledge and are linked
   into the standalone `editor_demo` to prove they work without the
-  full app.
+  full app. `editor_demo` is the canary here: it should use `src/ui/core`
+  only and must not grow a dependency on `src/ui/app`.
 - **`app/`** — feature-UI that knows REPL / editor / peer concepts.
   The code-panel adapter (`repl_code_panel.c`), the floating panels
   (`color_picker.c`, `variable_panel.c`, `autocomplete_panel.c`,
@@ -59,10 +60,10 @@ Dependencies are strictly one-way: `app/` may include from `core/`;
 untested in isolation: the generic text panel (`text_panel.c` plus its
 layout/search helpers) is linked and driven by
 [`tools/editor_demo/`](../../tools/editor_demo/), the standalone plain-text
-editor — so the reusable view half runs without the REPL. The `scene_demo`
-HUD shows the same fixed-function 2D-overlay drawing style this layer uses.
-There is no `ui_demo` because UI is a *view for* other subsystems, not a
-subsystem with behavior of its own.
+editor — so the reusable view half runs without the REPL, without `src/app`,
+and without `src/ui/app`. The `scene_demo` HUD shows the same fixed-function
+2D-overlay drawing style this layer uses. There is no `ui_demo` because UI is a
+*view for* other subsystems, not a subsystem with behavior of its own.
 
 ## In the REPL app
 
