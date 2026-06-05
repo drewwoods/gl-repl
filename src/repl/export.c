@@ -1450,18 +1450,6 @@ static void write_render_body_range_as_c(FILE *f, int start, int end_idx,
     }
 }
 
-/* Number of geometry passes display() will emit. Always at least 1
- * (Vertex Fill); outline / vertex-point passes are gated by cfg
- * toggles. The save / restore helpers and the wrapping save call in
- * display() are emitted only when this returns >1, so single-pass
- * exports stay zero-overhead. */
-static int export_count_enabled_passes(void) {
-    int count = 1;
-    if (repl_cfg_get_int(k_cfg_slug_vertex_outlines, 0)) count++;
-    if (repl_cfg_get_int(k_cfg_slug_vertex_points, 0)) count++;
-    return count;
-}
-
 /* Predef vars other than `t` carry their snapshot value forward into
  * the next frame. `t` is set per-frame from glutGet at the top of
  * display(), so its static initializer is irrelevant. */
@@ -1717,6 +1705,10 @@ typedef struct {
     ExportDisplayPassSetupFn    emit_setup;
 } ExportDisplayPassSpec;
 
+enum {
+    EXPORT_DISPLAY_PASS_COUNT = 3
+};
+
 /* Word-boundary-aware substring scan: returns 1 iff `needle` appears in
  * `haystack` and the byte immediately before its match position is NOT
  * an identifier character. Avoids false hits like `glRand(` triggering
@@ -1796,6 +1788,66 @@ static void emit_export_point_pass_setup(FILE *f) {
     fprintf(f, "  glEnable(GL_LIGHTING);\n");
 }
 
+/* Build the actual display() pass plan. Multipass scaffolding must count
+ * these enabled flags, not raw cfg toggles, because cfg-backed overlay
+ * passes may be intentionally disabled in export. */
+static size_t export_build_display_passes(
+    ExportDisplayPassSpec passes[EXPORT_DISPLAY_PASS_COUNT]) {
+    int outlines_on = repl_cfg_get_int(k_cfg_slug_vertex_outlines, 0);
+    int vpoints_on = repl_cfg_get_int(k_cfg_slug_vertex_points, 0);
+
+    if (!passes)
+        return 0;
+
+    passes[0].label = "Vertex Fill Pass";
+    passes[0].enabled = 1;
+    passes[0].emit_setup = NULL;
+
+    /* Disable the outlines for now, they complicate the exported code
+     * and are not one for one with the live REPL's outline pass.
+     *
+     * TODO: adapt both the REPL and export outline passes to use a
+     * shared codegen path so they stay in sync and the export can
+     * emit a matching outline pass setup.  Possibly using a stencil
+     * buffer approach of drawing without color buffer with
+     * polygonmode line and points and then fill the stencil in a
+     * second pass, which would be more robust and simpler than the
+     * current approach of using LIGHTING and setting lights to black
+     * for the outline pass. */
+    passes[1].label = "Vertex Outline Pass";
+    passes[1].enabled = 0;
+    passes[1].emit_setup = emit_export_outline_pass_setup;
+
+    passes[2].label = "Vertex Point Pass";
+    passes[2].enabled = 0;
+    passes[2].emit_setup = emit_export_point_pass_setup;
+
+    (void)outlines_on;
+    (void)vpoints_on;
+    return EXPORT_DISPLAY_PASS_COUNT;
+}
+
+static int export_count_enabled_pass_specs(
+    const ExportDisplayPassSpec *passes, size_t pass_count) {
+    int count = 0;
+    size_t pass_idx;
+
+    if (!passes)
+        return 0;
+
+    for (pass_idx = 0; pass_idx < pass_count; pass_idx++) {
+        if (passes[pass_idx].enabled)
+            count++;
+    }
+    return count;
+}
+
+static int export_display_has_multiple_enabled_passes(void) {
+    ExportDisplayPassSpec passes[EXPORT_DISPLAY_PASS_COUNT];
+    size_t pass_count = export_build_display_passes(passes);
+    return export_count_enabled_pass_specs(passes, pass_count) > 1;
+}
+
 static void emit_export_geometry_pass(FILE *f,
                                       const ExportDisplayPassSpec *pass,
                                       int needs_restore) {
@@ -1848,31 +1900,8 @@ static void emit_export_display_begin(FILE *f) {
 }
 
 static void emit_export_display_geometry(FILE *f) {
-    /* Presentation toggles moved to glr_state. Read them via
-     * the bridge — same opaque path as the rest of the export
-     * pipeline. Demo case (no bridge installed) falls back to "off",
-     * which is fine because the demo doesn't export (implemented in
-     * step 7a). */
-    int __attribute__((unused)) outlines_on = repl_cfg_get_int(k_cfg_slug_vertex_outlines, 0);
-    int __attribute__((unused)) vpoints_on = repl_cfg_get_int(k_cfg_slug_vertex_points, 0);
-
-    /* Disable the outlines for now, they complicate the exported code
-     * and are not one for one with the live REPL's outline pass.
-     *
-     * TODO: adapt both the REPL and export outline passes to use a
-     * shared codegen path so they stay in sync and the export can
-     * emit a matching outline pass setup.  Possibly using a stencil
-     * buffer approach of drawing without color buffer with
-     * polygonmode line and points and then fill the stencil in a
-     * second pass, which would be more robust and simpler than the
-     * current approach of using LIGHTING and setting lights to black
-     * for the outline pass.
-     */
-    const ExportDisplayPassSpec passes[] = {
-        { "Vertex Fill Pass",    1,           NULL },
-        { "Vertex Outline Pass", 0 /* outlines_on */, emit_export_outline_pass_setup },
-        { "Vertex Point Pass",   0 /* vpoints_on */, emit_export_point_pass_setup },
-    };
+    ExportDisplayPassSpec passes[EXPORT_DISPLAY_PASS_COUNT];
+    size_t pass_count = export_build_display_passes(passes);
 
     /* `t` is advanced by the tick() timer at a fixed step (see the
      * footer's tick() / glutTimerFunc setup), mirroring the live
@@ -1885,13 +1914,13 @@ static void emit_export_display_geometry(FILE *f) {
      * and restore between passes so each pass starts from the same
      * state, while the LAST pass's mutations carry into the next
      * frame. */
-    int multipass = export_count_enabled_passes() > 1 &&
+    int multipass = export_count_enabled_pass_specs(passes, pass_count) > 1 &&
                     export_has_persistent_predef_vars();
     if (multipass)
         fprintf(f, "  save_repl_vars();\n");
 
     int rendered_passes = 0;
-    for (size_t i = 0; i < sizeof(passes) / sizeof(passes[0]); i++) {
+    for (size_t i = 0; i < pass_count; i++) {
         if (!passes[i].enabled) continue;
         int needs_restore = multipass && rendered_passes > 0;
         emit_export_geometry_pass(f, &passes[i], needs_restore);
@@ -2135,10 +2164,9 @@ static void emit_export_tess_preamble_section(FILE *f,
 static void emit_export_save_restore_section(FILE *f,
                                              const ExportScaffoldContext *ctx) {
     (void)ctx;
-    if (export_count_enabled_passes() <= 1 ||
+    if (!export_display_has_multiple_enabled_passes() ||
         !export_has_persistent_predef_vars())
         return;
-    (void)ctx;
     write_save_restore_helpers(f);
 }
 
