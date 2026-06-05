@@ -2274,6 +2274,84 @@ static void test_import_robustness(void) {
     ASSERT_TRUE("load file with NUL fails gracefully", repl_export_load_from_file(test_path, NULL) == 0);
     ASSERT_INT("NUL file count", repl_state_document_count(), 0);
 
+    /* 6. Multi-line C statements reassemble into one logical command.
+     * The importer accumulates physical lines until brackets are
+     * balanced and a terminator is seen, so hand-written / pasted C
+     * whose calls span several lines still imports. */
+
+    /* 6a. A plain call split across lines. */
+    f = fopen(test_path, "w");
+    fprintf(f, "// Snippet start\n");
+    fprintf(f, "glBegin(GL_TRIANGLES);\n");
+    fprintf(f, "glVertex3f(\n    1.0,\n    2.0,\n    3.0);\n");
+    fprintf(f, "glEnd();\n");
+    fprintf(f, "// Snippet end\n");
+    fclose(f);
+    glr_ctrl_reset_all(); declare_test_vars();
+    ASSERT_TRUE("load split-call file", repl_export_load_from_file(test_path, NULL) == 1);
+    ASSERT_INT("split-call count", repl_state_document_count(), 3);
+    ASSERT_TRUE("split call reassembled",
+                strstr(editor_buffer_line(1), "glVertex3f(1, 2, 3);") != NULL);
+
+    /* 6b. Trailing inline comments on continuation lines are dropped,
+     * but the comment on the terminating line is preserved. */
+    f = fopen(test_path, "w");
+    fprintf(f, "// Snippet start\n");
+    fprintf(f, "glVertex3f(\n    1.0,  // x\n    2.0,  // y\n    3.0); // keep me\n");
+    fprintf(f, "// Snippet end\n");
+    fclose(f);
+    glr_ctrl_reset_all(); declare_test_vars();
+    ASSERT_TRUE("load commented-continuation file", repl_export_load_from_file(test_path, NULL) == 1);
+    ASSERT_INT("commented-continuation count", repl_state_document_count(), 1);
+    ASSERT_TRUE("continuation comments dropped, vertex intact",
+                strstr(editor_buffer_line(0), "glVertex3f(1, 2, 3);") != NULL);
+    ASSERT_TRUE("terminating-line comment preserved",
+                strstr(editor_buffer_line(0), "// keep me") != NULL);
+    ASSERT_TRUE("mid-statement comment text not bled in",
+                strstr(editor_buffer_line(0), "// x") == NULL);
+
+    /* 6c. A blank line inside an open statement does not split it. */
+    f = fopen(test_path, "w");
+    fprintf(f, "// Snippet start\n");
+    fprintf(f, "glVertex3f(\n    1.0,\n\n    2.0, 3.0);\n");
+    fprintf(f, "// Snippet end\n");
+    fclose(f);
+    glr_ctrl_reset_all(); declare_test_vars();
+    ASSERT_TRUE("load blank-in-statement file", repl_export_load_from_file(test_path, NULL) == 1);
+    ASSERT_INT("blank-in-statement count (no split, no stray blank)",
+               repl_state_document_count(), 1);
+    ASSERT_TRUE("blank-in-statement reassembled",
+                strstr(editor_buffer_line(0), "glVertex3f(1, 2, 3);") != NULL);
+
+    /* 6d. A split compound literal: the inner `{` is not a false
+     * statement terminator while a paren is still open. */
+    f = fopen(test_path, "w");
+    fprintf(f, "// Snippet start\n");
+    fprintf(f, "glMaterialfv(GL_FRONT, GL_DIFFUSE, (GLfloat[]){\n    1, 0, 0, 1});\n");
+    fprintf(f, "// Snippet end\n");
+    fclose(f);
+    glr_ctrl_reset_all(); declare_test_vars();
+    ASSERT_TRUE("load split-compound-literal file", repl_export_load_from_file(test_path, NULL) == 1);
+    ASSERT_INT("split-compound-literal count", repl_state_document_count(), 1);
+    ASSERT_TRUE("split compound literal reassembled",
+                strstr(editor_buffer_line(0), "(GLfloat[]){1, 0, 0, 1}") != NULL);
+
+    /* 6e. Single-line statements still stay separate (regression guard
+     * for the over-accumulation that the depth/terminator gate prevents). */
+    f = fopen(test_path, "w");
+    fprintf(f, "// Snippet start\n");
+    fprintf(f, "glColor3f(1, 0, 0); // red\n");
+    fprintf(f, "glVertex3f(0, 0, 0); // origin\n");
+    fprintf(f, "// Snippet end\n");
+    fclose(f);
+    glr_ctrl_reset_all(); declare_test_vars();
+    ASSERT_TRUE("load single-line file", repl_export_load_from_file(test_path, NULL) == 1);
+    ASSERT_INT("single-line count stays 2", repl_state_document_count(), 2);
+    ASSERT_TRUE("single line 0 keeps its own trailing comment",
+                strstr(editor_buffer_line(0), "glColor3f(1, 0, 0); // red") != NULL);
+    ASSERT_TRUE("single line 1 keeps its own trailing comment",
+                strstr(editor_buffer_line(1), "glVertex3f(0, 0, 0); // origin") != NULL);
+
     remove(test_path);
 }
 
