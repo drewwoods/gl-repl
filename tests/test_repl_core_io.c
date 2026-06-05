@@ -114,6 +114,44 @@ static int find_init_line_substr(const char *needle) {
     return -1;
 }
 
+/* Write `contents` to a temp .c file, import it with fd 2 (stderr)
+ * redirected into `out`, and return repl_export_load_from_file's value.
+ * Mirrors the dup2 capture used by the #8 load_err regression — used to
+ * assert the importer warns (rather than silently dropping) on overflowed
+ * @var / @func / @declare names. */
+static int import_with_captured_stderr(const char *contents,
+                                       char *out, size_t out_sz) {
+    const char *src_path = "/tmp/repl_core_io_warn_src.c";
+    const char *err_path = "/tmp/repl_core_io_warn_stderr.txt";
+
+    FILE *f = fopen(src_path, "w");
+    if (f) { fputs(contents, f); fclose(f); }
+
+    fflush(stderr);
+    int cap_fd = open(err_path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    int saved_fd = dup(STDERR_FILENO);
+    if (cap_fd >= 0) dup2(cap_fd, STDERR_FILENO);
+
+    int rc = repl_export_load_from_file(src_path, NULL);
+    fflush(stderr);
+
+    if (saved_fd >= 0) { dup2(saved_fd, STDERR_FILENO); close(saved_fd); }
+    if (cap_fd >= 0) close(cap_fd);
+
+    out[0] = '\0';
+    if (out_sz > 0) {
+        FILE *rd = fopen(err_path, "r");
+        if (rd) {
+            size_t n = fread(out, 1, out_sz - 1, rd);
+            out[n] = '\0';
+            fclose(rd);
+        }
+    }
+    remove(src_path);
+    remove(err_path);
+    return rc;
+}
+
 int main(void) {
     const char *path = "/tmp/repl_core_roundtrip_output.c";
     const char *scratch_path = "/tmp/repl_core_scratch_output.c";
@@ -1899,6 +1937,70 @@ int main(void) {
 
         remove(fail_path);
         remove(stderr_path);
+    }
+
+    /* Silent-drop coverage: an overflowed @var / @declare name (and a
+     * reserved @var) must WARN on import rather than vanishing without a
+     * trace. Companion to the @func long-name warning on this branch.
+     * Each case captures fd 2 and checks the importer named the offending
+     * directive; (d) is a negative control proving the checks aren't
+     * passing on stray stderr noise. */
+    {
+        char cap[4096];
+
+        /* (a) @var name longer than REPL_PREDEF_NAME_MAX-1 chars. Pre-fix
+         * the leftover name chars broke the `=` parse, so the whole
+         * `// @var` line was silently swallowed as a comment. */
+        glr_ctrl_reset_all();
+        int rc_a = import_with_captured_stderr(
+            "// @var thisVarNameIsTooLong = 5\n"
+            "// Snippet start\n"
+            "glVertex3f(0, 0, 0);\n"
+            "// Snippet end\n",
+            cap, sizeof(cap));
+        ASSERT_TRUE("long @var import still succeeds", rc_a == 1);
+        ASSERT_TRUE("long @var name warns instead of dropping silently",
+                    strstr(cap, "@var name exceeds") != NULL);
+
+        /* (b) @var with a reserved name: the declare fails and pre-fix the
+         * error string from repl_eval_declare_predef_var was discarded. */
+        glr_ctrl_reset_all();
+        int rc_b = import_with_captured_stderr(
+            "// @var PI = 3\n"
+            "// Snippet start\n"
+            "glVertex3f(0, 0, 0);\n"
+            "// Snippet end\n",
+            cap, sizeof(cap));
+        ASSERT_TRUE("reserved @var import still succeeds", rc_b == 1);
+        ASSERT_TRUE("reserved @var surfaces the declare error",
+                    strstr(cap, "could not be declared") != NULL);
+
+        /* (c) @declare snippet marker with an over-long name. Pre-fix the
+         * `len >= MAX` break dropped it (and any names after it) silently
+         * without even bumping the warning counter. */
+        glr_ctrl_reset_all();
+        int rc_c = import_with_captured_stderr(
+            "// Snippet start\n"
+            "// @declare thisDeclNameTooLong\n"
+            "glVertex3f(0, 0, 0);\n"
+            "// Snippet end\n",
+            cap, sizeof(cap));
+        ASSERT_TRUE("long @declare import still succeeds", rc_c == 1);
+        ASSERT_TRUE("long @declare name warns instead of dropping silently",
+                    strstr(cap, "@declare name") != NULL &&
+                    strstr(cap, "exceeds") != NULL);
+
+        /* (d) negative control: a clean file emits no Warning lines. */
+        glr_ctrl_reset_all();
+        int rc_d = import_with_captured_stderr(
+            "// @var n = 5\n"
+            "// Snippet start\n"
+            "glVertex3f(n, 0, 0);\n"
+            "// Snippet end\n",
+            cap, sizeof(cap));
+        ASSERT_TRUE("clean import succeeds", rc_d == 1);
+        ASSERT_TRUE("clean import emits no Warning",
+                    strstr(cap, "Warning:") == NULL);
     }
 
     /* Regression for #83 in plans/done/src-repl-code-smell-audit-2.md:
