@@ -241,6 +241,7 @@ static SceneGuideSnapshot glr_ctrl_build_guide_snapshot(const SceneRenderConfig 
     SceneGuideSnapshot snapshot = {
         .show_guides = (presentation.xform_guide_mode != SCENE_XFORM_GUIDE_OFF),
         .replaying = replay_active(),
+        .replay_focus_vertex_flat_idx = replay_focus_vertex_flat_idx(),
         .xform_guide_mode = presentation.xform_guide_mode,
         .user_lighting_enabled = config ? config->user_lighting_enabled : 0,
         .anim_time = vars.anim_time,

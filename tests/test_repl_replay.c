@@ -831,11 +831,47 @@ static void test_replay_focus_call_depth(void) {
     replay_stop();
 }
 
+/* Request 3: replay_focus_vertex_flat_idx() names the vertex the current step
+ * emitted, which anchors the frame-axes overlay. It tracks the step in vertex
+ * mode and is inert otherwise. */
+static void test_replay_focus_vertex_flat_idx(void) {
+    glr_ctrl_reset_all();
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(1, 2, 3);");
+    editor_feed_line("glVertex3f(4, 5, 6);");
+    editor_feed_line("glEnd();");
+    repl_flatten_commands(editor_state_edit_line());
+    /* flat: BEGIN(0), VERTEX(1), VERTEX(2), END(3) */
+
+    ASSERT_TRUE("inactive vertex focus is -1", replay_focus_vertex_flat_idx() == -1);
+
+    replay_start();
+    g_replay_mode = REPLAY_MODE_VERTEX;
+    g_replay_state = REPLAY_PAUSED;
+
+    replay_advance(repl_state_flat_program_view());
+    ASSERT_TRUE("step 1 vertex focus is first vertex (1)",
+                replay_focus_vertex_flat_idx() == 1);
+
+    replay_advance(repl_state_flat_program_view());
+    ASSERT_TRUE("step 2 vertex focus is second vertex (2)",
+                replay_focus_vertex_flat_idx() == 2);
+
+    /* Polygon mode is out of scope for the frame-axes overlay. */
+    g_replay_mode = REPLAY_MODE_POLYGON;
+    ASSERT_TRUE("polygon mode vertex focus is -1",
+                replay_focus_vertex_flat_idx() == -1);
+
+    replay_stop();
+    ASSERT_TRUE("stopped vertex focus is -1", replay_focus_vertex_flat_idx() == -1);
+}
+
 int main(void) {
     test_replay_basic_controls();
     test_replay_stepping();
     test_replay_focus_call_site_provenance();
     test_replay_focus_call_depth();
+    test_replay_focus_vertex_flat_idx();
     test_replay_tessellation_stepping();
     test_replay_fade_batches();
     test_replay_input();

@@ -143,6 +143,12 @@ int    replay_total_flat(void);      /* .total_flat_cmds — captured at start *
  * inactive or the step has no focus-candidate command. */
 int    replay_focus_flat_idx(void);
 
+/* Flat-program index of the vertex command the current replay step emitted —
+ * the last repl_cmd_emits_vertex() command in the active step range. Used to
+ * anchor the replay frame-axes overlay on that exact vertex. Returns -1 when
+ * replay is inactive, not in vertex mode, or the step emitted no vertex. */
+int    replay_focus_vertex_flat_idx(void);
+
 /* --- Handler API ---
  *
  * Small routing surface for controller/editor input code. UI hit handling calls
