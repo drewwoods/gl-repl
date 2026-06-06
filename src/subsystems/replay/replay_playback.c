@@ -288,14 +288,29 @@ static int replay_prev_limit(int current_pc) {
 
 int replay_focus_vertex_flat_idx(void) {
     const ReplayRuntimeState *state = replay_state_const();
+    FlatProgramView flat;
+    int pc;
+    int begin;
+    const GLCmd *cmds;
+
     /* Vertex replay only: the frame-axes overlay anchors on the vertex the
      * step just emitted, so it is meaningless for polygon-batch stepping. */
     if (!state->active || state->mode != REPLAY_MODE_VERTEX)
         return -1;
-    int begin = replay_prev_limit(state->pc);
-    FlatProgramView flat = repl_state_flat_program_view();
-    const GLCmd *cmds = flat.cmds;
-    for (int i = state->pc - 1; i >= begin && i >= 0; i--) {
+
+    flat = repl_state_flat_program_view();
+    if (!flat.cmds || flat.cmd_count <= 0)
+        return -1;
+
+    pc = state->pc;
+    if (pc < 0)
+        pc = 0;
+    if (pc > flat.cmd_count)
+        pc = flat.cmd_count;
+
+    begin = replay_prev_limit(pc);
+    cmds = flat.cmds;
+    for (int i = pc - 1; i >= begin && i >= 0; i--) {
         if (!cmds[i].valid) continue;
         if (repl_cmd_emits_vertex(cmds[i].type))
             return i;

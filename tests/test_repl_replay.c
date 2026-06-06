@@ -835,13 +835,17 @@ static void test_replay_focus_call_depth(void) {
  * emitted, which anchors the frame-axes overlay. It tracks the step in vertex
  * mode and is inert otherwise. */
 static void test_replay_focus_vertex_flat_idx(void) {
+    int full_count;
+
     glr_ctrl_reset_all();
     editor_feed_line("glBegin(GL_POINTS);");
     editor_feed_line("glVertex3f(1, 2, 3);");
     editor_feed_line("glVertex3f(4, 5, 6);");
     editor_feed_line("glEnd();");
     repl_flatten_commands(editor_state_edit_line());
+    full_count = repl_state_flat_program_count();
     /* flat: BEGIN(0), VERTEX(1), VERTEX(2), END(3) */
+    ASSERT_TRUE("full flat count", full_count == 4);
 
     ASSERT_TRUE("inactive vertex focus is -1", replay_focus_vertex_flat_idx() == -1);
 
@@ -856,6 +860,15 @@ static void test_replay_focus_vertex_flat_idx(void) {
     replay_advance(repl_state_flat_program_view());
     ASSERT_TRUE("step 2 vertex focus is second vertex (2)",
                 replay_focus_vertex_flat_idx() == 2);
+
+    /* Stale replay state can momentarily point beyond a shrunken flat program;
+     * the focus accessor must stay inside the current logical command count. */
+    g_replay_pc = full_count + 10;
+    repl_state_flat_program_set_count(2);
+    ASSERT_TRUE("out-of-range pc clamps to current flat count",
+                replay_focus_vertex_flat_idx() == 1);
+    repl_state_flat_program_set_count(full_count);
+    g_replay_pc = 3;
 
     /* Polygon mode is out of scope for the frame-axes overlay. */
     g_replay_mode = REPLAY_MODE_POLYGON;
