@@ -10,7 +10,7 @@
  * so a var-heavy scene can't crowd the trailing @cfg lines off the end —
  * the old 48-line budget silently truncated them (vertex_outlines among
  * them) once @var + @func filled the buffer first:
- *     1   banner ("// @workspace: ...")
+ *     1   banner ("@workspace: ..." block-comment directive)
  *     1   @scene-name
  *     1   @workspace-dir
  *    24   @var   (MAX_PREDEF_VARS)

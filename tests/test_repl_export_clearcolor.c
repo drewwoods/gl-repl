@@ -32,10 +32,10 @@ static char *read_file(const char *path) {
     return buf;
 }
 
-/* Return the text of the exported init() body (between "void init() {" and
+/* Return the text of the exported init() body (between "void init(void) {" and
  * the next line-start "}"). Heap-allocated; NULL if not found. */
 static char *extract_init_body(const char *c) {
-    const char *start = strstr(c, "void init() {");
+    const char *start = strstr(c, "void init(void) {");
     if (!start) return NULL;
     const char *end = strstr(start, "\n}\n");
     if (!end) return NULL;

@@ -75,6 +75,9 @@ static int export_slot_pos_is_eye_space(int slot) {
 static const char k_snippet_directive_declare[] = "declare";
 static const char k_export_c89_loop_scope_marker[] = "repl-export-c89-loop-scope";
 static const char k_export_c89_loop_var_marker[] = "repl-export-c89-loop-var";
+static const char k_export_glfloat1_helper[] = "repl_glfloat1";
+static const char k_export_glfloat3_helper[] = "repl_glfloat3";
+static const char k_export_glfloat4_helper[] = "repl_glfloat4";
 
 /* Camera bridge — same shape as the cfg bridge. Step 4a moved camera-block
  * emission and parsing through this interface so src/repl/export.c no longer
@@ -238,15 +241,15 @@ static void export_format_decl_float(char *buf, size_t n, float v) {
 }
 
 /* One formatted float uses REPL_SOURCE_FLOAT_TEXT_MAX (text_helpers.h);
- * a GLfloat[] literal joins up to 4 of them with ", " separators. */
+ * exported GLfloat helper calls join up to 4 of them with ", " separators. */
 #define EXPORT_FLOAT_TEXT_MAX REPL_SOURCE_FLOAT_TEXT_MAX
 #define EXPORT_FLOAT_LIST_MAX (4 * EXPORT_FLOAT_TEXT_MAX)
 
 /* Join `count` floats (count <= 4) as "a, b, c, d" using the shortest
  * exact-round-trip representation (repl_format_source_float) rather than
  * %.9g. Same bit-exact reload guarantee, but a value of 0.8f reads as
- * "0.8" instead of %.9g's "0.800000012". Used for the (GLfloat[]){...}
- * light color/position literals shared by the code panel and export. */
+ * "0.8" instead of %.9g's "0.800000012". Used for the light
+ * color/position vectors shared by the code panel and export. */
 static void export_format_float_list(char *buf, size_t n,
                                      const float *v, int count) {
     if (!buf || n == 0) return;
@@ -280,6 +283,98 @@ static const char *export_document_text(int cmd_idx) {
     return (text && text[0]) ? text : "";
 }
 
+static const char *export_line_comment_start(const char *s) {
+    int in_str = 0;
+    int in_chr = 0;
+
+    if (!s)
+        return NULL;
+    for (; *s; s++) {
+        if (in_str || in_chr) {
+            if (*s == '\\' && s[1]) {
+                s++;
+                continue;
+            }
+            if (in_str && *s == '"')
+                in_str = 0;
+            else if (in_chr && *s == '\'')
+                in_chr = 0;
+            continue;
+        }
+        if (*s == '"') {
+            in_str = 1;
+            continue;
+        }
+        if (*s == '\'') {
+            in_chr = 1;
+            continue;
+        }
+        if (s[0] == '/' && s[1] == '/')
+            return s;
+    }
+    return NULL;
+}
+
+static void export_append_c89_comment_payload(char *out, size_t out_sz,
+                                              size_t *off,
+                                              const char *payload) {
+    while (*payload && *off + 1 < out_sz) {
+        if (payload[0] == '*' && payload[1] == '/') {
+            out[(*off)++] = '*';
+            if (*off + 1 < out_sz)
+                out[(*off)++] = ' ';
+            payload += 2;
+            continue;
+        }
+        out[(*off)++] = *payload++;
+    }
+}
+
+static void export_format_c89_comment_line(char *out, size_t out_sz,
+                                           const char *line) {
+    const char *comment;
+    size_t off = 0;
+    size_t prefix_len;
+
+    if (!out || out_sz == 0)
+        return;
+    out[0] = '\0';
+    if (!line) {
+        return;
+    }
+
+    comment = export_line_comment_start(line);
+    if (!comment) {
+        snprintf(out, out_sz, "%s", line);
+        return;
+    }
+
+    prefix_len = (size_t)(comment - line);
+    if (prefix_len > out_sz - 1)
+        prefix_len = out_sz - 1;
+    memcpy(out, line, prefix_len);
+    off = prefix_len;
+
+    if (off + 2 < out_sz) {
+        out[off++] = '/';
+        out[off++] = '*';
+    }
+    export_append_c89_comment_payload(out, out_sz, &off, comment + 2);
+    if (off + 3 < out_sz) {
+        out[off++] = ' ';
+        out[off++] = '*';
+        out[off++] = '/';
+    }
+    out[off < out_sz ? off : out_sz - 1] = '\0';
+}
+
+static void export_write_c89_line(FILE *f, const char *line) {
+    char out[MAX_LINE_LEN * 2];
+
+    export_format_c89_comment_line(out, sizeof(out), line ? line : "");
+    fprintf(f, "%s\n", out);
+}
+
 /* ========================================================================= */
 /* Workspace header directive table — writer half.                            */
 /*                                                                            */
@@ -304,7 +399,7 @@ static void emit_workspace_dir(int *n) {
 
     if (workspace_dir[0] && *n < MAX_WORKSPACE_HEADER_LINES) {
         snprintf(g_workspace_header_lines[(*n)++], WORKSPACE_HEADER_LINE_LEN,
-                 "// @workspace-dir %s", workspace_dir);
+                "/* @workspace-dir %s */", workspace_dir);
     }
 }
 
@@ -317,7 +412,7 @@ static void emit_scene_name(int *n) {
         scene_name = repl_user_scene_name(repl_active_user_scene());
     if (scene_name && *scene_name && *n < MAX_WORKSPACE_HEADER_LINES) {
         snprintf(g_workspace_header_lines[(*n)++], WORKSPACE_HEADER_LINE_LEN,
-                 "// @scene-name %s", scene_name);
+                 "/* @scene-name %s */", scene_name);
     }
 }
 
@@ -328,15 +423,15 @@ static void emit_vars(int *n) {
         char vbuf[32];
         workspace_format_float(vbuf, sizeof(vbuf), g_predef_vars[var_idx].value);
         if (repl_format_fits(g_workspace_header_lines[*n], WORKSPACE_HEADER_LINE_LEN,
-                             "// @var %s = %s", g_predef_vars[var_idx].name, vbuf))
+                             "/* @var %s = %s */", g_predef_vars[var_idx].name, vbuf))
             (*n)++;
     }
 }
 
 /* --- func aliases ----------------------------------------------------------
  * Round-trip the func-alias table through the workspace header so a saved
- * `drawCube` definition reloads into the same slot. Format:
- *   `// @func 0 = drawCube`
+ * `drawCube` definition reloads into the same slot. Exported as a
+ * block-comment @func directive carrying the slot number and alias.
  * Slots without an alias don't emit a line. */
 
 static void emit_func_aliases(int *n) {
@@ -347,7 +442,7 @@ static void emit_func_aliases(int *n) {
         if (!alias) continue;
         if (repl_format_fits(g_workspace_header_lines[*n],
                              WORKSPACE_HEADER_LINE_LEN,
-                             "// @func %d = %s", slot, alias))
+                             "/* @func %d = %s */", slot, alias))
             (*n)++;
     }
 }
@@ -366,7 +461,7 @@ static void emit_cfgs(int *n) {
     int i = 0;
     for (; i < cfg.count && *n < MAX_WORKSPACE_HEADER_LINES; i++) {
         snprintf(g_workspace_header_lines[(*n)++], WORKSPACE_HEADER_LINE_LEN,
-                 "// @cfg %s = %s", cfg.items[i].key, cfg.items[i].value);
+                 "/* @cfg %s = %s */", cfg.items[i].key, cfg.items[i].value);
     }
     /* The header budget is sized (export_state.h) so this never trips,
      * but warn loudly rather than silently dropping presentation state
@@ -410,7 +505,7 @@ void repl_state_refresh_workspace_header_lines(void) {
     int line_count = 0;
     if (line_count < MAX_WORKSPACE_HEADER_LINES) {
         snprintf(g_workspace_header_lines[line_count++], WORKSPACE_HEADER_LINE_LEN,
-                 "// @workspace: REPL state (auto-saved)");
+                 "/* @workspace: REPL state (auto-saved) */");
     }
     for (int dir_idx = 0; dir_idx < WORKSPACE_DIRECTIVE_COUNT; dir_idx++)
         WORKSPACE_DIRECTIVES[dir_idx].emit(&line_count);
@@ -486,8 +581,7 @@ static ReplParsedLine g_init_bootstrap_cmds[NUM_INIT_BOOTSTRAP];
 static int            g_init_bootstrap_ready = 0;
 
 static const char *g_init_host_only_visible_c[] = {
-    "  GLfloat lm_amb[] = { 0.15f, 0.15f, 0.20f, 1.0f };",
-    "  glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lm_amb);",
+    "  glLightModelfv(GL_LIGHT_MODEL_AMBIENT, repl_glfloat4(0.15f, 0.15f, 0.20f, 1.0f));",
     NULL
 };
 
@@ -505,6 +599,8 @@ static const char *g_init_host_only_tess_c[] = {
 static void format_cmd_source_as_c(char *out, size_t out_sz,
                                    const char *source_text,
                                    int translate_exprs);
+static int write_materialfv_as_c89(FILE *f, const char *source_text);
+static int write_point_parameterfv_as_c89(FILE *f, const char *source_text);
 
 const char *g_footer_pre_init[] = {
     "",
@@ -542,7 +638,7 @@ const char *g_footer_pre_init[] = {
     "  glutTimerFunc(16, tick, 0);",
     "}",
     "",
-    "void init() {",
+    "void init(void) {",
     "  glLineWidth(1.5f);",
     NULL
 };
@@ -736,15 +832,15 @@ static void emit_export_init_section_to_file(FILE *f, int include_tess) {
     char line[MAX_LINE_LEN];
 
     for (int line_idx = 0; g_init_host_only_visible_c[line_idx]; line_idx++)
-        fprintf(f, "%s\n", g_init_host_only_visible_c[line_idx]);
+        export_write_c89_line(f, g_init_host_only_visible_c[line_idx]);
     if (include_tess)
         for (int line_idx = 0; g_init_host_only_tess_c[line_idx]; line_idx++)
-            fprintf(f, "%s\n", g_init_host_only_tess_c[line_idx]);
+            export_write_c89_line(f, g_init_host_only_tess_c[line_idx]);
 
     int n_lights = repl_export_lights_init_line_count();
     for (int lights_idx = 0; lights_idx < n_lights; lights_idx++) {
         repl_export_lights_init_line(lights_idx, line, sizeof(line));
-        fprintf(f, "%s\n", line);
+        export_write_c89_line(f, line);
     }
 
     repl_ensure_init_bootstrap_ready();
@@ -766,10 +862,16 @@ static void emit_export_init_section_to_file(FILE *f, int include_tess) {
                 continue;
             }
         }
+        if (g_init_bootstrap_cmds[bootstrap_idx].cmd.type == CMD_MATERIALFV &&
+            write_materialfv_as_c89(f, g_init_bootstrap_cmds[bootstrap_idx].text))
+            continue;
+        if (g_init_bootstrap_cmds[bootstrap_idx].cmd.type == CMD_POINT_PARAMETER_FV &&
+            write_point_parameterfv_as_c89(f, g_init_bootstrap_cmds[bootstrap_idx].text))
+            continue;
         format_cmd_source_as_c(line, sizeof(line),
                                g_init_bootstrap_cmds[bootstrap_idx].text,
                                0);
-        fprintf(f, "%s\n", line);
+        export_write_c89_line(f, line);
     }
 }
 
@@ -792,12 +894,12 @@ static void emit_export_header_pre(FILE *f) {
     for (int line_idx = 0; g_header_pre[line_idx]; line_idx++) {
         if (strcmp(g_header_pre[line_idx], "static float g_angle = 0.0f;") == 0) {
             if (angle_line[0])
-                fprintf(f, "%s\n", angle_line);
+                export_write_c89_line(f, angle_line);
             else
-                fprintf(f, "%s\n", g_header_pre[line_idx]);
+                export_write_c89_line(f, g_header_pre[line_idx]);
             continue;
         }
-        fprintf(f, "%s\n", g_header_pre[line_idx]);
+        export_write_c89_line(f, g_header_pre[line_idx]);
     }
 }
 
@@ -814,7 +916,7 @@ static void emit_export_cam_lines(FILE *f) {
     if (!block.present) return;
     for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++) {
         if (block.lines[i][0])
-            fprintf(f, "%s\n", block.lines[i]);
+            export_write_c89_line(f, block.lines[i]);
     }
 }
 
@@ -870,11 +972,10 @@ void repl_refresh_camera_lines(void) {
  * (identity), so they wouldn't orbit with the scene.
  *
  * The same text appears in the editor's code panel and the exported C.
- * Format uses inline `(GLfloat[]){...}` literals matching the bootstrap
- * REPL commands' rendered C; values go through export_format_float_list
- * (repl_format_source_float) so they keep float32 round-trip safety
- * while reading as the shortest exact form (0.8f -> "0.8", not the
- * "0.800000012" a raw %.9g would emit). */
+ * Exported C uses repl_glfloatN(...) helpers instead of compound literals;
+ * values go through export_format_float_list (repl_format_source_float) so
+ * they keep float32 round-trip safety while reading as the shortest exact
+ * form (0.8f -> "0.8", not the "0.800000012" a raw %.9g would emit). */
 
 static const char *const k_light_names[REPL_LIGHT_SLOT_COUNT] = {
     "GL_LIGHT0", "GL_LIGHT1", "GL_LIGHT2", "GL_LIGHT3"
@@ -920,17 +1021,20 @@ static void lights_init_emit_slot_line(int slot, int sub, char *buf, size_t n) {
     case 0:
         export_format_float_list(body, sizeof(body), l.diffuse, 4);
         snprintf(buf, n,
-                 "  glLightfv(%s, GL_DIFFUSE,  (GLfloat[]){%s});", ln, body);
+                 "  glLightfv(%s, GL_DIFFUSE,  %s(%s));",
+                 ln, k_export_glfloat4_helper, body);
         return;
     case 1:
         export_format_float_list(body, sizeof(body), l.ambient, 4);
         snprintf(buf, n,
-                 "  glLightfv(%s, GL_AMBIENT,  (GLfloat[]){%s});", ln, body);
+                 "  glLightfv(%s, GL_AMBIENT,  %s(%s));",
+                 ln, k_export_glfloat4_helper, body);
         return;
     case 2:
         export_format_float_list(body, sizeof(body), l.specular, 4);
         snprintf(buf, n,
-                 "  glLightfv(%s, GL_SPECULAR, (GLfloat[]){%s});", ln, body);
+                 "  glLightfv(%s, GL_SPECULAR, %s(%s));",
+                 ln, k_export_glfloat4_helper, body);
         return;
     case 3:
         snprintf(buf, n, "  glDisable(%s);", ln);
@@ -941,7 +1045,8 @@ static void lights_init_emit_slot_line(int slot, int sub, char *buf, size_t n) {
          * the slot will then track the camera as the user orbits. */
         export_format_float_list(body, sizeof(body), l.pos, 4);
         snprintf(buf, n,
-                 "  glLightfv(%s, GL_POSITION, (GLfloat[]){%s});", ln, body);
+                 "  glLightfv(%s, GL_POSITION, %s(%s));",
+                 ln, k_export_glfloat4_helper, body);
         return;
     }
 }
@@ -1008,7 +1113,8 @@ void repl_export_lights_display_line(int i, char *buf, size_t n) {
             char body[EXPORT_FLOAT_LIST_MAX];
             export_format_float_list(body, sizeof(body), l.pos, 4);
             snprintf(buf, n,
-                     "  glLightfv(%s, GL_POSITION, (GLfloat[]){%s});", ln, body);
+                     "  glLightfv(%s, GL_POSITION, %s(%s));",
+                     ln, k_export_glfloat4_helper, body);
             return;
         }
         i--;
@@ -1067,12 +1173,12 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd,
             strncpy(c_step, "1.0f", sizeof(c_step));
 
         if (var_name[0] == '\0') {
-            fprintf(f, "%s\n", source_text);
+            export_write_c89_line(f, source_text);
             return;
         }
 
-        fprintf(f, "%s{ // %s\n", ind, k_export_c89_loop_scope_marker);
-        fprintf(f, "%sfloat %s; // %s\n",
+        fprintf(f, "%s{ /* %s */\n", ind, k_export_c89_loop_scope_marker);
+        fprintf(f, "%sfloat %s; /* %s */\n",
                 ind, var_name, k_export_c89_loop_var_marker);
         float step_v = cmd->args[2];
         if (step_v >= 0) {
@@ -1092,8 +1198,8 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd,
         char start_s[EXPORT_FLOAT_TEXT_MAX], end_s[EXPORT_FLOAT_TEXT_MAX];
         repl_format_source_float(start_s, sizeof(start_s), start_v);
         repl_format_source_float(end_s, sizeof(end_s), end_v);
-        fprintf(f, "%s{ // %s\n", ind, k_export_c89_loop_scope_marker);
-        fprintf(f, "%sfloat %s; // %s\n",
+        fprintf(f, "%s{ /* %s */\n", ind, k_export_c89_loop_scope_marker);
+        fprintf(f, "%sfloat %s; /* %s */\n",
                 ind, var_name, k_export_c89_loop_var_marker);
         if (step_v == 1.0f) {
             fprintf(f, "%sfor (%s = %s; %s < %s; %s += 1.0f) {\n",
@@ -1109,7 +1215,7 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd,
                     step_v > 0 ? "<" : ">", end_s, var_name, step_s);
         }
     } else {
-        fprintf(f, "%s\n", source_text);
+        export_write_c89_line(f, source_text);
     }
 }
 
@@ -1119,8 +1225,8 @@ static void write_for_end_as_c(FILE *f, const char *source_text) {
     while (source_text[indent] && isspace((unsigned char)source_text[indent]))
         indent++;
 
-    fprintf(f, "%s\n", source_text);
-    fprintf(f, "%.*s} // %s\n",
+    export_write_c89_line(f, source_text);
+    fprintf(f, "%.*s} /* %s */\n",
             indent, source_text, k_export_c89_loop_scope_marker);
 }
 
@@ -1219,7 +1325,7 @@ static void write_cmd_source_as_c(FILE *f, const char *source_text,
     char out[MAX_LINE_LEN];
 
     format_cmd_source_as_c(out, sizeof(out), source_text, translate_exprs);
-    fprintf(f, "%s\n", out);
+    export_write_c89_line(f, out);
 }
 
 static int find_export_block_end(int begin_idx) {
@@ -1259,7 +1365,7 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
         fputc('\n', f);
         break;
     case CMD_COMMENT:
-        fprintf(f, "%s\n", source_text);
+        export_write_c89_line(f, source_text);
         break;
     case CMD_VAR_DECLARE: {
         /* Variables are emitted as file-scope statics by write_predef_var_globals().
@@ -1309,7 +1415,7 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
                 }
             }
         }
-        fprintf(f, "  // @%s", k_snippet_directive_declare);
+        fprintf(f, "  /* @%s", k_snippet_directive_declare);
         for (int di = 0; di < cmd->payload.decl.count; di++) {
             if (has_init[di]) {
                 char vbuf[32];
@@ -1323,23 +1429,31 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
          * trailing token detaches cleanly. */
         if (repl_eval_line_has_tune_tag(source_text))
             fprintf(f, " @tune");
-        fprintf(f, "\n");
+        fprintf(f, " */\n");
         break;
     }
     case CMD_VAR_ASSIGN: {
         char c_src[MAX_LINE_LEN];
         repl_eval_expr_to_c(source_text, c_src, sizeof(c_src));
-        fprintf(f, "%s\n", c_src);
+        export_write_c89_line(f, c_src);
         break;
     }
     case CMD_SCRATCH_ASSIGN: {
         char c_src[MAX_LINE_LEN];
         repl_eval_expr_to_c(source_text, c_src, sizeof(c_src));
-        fprintf(f, "%s\n", c_src);
+        export_write_c89_line(f, c_src);
         break;
     }
     case CMD_CALL:
         write_cmd_source_as_c(f, source_text, 1);
+        break;
+    case CMD_MATERIALFV:
+        if (!write_materialfv_as_c89(f, source_text))
+            write_cmd_source_as_c(f, source_text, cmd->has_vars);
+        break;
+    case CMD_POINT_PARAMETER_FV:
+        if (!write_point_parameterfv_as_c89(f, source_text))
+            write_cmd_source_as_c(f, source_text, cmd->has_vars);
         break;
     case CMD_TESS_BEGIN_POLYGON:
         fprintf(f, "  { _tv_n = 0; gluTessBeginPolygon(g_tess, NULL); }\n");
@@ -1430,15 +1544,24 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
                 char post_c[MAX_LINE_LEN] = "";
                 if (post[0])
                     repl_eval_expr_to_c(post, post_c, sizeof(post_c));
-                fwrite(source_text, 1, (size_t)prefix_len, f);
-                fprintf(f, "\"%s\"%s%s);\n",
-                        fmt, post_c[0] ? ", " : "", post_c);
+                {
+                    char label_line[MAX_LINE_LEN];
+                    int take = prefix_len;
+                    if (take >= (int)sizeof(label_line))
+                        take = (int)sizeof(label_line) - 1;
+                    memcpy(label_line, source_text, (size_t)take);
+                    label_line[take] = '\0';
+                    snprintf(label_line + take, sizeof(label_line) - (size_t)take,
+                             "\"%s\"%s%s);",
+                             fmt, post_c[0] ? ", " : "", post_c);
+                    export_write_c89_line(f, label_line);
+                }
                 break;
             }
         }
         /* Fallback: emit raw text — the importer handles it via the
          * default repl_eval_c_expr_to_repl path. */
-        fprintf(f, "%s\n", source_text);
+        export_write_c89_line(f, source_text);
         break;
     }
     default:
@@ -1567,6 +1690,201 @@ static void write_rand_helper(FILE *f) {
         "}\n");
 }
 
+static void write_glfloat_vector_helpers(FILE *f) {
+    fprintf(f,
+        "\n/* C89 replacement for C99 compound GLfloat literals. */\n"
+        "static GLfloat repl_glfloat1_buf[1];\n"
+        "static GLfloat repl_glfloat3_buf[3];\n"
+        "static GLfloat repl_glfloat4_buf[4];\n"
+        "\n"
+        "static GLfloat *%s(GLfloat a) {\n"
+        "  repl_glfloat1_buf[0] = a;\n"
+        "  return repl_glfloat1_buf;\n"
+        "}\n"
+        "\n"
+        "static GLfloat *%s(GLfloat a, GLfloat b, GLfloat c) {\n"
+        "  repl_glfloat3_buf[0] = a;\n"
+        "  repl_glfloat3_buf[1] = b;\n"
+        "  repl_glfloat3_buf[2] = c;\n"
+        "  return repl_glfloat3_buf;\n"
+        "}\n"
+        "\n"
+        "static GLfloat *%s(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {\n"
+        "  repl_glfloat4_buf[0] = a;\n"
+        "  repl_glfloat4_buf[1] = b;\n"
+        "  repl_glfloat4_buf[2] = c;\n"
+        "  repl_glfloat4_buf[3] = d;\n"
+        "  return repl_glfloat4_buf;\n"
+        "}\n",
+        k_export_glfloat1_helper,
+        k_export_glfloat3_helper,
+        k_export_glfloat4_helper);
+}
+
+static int export_copy_first_arg(const char **p_inout,
+                                 char *out, size_t out_sz) {
+    const char *p = *p_inout;
+    const char *start;
+    const char *delim;
+    int len;
+
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    start = p;
+    delim = repl_scan_next_arg_delim(p);
+    if (*delim != ',')
+        return 0;
+    len = (int)(delim - start);
+    while (len > 0 && isspace((unsigned char)start[len - 1]))
+        len--;
+    if (len <= 0 || len >= (int)out_sz)
+        return 0;
+    memcpy(out, start, (size_t)len);
+    out[len] = '\0';
+    *p_inout = delim + 1;
+    return 1;
+}
+
+static int export_extract_vector_payload(const char *arg,
+                                         char *out, size_t out_sz) {
+    const char *open;
+    const char *close;
+    int len;
+
+    while (*arg && isspace((unsigned char)*arg))
+        arg++;
+    open = strchr(arg, '{');
+    close = strrchr(arg, '}');
+    if (open && close && close > open) {
+        len = (int)(close - open - 1);
+        if (len <= 0 || len >= (int)out_sz)
+            return 0;
+        memcpy(out, open + 1, (size_t)len);
+        out[len] = '\0';
+        return 1;
+    }
+
+    len = (int)strlen(arg);
+    while (len > 0 && isspace((unsigned char)arg[len - 1]))
+        len--;
+    if (len <= 0 || len >= (int)out_sz)
+        return 0;
+    memcpy(out, arg, (size_t)len);
+    out[len] = '\0';
+    return 1;
+}
+
+static int export_translate_vector_args(const char *payload,
+                                        char out[][MAX_LINE_LEN],
+                                        int expected_count) {
+    char raw[4][MAX_LINE_LEN];
+    int count = split_top_level_args(payload, raw, 4);
+    int arg_idx;
+
+    if (count != expected_count)
+        return 0;
+    for (arg_idx = 0; arg_idx < count; arg_idx++)
+        repl_eval_expr_to_c(raw[arg_idx], out[arg_idx], sizeof(out[arg_idx]));
+    return 1;
+}
+
+static int write_materialfv_as_c89(FILE *f, const char *source_text) {
+    const char *p = source_text;
+    const char *payload_start;
+    const char *payload_end;
+    char face[MAX_LINE_LEN];
+    char pname[MAX_LINE_LEN];
+    char vector_payload[MAX_LINE_LEN];
+    char c_args[4][MAX_LINE_LEN];
+    int indent = 0;
+    int payload_len;
+    char payload[MAX_LINE_LEN];
+    const char *payload_p;
+    int count;
+
+    while (p[indent] && isspace((unsigned char)p[indent]))
+        indent++;
+    p += indent;
+    if (strncmp(p, "glMaterialfv", 12) != 0)
+        return 0;
+    payload_start = strchr(p, '(');
+    payload_end = strrchr(p, ')');
+    if (!payload_start || !payload_end || payload_end <= payload_start)
+        return 0;
+    payload_len = (int)(payload_end - payload_start - 1);
+    if (payload_len <= 0 || payload_len >= (int)sizeof(payload))
+        return 0;
+    memcpy(payload, payload_start + 1, (size_t)payload_len);
+    payload[payload_len] = '\0';
+
+    payload_p = payload;
+    if (!export_copy_first_arg(&payload_p, face, sizeof(face)))
+        return 0;
+    if (!export_copy_first_arg(&payload_p, pname, sizeof(pname)))
+        return 0;
+    if (!export_extract_vector_payload(payload_p, vector_payload, sizeof(vector_payload)))
+        return 0;
+
+    count = split_top_level_args(vector_payload, c_args, 4);
+    if (count != 1 && count != 4)
+        return 0;
+    if (!export_translate_vector_args(vector_payload, c_args, count))
+        return 0;
+
+    if (count == 1) {
+        fprintf(f, "%.*sglMaterialfv(%s, %s, %s(%s));\n",
+                indent, source_text, face, pname,
+                k_export_glfloat1_helper, c_args[0]);
+    } else {
+        fprintf(f, "%.*sglMaterialfv(%s, %s, %s(%s, %s, %s, %s));\n",
+                indent, source_text, face, pname,
+                k_export_glfloat4_helper,
+                c_args[0], c_args[1], c_args[2], c_args[3]);
+    }
+    return 1;
+}
+
+static int write_point_parameterfv_as_c89(FILE *f, const char *source_text) {
+    const char *p = source_text;
+    const char *payload_start;
+    const char *payload_end;
+    char pname[MAX_LINE_LEN];
+    char vector_payload[MAX_LINE_LEN];
+    char c_args[4][MAX_LINE_LEN];
+    int indent = 0;
+    int payload_len;
+    char payload[MAX_LINE_LEN];
+    const char *payload_p;
+
+    while (p[indent] && isspace((unsigned char)p[indent]))
+        indent++;
+    p += indent;
+    if (strncmp(p, "glPointParameterfv", 18) != 0)
+        return 0;
+    payload_start = strchr(p, '(');
+    payload_end = strrchr(p, ')');
+    if (!payload_start || !payload_end || payload_end <= payload_start)
+        return 0;
+    payload_len = (int)(payload_end - payload_start - 1);
+    if (payload_len <= 0 || payload_len >= (int)sizeof(payload))
+        return 0;
+    memcpy(payload, payload_start + 1, (size_t)payload_len);
+    payload[payload_len] = '\0';
+
+    payload_p = payload;
+    if (!export_copy_first_arg(&payload_p, pname, sizeof(pname)))
+        return 0;
+    if (!export_extract_vector_payload(payload_p, vector_payload, sizeof(vector_payload)))
+        return 0;
+    if (!export_translate_vector_args(vector_payload, c_args, 3))
+        return 0;
+
+    fprintf(f, "%.*sglPointParameterfv(%s, %s(%s, %s, %s));\n",
+            indent, source_text, pname, k_export_glfloat3_helper,
+            c_args[0], c_args[1], c_args[2]);
+    return 1;
+}
+
 /* Wrapper for the REPL `label("fmt", ...)` primitive. Walks the format
  * string and substitutes each `%f` with `%g`-formatted output (matching
  * the REPL's CMD_LABEL executor case in src/repl/executor.c) so the live
@@ -1621,7 +1939,7 @@ static void write_label_helper(FILE *f) {
 static void write_render_helper_as_c(FILE *f, const char *name) {
     fprintf(f, "\n/* User scene commands captured from gl-repl. */\n");
     fprintf(f, "static void %s(void) {\n", name);
-    fprintf(f, "  // Snippet start\n");
+    fprintf(f, "  /* Snippet start */\n");
     write_render_body_range_as_c(f, 0, repl_state_document_count(), 1);
     int bb = 0;
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
@@ -1630,7 +1948,7 @@ static void write_render_helper_as_c(FILE *f, const char *name) {
     }
     if (bb > 0)
         fprintf(f, "  glEnd();\n");
-    fprintf(f, "  // Snippet end\n");
+    fprintf(f, "  /* Snippet end */\n");
     fprintf(f, "}\n");
 }
 
@@ -1645,8 +1963,10 @@ static void write_func_defs_as_c(FILE *f) {
                 repl_state_document_cmds()[comment_start - 1].type == CMD_EMPTY))
             comment_start--;
         /* Emit any preceding comment lines. */
-        for (int comment_idx = comment_start; comment_idx < cmd_idx; comment_idx++)
-            fprintf(f, "\n%s\n", export_document_text(comment_idx));
+        for (int comment_idx = comment_start; comment_idx < cmd_idx; comment_idx++) {
+            fputc('\n', f);
+            export_write_c89_line(f, export_document_text(comment_idx));
+        }
 
         int fn = (int)repl_state_document_cmds()[cmd_idx].args[0];
         int parsed_fn = fn;
@@ -2105,7 +2425,7 @@ static void emit_export_display_begin(FILE *f) {
         fprintf(f, "%s\n", g_display_header[line_idx]);
     /* Emit render state configuration lines (lighting, depth, etc). */
     for (int state_line_idx = 0; state_line_idx < RENDER_STATE_LINE_COUNT; state_line_idx++)
-        fprintf(f, "%s\n", g_render_state_lines[state_line_idx]);
+        export_write_c89_line(f, g_render_state_lines[state_line_idx]);
     emit_export_cam_lines(f);
     /* Light positions are set after the camera transforms so
      * glLightfv(GL_POSITION) snapshots the post-camera modelview and
@@ -2121,12 +2441,12 @@ static void emit_export_display_begin(FILE *f) {
         for (int pos_idx = 0; pos_idx < n_pos; pos_idx++) {
             char line[MAX_LINE_LEN];
             repl_export_lights_display_line(pos_idx, line, sizeof(line));
-            fprintf(f, "%s\n", line);
+            export_write_c89_line(f, line);
         }
     }
     /* g_header_post: additional setup after the dynamic state lines. */
     for (int line_idx = 0; g_header_post[line_idx]; line_idx++)
-        fprintf(f, "%s\n", g_header_post[line_idx]);
+        export_write_c89_line(f, g_header_post[line_idx]);
 }
 
 static void emit_export_display_geometry(FILE *f,
@@ -2388,7 +2708,7 @@ static void emit_export_display_tail(FILE *f, const ExportNeeds *needs,
         "}\n"
         "\n"
         "/* One-time OpenGL state setup. */\n"
-        "void init() {\n"
+        "void init(void) {\n"
         "  glLineWidth(1.5f);\n",
         names->keyboard_key,
         names->keyboard_key);
@@ -2425,19 +2745,19 @@ static void emit_export_banner_section(FILE *f,
                                        const ExportScaffoldContext *ctx) {
     (void)ctx;
     fprintf(f,
-        "// Generated by gl-repl.\n"
-        "//\n"
-        "// This is a standalone GLUT/OpenGL C file. You can edit it by hand,\n"
-        "// or load it back into gl-repl to keep working on the scene.\n"
-        "//\n"
-        "// Linux:\n"
-        "//   cc -std=c99 -Wall -Wextra -o scene scene.c -lglut -lGL -lGLU -lm\n"
-        "//\n"
-        "// macOS:\n"
-        "//   cc -std=c99 -Wall -Wextra -o scene scene.c -framework OpenGL -framework GLUT -lm\n"
-        "//\n"
-        "// SPDX-License-Identifier: MIT\n"
-        "// See the gl-repl repository LICENSE file for the full text.\n"
+        "/* Generated by gl-repl. */\n"
+        "/* */\n"
+        "/* This is a standalone GLUT/OpenGL C file. You can edit it by hand, */\n"
+        "/* or load it back into gl-repl to keep working on the scene. */\n"
+        "/* */\n"
+        "/* Linux: */\n"
+        "/*   cc -std=c89 -Wall -Wextra -o scene scene.c -lglut -lGL -lGLU -lm */\n"
+        "/* */\n"
+        "/* macOS: */\n"
+        "/*   cc -std=c89 -Wall -Wextra -o scene scene.c -framework OpenGL -framework GLUT -lm */\n"
+        "/* */\n"
+        "/* SPDX-License-Identifier: MIT */\n"
+        "/* See the gl-repl repository LICENSE file for the full text. */\n"
         "\n");
 }
 
@@ -2455,6 +2775,12 @@ static void emit_export_header_section(FILE *f,
                                        const ExportScaffoldContext *ctx) {
     (void)ctx;
     emit_export_header_pre(f);
+}
+
+static void emit_export_glfloat_helpers_section(FILE *f,
+                                                const ExportScaffoldContext *ctx) {
+    (void)ctx;
+    write_glfloat_vector_helpers(f);
 }
 
 static void emit_export_predef_globals_section(FILE *f,
@@ -2543,6 +2869,7 @@ static const ExportScaffoldSectionSpec EXPORT_SCAFFOLD_SECTIONS[] = {
     { emit_export_banner_section },
     { emit_export_workspace_metadata_section },
     { emit_export_header_section },
+    { emit_export_glfloat_helpers_section },
     { emit_export_predef_globals_section },
     { emit_export_scratch_globals_section },
     { emit_export_rand_helper_section },

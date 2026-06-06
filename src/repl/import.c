@@ -153,6 +153,9 @@ typedef struct {
 static const char k_snippet_directive_declare[] = "declare";
 static const char k_export_c89_loop_scope_marker[] = "repl-export-c89-loop-scope";
 static const char k_export_c89_loop_var_marker[] = "repl-export-c89-loop-var";
+static const char k_export_glfloat1_helper[] = "repl_glfloat1";
+static const char k_export_glfloat3_helper[] = "repl_glfloat3";
+static const char k_export_glfloat4_helper[] = "repl_glfloat4";
 
 /* Emit one import diagnostic to stderr with the shared "Warning: " prefix
  * and trailing newline. Centralises the format so the @var / @func /
@@ -363,7 +366,9 @@ int repl_state_parse_workspace_header_line(const char *line) {
     if (*p != '@') return 0;
     p++;
 
-    /* Banner line: `// @workspace: REPL state ...` - recognised, no payload. */
+    /* Banner line: @workspace: REPL state ... - recognised, no payload.
+     * C89 block-comment directives are normalized to // form by file import
+     * before reaching this parser; legacy callers may still pass // directly. */
     if (strncmp(p, "workspace:", 10) == 0) return 1;
     if (strncmp(p, "workspace", 9) == 0 &&
         !isalnum((unsigned char)p[9]) && p[9] != '_' && p[9] != '-')
@@ -1142,14 +1147,28 @@ static int import_make_repl_point_parameter_line(const char *line, char *out, in
 
     brace_open = strchr(comma + 1, '{');
     brace_close = strrchr(comma + 1, '}');
-    if (!brace_open || !brace_close || brace_close <= brace_open + 1)
-        return 0;
-
-    coeff_len = (int)(brace_close - brace_open - 1);
-    if (coeff_len <= 0 || coeff_len >= (int)sizeof(coeffs))
-        return 0;
-    memcpy(coeffs, brace_open + 1, (size_t)coeff_len);
-    coeffs[coeff_len] = '\0';
+    if (brace_open && brace_close && brace_close > brace_open) {
+        coeff_len = (int)(brace_close - brace_open - 1);
+        if (coeff_len <= 0 || coeff_len >= (int)sizeof(coeffs))
+            return 0;
+        memcpy(coeffs, brace_open + 1, (size_t)coeff_len);
+        coeffs[coeff_len] = '\0';
+    } else {
+        const char *helper = strstr(comma + 1, k_export_glfloat3_helper);
+        const char *helper_open;
+        const char *helper_close;
+        if (!helper)
+            return 0;
+        helper_open = strchr(helper, '(');
+        helper_close = helper_open ? strrchr(helper_open, ')') : NULL;
+        if (!helper_open || !helper_close || helper_close <= helper_open + 1)
+            return 0;
+        coeff_len = (int)(helper_close - helper_open - 1);
+        if (coeff_len <= 0 || coeff_len >= (int)sizeof(coeffs))
+            return 0;
+        memcpy(coeffs, helper_open + 1, (size_t)coeff_len);
+        coeffs[coeff_len] = '\0';
+    }
 
     count = split_top_level_args(coeffs, raw_args, 4);
     if (count != 3)
@@ -1162,6 +1181,106 @@ static int import_make_repl_point_parameter_line(const char *line, char *out, in
     return repl_format_fits(out, (size_t)out_sz,
                             "glPointParameterfv(%s, %s, %s, %s);",
                             pname, repl_args[0], repl_args[1], repl_args[2]);
+}
+
+static int import_make_repl_materialfv_line(const char *line, char *out, int out_sz) {
+    const char *p = line;
+    const char *open;
+    const char *close;
+    const char *first_comma;
+    const char *second_comma;
+    const char *brace_open;
+    const char *brace_close;
+    char payload[MAX_LINE_LEN];
+    char face[64];
+    char pname[64];
+    char values[MAX_LINE_LEN];
+    char raw_args[4][MAX_LINE_LEN];
+    char repl_args[4][MAX_LINE_LEN];
+    int payload_len;
+    int face_len;
+    int pname_len;
+    int values_len;
+    int count;
+
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    if (strncmp(p, "glMaterialfv(", 13) != 0)
+        return 0;
+
+    open = strchr(p, '(');
+    close = strrchr(p, ')');
+    if (!open || !close || close <= open + 1)
+        return 0;
+
+    payload_len = (int)(close - open - 1);
+    if (payload_len <= 0 || payload_len >= (int)sizeof(payload))
+        return 0;
+    memcpy(payload, open + 1, (size_t)payload_len);
+    payload[payload_len] = '\0';
+
+    first_comma = strchr(payload, ',');
+    if (!first_comma)
+        return 0;
+    face_len = (int)(first_comma - payload);
+    if (face_len <= 0 || face_len >= (int)sizeof(face))
+        return 0;
+    memcpy(face, payload, (size_t)face_len);
+    face[face_len] = '\0';
+    trim_in_place(face);
+
+    second_comma = strchr(first_comma + 1, ',');
+    if (!second_comma)
+        return 0;
+    pname_len = (int)(second_comma - (first_comma + 1));
+    if (pname_len <= 0 || pname_len >= (int)sizeof(pname))
+        return 0;
+    memcpy(pname, first_comma + 1, (size_t)pname_len);
+    pname[pname_len] = '\0';
+    trim_in_place(pname);
+
+    brace_open = strchr(second_comma + 1, '{');
+    brace_close = strrchr(second_comma + 1, '}');
+    if (brace_open && brace_close && brace_close > brace_open) {
+        values_len = (int)(brace_close - brace_open - 1);
+        if (values_len <= 0 || values_len >= (int)sizeof(values))
+            return 0;
+        memcpy(values, brace_open + 1, (size_t)values_len);
+        values[values_len] = '\0';
+    } else {
+        const char *helper = strstr(second_comma + 1, k_export_glfloat4_helper);
+        const char *helper_open;
+        const char *helper_close;
+        if (!helper)
+            helper = strstr(second_comma + 1, k_export_glfloat1_helper);
+        if (!helper)
+            return 0;
+        helper_open = strchr(helper, '(');
+        helper_close = helper_open ? strrchr(helper_open, ')') : NULL;
+        if (!helper_open || !helper_close || helper_close <= helper_open + 1)
+            return 0;
+        values_len = (int)(helper_close - helper_open - 1);
+        if (values_len <= 0 || values_len >= (int)sizeof(values))
+            return 0;
+        memcpy(values, helper_open + 1, (size_t)values_len);
+        values[values_len] = '\0';
+    }
+
+    count = split_top_level_args(values, raw_args, 4);
+    if (count != 1 && count != 4)
+        return 0;
+    for (int arg_idx = 0; arg_idx < count; arg_idx++)
+        repl_eval_c_expr_to_repl(raw_args[arg_idx], repl_args[arg_idx], sizeof(repl_args[arg_idx]));
+
+    if (count == 1) {
+        return repl_format_fits(out, (size_t)out_sz,
+                                "glMaterialfv(%s, %s, (GLfloat[]){%s});",
+                                face, pname, repl_args[0]);
+    }
+    return repl_format_fits(out, (size_t)out_sz,
+                            "glMaterialfv(%s, %s, (GLfloat[]){%s, %s, %s, %s});",
+                            face, pname,
+                            repl_args[0], repl_args[1], repl_args[2], repl_args[3]);
 }
 
 static int import_make_repl_glut_bitmap_string(const char *line,
@@ -1256,6 +1375,7 @@ static void import_feed_one_line(ImportState *s, const char *line) {
         handled = repl_load_apply_line(repl_line, load_err, (int)sizeof(load_err),
                                        &s->edit_line);
     } else if (import_make_repl_tess_line(line, repl_line, sizeof(repl_line)) ||
+               import_make_repl_materialfv_line(line, repl_line, sizeof(repl_line)) ||
                import_make_repl_point_parameter_line(line, repl_line, sizeof(repl_line)) ||
                import_make_repl_label(line, repl_line, sizeof(repl_line)) ||
                import_make_repl_glut_bitmap_string(line, repl_line, sizeof(repl_line))) {
@@ -1358,10 +1478,60 @@ static int code_brace_delta(const char *p) {
     return delta;
 }
 
+static int import_comment_matches_marker(const char *comment,
+                                         const char *marker) {
+    const char *p = comment;
+
+    if (!p || p[0] != '/' || p[1] != '/')
+        return 0;
+    p += 2;
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    if (strncmp(p, marker, strlen(marker)) != 0)
+        return 0;
+    p += strlen(marker);
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    return *p == '\0';
+}
+
+static int import_is_c89_loop_marker_line(const char *p) {
+    const char *comment;
+    const char *q;
+
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    if (*p == '{' || *p == '}') {
+        q = p + 1;
+        while (*q && isspace((unsigned char)*q))
+            q++;
+        return import_comment_matches_marker(q, k_export_c89_loop_scope_marker);
+    }
+
+    if (strncmp(p, "float", 5) != 0 || !isspace((unsigned char)p[5]))
+        return 0;
+    q = p + 5;
+    while (*q && isspace((unsigned char)*q))
+        q++;
+    if (!isalpha((unsigned char)*q) && *q != '_')
+        return 0;
+    q++;
+    while (*q && (isalnum((unsigned char)*q) || *q == '_'))
+        q++;
+    while (*q && isspace((unsigned char)*q))
+        q++;
+    if (*q != ';')
+        return 0;
+    q++;
+    while (*q && isspace((unsigned char)*q))
+        q++;
+    comment = q;
+    return import_comment_matches_marker(comment, k_export_c89_loop_var_marker);
+}
+
 static int import_try_function_body(ImportState *s, const char *p) {
     if (s->func_depth <= 0) return 0;
-    if (strstr(p, k_export_c89_loop_scope_marker) ||
-        strstr(p, k_export_c89_loop_var_marker))
+    if (import_is_c89_loop_marker_line(p))
         return 1;
     import_feed_one_line(s, p);
     s->func_depth += code_brace_delta(p);
@@ -1442,8 +1612,7 @@ static int import_try_predef_decl(const char *p) {
 }
 
 static int import_try_snippet_body_line(ImportState *s, const char *p) {
-    if (strstr(p, k_export_c89_loop_scope_marker) ||
-        strstr(p, k_export_c89_loop_var_marker))
+    if (import_is_c89_loop_marker_line(p))
         return 1;
     import_feed_one_line(s, p);
     return 1;
@@ -1489,6 +1658,79 @@ static void repl_export_load_reset_accumulators(void) {
     g_pending_scene_name[0]    = '\0';
     g_pending_workspace_dir[0] = '\0';
     import_cfg_accumulator_reset();
+}
+
+static const char *import_find_block_comment_start(const char *s) {
+    int in_str = 0;
+    int in_chr = 0;
+
+    if (!s)
+        return NULL;
+    for (; *s; s++) {
+        if (in_str || in_chr) {
+            if (*s == '\\' && s[1]) {
+                s++;
+                continue;
+            }
+            if (in_str && *s == '"')
+                in_str = 0;
+            else if (in_chr && *s == '\'')
+                in_chr = 0;
+            continue;
+        }
+        if (*s == '"') {
+            in_str = 1;
+            continue;
+        }
+        if (*s == '\'') {
+            in_chr = 1;
+            continue;
+        }
+        if (s[0] == '/' && s[1] == '*')
+            return s;
+    }
+    return NULL;
+}
+
+static int import_normalize_c89_comment_line(const char *line,
+                                             char *out, size_t out_sz) {
+    const char *open;
+    const char *close;
+    const char *tail;
+    size_t prefix_len;
+    size_t payload_len;
+    size_t off;
+
+    if (!line || !out || out_sz == 0)
+        return 0;
+
+    open = import_find_block_comment_start(line);
+    if (!open)
+        return 0;
+    close = strstr(open + 2, "*/");
+    if (!close)
+        return 0;
+    tail = close + 2;
+    while (*tail && isspace((unsigned char)*tail))
+        tail++;
+    if (*tail)
+        return 0;
+
+    prefix_len = (size_t)(open - line);
+    payload_len = (size_t)(close - (open + 2));
+    if (payload_len > 0 && open[2 + payload_len - 1] == ' ')
+        payload_len--;
+    if (prefix_len + 3 + payload_len >= out_sz)
+        payload_len = out_sz > prefix_len + 4 ? out_sz - prefix_len - 4 : 0;
+
+    memcpy(out, line, prefix_len);
+    off = prefix_len;
+    out[off++] = '/';
+    out[off++] = '/';
+    memcpy(out + off, open + 2, payload_len);
+    off += payload_len;
+    out[off] = '\0';
+    return 1;
 }
 
 static int is_line_comment_or_directive(const char *line) {
@@ -1580,6 +1822,8 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
     int accum_depth     = 0;
     int accum_truncated = 0;
     while (fgets(line, sizeof(line), f)) {
+        char normalized_line[MAX_LINE_LEN];
+        const char *proc_line = line;
         state.line_no++;
         size_t raw_len = strlen(line);
         if (raw_len > 0 &&
@@ -1596,20 +1840,23 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
         while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r'))
             line[--len] = '\0';
 
-        if (is_line_comment_or_directive(line)) {
+        if (import_normalize_c89_comment_line(line, normalized_line, sizeof(normalized_line)))
+            proc_line = normalized_line;
+
+        if (is_line_comment_or_directive(proc_line)) {
             /* A blank, comment, or directive line that falls inside an
              * in-progress statement (open bracket, or no terminator
              * seen yet) is dropped — keep accumulating rather than
              * flushing a half-built statement. With nothing in progress
              * it is a standalone line, processed as before. */
             if (accum[0]) continue;
-            const char *p = line;
+            const char *p = proc_line;
             while (*p && isspace((unsigned char)*p)) p++;
-            import_process_line(&state, p, line);
+            import_process_line(&state, p, proc_line);
             continue;
         }
 
-        const char *app = line;
+        const char *app = proc_line;
         while (*app && isspace((unsigned char)*app)) app++;
 
         if (!accum[0]) {

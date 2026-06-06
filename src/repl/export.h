@@ -47,7 +47,7 @@
 #include "repl/cfg_baseline.h"
 #include "repl/state_views.h"   /* REPL_WORKSPACE_DIR_MAX, USER_SCENE_NAME_MAX */
 
-/* Apply the current batch of parsed `// @cfg` lines, then clear the accumulator.
+/* Apply the current batch of parsed @cfg lines, then clear the accumulator.
  * Importers call this after finishing a header batch; example loading uses the
  * same drain after consuming leading example metadata. The per-line parser may
  * already have applied each cfg immediately, so this is primarily the
@@ -179,7 +179,7 @@ int repl_export_reshape_projection_lines(const char *out[REPL_EXPORT_PROJ_LINES]
 
 /* Boilerplate C file segments for export. g_header_pre is the file-scope
  * preamble (includes, macros, rotation globals). g_display_header opens
- * the display() function (`void display() { ...clear/load/push...`) and
+ * the display() function (`void display(void) { ...clear/load/push...`) and
  * is shared verbatim by the code panel and emit_export_display_begin so
  * the two stay in sync. g_header_post follows the dynamic state lines
  * inside display(); g_footer_pre_init / g_footer_post_init bracket the
@@ -188,7 +188,7 @@ int repl_export_reshape_projection_lines(const char *out[REPL_EXPORT_PROJ_LINES]
  * g_display_header[0] and as the search needle from core.c's
  * scroll_to_display_function — exposed via this macro so both sides
  * stay in sync if the line text ever changes. */
-#define REPL_EXPORT_DISPLAY_OPEN_LINE "void display() {"
+#define REPL_EXPORT_DISPLAY_OPEN_LINE "void display(void) {"
 extern const char  *g_header_pre[];
 extern const char  *g_display_header[];
 extern const char  *g_header_post[];
