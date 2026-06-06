@@ -431,3 +431,80 @@ int repl_find_affecting_transforms(int line_idx, int *out, int out_cap) {
     }
     return count;
 }
+
+/* Append src_line to out[] if not already present and within capacity.
+ * Returns the (possibly unchanged) count. Shared by the two flat-program
+ * affecting-transform resolvers so a transform that appears in multiple
+ * function expansions only lights its source line once. */
+static int append_unique_src_line(int *out, int count, int out_cap, int src_line) {
+    if (src_line < 0 || count >= out_cap) return count;
+    for (int k = 0; k < count; k++)
+        if (out[k] == src_line) return count;
+    out[count++] = src_line;
+    return count;
+}
+
+int repl_find_affecting_transforms_for_flat_vertex(int flat_idx,
+                                                   int *out, int out_cap) {
+    if (!out || out_cap <= 0) return 0;
+    FlatProgramView flat = repl_state_flat_program_view();
+    if (flat_idx < 0 || flat_idx >= flat.cmd_count) return 0;
+    const GLCmd *cmds = flat.cmds;
+    if (!cmds[flat_idx].valid) return 0;
+    if (!repl_cmd_consumes_current_color(cmds[flat_idx].type)) return 0;
+
+    /* The flat program has already inlined every funcN body and unrolled
+     * every loop, so a straight backward walk crosses function boundaries
+     * for free: call-site-scope transforms and in-body transforms both sit
+     * inline ahead of the vertex. No CMD_FUNC_DEF/_END markers survive
+     * flattening (flatten_range skips them), so unlike the source walk we
+     * never have to stop at a function boundary or skip an opaque body. */
+    int count = 0;
+    int popped_depth = 0;
+    for (int i = flat_idx - 1; i >= 0 && count < out_cap; i--) {
+        if (!cmds[i].valid) continue;
+        CmdType t = cmds[i].type;
+        if (t == CMD_POP_MATRIX) {
+            popped_depth++;
+        } else if (t == CMD_PUSH_MATRIX) {
+            if (popped_depth > 0) popped_depth--;
+        } else if (t == CMD_LOAD_IDENTITY) {
+            if (popped_depth == 0) break;
+        } else if (t == CMD_TRANSLATE3F || t == CMD_SCALEF || t == CMD_ROTATEF) {
+            if (popped_depth == 0)
+                count = append_unique_src_line(out, count, out_cap,
+                                               cmds[i].src_cmd_idx);
+        }
+    }
+    return count;
+}
+
+int repl_find_affecting_transforms_flat(int line_idx, int *out, int out_cap) {
+    if (!out || out_cap <= 0) return 0;
+    int n = repl_state_document_count();
+    if (line_idx < 0 || line_idx >= n) return 0;
+    const GLCmd *src = repl_state_document_cmds();
+    if (!src[line_idx].valid) return 0;
+    if (!repl_cmd_consumes_current_color(src[line_idx].type)) return 0;
+
+    /* Without a selected invocation the live cursor view is the union of
+     * affecting transforms across every flat expansion of this source
+     * vertex line. We deliberately key off src_cmd_idx == line_idx (the
+     * exact owning vertex/glut-solid), NOT repl_flat_cmd_matches_cursor(),
+     * which matches whole function scopes and call-site blocks and would be
+     * far too broad for "this one vertex line." */
+    FlatProgramView flat = repl_state_flat_program_view();
+    int count = 0;
+    for (int fi = 0; fi < flat.cmd_count && count < out_cap; fi++) {
+        if (!flat.cmds[fi].valid) continue;
+        if (flat.cmds[fi].src_cmd_idx != line_idx) continue;
+        if (!repl_cmd_consumes_current_color(flat.cmds[fi].type)) continue;
+
+        int tmp[MAX_AFFECTING_TRANSFORMS];
+        int tn = repl_find_affecting_transforms_for_flat_vertex(
+            fi, tmp, MAX_AFFECTING_TRANSFORMS);
+        for (int k = 0; k < tn; k++)
+            count = append_unique_src_line(out, count, out_cap, tmp[k]);
+    }
+    return count;
+}

@@ -369,10 +369,17 @@ static void glr_ctrl_push_highlights(void) {
                                                         HIGHLIGHT_MATCHING_PUSH_MATRIX);
             }
 
+            /* Prefer the flat-accurate resolver so a vertex inside a funcN
+             * body picks up the calling-scope transforms too. Fall back to
+             * the source walk only when the flat program is empty/unbuilt
+             * (e.g. a flatten error) — by this point in the frame flatten has
+             * already run and cleared its dirty flag. */
             int xform_lines[MAX_AFFECTING_TRANSFORMS];
-            int xform_count = repl_find_affecting_transforms(edit_line,
-                                                             xform_lines,
-                                                             MAX_AFFECTING_TRANSFORMS);
+            int xform_count = repl_find_affecting_transforms_flat(
+                edit_line, xform_lines, MAX_AFFECTING_TRANSFORMS);
+            if (xform_count == 0 && repl_state_flat_program_view().cmd_count == 0)
+                xform_count = repl_find_affecting_transforms(
+                    edit_line, xform_lines, MAX_AFFECTING_TRANSFORMS);
             for (int i = 0; i < xform_count; i++)
                 editor_state_highlights_append(xform_lines[i], -1, -1,
                                                     HIGHLIGHT_AFFECTING_TRANSFORM);

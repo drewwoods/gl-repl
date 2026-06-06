@@ -1826,6 +1826,97 @@ int main(void) {
                     n == 1 && xs[0] == 3);
     }
 
+    /* repl_find_affecting_transforms_flat / _for_flat_vertex: flat-accurate
+     * cross-function resolution (req 4). A vertex inside a funcN body called
+     * from two transformed call sites must union both call-site transform
+     * source lines — the source walk above can't, because function bodies are
+     * opaque from the call site. */
+    {
+        int xs[MAX_AFFECTING_TRANSFORMS];
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("func0() {");          /* 0 */
+        editor_feed_line("  glVertex3f(0, 0, 0);"); /* 1 */
+        editor_feed_line("}");                   /* 2 */
+        editor_feed_line("glPushMatrix();");     /* 3 */
+        editor_feed_line("glTranslatef(1, 0, 0);"); /* 4 */
+        editor_feed_line("func0();");            /* 5 */
+        editor_feed_line("glPopMatrix();");      /* 6 */
+        editor_feed_line("glPushMatrix();");     /* 7 */
+        editor_feed_line("glTranslatef(2, 0, 0);"); /* 8 */
+        editor_feed_line("func0();");            /* 9 */
+        editor_feed_line("glPopMatrix();");      /* 10 */
+        repl_flatten_commands(editor_state_edit_line());
+
+        /* Source walk stops at the enclosing FUNC_DEF → sees nothing. */
+        int n_src = repl_find_affecting_transforms(1, xs, MAX_AFFECTING_TRANSFORMS);
+        ASSERT_TRUE("source walk: body vertex sees no call-site transforms",
+                    n_src == 0);
+
+        /* Flat walk unions both call-site translate source lines (4 and 8). */
+        int n = repl_find_affecting_transforms_flat(1, xs, MAX_AFFECTING_TRANSFORMS);
+        ASSERT_TRUE("flat walk: body vertex unions both call-site translates",
+                    n == 2);
+        int saw4 = 0, saw8 = 0;
+        for (int k = 0; k < n; k++) {
+            if (xs[k] == 4) saw4 = 1;
+            if (xs[k] == 8) saw8 = 1;
+        }
+        ASSERT_TRUE("flat union includes first call-site translate",  saw4);
+        ASSERT_TRUE("flat union includes second call-site translate", saw8);
+
+        /* Exact-flat-index helper: each expansion sees only its own scope. */
+        int first_v = -1, second_v = -1;
+        for (int i = 0; i < repl_state_flat_program_count(); i++) {
+            const GLCmd *fc = &repl_state_flat_program_cmds_mut()[i];
+            if (fc->type == CMD_VERTEX3F && fc->src_cmd_idx == 1) {
+                if (first_v < 0) first_v = i;
+                else if (second_v < 0) second_v = i;
+            }
+        }
+        ASSERT_TRUE("two flat expansions of the body vertex",
+                    first_v >= 0 && second_v >= 0);
+        n = repl_find_affecting_transforms_for_flat_vertex(
+                first_v, xs, MAX_AFFECTING_TRANSFORMS);
+        ASSERT_TRUE("first expansion: only first call-site translate",
+                    n == 1 && xs[0] == 4);
+        n = repl_find_affecting_transforms_for_flat_vertex(
+                second_v, xs, MAX_AFFECTING_TRANSFORMS);
+        ASSERT_TRUE("second expansion: only second call-site translate",
+                    n == 1 && xs[0] == 8);
+
+        /* Guards: non-consumer source line and OOB flat index → 0. */
+        ASSERT_TRUE("flat resolver: non-consumer line → 0",
+                    repl_find_affecting_transforms_flat(
+                        4, xs, MAX_AFFECTING_TRANSFORMS) == 0);
+        ASSERT_TRUE("flat-vertex resolver: OOB → 0",
+                    repl_find_affecting_transforms_for_flat_vertex(
+                        -1, xs, MAX_AFFECTING_TRANSFORMS) == 0);
+    }
+
+    /* Top-level (non-function) vertices: the flat resolver matches the source
+     * walk exactly — no regression for the common case. */
+    {
+        int xs[MAX_AFFECTING_TRANSFORMS];
+        int fs[MAX_AFFECTING_TRANSFORMS];
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glTranslatef(1, 0, 0);"); /* 0 */
+        editor_feed_line("glRotatef(30, 0, 1, 0);"); /* 1 */
+        editor_feed_line("glVertex3f(0, 0, 0);");    /* 2 */
+        repl_flatten_commands(editor_state_edit_line());
+        int n_src = repl_find_affecting_transforms(2, xs, MAX_AFFECTING_TRANSFORMS);
+        int n_flat = repl_find_affecting_transforms_flat(2, fs, MAX_AFFECTING_TRANSFORMS);
+        ASSERT_TRUE("top-level: flat resolver matches source walk count",
+                    n_src == 2 && n_flat == 2);
+        int saw0 = 0, saw1 = 0;
+        for (int k = 0; k < n_flat; k++) {
+            if (fs[k] == 0) saw0 = 1;
+            if (fs[k] == 1) saw1 = 1;
+        }
+        ASSERT_TRUE("top-level: flat union has translate + rotate", saw0 && saw1);
+    }
+
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_TRIANGLES);");
     editor_feed_line("glVertex3f(0, 0, 0);");
