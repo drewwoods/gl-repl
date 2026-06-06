@@ -7,7 +7,6 @@
  * controller-installed ReplExportCameraBridge (see src/repl/export.h).
  * glr_config.h was already dropped in step 4 for the same reason. */
 #include "config.h"             /* shared export/runtime constants */
-#include <assert.h>             /* @tune save-path injection anchor checks */
 #include "repl/command_store.h"
 #include "repl/core.h"
 #include "repl/core_internal.h"
@@ -170,7 +169,18 @@ const char *g_header_pre[] = {
     "#define gamma _gamma",
     "#define lgamma _lgamma",
     "#define tgamma _tgamma",
-    "#include \"gl_includes.h\"",
+    "#include <stddef.h>",
+    "#if defined(__APPLE__)",
+    "#include <OpenGL/gl.h>",
+    "#include <OpenGL/glu.h>",
+    "#include <GLUT/glut.h>",
+    "#else",
+    "#define GL_GLEXT_PROTOTYPES",
+    "#include <GL/gl.h>",
+    "#include <GL/glext.h>",
+    "#include <GL/glu.h>",
+    "#include <GL/freeglut.h>",
+    "#endif",
     "#include <math.h>",
     "#include <stdlib.h>",
     "#undef j0",
@@ -511,13 +521,11 @@ const char *g_footer_pre_init[] = {
     "  glMatrixMode(GL_MODELVIEW);",
     "}",
     "",
-    "void keyboard(unsigned char repl_export_keyboard_key_code,",
-    "              int repl_export_keyboard_mouse_x,",
-    "              int repl_export_keyboard_mouse_y) {",
-    "  (void)repl_export_keyboard_mouse_x;",
-    "  (void)repl_export_keyboard_mouse_y;",
-    "  if (repl_export_keyboard_key_code == ' ') g_rotating = !g_rotating;",
-    "  if (repl_export_keyboard_key_code == 27) exit(0);",
+    "void keyboard(unsigned char key, int mouse_x, int mouse_y) {",
+    "  (void)mouse_x;",
+    "  (void)mouse_y;",
+    "  if (key == ' ') g_rotating = !g_rotating;",
+    "  if (key == 27) exit(0);",
     "}",
     "",
     "void tick(int v) {",
@@ -1133,7 +1141,7 @@ static int write_tess_source_as_c(FILE *f, const GLCmd *cmd,
     case CMD_TESS_NORMAL:
         if (arg_count != 3)
             return 0;
-        fprintf(f, "      { _tn[0]=%s; _tn[1]=%s; _tn[2]=%s; }\n",
+        fprintf(f, "      { _tn[0] = %s; _tn[1] = %s; _tn[2] = %s; }\n",
                 c_args[0], c_args[1], c_args[2]);
         return 1;
     case CMD_TESS_COLOR:
@@ -1144,17 +1152,19 @@ static int write_tess_source_as_c(FILE *f, const GLCmd *cmd,
         }
         if (arg_count != 4)
             return 0;
-        fprintf(f, "      { _tc[0]=%s; _tc[1]=%s; _tc[2]=%s; _tc[3]=%s; }\n",
+        fprintf(f,
+                "      { _tc[0] = %s; _tc[1] = %s; _tc[2] = %s; _tc[3] = %s; }\n",
                 c_args[0], c_args[1], c_args[2], c_args[3]);
         return 1;
     case CMD_TESS_VERTEX:
         if (arg_count != 3)
             return 0;
         fprintf(f,
-                "      { TessVertex *_v=&_tv[_tv_n++];"
-                " _v->pos[0]=%s;_v->pos[1]=%s;_v->pos[2]=%s;"
-                " memcpy(_v->normal,_tn,24); memcpy(_v->color,_tc,32);"
-                " gluTessVertex(g_tess,_v->pos,_v); }\n",
+                "      {TessVertex*_v=&_tv[_tv_n++];"
+                "_v->pos[0]=%s;_v->pos[1]=%s;_v->pos[2]=%s;"
+                "memcpy(_v->normal,_tn,sizeof _v->normal);"
+                "memcpy(_v->color,_tc,sizeof _v->color);"
+                "gluTessVertex(g_tess,_v->pos,_v);}\n",
                 c_args[0], c_args[1], c_args[2]);
         return 1;
     default:
@@ -1308,7 +1318,7 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
         write_cmd_source_as_c(f, source_text, 1);
         break;
     case CMD_TESS_BEGIN_POLYGON:
-        fprintf(f, "  { _tv_n=0; gluTessBeginPolygon(g_tess,NULL); }\n");
+        fprintf(f, "  { _tv_n = 0; gluTessBeginPolygon(g_tess, NULL); }\n");
         *tess_depth = 1;
         break;
     case CMD_TESS_BEGIN_CONTOUR:
@@ -1330,7 +1340,8 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
             repl_format_source_float(x, sizeof(x), cmd->args[0]);
             repl_format_source_float(y, sizeof(y), cmd->args[1]);
             repl_format_source_float(z, sizeof(z), cmd->args[2]);
-            fprintf(f, "      { _tn[0]=%s; _tn[1]=%s; _tn[2]=%s; }\n", x, y, z);
+            fprintf(f, "      { _tn[0] = %s; _tn[1] = %s; _tn[2] = %s; }\n",
+                    x, y, z);
         }
         break;
     case CMD_TESS_COLOR:
@@ -1341,7 +1352,8 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
             repl_format_source_float(g, sizeof(g), cmd->args[1]);
             repl_format_source_float(b, sizeof(b), cmd->args[2]);
             repl_format_source_float(a, sizeof(a), cmd->args[3]);
-            fprintf(f, "      { _tc[0]=%s; _tc[1]=%s; _tc[2]=%s; _tc[3]=%s; }\n",
+            fprintf(f,
+                    "      { _tc[0] = %s; _tc[1] = %s; _tc[2] = %s; _tc[3] = %s; }\n",
                     r, g, b, a);
         }
         break;
@@ -1352,10 +1364,11 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
             repl_format_source_float(y, sizeof(y), cmd->args[1]);
             repl_format_source_float(z, sizeof(z), cmd->args[2]);
             fprintf(f,
-                    "      { TessVertex *_v=&_tv[_tv_n++];"
-                    " _v->pos[0]=%s;_v->pos[1]=%s;_v->pos[2]=%s;"
-                    " memcpy(_v->normal,_tn,24); memcpy(_v->color,_tc,32);"
-                    " gluTessVertex(g_tess,_v->pos,_v); }\n",
+                    "      {TessVertex*_v=&_tv[_tv_n++];"
+                    "_v->pos[0]=%s;_v->pos[1]=%s;_v->pos[2]=%s;"
+                    "memcpy(_v->normal,_tn,sizeof _v->normal);"
+                    "memcpy(_v->color,_tc,sizeof _v->color);"
+                    "gluTessVertex(g_tess,_v->pos,_v);}\n",
                     x, y, z);
         }
         break;
@@ -1466,11 +1479,10 @@ static int export_has_persistent_predef_vars(void) {
 
 static void write_predef_var_globals(FILE *f) {
     if (g_num_predef_vars <= 0) return;
-    fprintf(f, "\n/* Predefined REPL variables (file scope for func access).\n"
-               " * Initializers are the live snapshot at export time so the\n"
-               " * exported binary starts in the same state the REPL ended in;\n"
-               " * the live REPL preserves these mutations across frames and\n"
-               " * the exported display() does the same (no per-frame reset). */\n");
+    fprintf(f, "\n/* Scene state variables.\n"
+               " * Initializers are the live snapshot at export time, so the\n"
+               " * program starts in the same state the REPL preview ended in.\n"
+               " * Variables other than t keep mutations from frame to frame. */\n");
     for (int var_idx = 0; var_idx < g_num_predef_vars; var_idx++) {
         const char *name = g_predef_vars[var_idx].name;
         if (!export_predef_var_persists(var_idx)) {
@@ -1551,34 +1563,39 @@ static void write_label_helper(FILE *f) {
     fprintf(f,
         "\n#include <stdarg.h>\n"
         "#include <stdio.h>\n"
+        "\n/* Draw bitmap text at the current raster position. */\n"
         "\nstatic void label(const char *fmt, ...) {\n"
-        "  char __b[128];\n"
-        "  int __off = 0;\n"
-        "  va_list __ap;\n"
-        "  va_start(__ap, fmt);\n"
-        "  while (*fmt && __off < (int)sizeof(__b) - 1) {\n"
+        "  char text[128];\n"
+        "  int offset = 0;\n"
+        "  va_list args;\n"
+        "\n"
+        "  va_start(args, fmt);\n"
+        "  while (*fmt && offset < (int)sizeof(text) - 1) {\n"
         "    if (fmt[0] == '%%' && fmt[1] == 'f') {\n"
-        "      double __v = va_arg(__ap, double);\n"
-        "      __off += snprintf(__b + __off, sizeof(__b) - (size_t)__off,\n"
-        "                        \"%%g\", __v);\n"
-        "      if (__off >= (int)sizeof(__b)) __off = (int)sizeof(__b) - 1;\n"
+        "      double value = va_arg(args, double);\n"
+        "      offset += snprintf(text + offset, sizeof(text) - (size_t)offset,\n"
+        "                         \"%%g\", value);\n"
+        "      if (offset >= (int)sizeof(text))\n"
+        "        offset = (int)sizeof(text) - 1;\n"
         "      fmt += 2;\n"
         "    } else if (fmt[0] == '%%' && fmt[1] == '%%') {\n"
-        "      __b[__off++] = '%%';\n"
+        "      text[offset++] = '%%';\n"
         "      fmt += 2;\n"
         "    } else {\n"
-        "      __b[__off++] = *fmt++;\n"
+        "      text[offset++] = *fmt++;\n"
         "    }\n"
         "  }\n"
-        "  __b[__off] = '\\0';\n"
-        "  va_end(__ap);\n"
-        "  for (const char *__p = __b; *__p; __p++)\n"
-        "    glutBitmapCharacter(GLUT_BITMAP_9_BY_15, (unsigned char)*__p);\n"
+        "  text[offset] = '\\0';\n"
+        "  va_end(args);\n"
+        "\n"
+        "  for (const char *ch = text; *ch; ch++)\n"
+        "    glutBitmapCharacter(GLUT_BITMAP_9_BY_15, (unsigned char)*ch);\n"
         "}\n");
 }
 
 static void write_render_helper_as_c(FILE *f, const char *name) {
-    fprintf(f, "\nstatic void %s(void) {\n", name);
+    fprintf(f, "\n/* User scene commands captured from gl-repl. */\n");
+    fprintf(f, "static void %s(void) {\n", name);
     fprintf(f, "  // Snippet start\n");
     write_render_body_range_as_c(f, 0, repl_state_document_count(), 1);
     int bb = 0;
@@ -1642,37 +1659,80 @@ static void write_func_defs_as_c(FILE *f) {
 
 static void write_tess_preamble(FILE *f) {
     fprintf(f,
-        "#include <string.h>\n"
-        "typedef struct { GLdouble pos[3]; GLdouble normal[3]; GLdouble color[4]; } TessVertex;\n"
+        "\n#include <string.h>\n"
+        "\n/* GLU tessellation support for concave polygons. */\n"
+        "typedef struct {\n"
+        "  GLdouble pos[3];\n"
+        "  GLdouble normal[3];\n"
+        "  GLdouble color[4];\n"
+        "} TessVertex;\n"
+        "\n"
         "static TessVertex _tv[256];\n"
         "static int _tv_n = 0;\n"
         "static GLdouble _tn[3] = {0.0, 0.0, 1.0};\n"
         "static GLdouble _tc[4] = {1.0, 1.0, 1.0, 1.0};\n"
         "static GLUtesselator *g_tess = NULL;\n"
+        "\n"
         "typedef void (*_GluCb)(void);\n"
-        "static void _tess_vtx_begin_cb(GLenum mode) { glBegin(mode); }\n"
-        "static void _tess_vtx_end_cb(void) { glEnd(); }\n"
+        "\n"
+        "static void _tess_vtx_begin_cb(GLenum mode) {\n"
+        "  glBegin(mode);\n"
+        "}\n"
+        "\n"
+        "static void _tess_vtx_end_cb(void) {\n"
+        "  glEnd();\n"
+        "}\n"
+        "\n"
         "static void _tess_vtx_cb(void *vd) {\n"
-        "    TessVertex *v=(TessVertex*)vd;\n"
-        "    glNormal3dv(v->normal); glColor4dv(v->color); glVertex3dv(v->pos);\n"
+        "  TessVertex *v = (TessVertex *)vd;\n"
+        "  glNormal3dv(v->normal);\n"
+        "  glColor4dv(v->color);\n"
+        "  glVertex3dv(v->pos);\n"
         "}\n"
-        "static void _tess_comb_cb(GLdouble coords[3],void *vd[4],GLfloat w[4],void **out) {\n"
-        "    if(_tv_n>=256){*out=NULL;return;}\n"
-        "    TessVertex *v=&_tv[_tv_n++];\n"
-        "    v->pos[0]=coords[0];v->pos[1]=coords[1];v->pos[2]=coords[2];\n"
-        "    for(int c=0;c<3;c++)v->normal[c]=0.0;\n"
-        "    for(int c=0;c<4;c++)v->color[c]=0.0;\n"
-        "    for(int j=0;j<4;j++){\n"
-        "        if(!vd[j])continue;\n"
-        "        TessVertex *s=(TessVertex*)vd[j];\n"
-        "        for(int c=0;c<3;c++)v->normal[c]+=w[j]*s->normal[c];\n"
-        "        for(int c=0;c<4;c++)v->color[c]+=w[j]*s->color[c];\n"
-        "    }\n"
-        "    double len=sqrt(v->normal[0]*v->normal[0]+v->normal[1]*v->normal[1]+v->normal[2]*v->normal[2]);\n"
-        "    if(len>1e-9){v->normal[0]/=len;v->normal[1]/=len;v->normal[2]/=len;}\n"
-        "    *out=v;\n"
+        "\n"
+        "static void _tess_comb_cb(GLdouble coords[3], void *vd[4],\n"
+        "                          GLfloat w[4], void **out) {\n"
+        "  if (_tv_n >= 256) {\n"
+        "    *out = NULL;\n"
+        "    return;\n"
+        "  }\n"
+        "\n"
+        "  TessVertex *v = &_tv[_tv_n++];\n"
+        "  v->pos[0] = coords[0];\n"
+        "  v->pos[1] = coords[1];\n"
+        "  v->pos[2] = coords[2];\n"
+        "\n"
+        "  for (int c = 0; c < 3; c++)\n"
+        "    v->normal[c] = 0.0;\n"
+        "  for (int c = 0; c < 4; c++)\n"
+        "    v->color[c] = 0.0;\n"
+        "\n"
+        "  for (int j = 0; j < 4; j++) {\n"
+        "    if (!vd[j])\n"
+        "      continue;\n"
+        "\n"
+        "    TessVertex *src = (TessVertex *)vd[j];\n"
+        "    for (int c = 0; c < 3; c++)\n"
+        "      v->normal[c] += w[j] * src->normal[c];\n"
+        "    for (int c = 0; c < 4; c++)\n"
+        "      v->color[c] += w[j] * src->color[c];\n"
+        "  }\n"
+        "\n"
+        "  double len = sqrt(v->normal[0] * v->normal[0] +\n"
+        "                    v->normal[1] * v->normal[1] +\n"
+        "                    v->normal[2] * v->normal[2]);\n"
+        "  if (len > 1e-9) {\n"
+        "    v->normal[0] /= len;\n"
+        "    v->normal[1] /= len;\n"
+        "    v->normal[2] /= len;\n"
+        "  }\n"
+        "\n"
+        "  *out = v;\n"
         "}\n"
-        "static void _tess_err_cb(GLenum err) { (void)err; }\n"
+        "\n"
+        "static void _tess_err_cb(GLenum err) {\n"
+        "  (void)err;\n"
+        "}\n"
     );
 }
 
@@ -1692,9 +1752,39 @@ typedef struct {
     const char *tune_names[REPL_TUNE_MAX_KNOBS];
 } ExportNeeds;
 
+enum {
+    EXPORT_NAME_MAX = 64,
+    EXPORT_NAME_SET_MAX = 160
+};
+
+typedef struct {
+    char names[EXPORT_NAME_SET_MAX][EXPORT_NAME_MAX];
+    int  count;
+} ExportNameSet;
+
+typedef struct {
+    char draw_scene[EXPORT_NAME_MAX];
+    char draw_tuning_overlay[EXPORT_NAME_MAX];
+    char tuning_step[EXPORT_NAME_MAX];
+    char tuning_window_width[EXPORT_NAME_MAX];
+    char tuning_window_height[EXPORT_NAME_MAX];
+    char keyboard_key[EXPORT_NAME_MAX];
+    char keyboard_mouse_x[EXPORT_NAME_MAX];
+    char keyboard_mouse_y[EXPORT_NAME_MAX];
+    char tune_modifiers[EXPORT_NAME_MAX];
+    char tune_normalized_key[EXPORT_NAME_MAX];
+    char tune_step_scale[EXPORT_NAME_MAX];
+    char overlay_width[EXPORT_NAME_MAX];
+    char overlay_height[EXPORT_NAME_MAX];
+    char overlay_text_y[EXPORT_NAME_MAX];
+    char overlay_line_text[EXPORT_NAME_MAX];
+    char overlay_char_ptr[EXPORT_NAME_MAX];
+} ExportGeneratedNames;
+
 typedef struct {
     ExportNeeds              needs;
     const ReplExportLayout  *layout;
+    ExportGeneratedNames     names;
 } ExportScaffoldContext;
 
 typedef void (*ExportDisplayPassSetupFn)(FILE *f);
@@ -1708,6 +1798,117 @@ typedef struct {
 enum {
     EXPORT_DISPLAY_PASS_COUNT = 3
 };
+
+static int export_name_set_has(const ExportNameSet *set, const char *name) {
+    if (!set || !name || !name[0])
+        return 0;
+    for (int i = 0; i < set->count; i++) {
+        if (strcmp(set->names[i], name) == 0)
+            return 1;
+    }
+    return 0;
+}
+
+static void export_name_set_add(ExportNameSet *set, const char *name) {
+    if (!set || !name || !name[0] || export_name_set_has(set, name))
+        return;
+    if (set->count >= EXPORT_NAME_SET_MAX)
+        return;
+    snprintf(set->names[set->count++], EXPORT_NAME_MAX, "%s", name);
+}
+
+static void export_choose_name(ExportNameSet *set, char out[EXPORT_NAME_MAX],
+                               const char *preferred, const char *fallback) {
+    const char *base = preferred && preferred[0] ? preferred : "generated_name";
+    if (!export_name_set_has(set, base)) {
+        snprintf(out, EXPORT_NAME_MAX, "%s", base);
+        export_name_set_add(set, out);
+        return;
+    }
+    if (fallback && fallback[0] && !export_name_set_has(set, fallback)) {
+        snprintf(out, EXPORT_NAME_MAX, "%s", fallback);
+        export_name_set_add(set, out);
+        return;
+    }
+    for (int suffix = 2; suffix < 10000; suffix++) {
+        char candidate[EXPORT_NAME_MAX];
+        snprintf(candidate, sizeof(candidate), "%s_%d", base, suffix);
+        if (!export_name_set_has(set, candidate)) {
+            snprintf(out, EXPORT_NAME_MAX, "%s", candidate);
+            export_name_set_add(set, out);
+            return;
+        }
+    }
+    snprintf(out, EXPORT_NAME_MAX, "%s_generated", base);
+    export_name_set_add(set, out);
+}
+
+static void export_name_set_add_user_identifiers(ExportNameSet *set) {
+    for (int var_idx = 0; var_idx < g_num_predef_vars; var_idx++)
+        export_name_set_add(set, g_predef_vars[var_idx].name);
+
+    for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {
+        const char *alias = repl_func_alias_get(slot);
+        if (alias)
+            export_name_set_add(set, alias);
+    }
+
+    for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
+        const GLCmd *cmd = &repl_state_document_cmds()[cmd_idx];
+        if (!cmd->valid || cmd->type != CMD_FUNC_DEF)
+            continue;
+        int fn = (int)cmd->args[0];
+        const char *alias = repl_func_alias_get(fn);
+        char fallback_name[REPL_FUNC_NAME_MAX + 8];
+        if (alias) {
+            export_name_set_add(set, alias);
+        } else {
+            snprintf(fallback_name, sizeof(fallback_name), "func%d", fn);
+            export_name_set_add(set, fallback_name);
+        }
+    }
+}
+
+static void export_generated_names_init(ExportGeneratedNames *names) {
+    ExportNameSet used;
+
+    memset(&used, 0, sizeof(used));
+    memset(names, 0, sizeof(*names));
+    export_name_set_add_user_identifiers(&used);
+
+    export_choose_name(&used, names->draw_scene,
+                       "draw_scene", "draw_repl_scene");
+    export_choose_name(&used, names->draw_tuning_overlay,
+                       "draw_tuning_overlay", "draw_repl_tuning_overlay");
+    export_choose_name(&used, names->tuning_step,
+                       "tuning_step", "tune_compute_step");
+    export_choose_name(&used, names->tuning_window_width,
+                       "window_width", "tuning_window_width");
+    export_choose_name(&used, names->tuning_window_height,
+                       "window_height", "tuning_window_height");
+    export_choose_name(&used, names->keyboard_key,
+                       "key", "pressed_key");
+    export_choose_name(&used, names->keyboard_mouse_x,
+                       "mouse_x", "keyboard_mouse_x");
+    export_choose_name(&used, names->keyboard_mouse_y,
+                       "mouse_y", "keyboard_mouse_y");
+    export_choose_name(&used, names->tune_modifiers,
+                       "modifiers", "tuning_modifiers");
+    export_choose_name(&used, names->tune_normalized_key,
+                       "normalized_key", "tuning_key");
+    export_choose_name(&used, names->tune_step_scale,
+                       "step_scale", "tuning_step_scale");
+    export_choose_name(&used, names->overlay_width,
+                       "overlay_width", "tuning_overlay_width");
+    export_choose_name(&used, names->overlay_height,
+                       "overlay_height", "tuning_overlay_height");
+    export_choose_name(&used, names->overlay_text_y,
+                       "text_y", "overlay_text_y");
+    export_choose_name(&used, names->overlay_line_text,
+                       "line_text", "overlay_line_text");
+    export_choose_name(&used, names->overlay_char_ptr,
+                       "ch", "overlay_char");
+}
 
 /* Word-boundary-aware substring scan: returns 1 iff `needle` appears in
  * `haystack` and the byte immediately before its match position is NOT
@@ -1850,7 +2051,8 @@ static int export_display_has_multiple_enabled_passes(void) {
 
 static void emit_export_geometry_pass(FILE *f,
                                       const ExportDisplayPassSpec *pass,
-                                      int needs_restore) {
+                                      int needs_restore,
+                                      const ExportGeneratedNames *names) {
     if (!pass || !pass->enabled)
         return;
 
@@ -1861,7 +2063,7 @@ static void emit_export_geometry_pass(FILE *f,
     fprintf(f, "  glPushMatrix();\n");
     if (needs_restore)
         fprintf(f, "  restore_repl_vars();\n");
-    fprintf(f, "  render_repl_geometry();\n");
+    fprintf(f, "  %s();\n", names->draw_scene);
     fprintf(f, "  glPopMatrix();\n");
     fprintf(f, "  glPopAttrib();\n");
 }
@@ -1870,7 +2072,7 @@ static void emit_export_display_begin(FILE *f) {
     /* display() opening lines come from g_display_header so the panel
      * (which renders the same array) and the exported file stay
      * byte-identical here. */
-    fprintf(f, "\n");
+    fprintf(f, "\n/* Draw one frame. */\n");
     for (int line_idx = 0; g_display_header[line_idx]; line_idx++)
         fprintf(f, "%s\n", g_display_header[line_idx]);
     /* Emit render state configuration lines (lighting, depth, etc). */
@@ -1899,7 +2101,8 @@ static void emit_export_display_begin(FILE *f) {
         fprintf(f, "%s\n", g_header_post[line_idx]);
 }
 
-static void emit_export_display_geometry(FILE *f) {
+static void emit_export_display_geometry(FILE *f,
+                                         const ExportGeneratedNames *names) {
     ExportDisplayPassSpec passes[EXPORT_DISPLAY_PASS_COUNT];
     size_t pass_count = export_build_display_passes(passes);
 
@@ -1923,7 +2126,7 @@ static void emit_export_display_geometry(FILE *f) {
     for (size_t i = 0; i < pass_count; i++) {
         if (!passes[i].enabled) continue;
         int needs_restore = multipass && rendered_passes > 0;
-        emit_export_geometry_pass(f, &passes[i], needs_restore);
+        emit_export_geometry_pass(f, &passes[i], needs_restore, names);
         rendered_passes++;
     }
 }
@@ -1941,56 +2144,88 @@ STATIC_ASSERT(sizeof(k_tune_down_keys) - 1 == REPL_TUNE_MAX_KNOBS,
 /* Prologue: window-size globals (captured in reshape, read by the HUD),
  * the swatch-step mirror, and the HUD draw pass. Emitted only when at least
  * one variable is @tune-tagged. */
-static void write_tune_helpers(FILE *f, const ExportNeeds *needs) {
+static void write_tune_helpers(FILE *f, const ExportNeeds *needs,
+                               const ExportGeneratedNames *names) {
     if (needs->tune_total > needs->tune_count)
         fprintf(f,
             "\n/* @tune: %d variables tagged; capped at %d keyboard knobs. */\n",
             needs->tune_total, REPL_TUNE_MAX_KNOBS);
     fprintf(f,
         "\n#include <stdio.h>\n"
-        "\n/* @tune knobs: keyboard-adjustable variables + HUD, generated"
-        " because\n"
+        "\n/* @tune knobs: keyboard-adjustable variables + overlay, generated because\n"
         " * one or more `float` decls carried a `// @tune` tag. */\n"
-        "static int g_tune_window_width  = 800;\n"
-        "static int g_tune_window_height = 600;\n"
+        "static int %s = 800;\n"
+        "static int %s = 600;\n"
         "\n/* Mirror of repl_eval_swatch_step() (src/repl/eval.c); pinned by the\n"
-        " * swatch-parity test in tests/test_repl_tune.c so it can't silently"
-        " drift. */\n"
-        "static float tune_compute_step(float v){ float m = fabsf(v);\n"
-        "  float e = (m < 10.0f) ? 0.0f : floorf(log10f(m));"
-        " return 0.05f * powf(10.0f, e); }\n"
-        "\nstatic void draw_tunable_overlay(void){\n"
-        "  int repl_tune_overlay_window_width_px = g_tune_window_width;\n"
-        "  int repl_tune_overlay_window_height_px = g_tune_window_height;\n"
-        "  glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity();\n"
-        "  glOrtho(0, repl_tune_overlay_window_width_px, 0,\n"
-        "          repl_tune_overlay_window_height_px, -1, 1);\n"
-        "  glMatrixMode(GL_MODELVIEW); glPushMatrix(); glLoadIdentity();\n"
+        " * swatch-parity test in tests/test_repl_tune.c so it cannot drift. */\n"
+        "static float %s(float value) {\n"
+        "  float magnitude = fabsf(value);\n"
+        "  float exponent = (magnitude < 10.0f) ? 0.0f : floorf(log10f(magnitude));\n"
+        "  return 0.05f * powf(10.0f, exponent);\n"
+        "}\n"
+        "\nstatic void %s(void) {\n"
+        "  int %s = %s;\n"
+        "  int %s = %s;\n"
+        "\n"
+        "  glMatrixMode(GL_PROJECTION);\n"
+        "  glPushMatrix();\n"
+        "  glLoadIdentity();\n"
+        "  glOrtho(0, %s, 0, %s, -1, 1);\n"
+        "\n"
+        "  glMatrixMode(GL_MODELVIEW);\n"
+        "  glPushMatrix();\n"
+        "  glLoadIdentity();\n"
+        "\n"
         "  glPushAttrib(GL_ALL_ATTRIB_BITS);\n"
-        "  glDisable(GL_LIGHTING); glDisable(GL_DEPTH_TEST);\n"
+        "  glDisable(GL_LIGHTING);\n"
+        "  glDisable(GL_DEPTH_TEST);\n"
         "  glColor3f(1.0f, 1.0f, 1.0f);\n"
-        "  float repl_tune_overlay_text_y =\n"
-        "      (float)repl_tune_overlay_window_height_px - 18.0f;\n"
-        "  char repl_tune_overlay_line_text[96];\n");
+        "\n"
+        "  float %s = (float)%s - 18.0f;\n"
+        "  char %s[96];\n",
+        names->tuning_window_width,
+        names->tuning_window_height,
+        names->tuning_step,
+        names->draw_tuning_overlay,
+        names->overlay_width,
+        names->tuning_window_width,
+        names->overlay_height,
+        names->tuning_window_height,
+        names->overlay_width,
+        names->overlay_height,
+        names->overlay_text_y,
+        names->overlay_height,
+        names->overlay_line_text);
     for (int i = 0; i < needs->tune_count; i++) {
         fprintf(f,
-            "  snprintf(repl_tune_overlay_line_text,\n"
-            "           sizeof repl_tune_overlay_line_text,\n"
+            "\n"
+            "  snprintf(%s,\n"
+            "           sizeof %s,\n"
             "           \"%c/%c  %s = %%.4g\", (double)%s);\n"
-            "  glRasterPos2f(8.0f, repl_tune_overlay_text_y);\n"
-            "  for (const char *repl_tune_overlay_char_ptr =\n"
-            "           repl_tune_overlay_line_text;\n"
-            "       *repl_tune_overlay_char_ptr; repl_tune_overlay_char_ptr++)\n"
+            "  glRasterPos2f(8.0f, %s);\n"
+            "  for (const char *%s = %s; *%s; %s++)\n"
             "    glutBitmapCharacter(GLUT_BITMAP_9_BY_15,\n"
-            "                        (unsigned char)*repl_tune_overlay_char_ptr);\n"
-            "  repl_tune_overlay_text_y -= 16.0f;\n",
+            "                        (unsigned char)*%s);\n"
+            "  %s -= 16.0f;\n",
+            names->overlay_line_text,
+            names->overlay_line_text,
             k_tune_up_keys[i], k_tune_down_keys[i],
-            needs->tune_names[i], needs->tune_names[i]);
+            needs->tune_names[i], needs->tune_names[i],
+            names->overlay_text_y,
+            names->overlay_char_ptr,
+            names->overlay_line_text,
+            names->overlay_char_ptr,
+            names->overlay_char_ptr,
+            names->overlay_char_ptr,
+            names->overlay_text_y);
     }
     fprintf(f,
         "  glPopAttrib();\n"
-        "  glMatrixMode(GL_PROJECTION); glPopMatrix();\n"
-        "  glMatrixMode(GL_MODELVIEW); glPopMatrix();\n"
+        "\n"
+        "  glMatrixMode(GL_PROJECTION);\n"
+        "  glPopMatrix();\n"
+        "  glMatrixMode(GL_MODELVIEW);\n"
+        "  glPopMatrix();\n"
         "}\n");
 }
 
@@ -1998,79 +2233,126 @@ static void write_tune_helpers(FILE *f, const ExportNeeds *needs) {
  * uppercase and Ctrl control-codes back to the base letter) and apply the
  * swatch step, Shift = fine and Ctrl = coarse — mirroring the in-app numeric
  * swatch and variable-panel adjustment multipliers. */
-static void emit_tune_keyboard_handlers(FILE *f, const ExportNeeds *needs) {
+static void emit_tune_keyboard_handlers(FILE *f, const ExportNeeds *needs,
+                                        const ExportGeneratedNames *names) {
     fprintf(f,
-        "  int repl_tune_keyboard_modifiers = glutGetModifiers();\n"
-        "  unsigned char repl_tune_keyboard_key_code =\n"
-        "      repl_export_keyboard_key_code;\n"
-        "  if ((repl_tune_keyboard_modifiers & GLUT_ACTIVE_CTRL) &&\n"
-        "      repl_tune_keyboard_key_code >= 1 &&\n"
-        "      repl_tune_keyboard_key_code <= 26)\n"
-        "    repl_tune_keyboard_key_code =\n"
-        "        (unsigned char)(repl_tune_keyboard_key_code - 1 + 'a');\n"
-        "  else if (repl_tune_keyboard_key_code >= 'A' &&\n"
-        "           repl_tune_keyboard_key_code <= 'Z')\n"
-        "    repl_tune_keyboard_key_code =\n"
-        "        (unsigned char)(repl_tune_keyboard_key_code + ('a' - 'A'));\n"
-        "  float repl_tune_keyboard_scale = 1.0f;\n"
-        "  if (repl_tune_keyboard_modifiers & GLUT_ACTIVE_SHIFT)\n"
-        "    repl_tune_keyboard_scale *= "
+        "  int %s = glutGetModifiers();\n"
+        "  unsigned char %s = %s;\n"
+        "\n"
+        "  if ((%s & GLUT_ACTIVE_CTRL) && %s >= 1 && %s <= 26) {\n"
+        "    %s = (unsigned char)(%s - 1 + 'a');\n"
+        "  } else if (%s >= 'A' && %s <= 'Z') {\n"
+        "    %s = (unsigned char)(%s + ('a' - 'A'));\n"
+        "  }\n"
+        "\n"
+        "  float %s = 1.0f;\n"
+        "  if (%s & GLUT_ACTIVE_SHIFT)\n"
+        "    %s *= "
             REPL_EXPORT_STRINGIFY(GLR_ADJUST_FINE_SCALE) ";\n"
-        "  if (repl_tune_keyboard_modifiers & GLUT_ACTIVE_CTRL)\n"
-        "    repl_tune_keyboard_scale *= "
-            REPL_EXPORT_STRINGIFY(GLR_ADJUST_COARSE_SCALE) ";\n");
+        "  if (%s & GLUT_ACTIVE_CTRL)\n"
+        "    %s *= "
+            REPL_EXPORT_STRINGIFY(GLR_ADJUST_COARSE_SCALE) ";\n",
+        names->tune_modifiers,
+        names->tune_normalized_key,
+        names->keyboard_key,
+        names->tune_modifiers,
+        names->tune_normalized_key,
+        names->tune_normalized_key,
+        names->tune_normalized_key,
+        names->tune_normalized_key,
+        names->tune_normalized_key,
+        names->tune_normalized_key,
+        names->tune_normalized_key,
+        names->tune_normalized_key,
+        names->tune_step_scale,
+        names->tune_modifiers,
+        names->tune_step_scale,
+        names->tune_modifiers,
+        names->tune_step_scale);
     for (int i = 0; i < needs->tune_count; i++) {
         const char *v = needs->tune_names[i];
         fprintf(f,
-            "  if (repl_tune_keyboard_key_code == '%c')\n"
-            "    %s += tune_compute_step(%s) * repl_tune_keyboard_scale;\n"
-            "  if (repl_tune_keyboard_key_code == '%c')\n"
-            "    %s -= tune_compute_step(%s) * repl_tune_keyboard_scale;\n",
-            k_tune_up_keys[i], v, v, k_tune_down_keys[i], v, v);
+            "  if (%s == '%c')\n"
+            "    %s += %s(%s) * %s;\n"
+            "  if (%s == '%c')\n"
+            "    %s -= %s(%s) * %s;\n",
+            names->tune_normalized_key, k_tune_up_keys[i],
+            v, names->tuning_step, v, names->tune_step_scale,
+            names->tune_normalized_key, k_tune_down_keys[i],
+            v, names->tuning_step, v, names->tune_step_scale);
     }
 }
 
 static void emit_export_display_tail(FILE *f, const ExportNeeds *needs,
-                                     const ReplExportLayout *layout) {
+                                     const ReplExportLayout *layout,
+                                     const ExportGeneratedNames *names) {
     int include_tess = needs ? needs->needs_tess : 0;
     int knobs = needs ? needs->tune_count : 0;
-    int hit_reshape = 0, hit_keyboard = 0, hit_hud = 0;
 
-    for (int line_idx = 0; g_footer_pre_init[line_idx]; line_idx++) {
-        const char *line = g_footer_pre_init[line_idx];
-        if (strcmp(line, REPL_EXPORT_RESHAPE_PROJ_SENTINEL) == 0) {
-            const char *proj[REPL_EXPORT_PROJ_LINES];
-            int pn = repl_export_reshape_projection_lines(proj);
-            for (int j = 0; j < pn; j++)
-                fprintf(f, "%s\n", proj[j]);
-            continue;
-        }
-        /* HUD draw goes just before the display() buffer swap. */
-        if (knobs > 0 && strcmp(line, "  glPopAttrib();") == 0) {
-            fprintf(f, "  draw_tunable_overlay();\n");
-            hit_hud = 1;
-        }
-        fprintf(f, "%s\n", line);
-        /* Capture live window size for the HUD's 2D ortho. */
-        if (knobs > 0 && strcmp(line, "void reshape(int w, int h) {") == 0) {
-            fprintf(f, "  g_tune_window_width = w; g_tune_window_height = h;\n");
-            hit_reshape = 1;
-        }
-        /* Knob key handling, after the keyboard() arg-unused line. */
-        if (knobs > 0 &&
-            strcmp(line, "  (void)repl_export_keyboard_mouse_y;") == 0) {
-            emit_tune_keyboard_handlers(f, needs);
-            hit_keyboard = 1;
-        }
+    if (knobs > 0)
+        fprintf(f, "  %s();\n", names->draw_tuning_overlay);
+    fprintf(f,
+        "  glPopAttrib();\n"
+        "  glutSwapBuffers();\n"
+        "}\n"
+        "\n"
+        "/* Keep the projection matched to the current window size. */\n"
+        "void reshape(int w, int h) {\n");
+    if (knobs > 0)
+        fprintf(f, "  %s = w;\n  %s = h;\n",
+                names->tuning_window_width,
+                names->tuning_window_height);
+    fprintf(f,
+        "  glViewport(0, 0, w, h);\n"
+        "  glMatrixMode(GL_PROJECTION);\n"
+        "  glLoadIdentity();\n");
+    {
+        const char *proj[REPL_EXPORT_PROJ_LINES];
+        int pn = repl_export_reshape_projection_lines(proj);
+        for (int j = 0; j < pn; j++)
+            fprintf(f, "%s\n", proj[j]);
     }
-    /* The injection keys off footer literal strings; if a future edit to
-     * g_footer_pre_init[] breaks an anchor, fail loudly rather than silently
-     * emit zero knobs. The export-content test is the regression guard. */
-    if (knobs > 0) {
-        assert(hit_reshape && hit_keyboard && hit_hud &&
-               "@tune injection anchor missing in g_footer_pre_init[]");
-        (void)hit_reshape; (void)hit_keyboard; (void)hit_hud;
-    }
+    fprintf(f,
+        "  glMatrixMode(GL_MODELVIEW);\n"
+        "}\n"
+        "\n"
+        "/* Keyboard controls: Space toggles rotation; Esc exits. */\n"
+        "void keyboard(unsigned char %s, int %s, int %s) {\n"
+        "  (void)%s;\n"
+        "  (void)%s;\n",
+        names->keyboard_key,
+        names->keyboard_mouse_x,
+        names->keyboard_mouse_y,
+        names->keyboard_mouse_x,
+        names->keyboard_mouse_y);
+    if (knobs > 0)
+        emit_tune_keyboard_handlers(f, needs, names);
+    fprintf(f,
+        "  if (%s == ' ')\n"
+        "    g_rotating = !g_rotating;\n"
+        "  if (%s == 27)\n"
+        "    exit(0);\n"
+        "}\n"
+        "\n"
+        "/* Advance animation at roughly 60 frames per second. */\n"
+        "void tick(int value) {\n"
+        "  (void)value;\n"
+        "  /* Fixed-step time advance, matching the live REPL's\n"
+        "   * repl_state_time_advance(0.016) timer. Keeps tDelta = (t -\n"
+        "   * tLast) * 10 constant across frames, independent of how long\n"
+        "   * each render actually takes. */\n"
+        "  t += 0.016f;\n"
+        "  if (g_rotating)\n"
+        "    g_angle += 0.5f;\n"
+        "  glutPostRedisplay();\n"
+        "  glutTimerFunc(16, tick, 0);\n"
+        "}\n"
+        "\n"
+        "/* One-time OpenGL state setup. */\n"
+        "void init() {\n"
+        "  glLineWidth(1.5f);\n",
+        names->keyboard_key,
+        names->keyboard_key);
     emit_export_init_section_to_file(f, include_tess);
 
     /* Use the actual scene rect so the exported window preserves the REPL
@@ -2086,10 +2368,11 @@ static void emit_export_display_tail(FILE *f, const ExportNeeds *needs,
 }
 
 static void emit_export_display(FILE *f, const ExportNeeds *needs,
-                                const ReplExportLayout *layout) {
+                                const ReplExportLayout *layout,
+                                const ExportGeneratedNames *names) {
     emit_export_display_begin(f);
-    emit_export_display_geometry(f);
-    emit_export_display_tail(f, needs, layout);
+    emit_export_display_geometry(f, names);
+    emit_export_display_tail(f, needs, layout, names);
 }
 
 typedef void (*ExportScaffoldSectionEmitFn)(FILE *f,
@@ -2098,6 +2381,26 @@ typedef void (*ExportScaffoldSectionEmitFn)(FILE *f,
 typedef struct {
     ExportScaffoldSectionEmitFn emit;
 } ExportScaffoldSectionSpec;
+
+static void emit_export_banner_section(FILE *f,
+                                       const ExportScaffoldContext *ctx) {
+    (void)ctx;
+    fprintf(f,
+        "// Generated by gl-repl.\n"
+        "//\n"
+        "// This is a standalone GLUT/OpenGL C file. You can edit it by hand,\n"
+        "// or load it back into gl-repl to keep working on the scene.\n"
+        "//\n"
+        "// Linux:\n"
+        "//   cc -std=c99 -Wall -Wextra -o scene scene.c -lglut -lGL -lGLU -lm\n"
+        "//\n"
+        "// macOS:\n"
+        "//   cc -std=c99 -Wall -Wextra -o scene scene.c -framework OpenGL -framework GLUT -lm\n"
+        "//\n"
+        "// SPDX-License-Identifier: MIT\n"
+        "// See the gl-repl repository LICENSE file for the full text.\n"
+        "\n");
+}
 
 static void emit_export_workspace_metadata_section(FILE *f,
                                                    const ExportScaffoldContext *ctx) {
@@ -2178,26 +2481,27 @@ static void emit_export_functions_section(FILE *f,
 
 static void emit_export_render_helper_section(FILE *f,
                                               const ExportScaffoldContext *ctx) {
-    (void)ctx;
-    write_render_helper_as_c(f, "render_repl_geometry");
+    if (!ctx) return;
+    write_render_helper_as_c(f, ctx->names.draw_scene);
 }
 
 static void emit_export_tune_section(FILE *f,
                                      const ExportScaffoldContext *ctx) {
     if (!ctx || ctx->needs.tune_count <= 0)
         return;
-    write_tune_helpers(f, &ctx->needs);
+    write_tune_helpers(f, &ctx->needs, &ctx->names);
 }
 
 static void emit_export_display_section(FILE *f,
                                         const ExportScaffoldContext *ctx) {
-    emit_export_display(f, &ctx->needs, ctx->layout);
+    emit_export_display(f, &ctx->needs, ctx->layout, &ctx->names);
 }
 
 /* Section order is the exported C ABI: imports and compile tests assume it.
  * The tune helpers must precede the display section so display()/keyboard()/
  * reshape() can reference tune_compute_step/draw_tunable_overlay/the globals. */
 static const ExportScaffoldSectionSpec EXPORT_SCAFFOLD_SECTIONS[] = {
+    { emit_export_banner_section },
     { emit_export_workspace_metadata_section },
     { emit_export_header_section },
     { emit_export_predef_globals_section },
@@ -2235,6 +2539,7 @@ int repl_export_save_output(const char *filename, SourceTextView text,
         .needs  = export_collect_needs(),
         .layout = layout,
     };
+    export_generated_names_init(&scaffold.names);
 
     repl_refresh_render_state_strings();
     repl_refresh_camera_lines();

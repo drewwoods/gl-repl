@@ -6,14 +6,16 @@
  * Files round-trip cleanly: saving and re-loading preserves all state.
  *
  * Export format (save_output): Writes a complete C file with:
- *   1. Header comments with workspace metadata (@var name=value, @cfg setting=value,
+ *   1. A file-only generated banner with standalone compile hints.
+ *   2. Header comments with workspace metadata (@var name=value, @cfg setting=value,
  *      @scene-name <name>, @workspace-dir <path>). Used by import to restore context.
- *   2. Global variable declarations for user-defined predefined variables (float x, y, z).
- *   3. Camera state as the raw glTranslatef/glRotatef sequence the REPL uses internally
+ *   3. Flattened system GL/GLUT includes, without depending on gl_includes.h.
+ *   4. Global variable declarations for user-defined predefined variables (float x, y, z).
+ *   5. Camera state as the raw glTranslatef/glRotatef sequence the REPL uses internally
  *      (not a pose matrix — the exact command history).
- *   4. REPL function definitions converted to C function syntax (for reloading as
+ *   6. REPL function definitions converted to C function syntax (for reloading as
  *      CMD_FUNC_DEF on import).
- *   5. Geometry commands in the display() function body (user-edited commands).
+ *   7. Geometry commands in the display() function body (user-edited commands).
  *
  * Import format (load_from_file): Line-by-line scan that:
  *   1. Parses leading workspace header directives (@var, @cfg, @scene-name, @workspace-dir).
