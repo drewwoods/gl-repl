@@ -746,8 +746,10 @@ int main(void) {
     {
         char buf[32768];
         read_text_file(param_loop_path, buf, sizeof(buf));
+        ASSERT_TRUE("saved param loop hoists loop var decl with marker",
+                    strstr(buf, "float i; // repl-export-c89-loop-var") != NULL);
         ASSERT_TRUE("saved param loop keeps symbolic C bound",
-                    strstr(buf, "for (float i = 0; i < sides + 1; i += 1.0f)") != NULL);
+                    strstr(buf, "for (i = 0; i < sides + 1; i += 1.0f)") != NULL);
     }
 
     glr_ctrl_reset_all();
@@ -1479,8 +1481,10 @@ int main(void) {
                     strstr(buf, "0.123457") == NULL);
 
         snprintf(expected_loop, sizeof(expected_loop),
-                 "for (float i = %s; i < %s; i += %sf) {",
+                 "for (i = %s; i < %s; i += %sf) {",
                  start_s, end_s, step_s);
+        ASSERT_TRUE("generated loop hoists loop var decl",
+                    strstr(buf, "float i; // repl-export-c89-loop-var") != NULL);
         ASSERT_TRUE("generated loop uses shortest exact float",
                     strstr(buf, expected_loop) != NULL);
 

@@ -127,12 +127,26 @@ static void test_collector_and_export(void) {
     ASSERT_TRUE("calls draw_tuning_overlay", contains(c, "draw_tuning_overlay();"));
     ASSERT_TRUE("hud_text formats via vsnprintf",
                 contains(c, "vsnprintf(line_text, sizeof line_text, fmt, args);"));
+    ASSERT_TRUE("hud_text hoists char pointer",
+                contains(c, "const char *ch;\n  char line_text[96];"));
+    ASSERT_TRUE("hud_text loop reuses declared char pointer",
+                contains(c, "for (ch = line_text; *ch; ch++)"));
+    ASSERT_TRUE("no C99 helper loop declaration",
+                !contains(c, "for (const char *ch ="));
     ASSERT_TRUE("overlay uses hud_text helper",
                 contains(c, "hud_text(8.0f, text_y, \"q/a  amp = %.4g\", (double)amp);"));
+    ASSERT_TRUE("overlay text_y declared before GL statements",
+                contains(c, "float text_y = (float)overlay_height - 18.0f;\n\n  glMatrixMode(GL_PROJECTION);"));
     ASSERT_TRUE("emits readable window-size globals", contains(c, "static int window_width"));
     ASSERT_TRUE("captures window size in reshape",
                 contains(c, "window_width = w;\n  window_height = h;"));
     ASSERT_TRUE("fabsf (not manual abs) in step", contains(c, "fabsf(value)"));
+    ASSERT_TRUE("keyboard locals precede unused param markers",
+                contains(c, "int modifiers = glutGetModifiers();\n"
+                            "  unsigned char normalized_key = key;\n"
+                            "  float step_scale = 1.0f;\n\n"
+                            "  (void)mouse_x;\n"
+                            "  (void)mouse_y;"));
     ASSERT_TRUE("knob q raises amp",
                 contains(c, "if (normalized_key == 'q') amp += tuning_step(amp) * step_scale;"));
     ASSERT_TRUE("knob a lowers amp",

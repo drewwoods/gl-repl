@@ -151,6 +151,8 @@ typedef struct {
 } SnippetDirective;
 
 static const char k_snippet_directive_declare[] = "declare";
+static const char k_export_c89_loop_scope_marker[] = "repl-export-c89-loop-scope";
+static const char k_export_c89_loop_var_marker[] = "repl-export-c89-loop-var";
 
 /* Emit one import diagnostic to stderr with the shared "Warning: " prefix
  * and trailing newline. Centralises the format so the @var / @func /
@@ -1358,6 +1360,9 @@ static int code_brace_delta(const char *p) {
 
 static int import_try_function_body(ImportState *s, const char *p) {
     if (s->func_depth <= 0) return 0;
+    if (strstr(p, k_export_c89_loop_scope_marker) ||
+        strstr(p, k_export_c89_loop_var_marker))
+        return 1;
     import_feed_one_line(s, p);
     s->func_depth += code_brace_delta(p);
     return 1;
@@ -1437,6 +1442,9 @@ static int import_try_predef_decl(const char *p) {
 }
 
 static int import_try_snippet_body_line(ImportState *s, const char *p) {
+    if (strstr(p, k_export_c89_loop_scope_marker) ||
+        strstr(p, k_export_c89_loop_var_marker))
+        return 1;
     import_feed_one_line(s, p);
     return 1;
 }

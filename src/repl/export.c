@@ -73,6 +73,8 @@ static int export_slot_pos_is_eye_space(int slot) {
  * CMD_VAR_DECLARE row. The reader half lives in src/repl/import.c and
  * declares its own copy so the two files stay independent. */
 static const char k_snippet_directive_declare[] = "declare";
+static const char k_export_c89_loop_scope_marker[] = "repl-export-c89-loop-scope";
+static const char k_export_c89_loop_var_marker[] = "repl-export-c89-loop-var";
 
 /* Camera bridge — same shape as the cfg bridge. Step 4a moved camera-block
  * emission and parsing through this interface so src/repl/export.c no longer
@@ -1064,12 +1066,20 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd,
         else
             strncpy(c_step, "1.0f", sizeof(c_step));
 
+        if (var_name[0] == '\0') {
+            fprintf(f, "%s\n", source_text);
+            return;
+        }
+
+        fprintf(f, "%s{ // %s\n", ind, k_export_c89_loop_scope_marker);
+        fprintf(f, "%sfloat %s; // %s\n",
+                ind, var_name, k_export_c89_loop_var_marker);
         float step_v = cmd->args[2];
         if (step_v >= 0) {
-            fprintf(f, "%sfor (float %s = %s; %s < %s; %s += %s) {\n",
+            fprintf(f, "%sfor (%s = %s; %s < %s; %s += %s) {\n",
                     ind, var_name, c_start, var_name, c_end, var_name, c_step);
         } else {
-            fprintf(f, "%sfor (float %s = %s; %s > %s; %s += %s) {\n",
+            fprintf(f, "%sfor (%s = %s; %s > %s; %s += %s) {\n",
                     ind, var_name, c_start, var_name, c_end, var_name, c_step);
         }
         return;
@@ -1082,22 +1092,36 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd,
         char start_s[EXPORT_FLOAT_TEXT_MAX], end_s[EXPORT_FLOAT_TEXT_MAX];
         repl_format_source_float(start_s, sizeof(start_s), start_v);
         repl_format_source_float(end_s, sizeof(end_s), end_v);
+        fprintf(f, "%s{ // %s\n", ind, k_export_c89_loop_scope_marker);
+        fprintf(f, "%sfloat %s; // %s\n",
+                ind, var_name, k_export_c89_loop_var_marker);
         if (step_v == 1.0f) {
-            fprintf(f, "%sfor (float %s = %s; %s < %s; %s += 1.0f) {\n",
+            fprintf(f, "%sfor (%s = %s; %s < %s; %s += 1.0f) {\n",
                     ind, var_name, start_s, var_name, end_s, var_name);
         } else if (step_v == -1.0f) {
-            fprintf(f, "%sfor (float %s = %s; %s > %s; %s -= 1.0f) {\n",
+            fprintf(f, "%sfor (%s = %s; %s > %s; %s -= 1.0f) {\n",
                     ind, var_name, start_s, var_name, end_s, var_name);
         } else {
             char step_s[EXPORT_FLOAT_TEXT_MAX];
             repl_format_source_float(step_s, sizeof(step_s), step_v);
-            fprintf(f, "%sfor (float %s = %s; %s %s %s; %s += %sf) {\n",
+            fprintf(f, "%sfor (%s = %s; %s %s %s; %s += %sf) {\n",
                     ind, var_name, start_s, var_name,
                     step_v > 0 ? "<" : ">", end_s, var_name, step_s);
         }
     } else {
         fprintf(f, "%s\n", source_text);
     }
+}
+
+static void write_for_end_as_c(FILE *f, const char *source_text) {
+    int indent = 0;
+
+    while (source_text[indent] && isspace((unsigned char)source_text[indent]))
+        indent++;
+
+    fprintf(f, "%s\n", source_text);
+    fprintf(f, "%.*s} // %s\n",
+            indent, source_text, k_export_c89_loop_scope_marker);
 }
 
 static int cmd_type_is_tess(CmdType t) {
@@ -1447,7 +1471,7 @@ static void write_render_body_range_as_c(FILE *f, int start, int end_idx,
             break;
         case CMD_FOR_END:
             for_depth--;
-            fprintf(f, "%s\n", export_document_text(cmd_idx));
+            write_for_end_as_c(f, export_document_text(cmd_idx));
             break;
         case CMD_FUNC_DEF:
             if (skip_func_defs)
@@ -1565,6 +1589,7 @@ static void write_label_helper(FILE *f) {
         "#include <stdio.h>\n"
         "\n/* Draw bitmap text at the current raster position. */\n"
         "\nstatic void label(const char *fmt, ...) {\n"
+        "  const char *ch;\n"
         "  char text[128];\n"
         "  int offset = 0;\n"
         "  va_list args;\n"
@@ -1588,7 +1613,7 @@ static void write_label_helper(FILE *f) {
         "  text[offset] = '\\0';\n"
         "  va_end(args);\n"
         "\n"
-        "  for (const char *ch = text; *ch; ch++)\n"
+        "  for (ch = text; *ch; ch++)\n"
         "    glutBitmapCharacter(GLUT_BITMAP_9_BY_15, (unsigned char)*ch);\n"
         "}\n");
 }
@@ -1692,35 +1717,41 @@ static void write_tess_preamble(FILE *f) {
         "\n"
         "static void _tess_comb_cb(GLdouble coords[3], void *vd[4],\n"
         "                          GLfloat w[4], void **out) {\n"
+        "  TessVertex *v;\n"
+        "  TessVertex *src;\n"
+        "  double len;\n"
+        "  int c;\n"
+        "  int j;\n"
+        "\n"
         "  if (_tv_n >= 256) {\n"
         "    *out = NULL;\n"
         "    return;\n"
         "  }\n"
         "\n"
-        "  TessVertex *v = &_tv[_tv_n++];\n"
+        "  v = &_tv[_tv_n++];\n"
         "  v->pos[0] = coords[0];\n"
         "  v->pos[1] = coords[1];\n"
         "  v->pos[2] = coords[2];\n"
         "\n"
-        "  for (int c = 0; c < 3; c++)\n"
+        "  for (c = 0; c < 3; c++)\n"
         "    v->normal[c] = 0.0;\n"
-        "  for (int c = 0; c < 4; c++)\n"
+        "  for (c = 0; c < 4; c++)\n"
         "    v->color[c] = 0.0;\n"
         "\n"
-        "  for (int j = 0; j < 4; j++) {\n"
+        "  for (j = 0; j < 4; j++) {\n"
         "    if (!vd[j])\n"
         "      continue;\n"
         "\n"
-        "    TessVertex *src = (TessVertex *)vd[j];\n"
-        "    for (int c = 0; c < 3; c++)\n"
+        "    src = (TessVertex *)vd[j];\n"
+        "    for (c = 0; c < 3; c++)\n"
         "      v->normal[c] += w[j] * src->normal[c];\n"
-        "    for (int c = 0; c < 4; c++)\n"
+        "    for (c = 0; c < 4; c++)\n"
         "      v->color[c] += w[j] * src->color[c];\n"
         "  }\n"
         "\n"
-        "  double len = sqrt(v->normal[0] * v->normal[0] +\n"
-        "                    v->normal[1] * v->normal[1] +\n"
-        "                    v->normal[2] * v->normal[2]);\n"
+        "  len = sqrt(v->normal[0] * v->normal[0] +\n"
+        "             v->normal[1] * v->normal[1] +\n"
+        "             v->normal[2] * v->normal[2]);\n"
         "  if (len > 1e-9) {\n"
         "    v->normal[0] /= len;\n"
         "    v->normal[1] /= len;\n"
@@ -2163,6 +2194,7 @@ static void write_tune_helpers(FILE *f, const ExportNeeds *needs,
         "}\n"
         "\n/* Draw formatted bitmap text in screen-space HUD coordinates. */\n"
         "static void %s(float x, float y, const char *fmt, ...) {\n"
+        "  const char *ch;\n"
         "  char line_text[96];\n"
         "  va_list args;\n"
         "\n"
@@ -2171,12 +2203,13 @@ static void write_tune_helpers(FILE *f, const ExportNeeds *needs,
         "  va_end(args);\n"
         "\n"
         "  glRasterPos2f(x, y);\n"
-        "  for (const char *ch = line_text; *ch; ch++)\n"
+        "  for (ch = line_text; *ch; ch++)\n"
         "    glutBitmapCharacter(GLUT_BITMAP_9_BY_15, (unsigned char)*ch);\n"
         "}\n"
         "\nstatic void %s(void) {\n"
         "  int %s = %s;\n"
         "  int %s = %s;\n"
+        "  float %s = (float)%s - 18.0f;\n"
         "\n"
         "  glMatrixMode(GL_PROJECTION);\n"
         "  glPushMatrix();\n"
@@ -2191,8 +2224,7 @@ static void write_tune_helpers(FILE *f, const ExportNeeds *needs,
         "  glDisable(GL_LIGHTING);\n"
         "  glDisable(GL_DEPTH_TEST);\n"
         "  glColor3f(1.0f, 1.0f, 1.0f);\n"
-        "\n"
-        "  float %s = (float)%s - 18.0f;\n",
+        "\n",
         names->tuning_window_width,
         names->tuning_window_height,
         names->tuning_step,
@@ -2202,9 +2234,9 @@ static void write_tune_helpers(FILE *f, const ExportNeeds *needs,
         names->tuning_window_width,
         names->overlay_height,
         names->tuning_window_height,
-        names->overlay_width,
-        names->overlay_height,
         names->overlay_text_y,
+        names->overlay_height,
+        names->overlay_width,
         names->overlay_height);
     for (int i = 0; i < needs->tune_count; i++) {
         fprintf(f,
@@ -2231,19 +2263,28 @@ static void write_tune_helpers(FILE *f, const ExportNeeds *needs,
  * uppercase and Ctrl control-codes back to the base letter) and apply the
  * swatch step, Shift = fine and Ctrl = coarse — mirroring the in-app numeric
  * swatch and variable-panel adjustment multipliers. */
-static void emit_tune_keyboard_handlers(FILE *f, const ExportNeeds *needs,
-                                        const ExportGeneratedNames *names) {
+static void emit_tune_keyboard_decls(FILE *f,
+                                     const ExportGeneratedNames *names) {
     fprintf(f,
         "  int %s = glutGetModifiers();\n"
         "  unsigned char %s = %s;\n"
-        "\n"
+        "  float %s = 1.0f;\n"
+        "\n",
+        names->tune_modifiers,
+        names->tune_normalized_key,
+        names->keyboard_key,
+        names->tune_step_scale);
+}
+
+static void emit_tune_keyboard_handlers(FILE *f, const ExportNeeds *needs,
+                                        const ExportGeneratedNames *names) {
+    fprintf(f,
         "  if ((%s & GLUT_ACTIVE_CTRL) && %s >= 1 && %s <= 26) {\n"
         "    %s = (unsigned char)(%s - 1 + 'a');\n"
         "  } else if (%s >= 'A' && %s <= 'Z') {\n"
         "    %s = (unsigned char)(%s + ('a' - 'A'));\n"
         "  }\n"
         "\n"
-        "  float %s = 1.0f;\n"
         "  if (%s & GLUT_ACTIVE_SHIFT)\n"
         "    %s *= "
             REPL_EXPORT_STRINGIFY(GLR_ADJUST_FINE_SCALE) ";\n"
@@ -2253,8 +2294,6 @@ static void emit_tune_keyboard_handlers(FILE *f, const ExportNeeds *needs,
         "\n",
         names->tune_modifiers,
         names->tune_normalized_key,
-        names->keyboard_key,
-        names->tune_modifiers,
         names->tune_normalized_key,
         names->tune_normalized_key,
         names->tune_normalized_key,
@@ -2262,8 +2301,6 @@ static void emit_tune_keyboard_handlers(FILE *f, const ExportNeeds *needs,
         names->tune_normalized_key,
         names->tune_normalized_key,
         names->tune_normalized_key,
-        names->tune_normalized_key,
-        names->tune_step_scale,
         names->tune_modifiers,
         names->tune_step_scale,
         names->tune_modifiers,
@@ -2314,14 +2351,19 @@ static void emit_export_display_tail(FILE *f, const ExportNeeds *needs,
         "}\n"
         "\n"
         "/* Keyboard controls: Space toggles rotation; Esc exits. */\n"
-        "void keyboard(unsigned char %s, int %s, int %s) {\n"
-        "  (void)%s;\n"
-        "  (void)%s;\n",
+        "void keyboard(unsigned char %s, int %s, int %s) {\n",
         names->keyboard_key,
         names->keyboard_mouse_x,
-        names->keyboard_mouse_y,
+        names->keyboard_mouse_y);
+    if (knobs > 0)
+        emit_tune_keyboard_decls(f, names);
+    fprintf(f,
+        "  (void)%s;\n"
+        "  (void)%s;\n",
         names->keyboard_mouse_x,
         names->keyboard_mouse_y);
+    if (knobs > 0)
+        fprintf(f, "\n");
     if (knobs > 0)
         emit_tune_keyboard_handlers(f, needs, names);
     fprintf(f,

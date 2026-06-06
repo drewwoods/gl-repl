@@ -167,6 +167,17 @@ static char *dump_code_panel(void) {
     return buf ? buf : strdup("");
 }
 
+static char *slurp_path(const char *path) {
+    FILE *f = fopen(path, "rb");
+    char *buf;
+
+    if (!f)
+        return NULL;
+    buf = slurp_stream(f);
+    fclose(f);
+    return buf;
+}
+
 int main(void) {
     const char *path1 = "/tmp/repl_export_all_commands_1.c";
     const char *path2 = "/tmp/repl_export_all_commands_2.c";
@@ -175,6 +186,7 @@ int main(void) {
     char *code_before = NULL;
     char *code_after = NULL;
     char *code_reexport = NULL;
+    char *export_text = NULL;
     int diff_line = 0;
 
     repl_eval_init_predef_vars();
@@ -267,6 +279,20 @@ int main(void) {
 
     /* First export to file */
     repl_export_save_output(path1, source_document_view(), NULL);
+    export_text = slurp_path(path1);
+    ASSERT_TRUE("export file readable", export_text != NULL);
+    ASSERT_TRUE("label helper hoists char pointer",
+                strstr(export_text, "const char *ch;\n  char text[128];") != NULL);
+    ASSERT_TRUE("label helper loop reuses declared pointer",
+                strstr(export_text, "for (ch = text; *ch; ch++)") != NULL);
+    ASSERT_TRUE("tess helper hoists C89 locals",
+                strstr(export_text,
+                       "TessVertex *v;\n  TessVertex *src;\n  double len;\n  int c;\n  int j;") != NULL);
+    ASSERT_TRUE("tess helper loop reuses declared counters",
+                strstr(export_text, "for (c = 0; c < 3; c++)") != NULL);
+    ASSERT_TRUE("no exported helper uses C99 for-loop declarations",
+                strstr(export_text, "for (const char *") == NULL &&
+                strstr(export_text, "for (int c =") == NULL);
 
     /* Reimport from file */
     glr_ctrl_reset_all();
@@ -324,6 +350,7 @@ int main(void) {
     free(code_before);
     free(code_after);
     free(code_reexport);
+    free(export_text);
     remove(path1);
     remove(path2);
 
