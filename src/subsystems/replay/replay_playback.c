@@ -377,6 +377,7 @@ void replay_restart_from_beginning(void) {
     replay_clear_fade_batches();
     state->state = REPLAY_PLAYING;
     state->src_line_idx = -1;
+    state->focus_call_depth = 0;
     state->last_src_line = -1;
 }
 
@@ -396,6 +397,7 @@ static void replay_init_playback_state(ReplayRuntimeState *state, int num_flat_c
     state->accum = 0.0f;
     replay_clear_fade_batches();
     state->src_line_idx = -1;
+    state->focus_call_depth = 0;
     state->total_flat_cmds = num_flat_cmds;
     state->last_src_line = -1;
 }
@@ -424,6 +426,7 @@ void replay_stop(void) {
     repl_dispatch_set_time_playing(state->saved_t_playing);
     state->active = 0;
     state->state = REPLAY_OFF;
+    state->focus_call_depth = 0;
     replay_clear_fade_batches();
 }
 
