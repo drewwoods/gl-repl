@@ -134,20 +134,21 @@ static void test_collector_and_export(void) {
                 contains(c, "window_width = w;\n  window_height = h;"));
     ASSERT_TRUE("fabsf (not manual abs) in step", contains(c, "fabsf(value)"));
     ASSERT_TRUE("knob q raises amp",
-                contains(c, "if (normalized_key == 'q')\n"
-                            "    amp += tuning_step(amp) * step_scale"));
+                contains(c, "if (normalized_key == 'q') amp += tuning_step(amp) * step_scale;"));
     ASSERT_TRUE("knob a lowers amp",
-                contains(c, "if (normalized_key == 'a')\n"
-                            "    amp -= tuning_step(amp) * step_scale"));
+                contains(c, "if (normalized_key == 'a') amp -= tuning_step(amp) * step_scale;"));
     ASSERT_TRUE("knob w raises freq",
-                contains(c, "if (normalized_key == 'w')\n"
-                            "    freq += tuning_step(freq) * step_scale"));
+                contains(c, "if (normalized_key == 'w') freq += tuning_step(freq) * step_scale;"));
     ASSERT_TRUE("Shift fine uses shared scale",
                 contains(c, "step_scale *= "
                          REPL_EXPORT_STRINGIFY(GLR_ADJUST_FINE_SCALE)));
     ASSERT_TRUE("Ctrl coarse uses shared scale",
                 contains(c, "step_scale *= "
                          REPL_EXPORT_STRINGIFY(GLR_ADJUST_COARSE_SCALE)));
+    ASSERT_TRUE("blank line before key handlers",
+                contains(c, "step_scale *= "
+                         REPL_EXPORT_STRINGIFY(GLR_ADJUST_COARSE_SCALE)
+                         ";\n\n  if (normalized_key == 'q')"));
     ASSERT_TRUE("round-trip marker amp", contains(c, "@declare amp=1.5 @tune"));
     ASSERT_TRUE("round-trip marker freq", contains(c, "@declare freq=2 @tune"));
     /* baseline keyboard handlers stay */
@@ -243,18 +244,14 @@ static void test_key_assignment_and_cap(void) {
     ASSERT_TRUE("export readable (cap)", c != NULL);
     /* Key assignment q/a, w/s, e/d for the first three. */
     ASSERT_TRUE("knob0 -> q/a",
-                contains(c, "if (normalized_key == 'q')\n"
-                            "    knob0 +="));
+                contains(c, "if (normalized_key == 'q') knob0 +="));
     ASSERT_TRUE("knob1 -> w/s",
-                contains(c, "if (normalized_key == 'w')\n"
-                            "    knob1 +="));
+                contains(c, "if (normalized_key == 'w') knob1 +="));
     ASSERT_TRUE("knob2 -> e/d",
-                contains(c, "if (normalized_key == 'e')\n"
-                            "    knob2 +="));
+                contains(c, "if (normalized_key == 'e') knob2 +="));
     /* 9th knob is o/l; the 10th must be dropped (no p key, knob9 absent). */
     ASSERT_TRUE("knob8 -> o/l",
-                contains(c, "if (normalized_key == 'o')\n"
-                            "    knob8 +="));
+                contains(c, "if (normalized_key == 'o') knob8 +="));
     ASSERT_TRUE("knob9 dropped (capped)", !contains(c, "knob9 +="));
     ASSERT_TRUE("cap note emitted", contains(c, "capped at 9 keyboard knobs"));
     free(c);

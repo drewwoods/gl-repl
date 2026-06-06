@@ -2249,7 +2249,8 @@ static void emit_tune_keyboard_handlers(FILE *f, const ExportNeeds *needs,
             REPL_EXPORT_STRINGIFY(GLR_ADJUST_FINE_SCALE) ";\n"
         "  if (%s & GLUT_ACTIVE_CTRL)\n"
         "    %s *= "
-            REPL_EXPORT_STRINGIFY(GLR_ADJUST_COARSE_SCALE) ";\n",
+            REPL_EXPORT_STRINGIFY(GLR_ADJUST_COARSE_SCALE) ";\n"
+        "\n",
         names->tune_modifiers,
         names->tune_normalized_key,
         names->keyboard_key,
@@ -2270,10 +2271,8 @@ static void emit_tune_keyboard_handlers(FILE *f, const ExportNeeds *needs,
     for (int i = 0; i < needs->tune_count; i++) {
         const char *v = needs->tune_names[i];
         fprintf(f,
-            "  if (%s == '%c')\n"
-            "    %s += %s(%s) * %s;\n"
-            "  if (%s == '%c')\n"
-            "    %s -= %s(%s) * %s;\n",
+            "  if (%s == '%c') %s += %s(%s) * %s;\n"
+            "  if (%s == '%c') %s -= %s(%s) * %s;\n",
             names->tune_normalized_key, k_tune_up_keys[i],
             v, names->tuning_step, v, names->tune_step_scale,
             names->tune_normalized_key, k_tune_down_keys[i],
