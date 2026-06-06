@@ -823,3 +823,71 @@ void scene_transform_guides_render_if_due(const SceneGuideSnapshot *snapshot,
     glPopMatrix();
     plan->consumed = 1;
 }
+
+/* World-space length of each replay frame axis. */
+#define TG_REPLAY_AXIS_LEN 0.35f
+
+void scene_replay_frame_axes_render(const SceneGuideSnapshot *snapshot,
+                                    const float cam_view[16]) {
+    if (!snapshot || !cam_view || !snapshot->replaying)
+        return;
+
+    int focus = snapshot->replay_focus_vertex_flat_idx;
+    if (focus < 0 || focus >= snapshot->flat_program.cmd_count)
+        return;
+    const GLCmd *vcmd = &snapshot->flat_program.cmds[focus];
+    if (!vcmd->valid || !repl_cmd_emits_vertex(vcmd->type))
+        return;
+
+    float vx = vcmd->args[0];
+    float vy = vcmd->args[1];
+    float vz = (vcmd->type == CMD_VERTEX2F) ? 0.0f : vcmd->args[2];
+
+    /* Accumulated modelview before the vertex, composed with the camera, then
+     * shifted to the vertex itself: the axes mark the vertex's local frame. */
+    float frame[16];
+    float guide_mv[16];
+    compute_before_cursor_matrix(snapshot, focus, frame);
+    mat4_mul_col_major(cam_view, frame, guide_mv);
+
+    float a = (snapshot->alpha_scale > 0.0f) ? snapshot->alpha_scale : 1.0f;
+    float len = TG_REPLAY_AXIS_LEN;
+
+    transform_guides_push_state();
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadMatrixf(guide_mv);
+    glTranslatef(vx, vy, vz);
+
+    /* Pass 0: depth-test off, stippled, dim — a ghost the geometry can't hide.
+     * Pass 1: depth-tested, full alpha, crisp where unoccluded. */
+    for (int pass = 0; pass < 2; pass++) {
+        float alpha_mul;
+        if (pass == 0) {
+            glDisable(GL_DEPTH_TEST);
+            glEnable(GL_LINE_STIPPLE);
+            glLineStipple(1, SCENE_OCCLUDED_GHOST_STIPPLE);
+            alpha_mul = SCENE_OCCLUDED_GHOST_ALPHA;
+        } else {
+            glEnable(GL_DEPTH_TEST);
+            glDisable(GL_LINE_STIPPLE);
+            alpha_mul = 1.0f;
+        }
+        glLineWidth(pass == 0 ? 1.5f : 2.5f);
+        glBegin(GL_LINES);
+        glColor4f(0.95f, 0.30f, 0.30f, a * alpha_mul); /* +X red   */
+        glVertex3f(0.0f, 0.0f, 0.0f); glVertex3f(len, 0.0f, 0.0f);
+        glColor4f(0.30f, 0.95f, 0.30f, a * alpha_mul); /* +Y green */
+        glVertex3f(0.0f, 0.0f, 0.0f); glVertex3f(0.0f, len, 0.0f);
+        glColor4f(0.40f, 0.55f, 0.95f, a * alpha_mul); /* +Z blue  */
+        glVertex3f(0.0f, 0.0f, 0.0f); glVertex3f(0.0f, 0.0f, len);
+        glEnd();
+    }
+
+    glPopMatrix();
+    transform_guides_pop_state();
+}

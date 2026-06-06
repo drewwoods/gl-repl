@@ -524,6 +524,11 @@ void edit_overlays_render_cursor_guides(const SceneGuideSnapshot *snapshot,
     glPushMatrix();
     glGetFloatv(GL_MODELVIEW_MATRIX, ctx.cam_view);
 
+    /* During replay the per-op edit guides are suppressed (the prepare guard);
+     * instead mark the vertex the step just emitted with its local frame axes. */
+    if (snapshot->replaying)
+        scene_replay_frame_axes_render(snapshot, ctx.cam_view);
+
     static const ReplayVertexWalkCallbacks cb = {
         .on_each_cmd = on_cmd_render_cursor_guides,
     };
