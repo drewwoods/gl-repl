@@ -804,13 +804,25 @@ static void test_replay_focus_call_depth(void) {
                  step, expect_depth[step]);
         ASSERT_TRUE(label, g_replay_focus_call_depth == expect_depth[step]);
     }
+
+    replay_restart_from_beginning();
+    ASSERT_TRUE("replay restart clears focus_call_depth",
+                g_replay_focus_call_depth == 0);
+
     replay_stop();
+    ASSERT_TRUE("replay stop clears focus_call_depth",
+                g_replay_focus_call_depth == 0);
 
     /* Top-level geometry: focus depth stays 0 (no "depth N" segment). */
     glr_ctrl_reset_all();
+    /* Starting a new replay must also clear any stale depth from a previous
+     * session before the first step updates the focused command. */
+    g_replay_focus_call_depth = 7;
     editor_feed_line("glVertex3f(1, 0, 0);");
     repl_flatten_commands(editor_state_edit_line());
     replay_start();
+    ASSERT_TRUE("replay start clears stale focus_call_depth",
+                g_replay_focus_call_depth == 0);
     g_replay_mode = REPLAY_MODE_VERTEX;
     g_replay_state = REPLAY_PAUSED;
     replay_advance(repl_state_flat_program_view());
