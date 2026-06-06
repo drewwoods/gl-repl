@@ -10,11 +10,27 @@ reuse and recursion make it hard to see which source invocation produced the
 current command. Vertex replay also shows the active vertex without applying
 the existing transform-guide affordances to that exact replay vertex.
 
-This audit covers three requested improvements:
+This audit covers six requested improvements:
 
-- Highlight the function call site during replay.
-- Show function call depth, especially for recursive functions.
-- Apply transformation guides to the specific vertex selected by replay.
+- Req 1 — Highlight the function call site during replay.
+- Req 2 — Show function call depth, especially for recursive functions.
+- Req 3 — Apply transformation guides to the specific vertex selected by replay.
+- Req 4 — When the cursor is on a vertex line, highlight the transform lines that
+  affect it (live REPL), made flat-accurate across function boundaries and given
+  a distinct marker color.
+- Req 5 — Apply that same affecting-transform highlight to the replay-focused
+  vertex (replay).
+- Req 6 — Make replay transforms look like the live transform guides: while
+  replay is focused on a vertex, resolve a transform focus for that vertex and
+  show the live animated guide there; this **replaces** req 3's static frame
+  axes.
+
+**Implementation status (2026-06-06).** Reqs 1–3 are implemented and committed
+on `main` (`34df87f3` call-site highlight, `fd571604` call depth, `0cb8c6d4`
+frame axes, `4b5d050e` stale-`pc` clamp for replay vertex focus), verified via
+headless OSMesa capture. Req 3's static frame axes are an interim visual that
+**req 6 supersedes** with the live-style transform guides. Reqs 4–6 are the new
+scope below and are not yet started.
 
 ## Current Architecture Notes
 
@@ -218,6 +234,138 @@ Tests:
   an example with transforms, start replay, `kill -USR1 <pid>` to capture a PPM
   and confirm axes anchor on the PC vertex.
 
+### 4. Flat-accurate, distinctly-colored affecting-transform highlight (live REPL)
+
+Effort: low-medium, roughly 0.5-1 day.
+
+Current state (already partly built):
+
+- `repl_find_affecting_transforms()` (`src/repl/autonormal.c:388`) already
+  highlights the in-scope `glTranslatef/glRotatef/glScalef` lines when the
+  cursor is on a vertex / glut-solid line (`repl_cmd_consumes_current_color`),
+  pushed as `HIGHLIGHT_AFFECTING_TRANSFORM` in `glr_ctrl_push_highlights()`
+  (`src/app/glr_ctrl.c:372-378`) and rendered as the orange gutter marker
+  (`MARKER_PRIORITY_AFFECTING_TRANSFORM`, `repl_code_panel.c`). So the base
+  "cursor-on-vertex → affecting transforms" behavior exists.
+
+Gaps to close (the requested change):
+
+- **Cross-function (flat-accurate).** The current walk is source-order and
+  breaks at `CMD_FUNC_DEF` (function bodies are opaque), so a vertex *inside* a
+  `funcN` body does not get the calling-scope transforms highlighted. Add a
+  flat-program resolver with two layers:
+  - An exact flat-target helper, e.g.
+    `repl_find_affecting_transforms_for_flat_vertex(flat_idx, out, cap)`, that
+    accepts one concrete flat vertex / tess vertex / glut-solid command, walks
+    backward from that flat index maintaining the same
+    push/pop/`glLoadIdentity` bookkeeping, collects the in-scope transform flat
+    commands, maps each back to `src_cmd_idx`, and dedups.
+  - A live-cursor line wrapper, e.g.
+    `repl_find_affecting_transforms_flat(line_idx, out, cap)`, that finds every
+    exact flat target whose `src_cmd_idx == line_idx` and whose type consumes the
+    current modelview state, then returns the union of affecting transform source
+    lines across those expansions. This gives deterministic behavior for reused
+    and recursive function body vertices: without a selected invocation, the
+    live cursor view shows all transforms that affect any expansion of that
+    source vertex line. Do **not** use `repl_flat_cmd_matches_cursor()` to choose
+    these targets; it intentionally matches whole function scopes and call-site
+    blocks, which is too broad for "this vertex line."
+  Because the flat program already inlined functions and substituted args, the
+  exact flat walk naturally includes both call-site-scope transforms and in-body
+  transforms. Keep the source-walk as a fallback only when the flat program is
+  unavailable/dirty.
+- **Distinct color.** Give the affecting-transform marker a dedicated hue that
+  reads clearly alongside the feeding-color (yellow) and feeding-normal (blue)
+  markers — distinct from today's orange if needed — in
+  `repl_code_panel_apply_command_overlays()`; revisit `MarkerPriority` ordering
+  so the transform marker is not masked on lines that also feed color/normal.
+
+Tests: a vertex inside a `funcN` body called from two different transformed
+call sites highlights both call-site translate source lines in live-cursor mode;
+nested/recursive cases union the applicable source transforms; top-level cases
+stay unchanged. Extend `test_repl_autonormal` / `test_glr_ctrl`.
+
+Files: `src/repl/autonormal.c`, `src/repl/core.h`, `src/app/glr_ctrl.c`,
+`src/ui/app/repl_code_panel.c`.
+
+### 5. Affecting-transform highlight for the replay-focused vertex (replay)
+
+Effort: low, roughly 0.5 day (builds on req 4 + `replay_focus_vertex_flat_idx`).
+
+Current state: affecting-transform highlights are pushed only for the **edit
+cursor** (`glr_ctrl_push_highlights`, gated `!insert_mode` + `edit_line`).
+During replay the cursor does not track the PC vertex, so the transforms
+affecting the replayed vertex are not shown.
+
+Recommended implementation:
+
+- When `replay_active()`, additionally resolve and push
+  `HIGHLIGHT_AFFECTING_TRANSFORM` for the transforms affecting the replay focus
+  vertex. The flat vertex index is already available as
+  `replay_focus_vertex_flat_idx()` (req 3), so reuse the req-4 flat resolver
+  keyed directly off that flat index (no source→flat mapping needed). This
+  composes with the existing replay call-site (req 1) and depth (req 2)
+  highlights.
+- Decide cursor-vs-replay precedence: during replay show the replay-vertex set
+  (the cursor may be parked elsewhere); outside replay keep the cursor set.
+
+Tests: replay test — step to a vertex inside a transformed and/or `funcN` scope;
+assert the affecting transform source lines are highlighted from the replay
+focus, independent of where the edit cursor sits.
+
+Files: `src/app/glr_ctrl.c` (push during replay), reusing the req-4 resolver.
+
+### 6. Live-style transform guides during replay (replaces req 3's frame axes)
+
+Effort: medium, roughly 1-2 days.
+
+Scope decision (2026-06-06): **replace** the static RGB frame axes from req 3.
+During vertex replay, `replay_focus_vertex_flat_idx()` remains the emitted
+vertex. Req 6 adds a **separate transform focus** for that vertex: if the user
+navigates the cursor onto an affecting transform line while replay is active,
+guide that transform for the current replay vertex; otherwise guide the nearest
+in-scope affecting transform before the replay vertex. Show the live animated
+transform guide (translate arrow / scale ticks / rotate arc) applied to the
+**current replay vertex**, mirroring the live behavior where cursor-on-transform
+shows the effect on the last applied vertex.
+
+Current state: req 3 draws `scene_replay_frame_axes_render()` axes at the replay
+vertex, and the live guides are hard-disabled during replay by the guard
+`if (snapshot->replaying || !snapshot->show_guides) return 0;` in
+`scene_transform_guides_prepare()` (`transform_guides.c:715`).
+
+Recommended implementation:
+
+- Split/generalize `scene_transform_guides_prepare()` so the replay path builds
+  a plan from a transform focus instead of assuming `replay_focus_flat_idx()` is
+  a transform. Two sub-cases:
+  (a) the cursor is moved onto a transform line during replay → choose the exact
+  flat transform with that `src_cmd_idx` that affects the current
+  `replay_focus_vertex_flat_idx()` invocation, preferring the closest preceding
+  match when the source transform appears in multiple expansions;
+  (b) no cursor transform is selected → choose the nearest in-scope affecting
+  transform before the current replay vertex. If no affecting transform exists,
+  produce no replay transform-guide plan.
+- Anchor the guide at the replay vertex: the FRAME-mode matrix and the
+  after-cursor origin should be computed relative to
+  `replay_focus_vertex_flat_idx()` rather than the edit-time after-cursor origin,
+  so "impact on the current vertex" is literal.
+- Reuse the existing `draw_translate_guide` / `draw_scale_guide` /
+  `draw_rotate_guide`; relax the replay guard only for this path, keeping
+  edit-mode behavior unchanged when not replaying.
+- Remove `scene_replay_frame_axes_render()` and its dedicated call in
+  `edit_overlays_render_cursor_guides()`. `replay_focus_vertex_flat_idx()`
+  stays — it now anchors the guides (req 6) and feeds req 5.
+
+Tests: `test_scene_guides` for the prepare path producing a transform-guide plan
+during replay (cursor-selected transform and default nearest-affecting-transform
+cases); regression that edit-mode guides are unchanged outside replay; headless
+OSMesa visual check.
+
+Files: `src/scene/guides/transform_guides.c` / `.h`,
+`src/scene/guides/guides_shared.h`,
+`src/subsystems/edit_overlays/edit_overlays.c`, `src/app/glr_ctrl.c`.
+
 ## Suggested Implementation Order
 
 1. Land the shared replay-focus helper and call-site highlighting first. This
@@ -229,6 +377,17 @@ Tests:
    is settled, because it touches replay state, overlay snapshots, and guide
    planning.
 
+Reqs 1-3 are done. The remaining order is 4 → 5 → 6:
+
+4. Build the flat-accurate affecting-transform resolver and recolor the marker
+   (live REPL). This is the foundation reused by req 5 and is independently
+   shippable.
+5. Reuse that resolver for the replay-focused vertex — small once req 4 and
+   `replay_focus_vertex_flat_idx()` exist.
+6. Replace the static frame axes with live-style transform guides during replay
+   last, since it reworks the guide prepare path and removes req 3's interim
+   `scene_replay_frame_axes_render()`.
+
 ## Assumptions
 
 - "Call site highlighted" means highlighting the source line containing
@@ -237,5 +396,14 @@ Tests:
   function expansion.
 - Transform guides apply during vertex replay mode only in v1. Polygon replay
   mode remains unchanged.
+- "Affects the current line" (reqs 4/5) means the in-scope modelview transforms
+  (`glTranslatef/glRotatef/glScalef`) accumulated before the vertex, honoring
+  `glPushMatrix/glPopMatrix/glLoadIdentity` — now resolved through the flat
+  program so calling-scope transforms for `funcN`-body vertices are included.
+- Req 6 replaces (does not coexist with) req 3's static frame axes; the live
+  animated guides are the single replay transform visual going forward. Replay's
+  vertex focus remains the emitted vertex; req 6's transform focus is derived
+  separately from the cursor-selected affecting transform or the nearest
+  in-scope affecting transform before that vertex.
 - Existing untracked files `new_scene.c` and `parametric_torus_nested_for.c`
   are unrelated to this audit.
