@@ -125,6 +125,20 @@ static void set_cmd3(GLCmd *cmd, CmdType type, int src_idx,
     (void)source;
 }
 
+static int count_highlight_kind_on_line(UiHighlightKind kind, int line_idx) {
+    const UiHighlightList *list = editor_state_highlights();
+    int count = 0;
+
+    if (!list)
+        return 0;
+    for (int i = 0; i < list->count; i++) {
+        if (list->items[i].kind == kind &&
+            list->items[i].line_idx == line_idx)
+            count++;
+    }
+    return count;
+}
+
 int test_scene_render_3d_scene(SceneRendererState *state,
                                const SceneRenderConfig *config) {
     (void)state;
@@ -1407,6 +1421,54 @@ static void test_display_frame_follows_replay_line_after_tick(void) {
                 follow_doc_line < editor_scroll() + visible_lines);
 }
 
+static void test_replay_call_site_highlights_are_pushed(void) {
+    printf("--- imrepl_ctrl replay call-site highlights ---\n");
+
+    glr_ctrl_reset_all();
+    editor_feed_line("func1(a, b) {");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(a, b, 0);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("}");
+    editor_feed_line("func0(scale) {");
+    editor_feed_line("func1(scale, scale + 1);");
+    editor_feed_line("}");
+    editor_feed_line("func0(2);");
+    editor_feed_line("func0(4);");
+    repl_flatten_commands(editor_state_edit_line());
+
+    replay_start();
+    replay_state_mut()->state = REPLAY_PAUSED;
+    replay_state_mut()->mode = REPLAY_MODE_VERTEX;
+
+    replay_advance(repl_state_flat_program_view());
+    glr_ctrl_push_highlights();
+
+    ASSERT_INT("first nested replay PC highlights body line",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_PC, 2), 1);
+    ASSERT_INT("first nested replay highlights immediate call site",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_SITE, 6), 1);
+    ASSERT_INT("first nested replay highlights root call site",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_ROOT_CALL_SITE, 8), 1);
+    ASSERT_INT("first nested replay has no root marker on second outer call",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_ROOT_CALL_SITE, 9), 0);
+
+    replay_advance(repl_state_flat_program_view());
+    glr_ctrl_push_highlights();
+
+    ASSERT_INT("second nested replay still highlights immediate call site",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_SITE, 6), 1);
+    ASSERT_INT("second nested replay moves root marker to second outer call",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_ROOT_CALL_SITE, 9), 1);
+    ASSERT_INT("second nested replay clears prior root marker",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_ROOT_CALL_SITE, 8), 0);
+
+    replay_stop();
+    glr_ctrl_push_highlights();
+    ASSERT_INT("inactive replay clears immediate call-site highlight",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_SITE, 6), 0);
+}
+
 /* Audit #41 prep: route_numeric_swatch_hit open-codes 68 lines of
  * compile + parse + ReplCompiledChange construction + apply + reload
  * inside the controller's router. The audit proposes extracting that
@@ -2056,6 +2118,7 @@ int main(void) {
     test_display_frame_scene_config_is_stable_across_frames();
     test_display_frame_no_replay_means_no_fade_plumbing();
     test_display_frame_follows_replay_line_after_tick();
+    test_replay_call_site_highlights_are_pushed();
     test_numeric_swatch_step_commits_line_and_undoes();
     test_numeric_swatch_no_op_outside_numeric_arg();
     test_numeric_swatch_no_op_in_insert_mode();
