@@ -369,20 +369,26 @@ static void glr_ctrl_push_highlights(void) {
                                                         HIGHLIGHT_MATCHING_PUSH_MATRIX);
             }
 
-            /* Prefer the flat-accurate resolver so a vertex inside a funcN
-             * body picks up the calling-scope transforms too. Fall back to
-             * the source walk only when the flat program is empty/unbuilt
-             * (e.g. a flatten error) — by this point in the frame flatten has
-             * already run and cleared its dirty flag. */
-            int xform_lines[MAX_AFFECTING_TRANSFORMS];
-            int xform_count = repl_find_affecting_transforms_flat(
-                edit_line, xform_lines, MAX_AFFECTING_TRANSFORMS);
-            if (xform_count == 0 && repl_state_flat_program_view().cmd_count == 0)
-                xform_count = repl_find_affecting_transforms(
+            /* Affecting-transform highlight for the edit cursor. During
+             * replay the replay-focus vertex owns this marker instead (the
+             * cursor may be parked elsewhere), so skip the cursor set and let
+             * the replay block below push it. Prefer the flat-accurate
+             * resolver so a vertex inside a funcN body picks up the
+             * calling-scope transforms too; fall back to the source walk only
+             * when the flat program is empty/unbuilt (e.g. a flatten error) —
+             * by this point in the frame flatten has already run and cleared
+             * its dirty flag. */
+            if (!replay_active()) {
+                int xform_lines[MAX_AFFECTING_TRANSFORMS];
+                int xform_count = repl_find_affecting_transforms_flat(
                     edit_line, xform_lines, MAX_AFFECTING_TRANSFORMS);
-            for (int i = 0; i < xform_count; i++)
-                editor_state_highlights_append(xform_lines[i], -1, -1,
-                                                    HIGHLIGHT_AFFECTING_TRANSFORM);
+                if (xform_count == 0 && repl_state_flat_program_view().cmd_count == 0)
+                    xform_count = repl_find_affecting_transforms(
+                        edit_line, xform_lines, MAX_AFFECTING_TRANSFORMS);
+                for (int i = 0; i < xform_count; i++)
+                    editor_state_highlights_append(xform_lines[i], -1, -1,
+                                                        HIGHLIGHT_AFFECTING_TRANSFORM);
+            }
         }
     }
 
@@ -420,6 +426,24 @@ static void glr_ctrl_push_highlights(void) {
             if (root_site >= 0 && root_site != call_site)
                 editor_state_highlights_append(root_site, -1, -1,
                                                     HIGHLIGHT_REPLAY_ROOT_CALL_SITE);
+        }
+    }
+
+    /* Affecting-transform highlight anchored on the replay-focused vertex
+     * (req 5). replay_focus_vertex_flat_idx() is a flat index (vertex mode
+     * only; -1 otherwise), so feed it straight to the req-4 exact-flat
+     * resolver — no source→flat mapping needed. This shows the transforms
+     * shaping the vertex currently being replayed, independent of where the
+     * edit cursor sits, and composes with the replay PC / call-site markers. */
+    if (replay_active()) {
+        int focus_vertex = replay_focus_vertex_flat_idx();
+        if (focus_vertex >= 0) {
+            int xform_lines[MAX_AFFECTING_TRANSFORMS];
+            int xform_count = repl_find_affecting_transforms_for_flat_vertex(
+                focus_vertex, xform_lines, MAX_AFFECTING_TRANSFORMS);
+            for (int i = 0; i < xform_count; i++)
+                editor_state_highlights_append(xform_lines[i], -1, -1,
+                                                    HIGHLIGHT_AFFECTING_TRANSFORM);
         }
     }
 

@@ -37,7 +37,13 @@ picks up calling-scope transforms; `glr_ctrl_push_highlights()` uses the flat
 resolver (source-walk fallback only when the flat program is empty), and the
 affecting-transform marker is recolored vivid amber and reprioritized above the
 feeding-color/normal markers (`src/ui/app/repl_code_panel.c`). Tests added in
-`tests/test_repl_core_commit.c`. Reqs 5–6 remain.
+`tests/test_repl_core_commit.c`. Req 5 is now implemented:
+`glr_ctrl_push_highlights()` suppresses the edit-cursor affecting-transform set
+during replay and instead pushes `HIGHLIGHT_AFFECTING_TRANSFORM` for
+`replay_focus_vertex_flat_idx()` via the req-4 exact-flat resolver, so the
+transforms shaping the replayed vertex show regardless of cursor position
+(`test_replay_focus_vertex_affecting_transforms` in `tests/test_glr_ctrl.c`).
+Req 6 remains.
 
 ## Current Architecture Notes
 
