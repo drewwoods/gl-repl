@@ -45,6 +45,13 @@ typedef enum {
     HIGHLIGHT_FEEDING_NORMAL,
     HIGHLIGHT_FEEDING_COLOR,
     HIGHLIGHT_REPLAY_PC,
+    /* During replay, the funcN(...) call site whose expansion is currently
+     * executing. CALL_SITE is the immediate caller; ROOT_CALL_SITE is the
+     * outermost caller of a nested chain, pushed only when it differs from
+     * the immediate one. Both come from the focused flat command's
+     * call_src_cmd_idx / root_call_src_cmd_idx provenance. */
+    HIGHLIGHT_REPLAY_CALL_SITE,
+    HIGHLIGHT_REPLAY_ROOT_CALL_SITE,
     HIGHLIGHT_SEARCH_MATCH,
     HIGHLIGHT_SELECTION,
     HIGHLIGHT_TUTORIAL_INSERTION,

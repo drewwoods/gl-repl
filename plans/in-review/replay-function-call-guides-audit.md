@@ -36,6 +36,20 @@ derives `src_line_idx` from the last meaningful source command in the current
 step range. That is enough for current code-panel highlighting, but too lossy
 for exact invocation context.
 
+Any feature that needs the active flat command should share one replay-focus
+contract instead of indexing the flat array with `replay_pc()`. Add narrow
+helpers in the replay subsystem:
+
+- `replay_focus_flat_idx()`: last replay focus candidate in the current replay
+  step, using the same focus-candidate predicate as `src_line_idx`.
+- `replay_focus_vertex_flat_idx()`: last `repl_cmd_emits_vertex()` command in
+  the current replay step; `-1` outside vertex replay mode.
+
+Both helpers should derive the current step range from replay state by factoring
+the existing `replay_prev_limit(pc)` logic, so seek, step-back, pause, and
+normal advance all produce the same focus without relying on fade batches or a
+transient `old_pc` local.
+
 The transform-guide path already has most of the rendering machinery needed:
 `edit_overlays_render_cursor_guides()` walks the flat program, applies tracked
 modelview transforms, and uses `cursor_guide_snapshot_with_flat_args()` to
@@ -56,8 +70,8 @@ Recommended implementation:
   `HIGHLIGHT_REPLAY_ROOT_CALL_SITE`.
 - Add UI marker/background colors in `repl_code_panel.c` that are distinct
   from the existing green replay PC highlight.
-- In `glr_ctrl_push_highlights()`, inspect the current replay flat command
-  near `replay_pc()` and push highlights for:
+- In `glr_ctrl_push_highlights()`, inspect `replay_focus_flat_idx()` and, when
+  it resolves to a valid flat command, push highlights for:
   - `flat.call_src_cmd_idx` as the immediate call site.
   - `flat.root_call_src_cmd_idx` as the root call site when it differs.
 - Keep the current `HIGHLIGHT_REPLAY_PC` body-line highlight unchanged.
@@ -134,10 +148,12 @@ Three contract pitfalls to get right (verified against the code):
   `replay_next_vertex_limit()` returns `flat_idx + 1` for a vertex and
   `replay_advance()` stores that as `state->pc` (`replay_playback.c:235`,
   `:420`), so the PC points at the *next* command (or `flat_count`). Do **not**
-  anchor on `replay_pc()` directly. Define `replay_focus_flat_idx` as the
-  **last emitted vertex in the completed step range**: scan `[old_pc, pc)`
-  backward for the last `repl_cmd_emits_vertex()` command. (`old_pc` is the
-  fade-batch begin already tracked by the step machine.)
+  anchor on `replay_pc()` directly. Derive the current step begin by factoring
+  the existing `replay_prev_limit(pc)` logic, then scan `[step_begin, pc)`
+  backward. `replay_focus_flat_idx()` scans for the last replay focus candidate;
+  `replay_focus_vertex_flat_idx()` scans for the last `repl_cmd_emits_vertex()`
+  command. This keeps advance, seek, step-back, and paused replay aligned and
+  avoids using fade batches as focus state.
 - **The frame matrix does not include the vertex args.**
   `compute_before_cursor_matrix()` applies only the transforms *before* the
   flat index (`transform_guides.c:102`); its origin is the local
@@ -159,11 +175,12 @@ Recommended implementation:
 
 - Add replay-specific focus metadata: a narrow accessor (or a field in
   `ReplayRuntimeState` updated alongside `src_line_idx`) that returns
-  `replay_focus_flat_idx` computed as above. Vertex mode only in v1; leave
-  polygon mode unchanged.
-- Extend `SceneGuideSnapshot` with `replay_focus_flat_idx` (and reuse the
+  `replay_focus_flat_idx()` for call-site UI and `replay_focus_vertex_flat_idx()`
+  for vertex axes. Vertex axes are vertex-mode only in v1; leave polygon mode
+  unchanged.
+- Extend `SceneGuideSnapshot` with `replay_focus_vertex_flat_idx` (and reuse the
   existing `replaying` flag), populated in `glr_ctrl_build_guide_snapshot()`
-  when `replay_active()`.
+  when `replay_active()` and `replay_mode() == REPLAY_MODE_VERTEX`.
 - Prefer a **dedicated replay axes walk** over reusing
   `edit_overlays_render_cursor_guides()`: a small walk that applies tracked
   transforms (same `apply_tracked_transform()` / `unwind_transform_stack()`
@@ -193,8 +210,8 @@ Expected behavior:
 
 Tests:
 
-- Assert the snapshot plumbing: `replay_pc_flat_idx` is populated only while
-  replaying, in a controller-level test.
+- Assert the snapshot plumbing: `replay_focus_vertex_flat_idx` is populated only
+  while replaying in vertex mode, in a controller-level test.
 - Extend `test_replay_walk` or `test_edit_overlays` to assert the walker
   reaches the replay focus flat vertex with the transformed modelview.
 - Visual check headless: OSMesa build (`make gl-repl FREEGLUT_OSMESA=1`), load
@@ -203,8 +220,9 @@ Tests:
 
 ## Suggested Implementation Order
 
-1. Land call-site highlighting first. It has the smallest surface area and uses
-   provenance already present on flat commands.
+1. Land the shared replay-focus helper and call-site highlighting first. This
+   has the smallest surface area and uses provenance already present on flat
+   commands.
 2. Add `call_depth` as a v1 depth display. Defer full stack snapshots unless
    exact recursive ancestry is required in the UI.
 3. Add replay-focused vertex guides after the replay focus flat-index contract
