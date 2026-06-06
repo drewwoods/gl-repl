@@ -76,15 +76,18 @@ static void flatten_get_for_var_name(SourceTextView text,
  *                          (-1 if top-level)
  *   root_call_src_cmd_idx-- the outermost call site in nested func calls
  *                          (-1 if top-level)
- *   func_scope_mask      -- bitmask of which func bodies this cmd is inside */
+ *   func_scope_mask      -- bitmask of which func bodies this cmd is inside
+ *   call_depth           -- funcN call-frame nesting/recursion depth (0 = top) */
 static void flat_cmd_set_provenance(GLCmd *cmd, int src_cmd_idx,
                                     int call_src_cmd_idx,
                                     int root_call_src_cmd_idx,
-                                    unsigned int func_scope_mask) {
+                                    unsigned int func_scope_mask,
+                                    int call_depth) {
     cmd->src_cmd_idx = src_cmd_idx;
     cmd->call_src_cmd_idx = call_src_cmd_idx;
     cmd->root_call_src_cmd_idx = root_call_src_cmd_idx;
     cmd->func_scope_mask = func_scope_mask;
+    cmd->call_depth = call_depth;
 }
 
 static int flatten_repl_source_scope_find_block_end(const FlattenContext *ctx, int begin_idx) {
@@ -120,7 +123,8 @@ static int flatten_append_cmd(FlattenContext *ctx, const GLCmd *cmd,
     ctx->flat_cmds[flat_cmd_idx] = *cmd;
     flat_cmd_set_provenance(&ctx->flat_cmds[flat_cmd_idx],
                             src_cmd_idx, call_src_cmd_idx,
-                            root_call_src_cmd_idx, func_scope_mask);
+                            root_call_src_cmd_idx, func_scope_mask,
+                            ctx->call_depth);
 
     if (ctx->flat_local_vars) {
         if (vars && num_vars > 0)

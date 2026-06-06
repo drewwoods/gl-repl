@@ -1298,6 +1298,11 @@ int main(void) {
     ASSERT_TRUE("nested func call provenance root first", repl_state_flat_program_cmds_mut()[1].root_call_src_cmd_idx == 8);
     ASSERT_TRUE("nested func call provenance root second", repl_state_flat_program_cmds_mut()[4].root_call_src_cmd_idx == 9);
     ASSERT_TRUE("nested func scope mask includes both", (repl_state_flat_program_cmds_mut()[1].func_scope_mask & 0x3u) == 0x3u);
+    /* func0 body (depth 1) calls func1 (depth 2): the inner vertices are two
+     * call frames deep, where func_scope_mask alone could not tell depth from
+     * "inside func0 and func1". Both invocations sit at the same depth. */
+    ASSERT_TRUE("nested func call_depth first is 2", repl_state_flat_program_cmds_mut()[1].call_depth == 2);
+    ASSERT_TRUE("nested func call_depth second is 2", repl_state_flat_program_cmds_mut()[4].call_depth == 2);
     {
         int matched = 0;
         editor_state_edit_line_set(8);
@@ -1853,6 +1858,12 @@ int main(void) {
     ASSERT_TRUE("recursive second x", fabsf(repl_state_flat_program_cmds_mut()[1].args[0] - 2.0f) < 1e-6f);
     ASSERT_TRUE("recursive third x", fabsf(repl_state_flat_program_cmds_mut()[2].args[0] - 1.0f) < 1e-6f);
     ASSERT_TRUE("recursive base x", fabsf(repl_state_flat_program_cmds_mut()[3].args[0] - 0.0f) < 1e-6f);
+    /* call_depth climbs with each recursive entry — func_scope_mask cannot
+     * express this since every frame reuses func0's single scope bit. */
+    ASSERT_TRUE("recursive call_depth ladder 1", repl_state_flat_program_cmds_mut()[0].call_depth == 1);
+    ASSERT_TRUE("recursive call_depth ladder 2", repl_state_flat_program_cmds_mut()[1].call_depth == 2);
+    ASSERT_TRUE("recursive call_depth ladder 3", repl_state_flat_program_cmds_mut()[2].call_depth == 3);
+    ASSERT_TRUE("recursive call_depth base 4", repl_state_flat_program_cmds_mut()[3].call_depth == 4);
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0(n) {");

@@ -121,6 +121,11 @@ typedef struct {
     int      call_src_cmd_idx;      /* Immediate call site that expanded this command */
     int      root_call_src_cmd_idx; /* Outermost call site in nested expansion */
     unsigned int func_scope_mask;   /* Function scopes active when command was flattened */
+    int      call_depth;            /* funcN nesting/recursion depth at flatten time
+                                     * (0 = top-level). Unlike func_scope_mask — which is
+                                     * a set of distinct slots and so cannot count repeated
+                                     * recursive entries of the same funcN — this counts
+                                     * every call frame, so recursion depth is visible. */
 } GLCmd;
 
 static inline int repl_cmd_is_transform(CmdType type) {

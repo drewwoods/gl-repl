@@ -303,7 +303,13 @@ static void replay_update_after_pc_change(ReplayRuntimeState *state, int num_fla
     if (state->pc > num_flat_cmds)
         state->pc = num_flat_cmds;
 
-    replay_set_src_line(replay_last_meaningful_src(search_begin, state->pc));
+    /* Resolve the focused command once and read both its source line and its
+     * funcN call-frame depth, so the HUD "depth N" readout and the highlighted
+     * line always describe the same command. */
+    int focus = replay_last_meaningful_flat(search_begin, state->pc);
+    FlatProgramView focus_flat = repl_state_flat_program_view();
+    replay_set_src_line(focus >= 0 ? focus_flat.cmds[focus].src_cmd_idx : -1);
+    state->focus_call_depth = focus >= 0 ? focus_flat.cmds[focus].call_depth : 0;
 
     if (state->pc >= num_flat_cmds && num_flat_cmds > 0) {
         if (state->state == REPLAY_PLAYING) {
