@@ -370,13 +370,13 @@ static void test_capture_restore_round_trip(void) {
                 repl_state_import_export().workspace_header_line_count >= 3);
     ASSERT_STR("workspace header banner restored",
                repl_state_import_export().workspace_header_lines[0],
-               "// @workspace: REPL state (auto-saved)");
+               "/* @workspace: REPL state (auto-saved) */");
     ASSERT_STR("workspace header scene restored",
                repl_state_import_export().workspace_header_lines[1],
-               "// @scene-name Captured Scene");
+               "/* @scene-name Captured Scene */");
     ASSERT_STR("workspace header dir restored",
                repl_state_import_export().workspace_header_lines[2],
-               "// @workspace-dir /tmp/repl-state-stage1");
+               "/* @workspace-dir /tmp/repl-state-stage1 */");
 
     foo_idx = repl_eval_find_predef_var_idx("foo");
     ASSERT_TRUE("foo var restored", foo_idx >= 0);
@@ -417,7 +417,7 @@ static void test_reset_all_restores_default_runtime(void) {
                defaults.import_export.workspace_header_line_count);
     ASSERT_STR("reset_all workspace header banner",
                repl_state_import_export().workspace_header_lines[0],
-               "// @workspace: REPL state (auto-saved)");
+               "/* @workspace: REPL state (auto-saved) */");
 }
 
 /* Regression (feedback P3): the per-line override list cap must

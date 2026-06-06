@@ -281,6 +281,18 @@ int main(void) {
     repl_export_save_output(path1, source_document_view(), NULL);
     export_text = slurp_path(path1);
     ASSERT_TRUE("export file readable", export_text != NULL);
+    ASSERT_TRUE("export uses C89 block comments",
+                strstr(export_text, "//") == NULL);
+    ASSERT_TRUE("export avoids C99 compound GLfloat literals",
+                strstr(export_text, "(GLfloat[]){") == NULL);
+    ASSERT_TRUE("export emits C89 GLfloat vector helpers",
+                strstr(export_text, "static GLfloat *repl_glfloat4") != NULL);
+    ASSERT_TRUE("export uses prototyped display",
+                strstr(export_text, "void display(void)") != NULL &&
+                strstr(export_text, "void display()") == NULL);
+    ASSERT_TRUE("export uses prototyped init",
+                strstr(export_text, "void init(void)") != NULL &&
+                strstr(export_text, "void init()") == NULL);
     ASSERT_TRUE("label helper hoists char pointer",
                 strstr(export_text, "const char *ch;\n  char text[128];") != NULL);
     ASSERT_TRUE("label helper loop reuses declared pointer",

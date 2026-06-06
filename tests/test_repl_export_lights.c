@@ -39,7 +39,7 @@ static char *slurp(const char *path) {
     return buf;
 }
 
-/* Locate the start of the `void init() {` body in the exported file
+/* Locate the start of the `void init(void) {` body in the exported file
  * and verify each generator-produced init line appears before the
  * closing `}`. The window check rejects accidental matches in
  * display() body that share the same substring. */
@@ -58,6 +58,21 @@ static int substring_in_window(const char *text, const char *window_start_marker
     return found;
 }
 
+static void expected_export_line(char *out, size_t out_sz, const char *line) {
+    const char *comment = strstr(line, "//");
+    size_t prefix_len;
+
+    if (!comment) {
+        snprintf(out, out_sz, "%s", line);
+        return;
+    }
+    prefix_len = (size_t)(comment - line);
+    if (prefix_len >= out_sz)
+        prefix_len = out_sz - 1;
+    memcpy(out, line, prefix_len);
+    snprintf(out + prefix_len, out_sz - prefix_len, "/*%s */", comment + 2);
+}
+
 int main(void) {
     const char *path = "/tmp/repl_export_lights_test.c";
 
@@ -72,39 +87,43 @@ int main(void) {
         return test_harness_report(&g_harness, "repl_export_lights");
     }
 
-    /* Init-section lines should land between `void init() {` and the
+    /* Init-section lines should land between `void init(void) {` and the
      * matching close brace just before `int main`. */
     int n_init = repl_export_lights_init_line_count();
     ASSERT_TRUE("init line count > 0", n_init > 0);
     for (int i = 0; i < n_init; i++) {
         char line[256];
+        char expected[256];
         repl_export_lights_init_line(i, line, sizeof(line));
+        expected_export_line(expected, sizeof(expected), line);
         /* The generator emits 2-space-indented lines; strip the leading
          * whitespace because the exported file may add its own
          * indentation in some sections. We match the bare text. */
-        const char *needle = line;
+        const char *needle = expected;
         while (*needle == ' ') needle++;
         char label[512];
         snprintf(label, sizeof(label),
                  "init line %d appears in init() body: %s", i, needle);
-        int found = substring_in_window(text, "void init() {",
+        int found = substring_in_window(text, "void init(void) {",
                                         "}\n\nint main", needle);
         ASSERT_TRUE(label, found);
     }
 
-    /* Display-section lines should land between `void display() {` and
+    /* Display-section lines should land between `void display(void) {` and
      * the closing `glPopAttrib`. */
     int n_disp = repl_export_lights_display_line_count();
     ASSERT_TRUE("display line count > 0", n_disp > 0);
     for (int i = 0; i < n_disp; i++) {
         char line[256];
+        char expected[256];
         repl_export_lights_display_line(i, line, sizeof(line));
-        const char *needle = line;
+        expected_export_line(expected, sizeof(expected), line);
+        const char *needle = expected;
         while (*needle == ' ') needle++;
         char label[512];
         snprintf(label, sizeof(label),
                  "display line %d appears in display() body: %s", i, needle);
-        int found = substring_in_window(text, "void display() {",
+        int found = substring_in_window(text, "void display(void) {",
                                         "glPopAttrib();", needle);
         ASSERT_TRUE(label, found);
     }
@@ -122,13 +141,13 @@ int main(void) {
     ASSERT_TRUE("headlight file readable", text_hl != NULL);
     if (text_hl) {
         int slot0_in_init = substring_in_window(
-            text_hl, "void init() {", "}\n\nint main",
+            text_hl, "void init(void) {", "}\n\nint main",
             "glLightfv(GL_LIGHT0, GL_POSITION");
         int slot0_in_display = substring_in_window(
-            text_hl, "void display() {", "glPopAttrib();",
+            text_hl, "void display(void) {", "glPopAttrib();",
             "glLightfv(GL_LIGHT0, GL_POSITION");
         int slot1_in_display = substring_in_window(
-            text_hl, "void display() {", "glPopAttrib();",
+            text_hl, "void display(void) {", "glPopAttrib();",
             "glLightfv(GL_LIGHT1, GL_POSITION");
         ASSERT_TRUE("headlight: GL_LIGHT0 POSITION lives in init()",
                     slot0_in_init);
@@ -153,10 +172,10 @@ int main(void) {
     ASSERT_TRUE("headlight round-trip file readable", text_rt != NULL);
     if (text_rt) {
         int slot0_in_init = substring_in_window(
-            text_rt, "void init() {", "}\n\nint main",
+            text_rt, "void init(void) {", "}\n\nint main",
             "glLightfv(GL_LIGHT0, GL_POSITION");
         int slot0_in_display = substring_in_window(
-            text_rt, "void display() {", "glPopAttrib();",
+            text_rt, "void display(void) {", "glPopAttrib();",
             "glLightfv(GL_LIGHT0, GL_POSITION");
         ASSERT_TRUE("round-trip: GL_LIGHT0 POSITION still in init()",
                     slot0_in_init);

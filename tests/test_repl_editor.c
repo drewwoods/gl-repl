@@ -535,7 +535,7 @@ int main() {
             refresh_workspace_header_lines();
             for (int i = 0; i < g_workspace_header_line_count; i++) {
                 if (strcmp(g_workspace_header_lines[i],
-                           "// @cfg code_panel = 3") == 0)
+                           "/* @cfg code_panel = 3 */") == 0)
                     found_hidden_export = 1;
             }
             ASSERT_TRUE("workspace header exports hidden code panel",
