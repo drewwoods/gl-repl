@@ -276,6 +276,50 @@ static void test_transform_guides_render(void) {
     }
 }
 
+/* Req 6: during replay the prepared plan's transform guide renders when the
+ * walk reaches the chosen transform's flat index (not the vertex). */
+static void test_replay_transform_guide_render(void) {
+    printf("--- replay transform guide rendering ---\n");
+
+    GLCmd source_cmds[3] = {0};
+    GLCmd flat_cmds[3] = {0};
+    SceneTransformGuidePlan plan;
+
+    source_cmds[0].type = CMD_TRANSLATE3F; source_cmds[0].valid = 1;
+    source_cmds[1].type = CMD_VERTEX3F;    source_cmds[1].valid = 1;
+
+    flat_cmds[0].type = CMD_TRANSLATE3F; flat_cmds[0].valid = 1; flat_cmds[0].src_cmd_idx = 0;
+    flat_cmds[0].args[0] = 2.0f;
+    flat_cmds[1].type = CMD_VERTEX3F;    flat_cmds[1].valid = 1; flat_cmds[1].src_cmd_idx = 1;
+    flat_cmds[1].args[0] = 0.5f; flat_cmds[1].args[1] = 0.5f;
+
+    SceneGuideSnapshot snapshot =
+        base_snapshot(source_cmds, 2, flat_cmds, 2, -1, "");
+    snapshot.replaying = 1;
+    snapshot.replay_focus_vertex_flat_idx = 1;
+    snapshot.alpha_scale = 1.0f;
+    snapshot.anim_time = 0.0f;
+
+    int prepared = scene_transform_guides_prepare(&snapshot, &plan);
+    ASSERT_INT("replay render: plan prepared", prepared, 1);
+    ASSERT_INT("replay render: focus is the translate", plan.cursor_flat_idx, 0);
+
+    float cam_view[16] = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 };
+
+    /* Not due at the vertex flat idx. */
+    gl_stub_counts_reset();
+    scene_transform_guides_render_if_due(&snapshot, &plan, 1, cam_view);
+    ASSERT_INT("replay render: nothing drawn off the focus index",
+               (int)gl_stub_counts[GL_STUB_glBegin], 0);
+
+    /* Due at the transform flat idx → draws the translate guide. */
+    gl_stub_counts_reset();
+    scene_transform_guides_render_if_due(&snapshot, &plan, 0, cam_view);
+    ASSERT_TRUE("replay render: translate guide draws at the transform idx",
+                gl_stub_counts[GL_STUB_glBegin] > 0);
+    ASSERT_INT("replay render: plan consumed after draw", plan.consumed, 1);
+}
+
 #include "scene/guides/geometry_guides.h"
 
 static void test_geometry_guides_render(void) {
@@ -399,9 +443,12 @@ int main(void) {
                           "glTranslatef(1,2,3)");
         snapshot.edit_line_committed_text = "glTranslatef(1,2,3);";
         snapshot.replaying = 1;
-        ASSERT_INT("prepare disabled while replaying",
+        /* Replaying with no valid focus vertex (the default flat idx 0 is a
+         * transform, not a vertex) produces no plan — req 6 only guides when a
+         * replay vertex is in focus. */
+        ASSERT_INT("replay without a focus vertex produces no plan",
                    scene_transform_guides_prepare(&snapshot, &plan), 0);
-        ASSERT_INT("plan inactive while replaying", plan.active, 0);
+        ASSERT_INT("plan inactive without a focus vertex", plan.active, 0);
 
         snapshot.replaying = 0;
         snapshot.show_guides = 0;
@@ -534,8 +581,111 @@ int main(void) {
                    plan.after_flat_idx, 2);
     }
 
+    /* Req 6: replay path builds a transform-guide plan anchored on the
+     * replay-focused vertex. Flat program:
+     *   0 translate (src 0)   1 rotate (src 1)   2 vertex (src 2)
+     * with the replay focus on the vertex at flat idx 2. */
+    {
+        GLCmd source_cmds[3] = {0};
+        GLCmd flat_cmds[3] = {0};
+        SceneTransformGuidePlan plan;
+
+        source_cmds[0].type = CMD_TRANSLATE3F; source_cmds[0].valid = 1;
+        source_cmds[1].type = CMD_ROTATEF;     source_cmds[1].valid = 1;
+        source_cmds[2].type = CMD_VERTEX3F;    source_cmds[2].valid = 1;
+
+        flat_cmds[0].type = CMD_TRANSLATE3F; flat_cmds[0].valid = 1; flat_cmds[0].src_cmd_idx = 0;
+        flat_cmds[1].type = CMD_ROTATEF;     flat_cmds[1].valid = 1; flat_cmds[1].src_cmd_idx = 1;
+        flat_cmds[1].args[0] = 45.0f; flat_cmds[1].args[2] = 1.0f; /* 45deg about +Y */
+        flat_cmds[2].type = CMD_VERTEX3F;    flat_cmds[2].valid = 1; flat_cmds[2].src_cmd_idx = 2;
+
+        SceneGuideSnapshot snapshot =
+            base_snapshot(source_cmds, 3, flat_cmds, 3, -1, "");
+        snapshot.replaying = 1;
+        snapshot.replay_focus_vertex_flat_idx = 2;
+
+        /* (b) Default: no cursor transform selected → nearest in-scope
+         * affecting transform before the vertex is the rotate (flat idx 1). */
+        ASSERT_INT("replay default prepares a plan",
+                   scene_transform_guides_prepare(&snapshot, &plan), 1);
+        ASSERT_INT("replay default focuses nearest transform (rotate)",
+                   plan.cursor_flat_idx, 1);
+        ASSERT_INT("replay plan anchors on the focus vertex",
+                   plan.after_flat_idx, 2);
+        ASSERT_INT("replay plan active", plan.active, 1);
+
+        /* (a) Cursor parked on the translate source line (idx 0) → focus the
+         * matching flat translate (idx 0) instead of the nearest rotate. */
+        snapshot.edit_line_idx = 0;
+        snapshot.input = "glTranslatef(1,2,3)";
+        snapshot.input_len = (int)strlen(snapshot.input);
+        snapshot.edit_line_committed_text = "glTranslatef(1,2,3);";
+        ASSERT_INT("replay cursor-on-transform prepares a plan",
+                   scene_transform_guides_prepare(&snapshot, &plan), 1);
+        ASSERT_INT("replay cursor focuses the cursor's transform (translate)",
+                   plan.cursor_flat_idx, 0);
+
+        /* Cursor on a non-transform line falls back to the nearest. */
+        snapshot.edit_line_idx = 2; /* the vertex line */
+        snapshot.input = "glVertex3f(0,0,0)";
+        snapshot.input_len = (int)strlen(snapshot.input);
+        snapshot.edit_line_committed_text = "glVertex3f(0,0,0);";
+        ASSERT_INT("replay cursor-on-non-transform falls back to nearest",
+                   scene_transform_guides_prepare(&snapshot, &plan), 1);
+        ASSERT_INT("fallback focuses nearest transform (rotate)",
+                   plan.cursor_flat_idx, 1);
+    }
+
+    /* Req 6: replay with no affecting transform before the vertex → no plan. */
+    {
+        GLCmd source_cmds[1] = {0};
+        GLCmd flat_cmds[1] = {0};
+        SceneTransformGuidePlan plan;
+
+        source_cmds[0].type = CMD_VERTEX3F; source_cmds[0].valid = 1;
+        flat_cmds[0].type = CMD_VERTEX3F;   flat_cmds[0].valid = 1; flat_cmds[0].src_cmd_idx = 0;
+
+        SceneGuideSnapshot snapshot =
+            base_snapshot(source_cmds, 1, flat_cmds, 1, -1, "");
+        snapshot.replaying = 1;
+        snapshot.replay_focus_vertex_flat_idx = 0;
+        ASSERT_INT("replay vertex with no transforms → no plan",
+                   scene_transform_guides_prepare(&snapshot, &plan), 0);
+        ASSERT_INT("no plan is inactive", plan.active, 0);
+    }
+
+    /* Req 6: a glPushMatrix/glPopMatrix-popped transform does not affect a
+     * later vertex, so it isn't chosen. Flat program:
+     *   0 push  1 translate(src1)  2 pop  3 rotate(src3)  4 vertex(src4) */
+    {
+        GLCmd source_cmds[5] = {0};
+        GLCmd flat_cmds[5] = {0};
+        SceneTransformGuidePlan plan;
+
+        source_cmds[1].type = CMD_TRANSLATE3F; source_cmds[1].valid = 1;
+        source_cmds[3].type = CMD_ROTATEF;     source_cmds[3].valid = 1;
+        source_cmds[4].type = CMD_VERTEX3F;    source_cmds[4].valid = 1;
+
+        flat_cmds[0].type = CMD_PUSH_MATRIX; flat_cmds[0].valid = 1; flat_cmds[0].src_cmd_idx = 0;
+        flat_cmds[1].type = CMD_TRANSLATE3F; flat_cmds[1].valid = 1; flat_cmds[1].src_cmd_idx = 1;
+        flat_cmds[2].type = CMD_POP_MATRIX;  flat_cmds[2].valid = 1; flat_cmds[2].src_cmd_idx = 2;
+        flat_cmds[3].type = CMD_ROTATEF;     flat_cmds[3].valid = 1; flat_cmds[3].src_cmd_idx = 3;
+        flat_cmds[3].args[0] = 30.0f; flat_cmds[3].args[2] = 1.0f;
+        flat_cmds[4].type = CMD_VERTEX3F;    flat_cmds[4].valid = 1; flat_cmds[4].src_cmd_idx = 4;
+
+        SceneGuideSnapshot snapshot =
+            base_snapshot(source_cmds, 5, flat_cmds, 5, -1, "");
+        snapshot.replaying = 1;
+        snapshot.replay_focus_vertex_flat_idx = 4;
+        ASSERT_INT("replay skips popped transform, prepares a plan",
+                   scene_transform_guides_prepare(&snapshot, &plan), 1);
+        ASSERT_INT("popped translate excluded; rotate chosen",
+                   plan.cursor_flat_idx, 3);
+    }
+
 #ifdef GL_STUBS
     test_transform_guides_render();
+    test_replay_transform_guide_render();
     test_geometry_guides_render();
 #endif
 

@@ -700,6 +700,75 @@ static int transform_input_matches_committed(const SceneGuideSnapshot *snapshot)
             snapshot->input_len == 0);
 }
 
+/* Max in-scope affecting transforms we track for replay focus selection.
+ * Bounded scratch; deeper stacks just cap (the nearest few are what matter). */
+#define TG_MAX_INSCOPE_XFORMS 64
+
+/* Collect the flat indices of the transforms in scope at `vertex_flat_idx`,
+ * walking the flat program backward and honoring glPushMatrix/glPopMatrix/
+ * glLoadIdentity. Writes newest-first, so out[0] is the nearest transform
+ * before the vertex. Returns the count (capped at out_cap).
+ *
+ * This mirrors the flat affecting-transform walk in src/repl/autonormal.c
+ * (repl_find_affecting_transforms_for_flat_vertex), but stays in the scene
+ * module and yields flat indices (not deduped source lines) so the renderer
+ * can anchor on a specific expansion. The scene module must not depend on
+ * repl/core, hence the small re-implementation over the shared GLCmd model. */
+static int collect_inscope_transform_flat_indices(const SceneGuideSnapshot *snapshot,
+                                                  int vertex_flat_idx,
+                                                  int *out, int out_cap) {
+    const GLCmd *cmds = snapshot->flat_program.cmds;
+    int count = 0;
+    int popped_depth = 0;
+    for (int i = vertex_flat_idx - 1; i >= 0 && count < out_cap; i--) {
+        if (!cmds[i].valid) continue;
+        CmdType t = cmds[i].type;
+        if (t == CMD_POP_MATRIX) {
+            popped_depth++;
+        } else if (t == CMD_PUSH_MATRIX) {
+            if (popped_depth > 0) popped_depth--;
+        } else if (t == CMD_LOAD_IDENTITY) {
+            if (popped_depth == 0) break;
+        } else if (t == CMD_TRANSLATE3F || t == CMD_SCALEF || t == CMD_ROTATEF) {
+            if (popped_depth == 0) out[count++] = i;
+        }
+    }
+    return count;
+}
+
+/* Choose which flat transform to guide for the current replay vertex:
+ *  (a) if the edit cursor is parked on a committed transform source line, the
+ *      nearest in-scope flat expansion of that exact source line (so moving
+ *      the cursor onto a transform during replay focuses it on the live
+ *      vertex), else
+ *  (b) the nearest in-scope affecting transform before the vertex.
+ * Returns the flat index, or -1 when no transform affects the vertex. */
+static int scene_replay_transform_focus_flat_idx(const SceneGuideSnapshot *snapshot,
+                                                 int vertex_flat_idx) {
+    int inscope[TG_MAX_INSCOPE_XFORMS];
+    int n = collect_inscope_transform_flat_indices(snapshot, vertex_flat_idx,
+                                                   inscope, TG_MAX_INSCOPE_XFORMS);
+    if (n == 0)
+        return -1;
+
+    int cursor = snapshot->edit_line_idx;
+    if (cursor >= 0 && cursor < snapshot->source_cmd_count &&
+        snapshot->source_cmds[cursor].valid &&
+        (snapshot->source_cmds[cursor].type == CMD_TRANSLATE3F ||
+         snapshot->source_cmds[cursor].type == CMD_ROTATEF ||
+         snapshot->source_cmds[cursor].type == CMD_SCALEF) &&
+        transform_input_matches_committed(snapshot)) {
+        /* inscope[] is newest-first, so the first src match is the closest
+         * preceding expansion of the cursor's transform line. */
+        for (int k = 0; k < n; k++)
+            if (snapshot->flat_program.cmds[inscope[k]].src_cmd_idx == cursor)
+                return inscope[k];
+        /* Cursor is on a transform that doesn't reach this vertex — fall
+         * through to the default nearest in-scope transform. */
+    }
+    return inscope[0];
+}
+
 int scene_transform_guides_prepare(const SceneGuideSnapshot *snapshot,
                                    SceneTransformGuidePlan *plan) {
     if (!snapshot || !plan)
@@ -712,8 +781,29 @@ int scene_transform_guides_prepare(const SceneGuideSnapshot *snapshot,
         .after_flat_idx = -1,
     };
 
-    if (snapshot->replaying || !snapshot->show_guides)
+    if (!snapshot->show_guides)
         return 0;
+
+    /* Replay path (req 6): instead of the edit cursor, anchor on the vertex
+     * the replay step emitted and guide the transform shaping it. cursor_flat_idx
+     * holds the chosen transform; after_flat_idx holds the replay vertex so the
+     * renderer can anchor the guide on it. */
+    if (snapshot->replaying) {
+        int vtx = snapshot->replay_focus_vertex_flat_idx;
+        int flat_count = snapshot->flat_program.cmd_count;
+        if (vtx < 0 || vtx >= flat_count)
+            return 0;
+        const GLCmd *vcmd = &snapshot->flat_program.cmds[vtx];
+        if (!vcmd->valid || !repl_cmd_emits_vertex(vcmd->type))
+            return 0;
+        int xform = scene_replay_transform_focus_flat_idx(snapshot, vtx);
+        if (xform < 0)
+            return 0;
+        plan->cursor_flat_idx = xform;
+        plan->after_flat_idx = vtx;
+        plan->active = 1;
+        return 1;
+    }
 
     int edit_line_idx = snapshot->edit_line_idx;
     if (edit_line_idx < 0 || edit_line_idx >= snapshot->source_cmd_count)
@@ -761,6 +851,39 @@ int scene_transform_guides_prepare(const SceneGuideSnapshot *snapshot,
     return 1;
 }
 
+/* Position of the replay vertex expressed in the frame that exists *before*
+ * `transform_flat_idx`: apply every transform in [transform_flat_idx,
+ * vertex_flat_idx) to identity, then transform the vertex's local args. The
+ * renderer loads (cam_view * before-transform frame), so this origin lands the
+ * guide on the actual replay vertex while the guide vector is still drawn in
+ * the transform's own basis. */
+static void compute_replay_vertex_in_frame(const SceneGuideSnapshot *snapshot,
+                                           int transform_flat_idx,
+                                           int vertex_flat_idx,
+                                           float out[3]) {
+    const GLCmd *cmds = snapshot->flat_program.cmds;
+    const GLCmd *vcmd = &cmds[vertex_flat_idx];
+    float vx = vcmd->args[0];
+    float vy = vcmd->args[1];
+    float vz = (vcmd->type == CMD_VERTEX2F) ? 0.0f : vcmd->args[2];
+
+    glPushMatrix();
+    glLoadIdentity();
+    int depth = 0;
+    for (int i = transform_flat_idx; i < vertex_flat_idx; i++) {
+        if (!cmds[i].valid) continue;
+        if (repl_cmd_is_transform(cmds[i].type))
+            apply_tracked_transform(&cmds[i], &depth);
+    }
+    float m[16];
+    glGetFloatv(GL_MODELVIEW_MATRIX, m);
+    out[0] = m[0]*vx + m[4]*vy + m[8]*vz + m[12];
+    out[1] = m[1]*vx + m[5]*vy + m[9]*vz + m[13];
+    out[2] = m[2]*vx + m[6]*vy + m[10]*vz + m[14];
+    unwind_transform_stack(&depth);
+    glPopMatrix();
+}
+
 void scene_transform_guides_render_if_due(const SceneGuideSnapshot *snapshot,
                                           SceneTransformGuidePlan *plan,
                                           int flat_cmd_idx,
@@ -777,7 +900,18 @@ void scene_transform_guides_render_if_due(const SceneGuideSnapshot *snapshot,
     float guide_origin[3];
 
     glPushMatrix();
-    if (snapshot->xform_guide_mode == SCENE_XFORM_GUIDE_FRAME) {
+    if (snapshot->replaying) {
+        /* Anchor on the replay vertex, drawn in the chosen transform's local
+         * frame so the translate/scale/rotate vector reads in the basis the
+         * command was issued in (req 6, replacing the static frame axes). */
+        float frame[16];
+        float guide_mv[16];
+        compute_before_cursor_matrix(snapshot, plan->cursor_flat_idx, frame);
+        mat4_mul_col_major(cam_view, frame, guide_mv);
+        glLoadMatrixf(guide_mv);
+        compute_replay_vertex_in_frame(snapshot, plan->cursor_flat_idx,
+                                       plan->after_flat_idx, guide_origin);
+    } else if (snapshot->xform_guide_mode == SCENE_XFORM_GUIDE_FRAME) {
         float frame[16];
         float guide_mv[16];
         compute_before_cursor_matrix(snapshot, plan->cursor_flat_idx, frame);
@@ -822,72 +956,4 @@ void scene_transform_guides_render_if_due(const SceneGuideSnapshot *snapshot,
 
     glPopMatrix();
     plan->consumed = 1;
-}
-
-/* World-space length of each replay frame axis. */
-#define TG_REPLAY_AXIS_LEN 0.35f
-
-void scene_replay_frame_axes_render(const SceneGuideSnapshot *snapshot,
-                                    const float cam_view[16]) {
-    if (!snapshot || !cam_view || !snapshot->replaying)
-        return;
-
-    int focus = snapshot->replay_focus_vertex_flat_idx;
-    if (focus < 0 || focus >= snapshot->flat_program.cmd_count)
-        return;
-    const GLCmd *vcmd = &snapshot->flat_program.cmds[focus];
-    if (!vcmd->valid || !repl_cmd_emits_vertex(vcmd->type))
-        return;
-
-    float vx = vcmd->args[0];
-    float vy = vcmd->args[1];
-    float vz = (vcmd->type == CMD_VERTEX2F) ? 0.0f : vcmd->args[2];
-
-    /* Accumulated modelview before the vertex, composed with the camera, then
-     * shifted to the vertex itself: the axes mark the vertex's local frame. */
-    float frame[16];
-    float guide_mv[16];
-    compute_before_cursor_matrix(snapshot, focus, frame);
-    mat4_mul_col_major(cam_view, frame, guide_mv);
-
-    float a = (snapshot->alpha_scale > 0.0f) ? snapshot->alpha_scale : 1.0f;
-    float len = TG_REPLAY_AXIS_LEN;
-
-    transform_guides_push_state();
-    glDisable(GL_LIGHTING);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    glMatrixMode(GL_MODELVIEW);
-    glPushMatrix();
-    glLoadMatrixf(guide_mv);
-    glTranslatef(vx, vy, vz);
-
-    /* Pass 0: depth-test off, stippled, dim — a ghost the geometry can't hide.
-     * Pass 1: depth-tested, full alpha, crisp where unoccluded. */
-    for (int pass = 0; pass < 2; pass++) {
-        float alpha_mul;
-        if (pass == 0) {
-            glDisable(GL_DEPTH_TEST);
-            glEnable(GL_LINE_STIPPLE);
-            glLineStipple(1, SCENE_OCCLUDED_GHOST_STIPPLE);
-            alpha_mul = SCENE_OCCLUDED_GHOST_ALPHA;
-        } else {
-            glEnable(GL_DEPTH_TEST);
-            glDisable(GL_LINE_STIPPLE);
-            alpha_mul = 1.0f;
-        }
-        glLineWidth(pass == 0 ? 1.5f : 2.5f);
-        glBegin(GL_LINES);
-        glColor4f(0.95f, 0.30f, 0.30f, a * alpha_mul); /* +X red   */
-        glVertex3f(0.0f, 0.0f, 0.0f); glVertex3f(len, 0.0f, 0.0f);
-        glColor4f(0.30f, 0.95f, 0.30f, a * alpha_mul); /* +Y green */
-        glVertex3f(0.0f, 0.0f, 0.0f); glVertex3f(0.0f, len, 0.0f);
-        glColor4f(0.40f, 0.55f, 0.95f, a * alpha_mul); /* +Z blue  */
-        glVertex3f(0.0f, 0.0f, 0.0f); glVertex3f(0.0f, 0.0f, len);
-        glEnd();
-    }
-
-    glPopMatrix();
-    transform_guides_pop_state();
 }

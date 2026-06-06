@@ -25,13 +25,4 @@ void scene_transform_guides_render_if_due(const SceneGuideSnapshot *snapshot,
                                           int flat_cmd_idx,
                                           const float cam_view[16]);
 
-/* Draw net coordinate-frame axes (X/Y/Z) at the active replay vertex
- * (snapshot->replay_focus_vertex_flat_idx), anchored at the vertex position
- * under the accumulated modelview. No-op unless snapshot->replaying and a
- * valid focus vertex is set. `cam_view` is the current camera-aligned view
- * matrix. This is the replay-time counterpart to the edit-time per-op guides,
- * which are suppressed while replaying. */
-void scene_replay_frame_axes_render(const SceneGuideSnapshot *snapshot,
-                                    const float cam_view[16]);
-
 #endif /* SCENE_TRANSFORM_GUIDES_H */

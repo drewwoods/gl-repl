@@ -1,6 +1,6 @@
 # Replay Function Call And Vertex Guide Debugging Audit
 
-Status: in-review
+Status: done
 Date: 2026-06-06
 
 ## Intent
@@ -43,7 +43,18 @@ during replay and instead pushes `HIGHLIGHT_AFFECTING_TRANSFORM` for
 `replay_focus_vertex_flat_idx()` via the req-4 exact-flat resolver, so the
 transforms shaping the replayed vertex show regardless of cursor position
 (`test_replay_focus_vertex_affecting_transforms` in `tests/test_glr_ctrl.c`).
-Req 6 remains.
+Req 6 is now implemented and **all six reqs are complete**:
+`scene_transform_guides_prepare()` (`src/scene/guides/transform_guides.c`) gains
+a replay branch that picks a transform focus for the replay vertex —
+cursor-on-transform (nearest matching expansion) or the nearest in-scope
+affecting transform — and `scene_transform_guides_render_if_due()` anchors the
+existing translate/scale/rotate guide on the replay vertex (drawn in the
+transform's local frame). The static `scene_replay_frame_axes_render()` and its
+`edit_overlays.c` call are removed. The in-scope transform selection lives in
+the scene module as a small flat-program walk (no repl/core dependency;
+`scene_demo` still links). Tests added in `tests/test_scene_guides.c` (replay
+prepare cases — default nearest, cursor-on-transform, no-transform, popped
+scope — plus a GL_STUBS render smoke test).
 
 ## Current Architecture Notes
 
