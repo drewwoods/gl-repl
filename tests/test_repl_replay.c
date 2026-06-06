@@ -669,9 +669,111 @@ static void test_replay_rendering(void) {
 }
 #endif
 
+/* Request 1: during replay the focused flat command carries the funcN(...)
+ * call-site provenance (call_src_cmd_idx / root_call_src_cmd_idx) that
+ * glr_ctrl_push_highlights() turns into call-site gutter markers. Verify
+ * replay_focus_flat_idx() lands on the live (focus-candidate) command and that
+ * its provenance names the right invocation for a reused function, and that
+ * immediate vs. root diverge for nested calls. */
+static void test_replay_focus_call_site_provenance(void) {
+    /* --- Reused single-level function: two distinct call sites (lines 5,6) --- */
+    glr_ctrl_reset_all();
+    editor_feed_line("func0() {");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(1, 1, 1);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("}");
+    editor_feed_line("func0();");
+    editor_feed_line("func0();");
+    repl_flatten_commands(editor_state_edit_line());
+
+    replay_start();
+    g_replay_mode = REPLAY_MODE_VERTEX;
+    g_replay_state = REPLAY_PAUSED;
+
+    const GLCmd *flat = repl_state_flat_program_view().cmds;
+
+    replay_advance(repl_state_flat_program_view());
+    int f1 = replay_focus_flat_idx();
+    ASSERT_TRUE("reused focus is a vertex",
+                f1 >= 0 && repl_cmd_emits_vertex(flat[f1].type));
+    ASSERT_TRUE("reused focus call site is first call line (5)",
+                f1 >= 0 && flat[f1].call_src_cmd_idx == 5);
+    ASSERT_TRUE("reused focus root == immediate (single level)",
+                f1 >= 0 && flat[f1].root_call_src_cmd_idx == flat[f1].call_src_cmd_idx);
+
+    replay_advance(repl_state_flat_program_view());
+    int f2 = replay_focus_flat_idx();
+    ASSERT_TRUE("reused second focus call site is second call line (6)",
+                f2 >= 0 && flat[f2].call_src_cmd_idx == 6);
+
+    replay_stop();
+
+    /* --- Nested calls: immediate (inner, line 6) and root (outer, 8/9) differ --- */
+    glr_ctrl_reset_all();
+    editor_feed_line("func1(a, b) {");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(a, b, 0);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("}");
+    editor_feed_line("func0(scale) {");
+    editor_feed_line("func1(scale, scale + 1);");
+    editor_feed_line("}");
+    editor_feed_line("func0(2);");
+    editor_feed_line("func0(4);");
+    repl_flatten_commands(editor_state_edit_line());
+
+    replay_start();
+    g_replay_mode = REPLAY_MODE_VERTEX;
+    g_replay_state = REPLAY_PAUSED;
+
+    flat = repl_state_flat_program_view().cmds;
+
+    replay_advance(repl_state_flat_program_view());
+    int n1 = replay_focus_flat_idx();
+    ASSERT_TRUE("nested focus immediate call site is inner call (6)",
+                n1 >= 0 && flat[n1].call_src_cmd_idx == 6);
+    ASSERT_TRUE("nested focus root call site is first outer call (8)",
+                n1 >= 0 && flat[n1].root_call_src_cmd_idx == 8);
+    ASSERT_TRUE("nested focus immediate != root",
+                n1 >= 0 && flat[n1].call_src_cmd_idx != flat[n1].root_call_src_cmd_idx);
+
+    replay_advance(repl_state_flat_program_view());
+    int n2 = replay_focus_flat_idx();
+    ASSERT_TRUE("nested second focus root is second outer call (9)",
+                n2 >= 0 && flat[n2].root_call_src_cmd_idx == 9);
+    ASSERT_TRUE("nested second focus immediate still inner call (6)",
+                n2 >= 0 && flat[n2].call_src_cmd_idx == 6);
+
+    replay_stop();
+
+    /* --- Top-level (no function): focus has no call site --- */
+    glr_ctrl_reset_all();
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glEnd();");
+    repl_flatten_commands(editor_state_edit_line());
+
+    replay_start();
+    g_replay_mode = REPLAY_MODE_VERTEX;
+    g_replay_state = REPLAY_PAUSED;
+    flat = repl_state_flat_program_view().cmds;
+
+    replay_advance(repl_state_flat_program_view());
+    int t1 = replay_focus_flat_idx();
+    ASSERT_TRUE("top-level focus has no call site",
+                t1 >= 0 && flat[t1].call_src_cmd_idx < 0);
+
+    replay_stop();
+
+    /* Inactive replay yields no focus. */
+    ASSERT_TRUE("inactive replay focus is -1", replay_focus_flat_idx() == -1);
+}
+
 int main(void) {
     test_replay_basic_controls();
     test_replay_stepping();
+    test_replay_focus_call_site_provenance();
     test_replay_tessellation_stepping();
     test_replay_fade_batches();
     test_replay_input();

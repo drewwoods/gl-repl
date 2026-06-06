@@ -80,6 +80,8 @@ typedef struct {
     int                     highlight_color_idx;
     int                     highlight_tutorial_insertion_idx;
     int                     highlight_matching_push_idx;
+    int                     highlight_replay_call_site_idx;
+    int                     highlight_replay_root_call_site_idx;
 } ReplCodePanelBuilder;
 
 static const char *repl_code_panel_display_text(const UiRenderSnapshot *snap, int line_idx);
@@ -524,11 +526,15 @@ static void repl_code_panel_find_highlight_rows(const UiRenderSnapshot *snap,
                                                 int *out_normal_idx,
                                                 int *out_color_idx,
                                                 int *out_tutorial_insertion_idx,
-                                                int *out_matching_push_idx) {
+                                                int *out_matching_push_idx,
+                                                int *out_replay_call_site_idx,
+                                                int *out_replay_root_call_site_idx) {
     int normal_idx = -1;
     int color_idx = -1;
     int tutorial_insertion_idx = -1;
     int matching_push_idx = -1;
+    int replay_call_site_idx = -1;
+    int replay_root_call_site_idx = -1;
 
     if (snap && snap->editor_highlights) {
         for (int i = 0; i < snap->editor_highlights->count; i++) {
@@ -541,6 +547,10 @@ static void repl_code_panel_find_highlight_rows(const UiRenderSnapshot *snap,
                 tutorial_insertion_idx = highlight->line_idx;
             else if (highlight->kind == HIGHLIGHT_MATCHING_PUSH_MATRIX)
                 matching_push_idx = highlight->line_idx;
+            else if (highlight->kind == HIGHLIGHT_REPLAY_CALL_SITE)
+                replay_call_site_idx = highlight->line_idx;
+            else if (highlight->kind == HIGHLIGHT_REPLAY_ROOT_CALL_SITE)
+                replay_root_call_site_idx = highlight->line_idx;
         }
     }
 
@@ -548,6 +558,9 @@ static void repl_code_panel_find_highlight_rows(const UiRenderSnapshot *snap,
     if (out_color_idx) *out_color_idx = color_idx;
     if (out_tutorial_insertion_idx) *out_tutorial_insertion_idx = tutorial_insertion_idx;
     if (out_matching_push_idx) *out_matching_push_idx = matching_push_idx;
+    if (out_replay_call_site_idx) *out_replay_call_site_idx = replay_call_site_idx;
+    if (out_replay_root_call_site_idx)
+        *out_replay_root_call_site_idx = replay_root_call_site_idx;
 }
 
 /* HIGHLIGHT_AFFECTING_TRANSFORM is multi-entry per frame, so we scan
@@ -602,7 +615,9 @@ static int repl_code_panel_init_builder(ReplCodePanelBuilder *builder,
                                         &builder->highlight_normal_idx,
                                         &builder->highlight_color_idx,
                                         &builder->highlight_tutorial_insertion_idx,
-                                        &builder->highlight_matching_push_idx);
+                                        &builder->highlight_matching_push_idx,
+                                        &builder->highlight_replay_call_site_idx,
+                                        &builder->highlight_replay_root_call_site_idx);
 
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (cp_w <= 0 || cp_h <= 0)
@@ -742,6 +757,8 @@ static void repl_code_panel_apply_tutorial_insertion_marker(
 typedef enum {
     MARKER_PRIORITY_NONE = 0,
     MARKER_PRIORITY_REPLAY,
+    MARKER_PRIORITY_REPLAY_ROOT_CALL_SITE,
+    MARKER_PRIORITY_REPLAY_CALL_SITE,
     MARKER_PRIORITY_AFFECTING_TRANSFORM,
     MARKER_PRIORITY_MATCHING_PUSH,
     MARKER_PRIORITY_FEEDING_NORMAL,
@@ -780,6 +797,24 @@ static void repl_code_panel_apply_command_overlays(ReplCodePanelBuilder *builder
         line_idx == builder->snap->replay.src_line_idx) {
         priority = MARKER_PRIORITY_REPLAY;
         color = repl_code_panel_rgba(0.20f, 0.90f, 0.30f, 0.85f);
+    }
+
+    /* Replay call-site markers (cyan family) — the funcN(...) line(s) whose
+     * expansion is currently executing. Distinct from the green PC marker so a
+     * reused/recursive function shows which invocation is live. Immediate
+     * caller (brighter) outranks the root caller of a nested chain (dimmer). */
+    if (line_idx >= 0 && line_idx == builder->highlight_replay_root_call_site_idx) {
+        if (MARKER_PRIORITY_REPLAY_ROOT_CALL_SITE > priority) {
+            priority = MARKER_PRIORITY_REPLAY_ROOT_CALL_SITE;
+            color = repl_code_panel_rgba(0.20f, 0.55f, 0.70f, 0.85f);
+        }
+    }
+
+    if (line_idx >= 0 && line_idx == builder->highlight_replay_call_site_idx) {
+        if (MARKER_PRIORITY_REPLAY_CALL_SITE > priority) {
+            priority = MARKER_PRIORITY_REPLAY_CALL_SITE;
+            color = repl_code_panel_rgba(0.30f, 0.85f, 0.95f, 0.90f);
+        }
     }
 
     if (repl_code_panel_line_is_affecting_transform(builder->snap, line_idx)) {

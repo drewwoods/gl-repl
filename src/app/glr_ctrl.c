@@ -395,6 +395,26 @@ static void glr_ctrl_push_highlights(void) {
         editor_state_highlights_append(src_line, -1, -1,
                                             HIGHLIGHT_REPLAY_PC);
 
+    /* When the focused replay command was expanded from a funcN(...) call,
+     * also light up the call site(s) so a reused or recursive function shows
+     * which invocation is live (the PC line above is the body line inside the
+     * function). call_src_cmd_idx is the immediate caller; root_call_src_cmd_idx
+     * the outermost caller of a nested chain — push it only when distinct. */
+    if (replay_active()) {
+        int focus = replay_focus_flat_idx();
+        FlatProgramView flat = repl_state_flat_program_view();
+        if (focus >= 0 && focus < flat.cmd_count) {
+            int call_site = flat.cmds[focus].call_src_cmd_idx;
+            int root_site = flat.cmds[focus].root_call_src_cmd_idx;
+            if (call_site >= 0)
+                editor_state_highlights_append(call_site, -1, -1,
+                                                    HIGHLIGHT_REPLAY_CALL_SITE);
+            if (root_site >= 0 && root_site != call_site)
+                editor_state_highlights_append(root_site, -1, -1,
+                                                    HIGHLIGHT_REPLAY_ROOT_CALL_SITE);
+        }
+    }
+
     if (tutorial_active()) {
         int insertion_line = tutorial_expected_commit_line();
         if (insertion_line >= 0)

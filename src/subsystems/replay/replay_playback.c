@@ -96,7 +96,7 @@ static int replay_cmd_is_focus_candidate(CmdType type) {
     }
 }
 
-static int replay_last_meaningful_src(int begin, int end_exclusive) {
+static int replay_last_meaningful_flat(int begin, int end_exclusive) {
     FlatProgramView flat_program = repl_state_flat_program_view();
     const GLCmd *flat_cmds = flat_program.cmds;
 
@@ -104,9 +104,16 @@ static int replay_last_meaningful_src(int begin, int end_exclusive) {
         if (!flat_cmds[flat_idx].valid) continue;
         if (!replay_cmd_is_focus_candidate(flat_cmds[flat_idx].type)) continue;
         if (flat_cmds[flat_idx].src_cmd_idx >= 0)
-            return flat_cmds[flat_idx].src_cmd_idx;
+            return flat_idx;
     }
     return -1;
+}
+
+static int replay_last_meaningful_src(int begin, int end_exclusive) {
+    int flat_idx = replay_last_meaningful_flat(begin, end_exclusive);
+    if (flat_idx < 0)
+        return -1;
+    return repl_state_flat_program_view().cmds[flat_idx].src_cmd_idx;
 }
 
 void replay_set_src_line(int src_line) {
@@ -277,6 +284,17 @@ static int replay_prev_limit(int current_pc) {
     }
 
     return prev_pc;
+}
+
+int replay_focus_flat_idx(void) {
+    const ReplayRuntimeState *state = replay_state_const();
+    if (!state->active)
+        return -1;
+    /* Derive the active step's begin the same way step-back does, so the
+     * focus is identical under advance, seek, step-back, and pause — and
+     * never relies on the transient old_pc local or fade-batch state. */
+    int begin = replay_prev_limit(state->pc);
+    return replay_last_meaningful_flat(begin, state->pc);
 }
 
 static void replay_update_after_pc_change(ReplayRuntimeState *state, int num_flat_cmds, int search_begin) {

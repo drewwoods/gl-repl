@@ -128,6 +128,17 @@ int    replay_mode(void);            /* .mode — REPLAY_MODE_VERTEX/POLYGON */
 int    replay_src_line(void);        /* .src_line_idx — source line of current cmd */
 int    replay_total_flat(void);      /* .total_flat_cmds — captured at start */
 
+/* Flat-program index of the command the current replay step focuses on:
+ * the last focus-candidate command in the active step range. Unlike
+ * replay_pc() — which is the execution *limit* and points one past the
+ * step's last emitted command (or at flat_count) — this resolves to the
+ * actual current command, so callers can read its provenance
+ * (call_src_cmd_idx, root_call_src_cmd_idx, func_scope_mask, ...). The
+ * step range is derived the same way step-back is, so advance, seek,
+ * step-back, and paused replay all agree. Returns -1 when replay is
+ * inactive or the step has no focus-candidate command. */
+int    replay_focus_flat_idx(void);
+
 /* --- Handler API ---
  *
  * Small routing surface for controller/editor input code. UI hit handling calls
