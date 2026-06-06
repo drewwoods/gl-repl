@@ -1469,6 +1469,67 @@ static void test_replay_call_site_highlights_are_pushed(void) {
                count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_SITE, 6), 0);
 }
 
+/* Req 5: during replay the affecting-transform highlight tracks the
+ * replay-focused vertex (via the req-4 exact-flat resolver), not the edit
+ * cursor — and each expansion shows only its own in-scope transforms. */
+static void test_replay_focus_vertex_affecting_transforms(void) {
+    printf("--- imrepl_ctrl replay focus-vertex affecting transforms ---\n");
+
+    glr_ctrl_reset_all();
+    editor_feed_line("func0() {");          /* 0 */
+    editor_feed_line("glBegin(GL_POINTS);"); /* 1 */
+    editor_feed_line("glVertex3f(0, 0, 0);"); /* 2 */
+    editor_feed_line("glEnd();");            /* 3 */
+    editor_feed_line("}");                   /* 4 */
+    editor_feed_line("glTranslatef(1, 0, 0);"); /* 5 */
+    editor_feed_line("func0();");            /* 6 */
+    editor_feed_line("glRotatef(45, 0, 0, 1);"); /* 7 */
+    editor_feed_line("glTranslatef(2, 0, 0);"); /* 8 */
+    editor_feed_line("func0();");            /* 9 */
+    repl_flatten_commands(editor_state_edit_line());
+
+    /* Park the edit cursor on the in-body vertex (line 2). Off replay, its
+     * flat resolver would union BOTH expansions → {5, 7, 8}; this lets the
+     * test prove replay precedence (the first-vertex focus shows only {5}). */
+    editor_insert_mode_set(0);
+    editor_state_edit_line_set(2);
+
+    replay_start();
+    replay_state_mut()->state = REPLAY_PAUSED;
+    replay_state_mut()->mode = REPLAY_MODE_VERTEX;
+
+    /* First vertex: modelview is just translate@5. */
+    replay_advance(repl_state_flat_program_view());
+    glr_ctrl_push_highlights();
+    ASSERT_INT("first replay vertex highlights its call-site translate",
+               count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 5), 1);
+    ASSERT_INT("first replay vertex does NOT show second-call rotate",
+               count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 7), 0);
+    ASSERT_INT("first replay vertex does NOT show second-call translate",
+               count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 8), 0);
+
+    /* Second vertex: modelview accumulated translate@5, rotate@7, translate@8. */
+    replay_advance(repl_state_flat_program_view());
+    glr_ctrl_push_highlights();
+    ASSERT_INT("second replay vertex shows first translate",
+               count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 5), 1);
+    ASSERT_INT("second replay vertex shows the rotate",
+               count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 7), 1);
+    ASSERT_INT("second replay vertex shows second translate",
+               count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 8), 1);
+
+    /* Off replay the edit-cursor set returns: cursor on line 2 unions both
+     * expansions, so all three transform lines light up. */
+    replay_stop();
+    glr_ctrl_push_highlights();
+    ASSERT_INT("post-replay cursor union shows first translate",
+               count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 5), 1);
+    ASSERT_INT("post-replay cursor union shows the rotate",
+               count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 7), 1);
+    ASSERT_INT("post-replay cursor union shows second translate",
+               count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 8), 1);
+}
+
 /* Audit #41 prep: route_numeric_swatch_hit open-codes 68 lines of
  * compile + parse + ReplCompiledChange construction + apply + reload
  * inside the controller's router. The audit proposes extracting that
@@ -2119,6 +2180,7 @@ int main(void) {
     test_display_frame_no_replay_means_no_fade_plumbing();
     test_display_frame_follows_replay_line_after_tick();
     test_replay_call_site_highlights_are_pushed();
+    test_replay_focus_vertex_affecting_transforms();
     test_numeric_swatch_step_commits_line_and_undoes();
     test_numeric_swatch_no_op_outside_numeric_arg();
     test_numeric_swatch_no_op_in_insert_mode();
