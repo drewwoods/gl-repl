@@ -122,7 +122,13 @@ static void test_collector_and_export(void) {
 
     ASSERT_TRUE("emits tuning_step", contains(c, "tuning_step"));
     ASSERT_TRUE("emits draw_tuning_overlay def", contains(c, "void draw_tuning_overlay"));
+    ASSERT_TRUE("emits hud_text helper",
+                contains(c, "static void hud_text(float x, float y, const char *fmt, ...)"));
     ASSERT_TRUE("calls draw_tuning_overlay", contains(c, "draw_tuning_overlay();"));
+    ASSERT_TRUE("hud_text formats via vsnprintf",
+                contains(c, "vsnprintf(line_text, sizeof line_text, fmt, args);"));
+    ASSERT_TRUE("overlay uses hud_text helper",
+                contains(c, "hud_text(8.0f, text_y, \"q/a  amp = %.4g\", (double)amp);"));
     ASSERT_TRUE("emits readable window-size globals", contains(c, "static int window_width"));
     ASSERT_TRUE("captures window size in reshape",
                 contains(c, "window_width = w;\n  window_height = h;"));
@@ -168,6 +174,7 @@ static void test_untagged_baseline(void) {
     char *c = read_file(path);
     ASSERT_TRUE("export readable (none)", c != NULL);
     ASSERT_TRUE("no HUD when untagged", !contains(c, "draw_tuning_overlay"));
+    ASSERT_TRUE("no hud_text when untagged", !contains(c, "hud_text("));
     ASSERT_TRUE("no tuning_step when untagged", !contains(c, "tuning_step"));
     ASSERT_TRUE("no knob decode when untagged",
                 !contains(c, "normalized_key"));
@@ -263,6 +270,7 @@ static void test_generated_names_do_not_shadow_tuned_vars(void) {
     editor_feed_line("float y = 3; // @tune");
     editor_feed_line("float w = 4; // @tune");
     editor_feed_line("float h = 5; // @tune");
+    editor_feed_line("float hud_text = 6; // @tune");
     editor_feed_line("glBegin(GL_POINTS);");
     editor_feed_line("glVertex3f(key, x, y);");
     editor_feed_line("glVertex3f(w, h, 0);");
@@ -278,10 +286,14 @@ static void test_generated_names_do_not_shadow_tuned_vars(void) {
     ASSERT_TRUE("old overlay w/h locals absent", !contains(c, "int w ="));
     ASSERT_TRUE("old overlay y local absent", !contains(c, "float y = (float)"));
     ASSERT_TRUE("old overlay ln local absent", !contains(c, "char ln[96]"));
+    ASSERT_TRUE("hud_text helper name falls back around user var",
+                !contains(c, "static void hud_text(float x, float y, const char *fmt, ...)"));
     ASSERT_TRUE("tuned key still adjusted",
                 contains(c, "key += tuning_step(key) * step_scale"));
     ASSERT_TRUE("tuned h still adjusted",
                 contains(c, "h += tuning_step(h) * step_scale"));
+    ASSERT_TRUE("tuned hud_text still adjusted",
+                contains(c, "hud_text += tuning_step(hud_text) * step_scale"));
     free(c);
 
     ASSERT_INT("shadow-collision export compiles against stubs",

@@ -1766,6 +1766,7 @@ typedef struct {
     char draw_scene[EXPORT_NAME_MAX];
     char draw_tuning_overlay[EXPORT_NAME_MAX];
     char tuning_step[EXPORT_NAME_MAX];
+    char hud_text[EXPORT_NAME_MAX];
     char tuning_window_width[EXPORT_NAME_MAX];
     char tuning_window_height[EXPORT_NAME_MAX];
     char keyboard_key[EXPORT_NAME_MAX];
@@ -1777,8 +1778,6 @@ typedef struct {
     char overlay_width[EXPORT_NAME_MAX];
     char overlay_height[EXPORT_NAME_MAX];
     char overlay_text_y[EXPORT_NAME_MAX];
-    char overlay_line_text[EXPORT_NAME_MAX];
-    char overlay_char_ptr[EXPORT_NAME_MAX];
 } ExportGeneratedNames;
 
 typedef struct {
@@ -1882,6 +1881,8 @@ static void export_generated_names_init(ExportGeneratedNames *names) {
                        "draw_tuning_overlay", "draw_repl_tuning_overlay");
     export_choose_name(&used, names->tuning_step,
                        "tuning_step", "tune_compute_step");
+    export_choose_name(&used, names->hud_text,
+                       "hud_text", "repl_hud_text");
     export_choose_name(&used, names->tuning_window_width,
                        "window_width", "tuning_window_width");
     export_choose_name(&used, names->tuning_window_height,
@@ -1904,10 +1905,6 @@ static void export_generated_names_init(ExportGeneratedNames *names) {
                        "overlay_height", "tuning_overlay_height");
     export_choose_name(&used, names->overlay_text_y,
                        "text_y", "overlay_text_y");
-    export_choose_name(&used, names->overlay_line_text,
-                       "line_text", "overlay_line_text");
-    export_choose_name(&used, names->overlay_char_ptr,
-                       "ch", "overlay_char");
 }
 
 /* Word-boundary-aware substring scan: returns 1 iff `needle` appears in
@@ -2142,8 +2139,8 @@ STATIC_ASSERT(sizeof(k_tune_down_keys) - 1 == REPL_TUNE_MAX_KNOBS,
               tune_down_key_count);
 
 /* Prologue: window-size globals (captured in reshape, read by the HUD),
- * the swatch-step mirror, and the HUD draw pass. Emitted only when at least
- * one variable is @tune-tagged. */
+ * the swatch-step mirror, a formatted HUD-text helper, and the HUD draw pass.
+ * Emitted only when at least one variable is @tune-tagged. */
 static void write_tune_helpers(FILE *f, const ExportNeeds *needs,
                                const ExportGeneratedNames *names) {
     if (needs->tune_total > needs->tune_count)
@@ -2151,7 +2148,8 @@ static void write_tune_helpers(FILE *f, const ExportNeeds *needs,
             "\n/* @tune: %d variables tagged; capped at %d keyboard knobs. */\n",
             needs->tune_total, REPL_TUNE_MAX_KNOBS);
     fprintf(f,
-        "\n#include <stdio.h>\n"
+        "\n#include <stdarg.h>\n"
+        "#include <stdio.h>\n"
         "\n/* @tune knobs: keyboard-adjustable variables + overlay, generated because\n"
         " * one or more `float` decls carried a `// @tune` tag. */\n"
         "static int %s = 800;\n"
@@ -2162,6 +2160,19 @@ static void write_tune_helpers(FILE *f, const ExportNeeds *needs,
         "  float magnitude = fabsf(value);\n"
         "  float exponent = (magnitude < 10.0f) ? 0.0f : floorf(log10f(magnitude));\n"
         "  return 0.05f * powf(10.0f, exponent);\n"
+        "}\n"
+        "\n/* Draw formatted bitmap text in screen-space HUD coordinates. */\n"
+        "static void %s(float x, float y, const char *fmt, ...) {\n"
+        "  char line_text[96];\n"
+        "  va_list args;\n"
+        "\n"
+        "  va_start(args, fmt);\n"
+        "  vsnprintf(line_text, sizeof line_text, fmt, args);\n"
+        "  va_end(args);\n"
+        "\n"
+        "  glRasterPos2f(x, y);\n"
+        "  for (const char *ch = line_text; *ch; ch++)\n"
+        "    glutBitmapCharacter(GLUT_BITMAP_9_BY_15, (unsigned char)*ch);\n"
         "}\n"
         "\nstatic void %s(void) {\n"
         "  int %s = %s;\n"
@@ -2181,11 +2192,11 @@ static void write_tune_helpers(FILE *f, const ExportNeeds *needs,
         "  glDisable(GL_DEPTH_TEST);\n"
         "  glColor3f(1.0f, 1.0f, 1.0f);\n"
         "\n"
-        "  float %s = (float)%s - 18.0f;\n"
-        "  char %s[96];\n",
+        "  float %s = (float)%s - 18.0f;\n",
         names->tuning_window_width,
         names->tuning_window_height,
         names->tuning_step,
+        names->hud_text,
         names->draw_tuning_overlay,
         names->overlay_width,
         names->tuning_window_width,
@@ -2194,29 +2205,16 @@ static void write_tune_helpers(FILE *f, const ExportNeeds *needs,
         names->overlay_width,
         names->overlay_height,
         names->overlay_text_y,
-        names->overlay_height,
-        names->overlay_line_text);
+        names->overlay_height);
     for (int i = 0; i < needs->tune_count; i++) {
         fprintf(f,
             "\n"
-            "  snprintf(%s,\n"
-            "           sizeof %s,\n"
-            "           \"%c/%c  %s = %%.4g\", (double)%s);\n"
-            "  glRasterPos2f(8.0f, %s);\n"
-            "  for (const char *%s = %s; *%s; %s++)\n"
-            "    glutBitmapCharacter(GLUT_BITMAP_9_BY_15,\n"
-            "                        (unsigned char)*%s);\n"
+            "  %s(8.0f, %s, \"%c/%c  %s = %%.4g\", (double)%s);\n"
             "  %s -= 16.0f;\n",
-            names->overlay_line_text,
-            names->overlay_line_text,
+            names->hud_text,
+            names->overlay_text_y,
             k_tune_up_keys[i], k_tune_down_keys[i],
             needs->tune_names[i], needs->tune_names[i],
-            names->overlay_text_y,
-            names->overlay_char_ptr,
-            names->overlay_line_text,
-            names->overlay_char_ptr,
-            names->overlay_char_ptr,
-            names->overlay_char_ptr,
             names->overlay_text_y);
     }
     fprintf(f,
