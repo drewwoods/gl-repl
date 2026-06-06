@@ -759,10 +759,14 @@ typedef enum {
     MARKER_PRIORITY_REPLAY,
     MARKER_PRIORITY_REPLAY_ROOT_CALL_SITE,
     MARKER_PRIORITY_REPLAY_CALL_SITE,
-    MARKER_PRIORITY_AFFECTING_TRANSFORM,
     MARKER_PRIORITY_MATCHING_PUSH,
     MARKER_PRIORITY_FEEDING_NORMAL,
     MARKER_PRIORITY_FEEDING_COLOR,
+    /* Above the feeding markers: the affecting-transform set now resolves
+     * through the flat program and can land on a line that also carries a
+     * feeding-color/normal marker for a different cursor query, so it must
+     * win rather than be masked (req 4). */
+    MARKER_PRIORITY_AFFECTING_TRANSFORM,
     MARKER_PRIORITY_UNBALANCED,
     MARKER_PRIORITY_TUTORIAL_INSERTION
 } MarkerPriority;
@@ -820,7 +824,10 @@ static void repl_code_panel_apply_command_overlays(ReplCodePanelBuilder *builder
     if (repl_code_panel_line_is_affecting_transform(builder->snap, line_idx)) {
         if (MARKER_PRIORITY_AFFECTING_TRANSFORM > priority) {
             priority = MARKER_PRIORITY_AFFECTING_TRANSFORM;
-            color = repl_code_panel_rgba(0.95f, 0.65f, 0.40f, 0.85f);
+            /* Vivid amber — deliberately redder/more saturated than the pale
+             * feeding-color yellow (0.95,0.85,0.30) and clear of the blue
+             * feeding-normal marker, so the transform set reads distinctly. */
+            color = repl_code_panel_rgba(1.0f, 0.50f, 0.10f, 0.92f);
         }
     }
 

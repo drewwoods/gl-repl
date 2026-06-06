@@ -320,6 +320,29 @@ int  repl_find_matching_pop_matrix(int line_idx);
 #define MAX_AFFECTING_TRANSFORMS 32
 int  repl_find_affecting_transforms(int line_idx, int *out_line_idx, int out_cap);
 
+/* Flat-program (cross-function-accurate) variants of the affecting-transform
+ * lookup. The source walk above stops at CMD_FUNC_DEF and treats function
+ * bodies as opaque, so a vertex *inside* a funcN body never sees the
+ * calling-scope transforms. These walk the flattened program instead, where
+ * every funcN body is already inlined and every loop unrolled, so call-site
+ * transforms and in-body transforms both count.
+ *
+ * repl_find_affecting_transforms_for_flat_vertex: takes one concrete flat
+ * vertex / tess-vertex / glut-solid command index, walks the flat array
+ * backward honoring glPushMatrix/glPopMatrix/glLoadIdentity, and fills
+ * out_line_idx[] with the deduped *source* lines of the in-scope transforms.
+ *
+ * repl_find_affecting_transforms_flat: live-cursor wrapper keyed on a source
+ * line. Finds every flat expansion of that source vertex line and returns the
+ * union of affecting transform source lines across them — deterministic even
+ * for reused/recursive function-body vertices with no selected invocation.
+ *
+ * Both return the number of source lines written; 0 if the target line/index
+ * isn't a color-consuming command or the flat program is empty. */
+int  repl_find_affecting_transforms_for_flat_vertex(int flat_idx,
+                                                    int *out_line_idx, int out_cap);
+int  repl_find_affecting_transforms_flat(int line_idx, int *out_line_idx, int out_cap);
+
 /* --- Tunable-variable (@tune) collection ------------------------------- */
 
 /* Maximum number of exported keyboard knobs — one QWERTY column-pair each

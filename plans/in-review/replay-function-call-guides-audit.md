@@ -29,8 +29,15 @@ This audit covers six requested improvements:
 on `main` (`34df87f3` call-site highlight, `fd571604` call depth, `0cb8c6d4`
 frame axes, `4b5d050e` stale-`pc` clamp for replay vertex focus), verified via
 headless OSMesa capture. Req 3's static frame axes are an interim visual that
-**req 6 supersedes** with the live-style transform guides. Reqs 4–6 are the new
-scope below and are not yet started.
+**req 6 supersedes** with the live-style transform guides. Req 4 is now
+implemented: `repl_find_affecting_transforms_for_flat_vertex()` /
+`repl_find_affecting_transforms_flat()` (`src/repl/autonormal.c`) resolve the
+affecting transforms through the flat program so a vertex inside a funcN body
+picks up calling-scope transforms; `glr_ctrl_push_highlights()` uses the flat
+resolver (source-walk fallback only when the flat program is empty), and the
+affecting-transform marker is recolored vivid amber and reprioritized above the
+feeding-color/normal markers (`src/ui/app/repl_code_panel.c`). Tests added in
+`tests/test_repl_core_commit.c`. Reqs 5–6 remain.
 
 ## Current Architecture Notes
 
