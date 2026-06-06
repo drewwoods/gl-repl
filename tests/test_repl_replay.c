@@ -27,6 +27,7 @@
 #define g_replay_accum       (REPLAY_STATE->accum)
 #define g_replay_fade_speed  (REPLAY_STATE->fade_speed)
 #define g_replay_src_line    (REPLAY_STATE->src_line_idx)
+#define g_replay_focus_call_depth (REPLAY_STATE->focus_call_depth)
 #define g_replay_total_flat  (REPLAY_STATE->total_flat_cmds)
 #define g_replay_expand_args (REPLAY_STATE->expand_args)
 #define g_replay_fade_batch_count (REPLAY_STATE->fade_batch_count)
@@ -770,10 +771,59 @@ static void test_replay_focus_call_site_provenance(void) {
     ASSERT_TRUE("inactive replay focus is -1", replay_focus_flat_idx() == -1);
 }
 
+/* Request 2: the focused flat command's funcN call-frame depth surfaces as
+ * ReplayRuntimeState.focus_call_depth, which the HUD shows as "depth N". A
+ * recursive function should make the depth climb step by step. */
+static void test_replay_focus_call_depth(void) {
+    glr_ctrl_reset_all();
+    editor_feed_line("func0(depth) {");
+    editor_feed_line("if(depth <= 0) {");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("if(depth > 0) {");
+    editor_feed_line("glVertex3f(depth, 0, 0);");
+    editor_feed_line("func0(depth - 1);");
+    editor_feed_line("}");
+    editor_feed_line("}");
+    editor_feed_line("func0(3);");
+    repl_flatten_commands(editor_state_edit_line());
+
+    /* Sanity: four vertices, one per recursion level (x = 3,2,1,0). */
+    ASSERT_TRUE("recursive replay flat count", repl_state_flat_program_count() == 4);
+
+    replay_start();
+    g_replay_mode = REPLAY_MODE_VERTEX;
+    g_replay_state = REPLAY_PAUSED;
+
+    int expect_depth[4] = { 1, 2, 3, 4 };
+    for (int step = 0; step < 4; step++) {
+        replay_advance(repl_state_flat_program_view());
+        char label[64];
+        snprintf(label, sizeof(label),
+                 "recursive replay focus_call_depth step %d == %d",
+                 step, expect_depth[step]);
+        ASSERT_TRUE(label, g_replay_focus_call_depth == expect_depth[step]);
+    }
+    replay_stop();
+
+    /* Top-level geometry: focus depth stays 0 (no "depth N" segment). */
+    glr_ctrl_reset_all();
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    repl_flatten_commands(editor_state_edit_line());
+    replay_start();
+    g_replay_mode = REPLAY_MODE_VERTEX;
+    g_replay_state = REPLAY_PAUSED;
+    replay_advance(repl_state_flat_program_view());
+    ASSERT_TRUE("top-level replay focus_call_depth is 0",
+                g_replay_focus_call_depth == 0);
+    replay_stop();
+}
+
 int main(void) {
     test_replay_basic_controls();
     test_replay_stepping();
     test_replay_focus_call_site_provenance();
+    test_replay_focus_call_depth();
     test_replay_tessellation_stepping();
     test_replay_fade_batches();
     test_replay_input();

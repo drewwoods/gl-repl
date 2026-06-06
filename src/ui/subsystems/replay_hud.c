@@ -19,7 +19,7 @@
 #include <string.h>
 
 void replay_ui_hud_render(const struct UiRenderSnapshot *snap) {
-    char progress_txt[64];
+    char progress_txt[96];
     char kbd_txt[128];
     float progress = 0.0f;
     int scene_x, scene_y, scene_w, scene_h;
@@ -102,12 +102,19 @@ void replay_ui_hud_render(const struct UiRenderSnapshot *snap) {
     }
 
     /* Line 1 - "Replay  4.0 cmd/s | Polygon" in green; command count
-     * is right-aligned so 4-digit totals don't push other fields around. */
+     * is right-aligned so 4-digit totals don't push other fields around.
+     * A "depth N" segment appears only when the focused command came from a
+     * funcN(...) call, so recursion/nesting depth is visible while stepping. */
+    char depth_seg[24] = "";
+    if (snap->replay.focus_call_depth > 0)
+        snprintf(depth_seg, sizeof(depth_seg), "  | depth %d",
+                 snap->replay.focus_call_depth);
     snprintf(progress_txt, sizeof(progress_txt),
-             "Replay  %11.1f cmd/s  | %7s  | %s",
+             "Replay  %11.1f cmd/s  | %7s  | %s%s",
              snap->replay.speed,
              snap->replay.mode == REPLAY_MODE_VERTEX ? "Vertex" : "Polygon",
-             snap->replay.expand_args ? "Code Expanded" : ""
+             snap->replay.expand_args ? "Code Expanded" : "",
+             depth_seg
              );
     ui_clr(UI_TOK_ACCENT);
     gl2d_draw_string((float)text_col_x,

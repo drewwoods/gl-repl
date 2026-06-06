@@ -84,6 +84,10 @@ typedef struct {
     float           accum;
     float           fade_speed;
     int             src_line_idx;
+    int             focus_call_depth;    /* funcN call-frame depth of the focused
+                                          * command (0 = top-level); drives the HUD
+                                          * "depth N" readout. Derived from the same
+                                          * focused flat command as src_line_idx. */
     int             total_flat_cmds;
     int             expand_args;
     float           baseline_predef_vals[MAX_PREDEF_VARS];
