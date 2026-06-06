@@ -83,7 +83,7 @@ static void test_tag_predicate(void) {
 }
 
 static void test_swatch_parity(void) {
-    /* Pins the in-app formula the exported tune_compute_step() mirrors. If
+    /* Pins the in-app formula the exported tuning_step() mirrors. If
      * these change, the export generator (write_tune_helpers) must follow. */
     TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "swatch 0.5", repl_eval_swatch_step(0.5f), 0.05f);
     TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "swatch 5",   repl_eval_swatch_step(5.0f), 0.05f);
@@ -120,33 +120,33 @@ static void test_collector_and_export(void) {
     char *c = read_file(path);
     ASSERT_TRUE("export readable", c != NULL);
 
-    ASSERT_TRUE("emits tune_compute_step", contains(c, "tune_compute_step"));
-    ASSERT_TRUE("emits draw_tunable_overlay def", contains(c, "void draw_tunable_overlay"));
-    ASSERT_TRUE("calls draw_tunable_overlay", contains(c, "draw_tunable_overlay();"));
-    ASSERT_TRUE("emits window-size globals", contains(c, "g_tune_window_width"));
+    ASSERT_TRUE("emits tuning_step", contains(c, "tuning_step"));
+    ASSERT_TRUE("emits draw_tuning_overlay def", contains(c, "void draw_tuning_overlay"));
+    ASSERT_TRUE("calls draw_tuning_overlay", contains(c, "draw_tuning_overlay();"));
+    ASSERT_TRUE("emits readable window-size globals", contains(c, "static int window_width"));
     ASSERT_TRUE("captures window size in reshape",
-                contains(c, "g_tune_window_width = w; g_tune_window_height = h;"));
-    ASSERT_TRUE("fabsf (not manual abs) in step", contains(c, "fabsf(v)"));
+                contains(c, "window_width = w;\n  window_height = h;"));
+    ASSERT_TRUE("fabsf (not manual abs) in step", contains(c, "fabsf(value)"));
     ASSERT_TRUE("knob q raises amp",
-                contains(c, "if (repl_tune_keyboard_key_code == 'q')\n"
-                            "    amp += tune_compute_step(amp) * repl_tune_keyboard_scale"));
+                contains(c, "if (normalized_key == 'q')\n"
+                            "    amp += tuning_step(amp) * step_scale"));
     ASSERT_TRUE("knob a lowers amp",
-                contains(c, "if (repl_tune_keyboard_key_code == 'a')\n"
-                            "    amp -= tune_compute_step(amp) * repl_tune_keyboard_scale"));
+                contains(c, "if (normalized_key == 'a')\n"
+                            "    amp -= tuning_step(amp) * step_scale"));
     ASSERT_TRUE("knob w raises freq",
-                contains(c, "if (repl_tune_keyboard_key_code == 'w')\n"
-                            "    freq += tune_compute_step(freq) * repl_tune_keyboard_scale"));
+                contains(c, "if (normalized_key == 'w')\n"
+                            "    freq += tuning_step(freq) * step_scale"));
     ASSERT_TRUE("Shift fine uses shared scale",
-                contains(c, "repl_tune_keyboard_scale *= "
+                contains(c, "step_scale *= "
                          REPL_EXPORT_STRINGIFY(GLR_ADJUST_FINE_SCALE)));
     ASSERT_TRUE("Ctrl coarse uses shared scale",
-                contains(c, "repl_tune_keyboard_scale *= "
+                contains(c, "step_scale *= "
                          REPL_EXPORT_STRINGIFY(GLR_ADJUST_COARSE_SCALE)));
     ASSERT_TRUE("round-trip marker amp", contains(c, "@declare amp=1.5 @tune"));
     ASSERT_TRUE("round-trip marker freq", contains(c, "@declare freq=2 @tune"));
     /* baseline keyboard handlers stay */
     ASSERT_TRUE("keeps space-toggle",
-                contains(c, "if (repl_export_keyboard_key_code == ' ')"));
+                contains(c, "if (key == ' ')"));
     free(c);
 }
 
@@ -167,10 +167,10 @@ static void test_untagged_baseline(void) {
     repl_export_save_output(path, source_document_view(), NULL);
     char *c = read_file(path);
     ASSERT_TRUE("export readable (none)", c != NULL);
-    ASSERT_TRUE("no HUD when untagged", !contains(c, "draw_tunable_overlay"));
-    ASSERT_TRUE("no tune_compute_step when untagged", !contains(c, "tune_compute_step"));
+    ASSERT_TRUE("no HUD when untagged", !contains(c, "draw_tuning_overlay"));
+    ASSERT_TRUE("no tuning_step when untagged", !contains(c, "tuning_step"));
     ASSERT_TRUE("no knob decode when untagged",
-                !contains(c, "repl_tune_keyboard_key_code"));
+                !contains(c, "normalized_key"));
     free(c);
 }
 
@@ -236,17 +236,17 @@ static void test_key_assignment_and_cap(void) {
     ASSERT_TRUE("export readable (cap)", c != NULL);
     /* Key assignment q/a, w/s, e/d for the first three. */
     ASSERT_TRUE("knob0 -> q/a",
-                contains(c, "if (repl_tune_keyboard_key_code == 'q')\n"
+                contains(c, "if (normalized_key == 'q')\n"
                             "    knob0 +="));
     ASSERT_TRUE("knob1 -> w/s",
-                contains(c, "if (repl_tune_keyboard_key_code == 'w')\n"
+                contains(c, "if (normalized_key == 'w')\n"
                             "    knob1 +="));
     ASSERT_TRUE("knob2 -> e/d",
-                contains(c, "if (repl_tune_keyboard_key_code == 'e')\n"
+                contains(c, "if (normalized_key == 'e')\n"
                             "    knob2 +="));
     /* 9th knob is o/l; the 10th must be dropped (no p key, knob9 absent). */
     ASSERT_TRUE("knob8 -> o/l",
-                contains(c, "if (repl_tune_keyboard_key_code == 'o')\n"
+                contains(c, "if (normalized_key == 'o')\n"
                             "    knob8 +="));
     ASSERT_TRUE("knob9 dropped (capped)", !contains(c, "knob9 +="));
     ASSERT_TRUE("cap note emitted", contains(c, "capped at 9 keyboard knobs"));
@@ -271,19 +271,17 @@ static void test_generated_names_do_not_shadow_tuned_vars(void) {
 
     char *c = read_file(path);
     ASSERT_TRUE("shadow export readable", c != NULL);
-    ASSERT_TRUE("keyboard callback key param cannot shadow globals",
-                contains(c, "void keyboard(unsigned char repl_export_keyboard_key_code,"));
-    ASSERT_TRUE("old keyboard params absent",
-                !contains(c, "void keyboard(unsigned char key, int x, int y)"));
-    ASSERT_TRUE("old overlay w/h locals absent",
-                !contains(c, "int w = g_tune_window_width"));
-    ASSERT_TRUE("old overlay y local absent",
-                !contains(c, "float y = (float)h"));
+    ASSERT_TRUE("keyboard callback key param falls back around global key",
+                contains(c, "void keyboard(unsigned char pressed_key,"));
+    ASSERT_TRUE("preferred key param absent when key is a user var",
+                !contains(c, "void keyboard(unsigned char key,"));
+    ASSERT_TRUE("old overlay w/h locals absent", !contains(c, "int w ="));
+    ASSERT_TRUE("old overlay y local absent", !contains(c, "float y = (float)"));
     ASSERT_TRUE("old overlay ln local absent", !contains(c, "char ln[96]"));
     ASSERT_TRUE("tuned key still adjusted",
-                contains(c, "key += tune_compute_step(key) * repl_tune_keyboard_scale"));
+                contains(c, "key += tuning_step(key) * step_scale"));
     ASSERT_TRUE("tuned h still adjusted",
-                contains(c, "h += tune_compute_step(h) * repl_tune_keyboard_scale"));
+                contains(c, "h += tuning_step(h) * step_scale"));
     free(c);
 
     ASSERT_INT("shadow-collision export compiles against stubs",

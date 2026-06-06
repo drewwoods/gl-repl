@@ -3,7 +3,7 @@
  * freshly-exported REPL program and runs only its user-geometry body.
  *
  * Why #include and not link? The exporter emits the user-geometry as
- * static helpers (render_repl_geometry / reset_repl_vars) inside the
+ * static helpers (draw_scene / reset_repl_vars) inside the
  * exported translation unit. Including the file pulls those statics
  * into this TU so the driver can call them directly, skipping the
  * camera transform, outline-pass, vertex-point-pass, and lighting
@@ -25,7 +25,7 @@
  * Future extensions (see plans/not-started/gl-stub-extensions.md): the
  * proposed GL_STUB_TRACE_LINE macro would have each stub fprintf its
  * own call+args to a per-leg trace file. The driver would just open
- * that file before calling render_repl_geometry() and close it after,
+ * that file before calling draw_scene() and close it after,
  * letting the parent compare traces with diff(1) on count mismatch.
  */
 #include <GL/gl_stub_counts.h>
@@ -60,14 +60,14 @@ int main(int argc, char **argv) {
      * trace whenever counts disagree. */
     if (argc >= 3) gl_stub_trace_open(argv[2]);
 
-    /* render_repl_geometry is static-in-translation-unit by the exporter;
+    /* draw_scene is static-in-translation-unit by the exporter;
      * the #include above makes it visible. We deliberately skip the
      * companion reset_repl_vars() — it's only emitted when the program
      * actually uses a predefined REPL var, so calling it would be a
      * compile error for predef-free programs. File-scope `static float
      * t = 0.0f;` etc. emitted by the exporter already gives the same
      * starting state the REPL side has after glr_ctrl_reset_all(). */
-    render_repl_geometry();
+    draw_scene();
     gl_stub_trace_close();
 
     FILE *f = fopen(argv[1], "w");
