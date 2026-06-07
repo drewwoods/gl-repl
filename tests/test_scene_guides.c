@@ -299,6 +299,7 @@ static void test_replay_transform_guide_render(void) {
     snapshot.replay_focus_vertex_flat_idx = 1;
     snapshot.alpha_scale = 1.0f;
     snapshot.anim_time = 0.0f;
+    snapshot.xform_guide_mode = SCENE_XFORM_GUIDE_FRAME;
 
     int prepared = scene_transform_guides_prepare(&snapshot, &plan);
     ASSERT_INT("replay render: plan prepared", prepared, 1);
@@ -610,7 +611,10 @@ int main(void) {
                    scene_transform_guides_prepare(&snapshot, &plan), 1);
         ASSERT_INT("replay default focuses nearest transform (rotate)",
                    plan.cursor_flat_idx, 1);
-        ASSERT_INT("replay plan anchors on the focus vertex",
+        /* after-cursor anchor = first following flat cmd from a different
+         * source (the vertex at idx 2), exactly like the edit-mode plan — the
+         * guide draws in the transform's frame, not on the vertex. */
+        ASSERT_INT("replay plan after-anchor is next different-src cmd",
                    plan.after_flat_idx, 2);
         ASSERT_INT("replay plan active", plan.active, 1);
 
