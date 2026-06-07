@@ -784,23 +784,35 @@ int scene_transform_guides_prepare(const SceneGuideSnapshot *snapshot,
     if (!snapshot->show_guides)
         return 0;
 
-    /* Replay path (req 6): instead of the edit cursor, anchor on the vertex
-     * the replay step emitted and guide the transform shaping it. cursor_flat_idx
-     * holds the chosen transform; after_flat_idx holds the replay vertex so the
-     * renderer can anchor the guide on it. */
+    /* Replay path (req 6): instead of the edit cursor, pick the transform
+     * shaping the vertex the replay step emitted and guide *it* exactly as the
+     * live edit-mode guide would. The plan is shaped identically to the edit
+     * path — cursor_flat_idx is the chosen transform's flat index, after_flat_idx
+     * the first following flat command from a different source line (WORLD-mode
+     * after-cursor anchor) — so the shared FRAME/WORLD render path draws it in
+     * the transform's own frame, not on the vertex (which already sits at its
+     * post-transform position). */
     if (snapshot->replaying) {
         int vtx = snapshot->replay_focus_vertex_flat_idx;
         int flat_count = snapshot->flat_program.cmd_count;
         if (vtx < 0 || vtx >= flat_count)
             return 0;
-        const GLCmd *vcmd = &snapshot->flat_program.cmds[vtx];
+        const GLCmd *flat_cmds = snapshot->flat_program.cmds;
+        const GLCmd *vcmd = &flat_cmds[vtx];
         if (!vcmd->valid || !repl_cmd_emits_vertex(vcmd->type))
             return 0;
         int xform = scene_replay_transform_focus_flat_idx(snapshot, vtx);
         if (xform < 0)
             return 0;
         plan->cursor_flat_idx = xform;
-        plan->after_flat_idx = vtx;
+        int xform_src = flat_cmds[xform].src_cmd_idx;
+        plan->after_flat_idx = flat_count;
+        for (int i = xform + 1; i < flat_count; i++) {
+            if (!flat_cmds[i].valid) continue;
+            if (flat_cmds[i].src_cmd_idx == xform_src) continue;
+            plan->after_flat_idx = i;
+            break;
+        }
         plan->active = 1;
         return 1;
     }
@@ -851,39 +863,6 @@ int scene_transform_guides_prepare(const SceneGuideSnapshot *snapshot,
     return 1;
 }
 
-/* Position of the replay vertex expressed in the frame that exists *before*
- * `transform_flat_idx`: apply every transform in [transform_flat_idx,
- * vertex_flat_idx) to identity, then transform the vertex's local args. The
- * renderer loads (cam_view * before-transform frame), so this origin lands the
- * guide on the actual replay vertex while the guide vector is still drawn in
- * the transform's own basis. */
-static void compute_replay_vertex_in_frame(const SceneGuideSnapshot *snapshot,
-                                           int transform_flat_idx,
-                                           int vertex_flat_idx,
-                                           float out[3]) {
-    const GLCmd *cmds = snapshot->flat_program.cmds;
-    const GLCmd *vcmd = &cmds[vertex_flat_idx];
-    float vx = vcmd->args[0];
-    float vy = vcmd->args[1];
-    float vz = (vcmd->type == CMD_VERTEX2F) ? 0.0f : vcmd->args[2];
-
-    glPushMatrix();
-    glLoadIdentity();
-    int depth = 0;
-    for (int i = transform_flat_idx; i < vertex_flat_idx; i++) {
-        if (!cmds[i].valid) continue;
-        if (repl_cmd_is_transform(cmds[i].type))
-            apply_tracked_transform(&cmds[i], &depth);
-    }
-    float m[16];
-    glGetFloatv(GL_MODELVIEW_MATRIX, m);
-    out[0] = m[0]*vx + m[4]*vy + m[8]*vz + m[12];
-    out[1] = m[1]*vx + m[5]*vy + m[9]*vz + m[13];
-    out[2] = m[2]*vx + m[6]*vy + m[10]*vz + m[14];
-    unwind_transform_stack(&depth);
-    glPopMatrix();
-}
-
 void scene_transform_guides_render_if_due(const SceneGuideSnapshot *snapshot,
                                           SceneTransformGuidePlan *plan,
                                           int flat_cmd_idx,
@@ -899,19 +878,12 @@ void scene_transform_guides_render_if_due(const SceneGuideSnapshot *snapshot,
     const GLCmd *live_cmd = &flat_cmds[flat_cmd_idx];
     float guide_origin[3];
 
+    /* Replay (req 6) shares the FRAME/WORLD anchoring below: the plan already
+     * pointed cursor_flat_idx at the replay-chosen transform, so the guide
+     * draws in that transform's own frame exactly as the live edit guide does,
+     * rather than on the vertex (which already sits post-transform). */
     glPushMatrix();
-    if (snapshot->replaying) {
-        /* Anchor on the replay vertex, drawn in the chosen transform's local
-         * frame so the translate/scale/rotate vector reads in the basis the
-         * command was issued in (req 6, replacing the static frame axes). */
-        float frame[16];
-        float guide_mv[16];
-        compute_before_cursor_matrix(snapshot, plan->cursor_flat_idx, frame);
-        mat4_mul_col_major(cam_view, frame, guide_mv);
-        glLoadMatrixf(guide_mv);
-        compute_replay_vertex_in_frame(snapshot, plan->cursor_flat_idx,
-                                       plan->after_flat_idx, guide_origin);
-    } else if (snapshot->xform_guide_mode == SCENE_XFORM_GUIDE_FRAME) {
+    if (snapshot->xform_guide_mode == SCENE_XFORM_GUIDE_FRAME) {
         float frame[16];
         float guide_mv[16];
         compute_before_cursor_matrix(snapshot, plan->cursor_flat_idx, frame);
