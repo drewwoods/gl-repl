@@ -539,6 +539,19 @@ typedef struct {
  * preserves this state across user commands. Comment entries (// ...)
  * parse as CMD_COMMENT — repl_apply_state_cmd no-ops them, but the editor
  * and exporter render them as section headers in the init() body. */
+/* Tiny constant term in the point-attenuation default. Only caps the
+ * otherwise-unbounded near-field point blow-up as eye distance d -> 0
+ * (the software fallback dodges this by keying off the global orbit
+ * distance, which never reaches 0). Negligible past d ~ 1. */
+#define POINT_ATTEN_NEAR_CAP 0.01f
+
+/* The point-attenuation bootstrap line, formatted once at startup from
+ * REPL_POINT_SIZE_REF_DIST (executor.h) so the hardware default and the
+ * software fallback share one reference distance and can't drift. The
+ * quadratic coefficient is 1/REF_DIST^2. Filled by parse_init_bootstrap
+ * before the table is read; g_init_bootstrap_repl points its entry here. */
+static char g_point_atten_bootstrap_line[96];
+
 static const InitBootstrapEntry g_init_bootstrap_repl[] = {
     { "// Background color used by glClear at the start of every frame.", NULL },
     { "glClearColor(0.10, 0.10, 0.10, 1.0);", NULL },
@@ -555,9 +568,15 @@ static const InitBootstrapEntry g_init_bootstrap_repl[] = {
     { "// Blending: standard src-over for translucent geometry.", NULL },
     { "glEnable(GL_BLEND);", NULL },
     { "glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);", NULL },
-        { "// Point attenuation: distance-based point-size falloff.", k_cfg_slug_point_attenuation },
-    { "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1.0, 0.0, 0.02);",
-            k_cfg_slug_point_attenuation },
+        { "// Point attenuation: points hold a constant world-space footprint,", k_cfg_slug_point_attenuation },
+        { "// shrinking as 1/distance like everything else under perspective.", k_cfg_slug_point_attenuation },
+    /* Near-pure-quadratic attenuation: derived_size = size/sqrt(a + c*d^2)
+     * with d the per-vertex eye distance. The quadratic term c = 1/REF_DIST^2
+     * dominates at any normal viewing distance, so size scales as ~1/d ->
+     * constant on-screen footprint, matching the software fallback
+     * size*REF_DIST/cam_dist. Text formatted at startup from the shared
+     * REPL_POINT_SIZE_REF_DIST (see g_point_atten_bootstrap_line). */
+    { g_point_atten_bootstrap_line, k_cfg_slug_point_attenuation },
 };
 
 /* Helper: look up a cfg toggle via the installed bridge. Returns the
@@ -702,6 +721,15 @@ static int init_host_only_line_count(void) {
 static void parse_init_bootstrap(void) {
     if (g_init_bootstrap_ready)
         return;
+
+    /* Format the point-attenuation line from the shared reference distance
+     * so it can't drift from the software fallback (executor.c). The
+     * quadratic coefficient is 1/REF_DIST^2. Done before the parse loop
+     * since g_init_bootstrap_repl points an entry at this buffer. */
+    snprintf(g_point_atten_bootstrap_line, sizeof(g_point_atten_bootstrap_line),
+             "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, %g, 0.0, %g);",
+             (double)POINT_ATTEN_NEAR_CAP,
+             (double)(1.0f / (REPL_POINT_SIZE_REF_DIST * REPL_POINT_SIZE_REF_DIST)));
 
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
         char bootstrap_err[REPL_STATUS_TEXT_MAX];
