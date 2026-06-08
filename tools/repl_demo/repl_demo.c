@@ -419,6 +419,22 @@ static int   g_render_sample = 1;     /* 1, 2, 3 */
 static float g_render_t      = 0.0f;
 static int   g_render_paused = 0;
 
+static void render_install_point_parameter_proc(void) {
+#if defined(__APPLE__) && defined(USE_GLUT)
+    repl_executor_install_point_parameter_proc(&glPointParameterfv);
+    repl_executor_set_point_parameter_supported(1);
+#else
+    ReplExecutorPointParameterProc proc =
+        (ReplExecutorPointParameterProc)glutGetProcAddress("glPointParameterfv");
+    if (!proc)
+        proc = (ReplExecutorPointParameterProc)glutGetProcAddress("glPointParameterfvARB");
+    if (!proc)
+        proc = (ReplExecutorPointParameterProc)glutGetProcAddress("glPointParameterfvEXT");
+    repl_executor_install_point_parameter_proc(proc);
+    repl_executor_set_point_parameter_supported(proc != NULL);
+#endif
+}
+
 /* Load whichever sample is currently selected into REPL state. */
 static void render_load_current_sample(void) {
     repl_state_reset_program();
@@ -514,6 +530,7 @@ static int run_render_mode(int argc, char **argv) {
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
     glutInitWindowSize(DEMO_WINDOW_W, DEMO_WINDOW_H);
     glutCreateWindow("repl_demo (real GL)");
+    render_install_point_parameter_proc();
 
     glEnable(GL_DEPTH_TEST);
 

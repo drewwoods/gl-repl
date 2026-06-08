@@ -107,6 +107,50 @@ static int glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(
 static UiRenderSnapshot g_last_ui_snapshot;
 static int g_last_ui_snapshot_valid = 0;
 static int g_last_replay_follow_src_line = -1;
+typedef ReplExecutorPointParameterProc
+(*GlrCtrlPointParameterProcLoaderFn)(const char *proc_name);
+
+static ReplExecutorPointParameterProc
+glr_ctrl_default_point_parameter_loader(const char *proc_name) {
+#if defined(__APPLE__) && defined(USE_GLUT)
+    (void)proc_name;
+    return &glPointParameterfv;
+#else
+    return (ReplExecutorPointParameterProc)glutGetProcAddress(proc_name);
+#endif
+}
+
+static GlrCtrlPointParameterProcLoaderFn g_glr_ctrl_point_parameter_loader =
+    glr_ctrl_default_point_parameter_loader;
+
+static ReplExecutorPointParameterProc
+glr_ctrl_load_point_parameter_proc(int has_core, int has_arb, int has_ext) {
+    ReplExecutorPointParameterProc proc = NULL;
+
+    if (!g_glr_ctrl_point_parameter_loader)
+        return NULL;
+    if (has_core) {
+        proc = g_glr_ctrl_point_parameter_loader("glPointParameterfv");
+        if (proc)
+            return proc;
+    }
+    if (has_arb) {
+        proc = g_glr_ctrl_point_parameter_loader("glPointParameterfvARB");
+        if (proc)
+            return proc;
+    }
+    if (has_ext) {
+        proc = g_glr_ctrl_point_parameter_loader("glPointParameterfvEXT");
+        if (proc)
+            return proc;
+    }
+    /* Some extension-only stacks still expose the unsuffixed symbol
+     * through the loader; take it as a final compatibility fallback
+     * after the suffixes the extension contract actually names. */
+    if (!has_core && (has_arb || has_ext))
+        return g_glr_ctrl_point_parameter_loader("glPointParameterfv");
+    return NULL;
+}
 
 /* Non-static: the input router (src/app/glr_ctrl_router.c) reads this cached
  * snapshot for drag hit-testing. Declared in glr_ctrl_internal.h. */
@@ -764,10 +808,14 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, SceneRende
     config->backdrop_mode = presentation.backdrop_mode;
     config->post_filter_mode = presentation.post_filter_mode;
     config->wireframe = presentation.wireframe;
-    /* Single source of truth: the executor flag set in glr_ctrl_init_gl.
-     * Lets the star backdrop's direct glPointParameterfv call be gated
-     * the same way the executor's is. */
+    /* Single source of truth: the executor's capability flag + loaded
+     * proc set in glr_ctrl_init_gl. Lets the star backdrop reset point
+     * attenuation through the same callable entry point the executor
+     * uses for CMD_POINT_PARAMETER_FV. */
     config->point_parameter_supported = repl_executor_point_parameter_supported();
+    config->point_parameter_proc = config->point_parameter_supported
+        ? repl_executor_point_parameter_proc()
+        : NULL;
     /* Scoped radial fog: probed once in glr_ctrl_init_gl. Only the city
      * backdrop and ocean/radar grid passes act on it. */
     config->nv_fog_distance_supported = g_nv_fog_distance_supported;
@@ -1993,38 +2041,56 @@ void glr_ctrl_init_gl(void) {
 
     /* Runtime point-parameter capability (replaces the old
      * compile-time NO_POINT_PARAMETER macro). glPointParameterfv is
-     * core GL 1.4 but absent on some legacy contexts — a runtime
-     * property, not a build one. The GL context is already current
-     * here (glr_ctrl_init_gl runs post-glutInit/window), so query it
-     * now. This MUST run before repl_apply_init_bootstrap() below: on
+     * core GL 1.4 but on older Linux stacks the context can advertise
+     * support while the unsuffixed C symbol is not safely callable. The
+     * GL context is already current here (glr_ctrl_init_gl runs
+     * post-glutInit/window), so detect BOTH pieces now:
+     *   (1) capability from GL_VERSION >= 1.4 or ARB/EXT extension bits
+     *   (2) a callable core/ARB/EXT proc loaded after the context exists
+     * This MUST run before repl_apply_init_bootstrap() below: on
      * unsupported hardware the point-attenuation bootstrap entry has
-     * to be skipped entirely rather than invoking the missing entry
-     * point. Check the GL version first — an ARB/EXT-only test
-     * false-negatives on a 1.4+ core context that doesn't advertise
-     * the extension string. GLR_NO_POINT_PARAMETER (any non-empty
-     * value) forces the unsupported path for testing on capable HW. */
+     * to be skipped entirely rather than invoking a missing entry
+     * point. GLR_NO_POINT_PARAMETER (any non-empty value) still forces
+     * the unsupported path for testing on capable HW. */
     int gl_major = 0, gl_minor = 0;
     const char *gl_ver = (const char *)glGetString(GL_VERSION);
     if (gl_ver) sscanf(gl_ver, "%d.%d", &gl_major, &gl_minor);
-    int hw_point_param = (gl_major > 1) || (gl_major == 1 && gl_minor >= 4)
-        || glutExtensionSupported("GL_ARB_point_parameters")
-        || glutExtensionSupported("GL_EXT_point_parameters");
+    int has_point_param_core =
+        (gl_major > 1) || (gl_major == 1 && gl_minor >= 4);
+    int has_point_param_arb =
+        glutExtensionSupported("GL_ARB_point_parameters") ? 1 : 0;
+    int has_point_param_ext =
+        glutExtensionSupported("GL_EXT_point_parameters") ? 1 : 0;
+    int point_param_advertised =
+        has_point_param_core || has_point_param_arb || has_point_param_ext;
+    ReplExecutorPointParameterProc point_param_proc =
+        point_param_advertised
+            ? glr_ctrl_load_point_parameter_proc(has_point_param_core,
+                                                 has_point_param_arb,
+                                                 has_point_param_ext)
+            : NULL;
+    repl_executor_install_point_parameter_proc(point_param_proc);
     const char *no_pp = getenv("GLR_NO_POINT_PARAMETER");
     int forced_off = (no_pp && no_pp[0]) ? 1 : 0;
-    int point_param_ok = hw_point_param && !forced_off;
+    int point_param_ok = (point_param_proc != NULL) && !forced_off;
     /* Tell the user on the terminal when point attenuation is off, and
      * which of the two reasons applies — a deliberate env override vs.
      * a GL context that genuinely lacks the entry point. */
     if (!point_param_ok) {
-        if (forced_off)
+        if (forced_off) {
+            const char *forced_detail =
+                point_param_proc
+                    ? " (this GL context does support it)"
+                    : point_param_advertised
+                        ? " (this GL context advertises it, but no callable entry point was found)"
+                        : " (this GL context does not support it either)";
             fprintf(stderr,
                 "[gl-repl] glPointParameterfv disabled via "
                 "GLR_NO_POINT_PARAMETER=%s; using the glPointSize "
                 "distance approximation%s.\n",
                 no_pp,
-                hw_point_param ? " (this GL context does support it)"
-                               : " (this GL context does not support it either)");
-        else
+                forced_detail);
+        } else if (!point_param_advertised) {
             fprintf(stderr,
                 "[gl-repl] glPointParameterfv unsupported by this GL "
                 "context (GL_VERSION \"%s\", no GL_ARB/EXT_point_parameters); "
@@ -2032,6 +2098,15 @@ void glr_ctrl_init_gl(void) {
                 "GLR_NO_POINT_PARAMETER=1 to force this path on capable "
                 "hardware.\n",
                 gl_ver ? gl_ver : "unknown");
+        } else {
+            fprintf(stderr,
+                "[gl-repl] GL point-parameter support is advertised by "
+                "this GL context (GL_VERSION \"%s\"), but no "
+                "glPointParameterfv/glPointParameterfvARB/"
+                "glPointParameterfvEXT entry point could be loaded; "
+                "using the glPointSize distance approximation.\n",
+                gl_ver ? gl_ver : "unknown");
+        }
     }
     repl_executor_set_point_parameter_supported(point_param_ok);
 

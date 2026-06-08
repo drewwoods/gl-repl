@@ -2,6 +2,7 @@
 #define STUB_FREEGLUT_H
 
 #include <stdint.h>
+#include <string.h>
 #include <GL/gl.h>
 #include <GL/glu.h>
 
@@ -107,6 +108,7 @@ typedef void (*GLUTpassiveCB)(int x, int y);
 typedef void (*GLUTtimerCB)(int value);
 typedef void (*GLUTidleCB)(void);
 typedef void (*GLUTmouseWheelCB)(int wheel, int direction, int x, int y);
+typedef void (*GLUTproc)(void);
 
 static inline void glutInit(int *argc, char **argv) { (void)argc; (void)argv; }
 static inline void glutInitDisplayMode(unsigned int display_mode) { (void)display_mode; }
@@ -130,6 +132,19 @@ static inline int glutGetModifiers(void) { return 0; }
 /* Returns 1 so the stub-built controller's runtime point-parameter
  * detection defaults to "supported" == today's default build. */
 static inline int glutExtensionSupported(const char *name) { (void)name; return 1; }
+/* Minimal proc resolver for the runtime point-parameter path. The
+ * controller probes the core, ARB, and EXT spellings; the stub build
+ * routes all three to the same no-op glPointParameterfv implementation
+ * in GL/gl.h. */
+static inline GLUTproc glutGetProcAddress(const char *name) {
+    if (!name)
+        return (GLUTproc)0;
+    if (strcmp(name, "glPointParameterfv") == 0 ||
+        strcmp(name, "glPointParameterfvARB") == 0 ||
+        strcmp(name, "glPointParameterfvEXT") == 0)
+        return (GLUTproc)glPointParameterfv;
+    return (GLUTproc)0;
+}
 static inline void glutSetCursor(int cursor) { (void)cursor; }
 static inline void glutBitmapCharacter(void *font, int character) { GL_STUB_TRACE_LINE("glutBitmapCharacter %d\n", (int)character); gl_stub_tick(GL_STUB_glutBitmapCharacter); (void)font; }
 static inline int glutBitmapWidth(void *font, int character) { (void)font; (void)character; return 8; }

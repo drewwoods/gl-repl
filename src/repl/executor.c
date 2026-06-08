@@ -33,6 +33,19 @@ void repl_executor_install_camera_distance_source(ReplExecutorCameraDistanceFn f
  * build. When unsupported: CMD_POINT_PARAMETER_FV is a no-op and
  * point sizes are scaled by camera distance as a visual stand-in. */
 static int g_point_parameter_supported = 1;
+/* Runtime-loaded point-parameter entry point. The controller resolves a
+ * callable core/ARB/EXT symbol after the GL context is current and
+ * installs it here; the executor never calls glPointParameterfv
+ * directly on the freeglut/Linux path. */
+static ReplExecutorPointParameterProc g_point_parameter_proc = NULL;
+
+void repl_executor_install_point_parameter_proc(ReplExecutorPointParameterProc fn) {
+    g_point_parameter_proc = fn;
+}
+
+ReplExecutorPointParameterProc repl_executor_point_parameter_proc(void) {
+    return g_point_parameter_proc;
+}
 
 void repl_executor_set_point_parameter_supported(int supported) {
     g_point_parameter_supported = supported ? 1 : 0;
@@ -324,9 +337,9 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
          * entirely when the runtime GL lacks glPointParameterfv; the
          * repl_exec_point_size camera-distance scaling stands in
          * visually. */
-        if (g_point_parameter_supported) {
+        if (g_point_parameter_supported && g_point_parameter_proc) {
             GLfloat params[3] = { cmd->args[1], cmd->args[2], cmd->args[3] };
-            glPointParameterfv((GLenum)cmd->args[0], params);
+           g_point_parameter_proc((GLenum)cmd->args[0], params);
         }
         return 1;
     }

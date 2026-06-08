@@ -169,12 +169,15 @@ typedef struct SceneRenderConfig {
 
     /* --- Environment --- */
     SceneBackdropMode backdrop_mode;
-    /* Runtime point-parameter (glPointParameterfv) capability, mirrored
-     * from the REPL executor flag. Gates the star backdrop's direct
-     * call. Non-REPL callers (scene_demo) leave this 0 via memset —
-     * the safe default: never call the entry point unless a caller has
-     * confirmed support. */
+    /* Runtime point-parameter capability plus the loaded entry point,
+     * mirrored from glr_ctrl_init_gl via the REPL executor. The
+     * backdrop uses the proc to reset GL_POINT_DISTANCE_ATTENUATION
+     * without taking a scene-layer dependency on REPL/controller code.
+     * Non-REPL callers (scene_demo) leave both zero via memset — the
+     * safe default: never call the entry point unless a caller has
+     * confirmed support and supplied a callable proc. */
     int point_parameter_supported;
+    void (APIENTRY *point_parameter_proc)(GLenum pname, const GLfloat *params);
     /* Runtime GL_NV_fog_distance capability, detected once in
      * glr_ctrl_init_gl and mirrored here. When set, the passes whose
      * distance fog wraps geometry around the camera — the city backdrop

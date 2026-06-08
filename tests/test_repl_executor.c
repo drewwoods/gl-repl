@@ -450,6 +450,7 @@ static float test_camera_distance_source(void) {
 static void test_executor_camera_distance_source(void) {
     /* Default state: no source installed. */
     repl_executor_install_camera_distance_source(NULL);
+    repl_executor_install_point_parameter_proc(NULL);
 
     /* Runtime point-parameter capability (replaces the compile-time
      * NO_POINT_PARAMETER macro). Two cases, observed through the
@@ -477,22 +478,31 @@ static void test_executor_camera_distance_source(void) {
     repl_executor_install_camera_distance_source(NULL);
     repl_exec_point_size(2.0f);  /* must not crash with no source */
 
-    /* (b) Supported (default): CMD_POINT_PARAMETER_FV calls
-     * glPointParameterfv, and the point-size path passes sz straight
-     * through without consulting the camera-distance source. */
+    /* (b) Supported but no loaded proc: the executor must NOT fall back
+     * to a direct glPointParameterfv symbol call. */
     repl_executor_set_point_parameter_supported(1);
     gl_stub_counts_reset();
     repl_apply_state_cmd(&pp, 1.0f);
-    ASSERT_TRUE("supported: CMD_POINT_PARAMETER_FV calls glPointParameterfv",
+    ASSERT_TRUE("supported without proc: CMD_POINT_PARAMETER_FV does not call glPointParameterfv",
+                gl_stub_counts[GL_STUB_glPointParameterfv] == 0);
+
+    /* (c) Supported with a loaded proc: CMD_POINT_PARAMETER_FV calls
+     * through it, and the point-size path passes sz straight through
+     * without consulting the camera-distance source. */
+    repl_executor_install_point_parameter_proc((ReplExecutorPointParameterProc)glPointParameterfv);
+    gl_stub_counts_reset();
+    repl_apply_state_cmd(&pp, 1.0f);
+    ASSERT_TRUE("supported with proc: CMD_POINT_PARAMETER_FV calls glPointParameterfv",
                 gl_stub_counts[GL_STUB_glPointParameterfv] == 1);
     g_test_camera_distance_calls = 0;
     repl_executor_install_camera_distance_source(test_camera_distance_source);
     repl_exec_point_size(2.0f);
-    ASSERT_TRUE("supported: point-size does not consult the camera-distance source",
+    ASSERT_TRUE("supported with proc: point-size does not consult the camera-distance source",
                 g_test_camera_distance_calls == 0);
     repl_executor_install_camera_distance_source(NULL);
 
     /* Restore default for subsequent tests. */
+    repl_executor_install_point_parameter_proc((ReplExecutorPointParameterProc)glPointParameterfv);
     repl_executor_set_point_parameter_supported(1);
 }
 
@@ -748,6 +758,7 @@ static void test_export_normal_encoding(void) {
 }
 
 int main(void) {
+    repl_executor_install_point_parameter_proc((ReplExecutorPointParameterProc)glPointParameterfv);
     test_tess_callbacks();
     test_export_normal_encoding();
     test_light_indicator_tracks_program();
