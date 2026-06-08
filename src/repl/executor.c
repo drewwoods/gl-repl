@@ -59,11 +59,10 @@ static int            g_tess_vert_count = 0;
 
 
 /* User-facing point-size emission. When the runtime lacks
- * glPointParameterfv, approximate its distance attenuation by scaling
- * every glPointSize call by 2 / (0.5 * cam_dist) — a reference scale
- * of 2 at a reference distance of half the camera distance, i.e. an
- * effective 4/cam_dist. The factored form is kept verbatim from the
- * old NO_POINT_PARAMETER fallback for parity. Reads cam_dist from the
+ * glPointParameterfv, approximate its distance attenuation in software by
+ * scaling every glPointSize call by REF_DIST/cam_dist — a constant
+ * footprint on the model, matching the hardware path's pure-quadratic
+ * default (see REPL_POINT_SIZE_REF_DIST). Reads cam_dist from the
  * controller-installed source; with no source installed (the demo, or
  * any embedder without an app-shell camera) cam_dist defaults to 0
  * and `sz` passes through unchanged. When supported, emit `sz`
@@ -71,7 +70,7 @@ static int            g_tess_vert_count = 0;
 static void repl_exec_point_size(GLfloat sz) {
     if (!g_point_parameter_supported) {
         float cam_dist = g_camera_distance_source ? g_camera_distance_source() : 0.0f;
-        glPointSize(cam_dist > 0.0f ? sz * (2.0f / (0.5f * cam_dist)) : sz);
+        glPointSize(cam_dist > 0.0f ? sz * (REPL_POINT_SIZE_REF_DIST / cam_dist) : sz);
     } else {
         glPointSize(sz);
     }

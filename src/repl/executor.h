@@ -35,6 +35,18 @@
 
 #define TESS_VERT_BUF_SIZE 256
 
+/* Reference distance (world units) at which a point renders at its literal
+ * glPointSize: point size scales as REF_DIST/d, a constant on-screen
+ * footprint on the model. The single source of truth for both point-size
+ * paths, so they can't drift:
+ *   - The software fallback (no glPointParameterfv) scales glPointSize by
+ *     REF_DIST/cam_dist directly — see repl_exec_point_size in executor.c.
+ *   - The hardware default seeds GL_POINT_DISTANCE_ATTENUATION with a
+ *     pure-quadratic coefficient 1/REF_DIST^2, which makes GL's
+ *     size/sqrt(c*d^2) reduce to the same size*REF_DIST/d — see the init
+ *     bootstrap in src/repl/export.c. */
+#define REPL_POINT_SIZE_REF_DIST 4.0f
+
 typedef struct TessVertex {
     GLdouble pos[3];
     GLdouble normal[3];

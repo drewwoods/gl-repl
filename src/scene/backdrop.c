@@ -389,7 +389,7 @@ static void draw_starry_sky(float anim_time, int point_parameter_supported) {
     /* Override prior point attenuation with identity so stars render at
      * fixed sizes (the per-band glPointSize values below) regardless of
      * camera distance. The init bootstrap sets a non-identity quadratic
-     * default (0.02 quadratic term) for normal scene point rendering;
+     * default (1/distance footprint scaling) for normal scene point rendering;
      * without this override stars would attenuate noticeably across the
      * STAR_SKY_RADIUS dome. Gated on the runtime capability the
      * controller mirrored into the config — unsupported contexts can't
