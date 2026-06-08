@@ -132,16 +132,20 @@ static void test_scene_status_banner_mode(void) {
     ui_state_code_panel_mut()->panel_frac = 0.4f;
 
     make_snap(&snap);
+    /* A shown message always has at least one history entry (the push that
+     * set it), so the bell the banner telescopes out of exists. */
+    snap.status_history.count = 1;
     snap.status.ttl = 120;
+    snap.status.age = 120;   /* fully telescoped out (past the open ramp) */
     snap.status.kind = UI_STATUS_INFO;
     snprintf(snap.status.text, sizeof(snap.status.text), "Saved to output.c");
 
     gl_stub_counts_reset();
     ui_panels_render_scene_status(&snap);
 
-    ASSERT_TRUE("status banner draws background rect",
+    ASSERT_TRUE("status banner draws filled geometry (bell + bar)",
                 gl_stub_counts[GL_STUB_glRectf] > 0);
-    ASSERT_TRUE("status banner draws badge circle",
+    ASSERT_TRUE("status banner emits primitive batches",
                 gl_stub_counts[GL_STUB_glBegin] > 0);
     ASSERT_TRUE("status banner draws text",
                 gl_stub_counts[GL_STUB_glRasterPos2f] > 0 ||
@@ -163,7 +167,9 @@ static void test_scene_status_error_banner(void) {
     ui_state_code_panel_mut()->panel_frac = 0.4f;
 
     make_snap(&snap);
+    snap.status_history.count = 1;
     snap.status.ttl = 120;
+    snap.status.age = 120;
     snap.status.kind = UI_STATUS_INFO;
     snprintf(snap.status.text, sizeof(snap.status.text), "info msg");
 

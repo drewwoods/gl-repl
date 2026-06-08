@@ -86,14 +86,29 @@ static void ui_state_status_history_push(const char *message, int kind) {
 }
 
 static void ui_state_status_set_kind(const char *message, int kind) {
+    int is_refresh;
     if (!message || !message[0])
         return;
+
+    /* A re-emit of the message already on screen (same text + kind, still
+     * live) is a refresh, not a new event: keep its animation age and its
+     * single history entry, just renew the ttl. This keeps per-frame
+     * re-emitters (e.g. tutorial COMMAND-step hints) from pinning the
+     * telescope animation collapsed or flooding the history. */
+    is_refresh = g_ui_state.status.ttl > 0 &&
+                 g_ui_state.status.kind == kind &&
+                 strcmp(g_ui_state.status.text, message) == 0;
+
     strncpy(g_ui_state.status.text, message,
             sizeof(g_ui_state.status.text) - 1);
     g_ui_state.status.text[sizeof(g_ui_state.status.text) - 1] = '\0';
     g_ui_state.status.ttl = UI_STATUS_MESSAGE_TTL;
     g_ui_state.status.kind = kind;
-    ui_state_status_history_push(g_ui_state.status.text, kind);
+
+    if (!is_refresh) {
+        g_ui_state.status.age = 0;
+        ui_state_status_history_push(g_ui_state.status.text, kind);
+    }
 }
 
 void ui_state_status_set(const char *message) {

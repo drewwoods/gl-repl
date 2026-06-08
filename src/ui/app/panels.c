@@ -131,7 +131,10 @@ static void draw_modal_strip(const UiRenderSnapshot *snap,
 /* --- Recent-message ("messages") button + history list --- */
 
 enum {
-    MSGBTN_PAD_X       = 8,   /* label inset each side */
+    MSGBTN_PAD_X       = 8,    /* button inset each side */
+    BELL_ICON_W        = 12,   /* bell glyph footprint */
+    BELL_ICON_H        = 13,
+    BELL_GAP           = 5,    /* gap between bell and the count */
     MSGLIST_ROW_H      = LINE_H,
     MSGLIST_PAD        = 4,    /* inner padding around the list text block */
     MSGLIST_MAX_ROWS   = 10,   /* visible rows cap, also clamped to fit */
@@ -139,14 +142,17 @@ enum {
     MSGLIST_MAX_W      = 460,
 };
 
-/* Build the button label ("Messages" or "Messages (N)") into buf. */
+/* Transient-banner animation: the status strip telescopes out of the bell
+ * on appear and collapses back into it on expiry, rather than fading. */
+enum {
+    STATUS_ANIM_OPEN_FRAMES  = 12,  /* extend-out duration */
+    STATUS_ANIM_CLOSE_FRAMES = 16,  /* collapse-in duration */
+};
+
+/* Build the bell's count label (number only) into buf. */
 static void status_history_button_label(const UiRenderSnapshot *snap,
                                          char *buf, int cap) {
-    int n = snap->status_history.count;
-    if (n > 0)
-        snprintf(buf, (size_t)cap, "Messages (%d)", n);
-    else
-        snprintf(buf, (size_t)cap, "Messages");
+    snprintf(buf, (size_t)cap, "%d", snap->status_history.count);
 }
 
 int ui_panels_status_history_button_rect(const UiRenderSnapshot *snap,
@@ -170,7 +176,8 @@ int ui_panels_status_history_button_rect(const UiRenderSnapshot *snap,
         return 0;
 
     status_history_button_label(snap, label, (int)sizeof(label));
-    bw = (int)strlen(label) * FONT_SMALL_W + 2 * MSGBTN_PAD_X;
+    bw = 2 * MSGBTN_PAD_X + BELL_ICON_W + BELL_GAP
+         + (int)strlen(label) * FONT_SMALL_W;
     bh = STATUSBAR_H;
     if (bw > sc_w)
         bw = sc_w;
@@ -229,18 +236,107 @@ static int status_history_list_rect(const UiRenderSnapshot *snap,
     return vis;
 }
 
-/* Draw the persistent messages button. Lit when history is open or
- * non-empty so it reads as a live affordance. */
-static void status_history_render_button(const UiRenderSnapshot *snap) {
+/* Transient-banner animation state, derived from the live status ttl.
+ * `ext` is the eased telescope factor (0 = collapsed into the bell, 1 =
+ * fully extended); `pulse` peaks while the bell is actively emitting /
+ * swallowing a message; `tilt` is the damped ring-wiggle in degrees. */
+typedef struct {
+    int   active;
+    float ext;
+    float pulse;
+    float tilt;
+} StatusAnim;
+
+static float status_smoothstep(float x) {
+    if (x <= 0.0f) return 0.0f;
+    if (x >= 1.0f) return 1.0f;
+    return x * x * (3.0f - 2.0f * x);
+}
+
+static StatusAnim status_anim_from(const UiStatusState *s) {
+    StatusAnim a = { 0, 0.0f, 0.0f, 0.0f };
+    float open_t, close_t, w_open, w_close;
+    const float PI = 3.14159265f;
+
+    if (s->ttl <= 0 || !s->text[0])
+        return a;
+    a.active = 1;
+
+    /* Open is driven by `age` (frames since the message first appeared,
+     * refresh-stable) and close by the remaining `ttl`, so a re-emitted
+     * message stays fully extended instead of restarting the animation. */
+    open_t  = (float)s->age  / (float)STATUS_ANIM_OPEN_FRAMES;
+    close_t = (float)s->ttl  / (float)STATUS_ANIM_CLOSE_FRAMES;
+    if (open_t  > 1.0f) open_t  = 1.0f;
+    if (close_t > 1.0f) close_t = 1.0f;
+
+    /* Extension is gated by whichever phase is mid-transition. */
+    a.ext   = status_smoothstep(open_t < close_t ? open_t : close_t);
+    /* Pulse: strong right as the bar leaves (open_t~0) and re-enters
+     * (close_t~0) the bell, quiet during the hold. */
+    a.pulse = (1.0f - open_t) > (1.0f - close_t)
+                  ? (1.0f - open_t) : (1.0f - close_t);
+    /* Damped sinusoid wiggle over each transition. */
+    w_open  = sinf(open_t * 4.0f * PI) * (1.0f - open_t);
+    w_close = sinf(close_t * 4.0f * PI) * (1.0f - close_t);
+    a.tilt  = (w_open + w_close) * 9.0f;
+    return a;
+}
+
+/* Draw a small bell glyph filled in the current GL color, body centered on
+ * cx with its rim at ry, height h. The bell is rotated by `tilt` degrees
+ * about its top crown to fake a ring. */
+static void status_draw_bell(float cx, float ry, float w, float h,
+                             float tilt) {
+    /* Silhouette, rim -> up the right side -> crown -> down the left. */
+    const float ox[11] = { 0.62f, 0.62f, 0.50f, 0.42f, 0.30f,
+                           0.00f, -0.30f, -0.42f, -0.50f, -0.62f, -0.62f };
+    const float oy[11] = { 0.00f, 0.06f, 0.18f, 0.55f, 0.92f,
+                           1.00f, 0.92f, 0.55f, 0.18f, 0.06f, 0.00f };
+    float px[11], py[11];
+    int i;
+
+    glPushMatrix();
+    glTranslatef(cx, ry + h, 0.0f);   /* pivot at the crown */
+    glRotatef(tilt, 0.0f, 0.0f, 1.0f);
+    glTranslatef(-cx, -(ry + h), 0.0f);
+
+    for (i = 0; i < 11; i++) {
+        px[i] = cx + ox[i] * (w * 0.5f);
+        py[i] = ry + oy[i] * h;
+    }
+
+    /* Filled body: fan from a point inside the silhouette (star-shaped). */
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex2f(cx, ry + 0.35f * h);
+    for (i = 0; i < 11; i++)
+        glVertex2f(px[i], py[i]);
+    glVertex2f(px[0], py[0]);
+    glEnd();
+
+    /* Crown knob + clapper dot. */
+    glRectf(cx - 1.0f, ry + h - 1.0f, cx + 1.0f, ry + h + 1.5f);
+    glRectf(cx - 1.5f, ry - 2.5f, cx + 1.5f, ry - 0.5f);
+
+    glPopMatrix();
+}
+
+/* Draw the persistent messages bell + count. While a message is animating
+ * the bell glows in the message hue and rings; otherwise it rests neutral. */
+static void status_history_render_button(const UiRenderSnapshot *snap,
+                                         StatusAnim anim) {
     int bx, by, bw, bh;
     char label[32];
     const float *bg;
+    float cx, ry, glow;
+    float bell[3];
+    int text_x, text_y, i;
 
     if (!ui_panels_status_history_button_rect(snap, &bx, &by, &bw, &bh))
         return;
 
     status_history_button_label(snap, label, (int)sizeof(label));
-    bg = (snap->status_history.open || snap->status_history.count > 0)
+    bg = (snap->status_history.open || anim.active)
              ? k_msgbtn_bg_lit : k_msgbtn_bg;
 
     glColor4fv(bg);
@@ -253,10 +349,39 @@ static void status_history_render_button(const UiRenderSnapshot *snap) {
     glVertex2f((float)bx + 0.5f, (float)(by + bh) - 0.5f);
     glEnd();
 
-    int text_y = by + (bh - FONT_SMALL_H) / 2 + 1;
+    /* Bell hue: rest neutral, warm to the live message color while it
+     * animates (amber for INFO, red for ERROR), brightened by the pulse. */
+    int ry_i = by + (bh - BELL_ICON_H) / 2 + 1;
+    cx = (float)(bx + MSGBTN_PAD_X) + BELL_ICON_W * 0.5f;
+    ry = (float)ry_i;
+    glow = anim.active ? (0.45f + 0.55f * anim.pulse) : 0.0f;
+    {
+        const float *hue = (snap->status.kind == UI_STATUS_ERROR)
+                               ? k_status_bar_fg_err : k_status_bar_fg;
+        for (i = 0; i < 3; i++)
+            bell[i] = k_msgbtn_fg[i] + (hue[i] - k_msgbtn_fg[i]) * glow;
+    }
+
+    /* Sound ring when the bell is emitting: a faint arc expanding off the
+     * crown, alpha tracking the pulse. */
+    if (anim.pulse > 0.02f) {
+        float r = 5.0f + 6.0f * (1.0f - anim.pulse);
+        glColor4f(bell[0], bell[1], bell[2], 0.5f * anim.pulse);
+        glBegin(GL_LINE_STRIP);
+        for (i = 0; i <= 8; i++) {
+            float ang = (-0.35f + 1.4f * (float)i / 8.0f) * 3.14159265f;
+            glVertex2f(cx + cosf(ang) * r, ry + BELL_ICON_H * 0.55f + sinf(ang) * r);
+        }
+        glEnd();
+    }
+
+    glColor4f(bell[0], bell[1], bell[2], 1.0f);
+    status_draw_bell(cx, ry, (float)BELL_ICON_W, (float)BELL_ICON_H, anim.tilt);
+
+    text_x = bx + MSGBTN_PAD_X + BELL_ICON_W + BELL_GAP;
+    text_y = by + (bh - FONT_SMALL_H) / 2 + 1;
     glColor3fv(k_msgbtn_fg);
-    gl2d_draw_string((float)(bx + MSGBTN_PAD_X), (float)text_y,
-                     label, FONT_SMALL);
+    gl2d_draw_string((float)text_x, (float)text_y, label, FONT_SMALL);
 }
 
 /* Draw the inline history list when the toggle is open. Newest entry sits
@@ -349,6 +474,98 @@ static UiHit status_history_hit_test(const UiRenderSnapshot *snap,
     return h;
 }
 
+/* Telescoping transient status banner. It grows out of the bell's left
+ * edge toward the scene's left edge as `anim.ext` rises; the leading (left)
+ * edge alpha lerps with the extension so the strip appears to stream out of
+ * the bell and, on expiry, collapse back into it. */
+static void status_banner_render(const UiRenderSnapshot *snap,
+                                 StatusAnim anim) {
+    int sc_x, sc_y, sc_w, sc_h;
+    int bx, by, bw, bh;
+    const float *bg_rgb, *edge_rgb, *fg_rgb;
+    float right, left_full, rev_left, y0, y1;
+    float bg_a, lead_a, ta;
+    int tx, text_y, dot_cx, dot_cy, max_px, max_chars, n, i;
+    char msg[REPL_STATUS_TEXT_MAX];
+
+    if (!anim.active || anim.ext <= 0.002f)
+        return;
+    if (!ui_panels_status_history_button_rect(snap, &bx, &by, &bw, &bh))
+        return;
+    ui_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
+    if (sc_w <= 0 || sc_h <= 0)
+        return;
+
+    if (snap->status.kind == UI_STATUS_ERROR) {
+        bg_rgb = k_status_bar_bg_err;
+        edge_rgb = k_status_bar_edge_err;
+        fg_rgb = k_status_bar_fg_err;
+    } else {
+        bg_rgb = k_status_bar_bg;
+        edge_rgb = k_status_bar_edge;
+        fg_rgb = k_status_bar_fg;
+    }
+
+    right     = (float)bx;                       /* banner abuts the bell */
+    left_full = (float)sc_x;
+    rev_left  = right - anim.ext * (right - left_full);
+    y0 = (float)sc_y;
+    y1 = (float)(sc_y + STATUSBAR_H);
+
+    bg_a   = 0.92f;
+    lead_a = bg_a * anim.ext;                    /* faint moving leading edge */
+    ta     = anim.ext;                           /* whole-bar fade-in */
+
+    /* Background: horizontal alpha gradient — faint at the leading edge,
+     * solid where it meets the bell. */
+    glBegin(GL_QUADS);
+    glColor4f(bg_rgb[0], bg_rgb[1], bg_rgb[2], lead_a);
+    glVertex2f(rev_left, y0);
+    glVertex2f(rev_left, y1);
+    glColor4f(bg_rgb[0], bg_rgb[1], bg_rgb[2], bg_a);
+    glVertex2f(right, y1);
+    glVertex2f(right, y0);
+    glEnd();
+
+    /* Top rule, matching the gradient. */
+    glBegin(GL_LINES);
+    glColor4f(edge_rgb[0], edge_rgb[1], edge_rgb[2], anim.ext * anim.ext);
+    glVertex2f(rev_left, y1);
+    glColor4f(edge_rgb[0], edge_rgb[1], edge_rgb[2], anim.ext);
+    glVertex2f(right, y1);
+    glEnd();
+
+    /* Severity dot at the text's left margin. */
+    tx     = sc_x + CODE_MARGIN_X + 10;
+    text_y = sc_y + (STATUSBAR_H - FONT_SMALL_H) / 2 + 1;
+    dot_cx = sc_x + CODE_MARGIN_X + 3;
+    dot_cy = sc_y + STATUSBAR_H / 2;
+    glColor4f(fg_rgb[0], fg_rgb[1], fg_rgb[2], ta);
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex2f((float)dot_cx, (float)dot_cy);
+    for (i = 0; i <= 12; i++) {
+        float ang = (float)i * (6.2831853f / 12.0f);
+        glVertex2f((float)dot_cx + cosf(ang) * 3.0f,
+                   (float)dot_cy + sinf(ang) * 3.0f);
+    }
+    glEnd();
+
+    /* Message text, truncated to the room left of the bell. */
+    max_px = bx - 8 - tx;
+    max_chars = max_px / FONT_SMALL_W;
+    if (max_chars < 8)
+        max_chars = 8;
+    if (max_chars > 255)
+        max_chars = 255;
+    n = (int)strlen(snap->status.text);
+    if (n > max_chars)
+        snprintf(msg, sizeof(msg), "%.*s...", max_chars - 3, snap->status.text);
+    else
+        snprintf(msg, sizeof(msg), "%s", snap->status.text);
+    glColor4f(fg_rgb[0], fg_rgb[1], fg_rgb[2], ta);
+    gl2d_draw_string((float)tx, (float)text_y, msg, FONT_SMALL);
+}
+
 void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
     if (snap->rename_active) {
         char msg[REPL_STATUS_TEXT_MAX];
@@ -374,95 +591,20 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
         return;
     }
 
-    /* Persistent messages button + (when open) the recent-message list.
-     * Rendered before the transient banner's ttl gate so the button stays
-     * visible even with no active message. The list draws under the bar
-     * band but is layered first; the button paints on top of both. */
+    /* One 2D pass: the transient banner telescopes out of the bell, the
+     * recent-message list (when open) stacks above it, and the persistent
+     * bell paints on top. The banner emanates from the bell and collapses
+     * back into it on expiry instead of fading in place. */
     {
+        StatusAnim anim = status_anim_from(&snap->status);
         gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        status_banner_render(snap, anim);
         status_history_render_list(snap);
-        status_history_render_button(snap);
+        status_history_render_button(snap, anim);
         glDisable(GL_BLEND);
         gl2d_end();
-    }
-
-    UiStatusState status = snap->status;
-    if (status.ttl <= 0 || !status.text[0])
-        return;
-
-    {
-        StatusStripFrame f;
-        float alpha;
-        int badge_d, badge_x, badge_y;
-        int tx, max_px, max_chars;
-        char msg[REPL_STATUS_TEXT_MAX];
-        int n;
-        const float *bg_rgb;
-        const float *edge_rgb;
-        const float *fg_rgb;
-        float bg[4], rule[4], fg[4];
-
-        if (!status_strip_begin(snap, &f))
-            return;
-
-        alpha = status.ttl > UI_STATUS_FADE_FRAMES
-                    ? 1.0f
-                    : (float)status.ttl / (float)UI_STATUS_FADE_FRAMES;
-        if (status.kind == UI_STATUS_ERROR) {
-            bg_rgb   = k_status_bar_bg_err;
-            edge_rgb = k_status_bar_edge_err;
-            fg_rgb   = k_status_bar_fg_err;
-        } else {
-            bg_rgb   = k_status_bar_bg;
-            edge_rgb = k_status_bar_edge;
-            fg_rgb   = k_status_bar_fg;
-        }
-        bg[0] = bg_rgb[0]; bg[1] = bg_rgb[1]; bg[2] = bg_rgb[2]; bg[3] = 0.92f * alpha;
-        rule[0] = edge_rgb[0]; rule[1] = edge_rgb[1]; rule[2] = edge_rgb[2]; rule[3] = alpha;
-        fg[0] = fg_rgb[0]; fg[1] = fg_rgb[1]; fg[2] = fg_rgb[2]; fg[3] = alpha;
-
-        status_strip_paint_bar(&f, bg, rule);
-
-        badge_d = 14;
-        badge_x = f.sc_x + CODE_MARGIN_X;
-        badge_y = f.bar_y + (f.bar_h - badge_d) / 2;
-        glColor4f(fg[0], fg[1], fg[2], fg[3]);
-        glBegin(GL_LINE_LOOP);
-        for (int i = 0; i < 16; i++) {
-            float angle = (float)i * (6.2831853f / 16.0f);
-            glVertex2f(badge_x + badge_d * 0.5f + cosf(angle) * (badge_d * 0.5f),
-                       badge_y + badge_d * 0.5f + sinf(angle) * (badge_d * 0.5f));
-        }
-        glEnd();
-        gl2d_draw_string((float)(badge_x + badge_d * 0.5f - FONT_SMALL_W * 0.5f + 1.0f),
-                         (float)f.text_y, "!", FONT_SMALL);
-
-        tx = badge_x + badge_d + 8;
-        max_px = f.sc_x + f.sc_w - CODE_MARGIN_X - tx;
-        /* Stop short of the right-anchored messages button so the banner
-         * text never slides under it. */
-        {
-            int bx, by, bw, bh;
-            if (ui_panels_status_history_button_rect(snap, &bx, &by, &bw, &bh))
-                max_px = bx - 8 - tx;
-        }
-        max_chars = max_px / FONT_SMALL_W;
-        if (max_chars < 8)
-            max_chars = 8;
-        if (max_chars > 255)
-            max_chars = 255;
-
-        n = (int)strlen(status.text);
-        if (n > max_chars)
-            snprintf(msg, sizeof(msg), "%.*s...", max_chars - 3, status.text);
-        else
-            snprintf(msg, sizeof(msg), "%s", status.text);
-        glColor4f(fg[0], fg[1], fg[2], fg[3]);
-        gl2d_draw_string((float)tx, (float)f.text_y, msg, FONT_SMALL);
-
-        status_strip_end();
     }
 }
 
