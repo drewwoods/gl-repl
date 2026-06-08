@@ -308,6 +308,7 @@ static void display_func(void) {
         exit(n < 0 ? 1 : 0);
     }
 
+    glFinish(); /* ensure all GL commands are done before we timestamp the swap */
     glutSwapBuffers();
     if (trace_this) {
         snprintf(buf, sizeof(buf), "frame %d swap done", frame_num);
