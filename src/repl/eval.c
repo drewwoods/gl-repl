@@ -363,7 +363,9 @@ static const ExprBuiltin k_expr_builtins[] = {
 };
 
 static const char *const k_reserved_identifiers[] = {
-    "t", "PI", "TAU", "e", "float", "var", "A", "B", "C", NULL
+    "t", "PI", "TAU", "e", "NAN", "INFINITY",
+    "nan", "inf", "infinity",
+    "float", "var", "A", "B", "C", NULL
 };
 
 static const ExprBuiltin *find_expr_builtin(const char *name) {
@@ -374,6 +376,34 @@ static const ExprBuiltin *find_expr_builtin(const char *name) {
             return &k_expr_builtins[builtin_idx];
     }
     return NULL;
+}
+
+static int repl_eval_named_constant_value(const char *name, float *out) {
+    if (!name)
+        return 0;
+    if (strcmp(name, "PI") == 0) {
+        if (out) *out = (float)M_PI;
+        return 1;
+    }
+    if (strcmp(name, "TAU") == 0) {
+        if (out) *out = (float)(2.0 * M_PI);
+        return 1;
+    }
+    if (strcmp(name, "e") == 0) {
+        if (out) *out = (float)M_E;
+        return 1;
+    }
+    if (strcmp(name, "NAN") == 0 || strcmp(name, "nan") == 0) {
+        if (out) *out = NAN;
+        return 1;
+    }
+    if (strcmp(name, "INFINITY") == 0 ||
+        strcmp(name, "inf") == 0 ||
+        strcmp(name, "infinity") == 0) {
+        if (out) *out = INFINITY;
+        return 1;
+    }
+    return 0;
 }
 
 int repl_eval_is_builtin_function(const char *name) {
@@ -654,8 +684,7 @@ static int expr_range_has_runtime_values(const char *src, const char *end,
         if (too_long)
             return 1;
 
-        if (strcmp(name, "PI") == 0 || strcmp(name, "TAU") == 0 ||
-            strcmp(name, "e") == 0)
+        if (repl_eval_named_constant_value(name, NULL))
             continue;
 
         if (repl_eval_scratch_array_index(name) >= 0)
@@ -714,8 +743,7 @@ static int validate_expression_idents_range(const char *src, const char *end,
             return 0;
         }
 
-        if (strcmp(name, "PI") == 0 || strcmp(name, "TAU") == 0 ||
-            strcmp(name, "e") == 0)
+        if (repl_eval_named_constant_value(name, NULL))
             continue;
 
         int scratch_idx = repl_eval_scratch_array_index(name);
@@ -999,9 +1027,11 @@ static float eval_primary(ExprCtx *ctx) {
         const char *q = skip_ws_ptr(ctx->p);
 
         /* Constants */
-        if (strcmp(name, "PI") == 0)  return (float)M_PI;
-        if (strcmp(name, "TAU") == 0) return (float)(2.0 * M_PI);
-        if (strcmp(name, "e") == 0)   return (float)M_E;
+        {
+            float constant_value = 0.0f;
+            if (repl_eval_named_constant_value(name, &constant_value))
+                return constant_value;
+        }
 
         {
             int scratch_idx = repl_eval_scratch_array_index(name);
@@ -1377,7 +1407,12 @@ void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
     static const struct { const char *from; const char *to; } k_const_expr_to_c[] = {
         { "TAU", "(2*M_PI)" },
         { "PI",  "M_PI" },
-        { "e",   "M_E" }
+        { "e",   "M_E" },
+        { "NAN", "NAN" },
+        { "nan", "NAN" },
+        { "INFINITY", "INFINITY" },
+        { "inf", "INFINITY" },
+        { "infinity", "INFINITY" }
     };
     const char *p = in;
     char *dst = out;
@@ -1566,7 +1601,12 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
     /* Identifier-aware replacement: sinf->sin, M_PI->PI, M_E->e, etc. */
     static const struct { const char *from; const char *to; } k_const_c_to_expr[] = {
         { "M_PI", "PI" },
-        { "M_E",  "e"  }
+        { "M_E",  "e"  },
+        { "NAN", "NAN" },
+        { "nan", "NAN" },
+        { "INFINITY", "INFINITY" },
+        { "inf", "INFINITY" },
+        { "infinity", "INFINITY" }
     };
     const char *p = tmp;
     char *dst = out;

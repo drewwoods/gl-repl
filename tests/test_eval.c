@@ -215,6 +215,24 @@ static void run_tests(void) {
     ASSERT_FLOAT("1.5f+0.5f", 2.0f);
     ASSERT_FLOAT("PI", (float)M_PI);
     ASSERT_FLOAT("TAU", (float)(2.0 * M_PI));
+    {
+        ExprCtx ctx = { "NAN", NULL, 0 };
+        ASSERT_TRUE("NAN constant", isnan(repl_eval_expr(&ctx)));
+    }
+    {
+        ExprCtx ctx = { "nan", NULL, 0 };
+        ASSERT_TRUE("nan constant", isnan(repl_eval_expr(&ctx)));
+    }
+    {
+        ExprCtx ctx = { "INFINITY", NULL, 0 };
+        float value = repl_eval_expr(&ctx);
+        ASSERT_TRUE("INFINITY constant", isinf(value) && value > 0.0f);
+    }
+    {
+        ExprCtx ctx = { "inf", NULL, 0 };
+        float value = repl_eval_expr(&ctx);
+        ASSERT_TRUE("inf constant", isinf(value) && value > 0.0f);
+    }
     ASSERT_FLOAT("sin(0)", 0.0f);
     ASSERT_FLOAT("cos(0)", 1.0f);
     ASSERT_FLOAT("tan(0)", 0.0f);
@@ -302,6 +320,10 @@ static void run_tests(void) {
         ASSERT_TRUE("declared var z exists", predef_idx("z") >= 0);
         ASSERT_TRUE("declared var n exists", predef_idx("n") >= 0);
     }
+    ASSERT_DECLARE_FAIL("NAN");
+    ASSERT_DECLARE_FAIL("nan");
+    ASSERT_DECLARE_FAIL("INFINITY");
+    ASSERT_DECLARE_FAIL("inf");
 
     /* Variables */
     set_predef("x", 1.5f);
@@ -623,6 +645,8 @@ static void run_tests(void) {
     ASSERT_TO_C("(x+y) % (z*2)", "fmodf((x+y), (z*2))");
     ASSERT_TO_C("sin(x) % 1", "fmodf(sinf(x), 1)");
     ASSERT_TO_C("rem(x,2)", "remainderf(x,2)");
+    ASSERT_TO_C("nan", "NAN");
+    ASSERT_TO_C("inf", "INFINITY");
     ASSERT_TO_C("A[2]", "A[2]");
     ASSERT_TO_C("A[i+1]", "A[(int)(i+1)]");
     ASSERT_TO_C("A[B[0]+1]", "A[(int)(B[0]+1)]");
@@ -638,6 +662,8 @@ static void run_tests(void) {
     ASSERT_TO_REPL("powf(1.0f,2.0f)", "pow(1.0f,2.0f)");
     ASSERT_TO_REPL("repl_randf(i,3)", "rand(i,3)");
     ASSERT_TO_REPL("remainderf(x,2)", "rem(x,2)");
+    ASSERT_TO_REPL("nan", "NAN");
+    ASSERT_TO_REPL("INFINITY", "INFINITY");
     ASSERT_TO_REPL("A[2]", "A[2]");
     ASSERT_TO_REPL("A[(int)(i+1)]", "A[i+1]");
     ASSERT_TO_REPL("A[(int)(B[0] + 1)]", "A[B[0] + 1]");

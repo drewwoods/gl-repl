@@ -2,6 +2,7 @@
 #include "repl/text_helpers.h"
 
 #include <ctype.h>
+#include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -31,6 +32,14 @@ void repl_canonical_input_view(const char *src,
 void repl_format_source_float(char *out, int out_sz, float v) {
     if (!out || out_sz <= 0)
         return;
+    if (isnan(v)) {
+        snprintf(out, (size_t)out_sz, "NAN");
+        return;
+    }
+    if (isinf(v)) {
+        snprintf(out, (size_t)out_sz, "%sINFINITY", v < 0.0f ? "-" : "");
+        return;
+    }
     if (v == 0.0f) {
         snprintf(out, (size_t)out_sz, "0");
         return;
