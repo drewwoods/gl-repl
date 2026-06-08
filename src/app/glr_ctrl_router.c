@@ -105,8 +105,8 @@ int glr_ctrl_router_handle_save_key(unsigned char key) {
 
 int glr_ctrl_router_handle_debug_dump_key(unsigned char key) {
     if (keymap_event_is(key, GLR_DEBUG_DUMP)) {
-        glr_debug_dump_editor(stdout, source_document_view());
         glr_debug_dump_flat_commands_sync(stdout, source_document_view());
+        glr_debug_dump_editor(stdout, source_document_view());
         repl_set_status("Dumped editor + flat commands to stdout");
         return 1;
     }
