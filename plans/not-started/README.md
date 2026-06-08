@@ -11,7 +11,6 @@ begun. They move to `plans/active/` once implementation starts.
 | `bounded-global-arrays.md` | Cap scratch arrays + deterministic `rand()` |
 | `clang-ast-mutation-analysis.md` | Clang AST pass for mutation analysis |
 | `cli-options-extraction.md` | Where CLI/arg handling should live (decision pending) |
-| `color-picker-palettes.md` | Color picker — Basic / Full / Harmony palettes |
 | `cursor-aware-enum-arg-completion.md` | Complete a prior enum argument at the cursor |
 | `float-returning-repl-functions.md` | Functions that return float values |
 | `historic-benchmark.md` | Historic bench trend tracking |
