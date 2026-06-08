@@ -1702,6 +1702,8 @@ static const char *import_find_block_comment_start(const char *s) {
             in_chr = 1;
             continue;
         }
+        if (s[0] == '/' && s[1] == '/')
+            return NULL;
         if (s[0] == '/' && s[1] == '*')
             return s;
     }
@@ -1837,6 +1839,8 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
     int accum_line_no   = 0;
     int accum_depth     = 0;
     int accum_truncated = 0;
+    int in_block_comment = 0;
+    int block_comment_indent = 0;
     while (fgets(line, sizeof(line), f)) {
         char normalized_line[MAX_LINE_LEN];
         const char *proc_line = line;
@@ -1856,8 +1860,59 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
         while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r'))
             line[--len] = '\0';
 
-        if (import_normalize_c89_comment_line(line, normalized_line, sizeof(normalized_line)))
+        if (in_block_comment) {
+            const char *close = strstr(line, "*/");
+            if (close) {
+                in_block_comment = 0;
+                const char *p = line;
+                while (p < close && isspace((unsigned char)*p)) p++;
+                if (p == close) continue;
+            }
+            const char *p = line;
+            while (*p && isspace((unsigned char)*p)) p++;
+            if (*p == '*') {
+                p++;
+                if (*p == ' ') p++;
+            }
+            /* Find trailing */ /* if any and strip it */
+            char payload[MAX_LINE_LEN];
+            snprintf(payload, sizeof(payload), "%s", p);
+            char *close_in_payload = strstr(payload, "*/");
+            if (close_in_payload) *close_in_payload = '\0';
+
+            /* Remove trailing spaces */
+            int plen = (int)strlen(payload);
+            while (plen > 0 && isspace((unsigned char)payload[plen - 1])) payload[--plen] = '\0';
+
+            int max_spaces = 32;
+            snprintf(normalized_line, sizeof(normalized_line), "%.*s// %s",
+                     block_comment_indent < max_spaces ? block_comment_indent : max_spaces,
+                     "                                ", payload);
             proc_line = normalized_line;
+        } else {
+            const char *open = import_find_block_comment_start(line);
+            if (open) {
+                const char *close = strstr(open + 2, "*/");
+                if (close) {
+                    if (import_normalize_c89_comment_line(line, normalized_line, sizeof(normalized_line)))
+                        proc_line = normalized_line;
+                } else {
+                    in_block_comment = 1;
+                    block_comment_indent = (int)(open - line);
+                    const char *p = open + 2;
+                    while (*p && isspace((unsigned char)*p)) p++;
+                    if (*p) {
+                        int max_spaces = 32;
+                        snprintf(normalized_line, sizeof(normalized_line), "%.*s// %s",
+                                 block_comment_indent < max_spaces ? block_comment_indent : max_spaces,
+                                 "                                ", p);
+                        proc_line = normalized_line;
+                    } else {
+                        continue;
+                    }
+                }
+            }
+        }
 
         if (is_line_comment_or_directive(proc_line)) {
             /* A blank, comment, or directive line that falls inside an

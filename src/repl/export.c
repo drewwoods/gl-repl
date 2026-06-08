@@ -1394,6 +1394,74 @@ static int comment_run_attached_func_idx(int start, int end_idx) {
     return -1;
 }
 
+static void export_write_comment_block_as_c(FILE *f, int start_idx, int end_idx) {
+    int count = 0;
+    int first_comment = -1;
+
+    for (int i = start_idx; i < end_idx; i++) {
+        if (!repl_state_document_cmds()[i].valid) continue;
+        if (repl_state_document_cmds()[i].type == CMD_COMMENT) {
+            count++;
+            if (first_comment < 0) first_comment = i;
+        }
+    }
+
+    if (count == 0) {
+        for (int i = start_idx; i < end_idx; i++) {
+            if (!repl_state_document_cmds()[i].valid) continue;
+            if (repl_state_document_cmds()[i].type == CMD_EMPTY)
+                fputc('\n', f);
+        }
+        return;
+    }
+
+    if (count == 1) {
+        for (int i = start_idx; i < end_idx; i++) {
+            if (!repl_state_document_cmds()[i].valid) continue;
+            if (repl_state_document_cmds()[i].type == CMD_EMPTY) {
+                fputc('\n', f);
+            } else if (repl_state_document_cmds()[i].type == CMD_COMMENT) {
+                export_write_c89_line(f, export_document_text(i));
+            }
+        }
+        return;
+    }
+
+    /* Multi-line block */
+    const char *first_text = export_document_text(first_comment);
+    int indent = 0;
+    while (first_text[indent] == ' ') indent++;
+
+    for (int i = 0; i < indent; i++) fputc(' ', f);
+    fprintf(f, "/*\n");
+
+    for (int i = start_idx; i < end_idx; i++) {
+        if (!repl_state_document_cmds()[i].valid) continue;
+        if (repl_state_document_cmds()[i].type == CMD_EMPTY) {
+            for (int j = 0; j < indent; j++) fputc(' ', f);
+            fprintf(f, " *\n");
+        } else if (repl_state_document_cmds()[i].type == CMD_COMMENT) {
+            const char *text = export_document_text(i);
+            const char *comment = export_line_comment_start(text);
+            for (int j = 0; j < indent; j++) fputc(' ', f);
+            if (comment) {
+                comment += 2;
+                if (*comment == ' ') comment++;
+                char payload_safe[MAX_LINE_LEN * 2];
+                size_t off = 0;
+                export_append_c89_comment_payload(payload_safe, sizeof(payload_safe), &off, comment);
+                payload_safe[off < sizeof(payload_safe) ? off : sizeof(payload_safe) - 1] = '\0';
+                fprintf(f, " * %s\n", payload_safe);
+            } else {
+                fprintf(f, " *\n");
+            }
+        }
+    }
+
+    for (int i = 0; i < indent; i++) fputc(' ', f);
+    fprintf(f, " */\n");
+}
+
 static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
                                      int for_depth, int *tess_depth) {
     const char *source_text = export_document_text(cmd_idx);
@@ -1640,6 +1708,23 @@ static void write_render_body_range_as_c(FILE *f, int start, int end_idx,
             break;
         case CMD_FUNC_END:
             break;
+        case CMD_COMMENT: {
+            int block_end = cmd_idx + 1;
+            while (block_end < end_idx && block_end < repl_state_document_count()) {
+                if (!repl_state_document_cmds()[block_end].valid) {
+                    block_end++;
+                    continue;
+                }
+                if (repl_state_document_cmds()[block_end].type == CMD_COMMENT) {
+                    block_end++;
+                } else {
+                    break;
+                }
+            }
+            export_write_comment_block_as_c(f, cmd_idx, block_end);
+            cmd_idx = block_end - 1;
+            break;
+        }
         default:
             write_canonical_cmd_as_c(f, &repl_state_document_cmds()[cmd_idx],
                                      cmd_idx, for_depth, &tess_depth);
@@ -2000,10 +2085,34 @@ static void write_func_defs_as_c(FILE *f) {
                (repl_state_document_cmds()[comment_start - 1].type == CMD_COMMENT ||
                 repl_state_document_cmds()[comment_start - 1].type == CMD_EMPTY))
             comment_start--;
-        /* Emit any preceding comment lines. */
-        for (int comment_idx = comment_start; comment_idx < cmd_idx; comment_idx++) {
-            fputc('\n', f);
-            export_write_c89_line(f, export_document_text(comment_idx));
+        /* Emit any preceding comment and empty lines. */
+        for (int i = comment_start; i < cmd_idx; ) {
+            if (!repl_state_document_cmds()[i].valid) {
+                i++;
+                continue;
+            }
+            fputc('\n', f); /* Formatting blank line for import coalescing */
+            if (repl_state_document_cmds()[i].type == CMD_EMPTY) {
+                fputc('\n', f);
+                i++;
+            } else if (repl_state_document_cmds()[i].type == CMD_COMMENT) {
+                int block_end = i + 1;
+                while (block_end < cmd_idx && block_end < repl_state_document_count()) {
+                    if (!repl_state_document_cmds()[block_end].valid) {
+                        block_end++;
+                        continue;
+                    }
+                    if (repl_state_document_cmds()[block_end].type == CMD_COMMENT) {
+                        block_end++;
+                    } else {
+                        break;
+                    }
+                }
+                export_write_comment_block_as_c(f, i, block_end);
+                i = block_end;
+            } else {
+                i++;
+            }
         }
 
         int fn = (int)repl_state_document_cmds()[cmd_idx].args[0];
