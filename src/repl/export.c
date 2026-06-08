@@ -2936,6 +2936,18 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
     repl_refresh_render_state_strings();
     repl_refresh_camera_lines();
 
+    /* Print config settings as block comments at the top of the dump,
+     * mirroring the saved C file's workspace header but omitting the
+     * volatile runtime state like @var. */
+    if (g_export_cfg_bridge && g_export_cfg_bridge->fill_all) {
+        ReplConfigBag cfg;
+        repl_config_bag_clear(&cfg);
+        g_export_cfg_bridge->fill_all(&cfg);
+        for (int i = 0; i < cfg.count; i++) {
+            fprintf(dst, "/* @cfg %s = %s */\n", cfg.items[i].key, cfg.items[i].value);
+        }
+    }
+
     fprintf(dst, "--- header_pre ---\n");
     /* Dump pre-header lines (includes, setup). */
     for (int line_idx = 0; g_header_pre[line_idx]; line_idx++)
