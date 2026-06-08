@@ -1094,10 +1094,28 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     repl_cfg_set_text("axes", "AXES_THEME_COMPSS");  /* typo */
     ASSERT_INT("typo'd axes symbol leaves axes_theme unchanged",
                glr_state_presentation().axes_theme, AXES_THEME_PULSE);
-    glr_state_presentation_mut()->backdrop_mode = SCENE_BACKDROP_STARS;
-    repl_cfg_set_text("backdrop", "SCENE_BACKDROP_CITISCAPE");  /* typo */
-    ASSERT_INT("typo'd backdrop symbol leaves backdrop_mode unchanged",
-               glr_state_presentation().backdrop_mode, SCENE_BACKDROP_STARS);
+    glr_state_presentation_mut()->grid_theme = GRID_THEME_RADAR;
+    glr_state_presentation_mut()->axes_theme = AXES_THEME_GIZMO;
+    glr_state_presentation_mut()->backdrop_mode = SCENE_BACKDROP_CITY_AND_STARS;
+    glr_state_presentation_mut()->light_theme = LIGHT_THEME_SOLAR;
+
+    ReplConfigBag bag;
+    repl_config_bag_clear(&bag);
+    repl_config_bridge()->fill_all(&bag);
+
+    ASSERT_STR("fill_all grid is symbolic", repl_config_bag_get(&bag, "grid"), "GRID_THEME_RADAR");
+    ASSERT_STR("fill_all axes is symbolic", repl_config_bag_get(&bag, "axes"), "AXES_THEME_GIZMO");
+    ASSERT_STR("fill_all backdrop is symbolic", repl_config_bag_get(&bag, "backdrop"), "SCENE_BACKDROP_CITY_AND_STARS");
+    ASSERT_STR("fill_all light_theme is symbolic", repl_config_bag_get(&bag, "light_theme"), "LIGHT_THEME_SOLAR");
+
+    ReplConfigBag scene_bag;
+    repl_config_bag_clear(&scene_bag);
+    repl_config_bridge()->fill_scene_subset(&scene_bag);
+
+    ASSERT_STR("fill_scene_subset grid is symbolic", repl_config_bag_get(&scene_bag, "grid"), "GRID_THEME_RADAR");
+    ASSERT_STR("fill_scene_subset axes is symbolic", repl_config_bag_get(&scene_bag, "axes"), "AXES_THEME_GIZMO");
+    ASSERT_STR("fill_scene_subset backdrop is symbolic", repl_config_bag_get(&scene_bag, "backdrop"), "SCENE_BACKDROP_CITY_AND_STARS");
+    ASSERT_STR("fill_scene_subset light_theme is symbolic", repl_config_bag_get(&scene_bag, "light_theme"), "LIGHT_THEME_SOLAR");
 }
 
 /* F9 was reassigned from Auto-normals to cycling the light theme. The
