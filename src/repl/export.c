@@ -16,14 +16,24 @@
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
 
-#define IMPORT_EXPORT_STATE (repl_state_import_export_mut())
-#define g_workspace_header_lines (IMPORT_EXPORT_STATE->workspace_header_lines)
-#define g_workspace_header_line_count (IMPORT_EXPORT_STATE->workspace_header_line_count)
-#define g_render_state_lines (IMPORT_EXPORT_STATE->render_state_lines)
-#define g_cam_lines (IMPORT_EXPORT_STATE->cam_lines)
-#define g_export_scene_name_hint (IMPORT_EXPORT_STATE->export_scene_name_hint)
-#define g_pending_scene_name (IMPORT_EXPORT_STATE->pending_scene_name)
-#define g_pending_workspace_dir (IMPORT_EXPORT_STATE->pending_workspace_dir)
+#define IMPORT_EXPORT_VIEW     (repl_state_import_export())
+#define IMPORT_EXPORT_WRITABLE (repl_state_import_export_writable())
+
+#define g_workspace_header_lines      (IMPORT_EXPORT_VIEW.workspace_header_lines)
+#define g_workspace_header_line_count (IMPORT_EXPORT_VIEW.workspace_header_line_count)
+#define g_render_state_lines          (IMPORT_EXPORT_VIEW.render_state_lines)
+#define g_cam_lines                   (IMPORT_EXPORT_VIEW.cam_lines)
+#define g_export_scene_name_hint      (IMPORT_EXPORT_VIEW.export_scene_name_hint)
+#define g_pending_scene_name          (IMPORT_EXPORT_VIEW.pending_scene_name)
+#define g_pending_workspace_dir       (IMPORT_EXPORT_VIEW.pending_workspace_dir)
+
+#define g_workspace_header_lines_writable      (IMPORT_EXPORT_WRITABLE->workspace_header_lines)
+#define g_workspace_header_line_count_writable (IMPORT_EXPORT_WRITABLE->workspace_header_line_count)
+#define g_render_state_lines_writable          (IMPORT_EXPORT_WRITABLE->render_state_lines)
+#define g_cam_lines_writable                   (IMPORT_EXPORT_WRITABLE->cam_lines)
+#define g_export_scene_name_hint_writable      (IMPORT_EXPORT_WRITABLE->export_scene_name_hint)
+#define g_pending_scene_name_writable          (IMPORT_EXPORT_WRITABLE->pending_scene_name)
+#define g_pending_workspace_dir_writable       (IMPORT_EXPORT_WRITABLE->pending_workspace_dir)
 
 #include "repl/cfg_baseline.h"
 
@@ -398,7 +408,7 @@ static void emit_workspace_dir(int *n) {
     const char *workspace_dir = repl_workspace_dir();
 
     if (workspace_dir[0] && *n < MAX_WORKSPACE_HEADER_LINES) {
-        snprintf(g_workspace_header_lines[(*n)++], WORKSPACE_HEADER_LINE_LEN,
+        snprintf(g_workspace_header_lines_writable[(*n)++], WORKSPACE_HEADER_LINE_LEN,
                 "/* @workspace-dir %s */", workspace_dir);
     }
 }
@@ -411,7 +421,7 @@ static void emit_scene_name(int *n) {
     if ((!scene_name || !*scene_name) && repl_active_user_scene() >= 0)
         scene_name = repl_user_scene_name(repl_active_user_scene());
     if (scene_name && *scene_name && *n < MAX_WORKSPACE_HEADER_LINES) {
-        snprintf(g_workspace_header_lines[(*n)++], WORKSPACE_HEADER_LINE_LEN,
+        snprintf(g_workspace_header_lines_writable[(*n)++], WORKSPACE_HEADER_LINE_LEN,
                  "/* @scene-name %s */", scene_name);
     }
 }
@@ -422,7 +432,7 @@ static void emit_vars(int *n) {
     for (int var_idx = 0; var_idx < g_num_predef_vars && *n < MAX_WORKSPACE_HEADER_LINES; var_idx++) {
         char vbuf[32];
         workspace_format_float(vbuf, sizeof(vbuf), g_predef_vars[var_idx].value);
-        if (repl_format_fits(g_workspace_header_lines[*n], WORKSPACE_HEADER_LINE_LEN,
+        if (repl_format_fits(g_workspace_header_lines_writable[*n], WORKSPACE_HEADER_LINE_LEN,
                              "/* @var %s = %s */", g_predef_vars[var_idx].name, vbuf))
             (*n)++;
     }
@@ -440,7 +450,7 @@ static void emit_func_aliases(int *n) {
          slot++) {
         const char *alias = repl_func_alias_get(slot);
         if (!alias) continue;
-        if (repl_format_fits(g_workspace_header_lines[*n],
+        if (repl_format_fits(g_workspace_header_lines_writable[*n],
                              WORKSPACE_HEADER_LINE_LEN,
                              "/* @func %d = %s */", slot, alias))
             (*n)++;
@@ -460,7 +470,7 @@ static void emit_cfgs(int *n) {
     g_export_cfg_bridge->fill_all(&cfg);
     int i = 0;
     for (; i < cfg.count && *n < MAX_WORKSPACE_HEADER_LINES; i++) {
-        snprintf(g_workspace_header_lines[(*n)++], WORKSPACE_HEADER_LINE_LEN,
+        snprintf(g_workspace_header_lines_writable[(*n)++], WORKSPACE_HEADER_LINE_LEN,
                  "/* @cfg %s = %s */", cfg.items[i].key, cfg.items[i].value);
     }
     /* The header budget is sized (export_state.h) so this never trips,
@@ -504,12 +514,12 @@ STATIC_ASSERT(MAX_WORKSPACE_HEADER_LINES >=
 void repl_state_refresh_workspace_header_lines(void) {
     int line_count = 0;
     if (line_count < MAX_WORKSPACE_HEADER_LINES) {
-        snprintf(g_workspace_header_lines[line_count++], WORKSPACE_HEADER_LINE_LEN,
+        snprintf(g_workspace_header_lines_writable[line_count++], WORKSPACE_HEADER_LINE_LEN,
                  "/* @workspace: REPL state (auto-saved) */");
     }
     for (int dir_idx = 0; dir_idx < WORKSPACE_DIRECTIVE_COUNT; dir_idx++)
         WORKSPACE_DIRECTIVES[dir_idx].emit(&line_count);
-    g_workspace_header_line_count = line_count;
+    g_workspace_header_line_count_writable = line_count;
 }
 
 const char *g_header_post[] = {
@@ -929,10 +939,10 @@ void repl_refresh_render_state_strings(void) {
      * (implemented in step 7a). */
     int msaa_on = repl_cfg_get_int(k_cfg_slug_msaa, 1);
     int line_smooth_on = repl_cfg_get_int(k_cfg_slug_line_smooth, 0);
-    snprintf(g_render_state_lines[0], sizeof(g_render_state_lines[0]),
+    snprintf(g_render_state_lines_writable[0], sizeof(g_render_state_lines_writable[0]),
              "  gl%s(GL_MULTISAMPLE);",
              msaa_on ? "Enable" : "Disable");
-    snprintf(g_render_state_lines[1], sizeof(g_render_state_lines[1]),
+    snprintf(g_render_state_lines_writable[1], sizeof(g_render_state_lines_writable[1]),
              "  gl%s(GL_LINE_SMOOTH);",
              line_smooth_on ? "Enable" : "Disable");
 }
@@ -949,16 +959,16 @@ void repl_refresh_camera_lines(void) {
      * empty — the demo doesn't render a code panel. */
     if (!g_export_camera_bridge || !g_export_camera_bridge->fill_display_block) {
         for (int i = 0; i < REPL_EXPORT_CAMERA_LINES &&
-                        i < (int)(sizeof(g_cam_lines) / sizeof(g_cam_lines[0])); i++)
-            g_cam_lines[i][0] = '\0';
+                        i < (int)(sizeof(g_cam_lines_writable) / sizeof(g_cam_lines_writable[0])); i++)
+            g_cam_lines_writable[i][0] = '\0';
         return;
     }
     ReplExportCameraBlock block;
     memset(&block, 0, sizeof(block));
     g_export_camera_bridge->fill_display_block(&block);
     for (int i = 0; i < REPL_EXPORT_CAMERA_LINES &&
-                    i < (int)(sizeof(g_cam_lines) / sizeof(g_cam_lines[0])); i++) {
-        snprintf(g_cam_lines[i], sizeof(g_cam_lines[i]), "%s", block.lines[i]);
+                    i < (int)(sizeof(g_cam_lines_writable) / sizeof(g_cam_lines_writable[0])); i++) {
+        snprintf(g_cam_lines_writable[i], sizeof(g_cam_lines_writable[i]), "%s", block.lines[i]);
     }
 }
 

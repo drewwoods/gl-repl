@@ -2,14 +2,13 @@
 # Hard ratchet: cap `_mut()` call sites in src/repl/ outside the
 # legitimate owner files.
 #
-# Audit #7/#14 (plans/active/src-repl-code-smell-audit-2.md) sweep
-# dropped `_mut()` reads from source_scope.c (4), autonormal.c (31),
-# export.c (22), and scenes.c (2) — those were pure reads that
-# defeated the const contract of the typed-state facade. The
-# remaining `_mut()` call sites in non-owner files are all
-# legitimate write-through accessors (SCENE_STATE / IMPORT_EXPORT_STATE
-# / EXEC_RENDER macros that write live state); they are tracked here
-# so a future commit can't quietly bring `_mut()` reads back.
+# Audit #7/#14 sweep dropped `_mut()` reads from several files.
+# The 2026-06-08 final sweep removed the remaining 11 `_mut()` calls
+# (all writers) by introducing explicit write surfaces (state_owners.h)
+# and setters.
+#
+# NEW RULE: ZERO `_mut()` calls allowed in src/repl/ outside the
+# legitimate owner files.
 #
 # Owner files (allowed to use `_mut()` freely): the typed-facade
 # implementations themselves — state.c, apply.c, command_store.c,

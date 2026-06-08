@@ -237,9 +237,8 @@ void repl_state_document_reset(void) {
     source_document_clear();
 }
 
-ReplFlatProgramState *repl_state_flat_program_mut(void) {
-    return &g_repl_state.flat_program;
-}
+ReplFlatProgramState *repl_state_flat_program_mut(void) { return &g_repl_state.flat_program; }
+ReplFlatProgramState *repl_state_flat_program_writable(void) { return &g_repl_state.flat_program; }
 
 const GLCmd *repl_state_flat_program_cmds(void) {
     return g_repl_state.flat_program.cmds;
@@ -433,9 +432,14 @@ ReplRenderState repl_state_render(void) {
     return g_repl_state.render;
 }
 
-ReplRenderState *repl_state_render_mut(void) {
-    return &g_repl_state.render;
+ReplRenderState *repl_state_render_mut(void) { return &g_repl_state.render; }
+void repl_state_render_set_clear_color(const float rgba[4]) { memcpy(g_repl_state.render.clear_color, rgba, sizeof(float) * 4); }
+void repl_state_render_set_light_enabled(int light_idx, int enabled) {
+    if (light_idx < 0 || light_idx >= REPL_LIGHT_SLOT_COUNT) return;
+    if (enabled) g_repl_state.render.light_enabled_mask |= (1u << light_idx);
+    else         g_repl_state.render.light_enabled_mask &= ~(1u << light_idx);
 }
+void repl_state_render_clear_light_enabled_mask(void) { g_repl_state.render.light_enabled_mask = 0; }
 
 void repl_state_render_reset_defaults(void) {
     g_repl_state.render = repl_state_defaults()->render;
@@ -451,9 +455,11 @@ ReplSceneRuntimeState repl_state_scenes(void) {
     return g_repl_state.scenes;
 }
 
-ReplSceneRuntimeState *repl_state_scenes_mut(void) {
-    return &g_repl_state.scenes;
-}
+ReplSceneRuntimeState *repl_state_scenes_mut(void) { return &g_repl_state.scenes; }
+ReplSceneRuntimeState *repl_state_scenes_writable(void) { return &g_repl_state.scenes; }
+int repl_state_active_example_idx(void) { return g_repl_state.scenes.active_example_idx; }
+const char *repl_state_workspace_dir(void) { return g_repl_state.scenes.workspace_dir; }
+void repl_state_scenes_set_active_example_idx(int idx) { g_repl_state.scenes.active_example_idx = idx; }
 
 ReplImportExportView repl_state_import_export(void) {
     return (ReplImportExportView){
@@ -467,9 +473,8 @@ ReplImportExportView repl_state_import_export(void) {
     };
 }
 
-ReplImportExportState *repl_state_import_export_mut(void) {
-    return &g_repl_state.import_export;
-}
+ReplImportExportState *repl_state_import_export_mut(void) { return &g_repl_state.import_export; }
+ReplImportExportState *repl_state_import_export_writable(void) { return &g_repl_state.import_export; }
 
 void repl_state_capture(ReplRuntimeState *snapshot) {
     if (!snapshot)

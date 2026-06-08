@@ -7,25 +7,14 @@
 # reads went through the mutator accessor and defeated the const
 # contract of the typed-state facade.
 #
-# After the 2026-05-26 sweep:
-#  - source_scope.c: 4 reads → const (was the audit #7 regression)
-#  - autonormal.c: 31 reads → const (audit #14 cluster)
-#  - export.c: 22 reads → const
-#  - scenes.c: 2 reads → const (snapshot owners memcpy from cmds_mut)
-#  ── const-replacement total: 59 sites moved off `_mut()`.
+# After the 2026-06-08 sweep (Final Elimination):
+#  - example_loader.c: active_example_idx write -> setter (1)
+#  - export.c / import.c: IMPORT_EXPORT_STATE macro -> read/write split (2)
+#  - executor.c: EXEC_RENDER macro -> render setters (1)
+#  - flatten.c: flat_program_mut -> flat_program_writable (1)
+#  - scenes.c: SCENE_STATE/IMPORT_EXPORT_STATE macros -> read/write split (2)
+#  - scenes.c: scene_cfg_mut / pre_example_cfg_mut -> cfg_writable (4)
+#  ── total: remaining 11 sites moved to explicit write surfaces.
 #
-# Remaining 11 sites in non-owner .c files (all legitimate writes
-# or owner-local helpers):
-#   src/repl/example_loader.c:501 — writes active_example_idx
-#   src/repl/export.c:18         — IMPORT_EXPORT_STATE macro (writers)
-#   src/repl/import.c            — IMPORT_EXPORT_STATE macro (writers; #69 split)
-#   src/repl/executor.c:50       — EXEC_RENDER macro (g_lights / g_clear_color writes)
-#   src/repl/flatten.c:656       — flat_program_mut (flatten owns flat state)
-#   src/repl/scenes.c:19         — SCENE_STATE macro (scene owner)
-#   src/repl/scenes.c:22         — IMPORT_EXPORT_STATE macro (scene <-> import)
-#   src/repl/scenes.c:98         — scene_cfg_mut (file-local owner helper, def)
-#   src/repl/scenes.c:113        — pre_example_cfg_mut (file-local owner helper, def)
-#   src/repl/scenes.c:150        — pre_example_cfg_mut call
-#   src/repl/scenes.c:224        — scene_cfg_mut call
-
-mut_call_count: 11
+# NEW RULE: ZERO `_mut()` calls allowed outside owner files.
+mut_call_count: 0

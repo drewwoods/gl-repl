@@ -470,7 +470,7 @@ static int load_example(int idx) {
     repl_scenes_capture_pre_example_cfg_if_entering();
 
     int new_edit_line = load_example_lines(lines, repl_example_tag_mask(idx));
-    repl_state_scenes_mut()->active_example_idx = idx;
+    repl_state_scenes_set_active_example_idx(idx);
     repl_scenes_mark_example_active();
     char msg[REPL_DIAG_TEXT_MAX];
     snprintf(msg, sizeof(msg), "Example %d/%d: %s (F12 for next)",
