@@ -26,7 +26,7 @@
 #include "repl/core_internal.h"  /* try_commit_*, editor_commit_func_decl_resume_peek */
 #include "repl/eval.h"
 #include "repl/load.h"           /* repl_load_apply_line for [P2] dup-check test */
-#include "repl/state.h"
+#include "repl/state_owners.h"
 #include "ui/app/state.h"
 #include "support/test_harness.h"
 

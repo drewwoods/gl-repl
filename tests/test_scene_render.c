@@ -17,7 +17,7 @@
 #include "repl/core.h"
 #include "repl/eval.h"
 #include "app/glr_ctrl.h"
-#include "repl/state.h"
+#include "repl/state_owners.h"
 #include "editor/state.h"
 
 #include "support/test_harness.h"

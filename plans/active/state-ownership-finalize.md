@@ -1,23 +1,22 @@
 # State Ownership: Finalize Headers, Helpers, and Capture Docs
 
-## Status — NOT STARTED (2026-05-23 audit)
+## Status — ACTIVE (2026-06-08)
 
 The "Provenance" stages 0–5 have all landed (that's the section
-below). The "Remaining work" items A/B/C are all untouched:
+below). The remaining work is tracked below:
 
-- **A — `state_views.h` / `state_owners.h` rename or keep.** Both
-  headers still exist with their original names (`src/repl/state_views.h`
-  and `src/repl/state_owners.h`). No rename commit yet.
-- **B — Domain-helper audit.** No focused commit found in `git log`.
-  Pass-through wrappers may still exist in `src/app/glr_actions.c`,
-  `src/app/glr_state.c`, and the `repl_state_*_set_*` family.
-- **C — Capture/restore boundary docs.** No "Capture/restore
-  boundaries" subsection in `ARCHITECTURE.md`; the only reference is
-  the stale-plan pointer at line 1224.
-
-ARCHITECTURE.md still calls out this plan as the home for the residual
-items (lines 1219–1230), so leaving the file in `not-started/`
-keeps that link valid.
+- **A — `state_views.h` / `state_owners.h` split and header cleanup.**
+  - **Status:** **IN PROGRESS (Staged)**
+  - Decoupled `src/repl/state_owners.h` from `src/repl/state.h`.
+  - Updated `src/repl/state.h` to only include `src/repl/state_views.h` (the read-side surface) and declare the `ReplRuntimeState` and capture/restore APIs.
+  - Callers mutating state now explicitly include `src/repl/state_owners.h`.
+  - Updated all tests and source files to match this new structure.
+- **B — Domain-helper audit.**
+  - **Status:** **NOT STARTED**
+  - No changes yet. Pass-through wrappers still exist in `src/app/glr_actions.c`, `src/app/glr_state.c`, and the `repl_state_*_set_*` family.
+- **C — Capture/restore boundary docs.**
+  - **Status:** **NOT STARTED**
+  - No "Capture/restore boundaries" subsection in `ARCHITECTURE.md` yet.
 
 ## Provenance
 
@@ -62,7 +61,7 @@ on or before commit `edc682e`.
 - **Stage 6 — rebuild `repl_undo.c` on `repl_state_capture()`.**
   Premise overtaken. Undo lives at `src/editor/undo.c` and
   *deliberately* does not snapshot input bytes or clipboard state.
-  See [`done/editor-input-selection.md`](done/editor-input-selection.md)
+  See [`done/editor-input-selection.md`](../done/editor-input-selection.md)
   Phase A item 6: input is rebuilt on undo via `load_line_to_input`,
   and the input-text clipboard payload intentionally survives
   unchanged across undo/redo. Folding all state into one
@@ -70,7 +69,7 @@ on or before commit `edc682e`.
   the stage as written no longer makes sense.
 
 - **Stage 7 input-bridge cleanup (Phase C of
-  [`done/push-architecture-ui.md`](done/push-architecture-ui.md)).**
+  [`done/push-architecture-ui.md`](../done/push-architecture-ui.md)).**
   Explicitly optional in the original plan; not pursued. UI input
   handlers stay as direct action calls rather than returning
   `UiAction` lists. The trade-off (15–25 new variants for limited
@@ -82,36 +81,15 @@ on or before commit `edc682e`.
 
 ### A — Decide the long-term shape of `state_views.h` / `state_owners.h`
 
-The original Stage 8 framed these as transitional headers to collapse
-back into a single `state.h`. In the live code they are not
-transitional — they're the read-side and write-side public APIs.
-`src/repl/state.h` is a 25-line shim that pulls both in:
+**Decision:** Keep the split and leave filenames as-is, but refine the decoupling.
 
-- `src/repl/state_views.h` (~200 lines) — by-value getters, view structs.
-  14 files include it. UI files include only this header, by
-  convention.
-- `src/repl/state_owners.h` (~130 lines) — `_mut()` accessors and
-  domain helpers. 28 files include it. Controllers and editors only.
+Rather than collapsing the headers or renaming them, the split was preserved and strengthened:
+- `src/repl/state.h` was changed to only include `src/repl/state_views.h` (read-only views/accessors) plus the `ReplRuntimeState` capture/restore API declarations.
+- It no longer includes `src/repl/state_owners.h`.
+- Calls to `_mut()` functions or other mutating API entry points must now explicitly include `src/repl/state_owners.h`.
+- This ensures that files (e.g. read-only readers, tests, formatters, etc.) can include `repl/state.h` without pulling in the mutating API surface, maintaining strict compiler-enforced state boundaries.
 
-The split serves a real purpose: UI cannot mutate via the include
-graph because it never asks for the writable surface. Three reasonable
-directions:
-
-1. **Keep the split, rename for clarity.** `state_views.h` →
-   `state_read.h`, `state_owners.h` → `state_write.h`. Makes the
-   role obvious at the include line. Mechanical: ~42 includer
-   updates.
-2. **Collapse both into `state.h`** (the original Stage 8 target).
-   Removes include-time enforcement; the `check-ui-no-repl-state-mut`
-   grep becomes the only gate against UI mutations. Acceptable only
-   if the grep guard is treated as load-bearing forever.
-3. **Leave as-is.** Names are technical-history baggage but the
-   split is right.
-
-Recommend (1) or (3). Don't pick (2) unless someone wants to retire
-the include-graph enforcement.
-
-Either rename change is independent of the other items below.
+Staged changes implement this change across the codebase, updating all references and tests.
 
 ### B — Domain-helper audit
 
@@ -153,9 +131,7 @@ feature plan.
 ## Verification
 
 - `make check-state-ownership` stays green.
-- After A: `grep -rln state_views.h | wc -l` and the equivalent for
-  `state_owners.h` reflect the new names (or are unchanged if option
-  3); no surprise UI mutations get through `check-ui-no-repl-state-mut`.
+- After A: `make test` builds and all tests run successfully with the new header layout. Decoupled includes are verified: files mutating state explicitly include `repl/state_owners.h`, and `repl/state.h` does not leak write access.
 - After B: `git log -p glr_actions.c glr_state.c src/repl/state.c`
   shows removed helpers each have a one-line rationale.
 - After C: `ARCHITECTURE.md` has a short "Capture/restore boundaries"

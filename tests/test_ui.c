@@ -4,7 +4,7 @@
 #define STATUSBAR_H 22
 #include "ui/core/metrics.h"
 #include "ui/app/state.h"
-#include "repl/state.h"
+#include "repl/state_owners.h"
 #include "repl/color_limits.h"
 #include "subsystems/replay/replay_state.h"
 #include "repl/core.h"

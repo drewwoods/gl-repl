@@ -3,6 +3,7 @@
 #include "app/glr_ctrl.h"
 #include "app/glr_actions.h"
 #include "repl/state.h"
+#include "repl/state_owners.h"
 #include "repl/core.h"              /* repl_set_workspace_dir */
 #include "editor/state.h"
 #include "ui/app/state.h"

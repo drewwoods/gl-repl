@@ -2,7 +2,6 @@
 #include "repl/core_internal.h"
 #include "editor/input.h"
 #include "repl/parser.h"
-#include "repl/state.h"
 #include "ui/app/state.h"
 #include "support/repl_test_support.h"
 #include "support/test_harness.h"
