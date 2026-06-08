@@ -22,7 +22,7 @@
  * life and collapses back into it over the last STATUS_ANIM_CLOSE_FRAMES;
  * both must stay well under UI_STATUS_MESSAGE_TTL so the hold phase shows.
  * Consumed by status_anim_from() in src/ui/app/panels.c. */
-#define STATUS_ANIM_OPEN_FRAMES  32
+#define STATUS_ANIM_OPEN_FRAMES  12
 #define STATUS_ANIM_CLOSE_FRAMES 36
 
 /* Code-panel render chrome: panel divider and per-frame mirrors
