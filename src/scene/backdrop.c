@@ -376,7 +376,10 @@ static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
     scene_backdrop_pop_state();
 }
 
-static void draw_starry_sky(float anim_time, int point_parameter_supported) {
+static void draw_starry_sky(
+    float anim_time,
+    int point_parameter_supported,
+    void (APIENTRY *point_parameter_proc)(GLenum pname, const GLfloat *params)) {
     scene_backdrop_push_state();
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
@@ -391,12 +394,12 @@ static void draw_starry_sky(float anim_time, int point_parameter_supported) {
      * camera distance. The init bootstrap sets a non-identity quadratic
      * default (1/distance footprint scaling) for normal scene point rendering;
      * without this override stars would attenuate noticeably across the
-     * STAR_SKY_RADIUS dome. Gated on the runtime capability the
-     * controller mirrored into the config — unsupported contexts can't
-     * have run the init-bootstrap call either, so the GL default
-     * (identity) is already in effect and no reset is needed. */
-    if (point_parameter_supported)
-        glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){1, 0, 0});
+     * STAR_SKY_RADIUS dome. Gated on the runtime capability + loaded
+     * proc the controller mirrored into the config — unsupported
+     * contexts can't have run the init-bootstrap call either, so the GL
+     * default (identity) is already in effect and no reset is needed. */
+    if (point_parameter_supported && point_parameter_proc)
+        point_parameter_proc(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){1, 0, 0});
 
     /* Strip camera translation so stars follow rotation only (no zoom pop). */
     glMatrixMode(GL_MODELVIEW);
@@ -486,12 +489,14 @@ void scene_backdrop_render(const SceneFrameRenderContext *frame_ctx) {
         break;
     case SCENE_BACKDROP_STARS:
         draw_starry_sky(frame_ctx->config.anim_time,
-                        frame_ctx->config.point_parameter_supported);
+                        frame_ctx->config.point_parameter_supported,
+                        frame_ctx->config.point_parameter_proc);
         break;
     case SCENE_BACKDROP_CITY_AND_STARS:
         /* Stars first so city geometry writes depth over them. */
         draw_starry_sky(frame_ctx->config.anim_time,
-                        frame_ctx->config.point_parameter_supported);
+                        frame_ctx->config.point_parameter_supported,
+                        frame_ctx->config.point_parameter_proc);
         draw_cityscape(frame_ctx->config.anim_time,
                        frame_ctx->config.nv_fog_distance_supported);
         break;

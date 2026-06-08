@@ -158,16 +158,27 @@ int  repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale);
 typedef float (*ReplExecutorCameraDistanceFn)(void);
 void repl_executor_install_camera_distance_source(ReplExecutorCameraDistanceFn fn);
 
+/* Install the runtime-loaded glPointParameterfv entry point. On older
+ * Linux libGL stacks the context can advertise point-parameter support
+ * while the unsuffixed C symbol is not safely callable, so the caller
+ * resolves a proc after the GL context is current and installs it here.
+ * Pass NULL to clear. */
+typedef void (APIENTRY *ReplExecutorPointParameterProc)(GLenum pname,
+                                                        const GLfloat *params);
+void repl_executor_install_point_parameter_proc(ReplExecutorPointParameterProc fn);
+ReplExecutorPointParameterProc repl_executor_point_parameter_proc(void);
+
 /* Runtime point-parameter capability (replaces the old compile-time
  * NO_POINT_PARAMETER macro). The controller detects support after the
- * GL context is current (glr_ctrl_init_gl) and sets this; everything
- * else defaults to supported. When unsupported, CMD_POINT_PARAMETER_FV
- * is a no-op in the executor and point sizes fall back to the
- * camera-distance approximation above. export.c consults
+ * GL context is current (glr_ctrl_init_gl), resolves a callable
+ * glPointParameterfv/glPointParameterfvARB/glPointParameterfvEXT proc,
+ * and sets both this flag and the proc above. When unsupported,
+ * CMD_POINT_PARAMETER_FV is a no-op in the executor and point sizes
+ * fall back to the camera-distance approximation above. export.c consults
  * repl_executor_point_parameter_supported() to decide whether to
  * apply/emit the point-attenuation init bootstrap entry, and the scene
- * controller mirrors it into SceneRenderConfig so the star backdrop's
- * direct call can be gated too. */
+ * controller mirrors both into SceneRenderConfig so the star backdrop's
+ * point-attenuation reset can call through the same loaded proc. */
 void repl_executor_set_point_parameter_supported(int supported);
 int  repl_executor_point_parameter_supported(void);
 

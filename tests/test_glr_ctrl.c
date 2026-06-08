@@ -189,6 +189,13 @@ int test_glr_export_mesh_ply(const char *path, int srgb_decode) {
     (void)path; (void)srgb_decode;
     return 0;
 }
+static int g_test_point_parameter_loader_calls = 0;
+static ReplExecutorPointParameterProc test_missing_point_parameter_loader(
+    const char *proc_name) {
+    (void)proc_name;
+    g_test_point_parameter_loader_calls++;
+    return NULL;
+}
 
 /* Build the variable-panel view from live app state (mirrors the
  * pre-narrowing NULL-snapshot path) so these tests can drive rect/hit by
@@ -2150,6 +2157,25 @@ static void test_app_lifecycle_bootstrap_shutdown(void) {
     ASSERT_TRUE("Shutdown completed successfully", 1);
 }
 
+static void test_init_gl_requires_loaded_point_parameter_proc(void) {
+    g_test_point_parameter_loader_calls = 0;
+    g_glr_ctrl_point_parameter_loader = test_missing_point_parameter_loader;
+    glr_ctrl_init_gl();
+    ASSERT_TRUE("init_gl attempted to load point-parameter proc",
+                g_test_point_parameter_loader_calls > 0);
+    ASSERT_INT("missing point-parameter proc disables support",
+               repl_executor_point_parameter_supported(), 0);
+    ASSERT_TRUE("missing point-parameter proc is cleared",
+                repl_executor_point_parameter_proc() == NULL);
+
+    g_glr_ctrl_point_parameter_loader = glr_ctrl_default_point_parameter_loader;
+    glr_ctrl_init_gl();
+    ASSERT_INT("default proc loader restores support",
+               repl_executor_point_parameter_supported(), 1);
+    ASSERT_TRUE("default proc loader installs a proc",
+                repl_executor_point_parameter_proc() != NULL);
+}
+
 static void test_code_panel_scroll_clamping_and_follow(void) {
     printf("--- imrepl_ctrl scroll clamping and follow ---\n");
     int follow_doc_line = 0;
@@ -2235,6 +2261,7 @@ int main(void) {
     test_mouse_routing_and_hit_testing();
     test_special_key_shortcuts();
     test_app_lifecycle_bootstrap_shutdown();
+    test_init_gl_requires_loaded_point_parameter_proc();
     test_code_panel_scroll_clamping_and_follow();
 
     printf("\n");
