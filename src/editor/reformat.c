@@ -17,7 +17,6 @@
 #include "reformat.h"
 
 #include "repl/core.h"        /* repl_reformat_program */
-#include "repl/state.h"
 #include "input.h" /* editor_load_line_to_input */
 #include "state.h"
 

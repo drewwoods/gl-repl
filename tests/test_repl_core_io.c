@@ -8,7 +8,7 @@
 #include "editor/input.h"
 #include "repl/pipeline.h"
 #include "repl/scenes.h"
-#include "repl/state.h"
+#include "repl/state_owners.h"
 #include "repl/export.h"
 #include "repl/executor.h"
 #include "ui/app/state.h"

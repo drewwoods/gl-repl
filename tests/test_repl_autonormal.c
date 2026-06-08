@@ -1,7 +1,7 @@
 #include "app/glr_ctrl.h"
 #include "repl/core.h"
 #include "editor/input.h"
-#include "repl/state.h"
+#include "repl/state_owners.h"
 #include "support/test_harness.h"
 #include <stdio.h>
 #include <stdlib.h>

@@ -8,7 +8,6 @@
 #define REPL_STATE_H
 
 #include "repl/state_views.h"
-#include "repl/state_owners.h"
 
 /* Snapshot of the REPL-owned runtime slices.
  *

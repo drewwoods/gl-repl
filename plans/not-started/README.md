@@ -17,6 +17,4 @@ begun. They move to `plans/active/` once implementation starts.
 | `scene-close-capability.md` | Close/remove a user scene (design brief) |
 | `scoped-local-variables.md` | Scoped local variable reassignment |
 | `smooth-autonormals-with-loop-support.md` | Smooth autonormals with loop awareness |
-| `state-ownership-finalize.md` | Finalize state-ownership headers, helpers, and capture docs |
-| `status-message-history.md` | Recent status-message viewer (decision pending) |
 | `tutorial-replay-system.md` | Tutorial replay system |

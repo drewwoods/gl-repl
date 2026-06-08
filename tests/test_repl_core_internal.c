@@ -6,7 +6,7 @@
 #include "repl/command_store.h"
 #include "repl/executor.h"
 #include "repl/source_scope.h"
-#include "repl/state.h"
+#include "repl/state_owners.h"
 #include "repl/core.h"
 #include "editor/input.h"
 #include "ui/app/state.h"

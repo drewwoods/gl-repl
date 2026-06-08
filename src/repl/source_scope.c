@@ -5,7 +5,7 @@
  * command at a given index is parsed, formatted, or structurally edited.
  */
 #include "repl/source_scope.h"
-#include "repl/state.h"
+#include "repl/state_views.h"
 
 /* Lightweight prefix-depth caches for O(1) depth lookups at position `pos`. */
 static int g_depth_cache_dirty = 1;
