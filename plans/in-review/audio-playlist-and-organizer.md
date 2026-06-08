@@ -41,34 +41,58 @@ The playlist already lives in `glr_audio.c` as
 int         glr_audio_track_count(void);            /* g_playlist_count */
 const char *glr_audio_track_path(int idx);          /* g_playlist[idx], NULL if OOR */
 int         glr_audio_current_index(void);          /* g_playlist_pos, -1 if nothing loaded */
-int         glr_audio_play_track(int idx);          /* set pos=idx; request_start(idx, GLR_AUDIO_NO_SEEK) */
+int         glr_audio_play_track(int idx);          /* request_start(idx, GLR_AUDIO_NO_SEEK) */
 int         glr_audio_remove_track(int idx);        /* rebuild playlist minus idx */
 ```
 
 - `glr_audio_current_index()` — `g_playlist_pos` is `0` at static init (not
-  `-1`); the "nothing loaded" state is tracked by `g_active == -1`. The accessor
-  composes the two: return `-1` when `g_active < 0` (no track playing), else
-  `g_playlist_pos`.
+  `-1`), and the current-track display should follow the same loaded-state
+  contract as `glr_audio_get_current_track()`: return `-1` when
+  `!g_music_loaded` or `g_playlist_pos` is out of range, otherwise return
+  `g_playlist_pos`. Do **not** key this only off `g_active`; remove-current can
+  deliberately leave an old `ma_sound` slot active for worker cleanup while the
+  UI/state-file view should already consider there to be no current track.
 - `glr_audio_track_path(idx)` returns a `const char *` into
   `g_playlist[idx]`. **Threading contract:** both this accessor and all playlist
   mutations (`remove_track`, `set_playlist`) run on the main thread, so the
   pointer stays valid until the next mutating call. The tag module and menu
   renderer may cache the pointer within a single frame.
-- `glr_audio_play_track(idx)` mirrors the body of `glr_audio_next_track()`
-  (around `glr_audio.c` next/prev + `request_start`): validate `idx`, set
-  `g_playlist_pos = idx`, call `request_start(idx, GLR_AUDIO_NO_SEEK)` (float,
-  not double), respect the current paused flag. Bumps the track generation on
-  actual start (existing worker path).
-- `glr_audio_remove_track(idx)` under `audio_lock()`: shift `g_playlist[]` /
-  `g_playlist_count` to delete `idx`. If the removed index **was** the current
-  (`g_playlist_pos`): the next track now occupies index `idx` (or wrap to 0 if it
-  was the last) — set `g_playlist_pos` accordingly and `request_start` it (the
-  "advance to next" behavior). If a load is in flight for the removed track, set
-  the existing `g_load_cancelled` flag. If the playlist becomes empty, post
-  `AWR_UNINIT` (the only "drop current sound" request — there is no `AWR_STOP`;
-  the full enum is `AWR_NONE / AWR_START / AWR_ADVANCE / AWR_UNINIT / AWR_QUIT`).
-  If the removed index was *below* the current, decrement `g_playlist_pos` so it
-  keeps pointing at the same track. Returns 0/-1.
+- `glr_audio_play_track(idx)` mirrors `glr_audio_next_track()` / `prev_track()`:
+  validate `idx`, then call `request_start(idx, GLR_AUDIO_NO_SEEK)` (float, not
+  double). **Do not set `g_playlist_pos` early** in this public API. On native
+  builds the worker publishes the new current track only after `worker_load()`
+  succeeds (`g_playlist_pos = idx; g_track_generation++`); that keeps the menu
+  highlight, status text, and state-file save aligned with the sound that is
+  actually loaded. The Emscripten deferred-gesture path may still record a
+  pending target inside `request_start()`, but `glr_audio_current_index()` stays
+  `-1` until a track is loaded because it checks `g_music_loaded`.
+- `glr_audio_remove_track(idx)` under `audio_lock()`: validate `idx`, treat any
+  playlist mutation during `g_loading` as invalidating the worker's copied
+  request index/path (`g_load_cancelled = 1`), then shift `g_playlist[]` /
+  `g_playlist_count` to delete `idx`. Cases:
+  - Removed index **below** the current loaded track: decrement `g_playlist_pos`
+    so it still points at the same path after the shift.
+  - Removed index **above** the current loaded track: keep `g_playlist_pos`.
+  - Removed index **is** the current loaded track: synchronously stop the active
+    slot with `ma_sound_stop()` under the existing audio lock (same risk profile
+    as pause/resume), set `g_music_loaded = 0`, clear any pending start for the
+    removed track, then after the list shift either request the next track or
+    uninit. The next track is the element that shifted into `idx`; if the removed
+    track was the last element, wrap to `0`. Do not publish that replacement via
+    `g_playlist_pos` until the worker successfully loads it. This avoids
+    `worker_save_state()` writing the replacement path with the removed track's
+    cursor while the old slot is still retiring. While that old slot remains in
+    `g_active` for worker cleanup, active-slot control paths (`set_paused`,
+    `tick` end-of-track advance, and any similar future path) must also gate on
+    `g_music_loaded` so they do not restart or advance the removed stopped slot.
+  - Playlist becomes empty: clear pending start/load state as needed and post
+    `AWR_UNINIT` (the only "drop current sound" request — there is no `AWR_STOP`;
+    the full enum is `AWR_NONE / AWR_START / AWR_ADVANCE / AWR_UNINIT /
+    AWR_QUIT`).
+
+  Also adjust or clear any queued/pending start index that points at or past the
+  removed element (`g_req == AWR_START`, `g_pending_start`) so a stale submenu
+  index cannot start a different track after the array compacts. Returns 0/-1.
 
 These are pure additions — no behavior change for existing callers.
 
@@ -82,6 +106,11 @@ and presents the playlist as a tag-grouped catalog. It reads track paths from
   and parses `tags.txt` once at startup. Each line: `stem: [tagA, tagB, ...]`.
   Store `stem → tag list`. Tolerant parser (skip blank/`#` lines, trim
   whitespace, ignore malformed).
+- Add a narrow parser test seam, e.g.
+  `int glr_audio_tags_load_file_for_test(const char *path)` or an internal
+  load-from-path helper used by both `glr_audio_tags_init()` and the test. The
+  test must not write into the user's real music directory just to exercise
+  parser cases.
 - Match a playlist track to its tags by **basename stem** (basename of
   `glr_audio_track_path(idx)` with the `.mp3` extension stripped), matching the
   user's `The_Save_Point` style (no extension). The stem extractor handles both
@@ -133,9 +162,11 @@ mutations and avoids a generation-counter protocol between the two modules.
     the `"Audio"` string literal **must** be added in lockstep, or the array
     under-sizes and label/menu indices desync. `menubar_rects` already derives
     widths from the labels.
-  - `menu_item_count`: `MENU_AUDIO → glr_audio_tags_visible_tag_count()` (top-level
-    rows are tag rows, hover-only flyout parents — mirrors the Scene/Tutorials
-    tag-row pattern).
+  - `menu_item_count`: `MENU_AUDIO → 0` when the playlist is empty, otherwise
+    `glr_audio_tags_visible_tag_count()` (top-level rows are tag rows,
+    hover-only flyout parents — mirrors the Scene/Tutorials tag-row pattern).
+    The `snap` path can use `snap->audio.track_count`; the existing `NULL`
+    layout/hit fallback can use `glr_audio_track_count()`.
   - `menu_item_label`: `MENU_AUDIO → glr_audio_tags_tag_label(i)`.
   - `menu_row_has_submenu`: `MENU_AUDIO` tag rows have submenus.
   - Add a third `CatalogFlyoutOps` (alongside the existing `kExampleCatalogOps`
@@ -164,15 +195,32 @@ mutations and avoids a generation-counter protocol between the two modules.
 Flyout scrolling for long playlists already works generically
 (`g_submenu_scroll` / `ui_menu_bar_handle_wheel_scroll`), so no extra work there.
 
+**Dynamic menu content / cache invalidation.** Audio is the first flyout catalog
+whose row count can shrink while the menu remains open. `menu_dropdown_rect` and
+`submenu_rect` cache geometry by menu/window/parent row only, so a removal can
+otherwise leave stale widths, heights, or parent-row mappings. Add a small
+menu-bar API such as `ui_menu_bar_note_content_changed()` that clears
+`g_dropdown_cache` / `g_submenu_cache`, clamps or resets `g_submenu_scroll`, and
+resets the open submenu if the current `(menu_id, parent_row)` no longer has a
+submenu. Call it after successful `glr_audio_remove_track()` before
+`editor_request_redraw()`. Left-click play does not change geometry and does not
+need this invalidation.
+
 ### 4. Snapshot field (`src/ui/app/snapshot.h`, `src/app/glr_ctrl.c`)
 
 Add an `audio` struct to `UiRenderSnapshot` with `int current_idx;` and
 `int track_count;`, and populate both in `glr_ctrl_build_ui_snapshot()` from
-`glr_audio_current_index()` / `glr_audio_track_count()`. Keeps the render/hit
-path snapshot-pure (no live `glr_audio_*` calls during render), consistent with
-how `tutorial.tutorial_idx` / `scenes.active_example_idx` are captured.
-`track_count` lets the menu renderer detect an empty playlist without a live
-accessor call.
+`glr_audio_current_index()` / `glr_audio_track_count()`. This makes the active
+highlight and empty-playlist display frame-stable, consistent with how
+`tutorial.tutorial_idx` / `scenes.active_example_idx` are captured.
+
+This is **not** a full audio-catalog snapshot: the provider described above
+still calls `glr_audio_tags_*`, and that module intentionally re-derives indices
+from the live playlist so removals are reflected without a cross-module
+generation protocol. Keep that contract explicit in comments. If a later purity
+pass wants a fully frozen menu, it should snapshot the visible audio tag labels
+and per-tag playlist-index rows into `UiRenderSnapshot`; this plan does not need
+that extra structure.
 
 ### 5. Click routing (`src/app/glr_ctrl_router.c`, `src/app/glr_actions.c`)
 
@@ -191,25 +239,34 @@ accessor call.
 - **Right-click a song** → remove. Add a new
   `glr_ctrl_router_handle_right_audio_press` (same shape as the existing
   `glr_ctrl_router_handle_right_config_press`) and wire it into the right-button
-  chain in `glr_ctrl_mouse`, right after `handle_right_config_press`. The
-  existing config handler already calls `ui_panels_handle_right_press(x, y)`
-  which does a generic `submenu_hit_test` — the returned `UiHit.cmd_idx`
-  identifies which menu the hit belongs to, so the audio handler follows the
-  identical pattern with a different `cmd_idx` check:
+  chain in `glr_ctrl_mouse`, right after `handle_right_config_press`.
+
+  Important integration detail: today `ui_panels_handle_right_press(x, y)` is
+  **Config-only** because it delegates to `ui_menu_bar_handle_config_right_press`,
+  which rejects any open menu other than `MENU_CONFIG`. Before adding audio,
+  expose a generic submenu right-hit helper (for example
+  `ui_menu_bar_handle_submenu_right_press`) that simply calls the existing
+  internal `submenu_hit_test`, and have `ui_panels_handle_right_press()` delegate
+  to that generic helper. Keep `glr_ctrl_router_handle_right_config_press`
+  behavior unchanged by filtering the returned hit for `GLR_MENU_CONFIG`; the
+  audio handler filters for `GLR_MENU_AUDIO`.
+
   ```c
   int glr_ctrl_router_handle_right_audio_press(int button, int state, int x, int y) {
       if (state != GLUT_DOWN || button != GLUT_RIGHT_BUTTON) return 0;
       UiHit hit = ui_panels_handle_right_press(x, y);
       if (hit.kind == UI_HIT_SUBMENU_ITEM && hit.cmd_idx == GLR_MENU_AUDIO && hit.item_idx >= 0) {
-          glr_audio_remove_track(hit.item_idx);
+          if (glr_audio_remove_track(hit.item_idx) == 0)
+              ui_menu_bar_note_content_changed();
           editor_request_redraw();
           return 1;             /* menu stays open */
       }
       return 0;
   }
   ```
-  Config keeps its existing `handle_right_config_press` unchanged (backward-cycle
-  on `GLR_MENU_CONFIG`). No renaming or generalization of the config handler.
+  Config keeps its existing `handle_right_config_press` semantics
+  (backward-cycle on `GLR_MENU_CONFIG`); the only shared change is that the
+  lower-level right-hit function becomes generic instead of Config-filtered.
 
 ### 6. Startup wiring (`gl_repl.c`)
 
@@ -231,12 +288,13 @@ can be a later follow-up.)
 | `src/app/glr_audio.h` / `.c` | New accessors + `glr_audio_play_track` / `glr_audio_remove_track` (mirror `next_track`/`request_start`, guarded by `audio_lock`) |
 | `src/app/glr_audio_tags.h` / `.c` | **New** module: parse `tags.txt`, derive tag groups, catalog query API |
 | `src/app/glr_actions.h` | Add `GLR_MENU_AUDIO` to `GlrMenuId`; inert tag-row guard in `glr_action_menu_item_activate` |
-| `src/ui/app/menu_bar.c` | `MENU_AUDIO` alias + label; `menu_item_count/label`, `menu_row_has_submenu`, `kAudioCatalogOps`/`kAudioProvider`, `flyout_provider_for`, `submenu_row_is_active` |
+| `src/ui/app/menu_bar.c` / `.h` | `MENU_AUDIO` alias + label; `menu_item_count/label`, `menu_row_has_submenu`, `kAudioCatalogOps`/`kAudioProvider`, `flyout_provider_for`, `submenu_row_is_active`; generic submenu right-hit helper; `ui_menu_bar_note_content_changed()` cache invalidation |
+| `src/ui/app/panels.c` / `.h` | Route `ui_panels_handle_right_press()` through the generic submenu right-hit helper instead of the Config-only helper |
 | `src/ui/app/snapshot.h` | Add `audio.current_idx`, `audio.track_count` |
 | `src/app/glr_ctrl.c` | Populate `snap->audio` in `glr_ctrl_build_ui_snapshot` |
-| `src/app/glr_ctrl_router.c` | Left-click play branch in `route_submenu_item_hit`; new `handle_right_audio_press` wired into `glr_ctrl_mouse` |
+| `src/app/glr_ctrl_router.c` | Left-click play branch in `route_submenu_item_hit`; new `handle_right_audio_press` wired into `glr_ctrl_mouse`; call menu content invalidation after successful removal |
 | `gl_repl.c` | `glr_audio_tags_init(...)` after playlist setup |
-| `Makefile` | Add `glr_audio_tags.c` to `$(SRCS)` **and** `$(CORE_TEST_SRCS)`; add `glr_audio_tags.h` to `$(HDRS)`; add `glr_audio_tags.o` to `test_audio_OBJS` |
+| `Makefile` | Add `glr_audio_tags.c` to `$(SRCS)` **and** `$(CORE_TEST_SRCS)` so `menu_bar.c` links in app/core-test binaries; add `glr_audio_tags.h` to `$(HDRS)`; add a custom `test_audio_tags` target outside `CORE_TEST_BINS` with `test_audio_tags.o` + `glr_audio_tags.o` + mocks, not `glr_audio.o` |
 
 ## Verification
 
@@ -245,17 +303,23 @@ can be a later follow-up.)
   Cross-check under real GCC on `gracemont` per CLAUDE.md (`make check-c99 &&
   make test-stubs`).
 - **Unit tests:** extend `tests/test_audio.c` for `play_track` (index bounds,
-  current-index update) and `remove_track` (mid-list, removing current →
-  advances, removing below-current keeps pointer, empties to nothing). Add a new
+  no early current-index publish before a successful load) and `remove_track`
+  (mid-list, removing current → advances, removing below-current keeps pointer,
+  empties to nothing, remove-current does not let pause/resume restart the
+  retired slot). Add a new
   `tests/test_audio_tags.c` for the `tags.txt` parser (well-formed,
   malformed/blank lines, stem matching, duplicate-stem merging, synthetic
   `Untagged`/`All`, empty-group filtering, tag ordering). **Test mocking:**
   `test_audio_tags` should **not** link `glr_audio.c` (which pulls in miniaudio
   and pthreads); instead, define lightweight mock implementations of
   `glr_audio_track_count()` and `glr_audio_track_path()` directly in the test
-  file, backed by a static array of paths. This keeps compile and run times fast
-  and avoids OS audio dependencies in a pure-data-structure test. Wire both test
-  binaries into the Makefile test targets.
+  file, backed by a static array of paths, and drive parsing through the
+  load-from-path test seam above. In the Makefile, add `test_audio_tags` to
+  `TEST_BINS`, filter it out of `CORE_TEST_BINS`, and define
+  `test_audio_tags_OBJS = $(OBJDIR)/$(TEST_DIR)/test_audio_tags.o
+  $(OBJDIR)/src/app/glr_audio_tags.o` with no `glr_audio.o`. This keeps compile
+  and run times fast and avoids OS audio dependencies in a pure-data-structure
+  test. Wire both test binaries into the Makefile test targets.
 - **Manual / headless:** run `./gl-repl` with ≥2 `.mp3`s in `./assets` and a
   `tags.txt`. Confirm: the **Audio** menu shows tag rows; hovering a tag opens a
   flyout of its songs; the playing track shows the accent highlight; left-click
