@@ -208,6 +208,64 @@ static int compile_set_err(char *err, int err_size, const char *fmt, ...) {
     return REPL_COMPILE_ERROR;
 }
 
+static int compile_name_is_active_func_param(const ReplCompileContext *ctx,
+                                             int pos,
+                                             const char *name) {
+    typedef struct {
+        CmdType type;
+        char params[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
+        int param_count;
+    } ScopeFrame;
+
+    ScopeFrame frames[64];
+    int depth = 0;
+
+    if (!ctx || !ctx->document_cmds || !name || !name[0])
+        return 0;
+
+    for (int cmd_idx = 0; cmd_idx < pos && cmd_idx < ctx->document_count; cmd_idx++) {
+        CmdType type = ctx->document_cmds[cmd_idx].type;
+
+        if (repl_cmd_is_block_head(type)) {
+            if (depth >= (int)(sizeof(frames) / sizeof(frames[0])))
+                break;
+
+            frames[depth].type = type;
+            frames[depth].param_count = 0;
+
+            if (type == CMD_FUNC_DEF) {
+                int parsed_fn = -1;
+                int param_count = 0;
+                const char *func_text = source_text_line(ctx->text, cmd_idx);
+
+                if (parse_repl_func_signature(func_text ? func_text : "",
+                                              &parsed_fn,
+                                              frames[depth].params,
+                                              MAX_EXPR_VARS,
+                                              &param_count)) {
+                    frames[depth].param_count = param_count;
+                }
+            }
+
+            depth++;
+        } else if (repl_cmd_is_block_end(type)) {
+            if (depth > 0)
+                depth--;
+        }
+    }
+
+    for (int depth_idx = depth - 1; depth_idx >= 0; depth_idx--) {
+        if (frames[depth_idx].type != CMD_FUNC_DEF)
+            continue;
+        for (int param_idx = 0; param_idx < frames[depth_idx].param_count; param_idx++) {
+            if (strcmp(frames[depth_idx].params[param_idx], name) == 0)
+                return 1;
+        }
+    }
+
+    return 0;
+}
+
 /* A same-name local (function param / for-loop var) shadows a global on
  * that entire source line, including the binder line itself. Use
  * collect_visible_vars(line_idx + 1) so `func0(x) {` and `for(x, ...) {`
@@ -1020,6 +1078,11 @@ ReplCompileResult repl_compile_var_assign(const char *input,
         snprintf(out->commit_message, sizeof(out->commit_message),
                  "%s[%d] = %g", name, elem_idx, (double)val);
     } else {
+        if (compile_name_is_active_func_param(ctx, insert_idx, name))
+            return compile_set_err(err, err_size,
+                                   "cannot assign to function parameter '%s' - function parameters are constant",
+                                   name);
+
         int var_idx = repl_eval_find_predef_var_idx(name);
         if (var_idx < 0)
             return compile_set_err(err, err_size,

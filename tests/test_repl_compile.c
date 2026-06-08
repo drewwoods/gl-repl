@@ -653,6 +653,49 @@ static void test_overwrite_assign_ignores_shadowed_param_refs(void) {
                  g_predef_vars[y_slot].value, 3.0f, 1e-6f);
 }
 
+static void test_var_assign_rejects_function_param_target(void) {
+    glr_ctrl_reset_all();
+
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompiledChange change;
+
+    editor_feed_line("func0(radius) {");
+    editor_state_edit_line_set(1);
+    editor_insert_mode_set(0);
+
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ASSERT_INT("func param assign compile ERROR",
+               repl_compile_var_assign("radius = 1", &ctx, &change,
+                                       err, sizeof(err)),
+               REPL_COMPILE_ERROR);
+    ASSERT_TRUE("func param assign message names parameter",
+                strstr(err, "function parameter 'radius'") != NULL);
+    ASSERT_TRUE("func param assign message mentions constant",
+                strstr(err, "function parameters are constant") != NULL);
+}
+
+static void test_var_assign_rejects_shadowed_function_param_target(void) {
+    glr_ctrl_reset_all();
+
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompiledChange change;
+
+    editor_feed_line("float radius;");
+    editor_feed_line("func0(radius) {");
+    editor_state_edit_line_set(2);
+    editor_insert_mode_set(0);
+
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ASSERT_INT("shadowed func param assign compile ERROR",
+               repl_compile_var_assign("radius = 1", &ctx, &change,
+                                       err, sizeof(err)),
+               REPL_COMPILE_ERROR);
+    ASSERT_TRUE("shadowed func param assign message names parameter",
+                strstr(err, "function parameter 'radius'") != NULL);
+    ASSERT_TRUE("shadowed func param assign message mentions constant",
+                strstr(err, "function parameters are constant") != NULL);
+}
+
 static void test_delete_range_ignores_shadowed_param_refs(void) {
     glr_ctrl_reset_all();
 
@@ -1333,6 +1376,8 @@ int main(void) {
     test_overwrite_earlier_decl_with_later_assign_rebases_slot();
     test_overwrite_decl_ignores_shadowed_param_refs();
     test_overwrite_assign_ignores_shadowed_param_refs();
+    test_var_assign_rejects_function_param_target();
+    test_var_assign_rejects_shadowed_function_param_target();
     test_delete_range_ignores_shadowed_param_refs();
     test_capacity_failure_is_atomic();
     test_reformat_keeps_buffer_and_store_aligned();
