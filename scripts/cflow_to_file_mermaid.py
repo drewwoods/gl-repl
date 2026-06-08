@@ -65,6 +65,18 @@ def should_filter(name, filter_stdlib=False, filter_glnums=False):
     return False
 
 
+def normalize_file_path(path):
+    """Normalize file path to include the module path (relative path from src/ or repo root)."""
+    if not path:
+        return path
+    path = os.path.normpath(path).replace("\\", "/")
+    if path.startswith("./"):
+        path = path[2:]
+    if path.startswith("src/"):
+        path = path[4:]
+    return path
+
+
 def make_node_key(func_name, file_name):
     """Make a stable function key, keeping file-local statics distinct when possible."""
     if file_name:
@@ -91,7 +103,7 @@ def parse_cflow(lines):
         level = indent // 4 if indent % 4 == 0 else (indent + 3) // 4
 
         if file_name:
-            file_name = os.path.basename(file_name)
+            file_name = normalize_file_path(file_name)
             name_to_files[func_name].add(file_name)
 
         node_key = make_node_key(func_name, file_name)
@@ -141,7 +153,7 @@ def normalize_group_entry(entry):
     return {
         "id": group_id,
         "label": label,
-        "files": list(entry.get("files", [])),
+        "files": [normalize_file_path(f) for f in entry.get("files", [])],
         "patterns": list(entry.get("patterns", [])),
     }
 
@@ -190,7 +202,7 @@ def group_matches_file(group, file_name):
         return True
 
     for pattern in group["patterns"]:
-        if fnmatch.fnmatch(file_name, pattern):
+        if fnmatch.fnmatch(file_name, pattern) or fnmatch.fnmatch(os.path.basename(file_name), pattern):
             return True
 
     return False
