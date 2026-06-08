@@ -105,7 +105,9 @@ void glr_audio_on_user_gesture(void);
  * NULL to disable.  The file is written at shutdown and periodically by
  * glr_audio_tick().
  * On startup, if the saved track is present in the current playlist the cursor
- * is restored; otherwise playback starts from track 0 as normal. */
+ * is restored; if that file cannot be opened, playback skips forward through
+ * the playlist to the next playable track. If the saved track is absent from
+ * the current playlist, playback starts from track 0 as normal. */
 void glr_audio_set_state_file(const char *path);
 
 /* Opaque audio-config integer owned by the action/config layer. The audio
