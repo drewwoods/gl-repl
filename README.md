@@ -180,11 +180,23 @@ scripts/record-gif.sh --example 8 --duration 4 --fps 30 --scale 600 --time 5 --o
 frame, so playback is `~fps/60`× natural speed — use `--fps 60` for real-time.
 Needs `ffmpeg`. (`scripts/record-gif.sh --help` for all flags.)
 
-This needs a vendored freeglut that carries the OSMesa backend (re-vendor with
-`FREEGLUT_REPO=<path-or-url> scripts/vendor-freeglut.sh <ref>`). See *Headless
+This needs a vendored freeglut that carries the OSMesa backend. It lives in the
+freeglut fork at <https://github.com/drewwoods/freeglut> (branch
+`osmesa-backend`), which carries the OSMesa platform plus the `SIGUSR1`
+screenshot and `FREEGLUT_CAPTURE_FRAMES` record-mode capture used above.
+Re-vendor from it with:
+
+```bash
+FREEGLUT_REPO=https://github.com/drewwoods/freeglut \
+  scripts/vendor-freeglut.sh osmesa-backend
+make freeglut-clean
+```
+
+The resolved SHA is pinned in `third_party/freeglut/VENDORED.txt`. See *Headless
 Rendering & Screenshots (OSMesa)* in [`ARCHITECTURE.md`](ARCHITECTURE.md) for the
 full design (build-mode swap, the teardown fix, the signal-driven capture, the
-record mode).
+record mode), and `plans/external/freeglut-osmesa-backend.md` for the backend
+spec.
 
 ## Music
 

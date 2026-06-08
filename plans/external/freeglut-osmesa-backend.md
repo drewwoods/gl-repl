@@ -1,14 +1,24 @@
 # Add an OSMesa (off-screen, window-system-less) backend to freeglut
 
-> **External plan.** This work is done **in a freeglut fork**, not in gl-repl.
-> It lives here only as the spec that motivated it (gl-repl wants a headless
-> GL context so `--export-ply`'s `GL_FEEDBACK` capture — including the GLUT
-> solids — can be validated in CI without a display). When picked up, fork
-> freeglut, implement there, and ideally upstream as a PR.
+> **External plan — IMPLEMENTED.** This work is done **in a freeglut fork**,
+> not in gl-repl. It lives here only as the spec that motivated it (gl-repl
+> wants a headless GL context so `--export-ply`'s `GL_FEEDBACK` capture —
+> including the GLUT solids — can be validated in CI without a display).
+>
+> **Where the work lives:** the freeglut fork at
+> <https://github.com/drewwoods/freeglut>, branch **`osmesa-backend`**. That
+> branch carries the OSMesa backend described below **plus** the headless
+> capture extras gl-repl drives (the `SIGUSR1` PPM screenshot and the
+> `FREEGLUT_CAPTURE_FRAMES` record mode). gl-repl vendors it via
+> `scripts/vendor-freeglut.sh` (`FREEGLUT_REPO=https://github.com/drewwoods/freeglut
+> scripts/vendor-freeglut.sh osmesa-backend`); the resolved SHA is pinned in
+> `third_party/freeglut/VENDORED.txt`. Upstreaming to freeglut proper is still
+> open.
 >
 > Reference checkout used to write this plan: `~/src/freeglut-fork`
-> (freeglut **3.8.0**; macOS Cocoa build). File paths below are relative to the
-> freeglut source root. Line numbers are approximate — match by symbol.
+> (freeglut **3.8.0**; macOS Cocoa build) — now published as the fork above.
+> File paths below are relative to the freeglut source root. Line numbers are
+> approximate — match by symbol.
 
 ## Why
 
