@@ -279,29 +279,7 @@ static int cfg_key_in_scene_subset(GlrConfigKey key) {
     }
 }
 
-static void glr_export_cfg_fill_all(ReplConfigBag *cfg) {
-    int n = 0;
-    const GlrConfigItem *items = glr_config_items(&n);
-    for (int i = 0; i < n; i++) {
-        const GlrConfigItem *item = &items[i];
-        if (item->section_header || item->key == GLR_CONFIG_NONE) continue;
-        if (item->state_count <= 0) continue; /* action row: nothing to persist */
-        repl_config_bag_set_int(cfg, glr_config_item_slug(item),
-                                glr_config_get(item->key));
-    }
-}
 
-static void glr_export_cfg_fill_scene_subset(ReplConfigBag *cfg) {
-    int n = 0;
-    const GlrConfigItem *items = glr_config_items(&n);
-    for (int i = 0; i < n; i++) {
-        const GlrConfigItem *item = &items[i];
-        if (item->section_header || item->key == GLR_CONFIG_NONE) continue;
-        if (!cfg_key_in_scene_subset(item->key))                  continue;
-        repl_config_bag_set_int(cfg, glr_config_item_slug(item),
-                                glr_config_get(item->key));
-    }
-}
 
 static void glr_export_cfg_normalize_legacy_alias(const char **slug, int *val,
                                                   char *slug_buf,
@@ -446,6 +424,55 @@ static int glr_export_cfg_resolve_value(const char *slug,
         return 0;
     *out_value = (int)strtol(value_text, NULL, 10);
     return 1;
+}
+
+static void glr_export_cfg_value_to_string(const char *slug, int value, char *buf, size_t buf_sz) {
+    const char *symbol = NULL;
+    if (strcmp(slug, "grid") == 0 && value >= 0 && value < GRID_THEME_COUNT) {
+        symbol = cfg_grid_theme_symbols[value];
+    } else if (strcmp(slug, "axes") == 0 && value >= 0 && value < AXES_THEME_COUNT) {
+        symbol = cfg_axes_theme_symbols[value];
+    } else if (strcmp(slug, "backdrop") == 0 && value >= 0 && value < SCENE_BACKDROP_COUNT) {
+        symbol = cfg_backdrop_mode_symbols[value];
+    } else if (strcmp(slug, "light_theme") == 0 && value >= 0 && value < LIGHT_THEME_COUNT) {
+        symbol = cfg_light_theme_symbols[value];
+    }
+
+    if (symbol) {
+        snprintf(buf, buf_sz, "%s", symbol);
+    } else {
+        snprintf(buf, buf_sz, "%d", value);
+    }
+}
+
+static void glr_export_cfg_fill_all(ReplConfigBag *cfg) {
+    int n = 0;
+    const GlrConfigItem *items = glr_config_items(&n);
+    for (int i = 0; i < n; i++) {
+        const GlrConfigItem *item = &items[i];
+        if (item->section_header || item->key == GLR_CONFIG_NONE) continue;
+        if (item->state_count <= 0) continue; /* action row: nothing to persist */
+        char val_str[REPL_CFG_VALUE_MAX];
+        glr_export_cfg_value_to_string(glr_config_item_slug(item),
+                                       glr_config_get(item->key),
+                                       val_str, sizeof(val_str));
+        repl_config_bag_set(cfg, glr_config_item_slug(item), val_str);
+    }
+}
+
+static void glr_export_cfg_fill_scene_subset(ReplConfigBag *cfg) {
+    int n = 0;
+    const GlrConfigItem *items = glr_config_items(&n);
+    for (int i = 0; i < n; i++) {
+        const GlrConfigItem *item = &items[i];
+        if (item->section_header || item->key == GLR_CONFIG_NONE) continue;
+        if (!cfg_key_in_scene_subset(item->key))                  continue;
+        char val_str[REPL_CFG_VALUE_MAX];
+        glr_export_cfg_value_to_string(glr_config_item_slug(item),
+                                       glr_config_get(item->key),
+                                       val_str, sizeof(val_str));
+        repl_config_bag_set(cfg, glr_config_item_slug(item), val_str);
+    }
 }
 
 static void glr_export_cfg_apply(const ReplConfigBag *cfg) {
