@@ -76,14 +76,27 @@ static void test_ring_order_and_cap(void) {
 static void test_consecutive_dedup(void) {
     UiStatusHistory h;
 
+    /* A message re-set while the previous identical one is still live is a
+     * refresh (no new entry); a re-occurrence after it has expired
+     * (ttl==0) collapses into the same entry with a bumped count. We force
+     * the expiry directly since there's no controller tick in the test. */
     ui_state_reset();
     ui_state_status_set("same");
+    ui_state_status_mut()->ttl = 0;
     ui_state_status_set("same");
+    ui_state_status_mut()->ttl = 0;
     ui_state_status_set("same");
 
     h = ui_state_status_history();
-    ASSERT_INT_EQ("dup run collapses to one entry", h.count, 1);
-    ASSERT_INT_EQ("dup_count counts the run", (int)newest(&h)->dup_count, 3);
+    ASSERT_INT_EQ("repeat occurrences collapse to one entry", h.count, 1);
+    ASSERT_INT_EQ("dup_count counts the occurrences", (int)newest(&h)->dup_count, 3);
+
+    /* A live re-emit of the same text does NOT add an entry or bump count. */
+    ui_state_status_set("same");   /* ttl is live here */
+    h = ui_state_status_history();
+    ASSERT_INT_EQ("live refresh adds no entry", h.count, 1);
+    ASSERT_INT_EQ("live refresh does not bump count",
+                  (int)newest(&h)->dup_count, 3);
 
     /* A different message breaks the run; a return to "same" is a new entry. */
     ui_state_status_set("other");
@@ -110,6 +123,27 @@ static void test_kind_preserved(void) {
     ui_state_status_set_error("dual");
     h = ui_state_status_history();
     ASSERT_INT_EQ("same text different kind: two entries", h.count, 4);
+}
+
+static void test_refresh_preserves_age(void) {
+    /* The telescope animation keys off status.age; a same-text live refresh
+     * must keep it (so a per-frame re-emit stays extended), a real change
+     * must reset it. */
+    ui_state_reset();
+    ui_state_status_set("hint");
+    ui_state_status_mut()->age = 50;        /* pretend the controller aged it */
+
+    ui_state_status_set("hint");            /* live refresh */
+    ASSERT_INT_EQ("refresh keeps age", ui_state_status().age, 50);
+    ASSERT_TRUE("refresh keeps ttl alive", ui_state_status().ttl > 0);
+
+    ui_state_status_set("different");        /* real change */
+    ASSERT_INT_EQ("new message resets age", ui_state_status().age, 0);
+
+    /* Kind change with same text also counts as new. */
+    ui_state_status_mut()->age = 30;
+    ui_state_status_set_error("different");
+    ASSERT_INT_EQ("kind change resets age", ui_state_status().age, 0);
 }
 
 static void test_reset_clears(void) {
@@ -236,6 +270,7 @@ int main(void) {
     test_ring_order_and_cap();
     test_consecutive_dedup();
     test_kind_preserved();
+    test_refresh_preserves_age();
     test_reset_clears();
     test_toggle();
     test_button_geometry();

@@ -13,12 +13,10 @@
 #include "config.h"          /* REPL_STATUS_TEXT_MAX */
 
 /* How long a status-bar message stays visible, in frames (~60 fps, so
- * 360 is roughly 6 s). */
+ * 360 is roughly 6 s). The banner telescopes out of / back into the
+ * messages bell over the first/last frames of this window (see
+ * STATUS_ANIM_*_FRAMES in src/ui/app/panels.c). */
 #define UI_STATUS_MESSAGE_TTL 360
-
-/* Width of the status-bar message alpha fade ramp at the end of its life,
- * in frames. */
-#define UI_STATUS_FADE_FRAMES 60
 
 /* Code-panel render chrome: panel divider and per-frame mirrors
  * of the presentation flags renderers need.
@@ -69,6 +67,10 @@ typedef struct {
     char text[REPL_STATUS_TEXT_MAX];
     int  ttl;
     int  kind;  /* UiStatusKind; default INFO since enum starts at 0 */
+    int  age;   /* frames since this message first appeared; reset only
+                 * when the text/kind actually changes (not on a same-text
+                 * refresh), so a message re-emitted every frame still
+                 * telescopes out once and stays put. Controller ages it. */
 } UiStatusState;
 
 /* Recent-message history. Every status message (INFO and ERROR alike)

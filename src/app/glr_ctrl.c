@@ -2397,8 +2397,15 @@ void glr_ctrl_tick(void) {
          * own display state via the snapshot rename view), so the TTL
          * just ages normally. */
         UiStatusState *status = ui_state_status_mut();
-        if (status->ttl > 0)
+        if (status->ttl > 0) {
             status->ttl--;
+            /* Age the live message so the banner's telescope-out animation
+             * advances even while a per-frame re-emitter keeps renewing the
+             * ttl (see ui_state_status_set_kind). Capped to avoid overflow
+             * on long-lived hints. */
+            if (status->age < (1 << 24))
+                status->age++;
+        }
 
         /* Tutorial COMMAND-step hint persistence: while a COMMAND step
          * is active, keep the affordance hint visible by re-emitting it
