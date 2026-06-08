@@ -78,9 +78,10 @@ A small **app-layer** module (no GL, no threads) that owns the parsed tag map
 and presents the playlist as a tag-grouped catalog. It reads track paths from
 `glr_audio_*` (above), so it stays in sync with removals automatically.
 
-- `void glr_audio_tags_init(const char *tags_file_path);` — parse `tags.txt`
-  once at startup. Each line: `stem: [tagA, tagB, ...]`. Store `stem → tag list`.
-  Tolerant parser (skip blank/`#` lines, trim whitespace, ignore malformed).
+- `void glr_audio_tags_init(void);` — self-resolves the tag file path (see §6)
+  and parses `tags.txt` once at startup. Each line: `stem: [tagA, tagB, ...]`.
+  Store `stem → tag list`. Tolerant parser (skip blank/`#` lines, trim
+  whitespace, ignore malformed).
 - Match a playlist track to its tags by **basename stem** (basename of
   `glr_audio_track_path(idx)` with the `.mp3` extension stripped), matching the
   user's `The_Save_Point` style (no extension). The stem extractor handles both
@@ -126,8 +127,12 @@ mutations and avoids a generation-counter protocol between the two modules.
 - `menu_bar.c`:
   - Add alias `MENU_AUDIO = GLR_MENU_AUDIO` (next to `MENU_CONFIG`) and append
     `"Audio"` to `g_menu_labels[]` (after `"Config"` — rightmost position).
-    `NUM_MENUS` is `sizeof(g_menu_labels)/sizeof(g_menu_labels[0])` so it scales
-    automatically; `menubar_rects` already derives widths from labels.
+    `NUM_MENUS` is `= GLR_MENU_COUNT` (an enum alias, `menu_bar.c:30`), so adding
+    `GLR_MENU_AUDIO` to `GlrMenuId` bumps the count and `NUM_MENUS` tracks it
+    automatically. But `g_menu_labels[NUM_MENUS]` is a fixed-size initializer:
+    the `"Audio"` string literal **must** be added in lockstep, or the array
+    under-sizes and label/menu indices desync. `menubar_rects` already derives
+    widths from the labels.
   - `menu_item_count`: `MENU_AUDIO → glr_audio_tags_visible_tag_count()` (top-level
     rows are tag rows, hover-only flyout parents — mirrors the Scene/Tutorials
     tag-row pattern).
@@ -210,12 +215,14 @@ accessor call.
 
 After the playlist is built and `glr_audio_set_playlist(...)` is called (the
 public signature is `int glr_audio_set_playlist(const char *const *paths, int
-count)`), call `glr_audio_tags_init(<user music dir>/tags.txt)`. The per-user
-music directory is available via `glr_paths_user_music_dir()` (public API in
-`src/app/glr_paths.h` — the old `user_music_dir()` static was refactored out);
-`glr_audio_tags.c` can call it directly rather than receiving the path from
-`main()`. (Tags load once at startup; editing `tags.txt` takes effect on next
-launch — a reload hook can be a later follow-up.)
+count)`), call `glr_audio_tags_init()`. The tag module self-resolves the file
+path: `glr_paths_user_music_dir(char *buf, size_t buflen)` (public API in
+`src/app/glr_paths.h` — the old `user_music_dir()` static was refactored out)
+**fills a caller buffer and returns success** (it is not a string-returning
+accessor), so `glr_audio_tags_init` writes the dir into a local buffer, appends
+`/tags.txt`, and parses that — no path is threaded through `main()`. (Tags load
+once at startup; editing `tags.txt` takes effect on next launch — a reload hook
+can be a later follow-up.)
 
 ## Critical files
 
