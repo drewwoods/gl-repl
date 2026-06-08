@@ -661,6 +661,42 @@ int main(void) {
         ASSERT_TRUE("camera tz restored",   fabsf(glr_camera().tz   - saved_tz)   < 1e-2f);
     }
 
+    /* Camera round-trip with a user function that contains its own
+     * glTranslatef/glRotatef calls. The exporter writes that function
+     * (a `static void funcN(...)` body) before display(), so on import
+     * the camera state machine sees those transforms first. It must not
+     * consume them as camera lines — doing so corrupted both the function
+     * and the real camera block in display() (camera distance regressed
+     * to 0). Regression for the workspace/new_scene.c report. */
+    {
+        const char *cam_func_path = "/tmp/repl_core_cam_func_roundtrip.c";
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("func0() {");
+        editor_feed_line("glTranslatef(-0.65, 0, 0);");
+        editor_feed_line("glRotatef(15, 0, 1, 0);");
+        editor_feed_line("glVertex3f(0, 0, 0);");
+        editor_feed_line("}");
+        editor_feed_line("func0();");
+        glr_camera_set_orbit(22.5235f, -49.0020f);
+        glr_camera_set_distance(6.3524f);
+        glr_camera_set_pan(0.0f, 0.0f, 0.0f);
+        repl_export_save_output(cam_func_path, source_document_view(), NULL);
+
+        glr_camera_set_orbit(10.0f, 10.0f);
+        glr_camera_set_distance(99.0f);
+        glr_camera_set_pan(7.0f, 7.0f, 7.0f);
+        glr_ctrl_reset_all(); declare_test_vars();
+        ASSERT_TRUE("load camera-with-func output",
+                    repl_export_load_from_file(cam_func_path, NULL) == 1);
+        ASSERT_TRUE("camera dist not eaten by func glTranslatef",
+                    fabsf(glr_camera().dist - 6.3524f) < 1e-2f);
+        ASSERT_TRUE("camera rx restored past func transforms",
+                    fabsf(glr_camera().rx - 22.5235f) < 1e-2f);
+        ASSERT_TRUE("camera ry restored past func transforms",
+                    fabsf(glr_camera().ry - (-49.0020f)) < 1e-2f);
+        remove(cam_func_path);
+    }
+
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("x = 1;");
     editor_feed_line("func0(radius, yoff) {");
