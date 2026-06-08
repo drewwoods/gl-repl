@@ -55,6 +55,36 @@ UiStatusState *ui_state_status_mut(void) {
     return &g_ui_state.status;
 }
 
+/* Push a message into the recent-message ring. Consecutive identical
+ * (text + kind) messages collapse into the newest entry with an
+ * incremented dup_count instead of flooding the ring. */
+static void ui_state_status_history_push(const char *message, int kind) {
+    UiStatusHistory *h = &g_ui_state.status_history;
+    UiStatusEntry *e;
+
+    if (h->count > 0) {
+        int newest = ui_status_history_index(h, h->count - 1);
+        UiStatusEntry *last = &h->entries[newest];
+        if (last->kind == kind && strcmp(last->text, message) == 0) {
+            if (last->dup_count < (unsigned int)-1)
+                last->dup_count++;
+            last->seq = h->next_seq++;
+            return;
+        }
+    }
+
+    e = &h->entries[h->head];
+    strncpy(e->text, message, sizeof(e->text) - 1);
+    e->text[sizeof(e->text) - 1] = '\0';
+    e->kind = kind;
+    e->dup_count = 1;
+    e->seq = h->next_seq++;
+
+    h->head = (h->head + 1) % UI_STATUS_HISTORY_CAP;
+    if (h->count < UI_STATUS_HISTORY_CAP)
+        h->count++;
+}
+
 static void ui_state_status_set_kind(const char *message, int kind) {
     if (!message || !message[0])
         return;
@@ -63,6 +93,7 @@ static void ui_state_status_set_kind(const char *message, int kind) {
     g_ui_state.status.text[sizeof(g_ui_state.status.text) - 1] = '\0';
     g_ui_state.status.ttl = UI_STATUS_MESSAGE_TTL;
     g_ui_state.status.kind = kind;
+    ui_state_status_history_push(g_ui_state.status.text, kind);
 }
 
 void ui_state_status_set(const char *message) {
@@ -71,6 +102,18 @@ void ui_state_status_set(const char *message) {
 
 void ui_state_status_set_error(const char *message) {
     ui_state_status_set_kind(message, UI_STATUS_ERROR);
+}
+
+UiStatusHistory ui_state_status_history(void) {
+    return g_ui_state.status_history;
+}
+
+void ui_state_status_history_set_open(int open) {
+    g_ui_state.status_history.open = open ? 1 : 0;
+}
+
+void ui_state_status_history_toggle(void) {
+    g_ui_state.status_history.open = !g_ui_state.status_history.open;
 }
 
 

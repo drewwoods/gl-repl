@@ -46,8 +46,18 @@ typedef struct UiCodePanelOutput {
 void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
                                  UiCodePanelOutput *out);
 
-/* Render the scene status banner from the supplied snapshot. */
+/* Render the scene status banner from the supplied snapshot. Also draws
+ * the persistent bottom "messages" button and, when toggled open, the
+ * inline recent-message history list. */
 void ui_panels_render_scene_status(const UiRenderSnapshot *snap);
+
+/* Pure geometry for the bottom "messages" button, in OpenGL bottom-left
+ * window coordinates. Returns 1 and fills the x, y, w, h out-params on
+ * success, 0 when there is no button (empty history, degenerate scene
+ * rect, or a modal prompt owns the strip). Shared by the renderer and the
+ * hit-test so both agree, and unit-testable on its own. */
+int ui_panels_status_history_button_rect(const UiRenderSnapshot *snap,
+                                          int *x, int *y, int *w, int *h);
 
 /* Handle right-click in non-code-panel areas: open Config menu if clicked on
  * menu bar region. Returns 1 if consumed, 0 otherwise. mx, my are window

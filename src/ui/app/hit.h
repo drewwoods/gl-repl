@@ -23,6 +23,7 @@ typedef enum {
     UI_HIT_PIN_BUTTON,
     UI_HIT_REPLAY_BUTTON,
     UI_HIT_HELP_PANEL,
+    UI_HIT_STATUS_HISTORY,   /* messages button: toggles recent-message list */
     UI_HIT_SCENE
 } UiAppHitKind;
 

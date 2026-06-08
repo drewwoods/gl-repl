@@ -71,6 +71,42 @@ typedef struct {
     int  kind;  /* UiStatusKind; default INFO since enum starts at 0 */
 } UiStatusState;
 
+/* Recent-message history. Every status message (INFO and ERROR alike)
+ * funnels through ui_state_status_set_kind, which pushes it here so the
+ * user can pull up messages that already flashed and faded. Session-only
+ * ring (no persistence); newest entry sits at index (head - 1). */
+#define UI_STATUS_HISTORY_CAP 16
+
+typedef struct {
+    char         text[REPL_STATUS_TEXT_MAX];
+    int          kind;       /* UiStatusKind */
+    unsigned int dup_count;  /* collapsed consecutive duplicates, >= 1 */
+    unsigned int seq;        /* monotonic id; larger == newer */
+} UiStatusEntry;
+
+typedef struct {
+    UiStatusEntry entries[UI_STATUS_HISTORY_CAP];
+    int           head;      /* next write slot (0..CAP-1) */
+    int           count;     /* valid entries, <= CAP */
+    unsigned int  next_seq;  /* id handed to the next pushed entry */
+    int           open;      /* the inline history list is toggled visible */
+} UiStatusHistory;
+
+/* Ring index of the `ordinal`-th entry counting from oldest (0) to
+ * newest (count-1). Returns -1 when ordinal is out of range. Pure, so
+ * both the renderer and tests can walk the ring in display order. */
+static inline int ui_status_history_index(const UiStatusHistory *h, int ordinal) {
+    int start;
+    if (!h || ordinal < 0 || ordinal >= h->count)
+        return -1;
+    /* oldest = head - count, normalized into [0, CAP). */
+    start = h->head - h->count;
+    start %= UI_STATUS_HISTORY_CAP;
+    if (start < 0)
+        start += UI_STATUS_HISTORY_CAP;
+    return (start + ordinal) % UI_STATUS_HISTORY_CAP;
+}
+
 /* Camera pose is intentionally not part of the UI chrome types. See
  * glr_camera.h for the app-owned orbit/pan/zoom state. */
 

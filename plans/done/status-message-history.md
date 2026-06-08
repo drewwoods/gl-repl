@@ -1,7 +1,34 @@
 # Status-message history (recent messages viewer)
 
-Status: **not-started** — feasibility verified 2026-06-08; UX forks
-resolved (recommendation adopted). Ready for implementation.
+Status: **done** — implemented 2026-06-08. Built the persistent bottom
+"messages" button (trigger, fork 1) + click-to-toggle inline stacked
+history list (surface, fork 2) + 16-entry session ring, newest-at-bottom,
+age-dimmed, consecutive-dup collapse (fork 3). The button appears once the
+session has recorded at least one message (the ring is session-retained, so
+it then stays). The transient-message **slide animation (fork 4)** was kept
+on the plain-fade fallback the plan sanctioned — discoverability is already
+solved by the persistent button, and the slide is the fiddly part; it can be
+layered on later without touching the data/hit-test work.
+
+Landed in existing modules (no new module):
+- Data: `UiStatusEntry`/`UiStatusHistory` in `src/ui/app/state_types.h`;
+  push + dedup + accessors in `src/ui/app/state.{c,h}` (`ui_state_status_history`,
+  `_set_open`, `_toggle`), pushed from the single `ui_state_status_set_kind`
+  chokepoint.
+- Snapshot: by-value `status_history` slice on `UiRenderSnapshot`, filled in
+  `glr_ctrl_build_ui_snapshot`.
+- Render + hit-test: messages button + history list in `src/ui/app/panels.c`;
+  `UI_HIT_STATUS_HISTORY` in `src/ui/app/hit.h`; pure geometry helper
+  `ui_panels_status_history_button_rect`.
+- Routing: `route_status_history_hit` in `src/app/glr_ctrl_router.c`.
+- Tests: `tests/test_ui_status_history.c` (ring order/cap/dedup, kind
+  preservation, reset/toggle, button geometry + hit + render). All 9802
+  suite tests pass; `check-state-ownership`, `check-c99`,
+  `check-duplicate-api-decls`, `check-trailing-whitespace` green.
+
+---
+
+Original plan (feasibility verified 2026-06-08; UX forks resolved):
 
 ## 2026-06-08 review
 
