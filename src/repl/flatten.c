@@ -302,9 +302,16 @@ static void flatten_call(FlattenContext *ctx,
             break;
         if (arg_count != param_count) {
             char msg[REPL_DIAG_TEXT_MAX];
-            snprintf(msg, sizeof(msg),
-                     "func%d expects %d args, got %d",
-                     func_num, param_count, arg_count);
+            const char *alias = repl_func_alias_get(func_num);
+            if (alias) {
+                snprintf(msg, sizeof(msg),
+                         "%s expects %d args, got %d",
+                         alias, param_count, arg_count);
+            } else {
+                snprintf(msg, sizeof(msg),
+                         "func%d expects %d args, got %d",
+                         func_num, param_count, arg_count);
+            }
             flatten_note_status(ctx, msg);
             break;
         }
