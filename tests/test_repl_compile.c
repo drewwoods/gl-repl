@@ -585,6 +585,101 @@ static void test_overwrite_earlier_decl_with_later_assign_rebases_slot(void) {
                repl_state_document_cmds_mut()[x_row].var_idx, y_slot);
 }
 
+static void test_overwrite_decl_ignores_shadowed_param_refs(void) {
+    glr_ctrl_reset_all();
+
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompiledChange change;
+    ReplCompileContext ctx;
+
+    editor_feed_line("float x;");
+    editor_feed_line("func0(x) {");
+    editor_feed_line("glVertex3f(x, 0, 0);");
+    editor_feed_line("}");
+
+    editor_state_edit_line_set(0);
+    editor_insert_mode_set(0);
+    set_input("float y;");
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+
+    ASSERT_INT("shadowed param decl overwrite compile OK",
+               repl_compile_float_decl("float y;", &ctx, &change,
+                                       err, sizeof(err)),
+               REPL_COMPILE_OK);
+    ASSERT_INT("shadowed param decl overwrite is REPLACE_ONE",
+               change.kind, REPL_COMPILED_REPLACE_ONE);
+    ASSERT_INT("shadowed param decl overwrite apply OK",
+               editor_commit_apply_external_change(&change, 0, 0), 1);
+    ASSERT_INT("shadowed param decl overwrite removed x",
+               repl_eval_find_predef_var_idx("x"), -1);
+    ASSERT_TRUE("shadowed param decl overwrite declared y",
+                repl_eval_find_predef_var_idx("y") >= 0);
+    ASSERT_INT("shadowed param decl overwrite kept func def",
+               repl_state_document_cmds_mut()[1].type, CMD_FUNC_DEF);
+}
+
+static void test_overwrite_assign_ignores_shadowed_param_refs(void) {
+    glr_ctrl_reset_all();
+
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompiledChange change;
+    ReplCompileContext ctx;
+    int y_slot;
+
+    editor_feed_line("float y;");
+    editor_feed_line("float x;");
+    editor_feed_line("func0(x) {");
+    editor_feed_line("glVertex3f(x, 0, 0);");
+    editor_feed_line("}");
+
+    editor_state_edit_line_set(1);
+    editor_insert_mode_set(0);
+    set_input("y = 3");
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+
+    ASSERT_INT("shadowed param assign overwrite compile OK",
+               repl_compile_var_assign("y = 3", &ctx, &change,
+                                       err, sizeof(err)),
+               REPL_COMPILE_OK);
+    ASSERT_INT("shadowed param assign overwrite is REPLACE_ONE",
+               change.kind, REPL_COMPILED_REPLACE_ONE);
+    ASSERT_INT("shadowed param assign overwrite apply OK",
+               editor_commit_apply_external_change(&change, 0, 0), 1);
+    ASSERT_INT("shadowed param assign overwrite removed x",
+               repl_eval_find_predef_var_idx("x"), -1);
+    y_slot = repl_eval_find_predef_var_idx("y");
+    ASSERT_TRUE("shadowed param assign overwrite kept y", y_slot >= 0);
+    ASSERT_FLOAT("shadowed param assign overwrite set y",
+                 g_predef_vars[y_slot].value, 3.0f, 1e-6f);
+}
+
+static void test_delete_range_ignores_shadowed_param_refs(void) {
+    glr_ctrl_reset_all();
+
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplCompiledChange change;
+    ReplCompileContext ctx;
+
+    editor_feed_line("float x;");
+    editor_feed_line("func0(x) {");
+    editor_feed_line("glVertex3f(x, 0, 0);");
+    editor_feed_line("}");
+
+    ctx = repl_compile_context_from_live(0);
+    ASSERT_INT("shadowed param delete compile OK",
+               repl_compile_delete_range(0, 1, &ctx, &change,
+                                         err, sizeof(err)),
+               REPL_COMPILE_OK);
+    ASSERT_INT("shadowed param delete is DELETE_RANGE",
+               change.kind, REPL_COMPILED_DELETE_RANGE);
+    ASSERT_INT("shadowed param delete apply OK",
+               editor_commit_apply_external_change(&change, 0, 0), 1);
+    ASSERT_INT("shadowed param delete removed x",
+               repl_eval_find_predef_var_idx("x"), -1);
+    ASSERT_INT("shadowed param delete kept func def at top",
+               repl_state_document_cmds_mut()[0].type, CMD_FUNC_DEF);
+}
+
 /* Forced cmd-store capacity failure leaves predef-vars, editor
  * buffer, and command store all unchanged. The preflight inside
  * editor_commit_apply_external_change is the load-bearing
@@ -1236,6 +1331,9 @@ int main(void) {
     test_compile_apply_var_assign_updates_value();
     test_overwrite_decl_with_assign_preserves_set_value();
     test_overwrite_earlier_decl_with_later_assign_rebases_slot();
+    test_overwrite_decl_ignores_shadowed_param_refs();
+    test_overwrite_assign_ignores_shadowed_param_refs();
+    test_delete_range_ignores_shadowed_param_refs();
     test_capacity_failure_is_atomic();
     test_reformat_keeps_buffer_and_store_aligned();
     test_set_predef_value_rewrites_decl_not_assignments();

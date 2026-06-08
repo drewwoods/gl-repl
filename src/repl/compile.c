@@ -208,6 +208,50 @@ static int compile_set_err(char *err, int err_size, const char *fmt, ...) {
     return REPL_COMPILE_ERROR;
 }
 
+/* A same-name local (function param / for-loop var) shadows a global on
+ * that entire source line, including the binder line itself. Use
+ * collect_visible_vars(line_idx + 1) so `func0(x) {` and `for(x, ...) {`
+ * treat `x` as already bound for the current-line reference scan. */
+static int compile_line_uses_global_ident(const ReplCompileContext *ctx,
+                                          int line_idx,
+                                          const char *name) {
+    const char *line;
+    ExprVar visible_vars[MAX_EXPR_VARS];
+    int visible_nv;
+
+    if (!ctx || !name || !name[0] ||
+        line_idx < 0 || line_idx >= ctx->document_count)
+        return 0;
+
+    line = source_text_line(ctx->text, line_idx);
+    if (!line || !repl_eval_source_uses_ident(line, name))
+        return 0;
+
+    visible_nv = collect_visible_vars(line_idx + 1, visible_vars,
+                                      MAX_EXPR_VARS, NULL);
+    for (int var_idx = 0; var_idx < visible_nv; var_idx++) {
+        if (strcmp(visible_vars[var_idx].name, name) == 0)
+            return 0;
+    }
+    return 1;
+}
+
+static int compile_name_is_still_referenced(const ReplCompileContext *ctx,
+                                            const char *name,
+                                            int skip_start,
+                                            int skip_end) {
+    if (!ctx || !name || !name[0])
+        return 0;
+
+    for (int cmd_idx = 0; cmd_idx < ctx->document_count; cmd_idx++) {
+        if (cmd_idx >= skip_start && cmd_idx < skip_end)
+            continue;
+        if (compile_line_uses_global_ident(ctx, cmd_idx, name))
+            return 1;
+    }
+    return 0;
+}
+
 static void compile_copy_leading_ws(const char *text, char *out, int out_sz) {
     int off = 0;
     const char *p = text ? text : "";
@@ -723,13 +767,10 @@ ReplCompileResult repl_compile_float_decl(const char *input,
                 if (strcmp(parsed.names[v], nm) == 0) { kept = 1; break; }
             }
             if (kept) continue;
-            for (int cmd_idx = 0; cmd_idx < ctx->document_count; cmd_idx++) {
-                if (cmd_idx == insert_idx) continue;
-                const char *line = source_text_line(ctx->text, cmd_idx);
-                if (repl_eval_source_uses_ident(line ? line : "", nm))
-                    return compile_set_err(err, err_size,
-                        "variable '%s' is in use, cannot overwrite", nm);
-            }
+            if (compile_name_is_still_referenced(ctx, nm, insert_idx,
+                                                 insert_idx + 1))
+                return compile_set_err(err, err_size,
+                    "variable '%s' is in use, cannot overwrite", nm);
         }
     }
 
@@ -1067,13 +1108,10 @@ ReplCompileResult repl_compile_var_assign(const char *input,
     if (overwriting_decl) {
         for (int decl_idx = 0; decl_idx < old_decl->payload.decl.count; decl_idx++) {
             const char *nm = old_decl->payload.decl.names[decl_idx];
-            for (int cmd_idx = 0; cmd_idx < ctx->document_count; cmd_idx++) {
-                if (cmd_idx == insert_idx) continue;
-                const char *line = source_text_line(ctx->text, cmd_idx);
-                if (repl_eval_source_uses_ident(line ? line : "", nm))
-                    return compile_set_err(err, err_size,
-                        "variable '%s' is in use, cannot overwrite", nm);
-            }
+            if (compile_name_is_still_referenced(ctx, nm, insert_idx,
+                                                 insert_idx + 1))
+                return compile_set_err(err, err_size,
+                    "variable '%s' is in use, cannot overwrite", nm);
             if (op_count >= MAX_PREDEF_OPS_PER_COMMIT) break;
             out->predef_ops[op_count].kind = REPL_PREDEF_OP_UNDECLARE;
             repl_copy_string_fits(out->predef_ops[op_count].name,
@@ -1176,9 +1214,9 @@ ReplCompileResult repl_compile_empty_line(int line_idx,
 
 /* Walk [range_start, range_end) for CMD_VAR_DECLARE rows. For each
  * declared name:
- *   1. Verify no line outside the range still references it. CMD_COMMENT
- *      lines are skipped — a line like `// x axis` is not a real use of
- *      `x`, and counting it would block legitimate decl removals.
+ *   1. Verify no line outside the range still references it. Comments are
+ *      ignored, and same-name locals (function params / for-loop vars)
+ *      shadow the global on their header and body lines.
  *   2. Append a REPL_PREDEF_OP_UNDECLARE op to `out->predef_ops`.
  *
  * Returns REPL_COMPILE_OK on success (predef_op_count incremented).
@@ -1190,23 +1228,16 @@ static ReplCompileResult compile_collect_undeclare_for_range(
         int range_start, int range_end,
         const char *action_verb,
         ReplCompiledChange *out, char *err, int err_size) {
-    int n = ctx->document_count;
-
-    /* Reference scan. Comments are not real references. */
+    /* Reference scan. */
     for (int i = range_start; i < range_end; i++) {
         const GLCmd *cmd = &ctx->document_cmds[i];
         if (cmd->type != CMD_VAR_DECLARE) continue;
         for (int d = 0; d < cmd->payload.decl.count; d++) {
             const char *nm = cmd->payload.decl.names[d];
-            for (int j = 0; j < n; j++) {
-                if (j >= range_start && j < range_end) continue;
-                if (ctx->document_cmds[j].type == CMD_COMMENT) continue;
-                const char *line = source_text_line(ctx->text, j);
-                if (line && repl_eval_source_uses_ident(line, nm))
-                    return compile_set_err(err, err_size,
-                                           "Cannot %s '%s': still referenced",
-                                           action_verb, nm);
-            }
+            if (compile_name_is_still_referenced(ctx, nm, range_start, range_end))
+                return compile_set_err(err, err_size,
+                                       "Cannot %s '%s': still referenced",
+                                       action_verb, nm);
         }
     }
 
