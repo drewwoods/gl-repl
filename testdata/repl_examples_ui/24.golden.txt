@@ -90,7 +90,8 @@ void display(void) {
 --- header_post ---
 --- source ---
   static float incl, th, px, py, pz;
-  func0(rad, tilt) {
+
+  OrbitRings(rad, tilt) {
     glBegin(GL_LINE_LOOP);
       for(i, 0, 64) {
         glVertex3f(cos(i*TAU/64)*rad, sin(i*TAU/64)*rad*sin(tilt), sin(i*TAU/64)*rad*cos(tilt));
@@ -98,22 +99,24 @@ void display(void) {
     glEnd();
   }
   glClearColor(0.02, 0.02, 0.05, 1);
-  glEnable(GL_DEPTH_TEST);
   glEnable(GL_NORMALIZE);
-  // faint orbit rings (unlit lines); func0 = one inclined ring
-  glDisable(GL_LIGHTING);
-  glColor3f(0.22, 0.24, 0.34);
-  glLineWidth(1.2);
-  func0(1.3, 0.18);
-  func0(2.1, 0.06);
-  func0(2.9, 0.0);
-  func0(3.7, 0.22);
+  // use cull face since we are using blending we want the effect to be view independent
+  glEnable(GL_CULL_FACE);
+
   // the sun: drawn unlit so it glows (it sits on the SOLAR light at origin)
-  glColor3f(1, 0.85, 0.3);
-  glutSolidSphere(0.5, 24, 24);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  glDisable(GL_DEPTH_TEST);
+  glColor4f(1, 0.85, 0.3, 0.5);
+  // Pulsate the sun's radius with two different frequencies to show it's alive.
+  glutSolidSphere(0.5  + cos(2*t)*0.01, 24, 24);
+  glutSolidSphere(0.45 + sin(t)*0.01, 24, 24);
+  glEnable(GL_DEPTH_TEST);
+  glutSolidSphere(0.4, 24, 24);
   glColor3f(1, 0.9, 0.5);
   glRasterPos3f(0.6, 0.55, 0);
   label("Sun");
+
   // planets: lit by the central SOLAR light, color via glColor
   glEnable(GL_LIGHT0);
   glEnable(GL_COLOR_MATERIAL);
@@ -185,3 +188,12 @@ void display(void) {
   glColor3f(0.75, 0.8, 0.9);
   glRasterPos3f(-1.6, -3, 0);
   label("Earth phase = %f", fmod(t*0.85 + 2.5, TAU));
+
+  // faint orbit rings (unlit lines); func0 = one inclined ring
+  glDisable(GL_LIGHTING);
+  glColor3f(0.22, 0.24, 0.34);
+  glLineWidth(1.2);
+  OrbitRings(1.3, 0.18);
+  OrbitRings(2.1, 0.06);
+  OrbitRings(2.9, 0.0);
+  OrbitRings(3.7, 0.22);
