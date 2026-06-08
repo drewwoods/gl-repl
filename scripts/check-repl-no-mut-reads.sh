@@ -24,7 +24,7 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-baseline_file="${1:-scripts/baselines/repl-mut-reads.txt}"
+baseline_file="${1:-scripts/baselines/repl-no-mut-reads.txt}"
 
 if [ ! -f "$baseline_file" ]; then
     echo "ERROR: missing baseline file $baseline_file" >&2

@@ -1,6 +1,6 @@
 # Plan: Eliminate Remaining `_mut()` Reads in `src/repl/`
 
-As of **2026-06-08**, `scripts/check-repl-mut-reads.sh` still reports
+As of **2026-06-08**, `scripts/check-repl-no-mut-reads.sh` still reports
 `repl-mut-reads OK (_mut() calls=11/11)`, so the plan's core goal is still
 current. The remaining non-owner call sites are still the same six-file
 cluster this draft targeted.
@@ -21,7 +21,7 @@ fields / dedicated getters**, not `STATE->field` pointer macros.
 
 ## Objective
 
-Reduce the `mut_call_count` in `scripts/baselines/repl-mut-reads.txt` from
+Reduce the `mut_call_count` in `scripts/baselines/repl-no-mut-reads.txt` from
 **11** to **0** by replacing the remaining non-owner `_mut()` call sites with:
 
 - const/read-only accessors for reads
@@ -54,8 +54,8 @@ Reduce the `mut_call_count` in `scripts/baselines/repl-mut-reads.txt` from
   - `src/repl/command_store.c`
   - `src/repl/eval.c`
 - **Ratchet / baseline:**
-  - `scripts/check-repl-mut-reads.sh`
-  - `scripts/baselines/repl-mut-reads.txt`
+  - `scripts/check-repl-no-mut-reads.sh`
+  - `scripts/baselines/repl-no-mut-reads.txt`
 - **Typed state APIs that matter here:**
   - `src/repl/state_views.h`
   - `src/repl/state_owners.h`
@@ -147,10 +147,10 @@ Notes:
 
 ### 7. Update the Ratchet Baseline and Comments
 
-- Set `mut_call_count: 0` in `scripts/baselines/repl-mut-reads.txt`
+- Set `mut_call_count: 0` in `scripts/baselines/repl-no-mut-reads.txt`
 - Rewrite the comments in:
-  - `scripts/baselines/repl-mut-reads.txt`
-  - `scripts/check-repl-mut-reads.sh`
+  - `scripts/baselines/repl-no-mut-reads.txt`
+  - `scripts/check-repl-no-mut-reads.sh`
 
 The current wording says the remaining non-owner `_mut()` sites are legitimate
 writes. Once this plan lands, that will no longer be true; the comments should
@@ -161,7 +161,7 @@ or narrow setters, not raw `_mut()` calls**.
 
 Minimum gate:
 
-- `scripts/check-repl-mut-reads.sh`
+- `scripts/check-repl-no-mut-reads.sh`
 - `make check-c99`
 - `make test-stubs`
 
