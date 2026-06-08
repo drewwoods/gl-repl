@@ -142,12 +142,9 @@ enum {
     MSGLIST_MAX_W      = 460,
 };
 
-/* Transient-banner animation: the status strip telescopes out of the bell
- * on appear and collapses back into it on expiry, rather than fading. */
-enum {
-    STATUS_ANIM_OPEN_FRAMES  = 12,  /* extend-out duration */
-    STATUS_ANIM_CLOSE_FRAMES = 16,  /* collapse-in duration */
-};
+/* STATUS_ANIM_OPEN_FRAMES / STATUS_ANIM_CLOSE_FRAMES (the telescope-out /
+ * collapse-in durations) live beside UI_STATUS_MESSAGE_TTL in
+ * ui/app/state_types.h, since they carve up that same ttl window. */
 
 /* Build the bell's count label (number only) into buf. */
 static void status_history_button_label(const UiRenderSnapshot *snap,
