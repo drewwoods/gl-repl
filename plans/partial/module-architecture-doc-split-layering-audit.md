@@ -1,7 +1,40 @@
 # Module Architecture Doc Split - Layering Audit
 
-Status: in-review
-Date: 2026-06-05
+Status: partial
+Date: 2026-06-05 (moved to partial 2026-06-08)
+
+## Status summary (partial)
+
+Moved to `plans/partial/` because a meaningful slice of the audit's cleanup
+landed in `main` and stands on its own, while the headline deliverable — the
+actual `ARCHITECTURE.md` → per-module `src/*/ARCHITECTURE.md` split — is
+deliberately deferred until the heavier coupling edges are decided.
+
+**Landed (in `main`):**
+
+- Finding 3 — `replay_annotations.{c,h}` moved out of `src/repl` into
+  `src/subsystems/replay/`; the REPL→replay presentation edge is gone (one-way).
+- Finding 5 — `edit_overlays` no longer reads `src/app`/`src/editor` live state;
+  the controller maps config into the subsystem-local enum and passes
+  cursor / `FlatProgramView` through `OverlayWalkCtx`.
+- Finding 4 (light half) — the REPL/scene `SceneLight` vocabulary edge is split:
+  REPL owns an enable bitmask, the dimensional light table is app-owned, export
+  reads it through a bridge; `state_views.h` no longer includes
+  `scene/render_types.h`.
+
+**Deferred (residual scope):**
+
+- The doc split itself — collapsing root `ARCHITECTURE.md` + `MODULES.md` into a
+  high-level map and adding one canonical per-module deep doc — is **not done**.
+- Finding 1 (app/UI menu/config view-model cycle) and Finding 2 (editor/UI
+  two-way includes): not started; these are the medium-high edges the split
+  should either refactor or explicitly document as current contracts.
+- Finding 4 (guides half) — REPL-aware guide snapshot/walk + `transform_utils.h`
+  still live in `src/scene`.
+- Finding 6 (`ui/app` ↔ `ui/subsystems` internal cycle) and the "doc-exists"
+  structural guard idea: open.
+
+A future reader can resume from this same baseline; nothing here is abandoned.
 
 ## Intent
 
