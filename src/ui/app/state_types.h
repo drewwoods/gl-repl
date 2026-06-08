@@ -14,9 +14,16 @@
 
 /* How long a status-bar message stays visible, in frames (~60 fps, so
  * 360 is roughly 6 s). The banner telescopes out of / back into the
- * messages bell over the first/last frames of this window (see
- * STATUS_ANIM_*_FRAMES in src/ui/app/panels.c). */
+ * messages bell over the first/last frames of this window. */
 #define UI_STATUS_MESSAGE_TTL 360
+
+/* Transient-banner telescope timing, in frames. The status strip extends
+ * out of the messages bell over the first STATUS_ANIM_OPEN_FRAMES of its
+ * life and collapses back into it over the last STATUS_ANIM_CLOSE_FRAMES;
+ * both must stay well under UI_STATUS_MESSAGE_TTL so the hold phase shows.
+ * Consumed by status_anim_from() in src/ui/app/panels.c. */
+#define STATUS_ANIM_OPEN_FRAMES  32
+#define STATUS_ANIM_CLOSE_FRAMES 36
 
 /* Code-panel render chrome: panel divider and per-frame mirrors
  * of the presentation flags renderers need.
