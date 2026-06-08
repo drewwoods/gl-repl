@@ -1124,6 +1124,17 @@ static int route_scene_tab_hit(const UiHit *hit) {
     return 1;  /* out-of-range stale idx — consumed no-op */
 }
 
+/* UI_HIT_STATUS_HISTORY: the bottom messages button (item_idx == 1)
+ * toggles the inline recent-message list; a click on the open list body
+ * (item_idx == 0) is consumed so it doesn't fall through to the scene. */
+static int route_status_history_hit(const UiHit *hit) {
+    if (hit->item_idx == 1) {
+        ui_state_status_history_toggle();
+        editor_request_redraw();
+    }
+    return 1;
+}
+
 /* UI_HIT_PANEL_DIVIDER: start the panel-resize drag. Motion updates
  * panel_frac via editor_handle_motion's resizing-panel branch; UP
  * clears the resizing flag. */
@@ -1228,6 +1239,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_help_toggle_hit(); break;
     case UI_HIT_CODE_PANEL_TAB:
         consumed = route_scene_tab_hit(&hit); break;
+    case UI_HIT_STATUS_HISTORY:
+        consumed = route_status_history_hit(&hit); break;
     case UI_HIT_HELP_PANEL:
     case UI_HIT_REPLAY_BUTTON:
     case UI_HIT_SCENE:

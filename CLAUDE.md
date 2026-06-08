@@ -580,9 +580,9 @@ state-machine level, not buried in the doc body.
 | `src/scene/lights.h` | Scene light setup/render entrypoints |
 | `src/scene/overlays.c` | Tiny per-vertex GL primitives the controller calls (vertex-number labels, normal arrows). Outline / vertex-point passes moved to `src/app/glr_ctrl.c` |
 | `src/scene/overlays.h` | Scene overlay primitive API |
-| `src/ui/app/state.c` | Owns `UiState`: viewport, pointer, status text TTL, panel visibility, panel-divider geometry |
+| `src/ui/app/state.c` | Owns `UiState`: viewport, pointer, status text TTL, recent-message history ring (`ui_state_status_history*`, pushed from the single `ui_state_status_set_kind` chokepoint with consecutive-dup collapse), panel visibility, panel-divider geometry |
 | `src/ui/core/hit.h` | `UiHitKind` + `UiHit` — neutral hit-test result returned by UI input handlers to `glr_ctrl` |
-| `src/ui/app/panels.c` | Code-panel row rendering (incl. inline ghost/hint text), scene status banner, hit-test (returns `UiHit`) |
+| `src/ui/app/panels.c` | Code-panel row rendering (incl. inline ghost/hint text), scene status banner, persistent bottom "messages" button + toggled recent-message history list (`UI_HIT_STATUS_HISTORY`; routed in `glr_ctrl_router.c`), hit-test (returns `UiHit`) |
 | `src/ui/app/panels.h` | Code-panel geometry, render, and hit-test declarations |
 | `src/repl/eval.c` | Expression evaluator (recursive descent), REPL<->C translators, for-loop parsers |
 | `src/repl/eval.h` | Evaluator types (`ExprVar`, `ExprCtx`), function declarations |

@@ -38,6 +38,16 @@ static const float k_status_bar_bg_err[3]   = { 0.290f, 0.078f, 0.078f };
 static const float k_status_bar_edge_err[3] = { 0.137f, 0.027f, 0.027f };
 static const float k_status_bar_fg_err[3]   = { 1.000f, 0.557f, 0.494f };
 
+/* Messages-button + recent-message-list palette. Neutral surfaces (not
+ * theme tokens) so the affordance reads the same across schemes, matching
+ * the deliberately non-accent status banner above. */
+static const float k_msgbtn_bg[4]    = { 0.137f, 0.137f, 0.157f, 0.95f };
+static const float k_msgbtn_bg_lit[4]= { 0.204f, 0.204f, 0.243f, 0.97f };
+static const float k_msgbtn_edge[4]  = { 0.392f, 0.392f, 0.451f, 1.0f };
+static const float k_msgbtn_fg[3]    = { 0.780f, 0.780f, 0.820f };
+static const float k_msglist_bg[4]   = { 0.090f, 0.090f, 0.110f, 0.96f };
+static const float k_msglist_edge[4] = { 0.353f, 0.353f, 0.404f, 1.0f };
+
 void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
                                  UiCodePanelOutput *out) {
     ui_repl_code_panel_render_with_chrome(snap, out);
@@ -118,6 +128,227 @@ static void draw_modal_strip(const UiRenderSnapshot *snap,
     status_strip_end();
 }
 
+/* --- Recent-message ("messages") button + history list --- */
+
+enum {
+    MSGBTN_PAD_X       = 8,   /* label inset each side */
+    MSGLIST_ROW_H      = LINE_H,
+    MSGLIST_PAD        = 4,    /* inner padding around the list text block */
+    MSGLIST_MAX_ROWS   = 10,   /* visible rows cap, also clamped to fit */
+    MSGLIST_MIN_W      = 200,
+    MSGLIST_MAX_W      = 460,
+};
+
+/* Build the button label ("Messages" or "Messages (N)") into buf. */
+static void status_history_button_label(const UiRenderSnapshot *snap,
+                                         char *buf, int cap) {
+    int n = snap->status_history.count;
+    if (n > 0)
+        snprintf(buf, (size_t)cap, "Messages (%d)", n);
+    else
+        snprintf(buf, (size_t)cap, "Messages");
+}
+
+int ui_panels_status_history_button_rect(const UiRenderSnapshot *snap,
+                                          int *x, int *y, int *w, int *h) {
+    int sc_x, sc_y, sc_w, sc_h;
+    int bw, bh;
+    char label[32];
+
+    if (!snap)
+        return 0;
+    /* Nothing to show until at least one message has been recorded; the
+     * ring is session-retained, so once it appears the button stays. */
+    if (snap->status_history.count <= 0)
+        return 0;
+    /* The modal prompt strips own the bottom band; no button while active. */
+    if (snap->rename_active || snap->file_prompt_active)
+        return 0;
+
+    ui_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
+    if (sc_w <= 0 || sc_h <= 0)
+        return 0;
+
+    status_history_button_label(snap, label, (int)sizeof(label));
+    bw = (int)strlen(label) * FONT_SMALL_W + 2 * MSGBTN_PAD_X;
+    bh = STATUSBAR_H;
+    if (bw > sc_w)
+        bw = sc_w;
+
+    if (x) *x = sc_x + sc_w - bw;     /* flush to the scene's right edge */
+    if (y) *y = sc_y;                 /* sits in the status-bar band */
+    if (w) *w = bw;
+    if (h) *h = bh;
+    return 1;
+}
+
+/* List rect (OpenGL bottom-left coords), grown upward from the button.
+ * Returns the number of visible rows (0 when empty / no room). */
+static int status_history_list_rect(const UiRenderSnapshot *snap,
+                                     int *x, int *y, int *w, int *h,
+                                     int *visible_rows) {
+    int bx, by, bw, bh;
+    int sc_x, sc_y, sc_w, sc_h;
+    int count, vis, room_rows, lw, lh, lx, ly;
+
+    if (!ui_panels_status_history_button_rect(snap, &bx, &by, &bw, &bh))
+        return 0;
+    ui_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
+
+    count = snap->status_history.count;
+    if (count <= 0)
+        return 0;
+
+    vis = count;
+    if (vis > MSGLIST_MAX_ROWS)
+        vis = MSGLIST_MAX_ROWS;
+    /* Clamp to the space above the bar so the list never grows off-screen. */
+    room_rows = (sc_y + sc_h - (by + bh) - 2 * MSGLIST_PAD) / MSGLIST_ROW_H;
+    if (room_rows < 1)
+        room_rows = 1;
+    if (vis > room_rows)
+        vis = room_rows;
+
+    lw = MSGLIST_MAX_W;
+    if (lw > sc_w - 2 * CODE_MARGIN_X)
+        lw = sc_w - 2 * CODE_MARGIN_X;
+    if (lw < MSGLIST_MIN_W)
+        lw = MSGLIST_MIN_W;
+    lh = vis * MSGLIST_ROW_H + 2 * MSGLIST_PAD;
+
+    lx = bx + bw - lw;                /* right-align list under the button */
+    if (lx < sc_x)
+        lx = sc_x;
+    ly = by + bh;                     /* directly above the button */
+
+    if (x) *x = lx;
+    if (y) *y = ly;
+    if (w) *w = lw;
+    if (h) *h = lh;
+    if (visible_rows) *visible_rows = vis;
+    return vis;
+}
+
+/* Draw the persistent messages button. Lit when history is open or
+ * non-empty so it reads as a live affordance. */
+static void status_history_render_button(const UiRenderSnapshot *snap) {
+    int bx, by, bw, bh;
+    char label[32];
+    const float *bg;
+
+    if (!ui_panels_status_history_button_rect(snap, &bx, &by, &bw, &bh))
+        return;
+
+    status_history_button_label(snap, label, (int)sizeof(label));
+    bg = (snap->status_history.open || snap->status_history.count > 0)
+             ? k_msgbtn_bg_lit : k_msgbtn_bg;
+
+    glColor4fv(bg);
+    glRectf((float)bx, (float)by, (float)(bx + bw), (float)(by + bh));
+    glColor4fv(k_msgbtn_edge);
+    glBegin(GL_LINE_LOOP);
+    glVertex2f((float)bx + 0.5f, (float)by + 0.5f);
+    glVertex2f((float)(bx + bw) - 0.5f, (float)by + 0.5f);
+    glVertex2f((float)(bx + bw) - 0.5f, (float)(by + bh) - 0.5f);
+    glVertex2f((float)bx + 0.5f, (float)(by + bh) - 0.5f);
+    glEnd();
+
+    int text_y = by + (bh - FONT_SMALL_H) / 2 + 1;
+    glColor3fv(k_msgbtn_fg);
+    gl2d_draw_string((float)(bx + MSGBTN_PAD_X), (float)text_y,
+                     label, FONT_SMALL);
+}
+
+/* Draw the inline history list when the toggle is open. Newest entry sits
+ * at the bottom (just above the button); older rows stack upward, dimmed
+ * by age. ERROR entries take the red status hue, INFO the amber. */
+static void status_history_render_list(const UiRenderSnapshot *snap) {
+    const UiStatusHistory *hist = &snap->status_history;
+    int lx, ly, lw, lh, vis;
+    int max_chars, r;
+
+    if (!hist->open)
+        return;
+    vis = status_history_list_rect(snap, &lx, &ly, &lw, &lh, NULL);
+    if (vis <= 0)
+        return;
+
+    glColor4fv(k_msglist_bg);
+    glRectf((float)lx, (float)ly, (float)(lx + lw), (float)(ly + lh));
+    glColor4fv(k_msglist_edge);
+    glBegin(GL_LINE_LOOP);
+    glVertex2f((float)lx + 0.5f, (float)ly + 0.5f);
+    glVertex2f((float)(lx + lw) - 0.5f, (float)ly + 0.5f);
+    glVertex2f((float)(lx + lw) - 0.5f, (float)(ly + lh) - 0.5f);
+    glVertex2f((float)lx + 0.5f, (float)(ly + lh) - 0.5f);
+    glEnd();
+
+    max_chars = (lw - 2 * MSGLIST_PAD) / FONT_SMALL_W;
+    if (max_chars < 8)
+        max_chars = 8;
+    if (max_chars > REPL_STATUS_TEXT_MAX - 16)
+        max_chars = REPL_STATUS_TEXT_MAX - 16;
+
+    /* r = 0 is the newest, drawn on the bottom row just above the button. */
+    for (r = 0; r < vis; r++) {
+        int ordinal = hist->count - 1 - r;
+        int idx = ui_status_history_index(hist, ordinal);
+        const UiStatusEntry *e;
+        const float *fg;
+        float dim;
+        int ty;
+        char line[REPL_STATUS_TEXT_MAX];
+
+        if (idx < 0)
+            continue;
+        e = &hist->entries[idx];
+        fg = (e->kind == UI_STATUS_ERROR) ? k_status_bar_fg_err
+                                          : k_status_bar_fg;
+        /* Newest at full strength; older rows fade toward 0.45 alpha. */
+        dim = 1.0f - 0.55f * ((float)r / (float)(vis > 1 ? vis - 1 : 1));
+
+        if (e->dup_count > 1)
+            snprintf(line, sizeof(line), "%.*s (x%u)",
+                     max_chars - 8, e->text, e->dup_count);
+        else
+            snprintf(line, sizeof(line), "%.*s", max_chars, e->text);
+
+        ty = ly + MSGLIST_PAD + (vis - 1 - r) * MSGLIST_ROW_H
+             + (MSGLIST_ROW_H - FONT_SMALL_H) / 2;
+        glColor4f(fg[0], fg[1], fg[2], dim);
+        gl2d_draw_string((float)(lx + MSGLIST_PAD), (float)ty, line, FONT_SMALL);
+    }
+}
+
+/* Classify a pointer over the messages button / open list. item_idx == 1
+ * is the button (toggle); item_idx == 0 is the open list body (consume so
+ * the click doesn't fall through to the scene behind it). */
+static UiHit status_history_hit_test(const UiRenderSnapshot *snap,
+                                     int mx, int my) {
+    UiHit h = ui_hit_none();
+    int win_h = snap->viewport.window_h;
+    int ry = win_h - my;
+    int bx, by, bw, bh;
+
+    if (ui_panels_status_history_button_rect(snap, &bx, &by, &bw, &bh) &&
+        mx >= bx && mx < bx + bw && ry >= by && ry < by + bh) {
+        h.kind = UI_HIT_STATUS_HISTORY;
+        h.item_idx = 1;
+        return h;
+    }
+
+    if (snap->status_history.open) {
+        int lx, ly, lw, lh;
+        if (status_history_list_rect(snap, &lx, &ly, &lw, &lh, NULL) > 0 &&
+            mx >= lx && mx < lx + lw && ry >= ly && ry < ly + lh) {
+            h.kind = UI_HIT_STATUS_HISTORY;
+            h.item_idx = 0;
+            return h;
+        }
+    }
+    return h;
+}
+
 void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
     if (snap->rename_active) {
         char msg[REPL_STATUS_TEXT_MAX];
@@ -141,6 +372,20 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
                          snap->file_prompt_text);
         draw_modal_strip(snap, msg, n, (int)sizeof(msg));
         return;
+    }
+
+    /* Persistent messages button + (when open) the recent-message list.
+     * Rendered before the transient banner's ttl gate so the button stays
+     * visible even with no active message. The list draws under the bar
+     * band but is layered first; the button paints on top of both. */
+    {
+        gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        status_history_render_list(snap);
+        status_history_render_button(snap);
+        glDisable(GL_BLEND);
+        gl2d_end();
     }
 
     UiStatusState status = snap->status;
@@ -196,6 +441,13 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
 
         tx = badge_x + badge_d + 8;
         max_px = f.sc_x + f.sc_w - CODE_MARGIN_X - tx;
+        /* Stop short of the right-anchored messages button so the banner
+         * text never slides under it. */
+        {
+            int bx, by, bw, bh;
+            if (ui_panels_status_history_button_rect(snap, &bx, &by, &bw, &bh))
+                max_px = bx - 8 - tx;
+        }
         max_chars = max_px / FONT_SMALL_W;
         if (max_chars < 8)
             max_chars = 8;
@@ -289,6 +541,14 @@ UiHit ui_panels_hit_test(const UiRenderSnapshot *snap,
         UiHit code_hit = ui_repl_code_panel_hit_test(snap, mx, my);
         if (code_hit.kind != UI_HIT_NONE)
             return code_hit;
+    }
+
+    /* Messages button / open history list sit over the bottom-right of
+     * the scene, after the code panel so an overlapping panel still wins. */
+    {
+        UiHit msg_hit = status_history_hit_test(snap, mx, my);
+        if (msg_hit.kind != UI_HIT_NONE)
+            return msg_hit;
     }
 
     hit.kind = UI_HIT_SCENE;

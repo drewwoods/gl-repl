@@ -1070,6 +1070,7 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->profile_panel  = ui_state_profile_panel();
     snap->memory_panel   = ui_state_memory_panel();
     snap->status         = ui_state_status();
+    snap->status_history = ui_state_status_history();
     /* Count of structurally unbalanced bracket commands, surfaced as a
      * persistent segment in the editor statusbar (the gutter markers,
      * pushed in glr_ctrl_push_highlights, pinpoint the lines). */

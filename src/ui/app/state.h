@@ -19,6 +19,7 @@
 
 typedef struct {
     UiStatusState           status;
+    UiStatusHistory         status_history;
     UiHelpState             help;
     UiProfilePanelState     profile_panel;
     UiMemoryPanelState      memory_panel;
@@ -36,6 +37,13 @@ UiStatusState  ui_state_status(void);
 UiStatusState *ui_state_status_mut(void);
 void             ui_state_status_set(const char *message);
 void             ui_state_status_set_error(const char *message);
+
+/* Recent-message history ring (session-only). Every status message is
+ * pushed here by the private set-kind chokepoint; the inline viewer's
+ * open/closed toggle rides along on the same struct. */
+UiStatusHistory  ui_state_status_history(void);
+void             ui_state_status_history_set_open(int open);
+void             ui_state_status_history_toggle(void);
 
 /* Help overlay visibility. */
 UiHelpState  ui_state_help(void);

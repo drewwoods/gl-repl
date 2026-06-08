@@ -867,6 +867,7 @@ TEST_BINS += test_export_trace_parity
 # real GL context.
 TEST_BINS += test_replay_walk
 TEST_BINS += test_ui_panels
+TEST_BINS += test_ui_status_history
 TEST_BINS += test_edit_overlays
 TEST_BINS += test_ui_memprof
 TEST_BINS += test_ui_cpuprof

@@ -77,6 +77,7 @@ typedef struct UiRenderSnapshot {
     UiProfilePanelState       profile_panel;
     UiMemoryPanelState        memory_panel;
     UiStatusState             status;
+    UiStatusHistory           status_history;
     EditorSearchState             search;
     EditorAutocompleteState       autocomplete;
     UiPointerState            pointer;
