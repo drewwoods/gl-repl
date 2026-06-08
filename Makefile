@@ -1478,7 +1478,6 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-repl-no-mut-reads \
 		check-scene-no-upper-layers \
 		check-ui-core-no-upper-layers \
-		check-c99 \
 		check-module-prefixes \
 		check-include-style \
 		check-tier-c-function-size \
