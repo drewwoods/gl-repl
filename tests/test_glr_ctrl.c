@@ -2158,6 +2158,10 @@ static void test_app_lifecycle_bootstrap_shutdown(void) {
 }
 
 static void test_init_gl_requires_loaded_point_parameter_proc(void) {
+#ifndef GL_STUBS
+    printf("Run `make test_glr_ctrl USE_GL_STUBS=1` for init_gl point-parameter loader coverage.\n");
+    return;
+#endif
     g_test_point_parameter_loader_calls = 0;
     g_glr_ctrl_point_parameter_loader = test_missing_point_parameter_loader;
     glr_ctrl_init_gl();
