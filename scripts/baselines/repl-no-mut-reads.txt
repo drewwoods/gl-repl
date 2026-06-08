@@ -1,4 +1,4 @@
-# Baseline for scripts/check-repl-mut-reads.sh.
+# Baseline for scripts/check-repl-no-mut-reads.sh.
 #
 # Counts `_mut(` call sites in src/repl/*.c outside the owner files
 # (state.c, apply.c, command_store.c, eval.c). The ratchet prevents

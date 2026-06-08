@@ -831,8 +831,8 @@ the latent simulator bug already documented under #3's status
 follow-up. Routing it through `repl_eval_predef_view()` is a
 larger correctness change tied to that fix.
 
-Ratchet: `scripts/check-repl-mut-reads.sh` +
-`scripts/baselines/repl-mut-reads.txt` (current count: 10/10).
+Ratchet: `scripts/check-repl-no-mut-reads.sh` +
+`scripts/baselines/repl-no-mut-reads.txt` (current count: 10/10).
 Wired into the `check-state-ownership` aggregate. The script greps
 for `[a-zA-Z_][a-zA-Z0-9_]*_mut\(` call sites in `src/repl/*.c`,
 skipping the owner files (`state.c`, `apply.c`, `command_store.c`,
@@ -2072,7 +2072,7 @@ externalizing the once-shared `WORKSPACE_DIRECTIVES`. Both files
 duplicate the `IMPORT_EXPORT_STATE` macro block verbatim with a
 comment marking them as a mirrored pair. Makefile and the
 `scripts/check-repl-export-*.sh` ratchets were extended to cover
-`import.c`; `scripts/baselines/repl-mut-reads.txt` bumped from 10
+`import.c`; `scripts/baselines/repl-no-mut-reads.txt` bumped from 10
 to 11 for the duplicated state-owner macro hit. `CLAUDE.md`'s
 MODULES table grew a sibling row for the new file.
 
