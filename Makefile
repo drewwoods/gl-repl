@@ -112,11 +112,21 @@ RELEASE_CFLAGS = \
 	$(COMMON_CFLAGS) \
 	-O2
 
+ifeq ($(NOSAN),1)
+NO_SAN := 1
+endif
+
+ifeq ($(NO_SAN),1)
+DEBUG_CFLAGS = \
+	$(COMMON_CFLAGS) \
+	-O0
+else
 DEBUG_CFLAGS = \
 	$(COMMON_CFLAGS) \
 	-O0 \
 	-fsanitize=address -fno-omit-frame-pointer \
 	-fsanitize=undefined -fno-sanitize-recover=undefined
+endif
 
 COVERAGE_CFLAGS = \
 	$(COMMON_CFLAGS) \
@@ -1881,6 +1891,7 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "                 e.g. make gl-repl CPPFLAGS=-DUI_THEME_DEFAULT=1. Defined in\n"
 	@printf "                 config.h, range-checked in src/ui/core/theme.h. See\n"
 	@printf "                 ARCHITECTURE.md > UI Color Theming.\n"
+	@printf "                 NO_SAN=1 (or NOSAN=1) disables ASan/UBSan sanitizers in debug builds.\n"
 	@printf "User CFLAGS are appended to the selected build mode.\n\n"
 	@printf "Tests:           make test runs test binaries in parallel; set TEST_JOBS=N to limit jobs.\n\n"
 	@printf "Individual tests can still be built directly, e.g. make test_eval or make test_repl_core_io.\n\n"
