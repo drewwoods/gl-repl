@@ -1633,8 +1633,14 @@ static int import_try_snippet_body_line(ImportState *s, const char *p) {
 static void import_process_line(ImportState *s, const char *p, const char *raw) {
     /* Camera-state lines appear both in the pre-snippet header and inside the
      * display() body that wraps the snippet, so they are recognised any time
-     * we are not already inside a snippet. */
-    if (!s->in_snippet && import_try_camera(p))                return;
+     * we are not already inside a snippet. They live at top level (the
+     * g_angle preamble) or inside display() — never inside a user funcN body,
+     * which the importer tracks with func_depth > 0. Gate on func_depth == 0
+     * so the greedy camera state machine doesn't consume a user function's
+     * own glTranslatef/glRotatef calls (e.g. a drawWhale() helper exported
+     * before display()), which would corrupt both that function and the
+     * real camera block that follows it. */
+    if (!s->in_snippet && s->func_depth == 0 && import_try_camera(p)) return;
 
     /* Everything after Snippet end is discarded. */
     if (s->past_snippet)                                       return;
