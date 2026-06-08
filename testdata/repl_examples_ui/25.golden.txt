@@ -9,7 +9,7 @@
 /* @cfg replay_expand = 1 */
 /* @cfg grid = GRID_THEME_OCEAN */
 /* @cfg grid_major = 0 */
-/* @cfg grid_extent = 2 */
+/* @cfg grid_extent = 1 */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg xform_guides = 2 */
 /* @cfg light_indicators = 1 */
@@ -236,7 +236,7 @@ void display(void) {
   }
 
   glBegin(GL_POINTS);
-    for(i, 0, 350) {
+    for(i, 0, 250) {
       launchVelX = 3 * rand2(i,1);
       launchVelY = 2 + 2 * rand(i, 2);
       launchVelZ = 3 * rand2(i, 3);
@@ -247,12 +247,11 @@ void display(void) {
       if((t - spawnDelay) > 0 && ( t <= ceil(emitDuration/particleLife)*particleLife + spawnDelay)) {
         particleAge = fmod(t - spawnDelay, particleLife);
 
-        computeDriftX(particleAge, blowHoleX + 0.1 + rand2(i, 5) * 0.05);
+        computeDriftX(particleAge, blowHoleX);
         computeVerticalMotion(particleAge, blowHoleY);
-        computeDriftZ(particleAge, blowHoleZ+ rand2(i, 6) * 0.05);
+        computeDriftZ(particleAge, blowHoleZ);
 
-        glVertex3f(particleX, particleY, particleZ);
-
+        glVertex3f(particleX + 0.05, particleY, particleZ);
       }
     }
   glEnd();
