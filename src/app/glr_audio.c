@@ -528,6 +528,48 @@ static int worker_load(int idx, float seek_secs) {
     return 0;
 }
 
+/* Worker-only. Start at `idx`, and if that file fails to open, walk
+ * forward through the rest of the playlist once looking for the next
+ * playable entry. Only the originally-requested track inherits the
+ * saved seek offset; fallback tracks start from the top. Retries abort
+ * if a newer request supersedes this one or the playlist changes under
+ * us. */
+static int worker_start_or_fallback(int idx, float seek_secs) {
+    int count;
+
+    audio_lock();
+    count = g_playlist_count;
+    audio_unlock();
+
+    if (idx < 0 || idx >= count)
+        return -1;
+
+    for (int attempt = 0; attempt < count; attempt++) {
+        if (attempt > 0) {
+            int superseded;
+            int cur_count;
+
+            audio_lock();
+            superseded = (g_req != AWR_NONE) || g_load_cancelled;
+            cur_count = g_playlist_count;
+            audio_unlock();
+
+            if (superseded || cur_count != count)
+                return -1;
+        }
+
+        {
+            int cur = idx + attempt;
+            if (cur >= count)
+                cur -= count;
+            if (worker_load(cur, attempt == 0 ? seek_secs : GLR_AUDIO_NO_SEEK) == 0)
+                return 0;
+        }
+    }
+
+    return -1;
+}
+
 /* Worker-only. The current track ended; advance per loop mode. Caps
  * attempts at playlist_count so a folder of broken files can't spin
  * forever (the skip-broken loop migrated here from glr_audio_tick so it
@@ -582,7 +624,7 @@ static void *audio_worker_main(void *arg) {
 
         double t0 = worker_now_ms();
         const char *op = "save-only";
-        if (k == AWR_START)        { op = "load";    worker_load(idx, seek); }
+        if (k == AWR_START)        { op = "load";    worker_start_or_fallback(idx, seek); }
         else if (k == AWR_ADVANCE) { op = "advance"; worker_advance(); }
         else if (k == AWR_UNINIT)  { op = "uninit";  worker_uninit_all(); }
 

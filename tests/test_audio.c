@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 double glr_audio_hitch_threshold_ms_for_test(void);
 
@@ -10,6 +11,23 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 
 #define ASSERT_TRUE(label, cond) \
     TEST_ASSERT_TRUE(&g_harness, label, cond)
+
+static int wait_for_current_track(const char *expected_path,
+                                  unsigned int baseline_generation,
+                                  int timeout_ms) {
+    int polls = timeout_ms / 10;
+    if (polls < 1)
+        polls = 1;
+    for (int i = 0; i < polls; i++) {
+        const char *current = glr_audio_get_current_track();
+        if (glr_audio_track_generation() > baseline_generation &&
+            current && strcmp(current, expected_path) == 0)
+            return 1;
+        glr_audio_tick();
+        usleep(10000);
+    }
+    return 0;
+}
 
 int main() {
     printf("--- repl_audio tests ---\n");
@@ -233,6 +251,38 @@ int main() {
 
             ASSERT_TRUE("set_playlist cancelled prior load", 1);
             glr_audio_shutdown();
+        }
+
+        /* 10. A saved-but-broken resume track should fall forward to the
+         * next playable playlist entry instead of stopping on the error. */
+        {
+            const char *state_file = "test_audio_missing_resume.ini";
+            const char *missing = "assets/does_not_exist.mp3";
+            const char *fallback = "assets/sample.mp3";
+            const char *tracks[] = { missing, fallback };
+            FILE *f = NULL;
+            unsigned int base_generation;
+
+            remove(state_file);
+            ASSERT_TRUE("resume-fallback: init", glr_audio_init() == 0);
+            glr_audio_set_state_file(state_file);
+            f = fopen(state_file, "w");
+            ASSERT_TRUE("resume-fallback: state file opened", f != NULL);
+            if (f) {
+                fprintf(f, "track=%s\n", missing);
+                fprintf(f, "offset=12.500\n");
+                fclose(f);
+            }
+
+            glr_audio_set_playlist(tracks, 2);
+            base_generation = glr_audio_track_generation();
+            ASSERT_TRUE("resume-fallback: play requested",
+                        glr_audio_play_playlist() == 0);
+            ASSERT_TRUE("resume-fallback: skipped to next playable track",
+                        wait_for_current_track(fallback, base_generation, 2000));
+
+            glr_audio_shutdown();
+            remove(state_file);
         }
     } else {
         printf("Skipping engine-active tests as init failed.\n");
