@@ -868,6 +868,8 @@ TEST_BINS += test_export_trace_parity
 TEST_BINS += test_replay_walk
 TEST_BINS += test_ui_panels
 TEST_BINS += test_edit_overlays
+TEST_BINS += test_ui_memprof
+TEST_BINS += test_ui_cpuprof
 endif
 
 CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_repl_code_panel_layout test_ui_theme test_scene_palette test_audio,$(TEST_BINS))
