@@ -1530,6 +1530,48 @@ static void test_replay_focus_vertex_affecting_transforms(void) {
                count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 8), 1);
 }
 
+/* A glutSolid* is a replay draw anchor too (it emits no REPL vertex but vertex
+ * stepping stops on it). The replay affecting-transform highlight must reach
+ * the transforms shaping the focused glut solid, just like for a vertex. */
+static void test_replay_focus_glut_solid_affecting_transforms(void) {
+    printf("--- imrepl_ctrl replay focus glut-solid affecting transforms ---\n");
+
+    glr_ctrl_reset_all();
+    editor_feed_line("glTranslatef(1, 0, 0);");   /* 0 */
+    editor_feed_line("glutSolidCube(1);");         /* 1 */
+    editor_feed_line("glRotatef(45, 0, 0, 1);");   /* 2 */
+    editor_feed_line("glutSolidSphere(1, 8, 8);"); /* 3 */
+    repl_flatten_commands(editor_state_edit_line());
+    /* flat: TRANSLATE(0) GLUT_CUBE(1) ROTATE(2) GLUT_SPHERE(3) */
+
+    /* Park the edit cursor off the solids so the highlight is provably driven
+     * by the replay anchor, not the cursor. */
+    editor_insert_mode_set(0);
+    editor_state_edit_line_set(0);
+
+    replay_start();
+    replay_state_mut()->state = REPLAY_PAUSED;
+    replay_state_mut()->mode = REPLAY_MODE_VERTEX;
+
+    /* First solid (cube): only translate@0 is in scope. */
+    replay_advance(repl_state_flat_program_view());
+    glr_ctrl_push_highlights();
+    ASSERT_INT("cube anchor highlights the translate",
+               count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 0), 1);
+    ASSERT_INT("cube anchor does NOT show the later rotate",
+               count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 2), 0);
+
+    /* Second solid (sphere): translate@0 and rotate@2 are both in scope. */
+    replay_advance(repl_state_flat_program_view());
+    glr_ctrl_push_highlights();
+    ASSERT_INT("sphere anchor shows the translate",
+               count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 0), 1);
+    ASSERT_INT("sphere anchor shows the rotate",
+               count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 2), 1);
+
+    replay_stop();
+}
+
 /* Audit #41 prep: route_numeric_swatch_hit open-codes 68 lines of
  * compile + parse + ReplCompiledChange construction + apply + reload
  * inside the controller's router. The audit proposes extracting that
@@ -2181,6 +2223,7 @@ int main(void) {
     test_display_frame_follows_replay_line_after_tick();
     test_replay_call_site_highlights_are_pushed();
     test_replay_focus_vertex_affecting_transforms();
+    test_replay_focus_glut_solid_affecting_transforms();
     test_numeric_swatch_step_commits_line_and_undoes();
     test_numeric_swatch_no_op_outside_numeric_arg();
     test_numeric_swatch_no_op_in_insert_mode();

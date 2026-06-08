@@ -241,7 +241,7 @@ static SceneGuideSnapshot glr_ctrl_build_guide_snapshot(const SceneRenderConfig 
     SceneGuideSnapshot snapshot = {
         .show_guides = (presentation.xform_guide_mode != SCENE_XFORM_GUIDE_OFF),
         .replaying = replay_active(),
-        .replay_focus_vertex_flat_idx = replay_focus_vertex_flat_idx(),
+        .replay_focus_anchor_flat_idx = replay_focus_anchor_flat_idx(),
         .xform_guide_mode = presentation.xform_guide_mode,
         .user_lighting_enabled = config ? config->user_lighting_enabled : 0,
         .anim_time = vars.anim_time,
@@ -429,18 +429,20 @@ static void glr_ctrl_push_highlights(void) {
         }
     }
 
-    /* Affecting-transform highlight anchored on the replay-focused vertex
-     * (req 5). replay_focus_vertex_flat_idx() is a flat index (vertex mode
-     * only; -1 otherwise), so feed it straight to the req-4 exact-flat
-     * resolver — no source→flat mapping needed. This shows the transforms
-     * shaping the vertex currently being replayed, independent of where the
-     * edit cursor sits, and composes with the replay PC / call-site markers. */
+    /* Affecting-transform highlight anchored on the replay-focused draw
+     * (req 5). replay_focus_anchor_flat_idx() is a flat index (vertex mode
+     * only; -1 otherwise) of the draw the step emitted — a glVertex/gluVertex
+     * or a glutSolid* — so feed it straight to the req-4 exact-flat resolver,
+     * which already accepts any repl_cmd_consumes_current_color target. This
+     * shows the transforms shaping the draw currently being replayed,
+     * independent of where the edit cursor sits, and composes with the replay
+     * PC / call-site markers. */
     if (replay_active()) {
-        int focus_vertex = replay_focus_vertex_flat_idx();
-        if (focus_vertex >= 0) {
+        int focus_anchor = replay_focus_anchor_flat_idx();
+        if (focus_anchor >= 0) {
             int xform_lines[MAX_AFFECTING_TRANSFORMS];
             int xform_count = repl_find_affecting_transforms_for_flat_vertex(
-                focus_vertex, xform_lines, MAX_AFFECTING_TRANSFORMS);
+                focus_anchor, xform_lines, MAX_AFFECTING_TRANSFORMS);
             for (int i = 0; i < xform_count; i++)
                 editor_state_highlights_append(xform_lines[i], -1, -1,
                                                     HIGHLIGHT_AFFECTING_TRANSFORM);

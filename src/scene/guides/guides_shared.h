@@ -16,10 +16,11 @@
 typedef struct SceneGuideSnapshot {
     int show_guides;
     int replaying;
-    /* Flat-program index of the vertex the active replay step emitted, or -1.
-     * When replaying with guides on, the frame-axes overlay draws the local
-     * coordinate frame at this vertex. Set from replay_focus_vertex_flat_idx(). */
-    int replay_focus_vertex_flat_idx;
+    /* Flat-program index of the draw the active replay step emitted, or -1 —
+     * a glVertex / gluVertex *or* a glutSolid*. When replaying with guides on,
+     * the live transform guide anchors on the transform shaping this draw. Set
+     * from replay_focus_anchor_flat_idx(). */
+    int replay_focus_anchor_flat_idx;
     SceneXformGuideMode xform_guide_mode;
     int user_lighting_enabled;
     float anim_time;

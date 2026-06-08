@@ -143,11 +143,12 @@ int    replay_total_flat(void);      /* .total_flat_cmds — captured at start *
  * inactive or the step has no focus-candidate command. */
 int    replay_focus_flat_idx(void);
 
-/* Flat-program index of the vertex command the current replay step emitted —
- * the last repl_cmd_emits_vertex() command in the active step range. Used to
- * anchor the replay frame-axes overlay on that exact vertex. Returns -1 when
- * replay is inactive, not in vertex mode, or the step emitted no vertex. */
-int    replay_focus_vertex_flat_idx(void);
+/* Flat-program index of the draw the current replay step emitted — the last
+ * repl_cmd_consumes_current_color() command (glVertex / gluVertex *or* a
+ * glutSolid*) in the active step range. Used to anchor the replay affecting-
+ * transform highlight and the live transform guide on that exact draw. Returns
+ * -1 when replay is inactive, not in vertex mode, or the step emitted no draw. */
+int    replay_focus_anchor_flat_idx(void);
 
 /* --- Handler API ---
  *

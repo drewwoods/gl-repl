@@ -296,7 +296,7 @@ static void test_replay_transform_guide_render(void) {
     SceneGuideSnapshot snapshot =
         base_snapshot(source_cmds, 2, flat_cmds, 2, -1, "");
     snapshot.replaying = 1;
-    snapshot.replay_focus_vertex_flat_idx = 1;
+    snapshot.replay_focus_anchor_flat_idx = 1;
     snapshot.alpha_scale = 1.0f;
     snapshot.anim_time = 0.0f;
     snapshot.xform_guide_mode = SCENE_XFORM_GUIDE_FRAME;
@@ -603,7 +603,7 @@ int main(void) {
         SceneGuideSnapshot snapshot =
             base_snapshot(source_cmds, 3, flat_cmds, 3, -1, "");
         snapshot.replaying = 1;
-        snapshot.replay_focus_vertex_flat_idx = 2;
+        snapshot.replay_focus_anchor_flat_idx = 2;
 
         /* (b) Default: no cursor transform selected → nearest in-scope
          * affecting transform before the vertex is the rotate (flat idx 1). */
@@ -652,7 +652,7 @@ int main(void) {
         SceneGuideSnapshot snapshot =
             base_snapshot(source_cmds, 1, flat_cmds, 1, -1, "");
         snapshot.replaying = 1;
-        snapshot.replay_focus_vertex_flat_idx = 0;
+        snapshot.replay_focus_anchor_flat_idx = 0;
         ASSERT_INT("replay vertex with no transforms → no plan",
                    scene_transform_guides_prepare(&snapshot, &plan), 0);
         ASSERT_INT("no plan is inactive", plan.active, 0);
@@ -680,11 +680,36 @@ int main(void) {
         SceneGuideSnapshot snapshot =
             base_snapshot(source_cmds, 5, flat_cmds, 5, -1, "");
         snapshot.replaying = 1;
-        snapshot.replay_focus_vertex_flat_idx = 4;
+        snapshot.replay_focus_anchor_flat_idx = 4;
         ASSERT_INT("replay skips popped transform, prepares a plan",
                    scene_transform_guides_prepare(&snapshot, &plan), 1);
         ASSERT_INT("popped translate excluded; rotate chosen",
                    plan.cursor_flat_idx, 3);
+    }
+
+    /* The replay anchor can be a glutSolid* (no REPL vertex). It still picks up
+     * the affecting transform and prepares a plan exactly like a vertex anchor.
+     * Flat program: 0 translate(src0)  1 glutSolidCube(src1). */
+    {
+        GLCmd source_cmds[2] = {0};
+        GLCmd flat_cmds[2] = {0};
+        SceneTransformGuidePlan plan;
+
+        source_cmds[0].type = CMD_TRANSLATE3F; source_cmds[0].valid = 1;
+        source_cmds[1].type = CMD_GLUT_CUBE;   source_cmds[1].valid = 1;
+
+        flat_cmds[0].type = CMD_TRANSLATE3F; flat_cmds[0].valid = 1; flat_cmds[0].src_cmd_idx = 0;
+        flat_cmds[1].type = CMD_GLUT_CUBE;   flat_cmds[1].valid = 1; flat_cmds[1].src_cmd_idx = 1;
+
+        SceneGuideSnapshot snapshot =
+            base_snapshot(source_cmds, 2, flat_cmds, 2, -1, "");
+        snapshot.replaying = 1;
+        snapshot.replay_focus_anchor_flat_idx = 1; /* the glut solid */
+        ASSERT_INT("replay glut-solid anchor prepares a plan",
+                   scene_transform_guides_prepare(&snapshot, &plan), 1);
+        ASSERT_INT("glut-solid anchor focuses the translate",
+                   plan.cursor_flat_idx, 0);
+        ASSERT_INT("glut-solid anchor plan active", plan.active, 1);
     }
 
 #ifdef GL_STUBS

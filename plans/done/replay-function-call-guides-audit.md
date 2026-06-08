@@ -431,3 +431,28 @@ Reqs 1-3 are done. The remaining order is 4 → 5 → 6:
   in-scope affecting transform before that vertex.
 - Existing untracked files `new_scene.c` and `parametric_torus_nested_for.c`
   are unrelated to this audit.
+
+## Follow-up: glut-solid replay anchors (2026-06-08)
+
+Reqs 5/6 originally fired only when replay parked on a true vertex
+(`repl_cmd_emits_vertex`: glVertex/gluVertex), even though vertex stepping
+already stops on each `glutSolid*` (`replay_next_vertex_limit`) and the
+live-cursor affecting-transform path (req 4) already covered glut solids via
+`repl_cmd_consumes_current_color`. So replay parked on a cube/sphere showed no
+affecting-transform highlight (req 5) and no transform guide (req 6) — an
+asymmetry with the cursor path.
+
+Resolved by broadening the replay focus to a **draw anchor** (a vertex *or* a
+glutSolid*): `replay_focus_vertex_flat_idx()` → `replay_focus_anchor_flat_idx()`
+keyed on `repl_cmd_consumes_current_color()` (`replay_playback.c`), the snapshot
+field renamed to `replay_focus_anchor_flat_idx` (`guides_shared.h`), and the
+req-6 prepare gate relaxed to the same predicate (`transform_guides.c`). Neither
+consumer needs a vertex *position* (the highlight only walks transforms back
+from the flat index; the guide draws in the transform's own frame), so a glut
+solid — which carries shape params, not a position — works unchanged. The
+req-5 resolver `repl_find_affecting_transforms_for_flat_vertex` already accepted
+any `consumes_current_color` target, so it needed no change. gluVertex was
+already covered (it is part of `repl_cmd_emits_vertex`). Tests:
+`test_replay_focus_anchor_glut_solid` (`test_repl_replay.c`), a glut-solid
+replay prepare case (`test_scene_guides.c`), and
+`test_replay_focus_glut_solid_affecting_transforms` (`test_glr_ctrl.c`).
