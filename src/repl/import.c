@@ -47,14 +47,24 @@
  * The two definitions must stay in lockstep — both TUs reach the same
  * state-owner facade (repl_state_import_export_mut). When you change
  * the macro list here, change it there too. */
-#define IMPORT_EXPORT_STATE (repl_state_import_export_mut())
-#define g_workspace_header_lines (IMPORT_EXPORT_STATE->workspace_header_lines)
-#define g_workspace_header_line_count (IMPORT_EXPORT_STATE->workspace_header_line_count)
-#define g_render_state_lines (IMPORT_EXPORT_STATE->render_state_lines)
-#define g_cam_lines (IMPORT_EXPORT_STATE->cam_lines)
-#define g_export_scene_name_hint (IMPORT_EXPORT_STATE->export_scene_name_hint)
-#define g_pending_scene_name (IMPORT_EXPORT_STATE->pending_scene_name)
-#define g_pending_workspace_dir (IMPORT_EXPORT_STATE->pending_workspace_dir)
+#define IMPORT_EXPORT_VIEW     (repl_state_import_export())
+#define IMPORT_EXPORT_WRITABLE (repl_state_import_export_writable())
+
+#define g_workspace_header_lines      (IMPORT_EXPORT_VIEW.workspace_header_lines)
+#define g_workspace_header_line_count (IMPORT_EXPORT_VIEW.workspace_header_line_count)
+#define g_render_state_lines          (IMPORT_EXPORT_VIEW.render_state_lines)
+#define g_cam_lines                   (IMPORT_EXPORT_VIEW.cam_lines)
+#define g_export_scene_name_hint      (IMPORT_EXPORT_VIEW.export_scene_name_hint)
+#define g_pending_scene_name          (IMPORT_EXPORT_VIEW.pending_scene_name)
+#define g_pending_workspace_dir       (IMPORT_EXPORT_VIEW.pending_workspace_dir)
+
+#define g_workspace_header_lines_writable      (IMPORT_EXPORT_WRITABLE->workspace_header_lines)
+#define g_workspace_header_line_count_writable (IMPORT_EXPORT_WRITABLE->workspace_header_line_count)
+#define g_render_state_lines_writable          (IMPORT_EXPORT_WRITABLE->render_state_lines)
+#define g_cam_lines_writable                   (IMPORT_EXPORT_WRITABLE->cam_lines)
+#define g_export_scene_name_hint_writable      (IMPORT_EXPORT_WRITABLE->export_scene_name_hint)
+#define g_pending_scene_name_writable          (IMPORT_EXPORT_WRITABLE->pending_scene_name)
+#define g_pending_workspace_dir_writable       (IMPORT_EXPORT_WRITABLE->pending_workspace_dir)
 
 #include "repl/cfg_baseline.h"
 
@@ -191,15 +201,15 @@ static void import_header_warn(const char *fmt, ...) {
 static int parse_workspace_dir(const char *args) {
     size_t char_idx = 0;
     while (*args && char_idx < REPL_WORKSPACE_DIR_MAX - 1)
-        g_pending_workspace_dir[char_idx++] = *args++;
-    g_pending_workspace_dir[char_idx] = '\0';
+        g_pending_workspace_dir_writable[char_idx++] = *args++;
+    g_pending_workspace_dir_writable[char_idx] = '\0';
     /* More source left over the cap means the path was clipped — a
      * truncated path points at the wrong directory, so don't do it silently. */
     if (*args)
         import_header_warn("@workspace-dir path exceeds the %d-char limit; truncated",
                            (int)REPL_WORKSPACE_DIR_MAX - 1);
-    while (char_idx > 0 && isspace((unsigned char)g_pending_workspace_dir[char_idx - 1]))
-        g_pending_workspace_dir[--char_idx] = '\0';
+    while (char_idx > 0 && isspace((unsigned char)g_pending_workspace_dir_writable[char_idx - 1]))
+        g_pending_workspace_dir_writable[--char_idx] = '\0';
     return 1;
 }
 
@@ -208,13 +218,13 @@ static int parse_workspace_dir(const char *args) {
 static int parse_scene_name(const char *args) {
     size_t char_idx = 0;
     while (*args && char_idx < USER_SCENE_NAME_MAX - 1)
-        g_pending_scene_name[char_idx++] = *args++;
-    g_pending_scene_name[char_idx] = '\0';
+        g_pending_scene_name_writable[char_idx++] = *args++;
+    g_pending_scene_name_writable[char_idx] = '\0';
     if (*args)
         import_header_warn("@scene-name exceeds the %d-char limit; truncated to '%s'",
                            (int)USER_SCENE_NAME_MAX - 1, g_pending_scene_name);
-    while (char_idx > 0 && isspace((unsigned char)g_pending_scene_name[char_idx - 1]))
-        g_pending_scene_name[--char_idx] = '\0';
+    while (char_idx > 0 && isspace((unsigned char)g_pending_scene_name_writable[char_idx - 1]))
+        g_pending_scene_name_writable[--char_idx] = '\0';
     return 1;
 }
 
@@ -1653,10 +1663,10 @@ static void import_process_line(ImportState *s, const char *p, const char *raw) 
  * repl_export_apply_pending_cfg() drain, which would otherwise re-apply
  * stale slugs from the failed import). */
 static void repl_export_load_reset_accumulators(void) {
-    g_deferred_var_count       = 0;
-    g_import_header_warnings   = 0;
-    g_pending_scene_name[0]    = '\0';
-    g_pending_workspace_dir[0] = '\0';
+    g_deferred_var_count           = 0;
+    g_import_header_warnings       = 0;
+    g_pending_scene_name_writable[0]    = '\0';
+    g_pending_workspace_dir_writable[0] = '\0';
     import_cfg_accumulator_reset();
 }
 

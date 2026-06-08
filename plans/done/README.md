@@ -98,6 +98,7 @@ historical context and are not in the table below.
 | `ply-feedback-export.md` | 2026-05-31 | `GL_FEEDBACK`-capture PLY mesh export: vertex colors, GLUT solid geometry, authored normals via texcoord channel, optional sRGB decode. |
 | `headless-gif-generator.md` | 2026-06-01 | OSMesa headless frame capture (`FREEGLUT_CAPTURE_FRAMES`) + `scripts/record-gif.sh` → animated GIF/MP4 via ffmpeg. |
 | `vendor-freeglut.md` | 2026-06-02 | Vendor freeglut as in-tree static library (`third_party/freeglut/`), Cocoa backend, `scripts/vendor-freeglut.sh` re-pin, `THIRD_PARTY_LICENSES.md` acknowledgement. |
+| `remove-remaining-repl-mut-reads.md` | 2026-06-08 | Finalized REPL state-access pattern: targeted setters and `_writable()` accessors in `state_owners.h`; zeroed the `_mut()` read ratchet across all non-owner modules. |
 
 Plans not in this directory are active, not-started, not-landed, or
 external; see the sibling subdirectories.

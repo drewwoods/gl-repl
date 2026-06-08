@@ -708,7 +708,7 @@ int repl_flatten_program(const ReplFlattenOptions *options,
 }
 
 void repl_flatten_commands(int edit_line_idx) {
-    ReplFlatProgramState *flat_program = repl_state_flat_program_mut();
+    ReplFlatProgramState *flat_program = repl_state_flat_program_writable();
     ReplFlattenOptions options = {
         .source_cmds = repl_state_document_cmds(),
         .source_cmd_count = repl_state_document_count(),

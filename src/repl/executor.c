@@ -42,12 +42,9 @@ int repl_executor_point_parameter_supported(void) {
     return g_point_parameter_supported;
 }
 
-#define EXEC_RENDER (repl_state_render_mut())
-#define g_clear_color (EXEC_RENDER->clear_color)
-
 /* Slot index (0..REPL_LIGHT_SLOT_COUNT-1) for a glEnable/glDisable cap, or
  * -1 if `cap` is not one of the tracked GL_LIGHTn ids. The executor records
- * which light slots the program enabled in EXEC_RENDER->light_enabled_mask;
+ * which light slots the program enabled in ReplRenderState;
  * the dimensional light data lives in app state, so the executor never
  * touches positions/colors here. */
 static int repl_exec_light_slot_for_cap(GLenum cap) {
@@ -270,7 +267,7 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
         glEnable(cap);
         int slot = repl_exec_light_slot_for_cap(cap);
         if (slot >= 0)
-            EXEC_RENDER->light_enabled_mask |= (1u << slot);
+            repl_state_render_set_light_enabled(slot, 1);
         return 1;
     }
     case CMD_DISABLE: {
@@ -278,7 +275,7 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
         glDisable(cap);
         int slot = repl_exec_light_slot_for_cap(cap);
         if (slot >= 0)
-            EXEC_RENDER->light_enabled_mask &= ~(1u << slot);
+            repl_state_render_set_light_enabled(slot, 0);
         return 1;
     }
     case CMD_SHADE_MODEL:
@@ -337,13 +334,12 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
     case CMD_BLEND_FUNC:
         glBlendFunc((GLenum)cmd->args[0], (GLenum)cmd->args[1]);
         return 1;
-    case CMD_CLEAR_COLOR:
-        g_clear_color[0] = cmd->args[0];
-        g_clear_color[1] = cmd->args[1];
-        g_clear_color[2] = cmd->args[2];
-        g_clear_color[3] = cmd->args[3];
-        glClearColor(cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
+    case CMD_CLEAR_COLOR: {
+        float rgba[4] = {cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]};
+        repl_state_render_set_clear_color(rgba);
+        glClearColor(rgba[0], rgba[1], rgba[2], rgba[3]);
         return 1;
+    }
     default:
         return 0;
     }
@@ -465,7 +461,7 @@ void repl_execute_program(const ReplExecutionOptions *options) {
      * one on. Reset the bookkeeping at the start of every walk so the
      * indicator tracks what the program actually does, instead of the
      * sticky, default-on value that never reflected enable/disable. */
-    EXEC_RENDER->light_enabled_mask = 0;
+    repl_state_render_clear_light_enabled_mask();
 
     int pc = 0;
     while (pc < flat_cmd_count) {

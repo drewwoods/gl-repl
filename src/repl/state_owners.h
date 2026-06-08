@@ -37,6 +37,7 @@ void         repl_state_normals_dirty_clear(void);
 void         repl_state_document_reset(void);
 
 ReplFlatProgramState       *repl_state_flat_program_mut(void);
+ReplFlatProgramState       *repl_state_flat_program_writable(void);
 const GLCmd      *repl_state_flat_program_cmds(void);
 GLCmd            *repl_state_flat_program_cmds_mut(void);
 FlatCmdLocalVars *repl_state_flat_program_local_vars_mut(void);
@@ -89,12 +90,18 @@ ReplRenderState       *repl_state_render_mut(void);
  * glr_state — call `glr_state_render_reset_defaults()` for those. Both
  * reset paths fire from `glr_ctrl_reset_all`. */
 void                   repl_state_render_reset_defaults(void);
+void                   repl_state_render_set_clear_color(const float rgba[4]);
+void                   repl_state_render_set_light_enabled(int light_idx, int enabled);
+void                   repl_state_render_clear_light_enabled_mask(void);
 
 ReplSceneRuntimeState    repl_state_scenes(void);
 ReplSceneRuntimeState       *repl_state_scenes_mut(void);
+ReplSceneRuntimeState       *repl_state_scenes_writable(void);
+void                         repl_state_scenes_set_active_example_idx(int idx);
 
 ReplImportExportView        repl_state_import_export(void);
 ReplImportExportState       *repl_state_import_export_mut(void);
+ReplImportExportState       *repl_state_import_export_writable(void);
 void                         repl_state_import_export_reset(void);
 void                         repl_state_refresh_workspace_header_lines(void);
 

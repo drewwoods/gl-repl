@@ -18,13 +18,20 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define SCENE_STATE (repl_state_scenes_mut())
-#define g_example_idx (SCENE_STATE->active_example_idx)
-#define g_workspace_dir (SCENE_STATE->workspace_dir)
-#define IMPORT_EXPORT_STATE (repl_state_import_export_mut())
-#define g_export_scene_name_hint (IMPORT_EXPORT_STATE->export_scene_name_hint)
-#define g_pending_scene_name (IMPORT_EXPORT_STATE->pending_scene_name)
-#define g_pending_workspace_dir (IMPORT_EXPORT_STATE->pending_workspace_dir)
+#define g_example_idx            (repl_state_active_example_idx())
+#define g_workspace_dir          (repl_state_workspace_dir())
+#define g_workspace_dir_writable (repl_state_scenes_writable()->workspace_dir)
+
+#define IMPORT_EXPORT_VIEW      (repl_state_import_export())
+#define IMPORT_EXPORT_WRITABLE  (repl_state_import_export_writable())
+
+#define g_export_scene_name_hint (IMPORT_EXPORT_VIEW.export_scene_name_hint)
+#define g_pending_scene_name     (IMPORT_EXPORT_VIEW.pending_scene_name)
+#define g_pending_workspace_dir  (IMPORT_EXPORT_VIEW.pending_workspace_dir)
+
+#define g_export_scene_name_hint_writable (IMPORT_EXPORT_WRITABLE->export_scene_name_hint)
+#define g_pending_scene_name_writable     (IMPORT_EXPORT_WRITABLE->pending_scene_name)
+#define g_pending_workspace_dir_writable  (IMPORT_EXPORT_WRITABLE->pending_workspace_dir)
 
 /* The per-scene cfg subset is selected by a controller-installed
  * bridge (ReplConfigBridge.fill_scene_subset / .apply) rather
@@ -104,7 +111,7 @@ static uint32_t  g_user_scene_tick = 0;
  * `valid` flag inside ReplConfigBag distinguishes "no capture yet" from "captured empty bag". */
 static ReplConfigBag g_pre_example;
 
-static ReplConfigBag *scene_cfg_mut(int slot) {
+static ReplConfigBag *scene_cfg_writable(int slot) {
     if (slot < 0 || slot >= MAX_USER_SCENES) return NULL;
     return &g_user_scenes[slot].cfg;
 }
@@ -119,7 +126,7 @@ static void scene_cfg_clear(int slot) {
     repl_config_bag_clear(&g_user_scenes[slot].cfg);
 }
 
-static ReplConfigBag *pre_example_cfg_mut(void) {
+static ReplConfigBag *pre_example_cfg_writable(void) {
     return &g_pre_example;
 }
 
@@ -193,7 +200,7 @@ static int ensure_dir_path(const char *dir) {
 }
 
 static void capture_pre_example_cfg(void) {
-    ReplConfigBag *cfg = pre_example_cfg_mut();
+    ReplConfigBag *cfg = pre_example_cfg_writable();
     repl_config_bag_clear(cfg);
     const ReplConfigBridge *bridge = repl_config_bridge();
     if (bridge && bridge->fill_scene_subset)
@@ -264,7 +271,7 @@ static void save_scene_to_slot(int idx, const char *name, int edit_line) {
             s->func_aliases[slot][0] = '\0';
     }
     {
-        ReplConfigBag *cfg = scene_cfg_mut(idx);
+        ReplConfigBag *cfg = scene_cfg_writable(idx);
         repl_config_bag_clear(cfg);
         const ReplConfigBridge *bridge = repl_config_bridge();
         if (bridge && bridge->fill_scene_subset)
@@ -389,7 +396,7 @@ static void load_scene_from_slot(int idx) {
     repl_mark_source_dirty();
     s->last_touch       = next_user_scene_tick();
     g_active_user_scene = idx;
-    g_example_idx       = -1;
+    repl_state_scenes_set_active_example_idx(-1);
     char msg[REPL_DIAG_TEXT_MAX];
     snprintf(msg, sizeof(msg), "Loaded scene: %s", s->name);
     repl_set_status(msg);
@@ -411,10 +418,10 @@ void repl_scenes_enter_transient_scene(void) {
     repl_scenes_save_active_scene_if_any();
     repl_scenes_capture_home_if_needed();
     restore_pre_example_cfg_if_valid();
-    g_export_scene_name_hint = NULL;
-    g_pending_scene_name[0] = '\0';
+    g_export_scene_name_hint_writable = NULL;
+    g_pending_scene_name_writable[0] = '\0';
     g_active_user_scene = -1;
-    g_example_idx = -1;
+    repl_state_scenes_set_active_example_idx(-1);
 }
 
 void repl_scenes_reset_for_transient(void) {
@@ -692,12 +699,12 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
     char prev_workspace_dir[REPL_WORKSPACE_DIR_MAX];
     snprintf(prev_workspace_dir, sizeof(prev_workspace_dir), "%s",
              g_workspace_dir);
-    snprintf(g_workspace_dir, REPL_WORKSPACE_DIR_MAX, "%s", dir);
+    snprintf(g_workspace_dir_writable, REPL_WORKSPACE_DIR_MAX, "%s", dir);
 
     UserScene *stash = scene_scratch_alloc();
     if (!stash) {
         repl_set_status_error("Workspace save: out of memory");
-        snprintf(g_workspace_dir, REPL_WORKSPACE_DIR_MAX, "%s", prev_workspace_dir);
+        snprintf(g_workspace_dir_writable, REPL_WORKSPACE_DIR_MAX, "%s", prev_workspace_dir);
         return -1;
     }
     stash_live_state(stash);
@@ -713,16 +720,16 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
         char path[REPL_WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
         snprintf(path, sizeof(path), "%s/%s.c", dir, slug);
 
-        g_export_scene_name_hint = g_user_scenes[s].name;
+        g_export_scene_name_hint_writable = g_user_scenes[s].name;
         if (!repl_export_save_output(path, source_document_view(), layout)) {
-            g_export_scene_name_hint = NULL;
+            g_export_scene_name_hint_writable = NULL;
             restore_live_from_stash(stash);
             scene_scratch_free(stash);
-            snprintf(g_workspace_dir, REPL_WORKSPACE_DIR_MAX, "%s",
+            snprintf(g_workspace_dir_writable, REPL_WORKSPACE_DIR_MAX, "%s",
                      prev_workspace_dir);
             return -1;
         }
-        g_export_scene_name_hint = NULL;
+        g_export_scene_name_hint_writable = NULL;
         written++;
     }
 
@@ -782,12 +789,12 @@ void repl_save_active_scene(const ReplExportLayout *layout) {
     char path[REPL_WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
     format_scene_path("c", workspace_dir, path, sizeof(path));
 
-    g_export_scene_name_hint = g_user_scenes[slot].name;
+    g_export_scene_name_hint_writable = g_user_scenes[slot].name;
     if (!repl_export_save_output(path, source_document_view(), layout)) {
-        g_export_scene_name_hint = NULL;
+        g_export_scene_name_hint_writable = NULL;
         return;
     }
-    g_export_scene_name_hint = NULL;
+    g_export_scene_name_hint_writable = NULL;
 
     /* repl_export_save_output hardcodes its success status to
      * "...output.c"; mask it with the real path, same as
@@ -896,10 +903,10 @@ int repl_load_workspace(const char *dir) {
 
     restore_live_from_stash(stash);
     scene_scratch_free(stash);
-    g_example_idx       = stash_example;
+    repl_state_scenes_set_active_example_idx(stash_example);
     g_active_user_scene = -1;
 
-    snprintf(g_workspace_dir, REPL_WORKSPACE_DIR_MAX, "%s", dir);
+    snprintf(g_workspace_dir_writable, REPL_WORKSPACE_DIR_MAX, "%s", dir);
 
     char msg[REPL_STATUS_TEXT_MAX];
     snprintf(msg, sizeof(msg), "Loaded %d scene%s from %s",
@@ -1000,8 +1007,8 @@ int repl_scenes_create_empty_user_scene(void) {
 
     repl_scenes_save_active_scene_if_any();
     restore_pre_example_cfg_if_valid();
-    g_export_scene_name_hint = NULL;
-    g_pending_scene_name[0] = '\0';
+    g_export_scene_name_hint_writable = NULL;
+    g_pending_scene_name_writable[0] = '\0';
 
     repl_scenes_reset_for_transient();
 
@@ -1009,7 +1016,7 @@ int repl_scenes_create_empty_user_scene(void) {
     derive_unique_scene_name(unique, sizeof(unique), "New Scene", -1);
     save_scene_to_slot(slot, unique, repl_dispatch_edit_line_get());
     g_active_user_scene = slot;
-    g_example_idx       = -1;
+    repl_state_scenes_set_active_example_idx(-1);
 
     char msg[REPL_DIAG_TEXT_MAX];
     snprintf(msg, sizeof(msg), "New scene: %s", unique);
@@ -1077,7 +1084,7 @@ int repl_load_scene_as_new_slot(const char *path,
         restore_live_from_stash(stash);
         scene_scratch_free(stash);
         scene_scratch_free(evicted_stash);
-        g_example_idx       = stash_example;
+        repl_state_scenes_set_active_example_idx(stash_example);
         g_active_user_scene = stash_active;
         if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_NO_SLOT;
         return -1;
@@ -1088,7 +1095,7 @@ int repl_load_scene_as_new_slot(const char *path,
     int slot = load_scene_file_into_slot(path);
     if (slot < 0) {
         restore_live_from_stash(stash);
-        g_example_idx       = stash_example;
+        repl_state_scenes_set_active_example_idx(stash_example);
         g_active_user_scene = stash_active;
         /* Roll back the eviction's in-memory mutation. The on-disk
          * file written by evict_scene_to_workspace is left in place —
@@ -1109,7 +1116,7 @@ int repl_load_scene_as_new_slot(const char *path,
      * and stored a copy in the slot. Activate the slot so subsequent
      * edits accumulate there and scene tabs reflect the new active. */
     g_active_user_scene = slot;
-    g_example_idx       = -1;
+    repl_state_scenes_set_active_example_idx(-1);
     return slot;
 }
 
@@ -1128,16 +1135,16 @@ static int evict_scene_to_workspace(int slot) {
     char path[REPL_WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
     snprintf(path, sizeof(path), "%s/%s.c", g_workspace_dir, slug);
 
-    g_export_scene_name_hint = g_user_scenes[slot].name;
+    g_export_scene_name_hint_writable = g_user_scenes[slot].name;
     /* LRU eviction runs as a side effect of repl_promote_example_if_needed
      * (called from editor_undo_push_snapshot). The user isn't actively
      * saving here, so the layout struct is unavailable — pass NULL and
      * accept the 800x600 fallback in the exported display(). */
     if (!repl_export_save_output(path, source_document_view(), NULL)) {
-        g_export_scene_name_hint = NULL;
+        g_export_scene_name_hint_writable = NULL;
         return 0;
     }
-    g_export_scene_name_hint = NULL;
+    g_export_scene_name_hint_writable = NULL;
 
     g_user_scenes[slot].used = 0;
     scene_cfg_clear(slot);
@@ -1193,7 +1200,7 @@ int repl_promote_example_if_needed(void) {
                              example_name ? example_name : "Scene", -1);
     save_scene_to_slot(slot, unique, repl_dispatch_edit_line_get());
     g_active_user_scene = slot;
-    g_example_idx       = -1;
+    repl_state_scenes_set_active_example_idx(-1);
 
     char msg[REPL_DIAG_TEXT_MAX];
     snprintf(msg, sizeof(msg), "Promoted to scene: %s", unique);
@@ -1245,8 +1252,8 @@ const char *repl_workspace_dir(void) {
 }
 
 void repl_set_workspace_dir(const char *dir) {
-    if (!dir) { g_workspace_dir[0] = '\0'; return; }
-    snprintf(g_workspace_dir, REPL_WORKSPACE_DIR_MAX, "%s", dir);
+    if (!dir) { g_workspace_dir_writable[0] = '\0'; return; }
+    snprintf(g_workspace_dir_writable, REPL_WORKSPACE_DIR_MAX, "%s", dir);
 }
 
 int repl_user_scene_rename(int slot, const char *new_name) {
@@ -1299,7 +1306,7 @@ void repl_scenes_activate_home_slot(const char *scene_name_hint) {
     restore_pre_example_cfg_if_valid();
     save_scene_to_slot(0, unique, repl_dispatch_edit_line_get());
     g_active_user_scene = 0;
-    g_example_idx       = -1;
+    repl_state_scenes_set_active_example_idx(-1);
 }
 
 void repl_scenes_reset(void) {
