@@ -253,7 +253,7 @@ There aren't any — `gl_2d.h` only provides `gl2d_panel_frame` (line *loops*). 
 
 Two binaries plus a test binary, mirroring `scene_demo` / `editor_demo`:
 
-Tool binaries follow the `scene_demo` / `editor_demo` pattern (explicit `*_OBJS` plus explicit link rule). The unit test integrates via the existing `TEST_BINS` machinery (`built_binary` macro at `Makefile:805`), which means lowercase per-target variables (`test_bench_trend_sample_OBJS`, `test_bench_trend_sample_LDLIBS`, `test_bench_trend_sample_RUN`) keyed off the target name — mirroring `test_scene_palette` and `test_eval` which override the `core_test_binary` defaults the same way (`Makefile:688-700`).
+Tool binaries follow the `scene_demo` / `editor_demo` pattern (explicit `*_OBJS` plus explicit link rule). The unit test integrates via the existing `TEST_BINS` machinery (`built_binary` macro around `Makefile:1172`), which means lowercase per-target variables (`test_bench_trend_sample_OBJS`, `test_bench_trend_sample_LDLIBS`, `test_bench_trend_sample_RUN`) keyed off the target name — mirroring `test_scene_palette` and `test_eval` which bypass the `core_test_binary` defaults the same way (by defining variables manually around `Makefile:909` and being filtered out of `CORE_TEST_BINS`).
 
 ```makefile
 # --- bench_trend_view (GLUT viewer) ----------------------------
@@ -288,12 +288,12 @@ test_bench_trend_sample_LDLIBS = -lm
 test_bench_trend_sample_RUN ?= $(BINDIR)/test_bench_trend_sample
 ```
 
-The two `_OBJS` / `_LDLIBS` / `_RUN` lines for the test go in the file *before* `built_binary` runs over `TEST_BINS` (i.e. above the `$(foreach test,...)` loop at `Makefile:813`), mirroring how `test_eval_OBJS = ...` and `test_eval_RUN = ...` are declared at `Makefile:688-690`. Then add `test_bench_trend_sample` to `TEST_BINS` (around `Makefile:595-635` in the alphabetical-ish list).
+The two `_OBJS` / `_LDLIBS` / `_RUN` lines for the test go in the file *before* `built_binary` runs over `TEST_BINS` (i.e. above the `$(foreach test,...)` loop at `Makefile:1180`), mirroring how `test_eval_OBJS = ...` and `test_eval_RUN = ...` are declared around `Makefile:909`. Then add `test_bench_trend_sample` to `TEST_BINS` (around `Makefile:854-870` in the alphabetical-ish list), AND add it to the `filter-out` list for `CORE_TEST_BINS` (around `Makefile:873`) so `core_test_binary` doesn't overwrite its custom objects.
 
 Also wire into the existing cleanup machinery:
 
-- **`ROOT_BIN_LINKS`** (Makefile:664): append `bench_trend_view bench_trend_sample` so the `clean` rule removes the root symlinks.
-- **`clean` rule** (Makefile:1307): add `bench_trend_view.dSYM` and `bench_trend_sample.dSYM` alongside the existing tool `.dSYM` paths.
+- **`ROOT_BIN_LINKS`** (Makefile:881): append `bench_trend_view bench_trend_sample` so the `clean` rule removes the root symlinks.
+- **`clean` rule** (Makefile:1754): add `bench_trend_view.dSYM` and `bench_trend_sample.dSYM` alongside the existing tool `.dSYM` paths.
 - **`TEST_BINS`** (search Makefile for the variable): append `test_bench_trend_sample` so `make test` runs it under ASan+UBSan like the other test binaries.
 
 `.gitignore` additions — leading slashes for root anchoring, matching the existing `/scene_demo` / `/repl_demo` / `/editor_demo` entries:
@@ -318,7 +318,7 @@ C99 ratchet: the `tools/bench_trend_*/` sources and `tests/test_bench_trend_samp
 - **New** `tools/bench_trend_sample/logic.c` + `logic.h` — pure decision functions (~200 lines).
 - **New** `tools/bench_trend_view/bench_trend_view.c` — GLUT viewer (single file, ~300–400 lines).
 - **New** `tests/test_bench_trend_sample.c` — C unittest exercising `logic.c` (~150 lines).
-- **Edit** `Makefile` — build rules for both binaries and the test (near existing `scene_demo` rules around line 751); append both binary names to `ROOT_BIN_LINKS` (line 664); add their `.dSYM` paths to `clean` (line 1307); add `test_bench_trend_sample` to `TEST_BINS` so `make test` runs it.
+- **Edit** `Makefile` — build rules for both binaries and the test (near existing `scene_demo` rules around line 1068); append both binary names to `ROOT_BIN_LINKS` (line 881); add their `.dSYM` paths to `clean` (line 1754); add `test_bench_trend_sample` to `TEST_BINS` and filter it out of `CORE_TEST_BINS` so `make test` runs it with its custom objects.
 - **Edit** `.gitignore` — add the seven entries above.
 - **New (runtime, gitignored)** `bench/trend_results.csv` — sampler output; canonical measurement store (12 columns; `date_epoch` is the sort key, `date_iso` is for human inspection).
 - **New (runtime, gitignored)** `bench/trend_runs.csv` — per-SHA companion recording the bench-name set that SHA's `bench_repl` actually emitted at a given `iters`; consulted for idempotency so older SHAs that legitimately emit fewer benches aren't endlessly re-measured.
