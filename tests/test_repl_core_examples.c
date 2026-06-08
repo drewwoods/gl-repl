@@ -33,6 +33,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 static int g_verbose = 0;
 static int g_use_color = 0;
 static int g_show_mismatch = 0;
+static int g_keep_temp = 0;
 
 #define ANSI_GREEN "\033[32m"
 #define ANSI_YELLOW "\033[33m"
@@ -1067,8 +1068,11 @@ static void print_usage(const char *prog) {
     printf("                         (used to regenerate golden fixture files)\n\n");
     printf("  --show-mismatch        Print expected/actual context around exact-text mismatches\n");
     printf("                         (alias: --diff)\n\n");
+    printf("  --keep-temp            Do not delete the temp dir / export files on exit\n");
+    printf("                         (leaves artifacts under /tmp for inspection)\n\n");
     printf("Environment:\n");
     printf("  REPL_EXPORT_VERBOSE=1  Print per-example step details\n");
+    printf("  REPL_EXPORT_KEEP_TEMP=1  Same as --keep-temp\n");
     printf("  REPL_EXPORT_CC         C compiler to use (default: cc)\n");
     printf("  REPL_EXPORT_COMPILE_CFLAGS  Extra compiler flags\n");
     printf("  NO_COLOR               Disable ANSI color output\n\n");
@@ -1107,6 +1111,7 @@ int main(int argc, char **argv) {
     int dump_idx = -1;
 
     g_verbose = verbose_env && verbose_env[0] && strcmp(verbose_env, "0") != 0;
+    g_keep_temp = env_truthy("REPL_EXPORT_KEEP_TEMP");
     g_use_color = getenv("NO_COLOR") == NULL &&
                   (isatty(STDOUT_FILENO) ||
                    env_truthy("FORCE_COLOR") ||
@@ -1121,6 +1126,10 @@ int main(int argc, char **argv) {
         if (strcmp(argv[argi], "--show-mismatch") == 0 ||
             strcmp(argv[argi], "--diff") == 0) {
             g_show_mismatch = 1;
+            continue;
+        }
+        if (strcmp(argv[argi], "--keep-temp") == 0) {
+            g_keep_temp = 1;
             continue;
         }
         if (strcmp(argv[argi], "--dump-index") == 0) {
@@ -1752,12 +1761,14 @@ int main(int argc, char **argv) {
                 }
                 snprintf(label, sizeof(label), "example %02d re-export compiles", idx);
                 ASSERT_TRUE(label, roundtrip_compiled);
-                remove(reexport_path);
+                if (!g_keep_temp)
+                    remove(reexport_path);
                 free(imported);
             }
         }
 
-        remove(export_path);
+        if (!g_keep_temp)
+            remove(export_path);
 
         free(expected_defs);
         free(expected);
@@ -1789,7 +1800,10 @@ int main(int argc, char **argv) {
         }
     }
 
-    rmdir(temp_dir);
+    if (g_keep_temp)
+        fprintf(stderr, "repl_core_examples: keeping temp dir %s\n", temp_dir);
+    else
+        rmdir(temp_dir);
 
     printf("%srepl_core_examples: %d/%d passed%s\n",
            (g_harness.run == g_harness.passed) ? ansi_green() : ansi_red(),
