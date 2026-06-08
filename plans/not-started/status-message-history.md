@@ -1,19 +1,20 @@
-# Status-message history (recent messages viewer) — decision pending
+# Status-message history (recent messages viewer)
 
-Status: **in-review** — feasible and low-risk to build, but the trigger
-and surface are UX forks not yet decided. Do not implement until a
-direction is chosen and the file moves to `not-started/`.
+Status: **not-started** — feasibility verified 2026-06-08; UX forks
+resolved (recommendation adopted). Ready for implementation.
+
+## 2026-06-08 review
+
+All architectural claims verified against the live codebase. The plan
+is feasible, low-risk, and well-described. Key corrections applied
+below (stale paths, missing error-kind detail). UX recommendation
+(persistent button + slide animation + inline list) adopted as the
+direction — forks 1–4 resolved.
 
 ## 2026-05-23 audit
 
 Not implemented: no `UiStatusHistory`/`UiStatusEntry`/`status_history`
 symbols in `src/ui/` or `src/app/`; no `tests/test_ui_status_history.c`.
-
-**Folder mismatch noted:** the header above declares
-`Status: **in-review**` but the file lives in `plans/not-started/`.
-The plan content is decision-pending (UX forks 1–4 unresolved), which
-matches `in-review/` semantics; consider moving it back. Out of scope
-for this audit pass.
 
 ## Context
 
@@ -23,18 +24,30 @@ after ~240 frames (`ui_panels_render_scene_status`). A message can also
 be overwritten before it's read. Users want to pull up *recent* messages
 on demand.
 
-Verified chokepoint: `repl_set_status` is wired via the sink table to
-`ui_state_status_set()` (`glr_ctrl.c` `.status = ui_state_status_set`;
-impl `src/ui/state.c:59`). **Every** message funnels through that one
-function — a ring pushed there captures all of them, no call-site sweep.
+Verified chokepoint: `repl_set_status` / `repl_set_status_error` are
+wired via the sink table to `ui_state_status_set()` /
+`ui_state_status_set_error()` (`src/app/glr_ctrl.c:1720–1722`,
+`.status = ui_state_status_set`, `.status_error =
+ui_state_status_set_error`; impl `src/ui/app/state.c:58–75`). Both
+delegate to the private `ui_state_status_set_kind(msg, kind)` helper —
+**every** message funnels through that one function. A ring pushed
+there captures all of them (both INFO and ERROR), no call-site sweep.
+
+Note: two callers of `ui_state_status_mut()` exist (TTL decrement in
+`glr_ctrl.c:2321` and save/restore in `editor/input.c:1025`) — neither
+writes `.text` from scratch, so the ring push belongs only in
+`ui_state_status_set_kind`.
+
 A reusable scrollable text overlay already exists
-(`ui_tabbed_overlay_render(UiOverlayState/UiOverlayContent)`, the F1
-help shell).
+(`ui_tabbed_overlay_render(UiOverlayState/UiOverlayContent)` in
+`src/ui/core/tabbed_overlay.{c,h}`, the F1 help shell — explicitly
+feature-agnostic per its header comment).
 
 ## Effort (≈ 1–2 days, low architectural risk)
 
-- Ring buffer in `ui/state.c` (fixed N × `REPL_STATUS_TEXT_MAX` +
-  anim_time), pushed in `ui_state_status_set`. Headless-unit-testable
+- Ring buffer in `src/ui/app/state.c` (fixed N × `REPL_STATUS_TEXT_MAX`
+  (256, from `config.h`) + kind + anim_time), pushed in
+  `ui_state_status_set_kind`. Headless-unit-testable
   (push N → assert order/cap), mirrors the lights/derivation tests.
 - By-value `UiStatusHistory` slice on `UiRenderSnapshot`, filled in
   `glr_ctrl_build_ui_snapshot` (same pattern as `scene_tabs`; ~4 KB/frame).
@@ -108,35 +121,67 @@ session ring, newest-at-bottom, age-dimmed, consecutive-dup collapse
 full scrollback is later wanted; keep plain fade as the trivial
 fallback if the slide proves fiddly.
 
-## If approved (sketch)
+## Implementation sketch
 
-- `src/ui/state.{c,h}` (+ `state_types.h`): `UiStatusEntry` /
-  `UiStatusHistory` ring; push in `ui_state_status_set`; reset in
-  `ui_state_reset`. Accessor `ui_state_status_history()`.
-- `src/ui/snapshot.h` + `glr_ctrl_build_ui_snapshot`: copy the ring
-  by value.
-- `src/ui/panels.c`:
+### Data layer
+
+- `src/ui/app/state_types.h`: new `UiStatusEntry` (text, kind, frame
+  counter or monotonic id) and `UiStatusHistory` (fixed-size ring of
+  `UiStatusEntry[16]`, head index, count, consecutive-dup counter).
+  Entry must preserve `UiStatusKind` (INFO vs ERROR) so the viewer
+  can color-code (amber vs red, matching `ui_panels_render_scene_status`).
+- `src/ui/app/state.{c,h}`: push in `ui_state_status_set_kind` (the
+  single private chokepoint — not in the public `_set`/`_set_error`
+  wrappers); reset in `ui_state_reset`. Accessor
+  `ui_state_status_history()`. Consecutive-dup detection: if new text
+  matches head entry, increment count instead of pushing.
+- `src/ui/app/snapshot.h` + `glr_ctrl_build_ui_snapshot` (line ~1022):
+  copy the ring by value onto `UiRenderSnapshot`.
+
+### Render layer
+
+- `src/ui/app/panels.c`:
   - persistent bottom **messages button** (small fixed rect; lit while
     history non-empty, brief pulse on new message) + a pure hit-test
-    for it (window coords vs the button rect; returns a new `UiHit`
-    kind or reuses CHROME + a controller toggle flag).
-  - replace the fade in `ui_panels_render_scene_status` with a **slide
-    transform**: interpolate the banner position between the button
-    rect and the banner slot, parameterised by remaining `ttl` (rise
-    on appear, hold, sink back into the button on expiry). Plain-fade
+    for it (window coords vs button rect; new `UI_HIT_STATUS_HISTORY`
+    in `UiAppHitKind` enum in `src/ui/app/hit.h`).
+  - replace the fade in `ui_panels_render_scene_status` (line ~121)
+    with a **slide transform**: interpolate banner position between
+    button rect and banner slot, parameterised by remaining `ttl`
+    (rise on appear, hold, sink back into button on expiry). Plain-fade
     fallback kept behind the same path if needed.
   - the inline stacked history list, anchored at / growing up from the
     button, shown while the toggle is open.
-- Controller: a `status_history_open` toggle flipped by the button hit
-  (lives with UI chrome state; snapshot-exposed for the renderer).
-- Tests: `tests/test_ui_status_history.c` (ring order/cap/dedup, pure)
-  + button hit-region geometry as a pure fn; slide math (position given
-  ttl) as a pure fn so it's headless-unit-testable.
-- Docs: CLAUDE.md File Layout / MODULES.md if a new module lands.
-- Verify `make test`, `make test-stubs`, UI boundary guards; `make
-  gl-tests` if any gl2d bracket is added.
+  - **Caveat**: `rename_active` and `file_prompt_active` modal strips
+    take priority over status rendering — the button and history list
+    must respect this suppression (same guard at panels.c that already
+    gates the status banner).
 
-## Folder note
+### Controller layer
 
-`plans/in-review/` = contested-direction. Lifecycle: in-review →
-(decision) → not-started → active → done, or deleted if rejected.
+- `status_history_open` toggle flipped by the button hit (lives with
+  UI chrome state; snapshot-exposed for the renderer).
+
+### Tests
+
+- `tests/test_ui_status_history.c`: ring order/cap/dedup (push N,
+  assert order, overflow eviction, consecutive-dup collapse with
+  count); kind preservation (push INFO then ERROR, assert both kinds
+  round-trip). Button hit-region geometry as a pure fn; slide math
+  (position given ttl) as a pure fn — all headless-unit-testable.
+
+### Docs & verification
+
+- Update `AGENTS.md` File Layout / `MODULES.md` if a new module lands.
+- Must pass all UI boundary guards — in particular:
+  `check-ui-no-repl-state-mut`, `check-ui-renderer-takes-view`,
+  `check-ui-no-repl-state-read`, `check-ui-panels-no-mutators`,
+  `check-ui-returns-hits-only`.
+- Verify `make test`, `make test-stubs`, `make check-state-ownership`;
+  `make gl-tests` if any gl2d bracket is added.
+
+## Lifecycle
+
+`not-started` → `active` (once implementation begins) → `done`.
+Previously held `in-review` status while UX forks were open; resolved
+2026-06-08.
