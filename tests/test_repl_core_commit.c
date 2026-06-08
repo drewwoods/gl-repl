@@ -2042,6 +2042,34 @@ int main(void) {
     ASSERT_TRUE("func def overwrite: status not a duplicate rejection",
                 strstr(g_status, "already defined") == NULL);
 
+    /* Function argument count mismatch on alias name */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        repl_func_alias_clear_all();
+        g_status[0] = '\0';
+        editor_feed_line("drawCube(x) {");
+        editor_feed_line("glVertex3f(x, 0, 0);");
+        editor_feed_line("}");
+        editor_feed_line("drawCube(1, 2);");
+        repl_flatten_commands(editor_state_edit_line());
+        ASSERT_TRUE("argument count mismatch status names the alias drawCube",
+                    strstr(g_status, "drawCube expects 1 args, got 2") != NULL);
+    }
+
+    /* Function argument count mismatch with no alias name */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        repl_func_alias_clear_all();
+        g_status[0] = '\0';
+        editor_feed_line("func0(x) {");
+        editor_feed_line("glVertex3f(x, 0, 0);");
+        editor_feed_line("}");
+        editor_feed_line("func0(1, 2);");
+        repl_flatten_commands(editor_state_edit_line());
+        ASSERT_TRUE("argument count mismatch status names func0",
+                    strstr(g_status, "func0 expects 1 args, got 2") != NULL);
+    }
+
     /* Regression: calling func<N> with no definition is rejected at
      * commit time, the same way `x = 1;` is rejected before `float x;`
      * is declared.  Call is never added to repl_state_document_cmds_mut() and status names the
