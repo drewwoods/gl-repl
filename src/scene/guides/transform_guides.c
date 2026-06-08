@@ -704,10 +704,10 @@ static int transform_input_matches_committed(const SceneGuideSnapshot *snapshot)
  * Bounded scratch; deeper stacks just cap (the nearest few are what matter). */
 #define TG_MAX_INSCOPE_XFORMS 64
 
-/* Collect the flat indices of the transforms in scope at `vertex_flat_idx`,
+/* Collect the flat indices of the transforms in scope at `anchor_flat_idx`,
  * walking the flat program backward and honoring glPushMatrix/glPopMatrix/
  * glLoadIdentity. Writes newest-first, so out[0] is the nearest transform
- * before the vertex. Returns the count (capped at out_cap).
+ * before the anchor draw. Returns the count (capped at out_cap).
  *
  * This mirrors the flat affecting-transform walk in src/repl/autonormal.c
  * (repl_find_affecting_transforms_for_flat_vertex), but stays in the scene
@@ -715,12 +715,12 @@ static int transform_input_matches_committed(const SceneGuideSnapshot *snapshot)
  * can anchor on a specific expansion. The scene module must not depend on
  * repl/core, hence the small re-implementation over the shared GLCmd model. */
 static int collect_inscope_transform_flat_indices(const SceneGuideSnapshot *snapshot,
-                                                  int vertex_flat_idx,
+                                                  int anchor_flat_idx,
                                                   int *out, int out_cap) {
     const GLCmd *cmds = snapshot->flat_program.cmds;
     int count = 0;
     int popped_depth = 0;
-    for (int i = vertex_flat_idx - 1; i >= 0 && count < out_cap; i--) {
+    for (int i = anchor_flat_idx - 1; i >= 0 && count < out_cap; i--) {
         if (!cmds[i].valid) continue;
         CmdType t = cmds[i].type;
         if (t == CMD_POP_MATRIX) {
@@ -736,17 +736,18 @@ static int collect_inscope_transform_flat_indices(const SceneGuideSnapshot *snap
     return count;
 }
 
-/* Choose which flat transform to guide for the current replay vertex:
+/* Choose which flat transform to guide for the current replay draw (a vertex
+ * or a glutSolid* anchor):
  *  (a) if the edit cursor is parked on a committed transform source line, the
  *      nearest in-scope flat expansion of that exact source line (so moving
  *      the cursor onto a transform during replay focuses it on the live
- *      vertex), else
- *  (b) the nearest in-scope affecting transform before the vertex.
- * Returns the flat index, or -1 when no transform affects the vertex. */
+ *      draw), else
+ *  (b) the nearest in-scope affecting transform before the anchor.
+ * Returns the flat index, or -1 when no transform affects the anchor. */
 static int scene_replay_transform_focus_flat_idx(const SceneGuideSnapshot *snapshot,
-                                                 int vertex_flat_idx) {
+                                                 int anchor_flat_idx) {
     int inscope[TG_MAX_INSCOPE_XFORMS];
-    int n = collect_inscope_transform_flat_indices(snapshot, vertex_flat_idx,
+    int n = collect_inscope_transform_flat_indices(snapshot, anchor_flat_idx,
                                                    inscope, TG_MAX_INSCOPE_XFORMS);
     if (n == 0)
         return -1;
@@ -785,23 +786,27 @@ int scene_transform_guides_prepare(const SceneGuideSnapshot *snapshot,
         return 0;
 
     /* Replay path (req 6): instead of the edit cursor, pick the transform
-     * shaping the vertex the replay step emitted and guide *it* exactly as the
-     * live edit-mode guide would. The plan is shaped identically to the edit
-     * path — cursor_flat_idx is the chosen transform's flat index, after_flat_idx
-     * the first following flat command from a different source line (WORLD-mode
-     * after-cursor anchor) — so the shared FRAME/WORLD render path draws it in
-     * the transform's own frame, not on the vertex (which already sits at its
-     * post-transform position). */
+     * shaping the draw the replay step emitted (a glVertex/gluVertex or a
+     * glutSolid*) and guide *it* exactly as the live edit-mode guide would. The
+     * plan is shaped identically to the edit path — cursor_flat_idx is the
+     * chosen transform's flat index, after_flat_idx the first following flat
+     * command from a different source line (WORLD-mode after-cursor anchor) — so
+     * the shared FRAME/WORLD render path draws it in the transform's own frame,
+     * not on the draw (which already sits at its post-transform position). */
     if (snapshot->replaying) {
-        int vtx = snapshot->replay_focus_vertex_flat_idx;
+        int anchor = snapshot->replay_focus_anchor_flat_idx;
         int flat_count = snapshot->flat_program.cmd_count;
-        if (vtx < 0 || vtx >= flat_count)
+        if (anchor < 0 || anchor >= flat_count)
             return 0;
         const GLCmd *flat_cmds = snapshot->flat_program.cmds;
-        const GLCmd *vcmd = &flat_cmds[vtx];
-        if (!vcmd->valid || !repl_cmd_emits_vertex(vcmd->type))
+        const GLCmd *acmd = &flat_cmds[anchor];
+        /* The replay anchor is whatever draw the step landed on — a glVertex /
+         * gluVertex or a glutSolid* (repl_cmd_consumes_current_color). The guide
+         * draws in the transform's own frame (not on the anchor's position), so
+         * a glut solid, which carries no vertex position, works the same way. */
+        if (!acmd->valid || !repl_cmd_consumes_current_color(acmd->type))
             return 0;
-        int xform = scene_replay_transform_focus_flat_idx(snapshot, vtx);
+        int xform = scene_replay_transform_focus_flat_idx(snapshot, anchor);
         if (xform < 0)
             return 0;
         plan->cursor_flat_idx = xform;

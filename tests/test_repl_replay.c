@@ -831,10 +831,10 @@ static void test_replay_focus_call_depth(void) {
     replay_stop();
 }
 
-/* Request 3: replay_focus_vertex_flat_idx() names the vertex the current step
- * emitted, which anchors the frame-axes overlay. It tracks the step in vertex
- * mode and is inert otherwise. */
-static void test_replay_focus_vertex_flat_idx(void) {
+/* replay_focus_anchor_flat_idx() names the draw the current replay step
+ * emitted, which anchors the affecting-transform highlight and the live
+ * transform guide. It tracks the step in vertex mode and is inert otherwise. */
+static void test_replay_focus_anchor_flat_idx(void) {
     int full_count;
 
     glr_ctrl_reset_all();
@@ -847,36 +847,63 @@ static void test_replay_focus_vertex_flat_idx(void) {
     /* flat: BEGIN(0), VERTEX(1), VERTEX(2), END(3) */
     ASSERT_TRUE("full flat count", full_count == 4);
 
-    ASSERT_TRUE("inactive vertex focus is -1", replay_focus_vertex_flat_idx() == -1);
+    ASSERT_TRUE("inactive anchor focus is -1", replay_focus_anchor_flat_idx() == -1);
 
     replay_start();
     g_replay_mode = REPLAY_MODE_VERTEX;
     g_replay_state = REPLAY_PAUSED;
 
     replay_advance(repl_state_flat_program_view());
-    ASSERT_TRUE("step 1 vertex focus is first vertex (1)",
-                replay_focus_vertex_flat_idx() == 1);
+    ASSERT_TRUE("step 1 anchor focus is first vertex (1)",
+                replay_focus_anchor_flat_idx() == 1);
 
     replay_advance(repl_state_flat_program_view());
-    ASSERT_TRUE("step 2 vertex focus is second vertex (2)",
-                replay_focus_vertex_flat_idx() == 2);
+    ASSERT_TRUE("step 2 anchor focus is second vertex (2)",
+                replay_focus_anchor_flat_idx() == 2);
 
     /* Stale replay state can momentarily point beyond a shrunken flat program;
      * the focus accessor must stay inside the current logical command count. */
     g_replay_pc = full_count + 10;
     repl_state_flat_program_set_count(2);
     ASSERT_TRUE("out-of-range pc clamps to current flat count",
-                replay_focus_vertex_flat_idx() == 1);
+                replay_focus_anchor_flat_idx() == 1);
     repl_state_flat_program_set_count(full_count);
     g_replay_pc = 3;
 
-    /* Polygon mode is out of scope for the frame-axes overlay. */
+    /* Polygon mode is out of scope for the anchor overlay. */
     g_replay_mode = REPLAY_MODE_POLYGON;
-    ASSERT_TRUE("polygon mode vertex focus is -1",
-                replay_focus_vertex_flat_idx() == -1);
+    ASSERT_TRUE("polygon mode anchor focus is -1",
+                replay_focus_anchor_flat_idx() == -1);
 
     replay_stop();
-    ASSERT_TRUE("stopped vertex focus is -1", replay_focus_vertex_flat_idx() == -1);
+    ASSERT_TRUE("stopped anchor focus is -1", replay_focus_anchor_flat_idx() == -1);
+}
+
+/* Glut solids emit no REPL vertex but ARE a draw anchor: vertex stepping stops
+ * on each glutSolid*, and the anchor focus must resolve to that flat index so
+ * the affecting-transform highlight / transform guide reach it. */
+static void test_replay_focus_anchor_glut_solid(void) {
+    glr_ctrl_reset_all();
+    editor_feed_line("glTranslatef(1, 0, 0);");
+    editor_feed_line("glutSolidCube(1);");
+    editor_feed_line("glutSolidSphere(1, 8, 8);");
+    repl_flatten_commands(editor_state_edit_line());
+    /* flat: TRANSLATE(0), GLUT_CUBE(1), GLUT_SPHERE(2) */
+    ASSERT_TRUE("glut flat count", repl_state_flat_program_count() == 3);
+
+    replay_start();
+    g_replay_mode = REPLAY_MODE_VERTEX;
+    g_replay_state = REPLAY_PAUSED;
+
+    replay_advance(repl_state_flat_program_view());
+    ASSERT_TRUE("step 1 anchor focus is the cube (1)",
+                replay_focus_anchor_flat_idx() == 1);
+
+    replay_advance(repl_state_flat_program_view());
+    ASSERT_TRUE("step 2 anchor focus is the sphere (2)",
+                replay_focus_anchor_flat_idx() == 2);
+
+    replay_stop();
 }
 
 int main(void) {
@@ -884,7 +911,8 @@ int main(void) {
     test_replay_stepping();
     test_replay_focus_call_site_provenance();
     test_replay_focus_call_depth();
-    test_replay_focus_vertex_flat_idx();
+    test_replay_focus_anchor_flat_idx();
+    test_replay_focus_anchor_glut_solid();
     test_replay_tessellation_stepping();
     test_replay_fade_batches();
     test_replay_input();

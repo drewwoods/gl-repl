@@ -286,15 +286,22 @@ static int replay_prev_limit(int current_pc) {
     return prev_pc;
 }
 
-int replay_focus_vertex_flat_idx(void) {
+int replay_focus_anchor_flat_idx(void) {
     const ReplayRuntimeState *state = replay_state_const();
     FlatProgramView flat;
     int pc;
     int begin;
     const GLCmd *cmds;
 
-    /* Vertex replay only: the frame-axes overlay anchors on the vertex the
-     * step just emitted, so it is meaningless for polygon-batch stepping. */
+    /* Vertex replay only: the affecting-transform highlight and the live
+     * transform guide anchor on the draw the step just emitted, so this is
+     * meaningless for polygon-batch stepping. Vertex stepping stops on each
+     * glutSolid* too (replay_next_vertex_limit), so the anchor is "the last
+     * draw in the step" — a glVertex/gluVertex *or* a glutSolid*, matched by
+     * repl_cmd_consumes_current_color (the same draw-target set the affecting-
+     * transform resolver uses). A glut solid carries no vertex position, but
+     * neither consumer needs one: the highlight only walks transforms back from
+     * the flat index, and the guide draws in the transform's own frame. */
     if (!state->active || state->mode != REPLAY_MODE_VERTEX)
         return -1;
 
@@ -312,7 +319,7 @@ int replay_focus_vertex_flat_idx(void) {
     cmds = flat.cmds;
     for (int i = pc - 1; i >= begin && i >= 0; i--) {
         if (!cmds[i].valid) continue;
-        if (repl_cmd_emits_vertex(cmds[i].type))
+        if (repl_cmd_consumes_current_color(cmds[i].type))
             return i;
     }
     return -1;
