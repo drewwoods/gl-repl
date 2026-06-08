@@ -228,7 +228,7 @@ const char *glr_config_state_name(GlrConfigKey key, int value) {
 
 void glr_config_set(GlrConfigKey key, int value) {
     int state_count = glr_config_state_count(key);
-    if (state_count > 0)
+    if (state_count > 0 && !(key == GLR_CONFIG_AUDIO_MODE && value == -1))
         value = clamp_int(value, 0, state_count - 1);
 
     if (key == GLR_CONFIG_AUDIO_MODE) {

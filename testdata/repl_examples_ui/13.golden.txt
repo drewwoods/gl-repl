@@ -1,3 +1,37 @@
+/* @cfg msaa = 1 */
+/* @cfg line_smooth = 0 */
+/* @cfg accum_aa = 1 */
+/* @cfg wireframe = 0 */
+/* @cfg point_attenuation = 1 */
+/* @cfg auto_time = 1 */
+/* @cfg replay = 0 */
+/* @cfg replay_mode = 1 */
+/* @cfg replay_expand = 1 */
+/* @cfg grid = GRID_THEME_PLANES */
+/* @cfg grid_major = 0 */
+/* @cfg grid_extent = 2 */
+/* @cfg axes = AXES_THEME_OFF */
+/* @cfg xform_guides = 2 */
+/* @cfg light_indicators = 0 */
+/* @cfg light_theme = LIGHT_THEME_DEFAULT */
+/* @cfg backdrop = SCENE_BACKDROP_OFF */
+/* @cfg auto_normals = 0 */
+/* @cfg view_mode = 0 */
+/* @cfg camera_rotate = 0 */
+/* @cfg vertex_labels = 1 */
+/* @cfg normal_vectors = 0 */
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
+/* @cfg poly_highlight = 1 */
+/* @cfg variable_panel = 1 */
+/* @cfg cpu_profile = 0 */
+/* @cfg memory_profile = 0 */
+/* @cfg code_panel = 1 */
+/* @cfg wrap_at_commas = 1 */
+/* @cfg syntax_highlight = 1 */
+/* @cfg paren_match = 1 */
+/* @cfg paren_scope = 1 */
+/* @cfg audio = -1 */
 --- header_pre ---
 #define j0 _j0
 #define j1 _j1
