@@ -605,7 +605,7 @@ flowchart TB
 
     srcdoc["<b>source_document port</b><br/>(neutral REPL ↔ host text seam;<br/>full-app impl = glr_source_document)"]
 
-    ui["<b>5. 2D UI</b> (render + hit-test)<br/><b>ui/core:</b> text_panel · text_layout · text_search ·<br/>layout · tabbed_overlay · gl_2d · hit · theme · metrics<br/><b>ui/app:</b> panels · menu_bar · scene_tabs · color_picker ·<br/>variable_panel · autocomplete_panel · profile_panel ·<br/>replay_hud · repl_code_panel<br/>(snapshots in, UiHit out — never mutates)"]
+    ui["<b>5. 2D UI</b> (render + hit-test)<br/><b>ui/core:</b> text_panel · text_layout · text_search ·<br/>tabbed_overlay · gl_2d · hit · theme · metrics<br/><b>ui/app:</b> panels · menu_bar · scene_tabs · color_picker ·<br/>variable_panel · autocomplete_panel · profile_panel ·<br/>replay_hud · repl_code_panel · layout<br/>(snapshots in, UiHit out — never mutates)"]
 
     scene["<b>4. 3D scene</b> (render)<br/>render · grid · axes · backdrop · lights ·<br/>overlays · postprocess_filter · guides ·<br/>scene_transition"]
 
@@ -742,7 +742,7 @@ flowchart LR
     end
 
     subgraph services["6. Services + lifecycle"]
-        audio["glr_audio.c<br/>playlist"]
+        audio["src/app/glr_audio.c<br/>playlist"]
         prof["src/support/cpuprof.c<br/>instrumentation"]
         export["src/repl/export.c<br/>save/load · reads source_document view"]
     end
@@ -763,7 +763,7 @@ flowchart LR
         uiprof["src/ui/support/cpuprof.c<br/>timing HUD"]
         uimem["src/ui/support/memprof.c<br/>memory HUD"]
         uirhud["src/ui/subsystems/replay_hud.c<br/>replay HUD (feature-UI)"]
-        uilayout["src/ui/core/layout.c<br/>rect geometry"]
+        uilayout["src/ui/app/layout.c<br/>rect geometry"]
         uicplay["src/ui/core/text_layout.c<br/>wrap iterator"]
     end
 
@@ -1038,8 +1038,8 @@ check-editor-ownership-budget          (landed commit 11)
 
 ### Layout geometry
 
-`src/ui/core/layout.c` owns scene/code-panel rectangle geometry. Non-UI callers
-may include `src/ui/core/layout.h` because the module is pure geometry, not UI
+`src/ui/app/layout.c` owns scene/code-panel rectangle geometry. Non-UI callers
+may include `src/ui/app/layout.h` because the module is pure geometry, not UI
 state.
 
 ### UI / scene independence
