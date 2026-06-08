@@ -2,6 +2,7 @@
 #include "app/glr_ctrl.h"
 #include "editor/input.h"
 #include "editor/search.h"
+#include "keys.h"
 #include "repl/core.h"
 #include "repl/state.h"
 
@@ -221,6 +222,33 @@ int main(void) {
                 editor_search_row_for_cmd_index(1) == 2);
     ASSERT_TRUE("row map inserting keeps prior rows",
                 editor_search_row_for_cmd_index(0) == 0);
+
+    /* Test paste into search query: input selection clipboard */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("hello world");
+    editor_state_clipboard_clear();
+    editor_clipboard_set_input_text("hello", 5);
+    open_search();
+    editor_handle_key(KEY_CTRL_V, 0, 0);
+    ASSERT_TRUE("paste input text into search query", strcmp(g_search_query, "hello") == 0);
+    ASSERT_TRUE("paste input text updates query len", g_search_query_len == 5);
+    ASSERT_TRUE("paste input text updates cursor pos", g_search_cursor_pos == 5);
+
+    /* Test paste into search query: line-range clipboard */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("test line");
+    editor_state_clipboard_clear();
+    {
+        EditorClipboardState *cb = editor_state_clipboard_mut();
+        strncpy(cb->lines[0], "test", MAX_LINE_LEN - 1);
+        cb->lines[0][MAX_LINE_LEN - 1] = '\0';
+        editor_state_clipboard_count_set(1);
+    }
+    open_search();
+    editor_handle_key(KEY_CTRL_V, 0, 0);
+    ASSERT_TRUE("paste lines into search query", strcmp(g_search_query, "test") == 0);
+    ASSERT_TRUE("paste lines updates query len", g_search_query_len == 4);
+    ASSERT_TRUE("paste lines updates cursor pos", g_search_cursor_pos == 4);
 
     printf("repl_core_search: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.run == g_harness.passed) ? 0 : 1;

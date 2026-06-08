@@ -410,6 +410,43 @@ int editor_search_handle_key(unsigned char key) {
     if (!srch->active)
         return 0;
 
+    if (keymap_event_is(key, GLR_PASTE)) {
+        EditorClipboardKind kind = editor_state_clipboard_kind();
+        const char *paste_str = NULL;
+        int paste_len = 0;
+
+        if (kind == EDITOR_CLIPBOARD_INPUT_TEXT) {
+            paste_str = editor_clipboard_input_text();
+            paste_len = editor_clipboard_input_text_len();
+        } else if (kind == EDITOR_CLIPBOARD_LINES) {
+            int count = editor_state_clipboard_count();
+            if (count > 0) {
+                const EditorClipboardState *cb = editor_state_clipboard();
+                paste_str = cb->lines[0];
+                paste_len = (int)strlen(paste_str);
+            }
+        }
+
+        if (paste_str && paste_len > 0) {
+            int room = (MAX_INPUT_LEN - 1) - srch->query_len;
+            if (room < 0)
+                room = 0;
+            if (paste_len > room)
+                paste_len = room;
+
+            if (paste_len > 0) {
+                memmove(&srch->query[srch->cursor_pos + paste_len],
+                        &srch->query[srch->cursor_pos],
+                        (size_t)(srch->query_len - srch->cursor_pos + 1));
+                memcpy(&srch->query[srch->cursor_pos], paste_str, (size_t)paste_len);
+                srch->query_len += paste_len;
+                srch->cursor_pos += paste_len;
+                search_refresh_query();
+            }
+        }
+        return 1;
+    }
+
     if (key == KEY_ESC) {
         editor_search_clear_all();
         return 1;
