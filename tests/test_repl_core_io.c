@@ -16,6 +16,7 @@
 #include "support/test_harness.h"
 #include <errno.h>
 #include <fcntl.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1538,6 +1539,50 @@ int main(void) {
                     repl_state_document_cmds_mut()[0].args[2] == loop_step);
 
         remove(precision_path);
+    }
+
+    /* Non-finite predef values must export as valid C99 constants rather
+     * than bare printf spellings like `nan`, and import must preserve
+     * them through the @var round-trip. */
+    {
+        const char *nonfinite_path = "/tmp/repl_core_nonfinite_roundtrip.c";
+        char buf[16384];
+        int x_idx;
+        int n_idx;
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        x_idx = repl_eval_find_predef_var_idx("x");
+        n_idx = repl_eval_find_predef_var_idx("n");
+        ASSERT_TRUE("nonfinite test vars exist", x_idx >= 0 && n_idx >= 0);
+        g_predef_vars_mut[x_idx].value = NAN;
+        g_predef_vars_mut[n_idx].value = INFINITY;
+        editor_feed_line("glPointSize(1);");
+
+        repl_export_save_output(nonfinite_path, source_document_view(), NULL);
+        read_text_file(nonfinite_path, buf, sizeof(buf));
+
+        ASSERT_TRUE("nonfinite header uses NAN",
+                    strstr(buf, "/* @var x = NAN */") != NULL);
+        ASSERT_TRUE("nonfinite header uses INFINITY",
+                    strstr(buf, "/* @var n = INFINITY */") != NULL);
+        ASSERT_TRUE("nonfinite globals use NAN",
+                    strstr(buf, "static float x = NAN;") != NULL);
+        ASSERT_TRUE("nonfinite globals use INFINITY",
+                    strstr(buf, "static float n = INFINITY;") != NULL);
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        ASSERT_TRUE("nonfinite export re-imports",
+                    repl_export_load_from_file(nonfinite_path, NULL) == 1);
+        x_idx = repl_eval_find_predef_var_idx("x");
+        n_idx = repl_eval_find_predef_var_idx("n");
+        ASSERT_TRUE("re-imported NAN survives",
+                    x_idx >= 0 && isnan(g_predef_vars[x_idx].value));
+        ASSERT_TRUE("re-imported INFINITY survives",
+                    n_idx >= 0 &&
+                    isinf(g_predef_vars[n_idx].value) &&
+                    g_predef_vars[n_idx].value > 0.0f);
+
+        remove(nonfinite_path);
     }
 
     /* A physical line longer than MAX_LINE_LEN-1 must not be split into
