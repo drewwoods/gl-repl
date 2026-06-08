@@ -1600,6 +1600,7 @@ static const char *const g_example_whale[] = {
     "  // Belly: lighter, sits just under the body so it shows the underside",
     "  glColor3f(0.72, 0.76, 0.78);",
     "  glPushMatrix();",
+    "    glTranslatef(0.05, -0.42, 0);",
     "    glScalef(1.65, 0.45, 0.75);",
     "    glutSolidSphere(1, detail, detail);",
     "  glPopMatrix();",
