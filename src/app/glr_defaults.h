@@ -24,6 +24,7 @@
 #include "scene/guides/xform_guide_mode.h"
 #include "scene/themes.h"
 #include "scene/view_mode.h"
+#include "subsystems/edit_overlays/edit_overlays.h"
 #include "ui/app/layout.h"
 
 #define CFG_DEFAULT_WIREFRAME         0
@@ -31,7 +32,7 @@
 #define CFG_DEFAULT_GRID_MAJOR_IDX    GRID_MAJOR_1
 #define CFG_DEFAULT_GRID_EXTENT_IDX   GRID_EXTENT_FAR
 #define CFG_DEFAULT_AXES_THEME        AXES_THEME_OFF
-#define CFG_DEFAULT_VERTEX_LABELS     GLR_VERTEX_LABEL_INDEX
+#define CFG_DEFAULT_VERTEX_LABELS     OVERLAY_VERTEX_LABEL_INDEX
 #define CFG_DEFAULT_VERTEX_INDICES    1
 #define CFG_DEFAULT_NORMAL_VECTORS    0
 #define CFG_DEFAULT_VERTEX_OUTLINES   1

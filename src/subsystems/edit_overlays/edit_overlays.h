@@ -5,12 +5,21 @@
 #include "scene/view_mode.h"             /* SceneViewMode */
 #include "repl/state_views.h"            /* FlatProgramView, CursorBlockState */
 
+#define OVERLAY_VERTEX_LABEL_LIST(X) \
+    X(OFF, "Off")                    \
+    X(INDEX, "Index")                \
+    X(INDEX_POS, "Index+Pos")        \
+    X(INDEX_WORLD, "Index+World")
+
+#define OVERLAY_VERTEX_LABEL_NAME_ENTRY(name, str) [OVERLAY_VERTEX_LABEL_##name] = str,
+
 typedef enum OverlayVertexLabelMode {
-    OVERLAY_VERTEX_LABEL_OFF = 0,
-    OVERLAY_VERTEX_LABEL_INDEX,
-    OVERLAY_VERTEX_LABEL_INDEX_POS,    /* raw vertex input coords (model-local) */
-    OVERLAY_VERTEX_LABEL_INDEX_WORLD,  /* coords after the active model transforms */
+#define OVERLAY_VERTEX_LABEL_ENUM_ENTRY(name, str) OVERLAY_VERTEX_LABEL_##name,
+    OVERLAY_VERTEX_LABEL_LIST(OVERLAY_VERTEX_LABEL_ENUM_ENTRY)
+#undef OVERLAY_VERTEX_LABEL_ENUM_ENTRY
+    OVERLAY_VERTEX_LABEL_COUNT
 } OverlayVertexLabelMode;
+
 
 typedef struct OverlayWalkCtx {
     FlatProgramView  program;
