@@ -16,51 +16,54 @@
  * in src/app/glr_actions.c). Adding a new theme/backdrop here picks it
  * up everywhere automatically. */
 #define GRID_THEME_LIST(X) \
-    X(OFF)                 \
-    X(CLASSIC)             \
-    X(FOG)                 \
-    X(TRON)                \
-    X(EMBER)               \
-    X(FAINT)               \
-    X(FOCUS)               \
-    X(OCEAN)               \
-    X(XZRULER)             \
-    X(PLANES)              \
-    X(RADAR)
+    X(OFF, "OFF")          \
+    X(CLASSIC, "Classic")  \
+    X(FOG, "Fog")          \
+    X(TRON, "Tron")        \
+    X(EMBER, "Ember")      \
+    X(FAINT, "Faint")      \
+    X(FOCUS, "Focus")      \
+    X(OCEAN, "Ocean")      \
+    X(XZRULER, "XZ Ruler") \
+    X(PLANES, "Adaptive Planes") \
+    X(RADAR, "Radar")
+
+#define GRID_THEME_ENUM_ENTRY(name, str) GRID_THEME_##name,
+#define GRID_THEME_NAME_ENTRY(name, str) [GRID_THEME_##name] = str,
 
 typedef enum {
-#define GRID_THEME_ENUM_ENTRY(name) GRID_THEME_##name,
     GRID_THEME_LIST(GRID_THEME_ENUM_ENTRY)
-#undef GRID_THEME_ENUM_ENTRY
     GRID_THEME_COUNT
 } SceneGridTheme;
 
 #define AXES_THEME_LIST(X) \
-    X(OFF)                 \
-    X(CLASSIC)             \
-    X(PULSE)               \
-    X(NEON)                \
-    X(COMPASS)             \
-    X(GIZMO)               \
-    X(RULER)
+    X(OFF, "OFF")          \
+    X(CLASSIC, "Classic")  \
+    X(PULSE, "Pulse")      \
+    X(NEON, "Neon")        \
+    X(COMPASS, "Compass")  \
+    X(GIZMO, "Gizmo")      \
+    X(RULER, "Ruler")
+
+#define AXES_THEME_ENUM_ENTRY(name, str) AXES_THEME_##name,
+#define AXES_THEME_NAME_ENTRY(name, str) [AXES_THEME_##name] = str,
 
 typedef enum {
-#define AXES_THEME_ENUM_ENTRY(name) AXES_THEME_##name,
     AXES_THEME_LIST(AXES_THEME_ENUM_ENTRY)
-#undef AXES_THEME_ENUM_ENTRY
     AXES_THEME_COUNT
 } SceneAxesTheme;
 
 #define SCENE_BACKDROP_LIST(X) \
-    X(OFF)                     \
-    X(CITYSCAPE)               \
-    X(STARS)                   \
-    X(CITY_AND_STARS)
+    X(OFF, "Off")              \
+    X(CITYSCAPE, "Cityscape")  \
+    X(STARS, "Stars")          \
+    X(CITY_AND_STARS, "City+Stars")
+
+#define SCENE_BACKDROP_ENUM_ENTRY(name, str) SCENE_BACKDROP_##name,
+#define SCENE_BACKDROP_NAME_ENTRY(name, str) [SCENE_BACKDROP_##name] = str,
 
 typedef enum {
-#define SCENE_BACKDROP_ENUM_ENTRY(name) SCENE_BACKDROP_##name,
     SCENE_BACKDROP_LIST(SCENE_BACKDROP_ENUM_ENTRY)
-#undef SCENE_BACKDROP_ENUM_ENTRY
     SCENE_BACKDROP_COUNT
 } SceneBackdropMode;
 
@@ -78,35 +81,48 @@ typedef enum {
  * position/colors; the program's glEnable(GL_LIGHTn) commands (or an
  * example's @cfg) decide which slots actually light up. */
 #define LIGHT_THEME_LIST(X) \
-    X(DEFAULT)              \
-    X(HEADLIGHT)            \
-    X(SOLAR)               \
-    X(STUDIO)              \
-    X(NEON)
+    X(DEFAULT, "Default")   \
+    X(HEADLIGHT, "Headlight") \
+    X(SOLAR, "Solar")       \
+    X(STUDIO, "Studio")     \
+    X(NEON, "Neon")
+
+#define LIGHT_THEME_ENUM_ENTRY(name, str) LIGHT_THEME_##name,
+#define LIGHT_THEME_NAME_ENTRY(name, str) [LIGHT_THEME_##name] = str,
 
 typedef enum {
-#define LIGHT_THEME_ENUM_ENTRY(name) LIGHT_THEME_##name,
     LIGHT_THEME_LIST(LIGHT_THEME_ENUM_ENTRY)
-#undef LIGHT_THEME_ENUM_ENTRY
     LIGHT_THEME_COUNT
 } SceneLightTheme;
 
 /* Grid major-tick spacing index. The actual float values live in a table
  * the controller passes through SceneRenderConfig.grid_major_steps. */
+#define GRID_MAJOR_LIST(X) \
+    X(1, "1")              \
+    X(2, "2")              \
+    X(5, "5")              \
+    X(10, "10")
+
+#define GRID_MAJOR_ENUM_ENTRY(name, str) GRID_MAJOR_##name,
+#define GRID_MAJOR_NAME_ENTRY(name, str) [GRID_MAJOR_##name] = str,
+
 typedef enum {
-    GRID_MAJOR_1  = 0,
-    GRID_MAJOR_2,
-    GRID_MAJOR_5,
-    GRID_MAJOR_10,
+    GRID_MAJOR_LIST(GRID_MAJOR_ENUM_ENTRY)
     GRID_MAJOR_COUNT
 } SceneGridMajorIdx;
 
 /* Grid half-extent from origin along each axis. Values live in
  * SceneRenderConfig.grid_extents and must match this enum order. */
+#define GRID_EXTENT_LIST(X) \
+    X(CLOSE, "Close")       \
+    X(MID, "Mid")           \
+    X(FAR, "Far")
+
+#define GRID_EXTENT_ENUM_ENTRY(name, str) GRID_EXTENT_##name,
+#define GRID_EXTENT_NAME_ENTRY(name, str) [GRID_EXTENT_##name] = str,
+
 typedef enum {
-    GRID_EXTENT_CLOSE = 0,
-    GRID_EXTENT_MID,
-    GRID_EXTENT_FAR,
+    GRID_EXTENT_LIST(GRID_EXTENT_ENUM_ENTRY)
     GRID_EXTENT_COUNT
 } SceneGridExtentIdx;
 

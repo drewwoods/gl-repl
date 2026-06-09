@@ -49,10 +49,7 @@
 
 static const char *replay_mode_names[] = { "Polygon", "Vertex" };
 static const char *backdrop_mode_names[SCENE_BACKDROP_COUNT] = {
-    [SCENE_BACKDROP_OFF] = "Off",
-    [SCENE_BACKDROP_CITYSCAPE] = "Cityscape",
-    [SCENE_BACKDROP_STARS] = "Stars",
-    [SCENE_BACKDROP_CITY_AND_STARS] = "City+Stars",
+    SCENE_BACKDROP_LIST(SCENE_BACKDROP_NAME_ENTRY)
 };
 static const char *xform_guide_mode_names[SCENE_XFORM_GUIDE_COUNT] = {
     [SCENE_XFORM_GUIDE_OFF]   = "Off",
@@ -65,37 +62,16 @@ static const char *code_panel_layout_names[] = {
     "Left", "Top", "Bottom", "Hidden"
 };
 static const char *grid_theme_names[GRID_THEME_COUNT] = {
-    [GRID_THEME_OFF]     = "OFF",
-    [GRID_THEME_CLASSIC] = "Classic",
-    [GRID_THEME_FOG]     = "Fog",
-    [GRID_THEME_TRON]    = "Tron",
-    [GRID_THEME_EMBER]   = "Ember",
-    [GRID_THEME_FAINT]   = "Faint",
-    [GRID_THEME_FOCUS]   = "Focus",
-    [GRID_THEME_OCEAN]   = "Ocean",
-    [GRID_THEME_XZRULER] = "XZ Ruler",
-    [GRID_THEME_PLANES]  = "Adaptive Planes",
-    [GRID_THEME_RADAR]   = "Radar",
+    GRID_THEME_LIST(GRID_THEME_NAME_ENTRY)
 };
 static const char *grid_major_names[GRID_MAJOR_COUNT] = {
-    [GRID_MAJOR_1]  = "1",
-    [GRID_MAJOR_2]  = "2",
-    [GRID_MAJOR_5]  = "5",
-    [GRID_MAJOR_10] = "10",
+    GRID_MAJOR_LIST(GRID_MAJOR_NAME_ENTRY)
 };
 static const char *grid_extent_names[GRID_EXTENT_COUNT] = {
-    [GRID_EXTENT_CLOSE] = "Close",
-    [GRID_EXTENT_MID]   = "Mid",
-    [GRID_EXTENT_FAR]   = "Far",
+    GRID_EXTENT_LIST(GRID_EXTENT_NAME_ENTRY)
 };
 static const char *axes_theme_names[AXES_THEME_COUNT] = {
-    [AXES_THEME_OFF]     = "OFF",
-    [AXES_THEME_CLASSIC] = "Classic",
-    [AXES_THEME_PULSE]   = "Pulse",
-    [AXES_THEME_NEON]    = "Neon",
-    [AXES_THEME_COMPASS] = "Compass",
-    [AXES_THEME_GIZMO]   = "Gizmo",
-    [AXES_THEME_RULER]   = "Ruler",
+    AXES_THEME_LIST(AXES_THEME_NAME_ENTRY)
 };
 static char cfg_status_buf[REPL_STATUS_TEXT_MAX];
 
@@ -337,22 +313,22 @@ static const GlrConfigItem *glr_export_cfg_find_item_by_slug(const char *slug) {
  * in src/scene/themes.h via X-macros, so adding a theme/backdrop there
  * adds its symbol here automatically. */
 static const char *cfg_grid_theme_symbols[GRID_THEME_COUNT] = {
-#define GRID_THEME_SYMBOL_ENTRY(name) [GRID_THEME_##name] = "GRID_THEME_" #name,
+#define GRID_THEME_SYMBOL_ENTRY(name, str) [GRID_THEME_##name] = "GRID_THEME_" #name,
     GRID_THEME_LIST(GRID_THEME_SYMBOL_ENTRY)
 #undef GRID_THEME_SYMBOL_ENTRY
 };
 static const char *cfg_axes_theme_symbols[AXES_THEME_COUNT] = {
-#define AXES_THEME_SYMBOL_ENTRY(name) [AXES_THEME_##name] = "AXES_THEME_" #name,
+#define AXES_THEME_SYMBOL_ENTRY(name, str) [AXES_THEME_##name] = "AXES_THEME_" #name,
     AXES_THEME_LIST(AXES_THEME_SYMBOL_ENTRY)
 #undef AXES_THEME_SYMBOL_ENTRY
 };
 static const char *cfg_backdrop_mode_symbols[SCENE_BACKDROP_COUNT] = {
-#define SCENE_BACKDROP_SYMBOL_ENTRY(name) [SCENE_BACKDROP_##name] = "SCENE_BACKDROP_" #name,
+#define SCENE_BACKDROP_SYMBOL_ENTRY(name, str) [SCENE_BACKDROP_##name] = "SCENE_BACKDROP_" #name,
     SCENE_BACKDROP_LIST(SCENE_BACKDROP_SYMBOL_ENTRY)
 #undef SCENE_BACKDROP_SYMBOL_ENTRY
 };
 static const char *cfg_light_theme_symbols[LIGHT_THEME_COUNT] = {
-#define LIGHT_THEME_SYMBOL_ENTRY(name) [LIGHT_THEME_##name] = "LIGHT_THEME_" #name,
+#define LIGHT_THEME_SYMBOL_ENTRY(name, str) [LIGHT_THEME_##name] = "LIGHT_THEME_" #name,
     LIGHT_THEME_LIST(LIGHT_THEME_SYMBOL_ENTRY)
 #undef LIGHT_THEME_SYMBOL_ENTRY
 };

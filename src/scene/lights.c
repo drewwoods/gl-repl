@@ -172,11 +172,7 @@ static const SceneLight g_light_themes[LIGHT_THEME_COUNT][MAX_LIGHTS] = {
 };
 
 const char *scene_light_theme_names[] = {
-    [LIGHT_THEME_DEFAULT]   = "Default",
-    [LIGHT_THEME_HEADLIGHT] = "Headlight",
-    [LIGHT_THEME_SOLAR]     = "Solar",
-    [LIGHT_THEME_STUDIO]    = "Studio",
-    [LIGHT_THEME_NEON]      = "Neon",
+    LIGHT_THEME_LIST(LIGHT_THEME_NAME_ENTRY)
 };
 
 void scene_lights_apply_theme(SceneLight out[MAX_LIGHTS], int theme) {
