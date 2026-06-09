@@ -114,8 +114,15 @@ AA/non-blur paths; the blur branch recomputes per pass from `pass_cfg`. The
 jitter table already supports 12 (first 12 of 16 entries).
 
 `validate_render_config` (render.c:97) is **reject-only on a const config** — do
-not "clamp". Add reject checks: `accum_effect ∉ [0,2]` → fail; `accum_passes` not
-in the supported ladder `{1,2,4,8,12,16}` → fail.
+not "clamp". Add: `accum_effect ∉ [0,2]` → fail (always). Validate the
+`accum_passes` ladder `{1,2,4,8,12,16}` **only when accumulation is active**
+(`use_accum && accum_effect != OFF`), mirroring the grid block's
+`grid_theme != GRID_THEME_OFF` guard (render.c:109). This keeps the
+`memset(0)` config path valid for non-accum callers — `tools/scene_demo/scene_demo.c`
+(scene_demo.c:169 builds via memset and never sets accum fields, then calls
+`scene_render_3d_scene` at :361) needs **no change**: effect=OFF ⇒ passes
+unchecked. The existing `tests/test_scene_render.c` setup is the one place that
+turns AA on, so it must set `accum_passes` (see Tests).
 
 ### 3. Camera helpers — `src/app/glr_camera.{h,c}`
 
@@ -132,11 +139,14 @@ linearly. `pose_changed` compares with epsilons (reuse the existing
 `CAM_TARGET_*_EPS` values). Keep `shortest_angle_delta` static (both helpers
 are same-TU).
 
-### 4. Transient time setter — `src/repl/state.{h,c}`
+### 4. Transient time setter — impl `src/repl/state.c`, decl `src/repl/state_owners.h`
 
 `repl_state_time_set` is unusable here (it overwrites `g_anim_time` and sets
 `g_flat_dirty`). Add a setter that writes only the predef-`t` slot; the **caller
-then reflattens** at that `t` (this is what actually re-bakes geometry — see P1):
+then reflattens** at that `t` (this is what actually re-bakes geometry — see P1).
+Declare it in **`state_owners.h`** alongside the other mutable time accessors
+(`repl_state_time_advance/_reset_to_zero/_set`, state_owners.h:62-64), not the
+read-only `state.h` facade:
 ```c
 /* Sets only predef 't' (no g_anim_time, no g_flat_dirty). For a motion-blur
  * sub-pass: set the sub-step t, then call repl_flatten_commands() to re-bake
@@ -166,9 +176,18 @@ void repl_state_time_set_transient(float value);  /* writes g_predef_vars_mut[g_
   modelview.
 - Resolve blur mode just before the render call (in/near
   `glr_ctrl_build_scene_config`), only when `accum_effect==BLUR && use_accum &&
-  passes>1`: `BLUR_CAMERA` if `prev_valid && glr_camera_pose_changed(prev,cur)`,
-  else `BLUR_TIME` if `repl_state_variables().time_playing`, else `BLUR_NONE`.
-  For `BLUR_NONE` leave `setup_subframe_fn = NULL` (scene → AA jitter fallback).
+  passes>1 && !replay_active()`: `BLUR_CAMERA` if `prev_valid &&
+  glr_camera_pose_changed(prev,cur)`, else `BLUR_TIME` if
+  `repl_state_variables().time_playing`, else `BLUR_NONE`. For `BLUR_NONE` leave
+  `setup_subframe_fn = NULL` (scene → AA jitter fallback).
+- **Replay degrades blur → AA (user directive).** When `replay_active()`, mode
+  is forced to `BLUR_NONE` so `setup_subframe_fn` stays NULL; with
+  `accum_effect ∈ {AA, Blur}` the scene's `do_accum` branch then renders the AA
+  jitter path. This sidesteps the reflatten/replay-clip conflict entirely:
+  per-subpass `repl_flatten_commands()` would reset the flat count to the full
+  program (flatten.c:731), clobbering the replay-narrowed count set by
+  `replay_prepare_frame` (glr_ctrl.c:1380) that `scene_execute_adapter` renders
+  (glr_ctrl.c:640). So during replay, AA-or-Blur ⇒ AA; Off ⇒ no accum.
   When blur is active, fill `g_subframe_ctx`: poses, `t_end` (current predef t),
   `dt = GLR_FRAME_DT_SECS`, `t_var_idx`, `edit_line`, and **snapshot the baseline**
   via `repl_copy_predef_values(base_predef,…)`, `repl_eval_copy_scratch_arrays(base_scratch)`,
@@ -288,7 +307,9 @@ New unit tests:
    Ctrl+= / Ctrl+− steps passes; drag the camera with effect=Blur and confirm
    camera-direction smear; with the camera still and `t` playing (Ctrl+T)
    confirm temporal smear on animated geometry; pause `t` with a still camera
-   and confirm it falls back to clean AA.
+   and confirm it falls back to clean AA. Start replay (Ctrl+R) with effect=Blur
+   and confirm geometry renders correctly (AA, not blurred — only the replay
+   slice draws, no whole-program leak).
 4. Headless sanity (optional): `make gl-repl FREEGLUT_OSMESA=1` +
    `scripts/record-gif.sh --example 2 --duration 2` with blur on to eyeball the
    accumulated frames.
