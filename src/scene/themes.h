@@ -27,7 +27,8 @@
     X(XZRULER, "XZ Ruler") \
     X(PLANES, "Adaptive Planes") \
     X(RADAR, "Radar")      \
-    X(AURORA, "Aurora")
+    X(AURORA, "Aurora")    \
+    X(SYNTHWAVE, "Synthwave")
 
 #define GRID_THEME_ENUM_ENTRY(name, str) GRID_THEME_##name,
 #define GRID_THEME_NAME_ENTRY(name, str) [GRID_THEME_##name] = str,
@@ -58,7 +59,8 @@ typedef enum {
     X(OFF, "Off")              \
     X(CITYSCAPE, "Cityscape")  \
     X(STARS, "Stars")          \
-    X(CITY_AND_STARS, "City+Stars")
+    X(CITY_AND_STARS, "City+Stars") \
+    X(SUNSET, "Sunset")
 
 #define SCENE_BACKDROP_ENUM_ENTRY(name, str) SCENE_BACKDROP_##name,
 #define SCENE_BACKDROP_NAME_ENTRY(name, str) [SCENE_BACKDROP_##name] = str,
