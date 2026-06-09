@@ -662,6 +662,14 @@ UiHit ui_panels_hit_test(const UiRenderSnapshot *snap,
             return tab_hit;
     }
 
+    /* The messages overlay paints after the floating variable panel, so its
+     * button and open-list pixels must claim the overlap first. */
+    {
+        UiHit msg_hit = status_history_hit_test(snap, mx, my);
+        if (msg_hit.kind != UI_HIT_NONE)
+            return msg_hit;
+    }
+
     {
         UiVariablePanelView var_view = ui_app_variable_panel_view(snap);
         var_view.var_count = variable_count;   /* honor the caller's count */
@@ -680,14 +688,6 @@ UiHit ui_panels_hit_test(const UiRenderSnapshot *snap,
         UiHit code_hit = ui_repl_code_panel_hit_test(snap, mx, my);
         if (code_hit.kind != UI_HIT_NONE)
             return code_hit;
-    }
-
-    /* Messages button / open history list sit over the bottom-right of
-     * the scene, after the code panel so an overlapping panel still wins. */
-    {
-        UiHit msg_hit = status_history_hit_test(snap, mx, my);
-        if (msg_hit.kind != UI_HIT_NONE)
-            return msg_hit;
     }
 
     hit.kind = UI_HIT_SCENE;
