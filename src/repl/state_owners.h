@@ -62,10 +62,12 @@ ReplVariableState       *repl_state_variables_mut(void);
 void                     repl_state_time_advance(float dt);
 void                     repl_state_time_reset_to_zero(void);
 void                     repl_state_time_set(float value);
-/* Set only the predef 't' value for a single motion-blur sub-pass re-bake.
- * Unlike repl_state_time_set it leaves the free-running clock (g_anim_time)
- * and the flat-dirty flag untouched; the caller reflattens then restores the
- * frame baseline. */
+/* Transiently override the predef 't' binding only. Unlike
+ * repl_state_time_set it leaves the free-running clock (g_anim_time) and the
+ * flat-dirty flag untouched, so the running animation is undisturbed. The
+ * caller owns re-flattening at the new t (if it needs geometry re-baked) and
+ * restoring the prior binding. Useful for evaluating the program at an
+ * alternate t for a transient purpose (e.g. sub-frame time sampling). */
 void                     repl_state_time_set_transient(float value);
 
 /* Mutable accessor boundary: this header intentionally stops at REPL-owned

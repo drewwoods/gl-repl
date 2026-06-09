@@ -252,7 +252,7 @@ compatibility wrappers.
 ./gl-repl                  # Fresh session
 ./gl-repl output.c         # Reload saved session (single file)
 ./gl-repl workspace/       # Load every *.c under workspace/ as a user scene
-./gl-repl --noaccum        # Disable accumulation buffer AA
+./gl-repl --noaccum        # Disable the accumulation buffer (AA + motion blur)
 ./gl-repl --dump-code      # Print loaded buffer to stdout
 ./gl-repl --no-audio       # Skip audio init entirely (isolates startup stalls)
 ./gl-repl --assets ~/Music/glr  # Scan this dir for *.mp3 instead of ./assets (also GLR_ASSETS_DIR)
@@ -425,7 +425,7 @@ state-machine level, not buried in the doc body.
 | `gl_repl.h` | Minimal legacy header: standard includes and `M_PI`; types/defaults moved out to dedicated headers |
 | `src/app/glr_ctrl.c` | App-frame controller: `glr_ctrl_display_frame`, `glr_ctrl_reshape`, `glr_ctrl_init_gl`; builds `SceneRenderConfig`, calls scene/UI renderers |
 | `src/app/glr_ctrl.h` | Controller public surface: display, reshape, init-GL entrypoints |
-| `src/app/glr_config.c` | Config key implementation and descriptor table helpers. The tail of `glr_config_set` notifies the tutorial runner (`tutorial_notify_state_changed`) so REQUIRE steps observe every write path — direct setters (e.g. accum-AA Ctrl+=/-), `glr_cfg_cycle_row`'s early-return branches, and the bridge's `apply` during `@cfg` / example / workspace load |
+| `src/app/glr_config.c` | Config key implementation and descriptor table helpers. The tail of `glr_config_set` notifies the tutorial runner (`tutorial_notify_state_changed`) so REQUIRE steps observe every write path — direct setters (e.g. accum-passes Ctrl+=/-), `glr_cfg_cycle_row`'s early-return branches, and the bridge's `apply` during `@cfg` / example / workspace load |
 | `src/app/glr_config.h` | `ReplConfigKey` / `ReplConfigItem` descriptor API for keyed config access |
 | `src/repl/command.h` | Core command model types: `CmdType` enum, `GLCmd` struct (pure parse-result: type, args, flags, provenance — no `source[]` field) |
 | `src/repl/compile.c` | Pure source-text validators that produce `ReplCompiledChange` descriptors; never mutates state |
@@ -694,12 +694,17 @@ is no shim layer.
    prepare replay frame if active; update export/camera strings
 2. Build `SceneRenderConfig` from REPL state. Load the camera via
    `glr_camera_load_modelview(&pose)` (from `src/app/glr_camera.h`),
-   then call `scene_render_3d_scene(&g_scene_renderer, &cfg)` once per
-   jitter sample (if accumulation-buffer AA is enabled). The camera
-   modelview transform is the controller's responsibility —
-   `src/scene/render.c` does not touch the modelview except for
-   sub-renderer push/pop bracketing, and owns no camera type. Jitter
-   is applied as a scene-local frustum shift inside the scene function.
+   then call `scene_render_3d_scene(&g_scene_renderer, &cfg)` once. The
+   accumulation loop (when `accum_effect` is AA or Blur with
+   `accum_passes > 1`) lives inside that call. The camera modelview
+   transform is the controller's responsibility — `src/scene/render.c`
+   does not touch the modelview except for sub-renderer push/pop
+   bracketing, and owns no camera type. For AA, jitter is applied as a
+   scene-local frustum shift inside the scene function. For Blur, the
+   controller installs a per-sample `setup_subframe_fn` on the config
+   (`glr_ctrl_resolve_blur_subframe`) that the scene calls before each
+   accumulation pass to interpolate the camera pose or advance an
+   animation-time sub-step; see *Accumulation Motion Blur* below.
 3. `scene_render_3d_scene(&cfg)` in `src/scene/render.c`: viewport/clear setup
    → projection → execute user geometry via `SceneExecuteProgramFn`
    callback → replay fade batches → grid/axes/backdrop/orbit-target →
@@ -712,6 +717,43 @@ The standalone `make scene_demo` binary (sources in `tools/scene_demo/`)
 exercises the scene contract with a non-REPL geometry callback — it builds
 without dragging in the REPL editor / controller, which is the load-bearing
 proof that `src/scene/` has no hard dependency on REPL code.
+
+### Accumulation Motion Blur
+
+The accumulation buffer drives two effects, selected by the **Accum effect**
+config (`GLR_CONFIG_ACCUM_EFFECT`: Off / AA / Blur, F2) over **Accum passes**
+samples (`GLR_CONFIG_ACCUM_PASSES`: 1/2/4/8/12/16, Ctrl+=/Ctrl+−). Backing
+fields are `GlrRenderState.accum_effect/accum_passes` → `SceneRenderConfig`.
+AA (the historic default, 2 passes) jitters the frustum per sample. Blur is
+opt-in (expensive: it re-renders the scene per sample with no temporal reuse).
+
+The accum loop lives in `scene_render_3d_scene()` (`src/scene/render.c`). For
+Blur the scene makes a per-sample `SceneRenderConfig` copy and calls
+`config->setup_subframe_fn(ud, pass_idx, pass_count, &pass_cfg)` — a hook the
+**controller** installs (`glr_ctrl_resolve_blur_subframe` →
+`glr_ctrl_setup_subframe` in `src/app/glr_ctrl.c`), so the scene stays
+camera/REPL-agnostic. Per frame the controller picks:
+
+- **Camera blur** — if the camera pose changed since last frame
+  (`glr_camera_pose_changed`), interpolate `prev`↔`cur` pose across the samples
+  (`glr_camera_pose_lerp`). The hook loads the interpolated modelview *and*
+  writes the pose into `pass_cfg->cam_*` so grid/axes/orbit-target/lights and
+  the ortho projection (recomputed per sample) blur with the camera too.
+- **Time blur** — else if `t` is playing, sample the trailing window
+  `[t−dt, t]` (`dt = GLR_FRAME_DT_SECS`): the hook calls
+  `repl_state_time_set_transient()` then `repl_flatten_commands()` to re-bake
+  geometry at the sub-step `t`. (Re-baking is required — the executor consumes
+  baked `flat_cmds[].args`; animation is reflatten-per-frame, not execute-time
+  re-eval.)
+- **Fallback** — `t` paused and camera still ⇒ the hook stays NULL and the
+  scene takes the AA jitter path. **Replay** also forces this (NULL hook): a
+  per-sample reflatten would clobber the replay-narrowed flat count.
+
+Each sample first resets predef/scratch/render to a frame baseline captured in
+`g_subframe_ctx`, so accumulating programs (`A[0]=A[0]+1`, `t=t+1`) don't
+compound across samples. The frame-level predef/scratch restore at the end of
+`glr_ctrl_display_frame` puts the true `t` back; the last sample (f=1) bakes at
+exactly `t_end`, so the flat program is left at the true frame time.
 
 ### Two-Level Command Model
 
@@ -1171,7 +1213,8 @@ alongside `.cfg` (see the file-layout table for the shipped catalog).
 | Ctrl+Shift+R | Toggle camera auto-rotate |
 | Ctrl+Shift+V | Toggle View mode (2D / 3D) |
 | F1 | Help overlay — also the clickable statusbar "F1 help" keycap |
-| F2-F10 | Cycle the bound config forward. Each drives a multi-state cycle: F2 Accum AA, F3 Grid, F4 Axes, F5 Vertex labels, F6 Backdrop, F7 Grid extent, F8 Xform guides, F9 Light theme, F10 Syntax highlight |
+| F2-F10 | Cycle the bound config forward. Each drives a multi-state cycle: F2 Accum effect (Off/AA/Blur), F3 Grid, F4 Axes, F5 Vertex labels, F6 Backdrop, F7 Grid extent, F8 Xform guides, F9 Light theme, F10 Syntax highlight |
+| Ctrl+= / Ctrl+− | Step Accum passes up/down (1/2/4/8/12/16; active when Accum effect ≠ Off) |
 | Shift+F2-F10 | Step the bound cycle backward |
 | F11 | Export scene geometry to PLY (also File → Export .ply). File is named after the active scene like Save Scene — `<scene>.ply` (in the workspace dir if bound), else `output.ply`. On macOS F11 may be claimed by "Show Desktop" — use the menu item then |
 | F12 | Next example / scene |

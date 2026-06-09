@@ -19,7 +19,7 @@
 #include "scene/themes.h"       /* GRID_THEME_*, AXES_THEME_*, SCENE_BACKDROP_* */
 #include "app/glr_defaults.h"   /* CFG_DEFAULT_* */
 
-#define g_accum_aa_enabled    (glr_state_render_mut()->accum_aa_enabled)
+#define g_accum_effect        (glr_state_render_mut()->accum_effect)
 #define g_multisample_enabled (glr_state_render_mut()->multisample_enabled)
 #define g_line_smooth_enabled (glr_state_render_mut()->line_smooth_enabled)
 
@@ -121,7 +121,7 @@ static void pin_code_panel_state(void) {
     glr_state_presentation_mut()->axes_theme = CFG_DEFAULT_AXES_THEME;
     glr_state_presentation_mut()->backdrop_mode = CFG_DEFAULT_BACKDROP_MODE;
     glr_state_presentation_mut()->show_vertex_outlines = CFG_DEFAULT_VERTEX_OUTLINES;
-    g_accum_aa_enabled = 1;
+    g_accum_effect = SCENE_ACCUM_EFFECT_AA;
     glr_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
     g_multisample_enabled = CFG_DEFAULT_MULTISAMPLE;
     g_line_smooth_enabled = CFG_DEFAULT_LINE_SMOOTH;
@@ -1406,7 +1406,7 @@ int main(int argc, char **argv) {
     {
         static const char *const mixed_cfg_camera_example[] = {
             "// @cfg axes = 5",
-            "// @cfg accum_aa = 0",
+            "// @cfg accum_effect = 0",
             "// @cfg top_code_panel = 1",
             "// @cfg code_panel = 3",
             "// camera",
@@ -1424,8 +1424,8 @@ int main(int argc, char **argv) {
         load_custom_example_lines_for_test(mixed_cfg_camera_example);
         ASSERT_TRUE("mixed cfg camera allowed axes applied",
                     glr_state_presentation().axes_theme == 5);
-        ASSERT_TRUE("mixed cfg camera disallowed accum aa ignored",
-                    g_accum_aa_enabled == 1);
+        ASSERT_TRUE("mixed cfg camera disallowed accum effect ignored",
+                    g_accum_effect == SCENE_ACCUM_EFFECT_AA);
         ASSERT_TRUE("mixed cfg camera disallowed layout ignored",
                     glr_state_presentation().code_panel_layout == CFG_DEFAULT_CODE_PANEL_LAYOUT);
         ASSERT_TRUE("mixed cfg camera rx preset",
@@ -1448,7 +1448,7 @@ int main(int argc, char **argv) {
             ASSERT_TRUE("mixed cfg camera allowed cfg hidden",
                         strstr(dump, "// @cfg axes = 5") == NULL);
             ASSERT_TRUE("mixed cfg camera disallowed cfg hidden",
-                        strstr(dump, "// @cfg accum_aa = 0") == NULL);
+                        strstr(dump, "// @cfg accum_effect = 0") == NULL);
             ASSERT_TRUE("mixed cfg camera layout cfg hidden",
                         strstr(dump, "// @cfg code_panel = 3") == NULL);
             ASSERT_TRUE("mixed cfg camera marker hidden",

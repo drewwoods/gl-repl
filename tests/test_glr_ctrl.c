@@ -230,8 +230,8 @@ static void prepare_display_fixture(void) {
     ui_state_viewport_set_size(800, 600);
     glr_camera_set(11.0f, 22.0f, 7.5f, 0.5f, -0.25f, 1.75f, 0.9f);
     glr_state_render_mut()->use_accum = 0;
-    glr_state_render_mut()->accum_aa_enabled = 0;
-    glr_state_render_mut()->accum_samples = 1;
+    glr_state_render_mut()->accum_effect = SCENE_ACCUM_EFFECT_OFF;
+    glr_state_render_mut()->accum_passes = 1;
     glr_state_render_mut()->multisample_enabled = 0;
     glr_state_render_mut()->line_smooth_enabled = 1;
     repl_state_render_mut()->clear_color[0] = 0.0f;

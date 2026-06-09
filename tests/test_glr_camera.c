@@ -123,6 +123,55 @@ static void test_camera_auto_rotation_and_focus(void) {
     ASSERT_TRUE("No auto-rotate when easing is active", glr_camera_target_active() || glr_camera().ry == start_ry);
 }
 
+/* Pose interpolation + change detection used by accum motion blur. */
+static void test_camera_pose_lerp_and_changed(void) {
+    printf("--- camera pose lerp + change detection ---\n");
+
+    GlrCameraPose a = { .rx = 10.0f, .ry =  20.0f, .dist = 4.0f,
+                        .tx = 0.0f,  .ty =  0.0f,  .tz = 0.0f };
+    GlrCameraPose b = { .rx = 30.0f, .ry =  60.0f, .dist = 8.0f,
+                        .tx = 2.0f,  .ty = -4.0f,  .tz = 1.0f };
+
+    /* Endpoints. */
+    GlrCameraPose p0 = glr_camera_pose_lerp(&a, &b, 0.0f);
+    ASSERT_FLOAT_NEAR("lerp f=0 rx -> a",   p0.rx,   a.rx,   1e-4f);
+    ASSERT_FLOAT_NEAR("lerp f=0 dist -> a", p0.dist, a.dist, 1e-4f);
+    GlrCameraPose p1 = glr_camera_pose_lerp(&a, &b, 1.0f);
+    ASSERT_FLOAT_NEAR("lerp f=1 ry -> b",   p1.ry,   b.ry,   1e-4f);
+    ASSERT_FLOAT_NEAR("lerp f=1 ty -> b",   p1.ty,   b.ty,   1e-4f);
+
+    /* Midpoint is the linear average for non-wrapping axes. */
+    GlrCameraPose pm = glr_camera_pose_lerp(&a, &b, 0.5f);
+    ASSERT_FLOAT_NEAR("lerp mid dist", pm.dist, 6.0f,  1e-4f);
+    ASSERT_FLOAT_NEAR("lerp mid ry",   pm.ry,   40.0f, 1e-4f);
+    ASSERT_FLOAT_NEAR("lerp mid tz",   pm.tz,   0.5f,  1e-4f);
+
+    /* Angle wrap: 350 -> 10 should cross 0/360 the short way (~0), not 180. */
+    GlrCameraPose w0 = { .ry = 350.0f };
+    GlrCameraPose w1 = { .ry =  10.0f };
+    GlrCameraPose wm = glr_camera_pose_lerp(&w0, &w1, 0.5f);
+    float wm_ry = fmodf(wm.ry + 360.0f, 360.0f);
+    ASSERT_TRUE("lerp wraps short way (near 0/360, not 180)",
+                wm_ry < 1.0f || wm_ry > 359.0f);
+
+    /* Change detection. */
+    ASSERT_TRUE("identical poses -> unchanged",
+                glr_camera_pose_changed(&a, &a) == 0);
+    GlrCameraPose tiny = a;
+    tiny.ry += 0.001f;   /* below CAM_TARGET_ANGLE_EPS (0.01) */
+    tiny.tx += 0.0001f;  /* below CAM_TARGET_POS_EPS (0.001) */
+    ASSERT_TRUE("sub-epsilon nudge -> unchanged",
+                glr_camera_pose_changed(&a, &tiny) == 0);
+    GlrCameraPose big = a;
+    big.ry += 1.0f;
+    ASSERT_TRUE("supra-epsilon angle -> changed",
+                glr_camera_pose_changed(&a, &big) == 1);
+    GlrCameraPose moved = a;
+    moved.tx += 0.1f;
+    ASSERT_TRUE("supra-epsilon translate -> changed",
+                glr_camera_pose_changed(&a, &moved) == 1);
+}
+
 int main(void) {
     printf("--- glr_camera tests ---\n");
 
@@ -130,6 +179,7 @@ int main(void) {
     test_camera_distance_bounds();
     test_camera_easing_and_decay();
     test_camera_auto_rotation_and_focus();
+    test_camera_pose_lerp_and_changed();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_glr_camera");

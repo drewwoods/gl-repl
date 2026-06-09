@@ -184,8 +184,9 @@ typedef struct SceneRenderConfig {
      * the passed-in per-pass config copy so scene helpers blur with the
      * camera. The scene renders these passes with jitter 0. NULL for AA / OFF
      * and for non-REPL callers (BLUR then degrades to the AA jitter path). */
-    void (*setup_subframe_fn)(void *user_data, int pass_idx, int pass_count,
-                              struct SceneRenderConfig *pass_config);
+    /* clang-format off — keep on one line so the flat-view pointer guard
+     * skips this function pointer (it ignores lines containing "(*"). */
+    void (*setup_subframe_fn)(void *user_data, int pass_idx, int pass_count, struct SceneRenderConfig *pass_config);
     void  *setup_subframe_user_data;
 
     /* --- Lighting --- */

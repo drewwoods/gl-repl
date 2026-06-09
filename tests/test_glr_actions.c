@@ -1201,7 +1201,7 @@ static void test_fkey_reassignment_and_alt_shortcuts(void) {
     /* Reassigned F-keys now drive the long cycles (plain, no Shift). */
     g_test_mods = 0;
     struct { int fkey; GlrConfigKey key; const char *name; } fmap[] = {
-        { GLUT_KEY_F2,  GLR_CONFIG_ACCUM_AA,        "Accum AA"        },
+        { GLUT_KEY_F2,  GLR_CONFIG_ACCUM_EFFECT,    "Accum effect"    },
         { GLUT_KEY_F6,  GLR_CONFIG_BACKDROP,        "Backdrop"        },
         { GLUT_KEY_F7,  GLR_CONFIG_GRID_EXTENT,     "Grid extent"     },
         { GLUT_KEY_F10, GLR_CONFIG_SYNTAX_HIGHLIGHT,"Syntax highlight"},

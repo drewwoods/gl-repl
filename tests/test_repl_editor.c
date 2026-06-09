@@ -562,13 +562,13 @@ int main() {
     {
         glr_ctrl_reset_all();
 
-        /* F2 cycles Accum AA (a multi-state cycle); wireframe moved to the
+        /* F2 cycles Accum effect (Off/AA/Blur); wireframe moved to the
          * plain Ctrl+G ascii shortcut. */
-        int accum_before = glr_config_get(GLR_CONFIG_ACCUM_AA);
+        int accum_before = glr_config_get(GLR_CONFIG_ACCUM_EFFECT);
         ASSERT_INT("config special shortcut consumed",
                    glr_cfg_handle_special_shortcut(GLUT_KEY_F2), 1);
-        ASSERT_TRUE("config special shortcut (F2) cycles Accum AA",
-                    glr_config_get(GLR_CONFIG_ACCUM_AA) != accum_before);
+        ASSERT_TRUE("config special shortcut (F2) cycles Accum effect",
+                    glr_config_get(GLR_CONFIG_ACCUM_EFFECT) != accum_before);
 
         glr_state_presentation_mut()->wireframe = 0;
         ASSERT_INT("wireframe ascii shortcut consumed",
@@ -3228,54 +3228,53 @@ int main() {
         g_mock_modifiers = saved_mods;
     }
 
-    /* Ctrl++ / Ctrl+- now drive the same Off->2x->4x->8x->16x cycle as
-     * the Config "Accum AA" menu row (clamped, no wrap), enabling /
-     * disabling accum AA at the ends — keyboard and menu are one
-     * model. Cycle index: 0=Off 1=2x 2=4x 3=8x 4=16x. */
+    /* Ctrl++ / Ctrl+- step the Config "Accum passes" cycle
+     * (1/2/4/8/12/16, clamped, no wrap), gated on use_accum and the effect
+     * being active. The passes cycle never turns the effect off — it only
+     * changes the sample count. Cycle index: 0=1 1=2 2=4 3=8 4=12 5=16. */
     {
         int saved_mods = g_mock_modifiers;
         GlrRenderState *rs = glr_state_render_mut();
 
         glr_ctrl_reset_all();
         rs->use_accum = 1;
-        glr_config_set(GLR_CONFIG_ACCUM_AA, 1);   /* 2x */
+        rs->accum_effect = SCENE_ACCUM_EFFECT_AA;
+        glr_config_set(GLR_CONFIG_ACCUM_PASSES, 1);   /* index 1 == 2 passes */
 
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
 
-        /* Increment steps the cycle up and tracks accum_samples. */
+        /* Increment steps the cycle up and tracks accum_passes. */
         glr_ctrl_router_handle_accum_samples_key('+');
-        ASSERT_INT("accum +: cycle 2x->4x", glr_config_get(GLR_CONFIG_ACCUM_AA), 2);
-        ASSERT_INT("accum +: samples = 4", rs->accum_samples, 4);
-        ASSERT_INT("accum +: AA enabled", rs->accum_aa_enabled, 1);
+        ASSERT_INT("accum +: cycle 2->4", glr_config_get(GLR_CONFIG_ACCUM_PASSES), 2);
+        ASSERT_INT("accum +: passes = 4", rs->accum_passes, 4);
 
         glr_ctrl_router_handle_accum_samples_key('='); /* '=' == '+' w/o shift */
-        ASSERT_INT("accum =: cycle 4x->8x", glr_config_get(GLR_CONFIG_ACCUM_AA), 3);
-        ASSERT_INT("accum =: samples = 8", rs->accum_samples, 8);
+        ASSERT_INT("accum =: cycle 4->8", glr_config_get(GLR_CONFIG_ACCUM_PASSES), 3);
+        ASSERT_INT("accum =: passes = 8", rs->accum_passes, 8);
 
         /* Decrement steps back down. */
         glr_ctrl_router_handle_accum_samples_key('-');
-        ASSERT_INT("accum -: cycle 8x->4x", glr_config_get(GLR_CONFIG_ACCUM_AA), 2);
-        ASSERT_INT("accum -: samples = 4", rs->accum_samples, 4);
+        ASSERT_INT("accum -: cycle 8->4", glr_config_get(GLR_CONFIG_ACCUM_PASSES), 2);
+        ASSERT_INT("accum -: passes = 4", rs->accum_passes, 4);
 
-        /* Top clamp: 16x + Ctrl++ stays 16x (no wrap to Off). */
-        glr_config_set(GLR_CONFIG_ACCUM_AA, 4);
+        /* Top clamp: 16 + Ctrl++ stays 16 (no wrap). */
+        glr_config_set(GLR_CONFIG_ACCUM_PASSES, 5);
         glr_ctrl_router_handle_accum_samples_key('+');
-        ASSERT_INT("accum +: capped at 16x", glr_config_get(GLR_CONFIG_ACCUM_AA), 4);
-        ASSERT_INT("accum +: samples = 16", rs->accum_samples, 16);
+        ASSERT_INT("accum +: capped at 16", glr_config_get(GLR_CONFIG_ACCUM_PASSES), 5);
+        ASSERT_INT("accum +: passes = 16", rs->accum_passes, 16);
 
-        /* Bottom clamp: 2x + Ctrl+- -> Off (disables AA), stays Off. */
-        glr_config_set(GLR_CONFIG_ACCUM_AA, 1);
+        /* Bottom clamp: index 0 == 1 pass, Ctrl+- stays there (no wrap). */
+        glr_config_set(GLR_CONFIG_ACCUM_PASSES, 0);
         glr_ctrl_router_handle_accum_samples_key('-');
-        ASSERT_INT("accum -: 2x->Off", glr_config_get(GLR_CONFIG_ACCUM_AA), 0);
-        ASSERT_INT("accum -: AA disabled at Off", rs->accum_aa_enabled, 0);
-        glr_ctrl_router_handle_accum_samples_key('-');
-        ASSERT_INT("accum -: floored at Off", glr_config_get(GLR_CONFIG_ACCUM_AA), 0);
+        ASSERT_INT("accum -: floored at 1", glr_config_get(GLR_CONFIG_ACCUM_PASSES), 0);
+        ASSERT_INT("accum -: passes = 1", rs->accum_passes, 1);
 
-        /* Off + Ctrl++ re-enables at 2x. */
+        /* With the effect Off the fine-adjust is inert (consumed, no change). */
+        rs->accum_effect = SCENE_ACCUM_EFFECT_OFF;
+        glr_config_set(GLR_CONFIG_ACCUM_PASSES, 2); /* 4 */
         glr_ctrl_router_handle_accum_samples_key('+');
-        ASSERT_INT("accum +: Off->2x", glr_config_get(GLR_CONFIG_ACCUM_AA), 1);
-        ASSERT_INT("accum +: AA re-enabled", rs->accum_aa_enabled, 1);
-        ASSERT_INT("accum +: samples = 2", rs->accum_samples, 2);
+        ASSERT_INT("accum +: inert while effect Off",
+                   glr_config_get(GLR_CONFIG_ACCUM_PASSES), 2);
 
         g_mock_modifiers = saved_mods;
     }
