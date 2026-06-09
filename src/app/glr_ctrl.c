@@ -350,10 +350,11 @@ static OverlaySnapshotPack g_overlay_pack;
 
 static OverlayVertexLabelMode glr_ctrl_overlay_vertex_label_mode(int mode) {
     switch (mode) {
-    case GLR_VERTEX_LABEL_INDEX:     return OVERLAY_VERTEX_LABEL_INDEX;
-    case GLR_VERTEX_LABEL_INDEX_POS: return OVERLAY_VERTEX_LABEL_INDEX_POS;
+    case GLR_VERTEX_LABEL_INDEX:       return OVERLAY_VERTEX_LABEL_INDEX;
+    case GLR_VERTEX_LABEL_INDEX_POS:   return OVERLAY_VERTEX_LABEL_INDEX_POS;
+    case GLR_VERTEX_LABEL_INDEX_WORLD: return OVERLAY_VERTEX_LABEL_INDEX_WORLD;
     case GLR_VERTEX_LABEL_OFF:
-    default:                         return OVERLAY_VERTEX_LABEL_OFF;
+    default:                           return OVERLAY_VERTEX_LABEL_OFF;
     }
 }
 

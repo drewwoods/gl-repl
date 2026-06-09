@@ -13,6 +13,70 @@
 #include <stdio.h>
 #include <string.h>
 
+/* Transform a point by a column-major (OpenGL-layout) 4x4 matrix, dividing by
+ * the resulting w (1 for the affine modelview transforms we deal with, but the
+ * divide keeps it correct if a projection ever slips in). */
+static void mat4_transform_point(const float m[16], float x, float y, float z,
+                                 float out[3]) {
+    float ox = m[0] * x + m[4] * y + m[8]  * z + m[12];
+    float oy = m[1] * x + m[5] * y + m[9]  * z + m[13];
+    float oz = m[2] * x + m[6] * y + m[10] * z + m[14];
+    float ow = m[3] * x + m[7] * y + m[11] * z + m[15];
+    if (ow != 0.0f && ow != 1.0f) {
+        ox /= ow; oy /= ow; oz /= ow;
+    }
+    out[0] = ox; out[1] = oy; out[2] = oz;
+}
+
+/* Invert a column-major (OpenGL-layout) 4x4 matrix via cofactor expansion
+ * (the classic MESA gluInvertMatrix). Returns 1 on success, 0 if singular
+ * (out is left untouched then). Used once per label pass to undo the camera
+ * view so vertex labels can report world-space (post-model-transform) coords. */
+static int mat4_invert(const float m[16], float out[16]) {
+    float inv[16], det;
+
+    inv[0]  =  m[5]*m[10]*m[15] - m[5]*m[11]*m[14] - m[9]*m[6]*m[15]
+             + m[9]*m[7]*m[14] + m[13]*m[6]*m[11] - m[13]*m[7]*m[10];
+    inv[4]  = -m[4]*m[10]*m[15] + m[4]*m[11]*m[14] + m[8]*m[6]*m[15]
+             - m[8]*m[7]*m[14] - m[12]*m[6]*m[11] + m[12]*m[7]*m[10];
+    inv[8]  =  m[4]*m[9]*m[15] - m[4]*m[11]*m[13] - m[8]*m[5]*m[15]
+             + m[8]*m[7]*m[13] + m[12]*m[5]*m[11] - m[12]*m[7]*m[9];
+    inv[12] = -m[4]*m[9]*m[14] + m[4]*m[10]*m[13] + m[8]*m[5]*m[14]
+             - m[8]*m[6]*m[13] - m[12]*m[5]*m[10] + m[12]*m[6]*m[9];
+    inv[1]  = -m[1]*m[10]*m[15] + m[1]*m[11]*m[14] + m[9]*m[2]*m[15]
+             - m[9]*m[3]*m[14] - m[13]*m[2]*m[11] + m[13]*m[3]*m[10];
+    inv[5]  =  m[0]*m[10]*m[15] - m[0]*m[11]*m[14] - m[8]*m[2]*m[15]
+             + m[8]*m[3]*m[14] + m[12]*m[2]*m[11] - m[12]*m[3]*m[10];
+    inv[9]  = -m[0]*m[9]*m[15] + m[0]*m[11]*m[13] + m[8]*m[1]*m[15]
+             - m[8]*m[3]*m[13] - m[12]*m[1]*m[11] + m[12]*m[3]*m[9];
+    inv[13] =  m[0]*m[9]*m[14] - m[0]*m[10]*m[13] - m[8]*m[1]*m[14]
+             + m[8]*m[2]*m[13] + m[12]*m[1]*m[10] - m[12]*m[2]*m[9];
+    inv[2]  =  m[1]*m[6]*m[15] - m[1]*m[7]*m[14] - m[5]*m[2]*m[15]
+             + m[5]*m[3]*m[14] + m[13]*m[2]*m[7] - m[13]*m[3]*m[6];
+    inv[6]  = -m[0]*m[6]*m[15] + m[0]*m[7]*m[14] + m[4]*m[2]*m[15]
+             - m[4]*m[3]*m[14] - m[12]*m[2]*m[7] + m[12]*m[3]*m[6];
+    inv[10] =  m[0]*m[5]*m[15] - m[0]*m[7]*m[13] - m[4]*m[1]*m[15]
+             + m[4]*m[3]*m[13] + m[12]*m[1]*m[7] - m[12]*m[3]*m[5];
+    inv[14] = -m[0]*m[5]*m[14] + m[0]*m[6]*m[13] + m[4]*m[1]*m[14]
+             - m[4]*m[2]*m[13] - m[12]*m[1]*m[6] + m[12]*m[2]*m[5];
+    inv[3]  = -m[1]*m[6]*m[11] + m[1]*m[7]*m[10] + m[5]*m[2]*m[11]
+             - m[5]*m[3]*m[10] - m[9]*m[2]*m[7] + m[9]*m[3]*m[6];
+    inv[7]  =  m[0]*m[6]*m[11] - m[0]*m[7]*m[10] - m[4]*m[2]*m[11]
+             + m[4]*m[3]*m[10] + m[8]*m[2]*m[7] - m[8]*m[3]*m[6];
+    inv[11] = -m[0]*m[5]*m[11] + m[0]*m[7]*m[9] + m[4]*m[1]*m[11]
+             - m[4]*m[3]*m[9] - m[8]*m[1]*m[7] + m[8]*m[3]*m[5];
+    inv[15] =  m[0]*m[5]*m[10] - m[0]*m[6]*m[9] - m[4]*m[1]*m[10]
+             + m[4]*m[2]*m[9] + m[8]*m[1]*m[6] - m[8]*m[2]*m[5];
+
+    det = m[0]*inv[0] + m[1]*inv[4] + m[2]*inv[8] + m[3]*inv[12];
+    if (det == 0.0f)
+        return 0;
+    det = 1.0f / det;
+    for (int i = 0; i < 16; i++)
+        out[i] = inv[i] * det;
+    return 1;
+}
+
 static int outline_begin_mode_has_overlay(GLenum mode) {
     switch (mode) {
     case GL_POINTS:
@@ -321,6 +385,12 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
 typedef struct {
     OverlayVertexLabelMode mode;
     int is_ortho;
+    /* For OVERLAY_VERTEX_LABEL_INDEX_WORLD: inverse of the camera/view matrix
+     * snapshotted at the start of the walk, so a per-vertex world position is
+     * view_inv * modelview * vertex (modelview = view * accumulated model
+     * transforms). view_inv_ok is 0 if the view matrix was singular. */
+    float view_inv[16];
+    int   view_inv_ok;
 } VertexLabelCtx;
 
 static void on_vertex_number_label(const ReplayVertexWalkState *state,
@@ -332,7 +402,8 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
     const char *detail_text = NULL;
 
     if (!ctx || (ctx->mode != OVERLAY_VERTEX_LABEL_INDEX &&
-                 ctx->mode != OVERLAY_VERTEX_LABEL_INDEX_POS))
+                 ctx->mode != OVERLAY_VERTEX_LABEL_INDEX_POS &&
+                 ctx->mode != OVERLAY_VERTEX_LABEL_INDEX_WORLD))
         return;
 
     snprintf(idx_buf, sizeof(idx_buf), " v%d", state->vertex_idx_in_block);
@@ -342,6 +413,22 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
         else
             snprintf(pos_buf, sizeof(pos_buf), " (%.2f, %.2f, %.2f)",
                      vx, vy, vz);
+        detail_text = pos_buf;
+    } else if (ctx->mode == OVERLAY_VERTEX_LABEL_INDEX_WORLD && ctx->view_inv_ok) {
+        /* GL_MODELVIEW here is view * model (the walker has applied the model
+         * transforms up to this vertex). Map the input vertex into eye space,
+         * then undo the camera to land in world space. Cheap: vertex labels
+         * only fire for the cursor's selected block, not the whole program. */
+        float mv[16], eye[3], world[3];
+        glGetFloatv(GL_MODELVIEW_MATRIX, mv);
+        mat4_transform_point(mv, vx, vy, vz, eye);
+        mat4_transform_point(ctx->view_inv, eye[0], eye[1], eye[2], world);
+        if (ctx->is_ortho)
+            snprintf(pos_buf, sizeof(pos_buf), " (%.2f, %.2f)",
+                     world[0], world[1]);
+        else
+            snprintf(pos_buf, sizeof(pos_buf), " (%.2f, %.2f, %.2f)",
+                     world[0], world[1], world[2]);
         detail_text = pos_buf;
     }
     scene_draw_vertex_label_text(vx, vy, vz, idx_buf, detail_text);
@@ -390,10 +477,19 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     glDisable(GL_DEPTH_TEST);
     scene_clr(SCENE_CLR_VERTEX_LABEL);
 
+    VertexLabelCtx label_ctx = { .mode = mode, .is_ortho = is_ortho };
+    if (mode == OVERLAY_VERTEX_LABEL_INDEX_WORLD) {
+        /* The modelview here is the camera/view matrix — the walker has not yet
+         * applied any model transform (it pushes/translates per cmd below). Cache
+         * its inverse once so each label can strip the camera back out. */
+        float cam_view[16];
+        glGetFloatv(GL_MODELVIEW_MATRIX, cam_view);
+        label_ctx.view_inv_ok = mat4_invert(cam_view, label_ctx.view_inv);
+    }
+
     static const ReplayVertexWalkCallbacks cb = {
         .on_vertex = on_vertex_number_label,
     };
-    VertexLabelCtx label_ctx = { .mode = mode, .is_ortho = is_ortho };
     replay_walk_user_vertices(&ctx, &cb, &label_ctx);
 
     glPopAttrib();

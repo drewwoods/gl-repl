@@ -8,7 +8,8 @@
 typedef enum OverlayVertexLabelMode {
     OVERLAY_VERTEX_LABEL_OFF = 0,
     OVERLAY_VERTEX_LABEL_INDEX,
-    OVERLAY_VERTEX_LABEL_INDEX_POS,
+    OVERLAY_VERTEX_LABEL_INDEX_POS,    /* raw vertex input coords (model-local) */
+    OVERLAY_VERTEX_LABEL_INDEX_WORLD,  /* coords after the active model transforms */
 } OverlayVertexLabelMode;
 
 typedef struct OverlayWalkCtx {

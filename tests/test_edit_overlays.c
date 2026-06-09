@@ -564,6 +564,48 @@ static void test_cursor_guide_snapshot_with_flat_args(void) {
     ASSERT_INT("NULL flat leaves base pos unset", s.normal_base_pos_valid, 0);
 }
 
+/* mat4_transform_point and mat4_invert mathematical verification. */
+static void test_mat4_math(void) {
+    printf("--- edit_overlays mat4_math ---\n");
+
+    /* Identity matrix */
+    float id[16] = {
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1
+    };
+    float out[16];
+
+    ASSERT_INT("invert identity succeeds", mat4_invert(id, out), 1);
+    ASSERT_TRUE("invert identity is identity", out[0] == 1.0f && out[5] == 1.0f && out[10] == 1.0f && out[15] == 1.0f);
+    ASSERT_TRUE("invert identity off-diagonal 0", out[1] == 0.0f && out[12] == 0.0f);
+
+    /* Translation matrix */
+    float tr[16] = {
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        5, 6, 7, 1
+    };
+    ASSERT_INT("invert translation succeeds", mat4_invert(tr, out), 1);
+    ASSERT_TRUE("invert translation diagonal 1", out[0] == 1.0f && out[5] == 1.0f && out[10] == 1.0f && out[15] == 1.0f);
+    ASSERT_TRUE("invert translation tx is -5", out[12] == -5.0f);
+    ASSERT_TRUE("invert translation ty is -6", out[13] == -6.0f);
+    ASSERT_TRUE("invert translation tz is -7", out[14] == -7.0f);
+
+    /* Transform point */
+    float pt[3];
+    mat4_transform_point(tr, 1.0f, 2.0f, 3.0f, pt);
+    ASSERT_TRUE("transform point tx", pt[0] == 6.0f);
+    ASSERT_TRUE("transform point ty", pt[1] == 8.0f);
+    ASSERT_TRUE("transform point tz", pt[2] == 10.0f);
+
+    /* Singular matrix */
+    float sing[16] = { 0 };
+    ASSERT_INT("invert singular fails", mat4_invert(sing, out), 0);
+}
+
 /* on_vertex_number_label callback: builds the index / index+pos label text
  * and forwards it to the scene text helper (observable as a glRasterPos3f at
  * the vertex). Also exercise the mode guard. */
@@ -591,6 +633,19 @@ static void test_on_vertex_number_label_callback(void) {
     trace_end(&log);
     ASSERT_INT("index+pos label sets raster pos at the vertex",
                trace_count_line(&log, "glRasterPos3f 4 5 6"), 1);
+
+    /* INDEX_WORLD mode (3D): exercises the world space logic via stubs. */
+    VertexLabelCtx world_ctx = { .mode = OVERLAY_VERTEX_LABEL_INDEX_WORLD, .is_ortho = 0, .view_inv_ok = 1 };
+    float id[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
+    memcpy(world_ctx.view_inv, id, sizeof(id));
+    extern float g_gl_stub_modelview_matrix[16];
+    memcpy(g_gl_stub_modelview_matrix, id, sizeof(id));
+
+    trace_begin();
+    on_vertex_number_label(&state, 1.0f, 2.0f, 3.0f, &world_ctx);
+    trace_end(&log);
+    ASSERT_INT("index+world label sets raster pos at the vertex",
+               trace_count_line(&log, "glRasterPos3f 1 2 3"), 1);
 
     /* OFF mode and NULL ctx draw nothing. */
     VertexLabelCtx off_ctx = { .mode = OVERLAY_VERTEX_LABEL_OFF, .is_ortho = 0 };
@@ -738,6 +793,7 @@ int main(void) {
     test_render_outlines_glut();
     test_find_next_vertex_args();
     test_cursor_guide_snapshot_with_flat_args();
+    test_mat4_math();
     test_on_vertex_number_label_callback();
     test_on_normal_vector_arrow_callback();
     test_render_via_repl_program();

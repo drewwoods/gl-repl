@@ -993,7 +993,7 @@ static void test_vertex_label_modes(void) {
     ASSERT_TRUE("vertex labels row found", vertex_labels_row >= 0);
 
     const GlrConfigItem *item = glr_config_item_at(vertex_labels_row);
-    ASSERT_INT("vertex labels state_count is 3",
+    ASSERT_INT("vertex labels state_count matches enum",
                item->state_count, GLR_VERTEX_LABEL_COUNT);
     ASSERT_TRUE("vertex labels has state_names",
                 item->state_names != NULL);
@@ -1006,6 +1006,12 @@ static void test_vertex_label_modes(void) {
                glr_config_get(GLR_CONFIG_VERTEX_LABELS), GLR_VERTEX_LABEL_INDEX_POS);
     ASSERT_STR("status Index+Pos", g_last_status,
                "Vertex labels: Index+Pos");
+
+    glr_cfg_cycle_row(vertex_labels_row, 1);
+    ASSERT_INT("cycle to Index+World",
+               glr_config_get(GLR_CONFIG_VERTEX_LABELS), GLR_VERTEX_LABEL_INDEX_WORLD);
+    ASSERT_STR("status Index+World", g_last_status,
+               "Vertex labels: Index+World");
 
     glr_cfg_cycle_row(vertex_labels_row, 1);
     ASSERT_INT("cycle to Off",
