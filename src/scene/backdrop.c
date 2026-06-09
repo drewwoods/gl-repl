@@ -750,7 +750,7 @@ static void draw_aurora(float anim_time, float alpha_scale, float extent) {
 
     const float t      = anim_time;
     const float as     = alpha_scale;
-    const int   steps  = 64;
+    const int   steps  = 256;
 
     for (int c = 0; c < 2; c++) {
         float ph       = (float)c * 2.6f;
