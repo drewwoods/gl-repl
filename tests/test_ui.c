@@ -838,6 +838,40 @@ static void test_ui_panels_hit_test_dispatch(void) {
     UiHit h_var = ui_panels_hit_test_current_snapshot(px + 10, my_var, 1);
     ASSERT_TRUE("var panel routed via panels_hit_test",
                 h_var.kind == UI_HIT_VARIABLE_SLIDER);
+
+    /* The open recent-messages list grows upward from the bell and overlaps
+     * the panel's lower-right rows. Because it renders after the variable
+     * panel, the overlay should win that shared hit area. */
+    ui_state_status_set("seed");
+    ui_state_status_history_set_open(1);
+    {
+        UiRenderSnapshot snap;
+        int bx, by, bw, bh;
+        int overlap_mx;
+        int overlap_my;
+        UiHit h_overlap_panel;
+        UiHit h_overlap_status;
+
+        make_test_ui_snapshot(&snap);
+        ASSERT_TRUE("status history button exists",
+                    ui_panels_status_history_button_rect(&snap, &bx, &by, &bw, &bh));
+        (void)by;
+        (void)bh;
+
+        overlap_mx = bx + bw / 2;
+        overlap_my = ui_state_viewport().window_h - (py + 10);
+
+        h_overlap_panel = vp_hit_test(1, overlap_mx, overlap_my);
+        ASSERT_TRUE("overlap probe reaches variable row",
+                    h_overlap_panel.kind == UI_HIT_VARIABLE_SLIDER);
+
+        h_overlap_status = ui_panels_hit_test(&snap, overlap_mx, overlap_my, 1);
+        ASSERT_TRUE("status history overlay wins over variable panel",
+                    h_overlap_status.kind == UI_HIT_STATUS_HISTORY);
+        ASSERT_TRUE("overlap click targets open list body",
+                    h_overlap_status.item_idx == 0);
+    }
+    ui_state_status_history_set_open(0);
     variable_panel_state_mut()->visible = 0;
 
     /* Menu pin button click should resolve as UI_HIT_PIN_BUTTON. */
