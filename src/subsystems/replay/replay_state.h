@@ -89,6 +89,13 @@ typedef struct {
                                           * "depth N" readout. Derived from the same
                                           * focused flat command as src_line_idx. */
     int             total_flat_cmds;
+    int             step_begin;          /* flat index where the current replay
+                                          * step begins (the [step_begin, pc) range).
+                                          * Maintained incrementally as pc moves so
+                                          * replay_focus_flat_idx() scans only the
+                                          * active step instead of re-deriving the
+                                          * begin via replay_prev_limit(pc) — an
+                                          * O(N^2) per-frame walk — every frame. */
     int             expand_args;
     float           baseline_predef_vals[MAX_PREDEF_VARS];
     char            baseline_predef_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX];
