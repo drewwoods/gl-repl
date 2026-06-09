@@ -3,23 +3,26 @@
  */
 #include "subsystems/replay/replay_state.h"
 #include "subsystems/replay/replay.h"
+#include "subsystems/replay/replay_internal.h"
 
-#define REPLAY_STATE_INITIAL                              \
-    {                                                     \
-        .active           = 0,                            \
-        .state            = REPLAY_OFF,                   \
-        .pc               = 0,                            \
-        .mode             = REPLAY_MODE_VERTEX,           \
-        .speed            = 4.0f,                         \
-        .accum            = 0.0f,                         \
-        .fade_speed       = 2.0f,                         \
-        .src_line_idx     = -1,                           \
-        .total_flat_cmds  = 0,                            \
-        .step_begin       = 0,                            \
-        .expand_args      = 1,                            \
-        .saved_t_playing  = 1,                            \
-        .last_src_line    = -1,                           \
-        .fade_batch_count = 0,                            \
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+
+#define REPLAY_STATE_INITIAL                                    \
+    {                                                           \
+        .active           = 0,                                  \
+        .state            = REPLAY_OFF,                         \
+        .pc               = 0,                                  \
+        .mode             = REPLAY_MODE_VERTEX,                 \
+        .speed            = 4.0f,                               \
+        .accum            = 0.0f,                               \
+        .fade_speed       = 1 / MAX(0.01, REPLAY_FADE_DURATION),\
+        .src_line_idx     = -1,                                 \
+        .total_flat_cmds  = 0,                                  \
+        .step_begin       = 0,                                  \
+        .expand_args      = 1,                                  \
+        .saved_t_playing  = 1,                                  \
+        .last_src_line    = -1,                                 \
+        .fade_batch_count = 0,                                  \
     }
 
 static ReplayRuntimeState       g_replay_runtime_state = REPLAY_STATE_INITIAL;

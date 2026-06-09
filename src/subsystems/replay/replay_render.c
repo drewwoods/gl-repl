@@ -48,7 +48,12 @@ void replay_render_fade_batches(const ReplayFadePlan *plan) {
     prof_begin(PROF_SCENE_3D_FADE);
 
     glPushAttrib(GL_ALL_ATTRIB_BITS);
+    /* Even though we disable lighting here, the repl executor, run by the fade
+     * batches, may re-enable it and emit geometry with non-ambient materials.
+     * Enabling color material mode ensures that such geometry still gets
+     * tinted by the fade alpha. */
     glDisable(GL_LIGHTING);
+    glEnable(GL_COLOR_MATERIAL);
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
     static const GLfloat mspec[] = { 0.4f, 0.4f, 0.4f, 1.0f };
     static const GLfloat mshin[] = { 30.0f };

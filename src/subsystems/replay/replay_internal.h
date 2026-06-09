@@ -10,10 +10,10 @@
 #include "repl/state_owners.h"
 
 /* Batch lifetime cap (seconds). Pairs with the replay peer's
- * fade_speed (replay_state.c, alpha/sec): alpha reaches 1.0 at
- * age 1/fade_speed but the batch is culled at REPLAY_FADE_DURATION,
- * so batches are intentionally removed before fully opaque. */
-#define REPLAY_FADE_DURATION   0.40f
+ * fade_speed (replay_state.c, alpha/sec): See REPLAY_STATE_INITIAL
+ * and ReplayRuntimeState::fade_speed.
+ */
+#define REPLAY_FADE_DURATION   0.50f
 /* A fresh fade batch starts one ~60 Hz frame "aged" rather than at 0
  * so it fades in smoothly instead of popping at full opacity. */
 #define REPLAY_FADE_INITIAL_AGE GLR_FRAME_DT_SECS
