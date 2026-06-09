@@ -78,7 +78,7 @@
 
 /* Code-panel input metrics local to the editor dispatcher. */
 #define CP_PAGE_SCROLL_ROWS 5
-#define CP_DIVIDER_HIT_PX   10
+#define CP_DIVIDER_HOVER_PX 3
 
 /* Forward declarations. */
 static void keyboard_func(unsigned char key, int x, int y);
@@ -1964,15 +1964,16 @@ int editor_input_point_on_code_panel_divider(int x, int y) {
     int cp_x, cp_y, cp_w, cp_h;
     int gl_y = ui_state_viewport().window_h - y;
     int layout = editor_input_code_panel_layout();
+    int pad = CP_DIVIDER_HOVER_PX;
 
     if (layout == CODE_PANEL_LAYOUT_HIDDEN)
         return 0;
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (layout == CODE_PANEL_LAYOUT_TOP)
-        return abs(gl_y - cp_y) < CP_DIVIDER_HIT_PX;
+        return gl_y >= cp_y - pad && gl_y <= cp_y + pad;
     if (layout == CODE_PANEL_LAYOUT_BOTTOM)
-        return abs(gl_y - (cp_y + cp_h)) < CP_DIVIDER_HIT_PX;
-    return abs(x - (cp_x + cp_w)) < CP_DIVIDER_HIT_PX;
+        return gl_y >= cp_y + cp_h - pad && gl_y <= cp_y + cp_h + pad;
+    return x >= cp_x + cp_w - pad && x <= cp_x + cp_w + pad;
 }
 
 int editor_input_code_panel_resize_cursor(void) {
