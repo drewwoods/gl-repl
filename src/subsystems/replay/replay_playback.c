@@ -286,6 +286,21 @@ static int replay_prev_limit(int current_pc) {
     return prev_pc;
 }
 
+/* Begin (inclusive) of the replay step ending at pc. Reads the incrementally
+ * maintained state->step_begin (O(1)) — advance stores old_pc, seek/step-back
+ * compute it once — instead of re-deriving it with replay_prev_limit(pc), an
+ * O(N^2) walk this would otherwise pay on every frame (it feeds the per-frame
+ * focus / anchor accessors below). Falls back to the full walk only when the
+ * cache is stale or degenerate (step_begin out of [0, pc)): pc was set out of
+ * band, or the flat program shrank under the cache. Those are rare and leave pc
+ * small, so the fallback is cheap; the result equals replay_prev_limit(pc). */
+static int replay_resolve_step_begin(int pc) {
+    int begin = replay_state_const()->step_begin;
+    if (begin < 0 || begin >= pc)
+        return replay_prev_limit(pc);
+    return begin;
+}
+
 int replay_focus_anchor_flat_idx(void) {
     const ReplayRuntimeState *state = replay_state_const();
     FlatProgramView flat;
@@ -315,7 +330,7 @@ int replay_focus_anchor_flat_idx(void) {
     if (pc > flat.cmd_count)
         pc = flat.cmd_count;
 
-    begin = replay_prev_limit(pc);
+    begin = replay_resolve_step_begin(pc);
     cmds = flat.cmds;
     for (int i = pc - 1; i >= begin && i >= 0; i--) {
         if (!cmds[i].valid) continue;
@@ -329,11 +344,16 @@ int replay_focus_flat_idx(void) {
     const ReplayRuntimeState *state = replay_state_const();
     if (!state->active)
         return -1;
-    /* Derive the active step's begin the same way step-back does, so the
-     * focus is identical under advance, seek, step-back, and pause — and
-     * never relies on the transient old_pc local or fade-batch state. */
-    int begin = replay_prev_limit(state->pc);
-    return replay_last_meaningful_flat(begin, state->pc);
+    /* Clamp pc to the live flat count (stale replay state can point past a
+     * shrunken program) and resolve the step begin from the O(1) cache. This is
+     * O(step) per frame instead of the old replay_prev_limit(state->pc) O(N^2)
+     * re-derivation, and equivalent to it under advance/seek/step-back/pause. */
+    FlatProgramView flat = repl_state_flat_program_view();
+    int pc = state->pc;
+    if (pc < 0) pc = 0;
+    if (pc > flat.cmd_count) pc = flat.cmd_count;
+    int begin = replay_resolve_step_begin(pc);
+    return replay_last_meaningful_flat(begin, pc);
 }
 
 static void replay_update_after_pc_change(ReplayRuntimeState *state, int num_flat_cmds, int search_begin) {
@@ -370,6 +390,10 @@ void replay_seek(int new_pc) {
     replay_clear_fade_batches();
     state->state = REPLAY_PAUSED;
     replay_update_after_pc_change(state, num_flat_cmds, 0);
+    /* Seek is a discrete user action (step-back, seek-to-line), not a
+     * per-frame path, so deriving the step begin from scratch here is fine;
+     * it keeps replay_focus_flat_idx() O(step) on every subsequent frame. */
+    state->step_begin = replay_prev_limit(state->pc);
 }
 
 int replay_seek_to_src_line(int target_line) {
@@ -412,6 +436,7 @@ int replay_seek_to_src_line(int target_line) {
 void replay_restart_from_beginning(void) {
     ReplayRuntimeState *state = replay_state_mut();
     state->pc = 0;
+    state->step_begin = 0;
     state->accum = 0.0f;
     replay_clear_fade_batches();
     state->state = REPLAY_PLAYING;
@@ -433,6 +458,7 @@ static void replay_init_playback_state(ReplayRuntimeState *state, int num_flat_c
     state->active = 1;
     state->state = REPLAY_PLAYING;
     state->pc = 0;
+    state->step_begin = 0;
     state->accum = 0.0f;
     replay_clear_fade_batches();
     state->src_line_idx = -1;
@@ -492,6 +518,7 @@ void replay_advance(FlatProgramView flat_program) {
         next_pc = num_flat_cmds;
 
     state->pc = next_pc;
+    state->step_begin = old_pc;
     replay_update_after_pc_change(state, num_flat_cmds, old_pc);
     replay_push_fade_batch(old_pc, state->pc);
 }

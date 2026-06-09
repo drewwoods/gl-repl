@@ -15,6 +15,7 @@
         .fade_speed       = 2.0f,                         \
         .src_line_idx     = -1,                           \
         .total_flat_cmds  = 0,                            \
+        .step_begin       = 0,                            \
         .expand_args      = 1,                            \
         .saved_t_playing  = 1,                            \
         .last_src_line    = -1,                           \

@@ -501,6 +501,94 @@ static BenchResult bench_replay_long(int iters) {
     return r;
 }
 
+/* ---- bench: per-frame replay focus resolution ------------------------- */
+
+/* glr_ctrl_push_highlights() calls replay_focus_flat_idx() once per rendered
+ * frame while a replay is active. Commit 34df87f added that call. The function
+ * derives the active step's begin via replay_prev_limit(pc), which re-walks the
+ * flat stream from index 0 up to pc *every call* — and in REPLAY_MODE_VERTEX
+ * each step within that walk does its own O(pc) backward scan
+ * (replay_find_open_begin_before / _tess_polygon_before), so the whole thing is
+ * O(N^2) in the flat-program length, paid per frame and worst at the tail of a
+ * long replay. This bench parks pc at the end of the long synthetic scene and
+ * times the per-frame focus call, so the regression (and any fix) is visible as
+ * a per-call number independent of the advance-step benchmarks above. */
+static BenchResult bench_replay_focus(int iters) {
+    BenchResult r = { .name = "replay_focus", .unit = "calls",
+                      .min_sec = 1e18 };
+
+    repl_load_example_lines_for_test(k_long_replay_scene);
+    repl_mark_source_dirty();
+    replay_start();
+
+    /* Advance to the end so pc sits at the tail — the worst case the
+     * per-frame highlight push pays. State becomes REPLAY_DONE but stays
+     * active until replay_stop(), and replay_focus_flat_idx() keys off
+     * state->active + state->pc, so the focus call still does full work. */
+    int safety = repl_state_flat_program_count() + 1;
+    while (replay_state_view().state == REPLAY_PLAYING && safety-- > 0)
+        replay_advance(repl_state_flat_program_view());
+    int pc = replay_state_view().pc;
+
+    int inner = 200;
+    int last_focus = 0;
+    for (int it = 0; it < iters; it++) {
+        double t0 = now_seconds();
+        for (int k = 0; k < inner; k++)
+            last_focus = replay_focus_flat_idx();
+        double dt = now_seconds() - t0;
+        if (dt < r.min_sec) r.min_sec = dt;
+        r.total_sec += dt;
+        r.ops += inner;
+        r.iters++;
+    }
+    replay_stop();
+
+    if (!g_csv) {
+        fprintf(stderr, "  (replay_focus: pc=%d, focus_idx=%d)\n",
+                pc, last_focus);
+    }
+    return r;
+}
+
+/* Companion to replay_focus: replay_focus_anchor_flat_idx() is the other
+ * replay-active call glr_ctrl_push_highlights() and the guide-snapshot build
+ * make per frame. It carried the same O(N^2) replay_prev_limit(pc) walk, so it
+ * gets its own tail-pc bench. */
+static BenchResult bench_replay_anchor(int iters) {
+    BenchResult r = { .name = "replay_anchor", .unit = "calls",
+                      .min_sec = 1e18 };
+
+    repl_load_example_lines_for_test(k_long_replay_scene);
+    repl_mark_source_dirty();
+    replay_start();
+
+    int safety = repl_state_flat_program_count() + 1;
+    while (replay_state_view().state == REPLAY_PLAYING && safety-- > 0)
+        replay_advance(repl_state_flat_program_view());
+    int pc = replay_state_view().pc;
+
+    int inner = 200;
+    int last_anchor = 0;
+    for (int it = 0; it < iters; it++) {
+        double t0 = now_seconds();
+        for (int k = 0; k < inner; k++)
+            last_anchor = replay_focus_anchor_flat_idx();
+        double dt = now_seconds() - t0;
+        if (dt < r.min_sec) r.min_sec = dt;
+        r.total_sec += dt;
+        r.ops += inner;
+        r.iters++;
+    }
+    replay_stop();
+
+    if (!g_csv) {
+        fprintf(stderr, "  (replay_anchor: pc=%d, anchor_idx=%d)\n",
+                pc, last_anchor);
+    }
+    return r;
+}
+
 /* ---- bench: replay fade-batch rendering path -------------------------- */
 
 /* Scene built to emit a long flat-command stream of many small primitives
@@ -720,6 +808,8 @@ static void usage(const char *prog) {
         "    flatten_examples  repl_flatten_commands per example\n"
         "    replay_examples   step replay through every example\n"
         "    replay_long       synthetic 600-iter for-loop replay\n"
+        "    replay_focus      per-frame replay_focus_flat_idx() at the tail\n"
+        "    replay_anchor     per-frame replay_focus_anchor_flat_idx() at the tail\n"
         "    fade_batches      replay fade-batch rendering with late old_pcs\n",
         prog);
 }
@@ -812,6 +902,10 @@ int main(int argc, char **argv) {
         report(bench_replay_examples(iters));
     if (wants(only, "replay_long"))
         report(bench_replay_long(iters));
+    if (wants(only, "replay_focus"))
+        report(bench_replay_focus(iters));
+    if (wants(only, "replay_anchor"))
+        report(bench_replay_anchor(iters));
 
     // GL benchmarks
     if (wants(only, "fade_batches")) {
