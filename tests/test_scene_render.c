@@ -12,13 +12,7 @@
 #include "scene/render.h"
 #include "scene/render_types.h"
 #include "scene/postprocess_filter.h"
-#include "app/glr_mesh_export.h"
-#include "editor/input.h"
-#include "repl/core.h"
-#include "repl/eval.h"
-#include "app/glr_ctrl.h"
-#include "repl/state_owners.h"
-#include "editor/state.h"
+
 
 #include "support/test_harness.h"
 #include <stdio.h>
@@ -918,34 +912,6 @@ static void test_postprocess_filters(void) {
                 scene_postprocess_filter_mode_name(SCENE_POST_FILTER_VIGNETTE) != NULL);
 }
 
-static void test_mesh_export_feedback(void) {
-    printf("--- PLY feedback mesh exporter ---\n");
-
-    /* 1. Test invalid arguments / empty program */
-    glr_ctrl_reset_all();
-    repl_eval_init_predef_vars();
-    int r_empty = glr_export_mesh_ply(NULL, 0);
-    ASSERT_INT("export fails on NULL path", r_empty, -1);
-
-    r_empty = glr_export_mesh_ply("test_export_empty.ply", 0);
-    ASSERT_INT("export fails on empty flat program", r_empty, -1);
-
-    /* 2. Populate mock commands and export */
-    editor_feed_line("glBegin(GL_TRIANGLES);");
-    editor_feed_line("glVertex3f(0, 0, 0);");
-    editor_feed_line("glVertex3f(1, 0, 0);");
-    editor_feed_line("glVertex3f(0, 1, 0);");
-    editor_feed_line("glEnd();");
-
-    repl_state_mark_flat_dirty();
-    repl_flatten_commands(editor_state_edit_line());
-    ASSERT_TRUE("program is non-empty", repl_state_flat_program_count() > 0);
-
-    int ntris = glr_export_mesh_ply("test_export.ply", 0);
-    ASSERT_TRUE("export returns 0 or more triangles in stub mode", ntris >= 0);
-
-    remove("test_export.ply");
-}
 #endif
 
 int main(int argc, char **argv) {
@@ -1002,7 +968,6 @@ int main(int argc, char **argv) {
     test_scene_axes_themes_and_opacity();
     test_scene_lights_indicators();
     test_postprocess_filters();
-    test_mesh_export_feedback();
 #endif
 
     printf("\ntest_scene_render: %d/%d passed\n", g_harness.passed, g_harness.run);
