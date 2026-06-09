@@ -13,6 +13,10 @@
 #include "postprocess_filter.h" /* ScenePostFilterMode */
 #include "gl_includes.h"        /* GLenum for SceneLight.id */
 
+#if defined(USE_GLUT) && !defined(APIENTRY)
+#define APIENTRY
+#endif
+
 /* GL_NV_fog_distance tokens — present in glext.h (Linux/Homebrew and the
  * macOS SDK) but not on the Apple-GLUT framework path (gl_includes.h pulls
  * only OpenGL/gl.h there) nor in the bundled GL stubs. Define the registry
