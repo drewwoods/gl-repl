@@ -104,6 +104,7 @@ void display(void) {
   static float speed = 0.5;
   static float detail = 30;
   static float blowHoleX = 0.95, blowHoleY = 0.71, blowHoleZ;
+  static float waterDroplets = 250; // @tune
 
   computeVerticalMotion(ageSeconds, launchY) {
     // Velocity is linear in age: currentVelY = gravityY*ageSeconds + launchVelY.
@@ -112,6 +113,7 @@ void display(void) {
     currentVelY = launchVelY + gravityY*ageSeconds;
     particleY = launchY + gravityY/2 * ageSeconds * ageSeconds + launchVelY * ageSeconds;
   }
+
   computeLifespan(launchY) {
     // Solve particleY(age) = floorY for age: how long the particle takes to fall
     // from launchY to the floor. particleY is the projectile
@@ -121,6 +123,7 @@ void display(void) {
     // Substituting a = gravityY/2: 4ac = 2*gravityY*c and 2a = gravityY.
     particleLife = (-launchVelY - sqrt(launchVelY*launchVelY - 2 * gravityY*(launchY - floorY))) / gravityY;
   }
+
   computeDriftX(ageSeconds, launchX) {
     // Integral over [0, age] of the decaying horizontal velocity
     //   velX(s) = launchVelX * dragDecay^(dragRate*s)
@@ -238,7 +241,7 @@ void display(void) {
   }
 
   glBegin(GL_POINTS);
-    for(i, 0, 250) {
+    for(i, 0, waterDroplets) {
       launchVelX = 3 * rand2(i,1);
       launchVelY = 2 + 2 * rand(i, 2);
       launchVelZ = 3 * rand2(i, 3);
