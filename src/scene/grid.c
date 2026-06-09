@@ -335,6 +335,36 @@ static void grid_aurora_end_pass(const GridDrawContext *ctx) {
     }
 }
 
+/* Synthwave: the floor companion to the Sunset backdrop. Hot neon-pink
+ * lines with breath-pulsed glow; the cross (constant-z) lines carry a
+ * brightness wave scrolling toward the camera to fake the classic
+ * drive-into-the-horizon grid motion, while the rails (constant-x)
+ * stay steady so the floor doesn't strobe. */
+static void grid_synthwave_line_color(float v, int is_major,
+                                      const GridDrawContext *ctx,
+                                      GridLineColors *out) {
+    float dist = fabsf(v) / ctx->extent;
+    float fade = 1.0f - dist * dist;
+    if (fade < 0.0f) fade = 0.0f;
+    float glow = 0.75f + ctx->breath * 0.25f;
+    /* Hot bases — the Sunset backdrop's bright horizon glow sits right
+     * behind these lines, so they need to punch well above the
+     * Tron-level alphas to read as neon rather than silhouette. */
+    float base = is_major ? 0.62f : 0.22f;
+
+    out->x_const = rgba(1.0f, 0.18f, 0.72f, base * fade * glow);
+
+    float wave = sinf(v * 1.8f - ctx->anim_time * 2.2f) * 0.5f + 0.5f;
+    out->z_const = rgba(1.0f, 0.18f + 0.24f * wave, 0.72f + 0.22f * wave,
+                        base * fade * (0.65f + 0.55f * wave) * glow);
+}
+
+static SceneRgba grid_synthwave_origin_color(const GridDrawContext *ctx) {
+    /* Cyan accent against the pink field, pulsing with the same breath. */
+    float glow = 0.75f + ctx->breath * 0.25f;
+    return rgba(0.15f, 0.85f, 1.0f, 0.40f * glow);
+}
+
 static void grid_ruler_line_color(float v, int is_major,
                                   const GridDrawContext *ctx,
                                   GridLineColors *out) {
@@ -365,6 +395,10 @@ static const GridThemeSpec g_grid_theme_specs[GRID_THEME_COUNT] = {
     [GRID_THEME_AURORA] = {
         grid_aurora_line_color, grid_aurora_origin_color, NULL,
         grid_aurora_end_pass, 1.0f
+    },
+    [GRID_THEME_SYNTHWAVE] = {
+        grid_synthwave_line_color, grid_synthwave_origin_color, NULL, NULL,
+        2.0f
     },
 };
 

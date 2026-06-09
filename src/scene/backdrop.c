@@ -51,6 +51,37 @@
 #define STAR_BAND_CUT_MED   0.80f
 #define STAR_BAND_CUT_LARGE 0.94f
 
+/* --- Sunset backdrop --- */
+
+/* Sky dome radius sits just inside the star dome so the two never
+ * z-fight if a future mode composes them; the sun plane sits inside
+ * the dome. */
+#define SUNSET_SKY_RADIUS   29.0f
+#define SUNSET_SKY_SEGS     48
+#define SUNSET_SKY_RINGS    16
+/* Dome elevation range in radians: slightly below the horizon (so no
+ * gap shows under the grid plane at shallow camera angles) to zenith. */
+#define SUNSET_PHI_MIN     (-0.06f * (float)M_PI)
+#define SUNSET_PHI_MAX      (0.50f * (float)M_PI)
+
+#define SUNSET_SUN_DIST     24.0f
+#define SUNSET_SUN_RADIUS    7.5f
+#define SUNSET_SUN_ELEV      5.0f
+/* Horizontal slices across the sun disc. Must stay well above
+ * SUNSET_STRIPE_FREQ so each scanline stripe spans several slices and
+ * the gap edges look crisp rather than aliased. */
+#define SUNSET_SUN_BANDS     96
+/* Scanline gaps: stripes per disc height, downward scroll rate in
+ * stripe phase per second, and where (in v, -1=bottom .. 1=top) the
+ * gaps start opening. */
+#define SUNSET_STRIPE_FREQ   9.0f
+#define SUNSET_STRIPE_SCROLL 0.55f
+#define SUNSET_GAP_START_V   0.10f
+
+#define SUNSET_STAR_COUNT    260
+#define SUNSET_STAR_STRIDE   11u
+#define SUNSET_STAR_SEED     0xD05Eu
+
 static void scene_backdrop_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 }
@@ -481,6 +512,232 @@ static void draw_starry_sky(
     scene_backdrop_pop_state();
 }
 
+/* Piecewise-linear vertical sky gradient for the sunset dome. h is
+ * normalized elevation: 0 = horizon, 1 = zenith, negative = below the
+ * horizon. Stops run dark under-horizon -> hot magenta horizon glow ->
+ * dusk purple -> near-black night blue at the zenith. */
+static void sunset_sky_color(float h, float *r, float *g, float *b) {
+    static const struct { float h, r, g, b; } stops[] = {
+        { -0.12f, 0.05f, 0.02f, 0.08f },
+        {  0.00f, 0.46f, 0.10f, 0.34f },
+        {  0.16f, 0.28f, 0.08f, 0.33f },
+        {  0.45f, 0.09f, 0.05f, 0.19f },
+        {  1.00f, 0.02f, 0.02f, 0.09f },
+    };
+    const int n = (int)(sizeof(stops) / sizeof(stops[0]));
+
+    if (h <= stops[0].h) { *r = stops[0].r; *g = stops[0].g; *b = stops[0].b; return; }
+    for (int i = 1; i < n; i++) {
+        if (h <= stops[i].h) {
+            float f = (h - stops[i - 1].h) / (stops[i].h - stops[i - 1].h);
+            *r = stops[i - 1].r + (stops[i].r - stops[i - 1].r) * f;
+            *g = stops[i - 1].g + (stops[i].g - stops[i - 1].g) * f;
+            *b = stops[i - 1].b + (stops[i].b - stops[i - 1].b) * f;
+            return;
+        }
+    }
+    *r = stops[n - 1].r; *g = stops[n - 1].g; *b = stops[n - 1].b;
+}
+
+/* Gradient dome. The sun sits at azimuth theta = pi (toward -Z); a warm
+ * sunward glow term brightens the horizon around it so the brightest
+ * sky hugs the sun instead of ringing the whole horizon uniformly. */
+static void draw_sunset_sky_dome(void) {
+    for (int ri = 0; ri < SUNSET_SKY_RINGS; ri++) {
+        float f0 = (float)ri / (float)SUNSET_SKY_RINGS;
+        float f1 = (float)(ri + 1) / (float)SUNSET_SKY_RINGS;
+        float phi0 = SUNSET_PHI_MIN + (SUNSET_PHI_MAX - SUNSET_PHI_MIN) * f0;
+        float phi1 = SUNSET_PHI_MIN + (SUNSET_PHI_MAX - SUNSET_PHI_MIN) * f1;
+
+        glBegin(GL_QUAD_STRIP);
+        for (int s = 0; s <= SUNSET_SKY_SEGS; s++) {
+            float theta = ((float)s / (float)SUNSET_SKY_SEGS) * 2.0f * (float)M_PI;
+            float st = sinf(theta), ct = cosf(theta);
+
+            for (int e = 0; e < 2; e++) {
+                float phi = e ? phi0 : phi1;
+                float sp = sinf(phi), cp = cosf(phi);
+                float h = sp;
+
+                float r, g, b;
+                sunset_sky_color(h, &r, &g, &b);
+
+                /* Sunward horizon glow: horizontal alignment with the
+                 * -Z sun azimuth, faded out away from the horizon. */
+                float align = -ct;
+                if (align > 0.0f) {
+                    float vfall = 1.0f - fabsf(h) * 2.6f;
+                    if (vfall > 0.0f) {
+                        float glow = align * align * align * align * vfall;
+                        r += 0.50f * glow;
+                        g += 0.16f * glow;
+                        b += 0.10f * glow;
+                    }
+                }
+
+                glColor4f(r, g, b, 1.0f);
+                glVertex3f(cp * st * SUNSET_SKY_RADIUS,
+                           sp * SUNSET_SKY_RADIUS,
+                           cp * ct * SUNSET_SKY_RADIUS);
+            }
+        }
+        glEnd();
+    }
+}
+
+/* The retro sun: a vertical stack of horizontal slices across the disc,
+ * pink at the base ramping to gold at the top, with animated scanline
+ * gaps opening across the lower half. Drawn as a flat camera-distant
+ * quad toward -Z; with the camera translation stripped the viewer is
+ * always at the origin, so the face-on error stays negligible. */
+static void draw_sunset_sun(float anim_time) {
+    float cy = SUNSET_SUN_ELEV;
+
+    /* Soft additive bloom behind the disc, pulsing gently. */
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    {
+        float pulse = 0.80f + 0.20f * sinf(anim_time * 0.8f);
+        float glow_r = SUNSET_SUN_RADIUS * 2.1f;
+        glBegin(GL_TRIANGLE_FAN);
+        glColor4f(1.0f, 0.42f, 0.50f, 0.30f * pulse);
+        glVertex3f(0.0f, cy, -SUNSET_SUN_DIST);
+        glColor4f(1.0f, 0.30f, 0.45f, 0.0f);
+        for (int s = 0; s <= 40; s++) {
+            float a = ((float)s / 40.0f) * 2.0f * (float)M_PI;
+            glVertex3f(cosf(a) * glow_r, cy + sinf(a) * glow_r,
+                       -SUNSET_SUN_DIST);
+        }
+        glEnd();
+    }
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glBegin(GL_QUADS);
+    for (int j = 0; j < SUNSET_SUN_BANDS; j++) {
+        float v0 = -1.0f + 2.0f * (float)j / (float)SUNSET_SUN_BANDS;
+        float v1 = -1.0f + 2.0f * (float)(j + 1) / (float)SUNSET_SUN_BANDS;
+        float vc = 0.5f * (v0 + v1);
+
+        /* Scanline gap roll: stripes scroll downward; the gap fraction
+         * of each stripe widens toward the bottom of the disc. */
+        if (vc < SUNSET_GAP_START_V) {
+            float gap = (SUNSET_GAP_START_V - vc) * 0.42f;
+            if (gap > 0.46f) gap = 0.46f;
+            float s = vc * SUNSET_STRIPE_FREQ - anim_time * SUNSET_STRIPE_SCROLL;
+            float frac = s - floorf(s);
+            if (frac < gap) continue;
+        }
+
+        float hw0 = SUNSET_SUN_RADIUS * sqrtf(1.0f - v0 * v0);
+        float hw1 = SUNSET_SUN_RADIUS * sqrtf(1.0f - v1 * v1);
+        float y0_band = cy + v0 * SUNSET_SUN_RADIUS;
+        float y1_band = cy + v1 * SUNSET_SUN_RADIUS;
+
+        /* Set into the horizon: drop bands fully below the grid plane
+         * and clamp the straddler, so the disc doesn't show through
+         * the floor as a phantom reflection. */
+        if (y1_band <= 0.0f) continue;
+        if (y0_band < 0.0f) y0_band = 0.0f;
+
+        /* Pink base -> golden crown. */
+        float cw = (vc + 1.0f) * 0.5f;
+        float r = 1.0f;
+        float g = 0.22f + 0.66f * cw;
+        float b = 0.52f - 0.18f * cw;
+
+        glColor4f(r, g, b, 1.0f);
+        glVertex3f(-hw0, y0_band, -SUNSET_SUN_DIST);
+        glVertex3f( hw0, y0_band, -SUNSET_SUN_DIST);
+        glVertex3f( hw1, y1_band, -SUNSET_SUN_DIST);
+        glVertex3f(-hw1, y1_band, -SUNSET_SUN_DIST);
+    }
+    glEnd();
+}
+
+/* Sparse warm stars confined to the dark upper sky so they read against
+ * the night-blue zenith, not the horizon glow. */
+static void draw_sunset_stars(float anim_time) {
+    static const float band_sizes[2] = { 1.8f, 3.2f };
+    const int band_cut = (int)(SUNSET_STAR_COUNT * 0.72f);
+
+    for (int bi = 0; bi < 2; bi++) {
+        glPointSize(band_sizes[bi]);
+        glBegin(GL_POINTS);
+        int lo = bi ? band_cut : 0;
+        int hi = bi ? SUNSET_STAR_COUNT : band_cut;
+        for (int i = lo; i < hi; i++) {
+            unsigned int base =
+                (unsigned int)i * SUNSET_STAR_STRIDE + SUNSET_STAR_SEED;
+
+            float theta = city_rng(base + 1u) * 2.0f * (float)M_PI;
+            /* phi measured from the zenith; cap keeps stars above ~55deg
+             * elevation, clear of the gradient's bright band. */
+            float phi = city_rng(base + 2u) * 0.36f * (float)M_PI;
+            float sp = sinf(phi), cp = cosf(phi);
+
+            /* Warm dusk palette: champagne white / pale gold / soft pink */
+            float roll = city_rng(base + 3u);
+            float sr, sg, sb;
+            if (roll < 0.5f) {
+                float w = city_rng(base + 10u);
+                sr = 0.92f + w * 0.08f; sg = 0.86f + w * 0.08f; sb = 0.80f + w * 0.10f;
+            } else if (roll < 0.8f) {
+                float w = city_rng(base + 11u);
+                sr = 1.0f; sg = 0.78f + w * 0.12f; sb = 0.42f + w * 0.16f;
+            } else {
+                float w = city_rng(base + 12u);
+                sr = 1.0f; sg = 0.52f + w * 0.16f; sb = 0.62f + w * 0.18f;
+            }
+
+            float phase = city_rng(base + 4u) * 2.0f * (float)M_PI;
+            float speed = 0.08f + city_rng(base + 5u) * 0.30f;
+            float blink = 0.5f + 0.5f * sinf(anim_time * speed * 2.0f * (float)M_PI + phase);
+            float alpha = 0.30f + 0.65f * blink;
+
+            glColor4f(sr, sg, sb, alpha);
+            glVertex3f(sp * cosf(theta) * (SUNSET_SKY_RADIUS - 1.0f),
+                       cp * (SUNSET_SKY_RADIUS - 1.0f),
+                       sp * sinf(theta) * (SUNSET_SKY_RADIUS - 1.0f));
+        }
+        glEnd();
+    }
+}
+
+static void draw_sunset(
+    float anim_time,
+    int point_parameter_supported,
+    void (APIENTRY *point_parameter_proc)(GLenum pname, const GLfloat *params)) {
+    scene_backdrop_push_state();
+    glDisable(GL_LIGHTING);
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_POINT_SMOOTH);
+    glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
+    glDisable(GL_FOG);
+    /* Same fixed-size star rationale as draw_starry_sky: identity
+     * attenuation so the dome stars keep their band sizes. */
+    if (point_parameter_supported && point_parameter_proc)
+        point_parameter_proc(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){1, 0, 0});
+
+    /* Strip camera translation so the sky follows rotation only. */
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    {
+        GLfloat mv[16];
+        glGetFloatv(GL_MODELVIEW_MATRIX, mv);
+        mv[12] = 0.0f; mv[13] = 0.0f; mv[14] = 0.0f;
+        glLoadMatrixf(mv);
+    }
+
+    draw_sunset_sky_dome();
+    draw_sunset_stars(anim_time);
+    draw_sunset_sun(anim_time);
+
+    glPopMatrix();
+    scene_backdrop_pop_state();
+}
+
 void scene_backdrop_render(const SceneFrameRenderContext *frame_ctx) {
     switch (frame_ctx->config.backdrop_mode) {
     case SCENE_BACKDROP_CITYSCAPE:
@@ -499,6 +756,11 @@ void scene_backdrop_render(const SceneFrameRenderContext *frame_ctx) {
                         frame_ctx->config.point_parameter_proc);
         draw_cityscape(frame_ctx->config.anim_time,
                        frame_ctx->config.nv_fog_distance_supported);
+        break;
+    case SCENE_BACKDROP_SUNSET:
+        draw_sunset(frame_ctx->config.anim_time,
+                    frame_ctx->config.point_parameter_supported,
+                    frame_ctx->config.point_parameter_proc);
         break;
     case SCENE_BACKDROP_OFF:
     default:
