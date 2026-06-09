@@ -132,6 +132,37 @@ static int replay_walk_flat_cmd_matches_cursor(int flat_idx,
     return cmd->src_cmd_idx == edit_line_idx;
 }
 
+static int replay_walk_source_block_matches_cursor(int begin_idx, int is_tess,
+                                                   const CursorBlockState *cursor,
+                                                   FlatProgramView program) {
+    const GLCmd *begin_cmd;
+
+    if (!cursor || !cursor->cursor_source_block_valid)
+        return 0;
+    if (is_tess)
+        return 0;
+    if (begin_idx < 0 || begin_idx >= program.cmd_count)
+        return 0;
+
+    begin_cmd = &program.cmds[begin_idx];
+    if (!begin_cmd->valid || begin_cmd->type != CMD_BEGIN)
+        return 0;
+    if (begin_cmd->src_cmd_idx != cursor->cursor_source_block_begin)
+        return 0;
+
+    for (int i = begin_idx + 1; i < program.cmd_count; i++) {
+        const GLCmd *cmd = &program.cmds[i];
+        if (!cmd->valid)
+            continue;
+        if (cmd->type == CMD_END)
+            return cmd->src_cmd_idx == cursor->cursor_source_block_end;
+        if (cmd->type == CMD_BEGIN)
+            break;
+    }
+
+    return cursor->cursor_source_block_end >= cursor->cursor_source_block_begin;
+}
+
 static int replay_walk_block_matches_cursor(int begin_idx, int is_tess,
                                             int edit_line_idx,
                                             int cursor_block_begin,
@@ -208,13 +239,19 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
         case CMD_BEGIN:
             state.in_block = 1;
             state.primitive_mode = (GLenum)cmd->args[0];
-            state.block_selected = selected_block_only
-                ? replay_walk_block_matches_cursor(i, 0, edit_line_idx,
-                                                   cursor_block_begin,
-                                                   cursor_block_end,
-                                                   cursor_func_scope_mask,
-                                                   program)
-                : 1;
+            if (selected_block_only && ctx->cursor.cursor_source_block_valid) {
+                state.block_selected =
+                    replay_walk_source_block_matches_cursor(i, 0, &ctx->cursor,
+                                                            program);
+            } else {
+                state.block_selected = selected_block_only
+                    ? replay_walk_block_matches_cursor(i, 0, edit_line_idx,
+                                                       cursor_block_begin,
+                                                       cursor_block_end,
+                                                       cursor_func_scope_mask,
+                                                       program)
+                    : 1;
+            }
             state.vertex_idx_in_block = 0;
             tess_depth = 0;
             state.normal[0] = 0.0f; state.normal[1] = 0.0f; state.normal[2] = 1.0f;

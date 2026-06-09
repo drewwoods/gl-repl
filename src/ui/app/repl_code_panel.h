@@ -110,4 +110,10 @@ int ui_repl_code_panel_row_marker_for_test(int source_line_idx,
                                            int *out_active,
                                            float out_rgba[4]);
 
+/* Test-only: after a render or hit-test populates the row builder, return the
+ * left auxiliary label for the row representing `source_line_idx`. Returns 1
+ * when a row was found, including rows whose aux label is empty. */
+int ui_repl_code_panel_row_aux_label_for_test(int source_line_idx,
+                                              char out_label[8]);
+
 #endif /* UI_REPL_CODE_PANEL_H */

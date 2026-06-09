@@ -219,6 +219,7 @@ static void test_build_vertex_walk_context(void) {
     ASSERT_INT("edit_line_idx matches input ctx", walk.cursor.edit_line_idx, 42);
     ASSERT_INT("block begin matches input ctx", walk.cursor.cursor_block_begin, 10);
     ASSERT_INT("block end matches input ctx", walk.cursor.cursor_block_end, 20);
+    ASSERT_INT("source block valid defaults off", walk.cursor.cursor_source_block_valid, 0);
     ASSERT_INT("func_scope_mask starts at 0", walk.cursor.cursor_func_scope_mask, 0u);
 }
 
@@ -682,6 +683,52 @@ static void test_on_normal_vector_arrow_callback(void) {
                trace_count_line(&log, "glVertex3f 1 1 3"), 2);
 }
 
+static void test_vertex_numbers_use_source_begin_block(void) {
+    printf("--- edit_overlays vertex labels source block selection ---\n");
+
+    GLCmd cmds[7];
+    mk_cmd(&cmds[0], CMD_BEGIN, (float)GL_POINTS, 0, 0);
+    cmds[0].src_cmd_idx = 0;
+    mk_cmd(&cmds[1], CMD_VERTEX3F, 1.0f, 0.0f, 0.0f);
+    cmds[1].src_cmd_idx = 2;
+    mk_cmd(&cmds[2], CMD_VERTEX3F, 2.0f, 0.0f, 0.0f);
+    cmds[2].src_cmd_idx = 2;
+    mk_cmd(&cmds[3], CMD_END, 0, 0, 0);
+    cmds[3].src_cmd_idx = 4;
+    mk_cmd(&cmds[4], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    cmds[4].src_cmd_idx = 10;
+    mk_cmd(&cmds[5], CMD_VERTEX3F, 9.0f, 0.0f, 0.0f);
+    cmds[5].src_cmd_idx = 11;
+    mk_cmd(&cmds[6], CMD_END, 0, 0, 0);
+    cmds[6].src_cmd_idx = 12;
+
+    OverlayWalkCtx walk;
+    memset(&walk, 0, sizeof(walk));
+    walk.program.cmds = cmds;
+    walk.program.cmd_count = 7;
+    walk.cursor.edit_line_idx = 11;
+    /* Simulate the flattened range landing inside the earlier GL_POINTS
+     * expansion; source block metadata must keep labels on the real cursor
+     * block instead. */
+    walk.cursor.cursor_block_begin = 1;
+    walk.cursor.cursor_block_end = 2;
+    walk.cursor.cursor_source_block_valid = 1;
+    walk.cursor.cursor_source_block_begin = 10;
+    walk.cursor.cursor_source_block_end = 12;
+
+    TraceLog log;
+    trace_begin();
+    edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX, 0);
+    trace_end(&log);
+
+    ASSERT_INT("earlier GL_POINTS vertex 0 not labelled",
+               trace_count_line(&log, "glRasterPos3f 1 0 0"), 0);
+    ASSERT_INT("earlier GL_POINTS vertex 1 not labelled",
+               trace_count_line(&log, "glRasterPos3f 2 0 0"), 0);
+    ASSERT_INT("cursor source block vertex labelled",
+               trace_count_line(&log, "glRasterPos3f 9 0 0"), 1);
+}
+
 /* End-to-end: feed a real REPL program, flatten it, then drive the
  * replay-walk-based overlays (vertex numbers, normals, cursor guides) and
  * the post_overlays orchestrator. Validates the overlays render the live
@@ -796,6 +843,7 @@ int main(void) {
     test_mat4_math();
     test_on_vertex_number_label_callback();
     test_on_normal_vector_arrow_callback();
+    test_vertex_numbers_use_source_begin_block();
     test_render_via_repl_program();
 
     return test_harness_report(&g_harness, "test_edit_overlays");

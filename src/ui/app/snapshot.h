@@ -168,6 +168,9 @@ typedef struct UiRenderSnapshot {
     int                         trailing_indent_chars;
     int                         in_begin_block;
     GLenum                      current_begin_mode;
+    int                         current_begin_block_valid;
+    int                         current_begin_block_start;
+    int                         current_begin_block_end;
 
     /* Reshape() projection body, resolved once per frame by the
      * controller from the scene's nearest-steady projection (see

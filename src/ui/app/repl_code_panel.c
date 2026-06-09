@@ -707,11 +707,22 @@ static int repl_code_panel_search_row_for_cmd(const UiRenderSnapshot *snap,
     return line_idx;
 }
 
+static int repl_code_panel_line_in_current_begin_block(const UiRenderSnapshot *snap,
+                                                       int line_idx) {
+    return snap &&
+           snap->current_begin_block_valid &&
+           line_idx >= snap->current_begin_block_start &&
+           line_idx <= snap->current_begin_block_end;
+}
+
 static void repl_code_panel_set_vertex_label(UiTextPanelRow *row,
                                              const UiRenderSnapshot *snap,
+                                             int line_idx,
                                              int is_vertex, int vnum,
                                              int primitive_vnums_exact) {
     if (!row || !snap || !snap->code_panel.show_vertex_indices || !is_vertex)
+        return;
+    if (!repl_code_panel_line_in_current_begin_block(snap, line_idx))
         return;
 
     snprintf(row->left_aux_label, sizeof(row->left_aux_label),
@@ -1378,7 +1389,7 @@ static void repl_code_panel_add_command_row(ReplCodePanelBuilder *builder,
     row->color = repl_code_panel_category_color(
         builder->snap->document_cmds[line_idx].type);
     row->hit_eligible = 1;
-    repl_code_panel_set_vertex_label(row, builder->snap, is_vertex, vnum,
+    repl_code_panel_set_vertex_label(row, builder->snap, line_idx, is_vertex, vnum,
                                      primitive_vnums_exact);
     repl_code_panel_set_right_action(row, builder->snap, line_idx);
     repl_code_panel_apply_command_overlays(builder, line_idx, row);
@@ -1606,6 +1617,7 @@ static void repl_code_panel_begin_walk_line(ReplCodePanelWalkState *state,
 
 static void repl_code_panel_vertex_aux_label(const UiRenderSnapshot *snap,
                                              const ReplCodePanelWalkState *state,
+                                             int line_idx,
                                              int is_vertex,
                                              char out_label[8]) {
     if (!out_label)
@@ -1613,6 +1625,8 @@ static void repl_code_panel_vertex_aux_label(const UiRenderSnapshot *snap,
 
     out_label[0] = '\0';
     if (!snap || !state || !snap->code_panel.show_vertex_indices || !is_vertex)
+        return;
+    if (!repl_code_panel_line_in_current_begin_block(snap, line_idx))
         return;
 
     snprintf(out_label, 8,
@@ -1690,7 +1704,7 @@ static void repl_code_panel_add_rows_for_line(ReplCodePanelBuilder *builder,
 
     is_edit = (!snap->editor_input.insert_mode && line_idx == snap->edit_line);
     is_vertex = cmd->valid && repl_cmd_emits_vertex(cmd->type);
-    repl_code_panel_vertex_aux_label(snap, state, is_vertex, aux_label);
+    repl_code_panel_vertex_aux_label(snap, state, line_idx, is_vertex, aux_label);
 
     if (is_edit) {
         repl_code_panel_add_input_row(builder, line_idx, -1,
@@ -2291,6 +2305,26 @@ int ui_repl_code_panel_row_marker_for_test(int source_line_idx,
             out_rgba[2] = row->left_marker_color.b;
             out_rgba[3] = row->left_marker_color.a;
         }
+        return 1;
+    }
+    return 0;
+}
+
+int ui_repl_code_panel_row_aux_label_for_test(int source_line_idx,
+                                              char out_label[8]) {
+    if (out_label)
+        out_label[0] = '\0';
+    if (!g_builder_cache.valid)
+        return 0;
+    for (int i = 0; i < g_builder_cache.builder.text_snap.row_count; i++) {
+        const UiTextPanelRow *row = &g_repl_code_panel_rows[i];
+        if (row->source_line_idx != source_line_idx)
+            continue;
+        if (row->kind != UI_TEXT_PANEL_ROW_TEXT &&
+            row->kind != UI_TEXT_PANEL_ROW_INPUT)
+            continue;
+        if (out_label)
+            snprintf(out_label, 8, "%s", row->left_aux_label);
         return 1;
     }
     return 0;
