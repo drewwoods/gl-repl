@@ -26,7 +26,8 @@
     X(OCEAN, "Ocean")      \
     X(XZRULER, "XZ Ruler") \
     X(PLANES, "Adaptive Planes") \
-    X(RADAR, "Radar")
+    X(RADAR, "Radar")      \
+    X(AURORA, "Aurora")
 
 #define GRID_THEME_ENUM_ENTRY(name, str) GRID_THEME_##name,
 #define GRID_THEME_NAME_ENTRY(name, str) [GRID_THEME_##name] = str,
