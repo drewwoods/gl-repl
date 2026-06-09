@@ -3339,19 +3339,38 @@ int main() {
 
     /* Extra coverage: editor_point_on_code_panel_divider */
     {
+        EditorInputDispatchEffects fx;
+        int cp_x, cp_y, cp_w, cp_h;
+        int win_h;
+
         glr_ctrl_reset_all();
         ui_state_viewport_set_size(1000, 1000);
+        win_h = ui_state_viewport().window_h;
         glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
         ui_state_code_panel_mut()->panel_frac = 0.3f;
+        ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
 
-        /* Divider should be at x = 300. Test hit at 305. */
-        editor_handle_passive_motion(305, 500);
-        /* We can't easily assert the cursor change without more mocking,
-         * but we are hitting the branch. */
+        fx = editor_handle_passive_motion(cp_x + cp_w - 4, 500);
+        ASSERT_TRUE("divider hover stays inherit inside code panel",
+                    fx.set_cursor && fx.cursor == GLUT_CURSOR_INHERIT);
+        fx = editor_handle_passive_motion(cp_x + cp_w + 4, 500);
+        ASSERT_TRUE("divider hover stays inherit inside scene",
+                    fx.set_cursor && fx.cursor == GLUT_CURSOR_INHERIT);
+        fx = editor_handle_passive_motion(cp_x + cp_w + 3, 500);
+        ASSERT_TRUE("divider hover cursor appears on divider",
+                    fx.set_cursor && fx.cursor == GLUT_CURSOR_LEFT_RIGHT);
 
         glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP; glr_ctrl_sync_ui_chrome();
-        /* Divider should be at gl_y = 300. window_h = 1000, so y = 700. Test hit at 705. */
-        editor_handle_passive_motion(500, 705);
+        ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+        fx = editor_handle_passive_motion(500, win_h - (cp_y + 4));
+        ASSERT_TRUE("top divider hover stays inherit inside code panel",
+                    fx.set_cursor && fx.cursor == GLUT_CURSOR_INHERIT);
+        fx = editor_handle_passive_motion(500, win_h - (cp_y - 4));
+        ASSERT_TRUE("top divider hover stays inherit inside scene",
+                    fx.set_cursor && fx.cursor == GLUT_CURSOR_INHERIT);
+        fx = editor_handle_passive_motion(500, win_h - (cp_y + 3));
+        ASSERT_TRUE("top divider hover cursor appears on divider",
+                    fx.set_cursor && fx.cursor == GLUT_CURSOR_UP_DOWN);
     }
 
     /* Extra coverage: Audio track navigation (Ctrl+Left/Right) */
