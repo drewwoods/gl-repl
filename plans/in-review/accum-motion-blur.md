@@ -32,22 +32,47 @@ The final image is an equal-weight blend of the N accumulated passes.
   on load (unknown-key behavior). No alias code. Note the break in the PR.
 - **Default effect:** `Off` (blur and AA both cost per frame).
 
+## How animation actually works (critical correctness facts)
+
+Two facts, verified in source, that drive the design:
+
+1. **Animation = reflatten-per-frame, not execute-time re-eval.** The executor
+   consumes *baked* `flat_cmds[].args` for nearly all commands (e.g.
+   `CMD_VERTEX3F`, executor.c:542); only control-flow conditions re-evaluate at
+   execute time. The flat program is rebuilt every frame when `g_flat_dirty` is
+   set — `repl_state_time_advance` sets it each playing frame (glr_ctrl.c:1333 →
+   `repl_flatten_commands`). So **a time sub-step must reflatten** at the
+   sub-step `t`; merely poking predef `t` will not move baked geometry.
+2. **Main-fill execution is not isolated.** `scene_execute_adapter` snapshots /
+   restores predef+scratch+render only for *non*-main-fill purposes
+   (glr_ctrl.c:638). A program with `A[0]=A[0]+1` or `t=t+1` style state mutates
+   predef/scratch/render during a pass, so **each accumulation sub-pass must be
+   reset to a shared baseline** or samples leak/compound into each other.
+
 ## Architecture decision
 
 Keep the accumulation loop **in the scene** (`scene_render_3d_scene`), where the
-accum buffer, per-pass clears, `glAccum`, and the once-per-frame
-`post_filter` already live. Inject per-pass camera/time variation via a new
-**callback**, mirroring the existing `execute_fn` / `post_fill_fn` /
-`post_overlays_fn` injection idiom in `SceneRenderConfig`. The scene stays
-camera/REPL-agnostic; the controller (which owns camera + `t`) supplies the
-per-pass policy. This avoids lifting the loop to the controller and duplicating
-the clear/accum/return/post-filter sequencing.
+accum buffer, per-pass clears, `glAccum`, and the once-per-frame `post_filter`
+already live. Inject per-pass policy via a new **callback** that receives a
+**mutable per-pass copy of the config**, mirroring the existing `execute_fn` /
+`post_fill_fn` injection idiom. The scene stays camera/REPL-agnostic; the
+controller (owns camera + `t`) supplies the per-pass policy.
 
-For `effect==Blur` the scene calls `setup_subframe_fn(ud, pass_idx, pass_count)`
-before each pass and renders with jitter=0; the controller's callback loads an
-interpolated modelview (camera blur) or sets the predef-`t` sub-step (time
-blur). When the callback is `NULL` (the paused + unchanged-camera case), the
-scene automatically uses the AA jitter path — that *is* the fallback.
+For `effect==Blur` the scene, per pass, makes a local `SceneRenderConfig
+pass_cfg = *config;`, calls
+`setup_subframe_fn(ud, pass_idx, pass_count, &pass_cfg)`, recomputes the active
+projection from `pass_cfg`, and renders that pass with jitter=0. The controller
+callback:
+- **resets predef/scratch/render to the frame baseline** (per-pass isolation, P2),
+- **camera blur**: writes the interpolated pose into `pass_cfg->cam_*` *and*
+  loads the interpolated modelview — so grid/axes/orbit-target/light-indicators
+  and the ortho projection (which read `cam_*` / are recomputed from `pass_cfg`)
+  **blur with the camera**, per the user's requirement;
+- **time blur**: sets the predef-`t` sub-step and **reflattens** at that `t`
+  (P1) — camera `cam_*` left at the current pose.
+
+When the callback is `NULL` (paused + unchanged-camera), the scene uses the AA
+jitter path — that *is* the fallback.
 
 ## Changes
 
@@ -62,23 +87,35 @@ typedef enum SceneAccumEffect {
 } SceneAccumEffect;
 ```
 In `SceneRenderConfig` (replace `accum_aa_enabled` / `accum_samples` at lines
-161-163; keep `use_accum`):
+161-163; keep `use_accum`). The callback takes the **mutable per-pass config**
+so it can write interpolated `cam_*`:
 ```c
 int use_accum;          /* --noaccum master gate */
 int accum_effect;       /* SceneAccumEffect */
 int accum_passes;       /* resolved pass count: 1,2,4,8,12,16 */
-void (*setup_subframe_fn)(void *user_data, int pass_idx, int pass_count);
+void (*setup_subframe_fn)(void *user_data, int pass_idx, int pass_count,
+                          struct SceneRenderConfig *pass_config);
 void  *setup_subframe_user_data;
 ```
 
 ### 2. Scene loop — `src/scene/render.c` (`scene_render_3d_scene`, 711-725)
 
 Generalize the loop: `do_accum = use_accum && accum_effect != OFF && passes > 1`.
-For each pass clear COLOR|DEPTH; if `effect==BLUR && setup_subframe_fn` call it
-then render with jitter 0,0; else render with `g_jitter_table[p % MAX_ACCUM_SAMPLES]`.
+Per pass clear COLOR|DEPTH; then:
+- `effect==BLUR && setup_subframe_fn`: `SceneRenderConfig pass_cfg = *config;`
+  call `setup_subframe_fn(ud, p, passes, &pass_cfg)`, then
+  `scene_compute_active_projection(state, &pass_cfg)` (so ortho scale follows
+  the interpolated `cam_dist`), then `render_3d_scene_pass(state, &pass_cfg, 0, 0)`.
+- else (AA): `render_3d_scene_pass(state, config, g_jitter_table[p % MAX_ACCUM_SAMPLES]…)`.
+
 `glAccum(GL_ACCUM, 1/passes)` per pass, `glAccum(GL_RETURN, 1)` after. The
-existing jitter table already supports 12 (uses the first 12 of 16 entries).
-Extend `validate_render_config` to clamp `accum_effect ∈ [0,2]`, `accum_passes ≥ 1`.
+once-before-loop `scene_compute_active_projection` (render.c:709) stays for the
+AA/non-blur paths; the blur branch recomputes per pass from `pass_cfg`. The
+jitter table already supports 12 (first 12 of 16 entries).
+
+`validate_render_config` (render.c:97) is **reject-only on a const config** — do
+not "clamp". Add reject checks: `accum_effect ∉ [0,2]` → fail; `accum_passes` not
+in the supported ladder `{1,2,4,8,12,16}` → fail.
 
 ### 3. Camera helpers — `src/app/glr_camera.{h,c}`
 
@@ -98,38 +135,65 @@ are same-TU).
 ### 4. Transient time setter — `src/repl/state.{h,c}`
 
 `repl_state_time_set` is unusable here (it overwrites `g_anim_time` and sets
-`g_flat_dirty`). Add:
+`g_flat_dirty`). Add a setter that writes only the predef-`t` slot; the **caller
+then reflattens** at that `t` (this is what actually re-bakes geometry — see P1):
 ```c
-/* Sets only predef 't' for one sub-pass re-eval; does NOT touch g_anim_time
- * or g_flat_dirty. The frame already snapshots/restores predef values. */
+/* Sets only predef 't' (no g_anim_time, no g_flat_dirty). For a motion-blur
+ * sub-pass: set the sub-step t, then call repl_flatten_commands() to re-bake
+ * the flat program at that t before the sub-pass renders. */
 void repl_state_time_set_transient(float value);  /* writes g_predef_vars_mut[g_t_var_idx].value */
 ```
-Safe because the executor re-evaluates `has_vars` flat commands from current
-predef values at execute time — no reflatten needed. The existing per-frame
-`repl_copy_predef_values` / `repl_restore_predef_values` bracket
-(`glr_ctrl.c:1377` / `1524`) already surrounds the whole accum loop, so the true
-`t` is restored automatically.
 
 ### 5. Controller wiring — `src/app/glr_ctrl.c`
 
-- File statics: `g_prev_frame_pose` (+`_valid`), `g_cur_frame_pose`, and a
-  `GlrSubframeCtx { mode, prev, cur, t_end, dt, t_var_idx }` stored in
-  `g_subframe_ctx`.
+- `GlrSubframeCtx` (file-static `g_subframe_ctx`) carries the per-pass policy
+  **and the frame baseline** the callback resets to each pass (P2):
+  ```c
+  typedef enum { BLUR_NONE, BLUR_CAMERA, BLUR_TIME } GlrBlurMode;
+  typedef struct {
+      GlrBlurMode   mode;
+      GlrCameraPose prev, cur;     /* BLUR_CAMERA endpoints */
+      float t_end, dt;             /* BLUR_TIME window [t_end-dt, t_end] */
+      int   t_var_idx, edit_line;  /* for set-t + reflatten */
+      float          base_predef[MAX_PREDEF_VARS];
+      float          base_scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
+      ReplRenderState base_render; /* light_enabled_mask / clear_color etc. */
+  } GlrSubframeCtx;
+  ```
+  Plus `g_prev_frame_pose` (+`_valid`) and `g_cur_frame_pose`.
 - Replace the inline camera-load block (1424-1428): capture
   `g_cur_frame_pose = glr_camera_pose_from_state(&cam)` and load it as the base
   modelview.
-- Resolve blur mode before the render call (in/near `glr_ctrl_build_scene_config`):
-  `BLUR_CAMERA` if `prev_valid && glr_camera_pose_changed(prev,cur)`, else
-  `BLUR_TIME` if `repl_state_variables().time_playing`, else `BLUR_NONE`. Only
-  when `accum_effect==BLUR && use_accum && passes>1`. For `BLUR_NONE` leave
-  `setup_subframe_fn = NULL` (scene → AA jitter fallback).
-- Add `glr_ctrl_setup_subframe(ud, pass_idx, pass_count)`: `f = pass_idx/(pass_count-1)`
-  (endpoints inclusive). Camera → `glr_camera_load_modelview(pose_lerp(prev,cur,f))`.
-  Time → `repl_state_time_set_transient(t_end - dt*(1-f))` (trailing window).
+- Resolve blur mode just before the render call (in/near
+  `glr_ctrl_build_scene_config`), only when `accum_effect==BLUR && use_accum &&
+  passes>1`: `BLUR_CAMERA` if `prev_valid && glr_camera_pose_changed(prev,cur)`,
+  else `BLUR_TIME` if `repl_state_variables().time_playing`, else `BLUR_NONE`.
+  For `BLUR_NONE` leave `setup_subframe_fn = NULL` (scene → AA jitter fallback).
+  When blur is active, fill `g_subframe_ctx`: poses, `t_end` (current predef t),
+  `dt = GLR_FRAME_DT_SECS`, `t_var_idx`, `edit_line`, and **snapshot the baseline**
+  via `repl_copy_predef_values(base_predef,…)`, `repl_eval_copy_scratch_arrays(base_scratch)`,
+  `base_render = repl_state_render()` (reuse the same helpers
+  scene_execute_adapter uses).
+- Add `glr_ctrl_setup_subframe(ud, p, N, pass_cfg)`; `f = N>1 ? p/(N-1) : 0`
+  (endpoints inclusive). First, **reset to baseline** every pass:
+  `repl_restore_predef_values(base_predef,…)`, `repl_eval_restore_scratch_arrays(base_scratch)`,
+  `*repl_state_render_mut() = base_render`. Then:
+  - **BLUR_CAMERA**: `pose = glr_camera_pose_lerp(&prev,&cur,f)`; write
+    `pose.{rx,ry,dist,tx,ty,tz}` into `pass_cfg->cam_rx/ry/cam_dist/cam_tx/ty/tz`;
+    `glr_camera_load_modelview(&pose)`.
+  - **BLUR_TIME**: `repl_state_time_set_transient(t_end - dt*(1-f))` then
+    `repl_flatten_commands(edit_line)` to re-bake the flat at the sub-step
+    (modelview/`cam_*` already at current pose from frame top / `*config`).
 - Populate `config->accum_effect/accum_passes/setup_subframe_fn/_user_data` in
   the build site (replaces lines 782-784).
+- After the render call, **mark the flat program dirty** so the next consumer
+  rebuilds at the true frame `t` (time blur left it baked at the last sub-step);
+  the frame-level `repl_restore_predef_values` (1524) already restores predef.
 - At the **end** of `glr_ctrl_display_frame`, capture
   `g_prev_frame_pose = g_cur_frame_pose; g_prev_frame_pose_valid = 1;`.
+
+**Cost note:** time blur reflattens + re-executes N times per frame; camera blur
+re-executes N times. Inherent to motion blur; gated off by default.
 
 ### 6. Config plumbing
 
@@ -155,7 +219,14 @@ predef values at execute time — no reflatten needed. The existing per-frame
   fine-adjust from `GLR_CONFIG_ACCUM_AA` to `GLR_CONFIG_ACCUM_PASSES`; gate on
   `use_accum && accum_effect != OFF`; status string "Accum passes: %s".
 
-### 7. Docs
+### 7. Status-bar text — `src/ui/app/repl_code_panel.c` (1816-1828)
+
+Reads `snap->render.accum_aa_enabled && accum_samples` → `"AA %dx"`. Update to
+the new fields: `off` when `accum_effect==OFF`, else `"AA %dx"` /
+`"Blur %dx"` from `accum_effect` + `accum_passes`. (This text appears in the
+golden fixtures — regen, below.)
+
+### 8. Docs
 
 `CLAUDE.md` F2 key-table row (1174), the "accum-AA Ctrl+=/−" mention (428), and
 the jitter-sample comment (698); `src/repl/help_text.c:160-161` ("Accumulation
@@ -173,19 +244,40 @@ default.
 - `cfg_slug_from_label` auto-derives the new `accum_effect`/`accum_passes` @cfg
   slugs — no export/import bridge edits needed.
 
-## Tests
+## Tests (full scope — old fields are referenced widely)
 
-- `tests/test_glr_actions.c`: `CFG_ITEM_COUNT` loops auto-adapt, but bump any
+Replace `accum_aa` / `accum_samples` / `accum_aa_enabled` / `GLR_CONFIG_ACCUM_AA`
+across the compiled tests:
+- `tests/test_glr_actions.c`: `CFG_ITEM_COUNT` loops auto-adapt, but bump
   hard-coded item/section counts (RENDERING section gains one row; the
-  section-structure arithmetic near 425/478). Replace `accum_aa`/`ACCUM_AA`
-  references with the two new keys (effect 3 states, passes 6 states).
-- New unit tests: `glr_camera_pose_lerp` (f=0→prev, f=1→cur, midpoint, and the
-  ry wrap case 350↔10 → ~0/360 not 180); `glr_camera_pose_changed` epsilon
-  (identical→0, sub-eps→0, supra-eps→1); config-state round-trips for effect
-  (0/1/2) and passes (cycle index → {1,2,4,8,12,16}).
-- The GL blur loop itself isn't unit-testable without a context; if a GL-stub
-  scene-render harness already exists, optionally install a counting
-  `setup_subframe_fn` + stub `execute_fn` and assert it fires `passes` times.
+  section-structure arithmetic near 425/478) and the F2 row table at 1204
+  (`GLR_CONFIG_ACCUM_AA, "Accum AA"` → `GLR_CONFIG_ACCUM_EFFECT, "Accum effect"`).
+- `tests/test_glr_ctrl.c:233-234`: `accum_aa_enabled=0; accum_samples=1;` →
+  `accum_effect = SCENE_ACCUM_EFFECT_OFF; accum_passes = 1;`.
+- `tests/test_repl_core_examples.c`: the `g_accum_aa_enabled` macro (22), its
+  uses (124, 1428), and the `// @cfg accum_aa = 0` strings (1409, 1451) →
+  the new effect/passes slugs/fields.
+- `tests/test_repl_editor.c`: the F2-cycles-Accum-AA block (565-571) → effect;
+  the Ctrl+=/− fine-adjust block (3231-3278, `glr_ctrl_router_handle_accum_samples_key`)
+  → drive `GLR_CONFIG_ACCUM_PASSES` and assert `accum_passes` over the
+  `{1,2,4,8,12,16}` ladder (note the ladder now includes 12).
+- `tests/test_scene_render.c:57`: `cfg.accum_aa_enabled = 1;` →
+  `cfg.accum_effect = SCENE_ACCUM_EFFECT_AA; cfg.accum_passes = …;`.
+- Golden fixtures `testdata/repl_examples_ui/*.golden.txt`: the status-bar "AA …"
+  text changes — regen with a **debug build** (per the golden-regen rule) after
+  the code lands.
+
+New unit tests:
+- `glr_camera_pose_lerp` — f=0→prev, f=1→cur, midpoint, ry wrap (350↔10 → ~0/360,
+  not 180); `glr_camera_pose_changed` epsilon (identical→0, sub-eps→0, supra-eps→1).
+- Config-state round-trips: effect (0/1/2) and passes (cycle index →
+  `{1,2,4,8,12,16}`).
+- **Per-pass isolation (P2):** if the scene-render test harness runs under a GL
+  stub, install a counting `setup_subframe_fn` + a stub `execute_fn` that bumps
+  a scratch var, and assert (a) the callback fires `passes` times with
+  `pass_idx` 0..N-1, and (b) each pass starts from the same baseline (the bumped
+  var does not compound). Otherwise cover the baseline reset by unit-testing the
+  callback's restore logic directly.
 
 ## Verification
 
