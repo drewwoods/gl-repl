@@ -826,7 +826,7 @@ TEST_BINS += test_ui_memprof
 TEST_BINS += test_ui_cpuprof
 endif
 
-CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_repl_code_panel_layout test_ui_theme test_scene_palette test_audio test_scene_guides test_scene_transition test_scene_render,$(TEST_BINS))
+CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_repl_code_panel_layout test_ui_theme test_scene_palette test_audio test_scene_guides test_scene_transition test_scene_render test_scene_file_menu,$(TEST_BINS))
 
 # Benchmark binaries follow the same linking pattern as core test binaries
 # (they reuse CORE_TEST_OBJS so they work in both real-GL and stubs builds),
@@ -914,6 +914,10 @@ test_scene_render_OBJS = $(OBJDIR)/$(TEST_DIR)/test_scene_render.o \
 	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o
 test_scene_render_LDLIBS = $(GL_LDFLAGS)
 test_scene_render_RUN ?= $(BINDIR)/test_scene_render
+
+test_scene_file_menu_OBJS = $(OBJDIR)/$(TEST_DIR)/test_scene_file_menu.o $(CORE_TEST_OBJS)
+test_scene_file_menu_LDLIBS = $(GL_LDFLAGS)
+test_scene_file_menu_RUN ?= $(BINDIR)/test_scene_file_menu
 # For tests using the "include-as-unit" pattern (e.g., `#include "file.c"` to test
 # internal static functions), we must filter out the original object file from
 # the CORE_TEST_OBJS link list to prevent duplicate symbol errors.
