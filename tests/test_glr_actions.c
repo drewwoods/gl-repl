@@ -28,6 +28,7 @@
 #include "subsystems/color_picker/color_picker_state.h"
 #include "repl/cfg_baseline.h"             /* repl_cfg_set_text, repl_cfg_resolve_text */
 #include "scene/themes.h"                  /* GRID/AXES/SCENE_BACKDROP/LIGHT_THEME_* */
+#include "subsystems/edit_overlays/edit_overlays.h"
 #include "support/test_harness.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -994,42 +995,42 @@ static void test_vertex_label_modes(void) {
 
     const GlrConfigItem *item = glr_config_item_at(vertex_labels_row);
     ASSERT_INT("vertex labels state_count matches enum",
-               item->state_count, GLR_VERTEX_LABEL_COUNT);
+               item->state_count, OVERLAY_VERTEX_LABEL_COUNT);
     ASSERT_TRUE("vertex labels has state_names",
                 item->state_names != NULL);
 
     ASSERT_INT("default is Index",
-               glr_config_get(GLR_CONFIG_VERTEX_LABELS), GLR_VERTEX_LABEL_INDEX);
+               glr_config_get(GLR_CONFIG_VERTEX_LABELS), OVERLAY_VERTEX_LABEL_INDEX);
 
     glr_cfg_cycle_row(vertex_labels_row, 1);
     ASSERT_INT("cycle to Index+Pos",
-               glr_config_get(GLR_CONFIG_VERTEX_LABELS), GLR_VERTEX_LABEL_INDEX_POS);
+               glr_config_get(GLR_CONFIG_VERTEX_LABELS), OVERLAY_VERTEX_LABEL_INDEX_POS);
     ASSERT_STR("status Index+Pos", g_last_status,
                "Vertex labels: Index+Pos");
 
     glr_cfg_cycle_row(vertex_labels_row, 1);
     ASSERT_INT("cycle to Index+World",
-               glr_config_get(GLR_CONFIG_VERTEX_LABELS), GLR_VERTEX_LABEL_INDEX_WORLD);
+               glr_config_get(GLR_CONFIG_VERTEX_LABELS), OVERLAY_VERTEX_LABEL_INDEX_WORLD);
     ASSERT_STR("status Index+World", g_last_status,
                "Vertex labels: Index+World");
 
     glr_cfg_cycle_row(vertex_labels_row, 1);
     ASSERT_INT("cycle to Off",
-               glr_config_get(GLR_CONFIG_VERTEX_LABELS), GLR_VERTEX_LABEL_OFF);
+               glr_config_get(GLR_CONFIG_VERTEX_LABELS), OVERLAY_VERTEX_LABEL_OFF);
     ASSERT_STR("status Off", g_last_status, "Vertex labels: Off");
 
     glr_cfg_cycle_row(vertex_labels_row, 1);
     ASSERT_INT("cycle wraps to Index",
-               glr_config_get(GLR_CONFIG_VERTEX_LABELS), GLR_VERTEX_LABEL_INDEX);
+               glr_config_get(GLR_CONFIG_VERTEX_LABELS), OVERLAY_VERTEX_LABEL_INDEX);
     ASSERT_STR("status Index", g_last_status, "Vertex labels: Index");
 
-    glr_config_set(GLR_CONFIG_VERTEX_LABELS, GLR_VERTEX_LABEL_INDEX_POS);
+    glr_config_set(GLR_CONFIG_VERTEX_LABELS, OVERLAY_VERTEX_LABEL_INDEX_POS);
     ASSERT_INT("direct set Index+Pos",
-               glr_state_presentation().show_vertex_labels, GLR_VERTEX_LABEL_INDEX_POS);
+               glr_state_presentation().show_vertex_labels, OVERLAY_VERTEX_LABEL_INDEX_POS);
 
-    glr_config_set(GLR_CONFIG_VERTEX_LABELS, GLR_VERTEX_LABEL_OFF);
+    glr_config_set(GLR_CONFIG_VERTEX_LABELS, OVERLAY_VERTEX_LABEL_OFF);
     ASSERT_INT("direct set Off",
-               glr_state_presentation().show_vertex_labels, GLR_VERTEX_LABEL_OFF);
+               glr_state_presentation().show_vertex_labels, OVERLAY_VERTEX_LABEL_OFF);
 }
 
 /* Audit #41: the cfg bridge accepts symbolic value names so catalogs
