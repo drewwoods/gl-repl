@@ -169,8 +169,8 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
 
     glr_render = glr_state_render_mut();
     glr_render->use_accum = 0;
-    glr_render->accum_aa_enabled = 0;
-    glr_render->accum_samples = 8;
+    glr_render->accum_effect = SCENE_ACCUM_EFFECT_OFF;
+    glr_render->accum_passes = 8;
     glr_render->multisample_enabled = 0;
     glr_render->line_smooth_enabled = 1;
     glr_render->point_attenuation_enabled = 0;
@@ -339,8 +339,8 @@ static void test_capture_restore_round_trip(void) {
     /* focus_vertex storage was deleted in step 7a; per-frame compute
      * lives on glr_ctrl. */
     ASSERT_INT("render use accum restored", glr_state_render().use_accum, 0);
-    ASSERT_INT("render accum aa restored", glr_state_render().accum_aa_enabled, 0);
-    ASSERT_INT("render samples restored", glr_state_render().accum_samples, 8);
+    ASSERT_INT("render accum effect restored", glr_state_render().accum_effect, SCENE_ACCUM_EFFECT_OFF);
+    ASSERT_INT("render passes restored", glr_state_render().accum_passes, 8);
     ASSERT_INT("render light enable mask restored",
                (int)repl_state_render().light_enabled_mask, (int)(1u << 1));
     ASSERT_TRUE("render light pos restored (app-owned)",

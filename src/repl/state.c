@@ -388,12 +388,13 @@ void repl_state_time_set(float value) {
 }
 
 void repl_state_time_set_transient(float value) {
-    /* Writes only the predef 't' slot for one re-bake — deliberately does
-     * NOT touch g_anim_time (the free-running clock stays put) and does NOT
-     * set g_flat_dirty. The motion-blur sub-pass driver sets a sub-step t,
-     * reflattens at that t to re-bake geometry, then restores the frame
-     * baseline; the per-frame predef snapshot/restore in the controller
-     * puts the true t back, so no reflatten is owed here. */
+    /* Override only the predef 't' binding, leaving the free-running clock
+     * (g_anim_time) and the flat-dirty flag untouched — unlike
+     * repl_state_time_set, this does not perturb the running animation. It
+     * lets a caller evaluate the program at an alternate t for a transient
+     * purpose (e.g. sampling sub-frame times) without advancing or dirtying
+     * anything. The caller owns re-flattening at the new t if it needs the
+     * geometry re-baked, and restoring the prior binding afterward. */
     ensure_t_var_idx();
     if (g_t_var_idx >= 0)
         g_predef_vars_mut[g_t_var_idx].value = value;

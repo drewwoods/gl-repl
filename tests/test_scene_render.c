@@ -48,8 +48,8 @@ static SceneRenderConfig make_test_config(void) {
     cfg.anim_time = 0.0f;
 
     cfg.use_accum = 1;
-    cfg.accum_aa_enabled = 1;
-    cfg.accum_samples = 2;
+    cfg.accum_effect = SCENE_ACCUM_EFFECT_AA;
+    cfg.accum_passes = 2;
 
     cfg.user_lighting_enabled = 0;
     cfg.show_light_indicators = 0;
@@ -122,8 +122,8 @@ static void test_scene_renderer_state_independence(void) {
      * input — proves there's no shared static under the API. */
     SceneRenderConfig cfg = make_test_config();
     cfg.use_accum = 0;
-    cfg.accum_aa_enabled = 0;
-    cfg.accum_samples = 1;
+    cfg.accum_effect = SCENE_ACCUM_EFFECT_OFF;
+    cfg.accum_passes = 1;
 
     SceneRendererState state_a, state_b;
     scene_renderer_state_init(&state_a);
@@ -153,21 +153,21 @@ static void test_scene_renderer_state_aa_invariant(void) {
 
 #ifdef GL_STUBS
     /* Cache resolves once before the AA jitter loop; per-sample apply
-     * is read-only on the state. So accum_samples=1 and =16 should
+     * is read-only on the state. So accum_passes=1 and =16 should
      * produce identical active_projection contents. */
     SceneRenderConfig cfg = make_test_config();
     cfg.use_accum = 1;
-    cfg.accum_aa_enabled = 1;
+    cfg.accum_effect = SCENE_ACCUM_EFFECT_AA;
     cfg.projection_mix = 1.0f;
 
     SceneRendererState s1, s16;
     scene_renderer_state_init(&s1);
     scene_renderer_state_init(&s16);
 
-    cfg.accum_samples = 1;
+    cfg.accum_passes = 1;
     ASSERT_INT("render @ 1 sample", scene_render_3d_scene(&s1, &cfg), 0);
 
-    cfg.accum_samples = 16;
+    cfg.accum_passes = 16;
     ASSERT_INT("render @ 16 samples", scene_render_3d_scene(&s16, &cfg), 0);
 
     SceneProjectionDesc p1, p16;
@@ -190,8 +190,8 @@ static void test_scene_projection_modes(void) {
 #ifdef GL_STUBS
     SceneRenderConfig cfg = make_test_config();
     cfg.use_accum = 0;
-    cfg.accum_aa_enabled = 0;
-    cfg.accum_samples = 1;
+    cfg.accum_effect = SCENE_ACCUM_EFFECT_OFF;
+    cfg.accum_passes = 1;
 
     SceneRendererState state;
     scene_renderer_state_init(&state);
@@ -236,8 +236,8 @@ static void test_scene_ortho_zoom_rescales(void) {
 #ifdef GL_STUBS
     SceneRenderConfig cfg = make_test_config();
     cfg.use_accum = 0;
-    cfg.accum_aa_enabled = 0;
-    cfg.accum_samples = 1;
+    cfg.accum_effect = SCENE_ACCUM_EFFECT_OFF;
+    cfg.accum_passes = 1;
     cfg.projection_mix = 0.0f; /* ortho */
 
     SceneRendererState state;
@@ -306,8 +306,8 @@ static void test_config_defaults(void) {
     ASSERT_FLOAT("scene_w default", cfg.scene_w, 800);
     ASSERT_FLOAT("scene_h default", cfg.scene_h, 600);
     ASSERT_INT("use_accum default", cfg.use_accum, 1);
-    ASSERT_INT("accum aa default", cfg.accum_aa_enabled, 1);
-    ASSERT_INT("accum samples default", cfg.accum_samples, 2);
+    ASSERT_INT("accum effect default", cfg.accum_effect, SCENE_ACCUM_EFFECT_AA);
+    ASSERT_INT("accum passes default", cfg.accum_passes, 2);
     ASSERT_INT("user_lighting_enabled default", cfg.user_lighting_enabled, 0);
     ASSERT_FLOAT("anim_time default", cfg.anim_time, 0.0f);
 }
