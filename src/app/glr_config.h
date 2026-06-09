@@ -70,7 +70,8 @@ typedef enum GlrConfigKey {
 typedef enum {
     GLR_VERTEX_LABEL_OFF = 0,
     GLR_VERTEX_LABEL_INDEX,
-    GLR_VERTEX_LABEL_INDEX_POS,
+    GLR_VERTEX_LABEL_INDEX_POS,    /* index + raw vertex input coords (model-local) */
+    GLR_VERTEX_LABEL_INDEX_WORLD,  /* index + world-space coords (input * model transforms) */
     GLR_VERTEX_LABEL_COUNT
 } GlrVertexLabelMode;
 

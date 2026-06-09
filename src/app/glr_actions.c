@@ -129,9 +129,10 @@ static const char *audio_cfg_names[] = { "off", "on" };
 static const char *syntax_hl_names[] = { "Off", "On", "On+Shadow" };
 static const char *view_mode_names[] = { "3D", "2D" };
 static const char *vertex_label_names[GLR_VERTEX_LABEL_COUNT] = {
-    [GLR_VERTEX_LABEL_OFF]       = "Off",
-    [GLR_VERTEX_LABEL_INDEX]     = "Index",
-    [GLR_VERTEX_LABEL_INDEX_POS] = "Index+Pos",
+    [GLR_VERTEX_LABEL_OFF]         = "Off",
+    [GLR_VERTEX_LABEL_INDEX]       = "Index",
+    [GLR_VERTEX_LABEL_INDEX_POS]   = "Index+Pos",
+    [GLR_VERTEX_LABEL_INDEX_WORLD] = "Index+World",
 };
 /* Accum AA is one cycle that collapses on/off + jitter-sample count:
  * Off -> 2x -> 4x -> 8x -> 16x. The (enabled, samples) split behind it
