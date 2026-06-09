@@ -314,6 +314,32 @@ void glr_camera_load_modelview(const GlrCameraPose *pose) {
     glTranslatef(-pose->tx, -pose->ty, -pose->tz);
 }
 
+GlrCameraPose glr_camera_pose_lerp(const GlrCameraPose *a,
+                                   const GlrCameraPose *b, float f) {
+    GlrCameraPose o = {0};
+    if (!a || !b)
+        return o;
+    o.rx   = a->rx   + shortest_angle_delta(a->rx, b->rx) * f;
+    o.ry   = a->ry   + shortest_angle_delta(a->ry, b->ry) * f;
+    o.dist = a->dist + (b->dist - a->dist) * f;
+    o.tx   = a->tx   + (b->tx - a->tx) * f;
+    o.ty   = a->ty   + (b->ty - a->ty) * f;
+    o.tz   = a->tz   + (b->tz - a->tz) * f;
+    return o;
+}
+
+int glr_camera_pose_changed(const GlrCameraPose *prev,
+                            const GlrCameraPose *cur) {
+    if (!prev || !cur)
+        return 0;
+    return fabsf(shortest_angle_delta(prev->rx, cur->rx)) > CAM_TARGET_ANGLE_EPS ||
+           fabsf(shortest_angle_delta(prev->ry, cur->ry)) > CAM_TARGET_ANGLE_EPS ||
+           fabsf(cur->dist - prev->dist) > CAM_TARGET_POS_EPS ||
+           fabsf(cur->tx - prev->tx) > CAM_TARGET_POS_EPS ||
+           fabsf(cur->ty - prev->ty) > CAM_TARGET_POS_EPS ||
+           fabsf(cur->tz - prev->tz) > CAM_TARGET_POS_EPS;
+}
+
 void glr_camera_focus_origin(void) {
     glr_camera_ease_to(g_camera.rx, g_camera.ry, g_camera.dist,
                        0.0f, 0.0f, 0.0f);

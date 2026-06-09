@@ -107,6 +107,28 @@ static int glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(
 static UiRenderSnapshot g_last_ui_snapshot;
 static int g_last_ui_snapshot_valid = 0;
 static int g_last_replay_follow_src_line = -1;
+
+/* --- Accumulation motion-blur sub-frame driver ---
+ * When accum_effect == BLUR the scene's accum loop calls back per sample to
+ * vary the camera (interpolated prev<->cur pose) or the animation time (a
+ * sub-step re-bake), accumulating the samples into one blurred frame. The
+ * mode is resolved once per frame in glr_ctrl_resolve_blur_subframe(); the
+ * baseline snapshot lets each sample start from identical REPL state so
+ * accumulating programs don't compound across samples. */
+typedef enum { GLR_BLUR_NONE = 0, GLR_BLUR_CAMERA, GLR_BLUR_TIME } GlrBlurMode;
+typedef struct {
+    GlrBlurMode     mode;
+    GlrCameraPose   prev, cur;   /* GLR_BLUR_CAMERA endpoints */
+    float           t_end, dt;   /* GLR_BLUR_TIME window [t_end - dt, t_end] */
+    int             edit_line;   /* reflatten anchor for time blur */
+    float           base_predef[MAX_PREDEF_VARS];
+    float           base_scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
+    ReplRenderState base_render;
+} GlrSubframeCtx;
+static GlrSubframeCtx g_subframe_ctx;
+static GlrCameraPose  g_prev_frame_pose;
+static int            g_prev_frame_pose_valid = 0;
+static GlrCameraPose  g_cur_frame_pose;
 typedef ReplExecutorPointParameterProc
 (*GlrCtrlPointParameterProcLoaderFn)(const char *proc_name);
 
@@ -1306,6 +1328,84 @@ static UiProfilePanelView glr_ctrl_build_profile_panel_view(const UiRenderSnapsh
     return v;
 }
 
+/* Per-sample hook for accum motion blur (installed only when the frame's
+ * blur mode is CAMERA or TIME). Resets to the frame baseline so each sample
+ * is independent, then applies the sample's camera pose or time sub-step. */
+static void glr_ctrl_setup_subframe(void *ud, int pass_idx, int pass_count,
+                                    SceneRenderConfig *pass_cfg) {
+    GlrSubframeCtx *c = (GlrSubframeCtx *)ud;
+    float f = (pass_count > 1) ? (float)pass_idx / (float)(pass_count - 1) : 0.0f;
+
+    /* Per-sample isolation: start from the frame baseline so accumulating
+     * programs (A[0]=A[0]+1, t=t+1) don't compound across samples. */
+    repl_restore_predef_values(c->base_predef, MAX_PREDEF_VARS);
+    repl_eval_restore_scratch_arrays(c->base_scratch);
+    *repl_state_render_mut() = c->base_render;
+
+    if (c->mode == GLR_BLUR_CAMERA) {
+        GlrCameraPose p = glr_camera_pose_lerp(&c->prev, &c->cur, f);
+        glr_camera_load_modelview(&p);
+        /* Expose the interpolated pose so grid/axes/orbit-target/lights and
+         * the ortho projection (recomputed per sample by the scene) blur with
+         * the camera, not just the user geometry's modelview. */
+        pass_cfg->cam_rx = p.rx;
+        pass_cfg->cam_ry = p.ry;
+        pass_cfg->cam_dist = p.dist;
+        pass_cfg->cam_tx = p.tx;
+        pass_cfg->cam_ty = p.ty;
+        pass_cfg->cam_tz = p.tz;
+    } else if (c->mode == GLR_BLUR_TIME) {
+        /* Trailing shutter [t_end - dt, t_end]: re-bake geometry at the
+         * sub-step t (the modelview stays at the current camera pose). The
+         * last sample (f==1) bakes at exactly t_end, so the flat program is
+         * left at the true frame time. */
+        repl_state_time_set_transient(c->t_end - c->dt * (1.0f - f));
+        repl_flatten_commands(c->edit_line);
+    }
+}
+
+/* Decide this frame's blur mode and, when active, install the per-sample
+ * hook + capture the baseline the hook resets to. Leaves setup_subframe_fn
+ * NULL when blur is off/inapplicable so the scene takes the AA jitter path
+ * (the paused + still-camera fallback, and the replay degradation). */
+static void glr_ctrl_resolve_blur_subframe(SceneRenderConfig *config) {
+    config->setup_subframe_fn = NULL;
+    config->setup_subframe_user_data = NULL;
+
+    if (config->accum_effect != SCENE_ACCUM_EFFECT_BLUR ||
+        !config->use_accum || config->accum_passes <= 1 ||
+        replay_active())
+        return;
+
+    GlrBlurMode mode = GLR_BLUR_NONE;
+    if (g_prev_frame_pose_valid &&
+        glr_camera_pose_changed(&g_prev_frame_pose, &g_cur_frame_pose))
+        mode = GLR_BLUR_CAMERA;
+    else if (repl_state_variables().time_playing)
+        mode = GLR_BLUR_TIME;
+
+    if (mode == GLR_BLUR_NONE)
+        return;  /* paused + still camera -> AA jitter fallback */
+
+    g_subframe_ctx.mode = mode;
+    g_subframe_ctx.prev = g_prev_frame_pose;
+    g_subframe_ctx.cur  = g_cur_frame_pose;
+    g_subframe_ctx.dt   = GLR_FRAME_DT_SECS;
+    g_subframe_ctx.edit_line = editor_state_edit_line();
+    {
+        ReplVariableView vv = repl_state_variables();
+        g_subframe_ctx.t_end =
+            (vv.time_var_idx >= 0 && vv.time_var_idx < vv.var_count)
+                ? vv.vars[vv.time_var_idx].value : 0.0f;
+    }
+    repl_copy_predef_values(g_subframe_ctx.base_predef, MAX_PREDEF_VARS);
+    repl_eval_copy_scratch_arrays(g_subframe_ctx.base_scratch);
+    g_subframe_ctx.base_render = repl_state_render();
+
+    config->setup_subframe_fn = glr_ctrl_setup_subframe;
+    config->setup_subframe_user_data = &g_subframe_ctx;
+}
+
 void glr_ctrl_display_frame(void) {
     int saved_flat_count;
     float live_predef_vals[MAX_PREDEF_VARS];
@@ -1428,9 +1528,12 @@ void glr_ctrl_display_frame(void) {
     prof_begin(PROF_SCENE_3D);
     {
         GlrCameraState cam = glr_camera();
-        GlrCameraPose pose = glr_camera_pose_from_state(&cam);
-        glr_camera_load_modelview(&pose);
+        g_cur_frame_pose = glr_camera_pose_from_state(&cam);
+        glr_camera_load_modelview(&g_cur_frame_pose);
     }
+    /* Resolve motion-blur mode for this frame now that the current pose is
+     * captured; installs the per-sample hook on scene_config when active. */
+    glr_ctrl_resolve_blur_subframe(&scene_config);
     if (scene_render_3d_scene(&g_scene_renderer, &scene_config) != 0) {
         static int warned = 0;
         if (!warned) {
@@ -1529,6 +1632,11 @@ void glr_ctrl_display_frame(void) {
     repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
     repl_eval_restore_scratch_arrays(live_scratch_arrays);
     prof_end(PROF_FRAME_RESTORE);
+
+    /* Remember this frame's camera pose so the next frame can detect camera
+     * motion and interpolate prev<->cur for camera blur. */
+    g_prev_frame_pose = g_cur_frame_pose;
+    g_prev_frame_pose_valid = 1;
 
     prof_end(PROF_FRAME_TOTAL);
 }
