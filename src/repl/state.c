@@ -387,6 +387,18 @@ void repl_state_time_set(float value) {
     g_flat_dirty = 1;
 }
 
+void repl_state_time_set_transient(float value) {
+    /* Writes only the predef 't' slot for one re-bake — deliberately does
+     * NOT touch g_anim_time (the free-running clock stays put) and does NOT
+     * set g_flat_dirty. The motion-blur sub-pass driver sets a sub-step t,
+     * reflattens at that t to re-bake geometry, then restores the frame
+     * baseline; the per-frame predef snapshot/restore in the controller
+     * puts the true t back, so no reflatten is owed here. */
+    ensure_t_var_idx();
+    if (g_t_var_idx >= 0)
+        g_predef_vars_mut[g_t_var_idx].value = value;
+}
+
 /* Editor-input + editor-buffer accessors moved to editor_state.c
  * (Phase 1 commits 4-5). Use editor_state_input / _mut / _reset for
  * the input slice, editor_state_buffer / _mut for the whole-buffer

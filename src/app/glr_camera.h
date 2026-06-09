@@ -134,6 +134,19 @@ GlrCameraPose glr_camera_pose_from_state(const GlrCameraState *state);
  * per frame before scene_render_3d_scene(). */
 void glr_camera_load_modelview(const GlrCameraPose *pose);
 
+/* Interpolate between two poses (f in [0,1]; f=0 -> a, f=1 -> b). Orbit
+ * angles rx/ry use the shortest angular path (so a wrap across +-180
+ * blurs the short way); dist/tx/ty/tz are linear. Used by the
+ * accumulation motion-blur loop to sample intermediate camera poses. */
+GlrCameraPose glr_camera_pose_lerp(const GlrCameraPose *a,
+                                   const GlrCameraPose *b, float f);
+
+/* True when two poses differ by more than the camera-ease epsilons on
+ * any axis (angles via shortest delta). The motion-blur driver uses this
+ * to decide camera-blur vs. time-blur for the frame. */
+int glr_camera_pose_changed(const GlrCameraPose *prev,
+                            const GlrCameraPose *cur);
+
 /* ---- Controls (drag, momentum) -------------------------------------- */
 
 /* Reset camera + drag state to defaults: clears any drag, momentum,
