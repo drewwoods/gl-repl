@@ -47,6 +47,9 @@ typedef struct {
     int          edit_line_idx;
     int          cursor_block_begin;
     int          cursor_block_end;
+    int          cursor_source_block_valid;
+    int          cursor_source_block_begin;
+    int          cursor_source_block_end;
     unsigned int cursor_func_scope_mask;
 } CursorBlockState;
 

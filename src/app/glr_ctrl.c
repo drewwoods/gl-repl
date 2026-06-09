@@ -368,6 +368,10 @@ static void glr_ctrl_build_replay_fade_plan(FlatProgramView flat_program, int re
     g_replay_fade_plan.active = 1;
 }
 
+static int glr_ctrl_current_begin_block_source_extent(int edit_line,
+                                                      int *out_start,
+                                                      int *out_end);
+
 static OverlaySnapshotPack g_overlay_pack;
 
 static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const SceneRenderConfig *cfg) {
@@ -379,6 +383,11 @@ static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const SceneRe
     pack->walk.cursor.edit_line_idx = editor_state_edit_line();
     pack->walk.cursor.cursor_block_begin = repl_state_flat_program_current_block_begin();
     pack->walk.cursor.cursor_block_end = repl_state_flat_program_current_block_end();
+    pack->walk.cursor.cursor_source_block_valid =
+        glr_ctrl_current_begin_block_source_extent(
+            pack->walk.cursor.edit_line_idx,
+            &pack->walk.cursor.cursor_source_block_begin,
+            &pack->walk.cursor.cursor_source_block_end);
     pack->walk.cursor.cursor_func_scope_mask = 0;
 
     pack->walk.show_vertex_outlines = presentation.show_vertex_outlines;
@@ -1064,6 +1073,42 @@ static void glr_ctrl_populate_numeric_swatch(UiRenderSnapshot *snap) {
     snap->numeric_swatch.anchor_y  = anchor_y;
 }
 
+static int glr_ctrl_current_begin_block_source_extent(int edit_line,
+                                                      int *out_start,
+                                                      int *out_end) {
+    const GLCmd *cmds = repl_state_document_cmds();
+    int count = repl_state_document_count();
+    int open_begin = -1;
+
+    if (out_start) *out_start = -1;
+    if (out_end) *out_end = -1;
+    if (edit_line < 0 || edit_line >= count)
+        return 0;
+
+    for (int i = 0; i < count; i++) {
+        if (!cmds[i].valid)
+            continue;
+
+        if (cmds[i].type == CMD_BEGIN) {
+            open_begin = i;
+        } else if (cmds[i].type == CMD_END && open_begin >= 0) {
+            if (edit_line >= open_begin && edit_line <= i) {
+                if (out_start) *out_start = open_begin;
+                if (out_end) *out_end = i;
+                return 1;
+            }
+            open_begin = -1;
+        }
+    }
+
+    if (open_begin >= 0 && edit_line >= open_begin) {
+        if (out_start) *out_start = open_begin;
+        if (out_end) *out_end = count - 1;
+        return 1;
+    }
+    return 0;
+}
+
 void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     FlatProgramView flat_program;
     ReplPredefView predef;
@@ -1149,6 +1194,11 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->trailing_indent_chars = repl_source_scope_cmd_indent_chars(snap->document_count);
     snap->in_begin_block        = repl_source_scope_in_begin_block();
     snap->current_begin_mode    = repl_current_begin_mode();
+    snap->current_begin_block_valid =
+        glr_ctrl_current_begin_block_source_extent(
+            snap->edit_line,
+            &snap->current_begin_block_start,
+            &snap->current_begin_block_end);
 
     /* Resolve the dynamic reshape() projection ONCE here so the panel's
      * row-count and render passes (which straddle scene_render_3d_scene)

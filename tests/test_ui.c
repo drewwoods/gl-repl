@@ -1284,6 +1284,53 @@ static void test_vertex2f_gutter_labels(void) {
                 gl_stub_counts[GL_STUB_glRasterPos2f] > v3f_base);
 }
 
+static void test_vertex_gutter_labels_follow_cursor_begin_block(void) {
+    UiRenderSnapshot snap;
+    char label[8];
+
+    printf("Testing cursor-scoped vertex gutter labels...\n");
+
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(4000, 600);
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_state_presentation_mut()->show_vertex_indices = 1;
+    glr_ctrl_sync_ui_chrome();
+    ui_state_code_panel_mut()->panel_frac = 0.4f;
+
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glEnd();");
+
+    editor_state_edit_line_set(4);
+    ui_repl_code_panel_invalidate_row_cache_for_test();
+    make_test_ui_snapshot(&snap);
+    ui_repl_code_panel_render_with_chrome(&snap, NULL);
+    ASSERT_TRUE("first block vertex row found",
+                ui_repl_code_panel_row_aux_label_for_test(1, label));
+    ASSERT_TRUE("first block vertex not labelled while cursor is in second block",
+                label[0] == '\0');
+    ASSERT_TRUE("second block vertex row found",
+                ui_repl_code_panel_row_aux_label_for_test(4, label));
+    ASSERT_TRUE("second block vertex labelled",
+                strcmp(label, "v0") == 0);
+
+    editor_state_edit_line_set(2);
+    ui_repl_code_panel_invalidate_row_cache_for_test();
+    make_test_ui_snapshot(&snap);
+    ui_repl_code_panel_render_with_chrome(&snap, NULL);
+    ASSERT_TRUE("first block vertex row found at glEnd cursor",
+                ui_repl_code_panel_row_aux_label_for_test(1, label));
+    ASSERT_TRUE("first block vertex labelled when cursor is on its glEnd",
+                strcmp(label, "v0") == 0);
+    ASSERT_TRUE("second block vertex row found at glEnd cursor",
+                ui_repl_code_panel_row_aux_label_for_test(4, label));
+    ASSERT_TRUE("second block vertex not labelled when cursor is in first block",
+                label[0] == '\0');
+}
+
 static void test_tutorial_fade_render_uses_per_char_path(void) {
     unsigned long long fading_raster_calls;
     unsigned long long settled_raster_calls;
@@ -1651,6 +1698,7 @@ int main(void) {
     test_ui_panels_hit_test_trailing_blank_row_kind();
     test_ui_panels_hit_test_virtual_row_routes_to_source();
     test_vertex2f_gutter_labels();
+    test_vertex_gutter_labels_follow_cursor_begin_block();
     test_tutorial_fade_render_uses_per_char_path();
     test_tutorial_fade_handles_wrapped_lines();
     test_render_then_hit_test_row_consistency();
