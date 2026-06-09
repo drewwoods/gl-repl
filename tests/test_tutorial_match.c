@@ -1,5 +1,14 @@
 #include "subsystems/tutorial/tutorial.h"
 #include "support/test_harness.h"
+#include "repl/eval.h"
+#include "repl/tutorials.h"
+
+/* Stubs to satisfy tutorial_shadow_suffix references when compiling tutorial_match.c */
+int tutorial_active(void) { return 0; }
+const char *tutorial_current_expected_text(void) { return NULL; }
+TutorialRuntimeState tutorial_state_view(void) { return (TutorialRuntimeState){0}; }
+int repl_eval_find_predef_var_idx(const char *name) { (void)name; return -1; }
+const TutorialStep *repl_tutorial_step_get(int idx, int step_idx) { (void)idx; (void)step_idx; return NULL; }
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
 
