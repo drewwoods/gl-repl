@@ -1762,7 +1762,6 @@ clean: ## Remove built binaries and object files.
 		callgraph*.mmd callgraph*.dot callgraph*.html callgrind.out*
 
 glut: ## Rebuild using the Apple GLUT framework instead of freeglut.
-	$(MAKE) clean
 	$(MAKE) all \
 		BUILD="$(BUILD)" \
 		CFLAGS="$(CFLAGS) -DUSE_GLUT" \

@@ -1737,11 +1737,13 @@ static void special_begin_key(void) {
  * acts on them either, so swallow them outright. */
 static int special_key_is_bare_modifier(int key) {
     switch (key) {
+#ifndef USE_GLUT /* these are freeglut extensions */
     case GLUT_KEY_SHIFT_L: case GLUT_KEY_SHIFT_R:
     case GLUT_KEY_CTRL_L:  case GLUT_KEY_CTRL_R:
     case GLUT_KEY_ALT_L:   case GLUT_KEY_ALT_R:
     case GLUT_KEY_SUPER_L: case GLUT_KEY_SUPER_R:
         return 1;
+#endif
     default:
         return 0;
     }
@@ -1922,10 +1924,12 @@ static void special_func(int key, int x, int y) {
     restore_hidden_code_panel_for_special(key);
 
     if (editor_search_handle_special(key))   return;
+#ifndef USE_GLUT /* GLUT_KEY_DELETE is a freeglut extension */
     if (key == GLUT_KEY_DELETE) {
         handle_text_delete_key_route(KEY_DELETE);
         return;
     }
+#endif
     if (handle_horizontal_special_key_route(key)) return;
     if (handle_vertical_special_key_route(key)) return;
     if (handle_page_scroll_special_key_route(key)) return;
