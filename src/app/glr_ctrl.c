@@ -1372,20 +1372,24 @@ static void glr_ctrl_resolve_blur_subframe(SceneRenderConfig *config) {
     config->setup_subframe_fn = NULL;
     config->setup_subframe_user_data = NULL;
 
-    if (config->accum_effect != SCENE_ACCUM_EFFECT_BLUR ||
+    if (!SCENE_ACCUM_EFFECT_IS_BLUR(config->accum_effect) ||
         !config->use_accum || config->accum_passes <= 1 ||
         replay_active())
         return;
 
+    int camera_moved = g_prev_frame_pose_valid &&
+        glr_camera_pose_changed(&g_prev_frame_pose, &g_cur_frame_pose);
+
     GlrBlurMode mode = GLR_BLUR_NONE;
-    if (g_prev_frame_pose_valid &&
-        glr_camera_pose_changed(&g_prev_frame_pose, &g_cur_frame_pose))
+    if (camera_moved)
         mode = GLR_BLUR_CAMERA;
-    else if (repl_state_variables().time_playing)
-        mode = GLR_BLUR_TIME;
+    else if (config->accum_effect == SCENE_ACCUM_EFFECT_BLUR &&
+             repl_state_variables().time_playing)
+        mode = GLR_BLUR_TIME;   /* Blur (full) also blurs animation time;
+                                 * Blur Camera does not -> AA fallback. */
 
     if (mode == GLR_BLUR_NONE)
-        return;  /* paused + still camera -> AA jitter fallback */
+        return;  /* still camera (and not time-blurring) -> AA jitter fallback */
 
     g_subframe_ctx.mode = mode;
     g_subframe_ctx.prev = g_prev_frame_pose;
