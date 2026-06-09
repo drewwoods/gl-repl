@@ -77,14 +77,23 @@ typedef enum SceneExecutePurpose {
 } SceneExecutePurpose;
 
 /* Accumulation-buffer effect mode. OFF = single pass (no accum); AA =
- * jitter-the-frustum antialiasing across accum_passes samples; BLUR =
- * motion blur (the caller supplies a per-pass setup callback that varies
- * the camera / animation time across the samples). */
+ * jitter-the-frustum antialiasing across accum_passes samples; BLUR /
+ * BLUR_CAMERA = motion blur (the caller supplies a per-pass setup callback
+ * that varies the camera / animation time across the samples). BLUR blurs
+ * camera motion when the camera moves, else the animation time; BLUR_CAMERA
+ * blurs only camera motion and falls back to AA when the camera is still.
+ * For any blur mode the scene renders with jitter 0 (blur and AA jitter are
+ * never combined). */
 typedef enum SceneAccumEffect {
     SCENE_ACCUM_EFFECT_OFF = 0,
     SCENE_ACCUM_EFFECT_AA,
     SCENE_ACCUM_EFFECT_BLUR,
+    SCENE_ACCUM_EFFECT_BLUR_CAMERA,
 } SceneAccumEffect;
+
+/* True for the motion-blur effect modes (both drive the per-pass hook). */
+#define SCENE_ACCUM_EFFECT_IS_BLUR(e) \
+    ((e) == SCENE_ACCUM_EFFECT_BLUR || (e) == SCENE_ACCUM_EFFECT_BLUR_CAMERA)
 
 /* Per-call context the scene passes back to the user's geometry
  * callback. Currently a single purpose enum; more frame-derived

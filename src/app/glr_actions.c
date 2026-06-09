@@ -112,7 +112,7 @@ static const char *vertex_label_names[OVERLAY_VERTEX_LABEL_COUNT] = {
  * jitter / motion Blur) and the sample/pass count. The passes cycle maps
  * its state index to an actual count on the supported ladder in
  * glr_config.c (accum_passes_*_cycle). */
-static const char *accum_effect_names[] = { "Off", "AA", "Blur" };
+static const char *accum_effect_names[] = { "Off", "AA", "Blur", "Blur Cam" };
 static const char *accum_passes_names[] = { "1", "2", "4", "8", "12", "16" };
 
 /* Hidden session toggles — intentionally NOT rows in this table (no
@@ -157,7 +157,7 @@ const GlrConfigItem g_cfg_items[] = {
     CFG_ITEM("### RENDERING",     0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
     CFG_ITEM_DISPLAY("MSAA",      GLR_MSAA, 0, GLR_CONFIG_MSAA,           2, NULL,                 0, &g_msaa_display_label),
     CFG_ITEM("Line smooth",       0, 0, 0, GLR_CONFIG_LINE_SMOOTH,        2, NULL,                 0),
-    CFG_ITEM("Accum effect",      GLR_ACCUM_EFFECT, 1, GLR_CONFIG_ACCUM_EFFECT, 3, accum_effect_names, 0),
+    CFG_ITEM("Accum effect",      GLR_ACCUM_EFFECT, 1, GLR_CONFIG_ACCUM_EFFECT, 4, accum_effect_names, 0),
     CFG_ITEM("Accum passes",      0, 0, 0, GLR_CONFIG_ACCUM_PASSES,      6, accum_passes_names,   0),
     CFG_ITEM("Wireframe",         GLR_WIREFRAME, 0, GLR_CONFIG_WIREFRAME, 2, NULL,                 0),
     CFG_ITEM("Point attenuation", 0, 0, 0, GLR_CONFIG_POINT_ATTENUATION,  2, NULL,                 0),

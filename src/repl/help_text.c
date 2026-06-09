@@ -158,9 +158,10 @@ static const char *const k_lang_sections_tail[] = {
     "  Use in any expression: glVertex3f(sin(t), cos(t), 0)",
     "",
     "Accumulation Buffer (F2 effect / Ctrl+= passes):",
-    "  Effect: Off / AA (antialiasing) / Blur (motion blur).",
-    "  AA on by default; Blur is opt-in (interpolates camera",
-    "  motion, else the animation time t). --noaccum disables.",
+    "  Effect: Off / AA / Blur / Blur Cam (motion blur).",
+    "  AA on by default; Blur is opt-in. Blur interpolates",
+    "  camera motion, else the animation time t; Blur Cam",
+    "  blurs only camera motion (else AA). --noaccum disables.",
     "  Passes (samples): 1/2/4/8/12/16. Status: AA 2x / Blur 8x.",
     "",
     NULL

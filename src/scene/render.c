@@ -123,7 +123,7 @@ static int validate_render_config(const SceneRenderConfig *config) {
      * accum_passes == 0, which is fine while effect is OFF. Mirrors the
      * grid block above (validated only when grid_theme != OFF). */
     if (config->accum_effect < 0 ||
-        config->accum_effect > SCENE_ACCUM_EFFECT_BLUR) goto bad;
+        config->accum_effect > SCENE_ACCUM_EFFECT_BLUR_CAMERA) goto bad;
     if (config->use_accum && config->accum_effect != SCENE_ACCUM_EFFECT_OFF) {
         int n = config->accum_passes;
         if (n != 1 && n != 2 && n != 4 && n != 8 && n != 12 && n != 16)
@@ -715,7 +715,7 @@ int scene_render_3d_scene(SceneRendererState *state,
                    config->accum_effect != SCENE_ACCUM_EFFECT_OFF &&
                    accum_passes > 1;
     if (do_accum) {
-        int blur = (config->accum_effect == SCENE_ACCUM_EFFECT_BLUR &&
+        int blur = (SCENE_ACCUM_EFFECT_IS_BLUR(config->accum_effect) &&
                     config->setup_subframe_fn != NULL);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT);
         float weight = 1.0f / (float)accum_passes;

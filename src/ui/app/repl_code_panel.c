@@ -1819,7 +1819,7 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
         if (snap->render.accum_effect != SCENE_ACCUM_EFFECT_OFF &&
             snap->render.accum_passes > 1)
             snprintf(L.aa, sizeof L.aa, "%s %dx",
-                     snap->render.accum_effect == SCENE_ACCUM_EFFECT_BLUR
+                     SCENE_ACCUM_EFFECT_IS_BLUR(snap->render.accum_effect)
                          ? "Blur" : "AA",
                      snap->render.accum_passes);
         else
