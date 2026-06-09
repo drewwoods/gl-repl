@@ -130,8 +130,8 @@ void scene_renderer_state_init(SceneRendererState *state);
  * Returns 0 on success, -1 with errno = EINVAL if the config is rejected
  * by validate_render_config: NULL config, non-positive scene_w / scene_h,
  * out-of-range grid_theme / axes_theme, grid index out of range or grid
- * extent/step <= 0 when grid is enabled, or accum_samples out of range
- * when accumulation AA is on. */
+ * extent/step <= 0 when grid is enabled, unknown accum_effect, or
+ * accum_passes off the supported ladder when accumulation is active. */
 int scene_render_3d_scene(SceneRendererState *state,
                           const SceneRenderConfig *config);
 

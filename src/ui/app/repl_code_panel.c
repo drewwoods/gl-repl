@@ -1816,8 +1816,12 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
     L.has_aa = snap->render.use_accum ? 1 : 0;
     if (L.has_aa) {
         tx += STATUSBAR_SEP_W;
-        if (snap->render.accum_aa_enabled && snap->render.accum_samples > 1)
-            snprintf(L.aa, sizeof L.aa, "AA %dx", snap->render.accum_samples);
+        if (snap->render.accum_effect != SCENE_ACCUM_EFFECT_OFF &&
+            snap->render.accum_passes > 1)
+            snprintf(L.aa, sizeof L.aa, "%s %dx",
+                     snap->render.accum_effect == SCENE_ACCUM_EFFECT_BLUR
+                         ? "Blur" : "AA",
+                     snap->render.accum_passes);
         else
             snprintf(L.aa, sizeof L.aa, "AA off");
         L.aa_w = (int)strlen(L.aa) * FONT_SMALL_W;

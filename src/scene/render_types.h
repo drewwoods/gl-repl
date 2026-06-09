@@ -76,6 +76,16 @@ typedef enum SceneExecutePurpose {
     SCENE_EXEC_DEPTH_PROBE,     /* scene_probe_eye_dist feedback walk */
 } SceneExecutePurpose;
 
+/* Accumulation-buffer effect mode. OFF = single pass (no accum); AA =
+ * jitter-the-frustum antialiasing across accum_passes samples; BLUR =
+ * motion blur (the caller supplies a per-pass setup callback that varies
+ * the camera / animation time across the samples). */
+typedef enum SceneAccumEffect {
+    SCENE_ACCUM_EFFECT_OFF = 0,
+    SCENE_ACCUM_EFFECT_AA,
+    SCENE_ACCUM_EFFECT_BLUR,
+} SceneAccumEffect;
+
 /* Per-call context the scene passes back to the user's geometry
  * callback. Currently a single purpose enum; more frame-derived
  * metadata can land here without changing the function-pointer
@@ -162,9 +172,21 @@ typedef struct SceneRenderConfig {
     /* --- Rendering quality --- */
     int multisample_enabled;
     int line_smooth_enabled;
-    int use_accum;
-    int accum_aa_enabled;
-    int accum_samples;
+    int use_accum;          /* accumulation buffer available (--noaccum gate) */
+    int accum_effect;       /* SceneAccumEffect: OFF / AA / BLUR */
+    int accum_passes;       /* resolved sample count: 1,2,4,8,12,16 */
+
+    /* --- Optional per-pass blur hook ---
+     * Invoked once before each accumulation pass when accum_effect == BLUR
+     * (pass_idx in [0, pass_count)). The controller installs this to load an
+     * interpolated camera modelview (camera blur) and/or set the predef-t
+     * sub-step + reflatten (time blur), and may overwrite the cam_* fields of
+     * the passed-in per-pass config copy so scene helpers blur with the
+     * camera. The scene renders these passes with jitter 0. NULL for AA / OFF
+     * and for non-REPL callers (BLUR then degrades to the AA jitter path). */
+    void (*setup_subframe_fn)(void *user_data, int pass_idx, int pass_count,
+                              struct SceneRenderConfig *pass_config);
+    void  *setup_subframe_user_data;
 
     /* --- Lighting --- */
     int        user_lighting_enabled;

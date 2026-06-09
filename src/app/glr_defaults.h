@@ -74,8 +74,11 @@
 #define CFG_DEFAULT_AUTONORMAL        0
 #define CFG_DEFAULT_HIGHLIGHT_POLY    1
 #define CFG_DEFAULT_USE_ACCUM         1
-#define CFG_DEFAULT_ACCUM_AA_ENABLED  1
-#define CFG_DEFAULT_ACCUM_SAMPLES     2
+/* Effect defaults to AA (preserving the historic accum-AA-on-by-default
+ * behavior); Blur is strictly opt-in. Passes default to 2 (the old
+ * default sample count). */
+#define CFG_DEFAULT_ACCUM_EFFECT      SCENE_ACCUM_EFFECT_AA
+#define CFG_DEFAULT_ACCUM_PASSES      2
 
 /* Tag-keyed presentation defaults applied during example loading,
  * layered between the global reset and the example's own leading

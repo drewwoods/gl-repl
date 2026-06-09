@@ -69,8 +69,8 @@ typedef struct {
  * when building SceneRenderConfig.lights[]. */
 typedef struct {
     int   use_accum;
-    int   accum_aa_enabled;
-    int   accum_samples;
+    int   accum_effect;   /* SceneAccumEffect: OFF / AA / BLUR */
+    int   accum_passes;   /* resolved sample count: 1,2,4,8,12,16 */
     int   multisample_enabled;
     int   line_smooth_enabled;
     int   point_attenuation_enabled;
