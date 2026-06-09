@@ -286,54 +286,6 @@ static SceneRgba grid_aurora_origin_color(const GridDrawContext *ctx) {
     return rgba(0.50f, 0.80f + 0.10f * s0, 0.95f, 0.50f);
 }
 
-static void grid_aurora_end_pass(const GridDrawContext *ctx) {
-    const float extent = ctx->extent;
-    const float t      = ctx->anim_time;
-    const float as     = ctx->alpha_scale;
-    const int   steps  = 64;
-
-    /* Additive blend so overlapping folds brighten like real curtains.
-     * Depth writes are already off for the whole grid pass, and
-     * scene_grid_pop_state restores the blend func afterwards. */
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-
-    for (int c = 0; c < 2; c++) {
-        float ph       = (float)c * 2.6f;
-        float z0       = (c == 0 ? -0.55f : -0.30f) * extent;
-        float h_base   = extent * (0.35f + 0.08f * (float)c);
-        float h_height = extent * (0.30f - 0.06f * (float)c);
-        glBegin(GL_TRIANGLE_STRIP);
-        for (int i = 0; i <= steps; i++) {
-            float x = -extent + 2.0f * extent * (float)i / (float)steps;
-            /* meandering path in z, two octaves */
-            float z = z0
-                + sinf(x * 0.22f + t * 0.18f + ph) * extent * 0.16f
-                + sinf(x * 0.06f - t * 0.11f + ph * 1.7f) * extent * 0.09f;
-            /* curtain folds: drive both height and brightness */
-            float fold = sinf(x * 1.3f + t * 0.9f + ph) * 0.35f
-                       + sinf(x * 2.9f - t * 1.4f + ph * 0.6f) * 0.20f;
-            float fold01 = fold + 0.5f;
-            if (fold01 < 0.0f) fold01 = 0.0f;
-            if (fold01 > 1.0f) fold01 = 1.0f;
-            /* soft ends so the ribbon has no hard border */
-            float ex = x / extent;
-            float edge = 1.0f - ex * ex * ex * ex;
-            if (edge < 0.0f) edge = 0.0f;
-            float y_lo = h_base
-                + sinf(x * 0.5f + t * 0.4f + ph) * extent * 0.05f;
-            float y_hi = y_lo + h_height * (0.65f + 0.35f * fold01);
-            /* base: bright aurora green */
-            grid_color(ctx, 0.18f, 0.95f, 0.50f,
-                       fminf(0.30f * (0.45f + 0.55f * fold01) * edge * as,
-                             1.0f));
-            glVertex3f(x, y_lo, z);
-            /* top: violet fringe fading to nothing */
-            grid_color(ctx, 0.50f, 0.25f, 0.90f, 0.0f);
-            glVertex3f(x, y_hi, z);
-        }
-        glEnd();
-    }
-}
 
 /* Synthwave: the floor companion to the Sunset backdrop. Hot neon-pink
  * lines with breath-pulsed glow; the cross (constant-z) lines carry a
@@ -394,7 +346,7 @@ static const GridThemeSpec g_grid_theme_specs[GRID_THEME_COUNT] = {
     },
     [GRID_THEME_AURORA] = {
         grid_aurora_line_color, grid_aurora_origin_color, NULL,
-        grid_aurora_end_pass, 1.0f
+        NULL, 1.0f
     },
     [GRID_THEME_SYNTHWAVE] = {
         grid_synthwave_line_color, grid_synthwave_origin_color, NULL, NULL,
