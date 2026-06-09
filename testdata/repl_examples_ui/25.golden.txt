@@ -84,21 +84,38 @@ void display(void) {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -9.5000f);
-  glRotatef(28.0000f, 1.0f, 0.0f, 0.0f);
+  glTranslatef(0.0000f, 0.0000f, -19.0000f);
+  glRotatef(30.0000f, 1.0f, 0.0f, 0.0f);
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  static float incl, th, px, py, pz;
+  static float th, px, py, pz; // shared orbit scratch: angle + world position
 
   OrbitRings(rad, tilt) {
     glBegin(GL_LINE_LOOP);
-      for(i, 0, 64) {
-        glVertex3f(cos(i*TAU/64)*rad, sin(i*TAU/64)*rad*sin(tilt), sin(i*TAU/64)*rad*cos(tilt));
+      for(i, 0, 96) {
+        glVertex3f(cos(i*TAU/96)*rad, sin(i*TAU/96)*rad*sin(tilt), sin(i*TAU/96)*rad*cos(tilt));
       }
     glEnd();
   }
+  // planet(): one lit sphere on an inclined circular orbit. th/px/py/pz
+  // stay set after the call so the caller can hang a label off the body.
+  planet(orbitR, rate, phase, incl, prad, cr, cg, cb) {
+    th = t*rate + phase;
+    px = cos(th)*orbitR;
+    py = sin(th)*orbitR*sin(incl);
+    pz = sin(th)*orbitR*cos(incl);
+    glEnable(GL_LIGHTING);
+    glColor3f(cr, cg, cb);
+    glPushMatrix();
+      glTranslatef(px, py, pz);
+      glutSolidSphere(prad, 24, 18);
+    glPopMatrix();
+    glDisable(GL_LIGHTING);
+  }
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.35, 0.33, 0.3, 1});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, (GLfloat[]){18});
   glClearColor(0.02, 0.02, 0.05, 1);
   glEnable(GL_NORMALIZE);
   // use cull face since we are using blending we want the effect to be view independent
@@ -108,93 +125,124 @@ void display(void) {
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE);
   glDisable(GL_DEPTH_TEST);
+  // soft corona, then two pulsing shells at different frequencies
+  glColor4f(1, 0.72, 0.22, 0.16);
+  glutSolidSphere(0.72 + sin(t*1.3)*0.02, 24, 24);
   glColor4f(1, 0.85, 0.3, 0.5);
-  // Pulsate the sun's radius with two different frequencies to show it's alive.
-  glutSolidSphere(0.5  + cos(2*t)*0.01, 24, 24);
-  glutSolidSphere(0.45 + sin(t)*0.01, 24, 24);
+  glutSolidSphere(0.56 + cos(2*t)*0.012, 24, 24);
+  glutSolidSphere(0.5 + sin(t)*0.012, 24, 24);
   glEnable(GL_DEPTH_TEST);
-  glutSolidSphere(0.4, 24, 24);
+  glutSolidSphere(0.45, 24, 24);
   glColor3f(1, 0.9, 0.5);
-  glRasterPos3f(0.6, 0.55, 0);
+  glRasterPos3f(0.62, 0.58, 0);
   label("Sun");
 
-  // planets: lit by the central SOLAR light, color via glColor
+  // planets: lit by the central SOLAR light; glColor rides GL_COLOR_MATERIAL
+  // and one shared specular material gives every body a sun-glint
   glEnable(GL_LIGHT0);
   glEnable(GL_COLOR_MATERIAL);
   // Mercury (0.38 Earth radii)
-  incl = 0.18;
-  th = t*1.6;
-  px = cos(th)*1.3;
-  py = sin(th)*1.3*sin(incl);
-  pz = sin(th)*1.3*cos(incl);
-  glEnable(GL_LIGHTING);
-  glColor3f(0.7, 0.6, 0.5);
-  glPushMatrix();
-    glTranslatef(px, py, pz);
-    glutSolidSphere(0.069, 16, 16);
-  glPopMatrix();
-  glDisable(GL_LIGHTING);
-  glColor3f(0.9, 0.75, 0.6);
-  glRasterPos3f(px + 0.12, py + 0.14, pz);
+  planet(1.4, 1.6, 0.0, 0.18, 0.105, 0.63, 0.58, 0.54);
+  glColor3f(0.9, 0.85, 0.8);
+  glRasterPos3f(px + 0.14, py + 0.16, pz);
   label("Mercury");
   // Venus (0.95 Earth radii)
-  incl = 0.06;
-  th = t*1.15 + 1.0;
-  px = cos(th)*2.1;
-  py = sin(th)*2.1*sin(incl);
-  pz = sin(th)*2.1*cos(incl);
-  glEnable(GL_LIGHTING);
-  glColor3f(0.95, 0.8, 0.5);
-  glPushMatrix();
-    glTranslatef(px, py, pz);
-    glutSolidSphere(0.171, 16, 16);
-  glPopMatrix();
-  glDisable(GL_LIGHTING);
+  planet(2.05, 1.15, 1.0, 0.06, 0.165, 0.93, 0.81, 0.55);
   glColor3f(1, 0.9, 0.65);
-  glRasterPos3f(px + 0.14, py + 0.16, pz);
+  glRasterPos3f(px + 0.2, py + 0.22, pz);
   label("Venus");
-  // Earth (1.0, the reference radius)
-  incl = 0.0;
-  th = t*0.85 + 2.5;
-  px = cos(th)*2.9;
-  py = sin(th)*2.9*sin(incl);
-  pz = sin(th)*2.9*cos(incl);
-  glEnable(GL_LIGHTING);
-  glColor3f(0.35, 0.55, 1);
+  // Earth (the reference radius) + Moon circling it
+  planet(2.7, 0.85, 2.5, 0.0, 0.17, 0.3, 0.52, 0.95);
   glPushMatrix();
     glTranslatef(px, py, pz);
-    glutSolidSphere(0.18, 16, 16);
+    glRotatef(t*160, 0, 1, 0);
+    glTranslatef(0.34, 0.03, 0);
+    glEnable(GL_LIGHTING);
+    glColor3f(0.72, 0.72, 0.7);
+    glutSolidSphere(0.046, 12, 10);
+    glDisable(GL_LIGHTING);
   glPopMatrix();
-  glDisable(GL_LIGHTING);
   glColor3f(0.6, 0.8, 1);
-  glRasterPos3f(px + 0.16, py + 0.18, pz);
+  glRasterPos3f(px + 0.2, py + 0.22, pz);
   label("Earth");
   // Mars (0.53 Earth radii)
-  incl = 0.22;
-  th = t*0.62 + 4.0;
-  px = cos(th)*3.7;
-  py = sin(th)*3.7*sin(incl);
-  pz = sin(th)*3.7*cos(incl);
-  glEnable(GL_LIGHTING);
-  glColor3f(0.9, 0.45, 0.3);
+  planet(3.35, 0.62, 4.0, 0.22, 0.125, 0.88, 0.45, 0.26);
+  glColor3f(1, 0.6, 0.45);
+  glRasterPos3f(px + 0.16, py + 0.18, pz);
+  label("Mars");
+  // Jupiter (11.2 Earth radii before compression)
+  planet(4.5, 0.36, 1.8, 0.05, 0.57, 0.83, 0.69, 0.52);
+  glColor3f(1, 0.85, 0.65);
+  glRasterPos3f(px + 0.62, py + 0.5, pz);
+  label("Jupiter");
+  // Saturn (9.4 Earth radii) + two ring bands with a Cassini gap.
+  // Rings are flat strips, so culling is off while they draw - either
+  // face may point at the camera.
+  planet(5.8, 0.26, 3.4, 0.10, 0.52, 0.9, 0.8, 0.58);
   glPushMatrix();
     glTranslatef(px, py, pz);
-    glutSolidSphere(0.096, 16, 16);
+    glRotatef(27, 1, 0, 0.35);
+    glDisable(GL_CULL_FACE);
+    glBegin(GL_TRIANGLE_STRIP);
+      for(s, 0, 33) {
+        glColor4f(0.85, 0.75, 0.55, 0.5);
+        glVertex3f(cos(s*TAU/32)*0.66, 0, sin(s*TAU/32)*0.66);
+        glColor4f(0.9, 0.82, 0.6, 0.3);
+        glVertex3f(cos(s*TAU/32)*0.88, 0, sin(s*TAU/32)*0.88);
+      }
+    glEnd();
+    glBegin(GL_TRIANGLE_STRIP);
+      for(s, 0, 33) {
+        glColor4f(0.8, 0.72, 0.5, 0.35);
+        glVertex3f(cos(s*TAU/32)*0.93, 0, sin(s*TAU/32)*0.93);
+        glColor4f(0.75, 0.68, 0.48, 0.12);
+        glVertex3f(cos(s*TAU/32)*1.05, 0, sin(s*TAU/32)*1.05);
+      }
+    glEnd();
+    glEnable(GL_CULL_FACE);
   glPopMatrix();
-  glDisable(GL_LIGHTING);
-  glColor3f(1, 0.6, 0.45);
-  glRasterPos3f(px + 0.13, py + 0.15, pz);
-  label("Mars");
+  glColor3f(1, 0.9, 0.7);
+  glRasterPos3f(px + 1.1, py + 0.4, pz);
+  label("Saturn");
+  // Uranus (4.0 Earth radii) + a thin ring standing nearly on end:
+  // the planet is tipped ~98 degrees, so its rings face the sun pole-on
+  planet(6.8, 0.18, 5.2, 0.07, 0.34, 0.58, 0.82, 0.88);
+  glPushMatrix();
+    glTranslatef(px, py, pz);
+    glRotatef(98, 0, 0, 1);
+    glDisable(GL_CULL_FACE);
+    glBegin(GL_TRIANGLE_STRIP);
+      for(s, 0, 33) {
+        glColor4f(0.72, 0.88, 0.92, 0.4);
+        glVertex3f(cos(s*TAU/32)*0.44, 0, sin(s*TAU/32)*0.44);
+        glColor4f(0.72, 0.88, 0.92, 0.1);
+        glVertex3f(cos(s*TAU/32)*0.58, 0, sin(s*TAU/32)*0.58);
+      }
+    glEnd();
+    glEnable(GL_CULL_FACE);
+  glPopMatrix();
+  glColor3f(0.75, 0.92, 0.95);
+  glRasterPos3f(px + 0.6, py + 0.35, pz);
+  label("Uranus");
+  // Neptune (3.9 Earth radii)
+  planet(7.7, 0.13, 0.7, 0.14, 0.335, 0.28, 0.42, 0.9);
+  glColor3f(0.55, 0.65, 1);
+  glRasterPos3f(px + 0.42, py + 0.34, pz);
+  label("Neptune");
   // live readout: Earth's orbital phase, anchored in 3D below the system
   glColor3f(0.75, 0.8, 0.9);
-  glRasterPos3f(-1.6, -3, 0);
+  glRasterPos3f(-2.6, -5.6, 0);
   label("Earth phase = %f", fmod(t*0.85 + 2.5, TAU));
 
-  // faint orbit rings (unlit lines); func0 = one inclined ring
+  // faint orbit rings (unlit lines), one per planet at its inclination
   glDisable(GL_LIGHTING);
   glColor3f(0.22, 0.24, 0.34);
   glLineWidth(1.2);
-  OrbitRings(1.3, 0.18);
-  OrbitRings(2.1, 0.06);
-  OrbitRings(2.9, 0.0);
-  OrbitRings(3.7, 0.22);
+  OrbitRings(1.4, 0.18);
+  OrbitRings(2.05, 0.06);
+  OrbitRings(2.7, 0.0);
+  OrbitRings(3.35, 0.22);
+  OrbitRings(4.5, 0.05);
+  OrbitRings(5.8, 0.10);
+  OrbitRings(6.8, 0.07);
+  OrbitRings(7.7, 0.14);
