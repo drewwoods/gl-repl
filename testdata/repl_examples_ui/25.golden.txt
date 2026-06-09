@@ -8,14 +8,14 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_OCEAN */
+/* @cfg grid = GRID_THEME_OFF */
 /* @cfg grid_major = 0 */
-/* @cfg grid_extent = 1 */
+/* @cfg grid_extent = 2 */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg xform_guides = 2 */
-/* @cfg light_indicators = 1 */
-/* @cfg light_theme = LIGHT_THEME_DEFAULT */
-/* @cfg backdrop = SCENE_BACKDROP_OFF */
+/* @cfg light_indicators = 0 */
+/* @cfg light_theme = LIGHT_THEME_SOLAR */
+/* @cfg backdrop = SCENE_BACKDROP_STARS */
 /* @cfg auto_normals = 0 */
 /* @cfg view_mode = 0 */
 /* @cfg camera_rotate = 0 */
@@ -84,192 +84,117 @@ void display(void) {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -6.5473f);
-  glRotatef(20.6076f, 1.0f, 0.0f, 0.0f);
-  glRotatef(-114.3999f, 0.0f, 1.0f, 0.0f);
-  glTranslatef(0.2893f, -0.0000f, -0.0242f);
+  glTranslatef(0.0000f, 0.0000f, -9.5000f);
+  glRotatef(28.0000f, 1.0f, 0.0f, 0.0f);
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  static float launchVelX, launchVelY, launchVelZ;
-  static float currentVelY;
-  static float particleLife, particleAge;
-  static float dragDecay = 0.9;
-  static float gravityY = -3.5;
-  static float dragRate = 10;
-  static float particleX, particleY, particleZ;
-  static float floorY = 0;
-  static float spawnDelay;
-  static float emitDuration = 5.99568;
-  static float fluke_ang, fin_ang;
-  static float speed = 0.5;
-  static float detail = 30;
-  static float blowHoleX = 0.95, blowHoleY = 0.71, blowHoleZ;
-  static float waterDroplets = 250; // @tune
+  static float incl, th, px, py, pz;
 
-  computeVerticalMotion(ageSeconds, launchY) {
-    // Velocity is linear in age: currentVelY = gravityY*ageSeconds + launchVelY.
-    // Position is its integral:
-    //   (gravityY/2)*ageSeconds^2 + launchVelY*ageSeconds + launchY
-    currentVelY = launchVelY + gravityY*ageSeconds;
-    particleY = launchY + gravityY/2 * ageSeconds * ageSeconds + launchVelY * ageSeconds;
+  OrbitRings(rad, tilt) {
+    glBegin(GL_LINE_LOOP);
+      for(i, 0, 64) {
+        glVertex3f(cos(i*TAU/64)*rad, sin(i*TAU/64)*rad*sin(tilt), sin(i*TAU/64)*rad*cos(tilt));
+      }
+    glEnd();
   }
+  glClearColor(0.02, 0.02, 0.05, 1);
+  glEnable(GL_NORMALIZE);
+  // use cull face since we are using blending we want the effect to be view independent
+  glEnable(GL_CULL_FACE);
 
-  computeLifespan(launchY) {
-    // Solve particleY(age) = floorY for age: how long the particle takes to fall
-    // from launchY to the floor. particleY is the projectile
-    //   (gravityY/2)*age^2 + launchVelY*age + (launchY - floorY) = 0
-    // a quadratic with a = gravityY/2, b = launchVelY, c = launchY - floorY, so
-    //   age = (-b - sqrt(b^2 - 4ac)) / 2a
-    // Substituting a = gravityY/2: 4ac = 2*gravityY*c and 2a = gravityY.
-    particleLife = (-launchVelY - sqrt(launchVelY*launchVelY - 2 * gravityY*(launchY - floorY))) / gravityY;
-  }
-
-  computeDriftX(ageSeconds, launchX) {
-    // Integral over [0, age] of the decaying horizontal velocity
-    //   velX(s) = launchVelX * dragDecay^(dragRate*s)
-    particleX = launchX + (launchVelX * pow(dragDecay, ageSeconds*dragRate) - launchVelX) / (dragRate*ln(dragDecay));
-  }
-
-  computeDriftZ(ageSeconds, launchZ) {
-    // Integral over [0, age] of the decaying horizontal velocity
-    //   velZ(s) = launchVelZ * dragDecay^(dragRate*s)
-    particleZ = launchZ + (launchVelZ * pow(dragDecay, ageSeconds*dragRate) - launchVelZ) / (dragRate*ln(dragDecay));
-  }
-
-  drawWhale(blowHoleX, blowHoleY, blowHoleZ) {
-    fluke_ang = sin(speed*t*TAU)* 30;
-    fin_ang = cos(speed*t*TAU)* 5;
-    detail = max(12, floor(detail));
-
-    // Shiny wet whale
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.2, 0.2, 0.2, 1});
-    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 100);
-
-    // Main body: elongated ellipsiod, dark blue-grey on top
-    glColor3f(0.24, 0.3, 0.4);
-
-    glPushMatrix();
-      glScalef(2, 0.85, 1.05);
-      glutSolidSphere(1, detail, detail);
-    glPopMatrix();
-
-    // Belly: lighter, sits just under the body so it shows the underside
-    glColor3f(0.72, 0.76, 0.78);
-    glPushMatrix();
-      glTranslatef(0.05, -0.42, 0);
-      glScalef(1.65, 0.45, 0.75);
-      glutSolidSphere(1, detail, detail);
-    glPopMatrix();
-
-    glColor3f(0.24, 0.3, 0.4);
-    glPushMatrix(); // begin tail
-      glTranslatef(-1.85, -0.2, 0);
-      glRotatef(fluke_ang/2, 0, 0, 1);
-
-      // Tail peduncle (narrow part before the flukes)
-      glPushMatrix();
-        glScalef(0.75, 0.3, 0.4);
-        glutSolidSphere(1, detail, detail);
-      glPopMatrix();
-
-      // Tail flukes -- two flat libes, animated with fluke_angle
-      glPushMatrix();
-        glTranslatef(-0.65, 0, 0);
-        glRotatef(fluke_ang, 0, 0, 1);
-        glPushMatrix();
-          glTranslatef(-0.1, 0, 0.55);
-          glRotatef(15, 0, 1, 0);
-          glScalef(0.35, 0.06, 0.65);
-          glutSolidSphere(1, detail, detail); // right fluke
-        glPopMatrix();
-        glPushMatrix();
-          glTranslatef(-0.1, 0, -0.55);
-          glRotatef(-15, 0, 1, 0);
-          glScalef(0.35, 0.06, 0.65);
-          glutSolidSphere(1, detail, detail); // left fluke
-        glPopMatrix();
-      glPopMatrix(); // end flukes
-    glPopMatrix(); // end tail
-
-    // Pectoral fins
-    glPushMatrix();
-      glRotatef(fin_ang, 0, 0, 1);
-      glRotatef(fin_ang/4, 0, 1, 0);
-
-      glPushMatrix();
-        glTranslatef(0.45, -0.25, 1);
-        glRotatef(25, 0, 1, 0);
-        glScalef(0.4, 0.08, 0.45);
-        glutSolidSphere(1, 14, 10); // right pectoral fin
-      glPopMatrix();
-
-      glPushMatrix();
-        glTranslatef(0.45, -0.25, -1);
-        glScalef(0.4, 0.08, 0.45);
-        glutSolidSphere(1, 14, 10); // left pectoral fin
-      glPopMatrix();
-    glPopMatrix(); // end fins
-
-    // Eyes
-    glDisable(GL_LIGHTING);
-    glColor3f(0.04, 0.04, 0.04);
-    glPushMatrix();
-      glTranslatef(1.45, 0.18, 0.63);
-      glutSolidSphere(0.07, 10, 8);
-      glTranslatef(0, 0, -1.26);
-      glutSolidSphere(0.07, 10, 8);
-    glPopMatrix();
-
-    // Blowhole
-    glColor3f(0.08, 0.08, 0.12);
-    glPushMatrix();
-      glTranslatef(blowHoleX, blowHoleY, blowHoleZ);
-      glScalef(0.15, 0.04, 0.1);
-      glutSolidSphere(1, 10, 8);
-    glPopMatrix();
-  }
-
-  glColor4f(0.25, 0.45, 0.85, 0.46);
+  // the sun: drawn unlit so it glows (it sits on the SOLAR light at origin)
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  glDisable(GL_DEPTH_TEST);
+  glColor4f(1, 0.85, 0.3, 0.5);
+  // Pulsate the sun's radius with two different frequencies to show it's alive.
+  glutSolidSphere(0.5  + cos(2*t)*0.01, 24, 24);
+  glutSolidSphere(0.45 + sin(t)*0.01, 24, 24);
   glEnable(GL_DEPTH_TEST);
-  glDepthFunc(GL_ALWAYS);
-  glPointSize(10);
+  glutSolidSphere(0.4, 24, 24);
+  glColor3f(1, 0.9, 0.5);
+  glRasterPos3f(0.6, 0.55, 0);
+  label("Sun");
 
-  if(t > 2*emitDuration) {
-    t = 0;
-  }
-
-  glBegin(GL_POINTS);
-    for(i, 0, waterDroplets) {
-      launchVelX = 3 * rand2(i,1);
-      launchVelY = 2 + 2 * rand(i, 2);
-      launchVelZ = 3 * rand2(i, 3);
-
-      computeLifespan(blowHoleY);
-      spawnDelay = 3 * rand(i,4);
-
-      if((t - spawnDelay) > 0 && ( t <= ceil(emitDuration/particleLife)*particleLife + spawnDelay)) {
-        particleAge = fmod(t - spawnDelay, particleLife);
-
-        computeDriftX(particleAge, blowHoleX);
-        computeVerticalMotion(particleAge, blowHoleY);
-        computeDriftZ(particleAge, blowHoleZ);
-
-        glVertex3f(particleX + 0.05, particleY, particleZ);
-      }
-    }
-  glEnd();
-
-  glDepthFunc(GL_LESS);
-
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_NORMALIZE);
-  glDisable(GL_BLEND);
-
+  // planets: lit by the central SOLAR light, color via glColor
   glEnable(GL_LIGHT0);
-  glEnable(GL_LIGHT1);
-
+  glEnable(GL_COLOR_MATERIAL);
+  // Mercury (0.38 Earth radii)
+  incl = 0.18;
+  th = t*1.6;
+  px = cos(th)*1.3;
+  py = sin(th)*1.3*sin(incl);
+  pz = sin(th)*1.3*cos(incl);
   glEnable(GL_LIGHTING);
+  glColor3f(0.7, 0.6, 0.5);
+  glPushMatrix();
+    glTranslatef(px, py, pz);
+    glutSolidSphere(0.069, 16, 16);
+  glPopMatrix();
+  glDisable(GL_LIGHTING);
+  glColor3f(0.9, 0.75, 0.6);
+  glRasterPos3f(px + 0.12, py + 0.14, pz);
+  label("Mercury");
+  // Venus (0.95 Earth radii)
+  incl = 0.06;
+  th = t*1.15 + 1.0;
+  px = cos(th)*2.1;
+  py = sin(th)*2.1*sin(incl);
+  pz = sin(th)*2.1*cos(incl);
+  glEnable(GL_LIGHTING);
+  glColor3f(0.95, 0.8, 0.5);
+  glPushMatrix();
+    glTranslatef(px, py, pz);
+    glutSolidSphere(0.171, 16, 16);
+  glPopMatrix();
+  glDisable(GL_LIGHTING);
+  glColor3f(1, 0.9, 0.65);
+  glRasterPos3f(px + 0.14, py + 0.16, pz);
+  label("Venus");
+  // Earth (1.0, the reference radius)
+  incl = 0.0;
+  th = t*0.85 + 2.5;
+  px = cos(th)*2.9;
+  py = sin(th)*2.9*sin(incl);
+  pz = sin(th)*2.9*cos(incl);
+  glEnable(GL_LIGHTING);
+  glColor3f(0.35, 0.55, 1);
+  glPushMatrix();
+    glTranslatef(px, py, pz);
+    glutSolidSphere(0.18, 16, 16);
+  glPopMatrix();
+  glDisable(GL_LIGHTING);
+  glColor3f(0.6, 0.8, 1);
+  glRasterPos3f(px + 0.16, py + 0.18, pz);
+  label("Earth");
+  // Mars (0.53 Earth radii)
+  incl = 0.22;
+  th = t*0.62 + 4.0;
+  px = cos(th)*3.7;
+  py = sin(th)*3.7*sin(incl);
+  pz = sin(th)*3.7*cos(incl);
+  glEnable(GL_LIGHTING);
+  glColor3f(0.9, 0.45, 0.3);
+  glPushMatrix();
+    glTranslatef(px, py, pz);
+    glutSolidSphere(0.096, 16, 16);
+  glPopMatrix();
+  glDisable(GL_LIGHTING);
+  glColor3f(1, 0.6, 0.45);
+  glRasterPos3f(px + 0.13, py + 0.15, pz);
+  label("Mars");
+  // live readout: Earth's orbital phase, anchored in 3D below the system
+  glColor3f(0.75, 0.8, 0.9);
+  glRasterPos3f(-1.6, -3, 0);
+  label("Earth phase = %f", fmod(t*0.85 + 2.5, TAU));
 
-  drawWhale(blowHoleX, blowHoleY, blowHoleZ);
+  // faint orbit rings (unlit lines); func0 = one inclined ring
+  glDisable(GL_LIGHTING);
+  glColor3f(0.22, 0.24, 0.34);
+  glLineWidth(1.2);
+  OrbitRings(1.3, 0.18);
+  OrbitRings(2.1, 0.06);
+  OrbitRings(2.9, 0.0);
+  OrbitRings(3.7, 0.22);
