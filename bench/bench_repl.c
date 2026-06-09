@@ -234,60 +234,118 @@ static BenchResult bench_feed_examples(int iters) {
     return r;
 }
 
-/* ---- bench: flatten cost on each example ------------------------------ */
+/* ---- bench: flatten cost on a fixed scene ----------------------------- */
+
+/* A verbatim, frozen copy of the "Animated wave surface" built-in example (a
+ * nested-for surface that unrolls to a large flat program). Hardcoded here so
+ * the flatten benchmark's workload is fixed regardless of changes to the
+ * built-in example list — adding, reordering, or editing examples in
+ * src/repl/examples.c can't move this number. The // camera / // @cfg metadata
+ * lines are kept so repl_load_example_lines_for_test strips them exactly as the
+ * real example loader does, preserving an identical post-load command set. */
+static const char *const k_flatten_bench_scene[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -5.0f);",
+    "glRotatef(20.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(30.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "",
+    "// @cfg vertex_points = 0",
+    "static float grid, extent, x, y, z, invGradMag; // strip cell index, world extent, vertex coords, 1/|gradient|",
+    "static float amp = 0.4;    // wave amplitude (peak |y|)",
+    "static float freq = 2.5;   // spatial frequency along x and z",
+    "static float zPhase = 0.7; // z-axis time phase: z evolves slower than x (<1)",
+    "glClearColor(0.1, 0.1, 0.1, 1.0);",
+    "// Animated surface: y = sin(freq*x + t) * cos(freq*z + zPhase*t) * amp",
+    "// Drawn as a triangle strip per row with analytic per-vertex normals.",
+    "glEnable(GL_DEPTH_TEST);",
+    "glEnable(GL_LIGHTING);",
+    "glEnable(GL_NORMALIZE);",
+    "glEnable(GL_LIGHT3);",
+    "glEnable(GL_LIGHT2);",
+    "glEnable(GL_LIGHT1);",
+    "glEnable(GL_LIGHT0);",
+    "glShadeModel(GL_SMOOTH);",
+    "grid = 16;     // rows/cols of strip cells",
+    "extent = 3.0;  // total surface width along x and z",
+    "for(i, 0, grid) {",
+        "glBegin(GL_TRIANGLE_STRIP);",
+        "for(j, 0, grid+1) {",
+            "// row i (z fixed), step j across x; emit two vertices per j to feed the strip",
+            "x = -extent/2 + extent*j/grid;",
+            "z = -extent/2 + extent*i/grid;",
+            "y = sin(x*freq + t)*cos(z*freq + zPhase*t)*amp;",
+            "// gradient = (dy/dx, 0, dy/dz); normal = (-dy/dx, 1, -dy/dz) / |...|.",
+            "// invGradMag = 1 / sqrt(1 + amp^2 * freq^2 * (cos^2*cos^2 + sin^2*sin^2)).",
+            "invGradMag = 1.0/sqrt(1 + amp*amp*freq*freq*(cos(x*freq + t)*cos(x*freq + t)*cos(z*freq + zPhase*t)*cos(z*freq + zPhase*t) + sin(x*freq + t)*sin(x*freq + t)*sin(z*freq + zPhase*t)*sin(z*freq + zPhase*t)));",
+            "glNormal3f(-amp*freq*cos(x*freq + t)*cos(z*freq + zPhase*t)*invGradMag, invGradMag, amp*freq*sin(x*freq + t)*sin(z*freq + zPhase*t)*invGradMag);",
+            "glColor3f(0.35 + 0.35*sin(x + t), 0.5 + 0.3*cos(z + t*0.5), 0.65 + 0.25*sin(x*z + t));",
+            "glVertex3f(x, y, z);",
+            "// second strip vertex: same x, but z stepped to row i+1",
+            "z = -extent/2 + extent*(i + 1)/grid;",
+            "y = sin(x*freq + t)*cos(z*freq + zPhase*t)*amp;",
+            "invGradMag = 1.0/sqrt(1 + amp*amp*freq*freq*(cos(x*freq + t)*cos(x*freq + t)*cos(z*freq + zPhase*t)*cos(z*freq + zPhase*t) + sin(x*freq + t)*sin(x*freq + t)*sin(z*freq + zPhase*t)*sin(z*freq + zPhase*t)));",
+            "glNormal3f(-amp*freq*cos(x*freq + t)*cos(z*freq + zPhase*t)*invGradMag, invGradMag, amp*freq*sin(x*freq + t)*sin(z*freq + zPhase*t)*invGradMag);",
+            "glColor3f(0.35 + 0.35*sin(x + t), 0.5 + 0.3*cos(z + t*0.5), 0.65 + 0.25*sin(x*z + t));",
+            "glVertex3f(x, y, z);",
+        "}",
+        "glEnd();",
+    "}",
+    NULL
+};
 
 static BenchResult bench_flatten_examples(int iters) {
-    int n_examples = repl_example_count();
-
-    BenchResult r = { .name = "flatten_examples", .unit = "examples",
+    BenchResult r = { .name = "flatten_examples", .unit = "flattens",
                       .min_sec = 1e18 };
 
-    /* Pre-load each example fresh so we are timing flatten alone, not
-     * editor_feed_line plus flatten. We re-run flatten `inner` times per example
-     * to amortize the surrounding loop overhead. The timer is started
-     * after the load so the flatten loop is the only thing being timed. */
-    int inner = 32;
+    /* Load the fixed scene fresh once so we are timing flatten alone, not
+     * editor_feed_line plus flatten. load_example_lines() resets cmd state
+     * itself; no separate fresh_repl() is needed. */
+    repl_load_example_lines_for_test(k_flatten_bench_scene);
+
+    /* Snapshot post-load predef values. flatten_range() writes
+     * g_predef_vars[].value on CMD_VAR_ASSIGN (src/repl/core.c:2624), so
+     * without restoring each iter sees drifted values and measures a different
+     * workload than the first - several examples have self-referential-looking
+     * assignments whose RHS depends on other predef vars. */
     float saved_vals[MAX_PREDEF_VARS];
+    int saved_n = g_num_predef_vars;
+    for (int i = 0; i < saved_n; i++)
+        saved_vals[i] = g_predef_vars[i].value;
+
+    /* Flatten `inner` times per timer sample so per-call granularity is well
+     * above the clock's resolution; the timer brackets only the flatten loop. */
+    int inner = 32;
 
     for (int it = 0; it < iters; it++) {
-        double iter_sec = 0.0;
-        for (int e = 0; e < n_examples; e++) {
-            /* load_example_lines() resets cmd state itself; no separate
-             * fresh_repl() is needed. */
-            repl_load_example_lines_for_test(repl_example_lines(e));
+        for (int i = 0; i < saved_n; i++)
+            g_predef_vars_mut[i].value = saved_vals[i];
 
-            /* Snapshot post-load predef values. flatten_range() writes
-             * g_predef_vars[].value on CMD_VAR_ASSIGN (src/repl/core.c:2624),
-             * so without restoring each iter sees drifted values and
-             * measures a different workload than the first - several
-             * examples have self-referential-looking assignments whose
-             * RHS depends on other predef vars. */
-            int saved_n = g_num_predef_vars;
+        double t0 = now_seconds();
+        for (int k = 0; k < inner; k++) {
+            /* Restore the post-load values before each flatten so every inner
+             * iteration measures the same expression evaluation workload. The
+             * restore is a 16-float copy, dwarfed by flatten itself. */
             for (int i = 0; i < saved_n; i++)
-                saved_vals[i] = g_predef_vars[i].value;
-
-            double t0 = now_seconds();
-            for (int k = 0; k < inner; k++) {
-                /* Restore the post-load values before each flatten so
-                 * every inner iteration measures the same expression
-                 * evaluation workload. The restore is a 16-float copy,
-                 * dwarfed by flatten itself. */
-                for (int i = 0; i < saved_n; i++)
-                    g_predef_vars_mut[i].value = saved_vals[i];
-                /* repl_flatten_commands(editor_state_edit_line()) -> flatten_commands() rebuilds
-                 * unconditionally (resets repl_state_flat_program_count() and walks
-                 * repl_state_document_cmds_mut()[]), so we don't need to toggle any dirty flag
-                 * here - doing so would just add unrelated side effects
-                 * (repl_state_normals_dirty(), depth cache invalidation) into the
-                 * timed region. */
-                repl_flatten_commands(editor_state_edit_line());
-            }
-            iter_sec += now_seconds() - t0;
+                g_predef_vars_mut[i].value = saved_vals[i];
+            /* repl_flatten_commands(editor_state_edit_line()) -> flatten_commands() rebuilds
+             * unconditionally (resets repl_state_flat_program_count() and walks
+             * repl_state_document_cmds_mut()[]), so we don't need to toggle any dirty flag
+             * here - doing so would just add unrelated side effects
+             * (repl_state_normals_dirty(), depth cache invalidation) into the
+             * timed region. */
+            repl_flatten_commands(editor_state_edit_line());
         }
-        if (iter_sec < r.min_sec) r.min_sec = iter_sec;
-        r.total_sec += iter_sec;
-        r.ops += (long long)n_examples * inner;
+        double dt = now_seconds() - t0;
+        if (dt < r.min_sec) r.min_sec = dt;
+        r.total_sec += dt;
+        r.ops += inner;
         r.iters++;
+    }
+
+    if (!g_csv) {
+        fprintf(stderr, "  (flatten_examples: fixed wave-surface scene, flat_cmds=%d)\n",
+                repl_state_flat_program_count());
     }
     return r;
 }
