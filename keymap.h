@@ -103,7 +103,7 @@
 #define GLR_GRID_MAJOR       KEY_CTRL_O, 0     /* pairs w/ Focus origin */
 #define GLR_CPU_PROFILE      KEY_CTRL_W, 0     /* pairs w/ Memory profile */
 #define GLR_CODE_PANEL       KEY_CTRL_B, 0
-#define GLR_ACCUM_AA         GLUT_KEY_F2, 0
+#define GLR_ACCUM_EFFECT     GLUT_KEY_F2, 0
 #define GLR_GRID             GLUT_KEY_F3, 0
 #define GLR_AXES             GLUT_KEY_F4, 0
 #define GLR_VERTEX_LABELS    GLUT_KEY_F5, 0

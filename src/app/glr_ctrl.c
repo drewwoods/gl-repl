@@ -780,8 +780,13 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, SceneRende
     config->multisample_enabled = render.multisample_enabled;
     config->line_smooth_enabled = render.line_smooth_enabled;
     config->use_accum = render.use_accum;
-    config->accum_aa_enabled = render.accum_aa_enabled;
-    config->accum_samples = render.accum_samples;
+    config->accum_effect = render.accum_effect;
+    config->accum_passes = render.accum_passes;
+    /* Blur sub-frame hook is resolved per frame in glr_ctrl_display_frame
+     * (it needs the captured current camera pose); default to no hook so
+     * effect==BLUR degrades to the AA jitter path until wired. */
+    config->setup_subframe_fn = NULL;
+    config->setup_subframe_user_data = NULL;
 
     /* --- Lighting ---
      * Merge the app-owned dimensional light data (theme-seeded positions /

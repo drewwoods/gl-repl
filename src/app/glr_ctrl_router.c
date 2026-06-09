@@ -184,11 +184,11 @@ int glr_ctrl_router_handle_cfg_shortcut_key(unsigned char key) {
     return glr_cfg_handle_ascii_shortcut(key);
 }
 
-/* Ctrl+= / Ctrl+- drive the *same* Off->2x->4x->8x->16x cycle the
- * Config "Accum AA" menu row uses (clamped, no wrap), so the keyboard
- * and the menu are one coherent model — no latent sample count behind
- * an "Off" state. Still gated on use_accum: with --noaccum there is no
- * accumulation buffer to enable. */
+/* Ctrl+= / Ctrl+- step the Config "Accum passes" cycle (1/2/4/8/12/16,
+ * clamped, no wrap), so the keyboard and the menu are one coherent model.
+ * Gated on use_accum (no accumulation buffer under --noaccum) and on the
+ * effect being active — adjusting the sample count is meaningless while the
+ * effect is Off. */
 int glr_ctrl_router_handle_accum_samples_key(unsigned char key) {
     GlrRenderState *rs = glr_state_render_mut();
     int is_up = (key == '=' || key == '+');
@@ -201,17 +201,17 @@ int glr_ctrl_router_handle_accum_samples_key(unsigned char key) {
     if (!is_up && !is_down)
         return 0;
 
-    if (rs->use_accum) {
-        int n   = glr_config_state_count(GLR_CONFIG_ACCUM_AA);
-        int idx = glr_config_get(GLR_CONFIG_ACCUM_AA);
+    if (rs->use_accum && rs->accum_effect != SCENE_ACCUM_EFFECT_OFF) {
+        int n   = glr_config_state_count(GLR_CONFIG_ACCUM_PASSES);
+        int idx = glr_config_get(GLR_CONFIG_ACCUM_PASSES);
         int next = idx + (is_up ? 1 : -1);
         if (next < 0)     next = 0;
         if (next > n - 1) next = n - 1;
         if (next != idx)
-            glr_config_set(GLR_CONFIG_ACCUM_AA, next);
+            glr_config_set(GLR_CONFIG_ACCUM_PASSES, next);
         char msg[64];
-        snprintf(msg, sizeof(msg), "Accum AA: %s",
-                 glr_config_state_name(GLR_CONFIG_ACCUM_AA, next));
+        snprintf(msg, sizeof(msg), "Accum passes: %s",
+                 glr_config_state_name(GLR_CONFIG_ACCUM_PASSES, next));
         repl_set_status(msg);
     }
     return 1;

@@ -22,36 +22,31 @@ static int clamp_int(int v, int lo, int hi) {
     return v;
 }
 
-/* Accum AA is presented as a single Off->2x->4x->8x->16x cycle that
- * drives the two underlying render fields (accum_aa_enabled +
- * accum_samples). Index 0 == Off; k_accum_steps[0] is unused.
- * Mirrors the audio-cfg collapse: config_value_ptr() returns NULL for
- * this key and glr_config_get/set special-case it. */
-#define ACCUM_AA_STATE_COUNT 5
 #define CFG_SECTION_LABEL_MAX 48
-static const int k_accum_steps[ACCUM_AA_STATE_COUNT] = { 0, 2, 4, 8, 16 };
 
-static int accum_aa_get_cycle(void) {
-    GlrRenderState render = glr_state_render();
-    if (!render.accum_aa_enabled ||
-        render.accum_samples <= 1)
-        return 0;
-    int samples = render.accum_samples;
-    for (int i = 1; i < ACCUM_AA_STATE_COUNT; i++)
-        if (samples <= k_accum_steps[i])
+/* Accum effect (Off/AA/Blur) is a plain backing int (accum_effect), so it
+ * goes through config_value_ptr like any toggle/cycle. Accum passes is a
+ * cycle whose state index maps to an actual sample count on the supported
+ * ladder; like the audio-cfg collapse, config_value_ptr() returns NULL for
+ * the passes key and glr_config_get/set special-case it via the helpers
+ * below. */
+#define ACCUM_PASS_STATE_COUNT 6
+static const int k_accum_pass_steps[ACCUM_PASS_STATE_COUNT] = { 1, 2, 4, 8, 12, 16 };
+
+static int accum_passes_get_cycle(void) {
+    int n = glr_state_render().accum_passes;
+    for (int i = 0; i < ACCUM_PASS_STATE_COUNT; i++)
+        if (n <= k_accum_pass_steps[i])
             return i;
-    return ACCUM_AA_STATE_COUNT - 1;
+    return ACCUM_PASS_STATE_COUNT - 1;
 }
 
-static void accum_aa_set_cycle(int value) {
-    if (value <= 0) {
-        glr_state_render_mut()->accum_aa_enabled = 0;
-        return;
-    }
-    if (value >= ACCUM_AA_STATE_COUNT)
-        value = ACCUM_AA_STATE_COUNT - 1;
-    glr_state_render_mut()->accum_aa_enabled = 1;
-    glr_state_render_mut()->accum_samples = k_accum_steps[value];
+static void accum_passes_set_cycle(int value) {
+    if (value < 0)
+        value = 0;
+    if (value >= ACCUM_PASS_STATE_COUNT)
+        value = ACCUM_PASS_STATE_COUNT - 1;
+    glr_state_render_mut()->accum_passes = k_accum_pass_steps[value];
 }
 
 static void cfg_slug_from_label(const char *label, char *out, size_t out_sz) {
@@ -109,7 +104,8 @@ static int *config_value_ptr(GlrConfigKey key) {
     switch (key) {
     case GLR_CONFIG_MSAA:                return &glr_state_render_mut()->multisample_enabled;
     case GLR_CONFIG_LINE_SMOOTH:         return &glr_state_render_mut()->line_smooth_enabled;
-    case GLR_CONFIG_ACCUM_AA:            return NULL; /* cycle: see accum_aa_*_cycle */
+    case GLR_CONFIG_ACCUM_EFFECT:        return &glr_state_render_mut()->accum_effect;
+    case GLR_CONFIG_ACCUM_PASSES:        return NULL; /* cycle: see accum_passes_*_cycle */
     case GLR_CONFIG_WIREFRAME:           return &glr_state_presentation_mut()->wireframe;
     case GLR_CONFIG_POINT_ATTENUATION:   return &glr_state_render_mut()->point_attenuation_enabled;
     case GLR_CONFIG_AUTO_TIME:           return &repl_state_variables_mut()->time_playing;
@@ -153,12 +149,13 @@ static int *config_value_ptr(GlrConfigKey key) {
 int glr_config_get(GlrConfigKey key) {
     if (key == GLR_CONFIG_AUDIO_MODE)
         return glr_audio_get_cfg_mode();
-    if (key == GLR_CONFIG_ACCUM_AA)
-        return accum_aa_get_cycle();
+    if (key == GLR_CONFIG_ACCUM_PASSES)
+        return accum_passes_get_cycle();
 
     switch (key) {
     case GLR_CONFIG_MSAA:                return glr_state_render().multisample_enabled;
     case GLR_CONFIG_LINE_SMOOTH:         return glr_state_render().line_smooth_enabled;
+    case GLR_CONFIG_ACCUM_EFFECT:        return glr_state_render().accum_effect;
     case GLR_CONFIG_WIREFRAME:           return glr_state_presentation().wireframe;
     case GLR_CONFIG_POINT_ATTENUATION:   return glr_state_render().point_attenuation_enabled;
     case GLR_CONFIG_AUTO_TIME:           return repl_state_variables().time_playing;
@@ -234,8 +231,8 @@ void glr_config_set(GlrConfigKey key, int value) {
     if (key == GLR_CONFIG_AUDIO_MODE) {
         glr_audio_set_cfg_mode(value);
         glr_actions_apply_audio_cfg_mode(value);
-    } else if (key == GLR_CONFIG_ACCUM_AA) {
-        accum_aa_set_cycle(value);
+    } else if (key == GLR_CONFIG_ACCUM_PASSES) {
+        accum_passes_set_cycle(value);
     } else if (key == GLR_CONFIG_REPLAY) {
         if (value) {
             if (!replay_active())

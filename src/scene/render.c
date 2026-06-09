@@ -116,15 +116,18 @@ static int validate_render_config(const SceneRenderConfig *config) {
         if (!(config->grid_major_steps[config->grid_major_idx] > 0.0f))
                                                               goto bad;
     }
-    /* accum_samples must come from the supported {1, 2, 4, 8, 16}
-     * ladder whenever AA is on the table — the jitter table is only
-     * a good N-sample set for those N. accum_samples == 1 with
-     * accum_aa_enabled is the natural "AA off via ladder index 0"
-     * UI state and is accepted; render_3d_scene_pass takes the
-     * single-sample non-AA path when accum_samples <= 1. */
-    if (config->use_accum && config->accum_aa_enabled) {
-        int n = config->accum_samples;
-        if (n != 1 && n != 2 && n != 4 && n != 8 && n != 16) goto bad;
+    /* accum_effect must be a known mode. accum_passes must come from the
+     * supported {1,2,4,8,12,16} ladder, but only when accumulation is
+     * actually active (effect != OFF on an accum-capable context) — a
+     * memset(0) config from a non-accum caller (scene_demo) leaves
+     * accum_passes == 0, which is fine while effect is OFF. Mirrors the
+     * grid block above (validated only when grid_theme != OFF). */
+    if (config->accum_effect < 0 ||
+        config->accum_effect > SCENE_ACCUM_EFFECT_BLUR) goto bad;
+    if (config->use_accum && config->accum_effect != SCENE_ACCUM_EFFECT_OFF) {
+        int n = config->accum_passes;
+        if (n != 1 && n != 2 && n != 4 && n != 8 && n != 12 && n != 16)
+            goto bad;
     }
     return 0;
 
@@ -691,7 +694,7 @@ int scene_render_3d_scene(SceneRendererState *state,
         return -1;
     if (!state) { errno = EINVAL; return -1; }
 
-    int accum_samples = config->accum_samples;
+    int accum_passes = config->accum_passes;
     glViewport(config->scene_x, config->scene_y,
                config->scene_w, config->scene_h);
     scene_apply_clear_color(config->clear_color);
@@ -708,14 +711,32 @@ int scene_render_3d_scene(SceneRendererState *state,
      * reshape() would emit, not a transient sample. */
     scene_compute_active_projection(state, config);
 
-    if (config->use_accum && config->accum_aa_enabled && accum_samples > 1) {
+    int do_accum = config->use_accum &&
+                   config->accum_effect != SCENE_ACCUM_EFFECT_OFF &&
+                   accum_passes > 1;
+    if (do_accum) {
+        int blur = (config->accum_effect == SCENE_ACCUM_EFFECT_BLUR &&
+                    config->setup_subframe_fn != NULL);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT);
-        float weight = 1.0f / (float)accum_samples;
-        for (int sample_idx = 0; sample_idx < accum_samples; sample_idx++) {
+        float weight = 1.0f / (float)accum_passes;
+        for (int pass_idx = 0; pass_idx < accum_passes; pass_idx++) {
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            render_3d_scene_pass(state, config,
-                                 g_jitter_table[sample_idx % MAX_ACCUM_SAMPLES][0],
-                                 g_jitter_table[sample_idx % MAX_ACCUM_SAMPLES][1]);
+            if (blur) {
+                /* Per-pass mutable copy: the callback may rewrite cam_* so
+                 * grid/axes/orbit-target/lights and the ortho projection
+                 * blur with the camera. Recompute the active projection from
+                 * the per-pass config (the once-before-loop computation above
+                 * reflects the base camera; the AA path reuses it). */
+                SceneRenderConfig pass_cfg = *config;
+                config->setup_subframe_fn(config->setup_subframe_user_data,
+                                          pass_idx, accum_passes, &pass_cfg);
+                scene_compute_active_projection(state, &pass_cfg);
+                render_3d_scene_pass(state, &pass_cfg, 0.0f, 0.0f);
+            } else {
+                render_3d_scene_pass(state, config,
+                                     g_jitter_table[pass_idx % MAX_ACCUM_SAMPLES][0],
+                                     g_jitter_table[pass_idx % MAX_ACCUM_SAMPLES][1]);
+            }
             glAccum(GL_ACCUM, weight);
         }
         glAccum(GL_RETURN, 1.0f);
