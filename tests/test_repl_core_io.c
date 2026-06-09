@@ -1,6 +1,7 @@
 #include "editor/state.h"
 #include "app/glr_camera.h"
 #include "app/glr_state.h"
+#include "app/glr_mesh_export.h"
 #include "app/glr_ctrl.h"
 #include "repl/command_store.h"
 #include "repl/core.h"
@@ -47,6 +48,9 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 static void test_import_robustness(void);
 static void test_config_variants_export(void);
 static void test_workspace_header_budget_worst_case(void);
+#ifdef GL_STUBS
+static void test_mesh_export_feedback(void);
+#endif
 static void declare_test_vars(void) {
     char err[128];
     repl_eval_declare_predef_var("x", err, sizeof(err));
@@ -2315,6 +2319,9 @@ int main(void) {
     test_config_variants_export();
     test_workspace_header_budget_worst_case();
     test_import_robustness();
+#ifdef GL_STUBS
+    test_mesh_export_feedback();
+#endif
 
     printf("repl_core_io: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.run == g_harness.passed) ? 0 : 1;
@@ -2629,3 +2636,34 @@ static void test_workspace_header_budget_worst_case(void) {
 
     remove(export_path);
 }
+
+#ifdef GL_STUBS
+static void test_mesh_export_feedback(void) {
+    printf("--- PLY feedback mesh exporter ---\n");
+
+    /* 1. Test invalid arguments / empty program */
+    glr_ctrl_reset_all();
+    repl_eval_init_predef_vars();
+    int r_empty = glr_export_mesh_ply(NULL, 0);
+    ASSERT_INT("export fails on NULL path", r_empty, -1);
+
+    r_empty = glr_export_mesh_ply("test_export_empty.ply", 0);
+    ASSERT_INT("export fails on empty flat program", r_empty, -1);
+
+    /* 2. Populate mock commands and export */
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glEnd();");
+
+    repl_state_mark_flat_dirty();
+    repl_flatten_commands(editor_state_edit_line());
+    ASSERT_TRUE("program is non-empty", repl_state_flat_program_count() > 0);
+
+    int ntris = glr_export_mesh_ply("test_export.ply", 0);
+    ASSERT_TRUE("export returns 0 or more triangles in stub mode", ntris >= 0);
+
+    remove("test_export.ply");
+}
+#endif
