@@ -21,6 +21,13 @@ void glr_ctrl_set_time(float value);
  * otherwise be posed on a headless render with no keyboard input. */
 void glr_ctrl_set_edit_line(int line);
 
+/* Set the accumulation sample count (one of 1/2/4/8/12/16; anything
+ * else warns and is ignored). Startup hook for GLR_ACCUM_PASSES:
+ * headless captures raise the AA passes for smoother 3D edges without
+ * supersampling — the 2D UI renders outside the accumulation loop, so
+ * text keeps its full size. */
+void glr_ctrl_set_accum_passes(int count);
+
 /* Apply tag-keyed presentation defaults from a (table, n) policy.
  * For each entry whose tag bit is set in `tag_mask`, call glr_config_set
  * in declaration order; if two entries target the same GlrConfigKey for
