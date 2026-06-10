@@ -102,6 +102,18 @@ idle (it reads the last completed colour buffer directly via
 `magick shot-0000.ppm shot.png`. This is a freeglut-fork feature, so it only
 exists in an OSMesa build re-vendored from a fork that carries it.
 
+**Doc media regeneration (`scripts/docs-assets.sh`).** Regenerates every
+screenshot/GIF under `docs/images/` (the media embedded in `README.md` /
+`USER_GUIDE.md`); takes asset names as args (`--list`), default all. Each
+asset is a staged snippet scene (`@cfg` headers + optional `// camera`
+block + `GLR_EDIT_LINE` for cursor-bound overlays) captured via the
+record mode and keeping the **last frame**, so frame-based settling
+(theme cross-fades ≈ 80 frames) is deterministic — no sleeps. Scene-only
+shots render at `--window 2400x1600` and downscale 50% (4x supersampling
+— the software rasterizer has no MSAA); full-UI shots stay 1x because the
+GLUT bitmap fonts don't scale and downscaling would halve the code-panel
+text.
+
 **Headless animations → GIF/MP4 (`scripts/record-gif.sh`).** `FREEGLUT_CAPTURE_FRAMES=N`
 is the backend's record mode: it captures every rendered frame to a numbered PPM
 and `exit(0)`s after N (serviced from `fgPlatformProcessSingleEvent`, the

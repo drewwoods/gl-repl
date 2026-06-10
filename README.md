@@ -246,6 +246,11 @@ scripts/record-gif.sh --example 8 --duration 4 --fps 30 --scale 600 --time 5 --o
 frame, so playback is `~fps/60`× natural speed — use `--fps 60` for real-time.
 Needs `ffmpeg`. (`scripts/record-gif.sh --help` for all flags.)
 
+The screenshots and GIFs in this README and the User Guide are themselves
+generated headlessly — `scripts/docs-assets.sh` regenerates everything under
+`docs/images/`, rendering scene shots at 2x via `--window 2400x1600` and
+downscaling for 4x supersampling (the software rasterizer has no MSAA).
+
 This needs a vendored freeglut that carries the OSMesa backend. It lives in the
 freeglut fork at <https://github.com/drewwoods/freeglut> (branch
 `osmesa-backend`), which carries the OSMesa platform plus the `SIGUSR1`
