@@ -393,6 +393,13 @@ typedef struct {
     int   view_inv_ok;
 } VertexLabelCtx;
 
+static float sanitize_zero(float val) {
+    if (val > -0.005f && val < 0.005f) {
+        return 0.0f;
+    }
+    return val;
+}
+
 static void on_vertex_number_label(const ReplayVertexWalkState *state,
                                    float vx, float vy, float vz,
                                    void *user) {
@@ -409,10 +416,11 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
     snprintf(idx_buf, sizeof(idx_buf), " v%d", state->vertex_idx_in_block);
     if (ctx->mode == OVERLAY_VERTEX_LABEL_INDEX_POS) {
         if (ctx->is_ortho)
-            snprintf(pos_buf, sizeof(pos_buf), " (%.2f, %.2f)", vx, vy);
+            snprintf(pos_buf, sizeof(pos_buf), " (%.2f, %.2f)",
+                     sanitize_zero(vx), sanitize_zero(vy));
         else
             snprintf(pos_buf, sizeof(pos_buf), " (%.2f, %.2f, %.2f)",
-                     vx, vy, vz);
+                     sanitize_zero(vx), sanitize_zero(vy), sanitize_zero(vz));
         detail_text = pos_buf;
     } else if (ctx->mode == OVERLAY_VERTEX_LABEL_INDEX_WORLD && ctx->view_inv_ok) {
         /* GL_MODELVIEW here is view * model (the walker has applied the model
@@ -425,10 +433,10 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
         mat4_transform_point(ctx->view_inv, eye[0], eye[1], eye[2], world);
         if (ctx->is_ortho)
             snprintf(pos_buf, sizeof(pos_buf), " (%.2f, %.2f)",
-                     world[0], world[1]);
+                     sanitize_zero(world[0]), sanitize_zero(world[1]));
         else
             snprintf(pos_buf, sizeof(pos_buf), " (%.2f, %.2f, %.2f)",
-                     world[0], world[1], world[2]);
+                     sanitize_zero(world[0]), sanitize_zero(world[1]), sanitize_zero(world[2]));
         detail_text = pos_buf;
     }
     scene_draw_vertex_label_text(vx, vy, vz, idx_buf, detail_text);

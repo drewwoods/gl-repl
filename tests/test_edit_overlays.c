@@ -607,6 +607,16 @@ static void test_mat4_math(void) {
     ASSERT_INT("invert singular fails", mat4_invert(sing, out), 0);
 }
 
+static void test_sanitize_zero(void) {
+    printf("--- edit_overlays sanitize_zero ---\n");
+    ASSERT_TRUE("sanitize_zero(0.0f) is 0.0f", sanitize_zero(0.0f) == 0.0f);
+    ASSERT_TRUE("sanitize_zero(-0.0f) is 0.0f", sanitize_zero(-0.0f) == 0.0f);
+    ASSERT_TRUE("sanitize_zero(-0.0049f) is 0.0f", sanitize_zero(-0.0049f) == 0.0f);
+    ASSERT_TRUE("sanitize_zero(0.0049f) is 0.0f", sanitize_zero(0.0049f) == 0.0f);
+    ASSERT_TRUE("sanitize_zero(-0.0051f) is -0.0051f", sanitize_zero(-0.0051f) == -0.0051f);
+    ASSERT_TRUE("sanitize_zero(0.0051f) is 0.0051f", sanitize_zero(0.0051f) == 0.0051f);
+}
+
 /* on_vertex_number_label callback: builds the index / index+pos label text
  * and forwards it to the scene text helper (observable as a glRasterPos3f at
  * the vertex). Also exercise the mode guard. */
@@ -841,6 +851,7 @@ int main(void) {
     test_find_next_vertex_args();
     test_cursor_guide_snapshot_with_flat_args();
     test_mat4_math();
+    test_sanitize_zero();
     test_on_vertex_number_label_callback();
     test_on_normal_vector_arrow_callback();
     test_vertex_numbers_use_source_begin_block();
