@@ -254,7 +254,7 @@ static void test_render_vertex_points(void) {
     ASSERT_INT("two point batches drawn",
                trace_count_sym(&log, "glVertex3f"), 2);
     ASSERT_INT("triangle vertices use the large point size",
-               trace_count_line(&log, "glPointSize 7"), 2);
+               trace_count_line(&log, "glPointSize 4"), 2);
     ASSERT_INT("counter agrees with trace",
                (int)gl_stub_counts[GL_STUB_glVertex3f], 2);
 
