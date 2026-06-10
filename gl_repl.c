@@ -201,6 +201,8 @@ static void print_usage(const char *prog) {
             "  --list-examples  Print the built-in examples and exit\n"
             "  --time <secs>  Set the initial animation time t at startup\n"
             "               (else GLR_TIME; --time wins). Start animations later.\n"
+            "  --window <WxH>  Initial window size (default 1200x800). Headless\n"
+            "               captures render at 2x and downscale for 4x supersampling.\n"
             "\n"
             "Environment:\n"
             "  GLR_EDIT_LINE=<n>  Park the cursor on source line n (0-based)\n"
@@ -417,6 +419,20 @@ int main(int argc, char **argv) {
             example_arg = argv[++i];
         else if (strcmp(argv[i], "--time") == 0 && i + 1 < argc)
             time_arg = argv[++i];
+        else if (strcmp(argv[i], "--window") == 0 && i + 1 < argc) {
+            /* --window WxH: initial window size. Headless captures use
+             * it to render at 2x and downscale (4x supersampling) since
+             * the software rasterizer has no MSAA. */
+            int w = 0, h = 0;
+            if (sscanf(argv[++i], "%dx%d", &w, &h) == 2 && w > 0 && h > 0) {
+                window_w = w;
+                window_h = h;
+            } else {
+                fprintf(stderr, "gl-repl: bad --window \"%s\" (want WxH)\n",
+                        argv[i]);
+                return 1;
+            }
+        }
         else if (strcmp(argv[i], "--list-examples") == 0) {
             list_examples(stdout);
             return 0;
