@@ -1,30 +1,85 @@
-## Design Goals
+# gl-repl
 
- - Launch pad.  Make its easy to get something goaling quickly.
- - Indpendence.  Export/import is first class citizen.  The idea is to take
-   what you build and use it in your own engine or tool.
- - Immediate mode.  The joy of immediate mode is the localized focus.  The
-   geometry is in the code and not hidden behind a data file.  The user can see
-   the geometry and color in the code and change it without having to open a
-   separate tool.
- - Limited state.  Animation driven by time.  Particles drived by deterministic
-   random number generator.
- - No textures, just geometry and color.  Not a hard design goal but the
-   current idea is to expose the expressiveness of geometry and color to the
-   user and not hide it behind textures.
+**Immediate mode, immediately.** Type classic OpenGL — `glBegin`,
+`glVertex3f`, `glRotatef` — press `;`, and it's on screen. No project, no
+build step, no window boilerplate. The code panel *is* the scene: every
+command stays editable, every edit re-renders, and when you're done the
+whole thing exports as a standalone C89 program you can compile anywhere.
 
-## Supported Material Commands
-
-The REPL accepts fixed-function material state in the display body:
+![Animated ring — a for-loop and the time variable t](docs/images/animated-ring.gif)
 
 ```c
-glColorMaterial(face, mode);
-glMaterialfv(face, pname, (GLfloat[]){r, g, b, a});  // or {value} for GL_SHININESS
+glBegin(GL_TRIANGLES);
+glVertex3f(0, 1, 0);
+glVertex3f(-1, -1, 0);
+glVertex3f(sin(t), -1, 0);   // expressions everywhere; t animates
+glEnd();
 ```
 
-`glColorMaterial` supports `GL_FRONT`, `GL_BACK`, and
-`GL_FRONT_AND_BACK` for `face`, and `GL_AMBIENT`, `GL_DIFFUSE`,
-`GL_SPECULAR`, `GL_EMISSION`, or `GL_AMBIENT_AND_DIFFUSE` for `mode`.
+## OpenGL, visualized as you type
+
+The REPL doesn't just run your commands — it shows you what they mean:
+
+- **Transform guides** — put the cursor on a `glTranslatef` / `glRotatef` /
+  `glScalef` line and an overlay arrow or arc shows exactly what that line
+  does, color-coded by axis, with a pulse traveling the path:
+
+  ![Cursor on a glTranslatef line: the guide shows the displacement](docs/images/xform-guide.gif)
+
+- **Cursor guides** — the vertex your cursor line refers to is marked in the
+  scene with a crosshair and its coordinates; vertex labels, normal arrows,
+  and polygon highlights follow the cursor through `glBegin` blocks.
+- **Replay** — step through the program one command at a time and watch the
+  scene assemble, with evaluated loop variables substituted into the code
+  panel as each line runs:
+
+  ![Replay stepping through a scene](docs/images/replay.gif)
+
+- **Live values** — every declared variable gets a slider; every number in
+  committed code gets an inline stepper; every color gets a swatch that
+  opens a color picker. Drag, and the scene follows.
+
+## Sketch here, ship as C
+
+The REPL is the launchpad, not the destination:
+
+- **Ctrl+S** exports a complete, C89-compliant GLUT/OpenGL program — your
+  functions as C functions, your commands as the `display()` body, tagged
+  `// @tune` variables as keyboard knobs with an on-screen HUD. It
+  round-trips: load the file back and keep working.
+- **F11** exports the scene geometry — `glVertex` polygons, GLU tess, GLUT
+  solids — as a PLY mesh for any 3D tool.
+- The exported program runs ~100× lighter on the CPU than the interpreted
+  REPL, so push the particle counts there.
+
+## Quick start
+
+```bash
+make gl-repl          # macOS (builds vendored freeglut; needs cmake) / Linux
+./gl-repl             # fresh session — type GL commands, press ; after each
+./gl-repl --example 8 # or start from a built-in (F12 cycles all 27)
+```
+
+Press **F1** in-app for the full command and key reference. The
+[**User Guide**](USER_GUIDE.md) documents every feature with screenshots;
+[`ARCHITECTURE.md`](ARCHITECTURE.md) and [`MODULES.md`](MODULES.md) cover the
+internals, including [how to add a new
+command](ARCHITECTURE.md#adding-a-new-command).
+
+## Design Goals
+
+- **Launch pad.** Make it easy to get something going quickly.
+- **Independence.** Export/import is a first-class citizen. Take what you
+  build and use it in your own engine or tool.
+- **Immediate mode.** The joy of immediate mode is the localized focus: the
+  geometry is in the code, not hidden behind a data file. You can see the
+  geometry and color in the code and change it without opening a separate
+  tool.
+- **Limited state.** Animation driven by time. Particles driven by a
+  deterministic random number generator.
+- **No textures, just geometry and color.** Not a hard rule, but the idea is
+  to expose the expressiveness of geometry and color rather than hide it
+  behind textures.
 
 ## Transform Guides
 
@@ -75,11 +130,11 @@ come after an intervening draw don't factor into the guide.
 The config menu (Config button on the code panel header) has an
 **Xform guide mode** toggle with two options:
 
-- **World** *(default)* — guide is rendered in world axes at world
-  origin. This is the strict OpenGL reverse-order reading: pre-cursor
-  transforms wrap the sub-expression later and don't move the guide.
-  Use this mode when you want to reason about what your line produces
-  independent of its surroundings.
+- **World** — guide is rendered in world axes at world origin. This is
+  the strict OpenGL reverse-order reading: pre-cursor transforms wrap
+  the sub-expression later and don't move the guide. Use this mode
+  when you want to reason about what your line produces independent
+  of its surroundings.
 
   Example — cursor on `glTranslatef(0, 0, -2);` at the bottom of:
 
@@ -91,8 +146,8 @@ The config menu (Config button on the code panel header) has an
 
   Shows an arrow from `(0, 0, 0)` to `(0, 0, -2)` along world Z.
 
-- **Frame** — guide is anchored at the scene-world position that
-  the full pre-cursor modelview (translations, rotations, and
+- **Frame** *(default)* — guide is anchored at the scene-world position
+  that the full pre-cursor modelview (translations, rotations, and
   scales) has carried the origin to. Use this mode when you want
   the guide to line up visually with geometry drawn by earlier
   `func0()` / `glBegin` blocks: the anchor tracks where that
@@ -164,10 +219,21 @@ from a later point in the timeline, set the initial `t` with `--time <secs>`
 GLR_TIME=5 ./build/release-osmesa/gl-repl --example 2 --no-audio & # same, via env
 ```
 
-**Animations → GIF / MP4.** `scripts/record-gif.sh` records a headless run into
-a GIF *and* an MP4. The backend captures every rendered frame
-(`FREEGLUT_CAPTURE_FRAMES`) and `ffmpeg` assembles them. The knob is **duration**
-(clip length, invariant of `--fps`):
+**Posing the cursor.** Cursor-bound overlays (transform guides, vertex
+labels) need the cursor parked on the relevant line — `GLR_EDIT_LINE=<n>`
+does that at startup, as if you had arrowed to source line *n* (0-based):
+
+```bash
+GLR_EDIT_LINE=4 ./build/release-osmesa/gl-repl scene.c --no-audio &  # guides render headlessly
+```
+
+**Animations → GIF / MP4 (`scripts/record-gif.sh`).** `FREEGLUT_CAPTURE_FRAMES=N`
+is the backend's record mode: it captures every rendered frame to a numbered PPM
+and `exit(0)`s after N (serviced from `fgPlatformProcessSingleEvent`, the
+backend's per-frame main-loop hook — the swap path is unreachable on a
+single-buffered window). `scripts/record-gif.sh --example 2 --duration 3 --out ring`
+records that headlessly and assembles `ring.gif` + `ring.mp4` via `ffmpeg`; the
+knob is duration (clip length, fps-invariant):
 
 ```bash
 make gl-repl FREEGLUT_OSMESA=1
