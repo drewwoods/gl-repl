@@ -27,6 +27,7 @@ project internals, see [`README.md`](README.md) and
 - [Built-in Examples](#built-in-examples)
 - [Scenes & Workspaces](#scenes--workspaces)
 - [Exporting & Importing](#exporting--importing)
+- [Performance & Scope](#performance--scope)
 - [Music](#music)
 - [Command-Line Options](#command-line-options)
 - [Profiling & Diagnostics](#profiling--diagnostics)
@@ -805,7 +806,8 @@ round-trip freely — scene names and the workspace binding are carried in
 **Ctrl+S** (File → Save Scene) writes a complete, compilable GLUT/OpenGL C
 program — header comments carry the REPL state (variables, config, camera),
 your functions become C functions, and your commands become the `display()`
-body:
+body. The generated file is **C89-compliant**, so it builds anywhere a GL/GLUT
+toolchain exists, old machines included:
 
 ```bash
 cc -std=c89 -Wall -o scene output.c -lglut -lGL -lGLU -lm     # Linux
@@ -813,11 +815,36 @@ cc -std=c89 -Wall -o scene output.c -framework OpenGL -framework GLUT -lm  # mac
 ```
 
 Everything round-trips: `./gl-repl output.c` reloads the file with
-variables, settings, camera, scene name, and `// @tune` tags intact. You can
-also hand-edit the exported file — on reload, commands between the
-`// Snippet start` / `// Snippet end` markers are imported.
+variables, settings, camera, scene name, and `// @tune` tags intact.
 
 `Ctrl+Q` quits and saves a recovery copy to a temp file.
+
+### Editing exported code & reimporting
+
+The exported file is meant to be worked on. You can extend it by hand in C
+and load it back — on reload, the commands between the `// Snippet start` /
+`// Snippet end` markers are imported, so edits inside that span come home to
+the REPL. Two rules keep the round trip clean:
+
+- **Stay inside the REPL language** for the snippet section — the supported
+  commands and syntax in [The REPL Language](#the-repl-language). Lines the
+  importer doesn't recognize are skipped with a warning. (Anything goes
+  *outside* the snippet markers, but those edits live only in the C file.)
+- **Stay within the command budget** — the document and its flattened
+  program each hold 4096 commands (the status bar shows usage, e.g.
+  `1345/4096 cmds`). Loops count once as source but every unrolled iteration
+  lands in the flat program, so a heavy particle loop reaches the cap long
+  before line 4096.
+
+> **Advanced — extending the REPL itself.** If you want a GL call the REPL
+> doesn't speak yet, the interpreter is built to be extended: see
+> [*Adding A New Command*](ARCHITECTURE.md#adding-a-new-command) in
+> `ARCHITECTURE.md` for the full recipe (command type, spec-table row,
+> executor case, replay annotation, help text, save/load round-trip). To
+> raise the command budget, bump `MAX_COMMANDS` in `config.h` — it is
+> `#ifndef`-guarded, so `-DMAX_COMMANDS=8192` on the compiler command line
+> works without editing the file. Expect proportionally more per-frame work:
+> the flattened program re-executes every frame.
 
 ### Mesh export (PLY)
 
@@ -836,6 +863,43 @@ Headless / scripted capture:
 
 Use `--export-ply-srgb` when the viewer is color-managed and treats PLY
 colors as linear (otherwise the mesh looks washed out).
+
+---
+
+## Performance & Scope
+
+The REPL is an interpreter. Every frame it re-evaluates expressions, and
+while anything is animating it re-flattens the whole program — loops
+unrolled, functions inlined, every argument expression parsed and evaluated
+again. That is what makes the live experience possible (edit any line, drag
+any slider, scrub time backwards), but it costs real CPU.
+
+The exported C program has none of that machinery — it is the same scene as
+plain compiled GL calls, roughly **100× lighter on the CPU**. So the
+workflow for pushing limits is:
+
+1. Sketch and tune the scene in the REPL until it looks right.
+2. Tag the parameters you still want to play with as `// @tune`.
+3. Export, compile, and push the numbers (particle counts, tessellation,
+   iteration depth) in the standalone program — via the exported tune knobs
+   or by editing the C directly.
+
+A scene that drops frames in the REPL at 500 particles will typically run
+thousands in the export without effort.
+
+That division of labor is by design: the REPL is a **launchpad, debugging
+aid, and educational environment** — a place to see immediate-mode GL
+respond line by line — not a platform to build a complete application on.
+The export is the product; the REPL is where it is born.
+
+> **Honest footnote on interpreter speed.** There is plenty of low-hanging
+> fruit in the interpreter — identifier lookup is a series of string
+> compares where a trie would do, and the per-frame flatten is a complete
+> pass where a partial recompile of only the dirty range would suffice.
+> These are deliberate omissions: optimizing further heads toward building
+> a virtual machine, and the project's complexity has already grown well
+> past its original intention. If the REPL feels slow, that's the signal to
+> export.
 
 ---
 
