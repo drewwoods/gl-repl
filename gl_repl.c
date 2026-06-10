@@ -209,6 +209,9 @@ static void print_usage(const char *prog) {
             "               after load, as if arrowed to. Poses cursor-bound\n"
             "               overlays (transform guides, vertex labels) for\n"
             "               headless captures.\n"
+            "  GLR_ACCUM_PASSES=<n>  Accumulation AA sample count (1/2/4/8/12/16).\n"
+            "               Captures use it to smooth 3D edges at full UI text\n"
+            "               size (the 2D UI renders outside the accum loop).\n"
             "\n"
             "Arguments:\n"
             "  input.c      Optional saved session to load at startup\n"
@@ -505,6 +508,17 @@ int main(int argc, char **argv) {
         const char *l_src = getenv("GLR_EDIT_LINE");
         if (l_src && *l_src)
             glr_ctrl_set_edit_line(atoi(l_src));
+    }
+    /* Accumulation-AA boost: GLR_ACCUM_PASSES=<count> (1/2/4/8/12/16)
+     * raises the accumulation sample count. Capture hook: the 2D UI
+     * renders outside the accumulation loop, so this antialiases the
+     * 3D scene while text keeps its full size — unlike 2x supersampling,
+     * which halves the apparent UI text. Applied after the file/example
+     * load so it wins over any @cfg accum_passes header. */
+    {
+        const char *p_src = getenv("GLR_ACCUM_PASSES");
+        if (p_src && *p_src)
+            glr_ctrl_set_accum_passes(atoi(p_src));
     }
     init_trace("REPL bootstrap done");
     glr_ctrl_set_accum(use_accum);

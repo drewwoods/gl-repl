@@ -104,15 +104,19 @@ exists in an OSMesa build re-vendored from a fork that carries it.
 
 **Doc media regeneration (`scripts/docs-assets.sh`).** Regenerates every
 screenshot/GIF under `docs/images/` (the media embedded in `README.md` /
-`USER_GUIDE.md`); takes asset names as args (`--list`), default all. Each
-asset is a staged snippet scene (`@cfg` headers + optional `// camera`
-block + `GLR_EDIT_LINE` for cursor-bound overlays) captured via the
-record mode and keeping the **last frame**, so frame-based settling
-(theme cross-fades ≈ 80 frames) is deterministic — no sleeps. Scene-only
-shots render at `--window 2400x1600` and downscale 50% (4x supersampling
-— the software rasterizer has no MSAA); full-UI shots stay 1x because the
-GLUT bitmap fonts don't scale and downscaling would halve the code-panel
-text.
+`USER_GUIDE.md`); takes asset names as args (`--list`), default all;
+`-j N` runs N assets in parallel (self-reexec via `xargs -P`, one
+process per asset). Each asset is a staged snippet scene (`@cfg` headers
++ optional `// camera` block + `GLR_EDIT_LINE` for cursor-bound
+overlays) captured via the record mode and keeping the **last frame**,
+so frame-based settling (theme cross-fades ≈ 80 frames) is deterministic
+— no sleeps. Antialiasing (no MSAA in the software rasterizer):
+scene-only shots render at `--window 2400x1600` and downscale 50% (4x
+supersampling); full-UI and hairline (grid/axes) shots stay 1x with
+`GLR_ACCUM_PASSES=16` accumulation AA instead — bitmap fonts don't
+scale (downscaling halves code-panel text) and supersampling dims 1px
+grid lines to half intensity, while the 2D UI renders outside the
+accumulation loop so jitter AA leaves both at full weight.
 
 **Headless animations → GIF/MP4 (`scripts/record-gif.sh`).** `FREEGLUT_CAPTURE_FRAMES=N`
 is the backend's record mode: it captures every rendered frame to a numbered PPM
@@ -280,6 +284,7 @@ GLR_DETAILED_PROF=1 ./gl-repl        # Same as --detailed-prof, via env
 GLR_ASSETS_DIR=/path/to/music ./gl-repl   # Same as --assets, via env (--assets wins)
 GLR_TIME=5 ./gl-repl                 # Initial animation time t in seconds (--time wins)
 GLR_EDIT_LINE=4 ./gl-repl scene.c    # Park the cursor on source line 4 (0-based, clamped) after load
+GLR_ACCUM_PASSES=16 ./gl-repl        # Accumulation AA sample count (1/2/4/8/12/16; capture hook)
 ```
 
 `GLR_EDIT_LINE` sets the cursor exactly as arrowing to the line would

@@ -2381,6 +2381,19 @@ void glr_ctrl_set_edit_line(int line) {
     editor_load_line_to_input(line);
 }
 
+void glr_ctrl_set_accum_passes(int count) {
+    static const int steps[] = { 1, 2, 4, 8, 12, 16 };
+    for (int i = 0; i < (int)(sizeof(steps) / sizeof(steps[0])); i++) {
+        if (steps[i] == count) {
+            glr_state_render_mut()->accum_passes = count;
+            return;
+        }
+    }
+    fprintf(stderr,
+            "gl-repl: GLR_ACCUM_PASSES=%d ignored (want 1/2/4/8/12/16)\n",
+            count);
+}
+
 void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
     if (!out) return;
     int sx = 0, sy = 0, sw = 0, sh = 0;
