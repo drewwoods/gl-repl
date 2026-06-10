@@ -211,7 +211,7 @@ static int code_panel_header_row_count(void) {
     for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
         rows += test_code_panel_row_count_for_text(g_render_state_lines[i],
                                                    text_x, panel_w);
-    for (int i = 0; i < CAM_LINE_COUNT; i++)
+    for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++)
         rows += test_code_panel_row_count_for_text(g_cam_lines[i], text_x, panel_w);
     {
         char line[MAX_LINE_LEN];
