@@ -755,7 +755,7 @@ static void draw_aurora(float anim_time, float alpha_scale, float extent) {
     for (int c = 0; c < 2; c++) {
         float ph       = (float)c * 2.6f;
         float z0       = (c == 0 ? -0.55f : -0.30f) * extent;
-        float h_base   = extent * (0.35f + 0.08f * (float)c);
+        float h_base   = extent * (0.15f + 0.08f * (float)c);
         float h_height = extent * (0.30f - 0.06f * (float)c);
         glBegin(GL_TRIANGLE_STRIP);
         for (int i = 0; i <= steps; i++) {
