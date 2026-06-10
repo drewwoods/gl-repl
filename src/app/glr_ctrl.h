@@ -14,6 +14,13 @@ void glr_ctrl_bootstrap_repl(const char *input_file);
 void glr_shutdown(void);
 void glr_ctrl_set_time(float value);
 
+/* Park the cursor on source line `line` (0-based, clamped to the
+ * document) and load that line into the input buffer — the same state
+ * arrowing to the line produces. Startup hook for GLR_EDIT_LINE:
+ * cursor-bound overlays (transform guides, vertex labels) can't
+ * otherwise be posed on a headless render with no keyboard input. */
+void glr_ctrl_set_edit_line(int line);
+
 /* Apply tag-keyed presentation defaults from a (table, n) policy.
  * For each entry whose tag bit is set in `tag_mask`, call glr_config_set
  * in declaration order; if two entries target the same GlrConfigKey for

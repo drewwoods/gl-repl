@@ -2373,6 +2373,14 @@ void glr_ctrl_set_time(float value) {
     repl_set_time(value);
 }
 
+void glr_ctrl_set_edit_line(int line) {
+    int count = repl_state_document_count();
+    if (line < 0 || count <= 0) return;
+    if (line >= count) line = count - 1;
+    editor_state_edit_line_set(line);
+    editor_load_line_to_input(line);
+}
+
 void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
     if (!out) return;
     int sx = 0, sy = 0, sw = 0, sh = 0;
