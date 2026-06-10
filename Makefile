@@ -79,6 +79,24 @@ GL_HEADER_CFLAGS = \
 	-I/usr/include
 endif
 
+# Detect compiler type
+COMPILER_OUTPUT := $(shell $(CC) --version 2>&1)
+ifneq ($(findstring clang,$(COMPILER_OUTPUT)),)
+    # It's Apple Clang or LLVM Clang (even if CC=gcc on Mac)
+    COMPILER_TYPE := clang
+else ifneq ($(findstring Free Software Foundation,$(COMPILER_OUTPUT)),)
+    # It's genuine GNU GCC
+    COMPILER_TYPE := gcc
+else
+    COMPILER_TYPE := unknown
+endif
+# Now if we are gcc add some gcc specific flags warnings
+ifeq ($(COMPILER_TYPE),gcc)
+  GCC_EXTRA_WARNINGS := -Wduplicated-cond -Wduplicated-branches -Wlogical-op
+else
+  GCC_EXTRA_WARNINGS :=
+endif
+
 # Language standard: C99, project-wide, no exceptions. Everything
 # (gl-repl, tests, demos, bench, CI) compiles -std=c99 so the project
 # runs on old machines / old GCC. Non-pedantic by default — GNU
@@ -106,7 +124,9 @@ COMMON_CFLAGS = \
 	$(GL_HEADER_CFLAGS) \
 	-I$(PROJECT_ROOT) \
 	-I$(SRC_DIR) \
-	-I$(LOCAL_INCLUDE)
+	-I$(LOCAL_INCLUDE) \
+	-Wshadow \
+	$(GCC_EXTRA_WARNINGS)
 
 RELEASE_CFLAGS = \
 	$(COMMON_CFLAGS) \
