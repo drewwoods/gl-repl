@@ -64,13 +64,13 @@ static void repl_state_apply_sentinels(ReplRuntimeState *s) {
              "  glEnable(GL_MULTISAMPLE);");
     snprintf(s->import_export.render_state_lines[1], RENDER_STATE_LINE_LEN,
              "  glDisable(GL_LINE_SMOOTH);");
-    snprintf(s->import_export.cam_lines[0], CAM_LINE_LEN,
+    snprintf(s->import_export.cam_lines[0], REPL_EXPORT_CAMERA_LINE_MAX,
              "  glTranslatef(0.0000f, 0.0000f, -5.0000f);");
-    snprintf(s->import_export.cam_lines[1], CAM_LINE_LEN,
+    snprintf(s->import_export.cam_lines[1], REPL_EXPORT_CAMERA_LINE_MAX,
              "  glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);");
-    snprintf(s->import_export.cam_lines[2], CAM_LINE_LEN,
+    snprintf(s->import_export.cam_lines[2], REPL_EXPORT_CAMERA_LINE_MAX,
              "  glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);");
-    snprintf(s->import_export.cam_lines[3], CAM_LINE_LEN,
+    snprintf(s->import_export.cam_lines[3], REPL_EXPORT_CAMERA_LINE_MAX,
              "  glTranslatef(0.0000f, 0.0000f, 0.0000f);");
 }
 

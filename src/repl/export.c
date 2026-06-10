@@ -980,13 +980,6 @@ void repl_refresh_render_state_strings(void) {
  * import-side line consumption and reset to the bridge (implemented in
  * step 4a). */
 
-/* The loops below index g_cam_lines_writable (storage rows =
- * CAM_LINE_COUNT, export_state.h) by the logical block size
- * (REPL_EXPORT_CAMERA_LINES, export.h). Pin the two constants together
- * at compile time rather than double-bounding the loops at runtime. */
-STATIC_ASSERT(CAM_LINE_COUNT == REPL_EXPORT_CAMERA_LINES,
-              "cam_lines storage rows out of sync with the export camera block");
-
 void repl_refresh_camera_lines(void) {
     /* Bridge-driven preview: the bridge formats the 4-line block from
      * current camera state with numeric ry (no g_angle placeholder).
@@ -3010,7 +3003,7 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
 
     fprintf(dst, "--- camera ---\n");
     /* Dump camera transformation lines. */
-    for (int cam_line_idx = 0; cam_line_idx < CAM_LINE_COUNT; cam_line_idx++)
+    for (int cam_line_idx = 0; cam_line_idx < REPL_EXPORT_CAMERA_LINES; cam_line_idx++)
         fprintf(dst, "%s\n", g_cam_lines[cam_line_idx]);
 
     fprintf(dst, "--- header_post ---\n");

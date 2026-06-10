@@ -21,8 +21,13 @@
  * if it ever still has to drop a @cfg line. */
 #define MAX_WORKSPACE_HEADER_LINES 80
 #define WORKSPACE_HEADER_LINE_LEN   96
-#define CAM_LINE_COUNT 4
-#define CAM_LINE_LEN   96    /* per-line buffer width for cam_lines[] */
+/* Camera transform block: one set of names dimensions both the
+ * cam_lines[] preview storage (state_views.h) and the
+ * ReplExportCameraBlock interchange struct (export.h). Defined here —
+ * the bottom of the include chain — because state_views.h needs them
+ * to declare the state struct and cannot include export.h back. */
+#define REPL_EXPORT_CAMERA_LINES    4
+#define REPL_EXPORT_CAMERA_LINE_MAX 96
 #define RENDER_STATE_LINE_COUNT 2
 #define RENDER_STATE_LINE_LEN   64    /* per-line buffer width for render_state_lines[] */
 

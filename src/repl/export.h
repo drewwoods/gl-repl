@@ -45,6 +45,7 @@
 #include <stdio.h>
 #include "source_document.h"
 #include "repl/cfg_baseline.h"
+#include "repl/export_state.h"  /* REPL_EXPORT_CAMERA_LINES / _LINE_MAX */
 #include "repl/state_views.h"   /* REPL_WORKSPACE_DIR_MAX, USER_SCENE_NAME_MAX */
 
 /* Apply the current batch of parsed @cfg lines, then clear the accumulator.
@@ -60,9 +61,11 @@ void repl_export_apply_pending_cfg(void);
  * import and example loading feed the same text back to the controller bridge.
  * src/repl/export.c treats the block as opaque strings, while the bridge in
  * src/app/glr_camera_export.c owns the actual camera parsing and mutation
- * (introduced in step 4a of the decouple plan). */
-#define REPL_EXPORT_CAMERA_LINES        4
-#define REPL_EXPORT_CAMERA_LINE_MAX     96
+ * (introduced in step 4a of the decouple plan).
+ *
+ * REPL_EXPORT_CAMERA_LINES / _LINE_MAX live in export_state.h (included
+ * above) so the same constants dimension the cam_lines[] preview storage
+ * in state_views.h. */
 #define REPL_EXPORT_CAMERA_PREAMBLE_MAX 64
 
 typedef struct {

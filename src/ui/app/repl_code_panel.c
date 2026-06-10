@@ -213,7 +213,7 @@ static int repl_code_panel_header_row_count(const UiRenderSnapshot *snap,
         rows += repl_code_panel_row_count(snap,
                                           import_export.render_state_lines[i],
                                           text_x, panel_w);
-    for (int i = 0; i < CAM_LINE_COUNT; i++)
+    for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++)
         rows += repl_code_panel_row_count(snap,
                                           import_export.cam_lines[i],
                                           text_x, panel_w);
@@ -1540,7 +1540,7 @@ static void repl_code_panel_add_header_rows(ReplCodePanelBuilder *builder) {
         repl_code_panel_rgb(REPL_CODE_PANEL_STATE_RGB));
     repl_code_panel_add_static_buffer_lines(
         builder,
-        CAM_LINE_COUNT,
+        REPL_EXPORT_CAMERA_LINES,
         sizeof(snap->import_export.cam_lines[0]),
         snap->import_export.cam_lines,
         repl_code_panel_rgb(REPL_CODE_PANEL_STATE_RGB));
