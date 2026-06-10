@@ -267,6 +267,7 @@ static inline void glNewList(GLuint list, GLenum mode) { GL_STUB_TRACE_LINE("glN
 static inline void glEndList(void) { GL_STUB_TRACE_LINE("glEndList\n"); gl_stub_tick(GL_STUB_glEndList); }
 static inline void glCallList(GLuint list) { GL_STUB_TRACE_LINE("glCallList %u\n", (unsigned)list); gl_stub_tick(GL_STUB_glCallList); }
 static inline void glDeleteLists(GLuint list, GLsizei range) { GL_STUB_TRACE_LINE("glDeleteLists %u %d\n", (unsigned)list, (int)range); gl_stub_tick(GL_STUB_glDeleteLists); }
+static inline void glFinish(void) { GL_STUB_TRACE_LINE("glFinish\n"); gl_stub_tick(GL_STUB_glFinish); }
 static inline void glFogf(GLenum pname, GLfloat param) { GL_STUB_TRACE_LINE("glFogf %u %g\n", (unsigned)pname, (double)param); gl_stub_tick(GL_STUB_glFogf); }
 static inline void glFogfv(GLenum pname, const GLfloat *params) { GL_STUB_TRACE_LINE("glFogfv %u\n", (unsigned)pname); gl_stub_tick(GL_STUB_glFogfv); (void)params; }
 static inline void glFogi(GLenum pname, GLint param) { GL_STUB_TRACE_LINE("glFogi %u %d\n", (unsigned)pname, (int)param); gl_stub_tick(GL_STUB_glFogi); }

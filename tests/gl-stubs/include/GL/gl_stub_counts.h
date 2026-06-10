@@ -65,6 +65,7 @@ extern "C" {
     X(glFrustum)                       \
     X(glGetFloatv)                     \
     X(glGetIntegerv)                   \
+    X(glFinish)                        \
     X(glHint)                          \
     X(glIsEnabled)                     \
     X(glLightfv)                       \
