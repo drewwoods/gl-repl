@@ -967,7 +967,6 @@ static void submenu_fill_hit(UiHit *h, int menu_id, int parent_row,
 static UiHit submenu_hit_test(int mx, int my) {
     UiHit h = ui_hit_none();
     int sx, sy, sw, sh;
-    int ry;
     int ordinal;
 
     if (g_submenu_menu_id < 0 || g_submenu_parent_row < 0)
@@ -980,7 +979,7 @@ static UiHit submenu_hit_test(int mx, int my) {
 
     {
         int count = submenu_row_count(g_submenu_menu_id, g_submenu_parent_row);
-        ry = ui_state_viewport().window_h - my;
+        int ry = ui_state_viewport().window_h - my;
         ordinal = dropdown_row_for_gl_y(sy, sh, ry) +
                   submenu_effective_scroll(sh, count);
         if (ordinal < 0 || ordinal >= count)
@@ -1243,7 +1242,6 @@ static int submenu_row_is_active(int menu_id, int parent_row, int ordinal,
 
 static int submenu_hover_ordinal(const UiRenderSnapshot *snap) {
     int sx, sy, sw, sh;
-    int ry;
     int ordinal;
 
     if (!submenu_rect(g_submenu_menu_id, g_submenu_parent_row,
@@ -1255,7 +1253,7 @@ static int submenu_hover_ordinal(const UiRenderSnapshot *snap) {
 
     {
         int count = submenu_row_count(g_submenu_menu_id, g_submenu_parent_row);
-        ry = snap->viewport.window_h - snap->pointer.mouse_y;
+        int ry = snap->viewport.window_h - snap->pointer.mouse_y;
         ordinal = dropdown_row_for_gl_y(sy, sh, ry) +
                   submenu_effective_scroll(sh, count);
         if (ordinal < 0 || ordinal >= count)

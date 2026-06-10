@@ -39,7 +39,7 @@ static MemprofReaderFn g_memprof_reader      = NULL; /* NULL -> memprof_read */
 
 static int memprof_read(MemSample *out) {
 #if defined(__APPLE__)
-    mach_task_basic_info_data_t info;
+    mach_task_basic_info_data_t info = {0};
     mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
     kern_return_t kr = task_info(mach_task_self(), MACH_TASK_BASIC_INFO,
                                  (task_info_t)&info, &count);

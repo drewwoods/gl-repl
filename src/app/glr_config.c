@@ -353,7 +353,7 @@ const char *glr_config_section_display_label(int section) {
                 continue;
             }
             size_t k = 0;
-            for (; raw[k] && k < CFG_SECTION_LABEL_MAX - 1; k++) {
+            for (; k < CFG_SECTION_LABEL_MAX - 1 && raw[k]; k++) {
                 char c = raw[k];
                 if (k == 0) {
                     if (c >= 'a' && c <= 'z') c = (char)(c - 32);

@@ -147,22 +147,20 @@ static GlrCtrlPointParameterProcLoaderFn g_glr_ctrl_point_parameter_loader =
 
 static ReplExecutorPointParameterProc
 glr_ctrl_load_point_parameter_proc(int has_core, int has_arb, int has_ext) {
-    ReplExecutorPointParameterProc proc = NULL;
-
     if (!g_glr_ctrl_point_parameter_loader)
         return NULL;
     if (has_core) {
-        proc = g_glr_ctrl_point_parameter_loader("glPointParameterfv");
+        ReplExecutorPointParameterProc proc = g_glr_ctrl_point_parameter_loader("glPointParameterfv");
         if (proc)
             return proc;
     }
     if (has_arb) {
-        proc = g_glr_ctrl_point_parameter_loader("glPointParameterfvARB");
+        ReplExecutorPointParameterProc proc = g_glr_ctrl_point_parameter_loader("glPointParameterfvARB");
         if (proc)
             return proc;
     }
     if (has_ext) {
-        proc = g_glr_ctrl_point_parameter_loader("glPointParameterfvEXT");
+        ReplExecutorPointParameterProc proc = g_glr_ctrl_point_parameter_loader("glPointParameterfvEXT");
         if (proc)
             return proc;
     }

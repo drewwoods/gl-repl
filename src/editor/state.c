@@ -212,7 +212,7 @@ int editor_buffer_apply_compiled_change(const struct ReplCompiledChange_s *chang
         /* Build a const char *[] view of the change's text array — the
          * editor_buffer_* mutators take a list of pointers. We clamp to
          * MAX_COMMIT_CMDS when copying to avoid out-of-bounds reads. */
-        const char *line_ptrs[MAX_COMMIT_CMDS];
+        const char *line_ptrs[MAX_COMMIT_CMDS] = {NULL};
         int insert_count = change->count;
         if (insert_count > MAX_COMMIT_CMDS)
             insert_count = MAX_COMMIT_CMDS;
