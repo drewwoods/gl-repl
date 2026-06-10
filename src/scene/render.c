@@ -611,6 +611,7 @@ static void scene_pass_setup(const SceneRendererState *state,
     glMatrixMode(GL_MODELVIEW);
 
     scene_lights_setup(frame_ctx);
+    scene_backdrop_setup_lights(frame_ctx);
     glDisable(GL_LIGHTING); /* baseline: disabled; execute_commands() enables if user typed it */
 
     /* glColorMaterial mode and default material specular/shininess are

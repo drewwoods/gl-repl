@@ -156,6 +156,10 @@ typedef double GLclampd;
 #define GL_LIGHT1 0x4001
 #define GL_LIGHT2 0x4002
 #define GL_LIGHT3 0x4003
+#define GL_LIGHT4 0x4004
+#define GL_LIGHT5 0x4005
+#define GL_LIGHT6 0x4006
+#define GL_LIGHT7 0x4007
 #define GL_AMBIENT 0x1200
 #define GL_DIFFUSE 0x1201
 #define GL_SPECULAR 0x1202
