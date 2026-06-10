@@ -42,8 +42,8 @@
  *
  * Because a binding is a comma pair it cannot be a `case` label; the one
  * switch on a binding (replay's Ctrl+K) lifts it to an `if`. The cfg
- * table reaches it as two adjacent struct fields — CFG_ITEM takes
- * `(key, modifiers)` in that order so the pair drops straight in.
+ * table (g_cfg_items[] in glr_actions.c) splits the pair into its
+ * .key_code / .modifiers fields with KM_KEY() / KM_MODS().
  *
  * Dependency contract (mirrors config.h's FONT_* = GLUT_BITMAP_* macros):
  * the KEY_CTRL_* / KEY_ESC codes (keys.h) and the GLUT_KEY_* /

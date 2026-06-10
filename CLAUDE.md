@@ -491,7 +491,7 @@ state-machine level, not buried in the doc body.
 | `src/app/glr_actions.c` | Config descriptor table, config shortcuts, menu actions |
 | `src/app/glr_actions.h` | Actions public API (`glr_action_menu_item_activate`, etc.) |
 | `config.h` | Project-wide compile-time configuration constants (force-included into every TU via `-include config.h`). Also `#include`s `keymap.h` so the key bindings reach every TU |
-| `keymap.h` | Keyboard shortcut bindings: one `#define GLR_<ACTION>  <key>, <mods>` pair per action — the single place to reassign a shortcut. Matched via `keymap_event_is(key, GLR_X)` (call sites never spell out modifiers); `KM_KEY`/`KM_MODS` extract one element for `case` labels / struct fields. Zero includes (tokens resolve lazily at the dispatch site, like `config.h`'s `FONT_*`); consumed by `g_cfg_items[]` (via variadic `CFG_ITEM`), the `glr_ctrl_router_*` handlers, and the editor input dispatcher. Guarded by `make check-keymap-no-dup`; `make keymap-list` prints bindings + free slots (`scripts/keymap.sh`). Sits at root (project-specific config), not `include/` (project-agnostic) |
+| `keymap.h` | Keyboard shortcut bindings: one `#define GLR_<ACTION>  <key>, <mods>` pair per action — the single place to reassign a shortcut. Matched via `keymap_event_is(key, GLR_X)` (call sites never spell out modifiers); `KM_KEY`/`KM_MODS` extract one element for `case` labels / struct fields. Zero includes (tokens resolve lazily at the dispatch site, like `config.h`'s `FONT_*`); consumed by `g_cfg_items[]` (via `KM_KEY`/`KM_MODS` designated initializers), the `glr_ctrl_router_*` handlers, and the editor input dispatcher. Guarded by `make check-keymap-no-dup`; `make keymap-list` prints bindings + free slots (`scripts/keymap.sh`). Sits at root (project-specific config), not `include/` (project-agnostic) |
 | `prof_sections.h` | CPU-profile section catalog: the `ProfSection` enum + `PROF_SECTION_COUNT`, force-included via `-include prof_sections.h`. Keeps `src/support/cpuprof.{c,h}` host-agnostic (they fall back to `typedef int ProfSection` when it's absent). Per-section *labels* are not here — see `src/app/glr_prof.c` |
 | `src/app/glr_defaults.h` | Controller-side scene/presentation defaults (`CFG_DEFAULT_*` macros) |
 | `src/ui/core/text_layout.c` | Pure code-panel wrapping, row counts, segment lookup, cursor-row mapping |
@@ -682,10 +682,11 @@ state-machine level, not buried in the doc body.
   shortcut. Call sites pass the whole pair to the matcher and never spell
   out modifiers: `keymap_event_is(key, GLR_X)` (it folds in the live
   modifiers in one place; implemented in `src/editor/input.c` next to the
-  modifier accessor, declared in `keymap.h`). The cfg table feeds the pair
-  through its variadic `CFG_ITEM(...)`; the two sites that need a bare key
-  (a `case` label, the search pin's synthetic dispatch) use `KM_KEY()` /
-  `KM_MODS()`. `keys.h` underneath is the physical byte/special-code layer
+  modifier accessor, declared in `keymap.h`). The cfg table splits the pair
+  into its `.key_code` / `.modifiers` designated initializers via
+  `KM_KEY()` / `KM_MODS()`, as do the two sites that need a bare key
+  (a `case` label, the search pin's synthetic dispatch).
+  `keys.h` underneath is the physical byte/special-code layer
   (`KEY_CTRL_*`); `keymap.h` is the action→key map on top. Guard:
   `make check-keymap-no-dup` (in the `check-state-ownership` gate) fails on
   any two bindings sharing a `(key, mods)`; `make keymap-list` prints the

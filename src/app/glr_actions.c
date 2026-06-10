@@ -133,92 +133,134 @@ static const char *accum_passes_names[] = { "1", "2", "4", "8", "12", "16" };
  *                    (UI_HIT_CODE_FOCUS_TOGGLE) and the F1 help catalog
  *                    (src/repl/help_text.c).
  *
- * Both Ctrl-key codes are defined/annotated in keys.h. */
+ * Both Ctrl-key bindings are defined in keymap.h (GLR_POST_FILTER,
+ * GLR_CODE_FOCUS). */
+
+/* Runtime display label for the MSAA row ("MSAAx<n>" once the GL sample
+ * count is known); set by glr_actions_set_msaa_label(). */
 static const char *g_msaa_display_label = NULL;
 
-/* A keymap.h binding pair `GLR_X` (= key, mods) sits in a row as a single
- * token. The variadic forwarder lets it expand to two arguments before the
- * fixed-arity *_IMPL counts them — a direct macro call would count the
- * still-unexpanded pair as one argument ("too few arguments"). _IMPL takes
- * (key_code, modifiers, is_special) so the pair fills the first two slots;
- * the emitted struct keeps the original field order. CFG_EXPAND() forces the
- * post-substitution rescan (and keeps the trick portable). Unbound rows and
- * section chrome pass an explicit 0, 0, 0. */
-#define CFG_EXPAND(x) x
-#define CFG_ITEM_IMPL(label, key_code, modifiers, is_special, key, state_count, state_names, section_header) \
-    { label, key_code, is_special, modifiers, key, state_count, state_names, section_header, NULL }
-#define CFG_ITEM(...) CFG_EXPAND(CFG_ITEM_IMPL(__VA_ARGS__))
-
-#define CFG_ITEM_DISPLAY_IMPL(label, key_code, modifiers, is_special, key, state_count, state_names, section_header, display_label_override) \
-    { label, key_code, is_special, modifiers, key, state_count, state_names, section_header, display_label_override }
-#define CFG_ITEM_DISPLAY(...) CFG_EXPAND(CFG_ITEM_DISPLAY_IMPL(__VA_ARGS__))
-
+/* Designated initializers keep each row down to the fields it uses:
+ * chrome rows ("### " headers / "---" separators) set only .label +
+ * .section_header; rows with no keyboard shortcut leave key_code /
+ * modifiers / is_special at 0. A keymap.h binding pair `GLR_X`
+ * (= key, mods) is split per-field with KM_KEY() / KM_MODS();
+ * .is_special = 1 marks the GLUT special-callback (F-key) bindings. */
 const GlrConfigItem g_cfg_items[] = {
-    CFG_ITEM("### RENDERING",     0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
-    CFG_ITEM_DISPLAY("MSAA",      GLR_MSAA, 0, GLR_CONFIG_MSAA,           2, NULL,                 0, &g_msaa_display_label),
-    CFG_ITEM("Line smooth",       0, 0, 0, GLR_CONFIG_LINE_SMOOTH,        2, NULL,                 0),
-    CFG_ITEM("Accum effect",      GLR_ACCUM_EFFECT, 1, GLR_CONFIG_ACCUM_EFFECT, 4, accum_effect_names, 0),
-    CFG_ITEM("Accum passes",      0, 0, 0, GLR_CONFIG_ACCUM_PASSES,      6, accum_passes_names,   0),
-    CFG_ITEM("Wireframe",         GLR_WIREFRAME, 0, GLR_CONFIG_WIREFRAME, 2, NULL,                 0),
-    CFG_ITEM("Point attenuation", 0, 0, 0, GLR_CONFIG_POINT_ATTENUATION,  2, NULL,                 0),
-    CFG_ITEM("---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
-    CFG_ITEM("### TIME & REPLAY", 0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
-    CFG_ITEM("Auto time",         GLR_AUTO_TIME, 0, GLR_CONFIG_AUTO_TIME, 2, NULL,                 0),
-    CFG_ITEM("Replay",            GLR_REPLAY, 0, GLR_CONFIG_REPLAY,       2, NULL,                 0),
-    CFG_ITEM("Replay mode",       0, 0, 0, GLR_CONFIG_REPLAY_MODE,         2, replay_mode_names,    0),
-    CFG_ITEM("Replay expand",     0, 0, 0, GLR_CONFIG_REPLAY_EXPAND,       2, NULL,                 0),
-    CFG_ITEM("---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
-    CFG_ITEM("### OVERLAYS & SCENE", 0, 0, 0, GLR_CONFIG_NONE,            0, NULL,                 1),
-    CFG_ITEM("Grid",              GLR_GRID, 1, GLR_CONFIG_GRID_THEME,     GRID_THEME_COUNT, grid_theme_names, 0),
-    CFG_ITEM("Grid major",        GLR_GRID_MAJOR, 0, GLR_CONFIG_GRID_MAJOR, GRID_MAJOR_COUNT, grid_major_names, 0),
-    CFG_ITEM("Grid extent",       GLR_GRID_EXTENT, 1, GLR_CONFIG_GRID_EXTENT, GRID_EXTENT_COUNT, grid_extent_names, 0),
-    CFG_ITEM("Axes",              GLR_AXES, 1, GLR_CONFIG_AXES_THEME,     AXES_THEME_COUNT, axes_theme_names, 0),
-    CFG_ITEM("Xform guides",      GLR_XFORM_GUIDES, 1, GLR_CONFIG_XFORM_GUIDE_MODE,
-             SCENE_XFORM_GUIDE_COUNT, xform_guide_mode_names, 0),
-    CFG_ITEM("Light indicators",  GLR_LIGHT_INDICATORS, 0, GLR_CONFIG_LIGHT_INDICATORS, 2, NULL, 0),
-    CFG_ITEM("Light theme",       GLR_LIGHT_THEME, 1, GLR_CONFIG_LIGHT_THEME, LIGHT_THEME_COUNT, scene_light_theme_names, 0),
-    CFG_ITEM("Backdrop",          GLR_BACKDROP, 1, GLR_CONFIG_BACKDROP,
-             SCENE_BACKDROP_COUNT, backdrop_mode_names, 0),
-    CFG_ITEM("Auto-normals",      0, 0, 0, GLR_CONFIG_AUTO_NORMALS, 2, NULL,             0),
-    CFG_ITEM("---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
-    CFG_ITEM("### CAMERA",        0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
-    CFG_ITEM("View mode",         GLR_VIEW_MODE, 0, GLR_CONFIG_ORTHO_MODE, 2, view_mode_names,     0),
-    CFG_ITEM("Camera rotate",     GLR_CAMERA_ROTATE, 0, GLR_CONFIG_CAMERA_ROTATE, 2, NULL,         0),
-    CFG_ITEM("Focus origin",      GLR_FOCUS_ORIGIN, 0, GLR_CONFIG_FOCUS_ORIGIN, 0, NULL,           0),
-    CFG_ITEM("Reset camera",      GLR_RESET_CAMERA, 0, GLR_CONFIG_RESET_CAMERA, 0, NULL,           0),
-    CFG_ITEM("---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
-    CFG_ITEM("### GEOMETRY",      0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
-    CFG_ITEM("Vertex labels",     GLR_VERTEX_LABELS, 1, GLR_CONFIG_VERTEX_LABELS, OVERLAY_VERTEX_LABEL_COUNT, vertex_label_names, 0),
-    CFG_ITEM("Normal vectors",    GLR_NORMAL_VECTORS, 0, GLR_CONFIG_NORMAL_VECTORS, 2, NULL,       0),
-    CFG_ITEM("Vertex outlines",   GLR_VERTEX_OUTLINES, 0, GLR_CONFIG_VERTEX_OUTLINES, 2, NULL,     0),
-    CFG_ITEM("Vertex points",     0, 0, 0, GLR_CONFIG_VERTEX_POINTS,        2, NULL,                 0),
-    CFG_ITEM("Poly highlight",    0, 0, 0, GLR_CONFIG_POLY_HIGHLIGHT,       2, NULL,                 0),
-    CFG_ITEM("---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
-    CFG_ITEM("### INTERFACE",     0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
-    CFG_ITEM("Variable panel",    GLR_VARIABLE_PANEL, 0, GLR_CONFIG_VARIABLE_PANEL, 2, NULL,       0),
-    CFG_ITEM("CPU profile",       GLR_CPU_PROFILE, 0, GLR_CONFIG_CPU_PROFILE, PROFILE_PANEL_MODE_COUNT, profile_panel_mode_names, 0),
+    { .label = "### RENDERING", .section_header = 1 },
+    { .label = "MSAA", .key = GLR_CONFIG_MSAA, .state_count = 2,
+      .key_code = KM_KEY(GLR_MSAA), .modifiers = KM_MODS(GLR_MSAA),
+      .display_label_override = &g_msaa_display_label },
+    { .label = "Line smooth", .key = GLR_CONFIG_LINE_SMOOTH, .state_count = 2 },
+    { .label = "Accum effect", .key = GLR_CONFIG_ACCUM_EFFECT,
+      .state_count = 4, .state_names = accum_effect_names,
+      .key_code = KM_KEY(GLR_ACCUM_EFFECT), .modifiers = KM_MODS(GLR_ACCUM_EFFECT),
+      .is_special = 1 },
+    { .label = "Accum passes", .key = GLR_CONFIG_ACCUM_PASSES,
+      .state_count = 6, .state_names = accum_passes_names },
+    { .label = "Wireframe", .key = GLR_CONFIG_WIREFRAME, .state_count = 2,
+      .key_code = KM_KEY(GLR_WIREFRAME), .modifiers = KM_MODS(GLR_WIREFRAME) },
+    { .label = "Point attenuation", .key = GLR_CONFIG_POINT_ATTENUATION, .state_count = 2 },
+    { .label = "---", .section_header = 1 },
+
+    { .label = "### TIME & REPLAY", .section_header = 1 },
+    { .label = "Auto time", .key = GLR_CONFIG_AUTO_TIME, .state_count = 2,
+      .key_code = KM_KEY(GLR_AUTO_TIME), .modifiers = KM_MODS(GLR_AUTO_TIME) },
+    { .label = "Replay", .key = GLR_CONFIG_REPLAY, .state_count = 2,
+      .key_code = KM_KEY(GLR_REPLAY), .modifiers = KM_MODS(GLR_REPLAY) },
+    { .label = "Replay mode", .key = GLR_CONFIG_REPLAY_MODE,
+      .state_count = 2, .state_names = replay_mode_names },
+    { .label = "Replay expand", .key = GLR_CONFIG_REPLAY_EXPAND, .state_count = 2 },
+    { .label = "---", .section_header = 1 },
+
+    { .label = "### OVERLAYS & SCENE", .section_header = 1 },
+    { .label = "Grid", .key = GLR_CONFIG_GRID_THEME,
+      .state_count = GRID_THEME_COUNT, .state_names = grid_theme_names,
+      .key_code = KM_KEY(GLR_GRID), .modifiers = KM_MODS(GLR_GRID), .is_special = 1 },
+    { .label = "Grid major", .key = GLR_CONFIG_GRID_MAJOR,
+      .state_count = GRID_MAJOR_COUNT, .state_names = grid_major_names,
+      .key_code = KM_KEY(GLR_GRID_MAJOR), .modifiers = KM_MODS(GLR_GRID_MAJOR) },
+    { .label = "Grid extent", .key = GLR_CONFIG_GRID_EXTENT,
+      .state_count = GRID_EXTENT_COUNT, .state_names = grid_extent_names,
+      .key_code = KM_KEY(GLR_GRID_EXTENT), .modifiers = KM_MODS(GLR_GRID_EXTENT),
+      .is_special = 1 },
+    { .label = "Axes", .key = GLR_CONFIG_AXES_THEME,
+      .state_count = AXES_THEME_COUNT, .state_names = axes_theme_names,
+      .key_code = KM_KEY(GLR_AXES), .modifiers = KM_MODS(GLR_AXES), .is_special = 1 },
+    { .label = "Xform guides", .key = GLR_CONFIG_XFORM_GUIDE_MODE,
+      .state_count = SCENE_XFORM_GUIDE_COUNT, .state_names = xform_guide_mode_names,
+      .key_code = KM_KEY(GLR_XFORM_GUIDES), .modifiers = KM_MODS(GLR_XFORM_GUIDES),
+      .is_special = 1 },
+    { .label = "Light indicators", .key = GLR_CONFIG_LIGHT_INDICATORS, .state_count = 2,
+      .key_code = KM_KEY(GLR_LIGHT_INDICATORS), .modifiers = KM_MODS(GLR_LIGHT_INDICATORS) },
+    { .label = "Light theme", .key = GLR_CONFIG_LIGHT_THEME,
+      .state_count = LIGHT_THEME_COUNT, .state_names = scene_light_theme_names,
+      .key_code = KM_KEY(GLR_LIGHT_THEME), .modifiers = KM_MODS(GLR_LIGHT_THEME),
+      .is_special = 1 },
+    { .label = "Backdrop", .key = GLR_CONFIG_BACKDROP,
+      .state_count = SCENE_BACKDROP_COUNT, .state_names = backdrop_mode_names,
+      .key_code = KM_KEY(GLR_BACKDROP), .modifiers = KM_MODS(GLR_BACKDROP), .is_special = 1 },
+    { .label = "Auto-normals", .key = GLR_CONFIG_AUTO_NORMALS, .state_count = 2 },
+    { .label = "---", .section_header = 1 },
+
+    { .label = "### CAMERA", .section_header = 1 },
+    { .label = "View mode", .key = GLR_CONFIG_ORTHO_MODE,
+      .state_count = 2, .state_names = view_mode_names,
+      .key_code = KM_KEY(GLR_VIEW_MODE), .modifiers = KM_MODS(GLR_VIEW_MODE) },
+    { .label = "Camera rotate", .key = GLR_CONFIG_CAMERA_ROTATE, .state_count = 2,
+      .key_code = KM_KEY(GLR_CAMERA_ROTATE), .modifiers = KM_MODS(GLR_CAMERA_ROTATE) },
+    /* Action rows: no state to cycle (state_count 0); activation fires
+     * the camera move. */
+    { .label = "Focus origin", .key = GLR_CONFIG_FOCUS_ORIGIN,
+      .key_code = KM_KEY(GLR_FOCUS_ORIGIN), .modifiers = KM_MODS(GLR_FOCUS_ORIGIN) },
+    { .label = "Reset camera", .key = GLR_CONFIG_RESET_CAMERA,
+      .key_code = KM_KEY(GLR_RESET_CAMERA), .modifiers = KM_MODS(GLR_RESET_CAMERA) },
+    { .label = "---", .section_header = 1 },
+
+    { .label = "### GEOMETRY", .section_header = 1 },
+    { .label = "Vertex labels", .key = GLR_CONFIG_VERTEX_LABELS,
+      .state_count = OVERLAY_VERTEX_LABEL_COUNT, .state_names = vertex_label_names,
+      .key_code = KM_KEY(GLR_VERTEX_LABELS), .modifiers = KM_MODS(GLR_VERTEX_LABELS),
+      .is_special = 1 },
+    { .label = "Normal vectors", .key = GLR_CONFIG_NORMAL_VECTORS, .state_count = 2,
+      .key_code = KM_KEY(GLR_NORMAL_VECTORS), .modifiers = KM_MODS(GLR_NORMAL_VECTORS) },
+    { .label = "Vertex outlines", .key = GLR_CONFIG_VERTEX_OUTLINES, .state_count = 2,
+      .key_code = KM_KEY(GLR_VERTEX_OUTLINES), .modifiers = KM_MODS(GLR_VERTEX_OUTLINES) },
+    { .label = "Vertex points", .key = GLR_CONFIG_VERTEX_POINTS, .state_count = 2 },
+    { .label = "Poly highlight", .key = GLR_CONFIG_POLY_HIGHLIGHT, .state_count = 2 },
+    { .label = "---", .section_header = 1 },
+
+    { .label = "### INTERFACE", .section_header = 1 },
+    { .label = "Variable panel", .key = GLR_CONFIG_VARIABLE_PANEL, .state_count = 2,
+      .key_code = KM_KEY(GLR_VARIABLE_PANEL), .modifiers = KM_MODS(GLR_VARIABLE_PANEL) },
+    { .label = "CPU profile", .key = GLR_CONFIG_CPU_PROFILE,
+      .state_count = PROFILE_PANEL_MODE_COUNT, .state_names = profile_panel_mode_names,
+      .key_code = KM_KEY(GLR_CPU_PROFILE), .modifiers = KM_MODS(GLR_CPU_PROFILE) },
     /* Ctrl+Shift+W mirrors CPU profile's Ctrl+W. The two-pass ascii
      * shortcut dispatcher in glr_cfg_handle_ascii_shortcut prefers
      * Shift-requiring rows when Shift is held, so plain Ctrl+W still
      * routes to CPU profile while Ctrl+Shift+W cycles this row. */
-    CFG_ITEM("Memory profile",    GLR_MEMORY_PROFILE, 0, GLR_CONFIG_MEMORY_PROFILE, MEMORY_PANEL_MODE_COUNT, memory_panel_mode_names, 0),
-    CFG_ITEM("Code panel",        GLR_CODE_PANEL, 0, GLR_CONFIG_CODE_PANEL_LAYOUT, CODE_PANEL_LAYOUT_COUNT, code_panel_layout_names, 0),
-    CFG_ITEM("Wrap at commas",    0, 0, 0, GLR_CONFIG_WRAP_AT_COMMA,       2, NULL,                 0),
-    CFG_ITEM("Syntax highlight",  GLR_SYNTAX_HL, 1, GLR_CONFIG_SYNTAX_HIGHLIGHT, 3, syntax_hl_names, 0),
-    CFG_ITEM("Paren match",       0, 0, 0, GLR_CONFIG_PAREN_MATCH,         2, NULL,                 0),
-    CFG_ITEM("Paren scope",       0, 0, 0, GLR_CONFIG_PAREN_SCOPE,         2, NULL,                 0),
-    CFG_ITEM("---",               0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
-    CFG_ITEM("### AUDIO",         0, 0, 0, GLR_CONFIG_NONE,               0, NULL,                 1),
-    CFG_ITEM("Audio",             GLR_AUDIO, 0, GLR_CONFIG_AUDIO_MODE, 2, audio_cfg_names,         0),
+    { .label = "Memory profile", .key = GLR_CONFIG_MEMORY_PROFILE,
+      .state_count = MEMORY_PANEL_MODE_COUNT, .state_names = memory_panel_mode_names,
+      .key_code = KM_KEY(GLR_MEMORY_PROFILE), .modifiers = KM_MODS(GLR_MEMORY_PROFILE) },
+    { .label = "Code panel", .key = GLR_CONFIG_CODE_PANEL_LAYOUT,
+      .state_count = CODE_PANEL_LAYOUT_COUNT, .state_names = code_panel_layout_names,
+      .key_code = KM_KEY(GLR_CODE_PANEL), .modifiers = KM_MODS(GLR_CODE_PANEL) },
+    { .label = "Wrap at commas", .key = GLR_CONFIG_WRAP_AT_COMMA, .state_count = 2 },
+    { .label = "Syntax highlight", .key = GLR_CONFIG_SYNTAX_HIGHLIGHT,
+      .state_count = 3, .state_names = syntax_hl_names,
+      .key_code = KM_KEY(GLR_SYNTAX_HL), .modifiers = KM_MODS(GLR_SYNTAX_HL), .is_special = 1 },
+    { .label = "Paren match", .key = GLR_CONFIG_PAREN_MATCH, .state_count = 2 },
+    { .label = "Paren scope", .key = GLR_CONFIG_PAREN_SCOPE, .state_count = 2 },
+    { .label = "---", .section_header = 1 },
+
+    { .label = "### AUDIO", .section_header = 1 },
+    { .label = "Audio", .key = GLR_CONFIG_AUDIO_MODE,
+      .state_count = 2, .state_names = audio_cfg_names,
+      .key_code = KM_KEY(GLR_AUDIO), .modifiers = KM_MODS(GLR_AUDIO) },
 };
 
 const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
-
-#undef CFG_ITEM_DISPLAY
-#undef CFG_ITEM_DISPLAY_IMPL
-#undef CFG_ITEM
-#undef CFG_ITEM_IMPL
-#undef CFG_EXPAND
 
 /* ---- Export-config bridge --------------------------------------------- *
  *
@@ -256,8 +298,6 @@ static int cfg_key_in_scene_subset(GlrConfigKey key) {
         return 0;
     }
 }
-
-
 
 static void glr_export_cfg_normalize_legacy_alias(const char **slug, int *val,
                                                   char *slug_buf,
@@ -334,39 +374,43 @@ static const char *cfg_light_theme_symbols[LIGHT_THEME_COUNT] = {
 #undef LIGHT_THEME_SYMBOL_ENTRY
 };
 
-static int glr_cfg_symbol_table_lookup(const char *value_name,
-                                       const char *const *table,
-                                       int count, int *out_value) {
-    if (!value_name || !table || !out_value) return 0;
-    for (int i = 0; i < count; i++) {
-        if (table[i] && strcmp(value_name, table[i]) == 0) {
-            *out_value = i;
-            return 1;
-        }
+/* The slug→table map shared by the symbolic resolver (read side) and the
+ * value-to-string emitter (write side). Returns NULL (count untouched)
+ * for slugs with no symbolic form. */
+static const char *const *cfg_symbol_table_for_slug(const char *slug,
+                                                    int *count) {
+    if (strcmp(slug, "grid") == 0) {
+        *count = GRID_THEME_COUNT;
+        return cfg_grid_theme_symbols;
     }
-    return 0;
+    if (strcmp(slug, "axes") == 0) {
+        *count = AXES_THEME_COUNT;
+        return cfg_axes_theme_symbols;
+    }
+    if (strcmp(slug, "backdrop") == 0) {
+        *count = SCENE_BACKDROP_COUNT;
+        return cfg_backdrop_mode_symbols;
+    }
+    if (strcmp(slug, "light_theme") == 0) {
+        *count = LIGHT_THEME_COUNT;
+        return cfg_light_theme_symbols;
+    }
+    return NULL;
 }
 
 static int glr_export_cfg_resolve_text(const char *slug,
                                        const char *value_name,
                                        int *out_value) {
     if (!slug || !value_name || !out_value) return 0;
-    if (strcmp(slug, "grid") == 0)
-        return glr_cfg_symbol_table_lookup(value_name,
-                                           cfg_grid_theme_symbols,
-                                           GRID_THEME_COUNT, out_value);
-    if (strcmp(slug, "axes") == 0)
-        return glr_cfg_symbol_table_lookup(value_name,
-                                           cfg_axes_theme_symbols,
-                                           AXES_THEME_COUNT, out_value);
-    if (strcmp(slug, "backdrop") == 0)
-        return glr_cfg_symbol_table_lookup(value_name,
-                                           cfg_backdrop_mode_symbols,
-                                           SCENE_BACKDROP_COUNT, out_value);
-    if (strcmp(slug, "light_theme") == 0)
-        return glr_cfg_symbol_table_lookup(value_name,
-                                           cfg_light_theme_symbols,
-                                           LIGHT_THEME_COUNT, out_value);
+    int count = 0;
+    const char *const *table = cfg_symbol_table_for_slug(slug, &count);
+    if (!table) return 0;
+    for (int i = 0; i < count; i++) {
+        if (table[i] && strcmp(value_name, table[i]) == 0) {
+            *out_value = i;
+            return 1;
+        }
+    }
     return 0;
 }
 
@@ -405,16 +449,9 @@ static int glr_export_cfg_resolve_value(const char *slug,
 }
 
 static void glr_export_cfg_value_to_string(const char *slug, int value, char *buf, size_t buf_sz) {
-    const char *symbol = NULL;
-    if (strcmp(slug, "grid") == 0 && value >= 0 && value < GRID_THEME_COUNT) {
-        symbol = cfg_grid_theme_symbols[value];
-    } else if (strcmp(slug, "axes") == 0 && value >= 0 && value < AXES_THEME_COUNT) {
-        symbol = cfg_axes_theme_symbols[value];
-    } else if (strcmp(slug, "backdrop") == 0 && value >= 0 && value < SCENE_BACKDROP_COUNT) {
-        symbol = cfg_backdrop_mode_symbols[value];
-    } else if (strcmp(slug, "light_theme") == 0 && value >= 0 && value < LIGHT_THEME_COUNT) {
-        symbol = cfg_light_theme_symbols[value];
-    }
+    int count = 0;
+    const char *const *table = cfg_symbol_table_for_slug(slug, &count);
+    const char *symbol = (table && value >= 0 && value < count) ? table[value] : NULL;
 
     if (symbol) {
         snprintf(buf, buf_sz, "%s", symbol);
@@ -644,7 +681,6 @@ void glr_cfg_cycle_row(int row, int delta) {
         repl_apply_init_bootstrap();
         repl_set_status(glr_config_get(GLR_CONFIG_POINT_ATTENUATION) ? "Point attenuation: ON"
                                                                   : "Point attenuation: OFF");
-
     } else if (item->key == GLR_CONFIG_LIGHT_THEME) {
         /* scene_lights_apply_theme + eye-space init already ran inside
          * glr_config_set above (so @cfg-driven theme loads get the
