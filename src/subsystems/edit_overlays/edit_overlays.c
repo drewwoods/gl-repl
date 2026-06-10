@@ -367,7 +367,7 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
                 int is_line = (primitive_mode == GL_LINES ||
                                primitive_mode == GL_LINE_STRIP ||
                                primitive_mode == GL_LINE_LOOP);
-                glPointSize(is_line ? 2.0f : 7.0f);
+                glPointSize(is_line ? 2.0f : 4.0f);
                 glBegin(GL_POINTS);
                 glVertex3f(flat_cmds[i].args[0], flat_cmds[i].args[1],
                            flat_cmds[i].args[2]);
