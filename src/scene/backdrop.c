@@ -791,6 +791,59 @@ static void draw_aurora(float anim_time, float alpha_scale, float extent) {
     scene_backdrop_pop_state();
 }
 
+/* Sunset environment lights, one row per slot: world-space position
+ * (w=0 => directional), then diffuse / ambient / specular. Slots live
+ * on GL_LIGHT4..6 — above the REPL's user-facing GL_LIGHT0..3 range —
+ * so lit geometry picks up the scene's colors without consuming any
+ * user slot (fixed-function GL guarantees 8 lights). Intensities stay
+ * moderate so an enabled user light still reads as the key. */
+static const struct {
+    GLenum  id;
+    GLfloat pos[4];
+    GLfloat diffuse[4];
+    GLfloat ambient[4];
+    GLfloat specular[4];
+} k_sunset_lights[] = {
+    /* Golden-pink sun key from the disc's direction (low, toward -Z). */
+    { GL_LIGHT4,
+      {  0.0f,  5.0f, -24.0f, 0.0f },
+      { 0.85f, 0.42f, 0.28f, 1.0f },
+      { 0.05f, 0.02f, 0.03f, 1.0f },
+      { 1.00f, 0.60f, 0.40f, 1.0f } },
+    /* Violet dusk-sky fill from high behind the viewer. */
+    { GL_LIGHT5,
+      {  0.2f,  0.6f,  1.0f, 0.0f },
+      { 0.26f, 0.12f, 0.42f, 1.0f },
+      { 0.02f, 0.01f, 0.04f, 1.0f },
+      { 0.15f, 0.08f, 0.25f, 1.0f } },
+    /* Hot-pink bounce off the neon floor, from below. */
+    { GL_LIGHT6,
+      {  0.0f, -1.0f,  0.15f, 0.0f },
+      { 0.38f, 0.08f, 0.26f, 1.0f },
+      { 0.00f, 0.00f, 0.00f, 1.0f },
+      { 0.20f, 0.04f, 0.14f, 1.0f } },
+};
+
+/* Backdrop-owned colored lights. Runs in the pass setup phase (after
+ * scene_lights_setup, before user fill) so lit user geometry sees them;
+ * unlike the user slots these are configured AND enabled here, since
+ * the REPL grammar can't reach GL_LIGHT4+. They contribute only once
+ * the program enables GL_LIGHTING, and the pass's outer
+ * glPushAttrib(GL_ALL_ATTRIB_BITS) bracket pops the enables at frame
+ * end, so nothing leaks when the backdrop changes. Positions are
+ * world-space: the modelview holds the camera at call time. */
+void scene_backdrop_setup_lights(const SceneFrameRenderContext *frame_ctx) {
+    if (frame_ctx->config.backdrop_mode != SCENE_BACKDROP_SUNSET) return;
+    for (int i = 0;
+         i < (int)(sizeof(k_sunset_lights) / sizeof(k_sunset_lights[0])); i++) {
+        glLightfv(k_sunset_lights[i].id, GL_POSITION, k_sunset_lights[i].pos);
+        glLightfv(k_sunset_lights[i].id, GL_DIFFUSE,  k_sunset_lights[i].diffuse);
+        glLightfv(k_sunset_lights[i].id, GL_AMBIENT,  k_sunset_lights[i].ambient);
+        glLightfv(k_sunset_lights[i].id, GL_SPECULAR, k_sunset_lights[i].specular);
+        glEnable(k_sunset_lights[i].id);
+    }
+}
+
 void scene_backdrop_render(const SceneFrameRenderContext *frame_ctx) {
     switch (frame_ctx->config.backdrop_mode) {
     case SCENE_BACKDROP_CITYSCAPE:
