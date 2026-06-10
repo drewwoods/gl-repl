@@ -481,12 +481,12 @@ static int expr_is_plain_integer_literal(const char *src) {
 static void expr_rewrite_scratch_subscripts_to_c(const char *src,
                                                  char *dst,
                                                  int dst_sz) {
+    if (!src || !dst || dst_sz <= 0)
+        return;
+
     const char *p = src;
     char *out = dst;
     char *end = dst + dst_sz - 1;
-
-    if (!src || !dst || dst_sz <= 0)
-        return;
 
     while (*p && out < end) {
         const char *id_start = NULL;
@@ -550,12 +550,12 @@ static void expr_rewrite_scratch_subscripts_to_c(const char *src,
 static void expr_rewrite_scratch_subscripts_to_repl(const char *src,
                                                     char *dst,
                                                     int dst_sz) {
+    if (!src || !dst || dst_sz <= 0)
+        return;
+
     const char *p = src;
     char *out = dst;
     char *end = dst + dst_sz - 1;
-
-    if (!src || !dst || dst_sz <= 0)
-        return;
 
     while (*p && out < end) {
         const char *id_start = NULL;
