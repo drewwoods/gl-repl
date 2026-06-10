@@ -980,22 +980,27 @@ void repl_refresh_render_state_strings(void) {
  * import-side line consumption and reset to the bridge (implemented in
  * step 4a). */
 
+/* The loops below index g_cam_lines_writable (storage rows =
+ * CAM_LINE_COUNT, export_state.h) by the logical block size
+ * (REPL_EXPORT_CAMERA_LINES, export.h). Pin the two constants together
+ * at compile time rather than double-bounding the loops at runtime. */
+STATIC_ASSERT(CAM_LINE_COUNT == REPL_EXPORT_CAMERA_LINES,
+              "cam_lines storage rows out of sync with the export camera block");
+
 void repl_refresh_camera_lines(void) {
     /* Bridge-driven preview: the bridge formats the 4-line block from
      * current camera state with numeric ry (no g_angle placeholder).
      * Without a bridge installed (the demo case), g_cam_lines stays
      * empty — the demo doesn't render a code panel. */
     if (!g_export_camera_bridge || !g_export_camera_bridge->fill_display_block) {
-        for (int i = 0; i < REPL_EXPORT_CAMERA_LINES &&
-                        i < (int)(sizeof(g_cam_lines_writable) / sizeof(g_cam_lines_writable[0])); i++)
+        for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++)
             g_cam_lines_writable[i][0] = '\0';
         return;
     }
     ReplExportCameraBlock block;
     memset(&block, 0, sizeof(block));
     g_export_camera_bridge->fill_display_block(&block);
-    for (int i = 0; i < REPL_EXPORT_CAMERA_LINES &&
-                    i < (int)(sizeof(g_cam_lines_writable) / sizeof(g_cam_lines_writable[0])); i++) {
+    for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++) {
         snprintf(g_cam_lines_writable[i], sizeof(g_cam_lines_writable[i]), "%s", block.lines[i]);
     }
 }
