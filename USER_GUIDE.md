@@ -640,7 +640,11 @@ guide follows:
 With **Xform guides** on (F8), placing the cursor on a committed
 `glTranslatef` / `glRotatef` / `glScalef` line draws an overlay arrow or arc
 showing what that line does — color-coded by axis (X=red, Y=green, Z=blue
-blends). Two modes:
+blends), with a pulse traveling along the path:
+
+![Cursor on a glTranslatef line: the guide shows the displacement](docs/images/xform-guide-still.png)
+
+Two modes:
 
 - **World** — the guide is drawn in world axes at the world origin: the
   strict OpenGL reverse-order reading of your line, independent of
