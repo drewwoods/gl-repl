@@ -267,7 +267,14 @@ GLR_AUDIO_HITCH_MS=10 ./gl-repl      # Lower the audio-worker hitch threshold
 GLR_DETAILED_PROF=1 ./gl-repl        # Same as --detailed-prof, via env
 GLR_ASSETS_DIR=/path/to/music ./gl-repl   # Same as --assets, via env (--assets wins)
 GLR_TIME=5 ./gl-repl                 # Initial animation time t in seconds (--time wins)
+GLR_EDIT_LINE=4 ./gl-repl scene.c    # Park the cursor on source line 4 (0-based, clamped) after load
 ```
+
+`GLR_EDIT_LINE` sets the cursor exactly as arrowing to the line would
+(edit line + input buffer, via `glr_ctrl_set_edit_line`), so
+cursor-bound overlays — transform guides, vertex labels — render on a
+headless OSMesa capture with no keyboard input. Applied after the
+file/example load, alongside `GLR_TIME`, in `main()` (`gl_repl.c`).
 
 The animation variable `t` starts at `0` and (with animation playing, the
 default) advances by a fixed `1/60 s` per rendered frame. `--time <secs>` /

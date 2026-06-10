@@ -943,6 +943,8 @@ runs.
 ```
 
 Useful environment variables: `GLR_TIME`, `GLR_ASSETS_DIR`,
+`GLR_EDIT_LINE=<n>` (park the cursor on source line *n* after load — poses
+cursor-bound overlays like transform guides for headless captures),
 `GLR_NO_POINT_PARAMETER=1` (force the no-`glPointParameterfv` fallback),
 `GLR_AUDIO_HITCH_MS` (audio worker stall-warning threshold).
 

@@ -202,6 +202,12 @@ static void print_usage(const char *prog) {
             "  --time <secs>  Set the initial animation time t at startup\n"
             "               (else GLR_TIME; --time wins). Start animations later.\n"
             "\n"
+            "Environment:\n"
+            "  GLR_EDIT_LINE=<n>  Park the cursor on source line n (0-based)\n"
+            "               after load, as if arrowed to. Poses cursor-bound\n"
+            "               overlays (transform guides, vertex labels) for\n"
+            "               headless captures.\n"
+            "\n"
             "Arguments:\n"
             "  input.c      Optional saved session to load at startup\n"
             "  workspace/   Optional directory: load every *.c as a user scene\n",
@@ -472,6 +478,17 @@ int main(int argc, char **argv) {
         const char *t_src = time_arg ? time_arg : getenv("GLR_TIME");
         if (t_src && *t_src)
             glr_ctrl_set_time((float)atof(t_src));
+    }
+    /* Cursor line override: GLR_EDIT_LINE=<line> (0-based, clamped)
+     * parks the cursor on a committed source line and loads it into the
+     * input buffer, exactly as arrowing to it would. Headless-capture
+     * hook: cursor-bound overlays (transform guides, vertex labels)
+     * can't otherwise be posed without live keyboard input. Applied
+     * after the file/example load so the line exists. */
+    {
+        const char *l_src = getenv("GLR_EDIT_LINE");
+        if (l_src && *l_src)
+            glr_ctrl_set_edit_line(atoi(l_src));
     }
     init_trace("REPL bootstrap done");
     glr_ctrl_set_accum(use_accum);
