@@ -69,7 +69,7 @@ static const char *const k_tab_overview[] = {
     "  Drag in the viewport to orbit; scroll to zoom.",
     "  Press Ctrl+T to animate using the time variable 't'.",
     "  Press F12 to cycle the built-in examples for ideas.",
-    "  Press Ctrl+V to open the Variables panel, hover any value,",
+    "  Press Ctrl+Shift+P to toggle the Variables panel, hover any value,",
     "    Left-click drag  - linear scrub",
     "    Right-click drag - logarithmic",
     "",
