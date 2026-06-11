@@ -22,6 +22,8 @@ GL, commit it, and the geometry appears immediately — beside the source that
 made it. No build step. No shaders. No scene files. Geometry and color,
 nothing else.
 
+<sub>Strictly a Read-Eval-**Render** Loop, but RERL is unpronounceable.</sub>
+
 ```c
 glBegin(GL_TRIANGLES);
 glVertex3f(0, 1, 0);
