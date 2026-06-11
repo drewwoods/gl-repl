@@ -106,7 +106,7 @@ int source_document_apply_change(const SourceTextChange *change) {
     case SOURCE_TEXT_DELETE_RANGE:
         return editor_buffer_delete_range(change->pos, change->count);
     case SOURCE_TEXT_LOAD_ALL: {
-        const char *ptrs[MAX_COMMIT_CMDS];
+        const char *ptrs[MAX_COMMIT_CMDS] = {NULL};
         int n = change->count;
         if (n < 0) n = 0;
         if (n > MAX_COMMIT_CMDS) return 0;
