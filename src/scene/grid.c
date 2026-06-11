@@ -582,6 +582,13 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
  * Below Y=0 the viewport gets a pale glacial tint (same mechanism as
  * Ocean's underwater fill) — looking up through the ice. */
 
+/* Glacial blue-white shared by the under-ice viewport tint and the
+ * ice-mist fog, so the grid fades out into the same cold colour the
+ * camera sees below the sheet. */
+#define GRID_FROZEN_TINT_R 0.58f
+#define GRID_FROZEN_TINT_G 0.74f
+#define GRID_FROZEN_TINT_B 0.86f
+
 /* Deterministic position hash in [-1, 1]; stable frame-to-frame so
  * the cracks and frost heave stay frozen in place (no swimming). */
 static float grid_frozen_hash(float a, float b) {
@@ -667,9 +674,28 @@ static void scene_grid_render_frozen_theme(const GridDrawContext *grid_ctx,
     const float step = grid_ctx->step;
     const float as = grid_ctx->alpha_scale;
 
-    /* Looking up through the ice: pale glacial viewport tint. */
-    if (grid_camera_world_y(config) < 0.0f)
-        grid_draw_viewport_tint(grid_ctx, config, 0.58f, 0.74f, 0.86f, 0.55f);
+    /* Looking up through the ice: pale glacial viewport tint. The
+     * EXP2 mist below applies on BOTH sides of the sheet (unlike
+     * Ocean's tint-or-fog split) so the grid always fades out into
+     * glacial blue-white instead of the clear colour; under the ice
+     * it's slightly denser — murkier, light scattered by the sheet.
+     * The tint rect itself is immune (grid_draw_viewport_tint
+     * brackets and disables fog around the fill). */
+    int under_ice = grid_camera_world_y(config) < 0.0f;
+    if (under_ice)
+        grid_draw_viewport_tint(grid_ctx, config,
+                                GRID_FROZEN_TINT_R, GRID_FROZEN_TINT_G,
+                                GRID_FROZEN_TINT_B, 0.55f);
+    {
+        float fog_col[4] = { GRID_FROZEN_TINT_R, GRID_FROZEN_TINT_G,
+                             GRID_FROZEN_TINT_B, 1.0f };
+        float density = (under_ice ? 0.040f : 0.030f) +
+                        grid_ctx->breath * 0.008f;
+        glFogfv(GL_FOG_COLOR, fog_col);
+        glEnable(GL_FOG);
+        glFogi(GL_FOG_MODE, GL_EXP2);
+        glFogf(GL_FOG_DENSITY, density);
+    }
 
     /* Minor lines: faint straight etch marks under the ice. Majors
      * are skipped here — the crack pass below replaces them. */
@@ -751,6 +777,11 @@ static void scene_grid_render_frozen_theme(const GridDrawContext *grid_ctx,
         }
         glEnd();
     }
+
+    /* Same teardown as the standard fog theme. Unlike Ocean (which
+     * drops fog before its water surface) the sheet above renders
+     * inside the mist on purpose — it whites out toward the horizon. */
+    grid_fog_end(grid_ctx);
 }
 
 static void scene_grid_render_xzruler_theme(const GridDrawContext *grid_ctx) {
@@ -947,7 +978,8 @@ static void scene_grid_render_radar_theme(const GridDrawContext *grid_ctx) {
 
 int scene_grid_theme_uses_fog(SceneGridTheme grid_theme) {
     return grid_theme == GRID_THEME_FOG ||
-           grid_theme == GRID_THEME_OCEAN;
+           grid_theme == GRID_THEME_OCEAN ||
+           grid_theme == GRID_THEME_FROZEN;
 }
 
 /* --- scene_grid_render phases ---
@@ -968,9 +1000,9 @@ int scene_grid_theme_uses_fog(SceneGridTheme grid_theme) {
  * (audit #3). */
 
 /* Resolve grid transition fade via the shared overlay-xn helper. The
- * grid's "this theme owns fog" carve-out (EXP2-fog themes — FOG and
- * OCEAN — fall back to plain alpha FADE so their fog isn't competing
- * with the synthetic LINEAR recede) is keyed on
+ * grid's "this theme owns fog" carve-out (EXP2-fog themes — FOG,
+ * OCEAN, FROZEN — fall back to plain alpha FADE so their fog isn't
+ * competing with the synthetic LINEAR recede) is keyed on
  * scene_grid_theme_uses_fog(). */
 static SceneOverlayXn grid_xn_resolve(const SceneRenderConfig *config,
                                       SceneGridTheme grid_theme) {
