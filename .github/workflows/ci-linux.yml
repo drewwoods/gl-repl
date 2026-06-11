@@ -1,0 +1,32 @@
+name: Linux CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: linux-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # check-trailing-whitespace diffs against origin/main's merge base
+          fetch-depth: 0
+
+      - name: C99 ratchet (real gcc)
+        run: make check-c99
+
+      - name: Stub test suite (ASan + UBSan, no GL libs)
+        run: make test-stubs
+
+      - name: Build gl-repl against system GL/GLUT
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libglu1-mesa-dev freeglut3-dev
+          make gl-repl

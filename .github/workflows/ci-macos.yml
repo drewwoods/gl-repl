@@ -1,0 +1,26 @@
+name: macOS CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: macos-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # check-trailing-whitespace diffs against origin/main's merge base
+          fetch-depth: 0
+
+      - name: Stub test suite (ASan + UBSan, no GL libs)
+        run: make test-stubs
+
+      - name: Build gl-repl (vendored freeglut, Cocoa)
+        run: make gl-repl

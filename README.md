@@ -12,6 +12,9 @@
 
 <br>
 
+[![macOS CI](https://github.com/drewwoods/gl-repl/actions/workflows/ci-macos.yml/badge.svg)](https://github.com/drewwoods/gl-repl/actions/workflows/ci-macos.yml)
+[![Linux CI](https://github.com/drewwoods/gl-repl/actions/workflows/ci-linux.yml/badge.svg)](https://github.com/drewwoods/gl-repl/actions/workflows/ci-linux.yml)
+
 </div>
 
 An interactive interpreter for fixed-function OpenGL. You write one line of
