@@ -1158,6 +1158,14 @@ void repl_export_lights_display_line(int i, char *buf, size_t n) {
     buf[0] = '\0';  /* unreachable */
 }
 
+/* Emit a CMD_FOR_BEGIN as C89: a marker-tagged scope brace + hoisted
+ * `float i;` decl (C89 has no for-init declarations; the markers let
+ * import_is_c89_loop_marker_line drop the scaffolding on re-import),
+ * then the `for (...)` header. Two paths: a has_vars loop re-extracts
+ * the start/end/step expression text from the source line and runs it
+ * through the expression-to-C translator (so `t`-animated bounds export
+ * live); a constant loop re-parses the header to floats and emits
+ * literals. Half-open REPL semantics map to `<` / `>` by step sign. */
 static void write_for_begin_as_c(FILE *f, const GLCmd *cmd,
                                  const char *source_text) {
     char var_name[REPL_PREDEF_NAME_MAX];
@@ -1392,6 +1400,17 @@ static int comment_run_attached_func_idx(int start, int end_idx) {
     return -1;
 }
 
+/* The per-command writer for the exported display() body: emit one
+ * source command as standalone C. One independent case per command
+ * family — most canonical REPL text is already valid C and passes
+ * through the default arm (expression-to-C translated when the command
+ * carries vars); the exceptions each own a case: var declares become
+ * `// @declare` markers (locals would shadow the file-scope globals),
+ * tess commands expand to the gluTess* call sequences, and label()
+ * keeps its format string byte-exact. Block structure (for/func) is the
+ * caller's job. The import translators in src/repl/import.c are the
+ * inverses of these arms — change them in pairs to keep export/import
+ * round-trips lossless. */
 static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
                                      int for_depth, int *tess_depth) {
     const char *source_text = export_document_text(cmd_idx);

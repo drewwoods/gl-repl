@@ -703,6 +703,14 @@ static int expr_range_has_runtime_values(const char *src, const char *end,
     return 0;
 }
 
+/* Commit-time identifier validation for the expression span [src, end)
+ * (end == NULL means whole string): every identifier must resolve to a
+ * named constant, a builtin function call, a scratch array (with an
+ * in-range, recursively-validated index when the index is itself
+ * compile-time evaluable), a visible loop/param var, or a predef var.
+ * Also rejects unbalanced parens up front, since eval_expr itself is
+ * forgiving about a missing ')'. Pure check — evaluates nothing into
+ * state; on failure writes a user-facing message into `err`. */
 static int validate_expression_idents_range(const char *src, const char *end,
                                             const ExprVar *vars, int num_vars,
                                             char *err, int errsz) {
@@ -985,6 +993,12 @@ static float expr_rand_signed(float seed, float iter) {
     return expr_rand01(seed, iter) * 2.0f - 1.0f;
 }
 
+/* The `primary` production of the recursive-descent grammar — the leaf
+ * dispatcher under repl_eval_expr's operator-precedence chain. In match
+ * order: unary -/+/!, parenthesised subexpression, numeric literal,
+ * then identifier resolution (named constant → scratch-array subscript
+ * → loop/param var → predef var → builtin function call). Errors report
+ * through expr_write_err and yield 0.0f so evaluation always completes. */
 static float eval_primary(ExprCtx *ctx) {
     expr_skip_ws(ctx);
 
@@ -1307,6 +1321,9 @@ void repl_append_trailing_comment(char *dst, size_t dst_sz, const char *source) 
 /* Inline numeric swatch helpers                                              */
 /* ========================================================================= */
 
+/* Strict float-literal check ([+-]digits[.digits][e[+-]digits], whole
+ * span) — gates the inline numeric swatch so it only attaches to a
+ * literal argument, never an expression. */
 static int is_pure_numeric_literal(const char *s, int len) {
     int i = 0;
     if (i < len && (s[i] == '+' || s[i] == '-')) i++;
@@ -1403,6 +1420,16 @@ void repl_eval_format_swatch_number(float v, char *out, int out_sz) {
 /* Expression translation: REPL <-> C                                         */
 /* ========================================================================= */
 
+/* Translate one REPL expression to compilable C for export. Three
+ * sequential rewrite passes over the code (a trailing `// ...` comment
+ * is split off first and re-attached untouched at the end):
+ *   1. identifier mapping — REPL constants/builtins to their C names
+ *      (PI -> M_PI, sin -> sinf, ...), other identifiers verbatim
+ *   2. `LHS % RHS` -> `fmodf(LHS, RHS)` (REPL `%` is float-modulo;
+ *      C's operator is integer-only), with paren/call-aware operand
+ *      scanning in both directions
+ *   3. scratch-array subscripts to their exported C array names
+ * Inverse of repl_eval_c_expr_to_repl below. */
 void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
     static const struct { const char *from; const char *to; } k_const_expr_to_c[] = {
         { "TAU", "(2*M_PI)" },
@@ -1573,6 +1600,12 @@ void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
     }
 }
 
+/* Inverse of repl_eval_expr_to_c: translate a C expression from an
+ * imported export file back to REPL spelling. `(2*M_PI)` collapses to
+ * TAU by substring pass first (it isn't a single identifier), then an
+ * identifier-aware pass maps C names back (M_PI -> PI, sinf -> sin),
+ * then scratch-array subscripts return to A/B/C[] form. fmodf is left
+ * as-is — the REPL grammar accepts it as the fmod builtin. */
 void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
     if (!in || !out || out_sz <= 0)
         return;
@@ -1671,6 +1704,10 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
 /* For-loop header parsers                                                    */
 /* ========================================================================= */
 
+/* Parse a REPL loop header `for(var, start, end[, step])`, evaluating
+ * the bound expressions against the visible vars. On success fills
+ * var_name / start / end / step (default 1) and points *body_start
+ * just past the ')'. Returns 0 on any token mismatch. */
 int repl_eval_parse_for_header_with_vars(const char *input, char *var_name, int var_sz,
                                float *start, float *end, float *step,
                                const ExprVar *vars, int num_vars,
@@ -1735,6 +1772,14 @@ int repl_eval_parse_for_header(const char *input, char *var_name, int var_sz,
                                       NULL, 0, body_start);
 }
 
+/* Import-side translation of a numeric C for-header
+ * `for ([type] i = START; i <op> END; i++/--/+=/-= STEP)` into REPL
+ * loop parameters. The token walk is strictly linear (each clause is
+ * one validate-and-advance step); the semantic work is mapping C's
+ * comparison forms onto the REPL's half-open ascending loop model:
+ * inclusive bounds (<=, >=) nudge END by one step, and a `>` condition
+ * forces a negative step so the loop terminates. Bounds are evaluated
+ * to floats here (no var context — imported headers are literal). */
 int repl_eval_parse_c_for_header(const char *input, char *var_name, int var_sz,
                        float *start, float *end, float *step) {
     const char *p = input;

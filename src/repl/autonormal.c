@@ -280,6 +280,12 @@ void repl_recompute_autonormals(int autonormal_enabled,
     }
 }
 
+/* For the code panel's "feeding state" markers: given the cursor on a
+ * vertex (or color-consuming glutSolid*) line, walk backward through
+ * the source for the nearest normal (want_normal=1) or color
+ * (want_normal=0) command of the matching family. Returns its source
+ * index, or -1 when the cursor line isn't a consumer / nothing feeds
+ * it. The family split is spelled out in the comment below. */
 static int find_feeding_state_cmd(int line_idx, int want_normal) {
     if (line_idx < 0 || line_idx >= repl_state_document_count()) return -1;
     if (!repl_state_document_cmds()[line_idx].valid) return -1;

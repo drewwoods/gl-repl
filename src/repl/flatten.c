@@ -786,7 +786,20 @@ static unsigned int line_func_scope_mask(int line) {
     return mask;
 }
 
-/* edit_line_idx is supplied by the caller (β: REPL pipeline does
+/* The cursor-highlight predicate: does flat command `flat_idx` belong
+ * to the highlight set of the source line under the cursor? Match
+ * rules, in precedence order:
+ *   1. cursor on a funcN(...) call -> flat cmds whose immediate or
+ *      root call site is that line
+ *   2. cursor inside a funcN body -> flat cmds sharing that func scope
+ *   3. cursor on a block head -> the cached current-block flat range
+ *      (refreshed lazily when the cursor line changed)
+ *   4. cursor on a top-level color/normal state line (immediate or
+ *      tess flavor) -> the vertices it feeds, i.e. vertices whose most
+ *      recent matching state cmd traces back to this source line.
+ *      Immediate and tess vertices intentionally pair only with their
+ *      own state-command families.
+ * edit_line_idx is supplied by the caller (β: REPL pipeline does
  * not call editor_state_*), implemented in phase 3.6.2 (see the
  * edit-line-ownership plan doc). */
 int repl_flat_cmd_matches_cursor(int flat_idx, int edit_line_idx) {
