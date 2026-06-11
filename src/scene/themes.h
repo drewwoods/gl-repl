@@ -28,7 +28,8 @@
     X(PLANES, "Adaptive Planes") \
     X(RADAR, "Radar")      \
     X(AURORA, "Aurora")    \
-    X(SYNTHWAVE, "Synthwave")
+    X(SYNTHWAVE, "Synthwave") \
+    X(FROZEN, "Frozen Lake")
 
 #define GRID_THEME_ENUM_ENTRY(name, str) GRID_THEME_##name,
 #define GRID_THEME_NAME_ENTRY(name, str) [GRID_THEME_##name] = str,

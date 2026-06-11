@@ -427,6 +427,49 @@ static void scene_grid_render_focus_theme(const SceneFrameRenderContext *frame_c
     }
 }
 
+/* Camera world-space height; < 0 means the eye is below the grid
+ * plane (Ocean's underwater branch, Frozen's under-ice branch). */
+static float grid_camera_world_y(const SceneRenderConfig *config) {
+    float camera_rx_rad = config->cam_rx * (float)M_PI / 180.0f;
+    return config->cam_ty + sinf(camera_rx_rad) * config->cam_dist;
+}
+
+/* Fill the active scene viewport with a tint rect (Ocean's underwater
+ * teal, Frozen's under-ice glacial blue). Coordinates use
+ * scene_w/scene_h (not the full window viewport) so the rect lines up
+ * with whatever glViewport scene_render set. */
+static void grid_draw_viewport_tint(const GridDrawContext *grid_ctx,
+                                    const SceneRenderConfig *config,
+                                    float r, float g, float b, float a) {
+    grid_color(grid_ctx, r, g, b, a);
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    gluOrtho2D(0, config->scene_w, 0, config->scene_h);
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+    /* GL_FOG_BIT is on the push mask because the outer grid pass
+     * leaves fog enabled (linear, end ≈ grid extent) — and after
+     * fb976f0 it may also have GL_FOG_DISTANCE_MODE_NV =
+     * GL_EYE_RADIAL_NV set when the OCEAN theme is the dispatch
+     * branch. With identity modelview the rect's eye-space radial
+     * distances run 0..sqrt(scene_w² + scene_h²), wildly past
+     * fog-end, so without the disable the rect fades to fog colour
+     * everywhere except the tiny lower-left near (0,0). See
+     * tests/test_scene_underwater_fill_gl.c. */
+    glPushAttrib(GL_DEPTH_BUFFER_BIT | GL_LIGHTING_BIT | GL_FOG_BIT);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_LIGHTING);
+    glDisable(GL_FOG);
+    glRectf(0, 0, (float)config->scene_w, (float)config->scene_h);
+    glPopAttrib();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+}
+
 static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
                                           const SceneFrameRenderContext *frame_ctx,
                                           float breath) {
@@ -435,41 +478,10 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
     const float major_tol = grid_ctx->major_tol;
     const float step = grid_ctx->step;
     const SceneRenderConfig *config = &frame_ctx->config;
-    float camera_rx_rad = config->cam_rx * (float)M_PI / 180.0f;
-    float camera_world_y = config->cam_ty + sinf(camera_rx_rad) * config->cam_dist;
 
     /* Underwater fog - slightly breathing density */
-    if (camera_world_y < 0.0f) {
-        /* Fill the active scene viewport with a teal tint. Coordinates
-         * use scene_w/scene_h (not the full window viewport) so the
-         * rect lines up with whatever glViewport scene_render set. */
-        grid_color(grid_ctx, 0.05f, 0.25f, 0.35f, 0.75f);
-        glMatrixMode(GL_PROJECTION);
-        glPushMatrix();
-        glLoadIdentity();
-        gluOrtho2D(0, config->scene_w, 0, config->scene_h);
-        glMatrixMode(GL_MODELVIEW);
-        glPushMatrix();
-        glLoadIdentity();
-        /* GL_FOG_BIT is on the push mask because the outer grid pass
-         * leaves fog enabled (linear, end ≈ grid extent) — and after
-         * fb976f0 it may also have GL_FOG_DISTANCE_MODE_NV =
-         * GL_EYE_RADIAL_NV set when the OCEAN theme is the dispatch
-         * branch. With identity modelview the rect's eye-space radial
-         * distances run 0..sqrt(scene_w² + scene_h²), wildly past
-         * fog-end, so without the disable the rect fades to fog colour
-         * everywhere except the tiny lower-left near (0,0). See
-         * tests/test_scene_underwater_fill_gl.c. */
-        glPushAttrib(GL_DEPTH_BUFFER_BIT | GL_LIGHTING_BIT | GL_FOG_BIT);
-        glDisable(GL_DEPTH_TEST);
-        glDisable(GL_LIGHTING);
-        glDisable(GL_FOG);
-        glRectf(0, 0, (float)config->scene_w, (float)config->scene_h);
-        glPopAttrib();
-        glMatrixMode(GL_PROJECTION);
-        glPopMatrix();
-        glMatrixMode(GL_MODELVIEW);
-        glPopMatrix();
+    if (grid_camera_world_y(config) < 0.0f) {
+        grid_draw_viewport_tint(grid_ctx, config, 0.05f, 0.25f, 0.35f, 0.75f);
     } else {
         glEnable(GL_FOG);
         glFogi(GL_FOG_MODE, GL_EXP2);
@@ -553,6 +565,187 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
                 float cr = sinf(sx * 0.4f + grid_ctx->anim_time * 0.3f) * 0.04f;
                 float cg = cosf(zz * 0.3f + grid_ctx->anim_time * 0.25f) * 0.04f;
                 grid_color(grid_ctx, 0.05f + cr, 0.25f + cg, 0.35f + cr, alpha);
+                glVertex3f(sx, y, zz);
+            }
+        }
+        glEnd();
+    }
+}
+
+/* Frozen Lake: a winter pond. Major grid lines are fracture cracks —
+ * jittered polylines with a wide faint halo, a bright core, and a
+ * dimmer echo sunk below the surface so the sheet reads as thick;
+ * minor lines stay faint straight etch marks under the ice. The
+ * pseudo-scene layer (the Ocean water-surface analogue) is a
+ * translucent blue-white ice sheet just above Y=0 with static
+ * frost-heave displacement and a slow sheen drifting across it.
+ * Below Y=0 the viewport gets a pale glacial tint (same mechanism as
+ * Ocean's underwater fill) — looking up through the ice. */
+
+/* Deterministic position hash in [-1, 1]; stable frame-to-frame so
+ * the cracks and frost heave stay frozen in place (no swimming). */
+static float grid_frozen_hash(float a, float b) {
+    float s = sinf(a * 12.9898f + b * 78.233f) * 43758.5453f;
+    return (s - floorf(s)) * 2.0f - 1.0f;
+}
+
+/* Crack segment count scales with extent so the kinks stay ~1.5 world
+ * units apart and read as fracture angles rather than stretching into
+ * smooth long waves; capped to bound immediate-mode cost at FAR. */
+static int grid_frozen_crack_segs(const GridDrawContext *ctx) {
+    int segs = (int)(ctx->extent * 2.0f / 1.5f);
+    if (segs < 8) segs = 8;
+    if (segs > 40) segs = 40;
+    return segs;
+}
+
+/* Lateral jitter of crack joint i on major line v. Scaled by
+ * sin(pi*f) so both endpoints stay exactly on the grid edge and the
+ * crack still reads as that grid line. Shared by the path and spur
+ * passes so spurs anchor exactly on the polyline joints. */
+static float grid_frozen_joint_off(const GridDrawContext *ctx, float v,
+                                   int axis, int i, int segs) {
+    float f = (float)i / (float)segs;
+    float amp = ctx->major * 0.20f * sinf(f * (float)M_PI);
+    return grid_frozen_hash(v * 3.7f + (float)axis * 17.0f,
+                            (float)i * 5.1f) * amp;
+}
+
+/* One fracture polyline replacing a straight major grid line.
+ * axis 0 draws the constant-x line (running along Z), axis 1 the
+ * constant-z line. y < 0 renders the sub-surface echo pass. */
+static void grid_frozen_crack_path(const GridDrawContext *ctx, float v,
+                                   int axis, float y, SceneRgba c) {
+    int segs = grid_frozen_crack_segs(ctx);
+    glBegin(GL_LINE_STRIP);
+    grid_color_rgba(ctx, c);
+    for (int i = 0; i <= segs; i++) {
+        float f = (float)i / (float)segs;
+        float along = -ctx->extent + f * 2.0f * ctx->extent;
+        float off = grid_frozen_joint_off(ctx, v, axis, i, segs);
+        if (axis == 0) glVertex3f(v + off, y, along);
+        else           glVertex3f(along, y, v + off);
+    }
+    glEnd();
+}
+
+/* Short branch spurs off some crack joints, fading to nothing at the
+ * tip. Joint selection hashes on (v, i) so the pattern is static. */
+static void grid_frozen_crack_spurs(const GridDrawContext *ctx, float v,
+                                    int axis, float as) {
+    int segs = grid_frozen_crack_segs(ctx);
+    glBegin(GL_LINES);
+    for (int i = 2; i < segs - 1; i += 3) {
+        float pick = grid_frozen_hash(v * 9.3f + (float)axis * 23.0f,
+                                      (float)i);
+        if (pick < 0.25f) continue;
+        float f = (float)i / (float)segs;
+        float along = -ctx->extent + f * 2.0f * ctx->extent;
+        float off = grid_frozen_joint_off(ctx, v, axis, i, segs);
+        float len = ctx->major *
+                    (0.25f + 0.35f * fabsf(grid_frozen_hash(v, (float)i + 41.0f)));
+        float dir = (pick > 0.6f) ? 1.0f : -1.0f;
+        float dx, dz; /* diagonal away from the crack */
+        if (axis == 0) { dx = dir * len * 0.7f; dz = len; }
+        else           { dx = len; dz = dir * len * 0.7f; }
+        grid_color(ctx, 0.85f, 0.93f, 1.0f, fminf(0.38f * as, 1.0f));
+        if (axis == 0) glVertex3f(v + off, 0.0f, along);
+        else           glVertex3f(along, 0.0f, v + off);
+        grid_color(ctx, 0.85f, 0.93f, 1.0f, 0.0f);
+        if (axis == 0) glVertex3f(v + off + dx, 0.0f, along + dz);
+        else           glVertex3f(along + dx, 0.0f, v + off + dz);
+    }
+    glEnd();
+}
+
+static void scene_grid_render_frozen_theme(const GridDrawContext *grid_ctx,
+                                           const SceneFrameRenderContext *frame_ctx) {
+    const SceneRenderConfig *config = &frame_ctx->config;
+    const float extent = grid_ctx->extent;
+    const float major = grid_ctx->major;
+    const float major_tol = grid_ctx->major_tol;
+    const float step = grid_ctx->step;
+    const float as = grid_ctx->alpha_scale;
+
+    /* Looking up through the ice: pale glacial viewport tint. */
+    if (grid_camera_world_y(config) < 0.0f)
+        grid_draw_viewport_tint(grid_ctx, config, 0.58f, 0.74f, 0.86f, 0.55f);
+
+    /* Minor lines: faint straight etch marks under the ice. Majors
+     * are skipped here — the crack pass below replaces them. */
+    glBegin(GL_LINES);
+    for (float v = -extent; v <= extent + GRID_LOOP_EPSILON; v += step) {
+        if (fabsf(v) < GRID_ORIGIN_SKIP_EPSILON) continue;
+        if (grid_is_major_line(v, major, major_tol)) continue;
+        GridLineColors colors;
+        grid_line_colors_same(&colors, rgba(0.55f, 0.70f, 0.82f,
+                                            fminf(0.07f * as, 1.0f)));
+        draw_grid_line_pair(v, grid_ctx, colors);
+    }
+    glEnd();
+
+    /* Major lines as fracture cracks: wide faint halo under a bright
+     * core, a dim echo sunk into the sheet for thickness, then branch
+     * spurs. A slow glint drifts along the cores so the ice isn't
+     * completely dead. */
+    for (float v = -extent; v <= extent + GRID_LOOP_EPSILON; v += major) {
+        if (fabsf(v) < GRID_ORIGIN_SKIP_EPSILON) continue;
+        float glint = sinf(v * 0.9f + grid_ctx->anim_time * 0.5f) * 0.5f + 0.5f;
+        float core_a = fminf((0.48f + glint * 0.20f) * as, 1.0f);
+        for (int axis = 0; axis < 2; axis++) {
+            glLineWidth(3.0f);
+            grid_frozen_crack_path(grid_ctx, v, axis, 0.0f,
+                                   rgba(0.70f, 0.85f, 0.95f,
+                                        fminf(0.10f * as, 1.0f)));
+            glLineWidth(1.0f);
+            grid_frozen_crack_path(grid_ctx, v, axis, 0.0f,
+                                   rgba(0.88f, 0.95f, 1.0f, core_a));
+            grid_frozen_crack_path(grid_ctx, v, axis, -0.16f,
+                                   rgba(0.45f, 0.62f, 0.78f, core_a * 0.35f));
+            grid_frozen_crack_spurs(grid_ctx, v, axis, as);
+        }
+    }
+
+    /* Origin axes: brighter frozen seams (depth-written like every
+     * theme's origin pass). */
+    draw_grid_origin_axes(grid_ctx,
+                          rgba(0.80f, 0.92f, 1.0f, fminf(0.55f * as, 1.0f)),
+                          1.5f);
+
+    /* ---- Ice sheet ----
+     * Translucent blue-white plane just above the cracks. Static
+     * frost-heave displacement (position hash, not time) keeps it
+     * frozen while a slow sheen drifts across. Same depth-test-on /
+     * depth-write-off contract as Ocean's water surface, so it tints
+     * the user's geometry below the sheet. Step scales with extent to
+     * cap strip density at FAR. */
+    float surf_step = extent / 33.0f;
+    if (surf_step < 0.75f) surf_step = 0.75f;
+    float surf_y = 0.02f;
+    for (float sz = -extent; sz < extent - GRID_LOOP_EPSILON; sz += surf_step) {
+        glBegin(GL_TRIANGLE_STRIP);
+        for (float sx = -extent; sx <= extent + GRID_LOOP_EPSILON;
+             sx += surf_step) {
+            for (int row = 0; row < 2; row++) {
+                float zz = sz + row * surf_step;
+                float y = surf_y + grid_frozen_hash(sx * 0.83f, zz * 0.83f) * 0.012f;
+
+                /* Smooth edge fade so the sheet has no hard border */
+                float dx = fabsf(sx) / extent;
+                float dz = fabsf(zz) / extent;
+                float edge = (1.0f - dx * dx) * (1.0f - dz * dz);
+                if (edge < 0.0f) edge = 0.0f;
+
+                float frost = grid_frozen_hash(sx * 0.31f + 11.0f,
+                                               zz * 0.31f) * 0.5f + 0.5f;
+                float sheen = sinf((sx + zz) * 0.18f +
+                                   grid_ctx->anim_time * 0.35f) * 0.5f + 0.5f;
+                float alpha = (0.20f + frost * 0.20f + sheen * 0.05f) * edge;
+                grid_color(grid_ctx,
+                           0.60f + frost * 0.16f + sheen * 0.06f,
+                           0.72f + frost * 0.12f + sheen * 0.05f,
+                           0.86f + frost * 0.06f + sheen * 0.05f,
+                           alpha);
                 glVertex3f(sx, y, zz);
             }
         }
@@ -900,6 +1093,10 @@ static void grid_dispatch_theme(const SceneFrameRenderContext *frame_ctx,
             glFogi(GL_FOG_DISTANCE_MODE_NV, GL_EYE_RADIAL_NV);
 #endif
         scene_grid_render_ocean_theme(grid_ctx, frame_ctx, grid_ctx->breath);
+        break;
+
+    case GRID_THEME_FROZEN:
+        scene_grid_render_frozen_theme(grid_ctx, frame_ctx);
         break;
 
     case GRID_THEME_XZRULER:
