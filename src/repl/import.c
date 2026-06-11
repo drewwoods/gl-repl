@@ -284,6 +284,10 @@ static int parse_var(const char *args) {
 
 /* --- func aliases ---------------------------------------------------------- */
 
+/* Parse the `@func <slot> = <name>` workspace-header directive args and
+ * register the alias, so the later `static void <name>(...)` definition
+ * in the file body maps back to its funcN slot. Returns 1 when
+ * consumed, 0 on malformed args. */
 static int parse_func_alias(const char *args) {
     const char *p = args;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -413,6 +417,12 @@ static int import_parse_cam_line(const char *text) {
     return bridge->try_consume_import_line(text);
 }
 
+/* Recognize an exported file-scope global decl
+ * `[static] float a = 1, b = 2.5;` (the write_predef_var_globals
+ * output) and copy each initializer into the already-registered predef
+ * var of the same name. Declaration/registration itself happens via the
+ * `@var` / `@declare` directives — this only restores values. Returns 1
+ * when at least one var was updated. */
 static int import_parse_predef_decl(const char *line) {
     const char *p = line;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -903,6 +913,11 @@ static int import_make_repl_for_header(const char *line, char *out, int out_sz) 
     return 1;
 }
 
+/* C-to-REPL line translator: `static void funcN(float a, float b) {`
+ * (or an aliased name resolved via @func) back to `funcN(a, b) {`.
+ * `void` / empty parameter lists become the zero-arg `funcN {` form.
+ * Returns 1 with the REPL line in `out`, 0 if the line isn't an
+ * exported function header. */
 static int import_make_repl_func_header(const char *line, char *out, int out_sz) {
     const char *p = line;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -1026,6 +1041,14 @@ static void eval_tess_brace_floats(const char *start, int n, float *out) {
     }
 }
 
+/* C-to-REPL line translator for the exported tessellator scaffolding.
+ * Each independent matcher maps one exported C shape back to its REPL
+ * source line: the gluTessBegin/gluTessEnd calls to gluBegin/gluEnd,
+ * and the `{ _tn[...] }` / `{ _tc[...] }` / `_v->pos[...]` assignment
+ * blocks to gluNormal/gluColor/gluVertex. Expression args are recovered
+ * verbatim from the brace block when possible (preserving vars like
+ * `t`), else re-evaluated to literals; a default-opaque alpha collapses
+ * back to the 3-arg gluColor form. Returns 1 on a match. */
 static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
     const char *p = line;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -1111,6 +1134,12 @@ static int import_make_repl_tess_line(const char *line, char *out, int out_sz) {
     return 0;
 }
 
+/* C-to-REPL line translator: exported
+ * `glPointParameterfv(pname, (GLfloat[]){c, l, q})` (or the GLfloat4
+ * helper form) back to the REPL's flat 4-arg
+ * `glPointParameterfv(pname, c, l, q);` spelling, running each
+ * coefficient through the C-to-REPL expression converter. Returns 1 on
+ * a match. */
 static int import_make_repl_point_parameter_line(const char *line, char *out, int out_sz) {
     const char *p = line;
     const char *open;
@@ -1193,6 +1222,12 @@ static int import_make_repl_point_parameter_line(const char *line, char *out, in
                             pname, repl_args[0], repl_args[1], repl_args[2]);
 }
 
+/* C-to-REPL line translator: `glMaterialfv(face, pname, <values>)`
+ * where <values> is either a compound literal `(GLfloat[]){...}` or one
+ * of the exporter's GLfloat1/GLfloat4 helper calls. The face/pname
+ * tokens carry over verbatim; the 1 (GL_SHININESS) or 4 (RGBA) value
+ * expressions run through the C-to-REPL converter and re-emit in the
+ * canonical compound-literal form. Returns 1 on a match. */
 static int import_make_repl_materialfv_line(const char *line, char *out, int out_sz) {
     const char *p = line;
     const char *open;
@@ -1505,6 +1540,11 @@ static int import_comment_matches_marker(const char *comment,
     return *p == '\0';
 }
 
+/* 1 if the line is part of the exporter's C89 loop scaffolding — a
+ * bare `{` / `}` tagged with the loop-scope marker comment, or a
+ * `float i;  // <marker>` hoisted loop-variable decl — which exists
+ * only to keep exported files C89-compilable and must be dropped (not
+ * fed as source) on import. */
 static int import_is_c89_loop_marker_line(const char *p) {
     const char *comment;
     const char *q;

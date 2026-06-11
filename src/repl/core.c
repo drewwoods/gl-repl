@@ -330,6 +330,13 @@ static int repl_core_append_span(char *dst, int dst_sz, int *off,
     return 1;
 }
 
+/* Re-emit a `float a = expr, b;` declaration line as canonical text:
+ * `<indent>static float a = expr, b;` with single-space comma joins,
+ * initializer expressions preserved verbatim, and any trailing `// ...`
+ * comment re-attached. One left-to-right scan over the name list; every
+ * branch is either a token step or a reject — returns 0 on anything that
+ * isn't a well-formed decl (caller falls back to rebuilding the text from
+ * the parsed payload.decl names, dropping initializer text). */
 static int repl_core_format_var_decl_text(const char *orig_text,
                                           const char *indent,
                                           char *out, int out_sz) {
@@ -522,6 +529,15 @@ static void repl_core_replace_formatted_cmd(ReplCommandStore *store,
         source_document_replace_line(cmd_idx, text);
 }
 
+/* The Ctrl+\ whole-document reformatter: re-derive canonical text for
+ * every valid source command and write it back through the command
+ * store. One independent case per command family — block heads re-emit
+ * their header from parsed args (or the original expression text when
+ * has_vars), block ends re-align to their opening line's indent, and
+ * the default arm round-trips plain GL commands through
+ * repl_parse_and_normalize with the line's visible loop/param vars. A
+ * case that can't reconstruct the line leaves it untouched rather than
+ * guessing. */
 void repl_reformat_program(void) {
     prof_begin(PROF_REFORMAT);
     ReplCommandStore store = repl_command_store_live();

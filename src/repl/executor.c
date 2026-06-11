@@ -409,13 +409,6 @@ static const char *execution_flat_text(SourceTextView text,
     }
 }
 
-/* Walk flat_cmds[0..flat_cmd_count) and issue the corresponding GL
- * calls. Handles vertex submission, state changes, GLU quadrics and
- * tessellator commands, transforms, goto/label control flow, if-block
- * evaluation, and variable assignments.
- *
- * Replay and fade passes provide an explicit limit instead of temporarily
- * mutating repl_state_flat_program_count(). */
 /* Transform an object-space normal `n` to world space by the current
  * modelview `m` (column-major), via the inverse-transpose of its upper-left
  * 3x3, then normalize. Used by the .ply export to encode world-space normals
@@ -443,6 +436,13 @@ static void exec_normal_to_world(const float m[16], const float n[3],
     out[0] = ox; out[1] = oy; out[2] = oz;
 }
 
+/* Walk flat_cmds[0..flat_cmd_count) and issue the corresponding GL
+ * calls. Handles vertex submission, state changes, GLU quadrics and
+ * tessellator commands, transforms, goto/label control flow, if-block
+ * evaluation, and variable assignments.
+ *
+ * Replay and fade passes provide an explicit limit instead of temporarily
+ * mutating repl_state_flat_program_count(). */
 void repl_execute_program(const ReplExecutionOptions *options) {
     FlatProgramView program = execution_program_from_options(options);
     const GLCmd *flat_cmds = program.cmds;

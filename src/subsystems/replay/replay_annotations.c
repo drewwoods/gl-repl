@@ -172,6 +172,14 @@ static const char *replay_find_matching_square(const char *open) {
     return NULL;
 }
 
+/* Rewrite every scratch-array read in `source` to its simulated value
+ * at this replay step: each `A[idx]` becomes the numeric element value,
+ * with the index expression evaluated against the simulated runtime
+ * state (bracket-aware, so nested subscripts survive). An index that
+ * fails to evaluate or lands out of range copies through verbatim, as
+ * do all non-scratch identifiers. The caller passes only the RHS of a
+ * scratch assignment, which is what keeps the LHS target subscript
+ * unsubstituted in the displayed line. */
 static void replay_subst_scratch_reads(
     int flat_idx,
     const char *source,
@@ -576,6 +584,17 @@ static void replay_init_sim_state(float *vals, int max_vals,
     }
 }
 
+/* Re-derive the variable / scratch-array state the executor would hold
+ * just before flat pc `target_pc`, without touching GL or live state: a
+ * dry-run walk over the flat program from a baseline snapshot, applying
+ * only the state-mutating semantics — var assigns, scratch assigns,
+ * if-blocks (skipping false bodies), and goto jumps (with the same loop
+ * limit as the executor). Geometry/state commands are skipped over.
+ * This is what lets the paused-replay annotations show the values a
+ * command actually executed with, since the live predef table has long
+ * since moved on. `before_step` (optional) observes every visited pc,
+ * including ones inside skipped if-bodies. Returns 0 on bad args or a
+ * goto loop overrun, 1 otherwise. */
 static int replay_simulate_runtime_until(
     int target_pc,
     float *vals,

@@ -100,6 +100,14 @@ const char *glr_config_item_slug(const GlrConfigItem *item) {
     return slug_cache[item->key];
 }
 
+/* The key -> backing-storage map: where each config value actually
+ * lives (glr_state render/presentation fields, REPL state, replay /
+ * variable-panel peer state, UI panels). One arm per key, by design —
+ * this switch *is* the ownership declaration, and the compiler flags a
+ * new GlrConfigKey that forgot to claim a slot. NULL arms are values
+ * with no plain int slot (module-owned, lifecycle-driven, or pure
+ * action rows); glr_config_get / glr_config_set carry the matching
+ * special cases for those. */
 static int *config_value_ptr(GlrConfigKey key) {
     switch (key) {
     case GLR_CONFIG_MSAA:                return &glr_state_render_mut()->multisample_enabled;
@@ -146,6 +154,9 @@ static int *config_value_ptr(GlrConfigKey key) {
     }
 }
 
+/* Read-side twin of config_value_ptr, against the const state views
+ * (the pointer map above can't serve reads without granting mutable
+ * access). Keep the two switches' arms in sync when adding a key. */
 int glr_config_get(GlrConfigKey key) {
     if (key == GLR_CONFIG_AUDIO_MODE)
         return glr_audio_get_cfg_mode();
