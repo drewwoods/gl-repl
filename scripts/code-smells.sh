@@ -6,6 +6,9 @@ cd "$ROOT"
 
 OUT_DIR="${OUT_DIR:-build/code-smells}"
 SRC_DIR="${SRC_DIR:-src}"
+TEST_DIR="${TEST_DIR:-tests}"
+TOOLS_DIR="${TOOLS_DIR:-tools}"
+BENCH_DIR="${BENCH_DIR:-bench}"
 
 MIN_TOKENS="${MIN_TOKENS:-80}"
 
@@ -18,6 +21,7 @@ CLANG_TIDY_BIN="${CLANG_TIDY_BIN:-/opt/homebrew/opt/llvm/bin/clang-tidy}"
 CLANG_TIDY_CHECKS="${CLANG_TIDY_CHECKS:-readability-*,bugprone-*,misc-*,-readability-magic-numbers}"
 
 PMD_IMAGE="${PMD_IMAGE:-pmdcode/pmd:latest}"
+JOBS="${JOBS:-4}"
 
 RUN_ALL=0
 RUN_CLANGD=0
@@ -59,6 +63,7 @@ Other:
 Environment knobs:
   OUT_DIR            Output directory. Default: build/code-smells
   SRC_DIR            Source directory. Default: src
+  JOBS               Parallel jobs for clangd/clang-tidy. Default: 4
 
   CLANGD_BIN         clangd executable. Default: clangd
 
@@ -173,9 +178,12 @@ ensure_compile_commands() {
 
   if have bear; then
     say "compile_commands.json missing; generating with bear + stub build"
-    bear -- make gl-repl USE_GL_STUBS=1
-    [[ -f compile_commands.json ]]
-    return $?
+    # NOTE: We use make -B to force a full rebuild under bear so that it records all
+    # compiler flags, even if the build is already up-to-date. We build with GL stubs
+    # (-DGL_STUBS) so the scan can run on machines without real GL development headers.
+    bear -- make -B gl-repl USE_GL_STUBS=1 || true
+    [[ -f compile_commands.json ]] || return 1
+    return 0
   fi
 
   cat > "$OUT_DIR/compile_commands.missing.txt" <<EOF
@@ -228,11 +236,16 @@ EOF
     return 0
   fi
 
-  find "$SRC_DIR" -name '*.c' -print0 |
-    while IFS= read -r -d '' file; do
-      printf '%s\n' "--- $file ---" >> "$clangd_log"
-      "$CLANGD_BIN" --check="$file" >> "$clangd_log" 2>&1 || true
-    done
+  # Run clangd --check in parallel using xargs to speed up execution
+  { find "$SRC_DIR" -name '*.c' -print0; printf 'gl_repl.c\0'; } |
+    xargs -0 -P "$JOBS" -I {} sh -c '
+      file="$1"
+      tmpfile=$(mktemp)
+      printf -- "--- %s ---\n" "$file" > "$tmpfile"
+      "'"$CLANGD_BIN"'" --check="$file" >> "$tmpfile" 2>&1 || true
+      cat "$tmpfile"
+      rm -f "$tmpfile"
+    ' _ {} >> "$clangd_log"
 
   grep -E "warning:|error:" "$clangd_log" > "$clangd_diag" || true
 
@@ -278,15 +291,20 @@ EOF
     return 0
   fi
 
-  find "$SRC_DIR" -name '*.c' -print0 |
-    while IFS= read -r -d '' file; do
-      printf '%s\n' "--- $file ---" >> "$tidy_log"
-      "$CLANG_TIDY_BIN" \
+  # Run clang-tidy in parallel using xargs to speed up execution
+  { find "$SRC_DIR" -name '*.c' -print0; printf 'gl_repl.c\0'; } |
+    xargs -0 -P "$JOBS" -I {} sh -c '
+      file="$1"
+      tmpfile=$(mktemp)
+      printf -- "--- %s ---\n" "$file" > "$tmpfile"
+      "'"$CLANG_TIDY_BIN"'" \
         -p . \
-        --checks="$CLANG_TIDY_CHECKS" \
+        --checks="'"$CLANG_TIDY_CHECKS"'" \
         "$file" \
-        >> "$tidy_log" 2>&1 || true
-    done
+        >> "$tmpfile" 2>&1 || true
+      cat "$tmpfile"
+      rm -f "$tmpfile"
+    ' _ {} >> "$tidy_log"
 
   grep -E "warning:|error:" "$tidy_log" > "$tidy_diag" || true
 
@@ -341,14 +359,34 @@ run_cppcheck() {
   local cppcheck_log="$OUT_DIR/cppcheck.txt"
 
   if have cppcheck; then
+    # Prepend note explaining the glr_audio.c exclusion to prevent false-positive triaging
+    cat << 'EOF' > "$cppcheck_log"
+# NOTE: src/app/glr_audio.c is excluded from this scan to avoid parsing miniaudio.h (extremely slow).
+# Consequently:
+# 1. Functions defined in src/app/glr_audio.c are not analyzed.
+# 2. Functions only called by src/app/glr_audio.c may be falsely flagged as unused (unusedFunction).
+# Always verify unusedFunction findings against src/app/glr_audio.c before removing code.
+--------------------------------------------------------------------------------
+EOF
+
+    # NOTE: Do NOT add -j (parallel execution) here.
+    # cppcheck's unusedFunction check is incompatible with -j and will be silently
+    # disabled or cause an error if -j is used, losing the dead-code check.
     cppcheck \
+      --quiet \
       --enable=style,unusedFunction \
       --inline-suppr \
       --suppress=missingIncludeSystem \
-      -I. -Iinclude -Isrc \
+      -i src/app/glr_audio.c \
+      --suppress='*:*/miniaudio.h' \
+      -I. \
+      -Iinclude \
       "$SRC_DIR" \
-      "*.c" \
-      > "$cppcheck_log" 2>&1 || true
+      "$TEST_DIR" \
+      "$TOOLS_DIR" \
+      "$BENCH_DIR" \
+      "gl_repl.c" \
+      >> "$cppcheck_log" 2>&1 || true
 
     printf 'wrote %s\n' "$cppcheck_log"
   else
@@ -370,7 +408,7 @@ run_cpd() {
   local cpd_summary="$OUT_DIR/cpd-summary.txt"
 
   if have docker; then
-    docker run --rm -t \
+    docker run --rm \
       -v "$ROOT:/src" \
       -w /src \
       "$PMD_IMAGE" \
@@ -397,7 +435,7 @@ Install/start Docker, then rerun this script.
 
 Manual command:
 
-  docker run --rm -t \\
+  docker run --rm \\
     -v "\$PWD:/src" \\
     -w /src \\
     pmdcode/pmd:latest \\
@@ -413,6 +451,7 @@ run_churn() {
   local churn_log="$OUT_DIR/churn-size.txt"
 
   {
+    printf '# Note: churn counts since src/ reorg on 2026-05-23 (pre-reorg paths filtered out)\n'
     printf '%8s %8s %8s  %s\n' "churn" "lines" "score" "file"
 
     git log --format= --name-only -- "$SRC_DIR" |
