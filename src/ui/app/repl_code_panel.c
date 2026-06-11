@@ -782,6 +782,12 @@ typedef enum {
     MARKER_PRIORITY_TUTORIAL_INSERTION
 } MarkerPriority;
 
+/* Decorate one code-panel row with its background band (replay PC /
+ * line selection) and at most one left-edge marker. Every marker
+ * source is tested independently against the snapshot, and ties
+ * resolve through the MarkerPriority ladder above — a sequence of
+ * "claim if higher priority" checks rather than nested exclusions, so
+ * adding a marker kind is one enum entry plus one block here. */
 static void repl_code_panel_apply_command_overlays(ReplCodePanelBuilder *builder,
                                                    int line_idx,
                                                    UiTextPanelRow *row) {

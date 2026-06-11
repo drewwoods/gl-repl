@@ -26,6 +26,12 @@ void repl_canonical_input_view(const char *src,
 #define REPL_SOURCE_FLOAT_TEXT_MAX 32
 
 void repl_format_source_float(char *out, int out_sz, float v);
+
+/* Split a comma-separated identifier list (e.g. a func parameter list
+ * `float a, float b` with leading_keyword "float", or a bare `a, b`
+ * with leading_keyword NULL/"") into names[]. Returns the count, or -1
+ * on anything malformed (missing keyword, non-identifier token,
+ * overlong name, more than max_names). An empty list returns 0. */
 int  repl_parse_identifier_list(const char *src, const char *leading_keyword,
                                 char names[][REPL_PREDEF_NAME_MAX], int max_names);
 int  repl_parse_func_name_token(const char **p_inout, int *fn);
@@ -55,9 +61,18 @@ void repl_normalize_from_parsed(const char *parsed_source,
 int  repl_extract_paren_payload(const char *src, char *out, int out_sz);
 int  repl_extract_label_name(const char *src, char *name, int name_sz);
 int  repl_extract_goto_label(const char *src, char *name, int name_sz);
+/* Split a plain `name = rhs;` assignment. Thin wrapper over the
+ * _target_parts variant below that additionally rejects subscripted
+ * (scratch-array) targets. */
 int  repl_extract_assignment_parts(const char *src,
                                    char *name, int name_sz,
                                    char *rhs, int rhs_sz);
+/* Split `name[index] = rhs;  // comment` into target name, optional
+ * bracket index expression (empty string when the target is a plain
+ * var), and the rhs text (trailing comment, `;`, and whitespace
+ * stripped). Rejects `==` so comparisons don't read as assignments.
+ * Purely lexical: no evaluation, no state reads; any out buffer may be
+ * NULL to skip that part. Returns 1 on a well-formed assignment. */
 int  repl_extract_assignment_target_parts(const char *src,
                                           char *name, int name_sz,
                                           char *index_expr, int index_expr_sz,

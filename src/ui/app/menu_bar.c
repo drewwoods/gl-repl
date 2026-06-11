@@ -270,6 +270,12 @@ static int config_all_parent_row(void) {
     return glr_config_section_count();
 }
 
+/* Row label for dropdown row `i` of `menu_id` — the single label table
+ * every render/measure path reads. Static menus (File) are literal
+ * per-index returns; Scene / Tutorials / Config compute the label from
+ * their catalog row layout (tag rows, `### ` headers, `---` separators,
+ * trailing action rows), mirroring the index math in
+ * glr_action_menu_item_activate. NULL = past the end. */
 static const char *menu_item_label(int menu_id, int i) {
     if (menu_id == MENU_FILE) {
         if (i == GLR_FILE_ITEM_NEW_SCENE)     return "New Scene";
@@ -474,6 +480,13 @@ static struct {
     int x, y, w, h;
 } g_dropdown_cache;
 
+/* Geometry of the open menu's dropdown (GL coords, below the bar):
+ * width sized to the widest label + optional shortcut / submenu-arrow
+ * columns, height to the row count. Render, hover, and hit-test all
+ * call this every event, so the result is cached per
+ * (menu, window size); opening/closing a menu resets the cache, which
+ * also covers label changes (they only happen alongside a menu
+ * transition). Returns 0 when no menu is open. */
 static int menu_dropdown_rect(int *dx, int *dy, int *dw, int *dh) {
     int win_w, win_h;
     if (g_open_menu < 0) return 0;
@@ -797,6 +810,14 @@ static struct {
     int x, y, w, h;
 } g_submenu_cache;
 
+/* Geometry of the flyout hanging off `parent_row` of the open
+ * dropdown (GL coords). The branching is all placement policy: width
+ * from the widest row label, height clamped to the viewport (overflow
+ * rows scroll via g_submenu_scroll), x beside the dropdown but flipped
+ * to its left edge when it would run off-screen, y top-aligned with
+ * the parent row then clamped into the window. Cached per
+ * (menu_id, parent_row, window size) like menu_dropdown_rect.
+ * Returns 0 when the row has no flyout or the menu isn't open. */
 static int submenu_rect(int menu_id, int parent_row,
                         int *sx, int *sy, int *sw, int *sh) {
     int win_w = ui_state_viewport().window_w;

@@ -598,6 +598,11 @@ static int parse_canonical_float_list(const char *text, float *out_args, int max
     return repl_eval_parse_exprs(text, out_args, max_args, vars, num_vars);
 }
 
+/* glMaterialfv(face, pname, ...) — the one command whose value argument
+ * is an aggregate. Accepts the canonical compound-literal form
+ * `(GLfloat[]){r, g, b, a}` (1 element for GL_SHININESS, 4 for the RGBA
+ * pnames) or the flat shorthand `face, pname, r, g, b, a`, which is
+ * rewritten to the compound-literal form in the canonical text. */
 static int parse_materialfv(const char *args, GLCmd *cmd,
                             char *text_out, int text_sz,
                             const char *indent,
@@ -933,6 +938,25 @@ static int parse_matrix_stack_cmd(const char *func, GLCmd *cmd,
     return 0;
 }
 
+/* The REPL line parser: match one trimmed source line to a CmdType,
+ * evaluate its argument expressions, and emit the canonical line text.
+ * Deliberately one flat dispatcher — each command match is independent,
+ * so the high branch count is breadth, not depth. The order is:
+ *
+ *   1. trim + strip trailing ';'; empty line / `// comment` short-circuit
+ *   2. split `func(args)` and reject trailing garbage after the ')'
+ *   3. table-driven enum commands (glEnable, glDepthFunc, ...) via
+ *      try_parse_table_driven_enum_command
+ *   4. table-driven float-arg commands (k_std_command_specs)
+ *   5. hand-written matchers for the irregular forms: glEnd, label(),
+ *      glMaterialfv/f, glPointParameterfv, matrix stack, gluBegin/End/
+ *      Color, goto / :label
+ *   6. `unknown_command:` fallback — recognize a bare math expression
+ *      and suggest assigning it, else emit the per-context error
+ *
+ * On success the matched arm sets cmd->type/args/valid and writes the
+ * canonical text (indent derived from source scope); a trailing `// ...`
+ * comment from the input is re-attached at the single exit point. */
 static int parse_command(const char *line, GLCmd *cmd,
                          char *text_out, int text_sz,
                          const ReplParseContext *ctx) {
