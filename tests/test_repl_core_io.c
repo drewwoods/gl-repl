@@ -60,11 +60,12 @@ static void declare_test_vars(void) {
 }
 
 static size_t read_text_file(const char *path, char *buf, size_t buf_sz) {
+    if (buf_sz == 0)
+        return 0;
+
     FILE *f = fopen(path, "r");
     size_t nread = 0;
 
-    if (buf_sz == 0)
-        return 0;
     if (f) {
         nread = fread(buf, 1, buf_sz - 1, f);
         fclose(f);

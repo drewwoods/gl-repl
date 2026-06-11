@@ -35,6 +35,7 @@ static char *read_file(const char *path) {
 /* Return the text of the exported init() body (between "void init(void) {" and
  * the next line-start "}"). Heap-allocated; NULL if not found. */
 static char *extract_init_body(const char *c) {
+    if (!c) return NULL;
     const char *start = strstr(c, "void init(void) {");
     if (!start) return NULL;
     const char *end = strstr(start, "\n}\n");
@@ -48,6 +49,7 @@ static char *extract_init_body(const char *c) {
 }
 
 static int init_has(const char *c, const char *needle) {
+    if (!c) return 0;
     char *body = extract_init_body(c);
     int r = body && strstr(body, needle) != NULL;
     free(body);

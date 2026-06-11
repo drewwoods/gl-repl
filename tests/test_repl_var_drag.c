@@ -77,7 +77,7 @@ static void test_begin_invalid_rows_leave_drag_inactive(void) {
 }
 
 static void test_linear_motion_emits_request_without_mutation(void) {
-    VariablePanelValueChange change;
+    VariablePanelValueChange change = {0};
 
     glr_ctrl_reset_all();
     g_predef_vars_mut[0].value = 5.0f;
@@ -92,7 +92,7 @@ static void test_linear_motion_emits_request_without_mutation(void) {
 }
 
 static void test_log_motion_emits_request_without_mutation(void) {
-    VariablePanelValueChange change;
+    VariablePanelValueChange change = {0};
 
     glr_ctrl_reset_all();
     g_predef_vars_mut[0].value = 10.0f;
@@ -106,7 +106,7 @@ static void test_log_motion_emits_request_without_mutation(void) {
 }
 
 static void test_log_near_zero_bootstrap_emits_request(void) {
-    VariablePanelValueChange change;
+    VariablePanelValueChange change = {0};
 
     glr_ctrl_reset_all();
     g_predef_vars_mut[0].value = 1e-7f;
@@ -120,7 +120,7 @@ static void test_log_near_zero_bootstrap_emits_request(void) {
 }
 
 static void test_motion_without_active_drag_is_noop(void) {
-    VariablePanelValueChange change;
+    VariablePanelValueChange change = {0};
 
     glr_ctrl_reset_all();
     g_predef_vars_mut[0].value = 5.0f;
@@ -150,7 +150,7 @@ static void test_reset_clears_drag_state_and_undo_flag(void) {
 }
 
 static void test_request_uses_dragged_variable_name(void) {
-    VariablePanelValueChange change;
+    VariablePanelValueChange change = {0};
     int x_idx;
 
     glr_ctrl_reset_all();
@@ -167,7 +167,7 @@ static void test_request_uses_dragged_variable_name(void) {
 }
 
 static void test_sequential_drags_reanchor_to_new_start_value(void) {
-    VariablePanelValueChange change;
+    VariablePanelValueChange change = {0};
 
     glr_ctrl_reset_all();
 
