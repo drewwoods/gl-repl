@@ -518,7 +518,7 @@ HDRS = \
 	src/support/cpuprof.h \
 	gl_repl.h \
 	source_document.h \
-	src/scene/guides/transform_utils.h \
+	src/repl/transform_utils.h \
 	src/app/glr_actions.h \
 	src/app/glr_camera.h \
 	src/app/glr_completion.h \

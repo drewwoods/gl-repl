@@ -591,7 +591,7 @@ state-machine level, not buried in the doc body.
 | `src/scene/guides/geometry_guides.h` | Geometry guides render entrypoint |
 | `src/scene/guides/transform_guides.c` | Transform guide rendering (pending matrix ops during replay) |
 | `src/scene/guides/transform_guides.h` | Transform guides render entrypoint |
-| `src/scene/guides/transform_utils.h` | Header-only GL matrix helpers (`apply_tracked_transform`, `unwind_transform_stack`) mirroring executor transforms without requiring `src/repl/executor.h` |
+| `src/repl/transform_utils.h` | Header-only GL matrix helpers (`apply_tracked_transform`, `unwind_transform_stack`) mirroring executor transforms without requiring (or linking) `src/repl/executor.h`; shared by transform guides, edit overlays, and the replay walkers |
 | `src/scene/render.c` | 3D scene frame orchestration, one-shot init, scene config/frame prep, edit guides, orbit target, replay fade pass orchestration |
 | `src/scene/grid.c` | Grid theme rendering and custom focus/ocean/ruler/planes passes |
 | `src/scene/grid.h` | Grid render entrypoint |

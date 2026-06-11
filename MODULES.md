@@ -264,7 +264,7 @@ These are intentional and must not be "fixed" by a future sweep:
   `TessVertex`, `FlatCmdLocalVars`, `FlatProgramView`,
   `CmdSyntaxCategory`, and the `cmd_type_name` thin alias.
 - **REPL formatting**: `src/repl/format.h` `ReplFmt*`/`repl_format_*`
-- **Root neutral helpers**: `src/ui/core/gl_2d.h` `gl2d_*`, `src/scene/guides/transform_utils.h`
+- **Root neutral helpers**: `src/ui/core/gl_2d.h` `gl2d_*`, `src/repl/transform_utils.h`
   `apply_tracked_transform` / `unwind_transform_stack`, and
   `src/ui/core/text_layout.h` `CodeLayout` / `CodeWrapIter` /
   `code_layout_*` (a pure utility shared by UI, export dumps, tests).
@@ -477,7 +477,7 @@ never read `ReplState`, `EditorState`, or `UiState` directly.
 | `src/scene/guides/geometry_guides.c` | Vertex/primitive guide rendering from a `SceneGuideSnapshot`. The controller fills the snapshot's cursor args from the flat program (funcN-local resolution) before calling in — see CLAUDE.md "Cursor Edit Guides" |
 | `src/scene/guides/transform_guides.c` | Transform-guide rendering from a `SceneGuideSnapshot` (REPL-aware) |
 | `glr_camera` | Camera/view transform helpers — orbit/pan/zoom drag state machine. `glr_ctrl_router_handle_camera_mouse` drives input; scene consumes final camera state through `SceneRenderConfig`. (Future `scene_camera_controls` move is still possible if the scene/viewport split lands.) |
-| `transform_utils` | Header-only GL matrix helpers (`src/scene/guides/transform_utils.h`). Consumed by `src/app/glr_ctrl.c` and `src/scene/guides/transform_guides.c` |
+| `transform_utils` | Header-only GL matrix helpers (`src/repl/transform_utils.h`). Consumed by `src/scene/guides/transform_guides.c`, `src/subsystems/edit_overlays/edit_overlays.c`, and `src/subsystems/replay/replay.c` |
 | `guides_shared` | Shared guide snapshot/planning types for REPL-aware 3D overlays (`src/scene/guides/guides_shared.h`, paired with the guides modules) |
 
 Scene code renders. It does not parse, edit, save, or dispatch UI actions.
