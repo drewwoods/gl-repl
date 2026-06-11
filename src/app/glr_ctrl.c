@@ -868,6 +868,7 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, SceneRende
     config->use_accum = render.use_accum;
     config->accum_effect = render.accum_effect;
     config->accum_passes = render.accum_passes;
+    config->use_accum_aa_scissors = CFG_DEFAULT_USE_ACCUM_AA_SCISSORS;
     /* Blur sub-frame hook is resolved per frame in glr_ctrl_display_frame
      * (it needs the captured current camera pose); default to no hook so
      * effect==BLUR degrades to the AA jitter path until wired. */
