@@ -407,8 +407,25 @@ static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
     scene_backdrop_pop_state();
 }
 
-static void draw_starry_sky(
-    float anim_time,
+/* Shared GL-state preamble for the point-based sky domes (starry sky,
+ * sunset). Pushes backdrop state, sets up unlit blended point-smooth
+ * rendering, then:
+ *
+ * - Overrides prior point attenuation with identity so dome stars
+ *   render at fixed sizes (the per-band glPointSize values) regardless
+ *   of camera distance. The init bootstrap sets a non-identity
+ *   quadratic default (1/distance footprint scaling) for normal scene
+ *   point rendering; without this override stars would attenuate
+ *   noticeably across the STAR_SKY_RADIUS dome. Gated on the runtime
+ *   capability + loaded proc the controller mirrored into the config —
+ *   unsupported contexts can't have run the init-bootstrap call either,
+ *   so the GL default (identity) is already in effect and no reset is
+ *   needed.
+ * - Strips the camera translation from the modelview (under a
+ *   glPushMatrix) so the sky follows rotation only — no zoom pop.
+ *
+ * Pair every call with backdrop_end_sky_point_state(). */
+static void backdrop_begin_sky_point_state(
     int point_parameter_supported,
     void (APIENTRY *point_parameter_proc)(GLenum pname, const GLfloat *params)) {
     scene_backdrop_push_state();
@@ -420,19 +437,10 @@ static void draw_starry_sky(
     glEnable(GL_POINT_SMOOTH);
     glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
     glDisable(GL_FOG);
-    /* Override prior point attenuation with identity so stars render at
-     * fixed sizes (the per-band glPointSize values below) regardless of
-     * camera distance. The init bootstrap sets a non-identity quadratic
-     * default (1/distance footprint scaling) for normal scene point rendering;
-     * without this override stars would attenuate noticeably across the
-     * STAR_SKY_RADIUS dome. Gated on the runtime capability + loaded
-     * proc the controller mirrored into the config — unsupported
-     * contexts can't have run the init-bootstrap call either, so the GL
-     * default (identity) is already in effect and no reset is needed. */
+
     if (point_parameter_supported && point_parameter_proc)
         point_parameter_proc(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){1, 0, 0});
 
-    /* Strip camera translation so stars follow rotation only (no zoom pop). */
     glMatrixMode(GL_MODELVIEW);
     glPushMatrix();
     {
@@ -441,6 +449,19 @@ static void draw_starry_sky(
         mv[12] = 0.0f; mv[13] = 0.0f; mv[14] = 0.0f;
         glLoadMatrixf(mv);
     }
+}
+
+static void backdrop_end_sky_point_state(void) {
+    glPopMatrix();
+    scene_backdrop_pop_state();
+}
+
+static void draw_starry_sky(
+    float anim_time,
+    int point_parameter_supported,
+    void (APIENTRY *point_parameter_proc)(GLenum pname, const GLfloat *params)) {
+    backdrop_begin_sky_point_state(point_parameter_supported,
+                                   point_parameter_proc);
 
     /* Four point-size bands; cumulative cutoffs are the STAR_BAND_CUT_* above. */
     static const float band_sizes[4] = { 1.5f, 2.0f, 3.0f, 4.5f };
@@ -508,8 +529,7 @@ static void draw_starry_sky(
         glEnd();
     }
 
-    glPopMatrix();
-    scene_backdrop_pop_state();
+    backdrop_end_sky_point_state();
 }
 
 /* Piecewise-linear vertical sky gradient for the sunset dome. h is
@@ -706,36 +726,14 @@ static void draw_sunset(
     float anim_time,
     int point_parameter_supported,
     void (APIENTRY *point_parameter_proc)(GLenum pname, const GLfloat *params)) {
-    scene_backdrop_push_state();
-    glDisable(GL_LIGHTING);
-    glEnable(GL_DEPTH_TEST);
-    glDepthMask(GL_FALSE);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_POINT_SMOOTH);
-    glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
-    glDisable(GL_FOG);
-    /* Same fixed-size star rationale as draw_starry_sky: identity
-     * attenuation so the dome stars keep their band sizes. */
-    if (point_parameter_supported && point_parameter_proc)
-        point_parameter_proc(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){1, 0, 0});
-
-    /* Strip camera translation so the sky follows rotation only. */
-    glMatrixMode(GL_MODELVIEW);
-    glPushMatrix();
-    {
-        GLfloat mv[16];
-        glGetFloatv(GL_MODELVIEW_MATRIX, mv);
-        mv[12] = 0.0f; mv[13] = 0.0f; mv[14] = 0.0f;
-        glLoadMatrixf(mv);
-    }
+    backdrop_begin_sky_point_state(point_parameter_supported,
+                                   point_parameter_proc);
 
     draw_sunset_sky_dome();
     draw_sunset_stars(anim_time);
     draw_sunset_sun(anim_time);
 
-    glPopMatrix();
-    scene_backdrop_pop_state();
+    backdrop_end_sky_point_state();
 }
 
 static void draw_aurora(float anim_time, float alpha_scale, float extent) {
