@@ -31,6 +31,7 @@ RUN_CPPCHECK=0
 RUN_CPD=0
 RUN_CHURN=0
 ENSURE_COMPILE_DB=1
+CPD_STATUS=""
 
 say() {
   printf '\n==> %s\n' "$*"
@@ -402,12 +403,21 @@ EOF
 }
 
 run_cpd() {
-  say "PMD CPD duplication scan via Docker"
-
   local cpd_log="$OUT_DIR/cpd.txt"
   local cpd_summary="$OUT_DIR/cpd-summary.txt"
 
-  if have docker; then
+  if have pmd; then
+    say "PMD CPD duplication scan (local)"
+    pmd cpd \
+      --minimum-tokens "$MIN_TOKENS" \
+      --language cpp \
+      --dir "$SRC_DIR" \
+      --format text \
+      > "$cpd_log" 2>&1 || true
+
+    CPD_STATUS="ok"
+  elif have docker && docker info >/dev/null 2>&1; then
+    say "PMD CPD duplication scan (Docker)"
     docker run --rm \
       -v "$ROOT:/src" \
       -w /src \
@@ -419,6 +429,33 @@ run_cpd() {
         --format text \
       > "$cpd_log" 2>&1 || true
 
+    CPD_STATUS="ok"
+  else
+    say "PMD CPD duplication scan"
+    cat > "$cpd_log" <<EOF
+PMD CPD could not be run.
+
+To run CPD, please do one of the following:
+
+1. Install PMD locally (so that the 'pmd' command is available in your PATH):
+   On macOS:
+     brew install pmd
+   Or download from https://pmd.github.io/
+
+2. Start the Docker daemon (if Docker is installed but not running).
+
+Manual command (Docker):
+  docker run --rm \\
+    -v "\$PWD:/src" \\
+    -w /src \\
+    pmdcode/pmd:latest \\
+    cpd --minimum-tokens 80 --language cpp --dir src
+EOF
+    printf 'skipping PMD CPD; see %s\n' "$cpd_log"
+    CPD_STATUS="skipped"
+  fi
+
+  if [[ "$CPD_STATUS" = "ok" ]]; then
     {
       printf 'minimum tokens: %s\n' "$MIN_TOKENS"
       printf 'duplication blocks: '
@@ -428,20 +465,7 @@ run_cpd() {
     printf 'wrote %s\n' "$cpd_log"
     cat "$cpd_summary"
   else
-    cat > "$cpd_log" <<EOF
-docker not found.
-
-Install/start Docker, then rerun this script.
-
-Manual command:
-
-  docker run --rm \\
-    -v "\$PWD:/src" \\
-    -w /src \\
-    pmdcode/pmd:latest \\
-    cpd --minimum-tokens 80 --language cpp --dir src
-EOF
-    printf 'skipping PMD CPD; see %s\n' "$cpd_log"
+    : > "$cpd_summary"
   fi
 }
 
@@ -507,7 +531,11 @@ print_summary() {
 
   if [[ "$RUN_CPD" -eq 1 && -f "$OUT_DIR/cpd.txt" ]]; then
     printf '  CPD blocks:              '
-    grep -c '^Found a' "$OUT_DIR/cpd.txt" || true
+    if [[ "$CPD_STATUS" = "skipped" ]]; then
+      printf 'skipped (pmd/docker missing or daemon not running)\n'
+    else
+      grep -c '^Found a' "$OUT_DIR/cpd.txt" || true
+    fi
   fi
 
   printf '\nDone.\n'
