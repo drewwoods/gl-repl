@@ -334,6 +334,24 @@ static inline void glNormal3f(GLfloat nx, GLfloat ny, GLfloat nz) { GL_STUB_TRAC
 static inline void glTexCoord3f(GLfloat s, GLfloat t, GLfloat r) { GL_STUB_TRACE_LINE("glTexCoord3f %g %g %g\n", (double)s, (double)t, (double)r); gl_stub_tick(GL_STUB_glTexCoord3f); }
 static inline void glPassThrough(GLfloat token) { GL_STUB_TRACE_LINE("glPassThrough %g\n", (double)token); gl_stub_tick(GL_STUB_glPassThrough); }
 static inline void glPointParameterfv(GLenum pname, const GLfloat *params) { GL_STUB_TRACE_LINE("glPointParameterfv %u\n", (unsigned)pname); gl_stub_tick(GL_STUB_glPointParameterfv); (void)params; }
+/* Timer-query entry points (GL 1.5 occlusion-query API + GL_EXT_timer_query's
+ * 64-bit getter), consumed only through the runtime-loaded GPU-profiler path
+ * (src/support/gpuprof.c via glutGetProcAddress) — never called directly by
+ * app code, so they don't tick gl_stub counters. glGenQueries hands out ids
+ * (callers key results on them); the getters write 0 so a stub "GPU result"
+ * is never available and gpuprof simply reports no data. */
+#define GL_QUERY_RESULT            0x8866
+#define GL_QUERY_RESULT_AVAILABLE  0x8867
+#define GL_TIME_ELAPSED_EXT        0x88BF
+#define GL_TIMESTAMP               0x8E28
+typedef unsigned long long GLuint64EXT;
+static inline void glGenQueries(GLsizei n, GLuint *ids) { GLsizei i; for (i = 0; i < n; i++) ids[i] = (GLuint)(i + 1); }
+static inline void glDeleteQueries(GLsizei n, const GLuint *ids) { (void)n; (void)ids; }
+static inline void glBeginQuery(GLenum target, GLuint id) { (void)target; (void)id; }
+static inline void glEndQuery(GLenum target) { (void)target; }
+static inline void glQueryCounter(GLuint id, GLenum target) { (void)id; (void)target; }
+static inline void glGetQueryObjectiv(GLuint id, GLenum pname, GLint *params) { (void)id; (void)pname; if (params) *params = 0; }
+static inline void glGetQueryObjectui64vEXT(GLuint id, GLenum pname, GLuint64EXT *params) { (void)id; (void)pname; if (params) *params = 0; }
 static inline void glPointSize(GLfloat size) { GL_STUB_TRACE_LINE("glPointSize %g\n", (double)size); gl_stub_tick(GL_STUB_glPointSize); }
 static inline void glPolygonMode(GLenum face, GLenum mode) { GL_STUB_TRACE_LINE("glPolygonMode %u %u\n", (unsigned)face, (unsigned)mode); gl_stub_tick(GL_STUB_glPolygonMode); }
 static inline void glPolygonOffset(GLfloat factor, GLfloat units) { GL_STUB_TRACE_LINE("glPolygonOffset %g %g\n", (double)factor, (double)units); gl_stub_tick(GL_STUB_glPolygonOffset); }

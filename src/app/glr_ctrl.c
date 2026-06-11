@@ -42,6 +42,8 @@
 #include "keys.h"
 #include "support/memprof.h"
 #include "support/cpuprof.h"
+#include "support/gpuprof.h"
+#include "app/glr_prof.h"
 #include "repl/core.h"
 #include "repl/examples.h"          /* REPL_EXAMPLE_TAG_* */
 #include "repl/eval.h"
@@ -169,6 +171,63 @@ glr_ctrl_load_point_parameter_proc(int has_core, int has_arb, int has_ext) {
         return g_glr_ctrl_point_parameter_loader("glPointParameterfv");
     return NULL;
 }
+
+/* Resolve the GL timer-query entry points for gpuprof. Same split as the
+ * point-parameter loader above: the Apple system-GLUT fallback build takes
+ * the framework symbols directly (Apple GLUT has no glutGetProcAddress);
+ * everywhere else (vendored freeglut Cocoa = dlsym on the OpenGL framework,
+ * Linux = glXGetProcAddress, OSMesa = OSMesaGetProcAddress) resolves at
+ * runtime, trying the core GL 1.5 name then the ARB/EXT suffix. Missing
+ * entries come back NULL and gpu_prof_init rejects the table.
+ *
+ * has_timestamp gates the optional glQueryCounter slot (GL_ARB_timer_query
+ * / GL 3.3 only — never advertised by EXT_timer_query, so e.g. Apple's GL
+ * 2.1 stays in elapsed mode). It must be capability-gated rather than
+ * load-and-see: GLX's GetProcAddress can return a callable stub for any
+ * name, supported or not. */
+#if defined(__APPLE__) && defined(USE_GLUT)
+static GpuProfGlFns glr_ctrl_load_gpu_prof_fns(int has_timestamp) {
+    GpuProfGlFns fns;
+    (void)has_timestamp;  /* Apple GL 2.1: no glQueryCounter symbol exists */
+    fns.gen_queries     = (void (*)(int, unsigned *))&glGenQueries;
+    fns.delete_queries  = (void (*)(int, const unsigned *))&glDeleteQueries;
+    fns.begin_query     = (void (*)(unsigned, unsigned))&glBeginQuery;
+    fns.end_query       = (void (*)(unsigned))&glEndQuery;
+    fns.get_query_iv    = (void (*)(unsigned, unsigned, int *))&glGetQueryObjectiv;
+    fns.get_query_ui64v =
+        (void (*)(unsigned, unsigned, GpuProfU64 *))&glGetQueryObjectui64vEXT;
+    fns.query_counter   = NULL;
+    return fns;
+}
+#else
+static GLUTproc glr_ctrl_gpu_prof_proc(const char *name, const char *alt_name) {
+    GLUTproc proc = glutGetProcAddress(name);
+    if (!proc && alt_name)
+        proc = glutGetProcAddress(alt_name);
+    return proc;
+}
+
+static GpuProfGlFns glr_ctrl_load_gpu_prof_fns(int has_timestamp) {
+    GpuProfGlFns fns;
+    fns.gen_queries     = (void (*)(int, unsigned *))
+        glr_ctrl_gpu_prof_proc("glGenQueries", "glGenQueriesARB");
+    fns.delete_queries  = (void (*)(int, const unsigned *))
+        glr_ctrl_gpu_prof_proc("glDeleteQueries", "glDeleteQueriesARB");
+    fns.begin_query     = (void (*)(unsigned, unsigned))
+        glr_ctrl_gpu_prof_proc("glBeginQuery", "glBeginQueryARB");
+    fns.end_query       = (void (*)(unsigned))
+        glr_ctrl_gpu_prof_proc("glEndQuery", "glEndQueryARB");
+    fns.get_query_iv    = (void (*)(unsigned, unsigned, int *))
+        glr_ctrl_gpu_prof_proc("glGetQueryObjectiv", "glGetQueryObjectivARB");
+    fns.get_query_ui64v = (void (*)(unsigned, unsigned, GpuProfU64 *))
+        glr_ctrl_gpu_prof_proc("glGetQueryObjectui64vEXT", "glGetQueryObjectui64v");
+    fns.query_counter   = has_timestamp
+        ? (void (*)(unsigned, unsigned))
+              glr_ctrl_gpu_prof_proc("glQueryCounter", NULL)
+        : NULL;
+    return fns;
+}
+#endif
 
 /* Non-static: the input router (src/app/glr_ctrl_router.c) reads this cached
  * snapshot for drag hit-testing. Declared in glr_ctrl_internal.h. */
@@ -1472,6 +1531,21 @@ void glr_ctrl_display_frame(void) {
 
     prof_frame_tick();
     memprof_frame_tick();
+    /* Dial GPU timer-query capture to what the profile panel can show this
+     * frame (hidden -> none, ON -> top-level rows, DETAILS -> everything):
+     * query boundaries aren't free, so don't issue ones nobody can see.
+     * Then open the frame's query slot — this must precede the first
+     * prof_begin of a GPU-bracketed section (FRAME_TOTAL, next line).
+     * Both no-op while gpu_prof is disabled. */
+    {
+        UiProfilePanelMode prof_mode =
+            (UiProfilePanelMode)ui_state_profile_panel().mode;
+        glr_prof_set_gpu_capture_mode(
+            prof_mode == PROFILE_PANEL_OFF ? GLR_PROF_GPU_CAPTURE_OFF
+            : prof_mode == PROFILE_PANEL_DETAILS ? GLR_PROF_GPU_CAPTURE_ALL
+                                                 : GLR_PROF_GPU_CAPTURE_TOP_LEVEL);
+    }
+    gpu_prof_frame_begin();
     prof_begin(PROF_FRAME_TOTAL);
 
     if (repl_state_normals_dirty()) {
@@ -2264,6 +2338,49 @@ void glr_ctrl_init_gl(void) {
         }
     }
     repl_executor_set_point_parameter_supported(point_param_ok);
+
+    /* GPU timer-query profiling (GL_EXT_timer_query / GL_ARB_timer_query /
+     * GL 3.3+). Feeds the profile panel's GPU column: GL_TIME_ELAPSED
+     * queries bracket the GPU-relevant prof sections (table in
+     * src/app/glr_prof.c, routed through the cpuprof section hooks) with
+     * results read back asynchronously a few frames later — never a
+     * glFinish. Unsupported context or GLR_NO_GPU_PROF=1 (any non-empty
+     * value) leaves gpu_prof disabled and the panel column reads "--". */
+    {
+        const char *no_gpu_prof = getenv("GLR_NO_GPU_PROF");
+        int gpu_prof_forced_off = (no_gpu_prof && no_gpu_prof[0]) ? 1 : 0;
+        /* Timestamp capability (additive interval mode) is strictly ARB /
+         * GL 3.3+; plain GL_EXT_timer_query contexts (Apple GL 2.1) only
+         * get elapsed-bracket mode. */
+        int gpu_timer_has_timestamp =
+            glutExtensionSupported("GL_ARB_timer_query") ||
+            (gl_major > 3 || (gl_major == 3 && gl_minor >= 3));
+        int gpu_timer_advertised =
+            gpu_timer_has_timestamp ||
+            glutExtensionSupported("GL_EXT_timer_query");
+        int gpu_prof_on = 0;
+        if (!gpu_prof_forced_off && gpu_timer_advertised) {
+            GpuProfGlFns gpu_fns =
+                glr_ctrl_load_gpu_prof_fns(gpu_timer_has_timestamp);
+            gpu_prof_on = gpu_prof_init(&gpu_fns);
+        }
+        if (gpu_prof_on) {
+            glr_prof_install_gpu_section_hooks();
+        } else {
+            /* Re-init safety (tests call init_gl repeatedly): make sure no
+             * stale hooks fire into a now-disabled gpu_prof. */
+            prof_install_section_hooks(NULL, NULL);
+            gpu_prof_shutdown();
+            fprintf(stderr,
+                "[gl-repl] GPU profile timing disabled (%s); the profile "
+                "panel's GPU column will read \"--\".\n",
+                gpu_prof_forced_off
+                    ? "GLR_NO_GPU_PROF set"
+                    : gpu_timer_advertised
+                        ? "timer-query entry points not loadable"
+                        : "no GL_EXT/ARB_timer_query support");
+        }
+    }
 
     /* Scoped radial fog (GL_NV_fog_distance). The city backdrop and the
      * ocean/radar grid themes draw distance fog over geometry that wraps

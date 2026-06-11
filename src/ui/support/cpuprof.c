@@ -1,10 +1,16 @@
 /*
- * ui_cpuprof.c - per-section wall-time profiling overlay panel.
+ * ui_cpuprof.c - per-section profiling overlay panel.
+ *
+ * Three time columns per section, all EMAs: CPU (wall time from
+ * support/cpuprof), GPU (timer-query elapsed time from support/gpuprof;
+ * "--" for sections that are CPU-only or when GPU timing is unavailable),
+ * and Max (the worse of the two — the binding cost for the section).
  */
 #include "ui/support/cpuprof.h"
 #include "ui/core/gl_2d.h"
 #include "ui/core/theme.h"
 #include "support/cpuprof.h"
+#include "support/gpuprof.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -29,7 +35,7 @@ static const float k_prof_dim[3]   = { 0.30f, 0.30f, 0.38f };
 #define PROF_HEADER_H        20
 #define PROF_BOTTOM_PAD      14
 #define PROF_COL_LABEL_W    150
-#define PROF_COL_LAST_W      72
+#define PROF_COL_VAL_W       72
 
 /* Visual indentation per nesting level. Labels arrive un-indented; the panel
  * offsets each row by depth * this, so prof_section_info()'s explicit depth is
@@ -150,20 +156,22 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
 
     /* Title */
     ui_clr(UI_TOK_TEXT_PRIMARY);
-    gl2d_draw_string((float)tx, (float)ty, "CPU Profile", FONT_SMALL);
+    gl2d_draw_string((float)tx, (float)ty, "CPU / GPU Profile", FONT_SMALL);
     ui_clr(UI_TOK_TEXT_MUTED);
     gl2d_draw_string((float)(panel_x + PROF_PANEL_W - hint_width), (float)ty, HINT, FONT_SMALL);
 
     ty -= PROF_HEADER_H;
 
     /* Column headings */
-    int col_last = tx + PROF_COL_LABEL_W;
-    int col_avg  = col_last + PROF_COL_LAST_W;
+    int col_cpu = tx + PROF_COL_LABEL_W;
+    int col_gpu = col_cpu + PROF_COL_VAL_W;
+    int col_max = col_gpu + PROF_COL_VAL_W;
 
     ui_clr(UI_TOK_TEXT_SECTION);
-    gl2d_draw_string((float)tx,        (float)ty, "Section",  FONT_SMALL);
-    gl2d_draw_string((float)col_last,  (float)ty, "Last",     FONT_SMALL);
-    gl2d_draw_string((float)col_avg,   (float)ty, "Avg",      FONT_SMALL);
+    gl2d_draw_string((float)tx,       (float)ty, "Section",  FONT_SMALL);
+    gl2d_draw_string((float)col_cpu,  (float)ty, "CPU",      FONT_SMALL);
+    gl2d_draw_string((float)col_gpu,  (float)ty, "GPU",      FONT_SMALL);
+    gl2d_draw_string((float)col_max,  (float)ty, "Max",      FONT_SMALL);
     ty -= 2;
 
     /* Thin rule under headings */
@@ -197,12 +205,13 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
             glDisable(GL_BLEND);
         }
 
-        int stale = prof_section_is_stale(s);
+        int cpu_ok = !prof_section_is_stale(s);
+        int gpu_ok = gpu_prof_section_has_data(s);
 
         /* Label */
         if (info.is_total)
             ui_clr(UI_TOK_TEXT_PRIMARY);
-        else if (stale)
+        else if (!cpu_ok && !gpu_ok)
             glColor3fv(k_prof_stale);
         else if (info.depth > 0)
             ui_clr(UI_TOK_TEXT_SECTION);
@@ -212,22 +221,46 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
         gl2d_draw_string((float)(tx + info.depth * PROF_INDENT_W),
                          (float)ty, info.label, FONT_SMALL);
 
-        /* Last / avg values */
-        char last_buf[24], avg_buf[24];
-        if (stale) {
-            snprintf(last_buf, sizeof(last_buf), "--");
-            snprintf(avg_buf,  sizeof(avg_buf),  "--");
-            glColor3fv(k_prof_dim);
-            gl2d_draw_string((float)col_last, (float)ty, last_buf, FONT_SMALL);
-            gl2d_draw_string((float)col_avg,  (float)ty, avg_buf,  FONT_SMALL);
+        /* CPU / GPU / Max values — all smoothed averages. */
+        double cpu_us = prof_section_avg_us(s);
+        double gpu_us = gpu_prof_section_avg_us(s);
+        char val_buf[24];
+
+        if (cpu_ok) {
+            fmt_us(val_buf, (int)sizeof(val_buf), cpu_us);
+            set_time_color(info.is_total, cpu_us);
         } else {
-            fmt_us(last_buf, (int)sizeof(last_buf), prof_section_last_us(s));
-            fmt_us(avg_buf,  (int)sizeof(avg_buf),  prof_section_avg_us(s));
-            set_time_color(info.is_total, prof_section_last_us(s));
-            gl2d_draw_string((float)col_last, (float)ty, last_buf, FONT_SMALL);
-            set_time_color(info.is_total, prof_section_avg_us(s));
-            gl2d_draw_string((float)col_avg,  (float)ty, avg_buf,  FONT_SMALL);
+            snprintf(val_buf, sizeof(val_buf), "--");
+            glColor3fv(k_prof_dim);
         }
+        gl2d_draw_string((float)col_cpu, (float)ty, val_buf, FONT_SMALL);
+
+        if (gpu_ok) {
+            fmt_us(val_buf, (int)sizeof(val_buf), gpu_us);
+            set_time_color(info.is_total, gpu_us);
+        } else {
+            snprintf(val_buf, sizeof(val_buf), "--");
+            glColor3fv(k_prof_dim);
+        }
+        gl2d_draw_string((float)col_gpu, (float)ty, val_buf, FONT_SMALL);
+
+        /* NOTE: Max takes the worse of the two independently-smoothed EMAs
+         * (and the GPU EMA runs 1-3 frames behind the CPU one, since query
+         * results are harvested asynchronously), not the average of paired
+         * per-frame worst cases — pairing each CPU sample with its GPU twin
+         * would mean holding samples back until the query resolves, for a
+         * distinction that only shows when CPU and GPU spikes anti-correlate
+         * frame-to-frame. Not strictly correct, close enough for a HUD. */
+        if (cpu_ok || gpu_ok) {
+            double max_us = cpu_ok ? cpu_us : 0.0;
+            if (gpu_ok && gpu_us > max_us) max_us = gpu_us;
+            fmt_us(val_buf, (int)sizeof(val_buf), max_us);
+            set_time_color(info.is_total, max_us);
+        } else {
+            snprintf(val_buf, sizeof(val_buf), "--");
+            glColor3fv(k_prof_dim);
+        }
+        gl2d_draw_string((float)col_max, (float)ty, val_buf, FONT_SMALL);
 
         ty -= PROF_ROW_H;
     }

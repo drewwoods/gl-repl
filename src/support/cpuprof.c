@@ -33,6 +33,9 @@ static int    g_prof_stale[PROF_SECTION_COUNT];    /* frames since last sample *
 static double g_prof_accum_pending[PROF_SECTION_COUNT]; /* running total for accum-commit */
 static int    g_prof_initialized = 0;
 
+static ProfSectionHookFn g_prof_begin_hook = 0;
+static ProfSectionHookFn g_prof_end_hook   = 0;
+
 /* ========================================================================= */
 /* Helpers                                                                    */
 /* ========================================================================= */
@@ -74,9 +77,18 @@ static void init_if_needed(void) {
 /* Public API                                                                 */
 /* ========================================================================= */
 
+void prof_install_section_hooks(ProfSectionHookFn begin_hook,
+                                ProfSectionHookFn end_hook) {
+    g_prof_begin_hook = begin_hook;
+    g_prof_end_hook   = end_hook;
+}
+
 void prof_begin(ProfSection s) {
     if (s < 0 || s >= PROF_SECTION_COUNT) return;
     init_if_needed();
+    /* Hook fires before the clock read so its cost (e.g. issuing a GPU
+     * timer query) is excluded from this section's CPU time. */
+    if (g_prof_begin_hook) g_prof_begin_hook(s);
     g_prof_start[s] = prof_now_us();
 }
 
@@ -86,6 +98,7 @@ void prof_end(ProfSection s) {
 
     double elapsed = prof_now_us() - g_prof_start[s];
     if (elapsed < 0.0) elapsed = 0.0;
+    if (g_prof_end_hook) g_prof_end_hook(s);
 
     g_prof_last_us[s] = elapsed;
     g_prof_stale[s]   = 0;
@@ -108,6 +121,7 @@ void prof_accum_end(ProfSection s) {
     init_if_needed();
     double elapsed = prof_now_us() - g_prof_start[s];
     if (elapsed < 0.0) elapsed = 0.0;
+    if (g_prof_end_hook) g_prof_end_hook(s);
     g_prof_accum_pending[s] += elapsed;
     g_prof_stale[s] = 0;
 }

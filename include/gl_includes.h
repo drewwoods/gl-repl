@@ -11,6 +11,7 @@
 
 #if defined(__APPLE__) && defined(USE_GLUT)
     #include <OpenGL/gl.h>
+    #include <OpenGL/glext.h>   /* glGetQueryObjectui64vEXT (GPU profiler) */
     #include <OpenGL/glu.h>
     #include <GLUT/glut.h>
 #else

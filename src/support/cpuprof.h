@@ -53,6 +53,18 @@ ProfSectionInfo prof_section_info(ProfSection s);
 void prof_begin(ProfSection s);
 void prof_end(ProfSection s);
 
+/* Optional per-section begin/end hooks, fired from prof_begin (before the
+ * clock is read) and prof_end / prof_accum_end (after the elapsed time is
+ * taken) so hook cost stays out of the section's own CPU measurement.
+ * This is the seam the app uses to bracket the same sections with GPU
+ * timer queries (src/support/gpuprof.c) without touching any call site —
+ * the hook implementation decides which sections it cares about. NULLs
+ * uninstall. No-op-cheap when uninstalled; not used by the generic timer
+ * itself. */
+typedef void (*ProfSectionHookFn)(ProfSection s);
+void prof_install_section_hooks(ProfSectionHookFn begin_hook,
+                                ProfSectionHookFn end_hook);
+
 /* Accumulation-aware timing helpers for sections called inside a multi-pass
  * loop (e.g. accumulation-buffer AA).
  *
