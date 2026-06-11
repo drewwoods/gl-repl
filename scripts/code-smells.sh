@@ -345,7 +345,9 @@ run_cppcheck() {
       --enable=style,unusedFunction \
       --inline-suppr \
       --suppress=missingIncludeSystem \
+      -I. -Iinclude -Isrc \
       "$SRC_DIR" \
+      "*.c" \
       > "$cppcheck_log" 2>&1 || true
 
     printf 'wrote %s\n' "$cppcheck_log"

@@ -217,7 +217,7 @@ static int compile_name_is_active_func_param(const ReplCompileContext *ctx,
         int param_count;
     } ScopeFrame;
 
-    ScopeFrame frames[64];
+    ScopeFrame frames[64] = {0};
     int depth = 0;
 
     if (!ctx || !ctx->document_cmds || !name || !name[0])
