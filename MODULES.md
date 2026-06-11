@@ -128,7 +128,7 @@ Consequences:
 | `replay` peer | Replay state machine: PC, mode, speed, accum, fade speed, src_line_idx, total_flat_cmds, expand_args. Storage in `src/subsystems/replay/replay_state.c`. | Editor text behavior, REPL grammar |
 | `editor_help_session` peer | Help-overlay session state: tab_idx, scroll. Storage in `src/editor/help_session.c`. Visibility flag stays on `UiState.help` as chrome. | Help content (provided by content provider) |
 | `color_picker` peer | Floating color-picker state, lifecycle, slider input handlers, source-line writeback through editor commit. Storage in `src/subsystems/color_picker/color_picker_state.c`; peer view + `ColorPickerInputResult` in `src/subsystems/color_picker/color_picker_state.h`. | Picker rendering / hit-test (lives on `src/ui/subsystems/color_picker.c`) |
-| `tutorial` peer | Tutorial runtime state: active flag, tutorial idx, current step, locked-line array, fade timing, last match result. Storage in `src/subsystems/tutorial/tutorial_state.c`. Runner orchestration lives in `src/subsystems/tutorial/tutorial_runner.c`; command matching and ghost-text helpers live in `src/subsystems/tutorial/tutorial_match.c`; fade timing math lives in `src/subsystems/tutorial/tutorial_animation.c`. | Editor text behavior, REPL grammar, tutorial catalog (`src/repl/tutorials.c`) |
+| `tutorial` peer | Tutorial runtime state: active flag, tutorial idx, current step, locked-line array, fade timing, last match result. Storage in `src/subsystems/tutorial/tutorial_state.c`. Runner orchestration lives in `src/subsystems/tutorial/tutorial_runner.c`; command matching and ghost-text helpers live in `src/subsystems/tutorial/tutorial_match.c`; pure fade timing helpers live in `src/subsystems/tutorial/tutorial_animation.c/.h`. | Editor text behavior, REPL grammar, tutorial catalog (`src/repl/tutorials.c`) |
 
 > The legacy forwarders (`ui_state_variable_panel*`, `editor_state_variable_drag*`,
 > `repl_state_replay*`) were retired in Phases J5–J7. Production callers and
@@ -1038,9 +1038,11 @@ check-editor-ownership-budget          (landed commit 11)
 
 ### Layout geometry
 
-`src/ui/app/layout.c` owns scene/code-panel rectangle geometry. Non-UI callers
-may include `src/ui/app/layout.h` because the module is pure geometry, not UI
-state.
+`src/ui/app/layout.c` owns scene/code-panel/menu-bar rectangle geometry. Non-UI
+callers may include `src/ui/app/layout.h` because the module is pure geometry,
+not UI state. The lower-level floating-panel clamp helper lives separately in
+`src/ui/core/layout_utils.h` so `src/ui/subsystems/` renderers can stay
+linkable without `src/ui/app/`.
 
 ### UI / scene independence
 

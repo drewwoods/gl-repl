@@ -412,11 +412,8 @@ static int cfg_max_state_chars(void) {
 static void menubar_rects(int menu_x[NUM_MENUS], int menu_w[NUM_MENUS],
                           int pin_x[NUM_PIN_BTNS], int pin_w[NUM_PIN_BTNS],
                           int *row_y, int *row_h) {
-    int cp_x, cp_y, cp_w, cp_h;
-    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
-    int panel_top = cp_y + cp_h;
-    int by = panel_top - CODE_MARGIN_Y - LINE_H;
-    int bh = LINE_H;
+    int cp_x, cp_w, by, bh;
+    ui_layout_menu_bar_rect(&cp_x, &by, &cp_w, &bh);
     if (row_y) *row_y = by;
     if (row_h) *row_h = bh;
 

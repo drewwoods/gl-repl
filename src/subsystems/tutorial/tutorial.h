@@ -160,19 +160,8 @@ int                  tutorial_note_expected_commit_applied(void);
  * tutorial_note_expected_commit_applied. */
 void                 tutorial_cancel_pending(void);
 
-/* Per-line fade/lock queries used by render and edit guards. */
-int                  tutorial_step_fade_front(int line_idx, int line_len,
-                                              float now);
-float                tutorial_step_fade_alpha(int line_idx, int char_idx,
-                                              int line_len, float now);
-/* Returns 0..1 describing how far a character has eased from its
- * just-revealed bright-white highlight back to the line's base
- * (comment) color. 0 = freshly revealed (full white); 1 = fully
- * settled (base color). Returns 1 when the line is not currently
- * animating. */
-float                tutorial_step_fade_settle(int line_idx, int char_idx,
-                                               int line_len, float now);
-int                  tutorial_line_is_fading(int line_idx, float now);
+/* Lock/source guards used by the editor/commit path. The pure fade math
+ * over TutorialFadeView lives in tutorial_animation.{c,h}. */
 int                  tutorial_line_is_locked(int line_idx);
 int                  tutorial_guard_source_change(int pos, int delete_count,
                                                   int insert_count);

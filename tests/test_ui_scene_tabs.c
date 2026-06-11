@@ -52,12 +52,13 @@ static void seed_user_scene(void) {
 
 /* Band outer rect, computed exactly as scene_tabs_rects() does. */
 static void band_rect(int *cp_x, int *cp_w, int *by, int *bh) {
-    int x, y, w, h;
-    ui_layout_code_panel_rect(&x, &y, &w, &h);
+    int x, w, menu_by;
+    ui_layout_code_panel_rect(&x, NULL, &w, NULL);
     *cp_x = x;
     *cp_w = w;
     *bh = TAB_STRIP_H;
-    *by = (y + h) - CODE_MARGIN_Y - LINE_H - TAB_STRIP_H;
+    ui_layout_menu_bar_rect(NULL, &menu_by, NULL, NULL);
+    *by = menu_by - TAB_STRIP_H;
 }
 
 static void test_derivation(void) {
@@ -212,7 +213,7 @@ static void test_double_click_rename(void) {
  * beneath the dropdown (overlay-precedence violation). */
 static void test_dropdown_over_band_consumes(void) {
     UiRenderSnapshot snap;
-    int cp_x, cp_y, cp_w, cp_h;
+    int cp_x, cp_w;
     int win_h, menu_by, tab_by, menu_my, my_click, cfg_mx;
 
     reset_fixture();
@@ -221,8 +222,8 @@ static void test_dropdown_over_band_consumes(void) {
     glr_ctrl_build_ui_snapshot(&snap);
 
     win_h = snap.viewport.window_h;
-    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
-    menu_by = (cp_y + cp_h) - CODE_MARGIN_Y - LINE_H;
+    ui_layout_code_panel_rect(&cp_x, NULL, &cp_w, NULL);
+    ui_layout_menu_bar_rect(NULL, &menu_by, NULL, NULL);
     tab_by  = menu_by - TAB_STRIP_H;
     menu_my = win_h - (menu_by + LINE_H / 2);
 

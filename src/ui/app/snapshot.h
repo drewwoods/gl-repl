@@ -20,6 +20,7 @@
 #include "app/glr_config.h"    /* GLR_CONFIG_COUNT */
 #include "repl/state_views.h"
 #include "repl/eval.h"
+#include "subsystems/tutorial/tutorial_animation.h"
 #include "ui/app/editor.h"
 #include "subsystems/color_picker/color_picker_state.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
@@ -186,12 +187,7 @@ typedef struct UiRenderSnapshot {
     EditorBufferView            editor_buffer;
     UiLineOverrideList          line_overrides;
 
-    struct {
-        int   active;
-        int   fade_line_idx;
-        float fade_start_t;
-        float fade_duration;
-    }                           tutorial_fade;
+    TutorialFadeView            tutorial_fade;
 
     char                        lights_display_lines[UI_LIGHTS_DISPLAY_MAX][MAX_LINE_LEN];
     int                         lights_display_count;

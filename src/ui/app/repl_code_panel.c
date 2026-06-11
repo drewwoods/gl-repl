@@ -18,7 +18,7 @@
 #include "ui/core/text_layout.h"
 #include "ui/core/text_panel.h"
 #include "ui/core/theme.h"
-#include "subsystems/tutorial/tutorial.h"
+#include "subsystems/tutorial/tutorial_animation.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -883,75 +883,9 @@ static void repl_code_panel_apply_command_overlays(ReplCodePanelBuilder *builder
     }
 }
 
-static float repl_code_panel_fade_slot_step(float fade_duration, int line_len) {
-    int safe_len = line_len > 0 ? line_len : 1;
-    int total_slots = safe_len + TUTORIAL_FADE_SETTLE_CHARS;
-    return fade_duration / (float)total_slots;
-}
-
-static int repl_code_panel_fade_front(const UiRenderSnapshot *snap, int line_idx, int line_len) {
-    if (!snap->tutorial_fade.active || line_idx != snap->tutorial_fade.fade_line_idx)
-        return -1;
-    float now = snap->anim_time;
-    if (now >= snap->tutorial_fade.fade_start_t + snap->tutorial_fade.fade_duration)
-        return -1;
-    int safe_len = line_len > 0 ? line_len : 1;
-    float step = repl_code_panel_fade_slot_step(snap->tutorial_fade.fade_duration, safe_len);
-    if (step <= 0.0f)
-        return -1;
-    float elapsed = now - snap->tutorial_fade.fade_start_t;
-    if (elapsed <= 0.0f)
-        return 0;
-    int front = (int)(elapsed / step);
-    if (front < 0)
-        front = 0;
-    if (front >= safe_len)
-        return -1;
-    return front;
-}
-
-static float repl_code_panel_fade_alpha(const UiRenderSnapshot *snap, int line_idx, int char_idx, int line_len) {
-    if (!snap->tutorial_fade.active || line_idx != snap->tutorial_fade.fade_line_idx)
-        return 1.0f;
-    float now = snap->anim_time;
-    if (now >= snap->tutorial_fade.fade_start_t + snap->tutorial_fade.fade_duration)
-        return 1.0f;
-    int safe_len = line_len > 0 ? line_len : 1;
-    if (char_idx < 0) char_idx = 0;
-    if (char_idx >= safe_len) char_idx = safe_len - 1;
-    float step = repl_code_panel_fade_slot_step(snap->tutorial_fade.fade_duration, safe_len);
-    if (step <= 0.0f)
-        return 1.0f;
-    float elapsed = (now - snap->tutorial_fade.fade_start_t) - (float)char_idx * step;
-    float alpha = elapsed / step;
-    if (alpha < 0.0f) alpha = 0.0f;
-    if (alpha > 1.0f) alpha = 1.0f;
-    return alpha;
-}
-
-static float repl_code_panel_fade_settle(const UiRenderSnapshot *snap, int line_idx, int char_idx, int line_len) {
-    if (!snap->tutorial_fade.active || line_idx != snap->tutorial_fade.fade_line_idx)
-        return 1.0f;
-    float now = snap->anim_time;
-    if (now >= snap->tutorial_fade.fade_start_t + snap->tutorial_fade.fade_duration)
-        return 1.0f;
-    int safe_len = line_len > 0 ? line_len : 1;
-    if (char_idx < 0) char_idx = 0;
-    if (char_idx >= safe_len) char_idx = safe_len - 1;
-    float step = repl_code_panel_fade_slot_step(snap->tutorial_fade.fade_duration, safe_len);
-    float settle_duration = step * (float)TUTORIAL_FADE_SETTLE_CHARS;
-    if (settle_duration <= 0.0f)
-        return 1.0f;
-    float elapsed = (now - snap->tutorial_fade.fade_start_t) - (float)(char_idx + 1) * step;
-    float settle = elapsed / settle_duration;
-    if (settle < 0.0f) settle = 0.0f;
-    if (settle > 1.0f) settle = 1.0f;
-    return settle;
-}
-
 static int repl_code_panel_line_is_fading(const UiRenderSnapshot *snap, int line_idx) {
-    return snap->tutorial_fade.active && line_idx == snap->tutorial_fade.fade_line_idx &&
-           snap->anim_time < snap->tutorial_fade.fade_start_t + snap->tutorial_fade.fade_duration;
+    return tutorial_fade_line_active(&snap->tutorial_fade, line_idx,
+                                     snap->anim_time);
 }
 
 static void repl_code_panel_apply_fade_segments(const UiRenderSnapshot *snap,
@@ -970,7 +904,8 @@ static void repl_code_panel_apply_fade_segments(const UiRenderSnapshot *snap,
     if (line_len <= 0)
         return;
 
-    front = repl_code_panel_fade_front(snap, line_idx, line_len);
+    front = tutorial_fade_front(&snap->tutorial_fade, line_idx, line_len,
+                                snap->anim_time);
     if (front < 0)
         return;
 
@@ -1001,7 +936,8 @@ static void repl_code_panel_apply_fade_segments(const UiRenderSnapshot *snap,
         UiTextPanelColor c;
         if (row->color_segment_count >= UI_TEXT_PANEL_MAX_COLOR_SEGMENTS)
             break;
-        s = repl_code_panel_fade_settle(snap, line_idx, i, line_len);
+        s = tutorial_fade_settle(&snap->tutorial_fade, line_idx, i, line_len,
+                                 snap->anim_time);
         c.r = 1.0f + (row->color.r - 1.0f) * s;
         c.g = 1.0f + (row->color.g - 1.0f) * s;
         c.b = 1.0f + (row->color.b - 1.0f) * s;
@@ -1026,7 +962,8 @@ static void repl_code_panel_apply_fade_segments(const UiRenderSnapshot *snap,
                 .char_count = 1,
                 .color = repl_code_panel_scaled_alpha(
                     highlight,
-                    repl_code_panel_fade_alpha(snap, line_idx, front, line_len)),
+                    tutorial_fade_alpha(&snap->tutorial_fade, line_idx, front,
+                                        line_len, snap->anim_time)),
             };
     }
 

@@ -36,12 +36,27 @@ static void reset_menu_bar_fixture(int window_w, int window_h) {
     ui_state_code_panel_mut()->panel_frac = 1.0f;
 }
 
-static int menu_bar_center_my(void) {
+static void test_menu_bar_rect_helper(void) {
     int cp_x, cp_y, cp_w, cp_h;
+    int bar_x, bar_y, bar_w, bar_h;
+
+    reset_menu_bar_fixture(1000, 600);
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    ui_layout_menu_bar_rect(&bar_x, &bar_y, &bar_w, &bar_h);
+
+    ASSERT_INT_EQ("menu bar x matches code panel", bar_x, cp_x);
+    ASSERT_INT_EQ("menu bar y anchors to code panel top chrome", bar_y,
+                  cp_y + cp_h - CODE_MARGIN_Y - LINE_H);
+    ASSERT_INT_EQ("menu bar w matches code panel", bar_w, cp_w);
+    ASSERT_INT_EQ("menu bar h is one line", bar_h, LINE_H);
+}
+
+static int menu_bar_center_my(void) {
+    int bar_y, bar_h;
     int row_mid_y;
 
-    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
-    row_mid_y = cp_y + cp_h - CODE_MARGIN_Y - LINE_H + LINE_H / 2;
+    ui_layout_menu_bar_rect(NULL, &bar_y, NULL, &bar_h);
+    row_mid_y = bar_y + bar_h / 2;
     return ui_state_viewport().window_h - row_mid_y;
 }
 
@@ -1085,6 +1100,7 @@ static void test_config_short_flyout_consumes_but_no_scroll(void) {
 int main(void) {
     printf("--- ui_menu_bar tests ---\n");
 
+    test_menu_bar_rect_helper();
     test_open_close_state();
     test_top_level_hits();
     test_dropdown_and_config_press();

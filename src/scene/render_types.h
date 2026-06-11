@@ -52,17 +52,6 @@ typedef struct SceneRgba {
     float r, g, b, a;
 } SceneRgba;
 
-/* Two-sided clamp to [0, 1]. Used wherever a 0..1 alpha/opacity is
- * derived from a controller config (which may overshoot during a fade
- * transition or carry an out-of-range fixture from a test). The
- * single-side fminf(v, 1.0f) clamps elsewhere in scene/ ride along an
- * always-non-negative computation and don't need this helper. */
-static inline float scene_clamp01f(float v) {
-    if (v < 0.0f) return 0.0f;
-    if (v > 1.0f) return 1.0f;
-    return v;
-}
-
 /* Why the scene is invoking the execute callback this frame.
  * Side-effecting callbacks (audio, RNG advance, dirty-flag writes)
  * should run only on MAIN_FILL; non-fill purposes are scaffolding
