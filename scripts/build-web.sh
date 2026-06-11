@@ -10,7 +10,7 @@ OUT_DIR="${SCRIPT_DIR}/out"
 
 # -- Emscripten environment -------------------------------
 STACK_SIZE=$((1024*1024)) # 1MB stack size for complex samples
-INITIAL_MEMORY=$((1024 * 1024 * 256)) # 256MB initial memory for REPL/Complex samples
+INITIAL_MEMORY=$((1024 * 1024 * 384)) # 384 initial memory for REPL/Complex samples
 
 # ── Library Paths (edit these if your layout differs) ────────────────────────
 GL4ES_INCLUDE="${SRC_DIR}/gl4es/include"
@@ -54,11 +54,12 @@ check_emsdk() {
         echo -e "${RED}Error: emsdk not found at ${SRC_DIR}/emsdk/${NC}"
         echo ""
         echo "Install emsdk:"
-        echo "  cd ${SRC_DIR}"
+        echo "  pushd ${SRC_DIR}"
         echo "  git clone https://github.com/emscripten-core/emsdk.git"
         echo "  cd emsdk"
         echo "  ./emsdk install latest"
         echo "  ./emsdk activate latest"
+        echo "  popd"
         exit 1
     fi
     # shellcheck disable=SC1091
@@ -70,12 +71,13 @@ check_gl4es() {
         echo -e "${RED}Error: gl4es not found at ${GL4ES_LIB}${NC}"
         echo ""
         echo "Install gl4es:"
-        echo "  cd ${SRC_DIR}"
+        echo "  pushd ${SRC_DIR}"
         echo "  git clone https://github.com/ptitSeb/gl4es.git"
         echo "  cd gl4es"
         echo "  mkdir build_wasm && cd build_wasm"
         echo "  emcmake cmake .. -DNOX11=ON -DNOEGL=ON -DSTATICLIB=ON"
         echo "  emmake make"
+        echo "  popd"
         exit 1
     fi
 }
