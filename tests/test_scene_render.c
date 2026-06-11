@@ -661,13 +661,14 @@ static void test_vertex2f_guide_cursor_dot(void) {
 /* --- Grid FOG-fallback predicate + the invariant it encodes ------- */
 
 /* Pure: scene_grid_theme_uses_fog must be true exactly for the
- * EXP2-fog themes (FOG, OCEAN) — the ones that take the FADE fallback
- * under the FOG transition style. FAR is deliberately not a factor.
- * No GL — runs in both builds. */
+ * EXP2-fog themes (FOG, OCEAN, FROZEN) — the ones that take the FADE
+ * fallback under the FOG transition style. FAR is deliberately not a
+ * factor. No GL — runs in both builds. */
 static void test_grid_theme_uses_fog_predicate(void) {
     printf("--- scene_grid_theme_uses_fog predicate ---\n");
     for (int th = 0; th < GRID_THEME_COUNT; th++) {
-        int expect = (th == GRID_THEME_FOG || th == GRID_THEME_OCEAN);
+        int expect = (th == GRID_THEME_FOG || th == GRID_THEME_OCEAN ||
+                      th == GRID_THEME_FROZEN);
         char lbl[64];
         snprintf(lbl, sizeof lbl, "uses_fog theme=%d", th);
         ASSERT_INT(lbl, scene_grid_theme_uses_fog(th) ? 1 : 0, expect);
@@ -683,8 +684,8 @@ static void test_grid_theme_uses_fog_predicate(void) {
  * touching fog without updating the predicate (which would silently
  * break the FOG-style FADE-fallback decision). FAR is excluded because
  * its LINEAR distance fog fires for every theme by design and is
- * independent of the predicate. Default camera => OCEAN takes its
- * above-water (fog) branch. */
+ * independent of the predicate. Default camera => OCEAN / FROZEN take
+ * their above-surface (fog) branches. */
 static void test_scene_grid_fog_matches_predicate(void) {
     printf("--- grid fog calls match uses_fog predicate (steady) ---\n");
 #ifdef GL_STUBS
