@@ -8,8 +8,9 @@ step-by-step, and export as a standalone C program.
 
 ![gl-repl rendering the Whale example](docs/images/hero.png)
 
-This guide covers every user-facing feature. For build instructions and
-project internals, see [`README.md`](README.md) and
+This guide covers every user-facing feature. For headless rendering, the
+full CLI/env-var reference, and recording, see
+[`ADVANCED_USAGE.md`](ADVANCED_USAGE.md); for project internals,
 [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## Contents
@@ -644,18 +645,74 @@ blends), with a pulse traveling along the path:
 
 ![Cursor on a glTranslatef line: the guide shows the displacement](docs/images/xform-guide-still.png)
 
-Two modes:
+Guides only appear when the line parsed cleanly and your current input
+matches the committed source — partial or mid-edit lines are skipped.
 
-- **World** — the guide is drawn in world axes at the world origin: the
+All guides share an "axes pulse" visual language: a dim solid base line or
+arc with a bright dot traveling along it and a short fading trail behind.
+The color is derived from the command's vector so the shape of the motion
+reads at a glance:
+
+- **Translate** — shaft color is `(|tx|, |ty|, |tz|)` normalized by its max
+  component, mapped to RGB. A pure-axis translation reads as a pure axis
+  color (`glTranslatef(2, 0, 0)` → red, `glTranslatef(0, 0, -3)` → blue);
+  diagonals blend. A 4-fin pyramid arrowhead marks the tip.
+- **Rotate** — shaft color is `(|ax|, |ay|, |az|)` normalized, so a Y-axis
+  rotation reads green. The axis stub through the rotation pivot shares the
+  color; the pulse dot sweeps along the arc so direction is unambiguous.
+  (When the "before" point lies on the rotation axis the arc collapses to a
+  point — hover a rotate line whose pivot is off-axis to see the sweep.)
+- **Scale** — shaft color is `(|sx-1|, |sy-1|, |sz-1|)` normalized, so the
+  color highlights which axes deviate from identity (`glScalef(2, 1, 1)`
+  reads red). The arrow runs from the "before" point to the component-wise
+  scaled result. If the "before" point is at the origin, a 3-axis gizmo is
+  drawn instead: a gray unit reference segment and a pulsing arrow per axis
+  in that axis's color.
+
+#### What is the "before" point?
+
+OpenGL applies transforms in reverse source order when computing a vertex:
+`M_1 · M_2 · ... · M_n · v`. That means the cursor's command `C_k` operates
+on the point that the *later* commands `C_{k+1..n}` have already placed.
+The guide starts at that point. Accumulation of the post-cursor transforms
+stops at the first draw call (`glBegin`, the `glutSolid*` shapes, a tess
+polygon) — transforms after an intervening draw don't factor in.
+
+#### Guide mode
+
+The Config menu has an **Xform guide mode** toggle with two options:
+
+- **World** — the guide is rendered in world axes at the world origin: the
   strict OpenGL reverse-order reading of your line, independent of
-  surrounding transforms.
-- **Frame** *(default)* — the guide anchors at the position the pre-cursor
-  transforms have carried the origin to, lining up visually with geometry
-  drawn earlier.
+  surrounding transforms. Cursor on the last line of
 
-See the *Transform Guides* section of [`README.md`](README.md) for the full
-semantics (the "before" point, draw-call cutoffs, and worked examples). The
-*Transform stress* example (F12 to cycle to it) is built to exercise them.
+  ```
+  glTranslatef(0, 0, 2);
+  glRotatef(45, 0, 1, 0);
+  glTranslatef(0, 0, -2);   // cursor here
+  ```
+
+  shows an arrow from `(0, 0, 0)` to `(0, 0, -2)` along world Z.
+
+- **Frame** *(default)* — the guide anchors at the scene-world position the
+  full pre-cursor modelview has carried the origin to, so it lines up
+  visually with geometry drawn by earlier `func0()` / `glBegin` blocks.
+  Only the anchor comes from the pre-cursor matrix — the guide itself still
+  draws with world-axis orientation. Cursor on the second translate in
+
+  ```
+  glTranslatef(2, 0, 0);
+  func0();
+  glTranslatef(-4, 0, 0);   // cursor here
+  func0();
+  ```
+
+  anchors the guide at `x = 2`, so the arrow runs `(2, 0, 0)` →
+  `(-2, 0, 0)`, matching the rendered triangles. World mode would draw
+  `(0, 0, 0)` → `(-4, 0, 0)`.
+
+The *Transform stress* example (F12 to cycle to it) is built to exercise
+all three guide types at once.
 
 ### Wireframe
 
@@ -955,9 +1012,9 @@ headless captures smooth 3D edges at full UI text size),
 `GLR_AUDIO_HITCH_MS` (audio worker stall-warning threshold).
 
 For fully headless rendering — screenshots and GIF/MP4 recordings with no
-window at all — build with `FREEGLUT_OSMESA=1` and see *Headless Rendering
-(OSMesa)* in [`README.md`](README.md). All screenshots and GIFs in this
-guide were captured that way.
+window at all — build with `FREEGLUT_OSMESA=1` and see [*Headless rendering
+(OSMesa)* in `ADVANCED_USAGE.md`](ADVANCED_USAGE.md#headless-rendering-osmesa).
+All screenshots and GIFs in this guide were captured that way.
 
 ---
 
