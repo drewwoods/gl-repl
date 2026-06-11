@@ -80,6 +80,18 @@
 #define CFG_DEFAULT_ACCUM_EFFECT      SCENE_ACCUM_EFFECT_AA
 #define CFG_DEFAULT_ACCUM_PASSES      2
 
+/* Scissor the accumulation-AA loop (per-pass glClear + glAccum read/return)
+ * to the scene viewport instead of the whole window. On paper this is a
+ * strict win: glClear/glAccum are bounded by the scissor box, not the
+ * viewport, so without it the up-to-16x accum work scans the dead region
+ * under the code panel every pass. Yet on macOS (Apple's OpenGL over Metal)
+ * it measured *slower* in practice — enabling GL_SCISSOR_TEST around the
+ * accum path appears to push the driver off a fast clear/accumulate path
+ * (e.g. a tile/fast-clear or whole-surface DMA optimization) that more than
+ * pays for the extra pixels covered. So it ships OFF; flip to 1 only on a
+ * platform where the scissored path actually benchmarks faster. */
+#define CFG_DEFAULT_USE_ACCUM_AA_SCISSORS  0
+
 /* Tag-keyed presentation defaults applied during example loading,
  * layered between the global reset and the example's own leading
  * `@cfg` metadata. Each entry is a (tag, GlrConfigKey, value) tuple;

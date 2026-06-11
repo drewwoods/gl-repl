@@ -718,7 +718,24 @@ int scene_render_3d_scene(SceneRendererState *state,
     if (do_accum) {
         int blur = (SCENE_ACCUM_EFFECT_IS_BLUR(config->accum_effect) &&
                     config->setup_subframe_fn != NULL);
+        /* Full-window clear once — this is the frame's only clear, so the
+         * chrome regions outside the scene rect (menu bar, status bar,
+         * code-panel backdrop) depend on it before the 2D overlays paint. */
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT);
+        /* Optionally confine the repeated per-pass clears and the glAccum
+         * read/return to the scene viewport: glClear/glAccum are bounded by
+         * the scissor box (not the viewport), so this lets the up-to-16x
+         * accumulation work skip the dead region under the code panel
+         * instead of scanning the whole window. In theory a smaller scissor
+         * region is a strict reduction in pixel-copy work; in practice on
+         * macOS it measured *slower*, so it's off by default — see
+         * CFG_DEFAULT_USE_ACCUM_AA_SCISSORS in glr_defaults.h. */
+        int use_scissor = config->use_accum_aa_scissors;
+        if (use_scissor) {
+            glEnable(GL_SCISSOR_TEST);
+            glScissor(config->scene_x, config->scene_y,
+                      config->scene_w, config->scene_h);
+        }
         float weight = 1.0f / (float)accum_passes;
         for (int pass_idx = 0; pass_idx < accum_passes; pass_idx++) {
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -741,6 +758,8 @@ int scene_render_3d_scene(SceneRendererState *state,
             glAccum(GL_ACCUM, weight);
         }
         glAccum(GL_RETURN, 1.0f);
+        if (use_scissor)
+            glDisable(GL_SCISSOR_TEST);
     } else {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         render_3d_scene_pass(state, config, 0.0f, 0.0f);

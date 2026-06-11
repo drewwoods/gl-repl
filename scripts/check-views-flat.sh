@@ -83,6 +83,10 @@ for path in files:
                 s = s.split("//", 1)[0].strip()
                 # Drop inline block comments on the same line.
                 s = re.sub(r"/\\*.*?\\*/", "", s).strip()
+                # Drop a block comment that opens here but closes on a
+                # later line (trailing field comment that wraps); the
+                # continuation lines start with '*' and are skipped above.
+                s = re.sub(r"/\\*.*$", "", s).strip()
                 if not s:
                     continue
 

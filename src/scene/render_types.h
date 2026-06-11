@@ -173,6 +173,9 @@ typedef struct SceneRenderConfig {
     int use_accum;          /* accumulation buffer available (--noaccum gate) */
     int accum_effect;       /* SceneAccumEffect: OFF / AA / BLUR */
     int accum_passes;       /* resolved sample count: 1,2,4,8,12,16 */
+    int use_accum_aa_scissors; /* scissor the accum loop to the scene rect
+                                * (skip the dead region under the code panel).
+                                * Off by default — see CFG_DEFAULT_USE_ACCUM_AA_SCISSORS. */
 
     /* --- Optional per-pass blur hook ---
      * Invoked once before each accumulation pass when accum_effect == BLUR
