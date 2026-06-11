@@ -583,9 +583,9 @@ backward):
 
 ![Grid themes: Tron, Radar, Aurora, Synthwave](docs/images/grid-themes.png)
 
-Fourteen grid themes (**F3**): Off, Classic, Fog, Tron, Ember, Faint, Focus,
+Fifteen grid themes (**F3**): Off, Classic, Fog, Tron, Ember, Faint, Focus,
 Ocean, XZ Ruler *(default)*, Adaptive Planes, Radar, Aurora, Synthwave,
-Frozen Lake.
+Frozen Lake, Tilled Field.
 **Grid major** (Ctrl+O) cycles the major-tick spacing (1/2/5/10) and **Grid
 extent** (F7) the grid's reach (Close / Mid / Far). Theme changes cross-fade,
 so a newly chosen grid takes a few seconds to fully appear.

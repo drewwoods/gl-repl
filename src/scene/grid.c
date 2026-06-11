@@ -591,7 +591,7 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
 
 /* Deterministic position hash in [-1, 1]; stable frame-to-frame so
  * the cracks and frost heave stay frozen in place (no swimming). */
-static float grid_frozen_hash(float a, float b) {
+static float grid_pos_hash(float a, float b) {
     float s = sinf(a * 12.9898f + b * 78.233f) * 43758.5453f;
     return (s - floorf(s)) * 2.0f - 1.0f;
 }
@@ -614,7 +614,7 @@ static float grid_frozen_joint_off(const GridDrawContext *ctx, float v,
                                    int axis, int i, int segs) {
     float f = (float)i / (float)segs;
     float amp = ctx->major * 0.20f * sinf(f * (float)M_PI);
-    return grid_frozen_hash(v * 3.7f + (float)axis * 17.0f,
+    return grid_pos_hash(v * 3.7f + (float)axis * 17.0f,
                             (float)i * 5.1f) * amp;
 }
 
@@ -643,14 +643,14 @@ static void grid_frozen_crack_spurs(const GridDrawContext *ctx, float v,
     int segs = grid_frozen_crack_segs(ctx);
     glBegin(GL_LINES);
     for (int i = 2; i < segs - 1; i += 3) {
-        float pick = grid_frozen_hash(v * 9.3f + (float)axis * 23.0f,
+        float pick = grid_pos_hash(v * 9.3f + (float)axis * 23.0f,
                                       (float)i);
         if (pick < 0.25f) continue;
         float f = (float)i / (float)segs;
         float along = -ctx->extent + f * 2.0f * ctx->extent;
         float off = grid_frozen_joint_off(ctx, v, axis, i, segs);
         float len = ctx->major *
-                    (0.25f + 0.35f * fabsf(grid_frozen_hash(v, (float)i + 41.0f)));
+                    (0.25f + 0.35f * fabsf(grid_pos_hash(v, (float)i + 41.0f)));
         float dir = (pick > 0.6f) ? 1.0f : -1.0f;
         float dx, dz; /* diagonal away from the crack */
         if (axis == 0) { dx = dir * len * 0.7f; dz = len; }
@@ -754,7 +754,7 @@ static void scene_grid_render_frozen_theme(const GridDrawContext *grid_ctx,
              sx += surf_step) {
             for (int row = 0; row < 2; row++) {
                 float zz = sz + row * surf_step;
-                float y = surf_y + grid_frozen_hash(sx * 0.83f, zz * 0.83f) * 0.012f;
+                float y = surf_y + grid_pos_hash(sx * 0.83f, zz * 0.83f) * 0.012f;
 
                 /* Smooth edge fade so the sheet has no hard border */
                 float dx = fabsf(sx) / extent;
@@ -762,7 +762,7 @@ static void scene_grid_render_frozen_theme(const GridDrawContext *grid_ctx,
                 float edge = (1.0f - dx * dx) * (1.0f - dz * dz);
                 if (edge < 0.0f) edge = 0.0f;
 
-                float frost = grid_frozen_hash(sx * 0.31f + 11.0f,
+                float frost = grid_pos_hash(sx * 0.31f + 11.0f,
                                                zz * 0.31f) * 0.5f + 0.5f;
                 float sheen = sinf((sx + zz) * 0.18f +
                                    grid_ctx->anim_time * 0.35f) * 0.5f + 0.5f;
@@ -782,6 +782,175 @@ static void scene_grid_render_frozen_theme(const GridDrawContext *grid_ctx,
      * drops fog before its water surface) the sheet above renders
      * inside the mist on purpose — it whites out toward the horizon. */
     grid_fog_end(grid_ctx);
+}
+
+/* Tilled Field: a plowed-earth floor where the grid's two directions
+ * are deliberately asymmetric. Constant-z major lines ARE the furrows
+ * — V-grooves cut into an opaque soil height-field running along X —
+ * while constant-x majors stay shallow: pale "planting string" lines
+ * laid over the ridges. Minor constant-z lines render as faint rake
+ * marks riding the furrow profile. The soil mesh writes depth (it is
+ * ground, not a translucent overlay), and a camera below the surface
+ * gets a near-black earth filter — underground you see almost
+ * nothing, which is the point. */
+
+#define GRID_SOIL_FURROW_HALF_FRAC 0.22f  /* furrow half-width, × major */
+#define GRID_SOIL_DEPTH 0.30f             /* furrow depth, world units */
+
+/* Furrow cross-section: smoothstep dip around each constant-z major
+ * line. Depends only on z, so any line running along X sits at one
+ * constant height — minor rake lines follow the terrain for free. */
+static float grid_soil_profile(const GridDrawContext *ctx, float z) {
+    float w = ctx->major * GRID_SOIL_FURROW_HALF_FRAC;
+    float dz = fabsf(remainderf(z, ctx->major));
+    if (dz >= w) return 0.0f;
+    float f = 1.0f - dz / w;
+    f = f * f * (3.0f - 2.0f * f);
+    return -GRID_SOIL_DEPTH * f;
+}
+
+/* Per-vertex soil colour: depth-shaded brown (sunlit ridge tops, dark
+ * groove bottoms) + a slope-keyed fake sun from -Z + two octaves of
+ * positional noise (fine clods, broad soil patches). Opaque at heart;
+ * only the outer rim edge-fades so the slab has no hard border. */
+static void grid_soil_vertex_color(const GridDrawContext *ctx,
+                                   float x, float z, float y) {
+    float t = -y / GRID_SOIL_DEPTH;
+    if (t > 1.0f) t = 1.0f;
+    if (t < 0.0f) t = 0.0f;
+    float e = ctx->major * 0.05f;
+    float slope = (grid_soil_profile(ctx, z + e) -
+                   grid_soil_profile(ctx, z - e)) / (2.0f * e);
+    float sun = slope * 0.10f;
+    if (sun > 0.10f) sun = 0.10f;
+    if (sun < -0.10f) sun = -0.10f;
+    float clod  = grid_pos_hash(x * 1.31f, z * 1.73f) * 0.035f;
+    float patch = grid_pos_hash(x * 0.06f + 7.0f, z * 0.06f) * 0.030f;
+    float dx = fabsf(x) / ctx->extent;
+    float dzn = fabsf(z) / ctx->extent;
+    float edge = (1.0f - dx * dx) * (1.0f - dzn * dzn);
+    if (edge < 0.0f) edge = 0.0f;
+    float alpha = edge * 1.8f;
+    if (alpha > 1.0f) alpha = 1.0f;
+    grid_color(ctx,
+               0.40f - 0.24f * t + sun + clod + patch,
+               0.29f - 0.18f * t + sun * 0.8f + clod + patch,
+               0.18f - 0.11f * t + sun * 0.5f + clod * 0.7f + patch,
+               alpha);
+}
+
+/* One soil strip between two z breakpoints, sampled along X. Heights
+ * carry a small positional jitter; colour is continuous across strips
+ * because both key on world coordinates. */
+static void grid_soil_strip(const GridDrawContext *ctx, float z0, float z1,
+                            float x_step) {
+    glBegin(GL_TRIANGLE_STRIP);
+    for (float sx = -ctx->extent; sx <= ctx->extent + GRID_LOOP_EPSILON;
+         sx += x_step) {
+        float zz[2];
+        zz[0] = z0;
+        zz[1] = z1;
+        for (int row = 0; row < 2; row++) {
+            float y = grid_soil_profile(ctx, zz[row]) +
+                      grid_pos_hash(sx * 0.91f, zz[row] * 0.97f) * 0.008f;
+            grid_soil_vertex_color(ctx, sx, zz[row], y);
+            glVertex3f(sx, y, zz[row]);
+        }
+    }
+    glEnd();
+}
+
+static void scene_grid_render_soil_theme(const GridDrawContext *grid_ctx,
+                                         const SceneFrameRenderContext *frame_ctx) {
+    const SceneRenderConfig *config = &frame_ctx->config;
+    const float extent = grid_ctx->extent;
+    const float major = grid_ctx->major;
+    const float major_tol = grid_ctx->major_tol;
+    const float step = grid_ctx->step;
+    const float as = grid_ctx->alpha_scale;
+    const float w = major * GRID_SOIL_FURROW_HALF_FRAC;
+
+    /* Buried camera: near-black warm earth filter over the viewport. */
+    if (grid_camera_world_y(config) < 0.0f)
+        grid_draw_viewport_tint(grid_ctx, config, 0.09f, 0.06f, 0.04f, 0.92f);
+
+    /* ---- Soil height-field ----
+     * Strips run along X between z breakpoints placed at each furrow's
+     * profile points (lip, half-slope, centre) plus the flat span to
+     * the next furrow, so the V-grooves are exact regardless of grid
+     * spacing. Depth-written: this is opaque ground, and later passes
+     * (axes, backdrop) must be occluded by it like real terrain. */
+    float x_samp = extent / 25.0f;
+    if (x_samp < major) x_samp = major;
+    glDepthMask(GL_TRUE);
+    float c0 = ceilf((-extent - w) / major) * major; /* first centre */
+    for (float c = c0; c - w < extent - GRID_LOOP_EPSILON; c += major) {
+        float pts[6];
+        pts[0] = c - w;
+        pts[1] = c - w * 0.5f;
+        pts[2] = c;
+        pts[3] = c + w * 0.5f;
+        pts[4] = c + w;
+        pts[5] = c + major - w; /* flat span to the next furrow's lip */
+        for (int i = 0; i < 5; i++) {
+            float z0 = pts[i], z1 = pts[i + 1];
+            if (z0 < -extent) z0 = -extent;
+            if (z1 > extent) z1 = extent;
+            if (z1 - z0 < GRID_LOOP_EPSILON) continue;
+            grid_soil_strip(grid_ctx, z0, z1, x_samp);
+        }
+    }
+    glDepthMask(GL_FALSE);
+
+    /* ---- Line passes over the soil ----
+     * Constant-z lines ride the furrow profile (one constant height
+     * per line): majors get a dark seam along the groove bottom,
+     * minors faint rake marks on the flats. Constant-x majors are the
+     * shallow direction: pale planting-string lines floating just
+     * above ridge level. */
+    glBegin(GL_LINES);
+    for (float v = -extent; v <= extent + GRID_LOOP_EPSILON; v += step) {
+        if (fabsf(v) < GRID_ORIGIN_SKIP_EPSILON) continue;
+        int is_major = grid_is_major_line(v, major, major_tol);
+        if (is_major) {
+            /* Furrow-bottom seam (constant z, along X) */
+            float yb = grid_soil_profile(grid_ctx, v) + 0.02f;
+            grid_color(grid_ctx, 0.10f, 0.07f, 0.05f, fminf(0.50f * as, 1.0f));
+            glVertex3f(-extent, yb, v);
+            glVertex3f( extent, yb, v);
+            /* Planting string (constant x, along Z) */
+            grid_color(grid_ctx, 0.72f, 0.62f, 0.42f, fminf(0.28f * as, 1.0f));
+            glVertex3f(v, 0.03f, -extent);
+            glVertex3f(v, 0.03f,  extent);
+        } else {
+            /* Rake marks: constant-z minors only — the along-X
+             * direction dominates a plowed field, so constant-x
+             * minors are deliberately absent. */
+            float ym = grid_soil_profile(grid_ctx, v) + 0.02f;
+            grid_color(grid_ctx, 0.50f, 0.40f, 0.28f, fminf(0.10f * as, 1.0f));
+            glVertex3f(-extent, ym, v);
+            glVertex3f( extent, ym, v);
+        }
+    }
+    glEnd();
+
+    /* Origin axes: brighter string lines, depth-written like every
+     * theme's origin pass. The X axis (constant z=0) sits in a furrow
+     * — lift it to its groove-bottom height so it doesn't vanish. */
+    {
+        float y0 = grid_soil_profile(grid_ctx, 0.0f) + 0.02f;
+        glDepthMask(GL_TRUE);
+        glLineWidth(1.5f);
+        glBegin(GL_LINES);
+        grid_color(grid_ctx, 0.85f, 0.72f, 0.48f, fminf(0.55f * as, 1.0f));
+        glVertex3f(-extent, y0, 0);
+        glVertex3f( extent, y0, 0);
+        glVertex3f(0, 0.03f, -extent);
+        glVertex3f(0, 0.03f,  extent);
+        glEnd();
+        glLineWidth(1.0f);
+        glDepthMask(GL_FALSE);
+    }
 }
 
 static void scene_grid_render_xzruler_theme(const GridDrawContext *grid_ctx) {
@@ -1129,6 +1298,10 @@ static void grid_dispatch_theme(const SceneFrameRenderContext *frame_ctx,
 
     case GRID_THEME_FROZEN:
         scene_grid_render_frozen_theme(grid_ctx, frame_ctx);
+        break;
+
+    case GRID_THEME_SOIL:
+        scene_grid_render_soil_theme(grid_ctx, frame_ctx);
         break;
 
     case GRID_THEME_XZRULER:
