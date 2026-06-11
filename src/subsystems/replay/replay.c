@@ -14,40 +14,8 @@
 #include "keys.h"
 #include "repl/core.h"
 #include "repl/state_owners.h"
+#include "repl/transform_utils.h" /* apply_tracked_transform / unwind_transform_stack */
 #include "subsystems/replay/replay_state.h"
-
-/* Apply a single transform CmdType to the current GL modelview, tracking
- * push/pop balance. Used by replay_walk_tess_preview below — REPL is
- * the home of GLCmd→GL translation, so the scene module never has to do
- * its own command iteration. */
-static void replay_walk_apply_transform(const GLCmd *cmd, int *depth) {
-    if (!cmd) return;
-    switch (cmd->type) {
-    case CMD_PUSH_MATRIX:
-        glPushMatrix();
-        if (depth) (*depth)++;
-        break;
-    case CMD_POP_MATRIX:
-        if (!depth || *depth > 0) {
-            glPopMatrix();
-            if (depth) (*depth)--;
-        }
-        break;
-    case CMD_LOAD_IDENTITY:
-        glLoadIdentity();
-        break;
-    case CMD_TRANSLATE3F:
-        glTranslatef(cmd->args[0], cmd->args[1], cmd->args[2]);
-        break;
-    case CMD_SCALEF:
-        glScalef(cmd->args[0], cmd->args[1], cmd->args[2]);
-        break;
-    case CMD_ROTATEF:
-        glRotatef(cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
-        break;
-    default: break;
-    }
-}
 
 void replay_walk_tess_preview(const ReplayTessPreviewCallbacks *cb,
                                    void *user_data) {
@@ -68,7 +36,7 @@ void replay_walk_tess_preview(const ReplayTessPreviewCallbacks *cb,
              * belong to the surrounding polygon frame, so only apply
              * them while not walking a live contour payload. */
             if (!in_contour)
-                replay_walk_apply_transform(cmd, &matrix_depth);
+                apply_tracked_transform(cmd, &matrix_depth);
             continue;
         }
 
@@ -96,7 +64,7 @@ void replay_walk_tess_preview(const ReplayTessPreviewCallbacks *cb,
     if (in_contour && cb->end_contour)
         cb->end_contour(user_data);
 
-    while (matrix_depth > 0) { glPopMatrix(); matrix_depth--; }
+    unwind_transform_stack(&matrix_depth);
     glPopMatrix();
 }
 
@@ -231,7 +199,7 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
         if (stop_flag && *stop_flag) break;
 
         if (!state.in_block && repl_cmd_is_transform(cmd->type)) {
-            replay_walk_apply_transform(cmd, &matrix_depth);
+            apply_tracked_transform(cmd, &matrix_depth);
             continue;
         }
 
@@ -313,6 +281,6 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
         }
         if (stop_flag && *stop_flag) break;
     }
-    while (matrix_depth > 0) { glPopMatrix(); matrix_depth--; }
+    unwind_transform_stack(&matrix_depth);
     glPopMatrix();
 }

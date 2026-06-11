@@ -31,6 +31,7 @@
 #include "repl/core.h"
 #include "editor/input.h"
 #include "repl/state_owners.h"
+#include "repl/transform_utils.h"
 #include "subsystems/replay/replay.h"
 #include "support/test_harness.h"
 
@@ -605,8 +606,8 @@ static void test_display_name_for_not_in_begin(void) {
 /* --- 7. transform-dispatch drift guard --------------------------------
  *
  * Two parallel switches dispatch transform CmdTypes:
- *   - apply_tracked_transform (scene/guides/transform_utils.h) — used by
- *     the controller's overlay walks and transform-guide pre-passes
+ *   - apply_tracked_transform (repl/transform_utils.h) — used by the
+ *     replay walkers, edit-overlay walks, and transform-guide pre-passes
  *   - repl_executor_apply_tracked_transform_cmd (repl/executor.c) — used
  *     by the live executor and replay paths
  *

@@ -63,8 +63,6 @@
 #include "scene/palette.h" /* scene_clr / scene_clr_a scene-space colors */
 #include "scene/postprocess_filter.h" /* ScenePostFilterMode, mode_name */
 #include "scene/render.h"
-#include "scene/guides/transform_guides.h" /* scene_transform_guides_prepare / _render_if_due */
-#include "scene/guides/transform_utils.h"  /* apply_tracked_transform / unwind_transform_stack */
 #include "ui/app/autocomplete_panel.h"
 #include "ui/app/editor.h"
 #include "ui/app/layout.h"
