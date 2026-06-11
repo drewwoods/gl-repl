@@ -28,6 +28,7 @@
 #include "ui/app/repl_code_panel.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 #include "subsystems/variable_panel/variable_panel_drag.h"
+#include "subsystems/tutorial/tutorial_animation.h"
 #include "subsystems/tutorial/tutorial.h"
 #include "subsystems/tutorial/tutorial_state.h"
 #include "support/test_harness.h"
@@ -556,6 +557,25 @@ static void test_variable_panel(void) {
                            ui_state_viewport().window_h - (py + 10), &row));
     ASSERT_TRUE("hit test outside panel",
                 !vp_hit_row(1, 0, 0, &row));
+}
+
+static void test_ui_clamp_panel_y_honors_edge_pad(void) {
+    ASSERT_INT("4px edge pad clamps above status inset",
+               ui_clamp_panel_y(0, 120, 20, 0, 0,
+                                STATUSBAR_H, 4),
+               STATUSBAR_H + 4);
+    ASSERT_INT("custom edge pad is preserved",
+               ui_clamp_panel_y(0, 120, 20, 0, 0,
+                                STATUSBAR_H, 12),
+               STATUSBAR_H + 12);
+    ASSERT_INT("top layout overflow parks at scene top with pad",
+               ui_clamp_panel_y(0, 40, 30, 100, 1,
+                                STATUSBAR_H, 8),
+               40 - 30 - 8);
+    ASSERT_INT("non-top overflow parks above bottom inset",
+               ui_clamp_panel_y(0, 40, 30, 100, 0,
+                                STATUSBAR_H, 8),
+               STATUSBAR_H + 8);
 }
 
 static void test_menu_bar(void) {
@@ -1331,6 +1351,62 @@ static void test_vertex_gutter_labels_follow_cursor_begin_block(void) {
                 label[0] == '\0');
 }
 
+static void test_tutorial_fade_math_uses_snapshot_view(void) {
+    UiRenderSnapshot s;
+    const char *line;
+    int line_idx;
+    int line_len;
+
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(800, 600);
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_ctrl_sync_ui_chrome();
+    ui_state_code_panel_mut()->panel_frac = 0.4f;
+
+    tutorial_start(0);
+    make_test_ui_snapshot(&s);
+
+    line_idx = s.tutorial_fade.fade_line_idx;
+    line = editor_buffer_view_line(s.editor_buffer, line_idx);
+    line_len = line ? (int)strlen(line) : 0;
+
+    ASSERT_INT("snapshot fade line is first row", line_idx, 0);
+    ASSERT_TRUE("snapshot fade line text present", line_len > 0);
+    ASSERT_TRUE("snapshot fade active just after start",
+                tutorial_fade_line_active(&s.tutorial_fade, line_idx,
+                                          s.tutorial_fade.fade_start_t + 0.01f));
+    ASSERT_INT("snapshot fade front starts at first char",
+               tutorial_fade_front(&s.tutorial_fade, line_idx, line_len,
+                                   s.tutorial_fade.fade_start_t),
+               0);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "snapshot char zero starts transparent",
+                              tutorial_fade_alpha(&s.tutorial_fade, line_idx, 0,
+                                                  line_len,
+                                                  s.tutorial_fade.fade_start_t),
+                              0.0f);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "snapshot last char finishes opaque",
+                              tutorial_fade_alpha(&s.tutorial_fade, line_idx,
+                                                  line_len - 1, line_len,
+                                                  s.tutorial_fade.fade_start_t +
+                                                      s.tutorial_fade.fade_duration),
+                              1.0f);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "snapshot settle starts at white",
+                              tutorial_fade_settle(&s.tutorial_fade, line_idx, 0,
+                                                   line_len,
+                                                   s.tutorial_fade.fade_start_t),
+                              0.0f);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "snapshot last char settles to base",
+                              tutorial_fade_settle(&s.tutorial_fade, line_idx,
+                                                   line_len - 1, line_len,
+                                                   s.tutorial_fade.fade_start_t +
+                                                       s.tutorial_fade.fade_duration),
+                              1.0f);
+    ASSERT_TRUE("snapshot fade stops after duration",
+                !tutorial_fade_line_active(&s.tutorial_fade, line_idx,
+                                           s.tutorial_fade.fade_start_t +
+                                               s.tutorial_fade.fade_duration));
+}
+
 static void test_tutorial_fade_render_uses_per_char_path(void) {
     unsigned long long fading_raster_calls;
     unsigned long long settled_raster_calls;
@@ -1685,6 +1761,7 @@ int main(void) {
     test_color_picker_active_line_no_revert();
     test_autocomplete_panel();
     test_variable_panel();
+    test_ui_clamp_panel_y_honors_edge_pad();
     test_menu_bar();
     test_ui_panels_hit_test();
     test_ui_menu_bar_hit_test();
@@ -1699,6 +1776,7 @@ int main(void) {
     test_ui_panels_hit_test_virtual_row_routes_to_source();
     test_vertex2f_gutter_labels();
     test_vertex_gutter_labels_follow_cursor_begin_block();
+    test_tutorial_fade_math_uses_snapshot_view();
     test_tutorial_fade_render_uses_per_char_path();
     test_tutorial_fade_handles_wrapped_lines();
     test_render_then_hit_test_row_consistency();

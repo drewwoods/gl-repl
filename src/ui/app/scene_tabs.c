@@ -46,7 +46,7 @@ static int scene_tabs_rects(const UiRenderSnapshot *snap,
                             int *cp_x_out, int *cp_w_out,
                             int *tab_by, int *tab_bh) {
     int cp_x, cp_y, cp_w, cp_h;
-    int panel_top, menu_by, by, bh;
+    int menu_by, by, bh;
     int count, avail, natural_sum, i, cx;
 
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
@@ -59,8 +59,7 @@ static int scene_tabs_rects(const UiRenderSnapshot *snap,
     if (count > UI_SCENE_TAB_CAP)
         count = UI_SCENE_TAB_CAP;
 
-    panel_top = cp_y + cp_h;
-    menu_by = panel_top - CODE_MARGIN_Y - LINE_H;  /* unchanged menu bar */
+    ui_layout_menu_bar_rect(NULL, &menu_by, NULL, NULL);
     bh = TAB_STRIP_H;
     by = menu_by - bh;
 

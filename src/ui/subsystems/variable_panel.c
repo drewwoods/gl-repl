@@ -14,6 +14,7 @@
 
 #include "ui/subsystems/variable_panel.h"
 #include "ui/core/gl_2d.h"
+#include "ui/core/layout_utils.h"
 #include "ui/core/theme.h"
 #include "config.h"                  /* FONT_SMALL, FONT_SMALL_W */
 
@@ -131,16 +132,9 @@ void ui_variable_panel_rect(const UiVariablePanelView *view,
 
     int panel_y = sc_y + VAR_PANEL_BASE_Y + view->statusbar_h
                 + (int)lroundf(view->replay_lift_px);
-    int min_y = sc_y + view->statusbar_h + VAR_PANEL_EDGE_PAD;
-    int max_y = sc_y + sc_h - panel_h - VAR_PANEL_EDGE_PAD;
-    if (max_y >= min_y) {
-        if (panel_y < min_y) panel_y = min_y;
-        if (panel_y > max_y) panel_y = max_y;
-    } else {
-        panel_y = view->code_panel_at_top
-                ? sc_y + sc_h - panel_h - VAR_PANEL_EDGE_PAD
-                : min_y;
-    }
+    panel_y = ui_clamp_panel_y(sc_y, sc_h, panel_h, panel_y,
+                               view->code_panel_at_top,
+                               view->statusbar_h, VAR_PANEL_EDGE_PAD);
 
     if (px) *px = panel_x;
     if (py) *py = panel_y;

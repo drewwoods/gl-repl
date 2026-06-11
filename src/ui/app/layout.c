@@ -100,15 +100,3 @@ void ui_layout_menu_bar_rect(int *x, int *y, int *w, int *h) {
     if (w) *w = cp_w;
     if (h) *h = LINE_H;
 }
-
-int ui_clamp_panel_y(int scene_y, int scene_h, int panel_h, int requested_y, int layout_mode, int statusbar_h) {
-    int min_y = scene_y + statusbar_h + 4;
-    int max_y = scene_y + scene_h - panel_h - 4;
-    if (max_y >= min_y) {
-        if (requested_y < min_y) return min_y;
-        if (requested_y > max_y) return max_y;
-        return requested_y;
-    } else {
-        return layout_mode == CODE_PANEL_LAYOUT_TOP ? (scene_y + scene_h - panel_h - 4) : min_y;
-    }
-}

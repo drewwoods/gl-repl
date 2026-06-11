@@ -1,5 +1,4 @@
-#include "subsystems/tutorial/tutorial_internal.h"
-#include <string.h>
+#include "subsystems/tutorial/tutorial_animation.h"
 
 static float clamp01(float value) {
     if (value <= 0.0f)
@@ -21,24 +20,24 @@ static float tutorial_fade_slot_step(float fade_duration, int line_len) {
     return fade_duration / (float)total_slots;
 }
 
-int tutorial_step_fade_front(int line_idx, int line_len, float now) {
-    TutorialRuntimeState state = tutorial_state_view();
+int tutorial_fade_front(const TutorialFadeView *fade, int line_idx, int line_len,
+                        float now) {
     int safe_len;
     float step;
     float elapsed;
     int front;
 
-    if (!state.active || line_idx != state.fade_line_idx)
+    if (!fade || !fade->active || line_idx != fade->fade_line_idx)
         return -1;
-    if (now >= state.fade_start_t + state.fade_duration)
+    if (now >= fade->fade_start_t + fade->fade_duration)
         return -1;
 
     safe_len = line_len > 0 ? line_len : 1;
-    step = tutorial_fade_slot_step(state.fade_duration, safe_len);
+    step = tutorial_fade_slot_step(fade->fade_duration, safe_len);
     if (step <= 0.0f)
         return -1;
 
-    elapsed = now - state.fade_start_t;
+    elapsed = now - fade->fade_start_t;
     if (elapsed <= 0.0f)
         return 0;
 
@@ -50,15 +49,15 @@ int tutorial_step_fade_front(int line_idx, int line_len, float now) {
     return front;
 }
 
-float tutorial_step_fade_alpha(int line_idx, int char_idx, int line_len, float now) {
-    TutorialRuntimeState state = tutorial_state_view();
+float tutorial_fade_alpha(const TutorialFadeView *fade, int line_idx, int char_idx,
+                          int line_len, float now) {
     int safe_len;
     float step;
     float elapsed;
 
-    if (!state.active || line_idx != state.fade_line_idx)
+    if (!fade || !fade->active || line_idx != fade->fade_line_idx)
         return 1.0f;
-    if (now >= state.fade_start_t + state.fade_duration)
+    if (now >= fade->fade_start_t + fade->fade_duration)
         return 1.0f;
 
     safe_len = line_len > 0 ? line_len : 1;
@@ -67,23 +66,23 @@ float tutorial_step_fade_alpha(int line_idx, int char_idx, int line_len, float n
     if (char_idx >= safe_len)
         char_idx = safe_len - 1;
 
-    step = tutorial_fade_slot_step(state.fade_duration, safe_len);
+    step = tutorial_fade_slot_step(fade->fade_duration, safe_len);
     if (step <= 0.0f)
         return 1.0f;
-    elapsed = (now - state.fade_start_t) - (float)char_idx * step;
+    elapsed = (now - fade->fade_start_t) - (float)char_idx * step;
     return clamp01(elapsed / step);
 }
 
-float tutorial_step_fade_settle(int line_idx, int char_idx, int line_len, float now) {
-    TutorialRuntimeState state = tutorial_state_view();
+float tutorial_fade_settle(const TutorialFadeView *fade, int line_idx, int char_idx,
+                           int line_len, float now) {
     int safe_len;
     float step;
     float settle_duration;
     float elapsed;
 
-    if (!state.active || line_idx != state.fade_line_idx)
+    if (!fade || !fade->active || line_idx != fade->fade_line_idx)
         return 1.0f;
-    if (now >= state.fade_start_t + state.fade_duration)
+    if (now >= fade->fade_start_t + fade->fade_duration)
         return 1.0f;
 
     safe_len = line_len > 0 ? line_len : 1;
@@ -92,18 +91,17 @@ float tutorial_step_fade_settle(int line_idx, int char_idx, int line_len, float 
     if (char_idx >= safe_len)
         char_idx = safe_len - 1;
 
-    step = tutorial_fade_slot_step(state.fade_duration, safe_len);
+    step = tutorial_fade_slot_step(fade->fade_duration, safe_len);
     settle_duration = step * (float)TUTORIAL_FADE_SETTLE_CHARS;
     if (settle_duration <= 0.0f)
         return 1.0f;
     /* Elapsed time since this char finished its reveal slot. */
-    elapsed = (now - state.fade_start_t) - (float)(char_idx + 1) * step;
+    elapsed = (now - fade->fade_start_t) - (float)(char_idx + 1) * step;
     return clamp01(elapsed / settle_duration);
 }
 
-int tutorial_line_is_fading(int line_idx, float now) {
-    TutorialRuntimeState state = tutorial_state_view();
-
-    return state.active && line_idx == state.fade_line_idx &&
-           now < state.fade_start_t + state.fade_duration;
+int tutorial_fade_line_active(const TutorialFadeView *fade, int line_idx,
+                              float now) {
+    return fade && fade->active && line_idx == fade->fade_line_idx &&
+           now < fade->fade_start_t + fade->fade_duration;
 }

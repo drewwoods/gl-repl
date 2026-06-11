@@ -37,19 +37,12 @@ void replay_ui_hud_render(const struct UiRenderSnapshot *snap) {
      * the bottom of the scene. */
     int hud_y = scene_y + REPLAY_HUD_MARGIN_Y + STATUSBAR_H;
     int hud_w = scene_w - 2 * REPLAY_HUD_MARGIN_X;
-    int min_y = scene_y + STATUSBAR_H + 4;
-    int max_y = scene_y + scene_h - REPLAY_HUD_HEIGHT - 4;
 
     if (hud_w < REPLAY_HUD_MIN_WIDTH)
         hud_w = REPLAY_HUD_MIN_WIDTH;
-    if (max_y >= min_y) {
-        if (hud_y < min_y) hud_y = min_y;
-        if (hud_y > max_y) hud_y = max_y;
-    } else {
-        hud_y = snap->code_panel.layout_mode == CODE_PANEL_LAYOUT_TOP
-              ? scene_y + scene_h - REPLAY_HUD_HEIGHT - 4
-              : min_y;
-    }
+    hud_y = ui_clamp_panel_y(scene_y, scene_h, REPLAY_HUD_HEIGHT, hud_y,
+                             snap->code_panel.layout_mode == CODE_PANEL_LAYOUT_TOP,
+                             STATUSBAR_H, 4);
     if (snap->replay.total_flat_cmds > 0)
         progress = (float)snap->replay.pc / (float)snap->replay.total_flat_cmds;
     if (progress < 0.0f) progress = 0.0f;

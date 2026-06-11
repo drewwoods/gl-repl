@@ -585,6 +585,7 @@ HDRS = \
 	src/ui/app/state.h \
 	src/ui/app/state_types.h \
 	src/ui/core/tabbed_overlay.h \
+	src/ui/core/layout_utils.h \
 	src/ui/core/text_layout.h \
 	src/ui/core/text_panel.h \
 	src/ui/core/text_search.h \
@@ -595,6 +596,7 @@ HDRS = \
 	src/subsystems/replay/replay.h \
 	src/subsystems/replay/replay_annotations.h \
 	src/subsystems/replay/replay_state.h \
+	src/subsystems/tutorial/tutorial_animation.h \
 	src/subsystems/tutorial/tutorial_internal.h \
 	src/subsystems/tutorial/tutorial.h \
 	src/subsystems/tutorial/tutorial_state.h \

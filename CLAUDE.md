@@ -513,8 +513,9 @@ state-machine level, not buried in the doc body.
 | `src/editor/search.c` | Case-insensitive substring search state and match navigation |
 | `src/editor/search.h` | Search query helpers and input routing API |
 | `src/app/glr_completion.c` | REPL-side completion provider: walks command spec / predef vars / `CMD_FUNC_DEF` for matches, ghost text, parameter hints. Registered via `EditorCompletionProvider`. |
-| `src/ui/app/layout.c` | Pure window layout geometry: scene rect and code-panel rect derivation |
-| `src/ui/app/layout.h` | Layout geometry API (`ui_layout_scene_rect`, `ui_layout_code_panel_rect`) |
+| `src/ui/app/layout.c` | Pure window layout geometry: scene/code-panel rect derivation plus shared menu-bar anchoring |
+| `src/ui/app/layout.h` | Layout geometry API (`ui_layout_scene_rect`, `ui_layout_code_panel_rect`, `ui_layout_menu_bar_rect`) |
+| `src/ui/core/layout_utils.h` | Header-only pure layout helpers shared across UI layers (`ui_clamp_panel_y`) |
 | `src/repl/scenes.c` | User-scene slots, LRU eviction, workspace save/load, workspace dir binding |
 | `src/repl/example_loader.c` | Built-in example loading and active-example tracking |
 | `src/app/glr_debug.c` | Diagnostic dumps for CLI flags and tests |
@@ -566,10 +567,11 @@ state-machine level, not buried in the doc body.
 | `src/subsystems/tutorial/tutorial_state.c` | Tutorial peer subsystem: owns `TutorialRuntimeState` (active flag, step, locked_lines, fade timing, pending commit, instruction-line map, last match result). `fade_duration` is set per-line at emit time from `TUTORIAL_FADE_CHARS_PER_SEC`, not held as a constant |
 | `src/subsystems/tutorial/tutorial_state.h` | Peer-subsystem facade (`tutorial_state_view/_mut/_reset`, `tutorial_active`), `TutorialMatchKind/Result` types |
 | `src/subsystems/tutorial/tutorial_runner.c` | Tutorial runner: starts/exits/advances, emits instruction comments via `repl_load_apply_line`, captures/restores cfg baselines, enforces locked-line/source guards, and handles SET/REQUIRE/REQUIRE_VAR progression without recursion (a REQUIRE_VAR step for a not-yet-declared var is a declaration step: no separate locked comment, instruction rides the ghost as a trailing comment on the decl line) |
-| `src/subsystems/tutorial/tutorial_animation.c` | Tutorial comment reveal timing: fade front, per-character alpha, settle easing, and active-line fade queries |
+| `src/subsystems/tutorial/tutorial_animation.h` | Pure fade helper surface: `TutorialFadeView` plus `tutorial_fade_*` queries over frozen timing data (shared by the snapshot/render path and tests) |
+| `src/subsystems/tutorial/tutorial_animation.c` | Implementation of the pure tutorial fade helpers; no live tutorial-state reads |
 | `src/subsystems/tutorial/tutorial_match.c` | Tutorial command matching, normalization, expected-message formatting, and ghost-text shadow suffix helpers |
 | `src/subsystems/tutorial/tutorial_internal.h` | Tutorial-private shared declarations for the split runner / animation / match files |
-| `src/subsystems/tutorial/tutorial.h` | Runner API: `tutorial_start/_exit/_teardown/_handle_commit_attempt/_advance_after_successful_commit/_current_expected_text/_current_step_kind/_notify_state_changed/_handle_ack_key/_block_noncommand_commit/_line_is_locked/_line_is_fading/_step_fade_alpha/_guard_source_change/_match`. Knobs: `TUTORIAL_FADE_CHARS_PER_SEC` (reveal rate), `TUTORIAL_FADE_SETTLE_CHARS` (settle-wave width) |
+| `src/subsystems/tutorial/tutorial.h` | Runner API: `tutorial_start/_exit/_teardown/_handle_commit_attempt/_advance_after_successful_commit/_current_expected_text/_current_step_kind/_notify_state_changed/_handle_ack_key/_block_noncommand_commit/_line_is_locked/_guard_source_change/_match`. Knobs: `TUTORIAL_FADE_CHARS_PER_SEC` (reveal rate), `TUTORIAL_FADE_SETTLE_CHARS` (settle-wave width) |
 | `src/repl/export.c` | Writer half (audit #69 split). `repl_export_save_output`, `repl_dump_code_panel_text`, workspace header emit dispatcher `repl_state_refresh_workspace_header_lines`, scaffold sections, render-state/cam refresh, init-bootstrap apply, light/render text generators. Also implements the typed live-cfg wrappers `repl_cfg_get_int` / `_set_int` / `_known` over the installed config bridge (bridge-only — no `scene_*`/`glr_*` calls; `check-repl-export-via-bridge` stays green) |
 | `src/repl/import.c` | Reader half (audit #69 split). `repl_export_load_from_file`, the pending-`@cfg` accumulator + `repl_export_apply_pending_cfg`, deferred-`@var` table, workspace directive readers (`parse_workspace_dir` / `_scene_name` / `_var` / `_func_alias` / `_cfg`) and the `repl_state_parse_workspace_header_line` dispatcher, snippet directive table (`@declare`), C-to-REPL line translators (for-headers, function headers, tess lines, `glPointParameterfv`, `label()`), and the line-by-line `ImportState` machine. The `IMPORT_EXPORT_STATE` macro block is duplicated verbatim with `src/repl/export.c`; both TUs reach the same state-owner facade. |
 | `src/repl/export.h` | Export/import public API and workspace-header pending-state types |

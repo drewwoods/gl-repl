@@ -834,19 +834,14 @@ static void test_invalid_user_scene_load_does_not_exit_tutorial(void) {
     ASSERT_TRUE("tutorial survives invalid scene load", tutorial_active());
 }
 
-static void test_fade_alpha_math(void) {
-    SourceTextView doc;
+static void test_fade_duration_math(void) {
     TutorialRuntimeState state;
-    int line_len;
 
     reset_fixture();
     tutorial_start(0);
-    doc = source_document_view();
     state = tutorial_state_view();
-    line_len = (int)strlen(source_text_line(doc, 0));
 
-    ASSERT_TRUE("line is fading at start",
-                tutorial_line_is_fading(0, state.fade_start_t + 0.01f));
+    ASSERT_TRUE("tutorial active after start", state.active);
     ASSERT_INT("fade line idx is first row", state.fade_line_idx, 0);
     /* Duration is now derived from the comment's length at a fixed
      * chars-per-second rate. Use the catalog's comment string (the same
@@ -862,27 +857,6 @@ static void test_fade_alpha_math(void) {
                    (int)(state.fade_duration * 1000.0f),
                    (int)(expected * 1000.0f));
     }
-    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "char zero starts transparent",
-                              tutorial_step_fade_alpha(0, 0, line_len, state.fade_start_t),
-                              0.0f);
-    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "last char finishes opaque",
-                              tutorial_step_fade_alpha(0, line_len - 1, line_len,
-                                                       state.fade_start_t + state.fade_duration),
-                              1.0f);
-    /* Settle factor lags behind the reveal: at fade_start_t a char is
-     * just appearing in bright white (settle=0) and the last char's
-     * settle finishes exactly at fade_start_t + fade_duration. */
-    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "char zero settle starts at white",
-                              tutorial_step_fade_settle(0, 0, line_len,
-                                                        state.fade_start_t),
-                              0.0f);
-    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "last char settle finishes at base",
-                              tutorial_step_fade_settle(0, line_len - 1, line_len,
-                                                        state.fade_start_t +
-                                                            state.fade_duration),
-                              1.0f);
-    ASSERT_TRUE("line stops fading after duration",
-                !tutorial_line_is_fading(0, state.fade_start_t + state.fade_duration));
 }
 
 static void test_complete_and_menu_actions(void) {
@@ -2900,7 +2874,7 @@ int main(void) {
     test_loading_workspace_exits_tutorial();
     test_invalid_workspace_load_does_not_exit_tutorial();
     test_invalid_user_scene_load_does_not_exit_tutorial();
-    test_fade_alpha_math();
+    test_fade_duration_math();
     test_complete_and_menu_actions();
     test_start_captures_home_for_unsaved_buffer();
     test_start_rejects_out_of_range_idx();
