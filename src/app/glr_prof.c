@@ -16,7 +16,9 @@
  * PROF_SNAPSHOT, PROF_SCENE_3D_OVERLAY_* in _OVERLAYS, etc.). A standalone
  * demo that reuses cpuprof supplies its own prof_section_info.
  */
+#include "app/glr_prof.h"
 #include "support/cpuprof.h"
+#include "support/gpuprof.h"
 
 #include <stddef.h>   /* NULL */
 
@@ -81,4 +83,79 @@ ProfSectionInfo prof_section_info(ProfSection s) {
         return k_sections[s];
     ProfSectionInfo unknown = { "?", 0, 0 };
     return unknown;
+}
+
+/* The GPU-bracketed subset: sections whose body emits GL calls, marked 1
+ * so the cpuprof hooks below wrap them in GL_TIME_ELAPSED queries. Left
+ * out (0): the pure-CPU sections (snapshot/flatten/reformat/autonormal/
+ * frame-restore, code-panel layout precompute) and the per-fade-batch
+ * sub-sections — one segment per batch per accumulation pass would swamp
+ * gpuprof's per-frame query budget while PROF_SCENE_3D_FADE already
+ * covers the whole pass. */
+static const unsigned char k_gpu_sections[PROF_SECTION_COUNT] = {
+    [PROF_SCENE_3D]                          = 1,
+    [PROF_SCENE_3D_SETUP]                    = 1,
+    [PROF_SCENE_3D_FILL]                     = 1,
+    [PROF_SCENE_3D_FADE]                     = 1,
+    [PROF_SCENE_3D_HELPERS]                  = 1,
+    [PROF_SCENE_3D_BACKDROP]                 = 1,
+    [PROF_SCENE_3D_GRID]                     = 1,
+    [PROF_SCENE_3D_AXES]                     = 1,
+    [PROF_SCENE_3D_ORBIT_TARGET]             = 1,
+    [PROF_SCENE_3D_OVERLAYS]                 = 1,
+    [PROF_SCENE_3D_OVERLAY_OUTLINES]         = 1,
+    [PROF_SCENE_3D_OVERLAY_BUILD_GUIDES]     = 1,
+    [PROF_SCENE_3D_OVERLAY_TRANSFORM_GUIDES] = 1,
+    [PROF_SCENE_3D_OVERLAY_NORMALS]          = 1,
+    [PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS]   = 1,
+    [PROF_SCENE_3D_POST_PROCESS]             = 1,
+    [PROF_CODE_PANEL]                        = 1,
+    [PROF_CODE_PANEL_CHROME]                 = 1,
+    [PROF_CODE_PANEL_LINES]                  = 1,
+    [PROF_CODE_PANEL_LINES_STATIC]           = 1,
+    [PROF_CODE_PANEL_LINES_BODY]             = 1,
+    [PROF_CODE_PANEL_LINES_BODY_CMDS]        = 1,
+    [PROF_CODE_PANEL_LINES_BODY_NEWLINE]     = 1,
+    [PROF_CODE_PANEL_LINES_FOOTER]           = 1,
+    [PROF_CODE_PANEL_OVERLAYS]               = 1,
+    [PROF_UI_PANELS]                         = 1,
+    [PROF_REPLAY_HUD]                        = 1,
+    [PROF_PROFILE_PANEL]                     = 1,
+    [PROF_MEMORY_PANEL]                      = 1,
+    [PROF_COMPOSITOR]                        = 1,
+    [PROF_FRAME_TOTAL]                       = 1,
+};
+
+int glr_prof_section_is_gpu(ProfSection s) {
+    if (s < 0 || s >= PROF_SECTION_COUNT) return 0;
+    return k_gpu_sections[s];
+}
+
+static GlrProfGpuCaptureMode g_gpu_capture_mode = GLR_PROF_GPU_CAPTURE_ALL;
+
+void glr_prof_set_gpu_capture_mode(GlrProfGpuCaptureMode mode) {
+    g_gpu_capture_mode = mode;
+}
+
+/* Capture-mode gate for the hooks. The mode only changes at frame top
+ * (before any begin), so begin/end always agree within a frame. */
+static int glr_prof_gpu_capture_allows(ProfSection s) {
+    if (!k_gpu_sections[s]) return 0;
+    if (g_gpu_capture_mode == GLR_PROF_GPU_CAPTURE_OFF) return 0;
+    if (g_gpu_capture_mode == GLR_PROF_GPU_CAPTURE_TOP_LEVEL &&
+        k_sections[s].depth > 0)
+        return 0;
+    return 1;
+}
+
+static void glr_prof_gpu_begin_hook(ProfSection s) {
+    if (glr_prof_gpu_capture_allows(s)) gpu_prof_begin(s);
+}
+
+static void glr_prof_gpu_end_hook(ProfSection s) {
+    if (glr_prof_gpu_capture_allows(s)) gpu_prof_end(s);
+}
+
+void glr_prof_install_gpu_section_hooks(void) {
+    prof_install_section_hooks(glr_prof_gpu_begin_hook, glr_prof_gpu_end_hook);
 }

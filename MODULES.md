@@ -517,7 +517,7 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 | `ui_tabbed_overlay` | Generic modal tabbed text overlay renderer. Takes a `UiOverlayState` (visible / tab_idx / scroll / viewport / `UiOverlayContent`) and draws a titled, paged reference card. Knows nothing about REPL semantics. Currently consumed by the F1 help; available for future modal text panels |
 | `ui_variable_panel` | Renderer for the variable-slider panel (the panel chrome — the *peer subsystem* owns drag/visibility state). Input returns `UI_HIT_VARIABLE_SLIDER` |
 | `ui_autocomplete_panel` | Completion popup renderer; reads `EditorState.autocomplete` |
-| `ui_profile_panel` | CPU timing HUD renderer (lives at `src/ui/support/cpuprof.c`) |
+| `ui_profile_panel` | CPU/GPU timing HUD renderer (lives at `src/ui/support/cpuprof.c`; CPU/GPU/Max columns, GPU fed by `src/support/gpuprof.c` timer queries) |
 | `ui_memory_panel` | Memory RSS/history HUD renderer (lives at `src/ui/support/memprof.c`) |
 | `replay_ui_hud` | **Feature-UI** (replay peer): 2D replay HUD; reads replay peer subsystem state through snapshot. Lives under the `replay_ui_*` prefix because it knows replay concepts (mode / PC / play-paused-done / speed); audited by `check-replay-ui-isolation` |
 
@@ -744,6 +744,7 @@ flowchart LR
     subgraph services["6. Services + lifecycle"]
         audio["src/app/glr_audio.c<br/>playlist"]
         prof["src/support/cpuprof.c<br/>instrumentation"]
+        gpuprof["src/support/gpuprof.c<br/>GPU timer queries"]
         export["src/repl/export.c<br/>save/load · reads source_document view"]
     end
 
@@ -760,7 +761,7 @@ flowchart LR
         uitabbed["src/ui/core/tabbed_overlay.c<br/>generic modal tabbed text<br/>(content from src/repl/help_text.c)"]
         uivpanel["src/ui/subsystems/variable_panel.c<br/>variable panel chrome"]
         uiac["src/ui/app/autocomplete_panel.c<br/>completion popup"]
-        uiprof["src/ui/support/cpuprof.c<br/>timing HUD"]
+        uiprof["src/ui/support/cpuprof.c<br/>CPU/GPU timing HUD"]
         uimem["src/ui/support/memprof.c<br/>memory HUD"]
         uirhud["src/ui/subsystems/replay_hud.c<br/>replay HUD (feature-UI)"]
         uilayout["src/ui/app/layout.c<br/>rect geometry"]

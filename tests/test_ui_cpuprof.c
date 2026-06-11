@@ -4,6 +4,7 @@
 #ifdef GL_STUBS
 #include "ui/support/cpuprof.h"
 #include "support/cpuprof.h"
+#include "app/glr_prof.h"
 #include "support/test_harness.h"
 #include <GL/gl_stub_counts.h>
 #endif
@@ -24,6 +25,24 @@ static void test_cpuprof_metrics(void) {
     ASSERT_TRUE("width is positive", ui_profile_panel_width() > 0);
     ASSERT_TRUE("height is positive on", ui_profile_panel_height(PROFILE_PANEL_ON) > 0);
     ASSERT_TRUE("height is positive details", ui_profile_panel_height(PROFILE_PANEL_DETAILS) > 0);
+}
+
+static void test_gpu_section_policy(void) {
+    /* GL-emitting sections are GPU-bracketed... */
+    ASSERT_INT_EQ("scene 3d is gpu", glr_prof_section_is_gpu(PROF_SCENE_3D), 1);
+    ASSERT_INT_EQ("code panel is gpu", glr_prof_section_is_gpu(PROF_CODE_PANEL), 1);
+    ASSERT_INT_EQ("frame total is gpu", glr_prof_section_is_gpu(PROF_FRAME_TOTAL), 1);
+    /* ...pure-CPU sections and the per-fade-batch budget exclusions are not. */
+    ASSERT_INT_EQ("flatten is cpu-only", glr_prof_section_is_gpu(PROF_FLATTEN), 0);
+    ASSERT_INT_EQ("snapshot is cpu-only", glr_prof_section_is_gpu(PROF_SNAPSHOT), 0);
+    ASSERT_INT_EQ("frame restore is cpu-only",
+                  glr_prof_section_is_gpu(PROF_FRAME_RESTORE), 0);
+    ASSERT_INT_EQ("fade batch exec excluded",
+                  glr_prof_section_is_gpu(PROF_SCENE_3D_FADE_BATCH_EXEC), 0);
+    ASSERT_INT_EQ("code panel layout excluded",
+                  glr_prof_section_is_gpu(PROF_CODE_PANEL_LAYOUT), 0);
+    ASSERT_INT_EQ("out-of-range section rejected",
+                  glr_prof_section_is_gpu((ProfSection)-1), 0);
 }
 
 static void test_cpuprof_render_off(void) {
@@ -83,6 +102,7 @@ static void test_cpuprof_render_details(void) {
 int main(void) {
     printf("--- ui_cpuprof tests ---\n");
     test_cpuprof_metrics();
+    test_gpu_section_policy();
     test_cpuprof_render_off();
     test_cpuprof_render_on();
     test_cpuprof_render_details();

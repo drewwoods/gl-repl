@@ -6,8 +6,9 @@
  * which include each other. So the section IDs live in this one tiny header,
  * force-included into every translation unit by the Makefile's OBJ_CFLAGS
  * (`-include prof_sections.h`, right beside `-include config.h`). That keeps
- * the generic timer/panel (src/support/cpuprof.{c,h}, src/ui/support/cpuprof.c)
- * free of any app section names: support/cpuprof.h falls back to an opaque
+ * the generic timers/panel (src/support/cpuprof.{c,h}, src/support/gpuprof.{c,h},
+ * src/ui/support/cpuprof.c) free of any app section names: support/cpuprof.h
+ * falls back to an opaque
  * `typedef int ProfSection` when this catalog is absent (see its #ifndef
  * PROF_SECTIONS_PROVIDED guard), so those four files compile and link with no
  * dependency on this file at all — the build just injects a richer catalog.

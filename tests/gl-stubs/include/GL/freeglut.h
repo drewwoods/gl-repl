@@ -143,6 +143,25 @@ static inline GLUTproc glutGetProcAddress(const char *name) {
         strcmp(name, "glPointParameterfvARB") == 0 ||
         strcmp(name, "glPointParameterfvEXT") == 0)
         return (GLUTproc)glPointParameterfv;
+    /* Timer-query procs for the runtime-loaded GPU-profiler path. The
+     * GL/gl.h stubs are inert (results never become available), so a
+     * stub build exercises gpuprof's bookkeeping but reports no data. */
+    if (strcmp(name, "glGenQueries") == 0 || strcmp(name, "glGenQueriesARB") == 0)
+        return (GLUTproc)glGenQueries;
+    if (strcmp(name, "glDeleteQueries") == 0 || strcmp(name, "glDeleteQueriesARB") == 0)
+        return (GLUTproc)glDeleteQueries;
+    if (strcmp(name, "glBeginQuery") == 0 || strcmp(name, "glBeginQueryARB") == 0)
+        return (GLUTproc)glBeginQuery;
+    if (strcmp(name, "glEndQuery") == 0 || strcmp(name, "glEndQueryARB") == 0)
+        return (GLUTproc)glEndQuery;
+    if (strcmp(name, "glGetQueryObjectiv") == 0 ||
+        strcmp(name, "glGetQueryObjectivARB") == 0)
+        return (GLUTproc)glGetQueryObjectiv;
+    if (strcmp(name, "glGetQueryObjectui64vEXT") == 0 ||
+        strcmp(name, "glGetQueryObjectui64v") == 0)
+        return (GLUTproc)glGetQueryObjectui64vEXT;
+    if (strcmp(name, "glQueryCounter") == 0)
+        return (GLUTproc)glQueryCounter;
     return (GLUTproc)0;
 }
 static inline void glutSetCursor(int cursor) { (void)cursor; }

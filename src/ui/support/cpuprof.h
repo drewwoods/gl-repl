@@ -1,17 +1,22 @@
 /*
- * ui_cpuprof.h - CPU profiling overlay panel.
+ * ui_cpuprof.h - CPU/GPU profiling overlay panel.
  *
- * Renders a compact overlay showing per-frame CPU time breakdown across major
- * sections (flattening, rendering, UI, physics, etc.). Displays both the
- * instantaneous last-frame time and a smoothed exponential average for trend
- * analysis. Used for real-time performance monitoring and bottleneck detection.
+ * Renders a compact overlay showing per-frame time breakdown across major
+ * sections (flattening, rendering, UI, etc.). Each row shows three smoothed
+ * exponential averages: CPU wall time, GPU elapsed time (for the
+ * GPU-bracketed subset, when timer queries are available — "--" otherwise),
+ * and Max, the worse of the two. Used for real-time performance monitoring
+ * and bottleneck detection. GPU windows overlap on pipelined/tile-deferred
+ * GPUs, so the GPU column is a relative-hotspot signal, not an additive
+ * budget — see the NOTE in support/gpuprof.h.
  *
- * Profiling infrastructure: The underlying measurement is in
+ * Profiling infrastructure: The CPU measurement is in
  * src/support/cpuprof.c / src/support/cpuprof.h, which uses platform timers
- * (gettimeofday or equivalent) to bracket code sections via
- * prof_begin/prof_end. This module reads those measurements and renders
- * them as an overlay (top-left corner by default, position is
- * configurable).
+ * to bracket code sections via prof_begin/prof_end; the GPU measurement is
+ * in src/support/gpuprof.c / src/support/gpuprof.h (asynchronous
+ * GL_TIME_ELAPSED timer queries over the same sections). This module reads
+ * those measurements and renders them as an overlay (top-left corner by
+ * default, position is configurable).
  *
  * Visibility: Panel can be toggled on/off via Ctrl+W or the config menu
  * (GLR_CONFIG_CPU_PROFILE). When off, rendering is a no-op. When on, the
@@ -34,9 +39,10 @@ typedef enum {
 	PROFILE_PANEL_MODE_COUNT
 } UiProfilePanelMode;
 
-/* Panel width in pixels. Public so sibling panels (e.g. ui_memory_panel)
- * can shift left of this panel for side-by-side layout. */
-#define PROFILE_PANEL_W  320
+/* Panel width in pixels (label column + three 72px value columns). Public
+ * so sibling panels (e.g. ui_memory_panel) can shift left of this panel
+ * for side-by-side layout. */
+#define PROFILE_PANEL_W  384
 
 /* Narrow per-frame view (the 2D analog of SceneRenderConfig). The controller
  * resolves the panel's stacked anchor and bakes it into panel_x/panel_y, so

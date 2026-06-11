@@ -377,6 +377,7 @@ FORCE:
 SUPPORT_SRCS = \
 	src/support/memprof.c \
 	src/support/cpuprof.c \
+	src/support/gpuprof.c \
 	src/support/mesh_ply.c
 
 APP_CONTROLLER_SRCS = \
@@ -516,6 +517,8 @@ HDRS = \
 	src/repl/format.h \
 	src/support/memprof.h \
 	src/support/cpuprof.h \
+	src/support/gpuprof.h \
+	src/app/glr_prof.h \
 	gl_repl.h \
 	source_document.h \
 	src/repl/transform_utils.h \
@@ -608,7 +611,7 @@ HDRS = \
 UI_SRCS = $(UI_CORE_SRCS) $(UI_APP_SRCS)
 SCENE_HDRS = $(filter src/scene/%.h,$(HDRS))
 UI_HDRS = $(filter src/ui/core/%.h src/ui/app/%.h,$(HDRS))
-STATE_NEUTRAL_SRCS = src/repl/format.c src/support/memprof.c src/support/cpuprof.c tests/gl-stubs/gl_stub_counts.c
+STATE_NEUTRAL_SRCS = src/repl/format.c src/support/memprof.c src/support/cpuprof.c src/support/gpuprof.c tests/gl-stubs/gl_stub_counts.c
 
 # Object lists used to build the standalone scene_demo without dragging in
 # any REPL editor/controller code. Scene + prof — the scene module no
@@ -716,8 +719,11 @@ MEMPROF_DEMO_DEP_SRCS = src/support/memprof.c \
 # memprof_demo: the CPU profile panel (src/ui/support/cpuprof.c) was narrowed
 # off UiRenderSnapshot onto UiProfilePanelView (anchor baked by the
 # controller), so it links from {support, ui/support, ui/core} alone.
-# support/cpuprof.c is the already-pure wall-time sampler.
+# support/cpuprof.c is the already-pure wall-time sampler; support/gpuprof.c
+# is its GL-free GPU twin (the panel reads it; never initialized here, so
+# the GPU column stays "--").
 CPUPROF_DEMO_DEP_SRCS = src/support/cpuprof.c \
+                        src/support/gpuprof.c \
                         src/ui/support/cpuprof.c \
                         src/ui/core/theme.c \
                         tests/gl-stubs/gl_stub_counts.c
@@ -784,6 +790,7 @@ TEST_BINS = \
 	test_format \
 	test_mesh_ply \
 	test_memprof \
+	test_gpuprof \
 	test_repl_state \
 	test_repl_code_panel_layout \
 	test_ui_theme \
@@ -848,7 +855,7 @@ TEST_BINS += test_ui_memprof
 TEST_BINS += test_ui_cpuprof
 endif
 
-CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_repl_code_panel_layout test_ui_theme test_scene_palette test_audio test_scene_guides test_scene_transition test_scene_render test_scene_file_menu test_editor_completion test_glr_camera test_ui_cpuprof test_ui_memprof test_ui_text_panel test_tutorial_match,$(TEST_BINS))
+CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_gpuprof test_repl_code_panel_layout test_ui_theme test_scene_palette test_audio test_scene_guides test_scene_transition test_scene_render test_scene_file_menu test_editor_completion test_glr_camera test_ui_cpuprof test_ui_memprof test_ui_text_panel test_tutorial_match,$(TEST_BINS))
 
 # Benchmark binaries follow the same linking pattern as core test binaries
 # (they reuse CORE_TEST_OBJS so they work in both real-GL and stubs builds),
@@ -899,6 +906,13 @@ test_mesh_ply_RUN ?= $(BINDIR)/test_mesh_ply
 test_memprof_OBJS = $(OBJDIR)/$(TEST_DIR)/test_memprof.o $(OBJDIR)/src/support/memprof.o
 test_memprof_LDLIBS = -lm
 test_memprof_RUN ?= $(BINDIR)/test_memprof
+
+# Include-as-unit (the test #includes support/gpuprof.c with a tiny segment
+# cap to reach the overflow path and the internal counters), so gpuprof.o
+# itself must not be linked. GL-free: queries are scripted fakes.
+test_gpuprof_OBJS = $(OBJDIR)/$(TEST_DIR)/test_gpuprof.o
+test_gpuprof_LDLIBS = -lm
+test_gpuprof_RUN ?= $(BINDIR)/test_gpuprof
 
 test_repl_code_panel_layout_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_code_panel_layout.o $(OBJDIR)/src/ui/core/text_layout.o
 test_repl_code_panel_layout_LDLIBS =
@@ -956,6 +970,7 @@ test_glr_camera_RUN ?= $(BINDIR)/test_glr_camera
 test_ui_cpuprof_OBJS = $(OBJDIR)/$(TEST_DIR)/test_ui_cpuprof.o \
 	$(OBJDIR)/src/app/glr_prof.o \
 	$(OBJDIR)/src/support/cpuprof.o \
+	$(OBJDIR)/src/support/gpuprof.o \
 	$(OBJDIR)/src/ui/support/cpuprof.o \
 	$(OBJDIR)/src/ui/core/theme.o \
 	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o
@@ -1919,6 +1934,11 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "                 path (camera-distance glPointSize fallback). Support is otherwise\n"
 	@printf "                 auto-detected from the GL context at startup; there is no build\n"
 	@printf "                 flag. See ARCHITECTURE.md > Runtime GL Capability Detection.\n"
+	@printf "                 GLR_NO_GPU_PROF=1 ./gl-repl disables the GPU timer queries behind\n"
+	@printf "                 the profile panel's GPU column (the column reads \"--\"). Otherwise\n"
+	@printf "                 auto-detected at startup: GL_ARB_timer_query / GL 3.3 timestamps\n"
+	@printf "                 preferred (additive), GL_EXT_timer_query elapsed brackets as the\n"
+	@printf "                 fallback (Apple GL 2.1); no build flag. Same doc section.\n"
 	@printf "                 GLR_AUDIO_HITCH_MS=N ./gl-repl sets the audio-worker hitch\n"
 	@printf "                 threshold (default 50ms; 0 disables). --no-audio skips audio\n"
 	@printf "                 init to isolate startup stalls; startup prints an [init +Ns]\n"

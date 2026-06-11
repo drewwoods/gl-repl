@@ -373,7 +373,7 @@ detected once in `glr_ctrl_init_gl()` — the first point at which the GL
 context is current — and pushed into the GL-free REPL/scene layers through
 setters and `SceneRenderConfig`, never re-queried per frame.
 
-The one current case is **`glPointParameterfv`** (distance-attenuated point
+The first case is **`glPointParameterfv`** (distance-attenuated point
 size), core GL 1.4 but absent on some legacy contexts. Detection:
 
 ```
@@ -405,6 +405,50 @@ Detection MUST run before `repl_apply_init_bootstrap()` in the same
 function: on unsupported hardware the injected `point_attenuation` bootstrap
 entry has to be skipped entirely rather than invoking the missing entry
 point.
+
+The second case is the **GPU profiler's timer queries** — the profile
+panel's GPU column, measured by `src/support/gpuprof.c`. Detection:
+
+```
+has_timestamp = glutExtensionSupported("GL_ARB_timer_query")
+              || GL_VERSION >= 3.3
+advertised    = has_timestamp
+              || glutExtensionSupported("GL_EXT_timer_query")
+```
+
+The entry points are runtime-loaded in `glr_ctrl_init_gl()` (same
+core-then-ARB/EXT-suffix loader pattern as `glPointParameterfv`) and
+injected into gpuprof as a function-pointer table, so the support module
+stays GL-header-free. Two measurement modes, picked at init by what
+loaded:
+
+* **timestamp mode** (preferred; `glQueryCounter(GL_TIMESTAMP)`, ARB /
+  GL 3.3 only — typical on Linux/Mesa contexts): one marker per section
+  transition; interval deltas tile the GPU timeline exactly, so
+  per-section times are additive and Frame Total is a true window.
+  `glQueryCounter` is only loaded when `has_timestamp` is advertised —
+  GLX's GetProcAddress can return a callable stub for *any* name, so
+  load-and-see is not a safe capability test.
+* **elapsed mode** (fallback; `GL_TIME_ELAPSED_EXT` brackets — the only
+  option on Apple's GL 2.1, which exposes `EXT_timer_query` but not
+  `ARB_timer_query`): bracket windows overlap on pipelined and
+  tile-deferred GPUs, so per-section sums can exceed the wall-clock
+  frame time; read the column as a relative-hotspot signal there (the
+  full caveat lives in `src/support/gpuprof.h`).
+
+Either way results are harvested asynchronously — a 4-deep ring of
+per-frame query slots polled with `GL_QUERY_RESULT_AVAILABLE`, read 1–3
+frames later — never a `glFinish`. How much gets queried per frame
+follows the profile panel: hidden → no queries at all, ON → top-level
+sections, DETAILS → the full GPU subset (`glr_prof_set_gpu_capture_mode`,
+policy table in `src/app/glr_prof.c`).
+
+**`GLR_NO_GPU_PROF`** (environment variable, any non-empty value)
+disables GPU timing entirely — the panel's GPU column reads `--`, and
+the Max column falls back to plain CPU. When GPU timing ends up off,
+`glr_ctrl_init_gl()` logs one stderr line distinguishing the env
+override, a context that advertises timer queries but yields no loadable
+entry points, and a context with no timer-query support at all.
 
 ### Dynamic Reshape Projection (export + code panel)
 
