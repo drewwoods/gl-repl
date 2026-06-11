@@ -200,8 +200,15 @@ build_one() {
     local project_src_abs
     project_src_abs="$(cd "${PROJECT_SRC}" && pwd)"
     local rel_path="${sample_dir#"${project_src_abs}"/}"
-    # Use nested path as name (replace / with -)
-    local sample_name="${rel_path//\//-}"
+    # Use nested path as name (replace / with -); for projects outside
+    # ${PROJECT_SRC} (e.g. the gl-repl repo) the prefix-strip is a no-op
+    # and would mangle the absolute path, so fall back to the dir name.
+    local sample_name
+    if [[ "${rel_path}" == "${sample_dir}" ]]; then
+        sample_name="$(basename "${sample_dir}")"
+    else
+        sample_name="${rel_path//\//-}"
+    fi
     if [[ -z "${sample_name}" || "${sample_name}" == "." ]]; then
         sample_name="$(basename "${sample_dir}")"
     fi
@@ -228,6 +235,53 @@ build_one() {
     if [[ "$(basename "${input_file_abs}")" == "Makefile" ]]; then
         echo -e "${CYAN}Building via Makefile: ${input_file} → ${out_html}${NC}"
 
+        # --- New-layout gl-repl repo (src/ tree, `gl-repl:` target) ---
+        # Its Makefile already carries the project -I flags and the
+        # `-include config.h` force-includes in OBJ_CFLAGS, so we override
+        # only the GL header/link knobs it exposes:
+        #   GL_HEADER_CFLAGS — swap native GL headers for gl4es + the
+        #     patched freeglut + GLU. `-std=gnu99` is appended because it
+        #     comes after the Makefile's -std=c99 on the compile line and
+        #     miniaudio's WebAudio backend needs EM_ASM (a gnu-mode
+        #     extension); native builds keep their C99 ratchet untouched.
+        #   GL_LDFLAGS — gl4es/GLU/freeglut static archives + emcc opts.
+        #   SAMPLE_BIN — point the link rule's -o straight at index.html.
+        #   OBJDIR — keep wasm objects out of the native build/<cfg> dirs.
+        # The windowing layer at runtime is Emscripten's JS GLUT (the
+        # patched freeglut renames its own windowing to fg_glut* and only
+        # contributes solids/fonts/extension queries).
+        if grep -q "^gl-repl:" "${input_file_abs}"; then
+            local em_flags="-include ${GL4ES_GL_H} -I${GL4ES_INCLUDE} -I${GLU_DIR}/include -I${FREEGLUT_INCLUDE} -DUSE_MGL_NAMESPACE -std=gnu99"
+            # Bundle only sample.mp3 (the `make app` small-download policy)
+            # — gl-repl's assets/ can symlink a full multi-hundred-MB
+            # playlist that file_packager would happily follow.
+            local repl_preload=""
+            if [[ -f "${sample_dir}/assets/sample.mp3" ]]; then
+                repl_preload="--preload-file ${sample_dir}/assets/sample.mp3@/assets/sample.mp3"
+                echo -e "${CYAN}  bundling assets/sample.mp3 only → /assets${NC}"
+            elif [[ -n "${preload_flag}" ]]; then
+                repl_preload="${preload_flag}"
+            fi
+
+            pushd "${sample_dir}" > /dev/null
+            emmake make "${out_html}" \
+                CC=emcc \
+                OBJDIR=build/emscripten \
+                SAMPLE_BIN="${out_html}" \
+                GL_HEADER_CFLAGS="${em_flags}" \
+                GL_LDFLAGS="${BOOTSTRAP} ${GL4ES_LIB} ${GLU_LIB} ${FREEGLUT_LIB} -s USE_WEBGL2=1 -s FULL_ES2=1 -s INITIAL_MEMORY=${INITIAL_MEMORY} -s STACK_SIZE=${STACK_SIZE} ${repl_preload}"
+            local res=$?
+            popd > /dev/null
+
+            if [[ ${res} -eq 0 && -f "${out_html}" ]]; then
+                echo -e "${GREEN}  ✓ ${sample_name}${NC}"
+                return 0
+            fi
+            echo -e "${RED}  ✗ ${sample_name} (gl-repl Makefile build failed)${NC}"
+            return 1
+        fi
+
+        # --- Legacy flat-layout Makefiles (claude4.6-opus-thinking era) ---
         # Common variables that Makefiles use for libraries
         local em_flags="-include ${GL4ES_GL_H} -I${GL4ES_INCLUDE} -I${GLU_DIR}/include -I${FREEGLUT_INCLUDE} -I${PROJECT_INCLUDE} -DGL_SILENCE_DEPRECATION -DUSE_MGL_NAMESPACE"
         local em_libs="${BOOTSTRAP} ${GL4ES_LIB} ${GLU_LIB} ${FREEGLUT_LIB} -lglut -s USE_WEBGL2=1 -s FULL_ES2=1 -s INITIAL_MEMORY=${INITIAL_MEMORY} -s STACK_SIZE=${STACK_SIZE} ${preload_flag}"
@@ -400,7 +454,11 @@ else
     local_dir="$(dirname "${local_src}")"
     project_src_abs="$(cd "${PROJECT_SRC}" && pwd)"
     rel_dir="${local_dir#"${project_src_abs}"/}"
-    LAST_SAMPLE="${rel_dir//\//-}"
+    if [[ "${rel_dir}" == "${local_dir}" ]]; then
+        LAST_SAMPLE="$(basename "${local_dir}")"
+    else
+        LAST_SAMPLE="${rel_dir//\//-}"
+    fi
     if [[ -z "${LAST_SAMPLE}" || "${LAST_SAMPLE}" == "." ]]; then
         LAST_SAMPLE="$(basename "${local_dir}")"
     fi

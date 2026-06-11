@@ -1,6 +1,33 @@
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <GL/gl.h>   /* gl4es's header (its -I precedes); maps gl* -> gl4es_gl* */
+
+/* Emscripten's built-in JS GLUT (library_glut.js) supplies the windowing/
+ * event layer (the patched freeglut renames its own windowing to fg_glut*
+ * so the JS implementation wins), but it does not implement
+ * glutExtensionSupported. Newer samples (gl-repl's runtime GL capability
+ * detection) call it, so provide the standard token-scan over the live GL
+ * extension string here. glGetString resolves to gl4es via the forced
+ * gl4es <GL/gl.h> include every TU is compiled with. */
+int glutExtensionSupported(const char *extension) {
+    const char *exts, *start;
+    size_t len;
+
+    if (!extension || !*extension || strchr(extension, ' ')) return 0;
+    exts = (const char *)glGetString(GL_EXTENSIONS);
+    if (!exts) return 0;
+
+    len = strlen(extension);
+    for (start = exts; (start = strstr(start, extension)) != NULL; start += len) {
+        if ((start == exts || start[-1] == ' ') &&
+            (start[len] == ' ' || start[len] == '\0')) {
+            return 1;
+        }
+    }
+    return 0;
+}
 
 // Forward declaration of a initialization function
 // This can be optionally defined in the sample code.
