@@ -270,6 +270,7 @@ compatibility wrappers.
 ./gl-repl workspace/       # Load every *.c under workspace/ as a user scene
 ./gl-repl --noaccum        # Disable the accumulation buffer (AA + motion blur)
 ./gl-repl --dump-code      # Print loaded buffer to stdout
+./gl-repl --example 28 --flat-histogram   # Per-function / per-line flat-command budget breakdown (the --dump-* family honors --example)
 ./gl-repl --no-audio       # Skip audio init entirely (isolates startup stalls)
 ./gl-repl --assets ~/Music/glr  # Scan this dir for *.mp3 instead of ./assets (also GLR_ASSETS_DIR)
 ./gl-repl --detailed-prof  # Add fine-grained init-trace phases (default off)

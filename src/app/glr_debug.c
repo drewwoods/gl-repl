@@ -6,9 +6,12 @@
 #include "editor/state.h"
 #include "repl/export.h"
 #include "repl/command_spec.h"
+#include "repl/eval.h"       /* repl_func_alias_get, REPL_FUNC_SLOT_COUNT */
 #include "repl/pipeline.h"
 #include "repl/state_owners.h"
 #include "repl/state.h"
+
+#include <string.h>          /* memset (flat histogram) */
 
 #include <stddef.h>
 
@@ -69,12 +72,102 @@ void glr_debug_dump_flat_commands_sync(FILE *out, SourceTextView text) {
     fflush(dst);
 }
 
+/* --flat-histogram: where the MAX_COMMANDS flatten budget is being
+ * spent. Two sections: per-function inclusive costs (func_scope_mask —
+ * exact across nesting/recursion; a nested call's commands count
+ * toward every function on its chain, so the section can sum past the
+ * flat total), then per-source-line direct emissions sorted
+ * descending (each flat command counts toward exactly one line, so
+ * this section sums to the flat total). */
+void glr_debug_dump_flat_histogram(FILE *out, SourceTextView text) {
+    FILE *dst = out ? out : stdout;
+    static int line_counts[MAX_COMMANDS];
+    static int order[MAX_COMMANDS];
+
+    if (repl_state_flat_program_dirty())
+        repl_flatten_commands(editor_state_edit_line());
+
+    FlatProgramView flat_program = repl_state_flat_program_view();
+    const GLCmd *flat_cmds = flat_program.cmds;
+    int num_flat_cmds = flat_program.cmd_count;
+    const GLCmd *doc = repl_state_document_cmds();
+    int doc_count = repl_state_document_count();
+    if (doc_count > MAX_COMMANDS) doc_count = MAX_COMMANDS;
+
+    fprintf(dst, "=== REPL Flat-Cost Histogram ===\n");
+    fprintf(dst, "flat total: %d/%d\n", num_flat_cmds, MAX_COMMANDS);
+
+    fprintf(dst, "-- functions (inclusive, all call sites) --\n");
+    for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {
+        int def_idx = -1;
+        for (int i = 0; i < doc_count; i++) {
+            if (doc[i].type == CMD_FUNC_DEF && (int)doc[i].args[0] == slot) {
+                def_idx = i;
+                break;
+            }
+        }
+        if (def_idx < 0) continue;
+        int count = 0;
+        for (int i = 0; i < num_flat_cmds; i++)
+            if (flat_cmds[i].func_scope_mask & (1u << slot)) count++;
+        const char *alias = repl_func_alias_get(slot);
+        fprintf(dst, "%5d  %5.1f%%  func%d%s%s (line %d)\n",
+                count,
+                num_flat_cmds > 0 ? 100.0 * count / num_flat_cmds : 0.0,
+                slot,
+                (alias && alias[0]) ? " " : "",
+                (alias && alias[0]) ? alias : "",
+                def_idx);
+    }
+
+    memset(line_counts, 0, sizeof(line_counts));
+    for (int i = 0; i < num_flat_cmds; i++) {
+        int src = flat_cmds[i].src_cmd_idx;
+        if (src >= 0 && src < MAX_COMMANDS)
+            line_counts[src]++;
+    }
+    int used = 0;
+    for (int i = 0; i < doc_count; i++)
+        if (line_counts[i] > 0)
+            order[used++] = i;
+    /* Selection sort, descending by count (ties: line order). Offline
+     * dump over <= MAX_COMMANDS entries — simplicity over speed. */
+    for (int a = 0; a < used - 1; a++) {
+        int best = a;
+        for (int b = a + 1; b < used; b++)
+            if (line_counts[order[b]] > line_counts[order[best]])
+                best = b;
+        if (best != a) {
+            int tmp = order[a];
+            order[a] = order[best];
+            order[best] = tmp;
+        }
+    }
+
+    fprintf(dst, "-- source lines (direct emissions) --\n");
+    for (int a = 0; a < used; a++) {
+        int li = order[a];
+        const char *line_text = source_text_line(text, li);
+        fprintf(dst, "%5d  %5.1f%%  line %4d | %s\n",
+                line_counts[li],
+                num_flat_cmds > 0 ? 100.0 * line_counts[li] / num_flat_cmds
+                                  : 0.0,
+                li, line_text ? line_text : "");
+    }
+    fprintf(dst, "=== End REPL Flat-Cost Histogram ===\n");
+    fflush(dst);
+}
+
 void glr_debug_dump_current_editor(FILE *out) {
     glr_debug_dump_editor(out, source_document_view());
 }
 
 void glr_debug_dump_current_flat_commands_sync(FILE *out) {
     glr_debug_dump_flat_commands_sync(out, source_document_view());
+}
+
+void glr_debug_dump_current_flat_histogram(FILE *out) {
+    glr_debug_dump_flat_histogram(out, source_document_view());
 }
 
 void glr_debug_dump_runtime_state_layout(FILE *out) {

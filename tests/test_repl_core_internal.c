@@ -975,6 +975,83 @@ int main() {
         ASSERT_TRUE("dup-funcN first-wins: color suppressed", !found_color);
     }
 
+    /* repl_flatten_cost_at_line: the statusbar budget readout.
+     *
+     * Program shape: an aliased func (box, slot 0) called both from
+     * inside a for-loop and at top level, plus a plain line and a
+     * comment. Flat layout: box body = 5 cmds (begin + 3 verts + end);
+     * loop = 4 iters x (1 color + 5 box) = 24; top-level box(9) = 5;
+     * plain color = 1. Total 30. */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("box(s) {");                 /* 0  */
+        editor_feed_line("  glBegin(GL_TRIANGLES);"); /* 1  */
+        editor_feed_line("  glVertex3f(s, 0, 0);");   /* 2  */
+        editor_feed_line("  glVertex3f(0, s, 0);");   /* 3  */
+        editor_feed_line("  glVertex3f(0, 0, s);");   /* 4  */
+        editor_feed_line("  glEnd();");               /* 5  */
+        editor_feed_line("}");                        /* 6  */
+        editor_feed_line("for(i, 0, 4) {");           /* 7  */
+        editor_feed_line("  glColor3f(i, 0, 0);");    /* 8  */
+        editor_feed_line("  box(i);");                /* 9  */
+        editor_feed_line("}");                        /* 10 */
+        editor_feed_line("box(9);");                  /* 11 */
+        editor_feed_line("glColor3f(1, 0, 0);");      /* 12 */
+        editor_feed_line("// budget note");           /* 13 */
+        repl_flatten_commands(editor_state_edit_line());
+        ASSERT_INT("flat-cost setup: flat total",
+                   repl_state_flat_program_count(), 30);
+
+        ReplFlatCost c;
+
+        /* Function attribution (func_scope_mask): every box expansion,
+         * across both call sites, from the def head / body / end. */
+        c = repl_flatten_cost_at_line(0);
+        ASSERT_INT("fn cost kind (def head)", (int)c.kind, REPL_FLAT_COST_FUNC);
+        ASSERT_INT("fn cost count (def head)", c.count, 25);
+        c = repl_flatten_cost_at_line(3);
+        ASSERT_INT("fn cost kind (body)", (int)c.kind, REPL_FLAT_COST_FUNC);
+        ASSERT_INT("fn cost count (body)", c.count, 25);
+        c = repl_flatten_cost_at_line(6);
+        ASSERT_INT("fn cost kind (end line)", (int)c.kind, REPL_FLAT_COST_FUNC);
+        ASSERT_INT("fn cost count (end line)", c.count, 25);
+
+        /* Block attribution: direct body (4 colors) + the box calls
+         * made inside the loop (20), from head / body / end. */
+        c = repl_flatten_cost_at_line(7);
+        ASSERT_INT("block cost kind (for head)", (int)c.kind, REPL_FLAT_COST_BLOCK);
+        ASSERT_INT("block cost count (for head)", c.count, 24);
+        c = repl_flatten_cost_at_line(8);
+        ASSERT_INT("block cost kind (inside)", (int)c.kind, REPL_FLAT_COST_BLOCK);
+        ASSERT_INT("block cost count (inside)", c.count, 24);
+        c = repl_flatten_cost_at_line(10);
+        ASSERT_INT("block cost kind (end line)", (int)c.kind, REPL_FLAT_COST_BLOCK);
+        ASSERT_INT("block cost count (end line)", c.count, 24);
+
+        /* Call-site attribution: the loop call counts once per
+         * iteration; the top-level call counts its single expansion. */
+        c = repl_flatten_cost_at_line(9);
+        ASSERT_INT("call cost kind (loop call)", (int)c.kind, REPL_FLAT_COST_CALL);
+        ASSERT_INT("call cost count (loop call)", c.count, 20);
+        c = repl_flatten_cost_at_line(11);
+        ASSERT_INT("call cost kind (top call)", (int)c.kind, REPL_FLAT_COST_CALL);
+        ASSERT_INT("call cost count (top call)", c.count, 5);
+
+        /* Plain line and comment. */
+        c = repl_flatten_cost_at_line(12);
+        ASSERT_INT("line cost kind", (int)c.kind, REPL_FLAT_COST_LINE);
+        ASSERT_INT("line cost count", c.count, 1);
+        c = repl_flatten_cost_at_line(13);
+        ASSERT_INT("comment cost kind", (int)c.kind, REPL_FLAT_COST_NONE);
+        ASSERT_INT("comment cost count", c.count, 0);
+
+        /* Out of range is NONE. */
+        c = repl_flatten_cost_at_line(-1);
+        ASSERT_INT("oob cost kind", (int)c.kind, REPL_FLAT_COST_NONE);
+        c = repl_flatten_cost_at_line(repl_state_document_count() + 5);
+        ASSERT_INT("oob cost kind (past end)", (int)c.kind, REPL_FLAT_COST_NONE);
+    }
+
     /* #4 regression: repl_config_bag_set must detect snprintf truncation
      * and refuse the write. Pre-fix, an over-long key truncated silently
      * and the function returned 1 — subsequent gets against the

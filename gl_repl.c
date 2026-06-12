@@ -189,6 +189,8 @@ static void print_usage(const char *prog) {
             "               ./assets (also via GLR_ASSETS_DIR env var)\n"
             "  --dump-code  Load the session and print the editor buffer\n"
             "  --dump-flat  Load the session and print flattened commands\n"
+            "  --flat-histogram  Load the session and print per-function /\n"
+            "               per-line flat-command costs (budget breakdown)\n"
             "  --dump-state-layout  Print ReplRuntimeState field layout\n"
             "  --detailed-prof  Emit finer-grained startup init traces\n"
             "               (also via GLR_DETAILED_PROF env var)\n"
@@ -377,6 +379,7 @@ int main(int argc, char **argv) {
     const char *time_arg = NULL;          /* --time SECS (else GLR_TIME) */
     int dump_code = 0;
     int dump_flat = 0;
+    int dump_flat_histogram = 0;
     int dump_state_layout = 0;
     int no_audio  = 0;
     int use_accum = 1;
@@ -408,6 +411,8 @@ int main(int argc, char **argv) {
             dump_code = 1;
         else if (strcmp(argv[i], "--dump-flat") == 0)
             dump_flat = 1;
+        else if (strcmp(argv[i], "--flat-histogram") == 0)
+            dump_flat_histogram = 1;
         else if (strcmp(argv[i], "--dump-state-layout") == 0)
             dump_state_layout = 1;
         else if (strcmp(argv[i], "--detailed-prof") == 0)
@@ -456,19 +461,27 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (dump_code || dump_flat || dump_state_layout) {
+    if (dump_code || dump_flat || dump_flat_histogram || dump_state_layout) {
         /* Dump-only paths skip glr_ctrl_init_gl (no GL context, no
          * window). glr_ctrl_bootstrap_repl now installs the app
          * services (status sink + export-config bridge) at its top so
          * @cfg in imported files is applied even on the dump path.
          * Status messages still surface to UiState, but UiState is
          * never rendered here, so they're effectively silent. */
-        if (dump_code || dump_flat)
+        if (dump_code || dump_flat || dump_flat_histogram) {
             glr_ctrl_bootstrap_repl(input_file);
+            /* --example works on the dump paths too: the loader chain
+             * (reset transients, undo note, repl_load_example) is
+             * GL-free, so built-ins can be inspected without a window. */
+            if (example_index >= 0)
+                glr_scene_load_example(example_index);
+        }
         if (dump_code)
             glr_debug_dump_current_editor(stdout);
         if (dump_flat)
             glr_debug_dump_current_flat_commands_sync(stdout);
+        if (dump_flat_histogram)
+            glr_debug_dump_current_flat_histogram(stdout);
         if (dump_state_layout)
             glr_debug_dump_runtime_state_layout(stdout);
         return 0;

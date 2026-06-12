@@ -1219,6 +1219,25 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->edit_line           = editor_state_edit_line();
 
     snap->flat_program_count  = flat_program.cmd_count;
+    /* Cursor budget readout: resolve the attribution kind to the short
+     * statusbar prefix. A plain line costing <= 1 is suppressed (every
+     * ordinary top-level line costs exactly 1 — noise, not signal). */
+    {
+        ReplFlatCost cost = repl_flatten_cost_at_line(snap->edit_line);
+        static const char *const k_cost_labels[] = {
+            [REPL_FLAT_COST_NONE]  = "",
+            [REPL_FLAT_COST_LINE]  = "line",
+            [REPL_FLAT_COST_CALL]  = "call",
+            [REPL_FLAT_COST_BLOCK] = "scope",
+            [REPL_FLAT_COST_FUNC]  = "fn",
+        };
+        const char *label = k_cost_labels[cost.kind];
+        if (cost.kind == REPL_FLAT_COST_LINE && cost.count <= 1)
+            label = "";
+        snap->cursor_cost_count = cost.count;
+        snprintf(snap->cursor_cost_label, sizeof(snap->cursor_cost_label),
+                 "%s", label);
+    }
     snap->anim_time           = repl_state_variables().anim_time;
 
     snap->user_scene_active_idx   = repl_active_user_scene();
