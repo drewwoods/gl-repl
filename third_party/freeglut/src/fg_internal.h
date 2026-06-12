@@ -1143,6 +1143,16 @@ void fgListInsert(SFG_List *list, SFG_Node *next, SFG_Node *node);
 void fgError( const char *fmt, ... );
 void fgWarning( const char *fmt, ... );
 
+/* Frame capture for the windowed backends (fg_capture.c): SIGUSR1 snapshot
+ * + FREEGLUT_CAPTURE_FRAMES record mode. Init installs the signal handler
+ * (glutInit); the tick (glutMainLoopEvent) services an idle-app request;
+ * the swap hook (glutSwapBuffers, pre-platform-swap) captures the completed
+ * back buffer. All three are stubs on the OSMesa backend, which carries its
+ * own self-contained capture. */
+void fghCaptureInit( void );
+void fghCaptureTick( void );
+void fghCaptureOnSwap( SFG_Window *window );
+
 SFG_Proc fgPlatformGetProcAddress( const char *procName );
 
 void fgPlatformInitSwapCtl(void);

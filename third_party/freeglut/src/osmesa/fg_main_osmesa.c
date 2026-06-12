@@ -78,7 +78,18 @@ static unsigned long fghOSMesaFrameSignature( void )
     unsigned long        sig = 2166136261UL;
     size_t               total, step, i;
 
-    if( !ctx || !OSMesaGetColorBuffer( ctx, &w, &h, &fmt, &buffer ) ||
+    if( !ctx )
+        return 0;
+
+    /* Gallium-based OSMesa resolves rendering into the user buffer only on
+     * a flush; without one the buffer holds stale pre-resolve contents, the
+     * signature never changes, and the record mode never starts. Sample
+     * after glFinish, like fghOSMesaCaptureFrame does before its read. Only
+     * the pre-start iterations of an active record pay this (limit > 0 and
+     * not yet started); finishing an already-idle software pipe is cheap. */
+    glFinish( );
+
+    if( !OSMesaGetColorBuffer( ctx, &w, &h, &fmt, &buffer ) ||
         !buffer || w <= 0 || h <= 0 )
         return 0;
 
