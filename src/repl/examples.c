@@ -2132,7 +2132,7 @@ static const char *const g_example_ringed_planet[] = {
     "",
     "glPushMatrix();",
     "glRotatef(-6*t, 0, 1, 0);",
-    "planet(1.55, 12, 20);",
+    "planet(1.55, 18, 18);",
     "glPopMatrix();",
     "",
     "glColor3f(0.78, 0.72, 0.64);",
