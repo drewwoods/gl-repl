@@ -9,11 +9,15 @@
  * `make glut` framework build (axes.c / grid.c / postprocess_filter.c). */
 #include <stddef.h>
 
-#if defined(__APPLE__) && defined(USE_GLUT)
+#if defined(__APPLE__)
     #include <OpenGL/gl.h>
     #include <OpenGL/glext.h>   /* glGetQueryObjectui64vEXT (GPU profiler) */
     #include <OpenGL/glu.h>
-    #include <GLUT/glut.h>
+    #ifdef USE_GLUT
+        #include <GLUT/glut.h>
+    #else
+        #include <GL/freeglut.h>
+    #endif
 #else
     #define GL_GLEXT_PROTOTYPES
     #include <GL/gl.h>
