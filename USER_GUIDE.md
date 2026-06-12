@@ -602,9 +602,9 @@ backward):
 
 ![Grid themes: Tron, Radar, Aurora, Synthwave](docs/images/grid-themes.png)
 
-Fifteen grid themes (**F3**): Off, Classic, Fog, Tron, Ember, Faint, Focus,
+Sixteen grid themes (**F3**): Off, Classic, Fog, Tron, Ember, Faint, Focus,
 Ocean, XZ Ruler *(default)*, Adaptive Planes, Radar, Aurora, Synthwave,
-Frozen Lake, Tilled Field.
+Frozen Lake, Tilled Field, Star Chart.
 **Grid major** (Ctrl+O) cycles the major-tick spacing (1/2/5/10) and **Grid
 extent** (F7) the grid's reach (Close / Mid / Far). Theme changes cross-fade,
 so a newly chosen grid takes a few seconds to fully appear.
@@ -619,7 +619,15 @@ Gizmo, Ruler.
 ![Backdrops: Cityscape, Stars, Sunset, Aurora](docs/images/backdrops.png)
 
 **F6** cycles the scene backdrop: Off *(default)*, Cityscape, Stars,
-City+Stars, Sunset, Aurora.
+City+Stars, Sunset, Aurora, Nebula.
+
+The Star Chart grid and Nebula backdrop are designed as a pair: the
+floor becomes a midnight observatory map (twinkling constellation
+nodes joined by inked links) under a violet/teal gas-cloud sky, and
+the backdrop adds its own dim violet/teal environment lights
+(GL_LIGHT4-6) so lit geometry picks up the nebula's colors. The
+*Ringed planet (nebula skies)* example under Scene → Showcase loads
+both.
 
 ### Lighting
 
@@ -817,25 +825,26 @@ the expected call), change a setting, or drag a variable slider to a target.
 
 ## Built-in Examples
 
-**F12** cycles forward through the 27 built-in examples (then your saved
+**F12** cycles forward through the 29 built-in examples (then your saved
 scenes, then back); **Shift+F12** cycles backward. The Scene menu lists them
 grouped by tag. `./gl-repl --list-examples` prints the set:
 
 ```
- 0  Lit cube                      14  Scratch arrays (de Casteljau)
- 1  2D assignment sketch          15  Torus knot (animated)
- 2  Animated ring (for + t)       16  Glow sprites (blend + attenuation)
- 3  Conditional colors (if + t)   17  Snowfall demo (550 particles)
- 4  Function demo (named func)    18  Swaying grass field (rand + t)
- 5  Function polygons             19  Jellyfish (glDepthMask translucency)
- 6  Function branching            20  Transform stress (guides)
- 7  Recursive triangle tree       21  GLU tessellator (concave arrow)
- 8  Parametric torus              22  GLU tessellator (arrow cutout)
- 9  Animated wave surface         23  Stress test (all features)
-10  Procedural terrain            24  Annotated orbit plot (labels)
-11  Animated spirograph curve     25  Orrery (labels track 3D orbits)
-12  Traveling ripple ring         26  Whale (particle system + lit model)
-13  Bezier curve with guides
+ 0  Lit cube                      15  Torus knot (animated)
+ 1  2D assignment sketch          16  Glow sprites (blend + attenuation)
+ 2  Animated ring (for + t)       17  Snowfall demo (550 particles)
+ 3  Conditional colors (if + t)   18  Swaying grass field (rand + t)
+ 4  Function demo (named func)    19  Jellyfish (glDepthMask translucency)
+ 5  Function polygons             20  Transform stress (guides)
+ 6  Function branching            21  GLU tessellator (concave arrow)
+ 7  Recursive triangle tree       22  GLU tessellator (arrow cutout)
+ 8  Parametric torus              23  Stress test (all features)
+ 9  Animated wave surface         24  Annotated orbit plot (labels)
+10  Procedural terrain            25  Orrery (labels track 3D orbits)
+11  Animated spirograph curve     26  Whale (particle system + lit model)
+12  Traveling ripple ring         27  Teapot carousel (transform stacks)
+13  Bezier curve with guides      28  Ringed planet (nebula skies)
+14  Scratch arrays (de Casteljau)
 ```
 
 Examples may carry their own presentation presets (grid theme, backdrop,

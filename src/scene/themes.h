@@ -30,7 +30,8 @@
     X(AURORA, "Aurora")    \
     X(SYNTHWAVE, "Synthwave") \
     X(FROZEN, "Frozen Lake") \
-    X(SOIL, "Tilled Field")
+    X(SOIL, "Tilled Field") \
+    X(STARCHART, "Star Chart")
 
 #define GRID_THEME_ENUM_ENTRY(name, str) GRID_THEME_##name,
 #define GRID_THEME_NAME_ENTRY(name, str) [GRID_THEME_##name] = str,
@@ -63,7 +64,8 @@ typedef enum {
     X(STARS, "Stars")          \
     X(CITY_AND_STARS, "City+Stars") \
     X(SUNSET, "Sunset")        \
-    X(AURORA, "Aurora")
+    X(AURORA, "Aurora")        \
+    X(NEBULA, "Nebula")
 
 #define SCENE_BACKDROP_ENUM_ENTRY(name, str) SCENE_BACKDROP_##name,
 #define SCENE_BACKDROP_NAME_ENTRY(name, str) [SCENE_BACKDROP_##name] = str,
