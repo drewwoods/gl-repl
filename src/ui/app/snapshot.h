@@ -116,6 +116,14 @@ typedef struct UiRenderSnapshot {
 
     /* Convenience scalars (mirror editor_input/code_panel for terse access) */
     int                         flat_program_count;
+    /* Cursor flat-cost readout: how many flat (expanded) commands the
+     * cursor's enclosing scope / call site / line contributes this
+     * frame (where the MAX_COMMANDS budget is being spent). The
+     * controller resolves the attribution kind to the short statusbar
+     * prefix ("fn" / "scope" / "call" / "line"); an empty label hides
+     * the segment. */
+    int                         cursor_cost_count;
+    char                        cursor_cost_label[8];
     /* Count of structurally unbalanced bracket commands (unmatched
      * glPushMatrix/glBegin openers + orphan glPopMatrix/glEnd closers).
      * Shown as a warning segment in the editor statusbar; 0 = balanced. */

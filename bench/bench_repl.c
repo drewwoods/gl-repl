@@ -350,6 +350,49 @@ static BenchResult bench_flatten_examples(int iters) {
     return r;
 }
 
+/* ---- bench: cursor flat-cost query (statusbar budget readout) --------- */
+
+/* Times repl_flatten_cost_at_line over every cursor line of the same
+ * wave-surface scene flatten_examples uses, so the two rows compare
+ * directly: the readout runs once per frame at snapshot build, the
+ * flatten it annotates runs once per frame too. One op = one full
+ * sweep of the document (every line classified + counted), i.e. a
+ * deliberate worst case — the live app issues a single line per frame. */
+static BenchResult bench_flat_cost_query(int iters) {
+    BenchResult r = { .name = "flat_cost_query", .unit = "sweeps",
+                      .min_sec = 1e18 };
+
+    repl_load_example_lines_for_test(k_flatten_bench_scene);
+    repl_flatten_commands(editor_state_edit_line());
+    int doc_count = repl_state_document_count();
+
+    int inner = 32;
+    /* The result is consumed (summed and reported) so the query can't
+     * be optimized away. */
+    long long sink = 0;
+
+    for (int it = 0; it < iters; it++) {
+        double t0 = now_seconds();
+        for (int k = 0; k < inner; k++) {
+            for (int line = 0; line < doc_count; line++) {
+                ReplFlatCost cost = repl_flatten_cost_at_line(line);
+                sink += cost.count;
+            }
+        }
+        double dt = now_seconds() - t0;
+        if (dt < r.min_sec) r.min_sec = dt;
+        r.total_sec += dt;
+        r.ops += inner;
+        r.iters++;
+    }
+
+    if (!g_csv) {
+        fprintf(stderr, "  (flat_cost_query: %d lines/sweep, flat_cmds=%d, checksum=%lld)\n",
+                doc_count, repl_state_flat_program_count(), sink);
+    }
+    return r;
+}
+
 /* ---- bench: spike — flatten the largest example, repeatedly ----------- */
 
 /* Editor-owns-text spike pass/fail bar. The spike modifies flatten_range()
@@ -864,6 +907,7 @@ static void usage(const char *prog) {
         "    parse_lines       repl_parse_command on every example line\n"
         "    feed_examples     full editor_feed_line path on every example\n"
         "    flatten_examples  repl_flatten_commands per example\n"
+        "    flat_cost_query   repl_flatten_cost_at_line over every cursor line\n"
         "    replay_examples   step replay through every example\n"
         "    replay_long       synthetic 600-iter for-loop replay\n"
         "    replay_focus      per-frame replay_focus_flat_idx() at the tail\n"
@@ -954,6 +998,8 @@ int main(int argc, char **argv) {
         report(bench_feed_examples(iters));
     if (wants(only, "flatten_examples"))
         report(bench_flatten_examples(iters));
+    if (wants(only, "flat_cost_query"))
+        report(bench_flat_cost_query(iters));
     if (wants(only, "spike_flatten_largest"))
         report(bench_spike_flatten_largest(iters));
     if (wants(only, "replay_examples"))

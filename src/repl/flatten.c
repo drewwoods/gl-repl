@@ -196,6 +196,141 @@ void repl_flatten_refresh_current_block_highlight(int edit_line_idx) {
                                               edit_line_idx);
 }
 
+/* ---- Flat-cost attribution (see flatten.h) -------------------------
+ *
+ * All counters walk the live flat program once and count each flat
+ * command at most once, so a sum over disjoint targets can never
+ * exceed the flat total. */
+
+static int flat_cost_count_func_mask(unsigned int bit) {
+    const GLCmd *flat = repl_state_flat_program_cmds();
+    int n = repl_state_flat_program_count();
+    int count = 0;
+    for (int i = 0; i < n; i++)
+        if (flat[i].func_scope_mask & bit) count++;
+    return count;
+}
+
+static int flat_cost_count_call_site(int line_idx) {
+    const GLCmd *flat = repl_state_flat_program_cmds();
+    int n = repl_state_flat_program_count();
+    int count = 0;
+    for (int i = 0; i < n; i++)
+        if (flat[i].call_src_cmd_idx == line_idx ||
+            flat[i].root_call_src_cmd_idx == line_idx) count++;
+    return count;
+}
+
+static int flat_cost_count_range(int lo, int hi) {
+    const GLCmd *flat = repl_state_flat_program_cmds();
+    int n = repl_state_flat_program_count();
+    int count = 0;
+    for (int i = 0; i < n; i++) {
+        const GLCmd *fc = &flat[i];
+        if ((fc->src_cmd_idx >= lo && fc->src_cmd_idx <= hi) ||
+            (fc->call_src_cmd_idx >= lo && fc->call_src_cmd_idx <= hi) ||
+            (fc->root_call_src_cmd_idx >= lo && fc->root_call_src_cmd_idx <= hi))
+            count++;
+    }
+    return count;
+}
+
+/* Innermost for/func/if block whose body contains line_idx; a block-end
+ * line attributes to the block it closes. Returns the head's source
+ * index, or -1 when line_idx sits at top level. */
+static int flat_cost_enclosing_block_head(const GLCmd *doc, int count,
+                                          int line_idx) {
+    int stack[MAX_FLATTEN_CALL_DEPTH * 2];
+    int sp = 0;
+    int limit = (line_idx < count &&
+                 repl_cmd_is_block_end(doc[line_idx].type))
+                ? line_idx + 1 : line_idx;
+    for (int i = 0; i < limit; i++) {
+        CmdType t = doc[i].type;
+        if (repl_cmd_is_block_head(t)) {
+            if (sp < (int)(sizeof(stack) / sizeof(stack[0])))
+                stack[sp] = i;
+            sp++;
+        } else if (repl_cmd_is_block_end(t)) {
+            /* The end line itself attributes to the block it closes:
+             * with limit == line_idx + 1 this pop runs AT line_idx, so
+             * report the head being popped instead of popping past it. */
+            if (i == line_idx)
+                break;
+            if (sp > 0) sp--;
+        }
+    }
+    if (sp <= 0) return -1;
+    if (sp > (int)(sizeof(stack) / sizeof(stack[0])))
+        sp = (int)(sizeof(stack) / sizeof(stack[0]));
+    return stack[sp - 1];
+}
+
+ReplFlatCost repl_flatten_cost_at_line(int line_idx) {
+    ReplFlatCost out = { REPL_FLAT_COST_NONE, 0 };
+    const GLCmd *doc = repl_state_document_cmds();
+    int doc_count = repl_state_document_count();
+    if (line_idx < 0 || line_idx >= doc_count)
+        return out;
+
+    const GLCmd *cmd = &doc[line_idx];
+
+    /* Cursor directly on a call site: that call's inclusive expansion
+     * (wins over the enclosing scope so hovering a call answers "what
+     * does THIS call cost"). */
+    if (cmd->valid && cmd->type == CMD_CALL) {
+        out.kind = REPL_FLAT_COST_CALL;
+        out.count = flat_cost_count_call_site(line_idx);
+        return out;
+    }
+
+    int head = (cmd->valid && repl_cmd_is_block_head(cmd->type))
+               ? line_idx
+               : flat_cost_enclosing_block_head(doc, doc_count, line_idx);
+
+    if (head < 0) {
+        /* Top level, no scope: the line's own emissions. */
+        if (!cmd->valid)
+            return out;
+        out.count = 0;
+        {
+            const GLCmd *flat = repl_state_flat_program_cmds();
+            int n = repl_state_flat_program_count();
+            for (int i = 0; i < n; i++)
+                if (flat[i].src_cmd_idx == line_idx) out.count++;
+        }
+        out.kind = out.count > 0 ? REPL_FLAT_COST_LINE : REPL_FLAT_COST_NONE;
+        return out;
+    }
+
+    if (doc[head].type == CMD_FUNC_DEF) {
+        int slot = (int)doc[head].args[0];
+        if (slot >= 0 && slot < FUNC_SCOPE_MASK_BITS) {
+            out.kind = REPL_FLAT_COST_FUNC;
+            out.count = flat_cost_count_func_mask(1u << slot);
+            return out;
+        }
+        /* Unrepresentable slot: fall through to the range count. */
+    }
+
+    {
+        int end = line_idx;
+        /* Scan for the matching end the same way flatten does
+         * (unterminated blocks run to the document end). */
+        int depth = 1;
+        for (end = head + 1; end < doc_count; end++) {
+            CmdType t = doc[end].type;
+            if (repl_cmd_is_block_head(t)) depth++;
+            else if (repl_cmd_is_block_end(t) && --depth == 0) break;
+        }
+        if (end >= doc_count) end = doc_count - 1;
+        out.kind = (doc[head].type == CMD_FUNC_DEF)
+                   ? REPL_FLAT_COST_FUNC : REPL_FLAT_COST_BLOCK;
+        out.count = flat_cost_count_range(head, end);
+    }
+    return out;
+}
+
 static void flatten_range(FlattenContext *ctx,
                           int start, int end_idx, ExprVar *vars, int nv,
                           int call_src_cmd_idx, int root_call_src_cmd_idx,

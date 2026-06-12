@@ -1736,13 +1736,16 @@ static const char *k_statusbar_focus_lbl = "focus";
 
 typedef struct {
     char cmds[48];
+    char cost[32];
     char line[64];
     char aa[32];
     char unbal[32];
     int  cmds_w;
+    int  cost_w;
     int  line_w;
     int  aa_w;
     int  unbal_w;
+    int  has_cost;
     int  has_aa;
     int  has_unbal;
     int  right_edge;
@@ -1758,6 +1761,22 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
              snap->flat_program_count, MAX_COMMANDS);
     L.cmds_w = (int)strlen(L.cmds) * FONT_SMALL_W;
     tx += L.cmds_w;
+
+    /* Cursor budget readout ("fn 2480", "scope 230", "call 96"):
+     * how much of the flat budget the cursor's scope spends. The
+     * controller leaves the label empty when there's nothing worth
+     * showing (plain lines costing <= 1, comments, empty buffer). */
+    L.has_cost = snap->cursor_cost_label[0] != '\0';
+    if (L.has_cost) {
+        tx += STATUSBAR_SEP_W;
+        snprintf(L.cost, sizeof L.cost, "%s %d",
+                 snap->cursor_cost_label, snap->cursor_cost_count);
+        L.cost_w = (int)strlen(L.cost) * FONT_SMALL_W;
+        tx += L.cost_w;
+    } else {
+        L.cost[0] = '\0';
+        L.cost_w = 0;
+    }
     tx += STATUSBAR_SEP_W;
 
     if (snap->editor_input.insert_mode)
@@ -1951,6 +1970,13 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
         ui_clr(UI_TOK_TEXT_PRIMARY);
         gl2d_draw_string((float)tx, (float)text_y, L.cmds, FONT_SMALL);
         tx += L.cmds_w;
+
+        if (L.has_cost) {
+            repl_code_panel_statusbar_sep(&tx, sy, sh);
+            ui_clr(UI_TOK_ACCENT);
+            gl2d_draw_string((float)tx, (float)text_y, L.cost, FONT_SMALL);
+            tx += L.cost_w;
+        }
 
         repl_code_panel_statusbar_sep(&tx, sy, sh);
 
