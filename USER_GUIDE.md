@@ -926,13 +926,14 @@ the REPL. Two rules keep the round trip clean:
   lands in the flat program, so a heavy particle loop reaches the cap long
   before line 4096.
 
-  To see *where* the budget goes, watch the second status-bar segment as
-  you move the cursor: `fn 2480` on or inside a function definition (its
-  total expansion across every call site), `scope 230` inside a `for`/`if`
-  block (the block's per-frame cost), `call 96` on a call line (that call's
-  inclusive expansion), `line 12` on a plain line that expands more than
-  once. For an offline breakdown, `./gl-repl --example 28 --flat-histogram`
-  prints per-function and per-line costs sorted by spend.
+  To see *where* the budget goes, watch the last left-aligned status-bar
+  segment as you move the cursor: `fn cmds 2480` on or inside a function
+  definition (its total expansion across every call site), `scope cmds 230`
+  inside a `for`/`if` block (the block's per-frame cost), `call cmds 96` on
+  a call line (that call's inclusive expansion), `line cmds 12` on a plain
+  line that expands more than once. For an offline breakdown,
+  `./gl-repl --example 28 --flat-histogram` prints per-function and
+  per-line costs sorted by spend.
 
 > **Advanced — extending the REPL itself.** If you want a GL call the REPL
 > doesn't speak yet, the interpreter is built to be extended: see
