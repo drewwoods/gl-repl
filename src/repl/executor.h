@@ -33,7 +33,7 @@
 #include "repl/flatten.h"
 #include "source_document.h"  /* SourceTextView (Phase 1 of feature/source-document-port.md) */
 
-#if defined(USE_GLUT) && !defined(APIENTRY)
+#ifndef APIENTRY
 #define APIENTRY
 #endif
 

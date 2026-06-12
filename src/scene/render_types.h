@@ -13,7 +13,7 @@
 #include "postprocess_filter.h" /* ScenePostFilterMode */
 #include "gl_includes.h"        /* GLenum for SceneLight.id */
 
-#if defined(USE_GLUT) && !defined(APIENTRY)
+#if !defined(APIENTRY)
 #define APIENTRY
 #endif
 
