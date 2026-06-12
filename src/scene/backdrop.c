@@ -998,10 +998,11 @@ static void draw_nebula(
  * through powder blue to a steel-blue zenith. Below the eye-level
  * horizon the table clamps to the constant glacial tint and the dome
  * extends well downward (POLAR_PHI_MIN): the dome is camera-centred,
- * so the gap between the grid's vanishing edge and the eye-level rim
- * grows with camera altitude (atan(height/extent)) — constant ice-haze
- * under the rim fills it at any height instead of a black void, and
- * the backdrop draws before the grid, so the grid (and its FAR
+ * so a rim pinned at the horizon leaves a void over the beyond-grid
+ * region that grows with camera altitude, and any partial floor leaves
+ * a visible bottom edge at steep look-down angles — the haze must
+ * close the full lower hemisphere to be edge-free from every camera.
+ * The backdrop draws before the grid, so the grid (and its FAR
  * white-out, which is this same tint) renders over it seamlessly. */
 static void polar_sky_color(float h, float *r, float *g, float *b) {
     static const struct { float h, r, g, b; } stops[] = {
@@ -1026,18 +1027,20 @@ static void polar_sky_color(float h, float *r, float *g, float *b) {
     *r = stops[n - 1].r; *g = stops[n - 1].g; *b = stops[n - 1].b;
 }
 
-/* Dome elevation floor: deep enough that the constant-glacial haze
- * band covers the beyond-grid void at steep look-down angles (see
- * polar_sky_color note). */
-#define POLAR_PHI_MIN (-0.25f * (float)M_PI)
+/* Full sphere: the glacial haze closes straight down (-90°), so no
+ * bottom edge exists for any look-down angle to find (see
+ * polar_sky_color note). Extra rings keep the above-horizon gradient
+ * as finely sampled as the sunset dome's despite the doubled span. */
+#define POLAR_PHI_MIN (-0.50f * (float)M_PI)
+#define POLAR_SKY_RINGS 32
 
 /* Gradient dome sharing the sunset dome's radius/tessellation; same
  * ring/strip walk minus the sunward glow term (a polar sky is
  * directionless) and starting at the horizon instead of below it. */
 static void draw_polar_sky_dome(void) {
-    for (int ri = 0; ri < SUNSET_SKY_RINGS; ri++) {
-        float f0 = (float)ri / (float)SUNSET_SKY_RINGS;
-        float f1 = (float)(ri + 1) / (float)SUNSET_SKY_RINGS;
+    for (int ri = 0; ri < POLAR_SKY_RINGS; ri++) {
+        float f0 = (float)ri / (float)POLAR_SKY_RINGS;
+        float f1 = (float)(ri + 1) / (float)POLAR_SKY_RINGS;
         float phi0 = POLAR_PHI_MIN + (SUNSET_PHI_MAX - POLAR_PHI_MIN) * f0;
         float phi1 = POLAR_PHI_MIN + (SUNSET_PHI_MAX - POLAR_PHI_MIN) * f1;
 
