@@ -25,7 +25,6 @@
 
 typedef struct {
     int   visible;
-    float replay_lift_px;
 } VariablePanelViewState;
 
 /* Snapshot-side view of the slider-drag transaction. Lets the renderer

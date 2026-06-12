@@ -14,7 +14,6 @@
 
 #include "ui/subsystems/variable_panel.h"
 #include "ui/core/gl_2d.h"
-#include "ui/core/layout_utils.h"
 #include "ui/core/theme.h"
 #include "config.h"                  /* FONT_SMALL, FONT_SMALL_W */
 
@@ -97,9 +96,6 @@ static float val_to_slider_t(float val, float scale) {
 #define VAR_PANEL_PAD   6
 #define VAR_TITLE_H    20
 #define VAR_ROW_H      20
-#define VAR_PANEL_BASE_Y 8
-#define VAR_PANEL_RIGHT_MARGIN 8     /* gap from the scene's right edge */
-#define VAR_PANEL_EDGE_PAD     4     /* min inset from scene edges after clamping */
 /* Layout constants for variable rows */
 #define VAR_NAME_COL_WIDTH_DENOM 3   /* name column gets 1/N of panel width */
 #define VAR_NAME_COL_PAD_CHARS 1     /* extra char-widths of padding for name column */
@@ -119,27 +115,20 @@ static float val_to_slider_t(float val, float scale) {
 #define VAR_NAME_MAX_PIXELS ((VAR_PANEL_W) / (VAR_NAME_COL_WIDTH_DENOM))
 #define VAR_NAME_MAX_CHARS  ((VAR_NAME_MAX_PIXELS) / (FONT_SMALL_W))
 
-/* Geometry in render coords (y=0 at bottom). */
+/* Panel size for a row count (clamped). Pure; no view needed. */
+void ui_variable_panel_size(int var_count, int *pw, int *ph) {
+    int count = clamp_var_count(var_count);
+    if (pw) *pw = VAR_PANEL_W;
+    if (ph) *ph = VAR_TITLE_H + count * VAR_ROW_H + 2 * VAR_PANEL_PAD;
+}
+
+/* Geometry in render coords (y=0 at bottom). Position is the view's
+ * resolved panel_x/panel_y (overlay layout engine / standalone driver). */
 void ui_variable_panel_rect(const UiVariablePanelView *view,
                             int *px, int *py, int *pw, int *ph) {
-    int sc_x = view->scene_x, sc_y = view->scene_y;
-    int sc_w = view->scene_w, sc_h = view->scene_h;
-    int count = clamp_var_count(view->var_count);
-    int panel_w = VAR_PANEL_W;
-    int panel_h = VAR_TITLE_H + count * VAR_ROW_H + 2 * VAR_PANEL_PAD;
-    int panel_x = sc_x + sc_w - panel_w - VAR_PANEL_RIGHT_MARGIN;
-    if (panel_x < sc_x + VAR_PANEL_EDGE_PAD) panel_x = sc_x + VAR_PANEL_EDGE_PAD;
-
-    int panel_y = sc_y + VAR_PANEL_BASE_Y + view->statusbar_h
-                + (int)lroundf(view->replay_lift_px);
-    panel_y = ui_clamp_panel_y(sc_y, sc_h, panel_h, panel_y,
-                               view->code_panel_at_top,
-                               view->statusbar_h, VAR_PANEL_EDGE_PAD);
-
-    if (px) *px = panel_x;
-    if (py) *py = panel_y;
-    if (pw) *pw = panel_w;
-    if (ph) *ph = panel_h;
+    if (px) *px = view->panel_x;
+    if (py) *py = view->panel_y;
+    ui_variable_panel_size(view->var_count, pw, ph);
 }
 
 /* Return 1 if window coord (gx, gy) is in the panel; sets *out_row. */

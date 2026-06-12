@@ -463,6 +463,7 @@ UI_APP_SRCS = \
 	src/ui/app/layout.c \
 	src/ui/app/menu_bar.c \
 	src/ui/app/numeric_swatch.c \
+	src/ui/app/overlay_layout.c \
 	src/ui/app/panels.c \
 	src/ui/app/repl_code_panel.c \
 	src/ui/app/scene_tabs.c \
@@ -799,6 +800,7 @@ TEST_BINS = \
 	test_repl_code_panel_document \
 	test_repl_code_panel_syntax \
 	test_scene_transition \
+	test_overlay_layout \
 	test_ui_scene_tabs \
 	test_ui_tabbed_overlay \
 	test_scene_file_menu \

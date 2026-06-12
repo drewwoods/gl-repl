@@ -69,6 +69,7 @@
 #include "ui/app/editor.h"
 #include "ui/app/layout.h"
 #include "ui/app/menu_bar.h"
+#include "ui/app/overlay_layout.h"
 #include "ui/core/metrics.h"
 #include "ui/support/memprof.h"
 #include "ui/app/numeric_swatch.h"
@@ -99,10 +100,9 @@ static int glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(
     int *out_follow_doc_line,
     int *out_visible_lines);
 
+/* Gap kept between the replay HUD's top edge and the overlay panel stack.
+ * The easing itself lives in the overlay layout engine (overlay_layout.c). */
 #define GLR_CTRL_REPLAY_PANEL_CLEARANCE_PX 10
-#define GLR_CTRL_REPLAY_PANEL_BASE_Y_PX    8
-#define GLR_CTRL_REPLAY_PANEL_LIFT_EASE    0.22f
-#define GLR_CTRL_REPLAY_PANEL_LIFT_SNAP_PX 0.25f
 
 static UiRenderSnapshot g_last_ui_snapshot;
 static int g_last_ui_snapshot_valid = 0;
@@ -1337,119 +1337,43 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     glr_ctrl_populate_numeric_swatch(snap);
 }
 
-/* Memory-panel stacking layout. The controller owns the anchor (the
- * renderer is snapshot-free), so these scene-relative margins live here —
- * distinct from the panel's own internal padding. They mirror the CPU
- * profile panel's spacing. */
-enum {
-    MEM_PANEL_SCENE_MARGIN_PX = 12, /* gap from scene edge when the variable panel is visible */
-    MEM_PANEL_SIDE_GAP_PX     = 8,  /* gap when shifted left of the CPU profile panel */
-    MEM_PANEL_EDGE_PAD_PX     = 4,  /* min inset from the scene edge after clamping */
-};
+/* Overlay layout inputs from a frame snapshot. The replay band reuses the
+ * reservation from the controller's last tick (ui_overlay_layout_last_band_h)
+ * so render and hit paths agree with the eased positions. */
+static UiOverlayLayoutIn glr_ctrl_overlay_layout_inputs(
+        const UiRenderSnapshot *snap) {
+    return ui_overlay_layout_inputs(snap->variable_panel.visible,
+                                    snap->variable_panel_vars.count,
+                                    snap->profile_panel.mode,
+                                    snap->memory_panel.mode,
+                                    ui_overlay_layout_last_band_h());
+}
 
-/* Resolve the memory panel's stacked anchor and pack it into the narrow
- * view the renderer consumes. Mirrors the CPU profile panel's logic:
- * right-edge of the variable panel (which itself carries the replay lift),
- * shifted left when the CPU profile panel is visible, clamped into the
- * scene rect. The renderer is snapshot-free (links against {support,
- * ui/core} alone), so the layout-policy reads live here in the controller. */
+/* Resolve the memory panel's overlay-layout slot into the narrow view the
+ * renderer consumes. All floating scene panels share one placement policy
+ * (src/ui/app/overlay_layout.c); the renderer stays snapshot-free (links
+ * against {support, ui/core} alone). */
 static UiMemoryPanelView glr_ctrl_build_memory_panel_view(const UiRenderSnapshot *snap) {
     UiMemoryPanelView v;
     v.window_w = snap->viewport.window_w;
     v.window_h = snap->viewport.window_h;
     v.mode     = (UiMemoryPanelMode)snap->memory_panel.mode;
-
-    int panel_w = ui_memory_panel_width();
-    int panel_h = ui_memory_panel_height();
-
-    int scene_x, scene_y, scene_w, scene_h;
-    ui_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
-
-    int panel_x, panel_y;
-    if (snap->variable_panel.visible) {
-        panel_x = scene_x + scene_w - panel_w - MEM_PANEL_SCENE_MARGIN_PX;
-        panel_y = scene_y + scene_h - panel_h - MEM_PANEL_SCENE_MARGIN_PX;
-    } else {
-        UiVariablePanelView var_view = ui_app_variable_panel_view(snap);
-        int var_x, var_y, var_w, var_h;
-        ui_variable_panel_rect(&var_view, &var_x, &var_y, &var_w, &var_h);
-        panel_x = var_x + var_w - panel_w;
-        panel_y = var_y;
-    }
-
-    if (snap->profile_panel.mode != PROFILE_PANEL_OFF)
-        panel_x -= (PROFILE_PANEL_W + MEM_PANEL_SIDE_GAP_PX);
-
-    int min_x = scene_x + MEM_PANEL_EDGE_PAD_PX;
-    int max_x = scene_x + scene_w - panel_w - MEM_PANEL_EDGE_PAD_PX;
-    if (panel_x < min_x) panel_x = min_x;
-    if (panel_x > max_x) panel_x = max_x;
-
-    int min_y = scene_y + STATUSBAR_H + MEM_PANEL_EDGE_PAD_PX;
-    int max_y = scene_y + scene_h     - panel_h - MEM_PANEL_EDGE_PAD_PX;
-    if (max_y >= min_y) {
-        if (panel_y < min_y) panel_y = min_y;
-        if (panel_y > max_y) panel_y = max_y;
-    } else {
-        panel_y = min_y;
-    }
-
-    v.panel_x = panel_x;
-    v.panel_y = panel_y;
+    UiOverlayLayoutIn in = glr_ctrl_overlay_layout_inputs(snap);
+    ui_overlay_layout_panel_pos(&in, UI_OVERLAY_PANEL_MEMORY,
+                                &v.panel_x, &v.panel_y);
     return v;
 }
 
-/* CPU profile panel stacking layout (controller-owned anchor, snapshot-free
- * renderer). Same scene-relative spacing the panel used internally before it
- * was narrowed. */
-enum {
-    PROF_PANEL_SCENE_MARGIN_PX = 12, /* gap from scene edge when the variable panel is visible */
-    PROF_PANEL_EDGE_PAD_PX     = 4,  /* min inset from the scene edge after clamping */
-};
-
-/* Resolve the CPU profile panel's stacked anchor (right edge of the scene, or
- * the variable panel's right edge when it's visible) into the narrow view the
- * renderer consumes — mirrors glr_ctrl_build_memory_panel_view. */
+/* CPU profile panel: same overlay-layout slot resolution as the memory
+ * panel — mirrors glr_ctrl_build_memory_panel_view. */
 static UiProfilePanelView glr_ctrl_build_profile_panel_view(const UiRenderSnapshot *snap) {
     UiProfilePanelView v;
     v.window_w = snap->viewport.window_w;
     v.window_h = snap->viewport.window_h;
     v.mode     = (UiProfilePanelMode)snap->profile_panel.mode;
-
-    int panel_w = ui_profile_panel_width();
-    int panel_h = ui_profile_panel_height(v.mode);
-
-    int scene_x, scene_y, scene_w, scene_h;
-    ui_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
-
-    int panel_x, panel_y;
-    if (snap->variable_panel.visible) {
-        panel_x = scene_x + scene_w - panel_w - PROF_PANEL_SCENE_MARGIN_PX;
-        panel_y = scene_y + scene_h - panel_h - PROF_PANEL_SCENE_MARGIN_PX;
-    } else {
-        UiVariablePanelView var_view = ui_app_variable_panel_view(snap);
-        int var_x, var_y, var_w, var_h;
-        ui_variable_panel_rect(&var_view, &var_x, &var_y, &var_w, &var_h);
-        panel_x = var_x + var_w - panel_w;
-        panel_y = var_y;
-    }
-
-    int min_x = scene_x + PROF_PANEL_EDGE_PAD_PX;
-    int max_x = scene_x + scene_w - panel_w - PROF_PANEL_EDGE_PAD_PX;
-    if (panel_x < min_x) panel_x = min_x;
-    if (panel_x > max_x) panel_x = max_x;
-
-    int min_y = scene_y + STATUSBAR_H + PROF_PANEL_EDGE_PAD_PX;
-    int max_y = scene_y + scene_h     - panel_h - PROF_PANEL_EDGE_PAD_PX;
-    if (max_y >= min_y) {
-        if (panel_y < min_y) panel_y = min_y;
-        if (panel_y > max_y) panel_y = max_y;
-    } else {
-        panel_y = min_y;
-    }
-
-    v.panel_x = panel_x;
-    v.panel_y = panel_y;
+    UiOverlayLayoutIn in = glr_ctrl_overlay_layout_inputs(snap);
+    ui_overlay_layout_panel_pos(&in, UI_OVERLAY_PANEL_PROFILE,
+                                &v.panel_x, &v.panel_y);
     return v;
 }
 
@@ -2160,6 +2084,7 @@ void glr_ctrl_reset_all(void) {
     g_last_replay_follow_src_line = -1;
     editor_state_reset();
     ui_state_reset();
+    ui_overlay_layout_reset();
     variable_panel_state_reset();
     replay_state_reset();
     color_picker_state_reset();
@@ -2678,21 +2603,20 @@ void glr_ctrl_tick(void) {
     glr_ctrl_tick_overlay_xn();
 
     {
-        /* Easing for variable panel's lift above replay HUD (Smell #21/#22/#40) */
-        VariablePanelViewState *vp = variable_panel_state_mut();
-        float target = 0.0f;
-        if (replay_active()) {
-            float lift_target = (float)(REPLAY_HUD_BOTTOM_Y +
-                                        GLR_CTRL_REPLAY_PANEL_CLEARANCE_PX -
-                                        GLR_CTRL_REPLAY_PANEL_BASE_Y_PX);
-            if (lift_target > 0.0f) target = lift_target;
-        }
-        vp->replay_lift_px +=
-            (target - vp->replay_lift_px) * GLR_CTRL_REPLAY_PANEL_LIFT_EASE;
-        if (fabsf(target - vp->replay_lift_px) <
-            GLR_CTRL_REPLAY_PANEL_LIFT_SNAP_PX) {
-            vp->replay_lift_px = target;
-        }
+        /* Ease all floating scene panels (variable / profile / memory)
+         * toward their overlay-layout slots. Replay reserves a bottom band
+         * so the whole stack lifts above the HUD — the old variable-panel-
+         * only replay_lift_px, generalized (Smell #21/#22/#40). */
+        int band_h = replay_active()
+                   ? REPLAY_HUD_BOTTOM_Y + GLR_CTRL_REPLAY_PANEL_CLEARANCE_PX
+                   : 0;
+        UiOverlayLayoutIn in = ui_overlay_layout_inputs(
+            variable_panel_visible(),
+            repl_eval_predef_view().count,
+            ui_state_profile_panel().mode,
+            ui_state_memory_panel().mode,
+            band_h);
+        ui_overlay_layout_tick(&in);
     }
 
     {

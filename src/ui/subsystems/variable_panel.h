@@ -45,15 +45,14 @@ typedef struct {
 } UiVariableList;
 
 /* Narrow per-frame view. All pointer fields are const (check-views-flat).
- * The controller bakes the scene rect / statusbar inset / code-panel-at-top
- * flag so the renderer needs nothing from ui/app/layout or ui/app/state. */
+ * panel_x/panel_y is the resolved bottom-left position (GL window coords):
+ * the app side bakes it via the overlay layout engine
+ * (src/ui/app/overlay_layout.c), standalone drivers set it directly — the
+ * renderer holds no placement policy of its own. */
 typedef struct {
     int   visible;
-    float replay_lift_px;
     int   window_w, window_h;
-    int   scene_x, scene_y, scene_w, scene_h;
-    int   statusbar_h;        /* bottom inset the panel floats above */
-    int   code_panel_at_top;  /* overflow fallback parks the panel at the top */
+    int   panel_x, panel_y;    /* resolved position (bottom-left, GL coords) */
     const UiVariable *vars;    /* may be NULL for hit-only views */
     int   var_count;
     int   drag_active_var;     /* row being dragged, -1 when idle */
@@ -65,8 +64,13 @@ typedef struct {
  * skipped). Called once per frame if the variable panel is enabled. */
 void ui_variable_panel_render(const UiVariablePanelView *view);
 
+/* Panel size for a declared-variable count (clamped to the row cap). Pure;
+ * the app's overlay layout engine uses it to size the panel's stack slot. */
+void ui_variable_panel_size(int var_count, int *pw, int *ph);
+
 /* Query the variable panel's bounding rectangle (window/screen coordinates).
- * Outputs panel position (px, py) and size (pw, ph) for the view's var_count. */
+ * Position comes from the view's resolved panel_x/panel_y; size from the
+ * view's var_count via ui_variable_panel_size. */
 void ui_variable_panel_rect(const UiVariablePanelView *view,
                             int *px, int *py, int *pw, int *ph);
 
