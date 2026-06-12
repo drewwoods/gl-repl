@@ -206,8 +206,8 @@ ifeq ($(UNAME_S),Darwin)
 	-lm -lpthread \
 	-framework CoreAudio -framework CoreFoundation -framework AudioToolbox
   else
-      # macOS: system frameworks + vendored static freeglut (Cocoa backend).
-      FREEGLUT_HEADER_CFLAGS = -I$(FREEGLUT_SRC)/include
+    # macOS: system frameworks + vendored static freeglut (Cocoa backend).
+    FREEGLUT_HEADER_CFLAGS = -I$(FREEGLUT_SRC)/include
     ifeq ($(FREEGLUT_VENDOR),1)
       FREEGLUT_LIB := $(FREEGLUT_STATIC_LIB)
     endif
