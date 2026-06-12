@@ -102,7 +102,7 @@
  * strips the camera translation, so the viewer is always inside the
  * fall volume). Y span starts below the grid plane so flakes don't
  * pop out at eye level on shallow camera angles. */
-#define SNOW_COUNT        900
+#define SNOW_COUNT        1500
 #define SNOW_RADIUS       16.0f
 #define SNOW_Y_MIN        -2.0f
 #define SNOW_Y_SPAN       14.0f
