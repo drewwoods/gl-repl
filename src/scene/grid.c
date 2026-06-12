@@ -673,11 +673,14 @@ static void scene_grid_render_frozen_theme(const GridDrawContext *grid_ctx,
 
     /* Looking up through the ice: pale glacial viewport tint plus a
      * dense EXP2 mist in the same colour, so the grid overhead fades
-     * into the murk. Above ground the theme is deliberately fog-less:
-     * the Polar Day backdrop's glacial horizon supplies the
-     * fade-to-tint look there (pairing them is the intended setup),
-     * and FAR-extent recede behaves like any other fog-less theme.
-     * The tint rect itself is immune to the mist
+     * into the murk. Above ground the theme carries no fog of its own
+     * (the Polar Day backdrop's glacial horizon is the intended
+     * pairing) — but at the FAR extent the generic recede fog is
+     * already enabled and keyed to the clear color, which would fade
+     * the far field to black; recolor it glacial so the recede whites
+     * out into the same tint instead. (LINEAR params stay; non-FAR
+     * steady frames remain fog-call-free, which the fog<->predicate
+     * test pins.) The tint rect itself is immune to the mist
      * (grid_draw_viewport_tint brackets and disables fog). */
     if (grid_camera_world_y(config) < 0.0f) {
         grid_draw_viewport_tint(grid_ctx, config,
@@ -689,6 +692,10 @@ static void scene_grid_render_frozen_theme(const GridDrawContext *grid_ctx,
         glFogi(GL_FOG_MODE, GL_EXP2);
         glFogf(GL_FOG_DENSITY, 0.040f + grid_ctx->breath * 0.008f);
         glEnable(GL_FOG);
+    } else if (config->grid_extent_idx == GRID_EXTENT_FAR) {
+        float fog_col[4] = { SCENE_GLACIAL_TINT_R, SCENE_GLACIAL_TINT_G,
+                             SCENE_GLACIAL_TINT_B, 1.0f };
+        glFogfv(GL_FOG_COLOR, fog_col);
     }
 
     /* Minor lines: faint straight etch marks under the ice. Majors

@@ -995,15 +995,16 @@ static void draw_nebula(
  * whiteout. The horizon stop is exactly SCENE_GLACIAL_TINT — the same
  * colour the Frozen Lake grid fades to — so the grid dissolves into
  * the sky with no seam at the grid extent. Above it the sky cools
- * through powder blue to a steel-blue zenith. The dome is
- * camera-centred, so its below-horizon band is visible wherever the
- * ground doesn't cover it (beyond the grid edge); those stops darken
- * quickly to a slate void so the band reads as distant dark ice, not
- * sky glowing underneath the ground. */
+ * through powder blue to a steel-blue zenith. Below the eye-level
+ * horizon the table clamps to the constant glacial tint and the dome
+ * extends well downward (POLAR_PHI_MIN): the dome is camera-centred,
+ * so the gap between the grid's vanishing edge and the eye-level rim
+ * grows with camera altitude (atan(height/extent)) — constant ice-haze
+ * under the rim fills it at any height instead of a black void, and
+ * the backdrop draws before the grid, so the grid (and its FAR
+ * white-out, which is this same tint) renders over it seamlessly. */
 static void polar_sky_color(float h, float *r, float *g, float *b) {
     static const struct { float h, r, g, b; } stops[] = {
-        { -0.19f, 0.10f, 0.14f, 0.20f },
-        { -0.04f, 0.38f, 0.52f, 0.66f },
         {  0.00f, SCENE_GLACIAL_TINT_R, SCENE_GLACIAL_TINT_G,
                   SCENE_GLACIAL_TINT_B },
         {  0.18f, 0.50f, 0.66f, 0.82f },
@@ -1025,14 +1026,20 @@ static void polar_sky_color(float h, float *r, float *g, float *b) {
     *r = stops[n - 1].r; *g = stops[n - 1].g; *b = stops[n - 1].b;
 }
 
-/* Gradient dome sharing the sunset dome's dimensions; same ring/strip
- * walk minus the sunward glow term (a polar sky is directionless). */
+/* Dome elevation floor: deep enough that the constant-glacial haze
+ * band covers the beyond-grid void at steep look-down angles (see
+ * polar_sky_color note). */
+#define POLAR_PHI_MIN (-0.25f * (float)M_PI)
+
+/* Gradient dome sharing the sunset dome's radius/tessellation; same
+ * ring/strip walk minus the sunward glow term (a polar sky is
+ * directionless) and starting at the horizon instead of below it. */
 static void draw_polar_sky_dome(void) {
     for (int ri = 0; ri < SUNSET_SKY_RINGS; ri++) {
         float f0 = (float)ri / (float)SUNSET_SKY_RINGS;
         float f1 = (float)(ri + 1) / (float)SUNSET_SKY_RINGS;
-        float phi0 = SUNSET_PHI_MIN + (SUNSET_PHI_MAX - SUNSET_PHI_MIN) * f0;
-        float phi1 = SUNSET_PHI_MIN + (SUNSET_PHI_MAX - SUNSET_PHI_MIN) * f1;
+        float phi0 = POLAR_PHI_MIN + (SUNSET_PHI_MAX - POLAR_PHI_MIN) * f0;
+        float phi1 = POLAR_PHI_MIN + (SUNSET_PHI_MAX - POLAR_PHI_MIN) * f1;
 
         glBegin(GL_QUAD_STRIP);
         for (int s = 0; s <= SUNSET_SKY_SEGS; s++) {
