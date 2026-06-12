@@ -33,6 +33,14 @@
 
 #define MAX_LIGHTS 4
 
+/* Glacial blue-white shared by the Frozen Lake grid (under-ice
+ * viewport tint + ice-mist fog colour) and the Polar Day backdrop's
+ * horizon stop, so the grid's mist dissolves seamlessly into the sky
+ * with no colour seam at the grid extent. */
+#define SCENE_GLACIAL_TINT_R 0.58f
+#define SCENE_GLACIAL_TINT_G 0.74f
+#define SCENE_GLACIAL_TINT_B 0.86f
+
 typedef struct {
     GLenum   id;         /* GL_LIGHT0 .. GL_LIGHT3 */
     int      enabled;
