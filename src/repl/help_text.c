@@ -242,7 +242,7 @@ static const char *const k_tab_keys_base[] = {
     "  Ctrl+-               \tDecrease jitter samples",
     "  Ctrl+U               \tToggle GL_MULTISAMPLE",
     "  Ctrl+O               \tCycle grid major tick spacing (1 / 2 / 5 / 10)",
-    "  Ctrl+W               \tCycle CPU profile panel",
+    "  Ctrl+W               \tCycle Compute profile panel",
     "  Ctrl+Shift+W         \tCycle memory profile panel",
     "",
     "Scene Overlays:",

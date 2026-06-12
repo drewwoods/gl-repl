@@ -39,8 +39,10 @@ static void test_gpu_section_policy(void) {
                   glr_prof_section_is_gpu(PROF_FRAME_RESTORE), 0);
     ASSERT_INT_EQ("fade batch exec excluded",
                   glr_prof_section_is_gpu(PROF_SCENE_3D_FADE_BATCH_EXEC), 0);
-    ASSERT_INT_EQ("code panel layout excluded",
-                  glr_prof_section_is_gpu(PROF_CODE_PANEL_LAYOUT), 0);
+    ASSERT_INT_EQ("code panel build rows excluded",
+                  glr_prof_section_is_gpu(PROF_CODE_PANEL_ROWS), 0);
+    ASSERT_INT_EQ("code panel text layout excluded",
+                  glr_prof_section_is_gpu(PROF_CODE_PANEL_TEXT_LAYOUT), 0);
     ASSERT_INT_EQ("out-of-range section rejected",
                   glr_prof_section_is_gpu((ProfSection)-1), 0);
 }

@@ -33,6 +33,7 @@
 #include "ui/core/metrics.h"
 #include "ui/app/panels.h"
 #include "ui/app/state.h"
+#include "ui/support/cpuprof.h" /* PROFILE_PANEL_* modes (legacy-slug test) */
 #include "ui/subsystems/variable_panel.h"
 #include "ui/app/variable_panel_view.h"
 
@@ -590,6 +591,15 @@ int main() {
         repl_export_apply_pending_cfg();
         ASSERT_INT("legacy top_code_panel off maps to left",
                    glr_state_presentation().code_panel_layout, CODE_PANEL_LAYOUT_LEFT);
+
+        /* "CPU profile" -> "Compute profile" rename: files saved before it
+         * carry the old cpu_profile slug and must still drive the panel. */
+        ASSERT_INT("parse legacy cpu_profile cfg",
+                   parse_workspace_header_line("// @cfg cpu_profile = 2"), 1);
+        repl_export_apply_pending_cfg();
+        ASSERT_INT("legacy cpu_profile maps to compute_profile",
+                   ui_state_profile_panel().mode, PROFILE_PANEL_DETAILS);
+        ui_state_profile_panel_mut()->mode = PROFILE_PANEL_OFF;
 
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;
         glr_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();

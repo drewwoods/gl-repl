@@ -25,7 +25,7 @@
 /* @cfg vertex_points = 0 */
 /* @cfg poly_highlight = 1 */
 /* @cfg variable_panel = 1 */
-/* @cfg cpu_profile = 0 */
+/* @cfg compute_profile = 0 */
 /* @cfg memory_profile = 0 */
 /* @cfg code_panel = 1 */
 /* @cfg wrap_at_commas = 1 */
