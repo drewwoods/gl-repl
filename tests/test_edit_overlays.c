@@ -838,6 +838,67 @@ static void test_render_via_repl_program(void) {
     edit_overlays_post_overlays(NULL);
 }
 
+static void test_cursor_guides_render_for_unterminated_begin(void) {
+    printf("--- edit_overlays cursor guides with unterminated glBegin ---\n");
+
+    GLCmd cmds[2];
+    mk_cmd(&cmds[0], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    cmds[0].src_cmd_idx = 0;
+    mk_cmd(&cmds[1], CMD_VERTEX3F, 0.25f, 0.5f, 0.75f);
+    cmds[1].src_cmd_idx = 1;
+
+    OverlayWalkCtx walk;
+    memset(&walk, 0, sizeof(walk));
+    walk.program.cmds = cmds;
+    walk.program.cmd_count = 2;
+    walk.cursor.edit_line_idx = 1;
+    walk.cursor.cursor_block_begin = -1;
+    walk.cursor.cursor_block_end = -1;
+
+    const char *input = "glVertex3f(0.25, 0.5, 0.75)";
+    SceneGuideSnapshot snap;
+    memset(&snap, 0, sizeof(snap));
+    snap.show_guides = 1;
+    snap.input = input;
+    snap.input_len = (int)strlen(input);
+    snap.edit_line_idx = 1;
+    snap.flat_program = walk.program;
+    snap.vertex_args[0] = 0.25f;
+    snap.vertex_args[1] = 0.5f;
+    snap.vertex_args[2] = 0.75f;
+    snap.vertex_filled[0] = snap.vertex_filled[1] = snap.vertex_filled[2] = 1;
+    snap.vertex_n_filled = 3;
+    snap.alpha_scale = 1.0f;
+
+    TraceLog log;
+    trace_begin();
+    edit_overlays_render_cursor_guides(&snap, &walk);
+    trace_end(&log);
+
+    ASSERT_INT("unterminated begin still draws cursor vertex guide",
+               trace_count_line(&log, "glPointSize 15"), 1);
+    ASSERT_INT("cursor guide uses the flat vertex coords",
+               trace_count_line(&log, "glVertex3f 0.25 0.5 0.75"), 1);
+
+    input = "glVertex3f(-0.25, -0.5, 0)";
+    walk.cursor.edit_line_idx = 2;
+    snap.input = input;
+    snap.input_len = (int)strlen(input);
+    snap.edit_line_idx = 2;
+    snap.vertex_args[0] = -0.25f;
+    snap.vertex_args[1] = -0.5f;
+    snap.vertex_args[2] = 0.0f;
+
+    trace_begin();
+    edit_overlays_render_cursor_guides(&snap, &walk);
+    trace_end(&log);
+
+    ASSERT_INT("unterminated begin draws append-row vertex guide",
+               trace_count_line(&log, "glPointSize 15"), 1);
+    ASSERT_INT("append-row guide uses live input coords",
+               trace_count_line(&log, "glVertex3f -0.25 -0.5 0"), 1);
+}
+
 int main(void) {
     printf("--- edit_overlays tests ---\n");
     test_outline_begin_mode_has_overlay();
@@ -856,6 +917,7 @@ int main(void) {
     test_on_normal_vector_arrow_callback();
     test_vertex_numbers_use_source_begin_block();
     test_render_via_repl_program();
+    test_cursor_guides_render_for_unterminated_begin();
 
     return test_harness_report(&g_harness, "test_edit_overlays");
 }

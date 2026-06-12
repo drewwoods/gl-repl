@@ -139,6 +139,12 @@ typedef struct ReplayVertexWalkCallbacks {
      * positional / cursor / block fields. */
     void (*on_each_cmd)(const ReplayVertexWalkState *state, void *user_data);
 
+    /* Fires once after the last valid command, before the walker unwinds
+     * its tracked modelview stack. This gives cursor overlays a virtual
+     * EOF position inside an unterminated glBegin block, matching the
+     * executor's tolerated trailing glEnd cleanup. */
+    void (*on_end)(const ReplayVertexWalkState *state, void *user_data);
+
     /* Fires for every CMD_VERTEX2F / CMD_VERTEX3F / CMD_TESS_VERTEX hit
      * during the walk, with (vx, vy, vz) extracted from the cmd's args. */
     void (*on_vertex)(const ReplayVertexWalkState *state,

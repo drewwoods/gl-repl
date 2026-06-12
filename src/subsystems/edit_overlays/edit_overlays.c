@@ -604,6 +604,17 @@ static void on_cmd_render_cursor_guides(const ReplayVertexWalkState *state,
         ctx->early_stop = 1;
 }
 
+static void on_end_render_cursor_guides(const ReplayVertexWalkState *state,
+                                        void *user) {
+    CursorGuideRenderCtx *ctx = (CursorGuideRenderCtx *)user;
+
+    if (!ctx->geometry_guide_done && !ctx->snapshot->replaying &&
+        state->in_block) {
+        scene_geometry_guides_render_for_cursor(ctx->snapshot);
+        ctx->geometry_guide_done = 1;
+    }
+}
+
 void edit_overlays_render_cursor_guides(const SceneGuideSnapshot *snapshot,
                                         const OverlayWalkCtx *walk_ctx) {
     ReplayVertexWalkContext walk;
@@ -634,6 +645,7 @@ void edit_overlays_render_cursor_guides(const SceneGuideSnapshot *snapshot,
 
     static const ReplayVertexWalkCallbacks cb = {
         .on_each_cmd = on_cmd_render_cursor_guides,
+        .on_end = on_end_render_cursor_guides,
     };
     walk.stop_flag = &ctx.early_stop;
     replay_walk_user_vertices(&walk, &cb, &ctx);

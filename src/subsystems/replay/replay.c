@@ -281,6 +281,11 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
         }
         if (stop_flag && *stop_flag) break;
     }
+    if ((!stop_flag || !*stop_flag) && cb->on_end) {
+        state.flat_cmd_idx = program.cmd_count;
+        state.src_cmd_idx = -1;
+        cb->on_end(&state, user_data);
+    }
     unwind_transform_stack(&matrix_depth);
     glPopMatrix();
 }
