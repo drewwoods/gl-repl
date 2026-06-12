@@ -156,7 +156,7 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
 
     /* Title */
     ui_clr(UI_TOK_TEXT_PRIMARY);
-    gl2d_draw_string((float)tx, (float)ty, "CPU / GPU Profile", FONT_SMALL);
+    gl2d_draw_string((float)tx, (float)ty, "Compute Profile", FONT_SMALL);
     ui_clr(UI_TOK_TEXT_MUTED);
     gl2d_draw_string((float)(panel_x + PROF_PANEL_W - hint_width), (float)ty, HINT, FONT_SMALL);
 

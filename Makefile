@@ -999,6 +999,7 @@ test_ui_text_panel_OBJS = $(OBJDIR)/$(TEST_DIR)/test_ui_text_panel.o \
 	$(OBJDIR)/src/ui/core/text_panel.o \
 	$(OBJDIR)/src/ui/core/text_search.o \
 	$(OBJDIR)/src/ui/core/theme.o \
+	$(OBJDIR)/src/support/cpuprof.o \
 	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o
 test_ui_text_panel_LDLIBS = $(GL_LDFLAGS)
 test_ui_text_panel_RUN ?= $(BINDIR)/test_ui_text_panel
@@ -1547,10 +1548,14 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-include-style \
 		check-tier-c-function-size \
 		check-no-test-default-output \
+		check-prof-sections-instrumented \
 		check-keymap-no-dup; do \
 		printf "  $(YELLOW)▶$(NC) $$target\n"; \
 		$(MAKE) --no-print-directory $$target 2>&1 | sed 's/^/    /' | sed $$'s/ OK / \033[0;32mOK\033[0m /g; s/ OK$$/ \033[0;32mOK\033[0m/' || exit $$?; \
 	done
+
+check-prof-sections-instrumented: ## Hard guard: every prof_sections.h catalog row has a prof_begin() site (no zombie profiler rows).
+	@bash scripts/check-prof-sections-instrumented.sh
 
 check-public-api-usage: ## Scan public API declarations for unused functions (informational).
 	@bash scripts/check-unused-apis.sh

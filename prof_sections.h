@@ -43,22 +43,18 @@ typedef enum {
     PROF_SCENE_3D_ORBIT_TARGET, /* draw_orbit_target() */
     PROF_SCENE_3D_OVERLAYS,  /* vertex dots, vertex/normal/transform guides */
     PROF_SCENE_3D_OVERLAY_OUTLINES,  /* polygon outline + current-block highlight */
-    PROF_SCENE_3D_OVERLAY_BUILD_GUIDES,  /* transform-editing gizmos (translate/rotate/scale) */
     PROF_SCENE_3D_OVERLAY_TRANSFORM_GUIDES,  /* transform-editing gizmos (translate/rotate/scale) */
     PROF_SCENE_3D_OVERLAY_NORMALS,        /* normal vector labels */
     PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS,    /* vertex numbers labels */
     PROF_SCENE_3D_POST_PROCESS,   /* scene_postprocess_filter_render() */
     PROF_SCENE_3D_LAST = PROF_SCENE_3D_POST_PROCESS,
-    PROF_CODE_PANEL,    /* render_code_panel() */
-    PROF_CODE_PANEL_LAYOUT,   /* render_code_panel() layout/precompute */
-    PROF_CODE_PANEL_CHROME,   /* background, border, header/search chrome */
-    PROF_CODE_PANEL_LINES,    /* header/body/footer line rendering */
-    PROF_CODE_PANEL_LINES_STATIC,  /* workspace/header static rows */
-    PROF_CODE_PANEL_LINES_BODY,    /* command + insert/newline body rows */
-    PROF_CODE_PANEL_LINES_BODY_CMDS,    /* command loop body */
-    PROF_CODE_PANEL_LINES_BODY_NEWLINE, /* newline slot body */
-    PROF_CODE_PANEL_LINES_FOOTER,  /* footer/static trailing rows */
-    PROF_CODE_PANEL_OVERLAYS, /* scroll/status/color-picker overlays */
+    PROF_CODE_PANEL,    /* ui_repl_code_panel_render_with_chrome() */
+    PROF_CODE_PANEL_ROWS,     /* adapter row/segment build from REPL state */
+    PROF_CODE_PANEL_TEXT,     /* generic ui_text_panel_render() */
+    PROF_CODE_PANEL_TEXT_LAYOUT, /* wrap-count cache + viewport metrics */
+    PROF_CODE_PANEL_TEXT_CHROME, /* background/border/divider + scrollbar */
+    PROF_CODE_PANEL_TEXT_LINES,  /* row draw loop */
+    PROF_CODE_PANEL_OVERLAYS, /* tabs/menubar/search/statusbar/picker/swatch */
     PROF_UI_PANELS,     /* autocomplete + dropdown + var + config + help */
     PROF_SNAPSHOT,                 /* aggregate snapshot production by controller */
     PROF_SNAPSHOT_TRANSFORMERS,    /* push_color_transformers (per-line scan) */

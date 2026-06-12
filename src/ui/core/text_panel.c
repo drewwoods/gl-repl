@@ -4,6 +4,9 @@
  * This file has no dependency on repl, editor, or app headers.
  */
 #include "config.h"
+#include "support/cpuprof.h"   /* phase probes; sections are opaque ints, the
+                                * catalog comes from the force-included
+                                * prof_sections.h — no app dependency */
 #include "ui/core/gl_2d.h"
 #include "ui/core/text_layout.h"
 #include "ui/core/text_search.h"
@@ -1176,9 +1179,11 @@ void ui_text_panel_render(const UiTextPanelSnapshot *snap,
 
     /* Fill the per-frame wrap-count cache so the hit-test and
      * input-row-y paths can reuse our walk instead of redoing it. */
+    prof_begin(PROF_CODE_PANEL_TEXT_LAYOUT);
     wrap_cache_populate(snap);
 
     metrics = text_panel_viewport_metrics(snap);
+    prof_end(PROF_CODE_PANEL_TEXT_LAYOUT);
 
     out->visible_rows = metrics.visible_rows;
     out->statusbar_slot = (UiTextPanelRect){
@@ -1198,7 +1203,12 @@ void ui_text_panel_render(const UiTextPanelSnapshot *snap,
         return;
 
     gl2d_begin(snap->vp_w, snap->vp_h);
+    /* Chrome is two disjoint spans (background/border here, scrollbar after
+     * the row loop), so it uses the accumulate-then-commit probes. */
+    prof_accum_reset(PROF_CODE_PANEL_TEXT_CHROME);
+    prof_begin(PROF_CODE_PANEL_TEXT_CHROME);
     text_panel_draw_chrome(snap);
+    prof_accum_end(PROF_CODE_PANEL_TEXT_CHROME);
 
     /* Clip the text rows to the panel interior. Rows are laid out
      * left-to-right with no per-row width clamp, so a long unbroken
@@ -1214,6 +1224,7 @@ void ui_text_panel_render(const UiTextPanelSnapshot *snap,
     glEnable(GL_SCISSOR_TEST);
     glScissor(snap->cp_x, snap->cp_y, snap->cp_w, snap->cp_h);
 
+    prof_begin(PROF_CODE_PANEL_TEXT_LINES);
     line_y = metrics.first_line_y;
     bracket_hl = text_panel_resolve_bracket_hl(snap);
 
@@ -1231,9 +1242,13 @@ void ui_text_panel_render(const UiTextPanelSnapshot *snap,
     }
 
     glDisable(GL_SCISSOR_TEST);
+    prof_end(PROF_CODE_PANEL_TEXT_LINES);
 
     out->total_rows = total_rows;
+    prof_begin(PROF_CODE_PANEL_TEXT_CHROME);
     text_panel_draw_scrollbar(snap, total_rows, metrics.visible_rows);
+    prof_accum_end(PROF_CODE_PANEL_TEXT_CHROME);
+    prof_accum_commit(PROF_CODE_PANEL_TEXT_CHROME);
     gl2d_end();
 }
 

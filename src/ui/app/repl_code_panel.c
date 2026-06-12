@@ -7,6 +7,7 @@
 #include "repl/eval.h"
 #include "repl/export.h"
 #include "repl/state_views.h"
+#include "support/cpuprof.h"
 #include "ui/subsystems/color_picker.h"
 #include "ui/app/numeric_swatch.h"
 #include "ui/core/gl_2d.h"
@@ -2056,7 +2057,9 @@ void ui_repl_code_panel_render_with_chrome(const UiRenderSnapshot *snap,
 
     glViewport(0, 0, snap->viewport.window_w, snap->viewport.window_h);
 
+    prof_begin(PROF_CODE_PANEL_ROWS);
     repl_code_panel_build_rows(&builder);
+    prof_end(PROF_CODE_PANEL_ROWS);
 
     g_builder_cache.snap    = snap;
     g_builder_cache.builder = builder;
@@ -2064,7 +2067,9 @@ void ui_repl_code_panel_render_with_chrome(const UiRenderSnapshot *snap,
     g_builder_cache.valid   = 1;
 
     memset(&text_out, 0, sizeof(text_out));
+    prof_begin(PROF_CODE_PANEL_TEXT);
     ui_text_panel_render(&builder.text_snap, &text_out);
+    prof_end(PROF_CODE_PANEL_TEXT);
 
     if (out) {
         out->cursor_px = text_out.cursor_px;
@@ -2072,6 +2077,7 @@ void ui_repl_code_panel_render_with_chrome(const UiRenderSnapshot *snap,
         out->cursor_valid = text_out.cursor_valid;
     }
 
+    prof_begin(PROF_CODE_PANEL_OVERLAYS);
     gl2d_begin(snap->viewport.window_w, snap->viewport.window_h);
     /* Draw the scene tab strip before the menu bar so the closed menu row
      * stays the topmost chrome; the example dropdown is a later controller
@@ -2086,6 +2092,7 @@ void ui_repl_code_panel_render_with_chrome(const UiRenderSnapshot *snap,
                            snap->viewport.window_h);
     ui_numeric_swatch_render(snap);
     gl2d_end();
+    prof_end(PROF_CODE_PANEL_OVERLAYS);
 }
 
 static UiHit repl_code_panel_rewrite_hit(const ReplCodePanelBuilder *builder,

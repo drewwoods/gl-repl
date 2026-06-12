@@ -576,7 +576,7 @@ flyouts taller than the window):
 - **CAMERA** — View mode, Camera rotate, Focus origin, Reset camera
 - **GEOMETRY** — Vertex labels, Normal vectors, Vertex outlines, Vertex
   points, Poly highlight
-- **INTERFACE** — Variable panel, CPU profile, Memory profile, Code panel,
+- **INTERFACE** — Variable panel, Compute profile, Memory profile, Code panel,
   Wrap at commas, Syntax highlight, Paren match, Paren scope
 - **AUDIO** — Audio on/off
 
@@ -1060,8 +1060,8 @@ All screenshots and GIFs in this guide were captured that way.
 
 ## Profiling & Diagnostics
 
-- **CPU profile** (Ctrl+W) — overlay panel of per-frame section timings
-  (Off / On / Details).
+- **Compute profile** (Ctrl+W) — overlay panel of per-frame section timings,
+  CPU and GPU columns (Off / On / Details).
 - **Memory profile** (Ctrl+Shift+W) — RSS history, baseline, and delta.
 - **Message history** — click the button at the right end of the bottom
   message line to review recent status messages.

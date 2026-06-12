@@ -233,13 +233,13 @@ const GlrConfigItem g_cfg_items[] = {
     { .label = "### INTERFACE", .section_header = 1 },
     { .label = "Variable panel", .key = GLR_CONFIG_VARIABLE_PANEL, .state_count = 2,
       .key_code = KM_KEY(GLR_VARIABLE_PANEL), .modifiers = KM_MODS(GLR_VARIABLE_PANEL) },
-    { .label = "CPU profile", .key = GLR_CONFIG_CPU_PROFILE,
+    { .label = "Compute profile", .key = GLR_CONFIG_CPU_PROFILE,
       .state_count = PROFILE_PANEL_MODE_COUNT, .state_names = profile_panel_mode_names,
       .key_code = KM_KEY(GLR_CPU_PROFILE), .modifiers = KM_MODS(GLR_CPU_PROFILE) },
-    /* Ctrl+Shift+W mirrors CPU profile's Ctrl+W. The two-pass ascii
+    /* Ctrl+Shift+W mirrors Compute profile's Ctrl+W. The two-pass ascii
      * shortcut dispatcher in glr_cfg_handle_ascii_shortcut prefers
      * Shift-requiring rows when Shift is held, so plain Ctrl+W still
-     * routes to CPU profile while Ctrl+Shift+W cycles this row. */
+     * routes to Compute profile while Ctrl+Shift+W cycles this row. */
     { .label = "Memory profile", .key = GLR_CONFIG_MEMORY_PROFILE,
       .state_count = MEMORY_PANEL_MODE_COUNT, .state_names = memory_panel_mode_names,
       .key_code = KM_KEY(GLR_MEMORY_PROFILE), .modifiers = KM_MODS(GLR_MEMORY_PROFILE) },
@@ -309,6 +309,13 @@ static void glr_export_cfg_normalize_legacy_alias(const char **slug, int *val,
         snprintf(slug_buf, slug_buf_sz, "%s", "code_panel");
         *slug = slug_buf;
         *val = *val ? CODE_PANEL_LAYOUT_TOP : CODE_PANEL_LAYOUT_LEFT;
+    }
+
+    /* The "CPU profile" row was renamed "Compute profile" (it carries GPU
+     * timings too); files saved before the rename still say cpu_profile. */
+    if (strcmp(*slug, "cpu_profile") == 0) {
+        snprintf(slug_buf, slug_buf_sz, "%s", "compute_profile");
+        *slug = slug_buf;
     }
 }
 
