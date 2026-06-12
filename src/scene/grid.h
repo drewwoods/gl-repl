@@ -16,8 +16,10 @@
 void scene_grid_render(const SceneFrameRenderContext *frame_ctx);
 
 /* True for the themes whose own fog is incompatible with the
- * synthesized clear-color recede (EXP2: GRID_THEME_FOG, OCEAN,
- * FROZEN). Under
+ * synthesized clear-color recede (EXP2: GRID_THEME_FOG, OCEAN).
+ * FROZEN is not here: its glacial mist is under-ice-only, so the
+ * steady above-ground frame emits no fog and the theme hides like a
+ * fog-less one. Under
  * the FOG transition style these fall back to the plain alpha FADE.
  * The FAR extent is intentionally NOT here: its distance fog is the
  * same LINEAR/clear-color model as the recede, so it composes without
