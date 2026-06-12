@@ -68,6 +68,12 @@ static SceneRgba rgba(float r, float g, float b, float a) {
     return c;
 }
 
+static void set_fog_to_clear_color() {
+    float clear_col[4];
+    glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_col);
+    glFogfv(GL_FOG_COLOR, clear_col);
+}
+
 /* Grid in-out transition (plans/.../grid-axes-transitions.md rule 4).
  * Resolved once at scene_grid_render entry from config.grid_opacity
  * and stored on the GridDrawContext. Every color path routes through
@@ -87,9 +93,7 @@ static SceneRgba rgba(float r, float g, float b, float a) {
  * opacity). tf<=0 -> no fog, continuous with the fogless steady look. */
 static void grid_xn_apply_transition_fog(float tf, float extent) {
     if (tf <= 0.0f) return;
-    float clear_col[4];
-    glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_col);
-    glFogfv(GL_FOG_COLOR, clear_col);
+    set_fog_to_clear_color();
     glEnable(GL_FOG);
     glFogi(GL_FOG_MODE, GL_LINEAR);
     float far_end  = extent * 1.25f;   /* tf~0: fog past the grid edge */
@@ -685,16 +689,22 @@ static void scene_grid_render_frozen_theme(const GridDrawContext *grid_ctx,
     if (under_ice)
         grid_draw_viewport_tint(grid_ctx, config,
                                 GRID_FROZEN_TINT_R, GRID_FROZEN_TINT_G,
-                                GRID_FROZEN_TINT_B, 0.55f);
+                                GRID_FROZEN_TINT_B, 0.65f);
     {
         float fog_col[4] = { GRID_FROZEN_TINT_R, GRID_FROZEN_TINT_G,
-                             GRID_FROZEN_TINT_B, 1.0f };
-        float density = (under_ice ? 0.040f : 0.030f) +
-                        grid_ctx->breath * 0.008f;
-        glFogfv(GL_FOG_COLOR, fog_col);
+                             GRID_FROZEN_TINT_B, 0.5f };
+        if (under_ice) {
+            glFogf(GL_FOG_DENSITY, 0.040f + grid_ctx->breath * 0.008f);
+            glFogfv(GL_FOG_COLOR, fog_col);
+            glFogi(GL_FOG_MODE, GL_EXP2);
+        }
+        else {
+            set_fog_to_clear_color();
+            glFogi(GL_FOG_MODE, GL_LINEAR);
+            glFogf(GL_FOG_START, extent * 0.85f);
+            glFogf(GL_FOG_END, extent);
+        }
         glEnable(GL_FOG);
-        glFogi(GL_FOG_MODE, GL_EXP2);
-        glFogf(GL_FOG_DENSITY, density);
     }
 
     /* Minor lines: faint straight etch marks under the ice. Majors
@@ -1221,6 +1231,7 @@ static GridDrawContext grid_build_draw_context(const SceneFrameRenderContext *fr
     };
 }
 
+
 /* FAR-extent clear-color distance fog. Under FOG transition style,
  * fog-less themes animate the same fog inward as they hide. The
  * xn parameter carries the resolved fog_tf (= 1 - opacity) so this
@@ -1257,9 +1268,7 @@ static void grid_apply_far_fog(const SceneRenderConfig *config,
 #else
     (void)xn;
 #endif
-    float clear_col[4];
-    glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_col);
-    glFogfv(GL_FOG_COLOR, clear_col);
+    set_fog_to_clear_color();
     glEnable(GL_FOG);
     glFogi(GL_FOG_MODE, GL_LINEAR);
     glFogf(GL_FOG_START, fog_start);
