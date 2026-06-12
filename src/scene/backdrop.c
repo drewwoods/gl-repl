@@ -82,6 +82,21 @@
 #define SUNSET_STAR_STRIDE   11u
 #define SUNSET_STAR_SEED     0xD05Eu
 
+/* --- Nebula backdrop --- */
+
+/* Cloud dome sits just inside the star dome; the starfield (drawn
+ * after, no depth writes) reads as shining through the gas. */
+#define NEBULA_SKY_RADIUS   28.0f
+#define NEBULA_PUFF_COUNT   110
+#define NEBULA_PUFF_SEGS    12
+/* Half-width of the galactic band, radians of elevation off the
+ * band's great circle; puffs scatter inside it triangularly. */
+#define NEBULA_BAND_SPREAD  0.38f
+#define NEBULA_FLARE_COUNT  6
+
+#define NEBULA_RNG_STRIDE   29u
+#define NEBULA_RNG_SEED     0x4EB1u
+
 static void scene_backdrop_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 }
@@ -789,19 +804,191 @@ static void draw_aurora(float anim_time, float alpha_scale, float extent) {
     scene_backdrop_pop_state();
 }
 
+/* --- Nebula: deep-space gas clouds along a tilted galactic band ---
+ *
+ * The companion sky to the Star Chart grid (violet/teal glow over its
+ * gold chart marks). Additive-blended soft discs ("puffs") scatter
+ * along a tilted great-circle band across the sky dome in three color
+ * families (magenta, indigo, teal), each slowly pulsing and drifting
+ * along the band; a handful of bright flare stars with diffraction
+ * spikes anchor the composition. The base starfield is composed on
+ * top by the dispatch (same pattern as CITY_AND_STARS). */
+
+/* Orthonormal band frame: e3 is the band pole (the band's great
+ * circle is the plane normal to it), e1/e2 span that plane. Constants
+ * chosen so the band crosses the sky diagonally. */
+static const float k_nebula_e1[3] = { -0.80f, 0.00f, 0.60f };
+static const float k_nebula_e2[3] = {  0.48f, -0.60f, 0.64f };
+static const float k_nebula_e3[3] = {  0.36f, 0.80f, 0.48f };
+
+/* Direction on the unit sphere for band coordinate (theta, phi_off):
+ * theta runs along the band's great circle, phi_off is elevation off
+ * it toward the pole. */
+static void nebula_band_dir(float theta, float phi_off, float out[3]) {
+    float ct = cosf(theta), st = sinf(theta);
+    float cp = cosf(phi_off), sp = sinf(phi_off);
+    for (int k = 0; k < 3; k++)
+        out[k] = cp * (ct * k_nebula_e1[k] + st * k_nebula_e2[k])
+               + sp * k_nebula_e3[k];
+}
+
+/* Tangent basis at dome direction d (unit): t1 along the band, t2
+ * completing the frame. d never reaches the band pole (|phi_off| is
+ * capped well below pi/2), so the cross product stays well-formed. */
+static void nebula_tangent_frame(const float d[3], float t1[3], float t2[3]) {
+    /* t1 = normalize(e3 x d) */
+    t1[0] = k_nebula_e3[1] * d[2] - k_nebula_e3[2] * d[1];
+    t1[1] = k_nebula_e3[2] * d[0] - k_nebula_e3[0] * d[2];
+    t1[2] = k_nebula_e3[0] * d[1] - k_nebula_e3[1] * d[0];
+    float len = sqrtf(t1[0] * t1[0] + t1[1] * t1[1] + t1[2] * t1[2]);
+    if (len < 1e-5f) len = 1e-5f;
+    for (int k = 0; k < 3; k++) t1[k] /= len;
+    /* t2 = d x t1 (unit: d and t1 are unit and orthogonal) */
+    t2[0] = d[1] * t1[2] - d[2] * t1[1];
+    t2[1] = d[2] * t1[0] - d[0] * t1[2];
+    t2[2] = d[0] * t1[1] - d[1] * t1[0];
+}
+
+/* One soft gas disc: center-bright triangle fan in the tangent plane,
+ * rim alpha 0 so puffs have no border and stack additively. */
+static void nebula_draw_puff(const float d[3], float radius,
+                             float r, float g, float b, float a) {
+    float t1[3], t2[3];
+    nebula_tangent_frame(d, t1, t2);
+    float cx = d[0] * NEBULA_SKY_RADIUS;
+    float cy = d[1] * NEBULA_SKY_RADIUS;
+    float cz = d[2] * NEBULA_SKY_RADIUS;
+    glBegin(GL_TRIANGLE_FAN);
+    glColor4f(r, g, b, a);
+    glVertex3f(cx, cy, cz);
+    glColor4f(r, g, b, 0.0f);
+    for (int s = 0; s <= NEBULA_PUFF_SEGS; s++) {
+        float ang = ((float)s / (float)NEBULA_PUFF_SEGS) * 2.0f * (float)M_PI;
+        float ca = cosf(ang) * radius, sa = sinf(ang) * radius;
+        glVertex3f(cx + t1[0] * ca + t2[0] * sa,
+                   cy + t1[1] * ca + t2[1] * sa,
+                   cz + t1[2] * ca + t2[2] * sa);
+    }
+    glEnd();
+}
+
+static void nebula_draw_clouds(float anim_time) {
+    for (int i = 0; i < NEBULA_PUFF_COUNT; i++) {
+        unsigned int base =
+            (unsigned int)i * NEBULA_RNG_STRIDE + NEBULA_RNG_SEED;
+
+        /* Along-band position with a very slow per-puff drift. */
+        float theta = city_rng(base + 1u) * 2.0f * (float)M_PI
+                    + anim_time * (0.004f + city_rng(base + 2u) * 0.008f);
+        /* Triangular falloff off the band's spine. */
+        float phi_off = (city_rng(base + 3u) + city_rng(base + 4u) - 1.0f)
+                      * NEBULA_BAND_SPREAD;
+        float d[3];
+        nebula_band_dir(theta, phi_off, d);
+        /* Skip puffs sunk below the horizon: the grid floor owns that
+         * half of the view, and the dome dips only slightly under it. */
+        if (d[1] < -0.05f) continue;
+
+        float radius = NEBULA_SKY_RADIUS * (0.10f + city_rng(base + 5u) * 0.16f);
+
+        /* Three cold gas families + per-puff jitter. */
+        float roll = city_rng(base + 6u);
+        float jit = city_rng(base + 7u) * 0.10f;
+        float r, g, b;
+        if (roll < 0.40f)      { r = 0.58f + jit; g = 0.14f; b = 0.50f + jit; }
+        else if (roll < 0.75f) { r = 0.20f + jit; g = 0.18f; b = 0.58f + jit; }
+        else                   { r = 0.08f; g = 0.42f + jit; b = 0.52f + jit; }
+
+        float phase = city_rng(base + 8u) * 2.0f * (float)M_PI;
+        float speed = 0.05f + city_rng(base + 9u) * 0.18f;
+        float pulse = 0.80f + 0.20f * sinf(anim_time * speed * 2.0f * (float)M_PI
+                                           + phase);
+        float a = (0.045f + city_rng(base + 10u) * 0.075f) * pulse;
+
+        nebula_draw_puff(d, radius, r, g, b, a);
+    }
+}
+
+/* A few bright "named" stars inside the band: a point core plus four
+ * diffraction spikes fading to nothing, slowly twinkling. */
+static void nebula_draw_flares(float anim_time) {
+    for (int i = 0; i < NEBULA_FLARE_COUNT; i++) {
+        unsigned int base =
+            (unsigned int)(i + 600) * NEBULA_RNG_STRIDE + NEBULA_RNG_SEED;
+
+        float theta = city_rng(base + 1u) * 2.0f * (float)M_PI;
+        float phi_off = (city_rng(base + 2u) - 0.5f) * NEBULA_BAND_SPREAD;
+        float d[3];
+        nebula_band_dir(theta, phi_off, d);
+        if (d[1] < 0.12f) continue;   /* keep flares clear of the floor */
+
+        float t1[3], t2[3];
+        nebula_tangent_frame(d, t1, t2);
+        float cx = d[0] * NEBULA_SKY_RADIUS;
+        float cy = d[1] * NEBULA_SKY_RADIUS;
+        float cz = d[2] * NEBULA_SKY_RADIUS;
+
+        float tw = 0.5f + 0.5f * sinf(anim_time *
+                                      (0.25f + city_rng(base + 3u) * 0.45f)
+                                      * 2.0f * (float)M_PI
+                                      + city_rng(base + 4u) * 6.28318f);
+        float a = 0.45f + 0.50f * tw;
+        float len = NEBULA_SKY_RADIUS * (0.045f + city_rng(base + 5u) * 0.045f)
+                  * (0.8f + 0.4f * tw);
+        /* warm-white core with a faint violet cast */
+        float r = 0.95f, g = 0.90f, b = 1.00f;
+
+        glBegin(GL_LINES);
+        for (int s = 0; s < 4; s++) {
+            const float *ax = (s < 2) ? t1 : t2;
+            float sgn = (s & 1) ? -1.0f : 1.0f;
+            glColor4f(r, g, b, a * 0.85f);
+            glVertex3f(cx, cy, cz);
+            glColor4f(r, g, b, 0.0f);
+            glVertex3f(cx + ax[0] * len * sgn,
+                       cy + ax[1] * len * sgn,
+                       cz + ax[2] * len * sgn);
+        }
+        glEnd();
+
+        glPointSize(5.0f);
+        glBegin(GL_POINTS);
+        glColor4f(r, g, b, a);
+        glVertex3f(cx, cy, cz);
+        glEnd();
+    }
+}
+
+static void draw_nebula(
+    float anim_time,
+    int point_parameter_supported,
+    void (APIENTRY *point_parameter_proc)(GLenum pname, const GLfloat *params)) {
+    backdrop_begin_sky_point_state(point_parameter_supported,
+                                   point_parameter_proc);
+
+    /* Additive blend: overlapping gas brightens like emission nebulae. */
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    nebula_draw_clouds(anim_time);
+    nebula_draw_flares(anim_time);
+
+    backdrop_end_sky_point_state();
+}
+
 /* Sunset environment lights, one row per slot: world-space position
  * (w=0 => directional), then diffuse / ambient / specular. Slots live
  * on GL_LIGHT4..6 — above the REPL's user-facing GL_LIGHT0..3 range —
  * so lit geometry picks up the scene's colors without consuming any
  * user slot (fixed-function GL guarantees 8 lights). Intensities stay
  * moderate so an enabled user light still reads as the key. */
-static const struct {
+typedef struct BackdropEnvLight {
     GLenum  id;
     GLfloat pos[4];
     GLfloat diffuse[4];
     GLfloat ambient[4];
     GLfloat specular[4];
-} k_sunset_lights[] = {
+} BackdropEnvLight;
+
+static const BackdropEnvLight k_sunset_lights[] = {
     /* Golden-pink sun key from the disc's direction (low, toward -Z). */
     { GL_LIGHT4,
       {  0.0f,  5.0f, -24.0f, 0.0f },
@@ -822,6 +1009,42 @@ static const struct {
       { 0.20f, 0.04f, 0.14f, 1.0f } },
 };
 
+/* Nebula environment lights: cold cosmic palette matched to the gas
+ * families above — magenta key from high along the band, teal rim
+ * from the opposite low quarter, and a deep-indigo bounce from below
+ * standing in for the Star Chart floor's glow. Same GL_LIGHT4..6
+ * contract as the sunset rig. */
+static const BackdropEnvLight k_nebula_lights[] = {
+    /* Magenta nebula key, high toward the band's bright side. */
+    { GL_LIGHT4,
+      {  0.45f,  0.65f, -0.60f, 0.0f },
+      { 0.55f, 0.18f, 0.48f, 1.0f },
+      { 0.04f, 0.01f, 0.04f, 1.0f },
+      { 0.65f, 0.30f, 0.60f, 1.0f } },
+    /* Teal gas rim from the opposite low quarter. */
+    { GL_LIGHT5,
+      { -0.55f,  0.20f,  0.65f, 0.0f },
+      { 0.10f, 0.34f, 0.40f, 1.0f },
+      { 0.01f, 0.02f, 0.03f, 1.0f },
+      { 0.15f, 0.40f, 0.45f, 1.0f } },
+    /* Indigo chart-floor bounce, from below. */
+    { GL_LIGHT6,
+      {  0.00f, -1.00f,  0.10f, 0.0f },
+      { 0.14f, 0.12f, 0.34f, 1.0f },
+      { 0.00f, 0.00f, 0.00f, 1.0f },
+      { 0.08f, 0.07f, 0.20f, 1.0f } },
+};
+
+static void backdrop_apply_env_lights(const BackdropEnvLight *lights, int n) {
+    for (int i = 0; i < n; i++) {
+        glLightfv(lights[i].id, GL_POSITION, lights[i].pos);
+        glLightfv(lights[i].id, GL_DIFFUSE,  lights[i].diffuse);
+        glLightfv(lights[i].id, GL_AMBIENT,  lights[i].ambient);
+        glLightfv(lights[i].id, GL_SPECULAR, lights[i].specular);
+        glEnable(lights[i].id);
+    }
+}
+
 /* Backdrop-owned colored lights. Runs in the pass setup phase (after
  * scene_lights_setup, before user fill) so lit user geometry sees them;
  * unlike the user slots these are configured AND enabled here, since
@@ -831,14 +1054,19 @@ static const struct {
  * end, so nothing leaks when the backdrop changes. Positions are
  * world-space: the modelview holds the camera at call time. */
 void scene_backdrop_setup_lights(const SceneFrameRenderContext *frame_ctx) {
-    if (frame_ctx->config.backdrop_mode != SCENE_BACKDROP_SUNSET) return;
-    for (int i = 0;
-         i < (int)(sizeof(k_sunset_lights) / sizeof(k_sunset_lights[0])); i++) {
-        glLightfv(k_sunset_lights[i].id, GL_POSITION, k_sunset_lights[i].pos);
-        glLightfv(k_sunset_lights[i].id, GL_DIFFUSE,  k_sunset_lights[i].diffuse);
-        glLightfv(k_sunset_lights[i].id, GL_AMBIENT,  k_sunset_lights[i].ambient);
-        glLightfv(k_sunset_lights[i].id, GL_SPECULAR, k_sunset_lights[i].specular);
-        glEnable(k_sunset_lights[i].id);
+    switch (frame_ctx->config.backdrop_mode) {
+    case SCENE_BACKDROP_SUNSET:
+        backdrop_apply_env_lights(
+            k_sunset_lights,
+            (int)(sizeof(k_sunset_lights) / sizeof(k_sunset_lights[0])));
+        break;
+    case SCENE_BACKDROP_NEBULA:
+        backdrop_apply_env_lights(
+            k_nebula_lights,
+            (int)(sizeof(k_nebula_lights) / sizeof(k_nebula_lights[0])));
+        break;
+    default:
+        break;
     }
 }
 
@@ -865,6 +1093,16 @@ void scene_backdrop_render(const SceneFrameRenderContext *frame_ctx) {
         draw_sunset(frame_ctx->config.anim_time,
                     frame_ctx->config.point_parameter_supported,
                     frame_ctx->config.point_parameter_proc);
+        break;
+    case SCENE_BACKDROP_NEBULA:
+        /* Gas first, then the shared starfield shines through on top
+         * (no depth writes in either pass — draw order is the layering). */
+        draw_nebula(frame_ctx->config.anim_time,
+                    frame_ctx->config.point_parameter_supported,
+                    frame_ctx->config.point_parameter_proc);
+        draw_starry_sky(frame_ctx->config.anim_time,
+                        frame_ctx->config.point_parameter_supported,
+                        frame_ctx->config.point_parameter_proc);
         break;
     case SCENE_BACKDROP_AURORA: {
         int ex_i = frame_ctx->config.grid_extent_idx;

@@ -963,6 +963,158 @@ static void scene_grid_render_soil_theme(const GridDrawContext *grid_ctx,
     }
 }
 
+/* Star Chart: the floor as a midnight observatory map — the
+ * companion piece to the Nebula backdrop (warm gold chart marks
+ * under its violet sky). Minor lines are faint indigo graticule
+ * etch and major lines slightly brighter chart rules; the content
+ * lives at the major-line intersections, where a deterministic
+ * subset of nodes renders as twinkling star points (three size
+ * bands, parchment gold with a few ice-blue strays) and some
+ * neighbouring star nodes are joined by faint inked constellation
+ * links, so the floor reads as a star atlas rather than graph
+ * paper. All placement keys on grid_pos_hash so the chart is
+ * static frame-to-frame; only the twinkle animates. */
+
+#define GRID_CHART_NODE_KEEP 0.55f  /* fraction of intersections inked */
+#define GRID_CHART_LINK_KEEP 0.30f  /* chance per neighbour edge */
+
+static float grid_chart_roll(float gx, float gz, float salt) {
+    return grid_pos_hash(gx * 1.93f + salt, gz * 2.41f + salt * 0.7f)
+           * 0.5f + 0.5f;
+}
+
+static int grid_chart_node_is_star(float gx, float gz) {
+    return grid_chart_roll(gx, gz, 31.0f) < GRID_CHART_NODE_KEEP;
+}
+
+/* Radial edge fade shared by nodes and links so the chart dissolves
+ * smoothly at the slab border instead of cutting off. */
+static float grid_chart_edge_fade(const GridDrawContext *ctx,
+                                  float gx, float gz) {
+    float d2 = (gx * gx + gz * gz) / (ctx->extent * ctx->extent);
+    float fade = 1.0f - d2;
+    return (fade < 0.0f) ? 0.0f : fade;
+}
+
+/* Constellation links: per star node, roll independently for the +X,
+ * +Z, and +X+Z diagonal neighbour; ink the segment only when both
+ * endpoints are star nodes so every line connects two chart marks. */
+static void grid_chart_draw_links(const GridDrawContext *ctx) {
+    const float ex = ctx->extent;
+    const float mj = ctx->major;
+    glBegin(GL_LINES);
+    for (float gx = -ex; gx <= ex + GRID_LOOP_EPSILON; gx += mj) {
+        for (float gz = -ex; gz <= ex + GRID_LOOP_EPSILON; gz += mj) {
+            if (!grid_chart_node_is_star(gx, gz)) continue;
+            static const float dx_tab[3] = { 1.0f, 0.0f, 1.0f };
+            static const float dz_tab[3] = { 0.0f, 1.0f, 1.0f };
+            for (int e = 0; e < 3; e++) {
+                float nx = gx + dx_tab[e] * mj;
+                float nz = gz + dz_tab[e] * mj;
+                if (nx > ex + GRID_LOOP_EPSILON ||
+                    nz > ex + GRID_LOOP_EPSILON) continue;
+                if (grid_chart_roll(gx, gz, 57.0f + 13.0f * (float)e) >=
+                    GRID_CHART_LINK_KEEP) continue;
+                if (!grid_chart_node_is_star(nx, nz)) continue;
+                float fade = grid_chart_edge_fade(ctx, gx, gz);
+                /* slow shared shimmer so the inked figures breathe */
+                float shim = 0.80f + 0.20f *
+                    sinf(ctx->anim_time * 0.4f +
+                         grid_chart_roll(gx, gz, 5.0f) * 6.28318f);
+                float a = fminf(0.11f * fade * shim * ctx->alpha_scale, 1.0f);
+                grid_color(ctx, 0.88f, 0.76f, 0.48f, a);
+                glVertex3f(gx, 0.0f, gz);
+                glVertex3f(nx, 0.0f, nz);
+            }
+        }
+    }
+    glEnd();
+}
+
+/* Twinkling star nodes in three point-size bands (batched per size,
+ * matching the backdrop star domes). Identity point attenuation is
+ * forced like the sky domes so far-corner nodes don't collapse under
+ * the init bootstrap's quadratic default. */
+static void grid_chart_draw_nodes(const GridDrawContext *ctx,
+                                  const SceneRenderConfig *config) {
+    static const float band_sizes[3] = { 2.0f, 3.0f, 4.5f };
+    const float ex = ctx->extent;
+    const float mj = ctx->major;
+
+    glEnable(GL_POINT_SMOOTH);
+    glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
+    if (config->point_parameter_supported && config->point_parameter_proc)
+        config->point_parameter_proc(GL_POINT_DISTANCE_ATTENUATION,
+                                     (GLfloat[]){1, 0, 0});
+
+    for (int band = 0; band < 3; band++) {
+        glPointSize(band_sizes[band]);
+        glBegin(GL_POINTS);
+        for (float gx = -ex; gx <= ex + GRID_LOOP_EPSILON; gx += mj) {
+            for (float gz = -ex; gz <= ex + GRID_LOOP_EPSILON; gz += mj) {
+                if (fabsf(gx) < GRID_ORIGIN_SKIP_EPSILON &&
+                    fabsf(gz) < GRID_ORIGIN_SKIP_EPSILON) continue;
+                if (!grid_chart_node_is_star(gx, gz)) continue;
+                int b = (int)(grid_chart_roll(gx, gz, 71.0f) * 3.0f);
+                if (b > 2) b = 2;
+                if (b != band) continue;
+
+                float fade = grid_chart_edge_fade(ctx, gx, gz);
+                if (fade <= 0.001f) continue;
+
+                /* per-node twinkle: hashed phase + speed */
+                float phase = grid_chart_roll(gx, gz, 91.0f) * 6.28318f;
+                float speed = 0.4f + grid_chart_roll(gx, gz, 113.0f) * 1.6f;
+                float tw = 0.5f + 0.5f * sinf(ctx->anim_time * speed + phase);
+                float a = fminf((0.22f + 0.55f * tw) * fade *
+                                ctx->alpha_scale, 1.0f);
+
+                if (grid_chart_roll(gx, gz, 137.0f) < 0.70f)
+                    grid_color(ctx, 0.95f, 0.85f, 0.58f, a); /* gold */
+                else
+                    grid_color(ctx, 0.70f, 0.82f, 1.00f, a); /* ice */
+                glVertex3f(gx, 0.0f, gz);
+            }
+        }
+        glEnd();
+    }
+}
+
+static void scene_grid_render_starchart_theme(const GridDrawContext *grid_ctx,
+                                              const SceneFrameRenderContext *frame_ctx) {
+    const SceneRenderConfig *config = &frame_ctx->config;
+    const float extent = grid_ctx->extent;
+    const float major = grid_ctx->major;
+    const float major_tol = grid_ctx->major_tol;
+    const float step = grid_ctx->step;
+    const float as = grid_ctx->alpha_scale;
+
+    /* Graticule: deep-indigo etch, majors as brighter chart rules. */
+    glBegin(GL_LINES);
+    for (float v = -extent; v <= extent + GRID_LOOP_EPSILON; v += step) {
+        if (fabsf(v) < GRID_ORIGIN_SKIP_EPSILON) continue;
+        int is_major = grid_is_major_line(v, major, major_tol);
+        GridLineColors colors;
+        if (is_major)
+            grid_line_colors_same(&colors, rgba(0.50f, 0.58f, 0.85f,
+                                                fminf(0.13f * as, 1.0f)));
+        else
+            grid_line_colors_same(&colors, rgba(0.30f, 0.36f, 0.62f,
+                                                fminf(0.045f * as, 1.0f)));
+        draw_grid_line_pair(v, grid_ctx, colors);
+    }
+    glEnd();
+
+    /* Origin meridians: parchment-gold rules, depth-written like every
+     * theme's origin pass. */
+    draw_grid_origin_axes(grid_ctx,
+                          rgba(0.92f, 0.80f, 0.52f, fminf(0.40f * as, 1.0f)),
+                          1.5f);
+
+    grid_chart_draw_links(grid_ctx);
+    grid_chart_draw_nodes(grid_ctx, config);
+}
+
 static void scene_grid_render_xzruler_theme(const GridDrawContext *grid_ctx) {
     float extent = grid_ctx->extent;
     float major = grid_ctx->major;
@@ -1311,6 +1463,10 @@ static void grid_dispatch_theme(const SceneFrameRenderContext *frame_ctx,
 
     case GRID_THEME_SOIL:
         scene_grid_render_soil_theme(grid_ctx, frame_ctx);
+        break;
+
+    case GRID_THEME_STARCHART:
+        scene_grid_render_starchart_theme(grid_ctx, frame_ctx);
         break;
 
     case GRID_THEME_XZRULER:
