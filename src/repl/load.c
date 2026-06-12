@@ -54,6 +54,7 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
         wrote_local = 1;
     }
     ReplCompileContext ctx = repl_compile_context_from_live(*edit_line_inout);
+    ctx.insert_mode = 1;
     ReplCompiledChange change;
     repl_compiled_change_init(&change);
 

@@ -110,6 +110,43 @@ static void declare_test_vars(void) {
     ASSERT_DECL_OK("declare_predef_var n", repl_eval_declare_predef_var("n", err, sizeof(err)), err);
 }
 
+/* Frozen excerpt from the Teapot carousel example at the time the
+ * clipboard-paste regression was found. Keep this local to the test so
+ * later showcase/example edits do not accidentally delete the coverage:
+ * the copied pair must include a loop-local `i` assignment followed by
+ * a valid `glColor3f` that can otherwise paste alone. */
+static const char *const k_carousel_copy_paste_fixture[] = {
+    "static float spinRate = 0.06;",
+    "static float bulbs = 28;",
+    "static float glow;",
+    "",
+    "glEnable(GL_DEPTH_TEST);",
+    "glPushMatrix();",
+    "  glRotatef(t * spinRate * 360, 0, 1, 0);",
+    "",
+    "  // Deck: triangle-fan disc, rim swept by the bulb chase phase",
+    "  // (i*TAU*4/bulbs ~= the bulbs' i*0.9 step, but closes the loop exactly)",
+    "  glDisable(GL_LIGHTING);",
+    "  glBegin(GL_TRIANGLE_FAN);",
+    "    glColor3f(0.2, 0.12, 0.06);",
+    "    glVertex3f(0, 0, 0);",
+    "    for(i, 0, bulbs + 1) {",
+    "      glow = 0.6 + 0.4 * sin(6*t + i*TAU*4/bulbs);",
+    "      glColor3f(0.45, 0.07 + 0.31*glow, 0.16*glow);",
+    "      glVertex3f(2.6*cos(i*TAU/bulbs), 0, 2.6*sin(i*TAU/bulbs));",
+    "    }",
+    "  glEnd();",
+    "glPopMatrix();",
+};
+
+static void load_carousel_copy_paste_fixture(void) {
+    ASSERT_TRUE("load frozen carousel paste fixture",
+                feed_program_lines(
+                    k_carousel_copy_paste_fixture,
+                    (int)(sizeof(k_carousel_copy_paste_fixture) /
+                          sizeof(k_carousel_copy_paste_fixture[0]))));
+}
+
 static int apply_code_panel_follow_for_test(int *out_follow_doc_line,
                                             int *out_visible_lines) {
     UiRenderSnapshot snap;
@@ -1227,6 +1264,96 @@ int main() {
         ASSERT_INT("paste redo: restores pasted count", repl_state_document_count(), 9);
         ASSERT_STR("paste redo: first pasted line", editor_buffer_line(5), "    glVertex3f(0, 0, 0);");
         ASSERT_STR("paste redo: original body shifted again", editor_buffer_line(7), "    glColor3f(1, 0, 0);");
+    }
+
+    /* 8d.1. Regression: line paste of the carousel glow assignment
+     * plus following color line must insert both. The first line uses
+     * the active for-loop variable `i`; a paste that reports two lines
+     * but silently drops handled per-line failures used to leave only
+     * the glColor3f line behind. */
+    {
+        int glow_line = -1;
+        int before_count;
+
+        glr_ctrl_reset_all();
+        load_carousel_copy_paste_fixture();
+
+        for (int i = 0; i + 1 < repl_state_document_count(); i++) {
+            const char *line = editor_buffer_line(i);
+            if (line && strstr(line, "glow = 0.6 + 0.4 * sin(6*t + i*TAU*4/bulbs)") != NULL) {
+                glow_line = i;
+                break;
+            }
+        }
+        ASSERT_TRUE("carousel glow line found", glow_line >= 0);
+        ASSERT_TRUE("carousel color line follows glow",
+                    strstr(editor_buffer_line(glow_line + 1),
+                           "glColor3f(0.45, 0.07 + 0.31*glow, 0.16*glow)") != NULL);
+
+        editor_state_selection_set(glow_line, glow_line + 1);
+        editor_state_edit_line_set(glow_line + 1);
+        editor_insert_mode_set(0);
+        editor_handle_key(3, 0, 0);
+        ASSERT_INT("carousel copy count", editor_state_clipboard_count(), 2);
+        ASSERT_TRUE("carousel copy first is glow assignment",
+                    strstr(editor_state_clipboard_mut()->lines[0],
+                           "glow = 0.6 + 0.4 * sin") != NULL);
+        ASSERT_TRUE("carousel copy second is color",
+                    strstr(editor_state_clipboard_mut()->lines[1],
+                           "glColor3f(0.45") != NULL);
+
+        before_count = repl_state_document_count();
+        editor_handle_key(22, 0, 0);
+
+        ASSERT_INT("carousel paste inserts two lines",
+                   repl_state_document_count(), before_count + 2);
+        ASSERT_TRUE("carousel paste first inserted line is glow assignment",
+                    strstr(editor_buffer_line(glow_line + 1),
+                           "glow = 0.6 + 0.4 * sin(6*t + i*TAU*4/bulbs)") != NULL);
+        ASSERT_TRUE("carousel paste second inserted line is color",
+                    strstr(editor_buffer_line(glow_line + 2),
+                           "glColor3f(0.45, 0.07 + 0.31*glow, 0.16*glow)") != NULL);
+        ASSERT_TRUE("carousel original color shifted after paste",
+                    strstr(editor_buffer_line(glow_line + 3),
+                           "glColor3f(0.45, 0.07 + 0.31*glow, 0.16*glow)") != NULL);
+        assert_status_contains("carousel paste status", "Pasted 2 lines");
+    }
+
+    /* 8d.2. Pasting the same two-line snippet outside its for-loop
+     * should be all-or-nothing. The color line is valid there because
+     * `glow` is declared, but the assignment line is not because `i`
+     * is a loop-local. Do not silently paste only the valid tail. */
+    {
+        int before_count;
+
+        glr_ctrl_reset_all();
+        editor_feed_line("static float bulbs = 28;");
+        editor_feed_line("static float glow;");
+        editor_feed_line("for(i, 0, bulbs + 1) {");
+        editor_feed_line("glow = 0.6 + 0.4 * sin(6*t + i*TAU*4/bulbs);");
+        editor_feed_line("glColor3f(0.45, 0.07 + 0.31*glow, 0.16*glow);");
+        editor_feed_line("}");
+
+        editor_state_selection_set(3, 4);
+        editor_state_edit_line_set(4);
+        editor_insert_mode_set(0);
+        editor_handle_key(3, 0, 0);
+        ASSERT_INT("out-of-scope copy count", editor_state_clipboard_count(), 2);
+
+        before_count = repl_state_document_count();
+        editor_state_edit_line_set(2);
+        editor_insert_mode_set(1);
+        editor_handle_key(22, 0, 0);
+
+        ASSERT_INT("out-of-scope paste is atomic",
+                   repl_state_document_count(), before_count);
+        ASSERT_TRUE("out-of-scope paste leaves for header in place",
+                    strstr(editor_buffer_line(2), "for(i, 0, bulbs + 1)") != NULL);
+        ASSERT_TRUE("out-of-scope paste did not insert color tail",
+                    strstr(editor_buffer_line(2), "glColor3f(0.45") == NULL);
+        assert_status_contains("out-of-scope paste status", "Paste failed at line 1 of 2");
+        ASSERT_INT("out-of-scope paste status is error",
+                   ui_state_status().kind, UI_STATUS_ERROR);
     }
 
     /* 8e. Cut selected block, then undo/redo */

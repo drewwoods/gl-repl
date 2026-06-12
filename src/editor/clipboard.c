@@ -8,6 +8,7 @@
  */
 
 #include <stdlib.h>
+#include <string.h>
 
 #include "state.h"
 #include "clipboard.h"
@@ -19,9 +20,12 @@
 #include "repl/command_store.h"
 #include "repl/core.h"
 #include "repl/core_internal.h"
+#include "repl/load.h"
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
 #include "subsystems/tutorial/tutorial.h"
+
+static EditorUndoSnapshot g_clipboard_paste_rollback_snapshot;
 
 static int tutorial_guard_clipboard_change_or_status(int pos,
                                                      int delete_count,
@@ -244,6 +248,32 @@ static int editor_clipboard_paste_input_text(void) {
     return 1;
 }
 
+static void clipboard_restore_input_state(const char *input,
+                                          int cursor_pos,
+                                          int anchor_pos,
+                                          int insert_mode,
+                                          int edit_line) {
+    editor_state_edit_line_set(edit_line);
+    editor_insert_mode_set(insert_mode);
+    editor_input_set_text(input ? input : "");
+    editor_cursor_pos_set(cursor_pos);
+    editor_input_anchor_set(anchor_pos);
+    editor_completion_update();
+}
+
+static void clipboard_set_paste_failed_status(int line_no, int count,
+                                              const char *err) {
+    char msg[REPL_STATUS_TEXT_MAX];
+    if (err && err[0]) {
+        snprintf(msg, sizeof(msg), "Paste failed at line %d of %d: %.96s",
+                 line_no, count, err);
+    } else {
+        snprintf(msg, sizeof(msg), "Paste failed at line %d of %d",
+                 line_no, count);
+    }
+    repl_set_status_error(msg);
+}
+
 void editor_clipboard_copy_current(void) {
     /* Input-buffer selection wins over line-range / current line.
      * Works in insert mode too — the cut/copy of a partial input
@@ -388,18 +418,47 @@ void editor_clipboard_paste_current(void) {
             repl_copy_string_fits(buf[i], MAX_LINE_LEN, cb->lines[i]);
     }
 
-    /* Single undo for the whole paste; editor_feed_line() runs the commit
-     * chain per line but does not push undo itself, so structured
-     * blocks (for / func / if / `}`) re-parse correctly as the
-     * partial document grows. */
+    EditorInputView input_before = editor_state_input();
+    char saved_input[MAX_INPUT_LEN];
+    int saved_cursor = input_before.cursor_pos;
+    int saved_anchor = input_before.anchor_pos;
+    int saved_insert = input_before.insert_mode;
+    int saved_edit = editor_state_edit_line();
+    EditorUndoRingState undo_before;
+    int edit_after = pos;
+    int failed_line = 0;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    repl_copy_string_fits(saved_input, sizeof(saved_input), input_before.input);
+    err[0] = '\0';
+    editor_undo_ring_state_capture(&undo_before);
+    editor_undo_snapshot_save(&g_clipboard_paste_rollback_snapshot);
+
+    /* Single undo for the whole paste. Clipboard lines are source text, so
+     * apply them through the line loader rather than the interactive input
+     * dispatcher: loader failures are real failures, not "handled" editor
+     * errors, and copied block delimiters paste as the exact copied rows. */
     editor_undo_push_snapshot();
+    editor_insert_mode_set(0);
+    editor_input_clear();
 
-    editor_state_edit_line_set(pos);
-    editor_insert_mode_set(1);
-
-    for (int i = 0; i < count; i++)
-        editor_feed_line(buf[i]);
+    for (int i = 0; i < count; i++) {
+        err[0] = '\0';
+        if (!repl_load_apply_line(buf[i], err, sizeof(err), &edit_after)) {
+            failed_line = i + 1;
+            break;
+        }
+    }
     free(buf);
+
+    if (failed_line) {
+        editor_undo_snapshot_restore(&g_clipboard_paste_rollback_snapshot);
+        editor_undo_ring_state_restore(&undo_before);
+        clipboard_restore_input_state(saved_input, saved_cursor, saved_anchor,
+                                      saved_insert, saved_edit);
+        clipboard_set_paste_failed_status(failed_line, count, err);
+        return;
+    }
 
     /* Turn off insert mode before the load_line call, even if we are going to
      * restore the entry insert mode: editor_load_line_to_input mirrors a
@@ -410,6 +469,7 @@ void editor_clipboard_paste_current(void) {
      * the next commit. (This is the Enter-virtual-blank paste bug: an
      * unmodified-line Enter leaves insert_mode set with no doc mutation,
      * so saved_insert was 1 and the following line got staged.) */
+    editor_state_edit_line_set(edit_after);
     editor_insert_mode_set(0);
     editor_load_line_to_input(editor_state_edit_line());
     repl_mark_source_dirty();
