@@ -17,7 +17,7 @@ BENCH_DIR := bench
 
 # Parallel builds by default, but not too aggressively
 ifeq ($(filter -j%,$(MAKEFLAGS)),)
-MAKEFLAGS += -j3
+  MAKEFLAGS += -j3
 endif
 
 # Color codes for output. ESC holds a real escape byte (not the two-char
@@ -57,13 +57,13 @@ FREEGLUT_VENDOR     ?= 1
 # static-lib name are kept distinct from the Cocoa build so the two coexist.
 FREEGLUT_OSMESA     ?= 0
 ifeq ($(FREEGLUT_OSMESA),1)
-FREEGLUT_BUILD          := $(FREEGLUT_SRC)/build-osmesa
-FREEGLUT_STATIC_LIB     := $(FREEGLUT_BUILD)/lib/libglut_osmesa.a
-FREEGLUT_CMAKE_BACKEND  := -DFREEGLUT_OSMESA=ON -DFREEGLUT_GLES=OFF
+  FREEGLUT_BUILD          := $(FREEGLUT_SRC)/build-osmesa
+  FREEGLUT_STATIC_LIB     := $(FREEGLUT_BUILD)/lib/libglut_osmesa.a
+  FREEGLUT_CMAKE_BACKEND  := -DFREEGLUT_OSMESA=ON -DFREEGLUT_GLES=OFF
 else
-FREEGLUT_BUILD          := $(FREEGLUT_SRC)/build
-FREEGLUT_STATIC_LIB     := $(FREEGLUT_BUILD)/lib/libglut.a
-FREEGLUT_CMAKE_BACKEND  := -DFREEGLUT_COCOA=ON
+  FREEGLUT_BUILD          := $(FREEGLUT_SRC)/build
+  FREEGLUT_STATIC_LIB     := $(FREEGLUT_BUILD)/lib/libglut.a
+  FREEGLUT_CMAKE_BACKEND  := -DFREEGLUT_COCOA=ON
 endif
 
 # FREEGLUT_HEADER_CFLAGS is set per-platform in the Darwin/Linux block below:
@@ -90,6 +90,7 @@ else ifneq ($(findstring Free Software Foundation,$(COMPILER_OUTPUT)),)
 else
     COMPILER_TYPE := unknown
 endif
+
 # Now if we are gcc add some gcc specific flags warnings
 ifeq ($(COMPILER_TYPE),gcc)
   GCC_EXTRA_WARNINGS := -Wduplicated-cond -Wduplicated-branches -Wlogical-op
@@ -177,93 +178,93 @@ BUILD_CFLAGS = $(RELEASE_CFLAGS)
 endif
 
 ifeq ($(UNAME_S),Darwin)
-ifeq ($(FREEGLUT_OSMESA),1)
-# macOS headless: vendored static freeglut (OSMesa backend) + Mesa GL/GLU +
-# libOSMesa, no Apple OpenGL/Cocoa frameworks. Mesa comes from Homebrew
-# (`brew install mesa mesa-glu`); the rpaths let the binary find the dylibs
-# without DYLD_LIBRARY_PATH. Audio frameworks stay (unchanged from the Cocoa
-# build). The vendored freeglut include dir is first so its <GL/freeglut.h>
-# wins; <GL/gl.h>/<GL/glu.h> resolve from the Mesa includes.
-MESA_PREFIX     := $(shell brew --prefix mesa 2>/dev/null)
-MESA_GLU_PREFIX := $(shell brew --prefix mesa-glu 2>/dev/null)
-FREEGLUT_HEADER_CFLAGS = -I$(FREEGLUT_SRC)/include -I$(MESA_PREFIX)/include -I$(MESA_GLU_PREFIX)/include
-ifeq ($(FREEGLUT_VENDOR),1)
-FREEGLUT_LIB := $(FREEGLUT_STATIC_LIB)
-endif
+  ifeq ($(FREEGLUT_OSMESA),1)
+    # macOS headless: vendored static freeglut (OSMesa backend) + Mesa GL/GLU +
+    # libOSMesa, no Apple OpenGL/Cocoa frameworks. Mesa comes from Homebrew
+    # (`brew install mesa mesa-glu`); the rpaths let the binary find the dylibs
+    # without DYLD_LIBRARY_PATH. Audio frameworks stay (unchanged from the Cocoa
+    # build). The vendored freeglut include dir is first so its <GL/freeglut.h>
+    # wins; <GL/gl.h>/<GL/glu.h> resolve from the Mesa includes.
+    MESA_PREFIX     := $(shell brew --prefix mesa 2>/dev/null)
+    MESA_GLU_PREFIX := $(shell brew --prefix mesa-glu 2>/dev/null)
+    FREEGLUT_HEADER_CFLAGS = -I$(FREEGLUT_SRC)/include -I$(MESA_PREFIX)/include -I$(MESA_GLU_PREFIX)/include
+    ifeq ($(FREEGLUT_VENDOR),1)
+      FREEGLUT_LIB := $(FREEGLUT_STATIC_LIB)
+    endif
 
-OSMESA_GL_LDFLAGS = \
+    OSMESA_GL_LDFLAGS = \
 	$(FREEGLUT_LIB) \
 	-L$(MESA_PREFIX)/lib -lGL -lOSMesa -L$(MESA_GLU_PREFIX)/lib -lGLU \
 	-Wl,-rpath,$(MESA_PREFIX)/lib -Wl,-rpath,$(MESA_GLU_PREFIX)/lib \
 	-lm -lpthread \
 	-framework CoreAudio -framework CoreFoundation -framework AudioToolbox
 
-GLUT_GL_LDFLAGS = $(OSMESA_GL_LDFLAGS)
-GL_LDFLAGS      = $(OSMESA_GL_LDFLAGS)
+    GLUT_GL_LDFLAGS = $(OSMESA_GL_LDFLAGS)
+    GL_LDFLAGS      = $(OSMESA_GL_LDFLAGS)
 
-GL_STUB_LDFLAGS = \
+    GL_STUB_LDFLAGS = \
 	-lm -lpthread \
 	-framework CoreAudio -framework CoreFoundation -framework AudioToolbox
-else
-# macOS: system frameworks + vendored static freeglut (Cocoa backend).
-FREEGLUT_HEADER_CFLAGS = -I$(FREEGLUT_SRC)/include
-ifeq ($(FREEGLUT_VENDOR),1)
-FREEGLUT_LIB := $(FREEGLUT_STATIC_LIB)
-endif
+  else
+      # macOS: system frameworks + vendored static freeglut (Cocoa backend).
+      FREEGLUT_HEADER_CFLAGS = -I$(FREEGLUT_SRC)/include
+    ifeq ($(FREEGLUT_VENDOR),1)
+      FREEGLUT_LIB := $(FREEGLUT_STATIC_LIB)
+    endif
 
-GLUT_GL_LDFLAGS = \
+    GLUT_GL_LDFLAGS = \
 	-lm -lpthread \
 	-framework IOKit -framework Cocoa -framework OpenGL -framework GLUT \
 	-framework CoreAudio -framework CoreFoundation -framework AudioToolbox
 
-# Vendored freeglut linked by archive path (no -lglut / no rpath). The Cocoa
-# backend pulls in CoreVideo; a static archive carries no framework deps of its
-# own, so the consumer must list them. FREEGLUT_LIB is empty under `make glut`
-# (FREEGLUT_VENDOR=0), where GLUT_GL_LDFLAGS overrides this anyway.
-GL_LDFLAGS = \
+    # Vendored freeglut linked by archive path (no -lglut / no rpath). The Cocoa
+    # backend pulls in CoreVideo; a static archive carries no framework deps of its
+    # own, so the consumer must list them. FREEGLUT_LIB is empty under `make glut`
+    # (FREEGLUT_VENDOR=0), where GLUT_GL_LDFLAGS overrides this anyway.
+    GL_LDFLAGS = \
 	$(FREEGLUT_LIB) -lm -lpthread \
 	-framework IOKit -framework Cocoa -framework OpenGL -framework CoreVideo \
 	-framework CoreAudio -framework CoreFoundation -framework AudioToolbox
 
-GL_STUB_LDFLAGS = \
+    GL_STUB_LDFLAGS = \
 	-lm -lpthread \
 	-framework CoreAudio -framework CoreFoundation -framework AudioToolbox
-endif
+  endif
 else
-ifeq ($(FREEGLUT_OSMESA),1)
-# Linux headless: vendored static freeglut (OSMesa backend) + libOSMesa for the
-# GL entry points, system GLU for the tessellator/quadrics. Needs
-# `libosmesa6-dev` (GL/osmesa.h + osmesa.pc + libOSMesa). Unlike the default
-# Linux path, this DOES vendor freeglut (system freeglut has no OSMesa backend),
-# so its include dir supplies <GL/freeglut.h>; <GL/gl.h>/<GL/glu.h> resolve from
-# the system Mesa headers on the default path. libGLU pulls libGL via DT_NEEDED;
-# both share Mesa's libglapi dispatch with libOSMesa, so they coexist.
-FREEGLUT_HEADER_CFLAGS = -I$(FREEGLUT_SRC)/include
-ifeq ($(FREEGLUT_VENDOR),1)
-FREEGLUT_LIB := $(FREEGLUT_STATIC_LIB)
-endif
+  ifeq ($(FREEGLUT_OSMESA),1)
+    # Linux headless: vendored static freeglut (OSMesa backend) + libOSMesa for the
+    # GL entry points, system GLU for the tessellator/quadrics. Needs
+    # `libosmesa6-dev` (GL/osmesa.h + osmesa.pc + libOSMesa). Unlike the default
+    # Linux path, this DOES vendor freeglut (system freeglut has no OSMesa backend),
+    # so its include dir supplies <GL/freeglut.h>; <GL/gl.h>/<GL/glu.h> resolve from
+    # the system Mesa headers on the default path. libGLU pulls libGL via DT_NEEDED;
+    # both share Mesa's libglapi dispatch with libOSMesa, so they coexist.
+    FREEGLUT_HEADER_CFLAGS = -I$(FREEGLUT_SRC)/include
+    ifeq ($(FREEGLUT_VENDOR),1)
+      FREEGLUT_LIB := $(FREEGLUT_STATIC_LIB)
+    endif
 
-OSMESA_GL_LDFLAGS = \
-	$(FREEGLUT_LIB) -lOSMesa -lGLU -lGL -lm -lpthread -ldl
+    OSMESA_GL_LDFLAGS = \
+      $(FREEGLUT_LIB) -lOSMesa -lGLU -lGL -lm -lpthread -ldl
 
-GLUT_GL_LDFLAGS = $(OSMESA_GL_LDFLAGS)
-GL_LDFLAGS      = $(OSMESA_GL_LDFLAGS)
-GL_STUB_LDFLAGS = \
-	-lm -lpthread -ldl
-else
-# Linux: system freeglut + GL/GLU. miniaudio dlopen()s pulseaudio/alsa
-# at runtime, so we only need -ldl (plus the existing -lpthread -lm).
-# No vendoring on Linux — system <GL/freeglut.h> is on the default include path.
-FREEGLUT_HEADER_CFLAGS =
-GLUT_GL_LDFLAGS = \
-	-lglut -lGL -lGLU -lm -lpthread -ldl
+    GLUT_GL_LDFLAGS = $(OSMESA_GL_LDFLAGS)
+    GL_LDFLAGS      = $(OSMESA_GL_LDFLAGS)
+    GL_STUB_LDFLAGS = \
+      -lm -lpthread -ldl
+  else
+    # Linux: system freeglut + GL/GLU. miniaudio dlopen()s pulseaudio/alsa
+    # at runtime, so we only need -ldl (plus the existing -lpthread -lm).
+    # No vendoring on Linux — system <GL/freeglut.h> is on the default include path.
+    FREEGLUT_HEADER_CFLAGS =
+    GLUT_GL_LDFLAGS = \
+      -lglut -lGL -lGLU -lm -lpthread -ldl
 
-GL_LDFLAGS = \
-	-lglut -lGL -lGLU -lm -lpthread -ldl
+    GL_LDFLAGS = \
+      -lglut -lGL -lGLU -lm -lpthread -ldl
 
-GL_STUB_LDFLAGS = \
-	-lm -lpthread -ldl
-endif
+    GL_STUB_LDFLAGS = \
+      -lm -lpthread -ldl
+  endif
 endif
 
 ifeq ($(USE_GL_STUBS),1)
