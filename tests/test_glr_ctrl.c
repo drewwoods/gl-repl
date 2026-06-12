@@ -1755,6 +1755,67 @@ static void test_numeric_swatch_scale_coarse_and_fine(void) {
     ASSERT_FLOAT("fine (x1/5) step is +0.01", fine, 1.51f);
 }
 
+static int first_flat_vertex_x(float *out_x) {
+    FlatProgramView flat = repl_state_flat_program_view();
+    if (!out_x)
+        return 0;
+    for (int i = 0; i < flat.cmd_count; i++) {
+        if (flat.cmds[i].valid && flat.cmds[i].type == CMD_VERTEX3F) {
+            *out_x = flat.cmds[i].args[0];
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void test_variable_panel_t_change_reflattens_when_time_paused(void) {
+    printf("--- variable panel t drag re-flattens while time paused ---\n");
+
+    glr_ctrl_reset_all();
+    g_t_idx = -1; /* keep the scene-render stub from mutating t in this test */
+
+    int t_idx = repl_eval_find_predef_var_idx("t");
+    ASSERT_TRUE("t predef exists", t_idx >= 0);
+    ASSERT_TRUE("t is visible in variable panel rows", t_idx >= 0);
+    repl_state_variables_mut()->time_playing = 0;
+    g_predef_vars_mut[t_idx].value = 0.0f;
+
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(t, 0, 0);");
+    editor_feed_line("glEnd();");
+    repl_flatten_commands(editor_state_edit_line());
+    repl_state_flat_program_clear_dirty();
+
+    float x = -1.0f;
+    ASSERT_TRUE("seed flat vertex exists", first_flat_vertex_x(&x));
+    ASSERT_FLOAT("seed flat vertex uses initial t", x, 0.0f);
+
+    variable_panel_handle_drag_begin(t_idx, 0, 0);
+    ASSERT_TRUE("variable-panel t motion consumed",
+                glr_ctrl_router_handle_variable_panel_motion(50, 0));
+    ASSERT_FLOAT("variable panel changed t", g_predef_vars[t_idx].value, 2.5f);
+    ASSERT_INT("panel t change marks flat dirty",
+               repl_state_flat_program_dirty(), 1);
+
+    glr_ctrl_display_frame();
+
+    ASSERT_TRUE("post-frame flat vertex exists", first_flat_vertex_x(&x));
+    ASSERT_FLOAT("post-frame flat vertex uses panel t", x, 2.5f);
+    ASSERT_FLOAT("time remains paused at panel value",
+                 g_predef_vars[t_idx].value, 2.5f);
+    ASSERT_INT("auto time remains off",
+               repl_state_variables().time_playing, 0);
+
+    repl_state_flat_program_clear_dirty();
+    variable_panel_handle_drag_begin(t_idx, 0, 0);
+    ASSERT_TRUE("same-value variable-panel t motion consumed",
+                glr_ctrl_router_handle_variable_panel_motion(0, 0));
+    ASSERT_FLOAT("same-value variable-panel leaves t unchanged",
+                 g_predef_vars[t_idx].value, 2.5f);
+    ASSERT_INT("same-value variable-panel leaves flat clean",
+               repl_state_flat_program_dirty(), 0);
+}
+
 /* scene_execute_adapter is called by render.c on both the main fill
  * pass and the scene_probe_eye_dist feedback pass. The probe pass
  * runs every frame in ortho/projection-transition mode; before the
@@ -2258,6 +2319,7 @@ int main(void) {
     test_numeric_swatch_no_op_outside_numeric_arg();
     test_numeric_swatch_no_op_in_insert_mode();
     test_numeric_swatch_scale_coarse_and_fine();
+    test_variable_panel_t_change_reflattens_when_time_paused();
     test_depth_probe_does_not_mutate_repl_state();
     test_example_reset_reapplies_light_theme();
     test_display_frame_merges_light_theme_and_enable_mask();

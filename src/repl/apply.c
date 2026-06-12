@@ -142,6 +142,7 @@ void repl_apply_predef_ops(const ReplCompiledChange *change) {
         int slot = repl_eval_find_predef_var_idx(op->name);
         if (slot < 0) continue;
         repl_eval_undeclare_predef_var(op->name);
+        repl_state_mark_flat_dirty();
         for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
             if (repl_state_document_cmds()[cmd_idx].type == CMD_VAR_ASSIGN &&
                 repl_state_document_cmds()[cmd_idx].var_idx > slot)
@@ -154,9 +155,14 @@ void repl_apply_predef_ops(const ReplCompiledChange *change) {
         if (op->kind == REPL_PREDEF_OP_DECLARE) {
             float val = op->has_value ? op->value : 0.0f;
             repl_eval_declare_predef_var_with_value(op->name, val, NULL, 0);
+            repl_state_mark_flat_dirty();
         } else if (op->kind == REPL_PREDEF_OP_SET_VALUE && op->has_value) {
             int idx = repl_eval_find_predef_var_idx(op->name);
-            if (idx >= 0) g_predef_vars_mut[idx].value = op->value;
+            if (idx >= 0) {
+                if (g_predef_vars[idx].value != op->value)
+                    repl_state_mark_flat_dirty();
+                g_predef_vars_mut[idx].value = op->value;
+            }
         }
     }
 }

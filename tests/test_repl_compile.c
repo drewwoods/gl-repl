@@ -1046,6 +1046,41 @@ static void test_set_predef_value_live_only_without_source(void) {
     }
 }
 
+static void test_set_predef_value_marks_flat_dirty_only_on_change(void) {
+    glr_ctrl_reset_all();
+
+    int t_idx = repl_eval_find_predef_var_idx("t");
+    ASSERT_TRUE("dirty-gate t exists", t_idx >= 0);
+    g_predef_vars_mut[t_idx].value = 3.5f;
+    repl_state_flat_program_clear_dirty();
+
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    ReplCompileResult r = repl_compile_set_predef_value(
+        "t", 3.5f, &ctx, &change, err, sizeof(err));
+    ASSERT_INT("same-value set_predef compile OK", r, REPL_COMPILE_OK);
+    ASSERT_INT("same-value set_predef no source change",
+               change.kind, REPL_COMPILED_NO_CHANGE);
+    ASSERT_INT("same-value set_predef apply OK",
+               editor_commit_apply_external_change(&change, 0, 0), 1);
+    ASSERT_FLOAT("same-value set_predef keeps value",
+                 g_predef_vars[t_idx].value, 3.5f, 1e-6f);
+    ASSERT_INT("same-value set_predef keeps flat clean",
+               repl_state_flat_program_dirty(), 0);
+
+    r = repl_compile_set_predef_value(
+        "t", 4.0f, &ctx, &change, err, sizeof(err));
+    ASSERT_INT("changed set_predef compile OK", r, REPL_COMPILE_OK);
+    ASSERT_INT("changed set_predef apply OK",
+               editor_commit_apply_external_change(&change, 0, 0), 1);
+    ASSERT_FLOAT("changed set_predef updates value",
+                 g_predef_vars[t_idx].value, 4.0f, 1e-6f);
+    ASSERT_INT("changed set_predef marks flat dirty",
+               repl_state_flat_program_dirty(), 1);
+}
+
 /* Live dispatch compile-failure path: redeclaring an existing predef
  * var produces a status error and leaves buffer/store/predef/undo
  * untouched. */
@@ -1387,6 +1422,7 @@ int main(void) {
     test_set_predef_value_rewrites_declaration_and_keeps_expression_sources();
     test_set_predef_value_does_not_rewrite_assignment_without_decl();
     test_set_predef_value_live_only_without_source();
+    test_set_predef_value_marks_flat_dirty_only_on_change();
     test_orchestration_compile_failure_returns_diagnostic();
     test_orchestration_no_change_falls_through();
     test_orchestration_success_returns_message();
