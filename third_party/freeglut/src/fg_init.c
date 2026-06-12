@@ -416,6 +416,10 @@ void FGAPIENTRY glutInit( int* pargc, char** argv )
      */
     fgPlatformInitialize( displayName );
 
+    /* Env/signal-gated frame capture (no-op stubs on the OSMesa backend,
+     * which installs its own handler in fgPlatformInitialize above). */
+    fghCaptureInit( );
+
     /*
      * Geometry parsing deferred until here because we may need the screen
      * size.

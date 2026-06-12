@@ -54,6 +54,10 @@ void FGAPIENTRY glutSwapBuffers( void )
     if( ! fgStructure.CurrentWindow->Window.DoubleBuffered )
         return;
 
+    /* Frame capture (SIGUSR1 / FREEGLUT_CAPTURE_FRAMES): the back buffer
+     * holds the exactly-complete frame about to be presented. */
+    fghCaptureOnSwap( fgStructure.CurrentWindow );
+
     fgPlatformGlutSwapBuffers( &fgDisplay.pDisplay, fgStructure.CurrentWindow );
 
     /* GLUT_FPS env var support */

@@ -192,9 +192,15 @@ ifeq ($(UNAME_S),Darwin)
       FREEGLUT_LIB := $(FREEGLUT_STATIC_LIB)
     endif
 
+    # -lOSMesa must precede -lGL: macOS two-level namespace binds each gl*
+    # symbol to the first library on the link line that exports it. Mesa's
+    # libOSMesa carries its own self-contained dispatch wired up by
+    # OSMesaMakeCurrent; libGL is the GLX/X11 dispatcher, which never has a
+    # current context here — gl* bound to it are silent no-ops (glGetString
+    # returns NULL, nothing rasterizes, captures come out black).
     OSMESA_GL_LDFLAGS = \
 	$(FREEGLUT_LIB) \
-	-L$(MESA_PREFIX)/lib -lGL -lOSMesa -L$(MESA_GLU_PREFIX)/lib -lGLU \
+	-L$(MESA_PREFIX)/lib -lOSMesa -lGL -L$(MESA_GLU_PREFIX)/lib -lGLU \
 	-Wl,-rpath,$(MESA_PREFIX)/lib -Wl,-rpath,$(MESA_GLU_PREFIX)/lib \
 	-lm -lpthread \
 	-framework CoreAudio -framework CoreFoundation -framework AudioToolbox

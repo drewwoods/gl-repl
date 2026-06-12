@@ -422,6 +422,11 @@ void FGAPIENTRY glutMainLoopEvent( void )
     /* Process input */
     fgPlatformProcessSingleEvent ();
 
+    /* Frame capture: post the redisplay a pending SIGUSR1 snapshot (or the
+     * FREEGLUT_CAPTURE_FRAMES record mode) needs, before this iteration's
+     * work is processed so the capture lands in the same loop pass. */
+    fghCaptureTick ();
+
     if( fgState.Timers.First )
         fghCheckTimers( );
     if (fgState.NumActiveJoysticks>0)   /* If zero, don't poll joysticks */

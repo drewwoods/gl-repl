@@ -8,12 +8,13 @@ reproduced (or pointed to) below; all are permissive.
 ## freeglut
 
 - **Upstream:** <https://github.com/freeglut/freeglut> (currently vendored from
-  a fork that adds the headless OSMesa backend; see `VENDORED.txt`).
+  a fork that adds the headless OSMesa backend and env/signal-gated frame
+  capture on the windowed backends; see `VENDORED.txt`).
 - **Vendored at:** `third_party/freeglut/` (built as a static library on macOS —
   Cocoa backend by default, or the headless OSMesa backend under
   `make ... FREEGLUT_OSMESA=1`). See `third_party/freeglut/VENDORED.txt` for the
   exact pinned source + commit; at time of writing it is
-  `11d12f6c6967f99b9fdf369a286b43ac13f30dbe`.
+  `3523ba740cdf713a268040f27e89d0a60350b2f7`.
 - **License:** X-Consortium / MIT-style (the freeglut license).
 
 The full contributor list lives in `third_party/freeglut/AUTHORS` (current

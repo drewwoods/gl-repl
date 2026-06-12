@@ -94,13 +94,19 @@ GLU tess + `glRenderMode(GL_FEEDBACK)` all work). Pure build-system change — t
 `-std=c99` sources are untouched; `gl_includes.h` already resolves the Mesa
 headers on the non-Apple-GLUT path.
 
-**Headless screenshots (`SIGUSR1`).** The vendored OSMesa backend captures the
-current frame to a PPM on `SIGUSR1` — no app code, works even when the app is
-idle (it reads the last completed colour buffer directly via
-`OSMesaGetColorBuffer`). `kill -USR1 <pid>` writes `<prefix>-NNNN.ppm`
-(`FREEGLUT_CAPTURE_FILE` env sets the prefix, default `freeglut`); convert with
-`magick shot-0000.ppm shot.png`. This is a freeglut-fork feature, so it only
-exists in an OSMesa build re-vendored from a fork that carries it.
+**Screenshots on `SIGUSR1` (OSMesa *and* native).** The vendored freeglut
+captures the current frame to a PPM on `SIGUSR1` — no app code. On the OSMesa
+backend it works even when the app is idle (it reads the last completed colour
+buffer directly via `OSMesaGetColorBuffer`); on the **windowed backends**
+(Cocoa/X11, fork branch `capture-windowed-backends`, vendored) the same
+signal posts a redisplay and grabs `GL_BACK` pre-swap on the next frame —
+real-GPU pixels (MSAA, true driver timings), so wait a few frames after
+signaling, and don't signal before `glutInit` has run (the handler isn't
+installed yet; default disposition kills the process). `kill -USR1 <pid>`
+writes `<prefix>-NNNN.ppm` (`FREEGLUT_CAPTURE_FILE` env sets the prefix,
+default `freeglut`); convert with `magick shot-0000.ppm shot.png`. This is a
+freeglut-fork feature, so it only exists in builds re-vendored from a fork
+that carries it.
 
 **Doc media regeneration (`scripts/docs-assets.sh`).** Regenerates every
 screenshot/GIF under `docs/images/` (the media embedded in `README.md` /
@@ -124,9 +130,12 @@ and `exit(0)`s after N (serviced from `fgPlatformProcessSingleEvent`, the
 backend's per-frame main-loop hook — the swap path is unreachable on a
 single-buffered window). `scripts/record-gif.sh --example 2 --duration 3 --out ring`
 records that headlessly and assembles `ring.gif` + `ring.mp4` via `ffmpeg`; the
-knob is duration (clip length, fps-invariant). Both the record mode and the
-`SIGUSR1` capture live entirely in the OSMesa backend files — no core freeglut
-change (kept clean for upstreaming).
+knob is duration (clip length, fps-invariant). On the OSMesa backend the
+capture lives in the backend files; the windowed backends share one core
+`src/fg_capture.c` + three hooks (`glutInit` → init, `glutMainLoopEvent` →
+tick, `glutSwapBuffers` → pre-swap grab), compiled to stubs on OSMesa builds.
+Record mode works natively too: `FREEGLUT_CAPTURE_FRAMES=3 ./gl-repl ...`
+opens a real window, writes N real-GPU frames, and exits.
 
 ### macOS app bundle (`make app`)
 
