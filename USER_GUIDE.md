@@ -619,7 +619,7 @@ Gizmo, Ruler.
 ![Backdrops: Cityscape, Stars, Sunset, Aurora](docs/images/backdrops.png)
 
 **F6** cycles the scene backdrop: Off *(default)*, Cityscape, Stars,
-City+Stars, Sunset, Aurora, Nebula.
+City+Stars, Sunset, Aurora, Nebula, Polar Day, Snowfall, Polar Day+Snow.
 
 The Star Chart grid and Nebula backdrop are designed as a pair: the
 floor becomes a midnight observatory map (twinkling constellation

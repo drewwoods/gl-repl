@@ -586,13 +586,6 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
  * Below Y=0 the viewport gets a pale glacial tint (same mechanism as
  * Ocean's underwater fill) — looking up through the ice. */
 
-/* Glacial blue-white shared by the under-ice viewport tint and the
- * ice-mist fog, so the grid fades out into the same cold colour the
- * camera sees below the sheet. */
-#define GRID_FROZEN_TINT_R 0.58f
-#define GRID_FROZEN_TINT_G 0.74f
-#define GRID_FROZEN_TINT_B 0.86f
-
 /* Deterministic position hash in [-1, 1]; stable frame-to-frame so
  * the cracks and frost heave stay frozen in place (no swimming). */
 static float grid_pos_hash(float a, float b) {
@@ -688,11 +681,11 @@ static void scene_grid_render_frozen_theme(const GridDrawContext *grid_ctx,
     int under_ice = grid_camera_world_y(config) < 0.0f;
     if (under_ice)
         grid_draw_viewport_tint(grid_ctx, config,
-                                GRID_FROZEN_TINT_R, GRID_FROZEN_TINT_G,
-                                GRID_FROZEN_TINT_B, 0.65f);
+                                SCENE_GLACIAL_TINT_R, SCENE_GLACIAL_TINT_G,
+                                SCENE_GLACIAL_TINT_B, 0.65f);
     {
-        float fog_col[4] = { GRID_FROZEN_TINT_R, GRID_FROZEN_TINT_G,
-                             GRID_FROZEN_TINT_B, 0.5f };
+        float fog_col[4] = { SCENE_GLACIAL_TINT_R, SCENE_GLACIAL_TINT_G,
+                             SCENE_GLACIAL_TINT_B, 0.5f };
         if (under_ice) {
             glFogf(GL_FOG_DENSITY, 0.040f + grid_ctx->breath * 0.008f);
             glFogfv(GL_FOG_COLOR, fog_col);

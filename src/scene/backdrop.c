@@ -96,6 +96,23 @@
 
 #define NEBULA_RNG_STRIDE   29u
 #define NEBULA_RNG_SEED     0x4EB1u
+/* --- Polar Day / Snowfall backdrops --- */
+
+/* Snow flakes live in a camera-centred cylinder (the sky-point state
+ * strips the camera translation, so the viewer is always inside the
+ * fall volume). Y span starts below the grid plane so flakes don't
+ * pop out at eye level on shallow camera angles. */
+#define SNOW_COUNT        900
+#define SNOW_RADIUS       16.0f
+#define SNOW_Y_MIN        -2.0f
+#define SNOW_Y_SPAN       14.0f
+#define SNOW_RNG_STRIDE   9u
+#define SNOW_RNG_SEED     0x1CEDu
+
+/* Cumulative flake-size band cutoffs as fractions of SNOW_COUNT:
+ * small/far (0..55%), medium (55..85%), large/near (85..100%). */
+#define SNOW_BAND_CUT_SMALL 0.55f
+#define SNOW_BAND_CUT_MED   0.85f
 
 static void scene_backdrop_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -974,6 +991,138 @@ static void draw_nebula(
     backdrop_end_sky_point_state();
 }
 
+/* Piecewise-linear vertical gradient for the polar-day dome: a cold
+ * whiteout. The horizon stop is exactly SCENE_GLACIAL_TINT — the same
+ * colour the Frozen Lake grid fades to — so the grid dissolves into
+ * the sky with no seam at the grid extent. Above it the sky cools
+ * through powder blue to a steel-blue zenith. The dome is
+ * camera-centred, so its below-horizon band is visible wherever the
+ * ground doesn't cover it (beyond the grid edge); those stops darken
+ * quickly to a slate void so the band reads as distant dark ice, not
+ * sky glowing underneath the ground. */
+static void polar_sky_color(float h, float *r, float *g, float *b) {
+    static const struct { float h, r, g, b; } stops[] = {
+        { -0.19f, 0.10f, 0.14f, 0.20f },
+        { -0.04f, 0.38f, 0.52f, 0.66f },
+        {  0.00f, SCENE_GLACIAL_TINT_R, SCENE_GLACIAL_TINT_G,
+                  SCENE_GLACIAL_TINT_B },
+        {  0.18f, 0.50f, 0.66f, 0.82f },
+        {  0.55f, 0.34f, 0.48f, 0.68f },
+        {  1.00f, 0.22f, 0.34f, 0.52f },
+    };
+    const int n = (int)(sizeof(stops) / sizeof(stops[0]));
+
+    if (h <= stops[0].h) { *r = stops[0].r; *g = stops[0].g; *b = stops[0].b; return; }
+    for (int i = 1; i < n; i++) {
+        if (h <= stops[i].h) {
+            float f = (h - stops[i - 1].h) / (stops[i].h - stops[i - 1].h);
+            *r = stops[i - 1].r + (stops[i].r - stops[i - 1].r) * f;
+            *g = stops[i - 1].g + (stops[i].g - stops[i - 1].g) * f;
+            *b = stops[i - 1].b + (stops[i].b - stops[i - 1].b) * f;
+            return;
+        }
+    }
+    *r = stops[n - 1].r; *g = stops[n - 1].g; *b = stops[n - 1].b;
+}
+
+/* Gradient dome sharing the sunset dome's dimensions; same ring/strip
+ * walk minus the sunward glow term (a polar sky is directionless). */
+static void draw_polar_sky_dome(void) {
+    for (int ri = 0; ri < SUNSET_SKY_RINGS; ri++) {
+        float f0 = (float)ri / (float)SUNSET_SKY_RINGS;
+        float f1 = (float)(ri + 1) / (float)SUNSET_SKY_RINGS;
+        float phi0 = SUNSET_PHI_MIN + (SUNSET_PHI_MAX - SUNSET_PHI_MIN) * f0;
+        float phi1 = SUNSET_PHI_MIN + (SUNSET_PHI_MAX - SUNSET_PHI_MIN) * f1;
+
+        glBegin(GL_QUAD_STRIP);
+        for (int s = 0; s <= SUNSET_SKY_SEGS; s++) {
+            float theta = ((float)s / (float)SUNSET_SKY_SEGS) * 2.0f * (float)M_PI;
+            float st = sinf(theta), ct = cosf(theta);
+
+            for (int e = 0; e < 2; e++) {
+                float phi = e ? phi0 : phi1;
+                float sp = sinf(phi), cp = cosf(phi);
+
+                float r, g, b;
+                polar_sky_color(sp, &r, &g, &b);
+                glColor4f(r, g, b, 1.0f);
+                glVertex3f(cp * st * SUNSET_SKY_RADIUS,
+                           sp * SUNSET_SKY_RADIUS,
+                           cp * ct * SUNSET_SKY_RADIUS);
+            }
+        }
+        glEnd();
+    }
+}
+
+/* Falling snow: a camera-centred point cloud in three size bands
+ * (small/far first so near flakes composite over them). Each flake's
+ * column, fall speed, sway, and alpha come from the deterministic
+ * hash; only the fall phase advances with anim_time, so pausing t
+ * freezes the snow mid-air. Flakes fade in just after spawning at the
+ * top of the span and fade out approaching the bottom, so the wrap
+ * never pops. */
+static void draw_snowfall(
+    float anim_time,
+    int point_parameter_supported,
+    void (APIENTRY *point_parameter_proc)(GLenum pname, const GLfloat *params)) {
+    static const float band_sizes[3] = { 2.0f, 3.0f, 4.5f };
+    const int band_cuts[4] = {
+        0,
+        (int)(SNOW_COUNT * SNOW_BAND_CUT_SMALL),
+        (int)(SNOW_COUNT * SNOW_BAND_CUT_MED),
+        SNOW_COUNT,
+    };
+
+    backdrop_begin_sky_point_state(point_parameter_supported,
+                                   point_parameter_proc);
+
+    for (int bi = 0; bi < 3; bi++) {
+        glPointSize(band_sizes[bi]);
+        glBegin(GL_POINTS);
+
+        for (int i = band_cuts[bi]; i < band_cuts[bi + 1]; i++) {
+            unsigned int base = (unsigned int)(i * SNOW_RNG_STRIDE + SNOW_RNG_SEED);
+
+            /* Column position: uniform over the disc (sqrt for area). */
+            float ang = city_rng(base + 1u) * 2.0f * (float)M_PI;
+            float rad = sqrtf(city_rng(base + 2u)) * SNOW_RADIUS;
+            float cx = cosf(ang) * rad;
+            float cz = sinf(ang) * rad;
+
+            /* Near flakes (later bands) fall a touch faster — cheap
+             * parallax against the slow far-band drift. */
+            float speed = (0.7f + city_rng(base + 3u) * 0.7f) *
+                          (1.0f + 0.25f * (float)bi);
+            float phase = city_rng(base + 4u);
+            float fy = phase - anim_time * speed / SNOW_Y_SPAN;
+            fy -= floorf(fy);                /* wrap to [0,1): 1=top */
+            float y = SNOW_Y_MIN + fy * SNOW_Y_SPAN;
+
+            /* Lateral sway, frozen per flake except the slow drift. */
+            float sway_ph = city_rng(base + 5u) * 2.0f * (float)M_PI;
+            float sway_amp = 0.25f + city_rng(base + 6u) * 0.35f;
+            float sway_spd = 0.4f + city_rng(base + 7u) * 0.5f;
+            float sx = cx + sinf(anim_time * sway_spd + sway_ph) * sway_amp;
+            float sz = cz + cosf(anim_time * sway_spd * 0.7f + sway_ph) *
+                       sway_amp * 0.6f;
+
+            float alpha = 0.45f + city_rng(base + 8u) * 0.35f;
+            float fade_in  = (1.0f - fy) * 8.0f;
+            float fade_out = fy * 10.0f;
+            if (fade_in  < 1.0f) alpha *= fade_in;
+            if (fade_out < 1.0f) alpha *= fade_out;
+
+            glColor4f(0.92f, 0.95f, 1.0f, alpha);
+            glVertex3f(sx, y, sz);
+        }
+
+        glEnd();
+    }
+
+    backdrop_end_sky_point_state();
+}
+
 /* Sunset environment lights, one row per slot: world-space position
  * (w=0 => directional), then diffuse / ambient / specular. Slots live
  * on GL_LIGHT4..6 — above the REPL's user-facing GL_LIGHT0..3 range —
@@ -1113,6 +1262,29 @@ void scene_backdrop_render(const SceneFrameRenderContext *frame_ctx) {
                     extent);
         break;
     }
+    case SCENE_BACKDROP_POLAR_DAY:
+        backdrop_begin_sky_point_state(
+            frame_ctx->config.point_parameter_supported,
+            frame_ctx->config.point_parameter_proc);
+        draw_polar_sky_dome();
+        backdrop_end_sky_point_state();
+        break;
+    case SCENE_BACKDROP_SNOWFALL:
+        draw_snowfall(frame_ctx->config.anim_time,
+                      frame_ctx->config.point_parameter_supported,
+                      frame_ctx->config.point_parameter_proc);
+        break;
+    case SCENE_BACKDROP_POLAR_DAY_SNOW:
+        /* Dome first so the flakes composite over the sky. */
+        backdrop_begin_sky_point_state(
+            frame_ctx->config.point_parameter_supported,
+            frame_ctx->config.point_parameter_proc);
+        draw_polar_sky_dome();
+        backdrop_end_sky_point_state();
+        draw_snowfall(frame_ctx->config.anim_time,
+                      frame_ctx->config.point_parameter_supported,
+                      frame_ctx->config.point_parameter_proc);
+        break;
     case SCENE_BACKDROP_OFF:
     default:
         break;

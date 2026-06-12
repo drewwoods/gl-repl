@@ -65,7 +65,10 @@ typedef enum {
     X(CITY_AND_STARS, "City+Stars") \
     X(SUNSET, "Sunset")        \
     X(AURORA, "Aurora")        \
-    X(NEBULA, "Nebula")
+    X(NEBULA, "Nebula")        \
+    X(POLAR_DAY, "Polar Day")  \
+    X(SNOWFALL, "Snowfall")    \
+    X(POLAR_DAY_SNOW, "Polar Day+Snow")
 
 #define SCENE_BACKDROP_ENUM_ENTRY(name, str) SCENE_BACKDROP_##name,
 #define SCENE_BACKDROP_NAME_ENTRY(name, str) [SCENE_BACKDROP_##name] = str,
