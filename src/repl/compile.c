@@ -169,13 +169,11 @@ void repl_compiled_change_to_text_change(const ReplCompiledChange *in,
 }
 
 ReplCompileContext repl_compile_context_from_live(int edit_line_idx) {
-    /* insert_mode defaults to 0 (overwrite mode). The non-editor load
-     * path (src/repl/load.c, demo, parse tests) always appends at the
-     * end, so 0 is correct. The editor-side callers (glr_ctrl.c
-     * variable-panel commit, editor commit pipeline) overwrite
-     * ctx.insert_mode = editor_insert_mode() after this returns —
-     * insert mode is editor state, not REPL state, so the REPL
-     * pipeline doesn't reach for it.
+    /* insert_mode defaults to 0 (overwrite mode). Callers with insert
+     * semantics (the editor commit pipeline, repl_load_apply_line)
+     * overwrite ctx.insert_mode after this returns. Insert mode is
+     * caller/editor state, not REPL state, so the REPL pipeline doesn't
+     * reach for it.
      *
      * edit_line_idx is supplied by the caller because the REPL
      * pipeline does not reach into editor_state_* for the cursor. */
