@@ -67,12 +67,18 @@ static UiVariablePanelView demo_build_view(void) {
     }
     UiVariablePanelView v;
     v.visible        = variable_panel_visible();
-    v.replay_lift_px = 0.0f;
     v.window_w       = g_window_w;
     v.window_h       = g_window_h;
-    v.scene_x = 0; v.scene_y = 0; v.scene_w = g_window_w; v.scene_h = g_window_h;
-    v.statusbar_h       = 0;
-    v.code_panel_at_top = 0;
+    /* Standalone placement: pin to the window's bottom-right. The full app
+     * resolves panel_x/panel_y through its overlay layout engine
+     * (src/ui/app/overlay_layout.c); the renderer just draws at the view's
+     * position either way. */
+    {
+        int pw, ph;
+        ui_variable_panel_size(DEMO_VAR_COUNT, &pw, &ph);
+        v.panel_x = g_window_w - pw - 8;
+        v.panel_y = 8;
+    }
     v.vars            = rows;
     v.var_count       = DEMO_VAR_COUNT;
     v.drag_active_var = variable_panel_drag_active_var();

@@ -517,6 +517,8 @@ state-machine level, not buried in the doc body.
 | `src/app/glr_completion.c` | REPL-side completion provider: walks command spec / predef vars / `CMD_FUNC_DEF` for matches, ghost text, parameter hints. Registered via `EditorCompletionProvider`. |
 | `src/ui/app/layout.c` | Pure window layout geometry: scene/code-panel rect derivation plus shared menu-bar anchoring |
 | `src/ui/app/layout.h` | Layout geometry API (`ui_layout_scene_rect`, `ui_layout_code_panel_rect`, `ui_layout_menu_bar_rect`) |
+| `src/ui/app/overlay_layout.c` | Layout engine for the floating scene-overlay panels (variable / profile / memory): pure bottom-up right-column stacking solve above the statusbar + replay-HUD band with column spill (panels can't overlap), plus the eased positions every panel glides on (the old variable-panel-only `replay_lift_px`, generalized). Controller ticks it once per frame; view builders read resolved positions, falling back to pure solve targets when unticked (tests/headless). Anchor-bound popups (autocomplete, color picker, dropdowns) stay out by design |
+| `src/ui/app/overlay_layout.h` | Engine API: `UiOverlayPanelId`/`UiOverlayLayoutIn`, `ui_overlay_layout_inputs/_solve/_tick/_panel_pos/_last_band_h/_reset` |
 | `src/ui/core/layout_utils.h` | Header-only pure layout helpers shared across UI layers (`ui_clamp_panel_y`) |
 | `src/repl/scenes.c` | User-scene slots, LRU eviction, workspace save/load, workspace dir binding |
 | `src/repl/example_loader.c` | Built-in example loading and active-example tracking |
