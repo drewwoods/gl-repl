@@ -366,23 +366,37 @@ tunable knob (see [Tunable Variables](#tunable-variables--tune)).
 
 ![The Animated ring example](docs/images/animated-ring.gif)
 
-`t` is the one predefined variable. While playing it advances a fixed 1/60 s
-per rendered frame; use it in any expression:
+`t` is the one predefined variable — it exists in every session without a
+declaration, starts at `0`, and while playing advances a fixed 1/60 s per
+rendered frame. Use it in any expression:
 
 ```c
 glRotatef(t*45, 0, 1, 0);
 glVertex3f(sin(t), cos(t), 0);
 ```
 
+This is the whole animation model: there is no keyframe data and no
+accumulated state. The scene re-evaluates every frame, so anything written
+in terms of `t` animates — loop bounds, colors, transforms, vertex
+positions — and a frame is a *pure function of `t`*. The same `t` always
+produces the same picture, which is what makes the scrubbing below (and
+headless capture) exactly reproducible.
+
 - **Ctrl+T** plays/pauses time (the *Auto time* config item is the same
   toggle).
 - **Ctrl+Shift+T** resets `t` to 0.
-- You can drag `t` backwards in the variable panel, then resume from there.
 - `--time <secs>` (or the `GLR_TIME` env var) sets the starting `t` when
   launching — handy for headless captures of a later moment.
 
-Geometry re-evaluates every frame, so anything written in terms of `t`
-animates: loop bounds, colors, transforms, vertex positions.
+### Scrubbing the timeline
+
+Because `t` is just a variable, it gets a row in the
+[variable panel](#the-variable-panel) like any other — and dragging that row
+is a timeline scrubber. Pause with **Ctrl+T**, then drag the `t` row to move
+the whole animation back and forth; release and press **Ctrl+T** again to
+resume playing from wherever you left it. The usual drag speeds apply:
+plain drag scrubs linearly, **right-click drag** is the fast scrub,
+**Shift+drag** the slow one (see the panel section below).
 
 ---
 
@@ -394,8 +408,13 @@ The variable panel (bottom-right) lists `t` plus every declared variable with
 its current value and a slider:
 
 - **Left-click drag** on a row scrubs the value linearly.
-- **Right-click drag** scrubs logarithmically — fine control near zero,
-  coarse far away.
+- **Right-click drag** is the *fast* scrub: it scales the value
+  multiplicatively (a decade per ~200 px of drag), covering large ranges
+  quickly — and staying fine near zero.
+- **Shift + click drag** is the *slow* scrub: linear deltas at 1/5 speed,
+  for dialing in a precise value.
+- The `t` row doubles as the animation timeline — see
+  [Scrubbing the timeline](#scrubbing-the-timeline).
 - Toggle the panel with **Ctrl+Shift+P** or the *Variable panel* config item.
 
 Edits write back through the normal commit pipeline, so scrubbing a slider
