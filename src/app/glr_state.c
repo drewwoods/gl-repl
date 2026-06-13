@@ -39,8 +39,8 @@ static const float g_grid_major_steps[GRID_MAJOR_COUNT] = {
 };
 static const float g_grid_extents[GRID_EXTENT_COUNT] = {
     [GRID_EXTENT_CLOSE] = 5.0f,
-    [GRID_EXTENT_MID]   = 25.0f,
-    [GRID_EXTENT_FAR]   = 100.0f,
+    [GRID_EXTENT_MID]   = 30.0f,
+    [GRID_EXTENT_FAR]   = 60.0f,
 };
 
 #define GLR_STATE_DEFAULTS_INITIALIZER { \
