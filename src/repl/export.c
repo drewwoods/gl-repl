@@ -913,7 +913,29 @@ static void emit_export_init_section_to_file(FILE *f, int include_tess) {
     }
 }
 
-static void emit_export_header_pre(FILE *f) {
+typedef struct ExportNeeds {
+    int needs_tess;
+    int needs_rand;
+    int needs_label;
+    int needs_scratch_a;
+    int needs_scratch_b;
+    int needs_scratch_c;
+    /* @tune knobs: names point into the live decl payloads (valid for the
+     * duration of one export). tune_count is what we emit (capped at
+     * REPL_TUNE_MAX_KNOBS); tune_total is the full tagged count for the
+     * "capped at N" note. */
+    int         tune_count;
+    int         tune_total;
+    const char *tune_names[REPL_TUNE_MAX_KNOBS];
+} ExportNeeds;
+
+static void emit_export_header_pre(FILE *f, const ExportNeeds *needs) {
+    /* The label() and @tune helpers need <stdarg.h>/<stdio.h>. Emit them
+     * here, grouped with the other system includes, rather than mid-file
+     * at each helper's definition — a stray `#include` below file-scope
+     * code reads as a sanitization bug even though it compiles. */
+    int needs_stdio = needs && (needs->needs_label || needs->tune_count > 0);
+
     /* Ask the camera bridge for the g_angle preamble line.
      * Without a bridge installed (the demo case) we emit the
      * placeholder unchanged so the file is still valid C. */
@@ -938,6 +960,11 @@ static void emit_export_header_pre(FILE *f) {
             continue;
         }
         export_write_c89_line(f, g_header_pre[line_idx]);
+        if (needs_stdio &&
+            strcmp(g_header_pre[line_idx], "#include <stdlib.h>") == 0) {
+            export_write_c89_line(f, "#include <stdarg.h>");
+            export_write_c89_line(f, "#include <stdio.h>");
+        }
     }
 }
 
@@ -1950,16 +1977,14 @@ static int write_point_parameterfv_as_c89(FILE *f, const char *source_text) {
  * Float args promote to double through the variadic call, so user
  * expressions don't need explicit casts at the call site.
  *
- * The two extra includes (<stdarg.h>, <stdio.h>) are emitted here
- * rather than in the global header so non-label exports stay
- * byte-identical to their pre-label form. */
+ * The <stdarg.h>/<stdio.h> this needs are emitted up in the system-include
+ * group by emit_export_header_pre (gated on needs_label || tune_count),
+ * not mid-file here. */
 static void write_label_helper(FILE *f) {
     /* fprintf format escaping: every literal `%` in the emitted C source
      * must be doubled (`%%`) so fprintf doesn't treat it as a conversion
      * specifier. The `%%g` below emits literal `%g` into the C output. */
     fprintf(f,
-        "\n#include <stdarg.h>\n"
-        "#include <stdio.h>\n"
         "\n/* Draw bitmap text at the current raster position. */\n"
         "\nstatic void label(const char *fmt, ...) {\n"
         "  const char *ch;\n"
@@ -2141,22 +2166,6 @@ static void write_tess_preamble(FILE *f) {
         "}\n"
     );
 }
-
-typedef struct {
-    int needs_tess;
-    int needs_rand;
-    int needs_label;
-    int needs_scratch_a;
-    int needs_scratch_b;
-    int needs_scratch_c;
-    /* @tune knobs: names point into the live decl payloads (valid for the
-     * duration of one export). tune_count is what we emit (capped at
-     * REPL_TUNE_MAX_KNOBS); tune_total is the full tagged count for the
-     * "capped at N" note. */
-    int         tune_count;
-    int         tune_total;
-    const char *tune_names[REPL_TUNE_MAX_KNOBS];
-} ExportNeeds;
 
 enum {
     EXPORT_NAME_MAX = 64,
@@ -2554,8 +2563,6 @@ static void write_tune_helpers(FILE *f, const ExportNeeds *needs,
             "\n/* @tune: %d variables tagged; capped at %d keyboard knobs. */\n",
             needs->tune_total, REPL_TUNE_MAX_KNOBS);
     fprintf(f,
-        "\n#include <stdarg.h>\n"
-        "#include <stdio.h>\n"
         "\n/* @tune knobs: keyboard-adjustable variables + overlay, generated because\n"
         " * one or more `float` decls carried a `// @tune` tag. */\n"
         "static int %s = 800;\n"
@@ -2828,8 +2835,7 @@ static void emit_export_workspace_metadata_section(FILE *f,
 
 static void emit_export_header_section(FILE *f,
                                        const ExportScaffoldContext *ctx) {
-    (void)ctx;
-    emit_export_header_pre(f);
+    emit_export_header_pre(f, ctx ? &ctx->needs : NULL);
 }
 
 static void emit_export_glfloat_helpers_section(FILE *f,
