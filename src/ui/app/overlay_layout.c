@@ -56,8 +56,16 @@ UiOverlayLayoutIn ui_overlay_layout_inputs(int var_visible, int var_count,
                            &in.panels[UI_OVERLAY_PANEL_VARIABLE].w,
                            &in.panels[UI_OVERLAY_PANEL_VARIABLE].h);
 
-    in.panels[UI_OVERLAY_PANEL_PROFILE].visible =
+    /* The FPS plot rides every non-OFF Compute-profile level; the section
+     * listing only joins from SECTIONS up. */
+    in.panels[UI_OVERLAY_PANEL_FPS].visible =
         (profile_mode != PROFILE_PANEL_OFF);
+    in.panels[UI_OVERLAY_PANEL_FPS].w = ui_fps_panel_width();
+    in.panels[UI_OVERLAY_PANEL_FPS].h = ui_fps_panel_height();
+
+    in.panels[UI_OVERLAY_PANEL_PROFILE].visible =
+        (profile_mode == PROFILE_PANEL_SECTIONS ||
+         profile_mode == PROFILE_PANEL_DETAILS);
     in.panels[UI_OVERLAY_PANEL_PROFILE].w = ui_profile_panel_width();
     in.panels[UI_OVERLAY_PANEL_PROFILE].h =
         ui_profile_panel_height((UiProfilePanelMode)profile_mode);

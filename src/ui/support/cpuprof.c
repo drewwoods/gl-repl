@@ -132,7 +132,11 @@ int ui_profile_panel_width(void) {
 
 void ui_profile_panel_render(const UiProfilePanelView *view) {
     int profile_mode = view->mode;
-    if (profile_mode == PROFILE_PANEL_OFF) return;
+    /* The section listing only exists from SECTIONS up; PLOT shows just the
+     * separate FPS plot panel (ui_fps_panel_render). */
+    if (profile_mode != PROFILE_PANEL_SECTIONS &&
+        profile_mode != PROFILE_PANEL_DETAILS)
+        return;
 
     int panel_h = ui_profile_panel_height((UiProfilePanelMode)profile_mode);
 
@@ -263,6 +267,180 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
         gl2d_draw_string((float)col_max, (float)ty, val_buf, FONT_SMALL);
 
         ty -= PROF_ROW_H;
+    }
+
+    gl2d_end();
+}
+
+/* ========================================================================= */
+/* FPS plot panel                                                             */
+/* ========================================================================= */
+
+#define FPS_PANEL_W       300
+#define FPS_HEADER_H      20
+#define FPS_LEGEND_H      14
+#define FPS_PLOT_H        90
+#define FPS_PLOT_GUTTER   28   /* y-axis label gutter ("240") */
+#define FPS_BOTTOM_PAD    10
+
+/* Series identity colors: fixed data-viz semantics (which time window a
+ * line is), not theme tokens — they must stay distinct in every scheme. */
+static const float k_fps_col_10s[3] = { 0.55f, 0.95f, 0.55f };  /* green */
+static const float k_fps_col_1m[3]  = { 0.95f, 0.85f, 0.35f };  /* amber */
+static const float k_fps_col_10m[3] = { 0.45f, 0.75f, 1.00f };  /* blue  */
+
+int ui_fps_panel_width(void) {
+    return FPS_PANEL_W;
+}
+
+int ui_fps_panel_height(void) {
+    return FPS_HEADER_H + FPS_LEGEND_H + FPS_PLOT_H + FPS_BOTTOM_PAD + 8;
+}
+
+/* One series as a line strip. The newest bucket pins to the right edge and
+ * each ring slot is one x step, so a partially-filled window draws only its
+ * recent right-hand stretch and grows leftward as history accrues. */
+static void fps_draw_series(int window, int plot_x, int plot_y,
+                            int plot_w, int plot_h, float y_hi,
+                            const float col[3]) {
+    float samples[PROF_FPS_HISTORY_CAP];
+    int n = prof_fps_history(window, samples, PROF_FPS_HISTORY_CAP);
+    if (n < 2 || y_hi <= 0.0f) return;
+
+    glColor4f(col[0], col[1], col[2], 0.95f);
+    glBegin(GL_LINE_STRIP);
+    for (int i = 0; i < n; i++) {
+        float fx = (float)plot_x + (float)plot_w
+                 * (float)(PROF_FPS_HISTORY_CAP - n + i)
+                 / (float)(PROF_FPS_HISTORY_CAP - 1);
+        float v = samples[i];
+        if (v < 0.0f) v = 0.0f;
+        if (v > y_hi) v = y_hi;
+        glVertex2f(fx, (float)plot_y + (v / y_hi) * (float)plot_h);
+    }
+    glEnd();
+}
+
+void ui_fps_panel_render(const UiFpsPanelView *view) {
+    if (!view || !view->visible) return;
+
+    int panel_h = ui_fps_panel_height();
+    int panel_x = view->panel_x;
+    int panel_y = view->panel_y;
+
+    gl2d_begin(view->window_w, view->window_h);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    gl2d_panel_frame((float)panel_x, (float)panel_y,
+                     (float)FPS_PANEL_W, (float)panel_h,
+                     UI_TOK_SUNKEN, 0.91f, UI_TOK_BORDER, 0.85f);
+    glDisable(GL_BLEND);
+
+    int tx = panel_x + 8;
+    int ty = panel_y + panel_h - FPS_HEADER_H + 2;
+
+    /* Title + smoothed current FPS readout. */
+    ui_clr(UI_TOK_TEXT_PRIMARY);
+    gl2d_draw_string((float)tx, (float)ty, "FPS", FONT_SMALL);
+    {
+        char now_buf[24];
+        snprintf(now_buf, sizeof(now_buf), "%.1f now", prof_fps_current());
+        int nw = (int)strlen(now_buf) * FONT_SMALL_W + 2;
+        ui_clr(UI_TOK_TEXT_MUTED);
+        gl2d_draw_string((float)(panel_x + FPS_PANEL_W - 8 - nw), (float)ty,
+                         now_buf, FONT_SMALL);
+    }
+    ty -= FPS_LEGEND_H;
+
+    /* Legend: one colored label per window. */
+    {
+        int lx = tx;
+        glColor3fv(k_fps_col_10s);
+        gl2d_draw_string((float)lx, (float)ty, "10s", FONT_SMALL);
+        lx += 4 * FONT_SMALL_W + 8;
+        glColor3fv(k_fps_col_1m);
+        gl2d_draw_string((float)lx, (float)ty, "1m", FONT_SMALL);
+        lx += 3 * FONT_SMALL_W + 8;
+        glColor3fv(k_fps_col_10m);
+        gl2d_draw_string((float)lx, (float)ty, "10m", FONT_SMALL);
+    }
+    ty -= FPS_LEGEND_H;
+
+    /* Plot rect (gutter on the left for y labels). */
+    int plot_x = panel_x + FPS_PLOT_GUTTER + 4;
+    int plot_w = FPS_PANEL_W - FPS_PLOT_GUTTER - 12;
+    int plot_y = panel_y + FPS_BOTTOM_PAD;
+    int plot_h = ty - plot_y - 2;
+    if (plot_h < 20) plot_h = 20;
+
+    /* Y range: 0 .. a nice ceiling over the worst series sample (at least
+     * 60 so an idle plot still reads in familiar FPS terms). */
+    float hi = 60.0f;
+    float cur = (float)prof_fps_current();
+    if (cur > hi) hi = cur;
+    int have_data = 0;
+    for (int w = 0; w < PROF_FPS_WIN_COUNT; w++) {
+        float samples[PROF_FPS_HISTORY_CAP];
+        int n = prof_fps_history(w, samples, PROF_FPS_HISTORY_CAP);
+        if (n >= 2) have_data = 1;
+        for (int i = 0; i < n; i++)
+            if (samples[i] > hi) hi = samples[i];
+    }
+    static const float k_steps[] = { 15.0f, 30.0f, 60.0f, 120.0f, 240.0f, 480.0f };
+    float step = k_steps[0];
+    for (size_t si = 0; si < sizeof(k_steps) / sizeof(k_steps[0]); si++) {
+        step = k_steps[si];
+        if (hi * 1.05f / step <= 4.0f) break;
+    }
+    float y_hi = step;
+    while (y_hi < hi * 1.05f) y_hi += step;
+
+    /* Plot frame + gridlines + y labels. */
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    gl2d_panel_frame((float)plot_x, (float)plot_y,
+                     (float)plot_w, (float)plot_h,
+                     UI_TOK_SUNKEN, 0.4f, UI_TOK_BORDER, 0.6f);
+    ui_clr_a(UI_TOK_DIVIDER, 0.30f);
+    glBegin(GL_LINES);
+    for (float v = step; v < y_hi + step * 0.5f; v += step) {
+        float gy = (float)plot_y + (v / y_hi) * (float)plot_h;
+        glVertex2f((float)plot_x,            gy);
+        glVertex2f((float)(plot_x + plot_w), gy);
+    }
+    glEnd();
+
+    if (!have_data) {
+        glDisable(GL_BLEND);
+        ui_clr(UI_TOK_TEXT_PLACEHOLDER);
+        const char *empty = "(collecting)";
+        int ew = (int)strlen(empty) * FONT_SMALL_W;
+        gl2d_draw_string((float)plot_x + ((float)plot_w - (float)ew) * 0.5f,
+                         (float)plot_y + (float)plot_h * 0.5f,
+                         empty, FONT_SMALL);
+        gl2d_end();
+        return;
+    }
+
+    /* Series, slowest window first so the fast 10s line draws on top. */
+    fps_draw_series(PROF_FPS_WIN_10M, plot_x, plot_y, plot_w, plot_h,
+                    y_hi, k_fps_col_10m);
+    fps_draw_series(PROF_FPS_WIN_1M, plot_x, plot_y, plot_w, plot_h,
+                    y_hi, k_fps_col_1m);
+    fps_draw_series(PROF_FPS_WIN_10S, plot_x, plot_y, plot_w, plot_h,
+                    y_hi, k_fps_col_10s);
+    glDisable(GL_BLEND);
+
+    /* Y labels right-aligned in the gutter. */
+    ui_clr(UI_TOK_TEXT_MUTED);
+    for (float v = 0.0f; v < y_hi + step * 0.5f; v += step) {
+        char lab[12];
+        snprintf(lab, sizeof(lab), "%.0f", (double)v);
+        int lw = (int)strlen(lab) * FONT_SMALL_W;
+        int gy = plot_y + (int)((v / y_hi) * (float)plot_h);
+        gl2d_draw_string((float)(panel_x + FPS_PLOT_GUTTER + 2 - lw),
+                         (float)(gy - 4), lab, FONT_SMALL);
     }
 
     gl2d_end();

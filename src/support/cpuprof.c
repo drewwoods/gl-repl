@@ -36,6 +36,29 @@ static int    g_prof_initialized = 0;
 static ProfSectionHookFn g_prof_begin_hook = 0;
 static ProfSectionHookFn g_prof_end_hook   = 0;
 
+/* FPS history: per-window bucket accumulators + sample rings, fed by
+ * prof_frame_tick. A bucket closes once its window/CAP span has elapsed;
+ * its value is frames / actual-span, so an irregular frame cadence (or a
+ * long stall spanning several nominal buckets) still yields a correct
+ * average for the time it covers. */
+#define PROF_FPS_EMA_ALPHA 0.08
+
+static const double k_fps_window_secs[PROF_FPS_WIN_COUNT] = {
+    10.0, 60.0, 600.0
+};
+
+typedef struct {
+    float  ring[PROF_FPS_HISTORY_CAP];
+    int    head;             /* next write slot */
+    int    count;            /* filled slots (caps at CAP) */
+    double bucket_start_us;  /* 0 = bucket not started yet */
+    int    bucket_frames;
+} ProfFpsWindow;
+
+static ProfFpsWindow g_fps_win[PROF_FPS_WIN_COUNT];
+static double g_fps_last_tick_us = 0.0;
+static double g_fps_ema = 0.0;
+
 /* ========================================================================= */
 /* Helpers                                                                    */
 /* ========================================================================= */
@@ -147,6 +170,60 @@ void prof_frame_tick(void) {
         if (g_prof_stale[section_idx] < PROF_STALE_FRAMES)
             g_prof_stale[section_idx]++;
     }
+
+    /* FPS bookkeeping: one tick = one frame. */
+    double now = prof_now_us();
+    if (g_fps_last_tick_us > 0.0) {
+        double dt = now - g_fps_last_tick_us;
+        if (dt > 0.0) {
+            double inst = 1e6 / dt;
+            g_fps_ema = (g_fps_ema == 0.0)
+                ? inst
+                : PROF_FPS_EMA_ALPHA * inst
+                  + (1.0 - PROF_FPS_EMA_ALPHA) * g_fps_ema;
+        }
+        for (int w = 0; w < PROF_FPS_WIN_COUNT; w++) {
+            ProfFpsWindow *win = &g_fps_win[w];
+            double bucket_us =
+                k_fps_window_secs[w] * 1e6 / (double)PROF_FPS_HISTORY_CAP;
+            if (win->bucket_start_us == 0.0)
+                win->bucket_start_us = g_fps_last_tick_us;
+            win->bucket_frames++;
+            double span = now - win->bucket_start_us;
+            if (span >= bucket_us) {
+                win->ring[win->head] =
+                    (float)((double)win->bucket_frames * 1e6 / span);
+                win->head = (win->head + 1) % PROF_FPS_HISTORY_CAP;
+                if (win->count < PROF_FPS_HISTORY_CAP)
+                    win->count++;
+                win->bucket_start_us = now;
+                win->bucket_frames = 0;
+            }
+        }
+    }
+    g_fps_last_tick_us = now;
+}
+
+double prof_fps_current(void) {
+    return g_fps_ema;
+}
+
+double prof_fps_window_secs(int window) {
+    if (window < 0 || window >= PROF_FPS_WIN_COUNT) return 0.0;
+    return k_fps_window_secs[window];
+}
+
+int prof_fps_history(int window, float *out, int max_samples) {
+    if (window < 0 || window >= PROF_FPS_WIN_COUNT || !out || max_samples <= 0)
+        return 0;
+    const ProfFpsWindow *win = &g_fps_win[window];
+    int n = (win->count < max_samples) ? win->count : max_samples;
+    for (int i = 0; i < n; i++) {
+        int idx = (win->head - n + i + 2 * PROF_FPS_HISTORY_CAP)
+                  % PROF_FPS_HISTORY_CAP;
+        out[i] = win->ring[idx];
+    }
+    return n;
 }
 
 double prof_section_last_us(ProfSection s) {

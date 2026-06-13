@@ -32,10 +32,14 @@
 #ifndef UI_CPUPROF_H
 #define UI_CPUPROF_H
 
+/* Compute-profile detail levels (Ctrl+W cycle). The FPS plot is a separate
+ * floating panel (ui_fps_panel_*) shown at every non-OFF level; the section
+ * listing panel joins it from SECTIONS up. */
 typedef enum {
 	PROFILE_PANEL_OFF = 0,
-	PROFILE_PANEL_ON,
-	PROFILE_PANEL_DETAILS,
+	PROFILE_PANEL_PLOT,      /* FPS plot panel only */
+	PROFILE_PANEL_SECTIONS,  /* plot + top-level section listing */
+	PROFILE_PANEL_DETAILS,   /* plot + full nested section listing */
 	PROFILE_PANEL_MODE_COUNT
 } UiProfilePanelMode;
 
@@ -64,5 +68,21 @@ void ui_profile_panel_render(const UiProfilePanelView *view);
  * the renderer's geometry. Height depends on the mode's visible row count. */
 int  ui_profile_panel_width(void);
 int  ui_profile_panel_height(UiProfilePanelMode mode);
+
+/* --- FPS plot panel ---
+ *
+ * A separate floating panel (its own overlay-layout slot) graphing FPS over
+ * the last 10 s / 1 min / 10 min as three overlaid series, memory-panel
+ * style. Data comes from the prof_fps_* history in support/cpuprof.c (fed
+ * by prof_frame_tick); visible at every Compute-profile level except OFF. */
+typedef struct {
+    int window_w, window_h;
+    int visible;            /* profile mode != PROFILE_PANEL_OFF */
+    int panel_x, panel_y;   /* resolved position, controller-baked */
+} UiFpsPanelView;
+
+void ui_fps_panel_render(const UiFpsPanelView *view);
+int  ui_fps_panel_width(void);
+int  ui_fps_panel_height(void);
 
 #endif /* UI_CPUPROF_H */
