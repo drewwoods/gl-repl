@@ -735,11 +735,15 @@ framework). So OSMesa mode just (a) builds the vendored freeglut with
 (`FREEGLUT_OSMESA` ⇒ `FREEGLUT_CMAKE_BACKEND`, the per-platform link block, the
 vendored-archive prereq gate) — see `CLAUDE.md`'s *Headless OSMesa build*.
 
-The backend lives in the **vendored** freeglut only, so OSMesa mode requires
-re-vendoring from a freeglut that carries it
+The backend lives in the **vendored** freeglut only — but the in-tree
+vendored tree **already carries it**: the `capture-windowed-backends` branch
+it is pinned to is stacked on `osmesa-backend`, so one tree holds both the
+native (Cocoa/X11) and OSMesa backends. `make … FREEGLUT_OSMESA=1` builds the
+OSMesa backend directly with **no re-vendor** — it coexists with the native
+build under suffixed dirs. Re-vendoring
 (`FREEGLUT_REPO=<path-or-url> scripts/vendor-freeglut.sh <ref>`; the source is
-recorded in `third_party/freeglut/VENDORED.txt`). Two fixes in that fork make it
-usable as a library consumer:
+recorded in `third_party/freeglut/VENDORED.txt`) is only for re-pinning a
+newer fork commit. Two fixes in that fork make it usable as a library consumer:
 
 - **Teardown.** An app that exits without an explicit `glutDestroyWindow()`
   destroys its window from freeglut's `atexit(fgDeinitialize)` sweep. On
@@ -762,7 +766,12 @@ usable as a library consumer:
   `glReadPixels` round-trip), packs RGBA→RGB, and emits rows top-to-bottom to
   invert OSMesa's bottom-up origin. Output prefix from `FREEGLUT_CAPTURE_FILE`
   (default `freeglut`), files `<prefix>-NNNN.ppm`; convert with e.g.
-  `magick shot-0000.ppm shot.png`. POSIX only (no `SIGUSR1` on Windows).
+  `magick shot-0000.ppm shot.png`. POSIX only (no `SIGUSR1` on Windows). The
+  **native** windowed backends (Cocoa/X11) honour the same `SIGUSR1` /
+  `FREEGLUT_CAPTURE_FILE` contract via a parallel path in core
+  `src/fg_capture.c` (it posts a redisplay and grabs `GL_BACK` pre-swap —
+  real-GPU pixels), so plain `make gl-repl` captures too; that path compiles
+  to stubs on OSMesa builds.
 
 **Animation clock & the `--time` / `GLR_TIME` start offset.** The predefined
 `t` variable is a *fixed-timestep* clock: while animation is playing (the

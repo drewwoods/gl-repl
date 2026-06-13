@@ -104,9 +104,15 @@ real-GPU pixels (MSAA, true driver timings), so wait a few frames after
 signaling, and don't signal before `glutInit` has run (the handler isn't
 installed yet; default disposition kills the process). `kill -USR1 <pid>`
 writes `<prefix>-NNNN.ppm` (`FREEGLUT_CAPTURE_FILE` env sets the prefix,
-default `freeglut`); convert with `magick shot-0000.ppm shot.png`. This is a
-freeglut-fork feature, so it only exists in builds re-vendored from a fork
-that carries it.
+default `freeglut`); convert with `magick shot-0000.ppm shot.png`. This
+capture support lives in the freeglut fork, and the in-tree vendored freeglut
+**already carries it** — the pinned `capture-windowed-backends` branch is
+stacked on `osmesa-backend`, so one vendored tree holds both the native
+windowed *and* OSMesa capture paths. **No re-vendor is needed:** plain `make
+gl-repl` (native Cocoa → the windowed `GL_BACK` path) and `make gl-repl
+FREEGLUT_OSMESA=1` (headless → the `OSMesaGetColorBuffer` path) both get it
+out of the box. You'd only re-pin (`scripts/vendor-freeglut.sh`) to upstream a
+newer fork commit.
 
 **Doc media regeneration (`scripts/docs-assets.sh`).** Regenerates every
 screenshot/GIF under `docs/images/` (the media embedded in `README.md` /
