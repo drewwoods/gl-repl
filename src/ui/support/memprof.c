@@ -14,10 +14,10 @@
 /* Panel geometry                                                             */
 /* ========================================================================= */
 
-/* Narrower than the CPU profile panel because the table is one column
- * and the graph uses the tiny font for tick labels. The shortcut is in
- * the Config menu + F1 help, so no inline hint is needed in the header. */
-#define MEM_PANEL_W         220
+/* Matches the variable panel width so the right-column overlay stack reads
+ * as one uniform column. The shortcut is in the Config menu + F1 help, so no
+ * inline hint is needed in the header. */
+#define MEM_PANEL_W         250
 #define MEM_PANEL_MARGIN     12
 #define MEM_ROW_H            14
 #define MEM_HEADER_H         18
