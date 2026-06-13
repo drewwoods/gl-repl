@@ -1401,7 +1401,7 @@ static void grid_apply_far_fog(const SceneRenderConfig *config,
 
     /* Steady: (0.7e .. e). tf=0 is the steady look (no pop); tf=1 is
      * a tight recede wall near the camera. */
-    float fog_start = extent * 0.7f;
+    float fog_start = extent * 0.85f;
     float fog_end   = extent;
 #if GRID_XN_STYLE == GRID_AXES_XN_FOG
     if (!uses_fog) {
