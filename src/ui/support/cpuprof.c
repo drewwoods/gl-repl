@@ -276,7 +276,7 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
 /* FPS plot panel                                                             */
 /* ========================================================================= */
 
-#define FPS_PANEL_W       300
+#define FPS_PANEL_W       250   /* matches the variable panel width */
 #define FPS_HEADER_H      20
 #define FPS_LEGEND_H      14
 #define FPS_PLOT_H        90
