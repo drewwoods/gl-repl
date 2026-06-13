@@ -23,7 +23,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 
 static void test_cpuprof_metrics(void) {
     ASSERT_TRUE("width is positive", ui_profile_panel_width() > 0);
-    ASSERT_TRUE("height is positive on", ui_profile_panel_height(PROFILE_PANEL_ON) > 0);
+    ASSERT_TRUE("height is positive on", ui_profile_panel_height(PROFILE_PANEL_SECTIONS) > 0);
     ASSERT_TRUE("height is positive details", ui_profile_panel_height(PROFILE_PANEL_DETAILS) > 0);
 }
 
@@ -65,7 +65,7 @@ static void test_cpuprof_render_on(void) {
     UiProfilePanelView view = {
         .window_w = 800,
         .window_h = 600,
-        .mode = PROFILE_PANEL_ON,
+        .mode = PROFILE_PANEL_SECTIONS,
         .panel_x = 10,
         .panel_y = 10
     };

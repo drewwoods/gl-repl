@@ -36,6 +36,8 @@ static UiOverlayLayoutIn base_inputs(void) {
     in.prefer_top_on_overflow = 0;
     in.panels[UI_OVERLAY_PANEL_VARIABLE] =
         (UiOverlayPanelReq){ 1, 250, 92 };   /* ~3 var rows */
+    in.panels[UI_OVERLAY_PANEL_FPS] =
+        (UiOverlayPanelReq){ 0, 300, 142 };  /* hidden in the base shape */
     in.panels[UI_OVERLAY_PANEL_PROFILE] =
         (UiOverlayPanelReq){ 1, 384, 200 };
     in.panels[UI_OVERLAY_PANEL_MEMORY] =
@@ -92,9 +94,37 @@ int main(void) {
            (22 + BASE_Y) + 92 + STACK_GAP + 200 + STACK_GAP);
         for (int a = 0; a < UI_OVERLAY_PANEL_COUNT; a++)
             for (int b = a + 1; b < UI_OVERLAY_PANEL_COUNT; b++) {
+                /* Hidden panels share the next-slot landing position by
+                 * design; only visible pairs must be disjoint. */
+                if (!in.panels[a].visible || !in.panels[b].visible)
+                    continue;
                 char label[64];
                 snprintf(label, sizeof(label),
                          "stack: no overlap %d vs %d", a, b);
+                AT(label, !rects_overlap(
+                       x[a], y[a], in.panels[a].w, in.panels[a].h,
+                       x[b], y[b], in.panels[b].w, in.panels[b].h));
+            }
+    }
+
+    /* --- FPS plot panel joins the stack between variable and profile. --- */
+    {
+        UiOverlayLayoutIn in = base_inputs();
+        in.panels[UI_OVERLAY_PANEL_FPS].visible = 1;
+        int x[UI_OVERLAY_PANEL_COUNT], y[UI_OVERLAY_PANEL_COUNT];
+        ui_overlay_layout_solve(&in, x, y);
+        AI("fps: above var",
+           y[UI_OVERLAY_PANEL_FPS], (22 + BASE_Y) + 92 + STACK_GAP);
+        AI("fps: prof above fps",
+           y[UI_OVERLAY_PANEL_PROFILE],
+           (22 + BASE_Y) + 92 + STACK_GAP + 142 + STACK_GAP);
+        for (int a = 0; a < UI_OVERLAY_PANEL_COUNT; a++)
+            for (int b = a + 1; b < UI_OVERLAY_PANEL_COUNT; b++) {
+                if (!in.panels[a].visible || !in.panels[b].visible)
+                    continue;
+                char label[64];
+                snprintf(label, sizeof(label),
+                         "fps: no overlap %d vs %d", a, b);
                 AT(label, !rects_overlap(
                        x[a], y[a], in.panels[a].w, in.panels[a].h,
                        x[b], y[b], in.panels[b].w, in.panels[b].h));
@@ -129,6 +159,8 @@ int main(void) {
            x[UI_OVERLAY_PANEL_PROFILE] - COL_GAP - 220);
         for (int a = 0; a < UI_OVERLAY_PANEL_COUNT; a++)
             for (int b = a + 1; b < UI_OVERLAY_PANEL_COUNT; b++) {
+                if (!in.panels[a].visible || !in.panels[b].visible)
+                    continue;
                 char label[64];
                 snprintf(label, sizeof(label),
                          "spill: no overlap %d vs %d", a, b);

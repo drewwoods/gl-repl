@@ -81,12 +81,36 @@ void prof_accum_reset(ProfSection s);
 void prof_accum_end(ProfSection s);
 void prof_accum_commit(ProfSection s);
 
-/* Mark the start of a new frame so per-frame sections can detect staleness. */
+/* Mark the start of a new frame so per-frame sections can detect staleness.
+ * Also feeds the FPS history below (one tick = one frame). */
 void prof_frame_tick(void);
 
 /* Read-only API for HUD rendering. */
 double prof_section_last_us(ProfSection s);
 double prof_section_avg_us(ProfSection s);
 int    prof_section_is_stale(ProfSection s);
+
+/* --- FPS history (fed by prof_frame_tick) ---
+ *
+ * Three fixed time windows, each a ring of PROF_FPS_HISTORY_CAP buckets
+ * (window / CAP seconds per bucket; a bucket's value is the average FPS
+ * over its span). Rings fill from empty, newest sample last. */
+enum {
+    PROF_FPS_WIN_10S = 0,
+    PROF_FPS_WIN_1M,
+    PROF_FPS_WIN_10M,
+    PROF_FPS_WIN_COUNT
+};
+#define PROF_FPS_HISTORY_CAP 120
+
+/* Smoothed instantaneous FPS (EMA of 1/frame-dt); 0 until two ticks. */
+double prof_fps_current(void);
+
+/* The window span in seconds for a PROF_FPS_WIN_* index (0 if invalid). */
+double prof_fps_window_secs(int window);
+
+/* Copy up to max_samples of a window's bucket history into out,
+ * oldest -> newest. Returns the number of samples written. */
+int    prof_fps_history(int window, float *out, int max_samples);
 
 #endif /* CPUPROF_H */

@@ -157,7 +157,7 @@ static void test_profile_panel(void) {
     prof_end(PROF_FRAME_TOTAL);
 
     gl_stub_counts_reset();
-    { UiProfilePanelView v = pp_view(PROFILE_PANEL_ON); ui_profile_panel_render(&v); }
+    { UiProfilePanelView v = pp_view(PROFILE_PANEL_SECTIONS); ui_profile_panel_render(&v); }
     ASSERT_GL_CALLS("profile visible -> draws quads", GL_STUB_glBegin, 1);
     ASSERT_GL_CALLS("profile visible -> draws text", GL_STUB_glRasterPos2f, 5);
     ASSERT_GL_CALLS("profile visible -> calls glColor4f", GL_STUB_glColor4f, 1);

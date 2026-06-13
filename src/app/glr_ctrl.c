@@ -1364,8 +1364,8 @@ static UiMemoryPanelView glr_ctrl_build_memory_panel_view(const UiRenderSnapshot
     return v;
 }
 
-/* CPU profile panel: same overlay-layout slot resolution as the memory
- * panel — mirrors glr_ctrl_build_memory_panel_view. */
+/* Compute-profile section listing: same overlay-layout slot resolution as
+ * the memory panel — mirrors glr_ctrl_build_memory_panel_view. */
 static UiProfilePanelView glr_ctrl_build_profile_panel_view(const UiRenderSnapshot *snap) {
     UiProfilePanelView v;
     v.window_w = snap->viewport.window_w;
@@ -1373,6 +1373,19 @@ static UiProfilePanelView glr_ctrl_build_profile_panel_view(const UiRenderSnapsh
     v.mode     = (UiProfilePanelMode)snap->profile_panel.mode;
     UiOverlayLayoutIn in = glr_ctrl_overlay_layout_inputs(snap);
     ui_overlay_layout_panel_pos(&in, UI_OVERLAY_PANEL_PROFILE,
+                                &v.panel_x, &v.panel_y);
+    return v;
+}
+
+/* FPS plot panel (Compute profile level 1): its own overlay-layout slot,
+ * visible at every non-OFF profile level. */
+static UiFpsPanelView glr_ctrl_build_fps_panel_view(const UiRenderSnapshot *snap) {
+    UiFpsPanelView v;
+    v.window_w = snap->viewport.window_w;
+    v.window_h = snap->viewport.window_h;
+    v.visible  = (snap->profile_panel.mode != PROFILE_PANEL_OFF);
+    UiOverlayLayoutIn in = glr_ctrl_overlay_layout_inputs(snap);
+    ui_overlay_layout_panel_pos(&in, UI_OVERLAY_PANEL_FPS,
                                 &v.panel_x, &v.panel_y);
     return v;
 }
@@ -1484,8 +1497,11 @@ void glr_ctrl_display_frame(void) {
     {
         UiProfilePanelMode prof_mode =
             (UiProfilePanelMode)ui_state_profile_panel().mode;
+        /* OFF and PLOT issue no timer queries — the FPS plot needs no
+         * per-section GPU data, and query boundaries cost real GPU time. */
         glr_prof_set_gpu_capture_mode(
-            prof_mode == PROFILE_PANEL_OFF ? GLR_PROF_GPU_CAPTURE_OFF
+            (prof_mode == PROFILE_PANEL_OFF ||
+             prof_mode == PROFILE_PANEL_PLOT) ? GLR_PROF_GPU_CAPTURE_OFF
             : prof_mode == PROFILE_PANEL_DETAILS ? GLR_PROF_GPU_CAPTURE_ALL
                                                  : GLR_PROF_GPU_CAPTURE_TOP_LEVEL);
     }
@@ -1672,6 +1688,10 @@ void glr_ctrl_display_frame(void) {
 
     prof_begin(PROF_PROFILE_PANEL);
     {
+        /* Both compute-profile surfaces: the FPS plot panel and the section
+         * listing (each renderer no-ops below its own visibility level). */
+        UiFpsPanelView fps_view = glr_ctrl_build_fps_panel_view(&ui_snap);
+        ui_fps_panel_render(&fps_view);
         UiProfilePanelView prof_view = glr_ctrl_build_profile_panel_view(&ui_snap);
         ui_profile_panel_render(&prof_view);
     }

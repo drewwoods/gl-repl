@@ -216,7 +216,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
     (void)x; (void)y;
     switch (key) {
     case 'd': case 'D':
-        g_mode = (g_mode == PROFILE_PANEL_DETAILS) ? PROFILE_PANEL_ON
+        g_mode = (g_mode == PROFILE_PANEL_DETAILS) ? PROFILE_PANEL_SECTIONS
                                                    : PROFILE_PANEL_DETAILS;
         break;
     case 27: case 'q': case 'Q': exit(0);

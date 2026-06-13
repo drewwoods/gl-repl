@@ -1060,8 +1060,10 @@ All screenshots and GIFs in this guide were captured that way.
 
 ## Profiling & Diagnostics
 
-- **Compute profile** (Ctrl+W) — overlay panel of per-frame section timings,
-  CPU and GPU columns (Off / On / Details).
+- **Compute profile** (Ctrl+W) — Off / Plot / Sections / Details. Plot is a
+  floating FPS graph (last 10 s / 1 min / 10 min as three overlaid series);
+  Sections adds the per-frame section listing with CPU and GPU columns;
+  Details expands the nested sub-sections.
 - **Memory profile** (Ctrl+Shift+W) — RSS history, baseline, and delta.
 - **Message history** — click the button at the right end of the bottom
   message line to review recent status messages.
