@@ -214,6 +214,12 @@ static void print_usage(const char *prog) {
             "  GLR_ACCUM_PASSES=<n>  Accumulation AA sample count (1/2/4/8/12/16).\n"
             "               Captures use it to smooth 3D edges at full UI text\n"
             "               size (the 2D UI renders outside the accum loop).\n"
+            "  GLR_VIEW_TOGGLE_AT=<t1,t2,...>  Toggle the 2D/3D view mode as the\n"
+            "               rendered-frame clock crosses each listed second (t\n"
+            "               advances 1/60 s per frame). Records the menu-bar\n"
+            "               2D/3D swatch transition headlessly; drives one\n"
+            "               fixed-dt animation tick per captured frame so the\n"
+            "               transition advances deterministically.\n"
             "\n"
             "Arguments:\n"
             "  input.c      Optional saved session to load at startup\n"
@@ -281,7 +287,48 @@ static const char *g_export_ply_path = NULL;
  * (for color-managed viewers that otherwise render them washed out). */
 static int g_export_ply_srgb = 0;
 
+/* Capture affordance (doc GIFs), sibling of GLR_TIME / GLR_EDIT_LINE:
+ * GLR_VIEW_TOGGLE_AT="t1,t2,..." toggles the 2D/3D view mode once as the
+ * rendered-frame clock crosses each listed second (t advances 1/60 s per
+ * frame), so the menu-bar swatch transition is recordable headlessly.
+ * Unset => no-op; production behavior is unchanged. */
+static void maybe_capture_view_toggle(void) {
+    static int   inited = 0;
+    static int   frame = 0;
+    static int   fire_frame[8];
+    static int   fired[8];
+    static int   n = 0;
+    if (!inited) {
+        inited = 1;
+        const char *s = getenv("GLR_VIEW_TOGGLE_AT");
+        while (s && *s && n < 8) {
+            char *end;
+            float secs = strtof(s, &end);
+            if (end == s) break;
+            fire_frame[n] = (int)(secs * 60.0f + 0.5f);
+            fired[n] = 0;
+            n++;
+            s = end;
+            while (*s == ',' || *s == ' ') s++;
+        }
+    }
+    if (n == 0) return;
+    for (int i = 0; i < n; i++) {
+        if (!fired[i] && frame >= fire_frame[i]) {
+            fired[i] = 1;
+            glr_action_toggle_view_mode();
+        }
+    }
+    /* The view-mode transition (and all motion) advances on the animation
+     * timer, which the headless/record main loop doesn't fire per captured
+     * frame. Drive one fixed-dt tick here so the transition advances
+     * deterministically — one frame of animation per captured frame. */
+    glr_ctrl_tick();
+    frame++;
+}
+
 static void display_func(void) {
+    maybe_capture_view_toggle();
     /* Trace the first two frames separately (gated on g_detailed_prof
      * — see --detailed-prof / GLR_DETAILED_PROF). The first frame
      * pays one-shot costs (GLUT solid-shape display-list compile,
