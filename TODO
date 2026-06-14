@@ -4,4 +4,5 @@ TODO:
    - Fix tests that dont use depth (particles) by using depthFunction always so the grid doesnt appear ontop
    - replace the exported code with a stencil test (color and depth mask false, stencil set, then color black where stencil set)
    - add model view matrix viaualizer. the 4x4 matrix with descriptions. Can click a button in the status bar
+   - add a 2D/3D toggle next to the replay button to adjust views
    
