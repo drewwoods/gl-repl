@@ -2101,6 +2101,18 @@ static void test_mouse_routing_and_hit_testing(void) {
     ASSERT_INT("pin button hit consumed", rc, 1);
     ASSERT_INT("replay state toggled to PLAYING", replay_state_view().state, REPLAY_PLAYING);
 
+    // Test route_pin_button_hit for view mode swatch toggle
+    hit.kind = UI_HIT_PIN_BUTTON;
+    hit.item_idx = UI_MENU_BAR_PIN_VIEW_MODE;
+    glr_config_set(GLR_CONFIG_ORTHO_MODE, 0); /* 3D */
+    rc = route_pin_button_hit(&hit);
+    ASSERT_INT("view-mode pin hit consumed", rc, 1);
+    ASSERT_INT("view mode toggled to 2D", glr_config_get(GLR_CONFIG_ORTHO_MODE), 1);
+
+    rc = route_pin_button_hit(&hit);
+    ASSERT_INT("view-mode pin hit consumed again", rc, 1);
+    ASSERT_INT("view mode toggled back to 3D", glr_config_get(GLR_CONFIG_ORTHO_MODE), 0);
+
     // Test route_inline_color_swatch_hit
     prepare_display_fixture();
     glr_color_picker_install_host();
