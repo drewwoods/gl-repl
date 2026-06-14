@@ -11,6 +11,7 @@
  */
 #include "ui/app/view_mode_swatch.h"
 
+#include <math.h>
 #include <string.h>
 
 #include "gl_includes.h"
@@ -191,17 +192,21 @@ static void render_cube(int cell_x, int cell_y, int cell_w, int cell_h,
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
-    /* Orthographic unit box over a square viewport: a face-on face (-1..1)
-     * fills the square un-stretched; no perspective distortion in the tiny
-     * widget. */
-    glOrtho(-1.0, 1.0, -1.0, 1.0, -2.0, 2.0);
+    /* Aspect-corrected ortho over the FULL (wide) cell: a unit cube stays
+     * square (un-stretched) and fills the cell height at rest, but the wide
+     * cell now gives the spinning/tilting cube horizontal head-room so it is
+     * never clipped mid-rotation (a cube needs ~1.41x its width at 45deg;
+     * the cell is ~1.9x). y stays -1..1 so the resting face fills the
+     * height; z range holds the tilt + depth. */
+    double aspect = (double)cell_w / (double)cell_h;
+    glOrtho(-aspect, aspect, -1.0, 1.0, -2.0, 2.0);
 
     glMatrixMode(GL_MODELVIEW);
     glPushMatrix();
     glLoadIdentity();
 
-    glViewport(sx, sy, sq, sq);
-    glScissor(sx, sy, sq, sq);
+    glViewport(cell_x, cell_y, cell_w, cell_h);
+    glScissor(cell_x, cell_y, cell_w, cell_h);
     glEnable(GL_SCISSOR_TEST);
     glClearDepth(1.0);
     glClear(GL_DEPTH_BUFFER_BIT);     /* scissored to the cell */
@@ -231,8 +236,18 @@ static void render_cube(int cell_x, int cell_y, int cell_w, int cell_h,
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
     glEnable(GL_NORMALIZE);
 
-    /* Rotate about Y: t=0 shows the +Z ("2D") face dead-on, t=1 brings the
-     * +X ("3D") face dead-on (both flat -> seamless handoff to flat text). */
+    /* A punchier 3D tumble that still lands flat at the endpoints. The Y
+     * spin (t=0 -> +Z "2D" dead-on, t=1 -> +X "3D" dead-on) is joined by a
+     * forward tilt that reveals the top face and a slight shrink — both
+     * scaled by sin(pi*t), so they peak at mid-rotation and return to zero
+     * at t=0/1. The endpoints therefore stay full-size and face-on (seamless
+     * handoff to the flat text), while the middle clearly reads as a turning
+     * lit cube. The shrink also keeps the tilted cube within the cell. */
+    float punch  = sinf((float)M_PI * t);
+    float tilt   = 18.0f * punch;
+    float shrink = 1.0f - 0.34f * punch;
+    glScalef(shrink, shrink, shrink);
+    glRotatef(tilt, 1.0f, 0.0f, 0.0f);
     glRotatef(-90.0f * t, 0.0f, 1.0f, 0.0f);
 
     /* Solid body (surface color) fills the cube interior behind the faces. */
