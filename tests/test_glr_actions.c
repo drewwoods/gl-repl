@@ -23,6 +23,7 @@
 #include "keys.h"
 #include "app/glr_camera.h"               /* glr_camera_target_active / glr_camera */
 #include "ui/app/menu_bar.h"              /* ui_menu_bar_open_menu_id, _set_open_menu */
+#include "ui/app/view_mode_swatch.h"      /* ui_view_mode_swatch_state */
 #include "ui/app/layout.h"                /* CODE_PANEL_LAYOUT_* */
 #include "repl/eval.h"                    /* g_predef_vars, repl_eval_find_predef_var_idx */
 #include "subsystems/color_picker/color_picker_state.h"
@@ -236,6 +237,47 @@ static void test_cfg_cycling(void) {
     ASSERT_INT("audio mode Off", glr_config_get(GLR_CONFIG_AUDIO_MODE), 0);
     ASSERT_STR("status audio Off", g_last_status, "Audio: off");
     ASSERT_INT("audio engine paused", glr_audio_is_paused(), 1);
+
+    /* View-mode swatch toggle: glr_action_toggle_view_mode() must flip the
+     * View mode config row (the click path the menu-bar 2D/3D swatch uses),
+     * sharing the keybind's status text. SceneViewMode: 0 = 3D, 1 = 2D. */
+    glr_config_set(GLR_CONFIG_ORTHO_MODE, 0);
+    glr_action_toggle_view_mode();
+    ASSERT_INT("view mode toggled to 2D", glr_config_get(GLR_CONFIG_ORTHO_MODE), 1);
+    ASSERT_STR("view mode status 2D", g_last_status, "View mode: 2D");
+    glr_action_toggle_view_mode();
+    ASSERT_INT("view mode toggled to 3D", glr_config_get(GLR_CONFIG_ORTHO_MODE), 0);
+    ASSERT_STR("view mode status 3D", g_last_status, "View mode: 3D");
+}
+
+/* The view-mode swatch's pure visual-state selector. SceneViewMode:
+ * 0 = 3D, non-0 = 2D; projection_mix in [0,1] (0 = ortho/2D, 1 = persp/3D). */
+static void test_view_mode_swatch_state(void) {
+    float t = -1.0f;
+
+    /* Settled endpoints -> flat text, t unused (0). */
+    ASSERT_INT("settled 3D -> flat 3D",
+               ui_view_mode_swatch_state(0, 1.0f, &t), UI_VIEW_SWATCH_FLAT_3D);
+    ASSERT_INT("settled 2D -> flat 2D",
+               ui_view_mode_swatch_state(1, 0.0f, &t), UI_VIEW_SWATCH_FLAT_2D);
+
+    /* Heading to 2D (target 2D, mix easing 1->0) -> cross-fade, t = 1-mix. */
+    ASSERT_INT("3D->2D -> cross-fade",
+               ui_view_mode_swatch_state(1, 0.75f, &t), UI_VIEW_SWATCH_CROSSFADE);
+    ASSERT_TRUE("cross-fade t = 1-mix", fabsf(t - 0.25f) < 1e-4f);
+
+    /* Heading to 3D (target 3D, mix easing 0->1) -> lit cube, t = mix. */
+    ASSERT_INT("2D->3D -> cube",
+               ui_view_mode_swatch_state(0, 0.4f, &t), UI_VIEW_SWATCH_CUBE);
+    ASSERT_TRUE("cube reveal t = mix", fabsf(t - 0.4f) < 1e-4f);
+
+    /* Out-of-range mix clamps t into [0,1]. */
+    ui_view_mode_swatch_state(0, 1.5f, &t); /* >=1 settles to flat 3D */
+    ASSERT_INT("mix>1 settles flat 3D",
+               ui_view_mode_swatch_state(0, 1.5f, &t), UI_VIEW_SWATCH_FLAT_3D);
+
+    ASSERT_TRUE("label width fits both labels",
+                ui_view_mode_swatch_label_width() >= 2 * FONT_SMALL_W);
 }
 
 static void test_menu_actions(void) {
@@ -1344,6 +1386,7 @@ int main(void) {
     test_cfg_cycling();
     test_config_sections();
     test_config_parent_rows_inert();
+    test_view_mode_swatch_state();
     test_menu_actions();
     test_split_decl_menu_action();
     test_load_workspace_activates_scene();
