@@ -1,6 +1,7 @@
 #include "app/glr_state.h"
 #include "app/glr_ctrl.h"
 #include "ui/app/menu_bar.h"
+#include "ui/app/view_mode_swatch.h"
 #include "app/glr_actions.h"
 #include "app/glr_config.h"
 #include "repl/core.h"
@@ -134,6 +135,8 @@ static void test_top_level_hits(void) {
     int menu_mx;
     int pin_mx;
     int my;
+    int cp_x, cp_y, cp_w, cp_h;
+    int right_edge, replay_w, view_mode_w, swatch_x, swatch_mx;
 
     reset_menu_bar_fixture(1000, 600);
     menu_mx = file_menu_mx();
@@ -145,6 +148,18 @@ static void test_top_level_hits(void) {
 
     UiHit h_pin = ui_menu_bar_hit_test(pin_mx, my);
     ASSERT_INT_EQ("hit Replay pin", h_pin.kind == UI_HIT_PIN_BUTTON ? h_pin.item_idx : -1, UI_MENU_BAR_PIN_REPLAY);
+
+    /* Test hit-testing the new View Mode pin (PIN_VIEW_MODE) */
+    view_mode_w = ui_view_mode_swatch_label_width();
+    replay_w = (int)strlen("Replaying") * FONT_SMALL_W + 12 + 22;
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    right_edge = cp_x + cp_w - CODE_MARGIN_X;
+    swatch_x = right_edge - replay_w - view_mode_w;
+    swatch_mx = swatch_x + view_mode_w / 2;
+
+    UiHit h_swatch = ui_menu_bar_hit_test(swatch_mx, my);
+    ASSERT_INT_EQ("hit View Mode pin kind", h_swatch.kind, UI_HIT_PIN_BUTTON);
+    ASSERT_INT_EQ("hit View Mode pin item_idx", h_swatch.item_idx, UI_MENU_BAR_PIN_VIEW_MODE);
 
     UiHit h_menu_miss = ui_menu_bar_hit_test(menu_mx, my + 120);
     ASSERT_INT_EQ("menu miss below bar", h_menu_miss.kind == UI_HIT_MENU_BUTTON ? h_menu_miss.cmd_idx : -1, -1);
