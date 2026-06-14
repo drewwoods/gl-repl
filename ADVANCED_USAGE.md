@@ -150,7 +150,7 @@ metadata that round-trips on reload:
 | `// @scene-name <name>` | Names the scene slot the file loads into. |
 | `// @workspace-dir <path>` | Re-binds the workspace directory. |
 | `// @var name=value` | Restores a predefined variable's value. |
-| `// @cfg <slug> = <value>` | Applies a scene-presentation setting (`wireframe`, `grid`, `axes`, `view_mode`, `backdrop`, …). |
+| `// @cfg <slug> = <value>` | Applies a scene-presentation setting (see the slug table below). |
 | `// @declare name` | Reconstructs a `float name;` declaration on import. |
 | `// @tune` | Marks a variable as a tunable knob in the exported program — see [User Guide → Tunable Variables](USER_GUIDE.md#tunable-variables--tune). |
 | `// camera` block | A 5-line camera preset applied on load. |
@@ -158,6 +158,47 @@ metadata that round-trips on reload:
 Built-in examples use the same `@cfg` + `// camera` headers, so a saved
 scene and an example are the same file format. Only *leading* directives
 are metadata; the same text later in the file is an ordinary comment.
+
+### `@cfg` scene-presentation slugs
+
+A scene file (and a built-in example) carries one `// @cfg <slug> = <value>`
+line per scene-presentation setting it overrides. The slug is the Config-menu
+row label, lowercased with spaces → underscores (`Grid extent` → `grid_extent`).
+Settings outside this scene subset (accumulation/MSAA, profiling panels, code
+layout, syntax theme) are *not* scene metadata and don't round-trip through a
+scene file.
+
+**Enum slugs** take a symbolic value name; the bare integer index still loads
+(legacy files), but the symbolic form is canonical on save and self-documents
+which choice it selects:
+
+| Slug | Symbolic values |
+|---|---|
+| `grid` | `GRID_THEME_OFF` `_CLASSIC` `_FOG` `_TRON` `_EMBER` `_FAINT` `_FOCUS` `_OCEAN` `_XZRULER` `_PLANES` `_RADAR` `_AURORA` `_SYNTHWAVE` `_FROZEN` `_SOIL` `_STARCHART` |
+| `axes` | `AXES_THEME_OFF` `_CLASSIC` `_PULSE` `_NEON` `_COMPASS` `_GIZMO` `_RULER` |
+| `backdrop` | `SCENE_BACKDROP_OFF` `_CITYSCAPE` `_STARS` `_CITY_AND_STARS` `_SUNSET` `_AURORA` `_NEBULA` `_POLAR_DAY` `_SNOWFALL` `_POLAR_DAY_SNOW` |
+| `light_theme` | `LIGHT_THEME_DEFAULT` `_HEADLIGHT` `_SOLAR` `_STUDIO` `_NEON` |
+| `grid_extent` | `GRID_EXTENT_CLOSE` `_MID` `_FAR` |
+| `grid_major` | `GRID_MAJOR_1` `_2` `_5` `_10` (the major-tick spacing) |
+| `view_mode` | `SCENE_VIEW_3D` `SCENE_VIEW_2D` (perspective vs. 2D ortho) |
+
+**Integer slugs** carry a plain index: the toggles `wireframe`,
+`normal_vectors`, `vertex_outlines`, `vertex_points`, `light_indicators`,
+`camera_rotate`, `variable_panel` are `0`/`1`; `vertex_labels` and
+`xform_guides` are small multi-state cycles saved as their index.
+
+```c
+// @cfg grid = GRID_THEME_OCEAN
+// @cfg grid_extent = GRID_EXTENT_MID
+// @cfg view_mode = SCENE_VIEW_2D
+// @cfg light_indicators = 1
+```
+
+The symbolic names come straight from the enums in `src/scene/themes.h` /
+`src/scene/view_mode.h` via X-macros, so reordering an enum can't silently
+shift which value a catalog literal selects. A typo'd or out-of-range
+symbol is dropped with a `repl_cfg: dropping '…' (unknown symbolic value)`
+note on stderr rather than landing at index 0.
 
 ## Music & assets
 
