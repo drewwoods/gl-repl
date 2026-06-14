@@ -74,10 +74,10 @@ static void draw_label_centered(int cell_x, int cell_y, int cell_w,
                      label, FONT_SMALL);
 }
 
-static void lerp3(const float *a, const float *b, float t, float out[3]) {
-    out[0] = a[0] + (b[0] - a[0]) * t;
-    out[1] = a[1] + (b[1] - a[1]) * t;
-    out[2] = a[2] + (b[2] - a[2]) * t;
+static float smoothstep01(float x) {
+    if (x < 0.0f) x = 0.0f;
+    if (x > 1.0f) x = 1.0f;
+    return x * x * (3.0f - 2.0f * x);
 }
 
 /* ---- cube textures + render ------------------------------------------ */
@@ -167,14 +167,22 @@ static void cube_solid_body(void) {
 
 static void render_cube(int cell_x, int cell_y, int cell_w, int cell_h,
                         float t) {
-    if (cell_w <= 1 || cell_h <= 1) return;
+    if (cell_h <= 1 || cell_w <= 1) return;
 
-    ensure_baked(cell_x, cell_y, cell_w, cell_h);
+    /* Render the cube into a centered SQUARE sub-region of the (wide) cell —
+     * a square viewport + unit-box ortho keeps the cube un-stretched, so it
+     * reads as a real turning cube rather than two labels spread apart. The
+     * texture is baked over the same square (text centered) so a face-on
+     * face matches the flat centered label. */
+    int sq = cell_h;
+    int sx = cell_x + (cell_w - sq) / 2;
+    int sy = cell_y;
+
+    ensure_baked(sx, sy, sq, sq);
 
     const float *bg = ui_rgba(UI_TOK_SURFACE);
-    float umax = (float)cell_w / (float)g_baked_w;
-    float vmax = (float)cell_h / (float)g_baked_h;
-    float aspect = (float)cell_w / (float)cell_h;
+    float umax = (float)sq / (float)g_baked_w;
+    float vmax = (float)sq / (float)g_baked_h;
 
     GLint saved_mm = 0;
     glGetIntegerv(GL_MATRIX_MODE, &saved_mm);
@@ -183,14 +191,17 @@ static void render_cube(int cell_x, int cell_y, int cell_w, int cell_h,
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
-    gluPerspective(34.0, (double)aspect, 0.5, 12.0);
+    /* Orthographic unit box over a square viewport: a face-on face (-1..1)
+     * fills the square un-stretched; no perspective distortion in the tiny
+     * widget. */
+    glOrtho(-1.0, 1.0, -1.0, 1.0, -2.0, 2.0);
 
     glMatrixMode(GL_MODELVIEW);
     glPushMatrix();
     glLoadIdentity();
 
-    glViewport(cell_x, cell_y, cell_w, cell_h);
-    glScissor(cell_x, cell_y, cell_w, cell_h);
+    glViewport(sx, sy, sq, sq);
+    glScissor(sx, sy, sq, sq);
     glEnable(GL_SCISSOR_TEST);
     glClearDepth(1.0);
     glClear(GL_DEPTH_BUFFER_BIT);     /* scissored to the cell */
@@ -202,15 +213,15 @@ static void render_cube(int cell_x, int cell_y, int cell_w, int cell_h,
     glDisable(GL_CULL_FACE);
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-    /* Headlight: directional light from the camera (+Z eye), set at the
-     * identity modelview so it rides the camera. Tuned so a face normal
-     * pointing at the camera (N.L = 1) renders at full brightness — the
-     * baked texture (accent on surface bg) then shows unmodulated, so the
-     * camera-facing face reads as flat text on the bar. Oblique faces fall
-     * off -> the rotation reads as a 3D cube. */
+    /* Light from the camera (+Z eye), set at the identity modelview so it
+     * rides the camera. Mostly ambient: a face pointing at the camera
+     * reaches full brightness (the baked accent-on-surface texture shows
+     * unmodulated -> matches the bar bg + flat accent text exactly), while
+     * oblique faces only dim slightly (0.8..1.0) -> a subtle 3D cue that
+     * stays in the bar's color family rather than reading as a dark box. */
     GLfloat lpos[4] = { 0.0f, 0.0f, 1.0f, 0.0f };
-    GLfloat lamb[4] = { 0.32f, 0.32f, 0.32f, 1.0f };
-    GLfloat ldif[4] = { 0.68f, 0.68f, 0.68f, 1.0f };
+    GLfloat lamb[4] = { 0.80f, 0.80f, 0.80f, 1.0f };
+    GLfloat ldif[4] = { 0.20f, 0.20f, 0.20f, 1.0f };
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT7);
     glLightfv(GL_LIGHT7, GL_POSITION, lpos);
@@ -220,14 +231,11 @@ static void render_cube(int cell_x, int cell_y, int cell_w, int cell_h,
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
     glEnable(GL_NORMALIZE);
 
-    /* Pull the cube back so a 2x2 face nearly fills the cell, then rotate
-     * about Y so t=0 shows the +Z ("2D") face dead-on and t=1 brings the
-     * +X ("3D") face dead-on (flat -> seamless handoff to the flat text). */
-    glTranslatef(0.0f, 0.0f, -3.35f);
-    glScalef(0.92f, 0.92f, 0.92f);
+    /* Rotate about Y: t=0 shows the +Z ("2D") face dead-on, t=1 brings the
+     * +X ("3D") face dead-on (both flat -> seamless handoff to flat text). */
     glRotatef(-90.0f * t, 0.0f, 1.0f, 0.0f);
 
-    /* Solid body (surface color) first. */
+    /* Solid body (surface color) fills the cube interior behind the faces. */
     glDisable(GL_TEXTURE_2D);
     glColor4f(bg[0], bg[1], bg[2], 1.0f);
     cube_solid_body();
@@ -265,8 +273,7 @@ void ui_view_mode_swatch_render(int cell_x, int cell_y, int cell_w,
     UiViewSwatchMode mode =
         ui_view_mode_swatch_state(ortho_mode, projection_mix, &t);
 
-    const float *accent  = ui_rgba(UI_TOK_ACCENT);
-    const float *surface = ui_rgba(UI_TOK_SURFACE);
+    const float *accent = ui_rgba(UI_TOK_ACCENT);
 
     switch (mode) {
     case UI_VIEW_SWATCH_FLAT_3D:
@@ -276,14 +283,18 @@ void ui_view_mode_swatch_render(int cell_x, int cell_y, int cell_w,
         draw_label_centered(cell_x, cell_y, cell_w, k_label_2d, accent, 1.0f);
         break;
     case UI_VIEW_SWATCH_CROSSFADE: {
-        /* "3D" dissolves toward the bar bg; "2D" emerges from it. Drawn
-         * opaque as color lerps so the text literally melts into / out of
-         * the surface color (no order-dependent alpha). */
-        float c3[3], c2[3];
-        lerp3(accent, surface, t, c3);  /* 3D: accent -> bg     */
-        lerp3(surface, accent, t, c2);  /* 2D: bg     -> accent */
-        draw_label_centered(cell_x, cell_y, cell_w, k_label_3d, c3, 1.0f);
-        draw_label_centered(cell_x, cell_y, cell_w, k_label_2d, c2, 1.0f);
+        /* Sequential hand-off (NOT a simultaneous overlay — two 2-char
+         * labels share the cell center, so drawing both at once garbles
+         * the glyphs): "3D" fades out to the bar bg over the first ~half,
+         * then "2D" fades in. Alpha-blended over the surface the menu bar
+         * already drew, so each label cleanly dissolves into / out of the
+         * background color. */
+        float a3 = 1.0f - smoothstep01(t / 0.55f);
+        float a2 = smoothstep01((t - 0.45f) / 0.55f);
+        if (a3 > 0.004f)
+            draw_label_centered(cell_x, cell_y, cell_w, k_label_3d, accent, a3);
+        if (a2 > 0.004f)
+            draw_label_centered(cell_x, cell_y, cell_w, k_label_2d, accent, a2);
         break;
     }
     case UI_VIEW_SWATCH_CUBE:
