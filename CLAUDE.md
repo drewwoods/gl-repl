@@ -302,6 +302,7 @@ GLR_ASSETS_DIR=/path/to/music ./gl-repl   # Same as --assets, via env (--assets 
 GLR_TIME=5 ./gl-repl                 # Initial animation time t in seconds (--time wins)
 GLR_EDIT_LINE=4 ./gl-repl scene.c    # Park the cursor on source line 4 (0-based, clamped) after load
 GLR_ACCUM_PASSES=16 ./gl-repl        # Accumulation AA sample count (1/2/4/8/12/16; capture hook)
+GLR_VIEW_TOGGLE_AT=0.5,2.0 ./gl-repl # Toggle 2D/3D view mode at t=0.5s and t=2.0s (records the swatch transition headlessly)
 ```
 
 `GLR_EDIT_LINE` sets the cursor exactly as arrowing to the line would
@@ -317,6 +318,20 @@ load (which resets `t`), so the override sticks. Useful headless: start an
 animation capture from a later point in its timeline instead of always from
 `t = 0`. Implemented as `repl_set_time()` (`src/repl/core.c` → `repl_state.c`),
 read in `main()` (`gl_repl.c`).
+
+`GLR_VIEW_TOGGLE_AT=<t1,t2,...>` is the capture affordance for the
+**menu-bar 2D/3D swatch** transition (the pin left of Replay). It toggles
+the view mode (`glr_action_toggle_view_mode`) once as the rendered-frame
+clock crosses each listed second (frame `N` ↔ `t = N/60`). Because the
+2D↔3D transition (`src/app/glr_ctrl_view_transition.c`) advances on the
+animation *timer*, which the record/headless main loop doesn't fire per
+captured frame, the hook also drives **one fixed-dt `glr_ctrl_tick()` per
+captured frame** — so the transition (and the swatch's cross-fade / lit-cube
+animation) advances deterministically, one frame of motion per frame
+written. Lives in `display_func` (`gl_repl.c`), gated on the env var (no-op
+when unset, so production timing is unchanged). Native record mode
+(`FREEGLUT_CAPTURE_FRAMES`) shows the full UI; pair them to record the
+swatch headlessly.
 
 ### Music assets & playlist sources
 
