@@ -150,22 +150,6 @@ static void cube_textured_face(float umax, float vmax) {
     glEnd();
 }
 
-/* The four "side/back" faces (everything except the +Z face the caller
- * orients toward the camera) as plain lit quads in the surface color, so
- * the cube body shades 3D without carrying text. */
-static void cube_solid_body(void) {
-    glBegin(GL_QUADS);
-        /* -Z */ glNormal3f(0,0,-1);
-        glVertex3f( 1,-1,-1); glVertex3f(-1,-1,-1); glVertex3f(-1,1,-1); glVertex3f(1,1,-1);
-        /* +Y */ glNormal3f(0,1,0);
-        glVertex3f(-1,1,1); glVertex3f(1,1,1); glVertex3f(1,1,-1); glVertex3f(-1,1,-1);
-        /* -Y */ glNormal3f(0,-1,0);
-        glVertex3f(-1,-1,-1); glVertex3f(1,-1,-1); glVertex3f(1,-1,1); glVertex3f(-1,-1,1);
-        /* -X */ glNormal3f(-1,0,0);
-        glVertex3f(-1,-1,-1); glVertex3f(-1,-1,1); glVertex3f(-1,1,1); glVertex3f(-1,1,-1);
-    glEnd();
-}
-
 static void render_cube(int cell_x, int cell_y, int cell_w, int cell_h,
                         float t) {
     if (cell_h <= 1 || cell_w <= 1) return;
@@ -185,9 +169,7 @@ static void render_cube(int cell_x, int cell_y, int cell_w, int cell_h,
     float umax = (float)sq / (float)g_baked_w;
     float vmax = (float)sq / (float)g_baked_h;
 
-    GLint saved_mm = 0;
-    glGetIntegerv(GL_MATRIX_MODE, &saved_mm);
-    glPushAttrib(GL_ALL_ATTRIB_BITS); /* viewport, scissor, enables, depth/color masks */
+    glPushAttrib(GL_ALL_ATTRIB_BITS); /* viewport, scissor, enables, depth/color masks, matrix mode */
 
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
@@ -236,24 +218,9 @@ static void render_cube(int cell_x, int cell_y, int cell_w, int cell_h,
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
     glEnable(GL_NORMALIZE);
 
-    /* A punchier 3D tumble that still lands flat at the endpoints. The Y
-     * spin (t=0 -> +Z "2D" dead-on, t=1 -> +X "3D" dead-on) is joined by a
-     * forward tilt that reveals the top face and a slight shrink — both
-     * scaled by sin(pi*t), so they peak at mid-rotation and return to zero
-     * at t=0/1. The endpoints therefore stay full-size and face-on (seamless
-     * handoff to the flat text), while the middle clearly reads as a turning
-     * lit cube. The shrink also keeps the tilted cube within the cell. */
-    float punch  = sinf((float)M_PI * t);
-    float tilt   = 18.0f * punch;
-    float shrink = 1.0f - 0.34f * punch;
-    glScalef(shrink, shrink, shrink);
-    glRotatef(tilt, 1.0f, 0.0f, 0.0f);
+    /* Rotate about Y: t=0 shows the +Z ("2D") face dead-on, t=1 brings the
+     * +X ("3D") face dead-on (both flat -> seamless handoff to flat text). */
     glRotatef(-90.0f * t, 0.0f, 1.0f, 0.0f);
-
-    /* Solid body (surface color) fills the cube interior behind the faces. */
-    glDisable(GL_TEXTURE_2D);
-    glColor4f(bg[0], bg[1], bg[2], 1.0f);
-    cube_solid_body();
 
     /* Textured faces modulate the lit brightness, keeping the accent hue. */
     glEnable(GL_TEXTURE_2D);
@@ -275,7 +242,6 @@ static void render_cube(int cell_x, int cell_y, int cell_w, int cell_h,
     glPopMatrix();
     glMatrixMode(GL_MODELVIEW);
     glPopMatrix();
-    glMatrixMode((GLenum)saved_mm);
     glPopAttrib();
 }
 
