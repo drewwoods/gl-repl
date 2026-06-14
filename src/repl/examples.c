@@ -546,6 +546,7 @@ static const char *const g_example_glow_particles[] = {
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
     "// @cfg grid = GRID_THEME_EMBER",
+    "// @cfg grid_extent = GRID_EXTENT_MID",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -5.0f);",
     "glRotatef(15.0f, 1.0f, 0.0f, 0.0f);",
@@ -1710,7 +1711,7 @@ static const char *const g_example_torus_knot[] = {
 static const char *const g_example_whale[] = {
     "// @cfg grid = GRID_THEME_OCEAN",
     "// @cfg axes = AXES_THEME_OFF",
-    "// @cfg grid_extent = 1",
+    "// @cfg grid_extent = GRID_EXTENT_MID",
     "// @cfg light_theme = LIGHT_THEME_DEFAULT",
     "// @cfg normal_vectors = 0",
     "// @cfg vertex_outlines = 0",
