@@ -948,8 +948,8 @@ static void test_catalog_starter_steps_are_append(void) {
 }
 
 static void test_catalog_cfg_lines(void) {
-    /* First Triangle ships a leading `@cfg view_mode = 1` so the flat
-     * triangle renders in true 2D; every other shipped tutorial omits
+    /* First Triangle ships a leading `@cfg view_mode = SCENE_VIEW_2D` so the
+     * flat triangle renders in true 2D; every other shipped tutorial omits
      * cfg (NULL = no presentation overrides). Out-of-range idx → NULL. */
     int first = -1;
     for (int i = 0; i < repl_tutorial_count(); i++) {
@@ -961,10 +961,10 @@ static void test_catalog_cfg_lines(void) {
         const char *const *cfg = repl_tutorial_cfg_lines(first);
         ASSERT_TRUE("First Triangle has cfg lines", cfg != NULL);
         if (cfg) {
-            ASSERT_TRUE("First Triangle cfg first line is view_mode = 1",
+            ASSERT_TRUE("First Triangle cfg first line is view_mode = SCENE_VIEW_2D",
                         cfg[0] != NULL &&
                         strstr(cfg[0], "view_mode") != NULL &&
-                        strstr(cfg[0], "1") != NULL);
+                        strstr(cfg[0], "SCENE_VIEW_2D") != NULL);
             ASSERT_TRUE("First Triangle cfg is NULL-terminated after 1 line",
                         cfg[1] == NULL);
         }

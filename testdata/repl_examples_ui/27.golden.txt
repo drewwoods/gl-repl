@@ -17,7 +17,7 @@
 /* @cfg light_theme = LIGHT_THEME_DEFAULT */
 /* @cfg backdrop = SCENE_BACKDROP_CITY_AND_STARS */
 /* @cfg auto_normals = 0 */
-/* @cfg view_mode = 0 */
+/* @cfg view_mode = SCENE_VIEW_3D */
 /* @cfg camera_rotate = 0 */
 /* @cfg vertex_labels = 1 */
 /* @cfg normal_vectors = 0 */
