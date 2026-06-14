@@ -15,6 +15,7 @@
 #include "ui/core/metrics.h"
 #include "ui/core/theme.h"
 #include "ui/app/layout.h"
+#include "ui/app/view_mode_swatch.h"
 #include "ui/core/gl_2d.h"
 
 /* Menu bar - styled after Header Wireframes v2.
@@ -42,9 +43,9 @@ static const float k_menubar_bottom_rule[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
 /* Right-to-left the pins render from highest index first, so PIN_REPLAY sits
  * at the far right matching the design. PIN_SEARCH fills the gap between the
  * last menu on the left and PIN_REPLAY. */
-enum { PIN_SEARCH = 0, PIN_REPLAY, NUM_PIN_BTNS };
+enum { PIN_SEARCH = 0, PIN_VIEW_MODE, PIN_REPLAY, NUM_PIN_BTNS };
 static const char *g_pin_btn_labels[NUM_PIN_BTNS] = {
-    "search...", "Replay"
+    "search...", "2D/3D", "Replay"
 };
 
 #define PIN_SEARCH_MIN_W 140
@@ -439,12 +440,16 @@ static void menubar_rects(int menu_x[NUM_MENUS], int menu_w[NUM_MENUS],
     pin_w[PIN_REPLAY] = replay_label_w + 12 /* icon */ + 22 /* pads */;
     pin_x[PIN_REPLAY] = right_edge - pin_w[PIN_REPLAY];
 
-    /* PIN_SEARCH - fills the gap between the last menu and PIN_REPLAY. */
+    /* PIN_VIEW_MODE - the 2D/3D toggle swatch, fixed width, left of Replay. */
+    pin_w[PIN_VIEW_MODE] = ui_view_mode_swatch_label_width();
+    pin_x[PIN_VIEW_MODE] = pin_x[PIN_REPLAY] - pin_w[PIN_VIEW_MODE];
+
+    /* PIN_SEARCH - fills the gap between the last menu and PIN_VIEW_MODE. */
     int menus_right = menu_x[NUM_MENUS - 1] + menu_w[NUM_MENUS - 1];
-    int search_w = pin_x[PIN_REPLAY] - menus_right;
+    int search_w = pin_x[PIN_VIEW_MODE] - menus_right;
     if (search_w < PIN_SEARCH_MIN_W) search_w = PIN_SEARCH_MIN_W;
     pin_w[PIN_SEARCH] = search_w;
-    pin_x[PIN_SEARCH] = pin_x[PIN_REPLAY] - search_w;
+    pin_x[PIN_SEARCH] = pin_x[PIN_VIEW_MODE] - search_w;
 }
 
 static int ui_menu_bar_menu_hit(int gx, int gy) {
@@ -1641,6 +1646,13 @@ static void paint_pin_buttons(const UiRenderSnapshot *snap,
                 gl2d_draw_string((float)tx, (float)(by + MENUBAR_TEXT_BASE_Y),
                             g_pin_btn_labels[i], FONT_SMALL);
             }
+        } else if (i == PIN_VIEW_MODE) {
+            /* The loop prologue already drew the cell hover bg + left
+             * divider; the swatch renders only its content (flat text /
+             * cross-fade / lit cube), fully bracketing any 3D state. */
+            ui_view_mode_swatch_render(pin_x[i], by, pin_w[i], bh,
+                                       snap->view_ortho_mode,
+                                       snap->view_projection_mix);
         } else if (i == PIN_REPLAY) {
             const char *label = "Replay";
             int icon_x = pin_x[i] + 10;

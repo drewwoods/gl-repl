@@ -90,6 +90,11 @@ void glr_actions_apply_audio_cfg_mode(int mode);
  * Called by keyboard shortcut handlers. */
 void glr_cfg_cycle_row(int row, int delta);
 
+/* Toggle the 2D/3D view mode (the "View mode" config row). Reuses the
+ * Config-row cycle, so it shares the keybind/menu status + transition.
+ * Called by the menu-bar 2D/3D swatch click. */
+void glr_action_toggle_view_mode(void);
+
 /* Reset the code-panel cursor blink state after navigation moves the cursor. */
 void glr_action_cursor_blink_reset(void);
 

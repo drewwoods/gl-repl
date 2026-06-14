@@ -661,6 +661,21 @@ void glr_scene_load_user_slot(int slot) {
         editor_load_line_to_input(editor_state_edit_line());
 }
 
+/* Toggle the 2D/3D view mode via the same Config-row cycle the Ctrl+Shift+V
+ * binding and the menu use, so the click path gets the status message and
+ * (via the next view-transition tick observing ortho_mode) the animated
+ * 2D<->3D transition. Used by the menu-bar view-mode swatch. */
+void glr_action_toggle_view_mode(void) {
+    int n = 0;
+    const GlrConfigItem *items = glr_config_items(&n);
+    for (int i = 0; i < n; i++) {
+        if (items[i].key == GLR_CONFIG_ORTHO_MODE) {
+            glr_cfg_cycle_row(i, +1);
+            return;
+        }
+    }
+}
+
 void glr_cfg_cycle_row(int row, int delta) {
     const GlrConfigItem *item = glr_config_item_at(row);
 

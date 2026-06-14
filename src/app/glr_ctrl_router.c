@@ -1003,6 +1003,9 @@ static int route_pin_button_hit(const UiHit *hit) {
     case UI_MENU_BAR_PIN_REPLAY:
         replay_handle_pin_clicked();
         break;
+    case UI_MENU_BAR_PIN_VIEW_MODE:
+        glr_action_toggle_view_mode();
+        break;
     case UI_MENU_BAR_PIN_SEARCH:
         editor_search_handle_key(KM_KEY(GLR_SEARCH));
         ui_menu_bar_note_search_opened(repl_state_variables().anim_time);
