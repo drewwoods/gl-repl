@@ -9,8 +9,8 @@
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
 /* @cfg grid = GRID_THEME_PLANES */
-/* @cfg grid_major = 0 */
-/* @cfg grid_extent = 2 */
+/* @cfg grid_major = GRID_MAJOR_1 */
+/* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg xform_guides = 2 */
 /* @cfg light_indicators = 1 */

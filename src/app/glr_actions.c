@@ -356,7 +356,8 @@ static const GlrConfigItem *glr_export_cfg_find_item_by_slug(const char *slug) {
  * value the catalog selects.
  *
  * The slug→table map below covers every enum-valued slug the catalogs
- * actually use today (grid / axes / backdrop). Other enum-shaped slugs
+ * actually use today (grid / axes / grid_extent / grid_major / backdrop /
+ * light_theme). Other enum-shaped slugs
  * — replay, code_panel_layout, vertex_label, etc. — stay integer-only
  * in their saved form because no catalog literal carries them
  * symbolically. Add a table here if a new catalog needs symbolic
@@ -377,6 +378,16 @@ static const char *cfg_axes_theme_symbols[AXES_THEME_COUNT] = {
 #define AXES_THEME_SYMBOL_ENTRY(name, str) [AXES_THEME_##name] = "AXES_THEME_" #name,
     AXES_THEME_LIST(AXES_THEME_SYMBOL_ENTRY)
 #undef AXES_THEME_SYMBOL_ENTRY
+};
+static const char *cfg_grid_extent_symbols[GRID_EXTENT_COUNT] = {
+#define GRID_EXTENT_SYMBOL_ENTRY(name, str) [GRID_EXTENT_##name] = "GRID_EXTENT_" #name,
+    GRID_EXTENT_LIST(GRID_EXTENT_SYMBOL_ENTRY)
+#undef GRID_EXTENT_SYMBOL_ENTRY
+};
+static const char *cfg_grid_major_symbols[GRID_MAJOR_COUNT] = {
+#define GRID_MAJOR_SYMBOL_ENTRY(name, str) [GRID_MAJOR_##name] = "GRID_MAJOR_" #name,
+    GRID_MAJOR_LIST(GRID_MAJOR_SYMBOL_ENTRY)
+#undef GRID_MAJOR_SYMBOL_ENTRY
 };
 static const char *cfg_backdrop_mode_symbols[SCENE_BACKDROP_COUNT] = {
 #define SCENE_BACKDROP_SYMBOL_ENTRY(name, str) [SCENE_BACKDROP_##name] = "SCENE_BACKDROP_" #name,
@@ -401,6 +412,14 @@ static const char *const *cfg_symbol_table_for_slug(const char *slug,
     if (strcmp(slug, "axes") == 0) {
         *count = AXES_THEME_COUNT;
         return cfg_axes_theme_symbols;
+    }
+    if (strcmp(slug, "grid_extent") == 0) {
+        *count = GRID_EXTENT_COUNT;
+        return cfg_grid_extent_symbols;
+    }
+    if (strcmp(slug, "grid_major") == 0) {
+        *count = GRID_MAJOR_COUNT;
+        return cfg_grid_major_symbols;
     }
     if (strcmp(slug, "backdrop") == 0) {
         *count = SCENE_BACKDROP_COUNT;

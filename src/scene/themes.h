@@ -120,7 +120,7 @@ typedef enum {
 typedef enum {
     GRID_MAJOR_LIST(GRID_MAJOR_ENUM_ENTRY)
     GRID_MAJOR_COUNT
-} SceneGridMajorIdx;
+} SceneGridMajor;
 
 /* Grid half-extent from origin along each axis. Values live in
  * SceneRenderConfig.grid_extents and must match this enum order. */
@@ -135,6 +135,6 @@ typedef enum {
 typedef enum {
     GRID_EXTENT_LIST(GRID_EXTENT_ENUM_ENTRY)
     GRID_EXTENT_COUNT
-} SceneGridExtentIdx;
+} SceneGridExtent;
 
 #endif /* SCENE_THEMES_H */
