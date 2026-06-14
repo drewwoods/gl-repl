@@ -475,6 +475,7 @@ UI_APP_SRCS = \
 	src/ui/app/scene_tabs.c \
 	src/ui/app/state.c \
 	src/ui/app/variable_panel_view.c \
+	src/ui/app/view_mode_swatch.c \
 	src/ui/app/color_swatch.c
 
 UI_SUPPORT_SRCS = \

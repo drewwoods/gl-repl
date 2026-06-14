@@ -212,6 +212,14 @@ typedef struct UiRenderSnapshot {
     }                           tutorial;
     int                         example_visible_tag_count;
     int                         user_scene_count;
+
+    /* View-mode swatch (2D/3D toggle, left of the Replay pin). ortho_mode
+     * is the committed target (SceneViewMode); projection_mix is the live
+     * 2D<->3D blend in [0,1] (0 = ortho/2D, 1 = perspective/3D) from
+     * glr_ctrl_view_projection_mix(). The swatch derives its steady/
+     * cross-fade/cube visual purely from this pair. */
+    int                         view_ortho_mode;
+    float                       view_projection_mix;
 } UiRenderSnapshot;
 
 #endif /* UI_SNAPSHOT_H */

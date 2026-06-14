@@ -16,10 +16,13 @@
 #include "ui/app/hit.h"
 #include "ui/app/snapshot.h"
 
-/* Pinned button identifiers (right side of menu bar). Search and Replay
- * buttons that toggle their respective overlays. */
+/* Pinned button identifiers (right side of menu bar). Indices MUST stay
+ * aligned with the internal PIN_* enum in menu_bar.c — the pin hit-test
+ * emits its internal index as item_idx and the router switches on these.
+ * Search opens search, View-mode toggles 2D/3D, Replay toggles replay. */
 enum {
     UI_MENU_BAR_PIN_SEARCH = 0,
+    UI_MENU_BAR_PIN_VIEW_MODE,
     UI_MENU_BAR_PIN_REPLAY,
     UI_MENU_BAR_PIN_COUNT
 };

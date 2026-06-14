@@ -1240,6 +1240,9 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     }
     snap->anim_time           = repl_state_variables().anim_time;
 
+    snap->view_ortho_mode       = glr_state_presentation().ortho_mode;
+    snap->view_projection_mix   = glr_ctrl_view_projection_mix();
+
     snap->user_scene_active_idx   = repl_active_user_scene();
     glr_ctrl_build_scene_tabs(&snap->scene_tabs);
 
