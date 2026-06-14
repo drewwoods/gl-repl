@@ -45,6 +45,7 @@
 #include "editor/inline_rename.h"
 #include "editor/undo.h"
 #include "scene/themes.h"
+#include "scene/view_mode.h"         /* SCENE_VIEW_LIST — derives the view_mode cfg symbols */
 #include "scene/lights.h"           /* scene_lights_apply_theme, scene_light_theme_names */
 #include "subsystems/edit_overlays/edit_overlays.h"
 
@@ -357,7 +358,7 @@ static const GlrConfigItem *glr_export_cfg_find_item_by_slug(const char *slug) {
  *
  * The slug→table map below covers every enum-valued slug the catalogs
  * actually use today (grid / axes / grid_extent / grid_major / backdrop /
- * light_theme). Other enum-shaped slugs
+ * light_theme / view_mode). Other enum-shaped slugs
  * — replay, code_panel_layout, vertex_label, etc. — stay integer-only
  * in their saved form because no catalog literal carries them
  * symbolically. Add a table here if a new catalog needs symbolic
@@ -388,6 +389,13 @@ static const char *cfg_grid_major_symbols[GRID_MAJOR_COUNT] = {
 #define GRID_MAJOR_SYMBOL_ENTRY(name, str) [GRID_MAJOR_##name] = "GRID_MAJOR_" #name,
     GRID_MAJOR_LIST(GRID_MAJOR_SYMBOL_ENTRY)
 #undef GRID_MAJOR_SYMBOL_ENTRY
+};
+/* SCENE_VIEW_LIST is single-arg — X(name) — unlike the (name, str) theme
+ * lists above, so its symbol-entry macro takes one parameter. */
+static const char *cfg_view_mode_symbols[SCENE_VIEW_COUNT] = {
+#define SCENE_VIEW_SYMBOL_ENTRY(name) [SCENE_VIEW_##name] = "SCENE_VIEW_" #name,
+    SCENE_VIEW_LIST(SCENE_VIEW_SYMBOL_ENTRY)
+#undef SCENE_VIEW_SYMBOL_ENTRY
 };
 static const char *cfg_backdrop_mode_symbols[SCENE_BACKDROP_COUNT] = {
 #define SCENE_BACKDROP_SYMBOL_ENTRY(name, str) [SCENE_BACKDROP_##name] = "SCENE_BACKDROP_" #name,
@@ -420,6 +428,10 @@ static const char *const *cfg_symbol_table_for_slug(const char *slug,
     if (strcmp(slug, "grid_major") == 0) {
         *count = GRID_MAJOR_COUNT;
         return cfg_grid_major_symbols;
+    }
+    if (strcmp(slug, "view_mode") == 0) {
+        *count = SCENE_VIEW_COUNT;
+        return cfg_view_mode_symbols;
     }
     if (strcmp(slug, "backdrop") == 0) {
         *count = SCENE_BACKDROP_COUNT;
