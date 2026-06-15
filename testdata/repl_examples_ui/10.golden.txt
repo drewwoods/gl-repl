@@ -8,7 +8,7 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_XZRULER */
+/* @cfg grid = GRID_THEME_PLANES */
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg axes = AXES_THEME_OFF */
@@ -21,8 +21,8 @@
 /* @cfg camera_rotate = 0 */
 /* @cfg vertex_labels = 1 */
 /* @cfg normal_vectors = 0 */
-/* @cfg vertex_outlines = 1 */
-/* @cfg vertex_points = 1 */
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
 /* @cfg poly_highlight = 1 */
 /* @cfg variable_panel = 1 */
 /* @cfg compute_profile = 0 */
@@ -84,45 +84,21 @@ void display(void) {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -12.0000f);
-  glRotatef(30.0000f, 1.0f, 0.0f, 0.0f);
+  glTranslatef(0.0000f, 0.0000f, -7.5000f);
+  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  static float halfExtent, h0, h1, ripple; // grid half-extent; QUAD_STRIP column-pair heights; animated row delta
-
+  static float dist, n, x, y, ang;
   glClearColor(0.1, 0.1, 0.1, 1);
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_LIGHTING);
-  glEnable(GL_NORMALIZE);
-  glShadeModel(GL_SMOOTH);
-  glEnable(GL_LIGHT3);
-  glEnable(GL_LIGHT0);
-  glPointSize(4);
-  glEnable(GL_BLEND);
-  glColor4f(0.176, 0.51392, 0.88, 0.713333);
-  halfExtent = 10; // grid spans [-halfExtent, halfExtent] on x and z
-  glTranslatef(0, -0.25, 0);
-  for(x, -halfExtent, halfExtent) {
-    glBegin(GL_QUAD_STRIP);
-      for(z, -halfExtent, halfExtent) {
-        // sample two random heights for the (x, z) and (x+1, z) corners
-        h0 = rand(x, z);
-        h1 = rand(x+1, z);
-        ripple = 0.25 * sin((100+t/2) * (z/200+4));
-        // NOTE: both branches add ripple to both heights, so the conditional is
-        //       currently dead. Likely intent: alternate which corner moves.
-        if(fmod(x, 2) == 0) {
-          h0 = h0 + ripple;
-          h1 = h1 + ripple;
-        }
-        if(abs(fmod(x, 2)) == 1) {
-          h1 = h1 + ripple;
-          h0 = h0 + ripple;
-        }
-        glVertex3f(x, h0, z);
-        glVertex3f(x+1, h1, z);
-      }
-    glEnd();
-  }
+  dist = 1.4;
+  n = 400;
+  glBegin(GL_LINE_LOOP);
+    for(i, 0, n) {
+      ang = TAU * i/n;
+      x = dist * cos(t*ang) + cos(ang);
+      y = dist * sin(t*ang) + sin(ang);
+      glVertex3f(x, y, 0);
+    }
+  glEnd();
