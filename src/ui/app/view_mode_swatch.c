@@ -11,10 +11,8 @@
  */
 #include "ui/app/view_mode_swatch.h"
 
-#include <math.h>
 #include <string.h>
 
-#include "gl_includes.h"
 #include "config.h"             /* FONT_SMALL, FONT_SMALL_W/H */
 #include "ui/core/theme.h"
 #include "ui/core/gl_2d.h"
@@ -165,7 +163,6 @@ static void render_cube(int cell_x, int cell_y, int cell_w, int cell_h,
 
     ensure_baked(sx, sy, sq, sq);
 
-    const float *bg = ui_rgba(UI_TOK_SURFACE);
     float umax = (float)sq / (float)g_baked_w;
     float vmax = (float)sq / (float)g_baked_h;
 
