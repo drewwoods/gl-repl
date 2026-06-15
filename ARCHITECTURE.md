@@ -997,6 +997,102 @@ state access. REPL-aware overlays now live under `src/scene/guides/`
 and consume the explicit `SceneGuideSnapshot` rather than pulling globals
 directly.
 
+### Grid Edge-Fade Dissolve (world-radial alpha)
+
+The reference-grid line themes dissolve their **alpha to 0 by world
+radial distance from the origin** (`sqrt(x² + z²)`), reaching full
+transparency at the grid extent. This is what lets the grid fade into
+whatever backdrop is behind it. It replaced an older GL-fog recede that
+faded the grid to the **clear color** — fine on a bare dark background,
+but wrong once a backdrop paints a different sky, where the grid faded
+to a dark smudge instead of the sky.
+
+Pieces, all in `src/scene/grid.c`:
+
+* `scene_grid_theme_uses_edge_fade(theme)` — the membership predicate
+  (declared in `grid.h`, pure, test-visible). True for the table-driven
+  line themes (minus FOG) plus the two custom-path line grids (XZ Ruler,
+  Star Chart).
+* `grid_edge_fade_build()` — once per frame, caches `fade_end` / `band`
+  and the offset-0 breakpoint ramp (used by the origin axes, which run
+  through the origin so radius == |along|). `fade_end = extent` steady,
+  and `extent * opacity` so the front sweeps inward during a hide
+  transition (the same machinery is the grid's in/out animation — there
+  is no separate transition fog for these themes).
+* `draw_grid_line_pair()` / `grid_radial_mul()` — for each grid line at
+  perpendicular offset `v`, subdivides at the radii where
+  `sqrt(v² + a²)` crosses `fade_start`/`fade_end` and scales per-vertex
+  alpha by the radial ramp. `GRID_EDGE_FADE_BAND` is the ramp width.
+* `grid_apply_far_fog()` early-returns with `glDisable(GL_FOG)` for any
+  edge-fade theme, so they never inherit the clear-color distance fog.
+
+**Two structural traps this design walked into — both easy to repeat:**
+
+1. **Per-vertex alpha needs subdivision, and the fade axis matters.**
+   A grid line drawn as a single 2-vertex `GL_LINES` segment can only
+   carry endpoint alphas; you cannot express "opaque interior, fades at
+   the ends" without splitting it. The first cut subdivided and faded by
+   position *along each line's own length*. That looked right in
+   isolation but **left the grazing-horizon smudge intact**: the lines
+   that pile up at the horizon are the ones running *across* the view
+   (large perpendicular offset), and an along-length fade leaves their
+   **centers** — exactly the stacked pixels at screen-center horizon — at
+   full alpha. They still saturate to the line color. The fade has to be
+   **radial** (by distance from the origin) so a cross-line is dimmed by
+   its offset at its center, not just at its far ends. Lesson: when a fade
+   is meant to read radially, fading along one axis is not an
+   approximation of it — it misses the perpendicular family entirely.
+
+2. **Disabling fog per-theme silently misses the custom themes.** The
+   fog-disable was first wired only for the spec-table themes, so the
+   *default* grid (XZ Ruler, a custom-path theme) kept fogging to the
+   clear color and still showed the smudge — the exact symptom the change
+   was meant to remove. Any "turn this off for grids" switch must be
+   keyed on a predicate that covers the custom-path themes too, not on
+   the spec-table membership that's convenient to reach for. The fog
+   regression test (`test_scene_grid_fog_matches_predicate`) now asserts
+   fog emission against `scene_grid_theme_uses_edge_fade()` for *every*
+   theme at *every* extent, so a theme added to one set but not the other
+   fails CI.
+
+Why overdraw saturates to the line color at all: standard
+`GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA` blending of N stacked layers of
+color C over background B converges to `C + (B − C)·(1−a)^N → C`. At a
+grazing angle the foreshortened far field stacks many translucent lines
+into a few horizon pixels, so coverage saturates and the band tends to
+the (dark) line color regardless of the backdrop. Fading alpha to 0 by
+distance bounds N before it saturates; a blend-function change
+(`GL_MIN`/`GL_MAX`) bounds accumulation but discards the soft alpha and
+anti-aliasing, so it was rejected.
+
+Before (clear-color fog → dark horizon band) and after (world-radial
+alpha dissolve), same theme/camera/backdrop:
+
+![Grid fading to a dark clear-color smudge at the horizon](docs/images/grid-fade-smudge-before.png)
+
+![Grid dissolving cleanly into the backdrop with the radial fade](docs/images/grid-fade-radial-after.png)
+
+**Per-theme fade ownership** (which mechanism each grid theme dissolves
+with — keep this current when adding a theme):
+
+| Theme(s) | Dissolve mechanism |
+|---|---|
+| Classic, Tron, Ember, Faint, Aurora, Synthwave | World-radial alpha (spec-table, via `draw_grid_line_pair`) |
+| XZ Ruler, Star Chart | World-radial alpha (custom path, but lines route through `draw_grid_line_pair`; in the edge-fade predicate) |
+| Focus | Own alpha fade by distance from the focus point (bounded magnifier) |
+| Adaptive Planes | Own alpha fade by camera orientation (vertical planes) |
+| Ocean, Frozen Lake | Intentional **environment fog/tint** to their *own* color (underwater teal / glacial), full-frame — not the clear color |
+| Fog | Fog by design (EXP2 to clear color) |
+| Radar | Opts into NV distance fog for its rings (covered by `test_nv_fog_distance_radial_optin`) |
+| Tilled Field | Opaque depth-written terrain — no translucent-line stacking |
+
+Open follow-up: Radar, Fog, Tilled Field, Focus, and Adaptive Planes are
+*not* on the world-radial path. Ocean/Frozen are deliberate (they own
+their atmosphere and fade to their own color). The others can still fog
+to the clear color when a backdrop is on; converting Radar (fade its
+rings by radius — a natural radial fit) and gating the residual
+clear-color fog on `backdrop == OFF` would close the gap.
+
 ### Edit Overlays: polygon outlines on geometry
 
 `src/subsystems/edit_overlays/edit_overlays.c` draws the "Vertex

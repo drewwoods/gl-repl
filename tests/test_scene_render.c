@@ -705,10 +705,17 @@ static void test_scene_grid_fog_matches_predicate(void) {
                 gl_stub_counts[GL_STUB_glFogfv];
 
             char lbl[80];
-            if (is_far) {
-                /* FAR is deliberately NOT in the predicate: its LINEAR
-                 * distance fog fires for every theme, independent of
-                 * scene_grid_theme_uses_fog. Lock that in. */
+            if (scene_grid_theme_uses_edge_fade(th)) {
+                /* Edge-fade line themes dissolve to the backdrop via
+                 * per-vertex alpha, so they emit no fog at ANY extent
+                 * (FAR included) or transition phase. */
+                snprintf(lbl, sizeof lbl,
+                         "theme=%d edge-fade: never fogs", th);
+                ASSERT_INT(lbl, (fog > 0) ? 1 : 0, 0);
+            } else if (is_far) {
+                /* FAR is deliberately NOT in the uses_fog predicate: its
+                 * LINEAR distance fog fires for every non-edge-fade
+                 * theme, independent of scene_grid_theme_uses_fog. */
                 snprintf(lbl, sizeof lbl,
                          "theme=%d FAR extent always fogs", th);
                 ASSERT_INT(lbl, (fog > 0) ? 1 : 0, 1);
