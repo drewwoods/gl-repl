@@ -8,12 +8,12 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_OFF */
+/* @cfg grid = GRID_THEME_XZRULER */
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg xform_guides = 2 */
-/* @cfg light_indicators = 0 */
+/* @cfg light_indicators = 1 */
 /* @cfg light_theme = LIGHT_THEME_DEFAULT */
 /* @cfg backdrop = SCENE_BACKDROP_OFF */
 /* @cfg auto_normals = 0 */
@@ -21,8 +21,8 @@
 /* @cfg camera_rotate = 0 */
 /* @cfg vertex_labels = 1 */
 /* @cfg normal_vectors = 0 */
-/* @cfg vertex_outlines = 0 */
-/* @cfg vertex_points = 0 */
+/* @cfg vertex_outlines = 1 */
+/* @cfg vertex_points = 1 */
 /* @cfg poly_highlight = 1 */
 /* @cfg variable_panel = 1 */
 /* @cfg compute_profile = 0 */
@@ -84,121 +84,58 @@ void display(void) {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -7.5000f);
-  glRotatef(4.0000f, 1.0f, 0.0f, 0.0f);
+  glTranslatef(0.0000f, 0.0000f, -5.0000f);
+  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
-  glTranslatef(-0.0000f, 0.7000f, -0.0000f);
+  glTranslatef(-0.0000f, -0.8000f, -0.0000f);
 --- header_post ---
 --- source ---
-  static float pulse, bellR, bellH; // breath phase; bell radius/height pulse in opposition
-  static float ang, phi, phi2, rad, rad2, topY, botY; // bell strip scratch
-  static float ax, az, sway, drop; // tentacle scratch
-  static float segs = 26; // bell azimuth segments
-  static float rings = 9; // bell latitude strips
-  static float tentacles = 15; // @tune
-  static float tentLen = 2.4; // @tune
-
-  // one tentacle: a swaying line strip; alpha fades toward the tip and the
-  // pulse tugs the strand upward (the drop*drop term makes tips lag the bell)
-  tentacle(angAt, attach, len, phase, amp, cr, cg, cb) {
-    ax = cos(angAt)*attach;
-    az = sin(angAt)*attach;
-    glBegin(GL_LINE_STRIP);
-      for(s, 0, 14) {
-        drop = s/13;
-        sway = amp*(sin(t*1.4 + phase + drop*3.5) + 0.4*sin(t*2.3 + phase*1.7 + drop*6))*drop;
-        glColor4f(cr, cg, cb, 0.04 + 0.40*(1 - drop)*(1 - drop));
-        glVertex3f(ax*(1 + 0.2*drop) + sway, topY - drop*len + 0.15*pulse*drop*drop, az*(1 + 0.2*drop) + sway*0.55);
-      }
+  tri() {
+    glBegin(GL_TRIANGLES);
+      glNormal3f(0, 0, 1);
+      glVertex3f(-0.3, -0.3, 0);
+      glVertex3f(0.3, -0.3, 0);
+      glVertex3f(0, 0.4, 0);
     glEnd();
   }
-  glClearColor(0.015, 0.03, 0.07, 1);
-  // Everything glows: additive blend with depth WRITES off (reads stay on).
-  // glDepthMask(GL_FALSE) is the classic translucency trick - without it the
-  // bell's far side would z-fight its near side and the tentacles would
-  // punch holes through the bell.
-  glDisable(GL_LIGHTING);
+
+  glClearColor(0.08, 0.08, 0.1, 1);
   glEnable(GL_DEPTH_TEST);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-  glEnable(GL_LINE_SMOOTH);
-  glEnable(GL_POINT_SMOOTH);
-  glDepthMask(GL_FALSE);
-  pulse = sin(t*1.6);
-  bellR = 1.5*(1 + 0.10*pulse);
-  bellH = 1.1*(1 - 0.14*pulse);
-
-  // marine snow: slow upward drift, wrapped with rem() so the field loops
-  glPointSize(3);
-  glBegin(GL_POINTS);
-    for(p, 0, 110) {
-      glColor4f(0.55, 0.75, 0.95, 0.08 + 0.22*rand(p, 4));
-      // rise speed 0.15..0.5 per mote; rem() wraps y into [-3.2, 3.2]
-      glVertex3f(4.5*rand2(p, 0) + 0.2*sin(t*0.4 + p), rem(3.2*rand2(p, 1) + t*(0.15 + 0.35*rand(p, 3)), 6.4), 4.5*rand2(p, 2));
-    }
-  glEnd();
-
-  // gentle bob + tilt for the whole animal
-  glTranslatef(0.2*sin(t*0.4), 0.18*sin(t*0.5), 0);
-  glRotatef(8*sin(t*0.23), 0, 0, 1);
-
-  // bell: latitude strips from crown to just past the equator (it curls
-  // under). Ring geometry depends only on i, so it is hoisted out of the
-  // inner loop - per-vertex assignments would blow the flat-command budget.
-  for(i, 0, rings) {
-    phi = (i/rings)*PI*0.52;
-    phi2 = ((i+1)/rings)*PI*0.52;
-    rad = bellR*sin(phi);
-    topY = bellH*cos(phi);
-    rad2 = bellR*sin(phi2);
-    botY = bellH*cos(phi2);
-    glBegin(GL_TRIANGLE_STRIP);
-      for(j, 0, segs+1) {
-        ang = j*TAU/segs;
-        glColor4f(0.10 + 0.30*i/rings, 0.35 + 0.45*i/rings, 0.95, 0.05 + 0.20*(i/rings)*(i/rings) + 0.04*sin(ang*6 - t*2));
-        glVertex3f(rad*cos(ang), topY, rad*sin(ang));
-        glColor4f(0.10 + 0.30*(i+1)/rings, 0.35 + 0.45*(i+1)/rings, 0.95, 0.05 + 0.20*((i+1)/rings)*((i+1)/rings) + 0.04*sin(ang*6 - t*2));
-        glVertex3f(rad2*cos(ang), botY, rad2*sin(ang));
-      }
-    glEnd();
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_NORMALIZE);
+  glEnable(GL_COLOR_MATERIAL);
+  glColor3f(1, 0.6, 0.3);
+  glPushMatrix();
+    glTranslatef(0, 0, 2);
+    glRotatef(45, 0, 1, 0);
+    glTranslatef(0, 0, -2);
+    tri();
+  glPopMatrix();
+  glColor3f(0.4, 0.9, 0.6);
+  glPushMatrix();
+    glTranslatef(-2, 0, 0);
+    glRotatef(3*t, 0, 1, 0);
+    glScalef(1.5, 0.5, 1);
+    tri();
+  glPopMatrix();
+  glColor3f(0.6, 0.7, 1);
+  for(i, 0, 6) {
+    glPushMatrix();
+      glRotatef(i*60, 0, 1, 0);
+      glTranslatef(2.5, 0, 0);
+      glScalef(0.6, 0.6, 0.6);
+      tri();
+    glPopMatrix();
   }
-
-  // scalloped frill hanging off the rim
-  rad = bellR*sin(PI*0.52);
-  topY = bellH*cos(PI*0.52);
-  glBegin(GL_TRIANGLE_STRIP);
-    for(j, 0, segs+1) {
-      ang = j*TAU/segs;
-      sway = -0.18 - 0.10*pulse + 0.10*sin(ang*9 + t*2.6);
-      glColor4f(0.45, 0.85, 1, 0.3);
-      glVertex3f(rad*cos(ang), topY, rad*sin(ang));
-      glColor4f(0.45, 0.85, 1, 0.03);
-      glVertex3f(rad*1.04*cos(ang), topY + sway, rad*1.04*sin(ang));
-    }
-  glEnd();
-  glLineWidth(1.6);
-  for(k, 0, tentacles) {
-    tentacle(k*TAU/tentacles + 0.2*rand2(k, 1), bellR*0.85, tentLen*(0.75 + 0.5*rand(k, 2)), rand(k, 3)*TAU, 0.3, 0.35, 0.75, 1.0);
-  }
-  // four thicker oral arms under the crown
-  glLineWidth(3.2);
-  for(k, 0, 4) {
-    tentacle(k*TAU/4 + 0.4, bellR*0.3, tentLen*1.2, k*1.7, 0.55, 1.0, 0.45, 0.75);
-  }
-  glLineWidth(1);
-
-  // bioluminescent core: two stacked soft points
-  glPointSize(30);
-  glBegin(GL_POINTS);
-    glColor4f(1, 0.55, 0.75, 0.3);
-    glVertex3f(0, bellH*0.3, 0);
-  glEnd();
-  glPointSize(13);
-  glBegin(GL_POINTS);
-    glColor4f(1, 0.8, 0.9, 0.55);
-    glVertex3f(0, bellH*0.32, 0);
-  glEnd();
-
-  // leave shared GL state the way we found it
-  glDepthMask(GL_TRUE);
-  glDisable(GL_BLEND);
+  glColor3f(1, 0.4, 0.8);
+  glPushMatrix();
+    glTranslatef(0, 2, 0);
+    glScalef(0.8, 0.8, 0.8);
+    tri();
+  glPopMatrix();
+  glColor3f(1, 1, 0.4);
+  glPushMatrix();
+    glRotatef(t*30, 0, 1, 0);
+    tri();
+  glPopMatrix();

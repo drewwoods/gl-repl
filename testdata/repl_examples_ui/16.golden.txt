@@ -8,12 +8,12 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_EMBER */
+/* @cfg grid = GRID_THEME_OFF */
 /* @cfg grid_major = GRID_MAJOR_1 */
-/* @cfg grid_extent = GRID_EXTENT_MID */
+/* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg xform_guides = 2 */
-/* @cfg light_indicators = 1 */
+/* @cfg light_indicators = 0 */
 /* @cfg light_theme = LIGHT_THEME_DEFAULT */
 /* @cfg backdrop = SCENE_BACKDROP_OFF */
 /* @cfg auto_normals = 0 */
@@ -24,7 +24,7 @@
 /* @cfg vertex_outlines = 0 */
 /* @cfg vertex_points = 0 */
 /* @cfg poly_highlight = 1 */
-/* @cfg variable_panel = 1 */
+/* @cfg variable_panel = 0 */
 /* @cfg compute_profile = 0 */
 /* @cfg memory_profile = 0 */
 /* @cfg code_panel = 1 */
@@ -84,44 +84,34 @@ void display(void) {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -5.0000f);
-  glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(10.0000f, 0.0f, 1.0f, 0.0f);
+  glTranslatef(0.0000f, 0.0000f, -13.5000f);
+  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  static float radius, angle, x, y, z; // per-particle: orbit radius, base angle, world pos
-  static float count = 160; // number of glow points
-  static float radMin = 0.4; // nearest orbital radius (xz plane)
-  static float radSpan = 1.8; // additional radius range; radius in [radMin, radMin+radSpan]
-  static float orbitRate = 0.4; // angular speed of the xz orbit (animates with t)
-  static float yWobbleFreq = 1.3; // y wobble frequency relative to the base angle
-  static float yWobbleRate = 0.6; // y wobble time-rate (animates with t)
-  static float yAmp = 0.9; // y wobble amplitude
-
-  glClearColor(0.1, 0.1, 0.1, 1);
-  // Glow sprites: additive blend + distance-attenuated point size.
-  // Each particle orbits in xz at (radius, angle) while y wobbles independently.
-  glDisable(GL_LIGHTING);
-  glDisable(GL_DEPTH_TEST);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-  glEnable(GL_POINT_SMOOTH);
-  glPointSize(24);
-  glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){0.2, 0, 0.15});
+  static float flakeCount = 550; // @tune
+  static float flakeX, flakeY; // particle position
+  static float drift, fall; // per-flake horizontal drift, vertical fall speed
+  static float depth; // [0,1] random; depth and shade both derive from it
+  static float driftMax = 0.5; // max horizontal drift magnitude
+  static float fallBase = -1.5; // base fall speed (NOT gravity)
+  static float wrapX = 12, wrapY = 5; // half-extents of the wrap region
+  static float depthScale = 10; // multiplier on `depth` for z position
+  glClearColor(0.05, 0.05, 0.05, 1);
+  glEnable(GL_DEPTH_TEST);
+  glPointSize(10);
   glBegin(GL_POINTS);
-    for(i, 0, count) {
-      angle = rand(i, 0)*TAU; // random base angle in [0, TAU)
-      radius = radMin + rand(i, 1)*radSpan; // random radius in the configured range
-      x = cos(angle + t*orbitRate)*radius;
-      y = sin(angle*yWobbleFreq + t*yWobbleRate)*yAmp;
-      z = sin(angle + t*orbitRate)*radius;
-      // per-particle base color: rand seeds 2/3/4 keep r/g/b stable across frames
-      glColor4f(0.4 + 0.6*rand(i, 2), 0.3 + 0.5*rand(i, 3), 0.8 + 0.2*rand(i, 4), 0.55);
-      glVertex3f(x, y, z);
+    for(p, 0, flakeCount) {
+      drift = driftMax * rand2(p, 1);
+      flakeX = rem(wrapX * rand2(p,4) + t * drift, 2 * wrapX);
+
+      fall = fallBase - rand(p, 2);
+      flakeY = rem(wrapY * rand2(p,3) + t * fall, 2 * wrapY);
+
+      depth = rand(p, 5); // z affects color and distance
+
+      glColor3f(0.5 + 0.5 * depth, 0.5 + 0.5 * depth, 0.5 + 0.5 * depth);
+      glVertex3f(flakeX, flakeY, depthScale * depth);
     }
   glEnd();
-  glDisable(GL_POINT_SMOOTH);
-  glDisable(GL_BLEND);
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_LIGHTING);

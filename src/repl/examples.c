@@ -590,58 +590,7 @@ static const char *const g_example_glow_particles[] = {
     NULL
 };
 
-/* Example 13: Procedural terrain - rand(x,z) samples heights at each grid vertex,
- * building GL_QUAD_STRIP rows via nested for-loops. An animated sine ripple
- * (`ripple`) is added per row each frame, giving the flat random field a
- * rolling wave motion. Lit with GL_LIGHT0 + GL_LIGHT3, smooth-shaded. */
-
-static const char *const g_example_random_surface[] = {
-    "// camera",
-    "glTranslatef(0.0f, 0.0f, -12.0f);",
-    "glRotatef(30.0f, 1.0f, 0.0f, 0.0f);",
-    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
-    "glTranslatef(0.0f, 0.0f, 0.0f);",
-    "",
-    "static float halfExtent, h0, h1, ripple; // grid half-extent; QUAD_STRIP column-pair heights; animated row delta",
-    "glClearColor(0.1, 0.1, 0.1, 1.0);",
-    "glEnable(GL_DEPTH_TEST);",
-    "glEnable(GL_LIGHTING);",
-    "glEnable(GL_NORMALIZE);",
-    "glShadeModel(GL_SMOOTH);",
-    "glEnable(GL_LIGHT3);",
-    "glEnable(GL_LIGHT0);",
-    "glPointSize(4);",
-    "glEnable(GL_BLEND);",
-    "glColor4f(0.176, 0.51392, 0.88, 0.713333);",
-    "halfExtent = 10; // grid spans [-halfExtent, halfExtent] on x and z",
-    "glTranslatef(0, -0.25, 0);",
-    "for (x, -halfExtent, halfExtent) {",
-    "  glBegin(GL_QUAD_STRIP);",
-    "    for (z, -halfExtent, halfExtent) {",
-    "      // sample two random heights for the (x, z) and (x+1, z) corners",
-    "      h0 = rand(x, z);",
-    "      h1 = rand(x+1, z);",
-    "      ripple = 0.25 * sin((100+t/2) * (z/200+4));",
-    "      // NOTE: both branches add ripple to both heights, so the conditional is",
-    "      //       currently dead. Likely intent: alternate which corner moves.",
-    "      if(fmod(x, 2) == 0) {",
-    "        h0 = h0 + ripple;",
-    "        h1 = h1 + ripple;",
-    "      }",
-    "      if(abs(fmod(x, 2)) == 1) {",
-    "        h1 = h1 + ripple;",
-    "        h0 = h0 + ripple;",
-    "      }",
-    "      glVertex3f(x, h0, z);",
-    "      glVertex3f(x+1, h1, z);",
-    "    }",
-    "  glEnd();",
-    "}",
-    NULL
-};
-
-
-/* Example 14: Animated wave surface - y = sin(freq*x + t)*cos(freq*z + zPhase*t)*amp
+/* Example 13: Animated wave surface - y = sin(freq*x + t)*cos(freq*z + zPhase*t)*amp
  * rendered as GL_TRIANGLE_STRIP rows. Normals are the exact analytic partial
  * derivatives of the wave function (no finite-difference approximation), giving
  * correct smooth lighting across all four lights. Per-vertex color varies with
@@ -698,7 +647,7 @@ static const char *const g_example_waves[] = {
     NULL
 };
 
-/* Example 15: Animated spirograph curve - closed parametric line loop
+/* Example 14: Animated spirograph curve - closed parametric line loop
  * driven by t, showing dense iteration and trig-heavy vertex generation. */
 static const char *const g_example_spirograph_curve[] = {
     "// @cfg vertex_outlines = 0",
@@ -723,7 +672,7 @@ static const char *const g_example_spirograph_curve[] = {
     NULL
 };
 
-/* Example 16: Traveling ripple ring - circular line loop with a narrow
+/* Example 15: Traveling ripple ring - circular line loop with a narrow
  * modulo-selected radial wave, exercising fmod math and conditional edits. */
 static const char *const g_example_traveling_ripple_ring[] = {
     "// @cfg vertex_outlines = 0",
@@ -2255,9 +2204,6 @@ static const ReplExampleEntry g_example_entries[] = {
       EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS,
       "Curves & surfaces" },
     { "Animated wave surface (analytic normals)", g_example_waves,
-      EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS,
-      "Curves & surfaces" },
-    { "Procedural terrain (rand grid + sin ripple)", g_example_random_surface,
       EXAMPLE_TAG_3D | EXAMPLE_TAG_POLYGONS,
       "Curves & surfaces" },
     { "Animated spirograph curve", g_example_spirograph_curve,

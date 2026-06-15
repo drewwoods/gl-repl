@@ -8,7 +8,7 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_PLANES */
+/* @cfg grid = GRID_THEME_XZRULER */
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg axes = AXES_THEME_OFF */
@@ -21,8 +21,8 @@
 /* @cfg camera_rotate = 0 */
 /* @cfg vertex_labels = 1 */
 /* @cfg normal_vectors = 0 */
-/* @cfg vertex_outlines = 1 */
-/* @cfg vertex_points = 1 */
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
 /* @cfg poly_highlight = 1 */
 /* @cfg variable_panel = 1 */
 /* @cfg compute_profile = 0 */
@@ -84,76 +84,26 @@ void display(void) {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -8.0000f);
-  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
+  glTranslatef(0.0000f, 0.0000f, -9.0000f);
+  glRotatef(25.0000f, 1.0f, 0.0f, 0.0f);
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  static float u;
-  // collapse(dst, lo, hi, blend): collapse one Bezier edge in place.
-  collapse(dst, lo, hi, blend) {
-    A[dst] = A[lo] + (A[hi] - A[lo])*blend;
-    B[dst] = B[lo] + (B[hi] - B[lo])*blend;
-    C[dst] = C[lo] + (C[hi] - C[lo])*blend;
-  }
-
-  glClearColor(0.07, 0.08, 0.1, 1);
-  glEnable(GL_DEPTH_TEST);
-  glDisable(GL_LIGHTING);
-  glLineWidth(3);
-  // Seed A/B/C with control points, then overwrite them with collapse().
-  glColor3f(1, 0.55, 0.2);
-  glBegin(GL_LINE_STRIP);
-    for(i, 0, 48) {
-      A[0] = -3.2;
-      B[0] = -1.8;
-      C[0] = -0.8;
-      A[1] = -1.1 + 0.4*sin(t*0.9);
-      B[1] = 2.4;
-      C[1] = -0.1;
-      A[2] = 1.0;
-      B[2] = -2.1 + 0.5*cos(t*0.7);
-      C[2] = 0.5;
-      A[3] = 3.1;
-      B[3] = 1.6;
-      C[3] = 1.0 + 0.25*sin(t*0.5);
-      u = i/48.0;
-      collapse(0, 0, 1, u);
-      collapse(1, 1, 2, u);
-      collapse(2, 2, 3, u);
-      collapse(0, 0, 1, u);
-      collapse(1, 1, 2, u);
-      collapse(0, 0, 1, u);
-      glVertex3f(A[0], B[0], C[0]);
+  static float n, p, q, ang, rr, x, y, z; // samples, winds, angle, ring radius, coords
+  glClearColor(0.05, 0.05, 0.08, 1);
+  glLineWidth(2);
+  n = 400; // samples around the closed curve
+  p = 2; // turns around the torus axis
+  q = 3; // turns through the torus hole
+  glBegin(GL_LINE_LOOP);
+    for(i, 0, n) {
+      ang = TAU * i/n;
+      rr = 2.0 + cos(q*ang); // distance from the axis
+      x = rr * cos(p*ang);
+      y = rr * sin(p*ang);
+      z = sin(q*ang);
+      glColor3f(0.5 + 0.5*sin(ang + t), 0.5 + 0.5*sin(ang + t + 2.0), 0.5 + 0.5*sin(ang + t + 4.0));
+      glVertex3f(x, y, z);
     }
-  glEnd();
-
-  // Rebuild the same control polygon from scratch-array state.
-  A[0] = -3.2;
-  B[0] = -1.8;
-  C[0] = -0.8;
-  A[1] = -1.1 + 0.4*sin(t*0.9);
-  B[1] = 2.4;
-  C[1] = -0.1;
-  A[2] = 1.0;
-  B[2] = -2.1 + 0.5*cos(t*0.7);
-  C[2] = 0.5;
-  A[3] = 3.1;
-  B[3] = 1.6;
-  C[3] = 1.0 + 0.25*sin(t*0.5);
-  glColor3f(0.25, 0.45, 0.95);
-  glBegin(GL_LINE_STRIP);
-    glVertex3f(A[0], B[0], C[0]);
-    glVertex3f(A[1], B[1], C[1]);
-    glVertex3f(A[2], B[2], C[2]);
-    glVertex3f(A[3], B[3], C[3]);
-  glEnd();
-  glPointSize(9);
-  glColor3f(1, 0.9, 0.35);
-  glBegin(GL_POINTS);
-    glVertex3f(A[0], B[0], C[0]);
-    glVertex3f(A[1], B[1], C[1]);
-    glVertex3f(A[2], B[2], C[2]);
-    glVertex3f(A[3], B[3], C[3]);
   glEnd();
