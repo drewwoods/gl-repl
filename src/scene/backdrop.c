@@ -1010,6 +1010,7 @@ static void draw_nebula(
  * white-out, which is this same tint) renders over it seamlessly. */
 static void polar_sky_color(float h, float *r, float *g, float *b) {
     static const struct { float h, r, g, b; } stops[] = {
+        {  -1.00f, 0.12f, 0.24f, 0.32f },
         {  0.00f, SCENE_GLACIAL_TINT_R, SCENE_GLACIAL_TINT_G,
                   SCENE_GLACIAL_TINT_B },
         {  0.18f, 0.50f, 0.66f, 0.82f },
@@ -1198,6 +1199,36 @@ static const BackdropEnvLight k_nebula_lights[] = {
       .specular = { 0.08f, 0.07f, 0.20f, 1.0f } },
 };
 
+/* Polar-day environment lights: a cool, diffuse arctic palette matched
+ * to the dome's glacial-tint → steel-blue gradient.  The dome is
+ * directionless (no sun disc), so the key is zenith-down and neutral-
+ * cool rather than warm-directional.  Same GL_LIGHT4..6 contract. */
+static const BackdropEnvLight k_polar_day_lights[] = {
+    /* Cool white zenith key, straight overhead — the open arctic sky. */
+    { GL_LIGHT4,
+      .pos      = { 1.0f,  0.2f,  0.0f, 0.0f },
+      .diffuse  = { 0.28f, 0.36f, 0.42f, 1.0f },
+      .ambient  = { 0.10f, 0.12f, 0.15f, 1.0f },
+      .specular = { 0.22f, 0.34f, 0.48f, 1.0f } },
+    /* Steel-blue horizon fill from low behind the viewer. */
+    { GL_LIGHT5,
+      .pos      = { 0.15f, 0.20f,  1.00f, 0.0f },
+      .diffuse  = { 0.30f, 0.44f, 0.62f, 1.0f },
+      .ambient  = { 0.02f, 0.03f, 0.05f, 1.0f },
+      .specular = { 0.22f, 0.34f, 0.48f, 1.0f } },
+    /* Pale glacial bounce from below — the ice-sheet reflection. */
+    { GL_LIGHT6,
+      .pos      = { -1.0f, -0.2f,  0.10f, 0.0f },
+      .diffuse  = { 0.28f, 0.36f, 0.42f, 1.0f },
+      .ambient  = { 0.00f, 0.00f, 0.00f, 1.0f },
+      .specular = { 0.18f, 0.24f, 0.30f, 1.0f } },
+    { GL_LIGHT7,
+      .pos      = { -0.1f, -0.2f,  -1.0f, 0.0f },
+      .diffuse  = { 0.28f, 0.36f, 0.42f, 1.0f },
+      .ambient  = { 0.00f, 0.00f, 0.00f, 1.0f },
+      .specular = { 0.18f, 0.24f, 0.30f, 1.0f } },
+};
+
 static void backdrop_apply_env_lights(const BackdropEnvLight *lights, int n) {
     for (int i = 0; i < n; i++) {
         glLightfv(lights[i].id, GL_POSITION, lights[i].pos);
@@ -1227,6 +1258,12 @@ void scene_backdrop_setup_lights(const SceneFrameRenderContext *frame_ctx) {
         backdrop_apply_env_lights(
             k_nebula_lights,
             (int)(sizeof(k_nebula_lights) / sizeof(k_nebula_lights[0])));
+        break;
+    case SCENE_BACKDROP_POLAR_DAY:
+    case SCENE_BACKDROP_POLAR_DAY_SNOW:
+        backdrop_apply_env_lights(
+            k_polar_day_lights,
+            (int)(sizeof(k_polar_day_lights) / sizeof(k_polar_day_lights[0])));
         break;
     default:
         break;
