@@ -574,7 +574,7 @@ static void draw_starry_sky(
  * dusk purple -> near-black night blue at the zenith. */
 static void sunset_sky_color(float h, float *r, float *g, float *b) {
     static const struct { float h, r, g, b; } stops[] = {
-        { -0.12f, 0.05f, 0.02f, 0.08f },
+        { -0.32f, 0.05f, 0.02f, 0.08f },
         {  0.00f, 0.46f, 0.10f, 0.34f },
         {  0.16f, 0.28f, 0.08f, 0.33f },
         {  0.45f, 0.09f, 0.05f, 0.19f },
@@ -1154,22 +1154,22 @@ typedef struct BackdropEnvLight {
 static const BackdropEnvLight k_sunset_lights[] = {
     /* Golden-pink sun key from the disc's direction (low, toward -Z). */
     { GL_LIGHT4,
-      {  0.0f,  5.0f, -24.0f, 0.0f },
-      { 0.85f, 0.42f, 0.28f, 1.0f },
-      { 0.05f, 0.02f, 0.03f, 1.0f },
-      { 1.00f, 0.60f, 0.40f, 1.0f } },
+      .pos      = { 0.0f,  5.0f, -24.0f, 0.0f },
+      .diffuse  = { 0.85f, 0.42f, 0.28f, 1.0f },
+      .ambient  = { 0.05f, 0.02f, 0.03f, 1.0f },
+      .specular = { 1.00f, 0.60f, 0.40f, 1.0f } },
     /* Violet dusk-sky fill from high behind the viewer. */
     { GL_LIGHT5,
-      {  0.2f,  0.6f,  1.0f, 0.0f },
-      { 0.26f, 0.12f, 0.42f, 1.0f },
-      { 0.02f, 0.01f, 0.04f, 1.0f },
-      { 0.15f, 0.08f, 0.25f, 1.0f } },
+      .pos      = {  0.2f,  0.6f,  1.0f, 0.0f },
+      .diffuse  = { 0.26f, 0.12f, 0.42f, 1.0f },
+      .ambient  = { 0.02f, 0.01f, 0.04f, 1.0f },
+      .specular = { 0.15f, 0.08f, 0.25f, 1.0f } },
     /* Hot-pink bounce off the neon floor, from below. */
     { GL_LIGHT6,
-      {  0.0f, -1.0f,  0.15f, 0.0f },
-      { 0.38f, 0.08f, 0.26f, 1.0f },
-      { 0.00f, 0.00f, 0.00f, 1.0f },
-      { 0.20f, 0.04f, 0.14f, 1.0f } },
+      .pos      = {  0.0f, -1.0f,  0.15f, 0.0f },
+      .diffuse  = { 0.38f, 0.08f, 0.26f, 1.0f },
+      .ambient  = { 0.00f, 0.00f, 0.00f, 1.0f },
+      .specular = { 0.20f, 0.04f, 0.14f, 1.0f } },
 };
 
 /* Nebula environment lights: cold cosmic palette matched to the gas
@@ -1180,22 +1180,22 @@ static const BackdropEnvLight k_sunset_lights[] = {
 static const BackdropEnvLight k_nebula_lights[] = {
     /* Magenta nebula key, high toward the band's bright side. */
     { GL_LIGHT4,
-      {  0.45f,  0.65f, -0.60f, 0.0f },
-      { 0.55f, 0.18f, 0.48f, 1.0f },
-      { 0.04f, 0.01f, 0.04f, 1.0f },
-      { 0.65f, 0.30f, 0.60f, 1.0f } },
+      .pos      = {  0.45f,  0.65f, -0.60f, 0.0f },
+      .diffuse  = { 0.55f, 0.18f, 0.48f, 1.0f },
+      .ambient  = { 0.04f, 0.01f, 0.04f, 1.0f },
+      .specular = { 0.65f, 0.30f, 0.60f, 1.0f } },
     /* Teal gas rim from the opposite low quarter. */
     { GL_LIGHT5,
-      { -0.55f,  0.20f,  0.65f, 0.0f },
-      { 0.10f, 0.34f, 0.40f, 1.0f },
-      { 0.01f, 0.02f, 0.03f, 1.0f },
-      { 0.15f, 0.40f, 0.45f, 1.0f } },
+      .pos      = { -0.55f,  0.20f,  0.65f, 0.0f },
+      .diffuse  = { 0.10f, 0.34f, 0.40f, 1.0f },
+      .ambient  = { 0.01f, 0.02f, 0.03f, 1.0f },
+      .specular = { 0.15f, 0.40f, 0.45f, 1.0f } },
     /* Indigo chart-floor bounce, from below. */
     { GL_LIGHT6,
-      {  0.00f, -1.00f,  0.10f, 0.0f },
-      { 0.14f, 0.12f, 0.34f, 1.0f },
-      { 0.00f, 0.00f, 0.00f, 1.0f },
-      { 0.08f, 0.07f, 0.20f, 1.0f } },
+      .pos      = {  0.00f, -1.00f,  0.10f, 0.0f },
+      .diffuse  = { 0.14f, 0.12f, 0.34f, 1.0f },
+      .ambient  = { 0.00f, 0.00f, 0.00f, 1.0f },
+      .specular = { 0.08f, 0.07f, 0.20f, 1.0f } },
 };
 
 static void backdrop_apply_env_lights(const BackdropEnvLight *lights, int n) {
