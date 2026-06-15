@@ -58,10 +58,14 @@
  * the dome. */
 #define SUNSET_SKY_RADIUS   29.0f
 #define SUNSET_SKY_SEGS     48
-#define SUNSET_SKY_RINGS    16
-/* Dome elevation range in radians: slightly below the horizon (so no
- * gap shows under the grid plane at shallow camera angles) to zenith. */
-#define SUNSET_PHI_MIN     (-0.06f * (float)M_PI)
+/* Full sphere like the polar-day dome: the gradient clamps to its dark
+ * under-horizon stop below the horizon, so closing the lower hemisphere
+ * (PHI_MIN = -90deg) leaves no bottom edge for a look-down camera to
+ * find. Doubled rings keep the above-horizon gradient as finely sampled
+ * as the old half-dome despite the doubled elevation span. */
+#define SUNSET_SKY_RINGS    32
+/* Dome elevation range in radians: straight down (-90deg) to zenith. */
+#define SUNSET_PHI_MIN     (-0.50f * (float)M_PI)
 #define SUNSET_PHI_MAX      (0.50f * (float)M_PI)
 
 #define SUNSET_SUN_DIST     24.0f
