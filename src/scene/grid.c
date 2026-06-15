@@ -12,6 +12,24 @@
 #define GRID_MINOR_SUBDIVISIONS 5.0f
 #define GRID_MAJOR_TOL_FRACTION 0.25f
 
+/* Edge-fade dissolve (replaces the clear-color recede fog for the
+ * generic line themes). Each grid line scales its per-vertex alpha to 0
+ * by WORLD radial distance from the origin, sqrt(x^2 + z^2): the fade is
+ * pinned in world space, so the grid edge is gone no matter where the
+ * camera is (drag out to the rim and there are no lines there), and the
+ * grid fades into whatever backdrop is behind it rather than to the GL
+ * clear color. Radial (not along-axis) is what kills the grazing-horizon
+ * smudge: the lines that pile up at the horizon are the far ones (large
+ * radius), and a radial fade dims them at their centers where they
+ * stack. The front is at `fade_end = extent` steady and sweeps inward
+ * during the hide transition (fade_end = extent * opacity), unifying the
+ * steady dissolve and the recede animation. Scoped to the table-driven
+ * line themes + XZ Ruler via scene_grid_theme_uses_edge_fade(); FOG owns
+ * its EXP2 fog and the custom environment themes own their atmosphere. */
+#define GRID_EDGE_FADE_BAND   0.35f  /* radial ramp width / extent (interior
+                                      * solid inside fade_end - band) */
+#define GRID_EDGE_FADE_MAX_BP 8      /* breakpoint capacity (uses <= 5) */
+
 /* Returns non-zero when v is close enough to a multiple of `major`
  * to be treated as a major line. `tol` is derived from the minor
  * step so the check stays robust as the step changes. */
@@ -34,6 +52,17 @@ typedef struct GridDrawContext {
      * under GRID_XN_STYLE == GRID_AXES_XN_FOG. */
     float xn_opacity;
     float xn_alpha;
+    /* Edge-fade rim dissolve (see GRID_EDGE_FADE_*). When edge_fade is
+     * set, the line draws subdivide at ef_bp[] and scale each vertex's
+     * alpha by ef_mul[]; the front is rebuilt once per frame from
+     * extent + opacity. The breakpoints are along-axis positions and
+     * are offset-independent, so they are shared by every line. */
+    int   edge_fade;
+    float ef_bp[GRID_EDGE_FADE_MAX_BP];
+    float ef_mul[GRID_EDGE_FADE_MAX_BP];
+    int   ef_n;
+    float ef_fade_end;  /* radius where alpha hits 0 (for arbitrary-pos eval) */
+    float ef_band;      /* ramp width just inside fade_end */
 } GridDrawContext;
 
 typedef struct GridLineColors {
@@ -118,14 +147,110 @@ static void grid_line_colors_same(GridLineColors *out, SceneRgba color) {
     out->z_const = color;
 }
 
+/* Build the per-frame dissolve front and cache fade_end/band on the
+ * context. The breakpoint table (ef_bp/ef_mul) is the offset-0 ramp —
+ * used directly only by the origin axes, which run through the origin so
+ * their radius == |along|. The main grid lines compute their own radial
+ * breakpoints per offset in draw_grid_line_pair; ticks sample the front
+ * pointwise via grid_edge_fade_mul. The offset-0 multiplier is the
+ * piecewise-linear clamp((fade_end - |p|) / band, 0, 1), and placing
+ * breakpoints at |p| = fade_start / fade_end reproduces it exactly. */
+static void grid_edge_fade_build(GridDrawContext *ctx, float fade_end,
+                                 float band) {
+    float extent = ctx->extent;
+    float fade_start = fade_end - band;
+    ctx->ef_fade_end = fade_end;
+    ctx->ef_band     = band;
+    float pos[GRID_EDGE_FADE_MAX_BP];
+    int n = 0;
+    pos[n++] = -extent;
+    if (fade_end   > 0.0f && fade_end   < extent) pos[n++] = -fade_end;
+    if (fade_start > 0.0f && fade_start < extent) pos[n++] = -fade_start;
+    pos[n++] = 0.0f;
+    if (fade_start > 0.0f && fade_start < extent) pos[n++] = fade_start;
+    if (fade_end   > 0.0f && fade_end   < extent) pos[n++] = fade_end;
+    pos[n++] = extent;
+
+    ctx->ef_n = n;
+    for (int i = 0; i < n; i++) {
+        float ap = fabsf(pos[i]);
+        float m = (band > 1e-6f) ? (fade_end - ap) / band
+                                 : (ap < fade_end ? 1.0f : 0.0f);
+        if (m < 0.0f) m = 0.0f;
+        if (m > 1.0f) m = 1.0f;
+        ctx->ef_bp[i]  = pos[i];
+        ctx->ef_mul[i] = m;
+    }
+}
+
+/* Edge-fade alpha multiplier for a single point at along-axis position
+ * `p` — for short marks / inline axes that don't subdivide. Mirrors the
+ * ramp grid_edge_fade_build samples at its breakpoints. */
+static float grid_edge_fade_mul(const GridDrawContext *ctx, float p) {
+    if (!ctx->edge_fade) return 1.0f;
+    float ap = fabsf(p);
+    float m = (ctx->ef_band > 1e-6f) ? (ctx->ef_fade_end - ap) / ctx->ef_band
+                                     : (ap < ctx->ef_fade_end ? 1.0f : 0.0f);
+    if (m < 0.0f) m = 0.0f;
+    if (m > 1.0f) m = 1.0f;
+    return m;
+}
+
+/* Radial edge-fade multiplier for a vertex at world (off, along) on one
+ * of the axis-aligned grid lines: alpha ramps from 1 inside fade_start
+ * to 0 at fade_end, keyed on the world radius sqrt(off^2 + along^2). */
+static float grid_radial_mul(float fade_end, float band, float off,
+                             float along) {
+    float r = sqrtf(off * off + along * along);
+    float m = (band > 1e-6f) ? (fade_end - r) / band : (r < fade_end ? 1.0f : 0.0f);
+    if (m < 0.0f) m = 0.0f;
+    if (m > 1.0f) m = 1.0f;
+    return m;
+}
+
 static void draw_grid_line_pair(float v, const GridDrawContext *ctx,
                                 GridLineColors colors) {
-    grid_color_rgba(ctx, colors.x_const);
-    glVertex3f(v, 0, -ctx->extent);
-    glVertex3f(v, 0,  ctx->extent);
-    grid_color_rgba(ctx, colors.z_const);
-    glVertex3f(-ctx->extent, 0, v);
-    glVertex3f( ctx->extent, 0, v);
+    if (!ctx->edge_fade) {
+        grid_color_rgba(ctx, colors.x_const);
+        glVertex3f(v, 0, -ctx->extent);
+        glVertex3f(v, 0,  ctx->extent);
+        grid_color_rgba(ctx, colors.z_const);
+        glVertex3f(-ctx->extent, 0, v);
+        glVertex3f( ctx->extent, 0, v);
+        return;
+    }
+    /* Radial dissolve by world distance from the origin. A line at
+     * perpendicular offset v fades where sqrt(v^2 + a^2) crosses the
+     * front, so the breakpoints along the running axis are the radii
+     * where r hits fade_start / fade_end — same for both axes at this
+     * offset. The x-const line runs along z, the z-const line along x. */
+    float fe = ctx->ef_fade_end, band = ctx->ef_band, extent = ctx->extent;
+    float av = fabsf(v);
+    if (av >= fe) return;                       /* whole line past the front */
+    float fs = fe - band;
+    float a_end = sqrtf(fe * fe - v * v);       /* r == fe here (fe > av) */
+    if (a_end > extent) a_end = extent;
+    float a_start = (fs > av) ? sqrtf(fs * fs - v * v) : 0.0f;
+
+    float pos[5];
+    int n = 0;
+    pos[n++] = -a_end;
+    if (a_start > 0.0f && a_start < a_end) pos[n++] = -a_start;
+    pos[n++] = 0.0f;
+    if (a_start > 0.0f && a_start < a_end) pos[n++] = a_start;
+    pos[n++] = a_end;
+
+    for (int i = 0; i + 1 < n; i++) {
+        float a0 = pos[i], a1 = pos[i + 1];
+        float m0 = grid_radial_mul(fe, band, v, a0);
+        float m1 = grid_radial_mul(fe, band, v, a1);
+        SceneRgba c = colors.x_const;
+        grid_color(ctx, c.r, c.g, c.b, c.a * m0); glVertex3f(v, 0, a0);
+        grid_color(ctx, c.r, c.g, c.b, c.a * m1); glVertex3f(v, 0, a1);
+        c = colors.z_const;
+        grid_color(ctx, c.r, c.g, c.b, c.a * m0); glVertex3f(a0, 0, v);
+        grid_color(ctx, c.r, c.g, c.b, c.a * m1); glVertex3f(a1, 0, v);
+    }
 }
 
 static void draw_grid_origin_axes(const GridDrawContext *ctx, SceneRgba color,
@@ -134,11 +259,27 @@ static void draw_grid_origin_axes(const GridDrawContext *ctx, SceneRgba color,
     if (line_width != 1.0f)
         glLineWidth(line_width);
     glBegin(GL_LINES);
-    grid_color_rgba(ctx, color);
-    glVertex3f(-ctx->extent, 0, 0);
-    glVertex3f( ctx->extent, 0, 0);
-    glVertex3f(0, 0, -ctx->extent);
-    glVertex3f(0, 0,  ctx->extent);
+    if (!ctx->edge_fade) {
+        grid_color_rgba(ctx, color);
+        glVertex3f(-ctx->extent, 0, 0);
+        glVertex3f( ctx->extent, 0, 0);
+        glVertex3f(0, 0, -ctx->extent);
+        glVertex3f(0, 0,  ctx->extent);
+    } else {
+        /* X axis runs along x (z=0); Z axis runs along z (x=0). */
+        for (int i = 0; i + 1 < ctx->ef_n; i++) {
+            float m0 = ctx->ef_mul[i], m1 = ctx->ef_mul[i + 1];
+            float p0 = ctx->ef_bp[i],  p1 = ctx->ef_bp[i + 1];
+            grid_color(ctx, color.r, color.g, color.b, color.a * m0);
+            glVertex3f(p0, 0, 0);
+            grid_color(ctx, color.r, color.g, color.b, color.a * m1);
+            glVertex3f(p1, 0, 0);
+            grid_color(ctx, color.r, color.g, color.b, color.a * m0);
+            glVertex3f(0, 0, p0);
+            grid_color(ctx, color.r, color.g, color.b, color.a * m1);
+            glVertex3f(0, 0, p1);
+        }
+    }
     glEnd();
     if (line_width != 1.0f)
         glLineWidth(1.0f);
@@ -1126,16 +1267,34 @@ static void scene_grid_render_xzruler_theme(const GridDrawContext *grid_ctx) {
     }
     glEnd();
 
-    /* Origin axes - bright, wider */
+    /* Origin axes - bright, wider. Edge-fade subdivides each axis so it
+     * dissolves into the backdrop at the rim like the grid lines. */
     glDepthMask(GL_TRUE);
     glLineWidth(2.0f);
     glBegin(GL_LINES);
-    /* X axis (z=0, runs along X) */
-    grid_color(grid_ctx, 0.88f, 0.28f, 0.12f, 0.70f);
-    glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
-    /* Z axis (x=0, runs along Z) */
-    grid_color(grid_ctx, 0.12f, 0.32f, 0.88f, 0.70f);
-    glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
+    if (grid_ctx->edge_fade) {
+        for (int i = 0; i + 1 < grid_ctx->ef_n; i++) {
+            float m0 = grid_ctx->ef_mul[i], m1 = grid_ctx->ef_mul[i + 1];
+            float p0 = grid_ctx->ef_bp[i],  p1 = grid_ctx->ef_bp[i + 1];
+            /* X axis (z=0, along X) */
+            grid_color(grid_ctx, 0.88f, 0.28f, 0.12f, 0.70f * m0);
+            glVertex3f(p0, 0, 0);
+            grid_color(grid_ctx, 0.88f, 0.28f, 0.12f, 0.70f * m1);
+            glVertex3f(p1, 0, 0);
+            /* Z axis (x=0, along Z) */
+            grid_color(grid_ctx, 0.12f, 0.32f, 0.88f, 0.70f * m0);
+            glVertex3f(0, 0, p0);
+            grid_color(grid_ctx, 0.12f, 0.32f, 0.88f, 0.70f * m1);
+            glVertex3f(0, 0, p1);
+        }
+    } else {
+        /* X axis (z=0, runs along X) */
+        grid_color(grid_ctx, 0.88f, 0.28f, 0.12f, 0.70f);
+        glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
+        /* Z axis (x=0, runs along Z) */
+        grid_color(grid_ctx, 0.12f, 0.32f, 0.88f, 0.70f);
+        glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
+    }
     glEnd();
     glLineWidth(1.0f);
     glDepthMask(GL_FALSE);
@@ -1146,7 +1305,7 @@ static void scene_grid_render_xzruler_theme(const GridDrawContext *grid_ctx) {
     for (float v = -extent; v <= extent + GRID_LOOP_EPSILON; v += major) {
         if (fabsf(v) < GRID_ORIGIN_SKIP_EPSILON) continue;
         float ta = (fabsf(v) <= major * 2.5f) ? 0.48f : 0.22f;
-        ta = fminf(ta * as, 1.0f);
+        ta = fminf(ta * as, 1.0f) * grid_edge_fade_mul(grid_ctx, v);
         /* Ticks crossing the X axis in the Z direction */
         grid_color(grid_ctx, 0.88f, 0.28f, 0.12f, ta);
         glVertex3f(v, 0, -tick); glVertex3f(v, 0, tick);
@@ -1303,6 +1462,23 @@ int scene_grid_theme_uses_fog(SceneGridTheme grid_theme) {
            grid_theme == GRID_THEME_OCEAN;
 }
 
+int scene_grid_theme_uses_edge_fade(SceneGridTheme grid_theme) {
+    /* Pure reference line-grids dissolve their alpha to the backdrop at
+     * the rim instead of fogging to the clear color: the table-driven
+     * line themes (minus FOG, which owns its EXP2 fog) plus the XZ Ruler
+     * and Star Chart — custom-path grids that still emit their graticule
+     * through draw_grid_line_pair, so they pick up the per-vertex radial
+     * fade once they are in this set. The custom *environment* themes
+     * (OCEAN / FROZEN / SOIL) own their own atmosphere, and RADAR / FOG
+     * own their distance fog, so all of those are out of scope.
+     * Pure — safe to call from tests. */
+    if (grid_theme == GRID_THEME_XZRULER ||
+        grid_theme == GRID_THEME_STARCHART)
+        return 1;
+    return grid_theme_spec(grid_theme) != NULL &&
+           grid_theme != GRID_THEME_FOG;
+}
+
 /* --- scene_grid_render phases ---
  *
  * Splits the 150-line orchestrator into:
@@ -1384,6 +1560,14 @@ static GridDrawContext grid_build_draw_context(const SceneFrameRenderContext *fr
 static void grid_apply_far_fog(const SceneRenderConfig *config,
                                SceneGridTheme grid_theme, float extent,
                                const SceneOverlayXn *xn) {
+    /* Edge-fade themes dissolve to the backdrop via per-vertex alpha
+     * (steady rim + animated recede), so they never want clear-color
+     * fog — at any extent or transition phase. Make sure none is left
+     * enabled from a prior pass and bail. */
+    if (scene_grid_theme_uses_edge_fade(grid_theme)) {
+        glDisable(GL_FOG);
+        return;
+    }
     int is_far = (config->grid_extent_idx == GRID_EXTENT_FAR);
 #if GRID_XN_STYLE == GRID_AXES_XN_FOG
     /* Fog-less, non-FAR themes: recede into a synthesized clear-color
@@ -1508,6 +1692,21 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
     GridDrawContext grid_ctx = grid_build_draw_context(frame_ctx);
     grid_ctx.xn_opacity = xn.opacity;
     grid_ctx.xn_alpha   = xn.alpha;
+
+    /* Edge-fade dissolve: always on for the line themes. The grid
+     * dissolves to transparency by world radial distance, reaching 0 at
+     * the extent (fade_end = extent steady, swept inward to 0 during a
+     * hide transition). The per-vertex alpha owns the whole fade, so the
+     * global xn_alpha is pinned to 1. */
+    if (scene_grid_theme_uses_edge_fade(grid_theme)) {
+        float extent = grid_ctx.extent;
+        grid_ctx.edge_fade = 1;
+        grid_ctx.xn_alpha  = 1.0f;
+        grid_edge_fade_build(&grid_ctx,
+                             extent * xn.opacity,           /* fade_end */
+                             GRID_EDGE_FADE_BAND * extent); /* band */
+    }
+
     grid_apply_far_fog(config, grid_theme, grid_ctx.extent, &xn);
 
     /* GL_FOG_DISTANCE_MODE_NV isn't in the Khronos GL_FOG_BIT spec, so

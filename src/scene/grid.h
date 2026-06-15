@@ -26,4 +26,12 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx);
  * a pop. Pure — safe to call from tests. */
 int scene_grid_theme_uses_fog(SceneGridTheme grid_theme);
 
+/* True for the generic table-driven line themes that dissolve their
+ * per-vertex alpha to the backdrop at the extent rim (and sweep the
+ * front inward while hiding) instead of fogging to the GL clear color.
+ * That is the standard themes minus FOG (which owns its EXP2 fog); the
+ * custom environment themes own their own atmosphere and are excluded.
+ * Pure — safe to call from tests. */
+int scene_grid_theme_uses_edge_fade(SceneGridTheme grid_theme);
+
 #endif /* SCENE_GRID_H */
