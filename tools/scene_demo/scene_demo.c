@@ -102,12 +102,14 @@ static void step_projection_mix(float dt) {
 /* --- Scene callback ---------------------------------------------------- */
 
 static void my_scene_execute(const SceneExecuteContext *ctx, void *user_data) {
-    (void)ctx;
     (void)user_data;
+    int wireframe_line_pass =
+        ctx && (ctx->purpose == SCENE_EXEC_WIREFRAME_HIDDEN_LINES ||
+                ctx->purpose == SCENE_EXEC_WIREFRAME_VISIBLE_LINES);
 
     /* scene_lights_setup has set per-light properties but glDisable'd them.
      * The user (this demo) decides which lights to actually enable. */
-    if (g_lighting_on) {
+    if (g_lighting_on && !wireframe_line_pass) {
         glEnable(GL_LIGHTING);
         for (int i = 0; i < MAX_LIGHTS; i++)
             if (g_lights_on[i]) glEnable(GL_LIGHT0 + i);
@@ -115,7 +117,8 @@ static void my_scene_execute(const SceneExecuteContext *ctx, void *user_data) {
 
     glPushMatrix();
     glTranslatef(0.0f, 0.75f, 0.0f);
-    glColor3f(0.85f, 0.70f, 0.40f);
+    if (!wireframe_line_pass)
+        glColor3f(0.85f, 0.70f, 0.40f);
     glutSolidTeapot(1.0f);
     glPopMatrix();
 }

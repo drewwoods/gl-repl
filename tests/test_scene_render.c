@@ -39,6 +39,25 @@ static void test_execute_noop(const SceneExecuteContext *ctx, void *user_data) {
     (void)user_data;
 }
 
+typedef struct PurposeCountCtx {
+    int counts[8];
+} PurposeCountCtx;
+
+static void test_execute_count_purpose(const SceneExecuteContext *ctx,
+                                       void *user_data) {
+    PurposeCountCtx *count_ctx = (PurposeCountCtx *)user_data;
+    int purpose = ctx ? (int)ctx->purpose : (int)SCENE_EXEC_MAIN_FILL;
+    if (count_ctx && purpose >= 0 &&
+        purpose < (int)(sizeof(count_ctx->counts) / sizeof(count_ctx->counts[0])))
+        count_ctx->counts[purpose]++;
+
+    glBegin(GL_TRIANGLES);
+    glVertex3f(0.0f, 0.0f, 0.0f);
+    glVertex3f(1.0f, 0.0f, 0.0f);
+    glVertex3f(0.0f, 1.0f, 0.0f);
+    glEnd();
+}
+
 /* Build a test SceneRenderConfig with sensible defaults. */
 static SceneRenderConfig make_test_config(void) {
     SceneRenderConfig cfg = {0};
@@ -587,6 +606,51 @@ static void test_render_mode_toggles(void) {
     ASSERT_TRUE("all toggles tested", 1);
 }
 
+static void test_wireframe_hidden_line_passes(void) {
+    printf("--- wireframe hidden-line render passes ---\n");
+
+#ifdef GL_STUBS
+    SceneRenderConfig cfg = make_test_config();
+    PurposeCountCtx count_ctx;
+    memset(&count_ctx, 0, sizeof(count_ctx));
+    cfg.execute_fn = test_execute_count_purpose;
+    cfg.execute_user_data = &count_ctx;
+    cfg.use_accum = 0;
+    cfg.accum_effect = SCENE_ACCUM_EFFECT_OFF;
+    cfg.accum_passes = 1;
+    cfg.wireframe = 1;
+
+    SceneRendererState state;
+    scene_renderer_state_init(&state);
+
+    gl_stub_counts_reset();
+    ASSERT_INT("wireframe render ok",
+               scene_render_3d_scene(&state, &cfg), 0);
+
+    ASSERT_INT("wireframe skips main fill purpose",
+               count_ctx.counts[SCENE_EXEC_MAIN_FILL], 0);
+    ASSERT_INT("wireframe hidden-line pass executes once",
+               count_ctx.counts[SCENE_EXEC_WIREFRAME_HIDDEN_LINES], 1);
+    ASSERT_INT("wireframe depth-fill pass executes once",
+               count_ctx.counts[SCENE_EXEC_WIREFRAME_DEPTH_FILL], 1);
+    ASSERT_INT("wireframe visible-line pass executes once",
+               count_ctx.counts[SCENE_EXEC_WIREFRAME_VISIBLE_LINES], 1);
+
+    ASSERT_TRUE("wireframe flips polygon modes for line/fill/line",
+                gl_stub_counts[GL_STUB_glPolygonMode] >= 3);
+    ASSERT_TRUE("wireframe owns color masks for hidden/depth/visible",
+                gl_stub_counts[GL_STUB_glColorMask] >= 3);
+    ASSERT_TRUE("wireframe owns depth func",
+                gl_stub_counts[GL_STUB_glDepthFunc] >= 3);
+    ASSERT_TRUE("wireframe owns depth mask",
+                gl_stub_counts[GL_STUB_glDepthMask] >= 3);
+    ASSERT_TRUE("wireframe applies fixed hidden/visible colors",
+                gl_stub_counts[GL_STUB_glColor4f] >= 2);
+#else
+    ASSERT_TRUE("wireframe hidden-line passes require GL stubs", 1);
+#endif
+}
+
 /* --- Regression tests for glVertex2f parity with glVertex3f ----------- */
 
 static void test_vertex2f_overlay_parity(void) {
@@ -967,6 +1031,7 @@ int main(int argc, char **argv) {
     test_grid_table_arrays();
     test_viewport_dimensions();
     test_render_mode_toggles();
+    test_wireframe_hidden_line_passes();
     test_vertex2f_overlay_parity();
     test_vertex2f_guide_cursor_dot();
     test_vertex_label_text();

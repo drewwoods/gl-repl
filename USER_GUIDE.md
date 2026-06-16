@@ -746,9 +746,11 @@ all three guide types at once.
 
 ![Wireframe torus](docs/images/wireframe.png)
 
-**Ctrl+G** toggles wireframe rendering (`glPolygonMode(GL_LINE)` over the
-whole scene). Tip: vertex outlines/points are on by default and draw over
-the wires; turn them off for a clean wireframe look.
+**Ctrl+G** toggles wireframe rendering with a hidden-line pass: all polygon
+edges draw first in a muted hidden-line color, the scene seeds the depth
+buffer with filled polygons, then visible edges draw again in a bright line
+color. Tip: vertex outlines/points are on by default and draw over the
+wires; turn them off for a clean wireframe look.
 
 ### Rendering quality
 

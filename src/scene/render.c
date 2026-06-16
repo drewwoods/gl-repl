@@ -477,14 +477,19 @@ static void scene_apply_quality_config(const SceneRenderConfig *config) {
     else glDisable(GL_LINE_SMOOTH);
 }
 
-static void scene_apply_wireframe_config(const SceneRenderConfig *config) {
-    if (config->wireframe)
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-}
-
 static void scene_prepare_frame_context(SceneFrameRenderContext *ctx,
                                         const SceneRenderConfig *config) {
     ctx->config = *config;
+}
+
+static void scene_execute_user_geometry(const SceneRenderConfig *config,
+                                        SceneExecutePurpose purpose) {
+    glPushMatrix();
+    if (config->execute_fn) {
+        SceneExecuteContext ctx = { .purpose = purpose };
+        config->execute_fn(&ctx, config->execute_user_data);
+    }
+    glPopMatrix();
 }
 
 /* ========================================================================= */
@@ -620,24 +625,56 @@ static void scene_pass_setup(const SceneRendererState *state,
      * commands so this pass doesn't need to re-assert them per frame. */
 
     scene_apply_quality_config(config);
-    scene_apply_wireframe_config(config);
     prof_accum_end(PROF_SCENE_3D_SETUP);
+}
+
+static void scene_pass_hidden_line_wireframe(const SceneRenderConfig *config) {
+    /* Hidden-line rendering follows the fixed-function OpenGL recipe:
+     * draw every edge in the hidden color, seed the depth buffer with
+     * filled polygons while color writes are masked, then redraw only
+     * depth-passing edges in the visible color. */
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+
+    glDisable(GL_LIGHTING);
+    glDisable(GL_BLEND);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
+    glDepthMask(GL_TRUE);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    scene_clr(SCENE_CLR_WIREFRAME_HIDDEN);
+    scene_execute_user_geometry(config, SCENE_EXEC_WIREFRAME_HIDDEN_LINES);
+
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
+    glDepthMask(GL_TRUE);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    scene_execute_user_geometry(config, SCENE_EXEC_WIREFRAME_DEPTH_FILL);
+
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glDisable(GL_LIGHTING);
+    glDisable(GL_BLEND);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
+    glDepthMask(GL_FALSE);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    scene_clr(SCENE_CLR_WIREFRAME_VISIBLE);
+    scene_execute_user_geometry(config, SCENE_EXEC_WIREFRAME_VISIBLE_LINES);
+
+    glPopAttrib();
 }
 
 static void scene_pass_fill(const SceneRenderConfig *config) {
     prof_begin(PROF_SCENE_3D_FILL);
-    glPushMatrix();
-    if (config->execute_fn) {
-        SceneExecuteContext ctx = { .purpose = SCENE_EXEC_MAIN_FILL };
-        config->execute_fn(&ctx, config->execute_user_data);
-    }
-    glPopMatrix();
+    if (config->wireframe)
+        scene_pass_hidden_line_wireframe(config);
+    else
+        scene_execute_user_geometry(config, SCENE_EXEC_MAIN_FILL);
     prof_accum_end(PROF_SCENE_3D_FILL);
 
     if (config->post_fill_fn)
         config->post_fill_fn(config->post_fill_user_data);
-
-    if (config->wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
 
 /* Draw translucent scene helpers after the main geometry so antialiased

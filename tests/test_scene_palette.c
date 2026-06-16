@@ -60,6 +60,16 @@ int main(void) {
         SceneRgba edge = scene_rgba(SCENE_CLR_OUTLINE_EDGE);
         ASSERT_F("outline-edge is black RGB", edge.r + edge.g + edge.b, 0.0f);
         ASSERT_F("outline-edge alpha is 1.0 (real entry)", edge.a, 1.0f);
+
+        SceneRgba wire_vis = scene_rgba(SCENE_CLR_WIREFRAME_VISIBLE);
+        ASSERT_F("wireframe-visible R", wire_vis.r, 0.96f);
+        ASSERT_F("wireframe-visible G", wire_vis.g, 0.98f);
+        ASSERT_F("wireframe-visible B", wire_vis.b, 1.00f);
+
+        SceneRgba wire_hid = scene_rgba(SCENE_CLR_WIREFRAME_HIDDEN);
+        ASSERT_F("wireframe-hidden R", wire_hid.r, 0.30f);
+        ASSERT_F("wireframe-hidden G", wire_hid.g, 0.38f);
+        ASSERT_F("wireframe-hidden B", wire_hid.b, 0.52f);
     }
 
     return test_harness_report(&g_harness, "test_scene_palette");

@@ -98,6 +98,10 @@ typedef enum {
     SCENE_CLR_VERTEX_POINT,        /* idle vertex points       0.85,0.85,0.90 */
     SCENE_CLR_VERTEX_POINT_REPLAY, /* replay vertex points     1.00,0.88,0.20 */
 
+    /* Hidden-line wireframe effect (render.c). */
+    SCENE_CLR_WIREFRAME_VISIBLE,   /* visible edges            0.96,0.98,1.00 */
+    SCENE_CLR_WIREFRAME_HIDDEN,    /* hidden edges             0.30,0.38,0.52 */
+
     SCENE_CLR_COUNT
 } SceneColorToken;
 
@@ -143,6 +147,8 @@ static const SceneRgba g_scene_palette[SCENE_CLR_COUNT] = {
     [SCENE_CLR_OUTLINE_EDGE]        = { 0.00f, 0.00f, 0.00f, 1.0f },
     [SCENE_CLR_VERTEX_POINT]        = { 0.85f, 0.85f, 0.90f, 1.0f },
     [SCENE_CLR_VERTEX_POINT_REPLAY] = { 1.00f, 0.88f, 0.20f, 1.0f },
+    [SCENE_CLR_WIREFRAME_VISIBLE]   = { 0.96f, 0.98f, 1.00f, 1.0f },
+    [SCENE_CLR_WIREFRAME_HIDDEN]    = { 0.30f, 0.38f, 0.52f, 1.0f },
 };
 
 static inline SceneRgba scene_rgba(SceneColorToken t) {
