@@ -14,6 +14,9 @@
 #include "editor/input.h"
 #include "ui/app/layout.h"   /* CODE_PANEL_LAYOUT_* */
 #include "support/test_harness.h"
+#ifdef GL_STUBS
+#include <GL/gl_stub_counts.h>
+#endif
 
 void glr_color_picker_install_host(void);
 
@@ -1827,19 +1830,20 @@ static void test_variable_panel_t_change_reflattens_when_time_paused(void) {
  * glr_ctrl_display_frame only snapshots predef + scratch, not the
  * persistent render state).
  *
- * This test exercises the adapter directly with both purposes and
- * pins the invariant: DEPTH_PROBE doesn't mutate predef vars or
- * scratch arrays; MAIN_FILL still does (would-be-regression for the
- * fix accidentally suppressing the real path). Clear-color and
+ * This test exercises the adapter directly and pins the invariant:
+ * DEPTH_PROBE plus the hidden/depth wireframe passes don't mutate
+ * predef vars or scratch arrays; MAIN_FILL and the visible wireframe
+ * pass still do (would-be-regression for accidentally suppressing the
+ * real render path, including wireframe mode). Clear-color and
  * light-enable side effects are intentionally excluded here — the
  * parser clamps glClearColor channels to 0.15 max, which complicates
  * a clean test signal, but the snapshot/restore path covers them the
  * same way it covers the predef/scratch state. */
-static void test_depth_probe_does_not_mutate_repl_state(void) {
-    printf("--- depth probe does not mutate REPL state (#2 P1 review) ---\n");
+static void test_auxiliary_scene_pass_side_effects(void) {
+    printf("--- auxiliary scene pass side effects (#2 P1 review) ---\n");
 
 #ifndef GL_STUBS
-    printf("Run `make test_glr_ctrl USE_GL_STUBS=1` for depth-probe adapter coverage.\n");
+    printf("Run `make test_glr_ctrl USE_GL_STUBS=1` for scene-pass adapter coverage.\n");
     return;
 #endif
 
@@ -1923,6 +1927,90 @@ static void test_depth_probe_does_not_mutate_repl_state(void) {
                  predef_after_fill, predef_before + 1.0f);
     ASSERT_FLOAT("fill: A[0] advanced once",
                  scratch_after_fill, scratch_before + 1.0f);
+
+    /* Wireframe hidden/depth passes are auxiliary; visible lines are
+     * the one side-effecting execution that replaces MAIN_FILL when
+     * wireframe mode is enabled. */
+    g_predef_vars_mut[probevar_idx].value = 0.0f;
+    repl_eval_restore_scratch_arrays(scratch_zero);
+    predef_before = g_predef_vars[probevar_idx].value;
+    repl_eval_scratch_get(scratch_a_idx, 0, &scratch_before);
+
+    SceneExecuteContext hidden_ctx = {
+        .purpose = SCENE_EXEC_WIREFRAME_HIDDEN_LINES
+    };
+    scene_execute_adapter(&hidden_ctx, NULL);
+    ASSERT_FLOAT("wire hidden: probevar unchanged",
+                 g_predef_vars[probevar_idx].value, predef_before);
+    repl_eval_scratch_get(scratch_a_idx, 0, &scratch_after_probe);
+    ASSERT_FLOAT("wire hidden: A[0] unchanged",
+                 scratch_after_probe, scratch_before);
+
+    SceneExecuteContext depth_ctx = {
+        .purpose = SCENE_EXEC_WIREFRAME_DEPTH_FILL
+    };
+    scene_execute_adapter(&depth_ctx, NULL);
+    ASSERT_FLOAT("wire depth: probevar unchanged",
+                 g_predef_vars[probevar_idx].value, predef_before);
+    repl_eval_scratch_get(scratch_a_idx, 0, &scratch_after_probe);
+    ASSERT_FLOAT("wire depth: A[0] unchanged",
+                 scratch_after_probe, scratch_before);
+
+    SceneExecuteContext visible_ctx = {
+        .purpose = SCENE_EXEC_WIREFRAME_VISIBLE_LINES
+    };
+    scene_execute_adapter(&visible_ctx, NULL);
+    ASSERT_FLOAT("wire visible: probevar advanced once",
+                 g_predef_vars[probevar_idx].value, predef_before + 1.0f);
+    repl_eval_scratch_get(scratch_a_idx, 0, &scratch_after_fill);
+    ASSERT_FLOAT("wire visible: A[0] advanced once",
+                 scratch_after_fill, scratch_before + 1.0f);
+}
+
+static void test_wireframe_renderer_ignores_user_draw_state(void) {
+    printf("--- wireframe renderer ignores user draw state ---\n");
+
+#ifndef GL_STUBS
+    printf("Run `make test_glr_ctrl USE_GL_STUBS=1` for wireframe renderer coverage.\n");
+    return;
+#endif
+
+    glr_ctrl_reset_all();
+    editor_feed_line("glColor3f(1, 0, 0);");
+    editor_feed_line("glEnable(GL_LIGHTING);");
+    editor_feed_line("glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);");
+    editor_feed_line("glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);");
+    editor_feed_line("glDepthFunc(GL_GREATER);");
+    editor_feed_line("glDepthMask(GL_FALSE);");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glEnd();");
+    repl_flatten_commands(0);
+
+    gl_stub_counts_reset();
+    SceneExecuteContext visible_ctx = {
+        .purpose = SCENE_EXEC_WIREFRAME_VISIBLE_LINES
+    };
+    scene_execute_adapter(&visible_ctx, NULL);
+
+    ASSERT_INT("wire renderer ignores user color",
+               (int)gl_stub_counts[GL_STUB_glColor4f], 0);
+    ASSERT_INT("wire renderer ignores user GL enable",
+               (int)gl_stub_counts[GL_STUB_glEnable], 0);
+    ASSERT_INT("wire renderer ignores user color material",
+               (int)gl_stub_counts[GL_STUB_glColorMaterial], 0);
+    ASSERT_INT("wire renderer ignores user color mask",
+               (int)gl_stub_counts[GL_STUB_glColorMask], 0);
+    ASSERT_INT("wire renderer ignores user depth func",
+               (int)gl_stub_counts[GL_STUB_glDepthFunc], 0);
+    ASSERT_INT("wire renderer ignores user depth mask",
+               (int)gl_stub_counts[GL_STUB_glDepthMask], 0);
+    ASSERT_INT("wire renderer emits one primitive",
+               (int)gl_stub_counts[GL_STUB_glBegin], 1);
+    ASSERT_INT("wire renderer emits vertices",
+               (int)gl_stub_counts[GL_STUB_glVertex3f], 3);
 }
 
 /* Regression: loading an example resets the light_theme *name* to the
@@ -2332,7 +2420,8 @@ int main(void) {
     test_numeric_swatch_no_op_in_insert_mode();
     test_numeric_swatch_scale_coarse_and_fine();
     test_variable_panel_t_change_reflattens_when_time_paused();
-    test_depth_probe_does_not_mutate_repl_state();
+    test_auxiliary_scene_pass_side_effects();
+    test_wireframe_renderer_ignores_user_draw_state();
     test_example_reset_reapplies_light_theme();
     test_display_frame_merges_light_theme_and_enable_mask();
     test_export_light_bridge_reads_app_state();

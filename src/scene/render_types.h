@@ -71,6 +71,9 @@ typedef struct SceneRgba {
 typedef enum SceneExecutePurpose {
     SCENE_EXEC_MAIN_FILL = 0,   /* the rendered geometry pass */
     SCENE_EXEC_DEPTH_PROBE,     /* scene_probe_eye_dist feedback walk */
+    SCENE_EXEC_WIREFRAME_HIDDEN_LINES, /* hidden-line effect: all edges */
+    SCENE_EXEC_WIREFRAME_DEPTH_FILL,   /* hidden-line effect: depth-only fill */
+    SCENE_EXEC_WIREFRAME_VISIBLE_LINES /* hidden-line effect: visible edges */
 } SceneExecutePurpose;
 
 /* Accumulation-buffer effect mode. OFF = single pass (no accum); AA =

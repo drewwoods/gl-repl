@@ -20,6 +20,7 @@
 #include "app/glr_completion.h"
 #include "app/glr_compositor.h"      /* whole-frame post-process hook */
 #include "app/glr_defaults.h"        /* CFG_DEFAULT_* */
+#include "app/glr_hidden_lines.h"
 #include "app/glr_state.h"
 #include "editor/commit.h"
 #include "editor/completion.h"
@@ -718,17 +719,19 @@ void glr_ctrl_apply_input_effects(EditorInputDispatchEffects effects) {
  * the count to the pre-fade base limit when replay-fade overlays are
  * active so the fade pass can layer on top of an unmodified prefix.
  *
- * For non-MAIN_FILL purposes (today: SCENE_EXEC_DEPTH_PROBE — the
- * GL_FEEDBACK pass that measures geometry depth for the ortho-mode
- * scale reference), snapshot REPL mutable state before the executor
- * runs and restore it after. The executor's CMD_VAR_ASSIGN /
- * CMD_SCRATCH_ASSIGN apply precomputed args[0] directly; CMD_ENABLE
- * (for GL_LIGHT*) and CMD_CLEAR_COLOR write into repl_state_render().
- * Without this bracket the probe would advance the user's
- * `t = t + 1` style state alongside the main fill (within-frame
- * doubling) and its glEnable / glClearColor would leak across frames
- * (the frame-level snapshot in glr_ctrl_display_frame restores predef
- * + scratch only, not the persistent render-state struct).
+ * For auxiliary purposes (depth probes and the renderer-owned hidden /
+ * depth-only wireframe passes), snapshot REPL mutable state before the
+ * geometry walk and restore it after. The visible wireframe line pass
+ * is the one side-effecting pass when wireframe mode replaces the
+ * normal main fill, so assignment-driven animation still advances
+ * exactly once per frame. Both the generic executor and the app-owned
+ * hidden-line renderer apply CMD_VAR_ASSIGN / CMD_SCRATCH_ASSIGN from
+ * precomputed args[]; they also update GL-light / clear-color
+ * bookkeeping. Without this bracket auxiliary passes would advance the
+ * user's `t = t + 1` style state alongside the main fill and leak
+ * render bookkeeping across frames (the frame-level snapshot in
+ * glr_ctrl_display_frame restores predef + scratch only, not the
+ * persistent render-state struct).
  *
  * SceneExecutePurpose is a forward-compatible enum; future probe-like
  * purposes (fade-overlay, picking pass, etc.) take the same
@@ -739,7 +742,13 @@ static void scene_execute_adapter(const SceneExecuteContext *ctx,
 
     SceneExecutePurpose purpose =
         ctx ? ctx->purpose : SCENE_EXEC_MAIN_FILL;
-    int suppress_side_effects = (purpose != SCENE_EXEC_MAIN_FILL);
+    int suppress_side_effects =
+        purpose != SCENE_EXEC_MAIN_FILL &&
+        purpose != SCENE_EXEC_WIREFRAME_VISIBLE_LINES;
+    int wireframe_effect_pass =
+        purpose == SCENE_EXEC_WIREFRAME_HIDDEN_LINES ||
+        purpose == SCENE_EXEC_WIREFRAME_DEPTH_FILL ||
+        purpose == SCENE_EXEC_WIREFRAME_VISIBLE_LINES;
 
     int count = repl_state_flat_program_count();
     if (g_replay_fade_plan.active)
@@ -756,13 +765,23 @@ static void scene_execute_adapter(const SceneExecuteContext *ctx,
 
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     char exec_status[REPL_DIAG_TEXT_MAX] = "";
-    repl_execute_program(&(ReplExecutionOptions){
-        .flat_cmd_count = count,
-        .program        = repl_state_flat_program_view(),
-        .text           = source_document_view(),
-        .status_out     = exec_status,
-        .status_out_sz  = (int)sizeof(exec_status),
-    });
+    if (wireframe_effect_pass) {
+        glr_hidden_lines_execute(&(GlrHiddenLinesRenderContext){
+            .flat_cmd_count = count,
+            .program        = repl_state_flat_program_view(),
+            .text           = source_document_view(),
+            .status_out     = exec_status,
+            .status_out_sz  = (int)sizeof(exec_status),
+        }, purpose);
+    } else {
+        repl_execute_program(&(ReplExecutionOptions){
+            .flat_cmd_count = count,
+            .program        = repl_state_flat_program_view(),
+            .text           = source_document_view(),
+            .status_out     = exec_status,
+            .status_out_sz  = (int)sizeof(exec_status),
+        });
+    }
     glPopAttrib();
     if (exec_status[0])
         repl_set_status_error(exec_status);
@@ -2271,6 +2290,7 @@ void glr_ctrl_init_gl(void) {
     scene_render_init_gl();
     scene_renderer_state_init(&g_scene_renderer);
     repl_executor_init_resources();
+    glr_hidden_lines_init_resources();
 
     /* Runtime point-parameter capability (replaces the old
      * compile-time NO_POINT_PARAMETER macro). glPointParameterfv is
@@ -2728,5 +2748,6 @@ void glr_ctrl_timer(int value) {
 
 void glr_shutdown(void) {
     glr_audio_shutdown();
+    glr_hidden_lines_destroy_resources();
     repl_executor_destroy_resources();
 }
