@@ -1041,8 +1041,11 @@ $(OBJDIR)/%.o: %.c
 
 # Vendored freeglut static library. Built once via CMake into $(FREEGLUT_BUILD),
 # which lives under third_party/ so the top-level `make clean` (rm -rf ./build)
-# leaves it intact. This rule has NO dependency on the freeglut sources, so
-# after re-vendoring run `make freeglut-clean` to force a rebuild. The backend
+# leaves it intact. The only source prerequisite is VENDORED.txt, which the
+# vendor script rewrites on every re-vendor (nothing else touches it) -- so a
+# re-vendor marks the archive stale and the next build reconfigures + rebuilds
+# it automatically. `make freeglut-clean` still forces a full from-scratch
+# rebuild (e.g. after a hand-edit, or to switch backends cleanly). The backend
 # (Cocoa by default, OSMesa under FREEGLUT_OSMESA=1) and build dir/lib name are
 # selected by FREEGLUT_CMAKE_BACKEND / FREEGLUT_BUILD up top. The OSMesa backend
 # resolves libOSMesa via pkg-config; point it at Homebrew's mesa .pc files.
@@ -1050,7 +1053,7 @@ $(OBJDIR)/%.o: %.c
 # on Linux libosmesa6-dev puts it on the default pkg-config path, so this stays
 # empty there.
 FREEGLUT_PKG_CONFIG_PATH := $(if $(filter 1,$(FREEGLUT_OSMESA)),$(if $(filter Darwin,$(UNAME_S)),$(shell brew --prefix mesa 2>/dev/null)/lib/pkgconfig),)
-$(FREEGLUT_STATIC_LIB):
+$(FREEGLUT_STATIC_LIB): $(FREEGLUT_SRC)/VENDORED.txt
 	PKG_CONFIG_PATH="$(FREEGLUT_PKG_CONFIG_PATH):$$PKG_CONFIG_PATH" \
 	cmake -S $(FREEGLUT_SRC) -B $(FREEGLUT_BUILD) \
 	  $(FREEGLUT_CMAKE_BACKEND) -DFREEGLUT_BUILD_STATIC_LIBS=ON \
@@ -1280,7 +1283,11 @@ gl-tests: $(addprefix $(BINDIR)/,$(GL_TEST_BINS)) ## Run real-GL UI state tests 
 # Placed HERE (after every referenced target var is defined: SAMPLE_BIN + the
 # demos ~earlier, TEST_BINS/BENCH_BINS, and GL_TEST_BINS just above) — a static
 # target list expands at parse time, so an earlier placement would silently
-# attach the prereq to nothing. Skipped under `make glut` (FREEGLUT_VENDOR=0)
+# attach the prereq to nothing. This is a NORMAL prerequisite (not order-only):
+# the archive's mtime now bumps only when it is missing or re-vendored (the
+# VENDORED.txt prereq above), so a fresh archive must relink its consumers —
+# an order-only `|` would build the lib first but skip the relink, stranding
+# the binary on a stale archive after a re-vendor. Skipped under `make glut` (FREEGLUT_VENDOR=0)
 # and on the default Linux path / GL stubs (FREEGLUT_LIB is empty there too).
 # Vendored freeglut is built on macOS (Cocoa or OSMesa) and on Linux ONLY for
 # the OSMesa backend (FREEGLUT_OSMESA=1); the default Linux path uses system
@@ -1291,7 +1298,7 @@ ifneq ($(USE_GL_STUBS),1)
 $(SAMPLE_BIN) $(SCENE_DEMO_BIN) $(REPL_DEMO_BIN) $(EDITOR_DEMO_BIN) \
 $(MEMPROF_DEMO_BIN) $(CPUPROF_DEMO_BIN) $(VARIABLE_PANEL_DEMO_BIN) \
 $(COLOR_PICKER_DEMO_BIN) \
-$(addprefix $(BINDIR)/,$(TEST_BINS) $(BENCH_BINS) $(GL_TEST_BINS)): | $(FREEGLUT_STATIC_LIB)
+$(addprefix $(BINDIR)/,$(TEST_BINS) $(BENCH_BINS) $(GL_TEST_BINS)): $(FREEGLUT_STATIC_LIB)
 endif
 endif
 endif
