@@ -29,11 +29,64 @@
 # errors on a missing CONFIGURE_FILE/include() input, add that path to ALLOWLIST
 # below.
 #
-# After vendoring, run `make freeglut-clean` so the static library is rebuilt
-# from the new source (the Makefile lib rule has no dependency on these files),
-# and update the pinned SHA noted in THIRD_PARTY_LICENSES.md.
+# After vendoring, the next `make` rebuilds the static library automatically:
+# the Makefile's libglut.a rule depends on VENDORED.txt (rewritten below), so a
+# re-vendor marks the lib stale and relinks its consumers. `make freeglut-clean`
+# forces a full from-scratch rebuild. Also update the pinned SHA noted in
+# THIRD_PARTY_LICENSES.md.
 
 set -euo pipefail
+
+usage() {
+	cat <<'HELPTEXT'
+vendor-freeglut.sh - vendor a freeglut source tree into third_party/freeglut/
+
+USAGE
+  scripts/vendor-freeglut.sh [<ref>]
+  FREEGLUT_REPO=<url-or-path> scripts/vendor-freeglut.sh [<ref>]
+  scripts/vendor-freeglut.sh -h | --help
+
+ARGUMENTS
+  <ref>   Any git ref, branch, tag, or SHA in the source repo.
+          Default: master (re-pins to the current upstream tip).
+
+ENVIRONMENT
+  FREEGLUT_REPO   Source repo to clone. Accepts anything `git clone` does - a
+                  remote URL or a LOCAL PATH to a working clone. A local path
+                  vendors only COMMITTED state, so commit fork changes first.
+                  Default: https://github.com/freeglut/freeglut.git
+
+EXAMPLES
+  # Re-pin to the current upstream master tip
+  scripts/vendor-freeglut.sh
+
+  # Pin to a specific upstream tag or SHA
+  scripts/vendor-freeglut.sh v3.4.0
+  scripts/vendor-freeglut.sh 91cf388
+
+  # Vendor the windowed-capture branch from a local fork clone
+  FREEGLUT_REPO="$HOME/src/freeglut-fork" \
+    scripts/vendor-freeglut.sh capture-windowed-backends
+
+  # Vendor the OSMesa backend branch from the fork URL (portable pin)
+  FREEGLUT_REPO=https://github.com/drewwoods/freeglut \
+    scripts/vendor-freeglut.sh osmesa-backend
+
+NOTES
+  Only a curated allowlist of the tree is copied; a missing allowlisted path
+  hard-fails. The resolved source + SHA are recorded in
+  third_party/freeglut/VENDORED.txt for reproducibility.
+
+  The next `make` after re-vendoring rebuilds libglut.a and relinks
+  automatically (VENDORED.txt is a Makefile prerequisite); `make freeglut-clean`
+  forces a full from-scratch rebuild. Also update the pinned SHA in
+  THIRD_PARTY_LICENSES.md.
+HELPTEXT
+}
+
+case "${1:-}" in
+	-h|--help) usage; exit 0 ;;
+esac
 
 REF="${1:-master}"
 UPSTREAM_URL="${FREEGLUT_REPO:-https://github.com/freeglut/freeglut.git}"
@@ -92,12 +145,14 @@ ref:      $REF
 sha:      $SHA
 
 Produced by scripts/vendor-freeglut.sh. Do NOT edit the vendored tree by hand;
-re-run the script with a ref to update. After re-vendoring, run
-\`make freeglut-clean\` so the static library is rebuilt from the new source.
+re-run the script with a ref to update. The Makefile's libglut.a rule depends
+on this file, so the next \`make\` rebuilds the static library from the new
+source and relinks; \`make freeglut-clean\` forces a full from-scratch rebuild.
 EOF
 
 echo
 echo "Vendored freeglut -> third_party/freeglut (sha $SHA)"
 echo "Reminders:"
+echo "  - the next 'make' auto-rebuilds libglut.a and relinks (VENDORED.txt is"
+echo "    a prereq); 'make freeglut-clean' forces a full from-scratch rebuild"
 echo "  - update the pinned SHA in THIRD_PARTY_LICENSES.md"
-echo "  - run 'make freeglut-clean' before the next build"
