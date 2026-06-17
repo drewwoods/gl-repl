@@ -1048,7 +1048,10 @@ Useful environment variables: `GLR_TIME`, `GLR_ASSETS_DIR`,
 cursor-bound overlays like transform guides for headless captures),
 `GLR_ACCUM_PASSES=<n>` (accumulation AA sample count, 1/2/4/8/12/16 — lets
 headless captures smooth 3D edges at full UI text size),
+`GLR_VIEW_TOGGLE_AT=<secs,...>` (toggle 2D/3D mode during deterministic
+captures),
 `GLR_NO_POINT_PARAMETER=1` (force the no-`glPointParameterfv` fallback),
+`GLR_NO_GPU_PROF=1` (disable GPU timer-query profiling),
 `GLR_AUDIO_HITCH_MS` (audio worker stall-warning threshold).
 
 For fully headless rendering — screenshots and GIF/MP4 recordings with no
