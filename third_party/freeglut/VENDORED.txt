@@ -2,8 +2,9 @@ freeglut vendored into this tree.
 
 upstream: /Users/drew/src/freeglut-fork
 ref:      capture-windowed-backends
-sha:      91cf388acffa2c675bfb5d8a9427e6b6ed151940
+sha:      c9582c41abbfd1dd9db8d6df1b4bf27c2a28c97f
 
 Produced by scripts/vendor-freeglut.sh. Do NOT edit the vendored tree by hand;
-re-run the script with a ref to update. After re-vendoring, run
-`make freeglut-clean` so the static library is rebuilt from the new source.
+re-run the script with a ref to update. The Makefile's libglut.a rule depends
+on this file, so the next `make` rebuilds the static library from the new
+source and relinks; `make freeglut-clean` forces a full from-scratch rebuild.
