@@ -1013,7 +1013,7 @@ pipeline, so it stays hidden from the code panel. `@cfg` parsing reuses
 `parse_workspace_header_line()` from `src/repl/export.c`, restricted to
 these scene-presentation slugs:
 
-`wireframe`, `grid`, `grid_major`, `grid_extent`, `axes`,
+`wireframe`, `grid`, `grid_major`, `grid_extent`, `grid_brightness`, `axes`,
 `vertex_labels`, `normal_vectors`, `vertex_outlines`, `vertex_points`,
 `xform_guides`, `light_indicators`, `light_theme`, `backdrop`,
 `view_mode`, `camera_rotate`, `variable_panel`.

@@ -137,4 +137,23 @@ typedef enum {
     GRID_EXTENT_COUNT
 } SceneGridExtent;
 
+/* Grid line-brightness multiplier index. The default grid-line alphas are
+ * deliberately faint (minor lines ~0.03..0.12); this scales them so a
+ * grid can be dialed up (or down) for contrast against the backdrop. The
+ * actual multiplier values live in the controller (glr_ctrl.c), resolved
+ * into SceneRenderConfig.grid_brightness — NORMAL == 1.0 (no change). */
+#define GRID_BRIGHTNESS_LIST(X) \
+    X(DIM,    "Dim")            \
+    X(NORMAL, "Normal")         \
+    X(BRIGHT, "Bright")         \
+    X(BOLD,   "Bold")
+
+#define GRID_BRIGHTNESS_ENUM_ENTRY(name, str) GRID_BRIGHTNESS_##name,
+#define GRID_BRIGHTNESS_NAME_ENTRY(name, str) [GRID_BRIGHTNESS_##name] = str,
+
+typedef enum {
+    GRID_BRIGHTNESS_LIST(GRID_BRIGHTNESS_ENUM_ENTRY)
+    GRID_BRIGHTNESS_COUNT
+} SceneGridBrightness;
+
 #endif /* SCENE_THEMES_H */

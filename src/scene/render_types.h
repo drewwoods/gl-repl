@@ -257,6 +257,7 @@ typedef struct SceneRenderConfig {
 
     /* --- Visual scaling --- */
     float alpha_scale; /* alpha boost to counter dark-bg crush; 1.0 = no change */
+    float grid_brightness; /* user grid-line alpha multiplier (Grid brightness cfg); 1.0 = no change */
 } SceneRenderConfig;
 
 /* Derived state that helper renderers should consume instead of recomputing

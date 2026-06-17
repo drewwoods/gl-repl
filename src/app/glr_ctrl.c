@@ -913,6 +913,20 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, SceneRende
     config->grid_xn_phase = g_grid_xn.phase;
     config->grid_extent_idx = presentation.grid_extent_idx;
     config->grid_major_idx = presentation.grid_major_idx;
+    /* Resolve the Grid brightness index to an alpha multiplier the scene
+     * folds into grid-line color (grid.c). NORMAL == 1.0 preserves the
+     * historic look; the rest dial the deliberately-faint grid lines down
+     * or up for contrast against the backdrop. Indexed by SceneGridBrightness
+     * (themes.h); out-of-range guards to NORMAL. */
+    static const float k_grid_brightness_factors[GRID_BRIGHTNESS_COUNT] = {
+        [GRID_BRIGHTNESS_DIM]    = 0.6f,
+        [GRID_BRIGHTNESS_NORMAL] = 1.0f,
+        [GRID_BRIGHTNESS_BRIGHT] = 1.8f,
+        [GRID_BRIGHTNESS_BOLD]   = 3.0f,
+    };
+    int br_i = presentation.grid_brightness_idx;
+    if (br_i < 0 || br_i >= GRID_BRIGHTNESS_COUNT) br_i = GRID_BRIGHTNESS_NORMAL;
+    config->grid_brightness = k_grid_brightness_factors[br_i];
     config->axes_theme = g_axes_xn.current;
     config->axes_opacity = g_axes_xn.opacity;
     config->axes_xn_phase = g_axes_xn.phase;
