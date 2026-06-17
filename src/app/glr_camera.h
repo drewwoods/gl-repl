@@ -69,10 +69,14 @@ void             glr_camera_set_distance(float dist);
 void             glr_camera_set_motion_glow(float motion_glow);
 void             glr_camera_ease_to(float rx, float ry, float dist,
                                     float tx, float ty, float tz);
-/* Re-aim an in-flight (or fresh) ease at a new framing distance + orbit
- * center, keeping the current orientation target. See glr_camera_ease_fit
- * in glr_camera.c — used by the fit-frame feature. */
-void             glr_camera_ease_fit(float dist, float tx, float ty, float tz);
+/* Re-aim an in-flight (or fresh) ease so the world-space bounds fit the
+ * viewport described by fovy/aspect, keeping the current orientation target.
+ * Returns 1 when it starts an ease, 0 for invalid / degenerate bounds. */
+int              glr_camera_ease_fit_bounds(const float bounds_min[3],
+                                            const float bounds_max[3],
+                                            float fovy_deg,
+                                            float aspect,
+                                            float margin);
 /* Override the per-ease decay for the current target. Each call to
  * glr_camera_ease_to resets it to the global GLR_CAMERA_TARGET_DECAY,
  * so this must be called AFTER the ease_to that it should affect.

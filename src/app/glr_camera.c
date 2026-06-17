@@ -262,17 +262,90 @@ void glr_camera_ease_to(float rx, float ry, float dist,
         snap_to_target();
 }
 
-/* Re-aim the camera ease at a new framing distance and orbit center while
- * preserving the current orientation TARGET (rx/ry). The fit-frame feature
- * fires one frame after a scene loads, mid-flight in the camera-block ease:
- * reading the live rx/ry would snap orientation back toward the previous
- * scene, so take the in-flight target's angles (or the live angles when no
- * ease is active, e.g. a scene with no // camera block). Eases like any
- * other camera move, so the user watches the geometry settle into frame. */
-void glr_camera_ease_fit(float dist, float tx, float ty, float tz) {
-    float rx = g_camera_target_active ? g_camera_target.rx : g_camera.rx;
-    float ry = g_camera_target_active ? g_camera_target.ry : g_camera.ry;
-    glr_camera_ease_to(rx, ry, dist, tx, ty, tz);
+static void camera_rotate_relative(float rx_deg, float ry_deg,
+                                   float dx, float dy, float dz,
+                                   float *out_x, float *out_y, float *out_z) {
+    float rx = rx_deg * (float)M_PI / 180.0f;
+    float ry = ry_deg * (float)M_PI / 180.0f;
+    float cry = cosf(ry), sry = sinf(ry);
+    float crx = cosf(rx), srx = sinf(rx);
+
+    /* Matches glr_camera_load_modelview's matrix order:
+     * glRotatef(rx, X) then glRotatef(ry, Y), so vertices see Y then X. */
+    float x1 = cry * dx + sry * dz;
+    float y1 = dy;
+    float z1 = -sry * dx + cry * dz;
+
+    if (out_x) *out_x = x1;
+    if (out_y) *out_y = crx * y1 - srx * z1;
+    if (out_z) *out_z = srx * y1 + crx * z1;
+}
+
+/* Fit a captured world-space bbox against the camera target orientation.
+ * The earlier sphere fit was deliberately conservative, but it wasted the
+ * horizontal room in wide top/bottom code-panel layouts. Projecting the 8
+ * bbox corners into the intended camera orientation lets aspect ratio do the
+ * right thing while still accounting for near/far depth inside the box. */
+int glr_camera_ease_fit_bounds(const float bounds_min[3],
+                               const float bounds_max[3],
+                               float fovy_deg,
+                               float aspect,
+                               float margin) {
+    if (!bounds_min || !bounds_max || fovy_deg <= 0.0f || aspect <= 0.0f)
+        return 0;
+
+    GlrCameraState target = g_camera_target_active ? g_camera_target : g_camera;
+    float center[3];
+    float largest_half = 0.0f;
+    for (int a = 0; a < 3; a++) {
+        if (bounds_max[a] < bounds_min[a])
+            return 0;
+        center[a] = 0.5f * (bounds_min[a] + bounds_max[a]);
+        float half = 0.5f * (bounds_max[a] - bounds_min[a]);
+        if (half > largest_half)
+            largest_half = half;
+    }
+    if (largest_half <= 0.0f)
+        return 0;
+
+    float tan_y = tanf(fovy_deg * (float)M_PI / 360.0f);
+    if (tan_y <= 0.0f)
+        return 0;
+    float tan_x = tan_y * aspect;
+    if (tan_x <= 0.0f)
+        return 0;
+    if (margin <= 0.0f)
+        margin = 1.0f;
+
+    float dist = 0.0f;
+    for (int mask = 0; mask < 8; mask++) {
+        float wx = (mask & 1) ? bounds_max[0] : bounds_min[0];
+        float wy = (mask & 2) ? bounds_max[1] : bounds_min[1];
+        float wz = (mask & 4) ? bounds_max[2] : bounds_min[2];
+        float vx, vy, vz;
+        camera_rotate_relative(target.rx, target.ry,
+                               wx - center[0],
+                               wy - center[1],
+                               wz - center[2],
+                               &vx, &vy, &vz);
+        float req_x = vz + fabsf(vx) / tan_x;
+        float req_y = vz + fabsf(vy) / tan_y;
+        if (req_x > dist) dist = req_x;
+        if (req_y > dist) dist = req_y;
+    }
+
+    if (dist <= 0.0f)
+        return 0;
+    dist *= margin;
+
+    target.dist = dist;
+    target.tx = center[0];
+    target.ty = center[1];
+    target.tz = center[2];
+    glr_camera_set_scene_default(&target);
+    glr_camera_ease_to(target.rx, target.ry, target.dist,
+                       target.tx, target.ty, target.tz);
+    return 1;
 }
 
 /* Override the per-ease decay for the current target. Call AFTER

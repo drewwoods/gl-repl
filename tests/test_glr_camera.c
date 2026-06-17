@@ -172,6 +172,41 @@ static void test_camera_pose_lerp_and_changed(void) {
                 glr_camera_pose_changed(&a, &moved) == 1);
 }
 
+static void test_camera_fit_bounds(void) {
+    printf("--- camera fit bounds ---\n");
+
+    glr_camera_reset_default();
+    glr_camera_set(0.0f, 0.0f, 10.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+
+    {
+        float mn[3] = { -4.0f, -1.0f, 0.0f };
+        float mx[3] = {  4.0f,  1.0f, 0.0f };
+        float tan_y = tanf(45.0f * (float)M_PI / 360.0f);
+        float expected = 1.0f / tan_y;
+
+        ASSERT_TRUE("wide-aspect fit accepts bounds",
+                    glr_camera_ease_fit_bounds(mn, mx, 45.0f, 4.0f, 1.0f));
+        glr_camera_set_target_decay(0.0f);
+        glr_camera_tick();
+
+        ASSERT_FLOAT_NEAR("wide-aspect fit uses horizontal room",
+                          glr_camera().dist, expected, 0.001f);
+        ASSERT_FLOAT_NEAR("wide-aspect fit centers x",
+                          glr_camera().tx, 0.0f, 0.001f);
+        ASSERT_FLOAT_NEAR("wide-aspect fit centers y",
+                          glr_camera().ty, 0.0f, 0.001f);
+
+        glr_camera_set(10.0f, 20.0f, 12.0f, 3.0f, 4.0f, 5.0f, 0.0f);
+        glr_camera_ease_to_default();
+        glr_camera_set_target_decay(0.0f);
+        glr_camera_tick();
+        ASSERT_FLOAT_NEAR("fit updates reset-camera distance",
+                          glr_camera().dist, expected, 0.001f);
+        ASSERT_FLOAT_NEAR("fit updates reset-camera center x",
+                          glr_camera().tx, 0.0f, 0.001f);
+    }
+}
+
 int main(void) {
     printf("--- glr_camera tests ---\n");
 
@@ -180,6 +215,7 @@ int main(void) {
     test_camera_easing_and_decay();
     test_camera_auto_rotation_and_focus();
     test_camera_pose_lerp_and_changed();
+    test_camera_fit_bounds();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_glr_camera");

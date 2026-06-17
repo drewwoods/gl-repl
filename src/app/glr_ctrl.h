@@ -112,7 +112,7 @@ int glr_ctrl_save_recovery_file(void);
 
 /* Arm a one-shot camera fit-to-geometry on the next display frame. Called
  * when a scene with `@cfg fit_frame = 1` is entered (from the cfg-bridge
- * apply). The fit captures the geometry's world-space bounding sphere and
+ * apply). The fit captures the geometry's world-space bounding box and
  * eases the camera so it fills the scene viewport at the current aspect;
  * orientation comes from the scene's // camera block. See
  * glr_ctrl_apply_pending_fit_frame in glr_ctrl.c. */

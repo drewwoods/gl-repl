@@ -1020,13 +1020,16 @@ these scene-presentation slugs:
 
 `fit_frame = 1` is a **one-shot camera framing directive**, not a stored
 config toggle. On entry to a scene that declares it, the controller
-captures the geometry's world-space bounding sphere via the same
-`glRenderMode(GL_FEEDBACK)` path as PLY export (`glr_capture_world_bbox`
+captures the geometry's world-space bounding box via the same
+`glRenderMode(GL_FEEDBACK)` path as PLY export (`glr_capture_world_bounds`
 in `src/app/glr_mesh_export.c`, off the pure `mesh_ply_bounds` walk) and
 **eases** the camera to a distance that fills the *current* scene
 viewport — so all geometry stays visible regardless of the aspect ratio
-the code panel imposes (`dist = R / (tan(fovy/2)·min(1, aspect))`, same
-knob in 2D ortho and 3D perspective). Orientation still comes from the
+the code panel imposes. The fit projects the box corners into the
+camera-block orientation target and solves against both horizontal and
+vertical FOV, so wide top/bottom code-panel layouts use their horizontal
+room instead of falling back to a conservative bounding sphere. Orientation
+still comes from the
 `// camera` block (only distance + orbit center are derived), so a
 fit-framed example only needs the rotations it wants — its
 `glTranslatef(0,0,-Z)` distance becomes redundant. It fires once on the

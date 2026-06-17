@@ -163,8 +163,8 @@ static float *mesh_capture_grow(int flat_count, int *out_written) {
     }
 }
 
-int glr_capture_world_bbox(float out_center[3], float *out_radius) {
-    if (!out_center || !out_radius)
+int glr_capture_world_bounds(float out_min[3], float out_max[3]) {
+    if (!out_min || !out_max)
         return 0;
 
     int flat_count = mesh_capture_flat_count();
@@ -182,15 +182,10 @@ int glr_capture_world_bbox(float out_center[3], float *out_radius) {
     if (nverts <= 0)
         return 0;                          /* vertex-free or parse error */
 
-    float r2 = 0.0f;
     for (int a = 0; a < 3; a++) {
-        out_center[a] = 0.5f * (mn[a] + mx[a]);
-        float half = 0.5f * (mx[a] - mn[a]);
-        r2 += half * half;
+        out_min[a] = mn[a];
+        out_max[a] = mx[a];
     }
-    /* Bounding-sphere radius (half-diagonal): fits the whole box at any orbit
-     * angle, so the fit never clips when the user rotates after entry. */
-    *out_radius = sqrtf(r2);
     return 1;
 }
 
