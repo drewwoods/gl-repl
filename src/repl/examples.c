@@ -104,6 +104,7 @@ static const char *const g_example_ring[] = {
 /* Example 2: Function demo - define a named reusable function (alias for a
  * funcN slot), call it repeatedly with transforms between calls. */
 static const char *const g_example_func[] = {
+    "// @cfg fit_frame = 1.15",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -3.0f);",
     "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
@@ -133,6 +134,7 @@ static const char *const g_example_func[] = {
 
 /* Example 3: Parametric polygon helper - function args driving local for-loops */
 static const char *const g_example_func_loop[] = {
+    "// @cfg fit_frame = 1.15",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -4.0f);",
     "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
@@ -675,6 +677,7 @@ static const char *const g_example_spirograph_curve[] = {
 /* Example 15: Traveling ripple ring - circular line loop with a narrow
  * modulo-selected radial wave, exercising fmod math and conditional edits. */
 static const char *const g_example_traveling_ripple_ring[] = {
+    "// @cfg fit_frame = 1.15",
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
     "// camera",
@@ -706,6 +709,7 @@ static const char *const g_example_traveling_ripple_ring[] = {
 /* Animated quadratic Bezier curve - vertex + line loop with parametric
  * function, showing variable assignment and reuse across calls. */
 static const char *const g_example_bezier[] = {
+    "// @cfg fit_frame = 1.15",
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
     "// @cfg light_indicators = 0",
@@ -1240,6 +1244,7 @@ static const char *const g_example_stress[] = {
  * unrolling, function scopes, and scale-of-origin (3-axis gizmo fallback).
  * Park the cursor on any transform line to see its guide overlay. */
 static const char *const g_example_xform_stress[] = {
+    "// @cfg fit_frame = 1.15",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -5.0f);",
     "glRotatef(00.0f, 1.0f, 0.0f, 0.0f);",
@@ -1301,6 +1306,7 @@ static const char *const g_example_xform_stress[] = {
  * A/B/C hold the x/y/z control-point lanes while collapse() implements one
  * in-place interpolation step using ordinary expression math. */
 static const char *const g_example_scratch_casteljau[] = {
+    "// @cfg fit_frame = 1.15",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -8.0f);",
     "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
@@ -1379,6 +1385,7 @@ static const char *const g_example_scratch_casteljau[] = {
 /* Text annotation demo - pairs glRasterPos3f with label() so scene data can
  * carry live numeric readouts instead of geometry alone. */
 static const char *const g_example_annotated_orbit_plot[] = {
+    "// @cfg fit_frame = 1.15",
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
     "// @cfg light_indicators = 0",
@@ -1857,6 +1864,7 @@ static const char *const g_example_whale[] = {
 };
 
 static const char *const g_example_carousel[] = {
+    "// @cfg fit_frame = 1.15",
     "// @cfg grid = GRID_THEME_FOCUS",
     "// @cfg axes = AXES_THEME_OFF",
     "// @cfg backdrop = SCENE_BACKDROP_CITY_AND_STARS",

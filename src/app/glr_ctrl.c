@@ -110,16 +110,14 @@ static int g_last_ui_snapshot_valid = 0;
 static int g_last_replay_follow_src_line = -1;
 
 /* Fit-frame request: set by glr_ctrl_request_fit_frame() when a scene with
- * `@cfg fit_frame = 1` is entered (armed from the cfg-bridge apply, the one
+ * `@cfg fit_frame = N` is entered (armed from the cfg-bridge apply, the one
  * chokepoint examples / user scenes / workspaces share). Consumed on the
  * next display frame — where the GL context and flat program are live —
  * which captures the geometry bbox and eases the camera so it fills the
- * scene viewport. One-shot: cleared after it fires (or is skipped). */
-static int g_pending_fit_frame = 0;
-
-/* Margin on the fit distance: pull back 8% so geometry doesn't touch the
- * viewport edges. */
-#define GLR_FIT_FRAME_MARGIN 1.08f
+ * scene viewport. N is applied as a distance multiplier, so values above 1
+ * pull the camera back. One-shot: cleared after it fires (or is skipped). */
+static int   g_pending_fit_frame = 0;
+static float g_pending_fit_frame_multiplier = 1.0f;
 
 /* --- Accumulation motion-blur sub-frame driver ---
  * When accum_effect == BLUR the scene's accum loop calls back per sample to
@@ -1502,8 +1500,11 @@ static void glr_ctrl_resolve_blur_subframe(SceneRenderConfig *config) {
     config->setup_subframe_user_data = &g_subframe_ctx;
 }
 
-void glr_ctrl_request_fit_frame(void) {
+void glr_ctrl_request_fit_frame(float multiplier) {
+    if (!(multiplier > 0.0f))
+        return;
     g_pending_fit_frame = 1;
+    g_pending_fit_frame_multiplier = multiplier;
 }
 
 /* If a fit-frame is pending, capture the scene's world-space bounds and ease
@@ -1525,7 +1526,7 @@ static void glr_ctrl_apply_pending_fit_frame(const SceneRenderConfig *config) {
     glr_camera_ease_fit_bounds(mn, mx,
                                (float)scene_default_fovy_deg(),
                                (float)config->scene_w / (float)config->scene_h,
-                               GLR_FIT_FRAME_MARGIN);
+                               g_pending_fit_frame_multiplier);
 }
 
 void glr_ctrl_display_frame(void) {
@@ -2164,6 +2165,8 @@ void glr_ctrl_reset_all(void) {
     glr_ctrl_view_reset();
     g_last_ui_snapshot_valid = 0;
     g_last_replay_follow_src_line = -1;
+    g_pending_fit_frame = 0;
+    g_pending_fit_frame_multiplier = 1.0f;
     editor_state_reset();
     ui_state_reset();
     ui_overlay_layout_reset();

@@ -383,6 +383,23 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
     ASSERT_INT("flat count restored after frame", repl_state_flat_program_count(), saved_flat_count);
 }
 
+static void test_fit_frame_request_records_multiplier(void) {
+    printf("--- imrepl_ctrl fit-frame request multiplier ---\n");
+
+    glr_ctrl_reset_all();
+
+    glr_ctrl_request_fit_frame(1.15f);
+    ASSERT_INT("fit-frame request armed", g_pending_fit_frame, 1);
+    ASSERT_FLOAT("fit-frame stores requested multiplier",
+                 g_pending_fit_frame_multiplier, 1.15f);
+
+    glr_ctrl_reset_all();
+    glr_ctrl_request_fit_frame(0.0f);
+    ASSERT_INT("zero fit-frame multiplier ignored", g_pending_fit_frame, 0);
+    ASSERT_FLOAT("ignored fit-frame keeps reset multiplier",
+                 g_pending_fit_frame_multiplier, 1.0f);
+}
+
 static void test_reshape_clamps_height(void) {
     printf("--- imrepl_ctrl reshape ---\n");
 
@@ -2306,6 +2323,7 @@ int main(void) {
     printf("--- imrepl_ctrl tests ---\n");
 
     test_display_frame_builds_config_and_restores_live_state();
+    test_fit_frame_request_records_multiplier();
     test_reshape_clamps_height();
     test_display_frame_profile_coverage();
     test_variable_panel_motion_routes_through_compile_and_coalesces_undo();

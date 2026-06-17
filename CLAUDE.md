@@ -1018,12 +1018,15 @@ these scene-presentation slugs:
 `xform_guides`, `light_indicators`, `light_theme`, `backdrop`,
 `view_mode`, `camera_rotate`, `variable_panel`, `fit_frame`.
 
-`fit_frame = 1` is a **one-shot camera framing directive**, not a stored
-config toggle. On entry to a scene that declares it, the controller
+`fit_frame = N` is a **one-shot camera framing directive**, not a stored
+config toggle. `N` is a positive distance multiplier: `1.0` is the tight
+fit, values above `1.0` pull the camera back to leave extra room for
+rotating/animated geometry (the built-in fit-framed examples use `1.15`).
+On entry to a scene that declares it, the controller
 captures the geometry's world-space bounding box via the same
 `glRenderMode(GL_FEEDBACK)` path as PLY export (`glr_capture_world_bounds`
 in `src/app/glr_mesh_export.c`, off the pure `mesh_ply_bounds` walk) and
-**eases** the camera to a distance that fills the *current* scene
+**eases** the camera to a multiplied distance that fills the *current* scene
 viewport — so all geometry stays visible regardless of the aspect ratio
 the code panel imposes. The fit projects the box corners into the
 camera-block orientation target and solves against both horizontal and

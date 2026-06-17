@@ -111,12 +111,13 @@ void glr_ctrl_request_quit(void);
 int glr_ctrl_save_recovery_file(void);
 
 /* Arm a one-shot camera fit-to-geometry on the next display frame. Called
- * when a scene with `@cfg fit_frame = 1` is entered (from the cfg-bridge
+ * when a scene with `@cfg fit_frame = N` is entered (from the cfg-bridge
  * apply). The fit captures the geometry's world-space bounding box and
  * eases the camera so it fills the scene viewport at the current aspect;
- * orientation comes from the scene's // camera block. See
+ * orientation comes from the scene's // camera block. `multiplier` is a
+ * distance multiplier: 1.0 is the tight fit, values above 1 pull back. See
  * glr_ctrl_apply_pending_fit_frame in glr_ctrl.c. */
-void glr_ctrl_request_fit_frame(void);
+void glr_ctrl_request_fit_frame(float multiplier);
 
 void glr_ctrl_display_frame(void);
 void glr_ctrl_reshape(int w, int h);

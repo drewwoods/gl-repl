@@ -509,6 +509,28 @@ static int glr_export_cfg_resolve_value(const char *slug,
     return 1;
 }
 
+static int glr_export_cfg_fit_frame_multiplier(const char *value_text,
+                                               float *out_multiplier) {
+    char *end = NULL;
+    float v;
+
+    if (!value_text || !out_multiplier)
+        return 0;
+    v = strtof(value_text, &end);
+    if (end == value_text)
+        return 0;
+    while (*end && isspace((unsigned char)*end))
+        end++;
+    if (*end == 'f' || *end == 'F')
+        end++;
+    while (*end && isspace((unsigned char)*end))
+        end++;
+    if (*end != '\0' || !(v > 0.0f))
+        return 0;
+    *out_multiplier = v;
+    return 1;
+}
+
 static void glr_export_cfg_value_to_string(const char *slug, int value, char *buf, size_t buf_sz) {
     int count = 0;
     const char *const *table = cfg_symbol_table_for_slug(slug, &count);
@@ -557,15 +579,17 @@ static void glr_export_cfg_apply(const ReplConfigBag *cfg) {
         const char *slug  = cfg->items[idx].key;
         const char *value = cfg->items[idx].value;
         /* fit_frame is a one-shot directive, not stored config: entering a
-         * scene that declares `@cfg fit_frame = 1` arms an eased camera
-         * fit-to-geometry on the next display frame. This bridge apply is
-         * the chokepoint every scene transition (example load, user-scene
-         * restore, workspace load) routes through, so arming here covers
-         * all of them. Handled before resolve_value (which only knows the
-         * stored slugs) and consumed by glr_ctrl_apply_pending_fit_frame. */
+         * scene that declares `@cfg fit_frame = N` arms an eased camera
+         * fit-to-geometry on the next display frame, using N as the camera
+         * distance multiplier. This bridge apply is the chokepoint every
+         * scene transition (example load, user-scene restore, workspace
+         * load) routes through, so arming here covers all of them. Handled
+         * before resolve_value (which only knows the stored slugs) and
+         * consumed by glr_ctrl_apply_pending_fit_frame. */
         if (strcmp(slug, "fit_frame") == 0) {
-            if ((int)strtol(value, NULL, 10) != 0)
-                glr_ctrl_request_fit_frame();
+            float multiplier;
+            if (glr_export_cfg_fit_frame_multiplier(value, &multiplier))
+                glr_ctrl_request_fit_frame(multiplier);
             continue;
         }
         int val;
