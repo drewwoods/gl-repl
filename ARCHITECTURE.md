@@ -733,7 +733,8 @@ framework). So OSMesa mode just (a) builds the vendored freeglut with
 `build/<cfg>-osmesa/`) so the OSMesa and native builds never collide. The
 `-std=c99` sources and every guard are untouched. Mechanics live in the Makefile
 (`FREEGLUT_OSMESA` ⇒ `FREEGLUT_CMAKE_BACKEND`, the per-platform link block, the
-vendored-archive prereq gate) — see `CLAUDE.md`'s *Headless OSMesa build*.
+vendored-archive prereq gate); the user-facing build and capture commands live
+in [`ADVANCED_USAGE.md`](ADVANCED_USAGE.md#headless-rendering-osmesa).
 
 The backend lives in the **vendored** freeglut only — but the in-tree
 vendored tree **already carries it**: the `capture-windowed-backends` branch
@@ -935,10 +936,11 @@ come from GLUT (`GLUT_KEY_F<n>`). macOS Cmd+letter is folded to
 Ctrl+letter by `editor_input_normalize_super_to_ctrl` at the top of
 `glr_ctrl_keyboard`, so every downstream layer sees Cmd+B as Ctrl+B.
 
-The F1 help "Keys" tab and CLAUDE.md's *Key Controls* table are
-maintained by hand **except** the F-key section of the help, which is
-generated from the config table via the `ReplHelpFkeyProvider`
-(`glr_ctrl_help_fkey_label` reads each F-key row's label by `key_code`).
+The F1 help "Keys" tab is the in-app source for shortcuts, and
+[`USER_GUIDE.md`](USER_GUIDE.md#keyboard--mouse-reference) mirrors it for
+readers outside the app. The F-key section of the help is generated from the
+config table via the `ReplHelpFkeyProvider` (`glr_ctrl_help_fkey_label` reads
+each F-key row's label by `key_code`).
 
 ### Toward a centralized keymap
 
@@ -1137,6 +1139,26 @@ and section 14b of `tests/test_repl_core_internal.c` (drives the full pass
 and asserts the shape is redrawn + polygon-mode/offset toggled, gated on
 `GL_STUBS`).
 
+### Cursor Edit Guides
+
+The vertex/normal guides drawn at the cursor line
+(`src/scene/guides/geometry_guides.c`) render from a `SceneGuideSnapshot`.
+The snapshot initially comes from `glr_ctrl_build_guide_snapshot()`, but text
+parsing the input line can only evaluate predefined variables. It cannot resolve
+funcN-local parameters or loop-assigned values, so the controller must override
+cursor arguments from the **flat** command stream before rendering guides inside
+functions or loops.
+
+`edit_overlays_render_cursor_guides()` walks the current `FlatProgramView` via
+the replay/user-vertex walkers while tracking the modelview with
+`apply_tracked_transform` / `unwind_transform_stack`. At the cursor's first flat
+command, `cursor_guide_snapshot_with_flat_args()` replaces `vertex_args` or
+`normal_args` from the already-substituted flat command. For normal guides it
+also walks forward to find the live anchor point, because source-line parsing
+alone cannot know the world-space vertex the normal belongs to. Argument-slot
+parsing uses `repl_scan_next_arg_delim()` so nested expressions such as
+`cos(i + phase)` do not truncate at an inner comma/paren.
+
 ## UI Layer
 
 The UI layer owns 2D editor rendering.
@@ -1217,6 +1239,43 @@ reads have been converted: `ui_repl_code_panel_build_layout` now takes a
 `replay_code_panel_get_command_display_text` takes an explicit
 `SourceTextView` supplied by the controller's annotation-prep pass
 rather than reading live state.
+
+### Menu Flyouts And Tutorial Catalogs
+
+The menu bar uses one submenu/flyout engine in `src/ui/app/menu_bar.c`. The
+engine is UI-pure: providers expose row count, row labels, absolute target
+indices, row kind, and active state; hit-tests return `UiHit` values, and the
+controller routes the hit to the owner.
+
+**Config menu.** `g_cfg_items[]` in `src/app/glr_actions.c` is the
+descriptor table for config rows. `### ` rows are section headers, and the
+Config dropdown renders one hover-only parent row per section plus a synthetic
+`All` parent. The section model lives in `src/app/glr_config.c`
+(`glr_config_section_count/_label/_range`, `glr_config_row_kind`); the `All`
+row is owned by the menu layer so it is not double-counted as real config data.
+Flyout item clicks route through `UI_HIT_SUBMENU_ITEM` to
+`glr_cfg_cycle_row(idx, +1)` and keep the dropdown open; right-press over a
+config flyout item cycles backward. Tall flyouts are clamped to the viewport and
+page on mouse wheel through `ui_menu_bar_handle_wheel_scroll`, which is called
+before code-panel/camera wheel handlers so scroll does not leak behind menus.
+
+**Tutorial menu.** Tutorials use the same flyout engine, but the catalog owner
+is `src/repl/tutorials.{c,h}`. Each tutorial entry declares a
+`ReplTutorialTagMask`; the synthetic `ALL` tag is folded into every entry's
+mask by `repl_tutorial_tag_mask`, so catalog literals only name real domain
+tags. Top-level visible rows are tags (`repl_tutorial_visible_tag_count()`
+hides unused tags), followed by `Restart Tutorial` / `Exit Tutorial` rows while
+a tutorial is active. Tag rows are inert hover-only parents; selecting a flyout
+tutorial routes through the controller to `tutorial_start(index)` and dismisses
+the menu.
+
+Catalog subheadings are free-form strings on tutorial/example entries, not a
+fixed enum. The shared catalog flyout walker emits a `### subheading` chrome row
+for each contiguous run with the same subheading, so entries sharing a
+subheading must be contiguous within each tag view. The metadata tests
+(`test_catalog_tag_metadata`, `test_catalog_subheading_metadata`, and the
+example equivalent) enforce non-zero tags, known bits only, and no interleaved
+subheading runs.
 
 ### UI Color Theming
 
@@ -1515,12 +1574,14 @@ shapes that the recent commits tripped on.
 >   steps 1, 2bc, 3, 4. They still need step 2a (autocomplete + F1 help) and
 >   step 7 (export round-trip helper if non-trivial). See **Step 0b** below.
 
-### 0a. Update CLAUDE.md's `## Supported Commands` block
+### 0a. Update user-facing command references
 
-The user-facing language reference at the bottom of `CLAUDE.md` is the
-authoritative list of REPL-recognised commands. Add the new signature there
-in the same style as the surrounding entries. Out-of-sync CLAUDE.md is a
-common review-time finding.
+The in-app F1 Commands tab is the canonical command reference, generated from
+`k_func_completions[]` and the hand-written language-level rows in
+`src/repl/help_text.c`. Add the new signature/description there through step 2a
+below, then mirror the user-visible syntax in
+[`USER_GUIDE.md`](USER_GUIDE.md#supported-gl-commands) when the guide's command
+list changes.
 
 ### 0b. Math / expression functions take a different path
 
@@ -1919,9 +1980,10 @@ status hint, and the autocomplete provider. Adding a tutorial means:
 
 - Pick a tag (`TUTORIAL_TAG_*`) and a subheading consistent with the
   per-tag contiguous-runs invariant enforced by
-  `test_catalog_subheading_metadata` (see CLAUDE.md's "Tutorials Menu"
-  section). The simplest path is to place the new entry between two
-  same-subheading entries in catalog order.
+  `test_catalog_subheading_metadata` (see
+  [Menu Flyouts And Tutorial Catalogs](#menu-flyouts-and-tutorial-catalogs)).
+  The simplest path is to place the new entry between two same-subheading
+  entries in catalog order.
 - The catalog validator `expected_is_single_command` rejects
   `float ...;` declarations in a COMMAND `expected` (CMD_VAR_DECLARE is
   relocated to the top of non-decl code by `editor_try_commit_float_decl`,
@@ -1958,14 +2020,13 @@ Add at least:
 - If you added ghost text: empty-input full-ghost case + strict-prefix
   suffix case.
 
-### 7. CLAUDE.md
+### 7. Catalog docs
 
-Update the `## Tutorials Menu` and tutorial file-layout descriptions
-in `CLAUDE.md` to mention the new kind. The validator drift test
-already requires non-zero `.tags`, but any new step-shape invariant
-(e.g. "REQUIRE_VAR var_name must be non-reserved") needs a one-line
-mention so future catalog authors don't rediscover it from a test
-failure.
+Update this architecture section, the tutorial catalog comments, and any
+agent-facing file-layout notes that describe the tutorial entries. The validator
+drift test already requires non-zero `.tags`, but any new step-shape invariant
+(e.g. "REQUIRE_VAR var_name must be non-reserved") needs a one-line mention so
+future catalog authors don't rediscover it from a test failure.
 
 ## Open Refactor Edges
 

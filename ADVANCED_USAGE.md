@@ -1,17 +1,17 @@
 # Advanced Usage
 
 The power-user reference: command-line flags, environment variables,
-headless rendering, recording, mesh export, scene-file headers, music,
-and diagnostics. For day-to-day features (editing, the language, the
-panels), see the [User Guide](USER_GUIDE.md).
+headless rendering, recording, documentation media, app packaging, mesh export,
+scene-file headers, music, and diagnostics. For day-to-day features (editing,
+the language, the panels), see the [User Guide](USER_GUIDE.md).
 
 ## Synopsis
 
 ```
 gl-repl [file.c | workspace/] [--example name|n] [--time secs]
         [--export-ply out.ply [--export-ply-srgb]] [--noaccum]
-        [--assets dir] [--no-audio] [--dump-code] [--detailed-prof]
-        [--list-examples]
+        [--assets dir] [--no-audio] [--dump-code] [--flat-histogram]
+        [--detailed-prof] [--list-examples]
 ```
 
 ## Options
@@ -29,6 +29,7 @@ gl-repl [file.c | workspace/] [--example name|n] [--time secs]
 | `--assets` *dir* | Scan *dir* for `*.mp3` instead of `./assets`. Beats `GLR_ASSETS_DIR`. |
 | `--no-audio` | Skip audio initialization entirely (also isolates startup stalls). |
 | `--dump-code` | Print the loaded buffer to stdout. |
+| `--flat-histogram` | Print per-function / per-line flat-command budget costs. Honors `--example`. |
 | `--detailed-prof` | Add fine-grained init-trace phases (see [Diagnostics](#diagnostics)). |
 
 ## Environment variables
@@ -39,11 +40,13 @@ gl-repl [file.c | workspace/] [--example name|n] [--time secs]
 | `GLR_TIME` | Initial animation time `t` in seconds; `--time` wins. |
 | `GLR_EDIT_LINE` | Park the cursor on source line *n* (0-based, clamped) after load — makes cursor-bound overlays render headlessly. |
 | `GLR_ACCUM_PASSES` | Accumulation AA sample count (1/2/4/8/12/16); used by the capture pipeline. |
+| `GLR_VIEW_TOGGLE_AT` | Comma-separated capture-clock seconds at which to toggle 2D/3D view mode while recording. |
 | `GLR_NO_POINT_PARAMETER` | Force the no-`glPointParameterfv` fallback path on capable hardware (keeps the fallback testable). |
+| `GLR_NO_GPU_PROF` | Disable GPU timer-query profiling; the profile panel's GPU column reads `--`. |
 | `GLR_AUDIO_HITCH_MS` | Audio-worker hitch-report threshold in ms (default 50; `0` disables). |
 | `GLR_DETAILED_PROF` | Same as `--detailed-prof`, via env. |
-| `FREEGLUT_CAPTURE_FILE` | *(OSMesa builds)* Filename prefix for `SIGUSR1` screenshots (default `freeglut`). |
-| `FREEGLUT_CAPTURE_FRAMES` | *(OSMesa builds)* Record mode: capture N frames as numbered PPMs, then exit. |
+| `FREEGLUT_CAPTURE_FILE` | Filename prefix for `SIGUSR1` screenshots in vendored freeglut builds (default `freeglut`). |
+| `FREEGLUT_CAPTURE_FRAMES` | Record mode in vendored freeglut builds: capture N frames as numbered PPMs, then exit. |
 | `USE_GL_STUBS=1` | *(build-time)* Compile against the bundled no-op GL headers — no system GL needed (non-rendering tests only). |
 
 ## Headless rendering (OSMesa)
@@ -61,6 +64,13 @@ FREEGLUT_CAPTURE_FILE=/tmp/shot ./build/release-osmesa/gl-repl --example 8 --no-
 kill -USR1 $!                                    # writes /tmp/shot-0000.ppm
 magick /tmp/shot-0000.ppm shot.png               # PPM -> PNG to view
 ```
+
+The same vendored freeglut capture hook also works in native Cocoa/X11 builds:
+`kill -USR1 <pid>` posts a redisplay and captures `GL_BACK` just before swap,
+so the image is from the real GPU path. Wait until after `glutInit` has run
+before signaling, and give an actively animating scene a few frames to settle.
+`FREEGLUT_CAPTURE_FILE` controls the filename prefix in both native and OSMesa
+builds.
 
 **Starting the animation later.** Animation plays by default, with `t`
 advancing a fixed `1/60 s` per rendered frame from `0`. To capture from a
@@ -96,28 +106,69 @@ scripts/record-gif.sh --example 8 --duration 4 --fps 30 --scale 600 --time 5 --o
 frame, so playback is `~fps/60`× natural speed — use `--fps 60` for
 real-time. Needs `ffmpeg`. (`scripts/record-gif.sh --help` for all flags.)
 
-The screenshots and GIFs in the README and User Guide are themselves
-generated headlessly — `scripts/docs-assets.sh` regenerates everything under
-`docs/images/`, rendering scene shots at 2x via `--window 2400x1600` and
-downscaling for 4x supersampling (the software rasterizer has no MSAA).
+Native builds support the same `FREEGLUT_CAPTURE_FRAMES=N` contract too: they
+open a real window, write N real-GPU frames, and exit.
 
-### Re-vendoring the OSMesa freeglut
+`GLR_VIEW_TOGGLE_AT=0.5,2.0` is a recording affordance for the 2D/3D swatch in
+the menu bar. It toggles view mode as the fixed capture clock crosses each
+listed second and advances the transition one fixed tick per captured frame, so
+UI transition clips are deterministic.
 
-The OSMesa backend needs a vendored freeglut that carries it. It lives in
-the freeglut fork at <https://github.com/drewwoods/freeglut> (branch
-`osmesa-backend`), which adds the OSMesa platform plus the `SIGUSR1`
-screenshot and `FREEGLUT_CAPTURE_FRAMES` record-mode capture used above:
+### Documentation media
+
+The screenshots and GIFs in the README and User Guide are generated by
+`scripts/docs-assets.sh`:
+
+```bash
+scripts/docs-assets.sh --list       # asset names
+scripts/docs-assets.sh -j 4         # regenerate all, four workers
+scripts/docs-assets.sh hero replay  # regenerate selected assets
+```
+
+Each asset is a staged snippet scene with optional `@cfg` headers, a `// camera`
+block, and sometimes `GLR_EDIT_LINE` to pose cursor-bound overlays. Captures use
+record mode and keep the last frame, so theme fades and other frame-based
+settling are deterministic. Scene-only shots render at `--window 2400x1600` and
+downscale 50% for 4x supersampling; full-UI and hairline grid/axes shots stay
+1x and use `GLR_ACCUM_PASSES=16` so bitmap text and 1px lines keep full weight.
+
+### Re-pinning vendored freeglut
+
+The in-tree vendored freeglut already carries the OSMesa backend and the native
+Cocoa/X11 capture hooks. No re-vendor is needed for `FREEGLUT_OSMESA=1`,
+`SIGUSR1` screenshots, or `FREEGLUT_CAPTURE_FRAMES` recording. Re-pin only when
+you want a newer fork commit:
 
 ```bash
 FREEGLUT_REPO=https://github.com/drewwoods/freeglut \
-  scripts/vendor-freeglut.sh osmesa-backend
+  scripts/vendor-freeglut.sh capture-windowed-backends
 make freeglut-clean
 ```
 
-The resolved SHA is pinned in `third_party/freeglut/VENDORED.txt`. See
-*Headless Rendering & Screenshots (OSMesa)* in
+The resolved source/ref/SHA are pinned in `third_party/freeglut/VENDORED.txt`.
+The current capture branch is stacked on the OSMesa backend branch, so one
+vendored tree serves both native and headless builds. See *Headless Rendering &
+Screenshots (OSMesa)* in
 [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full design, and
 `plans/external/freeglut-osmesa-backend.md` for the backend spec.
+
+## macOS app bundle
+
+`make app` packages the binary as `gl-repl.app` with a Finder/Dock icon and a
+bundled sample track:
+
+```bash
+make app
+open gl-repl.app
+```
+
+The icon source is `packaging/macos/gl-repl-soft-cube.svg` by default
+(`APP_ICON_SVG=...` selects another SVG). Building the `.icns` requires
+`rsvg-convert` from `librsvg`; `iconutil` is provided by macOS. The bundle
+copies only `assets/sample.mp3` into `Contents/Resources/assets/`; additional
+tracks belong in the per-user music folder or a directory passed with
+`--assets`. Generated bundle products (`gl-repl.app/`, `gl-repl.icns`,
+`gl-repl.iconset/`) are ignored by git.
 
 ## Mesh export (PLY)
 
@@ -239,6 +290,9 @@ hitches:
   load, stream teardown, advance) over the threshold logs
   `repl_audio: worker hitch: <op> took N ms`. Tune with
   `GLR_AUDIO_HITCH_MS` (default 50; `0` disables).
+- **GPU timer-query override** — `GLR_NO_GPU_PROF=1` leaves the CPU profile
+  data on but disables GPU timings, useful when a driver advertises timer
+  queries unreliably.
 
 In-app, the CPU profiler overlay shows per-frame section timings and the
 memory panel shows RSS history — see
