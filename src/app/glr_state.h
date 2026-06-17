@@ -29,6 +29,7 @@ typedef struct {
     int grid_theme;
     int grid_major_idx;
     int grid_extent_idx;
+    int grid_brightness_idx;
     int axes_theme;
     int show_vertex_labels;
     int show_normal_vectors;

@@ -45,6 +45,10 @@ typedef struct GridDrawContext {
     float anim_time;
     float breath;
     float alpha_scale; /* boost factor when bg is darker than design point */
+    float grid_brightness; /* user grid-line alpha multiplier (Grid brightness
+                            * cfg); folded into grid_color for grid LINES, not
+                            * the environment-theme surface fills (those use
+                            * grid_color_surface). 1.0 = no change. */
     /* In-out transition (audit #3): formerly file-static g_xn_opacity /
      * g_xn_alpha. Resolved once at scene_grid_render entry via
      * scene_overlay_xn_resolve, then every grid_color call multiplies
@@ -135,6 +139,20 @@ static void grid_xn_apply_transition_fog(float tf, float extent) {
 
 static void grid_color(const GridDrawContext *ctx,
                        float r, float g, float b, float a) {
+    /* Grid LINES route here: fold in the transition fade (xn_alpha) and the
+     * user grid-line brightness multiplier, clamping since brightness may
+     * push a pre-clamped alpha back above 1.0. */
+    glColor4f(r, g, b, fminf(a * ctx->xn_alpha * ctx->grid_brightness, 1.0f));
+}
+
+/* Environment-theme surface/atmosphere fills (Ocean water, Frozen ice
+ * sheet, Soil mesh, and the underwater/glacial/earth viewport tints) route
+ * here instead: they take the transition fade but NOT the grid-line
+ * brightness multiplier, which is meant for the grid lines, not a theme's
+ * opaque scene layers (scaling those would, e.g., turn the underwater tint
+ * fully opaque at Bold or wash it out at Dim). */
+static void grid_color_surface(const GridDrawContext *ctx,
+                               float r, float g, float b, float a) {
     glColor4f(r, g, b, a * ctx->xn_alpha);
 }
 
@@ -586,7 +604,7 @@ static float grid_camera_world_y(const SceneRenderConfig *config) {
 static void grid_draw_viewport_tint(const GridDrawContext *grid_ctx,
                                     const SceneRenderConfig *config,
                                     float r, float g, float b, float a) {
-    grid_color(grid_ctx, r, g, b, a);
+    grid_color_surface(grid_ctx, r, g, b, a);
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
@@ -709,7 +727,8 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
                 /* Subtle colour variation across surface */
                 float cr = sinf(sx * 0.4f + grid_ctx->anim_time * 0.3f) * 0.04f;
                 float cg = cosf(zz * 0.3f + grid_ctx->anim_time * 0.25f) * 0.04f;
-                grid_color(grid_ctx, 0.05f + cr, 0.25f + cg, 0.35f + cr, alpha);
+                grid_color_surface(grid_ctx, 0.05f + cr, 0.25f + cg,
+                                   0.35f + cr, alpha);
                 glVertex3f(sx, y, zz);
             }
         }
@@ -909,7 +928,7 @@ static void scene_grid_render_frozen_theme(const GridDrawContext *grid_ctx,
                 float sheen = sinf((sx + zz) * 0.18f +
                                    grid_ctx->anim_time * 0.35f) * 0.5f + 0.5f;
                 float alpha = (0.20f + frost * 0.20f + sheen * 0.05f) * edge;
-                grid_color(grid_ctx,
+                grid_color_surface(grid_ctx,
                            0.60f + frost * 0.16f + sheen * 0.06f,
                            0.72f + frost * 0.12f + sheen * 0.05f,
                            0.86f + frost * 0.06f + sheen * 0.05f,
@@ -974,7 +993,7 @@ static void grid_soil_vertex_color(const GridDrawContext *ctx,
     if (edge < 0.0f) edge = 0.0f;
     float alpha = edge * 1.8f;
     if (alpha > 1.0f) alpha = 1.0f;
-    grid_color(ctx,
+    grid_color_surface(ctx,
                0.40f - 0.24f * t + sun + clod + patch,
                0.29f - 0.18f * t + sun * 0.8f + clod + patch,
                0.18f - 0.11f * t + sun * 0.5f + clod * 0.7f + patch,
@@ -1548,6 +1567,11 @@ static GridDrawContext grid_build_draw_context(const SceneFrameRenderContext *fr
         .anim_time   = config->anim_time,
         .breath      = breath,
         .alpha_scale = config->alpha_scale,
+        /* A zero-initialized config (scene_demo, headless tests that don't
+         * set this) must not zero out grid-line alpha, so treat <= 0 as the
+         * neutral 1.0 multiplier. */
+        .grid_brightness = config->grid_brightness > 0.0f
+                               ? config->grid_brightness : 1.0f,
     };
 }
 

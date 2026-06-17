@@ -72,6 +72,9 @@ static const char *grid_major_names[GRID_MAJOR_COUNT] = {
 static const char *grid_extent_names[GRID_EXTENT_COUNT] = {
     GRID_EXTENT_LIST(GRID_EXTENT_NAME_ENTRY)
 };
+static const char *grid_brightness_names[GRID_BRIGHTNESS_COUNT] = {
+    GRID_BRIGHTNESS_LIST(GRID_BRIGHTNESS_NAME_ENTRY)
+};
 static const char *axes_theme_names[AXES_THEME_COUNT] = {
     AXES_THEME_LIST(AXES_THEME_NAME_ENTRY)
 };
@@ -185,6 +188,8 @@ const GlrConfigItem g_cfg_items[] = {
       .state_count = GRID_EXTENT_COUNT, .state_names = grid_extent_names,
       .key_code = KM_KEY(GLR_GRID_EXTENT), .modifiers = KM_MODS(GLR_GRID_EXTENT),
       .is_special = 1 },
+    { .label = "Grid brightness", .key = GLR_CONFIG_GRID_BRIGHTNESS,
+      .state_count = GRID_BRIGHTNESS_COUNT, .state_names = grid_brightness_names },
     { .label = "Axes", .key = GLR_CONFIG_AXES_THEME,
       .state_count = AXES_THEME_COUNT, .state_names = axes_theme_names,
       .key_code = KM_KEY(GLR_AXES), .modifiers = KM_MODS(GLR_AXES), .is_special = 1 },
@@ -282,6 +287,7 @@ static int cfg_key_in_scene_subset(GlrConfigKey key) {
     case GLR_CONFIG_GRID_THEME:
     case GLR_CONFIG_GRID_MAJOR:
     case GLR_CONFIG_GRID_EXTENT:
+    case GLR_CONFIG_GRID_BRIGHTNESS:
     case GLR_CONFIG_AXES_THEME:
     case GLR_CONFIG_VERTEX_LABELS:
     case GLR_CONFIG_NORMAL_VECTORS:
@@ -390,6 +396,11 @@ static const char *cfg_grid_major_symbols[GRID_MAJOR_COUNT] = {
     GRID_MAJOR_LIST(GRID_MAJOR_SYMBOL_ENTRY)
 #undef GRID_MAJOR_SYMBOL_ENTRY
 };
+static const char *cfg_grid_brightness_symbols[GRID_BRIGHTNESS_COUNT] = {
+#define GRID_BRIGHTNESS_SYMBOL_ENTRY(name, str) [GRID_BRIGHTNESS_##name] = "GRID_BRIGHTNESS_" #name,
+    GRID_BRIGHTNESS_LIST(GRID_BRIGHTNESS_SYMBOL_ENTRY)
+#undef GRID_BRIGHTNESS_SYMBOL_ENTRY
+};
 /* SCENE_VIEW_LIST is single-arg — X(name) — unlike the (name, str) theme
  * lists above, so its symbol-entry macro takes one parameter. */
 static const char *cfg_view_mode_symbols[SCENE_VIEW_COUNT] = {
@@ -428,6 +439,10 @@ static const char *const *cfg_symbol_table_for_slug(const char *slug,
     if (strcmp(slug, "grid_major") == 0) {
         *count = GRID_MAJOR_COUNT;
         return cfg_grid_major_symbols;
+    }
+    if (strcmp(slug, "grid_brightness") == 0) {
+        *count = GRID_BRIGHTNESS_COUNT;
+        return cfg_grid_brightness_symbols;
     }
     if (strcmp(slug, "view_mode") == 0) {
         *count = SCENE_VIEW_COUNT;

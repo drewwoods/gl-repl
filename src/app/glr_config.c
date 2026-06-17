@@ -123,6 +123,7 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_GRID_THEME:          return &glr_state_presentation_mut()->grid_theme;
     case GLR_CONFIG_GRID_MAJOR:          return &glr_state_presentation_mut()->grid_major_idx;
     case GLR_CONFIG_GRID_EXTENT:         return &glr_state_presentation_mut()->grid_extent_idx;
+    case GLR_CONFIG_GRID_BRIGHTNESS:     return &glr_state_presentation_mut()->grid_brightness_idx;
     case GLR_CONFIG_AXES_THEME:          return &glr_state_presentation_mut()->axes_theme;
     case GLR_CONFIG_XFORM_GUIDE_MODE:    return (int *)&glr_state_presentation_mut()->xform_guide_mode;
     case GLR_CONFIG_LIGHT_INDICATORS:    return &glr_state_presentation_mut()->show_light_indicators;
@@ -176,6 +177,7 @@ int glr_config_get(GlrConfigKey key) {
     case GLR_CONFIG_GRID_THEME:          return glr_state_presentation().grid_theme;
     case GLR_CONFIG_GRID_MAJOR:          return glr_state_presentation().grid_major_idx;
     case GLR_CONFIG_GRID_EXTENT:         return glr_state_presentation().grid_extent_idx;
+    case GLR_CONFIG_GRID_BRIGHTNESS:     return glr_state_presentation().grid_brightness_idx;
     case GLR_CONFIG_AXES_THEME:          return glr_state_presentation().axes_theme;
     case GLR_CONFIG_XFORM_GUIDE_MODE:    return glr_state_presentation().xform_guide_mode;
     case GLR_CONFIG_LIGHT_INDICATORS:    return glr_state_presentation().show_light_indicators;
