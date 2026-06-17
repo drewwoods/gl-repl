@@ -93,4 +93,19 @@ typedef struct {
 int mesh_ply_write(FILE *out, const float *feedback, int float_count,
                    const MeshPlyCapture *cap, const MeshPlyOptions *opts);
 
+/* Compute the world-space axis-aligned bounding box of the geometry in
+ * feedback[0 .. float_count). Walks the same token stream as
+ * mesh_ply_write (polygons, points, lines) and inverts every vertex to
+ * world space via the same `cap` transform, but accumulates min/max
+ * instead of emitting a mesh — no welding, triangulation, or normals.
+ *
+ * out_min / out_max receive the world-space corners (xyz). Returns the
+ * number of vertices seen: 0 for an empty / vertex-free stream (in which
+ * case out_min / out_max are left untouched) or a NEGATIVE value on a
+ * parse error (unknown / misaligned / truncated token), mirroring
+ * mesh_ply_write's error contract. Pure: no GL, no allocation. */
+int mesh_ply_bounds(const float *feedback, int float_count,
+                    const MeshPlyCapture *cap,
+                    float out_min[3], float out_max[3]);
+
 #endif /* MESH_PLY_H */

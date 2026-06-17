@@ -16,6 +16,7 @@
 #include "gl_includes.h"
 #include "c_compat.h"  /* STATIC_ASSERT */
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -108,51 +109,107 @@ static int capture_feedback(float *buf, int cap_floats, int flat_count) {
     return written;
 }
 
+/* The fixed capture transform glr_mesh_export installs, shared by the PLY
+ * writer and the bbox walk so both invert window coords identically. */
+static const MeshPlyCapture k_mesh_capture = {
+    .ortho_r = MESH_EXPORT_ORTHO_R,
+    .vp_x = 0, .vp_y = 0, .vp_w = MESH_EXPORT_VP, .vp_h = MESH_EXPORT_VP,
+    .depth_near = 0.0f, .depth_far = 1.0f,
+    .floats_per_vertex = MESH_PLY_FLOATS_PER_VERTEX_TEX,  /* GL_3D_COLOR_TEXTURE */
+};
+
+/* Make the live flat program current and return the count to capture (replay
+ * clamps to the PC). Returns <= 0 when there is nothing to capture. */
+static int mesh_capture_flat_count(void) {
+    /* Capture runs outside the per-frame flatten-if-dirty in display_frame, so
+     * make the flat program current first (decision 7: freshness). */
+    if (repl_state_flat_program_dirty())
+        repl_flatten_commands(editor_state_edit_line());
+    /* Match "what's on screen": clamp to the replay PC when replaying. */
+    return replay_active() ? replay_exec_limit()
+                           : repl_state_flat_program_count();
+}
+
+/* Capture the flat program into a feedback buffer, growing x2 and re-running
+ * on overflow (the buffer is only filled while rendering, so each retry
+ * re-runs). On success returns the malloc'd buffer (caller frees) and writes
+ * the value count to *out_written; on failure sets the status error, frees,
+ * and returns NULL. */
+static float *mesh_capture_grow(int flat_count, int *out_written) {
+    int cap_floats = MESH_FB_INITIAL;
+    float *buf = NULL;
+    for (;;) {
+        float *nb = realloc(buf, (size_t)cap_floats * sizeof *nb);
+        if (!nb) {
+            free(buf);
+            repl_set_status_error("Out of memory capturing geometry");
+            return NULL;
+        }
+        buf = nb;
+
+        int written = capture_feedback(buf, cap_floats, flat_count);
+        if (written >= 0) {
+            *out_written = written;
+            return buf;                    /* fit */
+        }
+        if (cap_floats >= MESH_FB_MAX) {
+            free(buf);
+            repl_set_status_error("Scene too large to capture");
+            return NULL;
+        }
+        cap_floats <<= 1;
+        if (cap_floats > MESH_FB_MAX)
+            cap_floats = MESH_FB_MAX;
+    }
+}
+
+int glr_capture_world_bbox(float out_center[3], float *out_radius) {
+    if (!out_center || !out_radius)
+        return 0;
+
+    int flat_count = mesh_capture_flat_count();
+    if (flat_count <= 0)
+        return 0;                          /* empty scene: nothing to frame */
+
+    int written = -1;
+    float *buf = mesh_capture_grow(flat_count, &written);
+    if (!buf)
+        return 0;                          /* status already set */
+
+    float mn[3], mx[3];
+    int nverts = mesh_ply_bounds(buf, written, &k_mesh_capture, mn, mx);
+    free(buf);
+    if (nverts <= 0)
+        return 0;                          /* vertex-free or parse error */
+
+    float r2 = 0.0f;
+    for (int a = 0; a < 3; a++) {
+        out_center[a] = 0.5f * (mn[a] + mx[a]);
+        float half = 0.5f * (mx[a] - mn[a]);
+        r2 += half * half;
+    }
+    /* Bounding-sphere radius (half-diagonal): fits the whole box at any orbit
+     * angle, so the fit never clips when the user rotates after entry. */
+    *out_radius = sqrtf(r2);
+    return 1;
+}
+
 int glr_export_mesh_ply(const char *path, int srgb_decode) {
     if (!path) {
         repl_set_status_error("No .ply path");
         return -1;
     }
 
-    /* Export runs outside the per-frame flatten-if-dirty in display_frame, so
-     * make the flat program current first (decision 7: freshness). */
-    if (repl_state_flat_program_dirty())
-        repl_flatten_commands(editor_state_edit_line());
-
-    /* Match "what's on screen": clamp to the replay PC when replaying. */
-    int flat_count = replay_active() ? replay_exec_limit()
-                                     : repl_state_flat_program_count();
+    int flat_count = mesh_capture_flat_count();
     if (flat_count <= 0) {
         repl_set_status_error("Nothing to export");
         return -1;
     }
 
-    /* Capture into a feedback buffer, growing x2 and re-running on overflow
-     * (the buffer is only filled while rendering, so each retry re-runs). */
-    int cap_floats = MESH_FB_INITIAL;
-    float *buf = NULL;
     int written = -1;
-    for (;;) {
-        float *nb = realloc(buf, (size_t)cap_floats * sizeof *nb);
-        if (!nb) {
-            free(buf);
-            repl_set_status_error("Out of memory capturing .ply");
-            return -1;
-        }
-        buf = nb;
-
-        written = capture_feedback(buf, cap_floats, flat_count);
-        if (written >= 0)
-            break;                         /* fit */
-        if (cap_floats >= MESH_FB_MAX) {
-            free(buf);
-            repl_set_status_error("Scene too large to export to .ply");
-            return -1;
-        }
-        cap_floats <<= 1;
-        if (cap_floats > MESH_FB_MAX)
-            cap_floats = MESH_FB_MAX;
-    }
+    float *buf = mesh_capture_grow(flat_count, &written);
+    if (!buf)
+        return -1;                         /* status already set */
 
     FILE *fp = fopen(path, "w");
     if (!fp) {
@@ -161,17 +218,11 @@ int glr_export_mesh_ply(const char *path, int srgb_decode) {
         return -1;
     }
 
-    MeshPlyCapture cap = {
-        .ortho_r = MESH_EXPORT_ORTHO_R,
-        .vp_x = 0, .vp_y = 0, .vp_w = MESH_EXPORT_VP, .vp_h = MESH_EXPORT_VP,
-        .depth_near = 0.0f, .depth_far = 1.0f,
-        .floats_per_vertex = MESH_PLY_FLOATS_PER_VERTEX_TEX,  /* GL_3D_COLOR_TEXTURE */
-    };
     MeshPlyOptions opts = {
         .weld = 1, .weld_eps = 1e-3f, .smooth_normals = 1, .triangulate = 1,
         .srgb_decode = srgb_decode,
     };
-    int ntris = mesh_ply_write(fp, buf, written, &cap, &opts);
+    int ntris = mesh_ply_write(fp, buf, written, &k_mesh_capture, &opts);
     int close_err = (fclose(fp) != 0);
     free(buf);
 

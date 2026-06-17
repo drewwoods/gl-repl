@@ -556,6 +556,18 @@ static void glr_export_cfg_apply(const ReplConfigBag *cfg) {
     for (int idx = 0; idx < cfg->count; idx++) {
         const char *slug  = cfg->items[idx].key;
         const char *value = cfg->items[idx].value;
+        /* fit_frame is a one-shot directive, not stored config: entering a
+         * scene that declares `@cfg fit_frame = 1` arms an eased camera
+         * fit-to-geometry on the next display frame. This bridge apply is
+         * the chokepoint every scene transition (example load, user-scene
+         * restore, workspace load) routes through, so arming here covers
+         * all of them. Handled before resolve_value (which only knows the
+         * stored slugs) and consumed by glr_ctrl_apply_pending_fit_frame. */
+        if (strcmp(slug, "fit_frame") == 0) {
+            if ((int)strtol(value, NULL, 10) != 0)
+                glr_ctrl_request_fit_frame();
+            continue;
+        }
         int val;
         if (!glr_export_cfg_resolve_value(slug, value, &val)) {
             /* Unresolved symbolic value — drop the row rather than
@@ -599,6 +611,12 @@ static int glr_export_cfg_is_known(const char *slug) {
 }
 
 static int glr_export_cfg_slug_is_scene_subset(const char *slug) {
+    /* fit_frame is a valid leading example/scene presentation slug even though
+     * it has no stored GlrConfigItem: it's a one-shot camera-fit directive
+     * (armed in glr_export_cfg_apply, consumed by the controller). Whitelist
+     * it so the example loader's leading-@cfg consumer doesn't drop it. */
+    if (slug && strcmp(slug, "fit_frame") == 0)
+        return 1;
     const GlrConfigItem *item = glr_export_cfg_find_item_by_slug(slug);
     return item && cfg_key_in_scene_subset(item->key) ? 1 : 0;
 }

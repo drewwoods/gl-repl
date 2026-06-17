@@ -22,4 +22,18 @@
  * plans/.../ply-feedback-export.md. */
 int glr_export_mesh_ply(const char *path, int srgb_decode);
 
+/* Compute the world-space bounding sphere of the current scene's geometry
+ * via the same GL_FEEDBACK capture path as glr_export_mesh_ply (identity
+ * modelview, so the box is post-user-transform but pre-camera). Writes the
+ * box center to out_center[3] and the half-diagonal radius to *out_radius.
+ *
+ * Used by the fit-frame feature to choose a camera distance that fills the
+ * scene viewport with all geometry visible. Like glr_export_mesh_ply this
+ * needs a live GL context on the GLUT thread (and is cheap: one feedback
+ * pass, no file I/O). Returns 1 on success, 0 when there is nothing to
+ * frame (empty scene, capture failure, or vertex-free stream) — in which
+ * case the outputs are left untouched and the caller should not move the
+ * camera. */
+int glr_capture_world_bbox(float out_center[3], float *out_radius);
+
 #endif /* GLR_MESH_EXPORT_H */

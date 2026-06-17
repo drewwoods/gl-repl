@@ -141,6 +141,11 @@ int scene_render_3d_scene(SceneRendererState *state,
 void scene_get_active_projection(const SceneRendererState *state,
                                  SceneProjectionDesc *out);
 
+/* The scene's fixed perspective vertical field of view, in degrees. Exposed
+ * so the controller's fit-frame math can size a camera distance against the
+ * same FOV the scene renders with, without duplicating the constant. */
+double scene_default_fovy_deg(void);
+
 /* Replay-fade overlay work no longer has a public scene entry point. Callers
  * that need it inject the pass through SceneRenderConfig.post_fill_fn, which
  * keeps src/scene/ unaware of replay batching details. */

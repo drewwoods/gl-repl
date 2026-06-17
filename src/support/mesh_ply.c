@@ -119,6 +119,71 @@ static int ensure_cap(void **arr, int *cap, int need, size_t esz) {
     return 1;
 }
 
+int mesh_ply_bounds(const float *feedback, int float_count,
+                    const MeshPlyCapture *cap,
+                    float out_min[3], float out_max[3]) {
+    if (float_count < 0 || (float_count > 0 && !feedback) || !cap ||
+        !out_min || !out_max)
+        return -1;
+
+    int stride  = (cap->floats_per_vertex >= MESH_PLY_FLOATS_PER_VERTEX_TEX)
+                      ? MESH_PLY_FLOATS_PER_VERTEX_TEX : MESH_PLY_FLOATS_PER_VERTEX;
+    int has_tex = (stride >= MESH_PLY_FLOATS_PER_VERTEX_TEX);
+
+    float mn[3] = {0}, mx[3] = {0};
+    int nverts = 0;
+
+    /* accumulate one vertex's inverted world position into mn/mx */
+    #define MESH_PLY_BOUNDS_ACC(base) do {                                   \
+        RawVert rv__ = invert_vertex(cap, (base), has_tex);                  \
+        float p__[3] = { rv__.x, rv__.y, rv__.z };                          \
+        for (int a__ = 0; a__ < 3; a__++) {                                  \
+            if (nverts == 0 || p__[a__] < mn[a__]) mn[a__] = p__[a__];       \
+            if (nverts == 0 || p__[a__] > mx[a__]) mx[a__] = p__[a__];       \
+        }                                                                    \
+        nverts++;                                                            \
+    } while (0)
+
+    /* Mirror mesh_ply_write's token walk, but only read vertex positions. */
+    int i = 0;
+    while (i < float_count) {
+        int tok = token_at(feedback, i);
+        i++;
+        if (tok == MESH_PLY_TOK_POLYGON) {
+            if (i >= float_count) return -1;            /* missing vertex count */
+            int n = token_at(feedback, i);
+            i++;
+            if (n < 0 || (long)n * stride > (long)(float_count - i))
+                return -1;                              /* truncated / misaligned */
+            for (int k = 0; k < n; k++)
+                MESH_PLY_BOUNDS_ACC(&feedback[i + k * stride]);
+            i += n * stride;
+        } else if (tok == MESH_PLY_TOK_POINT || tok == MESH_PLY_TOK_BITMAP ||
+                   tok == MESH_PLY_TOK_DRAW_PIXEL || tok == MESH_PLY_TOK_COPY_PIXEL) {
+            if (stride > float_count - i) return -1;
+            MESH_PLY_BOUNDS_ACC(&feedback[i]);
+            i += stride;                                /* 1 vertex */
+        } else if (tok == MESH_PLY_TOK_LINE || tok == MESH_PLY_TOK_LINE_RESET) {
+            if (2 * stride > float_count - i) return -1;
+            MESH_PLY_BOUNDS_ACC(&feedback[i]);
+            MESH_PLY_BOUNDS_ACC(&feedback[i + stride]);
+            i += 2 * stride;                            /* 2 vertices */
+        } else if (tok == MESH_PLY_TOK_PASS_THROUGH) {
+            if (1 > float_count - i) return -1;
+            i += 1;                                     /* the pass-through value */
+        } else {
+            return -1;                                  /* unknown token */
+        }
+    }
+
+    #undef MESH_PLY_BOUNDS_ACC
+
+    if (nverts > 0) {
+        for (int a = 0; a < 3; a++) { out_min[a] = mn[a]; out_max[a] = mx[a]; }
+    }
+    return nverts;
+}
+
 int mesh_ply_write(FILE *out, const float *feedback, int float_count,
                    const MeshPlyCapture *cap, const MeshPlyOptions *opts) {
     int rc = -1;

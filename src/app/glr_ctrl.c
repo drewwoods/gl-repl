@@ -38,6 +38,7 @@
 #include "app/glr_config.h"
 #include "app/glr_camera.h"
 #include "app/glr_camera_export.h"
+#include "app/glr_mesh_export.h"     /* glr_capture_world_bbox (fit frame) */
 #include "app/glr_debug.h"
 #include "keys.h"
 #include "support/memprof.h"
@@ -107,6 +108,18 @@ static int glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(
 static UiRenderSnapshot g_last_ui_snapshot;
 static int g_last_ui_snapshot_valid = 0;
 static int g_last_replay_follow_src_line = -1;
+
+/* Fit-frame request: set by glr_ctrl_request_fit_frame() when a scene with
+ * `@cfg fit_frame = 1` is entered (armed from the cfg-bridge apply, the one
+ * chokepoint examples / user scenes / workspaces share). Consumed on the
+ * next display frame — where the GL context and flat program are live —
+ * which captures the geometry bbox and eases the camera so it fills the
+ * scene viewport. One-shot: cleared after it fires (or is skipped). */
+static int g_pending_fit_frame = 0;
+
+/* Margin on the fit distance: pull back 8% so geometry doesn't touch the
+ * viewport edges. */
+#define GLR_FIT_FRAME_MARGIN 1.08f
 
 /* --- Accumulation motion-blur sub-frame driver ---
  * When accum_effect == BLUR the scene's accum loop calls back per sample to
@@ -1489,6 +1502,40 @@ static void glr_ctrl_resolve_blur_subframe(SceneRenderConfig *config) {
     config->setup_subframe_user_data = &g_subframe_ctx;
 }
 
+void glr_ctrl_request_fit_frame(void) {
+    g_pending_fit_frame = 1;
+}
+
+/* If a fit-frame is pending, capture the scene's world-space bounding sphere
+ * and ease the camera to a distance that fits it in the current scene
+ * viewport (`config` supplies scene_w/scene_h, so the live code-panel aspect
+ * is baked in). One-shot: cleared whether or not it found geometry to frame.
+ *
+ * The fit distance derives from the same fixed vertical FOV the scene renders
+ * with. At distance d the visible half-extents about the orbit center are
+ * d*tan(fovy/2) vertically and that * aspect horizontally; to contain a
+ * sphere of radius R on the binding (smaller) axis:
+ *     d = R / (tan(fovy/2) * min(1, aspect))
+ * The same d feeds 2D ortho framing (ortho_ref = cam_dist), so this works in
+ * both view modes. glr_camera_ease_fit keeps the camera-block orientation. */
+static void glr_ctrl_apply_pending_fit_frame(const SceneRenderConfig *config) {
+    if (!g_pending_fit_frame)
+        return;
+    g_pending_fit_frame = 0;   /* one-shot regardless of outcome */
+
+    float center[3];
+    float radius = 0.0f;
+    if (!glr_capture_world_bbox(center, &radius) || radius <= 0.0f)
+        return;                /* empty / degenerate scene: leave camera as-is */
+
+    double aspect = (double)config->scene_w / (double)config->scene_h;
+    double half_fovy_tan = tan(scene_default_fovy_deg() * M_PI / 360.0);
+    double bind = (aspect < 1.0) ? aspect : 1.0;   /* min(1, aspect) */
+    double dist = (double)radius / (half_fovy_tan * bind) * GLR_FIT_FRAME_MARGIN;
+
+    glr_camera_ease_fit((float)dist, center[0], center[1], center[2]);
+}
+
 void glr_ctrl_display_frame(void) {
     int saved_flat_count;
     float live_predef_vals[MAX_PREDEF_VARS];
@@ -1601,6 +1648,12 @@ void glr_ctrl_display_frame(void) {
     prof_begin(PROF_SNAPSHOT_SCENE_CONFIG);
     glr_ctrl_build_scene_config(flat_program, &scene_config);
     prof_end(PROF_SNAPSHOT_SCENE_CONFIG);
+
+    /* Fit-frame (one-shot on scene entry): now that scene_w/scene_h are
+     * resolved and the flat program is current, frame the camera to the
+     * geometry. Runs before the modelview load below so the ease it starts
+     * is already in flight this frame. No-op unless armed. */
+    glr_ctrl_apply_pending_fit_frame(&scene_config);
 
     prof_begin(PROF_SNAPSHOT_UI);
     /* Build, let follow-scroll adjust editor scroll, then update scroll-dependent

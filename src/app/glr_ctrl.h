@@ -110,6 +110,14 @@ void glr_ctrl_request_quit(void);
  * current in-memory scene. Returns 1 on success, 0 on failure. */
 int glr_ctrl_save_recovery_file(void);
 
+/* Arm a one-shot camera fit-to-geometry on the next display frame. Called
+ * when a scene with `@cfg fit_frame = 1` is entered (from the cfg-bridge
+ * apply). The fit captures the geometry's world-space bounding sphere and
+ * eases the camera so it fills the scene viewport at the current aspect;
+ * orientation comes from the scene's // camera block. See
+ * glr_ctrl_apply_pending_fit_frame in glr_ctrl.c. */
+void glr_ctrl_request_fit_frame(void);
+
 void glr_ctrl_display_frame(void);
 void glr_ctrl_reshape(int w, int h);
 void glr_ctrl_keyboard(unsigned char key, int x, int y);

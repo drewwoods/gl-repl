@@ -151,6 +151,10 @@ static void scene_render_pop_state(void) {
     glPopAttrib();
 }
 
+double scene_default_fovy_deg(void) {
+    return SCENE_DEFAULT_FOVY_DEG;
+}
+
 void scene_get_active_projection(const SceneRendererState *state,
                                  SceneProjectionDesc *out) {
     if (!out) return;

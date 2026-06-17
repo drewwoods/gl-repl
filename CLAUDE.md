@@ -1016,7 +1016,27 @@ these scene-presentation slugs:
 `wireframe`, `grid`, `grid_major`, `grid_extent`, `grid_brightness`, `axes`,
 `vertex_labels`, `normal_vectors`, `vertex_outlines`, `vertex_points`,
 `xform_guides`, `light_indicators`, `light_theme`, `backdrop`,
-`view_mode`, `camera_rotate`, `variable_panel`.
+`view_mode`, `camera_rotate`, `variable_panel`, `fit_frame`.
+
+`fit_frame = 1` is a **one-shot camera framing directive**, not a stored
+config toggle. On entry to a scene that declares it, the controller
+captures the geometry's world-space bounding sphere via the same
+`glRenderMode(GL_FEEDBACK)` path as PLY export (`glr_capture_world_bbox`
+in `src/app/glr_mesh_export.c`, off the pure `mesh_ply_bounds` walk) and
+**eases** the camera to a distance that fills the *current* scene
+viewport — so all geometry stays visible regardless of the aspect ratio
+the code panel imposes (`dist = R / (tan(fovy/2)·min(1, aspect))`, same
+knob in 2D ortho and 3D perspective). Orientation still comes from the
+`// camera` block (only distance + orbit center are derived), so a
+fit-framed example only needs the rotations it wants — its
+`glTranslatef(0,0,-Z)` distance becomes redundant. It fires once on the
+first display frame after load (where the GL context + flat program are
+live) and never re-fits, so the user is free to orbit/zoom afterward.
+Because it's whitelisted in the cfg bridge's `slug_is_scene_subset` /
+`apply` (no `GlrConfigItem`), it works for any scene that routes through
+that bridge — examples, user-scene restore, workspace load — not just
+examples. Armed in `glr_export_cfg_apply` (`src/app/glr_actions.c`),
+consumed by `glr_ctrl_apply_pending_fit_frame` (`src/app/glr_ctrl.c`).
 
 `view_mode` is the 2D/3D projection toggle (slug for the "View mode"
 config row → `GLR_CONFIG_ORTHO_MODE`): `0` = 3D perspective, `1` = 2D

@@ -262,6 +262,19 @@ void glr_camera_ease_to(float rx, float ry, float dist,
         snap_to_target();
 }
 
+/* Re-aim the camera ease at a new framing distance and orbit center while
+ * preserving the current orientation TARGET (rx/ry). The fit-frame feature
+ * fires one frame after a scene loads, mid-flight in the camera-block ease:
+ * reading the live rx/ry would snap orientation back toward the previous
+ * scene, so take the in-flight target's angles (or the live angles when no
+ * ease is active, e.g. a scene with no // camera block). Eases like any
+ * other camera move, so the user watches the geometry settle into frame. */
+void glr_camera_ease_fit(float dist, float tx, float ty, float tz) {
+    float rx = g_camera_target_active ? g_camera_target.rx : g_camera.rx;
+    float ry = g_camera_target_active ? g_camera_target.ry : g_camera.ry;
+    glr_camera_ease_to(rx, ry, dist, tx, ty, tz);
+}
+
 /* Override the per-ease decay for the current target. Call AFTER
  * glr_camera_ease_to (which resets to the global default). Values in
  * [0, 1): lower = faster (more of the remaining distance applied per

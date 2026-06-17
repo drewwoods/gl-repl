@@ -398,6 +398,67 @@ static void test_texcoord_normals(void) {
     }
 }
 
+/* ---- mesh_ply_bounds (fit-frame bbox walk) ------------------------------- */
+
+static void test_bounds_polygon(void) {
+    printf("test_bounds_polygon\n");
+    float buf[64]; int n = 0;
+    /* A triangle spanning x[-2,3], y[-1,4], z[0,0]. */
+    push_tok(buf, &n, MESH_PLY_TOK_POLYGON);
+    push_val(buf, &n, 3);
+    push_vert(buf, &n, -2, -1, 0, 1, 1, 1, 1);
+    push_vert(buf, &n,  3, -1, 0, 1, 1, 1, 1);
+    push_vert(buf, &n,  3,  4, 0, 1, 1, 1, 1);
+
+    float mn[3], mx[3];
+    int nv = mesh_ply_bounds(buf, n, &CAP, mn, mx);
+    ASSERT_INT("poly bounds sees 3 verts", nv, 3);
+    ASSERT_FLT("poly min x", mn[0], -2.0f);
+    ASSERT_FLT("poly min y", mn[1], -1.0f);
+    ASSERT_FLT("poly max x", mx[0], 3.0f);
+    ASSERT_FLT("poly max y", mx[1], 4.0f);
+    ASSERT_FLT("poly z flat", mn[2], 0.0f);
+    ASSERT_FLT("poly z flat max", mx[2], 0.0f);
+}
+
+static void test_bounds_mixed_tokens(void) {
+    printf("test_bounds_mixed_tokens\n");
+    float buf[128]; int n = 0;
+    /* A line (2 verts) extends z to 5; a passthrough marker is skipped; a
+     * point extends x to 9. Bbox must span all of them. */
+    push_tok(buf, &n, MESH_PLY_TOK_LINE);
+    push_vert(buf, &n, 0, 0, 0, 1, 1, 1, 1);
+    push_vert(buf, &n, 1, 1, 5, 1, 1, 1, 1);
+    push_tok(buf, &n, MESH_PLY_TOK_PASS_THROUGH);
+    push_val(buf, &n, MESH_PLY_PASS_NORMALS);
+    push_tok(buf, &n, MESH_PLY_TOK_POINT);
+    push_vert(buf, &n, 9, -3, 2, 1, 1, 1, 1);
+
+    float mn[3], mx[3];
+    int nv = mesh_ply_bounds(buf, n, &CAP, mn, mx);
+    ASSERT_INT("mixed bounds sees 3 verts", nv, 3);
+    ASSERT_FLT("mixed min x", mn[0], 0.0f);
+    ASSERT_FLT("mixed max x", mx[0], 9.0f);
+    ASSERT_FLT("mixed min y", mn[1], -3.0f);
+    ASSERT_FLT("mixed max z", mx[2], 5.0f);
+}
+
+static void test_bounds_empty_and_error(void) {
+    printf("test_bounds_empty_and_error\n");
+    float mn[3] = {7, 7, 7}, mx[3] = {7, 7, 7};
+    /* Empty stream: 0 verts, outputs untouched. */
+    int nv = mesh_ply_bounds(NULL, 0, &CAP, mn, mx);
+    ASSERT_INT("empty bounds returns 0", nv, 0);
+    ASSERT_FLT("empty leaves min untouched", mn[0], 7.0f);
+
+    /* Truncated polygon (claims 3 verts, supplies none) -> parse error. */
+    float buf[8]; int n = 0;
+    push_tok(buf, &n, MESH_PLY_TOK_POLYGON);
+    push_val(buf, &n, 3);
+    nv = mesh_ply_bounds(buf, n, &CAP, mn, mx);
+    ASSERT_TRUE("truncated bounds errors", nv < 0);
+}
+
 int main(void) {
     printf("=== mesh_ply tests ===\n\n");
     test_single_triangle();
@@ -409,6 +470,9 @@ int main(void) {
     test_color_clamp();
     test_srgb_decode();
     test_texcoord_normals();
+    test_bounds_polygon();
+    test_bounds_mixed_tokens();
+    test_bounds_empty_and_error();
 
     printf("\n=== Results: ");
     return test_harness_report(&g_harness, "mesh_ply");
