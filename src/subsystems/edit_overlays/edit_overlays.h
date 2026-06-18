@@ -29,6 +29,7 @@ typedef struct OverlayWalkCtx {
     int              replay_tess_preview;
     int              show_vertex_points;
     int              replay_vertex_points;
+    int              replay_anchor_flat_idx; /* -1 or flat idx of current replay vertex */
 } OverlayWalkCtx;
 
 typedef struct OverlaySnapshotPack {
