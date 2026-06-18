@@ -609,13 +609,13 @@ int main() {
     {
         glr_ctrl_reset_all();
 
-        /* F2 cycles Accum effect (Off/AA/Blur); wireframe moved to the
+        /* F2 cycles Grid theme; wireframe moved to the
          * plain Ctrl+G ascii shortcut. */
-        int accum_before = glr_config_get(GLR_CONFIG_ACCUM_EFFECT);
+        int grid_before = glr_config_get(GLR_CONFIG_GRID_THEME);
         ASSERT_INT("config special shortcut consumed",
                    glr_cfg_handle_special_shortcut(GLUT_KEY_F2), 1);
-        ASSERT_TRUE("config special shortcut (F2) cycles Accum effect",
-                    glr_config_get(GLR_CONFIG_ACCUM_EFFECT) != accum_before);
+        ASSERT_TRUE("config special shortcut (F2) cycles Grid theme",
+                    glr_config_get(GLR_CONFIG_GRID_THEME) != grid_before);
 
         glr_state_presentation_mut()->wireframe = 0;
         ASSERT_INT("wireframe ascii shortcut consumed",
@@ -624,10 +624,13 @@ int main() {
                    glr_state_presentation().wireframe, 1);
 
         glr_state_presentation_mut()->grid_major_idx = 0;
+        int saved_mods = g_mock_modifiers;
+        g_mock_modifiers = GLUT_ACTIVE_SHIFT;
         ASSERT_INT("config ascii shortcut consumed",
-                   glr_cfg_handle_ascii_shortcut(KEY_CTRL_O), 1);
+                   glr_cfg_handle_ascii_shortcut(KEY_CTRL_G), 1);
         ASSERT_INT("config ascii shortcut cycles grid major",
                    glr_state_presentation().grid_major_idx, 1);
+        g_mock_modifiers = saved_mods;
 
         int row = cfg_row_for_key(GLR_CONFIG_CODE_PANEL_LAYOUT);
         ASSERT_TRUE("config menu action row exists", row >= 0);
@@ -3748,10 +3751,12 @@ int main() {
         editor_handle_key(28, 0, 0);
         assert_status_contains("Ctrl+\\ reformat", "Reformatted");
 
-        /* Ctrl+P (Dump) */
+        /* Ctrl+Shift+D (Dump) */
         /* We can't easily check stdout, but we trigger the branch. */
-        glr_ctrl_router_handle_debug_dump_key(16);
-        assert_status_contains("Ctrl+P dump", "Dumped");
+        g_mock_modifiers = GLUT_ACTIVE_CTRL | GLUT_ACTIVE_SHIFT;
+        glr_ctrl_router_handle_debug_dump_key(4);
+        assert_status_contains("Ctrl+Shift+D dump", "Dumped");
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
 
         /* Ctrl+S (Save) */
         {

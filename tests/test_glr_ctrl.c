@@ -2158,8 +2158,8 @@ static void test_special_key_shortcuts(void) {
 
     /* 2. Config special shortcut */
     int old_grid = glr_config_get(GLR_CONFIG_GRID_THEME);
-    glr_ctrl_special(GLUT_KEY_F3, 0, 0);
-    ASSERT_TRUE("F3 toggled grid config", glr_config_get(GLR_CONFIG_GRID_THEME) != old_grid);
+    glr_ctrl_special(GLUT_KEY_F2, 0, 0);
+    ASSERT_TRUE("F2 toggled grid config", glr_config_get(GLR_CONFIG_GRID_THEME) != old_grid);
 
     /* 3. Audio special shortcuts (Ctrl+Left / Ctrl+Right) */
     g_simulated_mods = GLUT_ACTIVE_CTRL;
