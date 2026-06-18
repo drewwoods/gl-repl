@@ -437,6 +437,7 @@ REPL_SRCS = \
 	src/repl/flatten.c \
 	src/repl/help_text.c \
 	src/repl/import.c \
+	src/repl/keymap_format.c \
 	src/repl/load.c \
 	src/repl/parser.c \
 	src/repl/scenes.c \

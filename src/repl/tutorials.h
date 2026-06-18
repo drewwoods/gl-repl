@@ -109,6 +109,14 @@ typedef struct {
      * keep zero-initialising these to NULL/0.0f. */
     const char               *var_name;
     float                     var_target;
+    /* Optional shortcut interpolation for `comment`. When
+     * comment_binding_key is non-zero, repl_tutorial_step_comment()
+     * treats comment as a printf-style format string with one `%s`
+     * placeholder and fills it with keymap_binding_to_string(...).
+     * Kept trailing so older positional initializers remain valid. */
+    int                       comment_binding_key;
+    int                       comment_binding_mods;
+    int                       comment_binding_is_special;
 } TutorialStep;
 
 /* Curated metadata tags used by the Tutorials menu. Tutorials keep their
@@ -182,11 +190,9 @@ const TutorialStep       *repl_tutorial_step_get(int idx, int step_idx);
 
 /* Per-field shims. Each is one walk + one field read. Use the bulk
  * accessor above when more than one field is needed for the same
- * step. */
-static inline const char *repl_tutorial_step_comment(int idx, int step_idx) {
-    const TutorialStep *step = repl_tutorial_step_get(idx, step_idx);
-    return step ? step->comment : NULL;
-}
+ * step. `comment` is a real function because some catalog comments
+ * interpolate keymap.h shortcuts at read time. */
+const char *repl_tutorial_step_comment(int idx, int step_idx);
 static inline const char *repl_tutorial_step_expected(int idx, int step_idx) {
     const TutorialStep *step = repl_tutorial_step_get(idx, step_idx);
     return step ? step->expected : NULL;

@@ -2067,12 +2067,13 @@ static void glr_ctrl_tick_overlay_xn(void) {
  * src/app/glr_config.h directly. */
 static const char *glr_ctrl_help_fkey_label(int fn) {
     int cfg_count = 0;
+    int key_code = GLUT_KEY_F1 + fn - 1;
     const GlrConfigItem *items = glr_config_items(&cfg_count);
     for (int i = 0; i < cfg_count; i++) {
         const GlrConfigItem *item = &items[i];
         if (item->section_header || item->key == GLR_CONFIG_NONE)
             continue;
-        if (item->is_special && item->key_code == fn)
+        if (item->is_special && item->key_code == key_code)
             return glr_config_item_display_label(item);
     }
     return NULL;

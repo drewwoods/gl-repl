@@ -6,6 +6,7 @@
 #include "repl/examples.h"
 #include "repl/tutorials.h"
 #include "app/glr_config.h"
+#include "keymap.h"
 #include "keys.h"
 #include "repl/state_views.h"
 #include "subsystems/replay/replay.h"   /* ReplayState (PLAYING / PAUSED / DONE) enum values */
@@ -329,9 +330,16 @@ static const char *menu_item_label(int menu_id, int i) {
 }
 
 static const char *menu_item_shortcut(int menu_id, int i) {
-    if (menu_id == MENU_FILE && i == GLR_FILE_ITEM_SAVE_SCENE) return "Ctrl+S";
-    if (menu_id == MENU_FILE && i == GLR_FILE_ITEM_SPLIT_DECL) return "Ctrl+Shift+S";
-    if (menu_id == MENU_FILE && i == GLR_FILE_ITEM_QUIT) return "Ctrl+Q";
+    static char buf[KEYMAP_SHORTCUT_LABEL_MAX];
+    if (menu_id == MENU_FILE && i == GLR_FILE_ITEM_SAVE_SCENE)
+        return keymap_binding_to_string(buf, (int)sizeof(buf),
+                                        KM_KEY(GLR_SAVE), KM_MODS(GLR_SAVE), 0);
+    if (menu_id == MENU_FILE && i == GLR_FILE_ITEM_SPLIT_DECL)
+        return keymap_binding_to_string(buf, (int)sizeof(buf),
+                                        KM_KEY(GLR_SPLIT_DECL), KM_MODS(GLR_SPLIT_DECL), 0);
+    if (menu_id == MENU_FILE && i == GLR_FILE_ITEM_QUIT)
+        return keymap_binding_to_string(buf, (int)sizeof(buf),
+                                        KM_KEY(GLR_QUIT), KM_MODS(GLR_QUIT), 0);
     if (menu_id == MENU_SCENE) return NULL;
     if (menu_id == MENU_TUTORIALS)
         return NULL;
@@ -343,25 +351,13 @@ static const char *menu_item_shortcut(int menu_id, int i) {
 
 /* Format the keyboard shortcut for a g_cfg_items[] entry, or NULL. */
 static const char *config_item_shortcut(const GlrConfigItem *item) {
-    static char buf[16];
+    static char buf[KEYMAP_SHORTCUT_LABEL_MAX];
     if (!item || item->section_header || item->key == GLR_CONFIG_NONE)
         return NULL;
     if (item->key_code == 0) return NULL;
-    if (item->is_special) {
-        snprintf(buf, sizeof(buf), "F%d", item->key_code - GLUT_KEY_F1 + 1);
-        return buf;
-    }
-    /* item->modifiers (GLUT_ACTIVE_* bitmask) inserts between the
-     * implied Ctrl and the letter, e.g. Shift -> "Ctrl+Shift+v". */
-    if (item->key_code > 0 && item->key_code <= 26) {
-        const char *mod = (item->modifiers & GLUT_ACTIVE_SHIFT) ? "Shift+" : "";
-        snprintf(buf, sizeof(buf), "Ctrl+%s%c", mod, item->key_code - 1 + 'a');
-        return buf;
-    }
-    if (item->key_code == KEY_CTRL_BACKSLASH)
-        return "Ctrl+\\";
-    snprintf(buf, sizeof(buf), "%c", item->key_code);
-    return buf;
+    return keymap_binding_to_string(buf, (int)sizeof(buf),
+                                    item->key_code, item->modifiers,
+                                    item->is_special);
 }
 
 #define CFG_STATE_MAX_CHARS 20

@@ -7,6 +7,7 @@
 #include "editor/input.h"
 #include "editor/state.h"
 #include "editor/undo.h"
+#include "keymap.h"
 #include "keys.h"
 #include "repl/core.h"
 #include "repl/eval.h"            /* REQUIRE_VAR tests: predef-var declare/lookup */
@@ -2231,6 +2232,35 @@ static void test_feature_tour_grid_steps_use_symbolic_names(void) {
                "GRID_THEME_FOCUS");
 }
 
+static void test_feature_tour_vertex_outline_hint_uses_keymap(void) {
+    int tour_idx = find_tutorial_idx("Feature Tour");
+    ASSERT_TRUE("Feature Tour exists for shortcut hint test", tour_idx >= 0);
+    if (tour_idx < 0) return;
+
+    int outline_step = -1;
+    int step_count = repl_tutorial_step_count(tour_idx);
+    for (int i = 0; i < step_count; i++) {
+        const char *slug = repl_tutorial_step_cfg_slug(tour_idx, i);
+        if (slug && strcmp(slug, "vertex_outlines") == 0 &&
+            repl_tutorial_step_kind(tour_idx, i) == TUTORIAL_STEP_KIND_REQUIRE) {
+            outline_step = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("Feature Tour has vertex_outlines REQUIRE step", outline_step >= 0);
+    if (outline_step < 0) return;
+
+    char shortcut[KEYMAP_SHORTCUT_LABEL_MAX];
+    const char *comment = repl_tutorial_step_comment(tour_idx, outline_step);
+    keymap_binding_to_string(shortcut, (int)sizeof(shortcut),
+                             KM_KEY(GLR_VERTEX_OUTLINES),
+                             KM_MODS(GLR_VERTEX_OUTLINES), 0);
+    ASSERT_TRUE("vertex outline hint contains keymap shortcut",
+                comment && strstr(comment, shortcut) != NULL);
+    ASSERT_TRUE("vertex outline hint does not carry stale F7 shortcut",
+                !comment || strstr(comment, "F7") == NULL);
+}
+
 /* Audit #41 follow-up: the runtime validator must reject a tutorial
  * whose SET / REQUIRE step or entry-level @cfg line carries a
  * symbolic value name that the bridge doesn't recognise — otherwise
@@ -2835,6 +2865,7 @@ static void test_require_var_shadow_suffix_synthesizes_assignment(void) {
 int main(void) {
     tutorial_state_init_explicit();
     test_feature_tour_grid_steps_use_symbolic_names();
+    test_feature_tour_vertex_outline_hint_uses_keymap();
     test_validate_rejects_typo_symbolic_value_name();
     test_exit_on_require_does_not_autoadvance();
     test_restart_during_tutorial_preserves_original_baseline();

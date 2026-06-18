@@ -12,6 +12,7 @@
 #include "config.h"                  /* DEFAULT_SCENE_FILE */
 #include "app/glr_audio.h"
 #include "repl/core.h"
+#include "repl/help_text.h"
 #include "editor/input.h"
 #include "editor/state.h"                /* editor_state_edit_line_set */
 #include "editor/inline_rename.h"
@@ -20,6 +21,7 @@
 #include "subsystems/tutorial/tutorial.h"
 #include "subsystems/tutorial/tutorial_state.h"
 #include "source_document.h"
+#include "keymap.h"
 #include "keys.h"
 #include "app/glr_camera.h"               /* glr_camera_target_active / glr_camera */
 #include "ui/app/menu_bar.h"              /* ui_menu_bar_open_menu_id, _set_open_menu */
@@ -1374,10 +1376,92 @@ static void test_keymap_event_is_strict(void) {
     g_test_mods = 0;
 }
 
+static void test_keymap_binding_to_string(void) {
+    char buf[KEYMAP_SHORTCUT_LABEL_MAX];
+
+    ASSERT_STR("format Ctrl letter",
+               keymap_binding_to_string(buf, (int)sizeof(buf),
+                                        KM_KEY(GLR_SAVE), KM_MODS(GLR_SAVE), 0),
+               "Ctrl+S");
+    ASSERT_STR("format Ctrl+Shift letter",
+               keymap_binding_to_string(buf, (int)sizeof(buf),
+                                        KM_KEY(GLR_SPLIT_DECL),
+                                        KM_MODS(GLR_SPLIT_DECL), 0),
+               "Ctrl+Shift+S");
+    ASSERT_STR("format F-key",
+               keymap_binding_to_string(buf, (int)sizeof(buf),
+                                        KM_KEY(GLR_NEXT_EXAMPLE),
+                                        KM_MODS(GLR_NEXT_EXAMPLE), 1),
+               "F12");
+    ASSERT_STR("format Shift+F-key",
+               keymap_binding_to_string(buf, (int)sizeof(buf),
+                                        KM_KEY(GLR_PREV_EXAMPLE),
+                                        KM_MODS(GLR_PREV_EXAMPLE), 1),
+               "Shift+F12");
+    ASSERT_STR("format Ctrl+special key",
+               keymap_binding_to_string(buf, (int)sizeof(buf),
+                                        KM_KEY(GLR_AUDIO_PREV),
+                                        KM_MODS(GLR_AUDIO_PREV), 1),
+               "Ctrl+Left");
+    ASSERT_STR("format printable key",
+               keymap_binding_to_string(buf, (int)sizeof(buf),
+                                        KM_KEY(GLR_CONFIG_MENU),
+                                        KM_MODS(GLR_CONFIG_MENU), 0),
+               "`");
+    ASSERT_STR("format escape key",
+               keymap_binding_to_string(buf, (int)sizeof(buf),
+                                        KM_KEY(GLR_ESCAPE),
+                                        KM_MODS(GLR_ESCAPE), 0),
+               "Escape");
+}
+
+static int help_tab_contains_binding(const char *tab_label,
+                                     const char *binding,
+                                     const char *desc) {
+    const ReplHelpContent *help = repl_help_text_build();
+    for (int t = 0; help && t < help->tab_count; t++) {
+        const ReplHelpTab *tab = &help->tabs[t];
+        if (!tab->label || strcmp(tab->label, tab_label) != 0)
+            continue;
+        for (int i = 0; tab->lines && tab->lines[i]; i++) {
+            if (strstr(tab->lines[i], binding) &&
+                strstr(tab->lines[i], desc))
+                return 1;
+        }
+    }
+    return 0;
+}
+
+static void test_help_keys_tab_uses_keymap_labels(void) {
+    char shortcut[KEYMAP_SHORTCUT_LABEL_MAX];
+
+    keymap_binding_to_string(shortcut, (int)sizeof(shortcut),
+                             KM_KEY(GLR_SAVE), KM_MODS(GLR_SAVE), 0);
+    ASSERT_TRUE("help Keys tab renders Save shortcut from keymap",
+                help_tab_contains_binding("Keys", shortcut, "Save to output.c"));
+
+    keymap_binding_to_string(shortcut, (int)sizeof(shortcut),
+                             KM_KEY(GLR_SPLIT_DECL), KM_MODS(GLR_SPLIT_DECL), 0);
+    ASSERT_TRUE("help Keys tab renders Split shortcut from keymap",
+                help_tab_contains_binding("Keys", shortcut, "Split multi-variable"));
+
+    keymap_binding_to_string(shortcut, (int)sizeof(shortcut),
+                             KM_KEY(GLR_NEXT_EXAMPLE), KM_MODS(GLR_NEXT_EXAMPLE), 1);
+    ASSERT_TRUE("help Keys tab renders Next Example shortcut from keymap",
+                help_tab_contains_binding("Keys", shortcut, "Next example / scene"));
+
+    keymap_binding_to_string(shortcut, (int)sizeof(shortcut),
+                             KM_KEY(GLR_AUDIO_PREV), KM_MODS(GLR_AUDIO_PREV), 1);
+    ASSERT_TRUE("help Keys tab renders Audio Previous shortcut from keymap",
+                help_tab_contains_binding("Keys", shortcut, "Previous track"));
+}
+
 int main(void) {
     test_apply_defaults();
     test_no_duplicate_config_bindings();
     test_keymap_event_is_strict();
+    test_keymap_binding_to_string();
+    test_help_keys_tab_uses_keymap_labels();
     test_f9_cycles_light_theme();
     test_shift_fkey_steps_backward();
     test_fkey_reassignment_and_alt_shortcuts();
