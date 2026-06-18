@@ -87,8 +87,8 @@
 /* ---- App action bindings (normal keyboard callback) ------------------ */
 #define GLR_SAVE             KEY_CTRL_S, 0     /* save to output.c */
 #define GLR_QUIT             KEY_CTRL_Q, 0     /* save + quit */
-#define GLR_DEBUG_DUMP       KEY_CTRL_P, 0     /* dump state (pairs w/ Variable panel) */
-#define GLR_CONFIG_MENU      '`', 0            /* open Config dropdown */
+#define GLR_DEBUG_DUMP       KEY_CTRL_D, GLUT_ACTIVE_SHIFT   /* dump state */
+#define GLR_CONFIG_MENU      KEY_CTRL_K, GLUT_ACTIVE_SHIFT   /* open Config dropdown */
 #define GLR_ESCAPE           KEY_ESC, 0        /* clear input / close overlay */
 #define GLR_POST_FILTER      KEY_CTRL_N, 0     /* cycle post-process (pairs w/ Normal vectors) */
 #define GLR_CODE_FOCUS       KEY_CTRL_F, GLUT_ACTIVE_SHIFT  /* pairs w/ Search (plain Ctrl+F) */
@@ -96,33 +96,35 @@
 /* ---- Config-row bindings (g_cfg_items[] in glr_actions.c) ------------- *
  * Ctrl-letter rows that double up with an editor / app action carry
  * GLUT_ACTIVE_SHIFT; the paired plain-Ctrl owner is noted alongside. */
-#define GLR_MSAA             KEY_CTRL_U, 0
-#define GLR_WIREFRAME        KEY_CTRL_G, 0
-#define GLR_AUTO_TIME        KEY_CTRL_T, 0     /* Shift resets t (read in handler) */
-#define GLR_REPLAY           KEY_CTRL_R, 0     /* pairs w/ Camera rotate */
-#define GLR_GRID_MAJOR       KEY_CTRL_O, 0     /* pairs w/ Focus origin */
-#define GLR_CPU_PROFILE      KEY_CTRL_W, 0     /* pairs w/ Memory profile */
-#define GLR_CODE_PANEL       KEY_CTRL_B, 0
-#define GLR_ACCUM_EFFECT     GLUT_KEY_F2, 0
-#define GLR_GRID             GLUT_KEY_F3, 0
-#define GLR_AXES             GLUT_KEY_F4, 0
-#define GLR_VERTEX_LABELS    GLUT_KEY_F5, 0
-#define GLR_BACKDROP         GLUT_KEY_F6, 0
-#define GLR_GRID_EXTENT      GLUT_KEY_F7, 0
+#define GLR_GRID             GLUT_KEY_F2, 0
+#define GLR_GRID_EXTENT      GLUT_KEY_F3, 0
+#define GLR_GRID_BRIGHTNESS  GLUT_KEY_F4, 0
+#define GLR_BACKDROP         GLUT_KEY_F5, 0
+#define GLR_AXES             GLUT_KEY_F6, 0
+#define GLR_VERTEX_LABELS    GLUT_KEY_F7, 0
 #define GLR_XFORM_GUIDES     GLUT_KEY_F8, 0
 #define GLR_LIGHT_THEME      GLUT_KEY_F9, 0
 #define GLR_SYNTAX_HL        GLUT_KEY_F10, 0
-#define GLR_LIGHT_INDICATORS KEY_CTRL_L, GLUT_ACTIVE_SHIFT  /* plain Ctrl+L = Clear all */
-#define GLR_VIEW_MODE        KEY_CTRL_V, GLUT_ACTIVE_SHIFT  /* plain Ctrl+V = Paste */
-#define GLR_CAMERA_ROTATE    KEY_CTRL_R, GLUT_ACTIVE_SHIFT  /* plain Ctrl+R = Replay */
-#define GLR_FOCUS_ORIGIN     KEY_CTRL_O, GLUT_ACTIVE_SHIFT  /* plain Ctrl+O = Grid major */
-#define GLR_RESET_CAMERA     KEY_CTRL_C, GLUT_ACTIVE_SHIFT  /* plain Ctrl+C = Copy */
-#define GLR_NORMAL_VECTORS   KEY_CTRL_N, GLUT_ACTIVE_SHIFT  /* plain Ctrl+N = Post filter */
-#define GLR_VERTEX_OUTLINES  KEY_CTRL_E, GLUT_ACTIVE_SHIFT  /* plain Ctrl+E = Line end */
-#define GLR_VARIABLE_PANEL   KEY_CTRL_P, GLUT_ACTIVE_SHIFT  /* plain Ctrl+P = Debug dump */
-#define GLR_MEMORY_PROFILE   KEY_CTRL_W, GLUT_ACTIVE_SHIFT  /* plain Ctrl+W = CPU profile */
 #define GLR_AUDIO            KEY_CTRL_A, GLUT_ACTIVE_SHIFT  /* plain Ctrl+A = Line start */
+#define GLR_CODE_PANEL       KEY_CTRL_B, 0
+#define GLR_RESET_CAMERA     KEY_CTRL_C, GLUT_ACTIVE_SHIFT  /* plain Ctrl+C = Copy */
+#define GLR_WIREFRAME        KEY_CTRL_G, 0
+#define GLR_GRID_MAJOR       KEY_CTRL_G, GLUT_ACTIVE_SHIFT
+#define GLR_LIGHT_INDICATORS KEY_CTRL_L, GLUT_ACTIVE_SHIFT  /* plain Ctrl+L = Clear all */
+#define GLR_NORMAL_VECTORS   KEY_CTRL_N, GLUT_ACTIVE_SHIFT  /* plain Ctrl+N = Post filter */
+#define GLR_FOCUS_ORIGIN     KEY_CTRL_O, 0
+#define GLR_VERTEX_OUTLINES  KEY_CTRL_O, GLUT_ACTIVE_SHIFT
+#define GLR_VERTEX_POINTS    KEY_CTRL_P, GLUT_ACTIVE_SHIFT
+#define GLR_REPLAY           KEY_CTRL_R, 0     /* pairs w/ Camera rotate */
+#define GLR_CAMERA_ROTATE    KEY_CTRL_R, GLUT_ACTIVE_SHIFT  /* plain Ctrl+R = Replay */
 #define GLR_SPLIT_DECL       KEY_CTRL_S, GLUT_ACTIVE_SHIFT  /* plain Ctrl+S = Save */
+#define GLR_AUTO_TIME        KEY_CTRL_T, 0     /* Shift resets t (read in handler) */
+#define GLR_MSAA             KEY_CTRL_U, 0
+#define GLR_ACCUM_EFFECT     KEY_CTRL_U, GLUT_ACTIVE_SHIFT  /* Shift toggles accum-AA (read in handler) */
+#define GLR_VIEW_MODE        KEY_CTRL_V, GLUT_ACTIVE_SHIFT  /* plain Ctrl+V = Paste */
+#define GLR_CPU_PROFILE      KEY_CTRL_W, 0     /* pairs w/ Memory profile */
+#define GLR_MEMORY_PROFILE   KEY_CTRL_W, GLUT_ACTIVE_SHIFT  /* plain Ctrl+W = CPU profile */
+#define GLR_VARIABLE_PANEL   '`', 0            /* open variable panel */
 
 /* ---- Editor text-editing bindings (src/editor/input.c) --------------- *
  * Plain Ctrl bytes; the Ctrl+Shift twin of several is a config row above,

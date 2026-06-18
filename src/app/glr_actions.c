@@ -158,8 +158,7 @@ const GlrConfigItem g_cfg_items[] = {
     { .label = "Line smooth", .key = GLR_CONFIG_LINE_SMOOTH, .state_count = 2 },
     { .label = "Accum effect", .key = GLR_CONFIG_ACCUM_EFFECT,
       .state_count = 4, .state_names = accum_effect_names,
-      .key_code = KM_KEY(GLR_ACCUM_EFFECT), .modifiers = KM_MODS(GLR_ACCUM_EFFECT),
-      .is_special = 1 },
+      .key_code = KM_KEY(GLR_ACCUM_EFFECT), .modifiers = KM_MODS(GLR_ACCUM_EFFECT) },
     { .label = "Accum passes", .key = GLR_CONFIG_ACCUM_PASSES,
       .state_count = 6, .state_names = accum_passes_names },
     { .label = "Wireframe", .key = GLR_CONFIG_WIREFRAME, .state_count = 2,
@@ -181,15 +180,17 @@ const GlrConfigItem g_cfg_items[] = {
     { .label = "Grid", .key = GLR_CONFIG_GRID_THEME,
       .state_count = GRID_THEME_COUNT, .state_names = grid_theme_names,
       .key_code = KM_KEY(GLR_GRID), .modifiers = KM_MODS(GLR_GRID), .is_special = 1 },
-    { .label = "Grid major", .key = GLR_CONFIG_GRID_MAJOR,
-      .state_count = GRID_MAJOR_COUNT, .state_names = grid_major_names,
-      .key_code = KM_KEY(GLR_GRID_MAJOR), .modifiers = KM_MODS(GLR_GRID_MAJOR) },
     { .label = "Grid extent", .key = GLR_CONFIG_GRID_EXTENT,
       .state_count = GRID_EXTENT_COUNT, .state_names = grid_extent_names,
       .key_code = KM_KEY(GLR_GRID_EXTENT), .modifiers = KM_MODS(GLR_GRID_EXTENT),
       .is_special = 1 },
     { .label = "Grid brightness", .key = GLR_CONFIG_GRID_BRIGHTNESS,
-      .state_count = GRID_BRIGHTNESS_COUNT, .state_names = grid_brightness_names },
+      .state_count = GRID_BRIGHTNESS_COUNT, .state_names = grid_brightness_names,
+      .key_code = KM_KEY(GLR_GRID_BRIGHTNESS), .modifiers = KM_MODS(GLR_GRID_BRIGHTNESS),
+      .is_special = 1 },
+    { .label = "Grid major", .key = GLR_CONFIG_GRID_MAJOR,
+      .state_count = GRID_MAJOR_COUNT, .state_names = grid_major_names,
+      .key_code = KM_KEY(GLR_GRID_MAJOR), .modifiers = KM_MODS(GLR_GRID_MAJOR) },
     { .label = "Axes", .key = GLR_CONFIG_AXES_THEME,
       .state_count = AXES_THEME_COUNT, .state_names = axes_theme_names,
       .key_code = KM_KEY(GLR_AXES), .modifiers = KM_MODS(GLR_AXES), .is_special = 1 },
@@ -232,7 +233,8 @@ const GlrConfigItem g_cfg_items[] = {
       .key_code = KM_KEY(GLR_NORMAL_VECTORS), .modifiers = KM_MODS(GLR_NORMAL_VECTORS) },
     { .label = "Vertex outlines", .key = GLR_CONFIG_VERTEX_OUTLINES, .state_count = 2,
       .key_code = KM_KEY(GLR_VERTEX_OUTLINES), .modifiers = KM_MODS(GLR_VERTEX_OUTLINES) },
-    { .label = "Vertex points", .key = GLR_CONFIG_VERTEX_POINTS, .state_count = 2 },
+    { .label = "Vertex points", .key = GLR_CONFIG_VERTEX_POINTS, .state_count = 2,
+      .key_code = KM_KEY(GLR_VERTEX_POINTS), .modifiers = KM_MODS(GLR_VERTEX_POINTS) },
     { .label = "Poly highlight", .key = GLR_CONFIG_POLY_HIGHLIGHT, .state_count = 2 },
     { .label = "---", .section_header = 1 },
 
@@ -841,7 +843,9 @@ static int cfg_match_row(unsigned char key, int want_shift) {
         const GlrConfigItem *item = glr_config_item_at(i);
         if (!item || item->section_header || item->is_special)
             continue;
-        if (item->key_code <= 0 || item->key_code >= 32 ||
+        /* reject printable ASCII - except backtick (the only printable ASCII
+         * that can be a control code) */
+        if ((item->key_code != '`' && (item->key_code <= 0 || item->key_code >= 32)) ||
             item->key_code != key)
             continue;
         int row_shift = (item->modifiers & GLUT_ACTIVE_SHIFT) != 0;
