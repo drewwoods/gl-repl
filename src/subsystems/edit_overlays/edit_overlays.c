@@ -336,6 +336,12 @@ void edit_overlays_render_outlines(const OverlayWalkCtx *ctx,
 void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
     if (!ctx->show_vertex_points && !ctx->replay_vertex_points) return;
 
+    /* When replay is providing the dots and the user hasn't explicitly turned
+     * on vertex points, only draw the single most-recent replay vertex
+     * (the anchor).  When the user toggle is on, draw all vertices. */
+    int replay_only = ctx->replay_vertex_points && !ctx->show_vertex_points;
+    int anchor_idx  = ctx->replay_anchor_flat_idx;
+
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
@@ -364,6 +370,8 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
             } else if (flat_cmds[i].type == CMD_END) {
                 primitive_mode = 0;
             } else if (repl_cmd_emits_vertex(flat_cmds[i].type)) {
+                if (replay_only && i != anchor_idx)
+                    continue;
                 int is_line = (primitive_mode == GL_LINES ||
                                primitive_mode == GL_LINE_STRIP ||
                                primitive_mode == GL_LINE_LOOP);

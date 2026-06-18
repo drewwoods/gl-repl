@@ -276,6 +276,7 @@ static void test_render_vertex_points(void) {
     ctx.program.cmds = line_cmds;
     ctx.program.cmd_count = 3;
     ctx.replay_vertex_points = 1;
+    ctx.show_vertex_points = 1;  /* user toggle on -> all vertices drawn */
     trace_begin();
     edit_overlays_render_vertex_points(&ctx);
     trace_end(&log);
@@ -298,6 +299,41 @@ static void test_render_vertex_points(void) {
     trace_end(&log);
     ASSERT_INT("vertex-points walk tracks the transform",
                trace_count_line(&log, "glTranslatef 9 0 0"), 1);
+
+    /* Replay-only (show_vertex_points=0, replay_vertex_points=1): only the
+     * anchor vertex should be drawn, not every vertex in the program. */
+    GLCmd multi_cmds[6];
+    mk_cmd(&multi_cmds[0], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&multi_cmds[1], CMD_VERTEX3F, 1.0f, 0.0f, 0.0f);
+    mk_cmd(&multi_cmds[2], CMD_VERTEX3F, 0.0f, 1.0f, 0.0f);
+    mk_cmd(&multi_cmds[3], CMD_VERTEX3F, 0.0f, 0.0f, 1.0f);
+    mk_cmd(&multi_cmds[4], CMD_END, 0, 0, 0);
+    mk_cmd(&multi_cmds[5], CMD_END, 0, 0, 0); /* padding */
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = multi_cmds;
+    ctx.program.cmd_count = 5;
+    ctx.replay_vertex_points = 1;
+    ctx.show_vertex_points = 0;  /* user toggle off -> replay-only mode */
+    ctx.replay_anchor_flat_idx = 2;  /* the second vertex (0,1,0) */
+    trace_begin();
+    edit_overlays_render_vertex_points(&ctx);
+    trace_end(&log);
+    ASSERT_INT("replay-only draws exactly one vertex",
+               trace_count_sym(&log, "glVertex3f"), 1);
+    ASSERT_INT("replay-only draws the anchor vertex",
+               trace_count_line(&log, "glVertex3f 0 1 0"), 1);
+    ASSERT_INT("replay-only skips non-anchor vertex (1,0,0)",
+               trace_count_line(&log, "glVertex3f 1 0 0"), 0);
+    ASSERT_INT("replay-only skips non-anchor vertex (0,0,1)",
+               trace_count_line(&log, "glVertex3f 0 0 1"), 0);
+
+    /* replay_anchor_flat_idx = -1 -> no anchor -> no dots drawn. */
+    ctx.replay_anchor_flat_idx = -1;
+    trace_begin();
+    edit_overlays_render_vertex_points(&ctx);
+    trace_end(&log);
+    ASSERT_INT("replay-only with no anchor emits no vertices",
+               trace_count_sym(&log, "glVertex3f"), 0);
 }
 
 /* render_outlines_glbegin_pass (via the public entry): traces an outline

@@ -472,6 +472,8 @@ static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const SceneRe
     pack->walk.replay_tess_preview = replay_mode_vertex;
     pack->walk.show_vertex_points = presentation.show_vertex_points;
     pack->walk.replay_vertex_points = replay_mode_vertex;
+    pack->walk.replay_anchor_flat_idx = replay_mode_vertex
+                                        ? replay_focus_anchor_flat_idx() : -1;
 
     pack->snapshot = glr_ctrl_build_guide_snapshot(cfg);
     pack->vertex_label_mode = (OverlayVertexLabelMode)presentation.show_vertex_labels;
