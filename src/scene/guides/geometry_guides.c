@@ -8,6 +8,9 @@
 #include <math.h>   /* sqrtf, fminf, fmodf, cosf, sinf */
 #include <string.h> /* strncmp */
 
+#define GEOMETRY_GUIDE_VERTEX_MARK_POINT_SIZE 8.0f
+#define GEOMETRY_GUIDE_NORMAL_POINT_SIZE 8.0f
+
 static void geometry_guides_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 }
@@ -111,7 +114,7 @@ static void draw_vertex_point_marker(float x, float y, float z) {
     int depth = glIsEnabled(GL_DEPTH_TEST);
     if (depth) glDisable(GL_DEPTH_TEST);
     scene_clr_a(SCENE_CLR_GUIDE_VERTEX_MARK, 0.9f);
-    glPointSize(15.0f);
+    glPointSize(GEOMETRY_GUIDE_VERTEX_MARK_POINT_SIZE);
     glBegin(GL_POINTS);
     glVertex3f(x, y, z);
     glEnd();
@@ -341,7 +344,7 @@ static void draw_normal_guides(const SceneGuideSnapshot *snapshot) {
     glDisable(GL_LINE_STIPPLE);
     glLineWidth(1.0f);
 
-    glPointSize(8.0f);
+    glPointSize(GEOMETRY_GUIDE_NORMAL_POINT_SIZE);
     glBegin(GL_POINTS);
     scene_clr_a(SCENE_CLR_GUIDE_NORMAL_DOUBLE, 0.85f);
     glVertex3f(vx + doubled[0]*scale, vy + doubled[1]*scale,
