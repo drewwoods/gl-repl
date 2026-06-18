@@ -613,6 +613,9 @@ static void on_end_render_cursor_guides(const ReplayVertexWalkState *state,
         scene_geometry_guides_render_for_cursor(ctx->snapshot);
         ctx->geometry_guide_done = 1;
     }
+    /* A tail-anchored transform plan (brand-new line) is flushed by the
+     * post-walk step in edit_overlays_render_cursor_guides, not here — that
+     * one path also covers the empty-program case where the walk never runs. */
 }
 
 void edit_overlays_render_cursor_guides(const SceneGuideSnapshot *snapshot,
@@ -620,10 +623,6 @@ void edit_overlays_render_cursor_guides(const SceneGuideSnapshot *snapshot,
     ReplayVertexWalkContext walk;
 
     if (!snapshot || !snapshot->show_guides) return;
-
-    walk = edit_overlays_build_vertex_walk_context(walk_ctx, 0);
-    if (!walk.program.cmds || walk.program.cmd_count <= 0)
-        return;
 
     CursorGuideRenderCtx ctx;
     ctx.snapshot = snapshot;
@@ -639,16 +638,36 @@ void edit_overlays_render_cursor_guides(const SceneGuideSnapshot *snapshot,
     glPushMatrix();
     glGetFloatv(GL_MODELVIEW_MATRIX, ctx.cam_view);
 
-    /* During replay, scene_transform_guides_prepare() builds a plan anchored
+    /* The flat-program walk drives the geometry (vertex/normal) guides, which
+     * render in the walk's accumulated modelview, and consumes the transform
+     * plan for the committed / replay / mid-document cases. It's skipped for an
+     * empty program (nothing to walk) — but the transform guide must still
+     * render below, so the early-out only bypasses the walk, not the flush.
+     *
+     * During replay, scene_transform_guides_prepare() builds a plan anchored
      * on the replay-focused vertex (req 6), so the same per-op guide renderer
-     * below draws the live-style transform guide there. No separate axes pass. */
+     * draws the live-style transform guide there. No separate axes pass. */
+    walk = edit_overlays_build_vertex_walk_context(walk_ctx, 0);
+    if (walk.program.cmds && walk.program.cmd_count > 0) {
+        static const ReplayVertexWalkCallbacks cb = {
+            .on_each_cmd = on_cmd_render_cursor_guides,
+            .on_end = on_end_render_cursor_guides,
+        };
+        walk.stop_flag = &ctx.early_stop;
+        replay_walk_user_vertices(&walk, &cb, &ctx);
+    }
 
-    static const ReplayVertexWalkCallbacks cb = {
-        .on_each_cmd = on_cmd_render_cursor_guides,
-        .on_end = on_end_render_cursor_guides,
-    };
-    walk.stop_flag = &ctx.early_stop;
-    replay_walk_user_vertices(&walk, &cb, &ctx);
+    /* Transform guides are position-independent: scene_transform_guides_render_if_due()
+     * recomputes its own anchor frame, so a plan the walk never reached — an
+     * empty flat program, or a brand-new line anchored at the flat tail —
+     * flushes here. This is the transform analog of the vertex guide's
+     * on_end / in_block append-row path (it's why a first-time transform
+     * draws live, before commit, just like a first-time glVertex). */
+    if (ctx.have_xform && !ctx.xform_plan.consumed) {
+        scene_transform_guides_render_if_due(snapshot, &ctx.xform_plan,
+                                             ctx.xform_plan.cursor_flat_idx,
+                                             ctx.cam_view);
+    }
 
     glPopMatrix();
     glPopAttrib();

@@ -274,6 +274,79 @@ static void test_transform_guides_render(void) {
         /* Reset stub matrix to identity */
         g_gl_stub_modelview_matrix[12] = 0.0f;
     }
+
+    /* 5. Live edit: the input buffer diverges from the committed line, so the
+     * guide renders from the pre-evaluated cursor args (not the committed
+     * flat args), with identity defaults for untyped slots. Here the user is
+     * mid-typing glTranslatef(5, 6  — z is untyped, defaulting to 0. */
+    {
+        GLCmd source_cmds[2] = {0};
+        GLCmd flat_cmds[2] = {0};
+        SceneTransformGuidePlan plan;
+
+        source_cmds[0].type = CMD_TRANSLATE3F;
+        source_cmds[0].valid = 1;
+        flat_cmds[0].type = CMD_TRANSLATE3F;
+        flat_cmds[0].valid = 1;
+        flat_cmds[0].src_cmd_idx = 0;
+        flat_cmds[0].args[0] = 1.0f; /* committed (1,0,0) — must NOT be drawn */
+
+        SceneGuideSnapshot snapshot =
+            base_snapshot(source_cmds, 2, flat_cmds, 1, 0, "glTranslatef(5, 6");
+        snapshot.edit_line_committed_text = "glTranslatef(1,0,0);";
+        snapshot.alpha_scale = 1.0f;
+        snapshot.xform_guide_mode = SCENE_XFORM_GUIDE_FRAME;
+        /* As the controller would fill them: two slots typed, z untyped. */
+        snapshot.xform_args[0] = 5.0f; snapshot.xform_filled[0] = 1;
+        snapshot.xform_args[1] = 6.0f; snapshot.xform_filled[1] = 1;
+        snapshot.xform_n_filled = 2;
+
+        int prepared = scene_transform_guides_prepare(&snapshot, &plan);
+        ASSERT_INT("live-edit translate prepared", prepared, 1);
+
+        float cam_view[16] = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 };
+        gl_stub_counts_reset();
+        scene_transform_guides_render_if_due(&snapshot, &plan, 0, cam_view);
+        ASSERT_TRUE("live-edit translate renders from cursor args",
+                    gl_stub_counts[GL_STUB_glBegin] > 0);
+    }
+
+    /* 6. Brand-new line: a transform typed on a not-yet-committed line (no
+     * source cmd, edit_line at the source tail) still activates, anchored at
+     * the insertion point (the flat tail), rendered via the on_end flush. */
+    {
+        GLCmd source_cmds[1] = {0};
+        GLCmd flat_cmds[1] = {0};
+        SceneTransformGuidePlan plan;
+
+        source_cmds[0].type = CMD_VERTEX3F;
+        source_cmds[0].valid = 1;
+        flat_cmds[0].type = CMD_VERTEX3F;
+        flat_cmds[0].valid = 1;
+        flat_cmds[0].src_cmd_idx = 0;
+
+        /* edit_line 1 == source_cmd_count: a fresh appended line. */
+        SceneGuideSnapshot snapshot =
+            base_snapshot(source_cmds, 1, flat_cmds, 1, 1, "glScalef(2,2,2)");
+        snapshot.edit_line_committed_text = NULL; /* nothing committed yet */
+        snapshot.alpha_scale = 1.0f;
+        snapshot.xform_guide_mode = SCENE_XFORM_GUIDE_FRAME;
+        snapshot.xform_args[0] = 2.0f; snapshot.xform_filled[0] = 1;
+        snapshot.xform_args[1] = 2.0f; snapshot.xform_filled[1] = 1;
+        snapshot.xform_args[2] = 2.0f; snapshot.xform_filled[2] = 1;
+        snapshot.xform_n_filled = 3;
+
+        int prepared = scene_transform_guides_prepare(&snapshot, &plan);
+        ASSERT_INT("new-line transform prepared", prepared, 1);
+        ASSERT_INT("new-line anchor is the flat tail", plan.cursor_flat_idx, 1);
+
+        float cam_view[16] = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 };
+        gl_stub_counts_reset();
+        scene_transform_guides_render_if_due(&snapshot, &plan,
+                                             plan.cursor_flat_idx, cam_view);
+        ASSERT_TRUE("new-line transform renders at tail flush",
+                    gl_stub_counts[GL_STUB_glBegin] > 0);
+    }
 }
 
 /* Req 6: during replay the prepared plan's transform guide renders when the
@@ -491,11 +564,16 @@ int main(void) {
                    scene_transform_guides_prepare(&snapshot, &plan), 0);
 
         source_cmds[0].type = CMD_SCALEF;
+        flat_cmds[0].type = CMD_SCALEF;
         snapshot.input = "glScalef(2,2,3)";
         snapshot.input_len = (int)strlen(snapshot.input);
         snapshot.edit_line_committed_text = "glScalef(2,2,2);";
-        ASSERT_INT("prepare rejects modified source text",
-                   scene_transform_guides_prepare(&snapshot, &plan), 0);
+        /* Modified-but-still-a-transform input now activates the live guide
+         * (it tracks the cursor args before commit) rather than hiding until
+         * the line matches the committed source again. */
+        ASSERT_INT("prepare activates for live-edited transform text",
+                   scene_transform_guides_prepare(&snapshot, &plan), 1);
+        ASSERT_INT("plan active for live-edited transform", plan.active, 1);
 
         source_cmds[0].type = CMD_TRANSLATE3F;
         flat_cmds[0].type = CMD_TRANSLATE3F;
