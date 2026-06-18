@@ -4,9 +4,10 @@
 #
 #   keymap.sh check   (default)  Hard guard: fail if two bindings claim the
 #                                same (key, mods) — a double-map.
-#   keymap.sh list               Print the current bindings, then the free
-#                                Ctrl / Ctrl+Shift / F-key slots still
-#                                available to assign.
+#   keymap.sh list               Print the current bindings, reserved
+#                                control-key aliases, then the free Ctrl /
+#                                Ctrl+Shift / F-key slots still available
+#                                to assign.
 #
 # Comparing the symbolic TEXT of `<key>, <mods>` is exactly right: the same
 # key with different modifiers is distinct by design (KEY_CTRL_C,0 = Copy vs
@@ -69,11 +70,24 @@ awk -v mode="$mode" '
         for (i = 0; i < k; i++)
             printf("  %-34s %s\n", bindings[i], owner[bindings[i]])
 
+        reserved = "HIJM"
+        reserved_reason["H"] = "byte 8 = Backspace"
+        reserved_reason["I"] = "byte 9 = Tab"
+        reserved_reason["J"] = "byte 10 = Line Feed / Enter variant"
+        reserved_reason["M"] = "byte 13 = Carriage Return / Enter"
+
+        print ""
+        print "Reserved (not assignable):"
+        for (ri = 1; ri <= length(reserved); ri++) {
+            c = substr(reserved, ri, 1)
+            printf("  Ctrl+%-2s / Ctrl+Shift+%-2s %s\n", c, c, reserved_reason[c])
+        }
+
         print ""
         print "Available (unbound) slots:"
-        # Ctrl+<letter>, plain. Ctrl+H/I/J/M arrive as Backspace/Tab/LF/Enter
-        # at the byte level, so they are not assignable — skip them.
-        reserved = "HIJM"
+        # Ctrl+<letter> aliases above arrive as editing keys at the byte
+        # level, so neither their plain nor Shift-modified forms are safe
+        # app shortcuts.
         L = "  Ctrl+        :"
         for (i = 1; i <= 26; i++) {
             c = substr("ABCDEFGHIJKLMNOPQRSTUVWXYZ", i, 1)
@@ -85,6 +99,7 @@ awk -v mode="$mode" '
         L = "  Ctrl+Shift+  :"
         for (i = 1; i <= 26; i++) {
             c = substr("ABCDEFGHIJKLMNOPQRSTUVWXYZ", i, 1)
+            if (index(reserved, c)) continue
             if (("KEY_CTRL_" c ",GLUT_ACTIVE_SHIFT") in owner) continue
             L = L " " c
         }

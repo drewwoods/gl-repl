@@ -1080,6 +1080,9 @@ All screenshots and GIFs in this guide were captured that way.
 
 Press **F1** in-app for the always-current version of this list (the Keys
 tab), plus the full command reference (the Commands tab).
+For shortcut-maintenance details, reserved control-key aliases, and the
+`scripts/keymap.sh` audit helper, see
+[Advanced Usage -> Keyboard map tooling](ADVANCED_USAGE.md#keyboard-map-tooling).
 
 ### Editing
 
