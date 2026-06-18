@@ -272,18 +272,19 @@ static SceneFocusVertex glr_ctrl_build_focus_vertex(void) {
     return focus;
 }
 
-/* Parse up to 3 comma-separated arg slots out of `src`, recording which
- * positions are actually present. repl_eval_parse_exprs() skips leading
+/* Parse up to `max_slots` comma-separated arg slots out of `src`, recording
+ * which positions are actually present. repl_eval_parse_exprs() skips leading
  * commas so ",1," and "1," look identical to it; this version tracks
- * slot indices. Empty slots leave filled[i]=0, out[i] unchanged. */
-static int parse_vertex_arg_slots(const char *src,
-                                  const ExprVar *predef_vars, int predef_var_count,
-                                  float out[3], int filled[3]) {
+ * slot indices. Empty slots leave filled[i]=0, out[i] unchanged. Callers
+ * pass 3 (glVertex / glTranslatef / glScalef) or 4 (glRotatef angle+axis). */
+static int parse_arg_slots(const char *src,
+                           const ExprVar *predef_vars, int predef_var_count,
+                           float *out, int *filled, int max_slots) {
     const char *s = src;
     int n_filled = 0;
-    filled[0] = filled[1] = filled[2] = 0;
+    for (int i = 0; i < max_slots; i++) filled[i] = 0;
 
-    for (int slot = 0; slot < 3; slot++) {
+    for (int slot = 0; slot < max_slots; slot++) {
         while (*s == ' ' || *s == '\t') s++;
         const char *start = s;
         s = repl_scan_next_arg_delim(s);
@@ -331,9 +332,30 @@ static void fill_guide_arg_slots(SceneGuideSnapshot *snapshot,
         vertex_args = input + 10;
     }
     if (vertex_args) {
-        snapshot->vertex_n_filled = parse_vertex_arg_slots(
+        snapshot->vertex_n_filled = parse_arg_slots(
             vertex_args, predef.vars, predef.count,
-            snapshot->vertex_args, snapshot->vertex_filled);
+            snapshot->vertex_args, snapshot->vertex_filled, 3);
+    }
+
+    /* Live transform args (glTranslatef / glScalef / glRotatef), parsed the
+     * same way so transform guides can track the cursor line before commit.
+     * Rotate carries a 4th slot (angle + axis); translate/scale use 3. */
+    snapshot->xform_n_filled = 0;
+    snapshot->xform_filled[0] = snapshot->xform_filled[1] =
+        snapshot->xform_filled[2] = snapshot->xform_filled[3] = 0;
+    const char *xform_args = NULL;
+    int xform_max = 0;
+    if (strncmp(input, "glTranslatef(", 13) == 0) {
+        xform_args = input + 13; xform_max = 3;
+    } else if (strncmp(input, "glScalef(", 9) == 0) {
+        xform_args = input + 9; xform_max = 3;
+    } else if (strncmp(input, "glRotatef(", 10) == 0) {
+        xform_args = input + 10; xform_max = 4;
+    }
+    if (xform_args) {
+        snapshot->xform_n_filled = parse_arg_slots(
+            xform_args, predef.vars, predef.count,
+            snapshot->xform_args, snapshot->xform_filled, xform_max);
     }
 
     const char *normal_args = NULL;

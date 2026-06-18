@@ -700,6 +700,40 @@ static int transform_input_matches_committed(const SceneGuideSnapshot *snapshot)
             snapshot->input_len == 0);
 }
 
+/* Identify a live transform command from the input-buffer prefix, mirroring
+ * geometry_guides.c's input_is_vertex_kind. Returns the CmdType
+ * (CMD_TRANSLATE3F / CMD_SCALEF / CMD_ROTATEF) once the user has typed the
+ * opening paren, or -1 otherwise. The args themselves are pre-evaluated by
+ * the controller into snapshot->xform_args (the scene module never evals). */
+static int transform_input_kind(const char *input, int input_len) {
+    if (!input) return -1;
+    if (input_len >= 13 && strncmp(input, "glTranslatef(", 13) == 0)
+        return CMD_TRANSLATE3F;
+    if (input_len >= 9 && strncmp(input, "glScalef(", 9) == 0)
+        return CMD_SCALEF;
+    if (input_len >= 10 && strncmp(input, "glRotatef(", 10) == 0)
+        return CMD_ROTATEF;
+    return -1;
+}
+
+/* Compose a GLCmd from the live cursor args for `kind`, filling slots the
+ * user hasn't typed yet with the transform identity: 1 for scale, 0 for
+ * translate/rotate (per the requested "assume defaults while typing"
+ * behavior). Only type + args are populated — the draw helpers read
+ * nothing else. */
+static GLCmd transform_live_cmd(const SceneGuideSnapshot *snapshot, int kind) {
+    GLCmd c;
+    memset(&c, 0, sizeof c);
+    c.type = (CmdType)kind;
+    c.valid = 1;
+    float dflt = (kind == CMD_SCALEF) ? 1.0f : 0.0f;
+    int n = (kind == CMD_ROTATEF) ? 4 : 3;
+    c.num_args = n;
+    for (int i = 0; i < n; i++)
+        c.args[i] = snapshot->xform_filled[i] ? snapshot->xform_args[i] : dflt;
+    return c;
+}
+
 /* Max in-scope affecting transforms we track for replay focus selection.
  * Bounded scratch; deeper stacks just cap (the nearest few are what matter). */
 #define TG_MAX_INSCOPE_XFORMS 64
@@ -823,18 +857,34 @@ int scene_transform_guides_prepare(const SceneGuideSnapshot *snapshot,
     }
 
     int edit_line_idx = snapshot->edit_line_idx;
-    if (edit_line_idx < 0 || edit_line_idx >= snapshot->source_cmd_count)
+    if (edit_line_idx < 0)
+        return 0;
+    /* A committed-but-invalid cursor line carries no guide (it failed to
+     * parse). Brand-new lines past the source tail have no source cmd yet
+     * and skip this check. */
+    if (edit_line_idx < snapshot->source_cmd_count &&
+        !snapshot->source_cmds[edit_line_idx].valid)
         return 0;
 
-    const GLCmd *source_cmd = &snapshot->source_cmds[edit_line_idx];
-    if (!source_cmd->valid)
-        return 0;
-    if (!transform_input_matches_committed(snapshot))
-        return 0;
-    if (!(source_cmd->type == CMD_TRANSLATE3F ||
-          source_cmd->type == CMD_ROTATEF ||
-          source_cmd->type == CMD_SCALEF)) {
-        return 0;
+    /* Two ways to activate the edit-mode guide:
+     *  (live) the input buffer is a transform being typed (glTranslatef( /
+     *         glScalef( / glRotatef() — render live with the cursor args and
+     *         identity defaults for untyped slots, even before commit.
+     *  (parked) no live transform input, but the cursor sits on a committed
+     *         transform source line whose buffer matches it — the historic
+     *         behavior, rendered from the committed flat args. */
+    int live_kind = transform_input_kind(snapshot->input, snapshot->input_len);
+    if (live_kind < 0) {
+        if (edit_line_idx >= snapshot->source_cmd_count)
+            return 0;
+        const GLCmd *source_cmd = &snapshot->source_cmds[edit_line_idx];
+        if (!transform_input_matches_committed(snapshot))
+            return 0;
+        if (!(source_cmd->type == CMD_TRANSLATE3F ||
+              source_cmd->type == CMD_ROTATEF ||
+              source_cmd->type == CMD_SCALEF)) {
+            return 0;
+        }
     }
 
     const GLCmd *flat_cmds = snapshot->flat_program.cmds;
@@ -848,8 +898,27 @@ int scene_transform_guides_prepare(const SceneGuideSnapshot *snapshot,
             break;
         }
     }
-    if (plan->cursor_flat_idx < 0)
-        return 0;
+    if (plan->cursor_flat_idx < 0) {
+        /* No flat expansion for the cursor line. For a committed/parked guide
+         * that means nothing to anchor on; bail. For a live transform being
+         * typed on a brand-new (not-yet-flattened) line, anchor at the
+         * insertion point — the first flat command at/after the cursor's
+         * source position (or the program tail). The shared FRAME/WORLD math
+         * walks [0, idx) / [idx, count), so the guide lands in the frame the
+         * new line will occupy; it renders via the on_end flush when the
+         * anchor is the tail (no per-cmd walk index matches it). */
+        if (live_kind < 0)
+            return 0;
+        int ins = flat_cmd_count;
+        for (int i = 0; i < flat_cmd_count; i++) {
+            if (!flat_cmds[i].valid) continue;
+            if (flat_cmds[i].src_cmd_idx >= edit_line_idx) { ins = i; break; }
+        }
+        plan->cursor_flat_idx = ins;
+        plan->after_flat_idx = ins;
+        plan->active = 1;
+        return 1;
+    }
 
     /* First flat command after the cursor row, used for after-cursor anchoring
      * in world mode; if absent, anchor after the program tail. */
@@ -879,8 +948,24 @@ void scene_transform_guides_render_if_due(const SceneGuideSnapshot *snapshot,
     if (flat_cmd_idx != plan->cursor_flat_idx)
         return;
 
-    const GLCmd *flat_cmds = snapshot->flat_program.cmds;
-    const GLCmd *live_cmd = &flat_cmds[flat_cmd_idx];
+    /* Choose the command to draw. While the user is actively typing a
+     * transform whose buffer diverges from the committed source (or there is
+     * no committed source — a brand-new line), draw from the live cursor args
+     * with identity defaults for untyped slots. When the buffer matches the
+     * committed line (incl. the empty no-edit-yet case) we draw the committed
+     * flat args exactly as before. Never during replay (it anchors on a
+     * replay-chosen flat transform, not the input buffer). */
+    int live_kind = transform_input_kind(snapshot->input, snapshot->input_len);
+    int use_live = !snapshot->replaying && live_kind >= 0 &&
+                   !transform_input_matches_committed(snapshot);
+    GLCmd live_synth;
+    const GLCmd *live_cmd;
+    if (use_live) {
+        live_synth = transform_live_cmd(snapshot, live_kind);
+        live_cmd = &live_synth;
+    } else {
+        live_cmd = &snapshot->flat_program.cmds[flat_cmd_idx];
+    }
     float guide_origin[3];
 
     /* Replay (req 6) shares the FRAME/WORLD anchoring below: the plan already

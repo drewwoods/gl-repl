@@ -899,6 +899,68 @@ static void test_cursor_guides_render_for_unterminated_begin(void) {
                trace_count_line(&log, "glVertex3f -0.25 -0.5 0"), 1);
 }
 
+/* The transform analog of the vertex append-row test: typing a brand-new
+ * transform line (no committed source / flat expansion yet) should draw its
+ * guide live, just like a first-time glVertex does. Two cases:
+ *  (a) tail append into a non-empty program, and
+ *  (b) the very first line in an empty program. */
+static void test_cursor_guides_render_for_new_transform_line(void) {
+    printf("--- edit_overlays cursor guides for a new transform line ---\n");
+
+    /* (a) One committed vertex; cursor parked on a fresh append row (src 1)
+     * typing glScalef(2,2,2). */
+    GLCmd cmds[1];
+    mk_cmd(&cmds[0], CMD_VERTEX3F, 0.0f, 0.0f, 0.0f);
+    cmds[0].src_cmd_idx = 0;
+
+    OverlayWalkCtx walk;
+    memset(&walk, 0, sizeof(walk));
+    walk.program.cmds = cmds;
+    walk.program.cmd_count = 1;
+    walk.cursor.edit_line_idx = 1;
+    walk.cursor.cursor_block_begin = -1;
+    walk.cursor.cursor_block_end = -1;
+
+    const char *input = "glScalef(2,2,2)";
+    SceneGuideSnapshot snap;
+    memset(&snap, 0, sizeof(snap));
+    snap.show_guides = 1;
+    snap.input = input;
+    snap.input_len = (int)strlen(input);
+    snap.edit_line_idx = 1;        /* past the one committed source line */
+    snap.source_cmd_count = 1;
+    snap.flat_program = walk.program;
+    snap.xform_guide_mode = SCENE_XFORM_GUIDE_FRAME;
+    snap.xform_args[0] = snap.xform_args[1] = snap.xform_args[2] = 2.0f;
+    snap.xform_filled[0] = snap.xform_filled[1] = snap.xform_filled[2] = 1;
+    snap.xform_n_filled = 3;
+    snap.alpha_scale = 1.0f;
+
+    TraceLog log;
+    trace_begin();
+    edit_overlays_render_cursor_guides(&snap, &walk);
+    trace_end(&log);
+    ASSERT_TRUE("new tail transform line draws a guide",
+                trace_count_sym(&log, "glBegin") > 0);
+
+    /* (b) Empty program: the first line typed is a transform. */
+    OverlayWalkCtx empty_walk;
+    memset(&empty_walk, 0, sizeof(empty_walk));
+    empty_walk.program.cmds = cmds;   /* cmds present but count 0 */
+    empty_walk.program.cmd_count = 0;
+    empty_walk.cursor.edit_line_idx = 0;
+
+    snap.flat_program = empty_walk.program;
+    snap.edit_line_idx = 0;
+    snap.source_cmd_count = 0;
+
+    trace_begin();
+    edit_overlays_render_cursor_guides(&snap, &empty_walk);
+    trace_end(&log);
+    ASSERT_TRUE("first transform line in an empty program draws a guide",
+                trace_count_sym(&log, "glBegin") > 0);
+}
+
 int main(void) {
     printf("--- edit_overlays tests ---\n");
     test_outline_begin_mode_has_overlay();
@@ -918,6 +980,7 @@ int main(void) {
     test_vertex_numbers_use_source_begin_block();
     test_render_via_repl_program();
     test_cursor_guides_render_for_unterminated_begin();
+    test_cursor_guides_render_for_new_transform_line();
 
     return test_harness_report(&g_harness, "test_edit_overlays");
 }

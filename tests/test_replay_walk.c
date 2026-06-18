@@ -494,7 +494,7 @@ static void test_cursor_guide_snapshot_override(void) {
                 snap5.vertex_args[0], base.vertex_args[0]);
 }
 
-/* --- 5. parse_vertex_arg_slots handles nested parens ------------------
+/* --- 5. parse_arg_slots handles nested parens ------------------
  *
  * Regression for the "wrong guide branch on funcN locals" bug:
  * glVertex3f(cos(i*TAU/sides + phase)*radius,
@@ -503,24 +503,24 @@ static void test_cursor_guide_snapshot_override(void) {
  * `)`. The cursor guide then takes the n==1 branch and draws the YZ
  * plane instead of a red point at the vertex.
  *
- * Note: this tests parse_vertex_arg_slots (static in glr_ctrl.c, reached
+ * Note: this tests parse_arg_slots (static in glr_ctrl.c, reached
  * via the include-as-unit pattern at the top of this file). With no
  * predefined-variable values, the args evaluate to 0 — that's the
  * normal outcome for funcN-local references; n_filled=3 is what we
  * actually care about so the n==3 branch fires and the cursor-guide
  * snapshot override (test #4) provides correct positions.
  */
-static void test_parse_vertex_arg_slots_nested_parens(void) {
+static void test_parse_arg_slots_nested_parens(void) {
     float out[3] = { 99.0f, 99.0f, 99.0f };
     int   filled[3] = { 0, 0, 0 };
 
     /* The exact pattern from g_example_ring's glVertex3f line, sans the
      * "glVertex3f(" prefix (which the caller strips before invoking
-     * parse_vertex_arg_slots). */
-    int n = parse_vertex_arg_slots(
+     * parse_arg_slots). */
+    int n = parse_arg_slots(
         "cos(i*TAU/sides + phase)*radius, "
         "sin(i*TAU/sides + phase)*radius, 0)",
-        NULL, 0, out, filled);
+        NULL, 0, out, filled, 3);
 
     ASSERT_INT("nested parens: all 3 slots filled", n, 3);
     ASSERT_INT("nested parens: filled[0]", filled[0], 1);
@@ -532,7 +532,7 @@ static void test_parse_vertex_arg_slots_nested_parens(void) {
     /* Sanity: a single-arg input still parses as 1. */
     out[0] = 99.0f;
     filled[0] = filled[1] = filled[2] = 0;
-    n = parse_vertex_arg_slots("0.5)", NULL, 0, out, filled);
+    n = parse_arg_slots("0.5)", NULL, 0, out, filled, 3);
     ASSERT_INT("single literal: n_filled", n, 1);
     ASSERT_NEAR("single literal: out[0]", out[0], 0.5f);
     ASSERT_INT("single literal: filled[1] still 0", filled[1], 0);
@@ -540,7 +540,7 @@ static void test_parse_vertex_arg_slots_nested_parens(void) {
     /* Sanity: nested literal expression doesn't trip the scanner. */
     out[0] = out[1] = out[2] = 99.0f;
     filled[0] = filled[1] = filled[2] = 0;
-    n = parse_vertex_arg_slots("(1+2), (3*4), (5))", NULL, 0, out, filled);
+    n = parse_arg_slots("(1+2), (3*4), (5))", NULL, 0, out, filled, 3);
     ASSERT_INT("parenthesised args: n_filled", n, 3);
     ASSERT_NEAR("parenthesised args: out[0]", out[0], 3.0f);
     ASSERT_NEAR("parenthesised args: out[1]", out[1], 12.0f);
@@ -773,7 +773,7 @@ int main(void) {
     test_walker_fires_on_each_cmd_at_cursor();
     test_walker_stop_flag_halts();
     test_cursor_guide_snapshot_override();
-    test_parse_vertex_arg_slots_nested_parens();
+    test_parse_arg_slots_nested_parens();
     test_predicate_category_agreement();
     test_display_name_for_not_in_begin();
     test_transform_dispatch_drift_guard();

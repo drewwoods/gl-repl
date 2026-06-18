@@ -54,6 +54,20 @@ typedef struct SceneGuideSnapshot {
     float normal_args[3];
     int   normal_n_filled;
 
+    /* Pre-evaluated transform cursor args, parallel to vertex_args. The
+     * controller fills these when the live input line is glTranslatef( /
+     * glScalef( / glRotatef(, so the transform guide can render live while
+     * typing (before commit) with the same feel as the vertex guide. Slots
+     * are positional: translate/scale use [0..2]; rotate uses [0]=angle,
+     * [1..3]=axis. xform_filled[i] flags the slots the user has actually
+     * typed; the scene module fills the rest with the transform identity
+     * (0 for translate/rotate, 1 for scale). The transform *kind* is
+     * re-derived in the scene module from `input` via strncmp (no eval),
+     * mirroring geometry_guides.c's input_is_vertex_kind. */
+    float xform_args[4];
+    int   xform_filled[4];
+    int   xform_n_filled;
+
     /* When the cursor is on a glNormal3f / gluNormal / CMD_TESS_NORMAL
      * line, the controller looks forward in the *flat* program for the
      * next vertex command and writes its evaluated position here. The

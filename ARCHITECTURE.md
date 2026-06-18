@@ -1159,6 +1159,55 @@ alone cannot know the world-space vertex the normal belongs to. Argument-slot
 parsing uses `repl_scan_next_arg_delim()` so nested expressions such as
 `cos(i + phase)` do not truncate at an inner comma/paren.
 
+#### Live transform guides (render-while-typing)
+
+Transform guides (`src/scene/guides/transform_guides.c`,
+`glTranslatef`/`glScalef`/`glRotatef`) render **live as you type**, before the
+line is committed — the same render-while-typing affordance the vertex guides
+have. The split mirrors the vertex path: the controller pre-evaluates the
+partial input into `SceneGuideSnapshot.xform_args[4]` / `xform_filled[4]`
+(`parse_arg_slots()` in `glr_ctrl.c`, no eval in the scene module), and the
+scene module re-derives the transform *kind* from the input prefix
+(`transform_input_kind()`, a strncmp like `input_is_vertex_kind`) and fills the
+untyped slots with the transform identity — **0 for translate/rotate, 1 for
+scale** (`transform_live_cmd()`).
+
+`scene_transform_guides_render_if_due()` uses those live args only when the
+input buffer **diverges** from the committed line
+(`!transform_input_matches_committed()` and not replaying); when the buffer
+matches (the parked / no-edit-yet case), it draws the committed flat args
+exactly as before. So one synthetic-cmd path covers both "edit a committed
+transform" and "compose a new one".
+
+**Anchoring, and the first-composition gotcha.** A live transform line usually
+has no flat expansion yet (it isn't committed), so `scene_transform_guides_prepare()`
+anchors at the *insertion point* — the first flat command at/after the cursor's
+source line, or the **flat tail** for an appended line. Crucially,
+`scene_transform_guides_render_if_due()` is **position-independent**: it
+recomputes its own anchor frame (`compute_before_cursor_matrix` /
+`compute_after_cursor_origin` walk the flat program themselves and
+`glLoadMatrixf` an absolute matrix), so it does *not* depend on where the
+vertex walk happens to be.
+
+That independence is what makes `edit_overlays_render_cursor_guides()` flush the
+transform guide **after** the walk (and even when there is *no* walk):
+
+* The flat-program walk drives the geometry guides (which *do* render in the
+  walk's accumulated modelview) and consumes the transform plan for the
+  committed / replay / mid-document cases.
+* An **empty flat program** (e.g. a transform is the very first thing typed in a
+  scene) skips the walk — but the post-walk flush still renders the guide. This
+  was the original gap: the old early-return on `cmd_count <= 0` bailed before
+  the flush, so a first-line transform drew nothing. The early-out now bypasses
+  only the walk.
+* A **tail-anchored** plan (`cursor_flat_idx == cmd_count`) never matches a
+  per-cmd walk index, so it too renders in the post-walk flush.
+
+This is the transform analog of the vertex guide's `on_end` / `in_block`
+append-row path (vertices typed inside an unterminated `glBegin` block render at
+walk end); transforms have no enclosing block, so the position-independent
+post-walk flush plays that role instead.
+
 ## UI Layer
 
 The UI layer owns 2D editor rendering.
