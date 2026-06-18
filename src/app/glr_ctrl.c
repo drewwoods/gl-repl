@@ -942,9 +942,9 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, SceneRende
      * (themes.h); out-of-range guards to NORMAL. */
     static const float k_grid_brightness_factors[GRID_BRIGHTNESS_COUNT] = {
         [GRID_BRIGHTNESS_DIM]    = 0.6f,
-        [GRID_BRIGHTNESS_NORMAL] = 1.0f,
-        [GRID_BRIGHTNESS_BRIGHT] = 1.8f,
-        [GRID_BRIGHTNESS_BOLD]   = 3.0f,
+        [GRID_BRIGHTNESS_NORMAL] = 1.5f,
+        [GRID_BRIGHTNESS_BRIGHT] = 2.8f,
+        [GRID_BRIGHTNESS_BOLD]   = 4.0f,
     };
     int br_i = presentation.grid_brightness_idx;
     if (br_i < 0 || br_i >= GRID_BRIGHTNESS_COUNT) br_i = GRID_BRIGHTNESS_NORMAL;
