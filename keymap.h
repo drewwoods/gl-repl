@@ -149,6 +149,28 @@
  * the file banner. Implemented in src/editor/input.c. */
 int keymap_event_is(int event_key, int binding_key, int binding_mods);
 
+/* User-facing shortcut labels. The caller owns `out`; each helper returns
+ * `out` for convenience, or an empty string if out_size <= 0.
+ *
+ * Pass `is_special=1` for GLUT special-callback keys (`GLUT_KEY_*`), and
+ * 0 for normal keyboard bytes (`KEY_CTRL_*`, printable ASCII, Escape).
+ * The flag is required because GLUT_KEY_F1 (numeric 1) aliases KEY_CTRL_A
+ * after preprocessing; keymap.h's textual tokens are distinct, but the
+ * runtime integer pair is not.
+ *
+ * Examples:
+ *   keymap_binding_to_string(buf, sizeof buf, KM_KEY(GLR_SAVE),
+ *                            KM_MODS(GLR_SAVE), 0)          -> Ctrl+S
+ *   keymap_binding_to_string(buf, sizeof buf, KM_KEY(GLR_PREV_EXAMPLE),
+ *                            KM_MODS(GLR_PREV_EXAMPLE), 1)  -> Shift+F12
+ *   keymap_binding_to_string(buf, sizeof buf, KM_KEY(GLR_AUDIO_PREV),
+ *                            KM_MODS(GLR_AUDIO_PREV), 1)    -> Ctrl+Left
+ */
+#define KEYMAP_SHORTCUT_LABEL_MAX 32
+const char *keymap_binding_to_string(char *out, int out_size,
+                                     int binding_key, int binding_mods,
+                                     int is_special);
+
 /* Pull one element out of a binding pair, for the rare site that needs a
  * bare key/mods constant rather than a match: a `case` label (which can't
  * take a comma pair), a synthetic dispatch that feeds a key byte to a

@@ -1,6 +1,9 @@
 #include "repl/tutorials.h"
 #include "repl/catalog_tags.h"
 #include "repl/eval.h"   /* repl_eval_is_reserved_ident for REQUIRE_VAR validation */
+#include "gl_includes.h"
+#include "keymap.h"
+#include "keys.h"
 
 #include <ctype.h>
 #include <stddef.h>
@@ -40,6 +43,11 @@
 #define STEP_REQUIRE(label, c, slug, val) \
     { (label), (c), NULL, TUTORIAL_STEP_APPEND, NULL, \
       TUTORIAL_STEP_KIND_REQUIRE, (slug), (val), NULL, NULL, 0.0f }
+
+#define STEP_REQUIRE_KEY(label, c, slug, val, key_code, mods, is_special) \
+    { (label), (c), NULL, TUTORIAL_STEP_APPEND, NULL, \
+      TUTORIAL_STEP_KIND_REQUIRE, (slug), (val), NULL, NULL, 0.0f, \
+      (key_code), (mods), (is_special) }
 
 /* Symbolic-value variant of STEP_REQUIRE. The runner resolves
  * `val_name` to int via the bridge's resolve_text at compare time. */
@@ -155,8 +163,9 @@ static const char *const g_tutorial_first_triangle_cfg[] = {
 
 /* "Feature Tour" — exercises the new step kinds:
  *   1) Five COMMAND steps draw a triangle in 3D.
- *   2) One REQUIRE step asks the user to enable vertex outlines (F7) so
- *      they see how the feature changes the rendering.
+ *   2) One REQUIRE step asks the user to enable vertex outlines (using
+ *      the GLR_VERTEX_OUTLINES binding) so they see how the feature
+ *      changes the rendering.
  *   3) Two SET steps showcase Radar (10) and Focus (6) grid themes;
  *      the user presses Enter/Tab/Space to advance through them.
  *
@@ -181,9 +190,10 @@ static const TutorialStep g_tutorial_feature_tour_steps[] = {
     STEP_APPEND(NULL,
         "// Close the batch - the filled triangle appears.",
         "glEnd()"),
-    STEP_REQUIRE(NULL,
-        "// Press F7 to turn on vertex outlines; they trace each edge.",
-        "vertex_outlines", 1),
+    STEP_REQUIRE_KEY(NULL,
+        "// Press %s to turn on vertex outlines; they trace each edge.",
+        "vertex_outlines", 1,
+        KM_KEY(GLR_VERTEX_OUTLINES), KM_MODS(GLR_VERTEX_OUTLINES), 0),
     STEP_SET_SYM(NULL,
         "// The Radar grid backdrop looks like this.",
         "grid", "GRID_THEME_RADAR"),
@@ -422,6 +432,23 @@ const TutorialStep *repl_tutorial_step_get(int idx, int step_idx) {
     return NULL;
 }
 
+const char *repl_tutorial_step_comment(int idx, int step_idx) {
+    static char comment_buf[256];
+    char shortcut[KEYMAP_SHORTCUT_LABEL_MAX];
+    const TutorialStep *step = repl_tutorial_step_get(idx, step_idx);
+    if (!step)
+        return NULL;
+    if (!step->comment_binding_key)
+        return step->comment;
+
+    keymap_binding_to_string(shortcut, (int)sizeof(shortcut),
+                             step->comment_binding_key,
+                             step->comment_binding_mods,
+                             step->comment_binding_is_special);
+    snprintf(comment_buf, sizeof(comment_buf), step->comment, shortcut);
+    return comment_buf;
+}
+
 int repl_tutorial_count(void) {
     return (int)(sizeof(g_tutorials) / sizeof(g_tutorials[0]));
 }
@@ -442,7 +469,7 @@ int repl_tutorial_step_count(int idx) {
     return count;
 }
 
-/* The eight per-field step accessors are now `static inline` in
+/* The per-field step accessors mostly live as `static inline` helpers in
  * tutorials.h and call repl_tutorial_step_get() once each. Callers
  * that need more than one field per step (e.g. the tutorial-menu
  * row renderer) should call repl_tutorial_step_get directly and

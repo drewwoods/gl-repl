@@ -9,6 +9,7 @@ const char *tutorial_current_expected_text(void) { return NULL; }
 TutorialRuntimeState tutorial_state_view(void) { return (TutorialRuntimeState){0}; }
 int repl_eval_find_predef_var_idx(const char *name) { (void)name; return -1; }
 const TutorialStep *repl_tutorial_step_get(int idx, int step_idx) { (void)idx; (void)step_idx; return NULL; }
+const char *repl_tutorial_step_comment(int idx, int step_idx) { (void)idx; (void)step_idx; return NULL; }
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
 

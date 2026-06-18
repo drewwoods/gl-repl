@@ -13,6 +13,9 @@
 #include "repl/help_text.h"
 #include "repl/command_spec.h"   /* MAX_FUNC_HINT_PARAMS */
 #include "repl/eval.h"           /* REPL_SCRATCH_ARRAY_LEN */
+#include "gl_includes.h"
+#include "keymap.h"
+#include "keys.h"
 
 #include <assert.h>
 #include <stdarg.h>
@@ -57,7 +60,7 @@ static const char *const k_tab_overview[] = {
     "  Tutorials          \tGuided, step-by-step lessons",
     "  Config             \tToggle grid, axes, lighting, backdrop, etc.",
     "  Replay (far right) \tStep through the scene one command at a time",
-    "  search...          \tFind text in the code buffer (also Ctrl+F)",
+    "  search...          \tFind text in the code buffer",
     "",
     "Getting started:",
     "  Enter one command at a time, ending each with ;",
@@ -67,17 +70,17 @@ static const char *const k_tab_overview[] = {
     "    glVertex3f(1, -1, 0)",
     "    glEnd()",
     "  Drag in the viewport to orbit; scroll to zoom.",
-    "  Press Ctrl+T to animate using the time variable 't'.",
-    "  Press F12 to cycle the built-in examples for ideas.",
-    "  Press Ctrl+Shift+P to toggle the Variables panel, hover any value,",
+    "  Use Auto time to animate with the time variable 't'.",
+    "  Cycle the built-in examples for ideas.",
+    "  Toggle the Variables panel, hover any value,",
     "    Left-click drag  - linear scrub",
     "    Right-click drag - logarithmic",
     "",
     "Finding your way around:",
-    "  Open this help any time with F1 (or the 'F1 help' keycap).",
+    "  Open this help any time with the help shortcut or keycap.",
     "  The Commands tab lists every GL command and the REPL language.",
     "  The Keys tab is the full keyboard and mouse reference.",
-    "  Esc closes this overlay; click outside it to dismiss too.",
+    "  The close shortcut or an outside click dismisses this overlay.",
     "",
     NULL
 };
@@ -148,7 +151,7 @@ static const char *const k_lang_sections_tail[] = {
     "  controls (+ HUD overlay) when exported as standalone C",
     "",
     "Save / Load:",
-    "  Click Save C or press Ctrl+S to export output.c",
+    "  Click Save C or use the File > Save Scene shortcut to export output.c",
     "  Reload a saved file:  ./gl-repl output.c",
     "  (Commands between // Snippet start/end are imported)",
     "",
@@ -157,7 +160,7 @@ static const char *const k_lang_sections_tail[] = {
     "  You can pull it back manually, then resume from there.",
     "  Use in any expression: glVertex3f(sin(t), cos(t), 0)",
     "",
-    "Accumulation Buffer (F2 effect / Ctrl+= passes):",
+    "Accumulation Buffer:",
     "  Effect: Off / AA / Blur / Blur Cam (motion blur).",
     "  AA on by default; Blur is opt-in. Blur interpolates",
     "  camera motion, else the animation time t; Blur Cam",
@@ -167,110 +170,10 @@ static const char *const k_lang_sections_tail[] = {
     NULL
 };
 
-/* Same '\t' convention: left column = key, right = action. The F-Key
- * Toggles section is generated dynamically from g_cfg_items so it
- * always reflects the actual bindings without manual sync. */
-static const char *const k_tab_keys_base[] = {
-    "Editing:",
-    "  ;                    \tCommit current line",
-    "  Enter                \tInsert new line",
-    "  Backspace            \tDelete character or selected lines",
-    "  Tab / Enter          \tAccept autocomplete suggestion",
-    "  Up / Down            \tNavigate lines",
-    "  Left / Right         \tMove cursor within line",
-    "  Home / Ctrl+A        \tJump to start of line",
-    "  End / Ctrl+E         \tJump to end of line",
-    "  Shift+Left/Right     \tExtend input selection by one char",
-    "  Shift+Home/End       \tExtend input selection to row start / end",
-    "  Shift+Up/Down        \tSelect multiple lines",
-    "  Click + drag (text)  \tSelect characters within the active input row",
-    "  Click + drag (gutter)\tSelect lines (line-range)",
-    "  Double-click         \tSelect the word under the cursor",
-    "  Caret on ( ) or { }  \tHighlights the matching bracket",
-    "  Caret inside ( )      \tHighlights text inside the enclosing parentheses",
-    "  PgUp / PgDn         \tScroll active panel/overlay",
-    "",
-    "Inline numeric stepper (cursor on a number in the code panel):",
-    "  Click up / down      \tNudge the value under the cursor",
-    "  Right-click up / down\tCoarse step (x10)",
-    "  Shift+click up / down\tFine step (x1/5)",
-    "",
-    "Clipboard & Undo:",
-    "  Ctrl+C               \tCopy input selection if active, else line/selection",
-    "  Ctrl+X               \tCut input selection if active, else line/selection",
-    "  Ctrl+V               \tPaste input text at cursor, or paste lines",
-    "  Ctrl+Z               \tUndo (source mutations only)",
-    "  Ctrl+Y               \tRedo",
-    "",
-    "Buffer Operations:",
-    "  Ctrl+F               \tSearch source buffer",
-    "  Ctrl+Shift+F         \tToggle code focus (hide boilerplate chrome)",
-    "  Ctrl+D               \tDelete line or selection",
-    "  Ctrl+L               \tClear all commands",
-    "  Ctrl+\\              \tReformat buffer",
-    "  Ctrl+Shift+S         \tSplit multi-variable declaration at cursor (one per line)",
-    "  Ctrl+/               \tToggle comment on line",
-    "  Ctrl+P               \tDump debug state to stdout",
-    "  Ctrl+S               \tSave to output.c",
-    "  Ctrl+Q               \tExit and save to temp file",
-    "  Escape               \tClear input / close overlay",
-    "",
-    "Camera:",
-    "  Left-drag            \tOrbit",
-    "  Right-drag           \tPan (XZ)",
-    "  Shift+Right-drag     \tPan (Y)",
-    "  Scroll wheel         \tZoom (viewport) / Scroll (code panel or long menu)",
-    "  Ctrl+Shift+O         \tFocus origin (ease target to 0,0,0)",
-    "  Ctrl+Shift+C         \tReset camera to default (eased)",
-    "  Ctrl+Shift+R         \tToggle camera auto-rotate",
-    "  Ctrl+Shift+V         \tToggle View mode (2D / 3D)",
-    "",
-    "Time & Replay:",
-    "  Ctrl+T               \tPlay / pause time variable",
-    "  Ctrl+Shift+T         \tReset t to 0",
-    "  Ctrl+R               \tStart / stop replay",
-    "  Ctrl+K               \tJump replay to cursor line (first geometry at/after)",
-    "  Space                \tPause / resume replay",
-    "  + / -                \tChange replay speed",
-    "  m / M                \tToggle polygon / vertex replay mode",
-    "  Left / Right         \tStep backward / forward (when paused)",
-    "  Esc                  \tStop replay",
-    "",
-    "Render State:",
-    "  Ctrl+B               \tCycle code panel layout",
-    "  Ctrl+=               \tIncrease jitter samples",
-    "  Ctrl+-               \tDecrease jitter samples",
-    "  Ctrl+U               \tToggle GL_MULTISAMPLE",
-    "  Ctrl+O               \tCycle grid major tick spacing (1 / 2 / 5 / 10)",
-    "  Ctrl+W               \tCycle Compute profile panel",
-    "  Ctrl+Shift+W         \tCycle memory profile panel",
-    "",
-    "Scene Overlays:",
-    "  Ctrl+G               \tToggle wireframe",
-    "  Ctrl+Shift+N         \tToggle normal vectors",
-    "  Ctrl+Shift+E         \tToggle vertex outlines",
-    "  Ctrl+Shift+L         \tToggle light indicators",
-    "",
-    "Interface:",
-    "  Statusbar keycaps    \tClick 'F1 help' or 'focus' (= Ctrl+Shift+F) to toggle",
-    "  `                    \tOpen Config menu",
-    "  Left-click item      \tCycle config entry forward",
-    "  Right-click item     \tCycle config entry backward",
-    "  Ctrl+Shift+P         \tToggle variable panel",
-    "",
-    "Audio:",
-    "  Ctrl+Shift+A         \tToggle audio (off / on)",
-    "  Ctrl+Left            \tPrevious track",
-    "  Ctrl+Right           \tNext track",
-    "",
-    "F-Key Toggles  (Shift+F<n> steps backward):",
-    NULL  /* dynamic F-key lines follow */
-};
-
-#define HELP_FKEY_MAX 16
 #define HELP_KEYS_MAX 128
+#define HELP_KEY_LINE_BUF 144
 
-static char        g_fkey_strbuf[HELP_FKEY_MAX][48];
+static char        g_key_strbuf[HELP_KEYS_MAX][HELP_KEY_LINE_BUF];
 static const char *g_tab_keys[HELP_KEYS_MAX];
 
 /* Commands tab: per-command rows generated from k_func_completions[];
@@ -364,6 +267,36 @@ static int cmd_emit_group(int n, ReplHelpGroup group) {
     return n;
 }
 
+static int key_emit(int n, const char *fmt, ...) {
+    if (n >= HELP_KEYS_MAX) {
+        static int warned = 0;
+        if (!warned) {
+            fprintf(stderr, "repl_help: warning: HELP_KEYS_MAX (%d) exceeded, help text truncated.\n", HELP_KEYS_MAX);
+            warned = 1;
+        }
+        return n;
+    }
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(g_key_strbuf[n], HELP_KEY_LINE_BUF, fmt, ap);
+    va_end(ap);
+    g_tab_keys[n] = g_key_strbuf[n];
+    return n + 1;
+}
+
+static int key_emit_binding(int n, const char *prefix,
+                            int key, int mods, int is_special,
+                            const char *suffix, const char *desc) {
+    char shortcut[KEYMAP_SHORTCUT_LABEL_MAX];
+    keymap_binding_to_string(shortcut, (int)sizeof(shortcut),
+                             key, mods, is_special);
+    return key_emit(n, "  %s%s%s\t%s",
+                    prefix ? prefix : "",
+                    shortcut,
+                    suffix ? suffix : "",
+                    desc ? desc : "");
+}
+
 const ReplHelpContent *repl_help_text_build(void) {
     /* --- Commands tab: per-command sections from the spec, then the
      * hand-written language sections. --- */
@@ -385,43 +318,155 @@ const ReplHelpContent *repl_help_text_build(void) {
         g_tab_commands[HELP_CMD_LINES_MAX - 1] = NULL;
 
     int nk = 0;
-    for (int i = 0;
-         k_tab_keys_base[i] != NULL && nk < HELP_KEYS_MAX - HELP_FKEY_MAX - 4;
-         i++)
-        g_tab_keys[nk++] = k_tab_keys_base[i];
+    nk = key_emit(nk, "Editing:");
+    nk = key_emit(nk, "  ;                    \tCommit current line");
+    nk = key_emit(nk, "  Enter                \tInsert new line");
+    nk = key_emit(nk, "  Backspace            \tDelete character or selected lines");
+    nk = key_emit(nk, "  Tab / Enter          \tAccept autocomplete suggestion");
+    nk = key_emit(nk, "  Up / Down            \tNavigate lines");
+    nk = key_emit(nk, "  Left / Right         \tMove cursor within line");
+    nk = key_emit_binding(nk, "Home / ", KM_KEY(GLR_LINE_START), KM_MODS(GLR_LINE_START), 0, "",
+                          "Jump to start of line");
+    nk = key_emit_binding(nk, "End / ", KM_KEY(GLR_LINE_END), KM_MODS(GLR_LINE_END), 0, "",
+                          "Jump to end of line");
+    nk = key_emit(nk, "  Shift+Left/Right     \tExtend input selection by one char");
+    nk = key_emit(nk, "  Shift+Home/End       \tExtend input selection to row start / end");
+    nk = key_emit(nk, "  Shift+Up/Down        \tSelect multiple lines");
+    nk = key_emit(nk, "  Click + drag (text)  \tSelect characters within the active input row");
+    nk = key_emit(nk, "  Click + drag (gutter)\tSelect lines (line-range)");
+    nk = key_emit(nk, "  Double-click         \tSelect the word under the cursor");
+    nk = key_emit(nk, "  Caret on ( ) or { }  \tHighlights the matching bracket");
+    nk = key_emit(nk, "  Caret inside ( )      \tHighlights text inside the enclosing parentheses");
+    nk = key_emit(nk, "  PgUp / PgDn         \tScroll active panel/overlay");
+    nk = key_emit(nk, "");
+    nk = key_emit(nk, "Inline numeric stepper (cursor on a number in the code panel):");
+    nk = key_emit(nk, "  Click up / down      \tNudge the value under the cursor");
+    nk = key_emit(nk, "  Right-click up / down\tCoarse step (x10)");
+    nk = key_emit(nk, "  Shift+click up / down\tFine step (x1/5)");
+    nk = key_emit(nk, "");
+    nk = key_emit(nk, "Clipboard & Undo:");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_COPY), KM_MODS(GLR_COPY), 0, "",
+                          "Copy input selection if active, else line/selection");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_CUT), KM_MODS(GLR_CUT), 0, "",
+                          "Cut input selection if active, else line/selection");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_PASTE), KM_MODS(GLR_PASTE), 0, "",
+                          "Paste input text at cursor, or paste lines");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_UNDO), KM_MODS(GLR_UNDO), 0, "",
+                          "Undo (source mutations only)");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_REDO), KM_MODS(GLR_REDO), 0, "", "Redo");
+    nk = key_emit(nk, "");
+    nk = key_emit(nk, "Buffer Operations:");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_SEARCH), KM_MODS(GLR_SEARCH), 0, "", "Search source buffer");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_CODE_FOCUS), KM_MODS(GLR_CODE_FOCUS), 0, "",
+                          "Toggle code focus (hide boilerplate chrome)");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_DELETE_LINE), KM_MODS(GLR_DELETE_LINE), 0, "",
+                          "Delete line or selection");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_CLEAR_ALL), KM_MODS(GLR_CLEAR_ALL), 0, "", "Clear all commands");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_REFORMAT), KM_MODS(GLR_REFORMAT), 0, "", "Reformat buffer");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_SPLIT_DECL), KM_MODS(GLR_SPLIT_DECL), 0, "",
+                          "Split multi-variable declaration at cursor (one per line)");
+    nk = key_emit(nk, "  Ctrl+/               \tToggle comment on line");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_DEBUG_DUMP), KM_MODS(GLR_DEBUG_DUMP), 0, "",
+                          "Dump debug state to stdout");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_SAVE), KM_MODS(GLR_SAVE), 0, "", "Save to output.c");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_QUIT), KM_MODS(GLR_QUIT), 0, "", "Exit and save to temp file");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_ESCAPE), KM_MODS(GLR_ESCAPE), 0, "",
+                          "Clear input / close overlay");
+    nk = key_emit(nk, "");
+    nk = key_emit(nk, "Camera:");
+    nk = key_emit(nk, "  Left-drag            \tOrbit");
+    nk = key_emit(nk, "  Right-drag           \tPan (XZ)");
+    nk = key_emit(nk, "  Shift+Right-drag     \tPan (Y)");
+    nk = key_emit(nk, "  Scroll wheel         \tZoom (viewport) / Scroll (code panel or long menu)");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_FOCUS_ORIGIN), KM_MODS(GLR_FOCUS_ORIGIN), 0, "",
+                          "Focus origin (ease target to 0,0,0)");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_RESET_CAMERA), KM_MODS(GLR_RESET_CAMERA), 0, "",
+                          "Reset camera to default (eased)");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_CAMERA_ROTATE), KM_MODS(GLR_CAMERA_ROTATE), 0, "",
+                          "Toggle camera auto-rotate");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_VIEW_MODE), KM_MODS(GLR_VIEW_MODE), 0, "",
+                          "Toggle View mode (2D / 3D)");
+    nk = key_emit(nk, "");
+    nk = key_emit(nk, "Time & Replay:");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_AUTO_TIME), KM_MODS(GLR_AUTO_TIME), 0, "",
+                          "Play / pause time variable");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_AUTO_TIME),
+                          KM_MODS(GLR_AUTO_TIME) | GLUT_ACTIVE_SHIFT, 0, "",
+                          "Reset t to 0");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_REPLAY), KM_MODS(GLR_REPLAY), 0, "", "Start / stop replay");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_REPLAY_JUMP), KM_MODS(GLR_REPLAY_JUMP), 0, "",
+                          "Jump replay to cursor line (first geometry at/after)");
+    nk = key_emit(nk, "  Space                \tPause / resume replay");
+    nk = key_emit(nk, "  + / -                \tChange replay speed");
+    nk = key_emit(nk, "  m / M                \tToggle polygon / vertex replay mode");
+    nk = key_emit(nk, "  Left / Right         \tStep backward / forward (when paused)");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_ESCAPE), KM_MODS(GLR_ESCAPE), 0, "", "Stop replay");
+    nk = key_emit(nk, "");
+    nk = key_emit(nk, "Render State:");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_CODE_PANEL), KM_MODS(GLR_CODE_PANEL), 0, "",
+                          "Cycle code panel layout");
+    nk = key_emit(nk, "  Ctrl+=               \tIncrease jitter samples");
+    nk = key_emit(nk, "  Ctrl+-               \tDecrease jitter samples");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_MSAA), KM_MODS(GLR_MSAA), 0, "",
+                          "Toggle GL_MULTISAMPLE");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_GRID_MAJOR), KM_MODS(GLR_GRID_MAJOR), 0, "",
+                          "Cycle grid major tick spacing (1 / 2 / 5 / 10)");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_CPU_PROFILE), KM_MODS(GLR_CPU_PROFILE), 0, "",
+                          "Cycle Compute profile panel");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_MEMORY_PROFILE), KM_MODS(GLR_MEMORY_PROFILE), 0, "",
+                          "Cycle memory profile panel");
+    nk = key_emit(nk, "");
+    nk = key_emit(nk, "Scene Overlays:");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_WIREFRAME), KM_MODS(GLR_WIREFRAME), 0, "", "Toggle wireframe");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_NORMAL_VECTORS), KM_MODS(GLR_NORMAL_VECTORS), 0, "",
+                          "Toggle normal vectors");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_VERTEX_OUTLINES), KM_MODS(GLR_VERTEX_OUTLINES), 0, "",
+                          "Toggle vertex outlines");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_LIGHT_INDICATORS), KM_MODS(GLR_LIGHT_INDICATORS), 0, "",
+                          "Toggle light indicators");
+    nk = key_emit(nk, "");
+    nk = key_emit(nk, "Interface:");
+    nk = key_emit(nk, "  Statusbar keycaps    \tClick help or focus keycaps to toggle");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_CONFIG_MENU), KM_MODS(GLR_CONFIG_MENU), 0, "", "Open Config menu");
+    nk = key_emit(nk, "  Left-click item      \tCycle config entry forward");
+    nk = key_emit(nk, "  Right-click item     \tCycle config entry backward");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_VARIABLE_PANEL), KM_MODS(GLR_VARIABLE_PANEL), 0, "",
+                          "Toggle variable panel");
+    nk = key_emit(nk, "");
+    nk = key_emit(nk, "Audio:");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_AUDIO), KM_MODS(GLR_AUDIO), 0, "", "Toggle audio (off / on)");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_AUDIO_PREV), KM_MODS(GLR_AUDIO_PREV), 1, "", "Previous track");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_AUDIO_NEXT), KM_MODS(GLR_AUDIO_NEXT), 1, "", "Next track");
+    nk = key_emit(nk, "");
+    nk = key_emit(nk, "F-Key Toggles  (Shift+F<n> steps backward):");
 
     /* F1 - not in g_cfg_items */
-    snprintf(g_fkey_strbuf[0], sizeof(g_fkey_strbuf[0]), "  F1   \tHelp overlay");
-    g_tab_keys[nk++] = g_fkey_strbuf[0];
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_HELP), KM_MODS(GLR_HELP), 1, "", "Help overlay");
 
     /* F2-F10 — pulled from the controller-installed provider so this
      * module stays free of app/ includes. F12 / Shift+F12 are not part
      * of the config table; they drive the example/scene cycle directly
      * (forward, and backward with Shift) and are emitted unconditionally
      * below. */
-    int di = 1;
-    for (int fn = 2; fn <= 10 && di < HELP_FKEY_MAX - 1; fn++) {
+    for (int fn = 2; fn <= 10; fn++) {
         const char *label = (g_fkey_provider && g_fkey_provider->fkey_label)
                           ? g_fkey_provider->fkey_label(fn)
                           : NULL;
         if (!label) continue;
-        snprintf(g_fkey_strbuf[di], sizeof(g_fkey_strbuf[di]),
-                 "  F%-2d  \t%s", fn, label);
-        g_tab_keys[nk++] = g_fkey_strbuf[di++];
+        nk = key_emit_binding(nk, "", GLUT_KEY_F1 + fn - 1, 0, 1, "", label);
     }
 
-    /* F12 - not in g_cfg_items */
-    snprintf(g_fkey_strbuf[di], sizeof(g_fkey_strbuf[di]),
-             "  F12  \tNext example / scene");
-    g_tab_keys[nk++] = g_fkey_strbuf[di++];
+    /* F12 / Shift+F12 - not in g_cfg_items */
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_NEXT_EXAMPLE), KM_MODS(GLR_NEXT_EXAMPLE), 1, "",
+                          "Next example / scene");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_PREV_EXAMPLE), KM_MODS(GLR_PREV_EXAMPLE), 1, "",
+                          "Previous example / scene");
 
-    /* Shift+F12 - not in g_cfg_items */
-    snprintf(g_fkey_strbuf[di], sizeof(g_fkey_strbuf[di]),
-             "  Shift+F12  \tPrevious example / scene");
-    g_tab_keys[nk++] = g_fkey_strbuf[di];
-
-    g_tab_keys[nk++] = "";
-    g_tab_keys[nk]   = NULL;
+    nk = key_emit(nk, "");
+    if (nk < HELP_KEYS_MAX)
+        g_tab_keys[nk] = NULL;
+    else
+        g_tab_keys[HELP_KEYS_MAX - 1] = NULL;
 
     /* Overview leads so a first-time user lands on orientation, not
      * the raw command dump. */
