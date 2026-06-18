@@ -298,6 +298,22 @@ In-app, the CPU profiler overlay shows per-frame section timings and the
 memory panel shows RSS history — see
 [User Guide → Profiling & Diagnostics](USER_GUIDE.md#profiling--diagnostics).
 
+## Keyboard map tooling
+
+Shortcut bindings live in `keymap.h` as `GLR_*` `(key, modifiers)` pairs.
+Use `scripts/keymap.sh` when changing or auditing them:
+
+```bash
+scripts/keymap.sh check   # fail on duplicate (key, modifiers) bindings
+scripts/keymap.sh list    # show bound, reserved, and available slots
+```
+
+`list` reports the current bindings, the byte-level reserved control aliases,
+and the unbound Ctrl / Ctrl+Shift / F-key slots. `Ctrl+H`, `Ctrl+I`,
+`Ctrl+J`, and `Ctrl+M` are reserved, including their Ctrl+Shift forms, because
+the normal keyboard callback receives them as Backspace, Tab, LF/Enter, and
+CR/Enter rather than distinct app shortcuts.
+
 ## Files
 
 ```
