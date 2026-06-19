@@ -417,7 +417,8 @@ const ReplHelpContent *repl_help_text_build(void) {
                           "Cycle memory profile panel");
     nk = key_emit(nk, "");
     nk = key_emit(nk, "Scene Overlays:");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_WIREFRAME), KM_MODS(GLR_WIREFRAME), 0, "", "Toggle wireframe");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_WIREFRAME), KM_MODS(GLR_WIREFRAME), 0, "",
+                          "Cycle wireframe (Off / Wireframe / Hidden-line)");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_NORMAL_VECTORS), KM_MODS(GLR_NORMAL_VECTORS), 0, "",
                           "Toggle normal vectors");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_VERTEX_OUTLINES), KM_MODS(GLR_VERTEX_OUTLINES), 0, "",

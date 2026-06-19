@@ -618,7 +618,7 @@ static void test_wireframe_hidden_line_passes(void) {
     cfg.use_accum = 0;
     cfg.accum_effect = SCENE_ACCUM_EFFECT_OFF;
     cfg.accum_passes = 1;
-    cfg.wireframe = 1;
+    cfg.wireframe = SCENE_WIREFRAME_HIDDEN;
 
     SceneRendererState state;
     scene_renderer_state_init(&state);
@@ -648,6 +648,42 @@ static void test_wireframe_hidden_line_passes(void) {
                 gl_stub_counts[GL_STUB_glColor4f] >= 2);
 #else
     ASSERT_TRUE("wireframe hidden-line passes require GL stubs", 1);
+#endif
+}
+
+static void test_plain_wireframe_uses_main_fill(void) {
+    printf("--- plain wireframe render pass ---\n");
+
+#ifdef GL_STUBS
+    SceneRenderConfig cfg = make_test_config();
+    PurposeCountCtx count_ctx;
+    memset(&count_ctx, 0, sizeof(count_ctx));
+    cfg.execute_fn = test_execute_count_purpose;
+    cfg.execute_user_data = &count_ctx;
+    cfg.use_accum = 0;
+    cfg.accum_effect = SCENE_ACCUM_EFFECT_OFF;
+    cfg.accum_passes = 1;
+    cfg.wireframe = SCENE_WIREFRAME_PLAIN;
+
+    SceneRendererState state;
+    scene_renderer_state_init(&state);
+
+    gl_stub_counts_reset();
+    ASSERT_INT("plain wireframe render ok",
+               scene_render_3d_scene(&state, &cfg), 0);
+
+    ASSERT_INT("plain wireframe executes main fill once",
+               count_ctx.counts[SCENE_EXEC_MAIN_FILL], 1);
+    ASSERT_INT("plain wireframe does not run hidden pass",
+               count_ctx.counts[SCENE_EXEC_WIREFRAME_HIDDEN_LINES], 0);
+    ASSERT_INT("plain wireframe does not run depth-fill pass",
+               count_ctx.counts[SCENE_EXEC_WIREFRAME_DEPTH_FILL], 0);
+    ASSERT_INT("plain wireframe does not run visible-line pass",
+               count_ctx.counts[SCENE_EXEC_WIREFRAME_VISIBLE_LINES], 0);
+    ASSERT_TRUE("plain wireframe sets line then fill polygon mode",
+                gl_stub_counts[GL_STUB_glPolygonMode] >= 2);
+#else
+    ASSERT_TRUE("plain wireframe pass requires GL stubs", 1);
 #endif
 }
 
@@ -1031,6 +1067,7 @@ int main(int argc, char **argv) {
     test_grid_table_arrays();
     test_viewport_dimensions();
     test_render_mode_toggles();
+    test_plain_wireframe_uses_main_fill();
     test_wireframe_hidden_line_passes();
     test_vertex2f_overlay_parity();
     test_vertex2f_guide_cursor_dot();

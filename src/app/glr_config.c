@@ -114,7 +114,7 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_LINE_SMOOTH:         return &glr_state_render_mut()->line_smooth_enabled;
     case GLR_CONFIG_ACCUM_EFFECT:        return &glr_state_render_mut()->accum_effect;
     case GLR_CONFIG_ACCUM_PASSES:        return NULL; /* cycle: see accum_passes_*_cycle */
-    case GLR_CONFIG_WIREFRAME:           return &glr_state_presentation_mut()->wireframe;
+    case GLR_CONFIG_WIREFRAME:           return (int *)&glr_state_presentation_mut()->wireframe;
     case GLR_CONFIG_POINT_ATTENUATION:   return &glr_state_render_mut()->point_attenuation_enabled;
     case GLR_CONFIG_AUTO_TIME:           return &repl_state_variables_mut()->time_playing;
     case GLR_CONFIG_REPLAY:              return NULL; /* lifecycle: see glr_config_set */
