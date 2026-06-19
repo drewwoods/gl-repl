@@ -269,27 +269,51 @@ void repl_executor_draw_glut_solid(const GLCmd *cmd) {
     }
 }
 
+void repl_apply_state_bookkeeping(const GLCmd *cmd) {
+    if (!cmd)
+        return;
+
+    switch (cmd->type) {
+    case CMD_ENABLE: {
+        int slot = repl_exec_light_slot_for_cap((GLenum)cmd->args[0]);
+        if (slot >= 0)
+            repl_state_render_set_light_enabled(slot, 1);
+        break;
+    }
+    case CMD_DISABLE: {
+        int slot = repl_exec_light_slot_for_cap((GLenum)cmd->args[0]);
+        if (slot >= 0)
+            repl_state_render_set_light_enabled(slot, 0);
+        break;
+    }
+    case CMD_CLEAR_COLOR: {
+        float rgba[4] = {cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]};
+        repl_state_render_set_clear_color(rgba);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
 int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
     if (!cmd)
         return 0;
 
+    /* REPL render-state side effects (light-enable mask, clear color) live
+     * here, in one place, so passes that own GL state themselves and skip the
+     * GL emission (the hidden-line wireframe pass) stay in sync by calling
+     * repl_apply_state_bookkeeping() directly. No-op for commands that carry
+     * no bookkeeping. */
+    repl_apply_state_bookkeeping(cmd);
+
     switch (cmd->type) {
-    case CMD_ENABLE: {
-        GLenum cap = (GLenum)cmd->args[0];
-        glEnable(cap);
-        int slot = repl_exec_light_slot_for_cap(cap);
-        if (slot >= 0)
-            repl_state_render_set_light_enabled(slot, 1);
+    case CMD_ENABLE:
+        glEnable((GLenum)cmd->args[0]);
         return 1;
-    }
-    case CMD_DISABLE: {
-        GLenum cap = (GLenum)cmd->args[0];
-        glDisable(cap);
-        int slot = repl_exec_light_slot_for_cap(cap);
-        if (slot >= 0)
-            repl_state_render_set_light_enabled(slot, 0);
+    case CMD_DISABLE:
+        glDisable((GLenum)cmd->args[0]);
         return 1;
-    }
     case CMD_SHADE_MODEL:
         glShadeModel((GLenum)cmd->args[0]);
         return 1;
@@ -346,12 +370,10 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
     case CMD_BLEND_FUNC:
         glBlendFunc((GLenum)cmd->args[0], (GLenum)cmd->args[1]);
         return 1;
-    case CMD_CLEAR_COLOR: {
-        float rgba[4] = {cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]};
-        repl_state_render_set_clear_color(rgba);
-        glClearColor(rgba[0], rgba[1], rgba[2], rgba[3]);
+    case CMD_CLEAR_COLOR:
+        /* Render-state clear color recorded by repl_apply_state_bookkeeping. */
+        glClearColor(cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
         return 1;
-    }
     default:
         return 0;
     }

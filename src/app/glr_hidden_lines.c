@@ -3,7 +3,6 @@
 #include "gl_includes.h"
 #include "config.h"
 #include "repl/executor.h"
-#include "repl/state_owners.h"
 
 #define GLR_HIDDEN_TESS_VERT_BUF_SIZE 256
 
@@ -86,40 +85,6 @@ static int hidden_lines_ensure_tess(void) {
     if (!g_hidden_tess)
         glr_hidden_lines_init_resources();
     return g_hidden_tess != NULL;
-}
-
-static int hidden_lines_light_slot_for_cap(GLenum cap) {
-    int slot = (int)cap - (int)GL_LIGHT0;
-    return (slot >= 0 && slot < REPL_LIGHT_SLOT_COUNT) ? slot : -1;
-}
-
-static void hidden_lines_apply_bookkeeping_cmd(const GLCmd *cmd) {
-    if (!cmd)
-        return;
-
-    switch (cmd->type) {
-    case CMD_ENABLE: {
-        int slot = hidden_lines_light_slot_for_cap((GLenum)cmd->args[0]);
-        if (slot >= 0)
-            repl_state_render_set_light_enabled(slot, 1);
-        break;
-    }
-    case CMD_DISABLE: {
-        int slot = hidden_lines_light_slot_for_cap((GLenum)cmd->args[0]);
-        if (slot >= 0)
-            repl_state_render_set_light_enabled(slot, 0);
-        break;
-    }
-    case CMD_CLEAR_COLOR: {
-        float rgba[4] = {
-            cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]
-        };
-        repl_state_render_set_clear_color(rgba);
-        break;
-    }
-    default:
-        break;
-    }
 }
 
 static int hidden_lines_begin_mode_writes_fill_depth(GLenum mode) {
@@ -306,7 +271,7 @@ void glr_hidden_lines_execute(const GlrHiddenLinesRenderContext *ctx,
             continue;
         }
 
-        hidden_lines_apply_bookkeeping_cmd(cmd);
+        repl_apply_state_bookkeeping(cmd);
         repl_exec_cursor_advance(&cursor);
     }
 
