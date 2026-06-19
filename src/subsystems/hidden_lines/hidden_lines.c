@@ -1,19 +1,19 @@
-#include "app/glr_hidden_lines.h"
+#include "subsystems/hidden_lines/hidden_lines.h"
 
 #include "gl_includes.h"
 #include "config.h"
 #include "repl/executor.h"
 
-#define GLR_HIDDEN_TESS_VERT_BUF_SIZE 256
+#define HIDDEN_LINES_TESS_VERT_BUF_SIZE 256
 
-typedef void (*GlrHiddenLinesGluCallback)(void);
+typedef void (*HiddenLinesGluCallback)(void);
 
 typedef struct {
     GLdouble pos[3];
-} GlrHiddenTessVertex;
+} HiddenLinesTessVertex;
 
 static GLUtesselator *g_hidden_tess = NULL;
-static GlrHiddenTessVertex g_hidden_tess_verts[GLR_HIDDEN_TESS_VERT_BUF_SIZE];
+static HiddenLinesTessVertex g_hidden_tess_verts[HIDDEN_LINES_TESS_VERT_BUF_SIZE];
 static int g_hidden_tess_vert_count = 0;
 
 static void hidden_tess_begin_cb(GLenum mode) {
@@ -25,7 +25,7 @@ static void hidden_tess_end_cb(void) {
 }
 
 static void hidden_tess_vertex_cb(void *vertex_data) {
-    GlrHiddenTessVertex *v = (GlrHiddenTessVertex *)vertex_data;
+    HiddenLinesTessVertex *v = (HiddenLinesTessVertex *)vertex_data;
     glVertex3dv(v->pos);
 }
 
@@ -33,10 +33,10 @@ static void hidden_tess_combine_cb(GLdouble coords[3],
                                    void *vertex_data[4],
                                    GLfloat weight[4],
                                    void **out_data) {
-    GlrHiddenTessVertex *v;
+    HiddenLinesTessVertex *v;
     (void)vertex_data;
     (void)weight;
-    if (g_hidden_tess_vert_count >= GLR_HIDDEN_TESS_VERT_BUF_SIZE) {
+    if (g_hidden_tess_vert_count >= HIDDEN_LINES_TESS_VERT_BUF_SIZE) {
         *out_data = NULL;
         return;
     }
@@ -52,7 +52,7 @@ static void hidden_tess_error_cb(GLenum err) {
     (void)err;
 }
 
-void glr_hidden_lines_destroy_resources(void) {
+void hidden_lines_destroy_resources(void) {
     if (g_hidden_tess) {
         gluDeleteTess(g_hidden_tess);
         g_hidden_tess = NULL;
@@ -60,30 +60,30 @@ void glr_hidden_lines_destroy_resources(void) {
     g_hidden_tess_vert_count = 0;
 }
 
-void glr_hidden_lines_init_resources(void) {
-    glr_hidden_lines_destroy_resources();
+void hidden_lines_init_resources(void) {
+    hidden_lines_destroy_resources();
 
     g_hidden_tess = gluNewTess();
     if (!g_hidden_tess)
         return;
 
     gluTessCallback(g_hidden_tess, GLU_TESS_BEGIN,
-                    (GlrHiddenLinesGluCallback)hidden_tess_begin_cb);
+                    (HiddenLinesGluCallback)hidden_tess_begin_cb);
     gluTessCallback(g_hidden_tess, GLU_TESS_END,
-                    (GlrHiddenLinesGluCallback)hidden_tess_end_cb);
+                    (HiddenLinesGluCallback)hidden_tess_end_cb);
     gluTessCallback(g_hidden_tess, GLU_TESS_VERTEX,
-                    (GlrHiddenLinesGluCallback)hidden_tess_vertex_cb);
+                    (HiddenLinesGluCallback)hidden_tess_vertex_cb);
     gluTessCallback(g_hidden_tess, GLU_TESS_COMBINE,
-                    (GlrHiddenLinesGluCallback)hidden_tess_combine_cb);
+                    (HiddenLinesGluCallback)hidden_tess_combine_cb);
     gluTessCallback(g_hidden_tess, GLU_TESS_ERROR,
-                    (GlrHiddenLinesGluCallback)hidden_tess_error_cb);
+                    (HiddenLinesGluCallback)hidden_tess_error_cb);
     gluTessCallback(g_hidden_tess, GLU_TESS_EDGE_FLAG,
-                    (GlrHiddenLinesGluCallback)glEdgeFlag);
+                    (HiddenLinesGluCallback)glEdgeFlag);
 }
 
 static int hidden_lines_ensure_tess(void) {
     if (!g_hidden_tess)
-        glr_hidden_lines_init_resources();
+        hidden_lines_init_resources();
     return g_hidden_tess != NULL;
 }
 
@@ -149,8 +149,8 @@ static void hidden_lines_execute_tess_cmd(const GLCmd *cmd, int *tess_depth) {
     case CMD_TESS_VERTEX:
         if (g_hidden_tess &&
             *tess_depth == 2 &&
-            g_hidden_tess_vert_count < GLR_HIDDEN_TESS_VERT_BUF_SIZE) {
-            GlrHiddenTessVertex *v =
+            g_hidden_tess_vert_count < HIDDEN_LINES_TESS_VERT_BUF_SIZE) {
+            HiddenLinesTessVertex *v =
                 &g_hidden_tess_verts[g_hidden_tess_vert_count++];
             v->pos[0] = cmd->args[0];
             v->pos[1] = cmd->args[1];
@@ -203,8 +203,8 @@ static int hidden_lines_cursor_owns_cmd(CmdType type) {
     }
 }
 
-void glr_hidden_lines_execute(const GlrHiddenLinesRenderContext *ctx,
-                              SceneExecutePurpose purpose) {
+void hidden_lines_execute(const HiddenLinesRenderContext *ctx,
+                          SceneExecutePurpose purpose) {
     ReplExecutionOptions options = {0};
     ReplExecCursor cursor;
     const GLCmd *cmd;

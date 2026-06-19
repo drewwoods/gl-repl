@@ -40,6 +40,9 @@ subsystems here:
   orchestration: owns the cursor-guide snapshot and the flat-program walk
   that drives the scene overlay primitives (plus the GL_LINE / GL_POINT
   outline passes), extracted out of `src/app/glr_ctrl.c`.
+- **`hidden_lines/`** — hidden-line wireframe execution: drives the REPL
+  execution cursor through the scene renderer's hidden/depth/visible wireframe
+  passes while skipping pass-local state commands.
 
 Subsystem file shapes vary: a single co-located file (like
 `color_picker_state.c`), a `*_state.c` storage file plus a `*.c`
@@ -90,6 +93,7 @@ virtual lines), but it never *becomes* editor-owned.
 | `variable_panel/variable_panel_drag.c` / `.h` | Slider drag transaction: begin/motion/reset, linear/log value writeback |
 | `variable_panel/variable_panel_state.c` / `.h` | Owns the variable-panel visibility flag + drag-state storage |
 | `color_picker/color_picker_state.c` / `.h` | Color-picker state, lifecycle, slider handlers, source-line writeback |
+| `hidden_lines/hidden_lines.c` / `.h` | Hidden-line wireframe cursor filtering and colorless tessellation |
 | `tutorial/tutorial.c` / `.h` | Tutorial runner: start/stop/advance, match, locked-line guard, fade math |
 | `tutorial/tutorial_state.c` / `.h` | Owns `TutorialRuntimeState` (active flag, step, locked lines, fade timing) |
 

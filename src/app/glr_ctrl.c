@@ -16,11 +16,11 @@
 
 #include "app/glr_audio.h"
 #include "subsystems/color_picker/color_picker_state.h"
+#include "subsystems/hidden_lines/hidden_lines.h"
 #include "editor/clipboard.h"
 #include "app/glr_completion.h"
 #include "app/glr_compositor.h"      /* whole-frame post-process hook */
 #include "app/glr_defaults.h"        /* CFG_DEFAULT_* */
-#include "app/glr_hidden_lines.h"
 #include "app/glr_state.h"
 #include "editor/commit.h"
 #include "editor/completion.h"
@@ -766,7 +766,7 @@ static void scene_execute_adapter(const SceneExecuteContext *ctx,
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     char exec_status[REPL_DIAG_TEXT_MAX] = "";
     if (wireframe_effect_pass) {
-        glr_hidden_lines_execute(&(GlrHiddenLinesRenderContext){
+        hidden_lines_execute(&(HiddenLinesRenderContext){
             .flat_cmd_count = count,
             .program        = repl_state_flat_program_view(),
             .text           = source_document_view(),
@@ -2290,7 +2290,7 @@ void glr_ctrl_init_gl(void) {
     scene_render_init_gl();
     scene_renderer_state_init(&g_scene_renderer);
     repl_executor_init_resources();
-    glr_hidden_lines_init_resources();
+    hidden_lines_init_resources();
 
     /* Runtime point-parameter capability (replaces the old
      * compile-time NO_POINT_PARAMETER macro). glPointParameterfv is
@@ -2748,6 +2748,6 @@ void glr_ctrl_timer(int value) {
 
 void glr_shutdown(void) {
     glr_audio_shutdown();
-    glr_hidden_lines_destroy_resources();
+    hidden_lines_destroy_resources();
     repl_executor_destroy_resources();
 }

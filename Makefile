@@ -402,7 +402,6 @@ APP_CONTROLLER_SRCS = \
 	src/app/glr_config.c \
 	src/app/glr_ctrl.c \
 	src/app/glr_debug.c \
-	src/app/glr_hidden_lines.c \
 	src/app/glr_prof.c \
 	src/app/glr_source_document.c \
 	src/app/glr_state.c
@@ -491,6 +490,7 @@ UI_SUBSYSTEMS_SRCS = \
 
 SUBSYSTEMS_SRCS = \
 	src/subsystems/color_picker/color_picker_state.c \
+	src/subsystems/hidden_lines/hidden_lines.c \
 	src/subsystems/replay/replay.c \
 	src/subsystems/replay/replay_annotations.c \
 	src/subsystems/replay/replay_fade.c \
@@ -541,9 +541,9 @@ HDRS = \
 	src/app/glr_ctrl.h \
 	src/app/glr_debug.h \
 	src/app/glr_defaults.h \
-	src/app/glr_hidden_lines.h \
 	src/app/glr_paths.h \
 	src/app/glr_state.h \
+	src/subsystems/hidden_lines/hidden_lines.h \
 	src/editor/clipboard.h \
 	src/editor/commit.h \
 	src/editor/completion.h \
