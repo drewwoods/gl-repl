@@ -10,6 +10,25 @@
 #define SCENE_GRID_H
 
 #include "render_types.h"
+#include "scene_transition.h"   /* SceneXnReveal */
+
+/* Grid show/hide fade durations (seconds). Owned by the grid module, not the
+ * generic transition machine: the grid's reveal curve (scene_grid_reveal)
+ * reads these, scaled by each theme's g_grid_reveal[].time multiplier. The
+ * fade-in is the leisurely "draw-in" window; the fade-out is quicker so
+ * cycling themes doesn't feel sticky. Tune to taste. */
+#ifndef GRID_FADE_IN_SECS
+#define GRID_FADE_IN_SECS  0.25f
+#endif
+#ifndef GRID_FADE_OUT_SECS
+#define GRID_FADE_OUT_SECS 0.20f
+#endif
+
+/* The grid's transition curve plugin (see SceneXnReveal): maps elapsed fade
+ * time to opacity using GRID_FADE_*_SECS and the per-theme time multiplier,
+ * and inverts it for reversal continuity. The controller binds this into the
+ * grid's SceneXnState at scene_xn_init, then only feeds the machine dt. */
+extern const SceneXnReveal scene_grid_reveal;
 
 /* Render the grid floor for the current frame. `frame_ctx` carries the camera,
  * theme, transition opacity, and spacing tables the grid code needs. */
@@ -34,13 +53,5 @@ int scene_grid_theme_uses_fog(SceneGridTheme grid_theme);
  * are excluded.
  * Pure — safe to call from tests. */
 int scene_grid_theme_uses_edge_fade(SceneGridTheme grid_theme);
-
-/* Per-theme reveal-time scale: multiplies the grid fade in/out durations
- * (GRID_FADE_*_SECS) for this theme's draw-in, so different themes can
- * animate at different speeds. Returns 1.0 (base speed) for OFF, out-of-range,
- * or any theme with an unset/zero entry in g_grid_reveal[]. The controller
- * reads it when ticking the transition machine. Pure — safe to call from
- * tests. */
-float scene_grid_reveal_time_scale(SceneGridTheme grid_theme);
 
 #endif /* SCENE_GRID_H */
