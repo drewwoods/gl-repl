@@ -288,6 +288,155 @@ static void test_execute_edge_cases(void) {
     repl_execute_commands();
 }
 
+static void test_exec_cursor_step_tracks_state(void) {
+    repl_executor_init_resources();
+
+    GLCmd cmds[7];
+    memset(cmds, 0, sizeof(cmds));
+    cmds[0].type = CMD_PUSH_MATRIX;         cmds[0].valid = 1;
+    cmds[1].type = CMD_BEGIN;               cmds[1].valid = 1; cmds[1].args[0] = GL_TRIANGLES;
+    cmds[2].type = CMD_END;                 cmds[2].valid = 1;
+    cmds[3].type = CMD_TESS_BEGIN_POLYGON;  cmds[3].valid = 1;
+    cmds[4].type = CMD_TESS_BEGIN_CONTOUR;  cmds[4].valid = 1;
+    cmds[5].type = CMD_TESS_END;            cmds[5].valid = 1;
+    cmds[6].type = CMD_TESS_END;            cmds[6].valid = 1;
+
+    ReplExecutionOptions opts = {0};
+    opts.flat_cmd_count = 7;
+    opts.program.cmds = cmds;
+    opts.program.cmd_count = 7;
+
+    gl_stub_counts_reset();
+    ReplExecCursor cursor = repl_exec_cursor_begin(&opts);
+    ASSERT_TRUE("cursor starts active", !repl_exec_cursor_done(&cursor));
+    ASSERT_TRUE("cursor peek returns first command",
+                repl_exec_cursor_peek(&cursor) == &cmds[0]);
+
+    ASSERT_TRUE("cursor step push returns true",
+                repl_exec_cursor_step(&cursor) == 1);
+    ASSERT_TRUE("cursor step push advances pc", cursor.pc == 1);
+    ASSERT_TRUE("cursor step push tracks matrix depth",
+                cursor.matrix_depth == 1);
+    ASSERT_TRUE("cursor step push reaches GL",
+                gl_stub_counts[GL_STUB_glPushMatrix] == 1);
+
+    ASSERT_TRUE("cursor peek returns begin command",
+                repl_exec_cursor_peek(&cursor) == &cmds[1]);
+    ASSERT_TRUE("cursor step begin returns true",
+                repl_exec_cursor_step(&cursor) == 1);
+    ASSERT_TRUE("cursor step begin tracks in_begin", cursor.in_begin == 1);
+    ASSERT_TRUE("cursor step begin reaches GL",
+                gl_stub_counts[GL_STUB_glBegin] == 1);
+
+    ASSERT_TRUE("cursor step end returns true",
+                repl_exec_cursor_step(&cursor) == 1);
+    ASSERT_TRUE("cursor step end clears in_begin", cursor.in_begin == 0);
+    ASSERT_TRUE("cursor step end reaches GL",
+                gl_stub_counts[GL_STUB_glEnd] == 1);
+
+    ASSERT_TRUE("cursor step tess polygon returns true",
+                repl_exec_cursor_step(&cursor) == 1);
+    ASSERT_TRUE("cursor step tess polygon tracks depth",
+                cursor.tess_depth == 1);
+    ASSERT_TRUE("cursor step tess polygon reaches GLU",
+                gl_stub_counts[GL_STUB_gluTessBeginPolygon] == 1);
+
+    ASSERT_TRUE("cursor step tess contour returns true",
+                repl_exec_cursor_step(&cursor) == 1);
+    ASSERT_TRUE("cursor step tess contour tracks depth",
+                cursor.tess_depth == 2);
+    ASSERT_TRUE("cursor step tess contour reaches GLU",
+                gl_stub_counts[GL_STUB_gluTessBeginContour] == 1);
+
+    ASSERT_TRUE("cursor step tess end contour returns true",
+                repl_exec_cursor_step(&cursor) == 1);
+    ASSERT_TRUE("cursor step tess end contour tracks depth",
+                cursor.tess_depth == 1);
+    ASSERT_TRUE("cursor step tess end contour reaches GLU",
+                gl_stub_counts[GL_STUB_gluTessEndContour] == 1);
+
+    ASSERT_TRUE("cursor step tess end polygon returns true",
+                repl_exec_cursor_step(&cursor) == 1);
+    ASSERT_TRUE("cursor step tess end polygon tracks depth",
+                cursor.tess_depth == 0);
+    ASSERT_TRUE("cursor step tess end polygon reaches GLU",
+                gl_stub_counts[GL_STUB_gluTessEndPolygon] == 1);
+    ASSERT_TRUE("cursor done after final command",
+                repl_exec_cursor_done(&cursor));
+    ASSERT_TRUE("cursor peek returns NULL when done",
+                repl_exec_cursor_peek(&cursor) == NULL);
+    ASSERT_TRUE("cursor step returns false when done",
+                repl_exec_cursor_step(&cursor) == 0);
+
+    repl_exec_cursor_end(&cursor);
+    ASSERT_TRUE("cursor end unwinds tracked push",
+                gl_stub_counts[GL_STUB_glPopMatrix] == 1);
+    ASSERT_TRUE("cursor end does not re-finalize closed tess polygon",
+                gl_stub_counts[GL_STUB_gluTessEndPolygon] == 1);
+
+    repl_executor_destroy_resources();
+}
+
+static void test_exec_cursor_advance_skips_without_state(void) {
+    repl_executor_init_resources();
+
+    GLCmd cmds[3];
+    memset(cmds, 0, sizeof(cmds));
+    cmds[0].type = CMD_PUSH_MATRIX;        cmds[0].valid = 1;
+    cmds[1].type = CMD_BEGIN;              cmds[1].valid = 1; cmds[1].args[0] = GL_TRIANGLES;
+    cmds[2].type = CMD_TESS_BEGIN_POLYGON; cmds[2].valid = 1;
+
+    ReplExecutionOptions opts = {0};
+    opts.flat_cmd_count = 3;
+    opts.program.cmds = cmds;
+    opts.program.cmd_count = 3;
+
+    gl_stub_counts_reset();
+    ReplExecCursor cursor = repl_exec_cursor_begin(&opts);
+    ASSERT_TRUE("advance cursor starts active",
+                !repl_exec_cursor_done(&cursor));
+
+    ASSERT_TRUE("advance cursor initially sees push",
+                repl_exec_cursor_peek(&cursor) == &cmds[0]);
+    repl_exec_cursor_advance(&cursor);
+    ASSERT_TRUE("advance over push increments pc only", cursor.pc == 1);
+    ASSERT_TRUE("advance over push leaves matrix depth untouched",
+                cursor.matrix_depth == 0);
+    ASSERT_TRUE("advance over push does not call glPushMatrix",
+                gl_stub_counts[GL_STUB_glPushMatrix] == 0);
+
+    ASSERT_TRUE("advance cursor now sees begin",
+                repl_exec_cursor_peek(&cursor) == &cmds[1]);
+    repl_exec_cursor_advance(&cursor);
+    ASSERT_TRUE("advance over begin increments pc only", cursor.pc == 2);
+    ASSERT_TRUE("advance over begin leaves in_begin untouched",
+                cursor.in_begin == 0);
+    ASSERT_TRUE("advance over begin does not call glBegin",
+                gl_stub_counts[GL_STUB_glBegin] == 0);
+
+    ASSERT_TRUE("advance cursor now sees tess begin",
+                repl_exec_cursor_peek(&cursor) == &cmds[2]);
+    repl_exec_cursor_advance(&cursor);
+    ASSERT_TRUE("advance over tess begin reaches done",
+                repl_exec_cursor_done(&cursor));
+    ASSERT_TRUE("advance over tess begin leaves tess depth untouched",
+                cursor.tess_depth == 0);
+    ASSERT_TRUE("advance over tess begin does not call GLU",
+                gl_stub_counts[GL_STUB_gluTessBeginPolygon] == 0);
+    ASSERT_TRUE("advance cursor peek returns NULL when done",
+                repl_exec_cursor_peek(&cursor) == NULL);
+
+    repl_exec_cursor_end(&cursor);
+    ASSERT_TRUE("advance cursor end has no begin to close",
+                gl_stub_counts[GL_STUB_glEnd] == 0);
+    ASSERT_TRUE("advance cursor end has no matrix to unwind",
+                gl_stub_counts[GL_STUB_glPopMatrix] == 0);
+    ASSERT_TRUE("advance cursor end has no tess to finalize",
+                gl_stub_counts[GL_STUB_gluTessEndPolygon] == 0);
+
+    repl_executor_destroy_resources();
+}
+
 static void test_execute_all_commands(void) {
     repl_executor_init_resources();
 
@@ -769,6 +918,8 @@ int main(void) {
     test_enum_arg_gl_trace();
     test_enum_arg_end_to_end_trace();
     test_execute_edge_cases();
+    test_exec_cursor_step_tracks_state();
+    test_exec_cursor_advance_skips_without_state();
     test_execute_all_commands();
     test_glut_bitmap_string();
     test_executor_camera_distance_source();
