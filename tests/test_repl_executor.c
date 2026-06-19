@@ -856,6 +856,77 @@ static void test_light_indicator_tracks_program(void) {
                 repl_light_enabled(rs.light_enabled_mask, 0) == 0);
 }
 
+/* repl_apply_state_bookkeeping(): the single source of truth for the REPL
+ * render-state side effects a state command carries (GL_LIGHTn enable mask,
+ * clear color), with NO GL emitted. repl_apply_state_cmd() folds it in; the
+ * hidden-line wireframe pass (which owns GL state and skips user state) calls
+ * it directly, so this locks the shared contract. */
+static void test_apply_state_bookkeeping(void) {
+    GLCmd cmd;
+    ReplRenderState rs;
+
+    /* Enable sets the matching light-slot bit; nothing else. */
+    repl_state_render_mut()->light_enabled_mask = 0u;
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.type = CMD_ENABLE; cmd.num_args = 1; cmd.args[0] = GL_LIGHT2;
+    repl_apply_state_bookkeeping(&cmd);
+    rs = repl_state_render();
+    ASSERT_TRUE("bookkeeping enable sets GL_LIGHT2 mask bit",
+                repl_light_enabled(rs.light_enabled_mask, 2) == 1);
+    ASSERT_TRUE("bookkeeping enable leaves other slots off",
+                repl_light_enabled(rs.light_enabled_mask, 0) == 0);
+
+    /* Disable clears it. */
+    cmd.type = CMD_DISABLE;
+    repl_apply_state_bookkeeping(&cmd);
+    rs = repl_state_render();
+    ASSERT_TRUE("bookkeeping disable clears GL_LIGHT2 mask bit",
+                repl_light_enabled(rs.light_enabled_mask, 2) == 0);
+
+    /* Non-light enable (e.g. GL_DEPTH_TEST) touches no slot. */
+    repl_state_render_mut()->light_enabled_mask = 0u;
+    cmd.type = CMD_ENABLE; cmd.args[0] = GL_DEPTH_TEST;
+    repl_apply_state_bookkeeping(&cmd);
+    ASSERT_TRUE("bookkeeping ignores non-light enable",
+                repl_state_render().light_enabled_mask == 0u);
+
+    /* Clear color is recorded into render state. */
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.type = CMD_CLEAR_COLOR; cmd.num_args = 4;
+    cmd.args[0] = 0.25f; cmd.args[1] = 0.5f; cmd.args[2] = 0.75f; cmd.args[3] = 1.0f;
+    repl_apply_state_bookkeeping(&cmd);
+    rs = repl_state_render();
+    ASSERT_TRUE("bookkeeping records clear color",
+                rs.clear_color[0] == 0.25f && rs.clear_color[1] == 0.5f &&
+                rs.clear_color[2] == 0.75f && rs.clear_color[3] == 1.0f);
+
+    /* A command that carries no bookkeeping is a no-op (no crash, no state). */
+    repl_state_render_mut()->light_enabled_mask = 0x5u;
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.type = CMD_BLEND_FUNC; cmd.num_args = 2;
+    cmd.args[0] = GL_SRC_ALPHA; cmd.args[1] = GL_ONE_MINUS_SRC_ALPHA;
+    repl_apply_state_bookkeeping(&cmd);
+    ASSERT_TRUE("bookkeeping no-op leaves mask untouched",
+                repl_state_render().light_enabled_mask == 0x5u);
+
+    /* NULL is safe. */
+    repl_apply_state_bookkeeping(NULL);
+
+#ifdef GL_STUBS
+    /* Bookkeeping emits NO GL — only repl_apply_state_cmd() does that. */
+    gl_stub_counts_reset();
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.type = CMD_ENABLE; cmd.num_args = 1; cmd.args[0] = GL_LIGHT0;
+    repl_apply_state_bookkeeping(&cmd);
+    cmd.type = CMD_CLEAR_COLOR; cmd.num_args = 4;
+    repl_apply_state_bookkeeping(&cmd);
+    ASSERT_TRUE("bookkeeping emits no glEnable",
+                gl_stub_counts[GL_STUB_glEnable] == 0);
+    ASSERT_TRUE("bookkeeping emits no glClearColor",
+                gl_stub_counts[GL_STUB_glClearColor] == 0);
+#endif
+}
+
 /* The .ply export pass (encode_feedback_normals) must, vs. a normal live
  * render: (1) suppress the program's glEnable(GL_LIGHTING)/glEnable(GL_CULL_FACE)
  * so feedback captures the raw glColor material color and all faces, and
@@ -911,6 +982,7 @@ int main(void) {
     test_tess_callbacks();
     test_export_normal_encoding();
     test_light_indicator_tracks_program();
+    test_apply_state_bookkeeping();
     test_fade_context();
     test_predef_edge_cases();
     test_transform_stack_edge_cases();

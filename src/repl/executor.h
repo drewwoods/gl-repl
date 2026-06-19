@@ -181,8 +181,19 @@ void repl_executor_draw_glut_solid(const GLCmd *cmd);
 /* Apply a single state-mutating GL command (enable/disable/color/shade
  * model/blend func/etc.). Used inside the executor's own loop and by
  * the export fade pass to apply scene defaults without driving a full
- * program. `alpha_scale` multiplies any color alpha channel. */
+ * program. `alpha_scale` multiplies any color alpha channel. Folds in
+ * repl_apply_state_bookkeeping() before emitting GL. */
 int  repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale);
+
+/* Apply only the REPL render-state bookkeeping a state command carries —
+ * the GL_LIGHTn enable mask (for the light-indicator overlay) and the
+ * clear color (for export / next-frame clear) — without emitting any GL.
+ * This is the single source of truth for "which commands carry REPL
+ * render bookkeeping": repl_apply_state_cmd() calls it alongside the GL
+ * emission, and specialized passes that own GL state themselves and skip
+ * the user's state commands (the hidden-line wireframe pass) call it
+ * directly so they stay in sync. A no-op for commands with no bookkeeping. */
+void repl_apply_state_bookkeeping(const GLCmd *cmd);
 
 /* Install a camera-distance source. The point-size fallback used when
  * the runtime GL context lacks glPointParameterfv needs the current
