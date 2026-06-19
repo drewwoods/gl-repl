@@ -530,26 +530,27 @@ static void test_ascii_shortcut_modifiers(void) {
     glr_ctrl_reset_all();
     editor_input_set_modifier_provider_for_test(test_mods_provider);
 
-    /* Plain Ctrl+O (no Shift) cycles Grid major; View mode untouched. */
+    /* Plain Ctrl+O (no Shift) runs Focus origin (an action row); its
+     * Ctrl+Shift twin Vertex outlines must NOT toggle. */
     g_test_mods = 0;
-    int gm0 = glr_config_get(GLR_CONFIG_GRID_MAJOR);
-    int ortho0 = glr_config_get(GLR_CONFIG_ORTHO_MODE);
+    int vo0 = glr_config_get(GLR_CONFIG_VERTEX_OUTLINES);
+    repl_set_status("");
     ASSERT_INT("plain Ctrl+O handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_O), 1);
-    ASSERT_TRUE("plain Ctrl+O cycled Grid major",
-                glr_config_get(GLR_CONFIG_GRID_MAJOR) != gm0);
-    ASSERT_INT("plain Ctrl+O left View mode alone",
-               glr_config_get(GLR_CONFIG_ORTHO_MODE), ortho0);
+    ASSERT_STR("plain Ctrl+O ran Focus origin", g_last_status,
+               "Camera: focus origin");
+    ASSERT_INT("plain Ctrl+O left Vertex outlines alone",
+               glr_config_get(GLR_CONFIG_VERTEX_OUTLINES), vo0);
 
-    /* Ctrl+Shift+O: the Shift-requiring Focus origin row shadows Grid
-     * major (which must NOT cycle); status proves Focus origin ran. */
+    /* Ctrl+Shift+O: the Shift-requiring Vertex outlines row toggles; Focus
+     * origin (the plain row) must NOT run. */
     g_test_mods = GLUT_ACTIVE_SHIFT;
-    int gm1 = glr_config_get(GLR_CONFIG_GRID_MAJOR);
+    int vo1 = glr_config_get(GLR_CONFIG_VERTEX_OUTLINES);
     repl_set_status("");
     ASSERT_INT("Ctrl+Shift+O handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_O), 1);
-    ASSERT_INT("Ctrl+Shift+O did NOT cycle Grid major",
-               glr_config_get(GLR_CONFIG_GRID_MAJOR), gm1);
-    ASSERT_STR("Ctrl+Shift+O ran Focus origin", g_last_status,
-               "Camera: focus origin");
+    ASSERT_TRUE("Ctrl+Shift+O toggled Vertex outlines",
+                glr_config_get(GLR_CONFIG_VERTEX_OUTLINES) != vo1);
+    ASSERT_TRUE("Ctrl+Shift+O did NOT run Focus origin",
+                strcmp(g_last_status, "Camera: focus origin") != 0);
 
     /* Ctrl+Shift+V toggles View mode (ordinary cycle row + Shift). */
     int ortho1 = glr_config_get(GLR_CONFIG_ORTHO_MODE);
@@ -1078,7 +1079,7 @@ static void test_vertex_label_modes(void) {
 }
 
 /* Audit #41: the cfg bridge accepts symbolic value names so catalogs
- * can write "@cfg grid = GRID_THEME_RADAR" instead of a magic 10.
+ * can write "@cfg grid = GRID_THEME_RADAR" instead of a magic integer.
  * Pin each scene-enum slug end-to-end (resolve_text + apply via
  * repl_cfg_set_text), plus the legacy integer path that still has
  * to round-trip from older saved files. */
@@ -1086,14 +1087,15 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     test_apply_defaults();  /* installs g_glr_export_cfg_bridge */
 
     int out = -1;
+    char grid_value[16];
     ASSERT_TRUE("resolve grid: GRID_THEME_RADAR",
                 repl_cfg_resolve_text("grid", "GRID_THEME_RADAR", &out));
     ASSERT_INT("  -> GRID_THEME_RADAR", out, GRID_THEME_RADAR);
 
     out = -1;
-    ASSERT_TRUE("resolve grid: GRID_THEME_FOCUS",
-                repl_cfg_resolve_text("grid", "GRID_THEME_FOCUS", &out));
-    ASSERT_INT("  -> GRID_THEME_FOCUS", out, GRID_THEME_FOCUS);
+    ASSERT_TRUE("resolve grid: GRID_THEME_AURORA",
+                repl_cfg_resolve_text("grid", "GRID_THEME_AURORA", &out));
+    ASSERT_INT("  -> GRID_THEME_AURORA", out, GRID_THEME_AURORA);
 
     out = -1;
     ASSERT_TRUE("resolve axes: AXES_THEME_COMPASS",
@@ -1129,8 +1131,9 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
      * path tries resolve_text first, then falls back to strtol.
      * Drives the same bag/apply edge repl_cfg_set_text uses, just
      * with an integer-string value instead of a symbolic name. */
-    repl_cfg_set_text("grid", "4");  /* GRID_THEME_EMBER */
-    ASSERT_INT("integer-form '4' still resolves to GRID_THEME_EMBER",
+    snprintf(grid_value, sizeof(grid_value), "%d", GRID_THEME_EMBER);
+    repl_cfg_set_text("grid", grid_value);
+    ASSERT_INT("integer-form still resolves to GRID_THEME_EMBER",
                glr_state_presentation().grid_theme, GRID_THEME_EMBER);
 
     /* A typo'd symbolic value name must NOT silently land at 0
@@ -1220,12 +1223,12 @@ static void test_shift_fkey_steps_backward(void) {
     ASSERT_INT("plain F9 forward undoes one Shift+F9 step",
                glr_config_get(GLR_CONFIG_LIGHT_THEME), LIGHT_THEME_COUNT - 1);
 
-    /* Grid theme (F3): same backward behavior on a different F-key row. */
+    /* Grid theme (F2): same backward behavior on a different F-key row. */
     glr_config_set(GLR_CONFIG_GRID_THEME, 0);
     g_test_mods = GLUT_ACTIVE_SHIFT;
-    ASSERT_INT("Shift+F3 handled",
-               glr_cfg_handle_special_shortcut(GLUT_KEY_F3), 1);
-    ASSERT_INT("Shift+F3 wraps grid theme backward to the last",
+    ASSERT_INT("Shift+F2 handled",
+               glr_cfg_handle_special_shortcut(GLUT_KEY_F2), 1);
+    ASSERT_INT("Shift+F2 wraps grid theme backward to the last",
                glr_config_get(GLR_CONFIG_GRID_THEME), GRID_THEME_COUNT - 1);
 
     editor_input_set_modifier_provider_for_test(NULL);
@@ -1245,9 +1248,9 @@ static void test_fkey_reassignment_and_alt_shortcuts(void) {
     /* Reassigned F-keys now drive the long cycles (plain, no Shift). */
     g_test_mods = 0;
     struct { int fkey; GlrConfigKey key; const char *name; } fmap[] = {
-        { GLUT_KEY_F2,  GLR_CONFIG_ACCUM_EFFECT,    "Accum effect"    },
-        { GLUT_KEY_F6,  GLR_CONFIG_BACKDROP,        "Backdrop"        },
-        { GLUT_KEY_F7,  GLR_CONFIG_GRID_EXTENT,     "Grid extent"     },
+        { GLUT_KEY_F2,  GLR_CONFIG_GRID_THEME,      "Grid theme"      },
+        { GLUT_KEY_F5,  GLR_CONFIG_BACKDROP,        "Backdrop"        },
+        { GLUT_KEY_F3,  GLR_CONFIG_GRID_EXTENT,     "Grid extent"     },
         { GLUT_KEY_F10, GLR_CONFIG_SYNTAX_HIGHLIGHT,"Syntax highlight"},
     };
     for (unsigned i = 0; i < sizeof(fmap)/sizeof(fmap[0]); i++) {
@@ -1263,17 +1266,13 @@ static void test_fkey_reassignment_and_alt_shortcuts(void) {
     ASSERT_INT("Ctrl+G consumed", glr_cfg_handle_ascii_shortcut(KEY_CTRL_G), 1);
     ASSERT_INT("Ctrl+G toggles wireframe", glr_state_presentation().wireframe, 1);
 
-    /* The three Ctrl+Shift toggles fire only with Shift held. */
+    /* The two Ctrl+Shift toggles fire only with Shift held. (Vertex outlines
+     * moved to Ctrl+Shift+O — covered in test_ascii_shortcut_modifiers.) */
     g_test_mods = GLUT_ACTIVE_SHIFT;
     glr_state_presentation_mut()->show_normal_vectors = 0;
     ASSERT_INT("Ctrl+Shift+N consumed", glr_cfg_handle_ascii_shortcut(KEY_CTRL_N), 1);
     ASSERT_INT("Ctrl+Shift+N toggles normal vectors",
                glr_state_presentation().show_normal_vectors, 1);
-
-    glr_state_presentation_mut()->show_vertex_outlines = 0;
-    ASSERT_INT("Ctrl+Shift+E consumed", glr_cfg_handle_ascii_shortcut(KEY_CTRL_E), 1);
-    ASSERT_INT("Ctrl+Shift+E toggles vertex outlines",
-               glr_state_presentation().show_vertex_outlines, 1);
 
     glr_state_presentation_mut()->show_light_indicators = 0;
     ASSERT_INT("Ctrl+Shift+L consumed", glr_cfg_handle_ascii_shortcut(KEY_CTRL_L), 1);
@@ -1405,8 +1404,8 @@ static void test_keymap_binding_to_string(void) {
                "Ctrl+Left");
     ASSERT_STR("format printable key",
                keymap_binding_to_string(buf, (int)sizeof(buf),
-                                        KM_KEY(GLR_CONFIG_MENU),
-                                        KM_MODS(GLR_CONFIG_MENU), 0),
+                                        KM_KEY(GLR_VARIABLE_PANEL),
+                                        KM_MODS(GLR_VARIABLE_PANEL), 0),
                "`");
     ASSERT_STR("format escape key",
                keymap_binding_to_string(buf, (int)sizeof(buf),

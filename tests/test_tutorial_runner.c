@@ -1897,7 +1897,7 @@ static void test_set_and_require_step_park_cursor_past_comment(void) {
                editor_state_edit_line(), instr_line + 1);
 
     /* Advance past REQUIRE by setting vertex_outlines (the notify hook
-     * in glr_config_set drives this). The next step is SET grid=10. */
+     * in glr_config_set drives this). The next step is SET grid=Radar. */
     glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);
     st = tutorial_state_view();
     ASSERT_INT("REQUIRE advanced to SET grid=Radar", st.step, 6);
@@ -1917,18 +1917,18 @@ static void test_set_step_applies_cfg_and_advances_on_ack(void) {
     reset_fixture();
     int idx = start_feature_tour_and_walk_commands();
     ASSERT_TRUE("walked into REQUIRE", idx >= 0);
-    /* Drive through REQUIRE to reach the first SET (grid = Radar = 10). */
+    /* Drive through REQUIRE to reach the first SET (grid = Radar). */
     glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);
     ASSERT_INT("entered SET grid=Radar", tutorial_state_view().step, 6);
     ASSERT_INT("cfg grid applied to Radar",
-               repl_cfg_get_int("grid", -1), 10);
+               repl_cfg_get_int("grid", -1), GRID_THEME_RADAR);
 
-    /* Ack via the controller router; SET advances to next SET (Focus = 6). */
+    /* Ack via the controller router; SET advances to next SET (Aurora). */
     glr_ctrl_keyboard('\r', 0, 0);
-    ASSERT_INT("ack key advanced to SET grid=Focus",
+    ASSERT_INT("ack key advanced to SET grid=Aurora",
                tutorial_state_view().step, 7);
-    ASSERT_INT("cfg grid applied to Focus",
-               repl_cfg_get_int("grid", -1), 6);
+    ASSERT_INT("cfg grid applied to Aurora",
+               repl_cfg_get_int("grid", -1), GRID_THEME_AURORA);
 
     /* One more ack: past the final SET → tutorial completes. */
     glr_ctrl_keyboard('\r', 0, 0);
@@ -2057,7 +2057,8 @@ static void test_workspace_load_during_tutorial_restores_baseline(void) {
     ASSERT_TRUE("walked into REQUIRE", idx >= 0);
     glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);  /* advances past REQUIRE */
     ASSERT_INT("now on SET grid=Radar", tutorial_state_view().step, 6);
-    ASSERT_INT("grid is RADAR mid-tutorial", repl_cfg_get_int("grid", -1), 10);
+    ASSERT_INT("grid is RADAR mid-tutorial",
+               repl_cfg_get_int("grid", -1), GRID_THEME_RADAR);
 
     /* Trigger the workspace-load teardown path — empty dir, but the
      * teardown helper must run the cfg restore before the load. */
@@ -2085,7 +2086,7 @@ static void test_exit_on_require_does_not_autoadvance(void) {
     /* Pre-tutorial baseline that COINCIDES with the REQUIRE target
      * (vertex_outlines == 1) — the worst-case input that exposed the
      * bug. Grid baseline is OFF so the post-fix path leaves grid at
-     * 0, not the SET-step's RADAR=10. */
+     * 0, not the SET-step's RADAR theme. */
     glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);
     glr_config_set(GLR_CONFIG_GRID_THEME, 0);
     int outlines_baseline = repl_cfg_get_int("vertex_outlines", -1);
@@ -2108,10 +2109,10 @@ static void test_exit_on_require_does_not_autoadvance(void) {
     ASSERT_TRUE("tutorial inactive after exit", !tutorial_active());
     ASSERT_INT("vertex_outlines restored to baseline",
                repl_cfg_get_int("vertex_outlines", -1), outlines_baseline);
-    /* The whole point: the next-step SET (grid = RADAR = 10) must NOT
+    /* The whole point: the next-step SET (grid = RADAR) must NOT
      * have fired during the restore. Pre-fix, the notify hook saw a
      * matching REQUIRE on the vertex_outlines write and auto-advanced,
-     * stamping grid=10 after grid had already been restored. */
+     * stamping the RADAR theme after grid had already been restored. */
     ASSERT_INT("next-step SET did NOT fire during teardown",
                repl_cfg_get_int("grid", -1), grid_baseline);
 }
@@ -2129,18 +2130,19 @@ static void test_restart_during_tutorial_preserves_original_baseline(void) {
     int baseline = repl_cfg_get_int("grid", -1);
     ASSERT_INT("baseline grid OFF", baseline, 0);
 
-    /* Walk Feature Tour past REQUIRE so the SET grid=RADAR(10) fires. */
+    /* Walk Feature Tour past REQUIRE so the SET grid=RADAR fires. */
     int idx1 = start_feature_tour_and_walk_commands();
     ASSERT_TRUE("walked tour 1 into REQUIRE", idx1 >= 0);
     glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1); /* advances REQUIRE → SET */
     ASSERT_INT("grid mutated to RADAR mid-tutorial 1",
-               repl_cfg_get_int("grid", -1), 10);
+               repl_cfg_get_int("grid", -1), GRID_THEME_RADAR);
     ASSERT_TRUE("tutorial 1 still active", tutorial_active());
 
     /* Start tutorial 2 without exiting tutorial 1. Pre-fix: the new
-     * tutorial's baseline capture saw grid=10 and enshrined it; the
-     * final exit would restore grid=10. Post-fix: the inner teardown
-     * restores grid=0 first, the new baseline captures grid=0. */
+     * tutorial's baseline capture saw the RADAR theme and enshrined it;
+     * the final exit would restore that mutated value. Post-fix: the
+     * inner teardown restores grid=0 first, the new baseline captures
+     * grid=0. */
     int idx2 = find_tutorial_idx("First Triangle");
     ASSERT_TRUE("found First Triangle", idx2 >= 0);
     tutorial_start(idx2);
@@ -2227,9 +2229,9 @@ static void test_feature_tour_grid_steps_use_symbolic_names(void) {
     ASSERT_STR("first grid SET step == GRID_THEME_RADAR",
                first_name ? first_name : "(null)",
                "GRID_THEME_RADAR");
-    ASSERT_STR("second grid SET step == GRID_THEME_FOCUS",
+    ASSERT_STR("second grid SET step == GRID_THEME_AURORA",
                second_name ? second_name : "(null)",
-               "GRID_THEME_FOCUS");
+               "GRID_THEME_AURORA");
 }
 
 static void test_feature_tour_vertex_outline_hint_uses_keymap(void) {

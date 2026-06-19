@@ -252,7 +252,7 @@ typedef struct SceneRenderConfig {
     float grid_major_steps[GRID_MAJOR_COUNT];
     float grid_extents[GRID_EXTENT_COUNT];
 
-    /* --- Focus marker (consumed by the focus grid theme) --- */
+    /* --- Focus marker (currently forwarded for tests / future grid use) --- */
     SceneFocusVertex focus;
 
     /* --- Visual scaling --- */

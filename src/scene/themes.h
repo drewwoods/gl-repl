@@ -18,11 +18,8 @@
 #define GRID_THEME_LIST(X) \
     X(OFF, "OFF")          \
     X(CLASSIC, "Classic")  \
-    X(FOG, "Fog")          \
     X(TRON, "Tron")        \
     X(EMBER, "Ember")      \
-    X(FAINT, "Faint")      \
-    X(FOCUS, "Focus")      \
     X(OCEAN, "Ocean")      \
     X(XZRULER, "XZ Ruler") \
     X(PLANES, "Adaptive Planes") \

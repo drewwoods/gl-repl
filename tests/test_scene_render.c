@@ -658,17 +658,17 @@ static void test_vertex2f_guide_cursor_dot(void) {
 #endif
 }
 
-/* --- Grid FOG-fallback predicate + the invariant it encodes ------- */
+/* --- Grid fog-owner predicate + the invariant it encodes ---------- */
 
-/* Pure: scene_grid_theme_uses_fog must be true exactly for the
- * EXP2-fog themes (FOG, OCEAN) — the ones that take the FADE
- * fallback under the FOG transition style. FROZEN's mist is
+/* Pure: scene_grid_theme_uses_fog must be true exactly for the themes
+ * whose own atmosphere collides with the synthesized clear-color recede.
+ * Today that is just OCEAN's above-water EXP2 fog. FROZEN's mist is
  * under-ice-only, so it stays out. FAR is deliberately not a factor.
  * No GL — runs in both builds. */
 static void test_grid_theme_uses_fog_predicate(void) {
     printf("--- scene_grid_theme_uses_fog predicate ---\n");
     for (int th = 0; th < GRID_THEME_COUNT; th++) {
-        int expect = (th == GRID_THEME_FOG || th == GRID_THEME_OCEAN);
+        int expect = (th == GRID_THEME_OCEAN);
         char lbl[64];
         snprintf(lbl, sizeof lbl, "uses_fog theme=%d", th);
         ASSERT_INT(lbl, scene_grid_theme_uses_fog(th) ? 1 : 0, expect);

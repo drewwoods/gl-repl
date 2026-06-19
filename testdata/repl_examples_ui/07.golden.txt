@@ -9,21 +9,21 @@
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
 /* @cfg grid = GRID_THEME_PLANES */
-/* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
+/* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg xform_guides = 2 */
-/* @cfg light_indicators = 1 */
+/* @cfg light_indicators = 0 */
 /* @cfg light_theme = LIGHT_THEME_DEFAULT */
 /* @cfg backdrop = SCENE_BACKDROP_OFF */
 /* @cfg auto_normals = 0 */
-/* @cfg view_mode = SCENE_VIEW_3D */
+/* @cfg view_mode = SCENE_VIEW_2D */
 /* @cfg camera_rotate = 0 */
 /* @cfg vertex_labels = 1 */
 /* @cfg normal_vectors = 0 */
-/* @cfg vertex_outlines = 0 */
-/* @cfg vertex_points = 0 */
+/* @cfg vertex_outlines = 1 */
+/* @cfg vertex_points = 1 */
 /* @cfg poly_highlight = 1 */
 /* @cfg variable_panel = 1 */
 /* @cfg compute_profile = 0 */
@@ -85,51 +85,28 @@ void display(void) {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -6.0000f);
+  glTranslatef(0.0000f, 0.0000f, -3.0000f);
   glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  // Recursive triangle tree: child calls shrink and rotate from the parent
-  branch(depth, size, spin) {
-    glColor3f(0.25 + depth*0.14, 0.45 + 0.2*sin(spin), 1 - depth*0.12);
-    glBegin(GL_LINE_LOOP);
+  triangle() {
+    glBegin(GL_TRIANGLES);
       glNormal3f(0, 0, 1);
-      glVertex3f(0, size, 0);
-      glVertex3f(-0.866*size, -0.5*size, 0);
-      glVertex3f(0.866*size, -0.5*size, 0);
+      glVertex3f(0, 0.8, 0);
+      glVertex3f(-0.7, -0.4, 0);
+      glVertex3f(0.7, -0.4, 0);
     glEnd();
-    if(depth <= 0) {
-      glColor3f(1, 0.8, 0.2);
-      glBegin(GL_TRIANGLES);
-        glNormal3f(0, 0, 1);
-        glVertex3f(0, size*0.55, 0);
-        glVertex3f(-0.48*size, -0.25*size, 0);
-        glVertex3f(0.48*size, -0.25*size, 0);
-      glEnd();
-    }
-    if(depth > 0) {
-      glPushMatrix();
-        glTranslatef(0, size*1.02, 0);
-        glRotatef(18 + spin*14, 0, 0, 1);
-        branch(depth - 1, size*0.62, spin + 0.15);
-      glPopMatrix();
-      glPushMatrix();
-        glTranslatef(-size*0.9, -size*0.38, 0);
-        glRotatef(-30 - spin*12, 0, 0, 1);
-        branch(depth - 1, size*0.58, spin + 0.12);
-      glPopMatrix();
-      glPushMatrix();
-        glTranslatef(size*0.9, -size*0.38, 0);
-        glRotatef(30 + spin*12, 0, 0, 1);
-        branch(depth - 1, size*0.58, spin + 0.12);
-      glPopMatrix();
-    }
   }
-
+  // @cfg vertex_points = 0
   glClearColor(0.1, 0.1, 0.1, 1);
   glEnable(GL_DEPTH_TEST);
-  glEnable(GL_NORMALIZE);
-  glRotatef(sin(t*0.35)*12, 0, 0, 1);
-  branch(4, 1.05, sin(t*0.4));
+  glColor3f(1, 0.3, 0.3);
+  triangle();
+  glTranslatef(2, 0, 0);
+  glColor3f(0.3, 1, 0.3);
+  triangle();
+  glTranslatef(-4, 0, 0);
+  glColor3f(0.3, 0.3, 1);
+  triangle();

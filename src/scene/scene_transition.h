@@ -40,7 +40,12 @@ typedef struct {
 
 /* Grid/axes show/hide durations in seconds. The transition machine ticks on
  * dt seconds; each overlay has independent in/out timing. Kept here with the
- * scene transition owner, not in global config. */
+ * scene transition owner, not in global config.
+ *
+ * The grid fade-in is deliberately slow (~1.2s) so the per-theme "draw-in"
+ * reveal (see GRID_REVEAL_* in grid.c) has room to sweep its bright draw-head
+ * across the floor before settling; the fade-out is a bit quicker so cycling
+ * themes doesn't feel sticky. Tune to taste. */
 #ifndef GRID_FADE_IN_SECS
 #define GRID_FADE_IN_SECS  0.25f
 #endif

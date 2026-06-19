@@ -8,13 +8,13 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_PLANES */
-/* @cfg grid_major = GRID_MAJOR_1 */
+/* @cfg grid = GRID_THEME_XZRULER */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
+/* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg xform_guides = 2 */
-/* @cfg light_indicators = 1 */
+/* @cfg light_indicators = 0 */
 /* @cfg light_theme = LIGHT_THEME_DEFAULT */
 /* @cfg backdrop = SCENE_BACKDROP_OFF */
 /* @cfg auto_normals = 0 */
@@ -85,28 +85,51 @@ void display(void) {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -3.0000f);
-  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
+  glTranslatef(0.0000f, 0.0000f, -5.0000f);
+  glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);
+  glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  triangle() {
-    glBegin(GL_TRIANGLES);
-      glNormal3f(0, 0, 1);
-      glVertex3f(0, 0.8, 0);
-      glVertex3f(-0.7, -0.4, 0);
-      glVertex3f(0.7, -0.4, 0);
-    glEnd();
-  }
+  static float grid, extent, x, y, z, invGradMag; // strip cell index, world extent, vertex coords, 1/|gradient|
+  static float amp = 0.4; // wave amplitude (peak |y|)
+  static float freq = 2.5; // spatial frequency along x and z
+  static float zPhase = 0.7; // z-axis time phase: z evolves slower than x (<1)
+
   // @cfg vertex_points = 0
   glClearColor(0.1, 0.1, 0.1, 1);
+  // Animated surface: y = sin(freq*x + t) * cos(freq*z + zPhase*t) * amp
+  // Drawn as a triangle strip per row with analytic per-vertex normals.
   glEnable(GL_DEPTH_TEST);
-  glColor3f(1, 0.3, 0.3);
-  triangle();
-  glTranslatef(2, 0, 0);
-  glColor3f(0.3, 1, 0.3);
-  triangle();
-  glTranslatef(-4, 0, 0);
-  glColor3f(0.3, 0.3, 1);
-  triangle();
+  glEnable(GL_LIGHTING);
+  glEnable(GL_NORMALIZE);
+  glEnable(GL_LIGHT3);
+  glEnable(GL_LIGHT2);
+  glEnable(GL_LIGHT1);
+  glEnable(GL_LIGHT0);
+  glShadeModel(GL_SMOOTH);
+  grid = 16; // rows/cols of strip cells
+  extent = 3.0; // total surface width along x and z
+  for(i, 0, grid) {
+    glBegin(GL_TRIANGLE_STRIP);
+      for(j, 0, grid+1) {
+        // row i (z fixed), step j across x; emit two vertices per j to feed the strip
+        x = -extent/2 + extent*j/grid;
+        z = -extent/2 + extent*i/grid;
+        y = sin(x*freq + t)*cos(z*freq + zPhase*t)*amp;
+        // gradient = (dy/dx, 0, dy/dz); normal = (-dy/dx, 1, -dy/dz) / |...|.
+        // invGradMag = 1 / sqrt(1 + amp^2 * freq^2 * (cos^2*cos^2 + sin^2*sin^2)).
+        invGradMag = 1.0/sqrt(1 + amp*amp*freq*freq*(cos(x*freq + t)*cos(x*freq + t)*cos(z*freq + zPhase*t)*cos(z*freq + zPhase*t) + sin(x*freq + t)*sin(x*freq + t)*sin(z*freq + zPhase*t)*sin(z*freq + zPhase*t)));
+        glNormal3f(-amp*freq*cos(x*freq + t)*cos(z*freq + zPhase*t)*invGradMag, invGradMag, amp*freq*sin(x*freq + t)*sin(z*freq + zPhase*t)*invGradMag);
+        glColor3f(0.35 + 0.35*sin(x + t), 0.5 + 0.3*cos(z + t*0.5), 0.65 + 0.25*sin(x*z + t));
+        glVertex3f(x, y, z);
+        // second strip vertex: same x, but z stepped to row i+1
+        z = -extent/2 + extent*(i + 1)/grid;
+        y = sin(x*freq + t)*cos(z*freq + zPhase*t)*amp;
+        invGradMag = 1.0/sqrt(1 + amp*amp*freq*freq*(cos(x*freq + t)*cos(x*freq + t)*cos(z*freq + zPhase*t)*cos(z*freq + zPhase*t) + sin(x*freq + t)*sin(x*freq + t)*sin(z*freq + zPhase*t)*sin(z*freq + zPhase*t)));
+        glNormal3f(-amp*freq*cos(x*freq + t)*cos(z*freq + zPhase*t)*invGradMag, invGradMag, amp*freq*sin(x*freq + t)*sin(z*freq + zPhase*t)*invGradMag);
+        glColor3f(0.35 + 0.35*sin(x + t), 0.5 + 0.3*cos(z + t*0.5), 0.65 + 0.25*sin(x*z + t));
+        glVertex3f(x, y, z);
+      }
+    glEnd();
+  }

@@ -8,13 +8,13 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_PLANES */
-/* @cfg grid_major = GRID_MAJOR_1 */
+/* @cfg grid = GRID_THEME_XZRULER */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
+/* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg xform_guides = 2 */
-/* @cfg light_indicators = 1 */
+/* @cfg light_indicators = 0 */
 /* @cfg light_theme = LIGHT_THEME_DEFAULT */
 /* @cfg backdrop = SCENE_BACKDROP_OFF */
 /* @cfg auto_normals = 0 */
@@ -22,8 +22,8 @@
 /* @cfg camera_rotate = 0 */
 /* @cfg vertex_labels = 1 */
 /* @cfg normal_vectors = 0 */
-/* @cfg vertex_outlines = 1 */
-/* @cfg vertex_points = 1 */
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
 /* @cfg poly_highlight = 1 */
 /* @cfg variable_panel = 1 */
 /* @cfg compute_profile = 0 */
@@ -85,34 +85,26 @@ void display(void) {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -4.0000f);
-  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
+  glTranslatef(0.0000f, 0.0000f, -9.0000f);
+  glRotatef(25.0000f, 1.0f, 0.0f, 0.0f);
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  polygon(radius, sides, phase) {
-    glBegin(GL_TRIANGLE_FAN);
-      glNormal3f(0, 0, 1);
-      glColor3f(1, 1, 1);
-      glVertex3f(0, 0, 0);
-      for(i, 0, sides + 1) {
-        glColor3f(sin(i*TAU/sides + phase)*0.5+0.5, cos(i*TAU/sides + phase)*0.5+0.5, 0.8);
-        glVertex3f(cos(i*TAU/sides + phase)*radius, sin(i*TAU/sides + phase)*radius, 0);
-      }
-    glEnd();
-  }
-  glClearColor(0.1, 0.1, 0.1, 1);
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_NORMALIZE);
-  glPushMatrix();
-    glTranslatef(-2.4, 0, 0);
-    polygon(0.9, 3, t*0.4);
-  glPopMatrix();
-  glPushMatrix();
-    polygon(0.9, 6, -t*0.25);
-  glPopMatrix();
-  glPushMatrix();
-    glTranslatef(2.4, 0, 0);
-    polygon(0.9, 10, t*0.15);
-  glPopMatrix();
+  static float n, p, q, ang, rr, x, y, z; // samples, winds, angle, ring radius, coords
+  glClearColor(0.05, 0.05, 0.08, 1);
+  glLineWidth(2);
+  n = 400; // samples around the closed curve
+  p = 2; // turns around the torus axis
+  q = 3; // turns through the torus hole
+  glBegin(GL_LINE_LOOP);
+    for(i, 0, n) {
+      ang = TAU * i/n;
+      rr = 2.0 + cos(q*ang); // distance from the axis
+      x = rr * cos(p*ang);
+      y = rr * sin(p*ang);
+      z = sin(q*ang);
+      glColor3f(0.5 + 0.5*sin(ang + t), 0.5 + 0.5*sin(ang + t + 2.0), 0.5 + 0.5*sin(ang + t + 4.0));
+      glVertex3f(x, y, z);
+    }
+  glEnd();

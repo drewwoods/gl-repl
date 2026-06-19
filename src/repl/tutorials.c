@@ -166,14 +166,14 @@ static const char *const g_tutorial_first_triangle_cfg[] = {
  *   2) One REQUIRE step asks the user to enable vertex outlines (using
  *      the GLR_VERTEX_OUTLINES binding) so they see how the feature
  *      changes the rendering.
- *   3) Two SET steps showcase Radar (10) and Focus (6) grid themes;
+ *   3) Two SET steps showcase Radar and Aurora grid themes;
  *      the user presses Enter/Tab/Space to advance through them.
  *
  * The entry-level `@cfg` block guarantees a known baseline (3D view,
  * grid off, vertex outlines off) so the REQUIRE step has the intended
- * teaching effect rather than auto-advancing immediately. Integer grid
- * values used directly (the catalog is repl-layer and must not include
- * src/scene/themes.h); see grid_theme_names in src/app/glr_actions.c. */
+ * teaching effect rather than auto-advancing immediately. The SET
+ * steps use symbolic cfg values so enum reordering in src/scene/themes.h
+ * does not silently retarget the showcase. */
 static const TutorialStep g_tutorial_feature_tour_steps[] = {
     STEP_APPEND(NULL,
         "// Open a triangle batch.",
@@ -198,15 +198,15 @@ static const TutorialStep g_tutorial_feature_tour_steps[] = {
         "// The Radar grid backdrop looks like this.",
         "grid", "GRID_THEME_RADAR"),
     STEP_SET_SYM(NULL,
-        "// And the Focus grid backdrop looks like this.",
-        "grid", "GRID_THEME_FOCUS"),
+        "// And the Aurora grid backdrop looks like this.",
+        "grid", "GRID_THEME_AURORA"),
     STEP_SENTINEL,
 };
 
 static const char *const g_tutorial_feature_tour_cfg[] = {
     "// @cfg view_mode = SCENE_VIEW_3D",  /* depth gives the grid themes context */
     "// @cfg vertex_outlines = 0",  /* baseline: REQUIRE will ask the user to turn this on */
-    "// @cfg grid = GRID_THEME_OFF", /* baseline: SET steps will showcase Radar then Focus */
+    "// @cfg grid = GRID_THEME_OFF", /* baseline: SET steps will showcase Radar then Aurora */
     NULL,
 };
 

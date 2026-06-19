@@ -893,10 +893,10 @@ static void test_example_tag_default_cfg(void) {
                     repl_example_has_tag(cube_idx, REPL_EXAMPLE_TAG_3D));
     }
     if (stress_idx >= 0) {
-        ASSERT_TRUE("stress carries 2D bit (multi-tag)",
-                    repl_example_has_tag(stress_idx, REPL_EXAMPLE_TAG_2D));
-        ASSERT_TRUE("stress carries 3D bit (multi-tag)",
+        ASSERT_TRUE("stress is in 3D bucket",
                     repl_example_has_tag(stress_idx, REPL_EXAMPLE_TAG_3D));
+        ASSERT_TRUE("stress is not in 2D bucket",
+                    !repl_example_has_tag(stress_idx, REPL_EXAMPLE_TAG_2D));
     }
     if (spirograph_idx >= 0) {
         ASSERT_TRUE("spirograph is in 2D bucket",
@@ -929,13 +929,13 @@ static void test_example_tag_default_cfg(void) {
                     CFG_DEFAULT_GRID_THEME);
     }
 
-    /* (4) Multi-tag example that carries 2D but its own @cfg sets
-     * grid=7 (GRID_THEME_OCEAN) → example wins over the 2D tag
-     * default. */
+    /* (4) Example with its own @cfg grid → the explicit value wins over the
+     * tag / global default. Stress is 3D-only and sets grid =
+     * GRID_THEME_AURORA. */
     if (stress_idx >= 0) {
         load_example_for_test(stress_idx);
-        ASSERT_TRUE("example @cfg grid overrides 2D tag default",
-                    glr_state_presentation().grid_theme == GRID_THEME_OCEAN);
+        ASSERT_TRUE("example @cfg grid overrides default",
+                    glr_state_presentation().grid_theme == GRID_THEME_AURORA);
     }
 }
 
@@ -1009,7 +1009,7 @@ static void test_example_tag_default_dispatch(void) {
               .value   = GRID_THEME_PLANES },
             { .tag_idx = REPL_EXAMPLE_TAG_LINES,
               .key     = GLR_CONFIG_GRID_THEME,
-              .value   = GRID_THEME_FAINT },
+              .value   = GRID_THEME_EMBER },
         };
         unsigned int mask = repl_example_tag_bit(REPL_EXAMPLE_TAG_2D) |
                             repl_example_tag_bit(REPL_EXAMPLE_TAG_LINES);
@@ -1019,7 +1019,7 @@ static void test_example_tag_default_dispatch(void) {
         ASSERT_TRUE("cross-tag same-key collision counted",
                     collisions == 1);
         ASSERT_TRUE("cross-tag same-key collision: later wins",
-                    glr_state_presentation().grid_theme == GRID_THEME_FAINT);
+                    glr_state_presentation().grid_theme == GRID_THEME_EMBER);
     }
 
     /* (D) Two entries colliding on the same key but the mask matches
@@ -1031,7 +1031,7 @@ static void test_example_tag_default_dispatch(void) {
               .value   = GRID_THEME_PLANES },
             { .tag_idx = REPL_EXAMPLE_TAG_3D,
               .key     = GLR_CONFIG_GRID_THEME,
-              .value   = GRID_THEME_FAINT },
+              .value   = GRID_THEME_EMBER },
         };
         unsigned int mask = repl_example_tag_bit(REPL_EXAMPLE_TAG_3D);
 
@@ -1040,7 +1040,7 @@ static void test_example_tag_default_dispatch(void) {
         ASSERT_TRUE("mask filters non-matching: no collision",
                     collisions == 0);
         ASSERT_TRUE("mask filters non-matching: only matching applied",
-                    glr_state_presentation().grid_theme == GRID_THEME_FAINT);
+                    glr_state_presentation().grid_theme == GRID_THEME_EMBER);
     }
 
     /* (E) Empty mask → nothing applied, no collisions. */
@@ -1369,7 +1369,8 @@ int main(int argc, char **argv) {
             ASSERT_TRUE("stress example outlines preset",
                         glr_state_presentation().show_vertex_outlines == 0);
             ASSERT_TRUE("stress example backdrop preset",
-                        glr_state_presentation().backdrop_mode == 1);
+                        glr_state_presentation().backdrop_mode ==
+                        SCENE_BACKDROP_AURORA);
             ASSERT_TRUE("stress example camera rx preset",
                         fabsf(glr_camera().rx - 27.5f) < 1e-4f);
             ASSERT_TRUE("stress example camera ry preset",
