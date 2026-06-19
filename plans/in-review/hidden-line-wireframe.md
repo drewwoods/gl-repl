@@ -59,14 +59,16 @@ Wireframe uses. Hidden-line keeps that shape instead of adding a hand-walker:
 it reuses the main wireframe pass for dim all-edges, then adds a silent fill
 prime and one bright visible-edge redraw in the app hooks.
 
-The only executor change is a narrow **`fixed_raster_state`** option (below), so
-the caller can own color, depth, blend, cull, lighting, line width, and masks
-while the executor still runs the program's transforms, geometry, assignments,
-and execute-time control flow normally. The app controller remains the REPL
-execution adapter, but the new GL passes live with the existing edit-overlay
-rendering code rather than as controller-local drawing helpers.
+The REPL-side change is a small **post-flatten fixed-raster filter** plus a
+tess fixed-color option. The filter builds a pass-local `FlatProgramView` from
+the already-flattened program, replacing commands that would overwrite the
+pass-owned raster state with `CMD_EMPTY` NOPs. The executor still runs the
+program's transforms, geometry, assignments, and execute-time control flow
+normally. The app controller remains the REPL execution adapter, but the new GL
+passes live with the existing edit-overlay rendering code rather than as
+controller-local drawing helpers.
 
-### Why the `fixed_raster_state` flag is needed (state interference)
+### Why the fixed-raster filter is needed (state interference)
 
 A plain run would replay the program's own `glColorMask` / `glDepthMask` /
 `glDepthFunc` / `glColor` / `glEnable(GL_LIGHTING|GL_CULL_FACE)` *after* the
@@ -75,11 +77,11 @@ solid colored faces in the prime; `glDepthMask(GL_FALSE)` would write no depth
 (no occlusion); a user `glColor` would override the fixed line color;
 `glEnable(GL_CULL_FACE)` would cull the back edges we need for the dim pass.
 
-Under `fixed_raster_state` the executor skips only commands that would change the
-pass's raster/appearance state, so the caller fully owns the forced hidden-line
-state. It still executes `CMD_VAR_ASSIGN`, `CMD_SCRATCH_ASSIGN`,
-`CMD_IF_BEGIN`/`CMD_IF_END`, `CMD_GOTO`/labels, transforms, `glBegin` blocks,
-GLU tess, and `glutSolid*` exactly like the existing wireframe path. This
+The fixed-raster filter NOPs only commands that would change the pass's
+raster/appearance state, so the caller fully owns the forced hidden-line state.
+It does not delete/compact commands: flat indices remain stable, `local_vars`
+stay aligned by index, `CMD_GOTO` label scans still see the same stream shape,
+and `CMD_IF_BEGIN` false-branch skipping keeps the same block structure. This
 mirrors the spirit of `encode_feedback_normals` (mesh export), which already
 suppresses selected user state while leaving geometry execution intact.
 
@@ -103,36 +105,82 @@ suppresses selected user state while leaving geometry execution intact.
   unchanged; examples can opt into hidden-line with `// @cfg wireframe = 2` (slug
   already allowed). The new `state_names` only affect menu/status display.
 
-### 2. Executor `fixed_raster_state` option (the one repl-side change)
+### 2. Post-flatten fixed-raster filter + tess color option
 
-- `src/repl/executor.h`: add these fields to `ReplExecutionOptions` (≈line 97,
-  beside `encode_feedback_normals`), documented:
+- Add a small reusable flat-program filter helper (for example under
+  `src/repl/flatten_filter.[ch]` or near the executor if that fits local
+  ownership better):
   ```c
-  int   fixed_raster_state;
-  int   fixed_color_enabled;
-  float fixed_color[4];
+  typedef int (*ReplFlatSuppressFn)(const GLCmd *cmd, void *user_data);
+
+  int repl_flat_program_filter_to_nops(FlatProgramView src,
+                                       int src_count,
+                                       GLCmd *scratch_cmds,
+                                       int scratch_capacity,
+                                       ReplFlatSuppressFn suppress_fn,
+                                       void *suppress_user_data,
+                                       FlatProgramView *out);
   ```
-- `src/repl/executor.c`: when `opts->fixed_raster_state`, preserve the normal
-  executor walk but suppress only commands that would overwrite the caller's
-  forced pass state:
-  - Skip appearance/raster state: `CMD_COLOR3F`, `CMD_COLOR4F`,
+  The helper copies `src.cmds[0..src_count)` into `scratch_cmds`; when
+  `suppress_fn` returns true, it replaces that command with a `CMD_EMPTY` NOP
+  while preserving the slot. The output view reuses `src.local_vars` because
+  indices are unchanged. It must not mutate the live flat program.
+- Prefer NOP replacement over deletion/compaction for this feature. Physical
+  deletion would require rebuilding the parallel `FlatCmdLocalVars` table and
+  auditing every flat-index-sensitive path (`CMD_GOTO`, `CMD_IF_BEGIN` skipping,
+  replay clamps, cursor/source mapping). Hidden-line only needs commands to stop
+  emitting state, so stable-index NOPs are the safer abstraction.
+- `src/repl/executor.h`: add the tess fixed-color fields to
+  `ReplExecutionOptions` (beside `encode_feedback_normals`), documented:
+  ```c
+  int   fixed_tess_color_enabled;
+  float fixed_tess_color[4];
+  ```
+- Add a blacklist predicate for the filter, e.g.
+  `repl_cmd_is_fixed_raster_suppressed(CmdType type)`. Do not implement a
+  geometry/control-flow whitelist: every command remains in the filtered program
+  unless this predicate identifies it as raster/appearance/text state that the
+  hidden-line pass owns. New geometry/control commands should therefore keep
+  working by default; only new state/text/appearance commands should be added to
+  the predicate.
+  - NOP appearance/state commands: `CMD_COLOR3F`, `CMD_COLOR4F`,
     `CMD_TESS_COLOR`, `CMD_ENABLE`, `CMD_DISABLE`, `CMD_SHADE_MODEL`,
     `CMD_COLOR_MATERIAL`, `CMD_MATERIALFV`, `CMD_MATERIALF`,
     `CMD_LIGHT_MODEL_I`, `CMD_FRONT_FACE`, `CMD_DEPTH_FUNC`,
     `CMD_DEPTH_MASK`, `CMD_COLOR_MASK`, `CMD_POINT_PARAMETER_FV`,
-    `CMD_BLEND_FUNC`, `CMD_CLEAR_COLOR`, `CMD_POINT_SIZE`, `CMD_LINE_WIDTH`,
-    `CMD_RASTER_POS3F`, and `CMD_LABEL`.
-  - Keep side effects and control flow: `CMD_VAR_ASSIGN`,
-    `CMD_SCRATCH_ASSIGN`, `CMD_IF_BEGIN`/`CMD_IF_END`, `CMD_GOTO`/labels.
-  - Keep geometry and transforms: `repl_cmd_is_transform(...)`,
-    `CMD_BEGIN`/`CMD_END`, `CMD_VERTEX2F`/`CMD_VERTEX3F`, tess begin/contour/end
-    and vertices, `CMD_NORMAL3F`/`CMD_TESS_NORMAL`, and `repl_cmd_is_glut_solid`.
+    `CMD_BLEND_FUNC`, `CMD_CLEAR_COLOR`, `CMD_POINT_SIZE`, and
+    `CMD_LINE_WIDTH`.
+  - NOP bitmap text rendering: `CMD_RASTER_POS3F` and `CMD_LABEL`. These are
+    not polygon raster state, but once fixed-raster passes suppress text labels,
+    the raster-position setup is also irrelevant and should not leak text into
+    hidden-line passes.
+  - Everything else falls through normally. In particular, side effects and
+    control flow must not be blacklisted: `CMD_VAR_ASSIGN`,
+    `CMD_SCRATCH_ASSIGN`, `CMD_IF_BEGIN`/`CMD_IF_END`,
+    `CMD_FOR_BEGIN`/`CMD_FOR_END`, `CMD_FUNC_DEF`/`CMD_FUNC_END`, `CMD_CALL`,
+    `CMD_GOTO`, and `CMD_GOTO_LABEL`. `CMD_COMMENT`, `CMD_EMPTY`, and
+    `CMD_VAR_DECLARE` are harmless no-ops if present.
+  - Geometry and transforms must also fall through normally:
+    `repl_cmd_is_transform(...)`,
+    `CMD_BEGIN`/`CMD_END`, `CMD_VERTEX2F`/`CMD_VERTEX3F`,
+    `CMD_TESS_BEGIN_POLYGON`, `CMD_TESS_BEGIN_CONTOUR`, `CMD_TESS_END`,
+    `CMD_TESS_VERTEX`, `CMD_NORMAL3F`/`CMD_TESS_NORMAL`, and
+    `repl_cmd_is_glut_solid`.
+- For the persistent hidden-line main pass, be careful not to lose app-side
+  bookkeeping for commands that are NOPed in the GL replay. Today
+  `repl_apply_state_cmd` also updates `ReplRenderState` for light enables and
+  `glClearColor`. The filtered pass must still update that model state once per
+  frame from the original command stream, without letting those commands mutate
+  the forced GL state. A narrow helper that applies only the non-GL bookkeeping
+  for suppressed state commands is enough; the depth-prime and visible-edge
+  overlay passes remain non-persistent and restore their snapshots.
 - Fixed color for tess: GLU tess callbacks currently emit `glColor4dv(v->color)`
   from each `TessVertex`, so simply skipping `CMD_TESS_COLOR` would turn tess
-  output white/opaque instead of using the hidden-line pass color. When
-  `fixed_color_enabled` is set, initialize the local tess color to
-  `fixed_color`, ignore user `CMD_TESS_COLOR`, and copy `fixed_color` into every
-  tess vertex (including combine-generated vertices). Plain `glBegin` and
+  output white/opaque instead of using the hidden-line pass color. Filtering
+  user `CMD_TESS_COLOR` to NOP is necessary but not sufficient for vertices that
+  appear before any tess color command. When `fixed_tess_color_enabled` is set,
+  initialize the local tess color to `fixed_tess_color` and copy that color into
+  every tess vertex (including combine-generated vertices). Plain `glBegin` and
   `glutSolid*` geometry rely on the caller's current `glColor4f`, just like the
   existing pipeline wireframe redraws rely on current GL state.
 
@@ -147,8 +195,8 @@ This should follow existing boundaries:
   hidden-line depth-prime / visible-line passes.
 
 Do **not** land the hidden-line GL pass bodies in `glr_ctrl.c`; that file should
-only set flags, install hooks, and translate `SceneExecutePurpose` into
-`ReplExecutionOptions`.
+only set flags, install hooks, build the filtered execution view, and translate
+`SceneExecutePurpose` into `ReplExecutionOptions`.
 
 ### 3a. Scene execution purposes
 
@@ -160,15 +208,17 @@ only set flags, install hooks, and translate `SceneExecutePurpose` into
   The dim all-edges pass still arrives as `SCENE_EXEC_MAIN_FILL`; hidden-line
   mode changes the raster state for that normal main-fill execution.
 - `src/app/glr_ctrl.c`, `scene_execute_adapter`: handle these purposes by
-  selecting `ReplExecutionOptions.fixed_raster_state` and the fixed tess color:
+  filtering the live `FlatProgramView` into a scratch NOP-filtered view and
+  selecting the fixed tess color option:
   - `SCENE_EXEC_MAIN_FILL` + `g_hidden_line_active`: capture the hidden-line
-    baseline, run the existing wireframe execution with fixed dim color, then
-    capture the post-main-fill state.
+    baseline, run the existing wireframe execution against the filtered view
+    with fixed dim color, apply the small non-GL `ReplRenderState` bookkeeping
+    for suppressed state commands once, then capture the post-main-fill state.
   - `SCENE_EXEC_HIDDEN_LINE_DEPTH_PRIME`: restore the captured baseline, run
-    fixed-raster execution with no fixed color, then restore the saved
-    post-main-fill state.
+    the filtered view with no fixed tess color (color writes are disabled), then
+    restore the saved post-main-fill state.
   - `SCENE_EXEC_HIDDEN_LINE_VISIBLE`: restore the captured baseline, run
-    fixed-raster execution with fixed visible color, then restore the saved
+    the filtered view with fixed visible tess color, then restore the saved
     post-prime state.
   This is the controller's legitimate role: it bridges scene purposes to REPL
   state snapshots and executor options. It should not also contain the GL
@@ -203,12 +253,15 @@ only set flags, install hooks, and translate `SceneExecutePurpose` into
 - Add `edit_overlays_hidden_line_depth_prime(void *user_data)`. It runs before
   helpers/grid/axes and before `render.c` restores `GL_FILL`, so it must bracket
   its own state:
+  - Use `glPushAttrib(GL_ALL_ATTRIB_BITS)` and `glPushMatrix()`; unlike attribs,
+    the modelview stack is not restored by `glPushAttrib`, and this hook runs
+    outside the main fill pass's execute `glPushMatrix()` / `glPopMatrix()`.
   - Force prime GL state: `glPolygonMode(FILL)`,
     `glColorMask(0,0,0,0)`, `glDepthMask(GL_TRUE)`,
     `glEnable(GL_DEPTH_TEST)`, `glDepthFunc(GL_LEQUAL)`,
     `glDisable(GL_CULL_FACE)`, `glDisable(GL_LIGHTING)`.
   - Call `pack->execute_fn` with purpose `SCENE_EXEC_HIDDEN_LINE_DEPTH_PRIME`.
-  - Restore GL attribs. REPL baseline restore/save happens inside
+  - Restore with `glPopMatrix()` + `glPopAttrib()`. REPL baseline restore/save happens inside
     `scene_execute_adapter`, because only the controller should touch REPL
     mutable state.
   - If replay fade/tess preview is active, `g_hidden_line_active` is already
@@ -254,12 +307,14 @@ Visible/hidden are independent — can differ in hue, not just alpha.
   extras are skipped → hidden-line degrades to plain see-through wireframe.
 - **2D / ortho:** harmless — prime writes ~constant depth, all edges read
   visible (looks like normal wireframe).
-- **Cost:** Hidden-line runs the executor 3× (dim wireframe + depth prime +
-  visible redraw). The extra fill/visible passes restore the captured main-fill
-  baseline before each run and restore the post-prime state afterward, so
-  execute-time assignments/control flow are evaluated consistently without
-  persistent re-advance. Acceptable for an opt-in mode; zero cost when off
-  (`g_hidden_line_active` gates everything).
+- **Cost:** Hidden-line runs the executor 3× per scene pass (dim wireframe +
+  depth prime + visible redraw). With accumulation AA/motion blur enabled, that
+  becomes `3 × accum_passes` executor walks because each jittered sub-frame needs
+  its own primed depth buffer and visible-edge redraw. The extra fill/visible
+  passes restore the captured main-fill baseline before each run and restore the
+  post-prime state afterward, so execute-time assignments/control flow are
+  evaluated consistently without persistent re-advance. Acceptable for an opt-in
+  mode; zero cost when off (`g_hidden_line_active` gates everything).
 - **GL stubs:** every symbol used (`glColorMask`, `glDepthFunc`, `GL_LEQUAL`,
   `glPolygonOffset`, `GL_POLYGON_OFFSET_LINE`) is already exercised by the
   executor / outline pass; stub headers need no change.
@@ -267,8 +322,11 @@ Visible/hidden are independent — can differ in hue, not just alpha.
 ## Files to modify
 
 - `src/app/glr_actions.c` — Wireframe row → 3-state + names array.
-- `src/repl/executor.h` / `src/repl/executor.c` — `fixed_raster_state` option,
-  fixed tess color handling, and raster-state skip gate.
+- `src/repl/flatten_filter.h` / `src/repl/flatten_filter.c` (or an equivalent
+  repl-owned helper location) — reusable post-flatten filter that copies a flat
+  program and replaces blacklisted commands with `CMD_EMPTY` NOPs.
+- `src/repl/executor.h` / `src/repl/executor.c` — fixed tess color handling for
+  GLU tess callbacks.
 - `src/scene/render_types.h` — add the hidden-line `SceneExecutePurpose` values
   used by overlay hooks to ask the app execution adapter for a depth-prime or
   visible-edge geometry replay.
@@ -283,12 +341,15 @@ Visible/hidden are independent — can differ in hue, not just alpha.
   and render the visible-edge overlay from `edit_overlays_post_overlays`.
 - `config.h` — named `REPL_HIDDEN_LINE_*` color/width constants.
 - `tests/test_glr_actions.c` — update the `g_cfg_items` runtime twin if it
-  asserts Wireframe is 2-state (grep `WIREFRAME`).
-- `tests/test_repl_executor.c` — cover `fixed_raster_state`: raster/appearance
-  commands are skipped, assignments/control flow still run, and fixed tess color
-  prevents `CMD_TESS_COLOR` / tess callbacks from overriding the pass color.
+  asserts Wireframe is 2-state (grep `WIREFRAME`), and update
+  `test_cfg_cycling()`'s status assertion from `"Wireframe: ON"` to the named
+  state string (then add/adjust a second cycle assertion for `"Hidden-line"`).
+- `tests/test_repl_executor.c` — cover the fixed-raster NOP filter: raster /
+  appearance commands become `CMD_EMPTY`, assignments/control flow/geometry keep
+  their slots and still run, and fixed tess color prevents `CMD_TESS_COLOR` /
+  tess callbacks from overriding the pass color.
 - `src/repl/help_text.c` — `Ctrl+G` help text changes from "Toggle wireframe" to
-  "Cycle wireframe".
+  "Cycle wireframe (Off / Wire / Hidden-line)" or similarly explicit wording.
 - `CLAUDE.md` Key Controls — `Ctrl+G` is now a 3-state cycle (Off / Wireframe /
   Hidden-line); note `@cfg wireframe = 2`. (And `README.md`/`USER_GUIDE.md` if
   they call wireframe a toggle.)
@@ -304,11 +365,14 @@ Visible/hidden are independent — can differ in hue, not just alpha.
    bright, grid hidden behind the solid; one more `Ctrl+G` → Off. Save
    (`Ctrl+S`), reload (`./gl-repl output.c`) → mode persists (`@cfg wireframe =
    2`).
-   - **State-interference check (the `fixed_raster_state` flag):** in Hidden-line
+   - **State-interference check (the fixed-raster NOP filter):** in Hidden-line
      mode add `glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);` and, separately,
      `glDepthMask(GL_FALSE);` and a `glColor3f(1,0,0);` to the program —
      occlusion and the fixed line colors must stay correct (no solid colored
      faces, no red edges, hidden edges still dimmed).
+   - **Light-background check:** set a bright `glClearColor` and confirm the
+     hidden-line colors still read acceptably; retune `REPL_HIDDEN_LINE_*` if the
+     dim pass disappears completely on light scenes.
    - **Side-effect baseline check:** add a self-updating assignment before
      geometry (`t = t + 1;` or `A[0] = A[0] + 1;`) and confirm the dim and
      visible wireframe edges overlap exactly rather than drifting apart.
