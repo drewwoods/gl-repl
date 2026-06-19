@@ -109,6 +109,7 @@ static void bind_app_workspace_for_scene_save_if_needed(void) {
 static const char *audio_cfg_names[] = { "off", "on" };
 static const char *syntax_hl_names[] = { "Off", "On", "On+Shadow" };
 static const char *view_mode_names[] = { "3D", "2D" };
+static const char *wireframe_mode_names[] = { "Off", "Wireframe", "Hidden-line" };
 static const char *vertex_label_names[OVERLAY_VERTEX_LABEL_COUNT] = {
     OVERLAY_VERTEX_LABEL_LIST(OVERLAY_VERTEX_LABEL_NAME_ENTRY)
 };
@@ -161,7 +162,8 @@ const GlrConfigItem g_cfg_items[] = {
       .key_code = KM_KEY(GLR_ACCUM_EFFECT), .modifiers = KM_MODS(GLR_ACCUM_EFFECT) },
     { .label = "Accum passes", .key = GLR_CONFIG_ACCUM_PASSES,
       .state_count = 6, .state_names = accum_passes_names },
-    { .label = "Wireframe", .key = GLR_CONFIG_WIREFRAME, .state_count = 2,
+    { .label = "Wireframe", .key = GLR_CONFIG_WIREFRAME,
+      .state_count = SCENE_WIREFRAME_COUNT, .state_names = wireframe_mode_names,
       .key_code = KM_KEY(GLR_WIREFRAME), .modifiers = KM_MODS(GLR_WIREFRAME) },
     { .label = "Point attenuation", .key = GLR_CONFIG_POINT_ATTENUATION, .state_count = 2 },
     { .label = "---", .section_header = 1 },

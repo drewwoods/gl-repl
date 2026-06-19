@@ -25,7 +25,7 @@
  * the code panel should format text, and which view mode/backdrop/filter choices
  * are active for the current session. */
 typedef struct {
-    int wireframe;
+    SceneWireframeMode wireframe;
     int grid_theme;
     int grid_major_idx;
     int grid_extent_idx;

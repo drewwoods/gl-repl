@@ -76,6 +76,13 @@ typedef enum SceneExecutePurpose {
     SCENE_EXEC_WIREFRAME_VISIBLE_LINES /* hidden-line effect: visible edges */
 } SceneExecutePurpose;
 
+typedef enum SceneWireframeMode {
+    SCENE_WIREFRAME_OFF = 0,
+    SCENE_WIREFRAME_PLAIN,
+    SCENE_WIREFRAME_HIDDEN,
+    SCENE_WIREFRAME_COUNT
+} SceneWireframeMode;
+
 /* Accumulation-buffer effect mode. OFF = single pass (no accum); AA =
  * jitter-the-frustum antialiasing across accum_passes samples; BLUR /
  * BLUR_CAMERA = motion blur (the caller supplies a per-pass setup callback
@@ -230,7 +237,7 @@ typedef struct SceneRenderConfig {
     /* Experimental scene-viewport post-processing.
      * Runtime-only (Ctrl+N); never persisted via @cfg. */
     ScenePostFilterMode post_filter_mode;
-    int wireframe;
+    SceneWireframeMode wireframe;
 
     /* --- Grid and axes ---
      * grid_theme/axes_theme are the *effective* (machine `current`)

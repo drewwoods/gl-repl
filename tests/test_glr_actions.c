@@ -182,7 +182,7 @@ static void test_cfg_cycling(void) {
     glr_state_presentation_mut()->wireframe = 0;
     glr_cfg_cycle_row(wireframe_row, 1);
     ASSERT_INT("wireframe toggled to 1", glr_state_presentation().wireframe, 1);
-    ASSERT_STR("wireframe status ON", g_last_status, "Wireframe: ON");
+    ASSERT_STR("wireframe status Wireframe", g_last_status, "Wireframe: Wireframe");
 
     /* Test Replay special case - only starts if there are commands to replay */
     replay_state_mut()->active = 0;

@@ -477,6 +477,11 @@ static void scene_apply_quality_config(const SceneRenderConfig *config) {
     else glDisable(GL_LINE_SMOOTH);
 }
 
+static void scene_apply_wireframe_config(const SceneRenderConfig *config) {
+    if (config->wireframe == SCENE_WIREFRAME_PLAIN)
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+}
+
 static void scene_prepare_frame_context(SceneFrameRenderContext *ctx,
                                         const SceneRenderConfig *config) {
     ctx->config = *config;
@@ -625,6 +630,7 @@ static void scene_pass_setup(const SceneRendererState *state,
      * commands so this pass doesn't need to re-assert them per frame. */
 
     scene_apply_quality_config(config);
+    scene_apply_wireframe_config(config);
     prof_accum_end(PROF_SCENE_3D_SETUP);
 }
 
@@ -667,7 +673,7 @@ static void scene_pass_hidden_line_wireframe(const SceneRenderConfig *config) {
 
 static void scene_pass_fill(const SceneRenderConfig *config) {
     prof_begin(PROF_SCENE_3D_FILL);
-    if (config->wireframe)
+    if (config->wireframe == SCENE_WIREFRAME_HIDDEN)
         scene_pass_hidden_line_wireframe(config);
     else
         scene_execute_user_geometry(config, SCENE_EXEC_MAIN_FILL);
@@ -675,6 +681,9 @@ static void scene_pass_fill(const SceneRenderConfig *config) {
 
     if (config->post_fill_fn)
         config->post_fill_fn(config->post_fill_user_data);
+
+    if (config->wireframe == SCENE_WIREFRAME_PLAIN)
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
 
 /* Draw translucent scene helpers after the main geometry so antialiased
