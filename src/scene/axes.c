@@ -6,6 +6,36 @@
 #include "occluded_ghost.h"  /* SCENE_OCCLUDED_GHOST_STIPPLE */
 #include <math.h>            /* sinf, cosf, fmodf, M_PI (via gl_includes.h) */
 
+/* ---- Axes transition curve plugin (SceneXnReveal, see scene_transition.h).
+ * A plain linear opacity ramp over AXES_FADE_*_SECS, no per-theme speed
+ * (theme ignored). The machine feeds elapsed time and reads opacity back;
+ * elapsed_at inverts the ramp for reversal continuity. */
+static float axes_reveal_opacity(int theme, SceneXnPhase phase, float elapsed) {
+    (void)theme;
+    if (phase == SCENE_XN_STEADY) return 1.0f;
+    float dur = (phase == SCENE_XN_FADE_IN) ? AXES_FADE_IN_SECS
+                                            : AXES_FADE_OUT_SECS;
+    float p = (dur > 0.0f) ? elapsed / dur : 1.0f;
+    if (p < 0.0f) p = 0.0f;
+    if (p > 1.0f) p = 1.0f;
+    return (phase == SCENE_XN_FADE_IN) ? p : 1.0f - p;
+}
+
+static float axes_reveal_elapsed_at(int theme, SceneXnPhase phase,
+                                    float opacity) {
+    (void)theme;
+    float dur = (phase == SCENE_XN_FADE_IN) ? AXES_FADE_IN_SECS
+                                            : AXES_FADE_OUT_SECS;
+    float p = (phase == SCENE_XN_FADE_IN) ? opacity : 1.0f - opacity;
+    if (p < 0.0f) p = 0.0f;
+    if (p > 1.0f) p = 1.0f;
+    return p * dur;
+}
+
+const SceneXnReveal scene_axes_reveal = {
+    axes_reveal_opacity, axes_reveal_elapsed_at
+};
+
 enum {
     SCENE_AXIS_X = 0,
     SCENE_AXIS_Y = 1,

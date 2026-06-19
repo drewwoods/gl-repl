@@ -52,8 +52,8 @@ typedef struct {
     int            head;   /* 1 = bright moving draw-head; 0 = plain dissolve */
     float          time;   /* fade in/out time scale vs GRID_FADE_*_SECS:
                             * 0 (the unset default) or 1 = base speed, >1
-                            * slower, <1 snappier. Read by the controller via
-                            * scene_grid_reveal_time_scale(). */
+                            * slower, <1 snappier. Consumed by the grid's
+                            * reveal curve (scene_grid_reveal). */
 } GridReveal;
 
 #define GRID_REVEAL_BAND        0.45f /* soft reveal ramp width (u fraction)      */
@@ -1510,12 +1510,50 @@ int scene_grid_theme_uses_fog(SceneGridTheme grid_theme) {
     return grid_theme == GRID_THEME_OCEAN;
 }
 
-float scene_grid_reveal_time_scale(SceneGridTheme grid_theme) {
+/* ---- Grid transition curve plugin (SceneXnReveal, see scene_transition.h) --
+ * The grid owns its fade durations + per-theme speed + opacity shape; the
+ * machine just feeds elapsed time and reads opacity back. A linear opacity
+ * ramp is intentional — the reveal's spatial shaping (smoothstep wipe, bright
+ * head) is applied on top of opacity in scene_grid_render, so opacity itself
+ * stays a plain 0..1 progress that inverts cleanly for reversal. */
+
+/* Per-theme fade-speed multiplier on GRID_FADE_*_SECS: 1.0 = base, >1 slower,
+ * <1 snappier. A 0 entry (the unset default) means base speed. */
+static float grid_reveal_time_scale(int grid_theme) {
     if (grid_theme <= GRID_THEME_OFF || grid_theme >= GRID_THEME_COUNT)
         return 1.0f;
     float t = g_grid_reveal[grid_theme].time;
-    return (t > 0.0f) ? t : 1.0f;   /* 0 (unset) → base speed */
+    return (t > 0.0f) ? t : 1.0f;
 }
+
+static float grid_reveal_duration(int grid_theme, SceneXnPhase phase) {
+    float base = (phase == SCENE_XN_FADE_IN) ? GRID_FADE_IN_SECS
+                                             : GRID_FADE_OUT_SECS;
+    return base * grid_reveal_time_scale(grid_theme);
+}
+
+static float grid_reveal_opacity(int grid_theme, SceneXnPhase phase,
+                                 float elapsed) {
+    if (phase == SCENE_XN_STEADY) return 1.0f;
+    float dur = grid_reveal_duration(grid_theme, phase);
+    float p = (dur > 0.0f) ? elapsed / dur : 1.0f;
+    if (p < 0.0f) p = 0.0f;
+    if (p > 1.0f) p = 1.0f;
+    return (phase == SCENE_XN_FADE_IN) ? p : 1.0f - p;
+}
+
+static float grid_reveal_elapsed_at(int grid_theme, SceneXnPhase phase,
+                                    float opacity) {
+    float dur = grid_reveal_duration(grid_theme, phase);
+    float p = (phase == SCENE_XN_FADE_IN) ? opacity : 1.0f - opacity;
+    if (p < 0.0f) p = 0.0f;
+    if (p > 1.0f) p = 1.0f;
+    return p * dur;
+}
+
+const SceneXnReveal scene_grid_reveal = {
+    grid_reveal_opacity, grid_reveal_elapsed_at
+};
 
 int scene_grid_theme_uses_edge_fade(SceneGridTheme grid_theme) {
     /* Pure reference line-grids dissolve their alpha to the backdrop at

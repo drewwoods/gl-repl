@@ -9,7 +9,6 @@
 #include <ctype.h>
 #include <math.h>
 #include <errno.h>
-#include <signal.h>
 #include "gl_includes.h"
 #include "config.h"
 #include <stdio.h>
@@ -17,7 +16,6 @@
 
 #include "app/glr_audio.h"
 #include "subsystems/color_picker/color_picker_state.h"
-#include "ui/subsystems/color_picker.h"   /* UI_HIT_COLOR_SWATCH routing */
 #include "editor/clipboard.h"
 #include "app/glr_completion.h"
 #include "app/glr_compositor.h"      /* whole-frame post-process hook */
@@ -29,17 +27,15 @@
 #include "editor/inline_file_prompt.h"
 #include "editor/inline_rename.h"
 #include "editor/input.h"
-#include "editor/search.h"
 #include "editor/state.h"
 #include "editor/undo.h"
-#include "scene/grid.h"                   /* scene_grid_reveal_time_scale */
-#include "scene/guides/geometry_guides.h" /* scene_geometry_guides_render_for_cursor */
+#include "scene/grid.h"                   /* scene_grid_reveal (transition curve) */
+#include "scene/axes.h"                   /* scene_axes_reveal (transition curve) */
 #include "scene/lights.h"                 /* scene_lights_apply_theme */
 #include "app/glr_actions.h"
 #include "app/glr_config.h"
 #include "app/glr_camera.h"
 #include "app/glr_camera_export.h"
-#include "app/glr_debug.h"
 #include "keys.h"
 #include "support/memprof.h"
 #include "support/cpuprof.h"
@@ -62,8 +58,6 @@
 #include "subsystems/tutorial/tutorial.h"
 #include "subsystems/tutorial/tutorial_state.h"
 #include "ui/subsystems/replay_hud.h"
-#include "scene/overlays.h" /* scene_draw_vertex_label_text / _arrow primitives */
-#include "scene/palette.h" /* scene_clr / scene_clr_a scene-space colors */
 #include "scene/postprocess_filter.h" /* ScenePostFilterMode, mode_name */
 #include "scene/render.h"
 #include "ui/app/autocomplete_panel.h"
@@ -71,7 +65,6 @@
 #include "ui/app/layout.h"
 #include "ui/app/menu_bar.h"
 #include "ui/app/overlay_layout.h"
-#include "ui/core/metrics.h"
 #include "ui/support/memprof.h"
 #include "ui/app/numeric_swatch.h"
 #include "ui/app/panels.h"
@@ -934,7 +927,7 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, SceneRende
      * the theme to draw while `next` may already point elsewhere mid
      * fade-out. */
     config->grid_theme = g_grid_xn.current;
-    config->grid_opacity = g_grid_xn.opacity;
+    config->grid_opacity = scene_xn_opacity(&g_grid_xn);
     config->grid_xn_phase = g_grid_xn.phase;
     config->grid_extent_idx = presentation.grid_extent_idx;
     config->grid_major_idx = presentation.grid_major_idx;
@@ -953,7 +946,7 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, SceneRende
     if (br_i < 0 || br_i >= GRID_BRIGHTNESS_COUNT) br_i = GRID_BRIGHTNESS_NORMAL;
     config->grid_brightness = k_grid_brightness_factors[br_i];
     config->axes_theme = g_axes_xn.current;
-    config->axes_opacity = g_axes_xn.opacity;
+    config->axes_opacity = scene_xn_opacity(&g_axes_xn);
     config->axes_xn_phase = g_axes_xn.phase;
     memcpy(config->grid_major_steps, grid_major_steps,
            sizeof(config->grid_major_steps));
@@ -2022,8 +2015,11 @@ static const ReplHostEffects g_glr_host_effects = {
 /* Seed both overlay fade machines to the current presentation theme at steady full opacity. */
 static void glr_ctrl_seed_overlay_xn(void) {
     GlrPresentationState p = glr_state_presentation();
-    scene_xn_init(&g_grid_xn, p.grid_theme);
-    scene_xn_init(&g_axes_xn, p.axes_theme);
+    /* Bind each overlay's curve plugin once; from here the controller only
+     * feeds the machines dt and reads opacity back — the grid/axes module
+     * owns the durations + per-theme speed. */
+    scene_xn_init(&g_grid_xn, p.grid_theme, &scene_grid_reveal);
+    scene_xn_init(&g_axes_xn, p.axes_theme, &scene_axes_reveal);
 }
 
 /* Fixed frame timestep (~60 Hz). The animation timer reschedules every
@@ -2051,21 +2047,16 @@ static void glr_ctrl_tick_overlay_xn(void) {
         scene_xn_show(&g_grid_xn, p.grid_theme);
     else
         scene_xn_set(&g_grid_xn, p.grid_theme);
-    /* Per-theme reveal-speed multiplier (g_grid_reveal[].time in grid.c),
-     * keyed on the theme being drawn/animated — the departing theme during
-     * FADE_OUT, the adopted one during FADE_IN. */
-    float grid_ts = scene_grid_reveal_time_scale(
-        (SceneGridTheme)g_grid_xn.current);
-    scene_xn_tick(&g_grid_xn, GLR_FRAME_DT_SECS,
-                  GRID_FADE_IN_SECS * grid_ts, GRID_FADE_OUT_SECS * grid_ts);
+    /* Pure clock: just advance by dt. The grid's bound reveal curve owns the
+     * durations + per-theme speed and decides when the fade is done. */
+    scene_xn_tick(&g_grid_xn, GLR_FRAME_DT_SECS);
 
     if (p.axes_theme != g_axes_xn.current &&
         g_axes_xn.current == AXES_THEME_OFF)
         scene_xn_show(&g_axes_xn, p.axes_theme);
     else
         scene_xn_set(&g_axes_xn, p.axes_theme);
-    scene_xn_tick(&g_axes_xn, GLR_FRAME_DT_SECS,
-                  AXES_FADE_IN_SECS, AXES_FADE_OUT_SECS);
+    scene_xn_tick(&g_axes_xn, GLR_FRAME_DT_SECS);
 }
 
 /* Look up the label of the config row currently bound to F<fn>.
