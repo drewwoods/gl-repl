@@ -99,6 +99,29 @@ typedef struct {
     int             status_out_sz;
 } ReplExecutionOptions;
 
+/* Stack-owned execution cursor over a flat REPL program. This is the same
+ * execution machinery used by repl_execute_program(), exposed one command at a
+ * time so specialized render passes can drive normal REPL semantics while
+ * skipping pass-local commands explicitly. */
+typedef struct ReplExecCursor {
+    ReplExecutionOptions options;
+    FlatProgramView      program;
+    SourceTextView       text;
+    int                  flat_cmd_count;
+    int                  pc;
+    int                  in_begin;
+    int                  encode_normals;
+    float                cur_normal[3];
+    float                begin_mv[16];
+    int                  tess_depth;
+    int                  matrix_depth;
+    GLdouble             tess_current_normal[3];
+    GLdouble             tess_current_color[4];
+    int                  goto_count;
+    float                alpha_scale;
+    int                  skip_geom_before_pc;
+} ReplExecCursor;
+
 /* Get a view over the live flat program (g_flat_cmds, g_flat_local_vars).
  * The pointers are valid until the next call to repl_flatten_program()
  * on the live buffers. */
@@ -131,6 +154,21 @@ void repl_execute_commands(void);
  * re-evaluate expressions with current predefined variable values. Called
  * once per frame from scene_render.c. */
 void repl_execute_program(const ReplExecutionOptions *options);
+
+/* Cursor API used by repl_execute_program() and specialized render passes.
+ * begin() snapshots the non-owning program/text views from `options` (or live
+ * REPL state when omitted), step() executes the current flat command and
+ * advances the cursor, and end() performs the old whole-program cleanup:
+ * closing an open glBegin, finalizing tessellation unless suppressed, and
+ * unwinding tracked matrix pushes. advance() intentionally skips the current
+ * command without executing it; callers that skip structural commands own the
+ * matching state consequences. */
+ReplExecCursor repl_exec_cursor_begin(const ReplExecutionOptions *options);
+int repl_exec_cursor_step(ReplExecCursor *cursor);
+void repl_exec_cursor_end(ReplExecCursor *cursor);
+int repl_exec_cursor_done(const ReplExecCursor *cursor);
+const GLCmd *repl_exec_cursor_peek(const ReplExecCursor *cursor);
+void repl_exec_cursor_advance(ReplExecCursor *cursor);
 
 /* Draw a single glutSolid* command (CMD_GLUT_TORUS/CUBE/SPHERE/TEAPOT/
  * CONE) at the current modelview by dispatching the matching freeglut
