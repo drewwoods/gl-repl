@@ -912,7 +912,7 @@ static void test_cursor_guides_render_for_unterminated_begin(void) {
     trace_end(&log);
 
     ASSERT_INT("unterminated begin still draws cursor vertex guide",
-               trace_count_line(&log, "glPointSize 15"), 1);
+               trace_count_line(&log, "glPointSize 8"), 1);
     ASSERT_INT("cursor guide uses the flat vertex coords",
                trace_count_line(&log, "glVertex3f 0.25 0.5 0.75"), 1);
 
@@ -930,7 +930,7 @@ static void test_cursor_guides_render_for_unterminated_begin(void) {
     trace_end(&log);
 
     ASSERT_INT("unterminated begin draws append-row vertex guide",
-               trace_count_line(&log, "glPointSize 15"), 1);
+               trace_count_line(&log, "glPointSize 8"), 1);
     ASSERT_INT("append-row guide uses live input coords",
                trace_count_line(&log, "glVertex3f -0.25 -0.5 0"), 1);
 }

@@ -32,6 +32,7 @@
 #include "editor/search.h"
 #include "editor/state.h"
 #include "editor/undo.h"
+#include "scene/grid.h"                   /* scene_grid_reveal_time_scale */
 #include "scene/guides/geometry_guides.h" /* scene_geometry_guides_render_for_cursor */
 #include "scene/lights.h"                 /* scene_lights_apply_theme */
 #include "app/glr_actions.h"
@@ -2050,8 +2051,13 @@ static void glr_ctrl_tick_overlay_xn(void) {
         scene_xn_show(&g_grid_xn, p.grid_theme);
     else
         scene_xn_set(&g_grid_xn, p.grid_theme);
+    /* Per-theme reveal-speed multiplier (g_grid_reveal[].time in grid.c),
+     * keyed on the theme being drawn/animated — the departing theme during
+     * FADE_OUT, the adopted one during FADE_IN. */
+    float grid_ts = scene_grid_reveal_time_scale(
+        (SceneGridTheme)g_grid_xn.current);
     scene_xn_tick(&g_grid_xn, GLR_FRAME_DT_SECS,
-                  GRID_FADE_IN_SECS, GRID_FADE_OUT_SECS);
+                  GRID_FADE_IN_SECS * grid_ts, GRID_FADE_OUT_SECS * grid_ts);
 
     if (p.axes_theme != g_axes_xn.current &&
         g_axes_xn.current == AXES_THEME_OFF)

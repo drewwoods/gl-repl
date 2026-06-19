@@ -8,7 +8,6 @@
 #define GRID_LOOP_EPSILON 0.01f
 #define GRID_ORIGIN_SKIP_EPSILON 0.01f
 #define GRID_PLANE_VISIBILITY_EPSILON 0.01f
-#define GRID_FOCUS_CROSSHAIR_HALF_SIZE 0.3f
 #define GRID_MINOR_SUBDIVISIONS 5.0f
 #define GRID_MAJOR_TOL_FRACTION 0.25f
 
@@ -24,11 +23,59 @@
  * stack. The front is at `fade_end = extent` steady and sweeps inward
  * during the hide transition (fade_end = extent * opacity), unifying the
  * steady dissolve and the recede animation. Scoped to the table-driven
- * line themes + XZ Ruler via scene_grid_theme_uses_edge_fade(); FOG owns
- * its EXP2 fog and the custom environment themes own their atmosphere. */
+ * line themes + XZ Ruler + Star Chart via scene_grid_theme_uses_edge_fade();
+ * the custom environment themes and Radar own their atmosphere/fog. */
 #define GRID_EDGE_FADE_BAND   0.35f  /* radial ramp width / extent (interior
                                       * solid inside fade_end - band) */
 #define GRID_EDGE_FADE_MAX_BP 8      /* breakpoint capacity (uses <= 5) */
+
+/* ---- Grid appear / disappear reveal animation (editable) ------------------
+ * While a line theme is mid fade-in/out it can "draw itself in" along a
+ * characteristic wipe instead of the plain radial recede, optionally with a
+ * bright moving draw-head at the advancing front that settles to the theme's
+ * base line color behind it (inspired by the reference plotter / synthwave
+ * draw-in styles). This is a transition-only effect: at full opacity the
+ * grid renders through the exact edge-fade path below, unchanged. Tune the
+ * motion with the GRID_REVEAL_* constants and assign each theme an
+ * { axis, head } pair in g_grid_reveal[]; all of it is meant to be edited and
+ * recompiled. A reveal is { axis, head=0 } for a plain dissolve with no head
+ * wave, or { axis, head=1 } for the bright leading-edge draw-head. */
+typedef enum {
+    GRID_REVEAL_RADIAL = 0,  /* grow outward from the origin (the classic look) */
+    GRID_REVEAL_SWEEP_X,     /* planar wipe along +X  (plotter, left-to-right)  */
+    GRID_REVEAL_SWEEP_Z,     /* planar wipe along +Z  (far-to-near drive-in)    */
+    GRID_REVEAL_DIAGONAL     /* planar wipe along the X+Z diagonal              */
+} GridRevealAxis;
+
+typedef struct {
+    GridRevealAxis axis;
+    int            head;   /* 1 = bright moving draw-head; 0 = plain dissolve */
+    float          time;   /* fade in/out time scale vs GRID_FADE_*_SECS:
+                            * 0 (the unset default) or 1 = base speed, >1
+                            * slower, <1 snappier. Read by the controller via
+                            * scene_grid_reveal_time_scale(). */
+} GridReveal;
+
+#define GRID_REVEAL_BAND        0.45f /* soft reveal ramp width (u fraction)      */
+#define GRID_REVEAL_HEAD_BAND   0.10f /* bright draw-head width (u fraction)      */
+#define GRID_REVEAL_HEAD_GAIN   2.4f  /* rgb brightness multiply at the head peak */
+#define GRID_REVEAL_HEAD_ALPHA  0.35f /* additive head-glow alpha at the front    */
+#define GRID_REVEAL_SEGS        22    /* per-line subdivisions while wiping        */
+
+/* Per-theme reveal motion. Only the edge-fade line themes animate a reveal;
+ * the environment themes (Ocean / Frozen / Soil / Radar) keep their own
+ * atmosphere fade, so their entries are unused. Unlisted entries default to
+ * { GRID_REVEAL_RADIAL, head=0 } (designated-init zero) — a plain radial
+ * dissolve with no head wave; that includes XZ Ruler and Star Chart, whose
+ * decorations fade radially, so a quiet radial graticule reveal stays cohesive
+ * with them. Edit freely. */
+static const GridReveal g_grid_reveal[GRID_THEME_COUNT] = {
+    /*                       axis                  head  time                  */
+    [GRID_THEME_EMBER]     = { GRID_REVEAL_RADIAL,   1,  7.0f },
+    [GRID_THEME_TRON]      = { GRID_REVEAL_SWEEP_X,  1,  7.0f },
+    [GRID_THEME_SYNTHWAVE] = { GRID_REVEAL_DIAGONAL, 1,  6.6f },
+    [GRID_THEME_STARCHART] = { GRID_REVEAL_RADIAL,   0,  4.0f },
+};
 
 /* Returns non-zero when v is close enough to a multiple of `major`
  * to be treated as a major line. `tol` is derived from the minor
@@ -67,6 +114,10 @@ typedef struct GridDrawContext {
     int   ef_n;
     float ef_fade_end;  /* radius where alpha hits 0 (for arbitrary-pos eval) */
     float ef_band;      /* ramp width just inside fade_end */
+    /* Transition-time draw-in (see GRID_REVEAL_* up top). Set from
+     * g_grid_reveal[theme]; only consulted while a line theme is
+     * mid-transition (grid_reveal_active). */
+    GridReveal reveal;
 } GridDrawContext;
 
 typedef struct GridLineColors {
@@ -226,6 +277,78 @@ static float grid_radial_mul(float fade_end, float band, float off,
     return m;
 }
 
+/* ---- Reveal wipe (see GRID_REVEAL_* up top) ----
+ * Active only while an edge-fade line theme is partway through its
+ * transition; at steady opacity the exact radial path below runs instead, so
+ * the steady look and its tests are untouched. */
+static int grid_reveal_active(const GridDrawContext *ctx) {
+    return ctx->edge_fade && ctx->xn_opacity > 0.0f && ctx->xn_opacity < 1.0f;
+}
+
+/* Normalized reveal coordinate along the active wipe axis (radial reaches
+ * ~1.41 at the corners). The front sweeps from u=0 to u=1 as opacity rises. */
+static float grid_reveal_u(const GridDrawContext *ctx, float x, float z) {
+    float ex = ctx->extent;
+    if (ex <= 0.0f) return 0.0f;
+    switch (ctx->reveal.axis) {
+    case GRID_REVEAL_SWEEP_X:  return (x + ex) / (2.0f * ex);
+    case GRID_REVEAL_SWEEP_Z:  return (z + ex) / (2.0f * ex);
+    case GRID_REVEAL_DIAGONAL: return (x + z + 2.0f * ex) / (4.0f * ex);
+    case GRID_REVEAL_RADIAL:
+    default:                   return sqrtf(x * x + z * z) / ex;
+    }
+}
+
+/* Emit one reveal-modulated vertex: the steady rim radial fade times the
+ * wipe alpha, plus the bright draw-head glow at the advancing front. The
+ * front overshoots to 1 + band so every u <= 1 is fully lit at opacity 1
+ * (continuous with the steady look); the head leaves the slab by then. */
+static void grid_reveal_vertex(const GridDrawContext *ctx, SceneRgba c,
+                               float x, float y, float z) {
+    float band   = GRID_REVEAL_BAND;
+    float front  = ctx->xn_opacity * (1.0f + band);
+    float behind = front - grid_reveal_u(ctx, x, z);   /* >0 on revealed side */
+
+    float am = behind / band;
+    if (am < 0.0f) am = 0.0f; else if (am > 1.0f) am = 1.0f;
+    am = am * am * (3.0f - 2.0f * am);                  /* smoothstep reveal ramp */
+
+    float head = 0.0f;
+    if (ctx->reveal.head && behind >= 0.0f) {
+        head = 1.0f - behind / GRID_REVEAL_HEAD_BAND;
+        if (head < 0.0f) head = 0.0f;
+    }
+
+    float rim  = grid_radial_mul(ctx->extent, GRID_EDGE_FADE_BAND * ctx->extent,
+                                 x, z);
+    float gain = 1.0f + (GRID_REVEAL_HEAD_GAIN - 1.0f) * head;
+    float a    = (c.a * am + GRID_REVEAL_HEAD_ALPHA * head) * rim
+                 * ctx->grid_brightness;
+    glColor4f(fminf(c.r * gain, 1.0f), fminf(c.g * gain, 1.0f),
+              fminf(c.b * gain, 1.0f), fminf(a, 1.0f));
+    glVertex3f(x, y, z);
+}
+
+/* Subdivide one axis-aligned line into GRID_REVEAL_SEGS reveal-shaded
+ * segments. axis 0 runs along Z at x=off; axis 1 runs along X at z=off.
+ * Emits vertex pairs for the caller's open GL_LINES block. */
+static void grid_reveal_line(const GridDrawContext *ctx, SceneRgba c,
+                             int axis, float off) {
+    float ex = ctx->extent;
+    int n = GRID_REVEAL_SEGS;
+    for (int i = 0; i < n; i++) {
+        float a0 = -ex + (2.0f * ex) * (float)i / (float)n;
+        float a1 = -ex + (2.0f * ex) * (float)(i + 1) / (float)n;
+        if (axis == 0) {
+            grid_reveal_vertex(ctx, c, off, 0.0f, a0);
+            grid_reveal_vertex(ctx, c, off, 0.0f, a1);
+        } else {
+            grid_reveal_vertex(ctx, c, a0, 0.0f, off);
+            grid_reveal_vertex(ctx, c, a1, 0.0f, off);
+        }
+    }
+}
+
 static void draw_grid_line_pair(float v, const GridDrawContext *ctx,
                                 GridLineColors colors) {
     if (!ctx->edge_fade) {
@@ -235,6 +358,11 @@ static void draw_grid_line_pair(float v, const GridDrawContext *ctx,
         grid_color_rgba(ctx, colors.z_const);
         glVertex3f(-ctx->extent, 0, v);
         glVertex3f( ctx->extent, 0, v);
+        return;
+    }
+    if (grid_reveal_active(ctx)) {
+        grid_reveal_line(ctx, colors.x_const, 0, v);  /* x-const, runs along Z */
+        grid_reveal_line(ctx, colors.z_const, 1, v);  /* z-const, runs along X */
         return;
     }
     /* Radial dissolve by world distance from the origin. A line at
@@ -277,7 +405,10 @@ static void draw_grid_origin_axes(const GridDrawContext *ctx, SceneRgba color,
     if (line_width != 1.0f)
         glLineWidth(line_width);
     glBegin(GL_LINES);
-    if (!ctx->edge_fade) {
+    if (grid_reveal_active(ctx)) {
+        grid_reveal_line(ctx, color, 1, 0.0f);  /* X axis, runs along X */
+        grid_reveal_line(ctx, color, 0, 0.0f);  /* Z axis, runs along Z */
+    } else if (!ctx->edge_fade) {
         grid_color_rgba(ctx, color);
         glVertex3f(-ctx->extent, 0, 0);
         glVertex3f( ctx->extent, 0, 0);
@@ -344,30 +475,9 @@ static SceneRgba grid_classic_origin_color(const GridDrawContext *ctx) {
     return rgba(0.50f, 0.50f, 0.60f, 0.45f);
 }
 
-static void grid_fog_begin(const GridDrawContext *ctx) {
-    float fog_density = 0.06f + ctx->breath * 0.04f;
-    glEnable(GL_FOG);
-    glFogi(GL_FOG_MODE, GL_EXP2);
-    glFogf(GL_FOG_DENSITY, fog_density);
-}
-
 static void grid_fog_end(const GridDrawContext *ctx) {
     (void)ctx;
     glDisable(GL_FOG);
-}
-
-static void grid_fog_line_color(float v, int is_major,
-                                const GridDrawContext *ctx,
-                                GridLineColors *out) {
-    (void)v;
-    (void)ctx;
-    grid_line_colors_same(out, rgba(0.45f, 0.50f, 0.65f,
-                                    is_major ? 0.25f : 0.10f));
-}
-
-static SceneRgba grid_fog_origin_color(const GridDrawContext *ctx) {
-    (void)ctx;
-    return rgba(0.45f, 0.50f, 0.65f, 0.55f);
 }
 
 static void grid_tron_line_color(float v, int is_major,
@@ -407,21 +517,6 @@ static SceneRgba grid_ember_origin_color(const GridDrawContext *ctx) {
     return rgba(0.95f, 0.35f + ripple0 * 0.25f, 0.05f,
                 0.7f * (0.6f + ripple0 * 0.4f));
 }
-
-static void grid_faint_line_color(float v, int is_major,
-                                  const GridDrawContext *ctx,
-                                  GridLineColors *out) {
-    (void)v;
-    (void)ctx;
-    grid_line_colors_same(out, rgba(0.50f, 0.50f, 0.60f,
-                                    is_major ? 0.07f : 0.03f));
-}
-
-static SceneRgba grid_faint_origin_color(const GridDrawContext *ctx) {
-    (void)ctx;
-    return rgba(0.50f, 0.50f, 0.60f, 0.18f);
-}
-
 
 /* Aurora: an arctic night. The floor is frosty ice-blue lines with a slow
  * green "reflection" band sweeping across them; the pseudo-scene layer (the
@@ -494,18 +589,11 @@ static const GridThemeSpec g_grid_theme_specs[GRID_THEME_COUNT] = {
     [GRID_THEME_CLASSIC] = {
         grid_classic_line_color, grid_classic_origin_color, NULL, NULL, 1.0f
     },
-    [GRID_THEME_FOG] = {
-        grid_fog_line_color, grid_fog_origin_color, grid_fog_begin,
-        grid_fog_end, 1.0f
-    },
     [GRID_THEME_TRON] = {
         grid_tron_line_color, grid_tron_origin_color, NULL, NULL, 2.0f
     },
     [GRID_THEME_EMBER] = {
         grid_ember_line_color, grid_ember_origin_color, NULL, NULL, 1.0f
-    },
-    [GRID_THEME_FAINT] = {
-        grid_faint_line_color, grid_faint_origin_color, NULL, NULL, 1.0f
     },
     [GRID_THEME_AURORA] = {
         grid_aurora_line_color, grid_aurora_origin_color, NULL,
@@ -530,64 +618,6 @@ static void scene_grid_apply_quality_config(const SceneRenderConfig *config) {
     else glDisable(GL_MULTISAMPLE);
     if (config->line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
     else glDisable(GL_LINE_SMOOTH);
-}
-
-static void scene_grid_render_focus_theme(const SceneFrameRenderContext *frame_ctx,
-                                         const GridDrawContext *grid_ctx) {
-    const SceneFocusVertex *focus = &frame_ctx->config.focus;
-    float cx = focus->pos[0], cz = focus->pos[2];
-    float radius = 3.0f;  /* fade-out radius */
-    float as = grid_ctx->alpha_scale;
-
-    glBegin(GL_LINES);
-    for (float v = -grid_ctx->extent; v <= grid_ctx->extent + GRID_LOOP_EPSILON;
-         v += grid_ctx->step) {
-        if (fabsf(v) < GRID_ORIGIN_SKIP_EPSILON) continue;
-        int is_major = grid_is_major_line(v, grid_ctx->major,
-                                          grid_ctx->major_tol);
-        float base = is_major ? 0.18f : 0.06f;
-
-        /* Vertical line at x=v: fade based on distance from cx */
-        float dx = v - cx;
-        float fx = 1.0f - (dx * dx) / (radius * radius);
-        if (fx < 0.0f) fx = 0.0f;
-        fx = fx * fx;  /* sharper falloff */
-        if (fx > 0.001f) {
-            grid_color(grid_ctx, 0.50f, 0.55f, 0.70f, fminf(base * fx * as, 1.0f));
-            /* Clamp line Z extent around focus */
-            float z0 = cz - radius, z1 = cz + radius;
-            if (z0 < -grid_ctx->extent) z0 = -grid_ctx->extent;
-            if (z1 > grid_ctx->extent) z1 = grid_ctx->extent;
-            glVertex3f(v, 0, z0); glVertex3f(v, 0, z1);
-        }
-
-        /* Horizontal line at z=v: fade based on distance from cz */
-        float dz = v - cz;
-        float fz = 1.0f - (dz * dz) / (radius * radius);
-        if (fz < 0.0f) fz = 0.0f;
-        fz = fz * fz;
-        if (fz > 0.001f) {
-            grid_color(grid_ctx, 0.50f, 0.55f, 0.70f, fminf(base * fz * as, 1.0f));
-            float x0 = cx - radius, x1 = cx + radius;
-            if (x0 < -grid_ctx->extent) x0 = -grid_ctx->extent;
-            if (x1 > grid_ctx->extent) x1 = grid_ctx->extent;
-            glVertex3f(x0, 0, v); glVertex3f(x1, 0, v);
-        }
-    }
-    glEnd();
-
-    /* Crosshair at focus point */
-    if (focus->valid) {
-        glLineWidth(1.5f);
-        glBegin(GL_LINES);
-        grid_color(grid_ctx, 0.80f, 0.85f, 0.95f, fminf(0.25f * as, 1.0f));
-        glVertex3f(cx - GRID_FOCUS_CROSSHAIR_HALF_SIZE, 0, cz);
-        glVertex3f(cx + GRID_FOCUS_CROSSHAIR_HALF_SIZE, 0, cz);
-        glVertex3f(cx, 0, cz - GRID_FOCUS_CROSSHAIR_HALF_SIZE);
-        glVertex3f(cx, 0, cz + GRID_FOCUS_CROSSHAIR_HALF_SIZE);
-        glEnd();
-        glLineWidth(1.0f);
-    }
 }
 
 /* Camera world-space height; < 0 means the eye is below the grid
@@ -1477,25 +1507,30 @@ static void scene_grid_render_radar_theme(const GridDrawContext *grid_ctx) {
 }
 
 int scene_grid_theme_uses_fog(SceneGridTheme grid_theme) {
-    return grid_theme == GRID_THEME_FOG ||
-           grid_theme == GRID_THEME_OCEAN;
+    return grid_theme == GRID_THEME_OCEAN;
+}
+
+float scene_grid_reveal_time_scale(SceneGridTheme grid_theme) {
+    if (grid_theme <= GRID_THEME_OFF || grid_theme >= GRID_THEME_COUNT)
+        return 1.0f;
+    float t = g_grid_reveal[grid_theme].time;
+    return (t > 0.0f) ? t : 1.0f;   /* 0 (unset) → base speed */
 }
 
 int scene_grid_theme_uses_edge_fade(SceneGridTheme grid_theme) {
     /* Pure reference line-grids dissolve their alpha to the backdrop at
      * the rim instead of fogging to the clear color: the table-driven
-     * line themes (minus FOG, which owns its EXP2 fog) plus the XZ Ruler
-     * and Star Chart — custom-path grids that still emit their graticule
-     * through draw_grid_line_pair, so they pick up the per-vertex radial
-     * fade once they are in this set. The custom *environment* themes
-     * (OCEAN / FROZEN / SOIL) own their own atmosphere, and RADAR / FOG
-     * own their distance fog, so all of those are out of scope.
+     * line themes plus the XZ Ruler and Star Chart — custom-path grids
+     * that still emit their graticule through draw_grid_line_pair, so
+     * they pick up the per-vertex radial fade once they are in this set.
+     * The custom *environment* themes (OCEAN / FROZEN / SOIL) own their
+     * own atmosphere, and RADAR owns its distance fog, so all of those
+     * are out of scope.
      * Pure — safe to call from tests. */
     if (grid_theme == GRID_THEME_XZRULER ||
         grid_theme == GRID_THEME_STARCHART)
         return 1;
-    return grid_theme_spec(grid_theme) != NULL &&
-           grid_theme != GRID_THEME_FOG;
+    return grid_theme_spec(grid_theme) != NULL;
 }
 
 /* --- scene_grid_render phases ---
@@ -1516,9 +1551,9 @@ int scene_grid_theme_uses_edge_fade(SceneGridTheme grid_theme) {
  * (audit #3). */
 
 /* Resolve grid transition fade via the shared overlay-xn helper. The
- * grid's "this theme owns fog" carve-out (EXP2-fog themes — FOG and
- * OCEAN — fall back to plain alpha FADE so their fog isn't competing
- * with the synthetic LINEAR recede) is keyed on
+ * grid's "this theme owns fog" carve-out (currently OCEAN only) falls
+ * back to plain alpha FADE so the theme's own fog is not competing
+ * with the synthetic LINEAR recede. The carve-out is keyed on
  * scene_grid_theme_uses_fog(). FROZEN is deliberately not in the set:
  * its mist only exists under the ice, so above ground it transitions
  * like any fog-less theme. */
@@ -1639,10 +1674,6 @@ static void grid_dispatch_theme(const SceneFrameRenderContext *frame_ctx,
     const SceneRenderConfig *config = &frame_ctx->config;
     switch (grid_theme) {
 
-    case GRID_THEME_FOCUS:
-        scene_grid_render_focus_theme(frame_ctx, grid_ctx);
-        break;
-
     case GRID_THEME_OCEAN:
 #if 0 /* nv radial fog breaks some of the geometry, since its per vertex and
          some of the grid lines are very long, extending past the fog end,
@@ -1687,9 +1718,9 @@ static void grid_dispatch_theme(const SceneFrameRenderContext *frame_ctx,
         break;
 
     default: {
-        /* GRID_THEME_CLASSIC, _FOG, _TRON, _EMBER, _FAINT and any
-         * future standard theme: look up its GridThemeSpec and draw
-         * through the table-driven path. */
+        /* GRID_THEME_CLASSIC, _TRON, _EMBER, _AURORA, _SYNTHWAVE and
+         * any future standard line theme: look up its GridThemeSpec and
+         * draw through the table-driven path. */
         const GridThemeSpec *spec = grid_theme_spec(grid_theme);
         if (spec)
             draw_grid_standard_theme(grid_ctx, spec);
@@ -1714,8 +1745,9 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
     glTranslatef(0, -0.002f, 0);
 
     GridDrawContext grid_ctx = grid_build_draw_context(frame_ctx);
-    grid_ctx.xn_opacity = xn.opacity;
-    grid_ctx.xn_alpha   = xn.alpha;
+    grid_ctx.xn_opacity   = xn.opacity;
+    grid_ctx.xn_alpha     = xn.alpha;
+    grid_ctx.reveal       = g_grid_reveal[grid_theme];
 
     /* Edge-fade dissolve: always on for the line themes. The grid
      * dissolves to transparency by world radial distance, reaching 0 at

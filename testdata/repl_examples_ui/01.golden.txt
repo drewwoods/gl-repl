@@ -8,17 +8,17 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_PLANES */
-/* @cfg grid_major = GRID_MAJOR_1 */
+/* @cfg grid = GRID_THEME_XZRULER */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
+/* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg xform_guides = 2 */
-/* @cfg light_indicators = 1 */
+/* @cfg light_indicators = 0 */
 /* @cfg light_theme = LIGHT_THEME_DEFAULT */
 /* @cfg backdrop = SCENE_BACKDROP_OFF */
 /* @cfg auto_normals = 0 */
-/* @cfg view_mode = SCENE_VIEW_2D */
+/* @cfg view_mode = SCENE_VIEW_3D */
 /* @cfg camera_rotate = 0 */
 /* @cfg vertex_labels = 1 */
 /* @cfg normal_vectors = 0 */
@@ -85,22 +85,26 @@ void display(void) {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -2.5000f);
-  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
+  glTranslatef(0.0000f, 0.0000f, -6.0000f);
+  glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);
+  glRotatef(10.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  static float x, y;
+
   glClearColor(0.1, 0.1, 0.1, 1);
-  // 2D assignment sketch: tests runtime variable assignment without goto
-  glDisable(GL_LIGHTING);
-  x = -1.7;
-  glBegin(GL_LINE_STRIP);
+  glEnable(GL_DEPTH_TEST);
+  glBegin(GL_LINE_LOOP);
     for(i, 0, 48) {
-      x = x + 0.07;
-      y = sin(x*2.5 + t)*0.52 + cos(i*0.25 + t*0.6)*0.16;
-      glColor3f(0.30 + i*0.010, 0.55 + 0.28*sin(i*0.20 + t), 0.95 - i*0.008);
-      glVertex3f(x, y, 0);
+      glColor3f(sin(i*TAU/48)*0.5+0.5, cos(i*TAU/48)*0.5+0.5, 0.5);
+      glVertex3f(cos(i*TAU/48+t)*2, sin(i*TAU/48+t)*2, sin(i*TAU/12+t)*0.5);
+    }
+  glEnd();
+  glBegin(GL_TRIANGLE_FAN);
+    glColor3f(0.2, 0.5, 1);
+    glVertex3f(0, 0, 0);
+    for(i, 0, 25) {
+      glColor3f(sin(i*TAU/24+t)*0.5+0.5, 0.3, cos(i*TAU/24+t)*0.5+0.5);
+      glVertex3f(cos(i*TAU/24)*1.5, sin(i*TAU/24)*1.5, 0);
     }
   glEnd();
