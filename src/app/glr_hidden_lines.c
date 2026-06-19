@@ -2,13 +2,8 @@
 
 #include "gl_includes.h"
 #include "config.h"
-#include "repl/core_internal.h"
-#include "repl/eval.h"
+#include "repl/executor.h"
 #include "repl/state_owners.h"
-#include "repl/transform_utils.h"
-
-#include <stdio.h>
-#include <string.h>
 
 #define GLR_HIDDEN_TESS_VERT_BUF_SIZE 256
 
@@ -93,55 +88,16 @@ static int hidden_lines_ensure_tess(void) {
     return g_hidden_tess != NULL;
 }
 
-static int hidden_lines_flat_count(const GlrHiddenLinesRenderContext *ctx) {
-    int count;
-    if (!ctx || !ctx->program.cmds || ctx->program.cmd_count <= 0)
-        return 0;
-
-    count = ctx->flat_cmd_count;
-    if (count < 0 || count > ctx->program.cmd_count)
-        count = ctx->program.cmd_count;
-    return count;
-}
-
-static const FlatCmdLocalVars *hidden_lines_local_vars_at(
-    FlatProgramView program,
-    int flat_cmd_idx) {
-    if (!program.local_vars ||
-        flat_cmd_idx < 0 ||
-        flat_cmd_idx >= program.cmd_count)
-        return NULL;
-    return &program.local_vars[flat_cmd_idx];
-}
-
-static const char *hidden_lines_flat_text(SourceTextView text,
-                                          const GLCmd *flat_cmd) {
-    if (!flat_cmd)
-        return "";
-    return source_text_line(text, flat_cmd->src_cmd_idx);
-}
-
 static int hidden_lines_light_slot_for_cap(GLenum cap) {
     int slot = (int)cap - (int)GL_LIGHT0;
     return (slot >= 0 && slot < REPL_LIGHT_SLOT_COUNT) ? slot : -1;
 }
 
-static void hidden_lines_apply_runtime_effect(const GLCmd *cmd) {
+static void hidden_lines_apply_bookkeeping_cmd(const GLCmd *cmd) {
     if (!cmd)
         return;
 
     switch (cmd->type) {
-    case CMD_VAR_ASSIGN: {
-        int var_idx = cmd->var_idx;
-        if (var_idx >= 0 && var_idx < g_num_predef_vars)
-            g_predef_vars_mut[var_idx].value = cmd->args[0];
-        break;
-    }
-    case CMD_SCRATCH_ASSIGN:
-        repl_eval_scratch_set((int)cmd->args[0],
-                              (int)cmd->args[1],
-                              cmd->args[2]);
-        break;
     case CMD_ENABLE: {
         int slot = hidden_lines_light_slot_for_cap((GLenum)cmd->args[0]);
         if (slot >= 0)
@@ -178,232 +134,183 @@ static int hidden_lines_begin_mode_writes_fill_depth(GLenum mode) {
     }
 }
 
-static void hidden_lines_draw_glut_solid(const GLCmd *cmd) {
-    if (!cmd)
-        return;
-
-    switch (cmd->type) {
-    case CMD_GLUT_TORUS:
-        glutSolidTorus((double)cmd->args[0],
-                       (double)cmd->args[1],
-                       (int)cmd->args[2],
-                       (int)cmd->args[3]);
-        break;
-    case CMD_GLUT_CUBE:
-        glutSolidCube((double)cmd->args[0]);
-        break;
-    case CMD_GLUT_SPHERE:
-        glutSolidSphere((double)cmd->args[0],
-                        (int)cmd->args[1],
-                        (int)cmd->args[2]);
-        break;
-    case CMD_GLUT_TEAPOT:
-        glutSolidTeapot((double)cmd->args[0]);
-        break;
-    case CMD_GLUT_CONE:
-        glutSolidCone((double)cmd->args[0],
-                      (double)cmd->args[1],
-                      (int)cmd->args[2],
-                      (int)cmd->args[3]);
-        break;
-    default:
-        break;
-    }
-}
-
 static int hidden_lines_is_wireframe_purpose(SceneExecutePurpose purpose) {
     return purpose == SCENE_EXEC_WIREFRAME_HIDDEN_LINES ||
            purpose == SCENE_EXEC_WIREFRAME_DEPTH_FILL ||
            purpose == SCENE_EXEC_WIREFRAME_VISIBLE_LINES;
 }
 
+static int hidden_lines_is_tess_cmd(CmdType type) {
+    switch (type) {
+    case CMD_TESS_BEGIN_POLYGON:
+    case CMD_TESS_BEGIN_CONTOUR:
+    case CMD_TESS_END:
+    case CMD_TESS_NORMAL:
+    case CMD_TESS_COLOR:
+    case CMD_TESS_VERTEX:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static void hidden_lines_execute_tess_cmd(const GLCmd *cmd, int *tess_depth) {
+    if (!cmd || !tess_depth)
+        return;
+
+    switch (cmd->type) {
+    case CMD_TESS_BEGIN_POLYGON:
+        if (hidden_lines_ensure_tess()) {
+            g_hidden_tess_vert_count = 0;
+            gluTessBeginPolygon(g_hidden_tess, NULL);
+            *tess_depth = 1;
+        }
+        break;
+    case CMD_TESS_BEGIN_CONTOUR:
+        if (g_hidden_tess && *tess_depth == 1) {
+            gluTessBeginContour(g_hidden_tess);
+            *tess_depth = 2;
+        }
+        break;
+    case CMD_TESS_END:
+        if (g_hidden_tess && *tess_depth == 2) {
+            gluTessEndContour(g_hidden_tess);
+            *tess_depth = 1;
+        } else if (g_hidden_tess && *tess_depth == 1) {
+            gluTessEndPolygon(g_hidden_tess);
+            *tess_depth = 0;
+        }
+        break;
+    case CMD_TESS_VERTEX:
+        if (g_hidden_tess &&
+            *tess_depth == 2 &&
+            g_hidden_tess_vert_count < GLR_HIDDEN_TESS_VERT_BUF_SIZE) {
+            GlrHiddenTessVertex *v =
+                &g_hidden_tess_verts[g_hidden_tess_vert_count++];
+            v->pos[0] = cmd->args[0];
+            v->pos[1] = cmd->args[1];
+            v->pos[2] = cmd->args[2];
+            gluTessVertex(g_hidden_tess, v->pos, v);
+        }
+        break;
+    case CMD_TESS_NORMAL:
+    case CMD_TESS_COLOR:
+    default:
+        break;
+    }
+}
+
+static void hidden_lines_finish_tess(int *tess_depth) {
+    if (!tess_depth || !g_hidden_tess)
+        return;
+    if (*tess_depth == 2) {
+        gluTessEndContour(g_hidden_tess);
+        *tess_depth = 1;
+    }
+    if (*tess_depth == 1)
+        gluTessEndPolygon(g_hidden_tess);
+    *tess_depth = 0;
+}
+
+static int hidden_lines_cursor_owns_cmd(CmdType type) {
+    if (repl_cmd_is_transform(type))
+        return 1;
+
+    switch (type) {
+    case CMD_BEGIN:
+    case CMD_END:
+    case CMD_VERTEX3F:
+    case CMD_VERTEX2F:
+    case CMD_GLUT_TORUS:
+    case CMD_GLUT_CUBE:
+    case CMD_GLUT_SPHERE:
+    case CMD_GLUT_TEAPOT:
+    case CMD_GLUT_CONE:
+    case CMD_GOTO_LABEL:
+    case CMD_GOTO:
+    case CMD_IF_BEGIN:
+    case CMD_IF_END:
+    case CMD_VAR_ASSIGN:
+    case CMD_SCRATCH_ASSIGN:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
 void glr_hidden_lines_execute(const GlrHiddenLinesRenderContext *ctx,
                               SceneExecutePurpose purpose) {
-    FlatProgramView program;
-    const GLCmd *cmds;
+    ReplExecutionOptions options = {0};
+    ReplExecCursor cursor;
+    const GLCmd *cmd;
     int cmd_count;
-    int pc = 0;
-    int goto_count = 0;
-    int in_begin = 0; /* 1 = emitting, 2 = skipping non-fill depth primitive */
     int tess_depth = 0;
-    int matrix_depth = 0;
+    int skipping_non_fill_begin = 0;
     int depth_fill = purpose == SCENE_EXEC_WIREFRAME_DEPTH_FILL;
 
     if (!ctx || !hidden_lines_is_wireframe_purpose(purpose))
         return;
-
-    program = ctx->program;
-    cmds = program.cmds;
-    cmd_count = hidden_lines_flat_count(ctx);
-    if (!cmds || cmd_count <= 0)
+    if (!ctx->program.cmds || ctx->program.cmd_count <= 0)
         return;
 
-    repl_state_render_clear_light_enabled_mask();
+    cmd_count = ctx->flat_cmd_count;
+    if (cmd_count < 0 || cmd_count > ctx->program.cmd_count)
+        cmd_count = ctx->program.cmd_count;
+    if (cmd_count <= 0)
+        return;
+
+    options.flat_cmd_count = cmd_count;
+    options.program = ctx->program;
+    options.text = ctx->text;
+    options.status_out = ctx->status_out;
+    options.status_out_sz = ctx->status_out_sz;
+    cursor = repl_exec_cursor_begin(&options);
 
     glPushMatrix();
-    while (pc < cmd_count) {
-        if (!cmds[pc].valid) {
-            pc++;
+    while ((cmd = repl_exec_cursor_peek(&cursor)) != NULL) {
+        if (!cmd->valid) {
+            repl_exec_cursor_advance(&cursor);
             continue;
         }
 
-        if (repl_cmd_is_transform(cmds[pc].type)) {
-            if (in_begin != 1 && tess_depth == 0)
-                apply_tracked_transform(&cmds[pc], &matrix_depth);
-            pc++;
+        if (skipping_non_fill_begin) {
+            if (cmd->type == CMD_END)
+                skipping_non_fill_begin = 0;
+            repl_exec_cursor_advance(&cursor);
             continue;
         }
 
-        switch (cmds[pc].type) {
-        case CMD_BEGIN: {
-            GLenum mode = (GLenum)cmds[pc].args[0];
-            if (in_begin == 1)
-                glEnd();
-            if (depth_fill && !hidden_lines_begin_mode_writes_fill_depth(mode)) {
-                in_begin = 2;
-            } else {
-                glBegin(mode);
-                in_begin = 1;
-            }
-            break;
+        if (depth_fill &&
+            cmd->type == CMD_BEGIN &&
+            !hidden_lines_begin_mode_writes_fill_depth((GLenum)cmd->args[0])) {
+            skipping_non_fill_begin = 1;
+            repl_exec_cursor_advance(&cursor);
+            continue;
         }
-        case CMD_END:
-            if (in_begin == 1)
-                glEnd();
-            in_begin = 0;
-            break;
-        case CMD_VERTEX3F:
-            if (in_begin == 1)
-                glVertex3f(cmds[pc].args[0],
-                           cmds[pc].args[1],
-                           cmds[pc].args[2]);
-            break;
-        case CMD_VERTEX2F:
-            if (in_begin == 1)
-                glVertex2f(cmds[pc].args[0], cmds[pc].args[1]);
-            break;
-        case CMD_GLUT_TORUS:
-        case CMD_GLUT_CUBE:
-        case CMD_GLUT_SPHERE:
-        case CMD_GLUT_TEAPOT:
-        case CMD_GLUT_CONE:
-            hidden_lines_draw_glut_solid(&cmds[pc]);
-            break;
-        case CMD_TESS_BEGIN_POLYGON:
-            if (hidden_lines_ensure_tess()) {
-                g_hidden_tess_vert_count = 0;
-                gluTessBeginPolygon(g_hidden_tess, NULL);
-                tess_depth = 1;
-            }
-            break;
-        case CMD_TESS_BEGIN_CONTOUR:
-            if (g_hidden_tess && tess_depth == 1) {
-                gluTessBeginContour(g_hidden_tess);
-                tess_depth = 2;
-            }
-            break;
-        case CMD_TESS_END:
-            if (g_hidden_tess && tess_depth == 2) {
-                gluTessEndContour(g_hidden_tess);
-                tess_depth = 1;
-            } else if (g_hidden_tess && tess_depth == 1) {
-                gluTessEndPolygon(g_hidden_tess);
-                tess_depth = 0;
-            }
-            break;
-        case CMD_TESS_VERTEX:
-            if (g_hidden_tess &&
-                tess_depth == 2 &&
-                g_hidden_tess_vert_count < GLR_HIDDEN_TESS_VERT_BUF_SIZE) {
-                GlrHiddenTessVertex *v =
-                    &g_hidden_tess_verts[g_hidden_tess_vert_count++];
-                v->pos[0] = cmds[pc].args[0];
-                v->pos[1] = cmds[pc].args[1];
-                v->pos[2] = cmds[pc].args[2];
-                gluTessVertex(g_hidden_tess, v->pos, v);
-            }
-            break;
-        case CMD_GOTO_LABEL:
-            break;
-        case CMD_GOTO: {
-            char label_name[REPL_GOTO_LABEL_MAX];
-            if (!repl_extract_goto_label(
-                    hidden_lines_flat_text(ctx->text, &cmds[pc]),
-                    label_name,
-                    sizeof(label_name)))
+
+        if (hidden_lines_is_tess_cmd(cmd->type)) {
+            hidden_lines_execute_tess_cmd(cmd, &tess_depth);
+            repl_exec_cursor_advance(&cursor);
+            continue;
+        }
+
+        if (repl_cmd_is_transform(cmd->type) &&
+            (cursor.in_begin || tess_depth != 0)) {
+            repl_exec_cursor_advance(&cursor);
+            continue;
+        }
+
+        if (hidden_lines_cursor_owns_cmd(cmd->type)) {
+            if (!repl_exec_cursor_step(&cursor))
                 break;
-            if (goto_count++ > REPL_GOTO_LOOP_LIMIT) {
-                if (ctx->status_out && ctx->status_out_sz > 0)
-                    snprintf(ctx->status_out, (size_t)ctx->status_out_sz,
-                             "goto: loop limit reached");
-                goto execute_done;
-            }
-            for (int label_idx = 0; label_idx < cmd_count; label_idx++) {
-                if (cmds[label_idx].valid &&
-                    cmds[label_idx].type == CMD_GOTO_LABEL) {
-                    char target_label[REPL_GOTO_LABEL_MAX];
-                    if (repl_extract_label_name(
-                            hidden_lines_flat_text(ctx->text,
-                                                   &cmds[label_idx]),
-                            target_label,
-                            sizeof(target_label)) &&
-                        strcmp(target_label, label_name) == 0) {
-                        pc = label_idx;
-                        goto goto_done;
-                    }
-                }
-            }
-goto_done:
-            break;
+            continue;
         }
-        case CMD_IF_BEGIN: {
-            float cond = cmds[pc].args[0];
-            if (cmds[pc].has_vars) {
-                const FlatCmdLocalVars *local_vars =
-                    hidden_lines_local_vars_at(program, pc);
-                const ExprVar *eval_vars = g_predef_vars;
-                int eval_num_vars = g_num_predef_vars;
-                if (local_vars && local_vars->num_vars > 0) {
-                    eval_vars = local_vars->vars;
-                    eval_num_vars = local_vars->num_vars;
-                }
-                cond = repl_eval_if_condition(
-                    hidden_lines_flat_text(ctx->text, &cmds[pc]),
-                    eval_vars,
-                    eval_num_vars,
-                    cond);
-            }
-            if (cond == 0.0f) {
-                int if_depth = 1;
-                while (if_depth > 0 && ++pc < cmd_count) {
-                    if (cmds[pc].type == CMD_IF_BEGIN)
-                        if_depth++;
-                    else if (cmds[pc].type == CMD_IF_END)
-                        if_depth--;
-                }
-            }
-            break;
-        }
-        case CMD_IF_END:
-            break;
-        default:
-            hidden_lines_apply_runtime_effect(&cmds[pc]);
-            break;
-        }
-        pc++;
+
+        hidden_lines_apply_bookkeeping_cmd(cmd);
+        repl_exec_cursor_advance(&cursor);
     }
 
-execute_done:
-    if (in_begin == 1)
-        glEnd();
-    if (g_hidden_tess) {
-        if (tess_depth == 2) {
-            gluTessEndContour(g_hidden_tess);
-            tess_depth = 1;
-        }
-        if (tess_depth == 1)
-            gluTessEndPolygon(g_hidden_tess);
-    }
-    unwind_transform_stack(&matrix_depth);
+    hidden_lines_finish_tess(&tess_depth);
+    repl_exec_cursor_end(&cursor);
     glPopMatrix();
 }
