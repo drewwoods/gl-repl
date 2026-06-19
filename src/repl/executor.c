@@ -436,36 +436,32 @@ static void exec_normal_to_world(const float m[16], const float n[3],
     out[0] = ox; out[1] = oy; out[2] = oz;
 }
 
-/* Walk flat_cmds[0..flat_cmd_count) and issue the corresponding GL
- * calls. Handles vertex submission, state changes, GLU quadrics and
- * tessellator commands, transforms, goto/label control flow, if-block
- * evaluation, and variable assignments.
- *
- * Replay and fade passes provide an explicit limit instead of temporarily
- * mutating repl_state_flat_program_count(). */
-void repl_execute_program(const ReplExecutionOptions *options) {
-    FlatProgramView program = execution_program_from_options(options);
-    const GLCmd *flat_cmds = program.cmds;
-    int flat_cmd_count = execution_flat_count_from_options(options, program);
-    SourceTextView text = options ? options->text : (SourceTextView){0};
-    int in_begin = 0;
-    int encode_normals = options && options->encode_feedback_normals;
-    float cur_normal[3] = {0.0f, 0.0f, 1.0f}; /* current normal, for export encoding */
-    float begin_mv[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1}; /* modelview snapshot per begin block */
-    int tess_depth = 0; /* 0=outside, 1=in polygon, 2=in contour */
-    int matrix_depth = 0;
-    GLdouble tess_current_normal[3] = {0.0, 0.0, 1.0};
-    GLdouble tess_current_color[4]  = {1.0, 1.0, 1.0, 1.0};
-    int goto_count = 0; /* safety guard against infinite goto loops */
+ReplExecCursor repl_exec_cursor_begin(const ReplExecutionOptions *options) {
+    ReplExecCursor cursor;
+    memset(&cursor, 0, sizeof(cursor));
 
-    float alpha_scale = 1.0f;
-    int skip_geom_before_pc = 0;
+    if (options)
+        cursor.options = *options;
+    cursor.program = execution_program_from_options(options);
+    cursor.flat_cmd_count = execution_flat_count_from_options(options,
+                                                              cursor.program);
+    cursor.text = options ? options->text : (SourceTextView){0};
+    cursor.encode_normals = options && options->encode_feedback_normals;
+    cursor.cur_normal[2] = 1.0f;
+    cursor.begin_mv[0] = 1.0f;
+    cursor.begin_mv[5] = 1.0f;
+    cursor.begin_mv[10] = 1.0f;
+    cursor.begin_mv[15] = 1.0f;
+    cursor.tess_current_normal[2] = 1.0;
+    cursor.tess_current_color[0] = 1.0;
+    cursor.tess_current_color[1] = 1.0;
+    cursor.tess_current_color[2] = 1.0;
+    cursor.alpha_scale = 1.0f;
     if (options && options->has_fade_context) {
-        alpha_scale = options->fade_alpha_scale;
-        skip_geom_before_pc = options->skip_geom_before_pc;
+        cursor.alpha_scale = options->fade_alpha_scale;
+        cursor.skip_geom_before_pc = options->skip_geom_before_pc;
     }
-
-    tess_current_color[3] = alpha_scale;
+    cursor.tess_current_color[3] = cursor.alpha_scale;
 
     /* The light-indicator overlay reads light_enabled_mask for its on/off
      * visual. GL's real default — and scene_lights_setup() — is
@@ -475,354 +471,439 @@ void repl_execute_program(const ReplExecutionOptions *options) {
      * sticky, default-on value that never reflected enable/disable. */
     repl_state_render_clear_light_enabled_mask();
 
-    int pc = 0;
-    while (pc < flat_cmd_count) {
-        if (!flat_cmds[pc].valid) { pc++; continue; }
-        if (repl_cmd_is_transform(flat_cmds[pc].type)) {
-            repl_executor_apply_tracked_transform_cmd(&flat_cmds[pc], &matrix_depth);
-            pc++;
-            continue;
-        }
-        if (pc < skip_geom_before_pc) {
-            /* Prefix walk: accumulate state but skip the expensive geometry.
-             * Structural commands (CMD_BEGIN, CMD_END, CMD_TESS_BEGIN_POLYGON,
-             * CMD_TESS_BEGIN_CONTOUR, CMD_TESS_END) are preserved so that in
-             * REPLAY_MODE_VERTEX - where old_pc/new_pc may fall inside an open
-             * begin/tess block - execute_commands still enters the right scope
-             * before emitting the incremental vertices that live at
-             * pc >= skip_geom_before_pc. */
-            switch (flat_cmds[pc].type) {
-            case CMD_VERTEX3F:
-            case CMD_VERTEX2F:
-            case CMD_GLUT_TORUS:
-            case CMD_GLUT_CUBE:
-            case CMD_GLUT_SPHERE:
-            case CMD_GLUT_TEAPOT:
-            case CMD_GLUT_CONE:
-            case CMD_TESS_VERTEX:
-                pc++;
-                continue;
-            default:
-                break;
-            }
-        }
-        switch (flat_cmds[pc].type) {
-        case CMD_BEGIN:
-            /* Parser rejects nested glBegin via repl_cmd_type_valid_in_begin.
-             * Export: mark the primitive's texcoords as authored normals
-             * (out of band, before glBegin so it is outside Begin/End). */
-            if (encode_normals) {
-                glPassThrough((GLfloat)MESH_PLY_PASS_NORMALS);
-                /* The modelview is constant within a begin/end block (the
-                 * parser rejects transforms inside), and glGet is illegal
-                 * between glBegin/glEnd — so snapshot it here, once, and reuse
-                 * it for every vertex's normal transform in the block. */
-                glGetFloatv(GL_MODELVIEW_MATRIX, begin_mv);
-            }
-            glBegin((GLenum)flat_cmds[pc].args[0]);
-            in_begin = 1;
-            break;
-        case CMD_END:
-            if (in_begin) {
-                glEnd();
-                in_begin = 0;
-                /* Export: close the normals scope; subsequent solids / tess /
-                 * gaps fall back to synthesized normals. */
-                if (encode_normals)
-                    glPassThrough((GLfloat)MESH_PLY_PASS_NO_NORMALS);
-            }
-            break;
+    return cursor;
+}
+
+int repl_exec_cursor_done(const ReplExecCursor *cursor) {
+    return (!cursor ||
+            cursor->pc < 0 ||
+            cursor->pc >= cursor->flat_cmd_count ||
+            !cursor->program.cmds);
+}
+
+const GLCmd *repl_exec_cursor_peek(const ReplExecCursor *cursor) {
+    if (repl_exec_cursor_done(cursor))
+        return NULL;
+    return &cursor->program.cmds[cursor->pc];
+}
+
+void repl_exec_cursor_advance(ReplExecCursor *cursor) {
+    if (!cursor || cursor->pc >= cursor->flat_cmd_count)
+        return;
+    cursor->pc++;
+}
+
+static void repl_exec_cursor_warn_unhandled_state(const GLCmd *cmd) {
+    static int s_warned_unhandled[CMD_TYPE_COUNT];
+    int t;
+
+    if (!cmd)
+        return;
+    t = (int)cmd->type;
+    if (t >= 0 && t < CMD_TYPE_COUNT && !s_warned_unhandled[t]) {
+        fprintf(stderr,
+                "repl_executor: state cmd %d enumerated in "
+                "executor switch but not in "
+                "repl_apply_state_cmd\n", t);
+        s_warned_unhandled[t] = 1;
+    }
+}
+
+/* Execute the command at cursor->pc and advance the cursor. The old
+ * whole-program executor is intentionally just a begin/step/end loop over
+ * this API so cursor users get the same command semantics. */
+int repl_exec_cursor_step(ReplExecCursor *cursor) {
+    const GLCmd *flat_cmds;
+    const GLCmd *cmd;
+
+    if (repl_exec_cursor_done(cursor))
+        return 0;
+
+    flat_cmds = cursor->program.cmds;
+    cmd = &flat_cmds[cursor->pc];
+    if (!cmd->valid) {
+        cursor->pc++;
+        return 1;
+    }
+    if (repl_cmd_is_transform(cmd->type)) {
+        repl_executor_apply_tracked_transform_cmd(cmd, &cursor->matrix_depth);
+        cursor->pc++;
+        return 1;
+    }
+    if (cursor->pc < cursor->skip_geom_before_pc) {
+        /* Prefix walk: accumulate state but skip the expensive geometry.
+         * Structural commands (CMD_BEGIN, CMD_END, CMD_TESS_BEGIN_POLYGON,
+         * CMD_TESS_BEGIN_CONTOUR, CMD_TESS_END) are preserved so that in
+         * REPLAY_MODE_VERTEX - where old_pc/new_pc may fall inside an open
+         * begin/tess block - execute_commands still enters the right scope
+         * before emitting the incremental vertices that live at
+         * pc >= skip_geom_before_pc. */
+        switch (cmd->type) {
         case CMD_VERTEX3F:
-            if (in_begin) {
-                if (encode_normals) {
-                    float nw[3];
-                    exec_normal_to_world(begin_mv, cur_normal, nw);
-                    glTexCoord3f(nw[0], nw[1], nw[2]);
-                }
-                glVertex3f(flat_cmds[pc].args[0], flat_cmds[pc].args[1],
-                           flat_cmds[pc].args[2]);
-            }
-            break;
-        case CMD_NORMAL3F:
-            cur_normal[0] = flat_cmds[pc].args[0];
-            cur_normal[1] = flat_cmds[pc].args[1];
-            cur_normal[2] = flat_cmds[pc].args[2];
-            glNormal3f(flat_cmds[pc].args[0], flat_cmds[pc].args[1],
-                       flat_cmds[pc].args[2]);
-            break;
-        case CMD_COLOR3F:
-            glColor4f(flat_cmds[pc].args[0], flat_cmds[pc].args[1],
-                      flat_cmds[pc].args[2], alpha_scale);
-            break;
-        case CMD_COLOR4F:
-            glColor4f(flat_cmds[pc].args[0], flat_cmds[pc].args[1],
-                      flat_cmds[pc].args[2],
-                      flat_cmds[pc].args[3] * alpha_scale);
-            break;
         case CMD_VERTEX2F:
-            if (in_begin) {
-                if (encode_normals) {
-                    float nw[3];
-                    exec_normal_to_world(begin_mv, cur_normal, nw);
-                    glTexCoord3f(nw[0], nw[1], nw[2]);
-                }
-                glVertex2f(flat_cmds[pc].args[0], flat_cmds[pc].args[1]);
-            }
-            break;
-        /* The CMD_*-not-in-begin block below relies on the parser
-         * rejecting these commands inside glBegin/glEnd
-         * (repl_cmd_type_valid_in_begin). The executor no longer
-         * defensively glEnd()s the active begin block. */
-        case CMD_POINT_SIZE:
-            repl_exec_point_size(flat_cmds[pc].args[0]);
-            break;
-        case CMD_LINE_WIDTH:
-            glLineWidth(flat_cmds[pc].args[0]);
-            break;
         case CMD_GLUT_TORUS:
         case CMD_GLUT_CUBE:
         case CMD_GLUT_SPHERE:
         case CMD_GLUT_TEAPOT:
         case CMD_GLUT_CONE:
-            repl_executor_draw_glut_solid(&flat_cmds[pc]);
-            break;
-        case CMD_RASTER_POS3F:
-            glRasterPos3f(flat_cmds[pc].args[0],
-                          flat_cmds[pc].args[1],
-                          flat_cmds[pc].args[2]);
-            break;
-        case CMD_LABEL: {
-            /* `label("fmt", a, b, c, d)` — printf-style text emission
-             * at the current raster position. Position is set by a
-             * preceding glRasterPos3f; this command does not touch
-             * it, so the call composes cleanly with whatever
-             * modelview/raster state the user has set up.
-             *
-             * Format substitution walks cmd.payload.label.fmt, expanding %f from
-             * args[0..3] and %% to a literal '%'. The flatten pass
-             * keeps args[] in sync with current variable values for
-             * has_vars commands, so we use them directly. */
-            char buf[128];
-            int sub_count = flat_cmds[pc].num_args;
-            if (sub_count < 0) sub_count = 0;
-            int sub_idx = 0;
-            int off = 0;
-            const char *fmt = flat_cmds[pc].payload.label.fmt;
-            while (*fmt && off < (int)sizeof(buf) - 1) {
-                if (fmt[0] == '%' && fmt[1] == 'f' && sub_idx < sub_count) {
-                    off += snprintf(buf + off, sizeof(buf) - (size_t)off,
-                                    "%g", (double)flat_cmds[pc].args[sub_idx]);
-                    if (off >= (int)sizeof(buf)) off = (int)sizeof(buf) - 1;
-                    sub_idx++;
-                    fmt += 2;
-                } else if (fmt[0] == '%' && fmt[1] == '%') {
-                    buf[off++] = '%';
-                    fmt += 2;
-                } else {
-                    buf[off++] = *fmt++;
-                }
-            }
-            buf[off] = '\0';
-            for (const char *c = buf; *c; c++)
-                glutBitmapCharacter(GLUT_BITMAP_9_BY_15, (unsigned char)*c);
-            break;
-        }
-        case CMD_TESS_BEGIN_POLYGON:
-            if (g_tess) { g_tess_vert_count = 0; gluTessBeginPolygon(g_tess, NULL); tess_depth = 1; }
-            break;
-        case CMD_TESS_BEGIN_CONTOUR:
-            if (g_tess && tess_depth == 1) { gluTessBeginContour(g_tess); tess_depth = 2; }
-            break;
-        case CMD_TESS_END:
-            if (g_tess && tess_depth == 2) { gluTessEndContour(g_tess); tess_depth = 1; }
-            else if (g_tess && tess_depth == 1) { gluTessEndPolygon(g_tess); tess_depth = 0; }
-            break;
-        case CMD_TESS_NORMAL:
-            tess_current_normal[0] = flat_cmds[pc].args[0];
-            tess_current_normal[1] = flat_cmds[pc].args[1];
-            tess_current_normal[2] = flat_cmds[pc].args[2];
-            break;
-        case CMD_TESS_COLOR:
-            tess_current_color[0] = flat_cmds[pc].args[0];
-            tess_current_color[1] = flat_cmds[pc].args[1];
-            tess_current_color[2] = flat_cmds[pc].args[2];
-            tess_current_color[3] = ((flat_cmds[pc].num_args >= 4)
-                                   ? flat_cmds[pc].args[3] : 1.0)
-                                  * alpha_scale;
-            break;
         case CMD_TESS_VERTEX:
-            if (g_tess && tess_depth == 2 && g_tess_vert_count < TESS_VERT_BUF_SIZE) {
-                TessVertex *v = &g_tess_verts[g_tess_vert_count++];
-                v->pos[0] = flat_cmds[pc].args[0];
-                v->pos[1] = flat_cmds[pc].args[1];
-                v->pos[2] = flat_cmds[pc].args[2];
-                memcpy(v->normal, tess_current_normal, sizeof(v->normal));
-                memcpy(v->color,  tess_current_color,  sizeof(v->color));
-                gluTessVertex(g_tess, v->pos, v);
-            }
-            break;
-        case CMD_GOTO_LABEL:
-            break; /* no-op marker */
-        case CMD_GOTO: {
-            /* Experimental top-level control-flow only.
-             * This jumps the flat-command program counter, but it does not
-             * rebuild or re-specialize the flat stream, so goto loops are only
-             * reliable for control flow and assignments. Variable-driven GL
-             * commands still use the args baked into flat_cmds[]. Replay also
-             * cannot follow the dynamic jump trace. */
-            char label_name[REPL_GOTO_LABEL_MAX];
-            if (!repl_extract_goto_label(execution_flat_text(text, &flat_cmds[pc]),
-                                         label_name, sizeof(label_name)))
-                break;
-            if (goto_count++ > REPL_GOTO_LOOP_LIMIT) {
-                if (options && options->status_out && options->status_out_sz > 0)
-                    snprintf(options->status_out, (size_t)options->status_out_sz,
-                             "goto: loop limit reached");
-                goto execute_done;
-            }
-            for (int label_idx = 0; label_idx < flat_cmd_count; label_idx++) {
-                if (flat_cmds[label_idx].valid &&
-                    flat_cmds[label_idx].type == CMD_GOTO_LABEL) {
-                    char target_label[REPL_GOTO_LABEL_MAX];
-                    if (repl_extract_label_name(execution_flat_text(text, &flat_cmds[label_idx]),
-                                                target_label,
-                                                sizeof(target_label)) &&
-                        strcmp(target_label, label_name) == 0) {
-                        pc = label_idx; /* outer pc++ steps past the label */
-                        goto goto_done;
-                    }
-                }
-            }
-            goto_done:;
+            cursor->pc++;
+            return 1;
+        default:
             break;
         }
-        case CMD_IF_BEGIN: {
-            /* Re-evaluate the condition at execute time so a goto looping
-             * back into the body sees updated vars. The cached args[0] is
-             * the flatten-time value, used as the fallback when the line
-             * doesn't carry vars (or when the paren-extract fails). The
-             * shared kernel with flatten lives in repl_eval_if_condition;
-             * see its doc for why both sides evaluate. */
-            float cond = flat_cmds[pc].args[0];
-            if (flat_cmds[pc].has_vars) {
-                FlatCmdLocalVars *local_vars =
-                    execution_local_vars_at(program, pc);
-                const ExprVar *eval_vars = g_predef_vars;
-                int eval_num_vars = g_num_predef_vars;
-                if (local_vars && local_vars->num_vars > 0) {
-                    eval_vars = local_vars->vars;
-                    eval_num_vars = local_vars->num_vars;
-                }
-                cond = repl_eval_if_condition(execution_flat_text(text, &flat_cmds[pc]),
-                                              eval_vars, eval_num_vars,
-                                              cond);
-            }
-            if (cond == 0.0f) {
-                int if_depth = 1;
-                while (if_depth > 0 && ++pc < flat_cmd_count) {
-                    if (flat_cmds[pc].type == CMD_IF_BEGIN) if_depth++;
-                    else if (flat_cmds[pc].type == CMD_IF_END) if_depth--;
-                }
-                /* pc now points to CMD_IF_END; outer pc++ steps past it. */
-            }
-            break;
-        }
-        case CMD_IF_END:
-            break; /* body executed; just step past */
-        case CMD_VAR_ASSIGN: {
-            /* Flatten already computed the RHS against current vars and
-             * stored the result in args[0]. Re-evaluating here would
-             * double-apply self-referential assignments like
-             * `tmp2 = tmp2 + 1;` (once during flatten, once here).
-             * Apply args[0] directly so flatten owns the eval semantics. */
-            int var_idx = flat_cmds[pc].var_idx;
-            float value = flat_cmds[pc].args[0];
-            if (var_idx >= 0 && var_idx < g_num_predef_vars)
-                g_predef_vars_mut[var_idx].value = value;
-            break;
-        }
-        case CMD_SCRATCH_ASSIGN: {
-            /* Same model as CMD_VAR_ASSIGN: flatten owns the eval; we
-             * just apply the precomputed value. */
-            int array_idx = (int)flat_cmds[pc].args[0];
-            int elem_idx = (int)flat_cmds[pc].args[1];
-            float value = flat_cmds[pc].args[2];
-            repl_eval_scratch_set(array_idx, elem_idx, value);
-            break;
-        }
-        /* Transforms handled by repl_cmd_is_transform() early-continue above. */
-        case CMD_TRANSLATE3F: case CMD_SCALEF: case CMD_ROTATEF:
-        case CMD_PUSH_MATRIX: case CMD_POP_MATRIX:
-        case CMD_LOAD_IDENTITY:
-        /* These are resolved during flatten and should not appear in flat_cmds. */
-        case CMD_FOR_BEGIN: case CMD_FOR_END:
-        case CMD_FUNC_DEF: case CMD_FUNC_END: case CMD_CALL:
-        case CMD_COMMENT:
-        case CMD_EMPTY:
-        case CMD_VAR_DECLARE:
-        case CMD_TYPE_COUNT:
-            break;
-        /* State-mutating cmds: enumerated explicitly so this switch is
-         * exhaustive over CmdType. Without enumeration, a `default:`
-         * would silently swallow any newly-added CmdType (the prior
-         * shape routed the default through repl_apply_state_cmd, whose
-         * own default returns 0 — the "you forgot to handle this"
-         * signal was lost in both layers). With no default and -Wall
-         * (which enables -Wswitch), adding a new CmdType emits a
-         * compile-time warning here. Adding a new entry to
-         * repl_apply_state_cmd still only requires one new case below;
-         * the cluster delegates uniformly. */
-        case CMD_ENABLE:
-        case CMD_DISABLE:
-        case CMD_SHADE_MODEL:
-        case CMD_COLOR_MATERIAL:
-        case CMD_MATERIALFV:
-        case CMD_MATERIALF:
-        case CMD_LIGHT_MODEL_I:
-        case CMD_FRONT_FACE:
-        case CMD_DEPTH_FUNC:
-        case CMD_DEPTH_MASK:
-        case CMD_COLOR_MASK:
-        case CMD_POINT_PARAMETER_FV:
-        case CMD_BLEND_FUNC:
-        case CMD_CLEAR_COLOR:
-            /* Export pass captures raw glColor + all faces. The capture
-             * disabled GL_LIGHTING and GL_CULL_FACE, but the program's own
-             * glEnable would turn them back on — feedback would then return
-             * per-vertex lit colors (not the material color) and drop culled
-             * back faces. Suppress those two enables during export (lights /
-             * material then no-op on color; both sides are captured). */
-            if (encode_normals && flat_cmds[pc].type == CMD_ENABLE &&
-                ((GLenum)flat_cmds[pc].args[0] == GL_LIGHTING ||
-                 (GLenum)flat_cmds[pc].args[0] == GL_CULL_FACE))
-                break;
-            /* repl_apply_state_cmd returns 0 if the cmd isn't in its
-             * own switch — which would mean the executor enumerated
-             * it here but the apply helper hasn't caught up yet. Log
-             * loudly once per type so the asymmetry surfaces in dev
-             * builds instead of as a silent visual regression. */
-            if (!repl_apply_state_cmd(&flat_cmds[pc], alpha_scale)) {
-                static int s_warned_unhandled[CMD_TYPE_COUNT];
-                int t = (int)flat_cmds[pc].type;
-                if (t >= 0 && t < CMD_TYPE_COUNT && !s_warned_unhandled[t]) {
-                    fprintf(stderr,
-                            "repl_executor: state cmd %d enumerated in "
-                            "executor switch but not in "
-                            "repl_apply_state_cmd\n", t);
-                    s_warned_unhandled[t] = 1;
-                }
-            }
-            break;
-        }
-        pc++;
     }
-execute_done:
-    if (in_begin) glEnd();
-    if (!(options && options->suppress_tess_finalize)) {
-        if (tess_depth == 2 && g_tess) { gluTessEndContour(g_tess); tess_depth = 1; }
-        if (tess_depth == 1 && g_tess) { gluTessEndPolygon(g_tess); }
+    switch (cmd->type) {
+    case CMD_BEGIN:
+        /* Parser rejects nested glBegin via repl_cmd_type_valid_in_begin.
+         * Export: mark the primitive's texcoords as authored normals
+         * (out of band, before glBegin so it is outside Begin/End). */
+        if (cursor->encode_normals) {
+            glPassThrough((GLfloat)MESH_PLY_PASS_NORMALS);
+            /* The modelview is constant within a begin/end block (the
+             * parser rejects transforms inside), and glGet is illegal
+             * between glBegin/glEnd — so snapshot it here, once, and reuse
+             * it for every vertex's normal transform in the block. */
+            glGetFloatv(GL_MODELVIEW_MATRIX, cursor->begin_mv);
+        }
+        glBegin((GLenum)cmd->args[0]);
+        cursor->in_begin = 1;
+        break;
+    case CMD_END:
+        if (cursor->in_begin) {
+            glEnd();
+            cursor->in_begin = 0;
+            /* Export: close the normals scope; subsequent solids / tess /
+             * gaps fall back to synthesized normals. */
+            if (cursor->encode_normals)
+                glPassThrough((GLfloat)MESH_PLY_PASS_NO_NORMALS);
+        }
+        break;
+    case CMD_VERTEX3F:
+        if (cursor->in_begin) {
+            if (cursor->encode_normals) {
+                float nw[3];
+                exec_normal_to_world(cursor->begin_mv, cursor->cur_normal, nw);
+                glTexCoord3f(nw[0], nw[1], nw[2]);
+            }
+            glVertex3f(cmd->args[0], cmd->args[1], cmd->args[2]);
+        }
+        break;
+    case CMD_NORMAL3F:
+        cursor->cur_normal[0] = cmd->args[0];
+        cursor->cur_normal[1] = cmd->args[1];
+        cursor->cur_normal[2] = cmd->args[2];
+        glNormal3f(cmd->args[0], cmd->args[1], cmd->args[2]);
+        break;
+    case CMD_COLOR3F:
+        glColor4f(cmd->args[0], cmd->args[1], cmd->args[2],
+                  cursor->alpha_scale);
+        break;
+    case CMD_COLOR4F:
+        glColor4f(cmd->args[0], cmd->args[1], cmd->args[2],
+                  cmd->args[3] * cursor->alpha_scale);
+        break;
+    case CMD_VERTEX2F:
+        if (cursor->in_begin) {
+            if (cursor->encode_normals) {
+                float nw[3];
+                exec_normal_to_world(cursor->begin_mv, cursor->cur_normal, nw);
+                glTexCoord3f(nw[0], nw[1], nw[2]);
+            }
+            glVertex2f(cmd->args[0], cmd->args[1]);
+        }
+        break;
+    /* The CMD_*-not-in-begin block below relies on the parser rejecting
+     * these commands inside glBegin/glEnd (repl_cmd_type_valid_in_begin).
+     * The executor no longer defensively glEnd()s the active begin block. */
+    case CMD_POINT_SIZE:
+        repl_exec_point_size(cmd->args[0]);
+        break;
+    case CMD_LINE_WIDTH:
+        glLineWidth(cmd->args[0]);
+        break;
+    case CMD_GLUT_TORUS:
+    case CMD_GLUT_CUBE:
+    case CMD_GLUT_SPHERE:
+    case CMD_GLUT_TEAPOT:
+    case CMD_GLUT_CONE:
+        repl_executor_draw_glut_solid(cmd);
+        break;
+    case CMD_RASTER_POS3F:
+        glRasterPos3f(cmd->args[0], cmd->args[1], cmd->args[2]);
+        break;
+    case CMD_LABEL: {
+        /* `label("fmt", a, b, c, d)` — printf-style text emission
+         * at the current raster position. Position is set by a preceding
+         * glRasterPos3f; this command does not touch it, so the call composes
+         * cleanly with whatever modelview/raster state the user has set up.
+         *
+         * Format substitution walks cmd.payload.label.fmt, expanding %f from
+         * args[0..3] and %% to a literal '%'. The flatten pass keeps args[]
+         * in sync with current variable values for has_vars commands, so we
+         * use them directly. */
+        char buf[128];
+        int sub_count = cmd->num_args;
+        int sub_idx = 0;
+        int off = 0;
+        const char *fmt = cmd->payload.label.fmt;
+        if (sub_count < 0)
+            sub_count = 0;
+        while (*fmt && off < (int)sizeof(buf) - 1) {
+            if (fmt[0] == '%' && fmt[1] == 'f' && sub_idx < sub_count) {
+                off += snprintf(buf + off, sizeof(buf) - (size_t)off,
+                                "%g", (double)cmd->args[sub_idx]);
+                if (off >= (int)sizeof(buf))
+                    off = (int)sizeof(buf) - 1;
+                sub_idx++;
+                fmt += 2;
+            } else if (fmt[0] == '%' && fmt[1] == '%') {
+                buf[off++] = '%';
+                fmt += 2;
+            } else {
+                buf[off++] = *fmt++;
+            }
+        }
+        buf[off] = '\0';
+        for (const char *c = buf; *c; c++)
+            glutBitmapCharacter(GLUT_BITMAP_9_BY_15, (unsigned char)*c);
+        break;
     }
-    repl_executor_unwind_tracked_transform_stack(&matrix_depth);
+    case CMD_TESS_BEGIN_POLYGON:
+        if (g_tess) {
+            g_tess_vert_count = 0;
+            gluTessBeginPolygon(g_tess, NULL);
+            cursor->tess_depth = 1;
+        }
+        break;
+    case CMD_TESS_BEGIN_CONTOUR:
+        if (g_tess && cursor->tess_depth == 1) {
+            gluTessBeginContour(g_tess);
+            cursor->tess_depth = 2;
+        }
+        break;
+    case CMD_TESS_END:
+        if (g_tess && cursor->tess_depth == 2) {
+            gluTessEndContour(g_tess);
+            cursor->tess_depth = 1;
+        } else if (g_tess && cursor->tess_depth == 1) {
+            gluTessEndPolygon(g_tess);
+            cursor->tess_depth = 0;
+        }
+        break;
+    case CMD_TESS_NORMAL:
+        cursor->tess_current_normal[0] = cmd->args[0];
+        cursor->tess_current_normal[1] = cmd->args[1];
+        cursor->tess_current_normal[2] = cmd->args[2];
+        break;
+    case CMD_TESS_COLOR:
+        cursor->tess_current_color[0] = cmd->args[0];
+        cursor->tess_current_color[1] = cmd->args[1];
+        cursor->tess_current_color[2] = cmd->args[2];
+        cursor->tess_current_color[3] = ((cmd->num_args >= 4)
+                                      ? cmd->args[3] : 1.0)
+                                     * cursor->alpha_scale;
+        break;
+    case CMD_TESS_VERTEX:
+        if (g_tess && cursor->tess_depth == 2 &&
+            g_tess_vert_count < TESS_VERT_BUF_SIZE) {
+            TessVertex *v = &g_tess_verts[g_tess_vert_count++];
+            v->pos[0] = cmd->args[0];
+            v->pos[1] = cmd->args[1];
+            v->pos[2] = cmd->args[2];
+            memcpy(v->normal, cursor->tess_current_normal, sizeof(v->normal));
+            memcpy(v->color, cursor->tess_current_color, sizeof(v->color));
+            gluTessVertex(g_tess, v->pos, v);
+        }
+        break;
+    case CMD_GOTO_LABEL:
+        break; /* no-op marker */
+    case CMD_GOTO: {
+        /* Experimental top-level control-flow only.
+         * This jumps the flat-command program counter, but it does not
+         * rebuild or re-specialize the flat stream, so goto loops are only
+         * reliable for control flow and assignments. Variable-driven GL
+         * commands still use the args baked into flat_cmds[]. Replay also
+         * cannot follow the dynamic jump trace. */
+        char label_name[REPL_GOTO_LABEL_MAX];
+        if (!repl_extract_goto_label(execution_flat_text(cursor->text, cmd),
+                                     label_name, sizeof(label_name)))
+            break;
+        if (cursor->goto_count++ > REPL_GOTO_LOOP_LIMIT) {
+            if (cursor->options.status_out &&
+                cursor->options.status_out_sz > 0)
+                snprintf(cursor->options.status_out,
+                         (size_t)cursor->options.status_out_sz,
+                         "goto: loop limit reached");
+            cursor->pc = cursor->flat_cmd_count;
+            return 0;
+        }
+        for (int label_idx = 0; label_idx < cursor->flat_cmd_count; label_idx++) {
+            if (flat_cmds[label_idx].valid &&
+                flat_cmds[label_idx].type == CMD_GOTO_LABEL) {
+                char target_label[REPL_GOTO_LABEL_MAX];
+                if (repl_extract_label_name(execution_flat_text(cursor->text,
+                                                                &flat_cmds[label_idx]),
+                                            target_label,
+                                            sizeof(target_label)) &&
+                    strcmp(target_label, label_name) == 0) {
+                    cursor->pc = label_idx; /* final advance steps past label */
+                    goto goto_done;
+                }
+            }
+        }
+        goto_done:;
+        break;
+    }
+    case CMD_IF_BEGIN: {
+        /* Re-evaluate the condition at execute time so a goto looping
+         * back into the body sees updated vars. The cached args[0] is
+         * the flatten-time value, used as the fallback when the line
+         * doesn't carry vars (or when the paren-extract fails). The
+         * shared kernel with flatten lives in repl_eval_if_condition;
+         * see its doc for why both sides evaluate. */
+        float cond = cmd->args[0];
+        if (cmd->has_vars) {
+            FlatCmdLocalVars *local_vars =
+                execution_local_vars_at(cursor->program, cursor->pc);
+            const ExprVar *eval_vars = g_predef_vars;
+            int eval_num_vars = g_num_predef_vars;
+            if (local_vars && local_vars->num_vars > 0) {
+                eval_vars = local_vars->vars;
+                eval_num_vars = local_vars->num_vars;
+            }
+            cond = repl_eval_if_condition(execution_flat_text(cursor->text,
+                                                              cmd),
+                                          eval_vars, eval_num_vars,
+                                          cond);
+        }
+        if (cond == 0.0f) {
+            int if_depth = 1;
+            while (if_depth > 0 &&
+                   ++cursor->pc < cursor->flat_cmd_count) {
+                if (flat_cmds[cursor->pc].type == CMD_IF_BEGIN)
+                    if_depth++;
+                else if (flat_cmds[cursor->pc].type == CMD_IF_END)
+                    if_depth--;
+            }
+            /* pc now points to CMD_IF_END; final advance steps past it. */
+        }
+        break;
+    }
+    case CMD_IF_END:
+        break; /* body executed; just step past */
+    case CMD_VAR_ASSIGN: {
+        /* Flatten already computed the RHS against current vars and
+         * stored the result in args[0]. Re-evaluating here would
+         * double-apply self-referential assignments like
+         * `tmp2 = tmp2 + 1;` (once during flatten, once here).
+         * Apply args[0] directly so flatten owns the eval semantics. */
+        int var_idx = cmd->var_idx;
+        float value = cmd->args[0];
+        if (var_idx >= 0 && var_idx < g_num_predef_vars)
+            g_predef_vars_mut[var_idx].value = value;
+        break;
+    }
+    case CMD_SCRATCH_ASSIGN: {
+        /* Same model as CMD_VAR_ASSIGN: flatten owns the eval; we
+         * just apply the precomputed value. */
+        int array_idx = (int)cmd->args[0];
+        int elem_idx = (int)cmd->args[1];
+        float value = cmd->args[2];
+        repl_eval_scratch_set(array_idx, elem_idx, value);
+        break;
+    }
+    /* Transforms handled by repl_cmd_is_transform() early-continue above. */
+    case CMD_TRANSLATE3F: case CMD_SCALEF: case CMD_ROTATEF:
+    case CMD_PUSH_MATRIX: case CMD_POP_MATRIX:
+    case CMD_LOAD_IDENTITY:
+    /* These are resolved during flatten and should not appear in flat_cmds. */
+    case CMD_FOR_BEGIN: case CMD_FOR_END:
+    case CMD_FUNC_DEF: case CMD_FUNC_END: case CMD_CALL:
+    case CMD_COMMENT:
+    case CMD_EMPTY:
+    case CMD_VAR_DECLARE:
+    case CMD_TYPE_COUNT:
+        break;
+    /* State-mutating cmds: enumerated explicitly so this switch is
+     * exhaustive over CmdType. Without enumeration, a `default:`
+     * would silently swallow any newly-added CmdType (the prior
+     * shape routed the default through repl_apply_state_cmd, whose
+     * own default returns 0 — the "you forgot to handle this"
+     * signal was lost in both layers). With no default and -Wall
+     * (which enables -Wswitch), adding a new CmdType emits a
+     * compile-time warning here. Adding a new entry to
+     * repl_apply_state_cmd still only requires one new case below;
+     * the cluster delegates uniformly. */
+    case CMD_ENABLE:
+    case CMD_DISABLE:
+    case CMD_SHADE_MODEL:
+    case CMD_COLOR_MATERIAL:
+    case CMD_MATERIALFV:
+    case CMD_MATERIALF:
+    case CMD_LIGHT_MODEL_I:
+    case CMD_FRONT_FACE:
+    case CMD_DEPTH_FUNC:
+    case CMD_DEPTH_MASK:
+    case CMD_COLOR_MASK:
+    case CMD_POINT_PARAMETER_FV:
+    case CMD_BLEND_FUNC:
+    case CMD_CLEAR_COLOR:
+        /* Export pass captures raw glColor + all faces. The capture
+         * disabled GL_LIGHTING and GL_CULL_FACE, but the program's own
+         * glEnable would turn them back on — feedback would then return
+         * per-vertex lit colors (not the material color) and drop culled
+         * back faces. Suppress those two enables during export (lights /
+         * material then no-op on color; both sides are captured). */
+        if (cursor->encode_normals && cmd->type == CMD_ENABLE &&
+            ((GLenum)cmd->args[0] == GL_LIGHTING ||
+             (GLenum)cmd->args[0] == GL_CULL_FACE))
+            break;
+        /* repl_apply_state_cmd returns 0 if the cmd isn't in its own
+         * switch - which would mean the executor enumerated it here but the
+         * apply helper hasn't caught up yet. Log loudly once per type so the
+         * asymmetry surfaces in dev builds instead of as a silent visual
+         * regression. */
+        if (!repl_apply_state_cmd(cmd, cursor->alpha_scale))
+            repl_exec_cursor_warn_unhandled_state(cmd);
+        break;
+    }
+    cursor->pc++;
+    return 1;
+}
+
+void repl_exec_cursor_end(ReplExecCursor *cursor) {
+    if (!cursor)
+        return;
+    if (cursor->in_begin) {
+        glEnd();
+        cursor->in_begin = 0;
+    }
+    if (!cursor->options.suppress_tess_finalize) {
+        if (cursor->tess_depth == 2 && g_tess) {
+            gluTessEndContour(g_tess);
+            cursor->tess_depth = 1;
+        }
+        if (cursor->tess_depth == 1 && g_tess)
+            gluTessEndPolygon(g_tess);
+    }
+    cursor->tess_depth = 0;
+    repl_executor_unwind_tracked_transform_stack(&cursor->matrix_depth);
+    cursor->pc = cursor->flat_cmd_count;
+}
+
+/* Walk flat_cmds[0..flat_cmd_count) and issue the corresponding GL
+ * calls. Handles vertex submission, state changes, GLU quadrics and
+ * tessellator commands, transforms, goto/label control flow, if-block
+ * evaluation, and variable assignments.
+ *
+ * Replay and fade passes provide an explicit limit instead of temporarily
+ * mutating repl_state_flat_program_count(). */
+void repl_execute_program(const ReplExecutionOptions *options) {
+    ReplExecCursor cursor = repl_exec_cursor_begin(options);
+    while (repl_exec_cursor_step(&cursor)) {
+    }
+    repl_exec_cursor_end(&cursor);
 }
 
 void repl_execute_commands(void) {
