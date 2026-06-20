@@ -5,6 +5,7 @@
 #include "repl/core_internal.h"
 #include "repl/parser.h"
 #include "repl/state_owners.h"
+#include "repl/util.h"            /* repl_format_fits / repl_copy_string_fits */
 #include "support/cpuprof.h"   /* PROF_FLATTEN_* sub-phase timing */
 #include "config.h"        /* REPL_STATUS_TEXT_MAX */
 

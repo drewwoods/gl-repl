@@ -39,6 +39,7 @@
 #include "repl/core_internal.h"
 #include "repl/executor.h"
 #include "repl/parser.h"
+#include "repl/util.h"            /* repl_format_fits / repl_copy_string_fits */
 #include "repl/pipeline.h"
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"

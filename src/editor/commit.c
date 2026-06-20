@@ -47,6 +47,7 @@
 #include "repl/state_views.h"
 #include "repl/source_scope.h"
 #include "repl/text_helpers.h"
+#include "repl/util.h"           /* repl_format_fits / repl_copy_string_fits */
 #include "repl/eval.h"
 
 #include "config.h"           /* REPL_INDENT_TEXT_MAX */

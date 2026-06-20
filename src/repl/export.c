@@ -10,6 +10,7 @@
 #include "repl/command_store.h"
 #include "repl/core.h"
 #include "repl/core_internal.h"
+#include "repl/util.h"            /* repl_format_fits / repl_copy_string_fits */
 #include "repl/executor.h"        /* repl_apply_state_cmd */
 #include "repl/parser.h"
 #include "repl/pipeline.h"

@@ -56,6 +56,7 @@
 #include "repl/parser.h"
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
+#include "repl/util.h"           /* repl_format_fits / repl_copy_string_fits */
 #include "ui/app/layout.h"
 #include "ui/app/state.h"
 

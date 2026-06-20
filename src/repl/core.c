@@ -27,6 +27,8 @@
 #include "repl/command_store.h"
 #include "repl/core_internal.h"
 #include "repl/eval.h"
+#include "repl/scenes.h"
+#include "repl/util.h"
 #include "repl/export.h"
 #include "repl/flatten.h"
 #include "repl/parser.h"

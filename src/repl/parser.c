@@ -12,6 +12,7 @@
 #include "repl/core_internal.h"
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
+#include "repl/util.h"          /* repl_format_fits / repl_copy_string_fits */
 
 #include "config.h" /* REPL_ENUM_ARG_MAX */
 
