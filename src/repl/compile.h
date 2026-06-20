@@ -170,12 +170,9 @@ typedef struct ReplCompiledChange_s {
 
 /* Read-only context passed to compile functions. The compile function
  * takes whatever it needs from here; it never reaches back into REPL
- * globals.
- *
- * Today's transitional state: source-scope reads and parser alias reads are
- * carried by source_scope / func_aliases, but compile functions still read
- * predef vars through the shared eval table because that table is
- * ReplState-adjacent and not yet threaded through context.
+ * globals — document, source-scope, function-alias, and predefined-variable
+ * reads all come from this snapshot, so compile is driven entirely by the
+ * context.
  */
 typedef struct {
     int               edit_line;        /* current cursor source-cmd idx */
@@ -185,6 +182,7 @@ typedef struct {
     const GLCmd      *document_cmds;    /* source-command array snapshot */
     ReplFuncAliasView func_aliases;     /* function aliases visible to parser calls */
     ReplSourceScopeView source_scope;   /* scope/depth view over document_cmds */
+    ReplPredefView    predef;           /* predefined-variable table snapshot */
 } ReplCompileContext;
 
 typedef enum {

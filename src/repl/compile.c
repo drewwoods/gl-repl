@@ -175,6 +175,7 @@ ReplCompileContext repl_compile_context_from_live(int edit_line_idx) {
         .text            = source_document_view(),
         .document_cmds   = repl_state_document_cmds(),
         .func_aliases    = repl_func_alias_view(),
+        .predef          = repl_eval_predef_view(),
     };
     repl_source_scope_view_bind(&ctx.source_scope,
                                 ctx.document_cmds,
@@ -544,6 +545,7 @@ typedef struct {
 static ReplCompileResult parse_float_name_list(const char *input,
                                                FloatDeclParse *parsed,
                                                int *recognized,
+                                               ReplPredefView predef,
                                                char *err, int err_size) {
     *recognized = 0;
     memset(parsed, 0, sizeof(*parsed));
@@ -632,10 +634,10 @@ static ReplCompileResult parse_float_name_list(const char *input,
                 return compile_set_err(err, err_size, "expected expression after '='");
 
             char verr[REPL_DIAG_TEXT_MAX];
-            if (!repl_eval_validate_expression_idents(init_expr, NULL, 0,
-                                                      verr, sizeof(verr)))
+            if (!repl_eval_validate_expression_idents_in(init_expr, predef, NULL, 0,
+                                                         verr, sizeof(verr)))
                 return compile_set_err(err, err_size, "%s", verr);
-            ExprCtx eval_ctx = { init_expr, g_predef_vars, g_num_predef_vars, NULL, 0 };
+            ExprCtx eval_ctx = { init_expr, predef.vars, predef.count, NULL, 0 };
             parsed->init_vals[parsed->count] = repl_eval_expr(&eval_ctx);
             parsed->has_init[parsed->count] = 1;
         }
@@ -667,6 +669,7 @@ static ReplCompileResult parse_float_name_list(const char *input,
  *   - net new slot count fits MAX_PREDEF_VARS */
 static ReplCompileResult validate_decl_names(const FloatDeclParse *parsed,
                                              const GLCmd *old_decl,
+                                             ReplPredefView predef,
                                              char *err, int err_size) {
     for (int var_idx = 0; var_idx < parsed->count; var_idx++) {
         const char *nm = parsed->names[var_idx];
@@ -676,7 +679,7 @@ static ReplCompileResult validate_decl_names(const FloatDeclParse *parsed,
                 return compile_set_err(err, err_size,
                     "duplicate name '%s' in declaration", nm);
         }
-        if (repl_eval_find_predef_var_idx(nm) >= 0) {
+        if (repl_eval_find_predef_var_idx_in(predef.vars, predef.count, nm) >= 0) {
             int in_old_decl = 0;
             if (old_decl) {
                 for (int d = 0; d < old_decl->payload.decl.count; d++) {
@@ -697,7 +700,7 @@ static ReplCompileResult validate_decl_names(const FloatDeclParse *parsed,
     }
 
     int old_count = old_decl ? old_decl->payload.decl.count : 0;
-    if (g_num_predef_vars + parsed->count - old_count > MAX_PREDEF_VARS)
+    if (predef.count + parsed->count - old_count > MAX_PREDEF_VARS)
         return compile_set_err(err, err_size,
             "variable table full (max %d)", MAX_PREDEF_VARS);
 
@@ -738,6 +741,7 @@ static void format_decl_text(const FloatDeclParse *parsed,
  * pre-removal indices (see repl_apply_predef_ops). */
 static void build_decl_predef_ops(const FloatDeclParse *parsed,
                                   const GLCmd *old_decl,
+                                  ReplPredefView predef,
                                   ReplCompiledChange *out) {
     int op_count = 0;
 
@@ -760,7 +764,7 @@ static void build_decl_predef_ops(const FloatDeclParse *parsed,
         if (op_count >= MAX_PREDEF_OPS_PER_COMMIT) break;
         const char *nm = parsed->names[v];
         int already_registered =
-            (old_decl && repl_eval_find_predef_var_idx(nm) >= 0);
+            (old_decl && repl_eval_find_predef_var_idx_in(predef.vars, predef.count, nm) >= 0);
         ReplPredefOp *op = &out->predef_ops[op_count++];
 
         if (already_registered) {
@@ -808,7 +812,8 @@ ReplCompileResult repl_compile_float_decl(const char *input,
     FloatDeclParse parsed;
     int recognized = 0;
     ReplCompileResult r =
-        parse_float_name_list(input, &parsed, &recognized, err, err_size);
+        parse_float_name_list(input, &parsed, &recognized, ctx->predef,
+                              err, err_size);
     if (r != REPL_COMPILE_OK)
         return r;
     if (!recognized) {
@@ -827,7 +832,7 @@ ReplCompileResult repl_compile_float_decl(const char *input,
                             ctx->document_cmds[insert_idx].type == CMD_VAR_DECLARE);
     const GLCmd *old_decl = overwriting_decl ? &ctx->document_cmds[insert_idx] : NULL;
 
-    r = validate_decl_names(&parsed, old_decl, err, err_size);
+    r = validate_decl_names(&parsed, old_decl, ctx->predef, err, err_size);
     if (r != REPL_COMPILE_OK)
         return r;
 
@@ -884,7 +889,7 @@ ReplCompileResult repl_compile_float_decl(const char *input,
     format_decl_text(&parsed, decl_text, (int)sizeof(decl_text));
     repl_copy_string_fits(out->text[0], sizeof(out->text[0]), decl_text);
 
-    build_decl_predef_ops(&parsed, old_decl, out);
+    build_decl_predef_ops(&parsed, old_decl, ctx->predef, out);
     build_decl_commit_message(&parsed, out->commit_message,
                               (int)sizeof(out->commit_message));
     return REPL_COMPILE_OK;
@@ -914,7 +919,7 @@ ReplCompileResult repl_compile_split_decl(const ReplCompileContext *ctx,
     int recognized = 0;
     ReplCompileResult r =
         parse_float_name_list(line ? line : "", &parsed, &recognized,
-                              err, err_size);
+                              ctx->predef, err, err_size);
     if (r != REPL_COMPILE_OK)
         return r;
     if (!recognized || parsed.count < 2) {
@@ -974,7 +979,8 @@ ReplCompileResult repl_compile_split_decl(const ReplCompileContext *ctx,
 static int compile_rebase_var_assign_slot_after_undeclares(
         const char *name,
         int original_slot,
-        const ReplCompiledChange *change) {
+        const ReplCompiledChange *change,
+        ReplPredefView predef) {
     int shifted_slot = original_slot;
 
     for (int op_idx = 0; op_idx < change->predef_op_count; op_idx++) {
@@ -984,7 +990,8 @@ static int compile_rebase_var_assign_slot_after_undeclares(
         if (op->kind != REPL_PREDEF_OP_UNDECLARE)
             continue;
 
-        dropped_slot = repl_eval_find_predef_var_idx(op->name);
+        dropped_slot = repl_eval_find_predef_var_idx_in(predef.vars, predef.count,
+                                                        op->name);
         if (dropped_slot < 0)
             continue;
         if (strcmp(op->name, name) == 0)
@@ -1061,13 +1068,13 @@ ReplCompileResult repl_compile_var_assign(const char *input,
         if (scratch_array_idx < 0)
             return compile_set_err(err, err_size, "unknown array '%s'", name);
 
-        if (!repl_eval_validate_expression_idents(index_expr,
-                                                  vis_n > 0 ? vis : NULL, vis_n,
-                                                  verr, sizeof(verr)))
+        if (!repl_eval_validate_expression_idents_in(index_expr, ctx->predef,
+                                                     vis_n > 0 ? vis : NULL, vis_n,
+                                                     verr, sizeof(verr)))
             return compile_set_err(err, err_size, "%s", verr);
-        if (!repl_eval_validate_expression_idents(rhs,
-                                                  vis_n > 0 ? vis : NULL, vis_n,
-                                                  verr, sizeof(verr)))
+        if (!repl_eval_validate_expression_idents_in(rhs, ctx->predef,
+                                                     vis_n > 0 ? vis : NULL, vis_n,
+                                                     verr, sizeof(verr)))
             return compile_set_err(err, err_size, "%s", verr);
 
         ExprCtx idx_ctx = { index_expr, vis_n > 0 ? vis : NULL, vis_n, NULL, 0 };
@@ -1104,14 +1111,15 @@ ReplCompileResult repl_compile_var_assign(const char *input,
                                    "cannot assign to function parameter '%s' - function parameters are constant",
                                    name);
 
-        int var_idx = repl_eval_find_predef_var_idx(name);
+        int var_idx = repl_eval_find_predef_var_idx_in(ctx->predef.vars,
+                                                       ctx->predef.count, name);
         if (var_idx < 0)
             return compile_set_err(err, err_size,
                 "undeclared variable '%s' - use 'float %s;' first", name, name);
 
-        if (!repl_eval_validate_expression_idents(rhs,
-                                                  vis_n > 0 ? vis : NULL, vis_n,
-                                                  verr, sizeof(verr)))
+        if (!repl_eval_validate_expression_idents_in(rhs, ctx->predef,
+                                                     vis_n > 0 ? vis : NULL, vis_n,
+                                                     verr, sizeof(verr)))
             return compile_set_err(err, err_size, "%s", verr);
 
         ExprCtx eval_ctx = { rhs, vis_n > 0 ? vis : NULL, vis_n, NULL, 0 };
@@ -1207,7 +1215,7 @@ ReplCompileResult repl_compile_var_assign(const char *input,
     out->predef_op_count = op_count;
     if (cmd.type == CMD_VAR_ASSIGN && overwriting_decl) {
         int rebased_slot = compile_rebase_var_assign_slot_after_undeclares(
-            name, cmd.var_idx, out);
+            name, cmd.var_idx, out, ctx->predef);
         if (rebased_slot < 0)
             return compile_set_err(err, err_size,
                                    "cannot overwrite declaration of '%s' with assignment",
@@ -1234,7 +1242,8 @@ ReplCompileResult repl_compile_set_predef_value(const char *name,
     if (err && err_size > 0)
         err[0] = '\0';
 
-    var_idx = repl_eval_find_predef_var_idx(name);
+    var_idx = repl_eval_find_predef_var_idx_in(ctx->predef.vars,
+                                               ctx->predef.count, name);
     if (var_idx < 0)
         return compile_set_err(err, err_size,
                                "undeclared variable '%s'", name);
@@ -1784,7 +1793,7 @@ ReplCompileResult repl_compile_if_block_kernel(const char *input,
     cond_text[clen] = '\0';
 
     char verr[REPL_DIAG_TEXT_MAX];
-    if (!repl_eval_validate_expression_idents(cond_text,
+    if (!repl_eval_validate_expression_idents_in(cond_text, ctx->predef,
                                               visible_nv > 0 ? visible_vars : NULL,
                                               visible_nv,
                                               verr, sizeof(verr))) {
@@ -2102,7 +2111,7 @@ ReplCompileResult repl_compile_for_loop_kernel(const char *input,
     while (*ra && isspace((unsigned char)*ra)) ra++;
 
     char verr[REPL_DIAG_TEXT_MAX];
-    if (!repl_eval_validate_expression_idents(ra, out->visible_vars,
+    if (!repl_eval_validate_expression_idents_in(ra, ctx->predef, out->visible_vars,
                                               out->visible_nv,
                                               verr, sizeof(verr))) {
         snprintf(err, (size_t)err_size, "%s", verr);
