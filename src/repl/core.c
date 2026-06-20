@@ -8,9 +8,6 @@
  *     parser absorbs them.
  *   - load_initial_commands() and a handful of startup helpers — pending move
  *     to src/repl/scenes.c.
- *   - current_begin_mode() / count_vertices() — pending move to
- *     src/repl/executor.c.
- *
  * For the live module map see MODULES.md. Editor input dispatch lives in
  * src/editor/input.c; cross-subsystem routing lives in glr_ctrl.c; commit
  * handlers live in src/editor/commit.c. The deleted repl_editor.{c,h} and
@@ -27,7 +24,6 @@
 #include "repl/scenes.h"
 #include "repl/util.h"
 #include "repl/export.h"
-#include "repl/flatten.h"
 #include "repl/parser.h"
 #include "repl/state_owners.h"
 
@@ -51,31 +47,6 @@ void repl_mark_source_dirty(void) {
 /* Predefined variables - defined in src/repl/eval.c */
 
 /* (no display list - commands are executed directly each frame) */
-
-const char *repl_mode_name(GLenum mode) {
-    return repl_begin_mode_name(mode);
-}
-
-GLenum repl_current_begin_mode(void) {
-    GLenum mode = GL_TRIANGLES;
-    const GLCmd *document_cmds = repl_state_document_cmds();
-    for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++)
-        if (document_cmds[cmd_idx].valid && document_cmds[cmd_idx].type == CMD_BEGIN)
-            mode = (GLenum)document_cmds[cmd_idx].args[0];
-    return mode;
-}
-
-int repl_count_vertices(void) {
-    int n = 0;
-    FlatProgramView flat_program = repl_state_flat_program_view();
-    const GLCmd *g_flat_cmds = flat_program.cmds;
-    int g_num_flat_cmds = flat_program.cmd_count;
-
-    for (int flat_idx = 0; flat_idx < g_num_flat_cmds; flat_idx++)
-        if (g_flat_cmds[flat_idx].valid &&
-            repl_cmd_emits_vertex(g_flat_cmds[flat_idx].type)) n++;
-    return n;
-}
 
 void repl_normalize_from_parsed(const char *parsed_source,
                                 const char *raw_expr,
@@ -410,29 +381,3 @@ void repl_set_time(float value) {
  * feature/decouple-repl-from-gl-repl-alt.md. Tests and callers that
  * want full-world reset call glr_ctrl_reset_all() (declared in
  * glr_ctrl.h). REPL-only callers can use repl_state_reset_program(). */
-
-/* ========================================================================= */
-/* Tunable-variable (@tune) collection                                        */
-/* ========================================================================= */
-
-int repl_collect_tuned_vars(const GLCmd *cmds, int count, SourceTextView text,
-                            const char **out, int max, int *total_out) {
-    int written = 0;
-    int total = 0;
-    if (!cmds || count < 0)
-        count = 0;
-    for (int i = 0; i < count; i++) {
-        if (cmds[i].type != CMD_VAR_DECLARE)
-            continue;
-        if (!repl_eval_line_has_tune_tag(source_text_line(text, i)))
-            continue;
-        for (int n = 0; n < cmds[i].payload.decl.count; n++) {
-            total++;
-            if (out && written < max)
-                out[written++] = cmds[i].payload.decl.names[n];
-        }
-    }
-    if (total_out)
-        *total_out = total;
-    return written;
-}

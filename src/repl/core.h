@@ -26,6 +26,7 @@
 #include "repl/export.h"     /* ReplExportLayout and save/load helpers */
 #include "repl/flatten.h"
 #include "repl/host_effects.h" /* Compatibility: host bridge moved out of core. */
+#include "repl/program_query.h" /* Compatibility: program queries moved out of core. */
 #include "repl/reformat.h"   /* Compatibility: reformatter moved out of core. */
 #include "source_document.h" /* SourceTextView document view */
 
@@ -116,9 +117,6 @@ void repl_flatten_commands(int edit_line_idx);
 void repl_recompute_autonormals(int autonormal_enabled,
                                 int *edit_line_inout);
 
-const char *repl_mode_name(GLenum mode);
-GLenum      repl_current_begin_mode(void);
-int         repl_count_vertices(void);
 /* Mark the source program dirty: invalidates the auto-normal pass, the
  * flat program, and the source-scope depth cache. Every source mutation
  * goes through here. Was named repl_mark_normals_dirty until the audit
@@ -237,21 +235,5 @@ int  repl_find_affecting_transforms(int line_idx, int *out_line_idx, int out_cap
 int  repl_find_affecting_transforms_for_flat_vertex(int flat_idx,
                                                     int *out_line_idx, int out_cap);
 int  repl_find_affecting_transforms_flat(int line_idx, int *out_line_idx, int out_cap);
-
-/* --- Tunable-variable (@tune) collection ------------------------------- */
-
-/* Maximum number of exported keyboard knobs — one QWERTY column-pair each
- * (q/a w/s e/d r/f t/g y/h u/j i/k o/l). */
-#define REPL_TUNE_MAX_KNOBS 9
-
-/* Walk `cmds[0..count)` and collect, in declaration order, the names of every
- * variable on a CMD_VAR_DECLARE line whose source text (read from `text`)
- * carries a whole-token `// @tune` tag. Writes up to `max` name pointers into
- * `out` (each points into a GLCmd decl payload, valid as long as `cmds` is),
- * sets `*total_out` (when non-NULL) to the total number of tagged names found
- * so callers can report the knob cap, and returns the number written
- * (min(total, max)). Neutral: cmds + text are parameters, no global reach. */
-int repl_collect_tuned_vars(const GLCmd *cmds, int count, SourceTextView text,
-                            const char **out, int max, int *total_out);
 
 #endif /* REPL_CORE_H */
