@@ -225,10 +225,14 @@ extern const char  *g_footer_post_init[];
  * not export) may pass NULL. The export call sites then use
  * defensive defaults: scene_w / scene_h fall back to 800x600 in the
  * exported display() boilerplate. */
-typedef struct {
+struct ReplExportLayout {
     int scene_w;
     int scene_h;
-} ReplExportLayout;
+};
+#ifndef REPL_EXPORT_LAYOUT_DECLARED
+#define REPL_EXPORT_LAYOUT_DECLARED
+typedef struct ReplExportLayout ReplExportLayout;
+#endif
 
 /* Export current REPL state to a C source file. Writes header metadata (@var, @cfg,
  * @scene-name, @workspace-dir), global variable declarations, camera state, function
