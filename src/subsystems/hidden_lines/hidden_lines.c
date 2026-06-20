@@ -215,14 +215,14 @@ void hidden_lines_execute(const HiddenLinesRenderContext *ctx,
 
     if (!ctx || !hidden_lines_is_wireframe_purpose(purpose))
         return;
-    if (!ctx->program.cmds || ctx->program.cmd_count <= 0)
-        return;
 
-    cmd_count = ctx->flat_cmd_count;
-    if (cmd_count < 0 || cmd_count > ctx->program.cmd_count)
-        cmd_count = ctx->program.cmd_count;
-    if (cmd_count <= 0)
-        return;
+    if (ctx->program.cmds && ctx->program.cmd_count > 0) {
+        cmd_count = ctx->flat_cmd_count;
+        if (cmd_count < 0 || cmd_count > ctx->program.cmd_count)
+            cmd_count = ctx->program.cmd_count;
+    } else {
+        cmd_count = 0;
+    }
 
     options.flat_cmd_count = cmd_count;
     options.program = ctx->program;
@@ -230,6 +230,10 @@ void hidden_lines_execute(const HiddenLinesRenderContext *ctx,
     options.status_out = ctx->status_out;
     options.status_out_sz = ctx->status_out_sz;
     cursor = repl_exec_cursor_begin(&options);
+    if (cmd_count <= 0) {
+        repl_exec_cursor_end(&cursor);
+        return;
+    }
 
     glPushMatrix();
     while ((cmd = repl_exec_cursor_peek(&cursor)) != NULL) {
@@ -260,7 +264,7 @@ void hidden_lines_execute(const HiddenLinesRenderContext *ctx,
         }
 
         if (repl_cmd_is_transform(cmd->type) &&
-            (cursor.in_begin || tess_depth != 0)) {
+            (repl_exec_cursor_in_begin(&cursor) || tess_depth != 0)) {
             repl_exec_cursor_advance(&cursor);
             continue;
         }

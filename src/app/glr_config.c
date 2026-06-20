@@ -115,7 +115,7 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_LINE_SMOOTH:         return &glr_state_render_mut()->line_smooth_enabled;
     case GLR_CONFIG_ACCUM_EFFECT:        return &glr_state_render_mut()->accum_effect;
     case GLR_CONFIG_ACCUM_PASSES:        return NULL; /* cycle: see accum_passes_*_cycle */
-    case GLR_CONFIG_WIREFRAME:           return (int *)&glr_state_presentation_mut()->wireframe;
+    case GLR_CONFIG_WIREFRAME:           return NULL; /* enum: see glr_config_set */
     case GLR_CONFIG_POINT_ATTENUATION:   return &glr_state_render_mut()->point_attenuation_enabled;
     case GLR_CONFIG_AUTO_TIME:           return NULL; /* REPL time owner: see glr_config_set */
     case GLR_CONFIG_REPLAY:              return NULL; /* lifecycle: see glr_config_set */
@@ -126,12 +126,12 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_GRID_EXTENT:         return &glr_state_presentation_mut()->grid_extent_idx;
     case GLR_CONFIG_GRID_BRIGHTNESS:     return &glr_state_presentation_mut()->grid_brightness_idx;
     case GLR_CONFIG_AXES_THEME:          return &glr_state_presentation_mut()->axes_theme;
-    case GLR_CONFIG_XFORM_GUIDE_MODE:    return (int *)&glr_state_presentation_mut()->xform_guide_mode;
+    case GLR_CONFIG_XFORM_GUIDE_MODE:    return NULL; /* enum: see glr_config_set */
     case GLR_CONFIG_LIGHT_INDICATORS:    return &glr_state_presentation_mut()->show_light_indicators;
     case GLR_CONFIG_LIGHT_THEME:         return &glr_state_presentation_mut()->light_theme;
     case GLR_CONFIG_POLY_HIGHLIGHT:      return &glr_state_presentation_mut()->highlight_current_poly;
     case GLR_CONFIG_BACKDROP:            return &glr_state_presentation_mut()->backdrop_mode;
-    case GLR_CONFIG_ORTHO_MODE:          return (int *)&glr_state_presentation_mut()->ortho_mode;
+    case GLR_CONFIG_ORTHO_MODE:          return NULL; /* enum: see glr_config_set */
     case GLR_CONFIG_CAMERA_ROTATE:       return &glr_camera_mut()->auto_rotate;
     case GLR_CONFIG_FOCUS_ORIGIN:        return NULL; /* action row: no backing state */
     case GLR_CONFIG_RESET_CAMERA:        return NULL; /* action row: no backing state */
@@ -256,6 +256,13 @@ void glr_config_set(GlrConfigKey key, int value) {
         } else if (replay_active()) {
             replay_stop();
         }
+    } else if (key == GLR_CONFIG_WIREFRAME) {
+        glr_state_presentation_mut()->wireframe = (SceneWireframeMode)value;
+    } else if (key == GLR_CONFIG_XFORM_GUIDE_MODE) {
+        glr_state_presentation_mut()->xform_guide_mode =
+            (SceneXformGuideMode)value;
+    } else if (key == GLR_CONFIG_ORTHO_MODE) {
+        glr_state_presentation_mut()->ortho_mode = (SceneViewMode)value;
     } else {
         int *target = config_value_ptr(key);
         if (!target)

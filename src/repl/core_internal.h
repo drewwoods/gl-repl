@@ -40,11 +40,6 @@ int  repl_parse_and_normalize_strict(const char *line, int pos,
                                      int preserve_expr, GLCmd *out_cmd,
                                      char *text_out, int text_sz);
 
-/* Hard cap on goto jumps while walking one flat program, shared by the
- * executor and the replay-annotation walker. A program that exceeds this
- * is treated as a runaway goto loop and bailed out with a status message. */
-#define REPL_GOTO_LOOP_LIMIT 100000
-
 /* ---- Visible-var collection ------------------------------------------- */
 
 /* Populate `vars` with every loop/function-local visible at source line

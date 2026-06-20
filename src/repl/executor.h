@@ -169,6 +169,7 @@ void repl_exec_cursor_end(ReplExecCursor *cursor);
 int repl_exec_cursor_done(const ReplExecCursor *cursor);
 const GLCmd *repl_exec_cursor_peek(const ReplExecCursor *cursor);
 void repl_exec_cursor_advance(ReplExecCursor *cursor);
+int repl_exec_cursor_in_begin(const ReplExecCursor *cursor);
 
 /* Draw a single glutSolid* command (CMD_GLUT_TORUS/CUBE/SPHERE/TEAPOT/
  * CONE) at the current modelview by dispatching the matching freeglut
