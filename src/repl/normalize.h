@@ -6,6 +6,7 @@
 
 #include "repl/command.h"
 #include "repl/eval.h"
+#include "repl/source_scope.h"
 
 void repl_normalize_from_parsed(const char *parsed_source,
                                 const char *raw_expr,
@@ -30,5 +31,12 @@ int repl_parse_and_normalize_strict(const char *line, int pos,
                                     ExprVar *vars, int num_vars,
                                     int preserve_expr, GLCmd *out_cmd,
                                     char *text_out, int text_sz);
+
+int repl_parse_and_normalize_strict_with_scope(
+        const char *line, int pos,
+        ExprVar *vars, int num_vars,
+        int preserve_expr, GLCmd *out_cmd,
+        char *text_out, int text_sz,
+        const ReplSourceScopeView *source_scope);
 
 #endif /* REPL_NORMALIZE_H */

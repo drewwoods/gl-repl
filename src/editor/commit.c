@@ -250,13 +250,11 @@ int editor_commit_apply_plan(const EditorCommitPlan *plan) {
 
 /* ---- editor_compile_close_brace --------------------------------- */
 
-/* CONTRACT (audit #11): context-pure for document data, live-state-
- * coupled for scope queries. The ReplCompileContext snapshot is
- * authoritative for ctx->document_cmds / _count / edit_line, but the
- * `repl_source_scope_*` calls below read from the live g_repl_state
- * document. Callers must apply each change to the live document
- * before the next scope-dependent compile call, or the scope queries
- * will misbehave. */
+/* CONTRACT (audit #11): context-pure for document data. The core
+ * compile kernel uses ReplCompileContext.source_scope; this editor-only
+ * wrapper still uses the existing live source-scope wrapper for
+ * post-effects and relocation helpers so editor -> REPL surface does not
+ * grow during this cleanup. */
 ReplCompileResult editor_compile_close_brace(const char *input,
                                              const ReplCompileContext *ctx,
                                              EditorCommitPlan *out,
@@ -336,14 +334,9 @@ ReplCompileResult editor_compile_close_brace(const char *input,
 
 /* ---- editor_compile_if_block ------------------------------------ */
 
-/* CONTRACT (audit #11): context-pure for document data, live-state-
- * coupled for both scope queries (repl_source_scope_*) and visible-
- * var collection (collect_visible_vars in src/repl/visible_vars.c). The
- * ReplCompileContext snapshot is authoritative for document_cmds /
- * _count / edit_line, but the helpers above read from the live
- * g_repl_state document. Callers must apply each change to the live
- * document before the next scope-dependent or visible-vars compile
- * call. */
+/* CONTRACT (audit #11): context-pure for document data and source-scope
+ * queries; still live-state-coupled for visible-var collection
+ * (collect_visible_vars in src/repl/visible_vars.c). */
 ReplCompileResult editor_compile_if_block(const char *input,
                                           const ReplCompileContext *ctx,
                                           EditorCommitPlan *out,
@@ -478,12 +471,10 @@ static int compile_function_decl_insert_pos_after_delete(
     return pos;
 }
 
-/* CONTRACT (audit #11): context-pure for document data, live-state-
- * coupled for scope queries (repl_source_scope_*). The
- * ReplCompileContext snapshot is authoritative for document_cmds /
- * _count / edit_line, but the helpers above read from the live
- * g_repl_state document. Callers must apply each change to the live
- * document before the next scope-dependent compile call. */
+/* CONTRACT (audit #11): context-pure for document data in the core
+ * compile kernel. This editor-specific relocation wrapper keeps the
+ * pre-existing live source-scope helper calls until the editor surface
+ * is consolidated. */
 ReplCompileResult editor_compile_func_def(const char *input,
                                           const ReplCompileContext *ctx,
                                           EditorCommitPlan *out,
@@ -647,14 +638,9 @@ ReplCompileResult editor_compile_func_def(const char *input,
 
 /* ---- editor_compile_for_loop ------------------------------------ */
 
-/* CONTRACT (audit #11): context-pure for document data, live-state-
- * coupled for both scope queries (repl_source_scope_*) and visible-
- * var collection (collect_visible_vars in src/repl/visible_vars.c). The
- * ReplCompileContext snapshot is authoritative for document_cmds /
- * _count / edit_line, but the helpers above read from the live
- * g_repl_state document. Callers must apply each change to the live
- * document before the next scope-dependent or visible-vars compile
- * call. */
+/* CONTRACT (audit #11): context-pure for document data and source-scope
+ * queries; still live-state-coupled for visible-var collection
+ * (collect_visible_vars in src/repl/visible_vars.c). */
 ReplCompileResult editor_compile_for_loop(const char *input,
                                           const ReplCompileContext *ctx,
                                           EditorCommitPlan *out,
@@ -773,6 +759,7 @@ ReplCompileResult editor_compile_for_loop(const char *input,
         .strict_refs     = 1,
         .err_buf         = body_err,
         .err_sz          = (int)sizeof(body_err),
+        .source_scope    = &ctx->source_scope,
     };
     ReplParsedLine body_pl;
     if (!repl_parser_parse_command_ctx(body, &body_pl, &parse_ctx)) {
@@ -1139,10 +1126,12 @@ int editor_commit_apply_swatch_change(int edit_line, int direction, float scale)
     if (n < 0 || n >= (int)sizeof new_line) return 0;
 
     {
+        ReplCompileContext ctx = editor_compile_context_live();
         ReplParseContext parse_ctx = {
             .source_line_idx = edit_line,
             .err_buf = parse_err,
             .err_sz = (int)sizeof parse_err,
+            .source_scope = &ctx.source_scope,
         };
         if (!repl_parser_parse_command_ctx(new_line, &pl, &parse_ctx)) {
             if (parse_err[0]) repl_set_status(parse_err);

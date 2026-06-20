@@ -48,7 +48,7 @@
 #include "repl/compile.h"
 
 #include "repl/core_internal.h"  /* repl_extract_assignment_parts, collect_visible_vars */
-#include "repl/source_scope.h"   /* repl_source_scope_cmd_indent, _find_block_end */
+#include "repl/source_scope.h"   /* ReplSourceScopeView queries */
 #include "repl/state_owners.h"
 #include "repl/util.h"            /* repl_format_fits / repl_copy_string_fits */
 
@@ -175,7 +175,33 @@ ReplCompileContext repl_compile_context_from_live(int edit_line_idx) {
         .text            = source_document_view(),
         .document_cmds   = repl_state_document_cmds(),
     };
+    repl_source_scope_view_bind(&ctx.source_scope,
+                                ctx.document_cmds,
+                                ctx.document_count);
     return ctx;
+}
+
+static const ReplSourceScopeView *compile_source_scope(
+        const ReplCompileContext *ctx) {
+    return ctx ? &ctx->source_scope : NULL;
+}
+
+static void compile_scope_cmd_indent(const ReplCompileContext *ctx,
+                                     int pos, char *buf, int buf_sz) {
+    repl_source_scope_view_cmd_indent(compile_source_scope(ctx),
+                                      pos, buf, buf_sz);
+}
+
+static int compile_scope_find_block_end(const ReplCompileContext *ctx,
+                                        int begin_idx) {
+    return repl_source_scope_view_find_block_end(compile_source_scope(ctx),
+                                                begin_idx);
+}
+
+static CmdType compile_scope_nearest_open_block_at(
+        const ReplCompileContext *ctx, int pos) {
+    return repl_source_scope_view_nearest_open_block_at(compile_source_scope(ctx),
+                                                       pos);
 }
 
 /* Insert/replace position for ctx: the edit line in insert mode;
@@ -1109,7 +1135,7 @@ ReplCompileResult repl_compile_var_assign(const char *input,
 
     /* Format text using the scope indent at the insert position. */
     char indent[REPL_INDENT_TEXT_MAX];
-    repl_source_scope_cmd_indent(insert_idx, indent, sizeof(indent));
+    compile_scope_cmd_indent(ctx, insert_idx, indent, sizeof(indent));
     char assign_text[MAX_LINE_LEN];
     if (index_expr[0]) {
         if (!repl_format_fits(assign_text, sizeof(assign_text),
@@ -1455,7 +1481,7 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
 
         if (is_block_head) {
             head = line_idx;
-            end = repl_source_scope_find_block_end(line_idx);
+            end = compile_scope_find_block_end(ctx, line_idx);
             if (end >= ctx->document_count)
                 return compile_set_err(err, err_size, "Unmatched block start");
         } else {
@@ -1533,10 +1559,12 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
             char parsed_text[MAX_LINE_LEN];
             memset(&parsed_cmd, 0, sizeof(parsed_cmd));
             parsed_text[0] = '\0';
-            if (!repl_parse_and_normalize_strict(stripped, line_idx,
-                                                 vis_n > 0 ? vis : NULL, vis_n,
-                                                 preserve_expr, &parsed_cmd,
-                                                 parsed_text, sizeof(parsed_text)))
+            if (!repl_parse_and_normalize_strict_with_scope(
+                    stripped, line_idx,
+                    vis_n > 0 ? vis : NULL, vis_n,
+                    preserve_expr, &parsed_cmd,
+                    parsed_text, sizeof(parsed_text),
+                    compile_source_scope(ctx)))
                 return compile_set_err(err, err_size,
                                        "Cannot uncomment: not a valid command");
             repl_compiled_change_init(out);
@@ -1613,8 +1641,9 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
 
 /* Compute the dedented (one-block-out) indent for a close-brace.
  * Mirror of close_brace_indent in src/editor/commit.c. */
-static void compile_close_brace_indent(int pos, char *buf, int buf_sz) {
-    repl_source_scope_cmd_indent(pos, buf, buf_sz);
+static void compile_close_brace_indent(const ReplCompileContext *ctx,
+                                       int pos, char *buf, int buf_sz) {
+    compile_scope_cmd_indent(ctx, pos, buf, buf_sz);
     int len = (int)strlen(buf);
     if (len >= 2)
         len -= 2;
@@ -1642,7 +1671,7 @@ ReplCompileResult repl_compile_close_brace_kernel(const char *input,
 
     out->pos = compile_insert_pos(ctx);
 
-    out->open_type = repl_source_scope_nearest_open_block_at(out->pos);
+    out->open_type = compile_scope_nearest_open_block_at(ctx, out->pos);
     if (out->open_type == CMD_FOR_BEGIN)      out->end_type = CMD_FOR_END;
     else if (out->open_type == CMD_FUNC_DEF)  out->end_type = CMD_FUNC_END;
     else if (out->open_type == CMD_IF_BEGIN)  out->end_type = CMD_IF_END;
@@ -1663,7 +1692,7 @@ ReplCompileResult repl_compile_close_brace_kernel(const char *input,
 
     /* Insert-new-end-marker branch. */
     char indent[REPL_INDENT_TEXT_MAX];
-    compile_close_brace_indent(out->pos, indent, sizeof(indent));
+    compile_close_brace_indent(ctx, out->pos, indent, sizeof(indent));
 
     out->fe.type  = out->end_type;
     out->fe.valid = 1;
@@ -1770,7 +1799,7 @@ ReplCompileResult repl_compile_if_block_kernel(const char *input,
         return REPL_COMPILE_ERROR;
     }
 
-    repl_source_scope_cmd_indent(out->pos, out->indent, sizeof(out->indent));
+    compile_scope_cmd_indent(ctx, out->pos, out->indent, sizeof(out->indent));
 
     out->ib.type    = CMD_IF_BEGIN;
     out->ib.args[0] = cond_val;
@@ -1950,7 +1979,7 @@ ReplCompileResult repl_compile_func_def_kernel(const char *input,
 
     out->pos = compile_insert_pos(ctx);
 
-    repl_source_scope_cmd_indent(out->pos, out->indent, sizeof(out->indent));
+    compile_scope_cmd_indent(ctx, out->pos, out->indent, sizeof(out->indent));
 
     out->fd.type     = CMD_FUNC_DEF;
     out->fd.args[0]  = (float)out->fn;
@@ -2022,7 +2051,7 @@ ReplCompileResult repl_compile_for_loop_kernel(const char *input,
         return REPL_COMPILE_ERROR;
     }
 
-    repl_source_scope_cmd_indent(out->pos, out->indent, sizeof(out->indent));
+    compile_scope_cmd_indent(ctx, out->pos, out->indent, sizeof(out->indent));
 
     out->fb.type    = CMD_FOR_BEGIN;
     out->fb.args[0] = out->start;

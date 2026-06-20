@@ -1169,10 +1169,15 @@ static void glr_ctrl_populate_numeric_swatch(UiRenderSnapshot *snap) {
     if (!d.found) return;
 
     {
+        ReplSourceScopeView source_scope;
+        repl_source_scope_view_bind(&source_scope,
+                                    repl_state_document_cmds(),
+                                    repl_state_document_count());
         ReplParseContext parse_ctx = {
             .source_line_idx = edit_line,
             .err_buf = parse_err,
             .err_sz = (int)sizeof parse_err,
+            .source_scope = &source_scope,
         };
         if (!repl_parser_parse_command_ctx(in.input, &pl, &parse_ctx)) return;
     }
