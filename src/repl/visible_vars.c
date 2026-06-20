@@ -10,7 +10,9 @@
 #include "repl/util.h"
 #include "source_document.h"
 
-int collect_visible_vars(int pos, ExprVar *vars, int max_vars, int *total_out) {
+int collect_visible_vars_in(SourceTextView text, const GLCmd *document_cmds,
+                            int document_count, int pos,
+                            ExprVar *vars, int max_vars, int *total_out) {
     typedef struct {
         CmdType type;
         ExprVar vars[MAX_EXPR_VARS];
@@ -19,14 +21,11 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars, int *total_out) {
 
     ScopeFrame frames[64];
     int depth = 0;
-    /* Source text reads for for-loop / func-def reparse route through
-     * a SourceTextView fetched at entry. Phase D will accept the
-     * view as a parameter once collect_visible_vars is folded into
-     * the editor commit path. */
-    SourceTextView text = source_document_view();
-    const GLCmd *document_cmds = repl_state_document_cmds();
 
-    for (int cmd_idx = 0; cmd_idx < pos && cmd_idx < repl_state_document_count(); cmd_idx++) {
+    if (!document_cmds)
+        document_count = 0;
+
+    for (int cmd_idx = 0; cmd_idx < pos && cmd_idx < document_count; cmd_idx++) {
         CmdType t = document_cmds[cmd_idx].type;
         if (repl_cmd_is_block_head(t)) {
             if (depth >= (int)(sizeof(frames) / sizeof(frames[0])))
@@ -77,4 +76,20 @@ int collect_visible_vars(int pos, ExprVar *vars, int max_vars, int *total_out) {
     }
     if (total_out) *total_out = total;
     return count;
+}
+
+/* Live-document convenience wrapper: collects against the current REPL
+ * document. Editor / loader / reformat callers that intentionally parse
+ * against live state use this; compile threads its own document view through
+ * collect_visible_vars_in so it stays context-driven.
+ *
+ * Residual: the CMD_FUNC_DEF param extraction above still routes through
+ * parse_repl_func_signature, which resolves a custom alias name via the live
+ * func-alias table (symbol state, not document state). Bare funcN headers need
+ * no such lookup; threading an alias view here is Finding-3-family follow-up. */
+int collect_visible_vars(int pos, ExprVar *vars, int max_vars, int *total_out) {
+    return collect_visible_vars_in(source_document_view(),
+                                   repl_state_document_cmds(),
+                                   repl_state_document_count(),
+                                   pos, vars, max_vars, total_out);
 }
