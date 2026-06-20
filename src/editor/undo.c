@@ -10,7 +10,10 @@
 
 #include "input.h"
 #include "repl/command_store.h"
-#include "repl/core.h"
+#include <stdio.h>
+#include <string.h>
+#include "repl/host_effects.h"
+#include "repl/state_notify.h"
 #include "repl/core_internal.h"
 #include "repl/scenes.h"         /* repl_promote_example_if_needed */
 #include "repl/state_views.h"

@@ -1,3 +1,4 @@
+#include "repl/flatten.h"
 #include "subsystems/replay/replay_internal.h"
 #include <string.h>
 

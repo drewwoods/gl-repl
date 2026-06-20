@@ -2,7 +2,7 @@
 #include "subsystems/variable_panel/variable_panel_drag.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 #include "repl/state.h"
-#include "repl/core.h"
+
 #include "editor/input.h"
 #include "repl/eval.h"
 #include "support/test_harness.h"

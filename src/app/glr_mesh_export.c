@@ -21,7 +21,8 @@
 
 #include "source_document.h"               /* source_document_view */
 #include "support/mesh_ply.h"
-#include "repl/core.h"                      /* repl_set_status[_error], repl_flatten_commands */
+#include "repl/host_effects.h"
+#include "repl/pipeline.h"
 #include "repl/executor.h"                  /* ReplExecutionOptions, repl_execute_program */
 #include "repl/state_views.h"               /* repl_state_flat_program_* */
 #include "editor/state.h"                   /* editor_state_edit_line */

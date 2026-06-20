@@ -43,7 +43,11 @@
 #include "support/gpuprof.h"
 #include "app/glr_prof.h"
 #include "repl/bootstrap.h"
-#include "repl/core.h"
+#include <string.h>
+#include "repl/host_effects.h"
+#include "repl/program_query.h"
+#include "repl/scenes.h"
+#include "source_document.h"
 #include "repl/examples.h"          /* REPL_EXAMPLE_TAG_* */
 #include "repl/eval.h"
 #include "repl/parser.h"

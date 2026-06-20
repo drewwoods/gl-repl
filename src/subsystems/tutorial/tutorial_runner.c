@@ -6,7 +6,7 @@
 
 #include <math.h>               /* fabsf for REQUIRE_VAR epsilon check */
 
-#include "repl/core.h"
+#include "repl/host_effects.h"
 #include "repl/cfg_baseline.h" /* For repl_cfg_get_int, repl_cfg_set_int, and repl_cfg_known */
 #include "repl/eval.h"          /* repl_eval_find_predef_var_idx + predef-vars view */
 #include "repl/load.h"

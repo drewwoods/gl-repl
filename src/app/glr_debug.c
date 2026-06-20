@@ -1,6 +1,9 @@
 /*
  * glr_debug.c - Diagnostic dumps for CLI flags and tests.
  */
+#include <stdio.h>
+#include "repl/flatten.h"
+#include "source_document.h"
 #include "app/glr_debug.h"
 
 #include "editor/state.h"

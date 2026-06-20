@@ -10,7 +10,9 @@
 #include "repl/example_loader.h"  /* repl_load_example_lines_for_test */
 #include "repl/examples.h"
 #include "repl/state_owners.h"
-#include "repl/core.h"
+#include <math.h>
+#include "repl/export.h"
+#include "source_document.h"
 #include "repl/text_helpers.h"
 #include "repl/util.h"
 #include "ui/app/layout.h"      /* CODE_PANEL_LAYOUT_* enum values */

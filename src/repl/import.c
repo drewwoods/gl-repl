@@ -35,7 +35,11 @@
 #include "repl/load.h"            /* repl_load_apply_line — step 5b */
 #include "config.h"
 #include "repl/command_store.h"
-#include "repl/core.h"
+#include <string.h>
+#include "repl/host_effects.h"
+#include "repl/reformat.h"
+#include "repl/scenes.h"
+#include "repl/state_notify.h"
 #include "repl/core_internal.h"
 #include "repl/executor.h"
 #include "repl/parser.h"

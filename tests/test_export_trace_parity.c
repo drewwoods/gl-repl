@@ -31,7 +31,7 @@
 #include "editor/input.h"
 #include "app/glr_ctrl.h"
 #include "app/glr_state.h"
-#include "repl/core.h"
+
 #include "repl/core_internal.h"
 #include "repl/examples.h"
 #include "repl/executor.h"

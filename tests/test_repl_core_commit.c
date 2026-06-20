@@ -3,7 +3,9 @@
 #include "editor/input.h"
 #include "app/glr_ctrl.h"
 #include "app/glr_ctrl_replay_annotations.h"
-#include "repl/core.h"
+#include <stdbool.h>
+#include "repl/pipeline.h"
+#include "source_document.h"
 #include "repl/executor.h"
 #include "repl/flatten.h"
 #include "repl/geometry_query.h"

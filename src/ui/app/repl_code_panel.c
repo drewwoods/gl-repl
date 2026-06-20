@@ -3,7 +3,7 @@
 #include "c_compat.h"
 #include "editor/state.h"
 #include "repl/command_spec.h"
-#include "repl/core.h"
+#include "repl/program_query.h"
 #include "repl/eval.h"
 #include "repl/export.h"
 #include "repl/state_views.h"

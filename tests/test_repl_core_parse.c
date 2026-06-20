@@ -9,6 +9,9 @@
 #define g_status (ui_state_status_mut()->text)
 
 #include <stdio.h>
+#include <stdbool.h>
+#include <math.h>
+#include "repl/host_effects.h"
 #include <stdlib.h>
 #include <string.h>
 

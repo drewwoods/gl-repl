@@ -3,7 +3,7 @@
 #include "editor/input.h"
 #include "editor/search.h"
 #include "keys.h"
-#include "repl/core.h"
+
 #include "repl/state.h"
 
 #define g_search_active    (editor_state_search_mut()->active)

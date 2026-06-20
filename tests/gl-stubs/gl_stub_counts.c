@@ -13,6 +13,7 @@ typedef int gl_stub_counts_tu_nonempty_t;
 
 #ifdef GL_STUBS
 
+#include <stdio.h>
 #include <GL/gl_stub_counts.h>
 
 #include <locale.h>

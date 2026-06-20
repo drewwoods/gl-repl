@@ -2,6 +2,7 @@
  * src/repl/program_query.c - Read-only queries over source and flat programs.
  */
 
+#include "source_document.h"
 #include "repl/program_query.h"
 
 #include "repl/command_spec.h"

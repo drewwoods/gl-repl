@@ -6,6 +6,7 @@
 
 #include "support/test_harness.h"
 #include <stdio.h>
+#include "repl/flatten.h"
 #include <string.h>
 
 static TestHarness g_harness = TEST_HARNESS_INIT;

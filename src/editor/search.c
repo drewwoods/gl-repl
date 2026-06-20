@@ -17,6 +17,7 @@
  * The module owns search behavior; storage lives in src/editor/state.c
  * (EditorSearchState) and is accessed through the typed search facade.
  */
+#include <string.h>
 #include "state.h"
 #include "input.h"
 #include "completion.h"

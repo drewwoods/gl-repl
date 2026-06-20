@@ -1,7 +1,7 @@
 #include "editor/state.h"
 #include "app/glr_ctrl.h"
 #include "repl/command_store.h"
-#include "repl/core.h"
+
 #include "repl/state.h"
 #include "repl/eval.h"
 #include "support/test_harness.h"

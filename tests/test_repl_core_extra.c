@@ -7,7 +7,13 @@
 #include "config.h"                  /* DEFAULT_SCENE_FILE */
 #include "repl/bootstrap.h"
 #include "repl/command_spec.h"  /* cmd_type_name */
-#include "repl/core.h"
+#include "repl/example_loader.h"
+#include "repl/export.h"
+#include "repl/flatten.h"
+#include "repl/pipeline.h"
+#include "repl/program_query.h"
+#include "repl/state_notify.h"
+#include "source_document.h"
 #include "repl/examples.h"     /* repl_example_count, repl_example_name */
 #include "editor/input.h"
 #include "repl/core_internal.h"

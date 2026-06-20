@@ -5,7 +5,11 @@
 #include "repl/command_store.h"
 #include "repl/core_internal.h"
 #include "repl/examples.h"
-#include "repl/core.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdint.h>
+#include "repl/host_effects.h"
+#include "repl/state_notify.h"
 #include "repl/util.h"          /* repl_format_fits / repl_copy_string_fits */
 #include "repl/cfg_baseline.h"   /* ReplConfigBag + bridge for per-scene cfg */
 #include "repl/export.h"          /* ReplExportCameraBlock + camera bridge */

@@ -6,7 +6,11 @@
 #include "repl/command_store.h"
 #include "repl/examples.h"
 #include "repl/scenes.h"
-#include "repl/core.h"
+#include <stdio.h>
+#include <string.h>
+#include "repl/example_loader.h"
+#include "repl/host_effects.h"
+#include "repl/state_notify.h"
 #include "repl/state_owners.h"
 #include "source_document.h"     /* source_document_clear */
 #include "config.h"              /* REPL_DIAG_TEXT_MAX */

@@ -9,6 +9,7 @@
 #include "support/test_harness.h"
 
 #include <stdio.h>
+#include "source_document.h"
 #include <stdlib.h>
 #include <string.h>
 

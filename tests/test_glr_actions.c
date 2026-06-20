@@ -11,7 +11,9 @@
 #include "app/glr_config.h"
 #include "config.h"                  /* DEFAULT_SCENE_FILE */
 #include "app/glr_audio.h"
-#include "repl/core.h"
+#include "repl/example_loader.h"
+#include "repl/host_effects.h"
+#include "repl/scenes.h"
 #include "repl/help_text.h"
 #include "editor/input.h"
 #include "editor/state.h"                /* editor_state_edit_line_set */

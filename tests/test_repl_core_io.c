@@ -4,7 +4,10 @@
 #include "app/glr_mesh_export.h"
 #include "app/glr_ctrl.h"
 #include "repl/command_store.h"
-#include "repl/core.h"
+#include "repl/example_loader.h"
+#include "repl/reformat.h"
+#include "repl/state_notify.h"
+#include "source_document.h"
 #include "repl/text_helpers.h"  /* repl_format_source_float, REPL_SOURCE_FLOAT_TEXT_MAX */
 #include "editor/input.h"
 #include "repl/pipeline.h"

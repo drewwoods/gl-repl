@@ -21,7 +21,7 @@
 #include "repl/apply.h"
 #include "repl/command_store.h"
 #include "repl/compile.h"
-#include "repl/core.h"
+#include <stdbool.h>
 #include "editor/input.h"
 #include "repl/core_internal.h"  /* try_commit_*, editor_commit_func_decl_resume_peek */
 #include "repl/eval.h"

@@ -8,7 +8,7 @@
  * key assignment, swatch-step parity, and a compile gate over the generated
  * file against the GL stub headers.
  */
-#include "repl/core.h"
+#include "repl/program_query.h"
 #include "repl/eval.h"
 #include "repl/export.h"
 #include "editor/input.h"

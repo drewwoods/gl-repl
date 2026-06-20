@@ -4,7 +4,8 @@
 #include "app/glr_actions.h"
 #include "repl/state.h"
 #include "repl/state_owners.h"
-#include "repl/core.h"              /* repl_set_workspace_dir */
+#include "repl/flatten.h"
+#include "repl/scenes.h"
 #include "editor/state.h"
 #include "ui/app/state.h"
 #include "app/glr_camera.h"

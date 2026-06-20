@@ -2,6 +2,7 @@
 #include "keys.h"
 #include "repl/cfg_baseline.h"
 #include <stdio.h>
+#include "repl/host_effects.h"
 
 static int replay_cancel_on_unrecognized(void) {
     repl_set_status("Replay: cancelled (key)");

@@ -23,7 +23,8 @@
 #include "repl/command.h"
 #include "repl/command_spec.h"
 #include "repl/compile.h"
-#include "repl/core.h"
+#include <stdbool.h>
+#include "repl/scenes.h"
 #include "repl/eval.h"
 #include "repl/export_state.h"
 #include "subsystems/replay/replay.h"

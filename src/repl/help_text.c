@@ -20,6 +20,9 @@
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <math.h>
 #include <string.h>
 
 static const ReplHelpFkeyProvider *g_fkey_provider = NULL;

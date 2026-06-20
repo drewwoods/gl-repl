@@ -5,6 +5,8 @@
  * context carries the source-line index used for scope-sensitive indentation
  * plus the loop/function locals visible at that line.
  */
+#include <stdio.h>
+#include <string.h>
 #include "repl/parser.h"
 
 #include "repl/command_spec.h"

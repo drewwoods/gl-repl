@@ -1,5 +1,6 @@
 /* Pure PLY writer for GL_FEEDBACK (GL_3D_COLOR) buffers. See mesh_ply.h. */
 
+#include <stdio.h>
 #include "support/mesh_ply.h"
 
 #include <math.h>

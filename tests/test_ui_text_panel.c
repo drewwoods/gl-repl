@@ -8,6 +8,7 @@
 #endif
 
 #include <stdio.h>
+#include <math.h>
 #include <string.h>
 
 #define STATUSBAR_H 22

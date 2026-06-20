@@ -5,7 +5,7 @@
 #include "app/glr_ctrl_replay_annotations.h"
 #include "editor/input.h"   /* editor_feed_line */
 #include "editor/state.h"   /* editor_state_edit_line */
-#include "repl/core.h"      /* repl_flatten_commands */
+#include "repl/pipeline.h"
 #include "repl/eval.h"
 #include "subsystems/replay/replay_annotations.h" /* ReplReplayAnnotationOutput */
 #include "repl/state.h"              /* repl_state_* views */

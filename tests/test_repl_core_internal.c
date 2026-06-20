@@ -7,7 +7,10 @@
 #include "repl/executor.h"
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
-#include "repl/core.h"
+#include <stdbool.h>
+#include "repl/flatten.h"
+#include "repl/pipeline.h"
+#include "repl/state_notify.h"
 #include "editor/input.h"
 #include "ui/app/state.h"
 #include "ui/app/layout.h"           /* CODE_PANEL_LAYOUT_* */

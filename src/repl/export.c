@@ -8,7 +8,9 @@
  * glr_config.h was already dropped in step 4 for the same reason. */
 #include "config.h"             /* shared export/runtime constants */
 #include "repl/command_store.h"
-#include "repl/core.h"
+#include "repl/host_effects.h"
+#include "repl/program_query.h"
+#include "repl/scenes.h"
 #include "repl/core_internal.h"
 #include "repl/util.h"            /* repl_format_fits / repl_copy_string_fits */
 #include "repl/executor.h"        /* repl_apply_state_cmd */

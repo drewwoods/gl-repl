@@ -4,6 +4,7 @@
  * These helpers answer questions about the source command array before a
  * command at a given index is parsed, formatted, or structurally edited.
  */
+#include <string.h>
 #include "repl/source_scope.h"
 #include "repl/state_views.h"
 

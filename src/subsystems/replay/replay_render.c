@@ -3,7 +3,7 @@
 #include "repl/state_views.h"
 #include "repl/executor.h"
 #include "repl/eval.h"
-#include "repl/core.h"
+#include "repl/flatten.h"
 #include "subsystems/replay/replay.h"
 #include "support/cpuprof.h"
 #include "scene/palette.h"

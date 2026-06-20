@@ -1,6 +1,6 @@
 #include "subsystems/edit_overlays/edit_overlays.h"
 #include "gl_includes.h"
-#include "repl/core.h"
+#include "repl/flatten.h"
 #include "subsystems/replay/replay.h"
 #include "repl/executor.h"
 #include "scene/palette.h"

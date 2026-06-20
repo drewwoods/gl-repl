@@ -50,7 +50,11 @@
 #include "keys.h"
 #include "support/memprof.h"
 #include "support/cpuprof.h"
-#include "repl/core.h"
+#include <string.h>
+#include "repl/example_loader.h"
+#include "repl/host_effects.h"
+#include "repl/scenes.h"
+#include "source_document.h"
 #include "repl/examples.h"          /* REPL_EXAMPLE_TAG_* */
 #include "repl/eval.h"
 #include "repl/parser.h"

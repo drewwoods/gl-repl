@@ -5,6 +5,7 @@
 #include "support/memprof.h"
 
 #include <stdio.h>
+#include <stdint.h>
 #include <time.h>
 
 #if defined(__APPLE__)
