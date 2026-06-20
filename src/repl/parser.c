@@ -58,39 +58,60 @@ static const ReplSourceScopeView *parser_source_scope(const ReplParseContext *ct
 }
 
 static int parser_scope_block_depth_at(const ReplParseContext *ctx, int pos) {
-    return repl_source_scope_view_block_depth_at(parser_source_scope(ctx), pos);
+    const ReplSourceScopeView *scope = parser_source_scope(ctx);
+    return scope ? repl_source_scope_view_block_depth_at(scope, pos)
+                 : repl_source_scope_block_depth_at(pos);
 }
 
 static int parser_scope_in_begin_block_at(const ReplParseContext *ctx, int pos) {
-    return repl_source_scope_view_in_begin_block_at(parser_source_scope(ctx), pos);
+    const ReplSourceScopeView *scope = parser_source_scope(ctx);
+    return scope ? repl_source_scope_view_in_begin_block_at(scope, pos)
+                 : repl_source_scope_in_begin_block_at(pos);
 }
 
 static void parser_scope_cmd_indent(const ReplParseContext *ctx,
                                     int pos, char *buf, int buf_sz) {
-    repl_source_scope_view_cmd_indent(parser_source_scope(ctx), pos, buf, buf_sz);
+    const ReplSourceScopeView *scope = parser_source_scope(ctx);
+    if (scope)
+        repl_source_scope_view_cmd_indent(scope, pos, buf, buf_sz);
+    else
+        repl_source_scope_cmd_indent(pos, buf, buf_sz);
 }
 
 static void parser_scope_begin_indent(const ReplParseContext *ctx,
                                       int pos, char *buf, int buf_sz) {
-    repl_source_scope_view_begin_indent(parser_source_scope(ctx), pos, buf, buf_sz);
+    const ReplSourceScopeView *scope = parser_source_scope(ctx);
+    if (scope)
+        repl_source_scope_view_begin_indent(scope, pos, buf, buf_sz);
+    else
+        repl_source_scope_begin_indent(pos, buf, buf_sz);
 }
 
 static void parser_scope_tess_close_indent(const ReplParseContext *ctx,
                                            int pos, char *buf, int buf_sz) {
-    repl_source_scope_view_tess_close_indent(parser_source_scope(ctx), pos,
-                                             buf, buf_sz);
+    const ReplSourceScopeView *scope = parser_source_scope(ctx);
+    if (scope)
+        repl_source_scope_view_tess_close_indent(scope, pos, buf, buf_sz);
+    else
+        repl_source_scope_tess_close_indent(pos, buf, buf_sz);
 }
 
 static void parser_scope_cmd_tess_indent(const ReplParseContext *ctx,
                                          int pos, char *buf, int buf_sz) {
-    repl_source_scope_view_cmd_tess_indent(parser_source_scope(ctx), pos,
-                                           buf, buf_sz);
+    const ReplSourceScopeView *scope = parser_source_scope(ctx);
+    if (scope)
+        repl_source_scope_view_cmd_tess_indent(scope, pos, buf, buf_sz);
+    else
+        repl_source_scope_cmd_tess_indent(pos, buf, buf_sz);
 }
 
 static void parser_scope_matrix_close_indent(const ReplParseContext *ctx,
                                              int pos, char *buf, int buf_sz) {
-    repl_source_scope_view_matrix_close_indent(parser_source_scope(ctx), pos,
-                                               buf, buf_sz);
+    const ReplSourceScopeView *scope = parser_source_scope(ctx);
+    if (scope)
+        repl_source_scope_view_matrix_close_indent(scope, pos, buf, buf_sz);
+    else
+        repl_source_scope_matrix_close_indent(pos, buf, buf_sz);
 }
 
 static void set_incomplete_missing_paren_status(const ReplParseContext *ctx,

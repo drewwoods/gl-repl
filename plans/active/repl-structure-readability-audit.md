@@ -1,9 +1,9 @@
 # `src/repl` structure and readability audit - active
 
 Status: **active** - implementation has started. Finding 1's implementation
-slice landed first, and Finding 4's source-scope view split is now landed in
-two follow-up commits. The remaining findings in this document are still a
-cleanup map, not completed work.
+slice landed first, and Finding 4's source-scope view split plus the 4b
+performance-regression fix are now landed. The remaining findings in this
+document are still a cleanup map, not completed work.
 
 Recent implementation commits:
 
@@ -26,7 +26,7 @@ Recent implementation commits:
 | Finding 4 phase 2: parser/compile source-scope plumbing | Landed | `dcf56b6a` threads `ReplSourceScopeView` through parser, compile, normalize, flatten, and scope-sensitive parse call sites. |
 | Finding 4 docs/status | Landed | `38b5f5e3` moved the audit to active and marked Finding 4 implemented. |
 | Finding 4 integration guard | Landed | `0906eb56` adds `normalize_large_doc`; revealed a ~14× per-call regression in the normalize path on large documents. |
-| Finding 4 phase 4b: warm-view fix | Recommended | Route live-document normalize through the warm `g_live_scope` to undo the O(N)-per-call bind (O(N²) reformat-all). See Finding 4 → Phase 4b. |
+| Finding 4 phase 4b: warm-view fix | Landed | Live-document normalize now reuses the warm live source-scope cache through parser live-wrapper fallback, and `reformat_large_doc` guards the user-visible reformat path. |
 | Finding 2 remaining purity gap | Not started | Visible-var and predef reads are still the main compile-context exceptions. |
 | Finding 3 strict-ref context cleanup | Not started | Strict function-call validation still needs explicit symbol/alias context work. |
 
@@ -36,6 +36,7 @@ Latest verification for Finding 4:
 - `make test_repl_core_parse USE_GL_STUBS=1`
 - `make test-stubs`
 - `make bench-csv USE_GL_STUBS=1`
+- `make bench-csv USE_GL_STUBS=1 BENCH_ARGS="--only normalize_large_doc,reformat_large_doc --iters 10"`
 
 Local benchmark status on `drew-macbook-air` (`min_iter_ms`):
 
@@ -46,6 +47,18 @@ Local benchmark status on `drew-macbook-air` (`min_iter_ms`):
 
 The local benchmark did not show the failure mode this finding guards against:
 `source_scope_query` did not drift toward `source_scope_churn`.
+
+Local Finding 4b benchmark rerun on `drew-macbook-air` after adding
+`reformat_large_doc` (`--iters 10`, CSV `per_op_us` / per-reformat average):
+
+| Phase | `normalize_large_doc` | `reformat_large_doc` |
+|---|---:|---:|
+| Temporary per-call-bind regression mode | 6.3143 µs | 44.6315 ms |
+| Phase 4b fix | 0.4293 µs | 31.5702 ms |
+
+The normalize entry is back in the pre-regression range. The direct reformat
+bench still includes all normal whole-document formatting work, but it now
+avoids the extra O(N) source-scope bind on every row.
 
 Re-reviewed after the recent `main` rebase. The rebase partially addressed a
 few items from the original audit: function-alias compile no longer mutates the
@@ -407,6 +420,15 @@ having been dropped — exactly the failure mode this finding warns about.
 
 #### Phase 4b (recommended): fix the per-call view-bind regression
 
+**Status (2026-06-20): landed.** The implementation keeps the warm live view
+private because the public pointer-returning accessor proposed below failed the
+`check-views-by-value-snapshot` ownership guard. Instead,
+`repl_parse_and_normalize{,_strict}` passes no explicit source-scope view, and
+the parser's source-scope helpers fall back to the existing live wrapper
+functions when `ctx->source_scope` is `NULL`. Snapshot/non-live callers still use
+`repl_parse_and_normalize_strict_with_scope` with an explicit
+`ReplSourceScopeView`.
+
 The `normalize_large_doc` integration guard (commit `0906eb56`) caught a real
 regression that `source_scope_query` could not: the view split routed
 `repl_parse_and_normalize{,_strict}` (`src/repl/normalize.c:175-201`) off the
@@ -431,22 +453,21 @@ not in a loop (fine).
 **Fix — route live-document normalize through the warm view (this is what this
 finding's own cache-ownership recommendation already called for):**
 
-1. Publicise the warm live view. `src/repl/source_scope.c` already keeps the
-   dirty-flag-rebuilt `g_live_scope` behind the file-static
-   `live_source_scope_view()`; expose it as
-   `const ReplSourceScopeView *repl_source_scope_live_view(void)`.
-2. Make `repl_parse_and_normalize{,_strict}` pass `repl_source_scope_live_view()`
-   into `parse_and_normalize_impl` instead of binding a fresh per-call view. The
-   warm view rebuilds only on the existing five invalidation sites, so on a
-   stable document (the reformat read pass) per-line normalize returns to
-   amortized O(1) — exactly pre-Finding-4 behavior.
+1. Keep the warm live view private behind `live_source_scope_view()` and the
+   existing live wrapper API; do not add a public pointer-returning live-view
+   accessor.
+2. Make `repl_parse_and_normalize{,_strict}` pass `NULL` into
+   `parse_and_normalize_impl` instead of binding a fresh per-call view. The
+   parser helpers interpret `NULL` as "use the live document wrappers", so a
+   stable document (the reformat read pass) returns to amortized O(1) live-cache
+   behavior.
 3. Keep `repl_parse_and_normalize_strict_with_scope` (explicit view) for callers
    that legitimately parse against a *non-live* document (tests,
    replay-against-snapshot). The view API stays; only the live convenience
    entries change.
-4. Optionally also reuse the live view in `repl_compile_context_from_live` to
-   drop its per-commit ~64 KB stack `ReplSourceScopeView` + O(N) memset — a
-   secondary win, not a regression fix.
+4. Leave `repl_compile_context_from_live` on its explicit owned view for now; its
+   one bind per commit is not the regression, and changing it would reopen the
+   public live-view ownership question.
 
 **Correctness.** The warm view reflects the committed document (the candidate
 line being normalized is not yet in it) — identical to the pre-Finding-4 warm
@@ -454,12 +475,14 @@ global, so no semantic change. Reusing `g_live_scope` is strictly ≥
 pre-Finding-4 behavior, since pre-Finding-4 used that same warm global.
 
 **Verify.** Re-run `make bench-csv USE_GL_STUBS=1 BENCH_ARGS="--only
-normalize_large_doc"`; expect ~5 µs → ~0.35 µs. Then add a `reformat_large_doc`
-bench (reformat-all over a large document) as the *direct* guard —
-`normalize_large_doc` proves the mechanism, but reformat is the user-visible
-victim — and capture its pre/post the same way (it uses only the stable
-reformat API, so it runs on the pre-Finding-4 tree unchanged and carries water
-as a true before/after).
+normalize_large_doc"`; expect the per-normalize result to return to the
+sub-microsecond pre-regression range. `reformat_large_doc` is now in
+`bench/bench_repl.c` as the direct guard: it reformats the same large live
+document end-to-end, so the user-visible O(N²) failure mode has a named bench.
+On `drew-macbook-air` (`--iters 10`), the temporary per-call-bind mode measured
+`normalize_large_doc=6.3143 µs` and `reformat_large_doc=44.6315 ms`; the fixed
+code measured `normalize_large_doc=0.4293 µs` and
+`reformat_large_doc=31.5702 ms`.
 
 ## Finding 5: `core_internal.h` is narrower, but still a mixed internal bucket
 

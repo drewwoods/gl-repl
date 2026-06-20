@@ -26,8 +26,11 @@
  *   source_scope_churn- invalidate + query per op (isolates the O(N) prefix
  *                       cache rebuild paid once per document change)
  *   normalize_large_doc- parse+normalize a line against a large live document
- *                       (integration guard: the normalize entry binds a fresh
- *                       source-scope view per call after Finding 4)
+ *                       (integration guard: the normalize entry must reuse the
+ *                       warm live source-scope cache)
+ *   reformat_large_doc - whole-document reformat over the same large live
+ *                       document (direct guard for the user-visible reformat
+ *                       path that calls normalize once per row)
  *   replay_examples   - start a replay and step it to completion
  *   replay_long       - feed a synthetic large scene and step replay to end
  *   fade_batches      - drive repl_execute_program() per fade batch with a packed
@@ -50,6 +53,7 @@
 #include <math.h>
 #include "repl/flatten.h"
 #include "repl/pipeline.h"
+#include "repl/reformat.h"
 #include "repl/state_notify.h"
 #include "repl/eval.h"
 #include "repl/example_loader.h"  /* repl_load_example_lines_for_test */
@@ -1075,6 +1079,36 @@ static BenchResult bench_normalize_large_doc(int iters) {
     return r;
 }
 
+/* Direct guard for the user-visible victim of the Finding-4b regression:
+ * Ctrl+Backslash reformat-all calls repl_parse_and_normalize once per command row.
+ * With a per-call source-scope view bind, this turns the reformat pass into
+ * O(N^2). One op = one full reformat pass over the deep document. */
+static BenchResult bench_reformat_large_doc(int iters) {
+    BenchResult r = { .name = "reformat_large_doc", .unit = "reformats",
+                      .min_sec = 1e18 };
+    int doc_count = load_deep_scope_doc(180);
+    long long sink = 0;
+
+    for (int it = 0; it < iters; it++) {
+        double t0 = now_seconds();
+        repl_reformat_program();
+        double dt = now_seconds() - t0;
+        if (dt < r.min_sec) r.min_sec = dt;
+        r.total_sec += dt;
+        r.ops++;
+        r.iters++;
+
+        sink += repl_state_document_count();
+        const char *line = editor_buffer_line(doc_count / 2);
+        if (line)
+            sink += (long long)strlen(line);
+    }
+    if (!g_csv)
+        fprintf(stderr, "  (reformat_large_doc: doc rows=%d, checksum=%lld)\n",
+                doc_count, sink);
+    return r;
+}
+
 /* ---- main -------------------------------------------------------------- */
 
 static void print_csv_header(void) {
@@ -1108,6 +1142,7 @@ static void usage(const char *prog) {
         "    source_scope_query  source-scope depth queries over a deep document (warm cache)\n"
         "    source_scope_churn  source-scope cache rebuild per op (invalidate + query)\n"
         "    normalize_large_doc parse+normalize a line against a large live document\n"
+        "    reformat_large_doc  reformat a large live document end-to-end\n"
         "    replay_examples   step replay through every example\n"
         "    replay_long       synthetic 600-iter for-loop replay\n"
         "    replay_focus      per-frame replay_focus_flat_idx() at the tail\n"
@@ -1208,6 +1243,8 @@ int main(int argc, char **argv) {
         report(bench_source_scope_churn(iters));
     if (wants(only, "normalize_large_doc"))
         report(bench_normalize_large_doc(iters));
+    if (wants(only, "reformat_large_doc"))
+        report(bench_reformat_large_doc(iters));
     if (wants(only, "spike_flatten_largest"))
         report(bench_spike_flatten_largest(iters));
     if (wants(only, "replay_examples"))
