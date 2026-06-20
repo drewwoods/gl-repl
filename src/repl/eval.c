@@ -434,11 +434,18 @@ void repl_eval_init_predef_vars(void) {
     g_predef_vars_mut[0].value = 0.0f;
 }
 
-int repl_eval_find_predef_var_idx(const char *name) {
-    for (int i = 0; i < g_num_predef_vars; i++)
-        if (strcmp(name, g_predef_vars[i].name) == 0)
+int repl_eval_find_predef_var_idx_in(const ExprVar *vars, int count,
+                                     const char *name) {
+    if (!vars || !name)
+        return -1;
+    for (int i = 0; i < count; i++)
+        if (strcmp(name, vars[i].name) == 0)
             return i;
     return -1;
+}
+
+int repl_eval_find_predef_var_idx(const char *name) {
+    return repl_eval_find_predef_var_idx_in(g_predef_vars, g_num_predef_vars, name);
 }
 
 static void expr_write_err(ExprCtx *ctx, const char *fmt, ...) {
@@ -691,7 +698,8 @@ static const char *expr_walk_next_ident(const char **s_inout, const char *end,
 }
 
 static int expr_range_has_runtime_values(const char *src, const char *end,
-                                         const ExprVar *vars, int num_vars) {
+                                         const ExprVar *vars, int num_vars,
+                                         ReplPredefView predef) {
     const char *s = src;
     char name[REPL_PREDEF_NAME_MAX];
     const char *q = NULL;
@@ -713,7 +721,7 @@ static int expr_range_has_runtime_values(const char *src, const char *end,
             if (strcmp(name, vars[var_idx].name) == 0)
                 return 1;
         }
-        if (repl_eval_find_predef_var_idx(name) >= 0)
+        if (repl_eval_find_predef_var_idx_in(predef.vars, predef.count, name) >= 0)
             return 1;
     }
 
@@ -730,6 +738,7 @@ static int expr_range_has_runtime_values(const char *src, const char *end,
  * state; on failure writes a user-facing message into `err`. */
 static int validate_expression_idents_range(const char *src, const char *end,
                                             const ExprVar *vars, int num_vars,
+                                            ReplPredefView predef,
                                             char *err, int errsz) {
     /* Reject unbalanced parens up front. The recursive-descent eval
      * tolerates a missing ')' on a function call (`max(1, 2` returns
@@ -789,11 +798,12 @@ static int validate_expression_idents_range(const char *src, const char *end,
             }
 
             if (!validate_expression_idents_range(q + 1, close,
-                                                  vars, num_vars,
+                                                  vars, num_vars, predef,
                                                   err, errsz))
                 return 0;
 
-            if (!expr_range_has_runtime_values(q + 1, close, vars, num_vars)) {
+            if (!expr_range_has_runtime_values(q + 1, close, vars, num_vars,
+                                               predef)) {
                 char idx_expr[MAX_LINE_LEN];
                 int idx_len = (int)(close - (q + 1));
                 if (idx_len >= (int)sizeof(idx_expr))
@@ -834,7 +844,7 @@ static int validate_expression_idents_range(const char *src, const char *end,
         if (found)
             continue;
 
-        if (repl_eval_find_predef_var_idx(name) >= 0)
+        if (repl_eval_find_predef_var_idx_in(predef.vars, predef.count, name) >= 0)
             continue;
 
         if (err)
@@ -945,7 +955,14 @@ int repl_eval_source_uses_ident(const char *src, const char *name) {
 int repl_eval_validate_expression_idents(const char *src, const ExprVar *vars,
                                int num_vars, char *err, int errsz) {
     return validate_expression_idents_range(src, NULL, vars, num_vars,
-                                            err, errsz);
+                                            repl_eval_predef_view(), err, errsz);
+}
+
+int repl_eval_validate_expression_idents_in(const char *src, ReplPredefView predef,
+                               const ExprVar *vars, int num_vars,
+                               char *err, int errsz) {
+    return validate_expression_idents_range(src, NULL, vars, num_vars,
+                                            predef, err, errsz);
 }
 
 int repl_eval_input_has_predef_vars(const char *s) {

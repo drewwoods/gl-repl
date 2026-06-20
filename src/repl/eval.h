@@ -266,6 +266,11 @@ int  repl_eval_is_builtin_function(const char *name);
 int  repl_eval_input_has_predef_vars(const char *s);
 /* Look up a variable by name; returns index in g_predef_vars, or -1 if not found. */
 int  repl_eval_find_predef_var_idx(const char *name);
+/* Context-driven variant: search an explicit predef table (no live read).
+ * compile passes its ReplCompileContext predef view; the live wrapper above
+ * delegates here with g_predef_vars / g_num_predef_vars. */
+int  repl_eval_find_predef_var_idx_in(const ExprVar *vars, int count,
+                                      const char *name);
 /* Declare a new predefined variable; returns 1 on success, 0 on
  * duplicate/error. Errors are written to the err buffer (errsz bytes).
  * Callers that need the slot index should use the _with_value variant
@@ -285,6 +290,11 @@ int  repl_eval_source_uses_ident(const char *src, const char *name);
  * functions. Errors written to err buffer (errsz bytes). Returns 1 on success. */
 int  repl_eval_validate_expression_idents(const char *src, const ExprVar *vars,
                                           int num_vars, char *err, int errsz);
+/* Context-driven variant: validate against an explicit predef view instead of
+ * the live table. The live wrapper above delegates here with the live view. */
+int  repl_eval_validate_expression_idents_in(const char *src, ReplPredefView predef,
+                                             const ExprVar *vars, int num_vars,
+                                             char *err, int errsz);
 
 /* ---- Expression evaluator (recursive descent) -------------------------- */
 
