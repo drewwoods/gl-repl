@@ -38,7 +38,57 @@
  * the *_indent helpers below) lives in config.h so editor / UI code can
  * size their indent buffers without pulling in this header. */
 
-/* Invalidate the prefix-depth cache. Called whenever the source command array
+typedef struct ReplSourceScopeView {
+    const GLCmd *cmds;
+    int count;
+    int built;
+    int block_depth_prefix[MAX_COMMANDS + 1];
+    int begin_depth_prefix[MAX_COMMANDS + 1];
+    int tess_depth_prefix[MAX_COMMANDS + 1];
+    int matrix_depth_prefix[MAX_COMMANDS + 1];
+} ReplSourceScopeView;
+
+/* Bind a source-scope view to an explicit command array and build its
+ * prefix-depth cache immediately. The bound document must remain stable while
+ * the view is queried. */
+void repl_source_scope_view_bind(ReplSourceScopeView *view,
+                                 const GLCmd *cmds, int count);
+
+int  repl_source_scope_view_in_begin_block_at(const ReplSourceScopeView *view,
+                                              int line_idx);
+int  repl_source_scope_view_block_depth_at(const ReplSourceScopeView *view,
+                                           int pos);
+int  repl_source_scope_view_tess_scope_depth_at(const ReplSourceScopeView *view,
+                                                int pos);
+int  repl_source_scope_view_matrix_scope_depth_at(const ReplSourceScopeView *view,
+                                                  int pos);
+void repl_source_scope_view_cmd_indent(const ReplSourceScopeView *view,
+                                       int pos, char *buf, int buf_sz);
+void repl_source_scope_view_begin_indent(const ReplSourceScopeView *view,
+                                         int pos, char *buf, int buf_sz);
+void repl_source_scope_view_tess_close_indent(const ReplSourceScopeView *view,
+                                              int pos, char *buf, int buf_sz);
+void repl_source_scope_view_cmd_tess_indent(const ReplSourceScopeView *view,
+                                            int pos, char *buf, int buf_sz);
+void repl_source_scope_view_matrix_close_indent(const ReplSourceScopeView *view,
+                                                int pos, char *buf, int buf_sz);
+int  repl_source_scope_view_cmd_indent_chars(const ReplSourceScopeView *view,
+                                             int pos);
+int  repl_source_scope_view_find_block_end(const ReplSourceScopeView *view,
+                                           int begin_idx);
+CmdType repl_source_scope_view_nearest_open_block_at(const ReplSourceScopeView *view,
+                                                     int pos);
+int repl_source_scope_view_block_extent(const ReplSourceScopeView *view,
+                                        int line_idx,
+                                        int *out_start, int *out_count);
+int repl_source_scope_view_line_is_block_head(const ReplSourceScopeView *view,
+                                              int line_idx);
+int repl_source_scope_view_line_is_label(const ReplSourceScopeView *view,
+                                         int line_idx);
+int repl_source_scope_view_collect_unbalanced(const ReplSourceScopeView *view,
+                                              int *out_lines, int max);
+
+/* Invalidate the live-document prefix-depth cache. Called whenever the source command array
  * changes (e.g., after insert, delete, or edit) to force recomputation of block
  * depths on the next query. */
 void repl_source_scope_depth_cache_invalidate(void);
