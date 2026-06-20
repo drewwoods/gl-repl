@@ -1,7 +1,12 @@
 /*
  * src/repl/flatten.c -- Source-to-flat command expansion and flat cursor mapping.
  */
-#include "repl/core.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include "repl/host_effects.h"
+#include "repl/pipeline.h"
+#include "source_document.h"
 #include "repl/core_internal.h"
 #include "repl/flatten.h"
 #include "repl/parser.h"

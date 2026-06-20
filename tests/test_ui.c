@@ -7,7 +7,7 @@
 #include "repl/state_owners.h"
 #include "repl/color_limits.h"
 #include "subsystems/replay/replay_state.h"
-#include "repl/core.h"
+#include "repl/example_loader.h"
 #include "editor/input.h"
 #include "editor/help_session.h"
 #include "ui/core/tabbed_overlay.h"

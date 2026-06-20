@@ -1,5 +1,5 @@
 #include "app/glr_ctrl.h"
-#include "repl/core.h"
+#include "repl/pipeline.h"
 #include "editor/input.h"
 #include "repl/state_owners.h"
 #include "support/test_harness.h"

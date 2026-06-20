@@ -12,7 +12,7 @@
 #include "repl/eval.h"
 #include "repl/pipeline.h"
 #include "keys.h"
-#include "repl/core.h"
+#include "repl/flatten.h"
 #include "repl/transform_utils.h" /* apply_tracked_transform / unwind_transform_stack */
 #include "subsystems/replay/replay_state.h"
 

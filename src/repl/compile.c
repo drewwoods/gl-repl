@@ -57,6 +57,8 @@
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include "source_document.h"
 #include <string.h>
 
 ReplCompileResult repl_compile_dispatch(const char *text,

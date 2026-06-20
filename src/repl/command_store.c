@@ -1,3 +1,5 @@
+#include <string.h>
+#include "repl/state_notify.h"
 #include "repl/command_store.h"
 #include "repl/state_owners.h"
 

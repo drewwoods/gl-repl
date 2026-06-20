@@ -38,7 +38,10 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "editor/state.h"         /* editor_state_edit_line */
-#include "repl/core.h"
+#include <math.h>
+#include "repl/flatten.h"
+#include "repl/pipeline.h"
+#include "repl/state_notify.h"
 #include "repl/eval.h"
 #include "repl/example_loader.h"  /* repl_load_example_lines_for_test */
 #include "repl/examples.h"

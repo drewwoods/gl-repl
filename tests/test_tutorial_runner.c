@@ -9,7 +9,10 @@
 #include "editor/undo.h"
 #include "keymap.h"
 #include "keys.h"
-#include "repl/core.h"
+#include <stdio.h>
+#include "repl/example_loader.h"
+#include "repl/host_effects.h"
+#include "repl/scenes.h"
 #include "repl/eval.h"            /* REQUIRE_VAR tests: predef-var declare/lookup */
 #include "repl/state_owners.h"
 #include "repl/state_views.h"

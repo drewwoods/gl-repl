@@ -1,5 +1,8 @@
 #include "subsystems/replay/replay_internal.h"
 #include <stdio.h>
+#include "repl/flatten.h"
+#include "repl/host_effects.h"
+#include "repl/pipeline.h"
 #include <string.h>
 
 static int replay_has_meaningful_cmds(void) {

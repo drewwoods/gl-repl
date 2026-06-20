@@ -1,3 +1,5 @@
+#include <stdlib.h>
+#include <math.h>
 #include "repl/command_spec.h"
 #include "c_compat.h"  /* STATIC_ASSERT */
 

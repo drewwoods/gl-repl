@@ -13,7 +13,10 @@
 #include "inline_file_prompt.h"   /* mutual-exclusion cancel */
 #include "keys.h"
 
-#include "repl/core.h"
+#include <stdio.h>
+#include <string.h>
+#include "repl/host_effects.h"
+#include "repl/scenes.h"
 #include "config.h"               /* REPL_DIAG_TEXT_MAX */
 
 /* `g_rename_active` is the active predicate (matches the

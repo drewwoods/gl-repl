@@ -24,7 +24,9 @@
 #include "editor/clipboard.h"
 #include "app/glr_ctrl.h"
 #include "keys.h"
-#include "repl/core.h"
+#include <stdbool.h>
+#include <math.h>
+#include "repl/example_loader.h"
 #include "repl/state_owners.h"
 #include "ui/app/hit.h"
 #include "support/test_harness.h"

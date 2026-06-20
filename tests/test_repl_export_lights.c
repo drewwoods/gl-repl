@@ -9,7 +9,7 @@
  */
 #include "app/glr_ctrl.h"
 #include "app/glr_config.h"
-#include "repl/core.h"
+#include "source_document.h"
 #include "repl/export.h"
 #include "scene/themes.h"      /* LIGHT_THEME_HEADLIGHT / _DEFAULT for the
                                   headlight round-trip case */

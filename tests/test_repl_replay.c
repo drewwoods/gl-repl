@@ -1,5 +1,7 @@
 #include "app/glr_ctrl.h"
-#include "repl/core.h"
+#include "repl/flatten.h"
+#include "repl/pipeline.h"
+#include "repl/state_notify.h"
 #include "editor/input.h"
 #include "subsystems/replay/replay.h"
 #include "repl/state.h"

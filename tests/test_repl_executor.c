@@ -1,5 +1,6 @@
 #include "editor/state.h"
-#include "repl/core.h"
+#include <stdbool.h>
+#include "repl/pipeline.h"
 #include "editor/input.h"
 #include "repl/state.h"
 #include "app/glr_ctrl.h"   /* glr_ctrl_reset_all (end-to-end P1 test) */

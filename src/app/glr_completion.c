@@ -13,7 +13,10 @@
 #include "editor/state.h"        /* EditorBufferView, EditorAutocompleteState, editor_state_* */
 #include "repl/state_views.h"
 #include "repl/core_internal.h"
-#include "repl/core.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include "repl/host_effects.h"
 #include "repl/command_spec.h"
 #include "editor/completion.h"
 #include "app/glr_completion.h"

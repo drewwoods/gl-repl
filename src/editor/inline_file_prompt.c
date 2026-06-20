@@ -19,7 +19,11 @@
 #include "keys.h"
 #include "undo.h"
 
-#include "repl/core.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include "repl/host_effects.h"
+#include "repl/scenes.h"
 
 /* Capacity holds full workspace paths comfortably (PATH_MAX is 4096 on
  * Linux). The status-bar render truncates by pixel width so any

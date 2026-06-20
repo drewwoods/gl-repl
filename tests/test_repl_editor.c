@@ -19,7 +19,10 @@
 #include "app/glr_state.h"
 #include "keys.h"
 #include "support/cpuprof.h"
-#include "repl/core.h"
+#include <math.h>
+#include "repl/example_loader.h"
+#include "repl/pipeline.h"
+#include "repl/state_notify.h"
 #include "repl/core_internal.h"
 #include "repl/examples.h"     /* repl_example_count */
 #include "repl/scenes.h"       /* repl_promote_example_if_needed */

@@ -3,7 +3,7 @@
 #include "app/glr_ctrl.h"
 #include "repl/core_internal.h"
 #include "repl/state.h"
-#include "repl/core.h"
+#include <math.h>
 #include "editor/input.h"
 #include "editor/completion.h"
 #include "support/test_harness.h"

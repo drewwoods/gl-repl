@@ -1,4 +1,7 @@
 #define REPL_STATE_IMPLEMENTATION
+#include <stdio.h>
+#include "repl/export.h"
+#include "repl/flatten.h"
 #include "repl/state.h"
 #include "repl/command_store.h"
 #include "source_document.h" /* source_document_clear */

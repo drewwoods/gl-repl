@@ -6,7 +6,8 @@
  * with stable, identical code output (like test_repl_core_examples.c).
  */
 #include "repl/command_spec.h"  /* cmd_type_name */
-#include "repl/core.h"
+#include "repl/export.h"
+#include "source_document.h"
 #include "editor/input.h"
 #include "repl/core_internal.h"
 #include "repl/state.h"

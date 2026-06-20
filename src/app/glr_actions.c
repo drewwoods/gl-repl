@@ -19,7 +19,11 @@
 #include "ui/app/layout.h"           /* CODE_PANEL_LAYOUT_* enum values */
 #include "subsystems/color_picker/color_picker_state.h"
 #include "app/glr_audio.h"
-#include "repl/core.h"
+#include <stdio.h>
+#include "repl/example_loader.h"
+#include "repl/export.h"
+#include "repl/host_effects.h"
+#include "repl/state_notify.h"
 #include "repl/core_internal.h"
 #include "repl/examples.h"
 #include "repl/scenes.h"

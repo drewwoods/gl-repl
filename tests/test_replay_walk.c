@@ -28,7 +28,9 @@
  */
 #include "app/glr_ctrl.h"
 #include "repl/command_spec.h"
-#include "repl/core.h"
+#include <math.h>
+#include "repl/pipeline.h"
+#include "repl/state_notify.h"
 #include "editor/input.h"
 #include "repl/state_owners.h"
 #include "repl/transform_utils.h"

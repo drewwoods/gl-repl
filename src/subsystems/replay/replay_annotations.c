@@ -1,6 +1,10 @@
 /*
  * src/subsystems/replay/replay_annotations.c -- Code-panel replay variable annotations.
  */
+#include <stdio.h>
+#include <string.h>
+#include "repl/flatten.h"
+#include "source_document.h"
 #include "repl/core_internal.h"
 #include "repl/control_flow.h"
 #include "repl/parser.h"

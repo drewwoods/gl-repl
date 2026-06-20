@@ -41,7 +41,12 @@
 #include "repl/command.h"
 #include "repl/command_spec.h"    /* cmd_type_name */
 #include "repl/command_store.h"
-#include "repl/core.h"
+#include <stdlib.h>
+#include <math.h>
+#include "repl/flatten.h"
+#include "repl/host_effects.h"
+#include "repl/pipeline.h"
+#include "repl/state_notify.h"
 #include "repl/core_internal.h"   /* repl_parse_and_normalize */
 #include "repl/eval.h"            /* repl_eval_declare_predef_var, g_predef_vars */
 #include "repl/executor.h"

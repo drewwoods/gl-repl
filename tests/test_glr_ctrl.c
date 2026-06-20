@@ -10,7 +10,11 @@
 #include <string.h>
 #include <unistd.h>
 #include "editor/undo.h"
-#include "repl/core.h"
+#include "repl/example_loader.h"
+#include "repl/export.h"
+#include "repl/flatten.h"
+#include "repl/pipeline.h"
+#include "repl/state_notify.h"
 #include "editor/input.h"
 #include "ui/app/layout.h"   /* CODE_PANEL_LAYOUT_* */
 #include "support/test_harness.h"

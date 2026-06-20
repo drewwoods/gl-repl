@@ -4,7 +4,7 @@
 #include "ui/app/view_mode_swatch.h"
 #include "app/glr_actions.h"
 #include "app/glr_config.h"
-#include "repl/core.h"
+#include "repl/scenes.h"
 #include "repl/examples.h"
 #include "repl/tutorials.h"
 #include "repl/state_owners.h"

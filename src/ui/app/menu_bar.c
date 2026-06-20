@@ -2,7 +2,10 @@
  * menu_bar.c -- Code-panel menu bar, dropdowns, and search slot.
  */
 #include "app/glr_actions.h"
-#include "repl/core.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include "repl/scenes.h"
 #include "repl/examples.h"
 #include "repl/tutorials.h"
 #include "app/glr_config.h"

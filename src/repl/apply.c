@@ -13,6 +13,7 @@
  * decides whether to surface that as a status message. All other
  * paths assume validation already passed in repl_compile.
  */
+#include "repl/state_notify.h"
 #include "repl/apply.h"
 
 #include "repl/command_store.h"

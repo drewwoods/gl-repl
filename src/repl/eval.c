@@ -14,6 +14,10 @@
  * Intentionally isolated from GL and from the command/editor layers so the
  * evaluator has its own unit tests (see tests/test_eval.c).
  */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <math.h>
 #include "repl/eval.h"
 
 #include <stdarg.h>

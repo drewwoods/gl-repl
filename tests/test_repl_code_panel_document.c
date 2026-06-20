@@ -7,7 +7,7 @@
 #include <string.h>
 
 #include "ui/app/state.h"
-#include "repl/core.h"
+#include "repl/export.h"
 #include "repl/state.h"
 #include "ui/app/layout.h"
 #include "ui/core/metrics.h"

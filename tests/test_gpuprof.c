@@ -7,6 +7,8 @@
  * model the contract gpuprof relies on: gen hands out ids, results are
  * keyed by id, availability is global (queries complete in order).
  */
+#include <stdio.h>
+#include <math.h>
 #include "support/test_harness.h"
 
 #include <string.h>

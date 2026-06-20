@@ -1,3 +1,4 @@
+#include <math.h>
 #include "repl/examples.h"
 #include "repl/catalog_tags.h"
 

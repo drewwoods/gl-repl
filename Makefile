@@ -568,7 +568,6 @@ HDRS = \
 	src/repl/compile.h \
 	src/repl/catalog_tags.h \
 	src/repl/control_flow.h \
-	src/repl/core.h \
 	src/repl/core_internal.h \
 	src/repl/eval.h \
 	src/repl/example_loader.h \

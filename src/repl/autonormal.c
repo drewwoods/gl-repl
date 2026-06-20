@@ -1,7 +1,10 @@
 /*
  * src/repl/autonormal.c -- Auto-generated normal commands and feeding-state lookup.
  */
-#include "repl/core.h"
+#include <stdio.h>
+#include <string.h>
+#include "repl/flatten.h"
+#include "repl/pipeline.h"
 #include "repl/command_store.h"
 #include "repl/geometry_query.h"
 #include "repl/source_scope.h"

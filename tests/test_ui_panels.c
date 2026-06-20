@@ -13,7 +13,7 @@
 #include "ui/app/snapshot.h"
 #include "ui/app/repl_code_panel.h"
 #include "ui/core/metrics.h"
-#include "repl/core.h"
+
 #include "support/test_harness.h"
 #include <GL/gl_stub_counts.h>
 #endif

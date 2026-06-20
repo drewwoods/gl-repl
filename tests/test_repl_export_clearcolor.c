@@ -4,7 +4,7 @@
  * is hoisted into the exported init() so the per-frame glClear (which runs
  * before render_repl_geometry and inside the glPushAttrib bracket) uses it.
  */
-#include "repl/core.h"
+#include "repl/export.h"
 #include "repl/eval.h"
 #include "editor/input.h"
 #include "source_document.h"
