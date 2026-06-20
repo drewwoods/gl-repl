@@ -5,6 +5,8 @@
 #include "app/glr_ctrl_replay_annotations.h"
 #include "repl/core.h"
 #include "repl/executor.h"
+#include "repl/flatten.h"
+#include "repl/geometry_query.h"
 #include "editor/clipboard.h"
 #include "editor/commit.h"
 #include "repl/state_views.h"

@@ -92,6 +92,7 @@ int  repl_flatten_program(const ReplFlattenOptions *options,
  * the innermost BEGIN/END block containing the current edit line. Called
  * before building scene config to ensure cursor block bounds are current. */
 void repl_flatten_refresh_current_block_highlight(int edit_line_idx);
+int  repl_flat_cmd_matches_cursor(int flat_idx, int edit_line_idx);
 
 /* ---- Flat-cost attribution (command-budget readout) ----
  *
