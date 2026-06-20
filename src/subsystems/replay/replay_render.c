@@ -35,9 +35,7 @@ static const ReplayTessPreviewCallbacks g_tess_preview_cb = {
  * would have dropped. */
 static void replay_render_restore_baseline(const ReplayFadePlan *fade_plan) {
     if (!fade_plan) return;
-    repl_eval_restore_predef_values_by_name(fade_plan->baseline_predef_vals,
-                                            fade_plan->baseline_predef_names,
-                                            fade_plan->baseline_predef_count);
+    repl_eval_restore_predef_values_by_snapshot(&fade_plan->baseline_predef);
     repl_eval_restore_scratch_arrays(fade_plan->baseline_scratch_arrays);
 }
 

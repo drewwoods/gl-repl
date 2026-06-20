@@ -1443,11 +1443,11 @@ int main(void) {
         repl_func_alias_clear_all();
 
         /* Call repl_compile_func_def directly with a header that
-         * passes the quick-reject (both `(` and `{`) and whose alias
-         * pre-step succeeds, but where parse_repl_func_signature
-         * fails on the param list (`123` is not a valid identifier).
-         * Pre-fix, the alias `badRoll` would leak to the global
-         * alias table even though no CMD_FUNC_DEF was created. */
+         * passes the quick-reject (both `(` and `{`) and whose pending
+         * alias resolves, but where parse_repl_func_signature fails on
+         * the param list (`123` is not a valid identifier). Pre-fix,
+         * the alias `badRoll` would leak to the global alias table even
+         * though no CMD_FUNC_DEF was created. */
         ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
         ReplCompiledChange change;
         char err[128] = "";
@@ -1512,14 +1512,11 @@ int main(void) {
                     strstr(err, "already defined") != NULL);
     }
 
-    /* [P2 editor] regression: editor_compile_func_def must roll back
-     * alias registration on parse failure. The editor wrapper
-     * (src/editor/commit.c ~line 645) registers a new alias before
-     * parse_repl_func_signature runs, mirroring the
-     * repl_compile_func_def pre-step. The corresponding parse-fail
-     * branch (line ~659) returns NO_CHANGE without rolling back, so
-     * a malformed `name(args` line in the user-facing path still
-     * leaves the alias registered. */
+    /* [P2 editor] regression: editor_compile_func_def must not publish
+     * aliases on parse failure. The editor wrapper used to register a
+     * new alias before parse_repl_func_signature ran, so a malformed
+     * `name(args` line in the user-facing path could leave the alias
+     * registered. */
     {
         glr_ctrl_reset_all();
         repl_func_alias_clear_all();
@@ -1658,12 +1655,10 @@ int main(void) {
                     repl_func_alias_lookup_slot("drawSphere") < 0);
     }
 
-    /* [P2 editor] regression: editor_compile_func_def must roll back
-     * alias registration on duplicate-funcN failure. The dup-check
-     * branch (src/editor/commit.c ~line 678) returns ERROR without
-     * rolling back, so a NEW alias whose pre-step assigns to slot N
-     * — where slot N already has a CMD_FUNC_DEF — leaks the alias
-     * registration. */
+    /* [P2 editor] regression: editor_compile_func_def must not publish
+     * aliases on duplicate-funcN failure. The old dup-check returned
+     * ERROR after registering the alias, so a NEW alias for slot N —
+     * where slot N already had a CMD_FUNC_DEF — leaked the alias. */
     {
         glr_ctrl_reset_all();
         repl_func_alias_clear_all();
@@ -1675,9 +1670,9 @@ int main(void) {
         ASSERT_TRUE("[P2 editor] bare func0 loads cleanly",
                     repl_load_apply_line("func0() {", err, sizeof(err), NULL));
 
-        /* Compile a NEW alias whose pre-step would target slot 0
-         * (first free) but whose dup check fails because fn=0
-         * already has a CMD_FUNC_DEF in the document. */
+        /* Compile a NEW alias whose pending op would target slot 0
+         * (first free) but whose dup check fails because fn=0 already
+         * has a CMD_FUNC_DEF in the document. */
         ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
         EditorCommitPlan plan;
         editor_commit_plan_init(&plan);
@@ -1784,12 +1779,11 @@ int main(void) {
                     repl_eval_find_predef_var_idx("fooLeak") < 0);
     }
 
-    /* [P1 loader] regression: alias registered during compile must
-     * be rolled back when the loader's apply step fails. Pre-fix,
-     * compile_func_def's pre-step would register the alias, then
-     * repl_apply_compiled_change would fail at capacity, but the
-     * alias would remain in the global table with no matching
-     * CMD_FUNC_DEF. */
+    /* [P1 loader] regression: alias registration is an apply-side op
+     * and must not run when the loader's command-store apply fails.
+     * Pre-fix, compile_func_def registered the alias before apply, then
+     * repl_apply_compiled_change could fail at capacity and leave the
+     * alias in the global table with no matching CMD_FUNC_DEF. */
     {
         glr_ctrl_reset_all();
         repl_func_alias_clear_all();
@@ -1934,10 +1928,10 @@ int main(void) {
         res = repl_compile_func_def_resolve_alias(&ctx, "myfunc() {", &change, &rejected_keyword, err, sizeof(err));
         ASSERT_INT("resolve_alias myfunc: returns OK", res, REPL_COMPILE_OK);
         ASSERT_INT("resolve_alias myfunc: rejected_keyword is false", rejected_keyword, 0);
-        ASSERT_TRUE("resolve_alias myfunc: picked slot", change.newly_aliased_slot >= 0);
-
-        /* Clean up any speculatively registered alias */
-        repl_compiled_change_rollback_alias(&change);
+        ASSERT_TRUE("resolve_alias myfunc: picked slot", change.alias_op.slot >= 0);
+        ASSERT_STR("resolve_alias myfunc: captured name", change.alias_op.name, "myfunc");
+        ASSERT_TRUE("resolve_alias myfunc: compile kept alias table unchanged",
+                    repl_func_alias_lookup_slot("myfunc") < 0);
     }
 
     /* Func alias slot exhaustion test */

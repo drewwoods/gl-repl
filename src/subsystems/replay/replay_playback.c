@@ -446,9 +446,7 @@ void replay_restart_from_beginning(void) {
 }
 
 static void replay_snapshot_baseline(ReplayRuntimeState *state) {
-    repl_eval_copy_predef_vars(state->baseline_predef_vals,
-                               state->baseline_predef_names,
-                               &state->baseline_predef_count);
+    repl_eval_capture_predef_snapshot(&state->baseline_predef);
     repl_eval_copy_scratch_arrays(state->baseline_scratch_arrays);
     state->saved_t_playing = repl_state_variables().time_playing;
     repl_dispatch_set_time_playing(0);
@@ -591,24 +589,13 @@ int replay_prepare_frame(FlatProgramView flat_program, int full_flat_count) {
 
 void replay_restore_baseline_predef_values(void) {
     ReplayRuntimeState *state = replay_state_mut();
-    repl_eval_restore_predef_values_by_name(state->baseline_predef_vals,
-                                            state->baseline_predef_names,
-                                            state->baseline_predef_count);
+    repl_eval_restore_predef_values_by_snapshot(&state->baseline_predef);
 }
 
-void replay_copy_baseline_predef_snapshot(
-    float dst_vals[MAX_PREDEF_VARS],
-    char  dst_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX],
-    int  *dst_count) {
+void replay_copy_baseline_predef_snapshot(ReplPredefSnapshot *dst) {
     const ReplayRuntimeState *state = replay_state_const();
-    if (dst_vals)
-        memcpy(dst_vals, state->baseline_predef_vals,
-               sizeof(state->baseline_predef_vals));
-    if (dst_names)
-        memcpy(dst_names, state->baseline_predef_names,
-               sizeof(state->baseline_predef_names));
-    if (dst_count)
-        *dst_count = state->baseline_predef_count;
+    if (dst)
+        *dst = state->baseline_predef;
 }
 
 void replay_copy_baseline_predef_values(float *dst, int max_vals) {
@@ -618,7 +605,7 @@ void replay_copy_baseline_predef_values(float *dst, int max_vals) {
         return;
 
     n = max_vals < MAX_PREDEF_VARS ? max_vals : MAX_PREDEF_VARS;
-    memcpy(dst, replay_state_mut()->baseline_predef_vals,
+    memcpy(dst, replay_state_mut()->baseline_predef.vals,
            (size_t)n * sizeof(float));
 }
 

@@ -8,18 +8,21 @@
  *     editor_undo_begin
  *     editor_buffer_apply_compiled_change   (EditorState text)
  *     repl_apply_compiled_change            (ReplState command store)
+ *     repl_apply_alias_ops                  (function aliases)
  *     editor_undo_commit
  *
  *   Lean source-loader (src/repl/load.c):
  *     repl_compiled_change_to_text_change   (translate)
  *     source_document_apply_change          (neutral text port)
  *     repl_apply_compiled_change            (ReplState command store)
+ *     repl_apply_alias_ops                  (function aliases)
  *
  * `repl_apply_compiled_change()` mutates ReplState command arrays
  * only. It does not touch source text, status, undo entries, or
- * predef-variable registrations. The predef-variable cascade is
- * applied separately through `repl_apply_predef_ops()` so callers
- * can sequence it correctly relative to undo capture.
+ * predef-variable registrations, or function aliases. Those cascades
+ * are applied separately through `repl_apply_predef_ops()` /
+ * `repl_apply_alias_ops()` so callers can sequence them correctly
+ * relative to undo capture and command-store success.
  *
  * The apply functions assume the change has already been validated
  * by `repl_compile_*()`. Capacity overflow is the only failure mode
@@ -81,5 +84,10 @@ void repl_apply_predef_ops(const ReplCompiledChange *change);
 /* Replay scratch-array side-effects in `change` against the evaluator's
  * bound scratch storage. */
 void repl_apply_scratch_ops(const ReplCompiledChange *change);
+
+/* Publish pending function-alias updates carried by `change`. Call this
+ * after `repl_apply_compiled_change()` succeeds so a failed command-store
+ * mutation cannot leave aliases pointing at nonexistent source rows. */
+void repl_apply_alias_ops(const ReplCompiledChange *change);
 
 #endif /* REPL_APPLY_H */

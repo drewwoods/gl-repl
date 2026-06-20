@@ -39,7 +39,7 @@ typedef struct {
  * executor's behavior. */
 typedef struct {
     const GLCmd      *cmds;
-    FlatCmdLocalVars *local_vars;
+    const FlatCmdLocalVars *local_vars;
     int               cmd_count;
 } FlatProgramView;
 

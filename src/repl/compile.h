@@ -106,6 +106,11 @@ typedef struct {
     float value;
 } ReplScratchOp;
 
+typedef struct {
+    int  slot;                         /* -1 = no alias update */
+    char name[REPL_FUNC_NAME_MAX];     /* empty clears the slot */
+} ReplFuncAliasOp;
+
 /* Bound: covers the two worst cases.
  *   - Float-decl overwrite emits DECLARE + UNDECLARE per delta name
  *     (MAX_NAMES_PER_DECL * 2 + 1).
@@ -152,21 +157,11 @@ typedef struct ReplCompiledChange_s {
     ReplScratchOp          scratch_ops[MAX_SCRATCH_OPS_PER_COMMIT];
     int                    scratch_op_count;
 
-    /* Func-alias registration that compile performed during its
-     * pre-step (see repl_compile_func_def / editor_compile_func_def).
-     * Compile mutates the global alias table so parse_repl_func_signature
-     * can map the name -> slot; if a downstream step (preflight, apply)
-     * fails, the caller must roll the registration back. -1 means
-     * compile registered nothing.
-     *
-     * If had_previous_alias is set, rollback restores previous_alias;
-     * otherwise rollback clears the touched slot. On success the slot
-     * stays registered; the alias matches the just-inserted /
-     * just-updated CMD_FUNC_DEF and persists for the document's
-     * lifetime. */
-    int                    newly_aliased_slot;
-    int                    had_previous_alias;
-    char                   previous_alias[REPL_FUNC_NAME_MAX];
+    /* Func-alias side-effect emitted by compile and committed by apply.
+     * Compile never mutates the alias table; new names are parsed through
+     * this pending op, then `repl_apply_alias_ops()` publishes the alias
+     * after the source-command mutation succeeds. */
+    ReplFuncAliasOp        alias_op;
 
     /* Success message (used by callers; not mutated by compile). */
     char                   commit_message[REPL_STATUS_TEXT_MAX];
@@ -195,10 +190,6 @@ typedef enum {
 
 /* Initialize a ReplCompiledChange to its zero state. */
 void repl_compiled_change_init(ReplCompiledChange *out);
-
-/* Restore the alias table entry captured in ReplCompiledChange's
- * speculative alias rollback fields. No-op if no alias was touched. */
-void repl_compiled_change_rollback_alias(const ReplCompiledChange *change);
 
 /* Translate a ReplCompiledChange into the neutral SourceTextChange
  * shape consumed by source_document_apply_change(). Copies kind, pos,
@@ -301,6 +292,9 @@ ReplCompileResult repl_compile_if_block(const char *input,
                                         ReplCompiledChange *out,
                                         char *err, int err_size);
 
+/* Resolve a custom function name in `trimmed` to a pending alias op.
+ * Pure: never writes the alias table. Existing aliases produce no op
+ * because the parser can already resolve them from live state. */
 ReplCompileResult repl_compile_func_def_resolve_alias(const ReplCompileContext *ctx,
                                                       const char *trimmed,
                                                       ReplCompiledChange *out,
@@ -406,16 +400,15 @@ ReplCompileResult repl_compile_close_brace_kernel(const char *input,
                                                   char *err, int err_size);
 
 /* Shared kernel for `funcN(params) {` (and alias-named variants like
- * `drawCube { ... }`). Handles the alias pre-step via the existing
- * resolve_alias helper, parses the signature with
- * parse_repl_func_signature, runs the duplicate-funcN guard, resolves
- * indent, and emits CMD_FUNC_DEF + fd_text.
+ * `drawCube { ... }`). Resolves a pending alias without mutating the
+ * alias table, parses the signature, runs the duplicate-funcN guard,
+ * resolves indent, and emits CMD_FUNC_DEF + fd_text.
  *
  * The duplicate guard is policy-controlled: `allow_overwrite_at_pos`
  * gives the caller's edit-position when an in-place rewrite is OK
  * (editor overwrite-header branch); -1 rejects every duplicate (loader
- * path). On rejection the kernel rolls back the alias registration
- * itself, mirroring both existing wrappers' behavior. */
+ * path). On rejection the pending alias is simply dropped; there is no
+ * global state to roll back. */
 typedef struct {
     int    valid;
     int    rejected_keyword;            /* parser rejected reserved name */
@@ -426,12 +419,7 @@ typedef struct {
     GLCmd  fd;
     char   fd_text[MAX_LINE_LEN];
     char   indent[REPL_INDENT_TEXT_MAX];
-    /* Alias bookkeeping (populated via repl_compile_func_def_resolve_alias).
-     * Used by the editor to publish rollback metadata on the
-     * EditorCommitPlan's change record. */
-    int    newly_aliased_slot;
-    int    had_previous_alias;
-    char   previous_alias[REPL_FUNC_NAME_MAX];
+    ReplFuncAliasOp alias_op;
 } ReplFuncDefKernel;
 
 ReplCompileResult repl_compile_func_def_kernel(const char *input,

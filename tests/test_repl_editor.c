@@ -2769,7 +2769,7 @@ int main() {
         glr_state_presentation_mut()->show_vertex_indices = 0; glr_ctrl_sync_ui_chrome();
         editor_navigate_to_line(0);
 
-        replay_active = 1;
+        replay_start();
         replay_state = REPLAY_PAUSED;
         replay_pc = repl_state_flat_program_count();
         replay_src_line = 1;
