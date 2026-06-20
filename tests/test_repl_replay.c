@@ -261,10 +261,8 @@ static void test_misc_helpers(void) {
 
     replay_prepare_frame(repl_state_flat_program_view(), 1);
 
-    float dummy[MAX_PREDEF_VARS];
     float scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     float scratch_value = 0.0f;
-    replay_copy_baseline_predef_values(dummy, MAX_PREDEF_VARS);
     repl_eval_scratch_set(0, 0, 3.0f);
     replay_start();
     repl_eval_scratch_set(0, 0, 9.0f);

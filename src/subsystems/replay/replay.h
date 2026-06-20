@@ -188,11 +188,6 @@ void replay_restore_baseline_predef_values(void);
  * per-frame fade plan without exposing the snapshot's storage layout. */
 void replay_copy_baseline_predef_snapshot(ReplPredefSnapshot *dst);
 
-/* Values-only snapshot for legacy short-lived callers that already know
- * the live predef table shape still matches the baseline. Prefer the full
- * snapshot above whenever names + count need to travel with the values. */
-void replay_copy_baseline_predef_values(float *dst, int max_vals);
-
 void replay_restore_baseline_scratch_arrays(void);
 void replay_copy_baseline_scratch_arrays(
     float dst[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]);
