@@ -25,6 +25,9 @@
  *                       must preserve)
  *   source_scope_churn- invalidate + query per op (isolates the O(N) prefix
  *                       cache rebuild paid once per document change)
+ *   normalize_large_doc- parse+normalize a line against a large live document
+ *                       (integration guard: the normalize entry binds a fresh
+ *                       source-scope view per call after Finding 4)
  *   replay_examples   - start a replay and step it to completion
  *   replay_long       - feed a synthetic large scene and step replay to end
  *   fade_batches      - drive repl_execute_program() per fade batch with a packed
@@ -53,6 +56,7 @@
 #include "repl/examples.h"
 #include "repl/executor.h"
 #include "repl/load.h"           /* repl_load_apply_line — uncapped doc build */
+#include "repl/normalize.h"      /* repl_parse_and_normalize_strict */
 #include "repl/parser.h"
 #include "repl/source_scope.h"   /* prefix-depth queries + cache invalidate */
 #include "subsystems/replay/replay.h"
@@ -1025,6 +1029,52 @@ static BenchResult bench_source_scope_churn(int iters) {
     return r;
 }
 
+/* ---- bench: normalize a line against a large live document ------------- */
+
+/* Integration guard for the Finding-4 per-call view bind. The source-scope
+ * view refactor moved repl_parse_and_normalize{,_strict} off the warm
+ * live-document cache (amortized O(1)) onto binding a fresh
+ * ReplSourceScopeView against the live document per call (O(N) build over the
+ * whole document). source_scope_query can't see this — it queries the live
+ * wrapper directly — so this drives the normalize entry against a large
+ * document to expose any per-call O(N) cost in the commit/parse path.
+ *
+ * Uses only the stable normalize/loader API (no ReplSourceScopeView types),
+ * so the SAME source compiles and runs on the pre-Finding-4 tree
+ * (bench_repl.c was untouched by the view-cache commits) for a true
+ * before/after: run it at the commit before 18c9b742 to get the pre number. */
+static BenchResult bench_normalize_large_doc(int iters) {
+    BenchResult r = { .name = "normalize_large_doc", .unit = "normalizes",
+                      .min_sec = 1e18 };
+    int doc_count = load_deep_scope_doc(180);
+    int pos = doc_count / 2;
+    const char *line = "glVertex3f(0, 0, 0);";
+
+    int inner = 2000;
+    long long sink = 0;
+    GLCmd cmd;
+    char text[MAX_LINE_LEN];
+    for (int it = 0; it < iters; it++) {
+        double t0 = now_seconds();
+        for (int k = 0; k < inner; k++) {
+            memset(&cmd, 0, sizeof(cmd));
+            /* No visible vars: the line is constant, so this measures the
+             * normalize path's source-scope work, not expression eval. */
+            sink += repl_parse_and_normalize_strict(line, pos, NULL, 0, 0,
+                                                    &cmd, text, sizeof(text));
+        }
+        double dt = now_seconds() - t0;
+        if (dt < r.min_sec) r.min_sec = dt;
+        r.total_sec += dt;
+        r.ops += inner;
+        r.iters++;
+    }
+    if (!g_csv)
+        fprintf(stderr, "  (normalize_large_doc: doc rows=%d, %d normalizes/sample, checksum=%lld)\n",
+                doc_count, inner, sink);
+    return r;
+}
+
 /* ---- main -------------------------------------------------------------- */
 
 static void print_csv_header(void) {
@@ -1057,6 +1107,7 @@ static void usage(const char *prog) {
         "    flat_cost_query   repl_flatten_cost_at_line over every cursor line\n"
         "    source_scope_query  source-scope depth queries over a deep document (warm cache)\n"
         "    source_scope_churn  source-scope cache rebuild per op (invalidate + query)\n"
+        "    normalize_large_doc parse+normalize a line against a large live document\n"
         "    replay_examples   step replay through every example\n"
         "    replay_long       synthetic 600-iter for-loop replay\n"
         "    replay_focus      per-frame replay_focus_flat_idx() at the tail\n"
@@ -1155,6 +1206,8 @@ int main(int argc, char **argv) {
         report(bench_source_scope_query(iters));
     if (wants(only, "source_scope_churn"))
         report(bench_source_scope_churn(iters));
+    if (wants(only, "normalize_large_doc"))
+        report(bench_normalize_large_doc(iters));
     if (wants(only, "spike_flatten_largest"))
         report(bench_spike_flatten_largest(iters));
     if (wants(only, "replay_examples"))
