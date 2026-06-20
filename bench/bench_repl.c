@@ -19,6 +19,12 @@
  *   parse_lines       - repl_parse_command on every example line
  *   feed_examples     - full editor_feed_line path on every example
  *   flatten_examples  - load each example then call repl_flatten_commands
+ *   source_scope_query- sweep source-scope depth/scope queries over a deep
+ *                       synthetic document (isolates the amortized-O(1)
+ *                       prefix-depth cache lookup the Finding-4 view refactor
+ *                       must preserve)
+ *   source_scope_churn- invalidate + query per op (isolates the O(N) prefix
+ *                       cache rebuild paid once per document change)
  *   replay_examples   - start a replay and step it to completion
  *   replay_long       - feed a synthetic large scene and step replay to end
  *   fade_batches      - drive repl_execute_program() per fade batch with a packed
@@ -46,7 +52,9 @@
 #include "repl/example_loader.h"  /* repl_load_example_lines_for_test */
 #include "repl/examples.h"
 #include "repl/executor.h"
+#include "repl/load.h"           /* repl_load_apply_line — uncapped doc build */
 #include "repl/parser.h"
+#include "repl/source_scope.h"   /* prefix-depth queries + cache invalidate */
 #include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
 #include "app/glr_ctrl.h"
@@ -54,6 +62,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/utsname.h>          /* uname() for the machine-id CSV preamble */
 #include <time.h>
 
 #ifdef GL_STUBS
@@ -895,11 +904,147 @@ static BenchResult bench_fade_batches(int iters) {
     return r;
 }
 
+/* ---- bench: source-scope prefix-depth queries ------------------------- */
+
+/* Feed a large, deeply-nested document directly through the lean loader
+ * (repl_load_apply_line), bypassing the example loader's EXAMPLE_BODY_LINES_MAX
+ * (256) cap so the source-scope prefix-depth cache has a realistically large
+ * scene to index. Each 16-line block nests for / push-matrix / begin, so the
+ * block-depth, matrix-depth, and begin-block prefixes all vary across
+ * positions. The body uses constants only (no var refs), so it commits cleanly
+ * against the post-reset predef table. Returns the resulting document row
+ * count. */
+static int load_deep_scope_doc(int blocks) {
+    static const char *const tmpl[] = {
+        "for(i, 0, 2) {",
+        "glPushMatrix();",
+        "glTranslatef(1, 0, 0);",
+        "glRotatef(1, 0, 1, 0);",
+        "for(j, 0, 2) {",
+        "glPushMatrix();",
+        "glScalef(1, 1, 1);",
+        "glBegin(GL_TRIANGLES);",
+        "glVertex3f(0, 0, 0);",
+        "glVertex3f(1, 0, 0);",
+        "glVertex3f(0, 1, 0);",
+        "glEnd();",
+        "glPopMatrix();",
+        "}",
+        "glPopMatrix();",
+        "}",
+    };
+    int tmpl_n = (int)(sizeof(tmpl) / sizeof(tmpl[0]));
+    char err[128];
+    int edit_line = 0;
+
+    glr_ctrl_reset_all();
+    for (int b = 0; b < blocks; b++)
+        for (int i = 0; i < tmpl_n; i++)
+            (void)repl_load_apply_line(tmpl[i], err, sizeof(err), &edit_line);
+    return repl_state_document_count();
+}
+
+/* Sweep every source-scope depth/scope query over every position of a deep
+ * document, with NO mutation in the loop, so the prefix-depth cache stays warm.
+ * This isolates the **amortized O(1) query** cost — the property the Finding-4
+ * source-scope view refactor must preserve. A regression that recomputes the
+ * prefix arrays per call (instead of indexing a built cache) shows up here as a
+ * large per-sweep blow-up. One op = one full document sweep across five
+ * queries. */
+static BenchResult bench_source_scope_query(int iters) {
+    BenchResult r = { .name = "source_scope_query", .unit = "sweeps",
+                      .min_sec = 1e18 };
+    int doc_count = load_deep_scope_doc(180);
+
+    /* Warm the cache so the timed loop measures the O(1) query, not the
+     * one-shot O(N) rebuild (that is bench_source_scope_churn's job). */
+    repl_source_scope_depth_cache_invalidate();
+    (void)repl_source_scope_block_depth_at(0);
+
+    int inner = 8;
+    /* Result is summed and reported so the queries can't be optimized away. */
+    long long sink = 0;
+    for (int it = 0; it < iters; it++) {
+        double t0 = now_seconds();
+        for (int k = 0; k < inner; k++) {
+            for (int pos = 0; pos <= doc_count; pos++) {
+                sink += repl_source_scope_block_depth_at(pos);
+                sink += repl_source_scope_matrix_scope_depth_at(pos);
+                sink += repl_source_scope_tess_scope_depth_at(pos);
+                sink += repl_source_scope_in_begin_block_at(pos);
+                sink += repl_source_scope_cmd_indent_chars(pos);
+            }
+        }
+        double dt = now_seconds() - t0;
+        if (dt < r.min_sec) r.min_sec = dt;
+        r.total_sec += dt;
+        r.ops += inner;
+        r.iters++;
+    }
+    if (!g_csv)
+        fprintf(stderr, "  (source_scope_query: doc rows=%d, 5 queries x (rows+1)/sweep, checksum=%lld)\n",
+                doc_count, sink);
+    return r;
+}
+
+/* Isolates the O(N) prefix-depth REBUILD. Each op invalidates the cache (as a
+ * document mutation does) then issues one query, forcing a full
+ * depth_cache_rebuild() over the document. Guards the "build on (re)bind" cost
+ * the Finding-4 view refactor must keep flat — a view bound once per frame and
+ * queried many times should rebuild no more often than today's global. One op =
+ * one invalidate + rebuild. */
+static BenchResult bench_source_scope_churn(int iters) {
+    BenchResult r = { .name = "source_scope_churn", .unit = "rebuilds",
+                      .min_sec = 1e18 };
+    int doc_count = load_deep_scope_doc(180);
+
+    int inner = 200;
+    long long sink = 0;
+    for (int it = 0; it < iters; it++) {
+        double t0 = now_seconds();
+        for (int k = 0; k < inner; k++) {
+            repl_source_scope_depth_cache_invalidate();
+            /* One invalidate forces the next query to rebuild the whole
+             * prefix cache (O(N)); the spread of follow-up queries is warm
+             * and cheap, and keeps the checksum robustly non-zero so the
+             * nested structure is verified, without changing that the
+             * rebuild dominates each op. Offsets dodge block boundaries
+             * (depth 0) so the sum reflects real nesting. */
+            for (int s = 0; s < 8; s++)
+                sink += repl_source_scope_block_depth_at((doc_count * s) / 8 + 3);
+        }
+        double dt = now_seconds() - t0;
+        if (dt < r.min_sec) r.min_sec = dt;
+        r.total_sec += dt;
+        r.ops += inner;
+        r.iters++;
+    }
+    if (!g_csv)
+        fprintf(stderr, "  (source_scope_churn: doc rows=%d, %d rebuilds/sample, checksum=%lld)\n",
+                doc_count, inner, sink);
+    return r;
+}
+
 /* ---- main -------------------------------------------------------------- */
 
 static void print_csv_header(void) {
     printf("name,unit,iters,ops,total_sec,min_iter_ms,per_iter_ms,"
            "per_op_us,ops_per_sec\n");
+}
+
+/* Identify the host so a captured baseline CSV records where its numbers
+ * came from (timings are only comparable on the same machine). In CSV mode
+ * the line is `#`-prefixed so it precedes the header as a skippable comment;
+ * in human mode it is a plain banner line. */
+static void print_machine_info(void) {
+    const char *prefix = g_csv ? "# " : "";
+    struct utsname u;
+    if (uname(&u) == 0) {
+        printf("%smachine: %s %s %s %s\n", prefix,
+               u.nodename, u.sysname, u.release, u.machine);
+    } else {
+        printf("%smachine: unknown\n", prefix);
+    }
 }
 
 static void usage(const char *prog) {
@@ -910,6 +1055,8 @@ static void usage(const char *prog) {
         "    feed_examples     full editor_feed_line path on every example\n"
         "    flatten_examples  repl_flatten_commands per example\n"
         "    flat_cost_query   repl_flatten_cost_at_line over every cursor line\n"
+        "    source_scope_query  source-scope depth queries over a deep document (warm cache)\n"
+        "    source_scope_churn  source-scope cache rebuild per op (invalidate + query)\n"
         "    replay_examples   step replay through every example\n"
         "    replay_long       synthetic 600-iter for-loop replay\n"
         "    replay_focus      per-frame replay_focus_flat_idx() at the tail\n"
@@ -988,8 +1135,10 @@ int main(int argc, char **argv) {
     fresh_repl();
 
     if (g_csv) {
+        print_machine_info();
         print_csv_header();
     } else {
+        print_machine_info();
         printf("REPL benchmarks (iters=%d, examples=%d, total_lines=%lld)\n",
                iters, repl_example_count(), total_example_lines());
     }
@@ -1002,6 +1151,10 @@ int main(int argc, char **argv) {
         report(bench_flatten_examples(iters));
     if (wants(only, "flat_cost_query"))
         report(bench_flat_cost_query(iters));
+    if (wants(only, "source_scope_query"))
+        report(bench_source_scope_query(iters));
+    if (wants(only, "source_scope_churn"))
+        report(bench_source_scope_churn(iters));
     if (wants(only, "spike_flatten_largest"))
         report(bench_spike_flatten_largest(iters));
     if (wants(only, "replay_examples"))
