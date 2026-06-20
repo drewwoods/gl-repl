@@ -8,9 +8,10 @@
  * the parser sees the line.
  *
  * Parse context allows internal callers (src/repl/flatten.c during expansion,
- * replay.c during step-back) to parse lines outside the active edit position.
- * Each parse is stateless and immutable: parsing the same line twice yields
- * identical results.
+ * replay.c during step-back) to parse lines outside the active edit position
+ * and against an explicit source-scope view. Each parse is stateless and
+ * immutable for a stable context: parsing the same line twice yields identical
+ * results.
  *
  * Expression validation: identifiers in expressions are validated against
  * the predefined-variable table (float x, y, z, t, etc.) and reserved function
@@ -22,6 +23,7 @@
 
 #include "repl/command.h"
 #include "repl/eval.h"
+#include "repl/source_scope.h"
 
 /* Parse context: allows internal callers to parse lines outside the active
  * editor position. source_line_idx is used for error reporting and line-number
@@ -50,6 +52,7 @@ typedef struct {
      * per-arg %g/snprintf rendering and trailing-comment scan. Default 0
      * (emit text) preserves the behavior for commit / reformat / export. */
     int skip_text;
+    const ReplSourceScopeView *source_scope;
 } ReplParseContext;
 
 /* Parser output struct. On success, cmd holds the parsed command and text

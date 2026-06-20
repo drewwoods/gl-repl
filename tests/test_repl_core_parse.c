@@ -2,6 +2,7 @@
 #include "repl/core_internal.h"
 #include "editor/input.h"
 #include "repl/parser.h"
+#include "repl/state_views.h"
 #include "ui/app/state.h"
 #include "support/repl_test_support.h"
 #include "support/test_harness.h"
@@ -219,7 +220,14 @@ int main(void) {
         editor_state_edit_line_set(0);
 
         GLCmd cmd;
-        ReplParseContext ctx = { repl_state_document_count(), NULL, 0, 0 };
+        ReplSourceScopeView source_scope;
+        repl_source_scope_view_bind(&source_scope,
+                                    repl_state_document_cmds(),
+                                    repl_state_document_count());
+        ReplParseContext ctx = {
+            .source_line_idx = repl_state_document_count(),
+            .source_scope = &source_scope,
+        };
         ReplParsedLine pl;
         int ok = repl_parser_parse_command_ctx("glVertex3f(1, 2, 3)", &pl, &ctx);
         ASSERT_TRUE("context parse ok", ok == 1);

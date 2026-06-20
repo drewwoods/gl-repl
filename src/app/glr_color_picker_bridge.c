@@ -89,10 +89,15 @@ static int glr_cp_write_color(int cmd_idx, float r, float g, float b, float a,
      * bar instead of failing silently. */
     char picker_parse_err[REPL_STATUS_TEXT_MAX];
     picker_parse_err[0] = '\0';
+    ReplSourceScopeView source_scope;
+    repl_source_scope_view_bind(&source_scope,
+                                repl_state_document_cmds(),
+                                repl_state_document_count());
     ReplParseContext parse_ctx = {
         .source_line_idx = cmd_idx,
         .err_buf = picker_parse_err,
         .err_sz  = (int)sizeof(picker_parse_err),
+        .source_scope = &source_scope,
     };
     ReplParsedLine pl;
     if (!repl_parser_parse_command_ctx(new_line, &pl, &parse_ctx)) {

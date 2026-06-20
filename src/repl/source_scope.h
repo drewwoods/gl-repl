@@ -18,11 +18,11 @@
  * nearest_open_block_at) allows the parser and UI to locate matching braces and
  * validate nesting.
  *
- * Caching: A prefix-depth cache (src/repl/source_scope.c) memoizes block-depth
- * computation from line 0 to each position. The cache is invalidated whenever
- * the source command array changes (via repl_source_scope_depth_cache_invalidate).
- * Cache hits avoid O(n) re-traversal on each query, keeping UI responsiveness
- * constant.
+ * Caching: ReplSourceScopeView owns prefix-depth arrays for the document it is
+ * bound to. Callers that already have an explicit command-array snapshot bind a
+ * view once and then query it in O(1). The legacy live wrappers keep a
+ * process-wide view and invalidate it whenever the source command array changes
+ * (via repl_source_scope_depth_cache_invalidate).
  *
  * Indentation formatting: Two variants — standard indentation for regular blocks
  * and tess-aware indentation for gluTessCallback setup. Both accept a destination

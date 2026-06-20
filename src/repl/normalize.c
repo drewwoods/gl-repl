@@ -9,6 +9,8 @@
 #include "repl/format.h"
 #include "repl/host_effects.h"
 #include "repl/parser.h"
+#include "repl/source_scope.h"
+#include "repl/state_views.h"
 #include "repl/text_helpers.h"
 
 #include <ctype.h>
@@ -120,7 +122,8 @@ static int parse_and_normalize_impl(const char *line, int pos,
                                     ExprVar *vars, int num_vars,
                                     int preserve_expr, GLCmd *out_cmd,
                                     char *text_out, int text_sz,
-                                    int strict_refs) {
+                                    int strict_refs,
+                                    const ReplSourceScopeView *source_scope) {
     /* repl_parse_and_normalize is called from many sites — commit
      * paths, reformatter, tests. The parser never calls set_status
      * itself (it writes diagnostics into ctx->err_buf; enforced by
@@ -135,6 +138,7 @@ static int parse_and_normalize_impl(const char *line, int pos,
         .strict_refs = strict_refs,
         .err_buf = normalize_parse_err,
         .err_sz  = (int)sizeof(normalize_parse_err),
+        .source_scope = source_scope,
     };
     ReplParsedLine pl;
     int parsed = repl_parser_parse_command_ctx(line, &pl, &parse_ctx);
@@ -172,16 +176,38 @@ int repl_parse_and_normalize(const char *line, int pos,
                              ExprVar *vars, int num_vars,
                              int preserve_expr, GLCmd *out_cmd,
                              char *text_out, int text_sz) {
+    ReplSourceScopeView source_scope;
+    repl_source_scope_view_bind(&source_scope,
+                                repl_state_document_cmds(),
+                                repl_state_document_count());
     return parse_and_normalize_impl(line, pos, vars, num_vars,
                                     preserve_expr, out_cmd,
-                                    text_out, text_sz, 0);
+                                    text_out, text_sz, 0,
+                                    &source_scope);
 }
 
 int repl_parse_and_normalize_strict(const char *line, int pos,
                                     ExprVar *vars, int num_vars,
                                     int preserve_expr, GLCmd *out_cmd,
                                     char *text_out, int text_sz) {
+    ReplSourceScopeView source_scope;
+    repl_source_scope_view_bind(&source_scope,
+                                repl_state_document_cmds(),
+                                repl_state_document_count());
     return parse_and_normalize_impl(line, pos, vars, num_vars,
                                     preserve_expr, out_cmd,
-                                    text_out, text_sz, 1);
+                                    text_out, text_sz, 1,
+                                    &source_scope);
+}
+
+int repl_parse_and_normalize_strict_with_scope(
+        const char *line, int pos,
+        ExprVar *vars, int num_vars,
+        int preserve_expr, GLCmd *out_cmd,
+        char *text_out, int text_sz,
+        const ReplSourceScopeView *source_scope) {
+    return parse_and_normalize_impl(line, pos, vars, num_vars,
+                                    preserve_expr, out_cmd,
+                                    text_out, text_sz, 1,
+                                    source_scope);
 }

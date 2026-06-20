@@ -513,6 +513,7 @@ static int parse_input_for_enter_commit(GLCmd *cmd, char *text_out, int text_sz,
     ExprVar vis_vars[MAX_EXPR_VARS];
     int vis_total = 0;
     int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS, &vis_total);
+    ReplCompileContext scope_ctx = repl_compile_context_from_live(insert_idx);
     memset(cmd, 0, sizeof(*cmd));
     if (text_out && text_sz > 0)
         text_out[0] = '\0';
@@ -526,6 +527,7 @@ static int parse_input_for_enter_commit(GLCmd *cmd, char *text_out, int text_sz,
             .strict_refs = 1,
             .err_buf = parse_err_buf,
             .err_sz  = (int)sizeof(parse_err_buf),
+            .source_scope = &scope_ctx.source_scope,
         };
         ReplParsedLine pl;
         parsed = repl_parser_parse_command_ctx(editor_state_input().input, &pl, &parse_ctx);
@@ -539,6 +541,7 @@ static int parse_input_for_enter_commit(GLCmd *cmd, char *text_out, int text_sz,
             .strict_refs = 1,
             .err_buf = parse_err_buf,
             .err_sz  = (int)sizeof(parse_err_buf),
+            .source_scope = &scope_ctx.source_scope,
         };
         ReplParsedLine pl;
         parsed = repl_parser_parse_command_ctx(editor_state_input().input, &pl, &parse_ctx);
@@ -846,6 +849,7 @@ static CommitResult commit_current_input(int enter_mode,
             ExprVar vis_vars[MAX_EXPR_VARS];
             int vis_total = 0;
             int num_vis_vars = collect_visible_vars(insert_idx, vis_vars, MAX_EXPR_VARS, &vis_total);
+            ReplCompileContext scope_ctx = repl_compile_context_from_live(insert_idx);
 
             char cmd_text[MAX_LINE_LEN] = "";
             char parse_err_buf[REPL_STATUS_TEXT_MAX];
@@ -857,6 +861,7 @@ static CommitResult commit_current_input(int enter_mode,
                     .vars = vis_vars, .num_vars = num_vis_vars,
                     .err_buf = parse_err_buf,
                     .err_sz  = (int)sizeof(parse_err_buf),
+                    .source_scope = &scope_ctx.source_scope,
                 };
                 if (editor_try_commit_var_statements())
                     return commit_progressed_since(before) ? COMMIT_OK : COMMIT_REJECTED;
@@ -872,6 +877,7 @@ static CommitResult commit_current_input(int enter_mode,
                     .source_line_idx = insert_idx,
                     .err_buf = parse_err_buf,
                     .err_sz  = (int)sizeof(parse_err_buf),
+                    .source_scope = &scope_ctx.source_scope,
                 };
                 ReplParsedLine pl;
                 parsed = repl_parser_parse_command_ctx(editor_state_input().input, &pl, &parse_ctx);

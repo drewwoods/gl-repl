@@ -8,6 +8,7 @@
 #include "repl/core_internal.h"
 #include "repl/control_flow.h"
 #include "repl/parser.h"
+#include "repl/source_scope.h"
 #include "subsystems/replay/replay.h"
 #include "repl/state_views.h"
 #include "subsystems/replay/replay_state.h"
@@ -949,11 +950,16 @@ static int replay_build_eval_annotation(int cmd_idx, int flat_idx,
      * the step renders without the evaluated-text overlay. */
     char annotation_parse_err[REPL_STATUS_TEXT_MAX]; /* deliberately unread */
     annotation_parse_err[0] = '\0';
+    ReplSourceScopeView source_scope;
+    repl_source_scope_view_bind(&source_scope,
+                                repl_state_document_cmds(),
+                                repl_state_document_count());
     ReplParseContext parse_ctx = {
         .source_line_idx = cmd_idx,
         .vars = visible_vars, .num_vars = nv,
         .err_buf = annotation_parse_err,
         .err_sz  = (int)sizeof(annotation_parse_err),
+        .source_scope = &source_scope,
     };
     ReplParsedLine eval_pl;
     repl_eval_copy_scratch_arrays(saved_scratch);

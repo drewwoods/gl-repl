@@ -53,6 +53,46 @@ static void parser_emit_error_static(const ReplParseContext *ctx, const char *ms
     parser_emit_error(ctx, "%s", msg ? msg : "");
 }
 
+static const ReplSourceScopeView *parser_source_scope(const ReplParseContext *ctx) {
+    return ctx ? ctx->source_scope : NULL;
+}
+
+static int parser_scope_block_depth_at(const ReplParseContext *ctx, int pos) {
+    return repl_source_scope_view_block_depth_at(parser_source_scope(ctx), pos);
+}
+
+static int parser_scope_in_begin_block_at(const ReplParseContext *ctx, int pos) {
+    return repl_source_scope_view_in_begin_block_at(parser_source_scope(ctx), pos);
+}
+
+static void parser_scope_cmd_indent(const ReplParseContext *ctx,
+                                    int pos, char *buf, int buf_sz) {
+    repl_source_scope_view_cmd_indent(parser_source_scope(ctx), pos, buf, buf_sz);
+}
+
+static void parser_scope_begin_indent(const ReplParseContext *ctx,
+                                      int pos, char *buf, int buf_sz) {
+    repl_source_scope_view_begin_indent(parser_source_scope(ctx), pos, buf, buf_sz);
+}
+
+static void parser_scope_tess_close_indent(const ReplParseContext *ctx,
+                                           int pos, char *buf, int buf_sz) {
+    repl_source_scope_view_tess_close_indent(parser_source_scope(ctx), pos,
+                                             buf, buf_sz);
+}
+
+static void parser_scope_cmd_tess_indent(const ReplParseContext *ctx,
+                                         int pos, char *buf, int buf_sz) {
+    repl_source_scope_view_cmd_tess_indent(parser_source_scope(ctx), pos,
+                                           buf, buf_sz);
+}
+
+static void parser_scope_matrix_close_indent(const ReplParseContext *ctx,
+                                             int pos, char *buf, int buf_sz) {
+    repl_source_scope_view_matrix_close_indent(parser_source_scope(ctx), pos,
+                                               buf, buf_sz);
+}
+
 static void set_incomplete_missing_paren_status(const ReplParseContext *ctx,
                                                 const char *func) {
     if (func && func[0])
@@ -412,11 +452,11 @@ static int try_parse_table_driven_enum_command(const char *func,
         if (text_out && text_sz > 0) {
             char ind[REPL_INDENT_TEXT_MAX];
             if (def->indent_type == 1) {
-                repl_source_scope_begin_indent(source_line_idx, ind,
-                                               sizeof(ind));
+                parser_scope_begin_indent(ctx, source_line_idx, ind,
+                                          sizeof(ind));
             } else {
-                repl_source_scope_cmd_indent(source_line_idx, ind,
-                                             sizeof(ind));
+                parser_scope_cmd_indent(ctx, source_line_idx, ind,
+                                        sizeof(ind));
             }
             format_enum_command_text(text_out, text_sz, ind, def,
                                      num_slots, slot_emit);
@@ -430,8 +470,8 @@ static int try_parse_table_driven_enum_command(const char *func,
 /* --- Extracted per-command handlers ---
  *
  * Each returns 1 (cmd populated) or 0 (parse failure, diagnostic in
- * ctx->err_buf). `indent` is the pre-computed indent string from
- * repl_source_scope_cmd_indent(source_line_idx). */
+ * ctx->err_buf). `indent` is the pre-computed source-scope indent
+ * string for source_line_idx. */
 
 static int parse_label(const char *args, GLCmd *cmd,
                        char *text_out, int text_sz,
@@ -818,7 +858,7 @@ static int parse_func_call(const char *args, int fn, GLCmd *cmd,
         return 0;
     }
 
-    if (ctx->strict_refs && repl_source_scope_block_depth_at(source_line_idx) == 0) {
+    if (ctx->strict_refs && parser_scope_block_depth_at(ctx, source_line_idx) == 0) {
         int def_exists = 0;
         const GLCmd *document_cmds = repl_state_document_cmds();
         for (int di = 0; di < repl_state_document_count(); di++) {
@@ -849,7 +889,7 @@ static int parse_func_call(const char *args, int fn, GLCmd *cmd,
     cmd->has_vars = input_has_any_visible_vars(args, vars, num_vars);
 
     char ind_str[REPL_INDENT_TEXT_MAX];
-    repl_source_scope_cmd_indent(source_line_idx, ind_str, (int)sizeof(ind_str));
+    parser_scope_cmd_indent(ctx, source_line_idx, ind_str, (int)sizeof(ind_str));
 
     char raw_args[MAX_LINE_LEN];
     strncpy(raw_args, args, sizeof(raw_args) - 1);
@@ -911,12 +951,14 @@ static void write_text(char *out, int sz, const char *fmt, ...) {
 /* No-arg matrix-stack commands: glPushMatrix / glPopMatrix / glLoadIdentity.
  * Returns 1 if `func` matched (cmd + text populated), 0 otherwise.
  * glPushMatrix opens an indent scope like glBegin, so its body lands one
- * level deeper (handled by repl_source_scope_cmd_indent via `indent`);
+ * level deeper (handled by the precomputed source-scope `indent`);
  * glPopMatrix aligns with its matching glPushMatrix — one matrix level
  * shallower — mirroring how glEnd lines up with glBegin. */
 static int parse_matrix_stack_cmd(const char *func, GLCmd *cmd,
                                   char *text_out, int text_sz,
-                                  const char *indent, int source_line_idx) {
+                                  const char *indent,
+                                  const ReplParseContext *ctx,
+                                  int source_line_idx) {
     if (strcmp(func, "glPushMatrix") == 0) {
         cmd->type = CMD_PUSH_MATRIX;
         cmd->valid = 1;
@@ -925,8 +967,8 @@ static int parse_matrix_stack_cmd(const char *func, GLCmd *cmd,
     }
     if (strcmp(func, "glPopMatrix") == 0) {
         char close_ind[REPL_INDENT_TEXT_MAX];
-        repl_source_scope_matrix_close_indent(source_line_idx, close_ind,
-                                              sizeof(close_ind));
+        parser_scope_matrix_close_indent(ctx, source_line_idx, close_ind,
+                                         sizeof(close_ind));
         cmd->type = CMD_POP_MATRIX;
         cmd->valid = 1;
         write_text(text_out, text_sz, "%sglPopMatrix();", close_ind);
@@ -1009,7 +1051,7 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->is_auto = 0;
         cmd->num_args = 0;
         char indent[REPL_INDENT_TEXT_MAX];
-        repl_source_scope_cmd_indent(source_line_idx, indent, sizeof(indent));
+        parser_scope_cmd_indent(ctx, source_line_idx, indent, sizeof(indent));
         WRITE_TEXT("%s%s", indent, p);
         return 1;
     }
@@ -1078,8 +1120,8 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->valid = 1;
         {
             char end_ind[REPL_INDENT_TEXT_MAX];
-            repl_source_scope_begin_indent(source_line_idx, end_ind,
-                                           sizeof(end_ind));
+            parser_scope_begin_indent(ctx, source_line_idx, end_ind,
+                                      sizeof(end_ind));
             WRITE_TEXT("%sglEnd();", end_ind);
         }
         return 1;
@@ -1087,14 +1129,15 @@ static int parse_command(const char *line, GLCmd *cmd,
 
     /* Indent for gl commands: 2 + 2*tess + 2*begin */
     char indent_buf[REPL_INDENT_TEXT_MAX];
-    repl_source_scope_cmd_indent(source_line_idx, indent_buf, sizeof(indent_buf));
+    parser_scope_cmd_indent(ctx, source_line_idx, indent_buf, sizeof(indent_buf));
     const char *indent = indent_buf;
 
     /* Indent for glu (tessellator) commands: 2 + 2*tess only.
      * glu commands belong to the tessellator scope, not the GL vertex block,
      * so glBegin depth is intentionally excluded. */
     char tess_indent_buf[REPL_INDENT_TEXT_MAX];
-    repl_source_scope_cmd_tess_indent(source_line_idx, tess_indent_buf, sizeof(tess_indent_buf));
+    parser_scope_cmd_tess_indent(ctx, source_line_idx, tess_indent_buf,
+                                 sizeof(tess_indent_buf));
     const char *tess_indent = tess_indent_buf;
 
     /* Table-driven parsing for standard commands */
@@ -1173,7 +1216,7 @@ static int parse_command(const char *line, GLCmd *cmd,
 
     /* glPushMatrix() / glPopMatrix() / glLoadIdentity() */
     if (parse_matrix_stack_cmd(func, cmd, text_out, text_sz, indent,
-                               source_line_idx))
+                               ctx, source_line_idx))
         return 1;
 
     {
@@ -1212,8 +1255,8 @@ static int parse_command(const char *line, GLCmd *cmd,
         cmd->valid = 1;
         {
             char close_ind[REPL_INDENT_TEXT_MAX];
-            repl_source_scope_tess_close_indent(source_line_idx, close_ind,
-                                                (int)sizeof(close_ind));
+            parser_scope_tess_close_indent(ctx, source_line_idx, close_ind,
+                                           (int)sizeof(close_ind));
             WRITE_TEXT("%sgluEnd();", close_ind);
         }
         return 1;
@@ -1265,8 +1308,8 @@ static int parse_command(const char *line, GLCmd *cmd,
             cmd->valid = 1;
             {
                 char ind_str[REPL_INDENT_TEXT_MAX];
-                repl_source_scope_cmd_indent(source_line_idx, ind_str,
-                                             (int)sizeof(ind_str));
+                parser_scope_cmd_indent(ctx, source_line_idx, ind_str,
+                                        (int)sizeof(ind_str));
                 WRITE_TEXT("%sgoto %s;", ind_str, clean_lname);
             }
             return 1;
@@ -1336,7 +1379,7 @@ int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,
      * tearing down the block for subsequent glVertex calls. Now the parser
      * is the gate, so the executor can rely on the invariant. */
     if (ctx && !repl_cmd_type_valid_in_begin(out->cmd.type) &&
-        repl_source_scope_in_begin_block_at(ctx->source_line_idx)) {
+        parser_scope_in_begin_block_at(ctx, ctx->source_line_idx)) {
         parser_emit_error(ctx, "%s not valid inside glBegin/glEnd",
                           repl_cmd_type_display_name(out->cmd.type));
         return 0;

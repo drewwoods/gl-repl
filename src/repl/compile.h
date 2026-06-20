@@ -28,6 +28,7 @@
 #include "config.h"          /* MAX_COMMIT_CMDS, MAX_LINE_LEN */
 #include "repl/command.h"    /* GLCmd */
 #include "repl/eval.h"       /* MAX_NAMES_PER_DECL, ExprVar */
+#include "repl/source_scope.h" /* ReplSourceScopeView */
 #include "source_document.h" /* SourceTextView */
 
 /* Source-command level shape of a compiled change. The `kind` field
@@ -171,9 +172,10 @@ typedef struct ReplCompiledChange_s {
  * takes whatever it needs from here; it never reaches back into REPL
  * globals.
  *
- * Today's transitional state: compile functions still read predef
- * vars through the shared eval table because that table is ReplState-
- * adjacent and not yet threaded through context.
+ * Today's transitional state: source-scope reads are carried by
+ * source_scope, but compile functions still read predef vars through
+ * the shared eval table because that table is ReplState-adjacent and
+ * not yet threaded through context.
  */
 typedef struct {
     int               edit_line;        /* current cursor source-cmd idx */
@@ -181,6 +183,7 @@ typedef struct {
     int               insert_mode;      /* 1 if editor is in insert mode */
     SourceTextView    text;             /* source-text view for ident-usage checks */
     const GLCmd      *document_cmds;    /* source-command array snapshot */
+    ReplSourceScopeView source_scope;   /* scope/depth view over document_cmds */
 } ReplCompileContext;
 
 typedef enum {

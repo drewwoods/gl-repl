@@ -10,6 +10,7 @@
 #include "repl/core_internal.h"
 #include "repl/flatten.h"
 #include "repl/parser.h"
+#include "repl/source_scope.h"
 #include "repl/state_owners.h"
 #include "repl/util.h"            /* repl_format_fits / repl_copy_string_fits */
 #include "support/cpuprof.h"   /* PROF_FLATTEN_* sub-phase timing */
@@ -41,6 +42,7 @@ typedef struct {
     int               flat_capacity;
     int               flat_count;
     SourceTextView  text;             /* editor source-text view for inline expansion */
+    ReplSourceScopeView source_scope;
     int               max_call_depth;
     int call_depth;
     int abort;
@@ -531,6 +533,7 @@ static int flatten_reparse_line(FlattenContext *ctx,
         /* Flatten only reads tmp_pl.cmd; the canonical text rendering
          * (per-arg %g/snprintf) is pure waste on every frame. */
         .skip_text = 1,
+        .source_scope = &ctx->source_scope,
     };
     const char *text = flatten_src_text(ctx->text, i);
     ReplParsedLine tmp_pl;
@@ -815,6 +818,10 @@ int repl_flatten_program(const ReplFlattenOptions *options,
                               "Invalid flatten program options");
         return 0;
     }
+
+    repl_source_scope_view_bind(&ctx.source_scope,
+                                ctx.source_cmds,
+                                ctx.source_count);
 
     /* Pre-index funcN definitions so CMD_CALL handlers can jump straight
      * to the body without scanning source_cmds[] per call. First match
