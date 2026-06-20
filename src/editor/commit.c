@@ -336,7 +336,7 @@ ReplCompileResult editor_compile_close_brace(const char *input,
 
 /* CONTRACT (audit #11): context-pure for document data, live-state-
  * coupled for both scope queries (repl_source_scope_*) and visible-
- * var collection (collect_visible_vars in src/repl/core.c). The
+ * var collection (collect_visible_vars in src/repl/visible_vars.c). The
  * ReplCompileContext snapshot is authoritative for document_cmds /
  * _count / edit_line, but the helpers above read from the live
  * g_repl_state document. Callers must apply each change to the live
@@ -647,7 +647,7 @@ ReplCompileResult editor_compile_func_def(const char *input,
 
 /* CONTRACT (audit #11): context-pure for document data, live-state-
  * coupled for both scope queries (repl_source_scope_*) and visible-
- * var collection (collect_visible_vars in src/repl/core.c). The
+ * var collection (collect_visible_vars in src/repl/visible_vars.c). The
  * ReplCompileContext snapshot is authoritative for document_cmds /
  * _count / edit_line, but the helpers above read from the live
  * g_repl_state document. Callers must apply each change to the live

@@ -5,7 +5,7 @@
  *
  *   - the parse-and-normalize entry points (the commit pipeline's front door),
  *   - the parse / extract / canonical-text helpers from text_helpers.h, and
- *   - visible-variable collection used by parse callers.
+ *   - visible-variable collection from visible_vars.h used by parse callers.
  *
  * It owns none of scene loading, export, editor-input shims, or controller
  * hooks; those live behind their own headers (repl/scenes.h, repl/export.h,
@@ -17,6 +17,7 @@
 #include "repl/command.h"      /* GLCmd */
 #include "repl/eval.h"         /* ExprVar */
 #include "repl/text_helpers.h" /* parse / extract / canonical-text helpers */
+#include "repl/visible_vars.h" /* visible-variable collection */
 #include "source_document.h"   /* SourceTextView document view */
 
 /* ---- Normalize / commit pipeline -------------------------------------- */
@@ -39,12 +40,5 @@ int  repl_parse_and_normalize_strict(const char *line, int pos,
                                      ExprVar *vars, int num_vars,
                                      int preserve_expr, GLCmd *out_cmd,
                                      char *text_out, int text_sz);
-
-/* ---- Visible-var collection ------------------------------------------- */
-
-/* Populate `vars` with every loop/function-local visible at source line
- * `pos`. Returns the count (capped at max_vars). If total_out is non-NULL,
- * receives the uncapped total (for truncation detection at commit sites). */
-int  collect_visible_vars(int pos, ExprVar *vars, int max_vars, int *total_out);
 
 #endif /* REPL_CORE_INTERNAL_H */

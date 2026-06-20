@@ -448,7 +448,8 @@ REPL_SRCS = \
 	src/repl/state.c \
 	src/repl/text_helpers.c \
 	src/repl/time.c \
-	src/repl/tutorials.c
+	src/repl/tutorials.c \
+	src/repl/visible_vars.c
 
 SCENE_SRCS = \
 	src/scene/axes.c \
@@ -687,8 +688,9 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/repl/scenes.c \
                      src/repl/source_scope.c \
                      src/repl/state.c \
-					 src/repl/text_helpers.c \
+                     src/repl/text_helpers.c \
                      src/repl/time.c \
+                     src/repl/visible_vars.c \
                      tools/repl_demo/source_document.c \
                      tests/gl-stubs/gl_stub_counts.c
 # src/app/glr_config.c removed in step 4 of the decouple plan: pipeline TUs
