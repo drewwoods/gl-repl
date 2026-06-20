@@ -10,7 +10,6 @@
 #include "repl/host_effects.h"
 #include "repl/parser.h"
 #include "repl/source_scope.h"
-#include "repl/state_views.h"
 #include "repl/text_helpers.h"
 
 #include <ctype.h>
@@ -176,28 +175,20 @@ int repl_parse_and_normalize(const char *line, int pos,
                              ExprVar *vars, int num_vars,
                              int preserve_expr, GLCmd *out_cmd,
                              char *text_out, int text_sz) {
-    ReplSourceScopeView source_scope;
-    repl_source_scope_view_bind(&source_scope,
-                                repl_state_document_cmds(),
-                                repl_state_document_count());
     return parse_and_normalize_impl(line, pos, vars, num_vars,
                                     preserve_expr, out_cmd,
                                     text_out, text_sz, 0,
-                                    &source_scope);
+                                    NULL);
 }
 
 int repl_parse_and_normalize_strict(const char *line, int pos,
                                     ExprVar *vars, int num_vars,
                                     int preserve_expr, GLCmd *out_cmd,
                                     char *text_out, int text_sz) {
-    ReplSourceScopeView source_scope;
-    repl_source_scope_view_bind(&source_scope,
-                                repl_state_document_cmds(),
-                                repl_state_document_count());
     return parse_and_normalize_impl(line, pos, vars, num_vars,
                                     preserve_expr, out_cmd,
                                     text_out, text_sz, 1,
-                                    &source_scope);
+                                    NULL);
 }
 
 int repl_parse_and_normalize_strict_with_scope(
