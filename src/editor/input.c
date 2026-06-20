@@ -527,6 +527,7 @@ static int parse_input_for_enter_commit(GLCmd *cmd, char *text_out, int text_sz,
             .strict_refs = 1,
             .err_buf = parse_err_buf,
             .err_sz  = (int)sizeof(parse_err_buf),
+            .func_aliases = scope_ctx.func_aliases,
             .source_scope = &scope_ctx.source_scope,
         };
         ReplParsedLine pl;
@@ -541,6 +542,7 @@ static int parse_input_for_enter_commit(GLCmd *cmd, char *text_out, int text_sz,
             .strict_refs = 1,
             .err_buf = parse_err_buf,
             .err_sz  = (int)sizeof(parse_err_buf),
+            .func_aliases = scope_ctx.func_aliases,
             .source_scope = &scope_ctx.source_scope,
         };
         ReplParsedLine pl;
@@ -861,6 +863,7 @@ static CommitResult commit_current_input(int enter_mode,
                     .vars = vis_vars, .num_vars = num_vis_vars,
                     .err_buf = parse_err_buf,
                     .err_sz  = (int)sizeof(parse_err_buf),
+                    .func_aliases = scope_ctx.func_aliases,
                     .source_scope = &scope_ctx.source_scope,
                 };
                 if (editor_try_commit_var_statements())
@@ -877,6 +880,7 @@ static CommitResult commit_current_input(int enter_mode,
                     .source_line_idx = insert_idx,
                     .err_buf = parse_err_buf,
                     .err_sz  = (int)sizeof(parse_err_buf),
+                    .func_aliases = scope_ctx.func_aliases,
                     .source_scope = &scope_ctx.source_scope,
                 };
                 ReplParsedLine pl;

@@ -244,6 +244,75 @@ int main(void) {
     }
 
     {
+        GLCmd doc[1];
+        memset(doc, 0, sizeof(doc));
+        doc[0].valid = 1;
+        doc[0].type = CMD_FUNC_DEF;
+        doc[0].args[0] = 0.0f;
+        ReplSourceScopeView source_scope;
+        repl_source_scope_view_bind(&source_scope, doc, 1);
+
+        char aliases[REPL_FUNC_SLOT_COUNT][REPL_FUNC_NAME_MAX];
+        memset(aliases, 0, sizeof(aliases));
+        snprintf(aliases[0], sizeof(aliases[0]), "%s", "drawBox");
+
+        char err_buf[REPL_STATUS_TEXT_MAX] = "";
+        ReplParseContext ctx = {
+            .source_line_idx = 1,
+            .strict_refs = 1,
+            .err_buf = err_buf,
+            .err_sz = (int)sizeof(err_buf),
+            .func_aliases = { aliases, REPL_FUNC_SLOT_COUNT },
+            .source_scope = &source_scope,
+        };
+        ReplParsedLine pl;
+        int ok = repl_parser_parse_command_ctx("drawBox(1);", &pl, &ctx);
+        ASSERT_TRUE("parser resolves alias from context", ok == 1);
+        ASSERT_TRUE("parser alias call targets slot 0", (int)pl.cmd.args[0] == 0);
+        ASSERT_TRUE("parser alias canonical text uses context alias",
+                    strstr(pl.text, "drawBox(1)") != NULL);
+
+        repl_func_alias_clear_all();
+        ASSERT_TRUE("set global-only alias", repl_func_alias_set(0, "globalOnly") == 1);
+        memset(&pl, 0, sizeof(pl));
+        err_buf[0] = '\0';
+        ReplParseContext no_alias_ctx = {
+            .source_line_idx = 1,
+            .strict_refs = 1,
+            .err_buf = err_buf,
+            .err_sz = (int)sizeof(err_buf),
+            .source_scope = &source_scope,
+        };
+        ok = repl_parser_parse_command_ctx("globalOnly();", &pl, &no_alias_ctx);
+        ASSERT_TRUE("parser ignores global alias without context", ok == 0);
+        repl_func_alias_clear_all();
+    }
+
+    {
+        glr_ctrl_reset_all();
+        declare_test_vars();
+        editor_feed_line("func0() {");
+        editor_feed_line("}");
+
+        ReplSourceScopeView empty_scope;
+        repl_source_scope_view_bind(&empty_scope, NULL, 0);
+        char err_buf[REPL_STATUS_TEXT_MAX] = "";
+        ReplParseContext ctx = {
+            .source_line_idx = 0,
+            .strict_refs = 1,
+            .err_buf = err_buf,
+            .err_sz = (int)sizeof(err_buf),
+            .source_scope = &empty_scope,
+        };
+        ReplParsedLine pl;
+        int ok = repl_parser_parse_command_ctx("func0();", &pl, &ctx);
+        ASSERT_TRUE("strict refs ignore live document without source view",
+                    ok == 0);
+        ASSERT_TRUE("strict refs report undefined from explicit empty view",
+                    strstr(err_buf, "undefined function 'func0'") != NULL);
+    }
+
+    {
         glr_ctrl_reset_all();
         declare_test_vars();
         editor_feed_line("gluBegin(GLU_POLYGON);");

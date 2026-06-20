@@ -64,6 +64,7 @@ typedef struct {
     FlatCmdLocalVars *flat_local_vars;
     int               flat_capacity;
     SourceTextView    text;             /* source-text view used for inline expansion */
+    ReplFuncAliasView func_aliases;     /* aliases visible while reparsing source text */
     int               max_call_depth;   /* recursion limit (default MAX_FLATTEN_CALL_DEPTH) */
     int               visit_budget;     /* total command visits allowed (default MAX_FLATTEN_VISIT_BUDGET) */
 } ReplFlattenOptions;

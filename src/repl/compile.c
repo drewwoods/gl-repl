@@ -174,6 +174,7 @@ ReplCompileContext repl_compile_context_from_live(int edit_line_idx) {
         .insert_mode     = 0,
         .text            = source_document_view(),
         .document_cmds   = repl_state_document_cmds(),
+        .func_aliases    = repl_func_alias_view(),
     };
     repl_source_scope_view_bind(&ctx.source_scope,
                                 ctx.document_cmds,
@@ -1564,7 +1565,8 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
                     vis_n > 0 ? vis : NULL, vis_n,
                     preserve_expr, &parsed_cmd,
                     parsed_text, sizeof(parsed_text),
-                    compile_source_scope(ctx)))
+                    compile_source_scope(ctx),
+                    ctx->func_aliases))
                 return compile_set_err(err, err_size,
                                        "Cannot uncomment: not a valid command");
             repl_compiled_change_init(out);

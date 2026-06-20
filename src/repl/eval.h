@@ -182,6 +182,11 @@ typedef struct {
  * frames. */
 ReplPredefView repl_eval_predef_view(void);
 
+typedef struct {
+    const char (*names)[REPL_FUNC_NAME_MAX];
+    int count;
+} ReplFuncAliasView;
+
 /* Function-alias table. Slot index 0..REPL_FUNC_SLOT_COUNT-1; an empty
  * string at a slot means "no alias, use bare funcN". Lookups never
  * match an empty alias. The table is REPL state and round-trips
@@ -191,6 +196,7 @@ void repl_func_alias_bind_storage(
 void repl_func_alias_clear_all(void);
 const char *repl_func_alias_get(int slot);
 int  repl_func_alias_lookup_slot(const char *name);
+ReplFuncAliasView repl_func_alias_view(void);
 /* Register `name` for `slot`. Returns 1 on success, 0 if the name is
  * empty / too long / reserved / already taken by a different slot, or
  * if slot is out of range. Pass NULL or "" to clear the slot. */

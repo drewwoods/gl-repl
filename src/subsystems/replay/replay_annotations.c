@@ -959,6 +959,7 @@ static int replay_build_eval_annotation(int cmd_idx, int flat_idx,
         .vars = visible_vars, .num_vars = nv,
         .err_buf = annotation_parse_err,
         .err_sz  = (int)sizeof(annotation_parse_err),
+        .func_aliases = repl_func_alias_view(),
         .source_scope = &source_scope,
     };
     ReplParsedLine eval_pl;

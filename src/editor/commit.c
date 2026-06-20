@@ -759,6 +759,7 @@ ReplCompileResult editor_compile_for_loop(const char *input,
         .strict_refs     = 1,
         .err_buf         = body_err,
         .err_sz          = (int)sizeof(body_err),
+        .func_aliases    = ctx->func_aliases,
         .source_scope    = &ctx->source_scope,
     };
     ReplParsedLine body_pl;
@@ -1131,6 +1132,7 @@ int editor_commit_apply_swatch_change(int edit_line, int direction, float scale)
             .source_line_idx = edit_line,
             .err_buf = parse_err,
             .err_sz = (int)sizeof parse_err,
+            .func_aliases = ctx.func_aliases,
             .source_scope = &ctx.source_scope,
         };
         if (!repl_parser_parse_command_ctx(new_line, &pl, &parse_ctx)) {

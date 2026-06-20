@@ -97,6 +97,7 @@ static int glr_cp_write_color(int cmd_idx, float r, float g, float b, float a,
         .source_line_idx = cmd_idx,
         .err_buf = picker_parse_err,
         .err_sz  = (int)sizeof(picker_parse_err),
+        .func_aliases = repl_func_alias_view(),
         .source_scope = &source_scope,
     };
     ReplParsedLine pl;

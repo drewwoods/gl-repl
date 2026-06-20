@@ -48,11 +48,20 @@ typedef struct ReplSourceScopeView {
     int matrix_depth_prefix[MAX_COMMANDS + 1];
 } ReplSourceScopeView;
 
+typedef struct {
+    const ReplSourceScopeView *scope;
+} ReplSourceScopeLiveView;
+
 /* Bind a source-scope view to an explicit command array and build its
  * prefix-depth cache immediately. The bound document must remain stable while
  * the view is queried. */
 void repl_source_scope_view_bind(ReplSourceScopeView *view,
                                  const GLCmd *cmds, int count);
+
+/* Return a handle to the warm live-document view. The pointed-to view remains
+ * valid until the next source-scope invalidation. Prefer explicit
+ * ReplSourceScopeView instances for snapshot/non-live documents. */
+ReplSourceScopeLiveView repl_source_scope_live_view(void);
 
 int  repl_source_scope_view_in_begin_block_at(const ReplSourceScopeView *view,
                                               int line_idx);

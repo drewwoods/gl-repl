@@ -10,17 +10,16 @@
  * Parse context allows internal callers (src/repl/flatten.c during expansion,
  * replay.c during step-back) to parse lines outside the active edit position
  * and against an explicit source-scope view. A parse is deterministic for a
- * stable context: parsing the same line twice yields identical results. It is
- * fully self-contained only when ctx->source_scope is non-NULL; with a NULL
- * source_scope the scope queries fall back to the live-document warm cache (see
- * the field comment), so those parses read live REPL state. Finding 3 in
- * plans/active/repl-structure-readability-audit.md tracks removing that
- * live fallback.
+ * stable context: parsing the same line twice yields identical results. The
+ * parser does not read the live editor, command list, source-scope cache, or
+ * function-alias table; callers that intentionally parse against the live
+ * document pass those views in the context.
  *
  * Expression validation: identifiers in expressions are validated against
  * the predefined-variable table (float x, y, z, t, etc.) and reserved function
- * names (sin, cos, sqrt, etc.). Function references in CMD_CALL can be validated
- * against existing CMD_FUNC_DEF if strict_refs is enabled.
+ * names (sin, cos, sqrt, etc.). Function references in CMD_CALL can be
+ * validated against existing CMD_FUNC_DEF rows in source_scope if strict_refs
+ * is enabled.
  */
 #ifndef REPL_PARSER_H
 #define REPL_PARSER_H
@@ -56,14 +55,14 @@ typedef struct {
      * per-arg %g/snprintf rendering and trailing-comment scan. Default 0
      * (emit text) preserves the behavior for commit / reformat / export. */
     int skip_text;
-    /* Source-scope view for indentation / block-depth / begin-block queries.
-     * When non-NULL the parser queries this view exclusively (no live-state
-     * reach). When NULL the parser's scope helpers fall back to the
-     * live-document warm cache (repl_source_scope_* live wrappers) — this is
-     * how repl_parse_and_normalize{,_strict} parse a candidate line against
-     * the current document without paying a per-call O(N) view bind. A caller
-     * parsing against any OTHER (non-live) document MUST set this; leaving it
-     * NULL there would silently query the live document instead. */
+    /* Function aliases visible to this parse. A zero-initialized view means no
+     * aliases; callers parsing against the live REPL should pass
+     * repl_func_alias_view(). */
+    ReplFuncAliasView func_aliases;
+    /* Source-scope view for indentation / block-depth / begin-block queries
+     * and strict function-reference checks. NULL means no scope information:
+     * the parser uses top-level/default indentation and does not read live REPL
+     * state. */
     const ReplSourceScopeView *source_scope;
 } ReplParseContext;
 

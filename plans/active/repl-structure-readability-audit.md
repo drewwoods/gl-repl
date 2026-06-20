@@ -1,9 +1,10 @@
 # `src/repl` structure and readability audit - active
 
 Status: **active** - implementation has started. Finding 1's implementation
-slice landed first, and Finding 4's source-scope view split plus the 4b
-performance-regression fix are now landed. The remaining findings in this
-document are still a cleanup map, not completed work.
+slice landed first, Finding 3's parser-context cleanup is landed, and Finding
+4's source-scope view split plus the 4b performance-regression fix are now
+landed. The remaining findings in this document are still a cleanup map, not
+completed work.
 
 Recent implementation commits:
 
@@ -28,7 +29,7 @@ Recent implementation commits:
 | Finding 4 integration guard | Landed | `0906eb56` adds `normalize_large_doc`; revealed a ~14× per-call regression in the normalize path on large documents. |
 | Finding 4 phase 4b: warm-view fix | Landed | Live-document normalize now reuses the warm live source-scope cache through parser live-wrapper fallback, and `reformat_large_doc` guards the user-visible reformat path. |
 | Finding 2 remaining purity gap | Not started | Visible-var and predef reads are still the main compile-context exceptions. |
-| Finding 3 strict-ref context cleanup | Not started | Strict function-call validation still needs explicit symbol/alias context work. |
+| Finding 3 strict-ref context cleanup | Landed | Parser strict function-call validation now uses context-supplied source-scope and alias views; `source_scope == NULL` no longer reads live state. |
 
 Latest verification for Finding 4:
 
@@ -250,13 +251,21 @@ source-scope behavior.
 
 ## Finding 3: parser is documented as stateless, but still performs live semantic lookup
 
+**Status:** Addressed for implementation on 2026-06-20. Parser function-call
+recognition, strict function-definition lookup, and alias-based canonical text
+now read only from `ReplParseContext`: `source_scope` supplies the document view
+for strict `CMD_FUNC_DEF` checks, and `func_aliases` supplies alias names.
+`repl_parse_and_normalize{,_strict}` remain the live convenience entries, but
+they now explicitly pass the warm live source-scope handle and live alias view
+instead of relying on parser fallbacks.
+
 ### Evidence
 
 `src/repl/parser.h` describes the parser as stateless: parsing the same line
 with the same context should produce the same result without touching the live
 editor or command list.
 
-`src/repl/parser.c` still performs live semantic lookup in strict function-call
+At audit time, `src/repl/parser.c` still performed live semantic lookup in strict function-call
 parsing:
 
 - It reads `repl_state_document_cmds()` and `repl_state_document_count()` to
@@ -285,29 +294,26 @@ Those jobs are related, but not identical. Combining them makes strict parsing
 and formatting behavior harder to test in isolation, and it makes the parser's
 "same input, same output" claim dependent on hidden live state.
 
-### Recommended cleanup
+### Implemented cleanup
 
-- Extend `ReplParseContext` with a symbol/source view for strict parsing.
-- Move function-definition and alias lookup behind that context.
-- Keep live-state convenience wrappers outside the parser for callers that
-  intentionally parse against the current document.
+- Extended `ReplParseContext` with `func_aliases` alongside the existing
+  `source_scope`.
+- Moved parser function-name alias resolution, strict function-definition
+  lookup, undefined-function diagnostics, and canonical alias text emission
+  behind that context.
+- Kept live-state convenience wrappers outside the parser: live normalize paths
+  call `repl_source_scope_live_view()` and `repl_func_alias_view()` before
+  invoking the parser.
 - Consider moving canonical text emission into a formatter layer once the live
   dependency is removed. The parser can still return enough structured data for
   canonical formatting; it should not need to know the live document.
 - Replace the largest recognition ladder with a table of handler functions over
   time. This is a readability improvement, not an urgent correctness fix.
-- **Remove the `ReplParseContext.source_scope == NULL` live fallback** added by
-  the Finding 4b fix (`c3d0d88d`). To undo the per-call O(N) view-bind
-  regression, the parser's scope helpers now fall back to the live-document
-  warm wrappers (`repl_source_scope_*`) when `source_scope` is NULL, and
-  `repl_parse_and_normalize{,_strict}` pass NULL to ride the warm
-  `g_live_scope`. That is correct and fast, but it reintroduces a parser →
-  live-state reach for the NULL path and overloads NULL to mean "the live
-  document" — a latent footgun for any future caller that parses against a
-  non-live snapshot and forgets to set the view. When this finding lands,
-  replace it with an explicit warm-view accessor
-  (`repl_source_scope_live_view()`) that those entries pass in, so the parser
-  stays fully view-driven and NULL goes back to meaning "no scope." The
+- Removed the `ReplParseContext.source_scope == NULL` live fallback added by
+  the Finding 4b fix (`c3d0d88d`). To keep the 4b performance fix without parser
+  live-state reach, `source_scope.c` now exposes a guard-compatible
+  value-returning `repl_source_scope_live_view()` handle; normalize passes its
+  contained view explicitly. `NULL` once again means "no scope." The
   `normalize_large_doc` bench guards the performance side of that swap.
 
 ## Finding 4: `source_scope` query APIs hide live-state cache behavior
