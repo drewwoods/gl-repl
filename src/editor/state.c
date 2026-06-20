@@ -247,7 +247,7 @@ const char *editor_buffer_view_line(EditorBufferView view, int idx) {
  * pipeline code receives the value as an explicit function parameter
  * or via the repl_dispatch_edit_line_get/_set sink — never by
  * linking to editor_state_edit_line directly (β invariant;
- * storage moved here in Phase 4 of plans/in-review/edit-line-ownership.md). */
+ * storage moved here in Phase 4 of plans/done/edit-line-ownership.md). */
 int editor_state_edit_line(void) {
     return g_editor_state.document.edit_line_idx;
 }

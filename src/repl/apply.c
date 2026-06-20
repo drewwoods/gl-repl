@@ -95,7 +95,7 @@ int repl_apply_compiled_change(const ReplCompiledChange *change,
      * Forwarding the caller pointer to both delete and insert
      * would change the composed cursor delta for in-place replace
      * paths (overwrite replacements, toggle-comment batches)
-     * (see plans/in-review/edit-line-ownership.md §1.3). */
+     * (see plans/done/edit-line-ownership.md §1.3). */
     if (change->delete_count > 0) {
         if (!repl_command_store_delete_range(&store, change->delete_pos,
                                              change->delete_count, NULL))

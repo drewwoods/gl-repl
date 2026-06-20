@@ -104,7 +104,7 @@ void repl_state_ensure_sentinels(void) {
 #define g_cmds                      (g_repl_state.document.cmds)
 #define g_num_cmds                  (g_repl_state.document.cmd_count)
 /* g_edit_line removed; edit-line cursor moved to EditorState
- * (implemented in Phase 4 of plans/in-review/edit-line-ownership.md). */
+ * (implemented in Phase 4 of plans/done/edit-line-ownership.md). */
 #define g_normals_dirty             (g_repl_state.document.normals_dirty)
 #define g_num_flat_cmds             (g_repl_state.flat_program.cmd_count)
 #define g_flat_dirty                (g_repl_state.flat_program.dirty)
