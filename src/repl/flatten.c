@@ -3,6 +3,7 @@
  */
 #include "repl/core.h"
 #include "repl/core_internal.h"
+#include "repl/flatten.h"
 #include "repl/parser.h"
 #include "repl/state_owners.h"
 #include "repl/util.h"            /* repl_format_fits / repl_copy_string_fits */

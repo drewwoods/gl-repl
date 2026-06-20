@@ -3,6 +3,7 @@
  */
 #include "repl/core.h"
 #include "repl/command_store.h"
+#include "repl/geometry_query.h"
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
 #include "source_document.h"   /* source_document_insert_line / _replace_line */
