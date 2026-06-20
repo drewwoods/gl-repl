@@ -5,6 +5,7 @@
 #endif
 #include "app/glr_config.h"
 #include "config.h"                  /* DEFAULT_SCENE_FILE */
+#include "repl/bootstrap.h"
 #include "repl/command_spec.h"  /* cmd_type_name */
 #include "repl/core.h"
 #include "repl/examples.h"     /* repl_example_count, repl_example_name */

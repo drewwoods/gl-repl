@@ -1,7 +1,7 @@
 /*
  * src/repl/example_loader.h - Lower-level example loader for tests and benches.
  *
- * Production code normally calls `repl_load_example(int)` from src/repl/core.h,
+ * Production code normally calls `repl_load_example(int)`, declared here,
  * which layers on scene promotion, presentation reset, and editor cleanup. This
  * smaller header exposes the in-memory line-array entry point used by tests and
  * bench drivers that want the same example body loading without the surrounding
@@ -27,6 +27,7 @@
  * boundary; tests that just want the body loaded can ignore the
  * return (implemented in phase 3.6.4; see the edit-line-ownership
  * plan doc). */
+int repl_load_example(int idx);
 int repl_load_example_lines_for_test(const char *const *lines);
 
 #endif /* REPL_EXAMPLE_LOADER_H */

@@ -23,6 +23,7 @@
 
 #include <stdio.h>
 
+#include "repl/bootstrap.h"   /* Compatibility: startup bootstrap moved out of core. */
 #include "repl/export.h"     /* ReplExportLayout and save/load helpers */
 #include "repl/flatten.h"
 #include "repl/geometry_query.h" /* Compatibility: cursor/feed queries moved out of core. */
@@ -167,10 +168,5 @@ int  repl_active_user_scene(void);        /* current slot index, -1 if none */
 /* Activate the first occupied slot after repl_load_workspace (which leaves
  * active == -1 and the pre-load document live). Returns the slot, or -1. */
 int  repl_scenes_activate_first_loaded_slot(void);
-
-/* Returns the post-load cursor target. Caller applies the value
- * via editor_state_edit_line_set() above the β boundary (implemented
- * in phase 3.6.4 of plans/done/edit-line-ownership.md). */
-int repl_load_initial_commands(const char *import_file);
 
 #endif /* REPL_CORE_H */

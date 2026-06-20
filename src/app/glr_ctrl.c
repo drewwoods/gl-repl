@@ -42,6 +42,7 @@
 #include "support/cpuprof.h"
 #include "support/gpuprof.h"
 #include "app/glr_prof.h"
+#include "repl/bootstrap.h"
 #include "repl/core.h"
 #include "repl/examples.h"          /* REPL_EXAMPLE_TAG_* */
 #include "repl/eval.h"
