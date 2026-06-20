@@ -43,7 +43,7 @@
 #include "repl/core_internal.h"
 #include "repl/parser.h"
 #include "repl/core.h"
-#include "repl/state_owners.h"
+#include "repl/state_views.h"
 #include "repl/source_scope.h"
 #include "repl/eval.h"
 
@@ -861,7 +861,7 @@ int editor_commit_resolve_insert_exit_target(int target) {
         g_func_decl_resume_delta <= 0 ||
         editor_state_edit_line() < 0 ||
         editor_state_edit_line() >= repl_state_document_count() ||
-        repl_state_document_cmds_mut()[editor_state_edit_line()].type != CMD_FUNC_END)
+        repl_state_document_cmds()[editor_state_edit_line()].type != CMD_FUNC_END)
         return target;
 
     if (target == editor_state_edit_line()) {

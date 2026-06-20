@@ -60,7 +60,7 @@
 #include "repl/pipeline.h"
 #include "subsystems/replay/replay_annotations.h"
 #include "repl/source_scope.h"
-#include "repl/state_owners.h"
+#include "repl/state_views.h"
 #include "repl/tutorials.h"
 #include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"

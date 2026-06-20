@@ -4,7 +4,7 @@
 #include "repl/core_internal.h"
 #include "repl/parser.h"
 #include "subsystems/replay/replay.h"
-#include "repl/state_owners.h"
+#include "repl/state_views.h"
 #include "subsystems/replay/replay_state.h"
 #include "subsystems/replay/replay_annotations.h"
 #include "config.h"        /* REPL_STATUS_TEXT_MAX */

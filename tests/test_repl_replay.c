@@ -3,6 +3,7 @@
 #include "editor/input.h"
 #include "subsystems/replay/replay.h"
 #include "repl/state.h"
+#include "repl/state_owners.h"
 #include "subsystems/replay/replay.c"
 #include "subsystems/replay/replay_annotations.h"
 #include "source_document.h"

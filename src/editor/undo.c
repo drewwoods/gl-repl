@@ -12,7 +12,7 @@
 #include "repl/command_store.h"
 #include "repl/core.h"
 #include "repl/core_internal.h"
-#include "repl/state_owners.h"
+#include "repl/state_views.h"
 #include "subsystems/tutorial/tutorial_state.h"
 #include "subsystems/color_picker/color_picker_state.h"
 
@@ -38,7 +38,7 @@ static const char *const *undo_snapshot_line_ptrs(const EditorUndoSnapshot *snap
 
 void editor_undo_snapshot_save(EditorUndoSnapshot *snapshot) {
     EditorBufferView text = editor_buffer_view();
-    memcpy(snapshot->cmds, repl_state_document_cmds_mut(), (size_t)repl_state_document_count() * sizeof(GLCmd));
+    memcpy(snapshot->cmds, repl_state_document_cmds(), (size_t)repl_state_document_count() * sizeof(GLCmd));
     for (int i = 0; i < repl_state_document_count(); i++)
         repl_copy_string_fits(snapshot->editor_lines[i],
                               MAX_LINE_LEN,
