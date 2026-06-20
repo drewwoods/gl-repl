@@ -7,10 +7,43 @@ cleanup map, not completed work.
 
 Recent implementation commits:
 
+- `515a264f` — add the source-scope prerequisite benchmarks.
+- `bd138a4b` — record the prerequisite benchmark context in this audit.
 - `18c9b742` — add `ReplSourceScopeView` and move the prefix-depth cache onto
   explicit views while keeping live wrappers for app/UI callers.
 - `dcf56b6a` — thread source-scope views through parser/compile paths and bind
   explicit views at parse call sites that operate on stable document snapshots.
+- `38b5f5e3` — move this audit to `plans/active/` and record the Finding 4
+  implementation.
+
+## Current Implementation Status
+
+| Slice | Status | Notes |
+|---|---|---|
+| Finding 1 implementation split | Landed | Core implementation split is complete; residual `core.h` include migration remains. |
+| Finding 4 prerequisite benchmarks | Landed | `source_scope_query` and `source_scope_churn` are in `bench/bench_repl.c`; original baseline is machine-specific. |
+| Finding 4 phase 1: source-scope view/cache ownership | Landed | `18c9b742` adds view-owned prefix caches plus live compatibility wrappers. |
+| Finding 4 phase 2: parser/compile source-scope plumbing | Landed | `dcf56b6a` threads `ReplSourceScopeView` through parser, compile, normalize, flatten, and scope-sensitive parse call sites. |
+| Finding 4 docs/status | Landed | `38b5f5e3` moved the audit to active and marked Finding 4 implemented. |
+| Finding 2 remaining purity gap | Not started | Visible-var and predef reads are still the main compile-context exceptions. |
+| Finding 3 strict-ref context cleanup | Not started | Strict function-call validation still needs explicit symbol/alias context work. |
+
+Latest verification for Finding 4:
+
+- `make check-c99`
+- `make test_repl_core_parse USE_GL_STUBS=1`
+- `make test-stubs`
+- `make bench-csv USE_GL_STUBS=1`
+
+Local benchmark status on `drew-macbook-air` (`min_iter_ms`):
+
+| Phase | `source_scope_query` | `source_scope_churn` |
+|---|---:|---:|
+| Phase 1 local reference | 0.159 | 1.227 |
+| Phase 2 after parser/compile plumbing | 0.159 | 1.216 |
+
+The local benchmark did not show the failure mode this finding guards against:
+`source_scope_query` did not drift toward `source_scope_churn`.
 
 Re-reviewed after the recent `main` rebase. The rebase partially addressed a
 few items from the original audit: function-alias compile no longer mutates the
@@ -301,20 +334,22 @@ source-scope queries.
 
 #### Cache ownership — the crux, not an afterthought
 
-The prefix-depth cache is the thing to get right — but **not because lookups
-are expensive. They aren't.** `source_scope.c` keeps four file-static prefix
-arrays (`g_block_depth_prefix`, `g_begin_depth_prefix`, `g_tess_depth_prefix`,
-`g_matrix_depth_prefix`) behind a dirty flag (`g_depth_cache_dirty`). The cost
-model is **build-once, query-many**, and the two costs are very different:
+The prefix-depth cache was the thing to get right — but **not because lookups
+are expensive. They aren't.** At audit time, `source_scope.c` kept four
+file-static prefix arrays (`g_block_depth_prefix`, `g_begin_depth_prefix`,
+`g_tess_depth_prefix`, `g_matrix_depth_prefix`) behind a dirty flag
+(`g_depth_cache_dirty`). The implemented shape keeps the same
+**build-once, query-many** cost model, but owns the arrays on
+`ReplSourceScopeView` instead of hidden file-statics. The two costs remain very
+different:
 
 - A **query** is an O(1) array index at `pos`. This is the hot path —
   `flatten.c` and `parser.c` hit it repeatedly per frame — and it stays O(1)
   no matter how the cache is owned.
-- The **O(N) cost is the rebuild** (`depth_cache_rebuild()`, one pass over the
-  document), paid once per document change and amortized across every query
-  until the next change. Five live-document mutation sites — `import.c:2016`,
-  `core.c:743`, `state.c` (×3) — call
-  `repl_source_scope_depth_cache_invalidate()` to arm the next rebuild.
+- The **O(N) cost is the rebuild** (`source_scope_view_build()`, one pass over
+  the document), paid when a caller binds a `ReplSourceScopeView` or when the
+  live wrapper lazily rebuilds after
+  `repl_source_scope_depth_cache_invalidate()` marks it dirty.
 
 So the earlier "live callers keep O(1), view callers pay an honest O(N)"
 framing was wrong, and worth correcting because the whole REPL hinges on these
@@ -330,7 +365,7 @@ and invalidation**:
 - Put the four prefix arrays (plus a `built` flag) on the source-scope
   view/context instead of file-statics, and build them when the view is **bound
   to a document** — once per frame / per compile pass, where the document is
-  stable. Queries then index the view in O(1). Same cost profile as today's
+  stable. Queries then index the view in O(1). Same cost profile as the old
   global, with explicit ownership instead of hidden state.
 - Keep a thin **live wrapper** that owns a process-wide view for the editor/UI
   hot path and rebuilds it at exactly today's five invalidation points (or
