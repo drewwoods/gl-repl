@@ -20,7 +20,7 @@ Recent implementation commits:
 
 | Slice | Status | Notes |
 |---|---|---|
-| Finding 1 implementation split | Landed | Core implementation split is complete; residual `core.h` include migration remains. |
+| Finding 1 implementation split | Done | Core split complete; `f9f8b4be` migrated every `core.h` includer and deleted the compat header — no residual. |
 | Finding 4 prerequisite benchmarks | Landed | `source_scope_query` and `source_scope_churn` are in `bench/bench_repl.c`; original baseline is machine-specific. |
 | Finding 4 phase 1: source-scope view/cache ownership | Landed | `18c9b742` adds view-owned prefix caches plus live compatibility wrappers. |
 | Finding 4 phase 2: parser/compile source-scope plumbing | Landed | `dcf56b6a` threads `ReplSourceScopeView` through parser, compile, normalize, flatten, and scope-sensitive parse call sites. |
@@ -159,10 +159,9 @@ these, not unwind them:
 
 ## Finding 1: `core.h` and `core.c` are still a residual facade
 
-**Status:** Addressed for implementation on 2026-06-20. `src/repl/core.c` was
-removed, and `src/repl/core.h` no longer owns canonical declarations. It now
-acts only as a legacy compatibility reexport for callers that have not yet
-migrated to focused owner headers.
+**Status:** Done. `src/repl/core.c` was removed, and the residual
+`src/repl/core.h` compatibility facade was migrated off and **deleted**
+(`f9f8b4be`) — declarations now live in focused owner headers.
 
 ### What changed
 
@@ -185,6 +184,8 @@ The split landed as a sequence of small commits:
   stopped redeclaring pipeline entry points in `core.h`.
 - `8e7e188e` — moved the default save wrapper into `src/repl/export.c` and
   deleted `src/repl/core.c`.
+- `f9f8b4be` — migrated every remaining `#include "repl/core.h"` call site to
+  the focused owner headers and deleted the compatibility header.
 
 ### Current state
 
@@ -194,15 +195,13 @@ The original readability problem is largely gone: new code can include
 `scenes.h`, `pipeline.h`, `state_notify.h`, or `export.h` directly depending
 on the role it needs.
 
-The remaining smell is compatibility fan-out. Many older files still include
-`src/repl/core.h`; that no longer pulls declarations from a monolithic
-implementation, but it still obscures the exact dependency a caller wants.
+The compatibility fan-out is gone too: `f9f8b4be` migrated every
+`#include "repl/core.h"` call site onto the focused owner headers and deleted
+the compat header, so no TU depends on the old facade.
 
 ### Residual cleanup
 
-Mechanically migrate existing `#include "repl/core.h"` call sites to focused
-owner headers. Once no production or test TU includes `core.h`, delete the
-compatibility header and remove this finding entirely.
+None — Finding 1 is complete.
 
 ## Finding 2: compile purity is improved, but still not fully true
 
