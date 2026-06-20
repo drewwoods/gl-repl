@@ -47,9 +47,10 @@
 #define _POSIX_C_SOURCE 200809L /* for strnlen on linux */
 #include "repl/compile.h"
 
-#include "repl/core_internal.h"  /* repl_format_fits, repl_extract_assignment_parts, collect_visible_vars */
+#include "repl/core_internal.h"  /* repl_extract_assignment_parts, collect_visible_vars */
 #include "repl/source_scope.h"   /* repl_source_scope_cmd_indent, _find_block_end */
 #include "repl/state_owners.h"
+#include "repl/util.h"            /* repl_format_fits / repl_copy_string_fits */
 
 #include "config.h"              /* REPL_INDENT_TEXT_MAX */
 

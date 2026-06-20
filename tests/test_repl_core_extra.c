@@ -10,6 +10,7 @@
 #include "repl/examples.h"     /* repl_example_count, repl_example_name */
 #include "editor/input.h"
 #include "repl/core_internal.h"
+#include "repl/scenes.h"       /* repl_scenes_* / repl_promote_example_if_needed */
 #include "app/glr_debug.h"
 #include "subsystems/replay/replay.h"
 #include "repl/executor.h"

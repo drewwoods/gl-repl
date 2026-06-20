@@ -12,7 +12,9 @@
 #include "repl/command_store.h"
 #include "repl/core.h"
 #include "repl/core_internal.h"
+#include "repl/scenes.h"         /* repl_promote_example_if_needed */
 #include "repl/state_views.h"
+#include "repl/util.h"           /* repl_copy_string_fits */
 #include "subsystems/tutorial/tutorial_state.h"
 #include "subsystems/color_picker/color_picker_state.h"
 

@@ -1,40 +1,23 @@
 /*
  * src/repl/core_internal.h - Shared internal parse / normalize helpers.
  *
- * This is the small internal surface that multiple REPL TUs and tests still
- * share: parse-and-normalize entry points, expression/string extractors,
- * canonical-text builders, and visible-variable collection. It no longer owns
- * scene loading, export, editor-input shims, or controller hooks.
+ * The narrow internal surface that several REPL TUs and tests share:
  *
- * The old catch-all header was shrunk to this parse-focused subset.
- * The pieces that moved out now live in (implemented in Phase 5 of
- * feature/source-document-port.md):
+ *   - the parse-and-normalize entry points (the commit pipeline's front door),
+ *   - the parse / extract / canonical-text helpers from text_helpers.h, and
+ *   - visible-variable collection used by parse callers.
  *
- *   src/repl/util.h            static inline format / copy helpers
- *   src/repl/scenes.h          scene promotion / capture / reset
- *   src/repl/executor.h        repl_apply_state_cmd
- *   src/repl/command_spec.h    cmd_type_name (alias)
- *   src/repl/example_loader.h  repl_load_example_lines_for_test
- *   src/repl/export.h          code-panel debug dumps
- *   replay.h               bench fade hooks
- *   src/editor/input.h     editor_feed_line, editor_load_line_to_input, modifier
- *                          provider typedef, editor transient reset
- *   glr_completion.h       glr_completion_register_provider,
- *                          glr_completion_accept_autocomplete
- *
- * What remains: the normalize / commit pipeline entry points and the
- * parse / extract / format helpers callers use to build canonical
- * source text. Plus visible-var collection (used by parse callers).
- * No editor headers; no app/controller/editor-input hooks.
+ * It owns none of scene loading, export, editor-input shims, or controller
+ * hooks; those live behind their own headers (repl/scenes.h, repl/export.h,
+ * src/editor/input.h, ...) which callers include directly when they need them.
  */
 #ifndef REPL_CORE_INTERNAL_H
 #define REPL_CORE_INTERNAL_H
 
-#include "repl/command.h"    /* GLCmd */
-#include "repl/eval.h"       /* ExprVar */
-#include "repl/scenes.h"     /* re-exported for legacy callers */
-#include "repl/util.h"       /* re-exported for legacy callers */
-#include "source_document.h" /* SourceTextView document view */
+#include "repl/command.h"      /* GLCmd */
+#include "repl/eval.h"         /* ExprVar */
+#include "repl/text_helpers.h" /* parse / extract / canonical-text helpers */
+#include "source_document.h"   /* SourceTextView document view */
 
 /* ---- Normalize / commit pipeline -------------------------------------- */
 
@@ -56,7 +39,6 @@ int  repl_parse_and_normalize_strict(const char *line, int pos,
                                      ExprVar *vars, int num_vars,
                                      int preserve_expr, GLCmd *out_cmd,
                                      char *text_out, int text_sz);
-#include "repl/text_helpers.h"
 
 /* Hard cap on goto jumps while walking one flat program, shared by the
  * executor and the replay-annotation walker. A program that exceeds this

@@ -22,6 +22,8 @@
 #include "repl/core.h"
 #include "repl/core_internal.h"
 #include "repl/examples.h"     /* repl_example_count */
+#include "repl/scenes.h"       /* repl_promote_example_if_needed */
+#include "repl/util.h"         /* repl_format_fits / repl_copy_string_fits */
 #include "repl/export.h"
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"

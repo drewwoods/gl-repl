@@ -1,10 +1,12 @@
 /*
  * src/repl/scenes.c -- User scene slots, promotion, and workspace save/load.
  */
+#include "repl/scenes.h"
 #include "repl/command_store.h"
 #include "repl/core_internal.h"
 #include "repl/examples.h"
 #include "repl/core.h"
+#include "repl/util.h"          /* repl_format_fits / repl_copy_string_fits */
 #include "repl/cfg_baseline.h"   /* ReplConfigBag + bridge for per-scene cfg */
 #include "repl/export.h"          /* ReplExportCameraBlock + camera bridge */
 #include "repl/state_owners.h"

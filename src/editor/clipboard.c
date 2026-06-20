@@ -23,6 +23,7 @@
 #include "repl/load.h"
 #include "repl/source_scope.h"
 #include "repl/state_views.h"
+#include "repl/util.h"           /* repl_format_fits / repl_copy_string_fits */
 #include "subsystems/tutorial/tutorial.h"
 
 static EditorUndoSnapshot g_clipboard_paste_rollback_snapshot;
