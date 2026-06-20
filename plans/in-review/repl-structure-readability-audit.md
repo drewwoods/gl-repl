@@ -271,7 +271,8 @@ Add explicit source-scope view APIs:
 typedef struct ReplSourceScopeView {
     const GLCmd *cmds;
     int count;
-    /* see "cache ownership" below — this is the hard part */
+    /* The prefix-depth cache lives here, built once when the view is bound
+     * to a document — so queries stay O(1) with no global. See below. */
 } ReplSourceScopeView;
 ```
 
@@ -285,46 +286,52 @@ After that split, compile and parser should use the view APIs exclusively.
 
 #### Cache ownership — the crux, not an afterthought
 
-The hard part is the prefix-depth cache, and the type sketch above hand-waves
-it. `source_scope.c` keeps four file-static prefix arrays
-(`g_block_depth_prefix`, `g_begin_depth_prefix`, `g_tess_depth_prefix`,
-`g_matrix_depth_prefix`) behind a dirty flag (`g_depth_cache_dirty`). Every
-query calls `depth_cache_rebuild()` first, and **five live-document mutation
-sites** — `import.c:2016`, `core.c:743`, and `state.c` (×3) — call
-`repl_source_scope_depth_cache_invalidate()`. The net effect is amortized
-**O(1)** depth lookups across a frame for the live document.
+The prefix-depth cache is the thing to get right — but **not because lookups
+are expensive. They aren't.** `source_scope.c` keeps four file-static prefix
+arrays (`g_block_depth_prefix`, `g_begin_depth_prefix`, `g_tess_depth_prefix`,
+`g_matrix_depth_prefix`) behind a dirty flag (`g_depth_cache_dirty`). The cost
+model is **build-once, query-many**, and the two costs are very different:
 
-A naive `*_view(cmds, count, pos)` that operates "only on the passed document"
-breaks that, and has two unhappy options:
+- A **query** is an O(1) array index at `pos`. This is the hot path —
+  `flatten.c` and `parser.c` hit it repeatedly per frame — and it stays O(1)
+  no matter how the cache is owned.
+- The **O(N) cost is the rebuild** (`depth_cache_rebuild()`, one pass over the
+  document), paid once per document change and amortized across every query
+  until the next change. Five live-document mutation sites — `import.c:2016`,
+  `core.c:743`, `state.c` (×3) — call
+  `repl_source_scope_depth_cache_invalidate()` to arm the next rebuild.
 
-- **Recompute per call.** Rebuild the prefix arrays on every query → **O(N)
-  per lookup** instead of amortized O(1). `flatten.c` and `parser.c` call these
-  repeatedly per frame, so this is a real hot-path regression, not a micro-cost.
-- **Thread a cache handle.** Carry the prefix storage + dirty flag in the view
-  (or a separate handle) and pass it through every caller. Keeps O(1), but is
-  invasive *and* merely relocates the invalidation problem — something still has
-  to mark the handle dirty on mutation, reintroducing the coupling unless
-  ownership is crisp.
+So the earlier "live callers keep O(1), view callers pay an honest O(N)"
+framing was wrong, and worth correcting because the whole REPL hinges on these
+lookups staying fast: it implied decoupling makes lookups slow. It doesn't. The
+build-once/query-many shape is **orthogonal to where the prefix arrays live** —
+a file-static global and a field on a passed-in view both build in O(N) and
+serve queries in O(1). A view is only "O(N) per query" if it *rebuilds on every
+call*, which is a design mistake, not a property of views.
 
-So the real decision is **cache ownership**, and the pragmatic answer is
-asymmetric rather than a single uniform view:
+The real decision is therefore not speed, it is **cache lifetime / ownership
+and invalidation**:
 
-- Expose pure `*_view(cmds, count, ...)` functions that **recompute** — correct,
-  testable, no hidden globals. Used by compile/parser tests and any non-live
-  caller. They pay honest O(N); that's fine for test/one-shot use.
-- Keep the **cached fast path strictly for the live document**: a thin live
-  wrapper that owns the four prefix arrays and the existing five
-  `repl_source_scope_depth_cache_invalidate()` hooks, and is the only thing
-  production hot paths call.
+- Put the four prefix arrays (plus a `built` flag) on the source-scope
+  view/context instead of file-statics, and build them when the view is **bound
+  to a document** — once per frame / per compile pass, where the document is
+  stable. Queries then index the view in O(1). Same cost profile as today's
+  global, with explicit ownership instead of hidden state.
+- Keep a thin **live wrapper** that owns a process-wide view for the editor/UI
+  hot path and rebuilds it at exactly today's five invalidation points (or
+  lazily on first query after a mutation, as now). Production keeps its
+  amortized O(1); nothing in the steady state gets slower.
+- Tests / one-shot callers build a view over their own `(cmds, count)` and
+  query it — also O(1) per query after a single O(N) build. The only thing that
+  is genuinely O(N)-heavy is "construct a fresh view, do one query, discard,
+  repeat," which is a usage anti-pattern, not a cost the design imposes.
 
-That stops the cache from masquerading as a property of "any document view":
-live callers keep O(1), view callers pay an honest O(N), and the five
-invalidation sites keep a single clear owner instead of being smeared across a
-handle threaded through callers. **Decide this before steps 3-5 of the cleanup
-order** — context-based source-scope, visible-vars, and parser strict-ref all
-sit on top of it, and a view API that silently drops the cache (or silently
-serves stale depths because nobody owns invalidation) is worse than the current
-honest-but-coupled global.
+The two failure modes to **avoid** are both design errors, not inherent costs:
+a view that rebuilds the prefix arrays on every query (needless O(N²) over a
+query batch), and a view where nobody owns invalidation (stale depths served
+silently). **Decide this ownership/lifetime question before steps 3-5 of the
+cleanup order** — context-based source-scope, visible-vars, and parser
+strict-ref all sit on top of it.
 
 ## Finding 5: `core_internal.h` is narrower, but still a mixed internal bucket
 
