@@ -1,8 +1,8 @@
 /*
- * src/repl/core.h - REPL pipeline facade.
+ * src/repl/core.h - REPL compatibility facade.
  *
- * Exposes the default output save wrapper. The includes below temporarily
- * compatibility-reexport APIs that have moved to their natural owner headers.
+ * Temporarily reexports APIs that have moved to their natural owner headers.
+ * New code should include the owner header directly.
  *
  * Sibling headers callers may need to include directly:
  *   src/repl/state.h           — read-only state views
@@ -35,13 +35,5 @@
 #include "repl/state_notify.h" /* Compatibility: dirty-state notifications moved out of core. */
 #include "repl/time.h"       /* Compatibility: timekeeping moved out of core. */
 #include "source_document.h" /* SourceTextView document view */
-
-/* --- Save / load ------------------------------------------------------- */
-
-/* Write the active user scene (or current example/transient buffer) to
- * ./output.c. This is the default single-file export path behind Ctrl+S when no
- * named scene-specific save target takes over. `layout` is the controller-built
- * ReplExportLayout passed through to the exporter as opaque integers. */
-void repl_save_default_output(const ReplExportLayout *layout);
 
 #endif /* REPL_CORE_H */

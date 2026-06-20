@@ -114,7 +114,8 @@ workspace I/O in `export.c`, and the neutral F1 `help_text.c` tables.
 | `autonormal.c` | Auto-generated `glNormal3f` maintenance |
 | `source_scope.c` / `.h` | Source depth / indentation / block lookup cache |
 | `format.c` / `.h` | Pure indentation/depth computation |
-| `core.c` / `.h`, `core_internal.h`, `pipeline.h` | Normalization pipeline + lifecycle/frame surface |
+| `normalize.c` / `.h`, `reformat.c` / `.h`, `bootstrap.c` / `.h` | Parse/normalize, source reformat, startup loading |
+| `pipeline.h`, `core_internal.h`, `core.h` | Frame pipeline declarations, test-visible internals, legacy compatibility facade |
 | `state.c` / `.h`, `state_views.h`, `state_owners.h` | `ReplState` storage + typed read/mut facades |
 | `scenes.c`, `examples.c`, `example_loader.c` | User-scene slots, built-in example data + loading |
 | `tutorials.c`, `help_text.c` | Tutorial catalog, F1 help-text tables |

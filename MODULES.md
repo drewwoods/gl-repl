@@ -1253,7 +1253,6 @@ Outstanding tracks:
 
 ```text
 R10-phase1                    reassess "stale" GLUT decls in src/repl/core.h
-R10-ph2-5                     dissolve src/repl/core.c into natural owners
 R11 (tail)                    shrink remaining allowlists (bench_repl.c)
 R12                           consolidate public REPL APIs into one repl.h
 R9                            optional: split src/repl/export.c
@@ -1263,6 +1262,7 @@ Completed:
 R8 (sample -> gl-repl rename) + src/ restructure (subsystems split,
 ui core/app split, prof + transform_utils relocations) — landed in
 plans/active/src-shuffle-final.md.
+R10-ph2-5 (dissolve src/repl/core.c into natural owners) — landed.
 ```
 
 `feature/state-ownership-finalize.md` (residual of the original

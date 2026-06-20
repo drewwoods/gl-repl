@@ -34,7 +34,7 @@
  * Query API: repl_example_count() returns the total number of examples;
  * repl_example_name() retrieves an example's display name; repl_example_lines()
  * retrieves the source line array for loading. Used by the UI to populate the
- * Example dropdown and by src/repl/core.c to load and feed examples.
+ * Example dropdown and by src/repl/example_loader.c to load examples.
  */
 #ifndef REPL_EXAMPLES_H
 #define REPL_EXAMPLES_H
@@ -46,7 +46,7 @@
 /* Query the source line array for an example. Returns a null-terminated array
  * of REPL command strings (ready to feed through the commit pipeline). Index
  * must be in range [0, repl_example_count()). The returned pointer is valid
- * for the lifetime of the program. Used by src/repl/core.c to load examples. */
+ * for the lifetime of the program. Used by src/repl/example_loader.c to load examples. */
 const char *const *repl_example_lines(int idx);
 
 /* Query the display name of an example (shown in the Example dropdown and menu).

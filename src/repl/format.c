@@ -1,4 +1,4 @@
-/* format.c - minimal REPL formatting helpers used by core.c and tests. */
+/* format.c - minimal REPL formatting helpers used by the reformatter and tests. */
 #include "repl/format.h"
 #include <string.h>
 

@@ -188,7 +188,7 @@ int repl_export_reshape_projection_lines(const char *out[REPL_EXPORT_PROJ_LINES]
  * inside display(); g_footer_pre_init / g_footer_post_init bracket the
  * init() function. Together they form a valid C program. */
 /* The literal that opens the exported display() function. Used as
- * g_display_header[0] and as the search needle from core.c's
+ * g_display_header[0] and as the search needle from bootstrap.c's
  * scroll_to_display_function — exposed via this macro so both sides
  * stay in sync if the line text ever changes. */
 #define REPL_EXPORT_DISPLAY_OPEN_LINE "void display(void) {"
@@ -247,6 +247,12 @@ typedef struct ReplExportLayout ReplExportLayout;
  * `src/repl/export.c` consumes it as opaque integers. */
 int repl_export_save_output(const char *filename, SourceTextView text,
                             const ReplExportLayout *layout);
+
+/* Write the active user scene (or current example/transient buffer) to
+ * ./output.c. This is the default single-file export path behind Ctrl+S when no
+ * named scene-specific save target takes over. `layout` is the controller-built
+ * ReplExportLayout passed through to the exporter as opaque integers. */
+void repl_save_default_output(const ReplExportLayout *layout);
 
 /* Code-panel dumps used by debug output and test fixtures. */
 void repl_dump_code_panel_text(FILE *out, SourceTextView text);

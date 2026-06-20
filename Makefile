@@ -429,7 +429,6 @@ REPL_SRCS = \
 	src/repl/command_spec.c \
 	src/repl/command_store.c \
 	src/repl/compile.c \
-	src/repl/core.c \
 	src/repl/eval.c \
 	src/repl/example_loader.c \
 	src/repl/examples.c \
@@ -674,7 +673,6 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/repl/command_spec.c \
                      src/repl/command_store.c \
                      src/repl/compile.c \
-                     src/repl/core.c \
                      src/repl/eval.c \
                      src/repl/example_loader.c \
                      src/repl/examples.c \
