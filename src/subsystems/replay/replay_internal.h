@@ -7,7 +7,7 @@
 #include "repl/eval.h"
 #include "repl/pipeline.h"
 #include "repl/core.h"
-#include "repl/state_owners.h"
+#include "repl/state_views.h"
 
 /* Batch lifetime cap (seconds). Pairs with the replay peer's
  * fade_speed (replay_state.c, alpha/sec): See REPLAY_STATE_INITIAL

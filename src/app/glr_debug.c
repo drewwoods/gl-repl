@@ -8,7 +8,6 @@
 #include "repl/command_spec.h"
 #include "repl/eval.h"       /* repl_func_alias_get, REPL_FUNC_SLOT_COUNT */
 #include "repl/pipeline.h"
-#include "repl/state_owners.h"
 #include "repl/state.h"
 
 #include <string.h>          /* memset (flat histogram) */

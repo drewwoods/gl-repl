@@ -11,7 +11,7 @@
  * accessed through the typed autocomplete facade.
  */
 #include "editor/state.h"        /* EditorBufferView, EditorAutocompleteState, editor_state_* */
-#include "repl/state_owners.h"
+#include "repl/state_views.h"
 #include "repl/core_internal.h"
 #include "repl/core.h"
 #include "repl/command_spec.h"

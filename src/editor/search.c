@@ -2,8 +2,8 @@
  * editor_search.c - Case-insensitive incremental search over code-panel rows.
  *
  * A "row" is one visible line in the code panel. It usually maps 1:1 to a
- * GLCmd in repl_state_document_cmds_mut()[], except while inserting: an extra synthetic row holds
- * the live g_input at editor_state_edit_line(), and real repl_state_document_cmds_mut()[] entries at or beyond
+ * GLCmd in repl_state_document_cmds(), except while inserting: an extra synthetic row holds
+ * the live g_input at editor_state_edit_line(), and real repl_state_document_cmds() entries at or beyond
  * that index are shifted down by one row.
  *
  *   row_count = repl_state_document_count()         (overwrite mode)

@@ -13,7 +13,6 @@
 #include "repl/pipeline.h"
 #include "keys.h"
 #include "repl/core.h"
-#include "repl/state_owners.h"
 #include "repl/transform_utils.h" /* apply_tracked_transform / unwind_transform_stack */
 #include "subsystems/replay/replay_state.h"
 
