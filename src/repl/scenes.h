@@ -5,8 +5,8 @@
  * workspace persistence). This header exposes the lifecycle entry points that
  * other REPL modules, the editor, and the controller call when an edit should
  * promote an example, an example load should capture/restore scene context, or
- * a full reset should discard scene state. Slot queries such as count/name/load
- * stay on src/repl/core.h.
+ * a full reset should discard scene state. Some scene/workspace APIs are still
+ * compatibility-reexported from src/repl/core.h for older call sites.
  *
  * These hooks were split out of src/repl/core_internal.h so the remaining
  * internal header could focus on parse/normalize helpers (implemented as
@@ -65,6 +65,14 @@ void repl_scenes_mark_example_active(void);
  * (or NULL/"" for the no-import path); when non-empty it becomes
  * the slot 0 name, otherwise the slot picks the built-in default. */
 void repl_scenes_activate_home_slot(const char *scene_name_hint);
+
+/* Workspace I/O: load every *.c scene under `dir`. Returns the number of
+ * files loaded, 0 for an empty directory argument, or -1 on I/O error. */
+int  repl_load_workspace(const char *dir);
+
+/* Activate the first occupied slot after repl_load_workspace (which leaves
+ * active == -1 and the pre-load document live). Returns the slot, or -1. */
+int  repl_scenes_activate_first_loaded_slot(void);
 
 /* Drop all user-scene state. Called from glr_ctrl_reset_all. */
 void repl_scenes_reset(void);
