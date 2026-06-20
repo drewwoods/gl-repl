@@ -333,6 +333,26 @@ silently). **Decide this ownership/lifetime question before steps 3-5 of the
 cleanup order** — context-based source-scope, visible-vars, and parser
 strict-ref all sit on top of it.
 
+#### Prerequisite benchmark (landed)
+
+A regression guard for the lookups this refactor must keep fast is now in place
+(`bench/bench_repl.c`):
+
+- **`source_scope_query`** sweeps all depth/scope queries over a 2880-row
+  deeply-nested document with a warm cache — it isolates the amortized O(1)
+  lookup, so a view that recomputes prefixes per call shows up as a large
+  per-sweep blow-up (toward churn cost).
+- **`source_scope_churn`** invalidates + queries per op — it isolates the O(N)
+  rebuild, guarding the "build on (re)bind" cost.
+
+The post-phase-1 baseline (stub build = reproducible pure-C cost, `--iters 10`)
+is committed at `bench/baselines/finding4-prereq.mac-mini.csv`. Re-run after
+each of steps 3-5 with `make bench-csv USE_GL_STUBS=1` and compare the
+**`min_iter_ms`** column — the mean is noisy on a shared host, and the CSV's
+`# machine:` preamble records which host a baseline came from. Treat a
+`source_scope_query` time drifting toward `source_scope_churn` as the cache
+having been dropped — exactly the failure mode this finding warns about.
+
 ## Finding 5: `core_internal.h` is narrower, but still a mixed internal bucket
 
 ### Evidence
