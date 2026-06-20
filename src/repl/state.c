@@ -2,11 +2,11 @@
 #include "repl/state.h"
 #include "repl/command_store.h"
 #include "source_document.h" /* source_document_clear */
-#include "repl/core.h"
 #include "repl/eval.h"
 #include "repl/pipeline.h"
 #include "repl/scenes.h"
 #include "repl/source_scope.h"
+#include "repl/state_notify.h"
 #include "repl/state_owners.h"
 #undef REPL_STATE_IMPLEMENTATION
 
@@ -331,6 +331,10 @@ void repl_state_mark_source_dirty(void) {
     g_normals_dirty = 1;
     g_flat_dirty = 1;
     repl_source_scope_depth_cache_invalidate();
+}
+
+void repl_mark_source_dirty(void) {
+    repl_state_mark_source_dirty();
 }
 
 FlatProgramView repl_state_flat_program_view(void) {
