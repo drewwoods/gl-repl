@@ -1,10 +1,10 @@
 # `src/repl` structure and readability audit - active
 
-Status: **active** - implementation has started. Finding 1's implementation
-slice landed first, Finding 3's parser-context cleanup is landed, and Finding
-4's source-scope view split plus the 4b performance-regression fix are now
-landed. The remaining findings in this document are still a cleanup map, not
-completed work.
+Status: **active** - implementation has started. Findings 1 (core split),
+2 (compile visible-var + predef context purity), 3 (parser strict-ref
+context), and 4 (source-scope view split + the 4b performance-regression fix)
+are landed. The remaining findings in this document are still a cleanup map,
+not completed work.
 
 Recent implementation commits:
 
@@ -28,7 +28,7 @@ Recent implementation commits:
 | Finding 4 docs/status | Landed | `38b5f5e3` moved the audit to active and marked Finding 4 implemented. |
 | Finding 4 integration guard | Landed | `0906eb56` adds `normalize_large_doc`; revealed a ~14× per-call regression in the normalize path on large documents. |
 | Finding 4 phase 4b: warm-view fix | Landed | Live-document normalize now reuses the warm live source-scope cache through parser live-wrapper fallback, and `reformat_large_doc` guards the user-visible reformat path. |
-| Finding 2 remaining purity gap | Not started | Visible-var and predef reads are still the main compile-context exceptions. |
+| Finding 2 compile purity (visible-var + predef) | Landed | `b828b64f` threads the document view through `collect_visible_vars_in`; `e1eb9ae4` adds a `ReplPredefView` to `ReplCompileContext` (+ eval `_in` variants). No global document/predef read remains in compile.c. |
 | Finding 3 strict-ref context cleanup | Landed | Parser strict function-call validation now uses context-supplied source-scope and alias views; `source_scope == NULL` no longer reads live state. |
 
 Latest verification for Finding 4:
@@ -205,6 +205,17 @@ the compat header, so no TU depends on the old facade.
 None — Finding 1 is complete.
 
 ## Finding 2: compile purity is improved, but still not fully true
+
+**Status:** Done (2026-06-21). Both live-state reads called out below are now
+threaded through `ReplCompileContext`: visible-var collection via
+`collect_visible_vars_in` (`b828b64f`) and predefined-variable reads via a
+`ReplPredefView` on the context plus eval `repl_eval_*_in` variants
+(`e1eb9ae4`). compile.c holds no global document or predef read. Behavior is
+unchanged — `ctx->predef` / `ctx->document_*` snapshot the live state at
+context build, and compile never mutates it. Residual: `collect_visible_vars`'
+CMD_FUNC_DEF param extraction still resolves a custom alias via the live
+func-alias table (symbol state, not document/predef — a Finding-3-family
+follow-up, noted in `visible_vars.c`).
 
 ### Evidence
 
