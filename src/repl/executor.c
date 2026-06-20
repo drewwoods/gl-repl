@@ -3,9 +3,9 @@
  * and execution-time state helpers.
  */
 #include "repl/executor.h"
-#include "repl/core.h"
-#include "repl/core_internal.h"
+#include "repl/control_flow.h"
 #include "repl/state_owners.h"
+#include "repl/text_helpers.h"
 #include "support/mesh_ply.h"   /* MESH_PLY_PASS_* feedback normal-encoding markers */
 
 /* Camera-distance source for the point-size fallback used when the
@@ -513,6 +513,10 @@ void repl_exec_cursor_advance(ReplExecCursor *cursor) {
     if (!cursor || cursor->pc >= cursor->flat_cmd_count)
         return;
     cursor->pc++;
+}
+
+int repl_exec_cursor_in_begin(const ReplExecCursor *cursor) {
+    return cursor ? cursor->in_begin : 0;
 }
 
 static void repl_exec_cursor_warn_unhandled_state(const GLCmd *cmd) {

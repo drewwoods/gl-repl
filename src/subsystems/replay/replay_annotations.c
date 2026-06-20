@@ -2,6 +2,7 @@
  * src/subsystems/replay/replay_annotations.c -- Code-panel replay variable annotations.
  */
 #include "repl/core_internal.h"
+#include "repl/control_flow.h"
 #include "repl/parser.h"
 #include "subsystems/replay/replay.h"
 #include "repl/state_views.h"
