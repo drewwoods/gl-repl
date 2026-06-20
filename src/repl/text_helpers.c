@@ -1,4 +1,3 @@
-#include "repl/core_internal.h"
 #include "repl/text_helpers.h"
 
 #include <ctype.h>
