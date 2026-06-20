@@ -8,6 +8,26 @@ churn it) and the localized brittle spots worth scheduling work against.
 No rewrite is proposed; every recommended fix uses an idiom already
 present in the tree.
 
+## Currency pass (2026-06-20)
+
+Re-verified against the tree ~5 weeks after capture; most actionable
+items have shipped. Per-item STATUS lines below carry the detail; the
+short version:
+
+- **Brittle #2 (ReplHostEffects)** — DONE (already marked).
+- **Brittle #3 (export.c)** — premise outdated: audit #69 split the
+  reader half into `import.c`, so it is no longer one TU. The
+  "still large?" question survives; the description doesn't.
+- **Smaller risks now resolved:** the func-alias compile pre-step +
+  `repl_compiled_change_rollback_alias` (removed by `4e0a6b87`, which
+  moved alias publish to apply-time), the `core.h` `editor_navigate_to_line`
+  / `editor_feed_line` exports (off the facade), and the `eval.h`
+  comment drift (rewritten to reference the macros symbolically).
+- **Live residual (genuinely still open):** the `compile.c` split
+  (Brittle #1 — line numbers refreshed below), the `apply.c`
+  `num_args`-cascade `command_store` helper, and the `compile.h` /
+  `ReplCompileContext` "promote predef-reads off the global" ratchet.
+
 ## Durable spine — leave it alone
 
 These are the structural commitments the reviewer flagged as load-bearing
@@ -61,6 +81,9 @@ right idiom already in-tree.
 **Status.** Deferred. Pure file-boundary refactor with no behavior or
 API change; no triggering feature pending. Revisit when `compile.c`
 growth or a compile-facing feature makes the split pay for itself.
+STILL OPEN (2026-06-20) — and the file kept growing: **2137 lines** now
+(was 1914 at capture). The split-landing line numbers below are
+stale; re-derive them before acting.
 
 **Problem.** `compile.c` is **1914 lines** and growing. The static
 helpers around float-decl parsing alone — `parse_float_name_list`,
@@ -158,10 +181,18 @@ The `ReplExportConfigBridge` / `ReplExportCameraBridge` pattern absorbs
 new persisted keys without code change, so the split is comfort, not
 necessity. Revisit on trigger (a third bridge, or editing friction).
 
-**Status.** Already an acknowledged open edge. `export.c` is **3633
-lines** — the largest file in the directory by a wide margin. Single
-TU does import + export + workspace headers + camera-line refresh +
-bootstrap init for two orchestration modes.
+**Status.** Already an acknowledged open edge. PREMISE OUTDATED
+(2026-06-20): audit #69 has since split the **reader** half out into
+`src/repl/import.c`, so this is no longer one TU. The two files are now
+`export.c` (writer, 3048 lines) + `import.c` (reader, 2039 lines) — each
+still large, sharing the duplicated `IMPORT_EXPORT_STATE` macro block.
+The "split export.c further?" question survives only as a size concern;
+the import/export separation it asked for already landed.
+
+Original framing (pre-split): `export.c` is **3633 lines** — the largest
+file in the directory by a wide margin. Single TU does import + export +
+workspace headers + camera-line refresh + bootstrap init for two
+orchestration modes.
 
 **Not urgent.** The `ReplExportConfigBridge` / `ReplExportCameraBridge`
 pattern inside already absorbs new persisted keys without code change,
@@ -172,31 +203,34 @@ point.
 ## Smaller risks — note and watch
 
 - **`repl_compile_func_def` mutates `g_func_aliases` as a pre-step.**
-  This is the one bent purity seam in `compile.c`; it exists so
-  `parse_repl_func_signature` can map the name → slot.
-  `repl_compiled_change_rollback_alias` documents the exception. Watch
-  for a **second** case wanting the same exception — that's when to
-  formalize a "compile pre-step allowed to touch X" mechanism, or
-  push alias resolution into `ReplCompileContext`.
-- **`apply.c:121–124` reaches into `repl_state_document_cmds_mut()`**
+  RESOLVED (2026-06-20). `4e0a6b87` reworked this: compile now emits a
+  pending `ReplFuncAliasOp` and the parser resolves the new name through
+  it (`parse_repl_func_signature_with_pending_alias`); `apply.c`
+  publishes the alias only after the command-store mutation succeeds.
+  `repl_compiled_change_rollback_alias` and its bookkeeping fields are
+  gone, and the redundant `repl_func_alias_clear` it called was removed
+  too. The bent purity seam this item watched no longer exists — compile
+  no longer touches the alias table.
+- **`apply.c` reaches into `repl_state_document_cmds_mut()`**
   to cascade `num_args` decrements during `repl_apply_predef_ops`.
+  STILL OPEN (2026-06-20) — line drifted to ~149 (was 121–124).
   Correct, but grabby across the module boundary. A
   `command_store` helper for "decrement num_args above slot X" would
   localize the concern.
 - **`core.h` still publishes `editor_navigate_to_line` /
-  `editor_feed_line`** on the REPL public facade. Tracked under the
-  R10 plan; don't let the list of `editor_*` exports on this header
-  bloat further.
-- **`eval.h:38–88` comment drift.** Comment text disagrees with the
-  actual `MAX_EXPR_VARS=32` / `MAX_PREDEF_VARS=24` constants and
-  describes a "silent truncation at 16" that no longer matches the
-  code. Fix the constants-vs-comment drift, or add an assert that
-  makes truncation impossible.
-- **`compile.h` is 401 lines, much of it a doc block.**
-  `ReplCompileContext` is half real fields, half admission that
-  compile still reads predef vars through a global. The transitional
-  state should be explicitly time-bounded — pick a "promote to context"
-  ratchet before the next compile-facing feature lands.
+  `editor_feed_line`** on the REPL public facade. RESOLVED
+  (2026-06-20) — neither symbol is on `core.h` anymore (R10 work).
+- **`eval.h:38–88` comment drift.** RESOLVED (2026-06-20) — the
+  header comment was rewritten to reference `MAX_PREDEF_VARS` /
+  `MAX_EXPR_VARS` symbolically; the stale "silent truncation at 16"
+  literal is gone and the truncation is now documented as intended
+  behavior, not drift.
+- **`compile.h` is 401 lines, much of it a doc block.** STILL OPEN
+  (2026-06-20) — now **530 lines**. `ReplCompileContext` is half real
+  fields, half admission that compile still reads predef vars through a
+  global. The transitional state should be explicitly time-bounded —
+  pick a "promote to context" ratchet before the next compile-facing
+  feature lands.
 
 ## Verdict
 
@@ -208,9 +242,13 @@ bridge-struct pattern absorbs new keys cleanly.
 
 The brittle spots (`compile.c` size, `core.c` sink soup, `export.c`
 size) are all localized and the project already has the right idioms
-in-tree to fix them. Schedule the `compile.c` split and the
-`ReplHostEffects` consolidation; leave the rest unless a triggering
-change arrives.
+in-tree to fix them. As of the 2026-06-20 currency pass the `core.c`
+sink soup (`ReplHostEffects`) is done and the `export.c` reader/writer
+split has landed (`import.c`); the one scheduled item still open is the
+`compile.c` verb-boundary split, plus the two smaller-risk followups
+(the `apply.c` `num_args` cascade helper and the `compile.h` /
+`ReplCompileContext` global-predef ratchet). Leave the rest unless a
+triggering change arrives.
 
 ## Files cited (review snapshot, 2026-05-14)
 
