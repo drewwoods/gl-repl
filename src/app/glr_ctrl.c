@@ -1686,6 +1686,11 @@ void glr_ctrl_display_frame(void) {
         }
     }
     prof_end(PROF_SCENE_3D);
+    /* Motion-blur sub-frames re-bake geometry via repl_flatten_commands()
+     * (glr_ctrl_setup_subframe), which rewrites the live flat-program count
+     * as a side effect. The last sample bakes at the true frame time, so the
+     * count is already correct in the common case; restore defensively for
+     * the rare sub-step whose count differs, before HUD/snapshot readers run. */
     if (repl_state_flat_program_count() != saved_flat_count)
         repl_state_flat_program_set_count(saved_flat_count);
 

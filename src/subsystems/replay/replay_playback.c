@@ -598,17 +598,6 @@ void replay_copy_baseline_predef_snapshot(ReplPredefSnapshot *dst) {
         *dst = state->baseline_predef;
 }
 
-void replay_copy_baseline_predef_values(float *dst, int max_vals) {
-    int n;
-
-    if (!dst || max_vals <= 0)
-        return;
-
-    n = max_vals < MAX_PREDEF_VARS ? max_vals : MAX_PREDEF_VARS;
-    memcpy(dst, replay_state_mut()->baseline_predef.vals,
-           (size_t)n * sizeof(float));
-}
-
 void replay_restore_baseline_scratch_arrays(void) {
     repl_eval_restore_scratch_arrays(replay_state_mut()->baseline_scratch_arrays);
 }
