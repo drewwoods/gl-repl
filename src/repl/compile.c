@@ -301,8 +301,9 @@ static int compile_line_uses_global_ident(const ReplCompileContext *ctx,
     if (!line || !repl_eval_source_uses_ident(line, name))
         return 0;
 
-    visible_nv = collect_visible_vars(line_idx + 1, visible_vars,
-                                      MAX_EXPR_VARS, NULL);
+    visible_nv = collect_visible_vars_in(ctx->text, ctx->document_cmds,
+                                         ctx->document_count, line_idx + 1,
+                                         visible_vars, MAX_EXPR_VARS, NULL);
     for (int var_idx = 0; var_idx < visible_nv; var_idx++) {
         if (strcmp(visible_vars[var_idx].name, name) == 0)
             return 0;
@@ -995,13 +996,15 @@ static int compile_rebase_var_assign_slot_after_undeclares(
     return shifted_slot;
 }
 
-/* CONTRACT (audit #11): context-pure for document data, live-state-
- * coupled for visible-var collection. The ReplCompileContext snapshot
- * is authoritative for document_cmds / _count / edit_line, but the
- * `collect_visible_vars` call below reads from the live g_repl_state
- * document. Callers must apply each change to the live document
- * before the next visible-vars compile call. Reached from both the
- * editor commit path and the file-load path via load_try_block. */
+/* CONTRACT (audit #11): context-pure for document data. The
+ * ReplCompileContext snapshot is authoritative for document_cmds /
+ * _count / edit_line, and visible-var collection now runs through
+ * collect_visible_vars_in over that same context view (no live
+ * g_repl_state read). Callers still build a fresh context per statement
+ * — repl_compile_context_from_live snapshots the live document — so a
+ * multi-statement commit observes each prior change via its next
+ * context. Reached from both the editor commit path and the file-load
+ * path via load_try_block. */
 ReplCompileResult repl_compile_var_assign(const char *input,
                                           const ReplCompileContext *ctx,
                                           ReplCompiledChange *out,
@@ -1046,7 +1049,9 @@ ReplCompileResult repl_compile_var_assign(const char *input,
     int insert_idx = compile_insert_pos(ctx);
 
     ExprVar vis[MAX_EXPR_VARS];
-    int vis_n = collect_visible_vars(insert_idx, vis, MAX_EXPR_VARS, NULL);
+    int vis_n = collect_visible_vars_in(ctx->text, ctx->document_cmds,
+                                        ctx->document_count, insert_idx,
+                                        vis, MAX_EXPR_VARS, NULL);
     char verr[REPL_DIAG_TEXT_MAX];
     GLCmd cmd;
     memset(&cmd, 0, sizeof(cmd));
@@ -1552,7 +1557,9 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
              * parser's canonical text emits args from cmd->args[]
              * regardless of has_vars). */
             ExprVar vis[MAX_EXPR_VARS];
-            int vis_n = collect_visible_vars(line_idx, vis, MAX_EXPR_VARS, NULL);
+            int vis_n = collect_visible_vars_in(ctx->text, ctx->document_cmds,
+                                                ctx->document_count, line_idx,
+                                                vis, MAX_EXPR_VARS, NULL);
             int preserve_expr = input_has_any_visible_vars(stripped,
                                                            vis_n > 0 ? vis : NULL,
                                                            vis_n);
@@ -1746,8 +1753,9 @@ ReplCompileResult repl_compile_if_block_kernel(const char *input,
     out->pos = compile_insert_pos(ctx);
 
     ExprVar visible_vars[MAX_EXPR_VARS];
-    int visible_nv = collect_visible_vars(out->pos, visible_vars,
-                                          MAX_EXPR_VARS, NULL);
+    int visible_nv = collect_visible_vars_in(ctx->text, ctx->document_cmds,
+                                             ctx->document_count, out->pos,
+                                             visible_vars, MAX_EXPR_VARS, NULL);
 
     /* Skip past `if` to the opening `(`. */
     while (*p && *p != '(') p++;
@@ -2040,8 +2048,9 @@ ReplCompileResult repl_compile_for_loop_kernel(const char *input,
 
     out->pos = compile_insert_pos(ctx);
 
-    out->visible_nv = collect_visible_vars(out->pos, out->visible_vars,
-                                           MAX_EXPR_VARS, NULL);
+    out->visible_nv = collect_visible_vars_in(ctx->text, ctx->document_cmds,
+                                              ctx->document_count, out->pos,
+                                              out->visible_vars, MAX_EXPR_VARS, NULL);
 
     if (!repl_eval_parse_for_header_with_vars(p, out->var_name,
                                               sizeof(out->var_name),
