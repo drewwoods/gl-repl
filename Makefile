@@ -441,6 +441,7 @@ REPL_SRCS = \
 	src/repl/keymap_format.c \
 	src/repl/load.c \
 	src/repl/parser.c \
+	src/repl/program_query.c \
 	src/repl/reformat.c \
 	src/repl/scenes.c \
 	src/repl/source_scope.c \
@@ -679,6 +680,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/repl/import.c \
                      src/repl/load.c \
                      src/repl/parser.c \
+                     src/repl/program_query.c \
                      src/repl/reformat.c \
                      src/subsystems/replay/replay_annotations.c \
                      src/repl/scenes.c \
