@@ -90,7 +90,7 @@ these, not unwind them:
 
 | Area | Main files | Smell | Recommended cleanup |
 |---|---|---|---|
-| Core facade | `src/repl/core.c`, `src/repl/core.h` | Residual catch-all API for host effects, save/load wrappers, scenes, time, cursor/feed queries, and metrics; `pipeline.h` is a useful start but does not drain the facade. | Split host effects and remaining reformat/bootstrap/query APIs into focused headers. |
+| Core facade | `src/repl/core.h` | Addressed for implementation: `src/repl/core.c` was dissolved, and canonical APIs moved to focused owners. `core.h` remains as a compatibility reexport header, so include fan-out cleanup is the residual work. | Migrate callers from `core.h` to focused owner headers, then delete the compatibility facade when no longer needed. |
 | Compile contract | `src/repl/compile.c`, `src/repl/compile.h` | Alias mutation is now fixed, but visible-var/source-scope and predef reads still make compile less pure than the header claims. | Thread visible vars / source scope / predef symbols through explicit context, or document the remaining transitional reads. |
 | Parser contract | `src/repl/parser.c`, `src/repl/parser.h` | Parser is documented as stateless, but strict function-call parsing reads live document and aliases. | Pass symbols through `ReplParseContext`; keep live lookup outside parser. |
 | Source scope | `src/repl/source_scope.c`, `src/repl/source_scope.h` | Query APIs hide a live-state prefix-depth cache. | Add explicit document-view APIs and keep live wrappers only for UI/app callers. |
@@ -103,58 +103,50 @@ these, not unwind them:
 
 ## Finding 1: `core.h` and `core.c` are still a residual facade
 
-### Evidence
+**Status:** Addressed for implementation on 2026-06-20. `src/repl/core.c` was
+removed, and `src/repl/core.h` no longer owns canonical declarations. It now
+acts only as a legacy compatibility reexport for callers that have not yet
+migrated to focused owner headers.
 
-`src/repl/core.c` starts with a file comment that explicitly calls the module a
-residual staging area:
+### What changed
 
-- `repl_parse_and_normalize`
-- `repl_reformat_program`
-- `load_initial_commands`
-- `current_begin_mode`
-- `count_vertices`
+The split landed as a sequence of small commits:
 
-The public header `src/repl/core.h` now exposes several unrelated surfaces:
+- `7d965430` — split host effects into `src/repl/host_effects.{c,h}`.
+- `f0b542e2` — split source reformatting into `src/repl/reformat.{c,h}`.
+- `f656f5f8` — split mode/vertex/tunable-var queries into
+  `src/repl/program_query.{c,h}`.
+- `dd35e040` — moved cursor/feed/transform query declarations into
+  `src/repl/geometry_query.h`.
+- `a0aca043` — split timekeeping into `src/repl/time.{c,h}`.
+- `126c0a7c` — split visible-variable collection into
+  `src/repl/visible_vars.{c,h}`.
+- `5f640112` — split normalization into `src/repl/normalize.{c,h}`.
+- `64a567d4` — moved `cmd_type_name` into `command_spec`.
+- `bb26b10f` — split startup loading into `src/repl/bootstrap.{c,h}`.
+- `4af9bf60` — moved scene/workspace declarations to `src/repl/scenes.h`.
+- `f3efb298` — moved dirty notifications to `src/repl/state_notify.h` and
+  stopped redeclaring pipeline entry points in `core.h`.
+- `8e7e188e` — moved the default save wrapper into `src/repl/export.c` and
+  deleted `src/repl/core.c`.
 
-- Save/load and workspace APIs.
-- The `ReplHostEffects` bridge and all dispatch wrappers.
-- Example and user-scene helpers.
-- Time/load/reformat helpers.
-- Cursor/feed/tune/metric queries.
+### Current state
 
-Several modules include `core.h` for a narrow reason, usually one dispatch hook
-or one legacy helper, and inherit the whole facade dependency.
+The original readability problem is largely gone: new code can include
+`host_effects.h`, `normalize.h`, `reformat.h`, `bootstrap.h`,
+`program_query.h`, `geometry_query.h`, `time.h`, `visible_vars.h`,
+`scenes.h`, `pipeline.h`, `state_notify.h`, or `export.h` directly depending
+on the role it needs.
 
-### Why it hurts readability
+The remaining smell is compatibility fan-out. Many older files still include
+`src/repl/core.h`; that no longer pulls declarations from a monolithic
+implementation, but it still obscures the exact dependency a caller wants.
 
-When a file includes `core.h`, it is not clear whether it wants compiler
-helpers, host effects, scene management, runtime time state, or user-scene
-queries. This makes dependency direction harder to inspect and makes new
-callers more likely to use the facade instead of the owning module.
+### Residual cleanup
 
-The file comment is correct, but that also means the codebase is carrying an
-explicit "to be dissolved" module as a central public API.
-
-### Recommended cleanup
-
-Split by role:
-
-| New area | Possible files | Moves from `core.*` |
-|---|---|---|
-| Host bridge | `src/repl/host_effects.h`, `src/repl/host_effects.c` | `ReplHostEffects`, registration, status/cursor/input/time dispatchers. |
-| Normalize | `src/repl/normalize.h`, `src/repl/normalize.c` | `repl_parse_and_normalize*`, normalization helpers. |
-| Reformat | `src/repl/reformat.h`, `src/repl/reformat.c` | `repl_reformat_program`. |
-| Bootstrap/load helpers | `src/repl/bootstrap.h`, `src/repl/bootstrap.c` | `repl_load_initial_commands` if it does not belong in load/scenes. |
-| Queries/metrics | `src/repl/program_query.h`, `src/repl/program_query.c` | `repl_current_begin_mode`, `repl_count_vertices`, feed/cursor/tune queries where appropriate. |
-
-`src/repl/pipeline.h` and `src/repl/format.h` are already steps in this
-direction. They make some controller-facing and formatting dependencies
-narrower, but `core.h` still owns the host bridge and several unrelated query /
-scene / time surfaces.
-
-This can be done incrementally. The lowest-risk first slice remains extracting
-`ReplHostEffects`, because many modules include `core.h` only for dispatch
-wrappers.
+Mechanically migrate existing `#include "repl/core.h"` call sites to focused
+owner headers. Once no production or test TU includes `core.h`, delete the
+compatibility header and remove this finding entirely.
 
 ## Finding 2: compile purity is improved, but still not fully true
 
@@ -689,57 +681,49 @@ Either way, the transaction boundary becomes visible.
 
 Do not attempt this as one broad refactor. The safest sequence is:
 
-1. **Extract host effects from `core.h/core.c`.**
-   This reduces include fan-out without changing compiler behavior.
+1. **Migrate compatibility-facade includes.**
+   Finding 1's implementation work is done, but many TUs still include
+   `src/repl/core.h`. Replace those with focused owner headers and delete
+   `core.h` once it has no callers.
 
-2. **Finish narrowing `core_internal.h`.**
-   The rebase removed legacy re-exports. Move the remaining visible-var and
-   normalize declarations to specific homes when those owners are chosen.
-
-3. **Add context-based source-scope APIs.**
+2. **Add context-based source-scope APIs.**
    Keep live wrappers, but make compile/parser use explicit document views.
 
-4. **Move visible-variable lookup onto the same explicit context path.**
+3. **Move visible-variable lookup onto the same explicit context path.**
    This removes one major exception from compile purity.
 
-5. **Move parser strict-ref lookup onto the same explicit context path.**
+4. **Move parser strict-ref lookup onto the same explicit context path.**
    Function aliases are no longer mutated during compile, but strict call
    validation still reads the live document and alias table.
 
-6. **Extract `SceneSnapshot` from `scenes.c`.**
+5. **Extract `SceneSnapshot` from `scenes.c`.**
    This gives scene slots, workspace IO, and state capture a clearer shared
    primitive.
 
-7. **Centralize the remaining import/export shared constants and accessors.**
+6. **Centralize the remaining import/export shared constants and accessors.**
    `export_state.h` already handles dimensions; do this for directive names,
    C89 markers, and duplicated state-access macros before splitting either
    large file.
 
-8. **Mechanically split `export.c` and flatten query helpers.**
+7. **Mechanically split `export.c` and flatten query helpers.**
    These are mostly physical organization wins once shared scaffolding is in
    place.
 
-9. **Clean migration comments and local aliases in `state.c`.**
+8. **Clean migration comments and local aliases in `state.c`.**
    Do this last, after ownership APIs settle, so comments do not churn twice.
 
 ## Suggested first slice
 
-The best first implementation slice is:
+The best next implementation slice is a mechanical include migration:
 
-1. Add `src/repl/host_effects.h`.
-2. Move `ReplHostEffects` and `repl_dispatch_*` declarations out of
-   `core.h`.
-3. Move the corresponding implementation out of `core.c`.
-4. Update includes that only need host dispatchers.
-5. Keep `core.h` including `host_effects.h` temporarily if that makes the first
-   patch smaller, then remove the compatibility include in a follow-up.
-
-Why this slice first:
-
-- It is low semantic risk.
-- It addresses the most visible dependency smell.
-- It makes later `core.h` shrinkage easier to review.
-- It does not require solving parser/compile context purity in the same patch.
+1. Pick one cluster of `#include "repl/core.h"` callers, such as app
+   controller files, editor files, or REPL pipeline files.
+2. Replace the facade include with the specific owner headers used in that
+   file (`host_effects.h`, `pipeline.h`, `scenes.h`, `export.h`,
+   `state_notify.h`, and so on).
+3. Build after each cluster so any accidental transitive-include dependency is
+   caught locally.
+4. When `rg '#include "repl/core.h"'` is empty, delete `core.h`.
 
 ## Verification strategy
 
