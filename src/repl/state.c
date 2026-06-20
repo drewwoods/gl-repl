@@ -359,6 +359,8 @@ ReplVariableState *repl_state_variables_mut(void) {
     return &g_repl_state.variables;
 }
 
+void repl_state_variables_reset_predefs(void) { reset_time_state(); }
+
 void repl_state_time_advance(float dt) {
     if (dt <= 0.0f)
         return;
@@ -387,6 +389,8 @@ void repl_state_time_set(float value) {
     g_flat_dirty = 1;
 }
 
+void repl_state_time_set_playing(int playing) { g_t_playing = playing ? 1 : 0; }
+
 void repl_state_time_set_transient(float value) {
     /* Override only the predef 't' binding, leaving the free-running clock
      * (g_anim_time) and the flat-dirty flag untouched — unlike
@@ -399,37 +403,6 @@ void repl_state_time_set_transient(float value) {
     if (g_t_var_idx >= 0)
         g_predef_vars_mut[g_t_var_idx].value = value;
 }
-
-/* Editor-input + editor-buffer accessors moved to editor_state.c
- * (Phase 1 commits 4-5). Use editor_state_input / _mut / _reset for
- * the input slice, editor_state_buffer / _mut for the whole-buffer
- * struct, and editor_buffer_* for slice-level line text. */
-
-/* Editor overlay snapshot list accessors (transformers / highlights /
- * virtual_lines) moved to editor_state.c (Phase 1 commit 9). Use
- * editor_state_transformers / _highlights / _virtual_lines. */
-
-/* editor_state_input_reset and the editor_input convenience getters
- * (input_text / input_len / cursor_pos / insert_mode / pending_newline_*)
- * moved to editor_state.c (Phase 1 commit 5). The editor_state_input
- * struct accessor and the new editor_state_input_reset entry point
- * live there too. */
-
-/* Selection + clipboard accessors moved to editor_state.c
- * (Phase 1 commit 6). Use editor_state_selection / _clipboard. */
-
-/* code_panel / camera / status / help / variable_panel /
- * profile_panel / pointer / viewport accessors all live on
- * ui_state.c (Phase 1 commit 8 + Phase A commits 12-14). Use the
- * canonical `ui_state_*` API directly; the transitional
- * `repl_state_*` forwarder block was removed in Phase A commit 14.
- *
- * Variable-drag accessors live on the variable_panel peer
- * (variable_panel.h). Use `variable_panel_drag` /
- * `variable_panel_handle_drag_*` directly.
- *
- * Search + autocomplete accessors moved to editor_state.c (Phase 1
- * commit 7). Use editor_state_search / _autocomplete. */
 
 /* repl_state_presentation* / _grid_*_steps / _extents and the
  * render-config toggle accessors moved to glr_state.c (step 7a). The
@@ -444,8 +417,8 @@ void repl_state_time_set_transient(float value) {
 ReplRenderState repl_state_render(void) {
     return g_repl_state.render;
 }
-
 ReplRenderState *repl_state_render_mut(void) { return &g_repl_state.render; }
+void repl_state_render_set(const ReplRenderState *render) { if (render) g_repl_state.render = *render; }
 void repl_state_render_set_clear_color(const float rgba[4]) { memcpy(g_repl_state.render.clear_color, rgba, sizeof(float) * 4); }
 void repl_state_render_set_light_enabled(int light_idx, int enabled) {
     if (light_idx < 0 || light_idx >= REPL_LIGHT_SLOT_COUNT) return;

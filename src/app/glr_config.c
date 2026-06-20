@@ -116,7 +116,7 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_ACCUM_PASSES:        return NULL; /* cycle: see accum_passes_*_cycle */
     case GLR_CONFIG_WIREFRAME:           return (int *)&glr_state_presentation_mut()->wireframe;
     case GLR_CONFIG_POINT_ATTENUATION:   return &glr_state_render_mut()->point_attenuation_enabled;
-    case GLR_CONFIG_AUTO_TIME:           return &repl_state_variables_mut()->time_playing;
+    case GLR_CONFIG_AUTO_TIME:           return NULL; /* REPL time owner: see glr_config_set */
     case GLR_CONFIG_REPLAY:              return NULL; /* lifecycle: see glr_config_set */
     case GLR_CONFIG_REPLAY_MODE:         return &replay_state_mut()->mode;
     case GLR_CONFIG_REPLAY_EXPAND:       return &replay_state_mut()->expand_args;
@@ -246,6 +246,8 @@ void glr_config_set(GlrConfigKey key, int value) {
         glr_actions_apply_audio_cfg_mode(value);
     } else if (key == GLR_CONFIG_ACCUM_PASSES) {
         accum_passes_set_cycle(value);
+    } else if (key == GLR_CONFIG_AUTO_TIME) {
+        repl_state_time_set_playing(value);
     } else if (key == GLR_CONFIG_REPLAY) {
         if (value) {
             if (!replay_active())
