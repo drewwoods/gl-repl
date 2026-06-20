@@ -16,9 +16,9 @@
 #include "repl/apply.h"
 #include "repl/command_store.h"
 #include "repl/compile.h"
-#include "repl/core.h"           /* repl_dispatch_edit_line_get / _set */
 #include "repl/core_internal.h"  /* collect_visible_vars, parse-and-normalize */
 #include "repl/eval.h"
+#include "repl/host_effects.h"   /* repl_dispatch_edit_line_get / _set */
 #include "source_document.h"     /* source_document_apply_change, _insert_line */
 
 #include <ctype.h>

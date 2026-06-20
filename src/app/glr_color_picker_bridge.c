@@ -17,7 +17,7 @@
 #include "repl/color_limits.h"    /* REPL_CLEAR_COLOR_MAX_V */
 #include "repl/command.h"         /* GLCmd, CMD_* */
 #include "repl/compile.h"         /* ReplCompiledChange */
-#include "repl/core.h"            /* repl_set_status */
+#include "repl/host_effects.h"    /* repl_set_status */
 #include "repl/parser.h"          /* repl_parser_parse_command_ctx */
 #include "repl/state_views.h"     /* repl_state_document_count / _cmd_at */
 #include "ui/app/layout.h"        /* ui_layout_code_panel_rect */

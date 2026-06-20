@@ -2,8 +2,9 @@
 # Hard guard: REPL pipeline files may not link directly to the tutorial
 # runner peer. Whole-document replacement paths request tutorial cleanup
 # through ReplHostEffects (`repl_dispatch_tutorial_teardown`) so repl_demo
-# can keep a stub-free link boundary. src/repl/core.{c,h} owns the bridge
-# declaration/dispatcher and is the only allowed bare tutorial_teardown name.
+# can keep a stub-free link boundary. src/repl/host_effects.{c,h} owns the
+# bridge declaration/dispatcher and is the only allowed bare tutorial_teardown
+# name.
 
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -11,8 +12,8 @@ cd "$(git rev-parse --show-toplevel)"
 bad_includes=$(rg -n '#include "subsystems/tutorial/tutorial\.h"' src/repl --glob '*.[ch]' || true)
 bad_calls=$(rg -n '\btutorial_[A-Za-z0-9_]*\s*\(' src/repl \
     --glob '*.[ch]' \
-    --glob '!core.c' \
-    --glob '!core.h' \
+    --glob '!host_effects.c' \
+    --glob '!host_effects.h' \
     --glob '!tutorials.c' \
     --glob '!tutorials.h' || true)
 

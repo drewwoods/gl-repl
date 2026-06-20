@@ -5,8 +5,8 @@
 #include "subsystems/replay/replay_state.h"
 #include "repl/core_internal.h"
 #include "repl/eval.h"
+#include "repl/host_effects.h"
 #include "repl/pipeline.h"
-#include "repl/core.h"
 #include "repl/state_views.h"
 
 /* Batch lifetime cap (seconds). Pairs with the replay peer's

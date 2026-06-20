@@ -7,7 +7,7 @@
 #include "app/glr_camera.h"
 #include "app/glr_state.h"           /* presentation + render storage */
 #include "repl/cfg_baseline.h"
-#include "repl/core.h"
+#include "repl/host_effects.h"
 #include "repl/state_views.h"
 #include "ui/app/state_types.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
