@@ -9,9 +9,13 @@
  *
  * Parse context allows internal callers (src/repl/flatten.c during expansion,
  * replay.c during step-back) to parse lines outside the active edit position
- * and against an explicit source-scope view. Each parse is stateless and
- * immutable for a stable context: parsing the same line twice yields identical
- * results.
+ * and against an explicit source-scope view. A parse is deterministic for a
+ * stable context: parsing the same line twice yields identical results. It is
+ * fully self-contained only when ctx->source_scope is non-NULL; with a NULL
+ * source_scope the scope queries fall back to the live-document warm cache (see
+ * the field comment), so those parses read live REPL state. Finding 3 in
+ * plans/active/repl-structure-readability-audit.md tracks removing that
+ * live fallback.
  *
  * Expression validation: identifiers in expressions are validated against
  * the predefined-variable table (float x, y, z, t, etc.) and reserved function
@@ -52,6 +56,14 @@ typedef struct {
      * per-arg %g/snprintf rendering and trailing-comment scan. Default 0
      * (emit text) preserves the behavior for commit / reformat / export. */
     int skip_text;
+    /* Source-scope view for indentation / block-depth / begin-block queries.
+     * When non-NULL the parser queries this view exclusively (no live-state
+     * reach). When NULL the parser's scope helpers fall back to the
+     * live-document warm cache (repl_source_scope_* live wrappers) — this is
+     * how repl_parse_and_normalize{,_strict} parse a candidate line against
+     * the current document without paying a per-call O(N) view bind. A caller
+     * parsing against any OTHER (non-live) document MUST set this; leaving it
+     * NULL there would silently query the live document instead. */
     const ReplSourceScopeView *source_scope;
 } ReplParseContext;
 
