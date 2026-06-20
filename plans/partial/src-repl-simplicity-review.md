@@ -1,5 +1,13 @@
 # `src/repl/` Architectural Review — Findings & Followups
 
+> **Superseded as the active map (2026-06-20).** The live cleanup map for
+> `src/repl` is now `plans/in-review/repl-structure-readability-audit.md`,
+> which subsumes the brittle-spots / smaller-risks lists below and carries
+> the "durable spine" section forward. Two still-live items from here — the
+> `compile.c` verb-boundary split and the `apply.c` `num_args`-cascade helper
+> — are tracked there explicitly. This document is retained for provenance and
+> its dated currency pass; schedule remaining work from the audit, not here.
+
 ## Provenance
 
 Captured 2026-05-14 from an arch-simplicity-reviewer pass over `src/repl/`.

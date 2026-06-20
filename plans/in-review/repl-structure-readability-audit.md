@@ -30,6 +30,62 @@ sediment**:
 - Inline migration notes and legacy aliases that were useful during the
   refactor but now compete with the current model for attention.
 
+## Relationship to the 2026-05-14 simplicity review
+
+This audit is the **single active cleanup map** for `src/repl`. It supersedes
+`plans/partial/src-repl-simplicity-review.md`: that earlier review's
+brittle-spots and smaller-risks lists are either already shipped (see its
+2026-06-20 currency pass) or folded into the findings below. Two of its
+still-live items are not otherwise covered here and are tracked as:
+
+- **`compile.c` verb-boundary split** — size, *not* purity, so distinct from
+  Finding 2. Deferred there; still deferred. `compile.c` is 2137 lines; the
+  natural cut is `compile_var.c` (float-decl / var-assign / set-predef) +
+  `compile_block.c` (close-brace / if / func / for) + a small
+  `compile_internal.h` for the ~20 shared file-statics. Budget the Makefile +
+  guard-script (`check-no-set-status-in-compile-apply.sh`) plumbing, not just
+  the function moves.
+- **`apply.c` `num_args` cascade** (~`apply.c:149`) reaches into
+  `repl_state_document_cmds_mut()` to decrement `num_args` above a deleted
+  predef slot. A `command_store` "decrement num_args above slot X" helper would
+  localize it. Pairs with Finding 12.
+
+The earlier review's one irreplaceable asset — the explicit "what is
+load-bearing, do not refactor" list — is carried forward immediately below so
+this audit is not a pure change-list with no guardrail.
+
+## Durable spine — do not touch
+
+Structural commitments flagged as load-bearing and well-paid-for in the
+2026-05-14 review and re-confirmed here. The findings below should preserve
+these, not unwind them:
+
+- **Two-level command model (source → flat → GL).** `GLCmd` is a pure
+  parse-result record with **no source-text field**; per-line text lives on
+  `EditorState`. This is what lets `flatten`/`executor`/`replay_annotations`
+  take a `SourceTextView`, and what lets `tools/repl_demo` link without the
+  editor. Findings 9-10 must not reintroduce a text field on `GLCmd`.
+- **Descriptor-table pattern.** `command_spec.c`'s three arrays
+  (`k_enum_command_specs[]`, `k_std_command_specs[]`,
+  `g_command_type_specs[CMD_TYPE_COUNT]`) are the single extension point for new
+  commands — parser, formatter, autocomplete, code panel, F1 help, and the
+  begin-block guard all read from it. Don't scatter switches back out.
+- **compile/apply purity split** — the direction every finding here pushes
+  *toward*, never away from. `compile.c` produces `ReplCompiledChange` values
+  with side effects represented as data (`ReplPredefOp[]`, `ReplScratchOp[]`,
+  and now `alias_op`); `apply.c` is the mutating dual behind a
+  `repl_apply_can_apply_compiled_change` preflight. Findings 2-4 narrow the
+  remaining live-state reads; they must not weaken this split.
+- **Owner-vs-view header split** (`state.h` / `state_views.h` /
+  `state_owners.h`, enforced by `check-views-no-owners`). The cheapest possible
+  read-by-value vs. mutate barrier; the `_mut()` suffix reads cleanly. Finding
+  11's `state.c` comment cleanup must keep this boundary intact.
+- **`command_store.c` stays small (~150 lines) and parse-free**, and
+  **`source_scope.c`'s editor-facing predicates** (`repl_line_is_block_head`,
+  `repl_line_is_label`, `repl_range_contains_var_decl`) keep the editor off
+  `CmdType` pattern-matching. Finding 4's view split must preserve these
+  predicates as live wrappers.
+
 ## Summary table
 
 | Area | Main files | Smell | Recommended cleanup |
@@ -223,7 +279,7 @@ Add explicit source-scope view APIs:
 typedef struct ReplSourceScopeView {
     const GLCmd *cmds;
     int count;
-    /* optional cache storage or cache handle */
+    /* see "cache ownership" below — this is the hard part */
 } ReplSourceScopeView;
 ```
 
@@ -234,6 +290,49 @@ Then provide two layers:
   app/UI callers.
 
 After that split, compile and parser should use the view APIs exclusively.
+
+#### Cache ownership — the crux, not an afterthought
+
+The hard part is the prefix-depth cache, and the type sketch above hand-waves
+it. `source_scope.c` keeps four file-static prefix arrays
+(`g_block_depth_prefix`, `g_begin_depth_prefix`, `g_tess_depth_prefix`,
+`g_matrix_depth_prefix`) behind a dirty flag (`g_depth_cache_dirty`). Every
+query calls `depth_cache_rebuild()` first, and **five live-document mutation
+sites** — `import.c:2016`, `core.c:743`, and `state.c` (×3) — call
+`repl_source_scope_depth_cache_invalidate()`. The net effect is amortized
+**O(1)** depth lookups across a frame for the live document.
+
+A naive `*_view(cmds, count, pos)` that operates "only on the passed document"
+breaks that, and has two unhappy options:
+
+- **Recompute per call.** Rebuild the prefix arrays on every query → **O(N)
+  per lookup** instead of amortized O(1). `flatten.c` and `parser.c` call these
+  repeatedly per frame, so this is a real hot-path regression, not a micro-cost.
+- **Thread a cache handle.** Carry the prefix storage + dirty flag in the view
+  (or a separate handle) and pass it through every caller. Keeps O(1), but is
+  invasive *and* merely relocates the invalidation problem — something still has
+  to mark the handle dirty on mutation, reintroducing the coupling unless
+  ownership is crisp.
+
+So the real decision is **cache ownership**, and the pragmatic answer is
+asymmetric rather than a single uniform view:
+
+- Expose pure `*_view(cmds, count, ...)` functions that **recompute** — correct,
+  testable, no hidden globals. Used by compile/parser tests and any non-live
+  caller. They pay honest O(N); that's fine for test/one-shot use.
+- Keep the **cached fast path strictly for the live document**: a thin live
+  wrapper that owns the four prefix arrays and the existing five
+  `repl_source_scope_depth_cache_invalidate()` hooks, and is the only thing
+  production hot paths call.
+
+That stops the cache from masquerading as a property of "any document view":
+live callers keep O(1), view callers pay an honest O(N), and the five
+invalidation sites keep a single clear owner instead of being smeared across a
+handle threaded through callers. **Decide this before steps 3-5 of the cleanup
+order** — context-based source-scope, visible-vars, and parser strict-ref all
+sit on top of it, and a view API that silently drops the cache (or silently
+serves stale depths because nobody owns invalidation) is worse than the current
+honest-but-coupled global.
 
 ## Finding 5: `core_internal.h` is narrower, but still a mixed internal bucket
 
