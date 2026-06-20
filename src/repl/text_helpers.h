@@ -38,6 +38,7 @@ int  repl_parse_func_name_token(const char **p_inout, int *fn);
 int  extract_for_args_text(const char *src,
                            char *var, int var_sz,
                            char *args, int args_sz);
+void repl_extract_for_var_name(const char *text, char *var, int var_sz);
 int  parse_expr_list_exact(const char *src, float *out_vals, int max_vals,
                            ExprVar *vars, int num_vars, int *out_count);
 int  parse_repl_func_signature(const char *src, int *fn,

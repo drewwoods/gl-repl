@@ -26,6 +26,7 @@
 #include "repl/export.h"     /* ReplExportLayout and save/load helpers */
 #include "repl/flatten.h"
 #include "repl/host_effects.h" /* Compatibility: host bridge moved out of core. */
+#include "repl/reformat.h"   /* Compatibility: reformatter moved out of core. */
 #include "source_document.h" /* SourceTextView document view */
 
 /* --- Save / load ------------------------------------------------------- */
@@ -187,12 +188,6 @@ void repl_set_time(float value);
  * via editor_state_edit_line_set() above the β boundary (implemented
  * in phase 3.6.4 of plans/done/edit-line-ownership.md). */
 int repl_load_initial_commands(const char *import_file);
-/* Pure REPL pass: walks every command and rewrites the canonical
- * line text + GLCmd in place. Does not save/restore editor input;
- * the editor's Ctrl+\ wrapper (`editor_reformat_commands`) layers
- * that on top. */
-void repl_reformat_program(void);
-
 /* --- Cursor / feed queries --------------------------------------------- */
 int  repl_flat_cmd_matches_cursor(int flat_idx, int edit_line_idx);
 int  repl_find_feeding_normal_cmd(int line_idx);

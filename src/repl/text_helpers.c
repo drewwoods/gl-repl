@@ -127,6 +127,21 @@ int extract_for_args_text(const char *src,
     return 1;
 }
 
+void repl_extract_for_var_name(const char *text, char *var, int var_sz) {
+    const char *p = text ? text : "";
+    int i = 0;
+
+    if (!var || var_sz <= 0)
+        return;
+
+    while (*p && *p != '(') p++;
+    if (*p) p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_') && i < var_sz - 1)
+        var[i++] = *p++;
+    var[i] = '\0';
+}
+
 int repl_parse_identifier_list(const char *src, const char *leading_keyword,
                                char names[][REPL_PREDEF_NAME_MAX], int max_names) {
     const char *p = src;
