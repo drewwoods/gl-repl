@@ -1,5 +1,6 @@
 #include "subsystems/replay/replay_internal.h"
 #include "keys.h"
+#include "repl/cfg_baseline.h"
 #include <stdio.h>
 
 static int replay_cancel_on_unrecognized(void) {

@@ -11,6 +11,7 @@
 #include "repl/eval.h"          /* repl_eval_find_predef_var_idx + predef-vars view */
 #include "repl/load.h"
 #include "repl/scenes.h"
+#include "repl/state_views.h"
 #include "repl/state_notify.h" /* For repl_state_mark_flat_dirty, repl_state_mark_source_dirty, and repl_state_parse_workspace_header_line */
 #include "repl/tutorials.h"
 #include "repl/export.h"

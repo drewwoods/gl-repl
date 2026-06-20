@@ -436,6 +436,7 @@ REPL_SRCS = \
 	src/repl/export.c \
 	src/repl/flatten.c \
 	src/repl/help_text.c \
+	src/repl/host_effects.c \
 	src/repl/import.c \
 	src/repl/keymap_format.c \
 	src/repl/load.c \
@@ -673,6 +674,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/repl/executor.c \
                      src/repl/export.c \
                      src/repl/flatten.c \
+                     src/repl/host_effects.c \
                      src/repl/import.c \
                      src/repl/load.c \
                      src/repl/parser.c \
