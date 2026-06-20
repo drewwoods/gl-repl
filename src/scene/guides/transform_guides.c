@@ -681,7 +681,7 @@ static void draw_rotate_guide(const SceneGuideSnapshot *snapshot,
  *
  * The function name reflects what is actually compared: input vs
  * committed text. It does NOT compare parsed args between input and
- * source — a future enhancement could (see plans/in-review/
+ * source — a future enhancement could (see plans/done/
  * src-scene-code-smell-audit.md #9). */
 static int transform_input_matches_committed(const SceneGuideSnapshot *snapshot) {
     const char *source = snapshot->edit_line_committed_text

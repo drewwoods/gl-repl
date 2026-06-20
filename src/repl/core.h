@@ -182,7 +182,7 @@ typedef struct {
      * stays intact. Higher-level pipeline entry points (scenes.c)
      * use this; the parse / compile / flatten / load layers take
      * cursor as an explicit parameter instead (see phase 3.6.x;
-     * implemented in phase 4 of plans/in-review/edit-line-ownership.md).
+     * implemented in phase 4 of plans/done/edit-line-ownership.md).
      *
      * Default behavior when the hook is NULL: edit_line_get
      * returns 0; edit_line_set is a no-op. The demo / pure REPL
@@ -242,7 +242,7 @@ void        repl_mark_source_dirty(void);
  * repl_load_example returns the post-load cursor target (= document
  * line count after the example body emits). Caller applies the value
  * via editor_state_edit_line_set() above the β boundary (implemented
- * in phase 3.6.4 of plans/in-review/edit-line-ownership.md). */
+ * in phase 3.6.4 of plans/done/edit-line-ownership.md). */
 int  repl_load_example(int idx);
 
 /* User scenes: persistent named snapshots (up to MAX_USER_SCENES slots).
@@ -285,7 +285,7 @@ void repl_set_time(float value);
 
 /* Returns the post-load cursor target. Caller applies the value
  * via editor_state_edit_line_set() above the β boundary (implemented
- * in phase 3.6.4 of plans/in-review/edit-line-ownership.md). */
+ * in phase 3.6.4 of plans/done/edit-line-ownership.md). */
 int repl_load_initial_commands(const char *import_file);
 /* Pure REPL pass: walks every command and rewrites the canonical
  * line text + GLCmd in place. Does not save/restore editor input;
