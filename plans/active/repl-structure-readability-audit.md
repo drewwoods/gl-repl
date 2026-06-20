@@ -1,8 +1,16 @@
-# `src/repl` structure and readability audit - review pending
+# `src/repl` structure and readability audit - active
 
-Status: **in-review** - this is a findings document and cleanup map. No
-implementation has started. Do not move this to `plans/active/` until a
-specific first slice is chosen.
+Status: **active** - implementation has started. Finding 1's implementation
+slice landed first, and Finding 4's source-scope view split is now landed in
+two follow-up commits. The remaining findings in this document are still a
+cleanup map, not completed work.
+
+Recent implementation commits:
+
+- `18c9b742` — add `ReplSourceScopeView` and move the prefix-depth cache onto
+  explicit views while keeping live wrappers for app/UI callers.
+- `dcf56b6a` — thread source-scope views through parser/compile paths and bind
+  explicit views at parse call sites that operate on stable document snapshots.
 
 Re-reviewed after the recent `main` rebase. The rebase partially addressed a
 few items from the original audit: function-alias compile no longer mutates the
@@ -91,9 +99,9 @@ these, not unwind them:
 | Area | Main files | Smell | Recommended cleanup |
 |---|---|---|---|
 | Core facade | `src/repl/core.h` | Addressed for implementation: `src/repl/core.c` was dissolved, and canonical APIs moved to focused owners. `core.h` remains as a compatibility reexport header, so include fan-out cleanup is the residual work. | Migrate callers from `core.h` to focused owner headers, then delete the compatibility facade when no longer needed. |
-| Compile contract | `src/repl/compile.c`, `src/repl/compile.h` | Alias mutation is now fixed, but visible-var/source-scope and predef reads still make compile less pure than the header claims. | Thread visible vars / source scope / predef symbols through explicit context, or document the remaining transitional reads. |
+| Compile contract | `src/repl/compile.c`, `src/repl/compile.h` | Alias mutation and source-scope ownership are now fixed, but visible-var and predef reads still make compile less pure than the header claims. | Thread visible vars / predef symbols through explicit context, or document the remaining transitional reads. |
 | Parser contract | `src/repl/parser.c`, `src/repl/parser.h` | Parser is documented as stateless, but strict function-call parsing reads live document and aliases. | Pass symbols through `ReplParseContext`; keep live lookup outside parser. |
-| Source scope | `src/repl/source_scope.c`, `src/repl/source_scope.h` | Query APIs hide a live-state prefix-depth cache. | Add explicit document-view APIs and keep live wrappers only for UI/app callers. |
+| Source scope | `src/repl/source_scope.c`, `src/repl/source_scope.h` | Addressed for implementation: query APIs now have explicit view variants and the prefix-depth cache lives on the view. | Keep live wrappers for UI/app callers; continue migrating future parser/compile callers through explicit views. |
 | Internal header | `src/repl/core_internal.h` | Narrower after the rebase, but still bundles normalize entry points, text helpers, and visible-var collection. | Split into `normalize.h`, `visible_vars.h`, and direct includes where useful. |
 | Scene slots/workspace | `src/repl/scenes.c` | One file owns scene slots, snapshots, promotion, workspace IO, cfg/camera/predef capture, and restore mechanics. | Extract `SceneSnapshot` and workspace IO helpers. |
 | Import/export | `src/repl/import.c`, `src/repl/export.c`, `src/repl/export_state.h` | Shared dimensions moved to `export_state.h`, but state-access macros, snippet/C89 constants, global import accumulators, and very large emit/load flows remain. | Centralize the remaining shared constants/accessors; then split export/import by concern. |
@@ -244,15 +252,21 @@ and formatting behavior harder to test in isolation, and it makes the parser's
 
 ## Finding 4: `source_scope` query APIs hide live-state cache behavior
 
+**Status:** Addressed for implementation on 2026-06-20. The view/cache split
+landed in `18c9b742`, and parser/compile source-scope callers moved onto
+explicit views in `dcf56b6a`. Existing live wrappers remain for app/UI/editor
+compatibility call sites.
+
 ### Evidence
 
-`src/repl/source_scope.c` owns static prefix-depth cache arrays and rebuilds
-them by reading `repl_state_document_count()` and `repl_state_document_cmds()`.
-Several source-scope functions look like pure queries from their names, but
-they operate on the current live document implicitly.
+Prior to the implementation commits, `src/repl/source_scope.c` owned static
+prefix-depth cache arrays and rebuilt them by reading
+`repl_state_document_count()` and `repl_state_document_cmds()`. Several
+source-scope functions looked like pure queries from their names, but operated
+on the current live document implicitly.
 
-Compile and parser code call into source-scope helpers while otherwise passing
-explicit parse/compile contexts.
+The remaining live wrappers are now explicit compatibility helpers. Parser and
+core compile code carry `ReplSourceScopeView` through their contexts.
 
 ### Why it hurts readability
 
@@ -263,9 +277,9 @@ because a helper underneath them reads `g_repl_state`.
 It also makes testing harder. Tests need the live document arranged correctly,
 even when the function under test appears to accept all of the needed context.
 
-### Recommended cleanup
+### Implemented cleanup
 
-Add explicit source-scope view APIs:
+The implementation added explicit source-scope view APIs:
 
 ```c
 typedef struct ReplSourceScopeView {
@@ -276,13 +290,14 @@ typedef struct ReplSourceScopeView {
 } ReplSourceScopeView;
 ```
 
-Then provide two layers:
+There are now two layers:
 
 - `*_view` functions that operate only on the passed document view.
 - Existing live wrappers that build/use the current global document view for
   app/UI callers.
 
-After that split, compile and parser should use the view APIs exclusively.
+After that split, parser and core compile code use the view APIs for
+source-scope queries.
 
 #### Cache ownership — the crux, not an afterthought
 
@@ -713,8 +728,9 @@ Do not attempt this as one broad refactor. The safest sequence is:
    `src/repl/core.h`. Replace those with focused owner headers and delete
    `core.h` once it has no callers.
 
-2. **Add context-based source-scope APIs.**
-   Keep live wrappers, but make compile/parser use explicit document views.
+2. **Add context-based source-scope APIs.** **Done on 2026-06-20.**
+   Live wrappers remain, while parser/core compile paths now use explicit
+   document views.
 
 3. **Move visible-variable lookup onto the same explicit context path.**
    This removes one major exception from compile purity.
