@@ -14,7 +14,6 @@
 
 #include "repl/core.h"
 #include "source_document.h"
-#include "repl/command_spec.h"
 #include "repl/scenes.h"
 #include "repl/export.h"
 #include "repl/state_owners.h"
@@ -35,12 +34,6 @@ static const char *outfile = "output.c";
 
 void repl_mark_source_dirty(void) {
     repl_state_mark_source_dirty();
-}
-
-/* (no display list - commands are executed directly each frame) */
-
-const char *cmd_type_name(CmdType t) {
-    return repl_cmd_type_name(t);
 }
 
 /* ========================================================================= */

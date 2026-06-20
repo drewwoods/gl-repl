@@ -515,6 +515,10 @@ const char *repl_cmd_type_name(CmdType type) {
     return spec ? spec->name : "CMD_UNKNOWN";
 }
 
+const char *cmd_type_name(CmdType type) {
+    return repl_cmd_type_name(type);
+}
+
 const char *repl_cmd_type_display_name(CmdType type) {
     const ReplCommandTypeSpec *spec = repl_command_type_spec(type);
     if (spec && spec->display_name)
