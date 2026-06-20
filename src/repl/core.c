@@ -11,21 +11,12 @@
 #include "repl/core.h"
 #include "source_document.h"
 #include "repl/export.h"
-#include "repl/state_owners.h"
 
 /* ========================================================================= */
 /* Constants                                                                  */
 /* ========================================================================= */
 
 static const char *outfile = "output.c";
-
-/* ========================================================================= */
-/* Global state                                                               */
-/* ========================================================================= */
-
-void repl_mark_source_dirty(void) {
-    repl_state_mark_source_dirty();
-}
 
 void repl_save_default_output(const ReplExportLayout *layout) {
     (void)repl_export_save_output(outfile, source_document_view(), layout);
