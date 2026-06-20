@@ -42,6 +42,7 @@ typedef struct {
     int               flat_capacity;
     int               flat_count;
     SourceTextView  text;             /* editor source-text view for inline expansion */
+    ReplFuncAliasView func_aliases;
     ReplSourceScopeView source_scope;
     int               max_call_depth;
     int call_depth;
@@ -446,7 +447,12 @@ static void flatten_call(FlattenContext *ctx,
             break;
         if (arg_count != param_count) {
             char msg[REPL_DIAG_TEXT_MAX];
-            const char *alias = repl_func_alias_get(func_num);
+            const char *alias = NULL;
+            if (func_num >= 0 && func_num < ctx->func_aliases.count &&
+                func_num < REPL_FUNC_SLOT_COUNT &&
+                ctx->func_aliases.names &&
+                ctx->func_aliases.names[func_num][0])
+                alias = ctx->func_aliases.names[func_num];
             if (alias) {
                 snprintf(msg, sizeof(msg),
                          "%s expects %d args, got %d",
@@ -533,6 +539,7 @@ static int flatten_reparse_line(FlattenContext *ctx,
         /* Flatten only reads tmp_pl.cmd; the canonical text rendering
          * (per-arg %g/snprintf) is pure waste on every frame. */
         .skip_text = 1,
+        .func_aliases = ctx->func_aliases,
         .source_scope = &ctx->source_scope,
     };
     const char *text = flatten_src_text(ctx->text, i);
@@ -799,6 +806,7 @@ int repl_flatten_program(const ReplFlattenOptions *options,
         .flat_capacity = options ? options->flat_capacity : 0,
         .flat_count = 0,
         .text = options ? options->text : (SourceTextView){0},
+        .func_aliases = options ? options->func_aliases : (ReplFuncAliasView){0},
         .max_call_depth = options && options->max_call_depth > 0
                         ? options->max_call_depth : MAX_FLATTEN_CALL_DEPTH,
         .call_depth = 0,
@@ -872,6 +880,7 @@ void repl_flatten_commands(int edit_line_idx) {
         .flat_local_vars = flat_program->local_vars,
         .flat_capacity = flat_program->capacity,
         .text = source_document_view(),
+        .func_aliases = repl_func_alias_view(),
         .max_call_depth = MAX_FLATTEN_CALL_DEPTH,
         .visit_budget = MAX_FLATTEN_VISIT_BUDGET
     };

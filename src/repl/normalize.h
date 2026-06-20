@@ -37,6 +37,7 @@ int repl_parse_and_normalize_strict_with_scope(
         ExprVar *vars, int num_vars,
         int preserve_expr, GLCmd *out_cmd,
         char *text_out, int text_sz,
-        const ReplSourceScopeView *source_scope);
+        const ReplSourceScopeView *source_scope,
+        ReplFuncAliasView func_aliases);
 
 #endif /* REPL_NORMALIZE_H */

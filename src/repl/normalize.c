@@ -122,7 +122,8 @@ static int parse_and_normalize_impl(const char *line, int pos,
                                     int preserve_expr, GLCmd *out_cmd,
                                     char *text_out, int text_sz,
                                     int strict_refs,
-                                    const ReplSourceScopeView *source_scope) {
+                                    const ReplSourceScopeView *source_scope,
+                                    ReplFuncAliasView func_aliases) {
     /* repl_parse_and_normalize is called from many sites — commit
      * paths, reformatter, tests. The parser never calls set_status
      * itself (it writes diagnostics into ctx->err_buf; enforced by
@@ -137,6 +138,7 @@ static int parse_and_normalize_impl(const char *line, int pos,
         .strict_refs = strict_refs,
         .err_buf = normalize_parse_err,
         .err_sz  = (int)sizeof(normalize_parse_err),
+        .func_aliases = func_aliases,
         .source_scope = source_scope,
     };
     ReplParsedLine pl;
@@ -175,20 +177,24 @@ int repl_parse_and_normalize(const char *line, int pos,
                              ExprVar *vars, int num_vars,
                              int preserve_expr, GLCmd *out_cmd,
                              char *text_out, int text_sz) {
+    ReplSourceScopeLiveView live_scope = repl_source_scope_live_view();
     return parse_and_normalize_impl(line, pos, vars, num_vars,
                                     preserve_expr, out_cmd,
                                     text_out, text_sz, 0,
-                                    NULL);
+                                    live_scope.scope,
+                                    repl_func_alias_view());
 }
 
 int repl_parse_and_normalize_strict(const char *line, int pos,
                                     ExprVar *vars, int num_vars,
                                     int preserve_expr, GLCmd *out_cmd,
                                     char *text_out, int text_sz) {
+    ReplSourceScopeLiveView live_scope = repl_source_scope_live_view();
     return parse_and_normalize_impl(line, pos, vars, num_vars,
                                     preserve_expr, out_cmd,
                                     text_out, text_sz, 1,
-                                    NULL);
+                                    live_scope.scope,
+                                    repl_func_alias_view());
 }
 
 int repl_parse_and_normalize_strict_with_scope(
@@ -196,9 +202,11 @@ int repl_parse_and_normalize_strict_with_scope(
         ExprVar *vars, int num_vars,
         int preserve_expr, GLCmd *out_cmd,
         char *text_out, int text_sz,
-        const ReplSourceScopeView *source_scope) {
+        const ReplSourceScopeView *source_scope,
+        ReplFuncAliasView func_aliases) {
     return parse_and_normalize_impl(line, pos, vars, num_vars,
                                     preserve_expr, out_cmd,
                                     text_out, text_sz, 1,
-                                    source_scope);
+                                    source_scope,
+                                    func_aliases);
 }

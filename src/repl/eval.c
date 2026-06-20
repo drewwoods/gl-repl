@@ -100,6 +100,11 @@ int repl_func_alias_lookup_slot(const char *name) {
     return -1;
 }
 
+ReplFuncAliasView repl_func_alias_view(void) {
+    ReplFuncAliasView view = { g_active_func_aliases, REPL_FUNC_SLOT_COUNT };
+    return view;
+}
+
 int repl_func_alias_name_is_valid(const char *name) {
     if (!name || !*name) return 0;
     /* Must be a C identifier. */

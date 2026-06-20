@@ -97,6 +97,11 @@ static const ReplSourceScopeView *live_source_scope_view(void) {
     return &g_live_scope;
 }
 
+ReplSourceScopeLiveView repl_source_scope_live_view(void) {
+    ReplSourceScopeLiveView view = { live_source_scope_view() };
+    return view;
+}
+
 int repl_source_scope_view_in_begin_block_at(const ReplSourceScopeView *view,
                                              int pos) {
     if (!view || !view->built) return 0;

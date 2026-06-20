@@ -172,10 +172,10 @@ typedef struct ReplCompiledChange_s {
  * takes whatever it needs from here; it never reaches back into REPL
  * globals.
  *
- * Today's transitional state: source-scope reads are carried by
- * source_scope, but compile functions still read predef vars through
- * the shared eval table because that table is ReplState-adjacent and
- * not yet threaded through context.
+ * Today's transitional state: source-scope reads and parser alias reads are
+ * carried by source_scope / func_aliases, but compile functions still read
+ * predef vars through the shared eval table because that table is
+ * ReplState-adjacent and not yet threaded through context.
  */
 typedef struct {
     int               edit_line;        /* current cursor source-cmd idx */
@@ -183,6 +183,7 @@ typedef struct {
     int               insert_mode;      /* 1 if editor is in insert mode */
     SourceTextView    text;             /* source-text view for ident-usage checks */
     const GLCmd      *document_cmds;    /* source-command array snapshot */
+    ReplFuncAliasView func_aliases;     /* function aliases visible to parser calls */
     ReplSourceScopeView source_scope;   /* scope/depth view over document_cmds */
 } ReplCompileContext;
 

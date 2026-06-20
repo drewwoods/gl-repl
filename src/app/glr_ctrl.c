@@ -1177,6 +1177,7 @@ static void glr_ctrl_populate_numeric_swatch(UiRenderSnapshot *snap) {
             .source_line_idx = edit_line,
             .err_buf = parse_err,
             .err_sz = (int)sizeof parse_err,
+            .func_aliases = repl_func_alias_view(),
             .source_scope = &source_scope,
         };
         if (!repl_parser_parse_command_ctx(in.input, &pl, &parse_ctx)) return;

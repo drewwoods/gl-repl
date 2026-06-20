@@ -13,7 +13,6 @@
 #include "repl/color_limits.h"
 #include "repl/core_internal.h"
 #include "repl/source_scope.h"
-#include "repl/state_owners.h"
 #include "repl/util.h"          /* repl_format_fits / repl_copy_string_fits */
 
 #include "config.h" /* REPL_ENUM_ARG_MAX */
@@ -58,60 +57,108 @@ static const ReplSourceScopeView *parser_source_scope(const ReplParseContext *ct
 }
 
 static int parser_scope_block_depth_at(const ReplParseContext *ctx, int pos) {
-    const ReplSourceScopeView *scope = parser_source_scope(ctx);
-    return scope ? repl_source_scope_view_block_depth_at(scope, pos)
-                 : repl_source_scope_block_depth_at(pos);
+    return repl_source_scope_view_block_depth_at(parser_source_scope(ctx), pos);
 }
 
 static int parser_scope_in_begin_block_at(const ReplParseContext *ctx, int pos) {
-    const ReplSourceScopeView *scope = parser_source_scope(ctx);
-    return scope ? repl_source_scope_view_in_begin_block_at(scope, pos)
-                 : repl_source_scope_in_begin_block_at(pos);
+    return repl_source_scope_view_in_begin_block_at(parser_source_scope(ctx), pos);
 }
 
 static void parser_scope_cmd_indent(const ReplParseContext *ctx,
                                     int pos, char *buf, int buf_sz) {
-    const ReplSourceScopeView *scope = parser_source_scope(ctx);
-    if (scope)
-        repl_source_scope_view_cmd_indent(scope, pos, buf, buf_sz);
-    else
-        repl_source_scope_cmd_indent(pos, buf, buf_sz);
+    repl_source_scope_view_cmd_indent(parser_source_scope(ctx), pos, buf, buf_sz);
 }
 
 static void parser_scope_begin_indent(const ReplParseContext *ctx,
                                       int pos, char *buf, int buf_sz) {
-    const ReplSourceScopeView *scope = parser_source_scope(ctx);
-    if (scope)
-        repl_source_scope_view_begin_indent(scope, pos, buf, buf_sz);
-    else
-        repl_source_scope_begin_indent(pos, buf, buf_sz);
+    repl_source_scope_view_begin_indent(parser_source_scope(ctx), pos, buf, buf_sz);
 }
 
 static void parser_scope_tess_close_indent(const ReplParseContext *ctx,
                                            int pos, char *buf, int buf_sz) {
-    const ReplSourceScopeView *scope = parser_source_scope(ctx);
-    if (scope)
-        repl_source_scope_view_tess_close_indent(scope, pos, buf, buf_sz);
-    else
-        repl_source_scope_tess_close_indent(pos, buf, buf_sz);
+    repl_source_scope_view_tess_close_indent(parser_source_scope(ctx), pos,
+                                             buf, buf_sz);
 }
 
 static void parser_scope_cmd_tess_indent(const ReplParseContext *ctx,
                                          int pos, char *buf, int buf_sz) {
-    const ReplSourceScopeView *scope = parser_source_scope(ctx);
-    if (scope)
-        repl_source_scope_view_cmd_tess_indent(scope, pos, buf, buf_sz);
-    else
-        repl_source_scope_cmd_tess_indent(pos, buf, buf_sz);
+    repl_source_scope_view_cmd_tess_indent(parser_source_scope(ctx), pos,
+                                           buf, buf_sz);
 }
 
 static void parser_scope_matrix_close_indent(const ReplParseContext *ctx,
                                              int pos, char *buf, int buf_sz) {
+    repl_source_scope_view_matrix_close_indent(parser_source_scope(ctx), pos,
+                                               buf, buf_sz);
+}
+
+static const char *parser_func_alias_get(const ReplParseContext *ctx, int slot) {
+    if (!ctx || !ctx->func_aliases.names)
+        return NULL;
+    if (slot < 0 || slot >= ctx->func_aliases.count ||
+        slot >= REPL_FUNC_SLOT_COUNT)
+        return NULL;
+    return ctx->func_aliases.names[slot][0]
+        ? ctx->func_aliases.names[slot]
+        : NULL;
+}
+
+static int parser_func_alias_lookup_slot(const ReplParseContext *ctx,
+                                         const char *name) {
+    if (!ctx || !ctx->func_aliases.names || !name || !*name)
+        return -1;
+    int count = ctx->func_aliases.count;
+    if (count > REPL_FUNC_SLOT_COUNT)
+        count = REPL_FUNC_SLOT_COUNT;
+    for (int slot = 0; slot < count; slot++) {
+        if (ctx->func_aliases.names[slot][0] &&
+            strcmp(ctx->func_aliases.names[slot], name) == 0)
+            return slot;
+    }
+    return -1;
+}
+
+static int parser_parse_func_name_token(const ReplParseContext *ctx,
+                                        const char **p_inout, int *fn) {
+    const char *p = *p_inout;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (strncmp(p, "func", 4) == 0 &&
+        p[4] >= '0' && p[4] <= '9' &&
+        !isalnum((unsigned char)p[5]) && p[5] != '_') {
+        if (fn) *fn = p[4] - '0';
+        p += 5;
+        *p_inout = p;
+        return 1;
+    }
+    if (!isalpha((unsigned char)*p) && *p != '_') return 0;
+    char ident[REPL_FUNC_NAME_MAX];
+    int len = 0;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
+           len < REPL_FUNC_NAME_MAX - 1) {
+        ident[len++] = *p++;
+    }
+    if (*p && (isalnum((unsigned char)*p) || *p == '_')) return 0;
+    ident[len] = '\0';
+    if (len == 0) return 0;
+
+    int slot = parser_func_alias_lookup_slot(ctx, ident);
+    if (slot < 0) return 0;
+    if (fn) *fn = slot;
+    *p_inout = p;
+    return 1;
+}
+
+static int parser_func_def_exists(const ReplParseContext *ctx, int fn) {
     const ReplSourceScopeView *scope = parser_source_scope(ctx);
-    if (scope)
-        repl_source_scope_view_matrix_close_indent(scope, pos, buf, buf_sz);
-    else
-        repl_source_scope_matrix_close_indent(pos, buf, buf_sz);
+    if (!scope || !scope->cmds)
+        return 0;
+    for (int di = 0; di < scope->count; di++) {
+        if (!scope->cmds[di].valid) continue;
+        if (scope->cmds[di].type != CMD_FUNC_DEF) continue;
+        if ((int)scope->cmds[di].args[0] != fn) continue;
+        return 1;
+    }
+    return 0;
 }
 
 static void set_incomplete_missing_paren_status(const ReplParseContext *ctx,
@@ -880,18 +927,10 @@ static int parse_func_call(const char *args, int fn, GLCmd *cmd,
     }
 
     if (ctx->strict_refs && parser_scope_block_depth_at(ctx, source_line_idx) == 0) {
-        int def_exists = 0;
-        const GLCmd *document_cmds = repl_state_document_cmds();
-        for (int di = 0; di < repl_state_document_count(); di++) {
-            if (!document_cmds[di].valid) continue;
-            if (document_cmds[di].type != CMD_FUNC_DEF) continue;
-            if ((int)document_cmds[di].args[0] != fn) continue;
-            def_exists = 1;
-            break;
-        }
+        int def_exists = parser_func_def_exists(ctx, fn);
         if (!def_exists) {
             char buf[96];
-            const char *alias = repl_func_alias_get(fn);
+            const char *alias = parser_func_alias_get(ctx, fn);
             if (alias)
                 snprintf(buf, sizeof(buf),
                          "undefined function '%s' - define it first", alias);
@@ -916,7 +955,7 @@ static int parse_func_call(const char *args, int fn, GLCmd *cmd,
     strncpy(raw_args, args, sizeof(raw_args) - 1);
     raw_args[sizeof(raw_args) - 1] = '\0';
     trim_in_place(raw_args);
-    const char *alias = repl_func_alias_get(fn);
+    const char *alias = parser_func_alias_get(ctx, fn);
     char fn_token[REPL_FUNC_NAME_MAX + 8];
     if (alias)
         snprintf(fn_token, sizeof(fn_token), "%s", alias);
@@ -1243,7 +1282,7 @@ static int parse_command(const char *line, GLCmd *cmd,
     {
         int fn = -1;
         const char *func_cursor = func;
-        if (repl_parse_func_name_token(&func_cursor, &fn) &&
+        if (parser_parse_func_name_token(ctx, &func_cursor, &fn) &&
             *func_cursor == '\0' && open_p && close_p)
             return parse_func_call(args, fn, cmd, text_out, text_sz, ctx);
     }
