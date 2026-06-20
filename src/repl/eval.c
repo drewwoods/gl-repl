@@ -150,11 +150,6 @@ int repl_func_alias_set(int slot, const char *name) {
     return 1;
 }
 
-void repl_func_alias_clear(int slot) {
-    if (slot < 0 || slot >= REPL_FUNC_SLOT_COUNT) return;
-    g_active_func_aliases[slot][0] = '\0';
-}
-
 void repl_eval_reset_scratch_arrays(void) {
     memset(g_active_scratch_arrays, 0, sizeof(g_fallback_scratch_arrays));
 }
@@ -242,12 +237,6 @@ void repl_eval_capture_predef_snapshot(ReplPredefSnapshot *dst) {
         return;
     memset(dst, 0, sizeof(*dst));
     repl_eval_copy_predef_vars(dst->vals, dst->names, &dst->count);
-}
-
-void repl_eval_restore_predef_snapshot(const ReplPredefSnapshot *src) {
-    if (!src)
-        return;
-    repl_eval_restore_predef_vars(src->vals, src->names, src->count);
 }
 
 /* Non-destructive restore: assign saved values to the live predef

@@ -195,7 +195,6 @@ int  repl_func_alias_lookup_slot(const char *name);
  * empty / too long / reserved / already taken by a different slot, or
  * if slot is out of range. Pass NULL or "" to clear the slot. */
 int  repl_func_alias_set(int slot, const char *name);
-void repl_func_alias_clear(int slot);
 /* Shape: returns 1 if `name` is a syntactically valid alias and is
  * not reserved. Does not check whether it's already registered. */
 int  repl_func_alias_name_is_valid(const char *name);
@@ -227,7 +226,6 @@ void repl_eval_restore_predef_vars(const float src_vals[MAX_PREDEF_VARS],
                                    const char src_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX],
                                    int src_count);
 void repl_eval_capture_predef_snapshot(ReplPredefSnapshot *dst);
-void repl_eval_restore_predef_snapshot(const ReplPredefSnapshot *src);
 
 /* Non-destructive value-only restore that pairs saved values with the
  * live predef slots whose names match the snapshot. The live table's
