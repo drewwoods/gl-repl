@@ -62,11 +62,6 @@ int  input_has_expr_vars(const char *s, ExprVar *vars, int num_vars);
 /* Same, but counting predef vars too (i.e. is any var visible at all?). */
 int  input_has_any_visible_vars(const char *s, ExprVar *vars, int num_vars);
 
-void repl_normalize_from_parsed(const char *parsed_source,
-                                const char *raw_expr,
-                                int ensure_semicolon,
-                                char *out, int out_sz);
-
 int  repl_extract_paren_payload(const char *src, char *out, int out_sz);
 int  repl_extract_label_name(const char *src, char *name, int name_sz);
 int  repl_extract_goto_label(const char *src, char *name, int name_sz);

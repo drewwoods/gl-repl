@@ -440,6 +440,7 @@ REPL_SRCS = \
 	src/repl/import.c \
 	src/repl/keymap_format.c \
 	src/repl/load.c \
+	src/repl/normalize.c \
 	src/repl/parser.c \
 	src/repl/program_query.c \
 	src/repl/reformat.c \
@@ -681,6 +682,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/repl/host_effects.c \
                      src/repl/import.c \
                      src/repl/load.c \
+                     src/repl/normalize.c \
                      src/repl/parser.c \
                      src/repl/program_query.c \
                      src/repl/reformat.c \
