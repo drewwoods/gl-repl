@@ -37,6 +37,7 @@
 #include "editor/help_session.h"
 #include "repl/pipeline.h"
 #include "repl/state_views.h"
+#include "repl/time.h"
 #include "ui/app/menu_bar.h"
 #include "ui/support/memprof.h"
 #include "ui/support/cpuprof.h"

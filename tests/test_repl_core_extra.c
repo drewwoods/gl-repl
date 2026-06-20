@@ -12,6 +12,7 @@
 #include "repl/core_internal.h"
 #include "repl/scenes.h"       /* repl_scenes_* / repl_promote_example_if_needed */
 #include "app/glr_debug.h"
+#include "repl/time.h"
 #include "subsystems/replay/replay.h"
 #include "repl/executor.h"
 #include "repl/state_owners.h"

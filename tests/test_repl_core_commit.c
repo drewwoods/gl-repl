@@ -12,6 +12,7 @@
 #include "repl/state_views.h"
 #include "repl/state_owners.h"
 #include "repl/text_helpers.h"
+#include "repl/time.h"
 #include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
 #include "ui/app/state.h"

@@ -365,18 +365,6 @@ int repl_load_initial_commands(const char *import_file) {
     return load_initial_commands(import_file);
 }
 
-void repl_advance_time(float dt) {
-    repl_state_time_advance(dt);
-}
-
-void repl_reset_time_to_zero(void) {
-    repl_state_time_reset_to_zero();
-}
-
-void repl_set_time(float value) {
-    repl_state_time_set(value);
-}
-
 /* repl_reset_state was removed in step 2 of
  * feature/decouple-repl-from-gl-repl-alt.md. Tests and callers that
  * want full-world reset call glr_ctrl_reset_all() (declared in

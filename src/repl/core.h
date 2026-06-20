@@ -29,6 +29,7 @@
 #include "repl/host_effects.h" /* Compatibility: host bridge moved out of core. */
 #include "repl/program_query.h" /* Compatibility: program queries moved out of core. */
 #include "repl/reformat.h"   /* Compatibility: reformatter moved out of core. */
+#include "repl/time.h"       /* Compatibility: timekeeping moved out of core. */
 #include "source_document.h" /* SourceTextView document view */
 
 /* --- Save / load ------------------------------------------------------- */
@@ -166,22 +167,6 @@ int  repl_active_user_scene(void);        /* current slot index, -1 if none */
 /* Activate the first occupied slot after repl_load_workspace (which leaves
  * active == -1 and the pre-load document live). Returns the slot, or -1. */
 int  repl_scenes_activate_first_loaded_slot(void);
-
-/* --- Timekeeping ------------------------------------------------------- */
-
-/* Advance the predefined `t` variable by `dt` seconds. The controller's
- * timer tick calls this every frame when the animation toggle (Ctrl+T)
- * is on. */
-void repl_advance_time(float dt);
-
-/* Reset `t` to 0. Called from controller/test paths that need a
- * deterministic time origin. */
-void repl_reset_time_to_zero(void);
-
-/* Set the predefined `t` variable to an explicit value (seconds). Used by
- * the startup `--time` flag / `GLR_TIME` env override so animations can be
- * captured starting from a later point in their timeline. */
-void repl_set_time(float value);
 
 /* Returns the post-load cursor target. Caller applies the value
  * via editor_state_edit_line_set() above the β boundary (implemented

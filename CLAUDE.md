@@ -316,7 +316,7 @@ default) advances by a fixed `1/60 s` per rendered frame. `--time <secs>` /
 `GLR_TIME` set its initial value at startup — applied after any `--example`
 load (which resets `t`), so the override sticks. Useful headless: start an
 animation capture from a later point in its timeline instead of always from
-`t = 0`. Implemented as `repl_set_time()` (`src/repl/core.c` → `repl_state.c`),
+`t = 0`. Implemented as `repl_set_time()` (`src/repl/time.c` → `repl_state.c`),
 read in `main()` (`gl_repl.c`).
 
 `GLR_VIEW_TOGGLE_AT=<t1,t2,...>` is the capture affordance for the
