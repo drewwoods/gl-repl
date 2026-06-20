@@ -786,8 +786,7 @@ static int bench_refresh_fade_plan(FlatProgramView program, ReplayFadePlan *plan
     memset(plan, 0, sizeof(*plan));
     *base_limit_out = 0;
 
-    replay_copy_baseline_predef_values(plan->baseline_predef_vals,
-                                            MAX_PREDEF_VARS);
+    replay_copy_baseline_predef_snapshot(&plan->baseline_predef);
 
     if (!replay_has_active_fades())
         return 0;

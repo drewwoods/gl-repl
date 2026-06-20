@@ -7,7 +7,8 @@
 #include "app/glr_camera.h"
 #include "app/glr_state.h"           /* presentation + render storage */
 #include "repl/cfg_baseline.h"
-#include "repl/state_owners.h"
+#include "repl/core.h"
+#include "repl/state_views.h"
 #include "ui/app/state_types.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 #include "subsystems/tutorial/tutorial.h"        /* tutorial_notify_state_changed */
@@ -247,7 +248,7 @@ void glr_config_set(GlrConfigKey key, int value) {
     } else if (key == GLR_CONFIG_ACCUM_PASSES) {
         accum_passes_set_cycle(value);
     } else if (key == GLR_CONFIG_AUTO_TIME) {
-        repl_state_time_set_playing(value);
+        repl_dispatch_set_time_playing(value);
     } else if (key == GLR_CONFIG_REPLAY) {
         if (value) {
             if (!replay_active())

@@ -194,9 +194,7 @@ int replay_bench_fade_install(const int *old_pcs, const int *new_pcs,
 
     /* Full snapshot — same rationale as replay_start: the fade-baseline
      * spans multiple frames and must survive predef-table reshape. */
-    repl_eval_copy_predef_vars(state->baseline_predef_vals,
-                               state->baseline_predef_names,
-                               &state->baseline_predef_count);
+    repl_eval_capture_predef_snapshot(&state->baseline_predef);
     repl_eval_copy_scratch_arrays(state->baseline_scratch_arrays);
     state->active = (installed > 0);
     return installed;

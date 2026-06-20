@@ -196,7 +196,10 @@ int parse_expr_list_exact(const char *src, float *out_vals, int max_vals,
     return 1;
 }
 
-int repl_parse_func_name_token(const char **p_inout, int *fn) {
+static int repl_parse_func_name_token_with_pending_alias(const char **p_inout,
+                                                        int *fn,
+                                                        const char *alias_name,
+                                                        int alias_slot) {
     const char *p = *p_inout;
     while (*p && isspace((unsigned char)*p)) p++;
     if (strncmp(p, "func", 4) == 0 &&
@@ -218,17 +221,38 @@ int repl_parse_func_name_token(const char **p_inout, int *fn) {
     ident[len] = '\0';
     if (len == 0) return 0;
     int slot = repl_func_alias_lookup_slot(ident);
+    if (slot < 0 &&
+        alias_name && alias_name[0] &&
+        alias_slot >= 0 && alias_slot < REPL_FUNC_SLOT_COUNT &&
+        strcmp(ident, alias_name) == 0) {
+        slot = alias_slot;
+    }
     if (slot < 0) return 0;
     if (fn) *fn = slot;
     *p_inout = p;
     return 1;
 }
 
+int repl_parse_func_name_token(const char **p_inout, int *fn) {
+    return repl_parse_func_name_token_with_pending_alias(p_inout, fn, NULL, -1);
+}
+
 int parse_repl_func_signature(const char *src, int *fn,
                               char param_names[][REPL_PREDEF_NAME_MAX], int max_params,
                               int *param_count) {
+    return parse_repl_func_signature_with_pending_alias(
+        src, NULL, -1, fn, param_names, max_params, param_count);
+}
+
+int parse_repl_func_signature_with_pending_alias(
+                              const char *src, const char *alias_name, int alias_slot,
+                              int *fn,
+                              char param_names[][REPL_PREDEF_NAME_MAX], int max_params,
+                              int *param_count) {
     const char *p = src;
-    if (!repl_parse_func_name_token(&p, fn)) return 0;
+    if (!repl_parse_func_name_token_with_pending_alias(&p, fn,
+                                                       alias_name, alias_slot))
+        return 0;
 
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p == '{' || *p == '\0') {
@@ -288,11 +312,12 @@ int extract_func_call_args_text(const char *src, int *fn,
     return 1;
 }
 
-void format_func_header(char *out, int out_sz, const char *indent,
-                        int fn, char param_names[][REPL_PREDEF_NAME_MAX], int param_count) {
-    const char *alias = repl_func_alias_get(fn);
-    int written = alias
-        ? snprintf(out, out_sz, "%s%s", indent, alias)
+static void format_func_header_named(char *out, int out_sz, const char *indent,
+                                     int fn, const char *alias_name,
+                                     char param_names[][REPL_PREDEF_NAME_MAX],
+                                     int param_count) {
+    int written = (alias_name && alias_name[0])
+        ? snprintf(out, out_sz, "%s%s", indent, alias_name)
         : snprintf(out, out_sz, "%sfunc%d", indent, fn);
     if (written < 0 || written >= out_sz) {
         if (out_sz > 0) out[out_sz - 1] = '\0';
@@ -308,6 +333,19 @@ void format_func_header(char *out, int out_sz, const char *indent,
         written += snprintf(out + written, out_sz - written, ")");
     if (written < out_sz)
         snprintf(out + written, out_sz - written, " {");
+}
+
+void format_func_header(char *out, int out_sz, const char *indent,
+                        int fn, char param_names[][REPL_PREDEF_NAME_MAX], int param_count) {
+    format_func_header_named(out, out_sz, indent, fn, repl_func_alias_get(fn),
+                             param_names, param_count);
+}
+
+void format_func_header_with_alias(char *out, int out_sz, const char *indent,
+                                   int fn, char param_names[][REPL_PREDEF_NAME_MAX],
+                                   int param_count, const char *alias_name) {
+    format_func_header_named(out, out_sz, indent, fn, alias_name,
+                             param_names, param_count);
 }
 
 int input_has_expr_vars(const char *s, ExprVar *vars, int num_vars) {

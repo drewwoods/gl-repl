@@ -85,11 +85,6 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
         change.adjust_edit_line = 1;
 
         if (!repl_apply_can_apply_compiled_change(&change)) {
-            /* Roll back any alias the func_def pre-step registered
-             * speculatively. Predef/scratch/editor-buffer ops haven't
-             * run yet (preflight gates them), so nothing else to
-             * undo. */
-            repl_compiled_change_rollback_alias(&change);
             if (err && err_size > 0 && err[0] == '\0')
                 snprintf(err, (size_t)err_size,
                          "command store at capacity (max %d)",
@@ -105,7 +100,6 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
         SourceTextChange text_change;
         repl_compiled_change_to_text_change(&change, &text_change);
         if (!source_document_apply_change(&text_change)) {
-            repl_compiled_change_rollback_alias(&change);
             if (err && err_size > 0 && err[0] == '\0')
                 snprintf(err, (size_t)err_size,
                          "source document apply failed");
@@ -119,8 +113,11 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
          * the append-at-end semantics (implemented in phase 1 +
          * phase 3.6.5). */
         int ok = repl_apply_compiled_change(&change, edit_line_inout);
-        if (ok && wrote_local)
-            repl_dispatch_edit_line_set(*edit_line_inout);
+        if (ok) {
+            repl_apply_alias_ops(&change);
+            if (wrote_local)
+                repl_dispatch_edit_line_set(*edit_line_inout);
+        }
         return ok ? 1 : 0;
     }
 

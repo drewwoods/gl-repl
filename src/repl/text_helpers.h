@@ -43,10 +43,18 @@ int  parse_expr_list_exact(const char *src, float *out_vals, int max_vals,
 int  parse_repl_func_signature(const char *src, int *fn,
                                char param_names[][REPL_PREDEF_NAME_MAX], int max_params,
                                int *param_count);
+int  parse_repl_func_signature_with_pending_alias(
+                               const char *src, const char *alias_name, int alias_slot,
+                               int *fn,
+                               char param_names[][REPL_PREDEF_NAME_MAX], int max_params,
+                               int *param_count);
 int  extract_func_call_args_text(const char *src, int *fn,
                                  char *args, int args_sz);
 void format_func_header(char *out, int out_sz, const char *indent,
                         int fn, char param_names[][REPL_PREDEF_NAME_MAX], int param_count);
+void format_func_header_with_alias(char *out, int out_sz, const char *indent,
+                                   int fn, char param_names[][REPL_PREDEF_NAME_MAX],
+                                   int param_count, const char *alias_name);
 
 /* Does `s` reference any variable in the given loop/function-scope array? */
 int  input_has_expr_vars(const char *s, ExprVar *vars, int num_vars);

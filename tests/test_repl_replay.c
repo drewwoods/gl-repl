@@ -472,19 +472,17 @@ static void test_replay_baseline_restore_survives_predef_reshape(void) {
                 repl_eval_find_predef_var_idx("Y") < 0);
     /* Also confirm the snapshot copy mirrors what was saved at start. */
     {
-        float snap_vals[MAX_PREDEF_VARS];
-        char snap_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX];
-        int snap_count = -1;
-        replay_copy_baseline_predef_snapshot(snap_vals, snap_names,
-                                             &snap_count);
+        ReplPredefSnapshot snap;
+        memset(&snap, 0, sizeof(snap));
+        replay_copy_baseline_predef_snapshot(&snap);
         ASSERT_TRUE("snapshot count matches replay_start table",
-                    snap_count >= 4); /* t + X + Y + Z, plus any others */
+                    snap.count >= 4); /* t + X + Y + Z, plus any others */
         int found_y = 0;
         float y_saved = 0.0f;
-        for (int i = 0; i < snap_count; i++) {
-            if (strcmp(snap_names[i], "Y") == 0) {
+        for (int i = 0; i < snap.count; i++) {
+            if (strcmp(snap.names[i], "Y") == 0) {
                 found_y = 1;
-                y_saved = snap_vals[i];
+                y_saved = snap.vals[i];
                 break;
             }
         }
@@ -621,10 +619,7 @@ static void test_replay_rendering(void) {
     /* Get the fade plan */
     ReplayFadePlan plan;
     memset(&plan, 0, sizeof(plan));
-    replay_copy_baseline_predef_snapshot(
-        plan.baseline_predef_vals,
-        plan.baseline_predef_names,
-        &plan.baseline_predef_count);
+    replay_copy_baseline_predef_snapshot(&plan.baseline_predef);
     replay_copy_baseline_scratch_arrays(
         plan.baseline_scratch_arrays);
 

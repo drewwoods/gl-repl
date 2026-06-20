@@ -407,8 +407,8 @@ static int execution_flat_count_from_options(const ReplExecutionOptions *options
     return flat_cmd_count;
 }
 
-static FlatCmdLocalVars *execution_local_vars_at(FlatProgramView program,
-                                                 int flat_cmd_idx) {
+static const FlatCmdLocalVars *execution_local_vars_at(FlatProgramView program,
+                                                       int flat_cmd_idx) {
     if (!program.local_vars || flat_cmd_idx < 0 || flat_cmd_idx >= program.cmd_count)
         return NULL;
     return &program.local_vars[flat_cmd_idx];
@@ -786,7 +786,7 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
          * see its doc for why both sides evaluate. */
         float cond = cmd->args[0];
         if (cmd->has_vars) {
-            FlatCmdLocalVars *local_vars =
+            const FlatCmdLocalVars *local_vars =
                 execution_local_vars_at(cursor->program, cursor->pc);
             const ExprVar *eval_vars = g_predef_vars;
             int eval_num_vars = g_num_predef_vars;

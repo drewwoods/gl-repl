@@ -374,8 +374,8 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
     ASSERT_FLOAT("scene saw live predef before mutation", g_predef_value_seen_in_scene, 9.0f);
     ASSERT_FLOAT("scene saw live scratch before mutation", g_scratch_value_seen_in_scene, 4.0f);
     ASSERT_FLOAT("HUD observed mutated predef during frame", g_predef_value_seen_in_hud, g_mutated_predef_value);
-    ASSERT_INT("HUD observed mutated flat count during frame", g_flat_count_seen_in_hud,
-               g_mutated_flat_count);
+    ASSERT_INT("HUD observed restored flat count during frame", g_flat_count_seen_in_hud,
+               saved_flat_count);
 
     ASSERT_FLOAT("predef restored after frame", g_predef_vars[g_t_idx].value, saved_t_value);
     {

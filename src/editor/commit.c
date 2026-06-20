@@ -9,6 +9,7 @@
  *       repl_apply_scratch_ops(change)               // scratch-array cascade
  *       editor_buffer_apply_compiled_change(change)  // editor text buffer
  *       repl_apply_compiled_change(change, &cursor)  // ReplState only
+ *       repl_apply_alias_ops(change)                 // function aliases
  *
  * Commit code now calls the repl_apply_* entry points directly.
  * Typed input runs through the editor_try_commit_* chain; each
@@ -45,6 +46,7 @@
 #include "repl/core.h"
 #include "repl/state_views.h"
 #include "repl/source_scope.h"
+#include "repl/text_helpers.h"
 #include "repl/eval.h"
 
 #include "config.h"           /* REPL_INDENT_TEXT_MAX */
@@ -102,8 +104,10 @@ static void apply_compiled_change_full(const ReplCompiledChange *change) {
     repl_apply_scratch_ops(change);
     editor_buffer_apply_compiled_change(change);
     int edit_line = editor_state_edit_line();
-    if (repl_apply_compiled_change(change, &edit_line))
+    if (repl_apply_compiled_change(change, &edit_line)) {
         editor_state_edit_line_set(edit_line);
+        repl_apply_alias_ops(change);
+    }
 }
 
 /* Fire the tutorial REQUIRE_VAR notify for any predef-var writeback
@@ -138,9 +142,6 @@ int editor_commit_apply_external_change(const struct ReplCompiledChange_s *chang
     if (!change)
         return 0;
     if (!repl_apply_can_apply_compiled_change(change)) {
-        /* Mirror editor_commit_apply_plan: roll back any speculative
-         * alias registration when preflight fails. [P1] regression. */
-        repl_compiled_change_rollback_alias(change);
         return 0;
     }
 
@@ -223,9 +224,6 @@ int editor_commit_apply_plan(const EditorCommitPlan *plan) {
 
     /* Preflight before any mutation. */
     if (!repl_apply_can_apply_compiled_change(&plan->change)) {
-        /* Roll back any speculative alias registration. [P1]
-         * regression: see editor_commit_apply_external_change. */
-        repl_compiled_change_rollback_alias(&plan->change);
         return 0;
     }
 
@@ -518,13 +516,7 @@ ReplCompileResult editor_compile_func_def(const char *input,
     int   fn          = kernel.fn;
     int   param_count = kernel.param_count;
 
-    /* Publish the alias bookkeeping on out->change so
-     * editor_commit_apply_plan can roll back the registration if its
-     * own preflight fails downstream. */
-    out->change.newly_aliased_slot = kernel.newly_aliased_slot;
-    out->change.had_previous_alias = kernel.had_previous_alias;
-    snprintf(out->change.previous_alias, sizeof(out->change.previous_alias),
-             "%s", kernel.previous_alias);
+    out->change.alias_op = kernel.alias_op;
 
     /* Overwrite-header branch: REPLACE_ONE at the cursor line. The
      * kernel built the fd cmd + fd_text against the kernel-computed
@@ -587,8 +579,11 @@ ReplCompileResult editor_compile_func_def(const char *input,
     GLCmd fd = kernel.fd;
 
     char fd_text[MAX_LINE_LEN];
-    format_func_header(fd_text, (int)sizeof(fd_text),
-                       indent, fn, kernel.param_names, param_count);
+    format_func_header_with_alias(fd_text, (int)sizeof(fd_text),
+                                  indent, fn, kernel.param_names,
+                                  param_count,
+                                  kernel.alias_op.slot >= 0
+                                      ? kernel.alias_op.name : NULL);
 
     GLCmd fe;
     memset(&fe, 0, sizeof(fe));

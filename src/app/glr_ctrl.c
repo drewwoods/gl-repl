@@ -402,6 +402,10 @@ static SceneGuideSnapshot glr_ctrl_build_guide_snapshot(const SceneRenderConfig 
  * fill (to clamp the flat-cmd count to the pre-fade base limit) and by
  * the post_fill_fn hook (to render the fading-batch overlay). */
 static ReplayFadePlan g_replay_fade_plan;
+/* Frame-local replay execution clamp. This must not be written into
+ * ReplFlatProgramState.cmd_count; UI/snapshot code should still see the
+ * full flattened program. */
+static int g_frame_replay_exec_limit = -1;
 
 static void glr_ctrl_build_replay_fade_plan(FlatProgramView flat_program, int replaying) {
     ReplayFadeBatchView fade_batches;
@@ -414,10 +418,7 @@ static void glr_ctrl_build_replay_fade_plan(FlatProgramView flat_program, int re
     if (!replaying)
         return;
 
-    replay_copy_baseline_predef_snapshot(
-        g_replay_fade_plan.baseline_predef_vals,
-        g_replay_fade_plan.baseline_predef_names,
-        &g_replay_fade_plan.baseline_predef_count);
+    replay_copy_baseline_predef_snapshot(&g_replay_fade_plan.baseline_predef);
     replay_copy_baseline_scratch_arrays(
         g_replay_fade_plan.baseline_scratch_arrays);
 
@@ -751,6 +752,8 @@ static void scene_execute_adapter(const SceneExecuteContext *ctx,
         purpose == SCENE_EXEC_WIREFRAME_VISIBLE_LINES;
 
     int count = repl_state_flat_program_count();
+    if (g_frame_replay_exec_limit >= 0 && g_frame_replay_exec_limit < count)
+        count = g_frame_replay_exec_limit;
     if (g_replay_fade_plan.active)
         count = g_replay_fade_plan.base_limit;
 
@@ -1620,7 +1623,7 @@ void glr_ctrl_display_frame(void) {
     repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
     repl_eval_copy_scratch_arrays(live_scratch_arrays);
     if (replay_active()) {
-        repl_state_flat_program_set_count(replay_prepare_frame(flat_program, saved_flat_count));
+        g_frame_replay_exec_limit = replay_prepare_frame(flat_program, saved_flat_count);
         int post_prep_src_line = replay_src_line();
         if (post_prep_src_line >= 0 &&
             post_prep_src_line != g_last_replay_follow_src_line) {
@@ -1628,6 +1631,7 @@ void glr_ctrl_display_frame(void) {
         }
         g_last_replay_follow_src_line = post_prep_src_line;
     } else {
+        g_frame_replay_exec_limit = saved_flat_count;
         g_last_replay_follow_src_line = -1;
     }
 
@@ -1682,6 +1686,8 @@ void glr_ctrl_display_frame(void) {
         }
     }
     prof_end(PROF_SCENE_3D);
+    if (repl_state_flat_program_count() != saved_flat_count)
+        repl_state_flat_program_set_count(saved_flat_count);
 
     int frame_replaying = replay_active();
     if (frame_replaying) {
@@ -1770,7 +1776,7 @@ void glr_ctrl_display_frame(void) {
     prof_end(PROF_COMPOSITOR);
 
     prof_begin(PROF_FRAME_RESTORE);
-    repl_state_flat_program_set_count(saved_flat_count);
+    g_frame_replay_exec_limit = -1;
     repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
     repl_eval_restore_scratch_arrays(live_scratch_arrays);
     prof_end(PROF_FRAME_RESTORE);
@@ -2160,6 +2166,7 @@ void glr_ctrl_reset_all(void) {
     glr_ctrl_view_reset();
     g_last_ui_snapshot_valid = 0;
     g_last_replay_follow_src_line = -1;
+    g_frame_replay_exec_limit = -1;
     editor_state_reset();
     ui_state_reset();
     ui_overlay_layout_reset();

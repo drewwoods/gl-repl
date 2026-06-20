@@ -105,20 +105,8 @@ void repl_compiled_change_init(ReplCompiledChange *out) {
     out->count = 0;
     out->delete_pos = -1;
     out->delete_count = 0;
-    out->newly_aliased_slot = -1;
-    out->had_previous_alias = 0;
-    out->previous_alias[0] = '\0';
-}
-
-void repl_compiled_change_rollback_alias(const ReplCompiledChange *change) {
-    if (!change || change->newly_aliased_slot < 0)
-        return;
-    if (change->had_previous_alias) {
-        repl_func_alias_set(change->newly_aliased_slot,
-                            change->previous_alias);
-    } else {
-        repl_func_alias_clear(change->newly_aliased_slot);
-    }
+    out->alias_op.slot = -1;
+    out->alias_op.name[0] = '\0';
 }
 
 void repl_compiled_change_to_text_change(const ReplCompiledChange *in,
@@ -1885,24 +1873,9 @@ ReplCompileResult repl_compile_func_def_resolve_alias(const ReplCompileContext *
                         }
                         return REPL_COMPILE_ERROR;
                     }
-                    char prev_alias[REPL_FUNC_NAME_MAX] = "";
-                    const char *prev_alias_live = repl_func_alias_get(target_slot);
-                    if (prev_alias_live)
-                        snprintf(prev_alias, sizeof(prev_alias),
-                                 "%s", prev_alias_live);
-                    if (!repl_func_alias_set(target_slot, ident)) {
-                        if (err && err_size > 0) {
-                            snprintf(err, (size_t)err_size,
-                                     "name '%s' already used", ident);
-                        }
-                        return REPL_COMPILE_ERROR;
-                    }
-                    out->newly_aliased_slot = target_slot;
-                    out->had_previous_alias = prev_alias[0] ? 1 : 0;
-                    if (out->had_previous_alias)
-                        snprintf(out->previous_alias,
-                                 sizeof(out->previous_alias),
-                                 "%s", prev_alias);
+                    out->alias_op.slot = target_slot;
+                    snprintf(out->alias_op.name, sizeof(out->alias_op.name),
+                             "%s", ident);
                 }
             }
         }
@@ -1927,20 +1900,10 @@ ReplCompileResult repl_compile_func_def_kernel(const char *input,
         return REPL_COMPILE_OK;
     }
 
-    /* Alias pre-registration for new user names (e.g. `drawCube { ... }`).
-     *
-     * parse_repl_func_signature recognises the bare `funcN` form plus
-     * already-registered aliases, so to parse a brand-new identifier
-     * we have to register the alias before calling the parser. The
-     * resolve_alias helper writes its bookkeeping into a temporary
-     * ReplCompiledChange; we copy the alias fields into the kernel
-     * struct and bridge to repl_compiled_change_rollback_alias on
-     * downstream rejection.
-     *
-     * [P1] regression: previously the alias_set call could leak on
-     * parse failure (or apply failure further upstream); the rollback
-     * below covers parse-side failures and the published rollback
-     * fields cover downstream preflight/apply failures. */
+    /* Resolve new user names (e.g. `drawCube { ... }`) into a pending
+     * alias op. The parser accepts that pending name for this call only;
+     * the alias table is updated later by apply, after the command-store
+     * mutation succeeds. */
     ReplCompiledChange alias_state;
     repl_compiled_change_init(&alias_state);
     int rejected_keyword = 0;
@@ -1952,16 +1915,15 @@ ReplCompileResult repl_compile_func_def_kernel(const char *input,
         out->rejected_keyword = 1;
         return REPL_COMPILE_OK;
     }
-    out->newly_aliased_slot = alias_state.newly_aliased_slot;
-    out->had_previous_alias = alias_state.had_previous_alias;
-    snprintf(out->previous_alias, sizeof(out->previous_alias),
-             "%s", alias_state.previous_alias);
+    out->alias_op = alias_state.alias_op;
 
-    if (!parse_repl_func_signature(input ? input : "", &out->fn,
-                                   out->param_names, MAX_EXPR_VARS,
-                                   &out->param_count)) {
-        repl_compiled_change_rollback_alias(&alias_state);
-        out->newly_aliased_slot = -1;
+    if (!parse_repl_func_signature_with_pending_alias(
+            input ? input : "",
+            out->alias_op.name, out->alias_op.slot,
+            &out->fn, out->param_names, MAX_EXPR_VARS,
+            &out->param_count)) {
+        out->alias_op.slot = -1;
+        out->alias_op.name[0] = '\0';
         out->valid = 0;
         return REPL_COMPILE_OK;
     }
@@ -1978,8 +1940,8 @@ ReplCompileResult repl_compile_func_def_kernel(const char *input,
         if (ei == allow_overwrite_at_pos) continue;
         snprintf(err, (size_t)err_size,
                  "func%d already defined (line %d)", out->fn, ei + 1);
-        repl_compiled_change_rollback_alias(&alias_state);
-        out->newly_aliased_slot = -1;
+        out->alias_op.slot = -1;
+        out->alias_op.name[0] = '\0';
         return REPL_COMPILE_ERROR;
     }
 
@@ -1992,8 +1954,10 @@ ReplCompileResult repl_compile_func_def_kernel(const char *input,
     out->fd.num_args = out->param_count;
     out->fd.valid    = 1;
 
-    format_func_header(out->fd_text, (int)sizeof(out->fd_text),
-                       out->indent, out->fn, out->param_names, out->param_count);
+    format_func_header_with_alias(out->fd_text, (int)sizeof(out->fd_text),
+                                  out->indent, out->fn, out->param_names,
+                                  out->param_count,
+                                  out->alias_op.slot >= 0 ? out->alias_op.name : NULL);
 
     out->valid = 1;
     return REPL_COMPILE_OK;
@@ -2022,12 +1986,7 @@ ReplCompileResult repl_compile_func_def(const char *input,
     out->adjust_edit_line = 1;
     out->cmds[0] = kernel.fd;
     snprintf(out->text[0], sizeof(out->text[0]), "%s", kernel.fd_text);
-    /* Publish the alias slot (if any) so callers can roll back the
-     * registration on preflight/apply failure downstream. */
-    out->newly_aliased_slot = kernel.newly_aliased_slot;
-    out->had_previous_alias = kernel.had_previous_alias;
-    snprintf(out->previous_alias, sizeof(out->previous_alias),
-             "%s", kernel.previous_alias);
+    out->alias_op = kernel.alias_op;
     return REPL_COMPILE_OK;
 }
 

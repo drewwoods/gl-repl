@@ -171,6 +171,12 @@ typedef struct {
     int            count;
 } ReplPredefView;
 
+typedef struct {
+    float vals[MAX_PREDEF_VARS];
+    char  names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX];
+    int   count;
+} ReplPredefSnapshot;
+
 /* Read-only snapshot of the current predefined-variable table. The pointer is
  * stable until the next declare/undeclare/restore call; do not cache it across
  * frames. */
@@ -220,6 +226,8 @@ void repl_eval_copy_predef_vars(float dst_vals[MAX_PREDEF_VARS],
 void repl_eval_restore_predef_vars(const float src_vals[MAX_PREDEF_VARS],
                                    const char src_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX],
                                    int src_count);
+void repl_eval_capture_predef_snapshot(ReplPredefSnapshot *dst);
+void repl_eval_restore_predef_snapshot(const ReplPredefSnapshot *src);
 
 /* Non-destructive value-only restore that pairs saved values with the
  * live predef slots whose names match the snapshot. The live table's
@@ -237,6 +245,7 @@ void repl_eval_restore_predef_values_by_name(
     const float src_vals[MAX_PREDEF_VARS],
     const char src_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX],
     int src_count);
+void repl_eval_restore_predef_values_by_snapshot(const ReplPredefSnapshot *src);
 
 /* Values-only snapshot of the live predef table (no names, no count).
  * Used by the controller per-frame baseline-save and by the replay peer

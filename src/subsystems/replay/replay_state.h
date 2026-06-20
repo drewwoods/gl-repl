@@ -45,20 +45,17 @@ typedef struct {
  * header can avoid pulling app/glr_ctrl.h — keeping the
  * subsystems → app dependency arrow pointed the right way.
  *
- * The predef baseline carries names + count (not just floats) so the
- * fade restore can route through repl_eval_restore_predef_values_by_name
- * and assign by name. Without that, a workspace switch or scene load
- * during an active replay reshapes the predef table and a values-only
- * restore writes saved floats into slots now holding different vars
- * (audit #3). */
+ * The predef baseline is a full snapshot (names + count, not just
+ * floats) so fade restore can assign by name. Without that, a workspace
+ * switch or scene load during an active replay reshapes the predef table
+ * and a values-only restore writes saved floats into slots now holding
+ * different vars. */
 typedef struct ReplayFadePlan {
     int             batch_count;
     ReplayFadeBatch batches[REPLAY_FADE_BATCH_MAX];
     int             skip_limits[REPLAY_FADE_BATCH_MAX];
     float           batch_alpha[REPLAY_FADE_BATCH_MAX];
-    float           baseline_predef_vals[MAX_PREDEF_VARS];
-    char            baseline_predef_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX];
-    int             baseline_predef_count;
+    ReplPredefSnapshot baseline_predef;
     float           baseline_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     int             active;              /* 1 = post_fill_fn should render fades */
     int             base_limit;          /* clamp for the main fill */
@@ -73,8 +70,8 @@ typedef struct ReplayFadePlan {
  * a workspace switch, scene load, or undo across an @declare between
  * replay_start and a later restore. A values-only restore would then
  * land saved floats into slots now holding different variables. The
- * restore goes through repl_eval_restore_predef_values_by_name, which
- * assigns by name into whichever slot currently holds that name. */
+ * restore assigns by name into whichever slot currently holds that
+ * name. */
 typedef struct {
     int             active;
     int             state;
@@ -97,9 +94,7 @@ typedef struct {
                                           * begin via replay_prev_limit(pc) — an
                                           * O(N^2) per-frame walk — every frame. */
     int             expand_args;
-    float           baseline_predef_vals[MAX_PREDEF_VARS];
-    char            baseline_predef_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX];
-    int             baseline_predef_count;
+    ReplPredefSnapshot baseline_predef;
     float           baseline_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     int             saved_t_playing;
     int             last_src_line;

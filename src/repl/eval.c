@@ -237,6 +237,19 @@ void repl_eval_restore_predef_vars(const float src_vals[MAX_PREDEF_VARS],
     }
 }
 
+void repl_eval_capture_predef_snapshot(ReplPredefSnapshot *dst) {
+    if (!dst)
+        return;
+    memset(dst, 0, sizeof(*dst));
+    repl_eval_copy_predef_vars(dst->vals, dst->names, &dst->count);
+}
+
+void repl_eval_restore_predef_snapshot(const ReplPredefSnapshot *src) {
+    if (!src)
+        return;
+    repl_eval_restore_predef_vars(src->vals, src->names, src->count);
+}
+
 /* Non-destructive restore: assign saved values to the live predef
  * slots whose names match the snapshot. The live table shape
  * (count, names, slot order) is UNCHANGED. Saved names that no
@@ -264,6 +277,12 @@ void repl_eval_restore_predef_values_by_name(
         if (idx >= 0)
             g_predef_vars_mut[idx].value = src_vals[i];
     }
+}
+
+void repl_eval_restore_predef_values_by_snapshot(const ReplPredefSnapshot *src) {
+    if (!src)
+        return;
+    repl_eval_restore_predef_values_by_name(src->vals, src->names, src->count);
 }
 
 /* Values-only snapshot of the live predef table, used by the controller's

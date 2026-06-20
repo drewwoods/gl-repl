@@ -176,3 +176,10 @@ void repl_apply_scratch_ops(const ReplCompiledChange *change) {
         repl_eval_scratch_set(op->array_idx, op->elem_idx, op->value);
     }
 }
+
+void repl_apply_alias_ops(const ReplCompiledChange *change) {
+    if (!change || change->alias_op.slot < 0)
+        return;
+
+    repl_func_alias_set(change->alias_op.slot, change->alias_op.name);
+}

@@ -33,7 +33,7 @@ static int   s_replay_current_flat_idx = -1;          /* flat cmd for src_line *
  * stored in s_replay_flat_map[src].  Built by a single O(replay_pc) forward
  * simulation so each snapshot reflects the correct variable state BEFORE
  * executing that specific flat command. */
-static float s_replay_predef_snap[MAX_COMMANDS][MAX_PREDEF_VARS];
+static ReplPredefSnapshot s_replay_predef_snap[MAX_COMMANDS];
 static float s_replay_scratch_snap[MAX_COMMANDS][REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
 static int   s_replay_predef_snap_valid[MAX_COMMANDS];
 
@@ -51,11 +51,11 @@ static SourceTextView s_replay_text_view;
 static void replay_build_predef_snapshots(void);
 static int replay_eval_expr_with_state(
     int flat_idx, const char *expr,
-    const float *predef_vals,
+    const ReplPredefSnapshot *predef,
     const float scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN],
     float *out_value);
 typedef void (*ReplayBeforeStepFn)(int pc, const GLCmd *cmd,
-                                   const float *vals,
+                                   const ReplPredefSnapshot *predef,
                                    const float scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]);
 
 static const char *replay_document_text(int cmd_idx) {
@@ -185,7 +185,7 @@ static void replay_subst_scratch_reads(
     const char *source,
     char *out,
     int out_size,
-    const float *predef_vals,
+    const ReplPredefSnapshot *predef,
     const float scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]) {
     int oi = 0;
     const char *p = source;
@@ -236,7 +236,7 @@ static void replay_subst_scratch_reads(
                         index_expr[expr_len] = '\0';
                     }
                     if (replay_eval_expr_with_state(flat_idx, index_expr,
-                                                    predef_vals, scratch_arrays,
+                                                    predef, scratch_arrays,
                                                     &index_value)) {
                         int elem_idx = (int)index_value;
                         if (elem_idx >= 0 && elem_idx < REPL_SCRATCH_ARRAY_LEN) {
@@ -407,9 +407,9 @@ static int find_replay_assignment_flat_cmd(int src_line) {
     return -1;
 }
 
-static int build_visible_vars_from_predef_values(int flat_idx,
-                                                 const float *predef_vals,
-                                                 ExprVar *out, int max_out) {
+static int build_visible_vars_from_predef_snapshot(int flat_idx,
+                                                   const ReplPredefSnapshot *predef,
+                                                   ExprVar *out, int max_out) {
     int nv = 0;
 
     if (!out || max_out <= 0)
@@ -421,25 +421,14 @@ static int build_visible_vars_from_predef_values(int flat_idx,
             out[nv++] = lcvars->vars[i];
     }
 
-    /* NOTE (#3 follow-up — annotation simulator latent bug): when
-     * `predef_vals` carries the replay-baseline snapshot, the values
-     * here are SAVED slot[i] values but the names below come from the
-     * CURRENT predef table. A workspace switch / scene load / undo
-     * across @declare between replay_start and this annotation render
-     * reshapes the live table, so current slot i no longer corresponds
-     * to the saved slot i and the simulator pairs mismatched
-     * name/value pairs. The fade-plan restore path was the audit's
-     * primary triggerable failure and is fixed via the widened
-     * snapshot threaded through ReplayFadePlan; doing the same here
-     * needs the saved names too — a follow-up. */
-    if (predef_vals) {
-        for (int i = 0; i < g_num_predef_vars && nv < max_out; i++) {
-            if (visible_var_index(out, nv, g_predef_vars[i].name) >= 0)
+    if (predef) {
+        for (int i = 0; i < predef->count && nv < max_out; i++) {
+            if (visible_var_index(out, nv, predef->names[i]) >= 0)
                 continue;
-            strncpy(out[nv].name, g_predef_vars[i].name,
+            strncpy(out[nv].name, predef->names[i],
                     sizeof(out[nv].name) - 1);
             out[nv].name[sizeof(out[nv].name) - 1] = '\0';
-            out[nv].value = predef_vals[i];
+            out[nv].value = predef->vals[i];
             nv++;
         }
     }
@@ -536,7 +525,7 @@ static int subst_visible_vars(const char *source, char *out, int out_size,
 
 static int replay_eval_expr_with_state(
     int flat_idx, const char *expr,
-    const float *predef_vals,
+    const ReplPredefSnapshot *predef,
     const float scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN],
     float *out_value) {
     char repl_expr[MAX_LINE_LEN];
@@ -549,9 +538,9 @@ static int replay_eval_expr_with_state(
         return 0;
 
     repl_eval_c_expr_to_repl(expr, repl_expr, sizeof(repl_expr));
-    nv = build_visible_vars_from_predef_values(flat_idx, predef_vals,
-                                               vars,
-                                               (int)(sizeof(vars) / sizeof(vars[0])));
+    nv = build_visible_vars_from_predef_snapshot(flat_idx, predef,
+                                                 vars,
+                                                 (int)(sizeof(vars) / sizeof(vars[0])));
     if (scratch_arrays) {
         repl_eval_copy_scratch_arrays(saved_scratch);
         repl_eval_restore_scratch_arrays(scratch_arrays);
@@ -565,20 +554,19 @@ static int replay_eval_expr_with_state(
     return 1;
 }
 
-static void replay_init_sim_state(float *vals, int max_vals,
+static void replay_init_sim_state(ReplPredefSnapshot *predef,
                                   float scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]) {
     ReplayRuntimeState replay = replay_state_view();
 
-    if (!vals || max_vals < g_num_predef_vars)
+    if (!predef)
         return;
 
     if (replay.active) {
-        replay_copy_baseline_predef_values(vals, max_vals);
+        replay_copy_baseline_predef_snapshot(predef);
         if (scratch)
             replay_copy_baseline_scratch_arrays(scratch);
     } else {
-        for (int i = 0; i < g_num_predef_vars && i < max_vals; i++)
-            vals[i] = g_predef_vars[i].value;
+        repl_eval_capture_predef_snapshot(predef);
         if (scratch)
             repl_eval_copy_scratch_arrays(scratch);
     }
@@ -597,18 +585,17 @@ static void replay_init_sim_state(float *vals, int max_vals,
  * goto loop overrun, 1 otherwise. */
 static int replay_simulate_runtime_until(
     int target_pc,
-    float *vals,
-    int max_vals,
+    ReplPredefSnapshot *predef,
     float scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN],
     ReplayBeforeStepFn before_step) {
     const GLCmd *flat_cmds = repl_state_flat_program_cmds();
     int pc = 0;
     int goto_count = 0;
 
-    if (!vals || max_vals < g_num_predef_vars)
+    if (!predef)
         return 0;
 
-    replay_init_sim_state(vals, max_vals, scratch);
+    replay_init_sim_state(predef, scratch);
 
     if (target_pc < 0)
         target_pc = 0;
@@ -617,7 +604,7 @@ static int replay_simulate_runtime_until(
 
     while (pc < target_pc) {
         if (before_step)
-            before_step(pc, &flat_cmds[pc], vals, scratch);
+            before_step(pc, &flat_cmds[pc], predef, scratch);
 
         if (!flat_cmds[pc].valid) {
             pc++;
@@ -628,8 +615,8 @@ static int replay_simulate_runtime_until(
         case CMD_VAR_ASSIGN: {
             int vi = flat_cmds[pc].var_idx;
             float value = flat_cmds[pc].args[0];
-            if (vi >= 0 && vi < g_num_predef_vars)
-                vals[vi] = value;
+            if (vi >= 0 && vi < predef->count)
+                predef->vals[vi] = value;
             break;
         }
         case CMD_SCRATCH_ASSIGN: {
@@ -649,7 +636,7 @@ static int replay_simulate_runtime_until(
                 if (repl_extract_paren_payload(replay_flat_text(pc),
                                                cond_text, sizeof(cond_text)) &&
                     cond_text[0]) {
-                    replay_eval_expr_with_state(pc, cond_text, vals,
+                    replay_eval_expr_with_state(pc, cond_text, predef,
                                                 scratch, &cond);
                 }
             }
@@ -657,7 +644,7 @@ static int replay_simulate_runtime_until(
                 int depth = 1;
                 while (depth > 0 && ++pc < target_pc) {
                     if (before_step)
-                        before_step(pc, &flat_cmds[pc], vals, scratch);
+                        before_step(pc, &flat_cmds[pc], predef, scratch);
                     if (flat_cmds[pc].type == CMD_IF_BEGIN) depth++;
                     else if (flat_cmds[pc].type == CMD_IF_END) depth--;
                 }
@@ -700,7 +687,7 @@ next_pc:
 static void replay_snapshot_if_mapped(
     int pc,
     const GLCmd *cmd,
-    const float *vals,
+    const ReplPredefSnapshot *predef,
     const float scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]) {
     if (!cmd)
         return;
@@ -708,8 +695,8 @@ static void replay_snapshot_if_mapped(
     if (cmd->src_cmd_idx >= 0 && cmd->src_cmd_idx < repl_state_document_count() &&
         s_replay_flat_map[cmd->src_cmd_idx] == pc &&
         !s_replay_predef_snap_valid[cmd->src_cmd_idx]) {
-        memcpy(s_replay_predef_snap[cmd->src_cmd_idx], vals,
-               sizeof(float) * (size_t)g_num_predef_vars);
+        if (predef)
+            s_replay_predef_snap[cmd->src_cmd_idx] = *predef;
         memcpy(s_replay_scratch_snap[cmd->src_cmd_idx], scratch,
                sizeof(s_replay_scratch_snap[cmd->src_cmd_idx]));
         s_replay_predef_snap_valid[cmd->src_cmd_idx] = 1;
@@ -718,19 +705,18 @@ static void replay_snapshot_if_mapped(
 
 static int replay_copy_runtime_state_before_flat_cmd(
     int target_pc,
-    float *out_vals,
-    int max_vals,
+    ReplPredefSnapshot *out_predef,
     float out_scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]) {
     /* Mirror executor.c CMD_VAR_ASSIGN / CMD_SCRATCH_ASSIGN by applying the
      * precomputed flat args directly; replay doesn't re-flatten here. */
-    return replay_simulate_runtime_until(target_pc, out_vals, max_vals,
+    return replay_simulate_runtime_until(target_pc, out_predef,
                                          out_scratch, NULL);
 }
 
 static int replay_load_runtime_state_for(
     int cmd_idx,
     int flat_idx,
-    float *predef_vals,
+    ReplPredefSnapshot *predef,
     float scratch_vals[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]) {
     ReplayRuntimeState replay = replay_state_view();
 
@@ -738,16 +724,15 @@ static int replay_load_runtime_state_for(
         cmd_idx >= 0 && cmd_idx < repl_state_document_count() &&
         s_replay_predef_snap_valid[cmd_idx] &&
         s_replay_flat_map[cmd_idx] == flat_idx) {
-        memcpy(predef_vals, s_replay_predef_snap[cmd_idx],
-               sizeof(float) * (size_t)g_num_predef_vars);
+        if (predef)
+            *predef = s_replay_predef_snap[cmd_idx];
         memcpy(scratch_vals, s_replay_scratch_snap[cmd_idx],
                sizeof(s_replay_scratch_snap[cmd_idx]));
         return 1;
     }
 
     return replay_copy_runtime_state_before_flat_cmd(flat_idx,
-                                                     predef_vals,
-                                                     MAX_PREDEF_VARS,
+                                                     predef,
                                                      scratch_vals);
 }
 
@@ -758,22 +743,20 @@ static int replay_load_runtime_state_for(
  * Total cost: O(replay_pc), called once per frame during cache rebuild. */
 static void replay_build_predef_snapshots(void) {
     ReplayRuntimeState replay = replay_state_view();
-    /* Zero-initialized so no later read can hit an indeterminate slot if a
-     * branch below fills only [0, g_num_predef_vars). */
-    float vals[MAX_PREDEF_VARS] = {0};
+    ReplPredefSnapshot predef;
     float scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     int target_pc = replay.pc;
 
+    memset(&predef, 0, sizeof(predef));
     memset(s_replay_predef_snap_valid, 0, sizeof(int) * (size_t)repl_state_document_count());
 
-    (void)replay_simulate_runtime_until(target_pc, vals, MAX_PREDEF_VARS,
+    (void)replay_simulate_runtime_until(target_pc, &predef,
                                         scratch, replay_snapshot_if_mapped);
 }
 
 static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
                                                   char *out, int out_size) {
-    /* Zero-init: the fill helper writes only [0, g_num_predef_vars). */
-    float predef_vals[MAX_PREDEF_VARS] = {0};
+    ReplPredefSnapshot predef;
     float scratch_vals[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     ExprVar visible_vars[MAX_PREDEF_VARS + MAX_EXPR_VARS];
     char rhs_subst[MAX_LINE_LEN];
@@ -786,15 +769,16 @@ static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
     if (!out || out_size <= 0)
         return 0;
     out[0] = '\0';
+    memset(&predef, 0, sizeof(predef));
 
     if (!replay_load_runtime_state_for(cmd_idx, flat_idx,
-                                       predef_vals, scratch_vals)) {
+                                       &predef, scratch_vals)) {
         return 0;
     }
 
-    nv = build_visible_vars_from_predef_values(flat_idx, predef_vals,
-                                               visible_vars,
-                                               (int)(sizeof(visible_vars) / sizeof(visible_vars[0])));
+    nv = build_visible_vars_from_predef_snapshot(flat_idx, &predef,
+                                                 visible_vars,
+                                                 (int)(sizeof(visible_vars) / sizeof(visible_vars[0])));
     type = repl_state_document_cmds()[cmd_idx].type;
     if (type == CMD_VAR_ASSIGN) {
         if (!repl_extract_assignment_parts(replay_document_text(cmd_idx),
@@ -807,7 +791,7 @@ static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
             float value = repl_state_flat_program_cmds()[flat_idx].args[0];
             subst_visible_vars(rhs, rhs_subst, sizeof(rhs_subst),
                                NULL, 0, visible_vars, nv);
-            replay_eval_expr_with_state(flat_idx, rhs, predef_vals, scratch_vals,
+            replay_eval_expr_with_state(flat_idx, rhs, &predef, scratch_vals,
                                         &value);
 
             if (rhs_subst[0] &&
@@ -839,13 +823,13 @@ static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
         char rhs_with_scratch[MAX_LINE_LEN];
         replay_subst_scratch_reads(flat_idx, rhs, rhs_with_scratch,
                                    sizeof(rhs_with_scratch),
-                                   predef_vals, scratch_vals);
+                                   &predef, scratch_vals);
         subst_visible_vars(rhs_with_scratch, rhs_subst, sizeof(rhs_subst),
                            NULL, 0, visible_vars, nv);
         if (index_expr[0])
-            replay_eval_expr_with_state(flat_idx, index_expr, predef_vals,
+            replay_eval_expr_with_state(flat_idx, index_expr, &predef,
                                         scratch_vals, &resolved_index);
-        replay_eval_expr_with_state(flat_idx, rhs, predef_vals, scratch_vals,
+        replay_eval_expr_with_state(flat_idx, rhs, &predef, scratch_vals,
                                     &value);
 
         if (rhs_subst[0] &&
@@ -908,8 +892,7 @@ int replay_code_panel_get_command_display_text(SourceTextView text,
 static int replay_build_subst_annotation(int cmd_idx, int flat_idx,
                                               char *subst, int subst_size,
                                               char *var_comment, int comment_size) {
-    /* Zero-init: the fill helper writes only [0, g_num_predef_vars). */
-    float predef_vals[MAX_PREDEF_VARS] = {0};
+    ReplPredefSnapshot predef;
     float scratch_vals[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     ExprVar visible_vars[MAX_PREDEF_VARS + MAX_EXPR_VARS];
     int nv;
@@ -919,15 +902,16 @@ static int replay_build_subst_annotation(int cmd_idx, int flat_idx,
     subst[0] = '\0';
     if (var_comment && comment_size > 0)
         var_comment[0] = '\0';
+    memset(&predef, 0, sizeof(predef));
 
     if (!replay_load_runtime_state_for(cmd_idx, flat_idx,
-                                       predef_vals, scratch_vals)) {
+                                       &predef, scratch_vals)) {
         return 0;
     }
 
-    nv = build_visible_vars_from_predef_values(flat_idx, predef_vals,
-                                               visible_vars,
-                                               (int)(sizeof(visible_vars) / sizeof(visible_vars[0])));
+    nv = build_visible_vars_from_predef_snapshot(flat_idx, &predef,
+                                                 visible_vars,
+                                                 (int)(sizeof(visible_vars) / sizeof(visible_vars[0])));
     return subst_visible_vars(replay_document_text(cmd_idx), subst, subst_size,
                               var_comment, comment_size,
                               visible_vars, nv);
@@ -935,8 +919,7 @@ static int replay_build_subst_annotation(int cmd_idx, int flat_idx,
 
 static int replay_build_eval_annotation(int cmd_idx, int flat_idx,
                                              char *eval_buf, int eval_size) {
-    /* Zero-init: the fill helper writes only [0, g_num_predef_vars). */
-    float predef_vals[MAX_PREDEF_VARS] = {0};
+    ReplPredefSnapshot predef;
     float scratch_vals[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     float saved_scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     ExprVar visible_vars[MAX_PREDEF_VARS + MAX_EXPR_VARS];
@@ -945,15 +928,16 @@ static int replay_build_eval_annotation(int cmd_idx, int flat_idx,
     if (!eval_buf || eval_size <= 0)
         return 0;
     eval_buf[0] = '\0';
+    memset(&predef, 0, sizeof(predef));
 
     if (!replay_load_runtime_state_for(cmd_idx, flat_idx,
-                                       predef_vals, scratch_vals)) {
+                                       &predef, scratch_vals)) {
         return 0;
     }
 
-    nv = build_visible_vars_from_predef_values(flat_idx, predef_vals,
-                                               visible_vars,
-                                               (int)(sizeof(visible_vars) / sizeof(visible_vars[0])));
+    nv = build_visible_vars_from_predef_snapshot(flat_idx, &predef,
+                                                 visible_vars,
+                                                 (int)(sizeof(visible_vars) / sizeof(visible_vars[0])));
     /* Replay annotation re-parses each step's source for display.
      * Errors here are dropped — the command was already validated at
      * commit time, and a parse failure during annotation just means
