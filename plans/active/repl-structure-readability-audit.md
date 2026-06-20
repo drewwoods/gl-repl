@@ -297,6 +297,19 @@ and formatting behavior harder to test in isolation, and it makes the parser's
   canonical formatting; it should not need to know the live document.
 - Replace the largest recognition ladder with a table of handler functions over
   time. This is a readability improvement, not an urgent correctness fix.
+- **Remove the `ReplParseContext.source_scope == NULL` live fallback** added by
+  the Finding 4b fix (`c3d0d88d`). To undo the per-call O(N) view-bind
+  regression, the parser's scope helpers now fall back to the live-document
+  warm wrappers (`repl_source_scope_*`) when `source_scope` is NULL, and
+  `repl_parse_and_normalize{,_strict}` pass NULL to ride the warm
+  `g_live_scope`. That is correct and fast, but it reintroduces a parser →
+  live-state reach for the NULL path and overloads NULL to mean "the live
+  document" — a latent footgun for any future caller that parses against a
+  non-live snapshot and forgets to set the view. When this finding lands,
+  replace it with an explicit warm-view accessor
+  (`repl_source_scope_live_view()`) that those entries pass in, so the parser
+  stays fully view-driven and NULL goes back to meaning "no scope." The
+  `normalize_large_doc` bench guards the performance side of that swap.
 
 ## Finding 4: `source_scope` query APIs hide live-state cache behavior
 
