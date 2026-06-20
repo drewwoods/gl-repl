@@ -789,7 +789,7 @@ static void scene_execute_adapter(const SceneExecuteContext *ctx,
     if (suppress_side_effects) {
         repl_restore_predef_values(saved_predef, MAX_PREDEF_VARS);
         repl_eval_restore_scratch_arrays(saved_scratch);
-        *repl_state_render_mut() = saved_render;
+        repl_state_render_set(&saved_render);
     }
 }
 
@@ -1456,7 +1456,7 @@ static void glr_ctrl_setup_subframe(void *ud, int pass_idx, int pass_count,
      * programs (A[0]=A[0]+1, t=t+1) don't compound across samples. */
     repl_restore_predef_values(c->base_predef, MAX_PREDEF_VARS);
     repl_eval_restore_scratch_arrays(c->base_scratch);
-    *repl_state_render_mut() = c->base_render;
+    repl_state_render_set(&c->base_render);
 
     if (c->mode == GLR_BLUR_CAMERA) {
         GlrCameraPose p = glr_camera_pose_lerp(&c->prev, &c->cur, f);
@@ -2010,7 +2010,7 @@ static const char *glr_ctrl_host_editor_input_get(void) {
 }
 
 static void glr_ctrl_host_set_time_playing(int playing) {
-    repl_state_variables_mut()->time_playing = playing;
+    repl_state_time_set_playing(playing);
 }
 
 /* The host-effect bridge routing core pipeline events to the UI and editor state. */
@@ -2486,14 +2486,7 @@ void glr_ctrl_bootstrap_repl(const char *input_file) {
      * — i.e. --dump-code / --dump-flat would print an empty buffer for any
      * non-empty file. Idempotent, so the windowed path is unaffected. */
     repl_state_ensure_sentinels();
-    repl_eval_init_predef_vars();
-    ReplPredefView predef = repl_eval_predef_view();
-    for (int i = 0; i < predef.count; i++) {
-        if (strcmp(predef.vars[i].name, "t") == 0) {
-            repl_state_variables_mut()->time_var_idx = i;
-            break;
-        }
-    }
+    repl_state_variables_reset_predefs();
     editor_state_edit_line_set(repl_load_initial_commands(input_file));
     /* Startup banner. Lives on the controller side so pipeline TUs
      * don't own display-string side effects. (Moved out of

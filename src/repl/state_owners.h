@@ -59,9 +59,14 @@ FlatProgramView   repl_state_flat_program_view(void);
 
 ReplVariableView         repl_state_variables(void);
 ReplVariableState       *repl_state_variables_mut(void);
+/* Reset the predefined-variable table and rebind the special `t` variable.
+ * Leaves document/flat/render/scene state alone; intended for bootstrap paths
+ * that skip the full repl_state_reset_program() reset. */
+void                     repl_state_variables_reset_predefs(void);
 void                     repl_state_time_advance(float dt);
 void                     repl_state_time_reset_to_zero(void);
 void                     repl_state_time_set(float value);
+void                     repl_state_time_set_playing(int playing);
 /* Transiently override the predef 't' binding only. Unlike
  * repl_state_time_set it leaves the free-running clock (g_anim_time) and the
  * flat-dirty flag untouched, so the running animation is undisturbed. The
@@ -78,11 +83,10 @@ void                     repl_state_time_set_transient(float value);
  * - `variable_panel_state.h` / variable-panel drag helpers for variable drag
  * - `glr_state.h` for presentation policy, render config, and grid tables
  *
- * The older
- * `repl_state_*` forwarders for those owners. REPL pipeline TUs still avoid
- * including `glr_state.h`; controller/editor/UI/scene callers can include it
- * directly (implemented in Phase 1 of the state split and step 7a of
- * feature/decouple-repl-from-gl-repl-alt.md). */
+ * The older `repl_state_*` forwarders for those owners were removed. REPL
+ * pipeline TUs still avoid including `glr_state.h`; controller/editor/UI/scene
+ * callers can include it directly (implemented in Phase 1 of the state split
+ * and step 7a of feature/decouple-repl-from-gl-repl-alt.md). */
 
 /* Runtime-mutated render tail only: executor writes `light_enabled_mask`
  * and `clear_color[]` in response to user GL commands, so those bytes remain
@@ -91,6 +95,7 @@ void                     repl_state_time_set_transient(float value);
  * as msaa, line smoothing, accumulation AA, and point-attenuation enablement. */
 ReplRenderState        repl_state_render(void);
 ReplRenderState       *repl_state_render_mut(void);
+void                   repl_state_render_set(const ReplRenderState *render);
 /* Reset the runtime-mutated render halves (`light_enabled_mask`,
  * `clear_color[]`) to defaults. The render-config toggles (msaa,
  * line_smooth, accum_*) and the dimensional `lights[]` table moved to
