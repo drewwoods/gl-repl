@@ -4,6 +4,13 @@ Status: **in-review** - this is a findings document and cleanup map. No
 implementation has started. Do not move this to `plans/active/` until a
 specific first slice is chosen.
 
+Re-reviewed after the recent `main` rebase. The rebase partially addressed a
+few items from the original audit: function-alias compile no longer mutates the
+alias table, `core_internal.h` no longer re-exports scene/util headers, and
+shared export-state dimensions now live in `src/repl/export_state.h`. The
+findings below are updated to separate those completed pieces from the
+remaining structure issues.
+
 ## Scope
 
 This audit is a static read of `src/repl` after several architecture refactors.
@@ -27,16 +34,16 @@ sediment**:
 
 | Area | Main files | Smell | Recommended cleanup |
 |---|---|---|---|
-| Core facade | `src/repl/core.c`, `src/repl/core.h` | Residual catch-all API for normalization, host effects, scenes, time, cursor/feed queries, and metrics. | Split host effects and normalization/reformat/bootstrap/query APIs into focused headers. |
-| Compile contract | `src/repl/compile.c`, `src/repl/compile.h` | "Pure compile" contract is partly true, but live-state reads and alias-table mutation remain. | Either make the contract honest, or remove the live/global dependencies from compile. |
+| Core facade | `src/repl/core.c`, `src/repl/core.h` | Residual catch-all API for host effects, save/load wrappers, scenes, time, cursor/feed queries, and metrics; `pipeline.h` is a useful start but does not drain the facade. | Split host effects and remaining reformat/bootstrap/query APIs into focused headers. |
+| Compile contract | `src/repl/compile.c`, `src/repl/compile.h` | Alias mutation is now fixed, but visible-var/source-scope and predef reads still make compile less pure than the header claims. | Thread visible vars / source scope / predef symbols through explicit context, or document the remaining transitional reads. |
 | Parser contract | `src/repl/parser.c`, `src/repl/parser.h` | Parser is documented as stateless, but strict function-call parsing reads live document and aliases. | Pass symbols through `ReplParseContext`; keep live lookup outside parser. |
 | Source scope | `src/repl/source_scope.c`, `src/repl/source_scope.h` | Query APIs hide a live-state prefix-depth cache. | Add explicit document-view APIs and keep live wrappers only for UI/app callers. |
-| Internal header | `src/repl/core_internal.h` | Legacy bucket for parse helpers, visible-var collection, text helpers, and re-exports. | Split into `normalize.h`, `visible_vars.h`, and direct includes. |
+| Internal header | `src/repl/core_internal.h` | Narrower after the rebase, but still bundles normalize entry points, text helpers, and visible-var collection. | Split into `normalize.h`, `visible_vars.h`, and direct includes where useful. |
 | Scene slots/workspace | `src/repl/scenes.c` | One file owns scene slots, snapshots, promotion, workspace IO, cfg/camera/predef capture, and restore mechanics. | Extract `SceneSnapshot` and workspace IO helpers. |
-| Import/export | `src/repl/import.c`, `src/repl/export.c` | Duplicated state-access macros/constants, global import accumulators, very large emit/load flows. | Centralize shared constants/accessors; then split export/import by concern. |
+| Import/export | `src/repl/import.c`, `src/repl/export.c`, `src/repl/export_state.h` | Shared dimensions moved to `export_state.h`, but state-access macros, snippet/C89 constants, global import accumulators, and very large emit/load flows remain. | Centralize the remaining shared constants/accessors; then split export/import by concern. |
 | Flatten | `src/repl/flatten.c` | Lowering is mixed with current-block highlight, cost queries, and cursor matching. | Move read/query helpers to `flatten_query.c` or similar. |
 | State layer | `src/repl/state.c`, `src/repl/state.h` | Migration history and macro aliases obscure current ownership boundaries. | Keep current invariants inline; move historical notes to plans/docs. |
-| Load transaction | `src/repl/load.c` | Structured and plain command load paths duplicate transaction flow and rollback assumptions. | Factor a shared compiled-change transaction helper. |
+| Load transaction | `src/repl/load.c`, `src/repl/apply.c` | Apply preflight is now stronger, but load still has two visible transaction flows and an implicit "cannot fail after preflight" structured path. | Factor or document the compiled-change transaction boundary explicitly. |
 
 ## Finding 1: `core.h` and `core.c` are still a residual facade
 
@@ -84,63 +91,59 @@ Split by role:
 | Bootstrap/load helpers | `src/repl/bootstrap.h`, `src/repl/bootstrap.c` | `repl_load_initial_commands` if it does not belong in load/scenes. |
 | Queries/metrics | `src/repl/program_query.h`, `src/repl/program_query.c` | `repl_current_begin_mode`, `repl_count_vertices`, feed/cursor/tune queries where appropriate. |
 
-This can be done incrementally. The lowest-risk first slice is to extract
+`src/repl/pipeline.h` and `src/repl/format.h` are already steps in this
+direction. They make some controller-facing and formatting dependencies
+narrower, but `core.h` still owns the host bridge and several unrelated query /
+scene / time surfaces.
+
+This can be done incrementally. The lowest-risk first slice remains extracting
 `ReplHostEffects`, because many modules include `core.h` only for dispatch
 wrappers.
 
-## Finding 2: compile purity has drifted from its documented contract
+## Finding 2: compile purity is improved, but still not fully true
 
 ### Evidence
 
 `src/repl/compile.h` describes compile as a pure source-text validation layer
-that produces `ReplCompiledChange` descriptors and does not mutate state. It
-also documents one transitional exception: predef-var reads still go through
-the shared eval table.
+that produces `ReplCompiledChange` descriptors and does not mutate state.
 
-The implementation has two larger exceptions:
+The recent rebase fixed one major exception: function-alias compilation no
+longer speculatively mutates the global alias table. Alias changes now ride in
+`ReplCompiledChange.alias_op` and are published later by
+`repl_apply_alias_ops()` after the command-store mutation succeeds.
+
+Two remaining dependencies still make the contract overstate the current
+implementation:
 
 1. Visible-variable collection still reaches live document state. The comment
    around `repl_compile_var_assign` calls this out as context-pure for document
    data, but live-state-coupled for visible-var collection.
-2. Function-alias compilation speculatively mutates the global alias table so
-   later parse calls can resolve the new function name. `compile.h` documents
-   that callers must roll this back on failure.
+2. Predef variables still go through the shared eval table. The header already
+   labels this as transitional, but it means compile is not yet fully driven by
+   `ReplCompileContext`.
 
 ### Why it hurts readability
 
 The compile layer is one of the most important boundaries in the repo. A reader
 expects it to validate input and return a descriptor, while `apply.c` and the
-command store perform mutation. The current code mostly follows that model, so
-the remaining exceptions stand out and make the whole boundary less trustworthy.
-
-The alias behavior is especially hard to follow because the compile result
-contains alias operations, but the compiler also mutates global alias state as
-a speculative parse aid.
+command store perform mutation. The alias cleanup moves the code in the right
+direction; the remaining visible-var/source-scope and predef dependencies now
+stand out more clearly as the next boundary issues.
 
 ### Recommended cleanup
 
-There are two valid directions. Pick one explicitly.
+Introduce an explicit compile-time symbol context that contains:
 
-**Conservative wording cleanup:**
+- visible vars for the current source position,
+- source-scope information for the current document view,
+- predef vars.
 
-- Update the module comments to say compile is a descriptor builder with two
-  transitional global dependencies: visible vars and speculative aliases.
-- Isolate those dependencies in clearly named helper functions or one file, so
-  the exceptions are easy to find.
+Then make parser/compiler helpers consult that context instead of live globals.
+Alias changes are already on the desired path: they stay in
+`ReplCompiledChange` and are applied in `apply.c`.
 
-**Stronger architecture cleanup:**
-
-- Introduce an explicit compile-time symbol context that contains:
-  - visible vars for the current source position,
-  - function definitions,
-  - function aliases,
-  - predef vars.
-- Make parser/compiler helpers consult that context instead of live globals.
-- Store alias changes only in `ReplCompiledChange`.
-- Apply alias mutations in `apply.c`, alongside the rest of the state change.
-
-The stronger version is cleaner, but it should be sliced carefully because it
-touches parser, compile, source-scope, and apply behavior.
+This should be sliced carefully because it touches parser, compile, and
+source-scope behavior.
 
 ## Finding 3: parser is documented as stateless, but still performs live semantic lookup
 
@@ -232,7 +235,7 @@ Then provide two layers:
 
 After that split, compile and parser should use the view APIs exclusively.
 
-## Finding 5: `core_internal.h` is a leftover internal bucket
+## Finding 5: `core_internal.h` is narrower, but still a mixed internal bucket
 
 ### Evidence
 
@@ -241,16 +244,19 @@ After that split, compile and parser should use the view APIs exclusively.
 - Normalize/commit pipeline declarations.
 - Text-helper declarations by including `repl/text_helpers.h`.
 - Visible-variable collection.
-- Legacy re-exports of scene/util headers for older callers.
 
-It is included by compile, parser, import, export, scenes, flatten, load, and
-some editor code.
+The recent rebase removed the legacy scene/util re-exports, which resolves the
+stale part of the original finding. The header still leaks beyond a narrow
+REPL-internal seam: it is included by core REPL modules, editor code,
+app-side actions/completion, replay/tutorial internals, the demo, and tests.
 
 ### Why it hurts readability
 
 An "internal" header can be useful when it expresses a coherent internal module
-boundary. This one mostly expresses history. Callers include it to get one
-helper and receive several unrelated concepts.
+boundary. This one is closer than before, but callers still include it to get
+one helper and receive parse/normalize, text-helper, and visible-var concepts
+together. The app-side includes are a sign that useful public seams are still
+missing or that those call sites should move behind a narrower facade.
 
 It also weakens the public/private distinction. Helpers that should have
 specific homes remain reachable from a broad internal header.
@@ -259,8 +265,6 @@ specific homes remain reachable from a broad internal header.
 
 - Move normalization declarations to `normalize.h`.
 - Move visible-variable collection to `visible_vars.h` or source-scope.
-- Remove legacy re-exports and make callers include the specific headers they
-  use.
 - Move `#include "repl/text_helpers.h"` to the top of files that need it
   directly.
 
@@ -323,9 +327,12 @@ not covered by `repl_state_capture` / `repl_state_restore`.
 
 ### Evidence
 
-`src/repl/import.c` explicitly says some state-access macros are duplicated
-verbatim from `export.c` because the two translation units do not share
-helpers. Both files also duplicate directive/helper constants for snippet
+`src/repl/export_state.h` now centralizes shared dimensions such as workspace
+header and camera-line sizes. That resolves part of the original duplication.
+
+`src/repl/import.c` still explicitly says some state-access macros are
+duplicated verbatim from `export.c` because the two translation units do not
+share helpers. Both files also duplicate directive/helper constants for snippet
 declarations and C89 export markers.
 
 `import.c` also has file-level accumulator state for:
@@ -336,9 +343,10 @@ declarations and C89 export markers.
 
 ### Why it hurts readability
 
-The import/export pair is a round-trip contract. Duplicated constants and
-access macros mean the contract is maintained by convention instead of by the
-compiler. A future export change can silently drift from import.
+The import/export pair is a round-trip contract. `export_state.h` now lets the
+compiler guard shared buffer dimensions, but the remaining duplicated constants
+and access macros are still maintained by convention. A future export change
+can still silently drift from import.
 
 The file-level import accumulators also make the import pipeline harder to
 reason about because state lifetime is not carried by the main `ImportState`
@@ -346,14 +354,15 @@ object.
 
 ### Recommended cleanup
 
-- Add a tiny shared header for import/export constants and state-access helper
-  macros, for example `src/repl/export_format_shared.h`.
+- Add a tiny shared header for the remaining import/export constants and
+  state-access helper macros, for example `src/repl/export_format_shared.h`.
 - Move import accumulator fields into `ImportState` where practical.
 - Keep the shared header small. Do not create a broad "import_export_util" file
   that becomes another dumping ground.
 
-This is a good cleanup before physically splitting `export.c`, because it
-reduces duplicated scaffolding first.
+This remains a good cleanup before physically splitting `export.c`, because it
+reduces duplicated scaffolding first. Keep `export_state.h` focused on shared
+state dimensions; do not overload it with format directive policy.
 
 ## Finding 8: import flow is an implicit state machine
 
@@ -525,7 +534,7 @@ or API shape, not just a comment.
 
 This cleanup should be kept separate from behavior changes.
 
-## Finding 12: load transaction flow is duplicated and slightly asymmetric
+## Finding 12: load transaction flow is clearer, but still implicit
 
 ### Evidence
 
@@ -536,15 +545,21 @@ This cleanup should be kept separate from behavior changes.
 
 Both paths manage source-document writes, command-store writes, cursor
 advancement, predef/scratch side effects, and rollback/error handling. The
-plain command path has explicit rollback if the command-store insertion fails
-after the source-document insert. The structured path does preflight work and
-then relies on later operations not failing in ways that need symmetric rollback.
+recent rebase tightened `repl_apply_compiled_change()` with an internal
+preflight, so the structured path's "cannot fail after preflight" assumption is
+much stronger than before.
+
+The flow is still duplicated and asymmetric to read: the plain command path has
+explicit rollback if command-store insertion fails after source-document insert,
+while the structured path applies text, predef ops, scratch ops, command-store
+mutation, then alias ops under the implicit invariant that apply cannot fail
+after the earlier gate.
 
 ### Why it hurts readability
 
-The behavior may be correct today, but the transaction model is hard to see.
-Readers have to compare both paths to understand which mutations happen before
-which validation and what gets rolled back on failure.
+The behavior is more defensible now, but the transaction model is still hard to
+see. Readers have to compare both paths and `apply.c` to understand which
+mutations happen before which validation and what gets rolled back on failure.
 
 ### Recommended cleanup
 
@@ -578,9 +593,9 @@ Do not attempt this as one broad refactor. The safest sequence is:
 1. **Extract host effects from `core.h/core.c`.**
    This reduces include fan-out without changing compiler behavior.
 
-2. **Split `core_internal.h` mechanical dependencies.**
-   Move declarations to specific headers and make call sites include what they
-   actually use.
+2. **Finish narrowing `core_internal.h`.**
+   The rebase removed legacy re-exports. Move the remaining visible-var and
+   normalize declarations to specific homes when those owners are chosen.
 
 3. **Add context-based source-scope APIs.**
    Keep live wrappers, but make compile/parser use explicit document views.
@@ -588,16 +603,18 @@ Do not attempt this as one broad refactor. The safest sequence is:
 4. **Move visible-variable lookup onto the same explicit context path.**
    This removes one major exception from compile purity.
 
-5. **Isolate function-alias mutation from compile.**
-   Either make alias lookup context-based, or clearly stage alias mutation as a
-   separate preflight/apply concern.
+5. **Move parser strict-ref lookup onto the same explicit context path.**
+   Function aliases are no longer mutated during compile, but strict call
+   validation still reads the live document and alias table.
 
 6. **Extract `SceneSnapshot` from `scenes.c`.**
    This gives scene slots, workspace IO, and state capture a clearer shared
    primitive.
 
-7. **Centralize import/export shared constants and accessors.**
-   Do this before splitting either large file.
+7. **Centralize the remaining import/export shared constants and accessors.**
+   `export_state.h` already handles dimensions; do this for directive names,
+   C89 markers, and duplicated state-access macros before splitting either
+   large file.
 
 8. **Mechanically split `export.c` and flatten query helpers.**
    These are mostly physical organization wins once shared scaffolding is in
@@ -623,7 +640,7 @@ Why this slice first:
 - It is low semantic risk.
 - It addresses the most visible dependency smell.
 - It makes later `core.h` shrinkage easier to review.
-- It does not require solving parser/compile purity in the same patch.
+- It does not require solving parser/compile context purity in the same patch.
 
 ## Verification strategy
 
@@ -652,10 +669,13 @@ ssh gracemont 'cd ~/code/openGL/samples/gen-ai/gl-repl && \
 
 ## Open review questions
 
-1. Should compile purity be made true now, or should the comments first be
-   updated to honestly document the remaining global dependencies?
+1. Should the remaining compile purity gap be fixed now, or should the comments
+   first be updated to honestly document the visible-var/source-scope and predef
+   dependencies?
 2. Should `repl_state_capture` grow to include scene catalog state, or should
    scene snapshots become a separate named concept?
-3. Should export/import be split before or after the parser/compile context
+3. Should `core.h` remain a compatibility facade after `pipeline.h`, or should
+   each caller be pushed to specific owner headers as the cleanup proceeds?
+4. Should export/import be split before or after the parser/compile context
    cleanup? Splitting first improves readability sooner; context cleanup first
    reduces hidden dependencies before moving code around.
