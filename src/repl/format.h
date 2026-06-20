@@ -1,4 +1,4 @@
-/* format.h - minimal REPL formatting helpers shared by core.c and tests. */
+/* format.h - minimal REPL formatting helpers shared by the reformatter and tests. */
 #ifndef REPL_FORMAT_H
 #define REPL_FORMAT_H
 

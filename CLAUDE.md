@@ -488,7 +488,10 @@ state-machine level, not buried in the doc body.
 | `src/repl/compile.h` | `ReplCompiledChange`, `ReplCompileResult`, `ReplCompileContext`, compile entry points |
 | `src/repl/apply.c` | Applies a `ReplCompiledChange` to `ReplState` command arrays |
 | `src/repl/apply.h` | Apply public API (`repl_apply_compiled_change`, `repl_apply_predef_ops`) |
-| `src/repl/core.c` | Normalization pipeline (`repl_parse_and_normalize*`), reformatter, startup helpers |
+| `src/repl/core.h` | Legacy compatibility facade that reexports focused REPL owner headers; new code should include the owner header directly |
+| `src/repl/normalize.c` | Parse-and-normalize pipeline (`repl_parse_and_normalize*`) |
+| `src/repl/reformat.c` | Source reformatter (`repl_reformat_program`) |
+| `src/repl/bootstrap.c` | Startup loading helpers (`repl_load_initial_commands`) |
 | `src/repl/parser.c` | REPL source-line parser, expression validation, canonical line text emission via `ReplParsedLine.text` (the per-line text lives in `EditorState`'s editor buffer, not on `GLCmd`) |
 | `src/repl/parser.h` | Parser entrypoints (`repl_parser_parse_command*`, `repl_parser_parse_command_ctx`), `ReplParseContext`, `ReplParsedLine` |
 | `src/repl/source_scope.c` | Source prefix-depth cache, indentation helpers, block lookup |
@@ -497,7 +500,6 @@ state-machine level, not buried in the doc body.
 | `src/repl/command_spec.h` | Command spec query API |
 | `src/repl/command_store.c` | Low-level `GLCmd` array mechanics: insert, delete, replace, bulk-load (no text-buffer writes) |
 | `src/repl/command_store.h` | Command-store public API (`repl_command_store_insert_one`, etc.) |
-| `src/repl/core.h` | Public API (parse, flatten, user scene + workspace) plus the neutral `repl_dispatch_*` host-effect hooks (no GLUT input-dispatch declarations) |
 | `src/repl/core_internal.h` | Test-visible internals (normalize/commit pipeline, `editor_feed_line`, `editor_load_line_to_input`, `repl_promote_example_if_needed`) |
 | `src/repl/state.c` | Owns `g_repl_state`, lifecycle, snapshot assembly (`repl_state_capture` / `repl_state_restore`) |
 | `src/repl/state.h` | Typed runtime-state facade, reset helpers, and focused accessors over the live REPL state |
@@ -1046,9 +1048,10 @@ The single source of truth for example-owned presentation defaults is
 the `CFG_DEFAULT_*` macro block in `src/app/glr_defaults.h`. Initializers, example
 reset helpers, and tests reuse those macros instead of duplicating
 literals. `make test_repl_core_examples` is the focused regression
-suite; touch `src/repl/core.c`, `src/repl/export.c`, `src/repl/examples.c`,
-`src/app/glr_defaults.h`, and `tests/test_repl_core_examples.c` together when
-changing example-metadata behavior.
+suite; touch `src/repl/example_loader.c`, `src/repl/export.c`,
+`src/repl/examples.c`, `src/app/glr_defaults.h`, and
+`tests/test_repl_core_examples.c` together when changing example-metadata
+behavior.
 
 ### Save/Load (output.c)
 
@@ -1060,7 +1063,7 @@ changing example-metadata behavior.
   uses internally, predefined vars plus fixed scratch arrays `A/B/C[8]` as
   globals, REPL functions as C
   functions, and `display()` body containing the user's geometry commands.
-  The workspace iterator in `src/repl/core.c` sets the export scene-name hint
+  The workspace iterator in `src/repl/scenes.c` sets the export scene-name hint
   in import/export state before each slot's save so the hint wins over the
   active user scene index.
 - **Import** (`repl_export_load_from_file()`): line-by-line scan parses camera state

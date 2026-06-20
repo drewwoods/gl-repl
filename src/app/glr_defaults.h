@@ -3,8 +3,8 @@
  *
  * Compile-time defaults for scene-presentation state that examples
  * are allowed to override via leading `// @cfg` metadata. Reset
- * helpers and tests reuse these to stay aligned with the global
- * definitions in src/repl/core.c without drifting.
+ * helpers and tests reuse these to stay aligned with the app-shell defaults
+ * without drifting.
  *
  * This is gl-repl app-shell logic — it knits together scene-render
  * enums and the editor's panel layout into a single set of "out of

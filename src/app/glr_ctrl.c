@@ -2505,9 +2505,7 @@ void glr_ctrl_bootstrap_repl(const char *input_file) {
     repl_state_variables_reset_predefs();
     editor_state_edit_line_set(repl_load_initial_commands(input_file));
     /* Startup banner. Lives on the controller side so pipeline TUs
-     * don't own display-string side effects. (Moved out of
-     * src/repl/core.c as step 3 of
-     * feature/decouple-repl-from-gl-repl-alt.md.) */
+     * don't own display-string side effects. */
     repl_set_status("Ready - type GL commands, press ; to execute. F1 for help. F12 for examples.");
 }
 
