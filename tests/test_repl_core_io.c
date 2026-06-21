@@ -740,7 +740,7 @@ int main(void) {
         ASSERT_TRUE("saved geometry called once in display",
                     count_substr(buf, "draw_scene();") == 1);
         /* Outline/point pass specs are intentionally disabled in export
-         * (see export_build_display_passes in src/repl/export.c), even
+         * (see export_build_display_passes in src/repl/export_display.c), even
          * when the cfg flags are on. Multipass save/restore follows the
          * pass specs rather than the cfg flags. */
         ASSERT_TRUE("saved overlay-disabled export omits save/restore",
@@ -1009,7 +1009,7 @@ int main(void) {
         /* Scene A — wireframe = 1.  Scene B — wireframe = 0.
          * Body lines must sit inside // Snippet start / end markers
          * (that's how repl_export_load_from_file detects the geometry
-         * snippet — see import_try_snippet_start in src/repl/export.c). */
+         * snippet — see import_try_snippet_start in src/repl/import.c). */
         {
             FILE *f = fopen("/tmp/repl_core_p1_workspace_in/scene_a.c", "w");
             ASSERT_TRUE("p1 scene_a fopen", f != NULL);
@@ -2624,7 +2624,7 @@ static void test_workspace_header_budget_worst_case(void) {
      * adding a config toggle, the emitted @cfg count outgrew a capacity:
      * raise REPL_CFG_MAX_ITEMS (cfg_baseline.h — the cfg bag silently
      * drops past it) AND MAX_WORKSPACE_HEADER_LINES (export_state.h, sized
-     * from it; its STATIC_ASSERT in export.c will also flag the shortfall). */
+     * from it; its STATIC_ASSERT in export_setup.c will also flag the shortfall). */
     ASSERT_TRUE("worst case: last @cfg (audio) present — if failing after a "
                 "new config toggle, raise REPL_CFG_MAX_ITEMS (cfg_baseline.h) "
                 "and MAX_WORKSPACE_HEADER_LINES (export_state.h)",

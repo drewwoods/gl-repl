@@ -434,6 +434,10 @@ REPL_SRCS = \
 	src/repl/examples.c \
 	src/repl/executor.c \
 	src/repl/export.c \
+	src/repl/export_cmd_writer.c \
+	src/repl/export_display.c \
+	src/repl/export_prologue.c \
+	src/repl/export_setup.c \
 	src/repl/flatten.c \
 	src/repl/help_text.c \
 	src/repl/host_effects.c \
@@ -677,6 +681,10 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/repl/examples.c \
                      src/repl/executor.c \
                      src/repl/export.c \
+                     src/repl/export_cmd_writer.c \
+                     src/repl/export_display.c \
+                     src/repl/export_prologue.c \
+                     src/repl/export_setup.c \
                      src/repl/flatten.c \
                      src/repl/host_effects.c \
                      src/repl/import.c \
@@ -695,7 +703,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      tools/repl_demo/source_document.c \
                      tests/gl-stubs/gl_stub_counts.c
 # src/app/glr_config.c removed in step 4 of the decouple plan: pipeline TUs
-# (src/repl/export.c, src/repl/scenes.c, src/repl/example_loader.c) no longer call
+# (src/repl/export*.c, src/repl/scenes.c, src/repl/example_loader.c) no longer call
 # glr_config_*; the controller-installed ReplExportConfigBridge is the
 # only path that touches cfg state, and that lives in src/app/glr_actions.c
 # (not in the demo link set).
@@ -1345,15 +1353,14 @@ check-controller-boundaries: ## Verify controller owns the scene/UI wiring bound
 	fi
 	@# Boundary allowlist for ui/ includes: src/app/glr_ctrl.c is the
 	@# router/controller and explicitly orchestrates UI; src/app/glr_actions.c
-	@# is the menu/shortcut dispatch; src/repl/export.c reads UI chrome
-	@# state to serialize ; repl_editor.c stays in the list as a
+	@# is the menu/shortcut dispatch; repl_editor.c stays in the list as a
 	@# historical breadcrumb (the file is deleted but the regex
 	@# tolerates absence). The previously-listed repl_(debug|config|
 	@# camera_controls) entries are gone — those files were renamed
 	@# into the glr_* namespace and are no longer matched by
 	@# REPL_SRCS, so the check skips them entirely.
 	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"ui/' $(REPL_SRCS) src/app/glr_ctrl.c src/app/glr_ctrl_router.c \
-		| grep -vE '^src/app/(glr_ctrl|glr_ctrl_router|glr_actions)\.c$$|^src/repl/export\.c$$|^repl_editor\.c$$' || true); \
+		| grep -vE '^src/app/(glr_ctrl|glr_ctrl_router|glr_actions)\.c$$|^repl_editor\.c$$' || true); \
 	if [ -n "$$bad" ]; then \
 		echo "$(RED)ERROR: new ui headers included outside approved exceptions:$(NC)"; \
 		echo "$$bad"; exit 1; \
@@ -1655,10 +1662,10 @@ check-glr-state-no-repl-mutators: ## Verify src/app/glr_state.c does not call ba
 check-repl-scenes-cfg-clear-paired: ## Verify every g_user_scenes[X].used=0 in src/repl/scenes.c pairs with scene_cfg_clear.
 	@bash scripts/check-repl-scenes-cfg-clear-paired.sh
 
-check-repl-export-no-ui-layout: ## Verify src/repl/export.c does not call ui_layout_* / ui_state_*.
+check-repl-export-no-ui-layout: ## Verify export/import TUs do not call ui_layout_* / ui_state_*.
 	@bash scripts/check-repl-export-no-ui-layout.sh
 
-check-repl-export-via-bridge: ## Verify src/repl/export.c pulls app/scene state only via controller-installed bridges (no scene_*/glr_* calls or scene/app includes).
+check-repl-export-via-bridge: ## Verify export/import TUs pull app/scene state only via controller-installed bridges (no scene_*/glr_* calls or scene/app includes).
 	@bash scripts/check-repl-export-via-bridge.sh
 
 check-ui-no-export-resolver: ## Verify src/ui reads the snapshot-frozen reshape projection, never calls repl_export_reshape_projection_lines() live.
