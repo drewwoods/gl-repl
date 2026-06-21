@@ -5,7 +5,7 @@
  * slices: source document, flat program, predefined variables, runtime-mutated
  * render state, scene bookkeeping, and import/export scratch storage. Companion
  * state owned by the editor, UI, replay peer, or app shell is mutated through
- * their own owner headers rather than through repl_state_* forwarders.
+ * its own owner header.
  */
 #ifndef REPL_STATE_OWNERS_H
 #define REPL_STATE_OWNERS_H
@@ -24,19 +24,10 @@ GLCmd       *repl_state_document_cmd_at_mut(int cmd_idx);
 int          repl_state_document_count(void);
 void         repl_state_document_count_set(int cmd_count);
 int          repl_state_document_capacity(void);
-/* repl_state_edit_line / _set / _clamp deleted. Use
- * editor_state_edit_line / _set / _clamp from src/editor/state.h
- * (editor / app / widget / test callers) or the
- * repl_dispatch_edit_line_get / _set sink in src/repl/core.h
- * (REPL pipeline callers that can't reach editor headers),
- * implemented in Phase 4 of plans/done/edit-line-ownership.md. */
 int          repl_state_normals_dirty(void);
 void         repl_state_normals_dirty_clear(void);
 /* Clears the source-command array + source-text document only.
- * The edit-line cursor lives on EditorState and is NOT touched
- * here — wholesale-reset callers must reposition the cursor at
- * the same boundary (via editor_state_edit_line_set above β, or
- * repl_dispatch_edit_line_set from REPL pipeline files). */
+ * The edit-line cursor is editor-owned and is not touched here. */
 void         repl_state_document_reset(void);
 
 ReplFlatProgramState       *repl_state_flat_program_mut(void);
@@ -73,7 +64,7 @@ void                     repl_state_time_reset_to_zero(void);
 void                     repl_state_time_set(float value);
 void                     repl_state_time_set_playing(int playing);
 /* Transiently override the predef 't' binding only. Unlike
- * repl_state_time_set it leaves the free-running clock (g_anim_time) and the
+ * repl_state_time_set it leaves the free-running clock and the
  * flat-dirty flag untouched, so the running animation is undisturbed. The
  * caller owns re-flattening at the new t (if it needs geometry re-baked) and
  * restoring the prior binding. Useful for evaluating the program at an
@@ -88,10 +79,8 @@ void                     repl_state_time_set_transient(float value);
  * - `variable_panel_state.h` / variable-panel drag helpers for variable drag
  * - `glr_state.h` for presentation policy, render config, and grid tables
  *
- * The older `repl_state_*` forwarders for those owners were removed. REPL
- * pipeline TUs still avoid including `glr_state.h`; controller/editor/UI/scene
- * callers can include it directly (implemented in Phase 1 of the state split
- * and step 7a of feature/decouple-repl-from-gl-repl-alt.md). */
+ * REPL pipeline TUs still avoid including `glr_state.h`; controller, editor,
+ * UI, and scene callers can include the app owner directly. */
 
 /* Runtime-mutated render tail only: executor writes `light_enabled_mask`
  * and `clear_color[]` in response to user GL commands, so those bytes remain
@@ -102,10 +91,8 @@ ReplRenderState        repl_state_render(void);
 ReplRenderState       *repl_state_render_mut(void);
 void                   repl_state_render_set(const ReplRenderState *render);
 /* Reset the runtime-mutated render halves (`light_enabled_mask`,
- * `clear_color[]`) to defaults. The render-config toggles (msaa,
- * line_smooth, accum_*) and the dimensional `lights[]` table moved to
- * glr_state — call `glr_state_render_reset_defaults()` for those. Both
- * reset paths fire from `glr_ctrl_reset_all`. */
+ * `clear_color[]`) to defaults. Render-config toggles (msaa, line_smooth,
+ * accum_*) and the dimensional `lights[]` table are app-owned in glr_state. */
 void                   repl_state_render_reset_defaults(void);
 void                   repl_state_render_set_clear_color(const float rgba[4]);
 void                   repl_state_render_set_light_enabled(int light_idx, int enabled);

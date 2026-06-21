@@ -15,19 +15,10 @@
 
 #include <string.h>  /* snprintf for cam_lines init */
 
-/* Presentation + render slices moved to glr_state.c, dropping the
- * last `glr_camera.h`
- * include from this TU. The previous `glr_camera_mut()->auto_rotate`
- * resets in `_presentation_reset_*` are gone — `auto_rotate` is part
- * of the per-scene cfg snapshot and the cfg bridge's `apply` callback
- * restores it during scene switches (implemented as step 7a of
- * feature/decouple-repl-from-gl-repl-alt.md). */
-
 static ReplRuntimeState g_repl_state;  /* BSS zero-initialised */
 
 /* Writes the non-zero default values that distinguish a valid default
- * ReplRuntimeState from raw zero-fill.  Mirrors the old
- * state_defaults.inc designator initialiser. */
+ * ReplRuntimeState from raw zero-fill. */
 static void repl_state_apply_sentinels(ReplRuntimeState *s) {
     /* --- document --- */
     s->document.capacity       = MAX_COMMANDS;
@@ -59,8 +50,8 @@ static void repl_state_apply_sentinels(ReplRuntimeState *s) {
     s->render.clear_color[2] = 0.10f;
     s->render.clear_color[3] = 1.0f;
 
-    /* --- scenes --- */
-    s->scenes.active_example_idx = -1;
+    /* --- scene_runtime --- */
+    s->scene_runtime.active_example_idx = -1;
 
     /* --- import_export: default render-state + cam lines --- */
     snprintf(s->import_export.render_state_lines[0], RENDER_STATE_LINE_LEN,
@@ -104,45 +95,6 @@ void repl_state_ensure_sentinels(void) {
     patched = 1;
 }
 
-#define g_cmds                      (g_repl_state.document.cmds)
-#define g_num_cmds                  (g_repl_state.document.cmd_count)
-/* g_edit_line removed; edit-line cursor moved to EditorState
- * (implemented in Phase 4 of plans/done/edit-line-ownership.md). */
-#define g_normals_dirty             (g_repl_state.document.normals_dirty)
-#define g_num_flat_cmds             (g_repl_state.flat_program.cmd_count)
-#define g_flat_dirty                (g_repl_state.flat_program.dirty)
-#define g_user_lighting_enabled     (g_repl_state.flat_program.user_lighting_enabled)
-#define g_current_block_begin       (g_repl_state.flat_program.current_block_begin_idx)
-#define g_current_block_end         (g_repl_state.flat_program.current_block_end_idx)
-#define g_current_block_line        (g_repl_state.flat_program.current_block_source_line_idx)
-/* g_input and related macros removed (Phase 1 commit 5). */
-/* g_clipboard and related macros removed (Phase 1 commit 6). */
-#define g_anim_time                 (g_repl_state.variables.anim_time)
-#define g_t_playing                 (g_repl_state.variables.time_playing)
-#define g_t_var_idx                 (g_repl_state.variables.time_var_idx)
-/* code_panel, scroll, help, variable_panel macros removed. */
-/* g_drag_* macros removed (Phase 1 commit 9). */
-/* g_show_profile_panel macro removed (Phase 1 commit 8); profile_panel
- * lives on g_ui_state.profile_panel in ui_state.c. */
-/* g_cam_* macros removed (Phase A commit 13); the camera slice lives
- * on g_ui_state.camera in ui_state.c, and the camera setters call
- * ui_state_camera_* directly.
- * g_mouse_* and g_win_* macros removed (Phase 1 commit 8); pointer and
- * viewport slices live on g_ui_state.{pointer,viewport} in ui_state.c. */
-/* presentation storage macros + render-config toggles removed (step 7a).
- * Those fields live on `g_glr_state.{presentation,render}` in
- * glr_state.c. The dead `g_focus_vtx` / `g_focus_vtx_valid` fields
- * were dropped along with the move. The runtime-mutated render halves
- * (`lights[]`, `clear_color[]`) stay here because the executor writes
- * them in response to user GL commands. */
-/* g_status / g_status_ttl macros removed (Phase 1 commit 8); status
- * lives on g_ui_state.status in ui_state.c.
- * g_cursor_px / g_cursor_py macros removed (Phase A commit 12); the
- * code_panel slice lives on g_ui_state.code_panel in ui_state.c. */
-/* g_replay_* macros removed (Phase F commit 33); replay state lives
- * on the replay peer (replay_state.c). Callers use replay_state_view
- * / replay_state_mut directly (Phase J7 retired the legacy
- * repl_state_replay forwarders). */
 static void repl_state_bind_eval_predef_storage(void) {
     repl_eval_bind_predef_storage(g_repl_state.variables.predef_vars,
                                   &g_repl_state.variables.predef_var_count);
@@ -158,14 +110,16 @@ static void repl_state_bind_eval_predef_storage_at_load(void) {
 #endif
 
 static void ensure_t_var_idx(void) {
-    if (g_t_var_idx >= 0 && g_t_var_idx < g_num_predef_vars &&
-        strcmp(g_predef_vars[g_t_var_idx].name, "t") == 0)
+    if (g_repl_state.variables.time_var_idx >= 0 &&
+        g_repl_state.variables.time_var_idx < g_num_predef_vars &&
+        strcmp(g_predef_vars[g_repl_state.variables.time_var_idx].name,
+               "t") == 0)
         return;
-    g_t_var_idx = repl_eval_find_predef_var_idx("t");
+    g_repl_state.variables.time_var_idx = repl_eval_find_predef_var_idx("t");
 }
 
 static void reset_time_state(void) {
-    g_anim_time = 0.0f;
+    g_repl_state.variables.anim_time = 0.0f;
     repl_eval_init_predef_vars();
     ensure_t_var_idx();
 }
@@ -183,57 +137,39 @@ GLCmd *repl_state_document_cmds_mut(void) {
 }
 
 const GLCmd *repl_state_document_cmd_at(int cmd_idx) {
-    if (cmd_idx < 0 || cmd_idx >= g_num_cmds)
+    if (cmd_idx < 0 || cmd_idx >= g_repl_state.document.cmd_count)
         return NULL;
-    return &g_cmds[cmd_idx];
+    return &g_repl_state.document.cmds[cmd_idx];
 }
 
 GLCmd *repl_state_document_cmd_at_mut(int cmd_idx) {
-    if (cmd_idx < 0 || cmd_idx >= g_num_cmds)
+    if (cmd_idx < 0 || cmd_idx >= g_repl_state.document.cmd_count)
         return NULL;
-    return &g_cmds[cmd_idx];
+    return &g_repl_state.document.cmds[cmd_idx];
 }
 
 int repl_state_document_count(void) {
-    return g_num_cmds;
+    return g_repl_state.document.cmd_count;
 }
 
 void repl_state_document_count_set(int cmd_count) {
-    g_num_cmds = cmd_count;
+    g_repl_state.document.cmd_count = cmd_count;
 }
 
 int repl_state_document_capacity(void) {
     return MAX_COMMANDS;
 }
 
-/* repl_state_edit_line / _set / _clamp were deleted. Edit-line cursor storage
- * moved to EditorState; editor code uses
- * editor_state_edit_line / _set / _clamp directly, and REPL pipeline
- * code receives the cursor as a function parameter or via the
- * repl_dispatch_edit_line_get / _set sink (implemented in phase 4 of
- * the edit-line-ownership plan). */
-
 int repl_state_normals_dirty(void) {
-    return g_normals_dirty;
+    return g_repl_state.document.normals_dirty;
 }
 
 void repl_state_normals_dirty_clear(void) {
-    g_normals_dirty = 0;
+    g_repl_state.document.normals_dirty = 0;
 }
 
-/* Clears the source-command array and the source-text document.
- * Does NOT touch the edit-line cursor — that storage moved to
- * EditorState and
- * sits on the other side of the β boundary from this TU.
- *
- * Wholesale-reset callers must position the cursor themselves at
- * the same boundary. Above the β boundary use
- * editor_state_edit_line_set(0) directly; from REPL pipeline files
- * route through repl_dispatch_edit_line_set(0). The "reset-and-
- * reposition" pair is what repl_scenes_reset_for_transient() does
- * for transient scene switches; editor_clear_all_cmds() does the
- * same dance for the editor-side Clear All (implemented in phase 4 of
- * the edit-line-ownership plan). */
+/* Clears source-command storage and source text. The edit-line cursor is
+ * editor-owned, so reset callers position it at their own boundary. */
 void repl_state_document_reset(void) {
     ReplCommandStore store = repl_command_store_live();
     repl_command_store_load(&store, NULL, 0);
@@ -260,7 +196,7 @@ FlatCmdLocalVars *repl_state_flat_program_local_vars_mut(void) {
 }
 
 int repl_state_flat_program_count(void) {
-    return g_num_flat_cmds;
+    return g_repl_state.flat_program.cmd_count;
 }
 
 void repl_state_flat_program_set_count(int cmd_count) {
@@ -268,42 +204,42 @@ void repl_state_flat_program_set_count(int cmd_count) {
         cmd_count = 0;
     if (cmd_count > MAX_COMMANDS)
         cmd_count = MAX_COMMANDS;
-    g_num_flat_cmds = cmd_count;
+    g_repl_state.flat_program.cmd_count = cmd_count;
 }
 
 int repl_state_flat_program_dirty(void) {
-    return g_flat_dirty;
+    return g_repl_state.flat_program.dirty;
 }
 
 void repl_state_flat_program_clear_dirty(void) {
-    g_flat_dirty = 0;
+    g_repl_state.flat_program.dirty = 0;
 }
 
 int repl_state_flat_program_user_lighting_enabled(void) {
-    return g_user_lighting_enabled;
+    return g_repl_state.flat_program.user_lighting_enabled;
 }
 
 int repl_state_flat_program_current_block_begin(void) {
-    return g_current_block_begin;
+    return g_repl_state.flat_program.current_block_begin_idx;
 }
 
 int repl_state_flat_program_current_block_end(void) {
-    return g_current_block_end;
+    return g_repl_state.flat_program.current_block_end_idx;
 }
 
 int repl_state_flat_program_current_block_source_line(void) {
-    return g_current_block_line;
+    return g_repl_state.flat_program.current_block_source_line_idx;
 }
 
 void repl_state_flat_program_set_user_lighting_enabled(int enabled) {
-    g_user_lighting_enabled = enabled ? 1 : 0;
+    g_repl_state.flat_program.user_lighting_enabled = enabled ? 1 : 0;
 }
 
 void repl_state_flat_program_set_current_block(int begin_idx, int end_idx,
                                                int source_line_idx) {
-    g_current_block_begin = begin_idx;
-    g_current_block_end = end_idx;
-    g_current_block_line = source_line_idx;
+    g_repl_state.flat_program.current_block_begin_idx = begin_idx;
+    g_repl_state.flat_program.current_block_end_idx = end_idx;
+    g_repl_state.flat_program.current_block_source_line_idx = source_line_idx;
 }
 
 void repl_state_flat_program_clear_current_block(void) {
@@ -311,14 +247,14 @@ void repl_state_flat_program_clear_current_block(void) {
 }
 
 void repl_state_flat_program_reset(void) {
-    g_num_flat_cmds = 0;
-    g_flat_dirty = 1;
-    g_user_lighting_enabled = 0;
+    g_repl_state.flat_program.cmd_count = 0;
+    g_repl_state.flat_program.dirty = 1;
+    g_repl_state.flat_program.user_lighting_enabled = 0;
     repl_state_flat_program_clear_current_block();
 }
 
 void repl_state_mark_flat_dirty(void) {
-    g_flat_dirty = 1;
+    g_repl_state.flat_program.dirty = 1;
 }
 
 void repl_state_mark_source_dirty(void) {
@@ -331,8 +267,8 @@ void repl_state_mark_source_dirty(void) {
      * Don't try to invalidate caches independently — every source
      * mutation goes through here, and that's the contract callers rely
      * on. */
-    g_normals_dirty = 1;
-    g_flat_dirty = 1;
+    g_repl_state.document.normals_dirty = 1;
+    g_repl_state.flat_program.dirty = 1;
     repl_source_scope_depth_cache_invalidate();
 }
 
@@ -356,9 +292,9 @@ ReplVariableView repl_state_variables(void) {
         .scratch_arrays = g_repl_state.variables.scratch_arrays,
         .scratch_array_count = REPL_SCRATCH_ARRAY_COUNT,
         .scratch_array_len = REPL_SCRATCH_ARRAY_LEN,
-        .time_var_idx = g_t_var_idx,
-        .time_playing = g_t_playing,
-        .anim_time = g_anim_time,
+        .time_var_idx = g_repl_state.variables.time_var_idx,
+        .time_playing = g_repl_state.variables.time_playing,
+        .anim_time = g_repl_state.variables.anim_time,
     };
 }
 
@@ -373,10 +309,11 @@ void repl_state_time_advance(float dt) {
         return;
 
     ensure_t_var_idx();
-    g_anim_time += dt;
-    if (g_t_playing && g_t_var_idx >= 0) {
-        g_predef_vars_mut[g_t_var_idx].value += dt;
-        g_flat_dirty = 1;
+    g_repl_state.variables.anim_time += dt;
+    if (g_repl_state.variables.time_playing &&
+        g_repl_state.variables.time_var_idx >= 0) {
+        g_predef_vars_mut[g_repl_state.variables.time_var_idx].value += dt;
+        g_repl_state.flat_program.dirty = 1;
     }
 }
 
@@ -388,38 +325,30 @@ void repl_state_time_set(float value) {
     ensure_t_var_idx();
     /* Keep the free-running accumulator in step with the visible clock so
      * later pause/resume math stays consistent. */
-    g_anim_time = value;
-    if (g_t_var_idx < 0)
+    g_repl_state.variables.anim_time = value;
+    if (g_repl_state.variables.time_var_idx < 0)
         return;
 
-    g_predef_vars_mut[g_t_var_idx].value = value;
-    g_flat_dirty = 1;
+    g_predef_vars_mut[g_repl_state.variables.time_var_idx].value = value;
+    g_repl_state.flat_program.dirty = 1;
 }
 
-void repl_state_time_set_playing(int playing) { g_t_playing = playing ? 1 : 0; }
+void repl_state_time_set_playing(int playing) {
+    g_repl_state.variables.time_playing = playing ? 1 : 0;
+}
 
 void repl_state_time_set_transient(float value) {
     /* Override only the predef 't' binding, leaving the free-running clock
-     * (g_anim_time) and the flat-dirty flag untouched — unlike
+     * (anim_time) and the flat-dirty flag untouched — unlike
      * repl_state_time_set, this does not perturb the running animation. It
      * lets a caller evaluate the program at an alternate t for a transient
      * purpose (e.g. sampling sub-frame times) without advancing or dirtying
      * anything. The caller owns re-flattening at the new t if it needs the
      * geometry re-baked, and restoring the prior binding afterward. */
     ensure_t_var_idx();
-    if (g_t_var_idx >= 0)
-        g_predef_vars_mut[g_t_var_idx].value = value;
+    if (g_repl_state.variables.time_var_idx >= 0)
+        g_predef_vars_mut[g_repl_state.variables.time_var_idx].value = value;
 }
-
-/* repl_state_presentation* / _grid_*_steps / _extents and the
- * render-config toggle accessors moved to glr_state.c (step 7a). The
- * runtime-mutated render halves (`lights[]`, `clear_color[]`) keep
- * these accessors because the executor writes them. Presentation
- * reset paths are now `glr_state_presentation_reset_defaults` /
- * `_example_defaults` and `glr_state_render_reset_defaults`, called
- * from `glr_ctrl_reset_all`. The example loader's per-load reset
- * routes through the controller-installed
- * `ReplHostEffects.example_presentation_reset` callback. */
 
 ReplRenderState repl_state_render(void) {
     return g_repl_state.render;
@@ -438,21 +367,29 @@ void repl_state_render_reset_defaults(void) {
     g_repl_state.render = repl_state_defaults()->render;
 }
 
-/* The legacy `repl_state_replay` / `_mut` / `_reset` forwarders are
- * gone. Callers use `replay_state_view` /
- * `replay_state_mut` / `replay_state_reset` directly. The
- * `check-replay-forwarders` ratchet is at 0/0 (implemented in
- * phase J7). */
-
 ReplSceneRuntimeState repl_state_scenes(void) {
-    return g_repl_state.scenes;
+    return g_repl_state.scene_runtime;
 }
 
-ReplSceneRuntimeState *repl_state_scenes_mut(void) { return &g_repl_state.scenes; }
-ReplSceneRuntimeState *repl_state_scenes_writable(void) { return &g_repl_state.scenes; }
-int repl_state_active_example_idx(void) { return g_repl_state.scenes.active_example_idx; }
-const char *repl_state_workspace_dir(void) { return g_repl_state.scenes.workspace_dir; }
-void repl_state_scenes_set_active_example_idx(int idx) { g_repl_state.scenes.active_example_idx = idx; }
+ReplSceneRuntimeState *repl_state_scenes_mut(void) {
+    return &g_repl_state.scene_runtime;
+}
+
+ReplSceneRuntimeState *repl_state_scenes_writable(void) {
+    return &g_repl_state.scene_runtime;
+}
+
+int repl_state_active_example_idx(void) {
+    return g_repl_state.scene_runtime.active_example_idx;
+}
+
+const char *repl_state_workspace_dir(void) {
+    return g_repl_state.scene_runtime.workspace_dir;
+}
+
+void repl_state_scenes_set_active_example_idx(int idx) {
+    g_repl_state.scene_runtime.active_example_idx = idx;
+}
 
 ReplImportExportView repl_state_import_export(void) {
     return (ReplImportExportView){
@@ -494,24 +431,10 @@ void repl_state_import_export_reset(void) {
     g_repl_state.import_export = repl_state_defaults()->import_export;
 }
 
-/* Reset REPL-owned slices to defaults. Peer/editor/UI/autocomplete
- * registration / chrome sync / derived export+camera text caches are
- * NOT included here — they live on glr_ctrl_reset_all in glr_ctrl.c
- * (see step 2 of feature/decouple-repl-from-gl-repl-alt.md).
- *
- * The derived-text refreshes (refresh_workspace_header_lines /
- * update_render_state_strings / update_cam_lines) read app-side state
- * through glr_config_get and the camera. They cannot run here without
- * pulling app/UI/peer state into the demo link set, AND if they ran
- * here they would pre-fire before glr_ctrl_reset_all has finished
- * resetting peers — the cached strings would briefly reflect
- * pre-reset peer state. The frame loop refreshes them every frame
- * anyway; tests that need them populated immediately go through
- * glr_ctrl_reset_all.
- *
- * Do NOT call any non-REPL reset entry from this function. The
- * separation is what lets tools/repl_demo build without stubbing
- * editor / UI / peer reset symbols. */
+/* Reset REPL-owned slices only. Peer/editor/UI state, chrome sync, and
+ * derived app-facing export/cache refreshes are owned by glr_ctrl_reset_all.
+ * Keeping this reset pure-REPL lets tools/repl_demo link without app/editor/UI
+ * reset stubs. */
 void repl_state_reset_program(void) {
     g_repl_state = *repl_state_defaults();
     repl_state_ensure_sentinels();
