@@ -1077,8 +1077,10 @@ ReplCompileResult repl_compile_var_assign(const char *input,
                                                      verr, sizeof(verr)))
             return compile_set_err(err, err_size, "%s", verr);
 
-        ExprCtx idx_ctx = { index_expr, vis_n > 0 ? vis : NULL, vis_n, NULL, 0 };
-        ExprCtx rhs_ctx = { rhs, vis_n > 0 ? vis : NULL, vis_n, NULL, 0 };
+        ExprCtx idx_ctx = { index_expr, vis_n > 0 ? vis : NULL, vis_n, NULL, 0,
+                            ctx->predef.vars, ctx->predef.count };
+        ExprCtx rhs_ctx = { rhs, vis_n > 0 ? vis : NULL, vis_n, NULL, 0,
+                            ctx->predef.vars, ctx->predef.count };
         int elem_idx = (int)repl_eval_expr(&idx_ctx);
         if (elem_idx < 0 || elem_idx >= REPL_SCRATCH_ARRAY_LEN)
             return compile_set_err(err, err_size,
@@ -1122,7 +1124,8 @@ ReplCompileResult repl_compile_var_assign(const char *input,
                                                      verr, sizeof(verr)))
             return compile_set_err(err, err_size, "%s", verr);
 
-        ExprCtx eval_ctx = { rhs, vis_n > 0 ? vis : NULL, vis_n, NULL, 0 };
+        ExprCtx eval_ctx = { rhs, vis_n > 0 ? vis : NULL, vis_n, NULL, 0,
+                             ctx->predef.vars, ctx->predef.count };
         float val = repl_eval_expr(&eval_ctx);
         int has_rhs_vars = input_has_any_visible_vars(rhs,
                                                       vis_n > 0 ? vis : NULL, vis_n);
@@ -2065,6 +2068,7 @@ ReplCompileResult repl_compile_for_loop_kernel(const char *input,
                                               sizeof(out->var_name),
                                               &out->start, &out->end, &out->step,
                                               out->visible_vars, out->visible_nv,
+                                              ctx->predef.vars, ctx->predef.count,
                                               &out->body_start)) {
         snprintf(err, (size_t)err_size,
                  "for syntax: for(var, start, end[, step]) body;");
