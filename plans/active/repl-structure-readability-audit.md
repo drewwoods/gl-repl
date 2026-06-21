@@ -724,21 +724,43 @@ local ignored variables and comments.
 
 ### Recommended cleanup
 
-Split mechanically after shared import/export constants are centralized:
+Divide by **output region** — the axis the existing scaffold section table
+already orders the file by — into **4 focused TUs + `export.c` as the
+orchestrator**, behind a shared private `export_internal.h`. This is a
+deliberate reduction from an earlier 7-file sketch, which over-fragmented:
+splitting `export_names.c` (~140 lines) and `export_tune.c` (~150 lines) into
+standalone files scatters `display()` generation across three TUs when names +
+needs-scan + passes + tune are one concern. Grouping by output region means
+each TU maps 1:1 to a contiguous region of the generated `output.c`, so a
+reader navigating the output lands in one file.
 
-| New file | Responsibility |
-|---|---|
-| `export_workspace_header.c` | Workspace/snippet header directives. |
-| `export_init.c` | Bootstrap, init, light/state setup. |
-| `export_cmd_writer.c` | Command-to-C emission. |
-| `export_names.c` | Generated names and collision avoidance. |
-| `export_display.c` | Display passes and render policy. |
-| `export_tune.c` | Tune helpers. |
-| `export_scaffold.c` | Main/footer/keyboard/tick scaffolding. |
+| New TU | ~lines | Holds (output region) |
+|---|---:|---|
+| `export_cmd_writer.c` | ~500 | GLCmd→C **body** emission: `write_canonical_cmd_as_c`, for/tess writers, `write_render_body_range`, `format_cmd_source_as_c`, `find_export_block_end`, the materialfv / point-parameter C89 translators. The largest, most self-contained chunk. |
+| `export_prologue.c` | ~500 | The generated file's **helpers + globals**: predef/scratch globals, save/restore helpers, `rand`, glfloat-vector helpers, `label`, render helper, func defs, tess preamble. |
+| `export_display.c` | ~550 | **`display()` generation + runtime UI**: generated-name collision (`ExportNameSet`, `export_choose_name`), needs scan (`ExportNeeds`, `export_collect_needs`), display passes + render policy, the tune knobs / keyboard handlers. Keeps names + needs + passes + tune together. |
+| `export_setup.c` | ~700 | **Header + GL-state setup**: workspace `@var`/`@cfg`/`@scene` metadata + C89 comment formatting, init bootstrap, lights init/display, camera/render-state line refresh. (Split into `export_header.c` + `export_init.c` if it feels too big.) |
+| `export.c` | ~400 | **Orchestrator**: the light/camera/projection bridges (install + accessors), the scaffold section table + `emit_export_scaffold`, and the public API (`repl_export_save_output`, `repl_save_default_output`, `repl_dump_code_panel_text`). |
 
-Keep `export.c` as the orchestration layer around the public save function.
+`export_internal.h` carries the shared substrate: `ExportNeeds`,
+`ExportGeneratedNames`/`ExportNameSet`, the `IMPORT_EXPORT_STATE` macro block,
+the float/format helpers, the bridge accessors, and `ExportScaffoldContext`.
 
-Also make export render policy explicit, for example:
+**Sequencing / cost (this is where the work is, not the function moves):**
+
+1. **Do Finding 7 first.** The `IMPORT_EXPORT_STATE` macros + shared constants
+   need `export_internal.h` as their home — which is exactly the substrate this
+   split requires anyway. Centralize them, then split.
+2. **Makefile + guards:** add the new TUs to every source / stub / test list,
+   and repoint any `export.c`-named guard (e.g. `check-repl-export-via-bridge`)
+   at the new filenames — the same plumbing tax flagged for the `compile.c`
+   split.
+3. **Behavior-preserving + guarded:** the cut is a mechanical move;
+   `test_export_trace_parity` + `test_repl_core_io` (round-trip) are the safety
+   net.
+
+The one *non*-move worth doing alongside: make the export render policy
+explicit instead of the ignored-cfg TODO in the display path —
 
 ```c
 typedef struct ReplExportRenderPolicy {
@@ -749,8 +771,8 @@ typedef struct ReplExportRenderPolicy {
 } ReplExportRenderPolicy;
 ```
 
-If export intentionally disables some overlays, that should be visible as
-policy, not as ignored cfg reads.
+— so a disabled overlay reads as policy, not as a silently-ignored cfg read.
+That is a behavior clarification, not part of the file cut.
 
 ## Finding 10: `flatten.c` mixes lowering with query/UI-adjacent helpers
 
