@@ -33,6 +33,7 @@ files=(
     src/repl/autonormal.c
     src/repl/scenes.c
     src/repl/scene_snapshot.c
+    src/repl/workspace_io.c
     src/repl/example_loader.c
     src/repl/examples.c
     src/repl/export.c

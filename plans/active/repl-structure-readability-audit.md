@@ -3,12 +3,11 @@
 Status: **active** - implementation has started. Findings 1 (core split),
 2 (compile context purity — visible-var, predef validator, and the eval path),
 3 (parser strict-ref context), 4 (source-scope view split + the 4b
-performance-regression fix), 6 (scene snapshot extraction), 7 (shared
-import/export vocabulary), 8 (import flow state), and 9 (export writer split)
-are landed. Finding 10 (flatten query split) and Finding 11 (state-layer
-scaffolding cleanup) are landed. The remaining findings and Finding 6's
-optional workspace-IO physical split are still a cleanup map, not completed
-work.
+performance-regression fix), 6 (scene snapshot extraction + workspace-IO
+mechanics split), 7 (shared import/export vocabulary), 8 (import flow state),
+9 (export writer split), 10 (flatten query split), and 11 (state-layer
+scaffolding cleanup) are landed. The remaining findings are still a cleanup
+map, not completed work.
 
 Recent implementation commits:
 
@@ -34,7 +33,8 @@ Recent implementation commits:
 | Finding 4 phase 4b: warm-view fix | Landed | Live-document normalize now reuses the warm live source-scope cache through parser live-wrapper fallback, and `reformat_large_doc` guards the user-visible reformat path. |
 | Finding 2 compile purity (visible-var + predef) | Landed | `b828b64f` threads the document view; `e1eb9ae4` the predef ident-validator; the eval path now carries an `ExprCtx.predef_vars` fallback so value evaluation (scratch/var-assign/if-condition/for-bounds) resolves against `ctx->predef`, not live `g_predef_vars` (closed by the P2 follow-up plus an if-condition fix; covered by `test_eval` and `test_repl_compile`). |
 | Finding 3 strict-ref context cleanup | Landed | Parser strict function-call validation now uses context-supplied source-scope and alias views; `source_scope == NULL` no longer reads live state. |
-| Finding 6 scene snapshot extraction | Landed | `src/repl/scene_snapshot.c` now owns command/source/cursor/predef/scratch/function-alias/cfg/camera capture, apply, clear, copy, and live command-loading helpers. `src/repl/scenes.c` keeps slot selection, promotion, eviction, and workspace iteration; a later `workspace_io.c` split remains optional residual cleanup. |
+| Finding 6 scene snapshot extraction | Landed | `src/repl/scene_snapshot.c` now owns command/source/cursor/predef/scratch/function-alias/cfg/camera capture, apply, clear, copy, and live command-loading helpers. `src/repl/scenes.c` keeps slot selection, promotion, eviction, and workspace iteration. |
+| Finding 6 workspace-IO mechanics split | Landed | `src/repl/workspace_io.c` now owns the filesystem + scene-file naming mechanics (recursive `mkdir`, `.c`-extension test, basename→scene-name, slug derivation + collision suffixes). `scenes.c` keeps the save/load orchestration that drives them, since that loop is the slot state machine and can't move without exposing `g_user_scenes`. `user_scene_copy` is now a whole-struct assignment. |
 | Finding 7 shared import/export format vocabulary | Landed | `export_format_shared.h` now owns the import/export state-access macro block plus workspace directive, snippet directive, C89 loop marker, and generated `repl_glfloatN` helper names. |
 | Finding 8 import flow state machine | Landed | File import now carries pending cfg, deferred `@var` values, and warning accounting through `ImportState`; public per-line workspace-header parsing keeps its separate batch for examples/tests. Line dispatch is explicit through `ImportLineKind` handler tables for early non-snippet, pre-snippet, and snippet-body phases. |
 | Finding 9 export writer split | Landed | `src/repl/export.c` is now the orchestrator; body writers, generated helpers, display/runtime UI generation, and setup/init/light/header text live in `export_cmd_writer.c`, `export_prologue.c`, `export_display.c`, and `export_setup.c` behind `export_internal.h`. |
@@ -614,15 +614,28 @@ decided.
 
 ## Finding 6: `scenes.c` combines scene state, snapshots, and workspace IO
 
-**Status:** Snapshot extraction landed on 2026-06-21. `SceneSnapshot` is now a
-named, copyable payload in `src/repl/scene_snapshot.{c,h}` and owns the repeated
-"capture live scene" / "apply snapshot to live state" mechanics for source text,
-commands, cursor, predef values, scratch arrays, function aliases, scene cfg, and
-camera text. `scenes.c` now embeds `SceneSnapshot` on `UserScene` and uses the
-helper for saves, tab loads, workspace iteration stashes, and LRU eviction
-rollback. The workspace filesystem loops still live in `scenes.c`; splitting
-those into a separate `workspace_io.c` remains a smaller follow-up rather than
-part of this landed slice.
+**Status:** Done (2026-06-21). Two extractions landed.
+
+*Snapshot.* `SceneSnapshot` is now a named, copyable payload in
+`src/repl/scene_snapshot.{c,h}` and owns the repeated "capture live scene" /
+"apply snapshot to live state" mechanics for source text, commands, cursor,
+predef values, scratch arrays, function aliases, scene cfg, and camera text.
+`scenes.c` embeds `SceneSnapshot` on `UserScene` and uses the helper for saves,
+tab loads, workspace iteration stashes, and LRU eviction rollback.
+
+*Workspace IO.* `src/repl/workspace_io.{c,h}` now owns the filesystem +
+scene-file naming mechanics — recursive `mkdir -p` (`workspace_io_ensure_dir`),
+the `.c`-extension test, basename→scene-name derivation, slug sanitization, and
+collision-suffix slugs. These are pure (no `g_user_scenes` / live-state access).
+The save/load *orchestration* (`repl_save_workspace` / `repl_load_workspace` and
+the per-slot evict/import drivers) stays in `scenes.c`: those loops are the slot
+state machine and example-promotion policy, so moving them would mean exporting
+`g_user_scenes` across a TU boundary — the opposite of the information-hiding
+goal. `scenes.c` thus keeps slot selection + active-scene state + promotion
+policy (the finding's concepts 2 and 4) and delegates the persistence "how" to
+`workspace_io.c` (concept 3); the copyable snapshot is concept 1.
+`user_scene_copy` collapsed to a whole-struct assignment now that every field
+(including the embedded `SceneSnapshot`) is plain data.
 
 ### Evidence
 
