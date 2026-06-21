@@ -79,6 +79,111 @@ program model in `state.c`:
 The two flows are deliberately decoupled by the dirty flag: editing
 never touches GL, and rendering never re-parses text it doesn't have to.
 
+### Component interaction map
+
+```mermaid
+flowchart LR
+    subgraph legend["Edge meaning"]
+        lmut_a["mutates"] e1@==> lmut_b["owned state / store"]
+        lread_a["reads / queries"] -.-> lread_b["view / context"]
+        lflow_a["routes / invokes"] i1@--> lflow_b["pipeline stage"]
+    end
+
+    subgraph host["Host boundary (outside src/repl)"]
+        editor_commit["src/editor/commit.c<br/>editor transaction<br/>(undo + text + REPL apply)"]
+        loader_callers["import · examples · tutorials · tests<br/>non-editor load callers"]
+        controller["src/app/glr_ctrl.c<br/>frame coordinator"]
+        source_port["source_document.h<br/>host-backed source text"]
+        hostfx["host_effects.h<br/>status · cursor · input hooks"]
+    end
+
+    subgraph edit_flow["Edit/load flow (text → source program)"]
+        load["load.c<br/>non-editor load transaction"]
+        compile["compile.c<br/>pure validators → ReplCompiledChange"]
+        parser["parser.c<br/>one line → GLCmd + canonical text"]
+        normalize["normalize.c<br/>parse + canonicalize"]
+        eval["eval.c<br/>expressions · predef vars · REPL↔C translation"]
+        scope["source_scope.c + visible_vars.c<br/>block depth · lexical vars"]
+        apply["apply.c<br/>apply compiled side effects"]
+        store["command_store.c<br/>GLCmd array mechanics"]
+    end
+
+    subgraph model["REPL-owned model"]
+        state["state.c<br/>ReplState slices"]
+        doc_state["source commands<br/>ReplDocumentState"]
+        vars["variables<br/>predefs · scratch · func aliases · t"]
+        flat_state["flat program<br/>ReplFlatProgramState"]
+    end
+
+    subgraph frame_flow["Frame flow (source program → GL)"]
+        pipeline["pipeline.h<br/>controller-facing frame entry points"]
+        autonormal["autonormal.c<br/>source-level normal maintenance"]
+        flatten["flatten.c<br/>unroll loops · inline funcs · resolve if"]
+        flatten_query["flatten_query.c<br/>cursor/cost queries"]
+        executor["executor.c<br/>flat program → GL calls"]
+    end
+
+    subgraph persistence["Persistence and scene catalog"]
+        import["import.c<br/>file/workspace reader"]
+        export["export*.c<br/>writer + generated C"]
+        scenes["scenes.c<br/>scene slots · promotion · orchestration"]
+        snapshot["scene_snapshot.c<br/>copyable scene payload"]
+        workspace["workspace_io.c<br/>filesystem + names"]
+        cfg["cfg_baseline.c<br/>flat config bag"]
+    end
+
+    editor_commit i2@--> compile
+    editor_commit i3@--> apply
+    loader_callers i4@--> load
+    load i5@--> compile
+    load e2@==> source_port
+    load i6@--> apply
+
+    compile i7@--> parser
+    compile i8@--> normalize
+    compile -.-> eval
+    compile -.-> scope
+    parser -.-> eval
+    normalize -.-> scope
+
+    apply i9@--> store
+    store e3@==> doc_state
+    apply e4@==> vars
+    state -.-> doc_state
+    state -.-> vars
+    state -.-> flat_state
+
+    controller i10@--> pipeline
+    pipeline i11@--> autonormal
+    pipeline i12@--> flatten
+    pipeline i13@--> executor
+    autonormal e5@==> doc_state
+    flatten -.-> source_port
+    flatten -.-> doc_state
+    flatten -.-> vars
+    flatten e6@==> flat_state
+    flatten_query -.-> flat_state
+    executor -.-> flat_state
+    executor -.-> source_port
+
+    import i14@--> load
+    export -.-> source_port
+    export -.-> state
+    scenes i15@--> snapshot
+    scenes i16@--> workspace
+    snapshot e7@==> state
+    snapshot -.-> cfg
+    workspace -.-> import
+    hostfx -.-> load
+    hostfx -.-> scenes
+
+    classDef animateE stroke:#f50,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
+    classDef animateF stroke:#5f0,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
+
+    class e1,e2,e3,e4,e5,e6,e7 animateE
+    class i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16 animateF
+```
+
 ---
 
 ## 3. The two-level command model
@@ -584,6 +689,86 @@ for(i, 0, 6) {
   glVertex3f(r * sin(i / 6 * TAU + t), r * cos(i / 6 * TAU + t), 0)
 }
 glEnd()
+```
+
+### Trace coverage diagram
+
+```mermaid
+flowchart LR
+    subgraph legend["Edge meaning"]
+        lmut_a["mutates"] e1@==> lmut_b["owned state / store"]
+        lread_a["reads / queries"] -.-> lread_b["view / context"]
+        lflow_a["routes / invokes"] i1@--> lflow_b["pipeline stage"]
+    end
+
+    subgraph sample["Representative demo program (SAMPLE_TRACE)"]
+        decls["float r;<br/>r = 1.5;"]
+        static_gl["glPointSize · glColor3f · glBegin"]
+        loop_text["for(i, 0, 6) {<br/>glVertex3f(r*sin(i/6*TAU+t), ...)<br/>}"]
+        end_gl["glEnd()"]
+    end
+
+    subgraph load_stage["Stage 1: non-editor load transaction"]
+        load["repl_load_apply_line<br/>per source line"]
+        compile["repl_compile_dispatch<br/>pure ReplCompiledChange"]
+        handlers["float_decl · var_assign · for_loop kernel<br/>fallback: GL parser"]
+        text_write["source_document_apply_change<br/>canonical line text"]
+        apply["repl_load_apply_compiled_change_transaction"]
+    end
+
+    subgraph source_model["Stage 2: source program"]
+        source_cmds["ReplDocumentState<br/>9 source commands"]
+        predef["predef vars<br/>t + r=1.5"]
+        body["CMD_VERTEX3F has_vars=1<br/>expression preserved as text"]
+    end
+
+    subgraph flat_stage["Stage 3: flatten"]
+        flatten["repl_flatten_commands"]
+        locals["FlatCmdLocalVars<br/>i=0 · i=1 · ... · i=5"]
+        flat["ReplFlatProgramState<br/>11 flat commands"]
+        provenance["src_idx=6 on all six vertices"]
+    end
+
+    subgraph frame_stage["Stage 4: frame loop"]
+        tick["t changes<br/>0.00 → 0.25 → 0.50 → 0.75"]
+        rebake["has_vars re-evaluation<br/>r and t live, i frozen"]
+        exec["repl_execute_program<br/>GL stubs in --trace; real GL in --render 4"]
+        ring["rotating 6-point ring"]
+    end
+
+    decls i2@--> load
+    static_gl i3@--> load
+    loop_text i4@--> load
+    end_gl i5@--> load
+
+    load i6@--> compile
+    compile i7@--> handlers
+    handlers i8@--> apply
+    apply e2@==> text_write
+    apply e3@==> source_cmds
+    apply e4@==> predef
+    source_cmds -.-> body
+
+    source_cmds i9@--> flatten
+    predef -.-> flatten
+    body -.-> flatten
+    flatten e5@==> flat
+    flatten e6@==> locals
+    flatten e7@==> provenance
+
+    tick e8@==> predef
+    tick i10@--> flatten
+    flat -.-> rebake
+    locals -.-> rebake
+    predef -.-> rebake
+    rebake i11@--> exec
+    exec i12@--> ring
+
+    classDef animateE stroke:#f50,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
+    classDef animateF stroke:#5f0,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
+
+    class e1,e2,e3,e4,e5,e6,e7,e8 animateE
+    class i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12 animateF
 ```
 
 ### Stage 1 — text → compile → apply  (`repl_load_apply_line`)
