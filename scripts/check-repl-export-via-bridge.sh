@@ -1,5 +1,5 @@
 #!/bin/bash
-# Hard guard: src/repl/export.c and src/repl/import.c stay GL-free and
+# Hard guard: src/repl/export*.c and src/repl/import.c stay GL-free and
 # pull all app/scene state through controller-installed bridges
 # (ReplExportCameraBridge, ReplExportProjectionBridge, ReplConfigBridge,
 # ...), never by reaching into the scene or app layers directly. This is
@@ -17,7 +17,14 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-files=(src/repl/export.c src/repl/import.c)
+files=(
+    src/repl/export.c
+    src/repl/export_cmd_writer.c
+    src/repl/export_display.c
+    src/repl/export_prologue.c
+    src/repl/export_setup.c
+    src/repl/import.c
+)
 
 violations=$(grep -nE '#[[:space:]]*include[[:space:]]+"(scene|app)/|\b(scene|glr)_[a-z0-9_]+[[:space:]]*\(' "${files[@]}" 2>/dev/null \
     | grep -vE '^[^:]+:[0-9]+:[[:space:]]*(\*|//|/\*)' \
@@ -29,7 +36,7 @@ if [ -z "$violations" ]; then
     exit 0
 fi
 
-echo "ERROR: src/repl/export.c / src/repl/import.c must not reach the scene/app layers directly." >&2
+echo "ERROR: src/repl/export*.c / src/repl/import.c must not reach the scene/app layers directly." >&2
 echo "Pull app/scene-derived values through a controller-installed bridge" >&2
 echo "(e.g. ReplExportProjectionBridge -> scene_get_active_projection in" >&2
 echo "src/app/glr_ctrl.c), not by calling scene_*/glr_* or including their" >&2

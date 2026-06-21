@@ -2,9 +2,10 @@
 
 Status: **active** - implementation has started. Findings 1 (core split),
 2 (compile context purity — visible-var, predef validator, and the eval path),
-3 (parser strict-ref context), and 4 (source-scope view split + the 4b
-performance-regression fix) are landed. The remaining findings in this document
-are still a cleanup map, not completed work.
+3 (parser strict-ref context), 4 (source-scope view split + the 4b
+performance-regression fix), 7 (shared import/export vocabulary), 8 (import flow
+state), and 9 (export writer split) are landed. The remaining findings in this
+document are still a cleanup map, not completed work.
 
 Recent implementation commits:
 
@@ -32,6 +33,20 @@ Recent implementation commits:
 | Finding 3 strict-ref context cleanup | Landed | Parser strict function-call validation now uses context-supplied source-scope and alias views; `source_scope == NULL` no longer reads live state. |
 | Finding 7 shared import/export format vocabulary | Landed | `export_format_shared.h` now owns the import/export state-access macro block plus workspace directive, snippet directive, C89 loop marker, and generated `repl_glfloatN` helper names. |
 | Finding 8 import flow state machine | Landed | File import now carries pending cfg, deferred `@var` values, and warning accounting through `ImportState`; public per-line workspace-header parsing keeps its separate batch for examples/tests. Line dispatch is explicit through `ImportLineKind` handler tables for early non-snippet, pre-snippet, and snippet-body phases. |
+| Finding 9 export writer split | Landed | `src/repl/export.c` is now the orchestrator; body writers, generated helpers, display/runtime UI generation, and setup/init/light/header text live in `export_cmd_writer.c`, `export_prologue.c`, `export_display.c`, and `export_setup.c` behind `export_internal.h`. |
+
+Latest verification for Finding 9:
+
+- `make test_repl_core_io USE_GL_STUBS=1`
+- `./build/release-gl-stubs/test_repl_core_io`
+- `make test_repl_export_all_commands test_repl_export_lights test_repl_export_clearcolor test_export_trace_parity USE_GL_STUBS=1`
+- `./build/release-gl-stubs/test_repl_export_all_commands`
+- `./build/release-gl-stubs/test_repl_export_lights`
+- `./build/release-gl-stubs/test_repl_export_clearcolor`
+- `./build/release-gl-stubs/test_export_trace_parity`
+- `make repl_demo USE_GL_STUBS=1`
+- `make check-c99`
+- `make test-stubs`
 
 Latest verification for Finding 4:
 
@@ -710,6 +725,15 @@ This does not need to change the file format. It is primarily a flow cleanup.
 
 ## Finding 9: `export.c` is several modules in one translation unit
 
+**Status:** Done (2026-06-21). The export writer is split by generated-output
+region: `export_cmd_writer.c` owns GLCmd body emission, `export_prologue.c` owns
+generated globals/helpers/function bodies, `export_display.c` owns generated
+names, needs scanning, display-pass policy, tune UI, and display/keyboard/tick
+emission, and `export_setup.c` owns header/setup/init/bootstrap/light text.
+`export.c` now keeps the bridges, scaffold section table, and public entry
+points. The display overlay policy is explicit through `ReplExportRenderPolicy`
+instead of reading cfg toggles and discarding them.
+
 ### Evidence
 
 `src/repl/export.c` is over 3k lines and contains at least these concerns:
@@ -760,9 +784,11 @@ reader navigating the output lands in one file.
 | `export_setup.c` | ~700 | **Header + GL-state setup**: workspace `@var`/`@cfg`/`@scene` metadata + C89 comment formatting, init bootstrap, lights init/display, camera/render-state line refresh. (Split into `export_header.c` + `export_init.c` if it feels too big.) |
 | `export.c` | ~400 | **Orchestrator**: the light/camera/projection bridges (install + accessors), the scaffold section table + `emit_export_scaffold`, and the public API (`repl_export_save_output`, `repl_save_default_output`, `repl_dump_code_panel_text`). |
 
-`export_internal.h` carries the shared substrate: `ExportNeeds`,
-`ExportGeneratedNames`/`ExportNameSet`, the `IMPORT_EXPORT_STATE` macro block,
-the float/format helpers, the bridge accessors, and `ExportScaffoldContext`.
+`export_internal.h` carries the shared substrate used by the split TUs:
+`ExportNeeds`, `ExportGeneratedNames`, `ExportScaffoldContext`, export-owned cfg
+slug constants, source-text view helpers, float/comment formatting helpers, and
+private writer prototypes. The import/export vocabulary centralized by Finding 7
+stays in `export_format_shared.h`.
 
 **Sequencing / cost (this is where the work is, not the function moves):**
 

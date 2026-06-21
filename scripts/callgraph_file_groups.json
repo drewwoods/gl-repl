@@ -101,6 +101,10 @@
       "label": "6. Persistence, audio, instrumentation, lifecycle",
       "files": [
         "repl/export.c",
+        "repl/export_cmd_writer.c",
+        "repl/export_display.c",
+        "repl/export_prologue.c",
+        "repl/export_setup.c",
         "app/glr_audio.c",
         "support/cpuprof.c",
         "support/memprof.c",
