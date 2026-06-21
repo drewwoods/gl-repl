@@ -1941,14 +1941,16 @@ int main(void) {
             fclose(f);
         }
 
-        /* Force live wireframe to 0 first. parse_cfg's per-line apply
-         * will flip it to 1 during the partial read; that's the
-         * already-mutated live state, not the leak we're testing. */
+        /* Force live wireframe to 0 first. File import now keeps @cfg in
+         * ImportState until the load succeeds, so the partial read must not
+         * mutate live config either. */
         glr_ctrl_reset_all(); declare_test_vars();
         glr_state_presentation_mut()->wireframe = 0;
 
         int rc = repl_export_load_from_file(leak_path, NULL);
         ASSERT_INT("leak fixture import fails (truncated line)", rc, 0);
+        ASSERT_INT("failed load did not apply @cfg before success",
+                   glr_state_presentation().wireframe, 0);
 
         /* Reset live wireframe back to 0 so a leaked accumulator
          * re-apply through repl_export_apply_pending_cfg becomes a

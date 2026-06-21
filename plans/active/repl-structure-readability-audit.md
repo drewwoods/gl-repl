@@ -30,7 +30,8 @@ Recent implementation commits:
 | Finding 4 phase 4b: warm-view fix | Landed | Live-document normalize now reuses the warm live source-scope cache through parser live-wrapper fallback, and `reformat_large_doc` guards the user-visible reformat path. |
 | Finding 2 compile purity (visible-var + predef) | Landed | `b828b64f` threads the document view; `e1eb9ae4` the predef ident-validator; the eval path now carries an `ExprCtx.predef_vars` fallback so value evaluation (scratch/var-assign/if-condition/for-bounds) resolves against `ctx->predef`, not live `g_predef_vars` (closed by the P2 follow-up plus an if-condition fix; covered by `test_eval` and `test_repl_compile`). |
 | Finding 3 strict-ref context cleanup | Landed | Parser strict function-call validation now uses context-supplied source-scope and alias views; `source_scope == NULL` no longer reads live state. |
-| Finding 7 shared import/export format vocabulary | Landed | `export_format_shared.h` now owns the import/export state-access macro block plus workspace directive, snippet directive, C89 loop marker, and generated `repl_glfloatN` helper names. The file-level import accumulators remain deferred to Finding 8 because the public per-line workspace-header parser intentionally accumulates state outside `ImportState`. |
+| Finding 7 shared import/export format vocabulary | Landed | `export_format_shared.h` now owns the import/export state-access macro block plus workspace directive, snippet directive, C89 loop marker, and generated `repl_glfloatN` helper names. |
+| Finding 8 import flow state machine | Landed | File import now carries pending cfg, deferred `@var` values, and warning accounting through `ImportState`; public per-line workspace-header parsing keeps its separate batch for examples/tests. Line dispatch is explicit through `ImportLineKind` handler tables for early non-snippet, pre-snippet, and snippet-body phases. |
 
 Latest verification for Finding 4:
 
@@ -619,9 +620,10 @@ not covered by `repl_state_capture` / `repl_state_restore`.
 Status: **implemented for the shared format contract** — `src/repl/export_format_shared.h`
 now centralizes the duplicated import/export state-access macros and the
 round-trip directive/marker string vocabulary. The import accumulator lifetime
-piece remains deferred to Finding 8 because it is bound to the public
+piece is covered by the Finding 8 implementation below because it belongs to
+the import state-machine contract, while the public
 `repl_state_parse_workspace_header_line()` / `repl_export_apply_pending_cfg()`
-batching contract rather than just import/export format duplication.
+batch stays separate for examples/tests.
 
 ### Evidence
 
@@ -663,6 +665,14 @@ reduces duplicated scaffolding first. Keep `export_state.h` focused on shared
 state dimensions; do not overload it with format directive policy.
 
 ## Finding 8: import flow is an implicit state machine
+
+Status: **implemented** — `src/repl/import.c` now gives file loads their own
+`ImportState.workspace` accumulator, routes file-load diagnostics through
+state-owned warning helpers, and makes the ordered line-dispatch phases explicit
+with `ImportLineKind` handler tables. The public
+`repl_state_parse_workspace_header_line()` / `repl_export_apply_pending_cfg()`
+batch remains separate so examples and tests keep their existing single-line
+parser contract.
 
 ### Evidence
 

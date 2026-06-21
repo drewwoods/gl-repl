@@ -6,10 +6,8 @@
  * code-panel dump, header-line refresh) stays in export.c. This file
  * owns:
  *
- *   - The pending-cfg accumulator (parse_cfg drains it into the cfg
- *     bridge once a header batch is parsed).
- *   - The deferred-@var table (workspace-header @var values that must
- *     survive a snippet's // @declare round-trip).
+ *   - The file-import state machine (line accumulation, handler dispatch,
+ *     diagnostics, pending cfg, and deferred @var values).
  *   - The workspace header directive readers
  *     (parse_workspace_dir / parse_scene_name / parse_var /
  *     parse_func_alias / parse_cfg) and the parser dispatcher
@@ -60,43 +58,67 @@ static const char kWarningPrefix[] = COLOR_WARNING_START "Warning:" COLOR_WARNIN
 
 #define g_import_cfg_bridge (repl_config_bridge())
 
-/* Pending @cfg accumulator: parse_cfg() during import populates this; the
- * import driver drains it via the bridge after parse completes. */
-static ReplConfigBag g_import_cfg_accumulator;
+#define MAX_DEFERRED_VAR_VALUES MAX_PREDEF_VARS
+typedef struct { char name[REPL_PREDEF_NAME_MAX]; float value; } DeferredVar;
 
-static void import_cfg_accumulator_reset(void) {
-    repl_config_bag_clear(&g_import_cfg_accumulator);
+typedef struct ImportState ImportState;
+
+typedef struct {
+    ReplConfigBag cfg_accumulator;
+    DeferredVar   deferred_var_values[MAX_DEFERRED_VAR_VALUES];
+    int           deferred_var_count;
+    ImportState  *owner;
+} ImportWorkspaceAccum;
+
+#define IMPORT_MAX_PENDING_COMMENTS 16
+
+struct ImportState {
+    int in_snippet;
+    int past_snippet;
+    int func_depth;                   /* depth inside a function definition */
+    int loaded;
+    int warnings;
+    int edit_line;                    /* caller-owned cursor (Phase 3.6.4) */
+    ImportWorkspaceAccum workspace;
+    char pending_comments[IMPORT_MAX_PENDING_COMMENTS][MAX_LINE_LEN];
+    int  pending_comment_count;
+    int  pending_blank_run;
+    int  line_no;
+};
+
+/* Public single-line parser batching state. repl_export_load_from_file uses
+ * ImportState.workspace instead, so failed file imports cannot leak @cfg or
+ * deferred @var data into later public repl_export_apply_pending_cfg() calls. */
+static ImportWorkspaceAccum g_public_workspace_accum;
+
+static void import_workspace_accum_reset(ImportWorkspaceAccum *accum) {
+    if (!accum)
+        return;
+    repl_config_bag_clear(&accum->cfg_accumulator);
+    accum->deferred_var_count = 0;
 }
 
-static void import_cfg_accumulator_apply_and_reset(void) {
+static void import_workspace_accum_init(ImportWorkspaceAccum *accum,
+                                        ImportState *owner) {
+    if (!accum)
+        return;
+    accum->owner = owner;
+    import_workspace_accum_reset(accum);
+}
+
+static void import_workspace_cfg_apply_and_reset(ImportWorkspaceAccum *accum) {
+    if (!accum)
+        return;
     if (g_import_cfg_bridge && g_import_cfg_bridge->apply &&
-        g_import_cfg_accumulator.count > 0) {
-        g_import_cfg_bridge->apply(&g_import_cfg_accumulator);
+        accum->cfg_accumulator.count > 0) {
+        g_import_cfg_bridge->apply(&accum->cfg_accumulator);
     }
-    import_cfg_accumulator_reset();
+    repl_config_bag_clear(&accum->cfg_accumulator);
 }
 
 void repl_export_apply_pending_cfg(void) {
-    import_cfg_accumulator_apply_and_reset();
+    import_workspace_cfg_apply_and_reset(&g_public_workspace_accum);
 }
-
-/* Deferred @var values: set by parse_workspace_header_line alongside the
- * normal auto-declare+set-value path.  load_from_file re-applies them after
- * the snippet is processed so that // @declare markers in the snippet can
- * undeclare and re-declare variables (creating CMD_VAR_DECLARE commands)
- * without losing the saved values from the workspace header. */
-#define MAX_DEFERRED_VAR_VALUES MAX_PREDEF_VARS
-typedef struct { char name[REPL_PREDEF_NAME_MAX]; float value; } DeferredVar;
-static DeferredVar g_deferred_var_values[MAX_DEFERRED_VAR_VALUES];
-static int         g_deferred_var_count = 0;
-
-/* Warnings emitted by the workspace-header directive parsers (parse_var /
- * parse_func_alias / parse_scene_name / parse_workspace_dir). They run via
- * repl_state_parse_workspace_header_line, which can't reach
- * ImportState.warnings, so they tally here instead; load_from_file folds
- * this into the per-load total. Reset per load in
- * repl_export_load_reset_accumulators. */
-static int         g_import_header_warnings = 0;
 
 static int import_first_non_decl(const ReplCommandStore *store) {
     int pos = 0;
@@ -124,9 +146,8 @@ static void import_format_decl_float(char *buf, size_t n, float v) {
 /* test catches any drift.                                                    */
 /* ========================================================================= */
 
-typedef int (*WorkspaceParseFn)(const char *args);
-typedef int (*SnippetParseFn)(const char *args, int *loaded,
-                              int *warnings, int *edit_line_inout);
+typedef int (*WorkspaceParseFn)(ImportWorkspaceAccum *accum, const char *args);
+typedef int (*SnippetParseFn)(const char *args, ImportState *s);
 
 typedef struct {
     const char       *name;      /* directive name without leading `@` */
@@ -149,29 +170,63 @@ static void import_vwarn(const char *fmt, va_list ap) {
     fputc('\n', stderr);
 }
 
-static void import_warn(const char *fmt, ...) {
+static void import_state_vwarn(ImportState *s, const char *fmt, va_list ap) {
+    import_vwarn(fmt, ap);
+    if (s)
+        s->warnings++;
+}
+
+static void import_state_warn(ImportState *s, const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    import_vwarn(fmt, ap);
+    import_state_vwarn(s, fmt, ap);
     va_end(ap);
 }
 
-/* Like import_warn, but also counts toward the per-load "(N warnings)"
- * total. For the workspace-header directive parsers, which run via
- * repl_state_parse_workspace_header_line and so can't reach
- * ImportState.warnings; the snippet parsers use import_warn + their own
- * (*warnings)++ instead. */
-static void import_header_warn(const char *fmt, ...) {
+/* Emit a workspace-header warning and count it toward the per-load
+ * "(N warnings)" total when parsing under repl_export_load_from_file().
+ * Public repl_state_parse_workspace_header_line() callers still get the
+ * warning printed immediately and can drain cfg through
+ * repl_export_apply_pending_cfg(). */
+static void import_workspace_warn(ImportWorkspaceAccum *accum,
+                                  const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    import_vwarn(fmt, ap);
+    if (accum && accum->owner) {
+        import_state_vwarn(accum->owner, fmt, ap);
+    } else {
+        import_vwarn(fmt, ap);
+    }
     va_end(ap);
-    g_import_header_warnings++;
+}
+
+static void import_state_warn_parse_line(ImportState *s, const char *line,
+                                         const char *detail) {
+    if (detail && detail[0])
+        fprintf(stderr, "%s (line %d): %s (%s)\n",
+                kWarningPrefix, s ? s->line_no : 0, line, detail);
+    else
+        fprintf(stderr, "%s (line %d): %s\n",
+                kWarningPrefix, s ? s->line_no : 0, line);
+    if (s)
+        s->warnings++;
+}
+
+static void import_state_warn_parse_status(ImportState *s, int line_no,
+                                           const char *fmt, ...) {
+    va_list ap;
+    fprintf(stderr, "%s (line %d): ", kWarningPrefix, line_no);
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+    fputc('\n', stderr);
+    if (s)
+        s->warnings++;
 }
 
 /* --- workspace-dir --------------------------------------------------------- */
 
-static int parse_workspace_dir(const char *args) {
+static int parse_workspace_dir(ImportWorkspaceAccum *accum, const char *args) {
     size_t char_idx = 0;
     while (*args && char_idx < REPL_WORKSPACE_DIR_MAX - 1)
         g_pending_workspace_dir_writable[char_idx++] = *args++;
@@ -179,8 +234,9 @@ static int parse_workspace_dir(const char *args) {
     /* More source left over the cap means the path was clipped — a
      * truncated path points at the wrong directory, so don't do it silently. */
     if (*args)
-        import_header_warn("@workspace-dir path exceeds the %d-char limit; truncated",
-                           (int)REPL_WORKSPACE_DIR_MAX - 1);
+        import_workspace_warn(accum,
+                              "@workspace-dir path exceeds the %d-char limit; truncated",
+                              (int)REPL_WORKSPACE_DIR_MAX - 1);
     while (char_idx > 0 && isspace((unsigned char)g_pending_workspace_dir_writable[char_idx - 1]))
         g_pending_workspace_dir_writable[--char_idx] = '\0';
     return 1;
@@ -188,14 +244,15 @@ static int parse_workspace_dir(const char *args) {
 
 /* --- scene-name ------------------------------------------------------------ */
 
-static int parse_scene_name(const char *args) {
+static int parse_scene_name(ImportWorkspaceAccum *accum, const char *args) {
     size_t char_idx = 0;
     while (*args && char_idx < USER_SCENE_NAME_MAX - 1)
         g_pending_scene_name_writable[char_idx++] = *args++;
     g_pending_scene_name_writable[char_idx] = '\0';
     if (*args)
-        import_header_warn("@scene-name exceeds the %d-char limit; truncated to '%s'",
-                           (int)USER_SCENE_NAME_MAX - 1, g_pending_scene_name);
+        import_workspace_warn(accum,
+                              "@scene-name exceeds the %d-char limit; truncated to '%s'",
+                              (int)USER_SCENE_NAME_MAX - 1, g_pending_scene_name);
     while (char_idx > 0 && isspace((unsigned char)g_pending_scene_name_writable[char_idx - 1]))
         g_pending_scene_name_writable[--char_idx] = '\0';
     return 1;
@@ -203,7 +260,7 @@ static int parse_scene_name(const char *args) {
 
 /* --- var ------------------------------------------------------------------- */
 
-static int parse_var(const char *args) {
+static int parse_var(ImportWorkspaceAccum *accum, const char *args) {
     const char *p = args;
     char name[REPL_PREDEF_NAME_MAX];
     int name_char_idx = 0;
@@ -217,8 +274,9 @@ static int parse_var(const char *args) {
      * so the variable stays usable, just under the shorter name. Pre-fix the
      * leftover chars broke the `=` parse and the whole @var was dropped. */
     if (*p && (isalnum((unsigned char)*p) || *p == '_')) {
-        import_header_warn("@var name exceeds the %d-char limit; truncated to '%s'",
-                           REPL_PREDEF_NAME_MAX - 1, name);
+        import_workspace_warn(accum,
+                              "@var name exceeds the %d-char limit; truncated to '%s'",
+                              REPL_PREDEF_NAME_MAX - 1, name);
         while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
     }
     while (*p && isspace((unsigned char)*p)) p++;
@@ -233,8 +291,8 @@ static int parse_var(const char *args) {
         if (!repl_eval_declare_predef_var(name, err, sizeof(err))) {
             /* e.g. reserved name or predef table full. Pre-fix this `err`
              * was computed and thrown away — surface it. */
-            import_header_warn("@var '%s' could not be declared: %s",
-                               name, err[0] ? err : "rejected");
+            import_workspace_warn(accum, "@var '%s' could not be declared: %s",
+                                  name, err[0] ? err : "rejected");
             return 0;
         }
         idx = repl_eval_find_predef_var_idx(name);
@@ -245,12 +303,13 @@ static int parse_var(const char *args) {
     /* Also defer the value so that if a // @declare marker in the snippet
      * undeclares and re-declares this var, the value is restored afterwards
      * (see load_from_file deferred-apply step). */
-    if (g_deferred_var_count < MAX_DEFERRED_VAR_VALUES) {
-        repl_copy_string_fits(g_deferred_var_values[g_deferred_var_count].name,
-                              sizeof(g_deferred_var_values[0].name),
+    if (accum && accum->owner &&
+        accum->deferred_var_count < MAX_DEFERRED_VAR_VALUES) {
+        repl_copy_string_fits(accum->deferred_var_values[accum->deferred_var_count].name,
+                              sizeof(accum->deferred_var_values[0].name),
                               name);
-        g_deferred_var_values[g_deferred_var_count].value = val;
-        g_deferred_var_count++;
+        accum->deferred_var_values[accum->deferred_var_count].value = val;
+        accum->deferred_var_count++;
     }
     return 1;
 }
@@ -261,7 +320,7 @@ static int parse_var(const char *args) {
  * register the alias, so the later `static void <name>(...)` definition
  * in the file body maps back to its funcN slot. Returns 1 when
  * consumed, 0 on malformed args. */
-static int parse_func_alias(const char *args) {
+static int parse_func_alias(ImportWorkspaceAccum *accum, const char *args) {
     const char *p = args;
     while (*p && isspace((unsigned char)*p)) p++;
     if (!isdigit((unsigned char)*p)) return 0;
@@ -290,16 +349,17 @@ static int parse_func_alias(const char *args) {
      * (the historical behaviour) — the only fix is a shorter func name or a
      * larger REPL_FUNC_NAME_MAX. */
     if (*p && (isalnum((unsigned char)*p) || *p == '_'))
-        import_header_warn("@func %d alias '%s' exceeds the %d-char name limit; "
-                           "its definition will be dropped on import",
-                           slot, name, REPL_FUNC_NAME_MAX - 1);
+        import_workspace_warn(accum,
+                              "@func %d alias '%s' exceeds the %d-char name limit; "
+                              "its definition will be dropped on import",
+                              slot, name, REPL_FUNC_NAME_MAX - 1);
     repl_func_alias_set(slot, name);
     return 1;
 }
 
 /* --- cfg ------------------------------------------------------------------- */
 
-static int parse_cfg(const char *args) {
+static int parse_cfg(ImportWorkspaceAccum *accum, const char *args) {
     char slug[32];
     const char *p = NULL;
     if (!repl_config_extract_slug(args, slug, sizeof(slug), &p))
@@ -321,7 +381,8 @@ static int parse_cfg(const char *args) {
     }
     value[vi] = '\0';
     if (vi == 0) return 0;
-    repl_config_bag_set(&g_import_cfg_accumulator, slug, value);
+    if (accum)
+        repl_config_bag_set(&accum->cfg_accumulator, slug, value);
     return 1;
 }
 
@@ -344,7 +405,8 @@ static const WorkspaceDirective WORKSPACE_DIRECTIVES[] = {
 #define SNIPPET_DIR(name, parse_fn) \
     { name, sizeof(name) - 1, parse_fn }
 
-int repl_state_parse_workspace_header_line(const char *line) {
+static int import_parse_workspace_header_line(ImportWorkspaceAccum *accum,
+                                              const char *line) {
     const char *p = line;
     while (*p && isspace((unsigned char)*p)) p++;
     if (p[0] != '/' || p[1] != '/') return 0;
@@ -373,9 +435,13 @@ int repl_state_parse_workspace_header_line(const char *line) {
         if (follow != '\0' && !isspace(follow)) continue;
         const char *args = p + d->name_len;
         while (*args && isspace((unsigned char)*args)) args++;
-        return d->parse(args);
+        return d->parse(accum, args);
     }
     return 0;
+}
+
+int repl_state_parse_workspace_header_line(const char *line) {
+    return import_parse_workspace_header_line(&g_public_workspace_accum, line);
 }
 
 /* The camera-block parser state machine lives in the bridge
@@ -471,8 +537,7 @@ static int declare_args_have_tune_tag(const char *s) {
  * declare_test_vars in tests) are kept at their current indices so that any
  * CMD_VAR_ASSIGN commands already loaded with those indices remain valid.
  * Vars not yet registered are declared. */
-static int parse_snippet_declare(const char *args, int *loaded,
-                                 int *warnings, int *edit_line_inout) {
+static int parse_snippet_declare(const char *args, ImportState *s) {
     const char *p = args;
     while (*p && isspace((unsigned char)*p)) p++;
 
@@ -507,16 +572,16 @@ static int parse_snippet_declare(const char *args, int *loaded,
         int len = (int)(p - start);
         if (len <= 0) break;  /* no more names */
         if (len >= REPL_PREDEF_NAME_MAX) {
-            import_warn("@declare name '%.*s' exceeds the %d-char limit; "
-                        "dropped (with any names after it)",
-                        len, start, REPL_PREDEF_NAME_MAX - 1);
-            if (warnings) (*warnings)++;
+            import_state_warn(s,
+                              "@declare name '%.*s' exceeds the %d-char limit; "
+                              "dropped (with any names after it)",
+                              len, start, REPL_PREDEF_NAME_MAX - 1);
             break;
         }
         if (count >= MAX_NAMES_PER_DECL) {
-            import_warn("@declare lists more than %d names; the rest are dropped",
-                        MAX_NAMES_PER_DECL);
-            if (warnings) (*warnings)++;
+            import_state_warn(s,
+                              "@declare lists more than %d names; the rest are dropped",
+                              MAX_NAMES_PER_DECL);
             break;
         }
         char name[REPL_PREDEF_NAME_MAX];
@@ -540,7 +605,7 @@ static int parse_snippet_declare(const char *args, int *loaded,
         int was_registered = (repl_eval_find_predef_var_idx(name) >= 0);
         if (!was_registered) {
             if (!repl_eval_declare_predef_var(name, NULL, 0)) {
-                if (warnings) (*warnings)++;
+                if (s) s->warnings++;
                 continue;
             }
             memcpy(newly_declared[new_count], name, (size_t)len);
@@ -555,7 +620,7 @@ static int parse_snippet_declare(const char *args, int *loaded,
                 repl_eval_undeclare_predef_var(name);
                 new_count--;
             }
-            if (warnings) (*warnings)++;
+            if (s) s->warnings++;
             continue;
         }
         off += snprintf(decl_line + off, sizeof(decl_line) - (size_t)off,
@@ -598,7 +663,7 @@ static int parse_snippet_declare(const char *args, int *loaded,
         if (!source_document_insert_line(decl_pos, decl_line)) {
             for (int i = 0; i < new_count; i++)
                 repl_eval_undeclare_predef_var(newly_declared[i]);
-            if (warnings) (*warnings)++;
+            if (s) s->warnings++;
             return 1;
         }
         /* Caller-owned cursor threaded through ImportState
@@ -606,7 +671,7 @@ static int parse_snippet_declare(const char *args, int *loaded,
          * edit-line-ownership plan doc). */
         ReplStoreMutOpts opts = {
             .flags        = REPL_COMMAND_STORE_ADJUST_EDIT_LINE,
-            .cursor_inout = edit_line_inout,
+            .cursor_inout = s ? &s->edit_line : NULL,
         };
         if (!repl_command_store_insert_one(
                 &store, decl_pos, &cmd, &opts)) {
@@ -620,10 +685,10 @@ static int parse_snippet_declare(const char *args, int *loaded,
             source_document_apply_change(&rollback);
             for (int i = 0; i < new_count; i++)
                 repl_eval_undeclare_predef_var(newly_declared[i]);
-            if (warnings) (*warnings)++;
+            if (s) s->warnings++;
             return 1;
         }
-        (*loaded)++;
+        if (s) s->loaded++;
     }
     return 1;
 }
@@ -637,9 +702,7 @@ static const SnippetDirective SNIPPET_DIRECTIVES[] = {
 
 #undef SNIPPET_DIR
 
-static int import_parse_snippet_directive(const char *line, int *loaded,
-                                          int *warnings,
-                                          int *edit_line_inout) {
+static int import_parse_snippet_directive(ImportState *s, const char *line) {
     const char *p = line;
     while (*p && isspace((unsigned char)*p)) p++;
     if (p[0] != '/' || p[1] != '/') return 0;
@@ -656,7 +719,7 @@ static int import_parse_snippet_directive(const char *line, int *loaded,
             !isspace((unsigned char)p[d->name_len]))
             continue;
         p += d->name_len;
-        return d->parse(p, loaded, warnings, edit_line_inout);
+        return d->parse(p, s);
     }
 
     return 0;
@@ -1350,21 +1413,6 @@ static int import_make_repl_glut_bitmap_string(const char *line,
                             fmt, post_repl[0] ? ", " : "", post_repl);
 }
 
-#define IMPORT_MAX_PENDING_COMMENTS 16
-
-typedef struct {
-    int in_snippet;
-    int past_snippet;
-    int func_depth;                   /* depth inside a function definition */
-    int loaded;
-    int warnings;
-    int edit_line;                    /* caller-owned cursor (Phase 3.6.4) */
-    char pending_comments[IMPORT_MAX_PENDING_COMMENTS][MAX_LINE_LEN];
-    int  pending_comment_count;
-    int  pending_blank_run;
-    int  line_no;
-} ImportState;
-
 static void import_state_init(ImportState *s) {
     s->in_snippet = 0;
     s->past_snippet = 0;
@@ -1372,6 +1420,7 @@ static void import_state_init(ImportState *s) {
     s->loaded = 0;
     s->warnings = 0;
     s->edit_line = 0;
+    import_workspace_accum_init(&s->workspace, s);
     s->pending_comment_count = 0;
     s->pending_blank_run = 0;
     s->line_no = 0;
@@ -1385,8 +1434,7 @@ static void import_feed_one_line(ImportState *s, const char *line) {
     /* Snippet directives such as @declare are written by
      * write_canonical_cmd_as_c() and must be handled before the generic
      * C-to-REPL path. */
-    if (import_parse_snippet_directive(line, &s->loaded, &s->warnings,
-                                       &s->edit_line))
+    if (import_parse_snippet_directive(s, line))
         return;
 
     /* Feed lines through the non-editor source-load API
@@ -1418,11 +1466,7 @@ static void import_feed_one_line(ImportState *s, const char *line) {
          * captured load_err but discarded it, so capacity overflows
          * and similar import failures showed up as the generic
          * "could not parse line" with no clue why. */
-        if (load_err[0])
-            fprintf(stderr, "%s (line %d): %s (%s)\n", kWarningPrefix, s->line_no, line, load_err);
-        else
-            fprintf(stderr, "%s (line %d): %s\n", kWarningPrefix, s->line_no, line);
-        s->warnings++;
+        import_state_warn_parse_line(s, line, load_err);
     }
 }
 
@@ -1582,11 +1626,7 @@ static int import_try_function_header(ImportState *s, const char *p, const char 
     if (repl_state_document_count() > before) s->loaded += (repl_state_document_count() - before);
     if (!handled) {
         /* See import_feed_one_line for the load_err rationale. */
-        if (load_err[0])
-            fprintf(stderr, "%s (line %d): %s (%s)\n", kWarningPrefix, s->line_no, raw, load_err);
-        else
-            fprintf(stderr, "%s (line %d): %s\n", kWarningPrefix, s->line_no, raw);
-        s->warnings++;
+        import_state_warn_parse_line(s, raw, load_err);
     }
     s->func_depth = 1;
     return 1;
@@ -1648,6 +1688,123 @@ static int import_try_snippet_body_line(ImportState *s, const char *p) {
 
 /* --- dispatch --------------------------------------------------------------- */
 
+typedef enum {
+    IMPORT_LINE_CAMERA,
+    IMPORT_LINE_WORKSPACE_HEADER,
+    IMPORT_LINE_FUNCTION_BODY,
+    IMPORT_LINE_FUNCTION_HEADER,
+    IMPORT_LINE_SNIPPET_START,
+    IMPORT_LINE_PENDING_COMMENT,
+    IMPORT_LINE_SNIPPET_END,
+    IMPORT_LINE_BLANK,
+    IMPORT_LINE_PREDEF_DECL,
+    IMPORT_LINE_SNIPPET_BODY
+} ImportLineKind;
+
+typedef int (*ImportLineHandler)(ImportState *s, const char *p,
+                                 const char *raw);
+
+typedef struct {
+    ImportLineKind    kind;
+    ImportLineHandler handle;
+} ImportLineHandlerSpec;
+
+static int import_handle_camera(ImportState *s, const char *p,
+                                const char *raw) {
+    (void)raw;
+    if (s->in_snippet || s->func_depth != 0)
+        return 0;
+    return import_try_camera(p);
+}
+
+static int import_handle_workspace_header(ImportState *s, const char *p,
+                                          const char *raw) {
+    (void)raw;
+    return import_parse_workspace_header_line(&s->workspace, p);
+}
+
+static int import_handle_function_body(ImportState *s, const char *p,
+                                       const char *raw) {
+    (void)raw;
+    return import_try_function_body(s, p);
+}
+
+static int import_handle_function_header(ImportState *s, const char *p,
+                                         const char *raw) {
+    return import_try_function_header(s, p, raw);
+}
+
+static int import_handle_snippet_start(ImportState *s, const char *p,
+                                       const char *raw) {
+    (void)raw;
+    return import_try_snippet_start(s, p);
+}
+
+static int import_handle_pending_comment(ImportState *s, const char *p,
+                                         const char *raw) {
+    (void)raw;
+    return import_try_pending_comment(s, p);
+}
+
+static int import_handle_snippet_end(ImportState *s, const char *p,
+                                     const char *raw) {
+    (void)raw;
+    return import_try_snippet_end(s, p);
+}
+
+static int import_handle_blank(ImportState *s, const char *p,
+                               const char *raw) {
+    (void)raw;
+    return import_try_blank(s, p);
+}
+
+static int import_handle_predef_decl(ImportState *s, const char *p,
+                                     const char *raw) {
+    (void)s;
+    (void)raw;
+    return import_try_predef_decl(p);
+}
+
+static int import_handle_snippet_body(ImportState *s, const char *p,
+                                      const char *raw) {
+    (void)raw;
+    return import_try_snippet_body_line(s, p);
+}
+
+static int import_run_handlers(const ImportLineHandlerSpec *handlers,
+                               int handler_count,
+                               ImportState *s,
+                               const char *p,
+                               const char *raw) {
+    for (int handler_idx = 0; handler_idx < handler_count; handler_idx++) {
+        (void)handlers[handler_idx].kind; /* names the ordered phase in tables */
+        if (handlers[handler_idx].handle(s, p, raw))
+            return 1;
+    }
+    return 0;
+}
+
+#define IMPORT_HANDLER_COUNT(table) ((int)(sizeof(table) / sizeof((table)[0])))
+
+static const ImportLineHandlerSpec IMPORT_EARLY_NON_SNIPPET_HANDLERS[] = {
+    { IMPORT_LINE_CAMERA, import_handle_camera },
+};
+
+static const ImportLineHandlerSpec IMPORT_PRE_SNIPPET_HANDLERS[] = {
+    { IMPORT_LINE_WORKSPACE_HEADER, import_handle_workspace_header },
+    { IMPORT_LINE_FUNCTION_BODY,    import_handle_function_body },
+    { IMPORT_LINE_FUNCTION_HEADER,  import_handle_function_header },
+    { IMPORT_LINE_SNIPPET_START,    import_handle_snippet_start },
+    { IMPORT_LINE_PENDING_COMMENT,  import_handle_pending_comment },
+};
+
+static const ImportLineHandlerSpec IMPORT_SNIPPET_HANDLERS[] = {
+    { IMPORT_LINE_SNIPPET_END,  import_handle_snippet_end },
+    { IMPORT_LINE_BLANK,        import_handle_blank },
+    { IMPORT_LINE_PREDEF_DECL,  import_handle_predef_decl },
+    { IMPORT_LINE_SNIPPET_BODY, import_handle_snippet_body },
+};
+
 static void import_process_line(ImportState *s, const char *p, const char *raw) {
     /* Camera-state lines appear both in the pre-snippet header and inside the
      * display() body that wraps the snippet, so they are recognised any time
@@ -1658,40 +1815,34 @@ static void import_process_line(ImportState *s, const char *p, const char *raw) 
      * own glTranslatef/glRotatef calls (e.g. a drawWhale() helper exported
      * before display()), which would corrupt both that function and the
      * real camera block that follows it. */
-    if (!s->in_snippet && s->func_depth == 0 && import_try_camera(p)) return;
-
-    /* Everything after Snippet end is discarded. */
-    if (s->past_snippet)                                       return;
-
-    if (!s->in_snippet) {
-        if (repl_state_parse_workspace_header_line(p))         return;
-        if (import_try_function_body(s, p))                    return;
-        if (import_try_function_header(s, p, raw))             return;
-        if (import_try_snippet_start(s, p))                    return;
-        (void)import_try_pending_comment(s, p);
+    if (import_run_handlers(IMPORT_EARLY_NON_SNIPPET_HANDLERS,
+                            IMPORT_HANDLER_COUNT(IMPORT_EARLY_NON_SNIPPET_HANDLERS),
+                            s, p, raw)) {
         return;
     }
 
-    /* In-snippet: */
-    if (import_try_snippet_end(s, p))                          return;
-    if (import_try_blank(s, p))                                return;
-    if (import_try_predef_decl(p))                             return;
-    (void)import_try_snippet_body_line(s, p);
+    /* Everything after Snippet end is discarded. */
+    if (s->past_snippet)
+        return;
+
+    if (!s->in_snippet) {
+        (void)import_run_handlers(IMPORT_PRE_SNIPPET_HANDLERS,
+                                  IMPORT_HANDLER_COUNT(IMPORT_PRE_SNIPPET_HANDLERS),
+                                  s, p, raw);
+        return;
+    }
+
+    (void)import_run_handlers(IMPORT_SNIPPET_HANDLERS,
+                              IMPORT_HANDLER_COUNT(IMPORT_SNIPPET_HANDLERS),
+                              s, p, raw);
 }
 
-/* Wipe per-load accumulator state populated by parse_workspace_header_line
- * / parse_cfg / @scene-name / @workspace-dir directives. Called at entry
- * (clears whatever a prior failed load may have left behind) and on every
- * failure exit (so a partial parse can't leak @cfg / @var / pending name
- * state into a later call — e.g. example_loader.c's
- * repl_export_apply_pending_cfg() drain, which would otherwise re-apply
- * stale slugs from the failed import). */
-static void repl_export_load_reset_accumulators(void) {
-    g_deferred_var_count           = 0;
-    g_import_header_warnings       = 0;
+/* Clear result fields that still live in ReplState because the public
+ * per-line workspace-header parser exposes them to legacy callers. The
+ * cfg/deferred-var accumulators are per ImportState during file import. */
+static void import_clear_pending_result_fields(void) {
     g_pending_scene_name_writable[0]    = '\0';
     g_pending_workspace_dir_writable[0] = '\0';
-    import_cfg_accumulator_reset();
 }
 
 static const char *import_find_block_comment_start(const char *s) {
@@ -1824,9 +1975,9 @@ static void import_flush_accum(ImportState *s, char *accum, int accum_line_no,
     int saved = s->line_no;
     s->line_no = accum_line_no;
     if (*truncated) {
-        fprintf(stderr, "%s (line %d): statement exceeded %d chars, truncated\n",
-                kWarningPrefix, accum_line_no, (int)MAX_LINE_LEN);
-        s->warnings++;
+        import_state_warn_parse_status(s, accum_line_no,
+                                       "statement exceeded %d chars, truncated",
+                                       (int)MAX_LINE_LEN);
     }
     import_process_line(s, accum, accum);
     s->line_no = saved;
@@ -1839,10 +1990,9 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
         result->scene_name[0]    = '\0';
         result->workspace_dir[0] = '\0';
     }
+    import_clear_pending_result_fields();
     FILE *f = fopen(filename, "r");
     if (!f) return 0;
-
-    repl_export_load_reset_accumulators();
 
     ImportState state;
     import_state_init(&state);
@@ -1945,14 +2095,16 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
     int had_read_err = ferror(f);
     int close_failed = fclose(f) != 0;
     if (had_read_err || close_failed) {
-        repl_export_load_reset_accumulators();
+        import_workspace_accum_reset(&state.workspace);
+        import_clear_pending_result_fields();
         char msg[REPL_STATUS_TEXT_MAX];
         snprintf(msg, sizeof(msg), "Error: cannot read %s", filename);
         repl_set_status_error(msg);
         return 0;
     }
     if (truncated_line) {
-        repl_export_load_reset_accumulators();
+        import_workspace_accum_reset(&state.workspace);
+        import_clear_pending_result_fields();
         char msg[REPL_STATUS_TEXT_MAX];
         snprintf(msg, sizeof(msg), "Import failed: line too long in %s", filename);
         repl_set_status_error(msg);
@@ -1963,24 +2115,18 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
      * have undeclared and re-declared variables (creating CMD_VAR_DECLARE
      * commands), resetting their values to 0.  Reapply the workspace-header
      * values here so they are restored correctly after the round-trip. */
-    for (int di = 0; di < g_deferred_var_count; di++) {
-        int idx = repl_eval_find_predef_var_idx(g_deferred_var_values[di].name);
+    for (int di = 0; di < state.workspace.deferred_var_count; di++) {
+        int idx = repl_eval_find_predef_var_idx(state.workspace.deferred_var_values[di].name);
         if (idx >= 0)
-            g_predef_vars_mut[idx].value = g_deferred_var_values[di].value;
+            g_predef_vars_mut[idx].value = state.workspace.deferred_var_values[di].value;
     }
-    g_deferred_var_count = 0;
 
     /* Drain @cfg accumulator: hand the parsed (slug, val) bag to the
      * controller-installed bridge, which knows how to apply each slug
      * to its owner's state. Without a bridge (the demo case), the
      * accumulator is dropped silently — that's the architectural goal
      * (no glr_config dependency from src/repl/import.c). */
-    import_cfg_accumulator_apply_and_reset();
-
-    /* Fold the workspace-header directive warnings (tallied separately,
-     * since those parsers can't reach state.warnings) into the per-load
-     * total so the "(N warnings)" summary below is accurate. */
-    state.warnings += g_import_header_warnings;
+    import_workspace_cfg_apply_and_reset(&state.workspace);
 
     if (result) {
         snprintf(result->scene_name, sizeof(result->scene_name),
