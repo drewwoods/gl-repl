@@ -1,0 +1,621 @@
+# `src/repl` — Architecture
+
+> The deep companion to [`README.md`](README.md). The README is the
+> one-screen orientation ("what a REPL pipeline is, what files exist");
+> this document is the working reference: the data model, the two
+> end-to-end flows (commit and frame), each pipeline stage in detail,
+> the state-ownership model, and the boundaries that keep this layer
+> independent of the rest of the app.
+>
+> Whole-tree context lives in [`../../MODULES.md`](../../MODULES.md)
+> (ownership map) and [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md)
+> (per-frame app narrative). This file never assumes you've read those —
+> it describes `src/repl` as a self-contained interpreter.
+
+---
+
+## 1. The shape of the thing
+
+`src/repl` is an **interpreter pipeline** for a small domain-specific
+language. The language is a friendly subset of immediate-mode OpenGL —
+`glBegin`/`glVertex3f`/`glColor3f`/`glRotatef`/… — plus light control
+flow (`for`, `if`, `func0..func9`), scalar variables, and fixed scratch
+arrays. The "effects" at the end of the pipeline are live GL calls that
+draw geometry.
+
+Strip away the editor and the screen and what remains is the textbook
+interpreter shape:
+
+```
+source text ──parse──▶ commands ──compile/validate──▶ change ──apply──▶ program model
+                                                                            │
+                                                              ┌─────────────┘
+                                                              ▼
+                                          program model ──flatten──▶ flat program ──execute──▶ GL
+```
+
+The standard interpreter parts map cleanly onto files:
+
+| Interpreter part | Here |
+|---|---|
+| Lexer / parser → AST | `parser.c` → `GLCmd` records |
+| Symbol / spec table | `command_spec.c` (per-command arity, arg kinds, highlight category) |
+| Expression evaluator | `eval.c` (recursive descent: `+ - * / %`, comparisons, `sin`/`cos`/…, variables) |
+| Static validation / compile pass | `compile.c` → `ReplCompiledChange` (**pure**; never mutates) |
+| Mutation / "linker" | `apply.c` + `command_store.c` (write the program model) |
+| IR lowering | `flatten.c` (unroll loops, inline functions, resolve `if`) |
+| Bytecode VM / executor | `executor.c` (walk the flat program, emit GL) |
+
+The defining design choice is the **two-level command model** (§3): the
+source program (loops and calls intact) is lowered into a flat program
+(everything unrolled and inlined) that the executor re-runs every frame.
+Re-flattening per frame is what makes `t`-driven animation and live
+variable edits take effect without an explicit recompile.
+
+---
+
+## 2. Two flows, one model
+
+Everything in this directory serves one of two flows over the shared
+program model in `state.c`:
+
+```
+   EDIT FLOW (occasional, on user commit)        FRAME FLOW (every frame, 60 Hz)
+   ─────────────────────────────────────        ──────────────────────────────
+   input text                                    is the program dirty?
+      │ parse + compile  (pure)                      │ yes → flatten + autonormal
+      ▼                                              ▼
+   ReplCompiledChange                             flat program
+      │ apply            (mutates ReplState)         │ execute
+      ▼                                              ▼
+   source command array  ───────dirty flag────────▶ GL calls (pixels)
+```
+
+- The **edit flow** turns a line of text into a validated mutation of
+  the *source* command array, and marks the flat program dirty.
+- The **frame flow** rebuilds the *flat* program from source when dirty,
+  then walks it emitting GL.
+
+The two flows are deliberately decoupled by the dirty flag: editing
+never touches GL, and rendering never re-parses text it doesn't have to.
+
+---
+
+## 3. The two-level command model
+
+This is the core data structure. Read this section before anything else.
+
+### 3.1 `GLCmd` — the universal command record
+
+A single `GLCmd` (`command.h`) represents one command in *either* level.
+It is a **pure parse result** — it carries type, evaluated args, flags,
+and provenance, but **no source text**. The per-line canonical text
+lives in the editor's buffer, not here. That omission is what keeps the
+pipeline editor-agnostic (and is what lets the standalone demo supply
+its own line store).
+
+```c
+typedef struct {
+    CmdType  type;             // CMD_VERTEX3F, CMD_FOR_BEGIN, …  (command.h enum)
+    float    args[8];          // evaluated numeric args; GL enums stored here too
+    int      num_args;
+    int      var_idx;          // predef slot for CMD_VAR_ASSIGN
+    int      valid;            // deleted commands stay allocated but skipped
+    int      is_auto;          // synthesized (e.g. auto-normal)
+    int      has_vars;         // expr references vars → must re-evaluate from text
+    union { … } payload;       // tagged on type: decl names / label fmt
+    // provenance — see 3.3
+    int      src_cmd_idx, call_src_cmd_idx, root_call_src_cmd_idx;
+    unsigned func_scope_mask;
+    int      call_depth;
+} GLCmd;
+```
+
+Two design notes worth internalizing:
+
+- **There is no `mode` field.** Every enum-backed command (`glEnable`,
+  `glDepthFunc`, even the hand-rolled `glMaterialfv`/`glPointParameterfv`
+  branches) stores its GL enums in `args[]` alongside numeric args.
+  GLenums in use are `< 2^24`, so `(GLenum)args[i]` round-trips through
+  float32 losslessly. The *absence* of the field is the
+  compiler-enforced invariant — no grep guard needed.
+- **`payload` is a tagged union** keyed on `type`: `payload.decl` for
+  `CMD_VAR_DECLARE`, `payload.label` for `CMD_LABEL`, zeroed for
+  everything else. This saves ~64 bytes/command vs. side-by-side fields.
+
+`CmdType` ordering is **append-stable**: switch dispatch in `executor.c`,
+`flatten.c`, `parser.c`, and `replay_annotations.c` keys on these values,
+so a new command goes next to its relatives — never reorder existing
+entries. `command.h` also exposes the *control-flow taxonomy* as inline
+predicates (`repl_cmd_is_transform`, `repl_cmd_emits_vertex`,
+`repl_cmd_is_block_head/_end`, `repl_cmd_is_glut_solid`,
+`repl_cmd_starts_geometry_emit`, `repl_cmd_consumes_current_color`).
+These are a separate axis from `CmdSyntaxCategory` in `command_spec.h`,
+which is the *visual* (syntax-highlight) taxonomy — don't fold one
+through the other.
+
+### 3.2 Source array vs. flat array
+
+| | Source array | Flat array |
+|---|---|---|
+| Accessor | `repl_state_document_cmds()` / `_count()` | `repl_state_flat_program_cmds()` / `_count()` |
+| Contents | what the user wrote: loops, calls, `if` intact | fully expanded: loops unrolled, funcs inlined, `if` resolved |
+| Mutated by | the **edit flow** (compile → apply) | the **frame flow** (`flatten`) |
+| Lifetime | persists across frames | rebuilt whenever dirty |
+| Capacity | `MAX_COMMANDS` (4096) | `MAX_COMMANDS` (4096) |
+
+A `for(i, 0, 4) { glVertex3f(i,0,0) }` is **three** source commands
+(`CMD_FOR_BEGIN` / body / `CMD_FOR_END`) but **four** flat commands (one
+`CMD_VERTEX3F` per iteration). The 4096 flat cap is the real budget —
+example authors hoist loop-invariant work to stay under it.
+
+### 3.3 Provenance: mapping flat → source
+
+Each flat command remembers where it came from so cursor highlighting,
+guides, replay, and cost attribution can map a flat command back to the
+line that produced it:
+
+- `src_cmd_idx` — the owning *source* line.
+- `call_src_cmd_idx` — the immediate call site that expanded it.
+- `root_call_src_cmd_idx` — the outermost call site in nested expansion.
+- `func_scope_mask` — bitset of `funcN` scopes active at flatten time
+  (a *set*, so it can't count repeated recursive entries of one slot).
+- `call_depth` — every call frame counted (so recursion depth *is*
+  visible, unlike the mask).
+
+`flatten_query.c` reads these to answer "how much of the flat budget is
+spent on the line under the cursor?" (a loop body counts once per
+iteration; a function counts across all call sites). `--flat-histogram`
+surfaces it on the CLI.
+
+### 3.4 Per-flat-command local variable snapshots
+
+Loop counters and function parameters don't exist in the source
+command's own scope. When `flatten.c` emits a flat command, it snapshots
+the live lexical bindings into a parallel `FlatCmdLocalVars` array
+(`repl_state_flat_program_local_vars()`):
+
+```c
+typedef struct { int num_vars; ExprVar vars[MAX_EXPR_VARS]; } FlatCmdLocalVars;
+```
+
+At execution time, a `has_vars` command re-evaluates its argument
+expressions against *its own* snapshot — that's how `glVertex3f(i, sin(t),
+0)` inside a loop gets both the right `i` (frozen at flatten) and the
+right `t` (live each frame).
+
+### 3.5 The dirty flags
+
+Two flags gate the frame flow (`state_views.h`):
+
+- `ReplDocumentState.normals_dirty` — source-level auto-normals need a
+  rebuild.
+- `ReplFlatProgramState.dirty` — the flat program is stale.
+
+Any source mutation sets them via `repl_state_mark_flat_dirty()` /
+`repl_state_mark_source_dirty()` (`state_notify.h`). The controller
+checks them at frame top and rebuilds only when set.
+
+---
+
+## 4. The edit flow (compile → apply)
+
+A committed line of text becomes a validated change to the source array
+in two strictly separated phases.
+
+### 4.1 Compile is pure; apply mutates
+
+`compile.c` contains the static-validation pass. Its contract is
+absolute and machine-checked:
+
+> A `repl_compile_*` function is **pure**: no editor mutation, no
+> command-store mutation, no status mutation, no undo entry. It returns
+> a `ReplCompiledChange` describing what *should* happen, or fills an
+> `err` buffer.
+
+The compiler reads everything it needs from a `ReplCompileContext`
+snapshot (current cmds, edit line, source-scope view, predef table,
+func aliases) — it never reaches into REPL globals. Build one with
+`repl_compile_context_from_live(edit_line_idx)`; the caller supplies the
+cursor because pipeline code does not call editor accessors.
+
+`apply.c` is the dual. `repl_apply_compiled_change()` mutates the
+ReplState command array **only** — it does not touch source text,
+status, undo, predef registrations, or aliases. Those cascades are
+separate calls (`repl_apply_predef_ops`, `repl_apply_scratch_ops`,
+`repl_apply_alias_ops`) so the orchestrator can sequence them correctly
+relative to undo capture.
+
+### 4.2 `ReplCompiledChange` — the descriptor
+
+A compiled change (`compile.h`) is a *source-command-level* plan, not a
+flat program. Its `kind` selects the meaningful fields:
+
+| Kind | Meaning |
+|---|---|
+| `REPL_COMPILED_NO_CHANGE` | nothing to mutate (may still carry predef side-effects) |
+| `REPL_COMPILED_INSERT_ONE` | insert `cmds[0]`/`text[0]` at `pos` |
+| `REPL_COMPILED_REPLACE_ONE` | replace cmd at `pos` |
+| `REPL_COMPILED_INSERT_MANY` | insert `cmds[0..count)` at `pos` |
+| `REPL_COMPILED_DELETE_RANGE` | delete `count` cmds from `pos` |
+
+Beyond the source edit it carries replayable side-effect lists:
+
+- `predef_ops[]` — `DECLARE` / `UNDECLARE` / `SET_VALUE` against the
+  variable table. Apply runs `UNDECLARE`s first and cascades
+  `CMD_VAR_ASSIGN.var_idx` compaction when a slot is freed.
+- `scratch_ops[]` — writes to `A`/`B`/`C[]`.
+- `alias_op` — a pending `funcN` alias publish.
+- An optional **pre-insert delete** (`delete_pos`/`delete_count`) lets a
+  single atomic plan express "delete a range, then insert at a new
+  position" (used by block comment-toggle). `pos` is in *post-delete*
+  coordinates — compile does that math so apply doesn't.
+
+This descriptor is the seam that decouples validation from mutation:
+tests and the demo can compile-and-inspect without ever mutating state.
+
+### 4.3 The compile dispatcher and handler order
+
+`repl_compile_dispatch()` walks per-kind validators in **canonical
+order** and returns the first non-`NO_CHANGE` result:
+
+```
+float_decl → var_assign → close_brace → for_loop → func_def → if_block
+```
+
+The order is load-bearing: `float_decl` **must** precede `var_assign`,
+or `float x;` parses as an assignment to an identifier named `float`.
+`NO_CHANGE` from all handlers means "not a statement I own" — the caller
+falls through to the generic GL `parser.c`.
+
+Block constructs share a **kernel** (`repl_compile_*_kernel`) between two
+callers: the lean loader's thin wrapper and the editor's richer wrapper
+(which adds header-replace, one-liner-body, and paired-end branches).
+The kernel does the parse/validate work; the wrappers shape it into the
+right `ReplCompiledChange`. This is why import, examples, and live typing
+all agree on what a valid `for(...)` is.
+
+### 4.4 The two apply paths
+
+The compile/apply pair is wired into two orchestrators, each owning its
+own text-mutation step:
+
+```
+Editor-input commit            (src/editor/commit.c)
+    editor_undo_begin
+    editor_buffer_apply_compiled_change   // EditorState text
+    repl_apply_compiled_change            // ReplState cmd store
+    repl_apply_alias_ops                  // func aliases
+    editor_undo_commit
+
+Lean source loader             (src/repl/load.c)
+    repl_load_apply_compiled_change_transaction
+        source_document_apply_change      // neutral text port
+        repl_apply_compiled_change        // ReplState cmd store
+        repl_apply_alias_ops              // func aliases
+```
+
+`load.c` is the non-editor entry: the importer, example loader, tutorial
+comment injector, and tests call `repl_load_apply_line()`, which picks an
+insertion index, compiles the line, and applies it without touching any
+editor input widget. Keeping it separate from `compile.c` preserves the
+purity boundary — `compile.c` only *describes* changes; `load.c` owns the
+apply orchestration.
+
+`command_store.c` underneath is the lowest layer: pure `GLCmd` array
+mechanics (insert/replace/delete/load, range normalization, capacity
+checks). It owns array shifting and bounds; callers own parsing, undo,
+variable registration, and cursor policy. Cursor shifting is opt-in per
+call via `ReplStoreMutOpts.cursor_inout` — the store never holds a cursor
+pointer.
+
+---
+
+## 5. The frame flow (flatten → autonormal → execute)
+
+Driven once per frame from the controller via `pipeline.h` entry points,
+before the scene renders.
+
+### 5.1 Autonormal maintenance
+
+`autonormal.c` keeps `glNormal3f` commands in sync with the geometry, at
+the **source** level. When enabled and `normals_dirty` is set,
+`repl_recompute_autonormals()` recomputes face normals (cross product of
+triangle edges, normalized) and inserts/updates `is_auto` `CMD_NORMAL3F`
+commands ahead of the vertices that feed them. Because it edits the
+source array (and can shift the cursor), it runs *before* flatten and
+takes the edit-line by reference.
+
+### 5.2 Flatten — lowering source to flat
+
+`repl_flatten_program()` (`flatten.c`) expands the source array into the
+flat array:
+
+- **for-loops** iterate `[start, end)` by `step`, half-open, re-parsing
+  the body each iteration with the loop var bound;
+- **function calls** (`CMD_CALL`) inline the matching `CMD_FUNC_DEF`
+  body, binding actual args to parameter names;
+- **if-blocks** evaluate the condition and include or drop the body.
+
+Expansion is recursive and **bounded**:
+
+- `MAX_FLATTEN_CALL_DEPTH = 64` — recursion depth ceiling.
+- `MAX_FLATTEN_VISIT_BUDGET = 200000` — total command visits, so one
+  runaway loop can't hang the frame.
+
+On overflow it returns `ok = 0` with a status message and leaves the
+prior flat program in place. Every emitted flat command gets its
+provenance (§3.3) and a `FlatCmdLocalVars` snapshot (§3.4).
+
+`flatten.c` deliberately re-parses source lines with `skip_text` set in
+the `ReplParseContext`: it consumes the parsed `GLCmd` and discards the
+canonical-text rendering, avoiding per-arg `snprintf` on the hot path.
+
+The live frame path goes through `repl_flatten_commands(edit_line_idx)`,
+but the engine is reusable: tests and replay tools flatten into a
+*temporary* buffer and pass a `FlatProgramView` over it, never touching
+the live arrays.
+
+### 5.3 Execute — flat program to GL
+
+`repl_execute_program()` (`executor.c`) walks `flat_cmds[0..count)`
+emitting GL. Key behaviors:
+
+- **Per-frame re-evaluation.** `has_vars` commands re-evaluate their
+  expressions against their local-var snapshot + the live predef table,
+  so `sin(t*speed)` animates. Commands without variable references use
+  their cached `args[]`.
+- **Matrix-stack tracking.** `repl_executor_apply_tracked_transform_cmd`
+  maintains a depth counter (push++/pop--) that overlays read to color
+  geometry by transform depth. The GL matrix stack — not `GLCmd` — is the
+  canonical transform truth at execution time.
+- **Replay clamp.** The caller passes `flat_cmd_count` (full count, or
+  the replay program counter when replay is active) so only commands up
+  to the PC render.
+- **A cursor API** (`repl_exec_cursor_begin/step/end/...`) exposes the
+  same machinery one command at a time, so specialized passes (replay
+  fade batches, the `.ply` feedback capture, the hidden-line wireframe
+  pass) drive normal REPL semantics while skipping pass-local commands.
+- **Point-size portability.** When the GL context lacks
+  `glPointParameterfv`, the executor falls back to scaling `glPointSize`
+  by `REPL_POINT_SIZE_REF_DIST / camera_distance` via a
+  controller-installed `ReplExecutorCameraDistanceFn`. The hardware path
+  and software path share `REPL_POINT_SIZE_REF_DIST` so they can't drift.
+- **Feedback-normal encoding.** With `encode_feedback_normals` set (the
+  PLY export pass), the executor mirrors each vertex's world-space normal
+  into the texcoord channel and brackets primitives with `glPassThrough`
+  markers, so the mesh writer can distinguish authored normals from
+  synthesized ones.
+
+`executor.c` is the **only** live-GL translation unit in this layer.
+
+---
+
+## 6. Runtime state and ownership
+
+### 6.1 `ReplState` — the owned slices
+
+`state.c` owns the process-global REPL runtime, exposed as a struct of
+typed slices (`state_views.h`):
+
+| Slice | Holds |
+|---|---|
+| `ReplDocumentState` | source `GLCmd[]`, count, capacity, `normals_dirty` |
+| `ReplFlatProgramState` | flat `GLCmd[]`, `FlatCmdLocalVars[]`, dirty flag, cursor-block range, user-lighting flag |
+| `ReplVariableState` | predef var table, scratch arrays `A/B/C`, `funcN` aliases, the `t` clock (`anim_time`, `time_playing`) |
+| `ReplRenderState` | the runtime-mutated render *tail*: `light_enabled_mask`, `clear_color[]` |
+| `ReplSceneRuntimeState` | active example index, bound workspace dir |
+| `ReplImportExportState` | cached header/render/camera text + pending import metadata |
+
+`repl_state_capture()` / `repl_state_restore()` snapshot exactly these
+slices — and nothing else (no editor, UI, replay, or app presentation
+state).
+
+### 6.2 The views/owners split
+
+State access is intentionally two-tiered:
+
+- **`state_views.h`** — read-only, by-value getters
+  (`repl_state_document_cmds()`, `repl_state_variables()`, …). Safe to
+  include from `scene_*` and `ui_*`.
+- **`state_owners.h`** — mutable `_mut()` accessors, setters, and reset
+  helpers. For owner modules and the controller only.
+
+`repl_state_ensure_sentinels()` patches the non-zero defaults (most
+importantly the array capacities — under raw BSS zero-fill they'd be 0
+and reject every insert). It's idempotent and matters for CLI paths like
+`--dump-code` that skip `glr_ctrl_init_gl`.
+
+### 6.3 What this layer does *not* own
+
+The render slice is a tail, not the whole picture. Dimensional light data
+(positions/colors/eye-space), and policy toggles (MSAA, line smoothing,
+accumulation AA, grid/axes visibility) are **app-owned** in `glr_state` —
+the REPL only tracks *which light slots the program enabled* as a
+bitmask. Likewise the **edit-line cursor** is editor-owned; pipeline code
+receives it as a parameter or through the host bridge (§7), never from a
+REPL accessor. These exclusions are enforced by guards (§10).
+
+---
+
+## 7. The host-effects bridge
+
+`src/repl` must not link the editor, UI, or app shell — but loader,
+scene-switch, snippet-import, and replay code legitimately need host
+actions (clear the input buffer, scroll the panel, set a status message,
+read/write the cursor). The bridge (`host_effects.h`) is how it asks for
+those *by purpose* without naming an implementation.
+
+The controller installs a `ReplHostEffects` table once at startup; REPL
+code calls dispatchers (`repl_dispatch_*`, `repl_set_status`,
+`repl_set_status_error`). **Any unset callback is a no-op** — which is
+exactly why pure REPL tests and the standalone demo "just work" with no
+host: status messages go nowhere, `edit_line_get` returns 0,
+`edit_line_set` does nothing.
+
+What flows through it: status / error messages, example-presentation
+reset (with the example's tag mask), input reset, insert-mode-off,
+scroll-to-line, tutorial teardown, edit-line get/set, cursor parking,
+completion clear/update, input read, and time-playing toggle.
+
+The export path uses the same pattern with dedicated bridges
+(`ReplExportLightBridge`, cfg/camera bridges) so `export.c` can emit
+live light/config/camera state without including any scene or app
+header — verified by `check-repl-export-via-bridge`.
+
+---
+
+## 8. Variables, scratch arrays, and time
+
+`eval.c` is a recursive-descent expression evaluator over floats:
+binary `+ - * / %`, unary minus, parens, comparisons, the math function
+set (`sin`, `cos`, `sqrt`, `pow`, `min`, `max`, `floor`, `fmod`, `rand`,
+`rand2`, …), and constants (`PI`, `TAU`, `e`). It also translates between
+the two accepted surface syntaxes:
+
+```
+REPL:  sin(t), pow(2,3),   for(i, 0, 10, 0.5) { … }
+C:     sinf(t), powf(2,3),  for (float i=0; i<10; i+=0.5) { … }   ← auto-translated on parse
+```
+
+Two distinct, independent capacity limits live in `config.h` (the long
+rationale is in `eval.h`):
+
+- **`MAX_PREDEF_VARS = 24`** — global `float x;` slots the user can
+  declare at once. One is reserved for built-in `t`; the float-decl
+  compiler rejects the 24th user var with "variable table full".
+- **`MAX_EXPR_VARS = 32`** — the lexical scope size for *one* expression
+  parse (predef vars + visible loop iterators + function params).
+  `collect_visible_vars_in()` (`visible_vars.c`) builds this per parse;
+  it reads no live state, so compile passes its context's document view.
+
+**Scratch arrays** `A`/`B`/`C` (`REPL_SCRATCH_ARRAY_COUNT ×
+REPL_SCRATCH_ARRAY_LEN` = 3×8 floats) are fixed global runtime storage
+for loop/recursive algorithms, indexed `0..7`, written and read with
+ordinary expression syntax.
+
+**Time.** `t` is the predefined animation clock. `time.c` →
+`state_owners.h` advance it (`repl_advance_time`, `+= 1/60 s`/frame when
+playing), reset it, or set it (`--time`/`GLR_TIME`). The transient
+variant (`repl_state_time_set_transient`) overrides only the `t` binding
+without disturbing the free-running clock — used by motion-blur sub-frame
+sampling, where the caller re-flattens at the sub-step `t` and restores
+afterward.
+
+---
+
+## 9. Control flow
+
+| Construct | Source cmds | Flattened to |
+|---|---|---|
+| `for(var, start, end[, step]) { … }` | `CMD_FOR_BEGIN` / body / `CMD_FOR_END` | body repeated per iteration, var bound |
+| `funcN(params) { … }` / aliased `NAME { … }` | `CMD_FUNC_DEF` / body / `CMD_FUNC_END` | inlined at each `CMD_CALL`, params bound |
+| `if(expr) { … }` | `CMD_IF_BEGIN` / body / `CMD_IF_END` | body included or dropped per condition |
+| `:name` / `name:`, `goto name` | `CMD_GOTO_LABEL` / `CMD_GOTO` | resolved at execute (bounded by `REPL_GOTO_LOOP_LIMIT`) |
+
+**Functions** are a fixed table of 10 slots (`func0..func9`). The slot is
+the load-bearing identity stored in `args[0]`; a user-chosen alias
+(`drawCube`) is a display + parser-recognition layer on top, carried
+per-scene in `ReplVariableState.func_aliases`. The compiler resolves an
+alias to a *pending* `alias_op` and never writes the table — apply
+publishes it after the source mutation succeeds, so a failed insert can't
+strand an alias pointing at a nonexistent row.
+
+`goto` is the one construct resolved at *execute* time rather than
+flatten time, because its target can depend on runtime state; the
+executor and the replay-annotation walker share `REPL_GOTO_LOOP_LIMIT`
+(100000 jumps) to bail out of a runaway loop with a status message.
+
+---
+
+## 10. Boundaries and invariants
+
+`src/repl` owns the **program model and compiler**. It does **not** own
+editor state, UI state, replay *runtime* state (a `src/subsystems/` peer),
+or live input dispatch. The only live GL is `executor.c`.
+
+These boundaries are not just convention — they're ratcheted by guards in
+`make check-state-ownership` (and a couple that run standalone):
+
+- `check-repl-export-via-bridge` — `export.c` reaches host data only
+  through bridges, never via `scene_*`/`glr_*` includes.
+- `check-repl-state-no-glr-state` — REPL pipeline TUs don't include
+  `glr_state.h`.
+- `check-include-style` — project-local headers use `""`, vendored/system
+  use `<>`.
+- `check-duplicate-api-decls`, `check-keymap-no-dup`,
+  `check-trailing-whitespace` — hygiene ratchets.
+- The whole layer compiles `-std=c99` (`make check-c99`); use
+  `STATIC_ASSERT` (never raw `_Static_assert`) and prototyped function
+  pointer typedefs.
+
+The structural payoff is provable: the standalone demo
+([`tools/repl_demo/`](../../tools/repl_demo/)) links *only* this
+pipeline — parse → command store → flatten → execute — with no editor,
+controller, or UI in the link set, and an empty `stubs.c`. If the
+pipeline ever grew a hidden dependency on a peer layer, the demo would
+fail to link. See the README's "demo" section for what it exercises.
+
+---
+
+## 11. Map of the territory
+
+Grouped by role. (The README carries the same map as a flat table; this
+grouping is the mental model.)
+
+**Core types & taxonomy**
+`command.h` (CmdType, GLCmd, control-flow predicates) ·
+`command_spec.c`/`.h` (per-command descriptor tables) ·
+`control_flow.h`, `color_limits.h`, `util.h` (shared constants/helpers)
+
+**Edit flow (text → program model)**
+`parser.c`/`.h` (line → GLCmd + canonical text) ·
+`normalize.c`/`.h` (parse-and-normalize) ·
+`eval.c`/`.h` (expressions, REPL↔C translation, predef vars) ·
+`compile.c`/`.h` (pure validators → ReplCompiledChange) ·
+`apply.c`/`.h` (apply a change to ReplState) ·
+`command_store.c`/`.h` (low-level GLCmd array mechanics) ·
+`load.c`/`.h` (non-editor line loader + apply transaction) ·
+`visible_vars.c`/`.h`, `text_helpers.c`/`.h`, `source_scope.c`/`.h`,
+`format.c`/`.h`, `reformat.c`/`.h`, `bootstrap.c`/`.h`
+
+**Frame flow (program model → GL)**
+`flatten.c`/`.h` (source → flat program) ·
+`flatten_query.c`/`.h` (live flat cost/cursor queries) ·
+`autonormal.c` (auto glNormal3f maintenance) ·
+`executor.c`/`.h` (walk flat program, emit GL) ·
+`transform_utils.h` (shared matrix tracking) ·
+`pipeline.h` (controller-facing frame entry points) ·
+`program_query.c`/`.h`, `geometry_query.h` (read-only program queries)
+
+**State & ownership**
+`state.c`/`.h` (ReplState storage, capture/restore) ·
+`state_views.h` (read API + slice types) ·
+`state_owners.h` (mutable API + resets) ·
+`state_notify.h` (dirty-flag invalidation) ·
+`time.c`/`.h` (the `t` clock) ·
+`host_effects.c`/`.h` (host side-effect bridge)
+
+**Persistence (save/load)**
+`export.c` (writer core + light bridge) ·
+`import.c` (reader / import state machine) ·
+`export_setup.c` (file-scope C boilerplate) ·
+`export_prologue.c` (globals/predef prologue) ·
+`export_display.c` (the `display()` body) ·
+`export_cmd_writer.c` (per-command C emission) ·
+`export.h`, `export_internal.h`, `export_state.h`,
+`export_format_shared.h`
+
+**Scenes & workspaces**
+`scenes.c`/`.h` (user-scene slots, LRU, promotion) ·
+`scene_snapshot.c`/`.h` (copyable scene payload) ·
+`workspace_io.c`/`.h` (filesystem + file-naming mechanics) ·
+`cfg_baseline.c`/`.h` (flat key/value config bag)
+
+**Program-adjacent data**
+`examples.c`/`.h` (built-in example data) ·
+`example_loader.c`/`.h` (example load + `@cfg`/`// camera` metadata) ·
+`tutorials.c`/`.h` (tutorial catalog) ·
+`catalog_tags.h` (shared example/tutorial tag-bit helper) ·
+`help_text.c`/`.h` (F1 help tables) ·
+`keymap_format.c` (user-facing keybinding labels)

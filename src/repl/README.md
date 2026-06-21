@@ -1,10 +1,14 @@
 # `src/repl` — the language pipeline
 
-> Part of the OpenGL Immediate-Mode REPL. The whole-tree ownership map is
-> in [`../../MODULES.md`](../../MODULES.md); the per-frame pipeline narrative
-> is in [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md). This README is the
-> module-local view: what a REPL pipeline *is*, how the standalone demo
-> exercises it, and what it does inside this app.
+> Part of the OpenGL Immediate-Mode REPL. This README is the module-local
+> orientation: what a REPL pipeline *is*, how the standalone demo exercises
+> it, and what it does inside this app. For the deep dive — the data model,
+> the edit/frame flows, each pipeline stage, and the state-ownership
+> boundaries — read [`ARCHITECTURE.md`](ARCHITECTURE.md).
+>
+> Whole-tree context lives one level up: the ownership map is in
+> [`../../MODULES.md`](../../MODULES.md) and the per-frame *app* narrative is
+> in [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md).
 
 ## What this is, in general
 
@@ -87,7 +91,10 @@ Inside the full app this is **layers 1 and 3** of the ownership map:
   and `autonormal.c` regenerates `glNormal3f`s; `executor.c` then renders it.
 - `ReplState` (`state.c`) owns the program model: parsed commands, the flat
   program, predefined variables, scratch arrays `A/B/C`, the `func0..func9`
-  alias table, user scenes, and persisted render config.
+  alias table, the `t` clock, and the runtime-mutated render tail
+  (light-enable mask + clear color). The user-scene *catalog* slots live
+  separately in `scenes.c` (as `SceneSnapshot`s); `ReplState` only tracks the
+  active example index and bound workspace dir.
 
 `GLCmd` is a pure parse result (type, args, flags, provenance) — it carries
 **no source text**; the per-line text lives in the editor's buffer. That
@@ -95,33 +102,57 @@ split is what keeps the pipeline editor-agnostic (and what `repl_demo`
 proves by supplying its own line store).
 
 Beyond the core pipeline, this directory also owns program-adjacent data and
-services: built-in `examples.c`, the `tutorials.c` catalog, save/load and
-workspace I/O in `export.c`, and the neutral F1 `help_text.c` tables.
+services: built-in `examples.c`, the `tutorials.c` catalog, the save/load
+file format (writer in `export.c`, reader in `import.c`) and workspace I/O
+(`scenes.c` / `workspace_io.c`), and the neutral F1 `help_text.c` tables.
+
+> For how all of this fits together — the two flows, the compile→apply
+> seam, the flatten budgets, the state slices, and the host-effects
+> bridge — see [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## File map
 
 | File | Responsibility |
 |---|---|
-| `parser.c` / `.h` | One source line → `GLCmd` + canonical text |
-| `eval.c` / `.h` | Expression evaluator, predefined-variable lookup, REPL↔C translation |
 | `command.h` | Core types: `CmdType`, `GLCmd`, control-flow predicates |
 | `command_spec.c` / `.h` | Per-command descriptor tables (arity, enum args, highlight category) |
+| `control_flow.h`, `color_limits.h`, `util.h` | Shared limits (goto cap, clear-color cap) and size-checked buffer helpers |
+| **Edit flow** | *text → program model* |
+| `parser.c` / `.h` | One source line → `GLCmd` + canonical text |
+| `normalize.c` / `.h` | Parse-and-normalize pipeline |
+| `eval.c` / `.h` | Expression evaluator, predefined-variable lookup, REPL↔C translation |
 | `compile.c` / `.h` | Pure validators → `ReplCompiledChange` (never mutates) |
-| `apply.c` / `.h` | Applies a compiled change to `ReplState` |
+| `apply.c` / `.h` | Applies a compiled change to `ReplState` (cmd store + predef/scratch/alias ops) |
 | `command_store.c` / `.h` | Low-level `GLCmd` array mechanics (insert/replace/delete/load) |
-| `flatten.c` / `.h`, `flatten_query.c` / `.h` | Source → flat program plus live flat-program cost/cursor queries |
-| `executor.c` / `.h` | Walks the flat program emitting live GL calls |
+| `load.c` / `.h` | Non-editor line loader + apply transaction (import/example/tutorial/tests) |
+| `visible_vars.c` / `.h`, `text_helpers.c` / `.h` | Loop/func-local variable collection; parse/extract/canonical-text helpers |
+| `source_scope.c` / `.h`, `format.c` / `.h`, `reformat.c` / `.h`, `bootstrap.c` / `.h` | Depth/indent/block-lookup cache, pure indentation, source reformat, startup loading |
+| **Frame flow** | *program model → GL* |
+| `flatten.c` / `.h` | Source → flat program (unroll/inline/resolve `if`) |
+| `flatten_query.c` / `.h` | Live flat-program cost/cursor queries |
 | `autonormal.c` | Auto-generated `glNormal3f` maintenance |
-| `source_scope.c` / `.h` | Source depth / indentation / block lookup cache |
-| `format.c` / `.h` | Pure indentation/depth computation |
-| `normalize.c` / `.h`, `reformat.c` / `.h`, `bootstrap.c` / `.h` | Parse/normalize, source reformat, startup loading |
-| `text_helpers.c` / `.h`, `visible_vars.c` / `.h` | Parse/extract/canonical-text helpers; visible-variable collection (formerly bundled by the deleted `core_internal.h` umbrella) |
-| `pipeline.h` | Frame pipeline declarations |
-| `state.c` / `.h`, `state_views.h`, `state_owners.h` | `ReplState` storage + typed read/mut facades |
-| `scenes.c`, `scene_snapshot.c`, `workspace_io.c`, `examples.c`, `example_loader.c` | User-scene slots, copyable scene snapshots, workspace filesystem + file-naming mechanics, built-in example data + loading |
-| `tutorials.c`, `help_text.c` | Tutorial catalog, F1 help-text tables |
-| `export.c` / `.h`, `export_state.h`, `load.c` | Save/load, workspace headers, single-file round-trip |
+| `executor.c` / `.h` | Walks the flat program emitting live GL calls (the only live-GL TU) |
+| `transform_utils.h` | Shared GL matrix tracking helpers (no executor link dependency) |
+| `pipeline.h` | Controller-facing frame entry points (flatten/autonormal/refresh) |
+| `program_query.c` / `.h`, `geometry_query.h` | Read-only queries over the source/flat program |
+| **State & ownership** | |
+| `state.c` / `.h`, `state_views.h`, `state_owners.h` | `ReplState` storage + capture/restore + typed read/mut facades |
+| `state_notify.h` | Dirty-flag invalidation entry points |
+| `time.c` / `.h` | The predefined `t` animation clock |
+| `host_effects.c` / `.h` | Host side-effect bridge (status, cursor, completion, tutorial teardown) |
+| **Persistence (save/load)** | |
+| `export.c`, `import.c` | Writer half (file emit, header refresh) and reader half (import state machine) |
+| `export_setup.c`, `export_prologue.c`, `export_display.c`, `export_cmd_writer.c` | C boilerplate, globals/predef prologue, `display()` body, per-command C emission |
+| `export.h`, `export_internal.h`, `export_state.h`, `export_format_shared.h` | Export/import API and shared state-text dimensions |
+| **Scenes & workspaces** | |
+| `scenes.c` / `.h`, `scene_snapshot.c` / `.h` | User-scene slots (LRU, promotion); copyable scene payload |
+| `workspace_io.c` / `.h`, `cfg_baseline.c` / `.h` | Workspace filesystem + file-naming mechanics; flat key/value config bag |
+| **Program-adjacent data** | |
+| `examples.c` / `.h`, `example_loader.c` / `.h` | Built-in example data; example load + `@cfg` / `// camera` metadata |
+| `tutorials.c` / `.h`, `catalog_tags.h` | Tutorial catalog; shared example/tutorial tag-bit helper |
+| `help_text.c` / `.h`, `keymap_format.c` | F1 help-text tables; user-facing keybinding labels |
 
 **Boundary:** `src/repl` owns the program model and compiler. It does **not**
 own editor state, UI state, replay *runtime* state (a `src/subsystems/` peer), or
 live input dispatch. The only live GL in this layer is `executor.c`.
+`ARCHITECTURE.md` §10 lists the guards that ratchet these boundaries.
