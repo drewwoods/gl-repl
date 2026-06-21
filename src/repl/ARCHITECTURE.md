@@ -558,7 +558,110 @@ fail to link. See the README's "demo" section for what it exercises.
 
 ---
 
-## 11. Map of the territory
+## 11. A worked example: the `repl_demo --trace`
+
+Everything above is concrete in one place: the standalone demo's `--trace`
+mode. It loads one small program through the *real* non-editor pipeline
+and narrates every stage, so you can watch the backend run with no
+editor, controller, or UI in the link set.
+
+```bash
+make repl_demo USE_GL_STUBS=1   # headless; no GL dev libs needed
+./repl_demo --trace
+```
+
+The program (`SAMPLE_TRACE` in `tools/repl_demo/repl_demo.c`) is chosen
+to touch every part of the pipeline — a declaration, an assignment, a
+typed-as-text loop, and a `has_vars` body:
+
+```c
+float r;
+r = 1.5;
+glPointSize(7)
+glColor3f(0.30, 0.85, 1.00)
+glBegin(GL_LINE_LOOP)
+for(i, 0, 6) {
+  glVertex3f(r * sin(i / 6 * TAU + t), r * cos(i / 6 * TAU + t), 0)
+}
+glEnd()
+```
+
+### Stage 1 — text → compile → apply  (`repl_load_apply_line`)
+
+Each line is fed to `repl_load_apply_line()` (`load.c`) — the same
+non-editor entry the example loader and file importer use (§4.4). For
+each line it builds a `ReplCompileContext`, runs `repl_compile_dispatch`
+(falling back to the GL parser), and applies the resulting
+`ReplCompiledChange` to the source array + variable table:
+
+```
+float r;       src+1 (now 1)  [t=0.00 r=0.00]   ← compile float_decl → predef DECLARE r
+r = 1.5;       src+1 (now 2)  [t=0.00 r=1.50]   ← compile var_assign → predef SET_VALUE
+glPointSize(7) src+1 (now 3)  [t=0.00 r=1.50]   ← GL parser → CMD_POINT_SIZE
+for(i, 0, 6) { src+1 (now 6)  [t=0.00 r=1.50]   ← for-loop kernel → CMD_FOR_BEGIN
+...
+```
+
+The `[t=… r=…]` readout *is* the predef-variable side-effects (§4.2)
+landing: `r` appears after the decl, gets `1.50` after the assignment.
+This is the compile-is-pure / apply-mutates seam (§4.1) running live.
+
+### Stage 2 — the source program  (`repl_state_document_cmds`)
+
+The nine source commands, control flow still folded:
+
+```
+idx type              has_vars
+5   CMD_FOR_BEGIN     -
+6   CMD_VERTEX3F      yes        ← expression preserved as text, not baked
+7   CMD_FOR_END       -
+```
+
+The loop is three commands (§3.2); the body carries `has_vars` (§3.1) so
+the executor knows to re-evaluate it from text.
+
+### Stage 3 — flatten  (`repl_flatten_commands`)
+
+`repl_flatten_program()` (§5.2) lowers the nine source commands to eleven
+flat ones — the loop body unrolled into six vertices, the `CMD_FOR_BEGIN`
+/ `CMD_FOR_END` / `CMD_VAR_DECLARE` markers consumed:
+
+```
+idx type           src_idx depth local-var snapshot
+4   CMD_VERTEX3F   6       0     i=0     ← provenance (§3.3) + FlatCmdLocalVars (§3.4)
+5   CMD_VERTEX3F   6       0     i=1
+...
+9   CMD_VERTEX3F   6       0     i=5
+```
+
+All six vertices map back to source line 6 (`src_idx`), and each froze
+its own `i` binding. `r` and `t` are *not* in the snapshot — they resolve
+live from the predef table at evaluation time.
+
+### Stage 4 — the frame loop  (re-flatten per frame)
+
+Bump `t`, re-flatten, and the `has_vars` body re-bakes against the live
+table (§5.2/§8) — the first vertex moves, i.e. the ring rotates:
+
+```
+t=0.00   glVertex3f(  0.000,   1.500,   0.000)
+t=0.25   glVertex3f(  0.371,   1.453,   0.000)
+t=0.50   glVertex3f(  0.719,   1.316,   0.000)
+```
+
+In the live app `executor.c` walks this flat program emitting the GL
+calls (§5.3); `./repl_demo --render` then `4` shows the same program
+rendered as a rotating ring against a real GL context — same parse →
+flatten → execute path, only a GLUT window added.
+
+The demo deliberately leaves the host-effects bridge (§7) mostly unset:
+status messages no-op, the cursor is a file-local int. That's the proof
+the pipeline needs no host — `tools/repl_demo/stubs.c` is empty, and
+`nm repl_demo` shows zero `editor_*` / `glr_ctrl_*` / `ui_*` symbols.
+
+---
+
+## 12. Map of the territory
 
 Grouped by role. (The README carries the same map as a flat table; this
 grouping is the mental model.)

@@ -34,8 +34,17 @@
  *
  * Run:
  *   make repl_demo USE_GL_STUBS=1
- *   ./repl_demo                  # default: print summary for both samples
+ *   ./repl_demo                  # default: print summary for all samples
  *   ./repl_demo --execute        # also call repl_execute_program()
+ *   ./repl_demo --trace          # narrated end-to-end pipeline walkthrough
+ *
+ * The --trace mode is the guided tour: it drives the *canonical
+ * non-editor load path* (repl_load_apply_line, the same entry point the
+ * example loader / file importer / tutorial runner use) so the real
+ * compile -> apply transaction runs, then narrates each stage the REPL
+ * backend goes through — parse/compile/apply -> source program ->
+ * flatten -> the per-frame re-evaluation that drives animation. See
+ * src/repl/ARCHITECTURE.md for the prose companion to this trace.
  */
 
 #include "repl/command.h"
@@ -45,6 +54,7 @@
 #include <math.h>
 #include "repl/flatten.h"
 #include "repl/host_effects.h"
+#include "repl/load.h"            /* repl_load_apply_line — non-editor compile+apply */
 #include "repl/pipeline.h"
 #include "repl/state_notify.h"
 #include "repl/normalize.h"
@@ -117,6 +127,30 @@ static const char *const SAMPLE_TRIANGLE[] = {
     "glVertex3f(1, 0, 0)",
     "glColor3f(0, 0, 1)",
     "glVertex3f(0, 1, 0)",
+    "glEnd()",
+    NULL,
+};
+
+/* Trace program (--trace mode and render sample 4): one small program that
+ * exercises the whole pipeline. Unlike samples 1-3, every line here is
+ * driven through repl_load_apply_line() — the real non-editor compile+apply
+ * path — so nothing is hand-constructed:
+ *
+ *   - `float r;`          a variable declaration   (compile float_decl  -> predef DECLARE)
+ *   - `r = 1.5;`          an assignment            (compile var_assign  -> predef SET_VALUE)
+ *   - the for-loop        typed-as-text control flow (compile for_loop kernel)
+ *   - the has_vars body   `sin(i/6*TAU + t)`-style expr the flattener re-bakes each frame
+ *
+ * Geometrically it's a 6-point ring that rotates with `t`. */
+static const char *const SAMPLE_TRACE[] = {
+    "float r;",
+    "r = 1.5;",
+    "glPointSize(7)",
+    "glColor3f(0.30, 0.85, 1.00)",
+    "glBegin(GL_LINE_LOOP)",
+    "for(i, 0, 6) {",
+    "  glVertex3f(r * sin(i / 6 * TAU + t), r * cos(i / 6 * TAU + t), 0)",
+    "}",
     "glEnd()",
     NULL,
 };
@@ -453,6 +487,21 @@ static void render_load_current_sample(void) {
     case 3:
         seed_variable_driven_program();
         break;
+    case 4: {
+        /* The --trace program, loaded the real way: every line through
+         * repl_load_apply_line (compile + apply), no hand-construction. */
+        source_document_clear();
+        repl_dispatch_edit_line_set(0);
+        int el = 0;
+        for (int i = 0; SAMPLE_TRACE[i]; i++) {
+            char err[REPL_STATUS_TEXT_MAX] = "";
+            if (!repl_load_apply_line(SAMPLE_TRACE[i], err, sizeof(err), &el))
+                fprintf(stderr, "[render] sample 4 line %d: %s\n",
+                        i, err[0] ? err : "(rejected)");
+        }
+        repl_state_mark_source_dirty();
+        break;
+    }
     default:
         break;
     }
@@ -476,9 +525,9 @@ static void render_display_func(void) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     render_apply_camera();
 
-    /* For sample 3, push the live `t` into the predef table so the
-     * has_vars re-evaluation sees the animated value. */
-    if (g_render_sample == 3) {
+    /* For the animated samples (3 = single point, 4 = ring), push the
+     * live `t` into the predef table so has_vars re-evaluation animates. */
+    if (g_render_sample >= 3) {
         int t_idx = repl_eval_find_predef_var_idx("t");
         if (t_idx >= 0)
             g_predef_vars_mut[t_idx].value = g_render_t;
@@ -505,7 +554,7 @@ static void render_reshape_func(int w, int h) {
 }
 
 static void render_idle_func(void) {
-    if (!g_render_paused && g_render_sample == 3)
+    if (!g_render_paused && g_render_sample >= 3)
         g_render_t += 0.016f;
     glutPostRedisplay();
 }
@@ -515,7 +564,7 @@ static void render_keyboard_func(unsigned char key, int x, int y) {
     switch (key) {
     case 27: case 'q': case 'Q':
         exit(0);
-    case '1': case '2': case '3':
+    case '1': case '2': case '3': case '4':
         g_render_sample = key - '0';
         render_load_current_sample();
         printf("[render] sample = %d\n", g_render_sample);
@@ -567,29 +616,200 @@ static int run_render_mode(int argc, char **argv) {
 
 #endif /* GL_STUBS */
 
+/* --- Pipeline trace (--trace) ---------------------------------------- *
+ *
+ * A narrated, headless walk through every stage the REPL backend runs to
+ * turn typed text into geometry. It drives the canonical non-editor load
+ * path (repl_load_apply_line), so the compile -> apply transaction
+ * happens for real, then dumps the intermediate state at each stage:
+ *
+ *   STAGE 1  text   -> compile -> apply        (source array + predef table)
+ *   STAGE 2  source program                    (loops/calls still folded)
+ *   STAGE 3  source -> flat program            (unrolled, with provenance)
+ *   STAGE 4  the frame loop: animate t          (re-bake has_vars per frame)
+ *
+ * Works in both the stubs and real-GL builds: it never needs a GL context
+ * because stage 4 reads the *flattened* (baked) args rather than executing.
+ */
+
+/* Compact "t=0.00 r=1.50" view of the live predefined-variable table. */
+static void trace_format_predef(char *buf, int buf_sz) {
+    ReplVariableView v = repl_state_variables();
+    int n = 0;
+    if (buf_sz > 0) buf[0] = '\0';
+    for (int i = 0; i < v.var_count && n < buf_sz; i++) {
+        int w = snprintf(buf + n, (size_t)(buf_sz - n), "%s%s=%.2f",
+                         i ? " " : "", v.vars[i].name, v.vars[i].value);
+        if (w < 0) break;
+        n += w;
+    }
+}
+
+/* Dump the source command array: type, has_vars flag, and evaluated args. */
+static void trace_print_source(void) {
+    int n = repl_state_document_count();
+    const GLCmd *cmds = repl_state_document_cmds();
+    printf("  %-3s %-20s %-8s %s\n", "idx", "type", "has_vars", "args");
+    for (int i = 0; i < n; i++) {
+        const GLCmd *c = &cmds[i];
+        printf("  %-3d %-20s %-8s ", i, cmd_type_name(c->type),
+               c->has_vars ? "yes" : "-");
+        for (int a = 0; a < c->num_args; a++)
+            printf("%s%.3g", a ? ", " : "", c->args[a]);
+        printf("\n");
+    }
+}
+
+/* Dump the flat program: type, owning source line (src_idx), call depth,
+ * and the frozen local-variable snapshot captured when the command was
+ * emitted (loop counters, function params, visible predefs). */
+static void trace_print_flat(void) {
+    FlatProgramView view = repl_state_flat_program_view();
+    const FlatCmdLocalVars *locals = repl_state_flat_program_local_vars();
+    int n = view.cmd_count;
+    printf("  %-3s %-20s %-7s %-5s %s\n",
+           "idx", "type", "src_idx", "depth", "local-var snapshot");
+    for (int i = 0; i < n; i++) {
+        const GLCmd *c = &view.cmds[i];
+        printf("  %-3d %-20s %-7d %-5d ", i, cmd_type_name(c->type),
+               c->src_cmd_idx, c->call_depth);
+        const FlatCmdLocalVars *lv = &locals[i];
+        if (lv->num_vars == 0) {
+            printf("-");
+        } else {
+            for (int v = 0; v < lv->num_vars; v++)
+                printf("%s%s=%.3g", v ? ", " : "",
+                       lv->vars[v].name, lv->vars[v].value);
+        }
+        printf("\n");
+    }
+}
+
+static int run_trace_mode(void) {
+    /* The pipeline reads/writes the edit-line cursor through the host
+     * bridge; back it with the demo-local int (see g_demo_host_effects). */
+    repl_install_host_effects(&g_demo_host_effects);
+    repl_state_reset_program();
+    source_document_clear();
+    repl_dispatch_edit_line_set(0);
+
+    puts("========================================================================");
+    puts(" REPL pipeline trace  —  one program, end to end");
+    puts("========================================================================");
+    puts("Typed exactly as a user would enter it:\n");
+    for (int i = 0; SAMPLE_TRACE[i]; i++)
+        printf("    %s\n", SAMPLE_TRACE[i]);
+
+    /* ---- STAGE 1: text -> compile -> apply ------------------------- */
+    puts("\n------------------------------------------------------------------------");
+    puts(" STAGE 1   text -> compile -> apply        repl_load_apply_line()");
+    puts("------------------------------------------------------------------------");
+    puts("Each line is compiled to a pure ReplCompiledChange, then applied to the");
+    puts("source command array + the predefined-variable table. Watch the source");
+    puts("count grow and the variables appear (the compile side-effects landing):\n");
+
+    int edit_line = 0;
+    for (int i = 0; SAMPLE_TRACE[i]; i++) {
+        int before = repl_state_document_count();
+        char err[REPL_STATUS_TEXT_MAX] = "";
+        if (!repl_load_apply_line(SAMPLE_TRACE[i], err, sizeof(err), &edit_line)) {
+            fprintf(stderr, "  trace: line %d rejected: %s\n    %s\n",
+                    i, err[0] ? err : "(no diagnostic)", SAMPLE_TRACE[i]);
+            return 1;
+        }
+        int after = repl_state_document_count();
+        char vars[160];
+        trace_format_predef(vars, sizeof(vars));
+        printf("  %-50s src+%d (now %2d)  [%s]\n",
+               SAMPLE_TRACE[i], after - before, after, vars);
+    }
+    /* The loader leaves the dirty flags to the caller (it batches loads). */
+    repl_state_mark_source_dirty();
+    repl_state_mark_flat_dirty();
+
+    /* ---- STAGE 2: the source program ------------------------------- */
+    puts("\n------------------------------------------------------------------------");
+    puts(" STAGE 2   the source program              repl_state_document_cmds()");
+    puts("------------------------------------------------------------------------");
+    puts("The parsed source array. Control flow is still folded — the for-loop is");
+    puts("three commands (FOR_BEGIN / body / FOR_END), not yet unrolled. Note the");
+    puts("has_vars body command: its expression is preserved as text, not baked.\n");
+    trace_print_source();
+
+    /* ---- STAGE 3: flatten ------------------------------------------ */
+    puts("\n------------------------------------------------------------------------");
+    puts(" STAGE 3   source -> flat program          repl_flatten_commands()");
+    puts("------------------------------------------------------------------------");
+    repl_flatten_commands(repl_dispatch_edit_line_get());
+    printf("%d source commands expand to %d flat commands. The loop body unrolled;\n"
+           "each flat command remembers its source line (src_idx) and a frozen\n"
+           "snapshot of the variables in scope when it was emitted:\n\n",
+           repl_state_document_count(), repl_state_flat_program_count());
+    trace_print_flat();
+    puts("\nThe loop counter 'i' differs per unrolled vertex (frozen at flatten);");
+    puts("'r' and 't' stay live — re-resolved from the predef table each frame.");
+
+    /* ---- STAGE 4: the frame loop ----------------------------------- */
+    puts("\n------------------------------------------------------------------------");
+    puts(" STAGE 4   the frame loop: animate t       (re-flatten per frame)");
+    puts("------------------------------------------------------------------------");
+    puts("Every frame the controller bumps 't' and re-flattens. Because the body");
+    puts("is has_vars, the flattener re-evaluates its expression against the live");
+    puts("table, so the baked vertex coordinates move — this is how animation");
+    puts("works. The executor then walks the flat program emitting glVertex3f.\n");
+    {
+        static const float ts[] = { 0.00f, 0.25f, 0.50f, 0.75f };
+        printf("  %-9s %s\n", "t", "first unrolled vertex (loop i=0)");
+        for (int k = 0; k < (int)(sizeof(ts) / sizeof(ts[0])); k++) {
+            int t_idx = repl_eval_find_predef_var_idx("t");
+            g_predef_vars_mut[t_idx].value = ts[k];
+            repl_state_mark_flat_dirty();
+            repl_flatten_commands(repl_dispatch_edit_line_get());
+            FlatProgramView v = repl_state_flat_program_view();
+            for (int i = 0; i < v.cmd_count; i++) {
+                if (v.cmds[i].type == CMD_VERTEX3F) {
+                    printf("  t=%-7.2f glVertex3f(%7.3f, %7.3f, %7.3f)\n",
+                           ts[k], v.cmds[i].args[0], v.cmds[i].args[1],
+                           v.cmds[i].args[2]);
+                    break;
+                }
+            }
+        }
+    }
+    puts("\nSame source, four values of t, four different baked positions: the ring");
+    puts("rotates. Run `./repl_demo --render` and press 4 to watch it live.");
+    return 0;
+}
+
 /* --- Main ------------------------------------------------------------- */
 
 static void print_help(const char *prog) {
     printf(
-"Usage: %s [--execute | --render] [-h|--help]\n"
+"Usage: %s [--execute | --trace | --render] [-h|--help]\n"
 "\n"
 "Standalone REPL pipeline demo. Drives parse -> command store -> flatten\n"
 "-> execute on hard-coded static-text samples, without linking the editor\n"
 "input dispatch, the controller, or the UI.\n"
 "\n"
 "Modes:\n"
-"  (no flag)   Print parse/flatten summaries for all three samples and\n"
-"              show the variable-driven re-evaluation table for sample 3.\n"
+"  (no flag)   Print parse/flatten summaries for samples 1-3 and show the\n"
+"              variable-driven re-evaluation table for sample 3.\n"
 "  --execute   Same as above, plus run repl_execute_program() against the\n"
 "              GL stubs after each sample's flatten.\n"
+"  --trace     Narrated, headless walk through every pipeline stage on one\n"
+"              representative program (sample 4): text -> compile -> apply\n"
+"              -> source program -> flatten (with provenance + local-var\n"
+"              snapshots) -> per-frame re-evaluation. The best starting\n"
+"              point for understanding the backend; pairs with\n"
+"              src/repl/ARCHITECTURE.md.\n"
 "  --render    Real GL: open a GLUT window and render the active sample.\n"
 "              Requires a non-stubs build (see Build below).\n"
 "  -h, --help  Print this help and exit.\n"
 "\n"
 "Render-mode keys:\n"
-"  1 / 2 / 3   Switch sample (1 = triangle, 2 = for-loop, 3 = animated)\n"
-"  space       Pause/resume sample-3 animation\n"
-"  q, Esc      Quit\n"
+"  1 / 2 / 3 / 4  Switch sample (1 triangle, 2 for-loop, 3 point, 4 ring)\n"
+"  space          Pause/resume animation (samples 3 and 4)\n"
+"  q, Esc         Quit\n"
 "\n"
 "Samples:\n"
 "  1  Plain commands: parses a hand-typed glBegin/glColor/glVertex/glEnd\n"
@@ -602,6 +822,10 @@ static void print_help(const char *prog) {
 "     references `r` and `t` with preserve_expr=1, then bumps `t` and\n"
 "     re-flattens to show has_vars expressions re-evaluating against\n"
 "     the live g_predef_vars table.\n"
+"  4  Trace program (see --trace): a var decl, an assignment, a typed\n"
+"     for-loop, and a has_vars ring body, loaded through the real\n"
+"     non-editor compile+apply path (repl_load_apply_line). Renders a\n"
+"     rotating 6-point ring.\n"
 "\n"
 "Build:\n"
 "  make repl_demo                  Real GL; --render works.\n"
@@ -613,11 +837,14 @@ static void print_help(const char *prog) {
 int main(int argc, char **argv) {
     int run_execute = 0;
     int run_render  = 0;
+    int run_trace   = 0;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--execute") == 0)
             run_execute = 1;
         else if (strcmp(argv[i], "--render") == 0)
             run_render = 1;
+        else if (strcmp(argv[i], "--trace") == 0)
+            run_trace = 1;
         else if (strcmp(argv[i], "-h") == 0
               || strcmp(argv[i], "--help") == 0) {
             print_help(argv[0]);
@@ -631,6 +858,9 @@ int main(int argc, char **argv) {
 
     if (run_render)
         return run_render_mode(argc, argv);
+
+    if (run_trace)
+        return run_trace_mode();
 
     /* Install the host-effects sink so the REPL pipeline's
      * repl_dispatch_edit_line_* calls land on the demo-local int.

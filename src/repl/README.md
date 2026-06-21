@@ -53,13 +53,22 @@ proof that the language pipeline stands on its own.
 
 ```bash
 make repl_demo                  # real GL (--render opens a window)
-./repl_demo                     # print parse + flatten summaries for 3 samples
+./repl_demo                     # print parse + flatten summaries for samples 1-3
 ./repl_demo --execute           # also run repl_execute_program() against GL stubs
-./repl_demo --render            # real GL window; keys 1/2/3 switch sample, space pauses, q quits
+./repl_demo --trace             # narrated end-to-end walkthrough of every stage
+./repl_demo --render            # real GL window; keys 1/2/3/4 switch sample, space pauses, q quits
 make repl_demo USE_GL_STUBS=1   # headless build (no GL dev libs needed)
 ```
 
-Three samples isolate three pipeline behaviors:
+**Start with `--trace`.** It loads one representative program through the
+*real* non-editor compile→apply path (`repl_load_apply_line`) and narrates
+every stage the backend runs — text → compile → apply → source program →
+flatten (with provenance + local-var snapshots) → per-frame re-evaluation.
+It's the executable companion to [`ARCHITECTURE.md` §11](ARCHITECTURE.md),
+which walks the same output prose-side. Render sample 4 draws the same
+program as a rotating ring.
+
+The three print-summary samples each isolate one pipeline behavior:
 
 1. **Plain commands** — a `glBegin/glColor/glVertex/glEnd` triangle parsed
    straight through `repl_parser_parse_command_ctx` + the command store.
