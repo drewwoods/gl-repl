@@ -5,7 +5,9 @@
 #include <string.h>
 #include "repl/flatten.h"
 #include "source_document.h"
-#include "repl/core_internal.h"
+#include "repl/command.h"
+#include "repl/eval.h"
+#include "repl/text_helpers.h"
 #include "repl/control_flow.h"
 #include "repl/parser.h"
 #include "repl/source_scope.h"

@@ -500,7 +500,6 @@ state-machine level, not buried in the doc body.
 | `src/repl/command_spec.h` | Command spec query API |
 | `src/repl/command_store.c` | Low-level `GLCmd` array mechanics: insert, delete, replace, bulk-load (no text-buffer writes) |
 | `src/repl/command_store.h` | Command-store public API (`repl_command_store_insert_one`, etc.) |
-| `src/repl/core_internal.h` | Test-visible internals (normalize/commit pipeline, `editor_feed_line`, `editor_load_line_to_input`, `repl_promote_example_if_needed`) |
 | `src/repl/state.c` | Owns `g_repl_state`, lifecycle, snapshot assembly (`repl_state_capture` / `repl_state_restore`) |
 | `src/repl/state.h` | Typed runtime-state facade, reset helpers, and focused accessors over the live REPL state |
 | `src/repl/state_views.h` | Read-only (by-value) state getters; safe to include from `scene_*` and `ui_*` |

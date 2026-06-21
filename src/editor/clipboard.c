@@ -21,7 +21,6 @@
 #include <stdio.h>
 #include "repl/host_effects.h"
 #include "repl/state_notify.h"
-#include "repl/core_internal.h"
 #include "repl/load.h"
 #include "repl/source_scope.h"
 #include "repl/state_views.h"

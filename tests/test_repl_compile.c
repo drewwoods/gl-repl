@@ -23,7 +23,7 @@
 #include "repl/compile.h"
 #include <stdbool.h>
 #include "editor/input.h"
-#include "repl/core_internal.h"  /* try_commit_*, editor_commit_func_decl_resume_peek */
+#include "repl/command.h"
 #include "repl/eval.h"
 #include "repl/load.h"           /* repl_load_apply_line for [P2] dup-check test */
 #include "repl/state_owners.h"

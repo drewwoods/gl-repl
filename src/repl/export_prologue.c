@@ -1,4 +1,5 @@
 #include "repl/export_internal.h"
+#include "repl/text_helpers.h"
 
 /* Predef vars other than `t` carry their snapshot value forward into
  * the next frame. `t` is set per-frame from glutGet at the top of

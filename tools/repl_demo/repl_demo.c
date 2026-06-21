@@ -47,7 +47,7 @@
 #include "repl/host_effects.h"
 #include "repl/pipeline.h"
 #include "repl/state_notify.h"
-#include "repl/core_internal.h"   /* repl_parse_and_normalize */
+#include "repl/normalize.h"
 #include "repl/eval.h"            /* repl_eval_declare_predef_var, g_predef_vars */
 #include "repl/executor.h"
 #include "repl/parser.h"

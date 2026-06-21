@@ -115,7 +115,8 @@ workspace I/O in `export.c`, and the neutral F1 `help_text.c` tables.
 | `source_scope.c` / `.h` | Source depth / indentation / block lookup cache |
 | `format.c` / `.h` | Pure indentation/depth computation |
 | `normalize.c` / `.h`, `reformat.c` / `.h`, `bootstrap.c` / `.h` | Parse/normalize, source reformat, startup loading |
-| `pipeline.h`, `core_internal.h`, `core.h` | Frame pipeline declarations, test-visible internals, legacy compatibility facade |
+| `text_helpers.c` / `.h`, `visible_vars.c` / `.h` | Parse/extract/canonical-text helpers; visible-variable collection (formerly bundled by the deleted `core_internal.h` umbrella) |
+| `pipeline.h` | Frame pipeline declarations |
 | `state.c` / `.h`, `state_views.h`, `state_owners.h` | `ReplState` storage + typed read/mut facades |
 | `scenes.c`, `scene_snapshot.c`, `workspace_io.c`, `examples.c`, `example_loader.c` | User-scene slots, copyable scene snapshots, workspace filesystem + file-naming mechanics, built-in example data + loading |
 | `tutorials.c`, `help_text.c` | Tutorial catalog, F1 help-text tables |

@@ -5,8 +5,7 @@
  * vsnprintf / copy wrappers. They return 0 on truncation so the caller can
  * surface a diagnostic instead of silently clipping text. Keeping them in this
  * narrow header lets consumers get safe fixed-buffer helpers without pulling in
- * the broader src/repl/core_internal.h surface. Include it directly where the
- * helpers are used.
+ * a broader internal surface. Include it directly where the helpers are used.
  */
 #ifndef REPL_UTIL_H
 #define REPL_UTIL_H

@@ -12,7 +12,8 @@
  */
 #include "editor/state.h"        /* EditorBufferView, EditorAutocompleteState, editor_state_* */
 #include "repl/state_views.h"
-#include "repl/core_internal.h"
+#include "repl/text_helpers.h"
+#include "repl/command.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>

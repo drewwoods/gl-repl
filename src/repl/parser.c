@@ -8,10 +8,12 @@
 #include <stdio.h>
 #include <string.h>
 #include "repl/parser.h"
+#include "repl/text_helpers.h"
 
 #include "repl/command_spec.h"
 #include "repl/color_limits.h"
-#include "repl/core_internal.h"
+#include "repl/command.h"
+#include "repl/eval.h"
 #include "repl/source_scope.h"
 #include "repl/util.h"          /* repl_format_fits / repl_copy_string_fits */
 
