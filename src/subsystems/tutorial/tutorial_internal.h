@@ -3,7 +3,6 @@
 
 #include "subsystems/tutorial/tutorial.h"
 #include "subsystems/tutorial/tutorial_state.h"
-#include "repl/core_internal.h"
 #include "repl/eval.h"
 #include "repl/host_effects.h"
 #include "repl/pipeline.h"

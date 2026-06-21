@@ -1,4 +1,5 @@
 #include "repl/export_internal.h"
+#include "repl/text_helpers.h"
 
 /* Emit a CMD_FOR_BEGIN as C89: a marker-tagged scope brace + hoisted
  * `float i;` decl (C89 has no for-init declarations; the markers let

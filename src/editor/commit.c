@@ -41,7 +41,8 @@
 
 #include "repl/apply.h"
 #include "repl/compile.h"
-#include "repl/core_internal.h"
+#include "repl/command.h"
+#include "repl/visible_vars.h"
 #include "repl/parser.h"
 #include "repl/host_effects.h"
 #include "repl/state_notify.h"

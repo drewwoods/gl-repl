@@ -1,4 +1,5 @@
 #include "repl/export_internal.h"
+#include "repl/text_helpers.h"
 
 /* File-scope C boilerplate: includes, macros, and the rotation globals.
  * Lines here appear in BOTH the code panel header AND the exported C

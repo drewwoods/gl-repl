@@ -9,7 +9,8 @@
 #include "repl/export.h"
 #include "source_document.h"
 #include "editor/input.h"
-#include "repl/core_internal.h"
+#include "repl/command.h"
+#include "repl/eval.h"
 #include "repl/state.h"
 #include "repl/pipeline.h"
 

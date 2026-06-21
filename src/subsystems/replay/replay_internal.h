@@ -3,7 +3,7 @@
 
 #include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
-#include "repl/core_internal.h"
+#include "repl/command.h"
 #include "repl/eval.h"
 #include "repl/host_effects.h"
 #include "repl/pipeline.h"

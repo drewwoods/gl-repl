@@ -5,13 +5,11 @@
  * workspace persistence). This header exposes the lifecycle entry points that
  * other REPL modules, the editor, and the controller call when an edit should
  * promote an example, an example load should capture/restore scene context, or
- * a full reset should discard scene state. src/repl/core.h compatibility-
- * reexports this header for older call sites, but new code should include this
- * owner directly.
+ * a full reset should discard scene state.
  *
- * These hooks were split out of src/repl/core_internal.h so the remaining
- * internal header could focus on parse/normalize helpers (implemented as
- * phase 5 of feature/source-document-port.md).
+ * These hooks were split out of the former src/repl/core_internal.h umbrella,
+ * which has since been removed entirely so callers include the focused owner
+ * headers they need directly.
  */
 #ifndef REPL_SCENES_H
 #define REPL_SCENES_H

@@ -1,4 +1,5 @@
 #include "repl/export_internal.h"
+#include "repl/text_helpers.h"
 
 /* Light bridge — the controller installs an adapter that copies the live
  * app-owned theme-seeded light data (positions/colors/eye-space) into the

@@ -7,9 +7,9 @@
  * bench drivers that want the same example body loading without the surrounding
  * controller choreography.
  *
- * This was split out of src/repl/core_internal.h so the catch-all
- * internal header could shrink toward parse-only helpers (implemented
- * in Phase 5 of feature/source-document-port.md).
+ * This was split out of the former src/repl/core_internal.h umbrella,
+ * which has since been removed entirely so callers include the focused
+ * owner headers they need directly.
  */
 #ifndef REPL_EXAMPLE_LOADER_H
 #define REPL_EXAMPLE_LOADER_H

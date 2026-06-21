@@ -24,7 +24,6 @@
 #include "repl/export.h"
 #include "repl/host_effects.h"
 #include "repl/state_notify.h"
-#include "repl/core_internal.h"
 #include "repl/examples.h"
 #include "repl/scenes.h"
 #include "app/glr_config.h"

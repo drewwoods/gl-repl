@@ -1,13 +1,13 @@
-# `src/repl` structure and readability audit - active
+# `src/repl` structure and readability audit - done
 
-Status: **active** - implementation has started. Findings 1 (core split),
+Status: **done** - all findings landed. Findings 1 (core split),
 2 (compile context purity — visible-var, predef validator, and the eval path),
 3 (parser strict-ref context), 4 (source-scope view split + the 4b
-performance-regression fix), 6 (scene snapshot extraction + workspace-IO
-mechanics split), 7 (shared import/export vocabulary), 8 (import flow state),
+performance-regression fix), 5 (`core_internal.h` umbrella removed),
+6 (scene snapshot extraction + workspace-IO mechanics split),
+7 (shared import/export vocabulary), 8 (import flow state),
 9 (export writer split), 10 (flatten query split), 11 (state-layer
-scaffolding cleanup), and 12 (load transaction boundary) are landed. The
-remaining findings are still a cleanup map, not completed work.
+scaffolding cleanup), and 12 (load transaction boundary) are all implemented.
 
 Recent implementation commits:
 
@@ -33,6 +33,7 @@ Recent implementation commits:
 | Finding 4 phase 4b: warm-view fix | Landed | Live-document normalize now reuses the warm live source-scope cache through parser live-wrapper fallback, and `reformat_large_doc` guards the user-visible reformat path. |
 | Finding 2 compile purity (visible-var + predef) | Landed | `b828b64f` threads the document view; `e1eb9ae4` the predef ident-validator; the eval path now carries an `ExprCtx.predef_vars` fallback so value evaluation (scratch/var-assign/if-condition/for-bounds) resolves against `ctx->predef`, not live `g_predef_vars` (closed by the P2 follow-up plus an if-condition fix; covered by `test_eval` and `test_repl_compile`). |
 | Finding 3 strict-ref context cleanup | Landed | Parser strict function-call validation now uses context-supplied source-scope and alias views; `source_scope == NULL` no longer reads live state. |
+| Finding 5 `core_internal.h` umbrella removed | Landed | The catch-all internal header is deleted; every consumer (REPL/editor/app/replay/tutorial TUs, the demo, and tests) now includes the focused owner header(s) it actually uses (`command.h` / `eval.h` / `normalize.h` / `text_helpers.h` / `visible_vars.h` / `source_document.h`). Same pattern that retired `core.h` in Finding 1. |
 | Finding 6 scene snapshot extraction | Landed | `src/repl/scene_snapshot.c` now owns command/source/cursor/predef/scratch/function-alias/cfg/camera capture, apply, clear, copy, and live command-loading helpers. `src/repl/scenes.c` keeps slot selection, promotion, eviction, and workspace iteration. |
 | Finding 6 workspace-IO mechanics split | Landed | `src/repl/workspace_io.c` now owns the filesystem + scene-file naming mechanics (recursive `mkdir`, `.c`-extension test, basename→scene-name, slug derivation + collision suffixes). `scenes.c` keeps the save/load orchestration that drives them, since that loop is the slot state machine and can't move without exposing `g_user_scenes`. `user_scene_copy` is now a whole-struct assignment. |
 | Finding 7 shared import/export format vocabulary | Landed | `export_format_shared.h` now owns the import/export state-access macro block plus workspace directive, snippet directive, C89 loop marker, and generated `repl_glfloatN` helper names. |
@@ -588,6 +589,14 @@ code measured `normalize_large_doc=0.4293 µs` and
 `reformat_large_doc=31.5702 ms`.
 
 ## Finding 5: `core_internal.h` is narrower, but still a mixed internal bucket
+
+**Status:** Done on 2026-06-21. The recommended moves had already landed
+(normalize/text-helper/visible-var declarations live in their own owner
+headers), leaving `core_internal.h` a pure umbrella that re-included them.
+That umbrella is now deleted: each of its ~31 consumers includes the focused
+owner header(s) it actually uses, so an "internal" include no longer hands a
+caller parse/normalize, text-helper, and visible-var concepts together. This
+mirrors how Finding 1 retired `core.h`.
 
 ### Evidence
 

@@ -14,7 +14,8 @@
 #include <string.h>
 #include "repl/host_effects.h"
 #include "repl/state_notify.h"
-#include "repl/core_internal.h"
+#include "repl/command.h"
+#include "repl/eval.h"
 #include "repl/scenes.h"         /* repl_promote_example_if_needed */
 #include "repl/state_views.h"
 #include "repl/util.h"           /* repl_copy_string_fits */

@@ -41,7 +41,7 @@ static const EditorState *editor_state_get_defaults(void) {
  * src is too long, dst is cleared to "" — same surrender behavior as
  * the legacy repl_copy_string_fits helper this slice depended on
  * before the migration. Inlined locally so editor_state.c does not
- * depend on src/repl/core_internal.h. */
+ * depend on a repl header just for a string helper. */
 static void editor_input_copy_str(char *dst, size_t sz, const char *src) {
     if (!dst || sz == 0)
         return;

@@ -10,11 +10,14 @@
  * store / predef-var registrations).
  */
 #include "repl/load.h"
+#include "repl/text_helpers.h"
 
 #include "repl/apply.h"
 #include "repl/command_store.h"
 #include "repl/compile.h"
-#include "repl/core_internal.h"  /* collect_visible_vars, parse-and-normalize */
+#include "repl/command.h"
+#include "repl/normalize.h"
+#include "repl/visible_vars.h"
 #include "repl/eval.h"
 #include "repl/host_effects.h"   /* repl_dispatch_edit_line_get / _set */
 #include "source_document.h"     /* source_document_apply_change, _insert_line */

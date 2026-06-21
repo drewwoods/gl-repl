@@ -21,7 +21,6 @@
 #include "repl/host_effects.h"
 #include "repl/program_query.h"
 #include "repl/scenes.h"
-#include "repl/core_internal.h"
 #include "repl/util.h"
 #include "repl/executor.h"
 #include "repl/parser.h"
