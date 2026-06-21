@@ -8,6 +8,7 @@
 #include "source_document.h"
 #include "repl/executor.h"
 #include "repl/flatten.h"
+#include "repl/flatten_query.h"
 #include "repl/geometry_query.h"
 #include "editor/clipboard.h"
 #include "editor/commit.h"

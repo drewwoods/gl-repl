@@ -52,6 +52,7 @@
 #include "editor/state.h"         /* editor_state_edit_line */
 #include <math.h>
 #include "repl/flatten.h"
+#include "repl/flatten_query.h"
 #include "repl/pipeline.h"
 #include "repl/reformat.h"
 #include "repl/state_notify.h"

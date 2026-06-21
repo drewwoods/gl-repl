@@ -5,8 +5,9 @@ Status: **active** - implementation has started. Findings 1 (core split),
 3 (parser strict-ref context), 4 (source-scope view split + the 4b
 performance-regression fix), 6 (scene snapshot extraction), 7 (shared
 import/export vocabulary), 8 (import flow state), and 9 (export writer split)
-are landed. The remaining findings and Finding 6's optional workspace-IO
-physical split are still a cleanup map, not completed work.
+are landed. Finding 10 (flatten query split) is landed. The remaining findings
+and Finding 6's optional workspace-IO physical split are still a cleanup map,
+not completed work.
 
 Recent implementation commits:
 
@@ -36,6 +37,17 @@ Recent implementation commits:
 | Finding 7 shared import/export format vocabulary | Landed | `export_format_shared.h` now owns the import/export state-access macro block plus workspace directive, snippet directive, C89 loop marker, and generated `repl_glfloatN` helper names. |
 | Finding 8 import flow state machine | Landed | File import now carries pending cfg, deferred `@var` values, and warning accounting through `ImportState`; public per-line workspace-header parsing keeps its separate batch for examples/tests. Line dispatch is explicit through `ImportLineKind` handler tables for early non-snippet, pre-snippet, and snippet-body phases. |
 | Finding 9 export writer split | Landed | `src/repl/export.c` is now the orchestrator; body writers, generated helpers, display/runtime UI generation, and setup/init/light/header text live in `export_cmd_writer.c`, `export_prologue.c`, `export_display.c`, and `export_setup.c` behind `export_internal.h`. |
+| Finding 10 flatten query split | Landed | `src/repl/flatten_query.{c,h}` carries live flat-program current-block, cursor-match, and cost-attribution queries. `src/repl/flatten.c` is back to source-to-flat lowering and rebuild orchestration. |
+
+Latest verification for Finding 10:
+
+- `make test_repl_core_commit test_repl_core_internal USE_GL_STUBS=1`
+- `./build/release-gl-stubs/test_repl_core_commit`
+- `./build/release-gl-stubs/test_repl_core_internal`
+- `make repl_demo USE_GL_STUBS=1`
+- `make bench USE_GL_STUBS=1`
+- `make check-c99`
+- `make test-stubs`
 
 Latest verification for Finding 9:
 
@@ -841,6 +853,10 @@ typedef struct ReplExportRenderPolicy {
 That is a behavior clarification, not part of the file cut.
 
 ## Finding 10: `flatten.c` mixes lowering with query/UI-adjacent helpers
+
+**Status:** Done on 2026-06-21. Query helpers moved to
+`src/repl/flatten_query.{c,h}` so `flatten.c` focuses on source-to-flat
+lowering and rebuild orchestration.
 
 ### Evidence
 
