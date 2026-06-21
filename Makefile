@@ -449,6 +449,7 @@ REPL_SRCS = \
 	src/repl/program_query.c \
 	src/repl/reformat.c \
 	src/repl/scenes.c \
+	src/repl/scene_snapshot.c \
 	src/repl/source_scope.c \
 	src/repl/state.c \
 	src/repl/text_helpers.c \
@@ -695,6 +696,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/repl/reformat.c \
                      src/subsystems/replay/replay_annotations.c \
                      src/repl/scenes.c \
+                     src/repl/scene_snapshot.c \
                      src/repl/source_scope.c \
                      src/repl/state.c \
                      src/repl/text_helpers.c \

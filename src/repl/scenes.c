@@ -2,9 +2,10 @@
  * src/repl/scenes.c -- User scene slots, promotion, and workspace save/load.
  */
 #include "repl/scenes.h"
-#include "repl/command_store.h"
-#include "repl/core_internal.h"
+#include "repl/scene_snapshot.h"
 #include "repl/examples.h"
+#include "repl/eval.h"
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
@@ -14,7 +15,7 @@
 #include "repl/cfg_baseline.h"   /* ReplConfigBag + bridge for per-scene cfg */
 #include "repl/export.h"          /* ReplExportCameraBlock + camera bridge */
 #include "repl/state_owners.h"
-#include "source_document.h" /* source_document_load_lines */
+#include "source_document.h" /* source_document_view */
 #include "config.h"          /* REPL_DIAG_TEXT_MAX */
 
 #include <dirent.h>
@@ -66,46 +67,22 @@
  *   on every access (load/save/rename) so LRU eviction can pick the
  *   coldest slot when the 9th scene is needed.
  *
- * The per-scene cfg snapshot is embedded on UserScene (the `cfg`
- * field) so it travels with the rest of the slot via struct copy —
- * no parallel array, no lifecycle invariant to maintain. The cfg
+ * The per-scene snapshot is embedded on UserScene (the `snapshot`
+ * field) so cfg, camera, variables, source text, and aliases travel
+ * with the rest of the slot via struct copy — no parallel arrays, no
+ * lifecycle invariant to maintain. The cfg
  * bag's contents are opaque to this TU; only the controller-installed
  * bridge interprets the slugs. The "pre-example" cfg (captured before
  * the user loads an example, restored when they leave it) lives in a
  * separate `g_pre_example` wrapper struct with its own `valid` flag
  * because it isn't tied to any slot.
- * (Snapshot first split out in Step 7b of
- * feature/decouple-repl-from-gl-repl-alt.md; embedded into UserScene
- * in the 2026-05-24 audit Tier B #44 pass — see
- * plans/done/src-repl-code-smell-audit.md.) */
+ * Snapshot copy/apply now lives in src/repl/scene_snapshot.c so this TU can
+ * focus on slot selection, promotion policy, and workspace iteration. */
 typedef struct {
-    int      used;
-    char     name[USER_SCENE_NAME_MAX];
-    uint32_t last_touch;
-    GLCmd    cmds[MAX_COMMANDS];
-    char     lines[MAX_COMMANDS][MAX_LINE_LEN];
-    int      num_cmds;
-    int      edit_line;
-    float    predef_vals[MAX_PREDEF_VARS];
-    float    scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
-    char     predef_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX];
-    int      num_predef_vars;
-    char     func_aliases[REPL_FUNC_SLOT_COUNT][REPL_FUNC_NAME_MAX];
-    /* Per-slot cfg snapshot — opaque bag whose slug semantics live on
-     * the controller-installed bridge. Embedded here so stash/restore
-     * and slot-eviction code paths handle cfg by ordinary struct copy
-     * instead of maintaining a parallel array. */
-    ReplConfigBag cfg;
-    /* Per-slot camera snapshot. The 4-line text block is the opaque
-     * serialization format the controller-installed camera bridge
-     * produces (fill_display_block) and consumes
-     * (apply_capture_block_snap / apply_example_block). Embedded so
-     * tab switches restore the slot's saved camera, and so workspace
-     * iteration writes each saved file with its OWN camera rather
-     * than the live one. `present == 0` = no per-slot camera (the
-     * slot inherits whatever is live, matching the example-loader
-     * default). */
-    ReplExportCameraBlock camera_block;
+    int           used;
+    char          name[USER_SCENE_NAME_MAX];
+    uint32_t      last_touch;
+    SceneSnapshot snapshot;
 } UserScene;
 
 static UserScene g_user_scenes[MAX_USER_SCENES];
@@ -117,19 +94,9 @@ static uint32_t  g_user_scene_tick = 0;
  * `valid` flag inside ReplConfigBag distinguishes "no capture yet" from "captured empty bag". */
 static ReplConfigBag g_pre_example;
 
-static ReplConfigBag *scene_cfg_writable(int slot) {
-    if (slot < 0 || slot >= MAX_USER_SCENES) return NULL;
-    return &g_user_scenes[slot].cfg;
-}
-
-static const ReplConfigBag *scene_cfg(int slot) {
-    if (slot < 0 || slot >= MAX_USER_SCENES) return NULL;
-    return &g_user_scenes[slot].cfg;
-}
-
 static void scene_cfg_clear(int slot) {
     if (slot < 0 || slot >= MAX_USER_SCENES) return;
-    repl_config_bag_clear(&g_user_scenes[slot].cfg);
+    repl_config_bag_clear(&g_user_scenes[slot].snapshot.cfg);
 }
 
 static ReplConfigBag *pre_example_cfg_writable(void) {
@@ -154,7 +121,7 @@ static void pre_example_cfg_set_valid(int valid) {
 
 static void scene_cfg_reset_all(void) {
     for (int i = 0; i < MAX_USER_SCENES; i++)
-        repl_config_bag_clear(&g_user_scenes[i].cfg);
+        repl_config_bag_clear(&g_user_scenes[i].snapshot.cfg);
     pre_example_cfg_clear();
 }
 
@@ -258,41 +225,8 @@ static void derive_unique_scene_name(char *out, size_t out_sz,
 static void save_scene_to_slot(int idx, const char *name, int edit_line) {
     if (idx < 0 || idx >= MAX_USER_SCENES) return;
     UserScene *s = &g_user_scenes[idx];
-    SourceTextView text = source_document_view();
-    memcpy(s->cmds, repl_state_document_cmds(), (size_t)repl_state_document_count() * sizeof(GLCmd));
-    for (int i = 0; i < repl_state_document_count(); i++)
-        repl_copy_string_fits(s->lines[i], MAX_LINE_LEN,
-                              source_text_line(text, i));
-    s->num_cmds        = repl_state_document_count();
-    s->edit_line       = edit_line;
-    repl_eval_copy_predef_vars(s->predef_vals,
-                               s->predef_names,
-                               &s->num_predef_vars);
-    repl_eval_copy_scratch_arrays(s->scratch_arrays);
-    for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {
-        const char *alias = repl_func_alias_get(slot);
-        if (alias)
-            snprintf(s->func_aliases[slot], REPL_FUNC_NAME_MAX, "%s", alias);
-        else
-            s->func_aliases[slot][0] = '\0';
-    }
-    {
-        ReplConfigBag *cfg = scene_cfg_writable(idx);
-        repl_config_bag_clear(cfg);
-        const ReplConfigBridge *bridge = repl_config_bridge();
-        if (bridge && bridge->fill_scene_subset)
-            bridge->fill_scene_subset(cfg);
-    }
-    /* Capture the live camera into the slot. Without this, the
-     * workspace-save iteration would write every saved file with
-     * the same (active scene's) camera, and tab switching would
-     * land the user on the previous tab's camera. */
-    {
-        memset(&s->camera_block, 0, sizeof(s->camera_block));
-        const ReplExportCameraBridge *cam_bridge = repl_export_camera_bridge();
-        if (cam_bridge && cam_bridge->fill_display_block)
-            cam_bridge->fill_display_block(&s->camera_block);
-    }
+    scene_snapshot_capture_live(&s->snapshot);
+    scene_snapshot_set_edit_line(&s->snapshot, edit_line);
     /* Callers re-saving an existing slot pass `g_user_scenes[idx].name`,
      * which aliases s->name. snprintf with overlapping src/dst is UB
      * (glibc with `%s` produces an empty buffer), so only copy when the
@@ -309,43 +243,6 @@ static void save_scene_to_slot(int idx, const char *name, int edit_line) {
     s->last_touch = next_user_scene_tick();
 }
 
-static const char *const *scene_line_ptrs(const char lines[MAX_COMMANDS][MAX_LINE_LEN],
-                                          int num_cmds) {
-    static const char *ptrs[MAX_COMMANDS];
-
-    if (!lines)
-        return NULL;
-    for (int i = 0; i < num_cmds && i < MAX_COMMANDS; i++)
-        ptrs[i] = lines[i];
-    return ptrs;
-}
-
-static int load_commands_into_live(const GLCmd *cmds,
-                                   const char lines[MAX_COMMANDS][MAX_LINE_LEN],
-                                   int num_cmds, int edit_line) {
-    /* Source text first so a bulk-load failure (capacity, fixture
-     * refusal) leaves the cmd-store untouched and the caller can
-     * surface the error to the user. */
-    if (!source_document_load_lines(scene_line_ptrs(lines, num_cmds), num_cmds))
-        return 0;
-    ReplCommandStore store = repl_command_store_live();
-    if (!repl_command_store_load(&store, cmds, num_cmds)) {
-        source_document_clear();
-        return 0;
-    }
-    /* Scene/workspace restore policy: stamp the snapshot's saved
-     * cursor. The store itself no longer writes the cursor on load,
-     * so this is the explicit policy hook. β-bound call (REPL →
-     * REPL); once repl_state_edit_line_set is deleted alongside the
-     * storage flip, this site moves to using a controller-threaded
-     * value.
-     * (Store stopped writing the cursor in phase 1 of the
-     * edit-line-ownership plan; storage flip and
-     * edit_line_set cleanup landed in phase 4.) */
-    repl_dispatch_edit_line_set(edit_line);
-    return 1;
-}
-
 void repl_scenes_save_active_scene_if_any(void);
 
 void repl_scenes_enter_transient_scene(void);
@@ -355,40 +252,9 @@ static void load_scene_from_slot(int idx) {
     UserScene *s = &g_user_scenes[idx];
     if (!s->used) return;
     repl_scenes_save_active_scene_if_any();
-    if (!load_commands_into_live(s->cmds, s->lines, s->num_cmds, s->edit_line))
+    if (!scene_snapshot_apply_live(&s->snapshot, SCENE_SNAPSHOT_CAMERA_EASE))
         return;
     repl_state_flat_program_set_count(0);
-    repl_eval_restore_predef_vars(s->predef_vals,
-                                  s->predef_names,
-                                  s->num_predef_vars);
-    repl_eval_restore_scratch_arrays(s->scratch_arrays);
-    /* Restore the per-scene func-alias table. Each scene owns its own
-     * mapping so renaming `drawCube` in scene A doesn't reach into B. */
-    repl_func_alias_clear_all();
-    for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {
-        if (s->func_aliases[slot][0])
-            repl_func_alias_set(slot, s->func_aliases[slot]);
-    }
-    /* Stamp in the saved per-scene cfg. The bridge's apply walks the
-     * full slug subset so this overwrites whatever an in-flight example
-     * sandbox had set; if a future change makes scene_cfg sparse /
-     * inherited-aware, a `restore_pre_example_cfg_if_valid()` call
-     * needs to come back in front of this apply so unsaved slugs roll
-     * back instead of leaking from the example. */
-    {
-        const ReplConfigBridge *bridge = repl_config_bridge();
-        if (bridge && bridge->apply)
-            bridge->apply(scene_cfg(idx));
-    }
-    /* Ease to the slot's saved camera (snap would be jarring on a
-     * user-triggered tab switch — same easing examples use via
-     * apply_example_block). No-op when the slot has no captured
-     * camera (camera_block.present == 0). */
-    {
-        const ReplExportCameraBridge *cam_bridge = repl_export_camera_bridge();
-        if (cam_bridge && cam_bridge->apply_example_block)
-            cam_bridge->apply_example_block(&s->camera_block);
-    }
     /* Exit insert mode so the next interactive line lands at the new
      * scene's tail, not inside the previous typing context. The full
      * reset (input buffer wipe, cursor home) belongs to the editor
@@ -462,125 +328,40 @@ static void install_scene_into_live(int slot) {
     if (slot < 0 || slot >= MAX_USER_SCENES) return;
     const UserScene *s = &g_user_scenes[slot];
     if (!s->used) return;
-    if (!load_commands_into_live(s->cmds, s->lines, s->num_cmds, s->edit_line))
-        return;
-    repl_eval_restore_predef_vars(s->predef_vals,
-                                  s->predef_names,
-                                  s->num_predef_vars);
-    repl_eval_restore_scratch_arrays(s->scratch_arrays);
-    repl_func_alias_clear_all();
-    for (int alias_slot = 0; alias_slot < REPL_FUNC_SLOT_COUNT; alias_slot++) {
-        if (s->func_aliases[alias_slot][0])
-            repl_func_alias_set(alias_slot, s->func_aliases[alias_slot]);
-    }
-    /* Apply the slot's saved per-scene cfg to live state. Without
-     * this, repl_save_workspace / evict_scene_to_workspace would
-     * export the scene with whichever cfg happened to be live when
-     * the iteration started — see the [P1] regression test in
-     * test_repl_core_io.c. The user-facing scene switch is used
-     * to apply this. */
-    const ReplConfigBridge *bridge = repl_config_bridge();
-    if (bridge && bridge->apply)
-        bridge->apply(scene_cfg(slot));
-    /* Snap-apply the slot's saved camera. The workspace-save
-     * iteration relies on this so the export bridge's
-     * fill_save_block reads the slot's pose, not the live one
-     * (which is whatever the stash captured at the top of the
-     * iteration). Snap (not ease) so the change lands in live
-     * state before the export call. */
-    {
-        const ReplExportCameraBridge *cam_bridge = repl_export_camera_bridge();
-        if (cam_bridge && cam_bridge->apply_capture_block_snap)
-            cam_bridge->apply_capture_block_snap(&s->camera_block);
-    }
+    (void)scene_snapshot_apply_live(&s->snapshot, SCENE_SNAPSHOT_CAMERA_SNAP);
 }
 
-/* Captures live state into a UserScene-shaped stash so
- * install_scene_into_live can be undone (the editor commit /
- * workspace iteration paths need this so a per-slot apply doesn't
- * permanently overwrite the document the user was editing).
- *
- * The cfg snapshot lives in `dst->cfg` (embedded by Tier B #44 —
- * see plans/done/src-repl-code-smell-audit.md) and is filled from
- * the live bridge here. `restore_live_from_stash` re-applies it. */
-/* Heap-allocate a transient UserScene scratch (~1.2 MB —
+/* Heap-allocate a transient SceneSnapshot scratch (~1.2 MB —
  * cmds[4096] + lines[4096][256] dominate). Stack allocation is a
- * real overflow hazard because repl_load_scene_as_new_slot keeps two
- * of these live while try_evict_lru adds a third on a recursive
+ * real overflow hazard because workspace/load flows can keep multiple
+ * snapshots live while try_evict_lru adds another on a recursive
  * frame; that exceeds the default POSIX worker stack (512 KB – 2 MB)
  * and pressures the 8 MB main stack alongside ASan/UBSan redzones.
- * Every successful scene_scratch_alloc must be paired with
- * scene_scratch_free at every exit path. Returns NULL on OOM. */
-static UserScene *scene_scratch_alloc(void) {
-    return (UserScene *)malloc(sizeof(UserScene));
+ * Every successful scene_snapshot_scratch_alloc must be paired with
+ * scene_snapshot_scratch_free at every exit path. Returns NULL on OOM. */
+static SceneSnapshot *scene_snapshot_scratch_alloc(void) {
+    return (SceneSnapshot *)malloc(sizeof(SceneSnapshot));
 }
 
-static void scene_scratch_free(UserScene *p) {
+static void scene_snapshot_scratch_free(SceneSnapshot *p) {
     free(p);
 }
 
-static void stash_live_state(UserScene *dst) {
-    SourceTextView text = source_document_view();
-    memset(dst, 0, sizeof(*dst));
-    memcpy(dst->cmds, repl_state_document_cmds(), (size_t)repl_state_document_count() * sizeof(GLCmd));
-    for (int i = 0; i < repl_state_document_count(); i++)
-        repl_copy_string_fits(dst->lines[i], MAX_LINE_LEN,
-                              source_text_line(text, i));
-    dst->num_cmds        = repl_state_document_count();
-    dst->edit_line       = repl_dispatch_edit_line_get();
-    repl_eval_copy_predef_vars(dst->predef_vals,
-                               dst->predef_names,
-                               &dst->num_predef_vars);
-    repl_eval_copy_scratch_arrays(dst->scratch_arrays);
-    for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {
-        const char *alias = repl_func_alias_get(slot);
-        if (alias)
-            snprintf(dst->func_aliases[slot], REPL_FUNC_NAME_MAX, "%s", alias);
-        else
-            dst->func_aliases[slot][0] = '\0';
-    }
-    {
-        const ReplConfigBridge *bridge = repl_config_bridge();
-        if (bridge && bridge->fill_scene_subset)
-            bridge->fill_scene_subset(&dst->cfg);
-    }
-    /* Snapshot live camera too — restore_live_from_stash brings it
-     * back symmetrically. The workspace-save iteration walks each
-     * slot via install_scene_into_live (which now applies the slot's
-     * own camera); the stash is what we restore live to at the end
-     * of the loop, so the user lands back on the camera they had
-     * before save started. */
-    {
-        memset(&dst->camera_block, 0, sizeof(dst->camera_block));
-        const ReplExportCameraBridge *cam_bridge = repl_export_camera_bridge();
-        if (cam_bridge && cam_bridge->fill_display_block)
-            cam_bridge->fill_display_block(&dst->camera_block);
-    }
+static void stash_live_state(SceneSnapshot *dst) {
+    scene_snapshot_capture_live(dst);
 }
 
-static void restore_live_from_stash(const UserScene *src) {
-    if (!load_commands_into_live(src->cmds, src->lines, src->num_cmds,
-                                 src->edit_line))
+static void restore_live_from_stash(const SceneSnapshot *src) {
+    (void)scene_snapshot_apply_live(src, SCENE_SNAPSHOT_CAMERA_SNAP);
+}
+
+static void user_scene_copy(UserScene *dst, const UserScene *src) {
+    if (!dst || !src)
         return;
-    repl_eval_restore_predef_vars(src->predef_vals,
-                                  src->predef_names,
-                                  src->num_predef_vars);
-    repl_eval_restore_scratch_arrays(src->scratch_arrays);
-    repl_func_alias_clear_all();
-    for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {
-        if (src->func_aliases[slot][0])
-            repl_func_alias_set(slot, src->func_aliases[slot]);
-    }
-    {
-        const ReplConfigBridge *bridge = repl_config_bridge();
-        if (bridge && bridge->apply)
-            bridge->apply(&src->cfg);
-    }
-    {
-        const ReplExportCameraBridge *cam_bridge = repl_export_camera_bridge();
-        if (cam_bridge && cam_bridge->apply_capture_block_snap)
-            cam_bridge->apply_capture_block_snap(&src->camera_block);
-    }
+    dst->used = src->used;
+    snprintf(dst->name, sizeof(dst->name), "%s", src->name);
+    dst->last_touch = src->last_touch;
+    (void)scene_snapshot_copy(&dst->snapshot, &src->snapshot);
 }
 
 static void scene_filename_slug(const char *name, char *out, size_t out_sz) {
@@ -707,7 +488,7 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
              g_workspace_dir);
     snprintf(g_workspace_dir_writable, REPL_WORKSPACE_DIR_MAX, "%s", dir);
 
-    UserScene *stash = scene_scratch_alloc();
+    SceneSnapshot *stash = scene_snapshot_scratch_alloc();
     if (!stash) {
         repl_set_status_error("Workspace save: out of memory");
         snprintf(g_workspace_dir_writable, REPL_WORKSPACE_DIR_MAX, "%s", prev_workspace_dir);
@@ -730,7 +511,7 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
         if (!repl_export_save_output(path, source_document_view(), layout)) {
             g_export_scene_name_hint_writable = NULL;
             restore_live_from_stash(stash);
-            scene_scratch_free(stash);
+            scene_snapshot_scratch_free(stash);
             snprintf(g_workspace_dir_writable, REPL_WORKSPACE_DIR_MAX, "%s",
                      prev_workspace_dir);
             return -1;
@@ -740,7 +521,7 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
     }
 
     restore_live_from_stash(stash);
-    scene_scratch_free(stash);
+    scene_snapshot_scratch_free(stash);
 
     char msg[REPL_STATUS_TEXT_MAX];
     snprintf(msg, sizeof(msg), "Saved %d scene%s to %s",
@@ -828,7 +609,7 @@ const char *repl_active_scene_export_path(const char *ext) {
 }
 
 static int load_scene_file_into_slot(const char *path) {
-    load_commands_into_live(NULL, NULL, 0, 0);
+    scene_snapshot_load_live_commands(NULL, NULL, 0, 0);
     /* Start each imported scene from the built-in predef baseline (`t`).
      * Workspace headers then re-declare any user vars on top. Clearing the
      * table entirely breaks round-tripping for scenes whose expressions
@@ -880,7 +661,7 @@ int repl_load_workspace(const char *dir) {
      * stashes live cfg as the pre-workspace snapshot. */
     repl_dispatch_tutorial_teardown();
 
-    UserScene *stash = scene_scratch_alloc();
+    SceneSnapshot *stash = scene_snapshot_scratch_alloc();
     if (!stash) {
         closedir(d);
         repl_set_status_error("Workspace load: out of memory");
@@ -908,7 +689,7 @@ int repl_load_workspace(const char *dir) {
     closedir(d);
 
     restore_live_from_stash(stash);
-    scene_scratch_free(stash);
+    scene_snapshot_scratch_free(stash);
     repl_state_scenes_set_active_example_idx(stash_example);
     g_active_user_scene = -1;
 
@@ -947,12 +728,11 @@ static int pick_lru_user_scene_slot(void);      /* defined below */
  * (no workspace bound, no eligible victim, or evict_scene_to_workspace
  * itself failed).
  *
- * On a successful eviction `*out_stash` receives a snapshot of the
- * victim's in-memory entry (cfg included, since Tier B #44 embedded
- * `ReplConfigBag cfg` on UserScene) so the caller can restore the
- * scene tab if needed; the on-disk file written by the eviction is
- * left in place either way (the user's data is preserved both
- * in-memory after restore AND on disk via Load Workspace). */
+ * On a successful eviction `*out_stash` receives a copy of the victim's
+ * in-memory entry, including its SceneSnapshot, so the caller can restore
+ * the scene tab if needed; the on-disk file written by the eviction is left
+ * in place either way (the user's data is preserved both in-memory after
+ * restore AND on disk via Load Workspace). */
 static int try_evict_lru(UserScene *out_stash) {
     if (find_free_user_scene_slot() >= 0 || !g_user_scenes[0].used)
         return -1;
@@ -964,28 +744,27 @@ static int try_evict_lru(UserScene *out_stash) {
      * runs — that helper marks the slot unused and clears its cfg as its
      * last step, so without this capture a subsequent parse failure would
      * leave the user staring at a missing tab. */
-    memcpy(out_stash, &g_user_scenes[victim], sizeof(UserScene));
+    user_scene_copy(out_stash, &g_user_scenes[victim]);
 
     /* evict_scene_to_workspace clobbers live state via install_scene_into_live;
      * wrap in its own stash/restore so the caller's outer live stash stays
      * the user's actual document, not the evicted scene's content. */
-    UserScene *live_temp = scene_scratch_alloc();
+    SceneSnapshot *live_temp = scene_snapshot_scratch_alloc();
     if (!live_temp) return -2;
     stash_live_state(live_temp);
     int ok = evict_scene_to_workspace(victim);
     restore_live_from_stash(live_temp);
-    scene_scratch_free(live_temp);
+    scene_snapshot_scratch_free(live_temp);
     if (!ok) return -2;
     return victim;
 }
 
 /* Restore a slot snapshot taken by try_evict_lru. Reinstates the
- * in-memory entry (so the scene tab reappears); cfg now lives on
- * UserScene so it travels with the memcpy. No-op if `slot < 0` (the
- * "no eviction happened" sentinel from try_evict_lru). */
+ * in-memory entry (so the scene tab reappears). No-op if `slot < 0`
+ * (the "no eviction happened" sentinel from try_evict_lru). */
 static void restore_evicted_slot(int slot, const UserScene *stash) {
     if (slot < 0) return;
-    memcpy(&g_user_scenes[slot], stash, sizeof(UserScene));
+    user_scene_copy(&g_user_scenes[slot], stash);
 }
 
 static int reserve_user_scene_slot_for_new(void) {
@@ -996,11 +775,11 @@ static int reserve_user_scene_slot_for_new(void) {
     if (slot >= 0)
         return slot;
 
-    UserScene *evicted_stash = scene_scratch_alloc();
+    UserScene *evicted_stash = (UserScene *)malloc(sizeof(UserScene));
     if (!evicted_stash)
         return -1;
     int evicted_slot = try_evict_lru(evicted_stash);
-    scene_scratch_free(evicted_stash);
+    free(evicted_stash);
     return evicted_slot >= 0 ? evicted_slot : -1;
 }
 
@@ -1065,15 +844,15 @@ int repl_load_scene_as_new_slot(const char *path,
      * its first step, so we must capture before that point.
      *
      * Both scratches are heap-allocated up front; this function holds
-     * them simultaneously across a try_evict_lru call (which adds a
-     * third UserScene on its own frame). On the stack that totals
+     * them simultaneously across a try_evict_lru call (which adds
+     * another SceneSnapshot on its own frame). On the stack that totals
      * ~3.6 MB before redzones — close to overrun on default worker
      * stacks. */
-    UserScene *stash         = scene_scratch_alloc();
-    UserScene *evicted_stash = scene_scratch_alloc();
+    SceneSnapshot *stash = scene_snapshot_scratch_alloc();
+    UserScene *evicted_stash = (UserScene *)malloc(sizeof(UserScene));
     if (!stash || !evicted_stash) {
-        scene_scratch_free(stash);
-        scene_scratch_free(evicted_stash);
+        scene_snapshot_scratch_free(stash);
+        free(evicted_stash);
         if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_NO_SLOT;
         return -1;
     }
@@ -1088,8 +867,8 @@ int repl_load_scene_as_new_slot(const char *path,
     int evicted_slot = try_evict_lru(evicted_stash);
     if (evicted_slot == -2) {
         restore_live_from_stash(stash);
-        scene_scratch_free(stash);
-        scene_scratch_free(evicted_stash);
+        scene_snapshot_scratch_free(stash);
+        free(evicted_stash);
         repl_state_scenes_set_active_example_idx(stash_example);
         g_active_user_scene = stash_active;
         if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_NO_SLOT;
@@ -1109,14 +888,14 @@ int repl_load_scene_as_new_slot(const char *path,
          * after restore_evicted_slot the in-memory tab and the disk
          * file agree, and the user has lost nothing. */
         restore_evicted_slot(evicted_slot, evicted_stash);
-        scene_scratch_free(stash);
-        scene_scratch_free(evicted_stash);
+        scene_snapshot_scratch_free(stash);
+        free(evicted_stash);
         if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_PARSE;
         return -1;
     }
 
-    scene_scratch_free(stash);
-    scene_scratch_free(evicted_stash);
+    scene_snapshot_scratch_free(stash);
+    free(evicted_stash);
 
     /* load_scene_file_into_slot left live state == the loaded scene
      * and stored a copy in the slot. Activate the slot so subsequent
@@ -1183,12 +962,12 @@ int repl_promote_example_if_needed(void) {
         if (g_workspace_dir[0]) {
             int victim = pick_lru_user_scene_slot();
             if (victim >= 0) {
-                UserScene *stash = scene_scratch_alloc();
+                SceneSnapshot *stash = scene_snapshot_scratch_alloc();
                 if (stash) {
                     stash_live_state(stash);
                     int ok = evict_scene_to_workspace(victim);
                     restore_live_from_stash(stash);
-                    scene_scratch_free(stash);
+                    scene_snapshot_scratch_free(stash);
                     if (ok)
                         slot = victim;
                 }

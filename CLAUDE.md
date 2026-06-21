@@ -553,6 +553,7 @@ state-machine level, not buried in the doc body.
 | `src/ui/app/overlay_layout.h` | Engine API: `UiOverlayPanelId`/`UiOverlayLayoutIn`, `ui_overlay_layout_inputs/_solve/_tick/_panel_pos/_last_band_h/_reset` |
 | `src/ui/core/layout_utils.h` | Header-only pure layout helpers shared across UI layers (`ui_clamp_panel_y`) |
 | `src/repl/scenes.c` | User-scene slots, LRU eviction, workspace save/load, workspace dir binding |
+| `src/repl/scene_snapshot.c` | Copy/apply helpers for scene snapshots: commands/text, cursor, variables, scratch arrays, function aliases, scene-local cfg, and camera text |
 | `src/repl/example_loader.c` | Built-in example loading and active-example tracking |
 | `src/app/glr_debug.c` | Diagnostic dumps for CLI flags and tests |
 | `src/app/glr_debug.h` | Debug dump public API |

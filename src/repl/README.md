@@ -117,7 +117,7 @@ workspace I/O in `export.c`, and the neutral F1 `help_text.c` tables.
 | `normalize.c` / `.h`, `reformat.c` / `.h`, `bootstrap.c` / `.h` | Parse/normalize, source reformat, startup loading |
 | `pipeline.h`, `core_internal.h`, `core.h` | Frame pipeline declarations, test-visible internals, legacy compatibility facade |
 | `state.c` / `.h`, `state_views.h`, `state_owners.h` | `ReplState` storage + typed read/mut facades |
-| `scenes.c`, `examples.c`, `example_loader.c` | User-scene slots, built-in example data + loading |
+| `scenes.c`, `scene_snapshot.c`, `examples.c`, `example_loader.c` | User-scene slots, copyable scene snapshots, built-in example data + loading |
 | `tutorials.c`, `help_text.c` | Tutorial catalog, F1 help-text tables |
 | `export.c` / `.h`, `export_state.h`, `load.c` | Save/load, workspace headers, single-file round-trip |
 
