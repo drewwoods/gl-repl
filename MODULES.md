@@ -742,6 +742,7 @@ flowchart LR
         state["src/repl/state.c<br/>ReplState"]
         scenes["src/repl/scenes.c<br/>user scenes · workspace"]
         scene_snapshot["src/repl/scene_snapshot.c<br/>copyable scene snapshots"]
+        workspace_io["src/repl/workspace_io.c<br/>workspace fs · file naming"]
         autonormal["src/repl/autonormal.c<br/>autonormals · feeding cmds"]
     end
 

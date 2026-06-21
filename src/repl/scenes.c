@@ -3,15 +3,14 @@
  */
 #include "repl/scenes.h"
 #include "repl/scene_snapshot.h"
+#include "repl/workspace_io.h"
 #include "repl/examples.h"
 #include "repl/eval.h"
-#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
 #include "repl/host_effects.h"
 #include "repl/state_notify.h"
-#include "repl/util.h"          /* repl_format_fits / repl_copy_string_fits */
 #include "repl/cfg_baseline.h"   /* ReplConfigBag + bridge for per-scene cfg */
 #include "repl/export.h"          /* ReplExportCameraBlock + camera bridge */
 #include "repl/state_owners.h"
@@ -19,7 +18,6 @@
 #include "config.h"          /* REPL_DIAG_TEXT_MAX */
 
 #include <dirent.h>
-#include <errno.h>
 #include <limits.h>          /* NAME_MAX */
 #include <stdlib.h>
 #include <sys/stat.h>
@@ -130,46 +128,6 @@ static void scene_cfg_reset_all(void) {
 
 static uint32_t next_user_scene_tick(void) {
     return ++g_user_scene_tick;
-}
-
-static int path_is_dir(const char *path) {
-    struct stat st;
-    return path && stat(path, &st) == 0 && S_ISDIR(st.st_mode);
-}
-
-static int mkdir_one_dir(const char *dir) {
-    if (!dir || !*dir)
-        return 0;
-    if (mkdir(dir, 0755) == 0)
-        return 1;
-    return errno == EEXIST && path_is_dir(dir);
-}
-
-static int ensure_dir_path(const char *dir) {
-    if (!dir || !*dir)
-        return 0;
-
-    char path[REPL_WORKSPACE_DIR_MAX];
-    int n = snprintf(path, sizeof(path), "%s", dir);
-    if (n < 0 || n >= (int)sizeof(path))
-        return 0;
-
-    size_t len = strlen(path);
-    while (len > 1 && path[len - 1] == '/')
-        path[--len] = '\0';
-
-    for (char *p = path + 1; *p; p++) {
-        if (*p != '/')
-            continue;
-        *p = '\0';
-        if (path[0] && !mkdir_one_dir(path)) {
-            *p = '/';
-            return 0;
-        }
-        *p = '/';
-    }
-
-    return mkdir_one_dir(path);
 }
 
 static void capture_pre_example_cfg(void) {
@@ -358,24 +316,10 @@ static void restore_live_from_stash(const SceneSnapshot *src) {
 static void user_scene_copy(UserScene *dst, const UserScene *src) {
     if (!dst || !src)
         return;
-    dst->used = src->used;
-    snprintf(dst->name, sizeof(dst->name), "%s", src->name);
-    dst->last_touch = src->last_touch;
-    (void)scene_snapshot_copy(&dst->snapshot, &src->snapshot);
-}
-
-static void scene_filename_slug(const char *name, char *out, size_t out_sz) {
-    size_t j = 0;
-    if (name) {
-        for (size_t i = 0; name[i] && j + 1 < out_sz; i++) {
-            unsigned char c = (unsigned char)name[i];
-            if (isalnum(c))                            out[j++] = (char)tolower(c);
-            else if (c == ' ' || c == '-' || c == '_') out[j++] = '_';
-        }
-    }
-    if (j == 0 && out_sz > 0) out[j++] = 's';
-    if (j >= out_sz) j = out_sz - 1;
-    out[j] = '\0';
+    /* UserScene is plain data (the embedded SceneSnapshot is itself POD), so a
+     * whole-struct assignment copies every field — drop-proof if a field is
+     * ever added, unlike a hand-maintained member-by-member copy. */
+    *dst = *src;
 }
 
 static int scene_slug_used(const char used[][USER_SCENE_NAME_MAX],
@@ -386,31 +330,6 @@ static int scene_slug_used(const char used[][USER_SCENE_NAME_MAX],
             return 1;
     }
     return 0;
-}
-
-static void scene_slug_with_collision_depth(const char *base_slug,
-                                            int collision_depth,
-                                            char *out,
-                                            size_t out_sz) {
-    if (!out || out_sz == 0) return;
-    if (!base_slug) base_slug = "s";
-
-    size_t max_len = out_sz - 1;
-    size_t suffix_len = (size_t)collision_depth * 2u;
-    if (suffix_len > max_len)
-        suffix_len = max_len;
-
-    size_t prefix_len = strlen(base_slug);
-    if (prefix_len > max_len - suffix_len)
-        prefix_len = max_len - suffix_len;
-
-    memcpy(out, base_slug, prefix_len);
-    size_t pos = prefix_len;
-    for (int i = 0; i < collision_depth && pos + 2 <= max_len; i++) {
-        out[pos++] = '_';
-        out[pos++] = '0';
-    }
-    out[pos] = '\0';
 }
 
 static void scene_filename_slug_for_slot(int slot, char *out, size_t out_sz) {
@@ -429,15 +348,15 @@ static void scene_filename_slug_for_slot(int slot, char *out, size_t out_sz) {
 
         char base_slug[USER_SCENE_NAME_MAX];
         char candidate[USER_SCENE_NAME_MAX];
-        scene_filename_slug(g_user_scenes[scene_slot].name,
-                            base_slug, sizeof(base_slug));
+        workspace_io_filename_slug(g_user_scenes[scene_slot].name,
+                                   base_slug, sizeof(base_slug));
         int collision_depth = 0;
-        scene_slug_with_collision_depth(base_slug, collision_depth,
-                                        candidate, sizeof(candidate));
+        workspace_io_slug_with_collision_depth(base_slug, collision_depth,
+                                               candidate, sizeof(candidate));
         while (scene_slug_used(used, used_count, candidate)) {
             collision_depth++;
-            scene_slug_with_collision_depth(base_slug, collision_depth,
-                                            candidate, sizeof(candidate));
+            workspace_io_slug_with_collision_depth(base_slug, collision_depth,
+                                                   candidate, sizeof(candidate));
         }
 
         if (scene_slot == slot) {
@@ -452,25 +371,13 @@ static void scene_filename_slug_for_slot(int slot, char *out, size_t out_sz) {
     out[0] = '\0';
 }
 
-static void scene_name_from_filename(const char *path,
-                                     char *out, size_t out_sz) {
-    const char *slash = strrchr(path, '/');
-    const char *base  = slash ? slash + 1 : path;
-    int n = 0;
-    while (base[n] && base[n] != '.' && n < (int)out_sz - 1) {
-        out[n] = base[n];
-        n++;
-    }
-    if (out_sz > 0) out[n] = '\0';
-}
-
 int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
     if (!dir || !*dir) {
         repl_set_status_error("Workspace save: no folder provided");
         return -1;
     }
 
-    if (!ensure_dir_path(dir)) {
+    if (!workspace_io_ensure_dir(dir)) {
         char msg[REPL_STATUS_TEXT_MAX];
         snprintf(msg, sizeof(msg), "Workspace save: cannot create %s", dir);
         repl_set_status_error(msg);
@@ -565,7 +472,7 @@ void repl_save_active_scene(const ReplExportLayout *layout) {
     const char *workspace_dir = g_workspace_dir[0] ? g_workspace_dir : NULL;
 
     /* Save aborts if a bound workspace dir can't be created. */
-    if (workspace_dir && workspace_dir[0] && !ensure_dir_path(workspace_dir)) {
+    if (workspace_dir && workspace_dir[0] && !workspace_io_ensure_dir(workspace_dir)) {
         char emsg[REPL_WORKSPACE_DIR_MAX + 48];
         snprintf(emsg, sizeof(emsg),
                  "Save scene: cannot create %s", workspace_dir);
@@ -602,7 +509,7 @@ const char *repl_active_scene_export_path(const char *ext) {
      * (the exporter's own fopen reports any remaining failure). */
     int use_workspace_dir =
         (slot >= 0 && slot < MAX_USER_SCENES && g_user_scenes[slot].used &&
-         workspace_dir && workspace_dir[0] && ensure_dir_path(workspace_dir));
+         workspace_dir && workspace_dir[0] && workspace_io_ensure_dir(workspace_dir));
     format_scene_path(ext, use_workspace_dir ? workspace_dir : NULL,
                       path, sizeof(path));
     return path;
@@ -629,7 +536,7 @@ static int load_scene_file_into_slot(const char *path) {
     if (import_result.scene_name[0]) {
         snprintf(scene_name, sizeof(scene_name), "%s", import_result.scene_name);
     } else {
-        scene_name_from_filename(path, scene_name, sizeof(scene_name));
+        workspace_io_scene_name_from_filename(path, scene_name, sizeof(scene_name));
         if (!scene_name[0])
             snprintf(scene_name, sizeof(scene_name), "Scene %d", slot);
     }
@@ -638,12 +545,6 @@ static int load_scene_file_into_slot(const char *path) {
     derive_unique_scene_name(unique, sizeof(unique), scene_name, -1);
     save_scene_to_slot(slot, unique, repl_dispatch_edit_line_get());
     return slot;
-}
-
-static int has_dot_c_ext(const char *name) {
-    size_t n = name ? strlen(name) : 0;
-    if (n < 3) return 0;
-    return name[n - 2] == '.' && (name[n - 1] == 'c' || name[n - 1] == 'C');
 }
 
 int repl_load_workspace(const char *dir) {
@@ -679,7 +580,7 @@ int repl_load_workspace(const char *dir) {
     while ((ent = readdir(d))) {
         const char *name = ent->d_name;
         if (name[0] == '.') continue;
-        if (!has_dot_c_ext(name)) continue;
+        if (!workspace_io_has_c_ext(name)) continue;
 
         char path[REPL_WORKSPACE_DIR_MAX + NAME_MAX + 1];
         snprintf(path, sizeof(path), "%s/%s", dir, name);
@@ -910,7 +811,7 @@ static int evict_scene_to_workspace(int slot) {
     if (!g_user_scenes[slot].used)            return 0;
     if (!g_workspace_dir[0])                  return 0;
 
-    if (!ensure_dir_path(g_workspace_dir)) return 0;
+    if (!workspace_io_ensure_dir(g_workspace_dir)) return 0;
 
     install_scene_into_live(slot);
 

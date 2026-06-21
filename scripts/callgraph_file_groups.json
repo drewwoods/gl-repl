@@ -50,6 +50,7 @@
         "repl/state.c",
         "repl/scenes.c",
         "repl/scene_snapshot.c",
+        "repl/workspace_io.c",
         "repl/example_loader.c",
         "repl/examples.c",
         "repl_autocomplete.c",
