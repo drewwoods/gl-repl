@@ -27,6 +27,7 @@
 #include "repl/eval.h"
 #include "repl/load.h"           /* repl_load_apply_line for [P2] dup-check test */
 #include "repl/state_owners.h"
+#include "source_document.h"
 #include "ui/app/state.h"
 #include "support/test_harness.h"
 
@@ -1828,6 +1829,78 @@ int main(void) {
         ASSERT_TRUE("[P1 loader] func capacity-fail returns 0", !ok);
         ASSERT_TRUE("[P1 loader] func capacity-fail does not leak alias",
                     slot < 0);
+    }
+
+    /* [Finding 12] The non-editor loader exposes its structured-change
+     * transaction boundary. The helper reports the post-apply cursor on
+     * success and rejects at preflight before source/predef mutation. */
+    {
+        glr_ctrl_reset_all();
+        repl_func_alias_clear_all();
+
+        ReplCompiledChange change;
+        repl_compiled_change_init(&change);
+        ReplCompileContext ctx = repl_compile_context_from_live(0);
+        ctx.insert_mode = 1;
+        char err[128] = "";
+        ReplCompileResult r = repl_compile_dispatch("float txValue = 2;",
+                                                     &ctx, &change,
+                                                     err, sizeof(err));
+        ASSERT_INT("[F12 transaction] decl compiles", r, REPL_COMPILE_OK);
+        ASSERT_INT("[F12 transaction] compile produced insert",
+                   change.kind, REPL_COMPILED_INSERT_ONE);
+        change.adjust_edit_line = 1;
+
+        ReplLoadTransactionResult tx;
+        ASSERT_TRUE("[F12 transaction] apply succeeds",
+                    repl_load_apply_compiled_change_transaction(&change,
+                                                               0, &tx));
+        ASSERT_INT("[F12 transaction] applied flag", tx.applied, 1);
+        ASSERT_INT("[F12 transaction] wrote source", tx.wrote_local, 1);
+        ASSERT_INT("[F12 transaction] cursor advanced", tx.next_cursor, 1);
+        ASSERT_INT("[F12 transaction] document count",
+                   repl_state_document_count(), 1);
+        ASSERT_INT("[F12 transaction] source line count",
+                   source_document_view().line_count, 1);
+        ASSERT_TRUE("[F12 transaction] predef registered",
+                    repl_eval_find_predef_var_idx("txValue") >= 0);
+    }
+
+    {
+        glr_ctrl_reset_all();
+
+        ReplCompiledChange change;
+        repl_compiled_change_init(&change);
+        ReplCompileContext ctx = repl_compile_context_from_live(0);
+        ctx.insert_mode = 1;
+        char err[128] = "";
+        ReplCompileResult r = repl_compile_dispatch("float txNoLeak;",
+                                                     &ctx, &change,
+                                                     err, sizeof(err));
+        ASSERT_INT("[F12 transaction] no-leak decl compiles",
+                   r, REPL_COMPILE_OK);
+        change.adjust_edit_line = 1;
+
+        ReplCommandStore store = repl_command_store_live();
+        int capacity = repl_command_store_capacity(&store);
+        int saved_count = *store.count;
+        *store.count = capacity;
+
+        ReplLoadTransactionResult tx;
+        int ok = repl_load_apply_compiled_change_transaction(&change, 0, &tx);
+
+        *store.count = saved_count;
+
+        ASSERT_TRUE("[F12 transaction] preflight rejects", !ok);
+        ASSERT_INT("[F12 transaction] reject applied flag", tx.applied, 0);
+        ASSERT_INT("[F12 transaction] reject wrote no source",
+                   tx.wrote_local, 0);
+        ASSERT_INT("[F12 transaction] reject kept cursor",
+                   tx.next_cursor, 0);
+        ASSERT_INT("[F12 transaction] reject source line count",
+                   source_document_view().line_count, 0);
+        ASSERT_TRUE("[F12 transaction] reject predef not registered",
+                    repl_eval_find_predef_var_idx("txNoLeak") < 0);
     }
 
     /* #49 regression: repl_apply_compiled_change runs the preflight

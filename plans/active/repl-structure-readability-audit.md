@@ -5,9 +5,9 @@ Status: **active** - implementation has started. Findings 1 (core split),
 3 (parser strict-ref context), 4 (source-scope view split + the 4b
 performance-regression fix), 6 (scene snapshot extraction + workspace-IO
 mechanics split), 7 (shared import/export vocabulary), 8 (import flow state),
-9 (export writer split), 10 (flatten query split), and 11 (state-layer
-scaffolding cleanup) are landed. The remaining findings are still a cleanup
-map, not completed work.
+9 (export writer split), 10 (flatten query split), 11 (state-layer
+scaffolding cleanup), and 12 (load transaction boundary) are landed. The
+remaining findings are still a cleanup map, not completed work.
 
 Recent implementation commits:
 
@@ -40,6 +40,17 @@ Recent implementation commits:
 | Finding 9 export writer split | Landed | `src/repl/export.c` is now the orchestrator; body writers, generated helpers, display/runtime UI generation, and setup/init/light/header text live in `export_cmd_writer.c`, `export_prologue.c`, `export_display.c`, and `export_setup.c` behind `export_internal.h`. |
 | Finding 10 flatten query split | Landed | `src/repl/flatten_query.{c,h}` carries live flat-program current-block, cursor-match, and cost-attribution queries. `src/repl/flatten.c` is back to source-to-flat lowering and rebuild orchestration. |
 | Finding 11 state-layer scaffolding cleanup | Landed | `src/repl/state.c` no longer carries local `g_*` aliases or old migration notes; `ReplRuntimeState.scene_runtime` makes the active-example/workspace-only scope explicit, while scene catalog slot payloads remain owned by `scenes.c`/`SceneSnapshot`. |
+| Finding 12 load transaction boundary | Landed | `repl_load_apply_compiled_change_transaction()` makes the structured load path explicit: preflight, source-document write, predef/scratch side effects, command-store apply, then alias publication. New tests pin success result fields and preflight no-mutation behavior. |
+
+Latest verification for Finding 12:
+
+- `make test_repl_compile USE_GL_STUBS=1`
+- `./build/release-gl-stubs/test_repl_compile`
+- `make test_repl_core_io USE_GL_STUBS=1`
+- `./build/release-gl-stubs/test_repl_core_io`
+- `make repl_demo USE_GL_STUBS=1`
+- `make check-c99`
+- `make test-stubs`
 
 Latest verification for Finding 11:
 
@@ -960,6 +971,16 @@ or API shape, not just a comment.
 This cleanup should be kept separate from behavior changes.
 
 ## Finding 12: load transaction flow is clearer, but still implicit
+
+**Status:** Done on 2026-06-21. `src/repl/load.c` now has a named
+`repl_load_apply_compiled_change_transaction()` helper and
+`ReplLoadTransactionResult`. The helper documents and enforces the structured
+load mutation order: command-store preflight before mutation, source-document
+write before eval/store side effects, predef/scratch ops before command-store
+apply, and function aliases only after command-store success. The command-store
+apply is asserted after preflight; unexpected failure there means the
+preflight/apply contracts drifted or live store state changed during the
+transaction.
 
 ### Evidence
 

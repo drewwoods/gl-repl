@@ -9,13 +9,37 @@
  *
  * The split from src/repl/compile.c matters because compile.c is the pure
  * validator layer: it returns ReplCompiledChange descriptors and must not write
- * command-store, editor-buffer, or predefined-variable state. This module owns
- * the apply orchestration. That separation became explicit after a review
- * finding on compile purity (implemented in step 5b of
- * feature/decouple-repl-from-gl-repl-alt.md).
+ * command-store, source-text, or predefined-variable state. This module owns
+ * the apply orchestration.
  */
 #ifndef REPL_LOAD_H
 #define REPL_LOAD_H
+
+#include "repl/compile.h"
+
+typedef struct ReplLoadTransactionResult {
+    int applied;
+    int wrote_local;
+    int next_cursor;
+} ReplLoadTransactionResult;
+
+/* Apply a precompiled structured change through the non-editor loader
+ * transaction:
+ *   1. preflight command-store feasibility before any mutation,
+ *   2. write source text through source_document,
+ *   3. apply predef/scratch side effects,
+ *   4. apply the command-store change,
+ *   5. publish function-alias changes after command-store success.
+ *
+ * `wrote_local` is set once the source-document mutation has committed.
+ * `next_cursor` is the post-transaction cursor value. The command-store apply
+ * honors `change->adjust_edit_line`; the apply is asserted after preflight, so
+ * a failure there indicates the live store changed during the transaction or
+ * the preflight/apply contracts drifted apart. */
+int repl_load_apply_compiled_change_transaction(
+    const ReplCompiledChange *change,
+    int cursor,
+    ReplLoadTransactionResult *out);
 
 /* Compile + apply a single source line at a caller-chosen index.
  *
@@ -37,9 +61,8 @@
  * operating on the ambient host cursor through
  * repl_dispatch_edit_line_get / _set: the value is read at entry,
  * advanced across the per-line apply, and written back on success.
- * Ad-hoc callers / tests get the pre-migration behavior where the
- * loader's cursor advance was visible to the next caller (implemented
- * in Phase 4 of plans/done/edit-line-ownership.md).
+ * Ad-hoc callers / tests get the same visible cursor advance as callers that
+ * pass an explicit cursor pointer.
  *
  * Caller responsibilities:
  *   - Initialize *edit_line_inout to the desired insertion index, which

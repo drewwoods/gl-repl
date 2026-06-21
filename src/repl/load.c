@@ -1,11 +1,9 @@
 /*
  * src/repl/load.c -- Apply orchestration for non-editor source loading.
  *
- * Drives compile (via repl_compile_*) → predef apply → editor-buffer
- * apply → command-store apply, mirroring the REPL halves of
- * editor_commit_apply_plan but without editor effects (cursor target,
- * insert-mode toggle, input buffer writes), implemented as step 5b of
- * the decouple plan.
+ * Drives compile (via repl_compile_*) into the non-editor apply transaction:
+ * source-document write, predef/scratch side effects, command-store mutation,
+ * and alias publication.
  *
  * Lives in its own module so src/repl/compile.c can stay a pure validator
  * (per the file's contract: never writes the editor buffer / command
@@ -21,9 +19,58 @@
 #include "repl/host_effects.h"   /* repl_dispatch_edit_line_get / _set */
 #include "source_document.h"     /* source_document_apply_change, _insert_line */
 
+#include <assert.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
+
+int repl_load_apply_compiled_change_transaction(
+    const ReplCompiledChange *change,
+    int cursor,
+    ReplLoadTransactionResult *out) {
+    ReplLoadTransactionResult result = {
+        .applied = 0,
+        .wrote_local = 0,
+        .next_cursor = cursor,
+    };
+    if (out)
+        *out = result;
+    if (!change || !out)
+        return 0;
+
+    if (!repl_apply_can_apply_compiled_change(change))
+        return 0;
+
+    /* Source text commits before eval/store side effects. If this host-side
+     * write fails, the transaction has not touched predefs, scratch arrays,
+     * aliases, or the command store. */
+    SourceTextChange text_change;
+    repl_compiled_change_to_text_change(change, &text_change);
+    if (!source_document_apply_change(&text_change))
+        return 0;
+    result.wrote_local = 1;
+
+    repl_apply_predef_ops(change);
+    repl_apply_scratch_ops(change);
+
+    /* The command-store apply repeats the same preflight internally. Reaching
+     * a failure here means the live store changed during this transaction or
+     * the preflight/apply contracts have diverged; the loader is single-threaded
+     * and should never hit that path. */
+    int next_cursor = cursor;
+    result.applied = repl_apply_compiled_change(change, &next_cursor);
+    result.next_cursor = next_cursor;
+    assert(result.applied &&
+           "preflighted load transaction command-store apply failed");
+    if (!result.applied) {
+        *out = result;
+        return 0;
+    }
+
+    repl_apply_alias_ops(change);
+    *out = result;
+    return 1;
+}
 
 int repl_load_apply_line(const char *line, char *err, int err_size,
                          int *edit_line_inout) {
@@ -40,12 +87,7 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
      * on the ambient host cursor through repl_dispatch_edit_line_get
      * / _set: the loader reads the
      * current value at entry, advances it across the per-line
-     * apply, and writes the post-load value back on success. This
-     * preserves the pre-migration behavior where ad-hoc loader
-     * callers (the editor's load-file path, the tutorial runner,
-     * mid-test commit chains) saw the cursor advance as a side
-     * effect of repl_load_apply_line (implemented in phase 3.6.5 and
-     * phase 4 of plans/done/edit-line-ownership.md). */
+     * apply, and writes the post-load value back on success. */
     int local_edit_line;
     int wrote_local = 0;
     if (edit_line_inout == NULL) {
@@ -76,11 +118,9 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
      * loader's append-at-end semantics, edit_line must auto-advance
      * line-by-line so the next call sees insert_idx = document_count.
      *
-     * Preflight FIRST so a capacity overflow doesn't leave half-applied
-     * side effects (registered predef vars, modified scratch arrays,
-     * editor-buffer mutations) without a matching source command.
-     * Mirrors editor_commit_apply_plan's preflight gate. [P1]
-     * regression. */
+     * The transaction helper owns the mutation order. The preflight here keeps
+     * the existing capacity diagnostic specific; the helper repeats it as the
+     * no-mutation gate for the transaction itself. */
     if (change.kind != REPL_COMPILED_NO_CHANGE) {
         change.adjust_edit_line = 1;
 
@@ -92,33 +132,20 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
             return 0;
         }
 
-        /* Past preflight: apply source text FIRST so a host that can
-         * fail the write (a non-editor backend or test fixture) doesn't
-         * leave predef-vars registered + scratch arrays mutated with no
-         * matching text on the document. predef/scratch/command-store
-         * mutations follow only once the text apply has committed. */
-        SourceTextChange text_change;
-        repl_compiled_change_to_text_change(&change, &text_change);
-        if (!source_document_apply_change(&text_change)) {
+        ReplLoadTransactionResult tx;
+        if (!repl_load_apply_compiled_change_transaction(
+                &change, *edit_line_inout, &tx)) {
             if (err && err_size > 0 && err[0] == '\0')
                 snprintf(err, (size_t)err_size,
-                         "source document apply failed");
+                         tx.wrote_local
+                             ? "compiled change transaction failed"
+                             : "source document apply failed");
             return 0;
         }
-        repl_apply_predef_ops(&change);
-        repl_apply_scratch_ops(&change);
-        /* Apply mutates *edit_line_inout in place via the store.
-         * The cursor advance is what
-         * makes the next call see insert_idx = document_count for
-         * the append-at-end semantics (implemented in phase 1 +
-         * phase 3.6.5). */
-        int ok = repl_apply_compiled_change(&change, edit_line_inout);
-        if (ok) {
-            repl_apply_alias_ops(&change);
-            if (wrote_local)
-                repl_dispatch_edit_line_set(*edit_line_inout);
-        }
-        return ok ? 1 : 0;
+        *edit_line_inout = tx.next_cursor;
+        if (wrote_local)
+            repl_dispatch_edit_line_set(*edit_line_inout);
+        return 1;
     }
 
     /* (4) Plain GL command path — parse + insert via command store.
