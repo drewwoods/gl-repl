@@ -5,7 +5,12 @@ and watch geometry render in real-time with a live code panel.
 
 New to the tree? Start with [`MODULES.md`](MODULES.md) for the one-page
 layered overview of the source files. This file is the agent-facing project
-brief and goes deeper.
+brief and goes deeper. The `src/repl` language pipeline (parse → compile →
+apply → flatten → execute) has its own module-local docs:
+[`src/repl/README.md`](src/repl/README.md) for orientation plus the
+standalone `repl_demo`, and [`src/repl/ARCHITECTURE.md`](src/repl/ARCHITECTURE.md)
+for the deep dive (data model, edit/frame flows, state ownership, host-effects
+bridge, with a worked `repl_demo --trace`).
 
 ## GNU Sed
 
@@ -488,7 +493,6 @@ state-machine level, not buried in the doc body.
 | `src/repl/compile.h` | `ReplCompiledChange`, `ReplCompileResult`, `ReplCompileContext`, compile entry points |
 | `src/repl/apply.c` | Applies a `ReplCompiledChange` to `ReplState` command arrays |
 | `src/repl/apply.h` | Apply public API (`repl_apply_compiled_change`, `repl_apply_predef_ops`) |
-| `src/repl/core.h` | Legacy compatibility facade that reexports focused REPL owner headers; new code should include the owner header directly |
 | `src/repl/normalize.c` | Parse-and-normalize pipeline (`repl_parse_and_normalize*`) |
 | `src/repl/reformat.c` | Source reformatter (`repl_reformat_program`) |
 | `src/repl/bootstrap.c` | Startup loading helpers (`repl_load_initial_commands`) |

@@ -10,7 +10,11 @@
 > this contract directly.
 
 For per-module detail and frame-pipeline narrative read
-[`ARCHITECTURE.md`](ARCHITECTURE.md). For the staged-cleanup history
+[`ARCHITECTURE.md`](ARCHITECTURE.md). The `src/repl` language pipeline has
+its own module-local docs: [`src/repl/README.md`](src/repl/README.md)
+(orientation + the standalone `repl_demo`) and
+[`src/repl/ARCHITECTURE.md`](src/repl/ARCHITECTURE.md) (deep dive: data model,
+edit/frame flows, state ownership, with a worked `repl_demo --trace`). For the staged-cleanup history
 (both plans landed) see
 [`feature/done/push-architecture-refinement.md`](feature/done/push-architecture-refinement.md)
 and [`feature/done/editor-owns-text-completion.md`](feature/done/editor-owns-text-completion.md).
