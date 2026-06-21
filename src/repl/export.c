@@ -1,4 +1,5 @@
 #include "repl/export.h"
+#include "repl/export_format_shared.h"
 #include "c_compat.h"            /* STATIC_ASSERT — header-budget guard */
 #include "source_document.h"     /* source_document_insert_line */
 #include "repl/load.h"           /* repl_load_apply_line — step 5b */
@@ -17,26 +18,6 @@
 #include "repl/parser.h"
 #include "repl/pipeline.h"
 #include "repl/source_scope.h"
-#include "repl/state_owners.h"
-
-#define IMPORT_EXPORT_VIEW     (repl_state_import_export())
-#define IMPORT_EXPORT_WRITABLE (repl_state_import_export_writable())
-
-#define g_workspace_header_lines      (IMPORT_EXPORT_VIEW.workspace_header_lines)
-#define g_workspace_header_line_count (IMPORT_EXPORT_VIEW.workspace_header_line_count)
-#define g_render_state_lines          (IMPORT_EXPORT_VIEW.render_state_lines)
-#define g_cam_lines                   (IMPORT_EXPORT_VIEW.cam_lines)
-#define g_export_scene_name_hint      (IMPORT_EXPORT_VIEW.export_scene_name_hint)
-#define g_pending_scene_name          (IMPORT_EXPORT_VIEW.pending_scene_name)
-#define g_pending_workspace_dir       (IMPORT_EXPORT_VIEW.pending_workspace_dir)
-
-#define g_workspace_header_lines_writable      (IMPORT_EXPORT_WRITABLE->workspace_header_lines)
-#define g_workspace_header_line_count_writable (IMPORT_EXPORT_WRITABLE->workspace_header_line_count)
-#define g_render_state_lines_writable          (IMPORT_EXPORT_WRITABLE->render_state_lines)
-#define g_cam_lines_writable                   (IMPORT_EXPORT_WRITABLE->cam_lines)
-#define g_export_scene_name_hint_writable      (IMPORT_EXPORT_WRITABLE->export_scene_name_hint)
-#define g_pending_scene_name_writable          (IMPORT_EXPORT_WRITABLE->pending_scene_name)
-#define g_pending_workspace_dir_writable       (IMPORT_EXPORT_WRITABLE->pending_workspace_dir)
 
 #include "repl/cfg_baseline.h"
 
@@ -81,16 +62,6 @@ static int export_slot_pos_is_eye_space(int slot) {
     export_light_info(slot, &info);
     return info.pos_is_eye_space;
 }
-
-/* `@declare` marker name emitted by write_canonical_cmd_as_c for each
- * CMD_VAR_DECLARE row. The reader half lives in src/repl/import.c and
- * declares its own copy so the two files stay independent. */
-static const char k_snippet_directive_declare[] = "declare";
-static const char k_export_c89_loop_scope_marker[] = "repl-export-c89-loop-scope";
-static const char k_export_c89_loop_var_marker[] = "repl-export-c89-loop-var";
-static const char k_export_glfloat1_helper[] = "repl_glfloat1";
-static const char k_export_glfloat3_helper[] = "repl_glfloat3";
-static const char k_export_glfloat4_helper[] = "repl_glfloat4";
 
 /* Camera bridge — same shape as the cfg bridge. Step 4a moved camera-block
  * emission and parsing through this interface so src/repl/export.c no longer
@@ -494,11 +465,11 @@ static void emit_cfgs(int *n) {
 
 static const WorkspaceDirective WORKSPACE_DIRECTIVES[] = {
     /* Emit order matches this array. */
-    WS_DIR("scene-name",    emit_scene_name),
-    WS_DIR("workspace-dir", emit_workspace_dir),
-    WS_DIR("var",           emit_vars),
-    WS_DIR("func",          emit_func_aliases),
-    WS_DIR("cfg",           emit_cfgs),
+    WS_DIR(REPL_WORKSPACE_DIRECTIVE_SCENE_NAME,    emit_scene_name),
+    WS_DIR(REPL_WORKSPACE_DIRECTIVE_WORKSPACE_DIR, emit_workspace_dir),
+    WS_DIR(REPL_WORKSPACE_DIRECTIVE_VAR,           emit_vars),
+    WS_DIR(REPL_WORKSPACE_DIRECTIVE_FUNC,          emit_func_aliases),
+    WS_DIR(REPL_WORKSPACE_DIRECTIVE_CFG,           emit_cfgs),
 };
 #define WORKSPACE_DIRECTIVE_COUNT \
     ((int)(sizeof(WORKSPACE_DIRECTIVES) / sizeof(WORKSPACE_DIRECTIVES[0])))
@@ -518,7 +489,7 @@ void repl_state_refresh_workspace_header_lines(void) {
     int line_count = 0;
     if (line_count < MAX_WORKSPACE_HEADER_LINES) {
         snprintf(g_workspace_header_lines_writable[line_count++], WORKSPACE_HEADER_LINE_LEN,
-                 "/* @workspace: REPL state (auto-saved) */");
+                 REPL_WORKSPACE_HEADER_BANNER);
     }
     for (int dir_idx = 0; dir_idx < WORKSPACE_DIRECTIVE_COUNT; dir_idx++)
         WORKSPACE_DIRECTIVES[dir_idx].emit(&line_count);
@@ -1088,19 +1059,19 @@ static void lights_init_emit_slot_line(int slot, int sub, char *buf, size_t n) {
         export_format_float_list(body, sizeof(body), l.diffuse, 4);
         snprintf(buf, n,
                  "  glLightfv(%s, GL_DIFFUSE,  %s(%s));",
-                 ln, k_export_glfloat4_helper, body);
+                 ln, REPL_EXPORT_GLFLOAT4_HELPER, body);
         return;
     case 1:
         export_format_float_list(body, sizeof(body), l.ambient, 4);
         snprintf(buf, n,
                  "  glLightfv(%s, GL_AMBIENT,  %s(%s));",
-                 ln, k_export_glfloat4_helper, body);
+                 ln, REPL_EXPORT_GLFLOAT4_HELPER, body);
         return;
     case 2:
         export_format_float_list(body, sizeof(body), l.specular, 4);
         snprintf(buf, n,
                  "  glLightfv(%s, GL_SPECULAR, %s(%s));",
-                 ln, k_export_glfloat4_helper, body);
+                 ln, REPL_EXPORT_GLFLOAT4_HELPER, body);
         return;
     case 3:
         snprintf(buf, n, "  glDisable(%s);", ln);
@@ -1112,7 +1083,7 @@ static void lights_init_emit_slot_line(int slot, int sub, char *buf, size_t n) {
         export_format_float_list(body, sizeof(body), l.pos, 4);
         snprintf(buf, n,
                  "  glLightfv(%s, GL_POSITION, %s(%s));",
-                 ln, k_export_glfloat4_helper, body);
+                 ln, REPL_EXPORT_GLFLOAT4_HELPER, body);
         return;
     }
 }
@@ -1180,7 +1151,7 @@ void repl_export_lights_display_line(int i, char *buf, size_t n) {
             export_format_float_list(body, sizeof(body), l.pos, 4);
             snprintf(buf, n,
                      "  glLightfv(%s, GL_POSITION, %s(%s));",
-                     ln, k_export_glfloat4_helper, body);
+                     ln, REPL_EXPORT_GLFLOAT4_HELPER, body);
             return;
         }
         i--;
@@ -1251,9 +1222,9 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd,
             return;
         }
 
-        fprintf(f, "%s{ /* %s */\n", ind, k_export_c89_loop_scope_marker);
+        fprintf(f, "%s{ /* %s */\n", ind, REPL_EXPORT_C89_LOOP_SCOPE_MARKER);
         fprintf(f, "%sfloat %s; /* %s */\n",
-                ind, var_name, k_export_c89_loop_var_marker);
+                ind, var_name, REPL_EXPORT_C89_LOOP_VAR_MARKER);
         float step_v = cmd->args[2];
         if (step_v >= 0) {
             fprintf(f, "%sfor (%s = %s; %s < %s; %s += %s) {\n",
@@ -1280,9 +1251,9 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd,
         char start_s[EXPORT_FLOAT_TEXT_MAX], end_s[EXPORT_FLOAT_TEXT_MAX];
         repl_format_source_float(start_s, sizeof(start_s), start_v);
         repl_format_source_float(end_s, sizeof(end_s), end_v);
-        fprintf(f, "%s{ /* %s */\n", ind, k_export_c89_loop_scope_marker);
+        fprintf(f, "%s{ /* %s */\n", ind, REPL_EXPORT_C89_LOOP_SCOPE_MARKER);
         fprintf(f, "%sfloat %s; /* %s */\n",
-                ind, var_name, k_export_c89_loop_var_marker);
+                ind, var_name, REPL_EXPORT_C89_LOOP_VAR_MARKER);
         if (step_v == 1.0f) {
             fprintf(f, "%sfor (%s = %s; %s < %s; %s += 1.0f) {\n",
                     ind, var_name, start_s, var_name, end_s, var_name);
@@ -1309,7 +1280,7 @@ static void write_for_end_as_c(FILE *f, const char *source_text) {
 
     export_write_c89_line(f, source_text);
     fprintf(f, "%.*s} /* %s */\n",
-            indent, source_text, k_export_c89_loop_scope_marker);
+            indent, source_text, REPL_EXPORT_C89_LOOP_SCOPE_MARKER);
 }
 
 static int cmd_type_is_tess(CmdType t) {
@@ -1508,7 +1479,7 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
                 }
             }
         }
-        fprintf(f, "  /* @%s", k_snippet_directive_declare);
+        fprintf(f, "  /* @%s", REPL_SNIPPET_DIRECTIVE_DECLARE);
         for (int di = 0; di < cmd->payload.decl.count; di++) {
             if (has_init[di]) {
                 char vbuf[32];
@@ -1809,9 +1780,9 @@ static void write_glfloat_vector_helpers(FILE *f) {
         "  repl_glfloat4_buf[3] = d;\n"
         "  return repl_glfloat4_buf;\n"
         "}\n",
-        k_export_glfloat1_helper,
-        k_export_glfloat3_helper,
-        k_export_glfloat4_helper);
+        REPL_EXPORT_GLFLOAT1_HELPER,
+        REPL_EXPORT_GLFLOAT3_HELPER,
+        REPL_EXPORT_GLFLOAT4_HELPER);
 }
 
 static int export_copy_first_arg(const char **p_inout,
@@ -1927,11 +1898,11 @@ static int write_materialfv_as_c89(FILE *f, const char *source_text) {
     if (count == 1) {
         fprintf(f, "%.*sglMaterialfv(%s, %s, %s(%s));\n",
                 indent, source_text, face, pname,
-                k_export_glfloat1_helper, c_args[0]);
+                REPL_EXPORT_GLFLOAT1_HELPER, c_args[0]);
     } else {
         fprintf(f, "%.*sglMaterialfv(%s, %s, %s(%s, %s, %s, %s));\n",
                 indent, source_text, face, pname,
-                k_export_glfloat4_helper,
+                REPL_EXPORT_GLFLOAT4_HELPER,
                 c_args[0], c_args[1], c_args[2], c_args[3]);
     }
     return 1;
@@ -1973,7 +1944,7 @@ static int write_point_parameterfv_as_c89(FILE *f, const char *source_text) {
         return 0;
 
     fprintf(f, "%.*sglPointParameterfv(%s, %s(%s, %s, %s));\n",
-            indent, source_text, pname, k_export_glfloat3_helper,
+            indent, source_text, pname, REPL_EXPORT_GLFLOAT3_HELPER,
             c_args[0], c_args[1], c_args[2]);
     return 1;
 }
