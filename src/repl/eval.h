@@ -145,6 +145,15 @@ typedef struct {
     int         num_vars;
     char       *err;
     int         err_sz;
+    /* Optional predef fallback for identifier resolution. When predef_vars is
+     * non-NULL, the evaluator resolves predefined-variable names against it
+     * instead of the live g_predef_vars table — this is how compile evaluates
+     * against its ReplCompileContext predef snapshot rather than live state.
+     * NULL (the zero-initialized default used by the runtime evaluator) keeps
+     * the live table, so existing { p, vars, num, ... } initializers are
+     * unaffected. */
+    const ExprVar *predef_vars;
+    int         predef_count;
 } ExprCtx;
 
 /* ---- Predefined variables (global scope) ------------------------------- */
@@ -396,9 +405,13 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz);
 int repl_eval_parse_for_header(const char *input, char *var_name, int var_sz,
                                 float *start, float *end, float *step,
                                 const char **body_start);
+/* `predef_vars` / `predef_count` give an explicit predef table to resolve
+ * bound expressions against (compile passes its ReplCompileContext snapshot);
+ * NULL / 0 uses the live table, which the runtime (flatten) path wants. */
 int repl_eval_parse_for_header_with_vars(const char *input, char *var_name, int var_sz,
                                           float *start, float *end, float *step,
                                           const ExprVar *vars, int num_vars,
+                                          const ExprVar *predef_vars, int predef_count,
                                           const char **body_start);
 
 /* Parse C for-loop header: for (float var = start; var < end; var += step) {

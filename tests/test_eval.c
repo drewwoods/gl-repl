@@ -737,7 +737,7 @@ static void run_tests(void) {
         const char *bp = NULL;
         int ok = repl_eval_parse_for_header_with_vars(
             "for(i, 0, radius, stepv) glVertex3f(i, 0, 0);",
-            vn, sizeof(vn), &s, &e, &st, vars, 2, &body);
+            vn, sizeof(vn), &s, &e, &st, vars, 2, NULL, 0, &body);
         bp = body;
         while (bp && *bp && isspace((unsigned char)*bp))
             bp++;
@@ -749,6 +749,26 @@ static void run_tests(void) {
                     fabsf(st - 0.5f) < 1e-4f &&
                     bp != NULL &&
                     strncmp(bp, "glVertex3f(", 11) == 0);
+    }
+
+    /* Finding 2 / P2: the evaluator resolves predefined-variable names against
+     * ExprCtx.predef_vars when one is supplied (how compile evaluates against
+     * its ReplCompileContext snapshot) rather than the live g_predef_vars
+     * table. `t` is always live, so a synthetic value distinct from its live
+     * value proves the context view wins — both for a direct eval and for a
+     * for-header bound, which threads the same view. */
+    {
+        ExprVar synth[1] = { { "t", 99.0f } };
+        ExprCtx ctx = { "t * 2", NULL, 0, NULL, 0, synth, 1 };
+        ASSERT_TRUE("eval predef resolves from ctx->predef_vars",
+                    fabsf(repl_eval_expr(&ctx) - 198.0f) < 1e-4f);
+
+        char vn[16]; float s, e, st; const char *body = NULL;
+        int ok = repl_eval_parse_for_header_with_vars(
+            "for(i, 0, t) glVertex3f(i, 0, 0);",
+            vn, sizeof(vn), &s, &e, &st, NULL, 0, synth, 1, &body);
+        ASSERT_TRUE("for-bound resolves predef from the supplied view",
+                    ok == 1 && fabsf(e - 99.0f) < 1e-4f);
     }
 
     printf("parse_c_for_header:\n");

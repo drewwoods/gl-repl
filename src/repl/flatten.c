@@ -365,7 +365,7 @@ static void flatten_for_loop(FlattenContext *ctx,
         char rv[16];
         if (repl_eval_parse_for_header_with_vars(src_text, rv, sizeof(rv),
                                        &re_start, &re_end, &re_step,
-                                       vars, nv, &unused_body)) {
+                                       vars, nv, NULL, 0, &unused_body)) {
             start_val = re_start;
             end_val   = re_end;
             step_val  = re_step;

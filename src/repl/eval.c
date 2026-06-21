@@ -1121,10 +1121,16 @@ static float eval_primary(ExprCtx *ctx) {
                     return ctx->vars[i].value;
         }
 
-        /* Predefined variables (checked after loop vars) */
-        for (int i = 0; i < g_num_predef_vars; i++)
-            if (strcmp(name, g_predef_vars[i].name) == 0)
-                return g_predef_vars[i].value;
+        /* Predefined variables (checked after loop vars). Resolve against the
+         * context's predef view when one is supplied (compile evaluating
+         * against its ReplCompileContext snapshot); otherwise the live table. */
+        {
+            const ExprVar *pv = ctx->predef_vars ? ctx->predef_vars : g_predef_vars;
+            int pc = ctx->predef_vars ? ctx->predef_count : g_num_predef_vars;
+            for (int i = 0; i < pc; i++)
+                if (strcmp(name, pv[i].name) == 0)
+                    return pv[i].value;
+        }
 
         /* Functions (consume opening paren) */
         if (*q == '(') {
@@ -1745,6 +1751,7 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
 int repl_eval_parse_for_header_with_vars(const char *input, char *var_name, int var_sz,
                                float *start, float *end, float *step,
                                const ExprVar *vars, int num_vars,
+                               const ExprVar *predef_vars, int predef_count,
                                const char **body_start) {
     const char *p = input;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -1769,7 +1776,7 @@ int repl_eval_parse_for_header_with_vars(const char *input, char *var_name, int 
 
     /* Start and end expressions share the same ExprCtx; we only need to
      * re-seat ctx.p at each argument boundary since eval_expr advances it. */
-    ExprCtx ctx = { p, vars, num_vars, NULL, 0 };
+    ExprCtx ctx = { p, vars, num_vars, NULL, 0, predef_vars, predef_count };
     *start = repl_eval_expr(&ctx);
     p = ctx.p;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -1803,7 +1810,7 @@ int repl_eval_parse_for_header(const char *input, char *var_name, int var_sz,
                      const char **body_start) {
     return repl_eval_parse_for_header_with_vars(input, var_name, var_sz,
                                       start, end, step,
-                                      NULL, 0, body_start);
+                                      NULL, 0, NULL, 0, body_start);
 }
 
 /* Import-side translation of a numeric C for-header
