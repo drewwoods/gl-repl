@@ -79,10 +79,18 @@ static double rand_dist_chisq(int seed_is_i, int C, long n);
     TEST_ASSERT_STR(&g_harness, _label, _buf, (expected)); \
 } while(0)
 
-#define ASSERT_FOR(input, expect_ok, e_var, e_start, e_end, e_step) do { \
+#define ASSERT_FOR(for_input, expect_ok, e_var, e_start, e_end, e_step) do { \
     char _label[128]; \
     char _vn[16]; float _s, _e, _st; const char *_b; \
-    int _ok = repl_eval_parse_for_header(input, _vn, sizeof(_vn), &_s, &_e, &_st, &_b); \
+    int _ok = repl_eval_parse_for_header(&(ReplForHeaderParseConfig){ \
+        .input = (for_input), \
+        .var_name = _vn, \
+        .var_sz = (int)sizeof(_vn), \
+        .start = &_s, \
+        .end = &_e, \
+        .step = &_st, \
+        .body_start = &_b, \
+    }); \
     int _match = (_ok == (expect_ok)); \
     if (_match && _ok) { \
         _match = (strcmp(_vn, (e_var)) == 0 && \
@@ -90,7 +98,7 @@ static double rand_dist_chisq(int seed_is_i, int C, long n);
                   fabsf(_e - (e_end)) <= 1e-4f && \
                   fabsf(_st - (e_step)) <= 1e-4f); \
     } \
-    snprintf(_label, sizeof(_label), "for header: %s", (input)); \
+    snprintf(_label, sizeof(_label), "for header: %s", (for_input)); \
     ASSERT_TRUE(_label, _match); \
 } while(0)
 
@@ -133,20 +141,36 @@ static double rand_dist_chisq(int seed_is_i, int C, long n);
     ASSERT_TRUE(_label, !_ok); \
 } while(0)
 
-#define ASSERT_VALIDATE_OK(src, vars, nv) do { \
+#define ASSERT_VALIDATE_OK(expr_src, vars_arg, nv_arg) do { \
     char _label[128]; \
     char _err[128] = {0}; \
-    int _ok = repl_eval_validate_expression_idents(src, vars, nv, _err, sizeof(_err)); \
+    int _ok = repl_eval_validate_expression_idents( \
+        &(ReplExprIdentValidationConfig){ \
+            .src = (expr_src), \
+            .vars = (vars_arg), \
+            .num_vars = (nv_arg), \
+            .predef = repl_eval_predef_view(), \
+            .err = _err, \
+            .errsz = (int)sizeof(_err), \
+        }); \
     (void)_err; \
-    snprintf(_label, sizeof(_label), "validate ok: %s", (src)); \
+    snprintf(_label, sizeof(_label), "validate ok: %s", (expr_src)); \
     ASSERT_TRUE(_label, _ok); \
 } while(0)
 
-#define ASSERT_VALIDATE_FAIL(src, vars, nv) do { \
+#define ASSERT_VALIDATE_FAIL(expr_src, vars_arg, nv_arg) do { \
     char _label[128]; \
     char _err[128] = {0}; \
-    int _ok = repl_eval_validate_expression_idents(src, vars, nv, _err, sizeof(_err)); \
-    snprintf(_label, sizeof(_label), "validate fail: %s", (src)); \
+    int _ok = repl_eval_validate_expression_idents( \
+        &(ReplExprIdentValidationConfig){ \
+            .src = (expr_src), \
+            .vars = (vars_arg), \
+            .num_vars = (nv_arg), \
+            .predef = repl_eval_predef_view(), \
+            .err = _err, \
+            .errsz = (int)sizeof(_err), \
+        }); \
+    snprintf(_label, sizeof(_label), "validate fail: %s", (expr_src)); \
     ASSERT_TRUE(_label, !_ok); \
 } while(0)
 
@@ -735,13 +759,22 @@ static void run_tests(void) {
         float s, e, st;
         const char *body = NULL;
         const char *bp = NULL;
-        int ok = repl_eval_parse_for_header_with_vars(
-            "for(i, 0, radius, stepv) glVertex3f(i, 0, 0);",
-            vn, sizeof(vn), &s, &e, &st, vars, 2, NULL, 0, &body);
+        int ok = repl_eval_parse_for_header(
+            &(ReplForHeaderParseConfig){
+                .input = "for(i, 0, radius, stepv) glVertex3f(i, 0, 0);",
+                .var_name = vn,
+                .var_sz = (int)sizeof(vn),
+                .start = &s,
+                .end = &e,
+                .step = &st,
+                .body_start = &body,
+                .vars = vars,
+                .num_vars = 2,
+            });
         bp = body;
         while (bp && *bp && isspace((unsigned char)*bp))
             bp++;
-        ASSERT_TRUE("parse_for_header_with_vars resolves local vars",
+        ASSERT_TRUE("parse_for_header resolves local vars",
                     ok == 1 &&
                     strcmp(vn, "i") == 0 &&
                     fabsf(s - 0.0f) < 1e-4f &&
@@ -764,9 +797,18 @@ static void run_tests(void) {
                     fabsf(repl_eval_expr(&ctx) - 198.0f) < 1e-4f);
 
         char vn[16]; float s, e, st; const char *body = NULL;
-        int ok = repl_eval_parse_for_header_with_vars(
-            "for(i, 0, t) glVertex3f(i, 0, 0);",
-            vn, sizeof(vn), &s, &e, &st, NULL, 0, synth, 1, &body);
+        int ok = repl_eval_parse_for_header(
+            &(ReplForHeaderParseConfig){
+                .input = "for(i, 0, t) glVertex3f(i, 0, 0);",
+                .var_name = vn,
+                .var_sz = (int)sizeof(vn),
+                .start = &s,
+                .end = &e,
+                .step = &st,
+                .body_start = &body,
+                .predef_vars = synth,
+                .predef_count = 1,
+            });
         ASSERT_TRUE("for-bound resolves predef from the supplied view",
                     ok == 1 && fabsf(e - 99.0f) < 1e-4f);
     }
@@ -1061,8 +1103,16 @@ static void run_tests(void) {
     {
         char vn[16]; float s, e, st;
         const char *body = NULL;
-        int ok = repl_eval_parse_for_header("for(i, 0, 5) glVertex3f(0,0,0);",
-                                  vn, sizeof(vn), &s, &e, &st, &body);
+        int ok = repl_eval_parse_for_header(
+            &(ReplForHeaderParseConfig){
+                .input = "for(i, 0, 5) glVertex3f(0,0,0);",
+                .var_name = vn,
+                .var_sz = (int)sizeof(vn),
+                .start = &s,
+                .end = &e,
+                .step = &st,
+                .body_start = &body,
+            });
         ASSERT_TRUE("for body_start points after header",
                     ok && body != NULL && strncmp(body, " glVertex3f", 11) == 0);
     }
@@ -1502,7 +1552,15 @@ static void interactive(void) {
 
         if (strncmp(line, "for ", 4) == 0) {
             char vn[16]; float s, e, st; const char *body;
-            if (repl_eval_parse_for_header(line + 4, vn, sizeof(vn), &s, &e, &st, &body))
+            if (repl_eval_parse_for_header(&(ReplForHeaderParseConfig){
+                    .input = line + 4,
+                    .var_name = vn,
+                    .var_sz = (int)sizeof(vn),
+                    .start = &s,
+                    .end = &e,
+                    .step = &st,
+                    .body_start = &body,
+                }))
                 printf("  var=%s  start=%g  end=%g  step=%g  body=\"%s\"\n",
                        vn, s, e, st, body);
             else

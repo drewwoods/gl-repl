@@ -52,6 +52,27 @@ static void parser_emit_error_static(const ReplParseContext *ctx, const char *ms
     parser_emit_error(ctx, "%s", msg ? msg : "");
 }
 
+static int parser_validate_expression_idents(const char *src,
+                                             const ExprVar *vars,
+                                             int num_vars,
+                                             const ReplParseContext *ctx) {
+    char err[REPL_DIAG_TEXT_MAX];
+
+    if (repl_eval_validate_expression_idents(
+            &(ReplExprIdentValidationConfig){
+                .src = src,
+                .vars = vars,
+                .num_vars = num_vars,
+                .predef = repl_eval_predef_view(),
+                .err = err,
+                .errsz = (int)sizeof(err),
+            }))
+        return 1;
+
+    parser_emit_error_static(ctx, err);
+    return 0;
+}
+
 static const ReplSourceScopeView *parser_source_scope(const ReplParseContext *ctx) {
     return ctx ? ctx->source_scope : NULL;
 }
@@ -271,12 +292,8 @@ static int resolve_enum_arg_slot(const char *raw,
         return 0;
 
     case REPL_ENUM_SLOT_ENUM_OR_CONST_VALUE: {
-        char verr[REPL_DIAG_TEXT_MAX];
-        if (!repl_eval_validate_expression_idents(raw, vars, num_vars,
-                                                  verr, sizeof(verr))) {
-            parser_emit_error_static(ctx, verr);
+        if (!parser_validate_expression_idents(raw, vars, num_vars, ctx))
             return 0;
-        }
         if (input_has_any_visible_vars(raw, vars, num_vars)) {
             parser_emit_error_static(ctx, as->usage);
             return 0;
@@ -317,12 +334,8 @@ static int resolve_enum_arg_slot(const char *raw,
     }
 
     case REPL_ENUM_SLOT_ENUM_OR_EXPR: {
-        char verr[REPL_DIAG_TEXT_MAX];
-        if (!repl_eval_validate_expression_idents(raw, vars, num_vars,
-                                                  verr, sizeof(verr))) {
-            parser_emit_error_static(ctx, verr);
+        if (!parser_validate_expression_idents(raw, vars, num_vars, ctx))
             return 0;
-        }
         float fv;
         if (repl_eval_parse_exprs(raw, &fv, 1, vars, num_vars) != 1) {
             parser_emit_error_static(ctx, as->usage);
@@ -562,11 +575,8 @@ static int parse_label(const char *args, GLCmd *cmd,
     float subs[GLUT_BITMAP_MAX_SUB_ARGS] = {0};
     int sub_count = 0;
     if (post_args[0]) {
-        char verr[REPL_DIAG_TEXT_MAX];
-        if (!repl_eval_validate_expression_idents(post_args, vars, num_vars,
-                                                   verr, sizeof(verr))) {
-            parser_emit_error_static(ctx, verr); return 0;
-        }
+        if (!parser_validate_expression_idents(post_args, vars, num_vars, ctx))
+            return 0;
         float subs_full[GLUT_BITMAP_MAX_SUB_ARGS + 4];
         int parsed = repl_eval_parse_exprs(
             post_args, subs_full,
@@ -701,11 +711,8 @@ static int parse_face_pname(const char *args,
 static int parse_canonical_float_list(const char *text, float *out_args, int max_args,
                                       ExprVar *vars, int num_vars,
                                       const ReplParseContext *ctx) {
-    char verr[REPL_DIAG_TEXT_MAX];
-    if (!repl_eval_validate_expression_idents(text, vars, num_vars, verr, sizeof(verr))) {
-        parser_emit_error_static(ctx, verr);
+    if (!parser_validate_expression_idents(text, vars, num_vars, ctx))
         return -1;
-    }
     return repl_eval_parse_exprs(text, out_args, max_args, vars, num_vars);
 }
 
@@ -915,10 +922,8 @@ static int parse_func_call(const char *args, int fn, GLCmd *cmd,
     float dummy_vals[MAX_EXPR_VARS];
     int arg_count = 0;
     if (args[0] != '\0') {
-        char verr[REPL_DIAG_TEXT_MAX];
-        if (!repl_eval_validate_expression_idents(args, vars, num_vars, verr, sizeof(verr))) {
-            parser_emit_error_static(ctx, verr); return 0;
-        }
+        if (!parser_validate_expression_idents(args, vars, num_vars, ctx))
+            return 0;
     }
     if (!parse_expr_list_exact(args, dummy_vals, MAX_EXPR_VARS,
                                vars, num_vars, &arg_count)) {
@@ -1203,12 +1208,8 @@ static int parse_command(const char *line, GLCmd *cmd,
     /* Table-driven parsing for standard commands */
     for (const ReplStdCommandSpec *def = repl_std_command_specs(); def->name; def++) {
         if (strcmp(func, def->name) == 0) {
-            {
-                char verr[REPL_DIAG_TEXT_MAX];
-                if (!repl_eval_validate_expression_idents(args, vars, num_vars, verr, sizeof(verr))) {
-                    parser_emit_error_static(ctx, verr); return 0;
-                }
-            }
+            if (!parser_validate_expression_idents(args, vars, num_vars, ctx))
+                return 0;
             int exact_count = 0;
             if (parse_expr_list_exact(args, cmd->args, def->num_args,
                                       vars, num_vars, &exact_count) &&
@@ -1324,12 +1325,8 @@ static int parse_command(const char *line, GLCmd *cmd,
 
     /* gluColor(r, g, b[, a]) - set per-vertex color for tessellator */
     if (strcmp(func, "gluColor") == 0) {
-        {
-            char verr[REPL_DIAG_TEXT_MAX];
-            if (!repl_eval_validate_expression_idents(args, vars, num_vars, verr, sizeof(verr))) {
-                parser_emit_error_static(ctx, verr); return 0;
-            }
-        }
+        if (!parser_validate_expression_idents(args, vars, num_vars, ctx))
+            return 0;
         cmd->num_args = repl_eval_parse_exprs(args, cmd->args, 4, vars, num_vars);
         if (cmd->num_args >= 3) {
             if (cmd->num_args < 4) cmd->args[3] = 1.0f;

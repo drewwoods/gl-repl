@@ -1267,8 +1267,16 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd,
 
     float start_v, end_v, step_v;
     const char *body;
-    if (repl_eval_parse_for_header(p, var_name, sizeof(var_name),
-                         &start_v, &end_v, &step_v, &body)) {
+    if (repl_eval_parse_for_header(
+            &(ReplForHeaderParseConfig){
+                .input = p,
+                .var_name = var_name,
+                .var_sz = (int)sizeof(var_name),
+                .start = &start_v,
+                .end = &end_v,
+                .step = &step_v,
+                .body_start = &body,
+            })) {
         char start_s[EXPORT_FLOAT_TEXT_MAX], end_s[EXPORT_FLOAT_TEXT_MAX];
         repl_format_source_float(start_s, sizeof(start_s), start_v);
         repl_format_source_float(end_s, sizeof(end_s), end_v);

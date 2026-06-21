@@ -634,8 +634,13 @@ static ReplCompileResult parse_float_name_list(const char *input,
                 return compile_set_err(err, err_size, "expected expression after '='");
 
             char verr[REPL_DIAG_TEXT_MAX];
-            if (!repl_eval_validate_expression_idents_in(init_expr, predef, NULL, 0,
-                                                         verr, sizeof(verr)))
+            if (!repl_eval_validate_expression_idents(
+                    &(ReplExprIdentValidationConfig){
+                        .src = init_expr,
+                        .predef = predef,
+                        .err = verr,
+                        .errsz = (int)sizeof(verr),
+                    }))
                 return compile_set_err(err, err_size, "%s", verr);
             ExprCtx eval_ctx = { init_expr, predef.vars, predef.count, NULL, 0 };
             parsed->init_vals[parsed->count] = repl_eval_expr(&eval_ctx);
@@ -1068,13 +1073,25 @@ ReplCompileResult repl_compile_var_assign(const char *input,
         if (scratch_array_idx < 0)
             return compile_set_err(err, err_size, "unknown array '%s'", name);
 
-        if (!repl_eval_validate_expression_idents_in(index_expr, ctx->predef,
-                                                     vis_n > 0 ? vis : NULL, vis_n,
-                                                     verr, sizeof(verr)))
+        if (!repl_eval_validate_expression_idents(
+                &(ReplExprIdentValidationConfig){
+                    .src = index_expr,
+                    .vars = vis_n > 0 ? vis : NULL,
+                    .num_vars = vis_n,
+                    .predef = ctx->predef,
+                    .err = verr,
+                    .errsz = (int)sizeof(verr),
+                }))
             return compile_set_err(err, err_size, "%s", verr);
-        if (!repl_eval_validate_expression_idents_in(rhs, ctx->predef,
-                                                     vis_n > 0 ? vis : NULL, vis_n,
-                                                     verr, sizeof(verr)))
+        if (!repl_eval_validate_expression_idents(
+                &(ReplExprIdentValidationConfig){
+                    .src = rhs,
+                    .vars = vis_n > 0 ? vis : NULL,
+                    .num_vars = vis_n,
+                    .predef = ctx->predef,
+                    .err = verr,
+                    .errsz = (int)sizeof(verr),
+                }))
             return compile_set_err(err, err_size, "%s", verr);
 
         ExprCtx idx_ctx = { index_expr, vis_n > 0 ? vis : NULL, vis_n, NULL, 0,
@@ -1119,9 +1136,15 @@ ReplCompileResult repl_compile_var_assign(const char *input,
             return compile_set_err(err, err_size,
                 "undeclared variable '%s' - use 'float %s;' first", name, name);
 
-        if (!repl_eval_validate_expression_idents_in(rhs, ctx->predef,
-                                                     vis_n > 0 ? vis : NULL, vis_n,
-                                                     verr, sizeof(verr)))
+        if (!repl_eval_validate_expression_idents(
+                &(ReplExprIdentValidationConfig){
+                    .src = rhs,
+                    .vars = vis_n > 0 ? vis : NULL,
+                    .num_vars = vis_n,
+                    .predef = ctx->predef,
+                    .err = verr,
+                    .errsz = (int)sizeof(verr),
+                }))
             return compile_set_err(err, err_size, "%s", verr);
 
         ExprCtx eval_ctx = { rhs, vis_n > 0 ? vis : NULL, vis_n, NULL, 0,
@@ -1796,10 +1819,15 @@ ReplCompileResult repl_compile_if_block_kernel(const char *input,
     cond_text[clen] = '\0';
 
     char verr[REPL_DIAG_TEXT_MAX];
-    if (!repl_eval_validate_expression_idents_in(cond_text, ctx->predef,
-                                              visible_nv > 0 ? visible_vars : NULL,
-                                              visible_nv,
-                                              verr, sizeof(verr))) {
+    if (!repl_eval_validate_expression_idents(
+            &(ReplExprIdentValidationConfig){
+                .src = cond_text,
+                .vars = visible_nv > 0 ? visible_vars : NULL,
+                .num_vars = visible_nv,
+                .predef = ctx->predef,
+                .err = verr,
+                .errsz = (int)sizeof(verr),
+            })) {
         snprintf(err, (size_t)err_size, "%s", verr);
         return REPL_COMPILE_ERROR;
     }
@@ -2063,12 +2091,20 @@ ReplCompileResult repl_compile_for_loop_kernel(const char *input,
                                               ctx->document_count, out->pos,
                                               out->visible_vars, MAX_EXPR_VARS, NULL);
 
-    if (!repl_eval_parse_for_header_with_vars(p, out->var_name,
-                                              sizeof(out->var_name),
-                                              &out->start, &out->end, &out->step,
-                                              out->visible_vars, out->visible_nv,
-                                              ctx->predef.vars, ctx->predef.count,
-                                              &out->body_start)) {
+    if (!repl_eval_parse_for_header(
+            &(ReplForHeaderParseConfig){
+                .input = p,
+                .var_name = out->var_name,
+                .var_sz = (int)sizeof(out->var_name),
+                .start = &out->start,
+                .end = &out->end,
+                .step = &out->step,
+                .body_start = &out->body_start,
+                .vars = out->visible_vars,
+                .num_vars = out->visible_nv,
+                .predef_vars = ctx->predef.vars,
+                .predef_count = ctx->predef.count,
+            })) {
         snprintf(err, (size_t)err_size,
                  "for syntax: for(var, start, end[, step]) body;");
         return REPL_COMPILE_ERROR;
@@ -2114,9 +2150,15 @@ ReplCompileResult repl_compile_for_loop_kernel(const char *input,
     while (*ra && isspace((unsigned char)*ra)) ra++;
 
     char verr[REPL_DIAG_TEXT_MAX];
-    if (!repl_eval_validate_expression_idents_in(ra, ctx->predef, out->visible_vars,
-                                              out->visible_nv,
-                                              verr, sizeof(verr))) {
+    if (!repl_eval_validate_expression_idents(
+            &(ReplExprIdentValidationConfig){
+                .src = ra,
+                .vars = out->visible_vars,
+                .num_vars = out->visible_nv,
+                .predef = ctx->predef,
+                .err = verr,
+                .errsz = (int)sizeof(verr),
+            })) {
         snprintf(err, (size_t)err_size, "%s", verr);
         return REPL_COMPILE_ERROR;
     }
