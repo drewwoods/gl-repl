@@ -295,15 +295,20 @@ void repl_eval_undeclare_predef_var(const char *name);
 int  repl_eval_is_reserved_ident(const char *name);
 /* Scan source for references to a specific identifier. */
 int  repl_eval_source_uses_ident(const char *src, const char *name);
+typedef struct {
+    const char    *src;
+    const char    *end;       /* optional exclusive end; NULL validates whole src */
+    const ExprVar *vars;
+    int            num_vars;
+    ReplPredefView predef;
+    char          *err;
+    int            errsz;
+} ReplExprIdentValidationConfig;
+
 /* Validate that all identifiers in source are either known variables or reserved
  * functions. Errors written to err buffer (errsz bytes). Returns 1 on success. */
-int  repl_eval_validate_expression_idents(const char *src, const ExprVar *vars,
-                                          int num_vars, char *err, int errsz);
-/* Context-driven variant: validate against an explicit predef view instead of
- * the live table. The live wrapper above delegates here with the live view. */
-int  repl_eval_validate_expression_idents_in(const char *src, ReplPredefView predef,
-                                             const ExprVar *vars, int num_vars,
-                                             char *err, int errsz);
+int  repl_eval_validate_expression_idents(
+    const ReplExprIdentValidationConfig *cfg);
 
 /* ---- Expression evaluator (recursive descent) -------------------------- */
 
@@ -398,21 +403,28 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz);
 
 /* ---- For-loop header parsers ------------------------------------------ */
 
-/* Parse REPL for-loop header: for(var, start, end[, step]) body
- * All expressions are evaluated using available variables.
- * Returns 1 on success; *body_start points past the closing ')'.
- * Step defaults to 1.0 if omitted. */
-int repl_eval_parse_for_header(const char *input, char *var_name, int var_sz,
-                                float *start, float *end, float *step,
-                                const char **body_start);
-/* `predef_vars` / `predef_count` give an explicit predef table to resolve
- * bound expressions against (compile passes its ReplCompileContext snapshot);
- * NULL / 0 uses the live table, which the runtime (flatten) path wants. */
-int repl_eval_parse_for_header_with_vars(const char *input, char *var_name, int var_sz,
-                                          float *start, float *end, float *step,
-                                          const ExprVar *vars, int num_vars,
-                                          const ExprVar *predef_vars, int predef_count,
-                                          const char **body_start);
+typedef struct {
+    const char    *input;
+    char          *var_name;
+    int            var_sz;
+    float         *start;
+    float         *end;
+    float         *step;
+    const char   **body_start;
+    const ExprVar *vars;
+    int            num_vars;
+    /* Optional explicit predef table for bound expressions. NULL keeps the live
+     * table, which the runtime (flatten) path wants; compile passes its
+     * ReplCompileContext snapshot here. */
+    const ExprVar *predef_vars;
+    int            predef_count;
+} ReplForHeaderParseConfig;
+
+/* Parse REPL for-loop header: for(var, start, end[, step]) body.
+ * All expressions are evaluated using available variables. Returns 1 on
+ * success; *body_start points past the closing ')'. Step defaults to 1.0 if
+ * omitted. */
+int repl_eval_parse_for_header(const ReplForHeaderParseConfig *cfg);
 
 /* Parse C for-loop header: for (float var = start; var < end; var += step) {
  * Returns 1 on success. Expressions are constant-folded (vars not supported). */

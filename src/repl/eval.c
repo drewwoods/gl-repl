@@ -697,13 +697,18 @@ static const char *expr_walk_next_ident(const char **s_inout, const char *end,
     return NULL;
 }
 
-static int expr_range_has_runtime_values(const char *src, const char *end,
-                                         const ExprVar *vars, int num_vars,
-                                         ReplPredefView predef) {
-    const char *s = src;
+static int expr_range_has_runtime_values(
+        const ReplExprIdentValidationConfig *cfg) {
+    const char *s = cfg ? cfg->src : NULL;
+    const char *end = cfg ? cfg->end : NULL;
+    const ExprVar *vars = cfg ? cfg->vars : NULL;
+    int num_vars = (cfg && cfg->vars) ? cfg->num_vars : 0;
     char name[REPL_PREDEF_NAME_MAX];
     const char *q = NULL;
     int too_long = 0;
+
+    if (!s)
+        return 0;
 
     while (expr_walk_next_ident(&s, end, name, sizeof(name), &q, &too_long)) {
         if (too_long)
@@ -721,7 +726,8 @@ static int expr_range_has_runtime_values(const char *src, const char *end,
             if (strcmp(name, vars[var_idx].name) == 0)
                 return 1;
         }
-        if (repl_eval_find_predef_var_idx_in(predef.vars, predef.count, name) >= 0)
+        if (repl_eval_find_predef_var_idx_in(cfg->predef.vars,
+                                             cfg->predef.count, name) >= 0)
             return 1;
     }
 
@@ -736,10 +742,18 @@ static int expr_range_has_runtime_values(const char *src, const char *end,
  * Also rejects unbalanced parens up front, since eval_expr itself is
  * forgiving about a missing ')'. Pure check — evaluates nothing into
  * state; on failure writes a user-facing message into `err`. */
-static int validate_expression_idents_range(const char *src, const char *end,
-                                            const ExprVar *vars, int num_vars,
-                                            ReplPredefView predef,
-                                            char *err, int errsz) {
+static int validate_expression_idents_range(
+        const ReplExprIdentValidationConfig *cfg) {
+    const char *src = cfg ? cfg->src : NULL;
+    const char *end = cfg ? cfg->end : NULL;
+    const ExprVar *vars = cfg ? cfg->vars : NULL;
+    int num_vars = (cfg && cfg->vars) ? cfg->num_vars : 0;
+    char *err = cfg ? cfg->err : NULL;
+    int errsz = cfg ? cfg->errsz : 0;
+
+    if (!src)
+        return 0;
+
     /* Reject unbalanced parens up front. The recursive-descent eval
      * tolerates a missing ')' on a function call (`max(1, 2` returns
      * 2 silently), so without this check broken input slips through
@@ -797,13 +811,26 @@ static int validate_expression_idents_range(const char *src, const char *end,
                 return 0;
             }
 
-            if (!validate_expression_idents_range(q + 1, close,
-                                                  vars, num_vars, predef,
-                                                  err, errsz))
+            if (!validate_expression_idents_range(
+                    &(ReplExprIdentValidationConfig){
+                        .src = q + 1,
+                        .end = close,
+                        .vars = vars,
+                        .num_vars = num_vars,
+                        .predef = cfg->predef,
+                        .err = err,
+                        .errsz = errsz,
+                    }))
                 return 0;
 
-            if (!expr_range_has_runtime_values(q + 1, close, vars, num_vars,
-                                               predef)) {
+            if (!expr_range_has_runtime_values(
+                    &(ReplExprIdentValidationConfig){
+                        .src = q + 1,
+                        .end = close,
+                        .vars = vars,
+                        .num_vars = num_vars,
+                        .predef = cfg->predef,
+                    })) {
                 char idx_expr[MAX_LINE_LEN];
                 int idx_len = (int)(close - (q + 1));
                 if (idx_len >= (int)sizeof(idx_expr))
@@ -811,7 +838,13 @@ static int validate_expression_idents_range(const char *src, const char *end,
                 memcpy(idx_expr, q + 1, (size_t)idx_len);
                 idx_expr[idx_len] = '\0';
 
-                ExprCtx idx_ctx = { idx_expr, vars, num_vars, NULL, 0 };
+                ExprCtx idx_ctx = {
+                    .p = idx_expr,
+                    .vars = vars,
+                    .num_vars = num_vars,
+                    .predef_vars = cfg->predef.vars,
+                    .predef_count = cfg->predef.count,
+                };
                 int elem_idx = (int)repl_eval_expr(&idx_ctx);
                 if (!scratch_elem_in_range(elem_idx)) {
                     if (err)
@@ -844,7 +877,8 @@ static int validate_expression_idents_range(const char *src, const char *end,
         if (found)
             continue;
 
-        if (repl_eval_find_predef_var_idx_in(predef.vars, predef.count, name) >= 0)
+        if (repl_eval_find_predef_var_idx_in(cfg->predef.vars,
+                                             cfg->predef.count, name) >= 0)
             continue;
 
         if (err)
@@ -952,17 +986,9 @@ int repl_eval_source_uses_ident(const char *src, const char *name) {
     return 0;
 }
 
-int repl_eval_validate_expression_idents(const char *src, const ExprVar *vars,
-                               int num_vars, char *err, int errsz) {
-    return validate_expression_idents_range(src, NULL, vars, num_vars,
-                                            repl_eval_predef_view(), err, errsz);
-}
-
-int repl_eval_validate_expression_idents_in(const char *src, ReplPredefView predef,
-                               const ExprVar *vars, int num_vars,
-                               char *err, int errsz) {
-    return validate_expression_idents_range(src, NULL, vars, num_vars,
-                                            predef, err, errsz);
+int repl_eval_validate_expression_idents(
+        const ReplExprIdentValidationConfig *cfg) {
+    return validate_expression_idents_range(cfg);
 }
 
 int repl_eval_input_has_predef_vars(const char *s) {
@@ -1748,12 +1774,17 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
  * the bound expressions against the visible vars. On success fills
  * var_name / start / end / step (default 1) and points *body_start
  * just past the ')'. Returns 0 on any token mismatch. */
-int repl_eval_parse_for_header_with_vars(const char *input, char *var_name, int var_sz,
-                               float *start, float *end, float *step,
-                               const ExprVar *vars, int num_vars,
-                               const ExprVar *predef_vars, int predef_count,
-                               const char **body_start) {
-    const char *p = input;
+int repl_eval_parse_for_header(const ReplForHeaderParseConfig *cfg) {
+    const char *p = cfg ? cfg->input : NULL;
+    char *var_name = cfg ? cfg->var_name : NULL;
+    int var_sz = cfg ? cfg->var_sz : 0;
+    const ExprVar *vars = cfg ? cfg->vars : NULL;
+    int num_vars = (cfg && cfg->vars) ? cfg->num_vars : 0;
+
+    if (!cfg || !p || !var_name || var_sz <= 0 ||
+        !cfg->start || !cfg->end || !cfg->step)
+        return 0;
+
     while (*p && isspace((unsigned char)*p)) p++;
     if (strncmp(p, "for(", 4) != 0 && strncmp(p, "for (", 5) != 0)
         return 0;
@@ -1776,24 +1807,30 @@ int repl_eval_parse_for_header_with_vars(const char *input, char *var_name, int 
 
     /* Start and end expressions share the same ExprCtx; we only need to
      * re-seat ctx.p at each argument boundary since eval_expr advances it. */
-    ExprCtx ctx = { p, vars, num_vars, NULL, 0, predef_vars, predef_count };
-    *start = repl_eval_expr(&ctx);
+    ExprCtx ctx = {
+        .p = p,
+        .vars = vars,
+        .num_vars = num_vars,
+        .predef_vars = cfg->predef_vars,
+        .predef_count = cfg->predef_count,
+    };
+    *cfg->start = repl_eval_expr(&ctx);
     p = ctx.p;
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != ',') return 0;
     p++;
 
     ctx.p = p;
-    *end = repl_eval_expr(&ctx);
+    *cfg->end = repl_eval_expr(&ctx);
     p = ctx.p;
     while (*p && isspace((unsigned char)*p)) p++;
 
     /* Optional step (defaults to 1). */
-    *step = 1.0f;
+    *cfg->step = 1.0f;
     if (*p == ',') {
         p++;
         ctx.p = p;
-        *step = repl_eval_expr(&ctx);
+        *cfg->step = repl_eval_expr(&ctx);
         p = ctx.p;
         while (*p && isspace((unsigned char)*p)) p++;
     }
@@ -1801,16 +1838,8 @@ int repl_eval_parse_for_header_with_vars(const char *input, char *var_name, int 
     if (*p != ')') return 0;
     p++;
 
-    if (body_start) *body_start = p;
+    if (cfg->body_start) *cfg->body_start = p;
     return 1;
-}
-
-int repl_eval_parse_for_header(const char *input, char *var_name, int var_sz,
-                     float *start, float *end, float *step,
-                     const char **body_start) {
-    return repl_eval_parse_for_header_with_vars(input, var_name, var_sz,
-                                      start, end, step,
-                                      NULL, 0, NULL, 0, body_start);
 }
 
 /* Import-side translation of a numeric C for-header
