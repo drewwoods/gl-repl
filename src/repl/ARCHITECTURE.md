@@ -659,6 +659,22 @@ status messages no-op, the cursor is a file-local int. That's the proof
 the pipeline needs no host — `tools/repl_demo/stubs.c` is empty, and
 `nm repl_demo` shows zero `editor_*` / `glr_ctrl_*` / `ui_*` symbols.
 
+### What this example represents
+
+`--trace` is a representative **language-pipeline** path: it uses the same
+non-editor loader that import/examples/tutorial helpers use, then follows the
+same source-command, flat-command, and executor data that the frame loop uses.
+It is the right quick check for the compile/apply seam, variable side effects,
+typed structured blocks, flatten provenance, local-var snapshots, and
+`has_vars` animation.
+
+It is deliberately not a miniature full app. It does not exercise editor undo,
+selection, autocomplete, cursor/input post-effects, code-panel rendering,
+scene-tab LRU/promotion, workspace save orchestration, full import/export
+metadata bridges, or tutorial/replay UI presentation. Those behaviors are
+owned outside `src/repl` or at its host boundary; keeping them out of the demo
+is the point of the link-boundary proof.
+
 ---
 
 ## 12. Map of the territory
