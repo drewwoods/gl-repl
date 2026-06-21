@@ -12,10 +12,10 @@
  *     editor_undo_commit
  *
  *   Lean source-loader (src/repl/load.c):
- *     repl_compiled_change_to_text_change   (translate)
- *     source_document_apply_change          (neutral text port)
- *     repl_apply_compiled_change            (ReplState command store)
- *     repl_apply_alias_ops                  (function aliases)
+ *     repl_load_apply_compiled_change_transaction
+ *       - source_document_apply_change      (neutral text port)
+ *       - repl_apply_compiled_change        (ReplState command store)
+ *       - repl_apply_alias_ops              (function aliases)
  *
  * `repl_apply_compiled_change()` mutates ReplState command arrays
  * only. It does not touch source text, status, undo entries, or
