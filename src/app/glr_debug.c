@@ -175,17 +175,14 @@ void glr_debug_dump_current_flat_histogram(FILE *out) {
 void glr_debug_dump_runtime_state_layout(FILE *out) {
     FILE *dst = out ? out : stdout;
 
-/* The runtime-state layout dump no longer includes ReplayRuntimeState,
- * the presentation slice, or render-config toggles: those moved off
- * ReplRuntimeState to replay_state.c and glr_state.c respectively. (Replay
- * migration was Phase F commit 33; presentation/render relocation was
- * step 7a of feature/decouple-repl-from-gl-repl-alt.md.) */
+/* The runtime-state layout dump lists only REPL-owned runtime slices. Peer/app
+ * state has its own owners and is outside ReplRuntimeState. */
 #define REPL_RUNTIME_STATE_FIELDS(X)                                                               \
     X(ReplDocumentState, document)                                                                 \
     X(ReplFlatProgramState, flat_program)                                                          \
     X(ReplVariableState, variables)                                                                \
     X(ReplRenderState, render)                                                                     \
-    X(ReplSceneRuntimeState, scenes)                                                               \
+    X(ReplSceneRuntimeState, scene_runtime)                                                        \
     X(ReplImportExportState, import_export)
 
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L

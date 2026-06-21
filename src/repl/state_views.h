@@ -26,8 +26,7 @@
  * through GL_LIGHT0+REPL_LIGHT_SLOT_COUNT-1. The dimensional light data
  * (positions / colors / eye-space) is presentation state owned by the app
  * shell (GlrRenderState.lights, seeded from a scene light theme); the REPL
- * pipeline owns only which slots the program enabled, as a bitmask, so this
- * header no longer needs to include the scene render-type vocabulary. The
+ * pipeline owns only which slots the program enabled, as a bitmask. The
  * controller STATIC_ASSERTs this count equals scene's MAX_LIGHTS. */
 #define REPL_LIGHT_SLOT_COUNT 4
 
@@ -37,14 +36,9 @@ static inline int repl_light_enabled(unsigned mask, int slot) {
     return (int)((mask >> slot) & 1u);
 }
 
-/* Source document storage: canonical source commands and the
- * source-level auto-normal dirty flag. The edit-line cursor lives
- * on EditorState;
- * REPL pipeline code that needs the cursor reads it through
- * function parameters (parse / compile / flatten / load) or
- * through the repl_dispatch_edit_line_get/_set sink (scene save
- * / restore), implemented in phase 4 (see the
- * edit-line-ownership plan doc). */
+/* Source document storage: canonical source commands and the source-level
+ * auto-normal dirty flag. The edit-line cursor is editor-owned; REPL pipeline
+ * code receives it as an argument or through the dispatch edit-line sink. */
 typedef struct {
     GLCmd cmds[MAX_COMMANDS];
     int   cmd_count;
@@ -96,16 +90,6 @@ typedef struct {
     float          anim_time;
 } ReplVariableView;
 
-/* State declared elsewhere:
- * - editor-owned input/buffer/selection/search/autocomplete and editor overlay
- *   list types live in editor_state.h
- * - UI chrome types live in src/ui/app/state_types.h
- * - app-owned presentation policy and render-config toggles live in glr_state.h
- *
- * Those declarations moved to their
- * owning modules. This header keeps only the REPL-owned render tail that the
- * executor mutates directly (implemented in phase 1 of the state split
- * and step 7a of feature/decouple-repl-from-gl-repl-alt.md). */
 /* REPL-owned render tail: the light-enable bitmask and clear color written by
  * user GL commands. `light_enabled_mask` bit i is set while the program's
  * glEnable(GL_LIGHT0+i) is in effect (recomputed each executor walk); the
@@ -155,9 +139,6 @@ const GLCmd *repl_state_document_cmds(void);
 const GLCmd *repl_state_document_cmd_at(int cmd_idx);
 int          repl_state_document_count(void);
 int          repl_state_document_capacity(void);
-/* repl_state_edit_line deleted. See state_owners.h for
- * the migration note (implemented in phase 4; see the
- * edit-line-ownership plan doc). */
 int          repl_state_normals_dirty(void);
 
 const GLCmd      *repl_state_flat_program_cmds(void);
@@ -173,12 +154,10 @@ FlatProgramView   repl_state_flat_program_view(void);
 ReplVariableView repl_state_variables(void);
 
 /* Read-only accessor boundary: functions below expose only REPL-owned slices.
- * For the rest of runtime state, include the owning header directly:
+ * For peer state, include the owning header directly:
  * `glr_state.h` for presentation policy/render config and grid tables,
  * `editor_state.h` for input/buffer/selection/search/autocomplete/overlay
- * lists, and `ui_state.h` for code-panel/help/status/pointer/viewport state.
- * The old `repl_state_*` forwarders were removed (implemented in
- * phase 1 and step 7a). */
+ * lists, and `ui_state.h` for code-panel/help/status/pointer/viewport state. */
 
 ReplSceneRuntimeState     repl_state_scenes(void);
 int                       repl_state_active_example_idx(void);
