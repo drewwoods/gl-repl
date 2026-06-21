@@ -1,9 +1,11 @@
 # `src/repl` structure and readability audit - active
 
 Status: **active** - implementation has started. Findings 1 (core split),
-2 (compile visible-var + predef context purity), 3 (parser strict-ref
-context), and 4 (source-scope view split + the 4b performance-regression fix)
-are landed. The remaining findings in this document are still a cleanup map,
+3 (parser strict-ref context), and 4 (source-scope view split + the 4b
+performance-regression fix) are landed. Finding 2 (compile context purity) is
+partial — visible-var and the predef ident-validator are context-driven, but
+value evaluation still falls back to the live predef table (tracked as P2 in
+Finding 2). The remaining findings in this document are still a cleanup map,
 not completed work.
 
 Recent implementation commits:
@@ -28,7 +30,7 @@ Recent implementation commits:
 | Finding 4 docs/status | Landed | `38b5f5e3` moved the audit to active and marked Finding 4 implemented. |
 | Finding 4 integration guard | Landed | `0906eb56` adds `normalize_large_doc`; revealed a ~14× per-call regression in the normalize path on large documents. |
 | Finding 4 phase 4b: warm-view fix | Landed | Live-document normalize now reuses the warm live source-scope cache through parser live-wrapper fallback, and `reformat_large_doc` guards the user-visible reformat path. |
-| Finding 2 compile purity (visible-var + predef) | Landed | `b828b64f` threads the document view through `collect_visible_vars_in`; `e1eb9ae4` adds a `ReplPredefView` to `ReplCompileContext` (+ eval `_in` variants). No global document/predef read remains in compile.c. |
+| Finding 2 compile purity (visible-var + predef) | Partial | `b828b64f` threads the document view (`collect_visible_vars_in`); `e1eb9ae4` makes the predef ident-validator context-driven (`ReplPredefView` + eval `_in`). Open (P2): value eval still falls back to live `g_predef_vars` via `eval_primary` (scratch/var-assign/for-bounds). See Finding 2. |
 | Finding 3 strict-ref context cleanup | Landed | Parser strict function-call validation now uses context-supplied source-scope and alias views; `source_scope == NULL` no longer reads live state. |
 
 Latest verification for Finding 4:
@@ -206,16 +208,31 @@ None — Finding 1 is complete.
 
 ## Finding 2: compile purity is improved, but still not fully true
 
-**Status:** Done (2026-06-21). Both live-state reads called out below are now
-threaded through `ReplCompileContext`: visible-var collection via
-`collect_visible_vars_in` (`b828b64f`) and predefined-variable reads via a
-`ReplPredefView` on the context plus eval `repl_eval_*_in` variants
-(`e1eb9ae4`). compile.c holds no global document or predef read. Behavior is
-unchanged — `ctx->predef` / `ctx->document_*` snapshot the live state at
-context build, and compile never mutates it. Residual: `collect_visible_vars`'
-CMD_FUNC_DEF param extraction still resolves a custom alias via the live
-func-alias table (symbol state, not document/predef — a Finding-3-family
-follow-up, noted in `visible_vars.c`).
+**Status:** Partial (corrected 2026-06-21 — the earlier "Done" overstated it).
+Two of three pieces are context-driven:
+
+- Visible-var collection threads the document view via `collect_visible_vars_in`
+  (`b828b64f`).
+- The predef-aware **ident validator** and existence/capacity checks, plus the
+  float-decl initializer eval, use `ctx->predef` (a `ReplPredefView` on the
+  context) and eval `repl_eval_*_in` variants (`e1eb9ae4`). compile.c has no
+  *direct* `g_predef_vars` token.
+
+**Open (P2):** value *evaluation* is not yet predef-context-driven.
+`eval_primary` (`src/repl/eval.c`) resolves `ExprCtx.vars` then **falls back to
+live `g_predef_vars`**, and compile evaluates scratch index/rhs, var-assign rhs,
+and `for` bounds through `ExprCtx`s carrying only visible locals — so those
+values come from the live table, not `ctx->predef`. A non-live context would
+therefore *validate* against one predef table and *compute values* from another.
+In production this is invisible (`ctx->predef` == live), but the purity claim is
+not yet true. Fix: a predef-aware eval path — give `ExprCtx` an optional predef
+view that `eval_primary` uses as its fallback, and set it at compile's eval
+sites (incl. the `for`-header bounds parser). Then this finding is genuinely
+done.
+
+**Residual (separate):** `collect_visible_vars`' CMD_FUNC_DEF param extraction
+still resolves a custom alias via the live func-alias table (symbol state, not
+document/predef — a Finding-3-family follow-up, noted in `visible_vars.c`).
 
 ### Evidence
 
