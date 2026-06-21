@@ -30,7 +30,7 @@ The pieces map onto standard interpreter parts:
 | Lexer/parser → AST | `parser.c` → `GLCmd` records |
 | Static validation / compile pass | `compile.c` → `ReplCompiledChange` (pure, never mutates) |
 | Expression evaluator | `eval.c` (recursive descent; `sin`, `cos`, `%`, comparisons, vars) |
-| IR / lowering | `flatten.c`: unrolls loops, inlines functions, resolves `if` → a flat command stream |
+| IR / lowering | `flatten.c`: unrolls loops, inlines functions, resolves `if` → a flat command stream; `flatten_query.c`: live flat-program cost/cursor queries |
 | Bytecode VM / executor | `executor.c`: walks the flat stream emitting GL calls |
 | Symbol/spec table | `command_spec.c` (per-command arity, arg kinds, highlight category) |
 
@@ -109,7 +109,7 @@ workspace I/O in `export.c`, and the neutral F1 `help_text.c` tables.
 | `compile.c` / `.h` | Pure validators → `ReplCompiledChange` (never mutates) |
 | `apply.c` / `.h` | Applies a compiled change to `ReplState` |
 | `command_store.c` / `.h` | Low-level `GLCmd` array mechanics (insert/replace/delete/load) |
-| `flatten.c` / `.h` | Source → flat program (loop unroll, func inline, `if` resolve) |
+| `flatten.c` / `.h`, `flatten_query.c` / `.h` | Source → flat program plus live flat-program cost/cursor queries |
 | `executor.c` / `.h` | Walks the flat program emitting live GL calls |
 | `autonormal.c` | Auto-generated `glNormal3f` maintenance |
 | `source_scope.c` / `.h` | Source depth / indentation / block lookup cache |

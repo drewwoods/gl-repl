@@ -9,6 +9,7 @@
 #include "repl/state_owners.h"
 #include <stdbool.h>
 #include "repl/flatten.h"
+#include "repl/flatten_query.h"
 #include "repl/pipeline.h"
 #include "repl/state_notify.h"
 #include "editor/input.h"

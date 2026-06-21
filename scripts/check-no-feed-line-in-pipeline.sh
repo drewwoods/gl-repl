@@ -26,6 +26,7 @@ files=(
     src/repl/load.c
     src/repl/apply.c
     src/repl/flatten.c
+    src/repl/flatten_query.c
     src/repl/executor.c
     src/repl/eval.c
     src/repl/source_scope.c

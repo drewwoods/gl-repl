@@ -535,7 +535,9 @@ state-machine level, not buried in the doc body.
 | `src/repl/executor.c` | Narrow live-GL dispatch: walks the flat command array emitting OpenGL calls |
 | `src/repl/executor.h` | Executor public API (`repl_execute_program`, transform helpers) |
 | `src/repl/flatten.c` | Source-to-flat program builder: unrolls loops, inlines functions, resolves if-blocks |
-| `src/repl/flatten.h` | Flatten public API (`repl_flatten_program`, cursor-highlight refresh) |
+| `src/repl/flatten.h` | Flatten public API (`repl_flatten_program`, `repl_flatten_commands`) |
+| `src/repl/flatten_query.c` | Live flat-program query helpers: cursor matching, current-block highlight refresh, and per-line flat-cost attribution |
+| `src/repl/flatten_query.h` | Flatten query public API (`repl_flat_cmd_matches_cursor`, `repl_flatten_cost_at_line`, `repl_flatten_refresh_current_block_highlight`) |
 | `src/repl/pipeline.h` | Pipeline and lifecycle surface for frame orchestration (flatten, autonormal, replay snapshots) |
 | `src/repl/autonormal.c` | Auto-generated `glNormal3f` maintenance for source commands |
 | `src/subsystems/replay/replay.c` | Replay-side walkers for tess preview and user-vertex traversal |

@@ -376,6 +376,7 @@ commands.
 | `repl_load` | Non-editor apply orchestration: compile → predef apply → source-document apply → command-store apply, mirroring the REPL halves of `editor_commit_apply_plan` without editor effects (cursor, insert mode, input buffer). Callers: save-file importer, example loader, tutorial comment injector, tests. Keeps `repl_compile` a pure validator |
 | `repl_command_store` | Low-level `GLCmd` array mechanics only: insert, replace, delete, load. No text-buffer writes |
 | `repl_flatten` | Builds the flat executable command stream from source commands, loops, functions, and `if` blocks |
+| `repl_flatten_query` | Reads the live flat command stream for cursor matching, current-block highlights, and per-line flat-cost attribution |
 | `repl_executor` | Narrow live-GL boundary that executes flat user geometry |
 | `repl_eval` | Expression evaluator and predefined-variable lookup |
 | `src/repl/format` | Pure text/indent/depth formatting helpers (`repl_format_*`) |
@@ -707,6 +708,7 @@ flowchart LR
         parser["src/repl/parser.c<br/>line parser"]
         scope["src/repl/source_scope.c<br/>depth · indent · context"]
         flatten["src/repl/flatten.c<br/>source-to-flat builder"]
+        flatten_query["src/repl/flatten_query.c<br/>flat-program queries"]
         exec["src/repl/executor.c<br/>flat command execution"]
         store["src/repl/command_store.c<br/>GLCmd array only"]
     end

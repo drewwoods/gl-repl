@@ -439,6 +439,7 @@ REPL_SRCS = \
 	src/repl/export_prologue.c \
 	src/repl/export_setup.c \
 	src/repl/flatten.c \
+	src/repl/flatten_query.c \
 	src/repl/help_text.c \
 	src/repl/host_effects.c \
 	src/repl/import.c \
@@ -687,6 +688,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/repl/export_prologue.c \
                      src/repl/export_setup.c \
                      src/repl/flatten.c \
+                     src/repl/flatten_query.c \
                      src/repl/host_effects.c \
                      src/repl/import.c \
                      src/repl/load.c \
