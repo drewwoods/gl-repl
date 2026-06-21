@@ -30,6 +30,7 @@ Recent implementation commits:
 | Finding 4 phase 4b: warm-view fix | Landed | Live-document normalize now reuses the warm live source-scope cache through parser live-wrapper fallback, and `reformat_large_doc` guards the user-visible reformat path. |
 | Finding 2 compile purity (visible-var + predef) | Landed | `b828b64f` threads the document view; `e1eb9ae4` the predef ident-validator; the eval path now carries an `ExprCtx.predef_vars` fallback so value evaluation (scratch/var-assign/if-condition/for-bounds) resolves against `ctx->predef`, not live `g_predef_vars` (closed by the P2 follow-up plus an if-condition fix; covered by `test_eval` and `test_repl_compile`). |
 | Finding 3 strict-ref context cleanup | Landed | Parser strict function-call validation now uses context-supplied source-scope and alias views; `source_scope == NULL` no longer reads live state. |
+| Finding 7 shared import/export format vocabulary | Landed | `export_format_shared.h` now owns the import/export state-access macro block plus workspace directive, snippet directive, C89 loop marker, and generated `repl_glfloatN` helper names. The file-level import accumulators remain deferred to Finding 8 because the public per-line workspace-header parser intentionally accumulates state outside `ImportState`. |
 
 Latest verification for Finding 4:
 
@@ -614,6 +615,13 @@ This also helps clarify the caveat in `state.h` that scene catalog statics are
 not covered by `repl_state_capture` / `repl_state_restore`.
 
 ## Finding 7: import/export share duplicated constants and access macros
+
+Status: **implemented for the shared format contract** — `src/repl/export_format_shared.h`
+now centralizes the duplicated import/export state-access macros and the
+round-trip directive/marker string vocabulary. The import accumulator lifetime
+piece remains deferred to Finding 8 because it is bound to the public
+`repl_state_parse_workspace_header_line()` / `repl_export_apply_pending_cfg()`
+batching contract rather than just import/export format duplication.
 
 ### Evidence
 

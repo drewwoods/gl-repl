@@ -21,16 +21,15 @@
  *     scans) and the import driver
  *     repl_export_load_from_file.
  *
- * The IMPORT_EXPORT_STATE macros are duplicated verbatim from
- * src/repl/export.c so each TU can reach the shared workspace-header
- * / pending-name / cam-line storage owned by the state-owner facade.
- * The two TUs do NOT share static helpers — the WORKSPACE_DIRECTIVES
- * dispatcher table here pairs each name with its reader only, and
- * export.c carries its own emit-only table.
+ * Shared format strings and state access macros live in
+ * export_format_shared.h. The two TUs do NOT share static helpers — the
+ * WORKSPACE_DIRECTIVES dispatcher table here pairs each name with its reader
+ * only, and export.c carries its own emit-only table.
  */
 #include <stdarg.h>
 #include <stdio.h>
 #include "repl/export.h"          /* public reader API */
+#include "repl/export_format_shared.h"
 #include "source_document.h"      /* source_document_insert_line */
 #include "repl/load.h"            /* repl_load_apply_line — step 5b */
 #include "config.h"
@@ -46,30 +45,6 @@
 #include "repl/util.h"            /* repl_format_fits / repl_copy_string_fits */
 #include "repl/pipeline.h"
 #include "repl/source_scope.h"
-#include "repl/state_owners.h"
-
-/* Mirrors the IMPORT_EXPORT_STATE block at the top of src/repl/export.c.
- * The two definitions must stay in lockstep — both TUs reach the same
- * state-owner facade (repl_state_import_export_mut). When you change
- * the macro list here, change it there too. */
-#define IMPORT_EXPORT_VIEW     (repl_state_import_export())
-#define IMPORT_EXPORT_WRITABLE (repl_state_import_export_writable())
-
-#define g_workspace_header_lines      (IMPORT_EXPORT_VIEW.workspace_header_lines)
-#define g_workspace_header_line_count (IMPORT_EXPORT_VIEW.workspace_header_line_count)
-#define g_render_state_lines          (IMPORT_EXPORT_VIEW.render_state_lines)
-#define g_cam_lines                   (IMPORT_EXPORT_VIEW.cam_lines)
-#define g_export_scene_name_hint      (IMPORT_EXPORT_VIEW.export_scene_name_hint)
-#define g_pending_scene_name          (IMPORT_EXPORT_VIEW.pending_scene_name)
-#define g_pending_workspace_dir       (IMPORT_EXPORT_VIEW.pending_workspace_dir)
-
-#define g_workspace_header_lines_writable      (IMPORT_EXPORT_WRITABLE->workspace_header_lines)
-#define g_workspace_header_line_count_writable (IMPORT_EXPORT_WRITABLE->workspace_header_line_count)
-#define g_render_state_lines_writable          (IMPORT_EXPORT_WRITABLE->render_state_lines)
-#define g_cam_lines_writable                   (IMPORT_EXPORT_WRITABLE->cam_lines)
-#define g_export_scene_name_hint_writable      (IMPORT_EXPORT_WRITABLE->export_scene_name_hint)
-#define g_pending_scene_name_writable          (IMPORT_EXPORT_WRITABLE->pending_scene_name)
-#define g_pending_workspace_dir_writable       (IMPORT_EXPORT_WRITABLE->pending_workspace_dir)
 
 #include "repl/cfg_baseline.h"
 
@@ -164,13 +139,6 @@ typedef struct {
     size_t         name_len;
     SnippetParseFn parse;
 } SnippetDirective;
-
-static const char k_snippet_directive_declare[] = "declare";
-static const char k_export_c89_loop_scope_marker[] = "repl-export-c89-loop-scope";
-static const char k_export_c89_loop_var_marker[] = "repl-export-c89-loop-var";
-static const char k_export_glfloat1_helper[] = "repl_glfloat1";
-static const char k_export_glfloat3_helper[] = "repl_glfloat3";
-static const char k_export_glfloat4_helper[] = "repl_glfloat4";
 
 /* Emit one import diagnostic to stderr with the shared "Warning: " prefix
  * and trailing newline. Centralises the format so the @var / @func /
@@ -362,11 +330,11 @@ static int parse_cfg(const char *args) {
 #define WS_DIR(name, parse_fn) { name, sizeof(name) - 1, parse_fn }
 
 static const WorkspaceDirective WORKSPACE_DIRECTIVES[] = {
-    WS_DIR("scene-name",    parse_scene_name),
-    WS_DIR("workspace-dir", parse_workspace_dir),
-    WS_DIR("var",           parse_var),
-    WS_DIR("func",          parse_func_alias),
-    WS_DIR("cfg",           parse_cfg),
+    WS_DIR(REPL_WORKSPACE_DIRECTIVE_SCENE_NAME,    parse_scene_name),
+    WS_DIR(REPL_WORKSPACE_DIRECTIVE_WORKSPACE_DIR, parse_workspace_dir),
+    WS_DIR(REPL_WORKSPACE_DIRECTIVE_VAR,           parse_var),
+    WS_DIR(REPL_WORKSPACE_DIRECTIVE_FUNC,          parse_func_alias),
+    WS_DIR(REPL_WORKSPACE_DIRECTIVE_CFG,           parse_cfg),
 };
 #define WORKSPACE_DIRECTIVE_COUNT \
     ((int)(sizeof(WORKSPACE_DIRECTIVES) / sizeof(WORKSPACE_DIRECTIVES[0])))
@@ -388,9 +356,14 @@ int repl_state_parse_workspace_header_line(const char *line) {
     /* Banner line: @workspace: REPL state ... - recognised, no payload.
      * C89 block-comment directives are normalized to // form by file import
      * before reaching this parser; legacy callers may still pass // directly. */
-    if (strncmp(p, "workspace:", 10) == 0) return 1;
-    if (strncmp(p, "workspace", 9) == 0 &&
-        !isalnum((unsigned char)p[9]) && p[9] != '_' && p[9] != '-')
+    if (strncmp(p, REPL_WORKSPACE_BANNER_DIRECTIVE_PREFIX,
+                sizeof(REPL_WORKSPACE_BANNER_DIRECTIVE_PREFIX) - 1) == 0)
+        return 1;
+    if (strncmp(p, REPL_WORKSPACE_BANNER_DIRECTIVE,
+                sizeof(REPL_WORKSPACE_BANNER_DIRECTIVE) - 1) == 0 &&
+        !isalnum((unsigned char)p[sizeof(REPL_WORKSPACE_BANNER_DIRECTIVE) - 1]) &&
+        p[sizeof(REPL_WORKSPACE_BANNER_DIRECTIVE) - 1] != '_' &&
+        p[sizeof(REPL_WORKSPACE_BANNER_DIRECTIVE) - 1] != '-')
         return 1;
 
     for (int dir_idx = 0; dir_idx < WORKSPACE_DIRECTIVE_COUNT; dir_idx++) {
@@ -656,7 +629,7 @@ static int parse_snippet_declare(const char *args, int *loaded,
 }
 
 static const SnippetDirective SNIPPET_DIRECTIVES[] = {
-    SNIPPET_DIR(k_snippet_directive_declare, parse_snippet_declare),
+    SNIPPET_DIR(REPL_SNIPPET_DIRECTIVE_DECLARE, parse_snippet_declare),
 };
 
 #define SNIPPET_DIRECTIVE_COUNT \
@@ -1198,7 +1171,7 @@ static int import_make_repl_point_parameter_line(const char *line, char *out, in
         memcpy(coeffs, brace_open + 1, (size_t)coeff_len);
         coeffs[coeff_len] = '\0';
     } else {
-        const char *helper = strstr(comma + 1, k_export_glfloat3_helper);
+        const char *helper = strstr(comma + 1, REPL_EXPORT_GLFLOAT3_HELPER);
         const char *helper_open;
         const char *helper_close;
         if (!helper)
@@ -1298,11 +1271,11 @@ static int import_make_repl_materialfv_line(const char *line, char *out, int out
         memcpy(values, brace_open + 1, (size_t)values_len);
         values[values_len] = '\0';
     } else {
-        const char *helper = strstr(second_comma + 1, k_export_glfloat4_helper);
+        const char *helper = strstr(second_comma + 1, REPL_EXPORT_GLFLOAT4_HELPER);
         const char *helper_open;
         const char *helper_close;
         if (!helper)
-            helper = strstr(second_comma + 1, k_export_glfloat1_helper);
+            helper = strstr(second_comma + 1, REPL_EXPORT_GLFLOAT1_HELPER);
         if (!helper)
             return 0;
         helper_open = strchr(helper, '(');
@@ -1560,7 +1533,7 @@ static int import_is_c89_loop_marker_line(const char *p) {
         q = p + 1;
         while (*q && isspace((unsigned char)*q))
             q++;
-        return import_comment_matches_marker(q, k_export_c89_loop_scope_marker);
+        return import_comment_matches_marker(q, REPL_EXPORT_C89_LOOP_SCOPE_MARKER);
     }
 
     if (strncmp(p, "float", 5) != 0 || !isspace((unsigned char)p[5]))
@@ -1581,7 +1554,7 @@ static int import_is_c89_loop_marker_line(const char *p) {
     while (*q && isspace((unsigned char)*q))
         q++;
     comment = q;
-    return import_comment_matches_marker(comment, k_export_c89_loop_var_marker);
+    return import_comment_matches_marker(comment, REPL_EXPORT_C89_LOOP_VAR_MARKER);
 }
 
 static int import_try_function_body(ImportState *s, const char *p) {
