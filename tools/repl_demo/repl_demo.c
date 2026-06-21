@@ -27,7 +27,7 @@
  *     controller-installed sink/bridge or an opaque parameter, there
  *     are zero stubs to backfill. Pipeline diagnostics and the editor
  *     host effects flow through the one ReplHostEffects bridge in
- *     src/repl/core.h; the demo leaves the bridge unset, so every
+ *     src/repl/host_effects.h; the demo leaves most callbacks unset, so every
  *     dispatch silently no-ops. The dependency ledger and removal plan live in
  *     feature/decouple-repl-from-gl-repl-alt.md and
  *     feature/source-document-port.md.
@@ -441,8 +441,8 @@ static void execute_against_stubs(void) {
  * The negative-isolation contract still holds: `nm repl_demo` shows
  * zero editor / glr_ctrl / ui_* / replay_ui_ symbols.
  *
- * Keys:  1 / 2 / 3  switch sample
- *        space      pause/resume animation (sample 3)
+ * Keys:  1 / 2 / 3 / 4  switch sample
+ *        space          pause/resume animation (samples 3 and 4)
  *        Esc / q    quit
  *
  * Build:  make repl_demo                  (real GL, --render works)
@@ -454,7 +454,7 @@ static void execute_against_stubs(void) {
 #define DEMO_WINDOW_W 800
 #define DEMO_WINDOW_H 600
 
-static int   g_render_sample = 1;     /* 1, 2, 3 */
+static int   g_render_sample = 1;     /* 1, 2, 3, 4 */
 static float g_render_t      = 0.0f;
 static int   g_render_paused = 0;
 
@@ -599,7 +599,7 @@ static int run_render_mode(int argc, char **argv) {
     glutIdleFunc(render_idle_func);
     glutKeyboardFunc(render_keyboard_func);
 
-    printf("[render] keys: 1/2/3 switch sample, space pause, q/Esc quit\n");
+    printf("[render] keys: 1/2/3/4 switch sample, space pause, q/Esc quit\n");
     glutMainLoop();
     return 0;
 }

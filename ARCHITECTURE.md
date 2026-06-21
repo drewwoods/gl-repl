@@ -18,11 +18,12 @@ superseded. This is a one-frontend REPL sample, so the useful boundary is
 between the REPL model/controller and the rendering views. The goal is not to
 turn `scene_*` into a plugin host.
 
-Current code already routes frame wiring through `src/app/glr_ctrl.c`. `src/repl/core.c`
-now keeps the REPL model/pipeline wrappers, while `src/scene/render.c` consumes
-explicit per-frame config. Phase 2 is still in progress; remaining work is
-mostly about shrinking transitional state/config surfaces and removing
-allowlisted view-layer state mutations.
+Current code routes frame wiring through `src/app/glr_ctrl.c`. The old
+`src/repl/core.c` bucket has been dissolved into focused REPL owners
+(`compile`, `load`, `normalize`, `reformat`, `bootstrap`, `program_query`,
+`time`, and friends), while `src/scene/render.c` consumes explicit per-frame
+config. Remaining cleanup is mostly about public API shape and optional export
+splits, not restoring a central core file.
 
 ## Ownership Model
 
@@ -1477,7 +1478,7 @@ or project-wide `include/` only when broadly reusable.
 ## Standalone REPL Demo Coupling
 
 `tools/repl_demo/repl_demo.c` is a negative boundary proof, not a packaged
-REPL library. It proves that the core path it drives directly
+REPL library. Its default samples prove that the core path they drive directly
 
 ```text
 parse -> command store -> flatten -> execute
@@ -1486,6 +1487,15 @@ parse -> command store -> flatten -> execute
 builds and runs **without** `src/app/glr_ctrl.c`, `src/editor/*`,
 `src/ui/*` renderers, or any app-owned state — and, since the decoupling
 landed, with a **stub-free link boundary**.
+
+`./repl_demo --trace` is the representative language-pipeline walkthrough:
+it feeds one program through the non-editor load transaction
+(`repl_load_apply_line`, so compile → source-document write → apply), then
+narrates the source program, flat program, provenance/local-var snapshots, and
+per-frame `has_vars` re-evaluation. It intentionally still stops at the REPL
+boundary: editor undo/cursor post-effects, UI/controller routing, scene-tab
+LRU, full import/export metadata bridges, and tutorial/replay presentation
+remain in their owning modules.
 
 ### Status: 17 → 0 stubs (complete)
 
@@ -1499,12 +1509,13 @@ app/editor/UI symbol dependency. `check-repl-demo-stubs-shrinking`
 ratchets the count and `check-repl-demo-no-editor` forbids editor/UI/app
 symbols in the demo link set.
 
-The current `REPL_DEMO_DEP_SRCS` link set is REPL-pipeline plus peer replay
-annotation support:
-`src/repl/*` (parser, command_store, compile, apply, flatten, executor,
-eval, export, scenes, example_loader, load, autonormal, command_spec,
-source_scope, core, state, format) plus `src/subsystems/replay/replay_annotations.c`,
-the replay / tutorial peer-state TUs, `src/support/cpuprof.c`, the GL stub counters, and crucially
+The current `REPL_DEMO_DEP_SRCS` link set is REPL-pipeline plus narrow peer
+support: `src/repl/*` owners for format, apply, autonormal, bootstrap,
+cfg-baseline, command spec/store, compile, eval, examples, executor,
+export/import/load, flatten, host effects, normalize/parser, program queries,
+reformat, scenes/snapshots/workspace IO, source scope, state, text helpers,
+time, and visible vars; replay annotation/state TUs; tutorial state;
+`src/support/cpuprof.c`; GL stub counters; and crucially
 **`tools/repl_demo/source_document.c`** — the editor-free backend for the
 source-document port. No `src/editor/*`, no `src/ui/*`, no `src/app/*`.
 
@@ -1522,7 +1533,7 @@ full app fills and the demo leaves unset:
    `repl_load_apply_line`, below) and let `src/editor/state.c` *leave* the
    demo link set entirely. See *Editor-owned text* above.
 
-2. **`ReplHostEffects` bridge** (`src/repl/core.h`). A single
+2. **`ReplHostEffects` bridge** (`src/repl/host_effects.h`). A single
    controller-installed table of host callbacks — `status`,
    `status_error`, `example_presentation_reset`, `input_reset`,
    `insert_mode_off`, `scroll_to_line`,
@@ -2124,24 +2135,17 @@ Completed (Phase 1 + most of Phase 2):
   `check-ui-no-repl-state-mut`, and the `check-state-ownership` umbrella
   are wired into `make test`.
 
-Still open:
+Status of the original push-architecture tracks:
 
 - ✅ **R10-phase1** — Phase J1 obsoleted the original framing
-  (`repl_editor.c/h` deleted). `src/repl/core.h` no longer carries any
-  GLUT-flavored input-dispatch declarations; its remaining cross-module
-  entry points are the neutral `repl_dispatch_*` host-effect hooks, which
-  belong there. Nothing left to relocate.
-- ❌ **R10-phase2..phase5** — Dissolve `src/repl/core.c` (~896 lines; it
-  grew with the `ReplHostEffects` install/dispatch surface): move
-  `repl_parse_and_normalize*` / `normalize_with_indent` /
-  `parse_and_normalize_impl` to `src/repl/parser.c`; move `collect_visible_vars`
-  to `src/repl/source_scope.c`; finish the reformatter split (the editor-side
-  wrapper `editor_reformat_commands` already lives in `src/editor/reformat.c`,
-  but the pure `repl_reformat_program()` pass still sits in `core.c`); move
-  `load_initial_commands` / `scroll_to_display_function` to `src/repl/scenes.c`;
-  move `current_begin_mode` / `count_vertices` to `src/repl/executor.c`; move
-  debug dumps to `src/repl/state.c` or `repl_debug.c`. The `ReplHostEffects`
-  install/dispatch layer is a candidate for its own small TU.
+  (`repl_editor.c/h` deleted). The later core split deleted `src/repl/core.h`;
+  host callbacks now live behind `src/repl/host_effects.h`, and pipeline entry
+  points live in focused owner headers.
+- ✅ **R10-phase2..phase5** — The old `src/repl/core.c` bucket is gone:
+  parse/normalize, reformat, startup loading, program queries, timekeeping,
+  host effects, and related helpers moved to focused owner modules. The
+  follow-up `core_internal.h` umbrella was deleted as Finding 5 of the
+  `src/repl` readability audit.
 - ✅ **R11 (tail)** — The `bench_repl.c` `src/repl/core_internal.h`
   exception is gone (bench no longer includes it); no surviving
   allowlist of that shape remains.

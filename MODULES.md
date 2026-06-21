@@ -174,8 +174,12 @@ composition code to make a boundary problem disappear.
   `src/scene/` with a non-REPL geometry callback. Proves `scene_*`
   has no hard dependency on the REPL editor / controller / UI.
 - **`make repl_demo`** (`tools/repl_demo/repl_demo.c`) — drives the
-  REPL pipeline (parse → command store → flatten → execute) from
-  static text. Proves the REPL pipeline has no hard dependency on
+  REPL pipeline from static text. The default samples cover
+  parse → command store → flatten → execute; `./repl_demo --trace`
+  drives the broader non-editor load transaction
+  (`repl_load_apply_line`: compile → source-document write → apply) and
+  then narrates source → flat → per-frame re-evaluation. Proves the
+  REPL pipeline has no hard dependency on
   editor input dispatch (`src/editor/input.c`), the controller
   (`src/app/glr_ctrl.c`), or the UI (`src/ui/`, `src/ui/subsystems/replay_hud.c`). The
   demo now backs the source lines with its own editor-free
@@ -219,9 +223,12 @@ composition code to make a boundary problem disappear.
 All three demos default to `USE_GL_STUBS=1`-friendly object lists.
 Run `./repl_demo` for a parse/flatten summary of the built-in samples;
 `./repl_demo --execute` also runs the flat program against GL stubs.
+Run `./repl_demo --trace` for the representative non-editor REPL pipeline
+walkthrough: text → compile → apply → source program → flatten → animated
+`has_vars` re-evaluation.
 Build with real GL (`make repl_demo`) and run `./repl_demo --render`
-for an actual GLUT window — `1`/`2`/`3` cycle samples, space pauses
-the sample-3 animation, `q`/Esc quits. Render mode shares the
+for an actual GLUT window — `1`/`2`/`3`/`4` cycle samples, space pauses
+the sample-3/sample-4 animations, `q`/Esc quits. Render mode shares the
 parse/flatten/execute path with the headless mode; the only added
 surface is GLUT bootstrap and a fixed orbit camera. `editor_demo`
 runs as a link-only smoke test under `USE_GL_STUBS=1`; the real-GL
@@ -1256,8 +1263,6 @@ syntax highlighting metadata-driven via `CmdSyntaxCategory` on
 Outstanding tracks:
 
 ```text
-R10-phase1                    reassess "stale" GLUT decls in src/repl/core.h
-R11 (tail)                    shrink remaining allowlists (bench_repl.c)
 R12                           consolidate public REPL APIs into one repl.h
 R9                            optional: split src/repl/export.c
 Color scheme + syntax         deferred sub-task of editor-owns-text Step 6
@@ -1266,7 +1271,9 @@ Completed:
 R8 (sample -> gl-repl rename) + src/ restructure (subsystems split,
 ui core/app split, prof + transform_utils relocations) — landed in
 plans/active/src-shuffle-final.md.
+R10-phase1 (retire src/repl/core.h facade) — landed.
 R10-ph2-5 (dissolve src/repl/core.c into natural owners) — landed.
+R11 (tail; shrink remaining allowlists, including bench_repl.c) — landed.
 ```
 
 `feature/state-ownership-finalize.md` (residual of the original

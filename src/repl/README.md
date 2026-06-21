@@ -68,6 +68,18 @@ It's the executable companion to [`ARCHITECTURE.md` §11](ARCHITECTURE.md),
 which walks the same output prose-side. Render sample 4 draws the same
 program as a rotating ring.
 
+The demo is representative of the **language pipeline**, not of the whole
+application. `--trace` is the broadest sample because it exercises the
+non-editor load transaction (`compile.c` + `load.c` + `apply.c`), variable
+side effects, typed block syntax, flatten provenance, local-var snapshots, and
+per-frame expression re-evaluation. The default samples are intentionally
+narrower boundary probes: one parses plain GL lines directly, one
+hand-constructs a loop to isolate flattening, and one registers variables
+directly to isolate `has_vars` re-evaluation. None of these demo modes cover
+editor undo/cursor/input effects, UI/controller routing, full import/export
+metadata, scene-tab LRU behavior, or tutorial/replay presentation; those stay
+with their owning modules in the full app and tests.
+
 The three print-summary samples each isolate one pipeline behavior:
 
 1. **Plain commands** — a `glBegin/glColor/glVertex/glEnd` triangle parsed
