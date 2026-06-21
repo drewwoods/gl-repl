@@ -363,6 +363,7 @@ endif
 	clean \
 	coverage \
 	debug \
+	demos \
 	glut \
 	help \
 	help-details \
@@ -1262,6 +1263,8 @@ $(COLOR_PICKER_DEMO_BIN): $(COLOR_PICKER_DEMO_OBJS)
 
 color_picker_demo: FORCE $(COLOR_PICKER_DEMO_BIN) ## Build the standalone color-picker demo.
 	ln -sfn $(COLOR_PICKER_DEMO_BIN) $@
+
+demos: scene_demo repl_demo editor_demo memprof_demo cpuprof_demo variable_panel_demo color_picker_demo ## Build all demos.
 
 .SECONDEXPANSION:
 
