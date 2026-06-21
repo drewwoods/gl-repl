@@ -444,7 +444,7 @@ Program-side state that is not the source command array itself.
 |--------|------|
 | `repl_state` | Owns `ReplState`: program state, capture/restore/reset for REPL-owned slices only |
 | `repl_config` | Config descriptor table for menu toggles and persisted render/audio settings |
-| `repl_scenes` | User-scene slots, workspace directory, LRU eviction, and scene-side command/text snapshots |
+| `repl_scenes` | User-scene slots, workspace directory, LRU eviction, and scene-side command/text snapshots (`SceneSnapshot` owns the copy/apply payload) |
 | `repl_example_loader` | Built-in example loading and active-example tracking |
 | `repl_examples` | Built-in example source data + catalog metadata: `ReplExampleEntry` carries a tag bitmask (`repl_example_tag_*` query API) and an optional `.subheading` (`repl_example_subheading`) that drives Scene flyout grouping. Symmetric with the tutorial catalog axes |
 | `repl_autonormal` | Auto-generated `glNormal3f` maintenance and feeding-command lookup |
@@ -739,6 +739,7 @@ flowchart LR
     subgraph models["3. REPL domain models"]
         state["src/repl/state.c<br/>ReplState"]
         scenes["src/repl/scenes.c<br/>user scenes · workspace"]
+        scene_snapshot["src/repl/scene_snapshot.c<br/>copyable scene snapshots"]
         autonormal["src/repl/autonormal.c<br/>autonormals · feeding cmds"]
     end
 

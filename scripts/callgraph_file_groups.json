@@ -48,6 +48,7 @@
         "app/glr_debug.c",
         "repl/state.c",
         "repl/scenes.c",
+        "repl/scene_snapshot.c",
         "repl/example_loader.c",
         "repl/examples.c",
         "repl_autocomplete.c",
