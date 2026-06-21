@@ -165,6 +165,13 @@ data.
 
 ## Two-Level Command Model
 
+> This section is the app-level summary. For the full treatment of the
+> `src/repl` interpreter — the `GLCmd` record and provenance, the
+> compile→apply edit flow, the flatten→execute frame flow, the `ReplState`
+> ownership slices, and the host-effects bridge — see the module-local deep
+> dive [`src/repl/ARCHITECTURE.md`](src/repl/ARCHITECTURE.md) (with a worked
+> `repl_demo --trace` walkthrough), oriented by [`src/repl/README.md`](src/repl/README.md).
+
 The REPL keeps source commands and flattened commands separate.
 
 ```text
@@ -235,7 +242,7 @@ reads and mutates source text through the neutral port in
 * Reads go through `source_document_view()` → `SourceTextView` (a
   `const char (*lines)[MAX_LINE_LEN]` + count), sliced by
   `source_text_line(view, idx)` (out-of-range returns `""`). Consumers:
-  `executor.c` (display text), `export.c`, `flatten.c`/`core.c` (reparse),
+  `executor.c` (display text), `export.c`, `flatten.c` (reparse),
   `compile.c`, `src/subsystems/replay/replay_annotations.c`.
 * Mutations go through `source_document_apply_change()` /
   `source_document_insert_line()` / `_replace_line()` / `_load_lines()` /
