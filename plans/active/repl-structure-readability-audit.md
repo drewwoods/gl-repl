@@ -28,7 +28,7 @@ Recent implementation commits:
 | Finding 4 docs/status | Landed | `38b5f5e3` moved the audit to active and marked Finding 4 implemented. |
 | Finding 4 integration guard | Landed | `0906eb56` adds `normalize_large_doc`; revealed a ~14× per-call regression in the normalize path on large documents. |
 | Finding 4 phase 4b: warm-view fix | Landed | Live-document normalize now reuses the warm live source-scope cache through parser live-wrapper fallback, and `reformat_large_doc` guards the user-visible reformat path. |
-| Finding 2 compile purity (visible-var + predef) | Landed | `b828b64f` threads the document view; `e1eb9ae4` the predef ident-validator; the eval path now carries an `ExprCtx.predef_vars` fallback so value evaluation (scratch/var-assign/for-bounds) resolves against `ctx->predef`, not live `g_predef_vars` (closes the P2 review finding; proven by a `test_eval` case). |
+| Finding 2 compile purity (visible-var + predef) | Landed | `b828b64f` threads the document view; `e1eb9ae4` the predef ident-validator; the eval path now carries an `ExprCtx.predef_vars` fallback so value evaluation (scratch/var-assign/if-condition/for-bounds) resolves against `ctx->predef`, not live `g_predef_vars` (closed by the P2 follow-up plus an if-condition fix; covered by `test_eval` and `test_repl_compile`). |
 | Finding 3 strict-ref context cleanup | Landed | Parser strict function-call validation now uses context-supplied source-scope and alias views; `source_scope == NULL` no longer reads live state. |
 
 Latest verification for Finding 4:
@@ -216,10 +216,11 @@ None — Finding 1 is complete.
   carries an optional `predef_vars`/`predef_count`; `eval_primary` resolves
   predef idents against it when set, else the live table (zero-initialized
   default → existing runtime callers unchanged). compile sets it on its
-  scratch/var-assign value evals and threads it through the `for`-header bounds
-  parser; the runtime (flatten) path passes NULL to keep live values. A
-  `test_eval` case proves a synthetic context view wins over the live table for
-  both a direct eval and a `for` bound.
+  scratch/var-assign value evals, the `if` condition eval, and threads it
+  through the `for`-header bounds parser; the runtime (flatten) path passes NULL
+  to keep live values. A `test_eval` case proves a synthetic context view wins
+  over the live table for both a direct eval and a `for` bound, and
+  `test_repl_compile` covers the compile-time `if` condition path.
 
 A non-live `ReplCompileContext` now validates *and* evaluates against the same
 predef table. Production behavior is unchanged (`ctx->predef` == live).

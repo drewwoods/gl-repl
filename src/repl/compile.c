@@ -1806,11 +1806,10 @@ ReplCompileResult repl_compile_if_block_kernel(const char *input,
 
     float cond_val = 0.0f;
     {
-        float cond_args[1];
-        int neval = repl_eval_parse_exprs(cond_text, cond_args, 1,
-                                          visible_nv > 0 ? visible_vars : NULL,
-                                          visible_nv);
-        cond_val = (neval >= 1) ? cond_args[0] : 0.0f;
+        ExprCtx cond_ctx = { cond_text, visible_nv > 0 ? visible_vars : NULL,
+                             visible_nv, NULL, 0,
+                             ctx->predef.vars, ctx->predef.count };
+        cond_val = repl_eval_expr(&cond_ctx);
     }
 
     /* Skip `)`; trailing `{` is optional for the lean loader. */
