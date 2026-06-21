@@ -1394,6 +1394,30 @@ static void test_func_def_resume_publish_consumed_by_close_brace(void) {
                post_consume, 0);
 }
 
+static void test_if_block_condition_eval_uses_context_predef(void) {
+    glr_ctrl_reset_all();
+
+    int live_t = repl_eval_find_predef_var_idx("t");
+    ASSERT_TRUE("live t exists", live_t >= 0);
+    if (live_t >= 0)
+        g_predef_vars_mut[live_t].value = 0.0f;
+
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ExprVar synthetic_predef[1] = { { "t", 3.0f } };
+    ctx.predef.vars = synthetic_predef;
+    ctx.predef.count = 1;
+
+    ReplIfBlockKernel kernel;
+    char err[128] = "";
+    ReplCompileResult r = repl_compile_if_block_kernel(
+        "if(t) {", &ctx, &kernel, err, sizeof(err));
+
+    ASSERT_INT("if-block synthetic predef compile OK", r, REPL_COMPILE_OK);
+    ASSERT_TRUE("if-block synthetic predef is valid", kernel.valid);
+    ASSERT_FLOAT("if-block condition uses ctx predef",
+                 kernel.ib.args[0], 3.0f, 1e-6f);
+}
+
 int main(void) {
     test_compile_float_decl_failure_is_pure();
     test_compile_float_decl_trailing_comment_no_semicolon();
@@ -1430,6 +1454,7 @@ int main(void) {
     test_func_def_blank_line_relocation();
     test_func_def_after_blank_separated_decls();
     test_func_def_resume_publish_consumed_by_close_brace();
+    test_if_block_condition_eval_uses_context_predef();
 
     /* [P1] regression: alias registration must roll back on parse
      * failure. Pre-fix, repl_compile_func_def called
