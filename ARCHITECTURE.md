@@ -1640,6 +1640,14 @@ shapes that the recent commits tripped on.
 >   evaluated inline by `src/repl/eval.c`, never become a `CmdType`, and skip
 >   steps 1, 2bc, 3, 4. They still need step 2a (autocomplete + F1 help) and
 >   step 7 (export round-trip helper if non-trivial). See **Step 0b** below.
+> - **Structured / control-flow syntax** (a new block construct, branch
+>   separator, or context-sensitive statement the generic parser can't own —
+>   `for`, `if`, `} else if(...) {`) → the shared wiring here still applies
+>   (steps 1–2, and 8 to verify), but the parse/validate, dispatch-order,
+>   source-scope, and flatten-lowering work lives in the compile + flatten path,
+>   not in a single `command_spec` row. Read
+>   [Adding New REPL Commands](#adding-new-repl-commands) first — it is the
+>   companion that owns that path and the source-vs-flat model.
 
 ### 0a. Update user-facing command references
 
@@ -1872,6 +1880,66 @@ make gl-repl USE_GL_STUBS=1   # verify stub build still links if step 6 changed
 # - For commands with a custom export helper: gcc -c output.c against
 #   vanilla freeglut succeeds, and on-screen output matches the REPL
 ```
+
+## Adding New REPL Commands
+
+The architectural companion to [Adding A New Command](#adding-a-new-command).
+That section is the mechanical step-by-step checklist for the three common
+command *shapes* — a bound GL/GLU/GLUT statement, a REPL primitive, or a math
+function. This section is the pipeline mental model behind it, and the path for
+the fourth shape the checklist defers: **structured, control-flow, or
+context-sensitive** syntax (`for`, `if`, `} else if(...) {`, `funcN`) whose
+parse / validate / lowering work lives in compile + source-scope + flatten
+rather than a single `command_spec` row. For the full source-vs-flat data model
+and a worked `else if` example, read
+[`src/repl/ARCHITECTURE.md`](src/repl/ARCHITECTURE.md).
+
+The one rule that prevents most drift: **source-command structure belongs to
+compile / source-scope / flatten; flat-command execution belongs to executor /
+replay.** A command works in one path and silently breaks in the other exactly
+when those two levels get mixed.
+
+Beyond the shared `CmdType` + `command_spec` wiring already covered by the
+checklist above (its steps 1–2), a structured command touches:
+
+1. **Predicates vs. categories** (when you do that shared wiring). Update the
+   inline predicates in `command.h` only when the command truly belongs to that
+   *behavioral* set; the syntax categories in `command_spec.c` are *visual*, so
+   never make one imply the other. Set the `valid_in_begin` policy for commands
+   illegal between `glBegin` / `glEnd`, and use the enum-arg specs for
+   table-driven GL commands.
+2. **Decide who owns the syntax.** A plain `name(args);` statement belongs to
+   the generic parser + command specs — i.e. the checklist path. Structured or
+   context-sensitive forms belong in `compile.c` as a pure `repl_compile_*`
+   validator, usually with a shared `repl_compile_*_kernel` that the loader and
+   the editor wrapper both reuse.
+3. **Check compile dispatch order.** Any syntax that starts like an existing
+   grammar must run before the broader grammar; `} else if(...) {` is the
+   canonical example — it must run before the generic `}` close-brace.
+4. **Update source-scope** if the command affects structure, visible variables,
+   indentation, block extent, copy/cut, or comment-toggle. Not every
+   structural-looking line is a block head or end: `CMD_ELSE_IF` / `CMD_ELSE`
+   are if-chain separators, so they do not change block depth, but their own
+   line renders at the enclosing-`if` indent and whole-block operations expand
+   to the full conditional.
+5. **Update `flatten.c`** when the command changes executable meaning. Flatten
+   owns source-to-flat lowering: loops unroll, functions inline, and
+   conditionals select arms here. The executor should only learn about a new
+   command when it can actually appear in the flat program.
+6. **Round-trip: export / import / reformat.** Export can often emit canonical
+   source text unchanged, but import must rebuild the same `GLCmd` through
+   `repl_load_apply_line()`, and reformat must preserve canonical text plus
+   indentation. (A GL command that needs a standalone export helper is the
+   checklist's step 7 instead.)
+7. **Sweep the flat-program walkers** — replay, hidden-line, overlays, UI. Most
+   source-only markers should be defensive skip-list entries only, because
+   flatten should have stripped them before execution.
+8. **Test at the lowest layer that owns the behavior** — parser/spec tests for
+   plain syntax, compile/load tests for structured source shapes, flatten tests
+   for executable semantics, format/import tests for round-trip, and editor
+   tests only when cursor/insert-mode behavior is part of the feature.
+
+---
 
 ## Adding A New Tutorial Step Kind
 
