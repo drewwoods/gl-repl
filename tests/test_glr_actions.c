@@ -1457,12 +1457,22 @@ static void test_help_keys_tab_uses_keymap_labels(void) {
                 help_tab_contains_binding("Keys", shortcut, "Previous track"));
 }
 
+static void test_help_commands_tab_lists_if_branches(void) {
+    ASSERT_TRUE("help Commands tab renders else-if syntax",
+                help_tab_contains_binding("Commands", "} else if(t > 0.5) {",
+                                          "First matching branch runs"));
+    ASSERT_TRUE("help Commands tab renders else syntax",
+                help_tab_contains_binding("Commands", "} else {",
+                                          "Fallback branch"));
+}
+
 int main(void) {
     test_apply_defaults();
     test_no_duplicate_config_bindings();
     test_keymap_event_is_strict();
     test_keymap_binding_to_string();
     test_help_keys_tab_uses_keymap_labels();
+    test_help_commands_tab_lists_if_branches();
     test_f9_cycles_light_theme();
     test_shift_fkey_steps_backward();
     test_fkey_reassignment_and_alt_shortcuts();
