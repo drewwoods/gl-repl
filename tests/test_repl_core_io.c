@@ -528,6 +528,14 @@ int main(void) {
                     repl_func_alias_name_is_valid(over_limit) == 0);
     }
 
+    /* else is reserved and cannot be a function alias name */
+    {
+        ASSERT_TRUE("else is rejected as a function alias",
+                    repl_func_alias_name_is_valid("else") == 0);
+        ASSERT_TRUE("elsewhere is valid as a function alias",
+                    repl_func_alias_name_is_valid("elsewhere") == 1);
+    }
+
     /* Direct file import should reset the alias table before reading
      * @func directives from the new file. Otherwise an aliased import
      * followed by a plain import leaves the old alias live even though
