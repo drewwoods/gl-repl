@@ -667,6 +667,10 @@ without disturbing the free-running clock — used by motion-blur sub-frame
 sampling, where the caller re-flattens at the sub-step `t` and restores
 afterward.
 
+Because advancing `t` marks the flat program dirty, a playing animation
+**re-flattens the whole program every frame** — see §13 for why that is, what
+it simplifies, and what it would take to stop doing it.
+
 ---
 
 ## 9. Control flow
@@ -983,3 +987,135 @@ grouping is the mental model.)
 `catalog_tags.h` (shared example/tutorial tag-bit helper) ·
 `help_text.c`/`.h` (F1 help tables) ·
 `keymap_format.c` (user-facing keybinding labels)
+
+---
+
+## 13. Performance: per-frame flattening, the command limit, and dropping both
+
+Design rationale + future work. This explains why an animated `t` re-flattens
+the whole program every frame, what that buys, and what it would take to stop
+paying for it.
+
+### 13.1 The cost, and why the 4096 cap exists
+
+The flat program is both **rebuilt** (flatten + assignment evaluation) and
+**walked** (execute) every frame, and both costs scale with the flat command
+count. In practice flatten + variable assignment can run **~8 ms per frame**
+for a large program — over half of a 60 Hz budget. `MAX_COMMANDS = 4096`, the
+cap on the flat array, is the lever that bounds it: cap the materialized length
+and you cap the per-frame flatten *and* execute cost at once.
+`MAX_FLATTEN_VISIT_BUDGET = 200000` is the matching guard on flatten's own work
+so one runaway loop can't hang the rebuild. Example authors hoist
+loop-invariant work specifically to stay under 4096 — the budget is real
+because it is paid every frame.
+
+### 13.2 Why `t` forces a re-flatten
+
+`repl_state_time_advance()` sets `flat_program.dirty = 1` whenever the clock is
+playing (`state.c`), so the controller rebuilds the flat program every frame.
+That is *required* because flatten is the only stage that resolves **program
+structure**, and structure can depend on `t`:
+
+- **loop bounds** — `for(i, 0, floor(t))` changes the iteration count, hence
+  the flat length;
+- **`if` / `else if` arm selection** — flatten emits only the taken arm and
+  strips the markers (§9), so which body is present changes with the condition;
+- **function-call inlining** — call args that depend on `t` change the inlined
+  body's local-var snapshots, and can feed loop bounds inside the callee.
+
+The executor cannot do any of these: it is a flat linear walker with no
+control-flow handling. (The dead `CMD_IF_BEGIN` walker was removed precisely
+because branch selection is a flatten-time concern — §9.)
+
+### 13.3 What re-flattening buys (the simplification)
+
+Re-flattening per frame is a deliberate trade of CPU for simplicity:
+
+- **The executor stays trivial.** It walks `flat_cmds[0..count)` emitting GL
+  and re-evaluating only leaf `has_vars` expressions — no loop counter, no arm
+  skip-scan, no call stack, no execute-time visit budget.
+- **The flat array is correct-by-construction each frame.** There is no
+  incremental "patch the flat program when `t` changed" path to get wrong.
+- **One static bound governs per-frame cost.** Because the thing walked every
+  frame *is* the materialized flat array, `MAX_COMMANDS` is a single,
+  cheap-to-enforce cap — no dynamic emission accounting at execute time.
+- **Downstream consumers read the materialized array for free** — provenance
+  (`src_cmd_idx`, `func_scope_mask`, …; §3.3), cursor-block highlight, replay
+  PC clamping and fade batches, and `--flat-histogram` cost attribution all
+  read a concrete array of resolved commands.
+
+### 13.4 The redundancy worth noticing
+
+For the *common* animation case, the per-frame re-flatten is pure waste.
+`glVertex3f(sin(t), …)`, `glColor3f(t, …)`, `glRotatef(t, …)` are leaf
+`has_vars` commands, and **the executor already re-evaluates `has_vars`
+arguments every frame** against the live variable table + the flat command's
+frozen local-var snapshot (§3.4). So when `t` appears only in leaf positions,
+the re-flatten produces a structurally identical flat program with re-baked
+args the executor would have re-baked anyway. Re-flatten is only *required*
+when `t` reaches a **structural** position: a loop bound, an `if` / `else if`
+condition, or a call arg that feeds one.
+
+(Assignments are the exception to "leaves are free": `A[0] = A[0] + 1` is
+evaluated and baked at flatten time, and the executor deliberately does *not*
+re-evaluate `CMD_VAR_ASSIGN` / `CMD_SCRATCH_ASSIGN` to avoid double-applying
+self-referential updates. Moving off per-frame flatten has to relocate that
+evaluation — see §13.6.)
+
+### 13.5 Incremental win: a structure-stable fast path
+
+The cheapest improvement keeps the two-level model but skips the rebuild when
+it cannot change anything structural:
+
+- On a variable change (the `t` tick, or a slider drag), decide whether that
+  variable can reach a structural position — a loop bound, branch condition, or
+  a call arg feeding one — directly or transitively through assignments.
+- If it cannot, **do not mark the flat program dirty**; let the executor's
+  existing `has_vars` re-eval carry the frame. If it can, re-flatten as today.
+
+This removes the ~8 ms for the typical "`t` only drives vertices / colors /
+transforms" program with no executor rewrite. The hard part is the dataflow
+analysis: it must be conservative (assignment chains, scratch arrays, and
+`funcN` params can launder `t` into a bound), and getting it wrong silently
+freezes an animation. A safe first cut is a whole-program property computed
+once at compile (not per frame): re-flatten unless the program contains **no**
+`t`-reachable loop bound or branch condition at all.
+
+### 13.6 Bigger future work: a control-flow-interpreting executor
+
+To drop per-frame flatten entirely, flatten becomes a one-time **compile** pass
+(run on edit, not per frame) and the executor becomes a small VM that
+interprets control flow over a compiled-once stream:
+
+- **Keep loops / ifs / calls symbolic** in the compiled stream instead of
+  unrolling and inlining them. Re-introduce the `if` / `else if` walker (the
+  one removed in §9) — keep the `CMD_IF_BEGIN` / `CMD_ELSE_IF` / `CMD_ELSE` /
+  `CMD_IF_END` markers and skip-scan to the selected arm at execute time. Add a
+  loop interpreter that re-evaluates the bound and threads a per-iteration
+  variable scope, and a call frame for `funcN` inlining / recursion.
+- **Evaluate assignments at execute time** in program order (today they are
+  baked at flatten), threading the mutable variable scope through loop and call
+  frames.
+- **Replace the static flat-length cap with a runtime budget.** With loops
+  symbolic, the compiled program is short (a loop is a few instructions, not N
+  copies), so `MAX_COMMANDS` as a *storage* limit can relax sharply. But
+  per-frame *work* is still O(emitted ops), so a dynamic per-frame
+  emission / visit budget must be checked during execution — the same shape as
+  today's `REPL_GOTO_LOOP_LIMIT` guard, with clamp + status on overflow
+  (mirroring the current flatten-budget overflow handling).
+
+This is where the command-limit logic genuinely complicates, especially with
+`t` in loops: a bound like `for(i, 0, 1000*t)` grows without any source edit,
+so the runtime budget — not a static array length — becomes the thing that must
+clamp it and surface a diagnostic *mid-frame*.
+
+**Trade-off summary.** The VM design pays the flatten / analysis cost once per
+edit instead of per frame (removing the ~8 ms for animation) and lets the
+storage limit relax because loops aren't materialized; per-frame cost drops to
+O(emitted GL ops), which is paid anyway. The price is real: control-flow
+complexity moves back into the executor, and every consumer that currently
+reads the materialized flat array — provenance / cursor highlight, replay PC
+and fade batches, `--flat-histogram` — needs a way to attribute work over a
+symbolic walk instead of a concrete array. The current design is the deliberate
+opposite bet: pay CPU every frame to keep the executor and all its consumers
+dumb and the cost model a single static cap.
