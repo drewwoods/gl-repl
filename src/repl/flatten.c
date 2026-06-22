@@ -309,23 +309,71 @@ static void flatten_call(FlattenContext *ctx,
     } while (0);
 }
 
+static int flatten_if_arm_boundary(const FlattenContext *ctx,
+                                   int start, int if_end) {
+    int depth = 0;
+
+    for (int j = start; j < if_end && j < ctx->source_count; j++) {
+        CmdType t = ctx->source_cmds[j].type;
+        if (depth == 0 && repl_cmd_is_if_branch_separator(t))
+            return j;
+        if (repl_cmd_is_block_head(t))
+            depth++;
+        else if (repl_cmd_is_block_end(t) && depth > 0)
+            depth--;
+    }
+    return if_end;
+}
+
+static float flatten_eval_if_line(FlattenContext *ctx,
+                                  const GLCmd *src_cmd, int line_idx,
+                                  ExprVar *vars, int nv) {
+    return repl_eval_if_condition(flatten_src_text(ctx->text, line_idx),
+                                  vars, nv, src_cmd->args[0]);
+}
+
 static void flatten_if_block(FlattenContext *ctx,
                              const GLCmd *src_cmd, int i,
                              ExprVar *vars, int nv,
                              int call_src_cmd_idx, int root_call_src_cmd_idx,
                              unsigned int func_scope_mask,
                              int if_end) {
-    /* Flatten-time eval decides whether to unroll the body into the
-     * flat program. The executor re-evaluates per iteration so goto
-     * loops back into the body see updated vars — same kernel, two
-     * different times; see repl_eval_if_condition's doc. */
-    float cond = repl_eval_if_condition(flatten_src_text(ctx->text, i),
-                                        vars, nv, src_cmd->args[0]);
+    int arm_start = i + 1;
+    int arm_end = flatten_if_arm_boundary(ctx, arm_start, if_end);
+    float cond = flatten_eval_if_line(ctx, src_cmd, i, vars, nv);
 
-    if (cond != 0.0f)
-        flatten_range(ctx, i + 1, if_end, vars, nv,
+    if (cond != 0.0f) {
+        flatten_range(ctx, arm_start, arm_end, vars, nv,
                       call_src_cmd_idx, root_call_src_cmd_idx,
                       func_scope_mask);
+        return;
+    }
+
+    for (int branch_idx = arm_end; branch_idx < if_end; ) {
+        const GLCmd *branch = &ctx->source_cmds[branch_idx];
+        int next_arm_end = flatten_if_arm_boundary(ctx, branch_idx + 1, if_end);
+
+        if (branch->type == CMD_ELSE_IF) {
+            cond = flatten_eval_if_line(ctx, branch, branch_idx, vars, nv);
+            if (cond != 0.0f) {
+                flatten_range(ctx, branch_idx + 1, next_arm_end, vars, nv,
+                              call_src_cmd_idx, root_call_src_cmd_idx,
+                              func_scope_mask);
+                return;
+            }
+        } else if (branch->type == CMD_ELSE) {
+            flatten_range(ctx, branch_idx + 1, next_arm_end, vars, nv,
+                          call_src_cmd_idx, root_call_src_cmd_idx,
+                          func_scope_mask);
+            return;
+        }
+
+        branch_idx = next_arm_end;
+    }
+}
+
+static int flatten_cmd_is_source_only_cond_marker(CmdType type) {
+    return (type == CMD_IF_END || repl_cmd_is_if_branch_separator(type));
 }
 
 /* Re-parse a source line into the flat buffer, evaluating expressions
@@ -548,10 +596,7 @@ static void flatten_range(FlattenContext *ctx,
             continue;
         }
 
-        if (src_cmd->type == CMD_IF_END) {
-            i++;
-            continue;
-        }
+        if (flatten_cmd_is_source_only_cond_marker(src_cmd->type)) { i++; continue; }
 
         if ((src_cmd->type == CMD_GOTO_LABEL || src_cmd->type == CMD_GOTO) &&
             func_scope_mask != 0) {

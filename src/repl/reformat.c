@@ -294,6 +294,18 @@ void repl_reformat_program(void) {
             reformat_replace_cmd(&store, cmd_idx, &fmt, fmt_text);
             break;
         }
+        case CMD_ELSE_IF: {
+            char cond[MAX_LINE_LEN] = "";
+            if (!repl_extract_paren_payload(orig_text, cond, sizeof(cond)))
+                snprintf(cond, sizeof(cond), "%g", orig.args[0]);
+            snprintf(fmt_text, sizeof(fmt_text), "%s} else if(%s) {", ind_s, cond);
+            reformat_replace_cmd(&store, cmd_idx, &fmt, fmt_text);
+            break;
+        }
+        case CMD_ELSE:
+            snprintf(fmt_text, sizeof(fmt_text), "%s} else {", ind_s);
+            reformat_replace_cmd(&store, cmd_idx, &fmt, fmt_text);
+            break;
         case CMD_VAR_ASSIGN: {
             const char *name = NULL;
             char rhs[MAX_LINE_LEN] = "";

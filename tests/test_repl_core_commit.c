@@ -314,6 +314,61 @@ static void run_program_feed_matrix(void) {
     assert_flat_vertex3_x("feed matrix true if: x", 0, 1.0f);
 
     reset_repl();
+    ASSERT_TRUE("feed matrix else-if first true: feed",
+                feed_program("float n = 2;",
+                             "if(n < 0) {",
+                             "glVertex3f(-1, 0, 0);",
+                             "} else if(n < 1) {",
+                             "glVertex3f(1, 0, 0);",
+                             "} else if(n < 3) {",
+                             "glVertex3f(2, 0, 0);",
+                             "} else {",
+                             "glVertex3f(9, 0, 0);",
+                             "}"));
+    ASSERT_INT("feed matrix else-if: else-if source count",
+               test_count_cmd_type(CMD_ELSE_IF), 2);
+    ASSERT_INT("feed matrix else-if: else source count",
+               test_count_cmd_type(CMD_ELSE), 1);
+    ASSERT_INT("feed matrix else-if: flat count",
+               repl_state_flat_count(), 1);
+    assert_flat_vertex3_x("feed matrix else-if: selected x", 0, 2.0f);
+
+    reset_repl();
+    ASSERT_TRUE("feed matrix else fallback: feed",
+                feed_program("float n = 5;",
+                             "if(n < 0) {",
+                             "glVertex3f(-1, 0, 0);",
+                             "} else if(n < 3) {",
+                             "glVertex3f(2, 0, 0);",
+                             "} else {",
+                             "glVertex3f(9, 0, 0);",
+                             "}"));
+    ASSERT_INT("feed matrix else fallback: flat count",
+               repl_state_flat_count(), 1);
+    assert_flat_vertex3_x("feed matrix else fallback: selected x", 0, 9.0f);
+
+    reset_repl();
+    ASSERT_TRUE("feed matrix if branch order seed decl",
+                editor_feed_line("float n = 1;"));
+    ASSERT_TRUE("feed matrix if branch order seed if",
+                editor_feed_line("if(n < 0) {"));
+    ASSERT_TRUE("feed matrix if branch order seed then body",
+                editor_feed_line("glVertex3f(-1, 0, 0);"));
+    ASSERT_TRUE("feed matrix if branch order seed else",
+                editor_feed_line("} else {"));
+    ASSERT_TRUE("feed matrix if branch order seed else body",
+                editor_feed_line("glVertex3f(9, 0, 0);"));
+    {
+        int before = repl_state_document_count();
+        editor_state_edit_line_set(repl_state_document_count());
+        editor_insert_mode_set(0);
+        ASSERT_TRUE("feed matrix else-if after else consumed as error",
+                    editor_feed_line("} else if(n > 0) {"));
+        ASSERT_INT("feed matrix else-if after else doc unchanged",
+                   repl_state_document_count(), before);
+    }
+
+    reset_repl();
     ASSERT_TRUE("feed matrix func call: feed",
                 feed_program("func0(a) {",
                              "glVertex3f(a, a + 1, 0);",

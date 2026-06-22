@@ -103,9 +103,9 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
     ReplCompiledChange change;
     repl_compiled_change_init(&change);
 
-    /* All six block/decl compile validators run in canonical order
+    /* All structured/decl compile validators run in canonical order
      * via repl_compile_dispatch (#16): float_decl → var_assign →
-     * close_brace → for_loop → func_def → if_block. The first
+     * if_branch → close_brace → for_loop → func_def → if_block. The first
      * matching grammar wins. */
     {
         ReplCompileResult r = repl_compile_dispatch(line, &ctx, &change,

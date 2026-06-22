@@ -47,7 +47,7 @@ int repl_load_apply_compiled_change_transaction(
  * dispatch (cursor mutations, insert mode toggle, input buffer
  * writes). Dispatch order matches editor_feed_line / try_commit_*:
  *   float decl → var assign (via repl_compile_dispatch)
- *   close_brace → for_loop → func_def → if_block (block validators)
+ *   if_branch → close_brace → for_loop → func_def → if_block
  *   plain GL command (via repl_parse_and_normalize_strict)
  *
  * Returns 1 if the line was consumed, 0 if nothing matched. On parse error

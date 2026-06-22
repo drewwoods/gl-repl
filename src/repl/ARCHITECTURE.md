@@ -365,11 +365,14 @@ tests and the demo can compile-and-inspect without ever mutating state.
 order** and returns the first non-`NO_CHANGE` result:
 
 ```
-float_decl → var_assign → close_brace → for_loop → func_def → if_block
+float_decl → var_assign → if_branch → close_brace → for_loop → func_def → if_block
 ```
 
 The order is load-bearing: `float_decl` **must** precede `var_assign`,
 or `float x;` parses as an assignment to an identifier named `float`.
+`if_branch` **must** precede `close_brace`, or `} else ...` lines are
+consumed as plain block closes before the branch-separator grammar sees
+them.
 `NO_CHANGE` from all handlers means "not a statement I own" — the caller
 falls through to the generic GL `parser.c`.
 
@@ -440,7 +443,9 @@ flat array:
   the body each iteration with the loop var bound;
 - **function calls** (`CMD_CALL`) inline the matching `CMD_FUNC_DEF`
   body, binding actual args to parameter names;
-- **if-blocks** evaluate the condition and include or drop the body.
+- **if-blocks** evaluate the `if` condition, then same-depth
+  `CMD_ELSE_IF` separators in source order, then the optional
+  `CMD_ELSE`, emitting only the first selected arm.
 
 Expansion is recursive and **bounded**:
 
@@ -493,6 +498,61 @@ emitting GL. Key behaviors:
   synthesized ones.
 
 `executor.c` is the **only** live-GL translation unit in this layer.
+
+---
+
+## Adding New REPL Commands
+
+Adding a command is a pipeline change, not just a parser row. The exact
+touch points depend on whether the command is a plain GL-like statement,
+a state-setting statement, or source-level control flow, but the normal
+checklist is:
+
+1. Add the `CmdType` in `command.h` without reordering existing values.
+   Update inline predicates only when the new command really belongs to
+   that semantic set. Syntax categories in `command_spec.c` are visual;
+   predicates in `command.h` are behavioral, so do not make one imply
+   the other.
+2. Add command metadata in `command_spec.c`: type spec row, autocomplete
+   / help entry when user-facing, enum argument specs for table-driven
+   GL commands, and `valid_in_begin` policy for commands illegal between
+   `glBegin` / `glEnd`.
+3. Decide whether the generic parser can own the syntax. Plain
+   `name(args);` commands usually belong in `parser.c` / command specs.
+   Structured or context-sensitive forms belong in `compile.c` as a pure
+   `repl_compile_*` validator, often with a shared
+   `repl_compile_*_kernel` that the loader and editor wrappers reuse.
+4. Check compile dispatch order. Any syntax that starts like an existing
+   grammar must run before the broader grammar; `} else if(...) {` is the
+   canonical example because it must run before the generic `}` close.
+5. Update source-scope behavior if the command affects source structure,
+   visible variables, indentation, block extent, copy/cut, or
+   comment-toggle. Not every structural-looking line is a block head or
+   end: `CMD_ELSE_IF` and `CMD_ELSE` are if-chain separators, so they do
+   not change block depth, but their own line renders at the enclosing
+   `if` indent and whole-block operations expand to the full conditional.
+6. Update `flatten.c` when the command changes executable meaning.
+   Flatten owns source-to-flat lowering: loops unroll, functions inline,
+   and conditionals choose arms here. The executor should only learn
+   about a new command when that command can actually appear in the flat
+   program.
+7. Update export/import and formatting. Export can often emit canonical
+   source text unchanged, but import must be able to rebuild the same
+   `GLCmd` shape through `repl_load_apply_line()`, and reformat must
+   preserve canonical text plus indentation.
+8. Sweep replay, hidden-line, overlays, and UI walkers for flat-program
+   behavior. Most source-only markers should be defensive skip-list
+   entries only, because they should have been stripped by flatten.
+9. Add focused tests at the lowest layer that owns the behavior:
+   parser/spec tests for plain syntax, compile/load tests for structured
+   source shapes, flatten tests for executable semantics, format/import
+   tests for round-trip, and editor tests only when cursor/insert-mode
+   behavior is part of the feature.
+
+The useful rule of thumb is: source-command structure belongs to
+compile/source-scope/flatten; flat-command execution belongs to
+executor/replay. Mixing those two levels is the quickest way to make a
+new command work in one path and drift in another.
 
 ---
 
@@ -615,7 +675,7 @@ afterward.
 |---|---|---|
 | `for(var, start, end[, step]) { … }` | `CMD_FOR_BEGIN` / body / `CMD_FOR_END` | body repeated per iteration, var bound |
 | `funcN(params) { … }` / aliased `NAME { … }` | `CMD_FUNC_DEF` / body / `CMD_FUNC_END` | inlined at each `CMD_CALL`, params bound |
-| `if(expr) { … }` | `CMD_IF_BEGIN` / body / `CMD_IF_END` | body included or dropped per condition |
+| `if(expr) { … } else if(expr) { … } else { … }` | `CMD_IF_BEGIN` / arm bodies split by `CMD_ELSE_IF` / `CMD_ELSE` / `CMD_IF_END` | first true arm emitted; optional else arm emitted as fallback |
 | `:name` / `name:`, `goto name` | `CMD_GOTO_LABEL` / `CMD_GOTO` | resolved at execute (bounded by `REPL_GOTO_LOOP_LIMIT`) |
 
 **Functions** are a fixed table of 10 slots (`func0..func9`). The slot is

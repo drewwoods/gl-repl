@@ -192,6 +192,11 @@ ReplCompileResult editor_compile_if_block(const char *input,
                                           EditorCommitPlan *out,
                                           char *err, int err_size);
 
+ReplCompileResult editor_compile_if_branch(const char *input,
+                                           const ReplCompileContext *ctx,
+                                           EditorCommitPlan *out,
+                                           char *err, int err_size);
+
 /* Editor-side compile for func definitions.
  *
  * Handles validation plus BOTH outcomes: the header-replace branch
@@ -263,6 +268,7 @@ int editor_try_commit_assign_variable(void);
 int editor_try_commit_for_loop(void);
 int editor_try_commit_func_def(void);
 int editor_try_commit_if_block(void);
+int editor_try_commit_if_branch(void);
 int editor_try_commit_close_brace(void);
 int editor_try_commit_var_statements(void);
 int editor_try_commit_block_structs(void);

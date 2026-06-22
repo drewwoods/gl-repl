@@ -253,8 +253,8 @@ ReplCompileResult repl_compile_var_assign(const char *input,
  * generic-command parser" (e.g. repl_load_apply_line punts back to
  * repl_parser_parse_command) or "no commit happened".
  *
- * Coverage: float_decl → var_assign → close_brace → for_loop →
- * func_def → if_block.
+ * Coverage: float_decl → var_assign → if_branch → close_brace →
+ * for_loop → func_def → if_block.
  *
  * Handler order is load-bearing: `repl_compile_float_decl` must run
  * before `repl_compile_var_assign`, otherwise `float x;` would parse
@@ -293,6 +293,11 @@ ReplCompileResult repl_compile_if_block(const char *input,
                                         const ReplCompileContext *ctx,
                                         ReplCompiledChange *out,
                                         char *err, int err_size);
+
+ReplCompileResult repl_compile_if_branch(const char *input,
+                                         const ReplCompileContext *ctx,
+                                         ReplCompiledChange *out,
+                                         char *err, int err_size);
 
 /* Resolve a custom function name in `trimmed` to a pending alias op.
  * Pure: never writes the alias table. Existing aliases produce no op
@@ -375,6 +380,29 @@ ReplCompileResult repl_compile_if_block_kernel(const char *input,
                                                const ReplCompileContext *ctx,
                                                ReplIfBlockKernel *out,
                                                char *err, int err_size);
+
+/* Shared kernel for if-branch separator lines:
+ *   } else if(expr) {
+ *   } else {
+ *
+ * These are source-command separators inside an already-open
+ * CMD_IF_BEGIN / CMD_IF_END range. The kernel validates that the
+ * current insert position is in an if-chain, that CMD_ELSE appears at
+ * most once and last, and that an else-if condition is valid in the
+ * visible scope. */
+typedef struct {
+    int      valid;
+    int      pos;
+    CmdType  branch_type;               /* CMD_ELSE_IF / CMD_ELSE */
+    GLCmd    branch;
+    char     branch_text[MAX_LINE_LEN];
+    char     indent[REPL_INDENT_TEXT_MAX];
+} ReplIfBranchKernel;
+
+ReplCompileResult repl_compile_if_branch_kernel(const char *input,
+                                                const ReplCompileContext *ctx,
+                                                ReplIfBranchKernel *out,
+                                                char *err, int err_size);
 
 /* Shared kernel for `}`. No expression parse — just the
  * open-block scope lookup and the matched-existing-end vs insert-

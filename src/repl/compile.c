@@ -79,15 +79,16 @@ ReplCompileResult repl_compile_dispatch(const char *text,
      *
      * Ordering is load-bearing: float_decl must come before
      * var_assign (otherwise `float x` would misread as an
-     * assignment to identifier `float`); close_brace must come
-     * before the three block openers (so a `}` line lands on the
-     * close-brace branch). */
+     * assignment to identifier `float`); if_branch must come before
+     * close_brace so `} else ...` is not consumed as a plain block
+     * close; close_brace still precedes the three block openers. */
     static const struct {
         ReplCompileResult (*fn)(const char *, const ReplCompileContext *,
                                 ReplCompiledChange *, char *, int);
     } chain[] = {
         { repl_compile_float_decl  },
         { repl_compile_var_assign  },
+        { repl_compile_if_branch   },
         { repl_compile_close_brace },
         { repl_compile_for_loop    },
         { repl_compile_func_def    },
@@ -208,6 +209,38 @@ static CmdType compile_scope_nearest_open_block_at(
         const ReplCompileContext *ctx, int pos) {
     return repl_source_scope_view_nearest_open_block_at(compile_source_scope(ctx),
                                                        pos);
+}
+
+static int compile_nearest_open_block_head_at(
+        const ReplCompileContext *ctx, int pos, CmdType *out_type) {
+    int stack[REPL_MAX_BLOCK_NEST_DEPTH];
+    int depth = 0;
+
+    if (out_type)
+        *out_type = CMD_TYPE_COUNT;
+    if (!ctx || !ctx->document_cmds)
+        return -1;
+    if (pos < 0)
+        pos = 0;
+    if (pos > ctx->document_count)
+        pos = ctx->document_count;
+
+    for (int i = 0; i < pos; i++) {
+        CmdType t = ctx->document_cmds[i].type;
+        if (repl_cmd_is_block_head(t)) {
+            if (depth < REPL_MAX_BLOCK_NEST_DEPTH)
+                stack[depth++] = i;
+        } else if (repl_cmd_is_block_end(t)) {
+            if (depth > 0)
+                depth--;
+        }
+    }
+
+    if (depth <= 0)
+        return -1;
+    if (out_type)
+        *out_type = ctx->document_cmds[stack[depth - 1]].type;
+    return stack[depth - 1];
 }
 
 /* Insert/replace position for ctx: the edit line in insert mode;
@@ -1501,6 +1534,7 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
     CmdType type;
     int is_block_head;
     int is_block_end;
+    int is_if_branch_separator;
 
     if (!ctx || !out)
         return REPL_COMPILE_ERROR;
@@ -1517,18 +1551,21 @@ ReplCompileResult repl_compile_toggle_comment(int line_idx,
     type = ctx->document_cmds[line_idx].type;
     is_block_head = repl_cmd_is_block_head(type);
     is_block_end  = repl_cmd_is_block_end(type);
+    is_if_branch_separator = repl_cmd_is_if_branch_separator(type);
 
-    /* Block head/end: batch-comment the whole [head..end] range. */
-    if (is_block_head || is_block_end) {
+    /* Block head/end or if-branch separator: batch-comment the whole
+     * enclosing [head..end] range. */
+    if (is_block_head || is_block_end || is_if_branch_separator) {
         int head;
         int end;
         int n;
 
-        if (is_block_head) {
-            head = line_idx;
-            end = compile_scope_find_block_end(ctx, line_idx);
-            if (end >= ctx->document_count)
+        if (is_block_head || is_if_branch_separator) {
+            int count = 0;
+            if (!repl_source_scope_view_block_extent(compile_source_scope(ctx),
+                                                     line_idx, &head, &count))
                 return compile_set_err(err, err_size, "Unmatched block start");
+            end = head + count - 1;
         } else {
             end = line_idx;
             head = compile_find_block_head(ctx, line_idx);
@@ -1701,6 +1738,287 @@ static void compile_close_brace_indent(const ReplCompileContext *ctx,
         len = buf_sz - 1;
     memset(buf, ' ', (size_t)len);
     buf[len] = '\0';
+}
+
+static void compile_if_branch_indent(const ReplCompileContext *ctx,
+                                     int pos, char *buf, int buf_sz) {
+    compile_scope_cmd_indent(ctx, pos, buf, buf_sz);
+    if (ctx && !ctx->insert_mode &&
+        pos >= 0 && pos < ctx->document_count &&
+        repl_cmd_is_if_branch_separator(ctx->document_cmds[pos].type))
+        return;
+
+    int len = (int)strlen(buf);
+    if (len >= 2)
+        len -= 2;
+    else
+        len = 0;
+    if (len > buf_sz - 1)
+        len = buf_sz - 1;
+    memset(buf, ' ', (size_t)len);
+    buf[len] = '\0';
+}
+
+static int compile_token_boundary(char ch) {
+    return !(isalnum((unsigned char)ch) || ch == '_');
+}
+
+static ReplCompileResult compile_parse_if_branch_header(
+        const char *input, CmdType *out_type,
+        char *cond_text, int cond_sz,
+        char *err, int err_size) {
+    const char *p = input ? input : "";
+
+    if (cond_text && cond_sz > 0)
+        cond_text[0] = '\0';
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    if (*p != '}')
+        return REPL_COMPILE_OK;
+    p++;
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    if (strncmp(p, "else", 4) != 0 || !compile_token_boundary(p[4]))
+        return REPL_COMPILE_OK;
+    p += 4;
+    while (*p && isspace((unsigned char)*p))
+        p++;
+
+    if (strncmp(p, "if", 2) == 0 && compile_token_boundary(p[2])) {
+        const char *expr_start;
+        int paren = 1;
+        int clen;
+
+        p += 2;
+        while (*p && isspace((unsigned char)*p))
+            p++;
+        if (*p != '(')
+            return compile_set_err(err, err_size,
+                                   "else-if syntax: } else if(expr) {");
+        p++;
+        expr_start = p;
+        while (*p && paren > 0) {
+            if (*p == '(')
+                paren++;
+            else if (*p == ')')
+                paren--;
+            if (paren > 0)
+                p++;
+        }
+        if (paren != 0)
+            return compile_set_err(err, err_size,
+                                   "else-if syntax: } else if(expr) {");
+        clen = (int)(p - expr_start);
+        if (clen <= 0)
+            return compile_set_err(err, err_size,
+                                   "else-if needs a condition");
+        if (cond_text && cond_sz > 0) {
+            if (clen > cond_sz - 1)
+                clen = cond_sz - 1;
+            memcpy(cond_text, expr_start, (size_t)clen);
+            cond_text[clen] = '\0';
+            trim_in_place(cond_text);
+        }
+
+        p++;
+        while (*p && isspace((unsigned char)*p))
+            p++;
+        if (*p != '{' && *p != '\0')
+            return compile_set_err(err, err_size,
+                                   "else-if syntax: } else if(expr) {");
+        if (out_type)
+            *out_type = CMD_ELSE_IF;
+        return REPL_COMPILE_OK;
+    }
+
+    if (*p == '{' || *p == '\0') {
+        if (out_type)
+            *out_type = CMD_ELSE;
+        return REPL_COMPILE_OK;
+    }
+
+    return compile_set_err(err, err_size, "else syntax: } else {");
+}
+
+static int compile_if_branch_has_separator_in_range(
+        const ReplCompileContext *ctx, int start, int end, CmdType target_type) {
+    int depth = 0;
+
+    if (!ctx || !ctx->document_cmds)
+        return 0;
+    if (start < 0)
+        start = 0;
+    if (end > ctx->document_count)
+        end = ctx->document_count;
+    for (int j = start; j < end; j++) {
+        CmdType t = ctx->document_cmds[j].type;
+        if (depth == 0 && repl_cmd_is_if_branch_separator(t) &&
+            (target_type == CMD_TYPE_COUNT || t == target_type))
+            return 1;
+        if (repl_cmd_is_block_head(t))
+            depth++;
+        else if (repl_cmd_is_block_end(t)) {
+            if (depth > 0)
+                depth--;
+            else
+                break;
+        }
+    }
+    return 0;
+}
+
+static ReplCompileResult compile_validate_if_branch_position(
+        const ReplCompileContext *ctx, int pos, CmdType branch_type,
+        int *out_if_head, char *err, int err_size) {
+    CmdType open_type = CMD_TYPE_COUNT;
+    int if_head = compile_nearest_open_block_head_at(ctx, pos, &open_type);
+    int if_end;
+    int scan_after_pos;
+
+    if (if_head < 0 || open_type != CMD_IF_BEGIN)
+        return compile_set_err(err, err_size,
+                               "else/else-if must be inside an if-block");
+
+    if_end = compile_scope_find_block_end(ctx, if_head);
+    if (if_end < ctx->document_count && pos > if_end)
+        return compile_set_err(err, err_size, "Unmatched if-block");
+
+    if (compile_if_branch_has_separator_in_range(ctx, if_head + 1, pos,
+                                                 CMD_ELSE))
+        return compile_set_err(err, err_size,
+                               "else-if cannot follow else");
+
+    scan_after_pos = pos;
+    if (!ctx->insert_mode && pos < ctx->document_count &&
+        repl_cmd_is_if_branch_separator(ctx->document_cmds[pos].type))
+        scan_after_pos = pos + 1;
+
+    if (branch_type == CMD_ELSE &&
+        compile_if_branch_has_separator_in_range(ctx, scan_after_pos, if_end,
+                                                 CMD_TYPE_COUNT))
+        return compile_set_err(err, err_size,
+                               "else must be the final if branch");
+
+    if (branch_type == CMD_ELSE &&
+        compile_if_branch_has_separator_in_range(ctx, if_head + 1, pos,
+                                                 CMD_ELSE))
+        return compile_set_err(err, err_size,
+                               "duplicate else branch");
+
+    if (out_if_head)
+        *out_if_head = if_head;
+    return REPL_COMPILE_OK;
+}
+
+ReplCompileResult repl_compile_if_branch_kernel(const char *input,
+                                                const ReplCompileContext *ctx,
+                                                ReplIfBranchKernel *out,
+                                                char *err, int err_size) {
+    CmdType branch_type = CMD_TYPE_COUNT;
+    char cond_text[MAX_LINE_LEN];
+    ReplCompileResult pr;
+
+    if (!ctx || !out)
+        return REPL_COMPILE_ERROR;
+    memset(out, 0, sizeof(*out));
+
+    pr = compile_parse_if_branch_header(input, &branch_type,
+                                        cond_text, sizeof(cond_text),
+                                        err, err_size);
+    if (pr != REPL_COMPILE_OK)
+        return pr;
+    if (branch_type != CMD_ELSE_IF && branch_type != CMD_ELSE) {
+        out->valid = 0;
+        return REPL_COMPILE_OK;
+    }
+
+    out->pos = compile_insert_pos(ctx);
+
+    if (compile_validate_if_branch_position(ctx, out->pos, branch_type,
+                                            NULL, err, err_size)
+            != REPL_COMPILE_OK)
+        return REPL_COMPILE_ERROR;
+
+    compile_if_branch_indent(ctx, out->pos, out->indent,
+                             sizeof(out->indent));
+
+    out->branch_type = branch_type;
+    out->branch.type = branch_type;
+    out->branch.valid = 1;
+
+    if (branch_type == CMD_ELSE_IF) {
+        ExprVar visible_vars[MAX_EXPR_VARS];
+        int visible_nv = collect_visible_vars_in(ctx->text, ctx->document_cmds,
+                                                 ctx->document_count, out->pos,
+                                                 visible_vars, MAX_EXPR_VARS,
+                                                 NULL);
+        char verr[REPL_DIAG_TEXT_MAX];
+        if (!repl_eval_validate_expression_idents(
+                &(ReplExprIdentValidationConfig){
+                    .src = cond_text,
+                    .vars = visible_nv > 0 ? visible_vars : NULL,
+                    .num_vars = visible_nv,
+                    .predef = ctx->predef,
+                    .err = verr,
+                    .errsz = (int)sizeof(verr),
+                })) {
+            snprintf(err, (size_t)err_size, "%s", verr);
+            return REPL_COMPILE_ERROR;
+        }
+
+        {
+            ExprCtx cond_ctx = { cond_text, visible_nv > 0 ? visible_vars : NULL,
+                                 visible_nv, NULL, 0,
+                                 ctx->predef.vars, ctx->predef.count };
+            out->branch.args[0] = repl_eval_expr(&cond_ctx);
+        }
+        out->branch.num_args = 1;
+        out->branch.has_vars = input_has_any_visible_vars(cond_text,
+                                                          visible_vars,
+                                                          visible_nv);
+
+        if (!repl_format_fits(out->branch_text, sizeof(out->branch_text),
+                              "%s} else if(%s) {", out->indent, cond_text)) {
+            snprintf(err, (size_t)err_size, "Command too long");
+            return REPL_COMPILE_ERROR;
+        }
+    } else {
+        if (!repl_format_fits(out->branch_text, sizeof(out->branch_text),
+                              "%s} else {", out->indent)) {
+            snprintf(err, (size_t)err_size, "Command too long");
+            return REPL_COMPILE_ERROR;
+        }
+    }
+
+    out->valid = 1;
+    return REPL_COMPILE_OK;
+}
+
+ReplCompileResult repl_compile_if_branch(const char *input,
+                                         const ReplCompileContext *ctx,
+                                         ReplCompiledChange *out,
+                                         char *err, int err_size) {
+    if (!ctx || !out)
+        return REPL_COMPILE_ERROR;
+    repl_compiled_change_init(out);
+
+    ReplIfBranchKernel kernel;
+    ReplCompileResult r = repl_compile_if_branch_kernel(input, ctx, &kernel,
+                                                        err, err_size);
+    if (r != REPL_COMPILE_OK)
+        return r;
+    if (!kernel.valid) {
+        out->kind = REPL_COMPILED_NO_CHANGE;
+        return REPL_COMPILE_OK;
+    }
+
+    out->kind = REPL_COMPILED_INSERT_ONE;
+    out->pos = kernel.pos;
+    out->count = 1;
+    out->adjust_edit_line = 1;
+    out->cmds[0] = kernel.branch;
+    snprintf(out->text[0], sizeof(out->text[0]), "%s", kernel.branch_text);
+    return REPL_COMPILE_OK;
 }
 
 ReplCompileResult repl_compile_close_brace_kernel(const char *input,

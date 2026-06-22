@@ -329,11 +329,11 @@ int   repl_eval_parse_exprs(const char *s, float *out, int max,
  * it through repl_eval_c_expr_to_repl, then through repl_eval_expr with
  * the provided variable scope. Returns `fallback` when the extract step
  * fails (treat as "no eval performed"). Two callers exercise this with
- * different inputs and at different times — flatten_if_block evaluates
- * at flatten time to decide whether to unroll the body into the flat
- * program; the executor's CMD_IF_BEGIN handler re-evaluates per-iteration
- * so goto loops back into the body see updated vars. The kernel is
- * identical, so a shared helper keeps the two sides from drifting. */
+ * different inputs and at different times — compile uses fallback scope
+ * to validate and cache the visible value, while flatten_if_block evaluates
+ * against the current flat-local variable scope to select the emitted arm.
+ * The kernel is identical, so a shared helper keeps the two sides from
+ * drifting. */
 float repl_eval_if_condition(const char *src_text,
                              const ExprVar *vars, int num_vars,
                              float fallback);

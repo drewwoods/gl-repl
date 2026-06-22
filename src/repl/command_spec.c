@@ -273,6 +273,8 @@ static const ReplFuncCompletion k_func_completions[] = {
     { "float ",              "float name",                                               0, { NULL } },
     { "for(",                "for(var, start, end[, step])",                             4, { "var", "start", "end", "step" } },
     { "if(",                 "if(expr)",                                                 1, { "expr" } },
+    { "} else if(",          "} else if(expr)",                                          1, { "expr" } },
+    { "} else {",            "} else {",                                                 0, { NULL } },
     { "goto ",               "goto label",                                               0, { NULL } },
     REPL_FUNC_SLOT_LIST(FUNC_DECL_COMPLETION)
     REPL_FUNC_SLOT_LIST(FUNC_CALL_COMPLETION)
@@ -502,6 +504,8 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_COLOR_MASK,         "glColorMask",         1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_RASTER_POS3F,       "glRasterPos3f",       1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_LABEL,              "label",               1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC(CMD_ELSE_IF,                    1, CMD_CAT_CONDITIONAL),
+    CMD_TYPE_SPEC(CMD_ELSE,                       1, CMD_CAT_CONDITIONAL),
 };
 
 const ReplCommandTypeSpec *repl_command_type_spec(CmdType type) {
