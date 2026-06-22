@@ -1,13 +1,14 @@
 # First-class `else` / `else if` REPL commands
 
-Status: **active** — implementation is in flight on
-`feature/first-class-else-if`. The command model, structured compile/editor
-path, source-scope indent/extent behavior, flatten arm selection,
-reformat/import coverage, defensive replay skip-list handling, and architecture
-notes have been implemented locally and are under verification. Adding both
-`else` and first-class `else if` remains feasible with the explicit
-separator representation: model both separators in the command stream instead
-of lowering `else if` into nested `if` syntax.
+Status: **done** — shipped on `feature/first-class-else-if` (commit
+`a3a1194d`) and reviewed. The command model, structured compile/editor path,
+source-scope indent/extent behavior, flatten arm selection, reformat/import
+coverage, defensive replay skip-list handling, and architecture notes all
+landed; the post-implementation review (see [Review](#review)) confirmed the
+design and closed the one coverage gap (export/import round-trip). `else` and
+first-class `else if` are modeled with the explicit separator representation:
+both separators live in the command stream rather than lowering `else if` into
+nested `if` syntax.
 
 > **Review correction (load-bearing).** Branch *selection* is a
 > **flatten-time** concern only. `flatten_if_block()` (`src/repl/flatten.c`)
@@ -260,3 +261,69 @@ but export/reformat should emit the existing REPL style with no space between
 `if` and `(`. A custom non-C-shaped `else if(expr) {` / `else {` line without
 the leading `}` would force extra translation work in export/import and would
 not reduce the implementation cost elsewhere.
+
+## Review
+
+Post-implementation review of commit `a3a1194d` against this plan. **Verdict:
+high quality; faithfully follows the revised plan, including the load-bearing
+flatten-time-selection correction.** Ground-truthed against the code (model,
+flatten, executor, both replay walkers, source-scope, compile chain) plus an
+empirical `--dump-flat` check.
+
+### What matched the plan
+
+- **Model** (`command.h`) — `CMD_ELSE_IF` / `CMD_ELSE` appended (stable enum
+  order), new `repl_cmd_is_if_branch_separator` predicate, deliberately kept
+  out of the block head/end sets.
+- **Flatten** (`flatten.c`) — `flatten_if_block` became a first-true-arm chain
+  selector (`flatten_if_arm_boundary` walks same-depth separators, skipping
+  nested blocks via block-head/end depth tracking); markers stay stripped.
+- **Executor** (`executor.c`) — the dead `CMD_IF_BEGIN`/`IF_END` walker was
+  **deleted** (not extended) and folded into the "resolved during flatten" case
+  group, matching the re-scoped Execute/replay guidance. `replay_playback.c`
+  got the defensive focus-list parity entries.
+- **Compile** (`compile.c`) — `if_branch` dispatched before close-brace;
+  validation is *stronger* than the plan sketched: it rejects duplicate `else`,
+  `else` not last, and `else if` after `else`.
+- **Source-scope** — separator-line outer-indent fix (implication 6,
+  `cmd_indent` / `cmd_indent_chars`) and chain-head `block_extent` for
+  copy/cut/comment both present.
+- **Editor / reformat / load** — `editor_compile_if_branch` wired first in the
+  block-struct chain (handles insert + overwrite), reformat emits canonical
+  separator text, the loader dispatches `if_branch`.
+
+### Empirical confirmation
+
+`./gl-repl --example cond --dump-flat` reports `num_flat_cmds=18` with **zero**
+`CMD_IF_BEGIN`/`IF_END` markers — confirming branch selection is entirely a
+flatten-time concern and the deleted executor/replay IF handling was dead on
+the live path, exactly as the plan's review correction stated.
+
+### Gap found and closed
+
+The implementation added compile / format / parse / commit tests, but **no test
+exercised the export side or a full export → import cycle**:
+`test_repl_core_format.c` was import-only (loading a hand-written `else` file)
+and `test_repl_core_commit.c` covered commit + flatten arm selection. The
+export emission of `} else if(...) {` / `} else {` and the lossless round-trip
+were unverified.
+
+Added an if-chain round-trip case to `tests/test_repl_core_io.c` that builds a
+first-class `if` / `else if` / `else` chain in the REPL, then asserts:
+
+- export emits canonical `} else if(n < 3) {` / `} else {`;
+- reload preserves command count and types with `CMD_ELSE_IF` / `CMD_ELSE`
+  intact (not lowered to nested `if`s);
+- flatten still selects the first true arm post-round-trip (`n = 2` → the
+  else-if arm, `x == 2`);
+- re-export is byte-identical (lossless canonical round-trip).
+
+Verified green (debug + GL stubs): `test_repl_core_io` 469/469,
+`test_repl_core_commit` 882/882, `test_repl_core_format` 81/81.
+
+### Residual notes (non-blocking)
+
+- The comprehensive `tests/test_repl_export_all_commands.c` still excludes
+  control flow by design; the new `test_repl_core_io.c` case is the round-trip
+  home for the if-chain.
+- No follow-up scope outstanding; closing the plan.

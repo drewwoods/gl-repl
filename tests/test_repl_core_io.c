@@ -631,6 +631,108 @@ int main(void) {
                     repl_func_alias_lookup_slot("if") == -1);
     }
 
+    /* If-chain (else / else-if) export -> import round-trip.
+     *
+     * test_repl_core_format.c covers the import-only direction (loading a
+     * hand-written else file) and test_repl_core_commit.c covers commit +
+     * flatten arm selection. This block closes the loop: build a
+     * first-class if / else-if / else chain in the REPL, EXPORT it, and
+     * verify the separators are emitted as canonical `} else if(...) {` /
+     * `} else {` C and reconstruct as CMD_ELSE_IF / CMD_ELSE source
+     * commands on reload (not lowered to nested ifs), with flatten still
+     * selecting the first true arm and a byte-stable re-export. */
+    {
+        const char *else_path  = "/tmp/repl_core_else_roundtrip.c";
+        const char *else_path2 = "/tmp/repl_core_else_roundtrip2.c";
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("n = 2;");
+        editor_feed_line("glBegin(GL_POINTS);");
+        editor_feed_line("if(n < 1) {");
+        editor_feed_line("glVertex3f(1, 0, 0);");
+        editor_feed_line("} else if(n < 3) {");
+        editor_feed_line("glVertex3f(2, 0, 0);");
+        editor_feed_line("} else {");
+        editor_feed_line("glVertex3f(9, 0, 0);");
+        editor_feed_line("}");
+        editor_feed_line("glEnd();");
+
+        int else_n = repl_state_document_count();
+        CmdType else_types[MAX_COMMANDS];
+        int built_elif = 0, built_else = 0;
+        for (int i = 0; i < else_n; i++) {
+            else_types[i] = repl_state_document_cmds_mut()[i].type;
+            if (else_types[i] == CMD_ELSE_IF) built_elif++;
+            if (else_types[i] == CMD_ELSE)    built_else++;
+        }
+        ASSERT_INT("else chain built with one else-if", built_elif, 1);
+        ASSERT_INT("else chain built with one else", built_else, 1);
+
+        repl_export_save_output(else_path, source_document_view(), NULL);
+        {
+            char buf[16384];
+            read_text_file(else_path, buf, sizeof(buf));
+            ASSERT_TRUE("export emits canonical else-if separator",
+                        strstr(buf, "} else if(n < 3) {") != NULL);
+            ASSERT_TRUE("export emits canonical else separator",
+                        strstr(buf, "} else {") != NULL);
+        }
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        ASSERT_TRUE("load else round-trip output",
+                    repl_export_load_from_file(else_path, NULL) == 1);
+        ASSERT_INT("else round-trip cmd count",
+                   repl_state_document_count(), else_n);
+        for (int i = 0; i < else_n; i++) {
+            char label[64];
+            snprintf(label, sizeof(label), "else round-trip type %d", i);
+            ASSERT_TRUE(label,
+                        repl_state_document_cmds_mut()[i].type == else_types[i]);
+        }
+        {
+            int rt_elif = 0, rt_else = 0;
+            for (int i = 0; i < repl_state_document_count(); i++) {
+                if (repl_state_document_cmds_mut()[i].type == CMD_ELSE_IF) rt_elif++;
+                if (repl_state_document_cmds_mut()[i].type == CMD_ELSE)    rt_else++;
+            }
+            ASSERT_INT("else round-trip keeps first-class else-if", rt_elif, 1);
+            ASSERT_INT("else round-trip keeps first-class else", rt_else, 1);
+        }
+
+        /* Arm selection survives the round-trip: n == 2 skips the false
+         * `n < 1` then takes the `n < 3` else-if arm -> glVertex3f(2,...). */
+        repl_flatten_commands(editor_state_edit_line());
+        {
+            int vtx_count = 0;
+            float vtx_x = -1.0f;
+            for (int i = 0; i < repl_state_flat_program_count(); i++) {
+                if (repl_state_flat_program_cmds_mut()[i].type == CMD_VERTEX3F) {
+                    vtx_count++;
+                    vtx_x = repl_state_flat_program_cmds_mut()[i].args[0];
+                }
+            }
+            ASSERT_INT("else round-trip flatten emits exactly one arm",
+                       vtx_count, 1);
+            ASSERT_TRUE("else round-trip selects else-if arm (n=2 -> x=2)",
+                        fabsf(vtx_x - 2.0f) < 1e-6f);
+        }
+
+        /* Stability: re-export of the reloaded program is byte-identical
+         * to the original export (lossless canonical round-trip). */
+        repl_export_save_output(else_path2, source_document_view(), NULL);
+        {
+            char buf1[16384];
+            char buf2[16384];
+            read_text_file(else_path, buf1, sizeof(buf1));
+            read_text_file(else_path2, buf2, sizeof(buf2));
+            ASSERT_TRUE("else round-trip re-export byte-stable",
+                        strcmp(buf1, buf2) == 0);
+        }
+
+        remove(else_path);
+        remove(else_path2);
+    }
+
     /* Camera state round-trip: non-default eye/center must survive save+load. */
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("glBegin(GL_POINTS);");
