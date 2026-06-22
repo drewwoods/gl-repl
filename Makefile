@@ -382,143 +382,25 @@ all: gl-repl install-hooks
 # Used to force rebuild if you list as a prerequisite, e.g. `test_eval: FORCE $(test_eval_OBJS)`.
 FORCE:
 
-SUPPORT_SRCS = \
-	src/support/memprof.c \
-	src/support/cpuprof.c \
-	src/support/gpuprof.c \
-	src/support/mesh_ply.c
+SUPPORT_SRCS = $(wildcard src/support/*.c)
 
-APP_CONTROLLER_SRCS = \
-	src/app/glr_audio.c \
-	src/app/glr_paths.c \
-	src/app/glr_mesh_export.c \
-	src/app/glr_actions.c \
-	src/app/glr_camera.c \
-	src/app/glr_camera_export.c \
-	src/app/glr_color_picker_bridge.c \
-	src/app/glr_ctrl_view_transition.c \
-	src/app/glr_ctrl_router.c \
-	src/app/glr_completion.c \
-	src/app/glr_compositor.c \
-	src/app/glr_config.c \
-	src/app/glr_ctrl.c \
-	src/app/glr_debug.c \
-	src/app/glr_prof.c \
-	src/app/glr_source_document.c \
-	src/app/glr_state.c
+APP_CONTROLLER_SRCS = $(wildcard src/app/*.c)
 
-EDITOR_SRCS = \
-	src/editor/clipboard.c \
-	src/editor/commit.c \
-	src/editor/completion.c \
-	src/editor/edit_ops.c \
-	src/editor/help_session.c \
-	src/editor/inline_file_prompt.c \
-	src/editor/inline_rename.c \
-	src/editor/input.c \
-	src/editor/reformat.c \
-	src/editor/search.c \
-	src/editor/state.c \
-	src/editor/undo.c
+EDITOR_SRCS = $(wildcard src/editor/*.c)
 
-REPL_SRCS = \
-	src/repl/format.c \
-	src/repl/apply.c \
-	src/repl/autonormal.c \
-	src/repl/bootstrap.c \
-	src/repl/cfg_baseline.c \
-	src/repl/command_spec.c \
-	src/repl/command_store.c \
-	src/repl/compile.c \
-	src/repl/eval.c \
-	src/repl/example_loader.c \
-	src/repl/examples.c \
-	src/repl/executor.c \
-	src/repl/export.c \
-	src/repl/export_cmd_writer.c \
-	src/repl/export_display.c \
-	src/repl/export_prologue.c \
-	src/repl/export_setup.c \
-	src/repl/flatten.c \
-	src/repl/flatten_query.c \
-	src/repl/help_text.c \
-	src/repl/host_effects.c \
-	src/repl/import.c \
-	src/repl/keymap_format.c \
-	src/repl/load.c \
-	src/repl/normalize.c \
-	src/repl/parser.c \
-	src/repl/program_query.c \
-	src/repl/reformat.c \
-	src/repl/scenes.c \
-	src/repl/scene_snapshot.c \
-	src/repl/source_scope.c \
-	src/repl/state.c \
-	src/repl/text_helpers.c \
-	src/repl/time.c \
-	src/repl/tutorials.c \
-	src/repl/visible_vars.c \
-	src/repl/workspace_io.c
+REPL_SRCS = $(wildcard src/repl/*.c)
 
-SCENE_SRCS = \
-	src/scene/axes.c \
-	src/scene/backdrop.c \
-	src/scene/postprocess_filter.c \
-	src/scene/grid.c \
-	src/scene/guides/geometry_guides.c \
-	src/scene/guides/transform_guides.c \
-	src/scene/lights.c \
-	src/scene/overlays.c \
-	src/scene/render.c \
-	src/scene/scene_transition.c
+SCENE_SRCS = $(wildcard src/scene/*.c src/scene/guides/*.c)
 
-UI_CORE_SRCS = \
-	src/ui/core/tabbed_overlay.c \
-	src/ui/core/text_layout.c \
-	src/ui/core/text_panel.c \
-	src/ui/core/text_search.c \
-	src/ui/core/theme.c
+UI_CORE_SRCS = $(wildcard src/ui/core/*.c)
 
-UI_APP_SRCS = \
-	src/ui/app/autocomplete_panel.c \
-	src/ui/app/layout.c \
-	src/ui/app/menu_bar.c \
-	src/ui/app/numeric_swatch.c \
-	src/ui/app/overlay_layout.c \
-	src/ui/app/panels.c \
-	src/ui/app/repl_code_panel.c \
-	src/ui/app/scene_tabs.c \
-	src/ui/app/state.c \
-	src/ui/app/variable_panel_view.c \
-	src/ui/app/view_mode_swatch.c \
-	src/ui/app/color_swatch.c
+UI_APP_SRCS = $(wildcard src/ui/app/*.c)
 
-UI_SUPPORT_SRCS = \
-	src/ui/support/memprof.c \
-	src/ui/support/cpuprof.c
+UI_SUPPORT_SRCS = $(wildcard src/ui/support/*.c)
 
-UI_SUBSYSTEMS_SRCS = \
-	src/ui/subsystems/color_picker.c \
-	src/ui/subsystems/replay_hud.c \
-	src/ui/subsystems/variable_panel.c
+UI_SUBSYSTEMS_SRCS = $(wildcard src/ui/subsystems/*.c)
 
-SUBSYSTEMS_SRCS = \
-	src/subsystems/color_picker/color_picker_state.c \
-	src/subsystems/hidden_lines/hidden_lines.c \
-	src/subsystems/replay/replay.c \
-	src/subsystems/replay/replay_annotations.c \
-	src/subsystems/replay/replay_fade.c \
-	src/subsystems/replay/replay_input.c \
-	src/subsystems/replay/replay_playback.c \
-	src/subsystems/replay/replay_state.c \
-	src/subsystems/tutorial/tutorial_runner.c \
-	src/subsystems/tutorial/tutorial_animation.c \
-	src/subsystems/tutorial/tutorial_match.c \
-	src/subsystems/tutorial/tutorial_state.c \
-	src/subsystems/variable_panel/variable_panel_drag.c \
-	src/subsystems/variable_panel/variable_panel_state.c \
-	src/subsystems/replay/replay_render.c \
-	src/subsystems/edit_overlays/edit_overlays.c
+SUBSYSTEMS_SRCS = $(wildcard src/subsystems/*/*.c)
 
 GL_STUB_COUNTS_SRCS = \
 	tests/gl-stubs/gl_stub_counts.c
@@ -538,101 +420,19 @@ SRCS = \
 	gl_repl.c
 
 HDRS = \
-	src/app/glr_audio.h \
-	src/repl/format.h \
-	src/support/memprof.h \
-	src/support/cpuprof.h \
-	src/support/gpuprof.h \
-	src/app/glr_prof.h \
+	$(wildcard src/app/*.h) \
+	$(wildcard src/editor/*.h) \
+	$(wildcard src/repl/*.h) \
+	$(wildcard src/scene/*.h) \
+	$(wildcard src/scene/guides/*.h) \
+	$(wildcard src/ui/core/*.h) \
+	$(wildcard src/ui/app/*.h) \
+	$(wildcard src/ui/support/*.h) \
+	$(wildcard src/ui/subsystems/*.h) \
+	$(wildcard src/subsystems/*/*.h) \
+	$(wildcard src/support/*.h) \
 	gl_repl.h \
-	source_document.h \
-	src/repl/transform_utils.h \
-	src/app/glr_actions.h \
-	src/app/glr_camera.h \
-	src/app/glr_completion.h \
-	src/app/glr_compositor.h \
-	src/app/glr_config.h \
-	src/app/glr_ctrl.h \
-	src/app/glr_debug.h \
-	src/app/glr_defaults.h \
-	src/app/glr_paths.h \
-	src/app/glr_state.h \
-	src/subsystems/hidden_lines/hidden_lines.h \
-	src/editor/clipboard.h \
-	src/editor/commit.h \
-	src/editor/completion.h \
-	src/editor/help_session.h \
-	src/editor/inline_file_prompt.h \
-	src/editor/inline_rename.h \
-	src/editor/input.h \
-	src/editor/reformat.h \
-	src/editor/search.h \
-	src/editor/state.h \
-	src/editor/undo.h \
-	src/repl/apply.h \
-	src/repl/cfg_baseline.h \
-	src/repl/command_spec.h \
-	src/repl/command_store.h \
-	src/repl/compile.h \
-	src/repl/catalog_tags.h \
-	src/repl/control_flow.h \
-	src/repl/core_internal.h \
-	src/repl/eval.h \
-	src/repl/example_loader.h \
-	src/repl/examples.h \
-	src/repl/export.h \
-	src/repl/help_text.h \
-	src/repl/parser.h \
-	src/repl/pipeline.h \
-	src/repl/scenes.h \
-	src/repl/source_scope.h \
-	src/repl/state.h \
-	src/repl/tutorials.h \
-	src/repl/util.h \
-	src/scene/axes.h \
-	src/scene/backdrop.h \
-	src/scene/grid.h \
-	src/scene/guides/geometry_guides.h \
-	src/scene/guides/guides_shared.h \
-	src/scene/guides/transform_guides.h \
-	src/scene/lights.h \
-	src/scene/overlays.h \
-	src/scene/render.h \
-	src/scene/scene_transition.h \
-	src/scene/render_types.h \
-	src/ui/app/autocomplete_panel.h \
-	src/ui/subsystems/color_picker.h \
-	src/ui/app/layout.h \
-	src/ui/support/memprof.h \
-	src/ui/app/menu_bar.h \
-	src/ui/app/numeric_swatch.h \
-	src/ui/app/panels.h \
-	src/ui/support/cpuprof.h \
-	src/ui/app/repl_code_panel.h \
-	src/ui/subsystems/replay_hud.h \
-	src/ui/app/scene_tabs.h \
-	src/ui/app/state.h \
-	src/ui/app/state_types.h \
-	src/ui/core/tabbed_overlay.h \
-	src/ui/core/layout_utils.h \
-	src/ui/core/text_layout.h \
-	src/ui/core/text_panel.h \
-	src/ui/core/text_search.h \
-	src/ui/core/theme.h \
-	src/ui/subsystems/variable_panel.h \
-	src/subsystems/color_picker/color_picker_state.h \
-	src/subsystems/replay/replay_internal.h \
-	src/subsystems/replay/replay.h \
-	src/subsystems/replay/replay_annotations.h \
-	src/subsystems/replay/replay_state.h \
-	src/subsystems/tutorial/tutorial_animation.h \
-	src/subsystems/tutorial/tutorial_internal.h \
-	src/subsystems/tutorial/tutorial.h \
-	src/subsystems/tutorial/tutorial_state.h \
-	src/subsystems/variable_panel/variable_panel_drag.h \
-	src/subsystems/variable_panel/variable_panel_state.h \
-	src/subsystems/replay/replay_render.h \
-	src/subsystems/edit_overlays/edit_overlays.h
+	source_document.h
 
 UI_SRCS = $(UI_CORE_SRCS) $(UI_APP_SRCS)
 SCENE_HDRS = $(filter src/scene/%.h,$(HDRS))
