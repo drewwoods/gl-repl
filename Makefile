@@ -1605,7 +1605,54 @@ lines: $(SRCS) $(HDRS) ## Count SLOC (code/comment/blank) across source and head
 		echo "  Linux:  sudo apt install cloc"; \
 		exit 1; \
 	fi
-	@cloc $(SRCS) $(HDRS) --by-file
+	@cloc $(SRCS) $(HDRS) --by-file | awk '\
+	BEGIN { \
+		mods[1] = "src/support"; \
+		mods[2] = "src/app"; \
+		mods[3] = "src/editor"; \
+		mods[4] = "src/repl"; \
+		mods[5] = "src/scene"; \
+		mods[6] = "src/ui"; \
+		mods[7] = "src/subsystems"; \
+		mods[8] = "(root files)"; \
+		for (i = 1; i <= 8; i++) { \
+			files[mods[i]] = 0; \
+			blank[mods[i]] = 0; \
+			comment[mods[i]] = 0; \
+			code[mods[i]] = 0; \
+		} \
+	} \
+	{ \
+		print $$0; \
+	} \
+	NF == 4 && $$1 != "SUM:" && $$2 ~ /^[0-9]+$$/ && $$3 ~ /^[0-9]+$$/ && $$4 ~ /^[0-9]+$$/ { \
+		fn = $$1; \
+		m = ""; \
+		if (fn ~ /^src\/support\//) m = "src/support"; \
+		else if (fn ~ /^src\/app\//) m = "src/app"; \
+		else if (fn ~ /^src\/editor\//) m = "src/editor"; \
+		else if (fn ~ /^src\/repl\//) m = "src/repl"; \
+		else if (fn ~ /^src\/scene\//) m = "src/scene"; \
+		else if (fn ~ /^src\/ui\//) m = "src/ui"; \
+		else if (fn ~ /^src\/subsystems\//) m = "src/subsystems"; \
+		else m = "(root files)"; \
+		files[m]++; \
+		blank[m] += $$2; \
+		comment[m] += $$3; \
+		code[m] += $$4; \
+	} \
+	END { \
+		print ""; \
+		print "==============================================================================="; \
+		print "                           METRICS SUMMARY BY MODULE"; \
+		print "==============================================================================="; \
+		printf "%-25s %10s %10s %10s %10s\n", "Module", "Files", "Blank", "Comment", "Code"; \
+		printf "%-25s %10s %10s %10s %10s\n", "-------------------------", "----------", "----------", "----------", "----------"; \
+		for (i = 1; i <= 8; i++) { \
+			m = mods[i]; \
+			printf "%-25s %10d %10d %10d %10d\n", m, files[m], blank[m], comment[m], code[m]; \
+		} \
+	}'
 
 # count lines: test sources + shared test helpers
 TEST_SLOC_SRCS = $(wildcard tests/*.c tests/*.h tests/support/*.c tests/support/*.h)
