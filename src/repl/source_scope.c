@@ -225,6 +225,13 @@ static void source_scope_write_indent(int spaces, char *buf, int buf_sz) {
     buf[spaces] = '\0';
 }
 
+static int source_scope_view_line_is_if_branch_separator(
+        const ReplSourceScopeView *view, int pos) {
+    return (view && view->cmds && pos >= 0 && pos < view->count &&
+            view->cmds[pos].valid &&
+            repl_cmd_is_if_branch_separator(view->cmds[pos].type));
+}
+
 /* Normal command indent: 2 + 2*tess + 2*begin + 2*block + 2*matrix.
  * glPushMatrix/glPopMatrix nest, so their bodies indent one level per
  * open push (mirroring how glBegin opens a level via begin depth). */
@@ -235,6 +242,8 @@ void repl_source_scope_view_cmd_indent(const ReplSourceScopeView *view,
     int bd = view && view->built ? view->begin_depth_prefix[pos] : 0;
     int kd = repl_source_scope_view_block_depth_at(view, pos);
     int md = repl_source_scope_view_matrix_scope_depth_at(view, pos);
+    if (source_scope_view_line_is_if_branch_separator(view, pos) && kd > 0)
+        kd--;
     int spaces = 2 + 2 * td + 2 * bd + 2 * kd + 2 * md;
     source_scope_write_indent(spaces, buf, buf_sz);
 }
@@ -304,8 +313,11 @@ int repl_source_scope_view_cmd_indent_chars(const ReplSourceScopeView *view,
                                             int pos) {
     pos = source_scope_clamp_pos(view, pos);
     if (!view || !view->built) return 2;
+    int kd = view->block_depth_prefix[pos];
+    if (source_scope_view_line_is_if_branch_separator(view, pos) && kd > 0)
+        kd--;
     return 2 + 2 * view->tess_depth_prefix[pos] + 2 * view->begin_depth_prefix[pos]
-             + 2 * view->block_depth_prefix[pos] + 2 * view->matrix_depth_prefix[pos];
+             + 2 * kd + 2 * view->matrix_depth_prefix[pos];
 }
 
 int repl_source_scope_cmd_indent_chars(int pos) {
@@ -368,17 +380,43 @@ CmdType repl_source_scope_nearest_open_block_at(int pos) {
     return repl_source_scope_view_nearest_open_block_at(live_source_scope_view(), pos);
 }
 
+static int source_scope_view_find_if_chain_head(const ReplSourceScopeView *view,
+                                                int line_idx) {
+    int depth = 0;
+
+    if (!view || !view->cmds)
+        return -1;
+    for (int j = line_idx - 1; j >= 0; j--) {
+        CmdType t = view->cmds[j].type;
+        if (repl_cmd_is_block_end(t)) {
+            depth++;
+        } else if (repl_cmd_is_block_head(t)) {
+            if (depth == 0)
+                return t == CMD_IF_BEGIN ? j : -1;
+            depth--;
+        }
+    }
+    return -1;
+}
+
 int repl_source_scope_view_block_extent(const ReplSourceScopeView *view,
                                         int line_idx,
                                         int *out_start, int *out_count) {
     int n = view ? view->count : 0;
+    int start = line_idx;
     if (line_idx < 0 || line_idx >= n) return 0;
-    if (!repl_source_scope_view_line_is_block_head(view, line_idx)) return 0;
-    int end = repl_source_scope_view_find_block_end(view, line_idx);
+    if (source_scope_view_line_is_if_branch_separator(view, line_idx)) {
+        start = source_scope_view_find_if_chain_head(view, line_idx);
+        if (start < 0)
+            return 0;
+    } else if (!repl_source_scope_view_line_is_block_head(view, line_idx)) {
+        return 0;
+    }
+    int end = repl_source_scope_view_find_block_end(view, start);
     if (end >= n) end = n - 1;
-    if (end < line_idx) return 0;
-    if (out_start) *out_start = line_idx;
-    if (out_count) *out_count = end - line_idx + 1;
+    if (end < start) return 0;
+    if (out_start) *out_start = start;
+    if (out_count) *out_count = end - start + 1;
     return 1;
 }
 

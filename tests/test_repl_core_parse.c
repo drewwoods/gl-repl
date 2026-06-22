@@ -816,7 +816,7 @@ int main(void) {
     /* Expressions inside the compound literal exercise both the
      * brace-aware unwrap (don't truncate at the inner ')') and the
      * full expression evaluator. The has_vars flag must propagate so
-     * the executor re-evaluates per frame. */
+     * variable-bearing commands can re-evaluate during execution. */
     {
         glr_ctrl_reset_all();
         declare_test_vars();

@@ -32,6 +32,7 @@ int main(void) {
     const char *line = "glVertex3f(x+1, y, z);";
     const char *tmp_path = "/tmp/repl_core_format_input.c";
     const char *tmp_loop_path = "/tmp/repl_core_format_loop_input.c";
+    const char *tmp_else_path = "/tmp/repl_core_format_else_input.c";
     const char *tmp_dump_path = "/tmp/repl_core_format_dump.txt";
     repl_eval_init_predef_vars();
     glr_ctrl_reset_all();
@@ -113,6 +114,47 @@ int main(void) {
         ASSERT_TRUE("reformat body comma spacing", buf1 && strstr(buf1, ", 0, 0") != NULL);
         ASSERT_TRUE("reformat close brace indent", buf2 && strcmp(buf2, "  }") == 0);
     }
+
+    {
+        FILE *f = fopen(tmp_else_path, "w");
+        ASSERT_TRUE("open tmp else file", f != NULL);
+        if (f) {
+            fprintf(f, "// Snippet start\n");
+            fprintf(f, "if (x < 0) {\n");
+            fprintf(f, "glVertex3f(-1, 0, 0);\n");
+            fprintf(f, "} else if (x < 1) {\n");
+            fprintf(f, "glVertex3f(1, 0, 0);\n");
+            fprintf(f, "} else {\n");
+            fprintf(f, "glVertex3f(2, 0, 0);\n");
+            fprintf(f, "}\n");
+            fprintf(f, "// Snippet end\n");
+            fclose(f);
+        }
+    }
+
+    glr_ctrl_reset_all();
+    declare_test_vars();
+    ASSERT_TRUE("load else-if file", repl_export_load_from_file(tmp_else_path, NULL) == 1);
+    ASSERT_TRUE("else-if imported 7 cmds", repl_state_document_count() == 7);
+    ASSERT_TRUE("else-if header type", repl_state_document_cmds_mut()[0].type == CMD_IF_BEGIN);
+    ASSERT_TRUE("else-if separator type", repl_state_document_cmds_mut()[2].type == CMD_ELSE_IF);
+    ASSERT_TRUE("else separator type", repl_state_document_cmds_mut()[4].type == CMD_ELSE);
+    ASSERT_TRUE("else-if end type", repl_state_document_cmds_mut()[6].type == CMD_IF_END);
+    ASSERT_TRUE("else-if canonical text",
+                strcmp(editor_buffer_line(2), "  } else if(x < 1) {") == 0);
+    ASSERT_TRUE("else canonical text",
+                strcmp(editor_buffer_line(4), "  } else {") == 0);
+
+    editor_buffer_set_line(2, "        } else if (x < 1) {");
+    editor_buffer_set_line(4, "        } else {");
+    editor_buffer_set_line(6, "        }");
+    editor_reformat_commands();
+    ASSERT_TRUE("reformat else-if separator indent",
+                strcmp(editor_buffer_line(2), "  } else if(x < 1) {") == 0);
+    ASSERT_TRUE("reformat else body indent",
+                strcmp(editor_buffer_line(5), "    glVertex3f(2, 0, 0);") == 0);
+    ASSERT_TRUE("reformat else close indent",
+                strcmp(editor_buffer_line(6), "  }") == 0);
 
     glr_ctrl_reset_all();
     declare_test_vars();

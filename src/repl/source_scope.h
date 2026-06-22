@@ -160,12 +160,12 @@ int  repl_source_scope_cmd_indent_chars(int pos);
 int     repl_source_scope_find_block_end(int begin_idx);
 CmdType repl_source_scope_nearest_open_block_at(int pos);
 
-/* Return the inclusive [head..end] extent of a structured block whose head
- * sits at `line_idx`. Returns 1 and fills *out_start / *out_count when
- * line_idx is a CMD_FOR_BEGIN / CMD_FUNC_DEF / CMD_IF_BEGIN row; returns 0
- * otherwise (and leaves outputs untouched). Used by clipboard and other
- * editor features to expand a single-line operation to whole-block scope
- * without reading CmdType themselves. */
+/* Return the inclusive [head..end] extent of a structured block. For
+ * CMD_FOR_BEGIN / CMD_FUNC_DEF / CMD_IF_BEGIN rows, `line_idx` is the block
+ * head. For CMD_ELSE_IF / CMD_ELSE rows, the extent expands to the whole
+ * enclosing if-chain. Returns 0 otherwise. Used by clipboard and other editor
+ * features to expand a single-line operation to whole-block scope without
+ * reading CmdType themselves. */
 int repl_source_scope_block_extent(int line_idx,
                                    int *out_start, int *out_count);
 

@@ -333,6 +333,68 @@ ReplCompileResult editor_compile_close_brace(const char *input,
     return REPL_COMPILE_OK;
 }
 
+/* ---- editor_compile_if_branch ----------------------------------- */
+
+ReplCompileResult editor_compile_if_branch(const char *input,
+                                           const ReplCompileContext *ctx,
+                                           EditorCommitPlan *out,
+                                           char *err, int err_size) {
+    if (!ctx || !out) return REPL_COMPILE_ERROR;
+
+    editor_commit_plan_init(out);
+    editor_compile_clear_err(err, err_size);
+
+    ReplIfBranchKernel kernel;
+    ReplCompileResult kr = repl_compile_if_branch_kernel(input, ctx, &kernel,
+                                                         err, err_size);
+    if (kr != REPL_COMPILE_OK)
+        return kr;
+    if (!kernel.valid) {
+        out->change.kind = REPL_COMPILED_NO_CHANGE;
+        return REPL_COMPILE_OK;
+    }
+
+    if (!ctx->insert_mode &&
+        ctx->edit_line < ctx->document_count &&
+        (ctx->document_cmds[ctx->edit_line].type == CMD_ELSE_IF ||
+         ctx->document_cmds[ctx->edit_line].type == CMD_ELSE)) {
+        out->change.kind = REPL_COMPILED_REPLACE_ONE;
+        out->change.pos = ctx->edit_line;
+        out->change.count = 1;
+        out->change.cmds[0] = kernel.branch;
+        snprintf(out->change.text[0], sizeof(out->change.text[0]),
+                 "%s", kernel.branch_text);
+
+        out->effects.cursor_target = ctx->edit_line + 1;
+        out->effects.insert_mode_target = 1;
+        out->effects.clear_input = 1;
+        out->effects.clear_autocomplete = 1;
+
+        snprintf(out->change.commit_message, sizeof(out->change.commit_message),
+                 "if branch updated");
+        return REPL_COMPILE_OK;
+    }
+
+    out->change.kind = REPL_COMPILED_INSERT_ONE;
+    out->change.pos = kernel.pos;
+    out->change.count = 1;
+    out->change.adjust_edit_line = 0;
+    out->change.cmds[0] = kernel.branch;
+    snprintf(out->change.text[0], sizeof(out->change.text[0]),
+             "%s", kernel.branch_text);
+
+    out->effects.cursor_target = kernel.pos + 1;
+    out->effects.insert_mode_target = 1;
+    out->effects.clear_input = 1;
+    out->effects.clear_pending_newline = 1;
+
+    snprintf(out->change.commit_message, sizeof(out->change.commit_message),
+             kernel.branch_type == CMD_ELSE_IF
+                 ? "else-if branch inserted"
+                 : "else branch inserted");
+    return REPL_COMPILE_OK;
+}
+
 /* ---- editor_compile_if_block ------------------------------------ */
 
 /* CONTRACT (audit #11): context-pure for document data and source-scope
@@ -1007,14 +1069,19 @@ int editor_try_commit_if_block(void) {
     return editor_try_commit_block(editor_compile_if_block);
 }
 
+int editor_try_commit_if_branch(void) {
+    return editor_try_commit_block(editor_compile_if_branch);
+}
+
 int editor_try_commit_close_brace(void) {
     return editor_try_commit_block(editor_compile_close_brace);
 }
 
 /* --- Higher-order dispatchers --- */
 
-/* Block-structural commit handlers: `}`, `for(`, `funcN`, `if(`. */
+/* Block-structural commit handlers: `} else`, `}`, `for(`, `funcN`, `if(`. */
 int editor_try_commit_block_structs(void) {
+    if (editor_try_commit_if_branch())   return 1;
     if (editor_try_commit_close_brace()) return 1;
     if (editor_try_commit_for_loop())    return 1;
     if (editor_try_commit_func_def())    return 1;

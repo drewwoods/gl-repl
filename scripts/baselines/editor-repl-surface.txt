@@ -59,8 +59,13 @@
 # editor_try_commit_* helper, which each call their repl_compile_*
 # partner — not a new coupling kind, just one more compile entry point.
 #
+# 2026-06-22: commit_c bumped +1 for repl_compile_if_branch_kernel, the
+# shared pure compiler behind first-class `} else if(...) {` / `} else {`
+# editor commits. This keeps editor insertion/replacement effects local
+# while reusing the same branch validation as the loader/import path.
+#
 # Ratchet down as migrations land. The plan target
 # (plans/done/editor-demo.md) is ~5 per file.
 
 input_c: 25
-commit_c: 28
+commit_c: 29

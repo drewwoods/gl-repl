@@ -412,13 +412,6 @@ static int execution_flat_count_from_options(const ReplExecutionOptions *options
     return flat_cmd_count;
 }
 
-static const FlatCmdLocalVars *execution_local_vars_at(FlatProgramView program,
-                                                       int flat_cmd_idx) {
-    if (!program.local_vars || flat_cmd_idx < 0 || flat_cmd_idx >= program.cmd_count)
-        return NULL;
-    return &program.local_vars[flat_cmd_idx];
-}
-
 static const char *execution_flat_text(SourceTextView text,
                                        const GLCmd *flat_cmd) {
     int src_cmd_idx;
@@ -786,43 +779,6 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
         goto_done:;
         break;
     }
-    case CMD_IF_BEGIN: {
-        /* Re-evaluate the condition at execute time so a goto looping
-         * back into the body sees updated vars. The cached args[0] is
-         * the flatten-time value, used as the fallback when the line
-         * doesn't carry vars (or when the paren-extract fails). The
-         * shared kernel with flatten lives in repl_eval_if_condition;
-         * see its doc for why both sides evaluate. */
-        float cond = cmd->args[0];
-        if (cmd->has_vars) {
-            const FlatCmdLocalVars *local_vars =
-                execution_local_vars_at(cursor->program, cursor->pc);
-            const ExprVar *eval_vars = g_predef_vars;
-            int eval_num_vars = g_num_predef_vars;
-            if (local_vars && local_vars->num_vars > 0) {
-                eval_vars = local_vars->vars;
-                eval_num_vars = local_vars->num_vars;
-            }
-            cond = repl_eval_if_condition(execution_flat_text(cursor->text,
-                                                              cmd),
-                                          eval_vars, eval_num_vars,
-                                          cond);
-        }
-        if (cond == 0.0f) {
-            int if_depth = 1;
-            while (if_depth > 0 &&
-                   ++cursor->pc < cursor->flat_cmd_count) {
-                if (flat_cmds[cursor->pc].type == CMD_IF_BEGIN)
-                    if_depth++;
-                else if (flat_cmds[cursor->pc].type == CMD_IF_END)
-                    if_depth--;
-            }
-            /* pc now points to CMD_IF_END; final advance steps past it. */
-        }
-        break;
-    }
-    case CMD_IF_END:
-        break; /* body executed; just step past */
     case CMD_VAR_ASSIGN: {
         /* Flatten already computed the RHS against current vars and
          * stored the result in args[0]. Re-evaluating here would
@@ -851,6 +807,7 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
     /* These are resolved during flatten and should not appear in flat_cmds. */
     case CMD_FOR_BEGIN: case CMD_FOR_END:
     case CMD_FUNC_DEF: case CMD_FUNC_END: case CMD_CALL:
+    case CMD_IF_BEGIN: case CMD_ELSE_IF: case CMD_ELSE: case CMD_IF_END:
     case CMD_COMMENT:
     case CMD_EMPTY:
     case CMD_VAR_DECLARE:

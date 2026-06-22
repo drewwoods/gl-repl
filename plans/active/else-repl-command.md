@@ -1,8 +1,12 @@
 # First-class `else` / `else if` REPL commands
 
-Status: **not-started** — reviewed and cleared for implementation (green-field;
-no commits yet). Adding both `else` and first-class `else if` is feasible. The
-representation is explicit: model both separators in the command stream instead
+Status: **active** — implementation is in flight on
+`feature/first-class-else-if`. The command model, structured compile/editor
+path, source-scope indent/extent behavior, flatten arm selection,
+reformat/import coverage, defensive replay skip-list handling, and architecture
+notes have been implemented locally and are under verification. Adding both
+`else` and first-class `else if` remains feasible with the explicit
+separator representation: model both separators in the command stream instead
 of lowering `else if` into nested `if` syntax.
 
 > **Review correction (load-bearing).** Branch *selection* is a
@@ -26,11 +30,10 @@ of lowering `else if` into nested `if` syntax.
   `repl_source_scope_find_block_end`, `compile_find_block_head`,
   `repl_source_scope_block_extent`, and the block-batch branch of
   `repl_compile_toggle_comment`.
-- The structured-commit chain is
-  `close_brace -> for_loop -> func_def -> if_block`
-  (`src/repl/compile.c`, `src/editor/commit.c`), so any input beginning
-  with `}` is currently claimed by the close-brace compiler before an
-  `if`-adjacent grammar can see it.
+- The structured-commit chain is now branch-aware:
+  `if_branch -> close_brace -> for_loop -> func_def -> if_block`
+  (`src/repl/compile.c`, `src/editor/commit.c`), so `} else ...`
+  input is recognized before the generic close-brace compiler can claim it.
 - Flatten resolves the conditional **at flatten time**: `flatten_if_block()`
   (`src/repl/flatten.c`) evaluates `CMD_IF_BEGIN`'s condition, emits the body
   only when true, and skips the `CMD_IF_BEGIN`/`CMD_IF_END` markers — they never
@@ -95,7 +98,7 @@ first-class `else if`; the model should preserve that shape.
 
 | Area | Files | Why it is touched |
 |---|---|---|
-| Command model / syntax metadata | `src/repl/command.h`, `src/repl/command_spec.c`, `src/repl/help_text.c` | Add `CMD_ELSE` and `CMD_ELSE_IF`, syntax-highlight category metadata, help/completion text. |
+| Command model / syntax metadata | `src/repl/command.h`, `src/repl/command_spec.c` | Add `CMD_ELSE` and `CMD_ELSE_IF`, syntax-highlight category metadata, and language-construct completion text. |
 | Structured compile / editor commit | `src/repl/compile.c`, `src/repl/compile.h`, `src/editor/commit.c`, `src/editor/commit.h` | `} else {` / `} else if(...) {` currently get stolen by close-brace handling; compile path must recognize and validate branch transitions before generic close-brace. |
 | Source-scope / structural editing | `src/repl/source_scope.c`, `src/repl/source_scope.h`, `src/editor/input.c`, `src/editor/clipboard.c`, `src/repl/compile.c` | Block extent, nearest-open-block, sticky editing, block copy/cut, and block toggle-comment logic need branch-chain-aware matching. |
 | Flatten (the core of the feature) | `src/repl/flatten.c` | `flatten_if_block()` currently chooses "emit body" vs "skip body"; it becomes the **sole** arm selector: evaluate `IF_BEGIN`, then each same-depth `CMD_ELSE_IF` in source order, and emit the first true arm's range (or the optional `CMD_ELSE` arm), continuing to strip all separators as it strips IF markers today. |
@@ -106,10 +109,10 @@ first-class `else if`; the model should preserve that shape.
 
 ## Specific implementation implications
 
-1. **Close-brace handling must move first.**
-   `} else {` and `} else if(...) {` cannot be added as new standalone
-   compilers at the end of the chain; the existing close-brace compiler will
-   consume the leading `}`.
+1. **Branch handling must precede close-brace handling.**
+   `} else {` and `} else if(...) {` are now recognized before the generic
+   close-brace compiler; adding them at the end of the chain would still let
+   the leading `}` be consumed as a plain block close.
 
 2. **Simple depth counting is no longer enough for `if`.**
    Helpers that currently just walk "block heads" and "block ends" need an
@@ -235,8 +238,8 @@ flatten + structural editing, not in the executor/replay walkers.
    now-dead `case CMD_IF_BEGIN/END` handlers in `executor.c` /
    `replay_annotations.c` and add the separators to
    `replay_cmd_is_focus_candidate`. No new runtime branch logic.
-7. Add reformat / help / completion support (incl. separator-line indent and
-   the `command_spec` / drift-test wiring from implications 6–7).
+7. Add reformat / completion support (incl. separator-line indent and the
+   `command_spec` / drift-test wiring from implications 6–7).
 8. Add export/import round-trip coverage.
 9. Lock tests *as each stage lands* — at minimum a flatten arm-selection test
    and a compile-recognition test before the structural-editor work — rather

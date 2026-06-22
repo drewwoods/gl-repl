@@ -78,6 +78,8 @@ typedef enum {
     CMD_COLOR_MASK,
     CMD_RASTER_POS3F,
     CMD_LABEL,
+    CMD_ELSE_IF,
+    CMD_ELSE,
     CMD_TYPE_COUNT
 } CmdType;
 
@@ -168,6 +170,15 @@ static inline int repl_cmd_is_block_end(CmdType type) {
     return (type == CMD_FOR_END ||
             type == CMD_FUNC_END ||
             type == CMD_IF_END);
+}
+
+/* Mid-block separators for an if-chain. They intentionally are not
+ * block heads or block ends: CMD_IF_BEGIN / CMD_IF_END remain the
+ * only structural boundary pair, while flatten selects which arm to
+ * emit from the separator-delimited ranges. */
+static inline int repl_cmd_is_if_branch_separator(CmdType type) {
+    return (type == CMD_ELSE_IF ||
+            type == CMD_ELSE);
 }
 
 /* True for the glutSolid* primitive commands (torus, cube, sphere,
