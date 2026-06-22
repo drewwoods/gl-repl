@@ -2081,5 +2081,46 @@ int main(void) {
         ASSERT_INT("lookup returns slot 0", repl_func_alias_lookup_slot("myfunc0"), 0);
     }
 
+    /* Standalone else rejection test */
+    {
+        glr_ctrl_reset_all();
+        ReplCompileContext ctx = repl_compile_context_from_live(0);
+        ReplCompiledChange change;
+        char err[256];
+
+        /* Bare "else" should fail compilation with the specific error message */
+        repl_compiled_change_init(&change);
+        err[0] = '\0';
+        ReplCompileResult r = repl_compile_dispatch("else", &ctx, &change, err, sizeof(err));
+        ASSERT_INT("standalone else compile returns ERROR", r, REPL_COMPILE_ERROR);
+        ASSERT_TRUE("standalone else error message matches",
+                    strstr(err, "else must be on the same line as }: } else {") != NULL);
+
+        /* "else {" should also fail compile */
+        repl_compiled_change_init(&change);
+        err[0] = '\0';
+        r = repl_compile_dispatch("else {", &ctx, &change, err, sizeof(err));
+        ASSERT_INT("standalone else with brace compile returns ERROR", r, REPL_COMPILE_ERROR);
+        ASSERT_TRUE("standalone else with brace error message matches",
+                    strstr(err, "else must be on the same line as }: } else {") != NULL);
+
+        /* "else if (x < 5) {" should also fail compile */
+        repl_compiled_change_init(&change);
+        err[0] = '\0';
+        r = repl_compile_dispatch("else if (x < 5) {", &ctx, &change, err, sizeof(err));
+        ASSERT_INT("standalone else if compile returns ERROR", r, REPL_COMPILE_ERROR);
+        ASSERT_TRUE("standalone else if error message matches",
+                    strstr(err, "else must be on the same line as }: } else {") != NULL);
+
+        /* "elsewhere {" should NOT fail with the else error because it has a different word */
+        repl_compiled_change_init(&change);
+        err[0] = '\0';
+        r = repl_compile_dispatch("elsewhere {", &ctx, &change, err, sizeof(err));
+        /* elsewhere is a custom function name, since we have free slots it should compile OK (returning REPL_COMPILE_OK) */
+        ASSERT_INT("elsewhere compile returns OK", r, REPL_COMPILE_OK);
+        ASSERT_TRUE("elsewhere does not set else error",
+                    strstr(err, "else must be on the same line as }") == NULL);
+    }
+
     return test_harness_report(&g_harness, "test_repl_compile");
 }

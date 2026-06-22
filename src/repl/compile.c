@@ -2294,10 +2294,20 @@ ReplCompileResult repl_compile_func_def_kernel(const char *input,
     if (!ctx || !out) return REPL_COMPILE_ERROR;
     memset(out, 0, sizeof(*out));
 
-    /* Quick-reject inputs that look like function calls (have `(` and
-     * no `{`). They go through the normal command parser. */
+    /* Quick-reject bare `else` / `else if(...)` that landed on its own
+     * line without the leading `}`.  No other commit handler claims a
+     * standalone `else`, so produce a descriptive compile error rather
+     * than letting it fall through to the "Unknown cmd" path. */
     const char *trimmed = input ? input : "";
     while (*trimmed && isspace((unsigned char)*trimmed)) trimmed++;
+    if (strncmp(trimmed, "else", 4) == 0 &&
+        compile_token_boundary(trimmed[4])) {
+        return compile_set_err(err, err_size,
+            "else must be on the same line as }: } else {");
+    }
+
+    /* Quick-reject inputs that look like function calls (have `(` and
+     * no `{`). They go through the normal command parser. */
     if (strchr(trimmed, '(') != NULL && strchr(trimmed, '{') == NULL) {
         out->valid = 0;
         return REPL_COMPILE_OK;
