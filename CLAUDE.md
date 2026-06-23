@@ -143,7 +143,7 @@ single-buffered window). `scripts/record-gif.sh --example 2 --duration 3 --out r
 records that headlessly and assembles `ring.gif` + `ring.mp4` via `ffmpeg`; the
 knob is duration (clip length, fps-invariant). On the OSMesa backend the
 capture lives in the backend files; the windowed backends share one core
-`src/fg_capture.c` + three hooks (`glutInit` → init, `glutMainLoopEvent` →
+`third_party/freeglut/src/fg_capture.c` + three hooks (`glutInit` → init, `glutMainLoopEvent` →
 tick, `glutSwapBuffers` → pre-swap grab), compiled to stubs on OSMesa builds.
 Record mode works natively too: `FREEGLUT_CAPTURE_FRAMES=3 ./gl-repl ...`
 opens a real window, writes N real-GPU frames, and exits.
@@ -321,7 +321,7 @@ default) advances by a fixed `1/60 s` per rendered frame. `--time <secs>` /
 `GLR_TIME` set its initial value at startup — applied after any `--example`
 load (which resets `t`), so the override sticks. Useful headless: start an
 animation capture from a later point in its timeline instead of always from
-`t = 0`. Implemented as `repl_set_time()` (`src/repl/time.c` → `repl_state.c`),
+`t = 0`. Implemented as `repl_set_time()` (`src/repl/time.c` → `src/repl/state.c`),
 read in `main()` (`gl_repl.c`).
 
 `GLR_VIEW_TOGGLE_AT=<t1,t2,...>` is the capture affordance for the
@@ -477,7 +477,7 @@ explaining why the extra background is useful.
 | `src/repl/command.h` | Core command model types: `CmdType` enum, `GLCmd` struct (pure parse-result: type, args, flags, provenance — no `source[]` field) |
 | `src/repl/compile.c` | Pure source-text validators that produce `ReplCompiledChange` descriptors; never mutates state |
 | `src/repl/compile.h` | `ReplCompiledChange`, `ReplCompileResult`, `ReplCompileContext`, compile entry points |
-| `src/repl/apply.c` | Applies a `ReplCompiledChange` to `ReplState` command arrays |
+| `src/repl/apply.c` | Applies a `ReplCompiledChange` to REPL runtime command arrays |
 | `src/repl/apply.h` | Apply public API (`repl_apply_compiled_change`, `repl_apply_predef_ops`) |
 | `src/repl/normalize.c` | Parse-and-normalize pipeline (`repl_parse_and_normalize*`) |
 | `src/repl/reformat.c` | Source reformatter (`repl_reformat_program`) |
@@ -617,7 +617,7 @@ explaining why the extra background is useful.
 | `src/support/gpuprof.h` | GPU profiler API (`gpu_prof_init/frame_begin/begin/end`, `gpu_prof_section_avg_us/_has_data`, `gpu_prof_uses_timestamps`) + the injected `GpuProfGlFns` table (`query_counter` optional → timestamp mode) |
 | `src/app/glr_prof.c` | gl-repl's `prof_section_info()` table: per-section `{ label, depth, is_total }` (bare label + explicit nesting depth — the panel derives indentation from depth). Also the GPU-bracketing policy: `k_gpu_sections[]` (which sections get timer queries — GL-emitting ones only; per-fade-batch subsections excluded for query-budget reasons), the cpuprof hook pair that routes them into gpuprof, and the per-frame capture mode (Off/Plot → no queries, Sections → depth-0 rows only, Details → full subset; set by the controller at frame top, since query boundaries cost real GPU time on GL-on-Metal). The demos implement their own `prof_section_info` |
 | `src/app/glr_prof.h` | GPU-section policy API (`glr_prof_section_is_gpu`, `glr_prof_install_gpu_section_hooks`, `glr_prof_set_gpu_capture_mode`) |
-| `src/scene/render_types.h` | Shared `SceneRgba` / `SceneRenderConfig` / `FrameRenderContext` types for scene helpers |
+| `src/scene/render_types.h` | Shared `SceneRgba` / `SceneRenderConfig` / `SceneFrameRenderContext` types for scene helpers |
 | `src/scene/guides/guides_shared.h` | Shared guide snapshot and planning types for REPL-aware 3D overlay passes |
 | `src/scene/guides/geometry_guides.c` | Vertex/primitive guide rendering (input context at cursor) from `SceneGuideSnapshot` |
 | `src/scene/guides/geometry_guides.h` | Geometry guides render entrypoint |
@@ -645,7 +645,7 @@ explaining why the extra background is useful.
 | `src/repl/eval.c` | Expression evaluator (recursive descent), REPL<->C translators, for-loop parsers |
 | `src/repl/eval.h` | Evaluator types (`ExprVar`, `ExprCtx`), function declarations |
 | `src/repl/format.c` | Pure indentation/depth computation (no GL dependency) |
-| `src/repl/format.h` | Formatting types (`ReplFmtCmd`, `ReplFmtType`), `repl_format_*` indent functions |
+| `src/repl/format.h` | Formatting helper declarations, currently `repl_format_reindent_from_parsed` |
 | `src/ui/core/gl_2d.h` | Header-only 2D OpenGL helper functions |
 | `tests/support/` | Shared test harness/setup helpers |
 | `tests/gl-stubs/` | No-op GL/GLU/GLUT headers used by `USE_GL_STUBS=1` builds |
@@ -666,8 +666,7 @@ explaining why the extra background is useful.
   `src/editor/`), `glr_*` for app shell/controller/app-service code,
   `scene_*` for 3D rendering, `ui_*` for 2D view rendering, and neutral
   names such as `prof` for generic utilities. The app-level audio
-  service lives at `src/app/glr_audio.c` with the `glr_audio_*` API
-  (resolved from the former neutral `audio.c`). Don't introduce new
+  service lives at `src/app/glr_audio.c` with the `glr_audio_*` API. Don't introduce new
   top-level prefixes without first documenting the ownership boundary.
 - Config toggles use the `ReplConfigItem` / `ReplConfigKey` pattern: add a
   descriptor entry to `g_cfg_items[]` in `src/app/glr_actions.c`; `CFG_ITEM_COUNT`

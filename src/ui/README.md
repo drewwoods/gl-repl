@@ -35,21 +35,23 @@ This split is reflected on the filesystem with two subdirectories:
 
 - **`core/`** — REPL-/editor-/peer-agnostic primitives. `text_panel.c`
   (reusable text panel), `tabbed_overlay.c` (modal paged reference
-  card), `layout.c` and `text_layout.c` (pure geometry / wrapping),
-  `text_search.c` (case-insensitive find), plus the header-only
-  helpers (`gl_2d.h`, `metrics.h`, `theme.h`, `hit.h`). These TUs are
+  card), `text_layout.c` (pure wrapping), `text_search.c`
+  (case-insensitive find), plus the header-only helpers (`gl_2d.h`,
+  `layout_utils.h`, `metrics.h`, `theme.h`, `core/hit.h`). These TUs are
   guarded against picking up REPL / editor knowledge and are linked
   into the standalone `editor_demo` to prove they work without the
   full app. `editor_demo` is the canary here: it should use `src/ui/core`
   only and must not grow a dependency on `src/ui/app`.
 - **`app/`** — feature-UI that knows REPL / editor / peer concepts.
-  The code-panel adapter (`repl_code_panel.c`), the floating panels
-  (`color_picker.c`, `variable_panel.c`, `autocomplete_panel.c`,
-  `profile_panel.c`), the chrome (`menu_bar.c`, `scene_tabs.c`,
-  `panels.c`), the feature HUDs (`replay_hud.c`), and the UI runtime
-  state itself (`state.{c,h}`, `state_types.h`, `snapshot.h`,
-  `editor.h`). All of these read frame snapshots and may carry
-  one-feature vocabulary (e.g. `replay_ui_*` in `replay_hud.c`).
+  The code-panel adapter (`repl_code_panel.c`), app geometry
+  (`layout.c`, `overlay_layout.c`), the floating-panel view projection
+  (`variable_panel_view.c`), autocomplete, chrome (`menu_bar.c`,
+  `scene_tabs.c`, `panels.c`), and the UI runtime state itself
+  (`state.{c,h}`, `state_types.h`, `snapshot.h`, `editor.h`). Peer-specific
+  renderers such as color picker, variable panel, and replay HUD live under
+  `subsystems/`; support overlays such as the CPU profile panel live under
+  `support/`. All of these read frame snapshots and may carry one-feature
+  vocabulary.
 
 Dependencies are strictly one-way: `app/` may include from `core/`;
 `core/` never includes from `app/`.
@@ -58,7 +60,7 @@ Dependencies are strictly one-way: `app/` may include from `core/`;
 
 `src/ui` has no standalone demo of its own, but its generic core is not
 untested in isolation: the generic text panel (`text_panel.c` plus its
-layout/search helpers) is linked and driven by
+wrapping/search helpers) is linked and driven by
 [`tools/editor_demo/`](../../tools/editor_demo/), the standalone plain-text
 editor — so the reusable view half runs without the REPL, without `src/app`,
 and without `src/ui/app`. The `scene_demo` HUD shows the same fixed-function
@@ -69,11 +71,11 @@ and without `src/ui/app`. The `scene_demo` HUD shows the same fixed-function
 
 Inside the full app this is **layer 5** of the ownership map. Each frame the
 controller (`src/app/glr_ctrl.c`) builds a `UiRenderSnapshot` from
-`ReplState` + `EditorState` + `UiState` + peer state and fans it out to the
+REPL runtime state + `EditorState` + `UiState` + peer state and fans it out to the
 `ui_*_render` functions. On input, the controller asks UI to hit-test, gets
 a `UiHit` back, and dispatches it to the owning subsystem.
 
-`UiState` (`state.c`) owns only **transient chrome**: viewport, pointer,
+`UiState` (`app/state.c`) owns only **transient chrome**: viewport, pointer,
 status-text TTL, panel visibility, the panel-divider geometry. It explicitly
 does *not* own cursor blink (the editor does), program state, or text. The
 code panel is assembled by a two-piece split: the generic `text_panel.c`
@@ -88,23 +90,26 @@ source-line targets.
 |---|---|
 | `core/text_panel.c` / `.h`, `core/text_search.c` | Generic text-panel renderer + hit-test + search visuals (REPL-free) |
 | `core/text_layout.c` / `.h` | Pure wrapping, row counts, cursor-row mapping (`CodeLayout`) |
-| `core/layout.c` / `.h` | Pure scene / code-panel rectangle geometry |
+| `core/layout_utils.h` | Header-only rectangle helpers shared by layout code |
 | `core/tabbed_overlay.c` / `.h` | Generic modal tabbed text overlay (the F1 help shell) |
 | `core/gl_2d.h` | Header-only 2D OpenGL helpers |
 | `core/hit.h` | `UiHit` / `UiHitKind` — the passive UI → controller result |
 | `core/metrics.h`, `core/theme.h` | Shared layout metrics + colors |
+| `app/layout.c` / `.h` | App scene / code-panel rectangle geometry |
+| `app/overlay_layout.c` / `.h` | Floating overlay panel placement |
 | `app/state.c` / `.h`, `app/state_types.h` | Owns `UiState` (chrome/viewport/pointer/status TTL only) |
 | `app/snapshot.h` | `UiRenderSnapshot` — the read-only per-frame bundle every renderer takes |
 | `app/panels.c` / `.h` | Top-level panel bridge: code panel + status banner, prioritizes overlay/menu hits |
 | `app/repl_code_panel.c` / `.h` | REPL-aware adapter: builds rows from snapshots, maps hits to source lines |
 | `app/menu_bar.c` / `.h` | Menu bar, dropdowns, flyout submenus, search slot |
 | `app/scene_tabs.c` / `.h` | Scene tab strip (snapshot-pure render + whole-band hit-test) |
-| `app/variable_panel.c` / `.h` | Variable-slider panel chrome (the peer owns drag/visibility) |
+| `app/variable_panel_view.c` / `.h` | Projects app snapshots into the variable-slider panel view |
 | `app/autocomplete_panel.c` / `.h` | Completion popup renderer |
-| `app/color_picker.c` / `.h` | Feature-UI: color-picker renderer + hit-test over `ColorPickerView` |
-| `app/replay_hud.c` / `.h` | Feature-UI: 2D replay HUD (reads the replay peer snapshot) |
-| `app/profile_panel.c` / `.h` | CPU profiling overlay |
 | `app/editor.h` | `Ui*` editor-overlay snapshot types (swatches, sliders, highlights) |
+| `subsystems/color_picker.c` / `.h` | Feature-UI: color-picker renderer + hit-test over `ColorPickerView` |
+| `subsystems/variable_panel.c` / `.h` | Feature-UI: variable-slider panel chrome (the peer owns drag/visibility) |
+| `subsystems/replay_hud.c` / `.h` | Feature-UI: 2D replay HUD (reads the replay peer snapshot) |
+| `support/cpuprof.c` / `.h` | CPU profiling overlay renderer and geometry helpers |
 
 **Boundary:** a UI renderer draws; a UI input handler hit-tests and returns a
 `UiHit`. Neither directly mutates REPL / editor / peer state, and `ui_*` does

@@ -162,7 +162,7 @@ scene_render_3d_scene(&scene_cfg)
   -> set viewport
   -> resolve and apply clear color from scene_cfg.flat_program
   -> for each accumulation sample:
-       -> prepare FrameRenderContext from scene_cfg
+       -> prepare SceneFrameRenderContext from scene_cfg
        -> apply projection using scene-local jitter
        -> apply camera and quality flags
        -> set up baseline lighting/material state
@@ -183,7 +183,7 @@ data.
 
 > This section is the app-level summary. For the full treatment of the
 > `src/repl` interpreter — the `GLCmd` record and provenance, the
-> compile→apply edit flow, the flatten→execute frame flow, the `ReplState`
+> compile→apply edit flow, the flatten→execute frame flow, the `ReplRuntimeState`
 > ownership slices, and the host-effects bridge — see the module-local deep
 > dive [`src/repl/ARCHITECTURE.md`](src/repl/ARCHITECTURE.md) (with a worked
 > `repl_demo --trace` walkthrough), oriented by [`src/repl/README.md`](src/repl/README.md).
@@ -348,10 +348,10 @@ Owned stages:
 | Stage | Owner |
 |-------|-------|
 | GLUT input dispatch (cross-subsystem routing) | `src/app/glr_ctrl.c` |
-| Editor text-document input + commit orchestration | `editor_input.c` + `editor_commit.c` |
+| Editor text-document input + commit orchestration | `src/editor/input.c` + `src/editor/commit.c` |
 | Parsing | `src/repl/parser.c` |
 | Validation / compilation (pure, returns `ReplCompiledChange`) | `src/repl/compile.c` |
-| Apply (writes `ReplState` only) | `src/repl/apply.c` |
+| Apply (writes REPL runtime state only) | `src/repl/apply.c` |
 | Source command mutation (low-level shifts) | `src/repl/command_store.c` |
 | Source scope/depth | `src/repl/source_scope.c` |
 | Flattening | `src/repl/flatten.c` |
@@ -572,7 +572,7 @@ snapshot for the panel, special-case in the consumers.
   `scene/`/`app/` headers or call `scene_*`/`glr_*`; it pulls
   app/scene-derived values only through controller-installed bridges
   (`ReplExportProjectionBridge`, `ReplExportCameraBridge`,
-  `ReplExportConfig`). Complements `check-gl-boundaries` (which already
+  `ReplConfigBridge`). Complements `check-gl-boundaries` (which already
   bars GL *calls* in the REPL pipeline) and `check-repl-export-no-ui-layout`.
 
 ### 2D Orthographic Scale (GL_FEEDBACK probe + zoom)
@@ -789,7 +789,7 @@ newer fork commit. Two fixes in that fork make it usable as a library consumer:
   `magick shot-0000.ppm shot.png`. POSIX only (no `SIGUSR1` on Windows). The
   **native** windowed backends (Cocoa/X11) honour the same `SIGUSR1` /
   `FREEGLUT_CAPTURE_FILE` contract via a parallel path in core
-  `src/fg_capture.c` (it posts a redisplay and grabs `GL_BACK` pre-swap —
+  `third_party/freeglut/src/fg_capture.c` (it posts a redisplay and grabs `GL_BACK` pre-swap —
   real-GPU pixels), so plain `make gl-repl` captures too; that path compiles
   to stubs on OSMesa builds.
 
@@ -992,7 +992,7 @@ metadata, and the `SceneFocusVertex` / `SceneGuideSnapshot` snapshots needed by
 3D overlays.
 
 Scene-local accumulation jitter does not live in the config. Derived
-per-pass data belongs in `FrameRenderContext`, for example camera world height,
+per-pass data belongs in `SceneFrameRenderContext`, for example camera world height,
 focus vertex, and other values that helper renderers should share.
 
 ## Scene Layer
@@ -1359,10 +1359,11 @@ Color falls into three buckets:
    palette, dim/stale text tiers, the `#000` menubar rule. A local
    `static const` documented at the use site.
 3. **Left as-is** — computed/domain palettes that must not follow the
-   accent: `color_picker.c` HSV math, `repl_code_panel.c`
-  syntax-highlight palette, the `cpuprof.c` FPS gauge (red must
-   keep meaning "over budget"), `text_panel.c` `k_clr_*` editor
-   sub-palette. Each carries a one-line pointer back to theme.h.
+   accent: `src/ui/subsystems/color_picker.c` HSV math,
+   `src/ui/app/repl_code_panel.c` syntax-highlight palette, the
+   `src/ui/support/cpuprof.c` FPS gauge (red must keep meaning
+   "over budget"), `src/ui/core/text_panel.c` `k_clr_*` editor
+   sub-palette. Each carries a one-line pointer back to `src/ui/core/theme.h`.
 
 **Selecting the scheme.** `UI_THEME_DEFAULT` in `config.h` is the
 single compile-time knob: a bare integer (`0` green … `5` mono — kept
@@ -1417,7 +1418,7 @@ Allowed:
 gl_repl.c        GLUT callback registration, glutInit, buffer swap
                 (the app-shell namespace rename is still open)
 src/app/glr_ctrl.c      GLUT modifier reads + cross-layer input routing
-editor_input.c  glutGetModifiers via editor_get_modifiers (gated behind
+src/editor/input.c  glutGetModifiers via editor_get_modifiers (gated behind
                 editor_input_enable_glut_modifier_reads so tests stay safe)
 src/repl/executor.c GLUT solid shapes (glutSolidCube/Sphere/Torus/Teapot/Cone)
                 and glutBitmapCharacter for label() text. (Its GLU
@@ -1447,7 +1448,7 @@ include `ui_*` headers.
 
 ### Scene state access
 
-Target rule: `scene_*` files consume `SceneRenderConfig`, `FrameRenderContext`,
+Target rule: `scene_*` files consume `SceneRenderConfig`, `SceneFrameRenderContext`,
 or explicit snapshot structs. They should not call `repl_state_*` directly.
 
 `check-state-boundaries` enforces the current audited boundary.
@@ -1542,7 +1543,7 @@ neutral seam that the full app fills and the demo can leave unset:
 
 3. **Export bridges + layout input** (`src/repl/export.h`). `export.c` is
    GL-free and app-free; app/scene-derived values arrive through
-   controller-installed bridges: `ReplExportConfigBridge` (`@cfg`
+   controller-installed bridges: `ReplConfigBridge` (`@cfg`
    emission/parse — also fronted by the typed live-cfg wrappers
    `repl_cfg_get_int` / `_set_int` / `_known` and the
    `repl_export_extract_cfg_slug` parser in `src/repl/export.c`, used by
@@ -1554,7 +1555,7 @@ neutral seam that the full app fills and the demo can leave unset:
    (viewport / code-panel geometry passed as an explicit export input
    instead of calling `ui_layout_*`). The demo installs none, so `@cfg` /
    camera / projection are no-ops there and `src/app/glr_config.c`,
-   `src/app/glr_camera.c`, `src/ui/core/layout.c` all leave the demo link set.
+   `src/app/glr_camera.c`, `src/ui/app/layout.c` all leave the demo link set.
    `check-repl-export-via-bridge` / `check-repl-export-no-ui-layout`
    guard this.
 
@@ -1787,7 +1788,7 @@ X(glutSolidTeapot)  \
 X(glutSolidCone)
 ```
 
-**`tests/gl-stubs/include/GL/freeglut.h`** (or `glu.h`) — add a no-op inline stub:
+**`tests/gl-stubs/include/GL/freeglut.h`** (or `tests/gl-stubs/include/GL/glu.h`) — add a no-op inline stub:
 
 ```c
 static inline void glutSolidTeapot(double size) {
@@ -2264,8 +2265,8 @@ How it works:
      pulling in `<stdlib.h>`, `<stdio.h>`, `<string.h>`, `<math.h>` via
      OpenGL-Vibe's bundled utilities, so this one re-includes them
      directly.
-   - `compat/legacy-include/miniaudio.h` (if present), else
-     `include/miniaudio.h`.
+   - the optional `miniaudio.h` copy under `compat/legacy-include/` (if present),
+     else `include/miniaudio.h`.
 2. Materialises both into `./.compat-scratch/include/` (untracked;
    already in HEAD's `.gitignore`).
 3. Invokes `make` with `PROJECT_ROOT` and `REPO_INCLUDE` overridden to
