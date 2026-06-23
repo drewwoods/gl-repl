@@ -2016,6 +2016,7 @@ static void test_wireframe_renderer_ignores_user_draw_state(void) {
     ASSERT_INT("wire renderer emits vertices",
                (int)gl_stub_counts[GL_STUB_glVertex3f], 3);
 #endif /* GL_STUBS */
+#endif /* !GL_STUBS */
 }
 
 /* Regression: loading an example resets the light_theme *name* to the
