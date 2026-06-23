@@ -48,6 +48,12 @@ gl_repl.c/h    = GLUT entry point and small shared header
                 (a `glr_*`-namespaced shell rename is on the open list)
 ```
 
+Naming note: `scene_*` is the existing code prefix, but the concept is closer
+to the rendered world or stage. It owns the camera-facing environment around
+the user program, not the saved user-scene slots (`repl_scenes`) and not the
+REPL geometry itself. If this were named from scratch, `world_*` or `stage_*`
+would describe that boundary more directly.
+
 The prefix is an ownership signal, not a generic sample prefix. New `repl_*`
 modules should own REPL language, editor, source, workspace, replay, or command
 model behavior. App-shell services belong under `glr_*`, including
