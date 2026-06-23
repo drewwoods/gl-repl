@@ -1680,9 +1680,9 @@ void glr_ctrl_display_frame(void) {
     /* 3D scene - render3d_draw_scene() handles optional accumulation-buffer AA */
     /* Reset subsection accumulators so timings across all AA samples sum up
      * correctly before the first (or only) render3d_draw_scene() call. */
-    for (ProfSection section_idx = PROF_RENDER3D_3D_SETUP; section_idx <= PROF_RENDER3D_3D_LAST; section_idx++)
+    for (ProfSection section_idx = PROF_RENDER3D_SETUP; section_idx <= PROF_RENDER3D_LAST; section_idx++)
         prof_accum_reset(section_idx);
-    prof_begin(PROF_RENDER3D_3D);
+    prof_begin(PROF_RENDER3D);
     {
         GlrCameraState cam = glr_camera();
         g_cur_frame_pose = glr_camera_pose_from_state(&cam);
@@ -1700,7 +1700,7 @@ void glr_ctrl_display_frame(void) {
             warned = 1;
         }
     }
-    prof_end(PROF_RENDER3D_3D);
+    prof_end(PROF_RENDER3D);
     /* Motion-blur sub-frames re-bake geometry via repl_flatten_commands()
      * (glr_ctrl_setup_subframe), which rewrites the live flat-program count
      * as a side effect. The last sample bakes at the true frame time, so the
@@ -1730,7 +1730,7 @@ void glr_ctrl_display_frame(void) {
     }
 
     /* Commit the accumulated subsection totals now that all AA samples are done. */
-    for (ProfSection section_idx = PROF_RENDER3D_3D_SETUP; section_idx <= PROF_RENDER3D_3D_LAST; section_idx++)
+    for (ProfSection section_idx = PROF_RENDER3D_SETUP; section_idx <= PROF_RENDER3D_LAST; section_idx++)
         prof_accum_commit(section_idx);
 
     prof_begin(PROF_CODE_PANEL);
@@ -1787,7 +1787,7 @@ void glr_ctrl_display_frame(void) {
     /* Compositor post-process: the whole-frame filter runs over the
      * entire composited image (3D scene + every 2D UI layer) now that
      * all drawing for the frame is done, before the buffer swap in
-     * display_func(). The scene-viewport filter (PROF_RENDER3D_3D_POST_PROCESS)
+     * display_func(). The scene-viewport filter (PROF_RENDER3D_POST_PROCESS)
      * is the separate scene-layer pass; this is the compositor stage. */
     prof_begin(PROF_COMPOSITOR);
     glr_compositor_postprocess_frame(

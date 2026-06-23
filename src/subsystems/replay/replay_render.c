@@ -43,7 +43,7 @@ void replay_render_fade_batches(const ReplayFadePlan *plan) {
     int batch_count = plan->batch_count;
     if (batch_count <= 0) return;
 
-    prof_begin(PROF_RENDER3D_3D_FADE);
+    prof_begin(PROF_RENDER3D_FADE);
 
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     /* Even though we disable lighting here, the repl executor, run by the fade
@@ -68,13 +68,13 @@ void replay_render_fade_batches(const ReplayFadePlan *plan) {
         float alpha = plan->batch_alpha[batch_idx];
         if (alpha <= 0.0f) continue;
 
-        prof_begin(PROF_RENDER3D_3D_FADE_BATCH_PREP);
+        prof_begin(PROF_RENDER3D_FADE_BATCH_PREP);
         replay_render_restore_baseline(plan);
         render3d_clr_a(RENDER3D_CLR_REPLAY_FADE, alpha);
         glPushMatrix();
-        prof_accum_end(PROF_RENDER3D_3D_FADE_BATCH_PREP);
+        prof_accum_end(PROF_RENDER3D_FADE_BATCH_PREP);
 
-        prof_begin(PROF_RENDER3D_3D_FADE_BATCH_EXEC);
+        prof_begin(PROF_RENDER3D_FADE_BATCH_EXEC);
         /* VERTEX-mode fade batches replay partial tess sequences,
          * so each batch must skip the executor's trailing
          * gluTessEndContour / gluTessEndPolygon cleanup — finalizing
@@ -91,16 +91,16 @@ void replay_render_fade_batches(const ReplayFadePlan *plan) {
             .has_fade_context       = 1,
             .suppress_tess_finalize = suppress_tess,
         });
-        prof_accum_end(PROF_RENDER3D_3D_FADE_BATCH_EXEC);
+        prof_accum_end(PROF_RENDER3D_FADE_BATCH_EXEC);
 
         glPopMatrix();
     }
 
-    prof_begin(PROF_RENDER3D_3D_FADE_BATCH_POST);
+    prof_begin(PROF_RENDER3D_FADE_BATCH_POST);
     glPopAttrib();
-    prof_accum_end(PROF_RENDER3D_3D_FADE_BATCH_POST);
+    prof_accum_end(PROF_RENDER3D_FADE_BATCH_POST);
 
-    prof_accum_end(PROF_RENDER3D_3D_FADE);
+    prof_accum_end(PROF_RENDER3D_FADE);
 }
 
 void replay_render_tess_preview(const ReplayFadePlan *plan) {

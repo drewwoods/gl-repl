@@ -608,7 +608,7 @@ static void render3d_pass_setup(const Render3dState *state,
                              const Render3dFrameRenderContext *frame_ctx,
                              float accum_jitter_x, float accum_jitter_y) {
     const Render3dRenderConfig *config = &frame_ctx->config;
-    prof_begin(PROF_RENDER3D_3D_SETUP);
+    prof_begin(PROF_RENDER3D_SETUP);
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 
     render3d_apply_projection(state, config, accum_jitter_x, accum_jitter_y);
@@ -631,7 +631,7 @@ static void render3d_pass_setup(const Render3dState *state,
 
     render3d_apply_quality_config(config);
     render3d_apply_wireframe_config(config);
-    prof_accum_end(PROF_RENDER3D_3D_SETUP);
+    prof_accum_end(PROF_RENDER3D_SETUP);
 }
 
 static void render3d_pass_hidden_line_wireframe(const Render3dRenderConfig *config) {
@@ -672,12 +672,12 @@ static void render3d_pass_hidden_line_wireframe(const Render3dRenderConfig *conf
 }
 
 static void render3d_pass_fill(const Render3dRenderConfig *config) {
-    prof_begin(PROF_RENDER3D_3D_FILL);
+    prof_begin(PROF_RENDER3D_FILL);
     if (config->wireframe == RENDER3D_WIREFRAME_HIDDEN)
         render3d_pass_hidden_line_wireframe(config);
     else
         render3d_execute_user_geometry(config, RENDER3D_EXEC_MAIN_FILL);
-    prof_accum_end(PROF_RENDER3D_3D_FILL);
+    prof_accum_end(PROF_RENDER3D_FILL);
 
     if (config->post_fill_fn)
         config->post_fill_fn(config->post_fill_user_data);
@@ -690,20 +690,20 @@ static void render3d_pass_fill(const Render3dRenderConfig *config) {
  * edges blend against the final background color rather than the clear
  * color from earlier in the frame. */
 static void render3d_pass_helpers(const Render3dFrameRenderContext *frame_ctx) {
-    prof_begin(PROF_RENDER3D_3D_HELPERS);
-    prof_begin(PROF_RENDER3D_3D_BACKDROP);
+    prof_begin(PROF_RENDER3D_HELPERS);
+    prof_begin(PROF_RENDER3D_BACKDROP);
     render3d_backdrop_render(frame_ctx);
-    prof_accum_end(PROF_RENDER3D_3D_BACKDROP);
-    prof_begin(PROF_RENDER3D_3D_GRID);
+    prof_accum_end(PROF_RENDER3D_BACKDROP);
+    prof_begin(PROF_RENDER3D_GRID);
     render3d_grid_render(frame_ctx);
-    prof_accum_end(PROF_RENDER3D_3D_GRID);
-    prof_begin(PROF_RENDER3D_3D_AXES);
+    prof_accum_end(PROF_RENDER3D_GRID);
+    prof_begin(PROF_RENDER3D_AXES);
     render3d_axes_render(frame_ctx);
-    prof_accum_end(PROF_RENDER3D_3D_AXES);
-    prof_begin(PROF_RENDER3D_3D_ORBIT_TARGET);
+    prof_accum_end(PROF_RENDER3D_AXES);
+    prof_begin(PROF_RENDER3D_ORBIT_TARGET);
     draw_orbit_target(frame_ctx);
-    prof_accum_end(PROF_RENDER3D_3D_ORBIT_TARGET);
-    prof_accum_end(PROF_RENDER3D_3D_HELPERS);
+    prof_accum_end(PROF_RENDER3D_ORBIT_TARGET);
+    prof_accum_end(PROF_RENDER3D_HELPERS);
 }
 
 /* Polygon outline overlay, vertex-point overlay, vertex-number /
@@ -713,13 +713,13 @@ static void render3d_pass_helpers(const Render3dFrameRenderContext *frame_ctx) {
  * fires after lights_render so its output sits on top of the
  * scene's helpers. */
 static void render3d_pass_overlays(const Render3dFrameRenderContext *frame_ctx) {
-    prof_begin(PROF_RENDER3D_3D_OVERLAYS);
+    prof_begin(PROF_RENDER3D_OVERLAYS);
     render3d_lights_render(frame_ctx);
     if (frame_ctx->config.post_overlays_fn)
         frame_ctx->config.post_overlays_fn(
             frame_ctx->config.post_overlays_user_data);
     glPopAttrib();
-    prof_accum_end(PROF_RENDER3D_3D_OVERLAYS);
+    prof_accum_end(PROF_RENDER3D_OVERLAYS);
 }
 
 static void render_3d_scene_pass(const Render3dState *state,
@@ -814,11 +814,11 @@ int render3d_draw_scene(Render3dState *state,
     /* Once per frame, on the fully resolved scene image (covers both
      * the accum and non-accum branches), before any 2D overlay. */
     if (config->post_filter_mode > RENDER3D_POST_FILTER_OFF) {
-        prof_begin(PROF_RENDER3D_3D_POST_PROCESS);
+        prof_begin(PROF_RENDER3D_POST_PROCESS);
         render3d_postprocess_filter_render(config->post_filter_mode,
                                         config->render3d_x, config->render3d_y,
                                         config->render3d_w, config->render3d_h);
-        prof_accum_end(PROF_RENDER3D_3D_POST_PROCESS);
+        prof_accum_end(PROF_RENDER3D_POST_PROCESS);
     }
     return 0;
 }

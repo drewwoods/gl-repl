@@ -436,7 +436,7 @@ static void test_display_frame_profile_coverage(void) {
         PROF_SNAPSHOT_PREP,
         PROF_SNAPSHOT_SCENE_CONFIG,
         PROF_SNAPSHOT_UI,
-        PROF_RENDER3D_3D,
+        PROF_RENDER3D,
         PROF_REPLAY_HUD,    /* fixture has replay active */
         PROF_CODE_PANEL,
         PROF_UI_PANELS,
@@ -451,7 +451,7 @@ static void test_display_frame_profile_coverage(void) {
     }
 
     /* Sum of disjoint top-level sections should be a substantial
-     * fraction of PROF_FRAME_TOTAL. PROF_SNAPSHOT / PROF_RENDER3D_3D
+     * fraction of PROF_FRAME_TOTAL. PROF_SNAPSHOT / PROF_RENDER3D
      * are themselves aggregates, so summing them with the leaves
      * outside (autonormal, flatten, replay_hud, code_panel,
      * ui_panels, profile_panel, frame_restore) covers the
@@ -461,7 +461,7 @@ static void test_display_frame_profile_coverage(void) {
         prof_section_last_us(PROF_AUTONORMAL) +
         prof_section_last_us(PROF_FLATTEN) +
         prof_section_last_us(PROF_SNAPSHOT) +
-        prof_section_last_us(PROF_RENDER3D_3D) +
+        prof_section_last_us(PROF_RENDER3D) +
         prof_section_last_us(PROF_REPLAY_HUD) +
         prof_section_last_us(PROF_CODE_PANEL) +
         prof_section_last_us(PROF_UI_PANELS) +
