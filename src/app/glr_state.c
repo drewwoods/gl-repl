@@ -23,8 +23,8 @@
 #include <string.h>
 
 #include "app/glr_defaults.h"    /* CFG_DEFAULT_* */
-#include "scene/themes.h"    /* GRID_MAJOR_*, GRID_EXTENT_*, SceneGridTheme defaults */
-#include "scene/postprocess_filter.h" /* SCENE_POST_FILTER_OFF */
+#include "render3d/themes.h"    /* GRID_MAJOR_*, GRID_EXTENT_*, SceneGridTheme defaults */
+#include "render3d/postprocess_filter.h" /* SCENE_POST_FILTER_OFF */
 #include "c_compat.h"        /* STATIC_ASSERT */
 
 /* The render defaults below seed exactly four GL_LIGHTn ids by hand, so the

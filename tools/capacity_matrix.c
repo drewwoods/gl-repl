@@ -28,7 +28,7 @@
 #include "repl/eval.h"
 #include "repl/export_state.h"
 #include "subsystems/replay/replay.h"
-#include "scene/render_types.h"
+#include "render3d/render_types.h"
 
 #include <stddef.h>
 #include <stdio.h>

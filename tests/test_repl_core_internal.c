@@ -20,7 +20,7 @@
 #include "ui/app/layout.h"           /* CODE_PANEL_LAYOUT_* */
 #include "app/glr_defaults.h"   /* CFG_DEFAULT_* */
 #include "support/test_harness.h"
-#include "scene/render.h"
+#include "render3d/render.h"
 #include "subsystems/edit_overlays/edit_overlays.h"  /* OverlayWalkCtx, edit_overlays_render_outlines */
 #include "source_document.h"        /* source_document_insert_line */
 #include "repl/cfg_baseline.h"      /* ReplConfigBag */

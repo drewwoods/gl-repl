@@ -17,7 +17,7 @@
 #include "repl/state_owners.h"
 #include "repl/state_views.h"
 #include "repl/tutorials.h"
-#include "scene/themes.h"        /* GRID_THEME_*, AXES_THEME_*, SCENE_BACKDROP_* */
+#include "render3d/themes.h"        /* GRID_THEME_*, AXES_THEME_*, SCENE_BACKDROP_* */
 #include "source_document.h"
 #include "subsystems/variable_panel/variable_panel_drag.h"   /* slider-drag plumbing for REQUIRE_VAR test */
 #include "subsystems/variable_panel/variable_panel_state.h"

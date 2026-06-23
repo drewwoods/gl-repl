@@ -391,7 +391,7 @@ EDITOR_SRCS = $(wildcard src/editor/*.c)
 
 REPL_SRCS = $(wildcard src/repl/*.c)
 
-SCENE_SRCS = $(wildcard src/scene/*.c src/scene/guides/*.c)
+SCENE_SRCS = $(wildcard src/render3d/*.c src/render3d/guides/*.c)
 
 UI_CORE_SRCS = $(wildcard src/ui/core/*.c)
 
@@ -424,8 +424,8 @@ HDRS = \
 	$(wildcard src/app/*.h) \
 	$(wildcard src/editor/*.h) \
 	$(wildcard src/repl/*.h) \
-	$(wildcard src/scene/*.h) \
-	$(wildcard src/scene/guides/*.h) \
+	$(wildcard src/render3d/*.h) \
+	$(wildcard src/render3d/guides/*.h) \
 	$(wildcard src/ui/core/*.h) \
 	$(wildcard src/ui/app/*.h) \
 	$(wildcard src/ui/support/*.h) \
@@ -436,7 +436,7 @@ HDRS = \
 	source_document.h
 
 UI_SRCS = $(UI_CORE_SRCS) $(UI_APP_SRCS)
-SCENE_HDRS = $(filter src/scene/%.h,$(HDRS))
+SCENE_HDRS = $(filter src/render3d/%.h,$(HDRS))
 UI_HDRS = $(filter src/ui/core/%.h src/ui/app/%.h,$(HDRS))
 STATE_NEUTRAL_SRCS = src/repl/format.c src/support/memprof.c src/support/cpuprof.c src/support/gpuprof.c tests/gl-stubs/gl_stub_counts.c
 
@@ -774,14 +774,14 @@ test_audio_LDLIBS = $(GL_LDFLAGS)
 test_audio_RUN ?= $(BINDIR)/test_audio
 
 test_scene_guides_OBJS = $(OBJDIR)/$(TEST_DIR)/test_scene_guides.o \
-	$(OBJDIR)/src/scene/guides/geometry_guides.o \
-	$(OBJDIR)/src/scene/guides/transform_guides.o \
+	$(OBJDIR)/src/render3d/guides/geometry_guides.o \
+	$(OBJDIR)/src/render3d/guides/transform_guides.o \
 	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o
 test_scene_guides_LDLIBS = $(GL_LDFLAGS)
 test_scene_guides_RUN ?= $(BINDIR)/test_scene_guides
 
 test_scene_transition_OBJS = $(OBJDIR)/$(TEST_DIR)/test_scene_transition.o \
-	$(OBJDIR)/src/scene/scene_transition.o
+	$(OBJDIR)/src/render3d/scene_transition.o
 test_scene_transition_LDLIBS =
 test_scene_transition_RUN ?= $(BINDIR)/test_scene_transition
 
@@ -1099,7 +1099,7 @@ $(BINDIR)/test_ui_gl_state: $(OBJDIR)/$(TEST_DIR)/test_ui_gl_state.o
 # nv_fog_distance_supported = 1, then glReadPixels and checks corner
 # pixels. Reproduces the post-fb976f0 underwater-fill regression on
 # drivers that advertise GL_NV_fog_distance.
-$(BINDIR)/test_scene_underwater_fill_gl: $(OBJDIR)/$(TEST_DIR)/test_scene_underwater_fill_gl.o $(OBJDIR)/src/scene/grid.o
+$(BINDIR)/test_scene_underwater_fill_gl: $(OBJDIR)/$(TEST_DIR)/test_scene_underwater_fill_gl.o $(OBJDIR)/src/render3d/grid.o
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $^ $(GL_LDFLAGS)
 
@@ -1280,7 +1280,7 @@ check-repl-no-app: ## Ratchet: forbid new app/glr_* coupling in src/repl/.
 check-repl-no-mut-reads: ## Ratchet: cap `_mut()` calls in src/repl/ outside owner files (audit #7/#14).
 	@bash scripts/check-repl-no-mut-reads.sh
 
-check-scene-no-upper-layers: ## Hard guard: src/scene/ must not include from app/editor/ui/subsystems.
+check-scene-no-upper-layers: ## Hard guard: src/render3d/ must not include from app/editor/ui/subsystems.
 	@bash scripts/check-scene-no-upper-layers.sh
 
 check-ui-core-no-upper-layers: ## Hard guard: src/ui/core/ must not include from app/editor/repl/scene/subsystems/ui-app.

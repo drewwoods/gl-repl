@@ -48,9 +48,9 @@
 #include "editor/inline_file_prompt.h"
 #include "editor/inline_rename.h"
 #include "editor/undo.h"
-#include "scene/themes.h"
-#include "scene/view_mode.h"         /* SCENE_VIEW_LIST — derives the view_mode cfg symbols */
-#include "scene/lights.h"           /* scene_lights_apply_theme, scene_light_theme_names */
+#include "render3d/themes.h"
+#include "render3d/view_mode.h"         /* SCENE_VIEW_LIST — derives the view_mode cfg symbols */
+#include "render3d/lights.h"           /* scene_lights_apply_theme, scene_light_theme_names */
 #include "subsystems/edit_overlays/edit_overlays.h"
 
 static const char *replay_mode_names[] = { "Polygon", "Vertex" };

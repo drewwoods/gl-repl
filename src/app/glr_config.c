@@ -15,7 +15,7 @@
 #include "ui/app/state.h"
 #include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
-#include "scene/lights.h"   /* scene_lights_apply_theme + eye-space init */
+#include "render3d/lights.h"   /* scene_lights_apply_theme + eye-space init */
 
 static int clamp_int(int v, int lo, int hi) {
     if (v < lo) return lo;

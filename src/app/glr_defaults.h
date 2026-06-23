@@ -21,9 +21,9 @@
 #define GLR_DEFAULTS_H
 
 #include "app/glr_config.h"  /* GlrConfigKey (used by GlrExampleTagDefault) */
-#include "scene/guides/xform_guide_mode.h"
-#include "scene/themes.h"
-#include "scene/view_mode.h"
+#include "render3d/guides/xform_guide_mode.h"
+#include "render3d/themes.h"
+#include "render3d/view_mode.h"
 #include "subsystems/edit_overlays/edit_overlays.h"
 #include "ui/app/layout.h"
 

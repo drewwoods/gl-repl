@@ -22,9 +22,9 @@
  */
 #include "gl_includes.h"
 #include "config.h"
-#include "scene/render.h"
-#include "scene/render_types.h"
-#include "scene/view_mode.h"  /* GLR_VIEW_PROJECTION_TRANSITION_SECS */
+#include "render3d/render.h"
+#include "render3d/render_types.h"
+#include "render3d/view_mode.h"  /* GLR_VIEW_PROJECTION_TRANSITION_SECS */
 
 #include <errno.h>
 #include <math.h>

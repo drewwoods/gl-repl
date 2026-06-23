@@ -46,9 +46,9 @@
  * NOT in `make test`. Needs a display.
  */
 #include "gl_includes.h"
-#include "scene/grid.h"
-#include "scene/render_types.h"
-#include "scene/themes.h"
+#include "render3d/grid.h"
+#include "render3d/render_types.h"
+#include "render3d/themes.h"
 #include "support/test_harness.h"
 
 #include <stdio.h>

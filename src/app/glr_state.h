@@ -17,9 +17,9 @@
 #ifndef GLR_STATE_H
 #define GLR_STATE_H
 
-#include "scene/guides/xform_guide_mode.h"
-#include "scene/view_mode.h"
-#include "scene/render_types.h"   /* SceneLight, MAX_LIGHTS for the theme-seeded lights[] */
+#include "render3d/guides/xform_guide_mode.h"
+#include "render3d/view_mode.h"
+#include "render3d/render_types.h"   /* SceneLight, MAX_LIGHTS for the theme-seeded lights[] */
 
 /* Scene-presentation policy: what chrome and overlays the app should show, how
  * the code panel should format text, and which view mode/backdrop/filter choices

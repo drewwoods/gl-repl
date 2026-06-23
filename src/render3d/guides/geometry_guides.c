@@ -2,8 +2,8 @@
  * geometry_guides.c - vertex/normal edit-guide rendering.
  */
 #include "geometry_guides.h"
-#include "scene/palette.h"
-#include "scene/occluded_ghost.h"  /* SCENE_OCCLUDED_GHOST_STIPPLE */
+#include "render3d/palette.h"
+#include "render3d/occluded_ghost.h"  /* SCENE_OCCLUDED_GHOST_STIPPLE */
 
 #include <math.h>   /* sqrtf, fminf, fmodf, cosf, sinf */
 #include <string.h> /* strncmp */

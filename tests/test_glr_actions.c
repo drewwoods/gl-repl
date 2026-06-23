@@ -32,7 +32,7 @@
 #include "repl/eval.h"                    /* g_predef_vars, repl_eval_find_predef_var_idx */
 #include "subsystems/color_picker/color_picker_state.h"
 #include "repl/cfg_baseline.h"             /* repl_cfg_set_text, repl_cfg_resolve_text */
-#include "scene/themes.h"                  /* GRID/AXES/SCENE_BACKDROP/LIGHT_THEME_* */
+#include "render3d/themes.h"                  /* GRID/AXES/SCENE_BACKDROP/LIGHT_THEME_* */
 #include "subsystems/edit_overlays/edit_overlays.h"
 #include "support/test_harness.h"
 #include <stdlib.h>

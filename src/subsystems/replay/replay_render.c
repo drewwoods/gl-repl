@@ -6,7 +6,7 @@
 #include "repl/flatten.h"
 #include "subsystems/replay/replay.h"
 #include "support/cpuprof.h"
-#include "scene/palette.h"
+#include "render3d/palette.h"
 #include "source_document.h"
 #include <string.h>
 

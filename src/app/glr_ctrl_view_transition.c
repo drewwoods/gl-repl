@@ -11,7 +11,7 @@
 #include "app/glr_ctrl_internal.h"
 #include "app/glr_camera.h"
 #include "app/glr_state.h"
-#include "scene/view_mode.h"          /* GLR_VIEW_PROJECTION_TRANSITION_SECS */
+#include "render3d/view_mode.h"          /* GLR_VIEW_PROJECTION_TRANSITION_SECS */
 
 static float g_projection_mix = 1.0f; /* 0 = ortho, 1 = perspective */
 typedef enum {

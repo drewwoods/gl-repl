@@ -1,7 +1,7 @@
 #!/bin/bash
-# Hard guard: src/scene/ must not include from upper layers.
+# Hard guard: src/render3d/ must not include from upper layers.
 #
-# The scene renderer (src/scene/) is layer 3.5. It is allowed to
+# The scene renderer (src/render3d/) is layer 3.5. It is allowed to
 # include from src/repl/ (small allow-list: command.h, flatten.h, and
 # similar program-model types it walks) and src/support/, but must
 # stay free of upper-layer headers:
@@ -15,7 +15,7 @@
 # Inverting any of these would mean the scene renderer reaches into
 # the controller / editor / UI / feature subsystems — a layering
 # inversion that breaks the standalone scene_demo target's reason
-# for existing (it links src/scene/ without the rest of the tree).
+# for existing (it links src/render3d/ without the rest of the tree).
 #
 # Comment-only references are filtered out — they describe history
 # but do not link.
@@ -27,10 +27,10 @@ forbidden='#include[[:space:]]+"(app|editor|ui|subsystems)/'
 files=()
 while IFS= read -r f; do
   files+=( "$f" )
-done < <(find src/scene -type f \( -name '*.c' -o -name '*.h' \) | sort)
+done < <(find src/render3d -type f \( -name '*.c' -o -name '*.h' \) | sort)
 
 if [ "${#files[@]}" -eq 0 ]; then
-  echo "ERROR: src/scene/ contains no .c / .h files — guard cannot run." >&2
+  echo "ERROR: src/render3d/ contains no .c / .h files — guard cannot run." >&2
   exit 1
 fi
 
@@ -39,7 +39,7 @@ hits="$( { grep -nE "$forbidden" "${files[@]}" 2>/dev/null || true; } \
         || true )"
 
 if [ -n "$hits" ]; then
-  echo "ERROR: src/scene/ contains forbidden upper-layer #includes:" >&2
+  echo "ERROR: src/render3d/ contains forbidden upper-layer #includes:" >&2
   echo "$hits" >&2
   echo >&2
   echo "       Scene code must not depend on app/, editor/, ui/, or" >&2

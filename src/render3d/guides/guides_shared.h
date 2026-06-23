@@ -11,7 +11,7 @@
 
 #include "repl/command.h"
 #include "repl/flatten.h"
-#include "scene/guides/xform_guide_mode.h"
+#include "render3d/guides/xform_guide_mode.h"
 
 typedef struct SceneGuideSnapshot {
     int show_guides;
