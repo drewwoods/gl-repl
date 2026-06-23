@@ -1,14 +1,15 @@
 # REPL Module Guide
 
-For per-module detail and frame-pipeline narrative read
-[`ARCHITECTURE.md`](ARCHITECTURE.md). The `src/repl` language pipeline has
-its own module-local docs: [`src/repl/README.md`](src/repl/README.md)
-(orientation + the standalone `repl_demo`) and
-[`src/repl/ARCHITECTURE.md`](src/repl/ARCHITECTURE.md) (deep dive: data model,
-edit/frame flows, state ownership, with a worked `repl_demo --trace`).
-
 This file is the quick ownership map: which layer owns which state, which
 module names mean what, and where new code should go.
+
+> [!NOTE]
+> For per-module detail and the frame-pipeline narrative, read
+> [`ARCHITECTURE.md`](ARCHITECTURE.md). The `src/repl` language pipeline has
+> its own module-local docs: [`src/repl/README.md`](src/repl/README.md)
+> (orientation + the standalone `repl_demo`) and
+> [`src/repl/ARCHITECTURE.md`](src/repl/ARCHITECTURE.md) (deep dive: data model,
+> edit/frame flows, state ownership, with a worked `repl_demo --trace`).
 
 ## Five-Role Ownership Contract
 
@@ -128,18 +129,23 @@ Consequences:
 
 ## State Owners
 
-| State | Owns | Does not own |
+The first column names the **type** that owns each slice; `(app)` / `(peer)`
+marks the tier. Storage lives in the type's sibling `.c` — the [Peer
+Subsystems](#peer-subsystems-and-neutral-support) and
+[Responsibility Layers](#responsibility-layers) sections give the file paths.
+
+| State (type) | Owns | Does not own |
 |---|---|---|
-| [`ReplRuntimeState`](src/repl/state.h#L18) | Parsed command array, flat program, REPL variable state (scalar predefined vars plus fixed scratch arrays `A/B/C` of `REPL_SCRATCH_ARRAY_LEN` floats and the `func0..func9` user-alias table), active scene/workspace identity, import/export metadata | Render/presentation config (`glr_state`, app layer), user-scene slot payloads (`repl_scenes`), replay runtime state (peer), variable-panel state (peer), help-session state (peer), color-picker state (peer), editable text, cursor, selection, search query, UI visibility, pointer/viewport chrome |
-| `glr_state` (app) | App-level presentation/render toggles (grid/axes themes, wireframe, overlays, backdrop, scene + whole-frame post-process filters, camera-rotate, etc.). Defaults from [`glr_defaults.h`](src/app/glr_defaults.h) (`CFG_DEFAULT_*`). Read/written through the `glr_config` keyed bridge and per-scene snapshots | Program model, editable text, REPL grammar |
+| [`ReplRuntimeState`](src/repl/state.h#L18) | Parsed command array, flat program, REPL variable state (scalar predefined vars plus fixed scratch arrays `A/B/C` of `REPL_SCRATCH_ARRAY_LEN` floats and the `func0..func9` user-alias table), active scene/workspace identity, import/export metadata | Render/presentation config ([`GlrState`](src/app/glr_state.h#L87), app layer), user-scene slot payloads (`repl_scenes`), replay runtime state (peer), variable-panel state (peer), help-session state (peer), color-picker state (peer), editable text, cursor, selection, search query, UI visibility, pointer/viewport chrome |
+| [`GlrState`](src/app/glr_state.h#L87) (app) | App-level presentation/render toggles (grid/axes themes, wireframe, overlays, backdrop, scene + whole-frame post-process filters, camera-rotate, etc.). Defaults from [`glr_defaults.h`](src/app/glr_defaults.h) (`CFG_DEFAULT_*`). Read/written through the `glr_config` keyed bridge and per-scene snapshots | Program model, editable text, REPL grammar |
 | [`EditorState`](src/editor/state.h#L175) | Editable text buffer, active input, cursor/edit-line, insert mode, selection, clipboard, search/autocomplete, scroll, **cursor blink** (the editor controls cursor visibility/blink — UI just renders), undo/redo, editor transactions | Variable-panel drag (owned by the variable_panel peer), parsed command semantics, GL execution, menu chrome, transient status banners, render-output pixel coordinates |
 | [`UiState`](src/ui/app/state.h#L20) | Viewport, pointer, status text TTL, help-overlay visibility (chrome flag), profile-panel visibility, panel-divider geometry (panel_frac + resizing_panel) | Help-session tab/scroll (peer), variable-panel state (peer), camera pose (lives on `glr_camera`), program model, editable text, command validation, cursor blink (editor owns), per-frame render-output (uses `Ui*Output`) |
 | [`SceneRendererState`](src/scene/render.h#L95) | Per-renderer 3D scene state that must persist across frames: ortho reference distance, active ortho edge tracking, and the most recent zero-jitter projection descriptor | REPL program state, editor text/session state, UI chrome, saved user-scene slots, app-level presentation config |
-| `variable_panel` peer | Variable-panel visibility flag + slider drag transaction (var_idx, log_mode, start_value, start_x). Storage in [`src/subsystems/variable_panel/variable_panel_state.c`](src/subsystems/variable_panel/variable_panel_state.c). | Editor text behavior, REPL grammar |
-| `replay` peer | Replay state machine: PC, mode, speed, accum, fade speed, src_line_idx, total_flat_cmds, expand_args. Storage in [`src/subsystems/replay/replay_state.c`](src/subsystems/replay/replay_state.c). | Editor text behavior, REPL grammar |
-| `editor_help_session` peer | Help-overlay session state: tab_idx, scroll. Storage in [`src/editor/help_session.c`](src/editor/help_session.c). Visibility flag stays on `UiState.help` as chrome. | Help content (provided by content provider) |
-| `color_picker` peer | Floating color-picker state, lifecycle, slider input handlers, source-line writeback through editor commit. Storage in [`src/subsystems/color_picker/color_picker_state.c`](src/subsystems/color_picker/color_picker_state.c); peer view + [`ColorPickerInputResult`](src/subsystems/color_picker/color_picker_state.h#L96) in [`src/subsystems/color_picker/color_picker_state.h`](src/subsystems/color_picker/color_picker_state.h). | Picker rendering / hit-test (lives on [`src/ui/subsystems/color_picker.c`](src/ui/subsystems/color_picker.c)) |
-| `tutorial` peer | Tutorial runtime state: active flag, tutorial idx, current step, locked-line array, fade timing, last match result. Storage in [`src/subsystems/tutorial/tutorial_state.c`](src/subsystems/tutorial/tutorial_state.c). Runner orchestration lives in [`src/subsystems/tutorial/tutorial_runner.c`](src/subsystems/tutorial/tutorial_runner.c); command matching and ghost-text helpers live in [`src/subsystems/tutorial/tutorial_match.c`](src/subsystems/tutorial/tutorial_match.c); pure fade timing helpers live in `src/subsystems/tutorial/tutorial_animation.c/.h`. | Editor text behavior, REPL grammar, tutorial catalog ([`src/repl/tutorials.c`](src/repl/tutorials.c)) |
+| [`VariablePanelState`](src/subsystems/variable_panel/variable_panel_state.h#L55) (peer) | Variable-panel visibility flag + slider drag transaction (var_idx, log_mode, start_value, start_x) | Editor text behavior, REPL grammar |
+| [`ReplayRuntimeState`](src/subsystems/replay/replay_state.h#L75) (peer) | Replay state machine: PC, mode, speed, accum, fade speed, src_line_idx, total_flat_cmds, expand_args | Editor text behavior, REPL grammar |
+| [`EditorHelpSession`](src/editor/help_session.h#L16) (peer) | Help-overlay session state: tab_idx, scroll. Visibility flag stays on `UiState.help` as chrome | Help content (provided by content provider) |
+| `color_picker` (peer, `g_cp_*` statics) | Floating color-picker state, lifecycle, slider input handlers, source-line writeback through editor commit; surfaced to renderers by value as [`ColorPickerView`](src/subsystems/color_picker/color_picker_state.h#L46). The one tier with no single state struct — its state lives in file-private `g_cp_*` statics rather than a named type | Picker rendering / hit-test (lives on [`src/ui/subsystems/color_picker.c`](src/ui/subsystems/color_picker.c)) |
+| [`TutorialRuntimeState`](src/subsystems/tutorial/tutorial_state.h#L44) (peer) | Tutorial runtime state: active flag, tutorial idx, current step, locked-line array, fade timing, last match result. Runner orchestration, command matching, and pure fade-timing helpers split across [`tutorial_runner.c`](src/subsystems/tutorial/tutorial_runner.c) / [`tutorial_match.c`](src/subsystems/tutorial/tutorial_match.c) / [`tutorial_animation.c`](src/subsystems/tutorial/tutorial_animation.c) | Editor text behavior, REPL grammar, tutorial catalog ([`src/repl/tutorials.c`](src/repl/tutorials.c)) |
 
 Callers use the peer accessors (`variable_panel_*`, `replay_state_*`)
 directly; `check-variable-panel-forwarders` and `check-replay-forwarders`
@@ -190,10 +196,13 @@ with no ownership of REPL/editor/scene/UI/app state.
 ## Standalone Demo Binaries (Layer Independence Proofs)
 
 Three binaries under `tools/` build with deliberately slim object
-lists to make the layer boundaries observable. These demos should stay
-mostly `src/app`-free: each demo may own a tiny local shell, but it should
-not quietly import `glr_ctrl`, `glr_actions`, `glr_config`, or other app
-composition code to make a boundary problem disappear.
+lists to make the layer boundaries observable.
+
+> [!WARNING]
+> These demos are the load-bearing proof of layer independence, so keep them
+> mostly `src/app`-free: each demo may own a tiny local shell, but it must
+> not quietly import `glr_ctrl`, `glr_actions`, `glr_config`, or other app
+> composition code to make a boundary problem disappear.
 
 - **`make scene_demo`** ([`tools/scene_demo/scene_demo.c`](tools/scene_demo/scene_demo.c)) — drives
   `src/scene/` with a non-REPL geometry callback. Proves `scene_*`
@@ -271,9 +280,11 @@ Load / Save (unimplemented v1 handlers — they just log) plus Quit.
 | `replay_*` | Peer subsystem: replay state machine, PC, mode, fade batches |
 | `support` / `prof` | Neutral utilities with no ownership of REPL/editor/scene/UI/app state |
 
-Treat prefixes as ownership boundaries, not naming aesthetics. A file
-that crosses a boundary either splits or moves. The app-level audio
-service is `src/app/glr_audio` with the `glr_audio_*` API.
+> [!IMPORTANT]
+> Treat prefixes as ownership boundaries, not naming aesthetics. A file
+> that crosses a boundary either splits or moves.
+
+The app-level audio service is `src/app/glr_audio` with the `glr_audio_*` API.
 
 Types follow the same rule with the PascalCase form of the prefix:
 `Repl*` / `Editor*` / `Ui*` / `Scene*` / `Glr*` / `Replay*`,
@@ -284,7 +295,11 @@ editor-overlay snapshot types in [`src/ui/app/editor.h`](src/ui/app/editor.h) ar
 
 ### Sanctioned naming exceptions
 
-These are intentional and must not be "fixed" by a future sweep:
+> [!CAUTION]
+> The names below are intentional. A future "consistency" sweep must **not**
+> rename them — they pass `check-module-prefixes` because it is a stale-name
+> denylist, not a foreign-prefix sweep, and renaming them would fight the
+> ownership model they encode.
 
 - **Legacy GL/eval domain types** in `src/repl/` (cross-domain,
   deliberately un-prefixed): [`GLCmd`](src/repl/command.h#L86), [`CmdType`](src/repl/command.h#L37), [`ExprVar`](src/repl/eval.h#L135), [`ExprCtx`](src/repl/eval.h#L142),
@@ -561,9 +576,10 @@ Files that do not belong in this layer:
 - Direct dispatch APIs: generic UI returns passive [`UiHit`](src/ui/core/hit.h#L51) values and lets
   `glr_ctrl` route them to the owning subsystem.
 
-A UI renderer may draw. A UI input handler may hit-test and return a
-[`UiHit`](src/ui/core/hit.h#L51). Neither may directly mutate REPL / editor / peer-subsystem
-state.
+> [!IMPORTANT]
+> A UI renderer may draw. A UI input handler may hit-test and return a
+> [`UiHit`](src/ui/core/hit.h#L51). Neither may directly mutate REPL / editor /
+> peer-subsystem state.
 
 ### 6. Persistence, audio, lifecycle, and neutral support
 
@@ -1100,7 +1116,10 @@ render-neutral types belong in explicit shared headers such as
 
 ## Guard Summary
 
-The Makefile checks keep this guide executable:
+> [!NOTE]
+> These Makefile checks keep this guide *executable* — they fail the build
+> when code drifts from the ownership rules above, so the doc can't silently
+> rot:
 
 - `make check-state-ownership` runs the ownership/boundary ratchets:
   state-view purity, UI hit-test purity, peer-subsystem accessors, source
