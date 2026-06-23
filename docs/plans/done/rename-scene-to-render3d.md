@@ -414,3 +414,68 @@ over-claim a cross-cutting verb?
 tests `test_ui_scene_tabs`, `test_scene_file_menu`; guard
 `check-repl-scenes-cfg-clear-paired`; theme constants `GRID_THEME_*`,
 `AXES_THEME_*`, `LIGHT_THEME_*`.
+
+---
+
+## Review (2026-06-24) — landed
+
+Reviewed against the §10 Definition of Done. **Verdict: correct and complete on
+the code side; merged after a small batch of cosmetic-label cleanups.**
+
+**Verified green:**
+
+- **Directory move with history.** `src/scene/` gone, `src/render3d/` present;
+  `git log --follow src/render3d/render.c` shows the full pre-rename history
+  (154 commits) — the `git mv` preserved provenance.
+- **Symbol rename complete.** Zero `scene_*`/`Scene*`/`SCENE_*` renderer tokens
+  remain in `src/render3d`; zero `"scene/"` includes anywhere in `src`/`tools`/
+  `tests`; zero renderer symbols (`scene_render_3d_scene`, `SceneRenderConfig`,
+  `SceneRendererState`, …) survive in any `.c`/`.h`. The four de-stutter
+  renames are applied.
+- **User-scene concept untouched.** A real token-by-token diff of every
+  `scene`-containing identifier between `main` and `HEAD` showed every *removed*
+  token is a renderer symbol; `g_user_scenes`, `UserScene`, `scene_tabs*`,
+  `@scene-name`, `repl_*_scene`, the `test_ui_scene_tabs` / `test_scene_file_menu`
+  tests, and `check-repl-scenes-cfg-clear-paired` all remain.
+- **Builds + tests.** `make gl-repl`, `make render3d_demo`, `make test` (8596
+  pass), `make test-stubs` (10390 pass), `make check-state-ownership`,
+  `make check-c99` all green. Renamed guards
+  (`check-pure-render3d-no-repl-state`, `check-render3d-no-repl-state-mut`,
+  `check-render3d-no-upper-layers`) run; `check-module-prefixes.sh` was correctly
+  inverted to deny the old prefix reappearing in `src/render3d`.
+- **Bonus commits beyond the plan are sound:** `PROF_RENDER3D_3D → PROF_RENDER3D`
+  de-stutter (the mechanical `SCENE_→RENDER3D_` swap on `PROF_SCENE_3D` would
+  have stuttered) and a Makefile lines fix.
+
+**Flaw found in the plan's own verification (not the branch):** the §4/§6/§9
+STAY-token gate uses `git grep … -- 'src/**' 'tests/**'`, and that `src/**`
+pathspec matches **nothing** in this repo's git — so `stay-before.txt` /
+`stay-after.txt` were both empty and the "no diff" gate passed *vacuously*. The
+branch is fine (confirmed by the real comparison above), but anyone re-running
+this plan's gate should replace `'src/**'` with `src` (a plain dir pathspec) or
+`:(glob)src/**`.
+
+**Cosmetic stragglers cleaned up before merge** (all behavior-neutral —
+comment/echo text only, the guards were already functionally correct):
+
+- Renamed-guard output labels: `scripts/check-render3d-no-upper-layers.sh`
+  printed `scene-no-upper-layers OK` → `render3d-no-upper-layers OK`; the
+  `check-pure-render3d-no-repl-state` recipe printed `Pure-scene boundary OK` →
+  `Pure-render3d boundary OK`.
+- Dead-name references in script comments: `scene_render_3d_scene()` →
+  `render3d_draw_scene()` in `check-ui-no-export-resolver.sh`; the old
+  `scene_demo` target name → `render3d_demo` in
+  `check-render3d-no-upper-layers.sh`, `check-subsystem-demo-isolation.sh`, and
+  `check-c99.sh`.
+- A stale dangling `scene_demo` symlink in the working tree (gitignored) was
+  removed.
+- `plans/partial/module-architecture-doc-split-layering-audit.md` got a
+  top-of-file forward-pointer note rather than a token sweep: it contains
+  explicit "Evidence (original)" sections whose `src/scene` / `Scene*` text is
+  deliberately historical, so rewriting them would have falsified the record.
+
+**Not done in this branch (recommended before/after merge):** the gracemont
+real-GCC `check-c99` + `test-stubs` cross-check from §9. This is a build-system /
+Makefile change, and CLAUDE.md asks for a real-GCC verification on
+portability-sensitive edits; local `check-c99` only exercised Apple clang in
+`-std=c99` mode.

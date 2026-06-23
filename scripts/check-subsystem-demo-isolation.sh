@@ -7,7 +7,7 @@
 # tests/gl-stubs/gl_stub_counts.c link stub) — never src/ui/app,
 # src/app, src/repl, or src/editor. That is the whole point of the
 # demos: they prove the subsystem is decoupled from the controller /
-# REPL / editor layers (the same role scene_demo / repl_demo /
+# REPL / editor layers (the same role render3d_demo / repl_demo /
 # editor_demo play for their subtrees).
 #
 # Three checks:

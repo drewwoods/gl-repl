@@ -3,6 +3,14 @@
 Status: partial
 Date: 2026-06-05 (moved to partial 2026-06-08)
 
+> **Note (2026-06-24):** the `src/scene/` renderer module was renamed to
+> `src/render3d/` (and `SceneRenderConfig` → `Render3dRenderConfig`,
+> `SceneLight` → `Render3dLight`, the `check-scene-no-upper-layers` guard →
+> `check-render3d-no-upper-layers`, etc.; see
+> `plans/done/rename-scene-to-render3d.md`). The `src/scene` paths and `Scene*`
+> type names below are preserved as the original audit text — read them as the
+> pre-rename `src/render3d` equivalents.
+
 ## Status summary (partial)
 
 Moved to `plans/partial/` because a meaningful slice of the audit's cleanup

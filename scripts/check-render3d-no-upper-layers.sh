@@ -14,7 +14,7 @@
 #
 # Inverting any of these would mean the scene renderer reaches into
 # the controller / editor / UI / feature subsystems — a layering
-# inversion that breaks the standalone scene_demo target's reason
+# inversion that breaks the standalone render3d_demo target's reason
 # for existing (it links src/render3d/ without the rest of the tree).
 #
 # Comment-only references are filtered out — they describe history
@@ -49,4 +49,4 @@ if [ -n "$hits" ]; then
   exit 1
 fi
 
-echo "scene-no-upper-layers OK (no upper-layer includes)"
+echo "render3d-no-upper-layers OK (no upper-layer includes)"

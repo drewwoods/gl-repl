@@ -100,6 +100,7 @@ historical context and are not in the table below.
 | `vendor-freeglut.md` | 2026-06-02 | Vendor freeglut as in-tree static library (`third_party/freeglut/`), Cocoa backend, `scripts/vendor-freeglut.sh` re-pin, `THIRD_PARTY_LICENSES.md` acknowledgement. |
 | `remove-remaining-repl-mut-reads.md` | 2026-06-08 | Finalized REPL state-access pattern: targeted setters and `_writable()` accessors in `state_owners.h`; zeroed the `_mut()` read ratchet across all non-owner modules. |
 | `color-picker-palettes.md` | Color picker — Basic / Full / Harmony palettes |
+| `rename-scene-to-render3d.md` | 2026-06-24 | Renamed the 3D scene-renderer module `src/scene/` → `src/render3d/` (`scene_*`/`Scene*`/`SCENE_*` → `render3d_*`/`Render3d*`/`RENDER3D_*`, `render3d_draw_scene`, `Render3dState`, `render3d_demo`, renamed guards/tests, `PROF_RENDER3D_*`) to end the collision with the user-scene concept. Behavior-neutral; user-scene tokens untouched. Includes review. |
 
 Plans not in this directory are active, not-started, not-landed, or
 external; see the sibling subdirectories.
