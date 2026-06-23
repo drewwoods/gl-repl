@@ -63,14 +63,14 @@ globals or call `repl_state_*` APIs directly during rendering.
 
 ## Adding An Owner Module
 
-When a module starts owning mutable REPL state, follow the Stage-1 template:
+When a module starts owning mutable REPL state, follow this template:
 
 1. Put the live bytes in `ReplRuntimeState` only if the state is genuinely
    REPL-language/program state. App-frame presentation and render policy
    belongs on `glr_state` (`src/app/glr_state.c`), editor document/session
    state on `EditorState`, and intentional sidecars (undo rings,
-   user-scene slots) stay separate — call those out explicitly instead of
-   describing them as runtime-state migration. REPL-pipeline TUs must not
+   user-scene slots) stay separate — call those out explicitly rather than
+   folding them into `ReplRuntimeState`. REPL-pipeline TUs must not
    reach `glr_state` (`check-repl-state-no-glr-state`).
 2. Add a named runtime slice in `src/repl/state.h`, wire it into
    `static ReplRuntimeState g_repl_state;`, and say whether the read path is
@@ -972,7 +972,7 @@ backdrop, overlay toggles, replay/HUD layout, grid tables, cursor-block
 metadata, and the `SceneFocusVertex` / `SceneGuideSnapshot` snapshots needed by
 3D overlays.
 
-Scene-local accumulation jitter no longer lives in the config. Derived
+Scene-local accumulation jitter does not live in the config. Derived
 per-pass data belongs in `FrameRenderContext`, for example camera world height,
 focus vertex, and other values that helper renderers should share.
 
