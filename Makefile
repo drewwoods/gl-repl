@@ -327,7 +327,7 @@ endif
 	check-no-write-through-view \
 	check-public-api-usage \
 	check-public-state-no-writable-pointers \
-	check-pure-scene-no-repl-state \
+	check-pure-render3d-no-repl-state \
 	check-repl-demo-no-editor \
 	check-repl-demo-stubs-shrinking \
 	check-repl-export-no-ui-layout \
@@ -342,7 +342,7 @@ endif
 	check-replay-forwarders \
 	check-replay-ui-isolation \
 	check-runtime-state-value-fields \
-	check-scene-no-repl-state-mut \
+	check-render3d-no-repl-state-mut \
 	check-source-document-port-owners \
 	check-state-boundaries \
 	check-state-c-shrinking \
@@ -391,7 +391,7 @@ EDITOR_SRCS = $(wildcard src/editor/*.c)
 
 REPL_SRCS = $(wildcard src/repl/*.c)
 
-SCENE_SRCS = $(wildcard src/render3d/*.c src/render3d/guides/*.c)
+RENDER3D_SRCS = $(wildcard src/render3d/*.c src/render3d/guides/*.c)
 
 UI_CORE_SRCS = $(wildcard src/ui/core/*.c)
 
@@ -411,7 +411,7 @@ SRCS = \
 	$(APP_CONTROLLER_SRCS) \
 	$(EDITOR_SRCS) \
 	$(REPL_SRCS) \
-	$(SCENE_SRCS) \
+	$(RENDER3D_SRCS) \
 	$(UI_CORE_SRCS) \
 	$(UI_APP_SRCS) \
 	$(UI_SUPPORT_SRCS) \
@@ -436,19 +436,19 @@ HDRS = \
 	source_document.h
 
 UI_SRCS = $(UI_CORE_SRCS) $(UI_APP_SRCS)
-SCENE_HDRS = $(filter src/render3d/%.h,$(HDRS))
+RENDER3D_HDRS = $(filter src/render3d/%.h,$(HDRS))
 UI_HDRS = $(filter src/ui/core/%.h src/ui/app/%.h,$(HDRS))
 STATE_NEUTRAL_SRCS = src/repl/format.c src/support/memprof.c src/support/cpuprof.c src/support/gpuprof.c tests/gl-stubs/gl_stub_counts.c
 
-# Object lists used to build the standalone scene_demo without dragging in
+# Object lists used to build the standalone render3d_demo without dragging in
 # any REPL editor/controller code. Scene + prof — the scene module no
 # longer touches repl_eval (replay-baseline restore is dispatched through a
 # function pointer the controller installs; geometry-guide arg parsing is
 # done in the controller before snapshot is built).
-SCENE_DEMO_DEP_SRCS = $(SCENE_SRCS) src/support/cpuprof.c \
+RENDER3D_DEMO_DEP_SRCS = $(RENDER3D_SRCS) src/support/cpuprof.c \
                       tests/gl-stubs/gl_stub_counts.c
 
-# Object list for the standalone repl_demo (the inverse of scene_demo:
+# Object list for the standalone repl_demo (the inverse of render3d_demo:
 # proves the REPL pipeline links without editor input dispatch
 # (src/editor/input.c), the controller (src/app/glr_ctrl.c + glr_ctrl_router_*),
 # the UI (src/ui/*, src/ui/subsystems/replay_hud.c), or — as of Phase 6 of
@@ -604,7 +604,7 @@ SUPPORT_OBJS          = $(addprefix $(OBJDIR)/,$(SUPPORT_SRCS:.c=.o))
 APP_CONTROLLER_OBJS   = $(addprefix $(OBJDIR)/,$(APP_CONTROLLER_SRCS:.c=.o))
 EDITOR_OBJS           = $(addprefix $(OBJDIR)/,$(EDITOR_SRCS:.c=.o))
 REPL_OBJS             = $(addprefix $(OBJDIR)/,$(REPL_SRCS:.c=.o))
-SCENE_OBJS            = $(addprefix $(OBJDIR)/,$(SCENE_SRCS:.c=.o))
+RENDER3D_OBJS            = $(addprefix $(OBJDIR)/,$(RENDER3D_SRCS:.c=.o))
 UI_CORE_OBJS          = $(addprefix $(OBJDIR)/,$(UI_CORE_SRCS:.c=.o))
 UI_APP_OBJS           = $(addprefix $(OBJDIR)/,$(UI_APP_SRCS:.c=.o))
 UI_SUPPORT_OBJS       = $(addprefix $(OBJDIR)/,$(UI_SUPPORT_SRCS:.c=.o))
@@ -617,7 +617,7 @@ CORE_TEST_OBJS = \
 	$(APP_CONTROLLER_OBJS) \
 	$(EDITOR_OBJS) \
 	$(REPL_OBJS) \
-	$(SCENE_OBJS) \
+	$(RENDER3D_OBJS) \
 	$(UI_CORE_OBJS) \
 	$(UI_APP_OBJS) \
 	$(UI_SUPPORT_OBJS) \
@@ -634,10 +634,10 @@ TEST_BINS = \
 	test_repl_state \
 	test_repl_code_panel_layout \
 	test_ui_theme \
-	test_scene_palette \
+	test_render3d_palette \
 	test_repl_code_panel_document \
 	test_repl_code_panel_syntax \
-	test_scene_transition \
+	test_render3d_transition \
 	test_overlay_layout \
 	test_ui_scene_tabs \
 	test_ui_tabbed_overlay \
@@ -661,8 +661,8 @@ TEST_BINS = \
 	test_repl_autocomplete \
 	test_repl_command_store \
 	test_repl_var_drag \
-	test_scene_guides \
-	test_scene_render \
+	test_render3d_guides \
+	test_render3d_render \
 	test_glr_ctrl \
 	test_repl_editor \
 	test_repl_core_extra \
@@ -696,7 +696,7 @@ TEST_BINS += test_ui_memprof
 TEST_BINS += test_ui_cpuprof
 endif
 
-CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_gpuprof test_repl_code_panel_layout test_ui_theme test_scene_palette test_audio test_scene_guides test_scene_transition test_scene_render test_scene_file_menu test_editor_completion test_glr_camera test_ui_cpuprof test_ui_memprof test_ui_text_panel test_tutorial_match,$(TEST_BINS))
+CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_gpuprof test_repl_code_panel_layout test_ui_theme test_render3d_palette test_audio test_render3d_guides test_render3d_transition test_render3d_render test_scene_file_menu test_editor_completion test_glr_camera test_ui_cpuprof test_ui_memprof test_ui_text_panel test_tutorial_match,$(TEST_BINS))
 
 # Benchmark binaries follow the same linking pattern as core test binaries
 # (they reuse CORE_TEST_OBJS so they work in both real-GL and stubs builds),
@@ -704,12 +704,12 @@ CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof t
 # them — benchmarks are timing-sensitive and should be invoked explicitly.
 BENCH_BINS = bench_repl
 
-ROOT_BIN_LINKS = gl-repl scene_demo repl_demo editor_demo memprof_demo variable_panel_demo color_picker_demo cpuprof_demo
+ROOT_BIN_LINKS = gl-repl render3d_demo repl_demo editor_demo memprof_demo variable_panel_demo color_picker_demo cpuprof_demo
 
 .PHONY: sample $(ROOT_BIN_LINKS) $(TEST_BINS) $(BENCH_BINS)
 
 SAMPLE_BIN = $(BINDIR)/gl-repl
-SCENE_DEMO_BIN = $(BINDIR)/scene_demo
+RENDER3D_DEMO_BIN = $(BINDIR)/render3d_demo
 REPL_DEMO_BIN = $(BINDIR)/repl_demo
 EDITOR_DEMO_BIN = $(BINDIR)/editor_demo
 MEMPROF_DEMO_BIN = $(BINDIR)/memprof_demo
@@ -765,32 +765,32 @@ test_ui_theme_LDLIBS =
 test_ui_theme_RUN ?= $(BINDIR)/test_ui_theme
 
 # Header-only: scene/palette.h pulls in no project objects.
-test_scene_palette_OBJS = $(OBJDIR)/$(TEST_DIR)/test_scene_palette.o
-test_scene_palette_LDLIBS =
-test_scene_palette_RUN ?= $(BINDIR)/test_scene_palette
+test_render3d_palette_OBJS = $(OBJDIR)/$(TEST_DIR)/test_render3d_palette.o
+test_render3d_palette_LDLIBS =
+test_render3d_palette_RUN ?= $(BINDIR)/test_render3d_palette
 
 test_audio_OBJS = $(OBJDIR)/$(TEST_DIR)/test_audio.o $(OBJDIR)/src/app/glr_audio.o
 test_audio_LDLIBS = $(GL_LDFLAGS)
 test_audio_RUN ?= $(BINDIR)/test_audio
 
-test_scene_guides_OBJS = $(OBJDIR)/$(TEST_DIR)/test_scene_guides.o \
+test_render3d_guides_OBJS = $(OBJDIR)/$(TEST_DIR)/test_render3d_guides.o \
 	$(OBJDIR)/src/render3d/guides/geometry_guides.o \
 	$(OBJDIR)/src/render3d/guides/transform_guides.o \
 	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o
-test_scene_guides_LDLIBS = $(GL_LDFLAGS)
-test_scene_guides_RUN ?= $(BINDIR)/test_scene_guides
+test_render3d_guides_LDLIBS = $(GL_LDFLAGS)
+test_render3d_guides_RUN ?= $(BINDIR)/test_render3d_guides
 
-test_scene_transition_OBJS = $(OBJDIR)/$(TEST_DIR)/test_scene_transition.o \
+test_render3d_transition_OBJS = $(OBJDIR)/$(TEST_DIR)/test_render3d_transition.o \
 	$(OBJDIR)/src/render3d/render3d_transition.o
-test_scene_transition_LDLIBS =
-test_scene_transition_RUN ?= $(BINDIR)/test_scene_transition
+test_render3d_transition_LDLIBS =
+test_render3d_transition_RUN ?= $(BINDIR)/test_render3d_transition
 
-test_scene_render_OBJS = $(OBJDIR)/$(TEST_DIR)/test_scene_render.o \
-	$(SCENE_OBJS) \
+test_render3d_render_OBJS = $(OBJDIR)/$(TEST_DIR)/test_render3d_render.o \
+	$(RENDER3D_OBJS) \
 	$(OBJDIR)/src/support/cpuprof.o \
 	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o
-test_scene_render_LDLIBS = $(GL_LDFLAGS)
-test_scene_render_RUN ?= $(BINDIR)/test_scene_render
+test_render3d_render_LDLIBS = $(GL_LDFLAGS)
+test_render3d_render_RUN ?= $(BINDIR)/test_render3d_render
 
 test_scene_file_menu_OBJS = $(OBJDIR)/$(TEST_DIR)/test_scene_file_menu.o $(CORE_TEST_OBJS)
 test_scene_file_menu_LDLIBS = $(GL_LDFLAGS)
@@ -965,17 +965,17 @@ app: gl-repl $(APP_ICNS) $(MACOS_PKG)/Info.plist ## Bundle gl-repl into gl-repl.
 
 # Standalone demo binary that drives the scene module with a teapot callback.
 # Proves the scene/ subtree links cleanly without the editor/UI/controller code.
-SCENE_DEMO_OBJS = $(OBJDIR)/tools/scene_demo/scene_demo.o \
-                   $(addprefix $(OBJDIR)/,$(SCENE_DEMO_DEP_SRCS:.c=.o))
+RENDER3D_DEMO_OBJS = $(OBJDIR)/tools/render3d_demo/render3d_demo.o \
+                   $(addprefix $(OBJDIR)/,$(RENDER3D_DEMO_DEP_SRCS:.c=.o))
 
-$(SCENE_DEMO_BIN): $(SCENE_DEMO_OBJS)
+$(RENDER3D_DEMO_BIN): $(RENDER3D_DEMO_OBJS)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) -o $@ $(SCENE_DEMO_OBJS) $(GL_LDFLAGS)
+	$(CC) $(OBJ_CFLAGS) -o $@ $(RENDER3D_DEMO_OBJS) $(GL_LDFLAGS)
 
-scene_demo: FORCE $(SCENE_DEMO_BIN) ## Build the standalone scene demo.
-	ln -sfn $(SCENE_DEMO_BIN) $@
+render3d_demo: FORCE $(RENDER3D_DEMO_BIN) ## Build the standalone scene demo.
+	ln -sfn $(RENDER3D_DEMO_BIN) $@
 
-# Standalone REPL pipeline demo. Inverse of scene_demo: proves the
+# Standalone REPL pipeline demo. Inverse of render3d_demo: proves the
 # REPL pipeline links without editor input dispatch / controller / UI.
 REPL_DEMO_OBJS = $(OBJDIR)/tools/repl_demo/repl_demo.o \
                  $(OBJDIR)/tools/repl_demo/stubs.o \
@@ -1065,7 +1065,7 @@ $(COLOR_PICKER_DEMO_BIN): $(COLOR_PICKER_DEMO_OBJS)
 color_picker_demo: FORCE $(COLOR_PICKER_DEMO_BIN) ## Build the standalone color-picker demo.
 	ln -sfn $(COLOR_PICKER_DEMO_BIN) $@
 
-demos: scene_demo repl_demo editor_demo memprof_demo cpuprof_demo variable_panel_demo color_picker_demo ## Build all demos.
+demos: render3d_demo repl_demo editor_demo memprof_demo cpuprof_demo variable_panel_demo color_picker_demo ## Build all demos.
 
 .SECONDEXPANSION:
 
@@ -1128,7 +1128,7 @@ gl-tests: $(addprefix $(BINDIR)/,$(GL_TEST_BINS)) ## Run real-GL UI state tests 
 ifeq ($(FREEGLUT_VENDOR),1)
 ifneq ($(filter Darwin,$(UNAME_S))$(filter 1,$(FREEGLUT_OSMESA)),)
 ifneq ($(USE_GL_STUBS),1)
-$(SAMPLE_BIN) $(SCENE_DEMO_BIN) $(REPL_DEMO_BIN) $(EDITOR_DEMO_BIN) \
+$(SAMPLE_BIN) $(RENDER3D_DEMO_BIN) $(REPL_DEMO_BIN) $(EDITOR_DEMO_BIN) \
 $(MEMPROF_DEMO_BIN) $(CPUPROF_DEMO_BIN) $(VARIABLE_PANEL_DEMO_BIN) \
 $(COLOR_PICKER_DEMO_BIN) \
 $(addprefix $(BINDIR)/,$(TEST_BINS) $(BENCH_BINS) $(GL_TEST_BINS)): $(FREEGLUT_STATIC_LIB)
@@ -1149,7 +1149,7 @@ check-gl-boundaries: ## Verify GL/GLUT calls are isolated to allowed files.
 check-layer-coupling: ## Verify UI and scene layers don't include each other's headers.
 	@echo "    Checking UI/scene layer coupling..."
 	@! grep -nE '#include\s+"scene/' $(UI_SRCS) $(UI_HDRS) || (echo "    $(RED)ERROR: UI files must not include scene headers$(NC)" && exit 1)
-	@! grep -nE '#include\s+"ui/' $(SCENE_SRCS) $(SCENE_HDRS) || (echo "    $(RED)ERROR: scene files must not include UI headers$(NC)" && exit 1)
+	@! grep -nE '#include\s+"ui/' $(RENDER3D_SRCS) $(RENDER3D_HDRS) || (echo "    $(RED)ERROR: scene files must not include UI headers$(NC)" && exit 1)
 	@echo "    Layer coupling $(GREEN)OK$(NC)"
 
 
@@ -1177,18 +1177,18 @@ check-controller-boundaries: ## Verify controller owns the scene/UI wiring bound
 	fi
 	@echo "Controller boundaries $(GREEN)OK$(NC)"
 
-check-scene-no-repl-state-mut: ## Verify scene code does not mutate REPL state directly.
+check-render3d-no-repl-state-mut: ## Verify scene code does not mutate REPL state directly.
 	@echo "Checking scene renderers do not mutate REPL state..."
-	@bad=$$(grep -nE 'repl_state_[A-Za-z0-9_]*_mut[[:space:]]*\(' $(SCENE_SRCS) || true); \
+	@bad=$$(grep -nE 'repl_state_[A-Za-z0-9_]*_mut[[:space:]]*\(' $(RENDER3D_SRCS) || true); \
 	if [ -n "$$bad" ]; then \
 		echo "$(RED)ERROR: scene files mutate REPL state:$(NC)"; \
 		echo "$$bad"; exit 1; \
 	fi
 	@echo "Scene mutation boundary $(GREEN)OK$(NC)"
 
-check-pure-scene-no-repl-state: ## Verify scene files do not reach into REPL state/replay APIs.
+check-pure-render3d-no-repl-state: ## Verify scene files do not reach into REPL state/replay APIs.
 	@echo "Checking scene files do not reach into REPL state/replay APIs..."
-	@bad=$$(grep -nE 'repl_(state|replay)_' $(SCENE_SRCS) || true); \
+	@bad=$$(grep -nE 'repl_(state|replay)_' $(RENDER3D_SRCS) || true); \
 	if [ -n "$$bad" ]; then \
 		echo "$(RED)ERROR: scene files reach into REPL state/replay APIs:$(NC)"; \
 		echo "$$bad"; exit 1; \
@@ -1197,13 +1197,13 @@ check-pure-scene-no-repl-state: ## Verify scene files do not reach into REPL sta
 
 check-state-boundaries: ## Verify REPL state facade usage stays in owned modules.
 	@echo "Checking state facade boundaries..."
-	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"repl/state\.h"' $(SCENE_SRCS) $(STATE_NEUTRAL_SRCS) 2>/dev/null || true); \
+	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"repl/state\.h"' $(RENDER3D_SRCS) $(STATE_NEUTRAL_SRCS) 2>/dev/null || true); \
 	if [ -n "$$bad" ]; then \
 		echo "$(RED)ERROR: scene or state-neutral files include src/repl/state.h:$(NC)"; \
 		echo "$$bad"; exit 1; \
 	fi
 	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"repl/core_internal\.h"' \
-		src/app/glr_ctrl.c $(SCENE_SRCS) $(UI_SRCS) $(STATE_NEUTRAL_SRCS) 2>/dev/null \
+		src/app/glr_ctrl.c $(RENDER3D_SRCS) $(UI_SRCS) $(STATE_NEUTRAL_SRCS) 2>/dev/null \
 		| grep -vE '^ui_(color_picker|panels)\.c$$' || true); \
 	if [ -n "$$bad" ]; then \
 		echo "$(RED)ERROR: unapproved view/utility files include src/repl/core_internal.h:$(NC)"; \
@@ -1215,7 +1215,7 @@ check-state-boundaries: ## Verify REPL state facade usage stays in owned modules
 		echo "$(RED)ERROR: unapproved UI files mutate REPL state directly:$(NC)"; \
 		echo "$$bad"; exit 1; \
 	fi
-	@bad=$$(grep -nE 'repl_(state|replay)_' $(SCENE_SRCS) 2>/dev/null || true); \
+	@bad=$$(grep -nE 'repl_(state|replay)_' $(RENDER3D_SRCS) 2>/dev/null || true); \
 	if [ -n "$$bad" ]; then \
 		echo "$(RED)ERROR: scene files reach into REPL state/replay APIs:$(NC)"; \
 		echo "$$bad"; exit 1; \
@@ -1224,7 +1224,7 @@ check-state-boundaries: ## Verify REPL state facade usage stays in owned modules
 
 check-views-no-owners: ## Verify scene/UI files do not include src/repl/state_owners.h.
 	@echo "Checking scene/UI view files do not include src/repl/state_owners.h..."
-	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"repl/state_owners\.h"' $(SCENE_SRCS) $(UI_SRCS) 2>/dev/null || true); \
+	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"repl/state_owners\.h"' $(RENDER3D_SRCS) $(UI_SRCS) 2>/dev/null || true); \
 	if [ -n "$$bad" ]; then \
 		echo "$(RED)ERROR: scene/UI view files include src/repl/state_owners.h:$(NC)"; \
 		echo "$$bad"; exit 1; \
@@ -1241,7 +1241,7 @@ check-ui-no-repl-state-mut: ## Verify UI files do not mutate REPL state directly
 	@echo "UI mutation boundary $(GREEN)OK$(NC)"
 
 check-no-write-through-view: ## Verify no writes happen through pointer fields on view structs.
-	@bash scripts/check-no-write-through-view.sh scripts/allowlists/write-through-view.txt $(UI_SRCS) $(SCENE_SRCS)
+	@bash scripts/check-no-write-through-view.sh scripts/allowlists/write-through-view.txt $(UI_SRCS) $(RENDER3D_SRCS)
 
 check-runtime-state-value-fields: ## Verify ReplRuntimeState owns values, not pointer aliases.
 	@bash scripts/check-runtime-state-value-fields.sh src/repl/state.h
@@ -1280,8 +1280,8 @@ check-repl-no-app: ## Ratchet: forbid new app/glr_* coupling in src/repl/.
 check-repl-no-mut-reads: ## Ratchet: cap `_mut()` calls in src/repl/ outside owner files (audit #7/#14).
 	@bash scripts/check-repl-no-mut-reads.sh
 
-check-scene-no-upper-layers: ## Hard guard: src/render3d/ must not include from app/editor/ui/subsystems.
-	@bash scripts/check-scene-no-upper-layers.sh
+check-render3d-no-upper-layers: ## Hard guard: src/render3d/ must not include from app/editor/ui/subsystems.
+	@bash scripts/check-render3d-no-upper-layers.sh
 
 check-ui-core-no-upper-layers: ## Hard guard: src/ui/core/ must not include from app/editor/repl/scene/subsystems/ui-app.
 	@bash scripts/check-ui-core-no-upper-layers.sh
@@ -1331,8 +1331,8 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 	@set -e -o pipefail; \
 	for target in \
 		check-controller-boundaries \
-		check-scene-no-repl-state-mut \
-		check-pure-scene-no-repl-state \
+		check-render3d-no-repl-state-mut \
+		check-pure-render3d-no-repl-state \
 		check-state-boundaries \
 		check-views-no-owners \
 		check-ui-no-repl-state-mut \
@@ -1386,7 +1386,7 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-editor-no-app \
 		check-repl-no-app \
 		check-repl-no-mut-reads \
-		check-scene-no-upper-layers \
+		check-render3d-no-upper-layers \
 		check-ui-core-no-upper-layers \
 		check-module-prefixes \
 		check-include-style \
@@ -1567,14 +1567,14 @@ test-detailed: $(TEST_BINS) ## Run the full test suite with verbose example expo
 test-stubs: check-trailing-whitespace check-gl-boundaries check-layer-coupling check-state-ownership ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs.
 	$(MAKE) test USE_GL_STUBS=1
 
-test-full: ## Full gate: stub tests + checks + build gl-repl, bench, repl_demo, scene_demo, editor_demo.
+test-full: ## Full gate: stub tests + checks + build gl-repl, bench, repl_demo, render3d_demo, editor_demo.
 	$(MAKE) --no-print-directory repl_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory editor_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory memprof_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory cpuprof_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory variable_panel_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory color_picker_demo USE_GL_STUBS=1
-	$(MAKE) --no-print-directory scene_demo USE_GL_STUBS=1
+	$(MAKE) --no-print-directory render3d_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory check
 	$(MAKE) --no-print-directory test-stubs
 	$(MAKE) --no-print-directory gl-repl
@@ -1717,7 +1717,7 @@ else
 endif
 
 clean: ## Remove built binaries and object files.
-	rm -rf $(ROOT_BIN_LINKS) gl-repl.dSYM scene_demo.dSYM repl_demo.dSYM editor_demo.dSYM memprof_demo.dSYM variable_panel_demo.dSYM color_picker_demo.dSYM cpuprof_demo.dSYM \
+	rm -rf $(ROOT_BIN_LINKS) gl-repl.dSYM render3d_demo.dSYM repl_demo.dSYM editor_demo.dSYM memprof_demo.dSYM variable_panel_demo.dSYM color_picker_demo.dSYM cpuprof_demo.dSYM \
 		$(TEST_BINS) $(addsuffix .dSYM,$(TEST_BINS)) \
 		$(BENCH_BINS) $(addsuffix .dSYM,$(BENCH_BINS)) \
 		build/coverage/lcov.info build/coverage/html \

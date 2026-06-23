@@ -4,7 +4,7 @@
 # The module-naming cleanup (docs/plans/in-review/module-naming-convention.md)
 # renamed every exported symbol so its prefix follows the owning
 # directory (src/repl -> repl_/Repl, src/editor -> editor_/Editor,
-# src/ui -> ui_/Ui, src/app -> glr_/Glr, src/scene -> scene_/Scene,
+# src/ui -> ui_/Ui, src/app -> glr_/Glr, src/render3d -> render3d_/Render3d,
 # src/subsystems/replay -> replay_/Replay). This guard is a denylist of the
 # exact stale names that were eliminated: if any reappears anywhere
 # under src/ it is a regression (a refactor that moved code without
@@ -44,6 +44,14 @@ if [ -n "$violations" ]; then
     echo "Sanctioned Exceptions / Conventions in docs/MODULES.md." >&2
     echo "Hits:" >&2
     printf '%s\n' "$violations" >&2
+    exit 1
+fi
+
+# Deny old scene_/Scene/SCENE_ symbols in src/render3d
+stale_scene_hits=$(grep -rnE '\b(scene_[a-z0-9_]+|Scene[A-Za-z0-9]+|SCENE_[A-Z0-9_]+)\b' --include='*.c' --include='*.h' src/render3d 2>/dev/null || true)
+if [ -n "$stale_scene_hits" ]; then
+    echo "ERROR: stale scene_/Scene/SCENE_ prefix used in src/render3d/:" >&2
+    printf '%s\n' "$stale_scene_hits" >&2
     exit 1
 fi
 

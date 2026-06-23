@@ -5,7 +5,7 @@ cd "$(git rev-parse --show-toplevel)"
 
 allowlist="${1:-scripts/allowlists/facade-includes-in-views.txt}"
 
-hits="$(rg -n "#\s*include\s+\"repl/state(\.h|_views\.h|_owners\.h)\"" src/ui src/scene -g '*.c' -g '*.h' 2>/dev/null || true)"
+hits="$(rg -n "#\s*include\s+\"repl/state(\.h|_views\.h|_owners\.h)\"" src/ui src/render3d -g '*.c' -g '*.h' 2>/dev/null || true)"
 
 if [ -z "$hits" ]; then
   echo "no-facade-include-in-views OK"

@@ -1,7 +1,7 @@
-# View files (src/ui, src/scene) allowed to include a repl/state*.h
+# View files (src/ui, src/render3d) allowed to include a repl/state*.h
 # header directly. Entries are repo-relative paths matched against the
 # `file:` prefix of a hit. Re-baselined to current reality after the
-# src/ restructure (the guard now scans src/ui + src/scene; the old
+# src/ restructure (the guard now scans src/ui + src/render3d; the old
 # flat-layout entries ui_color_picker.c / ui_help_overlay.c are gone,
 # and the files that no longer include the header were pruned).
 #
