@@ -3116,7 +3116,7 @@ int main() {
         editor_clear_all_cmds();
         ASSERT_INT("clear_all: num_cmds is 0", repl_state_document_count(), 0);
         /* Editor owns the text buffer (Phase 4 of
-         * plans/done/edit-line-ownership.md). A clear-all has to drop
+         * docs/plans/done/edit-line-ownership.md). A clear-all has to drop
          * the editor's source text in lockstep with the command store
          * — otherwise the user sees the old lines in the code panel
          * while every commit acts on an empty cmd-store. */

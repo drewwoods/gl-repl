@@ -1,6 +1,6 @@
 # Tier C size ratchet — prevents parse_command and flatten_range from
 # growing further.  Both functions are audit items #39 and #40 in
-# plans/done/src-repl-code-smell-audit.md, deferred because they are
+# docs/plans/done/src-repl-code-smell-audit.md, deferred because they are
 # high-cost refactors.  The ratchet enforces the "don't make it worse"
 # contract: a commit can shrink either function (good — someone is
 # decomposing it) but never grow it past the baseline.

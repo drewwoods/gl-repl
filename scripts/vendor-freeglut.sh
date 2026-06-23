@@ -33,7 +33,7 @@
 # the Makefile's libglut.a rule depends on VENDORED.txt (rewritten below), so a
 # re-vendor marks the lib stale and relinks its consumers. `make freeglut-clean`
 # forces a full from-scratch rebuild. Also update the pinned SHA noted in
-# THIRD_PARTY_LICENSES.md.
+# docs/THIRD_PARTY_LICENSES.md.
 
 set -euo pipefail
 
@@ -80,7 +80,7 @@ NOTES
   The next `make` after re-vendoring rebuilds libglut.a and relinks
   automatically (VENDORED.txt is a Makefile prerequisite); `make freeglut-clean`
   forces a full from-scratch rebuild. Also update the pinned SHA in
-  THIRD_PARTY_LICENSES.md.
+  docs/THIRD_PARTY_LICENSES.md.
 HELPTEXT
 }
 
@@ -155,4 +155,4 @@ echo "Vendored freeglut -> third_party/freeglut (sha $SHA)"
 echo "Reminders:"
 echo "  - the next 'make' auto-rebuilds libglut.a and relinks (VENDORED.txt is"
 echo "    a prereq); 'make freeglut-clean' forces a full from-scratch rebuild"
-echo "  - update the pinned SHA in THIRD_PARTY_LICENSES.md"
+echo "  - update the pinned SHA in docs/THIRD_PARTY_LICENSES.md"

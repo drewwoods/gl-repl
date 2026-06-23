@@ -14,7 +14,7 @@
  * reads a plain float buffer, so it is fully unit-testable with synthetic
  * buffers and no GL context. The GL-coupled capture that fills the buffer
  * lives in src/app/glr_mesh_export.c. See
- * plans/.../ply-feedback-export.md. */
+ * docs/plans/.../ply-feedback-export.md. */
 
 /* Floats per feedback vertex. GL_3D_COLOR mode = 7 (x y z r g b a). When the
  * capture also records a per-vertex normal in the texture channel

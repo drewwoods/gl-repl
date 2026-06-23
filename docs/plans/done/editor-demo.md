@@ -381,7 +381,7 @@ level.
   - Build `make sample USE_GL_STUBS=1`, `make repl_demo USE_GL_STUBS=1`, `make scene_demo USE_GL_STUBS=1`.
   - Run `make test-stubs` and `make check-state-ownership`.
   - **Capture baseline snapshots** so logical regressions are catchable later:
-    - `testdata/repl_examples_ui/*.golden.txt` is a **logical** fixture (one row per header/source line, no wrap geometry), not a pixel-accurate visual fixture — see the comment at `tests/test_repl_core_examples.c:1044-1048` that calls this out and points to "the visual code-panel dump tests" as the place wrapped-row rendering is checked. Re-running the example-fixture suite after each phase catches structural drift (row counts, source order, header/footer scaffolding) but **does not** catch glyph-level visual regressions (color shifts, alpha blending, kerning, wrap geometry).
+    - `tests/testdata/repl_examples_ui/*.golden.txt` is a **logical** fixture (one row per header/source line, no wrap geometry), not a pixel-accurate visual fixture — see the comment at `tests/test_repl_core_examples.c:1044-1048` that calls this out and points to "the visual code-panel dump tests" as the place wrapped-row rendering is checked. Re-running the example-fixture suite after each phase catches structural drift (row counts, source order, header/footer scaffolding) but **does not** catch glyph-level visual regressions (color shifts, alpha blending, kerning, wrap geometry).
     - Current `--dump-code` output is useful as a source/export baseline, but it is still logical text: `sample.c` calls `glr_debug_dump_editor()`, which calls `repl_dump_code_panel_text()`, and that path does **not** exercise the wrap iterator. Capture those dumps for structural/source diffs if useful, but do not treat them as visual coverage.
     - For a checkable wrapped-rendering proxy, **do not** revive
       `repl_dump_code_panel_visual_text()` in place. That helper is
@@ -831,7 +831,7 @@ in Phase 6 must reflect the final measured reality.
 ### Validation
 
 - Existing `make test`, `make test-stubs`, `make check-state-ownership` pass with no changes to test fixtures.
-- Test fixtures `testdata/repl_examples_ui/*.golden.txt` byte-equal after the refactor.
+- Test fixtures `tests/testdata/repl_examples_ui/*.golden.txt` byte-equal after the refactor.
 - Greppable guard:
   - `scripts/check-editor-repl-surface.sh` counts `repl_*(` calls in `src/editor/input.c` and `src/editor/commit.c`; fails if either exceeds a ratcheted threshold (start at 8).
   - Optional companion: a narrow `scripts/check-editor-glr-surface.sh` counting only `glr_*(` call sites in `src/editor/input.c`, ratcheted from the measured floor (likely 3-4). Lighter than the dropped `EditorChromeServices` guard since it just enforces "don't grow the upward reach," not "abstract it behind a table." Skip if the count is already at floor and the team trusts the `repl_shim.c` cap to catch regressions.

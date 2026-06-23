@@ -44,7 +44,7 @@ void repl_export_install_projection_bridge(const ReplExportProjectionBridge *bri
  * panel must NOT call this — the controller resolves it once per frame
  * into UiRenderSnapshot.reshape_proj_lines so the panel's row-count and
  * render passes (which straddle scene_render_3d_scene) agree. See
- * ARCHITECTURE.md, "Rule — where a per-frame dynamic value is resolved". */
+ * docs/ARCHITECTURE.md, "Rule — where a per-frame dynamic value is resolved". */
 int repl_export_reshape_projection_lines(const char *out[REPL_EXPORT_PROJ_LINES]) {
     static char buf[REPL_EXPORT_PROJ_LINES][REPL_EXPORT_PROJ_LINE_MAX];
     int count = 0;

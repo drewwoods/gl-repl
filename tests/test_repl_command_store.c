@@ -323,7 +323,7 @@ static void test_repl_command_store_load(void) {
     };
 
     /* _load no longer touches the cursor (Phase 1 of
-     * plans/in-review/edit-line-ownership.md); cursor policy is
+     * docs/plans/in-review/edit-line-ownership.md); cursor policy is
      * the caller's. */
     ASSERT_INT("load commands",
                repl_command_store_load(&store, cmds, 2), 1);
@@ -425,7 +425,7 @@ static void test_repl_command_store_insert_at_end(void) {
     ASSERT_INT("count after insert at end", repl_command_store_count(&store), 2);
 }
 
-/* Phase 1 of plans/in-review/edit-line-ownership.md: cursor-aware
+/* Phase 1 of docs/plans/in-review/edit-line-ownership.md: cursor-aware
  * delete is net-new store behavior. Verify the three cases in the
  * cursor-shift math (before / inside / past the deleted range). */
 static void test_repl_command_store_delete_cursor_math(void) {

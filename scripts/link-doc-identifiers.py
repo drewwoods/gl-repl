@@ -277,7 +277,7 @@ def add_function_decl(funcs: dict[str, list[Target]], chunk: str, rel: str, line
 
 
 def default_markdown_files(root: Path) -> list[Path]:
-    rels = git_files(root, "*.md", ":(exclude)plans/**", ":(exclude)third_party/**")
+    rels = git_files(root, "*.md", ":(exclude)docs/plans/**", ":(exclude)third_party/**")
     return dedupe_paths([root / rel for rel in rels])
 
 
@@ -478,7 +478,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true", help="Print matches without writing files (default).")
     mode.add_argument("--write", action="store_true", help="Rewrite files, linking unique matches.")
-    parser.add_argument("files", nargs="*", help="Markdown files to scan. Defaults to tracked docs outside plans/.")
+    parser.add_argument("files", nargs="*", help="Markdown files to scan. Defaults to tracked docs outside docs/plans/.")
     return parser.parse_args(argv)
 
 

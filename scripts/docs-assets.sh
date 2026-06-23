@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # docs-assets.sh - regenerate the screenshots and GIFs under docs/images/
-# (the media embedded in README.md and USER_GUIDE.md), fully headless.
+# (the media embedded in README.md and docs/USER_GUIDE.md), fully headless.
 #
 #   scripts/docs-assets.sh [-j N] [asset ...]   # default: all assets
 #   scripts/docs-assets.sh --list               # print asset names and exit

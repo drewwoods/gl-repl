@@ -6,7 +6,7 @@ in a 3D viewport. Every command stays in an editable code panel, so a scene is
 a readable list of GL calls you can revisit, tweak, animate, replay
 step-by-step, and export as a standalone C program.
 
-![gl-repl rendering the Whale example](docs/images/hero.png)
+![gl-repl rendering the Whale example](images/hero.png)
 
 This guide covers every user-facing feature. For headless rendering, the
 full CLI/env-var reference, and recording, see
@@ -48,7 +48,7 @@ Run a fresh session, or reload earlier work:
 
 ### The window
 
-![A first triangle](docs/images/first-triangle.png)
+![A first triangle](images/first-triangle.png)
 
 - **Code panel** — the live, editable list of GL commands. By default it sits
   above the viewport; cycle its position (Left / Top / Bottom / Hidden) with
@@ -236,7 +236,7 @@ glutSolidCone(base, height, slices, stacks)
 
 ### GLU tessellator (concave / complex polygons)
 
-![GLU tessellated concave arrow with a cutout](docs/images/glu-tess.png)
+![GLU tessellated concave arrow with a cutout](images/glu-tess.png)
 
 `gluTess` polygons handle concave outlines, and multiple contours in one
 polygon create holes (opposite winding). See built-in examples *GLU
@@ -245,7 +245,7 @@ action.
 
 ### Bitmap text — `label()`
 
-![The Orrery example uses labels that track 3D orbits](docs/images/labels-orrery.png)
+![The Orrery example uses labels that track 3D orbits](images/labels-orrery.png)
 
 ```c
 glRasterPos3f(x, y, z);      // place the text anchor (transforms apply)
@@ -364,7 +364,7 @@ tunable knob (see [Tunable Variables](#tunable-variables--tune)).
 
 ## Animation & the Time Variable
 
-![The Animated ring example](docs/images/animated-ring.gif)
+![The Animated ring example](images/animated-ring.gif)
 
 `t` is the one predefined variable — it exists in every session without a
 declaration, starts at `0`, and while playing advances a fixed 1/60 s per
@@ -402,7 +402,7 @@ plain drag scrubs linearly, **right-click drag** is the fast scrub,
 
 ## The Variable Panel
 
-![Variable panel with sliders](docs/images/variable-panel.png)
+![Variable panel with sliders](images/variable-panel.png)
 
 The variable panel (bottom-right) lists `t` plus every declared variable with
 its current value and a slider:
@@ -451,7 +451,7 @@ Tagged variables are still normal REPL variables while you are authoring. In
 the variable panel, tagged rows get an accent mark so you can see which
 values will export as knobs:
 
-![Tagged rows get an accent mark](docs/images/tune-badges.png)
+![Tagged rows get an accent mark](images/tune-badges.png)
 
 ### Exported controls
 
@@ -550,7 +550,7 @@ swatches.
 
 ### 2D mode
 
-![A 2D sketch in ortho view](docs/images/view-mode-2d.png)
+![A 2D sketch in ortho view](images/view-mode-2d.png)
 
 *View mode* (Ctrl+Shift+V, or the CAMERA section of the Config menu) switches
 between the 3D perspective camera and a flat 2D orthographic projection —
@@ -600,7 +600,7 @@ backward):
 
 ### Grid & axes
 
-![Grid themes: Tron, Radar, Aurora, Synthwave](docs/images/grid-themes.png)
+![Grid themes: Tron, Radar, Aurora, Synthwave](images/grid-themes.png)
 
 Sixteen grid themes (**F3**): Off, Classic, Fog, Tron, Ember, Faint, Focus,
 Ocean, XZ Ruler *(default)*, Adaptive Planes, Radar, Aurora, Synthwave,
@@ -612,11 +612,11 @@ so a newly chosen grid takes a few seconds to fully appear.
 Seven axes themes (**F4**): Off *(default)*, Classic, Pulse, Neon, Compass,
 Gizmo, Ruler.
 
-![Compass axes](docs/images/axes-compass.png)
+![Compass axes](images/axes-compass.png)
 
 ### Backdrops
 
-![Backdrops: Cityscape, Stars, Sunset, Aurora](docs/images/backdrops.png)
+![Backdrops: Cityscape, Stars, Sunset, Aurora](images/backdrops.png)
 
 **F6** cycles the scene backdrop: Off *(default)*, Cityscape, Stars,
 City+Stars, Sunset, Aurora, Nebula, Polar Day, Snowfall, Polar Day+Snow.
@@ -631,7 +631,7 @@ both.
 
 ### Lighting
 
-![Studio light theme on the teapot, with a light indicator](docs/images/light-theme-studio.png)
+![Studio light theme on the teapot, with a light indicator](images/light-theme-studio.png)
 
 **Light themes** (**F9**) are preset light rigs: Default (three colored
 keys), Headlight (light 0 rides the camera), Solar (light 0 at the world
@@ -646,7 +646,7 @@ where the rig sits.
 
 ### Geometry overlays
 
-![Normal vectors, vertex points and outlines on a quad](docs/images/vertex-overlays.png)
+![Normal vectors, vertex points and outlines on a quad](images/vertex-overlays.png)
 
 - **Vertex labels** (F5): Off / Index / Index+Pos / Index+World — numbers
   each vertex of the primitive at the cursor, optionally with its
@@ -662,7 +662,7 @@ A cursor crosshair guide also marks the vertex your cursor line refers to,
 with its position label — move the cursor through a `glBegin` block and the
 guide follows:
 
-![Cursor guide and Tron grid in the Transform stress example](docs/images/transform-stress.png)
+![Cursor guide and Tron grid in the Transform stress example](images/transform-stress.png)
 
 ### Transform guides
 
@@ -671,7 +671,7 @@ With **Xform guides** on (F8), placing the cursor on a committed
 showing what that line does — color-coded by axis (X=red, Y=green, Z=blue
 blends), with a pulse traveling along the path:
 
-![Cursor on a glTranslatef line: the guide shows the displacement](docs/images/xform-guide-still.png)
+![Cursor on a glTranslatef line: the guide shows the displacement](images/xform-guide-still.png)
 
 Guides only appear when the line parsed cleanly and your current input
 matches the committed source — partial or mid-edit lines are skipped.
@@ -744,7 +744,7 @@ all three guide types at once.
 
 ### Wireframe
 
-![Wireframe torus](docs/images/wireframe.png)
+![Wireframe torus](images/wireframe.png)
 
 **Ctrl+G** toggles wireframe rendering with a hidden-line pass: all polygon
 edges draw first in a muted hidden-line color, the scene seeds the depth
@@ -767,14 +767,14 @@ wires; turn them off for a clean wireframe look.
     (`AA 2x`, `Blur 16x`). Blur is expensive — every pass is a full scene
     render. `--noaccum` disables the accumulation buffer entirely.
 
-  ![Motion blur on a spinning cube (Blur 16x)](docs/images/motion-blur.png)
+  ![Motion blur on a spinning cube (Blur 16x)](images/motion-blur.png)
 
 - **Point attenuation** — distance-attenuated point sprites
   (`glPointParameterfv`); used by the glow/particle examples. On hardware
   without the entry point the REPL falls back to a distance-based
   `glPointSize` approximation.
 
-  ![Glow sprites example: blending + point attenuation](docs/images/glow-sprites.png)
+  ![Glow sprites example: blending + point attenuation](images/glow-sprites.png)
 
 - **Post-process filter** (Ctrl+N) — experimental viewport filters: Off /
   Chromatic aberration / Vignette.
@@ -783,7 +783,7 @@ wires; turn them off for a clean wireframe look.
 
 ## Replay
 
-![Replay stepping through a scene](docs/images/replay.gif)
+![Replay stepping through a scene](images/replay.gif)
 
 Replay executes your program one command at a time so you can watch the
 scene assemble — geometry appears incrementally, older geometry fades in a
@@ -942,7 +942,7 @@ the REPL. Two rules keep the round trip clean:
 > [*Adding A New Command*](ARCHITECTURE.md#adding-a-new-command) in
 > `ARCHITECTURE.md` for the full recipe (command type, spec-table row,
 > executor case, replay annotation, help text, save/load round-trip). To
-> raise the command budget, bump `MAX_COMMANDS` in [`config.h`](config.h) — it is
+> raise the command budget, bump `MAX_COMMANDS` in [`config.h`](../config.h) — it is
 > `#ifndef`-guarded, so `-DMAX_COMMANDS=8192` on the compiler command line
 > works without editing the file. Expect proportionally more per-frame work:
 > the flattened program re-executes every frame.

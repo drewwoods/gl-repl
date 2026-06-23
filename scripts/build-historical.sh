@@ -1,6 +1,6 @@
 #!/bin/sh
 # build-historical.sh — build the REPL at an old SHA without OpenGL-Vibe present.
-# See ARCHITECTURE.md § "Building Historical Checkouts" for the full story.
+# See docs/ARCHITECTURE.md § "Building Historical Checkouts" for the full story.
 # Run with `--help` for inline usage.
 
 set -eu

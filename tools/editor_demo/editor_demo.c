@@ -1,7 +1,7 @@
 /*
  * tools/editor_demo/editor_demo.c -- Standalone generic text editor demo.
  *
- * Per the Phase 8 cleavage in plans/done/editor-demo.md, this demo
+ * Per the Phase 8 cleavage in docs/plans/done/editor-demo.md, this demo
  * does NOT reuse the REPL editor's controller (src/editor/input.c,
  * commit.c, clipboard.c, undo.c, reformat.c, search.c, completion.c,
  * and the inline overlays — all REPL-flavored). It runs entirely on:
@@ -22,7 +22,7 @@
  * src/subsystems, plus the REPL-flavored editor controller files listed
  * above. There is no fake REPL service layer, no per-symbol REPL /
  * glr / ui / tutorial stub block, and (since Phase 4 of
- * plans/done/edit-line-ownership.md flipped storage and Phase 5
+ * docs/plans/done/edit-line-ownership.md flipped storage and Phase 5
  * deleted the shim file) no repl_shim.c either — the editor now
  * owns its edit-line cursor on EditorState.document.edit_line_idx.
  *
@@ -30,7 +30,7 @@
  * arrow keys / Home / End to move within the row, click the File menu
  * for Load / Save (unimplemented handlers) / Quit. Cross-line nav, undo,
  * find, word jumps, selection clipboard, and File menu handlers are
- * deferred to follow-up phases — see plans/done/editor-demo.md "What's
+ * deferred to follow-up phases — see docs/plans/done/editor-demo.md "What's
  * still open".
  *
  * Run:
@@ -63,7 +63,7 @@ static int  g_demo_scroll = 0;
  * buffer line plus one INPUT row at the active edit position.
  * Caller-owned rows[] storage stays valid for the duration of the
  * render/hit-test call. Edit-line lives on EditorState.document
- * (Phase 4 of plans/done/edit-line-ownership.md); read it via
+ * (Phase 4 of docs/plans/done/edit-line-ownership.md); read it via
  * editor_state_edit_line(). */
 static void demo_fill_text_row(UiTextPanelRow *row, const char *text,
                                int line_idx) {

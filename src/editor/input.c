@@ -305,7 +305,7 @@ static void editor_reset_document_to_empty(void) {
      * the surviving editor text drift out of lockstep — the user
      * sees the old lines in the code panel while every commit acts
      * on an empty cmd-store (implemented in Phase 4 of
-     * plans/done/edit-line-ownership.md). */
+     * docs/plans/done/edit-line-ownership.md). */
     editor_buffer_clear();
     editor_state_edit_line_set(0);
     editor_insert_mode_set(0);

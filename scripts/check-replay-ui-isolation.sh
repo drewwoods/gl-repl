@@ -2,7 +2,7 @@
 # Lighter feature-UI guard for the replay subsystem's UI surface
 # (`replay_ui_*.c`).
 #
-# Per the prefix discipline rule in MODULES.md ("2D UI rendering and
+# Per the prefix discipline rule in docs/MODULES.md ("2D UI rendering and
 # hit-test"), feature-owned UI modules may legitimately know their
 # feature's semantics and route hits to that feature's controller —
 # but they may not own unrelated editor / REPL / app-router state.
@@ -55,7 +55,7 @@ if [ -n "$violations" ]; then
     echo "replay HUD/buttons, hit-test replay-specific controls, route" >&2
     echo "hits via replay_handle_*, and read replay snapshots — but it" >&2
     echo "must not mutate editor / REPL state directly or call" >&2
-    echo "parser / compile / apply. See MODULES.md '2D UI rendering" >&2
+    echo "parser / compile / apply. See docs/MODULES.md '2D UI rendering" >&2
     echo "and hit-test'." >&2
     echo "Hits:" >&2
     printf '%s' "$violations" >&2

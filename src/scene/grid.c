@@ -158,7 +158,7 @@ static void set_fog_to_clear_color() {
     glFogfv(GL_FOG_COLOR, clear_col);
 }
 
-/* Grid in-out transition (plans/.../grid-axes-transitions.md rule 4).
+/* Grid in-out transition (docs/plans/.../grid-axes-transitions.md rule 4).
  * Resolved once at scene_grid_render entry from config.grid_opacity
  * and stored on the GridDrawContext. Every color path routes through
  * grid_color so it applies uniformly, AFTER each call site's own

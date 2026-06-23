@@ -55,7 +55,7 @@
 #include <string.h>
 
 /* Edit-line cursor lives on EditorState.document.edit_line_idx
- * (Phase 4 of plans/done/edit-line-ownership.md). The demo reads /
+ * (Phase 4 of docs/plans/done/edit-line-ownership.md). The demo reads /
  * writes it through editor_state_edit_line / _set — the same API
  * the REPL editor uses; the shim that previously backed this is
  * gone (Phase 5). */

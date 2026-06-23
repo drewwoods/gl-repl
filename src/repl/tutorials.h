@@ -100,7 +100,7 @@ typedef struct {
      * controller-installed bridge at apply time (SET) or compare time
      * (REQUIRE) instead of using the raw `cfg_value` integer. Lets the
      * catalog name the enum constant rather than encoding magic
-     * numbers — see plans/done/src-repl-code-smell-audit-2.md #41. */
+     * numbers — see docs/plans/done/src-repl-code-smell-audit-2.md #41. */
     const char               *cfg_value_name;
     /* Predef-variable target (REQUIRE_VAR only). `var_name` names a
      * predefined variable that must exist when the step is entered;

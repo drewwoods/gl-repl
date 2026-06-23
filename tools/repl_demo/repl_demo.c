@@ -99,7 +99,7 @@
 
 /* --- Demo-local edit-line cursor ------------------------------------- */
 
-/* Phase 4 of plans/in-review/edit-line-ownership.md moved edit-line
+/* Phase 4 of docs/plans/in-review/edit-line-ownership.md moved edit-line
  * storage out of ReplState. The REPL pipeline reads/writes the
  * cursor through a controller-installed host-effects sink; the
  * demo backs the sink with a file-local int since it doesn't link

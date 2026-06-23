@@ -3,7 +3,7 @@
 Interactive OpenGL command interpreter. Type GL commands, press `;` to execute,
 and watch geometry render in real-time with a live code panel.
 
-New to the tree? Start with [`MODULES.md`](MODULES.md) for the one-page
+New to the tree? Start with [`docs/MODULES.md`](docs/MODULES.md) for the one-page
 layered overview of the source files. This file is the agent-facing project
 brief and goes deeper. The `src/repl` language pipeline (parse → compile →
 apply → flatten → execute) has its own module-local docs:
@@ -74,7 +74,7 @@ then `make freeglut-clean`. The source repo defaults to upstream but is
 overridable with `FREEGLUT_REPO=<url-or-path>` (accepts a local fork clone) —
 e.g. `FREEGLUT_REPO=~/src/freeglut-fork scripts/vendor-freeglut.sh
 osmesa-backend` re-vendors from a fork carrying the OSMesa backend. Licenses for
-freeglut and miniaudio are acknowledged in `THIRD_PARTY_LICENSES.md`.
+freeglut and miniaudio are acknowledged in `docs/THIRD_PARTY_LICENSES.md`.
 
 ### Headless OSMesa build (`make ... FREEGLUT_OSMESA=1`)
 
@@ -121,7 +121,7 @@ newer fork commit.
 
 **Doc media regeneration (`scripts/docs-assets.sh`).** Regenerates every
 screenshot/GIF under `docs/images/` (the media embedded in `README.md` /
-`USER_GUIDE.md`); takes asset names as args (`--list`), default all;
+`docs/USER_GUIDE.md`); takes asset names as args (`--list`), default all;
 `-j N` runs N assets in parallel (self-reexec via `xargs -P`, one
 process per asset). Each asset is a staged snippet scene (`@cfg` headers
 + optional `// camera` block + `GLR_EDIT_LINE` for cursor-bound
@@ -429,7 +429,7 @@ skipped in apply *and* export, and the star backdrop's direct call is
 gated via `SceneRenderConfig.point_parameter_supported`. User-typed
 `glPointParameterfv(...)` is still kept verbatim in exported standalone C
 (it may target other hardware). See *Runtime GL Capability Detection* in
-`ARCHITECTURE.md`.
+`docs/ARCHITECTURE.md`.
 
 ## Test
 
@@ -459,7 +459,7 @@ whitespace; also wired into `test-stubs` and the pre-push hook).
 
 ## Design notes
 
-Use `plans/` for long-form design or audit notes when the change is broad
+Use `docs/plans/` for long-form design or audit notes when the change is broad
 enough that a short issue or commit message would not preserve the rationale.
 Root docs should describe the current design first; link to a plan only after
 explaining why the extra background is useful.
@@ -613,7 +613,7 @@ explaining why the extra background is useful.
 | [`src/support/mesh_ply.h`](src/support/mesh_ply.h) | [`MeshPlyCapture`](src/support/mesh_ply.h#L56) (incl. `floats_per_vertex` = 7/11) / [`MeshPlyOptions`](src/support/mesh_ply.h#L65) + [`mesh_ply_write()`](src/support/mesh_ply.h#L93); local `MESH_PLY_TOK_*` token enum + `MESH_PLY_PASS_NORMALS`/`_NO_NORMALS` markers |
 | [`src/support/cpuprof.c`](src/support/cpuprof.c) | CPU wall-time profiling instrumentation (per-section accumulators, frame tick); host-agnostic — sections are opaque ints, catalog injected via [`prof_sections.h`](prof_sections.h). Carries the optional per-section begin/end hook seam (`prof_install_section_hooks`) the app uses to bracket GPU sections without touching call sites |
 | [`src/support/cpuprof.h`](src/support/cpuprof.h) | Profiling API (`prof_begin`, `prof_end`, `prof_frame_tick`, etc.); no UI/app dependency — `#ifndef PROF_SECTIONS_PROVIDED` fallback makes it compile with no catalog (`check-cpuprof-standalone`). Declares [`prof_section_info()`](src/support/cpuprof.h#L48) (per-section label/depth/is_total), implemented per-binary |
-| [`src/support/gpuprof.c`](src/support/gpuprof.c) | GPU time profiling via GL timer queries, keyed on the same `ProfSection` ids. Two modes picked at init: **timestamp** (`glQueryCounter(GL_TIMESTAMP)`, ARB_timer_query / GL 3.3 — one marker per transition, interval deltas tile the GPU timeline so sums are additive; the Linux/Mesa path) and **elapsed** (`GL_TIME_ELAPSED_EXT` brackets, the EXT_timer_query fallback — Apple GL 2.1; windows overlap on tile-deferred GPUs, see the NOTE in gpuprof.h). Asynchronous by design: per-frame query slots in a 4-deep ring, polled with `GL_QUERY_RESULT_AVAILABLE` and harvested 1-3 frames later — never a glFinish. Begin/end slice the frame into non-overlapping segments tagged with the open-section mask. GL-free TU: entry points injected as function pointers at init (loaded in `glr_ctrl_init_gl`, same proc-loader pattern as glPointParameterfv; `GLR_NO_GPU_PROF=1` forces off), GL tokens defined locally (mesh_ply precedent). See *Runtime GL Capability Detection* in `ARCHITECTURE.md` |
+| [`src/support/gpuprof.c`](src/support/gpuprof.c) | GPU time profiling via GL timer queries, keyed on the same `ProfSection` ids. Two modes picked at init: **timestamp** (`glQueryCounter(GL_TIMESTAMP)`, ARB_timer_query / GL 3.3 — one marker per transition, interval deltas tile the GPU timeline so sums are additive; the Linux/Mesa path) and **elapsed** (`GL_TIME_ELAPSED_EXT` brackets, the EXT_timer_query fallback — Apple GL 2.1; windows overlap on tile-deferred GPUs, see the NOTE in gpuprof.h). Asynchronous by design: per-frame query slots in a 4-deep ring, polled with `GL_QUERY_RESULT_AVAILABLE` and harvested 1-3 frames later — never a glFinish. Begin/end slice the frame into non-overlapping segments tagged with the open-section mask. GL-free TU: entry points injected as function pointers at init (loaded in `glr_ctrl_init_gl`, same proc-loader pattern as glPointParameterfv; `GLR_NO_GPU_PROF=1` forces off), GL tokens defined locally (mesh_ply precedent). See *Runtime GL Capability Detection* in `docs/ARCHITECTURE.md` |
 | [`src/support/gpuprof.h`](src/support/gpuprof.h) | GPU profiler API (`gpu_prof_init/frame_begin/begin/end`, `gpu_prof_section_avg_us/_has_data`, `gpu_prof_uses_timestamps`) + the injected [`GpuProfGlFns`](src/support/gpuprof.h#L57) table (`query_counter` optional → timestamp mode) |
 | [`src/app/glr_prof.c`](src/app/glr_prof.c) | gl-repl's [`prof_section_info()`](src/support/cpuprof.h#L48) table: per-section `{ label, depth, is_total }` (bare label + explicit nesting depth — the panel derives indentation from depth). Also the GPU-bracketing policy: `k_gpu_sections[]` (which sections get timer queries — GL-emitting ones only; per-fade-batch subsections excluded for query-budget reasons), the cpuprof hook pair that routes them into gpuprof, and the per-frame capture mode (Off/Plot → no queries, Sections → depth-0 rows only, Details → full subset; set by the controller at frame top, since query boundaries cost real GPU time on GL-on-Metal). The demos implement their own `prof_section_info` |
 | [`src/app/glr_prof.h`](src/app/glr_prof.h) | GPU-section policy API (`glr_prof_section_is_gpu`, `glr_prof_install_gpu_section_hooks`, `glr_prof_set_gpu_capture_mode`) |
@@ -649,7 +649,7 @@ explaining why the extra background is useful.
 | [`src/ui/core/gl_2d.h`](src/ui/core/gl_2d.h) | Header-only 2D OpenGL helper functions |
 | `tests/support/` | Shared test harness/setup helpers |
 | `tests/gl-stubs/` | No-op GL/GLU/GLUT headers used by `USE_GL_STUBS=1` builds |
-| `MODULES.md` | One-page layered overview, ownership diagram, current boundaries, open edges |
+| `docs/MODULES.md` | One-page layered overview, ownership diagram, current boundaries, open edges |
 
 ## Conventions
 

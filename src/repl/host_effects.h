@@ -76,7 +76,7 @@ typedef struct {
      * stays intact. Higher-level pipeline entry points (scenes.c)
      * use this; the parse / compile / flatten / load layers take
      * cursor as an explicit parameter instead (see phase 3.6.x;
-     * implemented in phase 4 of plans/done/edit-line-ownership.md).
+     * implemented in phase 4 of docs/plans/done/edit-line-ownership.md).
      *
      * Default behavior when the hook is NULL: edit_line_get
      * returns 0; edit_line_set is a no-op. The demo / pure REPL

@@ -1,13 +1,13 @@
 #!/bin/bash
 # Hard ratchet: forbid new app/glr_* coupling in src/editor/.
 #
-# The editor (src/editor/) is layer 2 in MODULES.md; non-editor concerns
+# The editor (src/editor/) is layer 2 in docs/MODULES.md; non-editor concerns
 # are supposed to be filtered by the controller before the editor sees
 # them. Direct #includes of app/glr_*.h from the editor invert the
 # layering: changes to app/* propagate down into the text-document
 # model.
 #
-# Audit finding #8 in plans/in-review/src-editor-code-smell-audit.md
+# Audit finding #8 in docs/plans/in-review/src-editor-code-smell-audit.md
 # documents the current four violations in src/editor/input.c; the
 # week-pass fix hoists those call sites into src/app/glr_ctrl.c.
 # Until that lands, this ratchet prevents the count from growing.

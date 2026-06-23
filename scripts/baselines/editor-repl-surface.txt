@@ -3,7 +3,7 @@
 # Counts unique `repl_*(` symbols called from each editor file.
 # These are the direct REPL coupling that tools/editor_demo/repl_shim.c
 # used to have to stub (the shim was deleted in Phase 5 of
-# plans/done/edit-line-ownership.md after the storage flip removed
+# docs/plans/done/edit-line-ownership.md after the storage flip removed
 # its last forwarders). Subsequent phases ratchet this surface down
 # by consolidating or deleting direct editor -> REPL dependencies.
 #
@@ -65,7 +65,7 @@
 # while reusing the same branch validation as the loader/import path.
 #
 # Ratchet down as migrations land. The plan target
-# (plans/done/editor-demo.md) is ~5 per file.
+# (docs/plans/done/editor-demo.md) is ~5 per file.
 
 input_c: 25
 commit_c: 29

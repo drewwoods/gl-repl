@@ -12,7 +12,7 @@ const UiRgba g_ui_theme_table[UI_THEME_COUNT][UI_TOK_COUNT] = {
     },
     /* The remaining rows reuse the same neutral chrome; only the accent,
      * a dark accent-tinted hover band, and the HUD glow band differ
-     * (--accent-h values from plans/done/design-rework). */
+     * (--accent-h values from docs/plans/done/design-rework). */
     [UI_THEME_WARM] = {
         UI_THEME_NEUTRAL_COLUMNS,
         [UI_TOK_ACCENT]                 = { 0.851f, 0.424f, 0.310f, 1.0f }, /* #d96c4f */

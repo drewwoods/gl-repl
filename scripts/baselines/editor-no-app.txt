@@ -2,7 +2,7 @@
 #
 # Counts non-comment `#include "app/...` lines in src/editor/**.
 # The editor (layer 2) should not depend on the controller (layer 6).
-# Audit finding #8 in plans/in-review/src-editor-code-smell-audit.md
+# Audit finding #8 in docs/plans/in-review/src-editor-code-smell-audit.md
 # previously documented four violations in src/editor/input.c. The
 # week-pass fix landed 2026-05-24:
 #   - editor_reset_transients moved to src/app/glr_ctrl.c as
