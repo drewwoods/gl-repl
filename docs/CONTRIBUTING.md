@@ -45,7 +45,7 @@ function-pointer typedefs (no old-style `void (*)()`).
 
 Prefixes express ownership: `repl_*` for the language/program model,
 `editor_*` for the text document, `glr_*` for the app shell/controller,
-`scene_*` for 3D rendering, `ui_*` for 2D rendering. Runtime state crosses
+`render3d_*` for 3D rendering, `ui_*` for 2D rendering. Runtime state crosses
 module boundaries only through the typed facades ([`src/repl/state.h`](../src/repl/state.h),
 [`src/editor/state.h`](../src/editor/state.h), peer-subsystem accessors). When in doubt,
 [`MODULES.md`](MODULES.md) has a "Where To Put New Code" section.

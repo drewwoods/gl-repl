@@ -228,11 +228,11 @@ which choice it selects:
 |---|---|
 | `grid` | `GRID_THEME_OFF` `_CLASSIC` `_FOG` `_TRON` `_EMBER` `_FAINT` `_FOCUS` `_OCEAN` `_XZRULER` `_PLANES` `_RADAR` `_AURORA` `_SYNTHWAVE` `_FROZEN` `_SOIL` `_STARCHART` |
 | `axes` | `AXES_THEME_OFF` `_CLASSIC` `_PULSE` `_NEON` `_COMPASS` `_GIZMO` `_RULER` |
-| `backdrop` | `SCENE_BACKDROP_OFF` `_CITYSCAPE` `_STARS` `_CITY_AND_STARS` `_SUNSET` `_AURORA` `_NEBULA` `_POLAR_DAY` `_SNOWFALL` `_POLAR_DAY_SNOW` |
+| `backdrop` | `RENDER3D_BACKDROP_OFF` `_CITYSCAPE` `_STARS` `_CITY_AND_STARS` `_SUNSET` `_AURORA` `_NEBULA` `_POLAR_DAY` `_SNOWFALL` `_POLAR_DAY_SNOW` |
 | `light_theme` | `LIGHT_THEME_DEFAULT` `_HEADLIGHT` `_SOLAR` `_STUDIO` `_NEON` |
 | `grid_extent` | `GRID_EXTENT_CLOSE` `_MID` `_FAR` |
 | `grid_major` | `GRID_MAJOR_1` `_2` `_5` `_10` (the major-tick spacing) |
-| `view_mode` | `SCENE_VIEW_3D` `SCENE_VIEW_2D` (perspective vs. 2D ortho) |
+| `view_mode` | `RENDER3D_VIEW_3D` `RENDER3D_VIEW_2D` (perspective vs. 2D ortho) |
 
 **Integer slugs** carry a plain index: the toggles `wireframe`,
 `normal_vectors`, `vertex_outlines`, `vertex_points`, `light_indicators`,
@@ -242,12 +242,12 @@ which choice it selects:
 ```c
 // @cfg grid = GRID_THEME_OCEAN
 // @cfg grid_extent = GRID_EXTENT_MID
-// @cfg view_mode = SCENE_VIEW_2D
+// @cfg view_mode = RENDER3D_VIEW_2D
 // @cfg light_indicators = 1
 ```
 
-The symbolic names come straight from the enums in [`src/scene/themes.h`](../src/scene/themes.h) /
-[`src/scene/view_mode.h`](../src/scene/view_mode.h) via X-macros, so reordering an enum can't silently
+The symbolic names come straight from the enums in [`src/render3d/themes.h`](../src/render3d/themes.h) /
+[`src/render3d/view_mode.h`](../src/render3d/view_mode.h) via X-macros, so reordering an enum can't silently
 shift which value a catalog literal selects. A typo'd or out-of-range
 symbol is dropped with a `repl_cfg: dropping '…' (unknown symbolic value)`
 note on stderr rather than landing at index 0.

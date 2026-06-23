@@ -492,7 +492,7 @@ explaining why the extra background is useful.
 | [`src/repl/command_store.h`](src/repl/command_store.h) | Command-store public API (`repl_command_store_insert_one`, etc.) |
 | [`src/repl/state.c`](src/repl/state.c) | Owns `g_repl_state`, lifecycle, snapshot assembly (`repl_state_capture` / `repl_state_restore`) |
 | [`src/repl/state.h`](src/repl/state.h) | Typed runtime-state facade, reset helpers, and focused accessors over the live REPL state |
-| [`src/repl/state_views.h`](src/repl/state_views.h) | Read-only (by-value) state getters; safe to include from `scene_*` and `ui_*` |
+| [`src/repl/state_views.h`](src/repl/state_views.h) | Read-only (by-value) state getters; safe to include from `render3d_*` and `ui_*` |
 | [`src/repl/state_owners.h`](src/repl/state_owners.h) | Mutable `_mut()` accessors; owner modules and controller only. |
 | [`src/repl/cfg_baseline.h`](src/repl/cfg_baseline.h) | Config bag API plus typed live-cfg helpers (`repl_cfg_get_int` / `_set_int` / `_known` / `_set_text` / `_resolve_text`) used by [`src/subsystems/tutorial/tutorial_runner.c`](src/subsystems/tutorial/tutorial_runner.c) for SET / REQUIRE handling and cfg baseline restore |
 | [`src/editor/input.c`](src/editor/input.c) | **REPL editor input dispatcher**: REPL key bindings (`;` commit, Tab autocomplete, Ctrl+R reformat, tutorial guards, comment toggle) + REPL-flavored orchestration on top of `edit_ops` primitives. Non-editor routing (replay, audio, config, save, camera) lives in [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c). The generic counterpart for `editor_demo` is [`tools/editor_demo/input.c`](tools/editor_demo/input.c). |
@@ -601,7 +601,7 @@ explaining why the extra background is useful.
 | [`src/subsystems/tutorial/tutorial_match.c`](src/subsystems/tutorial/tutorial_match.c) | Tutorial command matching, normalization, expected-message formatting, and ghost-text shadow suffix helpers |
 | [`src/subsystems/tutorial/tutorial_internal.h`](src/subsystems/tutorial/tutorial_internal.h) | Tutorial-private shared declarations for the split runner / animation / match files |
 | [`src/subsystems/tutorial/tutorial.h`](src/subsystems/tutorial/tutorial.h) | Runner API: `tutorial_start/_exit/_teardown/_handle_commit_attempt/_advance_after_successful_commit/_current_expected_text/_current_step_kind/_notify_state_changed/_handle_ack_key/_block_noncommand_commit/_line_is_locked/_guard_source_change/_match`. Knobs: `TUTORIAL_FADE_CHARS_PER_SEC` (reveal rate), `TUTORIAL_FADE_SETTLE_CHARS` (settle-wave width) |
-| [`src/repl/export.c`](src/repl/export.c) | Export writer: `repl_export_save_output`, `repl_dump_code_panel_text`, workspace header emit dispatcher `repl_state_refresh_workspace_header_lines`, scaffold sections, render-state/cam refresh, init-bootstrap apply, light/render text generators. Also implements the typed live-cfg wrappers `repl_cfg_get_int` / `_set_int` / `_known` over the installed config bridge (bridge-only — no `scene_*`/`glr_*` calls; `check-repl-export-via-bridge` stays green) |
+| [`src/repl/export.c`](src/repl/export.c) | Export writer: `repl_export_save_output`, `repl_dump_code_panel_text`, workspace header emit dispatcher `repl_state_refresh_workspace_header_lines`, scaffold sections, render-state/cam refresh, init-bootstrap apply, light/render text generators. Also implements the typed live-cfg wrappers `repl_cfg_get_int` / `_set_int` / `_known` over the installed config bridge (bridge-only — no `render3d_*`/`glr_*` calls; `check-repl-export-via-bridge` stays green) |
 | [`src/repl/import.c`](src/repl/import.c) | Import reader: `repl_export_load_from_file`, the pending-`@cfg` accumulator + `repl_export_apply_pending_cfg`, deferred-`@var` table, workspace directive readers (`parse_workspace_dir` / `_scene_name` / `_var` / `_func_alias` / `_cfg`) and the `repl_state_parse_workspace_header_line` dispatcher, snippet directive table (`@declare`), C-to-REPL line translators (for-headers, function headers, tess lines, `glPointParameterfv`, `label()`), and the line-by-line `ImportState` machine. The `IMPORT_EXPORT_STATE` macro block is duplicated verbatim with [`src/repl/export.c`](src/repl/export.c); both TUs reach the same state-owner facade. |
 | [`src/repl/export.h`](src/repl/export.h) | Export/import public API and workspace-header pending-state types |
 | [`src/repl/export_state.h`](src/repl/export_state.h) | Shared dimensions for import/export state text |
@@ -629,9 +629,9 @@ explaining why the extra background is useful.
 | [`src/render3d/grid.h`](src/render3d/grid.h) | Grid render entrypoint |
 | [`src/render3d/axes.c`](src/render3d/axes.c) | Axes theme rendering |
 | [`src/render3d/axes.h`](src/render3d/axes.h) | Axes render entrypoint |
-| [`src/render3d/render3d_transition.c`](src/render3d/render3d_transition.c) | Pure grid/axes show↔hide fade state machine (`scene_xn_init/set/show/tick`); no GL, one instance per overlay |
-| [`src/render3d/render3d_transition.h`](src/render3d/render3d_transition.h) | Transition machine API: [`SceneXnState`](src/render3d/render3d_transition.h#L55), [`SceneXnPhase`](src/render3d/render3d_transition.h#L34), entry points |
-| [`src/render3d/render.h`](src/render3d/render.h) | Declares `render3d_draw_scene(Render3dState *, const Render3dRenderConfig *)`, `render3d_state_init(...)`, `scene_get_active_projection(...)`. Camera transform is set by the caller (e.g. `glr_camera_load_modelview` from [`src/app/glr_camera.h`](src/app/glr_camera.h)) before invoking — the scene module owns no camera type or apply helper |
+| [`src/render3d/render3d_transition.c`](src/render3d/render3d_transition.c) | Pure grid/axes show↔hide fade state machine (`render3d_xn_init/set/show/tick`); no GL, one instance per overlay |
+| [`src/render3d/render3d_transition.h`](src/render3d/render3d_transition.h) | Transition machine API: [`Render3dXnState`](src/render3d/render3d_transition.h#L55), [`Render3dXnPhase`](src/render3d/render3d_transition.h#L34), entry points |
+| [`src/render3d/render.h`](src/render3d/render.h) | Declares `render3d_draw_scene(Render3dState *, const Render3dRenderConfig *)`, `render3d_state_init(...)`, `render3d_get_active_projection(...)`. Camera transform is set by the caller (e.g. `glr_camera_load_modelview` from [`src/app/glr_camera.h`](src/app/glr_camera.h)) before invoking — the render3d module owns no camera type or apply helper |
 | [`src/render3d/backdrop.c`](src/render3d/backdrop.c) | Backdrop mode dispatch and deterministic cityscape renderer |
 | [`src/render3d/backdrop.h`](src/render3d/backdrop.h) | Backdrop render entrypoint |
 | [`src/render3d/lights.c`](src/render3d/lights.c) | Ambient init, light setup/reset, and visible light indicator overlay |
@@ -664,7 +664,7 @@ explaining why the extra background is useful.
 - Prefixes express ownership. Use `repl_*` for REPL language/source/program
   model modules, `editor_*` for text-document model/controller (under
   `src/editor/`), `glr_*` for app shell/controller/app-service code,
-  `scene_*` for 3D rendering, `ui_*` for 2D view rendering, and neutral
+  `render3d_*` for 3D rendering, `ui_*` for 2D view rendering, and neutral
   names such as `prof` for generic utilities. The app-level audio
   service lives at [`src/app/glr_audio.c`](src/app/glr_audio.c) with the `glr_audio_*` API. Don't introduce new
   top-level prefixes without first documenting the ownership boundary.
@@ -764,7 +764,7 @@ is no shim layer.
    accumulation pass to interpolate the camera pose or advance an
    animation-time sub-step; see *Accumulation Motion Blur* below.
 3. `render3d_draw_scene(&cfg)` in [`src/render3d/render.c`](src/render3d/render.c): viewport/clear setup
-   → projection → execute user geometry via `SceneExecuteProgramFn`
+   → projection → execute user geometry via `Render3dExecuteProgramFn`
    callback → replay fade batches → grid/axes/backdrop/orbit-target →
    polygon-outline, vertex, normal, and guide overlays → 2D replay HUD
   (renders via `replay_ui_hud_render` from [`src/ui/subsystems/replay_hud.c`](src/ui/subsystems/replay_hud.c))
@@ -791,7 +791,7 @@ always renders with jitter 0, so a frame is exactly `accum_passes` renders
 either way (no doubling).
 
 The accum loop lives in [`render3d_draw_scene()`](src/render3d/render.h#L135) ([`src/render3d/render.c`](src/render3d/render.c)); a
-sample is a "blur sample" when `SCENE_ACCUM_EFFECT_IS_BLUR(accum_effect)` and a
+sample is a "blur sample" when `RENDER3D_ACCUM_EFFECT_IS_BLUR(accum_effect)` and a
 hook is installed. For blur the scene makes a per-sample [`Render3dRenderConfig`](src/render3d/render_types.h#L130)
 copy and calls `config->setup_subframe_fn(ud, pass_idx, pass_count, &pass_cfg)`
 — a hook the **controller** installs (`glr_ctrl_resolve_blur_subframe` →
