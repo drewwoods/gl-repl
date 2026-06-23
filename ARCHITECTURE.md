@@ -1,5 +1,6 @@
 # REPL Architecture
 
+> [!NOTE]
 > For the quick module map, see [`MODULES.md`](MODULES.md). Each
 > `src/` subsystem also carries its own `README.md`
 > (`src/repl/`, `src/editor/`, `src/app/`, `src/scene/`, `src/ui/`,
@@ -181,6 +182,7 @@ data.
 
 ## Two-Level Command Model
 
+> [!NOTE]
 > This section is the app-level summary. For the full treatment of the
 > `src/repl` interpreter — the [`GLCmd`](src/repl/command.h#L86) record and provenance, the
 > compile→apply edit flow, the flatten→execute frame flow, the [`ReplRuntimeState`](src/repl/state.h#L18)
@@ -421,10 +423,11 @@ line to stderr that distinguishes the two causes:
 * genuine lack — `"glPointParameterfv unsupported by this GL context
   (GL_VERSION ...)"` (and points at the env var for forced testing).
 
-Detection MUST run before [`repl_apply_init_bootstrap()`](src/repl/pipeline.h#L16) in the same
-function: on unsupported hardware the injected `point_attenuation` bootstrap
-entry has to be skipped entirely rather than invoking the missing entry
-point.
+> [!WARNING]
+> Detection MUST run before [`repl_apply_init_bootstrap()`](src/repl/pipeline.h#L16) in the same
+> function: on unsupported hardware the injected `point_attenuation` bootstrap
+> entry has to be skipped entirely rather than invoking the missing entry
+> point.
 
 The second case is the **GPU profiler's timer queries** — the profile
 panel's GPU column, measured by [`src/support/gpuprof.c`](src/support/gpuprof.c). Detection:
@@ -500,6 +503,7 @@ mechanisms:
 to *any* value that is (a) recomputed per frame from live REPL/scene
 state and (b) read by more than one consumer in the frame loop:
 
+> [!IMPORTANT]
 > **If a per-frame value has more than one consumer, the controller
 > resolves it once into the frame snapshot; consumers read the snapshot.
 > Never let two consumers re-resolve it independently.**
@@ -518,11 +522,12 @@ the scene-render boundary. This is just [`UiRenderSnapshot`](src/ui/app/snapshot
 contract ("UI render code reads only from the snapshot") restated for
 the case where the value is computed rather than copied.
 
-⚠️ **Do not generalize the `"static float g_angle = 0.0f;"` precedent.**
-That special-case resolves at the consumer site, which is safe *only*
-because its single consumer is the file writer (one pass, off the frame
-loop). It is the wrong model for any value the code panel reads — copy
-the snapshot shape below, not the `g_angle` shape.
+> [!CAUTION]
+> **Do not generalize the `"static float g_angle = 0.0f;"` precedent.**
+> That special-case resolves at the consumer site, which is safe *only*
+> because its single consumer is the file writer (one pass, off the frame
+> loop). It is the wrong model for any value the code panel reads — copy
+> the snapshot shape below, not the `g_angle` shape.
 
 **Dynamic-footer sentinel mechanism.** `g_footer_pre_init[]` is iterated
 verbatim by three consumers (the file writer in [`src/repl/export.c`](src/repl/export.c) and
@@ -1489,8 +1494,8 @@ parse -> command store -> flatten -> execute
 ```
 
 builds and runs **without** [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c), `src/editor/*`,
-`src/ui/*` renderers, or any app-owned state — and, since the decoupling
-with a **stub-free link boundary**.
+`src/ui/*` renderers, or any app-owned state — and it enforces that decoupling
+with a **stub-free link boundary** (next section).
 
 `./repl_demo --trace` is the representative language-pipeline walkthrough:
 it feeds one program through the non-editor load transaction
@@ -1612,6 +1617,7 @@ the canonical worked example for a GL command; `label` (REPL primitive) and
 `rand2` (math function) are the worked examples for the two off-the-main-path
 shapes.
 
+> [!TIP]
 > **What kind of thing am I adding?** The path branches at step 0.
 >
 > - **Bound GL/GLU/GLUT command** (most common — `glutSolidCube`,
@@ -1678,6 +1684,7 @@ CMD_GLUT_CUBE, CMD_GLUT_SPHERE, CMD_GLUT_TEAPOT, CMD_GLUT_CONE,
 
 ### 2. [`src/repl/command_spec.c`](src/repl/command_spec.c) — three additions
 
+> [!IMPORTANT]
 > **Required, not optional.** All three sub-tables feed different consumers.
 > Without 2a the command is invisible in F1 help and Tab-completion; without
 > 2b the parser has nothing to match against; without 2c the code-panel
@@ -1876,10 +1883,11 @@ rather than a single `command_spec` row. For the full source-vs-flat data model
 and a worked `else if` example, read
 [`src/repl/ARCHITECTURE.md`](src/repl/ARCHITECTURE.md).
 
-The one rule that prevents most drift: **source-command structure belongs to
-compile / source-scope / flatten; flat-command execution belongs to executor /
-replay.** A command works in one path and silently breaks in the other exactly
-when those two levels get mixed.
+> [!IMPORTANT]
+> The one rule that prevents most drift: **source-command structure belongs to
+> compile / source-scope / flatten; flat-command execution belongs to executor /
+> replay.** A command works in one path and silently breaks in the other exactly
+> when those two levels get mixed.
 
 Beyond the shared [`CmdType`](src/repl/command.h#L37) + `command_spec` wiring already covered by the
 checklist above (its steps 1–2), a structured command touches:
