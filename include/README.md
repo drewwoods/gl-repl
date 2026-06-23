@@ -5,9 +5,9 @@ dependencies that are used by normal source builds.
 
 Current contents:
 
-- `gl_includes.h` - project-wide GL/GLU/GLUT include shim.
-- `gl_2d.h` - header-only 2D OpenGL helper functions.
-- `miniaudio.h` - vendored miniaudio dependency.
+- [`gl_includes.h`](include/gl_includes.h) - project-wide GL/GLU/GLUT include shim.
+- [`gl_2d.h`](src/ui/core/gl_2d.h) - header-only 2D OpenGL helper functions.
+- [`miniaudio.h`](include/miniaudio.h) - vendored miniaudio dependency.
 
 freeglut itself is vendored separately under `third_party/freeglut/` (full
 source, built as a static library with the macOS Cocoa backend); see

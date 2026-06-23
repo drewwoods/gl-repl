@@ -37,7 +37,7 @@ green:
   (also wired into `test-stubs` and the pre-push hook).
 
 Portability conventions the guards can't fully machine-check: use
-`STATIC_ASSERT(expr, msg)` from `include/c_compat.h` (never raw
+`STATIC_ASSERT(expr, msg)` from [`include/c_compat.h`](include/c_compat.h) (never raw
 `_Static_assert`), plain `, __VA_ARGS__` (no GNU `##`), and prototyped
 function-pointer typedefs (no old-style `void (*)()`).
 
@@ -46,8 +46,8 @@ function-pointer typedefs (no old-style `void (*)()`).
 Prefixes express ownership: `repl_*` for the language/program model,
 `editor_*` for the text document, `glr_*` for the app shell/controller,
 `scene_*` for 3D rendering, `ui_*` for 2D rendering. Runtime state crosses
-module boundaries only through the typed facades (`src/repl/state.h`,
-`src/editor/state.h`, peer-subsystem accessors). When in doubt,
+module boundaries only through the typed facades ([`src/repl/state.h`](src/repl/state.h),
+[`src/editor/state.h`](src/editor/state.h), peer-subsystem accessors). When in doubt,
 [`MODULES.md`](MODULES.md) has a "Where To Put New Code" section.
 
 ## Extending the REPL
@@ -55,34 +55,34 @@ module boundaries only through the typed facades (`src/repl/state.h`,
 The most common contributions, recipe-style:
 
 **A new GL command**
-1. Add a `CmdType` to `src/repl/command.h`.
-2. Parse it in `repl_parser_parse_command_ctx()` (`src/repl/parser.c`) —
+1. Add a [`CmdType`](src/repl/command.h#L37) to [`src/repl/command.h`](src/repl/command.h).
+2. Parse it in `repl_parser_parse_command_ctx()` ([`src/repl/parser.c`](src/repl/parser.c)) —
    for a `glEnable`-shaped enum-arg command or a standard float-arg
    command, you only need a new row in `k_enum_command_specs[]` /
-   `k_std_command_specs[]` in `src/repl/command_spec.c` (keep the tables
+   `k_std_command_specs[]` in [`src/repl/command_spec.c`](src/repl/command_spec.c) (keep the tables
    alphabetically sorted by GL name).
-3. Execute it in `repl_execute_program()` (`src/repl/executor.c`) and
-   handle it in `flatten_range()` (`src/repl/flatten.c`).
-4. Add a `g_command_type_specs[]` entry in `src/repl/command_spec.c` with
-   the right `CmdSyntaxCategory` for syntax highlighting.
+3. Execute it in `repl_execute_program()` ([`src/repl/executor.c`](src/repl/executor.c)) and
+   handle it in `flatten_range()` ([`src/repl/flatten.c`](src/repl/flatten.c)).
+4. Add a `g_command_type_specs[]` entry in [`src/repl/command_spec.c`](src/repl/command_spec.c) with
+   the right [`CmdSyntaxCategory`](src/repl/command_spec.h#L140) for syntax highlighting.
 5. If it's a new GL/GLU/GLUT symbol, extend the matching stub header
    under `tests/gl-stubs/include/` and verify both `make test-stubs` and
    `make gl-repl`.
 
-**A new config toggle** — append a `ReplConfigItem` descriptor to
-`g_cfg_items[]` in `src/app/glr_actions.c` under the right `### ` section.
+**A new config toggle** — append a [`ReplConfigItem`](src/repl/cfg_baseline.h#L29) descriptor to
+`g_cfg_items[]` in [`src/app/glr_actions.c`](src/app/glr_actions.c) under the right `### ` section.
 The count auto-computes and the item joins its section's flyout menu.
 
-**A new built-in example** — add it to `src/repl/examples.c` with optional
+**A new built-in example** — add it to [`src/repl/examples.c`](src/repl/examples.c) with optional
 leading `// @cfg` lines and a `// camera` block. Mind the 4096 flat-command
 budget (hoist loop-invariant assignments out of loops).
 
 **A new tutorial** — add a `TutorialStep[]` entry to `g_tutorials[]` in
-`src/repl/tutorials.c` with a `.tags` mask; the metadata tests fail if you
+[`src/repl/tutorials.c`](src/repl/tutorials.c) with a `.tags` mask; the metadata tests fail if you
 forget the tags.
 
 **A new keyboard shortcut** — one `#define GLR_<ACTION> <key>, <mods>` pair
-in `keymap.h`; `make keymap-list` prints current bindings and free slots.
+in [`keymap.h`](keymap.h); `make keymap-list` prints current bindings and free slots.
 
 ## Design notes
 

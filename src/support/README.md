@@ -13,7 +13,7 @@ their respective layers.
   (per-section accumulators, frame tick). Public API: `prof_begin`,
   `prof_accum_end`, `prof_end`, `prof_frame_tick`, etc. Used by every
   layer that wants to measure work; the UI panel that visualises it
-  lives at `src/ui/support/cpuprof.c`.
+  lives at [`src/ui/support/cpuprof.c`](src/ui/support/cpuprof.c).
 
 ## Why a dedicated directory
 

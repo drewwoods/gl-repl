@@ -17,7 +17,7 @@ calling a new GL/GLU/GLUT symbol, extend the matching stub header under
 
 Header layout:
 
-- `tests/gl-stubs/include/GL/gl.h` - fixed-function GL types, constants, and no-op calls.
-- `tests/gl-stubs/include/GL/glu.h` - GLU projection, quadric, and tessellator calls.
-- `tests/gl-stubs/include/GL/freeglut.h` - GLUT/freeglut callbacks and shapes.
+- [`tests/gl-stubs/include/GL/gl.h`](tests/gl-stubs/include/GL/gl.h) - fixed-function GL types, constants, and no-op calls.
+- [`tests/gl-stubs/include/GL/glu.h`](tests/gl-stubs/include/GL/glu.h) - GLU projection, quadric, and tessellator calls.
+- [`tests/gl-stubs/include/GL/freeglut.h`](tests/gl-stubs/include/GL/freeglut.h) - GLUT/freeglut callbacks and shapes.
 - `tests/gl-stubs/include/GLUT/` and `tests/gl-stubs/include/OpenGL/` - compatibility wrappers.

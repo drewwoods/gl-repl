@@ -16,7 +16,7 @@ larger systems it is the **composition root** (the one place that knows about
 all the concrete modules and assembles them) and a **mediator** (subsystems
 talk to it, not to each other).
 
-`src/app` is that layer. Its hub, `glr_ctrl.c`, is deliberately *thin*: it
+`src/app` is that layer. Its hub, [`glr_ctrl.c`](src/app/glr_ctrl.c), is deliberately *thin*: it
 **routes** input and **coordinates** frames, but it does **not** implement
 editor behavior, parse the language, or draw widgets. The subsystems it wires
 together (`src/repl`, `src/editor`, `src/ui`, `src/scene`, `src/subsystems`) do
@@ -27,7 +27,7 @@ app-specific: the camera, the audio playlist, the config/menu tables, and the
 completion provider.
 
 (The literal `main()` and the GLUT callback registration live in the
-root-level `gl_repl.c`, which forwards directly to `glr_ctrl_*` — there is no
+root-level [`gl_repl.c`](gl_repl.c), which forwards directly to `glr_ctrl_*` — there is no
 shim in between.)
 
 ## How it is exercised — the inverse of the demos
@@ -50,7 +50,7 @@ would replace.
 That independence is intentional documentation, not just a build
 optimization. A demo should stay `src/app`-free unless a new exception is
 explicitly justified in its object-list comment and local docs. Pulling in
-`glr_ctrl`, `glr_actions`, `glr_config`, or `UiRenderSnapshot` to make a demo
+`glr_ctrl`, `glr_actions`, `glr_config`, or [`UiRenderSnapshot`](src/ui/app/snapshot.h#L70) to make a demo
 easier usually means the owner module is missing a smaller contract or view
 type.
 
@@ -61,10 +61,10 @@ Inside the full app this is **layer 0** of the ownership map. Per frame,
 
 1. rebuilds autonormals / the flat program if dirty, and prepares replay /
    export / camera strings;
-2. builds a `SceneRenderConfig` from REPL runtime state + view state and calls
+2. builds a [`SceneRenderConfig`](src/scene/render_types.h#L130) from REPL runtime state + view state and calls
    `glr_camera_load_modelview()` then `scene_render_3d_scene()` (with the
-   owned `SceneRendererState`, once per accumulation-jitter sample);
-3. builds a `UiRenderSnapshot` and fans it out to the `ui_*_render`
+   owned [`SceneRendererState`](src/scene/render.h#L95), once per accumulation-jitter sample);
+3. builds a [`UiRenderSnapshot`](src/ui/app/snapshot.h#L70) and fans it out to the `ui_*_render`
    functions.
 
 On input, `glr_ctrl_keyboard` / `_mouse` normalize the event, ask UI to
@@ -80,17 +80,17 @@ editor operation.
 
 | File | Responsibility |
 |---|---|
-| `glr_ctrl.c` / `.h` | App-frame controller + input router: display/reshape/init-GL, snapshot builders, `glr_ctrl_router_*` non-editor routing |
-| `glr_camera.c` / `.h` | Orbit/pan/zoom camera state, drag transactions, momentum, eased targets |
-| `glr_camera_export.c` | Camera state ↔ exported `glTranslatef`/`glRotatef` text |
-| `glr_audio.c` / `.h` | App-level playlist engine and persisted audio config (`glr_audio_*`) |
-| `glr_actions.c` / `.h` | Config descriptor table (`g_cfg_items[]`), config shortcuts, menu actions |
-| `glr_config.c` / `.h` | `ReplConfigKey` / `ReplConfigItem` descriptor API for keyed config access |
-| `glr_completion.c` / `.h` | REPL-side completion provider; registers with `editor_completion` |
-| `glr_state.c` / `.h` | App-level presentation/runtime toggles not owned by repl/editor/ui |
-| `glr_source_document.c` | Binds the `source_document_*` contract to the live `EditorState` buffer |
-| `glr_debug.c` / `.h` | Diagnostic dumps for CLI flags and tests |
-| `glr_defaults.h` | Controller-side scene/presentation defaults (`CFG_DEFAULT_*`) |
+| [`glr_ctrl.c`](src/app/glr_ctrl.c) / `.h` | App-frame controller + input router: display/reshape/init-GL, snapshot builders, `glr_ctrl_router_*` non-editor routing |
+| [`glr_camera.c`](src/app/glr_camera.c) / `.h` | Orbit/pan/zoom camera state, drag transactions, momentum, eased targets |
+| [`glr_camera_export.c`](src/app/glr_camera_export.c) | Camera state ↔ exported `glTranslatef`/`glRotatef` text |
+| [`glr_audio.c`](src/app/glr_audio.c) / `.h` | App-level playlist engine and persisted audio config (`glr_audio_*`) |
+| [`glr_actions.c`](src/app/glr_actions.c) / `.h` | Config descriptor table (`g_cfg_items[]`), config shortcuts, menu actions |
+| [`glr_config.c`](src/app/glr_config.c) / `.h` | `ReplConfigKey` / [`ReplConfigItem`](src/repl/cfg_baseline.h#L29) descriptor API for keyed config access |
+| [`glr_completion.c`](src/app/glr_completion.c) / `.h` | REPL-side completion provider; registers with `editor_completion` |
+| [`glr_state.c`](src/app/glr_state.c) / `.h` | App-level presentation/runtime toggles not owned by repl/editor/ui |
+| [`glr_source_document.c`](src/app/glr_source_document.c) | Binds the `source_document_*` contract to the live [`EditorState`](src/editor/state.h#L175) buffer |
+| [`glr_debug.c`](src/app/glr_debug.c) / `.h` | Diagnostic dumps for CLI flags and tests |
+| [`glr_defaults.h`](src/app/glr_defaults.h) | Controller-side scene/presentation defaults (`CFG_DEFAULT_*`) |
 
 **Boundary:** `glr_ctrl` routes raw input to the owning subsystem and builds
 frame snapshots. It does **not** implement editor behavior or duplicate the
