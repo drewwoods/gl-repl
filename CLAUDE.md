@@ -426,7 +426,7 @@ that genuinely lacks the entry point. Unsupported → `CMD_POINT_PARAMETER_FV`
 is a silent no-op (executor falls back to a camera-distance `glPointSize`
 approximation), the injected `point_attenuation` init bootstrap entry is
 skipped in apply *and* export, and the star backdrop's direct call is
-gated via `SceneRenderConfig.point_parameter_supported`. User-typed
+gated via `Render3dRenderConfig.point_parameter_supported`. User-typed
 `glPointParameterfv(...)` is still kept verbatim in exported standalone C
 (it may target other hardware). See *Runtime GL Capability Detection* in
 `docs/ARCHITECTURE.md`.
@@ -470,7 +470,7 @@ explaining why the extra background is useful.
 |------|----------------|
 | [`gl_repl.c`](gl_repl.c) | GLUT callback registration, `main()`, window setup, buffer swap; forwards directly to `glr_ctrl_*` |
 | [`gl_repl.h`](gl_repl.h) | Small shared header: standard includes and `M_PI`; types/defaults live in dedicated headers |
-| [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c) | App-frame controller: `glr_ctrl_display_frame`, `glr_ctrl_reshape`, `glr_ctrl_init_gl`; builds [`SceneRenderConfig`](src/scene/render_types.h#L130), calls scene/UI renderers |
+| [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c) | App-frame controller: `glr_ctrl_display_frame`, `glr_ctrl_reshape`, `glr_ctrl_init_gl`; builds [`Render3dRenderConfig`](src/render3d/render_types.h#L130), calls scene/UI renderers |
 | [`src/app/glr_ctrl.h`](src/app/glr_ctrl.h) | Controller public surface: display, reshape, init-GL entrypoints |
 | [`src/app/glr_config.c`](src/app/glr_config.c) | Config key implementation and descriptor table helpers. The tail of `glr_config_set` notifies the tutorial runner (`tutorial_notify_state_changed`) so REQUIRE steps observe every write path — direct setters (e.g. accum-passes Ctrl+=/-), `glr_cfg_cycle_row`'s early-return branches, and the bridge's `apply` during `@cfg` / example / workspace load |
 | [`src/app/glr_config.h`](src/app/glr_config.h) | `ReplConfigKey` / [`ReplConfigItem`](src/repl/cfg_baseline.h#L29) descriptor API for keyed config access |
@@ -582,7 +582,7 @@ explaining why the extra background is useful.
 | [`src/subsystems/variable_panel/variable_panel_state.c`](src/subsystems/variable_panel/variable_panel_state.c) | Variable-panel peer subsystem: owns visibility flag + drag-state storage |
 | [`src/subsystems/variable_panel/variable_panel_state.h`](src/subsystems/variable_panel/variable_panel_state.h) | Peer-subsystem facade ([`VariablePanelState`](src/subsystems/variable_panel/variable_panel_state.h#L55), capture/restore/reset, view/drag accessors) |
 | [`src/subsystems/replay/replay_state.c`](src/subsystems/replay/replay_state.c) | Replay peer subsystem: owns [`ReplayRuntimeState`](src/subsystems/replay/replay_state.h#L75) storage |
-| [`src/subsystems/replay/replay_render.c`](src/subsystems/replay/replay_render.c) | Replay fade-batch GL rendering pass (`glPushAttrib`/`glMaterialfv`/`glBegin`), extracted out of [`src/scene/render.c`](src/scene/render.c) |
+| [`src/subsystems/replay/replay_render.c`](src/subsystems/replay/replay_render.c) | Replay fade-batch GL rendering pass (`glPushAttrib`/`glMaterialfv`/`glBegin`), extracted out of [`src/render3d/render.c`](src/render3d/render.c) |
 | [`src/subsystems/edit_overlays/edit_overlays.c`](src/subsystems/edit_overlays/edit_overlays.c) | Cursor edit-guide + vertex/normal overlay orchestration: owns the cursor-guide snapshot and the flat-program walk that calls the scene overlay primitives; extracted out of [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c) |
 | [`src/subsystems/replay/replay_state.h`](src/subsystems/replay/replay_state.h) | Peer-subsystem facade (`replay_state_capture/restore/reset/view/mut`) |
 | [`src/editor/help_session.c`](src/editor/help_session.c) | Read-only editor session for the help overlay (tab_idx + scroll) |
@@ -617,27 +617,27 @@ explaining why the extra background is useful.
 | [`src/support/gpuprof.h`](src/support/gpuprof.h) | GPU profiler API (`gpu_prof_init/frame_begin/begin/end`, `gpu_prof_section_avg_us/_has_data`, `gpu_prof_uses_timestamps`) + the injected [`GpuProfGlFns`](src/support/gpuprof.h#L57) table (`query_counter` optional → timestamp mode) |
 | [`src/app/glr_prof.c`](src/app/glr_prof.c) | gl-repl's [`prof_section_info()`](src/support/cpuprof.h#L48) table: per-section `{ label, depth, is_total }` (bare label + explicit nesting depth — the panel derives indentation from depth). Also the GPU-bracketing policy: `k_gpu_sections[]` (which sections get timer queries — GL-emitting ones only; per-fade-batch subsections excluded for query-budget reasons), the cpuprof hook pair that routes them into gpuprof, and the per-frame capture mode (Off/Plot → no queries, Sections → depth-0 rows only, Details → full subset; set by the controller at frame top, since query boundaries cost real GPU time on GL-on-Metal). The demos implement their own `prof_section_info` |
 | [`src/app/glr_prof.h`](src/app/glr_prof.h) | GPU-section policy API (`glr_prof_section_is_gpu`, `glr_prof_install_gpu_section_hooks`, `glr_prof_set_gpu_capture_mode`) |
-| [`src/scene/render_types.h`](src/scene/render_types.h) | Shared [`SceneRgba`](src/scene/render_types.h#L59) / [`SceneRenderConfig`](src/scene/render_types.h#L130) / [`SceneFrameRenderContext`](src/scene/render_types.h#L277) types for scene helpers |
-| [`src/scene/guides/guides_shared.h`](src/scene/guides/guides_shared.h) | Shared guide snapshot and planning types for REPL-aware 3D overlay passes |
-| [`src/scene/guides/geometry_guides.c`](src/scene/guides/geometry_guides.c) | Vertex/primitive guide rendering (input context at cursor) from [`SceneGuideSnapshot`](src/scene/guides/guides_shared.h#L16) |
-| [`src/scene/guides/geometry_guides.h`](src/scene/guides/geometry_guides.h) | Geometry guides render entrypoint |
-| [`src/scene/guides/transform_guides.c`](src/scene/guides/transform_guides.c) | Transform guide rendering (pending matrix ops during replay) |
-| [`src/scene/guides/transform_guides.h`](src/scene/guides/transform_guides.h) | Transform guides render entrypoint |
+| [`src/render3d/render_types.h`](src/render3d/render_types.h) | Shared [`Render3dRgba`](src/render3d/render_types.h#L59) / [`Render3dRenderConfig`](src/render3d/render_types.h#L130) / [`Render3dFrameRenderContext`](src/render3d/render_types.h#L277) types for scene helpers |
+| [`src/render3d/guides/guides_shared.h`](src/render3d/guides/guides_shared.h) | Shared guide snapshot and planning types for REPL-aware 3D overlay passes |
+| [`src/render3d/guides/geometry_guides.c`](src/render3d/guides/geometry_guides.c) | Vertex/primitive guide rendering (input context at cursor) from [`Render3dGuideSnapshot`](src/render3d/guides/guides_shared.h#L16) |
+| [`src/render3d/guides/geometry_guides.h`](src/render3d/guides/geometry_guides.h) | Geometry guides render entrypoint |
+| [`src/render3d/guides/transform_guides.c`](src/render3d/guides/transform_guides.c) | Transform guide rendering (pending matrix ops during replay) |
+| [`src/render3d/guides/transform_guides.h`](src/render3d/guides/transform_guides.h) | Transform guides render entrypoint |
 | [`src/repl/transform_utils.h`](src/repl/transform_utils.h) | Header-only GL matrix helpers (`apply_tracked_transform`, `unwind_transform_stack`) mirroring executor transforms without requiring (or linking) [`src/repl/executor.h`](src/repl/executor.h); shared by transform guides, edit overlays, and the replay walkers |
-| [`src/scene/render.c`](src/scene/render.c) | 3D scene frame orchestration, one-shot init, scene config/frame prep, edit guides, orbit target, replay fade pass orchestration |
-| [`src/scene/grid.c`](src/scene/grid.c) | Grid theme rendering and custom focus/ocean/ruler/planes passes |
-| [`src/scene/grid.h`](src/scene/grid.h) | Grid render entrypoint |
-| [`src/scene/axes.c`](src/scene/axes.c) | Axes theme rendering |
-| [`src/scene/axes.h`](src/scene/axes.h) | Axes render entrypoint |
-| [`src/scene/scene_transition.c`](src/scene/scene_transition.c) | Pure grid/axes show↔hide fade state machine (`scene_xn_init/set/show/tick`); no GL, one instance per overlay |
-| [`src/scene/scene_transition.h`](src/scene/scene_transition.h) | Transition machine API: [`SceneXnState`](src/scene/scene_transition.h#L55), [`SceneXnPhase`](src/scene/scene_transition.h#L34), entry points |
-| [`src/scene/render.h`](src/scene/render.h) | Declares `scene_render_3d_scene(SceneRendererState *, const SceneRenderConfig *)`, `scene_renderer_state_init(...)`, `scene_get_active_projection(...)`. Camera transform is set by the caller (e.g. `glr_camera_load_modelview` from [`src/app/glr_camera.h`](src/app/glr_camera.h)) before invoking — the scene module owns no camera type or apply helper |
-| [`src/scene/backdrop.c`](src/scene/backdrop.c) | Backdrop mode dispatch and deterministic cityscape renderer |
-| [`src/scene/backdrop.h`](src/scene/backdrop.h) | Backdrop render entrypoint |
-| [`src/scene/lights.c`](src/scene/lights.c) | Ambient init, light setup/reset, and visible light indicator overlay |
-| [`src/scene/lights.h`](src/scene/lights.h) | Scene light setup/render entrypoints |
-| [`src/scene/overlays.c`](src/scene/overlays.c) | Tiny per-vertex GL primitives the controller calls (vertex-number labels, normal arrows). Outline / vertex-point passes moved to [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c) |
-| [`src/scene/overlays.h`](src/scene/overlays.h) | Scene overlay primitive API |
+| [`src/render3d/render.c`](src/render3d/render.c) | 3D scene frame orchestration, one-shot init, scene config/frame prep, edit guides, orbit target, replay fade pass orchestration |
+| [`src/render3d/grid.c`](src/render3d/grid.c) | Grid theme rendering and custom focus/ocean/ruler/planes passes |
+| [`src/render3d/grid.h`](src/render3d/grid.h) | Grid render entrypoint |
+| [`src/render3d/axes.c`](src/render3d/axes.c) | Axes theme rendering |
+| [`src/render3d/axes.h`](src/render3d/axes.h) | Axes render entrypoint |
+| [`src/render3d/render3d_transition.c`](src/render3d/render3d_transition.c) | Pure grid/axes show↔hide fade state machine (`scene_xn_init/set/show/tick`); no GL, one instance per overlay |
+| [`src/render3d/render3d_transition.h`](src/render3d/render3d_transition.h) | Transition machine API: [`SceneXnState`](src/render3d/render3d_transition.h#L55), [`SceneXnPhase`](src/render3d/render3d_transition.h#L34), entry points |
+| [`src/render3d/render.h`](src/render3d/render.h) | Declares `render3d_draw_scene(Render3dState *, const Render3dRenderConfig *)`, `render3d_state_init(...)`, `scene_get_active_projection(...)`. Camera transform is set by the caller (e.g. `glr_camera_load_modelview` from [`src/app/glr_camera.h`](src/app/glr_camera.h)) before invoking — the scene module owns no camera type or apply helper |
+| [`src/render3d/backdrop.c`](src/render3d/backdrop.c) | Backdrop mode dispatch and deterministic cityscape renderer |
+| [`src/render3d/backdrop.h`](src/render3d/backdrop.h) | Backdrop render entrypoint |
+| [`src/render3d/lights.c`](src/render3d/lights.c) | Ambient init, light setup/reset, and visible light indicator overlay |
+| [`src/render3d/lights.h`](src/render3d/lights.h) | Scene light setup/render entrypoints |
+| [`src/render3d/overlays.c`](src/render3d/overlays.c) | Tiny per-vertex GL primitives the controller calls (vertex-number labels, normal arrows). Outline / vertex-point passes moved to [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c) |
+| [`src/render3d/overlays.h`](src/render3d/overlays.h) | Scene overlay primitive API |
 | [`src/ui/app/state.c`](src/ui/app/state.c) | Owns [`UiState`](src/ui/app/state.h#L20): viewport, pointer, status text TTL, recent-message history ring (`ui_state_status_history*`, pushed from the single `ui_state_status_set_kind` chokepoint with consecutive-dup collapse), panel visibility, panel-divider geometry |
 | [`src/ui/core/hit.h`](src/ui/core/hit.h) | [`UiHitKind`](src/ui/core/hit.h#L17) + [`UiHit`](src/ui/core/hit.h#L51) — neutral hit-test result returned by UI input handlers to `glr_ctrl` |
 | [`src/ui/app/panels.c`](src/ui/app/panels.c) | Code-panel row rendering (incl. inline ghost/hint text), scene status banner, persistent bottom "messages" button + toggled recent-message history list (`UI_HIT_STATUS_HISTORY`; routed in [`glr_ctrl_router.c`](src/app/glr_ctrl_router.c)), hit-test (returns [`UiHit`](src/ui/core/hit.h#L51)) |
@@ -750,12 +750,12 @@ explaining why the extra background is useful.
 is no shim layer.
 1. Rebuild autonormals and flat program if dirty; save predef var values;
    prepare replay frame if active; update export/camera strings
-2. Build [`SceneRenderConfig`](src/scene/render_types.h#L130) from REPL state. Load the camera via
+2. Build [`Render3dRenderConfig`](src/render3d/render_types.h#L130) from REPL state. Load the camera via
    `glr_camera_load_modelview(&pose)` (from [`src/app/glr_camera.h`](src/app/glr_camera.h)),
-   then call `scene_render_3d_scene(&g_scene_renderer, &cfg)` once. The
+   then call `render3d_draw_scene(&g_scene_renderer, &cfg)` once. The
    accumulation loop (when `accum_effect` is AA or Blur with
    `accum_passes > 1`) lives inside that call. The camera modelview
-   transform is the controller's responsibility — [`src/scene/render.c`](src/scene/render.c)
+   transform is the controller's responsibility — [`src/render3d/render.c`](src/render3d/render.c)
    does not touch the modelview except for sub-renderer push/pop
    bracketing, and owns no camera type. For AA, jitter is applied as a
    scene-local frustum shift inside the scene function. For Blur, the
@@ -763,7 +763,7 @@ is no shim layer.
    (`glr_ctrl_resolve_blur_subframe`) that the scene calls before each
    accumulation pass to interpolate the camera pose or advance an
    animation-time sub-step; see *Accumulation Motion Blur* below.
-3. `scene_render_3d_scene(&cfg)` in [`src/scene/render.c`](src/scene/render.c): viewport/clear setup
+3. `render3d_draw_scene(&cfg)` in [`src/render3d/render.c`](src/render3d/render.c): viewport/clear setup
    → projection → execute user geometry via `SceneExecuteProgramFn`
    callback → replay fade batches → grid/axes/backdrop/orbit-target →
    polygon-outline, vertex, normal, and guide overlays → 2D replay HUD
@@ -771,10 +771,10 @@ is no shim layer.
 4. 2D overlays: code panel, autocomplete popup, example dropdown,
    variable slider panel, config menu, help overlay, search overlay
 
-The standalone `make scene_demo` binary (sources in `tools/scene_demo/`)
+The standalone `make render3d_demo` binary (sources in `tools/render3d_demo/`)
 exercises the scene contract with a non-REPL geometry callback — it builds
 without dragging in the REPL editor / controller, which is the load-bearing
-proof that `src/scene/` has no hard dependency on REPL code.
+proof that `src/render3d/` has no hard dependency on REPL code.
 
 ### Accumulation Motion Blur
 
@@ -782,7 +782,7 @@ The accumulation buffer drives several effects, selected by the **Accum
 effect** config (`GLR_CONFIG_ACCUM_EFFECT`: Off / AA / Blur / Blur Cam, F2)
 over **Accum passes** samples (`GLR_CONFIG_ACCUM_PASSES`: 1/2/4/8/12/16,
 Ctrl+=/Ctrl+−). Backing fields are `GlrRenderState.accum_effect/accum_passes`
-→ [`SceneRenderConfig`](src/scene/render_types.h#L130). AA (the historic default, 2 passes) jitters the frustum
+→ [`Render3dRenderConfig`](src/render3d/render_types.h#L130). AA (the historic default, 2 passes) jitters the frustum
 per sample. **Blur** and **Blur Cam** are opt-in (expensive: they re-render the
 scene per sample with no temporal reuse). The two blur modes differ only in the
 no-camera-motion case: **Blur** also blurs the animation time, **Blur Cam**
@@ -790,9 +790,9 @@ falls back to AA. **Blur and AA jitter are never combined** — a blur sample
 always renders with jitter 0, so a frame is exactly `accum_passes` renders
 either way (no doubling).
 
-The accum loop lives in [`scene_render_3d_scene()`](src/scene/render.h#L135) ([`src/scene/render.c`](src/scene/render.c)); a
+The accum loop lives in [`render3d_draw_scene()`](src/render3d/render.h#L135) ([`src/render3d/render.c`](src/render3d/render.c)); a
 sample is a "blur sample" when `SCENE_ACCUM_EFFECT_IS_BLUR(accum_effect)` and a
-hook is installed. For blur the scene makes a per-sample [`SceneRenderConfig`](src/scene/render_types.h#L130)
+hook is installed. For blur the scene makes a per-sample [`Render3dRenderConfig`](src/render3d/render_types.h#L130)
 copy and calls `config->setup_subframe_fn(ud, pass_idx, pass_count, &pass_cfg)`
 — a hook the **controller** installs (`glr_ctrl_resolve_blur_subframe` →
 `glr_ctrl_setup_subframe` in [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c)), so the scene stays
@@ -1105,7 +1105,7 @@ Circular snapshot buffers in [`src/editor/undo.c`](src/editor/undo.c):
 ### Cursor Edit Guides
 
 The vertex/normal guides drawn at the cursor line
-([`src/scene/guides/geometry_guides.c`](src/scene/guides/geometry_guides.c)) are fed by a [`SceneGuideSnapshot`](src/scene/guides/guides_shared.h#L16).
+([`src/render3d/guides/geometry_guides.c`](src/render3d/guides/geometry_guides.c)) are fed by a [`Render3dGuideSnapshot`](src/render3d/guides/guides_shared.h#L16).
 The non-obvious data-flow gotcha: `glr_ctrl_build_guide_snapshot()`
 fills `snapshot.vertex_args` / `normal_args` by text-parsing the input
 line with a **predef-only** evaluator. That can't resolve funcN-local

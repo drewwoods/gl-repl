@@ -4,7 +4,7 @@ Home for small, dependency-light helpers that don't belong to any of the
 layered modules (`repl`, `editor`, `scene`, `ui`, `app`, `subsystems`).
 TUs here have no `repl_*` / `editor_*` / `scene_*` / `ui_*` /
 `glr_*` knowledge and must be linkable into any of the standalone
-demos (`scene_demo`, `repl_demo`, `editor_demo`) without dragging in
+demos (`render3d_demo`, `repl_demo`, `editor_demo`) without dragging in
 their respective layers.
 
 ## Contents
@@ -20,7 +20,7 @@ their respective layers.
 Before the `src/` restructure these files sat at the repo root with no
 owner directory. Putting them under `src/support/` keeps the root
 clean and gives future neutral helpers a clear landing spot — matching
-the same pattern as `src/scene/guides/`, `src/subsystems/`, and
+the same pattern as `src/render3d/guides/`, `src/subsystems/`, and
 similar self-contained pockets.
 
 See [`MODULES.md`](../../docs/MODULES.md) for the full layered overview.

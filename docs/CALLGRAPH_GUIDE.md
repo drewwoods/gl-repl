@@ -43,7 +43,7 @@ sfdp -Tsvg callgraph-imrepl_ctrl_display_frame.dot -o callgraph.svg    # scalabl
 
 ```bash
 # Generate Mermaid diagram for specific entry point
-make callgraph-static-entry ENTRY=scene_render_3d_scene
+make callgraph-static-entry ENTRY=render3d_draw_scene
 ```
 
 **Why choose this:**
@@ -138,7 +138,7 @@ neato -Tsvg callgraph-imrepl_ctrl_display_frame.dot -o graph.svg   # spring layo
 ```
 
 ### Mermaid Online
-1. Generate: `make callgraph-static-entry ENTRY=scene_render_3d_scene`
+1. Generate: `make callgraph-static-entry ENTRY=render3d_draw_scene`
 2. Go to [https://mermaid.live](https://mermaid.live)
 3. Paste contents of `.mmd` file
 4. (Only works for graphs with < 500 edges)
@@ -180,10 +180,10 @@ sfdp -Tsvg callgraph-imrepl_ctrl_display_frame.dot -o display-frame.svg
 ### Example 3: Focus on Core Rendering
 ```bash
 # Scene rendering pipeline
-make callgraph-static-entry ENTRY=scene_render_3d_scene
+make callgraph-static-entry ENTRY=render3d_draw_scene
 
 # This has ~50 edges, works fine in Mermaid
-cat callgraph-scene_render_3d_scene.mmd
+cat callgraph-render3d_draw_scene.mmd
 # Copy to https://mermaid.live
 ```
 
@@ -383,8 +383,8 @@ make callgraph-profile PROG="./gl-repl examples/animated_ring.c"
 ### Code Review
 Understand what a change affects:
 ```bash
-# Before refactoring scene_render_3d_scene
-make callgraph-static-entry ENTRY=scene_render_3d_scene
+# Before refactoring render3d_draw_scene
+make callgraph-static-entry ENTRY=render3d_draw_scene
 ```
 
 ### Module Testing

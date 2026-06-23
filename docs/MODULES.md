@@ -101,7 +101,7 @@ Consequences:
 
 - **State has explicit owners.** [`ReplRuntimeState`](../src/repl/state.h#L18) is the REPL program runtime.
   [`EditorState`](../src/editor/state.h#L175) is the text-document session. [`UiState`](../src/ui/app/state.h#L20) is transient UI/session
-  chrome. [`SceneRendererState`](../src/scene/render.h#L95) is the scene renderer's frame-to-frame
+  chrome. [`Render3dState`](../src/render3d/render.h#L95) is the scene renderer's frame-to-frame
   instance state; the scene module defines its semantics and each caller owns
   the instance lifetime. Runtime storage stays in the owning modules
   ([`src/repl/state.c`](../src/repl/state.c), [`src/editor/state.c`](../src/editor/state.c), [`src/ui/app/state.c`](../src/ui/app/state.c),
@@ -140,7 +140,7 @@ Subsystems](#peer-subsystems-and-neutral-support) and
 | [`GlrState`](../src/app/glr_state.h#L87) (app) | App-level presentation/render toggles (grid/axes themes, wireframe, overlays, backdrop, scene + whole-frame post-process filters, camera-rotate, etc.). Defaults from [`glr_defaults.h`](../src/app/glr_defaults.h) (`CFG_DEFAULT_*`). Read/written through the `glr_config` keyed bridge and per-scene snapshots | Program model, editable text, REPL grammar |
 | [`EditorState`](../src/editor/state.h#L175) | Editable text buffer, active input, cursor/edit-line, insert mode, selection, clipboard, search/autocomplete, scroll, **cursor blink** (the editor controls cursor visibility/blink — UI just renders), undo/redo, editor transactions | Variable-panel drag (owned by the variable_panel peer), parsed command semantics, GL execution, menu chrome, transient status banners, render-output pixel coordinates |
 | [`UiState`](../src/ui/app/state.h#L20) | Viewport, pointer, status text TTL, help-overlay visibility (chrome flag), profile-panel visibility, panel-divider geometry (panel_frac + resizing_panel) | Help-session tab/scroll (peer), variable-panel state (peer), camera pose (lives on `glr_camera`), program model, editable text, command validation, cursor blink (editor owns), per-frame render-output (uses `Ui*Output`) |
-| [`SceneRendererState`](../src/scene/render.h#L95) | Per-renderer 3D scene state that must persist across frames: ortho reference distance, active ortho edge tracking, and the most recent zero-jitter projection descriptor | REPL program state, editor text/session state, UI chrome, saved user-scene slots, app-level presentation config |
+| [`Render3dState`](../src/render3d/render.h#L95) | Per-renderer 3D scene state that must persist across frames: ortho reference distance, active ortho edge tracking, and the most recent zero-jitter projection descriptor | REPL program state, editor text/session state, UI chrome, saved user-scene slots, app-level presentation config |
 | [`VariablePanelState`](../src/subsystems/variable_panel/variable_panel_state.h#L55) (peer) | Variable-panel visibility flag + slider drag transaction (var_idx, log_mode, start_value, start_x) | Editor text behavior, REPL grammar |
 | [`ReplayRuntimeState`](../src/subsystems/replay/replay_state.h#L75) (peer) | Replay state machine: PC, mode, speed, accum, fade speed, src_line_idx, total_flat_cmds, expand_args | Editor text behavior, REPL grammar |
 | [`EditorHelpSession`](../src/editor/help_session.h#L16) (peer) | Help-overlay session state: tab_idx, scroll. Visibility flag stays on `UiState.help` as chrome | Help content (provided by content provider) |
@@ -204,8 +204,8 @@ lists to make the layer boundaries observable.
 > not quietly import `glr_ctrl`, `glr_actions`, `glr_config`, or other app
 > composition code to make a boundary problem disappear.
 
-- **`make scene_demo`** ([`tools/scene_demo/scene_demo.c`](../tools/scene_demo/scene_demo.c)) — drives
-  `src/scene/` with a non-REPL geometry callback. Proves `scene_*`
+- **`make render3d_demo`** ([`tools/render3d_demo/render3d_demo.c`](../tools/render3d_demo/render3d_demo.c)) — drives
+  `src/render3d/` with a non-REPL geometry callback. Proves `scene_*`
   has no hard dependency on the REPL editor / controller / UI.
 - **`make repl_demo`** ([`tools/repl_demo/repl_demo.c`](../tools/repl_demo/repl_demo.c)) — drives the
   REPL pipeline from static text. The default samples cover
@@ -385,10 +385,10 @@ Display frame:
   -> rebuild autonormals / flat program if dirty
   -> push editor/UI snapshots
        (transformers, highlights, virtual lines, annotations)
-  -> build SceneRenderConfig from REPL runtime + view/session state
+  -> build Render3dRenderConfig from REPL runtime + view/session state
   -> build UiRenderSnapshot from REPL runtime + EditorState + UiState
        + peer subsystem state (variable panel, replay)
-  -> scene_render_3d_scene(&scene_cfg)
+  -> render3d_draw_scene(&scene_cfg)
   -> ui_*_render(&ui_snap)               (snapshot-only; no state mutation)
   -> restore transient replay/predef state
 ```
@@ -463,7 +463,7 @@ controllers; UI may render them; their input routes to them through
 | `variable_panel_drag` | Implementation behind `variable_panel`'s drag transaction (begin/motion/reset, value writeback, source-line rewrite). Reads/writes through [`variable_panel_drag_mut()`](../src/subsystems/variable_panel/variable_panel_state.h#L72) |
 | `replay_state` | Peer subsystem: owns [`ReplayRuntimeState`](../src/subsystems/replay/replay_state.h#L75) storage in [`src/subsystems/replay/replay_state.c`](../src/subsystems/replay/replay_state.c). Narrow accessors (`replay_active`, `replay_pc`, `replay_mode`, …) plus [`replay_state_view()`](../src/subsystems/replay/replay_state.h#L116) for the per-frame snapshot fill |
 | `replay` | Replay state machine implementation behind `replay_state`: PC stepping, mode toggling, fade batches. Routes via `replay_handle_pin_clicked` / `replay_handle_key` / `replay_handle_special` |
-| `replay_render` | Replay fade-batch GL rendering pass (`glPushAttrib` / `glMaterialfv` / `glBegin`) in [`src/subsystems/replay/replay_render.c`](../src/subsystems/replay/replay_render.c), extracted out of the scene layer ([`src/scene/render.c`](../src/scene/render.c)) |
+| `replay_render` | Replay fade-batch GL rendering pass (`glPushAttrib` / `glMaterialfv` / `glBegin`) in [`src/subsystems/replay/replay_render.c`](../src/subsystems/replay/replay_render.c), extracted out of the scene layer ([`src/render3d/render.c`](../src/render3d/render.c)) |
 | `replay_annotations` | Replay annotation cache and virtual-line production; takes [`SourceTextView`](../source_document.h#L27) explicitly |
 | `editor_help_session` | Peer subsystem: read-only editor session for the help overlay (tab_idx, scroll). Visibility flag stays on `UiState.help` as chrome |
 | `color_picker` | Peer subsystem: floating HSV/alpha picker. Owns `g_cp_*` state, lifecycle (`color_picker_start` / `_stop` / `_active_line` / `_can_edit_cmd`), input handlers (`color_picker_handle_press` / `_motion` / `_release` returning [`ColorPickerInputResult`](../src/subsystems/color_picker/color_picker_state.h#L96)), and source-line writeback through `editor_commit_apply_external_change`. Exposes [`color_picker_view()`](../src/subsystems/color_picker/color_picker_state.h#L154) for renderers and `color_picker_hsv_to_rgb` as a shared color-math helper. Storage lives in [`src/subsystems/color_picker/color_picker_state.c`](../src/subsystems/color_picker/color_picker_state.c); renderer lives separately in [`src/ui/subsystems/color_picker.c`](../src/ui/subsystems/color_picker.c) |
@@ -510,21 +510,21 @@ scratch, `world_*` or `stage_*` would be more direct.
 
 | Module | Role |
 |--------|------|
-| `src/scene/render` | 3D frame setup: viewport, clear, projection, camera, accumulation loop, user-geometry execution hook |
-| `src/scene/render_types` | Scene config/context types and narrow callback interfaces |
-| `src/scene/grid` | Grid rendering and grid themes |
-| `src/scene/axes` | Axis rendering and axis themes |
-| `src/scene/scene_transition` | Pure grid/axes show↔hide fade state machine (no GL); controller diffs theme, renderer scales color alpha by opacity |
-| `src/scene/backdrop` | Backdrop/environment rendering |
-| `src/scene/lights` | Baseline lighting and light indicators |
-| `src/scene/overlays` | Tiny per-vertex GL primitives (vertex-number labels, normal arrows). REPL-walking overlays live in [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c). |
-| `src/scene/postprocess_filter` | Optional post-process pass: **chromatic aberration** (capture the rect to a texture, redraw channel-offset passes) or **vignette** (blended elliptical darkening; no capture). Pure fixed-function GL, dispatched on [`ScenePostFilterMode`](../src/scene/postprocess_filter.h#L19). Driven over the **scene-viewport rect** once per frame by `src/scene/render`; the *same primitives* are reused over the **whole window** by the app-level `glr_compositor` (Layer 6) |
-| `src/scene/themes` | Shared scene theme enums (grid/axes themes, backdrop modes, grid spacing/extent) — the vocabulary app/UI config code and scene renderers share (header-only) |
-| [`src/scene/guides/geometry_guides.c`](../src/scene/guides/geometry_guides.c) | Vertex/primitive guide rendering from a [`SceneGuideSnapshot`](../src/scene/guides/guides_shared.h#L16). The controller fills the snapshot's cursor args from the flat program (funcN-local resolution) before calling in — see [Architecture: Cursor Edit Guides](ARCHITECTURE.md#cursor-edit-guides) |
-| [`src/scene/guides/transform_guides.c`](../src/scene/guides/transform_guides.c) | Transform-guide rendering from a [`SceneGuideSnapshot`](../src/scene/guides/guides_shared.h#L16) (REPL-aware) |
-| `glr_camera` | Camera/view transform helpers — orbit/pan/zoom drag state machine. `glr_ctrl_router_handle_camera_mouse` drives input; scene consumes final camera state through [`SceneRenderConfig`](../src/scene/render_types.h#L130). (Future `scene_camera_controls` move is still possible if the scene/viewport split lands.) |
-| `transform_utils` | Header-only GL matrix helpers ([`src/repl/transform_utils.h`](../src/repl/transform_utils.h)). Consumed by [`src/scene/guides/transform_guides.c`](../src/scene/guides/transform_guides.c), [`src/subsystems/edit_overlays/edit_overlays.c`](../src/subsystems/edit_overlays/edit_overlays.c), and [`src/subsystems/replay/replay.c`](../src/subsystems/replay/replay.c) |
-| `guides_shared` | Shared guide snapshot/planning types for REPL-aware 3D overlays ([`src/scene/guides/guides_shared.h`](../src/scene/guides/guides_shared.h), paired with the guides modules) |
+| `src/render3d/render` | 3D frame setup: viewport, clear, projection, camera, accumulation loop, user-geometry execution hook |
+| `src/render3d/render_types` | Scene config/context types and narrow callback interfaces |
+| `src/render3d/grid` | Grid rendering and grid themes |
+| `src/render3d/axes` | Axis rendering and axis themes |
+| `src/render3d/render3d_transition` | Pure grid/axes show↔hide fade state machine (no GL); controller diffs theme, renderer scales color alpha by opacity |
+| `src/render3d/backdrop` | Backdrop/environment rendering |
+| `src/render3d/lights` | Baseline lighting and light indicators |
+| `src/render3d/overlays` | Tiny per-vertex GL primitives (vertex-number labels, normal arrows). REPL-walking overlays live in [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c). |
+| `src/render3d/postprocess_filter` | Optional post-process pass: **chromatic aberration** (capture the rect to a texture, redraw channel-offset passes) or **vignette** (blended elliptical darkening; no capture). Pure fixed-function GL, dispatched on [`ScenePostFilterMode`](../src/render3d/postprocess_filter.h#L19). Driven over the **scene-viewport rect** once per frame by `src/render3d/render`; the *same primitives* are reused over the **whole window** by the app-level `glr_compositor` (Layer 6) |
+| `src/render3d/themes` | Shared scene theme enums (grid/axes themes, backdrop modes, grid spacing/extent) — the vocabulary app/UI config code and scene renderers share (header-only) |
+| [`src/render3d/guides/geometry_guides.c`](../src/render3d/guides/geometry_guides.c) | Vertex/primitive guide rendering from a [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L16). The controller fills the snapshot's cursor args from the flat program (funcN-local resolution) before calling in — see [Architecture: Cursor Edit Guides](ARCHITECTURE.md#cursor-edit-guides) |
+| [`src/render3d/guides/transform_guides.c`](../src/render3d/guides/transform_guides.c) | Transform-guide rendering from a [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L16) (REPL-aware) |
+| `glr_camera` | Camera/view transform helpers — orbit/pan/zoom drag state machine. `glr_ctrl_router_handle_camera_mouse` drives input; scene consumes final camera state through [`Render3dRenderConfig`](../src/render3d/render_types.h#L130). (Future `scene_camera_controls` move is still possible if the scene/viewport split lands.) |
+| `transform_utils` | Header-only GL matrix helpers ([`src/repl/transform_utils.h`](../src/repl/transform_utils.h)). Consumed by [`src/render3d/guides/transform_guides.c`](../src/render3d/guides/transform_guides.c), [`src/subsystems/edit_overlays/edit_overlays.c`](../src/subsystems/edit_overlays/edit_overlays.c), and [`src/subsystems/replay/replay.c`](../src/subsystems/replay/replay.c) |
+| `guides_shared` | Shared guide snapshot/planning types for REPL-aware 3D overlays ([`src/render3d/guides/guides_shared.h`](../src/render3d/guides/guides_shared.h), paired with the guides modules) |
 
 Scene code renders. It does not parse, edit, save, or dispatch UI actions.
 
@@ -647,7 +647,7 @@ flowchart TB
 
     ui["<b>5. 2D UI</b> (render + hit-test)<br/><b>ui/core:</b> text_panel · text_layout · text_search ·<br/>tabbed_overlay · gl_2d · hit · theme · metrics<br/><b>ui/app:</b> panels · menu_bar · scene_tabs · color_picker ·<br/>variable_panel · autocomplete_panel · profile_panel ·<br/>replay_hud · repl_code_panel · layout<br/>(snapshots in, UiHit out — never mutates)"]
 
-    scene["<b>4. 3D scene</b> (render)<br/>render · grid · axes · backdrop · lights ·<br/>overlays · postprocess_filter · guides ·<br/>scene_transition"]
+    scene["<b>4. 3D scene</b> (render)<br/>render · grid · axes · backdrop · lights ·<br/>overlays · postprocess_filter · guides ·<br/>render3d_transition"]
 
     services["<b>6. Services + neutral support</b><br/>repl_export · glr_audio · src/support/*<br/>cpuprof · gpuprof · memprof · mesh_ply"]
 
@@ -814,15 +814,15 @@ flowchart LR
     end
 
     subgraph scene_layer["4. 3D scene rendering"]
-        sceneR["src/scene/render.c<br/>3D frame"]
-        sgeomg["src/scene/guides/geometry_guides.c<br/>geometry guides<br/>(REPL-aware)"]
-        sxformg["src/scene/guides/transform_guides.c<br/>transform guides<br/>(REPL-aware)"]
-        sgrid["src/scene/grid.c<br/>grid"]
-        saxes["src/scene/axes.c<br/>axes"]
-        sbackdrop["src/scene/backdrop.c<br/>backdrop"]
-        slights["src/scene/lights.c<br/>lights"]
-        soverlays["src/scene/overlays.c<br/>overlay primitives"]
-        spost["src/scene/postprocess_filter.c<br/>scene-viewport post-process<br/>(chromatic aberration / vignette;<br/>reused by glr_compositor)"]
+        sceneR["src/render3d/render.c<br/>3D frame"]
+        sgeomg["src/render3d/guides/geometry_guides.c<br/>geometry guides<br/>(REPL-aware)"]
+        sxformg["src/render3d/guides/transform_guides.c<br/>transform guides<br/>(REPL-aware)"]
+        sgrid["src/render3d/grid.c<br/>grid"]
+        saxes["src/render3d/axes.c<br/>axes"]
+        sbackdrop["src/render3d/backdrop.c<br/>backdrop"]
+        slights["src/render3d/lights.c<br/>lights"]
+        soverlays["src/render3d/overlays.c<br/>overlay primitives"]
+        spost["src/render3d/postprocess_filter.c<br/>scene-viewport post-process<br/>(chromatic aberration / vignette;<br/>reused by glr_compositor)"]
     end
 
     %% gl_repl.c hands raw GLUT events to the controller
@@ -1001,7 +1001,7 @@ Reading the diagram:
 - UI render is read-only. UI input is hit-test-and-return.
 - Post-processing has **two stages**, both reusing the same
   fixed-function `postprocess_filter` primitive: the scene-viewport pass
-  (`sceneR i40@--> spost`, inside `scene_render_3d_scene`) and the
+  (`sceneR i40@--> spost`, inside `render3d_draw_scene`) and the
   whole-frame compositor pass (`ctrl i43@--> glrcompositor i44@--> spost`,
   at frame end after every UI layer). The controller keeps them mutually
   exclusive via `Ctrl+N`, which walks each effect (chromatic aberration,
@@ -1090,7 +1090,7 @@ which is why the renderers and their demos stay linkable without
 
 `ui_*` and `scene_*` should not include each other's headers. Shared
 render-neutral types belong in explicit shared headers such as
-[`src/scene/render_types.h`](../src/scene/render_types.h) or [`src/ui/app/snapshot.h`](../src/ui/app/snapshot.h).
+[`src/render3d/render_types.h`](../src/render3d/render_types.h) or [`src/ui/app/snapshot.h`](../src/ui/app/snapshot.h).
 
 ## Where To Put New Code
 
@@ -1099,7 +1099,7 @@ render-neutral types belong in explicit shared headers such as
 | New REPL syntax | `repl_parser`, `repl_command_spec`, `repl_compile`, `repl_flatten`, `repl_executor` |
 | New user-geometry execution behavior | `repl_executor` |
 | New 3D world decorator | `scene_*` |
-| New 3D REPL-aware overlay | `scene_*`, consuming snapshots/configs from [`SceneRenderConfig`](../src/scene/render_types.h#L130) |
+| New 3D REPL-aware overlay | `scene_*`, consuming snapshots/configs from [`Render3dRenderConfig`](../src/render3d/render_types.h#L130) |
 | New 2D UI render | `ui_*` render path, snapshot-only |
 | New 2D UI input behavior | `ui_*` hit-test that returns a [`UiHit`](../src/ui/core/hit.h#L51); if a new region needs distinguishing, add a [`UiHitKind`](../src/ui/core/hit.h#L17) value |
 | New owning subsystem (variable panel, replay, etc.) | Its own `subsystem_*` files plus a route from `glr_ctrl` based on `UiHit.kind` |

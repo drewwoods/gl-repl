@@ -26,7 +26,7 @@ new feature behavior there by default.
 
 The boundary still matters: `glr_ctrl` should not implement editor behavior,
 parse the language, draw widgets, or own 3D scene policy. The subsystems it
-wires together (`src/repl`, `src/editor`, `src/ui`, `src/scene`,
+wires together (`src/repl`, `src/editor`, `src/ui`, `src/render3d`,
 `src/subsystems`) do not depend on it — the dependency arrows run one way, from
 `glr_ctrl` to the subsystems, never back.
 Alongside the router live the app-level services that are genuinely
@@ -45,7 +45,7 @@ demos are each defined by **excluding this layer**:
 - `repl_demo` drives `src/repl` *without* `glr_ctrl` or its router family.
 - `editor_demo` drives `src/editor`'s model with its *own* input dispatcher
   and File menu instead of this app's.
-- `scene_demo` drives `src/scene` with its *own* camera/HUD shell.
+- `render3d_demo` drives `src/render3d` with its *own* camera/HUD shell.
 
 Each demo re-implements just enough of the controller's job to stand its
 subsystem up alone. So `src/app` is, by construction, the **app-specific
@@ -68,9 +68,9 @@ Inside the full app this is **layer 0** of the ownership map. Per frame,
 
 1. rebuilds autonormals / the flat program if dirty, and prepares replay /
    export / camera strings;
-2. builds a [`SceneRenderConfig`](src/scene/render_types.h#L130) from REPL runtime state + view state and calls
-   [`glr_camera_load_modelview()`](src/app/glr_camera.h#L135) then [`scene_render_3d_scene()`](src/scene/render.h#L135) (with the
-   owned [`SceneRendererState`](src/scene/render.h#L95), once per accumulation-jitter sample);
+2. builds a [`Render3dRenderConfig`](src/render3d/render_types.h#L130) from REPL runtime state + view state and calls
+   [`glr_camera_load_modelview()`](src/app/glr_camera.h#L135) then [`render3d_draw_scene()`](src/render3d/render.h#L135) (with the
+   owned [`Render3dState`](src/render3d/render.h#L95), once per accumulation-jitter sample);
 3. builds a [`UiRenderSnapshot`](src/ui/app/snapshot.h#L70) and fans it out to the `ui_*_render`
    functions.
 
