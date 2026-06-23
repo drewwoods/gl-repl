@@ -1761,7 +1761,7 @@ int main(void) {
 
     /* (F) Post-import host cursor publication.
      *
-     * Phase 4 of plans/done/edit-line-ownership.md moved cursor
+     * Phase 4 of docs/plans/done/edit-line-ownership.md moved cursor
      * storage out of ReplState. repl_export_load_from_file threads
      * cursor through ImportState.edit_line internally; review
      * finding [P1] noted that the final value wasn't being
@@ -2221,7 +2221,7 @@ int main(void) {
                     strstr(cap, "warnings)") == NULL);
     }
 
-    /* Regression for #83 in plans/done/src-repl-code-smell-audit-2.md:
+    /* Regression for #83 in docs/plans/done/src-repl-code-smell-audit-2.md:
      * parse_snippet_declare used to use a `< 0` check on
      * repl_eval_declare_predef_var (which actually returns 1/0, not
      * idx-or-(-1)). On a reserved or otherwise-invalid name the

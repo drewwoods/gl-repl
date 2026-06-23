@@ -530,7 +530,7 @@ static void print_help(const char *argv0) {
 "Options:\n"
 "  --full          After the curated table, also run every built-in\n"
 "                  example via repl_example_*. Slow: one cc invocation\n"
-"                  per program. See plans/not-started/gl-stub-extensions.md.\n"
+"                  per program. See docs/plans/not-started/gl-stub-extensions.md.\n"
 "  --keep-traces   On real FAIL, leave the .repl.tr and .child.tr trace\n"
 "                  files in /tmp for inspection. XFAIL traces are still\n"
 "                  unlinked (the divergence is expected).\n"

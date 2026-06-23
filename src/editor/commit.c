@@ -94,7 +94,7 @@ static ReplCompileResult editor_compile_error(char *err, int err_size,
  * edit-line is read into a local, threaded through apply, and
  * written back on success (matches the apply API's cursor-inout
  * contract; cursor ownership moved editor-side in Phase 1 of
- * plans/done/edit-line-ownership.md). */
+ * docs/plans/done/edit-line-ownership.md). */
 static void apply_compiled_change_full(const ReplCompiledChange *change) {
     if (!repl_apply_can_apply_compiled_change(change))
         return;

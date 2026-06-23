@@ -4,7 +4,7 @@
 # (ReplExportCameraBridge, ReplExportProjectionBridge, ReplConfigBridge,
 # ...), never by reaching into the scene or app layers directly. This is
 # the canonical seam for keeping the REPL/export pipeline reusable
-# without the GL frontend (see ARCHITECTURE.md, "Dynamic Reshape
+# without the GL frontend (see docs/ARCHITECTURE.md, "Dynamic Reshape
 # Projection" + decouple step 4).
 #
 # check-gl-boundaries already forbids GL/GLU/GLUT *calls* here; this
@@ -40,7 +40,7 @@ echo "ERROR: src/repl/export*.c / src/repl/import.c must not reach the scene/app
 echo "Pull app/scene-derived values through a controller-installed bridge" >&2
 echo "(e.g. ReplExportProjectionBridge -> scene_get_active_projection in" >&2
 echo "src/app/glr_ctrl.c), not by calling scene_*/glr_* or including their" >&2
-echo "headers here. See ARCHITECTURE.md, \"Dynamic Reshape Projection\"." >&2
+echo "headers here. See docs/ARCHITECTURE.md, \"Dynamic Reshape Projection\"." >&2
 echo "Hits:" >&2
 printf '%s\n' "$violations" >&2
 exit 1

@@ -7,8 +7,8 @@
 > boundaries — read [`ARCHITECTURE.md`](ARCHITECTURE.md).
 >
 > Whole-tree context lives one level up: the ownership map is in
-> [`../../MODULES.md`](../../MODULES.md) and the per-frame *app* narrative is
-> in [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md).
+> [`../../docs/MODULES.md`](../../docs/MODULES.md) and the per-frame *app* narrative is
+> in [`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
 
 ## What this is, in general
 

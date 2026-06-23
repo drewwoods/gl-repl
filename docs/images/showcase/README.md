@@ -1,6 +1,6 @@
 # Showcase shot list
 
-Assets referenced by [`SHOWCASE.md`](../../../SHOWCASE.md). Each entry below
+Assets referenced by [`SHOWCASE.md`](../../SHOWCASE.md). Each entry below
 is a placeholder until captured — the `<!-- PLACEHOLDER -->` comments in
 SHOWCASE.md carry the intent and a starting command. Camera angle, fps,
 resolution, and duration are all refinable; filenames are the contract.

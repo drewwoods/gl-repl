@@ -517,7 +517,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
 # (not in the demo link set).
 
 # Object list for the standalone editor_demo. Phase 8 refit
-# (plans/done/editor-demo.md) split the editor module into a generic
+# (docs/plans/done/editor-demo.md) split the editor module into a generic
 # half (state.c data model + edit_ops.c primitives) and a REPL-flavored
 # controller half (input.c, commit.c, clipboard.c, undo.c, reformat.c,
 # search.c, completion.c, plus the inline overlays). The demo links
@@ -529,7 +529,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
 # controllers are not linked at all; the demo provides its own
 # generic input dispatcher (tools/editor_demo/input.c) and File menu
 # (tools/editor_demo/menu.c). Phase 5 of
-# plans/in-review/edit-line-ownership.md deleted the former
+# docs/plans/in-review/edit-line-ownership.md deleted the former
 # tools/editor_demo/repl_shim.c — the prior ~85-stub shim went away
 # with the controller files (Phase 8.7 of editor-demo.md) and the
 # residual edit-line forwarder went away with the storage flip
@@ -997,7 +997,7 @@ repl_demo: FORCE $(REPL_DEMO_BIN) ## Build the standalone REPL pipeline demo.
 # stand in for the REPL-flavored controller files
 # (src/editor/{input,commit,clipboard,undo,reformat,search,completion}.c
 # and the inline overlays), which Phase 8.7 dropped from this link
-# set entirely. Phase 5 of plans/in-review/edit-line-ownership.md
+# set entirely. Phase 5 of docs/plans/in-review/edit-line-ownership.md
 # deleted the former tools/editor_demo/repl_shim.c — after Phase 4
 # moved edit-line storage to EditorState, the shim's
 # repl_state_edit_line stubs had no remaining callers.
@@ -1842,7 +1842,7 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "Runtime env:     GLR_NO_POINT_PARAMETER=1 ./gl-repl forces the no-glPointParameterfv\n"
 	@printf "                 path (camera-distance glPointSize fallback). Support is otherwise\n"
 	@printf "                 auto-detected from the GL context at startup; there is no build\n"
-	@printf "                 flag. See ARCHITECTURE.md > Runtime GL Capability Detection.\n"
+	@printf "                 flag. See docs/ARCHITECTURE.md > Runtime GL Capability Detection.\n"
 	@printf "                 GLR_NO_GPU_PROF=1 ./gl-repl disables the GPU timer queries behind\n"
 	@printf "                 the profile panel's GPU column (the column reads \"--\"). Otherwise\n"
 	@printf "                 auto-detected at startup: GL_ARB_timer_query / GL 3.3 timestamps\n"
@@ -1855,12 +1855,12 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "                 GLR_DETAILED_PROF=1 ./gl-repl (or --detailed-prof) promotes\n"
 	@printf "                 the optional fine-grained init-trace phases (glutInit split,\n"
 	@printf "                 audio playlist sub-steps, first-two-frames triple); default\n"
-	@printf "                 off. See ARCHITECTURE.md > Startup & Audio-Worker Diagnostics.\n"
+	@printf "                 off. See docs/ARCHITECTURE.md > Startup & Audio-Worker Diagnostics.\n"
 	@printf "Build options:   UI_THEME_DEFAULT=N picks the compile-time UI color scheme\n"
 	@printf "                 (0 green default, 1 warm, 2 cyan, 3 amber, 4 violet, 5 mono),\n"
 	@printf "                 e.g. make gl-repl CPPFLAGS=-DUI_THEME_DEFAULT=1. Defined in\n"
 	@printf "                 config.h, range-checked in src/ui/core/theme.h. See\n"
-	@printf "                 ARCHITECTURE.md > UI Color Theming.\n"
+	@printf "                 docs/ARCHITECTURE.md > UI Color Theming.\n"
 	@printf "                 NO_SAN=1 (or NOSAN=1) disables ASan/UBSan sanitizers in debug builds.\n"
 	@printf "                 GLR_AUDIO_NO_THREAD=1 (e.g. make gl-repl CPPFLAGS=-DGLR_AUDIO_NO_THREAD=1)\n"
 	@printf "                 drops the audio background worker thread: the playlist lifecycle ops\n"

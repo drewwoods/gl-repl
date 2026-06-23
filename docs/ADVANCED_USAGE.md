@@ -151,7 +151,7 @@ vendored tree serves both native and headless builds. See *Headless Rendering &
 Screenshots (OSMesa)* in
 [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full design. If you are changing
 the vendored freeglut backend itself, the lower-level backend notes live in
-`plans/external/freeglut-osmesa-backend.md`.
+`docs/plans/external/freeglut-osmesa-backend.md`.
 
 ## macOS app bundle
 
@@ -246,8 +246,8 @@ which choice it selects:
 // @cfg light_indicators = 1
 ```
 
-The symbolic names come straight from the enums in [`src/scene/themes.h`](src/scene/themes.h) /
-[`src/scene/view_mode.h`](src/scene/view_mode.h) via X-macros, so reordering an enum can't silently
+The symbolic names come straight from the enums in [`src/scene/themes.h`](../src/scene/themes.h) /
+[`src/scene/view_mode.h`](../src/scene/view_mode.h) via X-macros, so reordering an enum can't silently
 shift which value a catalog literal selects. A typo'd or out-of-range
 symbol is dropped with a `repl_cfg: dropping '…' (unknown symbolic value)`
 note on stderr rather than landing at index 0.
@@ -301,7 +301,7 @@ memory panel shows RSS history — see
 
 ## Keyboard map tooling
 
-Shortcut bindings live in [`keymap.h`](keymap.h) as `GLR_*` `(key, modifiers)` pairs.
+Shortcut bindings live in [`keymap.h`](../keymap.h) as `GLR_*` `(key, modifiers)` pairs.
 Use `scripts/keymap.sh` when changing or auditing them:
 
 ```bash

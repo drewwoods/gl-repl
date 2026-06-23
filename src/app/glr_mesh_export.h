@@ -19,7 +19,7 @@
  * When `srgb_decode` is non-zero, vertex colors are decoded from sRGB to
  * linear light before being written (see MeshPlyOptions.srgb_decode) — for
  * color-managed viewers that would otherwise render them washed out. See
- * plans/.../ply-feedback-export.md. */
+ * docs/plans/.../ply-feedback-export.md. */
 int glr_export_mesh_ply(const char *path, int srgb_decode);
 
 #endif /* GLR_MESH_EXPORT_H */

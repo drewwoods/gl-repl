@@ -8,7 +8,7 @@
  * snapshot. It still must not own unrelated editor / REPL state and
  * must not call parser / compile / apply.
  *
- * See MODULES.md "2D UI rendering and hit-test" for the prefix
+ * See docs/MODULES.md "2D UI rendering and hit-test" for the prefix
  * discipline rule and `scripts/check-replay-ui-isolation.sh` for the
  * lighter feature-UI guard.
  */

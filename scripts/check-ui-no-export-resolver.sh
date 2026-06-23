@@ -3,7 +3,7 @@
 # live. The code panel's row-count/follow-scroll pass and its render
 # pass straddle scene_render_3d_scene() in glr_ctrl_display_frame(), so
 # a value re-resolved in both passes can diverge across a transition
-# (see ARCHITECTURE.md, "Rule — where a per-frame dynamic value is
+# (see docs/ARCHITECTURE.md, "Rule — where a per-frame dynamic value is
 # resolved"). The controller resolves it once into UiRenderSnapshot;
 # UI reads the snapshot.
 #
@@ -29,7 +29,7 @@ fi
 echo "ERROR: src/ui must not call repl_export_reshape_projection_lines()." >&2
 echo "Read the controller-frozen UiRenderSnapshot.reshape_proj_lines/_count" >&2
 echo "instead. Resolving live in a UI pass races the scene-render boundary." >&2
-echo "See ARCHITECTURE.md, \"Rule - where a per-frame dynamic value is resolved\"." >&2
+echo "See docs/ARCHITECTURE.md, \"Rule - where a per-frame dynamic value is resolved\"." >&2
 echo "Hits:" >&2
 printf '%s\n' "$violations" >&2
 exit 1

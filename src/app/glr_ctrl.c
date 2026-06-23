@@ -805,7 +805,7 @@ static void scene_execute_adapter(const SceneExecuteContext *ctx,
     }
 }
 
-/* Grid/axes in-out fade machines (plans/.../grid-axes-transitions.md).
+/* Grid/axes in-out fade machines (docs/plans/.../grid-axes-transitions.md).
  * The config path is untouched: toggling still just flips
  * presentation.grid_theme/axes_theme. Each frame the diff feeds these
  * machines and the renderer draws the effective {theme, opacity}. */

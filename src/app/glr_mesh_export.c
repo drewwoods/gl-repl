@@ -8,7 +8,7 @@
  * writer (src/support/mesh_ply.c). All GL state is saved/restored so the
  * visible frame is undisturbed (feedback produces no fragments).
  *
- * See plans/.../ply-feedback-export.md.
+ * See docs/plans/.../ply-feedback-export.md.
  */
 
 #include "app/glr_mesh_export.h"

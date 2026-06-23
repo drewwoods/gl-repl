@@ -11,7 +11,7 @@
  * stubs from tools/repl_demo/stubs.c.
  *
  * These started as individual callbacks; the six installers were consolidated into
- * one struct per plans/partial/src-repl-simplicity-review.md item 2.
+ * one struct per docs/plans/partial/src-repl-simplicity-review.md item 2.
  *
  * The status callback's long-term preferred shape is still per-function
  * out-params (err_buf / ReplDiagnostic) on each pipeline entry point.

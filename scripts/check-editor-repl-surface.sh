@@ -12,9 +12,9 @@
 # explicitly.
 #
 # Ratchet down as direct editor → REPL calls are consolidated or
-# deleted. The plan target (plans/done/editor-demo.md) is ~5 per
+# deleted. The plan target (docs/plans/done/editor-demo.md) is ~5 per
 # file; current baseline reflects post-edit-line-ownership reality
-# (Phase 5 of plans/done/edit-line-ownership.md deleted the former
+# (Phase 5 of docs/plans/done/edit-line-ownership.md deleted the former
 # tools/editor_demo/repl_shim.c after the storage flip removed its
 # last forwarders).
 

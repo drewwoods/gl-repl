@@ -1,8 +1,8 @@
 # `src/ui` — the 2D view + hit-test layer
 
 > Part of the OpenGL Immediate-Mode REPL. The whole-tree ownership map is
-> in [`../../MODULES.md`](../../MODULES.md); the per-frame pipeline narrative
-> is in [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md). This README is the
+> in [`../../docs/MODULES.md`](../../docs/MODULES.md); the per-frame pipeline narrative
+> is in [`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md). This README is the
 > module-local view: what a 2D UI layer *is*, how it is exercised, and what
 > it does inside this app.
 

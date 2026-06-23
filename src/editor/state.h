@@ -167,7 +167,7 @@ typedef struct {
  * or routes through the repl_dispatch_edit_line_get / _set
  * host-effects sink (scene save/restore, the load.c NULL-fallback).
  * REPL files do not link `editor_state_*` symbols (β invariant;
- * storage moved here in Phase 4 of plans/done/edit-line-ownership.md). */
+ * storage moved here in Phase 4 of docs/plans/done/edit-line-ownership.md). */
 typedef struct {
     int edit_line_idx;
 } EditorDocumentState;
@@ -343,7 +343,7 @@ void        editor_pending_newline_clear(void);
  * host-effects sink in `src/repl/core.h` (scene save/restore, the
  * load.c NULL-fallback). β invariant: REPL files do not call editor
  * accessors (storage moved off `ReplState.document.edit_line_idx` in
- * plans/done/edit-line-ownership.md, Phase 4). */
+ * docs/plans/done/edit-line-ownership.md, Phase 4). */
 int                  editor_state_edit_line(void);
 void                 editor_state_edit_line_set(int line);
 void                 editor_state_edit_line_clamp(void);

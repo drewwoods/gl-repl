@@ -395,7 +395,7 @@ make callgraph-profile PROG="./test_scene_render"
 
 ## Integration with MODULES.md
 
-The `MODULES.md` file in the root contains hand-crafted architecture diagrams. These auto-generated graphs complement those by showing:
+The `MODULES.md` file in `docs/` contains hand-crafted architecture diagrams. These auto-generated graphs complement those by showing:
 - **MODULES.md**: Ownership boundaries, module relationships, responsibilities
 - **Callgraph**: Actual function-level call chains, execution order
 - **File-level Mermaid**: Collapsed `file.c -> file.c` interactions grouped by configurable subgraphs, with cross-boundary edges highlighted

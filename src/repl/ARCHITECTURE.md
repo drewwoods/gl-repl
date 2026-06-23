@@ -7,14 +7,14 @@
 > the state-ownership model, and the boundaries that keep this layer
 > independent of the rest of the app.
 >
-> Whole-tree context lives in [`../../MODULES.md`](../../MODULES.md)
-> (ownership map) and [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md)
+> Whole-tree context lives in [`../../docs/MODULES.md`](../../docs/MODULES.md)
+> (ownership map) and [`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md)
 > (per-frame app narrative). This file never assumes you've read those —
 > it describes `src/repl` as a self-contained interpreter.
 >
 > To *add* a command or new REPL syntax, see the step-by-step checklist and
 > its structured-syntax companion in
-> [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md) — *Adding A New Command* and
+> [`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md) — *Adding A New Command* and
 > *Adding New REPL Commands*. This file is the why/how-it-works; those are the
 > how-to.
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Validate local Markdown file links and GitHub-style line anchors.
 
-Default scope is tracked Markdown outside plans/ and third_party/. Historical
+Default scope is tracked Markdown outside docs/plans/ and third_party/. Historical
 plans can contain absolute links into old worktrees, so they are intentionally
 not part of the default reader-facing docs check.
 """
@@ -31,7 +31,7 @@ def repo_root() -> Path:
 
 def default_markdown_files(root: Path) -> list[Path]:
     out = subprocess.check_output(
-        ["git", "ls-files", "*.md", ":(exclude)plans/**", ":(exclude)third_party/**"],
+        ["git", "ls-files", "*.md", ":(exclude)docs/plans/**", ":(exclude)third_party/**"],
         cwd=root,
         text=True,
     )

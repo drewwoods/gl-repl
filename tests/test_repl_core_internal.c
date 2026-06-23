@@ -492,7 +492,7 @@ int main() {
         ASSERT_INT("document normals dirty clear",
                    repl_state_normals_dirty(), 0);
         /* _load no longer touches the cursor (Phase 1 of
-         * plans/in-review/edit-line-ownership.md); cursor adjustment
+         * docs/plans/in-review/edit-line-ownership.md); cursor adjustment
          * post-load is caller policy. Set explicitly here to mirror
          * the previous test's intent (clamp to count). */
         ASSERT_INT("command_store_load ok",

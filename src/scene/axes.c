@@ -81,7 +81,7 @@ static SceneRgba rgba(float r, float g, float b, float a) {
     return c;
 }
 
-/* Axes in-out transition (plans/.../grid-axes-transitions.md rule 4).
+/* Axes in-out transition (docs/plans/.../grid-axes-transitions.md rule 4).
  * Resolved once at scene_axes_render entry from config.axes_opacity
  * via the shared scene_overlay_xn_resolve helper (overlay_xn.h),
  * stored on AxesDrawContext, then every color path routes through

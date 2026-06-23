@@ -254,7 +254,7 @@ static int compile_exported_source(int idx, const char *name,
 }
 
 static void fixture_path_for_idx(int idx, char *out, int out_sz) {
-    snprintf(out, (size_t)out_sz, "testdata/repl_examples_ui/%02d.golden.txt", idx);
+    snprintf(out, (size_t)out_sz, "tests/testdata/repl_examples_ui/%02d.golden.txt", idx);
 }
 
 static int examples_have_no_invalid_cmds(void) {
@@ -1079,14 +1079,14 @@ static void print_usage(const char *prog) {
     printf("  REPL_EXPORT_CC         C compiler to use (default: cc)\n");
     printf("  REPL_EXPORT_COMPILE_CFLAGS  Extra compiler flags\n");
     printf("  NO_COLOR               Disable ANSI color output\n\n");
-    printf("Golden fixture files: testdata/repl_examples_ui/NN.golden.txt\n\n");
+    printf("Golden fixture files: tests/testdata/repl_examples_ui/NN.golden.txt\n\n");
     printf("To regenerate all golden fixtures after intentional changes:\n");
     printf("  for i in $(seq -f '%%02g' 0 N); do\n");
-    printf("    %s --dump-index $i > testdata/repl_examples_ui/$i.golden.txt\n",
+    printf("    %s --dump-index $i > tests/testdata/repl_examples_ui/$i.golden.txt\n",
            prog);
     printf("  done\n");
     printf("Or to regenerate a single fixture for example N:\n");
-    printf("  %s --dump-index N > testdata/repl_examples_ui/NN.golden.txt\n\n",
+    printf("  %s --dump-index N > tests/testdata/repl_examples_ui/NN.golden.txt\n\n",
            prog);
 }
 

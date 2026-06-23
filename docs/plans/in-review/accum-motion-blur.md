@@ -282,7 +282,7 @@ across the compiled tests:
   `{1,2,4,8,12,16}` ladder (note the ladder now includes 12).
 - `tests/test_scene_render.c:57`: `cfg.accum_aa_enabled = 1;` →
   `cfg.accum_effect = SCENE_ACCUM_EFFECT_AA; cfg.accum_passes = …;`.
-- Golden fixtures `testdata/repl_examples_ui/*.golden.txt`: the status-bar "AA …"
+- Golden fixtures `tests/testdata/repl_examples_ui/*.golden.txt`: the status-bar "AA …"
   text changes — regen with a **debug build** (per the golden-regen rule) after
   the code lands.
 

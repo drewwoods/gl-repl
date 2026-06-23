@@ -182,7 +182,7 @@ void gl_stub_counts_dump(FILE *out, const char *prefix, long long divisor);
  *                                      labels can't corrupt the trace).
  *   pointer-array args are omitted    — fp parity tests compare scalar
  *                                      args only; see
- *                                      plans/not-started/gl-stub-extensions.md
+ *                                      docs/plans/not-started/gl-stub-extensions.md
  *                                      for the array-content sketch. */
 extern FILE *gl_stub_trace_fp;
 void gl_stub_trace_open(const char *path);

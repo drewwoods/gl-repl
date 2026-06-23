@@ -18,7 +18,7 @@
  * standard insert/delete math to the caller's int in place. NULL means "no
  * cursor mutation — pure data op." The store's previous `int *edit_line`
  * pointer was dropped in favour of this per-call parameter (implemented in
- * phase 1 of plans/done/edit-line-ownership.md).
+ * phase 1 of docs/plans/done/edit-line-ownership.md).
  *
  * Only insert ops also honour REPL_COMMAND_STORE_ADJUST_EDIT_LINE as the
  * intent flag (so callers can pass a non-NULL `cursor_inout` for capacity
@@ -141,7 +141,7 @@ int  repl_command_store_replace_one(ReplCommandStore *store, int pos,
  * `opts->flags` is ignored — delete callers gate via NULL/non-NULL
  * `cursor_inout` directly. Cursor-aware delete is net-new store
  * behavior; earlier versions had no cursor shift in delete
- * (implemented in Phase 1 of plans/done/edit-line-ownership.md). */
+ * (implemented in Phase 1 of docs/plans/done/edit-line-ownership.md). */
 int  repl_command_store_delete_range(ReplCommandStore *store, int start,
                                      int count,
                                      const ReplStoreMutOpts *opts);

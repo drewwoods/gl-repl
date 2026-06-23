@@ -23,4 +23,4 @@ clean and gives future neutral helpers a clear landing spot — matching
 the same pattern as `src/scene/guides/`, `src/subsystems/`, and
 similar self-contained pockets.
 
-See [`MODULES.md`](../../MODULES.md) for the full layered overview.
+See [`MODULES.md`](../../docs/MODULES.md) for the full layered overview.

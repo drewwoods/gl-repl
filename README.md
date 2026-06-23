@@ -53,13 +53,13 @@ glEnd();
 
 <div align="center">
 
-<a href="SHOWCASE.md"><img src="docs/images/animated-ring.gif" alt="Animated ring example" width="31%"></a>
+<a href="docs/SHOWCASE.md"><img src="docs/images/animated-ring.gif" alt="Animated ring example" width="31%"></a>
 &nbsp;
-<a href="SHOWCASE.md"><img src="docs/images/transform-stress.png" alt="Transform guides" width="31%"></a>
+<a href="docs/SHOWCASE.md"><img src="docs/images/transform-stress.png" alt="Transform guides" width="31%"></a>
 &nbsp;
-<a href="SHOWCASE.md"><img src="docs/images/labels-orrery.png" alt="Orrery with tracking labels" width="31%"></a>
+<a href="docs/SHOWCASE.md"><img src="docs/images/labels-orrery.png" alt="Orrery with tracking labels" width="31%"></a>
 
-<sub>**[The full showcase →](SHOWCASE.md)** — 27 built-in scenes, each one a screenful of typed GL.</sub>
+<sub>**[The full showcase →](docs/SHOWCASE.md)** — 27 built-in scenes, each one a screenful of typed GL.</sub>
 
 </div>
 
@@ -133,7 +133,7 @@ rate is just the scalar in front of `t`, and every line stays editable.
 </tr>
 </table>
 
-<sub>On macOS, `Cmd`+letter works as `Ctrl`+letter. Full reference: [User Guide → Keyboard & Mouse](USER_GUIDE.md#keyboard--mouse-reference).</sub>
+<sub>On macOS, `Cmd`+letter works as `Ctrl`+letter. Full reference: [User Guide → Keyboard & Mouse](docs/USER_GUIDE.md#keyboard--mouse-reference).</sub>
 
 <br>
 
@@ -159,12 +159,12 @@ rate is just the scalar in front of `t`, and every line stays editable.
 
 | | |
 |---|---|
-| [**User Guide**](USER_GUIDE.md) | The manual — every feature, with screenshots. |
-| [**Showcase**](SHOWCASE.md) | The built-in scenes and the source that draws them. |
-| [**Advanced Usage**](ADVANCED_USAGE.md) | CLI flags, env vars, headless rendering, recording GIFs, mesh export, music. |
-| [**Contributing**](CONTRIBUTING.md) | Build, test, the guard suite, and how to extend the REPL. |
-| [**Modules**](MODULES.md) | One-page map of the source tree and its ownership rules. |
-| [**Architecture**](ARCHITECTURE.md) | The deep dive — command model, frame pipeline, boundaries. |
+| [**User Guide**](docs/USER_GUIDE.md) | The manual — every feature, with screenshots. |
+| [**Showcase**](docs/SHOWCASE.md) | The built-in scenes and the source that draws them. |
+| [**Advanced Usage**](docs/ADVANCED_USAGE.md) | CLI flags, env vars, headless rendering, recording GIFs, mesh export, music. |
+| [**Contributing**](docs/CONTRIBUTING.md) | Build, test, the guard suite, and how to extend the REPL. |
+| [**Modules**](docs/MODULES.md) | One-page map of the source tree and its ownership rules. |
+| [**Architecture**](docs/ARCHITECTURE.md) | The deep dive — command model, frame pipeline, boundaries. |
 
 <br>
 
@@ -174,6 +174,6 @@ rate is just the scalar in front of `t`, and every line stays editable.
 
 <sub>C99 · OpenGL 1.1 · GLU · freeglut · [MIT](LICENSE)</sub>
 
-<sub>Bundles [freeglut and miniaudio](THIRD_PARTY_LICENSES.md). Background music: drop `.mp3`s in `./assets` or fetch the optional [music pack](ADVANCED_USAGE.md#music--assets).</sub>
+<sub>Bundles [freeglut and miniaudio](docs/THIRD_PARTY_LICENSES.md). Background music: drop `.mp3`s in `./assets` or fetch the optional [music pack](docs/ADVANCED_USAGE.md#music--assets).</sub>
 
 </div>

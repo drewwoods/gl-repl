@@ -651,7 +651,7 @@ void emit_export_header_pre(FILE *f, const ExportNeeds *needs) {
      * writer — a single pass off the frame loop. Do NOT copy this shape
      * for a line the code panel reads: panel row-count and render
      * straddle scene_render_3d_scene() and would diverge. Resolve once
-     * into UiRenderSnapshot instead. See ARCHITECTURE.md, "Rule — where
+     * into UiRenderSnapshot instead. See docs/ARCHITECTURE.md, "Rule — where
      * a per-frame dynamic value is resolved". */
     for (int line_idx = 0; g_header_pre[line_idx]; line_idx++) {
         if (strcmp(g_header_pre[line_idx], "static float g_angle = 0.0f;") == 0) {
