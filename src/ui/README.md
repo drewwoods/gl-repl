@@ -9,7 +9,7 @@
 ## What this is, in general
 
 `src/ui` is a small **2D GUI / overlay layer**: it draws panels, menus, the
-code panel, popups, sliders, and HUDs on top of the 3D scene, and it
+code panel, popups, sliders, and HUDs on top of the 3D stage, and it
 **hit-tests** pointer positions back to those visual regions. It is built in
 the **immediate-mode** spirit (à la Dear ImGui, but minimal and
 fixed-function): widgets are redrawn from data every frame rather than
@@ -95,7 +95,7 @@ source-line targets.
 | [`core/gl_2d.h`](src/ui/core/gl_2d.h) | Header-only 2D OpenGL helpers |
 | [`core/hit.h`](src/ui/core/hit.h) | [`UiHit`](src/ui/core/hit.h#L51) / [`UiHitKind`](src/ui/core/hit.h#L17) — the passive UI → controller result |
 | [`core/metrics.h`](src/ui/core/metrics.h), [`core/theme.h`](src/ui/core/theme.h) | Shared layout metrics + colors |
-| [`app/layout.c`](src/ui/app/layout.c) / `.h` | App scene / code-panel rectangle geometry |
+| [`app/layout.c`](src/ui/app/layout.c) / `.h` | App 3D viewport / code-panel rectangle geometry |
 | [`app/overlay_layout.c`](src/ui/app/overlay_layout.c) / `.h` | Floating overlay panel placement |
 | [`app/state.c`](src/ui/app/state.c) / `.h`, [`app/state_types.h`](src/ui/app/state_types.h) | Owns [`UiState`](src/ui/app/state.h#L20) (chrome/viewport/pointer/status TTL only) |
 | [`app/snapshot.h`](src/ui/app/snapshot.h) | [`UiRenderSnapshot`](src/ui/app/snapshot.h#L70) — the read-only per-frame bundle every renderer takes |

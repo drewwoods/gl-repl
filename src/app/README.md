@@ -25,7 +25,7 @@ transitional glue. That bloat is a known design pressure, not a license to add
 new feature behavior there by default.
 
 The boundary still matters: `glr_ctrl` should not implement editor behavior,
-parse the language, draw widgets, or own 3D scene policy. The subsystems it
+parse the language, draw widgets, or own 3D rendering policy. The subsystems it
 wires together (`src/repl`, `src/editor`, `src/ui`, `src/render3d`,
 `src/subsystems`) do not depend on it — the dependency arrows run one way, from
 `glr_ctrl` to the subsystems, never back.
@@ -97,7 +97,7 @@ editor operation.
 | [`glr_state.c`](src/app/glr_state.c) / `.h` | App-level presentation/runtime toggles not owned by repl/editor/ui |
 | [`glr_source_document.c`](src/app/glr_source_document.c) | Binds the `source_document_*` contract to the live [`EditorState`](src/editor/state.h#L175) buffer |
 | [`glr_debug.c`](src/app/glr_debug.c) / `.h` | Diagnostic dumps for CLI flags and tests |
-| [`glr_defaults.h`](src/app/glr_defaults.h) | Controller-side scene/presentation defaults (`CFG_DEFAULT_*`) |
+| [`glr_defaults.h`](src/app/glr_defaults.h) | Controller-side 3D presentation defaults (`CFG_DEFAULT_*`) |
 
 **Boundary:** `glr_ctrl` routes raw input to the owning subsystem and builds
 frame snapshots. It does **not** implement editor behavior or duplicate the

@@ -38,7 +38,7 @@ subsystems here:
   rows, gates commits, and tracks step progress.
 - **`edit_overlays/`** — cursor edit-guide + vertex/normal overlay
   orchestration: owns the cursor-guide snapshot and the flat-program walk
-  that drives the scene overlay primitives (plus the GL_LINE / GL_POINT
+  that drives the 3D overlay primitives (plus the GL_LINE / GL_POINT
   outline passes), extracted out of [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c).
 - **`hidden_lines/`** — hidden-line wireframe execution: drives the REPL
   execution cursor through the render3d renderer's hidden/depth/visible wireframe
@@ -52,7 +52,7 @@ spans runner / animation / match). The `*_state.c` always *owns the
 storage* (a small struct with reset and narrow accessors; some peers also
 carry capture/restore for snapshot round-trips).
 
-For subsystems like `variable_panel`, `variable_panel_set_visible` is the canonical public visibility setter for external code, while [`variable_panel_state_mut()`](src/subsystems/variable_panel/variable_panel_state.h#L70) provides direct mutable pointers for internal config-mapping. (Per-frame placement easing moved out of the peer: all floating scene panels glide via the overlay layout engine in [`src/ui/app/overlay_layout.c`](src/ui/app/overlay_layout.c).)
+For subsystems like `variable_panel`, `variable_panel_set_visible` is the canonical public visibility setter for external code, while [`variable_panel_state_mut()`](src/subsystems/variable_panel/variable_panel_state.h#L70) provides direct mutable pointers for internal config-mapping. (Per-frame placement easing moved out of the peer: all floating panels glide via the overlay layout engine in [`src/ui/app/overlay_layout.c`](src/ui/app/overlay_layout.c).)
 
 ## How it is exercised
 

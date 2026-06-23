@@ -29,7 +29,7 @@
 
 /* Sections that are timed each frame (or whenever they run). */
 typedef enum {
-    PROF_RENDER3D_3D = 0,  /* render_3d_scene() */
+    PROF_RENDER3D_3D = 0,  /* render3d_draw_scene() */
     PROF_RENDER3D_3D_SETUP,     /* projection/camera/lights/material setup */
     PROF_RENDER3D_3D_FILL,      /* execute_commands() main fill pass */
     PROF_RENDER3D_3D_FADE,      /* replay fade batches pass */
@@ -37,16 +37,16 @@ typedef enum {
     PROF_RENDER3D_3D_FADE_BATCH_EXEC,  /* per-batch execute_commands */
     PROF_RENDER3D_3D_FADE_BATCH_POST,  /* per-batch post-execute cleanup */
     PROF_RENDER3D_3D_HELPERS,      /* backdrop/grid/axes/orbit-target aggregate */
-    PROF_RENDER3D_3D_BACKDROP,     /* scene_backdrop_render() – stale when off */
-    PROF_RENDER3D_3D_GRID,         /* scene_grid_render() */
-    PROF_RENDER3D_3D_AXES,         /* scene_axes_render() */
+    PROF_RENDER3D_3D_BACKDROP,     /* render3d_backdrop_render() – stale when off */
+    PROF_RENDER3D_3D_GRID,         /* render3d_grid_render() */
+    PROF_RENDER3D_3D_AXES,         /* render3d_axes_render() */
     PROF_RENDER3D_3D_ORBIT_TARGET, /* draw_orbit_target() */
     PROF_RENDER3D_3D_OVERLAYS,  /* vertex dots, vertex/normal/transform guides */
     PROF_RENDER3D_3D_OVERLAY_OUTLINES,  /* polygon outline + current-block highlight */
     PROF_RENDER3D_3D_OVERLAY_TRANSFORM_GUIDES,  /* transform-editing gizmos (translate/rotate/scale) */
     PROF_RENDER3D_3D_OVERLAY_NORMALS,        /* normal vector labels */
     PROF_RENDER3D_3D_OVERLAY_VERTEX_NUMBERS,    /* vertex numbers labels */
-    PROF_RENDER3D_3D_POST_PROCESS,   /* scene_postprocess_filter_render() */
+    PROF_RENDER3D_3D_POST_PROCESS,   /* render3d_postprocess_filter_render() */
     PROF_RENDER3D_3D_LAST = PROF_RENDER3D_3D_POST_PROCESS,
     PROF_CODE_PANEL,    /* ui_repl_code_panel_render_with_chrome() */
     PROF_CODE_PANEL_ROWS,     /* adapter row/segment build from REPL state */
