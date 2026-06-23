@@ -50,7 +50,7 @@ FILES="$(printf '%s\n' ${SAMPLE_FILES}; \
          find tools bench -name '*.c' 2>/dev/null | sort)"
 
 # Prefer the REAL GL/GLU/GLUT/freeglut headers (the superset that
-# declares every symbol scene_demo/bench/gl-repl use) as -isystem, so
+# declares every symbol render3d_demo/bench/gl-repl use) as -isystem, so
 # their own old-style decls don't fail the guard while our -I'd code
 # stays -I'd. Nonexistent dirs are harmless (the compiler ignores
 # them), so this stays portable across macOS (homebrew + vendored

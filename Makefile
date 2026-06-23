@@ -1193,7 +1193,7 @@ check-pure-render3d-no-repl-state: ## Verify scene files do not reach into REPL 
 		echo "$(RED)ERROR: scene files reach into REPL state/replay APIs:$(NC)"; \
 		echo "$$bad"; exit 1; \
 	fi
-	@echo "Pure-scene boundary $(GREEN)OK$(NC)"
+	@echo "Pure-render3d boundary $(GREEN)OK$(NC)"
 
 check-state-boundaries: ## Verify REPL state facade usage stays in owned modules.
 	@echo "Checking state facade boundaries..."

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Hard guard: UI source must not resolve dynamic export-derived text
 # live. The code panel's row-count/follow-scroll pass and its render
-# pass straddle scene_render_3d_scene() in glr_ctrl_display_frame(), so
+# pass straddle render3d_draw_scene() in glr_ctrl_display_frame(), so
 # a value re-resolved in both passes can diverge across a transition
 # (see docs/ARCHITECTURE.md, "Rule — where a per-frame dynamic value is
 # resolved"). The controller resolves it once into UiRenderSnapshot;
