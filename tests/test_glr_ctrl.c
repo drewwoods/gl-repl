@@ -1993,6 +1993,7 @@ static void test_wireframe_renderer_ignores_user_draw_state(void) {
     editor_feed_line("glEnd();");
     repl_flatten_commands(0);
 
+#ifdef GL_STUBS
     gl_stub_counts_reset();
     SceneExecuteContext visible_ctx = {
         .purpose = SCENE_EXEC_WIREFRAME_VISIBLE_LINES
@@ -2015,6 +2016,7 @@ static void test_wireframe_renderer_ignores_user_draw_state(void) {
                (int)gl_stub_counts[GL_STUB_glBegin], 1);
     ASSERT_INT("wire renderer emits vertices",
                (int)gl_stub_counts[GL_STUB_glVertex3f], 3);
+#endif /* GL_STUBS */
 }
 
 /* Regression: loading an example resets the light_theme *name* to the
