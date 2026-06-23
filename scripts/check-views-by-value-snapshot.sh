@@ -7,7 +7,7 @@ baseline_file="${1:-scripts/baselines/by-value-snapshot-pointer-returns.txt}"
 
 pattern='^\s*const\s+[A-Za-z_][A-Za-z0-9_]*(View|State)\s*\*\s*[A-Za-z_][A-Za-z0-9_]*\s*\('
 
-hits="$(rg -n "$pattern" src/repl src/ui src/scene -g '*.h' 2>/dev/null || true)"
+hits="$(rg -n "$pattern" src/repl src/ui src/render3d -g '*.h' 2>/dev/null || true)"
 count=0
 if [ -n "$hits" ]; then
   count="$(printf '%s\n' "$hits" | wc -l | tr -d ' ')"

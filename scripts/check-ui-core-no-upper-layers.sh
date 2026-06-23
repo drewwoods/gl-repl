@@ -9,7 +9,7 @@
 #   - src/app/        (controller layer 6)
 #   - src/editor/     (text-document model layer 3)
 #   - src/repl/       (program model layer 1)
-#   - src/scene/      (scene renderer layer 3.5 —
+#   - src/render3d/      (scene renderer layer 3.5 —
 #                      check-layer-coupling enforces UI ↔ scene
 #                      mutual exclusion overall; this re-asserts it
 #                      for the core subset)
