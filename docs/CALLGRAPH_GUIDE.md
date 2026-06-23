@@ -179,7 +179,7 @@ sfdp -Tsvg callgraph-imrepl_ctrl_display_frame.dot -o display-frame.svg
 
 ### Example 3: Focus on Core Rendering
 ```bash
-# Scene rendering pipeline
+# Render3d rendering pipeline
 make callgraph-static-entry ENTRY=render3d_draw_scene
 
 # This has ~50 edges, works fine in Mermaid
@@ -219,7 +219,7 @@ neato -Tsvg callgraph-repl_eval_expr.dot -o expr-eval.svg
 ### Example 5: Performance Analysis
 ```bash
 # Profile actual execution with a specific test
-make callgraph-profile PROG="./test_scene_render"
+make callgraph-profile PROG="./test_render3d_render"
 
 # Shows only what actually ran (smaller than static analysis)
 ```
@@ -390,7 +390,7 @@ make callgraph-static-entry ENTRY=render3d_draw_scene
 ### Module Testing
 Trace which functions are actually exercised by tests:
 ```bash
-make callgraph-profile PROG="./test_scene_render"
+make callgraph-profile PROG="./test_render3d_render"
 ```
 
 ## Integration with MODULES.md

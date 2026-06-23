@@ -41,7 +41,7 @@ subsystems here:
   that drives the scene overlay primitives (plus the GL_LINE / GL_POINT
   outline passes), extracted out of [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c).
 - **`hidden_lines/`** — hidden-line wireframe execution: drives the REPL
-  execution cursor through the scene renderer's hidden/depth/visible wireframe
+  execution cursor through the render3d renderer's hidden/depth/visible wireframe
   passes while skipping pass-local state commands.
 
 Subsystem file shapes vary: a single co-located file (like

@@ -2,7 +2,7 @@
 
 Home for small, dependency-light helpers that don't belong to any of the
 layered modules (`repl`, `editor`, `scene`, `ui`, `app`, `subsystems`).
-TUs here have no `repl_*` / `editor_*` / `scene_*` / `ui_*` /
+TUs here have no `repl_*` / `editor_*` / `render3d_*` / `ui_*` /
 `glr_*` knowledge and must be linkable into any of the standalone
 demos (`render3d_demo`, `repl_demo`, `editor_demo`) without dragging in
 their respective layers.

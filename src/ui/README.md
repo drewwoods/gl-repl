@@ -63,7 +63,7 @@ untested in isolation: the generic text panel ([`text_panel.c`](src/ui/core/text
 wrapping/search helpers) is linked and driven by
 [`tools/editor_demo/`](../../tools/editor_demo/), the standalone plain-text
 editor — so the reusable view half runs without the REPL, without `src/app`,
-and without `src/ui/app`. The `scene_demo` HUD shows the same fixed-function
+and without `src/ui/app`. The `render3d_demo` HUD shows the same fixed-function
 2D-overlay drawing style this layer uses. There is no `ui_demo` because UI is a
 *view for* other subsystems, not a subsystem with behavior of its own.
 
@@ -113,4 +113,4 @@ source-line targets.
 
 **Boundary:** a UI renderer draws; a UI input handler hit-tests and returns a
 [`UiHit`](src/ui/core/hit.h#L51). Neither directly mutates REPL / editor / peer state, and `ui_*` does
-not include `scene_*` headers.
+not include `render3d_*` headers.

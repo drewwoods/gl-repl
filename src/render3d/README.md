@@ -1,14 +1,14 @@
-# `src/render3d` — the 3D scene renderer
+# `src/render3d` — the 3D renderer
 
 > Part of the OpenGL Immediate-Mode REPL. The whole-tree ownership map is
 > in [`../../docs/MODULES.md`](../../docs/MODULES.md); the per-frame pipeline narrative
 > is in [`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md). This README is the
-> module-local view: what a scene renderer *is*, how the standalone demo
+> module-local view: what a 3D renderer *is*, how the standalone demo
 > exercises it, and what it does inside this app.
 
 ## What this is, in general
 
-A **scene renderer** is the part of a graphics program that owns the
+A **3D renderer** is the part of a graphics program that owns the
 *frame*: it sets the viewport, clears the buffers, builds the projection,
 positions the camera, configures lighting, draws the world, and adds the
 "studio" decorations (a reference grid, axes, a backdrop). It does **not**
@@ -27,7 +27,7 @@ glr_camera_load_modelview(&pose);                /* caller owns the modelview ca
 render3d_draw_scene(&renderer_state, &cfg);    /* viewport → projection → cfg.execute_fn() → grid/axes/backdrop/overlays */
 ```
 
-The scene module owns no camera type — the caller picks one. The REPL
+The render3d module owns no camera type — the caller picks one. The REPL
 controller uses [`GlrCameraPose`](src/app/glr_camera.h#L120) + `glr_camera_load_modelview` from
 [`src/app/glr_camera.h`](src/app/glr_camera.h); the standalone `render3d_demo` inlines the six
 matrix calls directly (`glLoadIdentity`, `glTranslatef`, two
@@ -57,7 +57,7 @@ backdrop, `I` toggles light indicators. A bitmap HUD prints the live config.
 
 The demo is the **layer-independence proof** for `src/render3d`: it builds with
 a deliberately slim object list and a geometry callback that knows nothing
-about the REPL. If scene code ever grew a hard dependency on the editor,
+about the REPL. If render3d code ever grew a hard dependency on the editor,
 controller, or UI, this binary would stop linking. It also documents the
 contract by example — `build_config()` shows exactly which [`Render3dRenderConfig`](src/render3d/render_types.h#L130)
 fields must be set (e.g. the grid step tables, or the renderer's grid loop
@@ -73,7 +73,7 @@ state each frame, then calls [`glr_camera_load_modelview()`](src/app/glr_camera.
 (`repl_execute_program`), so the user's typed program becomes the scene's
 geometry.
 
-Scene renderers **consume snapshots/configs and never read REPL runtime state,
+Render3d renderers **consume snapshots/configs and never read REPL runtime state,
 [`EditorState`](src/editor/state.h#L175), or [`UiState`](src/ui/app/state.h#L20) directly.** The two REPL-aware overlay passes
 under `guides/` (vertex/normal guides at the cursor, transform guides during
 replay) still obey this: the `edit_overlays` peer subsystem
@@ -100,6 +100,6 @@ applies a scene-local frustum shift for jitter.
 | [`guides/guides_shared.h`](src/render3d/guides/guides_shared.h) | Shared guide snapshot/planning types |
 | [`palette.h`](src/render3d/palette.h), [`themes.h`](src/render3d/themes.h), [`occluded_ghost.h`](src/render3d/occluded_ghost.h) | Shared color/theme/style constants |
 
-**Boundary:** scene code renders. It does **not** parse, edit, save, or
-dispatch UI actions, and `scene_*` / `ui_*` do not include each other's
+**Boundary:** render3d code renders. It does **not** parse, edit, save, or
+dispatch UI actions, and `render3d_*` / `ui_*` do not include each other's
 headers — shared types live in [`render_types.h`](src/render3d/render_types.h) / [`src/ui/app/snapshot.h`](src/ui/app/snapshot.h).

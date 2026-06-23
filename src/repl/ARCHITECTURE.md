@@ -533,7 +533,7 @@ State access is intentionally two-tiered:
 
 - **[`state_views.h`](src/repl/state_views.h)** — read-only, by-value getters
   (`repl_state_document_cmds()`, `repl_state_variables()`, …). Safe to
-  include from `scene_*` and `ui_*`.
+  include from `render3d_*` and `ui_*`.
 - **[`state_owners.h`](src/repl/state_owners.h)** — mutable `_mut()` accessors, setters, and reset
   helpers. For owner modules and the controller only.
 
@@ -658,7 +658,7 @@ These boundaries are not just convention — they're ratcheted by guards in
 `make check-state-ownership` (and a couple that run standalone):
 
 - `check-repl-export-via-bridge` — [`export.c`](src/repl/export.c) reaches host data only
-  through bridges, never via `scene_*`/`glr_*` includes.
+  through bridges, never via `render3d_*`/`glr_*` includes.
 - `check-repl-state-no-glr-state` — REPL pipeline TUs don't include
   [`glr_state.h`](src/app/glr_state.h).
 - `check-include-style` — project-local headers use `""`, vendored/system

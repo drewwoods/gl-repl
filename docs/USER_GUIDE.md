@@ -555,7 +555,7 @@ swatches.
 *View mode* (Ctrl+Shift+V, or the CAMERA section of the Config menu) switches
 between the 3D perspective camera and a flat 2D orthographic projection —
 useful for plots, sketches, and UI-like drawings. Examples that declare
-`@cfg view_mode = SCENE_VIEW_2D` start in 2D automatically.
+`@cfg view_mode = RENDER3D_VIEW_2D` start in 2D automatically.
 
 ---
 
