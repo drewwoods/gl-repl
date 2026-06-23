@@ -105,16 +105,16 @@ Inside the full app this is **layers 1 and 3** of the ownership map:
 
 - The editor proposes text; `repl_compile` validates it *purely* (it never
   edits state, never touches the cursor, never calls `set_status`).
-- On success the editor applies the change to `ReplState` via
+- On success the editor applies the change to REPL runtime state via
   `repl_apply_*`, and `repl_command_store` does the low-level `GLCmd` array
   shuffling.
 - Each frame, if the program is dirty, `flatten.c` rebuilds the flat program
   and `autonormal.c` regenerates `glNormal3f`s; `executor.c` then renders it.
-- `ReplState` (`state.c`) owns the program model: parsed commands, the flat
+- `ReplRuntimeState` (`state.c`) owns the program model: parsed commands, the flat
   program, predefined variables, scratch arrays `A/B/C`, the `func0..func9`
   alias table, the `t` clock, and the runtime-mutated render tail
   (light-enable mask + clear color). The user-scene *catalog* slots live
-  separately in `scenes.c` (as `SceneSnapshot`s); `ReplState` only tracks the
+  separately in `scenes.c` (as `SceneSnapshot`s); `ReplRuntimeState` only tracks the
   active example index and bound workspace dir.
 
 `GLCmd` is a pure parse result (type, args, flags, provenance) — it carries
@@ -143,7 +143,7 @@ file format (writer in `export.c`, reader in `import.c`) and workspace I/O
 | `normalize.c` / `.h` | Parse-and-normalize pipeline |
 | `eval.c` / `.h` | Expression evaluator, predefined-variable lookup, REPL↔C translation |
 | `compile.c` / `.h` | Pure validators → `ReplCompiledChange` (never mutates) |
-| `apply.c` / `.h` | Applies a compiled change to `ReplState` (cmd store + predef/scratch/alias ops) |
+| `apply.c` / `.h` | Applies a compiled change to REPL runtime state (cmd store + predef/scratch/alias ops) |
 | `command_store.c` / `.h` | Low-level `GLCmd` array mechanics (insert/replace/delete/load) |
 | `load.c` / `.h` | Non-editor line loader + apply transaction (import/example/tutorial/tests) |
 | `visible_vars.c` / `.h`, `text_helpers.c` / `.h` | Loop/func-local variable collection; parse/extract/canonical-text helpers |
@@ -157,7 +157,7 @@ file format (writer in `export.c`, reader in `import.c`) and workspace I/O
 | `pipeline.h` | Controller-facing frame entry points (flatten/autonormal/refresh) |
 | `program_query.c` / `.h`, `geometry_query.h` | Read-only queries over the source/flat program |
 | **State & ownership** | |
-| `state.c` / `.h`, `state_views.h`, `state_owners.h` | `ReplState` storage + capture/restore + typed read/mut facades |
+| `state.c` / `.h`, `state_views.h`, `state_owners.h` | `ReplRuntimeState` storage + capture/restore + typed read/mut facades |
 | `state_notify.h` | Dirty-flag invalidation entry points |
 | `time.c` / `.h` | The predefined `t` animation clock |
 | `host_effects.c` / `.h` | Host side-effect bridge (status, cursor, completion, tutorial teardown) |

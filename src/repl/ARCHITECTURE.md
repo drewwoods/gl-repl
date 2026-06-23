@@ -72,7 +72,7 @@ program model in `state.c`:
       │ parse + compile  (pure)                      │ yes → flatten + autonormal
       ▼                                              ▼
    ReplCompiledChange                             flat program
-      │ apply            (mutates ReplState)         │ execute
+      │ apply            (mutates runtime state)     │ execute
       ▼                                              ▼
    source command array  ───────dirty flag────────▶ GL calls (pixels)
 ```
@@ -115,7 +115,7 @@ flowchart LR
     end
 
     subgraph model["REPL-owned model"]
-        state["state.c<br/>ReplState slices"]
+        state["state.c<br/>ReplRuntimeState slices"]
         doc_state["source commands<br/>ReplDocumentState"]
         vars["variables<br/>predefs · scratch · func aliases · t"]
         flat_state["flat program<br/>ReplFlatProgramState"]
@@ -331,7 +331,7 @@ func aliases) — it never reaches into REPL globals. Build one with
 cursor because pipeline code does not call editor accessors.
 
 `apply.c` is the dual. `repl_apply_compiled_change()` mutates the
-ReplState command array **only** — it does not touch source text,
+REPL runtime command array **only** — it does not touch source text,
 status, undo, predef registrations, or aliases. Those cascades are
 separate calls (`repl_apply_predef_ops`, `repl_apply_scratch_ops`,
 `repl_apply_alias_ops`) so the orchestrator can sequence them correctly
@@ -398,14 +398,14 @@ own text-mutation step:
 Editor-input commit            (src/editor/commit.c)
     editor_undo_begin
     editor_buffer_apply_compiled_change   // EditorState text
-    repl_apply_compiled_change            // ReplState cmd store
+    repl_apply_compiled_change            // REPL runtime cmd store
     repl_apply_alias_ops                  // func aliases
     editor_undo_commit
 
 Lean source loader             (src/repl/load.c)
     repl_load_apply_compiled_change_transaction
         source_document_apply_change      // neutral text port
-        repl_apply_compiled_change        // ReplState cmd store
+        repl_apply_compiled_change        // REPL runtime cmd store
         repl_apply_alias_ops              // func aliases
 ```
 
@@ -509,7 +509,7 @@ emitting GL. Key behaviors:
 
 ## 6. Runtime state and ownership
 
-### 6.1 `ReplState` — the owned slices
+### 6.1 `ReplRuntimeState` — the owned slices
 
 `state.c` owns the process-global REPL runtime, exposed as a struct of
 typed slices (`state_views.h`):
@@ -892,7 +892,7 @@ grouping is the mental model.)
 `normalize.c`/`.h` (parse-and-normalize) ·
 `eval.c`/`.h` (expressions, REPL↔C translation, predef vars) ·
 `compile.c`/`.h` (pure validators → ReplCompiledChange) ·
-`apply.c`/`.h` (apply a change to ReplState) ·
+`apply.c`/`.h` (apply a change to REPL runtime state) ·
 `command_store.c`/`.h` (low-level GLCmd array mechanics) ·
 `load.c`/`.h` (non-editor line loader + apply transaction) ·
 `visible_vars.c`/`.h`, `text_helpers.c`/`.h`, `source_scope.c`/`.h`,
@@ -908,7 +908,7 @@ grouping is the mental model.)
 `program_query.c`/`.h`, `geometry_query.h` (read-only program queries)
 
 **State & ownership**
-`state.c`/`.h` (ReplState storage, capture/restore) ·
+`state.c`/`.h` (`ReplRuntimeState` storage, capture/restore) ·
 `state_views.h` (read API + slice types) ·
 `state_owners.h` (mutable API + resets) ·
 `state_notify.h` (dirty-flag invalidation) ·

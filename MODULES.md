@@ -86,15 +86,15 @@ REPL compiler:             whether committed source text is valid
 
 Consequences:
 
-- **State has three owners.** `ReplState` is the program. `EditorState`
-  is the text-document session. `UiState` is transient UI/session
+- **State has three owners.** `ReplRuntimeState` is the REPL program runtime.
+  `EditorState` is the text-document session. `UiState` is transient UI/session
   chrome. Their storage lives in their owner modules (`src/repl/state.c`,
   `src/editor/state.c`, `src/ui/app/state.c`). `glr_ctrl` orchestrates them; it
   does not become a dumping ground for their bytes.
 - **REPL compiles; it does not edit.** The editor calls
   `repl_compile(text, ctx) -> ReplCompiledChange | error`. On success,
   the editor writes its own text buffer and asks `repl_apply_*` to
-  apply the parsed command to `ReplState` — both inside one editor
+  apply the parsed command to REPL runtime state — both inside one editor
   undo transaction.
 - **Editor commits are transactions.** A successful edit updates both
   editor text and REPL command state. A failed validation updates
@@ -115,7 +115,7 @@ Consequences:
 
 | State | Owns | Does not own |
 |---|---|---|
-| `ReplState` | Parsed command array, flat program, REPL variable state (scalar predefined vars plus fixed scratch arrays `A/B/C` of `REPL_SCRATCH_ARRAY_LEN` floats and the `func0..func9` user-alias table), scenes, import/export metadata | Render/presentation config (`glr_state`, app layer), replay runtime state (peer), variable-panel state (peer), help-session state (peer), color-picker state (peer), editable text, cursor, selection, search query, UI visibility, pointer/viewport chrome |
+| `ReplRuntimeState` | Parsed command array, flat program, REPL variable state (scalar predefined vars plus fixed scratch arrays `A/B/C` of `REPL_SCRATCH_ARRAY_LEN` floats and the `func0..func9` user-alias table), active scene/workspace identity, import/export metadata | Render/presentation config (`glr_state`, app layer), user-scene slot payloads (`repl_scenes`), replay runtime state (peer), variable-panel state (peer), help-session state (peer), color-picker state (peer), editable text, cursor, selection, search query, UI visibility, pointer/viewport chrome |
 | `glr_state` (app) | App-level presentation/render toggles (grid/axes themes, wireframe, overlays, backdrop, scene + whole-frame post-process filters, camera-rotate, etc.). Defaults from `glr_defaults.h` (`CFG_DEFAULT_*`). Read/written through the `glr_config` keyed bridge and per-scene snapshots | Program model, editable text, REPL grammar |
 | `EditorState` | Editable text buffer, active input, cursor/edit-line, insert mode, selection, clipboard, search/autocomplete, scroll, **cursor blink** (the editor controls cursor visibility/blink — UI just renders), undo/redo, editor transactions | Variable-panel drag (owned by the variable_panel peer), parsed command semantics, GL execution, menu chrome, transient status banners, render-output pixel coordinates |
 | `UiState` | Viewport, pointer, status text TTL, help-overlay visibility (chrome flag), profile-panel visibility, panel-divider geometry (panel_frac + resizing_panel) | Help-session tab/scroll (peer), variable-panel state (peer), camera pose (lives on `glr_camera`), program model, editable text, command validation, cursor blink (editor owns), per-frame render-output (uses `Ui*Output`) |
@@ -129,14 +129,14 @@ Callers use the peer accessors (`variable_panel_*`, `replay_state_*`)
 directly; `check-variable-panel-forwarders` and `check-replay-forwarders`
 guard against reintroducing state-forwarder shims.
 
-`ReplState` owns the fixed scratch arrays `A/B/C[REPL_SCRATCH_ARRAY_LEN]`
-as REPL language runtime state. They are not editor/UI state, do not
+The REPL runtime owns the fixed scratch arrays `A/B/C[REPL_SCRATCH_ARRAY_LEN]`
+as language runtime state. They are not editor/UI state, do not
 participate in variable-panel editing, and do not consume
 `MAX_PREDEF_VARS` scalar slots. The exported `output.c` only emits the
 arrays a snippet actually references — `export_collect_needs` scans for
 `A[`/`B[`/`C[` use per-letter and skips unused arrays.
 
-`ReplState.variables.func_aliases[REPL_FUNC_SLOT_COUNT][REPL_FUNC_NAME_MAX]`
+`ReplRuntimeState.variables.func_aliases[REPL_FUNC_SLOT_COUNT][REPL_FUNC_NAME_MAX]`
 backs the user-named function feature: any C identifier (not reserved /
 not control-flow) maps to one of the 10 underlying `funcN` slots, so a
 user can type `drawCube { ... }` instead of `func0 { ... }`. The alias
@@ -191,8 +191,9 @@ composition code to make a boundary problem disappear.
   (`tools/editor_demo/menu.c`). `src/editor/input.c` is the **REPL editor's
   input dispatcher** (REPL key bindings + REPL-flavored controller), not a
   generic editor controller; the
-  demo therefore does *not* link it. Same goes for `commit.c`,
-  `clipboard.c`, `undo.c`, `reformat.c`, `search.c`, `completion.c`
+  demo therefore does *not* link it. Same goes for `src/editor/commit.c`,
+  `src/editor/clipboard.c`, `src/editor/undo.c`, `src/editor/reformat.c`,
+  `src/editor/search.c`, `src/editor/completion.c`
   and the inline overlays — all REPL-flavored controllers, none
   linked by the demo. What *is* linked: `src/editor/state.c` (text
   buffer + cursor + selection + document data model),
@@ -290,7 +291,7 @@ sweep, so the borrowed-API types above keep passing.
    Render-time discoveries return through output structs that the
    controller actualizes.
 4. Update the ownership checks in the same change. The capture/restore /
-   reset path for `ReplState`, `EditorState`, and `UiState` must stay in
+   reset path for `ReplRuntimeState`, `EditorState`, and `UiState` must stay in
    lockstep with the state layout.
 
 ## Intended Frame Shape
@@ -337,8 +338,8 @@ Display frame:
   -> rebuild autonormals / flat program if dirty
   -> push editor/UI snapshots
        (transformers, highlights, virtual lines, annotations)
-  -> build SceneRenderConfig from ReplState + view/session state
-  -> build UiRenderSnapshot from ReplState + EditorState + UiState
+  -> build SceneRenderConfig from REPL runtime + view/session state
+  -> build UiRenderSnapshot from REPL runtime + EditorState + UiState
        + peer subsystem state (variable panel, replay)
   -> scene_render_3d_scene(&scene_cfg)
   -> ui_*_render(&ui_snap)               (snapshot-only; no state mutation)
@@ -434,7 +435,7 @@ Program-side state that is not the source command array itself.
 
 | Module | Role |
 |--------|------|
-| `repl_state` | Owns `ReplState`: program state, capture/restore/reset for REPL-owned slices only |
+| `repl_state` | Owns `ReplRuntimeState`: program state, capture/restore/reset for REPL-owned slices only |
 | `repl_config` | Config descriptor table for menu toggles and persisted render/audio settings |
 | `repl_scenes` | User-scene slots, workspace directory, LRU eviction, and scene-side command/text snapshots (`SceneSnapshot` owns the copy/apply payload) |
 | `repl_example_loader` | Built-in example loading and active-example tracking |
@@ -452,7 +453,7 @@ parameters. They must not discover or mutate editor state globally.
 ### 4. 3D scene rendering
 
 `scene_*` owns the 3D view. Scene renderers consume snapshots/configs and
-never read `ReplState`, `EditorState`, or `UiState` directly.
+never read REPL runtime state, `EditorState`, or `UiState` directly.
 
 Naming note: `scene_*` is the current code prefix for the rendered world or
 stage: camera, projection, grid, axes, backdrop, lights, and 3D overlays around
@@ -590,7 +591,7 @@ flowchart TB
 
     repl["<b>1. REPL pipeline</b> (pure compiler/program)<br/>compile · apply · load · parser ·<br/>source_scope · command_spec · command_store ·<br/>flatten · executor · eval"]
 
-    models["<b>3. REPL domain models</b><br/>ReplState · scenes · examples ·<br/>example_loader · autonormal"]
+    models["<b>3. REPL domain models</b><br/>ReplRuntimeState · scenes · examples ·<br/>example_loader · autonormal"]
 
     srcdoc["<b>source_document port</b><br/>(neutral REPL ↔ host text seam;<br/>full-app impl = glr_source_document)"]
 
@@ -683,7 +684,7 @@ flowchart LR
 
     subgraph app["0. App shell (router · bridges · app state)"]
         ctrl["src/app/glr_ctrl.c<br/>raw input router · frame/snapshot coordinator<br/>non-editor router helpers · timer tick<br/>does NOT drive editor behavior"]
-        glrstate["src/app/glr_state.c<br/>app presentation/render state<br/>(app-owned, not ReplState)"]
+        glrstate["src/app/glr_state.c<br/>app presentation/render state<br/>(app-owned, not REPL runtime)"]
         glrsrcdoc["src/app/glr_source_document.c<br/>source_document port → EditorState"]
         glrcamexport["src/app/glr_camera_export.c<br/>camera ↔ export-text bridge"]
         glrcompositor["src/app/glr_compositor.c<br/>whole-frame post-process hook<br/>(reuses scene primitive over full window)"]
@@ -726,7 +727,7 @@ flowchart LR
     end
 
     subgraph models["3. REPL domain models"]
-        state["src/repl/state.c<br/>ReplState"]
+        state["src/repl/state.c<br/>ReplRuntimeState"]
         scenes["src/repl/scenes.c<br/>user scenes · workspace"]
         scene_snapshot["src/repl/scene_snapshot.c<br/>copyable scene snapshots"]
         workspace_io["src/repl/workspace_io.c<br/>workspace fs · file naming"]
@@ -848,7 +849,7 @@ flowchart LR
     load i37@--> glrsrcdoc
     tutorial_sys i38@--> load
 
-    %% App-owned presentation/render state (not on ReplState) and
+    %% App-owned presentation/render state (not on REPL runtime state) and
     %% the camera<->export-text bridge.
     ctrl -.-> glrstate
     sceneR -.-> glrstate
@@ -1058,7 +1059,7 @@ render-neutral types belong in explicit shared headers such as
 | New cmd-array mutation | `repl_apply_*`; low-level shifts stay inside `repl_command_store` |
 | New editor session state | `EditorState` slice |
 | New UI visibility/status/chrome state | `UiState` slice |
-| New program/persistence state | `ReplState` slice |
+| New program/persistence state | `ReplRuntimeState` slice |
 | New header-only render helper | `include/` |
 
 ## Guard Summary

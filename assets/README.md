@@ -1,6 +1,6 @@
 # assets/
 
-Runtime data for the REPL sample. The audio backend (`repl_audio.c` via
+Runtime data for the REPL sample. The audio backend (`src/app/glr_audio.c` via
 `miniaudio.h`) looks for background music here.
 
 ## Music

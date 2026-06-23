@@ -76,7 +76,7 @@ Inside the full app this is **layer 2** of the ownership map. The contract:
 - **Commits are transactions.** `commit.c` is the only path that crosses
   into the REPL: it calls `repl_compile` (pure validation); on success it
   takes an undo snapshot, writes the editor buffer, and applies the parsed
-  command to `ReplState` — all inside one undo boundary, so undo restores
+  command to REPL runtime state — all inside one undo boundary, so undo restores
   both sides together. On a validation failure, nothing mutates.
 - Read-only documents are also editor sessions: `help_session.c` backs the
   F1 overlay with the same scroll/search/cursor model and no commit path.

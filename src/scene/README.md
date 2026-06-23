@@ -66,14 +66,14 @@ never terminates).
 ## In the REPL app
 
 Inside the full app this is **layer 4** of the ownership map. The controller
-(`src/app/glr_ctrl.c`) builds a `SceneRenderConfig` from `ReplState` + view
+(`src/app/glr_ctrl.c`) builds a `SceneRenderConfig` from REPL runtime state + view
 state each frame, then calls `glr_camera_load_modelview()` and
 `scene_render_3d_scene()` once per accumulation-jitter sample (with its own
 `SceneRendererState`). The geometry callback is the REPL executor
 (`repl_execute_program`), so the user's typed program becomes the scene's
 geometry.
 
-Scene renderers **consume snapshots/configs and never read `ReplState`,
+Scene renderers **consume snapshots/configs and never read REPL runtime state,
 `EditorState`, or `UiState` directly.** The two REPL-aware overlay passes
 under `guides/` (vertex/normal guides at the cursor, transform guides during
 replay) still obey this: the `edit_overlays` peer subsystem

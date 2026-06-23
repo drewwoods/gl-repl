@@ -60,7 +60,7 @@ These are app features rather than reusable libraries, so there is no
 standalone `subsystems_demo`. They are exercised through the full app and
 by the focused unit tests under `tests/` (e.g. `test_repl_replay`,
 `test_repl_var_drag`, `test_tutorial_runner`). Their *rendering* is done
-by feature-UI in `src/ui/app/` (`replay_hud.c`, `color_picker.c`,
+by feature-UI in `src/ui/subsystems/` (`replay_hud.c`, `color_picker.c`,
 `variable_panel.c`) reading the per-frame snapshot.
 
 ## In the REPL app
@@ -77,7 +77,7 @@ is identical:
    `variable_panel_handle_*`).
 3. The subsystem mutates its own state; if a change must reach the
    program (a slider value, a picked color), it goes through the editor
-   *commit* transaction — the one sanctioned path into `ReplState`.
+   *commit* transaction — the one sanctioned path into REPL runtime state.
 4. UI renders the subsystem from the frame snapshot.
 
 A peer may *produce* overlays the editor renders (replay annotations are
@@ -94,12 +94,14 @@ virtual lines), but it never *becomes* editor-owned.
 | `variable_panel/variable_panel_state.c` / `.h` | Owns the variable-panel visibility flag + drag-state storage |
 | `color_picker/color_picker_state.c` / `.h` | Color-picker state, lifecycle, slider handlers, source-line writeback |
 | `hidden_lines/hidden_lines.c` / `.h` | Hidden-line wireframe cursor filtering and colorless tessellation |
-| `tutorial/tutorial.c` / `.h` | Tutorial runner: start/stop/advance, match, locked-line guard, fade math |
+| `tutorial/tutorial_runner.c`, `tutorial/tutorial.h` | Tutorial runner public API and orchestration: start/stop/advance, locked-line guard, source-change guard |
+| `tutorial/tutorial_match.c` | Tutorial command matching, normalization, expected-message formatting, and ghost-text suffix helpers |
+| `tutorial/tutorial_animation.c` / `.h` | Pure tutorial fade timing helpers |
 | `tutorial/tutorial_state.c` / `.h` | Owns `TutorialRuntimeState` (active flag, step, locked lines, fade timing) |
 
 **Boundary:** a subsystem owns its own state and controller. It does
 **not** own editor text behavior or REPL grammar; its renderer lives in
-`src/ui/app/`; its one user-driven write path into the program is the editor commit.
+`src/ui/subsystems/`; its one user-driven write path into the program is the editor commit.
 (Programmatic scene-setup or comment injection by subsystems like `tutorial` may
 bypass the commit transaction and load directly via `repl_load_apply_line` without
 generating undo history.)
