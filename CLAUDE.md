@@ -188,18 +188,18 @@ C99. There is no C2x build and no `STD` knob.
 
 **`make check-c99` is a build guard** (also run inside
 `make check-state-ownership`, so it's in the standard gate): it
-syntax-checks the *shipped/real* sources — the sample object set
+syntax-checks the project source set — the sample object set
 (`$(SRCS)`) plus the demo drivers (`tools/`) and bench harness
 (`bench/`) — under `gcc -std=c99 -fsyntax-only`, **non-pedantic**.
 Our code dirs are `-I`; the real GL/GLU/GLUT/freeglut headers are
 `-isystem` so a vendored header's own old-style decl (e.g.
 `freeglut_ext.h`) can't fail it. It still has teeth: C99 makes
 implicit function declarations a hard error even non-pedantic, and
-unknown symbols fail. Tests are excluded (not shipped); they build
+unknown symbols fail. Tests are excluded from this guard; they build
 under plain `-std=c99` too.
 
 Why non-pedantic: a real-GCC check found the *only*
-`-std=c99 -pedantic-errors` failures across the whole shipped set
+`-std=c99 -pedantic-errors` failures across the checked source set
 were 22 hits of one benign rule — C99 forbids the implicit
 pointer-to-array `const`-qualifier conversion (`T (*)[N]` →
 `const T (*)[N]`) that **C2x explicitly re-allows**. The code is
@@ -368,8 +368,8 @@ If all three turn up zero `.mp3`s, it falls back to the single-file
 entirely. Adding a new candidate source or changing the per-user path is
 a `gl_repl.c` change (all of this lives in that one TU's statics); the
 platform branches in `executable_dir` / `user_music_dir` are
-`#ifdef`-guarded and **must stay C99 / portable** (see *Windows port*
-plan for the Windows branches).
+`#ifdef`-guarded and **must stay C99 / portable**; keep future platform
+branches localized to those helpers.
 
 ### Startup & audio-worker diagnostics
 
@@ -457,33 +457,19 @@ Two hard-failing guards run *outside* that aggregate: `check-duplicate-api-decls
 `check-trailing-whitespace` (commits since `origin/main` carry no trailing
 whitespace; also wired into `test-stubs` and the pre-push hook).
 
-## Plans & audits
+## Design notes
 
-Long-form audit / implementation docs live under `plans/` and move
-between subdirectories as their state changes. Five buckets:
-
-| Directory | Meaning |
-|---|---|
-| `plans/not-started/` | Drafted but no commits yet — green-field plans waiting on a slot. |
-| `plans/in-review/` | A reviewer is actively reading the doc; no implementation has begun. |
-| `plans/active/` | Implementation is in flight. Some commits have landed; the doc's status table tracks what's done vs. deferred. |
-| `plans/partial/` | Implementation stalled mid-way (intentional pause) and the residual scope is still meaningful. |
-| `plans/done/` | Fully completed (the bulk of the directory — closed audits, finished refactors). |
-
-The transitions go `not-started → in-review → active → done` for the
-happy path, with `partial` as the side branch when a plan ships some
-of its scope but defers the rest. Don't graduate a doc to `done/` if
-its status table or deferred-follow-ups block still describes
-unfinished work — keep it in `active/` (or move to `partial/` if the
-gap is intentional) so future readers see the residual scope at the
-state-machine level, not buried in the doc body.
+Use `plans/` for long-form design or audit notes when the change is broad
+enough that a short issue or commit message would not preserve the rationale.
+Root docs should describe the current design first; link to a plan only after
+explaining why the extra background is useful.
 
 ## File Layout
 
 | File | Responsibility |
 |------|----------------|
 | `gl_repl.c` | GLUT callback registration, `main()`, window setup, buffer swap; forwards directly to `glr_ctrl_*` |
-| `gl_repl.h` | Minimal legacy header: standard includes and `M_PI`; types/defaults moved out to dedicated headers |
+| `gl_repl.h` | Small shared header: standard includes and `M_PI`; types/defaults live in dedicated headers |
 | `src/app/glr_ctrl.c` | App-frame controller: `glr_ctrl_display_frame`, `glr_ctrl_reshape`, `glr_ctrl_init_gl`; builds `SceneRenderConfig`, calls scene/UI renderers |
 | `src/app/glr_ctrl.h` | Controller public surface: display, reshape, init-GL entrypoints |
 | `src/app/glr_config.c` | Config key implementation and descriptor table helpers. The tail of `glr_config_set` notifies the tutorial runner (`tutorial_notify_state_changed`) so REQUIRE steps observe every write path — direct setters (e.g. accum-passes Ctrl+=/-), `glr_cfg_cycle_row`'s early-return branches, and the bridge's `apply` during `@cfg` / example / workspace load |
@@ -615,8 +601,8 @@ state-machine level, not buried in the doc body.
 | `src/subsystems/tutorial/tutorial_match.c` | Tutorial command matching, normalization, expected-message formatting, and ghost-text shadow suffix helpers |
 | `src/subsystems/tutorial/tutorial_internal.h` | Tutorial-private shared declarations for the split runner / animation / match files |
 | `src/subsystems/tutorial/tutorial.h` | Runner API: `tutorial_start/_exit/_teardown/_handle_commit_attempt/_advance_after_successful_commit/_current_expected_text/_current_step_kind/_notify_state_changed/_handle_ack_key/_block_noncommand_commit/_line_is_locked/_guard_source_change/_match`. Knobs: `TUTORIAL_FADE_CHARS_PER_SEC` (reveal rate), `TUTORIAL_FADE_SETTLE_CHARS` (settle-wave width) |
-| `src/repl/export.c` | Writer half (audit #69 split). `repl_export_save_output`, `repl_dump_code_panel_text`, workspace header emit dispatcher `repl_state_refresh_workspace_header_lines`, scaffold sections, render-state/cam refresh, init-bootstrap apply, light/render text generators. Also implements the typed live-cfg wrappers `repl_cfg_get_int` / `_set_int` / `_known` over the installed config bridge (bridge-only — no `scene_*`/`glr_*` calls; `check-repl-export-via-bridge` stays green) |
-| `src/repl/import.c` | Reader half (audit #69 split). `repl_export_load_from_file`, the pending-`@cfg` accumulator + `repl_export_apply_pending_cfg`, deferred-`@var` table, workspace directive readers (`parse_workspace_dir` / `_scene_name` / `_var` / `_func_alias` / `_cfg`) and the `repl_state_parse_workspace_header_line` dispatcher, snippet directive table (`@declare`), C-to-REPL line translators (for-headers, function headers, tess lines, `glPointParameterfv`, `label()`), and the line-by-line `ImportState` machine. The `IMPORT_EXPORT_STATE` macro block is duplicated verbatim with `src/repl/export.c`; both TUs reach the same state-owner facade. |
+| `src/repl/export.c` | Export writer: `repl_export_save_output`, `repl_dump_code_panel_text`, workspace header emit dispatcher `repl_state_refresh_workspace_header_lines`, scaffold sections, render-state/cam refresh, init-bootstrap apply, light/render text generators. Also implements the typed live-cfg wrappers `repl_cfg_get_int` / `_set_int` / `_known` over the installed config bridge (bridge-only — no `scene_*`/`glr_*` calls; `check-repl-export-via-bridge` stays green) |
+| `src/repl/import.c` | Import reader: `repl_export_load_from_file`, the pending-`@cfg` accumulator + `repl_export_apply_pending_cfg`, deferred-`@var` table, workspace directive readers (`parse_workspace_dir` / `_scene_name` / `_var` / `_func_alias` / `_cfg`) and the `repl_state_parse_workspace_header_line` dispatcher, snippet directive table (`@declare`), C-to-REPL line translators (for-headers, function headers, tess lines, `glPointParameterfv`, `label()`), and the line-by-line `ImportState` machine. The `IMPORT_EXPORT_STATE` macro block is duplicated verbatim with `src/repl/export.c`; both TUs reach the same state-owner facade. |
 | `src/repl/export.h` | Export/import public API and workspace-header pending-state types |
 | `src/repl/export_state.h` | Shared dimensions for import/export state text |
 | `src/app/glr_audio.c` | App-level playlist engine and persisted audio config |
@@ -682,7 +668,7 @@ state-machine level, not buried in the doc body.
   names such as `prof` for generic utilities. The app-level audio
   service lives at `src/app/glr_audio.c` with the `glr_audio_*` API
   (resolved from the former neutral `audio.c`). Don't introduce new
-  top-level prefixes without a plan.
+  top-level prefixes without first documenting the ownership boundary.
 - Config toggles use the `ReplConfigItem` / `ReplConfigKey` pattern: add a
   descriptor entry to `g_cfg_items[]` in `src/app/glr_actions.c`; `CFG_ITEM_COUNT`
   auto-computes via `sizeof`
@@ -1221,7 +1207,7 @@ Config. The tag system mirrors examples one-for-one
 `src/repl/tutorials.{c,h}`); the synthetic `ALL` is folded into every
 entry's mask by `repl_tutorial_tag_mask`, so entry literals stay free
 of it. Each tutorial declares a `.tags = TUTORIAL_TAG_X | …` mask
-alongside `.cfg` (see the file-layout table for the shipped catalog).
+alongside `.cfg` (see the file-layout table for the tutorial catalog).
 
 - **Top-level layout.** `[0..t-1]` tag rows
   (`t = repl_tutorial_visible_tag_count()` — unused tags are hidden,
@@ -1251,7 +1237,7 @@ alongside `.cfg` (see the file-layout table for the shipped catalog).
   `### subheading` chrome row (HEADER kind, inert hover-only — same
   styling as Config's "All" flyout section headers). Tutorials with
   `NULL` subheading render without a header. Labels are catalog-author
-  choices, not a fixed vocabulary — the current shipped subheadings
+  choices, not a fixed vocabulary — the current subheadings
   happen to be `Beginner` / `Intermediate`, but a future REPL-vs-OpenGL
   tag layout could use `Grids` / `Lighting` / etc. within each tag's
   flyout. **Catalog convention:** entries sharing a subheading must be
@@ -1307,8 +1293,7 @@ When an input-buffer (character-range) selection is active,
 line. `Ctrl+V` then inserts the substring at the cursor (replacing
 any active destination selection). With no input selection, the
 existing line-range clipboard path runs unchanged. See
-[`done/editor-input-selection.md`](done/editor-input-selection.md)
-for the full model.
+the editor input-selection tests for the full model.
 
 ## Supported Commands
 

@@ -12,7 +12,7 @@ make gl-repl          # main binary (macOS needs cmake for the vendored freeglut
 make test             # build and run all tests (debug: ASan + UBSan)
 make test-stubs       # the suite against bundled no-op GL headers — no GL
                       #  dev packages needed, works headless
-make check-c99        # the C99 ratchet (gcc -std=c99 syntax check, shipped sources)
+make check-c99        # the C99 ratchet (gcc -std=c99 syntax check)
 make check-state-ownership   # the full ownership / contract guard suite
 ```
 
@@ -84,11 +84,12 @@ forget the tags.
 **A new keyboard shortcut** — one `#define GLR_<ACTION> <key>, <mods>` pair
 in `keymap.h`; `make keymap-list` prints current bindings and free slots.
 
-## Plans
+## Design notes
 
-Long-form design / audit docs live under `plans/`, bucketed by state
-(`not-started/`, `in-review/`, `active/`, `partial/`, `done/`). Substantial
-features usually start as a plan doc; small fixes don't need one.
+Use `plans/` for long-form design or audit notes when the rationale would be
+too large for a commit message or issue. Keep reader-facing docs focused on
+the current design; link to a plan only after explaining what extra background
+the plan provides.
 
 ## Pull requests
 
