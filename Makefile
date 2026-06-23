@@ -410,8 +410,8 @@ SRCS = \
 	$(SUPPORT_SRCS) \
 	$(APP_CONTROLLER_SRCS) \
 	$(EDITOR_SRCS) \
-	$(REPL_SRCS) \
 	$(RENDER3D_SRCS) \
+	$(REPL_SRCS) \
 	$(UI_CORE_SRCS) \
 	$(UI_APP_SRCS) \
 	$(UI_SUPPORT_SRCS) \
@@ -423,9 +423,9 @@ SRCS = \
 HDRS = \
 	$(wildcard src/app/*.h) \
 	$(wildcard src/editor/*.h) \
-	$(wildcard src/repl/*.h) \
 	$(wildcard src/render3d/*.h) \
 	$(wildcard src/render3d/guides/*.h) \
+	$(wildcard src/repl/*.h) \
 	$(wildcard src/ui/core/*.h) \
 	$(wildcard src/ui/app/*.h) \
 	$(wildcard src/ui/support/*.h) \
@@ -1619,8 +1619,8 @@ lines: $(SRCS) $(HDRS) ## Count SLOC (code/comment/blank) across source and head
 		mods[1] = "src/support"; \
 		mods[2] = "src/app"; \
 		mods[3] = "src/editor"; \
+		mods[5] = "src/render3d"; \
 		mods[4] = "src/repl"; \
-		mods[5] = "src/scene"; \
 		mods[6] = "src/ui"; \
 		mods[7] = "src/subsystems"; \
 		mods[8] = "(root files)"; \
@@ -1640,8 +1640,8 @@ lines: $(SRCS) $(HDRS) ## Count SLOC (code/comment/blank) across source and head
 		if (fn ~ /^src\/support\//) m = "src/support"; \
 		else if (fn ~ /^src\/app\//) m = "src/app"; \
 		else if (fn ~ /^src\/editor\//) m = "src/editor"; \
+		else if (fn ~ /^src\/render3d\//) m = "src/render3d"; \
 		else if (fn ~ /^src\/repl\//) m = "src/repl"; \
-		else if (fn ~ /^src\/scene\//) m = "src/scene"; \
 		else if (fn ~ /^src\/ui\//) m = "src/ui"; \
 		else if (fn ~ /^src\/subsystems\//) m = "src/subsystems"; \
 		else m = "(root files)"; \
