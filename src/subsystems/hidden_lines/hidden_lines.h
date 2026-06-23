@@ -2,7 +2,7 @@
 #define HIDDEN_LINES_H
 
 #include "repl/flatten.h"
-#include "scene/render_types.h"
+#include "render3d/render_types.h"
 #include "source_document.h"
 
 typedef struct {

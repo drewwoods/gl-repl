@@ -11,7 +11,7 @@
 #include "app/glr_config.h"
 #include "source_document.h"
 #include "repl/export.h"
-#include "scene/themes.h"      /* LIGHT_THEME_HEADLIGHT / _DEFAULT for the
+#include "render3d/themes.h"      /* LIGHT_THEME_HEADLIGHT / _DEFAULT for the
                                   headlight round-trip case */
 
 #include "support/test_harness.h"

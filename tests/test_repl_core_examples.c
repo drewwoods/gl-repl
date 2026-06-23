@@ -17,8 +17,8 @@
 #include "repl/util.h"
 #include "ui/app/layout.h"      /* CODE_PANEL_LAYOUT_* enum values */
 #include "ui/app/state.h"
-#include "scene/render.h"
-#include "scene/themes.h"       /* GRID_THEME_*, AXES_THEME_*, SCENE_BACKDROP_* */
+#include "render3d/render.h"
+#include "render3d/themes.h"       /* GRID_THEME_*, AXES_THEME_*, SCENE_BACKDROP_* */
 #include "app/glr_defaults.h"   /* CFG_DEFAULT_* */
 
 #define g_accum_effect        (glr_state_render_mut()->accum_effect)

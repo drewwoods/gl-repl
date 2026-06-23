@@ -1,4 +1,4 @@
-#include "scene/guides/transform_guides.h"
+#include "render3d/guides/transform_guides.h"
 #include "gl_includes.h"
 #ifdef GL_STUBS
 #include <GL/gl_stub_counts.h>
@@ -395,7 +395,7 @@ static void test_replay_transform_guide_render(void) {
     ASSERT_INT("replay render: plan consumed after draw", plan.consumed, 1);
 }
 
-#include "scene/guides/geometry_guides.h"
+#include "render3d/guides/geometry_guides.h"
 
 static void test_geometry_guides_render(void) {
     printf("--- geometry guides rendering ---\n");

@@ -17,7 +17,7 @@
  */
 #include "app/glr_compositor.h"
 
-#include "scene/postprocess_filter.h"
+#include "render3d/postprocess_filter.h"
 
 void glr_compositor_postprocess_frame(ScenePostFilterMode mode,
                                       int win_w, int win_h) {

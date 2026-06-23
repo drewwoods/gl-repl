@@ -21,7 +21,7 @@
 #ifndef GLR_COMPOSITOR_H
 #define GLR_COMPOSITOR_H
 
-#include "scene/postprocess_filter.h"  /* ScenePostFilterMode */
+#include "render3d/postprocess_filter.h"  /* ScenePostFilterMode */
 
 /* Apply the selected post-process filter to the whole window
  * (0, 0, win_w, win_h), in GL bottom-left window coordinates. No-op for

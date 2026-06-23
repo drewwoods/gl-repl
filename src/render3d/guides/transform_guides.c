@@ -3,8 +3,8 @@
  */
 #include "transform_guides.h"
 #include "repl/transform_utils.h"
-#include "scene/palette.h"
-#include "scene/occluded_ghost.h"
+#include "render3d/palette.h"
+#include "render3d/occluded_ghost.h"
 
 #include <ctype.h>  /* isspace */
 #include <math.h>   /* sqrtf, fminf, fmodf, cosf, sinf, fabsf, M_PI */

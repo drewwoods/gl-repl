@@ -8,7 +8,7 @@
  * scene_clr_a are not invoked (they call glColor4f and need a live GL
  * context, exactly as test_ui_theme leaves ui_clr uncalled).
  */
-#include "scene/palette.h"
+#include "render3d/palette.h"
 #include "support/test_harness.h"
 
 #include <stdio.h>

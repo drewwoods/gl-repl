@@ -1,8 +1,8 @@
 #ifndef EDIT_OVERLAYS_H
 #define EDIT_OVERLAYS_H
 
-#include "scene/guides/guides_shared.h"  /* SceneGuideSnapshot */
-#include "scene/view_mode.h"             /* SceneViewMode */
+#include "render3d/guides/guides_shared.h"  /* SceneGuideSnapshot */
+#include "render3d/view_mode.h"             /* SceneViewMode */
 #include "repl/state_views.h"            /* FlatProgramView, CursorBlockState */
 
 #define OVERLAY_VERTEX_LABEL_LIST(X) \

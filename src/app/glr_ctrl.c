@@ -30,9 +30,9 @@
 #include "editor/input.h"
 #include "editor/state.h"
 #include "editor/undo.h"
-#include "scene/grid.h"                   /* scene_grid_reveal (transition curve) */
-#include "scene/axes.h"                   /* scene_axes_reveal (transition curve) */
-#include "scene/lights.h"                 /* scene_lights_apply_theme */
+#include "render3d/grid.h"                   /* scene_grid_reveal (transition curve) */
+#include "render3d/axes.h"                   /* scene_axes_reveal (transition curve) */
+#include "render3d/lights.h"                 /* scene_lights_apply_theme */
 #include "app/glr_actions.h"
 #include "app/glr_config.h"
 #include "app/glr_camera.h"
@@ -68,8 +68,8 @@
 #include "subsystems/tutorial/tutorial.h"
 #include "subsystems/tutorial/tutorial_state.h"
 #include "ui/subsystems/replay_hud.h"
-#include "scene/postprocess_filter.h" /* ScenePostFilterMode, mode_name */
-#include "scene/render.h"
+#include "render3d/postprocess_filter.h" /* ScenePostFilterMode, mode_name */
+#include "render3d/render.h"
 #include "ui/app/autocomplete_panel.h"
 #include "ui/app/editor.h"
 #include "ui/app/layout.h"
