@@ -16,6 +16,6 @@ typedef struct {
 void hidden_lines_init_resources(void);
 void hidden_lines_destroy_resources(void);
 void hidden_lines_execute(const HiddenLinesRenderContext *ctx,
-                          SceneExecutePurpose purpose);
+                          Render3dExecutePurpose purpose);
 
 #endif /* HIDDEN_LINES_H */

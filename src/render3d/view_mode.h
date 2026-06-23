@@ -7,24 +7,24 @@
  * The X-macro list mirrors src/scene/themes.h so the cfg-symbol string
  * table in src/app/glr_actions.c can be derived from the same source.
  */
-#ifndef SCENE_VIEW_MODE_H
-#define SCENE_VIEW_MODE_H
+#ifndef RENDER3D_VIEW_MODE_H
+#define RENDER3D_VIEW_MODE_H
 
-#define SCENE_VIEW_LIST(X) \
+#define RENDER3D_VIEW_LIST(X) \
     X(3D)                  \
     X(2D)
 
 typedef enum {
-#define SCENE_VIEW_ENUM_ENTRY(name) SCENE_VIEW_##name,
-    SCENE_VIEW_LIST(SCENE_VIEW_ENUM_ENTRY)
-#undef SCENE_VIEW_ENUM_ENTRY
-    SCENE_VIEW_COUNT
-} SceneViewMode;
+#define RENDER3D_VIEW_ENUM_ENTRY(name) RENDER3D_VIEW_##name,
+    RENDER3D_VIEW_LIST(RENDER3D_VIEW_ENUM_ENTRY)
+#undef RENDER3D_VIEW_ENUM_ENTRY
+    RENDER3D_VIEW_COUNT
+} Render3dViewMode;
 
 /* Orthographic/perspective projection blend duration, in seconds, for callers
- * that animate between SceneViewMode values. */
+ * that animate between Render3dViewMode values. */
 #ifndef GLR_VIEW_PROJECTION_TRANSITION_SECS
 #define GLR_VIEW_PROJECTION_TRANSITION_SECS 0.75f
 #endif
 
-#endif /* SCENE_VIEW_MODE_H */
+#endif /* RENDER3D_VIEW_MODE_H */

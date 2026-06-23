@@ -17,7 +17,7 @@
 #include "repl/state_owners.h"
 #include "repl/state_views.h"
 #include "repl/tutorials.h"
-#include "render3d/themes.h"        /* GRID_THEME_*, AXES_THEME_*, SCENE_BACKDROP_* */
+#include "render3d/themes.h"        /* GRID_THEME_*, AXES_THEME_*, RENDER3D_BACKDROP_* */
 #include "source_document.h"
 #include "subsystems/variable_panel/variable_panel_drag.h"   /* slider-drag plumbing for REQUIRE_VAR test */
 #include "subsystems/variable_panel/variable_panel_state.h"
@@ -952,7 +952,7 @@ static void test_catalog_starter_steps_are_append(void) {
 }
 
 static void test_catalog_cfg_lines(void) {
-    /* First Triangle ships a leading `@cfg view_mode = SCENE_VIEW_2D` so the
+    /* First Triangle ships a leading `@cfg view_mode = RENDER3D_VIEW_2D` so the
      * flat triangle renders in true 2D; every other shipped tutorial omits
      * cfg (NULL = no presentation overrides). Out-of-range idx → NULL. */
     int first = -1;
@@ -965,10 +965,10 @@ static void test_catalog_cfg_lines(void) {
         const char *const *cfg = repl_tutorial_cfg_lines(first);
         ASSERT_TRUE("First Triangle has cfg lines", cfg != NULL);
         if (cfg) {
-            ASSERT_TRUE("First Triangle cfg first line is view_mode = SCENE_VIEW_2D",
+            ASSERT_TRUE("First Triangle cfg first line is view_mode = RENDER3D_VIEW_2D",
                         cfg[0] != NULL &&
                         strstr(cfg[0], "view_mode") != NULL &&
-                        strstr(cfg[0], "SCENE_VIEW_2D") != NULL);
+                        strstr(cfg[0], "RENDER3D_VIEW_2D") != NULL);
             ASSERT_TRUE("First Triangle cfg is NULL-terminated after 1 line",
                         cfg[1] == NULL);
         }
@@ -2190,7 +2190,7 @@ static void test_baseline_captures_view_mode_even_when_unreferenced(void) {
 }
 
 /* Audit #41: catalog grid-theme SET steps must use symbolic value
- * names (via STEP_SET_SYM) so reordering `SceneGridTheme` in
+ * names (via STEP_SET_SYM) so reordering `Render3dGridTheme` in
  * src/scene/themes.h cannot silently shift the showcase to a
  * different theme. Locate the Feature Tour by name, find the two
  * grid SET steps in catalog order, and assert each is symbolic

@@ -18,7 +18,7 @@
  *
  * Matrix stack tracking (repl_executor_apply_tracked_transform_cmd,
  * repl_executor_unwind_tracked_transform_stack) maintains a depth counter
- * that scene_render.c uses for polygon outline and normal-vector overlays:
+ * that render3d_render.c uses for polygon outline and normal-vector overlays:
  * geometry drawn under different transform stacks is highlighted differently.
  *
  * Transform matrices are applied immediately (glTranslatef, glRotatef, etc.)
@@ -152,7 +152,7 @@ void repl_execute_commands(void);
 
 /* Execute a flat program: walk cmds[0..flat_cmd_count), emit GL calls,
  * re-evaluate expressions with current predefined variable values. Called
- * once per frame from scene_render.c. */
+ * once per frame from render3d_render.c. */
 void repl_execute_program(const ReplExecutionOptions *options);
 
 /* Cursor API used by repl_execute_program() and specialized render passes.
@@ -231,7 +231,7 @@ ReplExecutorPointParameterProc repl_executor_point_parameter_proc(void);
  * fall back to the camera-distance approximation above. export.c consults
  * repl_executor_point_parameter_supported() to decide whether to
  * apply/emit the point-attenuation init bootstrap entry, and the scene
- * controller mirrors both into SceneRenderConfig so the star backdrop's
+ * controller mirrors both into Render3dRenderConfig so the star backdrop's
  * point-attenuation reset can call through the same loaded proc. */
 void repl_executor_set_point_parameter_supported(int supported);
 int  repl_executor_point_parameter_supported(void);

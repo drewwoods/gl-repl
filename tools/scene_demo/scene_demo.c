@@ -1,5 +1,5 @@
 /*
- * tools/scene_demo/scene_demo.c — independent binary that drives the scene
+ * tools/render3d_demo/render3d_demo.c — independent binary that drives the scene
  * module with a non-REPL geometry callback (a single glutSolidTeapot).
  *
  * Demonstrates that scene/ has no hard dependency on the REPL editor or
@@ -14,7 +14,7 @@
  * App pseudo-code:
  *   render() {
  *     apply_camera_modelview(&cfg);   // inline glLoadIdentity + glTranslatef + glRotatef
- *     scene_render_3d_scene(&state, &cfg);
+ *     render3d_draw_scene(&state, &cfg);
  *     render_hud();
  *   }
  *   my_scene(...) { glEnable(GL_LIGHTING); ...; glutSolidTeapot(1.0); }
@@ -52,7 +52,7 @@ static int   g_auto_rotate = 1;
  * main() after the GL context is current. Mirrors what glr_ctrl owns
  * in src/app/glr_ctrl.c (the single-renderer assumption is now per
  * binary). */
-static SceneRendererState g_scene_renderer;
+static Render3dState g_scene_renderer;
 
 /* Mouse drag state. button=-1 means not dragging. */
 static int g_drag_button = -1;
@@ -67,7 +67,7 @@ static int g_show_indicators = 1;
 static int g_wireframe       = 0;
 static int g_grid_theme      = 1;
 static int g_axes_theme      = 1;
-static SceneBackdropMode g_backdrop_mode = SCENE_BACKDROP_OFF;
+static Render3dBackdropMode g_backdrop_mode = RENDER3D_BACKDROP_OFF;
 static float g_projection_mix = 1.0f;
 static float g_projection_mix_target = 1.0f;
 static int g_show_hud        = 1;
@@ -101,13 +101,13 @@ static void step_projection_mix(float dt) {
 
 /* --- Scene callback ---------------------------------------------------- */
 
-static void my_scene_execute(const SceneExecuteContext *ctx, void *user_data) {
+static void my_scene_execute(const Render3dExecuteContext *ctx, void *user_data) {
     (void)user_data;
     int wireframe_line_pass =
-        ctx && (ctx->purpose == SCENE_EXEC_WIREFRAME_HIDDEN_LINES ||
-                ctx->purpose == SCENE_EXEC_WIREFRAME_VISIBLE_LINES);
+        ctx && (ctx->purpose == RENDER3D_EXEC_WIREFRAME_HIDDEN_LINES ||
+                ctx->purpose == RENDER3D_EXEC_WIREFRAME_VISIBLE_LINES);
 
-    /* scene_lights_setup has set per-light properties but glDisable'd them.
+    /* render3d_lights_setup has set per-light properties but glDisable'd them.
      * The user (this demo) decides which lights to actually enable. */
     if (g_lighting_on && !wireframe_line_pass) {
         glEnable(GL_LIGHTING);
@@ -125,8 +125,8 @@ static void my_scene_execute(const SceneExecuteContext *ctx, void *user_data) {
 
 /* --- Light table ------------------------------------------------------- */
 
-static void seed_lights(SceneLight lights[MAX_LIGHTS]) {
-    SceneLight *l;
+static void seed_lights(Render3dLight lights[MAX_LIGHTS]) {
+    Render3dLight *l;
 
     /* Light 0: warm white key, upper right. */
     l = &lights[0];
@@ -161,10 +161,10 @@ static void seed_lights(SceneLight lights[MAX_LIGHTS]) {
     l->specular[0] = 0.55f; l->specular[1] = 0.95f; l->specular[2] = 0.55f; l->specular[3] = 1.0f;
 }
 
-static void build_config(SceneRenderConfig *cfg) {
+static void build_config(Render3dRenderConfig *cfg) {
     /* memset zeroes every field, which is the intended default for
      * point_parameter_supported: 0 == unsupported, so the star
-     * backdrop skips its direct glPointParameterfv. scene_demo has no
+     * backdrop skips its direct glPointParameterfv. render3d_demo has no
      * GL-context capability-query path (it is a link-proof harness,
      * not a feature surface), and never calling the entry point
      * unless a caller has explicitly confirmed support is the safe
@@ -174,8 +174,8 @@ static void build_config(SceneRenderConfig *cfg) {
     cfg->execute_fn = my_scene_execute;
     cfg->anim_time  = g_anim_t;
 
-    cfg->scene_x = 0; cfg->scene_y = 0;
-    cfg->scene_w = g_window_w; cfg->scene_h = g_window_h;
+    cfg->render3d_x = 0; cfg->render3d_y = 0;
+    cfg->render3d_w = g_window_w; cfg->render3d_h = g_window_h;
 
     cfg->cam_dist = g_cam_dist;
     cfg->cam_rx   = g_cam_rx;
@@ -347,11 +347,11 @@ static void render_hud(void) {
 
 /* Populate GL_MODELVIEW with the orbit-camera transform. The scene
  * module documents this as the caller's responsibility — see the
- * comment block in src/scene/render.h above scene_render_3d_scene.
+ * comment block in src/scene/render.h above render3d_draw_scene.
  * Inlined here (instead of importing src/app/glr_camera.h's
- * glr_camera_load_modelview) because scene_demo's whole purpose is
+ * glr_camera_load_modelview) because render3d_demo's whole purpose is
  * proving src/scene/ has no hard dependency on app code. */
-static void apply_camera_modelview(const SceneRenderConfig *cfg) {
+static void apply_camera_modelview(const Render3dRenderConfig *cfg) {
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     glTranslatef(0.0f, 0.0f, -cfg->cam_dist);
@@ -361,13 +361,13 @@ static void apply_camera_modelview(const SceneRenderConfig *cfg) {
 }
 
 static void display_func(void) {
-    SceneRenderConfig cfg;
+    Render3dRenderConfig cfg;
     build_config(&cfg);
 
     apply_camera_modelview(&cfg);
-    if (scene_render_3d_scene(&g_scene_renderer, &cfg) != 0) {
+    if (render3d_draw_scene(&g_scene_renderer, &cfg) != 0) {
         fprintf(stderr,
-                "scene_demo: scene_render_3d_scene rejected config (errno=%d)\n",
+                "render3d_demo: render3d_draw_scene rejected config (errno=%d)\n",
                 errno);
         exit(1);
     }
@@ -416,7 +416,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
         case 'x': case 'X': g_axes_theme     = (g_axes_theme    + 1) % AXES_THEME_COUNT; break;
         case 'b': case 'B':
             g_backdrop_mode =
-                (SceneBackdropMode)((g_backdrop_mode + 1) % SCENE_BACKDROP_COUNT);
+                (Render3dBackdropMode)((g_backdrop_mode + 1) % RENDER3D_BACKDROP_COUNT);
             break;
         case '1': g_lights_on[0] = !g_lights_on[0]; break;
         case '2': g_lights_on[1] = !g_lights_on[1]; break;
@@ -506,8 +506,8 @@ int main(int argc, char **argv) {
     glutCreateWindow("scene-module teapot demo");
 
     glEnable(GL_DEPTH_TEST);
-    scene_render_init_gl();
-    scene_renderer_state_init(&g_scene_renderer);
+    render3d_init_gl();
+    render3d_state_init(&g_scene_renderer);
 
     glutDisplayFunc(display_func);
     glutReshapeFunc(reshape_func);

@@ -42,7 +42,7 @@ typedef struct {
 
 /* Solver inputs. Flat by-value data only (check-views-flat). */
 typedef struct {
-    int scene_x, scene_y, scene_w, scene_h;
+    int render3d_x, render3d_y, render3d_w, render3d_h;
     int bottom_inset;            /* status bar height along the scene bottom */
     int band_h;                  /* reserved bottom band above the inset
                                   * (replay HUD + clearance), 0 when absent */

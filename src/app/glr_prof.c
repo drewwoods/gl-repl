@@ -13,7 +13,7 @@
  *              the nesting classification;
  *   - is_total marks the one whole-frame total row.
  * Depth reflects true prof_begin/prof_end enclosure (PROF_SNAPSHOT_* nest in
- * PROF_SNAPSHOT, PROF_SCENE_3D_OVERLAY_* in _OVERLAYS, etc.). A standalone
+ * PROF_SNAPSHOT, PROF_RENDER3D_3D_OVERLAY_* in _OVERLAYS, etc.). A standalone
  * demo that reuses cpuprof supplies its own prof_section_info.
  */
 #include "app/glr_prof.h"
@@ -23,28 +23,28 @@
 #include <stddef.h>   /* NULL */
 
 /* Indexed by ProfSection (designated initializers keep label/depth co-located
- * with each enum constant). PROF_SCENE_3D_LAST aliases _POST_PROCESS, so it
+ * with each enum constant). PROF_RENDER3D_3D_LAST aliases _POST_PROCESS, so it
  * shares that row. Any section left out reads back as {NULL,...} and is
  * rendered as "?" by the accessor below. */
 static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
-    [PROF_SCENE_3D]                          = { "Scene 3D",        0, 0 },
-    [PROF_SCENE_3D_SETUP]                    = { "setup",           1, 0 },
-    [PROF_SCENE_3D_FILL]                     = { "fill",            1, 0 },
-    [PROF_SCENE_3D_FADE]                     = { "fade batches",    1, 0 },
-    [PROF_SCENE_3D_FADE_BATCH_PREP]          = { "batch prep",      2, 0 },
-    [PROF_SCENE_3D_FADE_BATCH_EXEC]          = { "batch exec",      2, 0 },
-    [PROF_SCENE_3D_FADE_BATCH_POST]          = { "batch post",      2, 0 },
-    [PROF_SCENE_3D_HELPERS]                  = { "helpers",         1, 0 },
-    [PROF_SCENE_3D_BACKDROP]                 = { "backdrop",        2, 0 },
-    [PROF_SCENE_3D_GRID]                     = { "grid",            2, 0 },
-    [PROF_SCENE_3D_AXES]                     = { "axes",            2, 0 },
-    [PROF_SCENE_3D_ORBIT_TARGET]             = { "orbit target",    2, 0 },
-    [PROF_SCENE_3D_OVERLAYS]                 = { "overlays",        1, 0 },
-    [PROF_SCENE_3D_OVERLAY_OUTLINES]         = { "outlines",        2, 0 },
-    [PROF_SCENE_3D_OVERLAY_TRANSFORM_GUIDES] = { "xform guides",    2, 0 },
-    [PROF_SCENE_3D_OVERLAY_NORMALS]          = { "normals",         2, 0 },
-    [PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS]   = { "vertex nums",     2, 0 },
-    [PROF_SCENE_3D_POST_PROCESS]             = { "post FX (scene)", 1, 0 },
+    [PROF_RENDER3D_3D]                          = { "Scene 3D",        0, 0 },
+    [PROF_RENDER3D_3D_SETUP]                    = { "setup",           1, 0 },
+    [PROF_RENDER3D_3D_FILL]                     = { "fill",            1, 0 },
+    [PROF_RENDER3D_3D_FADE]                     = { "fade batches",    1, 0 },
+    [PROF_RENDER3D_3D_FADE_BATCH_PREP]          = { "batch prep",      2, 0 },
+    [PROF_RENDER3D_3D_FADE_BATCH_EXEC]          = { "batch exec",      2, 0 },
+    [PROF_RENDER3D_3D_FADE_BATCH_POST]          = { "batch post",      2, 0 },
+    [PROF_RENDER3D_3D_HELPERS]                  = { "helpers",         1, 0 },
+    [PROF_RENDER3D_3D_BACKDROP]                 = { "backdrop",        2, 0 },
+    [PROF_RENDER3D_3D_GRID]                     = { "grid",            2, 0 },
+    [PROF_RENDER3D_3D_AXES]                     = { "axes",            2, 0 },
+    [PROF_RENDER3D_3D_ORBIT_TARGET]             = { "orbit target",    2, 0 },
+    [PROF_RENDER3D_3D_OVERLAYS]                 = { "overlays",        1, 0 },
+    [PROF_RENDER3D_3D_OVERLAY_OUTLINES]         = { "outlines",        2, 0 },
+    [PROF_RENDER3D_3D_OVERLAY_TRANSFORM_GUIDES] = { "xform guides",    2, 0 },
+    [PROF_RENDER3D_3D_OVERLAY_NORMALS]          = { "normals",         2, 0 },
+    [PROF_RENDER3D_3D_OVERLAY_VERTEX_NUMBERS]   = { "vertex nums",     2, 0 },
+    [PROF_RENDER3D_3D_POST_PROCESS]             = { "post FX (scene)", 1, 0 },
     [PROF_CODE_PANEL]                        = { "Code Panel",      0, 0 },
     [PROF_CODE_PANEL_ROWS]                   = { "build rows",      1, 0 },
     [PROF_CODE_PANEL_TEXT]                   = { "draw text",       1, 0 },
@@ -86,24 +86,24 @@ ProfSectionInfo prof_section_info(ProfSection s) {
  * out (0): the pure-CPU sections (snapshot/flatten/reformat/autonormal/
  * frame-restore, code-panel layout precompute) and the per-fade-batch
  * sub-sections — one segment per batch per accumulation pass would swamp
- * gpuprof's per-frame query budget while PROF_SCENE_3D_FADE already
+ * gpuprof's per-frame query budget while PROF_RENDER3D_3D_FADE already
  * covers the whole pass. */
 static const unsigned char k_gpu_sections[PROF_SECTION_COUNT] = {
-    [PROF_SCENE_3D]                          = 1,
-    [PROF_SCENE_3D_SETUP]                    = 1,
-    [PROF_SCENE_3D_FILL]                     = 1,
-    [PROF_SCENE_3D_FADE]                     = 1,
-    [PROF_SCENE_3D_HELPERS]                  = 1,
-    [PROF_SCENE_3D_BACKDROP]                 = 1,
-    [PROF_SCENE_3D_GRID]                     = 1,
-    [PROF_SCENE_3D_AXES]                     = 1,
-    [PROF_SCENE_3D_ORBIT_TARGET]             = 1,
-    [PROF_SCENE_3D_OVERLAYS]                 = 1,
-    [PROF_SCENE_3D_OVERLAY_OUTLINES]         = 1,
-    [PROF_SCENE_3D_OVERLAY_TRANSFORM_GUIDES] = 1,
-    [PROF_SCENE_3D_OVERLAY_NORMALS]          = 1,
-    [PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS]   = 1,
-    [PROF_SCENE_3D_POST_PROCESS]             = 1,
+    [PROF_RENDER3D_3D]                          = 1,
+    [PROF_RENDER3D_3D_SETUP]                    = 1,
+    [PROF_RENDER3D_3D_FILL]                     = 1,
+    [PROF_RENDER3D_3D_FADE]                     = 1,
+    [PROF_RENDER3D_3D_HELPERS]                  = 1,
+    [PROF_RENDER3D_3D_BACKDROP]                 = 1,
+    [PROF_RENDER3D_3D_GRID]                     = 1,
+    [PROF_RENDER3D_3D_AXES]                     = 1,
+    [PROF_RENDER3D_3D_ORBIT_TARGET]             = 1,
+    [PROF_RENDER3D_3D_OVERLAYS]                 = 1,
+    [PROF_RENDER3D_3D_OVERLAY_OUTLINES]         = 1,
+    [PROF_RENDER3D_3D_OVERLAY_TRANSFORM_GUIDES] = 1,
+    [PROF_RENDER3D_3D_OVERLAY_NORMALS]          = 1,
+    [PROF_RENDER3D_3D_OVERLAY_VERTEX_NUMBERS]   = 1,
+    [PROF_RENDER3D_3D_POST_PROCESS]             = 1,
     /* build rows / layout are pure-CPU phases (no GL emitted) — excluded. */
     [PROF_CODE_PANEL]                        = 1,
     [PROF_CODE_PANEL_TEXT]                   = 1,

@@ -2037,8 +2037,8 @@ int main() {
     /* 24. prof_frame_tick - increments staleness counters */
     {
         /* Call begin/end to prime a section, then tick several frames */
-        prof_begin(PROF_SCENE_3D);
-        prof_end(PROF_SCENE_3D);
+        prof_begin(PROF_RENDER3D_3D);
+        prof_end(PROF_RENDER3D_3D);
         /* Frame tick - sections that didn't run this frame become stale */
         prof_frame_tick();
         prof_frame_tick();
@@ -3384,7 +3384,7 @@ int main() {
 
         glr_ctrl_reset_all();
         rs->use_accum = 1;
-        rs->accum_effect = SCENE_ACCUM_EFFECT_AA;
+        rs->accum_effect = RENDER3D_ACCUM_EFFECT_AA;
         glr_config_set(GLR_CONFIG_ACCUM_PASSES, 1);   /* index 1 == 2 passes */
 
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
@@ -3416,7 +3416,7 @@ int main() {
         ASSERT_INT("accum -: passes = 1", rs->accum_passes, 1);
 
         /* With the effect Off the fine-adjust is inert (consumed, no change). */
-        rs->accum_effect = SCENE_ACCUM_EFFECT_OFF;
+        rs->accum_effect = RENDER3D_ACCUM_EFFECT_OFF;
         glr_config_set(GLR_CONFIG_ACCUM_PASSES, 2); /* 4 */
         glr_ctrl_router_handle_accum_samples_key('+');
         ASSERT_INT("accum +: inert while effect Off",
@@ -3697,7 +3697,7 @@ int main() {
 
         for (int layout_idx = 0; layout_idx < 3; layout_idx++) {
             int cp_x, cp_y, cp_w, cp_h;
-            int scene_x, scene_y, scene_w, scene_h;
+            int render3d_x, render3d_y, render3d_w, render3d_h;
             int code_x, code_y;
             int layout = layouts[layout_idx];
             char label[128];
@@ -3708,12 +3708,12 @@ int main() {
             glr_state_presentation_mut()->code_panel_layout = layout; glr_ctrl_sync_ui_chrome();
 
             ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
-            ui_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
+            ui_layout_scene_rect(&render3d_x, &render3d_y, &render3d_w, &render3d_h);
 
             code_x = cp_x + cp_w / 2;
             code_y = ui_state_viewport().window_h - (cp_y + cp_h / 2);
-            scene_x += scene_w / 2;
-            scene_y = ui_state_viewport().window_h - (scene_y + scene_h / 2);
+            render3d_x += render3d_w / 2;
+            render3d_y = ui_state_viewport().window_h - (render3d_y + render3d_h / 2);
 
             editor_handle_mousewheel(0, 1, code_x, code_y);
             snprintf(label, sizeof(label),
@@ -3727,7 +3727,7 @@ int main() {
                      layout_names[layout_idx]);
             ASSERT_INT(label, editor_scroll(), 0);
 
-            editor_handle_mousewheel(0, 1, scene_x, scene_y);
+            editor_handle_mousewheel(0, 1, render3d_x, render3d_y);
             snprintf(label, sizeof(label),
                      "mousewheel: %s scene wheel leaves code scroll unchanged",
                      layout_names[layout_idx]);

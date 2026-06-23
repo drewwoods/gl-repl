@@ -109,14 +109,14 @@ void glr_camera_restore(const GlrCameraState *snapshot);
  * position. Used as the input to glr_camera_load_modelview so the C
  * type system can tell six adjacent floats apart at the boundary.
  *
- * The audit's #11 finding was that scene_apply_camera lived in
+ * The audit's #11 finding was that render3d_apply_camera lived in
  * src/scene/render.c but the renderer refused to call it — a
  * scene-namespaced public function that scene code wouldn't touch
  * was hidden temporal coupling enforced by convention. The fix is
  * to move both the type and the helper into glr_camera (the app's
  * camera owner) so the scene module is purely the renderer and
  * callers are responsible for populating GL_MODELVIEW before each
- * scene_render_3d_scene call. */
+ * render3d_draw_scene call. */
 typedef struct GlrCameraPose {
     float rx, ry;       /* orbit pitch and yaw, degrees */
     float dist;         /* distance from target along the local Z axis */
@@ -131,7 +131,7 @@ GlrCameraPose glr_camera_pose_from_state(const GlrCameraState *state);
 /* Load the modelview matrix with the orbit-camera transform: clear,
  * translate by distance, rotate by pitch/yaw, translate by target.
  * Pure GL state mutation; reads no globals. Callers invoke this once
- * per frame before scene_render_3d_scene(). */
+ * per frame before render3d_draw_scene(). */
 void glr_camera_load_modelview(const GlrCameraPose *pose);
 
 /* Interpolate between two poses (f in [0,1]; f=0 -> a, f=1 -> b). Orbit

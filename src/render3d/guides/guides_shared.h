@@ -1,19 +1,19 @@
 /*
  * guides_shared.h - Shared guide snapshot and planning types.
  *
- * The controller builds a SceneGuideSnapshot once per frame from the current
+ * The controller builds a Render3dGuideSnapshot once per frame from the current
  * editor/replay context, then guide renderers consume it without reaching back
- * into editor or REPL globals. SceneTransformGuidePlan is the small per-frame
+ * into editor or REPL globals. Render3dTransformGuidePlan is the small per-frame
  * cache transform guides use between prepare and render.
  */
-#ifndef SCENE_GUIDES_SHARED_H
-#define SCENE_GUIDES_SHARED_H
+#ifndef RENDER3D_GUIDES_SHARED_H
+#define RENDER3D_GUIDES_SHARED_H
 
 #include "repl/command.h"
 #include "repl/flatten.h"
 #include "render3d/guides/xform_guide_mode.h"
 
-typedef struct SceneGuideSnapshot {
+typedef struct Render3dGuideSnapshot {
     int show_guides;
     int replaying;
     /* Flat-program index of the draw the active replay step emitted, or -1 —
@@ -21,7 +21,7 @@ typedef struct SceneGuideSnapshot {
      * the live transform guide anchors on the transform shaping this draw. Set
      * from replay_focus_anchor_flat_idx(). */
     int replay_focus_anchor_flat_idx;
-    SceneXformGuideMode xform_guide_mode;
+    Render3dXformGuideMode xform_guide_mode;
     int user_lighting_enabled;
     float anim_time;
 
@@ -81,13 +81,13 @@ typedef struct SceneGuideSnapshot {
     int   normal_base_pos_valid;
 
     float alpha_scale; /* alpha boost to counter dark-bg crush; 1.0 = no change */
-} SceneGuideSnapshot;
+} Render3dGuideSnapshot;
 
-typedef struct SceneTransformGuidePlan {
+typedef struct Render3dTransformGuidePlan {
     int active;
     int consumed;
     int cursor_flat_idx;
     int after_flat_idx;
-} SceneTransformGuidePlan;
+} Render3dTransformGuidePlan;
 
-#endif /* SCENE_GUIDES_SHARED_H */
+#endif /* RENDER3D_GUIDES_SHARED_H */

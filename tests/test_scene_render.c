@@ -34,7 +34,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 } while (0)
 
 /* Minimal execute callback for testing. */
-static void test_execute_noop(const SceneExecuteContext *ctx, void *user_data) {
+static void test_execute_noop(const Render3dExecuteContext *ctx, void *user_data) {
     (void)ctx;
     (void)user_data;
 }
@@ -43,10 +43,10 @@ typedef struct PurposeCountCtx {
     int counts[8];
 } PurposeCountCtx;
 
-static void test_execute_count_purpose(const SceneExecuteContext *ctx,
+static void test_execute_count_purpose(const Render3dExecuteContext *ctx,
                                        void *user_data) {
     PurposeCountCtx *count_ctx = (PurposeCountCtx *)user_data;
-    int purpose = ctx ? (int)ctx->purpose : (int)SCENE_EXEC_MAIN_FILL;
+    int purpose = ctx ? (int)ctx->purpose : (int)RENDER3D_EXEC_MAIN_FILL;
     if (count_ctx && purpose >= 0 &&
         purpose < (int)(sizeof(count_ctx->counts) / sizeof(count_ctx->counts[0])))
         count_ctx->counts[purpose]++;
@@ -58,16 +58,16 @@ static void test_execute_count_purpose(const SceneExecuteContext *ctx,
     glEnd();
 }
 
-/* Build a test SceneRenderConfig with sensible defaults. */
-static SceneRenderConfig make_test_config(void) {
-    SceneRenderConfig cfg = {0};
+/* Build a test Render3dRenderConfig with sensible defaults. */
+static Render3dRenderConfig make_test_config(void) {
+    Render3dRenderConfig cfg = {0};
     cfg.execute_fn = test_execute_noop;
     cfg.execute_user_data = NULL;
 
     cfg.anim_time = 0.0f;
 
     cfg.use_accum = 1;
-    cfg.accum_effect = SCENE_ACCUM_EFFECT_AA;
+    cfg.accum_effect = RENDER3D_ACCUM_EFFECT_AA;
     cfg.accum_passes = 2;
 
     cfg.user_lighting_enabled = 0;
@@ -80,10 +80,10 @@ static SceneRenderConfig make_test_config(void) {
     for (int i = 0; i < GRID_EXTENT_COUNT; i++)
         cfg.grid_extents[i] = 10.0f;
 
-    cfg.scene_x = 0;
-    cfg.scene_y = 0;
-    cfg.scene_w = 800;
-    cfg.scene_h = 600;
+    cfg.render3d_x = 0;
+    cfg.render3d_y = 0;
+    cfg.render3d_w = 800;
+    cfg.render3d_h = 600;
     cfg.cam_dist = 30.0f;
     cfg.cam_rx = 0.0f;
     cfg.cam_ry = 0.0f;
@@ -104,61 +104,61 @@ static SceneRenderConfig make_test_config(void) {
     return cfg;
 }
 
-/* SceneRendererState is the controller-owned per-renderer state that
+/* Render3dState is the controller-owned per-renderer state that
  * replaced the file-static g_ortho_ref_dist / g_ortho_active /
  * g_active_projection trio. These tests pin the new contracts: init
  * gives a fresh state defaults; two states are independent; and the
  * active_projection cache reflects the canonical zero-jitter math no
  * matter how many AA samples the render walked. */
 static void test_scene_renderer_state_init_defaults(void) {
-    printf("--- SceneRendererState init defaults ---\n");
+    printf("--- Render3dState init defaults ---\n");
 
-    SceneRendererState state;
+    Render3dState state;
     /* Fill with garbage first to make sure init actually writes. */
     memset(&state, 0xCC, sizeof state);
-    scene_renderer_state_init(&state);
+    render3d_state_init(&state);
 
-    SceneProjectionDesc p;
-    scene_get_active_projection(&state, &p);
+    Render3dProjectionDesc p;
+    render3d_get_active_projection(&state, &p);
     ASSERT_INT("init: ortho off", p.ortho, 0);
     ASSERT_FLOAT("init: fovy_deg = 45", (float)p.fovy_deg, 45.0f);
     ASSERT_TRUE("init: near_z > 0", p.near_z > 0.0);
     ASSERT_TRUE("init: far_z > near_z", p.far_z > p.near_z);
 
     /* Defensive NULL state still hands back the same defaults. */
-    SceneProjectionDesc q;
-    scene_get_active_projection(NULL, &q);
+    Render3dProjectionDesc q;
+    render3d_get_active_projection(NULL, &q);
     ASSERT_INT("NULL state defaults: ortho", q.ortho, p.ortho);
     ASSERT_FLOAT("NULL state defaults: fovy", (float)q.fovy_deg, (float)p.fovy_deg);
 }
 
 static void test_scene_renderer_state_independence(void) {
-    printf("--- SceneRendererState independence ---\n");
+    printf("--- Render3dState independence ---\n");
 
 #ifdef GL_STUBS
     /* Two states, two different mix values. Render through each and
      * verify the cached active_projection reflects each renderer's
      * input — proves there's no shared static under the API. */
-    SceneRenderConfig cfg = make_test_config();
+    Render3dRenderConfig cfg = make_test_config();
     cfg.use_accum = 0;
-    cfg.accum_effect = SCENE_ACCUM_EFFECT_OFF;
+    cfg.accum_effect = RENDER3D_ACCUM_EFFECT_OFF;
     cfg.accum_passes = 1;
 
-    SceneRendererState state_a, state_b;
-    scene_renderer_state_init(&state_a);
-    scene_renderer_state_init(&state_b);
+    Render3dState state_a, state_b;
+    render3d_state_init(&state_a);
+    render3d_state_init(&state_b);
 
     cfg.projection_mix = 1.0f;  /* fully perspective */
     ASSERT_INT("render A (perspective)",
-               scene_render_3d_scene(&state_a, &cfg), 0);
+               render3d_draw_scene(&state_a, &cfg), 0);
 
     cfg.projection_mix = 0.0f;  /* fully ortho */
     ASSERT_INT("render B (ortho)",
-               scene_render_3d_scene(&state_b, &cfg), 0);
+               render3d_draw_scene(&state_b, &cfg), 0);
 
-    SceneProjectionDesc pa, pb;
-    scene_get_active_projection(&state_a, &pa);
-    scene_get_active_projection(&state_b, &pb);
+    Render3dProjectionDesc pa, pb;
+    render3d_get_active_projection(&state_a, &pa);
+    render3d_get_active_projection(&state_b, &pb);
 
     ASSERT_INT("state A keeps perspective", pa.ortho, 0);
     ASSERT_INT("state B keeps ortho",       pb.ortho, 1);
@@ -174,24 +174,24 @@ static void test_scene_renderer_state_aa_invariant(void) {
     /* Cache resolves once before the AA jitter loop; per-sample apply
      * is read-only on the state. So accum_passes=1 and =16 should
      * produce identical active_projection contents. */
-    SceneRenderConfig cfg = make_test_config();
+    Render3dRenderConfig cfg = make_test_config();
     cfg.use_accum = 1;
-    cfg.accum_effect = SCENE_ACCUM_EFFECT_AA;
+    cfg.accum_effect = RENDER3D_ACCUM_EFFECT_AA;
     cfg.projection_mix = 1.0f;
 
-    SceneRendererState s1, s16;
-    scene_renderer_state_init(&s1);
-    scene_renderer_state_init(&s16);
+    Render3dState s1, s16;
+    render3d_state_init(&s1);
+    render3d_state_init(&s16);
 
     cfg.accum_passes = 1;
-    ASSERT_INT("render @ 1 sample", scene_render_3d_scene(&s1, &cfg), 0);
+    ASSERT_INT("render @ 1 sample", render3d_draw_scene(&s1, &cfg), 0);
 
     cfg.accum_passes = 16;
-    ASSERT_INT("render @ 16 samples", scene_render_3d_scene(&s16, &cfg), 0);
+    ASSERT_INT("render @ 16 samples", render3d_draw_scene(&s16, &cfg), 0);
 
-    SceneProjectionDesc p1, p16;
-    scene_get_active_projection(&s1, &p1);
-    scene_get_active_projection(&s16, &p16);
+    Render3dProjectionDesc p1, p16;
+    render3d_get_active_projection(&s1, &p1);
+    render3d_get_active_projection(&s16, &p16);
 
     ASSERT_INT("ortho field identical", p1.ortho, p16.ortho);
     ASSERT_FLOAT("near_z identical", (float)p1.near_z, (float)p16.near_z);
@@ -207,32 +207,32 @@ static void test_scene_projection_modes(void) {
     printf("--- scene projection modes ---\n");
 
 #ifdef GL_STUBS
-    SceneRenderConfig cfg = make_test_config();
+    Render3dRenderConfig cfg = make_test_config();
     cfg.use_accum = 0;
-    cfg.accum_effect = SCENE_ACCUM_EFFECT_OFF;
+    cfg.accum_effect = RENDER3D_ACCUM_EFFECT_OFF;
     cfg.accum_passes = 1;
 
-    SceneRendererState state;
-    scene_renderer_state_init(&state);
+    Render3dState state;
+    render3d_state_init(&state);
 
     gl_stub_counts_reset();
     cfg.projection_mix = 1.0f;
     ASSERT_INT("perspective render ok",
-               scene_render_3d_scene(&state, &cfg), 0);
+               render3d_draw_scene(&state, &cfg), 0);
     ASSERT_TRUE("perspective uses glFrustum",
                 gl_stub_counts[GL_STUB_glFrustum] > 0);
 
     gl_stub_counts_reset();
     cfg.projection_mix = 0.0f;
     ASSERT_INT("ortho render ok",
-               scene_render_3d_scene(&state, &cfg), 0);
+               render3d_draw_scene(&state, &cfg), 0);
     ASSERT_TRUE("ortho uses glOrtho",
                 gl_stub_counts[GL_STUB_glOrtho] > 0);
 
     gl_stub_counts_reset();
     cfg.projection_mix = 0.5f;
     ASSERT_INT("mixed projection render ok",
-               scene_render_3d_scene(&state, &cfg), 0);
+               render3d_draw_scene(&state, &cfg), 0);
     ASSERT_TRUE("mixed projection loads custom matrix",
                 gl_stub_counts[GL_STUB_glLoadMatrixf] > 0);
 #else
@@ -253,35 +253,35 @@ static void test_scene_ortho_zoom_rescales(void) {
     printf("--- 2D ortho scale tracks cam_dist (zoom) ---\n");
 
 #ifdef GL_STUBS
-    SceneRenderConfig cfg = make_test_config();
+    Render3dRenderConfig cfg = make_test_config();
     cfg.use_accum = 0;
-    cfg.accum_effect = SCENE_ACCUM_EFFECT_OFF;
+    cfg.accum_effect = RENDER3D_ACCUM_EFFECT_OFF;
     cfg.accum_passes = 1;
     cfg.projection_mix = 0.0f; /* ortho */
 
-    SceneRendererState state;
-    scene_renderer_state_init(&state);
+    Render3dState state;
+    render3d_state_init(&state);
     /* Pretend we already froze a depth-center of 8.0 at cam_dist 30. */
     state.ortho_ref_dist = 8.0;
     state.ortho_ref_cam_dist = 30.0;
     state.ortho_active = 1;
 
-    SceneProjectionDesc p_base, p_in, p_out;
+    Render3dProjectionDesc p_base, p_in, p_out;
 
     cfg.cam_dist = 30.0f; /* no zoom: at the freeze distance */
     ASSERT_INT("ortho render @ freeze dist",
-               scene_render_3d_scene(&state, &cfg), 0);
-    scene_get_active_projection(&state, &p_base);
+               render3d_draw_scene(&state, &cfg), 0);
+    render3d_get_active_projection(&state, &p_base);
 
     cfg.cam_dist = 27.0f; /* zoom in: closer camera */
     ASSERT_INT("ortho render @ zoom-in dist",
-               scene_render_3d_scene(&state, &cfg), 0);
-    scene_get_active_projection(&state, &p_in);
+               render3d_draw_scene(&state, &cfg), 0);
+    render3d_get_active_projection(&state, &p_in);
 
     cfg.cam_dist = 33.0f; /* zoom out: farther camera */
     ASSERT_INT("ortho render @ zoom-out dist",
-               scene_render_3d_scene(&state, &cfg), 0);
-    scene_get_active_projection(&state, &p_out);
+               render3d_draw_scene(&state, &cfg), 0);
+    render3d_get_active_projection(&state, &p_out);
 
     ASSERT_TRUE("zoom in shrinks ortho_top",  p_in.ortho_top  < p_base.ortho_top);
     ASSERT_TRUE("zoom out grows ortho_top",   p_out.ortho_top > p_base.ortho_top);
@@ -305,112 +305,112 @@ static void test_scene_ortho_zoom_rescales(void) {
 #endif
 }
 
-/* Build a test SceneFrameRenderContext. */
-static SceneFrameRenderContext make_test_frame_ctx(void) {
-    SceneFrameRenderContext ctx = {0};
+/* Build a test Render3dFrameRenderContext. */
+static Render3dFrameRenderContext make_test_frame_ctx(void) {
+    Render3dFrameRenderContext ctx = {0};
     ctx.config = make_test_config();
     ctx.config.focus.valid = 0;
     return ctx;
 }
 
-/* --- Tests for SceneRenderConfig structure ----------------------- */
+/* --- Tests for Render3dRenderConfig structure ----------------------- */
 
 static void test_config_defaults(void) {
-    printf("--- SceneRenderConfig defaults ---\n");
+    printf("--- Render3dRenderConfig defaults ---\n");
 
-    SceneRenderConfig cfg = make_test_config();
+    Render3dRenderConfig cfg = make_test_config();
 
     ASSERT_INT("execute_fn set", cfg.execute_fn != NULL, 1);
     ASSERT_INT("post_fill_fn unset by default", cfg.post_fill_fn == NULL, 1);
-    ASSERT_FLOAT("scene_w default", cfg.scene_w, 800);
-    ASSERT_FLOAT("scene_h default", cfg.scene_h, 600);
+    ASSERT_FLOAT("render3d_w default", cfg.render3d_w, 800);
+    ASSERT_FLOAT("render3d_h default", cfg.render3d_h, 600);
     ASSERT_INT("use_accum default", cfg.use_accum, 1);
-    ASSERT_INT("accum effect default", cfg.accum_effect, SCENE_ACCUM_EFFECT_AA);
+    ASSERT_INT("accum effect default", cfg.accum_effect, RENDER3D_ACCUM_EFFECT_AA);
     ASSERT_INT("accum passes default", cfg.accum_passes, 2);
     ASSERT_INT("user_lighting_enabled default", cfg.user_lighting_enabled, 0);
     ASSERT_FLOAT("anim_time default", cfg.anim_time, 0.0f);
 }
 
-/* --- Tests for SceneFrameRenderContext ----------------------------- */
+/* --- Tests for Render3dFrameRenderContext ----------------------------- */
 
 static void test_frame_ctx_defaults(void) {
-    printf("--- SceneFrameRenderContext defaults ---\n");
+    printf("--- Render3dFrameRenderContext defaults ---\n");
 
-    SceneFrameRenderContext ctx = make_test_frame_ctx();
+    Render3dFrameRenderContext ctx = make_test_frame_ctx();
 
     ASSERT_INT("config has execute_fn", ctx.config.execute_fn != NULL, 1);
     ASSERT_INT("focus not valid by default", ctx.config.focus.valid, 0);
 }
 
-/* --- Tests for scene_grid_render (minimal) ----------------------- */
+/* --- Tests for render3d_grid_render (minimal) ----------------------- */
 
 static void test_scene_grid_render(void) {
-    printf("--- scene_grid_render ---\n");
+    printf("--- render3d_grid_render ---\n");
 
-    SceneFrameRenderContext ctx = make_test_frame_ctx();
+    Render3dFrameRenderContext ctx = make_test_frame_ctx();
 
     /* Just ensure it doesn't crash with null/empty config. */
-    scene_grid_render(&ctx);
-    ASSERT_TRUE("scene_grid_render did not crash", 1);
+    render3d_grid_render(&ctx);
+    ASSERT_TRUE("render3d_grid_render did not crash", 1);
 
     /* With scene viewport sized. */
-    ctx.config.scene_w = 1024;
-    ctx.config.scene_h = 768;
-    scene_grid_render(&ctx);
-    ASSERT_TRUE("scene_grid_render with explicit scene rect did not crash", 1);
+    ctx.config.render3d_w = 1024;
+    ctx.config.render3d_h = 768;
+    render3d_grid_render(&ctx);
+    ASSERT_TRUE("render3d_grid_render with explicit scene rect did not crash", 1);
 }
 
-/* --- Tests for scene_axes_render (minimal) ----------------------- */
+/* --- Tests for render3d_axes_render (minimal) ----------------------- */
 
 static void test_scene_axes_render(void) {
-    printf("--- scene_axes_render ---\n");
+    printf("--- render3d_axes_render ---\n");
 
-    SceneFrameRenderContext ctx = make_test_frame_ctx();
+    Render3dFrameRenderContext ctx = make_test_frame_ctx();
 
-    scene_axes_render(&ctx);
-    ASSERT_TRUE("scene_axes_render did not crash", 1);
+    render3d_axes_render(&ctx);
+    ASSERT_TRUE("render3d_axes_render did not crash", 1);
 
     /* With different theme. */
     ctx.config.axes_theme = 1;
-    scene_axes_render(&ctx);
-    ASSERT_TRUE("scene_axes_render with different theme did not crash", 1);
+    render3d_axes_render(&ctx);
+    ASSERT_TRUE("render3d_axes_render with different theme did not crash", 1);
 }
 
-/* --- Tests for scene_backdrop_render (minimal) ------------------- */
+/* --- Tests for render3d_backdrop_render (minimal) ------------------- */
 
 static void test_scene_backdrop_render(void) {
-    printf("--- scene_backdrop_render ---\n");
+    printf("--- render3d_backdrop_render ---\n");
 
-    SceneFrameRenderContext ctx = make_test_frame_ctx();
+    Render3dFrameRenderContext ctx = make_test_frame_ctx();
 
-    scene_backdrop_render(&ctx);
-    ASSERT_TRUE("scene_backdrop_render did not crash", 1);
+    render3d_backdrop_render(&ctx);
+    ASSERT_TRUE("render3d_backdrop_render did not crash", 1);
 
     /* With different backdrop mode. */
     ctx.config.backdrop_mode = 1;
-    scene_backdrop_render(&ctx);
-    ASSERT_TRUE("scene_backdrop_render with different mode did not crash", 1);
+    render3d_backdrop_render(&ctx);
+    ASSERT_TRUE("render3d_backdrop_render with different mode did not crash", 1);
 }
 
-/* --- Tests for scene_lights_setup/render (minimal) --------------- */
+/* --- Tests for render3d_lights_setup/render (minimal) --------------- */
 
 static void test_scene_lights(void) {
-    printf("--- scene_lights_setup and scene_lights_render ---\n");
+    printf("--- render3d_lights_setup and render3d_lights_render ---\n");
 
-    SceneFrameRenderContext ctx = make_test_frame_ctx();
+    Render3dFrameRenderContext ctx = make_test_frame_ctx();
 
     /* Setup. */
-    scene_lights_setup(&ctx);
-    ASSERT_TRUE("scene_lights_setup did not crash", 1);
+    render3d_lights_setup(&ctx);
+    ASSERT_TRUE("render3d_lights_setup did not crash", 1);
 
     /* Render. */
-    scene_lights_render(&ctx);
-    ASSERT_TRUE("scene_lights_render did not crash", 1);
+    render3d_lights_render(&ctx);
+    ASSERT_TRUE("render3d_lights_render did not crash", 1);
 
     /* With lighting enabled. */
     ctx.config.user_lighting_enabled = 1;
-    scene_lights_setup(&ctx);
-    scene_lights_render(&ctx);
+    render3d_lights_setup(&ctx);
+    render3d_lights_render(&ctx);
     ASSERT_TRUE("scene_lights with user_lighting_enabled did not crash", 1);
 }
 
@@ -419,35 +419,35 @@ static void test_scene_lights(void) {
 static void test_scene_overlays(void) {
     printf("--- scene_overlays primitives + outlines ---\n");
 
-    SceneFrameRenderContext ctx = make_test_frame_ctx();
+    Render3dFrameRenderContext ctx = make_test_frame_ctx();
 
     /* All overlay rendering moved out of scene; the scene module now
      * exposes only per-vertex / per-cmd primitives. Outlines + vertex
      * points became controller polygon-mode passes (see imrepl_ctrl.c)
      * and aren't tested here. */
     (void)ctx;
-    scene_draw_vertex_label_text(0.0f, 0.0f, 0.0f, " v0", NULL);
-    ASSERT_TRUE("scene_draw_vertex_label_text did not crash", 1);
-    scene_draw_normal_vector_arrow(0.0f, 0.0f, 0.0f,
+    render3d_draw_vertex_label_text(0.0f, 0.0f, 0.0f, " v0", NULL);
+    ASSERT_TRUE("render3d_draw_vertex_label_text did not crash", 1);
+    render3d_draw_normal_vector_arrow(0.0f, 0.0f, 0.0f,
                                    0.0f, 1.0f, 0.0f, 0.5f);
-    ASSERT_TRUE("scene_draw_normal_vector_arrow did not crash", 1);
+    ASSERT_TRUE("render3d_draw_normal_vector_arrow did not crash", 1);
 }
 
 /* --- Light theme presets (pure data; runs in both builds) ---------- *
  * Every theme must produce a distinct, non-degenerate rig; the names
  * array must be fully populated; the .enabled=0 invariant must hold
  * (the program's glEnable decides which slots light up); STUDIO must
- * keep the tools/scene_demo key-light color it was lifted from; and the
+ * keep the tools/render3d_demo key-light color it was lifted from; and the
  * eye-space carve-out stays HEADLIGHT-slot-0 only. */
 static void test_light_theme_presets(void) {
     printf("--- light theme presets ---\n");
 
-    SceneLight themes[LIGHT_THEME_COUNT][MAX_LIGHTS];
+    Render3dLight themes[LIGHT_THEME_COUNT][MAX_LIGHTS];
     for (int t = 0; t < LIGHT_THEME_COUNT; t++) {
-        scene_lights_apply_theme(themes[t], t);
+        render3d_lights_apply_theme(themes[t], t);
         ASSERT_TRUE("theme name present + non-empty",
-                    scene_light_theme_names[t] != NULL &&
-                    scene_light_theme_names[t][0] != '\0');
+                    render3d_light_theme_names[t] != NULL &&
+                    render3d_light_theme_names[t][0] != '\0');
         const float *d = themes[t][0].diffuse;
         ASSERT_TRUE("theme light0 diffuse is non-zero",
                     d[0] != 0.0f || d[1] != 0.0f || d[2] != 0.0f);
@@ -462,7 +462,7 @@ static void test_light_theme_presets(void) {
             ASSERT_TRUE("themes are pairwise distinct",
                         memcmp(themes[a], themes[b], sizeof(themes[a])) != 0);
 
-    /* STUDIO key light is the scene_demo warm-white (1.00, 0.95, 0.85). */
+    /* STUDIO key light is the render3d_demo warm-white (1.00, 0.95, 0.85). */
     ASSERT_FLOAT("studio key diffuse r",
                  themes[LIGHT_THEME_STUDIO][0].diffuse[0], 1.00f);
     ASSERT_FLOAT("studio key diffuse g",
@@ -486,15 +486,15 @@ static void test_light_theme_presets(void) {
 static void test_anim_time_propagation(void) {
     printf("--- anim_time propagation ---\n");
 
-    SceneFrameRenderContext ctx = make_test_frame_ctx();
+    Render3dFrameRenderContext ctx = make_test_frame_ctx();
 
     /* Set animation time and ensure it's preserved through renderers. */
     ctx.config.anim_time = 2.5f;
 
-    scene_grid_render(&ctx);
+    render3d_grid_render(&ctx);
     ASSERT_FLOAT("grid sees anim_time", ctx.config.anim_time, 2.5f);
 
-    scene_backdrop_render(&ctx);
+    render3d_backdrop_render(&ctx);
     ASSERT_FLOAT("backdrop sees anim_time", ctx.config.anim_time, 2.5f);
 
     ASSERT_TRUE("anim_time propagation complete", 1);
@@ -505,7 +505,7 @@ static void test_anim_time_propagation(void) {
 static void test_focus_vertex_context(void) {
     printf("--- focus vertex in grid context ---\n");
 
-    SceneFrameRenderContext ctx = make_test_frame_ctx();
+    Render3dFrameRenderContext ctx = make_test_frame_ctx();
 
     /* With valid focus vertex. */
     ctx.config.focus.valid = 1;
@@ -513,7 +513,7 @@ static void test_focus_vertex_context(void) {
     ctx.config.focus.pos[1] = 2.0f;
     ctx.config.focus.pos[2] = 3.0f;
 
-    scene_grid_render(&ctx);
+    render3d_grid_render(&ctx);
     ASSERT_TRUE("grid with valid focus vertex did not crash", 1);
     ASSERT_INT("focus remains valid", ctx.config.focus.valid, 1);
 }
@@ -523,7 +523,7 @@ static void test_focus_vertex_context(void) {
 static void test_lighting_array_access(void) {
     printf("--- lighting array in config ---\n");
 
-    SceneFrameRenderContext ctx = make_test_frame_ctx();
+    Render3dFrameRenderContext ctx = make_test_frame_ctx();
 
     /* Populate a light. */
     ctx.config.lights[0].pos[0] = 1.0f;
@@ -539,7 +539,7 @@ static void test_lighting_array_access(void) {
     ASSERT_FLOAT("light pos[1]", ctx.config.lights[0].pos[1], 2.0f);
     ASSERT_FLOAT("light ambient[0]", ctx.config.lights[0].ambient[0], 0.2f);
 
-    scene_lights_setup(&ctx);
+    render3d_lights_setup(&ctx);
     ASSERT_TRUE("lights_setup with populated light did not crash", 1);
 }
 
@@ -548,7 +548,7 @@ static void test_lighting_array_access(void) {
 static void test_grid_table_arrays(void) {
     printf("--- grid table arrays in config ---\n");
 
-    SceneFrameRenderContext ctx = make_test_frame_ctx();
+    Render3dFrameRenderContext ctx = make_test_frame_ctx();
 
     /* Populate grid tables. */
     for (int i = 0; i < GRID_MAJOR_COUNT; i++)
@@ -560,7 +560,7 @@ static void test_grid_table_arrays(void) {
     ASSERT_FLOAT("grid_major_steps[1]", ctx.config.grid_major_steps[1], 2.0f);
     ASSERT_FLOAT("grid_extents[0]", ctx.config.grid_extents[0], 10.0f);
 
-    scene_grid_render(&ctx);
+    render3d_grid_render(&ctx);
     ASSERT_TRUE("grid_render with populated tables did not crash", 1);
 }
 
@@ -569,24 +569,24 @@ static void test_grid_table_arrays(void) {
 static void test_viewport_dimensions(void) {
     printf("--- viewport dimension handling ---\n");
 
-    SceneFrameRenderContext ctx = make_test_frame_ctx();
+    Render3dFrameRenderContext ctx = make_test_frame_ctx();
 
     /* Small scene viewport. */
-    ctx.config.scene_w = 100;
-    ctx.config.scene_h = 100;
-    scene_grid_render(&ctx);
+    ctx.config.render3d_w = 100;
+    ctx.config.render3d_h = 100;
+    render3d_grid_render(&ctx);
     ASSERT_TRUE("small scene viewport did not crash", 1);
 
     /* Large scene viewport. */
-    ctx.config.scene_w = 4096;
-    ctx.config.scene_h = 2160;
-    scene_grid_render(&ctx);
+    ctx.config.render3d_w = 4096;
+    ctx.config.render3d_h = 2160;
+    render3d_grid_render(&ctx);
     ASSERT_TRUE("large scene viewport did not crash", 1);
 
     /* Extreme aspect ratio. */
-    ctx.config.scene_w = 3840;
-    ctx.config.scene_h = 480;
-    scene_grid_render(&ctx);
+    ctx.config.render3d_w = 3840;
+    ctx.config.render3d_h = 480;
+    render3d_grid_render(&ctx);
     ASSERT_TRUE("extreme aspect ratio did not crash", 1);
 }
 
@@ -595,11 +595,11 @@ static void test_viewport_dimensions(void) {
 static void test_render_mode_toggles(void) {
     printf("--- render mode toggles ---\n");
 
-    SceneFrameRenderContext ctx = make_test_frame_ctx();
+    Render3dFrameRenderContext ctx = make_test_frame_ctx();
 
     /* Wireframe. */
     ctx.config.wireframe = 1;
-    scene_grid_render(&ctx);
+    render3d_grid_render(&ctx);
     ASSERT_INT("wireframe set", ctx.config.wireframe, 1);
     ctx.config.wireframe = 0;
 
@@ -610,31 +610,31 @@ static void test_wireframe_hidden_line_passes(void) {
     printf("--- wireframe hidden-line render passes ---\n");
 
 #ifdef GL_STUBS
-    SceneRenderConfig cfg = make_test_config();
+    Render3dRenderConfig cfg = make_test_config();
     PurposeCountCtx count_ctx;
     memset(&count_ctx, 0, sizeof(count_ctx));
     cfg.execute_fn = test_execute_count_purpose;
     cfg.execute_user_data = &count_ctx;
     cfg.use_accum = 0;
-    cfg.accum_effect = SCENE_ACCUM_EFFECT_OFF;
+    cfg.accum_effect = RENDER3D_ACCUM_EFFECT_OFF;
     cfg.accum_passes = 1;
-    cfg.wireframe = SCENE_WIREFRAME_HIDDEN;
+    cfg.wireframe = RENDER3D_WIREFRAME_HIDDEN;
 
-    SceneRendererState state;
-    scene_renderer_state_init(&state);
+    Render3dState state;
+    render3d_state_init(&state);
 
     gl_stub_counts_reset();
     ASSERT_INT("wireframe render ok",
-               scene_render_3d_scene(&state, &cfg), 0);
+               render3d_draw_scene(&state, &cfg), 0);
 
     ASSERT_INT("wireframe skips main fill purpose",
-               count_ctx.counts[SCENE_EXEC_MAIN_FILL], 0);
+               count_ctx.counts[RENDER3D_EXEC_MAIN_FILL], 0);
     ASSERT_INT("wireframe hidden-line pass executes once",
-               count_ctx.counts[SCENE_EXEC_WIREFRAME_HIDDEN_LINES], 1);
+               count_ctx.counts[RENDER3D_EXEC_WIREFRAME_HIDDEN_LINES], 1);
     ASSERT_INT("wireframe depth-fill pass executes once",
-               count_ctx.counts[SCENE_EXEC_WIREFRAME_DEPTH_FILL], 1);
+               count_ctx.counts[RENDER3D_EXEC_WIREFRAME_DEPTH_FILL], 1);
     ASSERT_INT("wireframe visible-line pass executes once",
-               count_ctx.counts[SCENE_EXEC_WIREFRAME_VISIBLE_LINES], 1);
+               count_ctx.counts[RENDER3D_EXEC_WIREFRAME_VISIBLE_LINES], 1);
 
     ASSERT_TRUE("wireframe flips polygon modes for line/fill/line",
                 gl_stub_counts[GL_STUB_glPolygonMode] >= 3);
@@ -655,31 +655,31 @@ static void test_plain_wireframe_uses_main_fill(void) {
     printf("--- plain wireframe render pass ---\n");
 
 #ifdef GL_STUBS
-    SceneRenderConfig cfg = make_test_config();
+    Render3dRenderConfig cfg = make_test_config();
     PurposeCountCtx count_ctx;
     memset(&count_ctx, 0, sizeof(count_ctx));
     cfg.execute_fn = test_execute_count_purpose;
     cfg.execute_user_data = &count_ctx;
     cfg.use_accum = 0;
-    cfg.accum_effect = SCENE_ACCUM_EFFECT_OFF;
+    cfg.accum_effect = RENDER3D_ACCUM_EFFECT_OFF;
     cfg.accum_passes = 1;
-    cfg.wireframe = SCENE_WIREFRAME_PLAIN;
+    cfg.wireframe = RENDER3D_WIREFRAME_PLAIN;
 
-    SceneRendererState state;
-    scene_renderer_state_init(&state);
+    Render3dState state;
+    render3d_state_init(&state);
 
     gl_stub_counts_reset();
     ASSERT_INT("plain wireframe render ok",
-               scene_render_3d_scene(&state, &cfg), 0);
+               render3d_draw_scene(&state, &cfg), 0);
 
     ASSERT_INT("plain wireframe executes main fill once",
-               count_ctx.counts[SCENE_EXEC_MAIN_FILL], 1);
+               count_ctx.counts[RENDER3D_EXEC_MAIN_FILL], 1);
     ASSERT_INT("plain wireframe does not run hidden pass",
-               count_ctx.counts[SCENE_EXEC_WIREFRAME_HIDDEN_LINES], 0);
+               count_ctx.counts[RENDER3D_EXEC_WIREFRAME_HIDDEN_LINES], 0);
     ASSERT_INT("plain wireframe does not run depth-fill pass",
-               count_ctx.counts[SCENE_EXEC_WIREFRAME_DEPTH_FILL], 0);
+               count_ctx.counts[RENDER3D_EXEC_WIREFRAME_DEPTH_FILL], 0);
     ASSERT_INT("plain wireframe does not run visible-line pass",
-               count_ctx.counts[SCENE_EXEC_WIREFRAME_VISIBLE_LINES], 0);
+               count_ctx.counts[RENDER3D_EXEC_WIREFRAME_VISIBLE_LINES], 0);
     ASSERT_TRUE("plain wireframe sets line then fill polygon mode",
                 gl_stub_counts[GL_STUB_glPolygonMode] >= 2);
 #else
@@ -694,12 +694,12 @@ static void test_vertex2f_overlay_parity(void) {
 
 #ifdef GL_STUBS
     /* The vertex-number overlay moved to the controller. The scene-side
-     * primitive scene_draw_vertex_label_text calls glRasterPos3f
+     * primitive render3d_draw_vertex_label_text calls glRasterPos3f
      * directly — that's enough to pin the parity check here.
      * Outline pass moved to controller (polygon-mode trick); tested via
      * the integration suite, not as a scene-module unit test. */
     gl_stub_counts_reset();
-    scene_draw_vertex_label_text(1.0f, 2.0f, 0.0f, " v0", NULL);
+    render3d_draw_vertex_label_text(1.0f, 2.0f, 0.0f, " v0", NULL);
     ASSERT_TRUE("vertex2f: vertex number label calls glRasterPos3f",
                 gl_stub_counts[GL_STUB_glRasterPos3f] > 0);
 #else
@@ -711,7 +711,7 @@ static void test_vertex2f_guide_cursor_dot(void) {
     printf("--- vertex2f guide: red cursor dot when both args filled ---\n");
 
 #ifdef GL_STUBS
-    SceneGuideSnapshot snap = {0};
+    Render3dGuideSnapshot snap = {0};
     snap.show_guides = 1;
     snap.alpha_scale = 1.0f;
 
@@ -725,7 +725,7 @@ static void test_vertex2f_guide_cursor_dot(void) {
     snap.vertex_filled[0] = snap.vertex_filled[1] = snap.vertex_filled[2] = 1;
     snap.vertex_n_filled = 3;
     gl_stub_counts_reset();
-    scene_geometry_guides_render_for_cursor(&snap);
+    render3d_geometry_guides_render_for_cursor(&snap);
     unsigned long long points3f = gl_stub_counts[GL_STUB_glBegin];
     ASSERT_TRUE("vertex3f(1,2,3): guide draws GL_POINTS", points3f > 0);
 
@@ -737,7 +737,7 @@ static void test_vertex2f_guide_cursor_dot(void) {
     snap.vertex_filled[2] = 0;
     snap.vertex_n_filled = 2;
     gl_stub_counts_reset();
-    scene_geometry_guides_render_for_cursor(&snap);
+    render3d_geometry_guides_render_for_cursor(&snap);
     ASSERT_TRUE("vertex2f(1,2): guide draws GL_POINTS (same as vertex3f)",
                 gl_stub_counts[GL_STUB_glBegin] > 0);
 
@@ -750,7 +750,7 @@ static void test_vertex2f_guide_cursor_dot(void) {
     snap.vertex_filled[1] = snap.vertex_filled[2] = 0;
     snap.vertex_n_filled = 1;
     gl_stub_counts_reset();
-    scene_geometry_guides_render_for_cursor(&snap);
+    render3d_geometry_guides_render_for_cursor(&snap);
     ASSERT_TRUE("vertex2f(1,): partial entry still draws a guide",
                 gl_stub_counts[GL_STUB_glBegin] > 0);
 #else
@@ -760,23 +760,23 @@ static void test_vertex2f_guide_cursor_dot(void) {
 
 /* --- Grid fog-owner predicate + the invariant it encodes ---------- */
 
-/* Pure: scene_grid_theme_uses_fog must be true exactly for the themes
+/* Pure: render3d_grid_theme_uses_fog must be true exactly for the themes
  * whose own atmosphere collides with the synthesized clear-color recede.
  * Today that is just OCEAN's above-water EXP2 fog. FROZEN's mist is
  * under-ice-only, so it stays out. FAR is deliberately not a factor.
  * No GL — runs in both builds. */
 static void test_grid_theme_uses_fog_predicate(void) {
-    printf("--- scene_grid_theme_uses_fog predicate ---\n");
+    printf("--- render3d_grid_theme_uses_fog predicate ---\n");
     for (int th = 0; th < GRID_THEME_COUNT; th++) {
         int expect = (th == GRID_THEME_OCEAN);
         char lbl[64];
         snprintf(lbl, sizeof lbl, "uses_fog theme=%d", th);
-        ASSERT_INT(lbl, scene_grid_theme_uses_fog(th) ? 1 : 0, expect);
+        ASSERT_INT(lbl, render3d_grid_theme_uses_fog(th) ? 1 : 0, expect);
     }
 }
 
 /* Regression: at a non-FAR extent and *steady* opacity, a grid emits
- * GL fog calls iff scene_grid_theme_uses_fog() says so. At opacity 1
+ * GL fog calls iff render3d_grid_theme_uses_fog() says so. At opacity 1
  * there is no transition fog in either style (the synth recede
  * early-returns under FOG, compiled out under FADE), and at a non-FAR
  * extent there is no distance fog, so any glFog* must come from a
@@ -792,20 +792,20 @@ static void test_scene_grid_fog_matches_predicate(void) {
     for (int e = 0; e < GRID_EXTENT_COUNT; e++) {
         int is_far = (e == GRID_EXTENT_FAR);
         for (int th = GRID_THEME_OFF + 1; th < GRID_THEME_COUNT; th++) {
-            SceneFrameRenderContext ctx = make_test_frame_ctx();
+            Render3dFrameRenderContext ctx = make_test_frame_ctx();
             ctx.config.grid_theme = th;
             ctx.config.grid_extent_idx = e;
             ctx.config.grid_opacity = 1.0f;     /* steady: no transition fog */
 
             gl_stub_counts_reset();
-            scene_grid_render(&ctx);
+            render3d_grid_render(&ctx);
             unsigned long long fog =
                 gl_stub_counts[GL_STUB_glFogi] +
                 gl_stub_counts[GL_STUB_glFogf] +
                 gl_stub_counts[GL_STUB_glFogfv];
 
             char lbl[80];
-            if (scene_grid_theme_uses_edge_fade(th)) {
+            if (render3d_grid_theme_uses_edge_fade(th)) {
                 /* Edge-fade line themes dissolve to the backdrop via
                  * per-vertex alpha, so they emit no fog at ANY extent
                  * (FAR included) or transition phase. */
@@ -815,7 +815,7 @@ static void test_scene_grid_fog_matches_predicate(void) {
             } else if (is_far) {
                 /* FAR is deliberately NOT in the uses_fog predicate: its
                  * LINEAR distance fog fires for every non-edge-fade
-                 * theme, independent of scene_grid_theme_uses_fog. */
+                 * theme, independent of render3d_grid_theme_uses_fog. */
                 snprintf(lbl, sizeof lbl,
                          "theme=%d FAR extent always fogs", th);
                 ASSERT_INT(lbl, (fog > 0) ? 1 : 0, 1);
@@ -823,7 +823,7 @@ static void test_scene_grid_fog_matches_predicate(void) {
                 snprintf(lbl, sizeof lbl,
                          "theme=%d extent=%d fog<->predicate", th, e);
                 ASSERT_INT(lbl, (fog > 0) ? 1 : 0,
-                           scene_grid_theme_uses_fog(th) ? 1 : 0);
+                           render3d_grid_theme_uses_fog(th) ? 1 : 0);
             }
         }
     }
@@ -851,19 +851,19 @@ static void test_nv_fog_distance_radial_optin(void) {
     const int   delta[]   = { 2, 0 };
     const char *names[]   = { "Radar", "Classic" };
     for (int i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
-        SceneFrameRenderContext ctx = make_test_frame_ctx();
+        Render3dFrameRenderContext ctx = make_test_frame_ctx();
         ctx.config.grid_theme = themes[i];
         ctx.config.grid_extent_idx = GRID_EXTENT_MID;   /* non-FAR */
         ctx.config.grid_opacity = 1.0f;                 /* steady */
 
         ctx.config.nv_fog_distance_supported = 0;
         gl_stub_counts_reset();
-        scene_grid_render(&ctx);
+        render3d_grid_render(&ctx);
         unsigned long long off = gl_stub_counts[GL_STUB_glFogi];
 
         ctx.config.nv_fog_distance_supported = 1;
         gl_stub_counts_reset();
-        scene_grid_render(&ctx);
+        render3d_grid_render(&ctx);
         unsigned long long on = gl_stub_counts[GL_STUB_glFogi];
 
         char lbl[80];
@@ -872,17 +872,17 @@ static void test_nv_fog_distance_radial_optin(void) {
     }
 
     {
-        SceneFrameRenderContext ctx = make_test_frame_ctx();
-        ctx.config.backdrop_mode = SCENE_BACKDROP_CITYSCAPE;
+        Render3dFrameRenderContext ctx = make_test_frame_ctx();
+        ctx.config.backdrop_mode = RENDER3D_BACKDROP_CITYSCAPE;
 
         ctx.config.nv_fog_distance_supported = 0;
         gl_stub_counts_reset();
-        scene_backdrop_render(&ctx);
+        render3d_backdrop_render(&ctx);
         unsigned long long off = gl_stub_counts[GL_STUB_glFogi];
 
         ctx.config.nv_fog_distance_supported = 1;
         gl_stub_counts_reset();
-        scene_backdrop_render(&ctx);
+        render3d_backdrop_render(&ctx);
         unsigned long long on = gl_stub_counts[GL_STUB_glFogi];
 
         /* Same set-and-restore pair as the grid OCEAN/RADAR themes. */
@@ -898,21 +898,21 @@ static void test_vertex_label_text(void) {
 
 #ifdef GL_STUBS
     gl_stub_counts_reset();
-    scene_draw_vertex_label_text(1.0f, 2.0f, 3.0f, NULL, NULL);
+    render3d_draw_vertex_label_text(1.0f, 2.0f, 3.0f, NULL, NULL);
     ASSERT_INT("NULL primary emits no glRasterPos3f",
                (int)gl_stub_counts[GL_STUB_glRasterPos3f], 0);
     ASSERT_INT("NULL primary emits no glutBitmapCharacter",
                (int)gl_stub_counts[GL_STUB_glutBitmapCharacter], 0);
 
     gl_stub_counts_reset();
-    scene_draw_vertex_label_text(1.0f, 2.0f, 3.0f, " v0", NULL);
+    render3d_draw_vertex_label_text(1.0f, 2.0f, 3.0f, " v0", NULL);
     ASSERT_INT("primary text calls glRasterPos3f",
                (int)gl_stub_counts[GL_STUB_glRasterPos3f], 1);
     int idx_chars = (int)gl_stub_counts[GL_STUB_glutBitmapCharacter];
     ASSERT_TRUE("primary text draws ' v0' (3 chars)", idx_chars == 3);
 
     gl_stub_counts_reset();
-    scene_draw_vertex_label_text(1.0f, 2.0f, 3.0f, " v5",
+    render3d_draw_vertex_label_text(1.0f, 2.0f, 3.0f, " v5",
                                  " (1.00, 2.00, 3.00)");
     ASSERT_INT("primary+detail calls glRasterPos3f once",
                (int)gl_stub_counts[GL_STUB_glRasterPos3f], 1);
@@ -926,7 +926,7 @@ static void test_vertex_label_text(void) {
 #ifdef GL_STUBS
 static void test_scene_axes_themes_and_opacity(void) {
     printf("--- axes themes, opacities, and transition fog ---\n");
-    SceneFrameRenderContext ctx = make_test_frame_ctx();
+    Render3dFrameRenderContext ctx = make_test_frame_ctx();
 
     /* Test all theme permutations */
     const int themes[] = {
@@ -943,21 +943,21 @@ static void test_scene_axes_themes_and_opacity(void) {
         /* Render fully opaque */
         ctx.config.axes_opacity = 1.0f;
         gl_stub_counts_reset();
-        scene_axes_render(&ctx);
+        render3d_axes_render(&ctx);
         ASSERT_TRUE("axes render for theme did not crash", 1);
         ASSERT_TRUE("axes render calls glColor", gl_stub_counts[GL_STUB_glColor4f] > 0);
 
         /* Render translucent (exercises transition alpha and fog paths) */
         ctx.config.axes_opacity = 0.5f;
         gl_stub_counts_reset();
-        scene_axes_render(&ctx);
+        render3d_axes_render(&ctx);
         ASSERT_TRUE("translucent axes render did not crash", 1);
     }
 }
 
 static void test_scene_lights_indicators(void) {
     printf("--- lights indicators (on/off/directional/positional/eye-space) ---\n");
-    SceneFrameRenderContext ctx = make_test_frame_ctx();
+    Render3dFrameRenderContext ctx = make_test_frame_ctx();
     ctx.config.show_light_indicators = 1;
 
     /* 1. Light 0 positional, enabled */
@@ -984,7 +984,7 @@ static void test_scene_lights_indicators(void) {
     ctx.config.lights[3].enabled = 0;
 
     gl_stub_counts_reset();
-    scene_lights_render(&ctx);
+    render3d_lights_render(&ctx);
     ASSERT_TRUE("lights indicators render did not crash", 1);
     ASSERT_TRUE("renders indicator points", gl_stub_counts[GL_STUB_glBegin] > 0);
 }
@@ -992,32 +992,32 @@ static void test_scene_lights_indicators(void) {
 static void test_postprocess_filters(void) {
     printf("--- postprocess filters (vignette & chromatic aberration) ---\n");
 
-    /* SCENE_POST_FILTER_OFF does nothing */
-    scene_postprocess_filter_render(SCENE_POST_FILTER_OFF, 0, 0, 800, 600);
+    /* RENDER3D_POST_FILTER_OFF does nothing */
+    render3d_postprocess_filter_render(RENDER3D_POST_FILTER_OFF, 0, 0, 800, 600);
 
-    /* SCENE_POST_FILTER_CHROMATIC_ABERRATION */
+    /* RENDER3D_POST_FILTER_CHROMATIC_ABERRATION */
     gl_stub_counts_reset();
-    scene_postprocess_filter_render(SCENE_POST_FILTER_CHROMATIC_ABERRATION, 0, 0, 800, 600);
+    render3d_postprocess_filter_render(RENDER3D_POST_FILTER_CHROMATIC_ABERRATION, 0, 0, 800, 600);
     ASSERT_TRUE("chromatic aberration calls glCopyTexSubImage2D",
                 gl_stub_counts[GL_STUB_glCopyTexSubImage2D] > 0);
     ASSERT_TRUE("chromatic aberration calls glColorMask",
                 gl_stub_counts[GL_STUB_glColorMask] > 0);
 
-    /* SCENE_POST_FILTER_VIGNETTE */
+    /* RENDER3D_POST_FILTER_VIGNETTE */
     gl_stub_counts_reset();
-    scene_postprocess_filter_render(SCENE_POST_FILTER_VIGNETTE, 0, 0, 800, 600);
+    render3d_postprocess_filter_render(RENDER3D_POST_FILTER_VIGNETTE, 0, 0, 800, 600);
     ASSERT_TRUE("vignette draws triangle strips",
                 gl_stub_counts[GL_STUB_glBegin] > 0);
 
     /* Test reset function */
-    scene_postprocess_filter_reset();
+    render3d_postprocess_filter_reset();
     ASSERT_TRUE("reset succeeded without crash", 1);
 
     /* Mode name strings */
     ASSERT_TRUE("chromatic name non-NULL",
-                scene_postprocess_filter_mode_name(SCENE_POST_FILTER_CHROMATIC_ABERRATION) != NULL);
+                render3d_postprocess_filter_mode_name(RENDER3D_POST_FILTER_CHROMATIC_ABERRATION) != NULL);
     ASSERT_TRUE("vignette name non-NULL",
-                scene_postprocess_filter_mode_name(SCENE_POST_FILTER_VIGNETTE) != NULL);
+                render3d_postprocess_filter_mode_name(RENDER3D_POST_FILTER_VIGNETTE) != NULL);
 }
 
 #endif

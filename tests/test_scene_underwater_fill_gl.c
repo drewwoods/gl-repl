@@ -5,14 +5,14 @@
  * Bug: after fb976f0 (the scoped GL_NV_fog_distance opt-in for the
  * city / ocean / radar passes), the OCEAN underwater fill was rendering
  * as a tiny teal patch in the lower-left of the scene viewport instead
- * of filling it. Cause: scene_grid_render_ocean_theme draws the fill as
+ * of filling it. Cause: render3d_grid_render_ocean_theme draws the fill as
  *
- *     gluOrtho2D(0, scene_w, 0, scene_h);
+ *     gluOrtho2D(0, render3d_w, 0, render3d_h);
  *     // ...glLoadIdentity modelview, glPushAttrib(DEPTH|LIGHTING)...
- *     glRectf(0, 0, scene_w, scene_h);
+ *     glRectf(0, 0, render3d_w, render3d_h);
  *
  * which puts the rect's eye-space vertices at coordinates up to
- * (scene_w, scene_h, 0) — radial distances 0 .. sqrt(W^2+H^2). The
+ * (render3d_w, render3d_h, 0) — radial distances 0 .. sqrt(W^2+H^2). The
  * outer grid pass leaves GL_FOG enabled and, under fb976f0's NV opt-in,
  * has just switched the OCEAN case to GL_EYE_RADIAL_NV. So with linear
  * fog whose end is keyed to a normal world-space grid extent (single
@@ -27,7 +27,7 @@
  * The stub harness counts calls but does not rasterize, so it can't
  * tell "the rect filled the viewport" from "the rect was fogged to a
  * lower-left sliver"; both make the same glRectf. This test creates a
- * real GLUT context, drives scene_grid_render(GRID_THEME_OCEAN) with
+ * real GLUT context, drives render3d_grid_render(GRID_THEME_OCEAN) with
  * cam_world_y < 0 and nv_fog_distance_supported = 1, then glReadPixels
  * the framebuffer and asserts the four corners + centre all look
  * teal-tinted. The radial-fog interaction reproduces here because the
@@ -58,20 +58,20 @@
 static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ASSERT_TRUE(label, cond) TEST_ASSERT_TRUE(&g_harness, label, cond)
 
-static void test_execute_noop(const SceneExecuteContext *ctx, void *ud) {
+static void test_execute_noop(const Render3dExecuteContext *ctx, void *ud) {
     (void)ctx;
     (void)ud;
 }
 
-/* Build a config that lands in scene_grid_render_ocean_theme's underwater
+/* Build a config that lands in render3d_grid_render_ocean_theme's underwater
  * branch (cam_world_y < 0) with the GL_NV_fog_distance opt-in active. */
-static SceneFrameRenderContext make_underwater_ctx(int scene_w, int scene_h) {
-    SceneFrameRenderContext ctx = {0};
+static Render3dFrameRenderContext make_underwater_ctx(int render3d_w, int render3d_h) {
+    Render3dFrameRenderContext ctx = {0};
     ctx.config.execute_fn = test_execute_noop;
-    ctx.config.scene_x = 0;
-    ctx.config.scene_y = 0;
-    ctx.config.scene_w = scene_w;
-    ctx.config.scene_h = scene_h;
+    ctx.config.render3d_x = 0;
+    ctx.config.render3d_y = 0;
+    ctx.config.render3d_w = render3d_w;
+    ctx.config.render3d_h = render3d_h;
     ctx.config.grid_theme = GRID_THEME_OCEAN;
     ctx.config.grid_opacity = 1.0f;
     ctx.config.alpha_scale = 1.0f;
@@ -87,9 +87,9 @@ static SceneFrameRenderContext make_underwater_ctx(int scene_w, int scene_h) {
     ctx.config.cam_rx = 0.0f;
     ctx.config.cam_ty = -5.0f;   /* under the water plane */
     ctx.config.projection_mix = 1.0f;
-    /* The flag that arms the bug. The dispatcher in scene_grid_render
+    /* The flag that arms the bug. The dispatcher in render3d_grid_render
      * calls glFogi(GL_FOG_DISTANCE_MODE_NV, GL_EYE_RADIAL_NV) when this
-     * is set, then enters scene_grid_render_ocean_theme. */
+     * is set, then enters render3d_grid_render_ocean_theme. */
     ctx.config.nv_fog_distance_supported = 1;
     return ctx;
 }
@@ -119,8 +119,8 @@ static void test_underwater_fill_covers_viewport(void) {
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    /* Detection match: scene_grid_render uses
-     * SceneRenderConfig.nv_fog_distance_supported (set in our config
+    /* Detection match: render3d_grid_render uses
+     * Render3dRenderConfig.nv_fog_distance_supported (set in our config
      * helper). But the radial-fog *effect* only happens if the runtime
      * driver actually honours GL_FOG_DISTANCE_MODE_NV. Probe explicitly
      * and report skip if not — otherwise a green test on a hardware
@@ -146,8 +146,8 @@ static void test_underwater_fill_covers_viewport(void) {
     float fog_color[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
     glFogfv(GL_FOG_COLOR, fog_color);
 
-    SceneFrameRenderContext ctx = make_underwater_ctx(W, H);
-    scene_grid_render(&ctx);
+    Render3dFrameRenderContext ctx = make_underwater_ctx(W, H);
+    render3d_grid_render(&ctx);
     glFinish();
 
     unsigned char *buf = (unsigned char *)malloc((size_t)W * (size_t)H * 3u);
@@ -198,5 +198,5 @@ int main(int argc, char **argv) {
 
     printf("--- scene underwater-fill tests (real GL context) ---\n");
     test_underwater_fill_covers_viewport();
-    return test_harness_report(&g_harness, "scene_underwater_fill_gl");
+    return test_harness_report(&g_harness, "render3d_underwater_fill_gl");
 }

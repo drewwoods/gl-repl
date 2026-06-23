@@ -157,7 +157,7 @@ static const TutorialStep g_tutorial_depth_triangle_steps[] = {
  * first-time user sees the shape head-on without perspective
  * foreshortening or accidental orbit. */
 static const char *const g_tutorial_first_triangle_cfg[] = {
-    "// @cfg view_mode = SCENE_VIEW_2D",
+    "// @cfg view_mode = RENDER3D_VIEW_2D",
     NULL,
 };
 
@@ -204,7 +204,7 @@ static const TutorialStep g_tutorial_feature_tour_steps[] = {
 };
 
 static const char *const g_tutorial_feature_tour_cfg[] = {
-    "// @cfg view_mode = SCENE_VIEW_3D",  /* depth gives the grid themes context */
+    "// @cfg view_mode = RENDER3D_VIEW_3D",  /* depth gives the grid themes context */
     "// @cfg vertex_outlines = 0",  /* baseline: REQUIRE will ask the user to turn this on */
     "// @cfg grid = GRID_THEME_OFF", /* baseline: SET steps will showcase Radar then Aurora */
     NULL,

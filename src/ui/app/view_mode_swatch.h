@@ -31,7 +31,7 @@ typedef enum {
 
 /* Pure selector (unit-testable, no GL): classify the swatch visual and
  * write the 0..1 transition progress into *out_t (CROSSFADE: 2D fade-in;
- * CUBE: 3D reveal). ortho_mode is SceneViewMode (0 = 3D, non-0 = 2D);
+ * CUBE: 3D reveal). ortho_mode is Render3dViewMode (0 = 3D, non-0 = 2D);
  * projection_mix is the blend in [0,1] (0 = ortho/2D, 1 = persp/3D). */
 UiViewSwatchMode ui_view_mode_swatch_state(int ortho_mode,
                                            float projection_mix,

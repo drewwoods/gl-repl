@@ -781,7 +781,7 @@ test_scene_guides_LDLIBS = $(GL_LDFLAGS)
 test_scene_guides_RUN ?= $(BINDIR)/test_scene_guides
 
 test_scene_transition_OBJS = $(OBJDIR)/$(TEST_DIR)/test_scene_transition.o \
-	$(OBJDIR)/src/render3d/scene_transition.o
+	$(OBJDIR)/src/render3d/render3d_transition.o
 test_scene_transition_LDLIBS =
 test_scene_transition_RUN ?= $(BINDIR)/test_scene_transition
 

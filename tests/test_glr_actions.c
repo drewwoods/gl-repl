@@ -244,7 +244,7 @@ static void test_cfg_cycling(void) {
 
     /* View-mode swatch toggle: glr_action_toggle_view_mode() must flip the
      * View mode config row (the click path the menu-bar 2D/3D swatch uses),
-     * sharing the keybind's status text. SceneViewMode: 0 = 3D, 1 = 2D. */
+     * sharing the keybind's status text. Render3dViewMode: 0 = 3D, 1 = 2D. */
     glr_config_set(GLR_CONFIG_ORTHO_MODE, 0);
     glr_action_toggle_view_mode();
     ASSERT_INT("view mode toggled to 2D", glr_config_get(GLR_CONFIG_ORTHO_MODE), 1);
@@ -254,7 +254,7 @@ static void test_cfg_cycling(void) {
     ASSERT_STR("view mode status 3D", g_last_status, "View mode: 3D");
 }
 
-/* The view-mode swatch's pure visual-state selector. SceneViewMode:
+/* The view-mode swatch's pure visual-state selector. Render3dViewMode:
  * 0 = 3D, non-0 = 2D; projection_mix in [0,1] (0 = ortho/2D, 1 = persp/3D). */
 static void test_view_mode_swatch_state(void) {
     float t = -1.0f;
@@ -1105,10 +1105,10 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     ASSERT_INT("  -> AXES_THEME_COMPASS", out, AXES_THEME_COMPASS);
 
     out = -1;
-    ASSERT_TRUE("resolve backdrop: SCENE_BACKDROP_CITY_AND_STARS",
-                repl_cfg_resolve_text("backdrop", "SCENE_BACKDROP_CITY_AND_STARS", &out));
-    ASSERT_INT("  -> SCENE_BACKDROP_CITY_AND_STARS", out,
-               SCENE_BACKDROP_CITY_AND_STARS);
+    ASSERT_TRUE("resolve backdrop: RENDER3D_BACKDROP_CITY_AND_STARS",
+                repl_cfg_resolve_text("backdrop", "RENDER3D_BACKDROP_CITY_AND_STARS", &out));
+    ASSERT_INT("  -> RENDER3D_BACKDROP_CITY_AND_STARS", out,
+               RENDER3D_BACKDROP_CITY_AND_STARS);
 
     /* Unknown name on a known slug must fail (don't fall back to
      * strtol — "GRID_THEME_XYZ" must NOT silently land as 0). */
@@ -1125,9 +1125,9 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     repl_cfg_set_text("axes", "AXES_THEME_NEON");
     ASSERT_INT("set_text axes -> presentation.axes_theme",
                glr_state_presentation().axes_theme, AXES_THEME_NEON);
-    repl_cfg_set_text("backdrop", "SCENE_BACKDROP_STARS");
+    repl_cfg_set_text("backdrop", "RENDER3D_BACKDROP_STARS");
     ASSERT_INT("set_text backdrop -> presentation.backdrop_mode",
-               glr_state_presentation().backdrop_mode, SCENE_BACKDROP_STARS);
+               glr_state_presentation().backdrop_mode, RENDER3D_BACKDROP_STARS);
 
     /* Legacy integer-form @cfg lines must still load — the apply
      * path tries resolve_text first, then falls back to strtol.
@@ -1152,7 +1152,7 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
                glr_state_presentation().axes_theme, AXES_THEME_PULSE);
     glr_state_presentation_mut()->grid_theme = GRID_THEME_RADAR;
     glr_state_presentation_mut()->axes_theme = AXES_THEME_GIZMO;
-    glr_state_presentation_mut()->backdrop_mode = SCENE_BACKDROP_CITY_AND_STARS;
+    glr_state_presentation_mut()->backdrop_mode = RENDER3D_BACKDROP_CITY_AND_STARS;
     glr_state_presentation_mut()->light_theme = LIGHT_THEME_SOLAR;
 
     ReplConfigBag bag;
@@ -1161,7 +1161,7 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
 
     ASSERT_STR("fill_all grid is symbolic", repl_config_bag_get(&bag, "grid"), "GRID_THEME_RADAR");
     ASSERT_STR("fill_all axes is symbolic", repl_config_bag_get(&bag, "axes"), "AXES_THEME_GIZMO");
-    ASSERT_STR("fill_all backdrop is symbolic", repl_config_bag_get(&bag, "backdrop"), "SCENE_BACKDROP_CITY_AND_STARS");
+    ASSERT_STR("fill_all backdrop is symbolic", repl_config_bag_get(&bag, "backdrop"), "RENDER3D_BACKDROP_CITY_AND_STARS");
     ASSERT_STR("fill_all light_theme is symbolic", repl_config_bag_get(&bag, "light_theme"), "LIGHT_THEME_SOLAR");
 
     ReplConfigBag scene_bag;
@@ -1170,7 +1170,7 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
 
     ASSERT_STR("fill_scene_subset grid is symbolic", repl_config_bag_get(&scene_bag, "grid"), "GRID_THEME_RADAR");
     ASSERT_STR("fill_scene_subset axes is symbolic", repl_config_bag_get(&scene_bag, "axes"), "AXES_THEME_GIZMO");
-    ASSERT_STR("fill_scene_subset backdrop is symbolic", repl_config_bag_get(&scene_bag, "backdrop"), "SCENE_BACKDROP_CITY_AND_STARS");
+    ASSERT_STR("fill_scene_subset backdrop is symbolic", repl_config_bag_get(&scene_bag, "backdrop"), "RENDER3D_BACKDROP_CITY_AND_STARS");
     ASSERT_STR("fill_scene_subset light_theme is symbolic", repl_config_bag_get(&scene_bag, "light_theme"), "LIGHT_THEME_SOLAR");
 }
 

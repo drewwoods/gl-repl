@@ -40,7 +40,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 
 /* Rename the controller's downstream render delegates so this test can stub
  * them and inspect the per-frame config without a real GL context. */
-#define scene_render_3d_scene              test_scene_render_3d_scene
+#define render3d_draw_scene              test_scene_render_3d_scene
 #define glr_camera_load_modelview          test_glr_camera_load_modelview
 #define replay_ui_hud_render               test_replay_ui_hud_render
 #define ui_panels_render_code_panel        test_ui_panels_render_code_panel
@@ -79,7 +79,7 @@ int test_glr_export_mesh_ply(const char *path, int srgb_decode);
  * mocked symbol, so compiling it in this mock context is identical to normal. */
 #include "app/glr_ctrl_router.c"
 
-#undef scene_render_3d_scene
+#undef render3d_draw_scene
 #undef glr_camera_load_modelview
 #undef replay_ui_hud_render
 #undef ui_panels_render_code_panel
@@ -94,7 +94,7 @@ int test_glr_export_mesh_ply(const char *path, int srgb_decode);
 #undef glutSetCursor
 #undef glr_export_mesh_ply
 
-static SceneRenderConfig g_last_scene_config;
+static Render3dRenderConfig g_last_scene_config;
 /* Snapshot copy captured by the replay HUD stub; replaces the old
  * UiReplayHudState struct after replay_ui_hud_render was reshaped to
  * take the per-frame snapshot directly. */
@@ -146,8 +146,8 @@ static int count_highlight_kind_on_line(UiHighlightKind kind, int line_idx) {
     return count;
 }
 
-int test_scene_render_3d_scene(SceneRendererState *state,
-                               const SceneRenderConfig *config) {
+int test_scene_render_3d_scene(Render3dState *state,
+                               const Render3dRenderConfig *config) {
     (void)state;
     g_scene_render_calls++;
     g_last_scene_config = *config;
@@ -237,7 +237,7 @@ static void prepare_display_fixture(void) {
     ui_state_viewport_set_size(800, 600);
     glr_camera_set(11.0f, 22.0f, 7.5f, 0.5f, -0.25f, 1.75f, 0.9f);
     glr_state_render_mut()->use_accum = 0;
-    glr_state_render_mut()->accum_effect = SCENE_ACCUM_EFFECT_OFF;
+    glr_state_render_mut()->accum_effect = RENDER3D_ACCUM_EFFECT_OFF;
     glr_state_render_mut()->accum_passes = 1;
     glr_state_render_mut()->multisample_enabled = 0;
     glr_state_render_mut()->line_smooth_enabled = 1;
@@ -252,7 +252,7 @@ static void prepare_display_fixture(void) {
     presentation->show_vertex_points = 1;
     presentation->show_light_indicators = 1;
     presentation->highlight_current_poly = 1;
-    presentation->xform_guide_mode = (SceneXformGuideMode)9; /* out-of-range: exercises clamp path */
+    presentation->xform_guide_mode = (Render3dXformGuideMode)9; /* out-of-range: exercises clamp path */
     presentation->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
 
     repl_state_variables_mut()->anim_time = 4.25f;
@@ -315,15 +315,15 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
 
     ASSERT_TRUE("scene execute fn wired", g_last_scene_config.execute_fn != NULL);
     ASSERT_TRUE("scene execute user data null", g_last_scene_config.execute_user_data == NULL);
-    /* viewport_w/h removed from SceneRenderConfig — scene helpers use
-     * scene_w/scene_h (the active GL viewport) instead. The HUD asserts
+    /* viewport_w/h removed from Render3dRenderConfig — scene helpers use
+     * render3d_w/render3d_h (the active GL viewport) instead. The HUD asserts
      * below read the window viewport from the snapshot directly. */
     ASSERT_FLOAT("camera distance forwarded", g_last_scene_config.cam_dist, 7.5f);
     ASSERT_FLOAT("camera tx forwarded", g_last_scene_config.cam_tx, 0.5f);
     ASSERT_FLOAT("camera glow forwarded", g_last_scene_config.cam_motion_glow, 0.9f);
     ASSERT_INT("user lighting copied", g_last_scene_config.user_lighting_enabled, 1);
     ASSERT_INT("light indicators copied", g_last_scene_config.show_light_indicators, 1);
-    /* The replay-fade plan moved out of SceneRenderConfig and is now a
+    /* The replay-fade plan moved out of Render3dRenderConfig and is now a
      * controller-private static (g_replay_fade_plan). Inspect it directly
      * since this TU includes imrepl_ctrl.c as a compilation unit. */
     ASSERT_INT("replay fade plan inactive without active fades",
@@ -436,7 +436,7 @@ static void test_display_frame_profile_coverage(void) {
         PROF_SNAPSHOT_PREP,
         PROF_SNAPSHOT_SCENE_CONFIG,
         PROF_SNAPSHOT_UI,
-        PROF_SCENE_3D,
+        PROF_RENDER3D_3D,
         PROF_REPLAY_HUD,    /* fixture has replay active */
         PROF_CODE_PANEL,
         PROF_UI_PANELS,
@@ -451,7 +451,7 @@ static void test_display_frame_profile_coverage(void) {
     }
 
     /* Sum of disjoint top-level sections should be a substantial
-     * fraction of PROF_FRAME_TOTAL. PROF_SNAPSHOT / PROF_SCENE_3D
+     * fraction of PROF_FRAME_TOTAL. PROF_SNAPSHOT / PROF_RENDER3D_3D
      * are themselves aggregates, so summing them with the leaves
      * outside (autonormal, flatten, replay_hud, code_panel,
      * ui_panels, profile_panel, frame_restore) covers the
@@ -461,7 +461,7 @@ static void test_display_frame_profile_coverage(void) {
         prof_section_last_us(PROF_AUTONORMAL) +
         prof_section_last_us(PROF_FLATTEN) +
         prof_section_last_us(PROF_SNAPSHOT) +
-        prof_section_last_us(PROF_SCENE_3D) +
+        prof_section_last_us(PROF_RENDER3D_3D) +
         prof_section_last_us(PROF_REPLAY_HUD) +
         prof_section_last_us(PROF_CODE_PANEL) +
         prof_section_last_us(PROF_UI_PANELS) +
@@ -837,7 +837,7 @@ static void test_pointer_state_tracks_controller_mouse_routes(void) {
 
 /* Grid/axes in-out transition wiring: the controller diffs the
  * presentation theme, ticks g_grid_xn/g_axes_xn, and writes the
- * effective {theme, opacity, phase} into SceneRenderConfig. Drives the
+ * effective {theme, opacity, phase} into Render3dRenderConfig. Drives the
  * machines via the real glr_ctrl_tick (the animation timer) and reads
  * back through the g_last_scene_config capture stub. */
 static void test_overlay_transition_machine_wiring(void) {
@@ -850,7 +850,7 @@ static void test_overlay_transition_machine_wiring(void) {
     /* Ticks to fully complete an OUT then IN at the *configured* grid
      * durations (glr_ctrl_tick advances a fixed 0.016s). Derived from
      * the constants, not hardcoded, so retuning GRID_FADE_*_SECS in
-     * scene_transition.h doesn't break this test. +6 ticks of margin. */
+     * render3d_transition.h doesn't break this test. +6 ticks of margin. */
     const int settle = (int)((GRID_FADE_OUT_SECS + GRID_FADE_IN_SECS)
                              / 0.016f) + 6;
 
@@ -861,10 +861,10 @@ static void test_overlay_transition_machine_wiring(void) {
                g_last_scene_config.grid_theme, CFG_DEFAULT_GRID_THEME);
     ASSERT_FLOAT("snap grid opacity 1", g_last_scene_config.grid_opacity, 1.0f);
     ASSERT_INT("snap grid phase STEADY",
-               g_last_scene_config.grid_xn_phase, SCENE_XN_STEADY);
+               g_last_scene_config.grid_xn_phase, RENDER3D_XN_STEADY);
     ASSERT_FLOAT("snap axes opacity 1", g_last_scene_config.axes_opacity, 1.0f);
     ASSERT_INT("snap axes phase STEADY",
-               g_last_scene_config.axes_xn_phase, SCENE_XN_STEADY);
+               g_last_scene_config.axes_xn_phase, RENDER3D_XN_STEADY);
 
     /* 2. A theme change drives FADE_OUT (old theme still drawn) then,
      *    past the opacity-0 crossing, FADE_IN of the adopted theme. */
@@ -874,7 +874,7 @@ static void test_overlay_transition_machine_wiring(void) {
     ASSERT_INT("OUT keeps old theme",
                g_last_scene_config.grid_theme, CFG_DEFAULT_GRID_THEME);
     ASSERT_INT("phase FADE_OUT",
-               g_last_scene_config.grid_xn_phase, SCENE_XN_FADE_OUT);
+               g_last_scene_config.grid_xn_phase, RENDER3D_XN_FADE_OUT);
     ASSERT_TRUE("opacity dropping during OUT",
                 g_last_scene_config.grid_opacity < 1.0f &&
                 g_last_scene_config.grid_opacity > 0.0f);
@@ -886,7 +886,7 @@ static void test_overlay_transition_machine_wiring(void) {
     ASSERT_FLOAT("faded fully back in",
                  g_last_scene_config.grid_opacity, 1.0f);
     ASSERT_INT("phase STEADY after IN",
-               g_last_scene_config.grid_xn_phase, SCENE_XN_STEADY);
+               g_last_scene_config.grid_xn_phase, RENDER3D_XN_STEADY);
 
     /* 3. Rapid toggle: retarget mid-OUT; the latest selection is
      *    adopted at the crossing and the ephemeral one is skipped. */
@@ -899,7 +899,7 @@ static void test_overlay_transition_machine_wiring(void) {
                g_last_scene_config.grid_theme, GRID_THEME_EMBER);
 
     /* 4. Rule 6 off-source: from the off index the controller calls
-     *    scene_xn_show, so the new theme fades IN from 0 with NO
+     *    render3d_xn_show, so the new theme fades IN from 0 with NO
      *    preceding FADE_OUT (current jumps straight to the theme). */
     glr_state_presentation_mut()->grid_theme = GRID_THEME_OFF;
     for (int i = 0; i < settle; i++) glr_ctrl_tick();   /* settle to off */
@@ -909,7 +909,7 @@ static void test_overlay_transition_machine_wiring(void) {
     ASSERT_INT("show: current jumps straight to theme",
                g_last_scene_config.grid_theme, GRID_THEME_CLASSIC);
     ASSERT_INT("show: phase FADE_IN (no dead OUT)",
-               g_last_scene_config.grid_xn_phase, SCENE_XN_FADE_IN);
+               g_last_scene_config.grid_xn_phase, RENDER3D_XN_FADE_IN);
     ASSERT_TRUE("show: fading up from 0",
                 g_last_scene_config.grid_opacity > 0.0f &&
                 g_last_scene_config.grid_opacity < 1.0f);
@@ -923,7 +923,7 @@ static void test_overlay_transition_machine_wiring(void) {
     ASSERT_FLOAT("reset grid opacity 1",
                  g_last_scene_config.grid_opacity, 1.0f);
     ASSERT_INT("reset grid STEADY",
-               g_last_scene_config.grid_xn_phase, SCENE_XN_STEADY);
+               g_last_scene_config.grid_xn_phase, RENDER3D_XN_STEADY);
 }
 
 static void test_view_mode_projection_transition_wiring(void) {
@@ -942,7 +942,7 @@ static void test_view_mode_projection_transition_wiring(void) {
     ASSERT_INT("camera controls start 3d",
                glr_camera_control_mode(), GLR_CAMERA_CONTROL_3D);
 
-    glr_state_presentation_mut()->ortho_mode = SCENE_VIEW_2D;
+    glr_state_presentation_mut()->ortho_mode = RENDER3D_VIEW_2D;
     glr_ctrl_tick();
     glr_ctrl_display_frame();
     ASSERT_INT("camera controls switch to 2d",
@@ -980,7 +980,7 @@ static void test_view_mode_projection_transition_wiring(void) {
     ASSERT_FLOAT("projection settles on ortho",
                  g_last_scene_config.projection_mix, 0.0f);
 
-    glr_state_presentation_mut()->ortho_mode = SCENE_VIEW_3D;
+    glr_state_presentation_mut()->ortho_mode = RENDER3D_VIEW_3D;
     glr_ctrl_tick();
     glr_ctrl_display_frame();
     ASSERT_INT("camera controls stay 2d while projection exits ortho",
@@ -1029,7 +1029,7 @@ static void test_view_mode_3d_to_2d_uses_faster_decay(void) {
     ry_default_step = 22.0f * (1.0f - GLR_CAMERA_TARGET_DECAY);
 
     /* 3D -> 2D: first tick uses the faster decay. */
-    glr_state_presentation_mut()->ortho_mode = SCENE_VIEW_2D;
+    glr_state_presentation_mut()->ortho_mode = RENDER3D_VIEW_2D;
     glr_ctrl_tick();
 
     cam = glr_camera();
@@ -1066,7 +1066,7 @@ static void test_view_mode_3d_to_2d_uses_faster_decay(void) {
      * then camera_tick), so the camera is already 1 tick into its ease
      * the moment projection settles — that's the sample to measure
      * against the default decay. */
-    glr_state_presentation_mut()->ortho_mode = SCENE_VIEW_3D;
+    glr_state_presentation_mut()->ortho_mode = RENDER3D_VIEW_3D;
     int converged_at = -1;
     for (int i = 0; i < 200; i++) {
         glr_ctrl_tick();
@@ -1128,7 +1128,7 @@ static void test_view_record_external_3d_pose_tracks_in_ortho(void) {
 
     /* 1) Enter 2D from a non-flat 3D pose; saved snapshot is the
      *    pre-ortho camera (rx=11, ry=22 from prepare_display_fixture). */
-    glr_state_presentation_mut()->ortho_mode = SCENE_VIEW_2D;
+    glr_state_presentation_mut()->ortho_mode = RENDER3D_VIEW_2D;
     tick_until_view_settled(400);
     cam = glr_camera();
     ASSERT_FLOAT("camera flattened to rx=0", cam.rx, 0.0f);
@@ -1140,7 +1140,7 @@ static void test_view_record_external_3d_pose_tracks_in_ortho(void) {
 
     /* 3) Returning to 3D should ease toward the reported pose, not the
      *    snapshot captured on 2D entry. */
-    glr_state_presentation_mut()->ortho_mode = SCENE_VIEW_3D;
+    glr_state_presentation_mut()->ortho_mode = RENDER3D_VIEW_3D;
     tick_until_view_settled(400);
     cam = glr_camera();
     ASSERT_FLOAT("camera-to-3d uses refreshed rx", cam.rx, 35.0f);
@@ -1161,18 +1161,18 @@ static void test_view_record_external_3d_pose_noop_in_perspective(void) {
     glr_ctrl_display_frame();
 
     /* Seed a saved snapshot by entering and leaving 2D. */
-    glr_state_presentation_mut()->ortho_mode = SCENE_VIEW_2D;
+    glr_state_presentation_mut()->ortho_mode = RENDER3D_VIEW_2D;
     tick_until_view_settled(400);
-    glr_state_presentation_mut()->ortho_mode = SCENE_VIEW_3D;
+    glr_state_presentation_mut()->ortho_mode = RENDER3D_VIEW_3D;
     tick_until_view_settled(400);
     cam_before = glr_camera();
 
     /* Fire the bridge while in 3D — the saved snapshot must be ignored. */
     glr_ctrl_view_record_external_3d_pose(99.0f, 99.0f, 99.0f);
 
-    glr_state_presentation_mut()->ortho_mode = SCENE_VIEW_2D;
+    glr_state_presentation_mut()->ortho_mode = RENDER3D_VIEW_2D;
     tick_until_view_settled(400);
-    glr_state_presentation_mut()->ortho_mode = SCENE_VIEW_3D;
+    glr_state_presentation_mut()->ortho_mode = RENDER3D_VIEW_3D;
     tick_until_view_settled(400);
     cam_after = glr_camera();
 
@@ -1277,7 +1277,7 @@ static void test_build_ui_snapshot_is_idempotent(void) {
 /* Audit #14 prep: scene-config invariants over the per-frame display
  * path. The audit proposes extracting ~600 lines of overlay rendering
  * from glr_ctrl into src/scene/. The contract that survives the move
- * is what fields the controller must populate on SceneRenderConfig so
+ * is what fields the controller must populate on Render3dRenderConfig so
  * the (post-refactor) scene module can drive overlay passes directly.
  *
  * Most fields are already pinned by
@@ -1287,8 +1287,8 @@ static void test_build_ui_snapshot_is_idempotent(void) {
  * must point at the config that hosts the guides (so the future
  * scene-side overlay code can rely on that handle). */
 static void test_display_frame_scene_config_is_stable_across_frames(void) {
-    SceneRenderConfig frame1;
-    SceneRenderConfig frame2;
+    Render3dRenderConfig frame1;
+    Render3dRenderConfig frame2;
 
     printf("--- imrepl_ctrl scene config purity ---\n");
     prepare_display_fixture();
@@ -1302,12 +1302,12 @@ static void test_display_frame_scene_config_is_stable_across_frames(void) {
     frame2 = g_last_scene_config;
 
     /* Stable inputs across frames. Note: anim_time advances inside
-     * scene_render (via the replay tick), so don't pin that here —
+     * render3d_render (via the replay tick), so don't pin that here —
      * the rest of the config is steady-state. */
-    ASSERT_INT("scene_w stable across frames",
-               frame2.scene_w, frame1.scene_w);
-    ASSERT_INT("scene_h stable across frames",
-               frame2.scene_h, frame1.scene_h);
+    ASSERT_INT("render3d_w stable across frames",
+               frame2.render3d_w, frame1.render3d_w);
+    ASSERT_INT("render3d_h stable across frames",
+               frame2.render3d_h, frame1.render3d_h);
     ASSERT_FLOAT("scene cam_dist stable across frames",
                  frame2.cam_dist, frame1.cam_dist);
     ASSERT_FLOAT("scene cam_rx stable across frames",
@@ -1330,7 +1330,7 @@ static void test_display_frame_scene_config_is_stable_across_frames(void) {
                  frame2.alpha_scale, frame1.alpha_scale);
 
     /* The post_overlays_fn hook is wired with config-as-user_data so
-     * the hook reads guides off SceneRenderConfig. Pin that pointer
+     * the hook reads guides off Render3dRenderConfig. Pin that pointer
      * identity — a refactor that switches user_data to NULL or to a
      * different pointer would break the guide overlay. */
     ASSERT_TRUE("post_overlays_fn wired in frame 1",
@@ -1338,11 +1338,11 @@ static void test_display_frame_scene_config_is_stable_across_frames(void) {
     ASSERT_TRUE("post_overlays_fn wired in frame 2",
                 frame2.post_overlays_fn != NULL);
     /* user_data IS the live config the controller passed into
-     * scene_render_3d_scene (not the cached frame1/frame2 copies).
+     * render3d_draw_scene (not the cached frame1/frame2 copies).
      * Catch it by reading g_last_scene_config.post_overlays_user_data
      * after the second frame and asserting it equals &g_last_scene_config
      * is intentionally NOT done — the controller hands the scene module
-     * its OWN local SceneRenderConfig. We pin the looser invariant: the
+     * its OWN local Render3dRenderConfig. We pin the looser invariant: the
      * hook always carries a non-NULL user_data alongside the fn. */
     ASSERT_TRUE("post_overlays_user_data non-NULL",
                 frame2.post_overlays_user_data != NULL);
@@ -1824,9 +1824,9 @@ static void test_variable_panel_t_change_reflattens_when_time_paused(void) {
 }
 
 /* scene_execute_adapter is called by render.c on both the main fill
- * pass and the scene_probe_eye_dist feedback pass. The probe pass
+ * pass and the render3d_probe_eye_dist feedback pass. The probe pass
  * runs every frame in ortho/projection-transition mode; before the
- * SceneExecutePurpose wiring its execute_fn invocation mutated REPL
+ * Render3dExecutePurpose wiring its execute_fn invocation mutated REPL
  * state (predef vars, scratch arrays, light enables, clear_color)
  * the same as the main fill, so the user's `t = t + 1` style code
  * advanced twice per frame and the probe's glEnable(GL_LIGHT0) /
@@ -1909,7 +1909,7 @@ static void test_auxiliary_scene_pass_side_effects(void) {
     float predef_before = g_predef_vars[probevar_idx].value;
 
     /* Probe call: state must not change. */
-    SceneExecuteContext probe_ctx = { .purpose = SCENE_EXEC_DEPTH_PROBE };
+    Render3dExecuteContext probe_ctx = { .purpose = RENDER3D_EXEC_DEPTH_PROBE };
     scene_execute_adapter(&probe_ctx, NULL);
 
     float predef_after_probe = g_predef_vars[probevar_idx].value;
@@ -1920,7 +1920,7 @@ static void test_auxiliary_scene_pass_side_effects(void) {
     ASSERT_FLOAT("probe: A[0] unchanged", scratch_after_probe, scratch_before);
 
     /* Main fill call: state SHOULD mutate. */
-    SceneExecuteContext fill_ctx = { .purpose = SCENE_EXEC_MAIN_FILL };
+    Render3dExecuteContext fill_ctx = { .purpose = RENDER3D_EXEC_MAIN_FILL };
     scene_execute_adapter(&fill_ctx, NULL);
 
     float predef_after_fill = g_predef_vars[probevar_idx].value;
@@ -1940,8 +1940,8 @@ static void test_auxiliary_scene_pass_side_effects(void) {
     predef_before = g_predef_vars[probevar_idx].value;
     repl_eval_scratch_get(scratch_a_idx, 0, &scratch_before);
 
-    SceneExecuteContext hidden_ctx = {
-        .purpose = SCENE_EXEC_WIREFRAME_HIDDEN_LINES
+    Render3dExecuteContext hidden_ctx = {
+        .purpose = RENDER3D_EXEC_WIREFRAME_HIDDEN_LINES
     };
     scene_execute_adapter(&hidden_ctx, NULL);
     ASSERT_FLOAT("wire hidden: probevar unchanged",
@@ -1950,8 +1950,8 @@ static void test_auxiliary_scene_pass_side_effects(void) {
     ASSERT_FLOAT("wire hidden: A[0] unchanged",
                  scratch_after_probe, scratch_before);
 
-    SceneExecuteContext depth_ctx = {
-        .purpose = SCENE_EXEC_WIREFRAME_DEPTH_FILL
+    Render3dExecuteContext depth_ctx = {
+        .purpose = RENDER3D_EXEC_WIREFRAME_DEPTH_FILL
     };
     scene_execute_adapter(&depth_ctx, NULL);
     ASSERT_FLOAT("wire depth: probevar unchanged",
@@ -1960,8 +1960,8 @@ static void test_auxiliary_scene_pass_side_effects(void) {
     ASSERT_FLOAT("wire depth: A[0] unchanged",
                  scratch_after_probe, scratch_before);
 
-    SceneExecuteContext visible_ctx = {
-        .purpose = SCENE_EXEC_WIREFRAME_VISIBLE_LINES
+    Render3dExecuteContext visible_ctx = {
+        .purpose = RENDER3D_EXEC_WIREFRAME_VISIBLE_LINES
     };
     scene_execute_adapter(&visible_ctx, NULL);
     ASSERT_FLOAT("wire visible: probevar advanced once",
@@ -1994,8 +1994,8 @@ static void test_wireframe_renderer_ignores_user_draw_state(void) {
 
 #ifdef GL_STUBS
     gl_stub_counts_reset();
-    SceneExecuteContext visible_ctx = {
-        .purpose = SCENE_EXEC_WIREFRAME_VISIBLE_LINES
+    Render3dExecuteContext visible_ctx = {
+        .purpose = RENDER3D_EXEC_WIREFRAME_VISIBLE_LINES
     };
     scene_execute_adapter(&visible_ctx, NULL);
 
@@ -2022,7 +2022,7 @@ static void test_wireframe_renderer_ignores_user_draw_state(void) {
  * default, and that reset must ALSO re-apply the theme to the app-state
  * lights[] (positions / colors / eye-space). Before the fix
  * glr_ctrl_reset_example_chrome reset the cfg field directly — bypassing
- * the scene_lights_apply_theme hook in glr_config_set — so the lights[]
+ * the render3d_lights_apply_theme hook in glr_config_set — so the lights[]
  * array (and the light indicators that read it) stayed on the *previous*
  * theme: the name said default but the geometry stayed e.g. SOLAR.
  *
@@ -2031,11 +2031,11 @@ static void test_wireframe_renderer_ignores_user_draw_state(void) {
 static void test_example_reset_reapplies_light_theme(void) {
     printf("--- glr_ctrl example reset re-applies light theme to lights[] ---\n");
 
-    SceneLight expected_default[MAX_LIGHTS];
-    scene_lights_apply_theme(expected_default, LIGHT_THEME_DEFAULT);
+    Render3dLight expected_default[MAX_LIGHTS];
+    render3d_lights_apply_theme(expected_default, LIGHT_THEME_DEFAULT);
 
     /* Switch to a non-default theme through the real setter, which fires
-     * the scene_lights_apply_theme hook, so lights[] holds the SOLAR preset. */
+     * the render3d_lights_apply_theme hook, so lights[] holds the SOLAR preset. */
     glr_config_set(GLR_CONFIG_LIGHT_THEME, LIGHT_THEME_SOLAR);
     ASSERT_INT("theme set to SOLAR",
                glr_config_get(GLR_CONFIG_LIGHT_THEME), LIGHT_THEME_SOLAR);
@@ -2054,7 +2054,7 @@ static void test_example_reset_reapplies_light_theme(void) {
                        sizeof(expected_default)) == 0);
 }
 
-/* The light-split contract: SceneRenderConfig.lights[] is assembled per frame
+/* The light-split contract: Render3dRenderConfig.lights[] is assembled per frame
  * from two owners — the app-owned theme-seeded dimensional data
  * (GlrRenderState.lights: position / color / id / eye-space) merged with the
  * REPL-owned enable bitmask (ReplRenderState.light_enabled_mask). This drives
@@ -2065,8 +2065,8 @@ static void test_display_frame_merges_light_theme_and_enable_mask(void) {
     printf("--- imrepl_ctrl light merge (theme + enable mask) ---\n");
     prepare_display_fixture();
 
-    SceneLight theme[MAX_LIGHTS];
-    scene_lights_apply_theme(theme, LIGHT_THEME_SOLAR);
+    Render3dLight theme[MAX_LIGHTS];
+    render3d_lights_apply_theme(theme, LIGHT_THEME_SOLAR);
 
     /* App side: the theme seeds positions/colors. REPL side: only slots 0
      * and 2 are enabled by the program. */
@@ -2112,7 +2112,7 @@ static void test_export_light_bridge_reads_app_state(void) {
         ReplExportLightInfo info;
         memset(&info, 0xAB, sizeof(info)); /* bridge must overwrite all fields */
         b->fill_slot(slot, &info);
-        const SceneLight *l = &render.lights[slot];
+        const Render3dLight *l = &render.lights[slot];
         ASSERT_TRUE("bridge diffuse matches app light",
                     info.diffuse[0] == l->diffuse[0] && info.diffuse[3] == l->diffuse[3]);
         ASSERT_TRUE("bridge ambient matches app light",

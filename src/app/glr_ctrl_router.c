@@ -205,7 +205,7 @@ int glr_ctrl_router_handle_accum_samples_key(unsigned char key) {
     if (!is_up && !is_down)
         return 0;
 
-    if (rs->use_accum && rs->accum_effect != SCENE_ACCUM_EFFECT_OFF) {
+    if (rs->use_accum && rs->accum_effect != RENDER3D_ACCUM_EFFECT_OFF) {
         int n   = glr_config_state_count(GLR_CONFIG_ACCUM_PASSES);
         int idx = glr_config_get(GLR_CONFIG_ACCUM_PASSES);
         int next = idx + (is_up ? 1 : -1);

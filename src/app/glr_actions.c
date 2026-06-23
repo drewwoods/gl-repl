@@ -49,18 +49,18 @@
 #include "editor/inline_rename.h"
 #include "editor/undo.h"
 #include "render3d/themes.h"
-#include "render3d/view_mode.h"         /* SCENE_VIEW_LIST — derives the view_mode cfg symbols */
-#include "render3d/lights.h"           /* scene_lights_apply_theme, scene_light_theme_names */
+#include "render3d/view_mode.h"         /* RENDER3D_VIEW_LIST — derives the view_mode cfg symbols */
+#include "render3d/lights.h"           /* render3d_lights_apply_theme, render3d_light_theme_names */
 #include "subsystems/edit_overlays/edit_overlays.h"
 
 static const char *replay_mode_names[] = { "Polygon", "Vertex" };
-static const char *backdrop_mode_names[SCENE_BACKDROP_COUNT] = {
-    SCENE_BACKDROP_LIST(SCENE_BACKDROP_NAME_ENTRY)
+static const char *backdrop_mode_names[RENDER3D_BACKDROP_COUNT] = {
+    RENDER3D_BACKDROP_LIST(RENDER3D_BACKDROP_NAME_ENTRY)
 };
-static const char *xform_guide_mode_names[SCENE_XFORM_GUIDE_COUNT] = {
-    [SCENE_XFORM_GUIDE_OFF]   = "Off",
-    [SCENE_XFORM_GUIDE_WORLD] = "World",
-    [SCENE_XFORM_GUIDE_FRAME] = "Frame",
+static const char *xform_guide_mode_names[RENDER3D_XFORM_GUIDE_COUNT] = {
+    [RENDER3D_XFORM_GUIDE_OFF]   = "Off",
+    [RENDER3D_XFORM_GUIDE_WORLD] = "World",
+    [RENDER3D_XFORM_GUIDE_FRAME] = "Frame",
 };
 static const char *profile_panel_mode_names[] = { "Off", "Plot", "Sections", "Details" };
 static const char *memory_panel_mode_names[]  = { "Off", "On" };
@@ -167,7 +167,7 @@ const GlrConfigItem g_cfg_items[] = {
     { .label = "Accum passes", .key = GLR_CONFIG_ACCUM_PASSES,
       .state_count = 6, .state_names = accum_passes_names },
     { .label = "Wireframe", .key = GLR_CONFIG_WIREFRAME,
-      .state_count = SCENE_WIREFRAME_COUNT, .state_names = wireframe_mode_names,
+      .state_count = RENDER3D_WIREFRAME_COUNT, .state_names = wireframe_mode_names,
       .key_code = KM_KEY(GLR_WIREFRAME), .modifiers = KM_MODS(GLR_WIREFRAME) },
     { .label = "Point attenuation", .key = GLR_CONFIG_POINT_ATTENUATION, .state_count = 2 },
     { .label = "---", .section_header = 1 },
@@ -201,17 +201,17 @@ const GlrConfigItem g_cfg_items[] = {
       .state_count = AXES_THEME_COUNT, .state_names = axes_theme_names,
       .key_code = KM_KEY(GLR_AXES), .modifiers = KM_MODS(GLR_AXES), .is_special = 1 },
     { .label = "Xform guides", .key = GLR_CONFIG_XFORM_GUIDE_MODE,
-      .state_count = SCENE_XFORM_GUIDE_COUNT, .state_names = xform_guide_mode_names,
+      .state_count = RENDER3D_XFORM_GUIDE_COUNT, .state_names = xform_guide_mode_names,
       .key_code = KM_KEY(GLR_XFORM_GUIDES), .modifiers = KM_MODS(GLR_XFORM_GUIDES),
       .is_special = 1 },
     { .label = "Light indicators", .key = GLR_CONFIG_LIGHT_INDICATORS, .state_count = 2,
       .key_code = KM_KEY(GLR_LIGHT_INDICATORS), .modifiers = KM_MODS(GLR_LIGHT_INDICATORS) },
     { .label = "Light theme", .key = GLR_CONFIG_LIGHT_THEME,
-      .state_count = LIGHT_THEME_COUNT, .state_names = scene_light_theme_names,
+      .state_count = LIGHT_THEME_COUNT, .state_names = render3d_light_theme_names,
       .key_code = KM_KEY(GLR_LIGHT_THEME), .modifiers = KM_MODS(GLR_LIGHT_THEME),
       .is_special = 1 },
     { .label = "Backdrop", .key = GLR_CONFIG_BACKDROP,
-      .state_count = SCENE_BACKDROP_COUNT, .state_names = backdrop_mode_names,
+      .state_count = RENDER3D_BACKDROP_COUNT, .state_names = backdrop_mode_names,
       .key_code = KM_KEY(GLR_BACKDROP), .modifiers = KM_MODS(GLR_BACKDROP), .is_special = 1 },
     { .label = "Auto-normals", .key = GLR_CONFIG_AUTO_NORMALS, .state_count = 2 },
     { .label = "---", .section_header = 1 },
@@ -409,16 +409,16 @@ static const char *cfg_grid_brightness_symbols[GRID_BRIGHTNESS_COUNT] = {
     GRID_BRIGHTNESS_LIST(GRID_BRIGHTNESS_SYMBOL_ENTRY)
 #undef GRID_BRIGHTNESS_SYMBOL_ENTRY
 };
-/* SCENE_VIEW_LIST is single-arg — X(name) — unlike the (name, str) theme
+/* RENDER3D_VIEW_LIST is single-arg — X(name) — unlike the (name, str) theme
  * lists above, so its symbol-entry macro takes one parameter. */
-static const char *cfg_view_mode_symbols[SCENE_VIEW_COUNT] = {
-#define SCENE_VIEW_SYMBOL_ENTRY(name) [SCENE_VIEW_##name] = "SCENE_VIEW_" #name,
-    SCENE_VIEW_LIST(SCENE_VIEW_SYMBOL_ENTRY)
+static const char *cfg_view_mode_symbols[RENDER3D_VIEW_COUNT] = {
+#define SCENE_VIEW_SYMBOL_ENTRY(name) [RENDER3D_VIEW_##name] = "RENDER3D_VIEW_" #name,
+    RENDER3D_VIEW_LIST(SCENE_VIEW_SYMBOL_ENTRY)
 #undef SCENE_VIEW_SYMBOL_ENTRY
 };
-static const char *cfg_backdrop_mode_symbols[SCENE_BACKDROP_COUNT] = {
-#define SCENE_BACKDROP_SYMBOL_ENTRY(name, str) [SCENE_BACKDROP_##name] = "SCENE_BACKDROP_" #name,
-    SCENE_BACKDROP_LIST(SCENE_BACKDROP_SYMBOL_ENTRY)
+static const char *cfg_backdrop_mode_symbols[RENDER3D_BACKDROP_COUNT] = {
+#define SCENE_BACKDROP_SYMBOL_ENTRY(name, str) [RENDER3D_BACKDROP_##name] = "RENDER3D_BACKDROP_" #name,
+    RENDER3D_BACKDROP_LIST(SCENE_BACKDROP_SYMBOL_ENTRY)
 #undef SCENE_BACKDROP_SYMBOL_ENTRY
 };
 static const char *cfg_light_theme_symbols[LIGHT_THEME_COUNT] = {
@@ -453,11 +453,11 @@ static const char *const *cfg_symbol_table_for_slug(const char *slug,
         return cfg_grid_brightness_symbols;
     }
     if (strcmp(slug, "view_mode") == 0) {
-        *count = SCENE_VIEW_COUNT;
+        *count = RENDER3D_VIEW_COUNT;
         return cfg_view_mode_symbols;
     }
     if (strcmp(slug, "backdrop") == 0) {
-        *count = SCENE_BACKDROP_COUNT;
+        *count = RENDER3D_BACKDROP_COUNT;
         return cfg_backdrop_mode_symbols;
     }
     if (strcmp(slug, "light_theme") == 0) {
@@ -773,7 +773,7 @@ void glr_cfg_cycle_row(int row, int delta) {
         repl_set_status(glr_config_get(GLR_CONFIG_POINT_ATTENUATION) ? "Point attenuation: ON"
                                                                   : "Point attenuation: OFF");
     } else if (item->key == GLR_CONFIG_LIGHT_THEME) {
-        /* scene_lights_apply_theme + eye-space init already ran inside
+        /* render3d_lights_apply_theme + eye-space init already ran inside
          * glr_config_set above (so @cfg-driven theme loads get the
          * same treatment). The cycle handler just needs to re-apply
          * the init bootstrap so the exporter / code-panel light lines

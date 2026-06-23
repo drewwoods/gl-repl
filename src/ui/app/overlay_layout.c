@@ -45,7 +45,7 @@ UiOverlayLayoutIn ui_overlay_layout_inputs(int var_visible, int var_count,
                                            int profile_mode, int memory_mode,
                                            int band_h) {
     UiOverlayLayoutIn in;
-    ui_layout_scene_rect(&in.scene_x, &in.scene_y, &in.scene_w, &in.scene_h);
+    ui_layout_scene_rect(&in.render3d_x, &in.render3d_y, &in.render3d_w, &in.render3d_h);
     in.bottom_inset = STATUSBAR_H;
     in.band_h       = band_h;
     in.prefer_top_on_overflow =
@@ -85,9 +85,9 @@ void ui_overlay_layout_solve(const UiOverlayLayoutIn *in,
                              int out_x[UI_OVERLAY_PANEL_COUNT],
                              int out_y[UI_OVERLAY_PANEL_COUNT]) {
     int base = (in->band_h > OVL_BASE_Y) ? in->band_h : OVL_BASE_Y;
-    int y0 = in->scene_y + in->bottom_inset + base;
-    int top_limit = in->scene_y + in->scene_h - OVL_EDGE_PAD;
-    int col_right = in->scene_x + in->scene_w - OVL_RIGHT_MARGIN;
+    int y0 = in->render3d_y + in->bottom_inset + base;
+    int top_limit = in->render3d_y + in->render3d_h - OVL_EDGE_PAD;
+    int col_right = in->render3d_x + in->render3d_w - OVL_RIGHT_MARGIN;
     int col_left  = col_right;
     int y = y0;
 
@@ -103,8 +103,8 @@ void ui_overlay_layout_solve(const UiOverlayLayoutIn *in,
         }
 
         int x = col_right - p->w;
-        if (x < in->scene_x + OVL_EDGE_PAD) x = in->scene_x + OVL_EDGE_PAD;
-        int yc = ui_clamp_panel_y(in->scene_y, in->scene_h, p->h, y,
+        if (x < in->render3d_x + OVL_EDGE_PAD) x = in->render3d_x + OVL_EDGE_PAD;
+        int yc = ui_clamp_panel_y(in->render3d_y, in->render3d_h, p->h, y,
                                   in->prefer_top_on_overflow,
                                   in->bottom_inset, OVL_EDGE_PAD);
         out_x[id] = x;

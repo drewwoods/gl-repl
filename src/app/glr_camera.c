@@ -283,11 +283,11 @@ void glr_camera_reset_default(void) {
 }
 
 /* Pure GL modelview load. Audit #11: this used to live in
- * src/scene/render.c as scene_apply_camera; scene called it,
+ * src/scene/render.c as render3d_apply_camera; scene called it,
  * scene readme insisted "scene does not own camera state", and the
  * scene renderer refused to invoke it on its own. Moved here so
  * the function and the camera type both sit with the app's camera
- * owner. scene_render_3d_scene now documents the precondition
+ * owner. render3d_draw_scene now documents the precondition
  * (modelview populated) without naming a specific helper. */
 GlrCameraPose glr_camera_pose_from_state(const GlrCameraState *state) {
     GlrCameraPose pose = {0};

@@ -15,7 +15,7 @@
 #include "ui/app/state.h"
 #include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
-#include "render3d/lights.h"   /* scene_lights_apply_theme + eye-space init */
+#include "render3d/lights.h"   /* render3d_lights_apply_theme + eye-space init */
 
 static int clamp_int(int v, int lo, int hi) {
     if (v < lo) return lo;
@@ -257,12 +257,12 @@ void glr_config_set(GlrConfigKey key, int value) {
             replay_stop();
         }
     } else if (key == GLR_CONFIG_WIREFRAME) {
-        glr_state_presentation_mut()->wireframe = (SceneWireframeMode)value;
+        glr_state_presentation_mut()->wireframe = (Render3dWireframeMode)value;
     } else if (key == GLR_CONFIG_XFORM_GUIDE_MODE) {
         glr_state_presentation_mut()->xform_guide_mode =
-            (SceneXformGuideMode)value;
+            (Render3dXformGuideMode)value;
     } else if (key == GLR_CONFIG_ORTHO_MODE) {
-        glr_state_presentation_mut()->ortho_mode = (SceneViewMode)value;
+        glr_state_presentation_mut()->ortho_mode = (Render3dViewMode)value;
     } else {
         int *target = config_value_ptr(key);
         if (!target)
@@ -275,7 +275,7 @@ void glr_config_set(GlrConfigKey key, int value) {
          * `@cfg light_theme = HEADLIGHT` arrives with the right
          * positions/colors and the headlight tracking the camera. */
         if (key == GLR_CONFIG_LIGHT_THEME)
-            scene_lights_apply_theme(glr_state_render_mut()->lights, value);
+            render3d_lights_apply_theme(glr_state_render_mut()->lights, value);
     }
 
     /* REQUIRE-step listener — slug-scoped and inactive-checked, so this

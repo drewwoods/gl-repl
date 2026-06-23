@@ -78,7 +78,7 @@ int  replay_exec_limit(void);           /* Current PC (what executor renders to)
 int  replay_has_active_fades(void);     /* Any fades currently visible? */
 int  replay_fill_base_limit(FlatProgramView flat_program);      /* Highest PC reached so far */
 
-/* Compute skip limits for performance: scene_render.c can skip rendering
+/* Compute skip limits for performance: render3d_render.c can skip rendering
  * commands in ranges where no fade is active (optimization). */
 int  replay_compute_fade_skip_limits(FlatProgramView flat_program, int *out_limits, int max_count);
 

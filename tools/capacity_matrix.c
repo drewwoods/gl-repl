@@ -103,7 +103,7 @@ static const CapRow rows[] = {
 
     /* Number of GL_LIGHT slots tracked by the renderer. */
     { "MAX_LIGHTS", MAX_LIGHTS,
-      sizeof(SceneLight),
+      sizeof(Render3dLight),
       "GlrRenderState.lights[] (theme-seeded; REPL owns only an enable bitmask)" },
 
     /* Undo / redo ring depth. Multiplies the entire snapshot cost. */

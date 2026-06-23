@@ -23,8 +23,8 @@
 #include <string.h>
 
 #include "app/glr_defaults.h"    /* CFG_DEFAULT_* */
-#include "render3d/themes.h"    /* GRID_MAJOR_*, GRID_EXTENT_*, SceneGridTheme defaults */
-#include "render3d/postprocess_filter.h" /* SCENE_POST_FILTER_OFF */
+#include "render3d/themes.h"    /* GRID_MAJOR_*, GRID_EXTENT_*, Render3dGridTheme defaults */
+#include "render3d/postprocess_filter.h" /* RENDER3D_POST_FILTER_OFF */
 #include "c_compat.h"        /* STATIC_ASSERT */
 
 /* The render defaults below seed exactly four GL_LIGHTn ids by hand, so the
@@ -61,8 +61,8 @@ static const float g_grid_extents[GRID_EXTENT_COUNT] = {
         .show_light_indicators  = CFG_DEFAULT_LIGHT_INDICATORS, \
         .light_theme            = CFG_DEFAULT_LIGHT_THEME, \
         .backdrop_mode          = CFG_DEFAULT_BACKDROP_MODE, \
-        .post_filter_mode       = SCENE_POST_FILTER_OFF, \
-        .compositor_filter_mode = SCENE_POST_FILTER_OFF, \
+        .post_filter_mode       = RENDER3D_POST_FILTER_OFF, \
+        .compositor_filter_mode = RENDER3D_POST_FILTER_OFF, \
         .highlight_current_poly = CFG_DEFAULT_HIGHLIGHT_POLY, \
         .ortho_mode             = CFG_DEFAULT_ORTHO_MODE, \
         .wrap_at_comma          = CFG_DEFAULT_WRAP_AT_COMMA, \
@@ -80,7 +80,7 @@ static const float g_grid_extents[GRID_EXTENT_COUNT] = {
         .line_smooth_enabled       = CFG_DEFAULT_LINE_SMOOTH, \
         .point_attenuation_enabled = CFG_DEFAULT_ATTENUATE_POINTS, \
         /* Seed the stable GL_LIGHTn ids; positions/colors/eye-space are \
-         * filled by scene_lights_apply_theme when the controller applies \
+         * filled by render3d_lights_apply_theme when the controller applies \
          * the active light theme (at init and on every example reset). */ \
         .lights = { { .id = GL_LIGHT0 }, { .id = GL_LIGHT1 }, \
                     { .id = GL_LIGHT2 }, { .id = GL_LIGHT3 } }, \

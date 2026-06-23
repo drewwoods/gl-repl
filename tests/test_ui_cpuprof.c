@@ -29,7 +29,7 @@ static void test_cpuprof_metrics(void) {
 
 static void test_gpu_section_policy(void) {
     /* GL-emitting sections are GPU-bracketed... */
-    ASSERT_INT_EQ("scene 3d is gpu", glr_prof_section_is_gpu(PROF_SCENE_3D), 1);
+    ASSERT_INT_EQ("scene 3d is gpu", glr_prof_section_is_gpu(PROF_RENDER3D_3D), 1);
     ASSERT_INT_EQ("code panel is gpu", glr_prof_section_is_gpu(PROF_CODE_PANEL), 1);
     ASSERT_INT_EQ("frame total is gpu", glr_prof_section_is_gpu(PROF_FRAME_TOTAL), 1);
     /* ...pure-CPU sections and the per-fade-batch budget exclusions are not. */
@@ -38,7 +38,7 @@ static void test_gpu_section_policy(void) {
     ASSERT_INT_EQ("frame restore is cpu-only",
                   glr_prof_section_is_gpu(PROF_FRAME_RESTORE), 0);
     ASSERT_INT_EQ("fade batch exec excluded",
-                  glr_prof_section_is_gpu(PROF_SCENE_3D_FADE_BATCH_EXEC), 0);
+                  glr_prof_section_is_gpu(PROF_RENDER3D_3D_FADE_BATCH_EXEC), 0);
     ASSERT_INT_EQ("code panel build rows excluded",
                   glr_prof_section_is_gpu(PROF_CODE_PANEL_ROWS), 0);
     ASSERT_INT_EQ("code panel text layout excluded",

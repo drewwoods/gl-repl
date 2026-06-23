@@ -38,11 +38,11 @@
 #define CFG_DEFAULT_NORMAL_VECTORS    0
 #define CFG_DEFAULT_VERTEX_OUTLINES   1
 #define CFG_DEFAULT_VERTEX_POINTS     1
-#define CFG_DEFAULT_XFORM_GUIDE_MODE  SCENE_XFORM_GUIDE_FRAME
+#define CFG_DEFAULT_XFORM_GUIDE_MODE  RENDER3D_XFORM_GUIDE_FRAME
 #define CFG_DEFAULT_LIGHT_INDICATORS  0
 #define CFG_DEFAULT_LIGHT_THEME       LIGHT_THEME_DEFAULT
-#define CFG_DEFAULT_BACKDROP_MODE     SCENE_BACKDROP_OFF
-#define CFG_DEFAULT_ORTHO_MODE        SCENE_VIEW_3D
+#define CFG_DEFAULT_BACKDROP_MODE     RENDER3D_BACKDROP_OFF
+#define CFG_DEFAULT_ORTHO_MODE        RENDER3D_VIEW_3D
 #define CFG_DEFAULT_CAMERA_ROTATE     0
 #define CFG_DEFAULT_VARIABLE_PANEL    1
 #define CFG_DEFAULT_WRAP_AT_COMMA     1
@@ -78,7 +78,7 @@
 /* Effect defaults to AA (preserving the historic accum-AA-on-by-default
  * behavior); Blur is strictly opt-in. Passes default to 2 (the old
  * default sample count). */
-#define CFG_DEFAULT_ACCUM_EFFECT      SCENE_ACCUM_EFFECT_AA
+#define CFG_DEFAULT_ACCUM_EFFECT      RENDER3D_ACCUM_EFFECT_AA
 #define CFG_DEFAULT_ACCUM_PASSES      2
 
 /* Scissor the accumulation-AA loop (per-pass glClear + glAccum read/return)

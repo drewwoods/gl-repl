@@ -3,7 +3,7 @@
  */
 #include "geometry_guides.h"
 #include "render3d/palette.h"
-#include "render3d/occluded_ghost.h"  /* SCENE_OCCLUDED_GHOST_STIPPLE */
+#include "render3d/occluded_ghost.h"  /* RENDER3D_OCCLUDED_GHOST_STIPPLE */
 
 #include <math.h>   /* sqrtf, fminf, fmodf, cosf, sinf */
 #include <string.h> /* strncmp */
@@ -22,15 +22,15 @@ static void geometry_guides_pop_state(void) {
 /* Per-axis fill and edge color tokens, indexed by the constrained axis
  * (0=X → YZ plane / red, 1=Y → XZ plane / green, 2=Z → XY plane /
  * blue). Used by draw_guide_axis_plane below. */
-static const SceneColorToken k_guide_plane_fill[3] = {
-    SCENE_CLR_GUIDE_PLANE_X_FILL,
-    SCENE_CLR_GUIDE_PLANE_Y_FILL,
-    SCENE_CLR_GUIDE_PLANE_Z_FILL,
+static const Render3dColorToken k_guide_plane_fill[3] = {
+    RENDER3D_CLR_GUIDE_PLANE_X_FILL,
+    RENDER3D_CLR_GUIDE_PLANE_Y_FILL,
+    RENDER3D_CLR_GUIDE_PLANE_Z_FILL,
 };
-static const SceneColorToken k_guide_plane_edge[3] = {
-    SCENE_CLR_GUIDE_PLANE_X_EDGE,
-    SCENE_CLR_GUIDE_PLANE_Y_EDGE,
-    SCENE_CLR_GUIDE_PLANE_Z_EDGE,
+static const Render3dColorToken k_guide_plane_edge[3] = {
+    RENDER3D_CLR_GUIDE_PLANE_X_EDGE,
+    RENDER3D_CLR_GUIDE_PLANE_Y_EDGE,
+    RENDER3D_CLR_GUIDE_PLANE_Z_EDGE,
 };
 
 /* Draw a semi-transparent plane perpendicular to `free_axis` at
@@ -55,7 +55,7 @@ static void draw_guide_axis_plane(int free_axis, float v, float sz, float as) {
     else if (free_axis == 1) { a_axis = 0; b_axis = 2; } /* XZ plane */
     else                     { a_axis = 0; b_axis = 1; } /* XY plane */
 
-    scene_clr_a(k_guide_plane_fill[free_axis], fminf(0.40f * as, 1.0f));
+    render3d_clr_a(k_guide_plane_fill[free_axis], fminf(0.40f * as, 1.0f));
     glBegin(GL_QUADS);
     for (int i = 0; i < 4; i++) {
         float p[3];
@@ -66,7 +66,7 @@ static void draw_guide_axis_plane(int free_axis, float v, float sz, float as) {
     }
     glEnd();
 
-    scene_clr_a(k_guide_plane_edge[free_axis], fminf(0.25f * as, 1.0f));
+    render3d_clr_a(k_guide_plane_edge[free_axis], fminf(0.25f * as, 1.0f));
     glBegin(GL_LINE_LOOP);
     for (int i = 0; i < 4; i++) {
         float p[3];
@@ -80,17 +80,17 @@ static void draw_guide_axis_plane(int free_axis, float v, float sz, float as) {
 
 /* Per-free-axis color token for the n==2 line guide, indexed by the
  * single still-unconstrained axis (0=X, 1=Y, 2=Z). */
-static const SceneColorToken k_guide_line_clr[3] = {
-    SCENE_CLR_GUIDE_LINE_X,
-    SCENE_CLR_GUIDE_LINE_Y,
-    SCENE_CLR_GUIDE_LINE_Z,
+static const Render3dColorToken k_guide_line_clr[3] = {
+    RENDER3D_CLR_GUIDE_LINE_X,
+    RENDER3D_CLR_GUIDE_LINE_Y,
+    RENDER3D_CLR_GUIDE_LINE_Z,
 };
 
 /* Recognize whether the partial input line is a vertex command. Returns
  * 1 for glVertex3f / glVertex2f / gluVertex (with at least one char past
  * the open paren), 0 otherwise. Sets *is_vertex2f for the glVertex2f
  * form, whose two args already pin a complete 2D vertex at z=0. */
-static int input_is_vertex_kind(const SceneGuideSnapshot *snapshot,
+static int input_is_vertex_kind(const Render3dGuideSnapshot *snapshot,
                                 int *is_vertex2f) {
     *is_vertex2f = 0;
     if (strncmp(snapshot->input, "glVertex3f(", 11) == 0 &&
@@ -113,7 +113,7 @@ static int input_is_vertex_kind(const SceneGuideSnapshot *snapshot,
 static void draw_vertex_point_marker(float x, float y, float z) {
     int depth = glIsEnabled(GL_DEPTH_TEST);
     if (depth) glDisable(GL_DEPTH_TEST);
-    scene_clr_a(SCENE_CLR_GUIDE_VERTEX_MARK, 0.9f);
+    render3d_clr_a(RENDER3D_CLR_GUIDE_VERTEX_MARK, 0.9f);
     glPointSize(GEOMETRY_GUIDE_VERTEX_MARK_POINT_SIZE);
     glBegin(GL_POINTS);
     glVertex3f(x, y, z);
@@ -131,7 +131,7 @@ static void draw_vertex_line_guide(int free_axis, const float vals[3], float sz)
     a[free_axis] = -sz;
     b[free_axis] =  sz;
 
-    scene_clr_a(k_guide_line_clr[free_axis], 0.9f);
+    render3d_clr_a(k_guide_line_clr[free_axis], 0.9f);
     glLineWidth(2.0f);
     glBegin(GL_LINES);
     glVertex3f(a[0], a[1], a[2]);
@@ -144,7 +144,7 @@ static void draw_vertex_line_guide(int free_axis, const float vals[3], float sz)
  * Edit guide for the vertex command under the cursor, visualizing the
  * degrees of freedom (DOF) still open as the user types its coordinates.
  *
- * snapshot->vertex_n_filled (see SceneGuideSnapshot) is how many of the
+ * snapshot->vertex_n_filled (see Render3dGuideSnapshot) is how many of the
  * comma-separated coordinate slots have a value so far; vertex_filled[]
  * flags which specific axes those are (both pre-evaluated by the
  * controller, so this module never touches repl_eval). The guide shows
@@ -157,7 +157,7 @@ static void draw_vertex_line_guide(int free_axis, const float vals[3], float sz)
  * glVertex2f is special-cased: two typed slots already pin a complete 2D
  * vertex at z=0, so it draws a point rather than a line.
  */
-static void draw_vertex_guides(const SceneGuideSnapshot *snapshot) {
+static void draw_vertex_guides(const Render3dGuideSnapshot *snapshot) {
     if (!snapshot->show_guides)
         return;
 
@@ -201,7 +201,7 @@ static void draw_vertex_guides(const SceneGuideSnapshot *snapshot) {
     geometry_guides_pop_state();
 }
 
-static void draw_normal_guides(const SceneGuideSnapshot *snapshot) {
+static void draw_normal_guides(const Render3dGuideSnapshot *snapshot) {
     if (!snapshot->show_guides)
         return;
 
@@ -315,7 +315,7 @@ static void draw_normal_guides(const SceneGuideSnapshot *snapshot) {
     float as = snapshot->alpha_scale;
     if (clen > 1e-8f) {
         float cn[3] = { vals[0]/clen, vals[1]/clen, vals[2]/clen };
-        scene_clr_a(SCENE_CLR_GUIDE_NORMAL_BASE, fminf(0.4f * as, 1.0f));
+        render3d_clr_a(RENDER3D_CLR_GUIDE_NORMAL_BASE, fminf(0.4f * as, 1.0f));
         glLineWidth(3.0f);
         glBegin(GL_LINES);
         glVertex3f(vx, vy, vz);
@@ -324,17 +324,17 @@ static void draw_normal_guides(const SceneGuideSnapshot *snapshot) {
     }
 
     glEnable(GL_LINE_STIPPLE);
-    glLineStipple(1, SCENE_OCCLUDED_GHOST_STIPPLE);
+    glLineStipple(1, RENDER3D_OCCLUDED_GHOST_STIPPLE);
     glLineWidth(4.0f);
 
-    scene_clr_a(SCENE_CLR_GUIDE_NORMAL_DOUBLE, 0.75f);
+    render3d_clr_a(RENDER3D_CLR_GUIDE_NORMAL_DOUBLE, 0.75f);
     glBegin(GL_LINES);
     glVertex3f(vx, vy, vz);
     glVertex3f(vx + doubled[0]*scale, vy + doubled[1]*scale,
                vz + doubled[2]*scale);
     glEnd();
 
-    scene_clr_a(SCENE_CLR_GUIDE_NORMAL_HALF, 0.75f);
+    render3d_clr_a(RENDER3D_CLR_GUIDE_NORMAL_HALF, 0.75f);
     glBegin(GL_LINES);
     glVertex3f(vx, vy, vz);
     glVertex3f(vx + halved[0]*scale, vy + halved[1]*scale,
@@ -346,10 +346,10 @@ static void draw_normal_guides(const SceneGuideSnapshot *snapshot) {
 
     glPointSize(GEOMETRY_GUIDE_NORMAL_POINT_SIZE);
     glBegin(GL_POINTS);
-    scene_clr_a(SCENE_CLR_GUIDE_NORMAL_DOUBLE, 0.85f);
+    render3d_clr_a(RENDER3D_CLR_GUIDE_NORMAL_DOUBLE, 0.85f);
     glVertex3f(vx + doubled[0]*scale, vy + doubled[1]*scale,
                vz + doubled[2]*scale);
-    scene_clr_a(SCENE_CLR_GUIDE_NORMAL_HALF, 0.85f);
+    render3d_clr_a(RENDER3D_CLR_GUIDE_NORMAL_HALF, 0.85f);
     glVertex3f(vx + halved[0]*scale, vy + halved[1]*scale,
                vz + halved[2]*scale);
     glEnd();
@@ -359,7 +359,7 @@ static void draw_normal_guides(const SceneGuideSnapshot *snapshot) {
     geometry_guides_pop_state();
 }
 
-void scene_geometry_guides_render_for_cursor(const SceneGuideSnapshot *snapshot) {
+void render3d_geometry_guides_render_for_cursor(const Render3dGuideSnapshot *snapshot) {
     if (!snapshot)
         return;
     draw_vertex_guides(snapshot);

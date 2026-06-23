@@ -30,9 +30,9 @@
 #include "editor/input.h"
 #include "editor/state.h"
 #include "editor/undo.h"
-#include "render3d/grid.h"                   /* scene_grid_reveal (transition curve) */
-#include "render3d/axes.h"                   /* scene_axes_reveal (transition curve) */
-#include "render3d/lights.h"                 /* scene_lights_apply_theme */
+#include "render3d/grid.h"                   /* render3d_grid_reveal (transition curve) */
+#include "render3d/axes.h"                   /* render3d_axes_reveal (transition curve) */
+#include "render3d/lights.h"                 /* render3d_lights_apply_theme */
 #include "app/glr_actions.h"
 #include "app/glr_config.h"
 #include "app/glr_camera.h"
@@ -68,7 +68,7 @@
 #include "subsystems/tutorial/tutorial.h"
 #include "subsystems/tutorial/tutorial_state.h"
 #include "ui/subsystems/replay_hud.h"
-#include "render3d/postprocess_filter.h" /* ScenePostFilterMode, mode_name */
+#include "render3d/postprocess_filter.h" /* Render3dPostFilterMode, mode_name */
 #include "render3d/render.h"
 #include "ui/app/autocomplete_panel.h"
 #include "ui/app/editor.h"
@@ -250,8 +250,8 @@ static int glr_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
     return cmd->valid && repl_cmd_emits_vertex(cmd->type);
 }
 
-static SceneFocusVertex glr_ctrl_build_focus_vertex(void) {
-    SceneFocusVertex focus = { .valid = 0 };
+static Render3dFocusVertex glr_ctrl_build_focus_vertex(void) {
+    Render3dFocusVertex focus = { .valid = 0 };
     int edit_line = editor_state_edit_line();
     const GLCmd *cmds = repl_state_document_cmds();
 
@@ -316,7 +316,7 @@ static int parse_arg_slots(const char *src,
 /* Resolve the cursor-line vertex / normal args into floats so the scene
  * module can render its guides without depending on repl_eval. Sets the
  * pre-parsed fields on `snapshot` based on `input`. */
-static void fill_guide_arg_slots(SceneGuideSnapshot *snapshot,
+static void fill_guide_arg_slots(Render3dGuideSnapshot *snapshot,
                                  const char *input, int input_len) {
     snapshot->vertex_n_filled = 0;
     snapshot->normal_n_filled = 0;
@@ -375,18 +375,18 @@ static void fill_guide_arg_slots(SceneGuideSnapshot *snapshot,
 }
 
 /* Build a guide-render snapshot from live REPL + editor state. The
- * SceneRenderConfig argument is consulted only for fields the
+ * Render3dRenderConfig argument is consulted only for fields the
  * controller already supplies (alpha_scale, user_lighting_enabled);
  * everything else comes from REPL/editor accessors so this can run
  * without a per-frame config pointer if needed. */
-static SceneGuideSnapshot glr_ctrl_build_guide_snapshot(const SceneRenderConfig *config) {
+static Render3dGuideSnapshot glr_ctrl_build_guide_snapshot(const Render3dRenderConfig *config) {
     GlrPresentationState presentation = glr_state_presentation();
     ReplVariableView vars = repl_state_variables();
     EditorInputView input = editor_state_input();
     int edit_line = editor_state_edit_line();
 
-    SceneGuideSnapshot snapshot = {
-        .show_guides = (presentation.xform_guide_mode != SCENE_XFORM_GUIDE_OFF),
+    Render3dGuideSnapshot snapshot = {
+        .show_guides = (presentation.xform_guide_mode != RENDER3D_XFORM_GUIDE_OFF),
         .replaying = replay_active(),
         .replay_focus_anchor_flat_idx = replay_focus_anchor_flat_idx(),
         .xform_guide_mode = presentation.xform_guide_mode,
@@ -456,7 +456,7 @@ static int glr_ctrl_current_begin_block_source_extent(int edit_line,
 
 static OverlaySnapshotPack g_overlay_pack;
 
-static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const SceneRenderConfig *cfg) {
+static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3dRenderConfig *cfg) {
     GlrPresentationState presentation = glr_state_presentation();
     int replaying = replay_active();
     int replay_mode_vertex = replaying && (replay_mode() == REPLAY_MODE_VERTEX);
@@ -743,22 +743,22 @@ void glr_ctrl_apply_input_effects(EditorInputDispatchEffects effects) {
  * glr_ctrl_display_frame restores predef + scratch only, not the
  * persistent render-state struct).
  *
- * SceneExecutePurpose is a forward-compatible enum; future probe-like
+ * Render3dExecutePurpose is a forward-compatible enum; future probe-like
  * purposes (fade-overlay, picking pass, etc.) take the same
  * snapshot/restore path automatically. */
-static void scene_execute_adapter(const SceneExecuteContext *ctx,
+static void scene_execute_adapter(const Render3dExecuteContext *ctx,
                                   void *user_data) {
     (void)user_data;
 
-    SceneExecutePurpose purpose =
-        ctx ? ctx->purpose : SCENE_EXEC_MAIN_FILL;
+    Render3dExecutePurpose purpose =
+        ctx ? ctx->purpose : RENDER3D_EXEC_MAIN_FILL;
     int suppress_side_effects =
-        purpose != SCENE_EXEC_MAIN_FILL &&
-        purpose != SCENE_EXEC_WIREFRAME_VISIBLE_LINES;
+        purpose != RENDER3D_EXEC_MAIN_FILL &&
+        purpose != RENDER3D_EXEC_WIREFRAME_VISIBLE_LINES;
     int wireframe_effect_pass =
-        purpose == SCENE_EXEC_WIREFRAME_HIDDEN_LINES ||
-        purpose == SCENE_EXEC_WIREFRAME_DEPTH_FILL ||
-        purpose == SCENE_EXEC_WIREFRAME_VISIBLE_LINES;
+        purpose == RENDER3D_EXEC_WIREFRAME_HIDDEN_LINES ||
+        purpose == RENDER3D_EXEC_WIREFRAME_DEPTH_FILL ||
+        purpose == RENDER3D_EXEC_WIREFRAME_VISIBLE_LINES;
 
     int count = repl_state_flat_program_count();
     if (g_frame_replay_exec_limit >= 0 && g_frame_replay_exec_limit < count)
@@ -809,18 +809,18 @@ static void scene_execute_adapter(const SceneExecuteContext *ctx,
  * The config path is untouched: toggling still just flips
  * presentation.grid_theme/axes_theme. Each frame the diff feeds these
  * machines and the renderer draws the effective {theme, opacity}. */
-static SceneXnState g_grid_xn;
-static SceneXnState g_axes_xn;
+static Render3dXnState g_grid_xn;
+static Render3dXnState g_axes_xn;
 
 /* Per-renderer scene state (formerly file-static in src/scene/render.c).
  * The single-renderer assumption is now an instance, not a global —
- * glr_ctrl is one renderer, scene_demo is another, and tests own
+ * glr_ctrl is one renderer, render3d_demo is another, and tests own
  * theirs. Initialized in glr_ctrl_init_gl. */
-static SceneRendererState g_scene_renderer;
+static Render3dState g_scene_renderer;
 
 /* Runtime GL_NV_fog_distance capability, probed once in glr_ctrl_init_gl
  * (the GL context is current there) and mirrored into each frame's
- * SceneRenderConfig. Lets the city backdrop and ocean/radar grid themes
+ * Render3dRenderConfig. Lets the city backdrop and ocean/radar grid themes
  * opt into radial fog. 0 until detection runs — the safe default. */
 static int g_nv_fog_distance_supported = 0;
 
@@ -830,7 +830,7 @@ static int g_nv_fog_distance_supported = 0;
  * reads the blend via glr_ctrl_view_projection_mix; reset_all calls
  * glr_ctrl_view_reset — all declared in glr_ctrl_internal.h. */
 
-static void glr_ctrl_build_scene_config(FlatProgramView flat_program, SceneRenderConfig *config) {
+static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRenderConfig *config) {
     GlrRenderState render = glr_state_render();
     ReplRenderState repl_render = repl_state_render();
     GlrPresentationState presentation = glr_state_presentation();
@@ -893,10 +893,10 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, SceneRende
     config->anim_time = repl_state_variables().anim_time;
 
     /* --- Viewport and scene rectangle --- */
-    ui_layout_scene_rect(&config->scene_x, &config->scene_y,
-                           &config->scene_w, &config->scene_h);
-    if (config->scene_w < 1) config->scene_w = 1;
-    if (config->scene_h < 1) config->scene_h = 1;
+    ui_layout_scene_rect(&config->render3d_x, &config->render3d_y,
+                           &config->render3d_w, &config->render3d_h);
+    if (config->render3d_w < 1) config->render3d_w = 1;
+    if (config->render3d_h < 1) config->render3d_h = 1;
 
     /* --- Camera state --- (modelview transform is applied separately by
      * the controller via glr_camera_load_modelview; these fields are
@@ -958,14 +958,14 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, SceneRende
      * the theme to draw while `next` may already point elsewhere mid
      * fade-out. */
     config->grid_theme = g_grid_xn.current;
-    config->grid_opacity = scene_xn_opacity(&g_grid_xn);
+    config->grid_opacity = render3d_xn_opacity(&g_grid_xn);
     config->grid_xn_phase = g_grid_xn.phase;
     config->grid_extent_idx = presentation.grid_extent_idx;
     config->grid_major_idx = presentation.grid_major_idx;
     /* Resolve the Grid brightness index to an alpha multiplier the scene
      * folds into grid-line color (grid.c). NORMAL == 1.0 preserves the
      * historic look; the rest dial the deliberately-faint grid lines down
-     * or up for contrast against the backdrop. Indexed by SceneGridBrightness
+     * or up for contrast against the backdrop. Indexed by Render3dGridBrightness
      * (themes.h); out-of-range guards to NORMAL. */
     static const float k_grid_brightness_factors[GRID_BRIGHTNESS_COUNT] = {
         [GRID_BRIGHTNESS_DIM]    = 0.6f,
@@ -977,7 +977,7 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, SceneRende
     if (br_i < 0 || br_i >= GRID_BRIGHTNESS_COUNT) br_i = GRID_BRIGHTNESS_NORMAL;
     config->grid_brightness = k_grid_brightness_factors[br_i];
     config->axes_theme = g_axes_xn.current;
-    config->axes_opacity = scene_xn_opacity(&g_axes_xn);
+    config->axes_opacity = render3d_xn_opacity(&g_axes_xn);
     config->axes_xn_phase = g_axes_xn.phase;
     memcpy(config->grid_major_steps, grid_major_steps,
            sizeof(config->grid_major_steps));
@@ -1348,7 +1348,7 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
             &snap->current_begin_block_end);
 
     /* Resolve the dynamic reshape() projection ONCE here so the panel's
-     * row-count and render passes (which straddle scene_render_3d_scene)
+     * row-count and render passes (which straddle render3d_draw_scene)
      * read one frozen value. This is the previous frame's scene
      * projection — build_ui_snapshot runs before scene render — which is
      * exactly the consistency the panel needs; a 1-frame text lag during
@@ -1466,7 +1466,7 @@ static UiFpsPanelView glr_ctrl_build_fps_panel_view(const UiRenderSnapshot *snap
  * blur mode is CAMERA or TIME). Resets to the frame baseline so each sample
  * is independent, then applies the sample's camera pose or time sub-step. */
 static void glr_ctrl_setup_subframe(void *ud, int pass_idx, int pass_count,
-                                    SceneRenderConfig *pass_cfg) {
+                                    Render3dRenderConfig *pass_cfg) {
     GlrSubframeCtx *c = (GlrSubframeCtx *)ud;
     float f = (pass_count > 1) ? (float)pass_idx / (float)(pass_count - 1) : 0.0f;
 
@@ -1502,11 +1502,11 @@ static void glr_ctrl_setup_subframe(void *ud, int pass_idx, int pass_count,
  * hook + capture the baseline the hook resets to. Leaves setup_subframe_fn
  * NULL when blur is off/inapplicable so the scene takes the AA jitter path
  * (the paused + still-camera fallback, and the replay degradation). */
-static void glr_ctrl_resolve_blur_subframe(SceneRenderConfig *config) {
+static void glr_ctrl_resolve_blur_subframe(Render3dRenderConfig *config) {
     config->setup_subframe_fn = NULL;
     config->setup_subframe_user_data = NULL;
 
-    if (!SCENE_ACCUM_EFFECT_IS_BLUR(config->accum_effect) ||
+    if (!RENDER3D_ACCUM_EFFECT_IS_BLUR(config->accum_effect) ||
         !config->use_accum || config->accum_passes <= 1 ||
         replay_active())
         return;
@@ -1517,7 +1517,7 @@ static void glr_ctrl_resolve_blur_subframe(SceneRenderConfig *config) {
     GlrBlurMode mode = GLR_BLUR_NONE;
     if (camera_moved)
         mode = GLR_BLUR_CAMERA;
-    else if (config->accum_effect == SCENE_ACCUM_EFFECT_BLUR &&
+    else if (config->accum_effect == RENDER3D_ACCUM_EFFECT_BLUR &&
              repl_state_variables().time_playing)
         mode = GLR_BLUR_TIME;   /* Blur (full) also blurs animation time;
                                  * Blur Camera does not -> AA fallback. */
@@ -1555,7 +1555,7 @@ void glr_ctrl_display_frame(void) {
      * test_glr_ctrl pins). Per-field narrow accessors elsewhere in
      * the frame are reading post-prepare state, which is what they want. */
     ReplayRuntimeState frame_replay = replay_state_view();
-    SceneRenderConfig scene_config;
+    Render3dRenderConfig scene_config;
     UiRenderSnapshot ui_snap;
 
     prof_frame_tick();
@@ -1677,12 +1677,12 @@ void glr_ctrl_display_frame(void) {
 
     prof_end(PROF_SNAPSHOT);
 
-    /* 3D scene - scene_render_3d_scene() handles optional accumulation-buffer AA */
+    /* 3D scene - render3d_draw_scene() handles optional accumulation-buffer AA */
     /* Reset subsection accumulators so timings across all AA samples sum up
-     * correctly before the first (or only) scene_render_3d_scene() call. */
-    for (ProfSection section_idx = PROF_SCENE_3D_SETUP; section_idx <= PROF_SCENE_3D_LAST; section_idx++)
+     * correctly before the first (or only) render3d_draw_scene() call. */
+    for (ProfSection section_idx = PROF_RENDER3D_3D_SETUP; section_idx <= PROF_RENDER3D_3D_LAST; section_idx++)
         prof_accum_reset(section_idx);
-    prof_begin(PROF_SCENE_3D);
+    prof_begin(PROF_RENDER3D_3D);
     {
         GlrCameraState cam = glr_camera();
         g_cur_frame_pose = glr_camera_pose_from_state(&cam);
@@ -1691,16 +1691,16 @@ void glr_ctrl_display_frame(void) {
     /* Resolve motion-blur mode for this frame now that the current pose is
      * captured; installs the per-sample hook on scene_config when active. */
     glr_ctrl_resolve_blur_subframe(&scene_config);
-    if (scene_render_3d_scene(&g_scene_renderer, &scene_config) != 0) {
+    if (render3d_draw_scene(&g_scene_renderer, &scene_config) != 0) {
         static int warned = 0;
         if (!warned) {
             fprintf(stderr,
-                    "glr_ctrl: scene_render_3d_scene rejected config (errno=%d)\n",
+                    "glr_ctrl: render3d_draw_scene rejected config (errno=%d)\n",
                     errno);
             warned = 1;
         }
     }
-    prof_end(PROF_SCENE_3D);
+    prof_end(PROF_RENDER3D_3D);
     /* Motion-blur sub-frames re-bake geometry via repl_flatten_commands()
      * (glr_ctrl_setup_subframe), which rewrites the live flat-program count
      * as a side effect. The last sample bakes at the true frame time, so the
@@ -1730,7 +1730,7 @@ void glr_ctrl_display_frame(void) {
     }
 
     /* Commit the accumulated subsection totals now that all AA samples are done. */
-    for (ProfSection section_idx = PROF_SCENE_3D_SETUP; section_idx <= PROF_SCENE_3D_LAST; section_idx++)
+    for (ProfSection section_idx = PROF_RENDER3D_3D_SETUP; section_idx <= PROF_RENDER3D_3D_LAST; section_idx++)
         prof_accum_commit(section_idx);
 
     prof_begin(PROF_CODE_PANEL);
@@ -1787,7 +1787,7 @@ void glr_ctrl_display_frame(void) {
     /* Compositor post-process: the whole-frame filter runs over the
      * entire composited image (3D scene + every 2D UI layer) now that
      * all drawing for the frame is done, before the buffer swap in
-     * display_func(). The scene-viewport filter (PROF_SCENE_3D_POST_PROCESS)
+     * display_func(). The scene-viewport filter (PROF_RENDER3D_3D_POST_PROCESS)
      * is the separate scene-layer pass; this is the compositor stage. */
     prof_begin(PROF_COMPOSITOR);
     glr_compositor_postprocess_frame(
@@ -1873,13 +1873,13 @@ static void glr_ctrl_reset_example_chrome(unsigned int tag_mask) {
 
     /* glr_state_presentation_reset_example_defaults() writes the
      * light_theme field directly (it is a pure storage module and
-     * cannot reach scene_lights_apply_theme), so the app-state lights[]
+     * cannot reach render3d_lights_apply_theme), so the app-state lights[]
      * positions/colors/eye-space flags are left on the *previous*
      * theme. Re-seed them from whatever theme the reset + tag defaults
      * settled on — same call reset_all makes. An example's own leading
      * `@cfg light_theme = X` runs after this through glr_config_set,
      * which re-applies via the same path (idempotent). */
-    scene_lights_apply_theme(glr_state_render_mut()->lights,
+    render3d_lights_apply_theme(glr_state_render_mut()->lights,
                              glr_state_presentation().light_theme);
 }
 
@@ -1893,15 +1893,15 @@ static float glr_ctrl_camera_distance(void) {
 }
 
 /* Adapter for the export reshape-projection bridge. Translates the
- * scene's currently-applied projection (cached by scene_apply_projection)
+ * scene's currently-applied projection (cached by render3d_apply_projection)
  * into the C lines the exported reshape() / live code panel emit between
  * glLoadIdentity() and glMatrixMode(GL_MODELVIEW). Ortho uses the
  * aspect-independent half-height and recomputes the aspect at runtime
  * from w/h so the exported program stays resolution-independent. */
 static void glr_ctrl_export_reshape_projection(ReplExportProjectionBlock *blk) {
-    SceneProjectionDesc p;
+    Render3dProjectionDesc p;
 
-    scene_get_active_projection(&g_scene_renderer, &p);
+    render3d_get_active_projection(&g_scene_renderer, &p);
     blk->count = 0;
     if (p.ortho) {
         snprintf(blk->lines[blk->count++], REPL_EXPORT_PROJ_LINE_MAX,
@@ -1930,7 +1930,7 @@ static const ReplExportProjectionBridge g_export_projection_bridge_impl = {
 static void glr_ctrl_export_fill_light(int slot, ReplExportLightInfo *out) {
     if (slot < 0 || slot >= MAX_LIGHTS) return;  /* out is pre-zeroed by caller */
     GlrRenderState render = glr_state_render();
-    const SceneLight *l = &render.lights[slot];
+    const Render3dLight *l = &render.lights[slot];
     memcpy(out->pos, l->pos, sizeof(out->pos));
     memcpy(out->diffuse, l->diffuse, sizeof(out->diffuse));
     memcpy(out->ambient, l->ambient, sizeof(out->ambient));
@@ -2063,8 +2063,8 @@ static void glr_ctrl_seed_overlay_xn(void) {
     /* Bind each overlay's curve plugin once; from here the controller only
      * feeds the machines dt and reads opacity back — the grid/axes module
      * owns the durations + per-theme speed. */
-    scene_xn_init(&g_grid_xn, p.grid_theme, &scene_grid_reveal);
-    scene_xn_init(&g_axes_xn, p.axes_theme, &scene_axes_reveal);
+    render3d_xn_init(&g_grid_xn, p.grid_theme, &render3d_grid_reveal);
+    render3d_xn_init(&g_axes_xn, p.axes_theme, &render3d_axes_reveal);
 }
 
 /* Fixed frame timestep (~60 Hz). The animation timer reschedules every
@@ -2081,7 +2081,7 @@ static void glr_ctrl_seed_overlay_xn(void) {
  * replay_tick_fade_batches / glr_camera_tick. NOT the display path:
  * display fires on reshape/expose without the timer, which would
  * couple fade speed to redraw rate. Rule 6 off-source short-circuit:
- * when the overlay is currently the off index, scene_xn_show skips the
+ * when the overlay is currently the off index, render3d_xn_show skips the
  * pointless OUT of an already-invisible overlay (controller owns the
  * off-index policy; the machine stays theme-index-agnostic). */
 static void glr_ctrl_tick_overlay_xn(void) {
@@ -2089,19 +2089,19 @@ static void glr_ctrl_tick_overlay_xn(void) {
 
     if (p.grid_theme != g_grid_xn.current &&
         g_grid_xn.current == GRID_THEME_OFF)
-        scene_xn_show(&g_grid_xn, p.grid_theme);
+        render3d_xn_show(&g_grid_xn, p.grid_theme);
     else
-        scene_xn_set(&g_grid_xn, p.grid_theme);
+        render3d_xn_set(&g_grid_xn, p.grid_theme);
     /* Pure clock: just advance by dt. The grid's bound reveal curve owns the
      * durations + per-theme speed and decides when the fade is done. */
-    scene_xn_tick(&g_grid_xn, GLR_FRAME_DT_SECS);
+    render3d_xn_tick(&g_grid_xn, GLR_FRAME_DT_SECS);
 
     if (p.axes_theme != g_axes_xn.current &&
         g_axes_xn.current == AXES_THEME_OFF)
-        scene_xn_show(&g_axes_xn, p.axes_theme);
+        render3d_xn_show(&g_axes_xn, p.axes_theme);
     else
-        scene_xn_set(&g_axes_xn, p.axes_theme);
-    scene_xn_tick(&g_axes_xn, GLR_FRAME_DT_SECS);
+        render3d_xn_set(&g_axes_xn, p.axes_theme);
+    render3d_xn_tick(&g_axes_xn, GLR_FRAME_DT_SECS);
 }
 
 /* Look up the label of the config row currently bound to F<fn>.
@@ -2180,7 +2180,7 @@ void glr_ctrl_reset_all(void) {
      * and the export light bridge see a coherent set of lights.
      * glr_state defaults only seed .id; without this call positions /
      * colors stay zero. */
-    scene_lights_apply_theme(glr_state_render_mut()->lights,
+    render3d_lights_apply_theme(glr_state_render_mut()->lights,
                              glr_state_presentation().light_theme);
     glr_camera_reset_default();
     glr_ctrl_view_reset();
@@ -2314,8 +2314,8 @@ void glr_ctrl_init_gl(void) {
     tutorial_state_init_explicit();
     glr_ctrl_reset_all();
     repl_ensure_init_bootstrap_ready();
-    scene_render_init_gl();
-    scene_renderer_state_init(&g_scene_renderer);
+    render3d_init_gl();
+    render3d_state_init(&g_scene_renderer);
     repl_executor_init_resources();
     hidden_lines_init_resources();
 
@@ -2439,7 +2439,7 @@ void glr_ctrl_init_gl(void) {
      * the fringes pop in and out as the camera orbits. When the NV
      * extension is present, those passes switch to true radial eye
      * distance; every other (eye-plane-tuned) theme is left alone.
-     * Mirrored into SceneRenderConfig per frame and applied per-pass —
+     * Mirrored into Render3dRenderConfig per frame and applied per-pass —
      * NOT set globally, which would fog out the tuned grid themes. */
     g_nv_fog_distance_supported =
         glutExtensionSupported("GL_NV_fog_distance") ? 1 : 0;
@@ -2554,8 +2554,8 @@ void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
     int sx = 0, sy = 0, sw = 0, sh = 0;
     ui_layout_scene_rect(&sx, &sy, &sw, &sh);
     *out = (ReplExportLayout){
-        .scene_w = sw,
-        .scene_h = sh,
+        .render3d_w = sw,
+        .render3d_h = sh,
     };
 }
 
@@ -2591,9 +2591,9 @@ void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
  *   -> Vignette (frame)
  *   -> Off ...
  *
- * The scene slot feeds scene_render_3d_scene's per-scene pass; the frame
+ * The scene slot feeds render3d_draw_scene's per-scene pass; the frame
  * slot feeds the glr_compositor hook at frame end. Table-driven so a new
- * ScenePostFilterMode is two rows, not new branches. Hidden shortcut
+ * Render3dPostFilterMode is two rows, not new branches. Hidden shortcut
  * only — no Config row, no @cfg. Session-level state on
  * GlrPresentationState. */
 int glr_ctrl_router_handle_post_filter_key(unsigned char key) {
@@ -2601,15 +2601,15 @@ int glr_ctrl_router_handle_post_filter_key(unsigned char key) {
         return 0;
 
     static const struct {
-        ScenePostFilterMode scene;   /* -> post_filter_mode       */
-        ScenePostFilterMode frame;   /* -> compositor_filter_mode */
+        Render3dPostFilterMode scene;   /* -> post_filter_mode       */
+        Render3dPostFilterMode frame;   /* -> compositor_filter_mode */
         const char         *where;
     } cycle[] = {
-        { SCENE_POST_FILTER_OFF,                  SCENE_POST_FILTER_OFF,                  ""        },
-        { SCENE_POST_FILTER_CHROMATIC_ABERRATION, SCENE_POST_FILTER_OFF,                  " (scene)" },
-        { SCENE_POST_FILTER_OFF,                  SCENE_POST_FILTER_CHROMATIC_ABERRATION, " (frame)" },
-        { SCENE_POST_FILTER_VIGNETTE,             SCENE_POST_FILTER_OFF,                  " (scene)" },
-        { SCENE_POST_FILTER_OFF,                  SCENE_POST_FILTER_VIGNETTE,             " (frame)" },
+        { RENDER3D_POST_FILTER_OFF,                  RENDER3D_POST_FILTER_OFF,                  ""        },
+        { RENDER3D_POST_FILTER_CHROMATIC_ABERRATION, RENDER3D_POST_FILTER_OFF,                  " (scene)" },
+        { RENDER3D_POST_FILTER_OFF,                  RENDER3D_POST_FILTER_CHROMATIC_ABERRATION, " (frame)" },
+        { RENDER3D_POST_FILTER_VIGNETTE,             RENDER3D_POST_FILTER_OFF,                  " (scene)" },
+        { RENDER3D_POST_FILTER_OFF,                  RENDER3D_POST_FILTER_VIGNETTE,             " (frame)" },
     };
     int n = (int)(sizeof(cycle) / sizeof(cycle[0]));
 
@@ -2619,8 +2619,8 @@ int glr_ctrl_router_handle_post_filter_key(unsigned char key) {
      * off-cycle), then advance to the next. */
     int cur = 0;
     for (int i = 0; i < n; i++) {
-        if (cycle[i].scene == (ScenePostFilterMode)p->post_filter_mode &&
-            cycle[i].frame == (ScenePostFilterMode)p->compositor_filter_mode) {
+        if (cycle[i].scene == (Render3dPostFilterMode)p->post_filter_mode &&
+            cycle[i].frame == (Render3dPostFilterMode)p->compositor_filter_mode) {
             cur = i;
             break;
         }
@@ -2629,11 +2629,11 @@ int glr_ctrl_router_handle_post_filter_key(unsigned char key) {
     p->post_filter_mode       = cycle[next].scene;
     p->compositor_filter_mode = cycle[next].frame;
 
-    ScenePostFilterMode shown = cycle[next].scene != SCENE_POST_FILTER_OFF
+    Render3dPostFilterMode shown = cycle[next].scene != RENDER3D_POST_FILTER_OFF
                               ? cycle[next].scene : cycle[next].frame;
     char msg[80];
     snprintf(msg, sizeof(msg), "Post filter: %s%s",
-             scene_postprocess_filter_mode_name(shown), cycle[next].where);
+             render3d_postprocess_filter_mode_name(shown), cycle[next].where);
     repl_set_status(msg);
     return 1;
 }

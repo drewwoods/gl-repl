@@ -42,7 +42,7 @@ static void repl_state_apply_sentinels(ReplRuntimeState *s) {
      * the zero-init above — no light is enabled until the program says so).
      * Positions, colors, eye-space, and the active lighting theme are
      * *presentation* concerns owned by the app shell (GlrRenderState.lights,
-     * seeded by the controller via scene_lights_apply_theme). */
+     * seeded by the controller via render3d_lights_apply_theme). */
     s->render.light_enabled_mask = 0;
 
     s->render.clear_color[0] = 0.10f;

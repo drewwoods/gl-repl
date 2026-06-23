@@ -157,11 +157,11 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     presentation->show_normal_vectors = 1;
     presentation->show_vertex_indices = 0;
     presentation->show_vertex_points = 0;
-    presentation->xform_guide_mode = SCENE_XFORM_GUIDE_OFF;
+    presentation->xform_guide_mode = RENDER3D_XFORM_GUIDE_OFF;
     presentation->show_light_indicators = 0;
     presentation->backdrop_mode = 1;
     presentation->highlight_current_poly = 0;
-    presentation->ortho_mode = SCENE_VIEW_2D;
+    presentation->ortho_mode = RENDER3D_VIEW_2D;
     presentation->wrap_at_comma = 0;
     presentation->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM;
     /* focus_vertex storage was deleted in step 7a — no live readers
@@ -170,7 +170,7 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
 
     glr_render = glr_state_render_mut();
     glr_render->use_accum = 0;
-    glr_render->accum_effect = SCENE_ACCUM_EFFECT_OFF;
+    glr_render->accum_effect = RENDER3D_ACCUM_EFFECT_OFF;
     glr_render->accum_passes = 8;
     glr_render->multisample_enabled = 0;
     glr_render->line_smooth_enabled = 1;
@@ -340,7 +340,7 @@ static void test_capture_restore_round_trip(void) {
     /* focus_vertex storage was deleted in step 7a; per-frame compute
      * lives on glr_ctrl. */
     ASSERT_INT("render use accum restored", glr_state_render().use_accum, 0);
-    ASSERT_INT("render accum effect restored", glr_state_render().accum_effect, SCENE_ACCUM_EFFECT_OFF);
+    ASSERT_INT("render accum effect restored", glr_state_render().accum_effect, RENDER3D_ACCUM_EFFECT_OFF);
     ASSERT_INT("render passes restored", glr_state_render().accum_passes, 8);
     ASSERT_INT("render light enable mask restored",
                (int)repl_state_render().light_enabled_mask, (int)(1u << 1));

@@ -13,7 +13,7 @@
  * Both are pure fixed-function GL (no shaders, no FBOs). The same rect
  * the scene renders into is reused over the whole window by the
  * app-level glr_compositor, so each effect works at scene-viewport and
- * full-frame scope alike. scene_postprocess_filter_render() dispatches
+ * full-frame scope alike. render3d_postprocess_filter_render() dispatches
  * on the mode.
  */
 #include "postprocess_filter.h"
@@ -30,17 +30,17 @@ static int    g_tex_h      = 0;
  * (e.g. GL stubs) so the size guard is not enforced. */
 static GLint  g_max_tex_size = 0;
 
-const char *scene_postprocess_filter_mode_name(ScenePostFilterMode mode) {
+const char *render3d_postprocess_filter_mode_name(Render3dPostFilterMode mode) {
     switch (mode) {
-    case SCENE_POST_FILTER_CHROMATIC_ABERRATION: return "Chromatic aberration";
-    case SCENE_POST_FILTER_VIGNETTE:             return "Vignette";
-    case SCENE_POST_FILTER_OFF:
-    case SCENE_POST_FILTER_COUNT:
+    case RENDER3D_POST_FILTER_CHROMATIC_ABERRATION: return "Chromatic aberration";
+    case RENDER3D_POST_FILTER_VIGNETTE:             return "Vignette";
+    case RENDER3D_POST_FILTER_OFF:
+    case RENDER3D_POST_FILTER_COUNT:
     default:                                     return "Off";
     }
 }
 
-void scene_postprocess_filter_reset(void) {
+void render3d_postprocess_filter_reset(void) {
     if (g_filter_tex) {
         glDeleteTextures(1, &g_filter_tex);
         g_filter_tex = 0;
@@ -241,20 +241,20 @@ static void postprocess_filter_render_vignette(int sx, int sy,
     postprocess_filter_end_2d(saved_matrix_mode);
 }
 
-void scene_postprocess_filter_render(ScenePostFilterMode mode, int sx, int sy,
+void render3d_postprocess_filter_render(Render3dPostFilterMode mode, int sx, int sy,
                                      int sw, int sh) {
     if (sw <= 0 || sh <= 0)
         return;
 
     switch (mode) {
-    case SCENE_POST_FILTER_CHROMATIC_ABERRATION:
+    case RENDER3D_POST_FILTER_CHROMATIC_ABERRATION:
         postprocess_filter_render_chromatic(sx, sy, sw, sh);
         break;
-    case SCENE_POST_FILTER_VIGNETTE:
+    case RENDER3D_POST_FILTER_VIGNETTE:
         postprocess_filter_render_vignette(sx, sy, sw, sh);
         break;
-    case SCENE_POST_FILTER_OFF:
-    case SCENE_POST_FILTER_COUNT:
+    case RENDER3D_POST_FILTER_OFF:
+    case RENDER3D_POST_FILTER_COUNT:
     default:
         break;
     }

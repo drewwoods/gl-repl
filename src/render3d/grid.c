@@ -2,7 +2,7 @@
  * grid.c - grid theme rendering
  */
 #include "grid.h"
-#include "overlay_xn.h"  /* SceneOverlayXn + shared resolve helper */
+#include "overlay_xn.h"  /* Render3dOverlayXn + shared resolve helper */
 #include <math.h>     /* sinf, cosf, sqrtf, fabsf, fmodf, M_PI (via gl_includes.h) */
 
 #define GRID_LOOP_EPSILON 0.01f
@@ -23,7 +23,7 @@
  * stack. The front is at `fade_end = extent` steady and sweeps inward
  * during the hide transition (fade_end = extent * opacity), unifying the
  * steady dissolve and the recede animation. Scoped to the table-driven
- * line themes + XZ Ruler + Star Chart via scene_grid_theme_uses_edge_fade();
+ * line themes + XZ Ruler + Star Chart via render3d_grid_theme_uses_edge_fade();
  * the custom environment themes and Radar own their atmosphere/fog. */
 #define GRID_EDGE_FADE_BAND   0.35f  /* radial ramp width / extent (interior
                                       * solid inside fade_end - band) */
@@ -53,7 +53,7 @@ typedef struct {
     float          time;   /* fade in/out time scale vs GRID_FADE_*_SECS:
                             * 0 (the unset default) or 1 = base speed, >1
                             * slower, <1 snappier. Consumed by the grid's
-                            * reveal curve (scene_grid_reveal). */
+                            * reveal curve (render3d_grid_reveal). */
 } GridReveal;
 
 #define GRID_REVEAL_BAND        0.45f /* soft reveal ramp width (u fraction)      */
@@ -97,8 +97,8 @@ typedef struct GridDrawContext {
                             * the environment-theme surface fills (those use
                             * grid_color_surface). 1.0 = no change. */
     /* In-out transition (audit #3): formerly file-static g_xn_opacity /
-     * g_xn_alpha. Resolved once at scene_grid_render entry via
-     * scene_overlay_xn_resolve, then every grid_color call multiplies
+     * g_xn_alpha. Resolved once at render3d_grid_render entry via
+     * render3d_overlay_xn_resolve, then every grid_color call multiplies
      * `a * xn_alpha`. xn_opacity drives the synthetic-fog recede pass
      * under GRID_XN_STYLE == GRID_AXES_XN_FOG. */
     float xn_opacity;
@@ -121,14 +121,14 @@ typedef struct GridDrawContext {
 } GridDrawContext;
 
 typedef struct GridLineColors {
-    SceneRgba x_const;
-    SceneRgba z_const;
+    Render3dRgba x_const;
+    Render3dRgba z_const;
 } GridLineColors;
 
 typedef void (*GridLineColorFn)(float v, int is_major,
                                 const GridDrawContext *ctx,
                                 GridLineColors *out);
-typedef SceneRgba (*GridOriginColorFn)(const GridDrawContext *ctx);
+typedef Render3dRgba (*GridOriginColorFn)(const GridDrawContext *ctx);
 typedef void (*GridPassFn)(const GridDrawContext *ctx);
 
 typedef struct GridThemeSpec {
@@ -139,16 +139,16 @@ typedef struct GridThemeSpec {
     float origin_line_width;
 } GridThemeSpec;
 
-static void scene_grid_push_state(void) {
+static void render3d_grid_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 }
 
-static void scene_grid_pop_state(void) {
+static void render3d_grid_pop_state(void) {
     glPopAttrib();
 }
 
-static SceneRgba rgba(float r, float g, float b, float a) {
-    SceneRgba c = { r, g, b, a };
+static Render3dRgba rgba(float r, float g, float b, float a) {
+    Render3dRgba c = { r, g, b, a };
     return c;
 }
 
@@ -159,13 +159,13 @@ static void set_fog_to_clear_color() {
 }
 
 /* Grid in-out transition (docs/plans/.../grid-axes-transitions.md rule 4).
- * Resolved once at scene_grid_render entry from config.grid_opacity
+ * Resolved once at render3d_grid_render entry from config.grid_opacity
  * and stored on the GridDrawContext. Every color path routes through
  * grid_color so it applies uniformly, AFTER each call site's own
  * alpha_scale clamp so the controller-owned OUT is the hard ceiling
  * (rule 3). 1.0 = shown.
  *
- * The shared scene_overlay_xn_resolve helper in overlay_xn.h owns the
+ * The shared render3d_overlay_xn_resolve helper in overlay_xn.h owns the
  * knee math; grid passes its style + GRID_XN_FOG_ALPHA_KNEE and
  * receives back the effective {alpha, opacity, fog_tf, draw}. */
 
@@ -207,11 +207,11 @@ static void grid_color_surface(const GridDrawContext *ctx,
     glColor4f(r, g, b, a * ctx->xn_alpha);
 }
 
-static void grid_color_rgba(const GridDrawContext *ctx, SceneRgba c) {
+static void grid_color_rgba(const GridDrawContext *ctx, Render3dRgba c) {
     grid_color(ctx, c.r, c.g, c.b, c.a);
 }
 
-static void grid_line_colors_same(GridLineColors *out, SceneRgba color) {
+static void grid_line_colors_same(GridLineColors *out, Render3dRgba color) {
     out->x_const = color;
     out->z_const = color;
 }
@@ -303,7 +303,7 @@ static float grid_reveal_u(const GridDrawContext *ctx, float x, float z) {
  * wipe alpha, plus the bright draw-head glow at the advancing front. The
  * front overshoots to 1 + band so every u <= 1 is fully lit at opacity 1
  * (continuous with the steady look); the head leaves the slab by then. */
-static void grid_reveal_vertex(const GridDrawContext *ctx, SceneRgba c,
+static void grid_reveal_vertex(const GridDrawContext *ctx, Render3dRgba c,
                                float x, float y, float z) {
     float band   = GRID_REVEAL_BAND;
     float front  = ctx->xn_opacity * (1.0f + band);
@@ -332,7 +332,7 @@ static void grid_reveal_vertex(const GridDrawContext *ctx, SceneRgba c,
 /* Subdivide one axis-aligned line into GRID_REVEAL_SEGS reveal-shaded
  * segments. axis 0 runs along Z at x=off; axis 1 runs along X at z=off.
  * Emits vertex pairs for the caller's open GL_LINES block. */
-static void grid_reveal_line(const GridDrawContext *ctx, SceneRgba c,
+static void grid_reveal_line(const GridDrawContext *ctx, Render3dRgba c,
                              int axis, float off) {
     float ex = ctx->extent;
     int n = GRID_REVEAL_SEGS;
@@ -390,7 +390,7 @@ static void draw_grid_line_pair(float v, const GridDrawContext *ctx,
         float a0 = pos[i], a1 = pos[i + 1];
         float m0 = grid_radial_mul(fe, band, v, a0);
         float m1 = grid_radial_mul(fe, band, v, a1);
-        SceneRgba c = colors.x_const;
+        Render3dRgba c = colors.x_const;
         grid_color(ctx, c.r, c.g, c.b, c.a * m0); glVertex3f(v, 0, a0);
         grid_color(ctx, c.r, c.g, c.b, c.a * m1); glVertex3f(v, 0, a1);
         c = colors.z_const;
@@ -399,7 +399,7 @@ static void draw_grid_line_pair(float v, const GridDrawContext *ctx,
     }
 }
 
-static void draw_grid_origin_axes(const GridDrawContext *ctx, SceneRgba color,
+static void draw_grid_origin_axes(const GridDrawContext *ctx, Render3dRgba color,
                                   float line_width) {
     glDepthMask(GL_TRUE);
     if (line_width != 1.0f)
@@ -453,7 +453,7 @@ static void draw_grid_standard_theme(const GridDrawContext *ctx,
     }
     glEnd();
 
-    SceneRgba origin_c = spec->origin_color(ctx);
+    Render3dRgba origin_c = spec->origin_color(ctx);
     origin_c.a = fminf(origin_c.a * ctx->alpha_scale, 1.0f);
     draw_grid_origin_axes(ctx, origin_c, spec->origin_line_width);
 
@@ -470,7 +470,7 @@ static void grid_classic_line_color(float v, int is_major,
                                     is_major ? 0.22f : 0.08f));
 }
 
-static SceneRgba grid_classic_origin_color(const GridDrawContext *ctx) {
+static Render3dRgba grid_classic_origin_color(const GridDrawContext *ctx) {
     (void)ctx;
     return rgba(0.50f, 0.50f, 0.60f, 0.45f);
 }
@@ -492,7 +492,7 @@ static void grid_tron_line_color(float v, int is_major,
                                     base * fade * glow));
 }
 
-static SceneRgba grid_tron_origin_color(const GridDrawContext *ctx) {
+static Render3dRgba grid_tron_origin_color(const GridDrawContext *ctx) {
     float glow = 0.7f + ctx->breath * 0.3f;
     return rgba(0.0f, 0.8f, 1.0f, 0.25f * glow);
 }
@@ -511,7 +511,7 @@ static void grid_ember_line_color(float v, int is_major,
                                     0.05f, a));
 }
 
-static SceneRgba grid_ember_origin_color(const GridDrawContext *ctx) {
+static Render3dRgba grid_ember_origin_color(const GridDrawContext *ctx) {
     (void)ctx;
     float ripple0 = -sinf(ctx->anim_time * 2.5f) * 0.5f + 0.5f;
     return rgba(0.95f, 0.35f + ripple0 * 0.25f, 0.05f,
@@ -539,7 +539,7 @@ static void grid_aurora_line_color(float v, int is_major,
                                     base * fade * (0.7f + shimmer * 0.3f)));
 }
 
-static SceneRgba grid_aurora_origin_color(const GridDrawContext *ctx) {
+static Render3dRgba grid_aurora_origin_color(const GridDrawContext *ctx) {
     float s0 = sinf(ctx->anim_time * 0.7f) * 0.5f + 0.5f;
     return rgba(0.50f, 0.80f + 0.10f * s0, 0.95f, 0.50f);
 }
@@ -569,7 +569,7 @@ static void grid_synthwave_line_color(float v, int is_major,
                         base * fade * (0.65f + 0.55f * wave) * glow);
 }
 
-static SceneRgba grid_synthwave_origin_color(const GridDrawContext *ctx) {
+static Render3dRgba grid_synthwave_origin_color(const GridDrawContext *ctx) {
     /* Cyan accent against the pink field, pulsing with the same breath. */
     float glow = 0.75f + ctx->breath * 0.25f;
     return rgba(0.15f, 0.85f, 1.0f, 0.40f * glow);
@@ -605,7 +605,7 @@ static const GridThemeSpec g_grid_theme_specs[GRID_THEME_COUNT] = {
     },
 };
 
-static const GridThemeSpec *grid_theme_spec(SceneGridTheme theme) {
+static const GridThemeSpec *grid_theme_spec(Render3dGridTheme theme) {
     if (theme <= GRID_THEME_OFF || theme >= GRID_THEME_COUNT)
         return NULL;
     if (!g_grid_theme_specs[theme].line_color)
@@ -613,7 +613,7 @@ static const GridThemeSpec *grid_theme_spec(SceneGridTheme theme) {
     return &g_grid_theme_specs[theme];
 }
 
-static void scene_grid_apply_quality_config(const SceneRenderConfig *config) {
+static void render3d_grid_apply_quality_config(const Render3dRenderConfig *config) {
     if (config->multisample_enabled) glEnable(GL_MULTISAMPLE);
     else glDisable(GL_MULTISAMPLE);
     if (config->line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
@@ -622,23 +622,23 @@ static void scene_grid_apply_quality_config(const SceneRenderConfig *config) {
 
 /* Camera world-space height; < 0 means the eye is below the grid
  * plane (Ocean's underwater branch, Frozen's under-ice branch). */
-static float grid_camera_world_y(const SceneRenderConfig *config) {
+static float grid_camera_world_y(const Render3dRenderConfig *config) {
     float camera_rx_rad = config->cam_rx * (float)M_PI / 180.0f;
     return config->cam_ty + sinf(camera_rx_rad) * config->cam_dist;
 }
 
 /* Fill the active scene viewport with a tint rect (Ocean's underwater
  * teal, Frozen's under-ice glacial blue). Coordinates use
- * scene_w/scene_h (not the full window viewport) so the rect lines up
- * with whatever glViewport scene_render set. */
+ * render3d_w/render3d_h (not the full window viewport) so the rect lines up
+ * with whatever glViewport render3d_render set. */
 static void grid_draw_viewport_tint(const GridDrawContext *grid_ctx,
-                                    const SceneRenderConfig *config,
+                                    const Render3dRenderConfig *config,
                                     float r, float g, float b, float a) {
     grid_color_surface(grid_ctx, r, g, b, a);
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
-    gluOrtho2D(0, config->scene_w, 0, config->scene_h);
+    gluOrtho2D(0, config->render3d_w, 0, config->render3d_h);
     glMatrixMode(GL_MODELVIEW);
     glPushMatrix();
     glLoadIdentity();
@@ -647,7 +647,7 @@ static void grid_draw_viewport_tint(const GridDrawContext *grid_ctx,
      * fb976f0 it may also have GL_FOG_DISTANCE_MODE_NV =
      * GL_EYE_RADIAL_NV set when the OCEAN theme is the dispatch
      * branch. With identity modelview the rect's eye-space radial
-     * distances run 0..sqrt(scene_w² + scene_h²), wildly past
+     * distances run 0..sqrt(render3d_w² + render3d_h²), wildly past
      * fog-end, so without the disable the rect fades to fog colour
      * everywhere except the tiny lower-left near (0,0). See
      * tests/test_scene_underwater_fill_gl.c. */
@@ -655,7 +655,7 @@ static void grid_draw_viewport_tint(const GridDrawContext *grid_ctx,
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_LIGHTING);
     glDisable(GL_FOG);
-    glRectf(0, 0, (float)config->scene_w, (float)config->scene_h);
+    glRectf(0, 0, (float)config->render3d_w, (float)config->render3d_h);
     glPopAttrib();
     glMatrixMode(GL_PROJECTION);
     glPopMatrix();
@@ -663,14 +663,14 @@ static void grid_draw_viewport_tint(const GridDrawContext *grid_ctx,
     glPopMatrix();
 }
 
-static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
-                                          const SceneFrameRenderContext *frame_ctx,
+static void render3d_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
+                                          const Render3dFrameRenderContext *frame_ctx,
                                           float breath) {
     const float extent = grid_ctx->extent;
     const float major = grid_ctx->major;
     const float major_tol = grid_ctx->major_tol;
     const float step = grid_ctx->step;
-    const SceneRenderConfig *config = &frame_ctx->config;
+    const Render3dRenderConfig *config = &frame_ctx->config;
 
     /* Underwater fog - slightly breathing density */
     if (grid_camera_world_y(config) < 0.0f) {
@@ -727,7 +727,7 @@ static void scene_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
      * A semi-transparent rippling mesh at Y ≈ 0.  Because the grid pass
      * runs after execute_commands(), this overlay tints everything the user
      * drew below the surface, producing the underwater look. Depth-test is
-     * on but depth-write is off (set at the top of scene_grid_render), so the
+     * on but depth-write is off (set at the top of render3d_grid_render), so the
      * surface correctly occludes only geometry that sits behind it from the
      * camera's point of view. */
     float surf_step = 0.75f;
@@ -809,7 +809,7 @@ static float grid_frozen_joint_off(const GridDrawContext *ctx, float v,
  * axis 0 draws the constant-x line (running along Z), axis 1 the
  * constant-z line. y < 0 renders the sub-surface echo pass. */
 static void grid_frozen_crack_path(const GridDrawContext *ctx, float v,
-                                   int axis, float y, SceneRgba c) {
+                                   int axis, float y, Render3dRgba c) {
     int segs = grid_frozen_crack_segs(ctx);
     glBegin(GL_LINE_STRIP);
     grid_color_rgba(ctx, c);
@@ -852,9 +852,9 @@ static void grid_frozen_crack_spurs(const GridDrawContext *ctx, float v,
     glEnd();
 }
 
-static void scene_grid_render_frozen_theme(const GridDrawContext *grid_ctx,
-                                           const SceneFrameRenderContext *frame_ctx) {
-    const SceneRenderConfig *config = &frame_ctx->config;
+static void render3d_grid_render_frozen_theme(const GridDrawContext *grid_ctx,
+                                           const Render3dFrameRenderContext *frame_ctx) {
+    const Render3dRenderConfig *config = &frame_ctx->config;
     const float extent = grid_ctx->extent;
     const float major = grid_ctx->major;
     const float major_tol = grid_ctx->major_tol;
@@ -874,17 +874,17 @@ static void scene_grid_render_frozen_theme(const GridDrawContext *grid_ctx,
      * (grid_draw_viewport_tint brackets and disables fog). */
     if (grid_camera_world_y(config) < 0.0f) {
         grid_draw_viewport_tint(grid_ctx, config,
-                                SCENE_GLACIAL_TINT_R, SCENE_GLACIAL_TINT_G,
-                                SCENE_GLACIAL_TINT_B, 0.65f);
-        float fog_col[4] = { SCENE_GLACIAL_TINT_R, SCENE_GLACIAL_TINT_G,
-                             SCENE_GLACIAL_TINT_B, 1.0f };
+                                RENDER3D_GLACIAL_TINT_R, RENDER3D_GLACIAL_TINT_G,
+                                RENDER3D_GLACIAL_TINT_B, 0.65f);
+        float fog_col[4] = { RENDER3D_GLACIAL_TINT_R, RENDER3D_GLACIAL_TINT_G,
+                             RENDER3D_GLACIAL_TINT_B, 1.0f };
         glFogfv(GL_FOG_COLOR, fog_col);
         glFogi(GL_FOG_MODE, GL_EXP2);
         glFogf(GL_FOG_DENSITY, 0.040f + grid_ctx->breath * 0.008f);
         glEnable(GL_FOG);
     } else if (config->grid_extent_idx == GRID_EXTENT_FAR) {
-        float fog_col[4] = { SCENE_GLACIAL_TINT_R, SCENE_GLACIAL_TINT_G,
-                             SCENE_GLACIAL_TINT_B, 1.0f };
+        float fog_col[4] = { RENDER3D_GLACIAL_TINT_R, RENDER3D_GLACIAL_TINT_G,
+                             RENDER3D_GLACIAL_TINT_B, 1.0f };
         glFogfv(GL_FOG_COLOR, fog_col);
     }
 
@@ -1051,9 +1051,9 @@ static void grid_soil_strip(const GridDrawContext *ctx, float z0, float z1,
     glEnd();
 }
 
-static void scene_grid_render_soil_theme(const GridDrawContext *grid_ctx,
-                                         const SceneFrameRenderContext *frame_ctx) {
-    const SceneRenderConfig *config = &frame_ctx->config;
+static void render3d_grid_render_soil_theme(const GridDrawContext *grid_ctx,
+                                         const Render3dFrameRenderContext *frame_ctx) {
+    const Render3dRenderConfig *config = &frame_ctx->config;
     const float extent = grid_ctx->extent;
     const float major = grid_ctx->major;
     const float major_tol = grid_ctx->major_tol;
@@ -1217,7 +1217,7 @@ static void grid_chart_draw_links(const GridDrawContext *ctx) {
  * forced like the sky domes so far-corner nodes don't collapse under
  * the init bootstrap's quadratic default. */
 static void grid_chart_draw_nodes(const GridDrawContext *ctx,
-                                  const SceneRenderConfig *config) {
+                                  const Render3dRenderConfig *config) {
     static const float band_sizes[3] = { 2.0f, 3.0f, 4.5f };
     const float ex = ctx->extent;
     const float mj = ctx->major;
@@ -1261,9 +1261,9 @@ static void grid_chart_draw_nodes(const GridDrawContext *ctx,
     }
 }
 
-static void scene_grid_render_starchart_theme(const GridDrawContext *grid_ctx,
-                                              const SceneFrameRenderContext *frame_ctx) {
-    const SceneRenderConfig *config = &frame_ctx->config;
+static void render3d_grid_render_starchart_theme(const GridDrawContext *grid_ctx,
+                                              const Render3dFrameRenderContext *frame_ctx) {
+    const Render3dRenderConfig *config = &frame_ctx->config;
     const float extent = grid_ctx->extent;
     const float major = grid_ctx->major;
     const float major_tol = grid_ctx->major_tol;
@@ -1296,7 +1296,7 @@ static void scene_grid_render_starchart_theme(const GridDrawContext *grid_ctx,
     grid_chart_draw_nodes(grid_ctx, config);
 }
 
-static void scene_grid_render_xzruler_theme(const GridDrawContext *grid_ctx) {
+static void render3d_grid_render_xzruler_theme(const GridDrawContext *grid_ctx) {
     float extent = grid_ctx->extent;
     float major = grid_ctx->major;
     float step = grid_ctx->step;
@@ -1365,7 +1365,7 @@ static void scene_grid_render_xzruler_theme(const GridDrawContext *grid_ctx) {
     glEnd();
 }
 
-static void scene_grid_render_planes_theme(const SceneRenderConfig *config,
+static void render3d_grid_render_planes_theme(const Render3dRenderConfig *config,
                                            const GridDrawContext *grid_ctx) {
     float extent = grid_ctx->extent;
     float major = grid_ctx->major;
@@ -1461,7 +1461,7 @@ static void scene_grid_render_planes_theme(const SceneRenderConfig *config,
 
 /* Radar: faint green range rings + crosshair, a very faint expanding
  * ping ring, and a single faint sweep line rotating on anim_time. */
-static void scene_grid_render_radar_theme(const GridDrawContext *grid_ctx) {
+static void render3d_grid_render_radar_theme(const GridDrawContext *grid_ctx) {
     const float extent = grid_ctx->extent;
     const float major  = grid_ctx->major;
     const float as     = grid_ctx->alpha_scale;
@@ -1506,15 +1506,15 @@ static void scene_grid_render_radar_theme(const GridDrawContext *grid_ctx) {
     glEnd();
 }
 
-int scene_grid_theme_uses_fog(SceneGridTheme grid_theme) {
+int render3d_grid_theme_uses_fog(Render3dGridTheme grid_theme) {
     return grid_theme == GRID_THEME_OCEAN;
 }
 
-/* ---- Grid transition curve plugin (SceneXnReveal, see scene_transition.h) --
+/* ---- Grid transition curve plugin (Render3dXnReveal, see render3d_transition.h) --
  * The grid owns its fade durations + per-theme speed + opacity shape; the
  * machine just feeds elapsed time and reads opacity back. A linear opacity
  * ramp is intentional — the reveal's spatial shaping (smoothstep wipe, bright
- * head) is applied on top of opacity in scene_grid_render, so opacity itself
+ * head) is applied on top of opacity in render3d_grid_render, so opacity itself
  * stays a plain 0..1 progress that inverts cleanly for reversal. */
 
 /* Per-theme fade-speed multiplier on GRID_FADE_*_SECS: 1.0 = base, >1 slower,
@@ -1526,36 +1526,36 @@ static float grid_reveal_time_scale(int grid_theme) {
     return (t > 0.0f) ? t : 1.0f;
 }
 
-static float grid_reveal_duration(int grid_theme, SceneXnPhase phase) {
-    float base = (phase == SCENE_XN_FADE_IN) ? GRID_FADE_IN_SECS
+static float grid_reveal_duration(int grid_theme, Render3dXnPhase phase) {
+    float base = (phase == RENDER3D_XN_FADE_IN) ? GRID_FADE_IN_SECS
                                              : GRID_FADE_OUT_SECS;
     return base * grid_reveal_time_scale(grid_theme);
 }
 
-static float grid_reveal_opacity(int grid_theme, SceneXnPhase phase,
+static float grid_reveal_opacity(int grid_theme, Render3dXnPhase phase,
                                  float elapsed) {
-    if (phase == SCENE_XN_STEADY) return 1.0f;
+    if (phase == RENDER3D_XN_STEADY) return 1.0f;
     float dur = grid_reveal_duration(grid_theme, phase);
     float p = (dur > 0.0f) ? elapsed / dur : 1.0f;
     if (p < 0.0f) p = 0.0f;
     if (p > 1.0f) p = 1.0f;
-    return (phase == SCENE_XN_FADE_IN) ? p : 1.0f - p;
+    return (phase == RENDER3D_XN_FADE_IN) ? p : 1.0f - p;
 }
 
-static float grid_reveal_elapsed_at(int grid_theme, SceneXnPhase phase,
+static float grid_reveal_elapsed_at(int grid_theme, Render3dXnPhase phase,
                                     float opacity) {
     float dur = grid_reveal_duration(grid_theme, phase);
-    float p = (phase == SCENE_XN_FADE_IN) ? opacity : 1.0f - opacity;
+    float p = (phase == RENDER3D_XN_FADE_IN) ? opacity : 1.0f - opacity;
     if (p < 0.0f) p = 0.0f;
     if (p > 1.0f) p = 1.0f;
     return p * dur;
 }
 
-const SceneXnReveal scene_grid_reveal = {
+const Render3dXnReveal render3d_grid_reveal = {
     grid_reveal_opacity, grid_reveal_elapsed_at
 };
 
-int scene_grid_theme_uses_edge_fade(SceneGridTheme grid_theme) {
+int render3d_grid_theme_uses_edge_fade(Render3dGridTheme grid_theme) {
     /* Pure reference line-grids dissolve their alpha to the backdrop at
      * the rim instead of fogging to the clear color: the table-driven
      * line themes plus the XZ Ruler and Star Chart — custom-path grids
@@ -1571,20 +1571,20 @@ int scene_grid_theme_uses_edge_fade(SceneGridTheme grid_theme) {
     return grid_theme_spec(grid_theme) != NULL;
 }
 
-/* --- scene_grid_render phases ---
+/* --- render3d_grid_render phases ---
  *
  * Splits the 150-line orchestrator into:
  *   - grid_xn_resolve(): per-frame transition fade via the shared
- *     scene_overlay_xn_resolve. Returns a SceneOverlayXn the caller
+ *     render3d_overlay_xn_resolve. Returns a Render3dOverlayXn the caller
  *     stamps onto the GridDrawContext.
  *   - grid_setup_blend_depth(): the GL state baseline for grid draws.
  *   - grid_build_draw_context(): clamps extent/major indices and
  *     fills the GridDrawContext.
  *   - grid_apply_far_fog(): the FAR-extent distance fog + the
  *     FOG-transition recede injection for non-far themes.
- *   - grid_dispatch_theme(): the switch over SceneGridTheme.
+ *   - grid_dispatch_theme(): the switch over Render3dGridTheme.
  *
- * scene_grid_render is now the sequencer of these phases, and the
+ * render3d_grid_render is now the sequencer of these phases, and the
  * xn fields live on GridDrawContext rather than as file statics
  * (audit #3). */
 
@@ -1592,36 +1592,36 @@ int scene_grid_theme_uses_edge_fade(SceneGridTheme grid_theme) {
  * grid's "this theme owns fog" carve-out (currently OCEAN only) falls
  * back to plain alpha FADE so the theme's own fog is not competing
  * with the synthetic LINEAR recede. The carve-out is keyed on
- * scene_grid_theme_uses_fog(). FROZEN is deliberately not in the set:
+ * render3d_grid_theme_uses_fog(). FROZEN is deliberately not in the set:
  * its mist only exists under the ice, so above ground it transitions
  * like any fog-less theme. */
-static SceneOverlayXn grid_xn_resolve(const SceneRenderConfig *config,
-                                      SceneGridTheme grid_theme) {
+static Render3dOverlayXn grid_xn_resolve(const Render3dRenderConfig *config,
+                                      Render3dGridTheme grid_theme) {
 #if GRID_XN_STYLE == GRID_AXES_XN_FOG
-    int uses_fog = scene_grid_theme_uses_fog(grid_theme);
+    int uses_fog = render3d_grid_theme_uses_fog(grid_theme);
     float knee   = GRID_XN_FOG_ALPHA_KNEE;
 #else
     (void)grid_theme;
     int uses_fog = 0;
     float knee   = 1.0f; /* not used in FADE style; keeps the helper pure */
 #endif
-    return scene_overlay_xn_resolve(config->grid_opacity,
+    return render3d_overlay_xn_resolve(config->grid_opacity,
                                     GRID_XN_STYLE,
                                     uses_fog, knee);
 }
 
-static void grid_setup_blend_depth(const SceneRenderConfig *config) {
+static void grid_setup_blend_depth(const Render3dRenderConfig *config) {
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
-    scene_grid_apply_quality_config(config);
+    render3d_grid_apply_quality_config(config);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
 
-static GridDrawContext grid_build_draw_context(const SceneFrameRenderContext *frame_ctx) {
-    const SceneRenderConfig *config = &frame_ctx->config;
-    float breath = sinf(config->anim_time * SCENE_BREATH_FREQ) * 0.5f + 0.5f;
+static GridDrawContext grid_build_draw_context(const Render3dFrameRenderContext *frame_ctx) {
+    const Render3dRenderConfig *config = &frame_ctx->config;
+    float breath = sinf(config->anim_time * RENDER3D_BREATH_FREQ) * 0.5f + 0.5f;
     /* Configurable extent / major-tick spacing. Minor step is the
      * major cell divided into 5 subdivisions, which keeps the look
      * consistent across the {1, 2, 5, 10} major options. */
@@ -1640,7 +1640,7 @@ static GridDrawContext grid_build_draw_context(const SceneFrameRenderContext *fr
         .anim_time   = config->anim_time,
         .breath      = breath,
         .alpha_scale = config->alpha_scale,
-        /* A zero-initialized config (scene_demo, headless tests that don't
+        /* A zero-initialized config (render3d_demo, headless tests that don't
          * set this) must not zero out grid-line alpha, so treat <= 0 as the
          * neutral 1.0 multiplier. */
         .grid_brightness = config->grid_brightness > 0.0f
@@ -1654,14 +1654,14 @@ static GridDrawContext grid_build_draw_context(const SceneFrameRenderContext *fr
  * xn parameter carries the resolved fog_tf (= 1 - opacity) so this
  * helper doesn't reach back to the renderer's draw context for the
  * value. */
-static void grid_apply_far_fog(const SceneRenderConfig *config,
-                               SceneGridTheme grid_theme, float extent,
-                               const SceneOverlayXn *xn) {
+static void grid_apply_far_fog(const Render3dRenderConfig *config,
+                               Render3dGridTheme grid_theme, float extent,
+                               const Render3dOverlayXn *xn) {
     /* Edge-fade themes dissolve to the backdrop via per-vertex alpha
      * (steady rim + animated recede), so they never want clear-color
      * fog — at any extent or transition phase. Make sure none is left
      * enabled from a prior pass and bail. */
-    if (scene_grid_theme_uses_edge_fade(grid_theme)) {
+    if (render3d_grid_theme_uses_edge_fade(grid_theme)) {
         glDisable(GL_FOG);
         return;
     }
@@ -1671,7 +1671,7 @@ static void grid_apply_far_fog(const SceneRenderConfig *config,
      * fog as the overlay hides. At FAR the recede is driven by the
      * FAR block's own fog (below) instead, so it isn't double-set /
      * overwritten. Fog-owning configs took the FADE fallback above. */
-    int uses_fog = scene_grid_theme_uses_fog(grid_theme);
+    int uses_fog = render3d_grid_theme_uses_fog(grid_theme);
     if (!uses_fog && !is_far)
         grid_xn_apply_transition_fog(xn->fog_tf, extent);
 #else
@@ -1705,11 +1705,11 @@ static void grid_apply_far_fog(const SceneRenderConfig *config,
  * GridThemeSpec entry is a one-edit change instead of two parallel
  * lists. set_nv_fog is true iff the runtime supports NV fog distance
  * AND the active theme wants radial eye-distance fog (OCEAN, RADAR). */
-static void grid_dispatch_theme(const SceneFrameRenderContext *frame_ctx,
+static void grid_dispatch_theme(const Render3dFrameRenderContext *frame_ctx,
                                 const GridDrawContext *grid_ctx,
-                                SceneGridTheme grid_theme,
+                                Render3dGridTheme grid_theme,
                                 int set_nv_fog) {
-    const SceneRenderConfig *config = &frame_ctx->config;
+    const Render3dRenderConfig *config = &frame_ctx->config;
     switch (grid_theme) {
 
     case GRID_THEME_OCEAN:
@@ -1723,27 +1723,27 @@ static void grid_dispatch_theme(const SceneFrameRenderContext *frame_ctx,
         if (set_nv_fog)
             glFogi(GL_FOG_DISTANCE_MODE_NV, GL_EYE_RADIAL_NV);
 #endif
-        scene_grid_render_ocean_theme(grid_ctx, frame_ctx, grid_ctx->breath);
+        render3d_grid_render_ocean_theme(grid_ctx, frame_ctx, grid_ctx->breath);
         break;
 
     case GRID_THEME_FROZEN:
-        scene_grid_render_frozen_theme(grid_ctx, frame_ctx);
+        render3d_grid_render_frozen_theme(grid_ctx, frame_ctx);
         break;
 
     case GRID_THEME_SOIL:
-        scene_grid_render_soil_theme(grid_ctx, frame_ctx);
+        render3d_grid_render_soil_theme(grid_ctx, frame_ctx);
         break;
 
     case GRID_THEME_STARCHART:
-        scene_grid_render_starchart_theme(grid_ctx, frame_ctx);
+        render3d_grid_render_starchart_theme(grid_ctx, frame_ctx);
         break;
 
     case GRID_THEME_XZRULER:
-        scene_grid_render_xzruler_theme(grid_ctx);
+        render3d_grid_render_xzruler_theme(grid_ctx);
         break;
 
     case GRID_THEME_PLANES:
-        scene_grid_render_planes_theme(config, grid_ctx);
+        render3d_grid_render_planes_theme(config, grid_ctx);
         break;
 
     case GRID_THEME_RADAR:
@@ -1752,7 +1752,7 @@ static void grid_dispatch_theme(const SceneFrameRenderContext *frame_ctx,
          * fringes under the eye-plane default. */
         if (set_nv_fog)
             glFogi(GL_FOG_DISTANCE_MODE_NV, GL_EYE_RADIAL_NV);
-        scene_grid_render_radar_theme(grid_ctx);
+        render3d_grid_render_radar_theme(grid_ctx);
         break;
 
     default: {
@@ -1767,15 +1767,15 @@ static void grid_dispatch_theme(const SceneFrameRenderContext *frame_ctx,
     }
 }
 
-void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
-    const SceneRenderConfig *config = &frame_ctx->config;
-    SceneGridTheme grid_theme = (SceneGridTheme)config->grid_theme;
+void render3d_grid_render(const Render3dFrameRenderContext *frame_ctx) {
+    const Render3dRenderConfig *config = &frame_ctx->config;
+    Render3dGridTheme grid_theme = (Render3dGridTheme)config->grid_theme;
     if (grid_theme == GRID_THEME_OFF) return;
 
-    SceneOverlayXn xn = grid_xn_resolve(config, grid_theme);
+    Render3dOverlayXn xn = grid_xn_resolve(config, grid_theme);
     if (!xn.draw) return;
 
-    scene_grid_push_state();
+    render3d_grid_push_state();
     grid_setup_blend_depth(config);
 
     /* Nudge grid slightly below Y=0 to avoid z-fighting with axes */
@@ -1792,7 +1792,7 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
      * the extent (fade_end = extent steady, swept inward to 0 during a
      * hide transition). The per-vertex alpha owns the whole fade, so the
      * global xn_alpha is pinned to 1. */
-    if (scene_grid_theme_uses_edge_fade(grid_theme)) {
+    if (render3d_grid_theme_uses_edge_fade(grid_theme)) {
         float extent = grid_ctx.extent;
         grid_ctx.edge_fade = 1;
         grid_ctx.xn_alpha  = 1.0f;
@@ -1820,8 +1820,8 @@ void scene_grid_render(const SceneFrameRenderContext *frame_ctx) {
         glFogi(GL_FOG_DISTANCE_MODE_NV, saved_nv_fog_mode);
 
     glPopMatrix();
-    /* scene_grid_pop_state restores GL_ALL_ATTRIB_BITS, covering
+    /* render3d_grid_pop_state restores GL_ALL_ATTRIB_BITS, covering
      * GL_DEPTH_BUFFER_BIT (depth mask), GL_COLOR_BUFFER_BIT (blend),
      * GL_FOG_BIT, and GL_LIGHTING_BIT — no manual teardown needed. */
-    scene_grid_pop_state();
+    render3d_grid_pop_state();
 }
