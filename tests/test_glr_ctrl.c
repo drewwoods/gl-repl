@@ -1977,8 +1977,7 @@ static void test_wireframe_renderer_ignores_user_draw_state(void) {
 #ifndef GL_STUBS
     printf("Run `make test_glr_ctrl USE_GL_STUBS=1` for wireframe renderer coverage.\n");
     return;
-#endif
-
+#else
     glr_ctrl_reset_all();
     editor_feed_line("glColor3f(1, 0, 0);");
     editor_feed_line("glEnable(GL_LIGHTING);");
