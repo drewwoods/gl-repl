@@ -60,9 +60,15 @@ TYPE_FALLBACK_PREFIXES = (
     "Tutorial",
     "Ui",
 )
-MULTILINE_TYPEDEF_RE = re.compile(
-    r"(?ms)^[ \t]*typedef[ \t]+(?:struct|enum|union)\b.*?\}[ \t]*"
-    r"([A-Z][A-Za-z0-9_]*)[ \t]*;"
+NAMED_BLOCK_RE = re.compile(
+    r"^[ \t]*(?:typedef[ \t]+)?(?:struct|enum|union)[ \t]+"
+    r"([A-Z][A-Za-z0-9_]*)[ \t]*\{"
+)
+TYPEDEF_BLOCK_START_RE = re.compile(r"^[ \t]*typedef[ \t]+(?:struct|enum|union)\b")
+TYPEDEF_BLOCK_CLOSE_RE = re.compile(r"\}[ \t]*([A-Z][A-Za-z0-9_]*)[ \t]*;")
+TYPEDEF_FORWARD_RE = re.compile(
+    r"^[ \t]*typedef[ \t]+(?:struct|enum|union)[ \t]+"
+    r"([A-Z][A-Za-z0-9_]*)[ \t]+([A-Z][A-Za-z0-9_]*)[ \t]*;"
 )
 SINGLELINE_TYPEDEF_RE = re.compile(r"\b([A-Z][A-Za-z0-9_]*)\s*;")
 
@@ -126,6 +132,7 @@ def add_type(types: dict[str, list[Target]], name: str, rel: str, line: int) -> 
 
 def build_type_index(root: Path) -> dict[str, list[Target]]:
     types: dict[str, list[Target]] = {}
+    named_blocks: dict[tuple[str, str], int] = {}
     for rel in git_files(root, "*.c", "*.h"):
         path = root / rel
         try:
@@ -133,33 +140,77 @@ def build_type_index(root: Path) -> dict[str, list[Target]]:
         except UnicodeDecodeError:
             continue
 
-        claimed_lines: set[int] = set()
-        for match in MULTILINE_TYPEDEF_RE.finditer(text):
-            line = line_no_for_offset(text, match.start())
-            add_type(types, match.group(1), rel, line)
-            claimed_lines.update(range(line, line_no_for_offset(text, match.end()) + 1))
-
-        for line_no, line in enumerate(text.splitlines(), 1):
+        lines = text.splitlines()
+        idx = 0
+        while idx < len(lines):
+            line_no = idx + 1
+            line = lines[idx]
             stripped = line.strip()
-            if line_no in claimed_lines:
-                continue
             if not stripped.startswith("typedef "):
+                block_match = NAMED_BLOCK_RE.match(line)
+                if block_match:
+                    named_blocks[(rel, block_match.group(1))] = line_no
+                idx += 1
                 continue
+
+            fwd_match = TYPEDEF_FORWARD_RE.match(line)
+            if fwd_match:
+                tag_name = fwd_match.group(1)
+                alias_name = fwd_match.group(2)
+                concrete_line = named_blocks.get((rel, tag_name))
+                if concrete_line is not None:
+                    add_type(types, alias_name, rel, concrete_line)
+                idx += 1
+                continue
+
+            if TYPEDEF_BLOCK_START_RE.match(line) and "{" in line:
+                block_match = NAMED_BLOCK_RE.match(line)
+                if block_match:
+                    named_blocks[(rel, block_match.group(1))] = line_no
+                end_idx = idx
+                while end_idx < len(lines):
+                    close_match = TYPEDEF_BLOCK_CLOSE_RE.search(lines[end_idx])
+                    if close_match:
+                        add_type(types, close_match.group(1), rel, line_no)
+                        idx = end_idx + 1
+                        break
+                    end_idx += 1
+                else:
+                    idx += 1
+                continue
+
             if not stripped.endswith(";"):
+                idx += 1
                 continue
             # Function-pointer typedefs and complex macro-shaped typedefs are
             # intentionally skipped. The tool favors false negatives.
             if "(" in stripped or ")" in stripped:
+                idx += 1
                 continue
             match = SINGLELINE_TYPEDEF_RE.search(stripped)
             if match:
                 add_type(types, match.group(1), rel, line_no)
+            idx += 1
     return types
 
 
 def default_markdown_files(root: Path) -> list[Path]:
     rels = git_files(root, "*.md", ":(exclude)plans/**", ":(exclude)third_party/**")
-    return [root / rel for rel in rels]
+    return dedupe_paths([root / rel for rel in rels])
+
+
+def dedupe_paths(paths: list[Path]) -> list[Path]:
+    by_real: dict[Path, Path] = {}
+    order: list[Path] = []
+    for path in paths:
+        real = path.resolve()
+        if real not in by_real:
+            by_real[real] = path
+            order.append(real)
+            continue
+        if by_real[real].is_symlink() and not path.is_symlink():
+            by_real[real] = path
+    return [by_real[real] for real in order]
 
 
 def existing_link_ranges(line: str) -> list[tuple[int, int]]:
@@ -210,7 +261,19 @@ def resolve_file(
             return by_path[rel], "matched"
         if (root / ident).exists():
             return Target(ident), "matched"
+        suffix_matches = [target for path, target in by_path.items() if path.endswith("/" + ident)]
+        if len(suffix_matches) == 1:
+            return suffix_matches[0], "matched"
+        if len(suffix_matches) > 1:
+            return None, "ambiguous file suffix: " + ", ".join(t.relpath for t in suffix_matches[:5])
         return None, "no file match"
+
+    try:
+        rel = str((source.parent / ident).resolve().relative_to(root))
+    except ValueError:
+        rel = ""
+    if rel in by_path:
+        return by_path[rel], "matched"
 
     matches = by_basename.get(ident, [])
     if len(matches) == 1:
@@ -306,6 +369,7 @@ def main(argv: list[str]) -> int:
     args = parse_args(argv)
     root = repo_root()
     files = [(Path(f) if Path(f).is_absolute() else root / f) for f in args.files]
+    files = dedupe_paths(files)
     if not files:
         files = default_markdown_files(root)
 
@@ -318,7 +382,7 @@ def main(argv: list[str]) -> int:
         if not path.exists():
             print(f"ERROR: {path} does not exist", file=sys.stderr)
             return 1
-        occurrences, lines = scan_file(path.resolve(), root, by_basename, by_path, types)
+        occurrences, lines = scan_file(path, root, by_basename, by_path, types)
         all_occurrences.extend(occurrences)
         if args.write:
             new_lines = apply_replacements(lines, occurrences)
