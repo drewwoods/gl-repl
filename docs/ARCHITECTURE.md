@@ -306,7 +306,7 @@ storage:
   **explicit `int` parameter** (and cursor-shifting store/apply ops update
   a caller-owned `int *cursor_inout`).
 * Higher-level pipeline entry points that genuinely need to move the
-  cursor (e.g. [`scenes.c`](../src/repl/render3ds.c)) go through the [`ReplHostEffects`](../src/repl/host_effects.h#L38)
+  cursor (e.g. [`scenes.c`](../src/repl/scenes.c)) go through the [`ReplHostEffects`](../src/repl/host_effects.h#L38)
   `edit_line_get` / `edit_line_set` hooks (`repl_dispatch_edit_line_*`),
   which are no-ops when no host bridge is installed.
 
