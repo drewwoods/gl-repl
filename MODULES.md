@@ -1,23 +1,14 @@
-# REPL Module Guide — North Star
-
-> **This document is the target ownership map.** The
-> `editor-ownership-gap-cleanup` branch landed Phases A–J9 and the
-> tree now matches the contract described here. The historical
-> filename deferrals (`repl_camera_controls` → `glr_camera`,
-> `repl_actions` → `glr_actions`) landed; `repl_commit` and
-> `repl_editor` are deleted entirely. A small number of ratchets
-> continue to drive transitional uses toward zero. New code follows
-> this contract directly.
+# REPL Module Guide
 
 For per-module detail and frame-pipeline narrative read
 [`ARCHITECTURE.md`](ARCHITECTURE.md). The `src/repl` language pipeline has
 its own module-local docs: [`src/repl/README.md`](src/repl/README.md)
 (orientation + the standalone `repl_demo`) and
 [`src/repl/ARCHITECTURE.md`](src/repl/ARCHITECTURE.md) (deep dive: data model,
-edit/frame flows, state ownership, with a worked `repl_demo --trace`). For the staged-cleanup history
-(both plans landed) see
-[`feature/done/push-architecture-refinement.md`](feature/done/push-architecture-refinement.md)
-and [`feature/done/editor-owns-text-completion.md`](feature/done/editor-owns-text-completion.md).
+edit/frame flows, state ownership, with a worked `repl_demo --trace`).
+
+This file is the quick ownership map: which layer owns which state, which
+module names mean what, and where new code should go.
 
 ## Four-Role Ownership Contract
 
@@ -124,9 +115,9 @@ Consequences:
 
 | State | Owns | Does not own |
 |---|---|---|
-| `ReplState` | Parsed command array, flat program, REPL variable state (scalar predefined vars plus fixed scratch arrays `A/B/C` of `REPL_SCRATCH_ARRAY_LEN` floats and the `func0..func9` user-alias table), scenes, import/export metadata | Render/presentation config (now `glr_state`, app layer), replay runtime state (peer), variable-panel state (peer), help-session state (peer), color-picker state (peer), editable text, cursor, selection, search query, UI visibility, pointer/viewport chrome |
-| `glr_state` (app) | App-level presentation/render toggles (grid/axes themes, wireframe, overlays, backdrop, scene + whole-frame post-process filters, camera-rotate, etc.). Relocated off `ReplRuntimeState.{presentation,render}`; defaults from `glr_defaults.h` (`CFG_DEFAULT_*`). Read/written through the `glr_config` keyed bridge and per-scene snapshots | Program model, editable text, REPL grammar |
-| `EditorState` | Editable text buffer, active input, cursor/edit-line, insert mode, selection, clipboard, search/autocomplete, scroll, **cursor blink** (the editor controls cursor visibility/blink — UI just renders), undo/redo, editor transactions | Variable-panel drag (now on the variable_panel peer), parsed command semantics, GL execution, menu chrome, transient status banners, render-output pixel coordinates |
+| `ReplState` | Parsed command array, flat program, REPL variable state (scalar predefined vars plus fixed scratch arrays `A/B/C` of `REPL_SCRATCH_ARRAY_LEN` floats and the `func0..func9` user-alias table), scenes, import/export metadata | Render/presentation config (`glr_state`, app layer), replay runtime state (peer), variable-panel state (peer), help-session state (peer), color-picker state (peer), editable text, cursor, selection, search query, UI visibility, pointer/viewport chrome |
+| `glr_state` (app) | App-level presentation/render toggles (grid/axes themes, wireframe, overlays, backdrop, scene + whole-frame post-process filters, camera-rotate, etc.). Defaults from `glr_defaults.h` (`CFG_DEFAULT_*`). Read/written through the `glr_config` keyed bridge and per-scene snapshots | Program model, editable text, REPL grammar |
+| `EditorState` | Editable text buffer, active input, cursor/edit-line, insert mode, selection, clipboard, search/autocomplete, scroll, **cursor blink** (the editor controls cursor visibility/blink — UI just renders), undo/redo, editor transactions | Variable-panel drag (owned by the variable_panel peer), parsed command semantics, GL execution, menu chrome, transient status banners, render-output pixel coordinates |
 | `UiState` | Viewport, pointer, status text TTL, help-overlay visibility (chrome flag), profile-panel visibility, panel-divider geometry (panel_frac + resizing_panel) | Help-session tab/scroll (peer), variable-panel state (peer), camera pose (lives on `glr_camera`), program model, editable text, command validation, cursor blink (editor owns), per-frame render-output (uses `Ui*Output`) |
 | `variable_panel` peer | Variable-panel visibility flag + slider drag transaction (var_idx, log_mode, start_value, start_x). Storage in `src/subsystems/variable_panel/variable_panel_state.c`. | Editor text behavior, REPL grammar |
 | `replay` peer | Replay state machine: PC, mode, speed, accum, fade speed, src_line_idx, total_flat_cmds, expand_args. Storage in `src/subsystems/replay/replay_state.c`. | Editor text behavior, REPL grammar |
@@ -134,11 +125,9 @@ Consequences:
 | `color_picker` peer | Floating color-picker state, lifecycle, slider input handlers, source-line writeback through editor commit. Storage in `src/subsystems/color_picker/color_picker_state.c`; peer view + `ColorPickerInputResult` in `src/subsystems/color_picker/color_picker_state.h`. | Picker rendering / hit-test (lives on `src/ui/subsystems/color_picker.c`) |
 | `tutorial` peer | Tutorial runtime state: active flag, tutorial idx, current step, locked-line array, fade timing, last match result. Storage in `src/subsystems/tutorial/tutorial_state.c`. Runner orchestration lives in `src/subsystems/tutorial/tutorial_runner.c`; command matching and ghost-text helpers live in `src/subsystems/tutorial/tutorial_match.c`; pure fade timing helpers live in `src/subsystems/tutorial/tutorial_animation.c/.h`. | Editor text behavior, REPL grammar, tutorial catalog (`src/repl/tutorials.c`) |
 
-> The legacy forwarders (`ui_state_variable_panel*`, `editor_state_variable_drag*`,
-> `repl_state_replay*`) were retired in Phases J5–J7. Production callers and
-> tests use the peer accessors (`variable_panel_*`, `replay_state_*`)
-> directly; `check-variable-panel-forwarders` and
-> `check-replay-forwarders` are at baseline **0/0**.
+Callers use the peer accessors (`variable_panel_*`, `replay_state_*`)
+directly; `check-variable-panel-forwarders` and `check-replay-forwarders`
+guard against reintroducing state-forwarder shims.
 
 `ReplState` owns the fixed scratch arrays `A/B/C[REPL_SCRATCH_ARRAY_LEN]`
 as REPL language runtime state. They are not editor/UI state, do not
@@ -186,12 +175,10 @@ composition code to make a boundary problem disappear.
   REPL pipeline has no hard dependency on
   editor input dispatch (`src/editor/input.c`), the controller
   (`src/app/glr_ctrl.c`), or the UI (`src/ui/`, `src/ui/subsystems/replay_hud.c`). The
-  demo now backs the source lines with its own editor-free
+  demo backs the source lines with its own editor-free
   `source_document` implementation (`tools/repl_demo/source_document.c`,
-  a tiny static line store) instead of linking `src/editor/state.c`'s
-  `EditorBuffer` — the source-document port made that substitution
-  possible. The `tools/repl_demo/stubs.c` file is now an empty,
-  documentation-only canary: if a pipeline TU reaches back into
+  a tiny static line store). The `tools/repl_demo/stubs.c` file is an
+  empty, documentation-only canary: if a pipeline TU reaches back into
   app/editor/UI/peer code, the stub count guard fails instead of letting
   the dependency hide. Host effects, export bridges, source-document, and
   tutorial teardown dispatch keep reset fan-out, status, config, import,
@@ -201,10 +188,9 @@ composition code to make a boundary problem disappear.
 - **`make editor_demo`** (`tools/editor_demo/`) — a generic
   plain-text editor demo driven by its *own* input dispatcher
   (`tools/editor_demo/input.c`) and its *own* File menu
-  (`tools/editor_demo/menu.c`). Per the Phase 8 cleavage in
-  `plans/done/editor-demo.md`, `src/editor/input.c` is recognized
-  as the **REPL editor's input dispatcher** (REPL key bindings +
-  REPL-flavored controller), not a generic editor controller; the
+  (`tools/editor_demo/menu.c`). `src/editor/input.c` is the **REPL editor's
+  input dispatcher** (REPL key bindings + REPL-flavored controller), not a
+  generic editor controller; the
   demo therefore does *not* link it. Same goes for `commit.c`,
   `clipboard.c`, `undo.c`, `reformat.c`, `search.c`, `completion.c`
   and the inline overlays — all REPL-flavored controllers, none
@@ -217,12 +203,10 @@ composition code to make a boundary problem disappear.
   **not** link `src/ui/app`: the demo proves the editor model can render
   through generic UI primitives without the REPL code-panel adapter,
   `UiRenderSnapshot`, menu bar, app chrome, or `UiState`. The demo is
-  shim-free as of
-  `plans/done/edit-line-ownership.md` Phase 5 — edit-line ownership
-  moved to `EditorState.document.edit_line_idx`, the
-  `tools/editor_demo/repl_shim.c` ledger file is gone, and the
-  demo's input dispatcher reaches edit-line through
-  `editor_state_edit_line` / `_set` like the REPL editor does.
+  shim-free: edit-line ownership lives in
+  `EditorState.document.edit_line_idx`, and the demo's input dispatcher
+  reaches edit-line through `editor_state_edit_line` / `_set` like the
+  REPL editor does.
 
 All three demos default to `USE_GL_STUBS=1`-friendly object lists.
 Run `./repl_demo` for a parse/flatten summary of the built-in samples;
@@ -256,8 +240,7 @@ Load / Save (unimplemented v1 handlers — they just log) plus Quit.
 
 Treat prefixes as ownership boundaries, not naming aesthetics. A file
 that crosses a boundary either splits or moves. The app-level audio
-service is `src/app/glr_audio` with the `glr_audio_*` API (resolved
-from the former neutral `audio`/`repl_audio` name).
+service is `src/app/glr_audio` with the `glr_audio_*` API.
 
 Types follow the same rule with the PascalCase form of the prefix:
 `Repl*` / `Editor*` / `Ui*` / `Scene*` / `Glr*` / `Replay*`,
@@ -291,15 +274,12 @@ These are intentional and must not be "fixed" by a future sweep:
   (variable-panel-owned, surfaced by value through
   `src/subsystems/variable_panel/variable_panel_state.h`).
 
-`make check-module-prefixes` (a denylist of the exact stale names the
-naming cleanup removed; in the `check-state-ownership` aggregate) fails
-if any eliminated prefix reappears under `src/`. It is a removed-name
-denylist, not a blanket foreign-prefix sweep, so the borrowed-API
-types above keep passing. See
-`plans/in-review/module-naming-convention.md` for the full rename
-record.
+`make check-module-prefixes` (a denylist of stale names; in the
+`check-state-ownership` aggregate) fails if an eliminated prefix reappears
+under `src/`. It is a removed-name denylist, not a blanket foreign-prefix
+sweep, so the borrowed-API types above keep passing.
 
-## Adding Or Migrating An Owner Module
+## Adding An Owner Module
 
 1. Pick the owner first: REPL program state, editor session state, or UI
    chrome/render state.
@@ -316,7 +296,7 @@ record.
 ## Intended Frame Shape
 
 ```text
-gl_repl.c (future src/app/glr_ctrl.c) GLUT callback
+gl_repl.c GLUT callback
   -> glr_ctrl_* callback wrapper                  (routing role)
   -> UI hit-test:  ui_panels_hit_test(mx, my, variable_count) -> UiHit
   -> glr_ctrl dispatches on UiHit.kind to the OWNING subsystem:
@@ -432,7 +412,7 @@ controllers; UI may render them; their input routes to them through
 | Module | Role |
 |--------|------|
 | `variable_panel` | Peer subsystem: owns visibility flag + slider drag transaction in a single `VariablePanelState`. Storage lives in `src/subsystems/variable_panel/variable_panel_state.c`. |
-| `variable_panel_drag` | Implementation behind `variable_panel`'s drag transaction (begin/motion/reset, value writeback, source-line rewrite). Reads/writes through `variable_panel_drag_mut()`; legacy `repl_var_drag_*` symbol surface ratchets toward zero |
+| `variable_panel_drag` | Implementation behind `variable_panel`'s drag transaction (begin/motion/reset, value writeback, source-line rewrite). Reads/writes through `variable_panel_drag_mut()` |
 | `replay_state` | Peer subsystem: owns `ReplayRuntimeState` storage in `src/subsystems/replay/replay_state.c`. Narrow accessors (`replay_active`, `replay_pc`, `replay_mode`, …) plus `replay_state_view()` for the per-frame snapshot fill |
 | `replay` | Replay state machine implementation behind `replay_state`: PC stepping, mode toggling, fade batches. Routes via `replay_handle_pin_clicked` / `replay_handle_key` / `replay_handle_special` |
 | `replay_render` | Replay fade-batch GL rendering pass (`glPushAttrib` / `glMaterialfv` / `glBegin`) in `src/subsystems/replay/replay_render.c`, extracted out of the scene layer (`src/scene/render.c`) |
@@ -513,7 +493,7 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 
 | Module | Role |
 |--------|------|
-| `ui_state` | Owns `UiState`: viewport, pointer, status text TTL, panel visibility, panel-divider geometry. *Not* cursor blink (that's editor) and *not* camera pose (that's `glr_camera`). Small chrome value types live in `ui_state_types` (re-exported by `repl_state_views` for older consumers) |
+| `ui_state` | Owns `UiState`: viewport, pointer, status text TTL, panel visibility, panel-divider geometry. *Not* cursor blink (that's editor) and *not* camera pose (that's `glr_camera`). Small chrome value types live in `ui_state_types` and are re-exported by `repl_state_views` where a view facade needs them |
 | `ui_snapshot` | Defines `UiRenderSnapshot`, the read-only bundle passed to every UI renderer |
 | `ui_editor` | Editor-overlay snapshot types: transformers, highlights, virtual lines |
 | `ui_hit` | Defines `UiHitKind` + `UiHit`, the passive UI → controller contract. UI hit-test functions return `UiHit`; `glr_ctrl` dispatches on it |
@@ -523,7 +503,7 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 | `ui_repl_code_panel` | REPL-aware adapter over `ui_text_panel`: builds rows from `UiRenderSnapshot`, editor buffer/virtual-line views, command metadata, tutorial fade, replay annotations, and color-transformer state; rewrites generic hits back to source-line targets |
 | `ui_layout` | Pure scene/code-panel rectangle geometry |
 | `ui_overlay_layout` (`src/ui/app/overlay_layout.c`) | Layout engine for the floating scene-overlay panels (variable / FPS plot / profile / memory): pure bottom-up right-column stacking solve above the statusbar + replay-HUD band, column spill on overflow (panels can't overlap), plus the controller-ticked eased positions every panel glides on (the old variable-panel-only `replay_lift_px`, generalized). View builders read resolved positions; unticked queries fall back to pure solve targets |
-| `ui_text_layout` (`src/ui/core/text_layout.c`, was `code_panel_layout`) | Pure text wrapping and visual-line iteration. Public types and functions use the `code_layout_*` / `CodeLayout` / `CodeWrapIter` convention (the historical `repl_code_panel_layout_*` rename has landed) |
+| `ui_text_layout` (`src/ui/core/text_layout.c`) | Pure text wrapping and visual-line iteration. Public types and functions use the `code_layout_*` / `CodeLayout` / `CodeWrapIter` convention |
 | `ui_menu_bar` | Menu bar, dropdowns, pinned buttons, search entry, and menu hit-testing. One generic `(menu_id, parent_row)` flyout-submenu engine shared by the Scene example-tag menu, the Tutorials tag menu, and the Config section/All menu (provider resolves Scene→`repl_example_*`, Tutorials→`repl_tutorial_*`, Config→`glr_config_section_*`). Scene + Tutorials per-tag flyouts share one `CatalogFlyoutOps` vtable + `catalog_flyout_row_at()` walker so the subheading-grouping emit rule (`### <subheading>` chrome headers between contiguous same-subheading entries) has a single home for both catalogs. A flyout taller than the viewport (e.g. the Config All list) is clamped to fit and mouse-wheel-scrolled via `ui_menu_bar_handle_wheel_scroll` (hooked first in both wheel paths of `glr_ctrl`), with a right-edge scrollbar hint |
 | `ui_scene_tabs` | Scene tab strip below the menu bar: snapshot-pure render + whole-band hit-test; tab set derived each frame from scene state, no persistent model. Geometry via the shared `ui_layout_code_panel_rect()` like `ui_menu_bar` |
 | `src/ui/subsystems/color_picker.c` | **Feature-UI** (color-picker peer): pure renderer + hit-test over `ColorPickerView`. State, lifecycle, and source-line writeback live on the `src/subsystems/color_picker/color_picker_state.c` peer; the UI side is mutator- and live-state-free, audited by `check-color-picker-ui-isolation` |
@@ -534,23 +514,13 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 | `ui_memory_panel` | Memory RSS/history HUD renderer (lives at `src/ui/support/memprof.c`) |
 | `replay_ui_hud` | **Feature-UI** (replay peer): 2D replay HUD; reads replay peer subsystem state through snapshot. Lives under the `replay_ui_*` prefix because it knows replay concepts (mode / PC / play-paused-done / speed); audited by `check-replay-ui-isolation` |
 
-Files no longer in this layer:
+Files that do not belong in this layer:
 
-- `ui_help_overlay` → split. The session state (`tab_idx`, `scroll`)
-  moved to `src/editor/help_session.c` (Layer 2). The renderer became the
-  generic, REPL-agnostic `src/ui/core/tabbed_overlay.c`; the per-row text
-  content is built REPL-side by `src/repl/help_text.c` from
-  `k_func_completions[]` and adapted by `glr_ctrl` so adding a new GL command auto-populates
-  the F1 overlay.
-- `ui_color_picker` → split into `src/subsystems/color_picker/color_picker_state.c` (peer state +
-  lifecycle + writeback) and `src/ui/subsystems/color_picker.c` (renderer +
-  hit-test). The picker UI is a pure renderer over `ColorPickerView`;
-  the peer is the only mutator. Locked in by
-  `check-color-picker-ui-isolation` (stricter than the replay-UI
-  guard).
-- `ui_action` / `ui_action_dispatch` (planned but never landed) — the
-  corrected contract uses `UiHit` (passive) instead of `UiAction`
-  (dispatch enum), so these modules are not introduced.
+- Feature session state: help session state lives in
+  `src/editor/help_session.c`; color-picker state lives in
+  `src/subsystems/color_picker/color_picker_state.c`.
+- Direct dispatch APIs: generic UI returns passive `UiHit` values and lets
+  `glr_ctrl` route them to the owning subsystem.
 
 A UI renderer may draw. A UI input handler may hit-test and return a
 `UiHit`. Neither may directly mutate REPL / editor / peer-subsystem
@@ -734,18 +704,18 @@ flowchart LR
         esearch["src/editor/search.c<br/>query · hit tracking"]
         eac["src/app/glr_completion.c<br/>REPL-side provider<br/>(registers with editor_completion)"]
         ecompl["src/editor/completion.c<br/>completion-provider registry"]
-        ehelpsess["src/editor/help_session.c<br/>read-only editor session<br/>(carved from ui_help_overlay state)"]
+        ehelpsess["src/editor/help_session.c<br/>read-only editor session"]
         erename["src/editor/inline_rename.c<br/>rename buffer"]
         efileprompt["src/editor/inline_file_prompt.c<br/>inline save/load file prompt"]
         ereformat["src/editor/reformat.c<br/>whole-document reindent"]
     end
 
     subgraph peers["2b. Peer subsystems (own state + controller)"]
-        vpanel["src/subsystems/variable_panel/variable_panel_state.c + src/subsystems/variable_panel/variable_panel_drag.c<br/>(was repl_var_drag)<br/>visibility + drag transaction"]
-        replay_sys["src/subsystems/replay/replay_playback.c + replay_fade.c + replay_input.c<br/>+ replay.c + replay_render.c + replay_state.c<br/>+ replay_annotations.c<br/>(was repl_replay)<br/>state machine · fades · fade GL render · walkers · annotations"]
-        cpicker["src/subsystems/color_picker/color_picker_state.c<br/>(was inside ui_color_picker)<br/>HSV/alpha state · lifecycle · writeback"]
+        vpanel["src/subsystems/variable_panel/variable_panel_state.c + src/subsystems/variable_panel/variable_panel_drag.c<br/>visibility + drag transaction"]
+        replay_sys["src/subsystems/replay/replay_playback.c + replay_fade.c + replay_input.c<br/>+ replay.c + replay_render.c + replay_state.c<br/>+ replay_annotations.c<br/>state machine · fades · fade GL render · walkers · annotations"]
+        cpicker["src/subsystems/color_picker/color_picker_state.c<br/>HSV/alpha state · lifecycle · writeback"]
         tutorial_sys["src/subsystems/tutorial/tutorial_runner.c + tutorial_animation.c + tutorial_match.c<br/>+ src/subsystems/tutorial/tutorial_state.c<br/>(catalog in src/repl/tutorials.c)<br/>runner · matching · fade timing"]
-        edit_overlays["src/subsystems/edit_overlays/edit_overlays.c<br/>(extracted from glr_ctrl)<br/>cursor edit-guide + vertex/normal overlay walk"]
+        edit_overlays["src/subsystems/edit_overlays/edit_overlays.c<br/>cursor edit-guide + vertex/normal overlay walk"]
         camera["src/app/glr_camera.c<br/>orbit/pan/zoom transform"]
     end
 
@@ -1006,25 +976,17 @@ check-ui-no-repl-state-read
     ui_*_render*() functions take const UiRenderSnapshot *snap and read
     only from it.
 
-check-ui-returns-hits-only             (Phase 4 — replaces the planned
-                                        check-ui-emits-actions-only)
+check-ui-returns-hits-only
     ui_*.c input handlers do not call glr_action_*, repl_command_store_*,
     editor_*_mut*, repl_state_*_mut*, or peer-subsystem mutators
     directly. They compute a UiHit and return it. The corrected
     contract has glr_ctrl dispatch on UiHit.kind to the owning
-    subsystem; UI does not own dispatch. Baseline 0 (lowered from
-    8 in Phase J2.2 as the controller took over code-panel press,
-    drag, menu activation, and color-picker dispatch; then to 1 in
-    J3 with color-picker writeback and to 0 in J4 once the
-    cursor-pixel moved to UiCodePanelOutput — ui_*.c is now
-    mutator-free).
+    subsystem; UI does not own dispatch.
 
-check-ui-panels-no-mutators            (Phase J2.2 hard guard)
-    src/ui/app/panels.c is hit-test only. The legacy code-panel press / click /
-    drag / release / scene-press / motion / mouse-release / escape
-    forwarders + color-picker open/close/press/motion/release + replay
-    pin + search + menu open/close/activate calls are all routed by
-    glr_ctrl. Any reappearance fails the build with no allowlist.
+check-ui-panels-no-mutators
+    src/ui/app/panels.c is hit-test only. Code-panel press / click /
+    drag / release, scene pointer input, color-picker input, replay
+    pins, search, and menu activation are all routed by glr_ctrl.
 
 check-replay-ui-isolation              (feature-UI prefix discipline)
     replay_ui_*.c is feature-owned UI: it may render the replay HUD,
@@ -1034,23 +996,19 @@ check-replay-ui-isolation              (feature-UI prefix discipline)
     A separate lighter guard for feature UI keeps the generic ui_*
     allowlists clean of feature-specific exemptions.
 
-check-glr-ctrl-not-editor-mirror         (Phase 4)
+check-glr-ctrl-not-editor-mirror
     glr_ctrl must not accumulate one wrapper per editor operation.
     New editor behavior belongs behind editor_handle_* or editor_*
     APIs. glr_ctrl routes raw input to the owning subsystem and
     builds frame snapshots; it does not implement editor behavior or
     duplicate the editor's API surface.
 
-check-no-repl-editor-input-shim        (Phase J1)
-    src/editor/input.c must not include the deleted repl_editor.h or call
-    legacy repl_*_func dispatch bodies. The input dispatch boundary
-    is closed: src/editor/input.c handles editor-text-model concerns only;
+check-no-repl-editor-input-shim
+    src/editor/input.c handles editor-text-model concerns only;
     non-editor routing lives in glr_ctrl_router_* helpers.
 
-check-editor-ownership-budget          (landed commit 11)
-    Ratchets the transitional ui-forwarder line count in src/repl/state.c
-    and the src/ui/app/state.h -> src/repl/state_views.h include count strictly
-    downward.
+check-editor-ownership-budget
+    Keeps editor/UI ownership shims from expanding.
 ```
 
 ### Layout geometry
@@ -1097,204 +1055,42 @@ render-neutral types belong in explicit shared headers such as
 | New program/persistence state | `ReplState` slice |
 | New header-only render helper | `include/` |
 
-## Current Status vs. Target
+## Guard Summary
 
-This document describes the **target**. The
-`editor-ownership-gap-cleanup` branch landed Phases A through J2,
-which closed the M/V/C+compiler+router contract end-to-end
-including the input dispatch boundary and the code-panel press
-side-effect routing. As of that branch landing:
+The Makefile checks keep this guide executable:
 
-- **Three-state split: done.** `EditorState`, `UiState`, and
-  `ReplRuntimeState` each own their respective slices. The
-  variable_panel and replay peers carved their state out as standalone
-  modules (Phase F).
-- **`repl_compile` / `repl_apply_*` API: done.** Compile is a pure
-  validator; apply is a pure mutator. Both produce / consume
-  `ReplCompiledChange`. Status side effects are forbidden by hard
-  guard (`check-no-set-status-in-compile-apply`).
-- **Editor-buffer single-writer: done.** `editor_buffer_*` is the
-  sole writer; the `repl_command_store_*_with_line[s]` overloads are
-  gone (Phase B).
-- **`EditorBufferView` for REPL readers: done.** Hard-guarded by
-  `check-repl-no-direct-buffer-read` with an allowlist for
-  transitional readers.
-- **`source_document` port: landed (in-flight decouple plan).** The
-  neutral `source_document` port (`SourceTextView` + `source_document_*`)
-  is the text seam between REPL pipeline TUs and the host. The full app
-  binds it to `EditorState` through `glr_source_document.c`; the standalone
-  `repl_demo` links a tiny editor-free implementation. `repl_load.c` owns
-  the non-editor apply path so `repl_compile.c` stays a pure validator.
-- **Presentation/render state off `ReplState`: landed.** The fields
-  that lived on `ReplRuntimeState.{presentation,render}` moved to the
-  app-level `glr_state.c`, reached through the `glr_config` keyed
-  bridge. Camera/cfg export formatting moved to the
-  `glr_camera_export.c` / cfg bridges so `repl_export.c` no longer parses
-  or formats GL strings.
-- **Input routing: done.** `ui_panels_hit_test`, `ui_menu_bar_hit_test`,
-  `ui_color_picker_hit_test`, `ui_variable_panel_hit_test` produce
+- `make check-state-ownership` runs the ownership/boundary ratchets:
+  state-view purity, UI hit-test purity, peer-subsystem accessors, source
+  document ownership, include style, keymap duplicates, and related checks.
+- `check-no-set-status-in-compile-apply` keeps `repl_compile` a pure validator
+  and `repl_apply_*` a pure mutator.
+- `check-repl-no-direct-buffer-read` and `check-source-document-port-owners`
+  keep REPL readers behind the neutral `source_document` port.
+- `check-ui-returns-hits-only`, `check-ui-panels-no-mutators`, and
+  `check-output-actualization` keep UI render/input code passive: hit-tests
+  return `UiHit`, render-side discoveries return `Ui*Output`, and `glr_ctrl`
+  actualizes them.
+- `check-repl-demo-no-editor` and `check-repl-demo-stubs-shrinking` keep
+  `tools/repl_demo` a stub-free proof that the REPL pipeline links without
+  app/editor/UI code.
+- `check-color-picker-ui-isolation`, `check-replay-ui-isolation`, and
+  `check-repl-no-direct-tutorial-runner` keep feature-specific behavior in its
+  owning peer subsystem rather than in generic UI or REPL pipeline code.
 
-  passive `UiHit` results; `check-ui-returns-hits-only` is now at
-  **0/0** — every legacy mid-input/mid-render mutator in `ui_*.c` is
-  gone. Color-picker writeback routes through
-  `editor_commit_apply_external_change`; the cursor-pixel publish
-  routes through the per-frame `UiCodePanelOutput` struct that
-  `ui_panels_render_code_panel` fills and `glr_ctrl` actualizes
-  by passing the coords directly to `ui_autocomplete_panel_render`.
-  The `cursor_px` / `cursor_py` fields on
-  `UiCodePanelRuntimeState`, the `glr_action_set_cursor_pixel`
-  setter, and the `check-cursor-px-encapsulated` guard were deleted
-  along with the data — it was rendering ephemera, not state.
-- **Code-panel press side effects: routed (Phase J2).**
-  `glr_ctrl_router_handle_code_panel_hit(UiHit, x, y)` dispatches
-  every code-panel press / drag / release / menu activation /
-  pin-button / inline-color-swatch / floating-picker control / panel-
-  divider hit by `UiHit.kind`. `src/ui/app/panels.c` is hit-test only —
-  the press / click / drag / release / scene-press / motion / mouse-
-  release / escape forwarders are deleted. Hard-guarded by
-  `check-ui-panels-no-mutators`. Drag-anchor state moved into
-  `src/app/glr_ctrl.c`; `route_menu_button_hit` / `route_menu_item_hit`
-  use `UI_HIT_MENU_BUTTON` vs `UI_HIT_MENU_ITEM` to disambiguate
-  top-level button clicks from open-dropdown row clicks via the
-  payload's `cmd_idx` / `item_idx` rather than reading menu state
-  back through `ui_menu_bar`.
-- **Input dispatch boundary: closed (Phase J1).** `repl_editor.{c,h}`
-  is deleted. All keyboard, special-key, mouse, motion, and
-  mousewheel dispatch migrated into `src/editor/input.c` (editor-text
-  concerns only) and `src/app/glr_ctrl.c` (non-editor routing via
-  `glr_ctrl_router_*` helpers: replay, audio, config, save,
-  camera, variable panel, scene press, scroll-wheel zoom). Timer
-  dispatch inlined into `glr_ctrl_timer` / `glr_ctrl_tick`.
-  Hard-guarded by `check-no-repl-editor-input-shim`.
-- **Peer subsystems: done.** `variable_panel`, `replay`, and
-  `editor_help_session` each own their state separately from
-  `EditorState` / `UiState` / `ReplState`.
-- **Read-only-document seam: done.** `editor_help_session` is the
-  read-only editor session backing the help overlay. The
-  `EditorCompletionProvider` registry decouples editor input
-  dispatch from REPL grammar (Phase G).
-- **Commit dispatch is editor-side: done.** `editor_try_commit_*`
-  dispatchers live in `src/editor/commit.c`. `repl_commit.c` is deleted
-  and hard-guarded against return (Phase H.5). `editor_try_commit_float_decl`
-  and `editor_try_commit_assign_variable` now route through
-  `editor_commit_apply_plan`.
-- **Parser diagnostic flow: data, not side effects.** `src/repl/parser.c`
-  writes diagnostics to `ReplParseContext.err_buf`. The parser core
-  has zero `set_status` calls; the legacy no-ctx wrappers
-  (`repl_parser_parse_command` / `_with_vars`) keep one bridge for
-  the test harness, ratcheted by `check-no-set-status-in-repl-parser`
-  (baseline 1 → 0).
-- **File renames: done.** `repl_undo` → `editor_undo`,
-  `repl_clipboard` → `editor_clipboard`, `repl_search` →
-  `editor_search`, `repl_inline_rename` → `editor_inline_rename`,
-  `repl_var_drag` → `variable_panel_drag`,
-  `repl_replay` → `replay`, `repl_layout` → `ui_layout`,
-  `repl_code_panel_layout` → `ui_code_panel_layout`,
-  `repl_code_panel_document` → split into `ui_text_panel` plus
-  `ui_repl_code_panel` (`src/editor/code_panel_document.c` deleted),
-  `repl_editor` → deleted (dispatch split between `editor_input`
-  and `glr_ctrl`), `repl_camera_controls` → `glr_camera`,
-  `repl_actions` → `glr_actions`. The `glr_*` namespace covers the
-  app-shell (router + camera + menu/config actions); the previously
-  noted deferrals have landed.
-- **Hard guards: in place.** `make check-state-ownership` runs the
-  ownership/boundary ratchets, while `make check` also adds
-  `check-gl-boundaries` and `check-layer-coupling`.
-  `check-public-api-usage` is informational. Recent guards include
-  `check-color-picker-ui-isolation` (the picker peer split —
-  `src/ui/subsystems/color_picker.c` is renderer + hit-test only, no state
-  reads / mutations / parser / commit), `check-replay-ui-isolation`
-  (Phase J3.1, the feature-UI prefix discipline), and
-  `check-repl-no-direct-tutorial-runner` (REPL pipeline files request
-  tutorial cleanup through `ReplHostEffects`, keeping `repl_demo`
-  stub-free). `check-output-actualization` actively scans
-  `UiCodePanelOutput` and verifies `src/app/glr_ctrl.c` reads every
-  field.
-- **Migration ratchets: all at 0/0.** `check-ui-returns-hits-only`,
-  `check-no-set-status-in-repl-parser`, `check-replay-forwarders`,
-  and `check-variable-panel-forwarders` all reach 0/0 after Phase
-  J3–J7 retired the legacy bridge code (parser no-ctx wrappers,
-  `repl_state_replay*` forwarders, `editor_state_variable_drag*`
-  / `ui_state_variable_panel*` / `repl_var_drag_*` shims). The
-  canonical peer accessors are the only entry points.
-
-Previously-deferred items, now resolved:
-
-- `ui_layout` / `ui_text_layout` parameterization — done: the geometry
-  helpers no longer read `repl_state_presentation()` (neither
-  `src/ui/core/layout.c` / `src/ui/app/layout.c` nor
-  `src/ui/core/text_layout.c` includes a repl-state header).
-- `ui_text_layout` symbol rename — done: the public API uses the
-  `code_layout_*` / `CodeLayout` / `CodeWrapIter` convention; no
-  `repl_code_panel_layout_*` symbol remains.
-- `audio` namespace audit — resolved: app service is now
-  `src/app/glr_audio` with the `glr_audio_*` API.
-- `editor_reset_transients` rename — done: the cross-subsystem reset
-  (editor + camera + menu + picker + code-panel-drag transients) is now
-  `glr_ctrl_reset_transients()` in `src/app/glr_ctrl.c`; the editor-side
-  residue is `editor_commit_reset_transients()`.
-
-REPL pipeline corner cases that deserve focused regression tests are
-listed in [`ARCHITECTURE.md`](ARCHITECTURE.md) under
-*Known REPL Corner Cases & Coverage Gaps*.
-
-See `feature/done/editor-ownership-gap-cleanup.md` for the audit script and
-baseline counts; `feature/editor-owns-text-completion.md` for the
-phase-by-phase commit ledger that delivered this state; and
-`feature/done/editor-text-model-controller.md` for the corrected
-contract that this document reflects.
+REPL pipeline corner cases that deserve focused regression tests are listed in
+[`ARCHITECTURE.md`](ARCHITECTURE.md) under *Known REPL Corner Cases & Coverage
+Gaps*.
 
 ## Open Refactor Edges
 
-Phase 1 of the earlier refinement plan is complete. Most of refinement
-Phase 2 has landed (R1, R2, R3, R4 controller-side, R5, R6, R7).
-`feature/editor-owns-text.md` Steps 2–6 completed the data-shape half of
-editor-owned text. Phase J1 closed the input dispatch boundary
-(`repl_editor.{c,h}` deleted). Phase J2 routed code-panel press side
-effects through `UiHit` dispatch (`src/ui/app/panels.c` is hit-test only).
-Phase J3 routed color-picker writeback through
-`editor_commit_apply_external_change` and renamed the replay HUD to
-the feature-UI `replay_ui_*` prefix. Phase J4 introduced
-`UiCodePanelOutput` so the editor cursor pixel flows back through a
-per-frame render-output struct rather than a state mutation; UI is
-now mutator-free in input AND render paths. Phases J5–J7 retired
-every legacy forwarder shim across parser, replay, and
-variable_panel. Phase J8 added macOS Cmd-key support
-(`editor_input_normalize_super_to_ctrl`). Phase J9 made code-panel
-syntax highlighting metadata-driven via `CmdSyntaxCategory` on
-`ReplCommandTypeSpec`.
-
-Outstanding tracks:
-
-```text
-R12                           consolidate public REPL APIs into one repl.h
-R9                            optional: split src/repl/export.c
-Color scheme + syntax         deferred sub-task of editor-owns-text Step 6
-
-Completed:
-R8 (sample -> gl-repl rename) + src/ restructure (subsystems split,
-ui core/app split, prof + transform_utils relocations) — landed in
-plans/active/src-shuffle-final.md.
-R10-phase1 (retire src/repl/core.h facade) — landed.
-R10-ph2-5 (dissolve src/repl/core.c into natural owners) — landed.
-R11 (tail; shrink remaining allowlists, including bench_repl.c) — landed.
-```
-
-`feature/state-ownership-finalize.md` (residual of the original
-`gold-standard-state-ownership.md` plan, retired 2026-05-11):
-
-- Stages 0/1 (Makefile checks, capture/restore) — landed.
-- Stages 2/3 (by-value read getters, UI-facing leaf state) — landed.
-- Stage 4 (cursor-pixel `UiCodePanelOutput` actualization) — landed.
-- Stage 5 (medium slices return by-value or view structs, UI no longer
-  reads `repl_state_presentation/replay/render` directly) — landed.
-- Stage 6 (`repl_undo` on top of `repl_state_capture()`) — abandoned;
-  superseded by the deliberate editor/REPL undo split documented in
-  `feature/done/editor-input-selection.md` Phase A item 6.
-- Stage 7 (UI snapshot purity) — render boundary done; input-bridge
-  conversion is the deferred Phase C of
-  `feature/done/push-architecture-ui.md`, explicitly optional and
-  not pursued.
-- Stages 8/9 (collapse views/owners headers, domain-helper audit,
-  capture-semantics docs) — open. See
-  `feature/state-ownership-finalize.md`.
+- **Public REPL API.** Consolidate truly public REPL APIs into one concise
+  header grouped by owner; keep internals owner-local.
+- **App-shell namespace.** Rename `gl_repl.c` / `gl_repl.h` into the `glr_*`
+  shell namespace without changing ownership.
+- **Export module size.** Split `src/repl/export.c` only if a natural owner
+  boundary appears.
+- **Theme extraction.** Color-scheme + syntax-keyword extraction should wait
+  for a configurable theme consumer.
+- **State view/owner polish.** Possible rename of `state_views.h` /
+  `state_owners.h`, a domain-helper audit, and explicit capture/restore docs
+  for the REPL document, editor session, and undo ring remain useful cleanup.

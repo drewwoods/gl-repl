@@ -149,8 +149,9 @@ The resolved source/ref/SHA are pinned in `third_party/freeglut/VENDORED.txt`.
 The current capture branch is stacked on the OSMesa backend branch, so one
 vendored tree serves both native and headless builds. See *Headless Rendering &
 Screenshots (OSMesa)* in
-[`ARCHITECTURE.md`](ARCHITECTURE.md) for the full design, and
-`plans/external/freeglut-osmesa-backend.md` for the backend spec.
+[`ARCHITECTURE.md`](ARCHITECTURE.md) for the full design. If you are changing
+the vendored freeglut backend itself, the lower-level backend notes live in
+`plans/external/freeglut-osmesa-backend.md`.
 
 ## macOS app bundle
 
