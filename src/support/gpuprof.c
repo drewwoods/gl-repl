@@ -4,7 +4,7 @@
  * Mechanism (see gpuprof.h for the contract):
  *
  * GL_TIME_ELAPSED_EXT queries cannot nest — only one may be active at a
- * time — but prof sections do nest (PROF_RENDER3D_3D wraps _FILL, _HELPERS,
+ * time — but prof sections do nest (PROF_RENDER3D wraps _FILL, _HELPERS,
  * ...). So begin/end never map 1:1 onto queries; instead each transition
  * is a boundary, slicing the frame into non-overlapping *segments*. Every
  * segment records the bitmask of sections open while it ran; at harvest a

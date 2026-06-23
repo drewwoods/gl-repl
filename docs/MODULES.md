@@ -1006,7 +1006,7 @@ Reading the diagram:
   at frame end after every UI layer). The controller keeps them mutually
   exclusive via `Ctrl+N`, which walks each effect (chromatic aberration,
   vignette) through both scopes. Each scope is timed by its own
-  CPU-profile section (`PROF_RENDER3D_3D_POST_PROCESS` "post FX (scene)" /
+  CPU-profile section (`PROF_RENDER3D_POST_PROCESS` "post FX (scene)" /
   `PROF_COMPOSITOR` "Compositor FX").
 
 ## Boundary Rules

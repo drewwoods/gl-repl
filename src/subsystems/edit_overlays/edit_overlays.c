@@ -685,25 +685,25 @@ void edit_overlays_post_overlays(void *user_data) {
     const OverlaySnapshotPack *pack = (const OverlaySnapshotPack *)user_data;
     if (!pack) return;
 
-    prof_begin(PROF_RENDER3D_3D_OVERLAY_OUTLINES);
+    prof_begin(PROF_RENDER3D_OVERLAY_OUTLINES);
     edit_overlays_render_outlines(&pack->walk, pack->multisample_enabled, pack->line_smooth_enabled);
     edit_overlays_render_vertex_points(&pack->walk);
-    prof_accum_end(PROF_RENDER3D_3D_OVERLAY_OUTLINES);
+    prof_accum_end(PROF_RENDER3D_OVERLAY_OUTLINES);
 
-    prof_begin(PROF_RENDER3D_3D_OVERLAY_TRANSFORM_GUIDES);
+    prof_begin(PROF_RENDER3D_OVERLAY_TRANSFORM_GUIDES);
     edit_overlays_render_cursor_guides(&pack->snapshot, &pack->walk);
-    prof_accum_end(PROF_RENDER3D_3D_OVERLAY_TRANSFORM_GUIDES);
+    prof_accum_end(PROF_RENDER3D_OVERLAY_TRANSFORM_GUIDES);
 
     if (pack->vertex_label_mode != OVERLAY_VERTEX_LABEL_OFF) {
-        prof_begin(PROF_RENDER3D_3D_OVERLAY_VERTEX_NUMBERS);
+        prof_begin(PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS);
         edit_overlays_render_vertex_numbers(&pack->walk,
                                             pack->vertex_label_mode,
                                             pack->ortho_mode);
-        prof_accum_end(PROF_RENDER3D_3D_OVERLAY_VERTEX_NUMBERS);
+        prof_accum_end(PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS);
     }
     if (pack->show_normal_vectors) {
-        prof_begin(PROF_RENDER3D_3D_OVERLAY_NORMALS);
+        prof_begin(PROF_RENDER3D_OVERLAY_NORMALS);
         edit_overlays_render_normal_vectors(&pack->walk);
-        prof_accum_end(PROF_RENDER3D_3D_OVERLAY_NORMALS);
+        prof_accum_end(PROF_RENDER3D_OVERLAY_NORMALS);
     }
 }

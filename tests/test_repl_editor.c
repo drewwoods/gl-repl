@@ -2037,8 +2037,8 @@ int main() {
     /* 24. prof_frame_tick - increments staleness counters */
     {
         /* Call begin/end to prime a section, then tick several frames */
-        prof_begin(PROF_RENDER3D_3D);
-        prof_end(PROF_RENDER3D_3D);
+        prof_begin(PROF_RENDER3D);
+        prof_end(PROF_RENDER3D);
         /* Frame tick - sections that didn't run this frame become stale */
         prof_frame_tick();
         prof_frame_tick();

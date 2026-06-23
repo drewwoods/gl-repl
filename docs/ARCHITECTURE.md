@@ -144,7 +144,7 @@ gl_repl.c GLUT display callback
         -> update export/camera strings
         -> build Render3dRenderConfig from REPL state                [PROF_SNAPSHOT_SCENE_CONFIG]
         -> build UiRenderSnapshot from REPL state                 [PROF_SNAPSHOT_UI]
-        -> render3d_draw_scene(&render3d_cfg)                      [PROF_RENDER3D_3D]
+        -> render3d_draw_scene(&render3d_cfg)                      [PROF_RENDER3D]
         -> ui_panels_render_code_panel(&ui_snap)                  [PROF_CODE_PANEL]
         -> ui_*_render(&ui_snap) overlays                         [PROF_UI_PANELS]
         -> ui_profile_panel_render(&ui_snap)
