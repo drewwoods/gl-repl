@@ -398,11 +398,11 @@ If accepting a keystroke can change line text, cursor position, scroll,
 selection, search/autocomplete state, or undo history, the code belongs
 in the editor layer.
 
-Code-panel row construction is no longer editor-owned. Generic text-panel
+Code-panel row construction is not editor-owned. Generic text-panel
 rendering and hit-test live in `ui_text_panel`; the REPL/editor adapter that
 turns snapshots into panel rows lives in `ui_repl_code_panel`.
 
-### 2b. Peer subsystems (carved out of editor / UI)
+### 2b. Peer subsystems (independent of editor / UI)
 
 Variable panel and replay are *not* part of the editor and *not* part
 of UI. They are independent subsystems with their own state +
@@ -463,7 +463,7 @@ never read `ReplState`, `EditorState`, or `UiState` directly.
 | `src/scene/scene_transition` | Pure grid/axes show↔hide fade state machine (no GL); controller diffs theme, renderer scales color alpha by opacity |
 | `src/scene/backdrop` | Backdrop/environment rendering |
 | `src/scene/lights` | Baseline lighting and light indicators |
-| `src/scene/overlays` | Tiny per-vertex GL primitives (vertex-number labels, normal arrows). REPL-walking overlays moved out to `src/app/glr_ctrl.c`. |
+| `src/scene/overlays` | Tiny per-vertex GL primitives (vertex-number labels, normal arrows). REPL-walking overlays live in `src/app/glr_ctrl.c`. |
 | `src/scene/postprocess_filter` | Optional post-process pass: **chromatic aberration** (capture the rect to a texture, redraw channel-offset passes) or **vignette** (blended elliptical darkening; no capture). Pure fixed-function GL, dispatched on `ScenePostFilterMode`. Driven over the **scene-viewport rect** once per frame by `src/scene/render`; the *same primitives* are reused over the **whole window** by the app-level `glr_compositor` (Layer 6) |
 | `src/scene/themes` | Shared scene theme enums (grid/axes themes, backdrop modes, grid spacing/extent) — the vocabulary app/UI config code and scene renderers share (header-only) |
 | `src/scene/guides/geometry_guides.c` | Vertex/primitive guide rendering from a `SceneGuideSnapshot`. The controller fills the snapshot's cursor args from the flat program (funcN-local resolution) before calling in — see [Architecture: Cursor Edit Guides](ARCHITECTURE.md#cursor-edit-guides) |
@@ -502,7 +502,7 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 | `ui_text_search` | Pure case-insensitive substring search helpers (`ui_text_matches_at`, `ui_text_find_next_in_text`). REPL/editor-free; used by `editor_search` |
 | `ui_repl_code_panel` | REPL-aware adapter over `ui_text_panel`: builds rows from `UiRenderSnapshot`, editor buffer/virtual-line views, command metadata, tutorial fade, replay annotations, and color-transformer state; rewrites generic hits back to source-line targets |
 | `ui_layout` | Pure scene/code-panel rectangle geometry |
-| `ui_overlay_layout` (`src/ui/app/overlay_layout.c`) | Layout engine for the floating scene-overlay panels (variable / FPS plot / profile / memory): pure bottom-up right-column stacking solve above the statusbar + replay-HUD band, column spill on overflow (panels can't overlap), plus the controller-ticked eased positions every panel glides on (the old variable-panel-only `replay_lift_px`, generalized). View builders read resolved positions; unticked queries fall back to pure solve targets |
+| `ui_overlay_layout` (`src/ui/app/overlay_layout.c`) | Layout engine for the floating scene-overlay panels (variable / FPS plot / profile / memory): pure bottom-up right-column stacking solve above the statusbar + replay-HUD band, column spill on overflow (panels can't overlap), plus the controller-ticked eased positions every panel glides on. View builders read resolved positions; unticked queries fall back to pure solve targets |
 | `ui_text_layout` (`src/ui/core/text_layout.c`) | Pure text wrapping and visual-line iteration. Public types and functions use the `code_layout_*` / `CodeLayout` / `CodeWrapIter` convention |
 | `ui_menu_bar` | Menu bar, dropdowns, pinned buttons, search entry, and menu hit-testing. One generic `(menu_id, parent_row)` flyout-submenu engine shared by the Scene example-tag menu, the Tutorials tag menu, and the Config section/All menu (provider resolves Scene→`repl_example_*`, Tutorials→`repl_tutorial_*`, Config→`glr_config_section_*`). Scene + Tutorials per-tag flyouts share one `CatalogFlyoutOps` vtable + `catalog_flyout_row_at()` walker so the subheading-grouping emit rule (`### <subheading>` chrome headers between contiguous same-subheading entries) has a single home for both catalogs. A flyout taller than the viewport (e.g. the Config All list) is clamped to fit and mouse-wheel-scrolled via `ui_menu_bar_handle_wheel_scroll` (hooked first in both wheel paths of `glr_ctrl`), with a right-edge scrollbar hint |
 | `ui_scene_tabs` | Scene tab strip below the menu bar: snapshot-pure render + whole-band hit-test; tab set derived each frame from scene state, no persistent model. Geometry via the shared `ui_layout_code_panel_rect()` like `ui_menu_bar` |
@@ -536,7 +536,7 @@ state.
 | `src/app/glr_camera_export` | Camera-block format owner: translates camera state ↔ the `// camera` block + `glRotatef`/`glTranslatef` text in saved files. Implements `ReplExportCameraBridge` so `repl_export` never parses/formats GL strings |
 | `src/app/glr_compositor` | App-level compositor post-process hook. Runs a post-process pass over the **entire composited frame** (3D scene + all 2D UI) at the tail of `glr_ctrl_display_frame`, after all drawing and before the buffer swap. Reuses the scene `postprocess_filter` primitive (Layer 4) over the full window rect; the scene's own pass stays scene-viewport-only. Driven by `GlrPresentationState.compositor_filter_mode`; the table-driven `Ctrl+N` cycle walks each effect through both scopes and keeps the two passes mutually exclusive (Off → CA scene → CA frame → vignette scene → vignette frame). Timed via `PROF_COMPOSITOR` ("Compositor FX") |
 | `src/app/glr_source_document` | Full-app adapter binding the neutral `source_document` port (read view + insert/replace/load/clear/apply) to the `EditorState` text buffer, so REPL pipeline TUs never reach into editor state directly |
-| `src/app/glr_state` | Storage + accessors for app-level presentation/render state relocated off `ReplRuntimeState`; reached through the `glr_config` keyed bridge |
+| `src/app/glr_state` | Storage + accessors for app-level presentation/render state, owned by the app layer rather than `ReplRuntimeState`; reached through the `glr_config` keyed bridge |
 | `src/app/glr_audio` | App-level playlist engine and persisted audio config (`glr_audio_*`) |
 | `prof` | Project-wide CPU timing instrumentation |
 | `gl_repl` | `main()`, GLUT callback registration, buffer swap |
@@ -677,7 +677,7 @@ flowchart LR
 
     subgraph app["0. App shell (router · bridges · app state)"]
         ctrl["src/app/glr_ctrl.c<br/>raw input router · frame/snapshot coordinator<br/>non-editor router helpers · timer tick<br/>does NOT drive editor behavior"]
-        glrstate["src/app/glr_state.c<br/>app presentation/render state<br/>(moved off ReplState)"]
+        glrstate["src/app/glr_state.c<br/>app presentation/render state<br/>(app-owned, not ReplState)"]
         glrsrcdoc["src/app/glr_source_document.c<br/>source_document port → EditorState"]
         glrcamexport["src/app/glr_camera_export.c<br/>camera ↔ export-text bridge"]
         glrcompositor["src/app/glr_compositor.c<br/>whole-frame post-process hook<br/>(reuses scene primitive over full window)"]
@@ -842,7 +842,7 @@ flowchart LR
     load i37@--> glrsrcdoc
     tutorial_sys i38@--> load
 
-    %% App-owned presentation/render state (relocated off ReplState) and
+    %% App-owned presentation/render state (not on ReplState) and
     %% the camera<->export-text bridge.
     ctrl -.-> glrstate
     sceneR -.-> glrstate
