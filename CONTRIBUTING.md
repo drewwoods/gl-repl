@@ -56,12 +56,12 @@ The most common contributions, recipe-style:
 
 **A new GL command**
 1. Add a [`CmdType`](src/repl/command.h#L37) to [`src/repl/command.h`](src/repl/command.h).
-2. Parse it in `repl_parser_parse_command_ctx()` ([`src/repl/parser.c`](src/repl/parser.c)) —
+2. Parse it in [`repl_parser_parse_command_ctx()`](src/repl/parser.h#L92) ([`src/repl/parser.c`](src/repl/parser.c)) —
    for a `glEnable`-shaped enum-arg command or a standard float-arg
    command, you only need a new row in `k_enum_command_specs[]` /
    `k_std_command_specs[]` in [`src/repl/command_spec.c`](src/repl/command_spec.c) (keep the tables
    alphabetically sorted by GL name).
-3. Execute it in `repl_execute_program()` ([`src/repl/executor.c`](src/repl/executor.c)) and
+3. Execute it in [`repl_execute_program()`](src/repl/executor.h#L156) ([`src/repl/executor.c`](src/repl/executor.c)) and
    handle it in `flatten_range()` ([`src/repl/flatten.c`](src/repl/flatten.c)).
 4. Add a `g_command_type_specs[]` entry in [`src/repl/command_spec.c`](src/repl/command_spec.c) with
    the right [`CmdSyntaxCategory`](src/repl/command_spec.h#L140) for syntax highlighting.

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Suggest or apply Markdown links for inline-code file/type identifiers.
+"""Suggest or apply Markdown links for inline-code file/type/function identifiers.
 
 This is intentionally conservative. It only considers inline-code spans such as
-`ReplRuntimeState` or `src/repl/state.h`, skips existing Markdown links and
-fenced code blocks, and only links identifiers with a unique target.
+`ReplRuntimeState`, `src/repl/state.h`, `source_document_view()`, or
+`source_document_view ()`, skips existing Markdown links and fenced code blocks,
+and only links identifiers with a unique target.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ CODE_SPAN_RE = re.compile(r"`([^`\n]+)`")
 TYPE_NAME_RE = re.compile(r"^[A-Z][A-Za-z0-9_]*$")
 ALL_CAPS_RE = re.compile(r"^[A-Z0-9_]+$")
 FILE_TOKEN_RE = re.compile(r"^(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.[ch]$")
+FUNCTION_TOKEN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)[ \t]*\(\)$")
 TYPE_FALLBACK_SUFFIXES = (
     "Bridge",
     "Capture",
@@ -71,6 +73,7 @@ TYPEDEF_FORWARD_RE = re.compile(
     r"([A-Z][A-Za-z0-9_]*)[ \t]+([A-Z][A-Za-z0-9_]*)[ \t]*;"
 )
 SINGLELINE_TYPEDEF_RE = re.compile(r"\b([A-Z][A-Za-z0-9_]*)\s*;")
+FUNCTION_DECL_NAME_RE = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 
 
 @dataclass(frozen=True)
@@ -194,6 +197,85 @@ def build_type_index(root: Path) -> dict[str, list[Target]]:
     return types
 
 
+def build_function_index(root: Path) -> dict[str, list[Target]]:
+    funcs: dict[str, list[Target]] = {}
+    for rel in git_files(root, "*.h"):
+        path = root / rel
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except UnicodeDecodeError:
+            continue
+
+        brace_depth = 0
+        pending = ""
+        pending_line = 0
+        for line_no, line in enumerate(lines, 1):
+            stripped = line.strip()
+
+            if pending:
+                pending += " " + stripped
+                if ";" in pending or "{" in pending:
+                    add_function_decl(funcs, pending, rel, pending_line)
+                    pending = ""
+                brace_depth += brace_delta_for_scan(stripped)
+                continue
+
+            if brace_depth != 0:
+                brace_depth += brace_delta_for_scan(stripped)
+                continue
+
+            if line_can_start_function_decl(stripped):
+                if ";" in stripped or "{" in stripped:
+                    add_function_decl(funcs, stripped, rel, line_no)
+                else:
+                    pending = stripped
+                    pending_line = line_no
+
+            brace_depth += brace_delta_for_scan(stripped)
+    return funcs
+
+
+def brace_delta_for_scan(line: str) -> int:
+    return line.count("{") - line.count("}")
+
+
+def line_can_start_function_decl(stripped: str) -> bool:
+    if "(" not in stripped:
+        return False
+    if not stripped:
+        return False
+    if stripped.startswith(("#", "/*", "*", "//")):
+        return False
+    if stripped.startswith("typedef "):
+        return False
+    return True
+
+
+def add_function_decl(funcs: dict[str, list[Target]], chunk: str, rel: str, line: int) -> None:
+    semi = chunk.find(";")
+    brace = chunk.find("{")
+    if brace >= 0 and brace < semi:
+        decl = chunk[:brace]
+        if not decl.lstrip().startswith("static inline "):
+            return
+    elif brace >= 0 and semi < 0:
+        decl = chunk[:brace]
+        if not decl.lstrip().startswith("static inline "):
+            return
+    elif semi >= 0:
+        decl = chunk[:semi]
+    else:
+        return
+    if "typedef " in decl or "(*" in decl:
+        return
+    matches = FUNCTION_DECL_NAME_RE.findall(decl)
+    if not matches:
+        return
+    name = matches[-1]
+    if is_plausible_function_name(name):
+        funcs.setdefault(name, []).append(Target(rel, line))
+
+
 def default_markdown_files(root: Path) -> list[Path]:
     rels = git_files(root, "*.md", ":(exclude)plans/**", ":(exclude)third_party/**")
     return dedupe_paths([root / rel for rel in rels])
@@ -221,9 +303,16 @@ def overlaps_any(start: int, end: int, ranges: list[tuple[int, int]]) -> bool:
     return any(start < r_end and end > r_start for r_start, r_end in ranges)
 
 
-def classify_ident(ident: str, types: dict[str, list[Target]]) -> str | None:
+def classify_ident(
+    ident: str,
+    types: dict[str, list[Target]],
+    functions: dict[str, list[Target]],
+) -> str | None:
     if FILE_TOKEN_RE.match(ident):
         return "file"
+    func_match = FUNCTION_TOKEN_RE.match(ident)
+    if func_match and is_plausible_function_name(func_match.group(1)):
+        return "function"
     if is_plausible_type_name(ident) and (
         ident in types
         or (ident.startswith(TYPE_FALLBACK_PREFIXES) and ident.endswith(TYPE_FALLBACK_SUFFIXES))
@@ -234,6 +323,18 @@ def classify_ident(ident: str, types: dict[str, list[Target]]) -> str | None:
 
 def is_plausible_type_name(ident: str) -> bool:
     if not TYPE_NAME_RE.match(ident):
+        return False
+    if ALL_CAPS_RE.match(ident):
+        return False
+    if not any(ch.islower() for ch in ident):
+        return False
+    return True
+
+
+def is_plausible_function_name(ident: str) -> bool:
+    if ident.startswith("_"):
+        return False
+    if "_" not in ident:
         return False
     if ALL_CAPS_RE.match(ident):
         return False
@@ -292,12 +393,24 @@ def resolve_type(ident: str, types: dict[str, list[Target]]) -> tuple[Target | N
     return None, "no typedef match"
 
 
+def resolve_function(ident: str, functions: dict[str, list[Target]]) -> tuple[Target | None, str]:
+    name = FUNCTION_TOKEN_RE.match(ident)
+    assert name is not None
+    matches = functions.get(name.group(1), [])
+    if len(matches) == 1:
+        return matches[0], "matched"
+    if len(matches) > 1:
+        return None, "ambiguous header function: " + ", ".join(t.markdown() for t in matches[:5])
+    return None, "no header function match"
+
+
 def scan_file(
     path: Path,
     root: Path,
     by_basename: dict[str, list[Target]],
     by_path: dict[str, Target],
     types: dict[str, list[Target]],
+    functions: dict[str, list[Target]],
 ) -> tuple[list[Occurrence], list[str]]:
     occurrences: list[Occurrence] = []
     lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
@@ -315,15 +428,19 @@ def scan_file(
             if overlaps_any(match.start(), match.end(), linked_ranges):
                 continue
             ident = match.group(1).strip()
-            if ident != match.group(1) or " " in ident:
+            if ident != match.group(1):
                 continue
-            kind = classify_ident(ident, types)
+            if " " in ident and not FUNCTION_TOKEN_RE.match(ident):
+                continue
+            kind = classify_ident(ident, types, functions)
             if kind is None:
                 continue
             if kind == "file":
                 target, reason = resolve_file(ident, path, root, by_basename, by_path)
-            else:
+            elif kind == "type":
                 target, reason = resolve_type(ident, types)
+            else:
+                target, reason = resolve_function(ident, functions)
             occurrences.append(
                 Occurrence(path, line_no, match.start(), match.end(), ident, kind, target, reason)
             )
@@ -356,7 +473,7 @@ def print_occurrences(root: Path, occurrences: list[Occurrence]) -> None:
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Suggest or apply links for inline-code file/type identifiers in Markdown."
+        description="Suggest or apply links for inline-code file/type/function identifiers in Markdown."
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true", help="Print matches without writing files (default).")
@@ -375,6 +492,7 @@ def main(argv: list[str]) -> int:
 
     by_basename, by_path = build_file_index(root)
     types = build_type_index(root)
+    functions = build_function_index(root)
 
     all_occurrences: list[Occurrence] = []
     writes = 0
@@ -382,7 +500,7 @@ def main(argv: list[str]) -> int:
         if not path.exists():
             print(f"ERROR: {path} does not exist", file=sys.stderr)
             return 1
-        occurrences, lines = scan_file(path, root, by_basename, by_path, types)
+        occurrences, lines = scan_file(path, root, by_basename, by_path, types, functions)
         all_occurrences.extend(occurrences)
         if args.write:
             new_lines = apply_replacements(lines, occurrences)

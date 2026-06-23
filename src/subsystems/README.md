@@ -52,7 +52,7 @@ spans runner / animation / match). The `*_state.c` always *owns the
 storage* (a small struct with reset and narrow accessors; some peers also
 carry capture/restore for snapshot round-trips).
 
-For subsystems like `variable_panel`, `variable_panel_set_visible` is the canonical public visibility setter for external code, while `variable_panel_state_mut()` provides direct mutable pointers for internal config-mapping. (Per-frame placement easing moved out of the peer: all floating scene panels glide via the overlay layout engine in [`src/ui/app/overlay_layout.c`](src/ui/app/overlay_layout.c).)
+For subsystems like `variable_panel`, `variable_panel_set_visible` is the canonical public visibility setter for external code, while [`variable_panel_state_mut()`](src/subsystems/variable_panel/variable_panel_state.h#L70) provides direct mutable pointers for internal config-mapping. (Per-frame placement easing moved out of the peer: all floating scene panels glide via the overlay layout engine in [`src/ui/app/overlay_layout.c`](src/ui/app/overlay_layout.c).)
 
 ## How it is exercised
 

@@ -19,7 +19,7 @@ style of `glBegin`/`glEnd`, the matrix stack, and `glLight*`/`glMaterial*`
 lighting (no shaders). Its central abstraction is a **geometry callback**:
 the caller fills a [`SceneRenderConfig`](src/scene/render_types.h#L130) (camera pose, lighting, grid/axes
 themes, AA settings, clear color) and supplies an `execute_fn` that draws
-the actual geometry. `scene_render_3d_scene()` does everything around that
+the actual geometry. [`scene_render_3d_scene()`](src/scene/render.h#L135) does everything around that
 callback:
 
 ```c
@@ -67,8 +67,8 @@ never terminates).
 
 Inside the full app this is **layer 4** of the ownership map. The controller
 ([`src/app/glr_ctrl.c`](src/app/glr_ctrl.c)) builds a [`SceneRenderConfig`](src/scene/render_types.h#L130) from REPL runtime state + view
-state each frame, then calls `glr_camera_load_modelview()` and
-`scene_render_3d_scene()` once per accumulation-jitter sample (with its own
+state each frame, then calls [`glr_camera_load_modelview()`](src/app/glr_camera.h#L135) and
+[`scene_render_3d_scene()`](src/scene/render.h#L135) once per accumulation-jitter sample (with its own
 [`SceneRendererState`](src/scene/render.h#L95)). The geometry callback is the REPL executor
 (`repl_execute_program`), so the user's typed program becomes the scene's
 geometry.
