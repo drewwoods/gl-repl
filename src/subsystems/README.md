@@ -28,7 +28,7 @@ subsystems here:
 - **`replay/`** — a step-by-step execution visualizer (a tiny transport:
   play / pause / step, a program counter, speed, and a fade-batch ring
   so old geometry fades as new geometry appears). Its fade-batch GL
-  rendering lives in [`replay_render.c`](src/subsystems/replay/replay_render.c), extracted out of `src/scene/`.
+  rendering lives in [`replay_render.c`](src/subsystems/replay/replay_render.c), extracted out of `src/render3d/`.
 - **`variable_panel/`** — floating sliders that scrub the REPL's scalar
   variables, with a log/linear drag transaction that writes the new value
   back into the source line.
