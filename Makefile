@@ -1297,6 +1297,9 @@ check-cpuprof-demo-isolation: ## Forbid app/repl/editor coupling in the cpuprof 
 check-cpuprof-standalone: ## Verify the generic CPU-profile timer compiles with no section catalog (fallback path).
 	@bash scripts/check-cpuprof-standalone.sh
 
+check-audio-nothread: ## Verify glr_audio.c compiles single-threaded (GLR_AUDIO_NO_THREAD=1, the Emscripten path).
+	@bash scripts/check-audio-nothread.sh
+
 check-variable-panel-demo-isolation: ## Forbid app/repl/editor coupling in the variable-panel demo link set.
 	@bash scripts/check-subsystem-demo-isolation.sh VARIABLE_PANEL_DEMO_DEP_SRCS tools/variable_panel_demo variable_panel_demo
 
@@ -1372,6 +1375,7 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-memprof-demo-isolation \
 		check-cpuprof-demo-isolation \
 		check-cpuprof-standalone \
+		check-audio-nothread \
 		check-variable-panel-demo-isolation \
 		check-color-picker-demo-isolation \
 		check-editor-repl-surface \
@@ -1853,6 +1857,12 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "                 config.h, range-checked in src/ui/core/theme.h. See\n"
 	@printf "                 ARCHITECTURE.md > UI Color Theming.\n"
 	@printf "                 NO_SAN=1 (or NOSAN=1) disables ASan/UBSan sanitizers in debug builds.\n"
+	@printf "                 GLR_AUDIO_NO_THREAD=1 (e.g. make gl-repl CPPFLAGS=-DGLR_AUDIO_NO_THREAD=1)\n"
+	@printf "                 drops the audio background worker thread: the playlist lifecycle ops\n"
+	@printf "                 (file open/uninit, state save) run synchronously, drained from\n"
+	@printf "                 glr_audio_tick() on the caller. Auto-enabled on Emscripten (no\n"
+	@printf "                 -pthread); set =0 to force the thread on. The toggle is contained\n"
+	@printf "                 entirely in src/app/glr_audio.c.\n"
 	@printf "User CFLAGS are appended to the selected build mode.\n\n"
 	@printf "Tests:           make test runs test binaries in parallel; set TEST_JOBS=N to limit jobs.\n\n"
 	@printf "Individual tests can still be built directly, e.g. make test_eval or make test_repl_core_io.\n\n"

@@ -7,8 +7,8 @@
  *
  * Threading model
  * ---------------
- * Every operation that can block on the filesystem runs on a dedicated
- * background worker thread, never on the caller (render) thread:
+ * By default every operation that can block on the filesystem runs on a
+ * dedicated background worker thread, never on the caller (render) thread:
  *
  *   - ma_sound_init_from_file / ma_sound_uninit. Even with
  *     MA_SOUND_FLAG_ASYNC, miniaudio opens the stream on the calling
@@ -34,6 +34,19 @@
  * caller (see tests/test_audio.c). Non-blocking control calls
  * (ma_sound_stop/start/set_looping, ma_engine volume) also stay on the
  * caller under the mutex.
+ *
+ * Compile-time threading toggle (GLR_AUDIO_NO_THREAD)
+ * --------------------------------------------------
+ * The worker thread is selectable at compile time. On Emscripten (no
+ * SharedArrayBuffer / -pthread by default) it is disabled automatically;
+ * a native build can force it off with -DGLR_AUDIO_NO_THREAD=1. With the
+ * thread off there is no pthread dependency at all: the same lifecycle
+ * requests are serviced synchronously from glr_audio_tick() on the
+ * per-frame caller, the lock helpers collapse to no-ops, and no other
+ * translation unit changes (glr_audio_tick() is already called once per
+ * frame by the controller). This is safe in that configuration because
+ * media there lives in MEMFS and never blocks on the filesystem — the
+ * very hazard the worker thread exists to absorb on native builds.
  */
 
 #include "app/glr_audio.h"
@@ -42,7 +55,21 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <pthread.h>
+
+/* Threading model selection. Default: use the background worker thread.
+ * Auto-disabled on Emscripten; overridable on any platform by defining
+ * GLR_AUDIO_NO_THREAD on the command line (0 forces the thread on). */
+#ifndef GLR_AUDIO_NO_THREAD
+#  if defined(__EMSCRIPTEN__)
+#    define GLR_AUDIO_NO_THREAD 1
+#  else
+#    define GLR_AUDIO_NO_THREAD 0
+#  endif
+#endif
+
+#if !GLR_AUDIO_NO_THREAD
+#  include <pthread.h>
+#endif
 
 /* Silence a few benign warnings from miniaudio's ~100k-line header under
  * -Wall -Wfloat-conversion without polluting the rest of the build. */
@@ -135,10 +162,12 @@ typedef enum {
     AWR_QUIT       /* final save + uninit, then exit                     */
 } AudioWorkerReq;
 
+#if !GLR_AUDIO_NO_THREAD
 static pthread_t       g_worker;
 static int             g_worker_running = 0;
 static pthread_mutex_t g_mtx;
 static pthread_cond_t  g_cv;
+#endif
 
 static AudioWorkerReq  g_req      = AWR_NONE;  /* latest lifecycle request */
 static int             g_req_idx  = 0;
@@ -182,7 +211,9 @@ static void reset_audio_module_state(void) {
     g_track_generation = 0;
     g_load_cancelled = 0;
 
+#if !GLR_AUDIO_NO_THREAD
     g_worker_running = 0;
+#endif
     g_req = AWR_NONE;
     g_req_idx = 0;
     g_req_seek = GLR_AUDIO_NO_SEEK;
@@ -211,9 +242,21 @@ static void reset_audio_module_state(void) {
  * shared by the device callback thread, this module-level serialization is
  * accepted here to maintain solid lifetime correctness for double-buffered slots.
  * The recursive g_mtx mutex is a dynamically-initialized implementation detail
- * to simplify nested control calls, not a correctness guarantee for lock ordering. */
+ * to simplify nested control calls, not a correctness guarantee for lock ordering.
+ *
+ * In the single-threaded build (GLR_AUDIO_NO_THREAD) there is no second
+ * thread to serialize against, so the lock helpers and the worker-wake
+ * signal collapse to no-ops. */
+#if GLR_AUDIO_NO_THREAD
+static void audio_lock(void)   { }
+static void audio_unlock(void) { }
+static void worker_wake(void)  { }
+#else
 static void audio_lock(void)   { if (g_inited) pthread_mutex_lock(&g_mtx); }
 static void audio_unlock(void) { if (g_inited) pthread_mutex_unlock(&g_mtx); }
+/* Wake the worker. Callers hold the mutex (recommended for cond_signal). */
+static void worker_wake(void)  { pthread_cond_signal(&g_cv); }
+#endif
 
 /* ------------------------------------------------------------------ */
 /* Worker hitch detector                                               */
@@ -601,58 +644,92 @@ static void worker_advance(void) {
     worker_uninit_all();   /* all remaining tracks failed */
 }
 
+/* Run a single already-dequeued lifecycle request (the caller cleared
+ * the mailbox under the lock). Times the blocking work and logs a hitch
+ * over the threshold. Returns the kind run; AWR_QUIT tells the worker
+ * loop to exit. Shared by the threaded worker and the single-threaded
+ * service path. */
+static AudioWorkerReq audio_run_request(AudioWorkerReq k, int idx,
+                                        float seek, int save) {
+    if (k == AWR_QUIT) {
+        worker_save_state();
+        worker_uninit_all();
+        return AWR_QUIT;
+    }
+
+    double t0 = worker_now_ms();
+    const char *op = "save-only";
+    if (k == AWR_START)        { op = "load";    worker_start_or_fallback(idx, seek); }
+    else if (k == AWR_ADVANCE) { op = "advance"; worker_advance(); }
+    else if (k == AWR_UNINIT)  { op = "uninit";  worker_uninit_all(); }
+
+    if (save)
+        worker_save_state();    /* after the lifecycle op: fresh cursor */
+
+    double thr = worker_hitch_threshold_ms();
+    double dt  = worker_now_ms() - t0;
+    if (thr > 0.0 && dt >= thr)
+        fprintf(stderr,
+                "repl_audio: worker hitch: %s%s took %.1f ms "
+                "(threshold %.0f ms)\n",
+                op, save ? "+save" : "", dt, thr);
+    return k;
+}
+
+/* Snapshot + clear the 1-slot mailbox under the lock, then run the
+ * request. Returns AWR_NONE when nothing was pending. The mailbox is
+ * latest-wins, so a request posted during the brief unlocked handoff is
+ * intentionally allowed to supersede this one. */
+static AudioWorkerReq audio_dequeue_and_run(void) {
+    audio_lock();
+    AudioWorkerReq k    = g_req;
+    int            idx  = g_req_idx;
+    float          seek = g_req_seek;
+    int            save = g_req_save;
+    g_req      = AWR_NONE;
+    g_req_save = 0;
+    audio_unlock();
+
+    if (k == AWR_NONE && !save)
+        return AWR_NONE;
+    return audio_run_request(k, idx, seek, save);
+}
+
+#if !GLR_AUDIO_NO_THREAD
 static void *audio_worker_main(void *arg) {
     (void)arg;
-    pthread_mutex_lock(&g_mtx);
     for (;;) {
+        pthread_mutex_lock(&g_mtx);
         while (g_req == AWR_NONE && !g_req_save)
             pthread_cond_wait(&g_cv, &g_mtx);
-
-        AudioWorkerReq k    = g_req;
-        int            idx  = g_req_idx;
-        float          seek = g_req_seek;
-        int            save = g_req_save;
-        g_req      = AWR_NONE;
-        g_req_save = 0;
         pthread_mutex_unlock(&g_mtx);
 
-        if (k == AWR_QUIT) {
-            worker_save_state();
-            worker_uninit_all();
+        if (audio_dequeue_and_run() == AWR_QUIT)
             return NULL;
-        }
-
-        double t0 = worker_now_ms();
-        const char *op = "save-only";
-        if (k == AWR_START)        { op = "load";    worker_start_or_fallback(idx, seek); }
-        else if (k == AWR_ADVANCE) { op = "advance"; worker_advance(); }
-        else if (k == AWR_UNINIT)  { op = "uninit";  worker_uninit_all(); }
-
-        if (save)
-            worker_save_state();    /* after the lifecycle op: fresh cursor */
-
-        double thr = worker_hitch_threshold_ms();
-        double dt  = worker_now_ms() - t0;
-        if (thr > 0.0 && dt >= thr)
-            fprintf(stderr,
-                    "repl_audio: worker hitch: %s%s took %.1f ms "
-                    "(threshold %.0f ms)\n",
-                    op, save ? "+save" : "", dt, thr);
-
-        pthread_mutex_lock(&g_mtx);
     }
+}
+#endif
+
+/* True when lifecycle requests can be serviced: the worker thread is up
+ * (threaded build) or the engine is initialized and tick() will drain
+ * the mailbox (single-threaded build). Both coincide with g_inited once
+ * glr_audio_init() has returned successfully. */
+static int audio_dispatch_active(void) {
+    return g_inited;
 }
 
 /* Post a lifecycle request (latest-wins: a newer request supersedes a
- * queued one). No-op when the worker isn't running. */
+ * queued one). No-op when audio isn't running. In the threaded build the
+ * worker picks it up immediately; in the single-threaded build it waits
+ * in the mailbox until the next glr_audio_tick() drains it. */
 static void worker_post(AudioWorkerReq kind, int idx, float seek) {
-    if (!g_worker_running) return;
+    if (!audio_dispatch_active()) return;
     audio_lock();
     if (g_req != AWR_QUIT) {
         g_req      = kind;
         g_req_idx  = idx;
         g_req_seek = seek;
-        pthread_cond_signal(&g_cv);
+        worker_wake();
     }
     audio_unlock();
 }
@@ -705,6 +782,10 @@ int glr_audio_init(void) {
     g_active = -1;
     g_slot_inited[0] = g_slot_inited[1] = 0;
 
+    g_req      = AWR_NONE;
+    g_req_save = 0;
+
+#if !GLR_AUDIO_NO_THREAD
     pthread_mutexattr_t attr;
     if (pthread_mutexattr_init(&attr) != 0) {
         ma_engine_uninit(&g_engine);
@@ -724,8 +805,6 @@ int glr_audio_init(void) {
         return -1;
     }
 
-    g_req      = AWR_NONE;
-    g_req_save = 0;
     if (pthread_create(&g_worker, NULL, audio_worker_main, NULL) != 0) {
         fprintf(stderr, "repl_audio: worker thread create failed\n");
         pthread_cond_destroy(&g_cv);
@@ -735,6 +814,7 @@ int glr_audio_init(void) {
     }
 
     g_worker_running = 1;
+#endif  /* !GLR_AUDIO_NO_THREAD */
 
 #if AUDIO_NEEDS_GESTURE
     g_gesture_done = 0;
@@ -750,13 +830,14 @@ void glr_audio_shutdown(void) {
     g_worker_hitch_threshold = -1.0;
     if (!g_inited) return;
 
+#if !GLR_AUDIO_NO_THREAD
     if (g_worker_running) {
         /* AWR_QUIT makes the worker do the final state save (off the
          * caller, but join() below waits for it so the file is on disk
          * before we return) and uninit the sounds, then exit. */
         audio_lock();
         g_req = AWR_QUIT;
-        pthread_cond_signal(&g_cv);
+        worker_wake();
         audio_unlock();
         pthread_join(g_worker, NULL);
 
@@ -764,8 +845,11 @@ void glr_audio_shutdown(void) {
 
         pthread_cond_destroy(&g_cv);
         pthread_mutex_destroy(&g_mtx);
-    } else {
-        /* No worker (create failed): nothing was ever loaded. */
+    } else
+#endif
+    {
+        /* Single-threaded build, or worker create failed: run the final
+         * state save + sound teardown synchronously on the caller. */
         worker_save_state();
         worker_uninit_all();
     }
@@ -852,19 +936,20 @@ int glr_audio_prev_track(void) {
 }
 
 void glr_audio_tick(void) {
-    /* All work here is messaging the worker; with no worker nothing is
-     * (or can be) playing, so there is nothing to do. */
-    if (!g_inited || !g_worker_running) return;
+    /* All work here is messaging the dispatch path; with audio down
+     * nothing is (or can be) playing, so there is nothing to do. */
+    if (!audio_dispatch_active()) return;
 
     /* Periodically persist track + offset so a crash or forced quit
      * still leaves a reasonably up-to-date state file. The write
-     * itself happens on the worker (no fsync, no render-thread I/O). */
+     * itself happens on the worker / drain (no fsync, no render-thread
+     * I/O). */
     audio_lock();
     if (g_state_file[0] && g_music_loaded) {
         time_t now = time(NULL);
         if (difftime(now, g_last_save_time) >= STATE_SAVE_INTERVAL_SECS) {
             g_req_save = 1;
-            pthread_cond_signal(&g_cv);
+            worker_wake();
         }
     }
 
@@ -875,9 +960,18 @@ void glr_audio_tick(void) {
         g_active >= 0 && !g_loading && g_req == AWR_NONE &&
         ma_sound_at_end(&g_slot[g_active])) {
         g_req = AWR_ADVANCE;
-        pthread_cond_signal(&g_cv);
+        worker_wake();
     }
     audio_unlock();
+
+#if GLR_AUDIO_NO_THREAD
+    /* Single-threaded build: no background worker exists, so service the
+     * request mailbox synchronously here, on the per-frame caller. The
+     * mailbox is 1-slot latest-wins and the lifecycle ops never re-post,
+     * so this drains in a single pass; the loop is purely defensive. */
+    while (g_req != AWR_NONE || g_req_save)
+        audio_dequeue_and_run();
+#endif
 }
 
 void glr_audio_set_loop_mode(int mode) {
