@@ -10,14 +10,14 @@
 #include <stddef.h>
 
 #define REPL_CFG_KEY_MAX     24
-/* 32 bytes: holds a 32-bit decimal int ("-2147483648" = 12) and any
- * enum value name from src/scene/themes.h. The longest current symbol
- * is "SCENE_BACKDROP_CITY_AND_STARS" (29 chars + null = 30). A
+/* 40 bytes: holds a 32-bit decimal int ("-2147483648" = 12) and any
+ * enum value name from src/render3d/themes.h. The longest current symbol
+ * is "RENDER3D_BACKDROP_CITY_AND_STARS" (32 chars + null = 33). A
  * STATIC_ASSERT in cfg_baseline.c pins this against the int-decimal
  * lower bound; the enum-name upper bound is informational, not
  * enforced at the REPL layer (the bridge is the only TU that needs
  * to know the symbolic names). */
-#define REPL_CFG_VALUE_MAX   32
+#define REPL_CFG_VALUE_MAX   40
 /* Capacity of a config bag — must stay >= the number of emitted @cfg
  * toggles (every non-header, non-action g_cfg_items[] row). When a new
  * config toggle pushes the real count past this, glr_export_cfg_fill_all

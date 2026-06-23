@@ -240,7 +240,7 @@ static int repl_code_panel_footer_row_count(const UiRenderSnapshot *snap,
                    REPL_EXPORT_RESHAPE_PROJ_SENTINEL) == 0) {
             /* Read the frame-frozen block from the snapshot — never
              * re-resolve live here, or this pass and the render pass
-             * (opposite sides of scene_render_3d_scene) could disagree
+             * (opposite sides of render3d_draw_scene) could disagree
              * on row count across a 2D/3D transition. */
             for (int j = 0; j < snap->reshape_proj_count; j++)
                 rows += repl_code_panel_row_count(snap, snap->reshape_proj_lines[j],
@@ -1777,10 +1777,10 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
     L.has_aa = snap->render.use_accum ? 1 : 0;
     if (L.has_aa) {
         tx += STATUSBAR_SEP_W;
-        if (snap->render.accum_effect != SCENE_ACCUM_EFFECT_OFF &&
+        if (snap->render.accum_effect != RENDER3D_ACCUM_EFFECT_OFF &&
             snap->render.accum_passes > 1)
             snprintf(L.aa, sizeof L.aa, "%s %dx",
-                     SCENE_ACCUM_EFFECT_IS_BLUR(snap->render.accum_effect)
+                     RENDER3D_ACCUM_EFFECT_IS_BLUR(snap->render.accum_effect)
                          ? "Blur" : "AA",
                      snap->render.accum_passes);
         else

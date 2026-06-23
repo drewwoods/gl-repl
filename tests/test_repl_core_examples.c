@@ -18,7 +18,7 @@
 #include "ui/app/layout.h"      /* CODE_PANEL_LAYOUT_* enum values */
 #include "ui/app/state.h"
 #include "render3d/render.h"
-#include "render3d/themes.h"       /* GRID_THEME_*, AXES_THEME_*, SCENE_BACKDROP_* */
+#include "render3d/themes.h"       /* GRID_THEME_*, AXES_THEME_*, RENDER3D_BACKDROP_* */
 #include "app/glr_defaults.h"   /* CFG_DEFAULT_* */
 
 #define g_accum_effect        (glr_state_render_mut()->accum_effect)
@@ -123,7 +123,7 @@ static void pin_code_panel_state(void) {
     glr_state_presentation_mut()->axes_theme = CFG_DEFAULT_AXES_THEME;
     glr_state_presentation_mut()->backdrop_mode = CFG_DEFAULT_BACKDROP_MODE;
     glr_state_presentation_mut()->show_vertex_outlines = CFG_DEFAULT_VERTEX_OUTLINES;
-    g_accum_effect = SCENE_ACCUM_EFFECT_AA;
+    g_accum_effect = RENDER3D_ACCUM_EFFECT_AA;
     glr_state_presentation_mut()->code_panel_layout = CFG_DEFAULT_CODE_PANEL_LAYOUT; glr_ctrl_sync_ui_chrome();
     g_multisample_enabled = CFG_DEFAULT_MULTISAMPLE;
     g_line_smooth_enabled = CFG_DEFAULT_LINE_SMOOTH;
@@ -143,7 +143,7 @@ static void seed_nondefault_example_presentation_state(void) {
     glr_state_presentation_mut()->show_normal_vectors = 1;
     glr_state_presentation_mut()->show_vertex_outlines = 0;
     glr_state_presentation_mut()->show_vertex_points = 0;
-    glr_state_presentation_mut()->xform_guide_mode = SCENE_XFORM_GUIDE_OFF;
+    glr_state_presentation_mut()->xform_guide_mode = RENDER3D_XFORM_GUIDE_OFF;
     glr_state_presentation_mut()->show_light_indicators = 0;
     glr_state_presentation_mut()->backdrop_mode = 1;
     glr_camera_mut()->auto_rotate = 1;
@@ -1298,7 +1298,7 @@ int main(int argc, char **argv) {
 
         repl_load_example_lines_for_test(view_mode_2d_example);
         ASSERT_TRUE("@cfg view_mode = 1 applies 2D (ortho)",
-                    glr_state_presentation().ortho_mode == SCENE_VIEW_2D);
+                    glr_state_presentation().ortho_mode == RENDER3D_VIEW_2D);
 
         /* The reset is the load-bearing assertion: a later example with
          * no @cfg view_mode reverts to default 3D, NOT inherited 2D. */
@@ -1309,10 +1309,10 @@ int main(int argc, char **argv) {
         /* @cfg still wins over the per-load reset. */
         repl_load_example_lines_for_test(view_mode_2d_example);
         ASSERT_TRUE("@cfg view_mode = 1 still applies after a reset",
-                    glr_state_presentation().ortho_mode == SCENE_VIEW_2D);
+                    glr_state_presentation().ortho_mode == RENDER3D_VIEW_2D);
         repl_load_example_lines_for_test(view_mode_3d_example);
         ASSERT_TRUE("@cfg view_mode = 0 overrides any prior 2D",
-                    glr_state_presentation().ortho_mode == SCENE_VIEW_3D);
+                    glr_state_presentation().ortho_mode == RENDER3D_VIEW_3D);
     }
 
     {
@@ -1372,7 +1372,7 @@ int main(int argc, char **argv) {
                         glr_state_presentation().show_vertex_outlines == 0);
             ASSERT_TRUE("stress example backdrop preset",
                         glr_state_presentation().backdrop_mode ==
-                        SCENE_BACKDROP_AURORA);
+                        RENDER3D_BACKDROP_AURORA);
             ASSERT_TRUE("stress example camera rx preset",
                         fabsf(glr_camera().rx - 27.5f) < 1e-4f);
             ASSERT_TRUE("stress example camera ry preset",
@@ -1428,7 +1428,7 @@ int main(int argc, char **argv) {
         ASSERT_TRUE("mixed cfg camera allowed axes applied",
                     glr_state_presentation().axes_theme == 5);
         ASSERT_TRUE("mixed cfg camera disallowed accum effect ignored",
-                    g_accum_effect == SCENE_ACCUM_EFFECT_AA);
+                    g_accum_effect == RENDER3D_ACCUM_EFFECT_AA);
         ASSERT_TRUE("mixed cfg camera disallowed layout ignored",
                     glr_state_presentation().code_panel_layout == CFG_DEFAULT_CODE_PANEL_LAYOUT);
         ASSERT_TRUE("mixed cfg camera rx preset",

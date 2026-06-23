@@ -105,7 +105,7 @@ static const char *const g_example_ring[] = {
 /* Example 2: Function demo - define a named reusable function (alias for a
  * funcN slot), call it repeatedly with transforms between calls. */
 static const char *const g_example_func[] = {
-    "// @cfg view_mode = SCENE_VIEW_2D",
+    "// @cfg view_mode = RENDER3D_VIEW_2D",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -3.0f);",
     "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
@@ -135,7 +135,7 @@ static const char *const g_example_func[] = {
 
 /* Example 3: Parametric polygon helper - function args driving local for-loops */
 static const char *const g_example_func_loop[] = {
-    "// @cfg view_mode = SCENE_VIEW_2D",
+    "// @cfg view_mode = RENDER3D_VIEW_2D",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -4.0f);",
     "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
@@ -171,7 +171,7 @@ static const char *const g_example_func_loop[] = {
 
 /* Example 4: Branching helper - function args driving local if-blocks */
 static const char *const g_example_func_if[] = {
-    "// @cfg view_mode = SCENE_VIEW_2D",
+    "// @cfg view_mode = RENDER3D_VIEW_2D",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -4.0f);",
     "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
@@ -217,7 +217,7 @@ static const char *const g_example_func_if[] = {
 
 /* Example 5: Recursive helper - transformed child calls with depth countdown */
 static const char *const g_example_func_recurse[] = {
-    "// @cfg view_mode = SCENE_VIEW_2D",
+    "// @cfg view_mode = RENDER3D_VIEW_2D",
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
     "// camera",
@@ -524,7 +524,7 @@ static const char *const g_example_tess_cutout[] = {
  * top-level only, not replay-safe, and not suitable for variable-driven
  * geometry loops. Keep coverage in tests/docs instead of F12 examples. */
 static const char *const g_example_assign_2d[] = {
-    "// @cfg view_mode = SCENE_VIEW_2D",
+    "// @cfg view_mode = RENDER3D_VIEW_2D",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -2.5f);",
     "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
@@ -655,7 +655,7 @@ static const char *const g_example_waves[] = {
 /* Example 14: Animated spirograph curve - closed parametric line loop
  * driven by t, showing dense iteration and trig-heavy vertex generation. */
 static const char *const g_example_spirograph_curve[] = {
-    "// @cfg view_mode = SCENE_VIEW_2D",
+    "// @cfg view_mode = RENDER3D_VIEW_2D",
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
     "// camera",
@@ -681,7 +681,7 @@ static const char *const g_example_spirograph_curve[] = {
 /* Example 15: Traveling ripple ring - circular line loop with a narrow
  * modulo-selected radial wave, exercising fmod math and conditional edits. */
 static const char *const g_example_traveling_ripple_ring[] = {
-    "// @cfg view_mode = SCENE_VIEW_2D",
+    "// @cfg view_mode = RENDER3D_VIEW_2D",
     "// @cfg fit_frame = 1.15",
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
@@ -714,7 +714,7 @@ static const char *const g_example_traveling_ripple_ring[] = {
 /* Animated quadratic Bezier curve - vertex + line loop with parametric
  * function, showing variable assignment and reuse across calls. */
 static const char *const g_example_bezier[] = {
-    "// @cfg view_mode = SCENE_VIEW_2D",
+    "// @cfg view_mode = RENDER3D_VIEW_2D",
     "// @cfg grid_brightness = GRID_BRIGHTNESS_BRIGHT",
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
@@ -1034,7 +1034,7 @@ static const char *const g_example_stress[] = {
     "// @cfg axes = AXES_THEME_COMPASS",
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
-    "// @cfg backdrop = SCENE_BACKDROP_AURORA",
+    "// @cfg backdrop = RENDER3D_BACKDROP_AURORA",
     "// @cfg grid = GRID_THEME_AURORA",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -12.5f);",
@@ -1470,7 +1470,7 @@ static const char *const g_example_orrery[] = {
     "// @cfg axes = AXES_THEME_OFF",
     "// @cfg grid = GRID_THEME_OFF",
     "// @cfg light_theme = LIGHT_THEME_SOLAR",
-    "// @cfg backdrop = SCENE_BACKDROP_STARS",
+    "// @cfg backdrop = RENDER3D_BACKDROP_STARS",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -19.0f);",
     "glRotatef(30.0f, 1.0f, 0.0f, 0.0f);",
@@ -1869,7 +1869,7 @@ static const char *const g_example_whale[] = {
 static const char *const g_example_carousel[] = {
     "// @cfg grid = GRID_THEME_AURORA",
     "// @cfg axes = AXES_THEME_OFF",
-    "// @cfg backdrop = SCENE_BACKDROP_CITY_AND_STARS",
+    "// @cfg backdrop = RENDER3D_BACKDROP_CITY_AND_STARS",
     "// @cfg light_theme = LIGHT_THEME_DEFAULT",
     "// @cfg normal_vectors = 0",
     "// @cfg vertex_outlines = 0",
@@ -2026,7 +2026,7 @@ static const char *const g_example_ringed_planet[] = {
     "// @cfg vertex_points = 0",
     "// @cfg light_indicators = 0",
     "// @cfg grid = GRID_THEME_STARCHART",
-    "// @cfg backdrop = SCENE_BACKDROP_NEBULA",
+    "// @cfg backdrop = RENDER3D_BACKDROP_NEBULA",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -12.5f);",
     "glRotatef(16.0f, 1.0f, 0.0f, 0.0f);",

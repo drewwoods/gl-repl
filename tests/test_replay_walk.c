@@ -342,12 +342,12 @@ static void test_walker_stop_flag_halts(void) {
  *
  * Direct unit test of the helper that the cursor-guide path uses to
  * fix up vertex_args before handing them to
- * scene_geometry_guides_render_for_cursor. This is the actual fix for the
+ * render3d_geometry_guides_render_for_cursor. This is the actual fix for the
  * "guide rendered at object center" bug: if someone reverts the helper
  * to just `return *snapshot`, this test fails.
  */
 static void test_cursor_guide_snapshot_override(void) {
-    SceneGuideSnapshot base = {0};
+    Render3dGuideSnapshot base = {0};
     base.vertex_args[0] = 0.0f;  /* what the predef-only text parser
                                   * would write for a funcN-local
                                   * expression like `cos(phase)*scale` */
@@ -363,7 +363,7 @@ static void test_cursor_guide_snapshot_override(void) {
     vertex3f.args[1] = -0.17f;
     vertex3f.args[2] = 0.99f;
 
-    SceneGuideSnapshot snap =
+    Render3dGuideSnapshot snap =
         cursor_guide_snapshot_with_flat_args(&base, &vertex3f, -1);
     ASSERT_NEAR("VERTEX3F: x overridden from flat args",
                 snap.vertex_args[0], 0.42f);
@@ -379,7 +379,7 @@ static void test_cursor_guide_snapshot_override(void) {
     vertex2f.args[0] = 0.5f;
     vertex2f.args[1] = 0.5f;
     vertex2f.args[2] = 9999.0f;  /* garbage; helper should ignore it */
-    SceneGuideSnapshot snap2 =
+    Render3dGuideSnapshot snap2 =
         cursor_guide_snapshot_with_flat_args(&base, &vertex2f, -1);
     ASSERT_NEAR("VERTEX2F: x overridden", snap2.vertex_args[0], 0.5f);
     ASSERT_NEAR("VERTEX2F: y overridden", snap2.vertex_args[1], 0.5f);
@@ -391,7 +391,7 @@ static void test_cursor_guide_snapshot_override(void) {
     tess.type = CMD_TESS_VERTEX;
     tess.valid = 1;
     tess.args[0] = -1.2f; tess.args[1] = 0.45f; tess.args[2] = -0.5f;
-    SceneGuideSnapshot snap3 =
+    Render3dGuideSnapshot snap3 =
         cursor_guide_snapshot_with_flat_args(&base, &tess, -1);
     ASSERT_NEAR("TESS_VERTEX: x", snap3.vertex_args[0], -1.2f);
     ASSERT_NEAR("TESS_VERTEX: y", snap3.vertex_args[1],  0.45f);
@@ -406,7 +406,7 @@ static void test_cursor_guide_snapshot_override(void) {
     nrm.valid = 1;
     nrm.args[0] = 0.0f; nrm.args[1] = 1.0f; nrm.args[2] = 0.0f;
     base.normal_args[0] = base.normal_args[1] = base.normal_args[2] = 0.0f;
-    SceneGuideSnapshot snap_n =
+    Render3dGuideSnapshot snap_n =
         cursor_guide_snapshot_with_flat_args(&base, &nrm, -1);
     ASSERT_NEAR("NORMAL3F: nx overridden", snap_n.normal_args[0], 0.0f);
     ASSERT_NEAR("NORMAL3F: ny overridden", snap_n.normal_args[1], 1.0f);
@@ -429,11 +429,11 @@ static void test_cursor_guide_snapshot_override(void) {
     flat_seq[2].type = CMD_VERTEX3F; flat_seq[2].valid = 1;
     flat_seq[2].args[0] = -1.5f; flat_seq[2].args[1] = 0.42f; flat_seq[2].args[2] = 0.25f;
 
-    SceneGuideSnapshot base_with_flat = base;
+    Render3dGuideSnapshot base_with_flat = base;
     base_with_flat.flat_program.cmds      = flat_seq;
     base_with_flat.flat_program.cmd_count = 3;
 
-    SceneGuideSnapshot snap_n2 =
+    Render3dGuideSnapshot snap_n2 =
         cursor_guide_snapshot_with_flat_args(&base_with_flat, &flat_seq[0], 0);
     ASSERT_INT("NORMAL3F: base_pos valid when next flat vertex exists",
                snap_n2.normal_base_pos_valid, 1);
@@ -452,11 +452,11 @@ static void test_cursor_guide_snapshot_override(void) {
     flat_blocked[2].type = CMD_VERTEX3F; flat_blocked[2].valid = 1;
     flat_blocked[2].args[0] = 99.0f;
 
-    SceneGuideSnapshot base_blocked = base;
+    Render3dGuideSnapshot base_blocked = base;
     base_blocked.flat_program.cmds      = flat_blocked;
     base_blocked.flat_program.cmd_count = 3;
 
-    SceneGuideSnapshot snap_blocked =
+    Render3dGuideSnapshot snap_blocked =
         cursor_guide_snapshot_with_flat_args(&base_blocked, &flat_blocked[0], 0);
     ASSERT_INT("NORMAL3F: CMD_END stops the forward search",
                snap_blocked.normal_base_pos_valid, 0);
@@ -466,7 +466,7 @@ static void test_cursor_guide_snapshot_override(void) {
     tnorm.type = CMD_TESS_NORMAL;
     tnorm.valid = 1;
     tnorm.args[0] = 1.0f; tnorm.args[1] = 0.0f; tnorm.args[2] = 0.0f;
-    SceneGuideSnapshot snap_tn =
+    Render3dGuideSnapshot snap_tn =
         cursor_guide_snapshot_with_flat_args(&base, &tnorm, -1);
     ASSERT_NEAR("TESS_NORMAL: nx", snap_tn.normal_args[0], 1.0f);
     ASSERT_NEAR("TESS_NORMAL: ny", snap_tn.normal_args[1], 0.0f);
@@ -477,7 +477,7 @@ static void test_cursor_guide_snapshot_override(void) {
     translate.type = CMD_TRANSLATE3F;
     translate.valid = 1;
     translate.args[0] = 5.0f; translate.args[1] = 5.0f; translate.args[2] = 5.0f;
-    SceneGuideSnapshot snap4 =
+    Render3dGuideSnapshot snap4 =
         cursor_guide_snapshot_with_flat_args(&base, &translate, -1);
     ASSERT_NEAR("non-vertex/normal cmd: vx untouched",
                 snap4.vertex_args[0], base.vertex_args[0]);
@@ -490,7 +490,7 @@ static void test_cursor_guide_snapshot_override(void) {
 
     /* NULL flat (e.g. cursor flat_cmd_idx out of bounds): also a
      * pass-through. */
-    SceneGuideSnapshot snap5 =
+    Render3dGuideSnapshot snap5 =
         cursor_guide_snapshot_with_flat_args(&base, NULL, -1);
     ASSERT_NEAR("NULL flat cmd: x untouched",
                 snap5.vertex_args[0], base.vertex_args[0]);

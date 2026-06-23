@@ -22,7 +22,7 @@ void replay_ui_hud_render(const struct UiRenderSnapshot *snap) {
     char progress_txt[96];
     char kbd_txt[128];
     float progress = 0.0f;
-    int scene_x, scene_y, scene_w, scene_h;
+    int render3d_x, render3d_y, render3d_w, render3d_h;
 
     if (!snap || !snap->replay.active)
         return;
@@ -30,17 +30,17 @@ void replay_ui_hud_render(const struct UiRenderSnapshot *snap) {
     /* Scene rect comes from the live layout module like the other panel
      * renderers (variable_panel does the same); other inputs come from
      * the per-frame snapshot. */
-    ui_layout_scene_rect(&scene_x, &scene_y, &scene_w, &scene_h);
+    ui_layout_scene_rect(&render3d_x, &render3d_y, &render3d_w, &render3d_h);
 
-    int hud_x = scene_x + REPLAY_HUD_MARGIN_X;
+    int hud_x = render3d_x + REPLAY_HUD_MARGIN_X;
     /* Lifted by STATUSBAR_H so the HUD clears the amber status strip along
      * the bottom of the scene. */
-    int hud_y = scene_y + REPLAY_HUD_MARGIN_Y + STATUSBAR_H;
-    int hud_w = scene_w - 2 * REPLAY_HUD_MARGIN_X;
+    int hud_y = render3d_y + REPLAY_HUD_MARGIN_Y + STATUSBAR_H;
+    int hud_w = render3d_w - 2 * REPLAY_HUD_MARGIN_X;
 
     if (hud_w < REPLAY_HUD_MIN_WIDTH)
         hud_w = REPLAY_HUD_MIN_WIDTH;
-    hud_y = ui_clamp_panel_y(scene_y, scene_h, REPLAY_HUD_HEIGHT, hud_y,
+    hud_y = ui_clamp_panel_y(render3d_y, render3d_h, REPLAY_HUD_HEIGHT, hud_y,
                              snap->code_panel.layout_mode == CODE_PANEL_LAYOUT_TOP,
                              STATUSBAR_H, 4);
     if (snap->replay.total_flat_cmds > 0)

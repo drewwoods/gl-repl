@@ -28,7 +28,7 @@ UiViewSwatchMode ui_view_mode_swatch_state(int ortho_mode,
                                            float *out_t) {
     float t = 0.0f;
     UiViewSwatchMode mode;
-    int target_2d = (ortho_mode != 0); /* SceneViewMode: 0 = 3D, 1 = 2D */
+    int target_2d = (ortho_mode != 0); /* Render3dViewMode: 0 = 3D, 1 = 2D */
 
     if (target_2d) {
         if (projection_mix <= 0.0001f) {

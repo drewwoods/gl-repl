@@ -7,8 +7,8 @@
  * the user's program, tracking transforms, or bracketing GL state belongs to
  * the controller.
  */
-#ifndef SCENE_OVERLAYS_H
-#define SCENE_OVERLAYS_H
+#ifndef RENDER3D_OVERLAYS_H
+#define RENDER3D_OVERLAYS_H
 
 #include "gl_includes.h"  /* GLUT_BITMAP_* font pointer types */
 
@@ -19,10 +19,10 @@
  * the program via replay_walk_user_vertices and calls these primitives at
  * each visit). That subsystem also sets up the surrounding GL state
  * (color, depth disable, push/pop attribs). */
-void scene_draw_vertex_label_text(float vx, float vy, float vz,
+void render3d_draw_vertex_label_text(float vx, float vy, float vz,
                                   const char *primary_text,
                                   const char *detail_text);
-void scene_draw_normal_vector_arrow(float vx, float vy, float vz,
+void render3d_draw_normal_vector_arrow(float vx, float vy, float vz,
                                     float nx, float ny, float nz,
                                     float scale);
 
@@ -32,7 +32,7 @@ void scene_draw_normal_vector_arrow(float vx, float vy, float vz,
  * module repeats in light indicators, overlay labels, and the orbit
  * gizmo coord readout. Color is the caller's responsibility (set
  * glColor* before calling). */
-void scene_draw_bitmap_text(void *font, float x, float y, float z,
+void render3d_draw_bitmap_text(void *font, float x, float y, float z,
                             const char *str);
 
 /* Outlines and vertex-point overlays are edit_overlays-subsystem passes, not
@@ -40,4 +40,4 @@ void scene_draw_bitmap_text(void *font, float x, float y, float z,
  * geometry in GL_LINE or GL_POINT mode and chooses the surrounding GL state;
  * src/scene/ only provides the per-vertex label/arrow helpers above. */
 
-#endif /* SCENE_OVERLAYS_H */
+#endif /* RENDER3D_OVERLAYS_H */

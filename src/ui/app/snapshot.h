@@ -4,7 +4,7 @@
  * The controller builds one `UiRenderSnapshot` per frame and passes it to the
  * `ui_*_render()` / hit-test entry points. UI code reads only from this frozen
  * bundle rather than reaching back into live editor/REPL/app state. That makes
- * the snapshot the 2D counterpart of `SceneRenderConfig` on the 3D side.
+ * the snapshot the 2D counterpart of `Render3dRenderConfig` on the 3D side.
  *
  * Render-discovered values such as cursor pixel position flow back out through
  * `Ui*Output` structs instead of mid-render state mutation. By-value slices are
@@ -45,7 +45,7 @@ enum { UI_SCENE_TAB_CAP = 9 };         /* == MAX_USER_SCENES + 1 */
 
 /* Resolved reshape() projection block, frozen into the snapshot once per
  * frame by the controller so the code panel's row-count and render
- * passes (which run on opposite sides of scene_render_3d_scene) always
+ * passes (which run on opposite sides of render3d_draw_scene) always
  * agree. Dimensions hardcoded for UI-layer purity — equivalence with
  * REPL_EXPORT_PROJ_LINES / _LINE_MAX is STATIC_ASSERTed in glr_ctrl.c. */
 enum { UI_RESHAPE_PROJ_LINES = 4 };    /* == REPL_EXPORT_PROJ_LINES */
@@ -183,7 +183,7 @@ typedef struct UiRenderSnapshot {
 
     /* Reshape() projection body, resolved once per frame by the
      * controller from the scene's nearest-steady projection (see
-     * scene_get_active_projection). The code panel expands the
+     * render3d_get_active_projection). The code panel expands the
      * REPL_EXPORT_RESHAPE_PROJ_SENTINEL footer slot from this, so its
      * row-count and render passes agree even when a 2D/3D transition
      * changes the line count mid-frame. */
@@ -214,7 +214,7 @@ typedef struct UiRenderSnapshot {
     int                         user_scene_count;
 
     /* View-mode swatch (2D/3D toggle, left of the Replay pin). ortho_mode
-     * is the committed target (SceneViewMode); projection_mix is the live
+     * is the committed target (Render3dViewMode); projection_mix is the live
      * 2D<->3D blend in [0,1] (0 = ortho/2D, 1 = perspective/3D) from
      * glr_ctrl_view_projection_mix(). The swatch derives its steady/
      * cross-fade/cube visual purely from this pair. */

@@ -155,10 +155,10 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
                                outline_block_matches_cursor(i, 0, ctx);
             if (block_is_current) {
                 glLineWidth(3.0f);
-                scene_clr(SCENE_CLR_OUTLINE_ACTIVE);
+                render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
             } else if (ctx->show_vertex_outlines && draw_outline) {
                 glLineWidth(1.2f);
-                scene_clr(SCENE_CLR_OUTLINE_EDGE);
+                render3d_clr(RENDER3D_CLR_OUTLINE_EDGE);
             } else {
                 in_begin = 0;
                 break;
@@ -172,7 +172,7 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
                 glEnd();
                 in_begin = 0;
                 glLineWidth(1.0f);
-                scene_clr(SCENE_CLR_OUTLINE_EDGE);
+                render3d_clr(RENDER3D_CLR_OUTLINE_EDGE);
             }
             block_is_current = 0;
             break;
@@ -228,9 +228,9 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
             if (ctx->show_vertex_outlines || tess_poly_is_current) {
                 glLineWidth(1.5f);
                 if (tess_poly_is_current)
-                    scene_clr(SCENE_CLR_OUTLINE_ACTIVE);
+                    render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
                 else
-                    scene_clr(SCENE_CLR_OUTLINE);
+                    render3d_clr(RENDER3D_CLR_OUTLINE);
                 glBegin(GL_LINE_LOOP);
                 tess_in_contour = 1;
             }
@@ -290,10 +290,10 @@ static void render_outlines_glut_pass(const OverlayWalkCtx *ctx) {
                          outline_cmd_matches_cursor(i, ctx);
         if (is_current) {
             glLineWidth(3.0f);
-            scene_clr(SCENE_CLR_OUTLINE_ACTIVE);
+            render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
         } else if (ctx->show_vertex_outlines) {
             glLineWidth(1.2f);
-            scene_clr(SCENE_CLR_OUTLINE_EDGE);
+            render3d_clr(RENDER3D_CLR_OUTLINE_EDGE);
         } else {
             continue;
         }
@@ -350,9 +350,9 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
     glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
 
     if (ctx->replay_vertex_points)
-        scene_clr_a(SCENE_CLR_VERTEX_POINT_REPLAY, 0.75f);
+        render3d_clr_a(RENDER3D_CLR_VERTEX_POINT_REPLAY, 0.75f);
     else
-        scene_clr_a(SCENE_CLR_VERTEX_POINT, 0.80f);
+        render3d_clr_a(RENDER3D_CLR_VERTEX_POINT, 0.80f);
 
     glPushMatrix();
     {
@@ -447,14 +447,14 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
                      sanitize_zero(world[0]), sanitize_zero(world[1]), sanitize_zero(world[2]));
         detail_text = pos_buf;
     }
-    scene_draw_vertex_label_text(vx, vy, vz, idx_buf, detail_text);
+    render3d_draw_vertex_label_text(vx, vy, vz, idx_buf, detail_text);
 }
 
 static void on_normal_vector_arrow(const ReplayVertexWalkState *state,
                                    float vx, float vy, float vz,
                                    void *user) {
     float scale = *(const float *)user;
-    scene_draw_normal_vector_arrow(vx, vy, vz,
+    render3d_draw_normal_vector_arrow(vx, vy, vz,
                                    state->normal[0],
                                    state->normal[1],
                                    state->normal[2],
@@ -491,7 +491,7 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
-    scene_clr(SCENE_CLR_VERTEX_LABEL);
+    render3d_clr(RENDER3D_CLR_VERTEX_LABEL);
 
     VertexLabelCtx label_ctx = { .mode = mode, .is_ortho = is_ortho };
     if (mode == OVERLAY_VERTEX_LABEL_INDEX_WORLD) {
@@ -523,7 +523,7 @@ void edit_overlays_render_normal_vectors(const OverlayWalkCtx *walk_ctx) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
-    scene_clr(SCENE_CLR_NORMAL_LABEL);
+    render3d_clr(RENDER3D_CLR_NORMAL_LABEL);
 
     static const ReplayVertexWalkCallbacks cb = {
         .on_vertex = on_normal_vector_arrow,
@@ -535,8 +535,8 @@ void edit_overlays_render_normal_vectors(const OverlayWalkCtx *walk_ctx) {
 }
 
 typedef struct {
-    const SceneGuideSnapshot *snapshot;
-    SceneTransformGuidePlan   xform_plan;
+    const Render3dGuideSnapshot *snapshot;
+    Render3dTransformGuidePlan   xform_plan;
     float                     cam_view[16];
     int                       have_xform;
     int                       geometry_guide_done;
@@ -562,10 +562,10 @@ static int find_next_vertex_args_in_flat(const FlatProgramView *flat,
     return 0;
 }
 
-SceneGuideSnapshot cursor_guide_snapshot_with_flat_args(const SceneGuideSnapshot *snapshot,
+Render3dGuideSnapshot cursor_guide_snapshot_with_flat_args(const Render3dGuideSnapshot *snapshot,
                                                         const GLCmd *flat,
                                                         int flat_idx) {
-    SceneGuideSnapshot snap = *snapshot;
+    Render3dGuideSnapshot snap = *snapshot;
     if (!flat) return snap;
     if (repl_cmd_emits_vertex(flat->type)) {
         snap.vertex_args[0] = flat->args[0];
@@ -594,15 +594,15 @@ static void on_cmd_render_cursor_guides(const ReplayVertexWalkState *state,
              state->flat_cmd_idx < ctx->snapshot->flat_program.cmd_count)
               ? &ctx->snapshot->flat_program.cmds[state->flat_cmd_idx]
               : NULL;
-        SceneGuideSnapshot snap =
+        Render3dGuideSnapshot snap =
             cursor_guide_snapshot_with_flat_args(ctx->snapshot, flat,
                                                  state->flat_cmd_idx);
-        scene_geometry_guides_render_for_cursor(&snap);
+        render3d_geometry_guides_render_for_cursor(&snap);
         ctx->geometry_guide_done = 1;
     }
 
     if (ctx->have_xform && !ctx->xform_plan.consumed) {
-        scene_transform_guides_render_if_due(ctx->snapshot, &ctx->xform_plan,
+        render3d_transform_guides_render_if_due(ctx->snapshot, &ctx->xform_plan,
                                              state->flat_cmd_idx, ctx->cam_view);
     }
 
@@ -618,7 +618,7 @@ static void on_end_render_cursor_guides(const ReplayVertexWalkState *state,
 
     if (!ctx->geometry_guide_done && !ctx->snapshot->replaying &&
         state->in_block) {
-        scene_geometry_guides_render_for_cursor(ctx->snapshot);
+        render3d_geometry_guides_render_for_cursor(ctx->snapshot);
         ctx->geometry_guide_done = 1;
     }
     /* A tail-anchored transform plan (brand-new line) is flushed by the
@@ -626,7 +626,7 @@ static void on_end_render_cursor_guides(const ReplayVertexWalkState *state,
      * one path also covers the empty-program case where the walk never runs. */
 }
 
-void edit_overlays_render_cursor_guides(const SceneGuideSnapshot *snapshot,
+void edit_overlays_render_cursor_guides(const Render3dGuideSnapshot *snapshot,
                                         const OverlayWalkCtx *walk_ctx) {
     ReplayVertexWalkContext walk;
 
@@ -636,7 +636,7 @@ void edit_overlays_render_cursor_guides(const SceneGuideSnapshot *snapshot,
     ctx.snapshot = snapshot;
     ctx.geometry_guide_done = 0;
     ctx.early_stop = 0;
-    ctx.have_xform = scene_transform_guides_prepare(snapshot, &ctx.xform_plan);
+    ctx.have_xform = render3d_transform_guides_prepare(snapshot, &ctx.xform_plan);
 
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
@@ -652,7 +652,7 @@ void edit_overlays_render_cursor_guides(const SceneGuideSnapshot *snapshot,
      * empty program (nothing to walk) — but the transform guide must still
      * render below, so the early-out only bypasses the walk, not the flush.
      *
-     * During replay, scene_transform_guides_prepare() builds a plan anchored
+     * During replay, render3d_transform_guides_prepare() builds a plan anchored
      * on the replay-focused vertex (req 6), so the same per-op guide renderer
      * draws the live-style transform guide there. No separate axes pass. */
     walk = edit_overlays_build_vertex_walk_context(walk_ctx, 0);
@@ -665,14 +665,14 @@ void edit_overlays_render_cursor_guides(const SceneGuideSnapshot *snapshot,
         replay_walk_user_vertices(&walk, &cb, &ctx);
     }
 
-    /* Transform guides are position-independent: scene_transform_guides_render_if_due()
+    /* Transform guides are position-independent: render3d_transform_guides_render_if_due()
      * recomputes its own anchor frame, so a plan the walk never reached — an
      * empty flat program, or a brand-new line anchored at the flat tail —
      * flushes here. This is the transform analog of the vertex guide's
      * on_end / in_block append-row path (it's why a first-time transform
      * draws live, before commit, just like a first-time glVertex). */
     if (ctx.have_xform && !ctx.xform_plan.consumed) {
-        scene_transform_guides_render_if_due(snapshot, &ctx.xform_plan,
+        render3d_transform_guides_render_if_due(snapshot, &ctx.xform_plan,
                                              ctx.xform_plan.cursor_flat_idx,
                                              ctx.cam_view);
     }
@@ -685,25 +685,25 @@ void edit_overlays_post_overlays(void *user_data) {
     const OverlaySnapshotPack *pack = (const OverlaySnapshotPack *)user_data;
     if (!pack) return;
 
-    prof_begin(PROF_SCENE_3D_OVERLAY_OUTLINES);
+    prof_begin(PROF_RENDER3D_3D_OVERLAY_OUTLINES);
     edit_overlays_render_outlines(&pack->walk, pack->multisample_enabled, pack->line_smooth_enabled);
     edit_overlays_render_vertex_points(&pack->walk);
-    prof_accum_end(PROF_SCENE_3D_OVERLAY_OUTLINES);
+    prof_accum_end(PROF_RENDER3D_3D_OVERLAY_OUTLINES);
 
-    prof_begin(PROF_SCENE_3D_OVERLAY_TRANSFORM_GUIDES);
+    prof_begin(PROF_RENDER3D_3D_OVERLAY_TRANSFORM_GUIDES);
     edit_overlays_render_cursor_guides(&pack->snapshot, &pack->walk);
-    prof_accum_end(PROF_SCENE_3D_OVERLAY_TRANSFORM_GUIDES);
+    prof_accum_end(PROF_RENDER3D_3D_OVERLAY_TRANSFORM_GUIDES);
 
     if (pack->vertex_label_mode != OVERLAY_VERTEX_LABEL_OFF) {
-        prof_begin(PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS);
+        prof_begin(PROF_RENDER3D_3D_OVERLAY_VERTEX_NUMBERS);
         edit_overlays_render_vertex_numbers(&pack->walk,
                                             pack->vertex_label_mode,
                                             pack->ortho_mode);
-        prof_accum_end(PROF_SCENE_3D_OVERLAY_VERTEX_NUMBERS);
+        prof_accum_end(PROF_RENDER3D_3D_OVERLAY_VERTEX_NUMBERS);
     }
     if (pack->show_normal_vectors) {
-        prof_begin(PROF_SCENE_3D_OVERLAY_NORMALS);
+        prof_begin(PROF_RENDER3D_3D_OVERLAY_NORMALS);
         edit_overlays_render_normal_vectors(&pack->walk);
-        prof_accum_end(PROF_SCENE_3D_OVERLAY_NORMALS);
+        prof_accum_end(PROF_RENDER3D_3D_OVERLAY_NORMALS);
     }
 }

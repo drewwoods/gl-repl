@@ -118,11 +118,11 @@
 #define SNOW_BAND_CUT_SMALL 0.55f
 #define SNOW_BAND_CUT_MED   0.85f
 
-static void scene_backdrop_push_state(void) {
+static void render3d_backdrop_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 }
 
-static void scene_backdrop_pop_state(void) {
+static void render3d_backdrop_pop_state(void) {
     glPopAttrib();
 }
 
@@ -335,7 +335,7 @@ static GLint setup_city_gl_state(int nv_fog_distance_supported) {
 }
 
 static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
-    scene_backdrop_push_state();
+    render3d_backdrop_push_state();
     GLint saved_nv_fog_mode = setup_city_gl_state(nv_fog_distance_supported);
 
     for (int bi = 0; bi < CITY_BLDG_COUNT; bi++) {
@@ -440,7 +440,7 @@ static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
         glFogi(GL_FOG_DISTANCE_MODE_NV, saved_nv_fog_mode);
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
-    scene_backdrop_pop_state();
+    render3d_backdrop_pop_state();
 }
 
 /* Shared GL-state preamble for the point-based sky domes (starry sky,
@@ -464,7 +464,7 @@ static void draw_cityscape(float anim_time, int nv_fog_distance_supported) {
 static void backdrop_begin_sky_point_state(
     int point_parameter_supported,
     void (APIENTRY *point_parameter_proc)(GLenum pname, const GLfloat *params)) {
-    scene_backdrop_push_state();
+    render3d_backdrop_push_state();
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
@@ -489,7 +489,7 @@ static void backdrop_begin_sky_point_state(
 
 static void backdrop_end_sky_point_state(void) {
     glPopMatrix();
-    scene_backdrop_pop_state();
+    render3d_backdrop_pop_state();
 }
 
 static void draw_starry_sky(
@@ -773,7 +773,7 @@ static void draw_sunset(
 }
 
 static void draw_aurora(float anim_time, float alpha_scale, float extent) {
-    scene_backdrop_push_state();
+    render3d_backdrop_push_state();
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
@@ -822,7 +822,7 @@ static void draw_aurora(float anim_time, float alpha_scale, float extent) {
         }
         glEnd();
     }
-    scene_backdrop_pop_state();
+    render3d_backdrop_pop_state();
 }
 
 /* --- Nebula: deep-space gas clouds along a tilted galactic band ---
@@ -996,7 +996,7 @@ static void draw_nebula(
 }
 
 /* Piecewise-linear vertical gradient for the polar-day dome: a cold
- * whiteout. The horizon stop is exactly SCENE_GLACIAL_TINT — the same
+ * whiteout. The horizon stop is exactly RENDER3D_GLACIAL_TINT — the same
  * colour the Frozen Lake grid fades to — so the grid dissolves into
  * the sky with no seam at the grid extent. Above it the sky cools
  * through powder blue to a steel-blue zenith. Below the eye-level
@@ -1011,8 +1011,8 @@ static void draw_nebula(
 static void polar_sky_color(float h, float *r, float *g, float *b) {
     static const struct { float h, r, g, b; } stops[] = {
         {  -1.00f, 0.12f, 0.24f, 0.32f },
-        {  0.00f, SCENE_GLACIAL_TINT_R, SCENE_GLACIAL_TINT_G,
-                  SCENE_GLACIAL_TINT_B },
+        {  0.00f, RENDER3D_GLACIAL_TINT_R, RENDER3D_GLACIAL_TINT_G,
+                  RENDER3D_GLACIAL_TINT_B },
         {  0.18f, 0.50f, 0.66f, 0.82f },
         {  0.55f, 0.34f, 0.48f, 0.68f },
         {  1.00f, 0.22f, 0.34f, 0.52f },
@@ -1240,27 +1240,27 @@ static void backdrop_apply_env_lights(const BackdropEnvLight *lights, int n) {
 }
 
 /* Backdrop-owned colored lights. Runs in the pass setup phase (after
- * scene_lights_setup, before user fill) so lit user geometry sees them;
+ * render3d_lights_setup, before user fill) so lit user geometry sees them;
  * unlike the user slots these are configured AND enabled here, since
  * the REPL grammar can't reach GL_LIGHT4+. They contribute only once
  * the program enables GL_LIGHTING, and the pass's outer
  * glPushAttrib(GL_ALL_ATTRIB_BITS) bracket pops the enables at frame
  * end, so nothing leaks when the backdrop changes. Positions are
  * world-space: the modelview holds the camera at call time. */
-void scene_backdrop_setup_lights(const SceneFrameRenderContext *frame_ctx) {
+void render3d_backdrop_setup_lights(const Render3dFrameRenderContext *frame_ctx) {
     switch (frame_ctx->config.backdrop_mode) {
-    case SCENE_BACKDROP_SUNSET:
+    case RENDER3D_BACKDROP_SUNSET:
         backdrop_apply_env_lights(
             k_sunset_lights,
             (int)(sizeof(k_sunset_lights) / sizeof(k_sunset_lights[0])));
         break;
-    case SCENE_BACKDROP_NEBULA:
+    case RENDER3D_BACKDROP_NEBULA:
         backdrop_apply_env_lights(
             k_nebula_lights,
             (int)(sizeof(k_nebula_lights) / sizeof(k_nebula_lights[0])));
         break;
-    case SCENE_BACKDROP_POLAR_DAY:
-    case SCENE_BACKDROP_POLAR_DAY_SNOW:
+    case RENDER3D_BACKDROP_POLAR_DAY:
+    case RENDER3D_BACKDROP_POLAR_DAY_SNOW:
         backdrop_apply_env_lights(
             k_polar_day_lights,
             (int)(sizeof(k_polar_day_lights) / sizeof(k_polar_day_lights[0])));
@@ -1270,18 +1270,18 @@ void scene_backdrop_setup_lights(const SceneFrameRenderContext *frame_ctx) {
     }
 }
 
-void scene_backdrop_render(const SceneFrameRenderContext *frame_ctx) {
+void render3d_backdrop_render(const Render3dFrameRenderContext *frame_ctx) {
     switch (frame_ctx->config.backdrop_mode) {
-    case SCENE_BACKDROP_CITYSCAPE:
+    case RENDER3D_BACKDROP_CITYSCAPE:
         draw_cityscape(frame_ctx->config.anim_time,
                        frame_ctx->config.nv_fog_distance_supported);
         break;
-    case SCENE_BACKDROP_STARS:
+    case RENDER3D_BACKDROP_STARS:
         draw_starry_sky(frame_ctx->config.anim_time,
                         frame_ctx->config.point_parameter_supported,
                         frame_ctx->config.point_parameter_proc);
         break;
-    case SCENE_BACKDROP_CITY_AND_STARS:
+    case RENDER3D_BACKDROP_CITY_AND_STARS:
         /* Stars first so city geometry writes depth over them. */
         draw_starry_sky(frame_ctx->config.anim_time,
                         frame_ctx->config.point_parameter_supported,
@@ -1289,12 +1289,12 @@ void scene_backdrop_render(const SceneFrameRenderContext *frame_ctx) {
         draw_cityscape(frame_ctx->config.anim_time,
                        frame_ctx->config.nv_fog_distance_supported);
         break;
-    case SCENE_BACKDROP_SUNSET:
+    case RENDER3D_BACKDROP_SUNSET:
         draw_sunset(frame_ctx->config.anim_time,
                     frame_ctx->config.point_parameter_supported,
                     frame_ctx->config.point_parameter_proc);
         break;
-    case SCENE_BACKDROP_NEBULA:
+    case RENDER3D_BACKDROP_NEBULA:
         /* Gas first, then the shared starfield shines through on top
          * (no depth writes in either pass — draw order is the layering). */
         draw_nebula(frame_ctx->config.anim_time,
@@ -1304,7 +1304,7 @@ void scene_backdrop_render(const SceneFrameRenderContext *frame_ctx) {
                         frame_ctx->config.point_parameter_supported,
                         frame_ctx->config.point_parameter_proc);
         break;
-    case SCENE_BACKDROP_AURORA: {
+    case RENDER3D_BACKDROP_AURORA: {
         int ex_i = frame_ctx->config.grid_extent_idx;
         if (ex_i < 0 || ex_i >= GRID_EXTENT_COUNT) ex_i = GRID_EXTENT_MID;
         float extent = frame_ctx->config.grid_extents[ex_i];
@@ -1313,19 +1313,19 @@ void scene_backdrop_render(const SceneFrameRenderContext *frame_ctx) {
                     extent);
         break;
     }
-    case SCENE_BACKDROP_POLAR_DAY:
+    case RENDER3D_BACKDROP_POLAR_DAY:
         backdrop_begin_sky_point_state(
             frame_ctx->config.point_parameter_supported,
             frame_ctx->config.point_parameter_proc);
         draw_polar_sky_dome();
         backdrop_end_sky_point_state();
         break;
-    case SCENE_BACKDROP_SNOWFALL:
+    case RENDER3D_BACKDROP_SNOWFALL:
         draw_snowfall(frame_ctx->config.anim_time,
                       frame_ctx->config.point_parameter_supported,
                       frame_ctx->config.point_parameter_proc);
         break;
-    case SCENE_BACKDROP_POLAR_DAY_SNOW:
+    case RENDER3D_BACKDROP_POLAR_DAY_SNOW:
         /* Dome first so the flakes composite over the sky. */
         backdrop_begin_sky_point_state(
             frame_ctx->config.point_parameter_supported,
@@ -1336,7 +1336,7 @@ void scene_backdrop_render(const SceneFrameRenderContext *frame_ctx) {
                       frame_ctx->config.point_parameter_supported,
                       frame_ctx->config.point_parameter_proc);
         break;
-    case SCENE_BACKDROP_OFF:
+    case RENDER3D_BACKDROP_OFF:
     default:
         break;
     }

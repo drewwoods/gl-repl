@@ -569,13 +569,13 @@ static void test_find_next_vertex_args(void) {
 static void test_cursor_guide_snapshot_with_flat_args(void) {
     printf("--- edit_overlays cursor_guide_snapshot_with_flat_args ---\n");
 
-    SceneGuideSnapshot base;
+    Render3dGuideSnapshot base;
     memset(&base, 0, sizeof(base));
 
     /* Vertex command -> vertex_args populated. */
     GLCmd v;
     mk_cmd(&v, CMD_VERTEX3F, 7.0f, 8.0f, 9.0f);
-    SceneGuideSnapshot s = cursor_guide_snapshot_with_flat_args(&base, &v, 0);
+    Render3dGuideSnapshot s = cursor_guide_snapshot_with_flat_args(&base, &v, 0);
     ASSERT_TRUE("vertex arg x copied", s.vertex_args[0] == 7.0f);
     ASSERT_TRUE("vertex arg y copied", s.vertex_args[1] == 8.0f);
     ASSERT_TRUE("vertex arg z copied", s.vertex_args[2] == 9.0f);
@@ -706,7 +706,7 @@ static void test_on_vertex_number_label_callback(void) {
 }
 
 /* on_normal_vector_arrow callback: draws a GL_LINES arrow from the vertex to
- * vertex + normal*scale (see scene_draw_normal_vector_arrow). */
+ * vertex + normal*scale (see render3d_draw_normal_vector_arrow). */
 static void test_on_normal_vector_arrow_callback(void) {
     printf("--- edit_overlays on_normal_vector_arrow ---\n");
 
@@ -826,7 +826,7 @@ static void test_render_via_repl_program(void) {
                 trace_count_sym(&log, "glVertex3f") >= 2);
 
     /* Cursor guides: place the cursor on the first vertex line and render. */
-    SceneGuideSnapshot snap;
+    Render3dGuideSnapshot snap;
     memset(&snap, 0, sizeof(snap));
     snap.show_guides = 1;
     snap.flat_program = repl_state_flat_program_view();
@@ -893,7 +893,7 @@ static void test_cursor_guides_render_for_unterminated_begin(void) {
     walk.cursor.cursor_block_end = -1;
 
     const char *input = "glVertex3f(0.25, 0.5, 0.75)";
-    SceneGuideSnapshot snap;
+    Render3dGuideSnapshot snap;
     memset(&snap, 0, sizeof(snap));
     snap.show_guides = 1;
     snap.input = input;
@@ -959,7 +959,7 @@ static void test_cursor_guides_render_for_new_transform_line(void) {
     walk.cursor.cursor_block_end = -1;
 
     const char *input = "glScalef(2,2,2)";
-    SceneGuideSnapshot snap;
+    Render3dGuideSnapshot snap;
     memset(&snap, 0, sizeof(snap));
     snap.show_guides = 1;
     snap.input = input;
@@ -967,7 +967,7 @@ static void test_cursor_guides_render_for_new_transform_line(void) {
     snap.edit_line_idx = 1;        /* past the one committed source line */
     snap.source_cmd_count = 1;
     snap.flat_program = walk.program;
-    snap.xform_guide_mode = SCENE_XFORM_GUIDE_FRAME;
+    snap.xform_guide_mode = RENDER3D_XFORM_GUIDE_FRAME;
     snap.xform_args[0] = snap.xform_args[1] = snap.xform_args[2] = 2.0f;
     snap.xform_filled[0] = snap.xform_filled[1] = snap.xform_filled[2] = 1;
     snap.xform_n_filled = 3;

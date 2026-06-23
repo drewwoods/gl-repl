@@ -8,7 +8,7 @@
  * routing. UI only renders and returns `UiHit`.
  *
  * The renderer consumes a narrow `UiVariablePanelView` (the 2D analog of
- * SceneRenderConfig), NOT the whole-frame `UiRenderSnapshot`. That keeps this
+ * Render3dRenderConfig), NOT the whole-frame `UiRenderSnapshot`. That keeps this
  * subsystem linkable from {subsystems, support, ui/core} alone — no ui/app.
  * The controller projects the snapshot down via
  * `ui_app_variable_panel_view()` (src/ui/app/variable_panel_view.c).

@@ -2,54 +2,54 @@
  * axes.c - axes theme rendering
  */
 #include "axes.h"
-#include "overlay_xn.h"  /* SceneOverlayXn + shared resolve helper */
-#include "occluded_ghost.h"  /* SCENE_OCCLUDED_GHOST_STIPPLE */
+#include "overlay_xn.h"  /* Render3dOverlayXn + shared resolve helper */
+#include "occluded_ghost.h"  /* RENDER3D_OCCLUDED_GHOST_STIPPLE */
 #include <math.h>            /* sinf, cosf, fmodf, M_PI (via gl_includes.h) */
 
-/* ---- Axes transition curve plugin (SceneXnReveal, see scene_transition.h).
+/* ---- Axes transition curve plugin (Render3dXnReveal, see render3d_transition.h).
  * A plain linear opacity ramp over AXES_FADE_*_SECS, no per-theme speed
  * (theme ignored). The machine feeds elapsed time and reads opacity back;
  * elapsed_at inverts the ramp for reversal continuity. */
-static float axes_reveal_opacity(int theme, SceneXnPhase phase, float elapsed) {
+static float axes_reveal_opacity(int theme, Render3dXnPhase phase, float elapsed) {
     (void)theme;
-    if (phase == SCENE_XN_STEADY) return 1.0f;
-    float dur = (phase == SCENE_XN_FADE_IN) ? AXES_FADE_IN_SECS
+    if (phase == RENDER3D_XN_STEADY) return 1.0f;
+    float dur = (phase == RENDER3D_XN_FADE_IN) ? AXES_FADE_IN_SECS
                                             : AXES_FADE_OUT_SECS;
     float p = (dur > 0.0f) ? elapsed / dur : 1.0f;
     if (p < 0.0f) p = 0.0f;
     if (p > 1.0f) p = 1.0f;
-    return (phase == SCENE_XN_FADE_IN) ? p : 1.0f - p;
+    return (phase == RENDER3D_XN_FADE_IN) ? p : 1.0f - p;
 }
 
-static float axes_reveal_elapsed_at(int theme, SceneXnPhase phase,
+static float axes_reveal_elapsed_at(int theme, Render3dXnPhase phase,
                                     float opacity) {
     (void)theme;
-    float dur = (phase == SCENE_XN_FADE_IN) ? AXES_FADE_IN_SECS
+    float dur = (phase == RENDER3D_XN_FADE_IN) ? AXES_FADE_IN_SECS
                                             : AXES_FADE_OUT_SECS;
-    float p = (phase == SCENE_XN_FADE_IN) ? opacity : 1.0f - opacity;
+    float p = (phase == RENDER3D_XN_FADE_IN) ? opacity : 1.0f - opacity;
     if (p < 0.0f) p = 0.0f;
     if (p > 1.0f) p = 1.0f;
     return p * dur;
 }
 
-const SceneXnReveal scene_axes_reveal = {
+const Render3dXnReveal render3d_axes_reveal = {
     axes_reveal_opacity, axes_reveal_elapsed_at
 };
 
 enum {
-    SCENE_AXIS_X = 0,
-    SCENE_AXIS_Y = 1,
-    SCENE_AXIS_Z = 2,
+    RENDER3D_AXIS_X = 0,
+    RENDER3D_AXIS_Y = 1,
+    RENDER3D_AXIS_Z = 2,
 };
 
 typedef struct AxesThemeSpec {
     float len;
-    SceneRgba axis[3];
-    SceneRgba label[3];
+    Render3dRgba axis[3];
+    Render3dRgba label[3];
 } AxesThemeSpec;
 
 /* Per-frame axes draw context (audit #3). Resolved once at
- * scene_axes_render entry via scene_overlay_xn_resolve; every
+ * render3d_axes_render entry via render3d_overlay_xn_resolve; every
  * axes_color call multiplies through xn_alpha. The struct is
  * deliberately small — axes don't carry the breath/anim_time
  * GridDrawContext has because each per-theme renderer that needs
@@ -63,27 +63,27 @@ typedef struct AxesDrawContext {
  * The static spec carries one flat axis/label color per axis; NEON is a
  * per-frame procedural look (a wide dim halo pass + a narrow bright core
  * pass + glowing tip dots, every channel modulated by the breathing
- * `glow` term) that a single SceneRgba triplet cannot express. It is
- * handled inline in scene_axes_render's switch; only its axis length is
+ * `glow` term) that a single Render3dRgba triplet cannot express. It is
+ * handled inline in render3d_axes_render's switch; only its axis length is
  * a plain constant. */
 #define AXES_NEON_LEN 2.5f
 
-static void scene_axes_push_state(void) {
+static void render3d_axes_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 }
 
-static void scene_axes_pop_state(void) {
+static void render3d_axes_pop_state(void) {
     glPopAttrib();
 }
 
-static SceneRgba rgba(float r, float g, float b, float a) {
-    SceneRgba c = { r, g, b, a };
+static Render3dRgba rgba(float r, float g, float b, float a) {
+    Render3dRgba c = { r, g, b, a };
     return c;
 }
 
 /* Axes in-out transition (docs/plans/.../grid-axes-transitions.md rule 4).
- * Resolved once at scene_axes_render entry from config.axes_opacity
- * via the shared scene_overlay_xn_resolve helper (overlay_xn.h),
+ * Resolved once at render3d_axes_render entry from config.axes_opacity
+ * via the shared render3d_overlay_xn_resolve helper (overlay_xn.h),
  * stored on AxesDrawContext, then every color path routes through
  * axes_color so it applies uniformly AFTER each call site's own
  * alpha_scale clamp (rule 3). 1.0 = shown.
@@ -118,7 +118,7 @@ static void axes_color(const AxesDrawContext *ctx,
     glColor4f(r, g, b, a * ctx->xn_alpha);
 }
 
-static void axes_color_rgba(const AxesDrawContext *ctx, SceneRgba c) {
+static void axes_color_rgba(const AxesDrawContext *ctx, Render3dRgba c) {
     axes_color(ctx, c.r, c.g, c.b, c.a);
 }
 
@@ -199,7 +199,7 @@ static const AxesThemeSpec g_axes_theme_specs[AXES_THEME_COUNT] = {
     },
 };
 
-static const AxesThemeSpec *axes_theme_spec(SceneAxesTheme theme) {
+static const AxesThemeSpec *axes_theme_spec(Render3dAxesTheme theme) {
     if (theme <= AXES_THEME_OFF || theme >= AXES_THEME_COUNT)
         return NULL;
     if (g_axes_theme_specs[theme].len <= 0.0f)
@@ -207,7 +207,7 @@ static const AxesThemeSpec *axes_theme_spec(SceneAxesTheme theme) {
     return &g_axes_theme_specs[theme];
 }
 
-static void scene_axes_apply_quality_config(const SceneRenderConfig *config) {
+static void render3d_axes_apply_quality_config(const Render3dRenderConfig *config) {
     if (config->multisample_enabled) glEnable(GL_MULTISAMPLE);
     else glDisable(GL_MULTISAMPLE);
     if (config->line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
@@ -216,16 +216,16 @@ static void scene_axes_apply_quality_config(const SceneRenderConfig *config) {
 
 static void draw_axis_line_triplet(const AxesDrawContext *ctx,
                                    float len, float width,
-                                   const SceneRgba colors[3],
+                                   const Render3dRgba colors[3],
                                    int direction) {
     float end = len * (float)direction;
     glLineWidth(width);
     glBegin(GL_LINES);
-    axes_color_rgba(ctx, colors[SCENE_AXIS_X]);
+    axes_color_rgba(ctx, colors[RENDER3D_AXIS_X]);
     glVertex3f(0, 0, 0); glVertex3f(end, 0, 0);
-    axes_color_rgba(ctx, colors[SCENE_AXIS_Y]);
+    axes_color_rgba(ctx, colors[RENDER3D_AXIS_Y]);
     glVertex3f(0, 0, 0); glVertex3f(0, end, 0);
-    axes_color_rgba(ctx, colors[SCENE_AXIS_Z]);
+    axes_color_rgba(ctx, colors[RENDER3D_AXIS_Z]);
     glVertex3f(0, 0, 0); glVertex3f(0, 0, end);
     glEnd();
     glLineWidth(1.0f);
@@ -233,16 +233,16 @@ static void draw_axis_line_triplet(const AxesDrawContext *ctx,
 
 static void draw_axis_tip_triplet(const AxesDrawContext *ctx,
                                   float len, float point_size,
-                                  const SceneRgba colors[3],
+                                  const Render3dRgba colors[3],
                                   int direction) {
     float end = len * (float)direction;
     glPointSize(point_size);
     glBegin(GL_POINTS);
-    axes_color_rgba(ctx, colors[SCENE_AXIS_X]);
+    axes_color_rgba(ctx, colors[RENDER3D_AXIS_X]);
     glVertex3f(end, 0, 0);
-    axes_color_rgba(ctx, colors[SCENE_AXIS_Y]);
+    axes_color_rgba(ctx, colors[RENDER3D_AXIS_Y]);
     glVertex3f(0, end, 0);
-    axes_color_rgba(ctx, colors[SCENE_AXIS_Z]);
+    axes_color_rgba(ctx, colors[RENDER3D_AXIS_Z]);
     glVertex3f(0, 0, end);
     glEnd();
     glPointSize(1.0f);
@@ -250,36 +250,36 @@ static void draw_axis_tip_triplet(const AxesDrawContext *ctx,
 
 static void draw_axis_label_triplet(const AxesDrawContext *ctx,
                                     float len, float offset,
-                                    const SceneRgba colors[3],
+                                    const Render3dRgba colors[3],
                                     const char labels[3],
                                     int direction) {
     float pos = (len + offset) * (float)direction;
-    draw_axis_label(ctx, pos, 0, 0, labels[SCENE_AXIS_X],
-                    colors[SCENE_AXIS_X].r, colors[SCENE_AXIS_X].g,
-                    colors[SCENE_AXIS_X].b);
-    draw_axis_label(ctx, 0, pos, 0, labels[SCENE_AXIS_Y],
-                    colors[SCENE_AXIS_Y].r, colors[SCENE_AXIS_Y].g,
-                    colors[SCENE_AXIS_Y].b);
-    draw_axis_label(ctx, 0, 0, pos, labels[SCENE_AXIS_Z],
-                    colors[SCENE_AXIS_Z].r, colors[SCENE_AXIS_Z].g,
-                    colors[SCENE_AXIS_Z].b);
+    draw_axis_label(ctx, pos, 0, 0, labels[RENDER3D_AXIS_X],
+                    colors[RENDER3D_AXIS_X].r, colors[RENDER3D_AXIS_X].g,
+                    colors[RENDER3D_AXIS_X].b);
+    draw_axis_label(ctx, 0, pos, 0, labels[RENDER3D_AXIS_Y],
+                    colors[RENDER3D_AXIS_Y].r, colors[RENDER3D_AXIS_Y].g,
+                    colors[RENDER3D_AXIS_Y].b);
+    draw_axis_label(ctx, 0, 0, pos, labels[RENDER3D_AXIS_Z],
+                    colors[RENDER3D_AXIS_Z].r, colors[RENDER3D_AXIS_Z].g,
+                    colors[RENDER3D_AXIS_Z].b);
 }
 
 /* --- per-theme axes renderers ---
  *
  * Each theme used to live as a giant inline switch arm in
- * scene_axes_render. Extracted into named static helpers so the
+ * render3d_axes_render. Extracted into named static helpers so the
  * dispatcher reads like a table-of-contents and each renderer owns
  * its own ~30-line body. Pattern mirrors grid.c's per-theme functions
  * (audit #52). */
 
-static void scene_axes_render_classic_theme(const AxesDrawContext *ctx) {
+static void render3d_axes_render_classic_theme(const AxesDrawContext *ctx) {
     const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_CLASSIC);
     draw_axis_line_triplet(ctx, spec->len, 2.0f, spec->axis, 1);
     draw_axis_label_triplet(ctx, spec->len, 0.15f, spec->label, "XYZ", 1);
 }
 
-static void scene_axes_render_pulse_theme(const AxesDrawContext *ctx,
+static void render3d_axes_render_pulse_theme(const AxesDrawContext *ctx,
                                           float anim_time) {
     const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_PULSE);
     float len = spec->len;
@@ -332,21 +332,21 @@ static void scene_axes_render_pulse_theme(const AxesDrawContext *ctx,
 /* Procedural theme — see the AXES_NEON_LEN note at the top of this
  * file for why NEON is the only theme that doesn't sit in the
  * g_axes_theme_specs table. */
-static void scene_axes_render_neon_theme(const AxesDrawContext *ctx,
+static void render3d_axes_render_neon_theme(const AxesDrawContext *ctx,
                                          float breath, float as) {
     float len = AXES_NEON_LEN;
     float glow = 0.6f + breath * 0.4f;
-    SceneRgba outer[3] = {
+    Render3dRgba outer[3] = {
         rgba(1.0f, 0.1f, 0.1f, fminf(0.12f * glow * as, 1.0f)),
         rgba(0.1f, 1.0f, 0.1f, fminf(0.12f * glow * as, 1.0f)),
         rgba(0.1f, 0.1f, 1.0f, fminf(0.12f * glow * as, 1.0f)),
     };
-    SceneRgba core[3] = {
+    Render3dRgba core[3] = {
         rgba(1.0f, 0.4f, 0.4f, 1.0f * glow),
         rgba(0.4f, 1.0f, 0.4f, 1.0f * glow),
         rgba(0.4f, 0.4f, 1.0f, 1.0f * glow),
     };
-    SceneRgba tips[3] = {
+    Render3dRgba tips[3] = {
         rgba(1.0f, 0.5f, 0.5f, glow),
         rgba(0.5f, 1.0f, 0.5f, glow),
         rgba(0.5f, 0.5f, 1.0f, glow),
@@ -358,7 +358,7 @@ static void scene_axes_render_neon_theme(const AxesDrawContext *ctx,
     draw_axis_tip_triplet(ctx, len, 6.0f, tips, 1);
 
     float la = 0.5f + glow * 0.5f;
-    SceneRgba labels[3] = {
+    Render3dRgba labels[3] = {
         rgba(1.0f * la, 0.3f * la, 0.3f * la, 1.0f),
         rgba(0.3f * la, 1.0f * la, 0.3f * la, 1.0f),
         rgba(0.3f * la, 0.3f * la, 1.0f * la, 1.0f),
@@ -366,20 +366,20 @@ static void scene_axes_render_neon_theme(const AxesDrawContext *ctx,
     draw_axis_label_triplet(ctx, len, 0.15f, labels, "XYZ", 1);
 }
 
-static void scene_axes_render_compass_theme(const AxesDrawContext *ctx) {
+static void render3d_axes_render_compass_theme(const AxesDrawContext *ctx) {
     const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_COMPASS);
     float len = spec->len;
-    SceneRgba negative_axes[3] = {
+    Render3dRgba negative_axes[3] = {
         rgba(1.0f, 0.30f, 0.30f, 0.35f),
         rgba(0.30f, 1.0f, 0.30f, 0.35f),
         rgba(0.30f, 0.30f, 1.0f, 0.35f),
     };
-    SceneRgba positive_tips[3] = {
+    Render3dRgba positive_tips[3] = {
         rgba(1.0f, 0.4f, 0.4f, 0.9f),
         rgba(0.4f, 1.0f, 0.4f, 0.9f),
         rgba(0.4f, 0.4f, 1.0f, 0.9f),
     };
-    SceneRgba negative_tips[3] = {
+    Render3dRgba negative_tips[3] = {
         rgba(1.0f, 0.3f, 0.3f, 0.30f),
         rgba(0.3f, 1.0f, 0.3f, 0.30f),
         rgba(0.3f, 0.3f, 1.0f, 0.30f),
@@ -390,7 +390,7 @@ static void scene_axes_render_compass_theme(const AxesDrawContext *ctx) {
 
     /* Negative axes (stippled) */
     glEnable(GL_LINE_STIPPLE);
-    glLineStipple(2, SCENE_OCCLUDED_GHOST_STIPPLE);
+    glLineStipple(2, RENDER3D_OCCLUDED_GHOST_STIPPLE);
     draw_axis_line_triplet(ctx, len, 2.0f, negative_axes, -1);
     glDisable(GL_LINE_STIPPLE);
 
@@ -407,7 +407,7 @@ static void scene_axes_render_compass_theme(const AxesDrawContext *ctx) {
     glPointSize(1.0f);
 
     draw_axis_label_triplet(ctx, len, 0.15f, spec->label, "XYZ", 1);
-    SceneRgba negative_labels[3] = {
+    Render3dRgba negative_labels[3] = {
         rgba(0.55f, 0.25f, 0.25f, 1.0f),
         rgba(0.25f, 0.55f, 0.25f, 1.0f),
         rgba(0.25f, 0.25f, 0.55f, 1.0f),
@@ -415,8 +415,8 @@ static void scene_axes_render_compass_theme(const AxesDrawContext *ctx) {
     draw_axis_label_triplet(ctx, len, 0.15f, negative_labels, "xyz", -1);
 }
 
-static void scene_axes_render_gizmo_theme(const AxesDrawContext *ctx,
-                                          const SceneRenderConfig *config,
+static void render3d_axes_render_gizmo_theme(const AxesDrawContext *ctx,
+                                          const Render3dRenderConfig *config,
                                           float as) {
     const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_GIZMO);
     float len  = spec->len;
@@ -483,7 +483,7 @@ static void scene_axes_render_gizmo_theme(const AxesDrawContext *ctx,
 
 /* Solid axes with measurement ticks: a short perpendicular bar at
  * every unit, longer every 5 (mirrors the grid XZ Ruler). */
-static void scene_axes_render_ruler_theme(const AxesDrawContext *ctx) {
+static void render3d_axes_render_ruler_theme(const AxesDrawContext *ctx) {
     const AxesThemeSpec *spec = axes_theme_spec(AXES_THEME_RULER);
     float len = spec->len;
     draw_axis_line_triplet(ctx, len, 2.0f, spec->axis, 1);
@@ -492,13 +492,13 @@ static void scene_axes_render_ruler_theme(const AxesDrawContext *ctx) {
     for (int i = 1; i <= (int)len; i++) {
         float t = (i % 5 == 0) ? 0.16f : 0.07f;
         /* X axis: ticks span ±Z */
-        axes_color_rgba(ctx, spec->axis[SCENE_AXIS_X]);
+        axes_color_rgba(ctx, spec->axis[RENDER3D_AXIS_X]);
         glVertex3f((float)i, 0, -t); glVertex3f((float)i, 0, t);
         /* Y axis: ticks span ±X */
-        axes_color_rgba(ctx, spec->axis[SCENE_AXIS_Y]);
+        axes_color_rgba(ctx, spec->axis[RENDER3D_AXIS_Y]);
         glVertex3f(-t, (float)i, 0); glVertex3f(t, (float)i, 0);
         /* Z axis: ticks span ±X */
-        axes_color_rgba(ctx, spec->axis[SCENE_AXIS_Z]);
+        axes_color_rgba(ctx, spec->axis[RENDER3D_AXIS_Z]);
         glVertex3f(-t, 0, (float)i); glVertex3f(t, 0, (float)i);
     }
     glEnd();
@@ -506,14 +506,14 @@ static void scene_axes_render_ruler_theme(const AxesDrawContext *ctx) {
     draw_axis_label_triplet(ctx, len, 0.15f, spec->label, "XYZ", 1);
 }
 
-void scene_axes_render(const SceneFrameRenderContext *frame_ctx) {
-    const SceneRenderConfig *config = &frame_ctx->config;
-    SceneAxesTheme axes_theme = (SceneAxesTheme)config->axes_theme;
+void render3d_axes_render(const Render3dFrameRenderContext *frame_ctx) {
+    const Render3dRenderConfig *config = &frame_ctx->config;
+    Render3dAxesTheme axes_theme = (Render3dAxesTheme)config->axes_theme;
     if (axes_theme == AXES_THEME_OFF) return;
 
     /* Resolve the transition fade via the shared overlay-xn helper.
      * Axes have no fog-owning themes, so uses_own_fog is always 0. */
-    SceneOverlayXn xn = scene_overlay_xn_resolve(
+    Render3dOverlayXn xn = render3d_overlay_xn_resolve(
         config->axes_opacity, AXES_XN_STYLE, 0,
 #if AXES_XN_STYLE == GRID_AXES_XN_FOG
         AXES_XN_FOG_ALPHA_KNEE
@@ -524,12 +524,12 @@ void scene_axes_render(const SceneFrameRenderContext *frame_ctx) {
     if (!xn.draw) return;
     AxesDrawContext ctx = { .xn_opacity = xn.opacity, .xn_alpha = xn.alpha };
 
-    scene_axes_push_state();
+    render3d_axes_push_state();
 
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
-    scene_axes_apply_quality_config(config);
+    render3d_axes_apply_quality_config(config);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -537,20 +537,20 @@ void scene_axes_render(const SceneFrameRenderContext *frame_ctx) {
     axes_xn_apply_transition_fog(xn.fog_tf, config->clear_color);
 #endif
 
-    float breath = sinf(config->anim_time * SCENE_BREATH_FREQ) * 0.5f + 0.5f; /* 0..1 */
+    float breath = sinf(config->anim_time * RENDER3D_BREATH_FREQ) * 0.5f + 0.5f; /* 0..1 */
     float as = config->alpha_scale;
 
     switch (axes_theme) {
-    case AXES_THEME_CLASSIC: scene_axes_render_classic_theme(&ctx);          break;
-    case AXES_THEME_PULSE:   scene_axes_render_pulse_theme(&ctx, config->anim_time); break;
-    case AXES_THEME_NEON:    scene_axes_render_neon_theme(&ctx, breath, as); break;
-    case AXES_THEME_COMPASS: scene_axes_render_compass_theme(&ctx);          break;
-    case AXES_THEME_GIZMO:   scene_axes_render_gizmo_theme(&ctx, config, as); break;
-    case AXES_THEME_RULER:   scene_axes_render_ruler_theme(&ctx);            break;
+    case AXES_THEME_CLASSIC: render3d_axes_render_classic_theme(&ctx);          break;
+    case AXES_THEME_PULSE:   render3d_axes_render_pulse_theme(&ctx, config->anim_time); break;
+    case AXES_THEME_NEON:    render3d_axes_render_neon_theme(&ctx, breath, as); break;
+    case AXES_THEME_COMPASS: render3d_axes_render_compass_theme(&ctx);          break;
+    case AXES_THEME_GIZMO:   render3d_axes_render_gizmo_theme(&ctx, config, as); break;
+    case AXES_THEME_RULER:   render3d_axes_render_ruler_theme(&ctx);            break;
     default:                                                                 break;
     }
 
-    /* scene_axes_pop_state restores depth/blend/lighting state via
+    /* render3d_axes_pop_state restores depth/blend/lighting state via
      * GL_ALL_ATTRIB_BITS; no manual teardown needed. */
-    scene_axes_pop_state();
+    render3d_axes_pop_state();
 }

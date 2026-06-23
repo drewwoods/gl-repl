@@ -1170,7 +1170,7 @@ int main(void) {
          * value that differs from BOTH scenes' saved values for
          * wireframe (e.g. 0 here — only matches scene B).  Pre-fix,
          * scene A would also be exported with wireframe=0. */
-        glr_state_presentation_mut()->wireframe = SCENE_WIREFRAME_OFF;
+        glr_state_presentation_mut()->wireframe = RENDER3D_WIREFRAME_OFF;
 
         int saved = repl_save_workspace(workspace_out, NULL);
         ASSERT_TRUE("p1 save_workspace wrote 2 files", saved == 2);

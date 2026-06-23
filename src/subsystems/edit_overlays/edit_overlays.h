@@ -1,8 +1,8 @@
 #ifndef EDIT_OVERLAYS_H
 #define EDIT_OVERLAYS_H
 
-#include "render3d/guides/guides_shared.h"  /* SceneGuideSnapshot */
-#include "render3d/view_mode.h"             /* SceneViewMode */
+#include "render3d/guides/guides_shared.h"  /* Render3dGuideSnapshot */
+#include "render3d/view_mode.h"             /* Render3dViewMode */
 #include "repl/state_views.h"            /* FlatProgramView, CursorBlockState */
 
 #define OVERLAY_VERTEX_LABEL_LIST(X) \
@@ -34,9 +34,9 @@ typedef struct OverlayWalkCtx {
 
 typedef struct OverlaySnapshotPack {
     OverlayWalkCtx walk;
-    SceneGuideSnapshot snapshot;
+    Render3dGuideSnapshot snapshot;
     OverlayVertexLabelMode vertex_label_mode;
-    SceneViewMode ortho_mode;
+    Render3dViewMode ortho_mode;
     int show_normal_vectors;
     int multisample_enabled;
     int line_smooth_enabled;
@@ -54,12 +54,12 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *ctx,
 
 void edit_overlays_render_normal_vectors(const OverlayWalkCtx *ctx);
 
-void edit_overlays_render_cursor_guides(const SceneGuideSnapshot *snapshot,
+void edit_overlays_render_cursor_guides(const Render3dGuideSnapshot *snapshot,
                                         const OverlayWalkCtx *ctx);
 
 void edit_overlays_post_overlays(void *user_data);
 
-SceneGuideSnapshot cursor_guide_snapshot_with_flat_args(const SceneGuideSnapshot *snapshot,
+Render3dGuideSnapshot cursor_guide_snapshot_with_flat_args(const Render3dGuideSnapshot *snapshot,
                                                         const GLCmd *flat,
                                                         int flat_idx);
 

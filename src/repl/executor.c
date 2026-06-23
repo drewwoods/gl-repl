@@ -484,7 +484,7 @@ ReplExecCursor repl_exec_cursor_begin(const ReplExecutionOptions *options) {
     cursor.tess_current_color[3] = cursor.alpha_scale;
 
     /* The light-indicator overlay reads light_enabled_mask for its on/off
-     * visual. GL's real default — and scene_lights_setup() — is
+     * visual. GL's real default — and render3d_lights_setup() — is
      * all-lights-disabled; only the program's glEnable(GL_LIGHTn) turns
      * one on. Reset the bookkeeping at the start of every walk so the
      * indicator tracks what the program actually does, instead of the

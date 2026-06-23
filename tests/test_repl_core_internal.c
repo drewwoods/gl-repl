@@ -663,13 +663,13 @@ int main() {
         glr_state_presentation_mut()->show_vertex_indices = 1; glr_ctrl_sync_ui_chrome();
         glr_state_presentation_mut()->show_vertex_outlines = 1;
         glr_state_presentation_mut()->show_vertex_points = 1;
-        glr_state_presentation_mut()->xform_guide_mode = SCENE_XFORM_GUIDE_FRAME;
+        glr_state_presentation_mut()->xform_guide_mode = RENDER3D_XFORM_GUIDE_FRAME;
         glr_state_presentation_mut()->autonormal = 1;
         glr_state_presentation_mut()->show_light_indicators = 0;
         glr_state_presentation_mut()->backdrop_mode = 0;
         glr_camera_mut()->auto_rotate = 1;
         glr_state_presentation_mut()->highlight_current_poly = 0;
-        glr_state_presentation_mut()->ortho_mode = SCENE_VIEW_2D;
+        glr_state_presentation_mut()->ortho_mode = RENDER3D_VIEW_2D;
         glr_state_presentation_mut()->wrap_at_comma = 0;
         glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_BOTTOM; glr_ctrl_sync_ui_chrome();
         /* focus_vertex storage was deleted in step 7a — no live
@@ -723,7 +723,7 @@ int main() {
                     render == repl_state_render_mut());
 
         g_use_accum = 0;
-        g_accum_effect = SCENE_ACCUM_EFFECT_OFF;
+        g_accum_effect = RENDER3D_ACCUM_EFFECT_OFF;
         g_accum_passes = 8;
         g_multisample_enabled = 0;
         g_line_smooth_enabled = 0;
@@ -738,7 +738,7 @@ int main() {
         glr_state_render_reset_defaults();
         repl_state_render_reset_defaults();
         ASSERT_INT("render reset use accum", g_use_accum, 1);
-        ASSERT_INT("render reset accum effect", g_accum_effect, SCENE_ACCUM_EFFECT_AA);
+        ASSERT_INT("render reset accum effect", g_accum_effect, RENDER3D_ACCUM_EFFECT_AA);
         ASSERT_INT("render reset accum passes", g_accum_passes, 2);
         ASSERT_INT("render reset multisample",
                    g_multisample_enabled, CFG_DEFAULT_MULTISAMPLE);
@@ -749,7 +749,7 @@ int main() {
         /* The dimensional light table is app-owned now; its slot ids are
          * seeded by glr_state defaults and restored by
          * glr_state_render_reset_defaults (positions/colors come from the
-         * controller's scene_lights_apply_theme). The REPL render reset
+         * controller's render3d_lights_apply_theme). The REPL render reset
          * only zeroes the enable bitmask + clear_color. */
         ASSERT_INT("render reset light id", (int)g_lights[0].id, GL_LIGHT0);
         ASSERT_TRUE("render reset clear color r", g_clear_color[0] == 0.10f);
@@ -1083,12 +1083,12 @@ int main() {
         ASSERT_INT("count unchanged after oversized key",
                    repl_config_bag_count(&bag), 1);
 
-        /* REPL_CFG_VALUE_MAX = 32, so a 36-char value is 4 over the
+        /* REPL_CFG_VALUE_MAX = 40, so a 44-char value is 4 over the
          * limit. The width was bumped from 16 to 32 to fit symbolic
-         * enum names like "SCENE_BACKDROP_CITY_AND_STARS". */
+         * enum names like "RENDER3D_BACKDROP_CITY_AND_STARS", and then to 40. */
         char long_value[64];
         memset(long_value, 'v', sizeof(long_value) - 1);
-        long_value[36] = '\0';
+        long_value[44] = '\0';
         ASSERT_INT("set fail: oversized value returns 0",
                    repl_config_bag_set(&bag, "axes", long_value), 0);
         ASSERT_INT("count unchanged after oversized value",

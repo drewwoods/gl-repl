@@ -99,10 +99,10 @@ static int hidden_lines_begin_mode_writes_fill_depth(GLenum mode) {
     }
 }
 
-static int hidden_lines_is_wireframe_purpose(SceneExecutePurpose purpose) {
-    return purpose == SCENE_EXEC_WIREFRAME_HIDDEN_LINES ||
-           purpose == SCENE_EXEC_WIREFRAME_DEPTH_FILL ||
-           purpose == SCENE_EXEC_WIREFRAME_VISIBLE_LINES;
+static int hidden_lines_is_wireframe_purpose(Render3dExecutePurpose purpose) {
+    return purpose == RENDER3D_EXEC_WIREFRAME_HIDDEN_LINES ||
+           purpose == RENDER3D_EXEC_WIREFRAME_DEPTH_FILL ||
+           purpose == RENDER3D_EXEC_WIREFRAME_VISIBLE_LINES;
 }
 
 static int hidden_lines_is_tess_cmd(CmdType type) {
@@ -204,14 +204,14 @@ static int hidden_lines_cursor_owns_cmd(CmdType type) {
 }
 
 void hidden_lines_execute(const HiddenLinesRenderContext *ctx,
-                          SceneExecutePurpose purpose) {
+                          Render3dExecutePurpose purpose) {
     ReplExecutionOptions options = {0};
     ReplExecCursor cursor;
     const GLCmd *cmd;
     int cmd_count;
     int tess_depth = 0;
     int skipping_non_fill_begin = 0;
-    int depth_fill = purpose == SCENE_EXEC_WIREFRAME_DEPTH_FILL;
+    int depth_fill = purpose == RENDER3D_EXEC_WIREFRAME_DEPTH_FILL;
 
     if (!ctx || !hidden_lines_is_wireframe_purpose(purpose))
         return;

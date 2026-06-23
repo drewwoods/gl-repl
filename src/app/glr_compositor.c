@@ -3,7 +3,7 @@
  *
  * Whole-frame post-processing hook. The chromatic-aberration effect is
  * delegated to the scene layer's fixed-function primitive
- * (scene_postprocess_filter_render), invoked over the full window rect
+ * (render3d_postprocess_filter_render), invoked over the full window rect
  * instead of the scene viewport rect. That primitive captures the named
  * rect from the back buffer into a texture and redraws it with the R/B
  * channel shifts, so handing it the whole window applies the same effect
@@ -19,12 +19,12 @@
 
 #include "render3d/postprocess_filter.h"
 
-void glr_compositor_postprocess_frame(ScenePostFilterMode mode,
+void glr_compositor_postprocess_frame(Render3dPostFilterMode mode,
                                       int win_w, int win_h) {
-    if (mode <= SCENE_POST_FILTER_OFF || mode >= SCENE_POST_FILTER_COUNT)
+    if (mode <= RENDER3D_POST_FILTER_OFF || mode >= RENDER3D_POST_FILTER_COUNT)
         return;
     if (win_w <= 0 || win_h <= 0)
         return;
 
-    scene_postprocess_filter_render(mode, 0, 0, win_w, win_h);
+    render3d_postprocess_filter_render(mode, 0, 0, win_w, win_h);
 }

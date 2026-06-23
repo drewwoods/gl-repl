@@ -8,8 +8,8 @@
  *
  * Label tables and render data keyed by these enums must stay in enum order.
  */
-#ifndef SCENE_THEMES_H
-#define SCENE_THEMES_H
+#ifndef RENDER3D_THEMES_H
+#define RENDER3D_THEMES_H
 
 /* X-macro lists drive the enum *and* any cfg-symbol string table that
  * needs to round-trip the value name (see cfg_grid_theme_symbols et al.
@@ -36,7 +36,7 @@
 typedef enum {
     GRID_THEME_LIST(GRID_THEME_ENUM_ENTRY)
     GRID_THEME_COUNT
-} SceneGridTheme;
+} Render3dGridTheme;
 
 #define AXES_THEME_LIST(X) \
     X(OFF, "OFF")          \
@@ -53,9 +53,9 @@ typedef enum {
 typedef enum {
     AXES_THEME_LIST(AXES_THEME_ENUM_ENTRY)
     AXES_THEME_COUNT
-} SceneAxesTheme;
+} Render3dAxesTheme;
 
-#define SCENE_BACKDROP_LIST(X) \
+#define RENDER3D_BACKDROP_LIST(X) \
     X(OFF, "Off")              \
     X(CITYSCAPE, "Cityscape")  \
     X(STARS, "Stars")          \
@@ -67,13 +67,13 @@ typedef enum {
     X(SNOWFALL, "Snowfall")    \
     X(POLAR_DAY_SNOW, "Polar Day+Snow")
 
-#define SCENE_BACKDROP_ENUM_ENTRY(name, str) SCENE_BACKDROP_##name,
-#define SCENE_BACKDROP_NAME_ENTRY(name, str) [SCENE_BACKDROP_##name] = str,
+#define RENDER3D_BACKDROP_ENUM_ENTRY(name, str) RENDER3D_BACKDROP_##name,
+#define RENDER3D_BACKDROP_NAME_ENTRY(name, str) [RENDER3D_BACKDROP_##name] = str,
 
 typedef enum {
-    SCENE_BACKDROP_LIST(SCENE_BACKDROP_ENUM_ENTRY)
-    SCENE_BACKDROP_COUNT
-} SceneBackdropMode;
+    RENDER3D_BACKDROP_LIST(RENDER3D_BACKDROP_ENUM_ENTRY)
+    RENDER3D_BACKDROP_COUNT
+} Render3dBackdropMode;
 
 /* Lighting environment preset. DEFAULT is the classic three-coloured-key
  * + disabled rim layout. HEADLIGHT places light 0 in eye space (at the
@@ -82,7 +82,7 @@ typedef enum {
  * geometry orbits a single central source — useful for solar-system /
  * planet renders. STUDIO is the three-point portrait rig (warm-white key,
  * cool-blue rim, warm-orange fill) plus a green directional accent,
- * mirroring the tools/scene_demo lighting. NEON is a vibrant saturated
+ * mirroring the tools/render3d_demo lighting. NEON is a vibrant saturated
  * triad (magenta key, cyan rim, lime fill) plus a dim warm back light,
  * for showing off colored materials. As with every theme, all four
  * slots ship `.enabled = 0` — a theme only defines each light's
@@ -101,10 +101,10 @@ typedef enum {
 typedef enum {
     LIGHT_THEME_LIST(LIGHT_THEME_ENUM_ENTRY)
     LIGHT_THEME_COUNT
-} SceneLightTheme;
+} Render3dLightTheme;
 
 /* Grid major-tick spacing index. The actual float values live in a table
- * the controller passes through SceneRenderConfig.grid_major_steps. */
+ * the controller passes through Render3dRenderConfig.grid_major_steps. */
 #define GRID_MAJOR_LIST(X) \
     X(1, "1")              \
     X(2, "2")              \
@@ -117,10 +117,10 @@ typedef enum {
 typedef enum {
     GRID_MAJOR_LIST(GRID_MAJOR_ENUM_ENTRY)
     GRID_MAJOR_COUNT
-} SceneGridMajor;
+} Render3dGridMajor;
 
 /* Grid half-extent from origin along each axis. Values live in
- * SceneRenderConfig.grid_extents and must match this enum order. */
+ * Render3dRenderConfig.grid_extents and must match this enum order. */
 #define GRID_EXTENT_LIST(X) \
     X(CLOSE, "Close")       \
     X(MID, "Mid")           \
@@ -132,13 +132,13 @@ typedef enum {
 typedef enum {
     GRID_EXTENT_LIST(GRID_EXTENT_ENUM_ENTRY)
     GRID_EXTENT_COUNT
-} SceneGridExtent;
+} Render3dGridExtent;
 
 /* Grid line-brightness multiplier index. The default grid-line alphas are
  * deliberately faint (minor lines ~0.03..0.12); this scales them so a
  * grid can be dialed up (or down) for contrast against the backdrop. The
  * actual multiplier values live in the controller (glr_ctrl.c), resolved
- * into SceneRenderConfig.grid_brightness — NORMAL == 1.0 (no change). */
+ * into Render3dRenderConfig.grid_brightness — NORMAL == 1.0 (no change). */
 #define GRID_BRIGHTNESS_LIST(X) \
     X(DIM,    "Dim")            \
     X(NORMAL, "Normal")         \
@@ -151,6 +151,6 @@ typedef enum {
 typedef enum {
     GRID_BRIGHTNESS_LIST(GRID_BRIGHTNESS_ENUM_ENTRY)
     GRID_BRIGHTNESS_COUNT
-} SceneGridBrightness;
+} Render3dGridBrightness;
 
-#endif /* SCENE_THEMES_H */
+#endif /* RENDER3D_THEMES_H */

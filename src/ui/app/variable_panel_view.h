@@ -7,7 +7,7 @@
  * or ui/app/layout / ui/app/state directly. This app-layer helper bakes the
  * scene rect, statusbar inset, and code-panel-at-top flag into that view so
  * the subsystem stays linkable from {ui/core, config} alone. It is the
- * 2D-panel analogue of glr_ctrl building SceneRenderConfig.
+ * 2D-panel analogue of glr_ctrl building Render3dRenderConfig.
  */
 #ifndef UI_APP_VARIABLE_PANEL_VIEW_H
 #define UI_APP_VARIABLE_PANEL_VIEW_H

@@ -125,12 +125,12 @@ const ReplExportCameraBridge *repl_export_camera_bridge(void);
  * glMatrixMode(GL_MODELVIEW) is dynamic: it must reproduce whatever
  * projection the scene is currently applying (perspective in 3D, ortho
  * in 2D). src/repl/export.c is GL-free, so the controller installs a
- * bridge whose implementation reads scene_get_active_projection() and
+ * bridge whose implementation reads render3d_get_active_projection() and
  * formats the lines. The g_footer_pre_init slot for those lines holds
  * REPL_EXPORT_RESHAPE_PROJ_SENTINEL; every consumer (file writer and the
  * live code panel) expands it through repl_export_reshape_projection_lines()
  * so the saved file and the panel always agree. No bridge installed (the
- * scene_demo, tests) => the canonical perspective default. */
+ * render3d_demo, tests) => the canonical perspective default. */
 #define REPL_EXPORT_PROJ_LINES    4
 #define REPL_EXPORT_PROJ_LINE_MAX 96
 #define REPL_EXPORT_RESHAPE_PROJ_SENTINEL "\x01@reshape-projection"
@@ -153,7 +153,7 @@ void                              repl_export_install_projection_bridge(const Re
  * presentation state owned by the app shell (GlrRenderState.lights, seeded
  * from a scene light theme). src/repl/export.c is scene/app-free, so the
  * controller installs a bridge that copies the live per-slot values into this
- * neutral float struct. No bridge installed (scene_demo, tests) => the
+ * neutral float struct. No bridge installed (render3d_demo, tests) => the
  * exporter emits zeroed/disabled lights. This carries only the dimensional
  * fields; whether a slot is *enabled* is decided by the program's own
  * glEnable(GL_LIGHTn) in display(), so the export bootstrap disables every
@@ -223,11 +223,11 @@ extern const char  *g_footer_post_init[];
  * Callers that do not have a viewport on hand (LRU evict in
  * src/repl/scenes.c, headless tests, the standalone repl_demo which does
  * not export) may pass NULL. The export call sites then use
- * defensive defaults: scene_w / scene_h fall back to 800x600 in the
+ * defensive defaults: render3d_w / render3d_h fall back to 800x600 in the
  * exported display() boilerplate. */
 struct ReplExportLayout {
-    int scene_w;
-    int scene_h;
+    int render3d_w;
+    int render3d_h;
 };
 #ifndef REPL_EXPORT_LAYOUT_DECLARED
 #define REPL_EXPORT_LAYOUT_DECLARED

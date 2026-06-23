@@ -2,24 +2,24 @@
  * lights.c - scene light setup and visible light indicators.
  */
 #include "lights.h"
-#include "overlays.h"     /* scene_draw_bitmap_text */
+#include "overlays.h"     /* render3d_draw_bitmap_text */
 #include "palette.h"
 #include "config.h"
-#include "occluded_ghost.h"  /* SCENE_OCCLUDED_GHOST_STIPPLE */
+#include "occluded_ghost.h"  /* RENDER3D_OCCLUDED_GHOST_STIPPLE */
 #include "gl_includes.h"  /* glColor4f, glutBitmapCharacter (avoid transitive deps) */
 #include <math.h>
 #include <stdio.h>
 #include <string.h>       /* memcpy for theme apply */
 
-static void scene_lights_push_state(void) {
+static void render3d_lights_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 }
 
-static void scene_lights_pop_state(void) {
+static void render3d_lights_pop_state(void) {
     glPopAttrib();
 }
 
-void scene_lights_init_global_ambient(void) {
+void render3d_lights_init_global_ambient(void) {
     /* Bucket-2 carve-out: a lighting *coefficient* (glLightModelfv),
      * not a glColor* draw color, so it is intentionally a named local
      * const and NOT a scene/palette.h token. */
@@ -40,9 +40,9 @@ void scene_lights_init_global_ambient(void) {
  *
  * `.pos_is_eye_space` is 1 for slots whose POSITION must be set at
  * identity modelview (currently only HEADLIGHT slot 0); the runtime
- * pushes those positions in scene_render_init_gl, and the exporter
+ * pushes those positions in render3d_init_gl, and the exporter
  * routes their POSITION line to init() instead of display(). */
-static const SceneLight g_light_themes[LIGHT_THEME_COUNT][MAX_LIGHTS] = {
+static const Render3dLight g_light_themes[LIGHT_THEME_COUNT][MAX_LIGHTS] = {
     /* DEFAULT: warm key + cool fill + orange rim + disabled directional.
      * Matches the historical 4-light layout. */
     [LIGHT_THEME_DEFAULT] = {
@@ -117,10 +117,10 @@ static const SceneLight g_light_themes[LIGHT_THEME_COUNT][MAX_LIGHTS] = {
             { 0.01f, 0.01f, 0.02f, 1.0f },
             { 0.08f, 0.08f, 0.10f, 1.0f } },
     },
-    /* STUDIO: the three-point portrait rig from tools/scene_demo.c —
+    /* STUDIO: the three-point portrait rig from tools/render3d_demo.c —
      * warm-white key (upper right), cool-blue rim (upper left), warm-
      * orange fill (lower right), and a green directional accent from
-     * below/back. Colors lifted verbatim from scene_demo's seed_lights. */
+     * below/back. Colors lifted verbatim from render3d_demo's seed_lights. */
     [LIGHT_THEME_STUDIO] = {
         { GL_LIGHT0, 0, 0,
             {  5.0f,  6.0f,  4.0f, 1.0f },
@@ -171,11 +171,11 @@ static const SceneLight g_light_themes[LIGHT_THEME_COUNT][MAX_LIGHTS] = {
     },
 };
 
-const char *scene_light_theme_names[] = {
+const char *render3d_light_theme_names[] = {
     LIGHT_THEME_LIST(LIGHT_THEME_NAME_ENTRY)
 };
 
-void scene_lights_apply_theme(SceneLight out[MAX_LIGHTS], int theme) {
+void render3d_lights_apply_theme(Render3dLight out[MAX_LIGHTS], int theme) {
     if (theme < 0 || theme >= LIGHT_THEME_COUNT)
         theme = LIGHT_THEME_DEFAULT;
     memcpy(out, g_light_themes[theme], sizeof(g_light_themes[theme]));
@@ -184,9 +184,9 @@ void scene_lights_apply_theme(SceneLight out[MAX_LIGHTS], int theme) {
 
 /* Set light properties only. User REPL commands still decide whether each
  * light is enabled during command execution. */
-void scene_lights_setup(const SceneFrameRenderContext *frame_ctx) {
+void render3d_lights_setup(const Render3dFrameRenderContext *frame_ctx) {
     for (int i = 0; i < MAX_LIGHTS; i++) {
-        const SceneLight *light = &frame_ctx->config.lights[i];
+        const Render3dLight *light = &frame_ctx->config.lights[i];
         glDisable(light->id);
         if (light->pos_is_eye_space) {
             /* glLightfv(POSITION) snapshots the current modelview at
@@ -210,11 +210,11 @@ void scene_lights_setup(const SceneFrameRenderContext *frame_ctx) {
 }
 
 /* Camera origin in world coordinates, derived from the camera fields
- * SceneRenderConfig carries. Lets scene_lights_render draw indicators
+ * Render3dRenderConfig carries. Lets render3d_lights_render draw indicators
  * for eye-space slots at the actual camera position instead of (0,0,0).
  * Matches the forward modelview chain in glr_camera_load_modelview:
  *   T(0,0,-cam_dist) * Rx(cam_rx) * Ry(cam_ry) * T(-cam_tx,-cam_ty,-cam_tz). */
-static void scene_lights_camera_world_pos(const SceneRenderConfig *cfg,
+static void render3d_lights_camera_world_pos(const Render3dRenderConfig *cfg,
                                           float *out_x, float *out_y, float *out_z) {
     const float deg = 3.14159265358979323846f / 180.0f;
     float cx = cosf(cfg->cam_rx * deg), sx = sinf(cfg->cam_rx * deg);
@@ -224,10 +224,10 @@ static void scene_lights_camera_world_pos(const SceneRenderConfig *cfg,
     *out_z = cfg->cam_tz + cfg->cam_dist * cx * cy;
 }
 
-void scene_lights_render(const SceneFrameRenderContext *frame_ctx) {
+void render3d_lights_render(const Render3dFrameRenderContext *frame_ctx) {
     if (!frame_ctx->config.show_light_indicators) return;
 
-    scene_lights_push_state();
+    render3d_lights_push_state();
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
@@ -236,10 +236,10 @@ void scene_lights_render(const SceneFrameRenderContext *frame_ctx) {
     float breath = sinf(frame_ctx->config.anim_time * 1.2f) * 0.5f + 0.5f;
 
     float cam_wx = 0.0f, cam_wy = 0.0f, cam_wz = 0.0f;
-    scene_lights_camera_world_pos(&frame_ctx->config, &cam_wx, &cam_wy, &cam_wz);
+    render3d_lights_camera_world_pos(&frame_ctx->config, &cam_wx, &cam_wy, &cam_wz);
 
     for (int i = 0; i < MAX_LIGHTS; i++) {
-        const SceneLight *light = &frame_ctx->config.lights[i];
+        const Render3dLight *light = &frame_ctx->config.lights[i];
         const float *d = light->diffuse;
         const float *p = light->pos;
         int eye_space = light->pos_is_eye_space;
@@ -283,13 +283,13 @@ void scene_lights_render(const SceneFrameRenderContext *frame_ctx) {
 
             glPointSize(3.0f);
             glBegin(GL_POINTS);
-            scene_clr_a(SCENE_CLR_LIGHT_CORE, 0.9f * glow);
+            render3d_clr_a(RENDER3D_CLR_LIGHT_CORE, 0.9f * glow);
             glVertex3f(lx, ly, lz);
             glEnd();
 
             if (is_dir) {
                 glEnable(GL_LINE_STIPPLE);
-                glLineStipple(2, SCENE_OCCLUDED_GHOST_STIPPLE);
+                glLineStipple(2, RENDER3D_OCCLUDED_GHOST_STIPPLE);
                 glLineWidth(1.0f);
                 glBegin(GL_LINES);
                 glColor4f(d[0], d[1], d[2], 0.35f * glow);
@@ -323,20 +323,20 @@ void scene_lights_render(const SceneFrameRenderContext *frame_ctx) {
             snprintf(label, sizeof(label), " L%d", i);
             glColor4f(d[0] * 0.7f + 0.3f, d[1] * 0.7f + 0.3f,
                       d[2] * 0.7f + 0.3f, 0.8f);
-            scene_draw_bitmap_text(FONT_SMALL, lx, ly, lz, label);
+            render3d_draw_bitmap_text(FONT_SMALL, lx, ly, lz, label);
         } else {
             glPointSize(6.0f);
             glBegin(GL_POINTS);
-            scene_clr_a(SCENE_CLR_LIGHT_OFF_DOT, 0.3f);
+            render3d_clr_a(RENDER3D_CLR_LIGHT_OFF_DOT, 0.3f);
             glVertex3f(lx, ly, lz);
             glEnd();
 
             float xsz = 0.12f;
             glEnable(GL_LINE_STIPPLE);
-            glLineStipple(1, SCENE_OCCLUDED_GHOST_STIPPLE);
+            glLineStipple(1, RENDER3D_OCCLUDED_GHOST_STIPPLE);
             glLineWidth(1.0f);
             glBegin(GL_LINES);
-            scene_clr_a(SCENE_CLR_LIGHT_OFF_X, 0.45f);
+            render3d_clr_a(RENDER3D_CLR_LIGHT_OFF_X, 0.45f);
             glVertex3f(lx - xsz, ly - xsz, lz);
             glVertex3f(lx + xsz, ly + xsz, lz);
             glVertex3f(lx - xsz, ly + xsz, lz);
@@ -346,14 +346,14 @@ void scene_lights_render(const SceneFrameRenderContext *frame_ctx) {
 
             char label[16];
             snprintf(label, sizeof(label), " L%d off", i);
-            scene_clr_a(SCENE_CLR_LIGHT_OFF_LABEL, 0.45f);
-            scene_draw_bitmap_text(FONT_SMALL, lx, ly, lz, label);
+            render3d_clr_a(RENDER3D_CLR_LIGHT_OFF_LABEL, 0.45f);
+            render3d_draw_bitmap_text(FONT_SMALL, lx, ly, lz, label);
         }
     }
 
-    /* scene_lights_pop_state restores every bit that was mutated above:
+    /* render3d_lights_pop_state restores every bit that was mutated above:
      * point size (GL_POINT_BIT), blend + color (GL_COLOR_BUFFER_BIT /
      * GL_CURRENT_BIT), depth-test enable (GL_DEPTH_BUFFER_BIT), and
      * lighting enable (GL_LIGHTING_BIT). No manual teardown needed. */
-    scene_lights_pop_state();
+    render3d_lights_pop_state();
 }

@@ -19,14 +19,14 @@
  * ghost helpers (render.c, transform_guides.c). Scene-internal, so it
  * lives under src/scene/ rather than at the repo root.
  */
-#ifndef SCENE_OCCLUDED_GHOST_H
-#define SCENE_OCCLUDED_GHOST_H
+#ifndef RENDER3D_OCCLUDED_GHOST_H
+#define RENDER3D_OCCLUDED_GHOST_H
 
 /* Shared glLineStipple pattern for scene-overlay dashed lines and the
  * depth-disabled ghost pass (caller picks the line factor). */
-#define SCENE_OCCLUDED_GHOST_STIPPLE 0x3F3F
+#define RENDER3D_OCCLUDED_GHOST_STIPPLE 0x3F3F
 
 /* Alpha multiplier applied to the ghost pass relative to the solid pass. */
-#define SCENE_OCCLUDED_GHOST_ALPHA   0.4f
+#define RENDER3D_OCCLUDED_GHOST_ALPHA   0.4f
 
-#endif /* SCENE_OCCLUDED_GHOST_H */
+#endif /* RENDER3D_OCCLUDED_GHOST_H */

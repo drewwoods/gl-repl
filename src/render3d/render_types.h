@@ -5,13 +5,13 @@
  * execute callbacks, light descriptors, camera/environment state, theme/fade
  * inputs, and the per-frame derived context wrapper.
  */
-#ifndef SCENE_RENDER_TYPES_H
-#define SCENE_RENDER_TYPES_H
+#ifndef RENDER3D_RENDER_TYPES_H
+#define RENDER3D_RENDER_TYPES_H
 
 #include "themes.h"
-#include "scene_transition.h"   /* SceneXnPhase for the overlay fade fields */
-#include "postprocess_filter.h" /* ScenePostFilterMode */
-#include "gl_includes.h"        /* GLenum for SceneLight.id */
+#include "render3d_transition.h"   /* Render3dXnPhase for the overlay fade fields */
+#include "postprocess_filter.h" /* Render3dPostFilterMode */
+#include "gl_includes.h"        /* GLenum for Render3dLight.id */
 
 #if !defined(APIENTRY)
 #define APIENTRY
@@ -22,7 +22,7 @@
  * only OpenGL/gl.h there) nor in the bundled GL stubs. Define the registry
  * values when absent; guarded so a real glext.h still wins. Consumed by the
  * scene passes that opt into radial fog via
- * SceneRenderConfig.nv_fog_distance_supported (city backdrop, ocean/radar
+ * Render3dRenderConfig.nv_fog_distance_supported (city backdrop, ocean/radar
  * grids). */
 #ifndef GL_FOG_DISTANCE_MODE_NV
 #define GL_FOG_DISTANCE_MODE_NV 0x855A
@@ -37,9 +37,9 @@
  * viewport tint + ice-mist fog colour) and the Polar Day backdrop's
  * horizon stop, so the grid's mist dissolves seamlessly into the sky
  * with no colour seam at the grid extent. */
-#define SCENE_GLACIAL_TINT_R 0.58f
-#define SCENE_GLACIAL_TINT_G 0.74f
-#define SCENE_GLACIAL_TINT_B 0.86f
+#define RENDER3D_GLACIAL_TINT_R 0.58f
+#define RENDER3D_GLACIAL_TINT_G 0.74f
+#define RENDER3D_GLACIAL_TINT_B 0.86f
 
 typedef struct {
     GLenum   id;         /* GL_LIGHT0 .. GL_LIGHT3 */
@@ -47,18 +47,18 @@ typedef struct {
     /* True when pos[] is interpreted in eye (camera-relative) space.
      * The runtime pushes POSITION for these slots once at identity
      * modelview, and the exporter routes their POSITION line to init()
-     * instead of display(). Set by scene_lights_apply_theme based on
+     * instead of display(). Set by render3d_lights_apply_theme based on
      * the chosen theme. */
     int      pos_is_eye_space;
     float    pos[4];     /* xyz + w (0=directional, 1=positional) */
     float    diffuse[4];
     float    ambient[4];
     float    specular[4];
-} SceneLight;
+} Render3dLight;
 
-typedef struct SceneRgba {
+typedef struct Render3dRgba {
     float r, g, b, a;
-} SceneRgba;
+} Render3dRgba;
 
 /* Why the scene is invoking the execute callback this frame.
  * Side-effecting callbacks (audio, RNG advance, dirty-flag writes)
@@ -68,20 +68,20 @@ typedef struct SceneRgba {
  *
  * Renamed from the unused_ placeholder so callers can branch on
  * purpose without changing the function-pointer signature. */
-typedef enum SceneExecutePurpose {
-    SCENE_EXEC_MAIN_FILL = 0,   /* the rendered geometry pass */
-    SCENE_EXEC_DEPTH_PROBE,     /* scene_probe_eye_dist feedback walk */
-    SCENE_EXEC_WIREFRAME_HIDDEN_LINES, /* hidden-line effect: all edges */
-    SCENE_EXEC_WIREFRAME_DEPTH_FILL,   /* hidden-line effect: depth-only fill */
-    SCENE_EXEC_WIREFRAME_VISIBLE_LINES /* hidden-line effect: visible edges */
-} SceneExecutePurpose;
+typedef enum Render3dExecutePurpose {
+    RENDER3D_EXEC_MAIN_FILL = 0,   /* the rendered geometry pass */
+    RENDER3D_EXEC_DEPTH_PROBE,     /* render3d_probe_eye_dist feedback walk */
+    RENDER3D_EXEC_WIREFRAME_HIDDEN_LINES, /* hidden-line effect: all edges */
+    RENDER3D_EXEC_WIREFRAME_DEPTH_FILL,   /* hidden-line effect: depth-only fill */
+    RENDER3D_EXEC_WIREFRAME_VISIBLE_LINES /* hidden-line effect: visible edges */
+} Render3dExecutePurpose;
 
-typedef enum SceneWireframeMode {
-    SCENE_WIREFRAME_OFF = 0,
-    SCENE_WIREFRAME_PLAIN,
-    SCENE_WIREFRAME_HIDDEN,
-    SCENE_WIREFRAME_COUNT
-} SceneWireframeMode;
+typedef enum Render3dWireframeMode {
+    RENDER3D_WIREFRAME_OFF = 0,
+    RENDER3D_WIREFRAME_PLAIN,
+    RENDER3D_WIREFRAME_HIDDEN,
+    RENDER3D_WIREFRAME_COUNT
+} Render3dWireframeMode;
 
 /* Accumulation-buffer effect mode. OFF = single pass (no accum); AA =
  * jitter-the-frustum antialiasing across accum_passes samples; BLUR /
@@ -91,24 +91,24 @@ typedef enum SceneWireframeMode {
  * blurs only camera motion and falls back to AA when the camera is still.
  * For any blur mode the scene renders with jitter 0 (blur and AA jitter are
  * never combined). */
-typedef enum SceneAccumEffect {
-    SCENE_ACCUM_EFFECT_OFF = 0,
-    SCENE_ACCUM_EFFECT_AA,
-    SCENE_ACCUM_EFFECT_BLUR,
-    SCENE_ACCUM_EFFECT_BLUR_CAMERA,
-} SceneAccumEffect;
+typedef enum Render3dAccumEffect {
+    RENDER3D_ACCUM_EFFECT_OFF = 0,
+    RENDER3D_ACCUM_EFFECT_AA,
+    RENDER3D_ACCUM_EFFECT_BLUR,
+    RENDER3D_ACCUM_EFFECT_BLUR_CAMERA,
+} Render3dAccumEffect;
 
 /* True for the motion-blur effect modes (both drive the per-pass hook). */
-#define SCENE_ACCUM_EFFECT_IS_BLUR(e) \
-    ((e) == SCENE_ACCUM_EFFECT_BLUR || (e) == SCENE_ACCUM_EFFECT_BLUR_CAMERA)
+#define RENDER3D_ACCUM_EFFECT_IS_BLUR(e) \
+    ((e) == RENDER3D_ACCUM_EFFECT_BLUR || (e) == RENDER3D_ACCUM_EFFECT_BLUR_CAMERA)
 
 /* Per-call context the scene passes back to the user's geometry
  * callback. Currently a single purpose enum; more frame-derived
  * metadata can land here without changing the function-pointer
  * signature. */
-typedef struct SceneExecuteContext {
-    SceneExecutePurpose purpose;
-} SceneExecuteContext;
+typedef struct Render3dExecuteContext {
+    Render3dExecutePurpose purpose;
+} Render3dExecuteContext;
 
 /* Called by render.c to emit user geometry. May be NULL (geometry
  * is silently skipped; scene background/grid/axes/lights still render).
@@ -116,20 +116,20 @@ typedef struct SceneExecuteContext {
  * the caller stashed when building the config — any REPL state (flat
  * program, current PC, alpha overrides for fade passes, etc.) is the
  * caller's responsibility, carried through user_data. */
-typedef void (*SceneExecuteProgramFn)(const SceneExecuteContext *ctx,
+typedef void (*Render3dExecuteProgramFn)(const Render3dExecuteContext *ctx,
                                       void *user_data);
 
-typedef struct SceneFocusVertex {
+typedef struct Render3dFocusVertex {
     float pos[3];
     int valid;
-} SceneFocusVertex;
+} Render3dFocusVertex;
 
 /* Snapshot of all per-frame inputs that helper renderers need to read
  * without sampling globals again.  render.c fills this once at frame
  * start, then passes it to grid/axes/overlay helpers. */
-typedef struct SceneRenderConfig {
+typedef struct Render3dRenderConfig {
     /* --- Execute hook --- */
-    SceneExecuteProgramFn execute_fn;          /* NULL = no geometry */
+    Render3dExecuteProgramFn execute_fn;          /* NULL = no geometry */
     void                 *execute_user_data;
 
     /* --- Optional post-fill hook ---
@@ -159,16 +159,16 @@ typedef struct SceneRenderConfig {
 
     /* --- Scene viewport rectangle (the region the scene helpers
      *     render into; the window viewport may be larger). --- */
-    int scene_x;
-    int scene_y;
-    int scene_w;
-    int scene_h;
+    int render3d_x;
+    int render3d_y;
+    int render3d_w;
+    int render3d_h;
 
     /* --- Camera state (read-only inputs) ---
      * The actual modelview transform is no longer applied by the scene module —
-     * callers populate GL_MODELVIEW themselves before scene_render_3d_scene()
+     * callers populate GL_MODELVIEW themselves before render3d_draw_scene()
      * (the controller uses glr_camera_load_modelview from src/app/glr_camera.h;
-     * scene_demo inlines the matrix calls). These fields are still passed in
+     * render3d_demo inlines the matrix calls). These fields are still passed in
      * because grid/axes themes orient themselves to camera angle, the
      * orbit-target gizmo is sized by cam_dist, and the gizmo position comes
      * from cam_tx/ty/tz. */
@@ -189,7 +189,7 @@ typedef struct SceneRenderConfig {
     int multisample_enabled;
     int line_smooth_enabled;
     int use_accum;          /* accumulation buffer available (--noaccum gate) */
-    int accum_effect;       /* SceneAccumEffect: OFF / AA / BLUR */
+    int accum_effect;       /* Render3dAccumEffect: OFF / AA / BLUR */
     int accum_passes;       /* resolved sample count: 1,2,4,8,12,16 */
     int use_accum_aa_scissors; /* scissor the accum loop to the scene rect
                                 * (skip the dead region under the code panel).
@@ -205,21 +205,21 @@ typedef struct SceneRenderConfig {
      * and for non-REPL callers (BLUR then degrades to the AA jitter path). */
     /* clang-format off — keep on one line so the flat-view pointer guard
      * skips this function pointer (it ignores lines containing "(*"). */
-    void (*setup_subframe_fn)(void *user_data, int pass_idx, int pass_count, struct SceneRenderConfig *pass_config);
+    void (*setup_subframe_fn)(void *user_data, int pass_idx, int pass_count, struct Render3dRenderConfig *pass_config);
     void  *setup_subframe_user_data;
 
     /* --- Lighting --- */
     int        user_lighting_enabled;
-    SceneLight lights[MAX_LIGHTS];
+    Render3dLight lights[MAX_LIGHTS];
     int        show_light_indicators;
 
     /* --- Environment --- */
-    SceneBackdropMode backdrop_mode;
+    Render3dBackdropMode backdrop_mode;
     /* Runtime point-parameter capability plus the loaded entry point,
      * mirrored from glr_ctrl_init_gl via the REPL executor. The
      * backdrop uses the proc to reset GL_POINT_DISTANCE_ATTENUATION
      * without taking a scene-layer dependency on REPL/controller code.
-     * Non-REPL callers (scene_demo) leave both zero via memset — the
+     * Non-REPL callers (render3d_demo) leave both zero via memset — the
      * safe default: never call the entry point unless a caller has
      * confirmed support and supplied a callable proc. */
     int point_parameter_supported;
@@ -231,13 +231,13 @@ typedef struct SceneRenderConfig {
      * (GL_EYE_RADIAL_NV) so their fringes stop swimming as the camera
      * orbits. Scoped per-pass and confined by each pass's
      * GL_ALL_ATTRIB_BITS (GL_FOG_BIT) push/pop, so the eye-plane-tuned
-     * themes are untouched. 0 for non-detecting callers (scene_demo) via
+     * themes are untouched. 0 for non-detecting callers (render3d_demo) via
      * memset — the safe default. */
     int nv_fog_distance_supported;
     /* Experimental scene-viewport post-processing.
      * Runtime-only (Ctrl+N); never persisted via @cfg. */
-    ScenePostFilterMode post_filter_mode;
-    SceneWireframeMode wireframe;
+    Render3dPostFilterMode post_filter_mode;
+    Render3dWireframeMode wireframe;
 
     /* --- Grid and axes ---
      * grid_theme/axes_theme are the *effective* (machine `current`)
@@ -253,29 +253,29 @@ typedef struct SceneRenderConfig {
      * stays observable. */
     int          grid_theme;
     float        grid_opacity;
-    SceneXnPhase grid_xn_phase;   /* RESERVED — see comment above */
+    Render3dXnPhase grid_xn_phase;   /* RESERVED — see comment above */
     int          grid_extent_idx;
     int          grid_major_idx;
     int          axes_theme;
     float        axes_opacity;
-    SceneXnPhase axes_xn_phase;   /* RESERVED — see comment above */
+    Render3dXnPhase axes_xn_phase;   /* RESERVED — see comment above */
     float grid_major_steps[GRID_MAJOR_COUNT];
     float grid_extents[GRID_EXTENT_COUNT];
 
     /* --- Focus marker (currently forwarded for tests / future grid use) --- */
-    SceneFocusVertex focus;
+    Render3dFocusVertex focus;
 
     /* --- Visual scaling --- */
     float alpha_scale; /* alpha boost to counter dark-bg crush; 1.0 = no change */
     float grid_brightness; /* user grid-line alpha multiplier (Grid brightness cfg); 1.0 = no change */
-} SceneRenderConfig;
+} Render3dRenderConfig;
 
 /* Derived state that helper renderers should consume instead of recomputing
- * from globals. Wraps the snapshot SceneRenderConfig so helpers can be
+ * from globals. Wraps the snapshot Render3dRenderConfig so helpers can be
  * extended with frame-derived fields here without changing every
  * helper's parameter list. */
-typedef struct SceneFrameRenderContext {
-    SceneRenderConfig config;
-} SceneFrameRenderContext;
+typedef struct Render3dFrameRenderContext {
+    Render3dRenderConfig config;
+} Render3dFrameRenderContext;
 
-#endif /* SCENE_RENDER_TYPES_H */
+#endif /* RENDER3D_RENDER_TYPES_H */

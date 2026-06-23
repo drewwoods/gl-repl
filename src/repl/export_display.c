@@ -601,8 +601,8 @@ static void emit_export_display_tail(FILE *f, const ExportNeeds *needs,
      * 800x600 when dimensions aren't available (headless / demo export).
      * Read from the explicit ReplExportLayout struct rather than
      * calling ui_layout_scene_rect directly (implemented in step 7c). */
-    int sw = layout ? layout->scene_w : 0;
-    int sh = layout ? layout->scene_h : 0;
+    int sw = layout ? layout->render3d_w : 0;
+    int sh = layout ? layout->render3d_h : 0;
     if (sw <= 0) sw = 800;
     if (sh <= 0) sh = 600;
     emit_footer_post_init(f, sw, sh);

@@ -29,8 +29,8 @@ enum {
  * bar — the shape the app actually produces. */
 static UiOverlayLayoutIn base_inputs(void) {
     UiOverlayLayoutIn in;
-    in.scene_x = 300; in.scene_y = 0;
-    in.scene_w = 700; in.scene_h = 600;
+    in.render3d_x = 300; in.render3d_y = 0;
+    in.render3d_w = 700; in.render3d_h = 600;
     in.bottom_inset = 22;
     in.band_h = 0;
     in.prefer_top_on_overflow = 0;
@@ -174,7 +174,7 @@ int main(void) {
      *     spills instead of overlapping. --- */
     {
         UiOverlayLayoutIn in = base_inputs();
-        in.panels[UI_OVERLAY_PANEL_VARIABLE].h = 700;  /* > scene_h */
+        in.panels[UI_OVERLAY_PANEL_VARIABLE].h = 700;  /* > render3d_h */
         int x[UI_OVERLAY_PANEL_COUNT], y[UI_OVERLAY_PANEL_COUNT];
         ui_overlay_layout_solve(&in, x, y);
         AI("degenerate: oversized panel parks at the inset",
@@ -191,13 +191,13 @@ int main(void) {
     }
 
     /* --- Top-docked code panel: the scene rect is the short band below it
-     *     (scene_y = 0, scene_h = window_h - code_panel_h). The stack must
+     *     (render3d_y = 0, render3d_h = window_h - code_panel_h). The stack must
      *     stay inside that band — spilling sideways rather than climbing
      *     into the code panel above. --- */
     {
         UiOverlayLayoutIn in = base_inputs();
-        in.scene_x = 0; in.scene_y = 0;
-        in.scene_w = 1000; in.scene_h = 280;   /* short band below the panel */
+        in.render3d_x = 0; in.render3d_y = 0;
+        in.render3d_w = 1000; in.render3d_h = 280;   /* short band below the panel */
         in.prefer_top_on_overflow = 1;          /* code panel at top */
         int x[UI_OVERLAY_PANEL_COUNT], y[UI_OVERLAY_PANEL_COUNT];
         ui_overlay_layout_solve(&in, x, y);
@@ -206,11 +206,11 @@ int main(void) {
             char label[64];
             snprintf(label, sizeof(label),
                      "top-dock: panel %d below the code panel", id);
-            AT(label, y[id] + in.panels[id].h <= in.scene_y + in.scene_h);
+            AT(label, y[id] + in.panels[id].h <= in.render3d_y + in.render3d_h);
             snprintf(label, sizeof(label),
                      "top-dock: panel %d inside scene x", id);
-            AT(label, x[id] >= in.scene_x &&
-                      x[id] + in.panels[id].w <= in.scene_x + in.scene_w);
+            AT(label, x[id] >= in.render3d_x &&
+                      x[id] + in.panels[id].w <= in.render3d_x + in.render3d_w);
         }
         AI("top-dock: prof spills to its own column",
            y[UI_OVERLAY_PANEL_PROFILE], 22 + BASE_Y);

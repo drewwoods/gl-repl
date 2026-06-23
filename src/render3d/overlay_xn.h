@@ -14,8 +14,8 @@
  * fog_tf is `1 - opacity` — a convenience for synthetic-fog recede
  * passes (grid uses it; axes doesn't, but the field is cheap).
  */
-#ifndef SCENE_OVERLAY_XN_H
-#define SCENE_OVERLAY_XN_H
+#ifndef RENDER3D_OVERLAY_XN_H
+#define RENDER3D_OVERLAY_XN_H
 
 /* Style selects how controller-owned opacity becomes a visual:
  *   GRID_AXES_XN_FADE  plain alpha fade
@@ -32,17 +32,17 @@
 #endif
 
 /* Frequency multiplier for shared grid/axes "breathing" glow:
- * sinf(anim_time * SCENE_BREATH_FREQ) * 0.5 + 0.5. */
-#ifndef SCENE_BREATH_FREQ
-#define SCENE_BREATH_FREQ 0.8f
+ * sinf(anim_time * RENDER3D_BREATH_FREQ) * 0.5 + 0.5. */
+#ifndef RENDER3D_BREATH_FREQ
+#define RENDER3D_BREATH_FREQ 0.8f
 #endif
 
-typedef struct SceneOverlayXn {
+typedef struct Render3dOverlayXn {
     int   draw;     /* 0 = skip the entire pass; opacity hit zero */
     float opacity;  /* clamped 0..1 */
     float alpha;    /* color-alpha multiplier (post-knee under FOG style) */
     float fog_tf;   /* synthetic-fog transition factor: 1 - opacity */
-} SceneOverlayXn;
+} Render3dOverlayXn;
 
 /* style:    GRID_AXES_XN_FADE → alpha = opacity (no knee)
  *           GRID_AXES_XN_FOG  → fog-knee resolve below
@@ -55,10 +55,10 @@ typedef struct SceneOverlayXn {
  *           style only). Per-renderer constant; the resolver doesn't
  *           hard-code it.
  */
-static inline SceneOverlayXn
-scene_overlay_xn_resolve(float opacity, int style,
+static inline Render3dOverlayXn
+render3d_overlay_xn_resolve(float opacity, int style,
                          int uses_own_fog, float fog_alpha_knee) {
-    SceneOverlayXn xn = { 0 };
+    Render3dOverlayXn xn = { 0 };
     if (opacity < 0.0f) opacity = 0.0f;
     if (opacity > 1.0f) opacity = 1.0f;
     xn.opacity = opacity;
@@ -90,4 +90,4 @@ scene_overlay_xn_resolve(float opacity, int style,
     return xn;
 }
 
-#endif /* SCENE_OVERLAY_XN_H */
+#endif /* RENDER3D_OVERLAY_XN_H */

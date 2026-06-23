@@ -47,7 +47,7 @@ static float clamp_head_len(float dlen, float frac, float min_len, float max_len
 
 /* Per-pass alpha multiplier (formerly the file-static
  * g_guide_alpha_mul). The render dispatcher draws each guide twice:
- * a depth-test-off ghost pass at SCENE_OCCLUDED_GHOST_ALPHA (~0.4)
+ * a depth-test-off ghost pass at RENDER3D_OCCLUDED_GHOST_ALPHA (~0.4)
  * so rotated geometry can't fully hide the guide, then a
  * depth-tested solid pass at 1.0 on top. The value is threaded as a
  * parameter through every draw helper so an early-return or
@@ -99,7 +99,7 @@ static void mat4_mul_col_major(const float a[16], const float b[16], float out[1
  * cmds to a fresh identity matrix. Returns the full scene-world frame at the
  * cursor line, so Frame guide mode can account for prior rotations as well as
  * translations. */
-static void compute_before_cursor_matrix(const SceneGuideSnapshot *snapshot,
+static void compute_before_cursor_matrix(const Render3dGuideSnapshot *snapshot,
                                          int cursor_flat_idx,
                                          float out[16]) {
     const GLCmd *flat_cmds = snapshot->flat_program.cmds;
@@ -121,7 +121,7 @@ static void compute_before_cursor_matrix(const SceneGuideSnapshot *snapshot,
  * don't leak). Stops at the first rendering action so transforms that come
  * after an intervening draw don't bleed into the guide. Returns the origin
  * transformed by the accumulated matrix. */
-static void compute_after_cursor_origin(const SceneGuideSnapshot *snapshot,
+static void compute_after_cursor_origin(const Render3dGuideSnapshot *snapshot,
                                         int first_after_idx,
                                         float out[3]) {
     const GLCmd *flat_cmds = snapshot->flat_program.cmds;
@@ -166,7 +166,7 @@ static void xform_axis_color(float x, float y, float z, float out[3]) {
 
 /* Pulse shader for a straight segment in the axes-pulse style: a dim solid
  * base line, a bright dot traveling a→b, and a short trail behind the dot. */
-static void draw_pulse_segment(const SceneGuideSnapshot *snapshot,
+static void draw_pulse_segment(const Render3dGuideSnapshot *snapshot,
                                const float a[3], const float b[3],
                                const float rgb[3], float alpha_mul) {
     float as = snapshot->alpha_scale;
@@ -213,7 +213,7 @@ static void draw_pulse_segment(const SceneGuideSnapshot *snapshot,
  * translate command's vector. Shaft is an axes-pulse-style traveling dot
  * over a dim base line; the solid 4-fin arrowhead at the tip keeps the
  * direction unambiguous. Shaft color is (|tx|,|ty|,|tz|)/max mapped to RGB. */
-static void draw_translate_guide(const SceneGuideSnapshot *snapshot,
+static void draw_translate_guide(const Render3dGuideSnapshot *snapshot,
                                  const GLCmd *cmd, const float p_after[3],
                                  float alpha_mul) {
     float tx = cmd->args[0], ty = cmd->args[1], tz = cmd->args[2];
@@ -321,7 +321,7 @@ static void draw_arrow_head(const float tip[3], const float dir[3], float head_l
  * passes through origin. The non-origin branch is the World-mode variant
  * where p_start is the actual anchor point and the 1.0 reference is p_start
  * itself; at exact scale (1,1,1) only the marker is drawn. */
-static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
+static void draw_scale_guide(const Render3dGuideSnapshot *snapshot,
                              const GLCmd *cmd, const float p_start[3],
                              float alpha_mul) {
     float sx = cmd->args[0], sy = cmd->args[1], sz = cmd->args[2];
@@ -340,7 +340,7 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
 
         float tick = 0.08f;
         glLineWidth(2.0f);
-        scene_clr_a(SCENE_CLR_GUIDE_REF_TICK, 0.9f * alpha_mul);
+        render3d_clr_a(RENDER3D_CLR_GUIDE_REF_TICK, 0.9f * alpha_mul);
         glBegin(GL_LINES);
         glVertex3f(p0[0]-tick, p0[1], p0[2]); glVertex3f(p0[0]+tick, p0[1], p0[2]);
         glVertex3f(p0[0], p0[1]-tick, p0[2]); glVertex3f(p0[0], p0[1]+tick, p0[2]);
@@ -348,7 +348,7 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
         glEnd();
         glPointSize(4.0f);
         glBegin(GL_POINTS);
-        scene_clr_a(SCENE_CLR_GUIDE_REF_POINT, 1.0f * alpha_mul);
+        render3d_clr_a(RENDER3D_CLR_GUIDE_REF_POINT, 1.0f * alpha_mul);
         glVertex3f(p0[0], p0[1], p0[2]);
         glEnd();
         glPointSize(1.0f);
@@ -407,7 +407,7 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
             const float *pb = axes[perp_b[a]];
 
             glLineWidth(1.5f);
-            scene_clr_a(SCENE_CLR_GUIDE_REF,
+            render3d_clr_a(RENDER3D_CLR_GUIDE_REF,
                         fminf(0.45f * snapshot->alpha_scale, 1.0f) * alpha_mul);
             glBegin(GL_LINES);
             glVertex3f(0.0f, 0.0f, 0.0f);
@@ -415,7 +415,7 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
             glEnd();
 
             glLineWidth(2.0f);
-            scene_clr_a(SCENE_CLR_GUIDE_REF_TICK, 0.9f * alpha_mul);
+            render3d_clr_a(RENDER3D_CLR_GUIDE_REF_TICK, 0.9f * alpha_mul);
             glBegin(GL_LINES);
             glVertex3f(ax[0] - pa[0]*tick, ax[1] - pa[1]*tick, ax[2] - pa[2]*tick);
             glVertex3f(ax[0] + pa[0]*tick, ax[1] + pa[1]*tick, ax[2] + pa[2]*tick);
@@ -424,7 +424,7 @@ static void draw_scale_guide(const SceneGuideSnapshot *snapshot,
             glEnd();
             glPointSize(3.0f);
             glBegin(GL_POINTS);
-            scene_clr_a(SCENE_CLR_GUIDE_REF_POINT, 1.0f * alpha_mul);
+            render3d_clr_a(RENDER3D_CLR_GUIDE_REF_POINT, 1.0f * alpha_mul);
             glVertex3f(ax[0], ax[1], ax[2]);
             glEnd();
             glPointSize(1.0f);
@@ -542,7 +542,7 @@ static void build_rotate_helix(float ax, float ay, float az,
 /* Animate a traveling glow dot + trail along arc[0..segs]. Same
  * shape as draw_pulse_segment's straight-line version, but the
  * sample positions are interpolated along the arc segments. */
-static void draw_rotate_pulse(const SceneGuideSnapshot *snapshot,
+static void draw_rotate_pulse(const Render3dGuideSnapshot *snapshot,
                               const float arc[][3], int segs,
                               const float rgb[3], const float bright[3],
                               float alpha_mul) {
@@ -594,7 +594,7 @@ static void draw_rotate_pulse(const SceneGuideSnapshot *snapshot,
     glPointSize(1.0f);
 }
 
-static void draw_rotate_guide(const SceneGuideSnapshot *snapshot,
+static void draw_rotate_guide(const Render3dGuideSnapshot *snapshot,
                               const GLCmd *cmd, const float p_start[3],
                               float alpha_mul) {
     float angle_deg = cmd->args[0];
@@ -683,7 +683,7 @@ static void draw_rotate_guide(const SceneGuideSnapshot *snapshot,
  * committed text. It does NOT compare parsed args between input and
  * source — a future enhancement could (see docs/plans/done/
  * src-scene-code-smell-audit.md #9). */
-static int transform_input_matches_committed(const SceneGuideSnapshot *snapshot) {
+static int transform_input_matches_committed(const Render3dGuideSnapshot *snapshot) {
     const char *source = snapshot->edit_line_committed_text
                          ? snapshot->edit_line_committed_text : "";
     while (*source && isspace((unsigned char)*source)) source++;
@@ -721,7 +721,7 @@ static int transform_input_kind(const char *input, int input_len) {
  * translate/rotate (per the requested "assume defaults while typing"
  * behavior). Only type + args are populated — the draw helpers read
  * nothing else. */
-static GLCmd transform_live_cmd(const SceneGuideSnapshot *snapshot, int kind) {
+static GLCmd transform_live_cmd(const Render3dGuideSnapshot *snapshot, int kind) {
     GLCmd c;
     memset(&c, 0, sizeof c);
     c.type = (CmdType)kind;
@@ -748,7 +748,7 @@ static GLCmd transform_live_cmd(const SceneGuideSnapshot *snapshot, int kind) {
  * module and yields flat indices (not deduped source lines) so the renderer
  * can anchor on a specific expansion. The scene module must not depend on
  * repl/core, hence the small re-implementation over the shared GLCmd model. */
-static int collect_inscope_transform_flat_indices(const SceneGuideSnapshot *snapshot,
+static int collect_inscope_transform_flat_indices(const Render3dGuideSnapshot *snapshot,
                                                   int anchor_flat_idx,
                                                   int *out, int out_cap) {
     const GLCmd *cmds = snapshot->flat_program.cmds;
@@ -778,7 +778,7 @@ static int collect_inscope_transform_flat_indices(const SceneGuideSnapshot *snap
  *      draw), else
  *  (b) the nearest in-scope affecting transform before the anchor.
  * Returns the flat index, or -1 when no transform affects the anchor. */
-static int scene_replay_transform_focus_flat_idx(const SceneGuideSnapshot *snapshot,
+static int render3d_replay_transform_focus_flat_idx(const Render3dGuideSnapshot *snapshot,
                                                  int anchor_flat_idx) {
     int inscope[TG_MAX_INSCOPE_XFORMS];
     int n = collect_inscope_transform_flat_indices(snapshot, anchor_flat_idx,
@@ -804,12 +804,12 @@ static int scene_replay_transform_focus_flat_idx(const SceneGuideSnapshot *snaps
     return inscope[0];
 }
 
-int scene_transform_guides_prepare(const SceneGuideSnapshot *snapshot,
-                                   SceneTransformGuidePlan *plan) {
+int render3d_transform_guides_prepare(const Render3dGuideSnapshot *snapshot,
+                                   Render3dTransformGuidePlan *plan) {
     if (!snapshot || !plan)
         return 0;
 
-    *plan = (SceneTransformGuidePlan){
+    *plan = (Render3dTransformGuidePlan){
         .active = 0,
         .consumed = 0,
         .cursor_flat_idx = -1,
@@ -840,7 +840,7 @@ int scene_transform_guides_prepare(const SceneGuideSnapshot *snapshot,
          * a glut solid, which carries no vertex position, works the same way. */
         if (!acmd->valid || !repl_cmd_consumes_current_color(acmd->type))
             return 0;
-        int xform = scene_replay_transform_focus_flat_idx(snapshot, anchor);
+        int xform = render3d_replay_transform_focus_flat_idx(snapshot, anchor);
         if (xform < 0)
             return 0;
         plan->cursor_flat_idx = xform;
@@ -937,8 +937,8 @@ int scene_transform_guides_prepare(const SceneGuideSnapshot *snapshot,
     return 1;
 }
 
-void scene_transform_guides_render_if_due(const SceneGuideSnapshot *snapshot,
-                                          SceneTransformGuidePlan *plan,
+void render3d_transform_guides_render_if_due(const Render3dGuideSnapshot *snapshot,
+                                          Render3dTransformGuidePlan *plan,
                                           int flat_cmd_idx,
                                           const float cam_view[16]) {
     if (!snapshot || !plan || !cam_view)
@@ -973,7 +973,7 @@ void scene_transform_guides_render_if_due(const SceneGuideSnapshot *snapshot,
      * draws in that transform's own frame exactly as the live edit guide does,
      * rather than on the vertex (which already sits post-transform). */
     glPushMatrix();
-    if (snapshot->xform_guide_mode == SCENE_XFORM_GUIDE_FRAME) {
+    if (snapshot->xform_guide_mode == RENDER3D_XFORM_GUIDE_FRAME) {
         float frame[16];
         float guide_mv[16];
         compute_before_cursor_matrix(snapshot, plan->cursor_flat_idx, frame);
@@ -998,8 +998,8 @@ void scene_transform_guides_render_if_due(const SceneGuideSnapshot *snapshot,
         if (pass == 0) {
             glDisable(GL_DEPTH_TEST);
             glEnable(GL_LINE_STIPPLE);
-            glLineStipple(1, SCENE_OCCLUDED_GHOST_STIPPLE);
-            alpha_mul = SCENE_OCCLUDED_GHOST_ALPHA;
+            glLineStipple(1, RENDER3D_OCCLUDED_GHOST_STIPPLE);
+            alpha_mul = RENDER3D_OCCLUDED_GHOST_ALPHA;
         } else {
             glEnable(GL_DEPTH_TEST);
             alpha_mul = 1.0f;
