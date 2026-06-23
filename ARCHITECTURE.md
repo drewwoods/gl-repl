@@ -17,9 +17,17 @@ API. The useful boundary is:
 REPL/editor/app state -> controller-built snapshots -> scene/UI renderers
 ```
 
-`src/app/glr_ctrl.c` is the composition point for frame wiring. Focused REPL
-owners (`compile`, `load`, `normalize`, `reformat`, `bootstrap`,
-`program_query`, `time`, and friends) own the source/program pipeline, while
+Put plainly: the REPL is the dynamic user-programmed geometry. It turns the
+editable text into the live shape being drawn. The scene is the stage around
+that geometry: camera, projection, lights, grid, axes, backdrop, accumulation,
+and guide overlays. The editor and UI are the instrument panel for programming
+the REPL and configuring the scene. The app controller is the frame-time
+coordinator that reads those owned states, builds snapshots, and hands them to
+the renderers.
+
+`src/app/glr_ctrl.c` is that composition point in code. Focused REPL owners
+(`compile`, `load`, `normalize`, `reformat`, `bootstrap`, `program_query`,
+`time`, and friends) own the source/program pipeline, while
 `src/scene/render.c` consumes explicit per-frame config. New work should keep
 that shape: add narrowly owned modules and explicit data handoffs instead of
 recreating a central REPL core bucket or turning `scene_*` into a plugin host.
@@ -65,16 +73,21 @@ globals or call `repl_state_*` APIs directly during rendering.
 
 When a module starts owning mutable REPL state, follow this template:
 
-1. Put the live bytes in `ReplRuntimeState` only if the state is genuinely
-   REPL-language/program state. App-frame presentation and render policy
-   belongs on `glr_state` (`src/app/glr_state.c`), editor document/session
-   state on `EditorState`, and intentional sidecars (undo rings,
-   user-scene slots) stay separate — call those out explicitly rather than
-   folding them into `ReplRuntimeState`. REPL-pipeline TUs must not
-   reach `glr_state` (`check-repl-state-no-glr-state`).
+1. Put the live bytes in
+   [`ReplRuntimeState`](src/repl/state.h#L18) only if the state is
+   genuinely REPL-language/program state. App-frame presentation and render
+   policy belongs on [`glr_state`](src/app/glr_state.h#L2)
+   ([`src/app/glr_state.c`](src/app/glr_state.c)), editor document/session
+   state on [`EditorState`](src/editor/state.h#L175), and intentional
+   sidecars (undo rings, user-scene slots) stay separate — call those out
+   explicitly rather than folding them into `ReplRuntimeState`. REPL-pipeline
+   TUs must not reach `glr_state`
+   ([`check-repl-state-no-glr-state`](Makefile#L1466),
+   [`scripts/check-repl-state-no-glr-state.sh`](scripts/check-repl-state-no-glr-state.sh)).
 2. Add a named runtime slice in `src/repl/state.h`, wire it into
-   `static ReplRuntimeState g_repl_state;`, and say whether the read path is
-   currently `facade-backed`, `direct-runtime`, or `value-getter`.
+   [`static ReplRuntimeState g_repl_state;`](src/repl/state.c#L18), and say
+   whether the read path is currently `facade-backed`, `direct-runtime`, or
+   `value-getter`.
 3. Keep mutations on the owner side. Scene/UI renderers read snapshots only;
    render-time discoveries return through output structs that the controller
    actualizes back into state.
