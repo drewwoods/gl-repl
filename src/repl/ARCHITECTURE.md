@@ -428,7 +428,7 @@ pointer.
 ## 5. The frame flow (flatten → autonormal → execute)
 
 Driven once per frame from the controller via [`pipeline.h`](src/repl/pipeline.h) entry points,
-before the scene renders.
+before render3d renders.
 
 ### 5.1 Autonormal maintenance
 
@@ -576,7 +576,7 @@ completion clear/update, input read, and time-playing toggle.
 
 The export path uses the same pattern with dedicated bridges
 ([`ReplExportLightBridge`](src/repl/export.h#L169), cfg/camera bridges) so [`export.c`](src/repl/export.c) can emit
-live light/config/camera state without including any scene or app
+live light/config/camera state without including any render3d or app
 header — verified by `check-repl-export-via-bridge`.
 
 ---

@@ -11,18 +11,18 @@
 This document describes the current ownership and frame architecture for the
 OpenGL immediate-mode REPL. The project has one frontend: a GLUT app shell that
 hosts a text editor, a REPL language pipeline, and 2D/3D renderers. Because
-there is only one frontend, the useful boundary is not a generic scene-plugin
+there is only one frontend, the useful boundary is not a generic render3d-plugin
 API. The useful boundary is:
 
 ```text
-REPL/editor/app state -> controller-built snapshots -> scene/UI renderers
+REPL/editor/app state -> controller-built snapshots -> render3d/UI renderers
 ```
 
 Put plainly: the REPL is the dynamic user-programmed geometry. It turns the
-editable text into the live shape being drawn. The scene is the stage around
+editable text into the live shape being drawn. The render3d module is the stage around
 that geometry: camera, projection, lights, grid, axes, backdrop, accumulation,
 and guide overlays. The editor and UI are the instrument panel for programming
-the REPL and configuring the scene. The app controller is the frame-time
+the REPL and configuring render3d. The app controller is the frame-time
 coordinator that reads those owned states, builds snapshots, and hands them to
 the renderers.
 
@@ -66,7 +66,7 @@ The main design rule:
 
 ```text
 The REPL owns the user program.
-The scene owns the 3D stage.
+The render3d module owns the 3D stage.
 The UI owns the 2D editor/view.
 The controller translates REPL state into per-frame view inputs.
 ```
@@ -95,7 +95,7 @@ When a module starts owning mutable REPL state, follow this template:
    [`static ReplRuntimeState g_repl_state;`](../src/repl/state.c#L18), and say
    whether the read path is currently `facade-backed`, `direct-runtime`, or
    `value-getter`.
-3. Keep mutations on the owner side. Scene/UI renderers read snapshots only;
+3. Keep mutations on the owner side. Render3d/UI renderers read snapshots only;
    render-time discoveries return through output structs that the controller
    actualizes back into state.
 4. Extend the ownership tests in the same change: keep
@@ -112,18 +112,18 @@ When a module starts owning mutable REPL state, follow this template:
 2. **The executor is the narrow live-GL gate for user geometry.**
    [`src/repl/executor.c`](../src/repl/executor.c) turns a flat program into OpenGL calls. General `repl_*`
    modules should not casually call OpenGL.
-3. **The scene owns the stage, not the editor.** It sets viewport, clear,
+3. **The render3d module owns the stage, not the editor.** It sets viewport, clear,
    projection, camera, accumulation, baseline lighting, grid, axes, backdrop,
    light indicators, orbit target, and 3D overlay passes from config.
 4. **The UI owns screen-space presentation.** UI renderers draw code rows,
    menus, popups, color picker, help, status, and profile views from snapshots
    and route mutations through REPL-owned actions or stores.
-5. **The controller is the mixed layer.** The frame controller builds scene and
+5. **The controller is the mixed layer.** The frame controller builds render3d and
    UI inputs from REPL state, calls the render3d renderer, then calls UI renderers.
    This role belongs in [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c).
 6. **Replay is REPL policy.** Replay state machine, PC, mode, baseline values,
   and fade/highlight decisions belong in `src/subsystems/replay/` (primarily
-  [`replay_playback.c`](../src/subsystems/replay/replay_playback.c), [`replay_fade.c`](../src/subsystems/replay/replay_fade.c), and [`replay.c`](../src/subsystems/replay/replay.c)). Any scene use of
+  [`replay_playback.c`](../src/subsystems/replay/replay_playback.c), [`replay_fade.c`](../src/subsystems/replay/replay_fade.c), and [`replay.c`](../src/subsystems/replay/replay.c)). Any render3d use of
   replay data should be via snapshots or
    documented transitional helpers.
 
@@ -144,7 +144,7 @@ gl_repl.c GLUT display callback
         -> update export/camera strings
         -> build Render3dRenderConfig from REPL state                [PROF_SNAPSHOT_SCENE_CONFIG]
         -> build UiRenderSnapshot from REPL state                 [PROF_SNAPSHOT_UI]
-        -> render3d_draw_scene(&scene_cfg)                      [PROF_SCENE_3D]
+        -> render3d_draw_scene(&render3d_cfg)                      [PROF_RENDER3D_3D]
         -> ui_panels_render_code_panel(&ui_snap)                  [PROF_CODE_PANEL]
         -> ui_*_render(&ui_snap) overlays                         [PROF_UI_PANELS]
         -> ui_profile_panel_render(&ui_snap)
@@ -156,27 +156,27 @@ visible: `PROF_SNAPSHOT` is the aggregate, with sub-sections for
 transformers, highlights, virtual lines, scene config, and ui snapshot
 (see [`src/support/cpuprof.h`](../src/support/cpuprof.h)).
 
-The scene frame consumes the explicit config:
+The render3d frame consumes the explicit config:
 
 ```text
-render3d_draw_scene(&scene_cfg)
+render3d_draw_scene(&render3d_cfg)
   -> set viewport
-  -> resolve and apply clear color from scene_cfg.flat_program
+  -> resolve and apply clear color from render3d_cfg.flat_program
   -> for each accumulation sample:
-       -> prepare Render3dFrameRenderContext from scene_cfg
-       -> apply projection using scene-local jitter
+       -> prepare Render3dFrameRenderContext from render3d_cfg
+       -> apply projection using render3d-local jitter
        -> apply camera and quality flags
        -> set up baseline lighting/material state
        -> execute user geometry through the narrow execution boundary
        -> invoke optional `post_fill_fn` (controller's replay-fade overlay)
        -> render backdrop, grid, axes, orbit target
        -> render REPL-aware 3D overlays from frame snapshots
-       -> render light indicators and other scene foreground helpers
+       -> render light indicators and other render3d foreground helpers
        -> accumulate sample if accumulation AA is active
 ```
 
 The exact ordering may preserve current visuals. The ownership rule still
-holds: the controller prepares the data, the scene decides where stage and
+holds: the controller prepares the data, the render3d module decides where stage and
 overlay passes occur, and the REPL owns the command/replay semantics behind the
 data.
 
@@ -341,7 +341,7 @@ input text
   -> parser
   -> source command store
   -> flatten
-  -> scene config / overlay snapshots
+  -> render3d config / overlay snapshots
   -> executor boundary
 ```
 
@@ -379,9 +379,9 @@ Responsibilities:
 * build [`Render3dRenderConfig`](../src/render3d/render_types.h#L130) and any guide/focus snapshots from REPL state
 * call `render3d_draw_scene(&config)`
 * call UI renderers in the correct order
-* keep profiling section boundaries around scene and UI rendering
+* keep profiling section boundaries around render3d and UI rendering
 
-[`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c) may include both REPL headers and scene/UI headers. Ordinary REPL
+[`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c) may include both REPL headers and render3d/UI headers. Ordinary REPL
 model modules should not.
 
 [`gl_repl.c`](../gl_repl.c) and [`gl_repl.h`](../gl_repl.h) carry the GLUT app entry point and small shared
@@ -476,18 +476,18 @@ entry points, and a context with no timer-query support at all.
 ### Dynamic Reshape Projection (export + code panel)
 
 The exported standalone C file's `reshape()` and the live code panel's
-footer chrome must show the projection the scene is *currently* applying
+footer chrome must show the projection render3d is *currently* applying
 (perspective in 3D, ortho in 2D), not a hardcoded `gluPerspective`. This
 is the canonical pattern for a **per-frame, GL-derived value that becomes
 emitted source text** consumed by GL-free modules. Two cooperating
 mechanisms:
 
-1. **Scene caches what it applied (Tenet 3).**
+1. **Render3d caches what it applied (Tenet 3).**
    `render3d_apply_projection()` writes a jitter-free [`Render3dProjectionDesc`](../src/render3d/render.h#L58)
    into a file static every frame; [`render3d_get_active_projection()`](../src/render3d/render.h#L141) reads
    it. The continuous perspective↔ortho blend is *snapped to the
    dominant side* (`mix < 0.5` ⇒ ortho) because `reshape()` emits one
-   discrete mode, never an interpolated matrix. Scene exposes data; it
+   discrete mode, never an interpolated matrix. Render3d exposes data; it
    does not format text or know about export.
 
 2. **Controller-installed projection bridge** (same shape as
@@ -511,14 +511,14 @@ state and (b) read by more than one consumer in the frame loop:
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
 *opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L135) in
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L113) (snapshot/follow-scroll → scene render →
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L113) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
 that frame — here a 2D/3D switch would let row-count see one
 `gluPerspective(...)` line while render emits two `glOrtho(...)` lines,
 skewing scroll-follow and row hit mapping. "Deterministic within a
 frame" is *not* sufficient — the inputs themselves change mid-frame at
-the scene-render boundary. This is just [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L70)'s existing
+the render3d-render boundary. This is just [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L70)'s existing
 contract ("UI render code reads only from the snapshot") restated for
 the case where the value is computed rather than copied.
 
@@ -542,8 +542,8 @@ Per the rule above:
   `UiRenderSnapshot.reshape_proj_lines/_count`; both panel passes read
   that frozen copy and never touch the resolver. This is the canonical
   shape — UI reads the snapshot only (the symmetric counterpart of
-  [`Render3dRenderConfig`](../src/render3d/render_types.h#L130)). The block is the *previous* frame's scene
-  projection (snapshot is built before scene render); a one-frame text
+  [`Render3dRenderConfig`](../src/render3d/render_types.h#L130)). The block is the *previous* frame's render3d
+  projection (snapshot is built before render3d render); a one-frame text
   lag during a transition is invisible and, crucially, internally
   consistent. snapshot.h hardcodes `UI_RESHAPE_PROJ_LINES/_LINE_MAX`
   for UI-layer purity, with `STATIC_ASSERT` equivalence to the
@@ -551,7 +551,7 @@ Per the rule above:
   the scene-tab dims).
 * **File save (discrete action):** `repl_export_save_output()` calls
   [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L181) directly — a single pass on
-  the Ctrl+S thread, not split across scene render, so it correctly
+  the Ctrl+S thread, not split across render3d render, so it correctly
   captures the projection in effect at save time. (Routing this through
   a controller-owned [`ReplExportLayout`](../src/repl/export.h#L228)-style export context is the
   documented next step if save is ever folded into the frame path.)
@@ -574,7 +574,7 @@ snapshot for the panel, special-case in the consumers.
   snapshot-frozen block. This is the structural backstop for the rule
   above: the mistake fails the build, not just review.
 * `check-repl-export-via-bridge` — [`src/repl/export.c`](../src/repl/export.c) may not include
-  `scene/`/`app/` headers or call `render3d_*`/`glr_*`; it pulls
+  `render3d/`/`app/` headers or call `render3d_*`/`glr_*`; it pulls
   app/render3d-derived values only through controller-installed bridges
   ([`ReplExportProjectionBridge`](../src/repl/export.h#L143), [`ReplExportCameraBridge`](../src/repl/export.h#L84),
   [`ReplConfigBridge`](../src/repl/cfg_baseline.h#L49)). Complements `check-gl-boundaries` (which already
@@ -583,7 +583,7 @@ snapshot for the panel, special-case in the consumers.
 ### 2D Orthographic Scale (GL_FEEDBACK probe + zoom)
 
 An orthographic projection has no inherent scale — unlike perspective,
-moving the camera toward the scene changes nothing on screen. So the 2D
+moving the camera toward the 3D stage changes nothing on screen. So the 2D
 view must *pick* an eye distance whose on-screen size it reproduces, and
 zoom must rescale that pick rather than dolly a camera the projection
 ignores. All of this lives in [`src/render3d/render.c`](../src/render3d/render.c); the controller feeds
@@ -628,7 +628,7 @@ wobble the ortho scale every frame even when the user isn't touching
 anything. Freezing the intrinsic depth-center and adding only the camera
 delta gives zoom-tracking without animation-induced wobble. (The
 non-default `GLR_ORTHO_REF_PERFRAME` knob re-probes every ortho frame and
-accepts the breathing in exchange for tracking live scene motion — even
+accepts the breathing in exchange for tracking live 3D stage motion — even
 that is per-frame, not keyed to zoom.)
 
 **Wheel feel.** Two independent [`config.h`](../config.h) knobs, shared by 2D *and* 3D
@@ -662,7 +662,7 @@ token values (`MESH_PLY_TOK_*`) locally; [`glr_mesh_export.c`](../src/app/glr_me
 a compile error.
 
 **Fixed capture transform → invertible window coords.** The capture pass
-installs a known, scene-independent transform so the pure writer can run
+installs a known, render3d-independent transform so the pure writer can run
 the projection backwards to world space: identity modelview (no camera),
 a containing `glOrtho(-R, R, …)` with `R = 1000` (clips nothing a
 hand-typed scene reaches at ~1e-4 float precision), a `1024²` viewport,
@@ -982,9 +982,9 @@ binding must explicitly read `glutGetModifiers()` /
 [`editor_input_active_modifiers()`](../src/editor/input.h#L67) (as cfg pass A and the code-focus
 router do).
 
-## Scene Render Config
+## Render3d Render Config
 
-[`Render3dRenderConfig`](../src/render3d/render_types.h#L130) is the scene's explicit per-frame input. It may carry
+[`Render3dRenderConfig`](../src/render3d/render_types.h#L130) is the render3d module's explicit per-frame input. It may carry
 REPL-aware data because this sample has one frontend and no plugin-host
 requirement.
 
@@ -996,11 +996,11 @@ backdrop, overlay toggles, replay/HUD layout, grid tables, cursor-block
 metadata, and the [`Render3dFocusVertex`](../src/render3d/render_types.h#L122) / [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L16) snapshots needed by
 3D overlays.
 
-Scene-local accumulation jitter does not live in the config. Derived
+Render3d-local accumulation jitter does not live in the config. Derived
 per-pass data belongs in [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L277), for example camera world height,
 focus vertex, and other values that helper renderers should share.
 
-## Scene Layer
+## Render3d Layer
 
 Render3d modules own 3D rendering and 3D helper visuals.
 
@@ -1008,12 +1008,12 @@ Responsibilities:
 
 * viewport and projection setup
 * camera transform
-* accumulation-buffer sampling with scene-local jitter
-* baseline scene lighting and material state
+* accumulation-buffer sampling with render3d-local jitter
+* baseline 3D lighting and material state
 * grid, axes, backdrop, light indicators, orbit target
 * REPL-aware 3D overlays while they remain under `render3d_*`
 * replay fade rendering owned by the replay peer
-  ([`src/subsystems/replay/replay_render.c`](../src/subsystems/replay/replay_render.c)); the scene calls it as a
+  ([`src/subsystems/replay/replay_render.c`](../src/subsystems/replay/replay_render.c)); render3d calls it as a
   fade pass but does not own the replay GL code
 
 Neutral render3d modules such as [`src/render3d/grid.c`](../src/render3d/grid.c), [`src/render3d/axes.c`](../src/render3d/axes.c),
@@ -1385,14 +1385,14 @@ zeroed token, neutral tokens stable across rows, green accent ==
 
 ## Replay Architecture
 
-Replay is REPL-owned. The scene may render the current visual effect, but it
+Replay is REPL-owned. Render3d may render the current visual effect, but it
 should not own replay policy.
 
 Runtime shape:
 
 * the controller builds a [`ReplayFadePlan`](../src/subsystems/replay/replay_state.h#L53) snapshot once per frame (batches,
   alpha, skip limits, baseline predef values)
-* the scene iterates the snapshot and owns the GL pass orchestration without
+* render3d iterates the snapshot and owns the GL pass orchestration without
   calling `replay_*` or `repl_state_*`
 * accumulation-AA settings are [`Render3dRenderConfig`](../src/render3d/render_types.h#L130) fields set by the controller
 * 2D replay HUD lives in [`src/ui/subsystems/replay_hud.c`](../src/ui/subsystems/replay_hud.c), driven by config fields
@@ -1434,10 +1434,10 @@ src/repl/executor.c GLUT solid shapes (glutSolidCube/Sphere/Torus/Teapot/Cone)
                 than naming GLUT symbols itself.
 ```
 
-### Controller-only scene wiring
+### Controller-only render3d wiring
 
 Ordinary `repl_*` model files should not include `render3d_*.h`.
-[`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c) is the scene/UI frame-rendering exception.
+[`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c) is the render3d/UI frame-rendering exception.
 `check-controller-boundaries` enforces this; cross-layer constants used by
 both layers (e.g. `CFG_DEFAULT_MULTISAMPLE`, `REPL_OUTLINE_POLYGON_OFFSET_*`)
 live in neutral headers ([`src/app/glr_defaults.h`](../src/app/glr_defaults.h), [`config.h`](../config.h),
@@ -1451,7 +1451,7 @@ through controller-installed bridges, guarded by
 [`src/app/glr_actions.c`](../src/app/glr_actions.c) is an app-shell file, so it may legitimately
 include `ui_*` headers.
 
-### Scene state access
+### Render3d state access
 
 Target rule: `render3d_*` files consume [`Render3dRenderConfig`](../src/render3d/render_types.h#L130), [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L277),
 or explicit snapshot structs. They should not call `repl_state_*` directly.
@@ -1478,7 +1478,7 @@ out of the input + render paths;
 `check-color-picker-ui-isolation` and `check-replay-ui-isolation`
 audit the feature-UI prefixes.
 
-### UI / scene independence
+### UI / render3d independence
 
 `ui_*` and `render3d_*` are sibling view layers. They should not include each
 other's headers. Shared render-neutral helpers belong in local shared headers
@@ -1576,7 +1576,7 @@ neutral seam that the full app fills and the demo can leave unset:
 
 Scene-presentation policy and most render config live in the app-side owner
 [`src/app/glr_state.c`](../src/app/glr_state.c) ([`glr_state.h`](../src/app/glr_state.h)). REPL-pipeline TUs do not include
-[`glr_state.h`](../src/app/glr_state.h) (`check-repl-state-no-glr-state`); app / editor / UI / scene
+[`glr_state.h`](../src/app/glr_state.h) (`check-repl-state-no-glr-state`); app / editor / UI / render3d
 code may. Only the REPL-owned render *tail* ([`ReplRenderState`](../src/repl/state_views.h#L100): per-light
 state + clear color) is a REPL slice.
 
@@ -1600,7 +1600,7 @@ All in the `check-state-ownership` gate: `check-repl-demo-no-editor`,
   [`FlatProgramView`](../src/repl/flatten.h#L41) or a snapshot from [`Render3dRenderConfig`](../src/render3d/render_types.h#L130).
 * New 2D UI: `ui_*` renderer plus `repl_*` model/action code if mutation is
   required.
-* New per-frame scene/UI wiring: [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c).
+* New per-frame render3d/UI wiring: [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c).
 * New app lifecycle/window wiring: [`gl_repl.c`](../gl_repl.c) (GLUT entry point).
 * New command mutation: `repl_command_store_*`.
 

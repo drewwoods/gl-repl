@@ -46,7 +46,7 @@ this module with a **non-REPL** geometry callback — a single
 `glutSolidTeapot` — wrapped in a small interactive shell.
 
 ```bash
-make render3d_demo     # opens a window: "scene-module teapot demo"
+make render3d_demo     # opens a window: "render3d teapot demo"
 ./render3d_demo        # drag = orbit/pan, wheel = zoom, ? = on-screen controls
 ```
 
@@ -70,17 +70,17 @@ Inside the full app this is **layer 4** of the ownership map. The controller
 state each frame, then calls [`glr_camera_load_modelview()`](src/app/glr_camera.h#L135) and
 [`render3d_draw_scene()`](src/render3d/render.h#L135) once per accumulation-jitter sample (with its own
 [`Render3dState`](src/render3d/render.h#L95)). The geometry callback is the REPL executor
-(`repl_execute_program`), so the user's typed program becomes the scene's
+(`repl_execute_program`), so the user's typed program becomes the rendered
 geometry.
 
 Render3d renderers **consume snapshots/configs and never read REPL runtime state,
 [`EditorState`](src/editor/state.h#L175), or [`UiState`](src/ui/app/state.h#L20) directly.** The two REPL-aware overlay passes
 under `guides/` (vertex/normal guides at the cursor, transform guides during
 replay) still obey this: the `edit_overlays` peer subsystem
-(`src/subsystems/edit_overlays/`, driven by the controller each frame)
+`src/subsystems/edit_overlays/` (driven by the controller each frame)
 resolves their data into a [`Render3dGuideSnapshot`](src/render3d/guides/guides_shared.h#L16) and passes it in. The camera transform is the
 controller's job — [`render.c`](src/render3d/render.c) only brackets sub-renderer push/pop and
-applies a scene-local frustum shift for jitter.
+applies a render3d-local frustum shift for jitter.
 
 ## File map
 
