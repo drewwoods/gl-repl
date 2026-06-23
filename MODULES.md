@@ -454,6 +454,12 @@ parameters. They must not discover or mutate editor state globally.
 `scene_*` owns the 3D view. Scene renderers consume snapshots/configs and
 never read `ReplState`, `EditorState`, or `UiState` directly.
 
+Naming note: `scene_*` is the current code prefix for the rendered world or
+stage: camera, projection, grid, axes, backdrop, lights, and 3D overlays around
+the user-programmed REPL geometry. It is separate from `repl_scenes`, which owns
+saved user-scene slots and workspace snapshots. If the layer were named from
+scratch, `world_*` or `stage_*` would be more direct.
+
 | Module | Role |
 |--------|------|
 | `src/scene/render` | 3D frame setup: viewport, clear, projection, camera, accumulation loop, user-geometry execution hook |
