@@ -303,6 +303,7 @@ endif
 	check-c99 \
 	check-color-picker-ui-isolation \
 	check-controller-boundaries \
+	check-doc-links \
 	check-domain-owner-encapsulation \
 	check-duplicate-api-decls \
 	check-edit-ops-pure \
@@ -1499,6 +1500,9 @@ check-repl-demo-stubs-shrinking: ## Ratchet on tools/repl_demo/stubs.c — must 
 check-include-style: ## Hard guard: project-local headers must use "X.h", not <X.h>.
 	@bash scripts/check-include-style.sh
 
+check-doc-links: ## Validate local Markdown file links and line anchors.
+	@python3 scripts/check-doc-links.py
+
 check-keymap-no-dup: ## Hard guard: no two keymap.h bindings share a (key, mods) — a double-map.
 	@bash scripts/keymap.sh check
 
@@ -1531,6 +1535,7 @@ check-trailing-whitespace: ## Verify commits since origin/main contain no traili
 
 CHECK_TARGETS = \
 	check-trailing-whitespace \
+	check-doc-links \
 	check-gl-boundaries \
 	check-layer-coupling \
 	check-state-ownership \
