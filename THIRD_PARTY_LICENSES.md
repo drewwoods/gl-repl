@@ -55,9 +55,9 @@ license text, reproduced verbatim from `third_party/freeglut/COPYING`:
 ## miniaudio
 
 - **Upstream:** <https://github.com/mackron/miniaudio>
-- **Vendored at:** `include/miniaudio.h` (single-header library).
+- **Vendored at:** [`include/miniaudio.h`](include/miniaudio.h) (single-header library).
 - **Author:** David Reid (mackron@gmail.com).
 - **License:** dual-licensed — your choice of **public domain (Unlicense)** or
   **MIT No Attribution (MIT-0)**. Neither option legally requires attribution;
   it is acknowledged here as a courtesy. The full text of both license options
-  is at the end of `include/miniaudio.h`.
+  is at the end of [`include/miniaudio.h`](include/miniaudio.h).

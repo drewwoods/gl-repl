@@ -942,7 +942,7 @@ the REPL. Two rules keep the round trip clean:
 > [*Adding A New Command*](ARCHITECTURE.md#adding-a-new-command) in
 > `ARCHITECTURE.md` for the full recipe (command type, spec-table row,
 > executor case, replay annotation, help text, save/load round-trip). To
-> raise the command budget, bump `MAX_COMMANDS` in `config.h` — it is
+> raise the command budget, bump `MAX_COMMANDS` in [`config.h`](config.h) — it is
 > `#ifndef`-guarded, so `-DMAX_COMMANDS=8192` on the compiler command line
 > works without editing the file. Expect proportionally more per-frame work:
 > the flattened program re-executes every frame.

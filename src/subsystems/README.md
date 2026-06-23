@@ -19,7 +19,7 @@ you could add or remove without surgery on the core.
 The defining rule for this directory: a subsystem **owns its state and
 mutates it directly**; the editor does not know the subsystem exists, and
 UI may *render* it but does not own it. Input reaches a subsystem by being
-*routed* to it (by `src/app/glr_ctrl.c`), not by the editor delegating.
+*routed* to it (by [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c)), not by the editor delegating.
 
 Each subsystem lives in its own subdirectory under `src/subsystems/`,
 keeping the per-feature files (state + controller) co-located. The
@@ -28,7 +28,7 @@ subsystems here:
 - **`replay/`** — a step-by-step execution visualizer (a tiny transport:
   play / pause / step, a program counter, speed, and a fade-batch ring
   so old geometry fades as new geometry appears). Its fade-batch GL
-  rendering lives in `replay_render.c`, extracted out of `src/scene/`.
+  rendering lives in [`replay_render.c`](src/subsystems/replay/replay_render.c), extracted out of `src/scene/`.
 - **`variable_panel/`** — floating sliders that scrub the REPL's scalar
   variables, with a log/linear drag transaction that writes the new value
   back into the source line.
@@ -39,20 +39,20 @@ subsystems here:
 - **`edit_overlays/`** — cursor edit-guide + vertex/normal overlay
   orchestration: owns the cursor-guide snapshot and the flat-program walk
   that drives the scene overlay primitives (plus the GL_LINE / GL_POINT
-  outline passes), extracted out of `src/app/glr_ctrl.c`.
+  outline passes), extracted out of [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c).
 - **`hidden_lines/`** — hidden-line wireframe execution: drives the REPL
   execution cursor through the scene renderer's hidden/depth/visible wireframe
   passes while skipping pass-local state commands.
 
 Subsystem file shapes vary: a single co-located file (like
-`color_picker_state.c`), a `*_state.c` storage file plus a `*.c`
+[`color_picker_state.c`](src/subsystems/color_picker/color_picker_state.c)), a `*_state.c` storage file plus a `*.c`
 runner/controller, or a wider multi-file split where the behavior is large
 (`replay/` spans playback / fade / input / render / walkers; `tutorial/`
 spans runner / animation / match). The `*_state.c` always *owns the
 storage* (a small struct with reset and narrow accessors; some peers also
 carry capture/restore for snapshot round-trips).
 
-For subsystems like `variable_panel`, `variable_panel_set_visible` is the canonical public visibility setter for external code, while `variable_panel_state_mut()` provides direct mutable pointers for internal config-mapping. (Per-frame placement easing moved out of the peer: all floating scene panels glide via the overlay layout engine in `src/ui/app/overlay_layout.c`.)
+For subsystems like `variable_panel`, `variable_panel_set_visible` is the canonical public visibility setter for external code, while `variable_panel_state_mut()` provides direct mutable pointers for internal config-mapping. (Per-frame placement easing moved out of the peer: all floating scene panels glide via the overlay layout engine in [`src/ui/app/overlay_layout.c`](src/ui/app/overlay_layout.c).)
 
 ## How it is exercised
 
@@ -60,8 +60,8 @@ These are app features rather than reusable libraries, so there is no
 standalone `subsystems_demo`. They are exercised through the full app and
 by the focused unit tests under `tests/` (e.g. `test_repl_replay`,
 `test_repl_var_drag`, `test_tutorial_runner`). Their *rendering* is done
-by feature-UI in `src/ui/subsystems/` (`replay_hud.c`, `color_picker.c`,
-`variable_panel.c`) reading the per-frame snapshot.
+by feature-UI in `src/ui/subsystems/` ([`replay_hud.c`](src/ui/subsystems/replay_hud.c), [`color_picker.c`](src/ui/subsystems/color_picker.c),
+[`variable_panel.c`](src/ui/subsystems/variable_panel.c)) reading the per-frame snapshot.
 
 ## In the REPL app
 
@@ -70,10 +70,10 @@ carved out of the editor/UI so neither becomes a grab bag. The flow for each
 is identical:
 
 1. State lives in the subsystem's own `*_state.c` (e.g.
-   `ReplayRuntimeState`, the variable-panel drag transaction, the
+   [`ReplayRuntimeState`](src/subsystems/replay/replay_state.h#L75), the variable-panel drag transaction, the
    tutorial step/lock state).
 2. Input is routed to the subsystem's controller by `glr_ctrl` based on
-   the `UiHit` kind (e.g. `UI_HIT_VARIABLE_SLIDER` →
+   the [`UiHit`](src/ui/core/hit.h#L51) kind (e.g. `UI_HIT_VARIABLE_SLIDER` →
    `variable_panel_handle_*`).
 3. The subsystem mutates its own state; if a change must reach the
    program (a slider value, a picked color), it goes through the editor
@@ -87,17 +87,17 @@ virtual lines), but it never *becomes* editor-owned.
 
 | File | Responsibility |
 |---|---|
-| `replay/replay.c` / `.h` | Replay state machine: PC, mode (OFF/PLAYING/PAUSED/DONE), speed, fade-batch ring |
-| `replay/replay_annotations.c` / `.h` | Replay-time source annotations / virtual lines |
-| `replay/replay_state.c` / `.h` | Owns `ReplayRuntimeState` storage + narrow accessors / snapshot view |
-| `variable_panel/variable_panel_drag.c` / `.h` | Slider drag transaction: begin/motion/reset, linear/log value writeback |
-| `variable_panel/variable_panel_state.c` / `.h` | Owns the variable-panel visibility flag + drag-state storage |
-| `color_picker/color_picker_state.c` / `.h` | Color-picker state, lifecycle, slider handlers, source-line writeback |
-| `hidden_lines/hidden_lines.c` / `.h` | Hidden-line wireframe cursor filtering and colorless tessellation |
-| `tutorial/tutorial_runner.c`, `tutorial/tutorial.h` | Tutorial runner public API and orchestration: start/stop/advance, locked-line guard, source-change guard |
-| `tutorial/tutorial_match.c` | Tutorial command matching, normalization, expected-message formatting, and ghost-text suffix helpers |
-| `tutorial/tutorial_animation.c` / `.h` | Pure tutorial fade timing helpers |
-| `tutorial/tutorial_state.c` / `.h` | Owns `TutorialRuntimeState` (active flag, step, locked lines, fade timing) |
+| [`replay/replay.c`](src/subsystems/replay/replay.c) / `.h` | Replay state machine: PC, mode (OFF/PLAYING/PAUSED/DONE), speed, fade-batch ring |
+| [`replay/replay_annotations.c`](src/subsystems/replay/replay_annotations.c) / `.h` | Replay-time source annotations / virtual lines |
+| [`replay/replay_state.c`](src/subsystems/replay/replay_state.c) / `.h` | Owns [`ReplayRuntimeState`](src/subsystems/replay/replay_state.h#L75) storage + narrow accessors / snapshot view |
+| [`variable_panel/variable_panel_drag.c`](src/subsystems/variable_panel/variable_panel_drag.c) / `.h` | Slider drag transaction: begin/motion/reset, linear/log value writeback |
+| [`variable_panel/variable_panel_state.c`](src/subsystems/variable_panel/variable_panel_state.c) / `.h` | Owns the variable-panel visibility flag + drag-state storage |
+| [`color_picker/color_picker_state.c`](src/subsystems/color_picker/color_picker_state.c) / `.h` | Color-picker state, lifecycle, slider handlers, source-line writeback |
+| [`hidden_lines/hidden_lines.c`](src/subsystems/hidden_lines/hidden_lines.c) / `.h` | Hidden-line wireframe cursor filtering and colorless tessellation |
+| [`tutorial/tutorial_runner.c`](src/subsystems/tutorial/tutorial_runner.c), [`tutorial/tutorial.h`](src/subsystems/tutorial/tutorial.h) | Tutorial runner public API and orchestration: start/stop/advance, locked-line guard, source-change guard |
+| [`tutorial/tutorial_match.c`](src/subsystems/tutorial/tutorial_match.c) | Tutorial command matching, normalization, expected-message formatting, and ghost-text suffix helpers |
+| [`tutorial/tutorial_animation.c`](src/subsystems/tutorial/tutorial_animation.c) / `.h` | Pure tutorial fade timing helpers |
+| [`tutorial/tutorial_state.c`](src/subsystems/tutorial/tutorial_state.c) / `.h` | Owns [`TutorialRuntimeState`](src/subsystems/tutorial/tutorial_state.h#L44) (active flag, step, locked lines, fade timing) |
 
 **Boundary:** a subsystem owns its own state and controller. It does
 **not** own editor text behavior or REPL grammar; its renderer lives in
@@ -106,7 +106,7 @@ virtual lines), but it never *becomes* editor-owned.
 bypass the commit transaction and load directly via `repl_load_apply_line` without
 generating undo history.)
 (The tutorial *catalog* — the lesson content — lives in
-`src/repl/tutorials.c`, separate from the runner here.)
+[`src/repl/tutorials.c`](src/repl/tutorials.c), separate from the runner here.)
 
 ## Lifecycle Vocabulary Conventions
 
