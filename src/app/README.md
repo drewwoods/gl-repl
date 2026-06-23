@@ -16,12 +16,19 @@ larger systems it is the **composition root** (the one place that knows about
 all the concrete modules and assembles them) and a **mediator** (subsystems
 talk to it, not to each other).
 
-`src/app` is that layer. Its hub, [`glr_ctrl.c`](src/app/glr_ctrl.c), is deliberately *thin*: it
-**routes** input and **coordinates** frames, but it does **not** implement
-editor behavior, parse the language, or draw widgets. The subsystems it wires
-together (`src/repl`, `src/editor`, `src/ui`, `src/scene`, `src/subsystems`) do
-not depend on it — the dependency arrows run one way, from `glr_ctrl` to the
-subsystems, never back.
+`src/app` is that layer. Its hub, [`glr_ctrl.c`](src/app/glr_ctrl.c), is meant
+to be a router and frame/snapshot coordinator: it should route input,
+coordinate frames, and keep the app-specific wiring in one place without owning
+feature behavior. The current file is broader than that target. It still carries
+too much mixed policy for routing, frame order, snapshot assembly, timers, and
+transitional glue. That bloat is a known design pressure, not a license to add
+new feature behavior there by default.
+
+The boundary still matters: `glr_ctrl` should not implement editor behavior,
+parse the language, draw widgets, or own 3D scene policy. The subsystems it
+wires together (`src/repl`, `src/editor`, `src/ui`, `src/scene`,
+`src/subsystems`) do not depend on it — the dependency arrows run one way, from
+`glr_ctrl` to the subsystems, never back.
 Alongside the router live the app-level services that are genuinely
 app-specific: the camera, the audio playlist, the config/menu tables, and the
 completion provider.
@@ -57,12 +64,12 @@ type.
 ## In the REPL app
 
 Inside the full app this is **layer 0** of the ownership map. Per frame,
-`glr_ctrl_display_frame()`:
+[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L113):
 
 1. rebuilds autonormals / the flat program if dirty, and prepares replay /
    export / camera strings;
 2. builds a [`SceneRenderConfig`](src/scene/render_types.h#L130) from REPL runtime state + view state and calls
-   `glr_camera_load_modelview()` then `scene_render_3d_scene()` (with the
+   [`glr_camera_load_modelview()`](src/app/glr_camera.h#L135) then [`scene_render_3d_scene()`](src/scene/render.h#L135) (with the
    owned [`SceneRendererState`](src/scene/render.h#L95), once per accumulation-jitter sample);
 3. builds a [`UiRenderSnapshot`](src/ui/app/snapshot.h#L70) and fans it out to the `ui_*_render`
    functions.

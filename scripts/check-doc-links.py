@@ -21,6 +21,7 @@ LINE_ANCHOR_RE = re.compile(r"^L([0-9]+)(?:-L?[0-9]+)?$")
 EXTERNAL_SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 TYPE_NAME_RE = re.compile(r"^[A-Z][A-Za-z0-9_]*$")
 TYPEDEF_START_RE = re.compile(r"^\s*typedef\s+(struct|enum|union)\b")
+FUNCTION_LABEL_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*\(\)$")
 
 
 def repo_root() -> Path:
@@ -34,7 +35,21 @@ def default_markdown_files(root: Path) -> list[Path]:
         cwd=root,
         text=True,
     )
-    return [root / line for line in out.splitlines() if line]
+    return dedupe_paths([root / line for line in out.splitlines() if line])
+
+
+def dedupe_paths(paths: list[Path]) -> list[Path]:
+    by_real: dict[Path, Path] = {}
+    order: list[Path] = []
+    for path in paths:
+        real = path.resolve()
+        if real not in by_real:
+            by_real[real] = path
+            order.append(real)
+            continue
+        if by_real[real].is_symlink() and not path.is_symlink():
+            by_real[real] = path
+    return [by_real[real] for real in order]
 
 
 def strip_link_destination(raw: str) -> str:
@@ -79,12 +94,25 @@ def is_typedef_anchor_ok(lines: list[str], line_idx: int, label: str) -> bool:
     if not TYPEDEF_START_RE.search(lines[line_idx]):
         return False
 
+    depth = 0
+    saw_open = False
     for idx in range(line_idx, min(len(lines), line_idx + 200)):
-        if label in lines[idx]:
+        line = lines[idx]
+        if label in line:
             return True
-        if "}" in lines[idx] and ";" in lines[idx]:
+        if "{" in line:
+            saw_open = True
+        depth += line.count("{") - line.count("}")
+        if saw_open and depth <= 0 and idx > line_idx and ";" in line:
             return False
     return False
+
+
+def is_function_anchor_ok(line: str, label: str) -> bool:
+    match = FUNCTION_LABEL_RE.match(label)
+    if not match:
+        return False
+    return bool(re.search(r"\b" + re.escape(match.group(1)) + r"\s*\(", line))
 
 
 def validate_line_anchor(
@@ -123,6 +151,8 @@ def validate_line_anchor(
     label_norm = normalize_label(label)
     linked_line = normalize_line(lines[line_no - 1])
     if label_norm and label_norm in linked_line:
+        return
+    if is_function_anchor_ok(linked_line, label_norm):
         return
     if is_typedef_anchor_ok(lines, line_no - 1, label_norm):
         return
@@ -169,7 +199,9 @@ def validate_file(path: Path, root: Path, errors: list[str]) -> int:
         link_count += 1
         target_path = Path(unquote(target_path_raw)) if target_path_raw else path
         if not target_path.is_absolute():
-            target_path = (path.parent / target_path).resolve()
+            doc_relative = (path.parent / target_path).resolve()
+            root_relative = (root / target_path).resolve()
+            target_path = doc_relative if doc_relative.exists() else root_relative
 
         if not target_path.exists():
             errors.append(f"{path}:{line_no}: linked path does not exist: {target}")

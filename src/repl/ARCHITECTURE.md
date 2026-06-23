@@ -284,7 +284,7 @@ surfaces it on the CLI.
 Loop counters and function parameters don't exist in the source
 command's own scope. When [`flatten.c`](src/repl/flatten.c) emits a flat command, it snapshots
 the live lexical bindings into a parallel [`FlatCmdLocalVars`](src/repl/flatten.h#L32) array
-(`repl_state_flat_program_local_vars()`):
+([`repl_state_flat_program_local_vars()`](src/repl/state_views.h#L145)):
 
 ```c
 typedef struct { int num_vars; ExprVar vars[MAX_EXPR_VARS]; } FlatCmdLocalVars;
@@ -303,8 +303,8 @@ Two flags gate the frame flow ([`state_views.h`](src/repl/state_views.h)):
   rebuild.
 - `ReplFlatProgramState.dirty` — the flat program is stale.
 
-Any source mutation sets them via `repl_state_mark_flat_dirty()` /
-`repl_state_mark_source_dirty()` ([`state_notify.h`](src/repl/state_notify.h)). The controller
+Any source mutation sets them via [`repl_state_mark_flat_dirty()`](src/repl/state_notify.h#L4) /
+[`repl_state_mark_source_dirty()`](src/repl/state_notify.h#L5) ([`state_notify.h`](src/repl/state_notify.h)). The controller
 checks them at frame top and rebuilds only when set.
 
 ---
@@ -330,7 +330,7 @@ func aliases) — it never reaches into REPL globals. Build one with
 `repl_compile_context_from_live(edit_line_idx)`; the caller supplies the
 cursor because pipeline code does not call editor accessors.
 
-[`apply.c`](src/repl/apply.c) is the dual. `repl_apply_compiled_change()` mutates the
+[`apply.c`](src/repl/apply.c) is the dual. [`repl_apply_compiled_change()`](src/repl/apply.h#L74) mutates the
 REPL runtime command array **only** — it does not touch source text,
 status, undo, predef registrations, or aliases. Those cascades are
 separate calls (`repl_apply_predef_ops`, `repl_apply_scratch_ops`,
@@ -367,7 +367,7 @@ tests and the demo can compile-and-inspect without ever mutating state.
 
 ### 4.3 The compile dispatcher and handler order
 
-`repl_compile_dispatch()` walks per-kind validators in **canonical
+[`repl_compile_dispatch()`](src/repl/compile.h#L262) walks per-kind validators in **canonical
 order** and returns the first non-`NO_CHANGE` result:
 
 ```
@@ -410,7 +410,7 @@ Lean source loader             (src/repl/load.c)
 ```
 
 [`load.c`](src/repl/load.c) is the non-editor entry: the importer, example loader, tutorial
-comment injector, and tests call `repl_load_apply_line()`, which picks an
+comment injector, and tests call [`repl_load_apply_line()`](src/repl/load.h#L78), which picks an
 insertion index, compiles the line, and applies it without touching any
 editor input widget. Keeping it separate from [`compile.c`](src/repl/compile.c) preserves the
 purity boundary — [`compile.c`](src/repl/compile.c) only *describes* changes; [`load.c`](src/repl/load.c) owns the
@@ -434,7 +434,7 @@ before the scene renders.
 
 [`autonormal.c`](src/repl/autonormal.c) keeps `glNormal3f` commands in sync with the geometry, at
 the **source** level. When enabled and `normals_dirty` is set,
-`repl_recompute_autonormals()` recomputes face normals (cross product of
+[`repl_recompute_autonormals()`](src/repl/pipeline.h#L11) recomputes face normals (cross product of
 triangle edges, normalized) and inserts/updates `is_auto` `CMD_NORMAL3F`
 commands ahead of the vertices that feed them. Because it edits the
 source array (and can shift the cursor), it runs *before* flatten and
@@ -442,7 +442,7 @@ takes the edit-line by reference.
 
 ### 5.2 Flatten — lowering source to flat
 
-`repl_flatten_program()` ([`flatten.c`](src/repl/flatten.c)) expands the source array into the
+[`repl_flatten_program()`](src/repl/flatten.h#L90) ([`flatten.c`](src/repl/flatten.c)) expands the source array into the
 flat array:
 
 - **for-loops** iterate `[start, end)` by `step`, half-open, re-parsing
@@ -474,7 +474,7 @@ the live arrays.
 
 ### 5.3 Execute — flat program to GL
 
-`repl_execute_program()` ([`executor.c`](src/repl/executor.c)) walks `flat_cmds[0..count)`
+[`repl_execute_program()`](src/repl/executor.h#L156) ([`executor.c`](src/repl/executor.c)) walks `flat_cmds[0..count)`
 emitting GL. Key behaviors:
 
 - **Per-frame re-evaluation.** `has_vars` commands re-evaluate their
@@ -523,7 +523,7 @@ typed slices ([`state_views.h`](src/repl/state_views.h)):
 | [`ReplSceneRuntimeState`](src/repl/state_views.h#L108) | active example index, bound workspace dir |
 | [`ReplImportExportState`](src/repl/state_views.h#L116) | cached header/render/camera text + pending import metadata |
 
-`repl_state_capture()` / `repl_state_restore()` snapshot exactly these
+[`repl_state_capture()`](src/repl/state.h#L29) / [`repl_state_restore()`](src/repl/state.h#L30) snapshot exactly these
 slices — and nothing else (no editor, UI, replay, or app presentation
 state).
 
@@ -537,7 +537,7 @@ State access is intentionally two-tiered:
 - **[`state_owners.h`](src/repl/state_owners.h)** — mutable `_mut()` accessors, setters, and reset
   helpers. For owner modules and the controller only.
 
-`repl_state_ensure_sentinels()` patches the non-zero defaults (most
+[`repl_state_ensure_sentinels()`](src/repl/state_owners.h#L130) patches the non-zero defaults (most
 importantly the array capacities — under raw BSS zero-fill they'd be 0
 and reject every insert). It's idempotent and matters for CLI paths like
 `--dump-code` that skip `glr_ctrl_init_gl`.
@@ -602,7 +602,7 @@ rationale is in [`eval.h`](src/repl/eval.h)):
   compiler rejects the 24th user var with "variable table full".
 - **`MAX_EXPR_VARS = 32`** — the lexical scope size for *one* expression
   parse (predef vars + visible loop iterators + function params).
-  `collect_visible_vars_in()` ([`visible_vars.c`](src/repl/visible_vars.c)) builds this per parse;
+  [`collect_visible_vars_in()`](src/repl/visible_vars.h#L16) ([`visible_vars.c`](src/repl/visible_vars.c)) builds this per parse;
   it reads no live state, so compile passes its context's document view.
 
 **Scratch arrays** `A`/`B`/`C` (`REPL_SCRATCH_ARRAY_COUNT ×
@@ -788,7 +788,7 @@ flowchart LR
 
 ### Stage 1 — text → compile → apply  (`repl_load_apply_line`)
 
-Each line is fed to `repl_load_apply_line()` ([`load.c`](src/repl/load.c)) — the same
+Each line is fed to [`repl_load_apply_line()`](src/repl/load.h#L78) ([`load.c`](src/repl/load.c)) — the same
 non-editor entry the example loader and file importer use (§4.4). For
 each line it builds a [`ReplCompileContext`](src/repl/compile.h#L177), runs `repl_compile_dispatch`
 (falling back to the GL parser), and applies the resulting
@@ -822,7 +822,7 @@ the executor knows to re-evaluate it from text.
 
 ### Stage 3 — flatten  (`repl_flatten_commands`)
 
-`repl_flatten_program()` (§5.2) lowers the nine source commands to eleven
+[`repl_flatten_program()`](src/repl/flatten.h#L90) (§5.2) lowers the nine source commands to eleven
 flat ones — the loop body unrolled into six vertices, the `CMD_FOR_BEGIN`
 / `CMD_FOR_END` / `CMD_VAR_DECLARE` markers consumed:
 
@@ -962,7 +962,7 @@ because it is paid every frame.
 
 ### 13.2 Why `t` forces a re-flatten
 
-`repl_state_time_advance()` sets `flat_program.dirty = 1` whenever the clock is
+[`repl_state_time_advance()`](src/repl/state_owners.h#L62) sets `flat_program.dirty = 1` whenever the clock is
 playing ([`state.c`](src/repl/state.c)), so the controller rebuilds the flat program every frame.
 That is *required* because flatten is the only stage that resolves **program
 structure**, and structure can depend on `t`:
