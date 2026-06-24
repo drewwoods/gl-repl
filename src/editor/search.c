@@ -391,6 +391,10 @@ static void search_navigate(int direction) {
     search_apply_hit(row, char_pos);
 }
 
+void editor_search_navigate(int direction) {
+    search_navigate(direction);
+}
+
 static void search_open(void) {
     EditorSearchState *srch = editor_state_search_mut();
     if (srch->active)
