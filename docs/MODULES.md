@@ -224,7 +224,7 @@ lists to make the layer boundaries observable.
   the dependency hide. Host effects, export bridges, source-document, and
   tutorial teardown dispatch keep reset fan-out, status, config, import,
   layout, and tutorial lifecycle edges out of the demo link set. See
-  [`ARCHITECTURE.md`](ARCHITECTURE.md#standalone-repl-demo-coupling) for
+  [`ARCHITECTURE.md`](ARCHITECTURE.md#decoupling-and-link-boundaries) for
   the detailed dependency table and guard list.
 - **`make editor_demo`** (`tools/editor_demo/`) — a generic
   plain-text editor demo driven by its *own* input dispatcher
