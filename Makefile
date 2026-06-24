@@ -1564,7 +1564,7 @@ test-detailed: $(TEST_BINS) ## Run the full test suite with verbose example expo
 	TEST_JOBS="$(TEST_JOBS)" \
 	sh scripts/run-tests.sh $(TEST_RUNNER_CASES)
 
-test-stubs: check-trailing-whitespace check-gl-boundaries check-layer-coupling check-state-ownership ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs.
+test-stubs: check-doc-links check-trailing-whitespace check-gl-boundaries check-layer-coupling check-state-ownership ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs.
 	$(MAKE) test USE_GL_STUBS=1
 
 test-full: ## Full gate: stub tests + checks + build gl-repl, bench, repl_demo, render3d_demo, editor_demo.
