@@ -1795,25 +1795,26 @@ static void graphplane_lines(const GridDrawContext *ctx, int iaxis, int jaxis, i
 }
 
 /* Coordinate labels for the head-on plane (`haxis` = screen-horizontal in-plane
- * axis, `vaxis` = screen-vertical, `kaxis` pinned to 0). h-values run along the
- * screen-bottom edge over [-Lh,Lh], v-values down the screen-left edge over
- * [-Lv,Lv] — Lh/Lv are the *visible* half-extents so both axes stay on screen.
- * Edges + margins come from the billboard basis so the signs work per plane. */
+ * axis, `vaxis` = screen-vertical, `kaxis` pinned to 0). The view is centred on
+ * the camera focus (`ch`,`cv` = the in-plane components of cam_tx/ty/tz), so
+ * under pan the labelled span [ch±Lh] × [cv±Lv] tracks what's actually visible.
+ * h-values run along the screen-bottom edge, v-values down the screen-left edge;
+ * Lh/Lv are the visible half-extents, so both axes stay on screen. */
 static void graphplane_labels(int haxis, int vaxis, int kaxis,
-                              float Lh, float Lv, float major,
+                              float ch, float cv, float Lh, float Lv, float major,
                               const float right[3], const float up[3],
                               float scale, float alpha) {
     glColor4f(0.90f, 0.93f, 0.98f, alpha);
-    int nh = (int)(Lh / major);
-    int nv = (int)(Lv / major);
-    if (nh > 60) nh = 60;
-    if (nv > 60) nv = 60;
+    int h0 = (int)ceilf((ch - Lh) / major), h1 = (int)floorf((ch + Lh) / major);
+    int v0 = (int)ceilf((cv - Lv) / major), v1 = (int)floorf((cv + Lv) / major);
+    if (h1 - h0 > 120) h1 = h0 + 120;               /* runaway guard */
+    if (v1 - v0 > 120) v1 = v0 + 120;
     /* Anchor both tracks just *inside* the visible edges (text grows toward the
-     * centre) so neither is pushed off screen. */
-    float bottom_v = -copysignf(Lv, up[vaxis]);     /* screen-bottom edge */
-    float left_h   = -copysignf(Lh, right[haxis]);  /* screen-left edge   */
+     * centre) so neither is pushed off screen — edges measured from the focus. */
+    float bottom_v = cv - copysignf(Lv, up[vaxis]);  /* screen-bottom edge */
+    float left_h   = ch - copysignf(Lh, right[haxis]); /* screen-left edge */
 
-    for (int s = -nh; s <= nh; s++) {               /* h-values along the bottom */
+    for (int s = h0; s <= h1; s++) {                /* h-values along the bottom */
         float c = s * major;
         char b[16];
         snprintf(b, sizeof b, "%g", (double)c);
@@ -1826,7 +1827,7 @@ static void graphplane_labels(int haxis, int vaxis, int kaxis,
         float q2 = p[2] - right[2] * tw * 0.5f + up[2] * major * 0.10f;
         grid_stroke_text_billboard(q0, q1, q2, scale, right, up, b);
     }
-    for (int s = -nv; s <= nv; s++) {               /* v-values down the left */
+    for (int s = v0; s <= v1; s++) {                /* v-values down the left */
         float c = s * major;
         char b[16];
         snprintf(b, sizeof b, "%g", (double)c);
@@ -1892,16 +1893,18 @@ static void render3d_grid_render_graphplanes_theme(const Render3dRenderConfig *c
     const float THRESH = 0.80f;
     float ta_base = fminf(grid_ctx->xn_alpha * grid_ctx->grid_brightness, 1.0f);
     float lblscale = fminf(0.0040f, fmaxf(0.0022f, major * 0.0036f));
+    /* Camera focus per world axis — labels centre on it so pan stays correct. */
+    float foc[3] = { config->cam_tx, config->cam_ty, config->cam_tz };
     glLineWidth(1.4f);
-    if (xy_w > zy_w && xy_w > xz_w && xy_w > THRESH) {
-        graphplane_labels(0, 1, 2, Lh, Lv, major, right, up, lblscale,
-                          ta_base * gp_smoothstep(THRESH, 0.96f, xy_w));   /* XY: x,y */
-    } else if (zy_w > xz_w && zy_w > THRESH) {
-        graphplane_labels(2, 1, 0, Lh, Lv, major, right, up, lblscale,
-                          ta_base * gp_smoothstep(THRESH, 0.96f, zy_w));   /* ZY: z,y */
-    } else if (xz_w > THRESH) {
-        graphplane_labels(0, 2, 1, Lh, Lv, major, right, up, lblscale,
-                          ta_base * gp_smoothstep(THRESH, 0.96f, xz_w));   /* XZ: x,z */
+    if (xy_w > zy_w && xy_w > xz_w && xy_w > THRESH) {           /* XY: x,y */
+        graphplane_labels(0, 1, 2, foc[0], foc[1], Lh, Lv, major, right, up,
+                          lblscale, ta_base * gp_smoothstep(THRESH, 0.96f, xy_w));
+    } else if (zy_w > xz_w && zy_w > THRESH) {                   /* ZY: z,y */
+        graphplane_labels(2, 1, 0, foc[2], foc[1], Lh, Lv, major, right, up,
+                          lblscale, ta_base * gp_smoothstep(THRESH, 0.96f, zy_w));
+    } else if (xz_w > THRESH) {                                  /* XZ: x,z */
+        graphplane_labels(0, 2, 1, foc[0], foc[2], Lh, Lv, major, right, up,
+                          lblscale, ta_base * gp_smoothstep(THRESH, 0.96f, xz_w));
     }
     glLineWidth(1.0f);
 }
