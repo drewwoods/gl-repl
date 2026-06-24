@@ -1600,12 +1600,12 @@ Decoupling is achieved through four primary interfaces that the app controller i
 
 #### 1. Source-Document Port (`source_document.h`)
 Source text reads and mutations are routed through `source_document_*` functions.
-* The full application links [`glr_source_document.c`](../src/app/glr_source_document.c) (which forwards calls to [EditorState](file:///Users/drew/src/code/openGL/samples/gen-ai/gl-repl-worktree/src/editor/state.h#L175)).
+* The full application links [`glr_source_document.c`](../src/app/glr_source_document.c) (which forwards calls to [EditorState](../src/editor/state.h#L175)).
 * The standalone demo links [`tools/repl_demo/source_document.c`](../tools/repl_demo/source_document.c) (a tiny, editor-free line store).
-This keeps [EditorState](file:///Users/drew/src/code/openGL/samples/gen-ai/gl-repl-worktree/src/editor/state.h#L175) and editor logic out of the core link set.
+This keeps [EditorState](../src/editor/state.h#L175) and editor logic out of the core link set.
 
 #### 2. Host-Effect Bridges (`ReplHostEffects`)
-The host-effect bridge ([ReplHostEffects](file:///Users/drew/src/code/openGL/samples/gen-ai/gl-repl-worktree/src/repl/host_effects.h#L38)) installed by the controller routes core pipeline actions (such as status updates, example resets, input resets, scrolling, follow-scroll, and cursor parking) back to the UI, editor state, and peer subsystems. The demo installs only its edit-line hooks and leaves the status/editor/tutorial hooks as no-ops.
+The host-effect bridge ([ReplHostEffects](../src/repl/host_effects.h#L38)) installed by the controller routes core pipeline actions (such as status updates, example resets, input resets, scrolling, follow-scroll, and cursor parking) back to the UI, editor state, and peer subsystems. The demo installs only its edit-line hooks and leaves the status/editor/tutorial hooks as no-ops.
 
 #### 3. Export Bridges & Layout Inputs
 The exporter ([`src/repl/export.c`](../src/repl/export.c)) is GL-free and app-free. All app/render3d values are retrieved through controller-installed bridges:
@@ -1621,7 +1621,7 @@ The exporter ([`src/repl/export.c`](../src/repl/export.c)) is GL-free and app-fr
 * **App-Service Bootstrapping:** Dump-only CLI paths (e.g., `--dump-code` and `--dump-flat`) bypass normal OpenGL initialization, but still load/export REPL state correctly by running the idempotent `glr_ctrl_install_app_services()` installer prior to loading commands.
 
 ### App-Frame State Ownership
-Scene-presentation policy and most render config live in the app-side owner [`src/app/glr_state.c`](../src/app/glr_state.c) ([`glr_state.h`](../src/app/glr_state.h)). REPL-pipeline TUs do not include [`glr_state.h`](../src/app/glr_state.h) (`check-repl-state-no-glr-state`); app, editor, UI, and render3d code may. Only the REPL-owned render *tail* ([ReplRenderState](file:///Users/drew/src/code/openGL/samples/gen-ai/gl-repl-worktree/src/repl/state_views.h#L100): per-light state + clear color) is a REPL slice.
+Scene-presentation policy and most render config live in the app-side owner [`src/app/glr_state.c`](../src/app/glr_state.c) ([`glr_state.h`](../src/app/glr_state.h)). REPL-pipeline TUs do not include [`glr_state.h`](../src/app/glr_state.h) (`check-repl-state-no-glr-state`); app, editor, UI, and render3d code may. Only the REPL-owned render *tail* ([ReplRenderState](../src/repl/state_views.h#L100): per-light state + clear color) is a REPL slice.
 ## Developer Playbook
 
 ### Where To Put New Code

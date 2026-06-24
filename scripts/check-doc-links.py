@@ -187,10 +187,23 @@ def validate_file(path: Path, root: Path, errors: list[str]) -> int:
     for line_no, label, target in links:
         if not target:
             continue
+
+        if "file://" in target.lower():
+            errors.append(f"{path}:{line_no}: link contains local absolute path: {target}")
+            continue
+
         if is_external(target):
             continue
 
         target_path_raw, anchor = split_target(target)
+        if target_path_raw.endswith((".c", ".h")):
+            try:
+                is_in_docs = "docs" in path.relative_to(root).parts
+            except ValueError:
+                is_in_docs = False
+            if is_in_docs and not target_path_raw.startswith("../"):
+                errors.append(f"{path}:{line_no}: link to .c/.h file must start with ../: {target}")
+                continue
         # Same-document heading anchors are intentionally ignored; heading
         # validation is a separate problem from file/line-link validation.
         if not target_path_raw and not anchor.startswith("L"):

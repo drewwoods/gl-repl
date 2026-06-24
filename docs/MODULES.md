@@ -486,7 +486,7 @@ Program-side state that is not the source command array itself.
 | `repl_config` | Config descriptor table for menu toggles and persisted render/audio settings |
 | `repl_scenes` | User-scene slots, workspace directory, LRU eviction, and scene-side command/text snapshots ([`SceneSnapshot`](../src/repl/scene_snapshot.h#L17) owns the copy/apply payload) |
 | `repl_example_loader` | Built-in example loading and active-example tracking |
-| `repl_examples` | Built-in example source data + catalog metadata: [`ReplExampleEntry`](src/repl/examples.c#L2236) carries a tag bitmask (`repl_example_tag_*` query API) and an optional `.subheading` (`repl_example_subheading`) that drives Scene flyout grouping. Symmetric with the tutorial catalog axes |
+| `repl_examples` | Built-in example source data + catalog metadata: [`ReplExampleEntry`](../src/repl/examples.c#L2236) carries a tag bitmask (`repl_example_tag_*` query API) and an optional `.subheading` (`repl_example_subheading`) that drives Scene flyout grouping. Symmetric with the tutorial catalog axes |
 | `repl_autonormal` | Auto-generated `glNormal3f` maintenance and feeding-command lookup |
 | `repl_replay` | Replay state machine, replay PC/mode, fade batches, replay timing |
 | `repl_debug` | Program/debug dump helpers; takes editor text views when it needs source text |
