@@ -715,8 +715,14 @@ void glr_ctrl_reset_transients(void) {
 void glr_ctrl_apply_input_effects(EditorInputDispatchEffects effects) {
     if (effects.set_cursor)
         glutSetCursor(effects.cursor);
-    if (effects.request_redraw)
-        glutPostRedisplay();
+    if (effects.request_redraw) {
+        /* No need for glutPostRedisplay() here: the controller's main display
+         * loop already redraws every frame, adding this causes inconsistent
+         * frame rate on higher refresh-rate displays (e.g. 120Hz) because the
+         * extra glutPostRedisplay() triggers a second display.
+         */
+        // glutPostRedisplay();
+    }
     if (effects.restore_hidden_code_panel)
         glr_ctrl_restore_hidden_code_panel();
     if (effects.close_help_overlay)
