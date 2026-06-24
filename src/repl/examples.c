@@ -63,7 +63,7 @@
  * covered set on this palette.
  * ========================================================================= */
 
-/* Example 0: Lit cube (default) */
+/* Lit cube (default) */
 static const char *const g_example_cube[] = {
     "// camera",
     "glTranslatef(0.0f, 0.0f, -6.0f);",
@@ -105,7 +105,7 @@ static const char *const g_example_cube[] = {
     NULL
 };
 
-/* Example 1: Animated ring - for-loop + t variable */
+/* Animated ring - for-loop + t variable */
 static const char *const g_example_ring[] = {
     "// camera",
     "glTranslatef(0.0f, 0.0f, -6.0f);",
@@ -132,7 +132,7 @@ static const char *const g_example_ring[] = {
     NULL
 };
 
-/* Example 2: Function demo - define a named reusable function (alias for a
+/* Function demo - define a named reusable function (alias for a
  * funcN slot), call it repeatedly with transforms between calls. */
 static const char *const g_example_func[] = {
     "// @cfg view_mode = RENDER3D_VIEW_2D",
@@ -163,7 +163,7 @@ static const char *const g_example_func[] = {
     NULL
 };
 
-/* Example 3: Parametric polygon helper - function args driving local for-loops */
+/* Parametric polygon helper - function args driving local for-loops */
 static const char *const g_example_func_loop[] = {
     "// @cfg view_mode = RENDER3D_VIEW_2D",
     "// camera",
@@ -199,7 +199,7 @@ static const char *const g_example_func_loop[] = {
     NULL
 };
 
-/* Example 4: Branching helper - function args driving local if-blocks */
+/* Branching helper - function args driving local if-blocks */
 static const char *const g_example_func_if[] = {
     "// @cfg view_mode = RENDER3D_VIEW_2D",
     "// camera",
@@ -245,7 +245,7 @@ static const char *const g_example_func_if[] = {
     NULL
 };
 
-/* Example 5: Recursive helper - transformed child calls with depth countdown */
+/* Recursive helper - transformed child calls with depth countdown */
 static const char *const g_example_func_recurse[] = {
     "// @cfg view_mode = RENDER3D_VIEW_2D",
     "// @cfg vertex_outlines = 0",
@@ -300,7 +300,7 @@ static const char *const g_example_func_recurse[] = {
     NULL
 };
 
-/* Example 6: Conditional colors - if-blocks + t variable */
+/* Conditional colors - if-blocks + t variable */
 static const char *const g_example_cond[] = {
     "// camera",
     "glTranslatef(0.0f, 0.0f, -6.0f);",
@@ -338,7 +338,7 @@ static const char *const g_example_cond[] = {
     NULL
 };
 
-/* Example 7: Parametric torus - nested for-loops.
+/* Parametric torus - nested for-loops.
  * Standard parametrization:
  *   P(u, v) = ((R + r*cos v) * cos u,
  *              (R + r*cos v) * sin u,
@@ -380,7 +380,7 @@ static const char *const g_example_torus[] = {
     NULL
 };
 
-/* Example 8: GLU tessellator - concave arrow polygon with per-vertex color */
+/* GLU tessellator - concave arrow polygon with per-vertex color */
 static const char *const g_example_tess[] = {
     "// camera",
     "glTranslatef(0.0f, 0.0f, -6.0f);",
@@ -419,7 +419,7 @@ static const char *const g_example_tess[] = {
     NULL
 };
 
-/* Example 9: GLU tessellator - concave arrow polygon cutout */
+/* GLU tessellator - concave arrow polygon cutout */
 static const char *const g_example_tess_cutout[] = {
     "// camera",
     "glTranslatef(0.0f, 0.0f, -6.0f);",
@@ -549,7 +549,7 @@ static const char *const g_example_tess_cutout[] = {
     NULL
 };
 
-/* Example 10: 2D assignment sketch - runtime assignment without goto.
+/* 2D assignment sketch - runtime assignment without goto.
  * No predefined goto examples are shipped because goto support is partial:
  * top-level only, not replay-safe, and not suitable for variable-driven
  * geometry loops. Keep coverage in tests/docs instead of F12 examples. */
@@ -576,7 +576,7 @@ static const char *const g_example_assign_2d[] = {
     NULL
 };
 
-/* Example 11: Additive glow particles - glPointSize + distance attenuation + blend */
+/* Additive glow particles - glPointSize + distance attenuation + blend */
 static const char *const g_example_glow_particles[] = {
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
@@ -625,7 +625,7 @@ static const char *const g_example_glow_particles[] = {
     NULL
 };
 
-/* Example 13: Animated wave surface - y = sin(freq*x + t)*cos(freq*z + zPhase*t)*amp
+/* Animated wave surface - y = sin(freq*x + t)*cos(freq*z + zPhase*t)*amp
  * rendered as GL_TRIANGLE_STRIP rows. Normals are the exact analytic partial
  * derivatives of the wave function (no finite-difference approximation), giving
  * correct smooth lighting across all four lights. Per-vertex color varies with
@@ -682,7 +682,7 @@ static const char *const g_example_waves[] = {
     NULL
 };
 
-/* Example 14: Animated spirograph curve - closed parametric line loop
+/* Animated spirograph curve - closed parametric line loop
  * driven by t, showing dense iteration and trig-heavy vertex generation. */
 static const char *const g_example_spirograph_curve[] = {
     "// @cfg view_mode = RENDER3D_VIEW_2D",
@@ -709,7 +709,7 @@ static const char *const g_example_spirograph_curve[] = {
     NULL
 };
 
-/* Example 15: Traveling ripple ring - circular line loop with a narrow
+/* Traveling ripple ring - circular line loop with a narrow
  * modulo-selected radial wave, exercising fmod math and conditional edits. */
 static const char *const g_example_traveling_ripple_ring[] = {
     "// @cfg view_mode = RENDER3D_VIEW_2D",
