@@ -67,7 +67,7 @@ never terminates).
 
 Inside the full app this is **layer 4** of the ownership map. The controller
 ([`src/app/glr_ctrl.c`](src/app/glr_ctrl.c)) builds a [`Render3dRenderConfig`](src/render3d/render_types.h#L130) from REPL runtime state + view
-state each frame, then calls [`glr_camera_load_modelview()`](src/app/glr_camera.h#L135) and
+state each frame, then calls [`glr_camera_load_modelview()`](src/app/glr_camera.h#L126) and
 [`render3d_draw_scene()`](src/render3d/render.h#L135) once per accumulation-jitter sample (with its own
 [`Render3dState`](src/render3d/render.h#L95)). The geometry callback is the REPL executor
 (`repl_execute_program`), so the user's typed program becomes the rendered
