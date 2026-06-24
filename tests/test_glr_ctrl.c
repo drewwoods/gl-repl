@@ -1147,6 +1147,35 @@ static void test_view_record_external_3d_pose_tracks_in_ortho(void) {
     ASSERT_FLOAT("camera-to-3d uses refreshed ry", cam.ry, 70.0f);
 }
 
+/* Switching from a 3D example to a 2D example issues the new example's
+ * `// camera` ease (e.g. dist=2.5) one frame before the view-mode
+ * transition fires. The 3D->2D camera flatten must carry that ease
+ * *destination* into 2D, not the still-live previous-example pose
+ * (dist=7.5 here) — otherwise the ortho zoom locks onto the old camera
+ * distance. Regression for the 3D-example -> 2D-example dist bug. */
+static void test_view_mode_2d_honors_pending_camera_ease(void) {
+    GlrCameraState cam;
+
+    printf("--- imrepl_ctrl 3d->2d honors pending camera ease ---\n");
+    prepare_display_fixture(); /* live camera dist = 7.5 (the "old" example) */
+    replay_state_mut()->active = 0;
+    replay_state_mut()->state = REPLAY_OFF;
+    glr_ctrl_display_frame();
+
+    /* Mimic the example-load order: the new 2D example's camera block
+     * eases toward dist=2.5 (target active, live pose still at 7.5), then
+     * its @cfg flips view_mode to 2D. The transition tick runs next. */
+    glr_camera_ease_to(0.0f, 0.0f, 2.5f, 0.0f, 0.0f, 0.0f);
+    glr_state_presentation_mut()->ortho_mode = RENDER3D_VIEW_2D;
+    tick_until_view_settled(400);
+
+    cam = glr_camera();
+    ASSERT_TRUE("2D camera honors the example's eased dist, not the stale 7.5",
+                fabsf(cam.dist - 2.5f) < 0.05f);
+    ASSERT_FLOAT("2D camera flattened to rx=0", cam.rx, 0.0f);
+    ASSERT_FLOAT("2D camera flattened to ry=0", cam.ry, 0.0f);
+}
+
 /* In 3D mode the live camera is authoritative, so an external 3D-pose
  * report (a stale callback firing outside the ortho window) must not
  * smear the saved snapshot. */
@@ -2411,6 +2440,7 @@ int main(void) {
     test_overlay_transition_machine_wiring();
     test_view_mode_projection_transition_wiring();
     test_view_mode_3d_to_2d_uses_faster_decay();
+    test_view_mode_2d_honors_pending_camera_ease();
     test_view_record_external_3d_pose_tracks_in_ortho();
     test_view_record_external_3d_pose_noop_in_perspective();
     test_quit_recovery_file();

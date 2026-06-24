@@ -45,7 +45,13 @@ void glr_ctrl_sync_camera_control_mode(void) {
 }
 
 static void glr_ctrl_start_camera_to_2d(void) {
-    GlrCameraState cam = glr_camera();
+    /* Use the ease *destination*, not the live pose: an example load one
+     * frame earlier may have issued an ease_to toward its `// camera` block
+     * (e.g. dist=-2.5) that hasn't ticked into the live pose yet. Reading
+     * glr_camera() here would carry the previous example's stale dist/tx/ty
+     * into 2D (and clobber the example's ease), so the ortho zoom would lock
+     * onto the old camera distance. */
+    GlrCameraState cam = glr_camera_destination();
     if (!g_saved_3d_camera_valid || g_view_xn_phase == GLR_VIEW_XN_IDLE) {
         g_saved_3d_camera = cam;
         g_saved_3d_camera_valid = 1;
