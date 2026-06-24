@@ -100,7 +100,16 @@ class Occurrence:
 
     def replacement(self) -> str:
         assert self.target is not None
-        return f"[`{self.ident}`]({self.target.markdown()})"
+        import os
+        root = repo_root()
+        target_abs = (root / self.target.relpath).resolve()
+        source_dir_abs = self.source.parent.resolve()
+        rel_path = os.path.relpath(target_abs, source_dir_abs).replace("\\", "/")
+        if self.target.line is None:
+            markdown_url = rel_path
+        else:
+            markdown_url = f"{rel_path}#L{self.target.line}"
+        return f"[`{self.ident}`]({markdown_url})"
 
 
 def repo_root() -> Path:
