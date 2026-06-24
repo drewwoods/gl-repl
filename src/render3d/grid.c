@@ -1710,7 +1710,7 @@ static void render3d_grid_render_neon_theme(const GridDrawContext *grid_ctx) {
     glEnd();
 
     /* Pulsing origin cross: coral core + additive bloom. */
-    float pulse = 0.62f + 0.38f * sinf(t * 2.0f);
+    float pulse = 0.62f + 0.18f * sinf(t);
     for (int pass = 0; pass < 2; pass++) {
         int glow = (pass == 1);
         glBlendFunc(GL_SRC_ALPHA, glow ? GL_ONE : GL_ONE_MINUS_SRC_ALPHA);
