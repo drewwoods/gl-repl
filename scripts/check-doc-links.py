@@ -8,6 +8,7 @@ not part of the default reader-facing docs check.
 
 from __future__ import annotations
 
+import argparse
 import os
 import re
 import subprocess
@@ -122,121 +123,167 @@ def validate_line_anchor(
     target_file: Path,
     anchor: str,
     label: str,
-    errors: list[str],
-) -> None:
+) -> str | None:
     m = LINE_ANCHOR_RE.match(anchor)
     if not m:
-        return
+        return None
     if "-" in anchor:
-        errors.append(
+        return (
             f"{source_file}:{source_line_no}: use a single-line anchor, not #{anchor}: "
             f"{target_file}"
         )
-        return
 
     line_no = int(m.group(1))
     try:
         lines = target_file.read_text(encoding="utf-8").splitlines()
     except UnicodeDecodeError:
-        errors.append(f"{source_file}:{source_line_no}: cannot read linked file as UTF-8: {target_file}")
-        return
+        return f"{source_file}:{source_line_no}: cannot read linked file as UTF-8: {target_file}"
 
     if line_no < 1 or line_no > len(lines):
-        errors.append(
+        return (
             f"{source_file}:{source_line_no}: #{anchor} is outside {target_file} "
             f"({len(lines)} lines)"
         )
-        return
 
     label_norm = normalize_label(label)
     linked_line = normalize_line(lines[line_no - 1])
     if label_norm and label_norm in linked_line:
-        return
+        return None
     if is_function_anchor_ok(linked_line, label_norm):
-        return
+        return None
     if is_typedef_anchor_ok(lines, line_no - 1, label_norm):
-        return
+        return None
 
-    errors.append(
+    return (
         f"{source_file}:{source_line_no}: link label {label_norm!r} is not on "
         f"{target_file}#{anchor}: {linked_line!r}"
     )
 
 
-def iter_markdown_links(path: Path) -> tuple[int, str, str]:
-    in_fence = False
-    for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        stripped = line.lstrip()
-        if stripped.startswith("```") or stripped.startswith("~~~"):
-            in_fence = not in_fence
-            continue
-        if in_fence:
-            continue
-        for match in LINK_RE.finditer(line):
-            yield line_no, match.group(2), strip_link_destination(match.group(3))
-
-
-def validate_file(path: Path, root: Path, errors: list[str]) -> int:
+def validate_file(path: Path, root: Path, errors: list[str], strip: bool = False) -> int:
     link_count = 0
     try:
-        links = list(iter_markdown_links(path))
+        content = path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
         errors.append(f"{path}: cannot read Markdown file as UTF-8")
         return 0
 
-    for line_no, label, target in links:
-        if not target:
+    lines = content.splitlines()
+    modified = False
+    new_lines: list[str] = []
+    in_fence = False
+
+    for line_no, line in enumerate(lines, 1):
+        stripped = line.lstrip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            in_fence = not in_fence
+            new_lines.append(line)
+            continue
+        if in_fence:
+            new_lines.append(line)
             continue
 
-        if "file://" in target.lower():
-            errors.append(f"{path}:{line_no}: link contains local absolute path: {target}")
+        matches = list(LINK_RE.finditer(line))
+        if not matches:
+            new_lines.append(line)
             continue
 
-        if is_external(target):
-            continue
+        current_line = line
+        for match in reversed(matches):
+            label = match.group(2)
+            target = strip_link_destination(match.group(3))
 
-        target_path_raw, anchor = split_target(target)
-        if target_path_raw.endswith((".c", ".h")):
-            try:
-                is_in_docs = "docs" in path.relative_to(root).parts
-            except ValueError:
-                is_in_docs = False
-            if is_in_docs and not target_path_raw.startswith("../"):
-                errors.append(f"{path}:{line_no}: link to .c/.h file must start with ../: {target}")
+            if not target:
                 continue
-        # Same-document heading anchors are intentionally ignored; heading
-        # validation is a separate problem from file/line-link validation.
-        if not target_path_raw and not anchor.startswith("L"):
-            continue
 
-        link_count += 1
-        target_path = Path(unquote(target_path_raw)) if target_path_raw else path
-        if not target_path.is_absolute():
-            doc_relative = (path.parent / target_path).resolve()
-            root_relative = (root / target_path).resolve()
-            target_path = doc_relative if doc_relative.exists() else root_relative
+            if "file://" in target.lower():
+                err = f"{path}:{line_no}: link contains local absolute path: {target}"
+                errors.append(err)
+                if strip:
+                    start, end = match.span()
+                    current_line = current_line[:start] + match.group(2) + current_line[end:]
+                    modified = True
+                continue
 
-        if not target_path.exists():
-            errors.append(f"{path}:{line_no}: linked path does not exist: {target}")
-            continue
+            if is_external(target):
+                continue
 
-        if anchor.startswith("L"):
-            validate_line_anchor(
-                source_file=path,
-                source_line_no=line_no,
-                target_file=target_path,
-                anchor=anchor,
-                label=label,
-                errors=errors,
-            )
+            target_path_raw, anchor = split_target(target)
+            if target_path_raw.endswith((".c", ".h")):
+                try:
+                    is_in_docs = "docs" in path.relative_to(root).parts
+                except ValueError:
+                    is_in_docs = False
+                if is_in_docs and not target_path_raw.startswith("../"):
+                    err = f"{path}:{line_no}: link to .c/.h file must start with ../: {target}"
+                    errors.append(err)
+                    if strip:
+                        start, end = match.span()
+                        current_line = current_line[:start] + match.group(2) + current_line[end:]
+                        modified = True
+                    continue
+
+            # Same-document heading anchors are intentionally ignored; heading
+            # validation is a separate problem from file/line-link validation.
+            if not target_path_raw and not anchor.startswith("L"):
+                continue
+
+            link_count += 1
+            target_path = Path(unquote(target_path_raw)) if target_path_raw else path
+            if not target_path.is_absolute():
+                doc_relative = (path.parent / target_path).resolve()
+                root_relative = (root / target_path).resolve()
+                target_path = doc_relative if doc_relative.exists() else root_relative
+
+            err = None
+            if not target_path.exists():
+                err = f"{path}:{line_no}: linked path does not exist: {target}"
+            elif anchor.startswith("L"):
+                err = validate_line_anchor(
+                    source_file=path,
+                    source_line_no=line_no,
+                    target_file=target_path,
+                    anchor=anchor,
+                    label=label,
+                )
+
+            if err is not None:
+                errors.append(err)
+                if strip:
+                    start, end = match.span()
+                    current_line = current_line[:start] + match.group(2) + current_line[end:]
+                    modified = True
+
+        new_lines.append(current_line)
+
+    if strip and modified:
+        new_content = "\n".join(new_lines)
+        if content.endswith("\n"):
+            new_content += "\n"
+        path.write_text(new_content, encoding="utf-8")
 
     return link_count
 
 
 def main(argv: list[str]) -> int:
     root = repo_root()
-    if argv:
-        files = [(Path(arg) if Path(arg).is_absolute() else root / arg) for arg in argv]
+    parser = argparse.ArgumentParser(
+        description="Validate local Markdown file links and GitHub-style line anchors."
+    )
+    parser.add_argument(
+        "--strip",
+        action="store_true",
+        help="Strip the link destination from failing links, leaving only the label.",
+    )
+    parser.add_argument(
+        "files",
+        nargs="*",
+        help="Files to validate.",
+    )
+    args = parser.parse_args(argv)
+
+    if args.files:
+        files = [(Path(arg) if Path(arg).is_absolute() else root / arg) for arg in args.files]
     else:
         files = default_markdown_files(root)
 
@@ -248,7 +295,7 @@ def main(argv: list[str]) -> int:
             continue
         if path.is_dir():
             continue
-        link_count += validate_file(path.resolve(), root, errors)
+        link_count += validate_file(path.resolve(), root, errors, strip=args.strip)
 
     if errors:
         print("ERROR: invalid Markdown links:", file=sys.stderr)
