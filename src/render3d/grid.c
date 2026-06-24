@@ -1726,6 +1726,186 @@ static void render3d_grid_render_neon_theme(const GridDrawContext *grid_ctx) {
     glLineWidth(1.0f);
 }
 
+/* ===========================================================================
+ * Graph Planes: an adaptive-planes 3D grid with coordinate labels
+ *
+ * Like Adaptive Planes (three orthogonal grid planes that emphasise whichever
+ * the camera faces), but a bounded labelled graph: each plane is a [-R,R] box
+ * of `major`-spaced cells, and the plane the camera is *nearly orthogonal* to
+ * gets real coordinate labels (GLUT stroke glyphs, billboarded to the camera).
+ * Only one plane is labelled at a time — they're chosen by the face weights
+ * xy_w / zy_w / xz_w (which sum to 1), and labels only appear above a head-on
+ * threshold, fading in as the view squares up. Dusk palette: XY azure, ZY
+ * amber, XZ floor cool-grey. Custom dispatch arm (no edge-fade).
+ * ========================================================================= */
+
+static float gp_smoothstep(float a, float b, float x) {
+    float t = (b - a != 0.0f) ? (x - a) / (b - a) : 0.0f;
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+    return t * t * (3.0f - 2.0f * t);
+}
+
+/* Stroke text billboarded by an explicit (right, up) world basis, anchored at
+ * (px,py,pz). Lets the labels lie flat against whichever plane is being viewed
+ * head-on while staying readable (advance = screen right, height = screen up). */
+static void grid_stroke_text_billboard(float px, float py, float pz, float scale,
+                                       const float right[3], const float up[3],
+                                       const char *str) {
+    float nx = right[1] * up[2] - right[2] * up[1];
+    float ny = right[2] * up[0] - right[0] * up[2];
+    float nz = right[0] * up[1] - right[1] * up[0];
+    GLfloat m[16] = {
+        right[0] * scale, right[1] * scale, right[2] * scale, 0.0f,
+        up[0]    * scale, up[1]    * scale, up[2]    * scale, 0.0f,
+        nx,               ny,               nz,               0.0f,
+        px,               py,               pz,               1.0f,
+    };
+    glPushMatrix();
+    glMultMatrixf(m);
+    for (const char *p = str; *p; p++)
+        glutStrokeCharacter(GLUT_STROKE_ROMAN, (int)*p);
+    glPopMatrix();
+}
+
+/* Draw one bounded grid plane: the component `kaxis` is pinned to 0, the in-plane
+ * axes `iaxis`/`jaxis` vary over [-R,R] at `major` spacing. Axis lines (through 0)
+ * use `aa`, the rest `la`. `n` is capped so a huge extent can't run away. */
+static void graphplane_lines(const GridDrawContext *ctx, int iaxis, int jaxis, int kaxis,
+                             float R, float major, float r, float g, float b,
+                             float la, float aa) {
+    int n = (int)(R / major + 0.5f);
+    if (n > 400) n = 400;
+    float ext = n * major;
+    (void)kaxis;
+    glBegin(GL_LINES);
+    for (int s = -n; s <= n; s++) {
+        float c = s * major;
+        float alpha = (s == 0) ? aa : la;
+        float p0[3] = { 0, 0, 0 }, p1[3] = { 0, 0, 0 };
+        /* line that runs along iaxis at jaxis = c */
+        grid_color(ctx, r, g, b, alpha);
+        p0[jaxis] = c; p0[iaxis] = -ext; p1[jaxis] = c; p1[iaxis] = ext;
+        glVertex3fv(p0); glVertex3fv(p1);
+        /* line that runs along jaxis at iaxis = c */
+        p0[iaxis] = c; p0[jaxis] = -ext; p1[iaxis] = c; p1[jaxis] = ext;
+        glVertex3fv(p0); glVertex3fv(p1);
+    }
+    glEnd();
+}
+
+/* Coordinate labels for the head-on plane (`haxis` = screen-horizontal in-plane
+ * axis, `vaxis` = screen-vertical, `kaxis` pinned to 0). h-values run along the
+ * screen-bottom edge over [-Lh,Lh], v-values down the screen-left edge over
+ * [-Lv,Lv] — Lh/Lv are the *visible* half-extents so both axes stay on screen.
+ * Edges + margins come from the billboard basis so the signs work per plane. */
+static void graphplane_labels(int haxis, int vaxis, int kaxis,
+                              float Lh, float Lv, float major,
+                              const float right[3], const float up[3],
+                              float scale, float alpha) {
+    glColor4f(0.90f, 0.93f, 0.98f, alpha);
+    int nh = (int)(Lh / major);
+    int nv = (int)(Lv / major);
+    if (nh > 60) nh = 60;
+    if (nv > 60) nv = 60;
+    /* Anchor both tracks just *inside* the visible edges (text grows toward the
+     * centre) so neither is pushed off screen. */
+    float bottom_v = -copysignf(Lv, up[vaxis]);     /* screen-bottom edge */
+    float left_h   = -copysignf(Lh, right[haxis]);  /* screen-left edge   */
+
+    for (int s = -nh; s <= nh; s++) {               /* h-values along the bottom */
+        float c = s * major;
+        char b[16];
+        snprintf(b, sizeof b, "%g", (double)c);
+        float tw = grid_stroke_text_width(scale, b);
+        float p[3] = { 0, 0, 0 };
+        p[haxis] = c; p[vaxis] = bottom_v;
+        /* centre on the gridline, lift a touch inward off the bottom edge */
+        float q0 = p[0] - right[0] * tw * 0.5f + up[0] * major * 0.10f;
+        float q1 = p[1] - right[1] * tw * 0.5f + up[1] * major * 0.10f;
+        float q2 = p[2] - right[2] * tw * 0.5f + up[2] * major * 0.10f;
+        grid_stroke_text_billboard(q0, q1, q2, scale, right, up, b);
+    }
+    for (int s = -nv; s <= nv; s++) {               /* v-values down the left */
+        float c = s * major;
+        char b[16];
+        snprintf(b, sizeof b, "%g", (double)c);
+        float p[3] = { 0, 0, 0 };
+        p[vaxis] = c; p[haxis] = left_h;
+        /* nudge inward off the left edge, vertically centre on the gridline */
+        float q0 = p[0] + right[0] * major * 0.14f - up[0] * major * 0.12f;
+        float q1 = p[1] + right[1] * major * 0.14f - up[1] * major * 0.12f;
+        float q2 = p[2] + right[2] * major * 0.14f - up[2] * major * 0.12f;
+        grid_stroke_text_billboard(q0, q1, q2, scale, right, up, b);
+    }
+    (void)kaxis;
+}
+
+static void render3d_grid_render_graphplanes_theme(const Render3dRenderConfig *config,
+                                                   const GridDrawContext *grid_ctx) {
+    float ry = config->cam_ry * (float)M_PI / 180.0f;
+    float rx = config->cam_rx * (float)M_PI / 180.0f;
+    float cry = cosf(ry), sry = sinf(ry), crx = cosf(rx), srx = sinf(rx);
+    /* Face weights (sum to 1): how head-on the camera is to each plane. */
+    float xy_w = crx * crx * cry * cry;   /* facing XY (look along Z)   */
+    float zy_w = crx * crx * sry * sry;   /* facing ZY (look along X)   */
+    float xz_w = srx * srx;               /* facing XZ floor (top-down) */
+
+    float major = grid_ctx->major;
+    if (major < 0.25f) major = 0.25f;
+    /* Planes span the grid extent (so the NEAR/MID/FAR setting drives them). */
+    float R = grid_ctx->extent;
+    if (R < 2.0f) R = 2.0f;
+    if (R > 80.0f) R = 80.0f;
+
+    /* Visible world half-extents at the origin's depth, from the perspective
+     * projection (half = cam_dist / |proj[diag]|). Labels live at these edges
+     * — clamped to the grid extent — so both axes stay on screen at any zoom.
+     * Clamp guards the ortho / degenerate case (this is a 3D theme). */
+    GLfloat pm[16];
+    glGetFloatv(GL_PROJECTION_MATRIX, pm);
+    float dist = config->cam_dist > 0.5f ? config->cam_dist : 6.0f;
+    float vh = (fabsf(pm[5]) > 1e-4f) ? dist / fabsf(pm[5]) : 4.0f;
+    float vw = (fabsf(pm[0]) > 1e-4f) ? dist / fabsf(pm[0]) : 6.0f;
+    if (vh < 0.5f || vh > 400.0f) vh = 4.0f;
+    if (vw < 0.5f || vw > 600.0f) vw = 6.0f;
+    float Lh = fminf(R, vw * 0.86f);      /* horizontal label extent / edge */
+    float Lv = fminf(R, vh * 0.80f);      /* vertical   label extent / edge */
+
+    /* Billboard basis: world-space screen-right and screen-up for this pose. */
+    float right[3] = { cry, 0.0f, sry };
+    float up[3]    = { srx * sry, crx, -srx * cry };
+
+    /* Three planes spanning the extent. A plane edge-on to the camera fades to
+     * near-nothing (low base) so it doesn't pile up receding lines; the head-on
+     * plane is the bright, readable graph. */
+    glLineWidth(1.3f);
+    graphplane_lines(grid_ctx, 0, 2, 1, R, major, 0.55f, 0.60f, 0.72f,   /* XZ floor */
+                     0.02f + 0.28f * xz_w, 0.06f + 0.55f * xz_w);
+    graphplane_lines(grid_ctx, 0, 1, 2, R, major, 0.40f, 0.70f, 0.98f,   /* XY azure */
+                     0.02f + 0.34f * xy_w, 0.05f + 0.60f * xy_w);
+    graphplane_lines(grid_ctx, 2, 1, 0, R, major, 0.98f, 0.74f, 0.42f,   /* ZY amber */
+                     0.02f + 0.34f * zy_w, 0.05f + 0.60f * zy_w);
+
+    /* Labels: only the most head-on plane, only above the threshold, fading in.
+     * Both in-plane axes are labelled (h along the bottom, v down the left). */
+    const float THRESH = 0.80f;
+    float ta_base = fminf(grid_ctx->xn_alpha * grid_ctx->grid_brightness, 1.0f);
+    float lblscale = fminf(0.0040f, fmaxf(0.0022f, major * 0.0036f));
+    glLineWidth(1.4f);
+    if (xy_w > zy_w && xy_w > xz_w && xy_w > THRESH) {
+        graphplane_labels(0, 1, 2, Lh, Lv, major, right, up, lblscale,
+                          ta_base * gp_smoothstep(THRESH, 0.96f, xy_w));   /* XY: x,y */
+    } else if (zy_w > xz_w && zy_w > THRESH) {
+        graphplane_labels(2, 1, 0, Lh, Lv, major, right, up, lblscale,
+                          ta_base * gp_smoothstep(THRESH, 0.96f, zy_w));   /* ZY: z,y */
+    } else if (xz_w > THRESH) {
+        graphplane_labels(0, 2, 1, Lh, Lv, major, right, up, lblscale,
+                          ta_base * gp_smoothstep(THRESH, 0.96f, xz_w));   /* XZ: x,z */
+    }
+    glLineWidth(1.0f);
+}
+
 /* ---- Grid transition curve plugin (Render3dXnReveal, see render3d_transition.h) --
  * The grid owns its fade durations + per-theme speed + opacity shape; the
  * machine just feeds elapsed time and reads opacity back. A linear opacity
@@ -1964,6 +2144,10 @@ static void grid_dispatch_theme(const Render3dFrameRenderContext *frame_ctx,
 
     case GRID_THEME_NEON:
         render3d_grid_render_neon_theme(grid_ctx);
+        break;
+
+    case GRID_THEME_GRAPHPLANES:
+        render3d_grid_render_graphplanes_theme(config, grid_ctx);
         break;
 
     case GRID_THEME_PLANES:

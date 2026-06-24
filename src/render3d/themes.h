@@ -30,7 +30,8 @@
     X(SOIL, "Tilled Field") \
     X(STARCHART, "Star Chart") \
     X(SKETCH, "Sketchbook")  \
-    X(NEON, "Neon Graph")
+    X(NEON, "Neon Graph")    \
+    X(GRAPHPLANES, "Graph Planes")
 
 #define GRID_THEME_ENUM_ENTRY(name, str) GRID_THEME_##name,
 #define GRID_THEME_NAME_ENTRY(name, str) [GRID_THEME_##name] = str,
