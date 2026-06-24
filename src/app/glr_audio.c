@@ -660,7 +660,7 @@ static AudioWorkerReq audio_run_request(AudioWorkerReq k, int idx,
     }
 
     double t0 = worker_now_ms();
-    const char *op = "save-only";
+    const char *op = "save";
     if (k == AWR_START)        { op = "load";    worker_start_or_fallback(idx, seek); }
     else if (k == AWR_ADVANCE) { op = "advance"; worker_advance(); }
     else if (k == AWR_UNINIT)  { op = "uninit";  worker_uninit_all(); }
@@ -671,16 +671,17 @@ static AudioWorkerReq audio_run_request(AudioWorkerReq k, int idx,
     double thr = worker_hitch_threshold_ms();
     double dt  = worker_now_ms() - t0;
     if (thr > 0.0 && dt >= thr) {
+        const char *save_suffix = (save && k != AWR_NONE) ? "+save" : "";
         if (g_hitch_log_elapsed_fn) {
             fprintf(stderr,
                     "[init +%6.3fs] repl_audio: worker hitch: %s%s took %.1f ms "
                     "(threshold %.0f ms)\n",
-                    g_hitch_log_elapsed_fn(), op, save ? "+save" : "", dt, thr);
+                    g_hitch_log_elapsed_fn(), op, save_suffix, dt, thr);
         } else {
             fprintf(stderr,
                     "repl_audio: worker hitch: %s%s took %.1f ms "
                     "(threshold %.0f ms)\n",
-                    op, save ? "+save" : "", dt, thr);
+                    op, save_suffix, dt, thr);
         }
     }
     return k;
