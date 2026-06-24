@@ -74,7 +74,14 @@ static void glr_ctrl_start_camera_to_3d(void) {
         return;
     }
 
-    cam = glr_camera();
+    /* Carry the ease *destination* (not the partway live pose) for
+     * tx/ty/dist: a 3D example loaded mid-blend is still easing toward its
+     * own pan/zoom when the projection finishes, so the live pose is only
+     * ~98% there. Reading the destination locks onto the example's intended
+     * values; with no ease in flight it equals the live pose (no change to
+     * the plain interactive toggle). The orbit angle + tz come from the
+     * saved snapshot, kept current by glr_ctrl_view_record_external_3d_pose. */
+    cam = glr_camera_destination();
     target = g_saved_3d_camera;
     target.tx = cam.tx;
     target.ty = cam.ty;
@@ -99,7 +106,17 @@ static void glr_ctrl_handle_view_mode_target_change(void) {
 }
 
 void glr_ctrl_view_record_external_3d_pose(float rx, float ry, float tz) {
-    if (!g_view_mode_target_ortho)
+    /* The saved-3D snapshot is still the authority — pending consumption by
+     * start_camera_to_3d — for as long as the controls are in 2D mode:
+     * either dwelling in 2D, or mid 2D->3D with the projection still
+     * blending (the same condition glr_ctrl_sync_camera_control_mode uses).
+     * Loading a *second* example mid-blend must refresh it here; otherwise
+     * start_camera_to_3d restores the FIRST example's stale orbit angle when
+     * the blend finishes. Once start_camera_to_3d has fired (CAMERA_TO_3D)
+     * or we've settled in 3D (IDLE) the live camera is authoritative and a
+     * stale report must not smear the snapshot — see
+     * test_view_record_external_3d_pose_noop_in_perspective. */
+    if (!glr_ctrl_view_controls_are_2d())
         return;
     /* Seed the snapshot when we've never been in 3D this session
      * (e.g. workspace loaded with ortho_mode=1): without this, the

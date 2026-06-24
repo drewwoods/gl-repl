@@ -1176,6 +1176,77 @@ static void test_view_mode_2d_honors_pending_camera_ease(void) {
     ASSERT_FLOAT("2D camera flattened to ry=0", cam.ry, 0.0f);
 }
 
+/* Drive the projection blend to a discrete endpoint (0 = ortho, 1 =
+ * perspective). Unlike tick_until_view_settled, this keeps ticking until
+ * the projection MIX reaches the target — tick_until_view_settled returns
+ * the instant the camera flatten finishes, while the 2D projection blend
+ * hasn't started, so it leaves mix == 1.0 (still perspective). */
+static void tick_until_projection_mix(float want, int max_iters) {
+    for (int i = 0; i < max_iters; i++) {
+        glr_ctrl_tick();
+        glr_ctrl_display_frame();
+        if (g_last_scene_config.projection_mix == want)
+            return;
+    }
+}
+
+/* Cycling 2D-example -> 3D-example-A -> 3D-example-B fast: example A
+ * starts a 2D->3D projection blend; example B loads mid-blend. The
+ * saved-3D snapshot (consumed by start_camera_to_3d when the blend ends)
+ * must refresh to B's pose, not stay stuck on A's — and the carried
+ * pan/zoom must track B's full target, not the ~98%-eased live pose. */
+static void test_view_mode_3d_restore_tracks_example_loaded_midblend(void) {
+    GlrCameraState cam;
+
+    printf("--- imrepl_ctrl 2d->3d restore tracks mid-blend example ---\n");
+    prepare_display_fixture();
+    replay_state_mut()->active = 0;
+    replay_state_mut()->state = REPLAY_OFF;
+    glr_ctrl_display_frame();
+
+    /* Settle fully into 2D: drive the projection all the way to ortho. */
+    glr_state_presentation_mut()->ortho_mode = RENDER3D_VIEW_2D;
+    tick_until_projection_mix(0.0f, 400);
+    ASSERT_FLOAT("precondition: settled into 2D ortho",
+                 g_last_scene_config.projection_mix, 0.0f);
+
+    /* Example A (3D) loads while still in 2D: records its 3D pose into the
+     * saved snapshot, eases the camera toward it, then flips to 3D. */
+    glr_camera_ease_to(30.0f, 60.0f, 4.0f, 0.0f, 0.0f, 0.0f);
+    glr_ctrl_view_record_external_3d_pose(30.0f, 60.0f, 0.0f);
+    glr_state_presentation_mut()->ortho_mode = RENDER3D_VIEW_3D;
+
+    /* One tick starts the ~0.6s projection blend (PROJECTION_TO_3D): we are
+     * now genuinely mid-transition and start_camera_to_3d has NOT fired. */
+    glr_ctrl_tick();
+    glr_ctrl_display_frame();
+    ASSERT_TRUE("precondition: mid-blend (0 < mix < 1)",
+                g_last_scene_config.projection_mix > 0.0f &&
+                g_last_scene_config.projection_mix < 1.0f);
+
+    /* Example B (3D) loads mid-blend: same bridge calls, new pose. */
+    glr_camera_ease_to(45.0f, 90.0f, 2.0f, 0.0f, 0.0f, 0.0f);
+    glr_ctrl_view_record_external_3d_pose(45.0f, 90.0f, 0.0f);
+
+    /* Finish the blend (fires start_camera_to_3d), then let the camera
+     * ease settle. */
+    for (int i = 0; i < 400; i++) {
+        glr_ctrl_tick();
+        glr_ctrl_display_frame();
+        if (g_last_scene_config.projection_mix == 1.0f &&
+            !glr_camera_target_active())
+            break;
+    }
+
+    cam = glr_camera();
+    ASSERT_TRUE("3D restore uses example B's orbit rx, not stale example A",
+                fabsf(cam.rx - 45.0f) < 0.5f);
+    ASSERT_TRUE("3D restore uses example B's orbit ry, not stale example A",
+                fabsf(cam.ry - 90.0f) < 0.5f);
+    ASSERT_TRUE("3D restore lands on example B's full dist, not the midblend live pose",
+                fabsf(cam.dist - 2.0f) < 0.05f);
+}
+
 /* In 3D mode the live camera is authoritative, so an external 3D-pose
  * report (a stale callback firing outside the ortho window) must not
  * smear the saved snapshot. */
@@ -2441,6 +2512,7 @@ int main(void) {
     test_view_mode_projection_transition_wiring();
     test_view_mode_3d_to_2d_uses_faster_decay();
     test_view_mode_2d_honors_pending_camera_ease();
+    test_view_mode_3d_restore_tracks_example_loaded_midblend();
     test_view_record_external_3d_pose_tracks_in_ortho();
     test_view_record_external_3d_pose_noop_in_perspective();
     test_quit_recovery_file();
