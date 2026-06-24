@@ -45,8 +45,15 @@ typedef enum {
     GLR_AUDIO_LOOP_ALL  = 2,
 } GlrAudioLoopMode;
 
+typedef double (*GlrAudioElapsedSecondsFn)(void);
+
 int  glr_audio_init(void);
 void glr_audio_shutdown(void);
+
+/* Optional diagnostic clock for worker-hitch logs. The callback must be safe
+ * to call from the audio worker and return seconds since the app's log origin.
+ * Set before glr_audio_init(); pass NULL to restore unprefixed hitch logs. */
+void glr_audio_set_hitch_log_elapsed_fn(GlrAudioElapsedSecondsFn fn);
 
 /* Register a list of file paths as the playlist. Paths are copied
  * internally. Extra entries past the internal cap are dropped (a

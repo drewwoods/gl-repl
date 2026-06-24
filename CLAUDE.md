@@ -405,8 +405,8 @@ audio-thread hitches (the kind seen on slow Linux disks):
   runs exactly one blocking lifecycle op, then sleeps again. The
   dispatch span is timed with `clock_gettime(CLOCK_MONOTONIC)` (after
   the mutex is released, so only the blocking work counts); any op
-  over the threshold logs `repl_audio: worker hitch: <op>[+save] took
-  N ms`. `<op>` is `load` (`ma_sound_init_from_file`), `uninit`
+  over the threshold logs `[init +N.NNNs] repl_audio: worker hitch:
+  <op>[+save] took N ms`. `<op>` is `load` (`ma_sound_init_from_file`), `uninit`
   (`ma_sound_uninit` stream page-flush), `advance`, or `save-only`.
   Threshold via `GLR_AUDIO_HITCH_MS` (default 50; `0` disables; read
   once and cached). `AWR_QUIT` (shutdown) is intentionally not timed.

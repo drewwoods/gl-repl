@@ -174,6 +174,8 @@ static int             g_req_idx  = 0;
 static float           g_req_seek = GLR_AUDIO_NO_SEEK;
 static int             g_req_save = 0;         /* independent: periodic save */
 
+static GlrAudioElapsedSecondsFn g_hitch_log_elapsed_fn = NULL;
+
 /* ------------------------------------------------------------------ */
 /* State persistence (track + offset + audio cfg across restarts)      */
 /* ------------------------------------------------------------------ */
@@ -668,11 +670,19 @@ static AudioWorkerReq audio_run_request(AudioWorkerReq k, int idx,
 
     double thr = worker_hitch_threshold_ms();
     double dt  = worker_now_ms() - t0;
-    if (thr > 0.0 && dt >= thr)
-        fprintf(stderr,
-                "repl_audio: worker hitch: %s%s took %.1f ms "
-                "(threshold %.0f ms)\n",
-                op, save ? "+save" : "", dt, thr);
+    if (thr > 0.0 && dt >= thr) {
+        if (g_hitch_log_elapsed_fn) {
+            fprintf(stderr,
+                    "[init +%6.3fs] repl_audio: worker hitch: %s%s took %.1f ms "
+                    "(threshold %.0f ms)\n",
+                    g_hitch_log_elapsed_fn(), op, save ? "+save" : "", dt, thr);
+        } else {
+            fprintf(stderr,
+                    "repl_audio: worker hitch: %s%s took %.1f ms "
+                    "(threshold %.0f ms)\n",
+                    op, save ? "+save" : "", dt, thr);
+        }
+    }
     return k;
 }
 
@@ -857,6 +867,10 @@ void glr_audio_shutdown(void) {
     ma_engine_uninit(&g_engine);
     reset_audio_module_state();
     g_worker_hitch_threshold = -1.0;
+}
+
+void glr_audio_set_hitch_log_elapsed_fn(GlrAudioElapsedSecondsFn fn) {
+    g_hitch_log_elapsed_fn = fn;
 }
 
 int glr_audio_set_playlist(const char *const *paths, int count) {

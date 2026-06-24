@@ -38,9 +38,13 @@ static double init_now(void) {
     return (double)tv.tv_sec + (double)tv.tv_usec / 1e6;
 }
 
-static void init_trace(const char *phase) {
+static double init_elapsed_seconds(void) {
     if (g_init_t0 < 0.0) g_init_t0 = init_now();
-    fprintf(stderr, "[init +%6.3fs] %s\n", init_now() - g_init_t0, phase);
+    return init_now() - g_init_t0;
+}
+
+static void init_trace(const char *phase) {
+    fprintf(stderr, "[init +%6.3fs] %s\n", init_elapsed_seconds(), phase);
 }
 
 static void init_trace_detail(const char *phase) {
@@ -434,6 +438,7 @@ int main(int argc, char **argv) {
     int window_h  = 800;
 
     init_trace("start");
+    glr_audio_set_hitch_log_elapsed_fn(init_elapsed_seconds);
     glr_ctrl_set_program_name(argv[0]);
 
     /* GLR_DETAILED_PROF (any non-empty value) is the env-var twin of
