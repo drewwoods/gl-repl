@@ -289,7 +289,7 @@ hitches:
   per-frame timing triples for the first two frames.
 - **Audio-worker hitch detector** — any blocking audio lifecycle op (track
   load, stream teardown, advance) over the threshold logs
-  `repl_audio: worker hitch: <op> took N ms`. Tune with
+  `[init +N.NNNs] repl_audio: worker hitch: <op> took N ms`. Tune with
   `GLR_AUDIO_HITCH_MS` (default 50; `0` disables).
 - **GPU timer-query override** — `GLR_NO_GPU_PROF=1` leaves the CPU profile
   data on but disables GPU timings, useful when a driver advertises timer

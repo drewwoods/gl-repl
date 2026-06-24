@@ -875,8 +875,8 @@ when a stall happens.
   `worker_save_state`), then sleeps again. The dispatch span is timed
   with `clock_gettime(CLOCK_MONOTONIC)` **after the mutex is released**
   so only the blocking work counts, and any op at/over the threshold
-  logs `repl_audio: worker hitch: <op>[+save] took N ms (threshold
-  M ms)`. Threshold via `GLR_AUDIO_HITCH_MS` (default 50; `0` disables;
+  logs `[init +N.NNNs] repl_audio: worker hitch: <op>[+save] took N ms
+  (threshold M ms)`. Threshold via `GLR_AUDIO_HITCH_MS` (default 50; `0` disables;
   read once and cached in a static). `AWR_QUIT` is intentionally
   outside the timed span — a slow final save/uninit at shutdown is not
   a runtime hitch. These stalls delay track change / resume only; the
