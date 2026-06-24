@@ -564,7 +564,7 @@ camera looks down −Z. In 3D they render as a vertical wall at z=0;
 filtering theme availability by view mode is a deliberate later step (the
 look was the first goal). Both use the Dusk scene palette, route line
 alpha through `grid_color()` (so the show/hide fade still applies), and
-carry no `GridThemeSpec`, so `render3d_grid_theme_uses_edge_fade()` is
+carry no [`GridThemeSpec`](../src/render3d/grid.c#L135), so [`render3d_grid_theme_uses_edge_fade()`](../src/render3d/grid.h#L55) is
 false and the radial edge-fade machinery is skipped. They live as custom
 arms in `grid_dispatch_theme` in [`src/render3d/grid.c`](../src/render3d/grid.c).
 
@@ -1586,7 +1586,7 @@ need no per-platform code.
 To keep the REPL compiler and pipeline engine (`src/repl/`) strictly decoupled from visual rendering and the host editor environment (`src/app/`, `src/editor/`), the codebase enforces a strict link boundary and routes all external interactions through explicit, neutral seams.
 
 ### Standalone REPL Demo Coupling
-[`tools/repl_demo/repl_demo.c`](../tools/repl_demo/repl_demo.c) serves as a negative boundary proof. Its default samples prove that the core pipeline (`parse -> command store -> flatten -> execute`) builds and runs **without** the app controller (`src/app/glr_ctrl.c`), the editor (`src/editor/*`), the UI renderers (`src/ui/*`), or any app-owned visual state.
+[`tools/repl_demo/repl_demo.c`](../tools/repl_demo/repl_demo.c) serves as a negative boundary proof. Its default samples prove that the core pipeline (`parse -> command store -> flatten -> execute`) builds and runs **without** the app controller ([`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c)), the editor (`src/editor/*`), the UI renderers (`src/ui/*`), or any app-owned visual state.
 
 `./repl_demo --trace` provides a representative walkthrough of this language pipeline: it loads code through the non-editor load transaction (`repl_load_apply_line`), parses and flattens it, and prints the evaluated results—stopping strictly at the REPL boundary. Editor-specific concerns (like undo/redo, cursor post-effects, and visual tutorial presentation) remain entirely inside their host modules.
 
@@ -1598,13 +1598,13 @@ To ensure dependencies do not leak back into the REPL core, the build system enf
 ### Host Bridges & Boundary Mechanisms
 Decoupling is achieved through four primary interfaces that the app controller installs at startup:
 
-#### 1. Source-Document Port (`source_document.h`)
+#### 1. Source-Document Port ([`source_document.h`](../source_document.h))
 Source text reads and mutations are routed through `source_document_*` functions.
 * The full application links [`glr_source_document.c`](../src/app/glr_source_document.c) (which forwards calls to [EditorState](../src/editor/state.h#L175)).
 * The standalone demo links [`tools/repl_demo/source_document.c`](../tools/repl_demo/source_document.c) (a tiny, editor-free line store).
 This keeps [EditorState](../src/editor/state.h#L175) and editor logic out of the core link set.
 
-#### 2. Host-Effect Bridges (`ReplHostEffects`)
+#### 2. Host-Effect Bridges ([`ReplHostEffects`](../src/repl/host_effects.h#L38))
 The host-effect bridge ([ReplHostEffects](../src/repl/host_effects.h#L38)) installed by the controller routes core pipeline actions (such as status updates, example resets, input resets, scrolling, follow-scroll, and cursor parking) back to the UI, editor state, and peer subsystems. The demo installs only its edit-line hooks and leaves the status/editor/tutorial hooks as no-ops.
 
 #### 3. Export Bridges & Layout Inputs
@@ -1612,7 +1612,7 @@ The exporter ([`src/repl/export.c`](../src/repl/export.c)) is GL-free and app-fr
 * **Config Bridge:** Installed via [`glr_actions_install_export_cfg_bridge()`](../src/app/glr_actions.h#L84) so the exporter can read/write `@cfg` blocks without direct coupling to app configuration modules.
 * **Camera Bridge:** Installed via [`glr_camera_export_install_bridge()`](../src/app/glr_camera_export.h#L14) to serialize camera coordinates (`// camera` blocks).
 * **Reshape-Projection Bridge:** Allows the exporter or code-panel calculations to query perspective or orthographic projections dynamically.
-* **Camera-Distance Source:** Injects the current camera distance into the command executor so that the dynamic point-attenuation fallback (scaling `glPointSize` manually when `glPointParameterfv` is unsupported) can function without linking `glr_camera.c`.
+* **Camera-Distance Source:** Injects the current camera distance into the command executor so that the dynamic point-attenuation fallback (scaling `glPointSize` manually when `glPointParameterfv` is unsupported) can function without linking [`glr_camera.c`](../src/app/glr_camera.c).
 * **Export Layout:** The [`ReplExportLayout`](../src/repl/export.h#L228) struct passes viewport and code-panel geometry as an explicit export input instead of calling `ui_layout_*`.
 
 #### 4. Global State Reset & Dispatch Separation
