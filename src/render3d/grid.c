@@ -1578,36 +1578,70 @@ static float grid_stroke_text_width(float scale, const char *str) {
     return w * scale;
 }
 
-/* Sketchbook: a bounded hand-drawn "field study" sheet — wobbly ink lines on
- * the dark canvas with cool-ink strokes, column letters (A..) along the
- * bottom, row numbers (1..) down the left, and a titled header. */
+/* Smallest "nice" multiplier (1, 2, 5, 10, 20, 50, ...) that is >= ratio. Used
+ * to thin the Sketchbook labels to a legible interval when zoomed out. */
+static float grid_nice_step_mul(float ratio) {
+    if (!(ratio > 1.0f)) return 1.0f;
+    float p = 1.0f;
+    while (p < ratio) {
+        if (p * 2.0f >= ratio) return p * 2.0f;
+        if (p * 5.0f >= ratio) return p * 5.0f;
+        p *= 10.0f;
+    }
+    return p;
+}
+
+/* Sketchbook: a hand-drawn coordinate graph that fills the 2D ortho view —
+ * wobbly ink cell lines snapped to real world coordinates, each labelled with
+ * its value (labels thin to a nice stride when zoomed out). */
 static void render3d_grid_render_sketch_theme(const Render3dRenderConfig *config,
                                               const GridDrawContext *grid_ctx) {
     /* Hand-drawn coordinate graph: wobbly ink cell lines snapped to real
-     * world coordinates (multiples of the grid `major` step), each labelled
-     * with its actual value, so the labels line up with the gridlines.
+     * world coordinates (multiples of the grid `major` step), labelled with
+     * their actual value so the labels line up with the gridlines.
      *
-     * Fit to the live ortho view: glOrtho's projection matrix gives the
-     * visible world half-extents directly (half = 1/|proj[diag]|); the view
-     * is centred on the camera pan (cam_tx, cam_ty). Clamp the half-extents
-     * to a sane band so the perspective (3D) fallback can't explode the loop
-     * counts. */
+     * Fit to the live ortho view: in the 2D ortho projection glOrtho's matrix
+     * gives the visible world half-extents exactly (half = 1/|proj[diag]|) at
+     * ANY zoom, so they must NOT be clamped to a small band — that snapped the
+     * grid to a fixed box once zoomed out far enough. Only the non-ortho (3D
+     * wall) / degenerate case falls back to a fixed size. The view is centred
+     * on the camera pan (cam_tx, cam_ty). */
     GLfloat pm[16];
     glGetFloatv(GL_PROJECTION_MATRIX, pm);
-    float half_w = (fabsf(pm[0]) > 1e-6f) ? 1.0f / fabsf(pm[0]) : 6.0f;
-    float half_h = (fabsf(pm[5]) > 1e-6f) ? 1.0f / fabsf(pm[5]) : 4.0f;
-    if (half_h < 1.5f || half_h > 16.0f) half_h = 4.0f;
-    if (half_w < 1.5f || half_w > 24.0f) half_w = half_h * 1.4f;
+    int is_ortho = fabsf(pm[15] - 1.0f) < 1e-3f && fabsf(pm[11]) < 1e-3f;
+    float half_w, half_h;
+    if (is_ortho && fabsf(pm[0]) > 1e-9f && fabsf(pm[5]) > 1e-9f) {
+        half_w = 1.0f / fabsf(pm[0]);
+        half_h = 1.0f / fabsf(pm[5]);
+    } else {
+        half_h = 4.0f; half_w = 5.6f;
+    }
+    if (!(half_h > 0.05f && half_h < 1.0e5f)) half_h = 4.0f;
+    if (!(half_w > 0.05f && half_w < 1.0e5f)) half_w = half_h * 1.4f;
     float cx = config->cam_tx, cy = config->cam_ty;
 
     float cell = grid_ctx->major;
     if (cell < 0.25f) cell = 0.25f;
 
-    /* Visible world bounds, centred on the camera pan. Gridlines sit on the
-     * `cell`-snapped coordinates inside this range; the line spans run the
-     * full view edge-to-edge so the graph fills the screen (no inset). */
+    /* Coarsen the cell to a nice multiple of `major` (1/2/5/10...) as the view
+     * grows, so the grid keeps a clean, legible step (and the labels stay
+     * readable, and the work stays bounded) instead of crowding to a fine mesh
+     * when zoomed out. At the nominal zoom the multiplier is 1 (unchanged). */
+    {
+        float vh_px = (config->render3d_h > 0) ? (float)config->render3d_h : 600.0f;
+        float px_per_cell = cell * vh_px / (2.0f * half_h);
+        if (px_per_cell > 1e-3f)
+            cell *= grid_nice_step_mul(34.0f / px_per_cell);
+    }
+
+    /* Visible world bounds, centred on the camera pan. The line spans run the
+     * full view edge-to-edge so the graph fills the screen. Cap the drawn span
+     * so an extreme zoom-out can't emit an unbounded number of strokes. */
     float vx0 = cx - half_w, vx1 = cx + half_w;
     float vy0 = cy - half_h, vy1 = cy + half_h;
+    const float MAX_HALF = 300.0f * cell;
+    if (half_w > MAX_HALF) { vx0 = cx - MAX_HALF; vx1 = cx + MAX_HALF; }
+    if (half_h > MAX_HALF) { vy0 = cy - MAX_HALF; vy1 = cy + MAX_HALF; }
     float left  = ceilf(vx0 / cell) * cell;
     float right = floorf(vx1 / cell) * cell;
     float bot   = ceilf(vy0 / cell) * cell;
@@ -1617,6 +1651,8 @@ static void render3d_grid_render_sketch_theme(const Render3dRenderConfig *config
     const float ink_r = 0.74f, ink_g = 0.80f, ink_g2 = 0.92f;
     int vsegs = (int)((vy1 - vy0) / cell * 3.0f) + 3;
     int hsegs = (int)((vx1 - vx0) / cell * 3.0f) + 3;
+    if (vsegs > 240) vsegs = 240;
+    if (hsegs > 240) hsegs = 240;
 
     /* Vertical cell lines (bold + faint pass); the x=0 axis line is heavier. */
     for (float x = left; x <= right + 1e-3f; x += cell) {
@@ -1640,8 +1676,8 @@ static void render3d_grid_render_sketch_theme(const Render3dRenderConfig *config
     }
 
     /* Coordinate labels: x values along the bottom of the view, y values down
-     * the left of the view — each centred on its gridline so it lines up with
-     * the value. Inset just enough from the edge that the glyphs don't clip. */
+     * the left of the view — each centred on its (coarsened) gridline so it
+     * lines up with the value. Inset just enough that the glyphs don't clip. */
     float ta = fminf(grid_ctx->xn_alpha * grid_ctx->grid_brightness, 1.0f);
     float lbl = fminf(0.0036f, fmaxf(0.0020f, cell * 0.0034f));   /* ~0.3 world units */
     float xlbl_y = vy0 + cell * 0.38f;          /* just above the bottom edge */
