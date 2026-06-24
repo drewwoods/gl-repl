@@ -328,6 +328,7 @@ static inline void glLineStipple(GLint factor, GLushort pattern) { GL_STUB_TRACE
 static inline void glLineWidth(GLfloat width) { GL_STUB_TRACE_LINE("glLineWidth %g\n", (double)width); gl_stub_tick(GL_STUB_glLineWidth); }
 static inline void glLoadIdentity(void) { GL_STUB_TRACE_LINE("glLoadIdentity\n"); gl_stub_tick(GL_STUB_glLoadIdentity); }
 static inline void glLoadMatrixf(const GLfloat *m) { GL_STUB_TRACE_LINE("glLoadMatrixf\n"); gl_stub_tick(GL_STUB_glLoadMatrixf); (void)m; }
+static inline void glMultMatrixf(const GLfloat *m) { (void)m; }
 static inline void glMaterialf(GLenum face, GLenum pname, GLfloat param) { GL_STUB_TRACE_LINE("glMaterialf %u %u %g\n", (unsigned)face, (unsigned)pname, (double)param); gl_stub_tick(GL_STUB_glMaterialf); }
 static inline void glMaterialfv(GLenum face, GLenum pname, const GLfloat *params) { GL_STUB_TRACE_LINE("glMaterialfv %u %u\n", (unsigned)face, (unsigned)pname); gl_stub_tick(GL_STUB_glMaterialfv); (void)params; }
 static inline void glMatrixMode(GLenum mode) { GL_STUB_TRACE_LINE("glMatrixMode %u\n", (unsigned)mode); gl_stub_tick(GL_STUB_glMatrixMode); }

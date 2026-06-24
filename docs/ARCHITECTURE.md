@@ -1105,6 +1105,7 @@ with — keep this current when adding a theme):
 | Radar | Opts into NV distance fog for its rings (covered by `test_nv_fog_distance_radial_optin`) |
 | Tilled Field | Opaque depth-written terrain — no translucent-line stacking |
 | Sketchbook, Neon Graph | Own alpha fade (`grid_color` xn_alpha); XY-plane 2D themes, not on the radial path |
+| Graph Planes | Own alpha fade (`grid_color` xn_alpha) + per-plane camera-orientation weight; 3D adaptive labelled planes |
 
 Open follow-up: Radar, Fog, Tilled Field, Focus, and Adaptive Planes are
 *not* on the world-radial path. Ocean/Frozen are deliberate (they own
@@ -1141,10 +1142,28 @@ arms in `grid_dispatch_theme` in [`src/render3d/grid.c`](../src/render3d/grid.c)
   brighter violet majors, an additive bloom pass, glowing nodes at the
   major intersections, and a pulsing coral origin cross. No text.
 
+A third theme, **Graph Planes**, is the **3D** counterpart — an
+adaptive-planes coordinate graph. It draws three bounded grid planes (XY
+azure, ZY amber, XZ floor grey) spanning the grid `extent`; each plane's
+brightness tracks how head-on the camera is to it (face weights
+`xy_w`/`zy_w`/`xz_w` from `cam_rx`/`cam_ry`, which sum to 1), so a plane
+edge-on to the camera fades to near nothing and the facing one is the
+bright readable graph. Only the plane the camera is **nearly orthogonal
+to** (face weight past a threshold) is labelled — so one X/Y, X/Z or Z/Y
+plane at a time — with both in-plane axes' real coordinate values, fading
+in as the view squares up. Labels are billboarded to the camera
+(`grid_stroke_text_billboard`, an explicit screen-right/up world basis)
+and anchored at the **visible** view edges so both axes stay on screen:
+the visible half-extents come from the perspective projection
+(`half = cam_dist / |proj[diag]|`) clamped to the grid extent. It is a
+3D theme; in the 2D ortho view it is not meaningful (the view-mode
+filtering follow-up covers hiding such mismatches).
+
 The GLUT stroke font (`glutStrokeCharacter` / `glutStrokeWidth` /
-`GLUT_STROKE_ROMAN`) is used for the scalable inked labels; the no-op
-stub equivalents were added to [`tests/gl-stubs/include/GL/freeglut.h`](../tests/gl-stubs/include/GL/freeglut.h) so
-`USE_GL_STUBS` builds still compile.
+`GLUT_STROKE_ROMAN`) is used for the scalable inked labels (and
+`glMultMatrixf` for the billboard basis); the no-op stub equivalents
+were added to [`tests/gl-stubs/include/GL/freeglut.h`](../tests/gl-stubs/include/GL/freeglut.h) and
+[`tests/gl-stubs/include/GL/gl.h`](../tests/gl-stubs/include/GL/gl.h) so `USE_GL_STUBS` builds still compile.
 
 ### Edit Overlays: polygon outlines on geometry
 
