@@ -214,7 +214,11 @@ static int consume_example_cfg_header(const char *const *lines) {
 
 /* ----- Body emission with editor-canonical func_def placement ----- */
 
-#define EXAMPLE_BODY_LINES_MAX 256
+/* Upper bound on an example's post-metadata body lines. Sizes the
+ * func-reorder `kinds[]` buffer below and bounds every emission pass;
+ * lines past it are silently dropped, so it must clear the largest
+ * example (the "Dusk lighthouse atoll" stress test, ~260 lines). */
+#define EXAMPLE_BODY_LINES_MAX 384
 
 #define EXAMPLE_KIND_OTHER      0
 #define EXAMPLE_KIND_FUNC_BLOCK 1
