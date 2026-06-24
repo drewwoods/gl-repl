@@ -1580,6 +1580,8 @@ test-full: ## Full gate: stub tests + checks + build gl-repl, bench, repl_demo, 
 	$(MAKE) --no-print-directory gl-repl
 	$(MAKE) --no-print-directory gl-tests
 	$(MAKE) --no-print-directory bench
+	$(MAKE) --no-print-directory clean
+	$(MAKE) --no-print-directory glut
 
 install-hooks: ## Point this clone's git hooks at the tracked .githooks/ directory.
 	@git config core.hooksPath .githooks

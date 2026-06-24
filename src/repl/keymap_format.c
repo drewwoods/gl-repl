@@ -62,7 +62,9 @@ static const char *base_key_name(int key, int is_special,
         case GLUT_KEY_PAGE_UP:   return "Page Up";
         case GLUT_KEY_PAGE_DOWN: return "Page Down";
         case GLUT_KEY_INSERT:    return "Insert";
+#ifndef USE_GLUT
         case GLUT_KEY_DELETE:    return "Delete";
+#endif
         default:                 break;
         }
     }
