@@ -9,13 +9,6 @@
 
 #include <stddef.h>
 
-#define GLR_PATH_MAX 1024
-
-/* Default workspace directory for save/load operations when the current
- * working directory is writable. Can be overridden by workspace metadata
- * headers or explicit user selection. */
-#define GLR_DEFAULT_WORKSPACE_DIR "./workspace"
-
 int         glr_paths_user_data_dir(char *buf, size_t buflen);
 int         glr_paths_user_music_dir(char *buf, size_t buflen);
 int         glr_paths_user_workspace_dir(char *buf, size_t buflen);
