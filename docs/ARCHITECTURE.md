@@ -1391,8 +1391,13 @@ designed family rather than a grab-bag of saturated primaries. The
 rollout started with the Scene menu "2D" tag (assignment sketch, function
 demos, recursive tree, spirograph, ripple ring, bezier, de Casteljau) and
 now also covers the line/surface 3D scenes (animated ring, animated wave
-surface, GLU tessellator + cutout, transform stress); the intent is the
-whole catalog over time. The palette is documented once as a comment
+surface, GLU tessellator + cutout, transform stress) and the
+kitchen-sink showcase, "Dusk lighthouse atoll" (the stress test —
+redesigned from a feature hodgepodge into one coherent dusk seascape that
+still exercises nested loops, recursion with `if`/`else if`/`else`, GLU
+tess + cutout, GLUT solids, a parametric surface, additive points,
+translucency, and bitmap text); the intent is the whole catalog over
+time. The palette is documented once as a comment
 block at the top of
 [`src/repl/examples.c`](../src/repl/examples.c) and applied as literal `glColor*` / `gluColor` /
 `glClearColor` values in the affected example arrays (the example data is

@@ -698,7 +698,7 @@ static void test_example_tag_metadata(void) {
         }
     }
 
-    stress_idx = find_example_index_by_name("Stress test (all features)");
+    stress_idx = find_example_index_by_name("Dusk lighthouse atoll (stress test)");
     ASSERT_TRUE("known multi-tag example found", stress_idx >= 0);
     if (stress_idx >= 0) {
         for (int tag_idx = 0; tag_idx < tag_count; tag_idx++) {
@@ -795,7 +795,7 @@ static void test_example_subheading_metadata(void) {
      * non-NULL and the same value must surface under every tag it
      * carries (catalog authoring rule: a single entry cannot rename
      * itself per tag). */
-    int stress_idx = find_example_index_by_name("Stress test (all features)");
+    int stress_idx = find_example_index_by_name("Dusk lighthouse atoll (stress test)");
     ASSERT_TRUE("Stress test in catalog", stress_idx >= 0);
     if (stress_idx >= 0) {
         const char *expected_sub = repl_example_subheading(stress_idx);
@@ -871,7 +871,7 @@ static void test_example_cfg_uses_symbolic_names(void) {
 static void test_example_tag_default_cfg(void) {
     int bezier_idx     = find_example_index_by_name("Bezier curve with guides");
     int cube_idx       = find_example_index_by_name("Lit cube");
-    int stress_idx     = find_example_index_by_name("Stress test (all features)");
+    int stress_idx     = find_example_index_by_name("Dusk lighthouse atoll (stress test)");
     int spirograph_idx =
         find_example_index_by_name("Animated spirograph curve");
 
@@ -933,11 +933,11 @@ static void test_example_tag_default_cfg(void) {
 
     /* (4) Example with its own @cfg grid → the explicit value wins over the
      * tag / global default. Stress is 3D-only and sets grid =
-     * GRID_THEME_AURORA. */
+     * GRID_THEME_OFF. */
     if (stress_idx >= 0) {
         load_example_for_test(stress_idx);
         ASSERT_TRUE("example @cfg grid overrides default",
-                    glr_state_presentation().grid_theme == GRID_THEME_AURORA);
+                    glr_state_presentation().grid_theme == GRID_THEME_OFF);
     }
 }
 
@@ -1360,47 +1360,47 @@ int main(int argc, char **argv) {
     }
 
     {
-        int idx = find_example_index_by_name("Stress test (all features)");
+        int idx = find_example_index_by_name("Dusk lighthouse atoll (stress test)");
         char *dump;
 
         ASSERT_TRUE("stress example index found", idx >= 0);
         if (idx >= 0) {
             load_example_for_test(idx);
             ASSERT_TRUE("stress example axes preset",
-                        glr_state_presentation().axes_theme == 4);
+                        glr_state_presentation().axes_theme == AXES_THEME_OFF);
             ASSERT_TRUE("stress example outlines preset",
                         glr_state_presentation().show_vertex_outlines == 0);
             ASSERT_TRUE("stress example backdrop preset",
                         glr_state_presentation().backdrop_mode ==
-                        RENDER3D_BACKDROP_AURORA);
+                        RENDER3D_BACKDROP_NEBULA);
             ASSERT_TRUE("stress example camera rx preset",
-                        fabsf(glr_camera().rx - 27.5f) < 1e-4f);
+                        fabsf(glr_camera().rx - 26.0f) < 1e-4f);
             ASSERT_TRUE("stress example camera ry preset",
-                        fabsf(glr_camera().ry - (-24.0f)) < 1e-4f);
+                        fabsf(glr_camera().ry - (-20.0f)) < 1e-4f);
             ASSERT_TRUE("stress example camera dist preset",
-                        fabsf(glr_camera().dist - 12.5f) < 1e-4f);
+                        fabsf(glr_camera().dist - 15.0f) < 1e-4f);
             ASSERT_TRUE("stress example camera tx preset",
-                        fabsf(glr_camera().tx - 0.6f) < 1e-4f);
+                        fabsf(glr_camera().tx - 0.0f) < 1e-4f);
             ASSERT_TRUE("stress example camera ty preset",
-                        fabsf(glr_camera().ty - 0.1f) < 1e-4f);
+                        fabsf(glr_camera().ty - 0.3f) < 1e-4f);
             ASSERT_TRUE("stress example camera tz preset",
-                        fabsf(glr_camera().tz - 0.4f) < 1e-4f);
+                        fabsf(glr_camera().tz - 0.0f) < 1e-4f);
 
             dump = dump_current_code_panel_text();
             ASSERT_TRUE("stress example camera dump alloc", dump != NULL);
             if (dump) {
                   ASSERT_TRUE("stress example cfg axes hidden",
-                        strstr(dump, "// @cfg axes = 4") == NULL);
+                        strstr(dump, "// @cfg axes = 0") == NULL);
                   ASSERT_TRUE("stress example cfg outlines hidden",
                         strstr(dump,
                             "// @cfg vertex_outlines = 0") == NULL);
                   ASSERT_TRUE("stress example cfg backdrop hidden",
-                        strstr(dump, "// @cfg backdrop = 1") == NULL);
+                        strstr(dump, "// @cfg backdrop = 6") == NULL);
                 ASSERT_TRUE("stress example camera marker hidden",
                             strstr(dump, "// camera") == NULL);
                 ASSERT_TRUE("stress example camera rotate hidden",
                             strstr(dump,
-                                   "glRotatef(27.5f, 1.0f, 0.0f, 0.0f);") == NULL);
+                                   "glRotatef(26.0f, 1.0f, 0.0f, 0.0f);") == NULL);
                 free(dump);
             }
         }
@@ -1785,7 +1785,7 @@ int main(int argc, char **argv) {
      * covered separately by the visual code-panel dump tests.
      */
     {
-        int stress_idx = find_example_index_by_name("Stress test (all features)");
+        int stress_idx = find_example_index_by_name("Dusk lighthouse atoll (stress test)");
 
         ASSERT_TRUE("wrap placeholder stress example found", stress_idx >= 0);
         if (stress_idx >= 0) {
@@ -1796,7 +1796,7 @@ int main(int argc, char **argv) {
                 if (dump) {
                          ASSERT_TRUE("logical dump keeps stress line unwrapped",
                                 strstr(dump,
-                                       "      n = 1.0/sqrt(1 + amp*amp*6.25*(cos(x*2.5 + phase)*cos(x*2.5 + phase)*cos(z*2.5 + phase*0.7)*cos(z*2.5 + phase*0.7) + sin(x*2.5 + phase)*sin(x*2.5 + phase)*sin(z*2.5 + phase*0.7)*sin(z*2.5 + phase*0.7)));")
+                                       "      n = 1.0/sqrt(1 + amp*amp*2.25*(cos(x*1.5 + t)*cos(x*1.5 + t)*cos(z*1.5 + t*0.6)*cos(z*1.5 + t*0.6) + sin(x*1.5 + t)*sin(x*1.5 + t)*sin(z*1.5 + t*0.6)*sin(z*1.5 + t*0.6)));")
                                 != NULL);
                     free(dump);
                 }
