@@ -175,6 +175,9 @@ static float           g_req_seek = GLR_AUDIO_NO_SEEK;
 static int             g_req_save = 0;         /* independent: periodic save */
 
 static GlrAudioElapsedSecondsFn g_hitch_log_elapsed_fn = NULL;
+static ma_log g_miniaudio_log;
+static int    g_miniaudio_log_inited = 0;
+static ma_uint32 g_miniaudio_log_max_level = MA_LOG_LEVEL_WARNING;
 
 /* ------------------------------------------------------------------ */
 /* State persistence (track + offset + audio cfg across restarts)      */
@@ -289,6 +292,77 @@ static double worker_hitch_threshold_ms(void) {
 
 double glr_audio_hitch_threshold_ms_for_test(void) {
     return worker_hitch_threshold_ms();
+}
+
+static ma_uint32 miniaudio_log_level_from_env(const char *env) {
+    if (!env || !*env)
+        return MA_LOG_LEVEL_WARNING;
+    if (strcmp(env, "debug") == 0 || strcmp(env, "all") == 0 ||
+        strcmp(env, "1") == 0)
+        return MA_LOG_LEVEL_DEBUG;
+    if (strcmp(env, "info") == 0)
+        return MA_LOG_LEVEL_INFO;
+    if (strcmp(env, "error") == 0)
+        return MA_LOG_LEVEL_ERROR;
+    return MA_LOG_LEVEL_WARNING;
+}
+
+static void miniaudio_log_stderr(void *user, ma_uint32 level,
+                                 const char *message) {
+    size_t len;
+
+    (void)user;
+    if (level > g_miniaudio_log_max_level)
+        return;
+
+    if (!message)
+        message = "";
+
+    if (g_hitch_log_elapsed_fn)
+        fprintf(stderr, "[init +%6.3fs] ", g_hitch_log_elapsed_fn());
+    fprintf(stderr, "repl_audio: miniaudio %s: %s",
+            ma_log_level_to_string(level), message);
+
+    len = strlen(message);
+    if (len == 0 || message[len - 1] != '\n')
+        fputc('\n', stderr);
+}
+
+static int miniaudio_log_init_for_engine(void) {
+    ma_result r;
+
+    if (g_miniaudio_log_inited)
+        return 0;
+
+    {
+        const char *env = getenv("GLR_MINIAUDIO_LOG");
+        if (env && (strcmp(env, "0") == 0 || strcmp(env, "off") == 0 ||
+                    strcmp(env, "none") == 0))
+            return -1;
+        g_miniaudio_log_max_level = miniaudio_log_level_from_env(env);
+    }
+
+    r = ma_log_init(NULL, &g_miniaudio_log);
+    if (r != MA_SUCCESS)
+        return -1;
+
+    r = ma_log_register_callback(
+        &g_miniaudio_log,
+        ma_log_callback_init(miniaudio_log_stderr, NULL));
+    if (r != MA_SUCCESS) {
+        ma_log_uninit(&g_miniaudio_log);
+        return -1;
+    }
+
+    g_miniaudio_log_inited = 1;
+    return 0;
+}
+
+static void miniaudio_log_uninit_for_engine(void) {
+    if (!g_miniaudio_log_inited)
+        return;
+    ma_log_uninit(&g_miniaudio_log);
+    g_miniaudio_log_inited = 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -782,11 +856,22 @@ static int request_start(int idx, float seek) {
 /* ------------------------------------------------------------------ */
 
 int glr_audio_init(void) {
+    ma_engine_config engine_config;
+    const ma_engine_config *engine_config_ptr = NULL;
+    ma_result r;
+
     if (g_inited) return 0;
 
-    ma_result r = ma_engine_init(NULL, &g_engine);
+    if (miniaudio_log_init_for_engine() == 0) {
+        engine_config = ma_engine_config_init();
+        engine_config.pLog = &g_miniaudio_log;
+        engine_config_ptr = &engine_config;
+    }
+
+    r = ma_engine_init(engine_config_ptr, &g_engine);
     if (r != MA_SUCCESS) {
         fprintf(stderr, "repl_audio: ma_engine_init failed: %d\n", (int)r);
+        miniaudio_log_uninit_for_engine();
         return -1;
     }
 
@@ -800,12 +885,14 @@ int glr_audio_init(void) {
     pthread_mutexattr_t attr;
     if (pthread_mutexattr_init(&attr) != 0) {
         ma_engine_uninit(&g_engine);
+        miniaudio_log_uninit_for_engine();
         return -1;
     }
     pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
     if (pthread_mutex_init(&g_mtx, &attr) != 0) {
         pthread_mutexattr_destroy(&attr);
         ma_engine_uninit(&g_engine);
+        miniaudio_log_uninit_for_engine();
         return -1;
     }
     pthread_mutexattr_destroy(&attr);
@@ -813,6 +900,7 @@ int glr_audio_init(void) {
     if (pthread_cond_init(&g_cv, NULL) != 0) {
         pthread_mutex_destroy(&g_mtx);
         ma_engine_uninit(&g_engine);
+        miniaudio_log_uninit_for_engine();
         return -1;
     }
 
@@ -821,6 +909,7 @@ int glr_audio_init(void) {
         pthread_cond_destroy(&g_cv);
         pthread_mutex_destroy(&g_mtx);
         ma_engine_uninit(&g_engine);
+        miniaudio_log_uninit_for_engine();
         return -1;
     }
 
@@ -866,6 +955,7 @@ void glr_audio_shutdown(void) {
     }
 
     ma_engine_uninit(&g_engine);
+    miniaudio_log_uninit_for_engine();
     reset_audio_module_state();
     g_worker_hitch_threshold = -1.0;
 }
