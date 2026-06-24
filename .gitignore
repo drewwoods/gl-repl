@@ -12,7 +12,7 @@ build/
 third_party/freeglut/build*/
 workspace/
 bench_repl
-/scene_demo
+/render3d_demo
 /repl_demo
 /editor_demo
 /editor_demo.txt
