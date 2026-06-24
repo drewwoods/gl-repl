@@ -34,20 +34,84 @@ gl-repl [file.c | workspace/] [--example name|n] [--time secs]
 
 ## Environment variables
 
-| Variable | Meaning |
-|---|---|
-| `GLR_ASSETS_DIR` | Music directory; the `--assets` flag overrides it. |
-| `GLR_TIME` | Initial animation time `t` in seconds; `--time` wins. |
-| `GLR_EDIT_LINE` | Park the cursor on source line *n* (0-based, clamped) after load — makes cursor-bound overlays render headlessly. |
-| `GLR_ACCUM_PASSES` | Accumulation AA sample count (1/2/4/8/12/16); used by the capture pipeline. |
-| `GLR_VIEW_TOGGLE_AT` | Comma-separated capture-clock seconds at which to toggle 2D/3D view mode while recording. |
-| `GLR_NO_POINT_PARAMETER` | Force the no-`glPointParameterfv` fallback path on capable hardware (keeps the fallback testable). |
-| `GLR_NO_GPU_PROF` | Disable GPU timer-query profiling; the profile panel's GPU column reads `--`. |
-| `GLR_AUDIO_HITCH_MS` | Audio-worker hitch-report threshold in ms (default 50; `0` disables). |
-| `GLR_DETAILED_PROF` | Same as `--detailed-prof`, via env. |
-| `FREEGLUT_CAPTURE_FILE` | Filename prefix for `SIGUSR1` screenshots in vendored freeglut builds (default `freeglut`). |
-| `FREEGLUT_CAPTURE_FRAMES` | Record mode in vendored freeglut builds: capture N frames as numbered PPMs, then exit. |
-| `USE_GL_STUBS=1` | *(build-time)* Compile against the bundled no-op GL headers — no system GL needed (non-rendering tests only). |
+The project uses environment variables in three places: runtime `gl-repl`
+knobs, vendored freeglut runtime knobs, and developer build/test tooling.
+When both a command-line flag and an env var exist, the flag wins.
+
+### gl-repl runtime
+
+| Variable | Values / default | Effect |
+|---|---|---|
+| `GLR_ASSETS_DIR` | Directory path; default `./assets`; `--assets` wins. | Primary music directory scanned for `*.mp3`. |
+| `GLR_TIME` | Seconds; default `0`; `--time` wins. | Initial animation time `t`, applied after any example/file load. |
+| `GLR_EDIT_LINE` | 0-based line index; clamped. | Parks the cursor after load so cursor-bound overlays render in captures. |
+| `GLR_ACCUM_PASSES` | `1`, `2`, `4`, `8`, `12`, or `16`; default app setting. | Overrides accumulation-AA sample count, mainly for capture/media generation. |
+| `GLR_VIEW_TOGGLE_AT` | Comma-separated capture-clock seconds. | Toggles 2D/3D view mode at deterministic times while recording. |
+| `GLR_NO_POINT_PARAMETER` | Any non-empty value. | Forces the no-`glPointParameterfv` fallback path even on capable hardware. |
+| `GLR_NO_GPU_PROF` | Any non-empty value. | Disables GPU timer-query profiling; the profile panel GPU column reads `--`. |
+| `GLR_DETAILED_PROF` | Any non-empty value; same as `--detailed-prof`. | Enables the finer init-trace phases and first-two-frame timing triples. |
+| `GLR_AUDIO_HITCH_MS` | Milliseconds; default `50`; `0` disables. | Threshold for logging audio-worker lifecycle hitches. |
+| `GLR_MINIAUDIO_LOG` | Default `warning`; `debug`/`all`/`1`, `info`, `error`, `0`/`off`/`none`. | Forwards miniaudio backend logs to stderr, timestamped when the init clock is available. Debug/info are noisy; backend underrun/starvation messages are platform-specific. |
+| `HOME` | User home directory. | Used for the macOS per-user music folder and as fallback for the XDG path. |
+| `XDG_DATA_HOME` | Directory path; Linux/Unix fallback `~/.local/share`. | Selects the non-macOS per-user music folder: `$XDG_DATA_HOME/gl-repl/music`. |
+
+### Vendored freeglut runtime
+
+These are read by the vendored freeglut tree linked into native macOS and
+OSMesa builds. Some are platform-specific and only matter on the backend that
+implements them.
+
+| Variable | Values / default | Effect |
+|---|---|---|
+| `FREEGLUT_CAPTURE_FILE` | Filename prefix; default `freeglut`. | Prefix for `SIGUSR1` screenshots and record-mode PPM frames. |
+| `FREEGLUT_CAPTURE_FRAMES` | Positive frame count. | Record mode: capture N rendered frames as numbered PPMs, then exit. |
+| `DISPLAY` | X display string. | X11 display selection for Linux/X11 freeglut. |
+| `GLUT_FPS` | Millisecond interval. | Enables freeglut FPS statistics printing at the requested interval. |
+| `FREEGLUT_NO_XRANDR` | Any non-empty value. | Disables XRandR use in X11 game-mode display changes. |
+| `FREEGLUT_NO_XF86VM` | Any non-empty value. | Disables XF86VidMode use in X11 game-mode display changes. |
+| `GLUT_DIALS_SERIAL` | Serial device path. | Enables the optional freeglut dials input device on supported X11 builds. |
+| `ORIENTATION` | Integer. | BlackBerry backend orientation override; irrelevant to the supported desktop builds. |
+| `HOME` | User home directory. | Also used by freeglut's X11 joystick code for `.joyNrc` files. |
+
+### Build, test, and tooling
+
+These are make variables or script/test env vars. Pass make variables as
+`make target NAME=value`; export script vars when invoking the script directly.
+
+| Variable | Where | Effect |
+|---|---|---|
+| `CC` | Makefile, `scripts/check-c99.sh`, export tests. | Compiler command. The test runner passes it to export-compile checks as `REPL_EXPORT_CC`. |
+| `CFLAGS` | Makefile. | Extra user C flags appended to the selected build mode. |
+| `CPPFLAGS` | Makefile compile rules. | Extra preprocessor flags, commonly `-DUI_THEME_DEFAULT=N` or `-DGLR_AUDIO_NO_THREAD=1`. |
+| `BUILD` | Makefile. | Build mode: `release`, `debug`, or `coverage`. Tests default to debug; app/bench/demo targets default to release. |
+| `NO_SAN`, `NOSAN` | Makefile. | Disable ASan/UBSan in debug builds. |
+| `USE_GL_STUBS` | Makefile. | `1` builds against bundled no-op GL/GLU/GLUT headers for non-rendering tests. |
+| `FREEGLUT_OSMESA` | Makefile. | `1` builds vendored freeglut with the headless OSMesa backend. |
+| `FREEGLUT_VENDOR` | Makefile. | `0` skips the vendored freeglut static library, used by the `make glut` fallback. |
+| `APP_ICON_SVG` | Makefile `make app`. | Source SVG for the generated macOS `.icns`. |
+| `TEST_JOBS` | Makefile, `scripts/run-tests.sh`. | Limits parallel test binaries; empty/`0` means unbounded parallel runner behavior. |
+| `TEST_LOG_DIR` | `scripts/run-tests.sh`. | Directory for per-test logs; default `build/test-logs/run-<pid>`. |
+| `NO_COLOR` | Test runners. | Disables ANSI color output. |
+| `FORCE_COLOR`, `CLICOLOR_FORCE` | Test runners. | Forces ANSI color output when `NO_COLOR` is unset. |
+| `REPL_EXPORT_CC` | `tests/test_repl_core_examples`. | Compiler command for exported standalone C smoke tests. |
+| `REPL_EXPORT_COMPILE_CFLAGS` | `tests/test_repl_core_examples`. | Extra C flags for exported standalone C smoke tests. |
+| `REPL_EXPORT_VERBOSE` | `tests/test_repl_core_examples`. | `1` prints per-example export/compile details. |
+| `REPL_EXPORT_KEEP_TEMP` | `tests/test_repl_core_examples`. | `1` keeps temporary export files for inspection. |
+| `C99_SRCS` | `scripts/check-c99.sh`. | Source list passed by `make check-c99`; script fallback is used when unset. |
+| `CHECK_BASE` | Makefile `check-trailing-whitespace`. | Git ref used as the diff base; default `origin/main`. |
+| `COMPAT_REF` | `scripts/build-historical.sh`. | Git ref used to read compatibility headers; default `main`. |
+| `FREEGLUT_REPO` | `scripts/vendor-freeglut.sh`. | Source repo or local clone to re-vendor from. |
+| `BIN` | `scripts/docs-assets.sh`. | `gl-repl` binary for doc media generation; default `build/release-osmesa/gl-repl`. |
+| `OUT` | `scripts/docs-assets.sh`. | Output directory for generated documentation media. |
+| `BENCH_ARGS` | Makefile bench targets. | Extra arguments passed to every benchmark binary. |
+| `SANITIZER_CHECKERS` | Makefile `analyze`. | Clang static-analyzer checker list. |
+| `ANALYZE_EXCLUDE` | Makefile `analyze`. | Space-separated source list excluded from static analysis. |
+| `OUT_DIR`, `SRC_DIR`, `TEST_DIR`, `TOOLS_DIR`, `BENCH_DIR` | `scripts/code-smells.sh`. | Input/output directories for the code-smell audit script. |
+| `JOBS` | `scripts/code-smells.sh`. | Parallelism for clangd/clang-tidy scans. |
+| `CLANGD_BIN`, `CLANG_TIDY_BIN` | `scripts/code-smells.sh`. | Tool paths for clangd and clang-tidy. |
+| `CLANG_TIDY_CHECKS` | `scripts/code-smells.sh`. | clang-tidy check filter. |
+| `MIN_TOKENS`, `PMD_IMAGE` | `scripts/code-smells.sh`. | PMD CPD duplicate-token threshold and Docker image. |
+| `LIZARD_CCN`, `LIZARD_LEN` | `scripts/code-smells.sh`. | Lizard complexity and function-length thresholds. |
 
 ## Headless rendering (OSMesa)
 
@@ -279,8 +343,8 @@ scripts/fetch-music.sh --dir ./assets   # or anywhere else
 
 ## Diagnostics
 
-Two always-on stderr diagnostics help locate startup stalls and audio
-hitches:
+Stderr diagnostics help locate startup stalls, audio-worker hitches, and
+backend audio-device issues:
 
 - **Init trace** — `main()` logs a wall-clock line per startup phase
   (`[init +N.NNNs] <phase>`). A large gap names the slow phase;
@@ -291,6 +355,11 @@ hitches:
   load, stream teardown, advance) over the threshold logs
   `[init +N.NNNs] repl_audio: worker hitch: <op> took N ms`. Tune with
   `GLR_AUDIO_HITCH_MS` (default 50; `0` disables).
+- **Miniaudio backend log** — `GLR_MINIAUDIO_LOG=debug` forwards miniaudio
+  device/resource-manager logs to stderr with the same `[init +N.NNNs]`
+  prefix when available. Leave it at the default warning/error level for
+  normal runs; debug/info output is noisy and underrun messages depend on
+  the active miniaudio backend.
 - **GPU timer-query override** — `GLR_NO_GPU_PROF=1` leaves the CPU profile
   data on but disables GPU timings, useful when a driver advertises timer
   queries unreliably.
