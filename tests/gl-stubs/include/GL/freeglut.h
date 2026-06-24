@@ -98,6 +98,11 @@ static const char glut_bitmap_helvetica_12_stub = 0;
 #define GLUT_BITMAP_HELVETICA_10 ((void *)(uintptr_t)&glut_bitmap_helvetica_10_stub)
 #define GLUT_BITMAP_HELVETICA_12 ((void *)(uintptr_t)&glut_bitmap_helvetica_12_stub)
 
+static const char glut_stroke_roman_stub = 0;
+static const char glut_stroke_mono_roman_stub = 0;
+#define GLUT_STROKE_ROMAN ((void *)(uintptr_t)&glut_stroke_roman_stub)
+#define GLUT_STROKE_MONO_ROMAN ((void *)(uintptr_t)&glut_stroke_mono_roman_stub)
+
 typedef void (*GLUTdisplayCB)(void);
 typedef void (*GLUTreshapeCB)(int width, int height);
 typedef void (*GLUTkeyboardCB)(unsigned char key, int x, int y);
@@ -167,6 +172,8 @@ static inline GLUTproc glutGetProcAddress(const char *name) {
 static inline void glutSetCursor(int cursor) { (void)cursor; }
 static inline void glutBitmapCharacter(void *font, int character) { GL_STUB_TRACE_LINE("glutBitmapCharacter %d\n", (int)character); gl_stub_tick(GL_STUB_glutBitmapCharacter); (void)font; }
 static inline int glutBitmapWidth(void *font, int character) { (void)font; (void)character; return 8; }
+static inline void glutStrokeCharacter(void *font, int character) { (void)font; (void)character; }
+static inline int glutStrokeWidth(void *font, int character) { (void)font; (void)character; return 104; }
 static inline void glutSolidSphere(double radius, int slices, int stacks) { GL_STUB_TRACE_LINE("glutSolidSphere %g %d %d\n", (double)radius, (int)slices, (int)stacks); gl_stub_tick(GL_STUB_glutSolidSphere); }
 static inline void glutWireSphere(double radius, int slices, int stacks) { GL_STUB_TRACE_LINE("glutWireSphere %g %d %d\n", (double)radius, (int)slices, (int)stacks); gl_stub_tick(GL_STUB_glutWireSphere); }
 static inline void glutSolidTorus(double inner_radius, double outer_radius, int sides, int rings) { GL_STUB_TRACE_LINE("glutSolidTorus %g %g %d %d\n", (double)inner_radius, (double)outer_radius, (int)sides, (int)rings); gl_stub_tick(GL_STUB_glutSolidTorus); }
