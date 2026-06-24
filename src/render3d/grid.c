@@ -1926,7 +1926,7 @@ static void render3d_grid_render_graphplanes_theme(const Render3dRenderConfig *c
 
     /* Labels: only the most head-on plane, only above the threshold, fading in.
      * Both in-plane axes are labelled (h along the bottom, v down the left). */
-    const float THRESH = 0.80f;
+    const float THRESH = 0.50f;
     float ta_base = fminf(grid_ctx->xn_alpha * grid_ctx->grid_brightness, 1.0f);
     float lblscale = fminf(0.0040f, fmaxf(0.0022f, major * 0.0036f));
     /* Camera focus per world axis — labels centre on it so pan stays correct. */
