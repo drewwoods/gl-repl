@@ -13,6 +13,7 @@
 #include "config.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>    /* clock_gettime(CLOCK_MONOTONIC) for frame pacing */
 
 #include "app/glr_audio.h"
 #include "subsystems/color_picker/color_picker_state.h"
@@ -2070,13 +2071,17 @@ static void glr_ctrl_seed_overlay_xn(void) {
     render3d_xn_init(&g_axes_xn, p.axes_theme, &render3d_axes_reveal);
 }
 
-/* Fixed frame timestep (~60 Hz). The animation timer reschedules every
- * GLR_FRAME_DT_MS ms; every per-frame advance (time var, replay fade,
- * camera momentum, grid/axes fade, view transition) uses the matching
- * GLR_FRAME_DT_SECS so motion speed stays decoupled from redraw rate.
- * GLR_CURSOR_BLINK_TICKS is the cursor blink half-period counted in
- * those ticks (~0.5 s). */
-#define GLR_FRAME_DT_MS       16
+/* Fixed frame timestep (~60 Hz). Every per-frame advance (time var, replay
+ * fade, camera momentum, grid/axes fade, view transition) uses the fixed
+ * GLR_FRAME_DT_SECS, so the sim is deterministic and headless capture is
+ * unaffected. GLR_FRAME_DT_MS_EXACT is the matching wall-clock period the
+ * animation timer paces to (see glr_ctrl_timer): a true 60 Hz frame is
+ * 16.667 ms, but glutTimerFunc takes only integer ms, so a constant
+ * glutTimerFunc(16,...) runs slightly fast and beats against the vblank
+ * cadence on high-refresh displays (the odd 1-vblank-early present shows as
+ * micro-stutter). GLR_CURSOR_BLINK_TICKS is the cursor blink half-period
+ * counted in those ticks (~0.5 s). */
+#define GLR_FRAME_DT_MS_EXACT (1000.0 / 60.0)
 #define GLR_CURSOR_BLINK_TICKS 30
 
 /* Per-frame diff + advance, called from glr_ctrl_tick (the animation
@@ -2760,11 +2765,41 @@ void glr_ctrl_tick(void) {
     }
 }
 
+static double glr_timer_now_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec * 1e3 + (double)ts.tv_nsec / 1e6;
+}
+
+/* Pace against an absolute monotonic deadline rather than a constant integer
+ * delay. Each tick the next deadline advances by the exact 16.667 ms period
+ * and we schedule the rounded remaining time, so the per-frame delays form
+ * 17,17,16,... whose AVERAGE is exactly 16.667 ms. This self-corrects for
+ * time spent in the callback and for accumulated rounding, keeping the
+ * presentation cadence phase-aligned with the vblank cadence (fewer
+ * micro-stutter slips on high-refresh displays). The sim still advances a
+ * fixed GLR_FRAME_DT_SECS per tick — only the wall-clock pacing changes. */
 void glr_ctrl_timer(int value) {
     (void)value;
+    static double next_deadline_ms = 0.0; /* monotonic ms; 0 = uninitialized */
+
     glr_ctrl_tick();
     glutPostRedisplay();
-    glutTimerFunc(GLR_FRAME_DT_MS, glr_ctrl_timer, 0);
+
+    double now = glr_timer_now_ms();
+    if (next_deadline_ms == 0.0)
+        next_deadline_ms = now;
+    next_deadline_ms += GLR_FRAME_DT_MS_EXACT;
+
+    /* Fell more than a frame behind (stall / debugger pause): drop the
+     * backlog and resync rather than bursting zero-delay catch-up frames. */
+    if (next_deadline_ms < now)
+        next_deadline_ms = now;
+
+    int delay = (int)lround(next_deadline_ms - now);
+    if (delay < 1)
+        delay = 1;
+    glutTimerFunc((unsigned int)delay, glr_ctrl_timer, 0);
 }
 
 void glr_shutdown(void) {
