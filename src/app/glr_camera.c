@@ -203,6 +203,10 @@ GlrCameraState *glr_camera_mut(void)   { return &g_camera; }
 GlrCameraControlMode glr_camera_control_mode(void) { return g_control_mode; }
 int glr_camera_target_active(void) { return g_camera_target_active; }
 
+GlrCameraState glr_camera_destination(void) {
+    return g_camera_target_active ? g_camera_target : g_camera;
+}
+
 void glr_camera_set_control_mode(GlrCameraControlMode mode) {
     if (mode != GLR_CAMERA_CONTROL_2D)
         mode = GLR_CAMERA_CONTROL_3D;

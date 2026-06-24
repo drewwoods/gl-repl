@@ -42,6 +42,14 @@ GlrCameraState  glr_camera(void);
 GlrCameraState *glr_camera_mut(void);
 GlrCameraControlMode glr_camera_control_mode(void);
 int              glr_camera_target_active(void);
+/* The camera's current ease *destination*: the active ease target when a
+ * target ease is in flight, otherwise the live pose. Use this (not
+ * glr_camera()) when a freshly-issued ease_to must win over the stale live
+ * pose — e.g. the view-mode 3D->2D transition fires the frame after an
+ * example's `// camera` block eases toward a new dist, before that ease has
+ * ticked into the live pose. Reading glr_camera() there would flatten the
+ * previous example's pose into 2D. */
+GlrCameraState   glr_camera_destination(void);
 void             glr_camera_set_control_mode(GlrCameraControlMode mode);
 void             glr_camera_set(float rx, float ry, float dist,
                                 float tx, float ty, float tz,
