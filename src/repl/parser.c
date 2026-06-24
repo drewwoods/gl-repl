@@ -718,6 +718,62 @@ static int parse_canonical_float_list(const char *text, float *out_args, int max
     return repl_eval_parse_exprs(text, out_args, max_args, vars, num_vars);
 }
 
+static int parse_glfloat_compound_literal_arg(const char *arg,
+                                              char *interior_buf,
+                                              int interior_sz,
+                                              const char **out_to_parse,
+                                              const ReplParseContext *ctx) {
+    static const char k_compound_prefix[] = "(GLfloat[]){";
+    const size_t k_compound_prefix_len = sizeof k_compound_prefix - 1;
+
+    if (!arg || !interior_buf || interior_sz <= 0 || !out_to_parse)
+        return 0;
+
+    *out_to_parse = arg;
+    if (strncmp(arg, k_compound_prefix, k_compound_prefix_len) != 0)
+        return 1;
+
+    {
+        const char *istart = arg + k_compound_prefix_len;
+        int brace_depth = 1;
+        const char *q = istart;
+        while (*q && brace_depth > 0) {
+            if (*q == '{') {
+                brace_depth++;
+            } else if (*q == '}') {
+                brace_depth--;
+                if (brace_depth == 0)
+                    break;
+            }
+            q++;
+        }
+        if (brace_depth != 0) {
+            parser_emit_error_static(ctx, "Unclosed (GLfloat[]){...} literal");
+            return 0;
+        }
+        {
+            size_t ilen = (size_t)(q - istart);
+            if (ilen >= (size_t)interior_sz)
+                ilen = (size_t)interior_sz - 1;
+            memcpy(interior_buf, istart, ilen);
+            interior_buf[ilen] = '\0';
+        }
+        {
+            const char *tail = q + 1;
+            while (*tail && isspace((unsigned char)*tail))
+                tail++;
+            if (*tail != '\0') {
+                parser_emit_error_static(ctx,
+                    "Trailing content after (GLfloat[]){...} compound literal");
+                return 0;
+            }
+        }
+    }
+
+    *out_to_parse = interior_buf;
+    return 1;
+}
+
 /* glMaterialfv(face, pname, ...) — the one command whose value argument
  * is an aggregate. Accepts the canonical compound-literal form
  * `(GLfloat[]){r, g, b, a}` (1 element for GL_SHININESS, 4 for the RGBA
@@ -750,33 +806,10 @@ static int parse_materialfv(const char *args, GLCmd *cmd,
 
     const char *to_parse = val_arg;
     char interior_buf[MAX_LINE_LEN];
-    static const char k_compound_prefix[] = "(GLfloat[]){";
-    const size_t k_compound_prefix_len = sizeof k_compound_prefix - 1;
-    if (strncmp(val_arg, k_compound_prefix, k_compound_prefix_len) == 0) {
-        const char *istart = val_arg + k_compound_prefix_len;
-        int brace_depth = 1;
-        const char *q = istart;
-        while (*q && brace_depth > 0) {
-            if (*q == '{')      brace_depth++;
-            else if (*q == '}') { brace_depth--; if (brace_depth == 0) break; }
-            q++;
-        }
-        if (brace_depth != 0) {
-            parser_emit_error_static(ctx, "Unclosed (GLfloat[]){...} literal");
-            return 0;
-        }
-        size_t ilen = (size_t)(q - istart);
-        if (ilen >= sizeof interior_buf) ilen = sizeof interior_buf - 1;
-        memcpy(interior_buf, istart, ilen);
-        interior_buf[ilen] = '\0';
-        to_parse = interior_buf;
-        const char *tail = q + 1;
-        while (*tail && isspace((unsigned char)*tail)) tail++;
-        if (*tail != '\0') {
-            parser_emit_error_static(ctx, "Trailing content after (GLfloat[]){...} compound literal");
-            return 0;
-        }
-    }
+    if (!parse_glfloat_compound_literal_arg(val_arg, interior_buf,
+                                            (int)sizeof(interior_buf),
+                                            &to_parse, ctx))
+        return 0;
 
     float parsed_args[8];
     int num_parsed = parse_canonical_float_list(to_parse, parsed_args, 8, vars, num_vars, ctx);
@@ -889,7 +922,13 @@ static int parse_point_parameter_fv(const char *args, GLCmd *cmd,
     }
 
     float parsed_args[4];
-    int num_parsed = parse_canonical_float_list(rest, parsed_args, 4, vars, num_vars, ctx);
+    const char *to_parse = rest;
+    char interior_buf[MAX_LINE_LEN];
+    if (!parse_glfloat_compound_literal_arg(rest, interior_buf,
+                                            (int)sizeof(interior_buf),
+                                            &to_parse, ctx))
+        return 0;
+    int num_parsed = parse_canonical_float_list(to_parse, parsed_args, 4, vars, num_vars, ctx);
     if (num_parsed < 0) return 0;
 
     if (num_parsed != 3) {
@@ -905,7 +944,7 @@ static int parse_point_parameter_fv(const char *args, GLCmd *cmd,
     cmd->args[2] = parsed_args[1];
     cmd->args[3] = parsed_args[2];
     cmd->num_args = 4;
-    cmd->has_vars = input_has_any_visible_vars(rest, vars, num_vars);
+    cmd->has_vars = input_has_any_visible_vars(to_parse, vars, num_vars);
 
     if (text_out && text_sz > 0)
         snprintf(text_out, (size_t)text_sz,

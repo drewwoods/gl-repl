@@ -3240,6 +3240,47 @@ int main() {
         g_mock_modifiers = saved_mods;
     }
 
+    /* Regression: glPointParameterfv canonicalizes to a
+     * `(GLfloat[]){...}` argument. Ctrl+/ must be able to comment the
+     * canonical line and then parse that same canonical text when
+     * uncommenting it. */
+    {
+        int saved_mods = g_mock_modifiers;
+
+        glr_ctrl_reset_all();
+        editor_feed_line("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 0.2, 0, 0.15);");
+        ASSERT_INT("uncomment point-param setup: committed",
+                   repl_state_document_cmds_mut()[0].type, CMD_POINT_PARAMETER_FV);
+        ASSERT_TRUE("uncomment point-param setup: canonical compound literal",
+                    strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "",
+                           "(GLfloat[]){0.2, 0, 0.15}") != NULL);
+
+        editor_state_edit_line_set(0);
+        editor_insert_mode_set(0);
+        g_status[0] = '\0';
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        editor_handle_key('/', 0, 0);
+        ASSERT_INT("comment point-param: row is comment",
+                   repl_state_document_cmds_mut()[0].type, CMD_COMMENT);
+        ASSERT_TRUE("comment point-param: source keeps command",
+                    strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "",
+                           "glPointParameterfv") != NULL);
+
+        editor_state_edit_line_set(0);
+        editor_insert_mode_set(0);
+        g_status[0] = '\0';
+        editor_handle_key('/', 0, 0);
+        ASSERT_INT("uncomment point-param: type restored",
+                   repl_state_document_cmds_mut()[0].type, CMD_POINT_PARAMETER_FV);
+        ASSERT_TRUE("uncomment point-param: no error status",
+                    strstr(g_status, "Cannot uncomment") == NULL);
+        ASSERT_TRUE("uncomment point-param: source still canonical",
+                    strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "",
+                           "(GLfloat[]){0.2, 0, 0.15}") != NULL);
+
+        g_mock_modifiers = saved_mods;
+    }
+
     /* Regression (feedback P1): commenting out an unreferenced
      * float declaration must drop the variable from the predef
      * table, not just turn the row into CMD_COMMENT. Otherwise the
