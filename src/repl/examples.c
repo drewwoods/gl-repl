@@ -618,10 +618,6 @@ static const char *const g_example_glow_particles[] = {
     "  glVertex3f(x, y, z);",
     "}",
     "glEnd();",
-    "glDisable(GL_POINT_SMOOTH);",
-    "glDisable(GL_BLEND);",
-    "glEnable(GL_DEPTH_TEST);",
-    "glEnable(GL_LIGHTING);",
     NULL
 };
 
