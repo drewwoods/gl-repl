@@ -287,6 +287,8 @@ def main(argv: list[str]) -> int:
     else:
         files = default_markdown_files(root)
 
+    print("    Checking Markdown doc links...", flush=True)
+
     errors: list[str] = []
     link_count = 0
     for path in files:
@@ -298,16 +300,19 @@ def main(argv: list[str]) -> int:
         link_count += validate_file(path.resolve(), root, errors, strip=args.strip)
 
     if errors:
-        print("ERROR: invalid Markdown links:", file=sys.stderr)
+        print("    ERROR: invalid Markdown links:", file=sys.stderr)
         for err in errors:
             try:
                 display = str(Path(err).relative_to(root))
             except (ValueError, OSError):
                 display = err
-            print(display, file=sys.stderr)
+            print(f"    {display}", file=sys.stderr)
+        print("\n    Fix suggestions:", file=sys.stderr)
+        print("      - Strip broken links: `./scripts/check-doc-links.py --strip`", file=sys.stderr)
+        print("      - Regenerate identifier links: `./scripts/link-doc-identifiers.py --write`", file=sys.stderr)
         return 1
 
-    print(f"doc-links OK ({len(files)} files, {link_count} local file/line links)")
+    print(f"    doc-links OK ({len(files)} files, {link_count} local file/line links)")
     return 0
 
 
