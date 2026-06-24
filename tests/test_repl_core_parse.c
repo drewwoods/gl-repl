@@ -1050,6 +1050,33 @@ int main(void) {
         ASSERT_TRUE("glPointParameterfv literal has_vars false", cmd.has_vars == 0);
     }
 
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        GLCmd cmd2;
+        char cmd_text[MAX_LINE_LEN] = "";
+        char cmd_text2[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        memset(&cmd2, 0, sizeof(cmd2));
+        int ok = parse_cmd_with_text(
+            "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 0.2, 0, 0.15)",
+            &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glPointParameterfv flat parse ok", ok == 1);
+        ASSERT_TRUE("glPointParameterfv flat canonical emits compound literal",
+                    strstr(cmd_text,
+                           "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){0.2, 0, 0.15})")
+                        != NULL);
+
+        ok = parse_cmd_with_text(cmd_text, &cmd2, cmd_text2, sizeof(cmd_text2));
+        ASSERT_TRUE("glPointParameterfv canonical re-parses", ok == 1);
+        ASSERT_TRUE("glPointParameterfv canonical type",
+                    cmd2.type == CMD_POINT_PARAMETER_FV);
+        ASSERT_TRUE("glPointParameterfv canonical num_args",
+                    cmd2.num_args == 4);
+        ASSERT_TRUE("glPointParameterfv canonical text stable",
+                    strcmp(cmd_text, cmd_text2) == 0);
+    }
+
     /* Incomplete commands should not be reported as unknown commands. */
     {
         glr_ctrl_reset_all();
