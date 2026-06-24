@@ -20,6 +20,7 @@
 #include "ui/core/theme.h"
 #include "ui/app/layout.h"
 #include "ui/app/view_mode_swatch.h"
+#include "ui/app/numeric_swatch.h"
 #include "ui/core/gl_2d.h"
 
 /* Menu bar - styled after Header Wireframes v2.
@@ -1494,6 +1495,25 @@ static void draw_search_icon(float cx, float cy, float r) {
     glEnd();
 }
 
+/* Find-bar match navigator: a small vertical stepper (up = previous
+ * match, down = next, matching the Up/Down keys) shown at the right edge
+ * of the search box whenever the query has matches. Reuses the generic
+ * ui_stepper from numeric_swatch.h so render and hit-test share geometry. */
+#define SEARCH_PAD_X       8
+#define SEARCH_NAV_BTN_W   14.0f
+#define SEARCH_NAV_BTN_H   8.0f
+#define SEARCH_NAV_GAP     6   /* px between the count text and the stepper */
+
+static int search_nav_geometry(EditorSearchState srch,
+                               int box_x, int box_y, int box_w, int box_h,
+                               float *out_x, float *out_cy) {
+    if (srch.query_len <= 0 || srch.match_count <= 0)
+        return 0;
+    if (out_x)  *out_x  = (float)(box_x + box_w - SEARCH_PAD_X) - SEARCH_NAV_BTN_W;
+    if (out_cy) *out_cy = (float)box_y + (float)box_h * 0.5f;
+    return 1;
+}
+
 void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap) {
     EditorSearchState srch = snap->search;
     char count_buf[32];
@@ -1529,13 +1549,17 @@ void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap) {
         snprintf(count_buf, sizeof(count_buf), "%d/%d",
                  srch.hit_ordinal, srch.match_count);
 
-    int pad_x = 8;
+    int pad_x = SEARCH_PAD_X;
     int icon_r = 5;
     int icon_cx = box_x + pad_x + icon_r;
     int icon_cy = box_y + box_h / 2;
     int text_y  = box_y + (box_h - FONT_SMALL_H) / 2 + 1;
+    float nav_x, nav_cy;
+    int has_nav = search_nav_geometry(srch, box_x, box_y, box_w, box_h,
+                                      &nav_x, &nav_cy);
+    int nav_reserve = has_nav ? ((int)SEARCH_NAV_BTN_W + SEARCH_NAV_GAP) : 0;
     int count_w = (int)strlen(count_buf) * FONT_SMALL_W;
-    int count_x = box_x + box_w - pad_x - count_w;
+    int count_x = box_x + box_w - pad_x - nav_reserve - count_w;
     int query_x = icon_cx + icon_r + 8;
     int max_query_chars = (count_x - query_x - pad_x) / FONT_SMALL_W;
     if (max_query_chars < 1) max_query_chars = 1;
@@ -1587,6 +1611,41 @@ void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap) {
     }
 
     glDisable(GL_BLEND);
+
+    /* Match stepper last: it brackets its own blend state. */
+    if (has_nav)
+        ui_stepper_render(nav_x, nav_cy, SEARCH_NAV_BTN_W, SEARCH_NAV_BTN_H);
+}
+
+UiHit ui_menu_bar_search_nav_hit_test(const UiRenderSnapshot *snap,
+                                      int mx, int my) {
+    UiHit h = ui_hit_none();
+    int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
+    int pin_x[NUM_PIN_BTNS], pin_w[NUM_PIN_BTNS];
+    int by, bh, win_h, dir;
+    float nav_x, nav_cy;
+
+    if (!snap || !snap->search.active)
+        return h;
+
+    win_h = snap->viewport.window_h;
+    if (win_h <= 0)
+        return h;
+
+    menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
+    if (!search_nav_geometry(snap->search, pin_x[PIN_SEARCH], by,
+                             pin_w[PIN_SEARCH], bh, &nav_x, &nav_cy))
+        return h;
+
+    dir = ui_stepper_hit(nav_x, nav_cy, SEARCH_NAV_BTN_W, SEARCH_NAV_BTN_H,
+                         mx, (float)(win_h - my));
+    if (dir == 0)
+        return h;
+
+    /* Up arrow (dir +1) = previous match → navigate(-1); down = next → +1. */
+    h.kind = UI_HIT_SEARCH_NAV;
+    h.item_idx = (dir > 0) ? -1 : +1;
+    return h;
 }
 
 

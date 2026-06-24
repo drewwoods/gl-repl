@@ -1145,7 +1145,7 @@ Symbol matching and function parameter hints in [`src/app/glr_completion.c`](src
 
 Case-insensitive text search in [`src/editor/search.c`](src/editor/search.c):
 - Activated by Ctrl+F; query and state accessed via [`editor_state_search()`](src/editor/state.h#L384)
-- [`editor_search_find_next_in_text()`](src/editor/search.h#L20) finds substring matches across
+- [`editor_search_find_next_in_text()`](src/editor/search.h#L25) finds substring matches across
   all visible lines (header, user code, footer)
 - `hit_line_idx`/`hit_char_idx` in [`EditorSearchState`](src/editor/state.h#L118) track current match position
 - Integrated with code panel rendering for match highlighting
@@ -1245,7 +1245,7 @@ alongside `.cfg` (see the file-layout table for the tutorial catalog).
   fails on interleaving (e.g., catalog order "Beginner, Intermediate,
   Beginner" would render two "Beginner" headers in the Geometry
   flyout). The walker is the generic `src/ui/app/menu_bar.c::catalog_flyout_row_at`
-  + [`CatalogFlyoutOps`](src/ui/app/menu_bar.c#L165) vtable, shared with the Scene example flyout
+  + [`CatalogFlyoutOps`](src/ui/app/menu_bar.c#L166) vtable, shared with the Scene example flyout
   ([`ReplExampleEntry`](src/repl/examples.c#L2232) carries the same `.subheading` field — see
   `test_example_subheading_metadata`).
 

@@ -39,6 +39,13 @@ void ui_menu_bar_render(const UiRenderSnapshot *snap);
  * of menu bar bottom. Reads from the supplied snapshot. */
 void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap);
 
+/* Hit-test the find-bar match navigator (the up/down stepper at the right
+ * of the search box). Returns UI_HIT_SEARCH_NAV with item_idx = +1 (next)
+ * or -1 (previous) when hit, else UI_HIT_NONE. Checked before the generic
+ * menu-bar hit-test since the stepper overlaps the search pin slot. */
+UiHit ui_menu_bar_search_nav_hit_test(const UiRenderSnapshot *snap,
+                                      int mx, int my);
+
 /* Render the example dropdown (F12 cycle menu showing built-in examples + user
  * scenes). Reads from the supplied snapshot. */
 void ui_menu_bar_render_example_dropdown(const UiRenderSnapshot *snap);

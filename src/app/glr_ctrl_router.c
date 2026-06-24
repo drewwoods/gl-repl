@@ -1021,6 +1021,15 @@ static int route_pin_button_hit(const UiHit *hit) {
     return 1;
 }
 
+/* UI_HIT_SEARCH_NAV: find-bar match stepper. item_idx carries the
+ * navigation direction (+1 next, -1 previous), already mapped from the
+ * up/down arrow by the hit-test. */
+static int route_search_nav_hit(const UiHit *hit) {
+    editor_search_navigate(hit->item_idx);
+    editor_request_redraw();
+    return 1;
+}
+
 /* UI_HIT_MENU_BUTTON: top-level menu-bar button. Click on the open
  * menu's button toggles it closed; click on a different button
  * switches the open dropdown. */
@@ -1222,6 +1231,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_numeric_swatch_hit(&hit, numeric_swatch_scale(0)); break;
     case UI_HIT_PIN_BUTTON:
         consumed = route_pin_button_hit(&hit); break;
+    case UI_HIT_SEARCH_NAV:
+        consumed = route_search_nav_hit(&hit); break;
     case UI_HIT_MENU_BUTTON:
         consumed = route_menu_button_hit(&hit); break;
     case UI_HIT_MENU_ITEM:
