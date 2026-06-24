@@ -99,12 +99,12 @@ void display(void) {
     C[dst] = C[lo] + (C[hi] - C[lo])*blend;
   }
 
-  glClearColor(0.07, 0.08, 0.1, 1);
+  glClearColor(0.05, 0.06, 0.08, 1);
   glEnable(GL_DEPTH_TEST);
   glDisable(GL_LIGHTING);
   glLineWidth(3);
   // Seed A/B/C with control points, then overwrite them with collapse().
-  glColor3f(1, 0.55, 0.2);
+  glColor3f(0.98, 0.46, 0.36);
   glBegin(GL_LINE_STRIP);
     for(i, 0, 48) {
       A[0] = -3.2;
@@ -143,7 +143,7 @@ void display(void) {
   A[3] = 3.1;
   B[3] = 1.6;
   C[3] = 1.0 + 0.25*sin(t*0.5);
-  glColor3f(0.25, 0.45, 0.95);
+  glColor3f(0.36, 0.7, 0.98);
   glBegin(GL_LINE_STRIP);
     glVertex3f(A[0], B[0], C[0]);
     glVertex3f(A[1], B[1], C[1]);
@@ -151,7 +151,7 @@ void display(void) {
     glVertex3f(A[3], B[3], C[3]);
   glEnd();
   glPointSize(9);
-  glColor3f(1, 0.9, 0.35);
+  glColor3f(0.98, 0.76, 0.36);
   glBegin(GL_POINTS);
     glVertex3f(A[0], B[0], C[0]);
     glVertex3f(A[1], B[1], C[1]);

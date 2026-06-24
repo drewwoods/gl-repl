@@ -92,7 +92,7 @@ void display(void) {
 --- header_post ---
 --- source ---
   static float dist, n, x, y, ang;
-  glClearColor(0.1, 0.1, 0.1, 1);
+  glClearColor(0.05, 0.06, 0.08, 1);
   dist = 1.4;
   n = 400;
   glBegin(GL_LINE_LOOP);
@@ -100,6 +100,7 @@ void display(void) {
       ang = TAU * i/n;
       x = dist * cos(t*ang) + cos(ang);
       y = dist * sin(t*ang) + sin(ang);
+      glColor3f(0.98 - 0.62*(0.5+0.5*sin(ang + t)), 0.46 + 0.24*(0.5+0.5*sin(ang + t)), 0.36 + 0.62*(0.5+0.5*sin(ang + t)));
       glVertex3f(x, y, 0);
     }
   glEnd();

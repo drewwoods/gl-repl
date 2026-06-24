@@ -93,7 +93,7 @@ void display(void) {
 --- source ---
   static float z;
 
-  glClearColor(0.1, 0.1, 0.1, 1);
+  glClearColor(0.05, 0.06, 0.08, 1);
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_LIGHTING);
   glEnable(GL_NORMALIZE);
@@ -110,56 +110,56 @@ void display(void) {
       glBegin(GL_QUAD_STRIP);
       gluNormal(0, 0, 1);
         // Side 0
-      gluColor(0.2, 0.4, 1, 1);
-        glColor3f(0.2, 0.4, 1);
+      gluColor(0.36, 0.7, 0.98, 1);
+        glColor3f(0.36, 0.7, 0.98);
         glNormal3f(-1, 0, 0);
         glVertex3f(-1.2, -0.45, 0);
         glVertex3f(-1.2, -0.45, z);
       gluVertex(-1.2, -0.45, 0);
         // Side 1
-      gluColor(0.2, 0.4, 1, 1);
-        glColor3f(0.2, 0.4, 1);
+      gluColor(0.36, 0.7, 0.98, 1);
+        glColor3f(0.36, 0.7, 0.98);
         glNormal3f(0, 1, 0);
         glVertex3f(-1.2, 0.45, 0);
         glVertex3f(-1.2, 0.45, z);
       gluVertex(-1.2, 0.45, 0);
         // Side 2
-      gluColor(0.55, 0.3, 1, 1);
-        glColor3f(0.55, 0.3, 1);
+      gluColor(0.62, 0.52, 0.95, 1);
+        glColor3f(0.62, 0.52, 0.95);
         glNormal3f(-1, 1, 0);
         glVertex3f(0, 0.45, 0);
         glVertex3f(0, 0.45, z);
       gluVertex(0, 0.45, 0);
         // Side 3
-      gluColor(1, 0.45, 0.05, 1);
-        glColor3f(1, 0.45, 0.05);
+      gluColor(0.98, 0.46, 0.36, 1);
+        glColor3f(0.98, 0.46, 0.36);
         glNormal3f(-1, 0, 0);
         glVertex3f(0, 1.1, 0);
         glVertex3f(0, 1.1, z);
       gluVertex(0, 1.1, 0);
         // Side 4
-      gluColor(1, 0.9, 0.1, 1);
-        glColor3f(1, 0.9, 0.1);
+      gluColor(0.98, 0.76, 0.36, 1);
+        glColor3f(0.98, 0.76, 0.36);
         glNormal3f(1, 0, 0);
         glVertex3f(1.3, 0, 0);
         glVertex3f(1.3, 0, z);
       gluVertex(1.3, 0, 0);
         // Side 5
-      gluColor(1, 0.45, 0.05, 1);
-        glColor3f(1, 0.45, 0.05);
+      gluColor(0.98, 0.46, 0.36, 1);
+        glColor3f(0.98, 0.46, 0.36);
         glNormal3f(-1, 0, 0);
         glVertex3f(0, -1.1, 0);
         glVertex3f(0, -1.1, z);
       gluVertex(0, -1.1, 0);
         // Side 6
-      gluColor(0.55, 0.3, 1, 1);
-        glColor3f(0.55, 0.3, 1);
+      gluColor(0.62, 0.52, 0.95, 1);
+        glColor3f(0.62, 0.52, 0.95);
         glNormal3f(-1, -1, 0);
         glVertex3f(0, -0.45, 0);
         glVertex3f(0, -0.45, z);
       gluVertex(0, -0.45, 0);
         // Quade side 7
-        glColor3f(0.2, 0.4, 1);
+        glColor3f(0.36, 0.7, 0.98);
         glNormal3f(0, -1, 0);
         glVertex3f(-1.2, -0.45, 0);
         glVertex3f(-1.2, -0.45, z);
@@ -167,7 +167,7 @@ void display(void) {
     gluEnd();
     gluBegin(GLU_CONTOUR);
       glBegin(GL_QUAD_STRIP);
-        glColor3f(0.5, 0.5, 0.5);
+        glColor3f(0.45, 0.49, 0.58);
       gluNormal(0, 0, 1);
         // Side 0
         glNormal3f(-1, 0, 0);
