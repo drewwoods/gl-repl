@@ -206,7 +206,7 @@
  * Shared by the live app controller (src/app/glr_ctrl.c) and the replay peer
  * (src/subsystems/replay/replay.c) for visual animation ticks. */
 #ifndef GLR_FRAME_DT_SECS
-#define GLR_FRAME_DT_SECS 0.016f
+#define GLR_FRAME_DT_SECS 0.01667f
 #endif
 
 /* View-mode 2D/3D transition tuning. Duration of the projection blend
