@@ -160,6 +160,18 @@
 
 /* ---- App-wide file/render/timing defaults ----------------------------- */
 
+/* Default workspace directory path, relative to the working directory.
+ * Used when a workspace is loaded/saved without an explicit path. */
+#ifndef GLR_DEFAULT_WORKSPACE_DIR
+#define GLR_DEFAULT_WORKSPACE_DIR "./workspace"
+#endif
+
+/* Maximum filesystem path length (including NUL). Used by workspace,
+ * scene file, and general path operations. */
+#ifndef GLR_PATH_MAX
+#define GLR_PATH_MAX 1024
+#endif
+
 /* Default filename suggested by the "Load Scene…" file prompt
  * (File menu → Load Scene, src/app/glr_actions.c). Also the seed value
  * the prompt's inline-file-prompt module documents in its header. */
@@ -195,6 +207,32 @@
  * (src/subsystems/replay/replay.c) for visual animation ticks. */
 #ifndef GLR_FRAME_DT_SECS
 #define GLR_FRAME_DT_SECS 0.016f
+#endif
+
+/* View-mode 2D/3D transition tuning. Duration of the projection blend
+ * (ortho ↔ perspective) when toggling between 2D and 3D views. */
+#ifndef GLR_VIEW_PROJECTION_TRANSITION_SECS
+#define GLR_VIEW_PROJECTION_TRANSITION_SECS 0.60f
+#endif
+
+/* Damping decay for the camera easing during 3D->2D flattening, applied
+ * before the projection blend starts. Lower values = faster decay. */
+#ifndef GLR_VIEW_CAMERA_TO_2D_DECAY
+#define GLR_VIEW_CAMERA_TO_2D_DECAY 0.75f
+#endif
+
+/* Camera ease/zoom tuning. Target decay is the per-frame damping applied
+ * by glr_camera_ease_to: at 0.93, each 16ms tick applies 7% of the
+ * remaining target delta. Wheel zoom step injects this amount per notch;
+ * zoom velocity then decays by CAM_DECAY_ZOOM each tick. */
+#ifndef GLR_CAMERA_TARGET_DECAY
+#define GLR_CAMERA_TARGET_DECAY 0.90f
+#endif
+#ifndef GLR_WHEEL_ZOOM_STEP
+#define GLR_WHEEL_ZOOM_STEP 0.02f
+#endif
+#ifndef CAM_DECAY_ZOOM
+#define CAM_DECAY_ZOOM 0.82f
 #endif
 
 /* Standard status message buffer size for the replay visualizer. */

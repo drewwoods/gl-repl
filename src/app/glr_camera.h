@@ -36,23 +36,6 @@ typedef enum {
     GLR_CAMERA_CONTROL_2D = 1
 } GlrCameraControlMode;
 
-/* Camera ease/zoom tuning.
- *
- * GLR_CAMERA_TARGET_DECAY is the per-frame decay used by glr_camera_ease_to:
- * at 0.93, each 16 ms tick applies 7% of the remaining target delta.
- *
- * One wheel notch injects GLR_WHEEL_ZOOM_STEP into the camera zoom velocity,
- * which decays by CAM_DECAY_ZOOM each tick. */
-#ifndef GLR_CAMERA_TARGET_DECAY
-#define GLR_CAMERA_TARGET_DECAY 0.93f
-#endif
-#ifndef GLR_WHEEL_ZOOM_STEP
-#define GLR_WHEEL_ZOOM_STEP 0.02f
-#endif
-#ifndef CAM_DECAY_ZOOM
-#define CAM_DECAY_ZOOM 0.82f
-#endif
-
 /* ---- Accessors ------------------------------------------------------ */
 
 GlrCameraState  glr_camera(void);

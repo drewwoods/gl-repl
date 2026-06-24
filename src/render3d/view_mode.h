@@ -21,10 +21,4 @@ typedef enum {
     RENDER3D_VIEW_COUNT
 } Render3dViewMode;
 
-/* Orthographic/perspective projection blend duration, in seconds, for callers
- * that animate between Render3dViewMode values. */
-#ifndef GLR_VIEW_PROJECTION_TRANSITION_SECS
-#define GLR_VIEW_PROJECTION_TRANSITION_SECS 0.75f
-#endif
-
 #endif /* RENDER3D_VIEW_MODE_H */
