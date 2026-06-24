@@ -4,6 +4,7 @@
 #include "grid.h"
 #include "overlay_xn.h"  /* Render3dOverlayXn + shared resolve helper */
 #include <math.h>     /* sinf, cosf, sqrtf, fabsf, fmodf, M_PI (via gl_includes.h) */
+#include <stdio.h>    /* snprintf (2D grid label text) */
 
 #define GRID_LOOP_EPSILON 0.01f
 #define GRID_ORIGIN_SKIP_EPSILON 0.01f
@@ -1510,6 +1511,221 @@ int render3d_grid_theme_uses_fog(Render3dGridTheme grid_theme) {
     return grid_theme == GRID_THEME_OCEAN;
 }
 
+/* ===========================================================================
+ * 2D-oriented grid themes (Sketchbook + Neon Graph)
+ *
+ * These draw their graticule in the XY plane (z = GRID_2D_Z, just behind the
+ * z=0 scene geometry) instead of the XZ ground plane, so they read as a flat,
+ * front-facing grid in the 2D ortho view (camera looking down -Z). In 3D they
+ * render as a vertical wall at z=0 — acceptable until grids are filtered by
+ * view mode. Both use the Dusk scene palette and route line alpha through
+ * grid_color() so the show/hide transition fade still applies. Custom themes:
+ * no GridThemeSpec entry, so render3d_grid_theme_uses_edge_fade() is false and
+ * the radial edge-fade machinery is skipped.
+ * ========================================================================= */
+
+#define GRID_2D_Z (-0.02f)   /* sit just behind z=0 user geometry */
+
+/* Smooth, frame-stable wobble for the inked sketch strokes. `u` runs along the
+ * stroke, `v` is its fixed coordinate, `seed` separates passes/lines. Returns a
+ * small world-space offset (~±0.05) — large enough to read as hand-drawn at
+ * unit cell size, small enough not to break the cell corners (callers taper it
+ * to zero at the endpoints). Deterministic in space, so the ink doesn't crawl
+ * between frames. */
+static float grid_sketch_wobble(float u, float v, float seed) {
+    return sinf(u * 1.7f + seed) * 0.022f
+         + cosf(v * 2.3f + seed * 1.7f) * 0.018f
+         + sinf(u * 3.9f + seed * 0.5f) * 0.011f;
+}
+
+/* One wobbly ink stroke between (ax,ay) and (bx,by) in the XY plane. The
+ * perpendicular wobble tapers to zero at both ends (sin envelope) so adjacent
+ * strokes still meet at the cell corners. */
+static void grid_sketch_stroke(float ax, float ay, float bx, float by,
+                               int segs, float seed) {
+    float dx = bx - ax, dy = by - ay;
+    float len = sqrtf(dx * dx + dy * dy);
+    float nx = (len > 1e-5f) ? -dy / len : 0.0f;
+    float ny = (len > 1e-5f) ?  dx / len : 0.0f;
+    glBegin(GL_LINE_STRIP);
+    for (int k = 0; k <= segs; k++) {
+        float u = (float)k / (float)segs;
+        float px = ax + dx * u, py = ay + dy * u;
+        float env = sinf(u * (float)M_PI);                 /* 0 at ends, 1 mid */
+        float w = grid_sketch_wobble(u * len, ax + ay, seed) * env;
+        glVertex3f(px + nx * w, py + ny * w, GRID_2D_Z);
+    }
+    glEnd();
+}
+
+/* GLUT stroke (line) glyphs anchored at (x,y) in the XY plane, `scale` world
+ * units per font unit. Matches the inked aesthetic (and scales with the sheet
+ * on zoom, unlike the fixed-pixel bitmap font). Color + line width are the
+ * caller's. */
+static void grid_stroke_text(float x, float y, float scale, const char *str) {
+    glPushMatrix();
+    glTranslatef(x, y, GRID_2D_Z);
+    glScalef(scale, scale, scale);
+    for (const char *p = str; *p; p++)
+        glutStrokeCharacter(GLUT_STROKE_ROMAN, (int)*p);
+    glPopMatrix();
+}
+
+static float grid_stroke_text_width(float scale, const char *str) {
+    float w = 0.0f;
+    for (const char *p = str; *p; p++)
+        w += (float)glutStrokeWidth(GLUT_STROKE_ROMAN, (int)*p);
+    return w * scale;
+}
+
+/* Sketchbook: a bounded hand-drawn "field study" sheet — wobbly ink lines on
+ * the dark canvas with cool-ink strokes, column letters (A..) along the
+ * bottom, row numbers (1..) down the left, and a titled header. */
+static void render3d_grid_render_sketch_theme(const Render3dRenderConfig *config,
+                                              const GridDrawContext *grid_ctx) {
+    /* Hand-drawn coordinate graph: wobbly ink cell lines snapped to real
+     * world coordinates (multiples of the grid `major` step), each labelled
+     * with its actual value, so the labels line up with the gridlines.
+     *
+     * Fit to the live ortho view: glOrtho's projection matrix gives the
+     * visible world half-extents directly (half = 1/|proj[diag]|); the view
+     * is centred on the camera pan (cam_tx, cam_ty). Clamp the half-extents
+     * to a sane band so the perspective (3D) fallback can't explode the loop
+     * counts. */
+    GLfloat pm[16];
+    glGetFloatv(GL_PROJECTION_MATRIX, pm);
+    float half_w = (fabsf(pm[0]) > 1e-6f) ? 1.0f / fabsf(pm[0]) : 6.0f;
+    float half_h = (fabsf(pm[5]) > 1e-6f) ? 1.0f / fabsf(pm[5]) : 4.0f;
+    if (half_h < 1.5f || half_h > 16.0f) half_h = 4.0f;
+    if (half_w < 1.5f || half_w > 24.0f) half_w = half_h * 1.4f;
+    float cx = config->cam_tx, cy = config->cam_ty;
+
+    float cell = grid_ctx->major;
+    if (cell < 0.25f) cell = 0.25f;
+
+    /* Visible world bounds, centred on the camera pan. Gridlines sit on the
+     * `cell`-snapped coordinates inside this range; the line spans run the
+     * full view edge-to-edge so the graph fills the screen (no inset). */
+    float vx0 = cx - half_w, vx1 = cx + half_w;
+    float vy0 = cy - half_h, vy1 = cy + half_h;
+    float left  = ceilf(vx0 / cell) * cell;
+    float right = floorf(vx1 / cell) * cell;
+    float bot   = ceilf(vy0 / cell) * cell;
+    float top   = floorf(vy1 / cell) * cell;
+    if (right < left - 1e-3f || top < bot - 1e-3f) return;
+
+    const float ink_r = 0.74f, ink_g = 0.80f, ink_g2 = 0.92f;
+    int vsegs = (int)((vy1 - vy0) / cell * 3.0f) + 3;
+    int hsegs = (int)((vx1 - vx0) / cell * 3.0f) + 3;
+
+    /* Vertical cell lines (bold + faint pass); the x=0 axis line is heavier. */
+    for (float x = left; x <= right + 1e-3f; x += cell) {
+        int axis = (fabsf(x) < cell * 0.25f);
+        for (int s = 0; s < 2; s++) {
+            grid_color(grid_ctx, ink_r, ink_g, ink_g2,
+                       s == 0 ? (axis ? 0.85f : 0.50f) : 0.16f);
+            glLineWidth(s == 0 ? (axis ? 2.1f : 1.4f) : 0.9f);
+            grid_sketch_stroke(x, vy0, x, vy1, vsegs, x * 4.3f + s * 31.7f);
+        }
+    }
+    /* Horizontal cell lines; the y=0 axis line is heavier. */
+    for (float y = bot; y <= top + 1e-3f; y += cell) {
+        int axis = (fabsf(y) < cell * 0.25f);
+        for (int s = 0; s < 2; s++) {
+            grid_color(grid_ctx, ink_r, ink_g, ink_g2,
+                       s == 0 ? (axis ? 0.85f : 0.50f) : 0.16f);
+            glLineWidth(s == 0 ? (axis ? 2.1f : 1.4f) : 0.9f);
+            grid_sketch_stroke(vx0, y, vx1, y, hsegs, y * 5.1f + s * 23.3f + 100.0f);
+        }
+    }
+
+    /* Coordinate labels: x values along the bottom of the view, y values down
+     * the left of the view — each centred on its gridline so it lines up with
+     * the value. Inset just enough from the edge that the glyphs don't clip. */
+    float ta = fminf(grid_ctx->xn_alpha * grid_ctx->grid_brightness, 1.0f);
+    float lbl = fminf(0.0036f, fmaxf(0.0020f, cell * 0.0034f));   /* ~0.3 world units */
+    float xlbl_y = vy0 + cell * 0.38f;          /* just above the bottom edge */
+    float ylbl_x = vx0 + cell * 0.12f;          /* just right of the left edge */
+
+    glLineWidth(1.3f);
+    glColor4f(0.86f, 0.90f, 0.97f, ta);
+    /* Start the x labels one cell in from the left edge so the leftmost one
+     * never lands on top of the y-axis label column in the bottom-left corner. */
+    float xlbl_start = vx0 + cell * 1.05f;
+    for (float x = left; x <= right + 1e-3f; x += cell) {
+        if (x < xlbl_start) continue;           /* clear the y-label column */
+        if (fabsf(x) < cell * 0.25f) continue;  /* skip 0 (shared with y-axis) */
+        char b[16];
+        snprintf(b, sizeof b, "%g", (double)x);
+        float tw = grid_stroke_text_width(lbl, b);
+        grid_stroke_text(x - tw * 0.5f, xlbl_y, lbl, b);
+    }
+    for (float y = bot; y <= top + 1e-3f; y += cell) {
+        char b[16];
+        snprintf(b, sizeof b, "%g", (double)y);
+        grid_stroke_text(ylbl_x, y + cell * 0.10f, lbl, b);
+    }
+    glLineWidth(1.0f);
+}
+
+/* Neon Graph: a glowing graph-paper grid in the XY plane — faint azure minor
+ * lines, brighter violet majors, an additive bloom pass, glowing nodes at the
+ * major intersections, and a pulsing coral origin cross. Clean, no text. */
+static void render3d_grid_render_neon_theme(const GridDrawContext *grid_ctx) {
+    const float major     = grid_ctx->major;
+    const float major_tol = grid_ctx->major_tol;
+    const float step      = grid_ctx->step;
+    const float t         = grid_ctx->anim_time;
+    /* Bound the drawn box so FAR extent doesn't emit thousands of lines. */
+    const float ext = fminf(grid_ctx->extent, 9.0f);
+
+    /* Two passes: solid core, then an additive bloom on top. */
+    for (int pass = 0; pass < 2; pass++) {
+        int glow = (pass == 1);
+        glBlendFunc(GL_SRC_ALPHA, glow ? GL_ONE : GL_ONE_MINUS_SRC_ALPHA);
+        glLineWidth(glow ? 3.4f : 1.3f);
+        glBegin(GL_LINES);
+        for (float v = -ext; v <= ext + GRID_LOOP_EPSILON; v += step) {
+            if (fabsf(v) < GRID_ORIGIN_SKIP_EPSILON) continue;
+            int is_major = grid_is_major_line(v, major, major_tol);
+            float a = (is_major ? 0.50f : 0.13f) * (glow ? 0.30f : 1.0f);
+            if (is_major) grid_color(grid_ctx, 0.50f, 0.55f, 0.96f, a);  /* violet */
+            else          grid_color(grid_ctx, 0.30f, 0.62f, 0.92f, a);  /* azure  */
+            glVertex3f(-ext, v, GRID_2D_Z); glVertex3f(ext, v, GRID_2D_Z);
+            glVertex3f(v, -ext, GRID_2D_Z); glVertex3f(v, ext, GRID_2D_Z);
+        }
+        glEnd();
+    }
+
+    /* Glowing nodes at the major intersections (additive). */
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    glEnable(GL_POINT_SMOOTH);
+    glPointSize(3.2f);
+    glBegin(GL_POINTS);
+    for (float vx = -ext; vx <= ext + GRID_LOOP_EPSILON; vx += major)
+        for (float vy = -ext; vy <= ext + GRID_LOOP_EPSILON; vy += major) {
+            grid_color(grid_ctx, 0.58f, 0.82f, 0.99f, 0.55f);
+            glVertex3f(vx, vy, GRID_2D_Z);
+        }
+    glEnd();
+
+    /* Pulsing origin cross: coral core + additive bloom. */
+    float pulse = 0.62f + 0.38f * sinf(t * 2.0f);
+    for (int pass = 0; pass < 2; pass++) {
+        int glow = (pass == 1);
+        glBlendFunc(GL_SRC_ALPHA, glow ? GL_ONE : GL_ONE_MINUS_SRC_ALPHA);
+        glLineWidth(glow ? 5.0f : 2.0f);
+        glBegin(GL_LINES);
+        grid_color(grid_ctx, 0.98f, 0.56f, 0.36f, (glow ? 0.16f : 0.72f) * pulse);
+        glVertex3f(-ext, 0, GRID_2D_Z); glVertex3f(ext, 0, GRID_2D_Z);
+        glVertex3f(0, -ext, GRID_2D_Z); glVertex3f(0, ext, GRID_2D_Z);
+        glEnd();
+    }
+
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glLineWidth(1.0f);
+}
+
 /* ---- Grid transition curve plugin (Render3dXnReveal, see render3d_transition.h) --
  * The grid owns its fade durations + per-theme speed + opacity shape; the
  * machine just feeds elapsed time and reads opacity back. A linear opacity
@@ -1740,6 +1956,14 @@ static void grid_dispatch_theme(const Render3dFrameRenderContext *frame_ctx,
 
     case GRID_THEME_XZRULER:
         render3d_grid_render_xzruler_theme(grid_ctx);
+        break;
+
+    case GRID_THEME_SKETCH:
+        render3d_grid_render_sketch_theme(config, grid_ctx);
+        break;
+
+    case GRID_THEME_NEON:
+        render3d_grid_render_neon_theme(grid_ctx);
         break;
 
     case GRID_THEME_PLANES:

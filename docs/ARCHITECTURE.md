@@ -1104,6 +1104,7 @@ with — keep this current when adding a theme):
 | Fog | Fog by design (EXP2 to clear color) |
 | Radar | Opts into NV distance fog for its rings (covered by `test_nv_fog_distance_radial_optin`) |
 | Tilled Field | Opaque depth-written terrain — no translucent-line stacking |
+| Sketchbook, Neon Graph | Own alpha fade (`grid_color` xn_alpha); XY-plane 2D themes, not on the radial path |
 
 Open follow-up: Radar, Fog, Tilled Field, Focus, and Adaptive Planes are
 *not* on the world-radial path. Ocean/Frozen are deliberate (they own
@@ -1111,6 +1112,39 @@ their atmosphere and fade to their own color). The others can still fog
 to the clear color when a backdrop is on; converting Radar (fade its
 rings by radius — a natural radial fit) and gating the residual
 clear-color fog on `backdrop == OFF` would close the gap.
+
+### 2D grid themes (Sketchbook + Neon Graph)
+
+`Sketchbook` and `Neon Graph` are purpose-built for the **2D ortho view**.
+Unlike every other theme — which draws its graticule in the XZ ground
+plane — these draw in the **XY plane** at `z = GRID_2D_Z` (just behind the
+z=0 user geometry), so they read as a flat, front-facing grid when the
+camera looks down −Z. In 3D they render as a vertical wall at z=0;
+filtering theme availability by view mode is a deliberate later step (the
+look was the first goal). Both use the Dusk scene palette, route line
+alpha through `grid_color()` (so the show/hide fade still applies), and
+carry no `GridThemeSpec`, so `render3d_grid_theme_uses_edge_fade()` is
+false and the radial edge-fade machinery is skipped. They live as custom
+arms in `grid_dispatch_theme` in [`src/render3d/grid.c`](../src/render3d/grid.c).
+
+- **Sketchbook** is a hand-drawn coordinate graph: each cell line is a
+  multi-segment `GL_LINE_STRIP` offset by a frame-stable `grid_sketch_wobble()`
+  (tapered to zero at the ends so corners still meet), drawn in two passes
+  (bold + faint) for an inked feel. Lines snap to real world coordinates
+  at the configurable `major` spacing and are **labelled with their actual
+  value** via GLUT stroke glyphs (`grid_stroke_text`), so the labels line
+  up with the gridlines. It fits the live view by reading the visible
+  world half-extents straight off the ortho `GL_PROJECTION` matrix
+  (`half = 1/|proj[diag]|`), centred on the camera pan, clamped so the 3D
+  fallback can't explode the loop counts.
+- **Neon Graph** is a glowing graph-paper grid: faint azure minors,
+  brighter violet majors, an additive bloom pass, glowing nodes at the
+  major intersections, and a pulsing coral origin cross. No text.
+
+The GLUT stroke font (`glutStrokeCharacter` / `glutStrokeWidth` /
+`GLUT_STROKE_ROMAN`) is used for the scalable inked labels; the no-op
+stub equivalents were added to [`tests/gl-stubs/include/GL/freeglut.h`](../tests/gl-stubs/include/GL/freeglut.h) so
+`USE_GL_STUBS` builds still compile.
 
 ### Edit Overlays: polygon outlines on geometry
 
