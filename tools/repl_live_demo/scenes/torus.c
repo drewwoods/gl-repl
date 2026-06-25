@@ -7,6 +7,8 @@
 // Snippet start
 float inner = 0.25;
 float outer = 0.70;
+glEnable(GL_LIGHT0);
+glEnable(GL_LIGHTING);
 glColor3f(0.90, 0.70, 0.30);
 glutSolidTorus(inner, outer, 24, 40);
 // Snippet end
