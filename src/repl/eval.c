@@ -1449,13 +1449,14 @@ ReplNumericArgAtCursor repl_eval_numeric_arg_at_cursor(const char *src,
             if (!is_pure_numeric_literal(base + lo, hi - lo))
                 return result;
 
-            ExprCtx ctx;
             const char *ep = base + lo;
-            ctx.p = ep;
-            ctx.vars = NULL;
-            ctx.num_vars = 0;
-            ctx.err = NULL;
-            ctx.err_sz = 0;
+            ExprCtx ctx = {
+                .p = ep,
+                .vars = NULL,
+                .num_vars = 0,
+                .err = NULL,
+                .err_sz = 0,
+            };
             float val = repl_eval_expr(&ctx);
 
             result.found = 1;

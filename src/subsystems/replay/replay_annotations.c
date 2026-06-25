@@ -540,7 +540,7 @@ static int replay_eval_expr_with_state(
     ExprVar vars[MAX_PREDEF_VARS + MAX_EXPR_VARS];
     float saved_scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     int nv;
-    ExprCtx ctx;
+    ExprCtx ctx = {0};
 
     if (!expr || !out_value)
         return 0;
@@ -556,6 +556,10 @@ static int replay_eval_expr_with_state(
     ctx.p = repl_expr;
     ctx.vars = vars;
     ctx.num_vars = nv;
+    if (predef) {
+        ctx.predef_vars = vars;
+        ctx.predef_count = nv;
+    }
     *out_value = repl_eval_expr(&ctx);
     if (scratch_arrays)
         repl_eval_restore_scratch_arrays(saved_scratch);
