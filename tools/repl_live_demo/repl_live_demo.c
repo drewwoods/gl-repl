@@ -529,7 +529,6 @@ static void reshape_func(int w, int h) {
     g_window_w = w;
     g_window_h = h;
     glViewport(0, 0, w, h);
-    glutPostRedisplay();
 }
 
 static double demo_timer_now_ms(void) {
@@ -583,7 +582,6 @@ static void mouse_func(int button, int state, int x, int y) {
                 int log_mode = (button == GLUT_RIGHT_BUTTON) ? 1 : 0;
                 variable_panel_handle_drag_begin(hit.item_idx, log_mode, x);
                 g_slider_drag = 1;
-                glutPostRedisplay();
                 return;
             }
         }
@@ -597,7 +595,6 @@ static void mouse_func(int button, int state, int x, int y) {
         }
         g_drag_button = -1;
     }
-    glutPostRedisplay();
 }
 
 static void motion_func(int x, int y) {
@@ -605,7 +602,6 @@ static void motion_func(int x, int y) {
         VariablePanelValueChange chg;
         if (variable_panel_handle_drag_motion(x, &chg))
             apply_var_change(&chg);
-        glutPostRedisplay();
         return;
     }
     if (g_drag_button < 0) return;
@@ -626,7 +622,6 @@ static void motion_func(int x, int y) {
             g_cam_ty -= (float)dy * k;
         }
     }
-    glutPostRedisplay();
 }
 
 static void mousewheel_func(int wheel, int direction, int x, int y) {
@@ -638,7 +633,6 @@ static void mousewheel_func(int wheel, int direction, int x, int y) {
         g_cam_dist *= 1.1f;
         if (g_cam_dist > 200.0f) g_cam_dist = 200.0f;
     }
-    glutPostRedisplay();
 }
 
 static void keyboard_func(unsigned char key, int x, int y) {
@@ -668,7 +662,6 @@ static void keyboard_func(unsigned char key, int x, int y) {
     default:
         return;
     }
-    glutPostRedisplay();
 }
 
 /* --- GL capability install ---------------------------------------------- */
