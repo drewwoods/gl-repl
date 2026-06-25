@@ -17,10 +17,76 @@
 #include "subsystems/replay/replay_state.h"
 #include "render3d/lights.h"   /* render3d_lights_apply_theme + eye-space init */
 
+typedef struct {
+    Render3dBackdropMode backdrop;
+    Render3dGridTheme    grid;
+} GlrBackdropGridPair;
+
+static const GlrBackdropGridPair k_backdrop_grid_pairs[] = {
+    { RENDER3D_BACKDROP_AURORA, GRID_THEME_AURORA },
+    { RENDER3D_BACKDROP_SUNSET, GRID_THEME_SYNTHWAVE },
+    { RENDER3D_BACKDROP_POLAR_DAY_SNOW, GRID_THEME_FROZEN },
+    { RENDER3D_BACKDROP_NEBULA, GRID_THEME_STARCHART },
+};
+
+static int g_pair_restore_grid_valid = 0;
+static Render3dGridTheme g_pair_restore_grid = GRID_THEME_OFF;
+
 static int clamp_int(int v, int lo, int hi) {
     if (v < lo) return lo;
     if (v > hi) return hi;
     return v;
+}
+
+int glr_config_backdrop_forces_grid(Render3dBackdropMode backdrop,
+                                    Render3dGridTheme *grid_out) {
+    size_t n = sizeof(k_backdrop_grid_pairs) / sizeof(k_backdrop_grid_pairs[0]);
+    for (size_t i = 0; i < n; i++) {
+        if (k_backdrop_grid_pairs[i].backdrop == backdrop) {
+            if (grid_out)
+                *grid_out = k_backdrop_grid_pairs[i].grid;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int glr_config_grid_user_selectable(Render3dGridTheme grid) {
+    size_t n = sizeof(k_backdrop_grid_pairs) / sizeof(k_backdrop_grid_pairs[0]);
+    if (grid < 0 || grid >= GRID_THEME_COUNT)
+        return 0;
+    for (size_t i = 0; i < n; i++) {
+        if (k_backdrop_grid_pairs[i].grid == grid)
+            return 0;
+    }
+    return 1;
+}
+
+static int grid_cycle_user_selectable(int value, int delta, int count) {
+    int dir;
+    int steps;
+
+    if (count <= 0)
+        return value;
+    if (delta == 0)
+        return value;
+
+    dir = delta < 0 ? -1 : 1;
+    steps = abs(delta);
+    while (steps-- > 0) {
+        int guard = 0;
+        do {
+            value = (value + dir) % count;
+            if (value < 0)
+                value += count;
+            guard++;
+        } while (guard <= count &&
+                 !glr_config_grid_user_selectable((Render3dGridTheme)value));
+
+        if (guard > count)
+            return glr_config_get(GLR_CONFIG_GRID_THEME);
+    }
+    return value;
 }
 
 #define CFG_SECTION_LABEL_MAX 48
@@ -263,6 +329,37 @@ void glr_config_set(GlrConfigKey key, int value) {
             (Render3dXformGuideMode)value;
     } else if (key == GLR_CONFIG_ORTHO_MODE) {
         glr_state_presentation_mut()->ortho_mode = (Render3dViewMode)value;
+    } else if (key == GLR_CONFIG_BACKDROP) {
+        Render3dBackdropMode old_backdrop =
+            (Render3dBackdropMode)glr_state_presentation().backdrop_mode;
+        Render3dGridTheme forced_grid;
+        int old_forced = glr_config_backdrop_forces_grid(old_backdrop,
+                                                         NULL);
+        int new_forced = glr_config_backdrop_forces_grid(
+            (Render3dBackdropMode)value, &forced_grid);
+
+        if (new_forced && !old_forced) {
+            g_pair_restore_grid =
+                (Render3dGridTheme)glr_state_presentation().grid_theme;
+            g_pair_restore_grid_valid = 1;
+        }
+
+        glr_state_presentation_mut()->backdrop_mode = value;
+
+        if (new_forced) {
+            glr_state_presentation_mut()->grid_theme = forced_grid;
+        } else if (old_forced && g_pair_restore_grid_valid) {
+            glr_state_presentation_mut()->grid_theme = g_pair_restore_grid;
+            g_pair_restore_grid_valid = 0;
+        }
+    } else if (key == GLR_CONFIG_GRID_THEME) {
+        Render3dGridTheme forced_grid;
+        if (glr_config_backdrop_forces_grid(
+                (Render3dBackdropMode)glr_state_presentation().backdrop_mode,
+                &forced_grid)) {
+            value = forced_grid;
+        }
+        glr_state_presentation_mut()->grid_theme = value;
     } else {
         int *target = config_value_ptr(key);
         if (!target)
@@ -293,9 +390,20 @@ int glr_config_cycle(GlrConfigKey key, int delta) {
         return glr_config_get(key);
 
     int value = glr_config_get(key);
-    value = (value + delta) % count;
-    if (value < 0)
-        value += count;
+    if (key == GLR_CONFIG_GRID_THEME) {
+        Render3dGridTheme forced_grid;
+        if (glr_config_backdrop_forces_grid(
+                (Render3dBackdropMode)glr_state_presentation().backdrop_mode,
+                &forced_grid)) {
+            glr_config_set(key, forced_grid);
+            return glr_config_get(key);
+        }
+        value = grid_cycle_user_selectable(value, delta, count);
+    } else {
+        value = (value + delta) % count;
+        if (value < 0)
+            value += count;
+    }
     glr_config_set(key, value);
     return glr_config_get(key);
 }

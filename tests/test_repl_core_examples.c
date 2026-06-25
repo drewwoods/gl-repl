@@ -872,12 +872,14 @@ static void test_example_tag_default_cfg(void) {
     int bezier_idx     = find_example_index_by_name("Bezier curve with guides");
     int cube_idx       = find_example_index_by_name("Lit cube");
     int stress_idx     = find_example_index_by_name("Dusk lighthouse atoll (stress test)");
+    int whale_idx      = find_example_index_by_name("Whale (particle system + lit model)");
     int spirograph_idx =
         find_example_index_by_name("Animated spirograph curve");
 
     ASSERT_TRUE("bezier example index found", bezier_idx >= 0);
     ASSERT_TRUE("cube example index found", cube_idx >= 0);
     ASSERT_TRUE("stress example index found", stress_idx >= 0);
+    ASSERT_TRUE("whale example index found", whale_idx >= 0);
     ASSERT_TRUE("spirograph example index found", spirograph_idx >= 0);
 
     /* Sanity-check tag membership so the test isn't quietly invalidated
@@ -899,6 +901,12 @@ static void test_example_tag_default_cfg(void) {
                     repl_example_has_tag(stress_idx, REPL_EXAMPLE_TAG_3D));
         ASSERT_TRUE("stress is not in 2D bucket",
                     !repl_example_has_tag(stress_idx, REPL_EXAMPLE_TAG_2D));
+    }
+    if (whale_idx >= 0) {
+        ASSERT_TRUE("whale is in 3D bucket",
+                    repl_example_has_tag(whale_idx, REPL_EXAMPLE_TAG_3D));
+        ASSERT_TRUE("whale is not in 2D bucket",
+                    !repl_example_has_tag(whale_idx, REPL_EXAMPLE_TAG_2D));
     }
     if (spirograph_idx >= 0) {
         ASSERT_TRUE("spirograph is in 2D bucket",
@@ -932,12 +940,12 @@ static void test_example_tag_default_cfg(void) {
     }
 
     /* (4) Example with its own @cfg grid → the explicit value wins over the
-     * tag / global default. Stress is 3D-only and sets grid =
-     * GRID_THEME_OFF. */
-    if (stress_idx >= 0) {
-        load_example_for_test(stress_idx);
+     * tag / global default. Whale is 3D-only and sets grid =
+     * GRID_THEME_OCEAN. */
+    if (whale_idx >= 0) {
+        load_example_for_test(whale_idx);
         ASSERT_TRUE("example @cfg grid overrides default",
-                    glr_state_presentation().grid_theme == GRID_THEME_OFF);
+                    glr_state_presentation().grid_theme == GRID_THEME_OCEAN);
     }
 }
 

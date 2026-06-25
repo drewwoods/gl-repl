@@ -870,7 +870,7 @@ note) used to initialize `g_ui_theme`. It is `#ifndef`-guarded and
 build-overridable, e.g. `make gl-repl CPPFLAGS=-DUI_THEME_DEFAULT=1`;
 [`theme.h`](../src/ui/core/theme.h) `STATIC_ASSERT`s the value is in range against the [`UiTheme`](../src/ui/core/theme.h#L62)
 enum. The [`ui_theme_select()`](../src/ui/core/theme.h#L113) / [`ui_theme_active()`](../src/ui/core/theme.h#L114) seam keeps call
-sites stable for a future runtime switcher (e.g. a [`GlrConfigKey`](../src/app/glr_config.h#L27)
+sites stable for a future runtime switcher (e.g. a [`GlrConfigKey`](../src/app/glr_config.h#L29)
 cycle) that would relocate the active index into one `.c` TU.
 [`tests/test_ui_theme.c`](../tests/test_ui_theme.c) (header-only) guards table integrity: no
 zeroed token, neutral tokens stable across rows, green accent ==
