@@ -294,6 +294,11 @@ double glr_audio_hitch_threshold_ms_for_test(void) {
     return worker_hitch_threshold_ms();
 }
 
+static int audio_no_device_requested(void) {
+    const char *env = getenv("GLR_AUDIO_NO_DEVICE");
+    return env && *env;
+}
+
 static ma_uint32 miniaudio_log_level_from_env(const char *env) {
     if (!env || !*env)
         return MA_LOG_LEVEL_WARNING;
@@ -866,6 +871,16 @@ int glr_audio_init(void) {
         engine_config = ma_engine_config_init();
         engine_config.pLog = &g_miniaudio_log;
         engine_config_ptr = &engine_config;
+    }
+
+    if (audio_no_device_requested()) {
+        if (!engine_config_ptr) {
+            engine_config = ma_engine_config_init();
+            engine_config_ptr = &engine_config;
+        }
+        engine_config.noDevice = MA_TRUE;
+        engine_config.channels = 2;
+        engine_config.sampleRate = 48000;
     }
 
     r = ma_engine_init(engine_config_ptr, &g_engine);

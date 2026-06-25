@@ -8,6 +8,11 @@
 SHELL := /bin/bash
 
 CC = gcc
+ifeq ($(origin CC),command line)
+MSAN_CC ?= $(CC)
+else
+MSAN_CC ?= clang
+endif
 PROJECT_ROOT := $(abspath .)
 LOCAL_INCLUDE := $(abspath include)
 SRC_DIR := $(abspath src)
@@ -148,9 +153,11 @@ else ifeq ($(SAN),memory)
 DEBUG_SAN_SUFFIX = -msan
 DEBUG_CFLAGS = \
 	$(COMMON_CFLAGS) \
-	-O0 \
+	-O1 \
 	-fsanitize=memory -fsanitize-memory-track-origins=2 \
-	-fno-omit-frame-pointer
+	-fno-omit-frame-pointer \
+	-Qunused-arguments \
+	-mllvm -fast-isel=false
 else ifneq ($(SAN),address)
 $(error unsupported SAN=$(SAN); use SAN=address, SAN=memory, or NO_SAN=1)
 else
@@ -1618,8 +1625,8 @@ test-detailed: $(TEST_BINS) ## Run the full test suite with verbose example expo
 test-stubs: check-doc-links check-trailing-whitespace check-gl-boundaries check-layer-coupling check-state-ownership ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs.
 	$(MAKE) test USE_GL_STUBS=1
 
-test-msan: check-doc-links check-trailing-whitespace check-gl-boundaries check-layer-coupling check-state-ownership ## Build and run stubbed tests with MemorySanitizer.
-	$(MAKE) test USE_GL_STUBS=1 BUILD=debug SAN=memory
+test-msan: ## Build and run stubbed tests with MemorySanitizer.
+	GLR_AUDIO_NO_DEVICE=1 $(MAKE) test USE_GL_STUBS=1 BUILD=debug SAN=memory CC=$(MSAN_CC)
 
 test-full: ## Full gate: stub tests + MSan tests + checks + build gl-repl, bench, repl_demo, render3d_demo, editor_demo.
 	$(MAKE) --no-print-directory repl_demo USE_GL_STUBS=1
@@ -1735,7 +1742,7 @@ debug: ## Build everything with debug ASan+UBSan flags.
 	$(MAKE) all BUILD=debug
 
 debug-msan: ## Build everything with debug MemorySanitizer flags.
-	$(MAKE) all BUILD=debug SAN=memory
+	$(MAKE) all BUILD=debug SAN=memory CC=$(MSAN_CC)
 
 coverage: ## Clean, rebuild tests with coverage, run suite, generate HTML report.
 	$(MAKE) clean
@@ -1921,8 +1928,8 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "                 config.h, range-checked in src/ui/core/theme.h. See\n"
 	@printf "                 docs/ARCHITECTURE.md > UI Color Theming.\n"
 	@printf "                 SAN=memory selects MemorySanitizer for debug builds (separate build/debug-msan dir).\n"
-	@printf "                 make debug-msan builds the full target set with SAN=memory.\n"
-	@printf "                 make test-msan runs the stubbed test suite with SAN=memory.\n"
+	@printf "                 make debug-msan builds the full target set with SAN=memory CC=$$(MSAN_CC).\n"
+	@printf "                 make test-msan runs the stubbed test suite with SAN=memory CC=$$(MSAN_CC).\n"
 	@printf "                 NO_SAN=1 (or NOSAN=1) disables debug-build sanitizers.\n"
 	@printf "                 GLR_AUDIO_NO_THREAD=1 (e.g. make gl-repl CPPFLAGS=-DGLR_AUDIO_NO_THREAD=1)\n"
 	@printf "                 drops the audio background worker thread: the playlist lifecycle ops\n"

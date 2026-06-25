@@ -85,8 +85,10 @@ These are make variables or script/test env vars. Pass make variables as
 | `CPPFLAGS` | Makefile compile rules. | Extra preprocessor flags, commonly `-DUI_THEME_DEFAULT=N` or `-DGLR_AUDIO_NO_THREAD=1`. |
 | `BUILD` | Makefile. | Build mode: `release`, `debug`, or `coverage`. Tests default to debug; app/bench/demo targets default to release. |
 | `SAN` | Makefile. | Debug sanitizer selector used by `make debug-msan` / `make test-msan`: `address` (default ASan+UBSan) or `memory` (MSan with origin tracking; uses `build/debug-msan*`). |
+| `MSAN_CC` | Makefile. | Compiler used by `make debug-msan` / `make test-msan`; defaults to `clang`, override for versioned LLVM binaries. |
 | `NO_SAN`, `NOSAN` | Makefile. | Disable debug-build sanitizers. |
 | `USE_GL_STUBS` | Makefile. | `1` builds against bundled no-op GL/GLU/GLUT headers for non-rendering tests. |
+| `GLR_AUDIO_NO_DEVICE` | Audio runtime, `make test-msan`. | Any non-empty value initializes miniaudio without opening a host audio device; `test-msan` sets this to avoid uninstrumented system audio backends. |
 | `FREEGLUT_OSMESA` | Makefile. | `1` builds vendored freeglut with the headless OSMesa backend. |
 | `FREEGLUT_VENDOR` | Makefile. | `0` skips the vendored freeglut static library, used by the `make glut` fallback. |
 | `APP_ICON_SVG` | Makefile `make app`. | Source SVG for the generated macOS `.icns`. |
