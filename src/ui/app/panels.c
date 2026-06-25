@@ -137,7 +137,7 @@ enum {
     BELL_GAP           = 5,    /* gap between bell and the count */
     MSGLIST_ROW_H      = LINE_H,
     MSGLIST_PAD        = 4,    /* inner padding around the list text block */
-    MSGLIST_MAX_ROWS   = 10,   /* visible rows cap, also clamped to fit */
+    MSGLIST_MAX_ROWS   = UI_STATUS_HISTORY_CAP,   /* visible rows cap, also clamped to fit */
     MSGLIST_MIN_W      = 200,
     MSGLIST_MAX_W      = 460,
 };
