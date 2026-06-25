@@ -3,6 +3,8 @@
 *.ini
 # ...but the repl_live_demo ships a default config (not runtime state).
 !tools/repl_live_demo/repl_live_demo.ini
+# repl_live_demo 'e' round-trip export artifacts (written to CWD).
+*.roundtrip.c
 gl-repl
 output.c
 output.ply

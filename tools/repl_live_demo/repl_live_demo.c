@@ -411,23 +411,45 @@ static void apply_camera_modelview(void) {
     glTranslatef(-g_cam_tx, -g_cam_ty, -g_cam_tz);
 }
 
-/* Per-frame GL baseline approximating what the app's render3d layer sets up
- * before user geometry runs. An exported scene assumes this baseline (it lives
- * in the export's init()/display() scaffold, which the demo does NOT execute —
- * only the geometry snippet runs), so without it lit geometry renders wrong:
- * e.g. GL_COLOR_MATERIAL off means glColor3f is ignored under GL_LIGHTING and a
- * tinted surface comes out as the default white-ish material. Color-material +
- * normalize + a neutral key/fill light + a known depth/blend/lighting start
- * state each frame restore the expected look. The scene still enables
- * GL_LIGHTING and its specific lights itself. Called after the camera modelview
- * so the light positions land in world space. */
-static void setup_render_baseline(void) {
-    GLfloat ambient[4] = { 0.15f, 0.15f, 0.18f, 1.0f };
-    GLfloat l0_pos[4]  = {  2.0f, 4.0f,  5.0f, 0.0f };  /* directional key */
-    GLfloat l0_dif[4]  = { 0.85f, 0.85f, 0.80f, 1.0f };
-    GLfloat l1_pos[4]  = { -3.0f, 2.0f, -2.0f, 1.0f };  /* positional fill */
-    GLfloat l1_dif[4]  = { 0.35f, 0.30f, 0.25f, 1.0f };
+/* The app's default light theme (LIGHT_THEME_DEFAULT), reproduced verbatim so
+ * lit scenes render — and re-export ('e') — with the SAME lights gl-repl uses,
+ * not the GL defaults (or zeros, which is what an export with no light bridge
+ * emits). These are exactly the per-slot values a real export's init() carries.
+ * Single source of truth for both setup_render_baseline() (live render) and the
+ * export light bridge (round-trip 'e'). Positions are world-space (applied after
+ * the camera). */
+enum { DEMO_LIGHT_COUNT = 4 };  /* GL_LIGHT0..3 — mirrors the app's MAX_LIGHTS */
 
+typedef struct {
+    GLfloat pos[4];
+    GLfloat diffuse[4];
+    GLfloat ambient[4];
+    GLfloat specular[4];
+} DemoLight;
+
+static const GLfloat g_light_model_ambient[4] = { 0.15f, 0.15f, 0.20f, 1.0f };
+
+static const DemoLight g_demo_lights[DEMO_LIGHT_COUNT] = {
+    { {  2.0f,  4.0f,  5.0f, 0.0f }, { 0.80f, 0.80f, 0.75f, 1.0f },
+      { 0.10f, 0.10f, 0.12f, 1.0f }, { 1.00f, 1.00f, 0.95f, 1.0f } },
+    { { -3.0f,  2.0f, -2.0f, 1.0f }, { 0.45f, 0.30f, 0.15f, 1.0f },
+      { 0.05f, 0.03f, 0.02f, 1.0f }, { 0.30f, 0.20f, 0.10f, 1.0f } },
+    { {  0.0f, -1.0f,  3.0f, 1.0f }, { 0.15f, 0.25f, 0.50f, 1.0f },
+      { 0.02f, 0.03f, 0.06f, 1.0f }, { 0.10f, 0.15f, 0.35f, 1.0f } },
+    { {  1.0f,  1.0f, -4.0f, 0.0f }, { 0.35f, 0.35f, 0.40f, 1.0f },
+      { 0.05f, 0.05f, 0.06f, 1.0f }, { 0.20f, 0.20f, 0.25f, 1.0f } },
+};
+
+/* Per-frame GL baseline matching what the app's render3d layer sets up before
+ * user geometry runs. An exported scene assumes this baseline (it lives in the
+ * export's init()/display() scaffold, which the demo does NOT execute — only the
+ * geometry snippet runs), so without it lit geometry renders wrong: e.g.
+ * GL_COLOR_MATERIAL off means glColor3f is ignored under GL_LIGHTING and a
+ * tinted surface comes out as the default white-ish material. The scene still
+ * enables GL_LIGHTING and the specific lights it wants. Called after the camera
+ * modelview so the light positions land in world space. */
+static void setup_render_baseline(void) {
+    int i;
     glDepthFunc(GL_LESS);
     glDisable(GL_BLEND);
     glDisable(GL_LIGHTING);
@@ -436,13 +458,33 @@ static void setup_render_baseline(void) {
     glEnable(GL_NORMALIZE);
     glEnable(GL_COLOR_MATERIAL);
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+    glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+    glLightModelfv(GL_LIGHT_MODEL_AMBIENT, g_light_model_ambient);
 
-    glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ambient);
-    glLightfv(GL_LIGHT0, GL_POSITION, l0_pos);
-    glLightfv(GL_LIGHT0, GL_DIFFUSE,  l0_dif);
-    glLightfv(GL_LIGHT1, GL_POSITION, l1_pos);
-    glLightfv(GL_LIGHT1, GL_DIFFUSE,  l1_dif);
+    for (i = 0; i < DEMO_LIGHT_COUNT; i++) {
+        GLenum lid = (GLenum)(GL_LIGHT0 + i);
+        glLightfv(lid, GL_POSITION, g_demo_lights[i].pos);
+        glLightfv(lid, GL_DIFFUSE,  g_demo_lights[i].diffuse);
+        glLightfv(lid, GL_AMBIENT,  g_demo_lights[i].ambient);
+        glLightfv(lid, GL_SPECULAR, g_demo_lights[i].specular);
+    }
 }
+
+/* Export light bridge ('e' round-trip): without it, repl_export_save_output
+ * emits zeroed light colors. Report the same per-slot values setup_render_baseline
+ * applies, so the exported standalone C lights the scene the way the demo does. */
+static void demo_light_fill_slot(int slot, ReplExportLightInfo *out) {
+    int i;
+    if (slot < 0 || slot >= DEMO_LIGHT_COUNT) { memset(out, 0, sizeof(*out)); return; }
+    for (i = 0; i < 4; i++) {
+        out->pos[i]      = g_demo_lights[slot].pos[i];
+        out->diffuse[i]  = g_demo_lights[slot].diffuse[i];
+        out->ambient[i]  = g_demo_lights[slot].ambient[i];
+        out->specular[i] = g_demo_lights[slot].specular[i];
+    }
+    out->pos_is_eye_space = 0;  /* world-space, set after the camera */
+}
+static const ReplExportLightBridge g_light_bridge = { demo_light_fill_slot };
 
 static void draw_text(int x, int y, const char *s) {
     glRasterPos2i(x, y);
@@ -841,6 +883,7 @@ int main(int argc, char **argv) {
 
     repl_install_host_effects(&g_host_effects);
     repl_export_install_camera_bridge(&g_cam_bridge);
+    repl_export_install_light_bridge(&g_light_bridge);
     variable_panel_state_reset();
     variable_panel_set_visible(g_panel_on);
     variable_panel_install_value_source(&g_value_source);
