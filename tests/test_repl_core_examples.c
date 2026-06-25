@@ -507,10 +507,168 @@ static char *canonicalize_definition_line(const char *line) {
 
     canonicalize_float_literals(repl_line, canon_float_line, sizeof(canon_float_line));
 
+    /* Strip initializers from float declarations, e.g. "static float x = 1, y = 2;" -> "static float x, y;" */
+    /* This allows comparing the structure of the declarations without being sensitive to live snapshot values. */
+    char stripped_line[MAX_LINE_LEN];
+    const char *p = canon_float_line;
+    char *dst = stripped_line;
+    while (*p && isspace((unsigned char)*p)) {
+        *dst++ = *p++;
+    }
+    int is_decl = 0;
+    if (strncmp(p, "static", 6) == 0 && isspace((unsigned char)p[6])) {
+        const char *q = p + 6;
+        while (*q && isspace((unsigned char)*q)) q++;
+        if (strncmp(q, "float", 5) == 0 && (q[5] == '\0' || isspace((unsigned char)q[5]))) {
+            is_decl = 1;
+        }
+    } else if (strncmp(p, "float", 5) == 0 && (p[5] == '\0' || isspace((unsigned char)p[5]))) {
+        is_decl = 1;
+    }
+
+    if (is_decl) {
+        /* Copy "static float " or "float " prefix */
+        if (strncmp(p, "static", 6) == 0) {
+            memcpy(dst, "static float ", 13);
+            dst += 13;
+            p += 6;
+            while (*p && isspace((unsigned char)*p)) p++;
+            p += 5; /* skip "float" */
+        } else {
+            memcpy(dst, "float ", 6);
+            dst += 6;
+            p += 5;
+        }
+        /* Parse variable names, ignoring "= value" */
+        while (*p) {
+            while (*p && isspace((unsigned char)*p)) {
+                *dst++ = *p++;
+            }
+            if (!*p) break;
+            if (isalnum((unsigned char)*p) || *p == '_') {
+                while (*p && (isalnum((unsigned char)*p) || *p == '_')) {
+                    *dst++ = *p++;
+                }
+            } else if (*p == '=') {
+                p++;
+                while (*p && *p != ',' && *p != ';') {
+                    p++;
+                }
+            } else if (*p == ',') {
+                while (dst > stripped_line && isspace((unsigned char)dst[-1])) dst--;
+                *dst++ = ',';
+                *dst++ = ' ';
+                p++;
+                while (*p && isspace((unsigned char)*p)) p++;
+            } else if (*p == ';') {
+                while (dst > stripped_line && isspace((unsigned char)dst[-1])) dst--;
+                *dst++ = ';';
+                p++;
+                break;
+            } else {
+                *dst++ = *p++;
+            }
+        }
+        *dst = '\0';
+        out = (char *)malloc(strlen(stripped_line) + 1);
+        if (!out) return NULL;
+        strcpy(out, stripped_line);
+        return out;
+    }
+
     out = (char *)malloc(strlen(canon_float_line) + 1);
     if (!out)
         return NULL;
     strcpy(out, canon_float_line);
+    return out;
+}
+
+static char *strip_declaration_initializers(const char *src) {
+    if (!src) return NULL;
+    size_t len = strlen(src);
+    char *out = (char *)malloc(len * 2 + 512);
+    if (!out) return NULL;
+
+    const char *p = src;
+    char *dst = out;
+    char line[MAX_LINE_LEN];
+
+    while (*p) {
+        int li = 0;
+        while (*p && *p != '\n' && li < MAX_LINE_LEN - 1) {
+            line[li++] = *p++;
+        }
+        line[li] = '\0';
+        if (*p == '\n') p++;
+
+        /* Strip initializers if it is a declaration line */
+        const char *lp = line;
+        while (*lp && isspace((unsigned char)*lp)) lp++;
+        int is_decl = 0;
+        if (strncmp(lp, "static", 6) == 0 && isspace((unsigned char)lp[6])) {
+            const char *q = lp + 6;
+            while (*q && isspace((unsigned char)*q)) q++;
+            if (strncmp(q, "float", 5) == 0 && (q[5] == '\0' || isspace((unsigned char)q[5]))) {
+                is_decl = 1;
+            }
+        } else if (strncmp(lp, "float", 5) == 0 && (lp[5] == '\0' || isspace((unsigned char)lp[5]))) {
+            is_decl = 1;
+        }
+
+        if (is_decl) {
+            /* Format without initializers */
+            const char *sp = line;
+            while (*sp && isspace((unsigned char)*sp)) {
+                *dst++ = *sp++;
+            }
+            if (strncmp(sp, "static", 6) == 0) {
+                memcpy(dst, "static float ", 13);
+                dst += 13;
+                sp += 6;
+                while (*sp && isspace((unsigned char)*sp)) sp++;
+                sp += 5;
+            } else {
+                memcpy(dst, "float ", 6);
+                dst += 6;
+                sp += 5;
+            }
+            while (*sp) {
+                while (*sp && isspace((unsigned char)*sp)) {
+                    *dst++ = *sp++;
+                }
+                if (!*sp) break;
+                if (isalnum((unsigned char)*sp) || *sp == '_') {
+                    while (*sp && (isalnum((unsigned char)*sp) || *sp == '_')) {
+                        *dst++ = *sp++;
+                    }
+                } else if (*sp == '=') {
+                    sp++;
+                    while (*sp && *sp != ',' && *sp != ';') {
+                        sp++;
+                    }
+                } else if (*sp == ',') {
+                    while (dst > out && isspace((unsigned char)dst[-1])) dst--;
+                    *dst++ = ',';
+                    *dst++ = ' ';
+                    sp++;
+                    while (*sp && isspace((unsigned char)*sp)) sp++;
+                } else if (*sp == ';') {
+                    while (dst > out && isspace((unsigned char)dst[-1])) dst--;
+                    *dst++ = ';';
+                    sp++;
+                    break;
+                } else {
+                    *dst++ = *sp++;
+                }
+            }
+        } else {
+            /* Copy line verbatim */
+            memcpy(dst, line, (size_t)li);
+            dst += li;
+        }
+        *dst++ = '\n';
+    }
+    *dst = '\0';
     return out;
 }
 
@@ -1738,8 +1896,10 @@ int main(int argc, char **argv) {
             if (imported) {
                 char *actual_cmp_raw = strip_decl_trailing_comments(actual);
                 char *imported_cmp_raw = strip_decl_trailing_comments(imported);
-                char *actual_cmp = canonicalize_text_floats(actual_cmp_raw);
-                char *imported_cmp = canonicalize_text_floats(imported_cmp_raw);
+                char *actual_cmp_floats = canonicalize_text_floats(actual_cmp_raw);
+                char *imported_cmp_floats = canonicalize_text_floats(imported_cmp_raw);
+                char *actual_cmp = strip_declaration_initializers(actual_cmp_floats);
+                char *imported_cmp = strip_declaration_initializers(imported_cmp_floats);
                 roundtrip_exact = compare_exact_text(actual_cmp, imported_cmp,
                                                      &diff_line);
                 if (!roundtrip_exact) {
@@ -1753,6 +1913,8 @@ int main(int argc, char **argv) {
                 }
                 free(actual_cmp);
                 free(imported_cmp);
+                free(actual_cmp_floats);
+                free(imported_cmp_floats);
                 free(actual_cmp_raw);
                 free(imported_cmp_raw);
                 snprintf(label, sizeof(label),

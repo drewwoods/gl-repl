@@ -97,11 +97,6 @@ typedef struct {
     WorkspaceEmitFn   emit;      /* append zero or more lines, bumping *n */
 } WorkspaceDirective;
 
-static void workspace_format_float(char *buf, size_t n, float v) {
-    /* Shortest exact-round-trip form (e.g. "0.8", not %.9g's
-     * "0.800000012"); reload reproduces the identical float32. */
-    repl_format_source_float(buf, (int)n, v);
-}
 
 /* Resolve slot `slot`'s dimensional light data through the bridge, or zero
  * it when no bridge is installed. */
@@ -152,13 +147,7 @@ static void emit_scene_name(int *n) {
 /* --- var ------------------------------------------------------------------- */
 
 static void emit_vars(int *n) {
-    for (int var_idx = 0; var_idx < g_num_predef_vars && *n < MAX_WORKSPACE_HEADER_LINES; var_idx++) {
-        char vbuf[32];
-        workspace_format_float(vbuf, sizeof(vbuf), g_predef_vars[var_idx].value);
-        if (repl_format_fits(g_workspace_header_lines_writable[*n], WORKSPACE_HEADER_LINE_LEN,
-                             "/* @var %s = %s */", g_predef_vars[var_idx].name, vbuf))
-            (*n)++;
-    }
+    (void)n;
 }
 
 /* --- func aliases ----------------------------------------------------------

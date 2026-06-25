@@ -163,8 +163,8 @@ static void test_collector_and_export(void) {
                 contains(c, "step_scale *= "
                          REPL_EXPORT_STRINGIFY(GLR_ADJUST_COARSE_SCALE)
                          ";\n\n  if (normalized_key == 'q')"));
-    ASSERT_TRUE("round-trip marker amp", contains(c, "@declare amp=1.5 @tune"));
-    ASSERT_TRUE("round-trip marker freq", contains(c, "@declare freq=2 @tune"));
+    ASSERT_TRUE("round-trip marker amp", contains(c, "@declare amp @tune"));
+    ASSERT_TRUE("round-trip marker freq", contains(c, "@declare freq @tune"));
     /* baseline keyboard handlers stay */
     ASSERT_TRUE("keeps space-toggle",
                 contains(c, "if (key == ' ')"));

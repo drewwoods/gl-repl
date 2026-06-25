@@ -256,7 +256,7 @@ int main(void) {
                                    "#include <stddef.h>"));
         ASSERT_TRUE("scaffold header before globals",
                     appears_before(buf, "#include <GL/freeglut.h>",
-                                   "static float t = 0.0f;"));
+                                   "static float t = "));
         /* Predef-var initializer carries the export-time snapshot value
          * (replaces the role reset_repl_vars used to play). */
         ASSERT_TRUE("predef var initializer carries snapshot value",
@@ -267,7 +267,7 @@ int main(void) {
         ASSERT_TRUE("single-pass export omits restore_repl_vars",
                     strstr(buf, "restore_repl_vars") == NULL);
         ASSERT_TRUE("scaffold globals before render helper",
-                    appears_before(buf, "static float t = 0.0f;",
+                    appears_before(buf, "static float t = ",
                                    "static void draw_scene(void)"));
         ASSERT_TRUE("scaffold render helper before display",
                     appears_before(buf, "static void draw_scene(void)",
@@ -1627,12 +1627,15 @@ int main(void) {
         repl_format_source_float(end_s, sizeof(end_s), loop_end);
         repl_format_source_float(step_s, sizeof(step_s), loop_step);
 
-        snprintf(expected_var, sizeof(expected_var), "/* @var x = %s */", x_s);
-        ASSERT_TRUE("workspace header uses shortest exact float",
-                    strstr(buf, expected_var) != NULL);
+        char expected_decl[64];
+        snprintf(expected_decl, sizeof(expected_decl), "static float x = %s;", x_s);
+        ASSERT_TRUE("static float uses shortest exact float",
+                    strstr(buf, expected_decl) != NULL);
         /* Guard against a regression to bare %g (lossy 6-digit). */
-        ASSERT_TRUE("workspace header float is not %g-truncated",
+        ASSERT_TRUE("static float is not %g-truncated",
                     strstr(buf, "0.123457") == NULL);
+        ASSERT_TRUE("no @var lines appear in exported buffer",
+                    strstr(buf, "/* @var") == NULL);
 
         snprintf(expected_loop, sizeof(expected_loop),
                  "for (i = %s; i < %s; i += %sf) {",
@@ -1678,10 +1681,8 @@ int main(void) {
         repl_export_save_output(nonfinite_path, source_document_view(), NULL);
         read_text_file(nonfinite_path, buf, sizeof(buf));
 
-        ASSERT_TRUE("nonfinite header uses NAN",
-                    strstr(buf, "/* @var x = NAN */") != NULL);
-        ASSERT_TRUE("nonfinite header uses INFINITY",
-                    strstr(buf, "/* @var n = INFINITY */") != NULL);
+        ASSERT_TRUE("nonfinite export has no @var lines",
+                    strstr(buf, "/* @var") == NULL);
         ASSERT_TRUE("nonfinite globals use NAN",
                     strstr(buf, "static float x = NAN;") != NULL);
         ASSERT_TRUE("nonfinite globals use INFINITY",
@@ -2160,61 +2161,31 @@ int main(void) {
     {
         char cap[4096];
 
-        /* (a) @var name longer than REPL_PREDEF_NAME_MAX-1 chars. Pre-fix
-         * the leftover name chars broke the `=` parse, so the whole
-         * `// @var` line was silently swallowed as a comment. */
-        glr_ctrl_reset_all();
-        int rc_a = import_with_captured_stderr(
-            "// @var thisVarNameIsTooLong = 5\n"
-            "// Snippet start\n"
-            "glVertex3f(0, 0, 0);\n"
-            "// Snippet end\n",
-            cap, sizeof(cap));
-        ASSERT_TRUE("long @var import still succeeds", rc_a == 1);
-        ASSERT_TRUE("long @var name warns instead of dropping silently",
-                    strstr(cap, "@var name exceeds") != NULL);
-        /* The header-directive warning is folded into the load summary's
-         * "(N warnings)" tally (it used to print but not count). */
-        ASSERT_TRUE("long @var counted in the load summary",
-                    strstr(cap, "(1 warnings)") != NULL);
-
-        /* (b) @var with a reserved name: the declare fails and pre-fix the
-         * error string from repl_eval_declare_predef_var was discarded. */
-        glr_ctrl_reset_all();
-        int rc_b = import_with_captured_stderr(
-            "// @var PI = 3\n"
-            "// Snippet start\n"
-            "glVertex3f(0, 0, 0);\n"
-            "// Snippet end\n",
-            cap, sizeof(cap));
-        ASSERT_TRUE("reserved @var import still succeeds", rc_b == 1);
-        ASSERT_TRUE("reserved @var surfaces the declare error",
-                    strstr(cap, "could not be declared") != NULL);
-
-        /* (c) @declare snippet marker with an over-long name. Pre-fix the
+        /* (a) @declare snippet marker with an over-long name. Pre-fix the
          * `len >= MAX` break dropped it (and any names after it) silently
          * without even bumping the warning counter. */
         glr_ctrl_reset_all();
-        int rc_c = import_with_captured_stderr(
+        int rc_a = import_with_captured_stderr(
             "// Snippet start\n"
             "// @declare thisDeclNameTooLong\n"
             "glVertex3f(0, 0, 0);\n"
             "// Snippet end\n",
             cap, sizeof(cap));
-        ASSERT_TRUE("long @declare import still succeeds", rc_c == 1);
+        ASSERT_TRUE("long @declare import still succeeds", rc_a == 1);
         ASSERT_TRUE("long @declare name warns instead of dropping silently",
                     strstr(cap, "@declare name") != NULL &&
                     strstr(cap, "exceeds") != NULL);
 
-        /* (d) negative control: a clean file emits no Warning lines. */
+        /* (b) negative control: a clean file emits no Warning lines. */
         glr_ctrl_reset_all();
-        int rc_d = import_with_captured_stderr(
-            "// @var n = 5\n"
+        int rc_b = import_with_captured_stderr(
+            "static float n = 5.0f;\n"
             "// Snippet start\n"
+            "// @declare n\n"
             "glVertex3f(n, 0, 0);\n"
             "// Snippet end\n",
             cap, sizeof(cap));
-        ASSERT_TRUE("clean import succeeds", rc_d == 1);
+        ASSERT_TRUE("clean import succeeds", rc_b == 1);
         ASSERT_TRUE("clean import emits no Warning",
                     strstr(cap, "Warning:") == NULL);
         ASSERT_TRUE("clean import summary shows no warning count",

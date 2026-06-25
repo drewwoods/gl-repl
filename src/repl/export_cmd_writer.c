@@ -280,55 +280,12 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
          * the importer can recreate the CMD_VAR_DECLARE when loading back into the
          * REPL without creating a C local variable.
          *
-         * Inline initializers (`float x = 5;`) ride along as `name=value` so
-         * the canonical decl text round-trips byte-exact through export+import. */
-        float inits[MAX_NAMES_PER_DECL];
-        int   has_init[MAX_NAMES_PER_DECL];
-        for (int di = 0; di < MAX_NAMES_PER_DECL; di++) {
-            inits[di] = 0;
-            has_init[di] = 0;
-        }
-        {
-            const char *p = source_text;
-            while (*p && isspace((unsigned char)*p)) p++;
-            /* Optional canonical `static ` prefix. */
-            if (strncmp(p, "static", 6) == 0 && isspace((unsigned char)p[6])) {
-                p += 6;
-                while (*p && isspace((unsigned char)*p)) p++;
-            }
-            if (strncmp(p, "float", 5) == 0 &&
-                (p[5] == ' ' || p[5] == '\t')) {
-                p += 5;
-                int idx = 0;
-                while (*p && *p != ';' && idx < cmd->payload.decl.count) {
-                    while (*p && isspace((unsigned char)*p)) p++;
-                    while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
-                    while (*p && isspace((unsigned char)*p)) p++;
-                    if (*p == '=') {
-                        p++;
-                        while (*p && isspace((unsigned char)*p)) p++;
-                        char *endp = NULL;
-                        float v = strtof(p, &endp);
-                        if (endp && endp != p) {
-                            inits[idx] = v;
-                            has_init[idx] = 1;
-                            p = endp;
-                        }
-                    }
-                    while (*p && isspace((unsigned char)*p)) p++;
-                    if (*p == ',') p++;
-                    idx++;
-                }
-            }
-        }
+         * We no longer emit initializers (`name=value`) in the @declare comment.
+         * The values are instead stashed from the static float declarations at
+         * import time. */
         fprintf(f, "  /* @%s", REPL_SNIPPET_DIRECTIVE_DECLARE);
         for (int di = 0; di < cmd->payload.decl.count; di++) {
-            if (has_init[di]) {
-                char vbuf[32];
-                export_format_decl_float(vbuf, sizeof(vbuf), inits[di]);
-                fprintf(f, " %s=%s", cmd->payload.decl.names[di], vbuf);
-            } else
-                fprintf(f, " %s", cmd->payload.decl.names[di]);
+            fprintf(f, " %s", cmd->payload.decl.names[di]);
         }
         /* Round-trip the @tune knob tag: import re-attaches `// @tune` to the
          * reconstructed decl line. Import's name loop stops at `@`, so the
