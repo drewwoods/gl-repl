@@ -1538,7 +1538,7 @@ int main(int argc, char **argv) {
                         glr_state_presentation().show_vertex_outlines == 0);
             ASSERT_TRUE("stress example backdrop preset",
                         glr_state_presentation().backdrop_mode ==
-                        RENDER3D_BACKDROP_NEBULA);
+                        RENDER3D_BACKDROP_STARS);
             ASSERT_TRUE("stress example camera rx preset",
                         fabsf(glr_camera().rx - 26.0f) < 1e-4f);
             ASSERT_TRUE("stress example camera ry preset",
