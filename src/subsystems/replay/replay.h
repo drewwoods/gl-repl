@@ -116,7 +116,8 @@ typedef struct ReplayVertexWalkState {
     int    in_block;           /* inside CMD_BEGIN..CMD_END or tess polygon */
     int    block_selected;     /* current block matches the cursor */
     int    vertex_idx_in_block;
-    float  normal[3];          /* most recent CMD_NORMAL3F / CMD_TESS_NORMAL value */
+    float  normal[3];          /* most recent CMD_NORMAL3F value */
+    float  tess_normal[3];     /* most recent CMD_TESS_NORMAL value */
 } ReplayVertexWalkState;
 
 typedef struct ReplayVertexWalkContext {

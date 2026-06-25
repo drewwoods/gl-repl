@@ -770,6 +770,71 @@ static void test_is_glut_solid_predicate(void) {
     }
 }
 
+/* --- 10. GLU tessellator vs immediate-mode normal separation ---------
+ *
+ * Verify that glNormal3f (standard immediate mode) does not overwrite
+ * the active gluNormal (GLU tessellator) normal state for subsequent
+ * gluVertex calls.
+ */
+typedef struct {
+    float normal_at_vertex3f[3];
+    float normal_at_gluvertex[3];
+    int   vertex3f_count;
+    int   gluvertex_count;
+} NormalRecorder;
+
+static void on_vertex_capture_normals(const ReplayVertexWalkState *state,
+                                     float vx, float vy, float vz, void *user) {
+    NormalRecorder *rec = (NormalRecorder *)user;
+    const GLCmd *cmd = &repl_state_flat_program_view().cmds[state->flat_cmd_idx];
+    if (cmd->type == CMD_VERTEX3F) {
+        rec->normal_at_vertex3f[0] = state->normal[0];
+        rec->normal_at_vertex3f[1] = state->normal[1];
+        rec->normal_at_vertex3f[2] = state->normal[2];
+        rec->vertex3f_count++;
+    } else if (cmd->type == CMD_TESS_VERTEX) {
+        rec->normal_at_gluvertex[0] = state->normal[0];
+        rec->normal_at_gluvertex[1] = state->normal[1];
+        rec->normal_at_gluvertex[2] = state->normal[2];
+        rec->gluvertex_count++;
+    }
+}
+
+static void test_walker_separates_glu_and_immediate_normals(void) {
+    glr_ctrl_reset_all();
+    editor_feed_line("gluBegin(GLU_POLYGON);");
+    editor_feed_line("gluNormal(0, 0, 1);");
+    editor_feed_line("glBegin(GL_QUAD_STRIP);");
+    editor_feed_line("glNormal3f(-1, 0, 0);");
+    editor_feed_line("glVertex3f(-1.2, -0.45, 0);");
+    editor_feed_line("gluVertex(-1.2, -0.45, 0);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("gluEnd();");
+
+    repl_state_mark_flat_dirty();
+    repl_flatten_commands(editor_state_edit_line());
+
+    NormalRecorder rec = {0};
+    ReplayVertexWalkCallbacks cb = {
+        .on_vertex = on_vertex_capture_normals
+    };
+    ReplayVertexWalkContext ctx = make_ctx(-1);
+    replay_walk_user_vertices(&ctx, &cb, &rec);
+
+    ASSERT_INT("visited glVertex3f", rec.vertex3f_count, 1);
+    ASSERT_INT("visited gluVertex", rec.gluvertex_count, 1);
+
+    /* glVertex3f should have normal (-1, 0, 0) */
+    ASSERT_NEAR("glVertex3f normal.x", rec.normal_at_vertex3f[0], -1.0f);
+    ASSERT_NEAR("glVertex3f normal.y", rec.normal_at_vertex3f[1], 0.0f);
+    ASSERT_NEAR("glVertex3f normal.z", rec.normal_at_vertex3f[2], 0.0f);
+
+    /* gluVertex should have normal (0, 0, 1) */
+    ASSERT_NEAR("gluVertex normal.x", rec.normal_at_gluvertex[0], 0.0f);
+    ASSERT_NEAR("gluVertex normal.y", rec.normal_at_gluvertex[1], 0.0f);
+    ASSERT_NEAR("gluVertex normal.z", rec.normal_at_gluvertex[2], 1.0f);
+}
+
 int main(void) {
     test_walker_resolves_funcn_args_at_cursor();
     test_walker_fires_on_each_cmd_at_cursor();
@@ -781,6 +846,7 @@ int main(void) {
     test_transform_dispatch_drift_guard();
     test_starts_geometry_emit_predicate();
     test_is_glut_solid_predicate();
+    test_walker_separates_glu_and_immediate_normals();
 
     printf("test_replay_walk: %d/%d passed\n",
            g_harness.passed, g_harness.run);

@@ -181,6 +181,7 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
         .block_selected      = selected_block_only ? 0 : 1,
         .vertex_idx_in_block = 0,
         .normal              = { 0.0f, 0.0f, 1.0f },
+        .tess_normal         = { 0.0f, 0.0f, 1.0f },
     };
     int matrix_depth = 0;
     int tess_depth   = 0;
@@ -242,6 +243,7 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
             state.vertex_idx_in_block = 0;
             tess_depth = replay_advance_tess_depth(cmd->type, tess_depth);
             state.normal[0] = 0.0f; state.normal[1] = 0.0f; state.normal[2] = 1.0f;
+            state.tess_normal[0] = 0.0f; state.tess_normal[1] = 0.0f; state.tess_normal[2] = 1.0f;
             break;
         case CMD_TESS_BEGIN_CONTOUR:
             tess_depth = replay_advance_tess_depth(cmd->type, tess_depth);
@@ -256,14 +258,17 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
             break;
         }
         case CMD_NORMAL3F:
-        case CMD_TESS_NORMAL:
             state.normal[0] = cmd->args[0];
             state.normal[1] = cmd->args[1];
             state.normal[2] = cmd->args[2];
             break;
+        case CMD_TESS_NORMAL:
+            state.tess_normal[0] = cmd->args[0];
+            state.tess_normal[1] = cmd->args[1];
+            state.tess_normal[2] = cmd->args[2];
+            break;
         case CMD_VERTEX2F:
-        case CMD_VERTEX3F:
-        case CMD_TESS_VERTEX: {
+        case CMD_VERTEX3F: {
             int visit = selected_block_only
                 ? (state.in_block && state.block_selected)
                 : 1;
@@ -271,6 +276,27 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
                 cb->on_vertex(&state,
                               cmd->args[0], cmd->args[1], cmd->args[2],
                               user_data);
+            }
+            state.vertex_idx_in_block++;
+            break;
+        }
+        case CMD_TESS_VERTEX: {
+            int visit = selected_block_only
+                ? (state.in_block && state.block_selected)
+                : 1;
+            if (visit && cb->on_vertex) {
+                float saved_normal[3] = { state.normal[0], state.normal[1], state.normal[2] };
+                state.normal[0] = state.tess_normal[0];
+                state.normal[1] = state.tess_normal[1];
+                state.normal[2] = state.tess_normal[2];
+
+                cb->on_vertex(&state,
+                              cmd->args[0], cmd->args[1], cmd->args[2],
+                              user_data);
+
+                state.normal[0] = saved_normal[0];
+                state.normal[1] = saved_normal[1];
+                state.normal[2] = saved_normal[2];
             }
             state.vertex_idx_in_block++;
             break;
