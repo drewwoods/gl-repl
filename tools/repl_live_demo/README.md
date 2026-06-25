@@ -38,6 +38,7 @@ make repl_live_demo USE_GL_STUBS=1   # headless build; runs the import path in
 |---|---|
 | `[` / `]` | Previous / next scene (re-imports) |
 | `r` | Force-reload the active scene |
+| `e` | Export current state to `./<scene>.roundtrip.c` (diff vs the source to check the round-trip) |
 | `v` | Toggle the variable panel |
 | `space` | Pause / resume the animation clock `t` |
 | LMB drag | Orbit camera |
@@ -97,3 +98,19 @@ pleasant to hand-edit in vim: the geometry lives between `// Snippet start` and
 `float name = value;` lines declare the predefined variables that drive the
 sliders. The animation clock `t` is shown as a slider too — dragging it scrubs
 the clock (playback then continues from the scrubbed value); space pauses it.
+
+## Rendering notes & limitations
+
+The demo executes **only the geometry program** (the snippet + the scene's
+functions). It does *not* run an export's `init()` / `display()` scaffold, which
+in the real app is the job of the `render3d` layer the demo deliberately omits.
+To keep lit scenes looking right anyway, the demo installs a small per-frame GL
+baseline that approximates `render3d`'s defaults: `GL_COLOR_MATERIAL` (so
+`glColor3f` tints lit surfaces — otherwise it is ignored under `GL_LIGHTING` and
+geometry renders as the default white-ish material), `GL_NORMALIZE`, a neutral
+key + fill light, and a small global ambient. The scene still enables
+`GL_LIGHTING` and its own lights. The *exact* light colors/positions from a
+scene's `init()` are not reproduced, so a heavily lit export may look close but
+not pixel-identical to `gl-repl`. The animation clock `t` is advanced in place
+in the REPL variable table (like the app), so a scene's own `t = 0` reset takes
+effect — the panel `t`, the HUD `t`, and the geometry all stay in sync.

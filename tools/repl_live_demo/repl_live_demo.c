@@ -73,8 +73,13 @@ static int   g_panel_on = 1;
 
 /* --- Animation + camera state ------------------------------------------- */
 
+/* The animation clock `t` is NOT a separate demo variable: it lives in the
+ * REPL predef table and is advanced in place (idle_func), exactly like the app.
+ * That way a scene's own `t = 0` reset — applied during flatten/execute — sticks
+ * and `t` continues from there, instead of being clobbered by a demo-side clock. */
+#define DEMO_FRAME_DT (1.0f / 60.0f)
+
 static int   g_playing = 1;
-static float g_anim_t  = 0.0f;
 
 static float g_cam_dist = 6.0f;
 static float g_cam_rx   = 20.0f;
@@ -217,7 +222,25 @@ static void demo_cam_reset_import(void) {
     g_cam_parse_state = 0;
 }
 
+/* Write side (used by the 'e' round-trip export): emit the 4-line camera block
+ * from the demo's live orbit camera, so a re-exported file carries the view the
+ * user is looking at. Mirrors the format the import parser above reads back. */
+static void demo_cam_fill_block(ReplExportCameraBlock *block) {
+    snprintf(block->lines[0], REPL_EXPORT_CAMERA_LINE_MAX,
+             "  glTranslatef(0.0000f, 0.0000f, %.4ff);", -g_cam_dist);
+    snprintf(block->lines[1], REPL_EXPORT_CAMERA_LINE_MAX,
+             "  glRotatef(%.4ff, 1.0f, 0.0f, 0.0f);", g_cam_rx);
+    snprintf(block->lines[2], REPL_EXPORT_CAMERA_LINE_MAX,
+             "  glRotatef(%.4ff, 0.0f, 1.0f, 0.0f);", g_cam_ry);
+    snprintf(block->lines[3], REPL_EXPORT_CAMERA_LINE_MAX,
+             "  glTranslatef(%.4ff, %.4ff, %.4ff);",
+             -g_cam_tx, -g_cam_ty, -g_cam_tz);
+    block->present = 1;
+}
+
 static const ReplExportCameraBridge g_cam_bridge = {
+    .fill_save_block         = demo_cam_fill_block,
+    .fill_display_block      = demo_cam_fill_block,
     .reset_import            = demo_cam_reset_import,
     .try_consume_import_line = demo_cam_try_consume_import_line,
 };
@@ -227,8 +250,8 @@ static const ReplExportCameraBridge g_cam_bridge = {
 /* Rebuild the slider rows from the live predefined-variable table after each
  * import. Row value pointers reference g_predef_vars_mut so the panel reads (and
  * drags write) the live values. The animation clock `t` is included like any
- * other variable; dragging it scrubs the clock (see apply_var_change) so the
- * value persists through display_func's per-frame `t = g_anim_t` write. */
+ * other variable; the demo advances `t` in place (idle_func), so a scene's own
+ * `t = 0` reset sticks and dragging the t row simply scrubs that same clock. */
 static void rebuild_variable_rows(void) {
     ReplVariableView v = repl_state_variables();
     int i;
@@ -257,12 +280,10 @@ static const VariablePanelValueSource g_value_source = { demo_var_read_row };
 static void apply_var_change(const VariablePanelValueChange *chg) {
     int idx = repl_eval_find_predef_var_idx(chg->name);
     if (idx >= 0) {
+        /* `t` is just another predef slot here; idle_func advances it in place,
+         * so dragging the t row scrubs the clock and playback continues from
+         * the scrubbed value with no special-casing. */
         g_predef_vars_mut[idx].value = chg->value;
-        /* Dragging the time clock scrubs g_anim_t too, otherwise display_func's
-         * per-frame `t = g_anim_t` write would clobber the drag next frame.
-         * Playback (if running) then continues from the scrubbed value. */
-        if (strcmp(chg->name, "t") == 0)
-            g_anim_t = chg->value;
         repl_state_mark_flat_dirty();
     }
 }
@@ -336,6 +357,27 @@ static void select_scene(int idx) {
     import_active_scene();
 }
 
+/* Round-trip aid ('e' key): re-export the live REPL state to ./<scene>.roundtrip.c
+ * via the same writer as gl-repl's Ctrl+S, so you can diff the export against the
+ * imported source to verify the import/export round-trips. The demo installs the
+ * camera write-bridge (above) so the view is captured, but not the projection /
+ * light bridges, so those lines fall back to the exporter's defaults. */
+static void export_active_scene(void) {
+    char out[PATH_MAX_LEN + 16];
+    ReplExportLayout layout;
+    int rc;
+    if (g_scene_count == 0) return;
+    snprintf(out, sizeof out, "%s.roundtrip.c",
+             scene_basename(g_scene_paths[g_active_scene]));
+    layout.render3d_w = g_window_w;
+    layout.render3d_h = g_window_h;
+    rc = repl_export_save_output(out, source_document_view(), &layout);
+    fprintf(stderr,
+            "[repl_live_demo] %s ./%s (%d cmds) -- diff against %s\n",
+            rc ? "exported ->" : "export FAILED:", out,
+            repl_state_document_count(), g_scene_paths[g_active_scene]);
+}
+
 static void poll_active_file(void) {
     time_t m;
     if (g_scene_count == 0) return;
@@ -364,6 +406,39 @@ static void apply_camera_modelview(void) {
     glTranslatef(-g_cam_tx, -g_cam_ty, -g_cam_tz);
 }
 
+/* Per-frame GL baseline approximating what the app's render3d layer sets up
+ * before user geometry runs. An exported scene assumes this baseline (it lives
+ * in the export's init()/display() scaffold, which the demo does NOT execute —
+ * only the geometry snippet runs), so without it lit geometry renders wrong:
+ * e.g. GL_COLOR_MATERIAL off means glColor3f is ignored under GL_LIGHTING and a
+ * tinted surface comes out as the default white-ish material. Color-material +
+ * normalize + a neutral key/fill light + a known depth/blend/lighting start
+ * state each frame restore the expected look. The scene still enables
+ * GL_LIGHTING and its specific lights itself. Called after the camera modelview
+ * so the light positions land in world space. */
+static void setup_render_baseline(void) {
+    GLfloat ambient[4] = { 0.15f, 0.15f, 0.18f, 1.0f };
+    GLfloat l0_pos[4]  = {  2.0f, 4.0f,  5.0f, 0.0f };  /* directional key */
+    GLfloat l0_dif[4]  = { 0.85f, 0.85f, 0.80f, 1.0f };
+    GLfloat l1_pos[4]  = { -3.0f, 2.0f, -2.0f, 1.0f };  /* positional fill */
+    GLfloat l1_dif[4]  = { 0.35f, 0.30f, 0.25f, 1.0f };
+
+    glDepthFunc(GL_LESS);
+    glDisable(GL_BLEND);
+    glDisable(GL_LIGHTING);
+    glColor3f(1.0f, 1.0f, 1.0f);
+
+    glEnable(GL_NORMALIZE);
+    glEnable(GL_COLOR_MATERIAL);
+    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+
+    glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ambient);
+    glLightfv(GL_LIGHT0, GL_POSITION, l0_pos);
+    glLightfv(GL_LIGHT0, GL_DIFFUSE,  l0_dif);
+    glLightfv(GL_LIGHT1, GL_POSITION, l1_pos);
+    glLightfv(GL_LIGHT1, GL_DIFFUSE,  l1_dif);
+}
+
 static void draw_text(int x, int y, const char *s) {
     glRasterPos2i(x, y);
     while (*s) {
@@ -385,17 +460,21 @@ static void draw_hud(void) {
     glPushMatrix();
     glLoadIdentity();
 
-    glColor3f(0.92f, 0.94f, 1.0f);
-    snprintf(buf, sizeof buf, "scene %d/%d  %s   t=%.2f%s   cmds=%d  vars=%d",
-             g_active_scene + 1, g_scene_count,
-             scene_basename(g_scene_paths[g_active_scene]),
-             g_anim_t, g_playing ? "" : " (paused)",
-             repl_state_document_count(), g_row_count);
-    draw_text(10, g_window_h - 18, buf);
+    {
+        int t_idx = repl_eval_find_predef_var_idx("t");
+        float tval = (t_idx >= 0) ? g_predef_vars_mut[t_idx].value : 0.0f;
+        glColor3f(0.92f, 0.94f, 1.0f);
+        snprintf(buf, sizeof buf, "scene %d/%d  %s   t=%.2f%s   cmds=%d  vars=%d",
+                 g_active_scene + 1, g_scene_count,
+                 scene_basename(g_scene_paths[g_active_scene]),
+                 tval, g_playing ? "" : " (paused)",
+                 repl_state_document_count(), g_row_count);
+        draw_text(10, g_window_h - 18, buf);
+    }
 
     glColor3f(0.62f, 0.72f, 0.84f);
     draw_text(10, 12,
-        "[ ] cycle scene   r reload   v panel   space pause   "
+        "[ ] cycle   r reload   e export   v panel   space pause   "
         "LMB orbit  RMB pan  wheel zoom   q quit");
 
     glMatrixMode(GL_PROJECTION);
@@ -407,13 +486,10 @@ static void draw_hud(void) {
 
 static void display_func(void) {
     ReplExecutionOptions opts;
-    int t_idx;
 
-    /* Push the animation clock into the predef table and re-bake so has_vars
-     * expressions animate, exactly like the full app's per-frame reflatten. */
-    t_idx = repl_eval_find_predef_var_idx("t");
-    if (t_idx >= 0)
-        g_predef_vars_mut[t_idx].value = g_anim_t;
+    /* `t` lives in the predef table and is advanced in place by idle_func; just
+     * re-bake so has_vars expressions pick up the new value (and any `t = ...`
+     * the scene applied), exactly like the app's per-frame reflatten. */
     repl_state_mark_flat_dirty();
     repl_flatten_commands(repl_dispatch_edit_line_get());
 
@@ -423,6 +499,7 @@ static void display_func(void) {
 
     apply_projection();
     apply_camera_modelview();
+    setup_render_baseline();
 
     memset(&opts, 0, sizeof opts);
     opts.flat_cmd_count = repl_state_flat_program_count();
@@ -451,8 +528,11 @@ static void reshape_func(int w, int h) {
 }
 
 static void idle_func(void) {
-    if (g_playing)
-        g_anim_t += 1.0f / 60.0f;
+    if (g_playing) {
+        int t_idx = repl_eval_find_predef_var_idx("t");
+        if (t_idx >= 0)
+            g_predef_vars_mut[t_idx].value += DEMO_FRAME_DT;
+    }
     glutPostRedisplay();
 }
 
@@ -544,6 +624,9 @@ static void keyboard_func(unsigned char key, int x, int y) {
         break;
     case 'r': case 'R':
         import_active_scene();
+        break;
+    case 'e': case 'E':
+        export_active_scene();
         break;
     case 'v': case 'V':
         g_panel_on = !g_panel_on;
@@ -690,8 +773,8 @@ static void print_usage(const char *prog) {
 "  config.ini    Load scenes + options from this INI.\n"
 "  *.c files     Use these scene files directly (bypass the INI).\n"
 "\n"
-"Keys:  [ ] cycle scene   r reload   v toggle panel   space pause   q/Esc quit\n"
-"       LMB orbit   RMB pan   wheel zoom   drag a slider (RMB = log)\n",
+"Keys:  [ ] cycle scene   r reload   e export (round-trip)   v toggle panel\n"
+"       space pause   q/Esc quit   LMB orbit  RMB pan  wheel zoom  drag a slider\n",
         prog);
 }
 
@@ -752,7 +835,7 @@ int main(int argc, char **argv) {
 
     printf("repl_live_demo: watching %d scene(s); edit them in your editor and save.\n",
            g_scene_count);
-    printf("  keys: [ ] cycle  r reload  v panel  space pause  q quit\n");
+    printf("  keys: [ ] cycle  r reload  e export  v panel  space pause  q quit\n");
 
     glutMainLoop();
     return 0;
