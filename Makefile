@@ -137,10 +137,22 @@ ifeq ($(NOSAN),1)
 NO_SAN := 1
 endif
 
+SAN ?= address
+DEBUG_SAN_SUFFIX =
+
 ifeq ($(NO_SAN),1)
 DEBUG_CFLAGS = \
 	$(COMMON_CFLAGS) \
 	-O0
+else ifeq ($(SAN),memory)
+DEBUG_SAN_SUFFIX = -msan
+DEBUG_CFLAGS = \
+	$(COMMON_CFLAGS) \
+	-O0 \
+	-fsanitize=memory -fsanitize-memory-track-origins=2 \
+	-fno-omit-frame-pointer
+else ifneq ($(SAN),address)
+$(error unsupported SAN=$(SAN); use SAN=address, SAN=memory, or NO_SAN=1)
 else
 DEBUG_CFLAGS = \
 	$(COMMON_CFLAGS) \
@@ -155,7 +167,8 @@ COVERAGE_CFLAGS = \
 	--coverage -fprofile-arcs -ftest-coverage
 
 # Test targets build & run under the debug sanitizer build
-# (AddressSanitizer + UBSan) by default; gl-repl, bench and the demos
+# (AddressSanitizer + UBSan by default, or MemorySanitizer with SAN=memory);
+# gl-repl, bench and the demos
 # stay release. An explicit `BUILD=...` on the command line or in the
 # environment always wins, so `make coverage` (BUILD=coverage) and
 # `make test BUILD=release` (fast unsanitized run) keep working.
@@ -163,7 +176,7 @@ ifeq ($(origin BUILD),command line)
 # explicit BUILD — honor it
 else ifeq ($(origin BUILD),environment)
 # explicit BUILD — honor it
-else ifneq ($(filter test test-detailed test-stubs test-full,$(MAKECMDGOALS)),)
+else ifneq ($(filter test test-detailed test-stubs test-msan test-full,$(MAKECMDGOALS)),)
 BUILD := debug
 else
 BUILD := release
@@ -364,6 +377,7 @@ endif
 	clean \
 	coverage \
 	debug \
+	debug-msan \
 	demos \
 	glut \
 	help \
@@ -375,6 +389,7 @@ endif
 	test \
 	test-detailed \
 	test-full \
+	test-msan \
 	test-stubs \
 	FORCE
 
@@ -610,7 +625,7 @@ REPL_LIVE_DEMO_DEP_SRCS = $(REPL_DEMO_DEP_SRCS) \
                           src/ui/subsystems/variable_panel.c \
                           src/ui/core/theme.c
 
-OBJDIR = build/$(BUILD)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)$(if $(filter 1,$(FREEGLUT_OSMESA)),-osmesa,)
+OBJDIR = build/$(BUILD)$(if $(filter debug,$(BUILD)),$(DEBUG_SAN_SUFFIX),)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)$(if $(filter 1,$(FREEGLUT_OSMESA)),-osmesa,)
 BINDIR = $(OBJDIR)
 OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS) -include config.h -include prof_sections.h
 DEPFLAGS = -MMD -MP
@@ -1603,7 +1618,10 @@ test-detailed: $(TEST_BINS) ## Run the full test suite with verbose example expo
 test-stubs: check-doc-links check-trailing-whitespace check-gl-boundaries check-layer-coupling check-state-ownership ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs.
 	$(MAKE) test USE_GL_STUBS=1
 
-test-full: ## Full gate: stub tests + checks + build gl-repl, bench, repl_demo, render3d_demo, editor_demo.
+test-msan: check-doc-links check-trailing-whitespace check-gl-boundaries check-layer-coupling check-state-ownership ## Build and run stubbed tests with MemorySanitizer.
+	$(MAKE) test USE_GL_STUBS=1 BUILD=debug SAN=memory
+
+test-full: ## Full gate: stub tests + MSan tests + checks + build gl-repl, bench, repl_demo, render3d_demo, editor_demo.
 	$(MAKE) --no-print-directory repl_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory editor_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory memprof_demo USE_GL_STUBS=1
@@ -1613,6 +1631,7 @@ test-full: ## Full gate: stub tests + checks + build gl-repl, bench, repl_demo, 
 	$(MAKE) --no-print-directory render3d_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory check
 	$(MAKE) --no-print-directory test-stubs
+	$(MAKE) --no-print-directory test-msan
 	$(MAKE) --no-print-directory gl-repl
 	$(MAKE) --no-print-directory gl-tests
 	$(MAKE) --no-print-directory bench
@@ -1712,8 +1731,11 @@ lines-test: $(TEST_SLOC_SRCS) ## Count SLOC (code/comment/blank) across test sou
 	fi
 	@cloc $(TEST_SLOC_SRCS) --by-file
 
-debug: ## Clean and rebuild everything with debug/ASan flags.
+debug: ## Build everything with debug ASan+UBSan flags.
 	$(MAKE) all BUILD=debug
+
+debug-msan: ## Build everything with debug MemorySanitizer flags.
+	$(MAKE) all BUILD=debug SAN=memory
 
 coverage: ## Clean, rebuild tests with coverage, run suite, generate HTML report.
 	$(MAKE) clean
@@ -1898,7 +1920,10 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "                 e.g. make gl-repl CPPFLAGS=-DUI_THEME_DEFAULT=1. Defined in\n"
 	@printf "                 config.h, range-checked in src/ui/core/theme.h. See\n"
 	@printf "                 docs/ARCHITECTURE.md > UI Color Theming.\n"
-	@printf "                 NO_SAN=1 (or NOSAN=1) disables ASan/UBSan sanitizers in debug builds.\n"
+	@printf "                 SAN=memory selects MemorySanitizer for debug builds (separate build/debug-msan dir).\n"
+	@printf "                 make debug-msan builds the full target set with SAN=memory.\n"
+	@printf "                 make test-msan runs the stubbed test suite with SAN=memory.\n"
+	@printf "                 NO_SAN=1 (or NOSAN=1) disables debug-build sanitizers.\n"
 	@printf "                 GLR_AUDIO_NO_THREAD=1 (e.g. make gl-repl CPPFLAGS=-DGLR_AUDIO_NO_THREAD=1)\n"
 	@printf "                 drops the audio background worker thread: the playlist lifecycle ops\n"
 	@printf "                 (file open/uninit, state save) run synchronously, drained from\n"

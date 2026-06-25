@@ -84,7 +84,8 @@ These are make variables or script/test env vars. Pass make variables as
 | `CFLAGS` | Makefile. | Extra user C flags appended to the selected build mode. |
 | `CPPFLAGS` | Makefile compile rules. | Extra preprocessor flags, commonly `-DUI_THEME_DEFAULT=N` or `-DGLR_AUDIO_NO_THREAD=1`. |
 | `BUILD` | Makefile. | Build mode: `release`, `debug`, or `coverage`. Tests default to debug; app/bench/demo targets default to release. |
-| `NO_SAN`, `NOSAN` | Makefile. | Disable ASan/UBSan in debug builds. |
+| `SAN` | Makefile. | Debug sanitizer selector used by `make debug-msan` / `make test-msan`: `address` (default ASan+UBSan) or `memory` (MSan with origin tracking; uses `build/debug-msan*`). |
+| `NO_SAN`, `NOSAN` | Makefile. | Disable debug-build sanitizers. |
 | `USE_GL_STUBS` | Makefile. | `1` builds against bundled no-op GL/GLU/GLUT headers for non-rendering tests. |
 | `FREEGLUT_OSMESA` | Makefile. | `1` builds vendored freeglut with the headless OSMesa backend. |
 | `FREEGLUT_VENDOR` | Makefile. | `0` skips the vendored freeglut static library, used by the `make glut` fallback. |
