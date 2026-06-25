@@ -602,9 +602,10 @@ backward):
 
 ![Grid themes: Tron, Radar, Aurora, Synthwave](images/grid-themes.png)
 
-Sixteen grid themes (**F3**): Off, Classic, Fog, Tron, Ember, Faint, Focus,
-Ocean, XZ Ruler *(default)*, Adaptive Planes, Radar, Aurora, Synthwave,
-Frozen Lake, Tilled Field, Star Chart.
+Twelve directly-selectable grid themes (**F3**): Off, Classic, Tron, Ember,
+Ocean, XZ Ruler *(default)*, Adaptive Planes, Radar, Tilled Field, Sketchbook,
+Neon Graph, Graph Planes. Some backdrops enable hidden companion grids; see
+[Advanced Usage](ADVANCED_USAGE.md#cfg-backdropgrid-pairing).
 **Grid major** (Ctrl+O) cycles the major-tick spacing (1/2/5/10) and **Grid
 extent** (F7) the grid's reach (Close / Mid / Far). Theme changes cross-fade,
 so a newly chosen grid takes a few seconds to fully appear.
@@ -621,13 +622,9 @@ Gizmo, Ruler.
 **F6** cycles the scene backdrop: Off *(default)*, Cityscape, Stars,
 City+Stars, Sunset, Aurora, Nebula, Polar Day, Snowfall, Polar Day+Snow.
 
-The Star Chart grid and Nebula backdrop are designed as a pair: the
-floor becomes a midnight observatory map (twinkling constellation
-nodes joined by inked links) under a violet/teal gas-cloud sky, and
-the backdrop adds its own dim violet/teal environment lights
-(GL_LIGHT4-6) so lit geometry picks up the nebula's colors. The
-*Ringed planet (nebula skies)* example under Scene → Showcase loads
-both.
+Some backdrops enable a hidden companion grid. Nebula selects Star Chart;
+see [Advanced Usage](ADVANCED_USAGE.md#cfg-backdropgrid-pairing) for the
+`@cfg` details.
 
 ### Lighting
 

@@ -1069,7 +1069,7 @@ static const char *const g_example_stress[] = {
     "// @cfg vertex_points = 0",
     "// @cfg light_indicators = 0",
     "// @cfg axes = AXES_THEME_OFF",
-    "// @cfg grid = GRID_THEME_OFF",
+    "// @cfg grid = GRID_THEME_STARCHART",
     "// @cfg backdrop = RENDER3D_BACKDROP_NEBULA",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -15.0f);",

@@ -743,6 +743,15 @@ void glr_cfg_cycle_row(int row, int delta) {
             replay_stop();
     }
 
+    int grid_locked = 0;
+    int locked_backdrop = 0;
+    Render3dGridTheme locked_grid = GRID_THEME_OFF;
+    if (item->key == GLR_CONFIG_GRID_THEME) {
+        locked_backdrop = glr_config_get(GLR_CONFIG_BACKDROP);
+        grid_locked = glr_config_backdrop_forces_grid(
+            (Render3dBackdropMode)locked_backdrop, &locked_grid);
+    }
+
     int new_value = glr_config_cycle(item->key, delta);
     glr_ctrl_sync_ui_chrome();  /* refresh ui_state.code_panel mirrors */
 
@@ -782,6 +791,16 @@ void glr_cfg_cycle_row(int row, int delta) {
         snprintf(cfg_status_buf, sizeof(cfg_status_buf), "%s: %s",
                  glr_config_item_display_label(item),
                  glr_config_state_name(item->key, new_value));
+        repl_set_status(cfg_status_buf);
+    } else if (grid_locked) {
+        const char *backdrop_name =
+            glr_config_state_name(GLR_CONFIG_BACKDROP, locked_backdrop);
+        const char *grid_name =
+            glr_config_state_name(GLR_CONFIG_GRID_THEME, locked_grid);
+        snprintf(cfg_status_buf, sizeof(cfg_status_buf),
+                 "Warning: grid locked by %s backdrop (%s)",
+                 backdrop_name ? backdrop_name : "paired",
+                 grid_name ? grid_name : "paired grid");
         repl_set_status(cfg_status_buf);
     } else if (item->state_names) {
         snprintf(cfg_status_buf, sizeof(cfg_status_buf), "%s: %s",

@@ -1080,6 +1080,75 @@ static void test_vertex_label_modes(void) {
                glr_state_presentation().show_vertex_labels, OVERLAY_VERTEX_LABEL_OFF);
 }
 
+static void test_backdrop_grid_pairing_policy(void) {
+    int grid_row = -1;
+    int grid_before_pair;
+    Render3dGridTheme paired_grid = GRID_THEME_OFF;
+
+    glr_ctrl_reset_all();
+    printf("--- Backdrop/grid pairing policy ---\n");
+
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        const GlrConfigItem *item = glr_config_item_at(i);
+        if (item && item->key == GLR_CONFIG_GRID_THEME) {
+            grid_row = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("found grid row", grid_row >= 0);
+
+    ASSERT_TRUE("Nebula forces a grid",
+                glr_config_backdrop_forces_grid(RENDER3D_BACKDROP_NEBULA,
+                                                &paired_grid));
+    ASSERT_INT("Nebula forces Star Chart", paired_grid, GRID_THEME_STARCHART);
+    ASSERT_TRUE("paired grid is hidden from direct selection",
+                !glr_config_grid_user_selectable(GRID_THEME_STARCHART));
+    ASSERT_TRUE("Aurora paired grid is hidden from direct selection",
+                !glr_config_grid_user_selectable(GRID_THEME_AURORA));
+    ASSERT_TRUE("ordinary grid remains directly selectable",
+                glr_config_grid_user_selectable(GRID_THEME_TRON));
+
+    grid_before_pair = glr_config_get(GLR_CONFIG_GRID_THEME);
+    glr_config_set(GLR_CONFIG_BACKDROP, RENDER3D_BACKDROP_NEBULA);
+    ASSERT_INT("setting Nebula forces Star Chart",
+               glr_config_get(GLR_CONFIG_GRID_THEME), GRID_THEME_STARCHART);
+
+    glr_config_set(GLR_CONFIG_GRID_THEME, GRID_THEME_TRON);
+    ASSERT_INT("manual grid set stays forced while Nebula is active",
+               glr_config_get(GLR_CONFIG_GRID_THEME), GRID_THEME_STARCHART);
+
+    glr_cfg_cycle_row(grid_row, 1);
+    ASSERT_INT("grid cycle stays forced while Nebula is active",
+               glr_config_get(GLR_CONFIG_GRID_THEME), GRID_THEME_STARCHART);
+    ASSERT_STR("grid cycle warns while Nebula locks the grid",
+               g_last_status,
+               "Warning: grid locked by Nebula backdrop (Star Chart)");
+
+    glr_config_set(GLR_CONFIG_BACKDROP, RENDER3D_BACKDROP_OFF);
+    ASSERT_INT("leaving paired backdrop restores previous grid",
+               glr_config_get(GLR_CONFIG_GRID_THEME), grid_before_pair);
+
+    glr_config_set(GLR_CONFIG_GRID_THEME, GRID_THEME_SOIL);
+    glr_cfg_cycle_row(grid_row, 1);
+    ASSERT_INT("grid cycle skips hidden Star Chart forward",
+               glr_config_get(GLR_CONFIG_GRID_THEME), GRID_THEME_SKETCH);
+
+    glr_cfg_cycle_row(grid_row, -1);
+    ASSERT_INT("grid cycle skips hidden Star Chart backward",
+               glr_config_get(GLR_CONFIG_GRID_THEME), GRID_THEME_SOIL);
+
+    glr_config_set(GLR_CONFIG_GRID_THEME, GRID_THEME_TRON);
+    glr_config_set(GLR_CONFIG_BACKDROP, RENDER3D_BACKDROP_AURORA);
+    ASSERT_INT("Aurora forces Aurora grid",
+               glr_config_get(GLR_CONFIG_GRID_THEME), GRID_THEME_AURORA);
+    glr_config_set(GLR_CONFIG_BACKDROP, RENDER3D_BACKDROP_SUNSET);
+    ASSERT_INT("switching paired backdrops forces the new pair",
+               glr_config_get(GLR_CONFIG_GRID_THEME), GRID_THEME_SYNTHWAVE);
+    glr_config_set(GLR_CONFIG_BACKDROP, RENDER3D_BACKDROP_OFF);
+    ASSERT_INT("leaving chained paired backdrops restores original grid",
+               glr_config_get(GLR_CONFIG_GRID_THEME), GRID_THEME_TRON);
+}
+
 /* Audit #41: the cfg bridge accepts symbolic value names so catalogs
  * can write "@cfg grid = GRID_THEME_RADAR" instead of a magic integer.
  * Pin each scene-enum slug end-to-end (resolve_text + apply via
@@ -1172,6 +1241,33 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     ASSERT_STR("fill_scene_subset axes is symbolic", repl_config_bag_get(&scene_bag, "axes"), "AXES_THEME_GIZMO");
     ASSERT_STR("fill_scene_subset backdrop is symbolic", repl_config_bag_get(&scene_bag, "backdrop"), "RENDER3D_BACKDROP_CITY_AND_STARS");
     ASSERT_STR("fill_scene_subset light_theme is symbolic", repl_config_bag_get(&scene_bag, "light_theme"), "LIGHT_THEME_SOLAR");
+}
+
+static void test_cfg_bridge_enforces_backdrop_grid_pair_order(void) {
+    ReplConfigBag bag;
+
+    glr_ctrl_reset_all();
+    printf("--- @cfg backdrop/grid pairing is order-independent ---\n");
+
+    repl_config_bag_clear(&bag);
+    repl_config_bag_set(&bag, "backdrop", "RENDER3D_BACKDROP_NEBULA");
+    repl_config_bag_set(&bag, "grid", "GRID_THEME_TRON");
+    repl_config_bridge()->apply(&bag);
+    ASSERT_INT("backdrop then grid still forced to Star Chart",
+               glr_config_get(GLR_CONFIG_GRID_THEME), GRID_THEME_STARCHART);
+
+    glr_ctrl_reset_all();
+    repl_config_bag_clear(&bag);
+    repl_config_bag_set(&bag, "grid", "GRID_THEME_TRON");
+    repl_config_bag_set(&bag, "backdrop", "RENDER3D_BACKDROP_NEBULA");
+    repl_config_bridge()->apply(&bag);
+    ASSERT_INT("grid then backdrop forced to Star Chart",
+               glr_config_get(GLR_CONFIG_GRID_THEME), GRID_THEME_STARCHART);
+
+    glr_ctrl_reset_all();
+    repl_cfg_set_text("grid", "GRID_THEME_STARCHART");
+    ASSERT_INT("hidden grid remains valid in saved cfg",
+               glr_config_get(GLR_CONFIG_GRID_THEME), GRID_THEME_STARCHART);
 }
 
 /* F9 was reassigned from Auto-normals to cycling the light theme. The
@@ -1501,7 +1597,9 @@ int main(void) {
     test_cfg_cycle_auto_time_shift_resets_time();
     test_cfg_cycle_panel_hidden_closes_overlays();
     test_vertex_label_modes();
+    test_backdrop_grid_pairing_policy();
     test_cfg_bridge_resolves_symbolic_names();
+    test_cfg_bridge_enforces_backdrop_grid_pair_order();
 
     return test_harness_report(&g_harness, "test_repl_actions");
 }

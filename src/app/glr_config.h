@@ -20,6 +20,8 @@
 #ifndef GLR_CONFIG_H
 #define GLR_CONFIG_H
 
+#include "render3d/themes.h"
+
 /* Stable config item identifiers. Used by menu dispatch, export/import,
  * help overlay, and tests to refer to config items by name rather than table
  * index. Items are in two groups: rendering features (MSAA, wireframe, etc.)
@@ -140,6 +142,13 @@ void glr_config_set(GlrConfigKey key, int value);
  * Wraps around at boundaries. Returns the new state value. Called by keyboard
  * shortcuts and config menu cycling. */
 int  glr_config_cycle(GlrConfigKey key, int delta);
+
+/* Backdrop/grid pairing policy. Some backdrops own a matching grid while
+ * active; paired grid targets stay valid config values but are hidden from
+ * direct user cycling/menu activation. */
+int  glr_config_backdrop_forces_grid(Render3dBackdropMode backdrop,
+                                     Render3dGridTheme *grid_out);
+int  glr_config_grid_user_selectable(Render3dGridTheme grid);
 
 /* ---- Section model over g_cfg_items[] -------------------------------- *
  *
