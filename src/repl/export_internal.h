@@ -66,6 +66,9 @@ typedef struct ExportGeneratedNames {
     char keyboard_key[EXPORT_NAME_MAX];
     char keyboard_mouse_x[EXPORT_NAME_MAX];
     char keyboard_mouse_y[EXPORT_NAME_MAX];
+    char timer_now_ms[EXPORT_NAME_MAX];
+    char timer_delay_ms[EXPORT_NAME_MAX];
+    char tick[EXPORT_NAME_MAX];
     char tune_modifiers[EXPORT_NAME_MAX];
     char tune_normalized_key[EXPORT_NAME_MAX];
     char tune_step_scale[EXPORT_NAME_MAX];
@@ -110,7 +113,8 @@ void write_tess_preamble(FILE *f);
 void emit_export_header_pre(FILE *f, const ExportNeeds *needs);
 void emit_export_cam_lines(FILE *f);
 void emit_export_init_section_to_file(FILE *f, int include_tess);
-void emit_footer_post_init(FILE *f, int win_w, int win_h);
+void emit_footer_post_init(FILE *f, int win_w, int win_h,
+                           const char *tick_name);
 
 ExportNeeds export_collect_needs(void);
 void export_generated_names_init(ExportGeneratedNames *names);

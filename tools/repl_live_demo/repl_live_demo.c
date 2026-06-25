@@ -37,6 +37,7 @@
  */
 #include "gl_includes.h"
 
+#include "config.h"
 #include "repl/eval.h"            /* g_predef_vars_mut, repl_eval_find_predef_var_idx */
 #include "repl/executor.h"        /* repl_execute_program, ReplExecutionOptions, point-param proc */
 #include "repl/export.h"          /* repl_export_load_from_file, ReplExportCameraBridge */
@@ -55,7 +56,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <sys/stat.h>
+#include <time.h>
 
 /* --- Config / scene list ------------------------------------------------- */
 
@@ -74,10 +77,12 @@ static int   g_panel_on = 1;
 /* --- Animation + camera state ------------------------------------------- */
 
 /* The animation clock `t` is NOT a separate demo variable: it lives in the
- * REPL predef table and is advanced in place (idle_func), exactly like the app.
- * That way a scene's own `t = 0` reset — applied during flatten/execute — sticks
- * and `t` continues from there, instead of being clobbered by a demo-side clock. */
-#define DEMO_FRAME_DT (1.0f / 60.0f)
+ * REPL predef table and is advanced in place by frame_timer, exactly like the
+ * app. That way a scene's own `t = 0` reset — applied during flatten/execute —
+ * sticks and `t` continues from there, instead of being clobbered by a
+ * demo-side clock. */
+#define DEMO_FRAME_DT GLR_FRAME_DT_SECS
+#define DEMO_FRAME_DT_MS_EXACT (1000.0 / 60.0)
 
 static int   g_playing = 1;
 
@@ -250,7 +255,7 @@ static const ReplExportCameraBridge g_cam_bridge = {
 /* Rebuild the slider rows from the live predefined-variable table after each
  * import. Row value pointers reference g_predef_vars_mut so the panel reads (and
  * drags write) the live values. The animation clock `t` is included like any
- * other variable; the demo advances `t` in place (idle_func), so a scene's own
+ * other variable; the demo advances `t` in place (frame_timer), so a scene's own
  * `t = 0` reset sticks and dragging the t row simply scrubs that same clock. */
 static void rebuild_variable_rows(void) {
     ReplVariableView v = repl_state_variables();
@@ -280,7 +285,7 @@ static const VariablePanelValueSource g_value_source = { demo_var_read_row };
 static void apply_var_change(const VariablePanelValueChange *chg) {
     int idx = repl_eval_find_predef_var_idx(chg->name);
     if (idx >= 0) {
-        /* `t` is just another predef slot here; idle_func advances it in place,
+        /* `t` is just another predef slot here; frame_timer advances it in place,
          * so dragging the t row scrubs the clock and playback continues from
          * the scrubbed value with no special-casing. */
         g_predef_vars_mut[idx].value = chg->value;
@@ -487,7 +492,7 @@ static void draw_hud(void) {
 static void display_func(void) {
     ReplExecutionOptions opts;
 
-    /* `t` lives in the predef table and is advanced in place by idle_func; just
+    /* `t` lives in the predef table and is advanced in place by frame_timer; just
      * re-bake so has_vars expressions pick up the new value (and any `t = ...`
      * the scene applied), exactly like the app's per-frame reflatten. */
     repl_state_mark_flat_dirty();
@@ -527,13 +532,38 @@ static void reshape_func(int w, int h) {
     glutPostRedisplay();
 }
 
-static void idle_func(void) {
+static double demo_timer_now_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec * 1e3 + (double)ts.tv_nsec / 1e6;
+}
+
+static void advance_animation_clock(void) {
     if (g_playing) {
         int t_idx = repl_eval_find_predef_var_idx("t");
         if (t_idx >= 0)
             g_predef_vars_mut[t_idx].value += DEMO_FRAME_DT;
     }
+}
+
+static void frame_timer(int value) {
+    (void)value;
+    static double next_deadline_ms = 0.0;
+
+    advance_animation_clock();
     glutPostRedisplay();
+
+    double now = demo_timer_now_ms();
+    if (next_deadline_ms == 0.0)
+        next_deadline_ms = now;
+    next_deadline_ms += DEMO_FRAME_DT_MS_EXACT;
+    if (next_deadline_ms < now)
+        next_deadline_ms = now;
+
+    int delay = (int)lround(next_deadline_ms - now);
+    if (delay < 1)
+        delay = 1;
+    glutTimerFunc((unsigned int)delay, frame_timer, 0);
 }
 
 static void watch_timer(int value) {
@@ -826,11 +856,11 @@ int main(int argc, char **argv) {
 
     glutDisplayFunc(display_func);
     glutReshapeFunc(reshape_func);
-    glutIdleFunc(idle_func);
     glutKeyboardFunc(keyboard_func);
     glutMouseFunc(mouse_func);
     glutMotionFunc(motion_func);
     glutMouseWheelFunc(mousewheel_func);
+    glutTimerFunc(16, frame_timer, 0);
     glutTimerFunc((unsigned int)g_poll_ms, watch_timer, 0);
 
     printf("repl_live_demo: watching %d scene(s); edit them in your editor and save.\n",

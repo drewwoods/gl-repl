@@ -282,6 +282,9 @@ static void test_generated_names_do_not_shadow_tuned_vars(void) {
     editor_feed_line("float w = 4; // @tune");
     editor_feed_line("float h = 5; // @tune");
     editor_feed_line("float hud_text = 6; // @tune");
+    editor_feed_line("float timer_now_ms = 7; // @tune");
+    editor_feed_line("float timer_delay_ms = 8; // @tune");
+    editor_feed_line("float tick = 9; // @tune");
     editor_feed_line("glBegin(GL_POINTS);");
     editor_feed_line("glVertex3f(key, x, y);");
     editor_feed_line("glVertex3f(w, h, 0);");
@@ -299,12 +302,26 @@ static void test_generated_names_do_not_shadow_tuned_vars(void) {
     ASSERT_TRUE("old overlay ln local absent", !contains(c, "char ln[96]"));
     ASSERT_TRUE("hud_text helper name falls back around user var",
                 !contains(c, "static void hud_text(float x, float y, const char *fmt, ...)"));
+    ASSERT_TRUE("timer now helper falls back around user var",
+                contains(c, "static double repl_timer_now_ms(void)"));
+    ASSERT_TRUE("timer delay helper falls back around user var",
+                contains(c, "static int repl_timer_delay_ms(double *next_deadline_ms)"));
+    ASSERT_TRUE("tick callback falls back around user var",
+                contains(c, "void repl_tick(int value)"));
+    ASSERT_TRUE("tick callback preferred name absent when tick is a user var",
+                !contains(c, "void tick(int value)"));
+    ASSERT_TRUE("computed-delay timer uses fallback tick callback",
+                contains(c, "glutTimerFunc((unsigned int)delay, repl_tick, 0)"));
+    ASSERT_TRUE("main timer uses fallback tick callback",
+                contains(c, "glutTimerFunc(16, repl_tick, 0)"));
     ASSERT_TRUE("tuned key still adjusted",
                 contains(c, "key += tuning_step(key) * step_scale"));
     ASSERT_TRUE("tuned h still adjusted",
                 contains(c, "h += tuning_step(h) * step_scale"));
     ASSERT_TRUE("tuned hud_text still adjusted",
                 contains(c, "hud_text += tuning_step(hud_text) * step_scale"));
+    ASSERT_TRUE("tuned tick still adjusted",
+                contains(c, "tick += tuning_step(tick) * step_scale"));
     free(c);
 
     ASSERT_INT("shadow-collision export compiles against stubs",
