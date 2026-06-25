@@ -40,6 +40,11 @@ LOG=/tmp/check-c99.log
 # (tests/*.c, tests/support/) are deliberately NOT included. $(SRCS)
 # already contains tests/gl-stubs/gl_stub_counts.c (linked into the
 # gl-repl); the find adds tools/** and bench/**.
+#
+# tools/repl_live_demo/scenes/*.c are pruned: despite the .c extension
+# they are REPL scene DATA (the app's save/export format read by
+# repl_export_load_from_file), not C translation units, so they neither
+# build nor belong in this guard.
 if [ -n "${C99_SRCS:-}" ]; then
     SAMPLE_FILES="${C99_SRCS}"
 else
@@ -47,7 +52,8 @@ else
         tests/gl-stubs/gl_stub_counts.c; find src -name '*.c')"
 fi
 FILES="$(printf '%s\n' ${SAMPLE_FILES}; \
-         find tools bench -name '*.c' 2>/dev/null | sort)"
+         find tools bench -name '*.c' \
+              -not -path 'tools/repl_live_demo/scenes/*' 2>/dev/null | sort)"
 
 # Prefer the REAL GL/GLU/GLUT/freeglut headers (the superset that
 # declares every symbol render3d_demo/bench/gl-repl use) as -isystem, so

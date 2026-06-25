@@ -1,6 +1,8 @@
 *.o
 *.dSYM
 *.ini
+# ...but the repl_live_demo ships a default config (not runtime state).
+!tools/repl_live_demo/repl_live_demo.ini
 gl-repl
 output.c
 output.ply
@@ -14,6 +16,7 @@ workspace/
 bench_repl
 /render3d_demo
 /repl_demo
+/repl_live_demo
 /editor_demo
 /editor_demo.txt
 /memprof_demo

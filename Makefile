@@ -594,6 +594,22 @@ COLOR_PICKER_DEMO_DEP_SRCS = src/subsystems/color_picker/color_picker_state.c \
                              src/ui/core/theme.c \
                              tests/gl-stubs/gl_stub_counts.c
 
+# Object list for the standalone repl_live_demo. The *composition* counterpart
+# to repl_demo: where repl_demo proves the REPL pipeline links with no editor /
+# controller / UI, repl_live_demo proves the REPL pipeline and the variable-panel
+# peer wire together under a one-file host controller — an external editor (vim)
+# owns the scene .c files, the demo watches their mtime, re-imports on save, and
+# surfaces predefined vars in the floating slider panel. It is the full
+# REPL_DEMO_DEP_SRCS set (pipeline + tools/repl_demo/source_document.c static
+# backend + gl_stub_counts + cpuprof) plus the four variable-panel TUs. Still no
+# src/editor, src/app, src/render3d, or src/ui/app — check-repl-live-demo-no-editor
+# enforces the editor exclusion.
+REPL_LIVE_DEMO_DEP_SRCS = $(REPL_DEMO_DEP_SRCS) \
+                          src/subsystems/variable_panel/variable_panel_state.c \
+                          src/subsystems/variable_panel/variable_panel_drag.c \
+                          src/ui/subsystems/variable_panel.c \
+                          src/ui/core/theme.c
+
 OBJDIR = build/$(BUILD)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)$(if $(filter 1,$(FREEGLUT_OSMESA)),-osmesa,)
 BINDIR = $(OBJDIR)
 OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS) -include config.h -include prof_sections.h
@@ -704,13 +720,14 @@ CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof t
 # them — benchmarks are timing-sensitive and should be invoked explicitly.
 BENCH_BINS = bench_repl
 
-ROOT_BIN_LINKS = gl-repl render3d_demo repl_demo editor_demo memprof_demo variable_panel_demo color_picker_demo cpuprof_demo
+ROOT_BIN_LINKS = gl-repl render3d_demo repl_demo repl_live_demo editor_demo memprof_demo variable_panel_demo color_picker_demo cpuprof_demo
 
 .PHONY: sample $(ROOT_BIN_LINKS) $(TEST_BINS) $(BENCH_BINS)
 
 SAMPLE_BIN = $(BINDIR)/gl-repl
 RENDER3D_DEMO_BIN = $(BINDIR)/render3d_demo
 REPL_DEMO_BIN = $(BINDIR)/repl_demo
+REPL_LIVE_DEMO_BIN = $(BINDIR)/repl_live_demo
 EDITOR_DEMO_BIN = $(BINDIR)/editor_demo
 MEMPROF_DEMO_BIN = $(BINDIR)/memprof_demo
 CPUPROF_DEMO_BIN = $(BINDIR)/cpuprof_demo
@@ -1065,7 +1082,22 @@ $(COLOR_PICKER_DEMO_BIN): $(COLOR_PICKER_DEMO_OBJS)
 color_picker_demo: FORCE $(COLOR_PICKER_DEMO_BIN) ## Build the standalone color-picker demo.
 	ln -sfn $(COLOR_PICKER_DEMO_BIN) $@
 
-demos: render3d_demo repl_demo editor_demo memprof_demo cpuprof_demo variable_panel_demo color_picker_demo ## Build all demos.
+# Standalone live REPL demo (composition proof). Bootstraps the REPL pipeline +
+# the variable-panel peer from a one-file controller: imports scene .c files
+# (edited externally in vim), watches their mtime to re-import on save, applies
+# each scene's // camera block through a demo-local camera bridge, and drives
+# predefined-variable sliders live. No editor / controller / app / render3d / ui-app.
+REPL_LIVE_DEMO_OBJS = $(OBJDIR)/tools/repl_live_demo/repl_live_demo.o \
+                      $(addprefix $(OBJDIR)/,$(REPL_LIVE_DEMO_DEP_SRCS:.c=.o))
+
+$(REPL_LIVE_DEMO_BIN): $(REPL_LIVE_DEMO_OBJS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OBJ_CFLAGS) -o $@ $(REPL_LIVE_DEMO_OBJS) $(GL_LDFLAGS)
+
+repl_live_demo: FORCE $(REPL_LIVE_DEMO_BIN) ## Build the standalone live REPL (file-watch) demo.
+	ln -sfn $(REPL_LIVE_DEMO_BIN) $@
+
+demos: render3d_demo repl_demo repl_live_demo editor_demo memprof_demo cpuprof_demo variable_panel_demo color_picker_demo ## Build all demos.
 
 .SECONDEXPANSION:
 
@@ -1128,7 +1160,7 @@ gl-tests: $(addprefix $(BINDIR)/,$(GL_TEST_BINS)) ## Run real-GL UI state tests 
 ifeq ($(FREEGLUT_VENDOR),1)
 ifneq ($(filter Darwin,$(UNAME_S))$(filter 1,$(FREEGLUT_OSMESA)),)
 ifneq ($(USE_GL_STUBS),1)
-$(SAMPLE_BIN) $(RENDER3D_DEMO_BIN) $(REPL_DEMO_BIN) $(EDITOR_DEMO_BIN) \
+$(SAMPLE_BIN) $(RENDER3D_DEMO_BIN) $(REPL_DEMO_BIN) $(REPL_LIVE_DEMO_BIN) $(EDITOR_DEMO_BIN) \
 $(MEMPROF_DEMO_BIN) $(CPUPROF_DEMO_BIN) $(VARIABLE_PANEL_DEMO_BIN) \
 $(COLOR_PICKER_DEMO_BIN) \
 $(addprefix $(BINDIR)/,$(TEST_BINS) $(BENCH_BINS) $(GL_TEST_BINS)): $(FREEGLUT_STATIC_LIB)
@@ -1289,6 +1321,9 @@ check-ui-core-no-upper-layers: ## Hard guard: src/ui/core/ must not include from
 check-repl-demo-no-editor: ## Forbid editor implementation in the standalone demo (Phase 7).
 	@bash scripts/check-repl-demo-no-editor.sh
 
+check-repl-live-demo-no-editor: ## Forbid editor implementation in the standalone live REPL demo.
+	@bash scripts/check-repl-demo-no-editor.sh repl_live_demo REPL_LIVE_DEMO_DEP_SRCS
+
 check-memprof-demo-isolation: ## Forbid app/repl/editor coupling in the memprof demo link set.
 	@bash scripts/check-subsystem-demo-isolation.sh MEMPROF_DEMO_DEP_SRCS tools/memprof_demo memprof_demo
 
@@ -1373,6 +1408,7 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 		check-repl-demo-stubs-shrinking \
 		check-repl-no-direct-editor \
 		check-repl-demo-no-editor \
+		check-repl-live-demo-no-editor \
 		check-memprof-demo-isolation \
 		check-cpuprof-demo-isolation \
 		check-cpuprof-standalone \
@@ -1719,7 +1755,7 @@ else
 endif
 
 clean: ## Remove built binaries and object files.
-	rm -rf $(ROOT_BIN_LINKS) gl-repl.dSYM render3d_demo.dSYM repl_demo.dSYM editor_demo.dSYM memprof_demo.dSYM variable_panel_demo.dSYM color_picker_demo.dSYM cpuprof_demo.dSYM \
+	rm -rf $(ROOT_BIN_LINKS) gl-repl.dSYM render3d_demo.dSYM repl_demo.dSYM repl_live_demo.dSYM editor_demo.dSYM memprof_demo.dSYM variable_panel_demo.dSYM color_picker_demo.dSYM cpuprof_demo.dSYM \
 		$(TEST_BINS) $(addsuffix .dSYM,$(TEST_BINS)) \
 		$(BENCH_BINS) $(addsuffix .dSYM,$(BENCH_BINS)) \
 		build/coverage/lcov.info build/coverage/html \
