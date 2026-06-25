@@ -127,7 +127,7 @@ static int find_init_line_substr(const char *needle) {
  * redirected into `out`, and return repl_export_load_from_file's value.
  * Mirrors the dup2 capture used by the #8 load_err regression — used to
  * assert the importer warns (rather than silently dropping) on overflowed
- * @var / @func / @declare names. */
+ * @func / @declare names. */
 static int import_with_captured_stderr(const char *contents,
                                        char *out, size_t out_sz) {
     const char *src_path = "/tmp/repl_core_io_warn_src.c";
@@ -1663,7 +1663,7 @@ int main(void) {
 
     /* Non-finite predef values must export as valid C99 constants rather
      * than bare printf spellings like `nan`, and import must preserve
-     * them through the @var round-trip. */
+     * them through the round-trip. */
     {
         const char *nonfinite_path = "/tmp/repl_core_nonfinite_roundtrip.c";
         char buf[16384];
@@ -2152,12 +2152,11 @@ int main(void) {
         remove(stderr_path);
     }
 
-    /* Silent-drop coverage: an overflowed @var / @declare name (and a
-     * reserved @var) must WARN on import rather than vanishing without a
-     * trace. Companion to the @func long-name warning on this branch.
-     * Each case captures fd 2 and checks the importer named the offending
-     * directive; (d) is a negative control proving the checks aren't
-     * passing on stray stderr noise. */
+    /* Silent-drop coverage: an overflowed @declare name must WARN on import
+     * rather than vanishing without a trace. Companion to the @func long-name
+     * warning on this branch. Each case captures fd 2 and checks the
+     * importer named the offending directive; (b) is a negative control
+     * proving the checks aren't passing on stray stderr noise. */
     {
         char cap[4096];
 
@@ -2652,11 +2651,10 @@ static void test_config_variants_export(void) {
 }
 
 /* Worst case for the shared workspace-header line budget: fill the
- * predefined-variable table to its user-declarable max so the @var lines
- * consume as much of the budget as possible, then confirm every trailing
- * @cfg line (vertex_outlines among them) still round-trips. With the old
- * 48-line budget the @var lines crowded the late @cfg lines off the end
- * and toggles like Vertex outlines silently failed to save. */
+ * predefined-variable table to its user-declarable max, then confirm
+ * every trailing @cfg line (vertex_outlines among them) still round-trips.
+ * With the old 48-line budget the metadata lines crowded the late @cfg
+ * lines off the end and toggles like Vertex outlines silently failed to save. */
 static void test_workspace_header_budget_worst_case(void) {
     printf("--- workspace header budget (worst case: max vars + all cfg) ---\n");
 

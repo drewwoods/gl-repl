@@ -423,7 +423,7 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
 
     /* Print config settings as block comments at the top of the dump,
      * mirroring the saved C file's workspace header but omitting the
-     * volatile runtime state like @var. */
+     * volatile runtime state. */
     if (g_export_cfg_bridge && g_export_cfg_bridge->fill_all) {
         ReplConfigBag cfg;
         repl_config_bag_clear(&cfg);

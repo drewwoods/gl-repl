@@ -7,7 +7,7 @@
  * owns:
  *
  *   - The file-import state machine (line accumulation, handler dispatch,
- *     diagnostics, pending cfg, and deferred @var values).
+ *     diagnostics, pending cfg, and stashed variable values).
  *   - The workspace header directive readers
  *     (parse_workspace_dir / parse_scene_name / parse_var /
  *     parse_func_alias / parse_cfg) and the parser dispatcher
@@ -92,7 +92,7 @@ struct ImportState {
 
 /* Public single-line parser batching state. repl_export_load_from_file uses
  * ImportState.workspace instead, so failed file imports cannot leak @cfg or
- * deferred @var data into later public repl_export_apply_pending_cfg() calls. */
+ * stashed variable data into later public repl_export_apply_pending_cfg() calls. */
 static ImportWorkspaceAccum g_public_workspace_accum;
 
 static void import_workspace_accum_reset(ImportWorkspaceAccum *accum) {
@@ -165,7 +165,7 @@ typedef struct {
 } SnippetDirective;
 
 /* Emit one import diagnostic to stderr with the shared "Warning: " prefix
- * and trailing newline. Centralises the format so the @var / @func /
+ * and trailing newline. Centralises the format so the @func /
  * @declare / scene-name / workspace-dir overflow notices read identically. */
 static void import_vwarn(const char *fmt, va_list ap) {
     fputs("Warning: ", stderr);
@@ -420,7 +420,7 @@ static int import_parse_cam_line(const char *text) {
  * `[static] float a = 1, b = 2.5;` (the write_predef_var_globals
  * output) and copy each initializer into the already-registered predef
  * var of the same name. Declaration/registration itself happens via the
- * `@var` / `@declare` directives — this only restores values. Returns 1
+ * `static float` declarations / `@declare` directives — this only restores values. Returns 1
  * when at least one var was updated. */
 static int import_parse_predef_decl_common(const char *line, ImportFloatStash *out_stash, int *out_count, int max_stash) {
     const char *p = line;
@@ -521,7 +521,7 @@ static int declare_args_have_tune_tag(const char *s) {
 
 /* Parse a snippet-scoped `@declare` marker written by write_canonical_cmd_as_c()
  * and reconstruct the corresponding CMD_VAR_DECLARE command. Variables that are
- * already registered in g_predef_vars (e.g. from @var auto-declare or from
+ * already registered in g_predef_vars (e.g. from auto-declare or from
  * declare_test_vars in tests) are kept at their current indices so that any
  * CMD_VAR_ASSIGN commands already loaded with those indices remain valid.
  * Vars not yet registered are declared. */
@@ -538,7 +538,7 @@ static int parse_snippet_declare(const char *args, ImportState *s) {
     /* Names that THIS call newly declares in the predef table — kept
      * separate so a later source/cmd-store insert failure can undeclare
      * them without touching names that were already registered (e.g.
-     * by @var auto-declare or by test setup). */
+     * by auto-declare or by test setup). */
     char newly_declared[MAX_NAMES_PER_DECL][REPL_PREDEF_NAME_MAX];
     int  new_count = 0;
 

@@ -602,7 +602,7 @@ explaining why the extra background is useful.
 | [`src/subsystems/tutorial/tutorial_internal.h`](src/subsystems/tutorial/tutorial_internal.h) | Tutorial-private shared declarations for the split runner / animation / match files |
 | [`src/subsystems/tutorial/tutorial.h`](src/subsystems/tutorial/tutorial.h) | Runner API: `tutorial_start/_exit/_teardown/_handle_commit_attempt/_advance_after_successful_commit/_current_expected_text/_current_step_kind/_notify_state_changed/_handle_ack_key/_block_noncommand_commit/_line_is_locked/_guard_source_change/_match`. Knobs: `TUTORIAL_FADE_CHARS_PER_SEC` (reveal rate), `TUTORIAL_FADE_SETTLE_CHARS` (settle-wave width) |
 | [`src/repl/export.c`](src/repl/export.c) | Export writer: `repl_export_save_output`, `repl_dump_code_panel_text`, workspace header emit dispatcher `repl_state_refresh_workspace_header_lines`, scaffold sections, render-state/cam refresh, init-bootstrap apply, light/render text generators. Also implements the typed live-cfg wrappers `repl_cfg_get_int` / `_set_int` / `_known` over the installed config bridge (bridge-only — no `render3d_*`/`glr_*` calls; `check-repl-export-via-bridge` stays green) |
-| [`src/repl/import.c`](src/repl/import.c) | Import reader: `repl_export_load_from_file`, the pending-`@cfg` accumulator + `repl_export_apply_pending_cfg`, deferred-`@var` table, workspace directive readers (`parse_workspace_dir` / `_scene_name` / `_var` / `_func_alias` / `_cfg`) and the `repl_state_parse_workspace_header_line` dispatcher, snippet directive table (`@declare`), C-to-REPL line translators (for-headers, function headers, tess lines, `glPointParameterfv`, `label()`), and the line-by-line `ImportState` machine. The `IMPORT_EXPORT_STATE` macro block is duplicated verbatim with [`src/repl/export.c`](src/repl/export.c); both TUs reach the same state-owner facade. |
+| [`src/repl/import.c`](src/repl/import.c) | Import reader: `repl_export_load_from_file`, the pending-`@cfg` accumulator + `repl_export_apply_pending_cfg`, stashed variables, workspace directive readers (`parse_workspace_dir` / `_scene_name` / `_var` / `_func_alias` / `_cfg`) and the `repl_state_parse_workspace_header_line` dispatcher, snippet directive table (`@declare`), C-to-REPL line translators (for-headers, function headers, tess lines, `glPointParameterfv`, `label()`), and the line-by-line `ImportState` machine. The `IMPORT_EXPORT_STATE` macro block is duplicated verbatim with [`src/repl/export.c`](src/repl/export.c); both TUs reach the same state-owner facade. |
 | [`src/repl/export.h`](src/repl/export.h) | Export/import public API and workspace-header pending-state types |
 | [`src/repl/export_state.h`](src/repl/export_state.h) | Shared dimensions for import/export state text |
 | [`src/app/glr_audio.c`](src/app/glr_audio.c) | App-level playlist engine and persisted audio config |
@@ -1049,8 +1049,8 @@ behavior.
 
 [`src/repl/export.c`](src/repl/export.c) handles bidirectional text format:
 - **Export** (`repl_export_save_output()`): writes a standalone C file with header
-  comments embedding workspace state (`@var name=value`,
-  `@cfg setting=value`, `@scene-name <name>`, `@workspace-dir <path>`),
+  comments embedding workspace state (`@cfg setting=value`,
+  `@scene-name <name>`, `@workspace-dir <path>`),
   camera state as the raw `glTranslatef`/`glRotatef` sequence the REPL
   uses internally, predefined vars plus fixed scratch arrays `A/B/C[8]` as
   globals, REPL functions as C

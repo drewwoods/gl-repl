@@ -7,7 +7,7 @@
  *
  * Export format (save_output): Writes a complete C file with:
  *   1. A file-only generated banner with standalone compile hints.
- *   2. Header comments with workspace metadata (@var name=value, @cfg setting=value,
+ *   2. Header comments with workspace metadata (@cfg setting=value,
  *      @scene-name <name>, @workspace-dir <path>). Used by import to restore context.
  *   3. Flattened system GL/GLUT includes, without depending on gl_includes.h.
  *   4. Global variable declarations for user-defined predefined variables (float x, y, z).
@@ -18,7 +18,7 @@
  *   7. Geometry commands in the display() function body (user-edited commands).
  *
  * Import format (load_from_file): Line-by-line scan that:
- *   1. Parses leading workspace header directives (@var, @cfg, @scene-name, @workspace-dir).
+ *   1. Parses leading workspace header directives (@cfg, @scene-name, @workspace-dir).
  *   2. Extracts camera state (raw glTranslatef/glRotatef lines) via the
  *      controller-installed camera bridge.
  *   3. Detects function definitions (lines matching C function syntax).
@@ -234,7 +234,7 @@ struct ReplExportLayout {
 typedef struct ReplExportLayout ReplExportLayout;
 #endif
 
-/* Export current REPL state to a C source file. Writes header metadata (@var, @cfg,
+/* Export current REPL state to a C source file. Writes header metadata (@cfg,
  * @scene-name, @workspace-dir), global variable declarations, camera state, function
  * definitions, and geometry commands to filename. The file is a complete, standalone
  * C program that can be reloaded via load_from_file(). Called by save-to-output and
@@ -276,7 +276,7 @@ typedef struct {
 int  repl_export_load_from_file(const char *filename, ReplImportResult *result);
 
 /* Refresh the export header text from current state. Pre-builds the header metadata
- * lines (@var, @cfg, @scene-name, @workspace-dir) from the current predefined
+ * lines (@cfg, @scene-name, @workspace-dir) from the current predefined
  * variables, render settings, and workspace directory. Called after mutations
  * (variable declare, config toggle, workspace directory change) to keep the export
  * buffer in sync. */
