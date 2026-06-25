@@ -1626,7 +1626,11 @@ test-stubs: check-doc-links check-trailing-whitespace check-gl-boundaries check-
 	$(MAKE) test USE_GL_STUBS=1
 
 test-msan: ## Build and run stubbed tests with MemorySanitizer.
+ifeq ($(UNAME_S),Darwin)
+	@printf "WARNING: MemorySanitizer is not supported on macOS (Darwin). Skipping test-msan.\n" >&2
+else
 	GLR_AUDIO_NO_DEVICE=1 $(MAKE) test USE_GL_STUBS=1 BUILD=debug SAN=memory CC=$(MSAN_CC)
+endif
 
 test-full: ## Full gate: stub tests + MSan tests + checks + build gl-repl, bench, repl_demo, render3d_demo, editor_demo.
 	$(MAKE) --no-print-directory repl_demo USE_GL_STUBS=1
@@ -1742,7 +1746,11 @@ debug: ## Build everything with debug ASan+UBSan flags.
 	$(MAKE) all BUILD=debug
 
 debug-msan: ## Build everything with debug MemorySanitizer flags.
+ifeq ($(UNAME_S),Darwin)
+	@printf "WARNING: MemorySanitizer is not supported on macOS (Darwin). Skipping debug-msan.\n" >&2
+else
 	$(MAKE) all BUILD=debug SAN=memory CC=$(MSAN_CC)
+endif
 
 coverage: ## Clean, rebuild tests with coverage, run suite, generate HTML report.
 	$(MAKE) clean
