@@ -180,9 +180,13 @@ UndefinedBehaviorSanitizer** (UB aborts: `-fno-sanitize-recover`).
 `make debug-msan` builds the same full target set with **MemorySanitizer**
 and origin tracking, and `make test-msan` runs the stubbed test suite
 under MSan (`build/debug-msan*` output dirs; internally this is
-`BUILD=debug SAN=memory`; requires compiler/runtime support, typically
-Clang on Linux). `make test-full` includes `test-msan`. `NO_SAN=1` /
-`NOSAN=1` disables debug-build sanitizers.
+`BUILD=debug SAN=memory CC=$(MSAN_CC)`, with `MSAN_CC=clang` by default,
+and Clang-oriented MSan flags including origin tracking plus a Linux
+Clang 18 codegen workaround; the test target also sets
+`GLR_AUDIO_NO_DEVICE=1` to avoid uninstrumented host audio backends;
+requires compiler/runtime support, typically Clang on Linux). `make
+test-full` includes `test-msan`. `NO_SAN=1` / `NOSAN=1` disables
+debug-build sanitizers.
 `make gl-repl`/`bench`/the demos stay `BUILD=release`. An explicit
 `BUILD=...` on the command line or in the environment always wins, so
 `make coverage` (BUILD=coverage) and `make test BUILD=release` (a fast

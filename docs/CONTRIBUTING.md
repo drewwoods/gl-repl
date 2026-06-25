@@ -22,8 +22,11 @@ Test targets default to `BUILD=debug`, which compiles with
 AddressSanitizer + UndefinedBehaviorSanitizer (UB aborts). `make
 debug-msan` builds the full target set with MemorySanitizer and origin
 tracking when the compiler/runtime support it; `make test-msan` runs the
-stubbed suite the same way, and is included by `make test-full`. `make
-test BUILD=release` is the fast unsanitized run.
+stubbed suite the same way, and is included by `make test-full`. The MSan
+targets default to `MSAN_CC=clang`; override that if your LLVM compiler
+has a versioned name. `test-msan` also sets `GLR_AUDIO_NO_DEVICE=1` so
+the audio tests exercise the engine without opening host audio backends.
+`make test BUILD=release` is the fast unsanitized run.
 
 ## The guard suite
 
