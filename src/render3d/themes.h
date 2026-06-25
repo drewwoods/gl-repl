@@ -22,13 +22,13 @@
     X(EMBER, "Ember")      \
     X(OCEAN, "Ocean")      \
     X(XZRULER, "XZ Ruler") \
-    X(PLANES, "Adaptive Planes") \
     X(RADAR, "Radar")      \
     X(AURORA, "Aurora")    \
     X(SYNTHWAVE, "Synthwave") \
     X(FROZEN, "Frozen Lake") \
     X(SOIL, "Tilled Field") \
     X(STARCHART, "Star Chart") \
+    X(PLANES, "Adaptive Planes") \
     X(SKETCH, "Sketchbook")  \
     X(NEON, "Neon Graph")    \
     X(GRAPHPLANES, "Graph Planes")
