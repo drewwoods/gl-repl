@@ -226,7 +226,7 @@
  * remaining target delta. Wheel zoom step injects this amount per notch;
  * zoom velocity then decays by CAM_DECAY_ZOOM each tick. */
 #ifndef GLR_CAMERA_TARGET_DECAY
-#define GLR_CAMERA_TARGET_DECAY 0.90f
+#define GLR_CAMERA_TARGET_DECAY 0.93f
 #endif
 #ifndef GLR_WHEEL_ZOOM_STEP
 #define GLR_WHEEL_ZOOM_STEP 0.02f
