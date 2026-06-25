@@ -1,8 +1,12 @@
 TODO:
-   
-   - Think of how to handle music - maybe a menu?
-   - Fix tests that dont use depth (particles) by using depthFunction always so the grid doesnt appear ontop
-   - replace the exported code with a stencil test (color and depth mask false, stencil set, then color black where stencil set)
-   - add model view matrix viaualizer. the 4x4 matrix with descriptions. Can click a button in the status bar
-   - add a 2D/3D toggle next to the replay button to adjust views
-   
+   - Decide how to handle music, possibly through a menu.
+   - Fix tests that do not use depth, such as particles, by always using
+     depthFunc so the grid does not appear on top.
+   - Replace the exported code with a stencil test: disable color and depth
+     writes, set the stencil, then draw black where the stencil is set.
+   - Add a model-view matrix visualizer showing the 4x4 matrix with
+     descriptions, accessible from a button in the status bar.
+   - Add helper functions for basic 3D math, such as cross and dot products.
+     This needs a better plan for vector types, perhaps vec3/vec4, or better
+     exposure of the A/B/C scratch arrays.
+   - Possibly extend auto-normal generation to support loops and smooth normals
