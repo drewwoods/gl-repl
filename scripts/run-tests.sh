@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 green=
 red=
@@ -54,7 +54,7 @@ printf '%b\n' "$reset"
 # no /usr/bin/time) it exits 127 — in that case timing is simply
 # dropped; the test result never depends on it.
 have_time=0
-if ( time : ) >/dev/null 2>&1; then
+if ( time -p true ) >/dev/null 2>&1; then
     have_time=1
 fi
 
@@ -79,7 +79,7 @@ for spec do
         fi
         # rc must come from the test command, never from `time`.
         if [ "$have_time" -eq 1 ]; then
-            { time sh -c "$cmd" >"$log" 2>&1; } 2>"$time_file"
+            { time -p sh -c "$cmd" >"$log" 2>&1; } 2>"$time_file"
             rc=$?
         else
             sh -c "$cmd" >"$log" 2>&1
@@ -125,16 +125,23 @@ parse_time_output() {
 }
 
 time_to_seconds() {
-    # Convert time format (0m1.234s or 1m2.345s) to seconds as float
+    # Convert time format (0m1.234s, 1m2.345s, or 1.234) to seconds as float
     local time_str=$1
     if [ -z "$time_str" ]; then
-        printf '0'
+        printf '0.000\n'
         return
     fi
-    # Handle format: XmY.Zs where X is minutes, Y.Z is seconds
-    local mins=$(printf '%s' "$time_str" | cut -d'm' -f1)
-    local secs=$(printf '%s' "$time_str" | cut -d'm' -f2 | cut -d's' -f1)
-    printf '%s\n' "$mins $secs" | awk '{printf "%.3f\n", $1 * 60 + $2}'
+    case "$time_str" in
+        *m*)
+            local mins=$(printf '%s' "$time_str" | cut -d'm' -f1)
+            local secs=$(printf '%s' "$time_str" | cut -d'm' -f2 | cut -d's' -f1)
+            printf '%s\n' "$mins $secs" | awk '{printf "%.3f\n", $1 * 60 + $2}'
+            ;;
+        *)
+            local secs=$(printf '%s' "$time_str" | cut -d's' -f1)
+            printf '%s\n' "$secs" | awk '{printf "%.3f\n", $1}'
+            ;;
+    esac
 }
 
 passed_bins=0
@@ -170,6 +177,7 @@ for spec do
             # Record timing for top 3 analysis (in seconds for sorting)
             elapsed_secs=$(time_to_seconds "$elapsed_str")
             printf '%s %s\n' "$elapsed_secs" "$name" >>"$timings_file"
+            elapsed_str="${elapsed_secs}s"
         fi
     else
         elapsed_str="unknown"
