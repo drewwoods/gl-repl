@@ -52,6 +52,23 @@
 #define CFG_DEFAULT_PAREN_MATCH       1   /* matching-paren highlight on */
 #define CFG_DEFAULT_PAREN_SCOPE       1   /* in-scope highlight band on */
 
+/* Backdrop/grid pairing defaults. These rows declare which backdrops own a
+ * companion grid; glr_config.c owns the enforcement policy (force the grid
+ * while paired, hide paired grids from direct user cycling, restore the prior
+ * grid when leaving paired backdrops).
+ *
+ * Initialize a table with the GLR_BACKDROP_GRID_PAIR_DEFAULTS macro:
+ *   static const GlrBackdropGridPair entries[] = GLR_BACKDROP_GRID_PAIR_DEFAULTS;
+ */
+#ifndef GLR_BACKDROP_GRID_PAIR_DEFAULTS
+#define GLR_BACKDROP_GRID_PAIR_DEFAULTS {                                  \
+    { .backdrop = RENDER3D_BACKDROP_AURORA,         .grid = GRID_THEME_AURORA }, \
+    { .backdrop = RENDER3D_BACKDROP_SUNSET,         .grid = GRID_THEME_SYNTHWAVE }, \
+    { .backdrop = RENDER3D_BACKDROP_POLAR_DAY_SNOW, .grid = GRID_THEME_FROZEN }, \
+    { .backdrop = RENDER3D_BACKDROP_NEBULA,         .grid = GRID_THEME_STARCHART }, \
+}
+#endif
+
 /* Neutral default clear color used by the controller when the flat
  * program contains no user glClearColor command. Keep the luminance
  * helper in sync with these channel values so overlay alpha scaling
