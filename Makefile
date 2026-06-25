@@ -1613,14 +1613,14 @@ test: $(TEST_BINS) ## Run the full automated test suite.
 	@REPL_EXPORT_CC="$(CC)" \
 	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
 	TEST_JOBS="$(TEST_JOBS)" \
-	sh scripts/run-tests.sh $(TEST_RUNNER_CASES)
+	bash scripts/run-tests.sh $(TEST_RUNNER_CASES)
 
 test-detailed: $(TEST_BINS) ## Run the full test suite with verbose example export/compile logging.
 	@REPL_EXPORT_CC="$(CC)" \
 	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
 	REPL_EXPORT_VERBOSE=1 \
 	TEST_JOBS="$(TEST_JOBS)" \
-	sh scripts/run-tests.sh $(TEST_RUNNER_CASES)
+	bash scripts/run-tests.sh $(TEST_RUNNER_CASES)
 
 test-stubs: check-doc-links check-trailing-whitespace check-gl-boundaries check-layer-coupling check-state-ownership ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs.
 	$(MAKE) test USE_GL_STUBS=1
