@@ -1840,7 +1840,6 @@ static void graphplane_labels(int haxis, int vaxis, int kaxis,
                               float ch, float cv, float Lh, float Lv, float major,
                               const float right[3], const float up[3],
                               float scale, float alpha) {
-    glColor4f(0.90f, 0.93f, 0.98f, alpha);
     int h0 = (int)ceilf((ch - Lh) / major), h1 = (int)floorf((ch + Lh) / major);
     int v0 = (int)ceilf((cv - Lv) / major), v1 = (int)floorf((cv + Lv) / major);
     if (h1 - h0 > 120) h1 = h0 + 120;               /* runaway guard */
@@ -1849,9 +1848,22 @@ static void graphplane_labels(int haxis, int vaxis, int kaxis,
      * centre) so neither is pushed off screen — edges measured from the focus. */
     float bottom_v = cv - copysignf(Lv, up[vaxis]);  /* screen-bottom edge */
     float left_h   = ch - copysignf(Lh, right[haxis]); /* screen-left edge */
+    /* Per-label edge fade: a value ramps up over the outermost ~band as it
+     * enters the visible span, so panning/zooming/rotating slides numbers in
+     * and out smoothly instead of popping them. */
+    float band = major * 1.6f;
 
     for (int s = h0; s <= h1; s++) {                /* h-values along the bottom */
         float c = s * major;
+        float ef = gp_smoothstep(0.0f, band, Lh - fabsf(c - ch));
+        /* Fade (rather than hard-skip) the h-labels approaching the left-edge
+         * v-label column, so the two tracks don't collide in the corner AND a
+         * value zooming past the column slides in smoothly instead of popping
+         * the instant it clears a hard cutoff. */
+        float cf = gp_smoothstep(0.0f, major * 2.0f, fabsf(c - left_h));
+        float a = alpha * ef * cf;
+        if (a <= 0.004f) continue;
+        glColor4f(0.90f, 0.93f, 0.98f, a);
         char b[16];
         snprintf(b, sizeof b, "%g", (double)c);
         float tw = grid_stroke_text_width(scale, b);
@@ -1865,6 +1877,9 @@ static void graphplane_labels(int haxis, int vaxis, int kaxis,
     }
     for (int s = v0; s <= v1; s++) {                /* v-values down the left */
         float c = s * major;
+        float ef = gp_smoothstep(0.0f, band, Lv - fabsf(c - cv));
+        if (ef <= 0.0f) continue;
+        glColor4f(0.90f, 0.93f, 0.98f, alpha * ef);
         char b[16];
         snprintf(b, sizeof b, "%g", (double)c);
         float p[3] = { 0, 0, 0 };
@@ -1924,9 +1939,12 @@ static void render3d_grid_render_graphplanes_theme(const Render3dRenderConfig *c
     graphplane_lines(grid_ctx, 2, 1, 0, R, major, 0.98f, 0.74f, 0.42f,   /* ZY amber */
                      0.02f + 0.34f * zy_w, 0.05f + 0.60f * zy_w);
 
-    /* Labels: only the most head-on plane, only above the threshold, fading in.
-     * Both in-plane axes are labelled (h along the bottom, v down the left). */
+    /* Labels: only the most head-on plane, fading the whole set in by the
+     * orientation weight (THRESH..FULL) and each value in by its distance from
+     * the visible edge (in graphplane_labels). Both in-plane axes are labelled
+     * (h bottom, v left). */
     const float THRESH = 0.50f;
+    const float FULL   = 0.985f;
     float ta_base = fminf(grid_ctx->xn_alpha * grid_ctx->grid_brightness, 1.0f);
     float lblscale = fminf(0.0040f, fmaxf(0.0022f, major * 0.0036f));
     /* Camera focus per world axis — labels centre on it so pan stays correct. */
@@ -1934,13 +1952,13 @@ static void render3d_grid_render_graphplanes_theme(const Render3dRenderConfig *c
     glLineWidth(1.4f);
     if (xy_w > zy_w && xy_w > xz_w && xy_w > THRESH) {           /* XY: x,y */
         graphplane_labels(0, 1, 2, foc[0], foc[1], Lh, Lv, major, right, up,
-                          lblscale, ta_base * gp_smoothstep(THRESH, 0.96f, xy_w));
+                          lblscale, ta_base * gp_smoothstep(THRESH, FULL, xy_w));
     } else if (zy_w > xz_w && zy_w > THRESH) {                   /* ZY: z,y */
         graphplane_labels(2, 1, 0, foc[2], foc[1], Lh, Lv, major, right, up,
-                          lblscale, ta_base * gp_smoothstep(THRESH, 0.96f, zy_w));
+                          lblscale, ta_base * gp_smoothstep(THRESH, FULL, zy_w));
     } else if (xz_w > THRESH) {                                  /* XZ: x,z */
         graphplane_labels(0, 2, 1, foc[0], foc[2], Lh, Lv, major, right, up,
-                          lblscale, ta_base * gp_smoothstep(THRESH, 0.96f, xz_w));
+                          lblscale, ta_base * gp_smoothstep(THRESH, FULL, xz_w));
     }
     glLineWidth(1.0f);
 }
