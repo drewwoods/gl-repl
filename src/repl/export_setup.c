@@ -144,11 +144,6 @@ static void emit_scene_name(int *n) {
     }
 }
 
-/* --- var ------------------------------------------------------------------- */
-
-static void emit_vars(int *n) {
-    (void)n;
-}
 
 /* --- func aliases ----------------------------------------------------------
  * Round-trip the func-alias table through the workspace header so a saved
@@ -205,7 +200,6 @@ static const WorkspaceDirective WORKSPACE_DIRECTIVES[] = {
     /* Emit order matches this array. */
     WS_DIR(REPL_WORKSPACE_DIRECTIVE_SCENE_NAME,    emit_scene_name),
     WS_DIR(REPL_WORKSPACE_DIRECTIVE_WORKSPACE_DIR, emit_workspace_dir),
-    WS_DIR(REPL_WORKSPACE_DIRECTIVE_VAR,           emit_vars),
     WS_DIR(REPL_WORKSPACE_DIRECTIVE_FUNC,          emit_func_aliases),
     WS_DIR(REPL_WORKSPACE_DIRECTIVE_CFG,           emit_cfgs),
 };
@@ -215,12 +209,12 @@ static const WorkspaceDirective WORKSPACE_DIRECTIVES[] = {
 #undef WS_DIR
 
 /* Pin the shared header budget against the worst case so adding cfg
- * items / predef-var slots / func slots can't silently reintroduce the
+ * items / func slots can't silently reintroduce the
  * @cfg truncation. Worst case = 1 banner + 1 @scene-name + 1
- * @workspace-dir + every @var + every @func + every @cfg (capped by the
+ * @workspace-dir + every @func + every @cfg (capped by the
  * bag's own REPL_CFG_MAX_ITEMS). See export_state.h. */
 STATIC_ASSERT(MAX_WORKSPACE_HEADER_LINES >=
-                  3 + MAX_PREDEF_VARS + REPL_FUNC_SLOT_COUNT + REPL_CFG_MAX_ITEMS,
+                  3 + REPL_FUNC_SLOT_COUNT + REPL_CFG_MAX_ITEMS,
               "workspace header budget too small for worst-case directives");
 
 void repl_state_refresh_workspace_header_lines(void) {

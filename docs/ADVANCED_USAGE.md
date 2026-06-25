@@ -265,7 +265,6 @@ metadata that round-trips on reload:
 |---|---|
 | `// @scene-name <name>` | Names the scene slot the file loads into. |
 | `// @workspace-dir <path>` | Re-binds the workspace directory. |
-| `// @var name=value` | Restores a predefined variable's value. |
 | `// @cfg <slug> = <value>` | Applies a scene-presentation setting (see the slug table below). |
 | `// @declare name` | Reconstructs a `float name;` declaration on import. |
 | `// @tune` | Marks a variable as a tunable knob in the exported program — see [User Guide → Tunable Variables](USER_GUIDE.md#tunable-variables--tune). |

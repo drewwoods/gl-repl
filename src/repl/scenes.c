@@ -520,7 +520,7 @@ static int load_scene_file_into_slot(const char *path) {
     /* Start each imported scene from the built-in predef baseline (`t`).
      * Workspace headers then re-declare any user vars on top. Clearing the
      * table entirely breaks round-tripping for scenes whose expressions
-     * reference `t`, because `@var t = ...` cannot re-declare a reserved
+     * reference `t`, because `t` cannot be re-declared as a reserved
      * built-in name. */
     repl_eval_init_predef_vars();
     repl_func_alias_clear_all();

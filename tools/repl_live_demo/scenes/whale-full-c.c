@@ -13,30 +13,7 @@
 /* See the gl-repl repository LICENSE file for the full text. */
 
 /* @workspace: REPL state (auto-saved) */
-/* @var t = 7.401524 */
-/* @var launchVelX = 1.5703125 */
-/* @var launchVelY = 3.59375 */
-/* @var launchVelZ = -0.1640625 */
-/* @var currentVelY = -1.4774656 */
-/* @var particleLife = 2.2350917 */
-/* @var particleAge = 1.4489188 */
-/* @var dragDecay = 0.9 */
-/* @var gravityY = -3.5 */
-/* @var dragRate = 10 */
-/* @var particleX = 2.1165864 */
-/* @var particleY = 2.2431624 */
-/* @var particleZ = -0.12188217 */
-/* @var floorY = -10 */
-/* @var spawnDelay = 1.4824219 */
-/* @var emitDuration = 5.99568 */
-/* @var fluke_ang = -28.575768 */
-/* @var fin_ang = -1.522293 */
-/* @var speed = 0.5 */
-/* @var detail = 30 */
-/* @var blowHoleX = 0.95 */
-/* @var blowHoleY = 0.71 */
-/* @var blowHoleZ = 0 */
-/* @var waterDroplets = 250 */
+
 /* @func 0 = computeVerticalMotion */
 /* @func 1 = computeLifespan */
 /* @func 2 = computeDriftX */
@@ -326,18 +303,18 @@ static void draw_scene(void) {
   /* @declare launchVelX launchVelY launchVelZ */
   /* @declare currentVelY */
   /* @declare particleLife particleAge */
-  /* @declare dragDecay=0.9 */
-  /* @declare gravityY=-3.5 */
-  /* @declare dragRate=10 */
+  /* @declare dragDecay */
+  /* @declare gravityY */
+  /* @declare dragRate */
   /* @declare particleX particleY particleZ */
-  /* @declare floorY=-10 */
+  /* @declare floorY */
   /* @declare spawnDelay */
-  /* @declare emitDuration=5.99568 */
+  /* @declare emitDuration */
   /* @declare fluke_ang fin_ang */
-  /* @declare speed=0.5 */
-  /* @declare detail=30 */
-  /* @declare blowHoleX=0.95 blowHoleY=0.71 blowHoleZ */
-  /* @declare waterDroplets=250 @tune */
+  /* @declare speed */
+  /* @declare detail */
+  /* @declare blowHoleX blowHoleY blowHoleZ */
+  /* @declare waterDroplets @tune */
 
   glColor4f(0.25, 0.45, 0.85, 0.46);
   glEnable(GL_BLEND);
