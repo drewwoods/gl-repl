@@ -225,15 +225,19 @@ int main(void) {
         char buf[16384];
         read_text_file(path, buf, sizeof(buf));
         /* Time advance lives in the tick() timer at a fixed step,
-         * matching the live REPL's repl_state_time_advance(0.016).
+         * matching the live REPL's repl_state_time_advance(0.01667).
          * display() must NOT advance t (that would make tDelta
          * frame-rate dependent). */
         ASSERT_TRUE("saved t advances at fixed step in tick()",
-                    strstr(buf, "t += 0.016f;") != NULL);
-        ASSERT_TRUE("saved tick scheduled via glutTimerFunc",
+                    strstr(buf, "t += 0.01667f;") != NULL);
+        ASSERT_TRUE("saved tick computes paced delay",
+                    strstr(buf, "delay = timer_delay_ms(&next_deadline_ms);") != NULL);
+        ASSERT_TRUE("saved tick reschedules via computed delay",
+                    strstr(buf, "glutTimerFunc((unsigned int)delay, tick, 0)") != NULL);
+        ASSERT_TRUE("saved main starts tick timer",
                     strstr(buf, "glutTimerFunc(16, tick, 0)") != NULL);
-        ASSERT_TRUE("saved display does not call glutGet(GLUT_ELAPSED_TIME)",
-                    strstr(buf, "glutGet(GLUT_ELAPSED_TIME)") == NULL);
+        ASSERT_TRUE("saved display does not derive t from elapsed time",
+                    strstr(buf, "t = (float)glutGet(GLUT_ELAPSED_TIME)") == NULL);
         ASSERT_TRUE("saved no longer uses glutIdleFunc",
                     strstr(buf, "glutIdleFunc") == NULL);
         ASSERT_TRUE("saved multisample header state",

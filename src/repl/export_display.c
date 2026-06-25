@@ -119,6 +119,12 @@ void export_generated_names_init(ExportGeneratedNames *names) {
                        "mouse_x", "keyboard_mouse_x");
     export_choose_name(&used, names->keyboard_mouse_y,
                        "mouse_y", "keyboard_mouse_y");
+    export_choose_name(&used, names->timer_now_ms,
+                       "timer_now_ms", "repl_timer_now_ms");
+    export_choose_name(&used, names->timer_delay_ms,
+                       "timer_delay_ms", "repl_timer_delay_ms");
+    export_choose_name(&used, names->tick,
+                       "tick", "repl_tick");
     export_choose_name(&used, names->tune_modifiers,
                        "modifiers", "tuning_modifiers");
     export_choose_name(&used, names->tune_normalized_key,
@@ -340,8 +346,8 @@ static void emit_export_display_geometry(FILE *f,
 
     /* `t` is advanced by the tick() timer at a fixed step (see the
      * footer's tick() / glutTimerFunc setup), mirroring the live
-     * REPL's repl_state_time_advance(0.016). display() only renders;
-     * it does NOT touch t. Using glutGet(GLUT_ELAPSED_TIME) here
+     * REPL's repl_state_time_advance(0.01667). display() only renders;
+     * it does NOT touch t. Setting t from elapsed wall time here
      * would make tDelta = (t - tLast) * 10 frame-rate dependent and
      * diverge from the REPL preview, where tDelta is constant. */
 
@@ -574,26 +580,58 @@ static void emit_export_display_tail(FILE *f, const ExportNeeds *needs,
         "  if (%s == 27)\n"
         "    exit(0);\n"
         "}\n"
+        "\n",
+        names->keyboard_key,
+        names->keyboard_key);
+    fprintf(f,
+        "static double %s(void) {\n"
+        "  return (double)glutGet(GLUT_ELAPSED_TIME);\n"
+        "}\n"
         "\n"
+        "static int %s(double *next_deadline_ms) {\n"
+        "  double now = %s();\n"
+        "  int delay;\n"
+        "\n"
+        "  if (*next_deadline_ms == 0.0)\n"
+        "    *next_deadline_ms = now;\n"
+        "  *next_deadline_ms += 1000.0 / 60.0;\n"
+        "  if (*next_deadline_ms < now)\n"
+        "    *next_deadline_ms = now;\n"
+        "\n"
+        "  delay = (int)(*next_deadline_ms - now + 0.5);\n"
+        "  if (delay < 1)\n"
+        "    delay = 1;\n"
+        "  return delay;\n"
+        "}\n"
+        "\n",
+        names->timer_now_ms,
+        names->timer_delay_ms,
+        names->timer_now_ms);
+    fprintf(f,
         "/* Advance animation at roughly 60 frames per second. */\n"
-        "void tick(int value) {\n"
+        "void %s(int value) {\n"
+        "  static double next_deadline_ms = 0.0;\n"
+        "  int delay;\n"
+        "\n"
         "  (void)value;\n"
         "  /* Fixed-step time advance, matching the live REPL's\n"
-        "   * repl_state_time_advance(0.016) timer. Keeps tDelta = (t -\n"
+        "   * repl_state_time_advance(0.01667) timer. Keeps tDelta = (t -\n"
         "   * tLast) * 10 constant across frames, independent of how long\n"
         "   * each render actually takes. */\n"
-        "  t += 0.016f;\n"
+        "  t += 0.01667f;\n"
         "  if (g_rotating)\n"
         "    g_angle += 0.5f;\n"
         "  glutPostRedisplay();\n"
-        "  glutTimerFunc(16, tick, 0);\n"
+        "  delay = %s(&next_deadline_ms);\n"
+        "  glutTimerFunc((unsigned int)delay, %s, 0);\n"
         "}\n"
         "\n"
         "/* One-time OpenGL state setup. */\n"
         "void init(void) {\n"
         "  glLineWidth(1.5f);\n",
-        names->keyboard_key,
-        names->keyboard_key);
+        names->tick,
+        names->timer_delay_ms,
+        names->tick);
     emit_export_init_section_to_file(f, include_tess);
 
     /* Use the actual scene rect so the exported window preserves the REPL
@@ -605,7 +643,7 @@ static void emit_export_display_tail(FILE *f, const ExportNeeds *needs,
     int sh = layout ? layout->render3d_h : 0;
     if (sw <= 0) sw = 800;
     if (sh <= 0) sh = 600;
-    emit_footer_post_init(f, sw, sh);
+    emit_footer_post_init(f, sw, sh, names->tick);
 }
 
 void emit_export_display(FILE *f, const ExportNeeds *needs,

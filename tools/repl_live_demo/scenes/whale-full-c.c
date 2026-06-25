@@ -491,18 +491,42 @@ void keyboard(unsigned char key, int mouse_x, int mouse_y) {
     exit(0);
 }
 
+static double timer_now_ms(void) {
+  return (double)glutGet(GLUT_ELAPSED_TIME);
+}
+
+static int timer_delay_ms(double *next_deadline_ms) {
+  double now = timer_now_ms();
+  int delay;
+
+  if (*next_deadline_ms == 0.0)
+    *next_deadline_ms = now;
+  *next_deadline_ms += 1000.0 / 60.0;
+  if (*next_deadline_ms < now)
+    *next_deadline_ms = now;
+
+  delay = (int)(*next_deadline_ms - now + 0.5);
+  if (delay < 1)
+    delay = 1;
+  return delay;
+}
+
 /* Advance animation at roughly 60 frames per second. */
 void tick(int value) {
+  static double next_deadline_ms = 0.0;
+  int delay;
+
   (void)value;
   /* Fixed-step time advance, matching the live REPL's
-   * repl_state_time_advance(0.016) timer. Keeps tDelta = (t -
+   * repl_state_time_advance(0.01667) timer. Keeps tDelta = (t -
    * tLast) * 10 constant across frames, independent of how long
    * each render actually takes. */
-  t += 0.016f;
+  t += 0.01667f;
   if (g_rotating)
     g_angle += 0.5f;
   glutPostRedisplay();
-  glutTimerFunc(16, tick, 0);
+  delay = timer_delay_ms(&next_deadline_ms);
+  glutTimerFunc((unsigned int)delay, tick, 0);
 }
 
 /* One-time OpenGL state setup. */
