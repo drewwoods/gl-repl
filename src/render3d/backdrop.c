@@ -1320,11 +1320,6 @@ void render3d_backdrop_render(const Render3dFrameRenderContext *frame_ctx) {
         draw_polar_sky_dome();
         backdrop_end_sky_point_state();
         break;
-    case RENDER3D_BACKDROP_SNOWFALL:
-        draw_snowfall(frame_ctx->config.anim_time,
-                      frame_ctx->config.point_parameter_supported,
-                      frame_ctx->config.point_parameter_proc);
-        break;
     case RENDER3D_BACKDROP_POLAR_DAY_SNOW:
         /* Dome first so the flakes composite over the sky. */
         backdrop_begin_sky_point_state(
