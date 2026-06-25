@@ -80,10 +80,20 @@ scene=scenes/torus.c
 ## Scene file format
 
 Scenes are in the app's **save/export `.c` format** — exactly what
-`./gl-repl scene.c` reads and what File → Save writes. The easiest way to make a
-new scene is to build it in `gl-repl` and save it; the bundled
-[`scenes/`](scenes/) files are minimal hand-written examples. The geometry lives
-between `// Snippet start` and `// Snippet end`; a leading `// camera` block sets
-the view, and `float name = value;` lines inside the snippet declare the
-predefined variables that drive the sliders. `t` is the animation clock (space
-toggles it) and is intentionally **not** shown as a slider.
+`./gl-repl scene.c` reads and what File → Save (`Ctrl+S`) writes.
+
+**Full standalone exports load directly.** A complete `output.c` — with its
+`#include` / `display()` / `main()` scaffold, global variable declarations,
+function definitions, and `// camera` block — imports the same as a minimal
+file: the demo uses the same `repl_export_load_from_file` reader as
+`./gl-repl output.c`, so a saved scene round-trips byte-for-byte through the
+geometry. Just point the demo at one (`./repl_live_demo output.c`) or add a
+`scene=` line for it. So the natural workflow is: build a scene in `gl-repl`,
+`Ctrl+S`, then watch/iterate on it here.
+
+The bundled [`scenes/`](scenes/) files are deliberately **minimal** so they are
+pleasant to hand-edit in vim: the geometry lives between `// Snippet start` and
+`// Snippet end`, a leading `// camera` block sets the view, and
+`float name = value;` lines declare the predefined variables that drive the
+sliders. The animation clock `t` is shown as a slider too — dragging it scrubs
+the clock (playback then continues from the scrubbed value); space pauses it.
