@@ -1713,7 +1713,6 @@ lines-test: $(TEST_SLOC_SRCS) ## Count SLOC (code/comment/blank) across test sou
 	@cloc $(TEST_SLOC_SRCS) --by-file
 
 debug: ## Clean and rebuild everything with debug/ASan flags.
-	$(MAKE) clean
 	$(MAKE) all BUILD=debug
 
 coverage: ## Clean, rebuild tests with coverage, run suite, generate HTML report.
