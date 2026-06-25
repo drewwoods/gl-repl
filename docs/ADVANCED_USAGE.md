@@ -333,7 +333,7 @@ Add one row per forced pair, using enum names from
 [`src/render3d/themes.h`](../src/render3d/themes.h). For example, if a future
 backdrop should own `GRID_THEME_NEON`, add another row such as
 `{ RENDER3D_BACKDROP_..., GRID_THEME_NEON }`. No saved-scene schema changes
-are needed: `glr_config.c` consumes the defaults macro as runtime config policy,
+are needed: [`glr_config.c`](../src/app/glr_config.c) consumes the defaults macro as runtime config policy,
 while `@cfg` continues to store ordinary `grid` and `backdrop` enum values.
 
 Paired grid targets are valid enum/config values, but they are hidden from

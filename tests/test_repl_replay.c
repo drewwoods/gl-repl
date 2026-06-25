@@ -298,7 +298,7 @@ static void test_replay_var_assign_uses_flatten_args(void) {
     g_predef_vars_mut[t_idx].value = 1.0f;
 
     editor_feed_line("float u;");
-    editor_feed_line("u = (t - 0.5) * 10;");
+    editor_feed_line("u = (t - 0.5) * 10 + sin(t) * 0;");
     editor_feed_line("glVertex3f(u, 0, 0);");
 
     int u_idx = repl_eval_find_predef_var_idx("u");
@@ -345,6 +345,9 @@ static void test_replay_var_assign_uses_flatten_args(void) {
     ASSERT_TRUE("expand_args on by default", g_replay_expand_args == 1);
 
     SourceTextView text = source_document_view();
+    char display[256];
+    replay_code_panel_get_command_display_text(text, 1, display, sizeof(display));
+
     ReplReplayAnnotationOutput out;
     replay_annotations_prepare(text, &out);
 
