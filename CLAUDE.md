@@ -38,8 +38,10 @@ should be cross-checked under real GCC on Ubuntu.
 
   `check-c99` is the real-gcc C99 ratchet; `test-stubs` builds and runs
   the suite with the bundled GL stubs, so it needs **no GL dev libs**
-  on the headless box (and picks up the debug-default ASan+UBSan). Use
-  `make test` there only if GL/GLUT dev packages are installed.
+  on the headless box (and picks up the debug-default ASan+UBSan; use
+  `make debug-msan` for a MemorySanitizer debug build when the
+  compiler/runtime support it). Use `make test` there only if GL/GLUT
+  dev packages are installed.
 
 ## Build
 
@@ -47,6 +49,8 @@ should be cross-checked under real GCC on Ubuntu.
 make gl-repl          # Build main binary (vendored static freeglut, macOS Cocoa)
 make glut            # Build with system GLUT (macOS Apple framework fallback)
 make test            # Build and run all tests (debug: ASan + UBSan)
+make test-msan       # Build and run stubbed tests with MemorySanitizer
+make debug-msan      # Build everything with MemorySanitizer (Clang/runtime permitting)
 make check-c99       # C99 ratchet (sample + demos + bench)
 make freeglut-clean  # Drop the vendored freeglut CMake build (forces a rebuild)
 make app             # (macOS) Bundle gl-repl.app with icon + sample.mp3
@@ -173,6 +177,12 @@ gitignored; the committed `.svg`s are the source of truth. Pure packaging
 The test targets (`test`, `test-detailed`, `test-stubs`, `test-full`)
 default to `BUILD=debug`, which compiles with **AddressSanitizer +
 UndefinedBehaviorSanitizer** (UB aborts: `-fno-sanitize-recover`).
+`make debug-msan` builds the same full target set with **MemorySanitizer**
+and origin tracking, and `make test-msan` runs the stubbed test suite
+under MSan (`build/debug-msan*` output dirs; internally this is
+`BUILD=debug SAN=memory`; requires compiler/runtime support, typically
+Clang on Linux). `make test-full` includes `test-msan`. `NO_SAN=1` /
+`NOSAN=1` disables debug-build sanitizers.
 `make gl-repl`/`bench`/the demos stay `BUILD=release`. An explicit
 `BUILD=...` on the command line or in the environment always wins, so
 `make coverage` (BUILD=coverage) and `make test BUILD=release` (a fast

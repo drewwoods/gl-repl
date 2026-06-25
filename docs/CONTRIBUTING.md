@@ -10,6 +10,8 @@ the one-page map of the source tree and who owns what — and skim
 make gl-repl          # main binary (macOS needs cmake for the vendored freeglut;
                       #  Linux: apt install freeglut3-dev)
 make test             # build and run all tests (debug: ASan + UBSan)
+make test-msan        # run stubbed tests with MemorySanitizer, if supported
+make debug-msan       # build everything with MemorySanitizer, if supported
 make test-stubs       # the suite against bundled no-op GL headers — no GL
                       #  dev packages needed, works headless
 make check-c99        # the C99 ratchet (gcc -std=c99 syntax check)
@@ -17,8 +19,11 @@ make check-state-ownership   # the full ownership / contract guard suite
 ```
 
 Test targets default to `BUILD=debug`, which compiles with
-AddressSanitizer + UndefinedBehaviorSanitizer (UB aborts). `make test
-BUILD=release` is the fast unsanitized run.
+AddressSanitizer + UndefinedBehaviorSanitizer (UB aborts). `make
+debug-msan` builds the full target set with MemorySanitizer and origin
+tracking when the compiler/runtime support it; `make test-msan` runs the
+stubbed suite the same way, and is included by `make test-full`. `make
+test BUILD=release` is the fast unsanitized run.
 
 ## The guard suite
 
