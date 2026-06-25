@@ -20,18 +20,13 @@ void write_predef_var_globals(FILE *f) {
     fprintf(f, "\n/* Scene state variables.\n"
                " * Initializers are the live snapshot at export time, so the\n"
                " * program starts in the same state the REPL preview ended in.\n"
-               " * Variables other than t keep mutations from frame to frame. */\n");
+               " * All variables (including t) carry their snapshot. */\n");
     for (int var_idx = 0; var_idx < g_num_predef_vars; var_idx++) {
         const char *name = g_predef_vars[var_idx].name;
-        if (!export_predef_var_persists(var_idx)) {
-            /* `t` is overwritten each frame in display() from glutGet. */
-            fprintf(f, "static float %s = 0.0f;\n", name);
-        } else {
-            char vbuf[32];
-            export_format_decl_float(vbuf, sizeof(vbuf),
-                                     g_predef_vars[var_idx].value);
-            fprintf(f, "static float %s = %s;\n", name, vbuf);
-        }
+        char vbuf[32];
+        export_format_decl_float(vbuf, sizeof(vbuf),
+                                 g_predef_vars[var_idx].value);
+        fprintf(f, "static float %s = %s;\n", name, vbuf);
     }
 }
 

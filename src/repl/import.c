@@ -60,17 +60,17 @@ static const char kWarningPrefix[] = COLOR_WARNING_START "Warning:" COLOR_WARNIN
 
 #define g_import_cfg_bridge (repl_config_bridge())
 
-#define MAX_DEFERRED_VAR_VALUES MAX_PREDEF_VARS
-typedef struct { char name[REPL_PREDEF_NAME_MAX]; float value; } DeferredVar;
-
 typedef struct ImportState ImportState;
 
 typedef struct {
     ReplConfigBag cfg_accumulator;
-    DeferredVar   deferred_var_values[MAX_DEFERRED_VAR_VALUES];
-    int           deferred_var_count;
     ImportState  *owner;
 } ImportWorkspaceAccum;
+
+typedef struct {
+    char name[REPL_PREDEF_NAME_MAX];
+    float value;
+} ImportFloatStash;
 
 #define IMPORT_MAX_PENDING_COMMENTS 16
 
@@ -86,6 +86,8 @@ struct ImportState {
     int  pending_comment_count;
     int  pending_blank_run;
     int  line_no;
+    ImportFloatStash float_stash[MAX_PREDEF_VARS];
+    int              float_stash_count;
 };
 
 /* Public single-line parser batching state. repl_export_load_from_file uses
@@ -97,7 +99,6 @@ static void import_workspace_accum_reset(ImportWorkspaceAccum *accum) {
     if (!accum)
         return;
     repl_config_bag_clear(&accum->cfg_accumulator);
-    accum->deferred_var_count = 0;
 }
 
 static void import_workspace_accum_init(ImportWorkspaceAccum *accum,
@@ -263,56 +264,8 @@ static int parse_scene_name(ImportWorkspaceAccum *accum, const char *args) {
 /* --- var ------------------------------------------------------------------- */
 
 static int parse_var(ImportWorkspaceAccum *accum, const char *args) {
-    const char *p = args;
-    char name[REPL_PREDEF_NAME_MAX];
-    int name_char_idx = 0;
-    while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
-           name_char_idx < (int)sizeof(name) - 1)
-        name[name_char_idx++] = *p++;
-    name[name_char_idx] = '\0';
-    /* Name longer than the predef-name buffer: it was clipped to `name`.
-     * Warn, then skip the overflow so the `= value` still parses and the
-     * (truncated) var registers — in-code references truncate identically,
-     * so the variable stays usable, just under the shorter name. Pre-fix the
-     * leftover chars broke the `=` parse and the whole @var was dropped. */
-    if (*p && (isalnum((unsigned char)*p) || *p == '_')) {
-        import_workspace_warn(accum,
-                              "@var name exceeds the %d-char limit; truncated to '%s'",
-                              REPL_PREDEF_NAME_MAX - 1, name);
-        while (*p && (isalnum((unsigned char)*p) || *p == '_')) p++;
-    }
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (*p != '=') return 0;
-    p++;
-    ExprCtx ctx = { p, NULL, 0, NULL, 0 };
-    float val = repl_eval_expr(&ctx);
-    int idx = repl_eval_find_predef_var_idx(name);
-    if (idx < 0) {
-        char err[REPL_DIAG_TEXT_MAX];
-        err[0] = '\0';
-        if (!repl_eval_declare_predef_var(name, err, sizeof(err))) {
-            /* e.g. reserved name or predef table full. Pre-fix this `err`
-             * was computed and thrown away — surface it. */
-            import_workspace_warn(accum, "@var '%s' could not be declared: %s",
-                                  name, err[0] ? err : "rejected");
-            return 0;
-        }
-        idx = repl_eval_find_predef_var_idx(name);
-        if (idx < 0)
-            return 0;
-    }
-    g_predef_vars_mut[idx].value = val;
-    /* Also defer the value so that if a // @declare marker in the snippet
-     * undeclares and re-declares this var, the value is restored afterwards
-     * (see load_from_file deferred-apply step). */
-    if (accum && accum->owner &&
-        accum->deferred_var_count < MAX_DEFERRED_VAR_VALUES) {
-        repl_copy_string_fits(accum->deferred_var_values[accum->deferred_var_count].name,
-                              sizeof(accum->deferred_var_values[0].name),
-                              name);
-        accum->deferred_var_values[accum->deferred_var_count].value = val;
-        accum->deferred_var_count++;
-    }
+    (void)accum;
+    (void)args;
     return 1;
 }
 
@@ -469,7 +422,7 @@ static int import_parse_cam_line(const char *text) {
  * var of the same name. Declaration/registration itself happens via the
  * `@var` / `@declare` directives — this only restores values. Returns 1
  * when at least one var was updated. */
-static int import_parse_predef_decl(const char *line) {
+static int import_parse_predef_decl_common(const char *line, ImportFloatStash *out_stash, int *out_count, int max_stash) {
     const char *p = line;
     while (*p && isspace((unsigned char)*p)) p++;
     /* Optional canonical `static ` prefix (see format_decl_text). */
@@ -500,12 +453,37 @@ static int import_parse_predef_decl(const char *line) {
         float val = repl_eval_expr(&ctx);
         p = ctx.p;
 
-        /* Look up and update the predefined variable value. */
-        for (int var_idx = 0; var_idx < g_num_predef_vars; var_idx++) {
-            if (strcmp(g_predef_vars[var_idx].name, name) == 0) {
-                g_predef_vars_mut[var_idx].value = val;
+        if (out_stash && out_count) {
+            if (*out_count < max_stash) {
+                repl_copy_string_fits(out_stash[*out_count].name,
+                                      sizeof(out_stash[*out_count].name),
+                                      name);
+                out_stash[*out_count].value = val;
+                (*out_count)++;
                 updated = 1;
-                break;
+
+                /* Register the predefined variable immediately so helper functions
+                 * defined before display() can successfully reference it on compile.
+                 * Skip system scaffold variables like g_angle. */
+                if (strcmp(name, "g_angle") != 0) {
+                    int was_registered = (repl_eval_find_predef_var_idx(name) >= 0);
+                    if (!was_registered) {
+                        repl_eval_declare_predef_var(name, NULL, 0);
+                    }
+                    int idx = repl_eval_find_predef_var_idx(name);
+                    if (idx >= 0) {
+                        g_predef_vars_mut[idx].value = val;
+                    }
+                }
+            }
+        } else {
+            /* Look up and update the predefined variable value. */
+            for (int var_idx = 0; var_idx < g_num_predef_vars; var_idx++) {
+                if (strcmp(g_predef_vars[var_idx].name, name) == 0) {
+                    g_predef_vars_mut[var_idx].value = val;
+                    updated = 1;
+                    break;
+                }
             }
         }
 
@@ -517,6 +495,14 @@ static int import_parse_predef_decl(const char *line) {
         break;
     }
     return updated;
+}
+
+static int import_parse_predef_decl(const char *line) {
+    return import_parse_predef_decl_common(line, NULL, NULL, 0);
+}
+
+static int import_try_stash_predef_decl(ImportState *s, const char *line) {
+    return import_parse_predef_decl_common(line, s->float_stash, &s->float_stash_count, MAX_PREDEF_VARS);
 }
 
 /* 1 if `s` carries a whole-token `@tune` (the trailing knob tag the exporter
@@ -589,18 +575,6 @@ static int parse_snippet_declare(const char *args, ImportState *s) {
         char name[REPL_PREDEF_NAME_MAX];
         memcpy(name, start, (size_t)len);
         name[len] = '\0';
-        /* Optional `=value` rider. */
-        int has_init = 0;
-        float init_val = 0;
-        if (*p == '=') {
-            p++;
-            char *endp = NULL;
-            init_val = strtof(p, &endp);
-            if (endp && endp != p) {
-                has_init = 1;
-                p = endp;
-            }
-        }
         /* Declare the var if not yet registered. Record newly-declared
          * names so we can undeclare them if a downstream step (name
          * copy overflow, source/cmd-store insert failure) bails. */
@@ -614,6 +588,22 @@ static int parse_snippet_declare(const char *args, ImportState *s) {
             newly_declared[new_count][len] = '\0';
             new_count++;
         }
+        int idx = repl_eval_find_predef_var_idx(name);
+        int has_stashed_val = 0;
+        float stashed_val = 0.0f;
+        if (idx >= 0 && s) {
+            for (int si = 0; si < s->float_stash_count; si++) {
+                if (strcmp(s->float_stash[si].name, name) == 0) {
+                    stashed_val = s->float_stash[si].value;
+                    has_stashed_val = 1;
+                    break;
+                }
+            }
+        }
+        if (has_stashed_val && idx >= 0) {
+            g_predef_vars_mut[idx].value = stashed_val;
+        }
+
         if (!repl_copy_string_fits(cmd.payload.decl.names[count],
                                    sizeof(cmd.payload.decl.names[count]), name)) {
             /* Roll back the just-declared entry so the predef table
@@ -627,9 +617,9 @@ static int parse_snippet_declare(const char *args, ImportState *s) {
         }
         off += snprintf(decl_line + off, sizeof(decl_line) - (size_t)off,
                         count == 0 ? " %.*s" : ", %.*s", len, start);
-        if (has_init) {
+        if (has_stashed_val) {
             char vbuf[32];
-            import_format_decl_float(vbuf, sizeof(vbuf), init_val);
+            import_format_decl_float(vbuf, sizeof(vbuf), stashed_val);
             off += snprintf(decl_line + off, sizeof(decl_line) - (size_t)off,
                             " = %s", vbuf);
         }
@@ -1426,6 +1416,7 @@ static void import_state_init(ImportState *s) {
     s->pending_comment_count = 0;
     s->pending_blank_run = 0;
     s->line_no = 0;
+    s->float_stash_count = 0;
 }
 
 static void import_feed_one_line(ImportState *s, const char *line) {
@@ -1695,6 +1686,7 @@ typedef enum {
     IMPORT_LINE_WORKSPACE_HEADER,
     IMPORT_LINE_FUNCTION_BODY,
     IMPORT_LINE_FUNCTION_HEADER,
+    IMPORT_LINE_PRE_SNIPPET_STASH_DECL,
     IMPORT_LINE_SNIPPET_START,
     IMPORT_LINE_PENDING_COMMENT,
     IMPORT_LINE_SNIPPET_END,
@@ -1767,6 +1759,12 @@ static int import_handle_predef_decl(ImportState *s, const char *p,
     return import_try_predef_decl(p);
 }
 
+static int import_handle_stash_predef_decl(ImportState *s, const char *p,
+                                           const char *raw) {
+    (void)raw;
+    return import_try_stash_predef_decl(s, p);
+}
+
 static int import_handle_snippet_body(ImportState *s, const char *p,
                                       const char *raw) {
     (void)raw;
@@ -1796,6 +1794,7 @@ static const ImportLineHandlerSpec IMPORT_PRE_SNIPPET_HANDLERS[] = {
     { IMPORT_LINE_WORKSPACE_HEADER, import_handle_workspace_header },
     { IMPORT_LINE_FUNCTION_BODY,    import_handle_function_body },
     { IMPORT_LINE_FUNCTION_HEADER,  import_handle_function_header },
+    { IMPORT_LINE_PRE_SNIPPET_STASH_DECL, import_handle_stash_predef_decl },
     { IMPORT_LINE_SNIPPET_START,    import_handle_snippet_start },
     { IMPORT_LINE_PENDING_COMMENT,  import_handle_pending_comment },
 };
@@ -2113,15 +2112,7 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
         return 0;
     }
 
-    /* Re-apply deferred @var values.  // @declare markers in the snippet may
-     * have undeclared and re-declared variables (creating CMD_VAR_DECLARE
-     * commands), resetting their values to 0.  Reapply the workspace-header
-     * values here so they are restored correctly after the round-trip. */
-    for (int di = 0; di < state.workspace.deferred_var_count; di++) {
-        int idx = repl_eval_find_predef_var_idx(state.workspace.deferred_var_values[di].name);
-        if (idx >= 0)
-            g_predef_vars_mut[idx].value = state.workspace.deferred_var_values[di].value;
-    }
+    /* Values are restored directly when @declare is parsed from the stash. */
 
     /* Drain @cfg accumulator: hand the parsed (slug, val) bag to the
      * controller-installed bridge, which knows how to apply each slug
