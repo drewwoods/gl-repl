@@ -195,7 +195,7 @@ with no ownership of REPL/editor/render3d/UI/app state.
 
 ## Standalone Demo Binaries (Layer Independence Proofs)
 
-Three binaries under `tools/` build with deliberately slim object
+Several binaries under `tools/` build with deliberately slim object
 lists to make the layer boundaries observable.
 
 > [!WARNING]
@@ -226,6 +226,20 @@ lists to make the layer boundaries observable.
   layout, and tutorial lifecycle edges out of the demo link set. See
   [`ARCHITECTURE.md`](ARCHITECTURE.md#decoupling-and-link-boundaries) for
   the detailed dependency table and guard list.
+- **`make repl_live_demo`** ([`tools/repl_live_demo/repl_live_demo.c`](../tools/repl_live_demo/repl_live_demo.c)) — the
+  *composition* counterpart to `repl_demo`: a one-file host controller that
+  wires the REPL pipeline **and** the variable-panel peer together under a real
+  external-editor workflow. It imports scene `.c` files (edited in vim, watched
+  by mtime, re-imported on save) via `repl_export_load_from_file`, applies each
+  scene's `// camera` block through a demo-local [`ReplExportCameraBridge`](../src/repl/export.h#L84), runs
+  the executor each frame under a manual orbit camera, and drives predefined-
+  variable sliders live. Reuses `repl_demo`'s editor-free `source_document`
+  backend; its link set is `REPL_DEMO_DEP_SRCS` + the four variable-panel TUs,
+  so still no `src/editor` / `src/app` / `src/render3d` / `src/ui/app`.
+  `check-repl-live-demo-no-editor` (the parameterized `repl_demo` no-editor
+  guard) enforces the editor exclusion. The `USE_GL_STUBS=1` build runs the
+  import path in `main()` and exits, doubling as a headless "does this scene
+  parse?" checker.
 - **`make editor_demo`** (`tools/editor_demo/`) — a generic
   plain-text editor demo driven by its *own* input dispatcher
   ([`tools/editor_demo/input.c`](../tools/editor_demo/input.c)) and its *own* File menu

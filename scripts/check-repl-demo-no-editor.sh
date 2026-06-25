@@ -1,25 +1,34 @@
 #!/bin/bash
-# Hard guard: the standalone repl_demo links no editor implementation.
+# Hard guard: a standalone REPL demo links no editor implementation.
+#
+# Parameterized by binary name ($1) and Makefile dep-srcs var name ($2) so the
+# same guard covers repl_demo (default) and repl_live_demo, which both link the
+# REPL pipeline + a static source-document backend but no editor TUs.
+#   $ check-repl-demo-no-editor.sh                                  # repl_demo
+#   $ check-repl-demo-no-editor.sh repl_live_demo REPL_LIVE_DEMO_DEP_SRCS
 #
 # Two checks:
-#   1. REPL_DEMO_DEP_SRCS in the Makefile must not contain src/editor/
-#      or glr_source_document.c — the demo provides its own static
-#      source-document backend.
-#   2. nm repl_demo must not expose editor implementation symbols
+#   1. <dep_var> in the Makefile must not contain src/editor/ or
+#      glr_source_document.c — the demo provides its own static
+#      source-document backend. (REPL_LIVE_DEMO_DEP_SRCS references
+#      $(REPL_DEMO_DEP_SRCS) by expansion, so checking its own block is
+#      enough: the base set is guarded independently by the repl_demo run.)
+#   2. nm <binary> must not expose editor implementation symbols
 #      (editor_buffer_*, editor_state_*, editor_cursor_*, editor_scroll_*,
 #      editor_insert_mode_*, EditorState). The host-effect sinks in
-#      src/repl/core.h are editor-NEUTRAL by name (repl_install_input_reset_sink
-#      etc.) and the demo leaves them unset, so they do not appear here.
+#      src/repl/host_effects.h are editor-NEUTRAL by name and the demo leaves
+#      them unset, so they do not appear here.
 #
 # Phase 7 of feature/source-document-port.md.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 binary="${1:-repl_demo}"
+dep_var="${2:-REPL_DEMO_DEP_SRCS}"
 
-# --- Check 1: Makefile REPL_DEMO_DEP_SRCS ------------------------------------
-bad_srcs="$(awk '
-    /^REPL_DEMO_DEP_SRCS *=/ { in_block = 1 }
+# --- Check 1: Makefile <dep_var> --------------------------------------------
+bad_srcs="$(awk -v var="$dep_var" '
+    $0 ~ ("^" var " *=") { in_block = 1 }
     in_block {
         print
         if ($0 !~ /\\$/) in_block = 0
@@ -27,14 +36,14 @@ bad_srcs="$(awk '
 ' Makefile | grep -E 'src/editor/|glr_source_document\.c' || true)"
 
 if [ -n "$bad_srcs" ]; then
-  echo "ERROR: REPL_DEMO_DEP_SRCS still references editor sources:" >&2
+  echo "ERROR: $dep_var still references editor sources:" >&2
   echo "$bad_srcs" >&2
   echo >&2
   echo "       Replace with tools/repl_demo/source_document.c." >&2
   exit 1
 fi
 
-# --- Check 2: nm repl_demo --------------------------------------------------
+# --- Check 2: nm <binary> ---------------------------------------------------
 if [ ! -x "$binary" ]; then
   echo "repl-demo-no-editor SKIP ($binary not built; run \`make $binary USE_GL_STUBS=1\` first)"
   exit 0
@@ -51,4 +60,4 @@ if [ -n "$hits" ]; then
   exit 1
 fi
 
-echo "repl-demo-no-editor OK (no editor sources in REPL_DEMO_DEP_SRCS; no editor symbols in $binary)"
+echo "repl-demo-no-editor OK (no editor sources in $dep_var; no editor symbols in $binary)"
