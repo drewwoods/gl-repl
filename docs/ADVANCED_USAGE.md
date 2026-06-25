@@ -311,27 +311,27 @@ which choice it selects:
 
 ### `@cfg` backdrop/grid pairing
 
-Some backdrops own a companion grid. The pairing table lives in
-[`src/app/glr_config.c`](../src/app/glr_config.c). Pairing is configured in
-source code, not in an `.ini` file or saved-scene header.
+Some backdrops own a companion grid. The pairing defaults live in
+[`src/app/glr_defaults.h`](../src/app/glr_defaults.h). Pairing is configured
+in source code, not in an `.ini` file or saved-scene header.
 
-To configure pairings, edit the app-side table:
+To configure pairings, edit the defaults macro:
 
 ```c
-static const GlrBackdropGridPair k_backdrop_grid_pairs[] = {
-    { RENDER3D_BACKDROP_AURORA, GRID_THEME_AURORA },
-    { RENDER3D_BACKDROP_SUNSET, GRID_THEME_SYNTHWAVE },
-    { RENDER3D_BACKDROP_POLAR_DAY_SNOW, GRID_THEME_FROZEN },
-    { RENDER3D_BACKDROP_NEBULA, GRID_THEME_STARCHART },
-};
+#define GLR_BACKDROP_GRID_PAIR_DEFAULTS {                                  \
+    { .backdrop = RENDER3D_BACKDROP_AURORA,         .grid = GRID_THEME_AURORA }, \
+    { .backdrop = RENDER3D_BACKDROP_SUNSET,         .grid = GRID_THEME_SYNTHWAVE }, \
+    { .backdrop = RENDER3D_BACKDROP_POLAR_DAY_SNOW, .grid = GRID_THEME_FROZEN }, \
+    { .backdrop = RENDER3D_BACKDROP_NEBULA,         .grid = GRID_THEME_STARCHART }, \
+}
 ```
 
 Add one row per forced pair, using enum names from
 [`src/render3d/themes.h`](../src/render3d/themes.h). For example, if a future
 backdrop should own `GRID_THEME_NEON`, add another row such as
 `{ RENDER3D_BACKDROP_..., GRID_THEME_NEON }`. No saved-scene schema changes
-are needed: the table is runtime config policy, while `@cfg` continues to
-store ordinary `grid` and `backdrop` enum values.
+are needed: `glr_config.c` consumes the defaults macro as runtime config policy,
+while `@cfg` continues to store ordinary `grid` and `backdrop` enum values.
 
 Paired grid targets are valid enum/config values, but they are hidden from
 direct Grid cycling. In practice:

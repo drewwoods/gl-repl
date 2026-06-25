@@ -5,6 +5,7 @@
 #include <string.h>
 #include "app/glr_audio.h"
 #include "app/glr_camera.h"
+#include "app/glr_defaults.h"
 #include "app/glr_state.h"           /* presentation + render storage */
 #include "repl/cfg_baseline.h"
 #include "repl/host_effects.h"
@@ -22,12 +23,8 @@ typedef struct {
     Render3dGridTheme    grid;
 } GlrBackdropGridPair;
 
-static const GlrBackdropGridPair k_backdrop_grid_pairs[] = {
-    { RENDER3D_BACKDROP_AURORA, GRID_THEME_AURORA },
-    { RENDER3D_BACKDROP_SUNSET, GRID_THEME_SYNTHWAVE },
-    { RENDER3D_BACKDROP_POLAR_DAY_SNOW, GRID_THEME_FROZEN },
-    { RENDER3D_BACKDROP_NEBULA, GRID_THEME_STARCHART },
-};
+static const GlrBackdropGridPair k_backdrop_grid_pairs[] =
+    GLR_BACKDROP_GRID_PAIR_DEFAULTS;
 
 static int g_pair_restore_grid_valid = 0;
 static Render3dGridTheme g_pair_restore_grid = GRID_THEME_OFF;
