@@ -1373,8 +1373,8 @@ passes + stripped tess are the load-bearing reason here); reach for
 **Side effects across auxiliary passes.** Both mechanisms can run the program
 more than once per frame (the wireframe's three passes; a depth probe).
 `scene_execute_adapter` in [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c)
-snapshots and restores predef vars / scratch arrays / `ReplRenderState`
-around any pass whose `Render3dExecutePurpose` is *not* the one
+snapshots and restores predef vars / scratch arrays / [`ReplRenderState`](../src/repl/state_views.h#L100)
+around any pass whose [`Render3dExecutePurpose`](../src/render3d/render_types.h#L71) is *not* the one
 side-effecting fill — so `t = t + 1` style assignment animation advances
 exactly once per frame. `RENDER3D_EXEC_MAIN_FILL`, the wireframe's visible-
 line pass, and `RENDER3D_EXEC_WINDING` are the side-effecting fills (they

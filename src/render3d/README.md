@@ -17,7 +17,7 @@ decide *what* geometry exists — that is handed in.
 `src/render3d` is a renderer for **fixed-function OpenGL** — the classic GL 1.x
 style of `glBegin`/`glEnd`, the matrix stack, and `glLight*`/`glMaterial*`
 lighting (no shaders). Its central abstraction is a **geometry callback**:
-the caller fills a [`Render3dRenderConfig`](src/render3d/render_types.h#L130) (camera pose, lighting, grid/axes
+the caller fills a [`Render3dRenderConfig`](render_types.h#L131) (camera pose, lighting, grid/axes
 themes, AA settings, clear color) and supplies an `execute_fn` that draws
 the actual geometry. [`render3d_draw_scene()`](src/render3d/render.h#L135) does everything around that
 callback:
@@ -59,14 +59,14 @@ The demo is the **layer-independence proof** for `src/render3d`: it builds with
 a deliberately slim object list and a geometry callback that knows nothing
 about the REPL. If render3d code ever grew a hard dependency on the editor,
 controller, or UI, this binary would stop linking. It also documents the
-contract by example — `build_config()` shows exactly which [`Render3dRenderConfig`](src/render3d/render_types.h#L130)
+contract by example — `build_config()` shows exactly which [`Render3dRenderConfig`](render_types.h#L131)
 fields must be set (e.g. the grid step tables, or the renderer's grid loop
 never terminates).
 
 ## In the REPL app
 
 Inside the full app this is **layer 4** of the ownership map. The controller
-([`src/app/glr_ctrl.c`](src/app/glr_ctrl.c)) builds a [`Render3dRenderConfig`](src/render3d/render_types.h#L130) from REPL runtime state + view
+([`src/app/glr_ctrl.c`](src/app/glr_ctrl.c)) builds a [`Render3dRenderConfig`](render_types.h#L131) from REPL runtime state + view
 state each frame, then calls [`glr_camera_load_modelview()`](src/app/glr_camera.h#L126) and
 [`render3d_draw_scene()`](src/render3d/render.h#L135) once per accumulation-jitter sample (with its own
 [`Render3dState`](src/render3d/render.h#L95)). The geometry callback is the REPL executor
@@ -87,7 +87,7 @@ applies a render3d-local frustum shift for jitter.
 | File | Responsibility |
 |---|---|
 | [`render.c`](src/render3d/render.c) / `.h` | Frame orchestration: viewport, clear, projection, accumulation loop, geometry-callback hook, overlay/HUD passes |
-| [`render_types.h`](src/render3d/render_types.h) | [`Render3dRgba`](src/render3d/render_types.h#L59), [`Render3dRenderConfig`](src/render3d/render_types.h#L130), frame-context types — the renderer contract |
+| [`render_types.h`](src/render3d/render_types.h) | [`Render3dRgba`](src/render3d/render_types.h#L59), [`Render3dRenderConfig`](render_types.h#L131), frame-context types — the renderer contract |
 | [`grid.c`](src/render3d/grid.c) / `.h` | Reference-grid rendering and grid themes (incl. ocean/ruler passes) |
 | [`axes.c`](src/render3d/axes.c) / `.h` | Axis rendering and axis themes |
 | [`render3d_transition.c`](src/render3d/render3d_transition.c) / `.h` | Pure grid/axes show↔hide fade state machine (no GL) |
