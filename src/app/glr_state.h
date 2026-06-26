@@ -52,8 +52,9 @@ typedef struct {
     int compositor_filter_mode;
     int highlight_current_poly;
     /* Winding-visualization view: paint front faces green, back (inside-out)
-     * faces red so winding mistakes are visible. Session-level like the
-     * post-process filters — not reset per example, not saved in @cfg. */
+     * faces red so winding mistakes are visible. Config-backed: saved in full
+     * workspace @cfg headers, but intentionally outside the per-example scene
+     * snapshot/default-reset subset so F12 example switches do not change it. */
     int winding_view;
     Render3dViewMode ortho_mode;
     int wrap_at_comma;

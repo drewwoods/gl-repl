@@ -474,7 +474,7 @@ the live arrays.
 
 ### 5.3 Execute — flat program to GL
 
-[`repl_execute_program()`](src/repl/executor.h#L156) ([`executor.c`](src/repl/executor.c)) walks `flat_cmds[0..count)`
+[`repl_execute_program()`](executor.h#L172) ([`executor.c`](src/repl/executor.c)) walks `flat_cmds[0..count)`
 emitting GL. Key behaviors:
 
 - **Per-frame re-evaluation.** `has_vars` commands re-evaluate their
