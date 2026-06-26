@@ -25,6 +25,7 @@
 /* @cfg vertex_outlines = 1 */
 /* @cfg vertex_points = 1 */
 /* @cfg poly_highlight = 1 */
+/* @cfg winding = 0 */
 /* @cfg variable_panel = 1 */
 /* @cfg compute_profile = 0 */
 /* @cfg memory_profile = 0 */

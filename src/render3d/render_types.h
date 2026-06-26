@@ -73,7 +73,8 @@ typedef enum Render3dExecutePurpose {
     RENDER3D_EXEC_DEPTH_PROBE,     /* render3d_probe_eye_dist feedback walk */
     RENDER3D_EXEC_WIREFRAME_HIDDEN_LINES, /* hidden-line effect: all edges */
     RENDER3D_EXEC_WIREFRAME_DEPTH_FILL,   /* hidden-line effect: depth-only fill */
-    RENDER3D_EXEC_WIREFRAME_VISIBLE_LINES /* hidden-line effect: visible edges */
+    RENDER3D_EXEC_WIREFRAME_VISIBLE_LINES, /* hidden-line effect: visible edges */
+    RENDER3D_EXEC_WINDING                  /* winding view: two-sided front/back fill */
 } Render3dExecutePurpose;
 
 typedef enum Render3dWireframeMode {
@@ -238,6 +239,13 @@ typedef struct Render3dRenderConfig {
      * Runtime-only (Ctrl+N); never persisted via @cfg. */
     Render3dPostFilterMode post_filter_mode;
     Render3dWireframeMode wireframe;
+    /* Winding-visualization view: replace the normal user-color fill with a
+     * single two-sided-lighting pass that paints front-facing polygons green
+     * and back-facing (inside-out / mis-wound) polygons red, so winding
+     * mistakes are visible. The caller's execute_fn must install a state
+     * filter that suppresses the program's own material/lighting/cull
+     * commands (see ReplExecutionOptions.state_filter). 0 = off. */
+    int winding_view;
 
     /* --- Grid and axes ---
      * grid_theme/axes_theme are the *effective* (machine `current`)

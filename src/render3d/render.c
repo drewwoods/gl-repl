@@ -671,10 +671,66 @@ static void render3d_pass_hidden_line_wireframe(const Render3dRenderConfig *conf
     glPopAttrib();
 }
 
+static void render3d_pass_winding(const Render3dRenderConfig *config) {
+    /* Winding visualization: one two-sided-lighting pass. GL selects the
+     * front material for front-facing polygons and the back material for
+     * back-facing ones — purely from window-space winding under the active
+     * glFrontFace — so flipped / inside-out faces read red against green.
+     * The caller's execute_fn must install a state filter that suppresses
+     * the program's own material / lighting / cull / color-material commands
+     * so this setup survives the geometry walk. */
+    static const GLfloat front_rgba[4]    = { 0.16f, 0.80f, 0.32f, 1.0f }; /* green */
+    static const GLfloat back_rgba[4]     = { 0.88f, 0.20f, 0.18f, 1.0f }; /* red   */
+    static const GLfloat model_ambient[4] = { 0.65f, 0.65f, 0.65f, 1.0f };
+    static const GLfloat light_diffuse[4] = { 0.55f, 0.55f, 0.55f, 1.0f };
+    static const GLfloat light_dir[4]     = { 0.3f, 0.5f, 1.0f, 0.0f }; /* eye-space */
+
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
+    glDepthMask(GL_TRUE);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glDisable(GL_BLEND);
+    glDisable(GL_CULL_FACE);       /* both sides must rasterize to read winding */
+    glDisable(GL_COLOR_MATERIAL);  /* materials, not glColor, drive the color */
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    glShadeModel(GL_SMOOTH);
+    glEnable(GL_NORMALIZE);
+
+    glEnable(GL_LIGHTING);
+    glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+    glLightModelfv(GL_LIGHT_MODEL_AMBIENT, model_ambient);
+
+    /* One headlight fixed to the eye gives gentle shape-revealing shading
+     * without tinting the face colors. Position it under an identity
+     * modelview so it tracks the camera rather than the world; the other
+     * lights are forced off so user light themes can't recolor the view. */
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+    glEnable(GL_LIGHT0);
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, light_diffuse);
+    glLightfv(GL_LIGHT0, GL_POSITION, light_dir);
+    glPopMatrix();
+    glDisable(GL_LIGHT1);
+    glDisable(GL_LIGHT2);
+    glDisable(GL_LIGHT3);
+
+    glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, front_rgba);
+    glMaterialfv(GL_BACK,  GL_AMBIENT_AND_DIFFUSE, back_rgba);
+
+    render3d_execute_user_geometry(config, RENDER3D_EXEC_WINDING);
+
+    glPopAttrib();
+}
+
 static void render3d_pass_fill(const Render3dRenderConfig *config) {
     prof_begin(PROF_RENDER3D_FILL);
     if (config->wireframe == RENDER3D_WIREFRAME_HIDDEN)
         render3d_pass_hidden_line_wireframe(config);
+    else if (config->winding_view)
+        render3d_pass_winding(config);
     else
         render3d_execute_user_geometry(config, RENDER3D_EXEC_MAIN_FILL);
     prof_accum_end(PROF_RENDER3D_FILL);
