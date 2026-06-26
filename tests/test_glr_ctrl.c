@@ -1711,6 +1711,29 @@ static void seed_swatch_fixture(const char *line) {
     editor_load_line_to_input(0);
 }
 
+static void seed_swatch_assignment_fixture(void) {
+    glr_ctrl_reset_all();
+    repl_eval_init_predef_vars();
+    ui_state_viewport_set_size(800, 600);
+    editor_insert_mode_set(0);
+    editor_feed_line("float x;");
+    editor_feed_line("x = 5;");
+    editor_state_edit_line_set(1);
+    editor_load_line_to_input(1);
+}
+
+static void seed_swatch_loop_fixture(void) {
+    glr_ctrl_reset_all();
+    repl_eval_init_predef_vars();
+    ui_state_viewport_set_size(800, 600);
+    editor_insert_mode_set(0);
+    editor_feed_line("for(i, 0, 10) {");
+    editor_feed_line("glVertex3f(1, 2*i, 3);");
+    editor_feed_line("}");
+    editor_state_edit_line_set(1);
+    editor_load_line_to_input(1);
+}
+
 static void test_numeric_swatch_step_commits_line_and_undoes(void) {
     UiHit hit_up   = ui_hit_none();
     UiHit hit_down = ui_hit_none();
@@ -1778,6 +1801,117 @@ static void test_numeric_swatch_step_commits_line_and_undoes(void) {
     buf = editor_buffer_view();
     ASSERT_STR("undo×3 restores the original line",
                editor_buffer_view_line(buf, 0), before);
+}
+
+static void test_numeric_swatch_step_commits_bare_assignment(void) {
+    EditorBufferView buf;
+    EditorInputView in;
+    UiRenderSnapshot snap;
+    const char *five;
+    int x_idx;
+
+    printf("--- imrepl_ctrl numeric swatch bare assignment ---\n");
+
+    seed_swatch_assignment_fixture();
+    in = editor_state_input();
+    five = strchr(in.input, '5');
+    ASSERT_TRUE("bare assignment swatch seed has rhs", five != NULL);
+    if (five)
+        editor_cursor_pos_set((int)(five - in.input));
+
+    memset(&snap, 0, sizeof snap);
+    glr_ctrl_build_ui_snapshot(&snap);
+    ASSERT_INT("bare assignment swatch visible", snap.numeric_swatch.visible, 1);
+    ASSERT_FLOAT("bare assignment swatch value", snap.numeric_swatch.value, 5.0f);
+
+    ASSERT_INT("bare assignment swatch apply",
+               editor_commit_apply_swatch_change(1, 1, 1.0f), 1);
+
+    buf = editor_buffer_view();
+    ASSERT_STR("bare assignment swatch rewrites line",
+               editor_buffer_view_line(buf, 1), "  x = 5.05;");
+
+    x_idx = repl_eval_find_predef_var_idx("x");
+    ASSERT_TRUE("bare assignment swatch x declared", x_idx >= 0);
+    if (x_idx >= 0)
+        ASSERT_FLOAT("bare assignment swatch updates x",
+                     g_predef_vars[x_idx].value, 5.05f);
+}
+
+static void test_numeric_swatch_visible_inside_loop_expr(void) {
+    UiRenderSnapshot snap;
+    EditorInputView in;
+    const char *one;
+    const char *two;
+    const char *three;
+
+    printf("--- imrepl_ctrl numeric swatch loop expr visibility ---\n");
+
+    seed_swatch_loop_fixture();
+    in = editor_state_input();
+    one = strchr(in.input, '1');
+    ASSERT_TRUE("loop swatch seed has first arg", one != NULL);
+    if (one) {
+        editor_cursor_pos_set((int)(one - in.input));
+        memset(&snap, 0, sizeof snap);
+        glr_ctrl_build_ui_snapshot(&snap);
+        ASSERT_INT("first arg swatch visible inside loop",
+                   snap.numeric_swatch.visible, 1);
+        ASSERT_FLOAT("first arg swatch value inside loop",
+                     snap.numeric_swatch.value, 1.0f);
+    }
+
+    seed_swatch_loop_fixture();
+    in = editor_state_input();
+    two = strstr(in.input, "2*i");
+    ASSERT_TRUE("loop swatch seed has literal multiplied by i", two != NULL);
+    if (two) {
+        editor_cursor_pos_set((int)(two - in.input));
+        memset(&snap, 0, sizeof snap);
+        glr_ctrl_build_ui_snapshot(&snap);
+        ASSERT_INT("expr literal swatch visible inside loop",
+                   snap.numeric_swatch.visible, 1);
+        ASSERT_FLOAT("expr literal swatch value inside loop",
+                     snap.numeric_swatch.value, 2.0f);
+    }
+
+    seed_swatch_loop_fixture();
+    in = editor_state_input();
+    three = strrchr(in.input, '3');
+    ASSERT_TRUE("loop swatch seed has last arg", three != NULL);
+    if (three) {
+        editor_cursor_pos_set((int)(three - in.input));
+        memset(&snap, 0, sizeof snap);
+        glr_ctrl_build_ui_snapshot(&snap);
+        ASSERT_INT("last arg swatch visible inside loop",
+                   snap.numeric_swatch.visible, 1);
+        ASSERT_FLOAT("last arg swatch value inside loop",
+                     snap.numeric_swatch.value, 3.0f);
+    }
+}
+
+static void test_numeric_swatch_step_commits_loop_expr_literal(void) {
+    EditorBufferView buf;
+    EditorInputView in;
+    const char *two;
+    const char *line;
+
+    printf("--- imrepl_ctrl numeric swatch loop expr commit ---\n");
+
+    seed_swatch_loop_fixture();
+    in = editor_state_input();
+    two = strstr(in.input, "2*i");
+    ASSERT_TRUE("loop expr swatch seed has literal", two != NULL);
+    if (two)
+        editor_cursor_pos_set((int)(two - in.input));
+
+    ASSERT_INT("loop expr swatch apply",
+               editor_commit_apply_swatch_change(1, 1, 1.0f), 1);
+
+    buf = editor_buffer_view();
+    line = editor_buffer_view_line(buf, 1);
+    ASSERT_STR("loop expr swatch preserves indentation",
+               line, "    glVertex3f(1, 2.05*i, 3);");
 }
 
 static void test_numeric_swatch_no_op_outside_numeric_arg(void) {
@@ -2524,6 +2658,9 @@ int main(void) {
     test_replay_focus_vertex_affecting_transforms();
     test_replay_focus_glut_solid_affecting_transforms();
     test_numeric_swatch_step_commits_line_and_undoes();
+    test_numeric_swatch_step_commits_bare_assignment();
+    test_numeric_swatch_visible_inside_loop_expr();
+    test_numeric_swatch_step_commits_loop_expr_literal();
     test_numeric_swatch_no_op_outside_numeric_arg();
     test_numeric_swatch_no_op_in_insert_mode();
     test_numeric_swatch_scale_coarse_and_fine();

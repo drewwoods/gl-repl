@@ -1244,7 +1244,16 @@ static void run_tests(void) {
         TEST_ASSERT_FLOAT(&g_harness, "color arg value", r.value, 0.8f, 1e-4f);
 
         r = repl_eval_numeric_arg_at_cursor("glVertex3f(1+2, 3.0, 4.0)", 12);
-        ASSERT_TRUE("expr arg not found", !r.found);
+        ASSERT_TRUE("expr arg first literal found", r.found);
+        ASSERT_TRUE("expr arg first literal start", r.arg_start == 11);
+        ASSERT_TRUE("expr arg first literal end", r.arg_end == 12);
+        TEST_ASSERT_FLOAT(&g_harness, "expr arg first literal value", r.value, 1.0f, 1e-4f);
+
+        r = repl_eval_numeric_arg_at_cursor("glVertex3f(1+2, 3.0, 4.0)", 13);
+        ASSERT_TRUE("expr arg second literal found", r.found);
+        ASSERT_TRUE("expr arg second literal start", r.arg_start == 13);
+        ASSERT_TRUE("expr arg second literal end", r.arg_end == 14);
+        TEST_ASSERT_FLOAT(&g_harness, "expr arg second literal value", r.value, 2.0f, 1e-4f);
 
         r = repl_eval_numeric_arg_at_cursor("glVertex3f(sin(1), 3.0, 4.0)", 14);
         ASSERT_TRUE("func call arg not found", !r.found);
@@ -1260,11 +1269,60 @@ static void run_tests(void) {
         ASSERT_TRUE("negative arg found", r.found);
         TEST_ASSERT_FLOAT(&g_harness, "negative arg value", r.value, -2.5f, 1e-4f);
 
+        r = repl_eval_numeric_arg_at_cursor("x = 5", 4);
+        ASSERT_TRUE("bare assignment rhs found", r.found);
+        ASSERT_TRUE("bare assignment rhs start", r.arg_start == 4);
+        ASSERT_TRUE("bare assignment rhs end", r.arg_end == 5);
+        TEST_ASSERT_FLOAT(&g_harness, "bare assignment rhs value", r.value, 5.0f, 1e-4f);
+
+        r = repl_eval_numeric_arg_at_cursor("x = 3.14", 5);
+        ASSERT_TRUE("bare decimal found", r.found);
+        ASSERT_TRUE("bare decimal start", r.arg_start == 4);
+        ASSERT_TRUE("bare decimal end", r.arg_end == 8);
+        TEST_ASSERT_FLOAT(&g_harness, "bare decimal value", r.value, 3.14f, 1e-4f);
+
+        r = repl_eval_numeric_arg_at_cursor("x = -2.5", 5);
+        ASSERT_TRUE("bare negative found", r.found);
+        ASSERT_TRUE("bare negative start", r.arg_start == 4);
+        ASSERT_TRUE("bare negative end", r.arg_end == 8);
+        TEST_ASSERT_FLOAT(&g_harness, "bare negative value", r.value, -2.5f, 1e-4f);
+
+        r = repl_eval_numeric_arg_at_cursor("x = 1 + 2", 9);
+        ASSERT_TRUE("bare second operand found", r.found);
+        ASSERT_TRUE("bare second operand start", r.arg_start == 8);
+        ASSERT_TRUE("bare second operand end", r.arg_end == 9);
+        TEST_ASSERT_FLOAT(&g_harness, "bare second operand value", r.value, 2.0f, 1e-4f);
+
+        r = repl_eval_numeric_arg_at_cursor("x = 1 + -3", 10);
+        ASSERT_TRUE("bare signed second operand found", r.found);
+        ASSERT_TRUE("bare signed second operand start", r.arg_start == 8);
+        ASSERT_TRUE("bare signed second operand end", r.arg_end == 10);
+        TEST_ASSERT_FLOAT(&g_harness, "bare signed second operand value", r.value, -3.0f, 1e-4f);
+
+        r = repl_eval_numeric_arg_at_cursor("a = 2 * sin(t)", 4);
+        ASSERT_TRUE("bare coefficient found", r.found);
+        ASSERT_TRUE("bare coefficient start", r.arg_start == 4);
+        ASSERT_TRUE("bare coefficient end", r.arg_end == 5);
+        TEST_ASSERT_FLOAT(&g_harness, "bare coefficient value", r.value, 2.0f, 1e-4f);
+
         r = repl_eval_numeric_arg_at_cursor("hello world", 3);
         ASSERT_TRUE("no parens not found", !r.found);
 
+        r = repl_eval_numeric_arg_at_cursor("x = sin(t)", 8);
+        ASSERT_TRUE("bare variable not found", !r.found);
+
         r = repl_eval_numeric_arg_at_cursor("glVertex3f(1.0, 2.0, 3.0)", 0);
         ASSERT_TRUE("cursor before paren not found", !r.found);
+
+        r = repl_eval_numeric_arg_at_cursor("glVertex3f(1.0, 2.0, 3.0)", 8);
+        ASSERT_TRUE("digit in identifier not found", !r.found);
+
+        {
+            const char *line = "x = 5 // offset 9";
+            const char *nine = strchr(line, '9');
+            r = repl_eval_numeric_arg_at_cursor(line, (int)(nine - line));
+            ASSERT_TRUE("trailing comment number not found", !r.found);
+        }
 
         /* Boundary positions inside an arg slot: in front of the digits,
          * in the middle, and after — with and without surrounding

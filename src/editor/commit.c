@@ -1171,6 +1171,68 @@ int editor_split_decl_at_cursor(void) {
     return 1;
 }
 
+static int editor_commit_format_swatch_source_text(const char *parsed_text,
+                                                   const char *edited_input,
+                                                   char *out,
+                                                   int out_sz) {
+    char body[MAX_LINE_LEN];
+    const char *body_start;
+    char *comment;
+    int body_len;
+    int indent_len = 0;
+    int n;
+
+    if (!out || out_sz <= 0)
+        return 0;
+    out[0] = '\0';
+
+    if (!parsed_text)
+        parsed_text = "";
+    while (parsed_text[indent_len] == ' ' ||
+           parsed_text[indent_len] == '\t')
+        indent_len++;
+    if (indent_len >= out_sz)
+        return 0;
+
+    body_start = edited_input ? edited_input : "";
+    while (*body_start && isspace((unsigned char)*body_start))
+        body_start++;
+    body_len = (int)strlen(body_start);
+    while (body_len > 0 &&
+           (body_start[body_len - 1] == ';' ||
+            isspace((unsigned char)body_start[body_len - 1])))
+        body_len--;
+    if (body_len <= 0 || body_len >= (int)sizeof body)
+        return 0;
+    memcpy(body, body_start, (size_t)body_len);
+    body[body_len] = '\0';
+
+    comment = strstr(body, "//");
+    if (comment) {
+        int code_len = (int)(comment - body);
+        int comment_len;
+        while (code_len > 0 &&
+               (body[code_len - 1] == ';' ||
+                isspace((unsigned char)body[code_len - 1])))
+            code_len--;
+        comment_len = (int)strlen(comment);
+        while (comment_len > 0 &&
+               isspace((unsigned char)comment[comment_len - 1]))
+            comment_len--;
+        n = snprintf(out, (size_t)out_sz, "%.*s%.*s; %.*s",
+                     indent_len, parsed_text, code_len, body,
+                     comment_len, comment);
+    } else {
+        while (body_len > 0 &&
+               (body[body_len - 1] == ';' ||
+                isspace((unsigned char)body[body_len - 1])))
+            body_len--;
+        n = snprintf(out, (size_t)out_sz, "%.*s%.*s;",
+                     indent_len, parsed_text, body_len, body);
+    }
+    return n >= 0 && n < out_sz;
+}
+
 int editor_commit_apply_swatch_change(int edit_line, int direction, float scale) {
     EditorInputView in = editor_state_input();
     ReplNumericArgAtCursor d;
@@ -1182,6 +1244,7 @@ int editor_commit_apply_swatch_change(int edit_line, int direction, float scale)
     ReplParsedLine pl;
     ReplCompiledChange change;
     int text_len;
+    char source_line[MAX_LINE_LEN];
 
     d = repl_eval_numeric_arg_at_cursor(in.input, in.cursor_pos);
     if (!d.found) return 0;
@@ -1196,31 +1259,62 @@ int editor_commit_apply_swatch_change(int edit_line, int direction, float scale)
 
     {
         ReplCompileContext ctx = editor_compile_context_live();
-        ReplParseContext parse_ctx = {
-            .source_line_idx = edit_line,
-            .err_buf = parse_err,
-            .err_sz = (int)sizeof parse_err,
-            .func_aliases = ctx.func_aliases,
-            .source_scope = &ctx.source_scope,
-        };
-        if (!repl_parser_parse_command_ctx(new_line, &pl, &parse_ctx)) {
+        ReplCompileResult cr =
+            repl_compile_float_decl(new_line, &ctx, &change,
+                                    parse_err, (int)sizeof parse_err);
+        if (cr == REPL_COMPILE_OK && change.kind == REPL_COMPILED_NO_CHANGE) {
+            cr = repl_compile_var_assign(new_line, &ctx, &change,
+                                         parse_err, (int)sizeof parse_err);
+        }
+        if (cr == REPL_COMPILE_ERROR) {
             if (parse_err[0]) repl_set_status(parse_err);
             return 0;
         }
-    }
-    if (pl.cmd.type == CMD_COMMENT) return 0;
 
-    repl_compiled_change_init(&change);
-    change.kind = REPL_COMPILED_REPLACE_ONE;
-    change.pos = edit_line;
-    change.count = 1;
-    change.cmds[0] = pl.cmd;
-    text_len = (int)strlen(pl.text);
-    if (text_len >= MAX_LINE_LEN) text_len = MAX_LINE_LEN - 1;
-    memcpy(change.text[0], pl.text, (size_t)text_len);
-    change.text[0][text_len] = '\0';
-    /* pl.text already carries new_line's trailing `// ...` comment (the
-     * parser re-attaches it), so the swatch commit preserves it. */
+        if (change.kind == REPL_COMPILED_NO_CHANGE) {
+            ExprVar vis_vars[MAX_EXPR_VARS];
+            int num_vis_vars;
+            memset(vis_vars, 0, sizeof vis_vars);
+            num_vis_vars =
+                collect_visible_vars_in(ctx.text, ctx.document_cmds,
+                                        ctx.document_count, edit_line,
+                                        vis_vars, MAX_EXPR_VARS, NULL);
+            ReplParseContext parse_ctx = {
+                .source_line_idx = edit_line,
+                .vars = vis_vars,
+                .num_vars = num_vis_vars,
+                .err_buf = parse_err,
+                .err_sz = (int)sizeof parse_err,
+                .func_aliases = ctx.func_aliases,
+                .source_scope = &ctx.source_scope,
+            };
+            if (!repl_parser_parse_command_ctx(new_line, &pl, &parse_ctx)) {
+                if (parse_err[0]) repl_set_status(parse_err);
+                return 0;
+            }
+            if (pl.cmd.type == CMD_COMMENT) return 0;
+
+            repl_compiled_change_init(&change);
+            change.kind = REPL_COMPILED_REPLACE_ONE;
+            change.pos = edit_line;
+            change.count = 1;
+            change.cmds[0] = pl.cmd;
+            if (!editor_commit_format_swatch_source_text(pl.text, new_line,
+                                                         source_line,
+                                                         (int)sizeof source_line))
+                return 0;
+            text_len = (int)strlen(source_line);
+            if (text_len >= MAX_LINE_LEN) text_len = MAX_LINE_LEN - 1;
+            memcpy(change.text[0], source_line, (size_t)text_len);
+            change.text[0][text_len] = '\0';
+            /* Keep the user's source expression text. The parser validates the
+             * command and builds pl.cmd, but its canonical text stores evaluated
+             * numeric args, which would collapse loop expressions like 2*i. */
+        } else if (change.kind != REPL_COMPILED_REPLACE_ONE ||
+                   change.pos != edit_line) {
+            return 0;
+        }
+    }
 
     if (editor_commit_apply_external_change(&change, 1, 0)) {
         editor_load_line_to_input(edit_line);

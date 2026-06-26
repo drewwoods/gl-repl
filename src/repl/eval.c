@@ -1410,12 +1410,157 @@ static int is_pure_numeric_literal(const char *s, int len) {
     return i == len;
 }
 
+static int is_swatch_numeric_scan_char(char c) {
+    return isdigit((unsigned char)c) || c == '.' || c == 'e' || c == 'E';
+}
+
+static int swatch_sign_has_unary_context(const char *src, int sign_pos) {
+    int i = sign_pos - 1;
+    while (i >= 0 && isspace((unsigned char)src[i]))
+        i--;
+    if (i < 0)
+        return 1;
+    switch (src[i]) {
+    case '=': case '+': case '-': case '*': case '/': case '%':
+    case '(': case ',': case '^':
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static int swatch_cursor_char_can_seed(const char *src, int idx, int code_len) {
+    char c;
+    if (idx < 0 || idx >= code_len)
+        return 0;
+    c = src[idx];
+    if (isdigit((unsigned char)c) || c == 'e' || c == 'E')
+        return 1;
+    if (c == '.') {
+        return (idx + 1 < code_len && isdigit((unsigned char)src[idx + 1])) ||
+               (idx > 0 && isdigit((unsigned char)src[idx - 1]));
+    }
+    if (c == '+' || c == '-') {
+        if (idx > 0 && (src[idx - 1] == 'e' || src[idx - 1] == 'E'))
+            return 1;
+        return swatch_sign_has_unary_context(src, idx) &&
+               idx + 1 < code_len &&
+               (isdigit((unsigned char)src[idx + 1]) || src[idx + 1] == '.');
+    }
+    return 0;
+}
+
+static int swatch_numeric_span_has_token_boundaries(const char *src,
+                                                    int lo,
+                                                    int hi,
+                                                    int code_len) {
+    if (lo > 0 && repl_eval_is_ident_continue((unsigned char)src[lo - 1]))
+        return 0;
+    if (hi < code_len &&
+        repl_eval_is_ident_continue((unsigned char)src[hi]))
+        return 0;
+    return 1;
+}
+
+static int swatch_numeric_result_from_span(const char *src,
+                                           int lo,
+                                           int hi,
+                                           ReplNumericArgAtCursor *out) {
+    char literal[MAX_LINE_LEN];
+    int span_len = hi - lo;
+    ExprCtx ctx;
+
+    if (!out || span_len <= 0 || span_len >= (int)sizeof(literal))
+        return 0;
+    if (!is_pure_numeric_literal(src + lo, span_len))
+        return 0;
+
+    memcpy(literal, src + lo, (size_t)span_len);
+    literal[span_len] = '\0';
+    ctx.p = literal;
+    ctx.vars = NULL;
+    ctx.num_vars = 0;
+    ctx.err = NULL;
+    ctx.err_sz = 0;
+
+    out->found = 1;
+    out->arg_start = lo;
+    out->arg_end = hi;
+    out->value = repl_eval_expr(&ctx);
+    return 1;
+}
+
+static int swatch_direct_numeric_arg_at_cursor(const char *src,
+                                               int cursor,
+                                               int code_len,
+                                               ReplNumericArgAtCursor *out) {
+    int seed = -1;
+    int lo, hi;
+
+    if (cursor > code_len)
+        return 0;
+
+    if (cursor < code_len && swatch_cursor_char_can_seed(src, cursor, code_len))
+        seed = cursor;
+    else if (cursor > 0 &&
+             swatch_cursor_char_can_seed(src, cursor - 1, code_len))
+        seed = cursor - 1;
+    if (seed < 0)
+        return 0;
+
+    lo = seed;
+    while (lo > 0) {
+        char c = src[lo - 1];
+        if (is_swatch_numeric_scan_char(c)) {
+            lo--;
+            continue;
+        }
+        if ((c == '+' || c == '-') && lo >= 2 &&
+            (src[lo - 2] == 'e' || src[lo - 2] == 'E')) {
+            lo--;
+            continue;
+        }
+        break;
+    }
+    if (lo > 0 && (src[lo - 1] == '+' || src[lo - 1] == '-') &&
+        swatch_sign_has_unary_context(src, lo - 1))
+        lo--;
+
+    hi = seed + 1;
+    while (hi < code_len) {
+        char c = src[hi];
+        if (is_swatch_numeric_scan_char(c)) {
+            hi++;
+            continue;
+        }
+        if ((c == '+' || c == '-') && hi > lo &&
+            (src[hi - 1] == 'e' || src[hi - 1] == 'E')) {
+            hi++;
+            continue;
+        }
+        break;
+    }
+
+    if (!swatch_numeric_span_has_token_boundaries(src, lo, hi, code_len))
+        return 0;
+    return swatch_numeric_result_from_span(src, lo, hi, out);
+}
+
 ReplNumericArgAtCursor repl_eval_numeric_arg_at_cursor(const char *src,
                                                        int cursor) {
     ReplNumericArgAtCursor result = { 0, 0, 0, 0.0f };
+    const char *comment;
+    int code_len;
     if (!src || cursor < 0) return result;
     int len = (int)strlen(src);
     if (cursor > len) return result;
+    comment = repl_line_trailing_comment(src);
+    code_len = comment ? (int)(comment - src) : len;
+
+    if (swatch_direct_numeric_arg_at_cursor(src, cursor, code_len, &result))
+        return result;
+    if (cursor > code_len)
+        return result;
 
     /* Find innermost enclosing '(' by scanning left. */
     int depth = 0;
@@ -1433,11 +1578,14 @@ ReplNumericArgAtCursor repl_eval_numeric_arg_at_cursor(const char *src,
     /* Walk top-level slots from paren_pos+1 using repl_scan_next_arg_delim. */
     const char *base = src;
     const char *p = base + paren_pos + 1;
-    while (*p && *p != ')') {
+    while ((int)(p - base) < code_len && *p && *p != ')') {
         const char *slot_start = p;
         const char *delim = repl_scan_next_arg_delim(p);
         int s_off = (int)(slot_start - base);
         int e_off = (int)(delim - base);
+
+        if (e_off > code_len)
+            e_off = code_len;
 
         if (cursor >= s_off && cursor <= e_off) {
             /* Trim whitespace. */
@@ -1446,23 +1594,8 @@ ReplNumericArgAtCursor repl_eval_numeric_arg_at_cursor(const char *src,
             while (hi > lo && isspace((unsigned char)base[hi - 1])) hi--;
             if (lo >= hi) return result;
 
-            if (!is_pure_numeric_literal(base + lo, hi - lo))
+            if (!swatch_numeric_result_from_span(base, lo, hi, &result))
                 return result;
-
-            const char *ep = base + lo;
-            ExprCtx ctx = {
-                .p = ep,
-                .vars = NULL,
-                .num_vars = 0,
-                .err = NULL,
-                .err_sz = 0,
-            };
-            float val = repl_eval_expr(&ctx);
-
-            result.found = 1;
-            result.arg_start = lo;
-            result.arg_end = hi;
-            result.value = val;
             return result;
         }
 
