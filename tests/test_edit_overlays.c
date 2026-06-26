@@ -767,7 +767,7 @@ static void test_vertex_label_scope(void) {
     VertexLabelCtx one;
     memset(&one, 0, sizeof(one));
     one.mode = OVERLAY_VERTEX_LABEL_INDEX;
-    one.label_options = 0;
+    one.label_options = OVERLAY_VERTEX_LABEL_SCOPE_ONE_INSTANCE;
     memcpy(one.proj, id, sizeof(id));
     one.vw = 1024;
     one.vh = 768;
@@ -784,7 +784,7 @@ static void test_vertex_label_scope(void) {
     VertexLabelCtx all;
     memset(&all, 0, sizeof(all));
     all.mode = OVERLAY_VERTEX_LABEL_INDEX;
-    all.label_options = 1;
+    all.label_options = OVERLAY_VERTEX_LABEL_SCOPE_ALL_INSTANCES;
     memcpy(all.proj, id, sizeof(id));
     all.vw = 1024;
     all.vh = 768;
@@ -803,7 +803,7 @@ static void test_vertex_label_scope(void) {
     VertexLabelCtx at_vert;
     memset(&at_vert, 0, sizeof(at_vert));
     at_vert.mode = OVERLAY_VERTEX_LABEL_INDEX;
-    at_vert.label_options = 2;
+    at_vert.label_options = OVERLAY_VERTEX_LABEL_SCOPE_AT_VERTEX;
     memcpy(at_vert.proj, id, sizeof(id));
     at_vert.vw = 1024;
     at_vert.vh = 768;
@@ -896,7 +896,7 @@ static void test_vertex_numbers_use_source_begin_block(void) {
     TraceLog log;
     trace_begin();
     edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX, 0,
-                                        /*label_options=*/1);
+                                        OVERLAY_VERTEX_LABEL_SCOPE_ALL_INSTANCES);
     trace_end(&log);
 
     ASSERT_INT("earlier GL_POINTS vertex 0 not labelled",
@@ -948,7 +948,7 @@ static void test_render_via_repl_program(void) {
     walk.cursor.cursor_block_end = repl_state_flat_program_current_block_end();
 
     edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX_POS, 0,
-                                        /*label_options=*/1);
+                                        OVERLAY_VERTEX_LABEL_SCOPE_ALL_INSTANCES);
     trace_end(&log);
     ASSERT_INT("vertex-number label at first vertex",
                trace_count_line(&log, "glRasterPos2f 640 576"), 1);

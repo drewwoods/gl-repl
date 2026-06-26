@@ -102,7 +102,7 @@
 #define GLR_BACKDROP         GLUT_KEY_F5, 0
 #define GLR_AXES             GLUT_KEY_F6, 0
 #define GLR_VERTEX_LABELS    GLUT_KEY_F7, 0
-#define GLR_XFORM_GUIDES     GLUT_KEY_F8, 0
+#define GLR_VERTEX_LABEL_SCOPE GLUT_KEY_F8, 0
 #define GLR_LIGHT_THEME      GLUT_KEY_F9, 0
 #define GLR_SYNTAX_HL        GLUT_KEY_F10, 0
 #define GLR_AUDIO            KEY_CTRL_A, GLUT_ACTIVE_SHIFT  /* plain Ctrl+A = Line start */
@@ -126,6 +126,7 @@
 #define GLR_VIEW_MODE        KEY_CTRL_V, GLUT_ACTIVE_SHIFT  /* plain Ctrl+V = Paste */
 #define GLR_CPU_PROFILE      KEY_CTRL_W, 0     /* pairs w/ Memory profile */
 #define GLR_MEMORY_PROFILE   KEY_CTRL_W, GLUT_ACTIVE_SHIFT  /* plain Ctrl+W = CPU profile */
+#define GLR_XFORM_GUIDES     KEY_CTRL_X, GLUT_ACTIVE_SHIFT
 #define GLR_VARIABLE_PANEL   '`', 0            /* open variable panel */
 
 /* ---- Editor text-editing bindings (src/editor/input.c) --------------- *

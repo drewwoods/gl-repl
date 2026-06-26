@@ -117,7 +117,9 @@ static const char *wireframe_mode_names[] = { "Off", "Wireframe", "Hidden-line" 
 static const char *vertex_label_names[OVERLAY_VERTEX_LABEL_COUNT] = {
     OVERLAY_VERTEX_LABEL_LIST(OVERLAY_VERTEX_LABEL_NAME_ENTRY)
 };
-static const char *vertex_label_scope_names[] = { "One instance", "All instances", "At vertex" };
+static const char *vertex_label_scope_names[OVERLAY_VERTEX_LABEL_SCOPE_COUNT] = {
+    OVERLAY_VERTEX_LABEL_SCOPE_LIST(OVERLAY_VERTEX_LABEL_SCOPE_NAME_ENTRY)
+};
 /* Accumulation buffer split into two rows: the effect mode (Off / AA
  * jitter / motion Blur) and the sample/pass count. The passes cycle maps
  * its state index to an actual count on the supported ladder in
@@ -203,8 +205,7 @@ const GlrConfigItem g_cfg_items[] = {
       .key_code = KM_KEY(GLR_AXES), .modifiers = KM_MODS(GLR_AXES), .is_special = 1 },
     { .label = "Xform guides", .key = GLR_CONFIG_XFORM_GUIDE_MODE,
       .state_count = RENDER3D_XFORM_GUIDE_COUNT, .state_names = xform_guide_mode_names,
-      .key_code = KM_KEY(GLR_XFORM_GUIDES), .modifiers = KM_MODS(GLR_XFORM_GUIDES),
-      .is_special = 1 },
+      .key_code = KM_KEY(GLR_XFORM_GUIDES), .modifiers = KM_MODS(GLR_XFORM_GUIDES) },
     { .label = "Light indicators", .key = GLR_CONFIG_LIGHT_INDICATORS, .state_count = 2,
       .key_code = KM_KEY(GLR_LIGHT_INDICATORS), .modifiers = KM_MODS(GLR_LIGHT_INDICATORS) },
     { .label = "Light theme", .key = GLR_CONFIG_LIGHT_THEME,
@@ -237,7 +238,9 @@ const GlrConfigItem g_cfg_items[] = {
       .key_code = KM_KEY(GLR_VERTEX_LABELS), .modifiers = KM_MODS(GLR_VERTEX_LABELS),
       .is_special = 1 },
     { .label = "Label scope", .key = GLR_CONFIG_VERTEX_LABEL_SCOPE, .state_count = 3,
-      .state_names = vertex_label_scope_names },
+      .state_names = vertex_label_scope_names,
+      .key_code = KM_KEY(GLR_VERTEX_LABEL_SCOPE), .modifiers = KM_MODS(GLR_VERTEX_LABEL_SCOPE),
+      .is_special = 1 },
     { .label = "Normal vectors", .key = GLR_CONFIG_NORMAL_VECTORS, .state_count = 2,
       .key_code = KM_KEY(GLR_NORMAL_VECTORS), .modifiers = KM_MODS(GLR_NORMAL_VECTORS) },
     { .label = "Vertex outlines", .key = GLR_CONFIG_VERTEX_OUTLINES, .state_count = 2,
