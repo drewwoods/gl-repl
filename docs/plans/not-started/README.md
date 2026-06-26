@@ -18,3 +18,4 @@ begun. They move to `plans/active/` once implementation starts.
 | `scoped-local-variables.md` | Scoped local variable reassignment |
 | `smooth-autonormals-with-loop-support.md` | Smooth autonormals with loop awareness |
 | `tutorial-replay-system.md` | Tutorial replay system |
+| `winding-texture-mode.md` | Winding view: add "Color + Texture" mode (FRONT/BACK textures, eye-linear texgen) |
