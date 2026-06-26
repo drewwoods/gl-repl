@@ -16,7 +16,7 @@
 /* @cfg xform_guides = 2 */
 /* @cfg light_indicators = 0 */
 /* @cfg light_theme = LIGHT_THEME_DEFAULT */
-/* @cfg backdrop = RENDER3D_BACKDROP_STARS */
+/* @cfg backdrop = RENDER3D_BACKDROP_OFF */
 /* @cfg auto_normals = 0 */
 /* @cfg view_mode = RENDER3D_VIEW_3D */
 /* @cfg camera_rotate = 0 */
@@ -30,7 +30,7 @@
 /* @cfg memory_profile = 0 */
 /* @cfg code_panel = 1 */
 /* @cfg wrap_at_commas = 1 */
-/* @cfg syntax_highlight = 1 */
+/* @cfg syntax_highlight = 2 */
 /* @cfg paren_match = 1 */
 /* @cfg paren_scope = 1 */
 /* @cfg audio = -1 */
@@ -85,270 +85,121 @@ void display(void) {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -15.0000f);
-  glRotatef(26.0000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(-20.0000f, 0.0f, 1.0f, 0.0f);
-  glTranslatef(-0.0000f, -0.3000f, -0.0000f);
+  glTranslatef(0.0000f, 0.0000f, -7.5000f);
+  glRotatef(4.0000f, 1.0f, 0.0f, 0.0f);
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
+  glTranslatef(-0.0000f, 0.7000f, -0.0000f);
 --- header_post ---
 --- source ---
-  static float x, y, z, n, k, s;
+  static float pulse, bellR, bellH; // breath phase; bell radius/height pulse in opposition
+  static float ang, phi, phi2, rad, rad2, topY, botY; // bell strip scratch
+  static float ax, az, sway, drop; // tentacle scratch
+  static float segs = 26; // bell azimuth segments
+  static float rings = 9; // bell latitude strips
+  static float tentacles = 15; // @tune
+  static float tentLen = 2.4; // @tune
 
-  // --- sea(): animated water sheet (nested for + analytic normals) ---
-  // Colored by wave height: deep azure troughs lift to bright azure crests.
-  sea(half, cells, amp) {
-    for(i, 0, cells) {
-      glBegin(GL_TRIANGLE_STRIP);
-        for(j, 0, cells + 1) {
-          x = -half + 2*half*j/cells;
-          z = -half + 2*half*i/cells;
-          y = amp*sin(x*1.5 + t)*cos(z*1.5 + t*0.6);
-          n = 1.0/sqrt(1 + amp*amp*2.25*(cos(x*1.5 + t)*cos(x*1.5 + t)*cos(z*1.5 + t*0.6)*cos(z*1.5 + t*0.6) + sin(x*1.5 + t)*sin(x*1.5 + t)*sin(z*1.5 + t*0.6)*sin(z*1.5 + t*0.6)));
-          glNormal3f(-amp*1.5*cos(x*1.5 + t)*cos(z*1.5 + t*0.6)*n, n, amp*1.5*sin(x*1.5 + t)*sin(z*1.5 + t*0.6)*n);
-          glColor3f(0.18 + 0.18*(0.5+0.5*y/amp), 0.34 + 0.36*(0.5+0.5*y/amp), 0.55 + 0.43*(0.5+0.5*y/amp));
-          glVertex3f(x, y, z);
-          z = -half + 2*half*(i + 1)/cells;
-          y = amp*sin(x*1.5 + t)*cos(z*1.5 + t*0.6);
-          n = 1.0/sqrt(1 + amp*amp*2.25*(cos(x*1.5 + t)*cos(x*1.5 + t)*cos(z*1.5 + t*0.6)*cos(z*1.5 + t*0.6) + sin(x*1.5 + t)*sin(x*1.5 + t)*sin(z*1.5 + t*0.6)*sin(z*1.5 + t*0.6)));
-          glNormal3f(-amp*1.5*cos(x*1.5 + t)*cos(z*1.5 + t*0.6)*n, n, amp*1.5*sin(x*1.5 + t)*sin(z*1.5 + t*0.6)*n);
-          glColor3f(0.18 + 0.18*(0.5+0.5*y/amp), 0.34 + 0.36*(0.5+0.5*y/amp), 0.55 + 0.43*(0.5+0.5*y/amp));
-          glVertex3f(x, y, z);
-        }
-      glEnd();
-    }
-  }
-
-  // --- island(): tessellated landmass with a lagoon cutout (GLU tess) ---
-  island(r, lagoon) {
-    glFrontFace(GL_CW);
-    gluBegin(GLU_POLYGON);
-      // Outer wobbly coastline
-      gluBegin(GLU_CONTOUR);
-        gluNormal(0, 1, 0);
-        for(i, 0, 30) {
-          k = r*(1 + 0.16*sin(i*0.9) + 0.09*cos(i*1.7));
-          gluColor(0.22 + 0.12*sin(i*0.5), 0.40 + 0.10*cos(i*0.7), 0.46 + 0.08*sin(i));
-          gluVertex(k*cos(i*TAU/30), 0, k*sin(i*TAU/30));
-        }
-      gluEnd();
-      // Inner lagoon contour (tessellator infers the hole from the overlap)
-      gluBegin(GLU_CONTOUR);
-        for(i, 0, 20) {
-          x = lagoon*cos(-i*TAU/20) - r*0.35;
-          z = lagoon*sin(-i*TAU/20) + r*0.2;
-          gluColor(0.08, 0.14, 0.2, 1);
-          gluVertex(x, 0, z);
-        }
-      gluEnd();
-    gluEnd();
-    glFrontFace(GL_CCW);
-  }
-
-  // --- lighthouse(): stacked GLUT solids (cone / torus / sphere) ---
-  lighthouse() {
-    glPushMatrix();
-      // Base rock - cone, apex up
-      glColor3f(0.3, 0.34, 0.42);
-      glPushMatrix();
-        glRotatef(-90, 1, 0, 0);
-        glutSolidCone(0.55, 0.5, 18, 3);
-      glPopMatrix();
-      glTranslatef(0, 0.42, 0);
-      // Tapered tower
-      glColor3f(0.9, 0.93, 0.97);
-      glPushMatrix();
-        glRotatef(-90, 1, 0, 0);
-        glutSolidCone(0.34, 1.5, 22, 1);
-      glPopMatrix();
-      // Coral band wrapping the tower
-      glPushMatrix();
-        glTranslatef(0, 0.62, 0);
-        glRotatef(90, 1, 0, 0);
-        glColor3f(0.98, 0.46, 0.36);
-        glutSolidTorus(0.04, 0.22, 10, 22);
-      glPopMatrix();
-      // Lantern - shiny amber bulb
-      glTranslatef(0, 1.5, 0);
-      glColor3f(0.98, 0.82, 0.45);
-      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 90);
-      glutSolidSphere(0.2, 16, 12);
-      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 16);
-      // Violet roof cone
-      glColor3f(0.62, 0.52, 0.95);
-      glPushMatrix();
-        glTranslatef(0, 0.16, 0);
-        glRotatef(-90, 1, 0, 0);
-        glutSolidCone(0.24, 0.32, 14, 1);
-      glPopMatrix();
-    glPopMatrix();
-  }
-
-  // --- tree(): recursion with if / else if / else tiered coloring ---
-  tree(depth, len, twist) {
-    if(depth >= 3) {
-      glColor3f(0.4, 0.36, 0.5);
-    } else if(depth >= 1) {
-      glColor3f(0.50 - 0.03*depth, 0.50, 0.92);
-    } else {
-      glColor3f(0.98, 0.74, 0.4);
-    }
-    glLineWidth(depth + 1);
-    glBegin(GL_LINES);
-      glNormal3f(0, 0, 1);
-      glVertex3f(0, 0, 0);
-      glVertex3f(0, len, 0);
-    glEnd();
-    if(depth > 0) {
-      glPushMatrix();
-        glTranslatef(0, len, 0);
-        glRotatef(26 + 7*sin(twist), 0, 0, 1);
-        glScalef(0.74, 0.74, 0.74);
-        tree(depth - 1, len, twist + 0.4);
-      glPopMatrix();
-      glPushMatrix();
-        glTranslatef(0, len, 0);
-        glRotatef(-29 - 6*cos(twist), 0, 0, 1);
-        glScalef(0.7, 0.7, 0.7);
-        tree(depth - 1, len, twist + 0.3);
-      glPopMatrix();
-      glPushMatrix();
-        glTranslatef(0, len*0.92, 0);
-        glRotatef(16 + 5*sin(twist*1.3), 1, 0, 0);
-        glScalef(0.6, 0.6, 0.6);
-        tree(depth - 1, len*0.86, twist + 0.5);
-      glPopMatrix();
-    } else {
-      // Blossom - small lit sphere at the twig tip
-      glColor3f(0.98, 0.55, 0.42);
-      glPushMatrix();
-        glTranslatef(0, len, 0);
-        glutSolidSphere(len*0.55, 8, 6);
-      glPopMatrix();
-    }
-  }
-
-  glClearColor(0.05, 0.06, 0.08, 1);
-  // ===== Dusk lighthouse atoll - a coherent feature tour =====
-  // One scene, many features: a parametric sea, a tessellated island with a
-  // lagoon cutout, a lighthouse of stacked GLUT solids with a sweeping
-  // translucent beam, a recursive tree (if / else if / else), GLUT-solid
-  // rocks, additive-blended firefly points, and a moon with a halo ring.
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_LIGHTING);
-  glEnable(GL_NORMALIZE);
-  glEnable(GL_COLOR_MATERIAL);
-  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-  glEnable(GL_LIGHT0);
-  glEnable(GL_LIGHT2);
-  glEnable(GL_LIGHT3);
-  glShadeModel(GL_SMOOTH);
-  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, 1);
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 16);
-
-  // ===== Scene composition =====
-  glLineWidth(1);
-
-  // Sea sheet under everything
-  glPushMatrix();
-    glTranslatef(0, -0.62, 0);
-    sea(5.5, 10, 0.16);
-  glPopMatrix();
-
-  // Island shelf just above the water
-  glPushMatrix();
-    glTranslatef(0, -0.5, 0);
-    island(2.2, 0.45);
-  glPopMatrix();
-
-  // Lighthouse on the island
-  glPushMatrix();
-    glTranslatef(0.5, -0.5, 0.1);
-    lighthouse();
-  glPopMatrix();
-
-  // Sweeping light beams from the lantern (blend + depth-mask off)
-  glPushMatrix();
-    glTranslatef(0.5, 1.42, 0.1);
-    glRotatef(t*55, 0, 1, 0);
-    glDisable(GL_LIGHTING);
-    glDepthMask(GL_FALSE);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-    glBegin(GL_TRIANGLES);
-      glColor4f(0.98, 0.82, 0.45, 0.55);
-      glVertex3f(0, 0, 0);
-      glColor4f(0.98, 0.82, 0.45, 0);
-      glVertex3f(7, -0.5, 0.7);
-      glVertex3f(7, 0.5, -0.7);
-      glColor4f(0.98, 0.82, 0.45, 0.55);
-      glVertex3f(0, 0, 0);
-      glColor4f(0.98, 0.82, 0.45, 0);
-      glVertex3f(-7, 0.5, 0.7);
-      glVertex3f(-7, -0.5, -0.7);
-    glEnd();
-    glDepthMask(GL_TRUE);
-    glDisable(GL_BLEND);
-    glEnable(GL_LIGHTING);
-  glPopMatrix();
-
-  // Wind-swayed tree across the island
-  glPushMatrix();
-    glTranslatef(-1.2, -0.5, 0.4);
-    glRotatef(4*sin(t*0.4), 0, 0, 1);
-    tree(3, 0.62, t*0.2);
-  glPopMatrix();
-
-  // Ring of rocks around the shoreline (loop + GLUT solids)
-  for(i, 0, 7) {
-    glPushMatrix();
-      glRotatef(i*360/7 + 20, 0, 1, 0);
-      glTranslatef(2, -0.55, 0);
-      glColor3f(0.28, 0.31, 0.4);
-      glScalef(1, 0.55, 1);
-      glutSolidSphere(0.16 + 0.07*rand(i, 7), 8, 6);
-    glPopMatrix();
-  }
-
-  // Fireflies - additive point sprites drifting over the atoll
-  glDisable(GL_LIGHTING);
-  glDepthMask(GL_FALSE);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-  glEnable(GL_POINT_SMOOTH);
-  glPointSize(7);
-  glBegin(GL_POINTS);
-    for(i, 0, 44) {
-      k = rand(i, 0)*TAU;
-      s = 1.2 + rand(i, 1)*2.6;
-      x = cos(k + t*(0.25 + rand(i, 2)*0.4))*s;
-      z = sin(k + t*(0.25 + rand(i, 2)*0.4))*s;
-      y = 0.1 + 1.4*rand(i, 3) + 0.18*sin(t*2 + i);
-      glColor4f(0.98, 0.74 + 0.22*rand(i, 4), 0.42, 0.75);
-      glVertex3f(x, y, z);
-    }
-  glEnd();
-  glDisable(GL_POINT_SMOOTH);
-  glDepthMask(GL_TRUE);
-  glDisable(GL_BLEND);
-  glEnable(GL_LIGHTING);
-
-  // Moon with a violet halo ring, parked in the sky
-  glPushMatrix();
-    glTranslatef(-3.6, 3, -2);
-    glDisable(GL_LIGHTING);
-    glColor3f(0.92, 0.95, 0.98);
-    glutSolidSphere(0.55, 22, 16);
-    glBegin(GL_LINE_LOOP);
-      for(i, 0, 48) {
-        glColor3f(0.62, 0.52, 0.95);
-        glVertex3f(0.92*cos(i*TAU/48), 0.92*sin(i*TAU/48), 0);
+  // one tentacle: a swaying line strip; alpha fades toward the tip and the
+  // pulse tugs the strand upward (the drop*drop term makes tips lag the bell)
+  tentacle(angAt, attach, len, phase, amp, cr, cg, cb) {
+    ax = cos(angAt)*attach;
+    az = sin(angAt)*attach;
+    glBegin(GL_LINE_STRIP);
+      for(s, 0, 14) {
+        drop = s/13;
+        sway = amp*(sin(t*1.4 + phase + drop*3.5) + 0.4*sin(t*2.3 + phase*1.7 + drop*6))*drop;
+        glColor4f(cr, cg, cb, 0.04 + 0.40*(1 - drop)*(1 - drop));
+        glVertex3f(ax*(1 + 0.2*drop) + sway, topY - drop*len + 0.15*pulse*drop*drop, az*(1 + 0.2*drop) + sway*0.55);
       }
     glEnd();
-    glEnable(GL_LIGHTING);
-  glPopMatrix();
-
-  // Caption readout (glRasterPos + bitmap label)
+  }
+  glClearColor(0.015, 0.03, 0.07, 1);
+  // Everything glows: additive blend with depth WRITES off (reads stay on).
+  // glDepthMask(GL_FALSE) is the classic translucency trick - without it the
+  // bell's far side would z-fight its near side and the tentacles would
+  // punch holes through the bell.
   glDisable(GL_LIGHTING);
-  glColor3f(0.92, 0.95, 0.98);
-  glRasterPos3f(-3.2, 2.2, 0);
-  label("dusk atoll");
-  glEnable(GL_LIGHTING);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  glEnable(GL_LINE_SMOOTH);
+  glEnable(GL_POINT_SMOOTH);
+  glDepthMask(GL_FALSE);
+  pulse = sin(t*1.6);
+  bellR = 1.5*(1 + 0.10*pulse);
+  bellH = 1.1*(1 - 0.14*pulse);
+
+  // marine snow: slow upward drift, wrapped with rem() so the field loops
+  glPointSize(5);
+  glBegin(GL_POINTS);
+    for(p, 0, 110) {
+      glColor4f(0.55, 0.75, 0.95, 0.08 + 0.22*rand(p, 4));
+      // rise speed 0.15..0.5 per mote; rem() wraps y into [-3.2, 3.2]
+      glVertex3f(4.5*rand2(p, 0) + 0.2*sin(t*0.4 + p), rem(3.2*rand2(p, 1) + t*(0.15 + 0.35*rand(p, 3)), 6.4), 4.5*rand2(p, 2));
+    }
+  glEnd();
+
+  // gentle bob + tilt for the whole animal
+  glTranslatef(0.2*sin(t*0.4), 0.18*sin(t*0.5), 0);
+  glRotatef(8*sin(t*0.23), 0, 0, 1);
+
+  // bell: latitude strips from crown to just past the equator (it curls
+  // under). Ring geometry depends only on i, so it is hoisted out of the
+  // inner loop - per-vertex assignments would blow the flat-command budget.
+  for(i, 0, rings) {
+    phi = (i/rings)*PI*0.52;
+    phi2 = ((i+1)/rings)*PI*0.52;
+    rad = bellR*sin(phi);
+    topY = bellH*cos(phi);
+    rad2 = bellR*sin(phi2);
+    botY = bellH*cos(phi2);
+    glBegin(GL_TRIANGLE_STRIP);
+      for(j, 0, segs+1) {
+        ang = j*TAU/segs;
+        glColor4f(0.10 + 0.30*i/rings, 0.35 + 0.45*i/rings, 0.95, 0.05 + 0.20*(i/rings)*(i/rings) + 0.04*sin(ang*6 - t*2));
+        glVertex3f(rad*cos(ang), topY, rad*sin(ang));
+        glColor4f(0.10 + 0.30*(i+1)/rings, 0.35 + 0.45*(i+1)/rings, 0.95, 0.05 + 0.20*((i+1)/rings)*((i+1)/rings) + 0.04*sin(ang*6 - t*2));
+        glVertex3f(rad2*cos(ang), botY, rad2*sin(ang));
+      }
+    glEnd();
+  }
+
+  // scalloped frill hanging off the rim
+  rad = bellR*sin(PI*0.52);
+  topY = bellH*cos(PI*0.52);
+  glBegin(GL_TRIANGLE_STRIP);
+    for(j, 0, segs+1) {
+      ang = j*TAU/segs;
+      sway = -0.18 - 0.10*pulse + 0.10*sin(ang*9 + t*2.6);
+      glColor4f(0.45, 0.85, 1, 0.3);
+      glVertex3f(rad*cos(ang), topY, rad*sin(ang));
+      glColor4f(0.45, 0.85, 1, 0.03);
+      glVertex3f(rad*1.04*cos(ang), topY + sway, rad*1.04*sin(ang));
+    }
+  glEnd();
+  glLineWidth(1.6);
+  for(k, 0, tentacles) {
+    tentacle(k*TAU/tentacles + 0.2*rand2(k, 1), bellR*0.85, tentLen*(0.75 + 0.5*rand(k, 2)), rand(k, 3)*TAU, 0.3, 0.35, 0.75, 1.0);
+  }
+  // four thicker oral arms under the crown
+  glLineWidth(3.2);
+  for(k, 0, 4) {
+    tentacle(k*TAU/4 + 0.4, bellR*0.3, tentLen*1.2, k*1.7, 0.55, 1.0, 0.45, 0.75);
+  }
+  glLineWidth(1);
+
+  // bioluminescent core: two stacked soft points
+  glPointSize(30);
+  glBegin(GL_POINTS);
+    glColor4f(1, 0.55, 0.75, 0.3);
+    glVertex3f(0, bellH*0.3, 0);
+  glEnd();
+  glPointSize(13);
+  glBegin(GL_POINTS);
+    glColor4f(1, 0.8, 0.9, 0.55);
+    glVertex3f(0, bellH*0.32, 0);
+  glEnd();
+
+  // leave shared GL state the way we found it
+  glDepthMask(GL_TRUE);
+  glDisable(GL_BLEND);

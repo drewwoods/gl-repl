@@ -8,7 +8,7 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_PLANES */
+/* @cfg grid = GRID_THEME_XZRULER */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
 /* @cfg grid_major = GRID_MAJOR_1 */
@@ -18,19 +18,19 @@
 /* @cfg light_theme = LIGHT_THEME_DEFAULT */
 /* @cfg backdrop = RENDER3D_BACKDROP_OFF */
 /* @cfg auto_normals = 0 */
-/* @cfg view_mode = RENDER3D_VIEW_2D */
+/* @cfg view_mode = RENDER3D_VIEW_3D */
 /* @cfg camera_rotate = 0 */
 /* @cfg vertex_labels = 1 */
 /* @cfg normal_vectors = 0 */
-/* @cfg vertex_outlines = 1 */
-/* @cfg vertex_points = 1 */
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
 /* @cfg poly_highlight = 1 */
 /* @cfg variable_panel = 1 */
 /* @cfg compute_profile = 0 */
 /* @cfg memory_profile = 0 */
 /* @cfg code_panel = 1 */
 /* @cfg wrap_at_commas = 1 */
-/* @cfg syntax_highlight = 1 */
+/* @cfg syntax_highlight = 2 */
 /* @cfg paren_match = 1 */
 /* @cfg paren_scope = 1 */
 /* @cfg audio = -1 */
@@ -85,22 +85,26 @@ void display(void) {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -2.5000f);
-  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
+  glTranslatef(0.0000f, 0.0000f, -9.0000f);
+  glRotatef(25.0000f, 1.0f, 0.0f, 0.0f);
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  static float x, y;
-  glClearColor(0.05, 0.06, 0.08, 1);
-  // 2D assignment sketch: tests runtime variable assignment without goto
-  glDisable(GL_LIGHTING);
-  x = -1.7;
-  glBegin(GL_LINE_STRIP);
-    for(i, 0, 48) {
-      x = x + 0.07;
-      y = sin(x*2.5 + t)*0.52 + cos(i*0.25 + t*0.6)*0.16;
-      glColor3f(0.98 - 0.62*(i/47.0), 0.46 + 0.24*(i/47.0), 0.36 + 0.62*(i/47.0));
-      glVertex3f(x, y, 0);
+  static float n, p, q, ang, rr, x, y, z; // samples, winds, angle, ring radius, coords
+  glClearColor(0.05, 0.05, 0.08, 1);
+  glLineWidth(2);
+  n = 400; // samples around the closed curve
+  p = 2; // turns around the torus axis
+  q = 3; // turns through the torus hole
+  glBegin(GL_LINE_LOOP);
+    for(i, 0, n) {
+      ang = TAU * i/n;
+      rr = 2.0 + cos(q*ang); // distance from the axis
+      x = rr * cos(p*ang);
+      y = rr * sin(p*ang);
+      z = sin(q*ang);
+      glColor3f(0.5 + 0.5*sin(ang + t), 0.5 + 0.5*sin(ang + t + 2.0), 0.5 + 0.5*sin(ang + t + 4.0));
+      glVertex3f(x, y, z);
     }
   glEnd();

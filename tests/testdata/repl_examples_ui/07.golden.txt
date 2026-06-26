@@ -30,7 +30,7 @@
 /* @cfg memory_profile = 0 */
 /* @cfg code_panel = 1 */
 /* @cfg wrap_at_commas = 1 */
-/* @cfg syntax_highlight = 1 */
+/* @cfg syntax_highlight = 2 */
 /* @cfg paren_match = 1 */
 /* @cfg paren_scope = 1 */
 /* @cfg audio = -1 */
@@ -85,28 +85,22 @@ void display(void) {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -3.0000f);
+  glTranslatef(0.0000f, 0.0000f, -2.5000f);
   glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  triangle() {
-    glBegin(GL_TRIANGLES);
-      glNormal3f(0, 0, 1);
-      glVertex3f(0, 0.8, 0);
-      glVertex3f(-0.7, -0.4, 0);
-      glVertex3f(0.7, -0.4, 0);
-    glEnd();
-  }
-  // @cfg vertex_points = 0
+  static float x, y;
   glClearColor(0.05, 0.06, 0.08, 1);
-  glEnable(GL_DEPTH_TEST);
-  glColor3f(0.98, 0.46, 0.36);
-  triangle();
-  glTranslatef(2, 0, 0);
-  glColor3f(0.3, 0.84, 0.8);
-  triangle();
-  glTranslatef(-4, 0, 0);
-  glColor3f(0.62, 0.52, 0.95);
-  triangle();
+  // 2D assignment sketch: tests runtime variable assignment without goto
+  glDisable(GL_LIGHTING);
+  x = -1.7;
+  glBegin(GL_LINE_STRIP);
+    for(i, 0, 48) {
+      x = x + 0.07;
+      y = sin(x*2.5 + t)*0.52 + cos(i*0.25 + t*0.6)*0.16;
+      glColor3f(0.98 - 0.62*(i/47.0), 0.46 + 0.24*(i/47.0), 0.36 + 0.62*(i/47.0));
+      glVertex3f(x, y, 0);
+    }
+  glEnd();

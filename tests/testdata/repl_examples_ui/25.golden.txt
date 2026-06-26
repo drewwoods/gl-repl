@@ -30,7 +30,7 @@
 /* @cfg memory_profile = 0 */
 /* @cfg code_panel = 1 */
 /* @cfg wrap_at_commas = 1 */
-/* @cfg syntax_highlight = 1 */
+/* @cfg syntax_highlight = 2 */
 /* @cfg paren_match = 1 */
 /* @cfg paren_scope = 1 */
 /* @cfg audio = -1 */
