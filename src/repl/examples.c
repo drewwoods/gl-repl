@@ -343,6 +343,8 @@ static const char *const g_example_cond[] = {
  *              r * sin v)
  * with u sweeping the major (ring) angle and v the minor (tube) angle. */
 static const char *const g_example_torus[] = {
+    "// @cfg poly_highlight = 0",
+    "// @cfg vertex_labels = 0",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -8.0f);",
     "glRotatef(20.0f, 1.0f, 0.0f, 0.0f);",
@@ -634,6 +636,7 @@ static const char *const g_example_glow_particles[] = {
  * position and t for a shifting iridescent look. */
 
 static const char *const g_example_waves[] = {
+    "// @cfg poly_highlight = 0",
     "// @cfg vertex_labels = 0",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -5.0f);",
@@ -691,6 +694,8 @@ static const char *const g_example_spirograph_curve[] = {
     "// @cfg view_mode = RENDER3D_VIEW_2D",
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
+    "// @cfg poly_highlight = 0",
+    "// @cfg vertex_labels = 0",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -7.5f);",
     "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);",
@@ -1740,6 +1745,8 @@ static const char *const g_example_orrery[] = {
  * Per-vertex color sweeps the hue around the curve and drifts with t, so
  * a rainbow band flows along the knot. Pure trig in one for-loop. */
 static const char *const g_example_torus_knot[] = {
+    "// @cfg poly_highlight = 0",
+    "// @cfg vertex_labels = 0",
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
     "// camera",
