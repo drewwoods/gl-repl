@@ -1,44 +1,53 @@
 # Showcase shot list
 
-Assets referenced by [`SHOWCASE.md`](../../SHOWCASE.md). Each entry below
-is a placeholder until captured — the `<!-- PLACEHOLDER -->` comments in
-SHOWCASE.md carry the intent and a starting command. Camera angle, fps,
-resolution, and duration are all refinable; filenames are the contract.
+Assets referenced by [`SHOWCASE.md`](../../SHOWCASE.md). These are generated
+by [`scripts/docs-assets.sh`](../../../scripts/docs-assets.sh) from the
+**native** build (`make gl-repl`) — the real GPU driver, so true colors and
+MSAA. (The old OSMesa software-rasterizer path mis-rendered the grid, so it
+was retired.) The filename stem is the script's asset name, prefixed `sc-`.
+Camera angle, fps, resolution, and duration are all refinable in that script;
+filenames are the contract.
 
-Headless capture pipeline:
+Capture pipeline (needs a display — each capture opens a window briefly):
 
 ```bash
-make gl-repl FREEGLUT_OSMESA=1
-scripts/record-gif.sh --example "<name>" --duration 6 --out <slug>   # GIFs
-# stills: SIGUSR1 capture or scripts/docs-assets.sh-style staging
+make gl-repl
+scripts/docs-assets.sh sc-torus-knot     # one asset
+scripts/docs-assets.sh                    # everything (core + showcase)
+scripts/docs-assets.sh --list             # asset names
 ```
 
-| File | Example | Notes |
+| File | Asset | Example |
 |---|---|---|
-| `torus-knot.gif` | Torus knot (animated) | hue cycling along the curve |
-| `snowfall.gif` | Snowfall demo (550 particles) | density + motion |
-| `parametric-torus.gif` | Parametric torus (nested for) | slow orbit, or a still |
-| `recursive-tree.gif` | Recursive triangle tree (func + recursion) | sway via `t` |
-| `spirograph.gif` | Animated spirograph curve | |
-| `ripple-ring.gif` | Traveling ripple ring | |
-| `bezier.png` | Bezier curve with guides | cursor on a control-point line (`GLR_EDIT_LINE`) |
-| `de-casteljau.png` | Scratch arrays (de Casteljau curve) | still |
-| `orbit-plot.png` | Annotated orbit plot (labels) | the `label()` text is the point |
-| `wave-surface.gif` | Animated wave surface (analytic normals) | lighting rolling across the wave |
-| `terrain.gif` | Procedural terrain (rand grid + sin ripple) | |
-| `lit-cube.png` | Lit cube | still; the default example |
-| `grass.gif` | Swaying grass field (rand + t) | |
-| `jellyfish.gif` | Jellyfish (glDepthMask translucency) | translucent bell |
-| `function-demo.png` | Function demo (named func) | still |
-| `function-polygons.png` | Function polygons (args + for) | still |
-| `conditional-colors.gif` | Conditional colors (if + t) | |
-| `whale.gif` | Whale (particle system + lit model) | flagship scene |
-| `stress-test.gif` | Stress test (all features) | |
-| `feature-time.gif` | any animated example | Ctrl+T moment: still → moving |
-| `feature-sliders.gif` | any with a `float` | slider drag, scene follows (interactive) |
-| `feature-ply.png` | Parametric torus | exported `.ply` open in MeshLab/Blender |
-| `feature-export-c.png` | any | `output.c` in an editor beside the running standalone binary |
+| `torus-knot.gif` | `sc-torus-knot` | Torus knot (animated) |
+| `snowfall.gif` | `sc-snowfall` | Snowfall demo (550 particles) |
+| `parametric-torus.png` | `sc-parametric-torus` | Parametric torus (nested for) — still (static geometry) |
+| `recursive-tree.gif` | `sc-recursive-tree` | Recursive triangle tree (func + recursion) |
+| `spirograph.gif` | `sc-spirograph` | Animated spirograph curve |
+| `ripple-ring.gif` | `sc-ripple-ring` | Traveling ripple ring |
+| `bezier.png` | `sc-bezier` | Bezier curve with guides (draws its own control points) |
+| `de-casteljau.png` | `sc-de-casteljau` | Scratch arrays (de Casteljau curve) |
+| `orbit-plot.png` | `sc-orbit-plot` | Annotated orbit plot (labels) |
+| `wave-surface.gif` | `sc-wave-surface` | Animated wave surface (analytic normals) |
+| `ringed-planet.gif` | `sc-ringed-planet` | Ringed planet (nebula skies) — replaces the retired "Procedural terrain" |
+| `lit-cube.png` | `sc-lit-cube` | Lit cube |
+| `grass.gif` | `sc-grass` | Swaying grass field (rand + t) |
+| `jellyfish.gif` | `sc-jellyfish` | Jellyfish (glDepthMask translucency) |
+| `function-demo.png` | `sc-function-demo` | Function demo (named func) |
+| `function-polygons.png` | `sc-function-polygons` | Function polygons (args + for) |
+| `conditional-colors.gif` | `sc-conditional-colors` | Conditional colors (if + t) |
+| `whale.gif` | `sc-whale` | Whale (particle system + lit model) |
+| `stress-test.gif` | `sc-stress-test` | Dusk lighthouse atoll (stress test) |
+| `feature-time.gif` | `sc-feature-time` | Conditional colors (if + t) — a t-driven clip |
 
-Already covered by existing `docs/images/` assets (no capture needed):
+Stand-ins (the ideal shot needs an external tool we can't drive headlessly):
+
+| File | Asset | Stand-in / ideal shot |
+|---|---|---|
+| `feature-ply.png` | `sc-feature-ply` | Reuses the parametric-torus scene. Ideal: its exported `.ply` in MeshLab/Blender. |
+| `feature-export-c.png` | `sc-feature-export-c` | Reuses a full-UI scene ("it's all code in the panel"). Ideal: `output.c` in an editor beside the running standalone binary. |
+| `feature-sliders.gif` | _(none)_ | SHOWCASE points at `images/variable-panel.png`. Ideal: a variable-panel slider drag with the scene responding live. |
+
+Already covered by existing `docs/images/` assets (no showcase capture needed):
 `animated-ring.gif`, `glow-sprites.png`, `labels-orrery.png`, `glu-tess.png`,
 `transform-stress.png`, `replay.gif`, `xform-guide.gif`, `variable-panel.png`.
