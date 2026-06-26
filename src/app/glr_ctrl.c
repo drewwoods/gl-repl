@@ -734,6 +734,38 @@ void glr_ctrl_apply_input_effects(EditorInputDispatchEffects effects) {
 /* Scene config builder (push model)                                          */
 /* ========================================================================= */
 
+/* State filter for the winding view (RENDER3D_EXEC_WINDING). The pass in
+ * render.c owns a two-sided-lighting setup (front green / back red); these
+ * program commands would clobber it, so suppress their GL emission while the
+ * geometry, transforms and normals still execute normally. glColor passes
+ * through — with lighting on and color-material off, GL ignores it anyway. */
+static int winding_state_filter(CmdType type, const GLCmd *cmd, void *ud) {
+    (void)ud;
+    switch (type) {
+    case CMD_MATERIALFV:
+    case CMD_MATERIALF:
+    case CMD_COLOR_MATERIAL:
+    case CMD_LIGHT_MODEL_I:
+        return 0;
+    case CMD_ENABLE:
+    case CMD_DISABLE:
+        switch ((GLenum)cmd->args[0]) {
+        case GL_LIGHTING:
+        case GL_CULL_FACE:
+        case GL_COLOR_MATERIAL:
+        case GL_LIGHT0:
+        case GL_LIGHT1:
+        case GL_LIGHT2:
+        case GL_LIGHT3:
+            return 0;
+        default:
+            return 1;
+        }
+    default:
+        return 1;
+    }
+}
+
 /* Scene's geometry callback for the main-fill and depth-probe passes.
  * The signature is intentionally opaque to scene — the controller
  * pulls live program / count / text from REPL state here, and clamps
@@ -765,7 +797,8 @@ static void scene_execute_adapter(const Render3dExecuteContext *ctx,
         ctx ? ctx->purpose : RENDER3D_EXEC_MAIN_FILL;
     int suppress_side_effects =
         purpose != RENDER3D_EXEC_MAIN_FILL &&
-        purpose != RENDER3D_EXEC_WIREFRAME_VISIBLE_LINES;
+        purpose != RENDER3D_EXEC_WIREFRAME_VISIBLE_LINES &&
+        purpose != RENDER3D_EXEC_WINDING;
     int wireframe_effect_pass =
         purpose == RENDER3D_EXEC_WIREFRAME_HIDDEN_LINES ||
         purpose == RENDER3D_EXEC_WIREFRAME_DEPTH_FILL ||
@@ -797,13 +830,16 @@ static void scene_execute_adapter(const Render3dExecuteContext *ctx,
             .status_out_sz  = (int)sizeof(exec_status),
         }, purpose);
     } else {
-        repl_execute_program(&(ReplExecutionOptions){
+        ReplExecutionOptions opts = {
             .flat_cmd_count = count,
             .program        = repl_state_flat_program_view(),
             .text           = source_document_view(),
             .status_out     = exec_status,
             .status_out_sz  = (int)sizeof(exec_status),
-        });
+        };
+        if (purpose == RENDER3D_EXEC_WINDING)
+            opts.state_filter = winding_state_filter;
+        repl_execute_program(&opts);
     }
     glPopAttrib();
     if (exec_status[0])
@@ -951,6 +987,7 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
     config->backdrop_mode = presentation.backdrop_mode;
     config->post_filter_mode = presentation.post_filter_mode;
     config->wireframe = presentation.wireframe;
+    config->winding_view = presentation.winding_view;
     /* Single source of truth: the executor's capability flag + loaded
      * proc set in glr_ctrl_init_gl. Lets the star backdrop reset point
      * attenuation through the same callable entry point the executor

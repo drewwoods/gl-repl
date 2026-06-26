@@ -51,6 +51,10 @@ typedef struct {
      * exclusive with post_filter_mode (Off -> scene -> frame -> Off). */
     int compositor_filter_mode;
     int highlight_current_poly;
+    /* Winding-visualization view: paint front faces green, back (inside-out)
+     * faces red so winding mistakes are visible. Session-level like the
+     * post-process filters — not reset per example, not saved in @cfg. */
+    int winding_view;
     Render3dViewMode ortho_mode;
     int wrap_at_comma;
     int code_panel_layout;

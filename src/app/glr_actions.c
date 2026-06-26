@@ -243,6 +243,7 @@ const GlrConfigItem g_cfg_items[] = {
       .key_code = KM_KEY(GLR_VERTEX_POINTS), .modifiers = KM_MODS(GLR_VERTEX_POINTS) },
     { .label = "Poly highlight", .key = GLR_CONFIG_POLY_HIGHLIGHT, .state_count = 2,
       .key_code = KM_KEY(GLR_POLY_HIGHLIGHT), .modifiers = KM_MODS(GLR_POLY_HIGHLIGHT) },
+    { .label = "Winding", .key = GLR_CONFIG_WINDING_VIEW, .state_count = 2 },
     { .label = "---", .section_header = 1 },
 
     { .label = "### INTERFACE", .section_header = 1 },

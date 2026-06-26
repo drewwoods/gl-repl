@@ -95,6 +95,22 @@ typedef struct {
      * material color (not per-vertex lit shading) and all faces (not just
      * front). No effect on the live frame. */
     int             encode_feedback_normals;
+    /* Optional filter over the program's GL state/color-emitting commands.
+     * Returns nonzero to emit the command's GL normally, zero to suppress
+     * the GL emission (the REPL bookkeeping a state command carries — the
+     * GL_LIGHTn enable mask and clear color — still runs, so render state
+     * stays coherent). NULL emits everything (the default live-frame path).
+     *
+     * This lets a single render pass own the material/lighting/cull state
+     * and stop the user program from clobbering it, without forking the
+     * whole execution walk the way the hidden-line wireframe pass does. The
+     * winding-visualization view installs one to suppress user materials,
+     * glColorMaterial, and glEnable/Disable of lighting / cull-face / lights
+     * so its two-sided-lighting setup survives the program. (The export
+     * pass's encode_feedback_normals lighting/cull carve-out is the older,
+     * special-cased ancestor of this hook.) */
+    int           (*state_filter)(CmdType type, const GLCmd *cmd, void *ud);
+    void           *state_filter_ud;
     char           *status_out;
     int             status_out_sz;
 } ReplExecutionOptions;

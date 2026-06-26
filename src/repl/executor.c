@@ -620,10 +620,18 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
         glNormal3f(cmd->args[0], cmd->args[1], cmd->args[2]);
         break;
     case CMD_COLOR3F:
+        if (cursor->options.state_filter &&
+            !cursor->options.state_filter(cmd->type, cmd,
+                                          cursor->options.state_filter_ud))
+            break;
         glColor4f(cmd->args[0], cmd->args[1], cmd->args[2],
                   cursor->alpha_scale);
         break;
     case CMD_COLOR4F:
+        if (cursor->options.state_filter &&
+            !cursor->options.state_filter(cmd->type, cmd,
+                                          cursor->options.state_filter_ud))
+            break;
         glColor4f(cmd->args[0], cmd->args[1], cmd->args[2],
                   cmd->args[3] * cursor->alpha_scale);
         break;
@@ -837,6 +845,16 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
     case CMD_POINT_PARAMETER_FV:
     case CMD_BLEND_FUNC:
     case CMD_CLEAR_COLOR:
+        /* General state filter: a render pass that owns its own material/
+         * lighting/cull state (the winding view) suppresses the program's
+         * conflicting state commands here. Bookkeeping (light mask / clear
+         * color) still runs so render state stays coherent. */
+        if (cursor->options.state_filter &&
+            !cursor->options.state_filter(cmd->type, cmd,
+                                          cursor->options.state_filter_ud)) {
+            repl_apply_state_bookkeeping(cmd);
+            break;
+        }
         /* Export pass captures raw glColor + all faces. The capture
          * disabled GL_LIGHTING and GL_CULL_FACE, but the program's own
          * glEnable would turn them back on — feedback would then return
