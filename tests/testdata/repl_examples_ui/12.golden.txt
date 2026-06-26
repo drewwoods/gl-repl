@@ -30,7 +30,7 @@
 /* @cfg memory_profile = 0 */
 /* @cfg code_panel = 1 */
 /* @cfg wrap_at_commas = 1 */
-/* @cfg syntax_highlight = 1 */
+/* @cfg syntax_highlight = 2 */
 /* @cfg paren_match = 1 */
 /* @cfg paren_scope = 1 */
 /* @cfg audio = -1 */
@@ -85,29 +85,22 @@ void display(void) {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -3.5000f);
+  glTranslatef(0.0000f, 0.0000f, -7.5000f);
   glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  static float phase, width, delta, amp, x, y;
-  // Traveling ripple ring: nested for + fmod + conditional deformation
+  static float dist, n, x, y, ang;
   glClearColor(0.05, 0.06, 0.08, 1);
-  amp = 0.1 * sin(t * TAU);
-  phase = fmod(t / 3, TAU);
-  width = PI / 8;
+  dist = 1.4;
+  n = 400;
   glBegin(GL_LINE_LOOP);
-    for(i, 0, 400) {
-      glColor3f(0.36, 0.7, 0.98);
-      x = cos(TAU * i / 400);
-      y = sin(TAU * i / 400);
-      delta = fmod(TAU * i / 400 - phase + TAU, TAU);
-      if(delta < width) {
-        glColor3f(0.98, 0.76, 0.36);
-        x = x + amp * x * sin(delta * TAU / width);
-        y = y + amp * y * sin(delta * TAU / width);
-      }
+    for(i, 0, n) {
+      ang = TAU * i/n;
+      x = dist * cos(t*ang) + cos(ang);
+      y = dist * sin(t*ang) + sin(ang);
+      glColor3f(0.98 - 0.62*(0.5+0.5*sin(ang + t)), 0.46 + 0.24*(0.5+0.5*sin(ang + t)), 0.36 + 0.62*(0.5+0.5*sin(ang + t)));
       glVertex3f(x, y, 0);
     }
   glEnd();

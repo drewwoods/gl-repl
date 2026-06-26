@@ -8,7 +8,7 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_OFF */
+/* @cfg grid = GRID_THEME_PLANES */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
 /* @cfg grid_major = GRID_MAJOR_1 */
@@ -18,19 +18,19 @@
 /* @cfg light_theme = LIGHT_THEME_DEFAULT */
 /* @cfg backdrop = RENDER3D_BACKDROP_OFF */
 /* @cfg auto_normals = 0 */
-/* @cfg view_mode = RENDER3D_VIEW_3D */
+/* @cfg view_mode = RENDER3D_VIEW_2D */
 /* @cfg camera_rotate = 0 */
 /* @cfg vertex_labels = 1 */
 /* @cfg normal_vectors = 0 */
 /* @cfg vertex_outlines = 0 */
 /* @cfg vertex_points = 0 */
 /* @cfg poly_highlight = 1 */
-/* @cfg variable_panel = 0 */
+/* @cfg variable_panel = 1 */
 /* @cfg compute_profile = 0 */
 /* @cfg memory_profile = 0 */
 /* @cfg code_panel = 1 */
 /* @cfg wrap_at_commas = 1 */
-/* @cfg syntax_highlight = 1 */
+/* @cfg syntax_highlight = 2 */
 /* @cfg paren_match = 1 */
 /* @cfg paren_scope = 1 */
 /* @cfg audio = -1 */
@@ -85,34 +85,61 @@ void display(void) {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -13.5000f);
+  glTranslatef(0.0000f, 0.0000f, -7.0000f);
   glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  static float flakeCount = 550; // @tune
-  static float flakeX, flakeY; // particle position
-  static float drift, fall; // per-flake horizontal drift, vertical fall speed
-  static float depth; // [0,1] random; depth and shade both derive from it
-  static float driftMax = 0.5; // max horizontal drift magnitude
-  static float fallBase = -1.5; // base fall speed (NOT gravity)
-  static float wrapX = 12, wrapY = 5; // half-extents of the wrap region
-  static float depthScale = 10; // multiplier on `depth` for z position
-  glClearColor(0.05, 0.05, 0.05, 1);
-  glEnable(GL_DEPTH_TEST);
-  glPointSize(10);
-  glBegin(GL_POINTS);
-    for(p, 0, flakeCount) {
-      drift = driftMax * rand2(p, 1);
-      flakeX = rem(wrapX * rand2(p,4) + t * drift, 2 * wrapX);
-
-      fall = fallBase - rand(p, 2);
-      flakeY = rem(wrapY * rand2(p,3) + t * fall, 2 * wrapY);
-
-      depth = rand(p, 5); // z affects color and distance
-
-      glColor3f(0.5 + 0.5 * depth, 0.5 + 0.5 * depth, 0.5 + 0.5 * depth);
-      glVertex3f(flakeX, flakeY, depthScale * depth);
+  static float n, r, x, y, phase, sample;
+  glClearColor(0.06, 0.07, 0.09, 1);
+  glDisable(GL_LIGHTING);
+  glDisable(GL_DEPTH_TEST);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glLineWidth(1.4);
+  // Annotation demo: geometry plus live numeric labels.
+  phase = fmod(t*0.2, 1);
+  n = 72;
+  for(r, 1, 4) {
+    glColor4f(0.2, 0.35, 0.55, 0.45);
+    glBegin(GL_LINE_LOOP);
+      for(i, 0, n) {
+        glVertex3f(cos(i*TAU/n)*r*0.6, sin(i*TAU/n)*r*0.6, 0);
+      }
+    glEnd();
+    glRasterPos3f(r*0.6 + 0.08, 0, 0);
+    label("r=%f", r*0.6);
+  }
+  glColor4f(0.45, 0.5, 0.65, 0.45);
+  glBegin(GL_LINES);
+    for(i, 0, 12) {
+      glVertex3f(0, 0, 0);
+      glVertex3f(cos(i*TAU/12)*2.4, sin(i*TAU/12)*2.4, 0);
     }
   glEnd();
+  glColor3f(1, 0.75, 0.25);
+  glLineWidth(3);
+  glBegin(GL_LINE_STRIP);
+    for(i, 0, n+1) {
+      sample = i/n;
+      r = 1.0 + 0.5*sin(sample*TAU*3 + t);
+      glVertex3f(cos(sample*TAU)*r, sin(sample*TAU)*r, 0);
+    }
+  glEnd();
+  sample = phase;
+  r = 1.0 + 0.5*sin(sample*TAU*3 + t);
+  x = cos(sample*TAU)*r;
+  y = sin(sample*TAU)*r;
+  glPointSize(11);
+  glColor3f(0.1, 0.9, 1);
+  glBegin(GL_POINTS);
+    glVertex3f(x, y, 0);
+  glEnd();
+  glColor3f(1, 1, 1);
+  glRasterPos3f(-2.35, 2.35, 0);
+  label("phase=%f", phase);
+  glRasterPos3f(x + 0.12, y + 0.12, 0);
+  label("r=%f", r);
+  glRasterPos3f(-2.35, -2.35, 0);
+  label("label text follows glRasterPos3f");

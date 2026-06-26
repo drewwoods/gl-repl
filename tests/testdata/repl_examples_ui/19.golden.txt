@@ -8,8 +8,8 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_XZRULER */
-/* @cfg grid_extent = GRID_EXTENT_FAR */
+/* @cfg grid = GRID_THEME_EMBER */
+/* @cfg grid_extent = GRID_EXTENT_MID */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg axes = AXES_THEME_OFF */
@@ -22,15 +22,15 @@
 /* @cfg camera_rotate = 0 */
 /* @cfg vertex_labels = 1 */
 /* @cfg normal_vectors = 0 */
-/* @cfg vertex_outlines = 1 */
-/* @cfg vertex_points = 1 */
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
 /* @cfg poly_highlight = 1 */
 /* @cfg variable_panel = 1 */
 /* @cfg compute_profile = 0 */
 /* @cfg memory_profile = 0 */
 /* @cfg code_panel = 1 */
 /* @cfg wrap_at_commas = 1 */
-/* @cfg syntax_highlight = 1 */
+/* @cfg syntax_highlight = 2 */
 /* @cfg paren_match = 1 */
 /* @cfg paren_scope = 1 */
 /* @cfg audio = -1 */
@@ -86,57 +86,39 @@ void display(void) {
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
   glTranslatef(0.0000f, 0.0000f, -5.0000f);
-  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
-  glTranslatef(-0.0000f, -0.8000f, -0.0000f);
+  glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);
+  glRotatef(10.0000f, 0.0f, 1.0f, 0.0f);
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  tri() {
-    glBegin(GL_TRIANGLES);
-      glNormal3f(0, 0, 1);
-      glVertex3f(-0.3, -0.3, 0);
-      glVertex3f(0.3, -0.3, 0);
-      glVertex3f(0, 0.4, 0);
-    glEnd();
-  }
+  static float radius, angle, x, y, z; // per-particle: orbit radius, base angle, world pos
+  static float count = 160; // number of glow points
+  static float radMin = 0.4; // nearest orbital radius (xz plane)
+  static float radSpan = 1.8; // additional radius range; radius in [radMin, radMin+radSpan]
+  static float orbitRate = 0.4; // angular speed of the xz orbit (animates with t)
+  static float yWobbleFreq = 1.3; // y wobble frequency relative to the base angle
+  static float yWobbleRate = 0.6; // y wobble time-rate (animates with t)
+  static float yAmp = 0.9; // y wobble amplitude
 
-  glClearColor(0.05, 0.06, 0.08, 1);
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_LIGHTING);
-  glEnable(GL_LIGHT0);
-  glEnable(GL_NORMALIZE);
-  glEnable(GL_COLOR_MATERIAL);
-  glColor3f(0.98, 0.46, 0.36);
-  glPushMatrix();
-    glTranslatef(0, 0, 2);
-    glRotatef(45, 0, 1, 0);
-    glTranslatef(0, 0, -2);
-    tri();
-  glPopMatrix();
-  glColor3f(0.3, 0.84, 0.8);
-  glPushMatrix();
-    glTranslatef(-2, 0, 0);
-    glRotatef(3*t, 0, 1, 0);
-    glScalef(1.5, 0.5, 1);
-    tri();
-  glPopMatrix();
-  glColor3f(0.36, 0.7, 0.98);
-  for(i, 0, 6) {
-    glPushMatrix();
-      glRotatef(i*60, 0, 1, 0);
-      glTranslatef(2.5, 0, 0);
-      glScalef(0.6, 0.6, 0.6);
-      tri();
-    glPopMatrix();
-  }
-  glColor3f(0.95, 0.44, 0.66);
-  glPushMatrix();
-    glTranslatef(0, 2, 0);
-    glScalef(0.8, 0.8, 0.8);
-    tri();
-  glPopMatrix();
-  glColor3f(0.98, 0.76, 0.36);
-  glPushMatrix();
-    glRotatef(t*30, 0, 1, 0);
-    tri();
-  glPopMatrix();
+  glClearColor(0.1, 0.1, 0.1, 1);
+  // Glow sprites: additive blend + distance-attenuated point size.
+  // Each particle orbits in xz at (radius, angle) while y wobbles independently.
+  glDisable(GL_LIGHTING);
+  glDisable(GL_DEPTH_TEST);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  glEnable(GL_POINT_SMOOTH);
+  glPointSize(24);
+  glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){0.2, 0, 0.15});
+  glBegin(GL_POINTS);
+    for(i, 0, count) {
+      angle = rand(i, 0)*TAU; // random base angle in [0, TAU)
+      radius = radMin + rand(i, 1)*radSpan; // random radius in the configured range
+      x = cos(angle + t*orbitRate)*radius;
+      y = sin(angle*yWobbleFreq + t*yWobbleRate)*yAmp;
+      z = sin(angle + t*orbitRate)*radius;
+      // per-particle base color: rand seeds 2/3/4 keep r/g/b stable across frames
+      glColor4f(0.4 + 0.6*rand(i, 2), 0.3 + 0.5*rand(i, 3), 0.8 + 0.2*rand(i, 4), 0.55);
+      glVertex3f(x, y, z);
+    }
+  glEnd();

@@ -8,8 +8,8 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_EMBER */
-/* @cfg grid_extent = GRID_EXTENT_MID */
+/* @cfg grid = GRID_THEME_PLANES */
+/* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg axes = AXES_THEME_OFF */
@@ -18,19 +18,19 @@
 /* @cfg light_theme = LIGHT_THEME_DEFAULT */
 /* @cfg backdrop = RENDER3D_BACKDROP_OFF */
 /* @cfg auto_normals = 0 */
-/* @cfg view_mode = RENDER3D_VIEW_3D */
+/* @cfg view_mode = RENDER3D_VIEW_2D */
 /* @cfg camera_rotate = 0 */
 /* @cfg vertex_labels = 1 */
 /* @cfg normal_vectors = 0 */
-/* @cfg vertex_outlines = 0 */
-/* @cfg vertex_points = 0 */
+/* @cfg vertex_outlines = 1 */
+/* @cfg vertex_points = 1 */
 /* @cfg poly_highlight = 1 */
 /* @cfg variable_panel = 1 */
 /* @cfg compute_profile = 0 */
 /* @cfg memory_profile = 0 */
 /* @cfg code_panel = 1 */
 /* @cfg wrap_at_commas = 1 */
-/* @cfg syntax_highlight = 1 */
+/* @cfg syntax_highlight = 2 */
 /* @cfg paren_match = 1 */
 /* @cfg paren_scope = 1 */
 /* @cfg audio = -1 */
@@ -85,40 +85,76 @@ void display(void) {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -5.0000f);
-  glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(10.0000f, 0.0f, 1.0f, 0.0f);
+  glTranslatef(0.0000f, 0.0000f, -8.0000f);
+  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  static float radius, angle, x, y, z; // per-particle: orbit radius, base angle, world pos
-  static float count = 160; // number of glow points
-  static float radMin = 0.4; // nearest orbital radius (xz plane)
-  static float radSpan = 1.8; // additional radius range; radius in [radMin, radMin+radSpan]
-  static float orbitRate = 0.4; // angular speed of the xz orbit (animates with t)
-  static float yWobbleFreq = 1.3; // y wobble frequency relative to the base angle
-  static float yWobbleRate = 0.6; // y wobble time-rate (animates with t)
-  static float yAmp = 0.9; // y wobble amplitude
+  static float u;
+  // collapse(dst, lo, hi, blend): collapse one Bezier edge in place.
+  collapse(dst, lo, hi, blend) {
+    A[dst] = A[lo] + (A[hi] - A[lo])*blend;
+    B[dst] = B[lo] + (B[hi] - B[lo])*blend;
+    C[dst] = C[lo] + (C[hi] - C[lo])*blend;
+  }
 
-  glClearColor(0.1, 0.1, 0.1, 1);
-  // Glow sprites: additive blend + distance-attenuated point size.
-  // Each particle orbits in xz at (radius, angle) while y wobbles independently.
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glEnable(GL_DEPTH_TEST);
   glDisable(GL_LIGHTING);
-  glDisable(GL_DEPTH_TEST);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-  glEnable(GL_POINT_SMOOTH);
-  glPointSize(24);
-  glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){0.2, 0, 0.15});
-  glBegin(GL_POINTS);
-    for(i, 0, count) {
-      angle = rand(i, 0)*TAU; // random base angle in [0, TAU)
-      radius = radMin + rand(i, 1)*radSpan; // random radius in the configured range
-      x = cos(angle + t*orbitRate)*radius;
-      y = sin(angle*yWobbleFreq + t*yWobbleRate)*yAmp;
-      z = sin(angle + t*orbitRate)*radius;
-      // per-particle base color: rand seeds 2/3/4 keep r/g/b stable across frames
-      glColor4f(0.4 + 0.6*rand(i, 2), 0.3 + 0.5*rand(i, 3), 0.8 + 0.2*rand(i, 4), 0.55);
-      glVertex3f(x, y, z);
+  glLineWidth(3);
+  // Seed A/B/C with control points, then overwrite them with collapse().
+  glColor3f(0.98, 0.46, 0.36);
+  glBegin(GL_LINE_STRIP);
+    for(i, 0, 48) {
+      A[0] = -3.2;
+      B[0] = -1.8;
+      C[0] = -0.8;
+      A[1] = -1.1 + 0.4*sin(t*0.9);
+      B[1] = 2.4;
+      C[1] = -0.1;
+      A[2] = 1.0;
+      B[2] = -2.1 + 0.5*cos(t*0.7);
+      C[2] = 0.5;
+      A[3] = 3.1;
+      B[3] = 1.6;
+      C[3] = 1.0 + 0.25*sin(t*0.5);
+      u = i/48.0;
+      collapse(0, 0, 1, u);
+      collapse(1, 1, 2, u);
+      collapse(2, 2, 3, u);
+      collapse(0, 0, 1, u);
+      collapse(1, 1, 2, u);
+      collapse(0, 0, 1, u);
+      glVertex3f(A[0], B[0], C[0]);
     }
+  glEnd();
+
+  // Rebuild the same control polygon from scratch-array state.
+  A[0] = -3.2;
+  B[0] = -1.8;
+  C[0] = -0.8;
+  A[1] = -1.1 + 0.4*sin(t*0.9);
+  B[1] = 2.4;
+  C[1] = -0.1;
+  A[2] = 1.0;
+  B[2] = -2.1 + 0.5*cos(t*0.7);
+  C[2] = 0.5;
+  A[3] = 3.1;
+  B[3] = 1.6;
+  C[3] = 1.0 + 0.25*sin(t*0.5);
+  glColor3f(0.36, 0.7, 0.98);
+  glBegin(GL_LINE_STRIP);
+    glVertex3f(A[0], B[0], C[0]);
+    glVertex3f(A[1], B[1], C[1]);
+    glVertex3f(A[2], B[2], C[2]);
+    glVertex3f(A[3], B[3], C[3]);
+  glEnd();
+  glPointSize(9);
+  glColor3f(0.98, 0.76, 0.36);
+  glBegin(GL_POINTS);
+    glVertex3f(A[0], B[0], C[0]);
+    glVertex3f(A[1], B[1], C[1]);
+    glVertex3f(A[2], B[2], C[2]);
+    glVertex3f(A[3], B[3], C[3]);
   glEnd();
