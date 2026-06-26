@@ -1086,6 +1086,12 @@ static void test_vertex_label_modes(void) {
                "Vertex labels: Index+World");
 
     glr_cfg_cycle_row(vertex_labels_row, 1);
+    ASSERT_INT("cycle to Index+World Fine",
+               glr_config_get(GLR_CONFIG_VERTEX_LABELS), OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE);
+    ASSERT_STR("status Index+World Fine", g_last_status,
+               "Vertex labels: Index+World Fine");
+
+    glr_cfg_cycle_row(vertex_labels_row, 1);
     ASSERT_INT("cycle to Off",
                glr_config_get(GLR_CONFIG_VERTEX_LABELS), OVERLAY_VERTEX_LABEL_OFF);
     ASSERT_STR("status Off", g_last_status, "Vertex labels: Off");

@@ -431,10 +431,10 @@ typedef struct {
 typedef struct {
     OverlayVertexLabelMode mode;
     int   is_ortho;
-    /* For OVERLAY_VERTEX_LABEL_INDEX_WORLD: inverse of the camera/view matrix
-     * snapshotted at the start of the walk, so a per-vertex world position is
-     * view_inv * modelview * vertex (modelview = view * accumulated model
-     * transforms). view_inv_ok is 0 if the view matrix was singular. */
+    /* For OVERLAY_VERTEX_LABEL_INDEX_WORLD and INDEX_WORLD_FINE: inverse of the
+     * camera/view matrix snapshotted at the start of the walk, so a per-vertex
+     * world position is view_inv * modelview * vertex (modelview = view *
+     * accumulated model transforms). view_inv_ok is 0 if the view matrix was singular. */
     float view_inv[16];
     int   view_inv_ok;
     /* Projection + viewport snapshotted before the walk (the walker only
@@ -511,7 +511,8 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
     if (!ctx ||
         (ctx->mode != OVERLAY_VERTEX_LABEL_INDEX &&
          ctx->mode != OVERLAY_VERTEX_LABEL_INDEX_POS &&
-         ctx->mode != OVERLAY_VERTEX_LABEL_INDEX_WORLD))
+         ctx->mode != OVERLAY_VERTEX_LABEL_INDEX_WORLD &&
+         ctx->mode != OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE))
         return;
 
     /* A flat program unrolls loops, so a looped primitive becomes many blocks
@@ -553,17 +554,21 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
         else
             snprintf(lbl->detail, sizeof(lbl->detail), " (%.2f, %.2f, %.2f)",
                      sanitize_zero(vx), sanitize_zero(vy), sanitize_zero(vz));
-    } else if (ctx->mode == OVERLAY_VERTEX_LABEL_INDEX_WORLD && ctx->view_inv_ok) {
+    } else if ((ctx->mode == OVERLAY_VERTEX_LABEL_INDEX_WORLD ||
+                ctx->mode == OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE) &&
+               ctx->view_inv_ok) {
         /* Map the vertex into eye space, then undo the camera to land in world
          * space. Cheap: labels only fire for the cursor's selected block. */
         float eye[3], world[3];
+        const char *fmt = (ctx->mode == OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE) ? " (%.6g, %.6g, %.6g)" : " (%.2f, %.2f, %.2f)";
+        const char *fmt_ortho = (ctx->mode == OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE) ? " (%.6g, %.6g)" : " (%.2f, %.2f)";
         mat4_transform_point(mv, vx, vy, vz, eye);
         mat4_transform_point(ctx->view_inv, eye[0], eye[1], eye[2], world);
         if (ctx->is_ortho)
-            snprintf(lbl->detail, sizeof(lbl->detail), " (%.2f, %.2f)",
+            snprintf(lbl->detail, sizeof(lbl->detail), fmt_ortho,
                      sanitize_zero(world[0]), sanitize_zero(world[1]));
         else
-            snprintf(lbl->detail, sizeof(lbl->detail), " (%.2f, %.2f, %.2f)",
+            snprintf(lbl->detail, sizeof(lbl->detail), fmt,
                      sanitize_zero(world[0]), sanitize_zero(world[1]), sanitize_zero(world[2]));
     }
     lbl->anchor_x = sx;
@@ -762,7 +767,8 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     label_ctx.vw = vp[2];
     label_ctx.vh = vp[3];
 
-    if (mode == OVERLAY_VERTEX_LABEL_INDEX_WORLD) {
+    if (mode == OVERLAY_VERTEX_LABEL_INDEX_WORLD ||
+        mode == OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE) {
         /* The modelview here is the camera/view matrix — the walker has not yet
          * applied any model transform (it pushes/translates per cmd below). Cache
          * its inverse once so each label can strip the camera back out. */

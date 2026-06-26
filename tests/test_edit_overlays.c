@@ -716,6 +716,21 @@ static void test_on_vertex_number_label_callback(void) {
     ASSERT_TRUE("index+world detail carries world coords",
                 strcmp(world_ctx.labels[0].detail, " (0.00, 0.00, 0.00)") == 0);
 
+    /* INDEX_WORLD_FINE mode: maps through modelview then view_inv with 6 decimal places. */
+    VertexLabelCtx fine_ctx;
+    memset(&fine_ctx, 0, sizeof(fine_ctx));
+    fine_ctx.mode = OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE;
+    fine_ctx.view_inv_ok = 1;
+    memcpy(fine_ctx.view_inv, id, sizeof(id));
+    memcpy(fine_ctx.proj, id, sizeof(id));
+    fine_ctx.vw = 1024;
+    fine_ctx.vh = 768;
+    fine_ctx.block_instances = 1;
+    on_vertex_number_label(&state, 0.123456f, 0.789012f, 0.345678f, &fine_ctx);
+    ASSERT_INT("index+world fine label collected", fine_ctx.count, 1);
+    ASSERT_TRUE("index+world fine detail carries high-precision world coords",
+                strcmp(fine_ctx.labels[0].detail, " (0.123456, 0.789012, 0.345678)") == 0);
+
     /* OFF mode and NULL ctx collect nothing. */
     VertexLabelCtx off_ctx;
     memset(&off_ctx, 0, sizeof(off_ctx));
