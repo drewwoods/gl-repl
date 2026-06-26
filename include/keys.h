@@ -69,8 +69,8 @@
 #define KEY_CTRL_DASH 31   /* decrement accum AA samples (Apple GLUT quirk, Ctrl+-) */
 
 /* Diagnostics */
-#define KEY_CTRL_P    16   /* dump editor state + flat commands to stdout (Ctrl+P);
-                              Ctrl+Shift+P: toggle variable panel */
+#define KEY_CTRL_P    16   /* toggle polygon highlight (Ctrl+P);
+                              Ctrl+Shift+P: toggle vertex points */
 
 /* Other */
 #define KEY_ESC       27   /* escape key (cancel overlays, etc.) */

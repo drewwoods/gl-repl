@@ -114,6 +114,7 @@
 #define GLR_NORMAL_VECTORS   KEY_CTRL_N, GLUT_ACTIVE_SHIFT  /* plain Ctrl+N = Post filter */
 #define GLR_FOCUS_ORIGIN     KEY_CTRL_O, 0
 #define GLR_VERTEX_OUTLINES  KEY_CTRL_O, GLUT_ACTIVE_SHIFT
+#define GLR_POLY_HIGHLIGHT   KEY_CTRL_P, 0
 #define GLR_VERTEX_POINTS    KEY_CTRL_P, GLUT_ACTIVE_SHIFT
 #define GLR_REPLAY           KEY_CTRL_R, 0     /* pairs w/ Camera rotate */
 #define GLR_CAMERA_ROTATE    KEY_CTRL_R, GLUT_ACTIVE_SHIFT  /* plain Ctrl+R = Replay */

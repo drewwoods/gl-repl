@@ -582,6 +582,23 @@ static void test_ascii_shortcut_modifiers(void) {
     ASSERT_TRUE("Ctrl+Shift+T fell back to Auto time (reset t)",
                 strstr(g_last_status, "reset to 0") != NULL);
 
+    /* Plain Ctrl+P (no Shift) toggles Poly highlight. */
+    g_test_mods = 0;
+    int ph0 = glr_config_get(GLR_CONFIG_POLY_HIGHLIGHT);
+    ASSERT_INT("plain Ctrl+P handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_P), 1);
+    ASSERT_TRUE("plain Ctrl+P toggled Poly highlight",
+                glr_config_get(GLR_CONFIG_POLY_HIGHLIGHT) != ph0);
+
+    /* Ctrl+Shift+P toggles Vertex points. Poly highlight must NOT toggle. */
+    g_test_mods = GLUT_ACTIVE_SHIFT;
+    int ph1 = glr_config_get(GLR_CONFIG_POLY_HIGHLIGHT);
+    int vp0 = glr_config_get(GLR_CONFIG_VERTEX_POINTS);
+    ASSERT_INT("Ctrl+Shift+P handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_P), 1);
+    ASSERT_TRUE("Ctrl+Shift+P toggled Vertex points",
+                glr_config_get(GLR_CONFIG_VERTEX_POINTS) != vp0);
+    ASSERT_INT("Ctrl+Shift+P left Poly highlight alone",
+               glr_config_get(GLR_CONFIG_POLY_HIGHLIGHT), ph1);
+
     editor_input_set_modifier_provider_for_test(NULL);
     g_test_mods = 0;
 }

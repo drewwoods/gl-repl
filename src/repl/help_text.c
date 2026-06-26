@@ -430,6 +430,10 @@ const ReplHelpContent *repl_help_text_build(void) {
                           "Toggle normal vectors");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_VERTEX_OUTLINES), KM_MODS(GLR_VERTEX_OUTLINES), 0, "",
                           "Toggle vertex outlines");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_VERTEX_POINTS), KM_MODS(GLR_VERTEX_POINTS), 0, "",
+                          "Toggle vertex points");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_POLY_HIGHLIGHT), KM_MODS(GLR_POLY_HIGHLIGHT), 0, "",
+                          "Toggle polygon highlight");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_LIGHT_INDICATORS), KM_MODS(GLR_LIGHT_INDICATORS), 0, "",
                           "Toggle light indicators");
     nk = key_emit(nk, "");
