@@ -844,6 +844,44 @@ static void test_vertex_label_scope(void) {
     ASSERT_TRUE("label 3 draw_y equals anchor_y", at_vert.labels[3].draw_y == at_vert.labels[3].anchor_y);
 }
 
+/* Visible-only scope: a vertex is dropped when the scene depth buffer holds
+ * nearer geometry at its pixel. Uses a tiny 4x4 depth grid so the projected
+ * pixel lookup is easy to reason about (identity proj over a 4x4 viewport maps
+ * object (x,y) -> ((x*0.5+0.5)*4, (y*0.5+0.5)*4)). */
+static void test_vertex_label_visible_occlusion(void) {
+    printf("--- edit_overlays vertex label visible-only occlusion ---\n");
+
+    float id[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
+    extern float g_gl_stub_modelview_matrix[16];
+    memcpy(g_gl_stub_modelview_matrix, id, sizeof(id));
+
+    ReplayVertexWalkState state;
+    memset(&state, 0, sizeof(state));
+
+    /* Far everywhere (1.0) except pixel (1,1), which has near geometry in
+     * front (0.0). */
+    float depth[16];
+    for (int i = 0; i < 16; i++) depth[i] = 1.0f;
+    depth[1 * 4 + 1] = 0.0f;
+
+    VertexLabelCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.mode = OVERLAY_VERTEX_LABEL_INDEX;
+    ctx.label_options = OVERLAY_VERTEX_LABEL_SCOPE_VISIBLE;
+    memcpy(ctx.proj, id, sizeof(id));
+    ctx.vw = 4;
+    ctx.vh = 4;
+    ctx.depthbuf = depth;
+
+    /* (0,0,0) -> pixel (2,2), window depth 0.5 vs scene 1.0 -> visible. */
+    on_vertex_number_label(&state, 0.0f, 0.0f, 0.0f, &ctx);
+    /* (-0.5,-0.5,0) -> pixel (1,1), window depth 0.5 vs scene 0.0 -> occluded. */
+    on_vertex_number_label(&state, -0.5f, -0.5f, 0.0f, &ctx);
+
+    ASSERT_INT("visible-only keeps the unoccluded vertex and drops the occluded one",
+               ctx.count, 1);
+}
+
 /* on_normal_vector_arrow callback: draws a GL_LINES arrow from the vertex to
  * vertex + normal*scale (see render3d_draw_normal_vector_arrow). */
 static void test_on_normal_vector_arrow_callback(void) {
@@ -1168,6 +1206,7 @@ int main(void) {
     test_sanitize_zero();
     test_on_vertex_number_label_callback();
     test_vertex_label_scope();
+    test_vertex_label_visible_occlusion();
     test_on_normal_vector_arrow_callback();
     test_vertex_numbers_use_source_begin_block();
     test_render_via_repl_program();
