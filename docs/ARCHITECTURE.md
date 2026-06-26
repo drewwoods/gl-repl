@@ -72,7 +72,7 @@ The controller translates REPL state into per-frame view inputs.
 
 Render3d modules may consume [`FlatProgramView`](../src/repl/flatten.h#L41), [`CmdType`](../src/repl/command.h#L37), and other
 command-domain data when that data is already present in the
-[`Render3dRenderConfig`](../src/render3d/render_types.h#L130) or a derived frame snapshot. They should not fetch REPL
+[`Render3dRenderConfig`](../src/render3d/render_types.h#L131) or a derived frame snapshot. They should not fetch REPL
 globals or call `repl_state_*` APIs directly during rendering.
 
 ## Core Tenets
@@ -347,7 +347,7 @@ Responsibilities:
 
 * rebuild flat program and autonormals when dirty
 * prepare replay frame clamps and restore state after rendering
-* build [`Render3dRenderConfig`](../src/render3d/render_types.h#L130) and any guide/focus snapshots from REPL state
+* build [`Render3dRenderConfig`](../src/render3d/render_types.h#L131) and any guide/focus snapshots from REPL state
 * call `render3d_draw_scene(&config)`
 * call UI renderers in the correct order
 * keep profiling section boundaries around render3d and UI rendering
@@ -424,7 +424,7 @@ router do).
 
 ## Render3d Render Config
 
-[`Render3dRenderConfig`](../src/render3d/render_types.h#L130) is the render3d module's explicit per-frame input. It may carry
+[`Render3dRenderConfig`](../src/render3d/render_types.h#L131) is the render3d module's explicit per-frame input. It may carry
 REPL-aware data because this sample has one frontend and no plugin-host
 requirement.
 
@@ -433,11 +433,11 @@ consumes it directly without calling back into REPL globals or rebuilding the
 frame inputs itself. The config currently carries the execute callback,
 [`FlatProgramView`](../src/repl/flatten.h#L41), viewport, camera, animation, quality flags, lighting,
 backdrop, overlay toggles, replay/HUD layout, grid tables, cursor-block
-metadata, and the [`Render3dFocusVertex`](../src/render3d/render_types.h#L122) / [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L16) snapshots needed by
+metadata, and the [`Render3dFocusVertex`](../src/render3d/render_types.h#L123) / [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L16) snapshots needed by
 3D overlays.
 
 Render3d-local accumulation jitter does not live in the config. Derived
-per-pass data belongs in [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L277), for example camera world height,
+per-pass data belongs in [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L285), for example camera world height,
 focus vertex, and other values that helper renderers should share.
 
 ## Render3d Layer
@@ -635,7 +635,7 @@ vertices** — the geometry is generated inside GLU/freeglut, so the first
 two passes have nothing to trace. Instead, each shape is *re-drawn* under
 the already-active `glPolygonMode(GL_LINE)` + polygon offset, letting the
 GL pipeline rasterize the wireframe itself. The actual `glutSolid*` call
-goes through [`repl_executor_draw_glut_solid()`](../src/repl/executor.h#L180) (shared with the live
+goes through [`repl_executor_draw_glut_solid()`](../src/repl/executor.h#L196) (shared with the live
 render loop in [`src/repl/executor.c`](../src/repl/executor.c), so the dispatch stays in one place
 and the GLUT-symbol call site stays inside the executor TU). The
 membership predicate is [`repl_cmd_is_glut_solid()`](../src/repl/command.h#L189) in [`src/repl/command.h`](../src/repl/command.h)
@@ -958,7 +958,7 @@ Runtime shape:
   alpha, skip limits, baseline predef values)
 * render3d iterates the snapshot and owns the GL pass orchestration without
   calling `replay_*` or `repl_state_*`
-* accumulation-AA settings are [`Render3dRenderConfig`](../src/render3d/render_types.h#L130) fields set by the controller
+* accumulation-AA settings are [`Render3dRenderConfig`](../src/render3d/render_types.h#L131) fields set by the controller
 * 2D replay HUD lives in [`src/ui/subsystems/replay_hud.c`](../src/ui/subsystems/replay_hud.c), driven by config fields
 * `render3d_*.c` files contain no `repl_state_*` or `replay_*` calls; Makefile
   checks keep that true
@@ -1017,7 +1017,7 @@ include `ui_*` headers.
 
 ### Render3d state access
 
-Target rule: `render3d_*` files consume [`Render3dRenderConfig`](../src/render3d/render_types.h#L130), [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L277),
+Target rule: `render3d_*` files consume [`Render3dRenderConfig`](../src/render3d/render_types.h#L131), [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L285),
 or explicit snapshot structs. They should not call `repl_state_*` directly.
 
 `check-state-boundaries` enforces the current audited boundary.
@@ -1055,7 +1055,7 @@ or project-wide `include/` only when broadly reusable.
 GL feature availability that varies by *runtime context* (not by build) is
 detected once in [`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L12) — the first point at which the GL
 context is current — and pushed into the GL-free REPL/render3d layers through
-setters and [`Render3dRenderConfig`](../src/render3d/render_types.h#L130), never re-queried per frame.
+setters and [`Render3dRenderConfig`](../src/render3d/render_types.h#L131), never re-queried per frame.
 
 The first case is **`glPointParameterfv`** (distance-attenuated point
 size), core GL 1.4 but absent on some legacy contexts. Detection:
@@ -1068,7 +1068,7 @@ supported = GL_VERSION >= 1.4
 
 The version check comes first on purpose: an ARB/EXT-only test
 false-negatives on a 1.4+ core context that doesn't advertise the extension
-string. The result is stored via [`repl_executor_set_point_parameter_supported()`](../src/repl/executor.h#L236)
+string. The result is stored via [`repl_executor_set_point_parameter_supported()`](../src/repl/executor.h#L252)
 (the executor no-ops `CMD_POINT_PARAMETER_FV` and falls back to a
 camera-distance `glPointSize` approximation when unsupported) and mirrored
 into `Render3dRenderConfig.point_parameter_supported` so the star backdrop's
@@ -1204,7 +1204,7 @@ Per the rule above:
   `UiRenderSnapshot.reshape_proj_lines/_count`; both panel passes read
   that frozen copy and never touch the resolver. This is the canonical
   shape — UI reads the snapshot only (the symmetric counterpart of
-  [`Render3dRenderConfig`](../src/render3d/render_types.h#L130)). The block is the *previous* frame's render3d
+  [`Render3dRenderConfig`](../src/render3d/render_types.h#L131)). The block is the *previous* frame's render3d
   projection (snapshot is built before render3d render); a one-frame text
   lag during a transition is invisible and, crucially, internally
   consistent. snapshot.h hardcodes `UI_RESHAPE_PROJ_LINES/_LINE_MAX`
@@ -1250,7 +1250,7 @@ view must *pick* an eye distance whose on-screen size it reproduces, and
 zoom must rescale that pick rather than dolly a camera the projection
 ignores. All of this lives in [`src/render3d/render.c`](../src/render3d/render.c); the controller feeds
 only `cam_dist` and `projection_mix` (the 2D↔3D blend) through
-[`Render3dRenderConfig`](../src/render3d/render_types.h#L130).
+[`Render3dRenderConfig`](../src/render3d/render_types.h#L131).
 
 **The probe runs once per *entry* into 2D — never on zoom.**
 `render3d_update_ortho_ref()` calls `render3d_probe_eye_dist()` (a
@@ -1302,6 +1302,84 @@ One notch travels
 motion on the first frame — lower decay is snappier but more "stepped",
 higher is smoother but coasts longer. Rapid notches stack onto the
 velocity, so fast scrolls still travel quickly.
+
+### Filtering The REPL Program (rendering a modified view)
+
+Several render passes need to draw the user's geometry but **not exactly as
+the program wrote it** — they want to own a slice of GL state (a uniform
+line color, a two-sided debug material) that the program's own `glColor` /
+`glMaterialfv` / `glEnable` calls would otherwise clobber, or they want to
+skip whole primitives. The program is the single source of geometry, so
+these passes re-drive the *same* flat command stream with a subset of its
+state commands suppressed. There are two complementary mechanisms, chosen by
+how much of the walk the pass needs to restructure.
+
+**1. `state_filter` predicate — suppress a slice of state, keep the real
+walk.** [`ReplExecutionOptions`](../src/repl/executor.h) carries an optional
+`state_filter(CmdType, const GLCmd *, void *ud)` callback. The executor runs
+its normal full path — real `gluTess*`, authored normals, animation
+re-eval — but at each state/color-emitting command it asks the filter:
+return nonzero to emit the GL normally, zero to **suppress the GL emission**.
+A suppressed command still runs [`repl_apply_state_bookkeeping()`](../src/repl/executor.h)
+so the REPL render bookkeeping a state command carries (the `GL_LIGHTn`
+enable mask read by the light-indicator overlay, the `glClearColor`) stays
+coherent. `NULL` emits everything — the default live-frame path. This is the
+light-touch option: the pass installs its own GL state once, then lets the
+geometry/transforms/normals execute untouched while the filter strips only
+the commands that would fight it.
+
+The **winding-visualization view** uses this. `render3d_pass_winding` in
+[`src/render3d/render.c`](../src/render3d/render.c) installs a single
+two-sided-lighting pass (front material green, back material red, cull off)
+so flipped/inside-out polygons read red against green; GL selects front-vs-
+back material purely from window-space winding. `winding_state_filter` in
+[`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c) is the predicate the controller
+hands the executor for the `RENDER3D_EXEC_WINDING` purpose — it suppresses
+`glMaterialfv`/`glMaterialf`/`glColorMaterial`/`glLightModeli` and the
+`glEnable`/`glDisable` of lighting / cull-face / color-material / `GL_LIGHT0..3`.
+Everything else (geometry, transforms, `glNormal3f`) passes through; `glColor`
+is left alone because GL ignores it with lighting on and color-material off.
+
+The `.ply` exporter's `encode_feedback_normals` flag (see *Mesh Export*
+below) is the older, special-cased ancestor of this hook: it hard-codes the
+suppression of the program's `glEnable(GL_LIGHTING)` / `glEnable(GL_CULL_FACE)`
+inline in the executor so feedback captures raw material color over all
+faces. New passes should prefer the general `state_filter`.
+
+**2. Whitelist re-walk — restructure the walk entirely.** When a pass needs
+*more* than a state slice — multiple passes, a stripped-down tessellator,
+or skipping whole primitives — it drives the **exposed execution cursor**
+([`repl_exec_cursor_begin`](../src/repl/executor.h)/`_peek`/`_step`/`_advance`/
+`_end`) itself instead of calling `repl_execute_program`. The hidden-line
+wireframe renderer ([`src/subsystems/hidden_lines/hidden_lines.c`](../src/subsystems/hidden_lines/hidden_lines.c))
+is the example. Its per-command loop:
+
+- runs `repl_exec_cursor_step` (real execution) only for command types in
+  the `hidden_lines_cursor_owns_cmd` whitelist — transforms, `glBegin`/`End`,
+  vertices, the `glutSolid*` shapes, gotos, `if`, and var/scratch assigns;
+- for every other command (all the color/material/enable state) calls
+  `repl_apply_state_bookkeeping` and `_advance` — i.e. suppresses **all**
+  state, since the pass sets up its own uniform-line GL state externally;
+- replaces `gluTess*` with its own position-only tessellator (the wireframe
+  wants outline edges, not lit/colored fills);
+- skips non-fill `glBegin` blocks during the depth-only pass.
+
+The cost is that the pass owns the bookkeeping and tess lifecycle the normal
+executor would have handled. Use the whitelist re-walk only when the
+`state_filter` predicate can't express the change (the wireframe's three
+passes + stripped tess are the load-bearing reason here); reach for
+`state_filter` first.
+
+**Side effects across auxiliary passes.** Both mechanisms can run the program
+more than once per frame (the wireframe's three passes; a depth probe).
+`scene_execute_adapter` in [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c)
+snapshots and restores predef vars / scratch arrays / `ReplRenderState`
+around any pass whose `Render3dExecutePurpose` is *not* the one
+side-effecting fill — so `t = t + 1` style assignment animation advances
+exactly once per frame. `RENDER3D_EXEC_MAIN_FILL`, the wireframe's visible-
+line pass, and `RENDER3D_EXEC_WINDING` are the side-effecting fills (they
+replace the main fill, single pass), so they advance normally; the hidden /
+depth-fill wireframe passes and probes are bracketed.
 
 ### Mesh Export (PLY via GL_FEEDBACK)
 
@@ -1631,7 +1709,7 @@ Scene-presentation policy and most render config live in the app-side owner [`sr
 * New user-geometry execution behavior: [`src/repl/executor.c`](../src/repl/executor.c).
 * New 3D world decorator: `render3d_*`.
 * New 3D REPL-aware overlay: current home is still `render3d_*`, consuming
-  [`FlatProgramView`](../src/repl/flatten.h#L41) or a snapshot from [`Render3dRenderConfig`](../src/render3d/render_types.h#L130).
+  [`FlatProgramView`](../src/repl/flatten.h#L41) or a snapshot from [`Render3dRenderConfig`](../src/render3d/render_types.h#L131).
 * New 2D UI: `ui_*` renderer plus `repl_*` model/action code if mutation is
   required.
 * New per-frame render3d/UI wiring: [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c).
