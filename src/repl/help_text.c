@@ -397,9 +397,6 @@ const ReplHelpContent *repl_help_text_build(void) {
     nk = key_emit(nk, "Time & Replay:");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_AUTO_TIME), KM_MODS(GLR_AUTO_TIME), 0, "",
                           "Play / pause time variable");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_AUTO_TIME),
-                          KM_MODS(GLR_AUTO_TIME) | GLUT_ACTIVE_SHIFT, 0, "",
-                          "Reset t to 0");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_REPLAY), KM_MODS(GLR_REPLAY), 0, "", "Start / stop replay");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_REPLAY_JUMP), KM_MODS(GLR_REPLAY_JUMP), 0, "",
                           "Jump replay to cursor line (first geometry at/after)");
@@ -434,6 +431,8 @@ const ReplHelpContent *repl_help_text_build(void) {
                           "Toggle vertex points");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_POLY_HIGHLIGHT), KM_MODS(GLR_POLY_HIGHLIGHT), 0, "",
                           "Toggle polygon highlight");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_WINDING_VIEW), KM_MODS(GLR_WINDING_VIEW), 0, "",
+                          "Toggle winding view");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_LIGHT_INDICATORS), KM_MODS(GLR_LIGHT_INDICATORS), 0, "",
                           "Toggle light indicators");
     nk = key_emit(nk, "");

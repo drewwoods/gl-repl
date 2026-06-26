@@ -1282,7 +1282,8 @@ alongside `.cfg` (see the file-layout table for the tutorial catalog).
 | Ctrl+\ | Reformat all lines |
 | Ctrl+Shift+S | Split the multi-variable declaration under the cursor into one per line (also File → Split Declaration) |
 | Ctrl+R | Start / stop replay |
-| Ctrl+T | Toggle time variable `t` (Ctrl+Shift+T resets it to 0) |
+| Ctrl+T | Toggle time variable `t` |
+| Ctrl+Shift+T | Toggle winding view |
 | Ctrl+G | Toggle wireframe |
 | Ctrl+Shift+N | Toggle normal vectors |
 | Ctrl+Shift+E | Toggle vertex outlines |

@@ -574,13 +574,12 @@ static void test_ascii_shortcut_modifiers(void) {
     ASSERT_INT("plain Ctrl+C declined (-> editor copy)",
                glr_cfg_handle_ascii_shortcut(KEY_CTRL_C), 0);
 
-    /* Ctrl+Shift+T quirk: no Shift-row for T, so it falls back to the
-     * modifiers==0 Auto time row, whose handler resets t on Shift. */
+    /* Ctrl+Shift+T toggles Winding view. */
     g_test_mods = GLUT_ACTIVE_SHIFT;
-    repl_set_status("");
+    int wv0 = glr_config_get(GLR_CONFIG_WINDING_VIEW);
     ASSERT_INT("Ctrl+Shift+T handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_T), 1);
-    ASSERT_TRUE("Ctrl+Shift+T fell back to Auto time (reset t)",
-                strstr(g_last_status, "reset to 0") != NULL);
+    ASSERT_TRUE("Ctrl+Shift+T toggled Winding",
+                glr_config_get(GLR_CONFIG_WINDING_VIEW) != wv0);
 
     /* Plain Ctrl+P (no Shift) toggles Poly highlight. */
     g_test_mods = 0;

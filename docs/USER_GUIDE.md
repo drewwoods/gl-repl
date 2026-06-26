@@ -384,7 +384,7 @@ headless capture) exactly reproducible.
 
 - **Ctrl+T** plays/pauses time (the *Auto time* config item is the same
   toggle).
-- **Ctrl+Shift+T** resets `t` to 0.
+- **Ctrl+Shift+T** toggles the winding-visualization view (the *Winding* config item).
 - `--time <secs>` (or the `GLR_TIME` env var) sets the starting `t` when
   launching — handy for headless captures of a later moment.
 
@@ -1112,7 +1112,8 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 
 | Key | Action |
 |---|---|
-| Ctrl+T | Play/pause time (Ctrl+Shift+T resets t) |
+| Ctrl+T | Play/pause time |
+| Ctrl+Shift+T | Winding |
 | Ctrl+R | Start/stop replay (Ctrl+K jump to cursor) |
 | Ctrl+G | Wireframe |
 | Ctrl+U | MSAA |
