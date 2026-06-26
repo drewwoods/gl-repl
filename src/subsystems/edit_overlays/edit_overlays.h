@@ -24,7 +24,8 @@ typedef enum OverlayVertexLabelMode {
 #define OVERLAY_VERTEX_LABEL_SCOPE_LIST(X) \
     X(ONE_INSTANCE, "One instance")        \
     X(ALL_INSTANCES, "All instances")      \
-    X(AT_VERTEX, "At vertex")
+    X(AT_VERTEX, "At vertex")              \
+    X(VISIBLE, "Visible only")
 
 #define OVERLAY_VERTEX_LABEL_SCOPE_NAME_ENTRY(name, str) [OVERLAY_VERTEX_LABEL_SCOPE_##name] = str,
 
@@ -51,7 +52,8 @@ typedef struct OverlaySnapshotPack {
     OverlayWalkCtx walk;
     Render3dGuideSnapshot snapshot;
     OverlayVertexLabelMode vertex_label_mode;
-    int vertex_label_scope;    /* 0 = one loop instance, 1 = all, 2 = all instances at vertex (no declutter) */
+    int vertex_label_scope;    /* 0 = one loop instance, 1 = all, 2 = all at vertex
+                                * (no declutter), 3 = all but depth-tested (visible) */
     Render3dViewMode ortho_mode;
     int show_normal_vectors;
     int multisample_enabled;

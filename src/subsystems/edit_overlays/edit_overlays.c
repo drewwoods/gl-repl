@@ -11,6 +11,7 @@
 #include "support/cpuprof.h"
 #include "config.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* Transform a point by a column-major (OpenGL-layout) 4x4 matrix, dividing by
@@ -418,6 +419,11 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
 #define VERTEX_LABEL_NUDGE_STEPS     4   /* max stack offsets per direction;   \
                                           * beyond this a crowded label drops  */
 #define VERTEX_LABEL_LEADER_MIN     3.0f /* draw a leader past this Y nudge    */
+/* Visible-only scope: window-depth slack when testing a vertex against the
+ * scene depth buffer. A vertex sits on the rendered surface, so its depth
+ * ~equals the buffer there; the bias absorbs projection/raster precision so
+ * front vertices aren't culled, while anything clearly behind is dropped. */
+#define VERTEX_LABEL_OCCLUDE_BIAS  0.002f
 
 typedef struct {
     float anchor_x, anchor_y;  /* projected vertex point, viewport-local px   */
@@ -446,10 +452,14 @@ typedef struct {
     /* Scope: 0 labels only the first unrolled copy of the cursor's looped
      * primitive (the parametric torus shows v0..vN once, not per ring);
      * 1 labels every unrolled vertex with a globally-unique number;
-     * 2 labels all instances at their vertex positions (without decluttering). */
+     * 2 labels all instances at their vertex positions (without decluttering);
+     * 3 (visible) is like 1 but depth-tested so occluded vertices are dropped. */
     int   label_options;
     int   block_instances;   /* selected blocks (loop iterations) seen so far  */
     int   labelable_seen;    /* running index over all visited labelable verts */
+    /* Visible-only scope: scene depth buffer (vw*vh, viewport-local, bottom-up)
+     * read once before the walk; NULL for every other scope. */
+    const float *depthbuf;
 } VertexLabelCtx;
 
 static float sanitize_zero(float val) {
@@ -474,7 +484,7 @@ static void mat4_mul_vec4(const float m[16], float x, float y, float z, float w,
  * Returns 0 when the point is at/behind the eye (clip w <= 0). */
 static int project_to_screen(const float mv[16], const float proj[16],
                              int vw, int vh, float x, float y, float z,
-                             float *sx, float *sy) {
+                             float *sx, float *sy, float *depth) {
     float eye[4], clip[4], inv;
     mat4_mul_vec4(mv, x, y, z, 1.0f, eye);
     mat4_mul_vec4(proj, eye[0], eye[1], eye[2], eye[3], clip);
@@ -483,6 +493,7 @@ static int project_to_screen(const float mv[16], const float proj[16],
     inv    = 1.0f / clip[3];
     *sx    = (clip[0] * inv * 0.5f + 0.5f) * (float)vw;
     *sy    = (clip[1] * inv * 0.5f + 0.5f) * (float)vh;
+    *depth = (clip[2] * inv * 0.5f + 0.5f);  /* window depth [0,1] */
     return 1;
 }
 
@@ -504,7 +515,7 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
                                    float vx, float vy, float vz,
                                    void *user) {
     VertexLabelCtx *ctx = (VertexLabelCtx *)user;
-    float mv[16], sx, sy;
+    float mv[16], sx, sy, depth;
     VertexLabel *lbl;
     int label_num, global_num;
 
@@ -537,13 +548,24 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
      * glRasterPos3f(vx, vy, vz) would have landed the text. */
     glGetFloatv(GL_MODELVIEW_MATRIX, mv);
     if (!project_to_screen(mv, ctx->proj, ctx->vw, ctx->vh, vx, vy, vz,
-                           &sx, &sy))
+                           &sx, &sy, &depth))
         return;  /* behind the camera */
     if (sx < 0.0f || sx >= (float)ctx->vw || sy < 0.0f || sy >= (float)ctx->vh)
         return;  /* projects off-screen: a direct glRasterPos3f would have
                     produced an invalid raster position and drawn nothing here */
 
-    label_num = (ctx->label_options == OVERLAY_VERTEX_LABEL_SCOPE_ALL_INSTANCES) ? global_num : state->vertex_idx_in_block;
+    /* Visible-only scope: drop the vertex if the scene rendered nearer geometry
+     * at this pixel (i.e. the vertex is occluded). depthbuf is only set for the
+     * VISIBLE scope; the off-screen guard above keeps the index in range. */
+    if (ctx->depthbuf) {
+        float scene_d = ctx->depthbuf[(int)sy * ctx->vw + (int)sx];
+        if (depth > scene_d + VERTEX_LABEL_OCCLUDE_BIAS)
+            return;
+    }
+
+    label_num = (ctx->label_options == OVERLAY_VERTEX_LABEL_SCOPE_ALL_INSTANCES ||
+                 ctx->label_options == OVERLAY_VERTEX_LABEL_SCOPE_VISIBLE)
+                ? global_num : state->vertex_idx_in_block;
     lbl = &ctx->labels[ctx->count];
     snprintf(lbl->idx, sizeof(lbl->idx), " v%d", label_num);
     lbl->detail[0] = '\0';
@@ -732,6 +754,7 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
      * this is reset per call. */
     static VertexLabelCtx label_ctx;
     GLint vp[4];
+    float *depthbuf = NULL;   /* visible-only scope: scene depth snapshot */
 
     if (mode == OVERLAY_VERTEX_LABEL_OFF)
         return;
@@ -758,6 +781,7 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     label_ctx.label_options   = label_options;
     label_ctx.block_instances = 0;
     label_ctx.labelable_seen  = 0;
+    label_ctx.depthbuf        = NULL;
 
     /* The scene's projection + viewport are live here and the walker leaves
      * them intact (it only pushes/pops the modelview), so snapshot them once
@@ -766,6 +790,21 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     glGetIntegerv(GL_VIEWPORT, vp);
     label_ctx.vw = vp[2];
     label_ctx.vh = vp[3];
+
+    /* Visible-only scope: snapshot the scene depth buffer once (one readback,
+     * not a per-vertex GL round-trip) so the callback can cull occluded
+     * vertices. The scene geometry has already drawn its depths by the time
+     * overlays run. Indexed viewport-local (bottom-up), matching project_to_screen. */
+    if (label_options == OVERLAY_VERTEX_LABEL_SCOPE_VISIBLE &&
+        label_ctx.vw > 0 && label_ctx.vh > 0) {
+        size_t n = (size_t)label_ctx.vw * (size_t)label_ctx.vh;
+        depthbuf = malloc(n * sizeof(float));
+        if (depthbuf) {
+            glReadPixels(vp[0], vp[1], label_ctx.vw, label_ctx.vh,
+                         GL_DEPTH_COMPONENT, GL_FLOAT, depthbuf);
+            label_ctx.depthbuf = depthbuf;
+        }
+    }
 
     if (mode == OVERLAY_VERTEX_LABEL_INDEX_WORLD ||
         mode == OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE) {
@@ -785,6 +824,7 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     if (label_ctx.vw > 0 && label_ctx.vh > 0)
         vertex_labels_layout_and_draw(&label_ctx);
 
+    free(depthbuf);
     glPopAttrib();
 }
 

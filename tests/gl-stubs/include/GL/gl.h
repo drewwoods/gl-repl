@@ -118,6 +118,8 @@ typedef double GLclampd;
 #define GL_SCISSOR_BIT 0x00080000
 #define GL_ALL_ATTRIB_BITS 0xFFFFFFFF
 
+#define GL_DEPTH_COMPONENT 0x1902
+#define GL_FLOAT 0x1406
 #define GL_MODELVIEW 0x1700
 #define GL_PROJECTION 0x1701
 #define GL_TEXTURE 0x1702
@@ -250,6 +252,17 @@ static inline void glTexParameteri(GLenum target, GLenum pname, GLint param) { G
 static inline void glBlendFunc(GLenum sfactor, GLenum dfactor) { GL_STUB_TRACE_LINE("glBlendFunc %u %u\n", (unsigned)sfactor, (unsigned)dfactor); gl_stub_tick(GL_STUB_glBlendFunc); }
 static inline void glClear(GLbitfield mask) { GL_STUB_TRACE_LINE("glClear %u\n", (unsigned)mask); gl_stub_tick(GL_STUB_glClear); }
 static inline void glClearDepth(GLclampd depth) { (void)depth; }
+/* No framebuffer in the stubs: report "nothing in front" (far depth 1.0) so
+ * occlusion-style depth reads behave as if every vertex is visible. */
+static inline void glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,
+                                GLenum format, GLenum type, void *pixels) {
+    (void)x; (void)y; (void)format; (void)type;
+    if (pixels && width > 0 && height > 0) {
+        float *p = (float *)pixels;
+        long n = (long)width * (long)height, i;
+        for (i = 0; i < n; i++) p[i] = 1.0f;
+    }
+}
 static inline void glClearColor(GLclampf red, GLclampf green, GLclampf blue, GLclampf alpha) { GL_STUB_TRACE_LINE("glClearColor %g %g %g %g\n", (double)red, (double)green, (double)blue, (double)alpha); gl_stub_tick(GL_STUB_glClearColor); }
 static inline void glColor3f(GLfloat red, GLfloat green, GLfloat blue) { GL_STUB_TRACE_LINE("glColor3f %g %g %g\n", (double)red, (double)green, (double)blue); gl_stub_tick(GL_STUB_glColor3f); }
 static inline void glColor3fv(const GLfloat *v) { GL_STUB_TRACE_LINE("glColor3fv\n"); gl_stub_tick(GL_STUB_glColor3fv); (void)v; }
