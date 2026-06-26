@@ -32,6 +32,7 @@ typedef struct {
     int grid_brightness_idx;
     int axes_theme;
     int show_vertex_labels;
+    int vertex_label_scope;    /* 0 = one loop instance, 1 = all (unique nums) */
     int show_normal_vectors;
     int show_vertex_indices;
     int show_vertex_outlines;

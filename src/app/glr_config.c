@@ -200,6 +200,7 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_RESET_CAMERA:        return NULL; /* action row: no backing state */
     case GLR_CONFIG_AUTO_NORMALS:        return &glr_state_presentation_mut()->autonormal;
     case GLR_CONFIG_VERTEX_LABELS:       return &glr_state_presentation_mut()->show_vertex_labels;
+    case GLR_CONFIG_VERTEX_LABEL_SCOPE:  return &glr_state_presentation_mut()->vertex_label_scope;
     case GLR_CONFIG_NORMAL_VECTORS:      return &glr_state_presentation_mut()->show_normal_vectors;
     case GLR_CONFIG_VERTEX_OUTLINES:     return &glr_state_presentation_mut()->show_vertex_outlines;
     case GLR_CONFIG_VERTEX_POINTS:       return &glr_state_presentation_mut()->show_vertex_points;
@@ -255,6 +256,7 @@ int glr_config_get(GlrConfigKey key) {
     case GLR_CONFIG_RESET_CAMERA:        return 0;
     case GLR_CONFIG_AUTO_NORMALS:        return glr_state_presentation().autonormal;
     case GLR_CONFIG_VERTEX_LABELS:       return glr_state_presentation().show_vertex_labels;
+    case GLR_CONFIG_VERTEX_LABEL_SCOPE:  return glr_state_presentation().vertex_label_scope;
     case GLR_CONFIG_NORMAL_VECTORS:      return glr_state_presentation().show_normal_vectors;
     case GLR_CONFIG_VERTEX_OUTLINES:     return glr_state_presentation().show_vertex_outlines;
     case GLR_CONFIG_VERTEX_POINTS:       return glr_state_presentation().show_vertex_points;
