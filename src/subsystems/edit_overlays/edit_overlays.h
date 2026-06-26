@@ -9,7 +9,8 @@
     X(OFF, "Off")                    \
     X(INDEX, "Index")                \
     X(INDEX_POS, "Index+Pos")        \
-    X(INDEX_WORLD, "Index+World")
+    X(INDEX_WORLD, "Index+World")    \
+    X(INDEX_WORLD_FINE, "Index+World Fine")
 
 #define OVERLAY_VERTEX_LABEL_NAME_ENTRY(name, str) [OVERLAY_VERTEX_LABEL_##name] = str,
 
