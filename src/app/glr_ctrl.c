@@ -64,6 +64,7 @@
 #include "repl/state_owners.h"
 #include "repl/time.h"
 #include "repl/tutorials.h"
+#include "repl/visible_vars.h"
 #include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
 #include "subsystems/tutorial/tutorial.h"
@@ -1157,18 +1158,22 @@ static void glr_ctrl_build_scene_tabs(UiSceneTabList *out) {
 static void glr_ctrl_populate_numeric_swatch(UiRenderSnapshot *snap) {
     EditorInputView in;
     int edit_line;
+    CmdType edit_type;
     ReplNumericArgAtCursor d;
     float anchor_y;
     int cp_x, cp_w;
     char parse_err[REPL_DIAG_TEXT_MAX] = "";
     ReplParsedLine pl;
+    ExprVar vis_vars[MAX_EXPR_VARS];
+    int num_vis_vars;
 
     snap->numeric_swatch.visible = 0;
 
     if (editor_insert_mode()) return;
     edit_line = editor_state_edit_line();
     if (edit_line < 0 || edit_line >= repl_state_document_count()) return;
-    if (repl_state_document_cmds()[edit_line].type == CMD_COMMENT) return;
+    edit_type = repl_state_document_cmds()[edit_line].type;
+    if (edit_type == CMD_COMMENT) return;
     if (ui_repl_code_panel_input_row_has_color_swatch(snap)) return;
     in = editor_state_input();
     if (in.cursor_pos < 0 || !in.input || !in.input[0]) return;
@@ -1181,17 +1186,29 @@ static void glr_ctrl_populate_numeric_swatch(UiRenderSnapshot *snap) {
 
     {
         ReplSourceScopeView source_scope;
+        memset(vis_vars, 0, sizeof vis_vars);
+        num_vis_vars = collect_visible_vars(edit_line, vis_vars,
+                                            MAX_EXPR_VARS, NULL);
         repl_source_scope_view_bind(&source_scope,
                                     repl_state_document_cmds(),
                                     repl_state_document_count());
         ReplParseContext parse_ctx = {
             .source_line_idx = edit_line,
+            .vars = vis_vars,
+            .num_vars = num_vis_vars,
             .err_buf = parse_err,
             .err_sz = (int)sizeof parse_err,
             .func_aliases = repl_func_alias_view(),
             .source_scope = &source_scope,
         };
-        if (!repl_parser_parse_command_ctx(in.input, &pl, &parse_ctx)) return;
+        if (!repl_parser_parse_command_ctx(in.input, &pl, &parse_ctx)) {
+            if (edit_type != CMD_VAR_ASSIGN &&
+                edit_type != CMD_VAR_DECLARE &&
+                edit_type != CMD_SCRATCH_ASSIGN)
+                return;
+            memset(&pl, 0, sizeof pl);
+            pl.cmd.type = edit_type;
+        }
     }
     if (pl.cmd.type == CMD_COMMENT) return;
 
