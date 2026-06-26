@@ -117,7 +117,7 @@ static const char *wireframe_mode_names[] = { "Off", "Wireframe", "Hidden-line" 
 static const char *vertex_label_names[OVERLAY_VERTEX_LABEL_COUNT] = {
     OVERLAY_VERTEX_LABEL_LIST(OVERLAY_VERTEX_LABEL_NAME_ENTRY)
 };
-static const char *vertex_label_scope_names[] = { "One instance", "All instances" };
+static const char *vertex_label_scope_names[] = { "One instance", "All instances", "At vertex" };
 /* Accumulation buffer split into two rows: the effect mode (Off / AA
  * jitter / motion Blur) and the sample/pass count. The passes cycle maps
  * its state index to an actual count on the supported ladder in
@@ -236,7 +236,7 @@ const GlrConfigItem g_cfg_items[] = {
       .state_count = OVERLAY_VERTEX_LABEL_COUNT, .state_names = vertex_label_names,
       .key_code = KM_KEY(GLR_VERTEX_LABELS), .modifiers = KM_MODS(GLR_VERTEX_LABELS),
       .is_special = 1 },
-    { .label = "Label scope", .key = GLR_CONFIG_VERTEX_LABEL_SCOPE, .state_count = 2,
+    { .label = "Label scope", .key = GLR_CONFIG_VERTEX_LABEL_SCOPE, .state_count = 3,
       .state_names = vertex_label_scope_names },
     { .label = "Normal vectors", .key = GLR_CONFIG_NORMAL_VECTORS, .state_count = 2,
       .key_code = KM_KEY(GLR_NORMAL_VECTORS), .modifiers = KM_MODS(GLR_NORMAL_VECTORS) },

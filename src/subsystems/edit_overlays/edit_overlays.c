@@ -445,8 +445,9 @@ typedef struct {
     int   count;
     /* Scope: 0 labels only the first unrolled copy of the cursor's looped
      * primitive (the parametric torus shows v0..vN once, not per ring);
-     * 1 labels every unrolled vertex with a globally-unique number. */
-    int   all_instances;
+     * 1 labels every unrolled vertex with a globally-unique number;
+     * 2 labels all instances at their vertex positions (without decluttering). */
+    int   label_options;
     int   block_instances;   /* selected blocks (loop iterations) seen so far  */
     int   labelable_seen;    /* running index over all visited labelable verts */
 } VertexLabelCtx;
@@ -523,10 +524,9 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
     global_num = ctx->labelable_seen++;
 
     /* One-instance mode: only the first unrolled copy (else the torus repeats
-     * v0..vN once per ring). All-instances mode keeps the globally-unique
-     * number so every vertex is distinguishable; the declutter pass still
-     * drops whatever doesn't fit. */
-    if (!ctx->all_instances && ctx->block_instances != 1)
+     * v0..vN once per ring). All-instances and At-vertex modes keep all copies;
+     * declutter pass still drops whatever doesn't fit for All-instances. */
+    if (ctx->label_options == 0 && ctx->block_instances != 1)
         return;
     if (ctx->count >= VERTEX_LABEL_MAX)
         return;
@@ -542,7 +542,7 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
         return;  /* projects off-screen: a direct glRasterPos3f would have
                     produced an invalid raster position and drawn nothing here */
 
-    label_num = ctx->all_instances ? global_num : state->vertex_idx_in_block;
+    label_num = (ctx->label_options == 1) ? global_num : state->vertex_idx_in_block;
     lbl = &ctx->labels[ctx->count];
     snprintf(lbl->idx, sizeof(lbl->idx), " v%d", label_num);
     lbl->detail[0] = '\0';
@@ -595,45 +595,53 @@ static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
             l->width = 1.0f;
     }
 
-    /* Place in collection (walk) order — a camera-independent priority — so two
-     * labels competing for the same screen region never swap which one claims
-     * the anchor vs. gets nudged/dropped as the camera moves. Sorting by depth
-     * instead made near-equal depths flip every frame (a z-fighting-like
-     * shimmer). The trade is that the kept subset is the earlier-in-walk one
-     * rather than strictly the closest. */
-    for (oi = 0; oi < ctx->count; oi++) {
-        VertexLabel *l = &ctx->labels[oi];
-        float best_y = 0.0f;
-        int   found = 0;
-        for (step = 0; step <= VERTEX_LABEL_NUDGE_STEPS && !found; step++) {
-            for (s = (step == 0 ? 0 : -1); s <= 1; s += 2) {
-                float cand = l->anchor_y + (float)s * (float)step * dy;
-                int clash = 0;
-                for (p = 0; p < placed_n; p++) {
-                    if (label_box_overlap(l->anchor_x, cand, l->width,
-                                          placed_x[p], placed_y[p],
-                                          placed_w[p], VERTEX_LABEL_LINE_H)) {
-                        clash = 1;
+    if (ctx->label_options == 2) {
+        for (i = 0; i < ctx->count; i++) {
+            VertexLabel *l = &ctx->labels[i];
+            l->drawn = 1;
+            l->draw_y = l->anchor_y;
+        }
+    } else {
+        /* Place in collection (walk) order — a camera-independent priority — so two
+         * labels competing for the same screen region never swap which one claims
+         * the anchor vs. gets nudged/dropped as the camera moves. Sorting by depth
+         * instead made near-equal depths flip every frame (a z-fighting-like
+         * shimmer). The trade is that the kept subset is the earlier-in-walk one
+         * rather than strictly the closest. */
+        for (oi = 0; oi < ctx->count; oi++) {
+            VertexLabel *l = &ctx->labels[oi];
+            float best_y = 0.0f;
+            int   found = 0;
+            for (step = 0; step <= VERTEX_LABEL_NUDGE_STEPS && !found; step++) {
+                for (s = (step == 0 ? 0 : -1); s <= 1; s += 2) {
+                    float cand = l->anchor_y + (float)s * (float)step * dy;
+                    int clash = 0;
+                    for (p = 0; p < placed_n; p++) {
+                        if (label_box_overlap(l->anchor_x, cand, l->width,
+                                              placed_x[p], placed_y[p],
+                                              placed_w[p], VERTEX_LABEL_LINE_H)) {
+                            clash = 1;
+                            break;
+                        }
+                    }
+                    if (!clash) {
+                        best_y = cand;
+                        found = 1;
                         break;
                     }
                 }
-                if (!clash) {
-                    best_y = cand;
-                    found = 1;
-                    break;
-                }
             }
+            /* Crowded out within the bounded search: drop the label rather than
+             * stack it far from its vertex (which would streak a long leader). */
+            l->drawn = found;
+            if (!found)
+                continue;
+            l->draw_y          = best_y;
+            placed_x[placed_n] = l->anchor_x;
+            placed_y[placed_n] = best_y;
+            placed_w[placed_n] = l->width;
+            placed_n++;
         }
-        /* Crowded out within the bounded search: drop the label rather than
-         * stack it far from its vertex (which would streak a long leader). */
-        l->drawn = found;
-        if (!found)
-            continue;
-        l->draw_y          = best_y;
-        placed_x[placed_n] = l->anchor_x;
-        placed_y[placed_n] = best_y;
-        placed_w[placed_n] = l->width;
-        placed_n++;
     }
 
     /* 2D overlay pass in viewport-local pixels. */
@@ -712,7 +720,7 @@ static ReplayVertexWalkContext edit_overlays_build_vertex_walk_context(
 void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
                                          OverlayVertexLabelMode mode,
                                          int is_ortho,
-                                         int all_instances) {
+                                         int label_options) {
     ReplayVertexWalkContext ctx;
     /* Big label store (the all-instances walk can collect a whole looped
      * surface); keep it off the render stack. Render is single-threaded and
@@ -736,7 +744,7 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     label_ctx.is_ortho        = is_ortho;
     label_ctx.view_inv_ok     = 0;
     label_ctx.count           = 0;
-    label_ctx.all_instances   = all_instances;
+    label_ctx.label_options   = label_options;
     label_ctx.block_instances = 0;
     label_ctx.labelable_seen  = 0;
 

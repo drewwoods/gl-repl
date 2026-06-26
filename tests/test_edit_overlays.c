@@ -767,7 +767,7 @@ static void test_vertex_label_scope(void) {
     VertexLabelCtx one;
     memset(&one, 0, sizeof(one));
     one.mode = OVERLAY_VERTEX_LABEL_INDEX;
-    one.all_instances = 0;
+    one.label_options = 0;
     memcpy(one.proj, id, sizeof(id));
     one.vw = 1024;
     one.vh = 768;
@@ -784,7 +784,7 @@ static void test_vertex_label_scope(void) {
     VertexLabelCtx all;
     memset(&all, 0, sizeof(all));
     all.mode = OVERLAY_VERTEX_LABEL_INDEX;
-    all.all_instances = 1;
+    all.label_options = 1;
     memcpy(all.proj, id, sizeof(id));
     all.vw = 1024;
     all.vh = 768;
@@ -798,6 +798,35 @@ static void test_vertex_label_scope(void) {
                 strcmp(all.labels[1].idx, " v1") == 0 &&
                 strcmp(all.labels[2].idx, " v2") == 0 &&
                 strcmp(all.labels[3].idx, " v3") == 0);
+
+    /* At-vertex: every vertex, numbered by in-block index, bypass layout. */
+    VertexLabelCtx at_vert;
+    memset(&at_vert, 0, sizeof(at_vert));
+    at_vert.mode = OVERLAY_VERTEX_LABEL_INDEX;
+    at_vert.label_options = 2;
+    memcpy(at_vert.proj, id, sizeof(id));
+    at_vert.vw = 1024;
+    at_vert.vh = 768;
+    for (int i = 0; i < 4; i++) {
+        state.vertex_idx_in_block = vidx[i];
+        on_vertex_number_label(&state, verts[i][0], verts[i][1], verts[i][2], &at_vert);
+    }
+    ASSERT_INT("at-vertex collects every vertex", at_vert.count, 4);
+    ASSERT_TRUE("at-vertex numbers by in-block index",
+                strcmp(at_vert.labels[0].idx, " v0") == 0 &&
+                strcmp(at_vert.labels[1].idx, " v1") == 0 &&
+                strcmp(at_vert.labels[2].idx, " v0") == 0 &&
+                strcmp(at_vert.labels[3].idx, " v1") == 0);
+
+    vertex_labels_layout_and_draw(&at_vert);
+    ASSERT_INT("label 0 drawn in at-vertex", at_vert.labels[0].drawn, 1);
+    ASSERT_INT("label 1 drawn in at-vertex", at_vert.labels[1].drawn, 1);
+    ASSERT_INT("label 2 drawn in at-vertex", at_vert.labels[2].drawn, 1);
+    ASSERT_INT("label 3 drawn in at-vertex", at_vert.labels[3].drawn, 1);
+    ASSERT_TRUE("label 0 draw_y equals anchor_y", at_vert.labels[0].draw_y == at_vert.labels[0].anchor_y);
+    ASSERT_TRUE("label 1 draw_y equals anchor_y", at_vert.labels[1].draw_y == at_vert.labels[1].anchor_y);
+    ASSERT_TRUE("label 2 draw_y equals anchor_y", at_vert.labels[2].draw_y == at_vert.labels[2].anchor_y);
+    ASSERT_TRUE("label 3 draw_y equals anchor_y", at_vert.labels[3].draw_y == at_vert.labels[3].anchor_y);
 }
 
 /* on_normal_vector_arrow callback: draws a GL_LINES arrow from the vertex to
@@ -867,7 +896,7 @@ static void test_vertex_numbers_use_source_begin_block(void) {
     TraceLog log;
     trace_begin();
     edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX, 0,
-                                        /*all_instances=*/1);
+                                        /*label_options=*/1);
     trace_end(&log);
 
     ASSERT_INT("earlier GL_POINTS vertex 0 not labelled",
@@ -919,7 +948,7 @@ static void test_render_via_repl_program(void) {
     walk.cursor.cursor_block_end = repl_state_flat_program_current_block_end();
 
     edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX_POS, 0,
-                                        /*all_instances=*/1);
+                                        /*label_options=*/1);
     trace_end(&log);
     ASSERT_INT("vertex-number label at first vertex",
                trace_count_line(&log, "glRasterPos2f 640 576"), 1);
