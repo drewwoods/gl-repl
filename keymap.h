@@ -120,7 +120,7 @@
 #define GLR_CAMERA_ROTATE    KEY_CTRL_R, GLUT_ACTIVE_SHIFT  /* plain Ctrl+R = Replay */
 #define GLR_SPLIT_DECL       KEY_CTRL_S, GLUT_ACTIVE_SHIFT  /* plain Ctrl+S = Save */
 #define GLR_AUTO_TIME        KEY_CTRL_T, 0
-#define GLR_WINDING_VIEW     KEY_CTRL_T, GLUT_ACTIVE_SHIFT
+#define GLR_WINDING_VIEW     KEY_CTRL_B, GLUT_ACTIVE_SHIFT
 #define GLR_MSAA             KEY_CTRL_U, 0
 #define GLR_ACCUM_EFFECT     KEY_CTRL_U, GLUT_ACTIVE_SHIFT  /* Shift toggles accum-AA (read in handler) */
 #define GLR_VIEW_MODE        KEY_CTRL_V, GLUT_ACTIVE_SHIFT  /* plain Ctrl+V = Paste */

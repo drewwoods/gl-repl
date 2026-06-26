@@ -574,12 +574,20 @@ static void test_ascii_shortcut_modifiers(void) {
     ASSERT_INT("plain Ctrl+C declined (-> editor copy)",
                glr_cfg_handle_ascii_shortcut(KEY_CTRL_C), 0);
 
-    /* Ctrl+Shift+T toggles Winding view. */
+    /* Ctrl+Shift+B toggles Winding view. */
     g_test_mods = GLUT_ACTIVE_SHIFT;
     int wv0 = glr_config_get(GLR_CONFIG_WINDING_VIEW);
-    ASSERT_INT("Ctrl+Shift+T handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_T), 1);
-    ASSERT_TRUE("Ctrl+Shift+T toggled Winding",
+    ASSERT_INT("Ctrl+Shift+B handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_B), 1);
+    ASSERT_TRUE("Ctrl+Shift+B toggled Winding",
                 glr_config_get(GLR_CONFIG_WINDING_VIEW) != wv0);
+
+    /* Ctrl+Shift+T resets time. */
+    g_test_mods = GLUT_ACTIVE_SHIFT;
+    int t_idx = repl_eval_find_predef_var_idx("t");
+    ASSERT_TRUE("t predef var exists", t_idx >= 0);
+    g_predef_vars_mut[t_idx].value = 5.0f;
+    ASSERT_INT("Ctrl+Shift+T handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_T), 1);
+    ASSERT_TRUE("Ctrl+Shift+T reset time to 0", fabsf(g_predef_vars[t_idx].value) < 1e-6f);
 
     /* Plain Ctrl+P (no Shift) toggles Poly highlight. */
     g_test_mods = 0;
