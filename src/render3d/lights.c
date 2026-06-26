@@ -27,6 +27,15 @@ void render3d_lights_init_global_ambient(void) {
     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lm_amb);
 }
 
+/* The HEADLIGHT lamp (slot 0, eye-space) sits this far in front of the eye
+ * along the view axis (eye-space -Z) instead of exactly at the camera. A
+ * lamp *at* the eye would put its indicator at the viewpoint — never on
+ * screen — so we nudge it a small, honest distance forward: the GL light
+ * genuinely lives here and the indicator is drawn at that same world point
+ * (no draw-only fudge). Well clear of the 0.1 near plane; small relative to
+ * the default 5.0 camera distance, so it still reads as the camera light. */
+#define RENDER3D_HEADLIGHT_EYE_OFFSET 1.0f
+
 /* --- Lighting themes ---------------------------------------------------
  *
  * Each theme defines the position + color of the four lights. Tones
@@ -68,11 +77,12 @@ static const Render3dLight g_light_themes[LIGHT_THEME_COUNT][MAX_LIGHTS] = {
             { 0.20f, 0.20f, 0.25f, 1.0f } },
     },
     /* HEADLIGHT: light 0 rides eye space (pos_is_eye_space=1, set at
-     * identity modelview); the rest are disabled fills the user can
-     * opt into. */
+     * identity modelview), nudged RENDER3D_HEADLIGHT_EYE_OFFSET into the
+     * scene (eye -Z) so its indicator clears the viewpoint; the rest are
+     * disabled fills the user can opt into. */
     [LIGHT_THEME_HEADLIGHT] = {
         { GL_LIGHT0, 0, 1,
-            {  0.0f,  0.0f,  0.0f, 1.0f },
+            {  0.0f,  0.0f, -RENDER3D_HEADLIGHT_EYE_OFFSET, 1.0f },
             { 0.90f, 0.90f, 0.85f, 1.0f },
             { 0.10f, 0.10f, 0.10f, 1.0f },
             { 0.70f, 0.70f, 0.65f, 1.0f } },
@@ -224,6 +234,27 @@ static void render3d_lights_camera_world_pos(const Render3dRenderConfig *cfg,
     *out_z = cfg->cam_tz + cfg->cam_dist * cx * cy;
 }
 
+/* Rotate an eye-space direction into world space using the camera
+ * orientation — the inverse of the Rx(cam_rx)*Ry(cam_ry) view rotation in
+ * glr_camera_load_modelview, i.e. world = Ry(-ry) * Rx(-rx) * eye. Lets an
+ * eye-space (HEADLIGHT) slot's offset be placed in front of the camera
+ * along the real view axis instead of naively shifted in world Z. */
+static void render3d_lights_eye_dir_to_world(const Render3dRenderConfig *cfg,
+                                          float ex, float ey, float ez,
+                                          float *out_x, float *out_y, float *out_z) {
+    const float deg = 3.14159265358979323846f / 180.0f;
+    float cx = cosf(cfg->cam_rx * deg), sx = sinf(cfg->cam_rx * deg);
+    float cy = cosf(cfg->cam_ry * deg), sy = sinf(cfg->cam_ry * deg);
+    /* Rx(-rx) * (ex,ey,ez) */
+    float x1 =  ex;
+    float y1 =  cx * ey + sx * ez;
+    float z1 = -sx * ey + cx * ez;
+    /* Ry(-ry) * (x1,y1,z1) */
+    *out_x = cy * x1 - sy * z1;
+    *out_y = y1;
+    *out_z = sy * x1 + cy * z1;
+}
+
 void render3d_lights_render(const Render3dFrameRenderContext *frame_ctx) {
     if (!frame_ctx->config.show_light_indicators) return;
 
@@ -249,11 +280,15 @@ void render3d_lights_render(const Render3dFrameRenderContext *frame_ctx) {
         float lx, ly, lz;
         if (eye_space) {
             /* pos[] is in eye space; the slot rides the camera, so the
-             * world location for the indicator is just the camera's
-             * world position plus any eye-space offset baked into pos. */
-            lx = cam_wx + p[0];
-            ly = cam_wy + p[1];
-            lz = cam_wz + p[2];
+             * world location is the camera's world position plus the
+             * eye-space offset rotated into world space along the view
+             * axis (not a naive world-Z shift). */
+            float ox, oy, oz;
+            render3d_lights_eye_dir_to_world(&frame_ctx->config,
+                                          p[0], p[1], p[2], &ox, &oy, &oz);
+            lx = cam_wx + ox;
+            ly = cam_wy + oy;
+            lz = cam_wz + oz;
         } else if (is_dir) {
             float len = sqrtf(p[0]*p[0] + p[1]*p[1] + p[2]*p[2]);
             if (len < 1e-6f) continue;
@@ -316,6 +351,23 @@ void render3d_lights_render(const Render3dFrameRenderContext *frame_ctx) {
                                ly + dirs[r][1] * rlen,
                                lz + dirs[r][2] * rlen);
                 }
+                glEnd();
+            }
+
+            if (eye_space) {
+                /* Headlight aim ray: a positional point at the eye reads as
+                 * a static lamp, so trace the view direction it shines along
+                 * (eye -Z rotated to world) a short way into the scene. */
+                float fx, fy, fz;
+                render3d_lights_eye_dir_to_world(&frame_ctx->config,
+                                              0.0f, 0.0f, -1.0f, &fx, &fy, &fz);
+                float aim = 1.2f;
+                glLineWidth(1.5f);
+                glBegin(GL_LINES);
+                glColor4f(d[0], d[1], d[2], 0.5f * glow);
+                glVertex3f(lx, ly, lz);
+                glColor4f(d[0], d[1], d[2], 0.0f);
+                glVertex3f(lx + fx * aim, ly + fy * aim, lz + fz * aim);
                 glEnd();
             }
 
