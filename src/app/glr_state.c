@@ -52,6 +52,7 @@ static const float g_grid_extents[GRID_EXTENT_COUNT] = {
         .grid_brightness_idx    = CFG_DEFAULT_GRID_BRIGHTNESS_IDX, \
         .axes_theme             = CFG_DEFAULT_AXES_THEME, \
         .show_vertex_labels     = CFG_DEFAULT_VERTEX_LABELS, \
+        .vertex_label_scope     = CFG_DEFAULT_VERTEX_LABEL_SCOPE, \
         .show_normal_vectors    = CFG_DEFAULT_NORMAL_VECTORS, \
         .show_vertex_indices    = CFG_DEFAULT_VERTEX_INDICES, \
         .show_vertex_outlines   = CFG_DEFAULT_VERTEX_OUTLINES, \

@@ -34,6 +34,11 @@
 #define CFG_DEFAULT_GRID_BRIGHTNESS_IDX GRID_BRIGHTNESS_NORMAL
 #define CFG_DEFAULT_AXES_THEME        AXES_THEME_OFF
 #define CFG_DEFAULT_VERTEX_LABELS     OVERLAY_VERTEX_LABEL_INDEX
+/* Vertex-label scope: 0 = label one representative copy of a looped primitive
+ * (so the parametric torus shows v0..vN once, not duplicated per ring);
+ * 1 = label every unrolled vertex with a globally-unique number (see all of
+ * them, world positions and all — declutter still drops whatever can't fit). */
+#define CFG_DEFAULT_VERTEX_LABEL_SCOPE 0
 #define CFG_DEFAULT_VERTEX_INDICES    1
 #define CFG_DEFAULT_NORMAL_VECTORS    0
 #define CFG_DEFAULT_VERTEX_OUTLINES   1

@@ -390,15 +390,65 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
     glPopAttrib();
 }
 
+/* ---- Vertex-number label declutter -------------------------------------
+ *
+ * Labels used to draw straight at each vertex's projected point. Two vertices
+ * that project near the same pixel then stamped their bitmap strings on top of
+ * each other into an unreadable jumble (classic when a primitive is viewed
+ * edge-on). Instead we now project every label to screen space during the
+ * walk, collect them, then lay them out in a 2D pass in collection (walk)
+ * order — a camera-independent priority, so co-visible labels never swap as the
+ * camera moves — nudging any label whose box overlaps an already-placed one
+ * vertically (with a thin leader line back to the vertex) until it clears.
+ *
+ * The nudge search is BOUNDED: a label that can't find a free slot within a
+ * few rows of its anchor is dropped rather than stacked arbitrarily far. That
+ * keeps a dense block (e.g. a 50-vertex parametric-torus quad strip) from
+ * piling every label into a tall column of long leader streaks — the
+ * earlier-in-walk labels are the ones that survive. */
+
+/* Collection ceiling. The cursor's "block" can be a whole looped surface (the
+ * parametric torus selects ~1200 vertices), and we want to consider all of
+ * them so the surviving labels spread evenly over the geometry instead of
+ * truncating to whatever came first in program order (one spatial arc). Beyond
+ * this many the labelling is meaningless anyway. */
+#define VERTEX_LABEL_MAX          2048
+#define VERTEX_LABEL_LINE_H       15.0f  /* collision-box height, px          */
+#define VERTEX_LABEL_GAP           2.0f  /* vertical gap between stacked rows  */
+#define VERTEX_LABEL_NUDGE_STEPS     4   /* max stack offsets per direction;   \
+                                          * beyond this a crowded label drops  */
+#define VERTEX_LABEL_LEADER_MIN     3.0f /* draw a leader past this Y nudge    */
+
+typedef struct {
+    float anchor_x, anchor_y;  /* projected vertex point, viewport-local px   */
+    float width;               /* measured glyph width, px (filled at layout) */
+    float draw_y;              /* baseline Y after declutter                  */
+    int   drawn;               /* 0 if dropped as un-placeable (too crowded)  */
+    char  idx[16];             /* "v<n>" run, FONT_MONO                       */
+    char  detail[48];          /* " (x, y, z)" run, FONT_TINY (may be empty)  */
+} VertexLabel;
+
 typedef struct {
     OverlayVertexLabelMode mode;
-    int is_ortho;
+    int   is_ortho;
     /* For OVERLAY_VERTEX_LABEL_INDEX_WORLD: inverse of the camera/view matrix
      * snapshotted at the start of the walk, so a per-vertex world position is
      * view_inv * modelview * vertex (modelview = view * accumulated model
      * transforms). view_inv_ok is 0 if the view matrix was singular. */
     float view_inv[16];
     int   view_inv_ok;
+    /* Projection + viewport snapshotted before the walk (the walker only
+     * touches the modelview), used to project each vertex to screen space. */
+    float proj[16];
+    int   vw, vh;
+    VertexLabel labels[VERTEX_LABEL_MAX];
+    int   count;
+    /* Scope: 0 labels only the first unrolled copy of the cursor's looped
+     * primitive (the parametric torus shows v0..vN once, not per ring);
+     * 1 labels every unrolled vertex with a globally-unique number. */
+    int   all_instances;
+    int   block_instances;   /* selected blocks (loop iterations) seen so far  */
+    int   labelable_seen;    /* running index over all visited labelable verts */
 } VertexLabelCtx;
 
 static float sanitize_zero(float val) {
@@ -408,46 +458,229 @@ static float sanitize_zero(float val) {
     return val;
 }
 
+/* Multiply column-major (OpenGL-layout) 4x4 `m` by the homogeneous vector
+ * (x, y, z, w), writing the 4-component result (no perspective divide). */
+static void mat4_mul_vec4(const float m[16], float x, float y, float z, float w,
+                          float out[4]) {
+    out[0] = m[0] * x + m[4] * y + m[8]  * z + m[12] * w;
+    out[1] = m[1] * x + m[5] * y + m[9]  * z + m[13] * w;
+    out[2] = m[2] * x + m[6] * y + m[10] * z + m[14] * w;
+    out[3] = m[3] * x + m[7] * y + m[11] * z + m[15] * w;
+}
+
+/* Project object-space (x, y, z) through modelview `mv` then projection `proj`
+ * into viewport-local window pixels (origin = scene viewport's lower-left).
+ * Returns 0 when the point is at/behind the eye (clip w <= 0). */
+static int project_to_screen(const float mv[16], const float proj[16],
+                             int vw, int vh, float x, float y, float z,
+                             float *sx, float *sy) {
+    float eye[4], clip[4], inv;
+    mat4_mul_vec4(mv, x, y, z, 1.0f, eye);
+    mat4_mul_vec4(proj, eye[0], eye[1], eye[2], eye[3], clip);
+    if (clip[3] <= 1e-5f)
+        return 0;
+    inv    = 1.0f / clip[3];
+    *sx    = (clip[0] * inv * 0.5f + 0.5f) * (float)vw;
+    *sy    = (clip[1] * inv * 0.5f + 0.5f) * (float)vh;
+    return 1;
+}
+
+static float bitmap_text_width(void *font, const char *s) {
+    float w = 0.0f;
+    for (; s && *s; s++)
+        w += (float)glutBitmapWidth(font, (unsigned char)*s);
+    return w;
+}
+
+/* Axis-aligned box overlap; both boxes share the fixed height `h`. */
+static int label_box_overlap(float ax, float ay, float aw,
+                             float bx, float by, float bw, float h) {
+    return ax < bx + bw && bx < ax + aw &&
+           ay < by + h  && by < ay + h;
+}
+
 static void on_vertex_number_label(const ReplayVertexWalkState *state,
                                    float vx, float vy, float vz,
                                    void *user) {
-    const VertexLabelCtx *ctx = (const VertexLabelCtx *)user;
-    char idx_buf[16];
-    char pos_buf[48];
-    const char *detail_text = NULL;
+    VertexLabelCtx *ctx = (VertexLabelCtx *)user;
+    float mv[16], sx, sy;
+    VertexLabel *lbl;
+    int label_num, global_num;
 
-    if (!ctx || (ctx->mode != OVERLAY_VERTEX_LABEL_INDEX &&
-                 ctx->mode != OVERLAY_VERTEX_LABEL_INDEX_POS &&
-                 ctx->mode != OVERLAY_VERTEX_LABEL_INDEX_WORLD))
+    if (!ctx ||
+        (ctx->mode != OVERLAY_VERTEX_LABEL_INDEX &&
+         ctx->mode != OVERLAY_VERTEX_LABEL_INDEX_POS &&
+         ctx->mode != OVERLAY_VERTEX_LABEL_INDEX_WORLD))
         return;
 
-    snprintf(idx_buf, sizeof(idx_buf), " v%d", state->vertex_idx_in_block);
+    /* A flat program unrolls loops, so a looped primitive becomes many blocks
+     * that all match the cursor's source line. vertex_idx_in_block resets to 0
+     * at each block, so it marks block boundaries; count them. The global index
+     * advances for every labelable vertex (independent of the off-screen cull
+     * below), so a given vertex keeps the same number as the camera moves. */
+    if (state->vertex_idx_in_block == 0)
+        ctx->block_instances++;
+    global_num = ctx->labelable_seen++;
+
+    /* One-instance mode: only the first unrolled copy (else the torus repeats
+     * v0..vN once per ring). All-instances mode keeps the globally-unique
+     * number so every vertex is distinguishable; the declutter pass still
+     * drops whatever doesn't fit. */
+    if (!ctx->all_instances && ctx->block_instances != 1)
+        return;
+    if (ctx->count >= VERTEX_LABEL_MAX)
+        return;
+
+    /* GL_MODELVIEW here is view * model (the walker has applied the model
+     * transforms up to this vertex), so this is exactly where a direct
+     * glRasterPos3f(vx, vy, vz) would have landed the text. */
+    glGetFloatv(GL_MODELVIEW_MATRIX, mv);
+    if (!project_to_screen(mv, ctx->proj, ctx->vw, ctx->vh, vx, vy, vz,
+                           &sx, &sy))
+        return;  /* behind the camera */
+    if (sx < 0.0f || sx >= (float)ctx->vw || sy < 0.0f || sy >= (float)ctx->vh)
+        return;  /* projects off-screen: a direct glRasterPos3f would have
+                    produced an invalid raster position and drawn nothing here */
+
+    label_num = ctx->all_instances ? global_num : state->vertex_idx_in_block;
+    lbl = &ctx->labels[ctx->count];
+    snprintf(lbl->idx, sizeof(lbl->idx), " v%d", label_num);
+    lbl->detail[0] = '\0';
     if (ctx->mode == OVERLAY_VERTEX_LABEL_INDEX_POS) {
         if (ctx->is_ortho)
-            snprintf(pos_buf, sizeof(pos_buf), " (%.2f, %.2f)",
+            snprintf(lbl->detail, sizeof(lbl->detail), " (%.2f, %.2f)",
                      sanitize_zero(vx), sanitize_zero(vy));
         else
-            snprintf(pos_buf, sizeof(pos_buf), " (%.2f, %.2f, %.2f)",
+            snprintf(lbl->detail, sizeof(lbl->detail), " (%.2f, %.2f, %.2f)",
                      sanitize_zero(vx), sanitize_zero(vy), sanitize_zero(vz));
-        detail_text = pos_buf;
     } else if (ctx->mode == OVERLAY_VERTEX_LABEL_INDEX_WORLD && ctx->view_inv_ok) {
-        /* GL_MODELVIEW here is view * model (the walker has applied the model
-         * transforms up to this vertex). Map the input vertex into eye space,
-         * then undo the camera to land in world space. Cheap: vertex labels
-         * only fire for the cursor's selected block, not the whole program. */
-        float mv[16], eye[3], world[3];
-        glGetFloatv(GL_MODELVIEW_MATRIX, mv);
+        /* Map the vertex into eye space, then undo the camera to land in world
+         * space. Cheap: labels only fire for the cursor's selected block. */
+        float eye[3], world[3];
         mat4_transform_point(mv, vx, vy, vz, eye);
         mat4_transform_point(ctx->view_inv, eye[0], eye[1], eye[2], world);
         if (ctx->is_ortho)
-            snprintf(pos_buf, sizeof(pos_buf), " (%.2f, %.2f)",
+            snprintf(lbl->detail, sizeof(lbl->detail), " (%.2f, %.2f)",
                      sanitize_zero(world[0]), sanitize_zero(world[1]));
         else
-            snprintf(pos_buf, sizeof(pos_buf), " (%.2f, %.2f, %.2f)",
+            snprintf(lbl->detail, sizeof(lbl->detail), " (%.2f, %.2f, %.2f)",
                      sanitize_zero(world[0]), sanitize_zero(world[1]), sanitize_zero(world[2]));
-        detail_text = pos_buf;
     }
-    render3d_draw_vertex_label_text(vx, vy, vz, idx_buf, detail_text);
+    lbl->anchor_x = sx;
+    lbl->anchor_y = sy;
+    lbl->draw_y   = sy;
+    lbl->width    = 0.0f;
+    ctx->count++;
+}
+
+/* Lay the collected labels out in a 2D pass over the scene viewport: walk them
+ * in collection order, push each overlapping label off its neighbours along Y,
+ * then draw leaders + glyphs. Assumes the caller has set the label color and a
+ * lighting/depth-disabled state (we only swap the matrices). */
+static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
+    float placed_x[VERTEX_LABEL_MAX], placed_y[VERTEX_LABEL_MAX],
+          placed_w[VERTEX_LABEL_MAX];
+    int   placed_n = 0;
+    const float dy = VERTEX_LABEL_LINE_H + VERTEX_LABEL_GAP;
+    int i, oi, step, s, p;
+
+    if (ctx->count <= 0)
+        return;
+
+    for (i = 0; i < ctx->count; i++) {
+        VertexLabel *l = &ctx->labels[i];
+        l->width = bitmap_text_width(FONT_MONO, l->idx) +
+                   bitmap_text_width(FONT_TINY, l->detail);
+        if (l->width < 1.0f)
+            l->width = 1.0f;
+    }
+
+    /* Place in collection (walk) order — a camera-independent priority — so two
+     * labels competing for the same screen region never swap which one claims
+     * the anchor vs. gets nudged/dropped as the camera moves. Sorting by depth
+     * instead made near-equal depths flip every frame (a z-fighting-like
+     * shimmer). The trade is that the kept subset is the earlier-in-walk one
+     * rather than strictly the closest. */
+    for (oi = 0; oi < ctx->count; oi++) {
+        VertexLabel *l = &ctx->labels[oi];
+        float best_y = 0.0f;
+        int   found = 0;
+        for (step = 0; step <= VERTEX_LABEL_NUDGE_STEPS && !found; step++) {
+            for (s = (step == 0 ? 0 : -1); s <= 1; s += 2) {
+                float cand = l->anchor_y + (float)s * (float)step * dy;
+                int clash = 0;
+                for (p = 0; p < placed_n; p++) {
+                    if (label_box_overlap(l->anchor_x, cand, l->width,
+                                          placed_x[p], placed_y[p],
+                                          placed_w[p], VERTEX_LABEL_LINE_H)) {
+                        clash = 1;
+                        break;
+                    }
+                }
+                if (!clash) {
+                    best_y = cand;
+                    found = 1;
+                    break;
+                }
+            }
+        }
+        /* Crowded out within the bounded search: drop the label rather than
+         * stack it far from its vertex (which would streak a long leader). */
+        l->drawn = found;
+        if (!found)
+            continue;
+        l->draw_y          = best_y;
+        placed_x[placed_n] = l->anchor_x;
+        placed_y[placed_n] = best_y;
+        placed_w[placed_n] = l->width;
+        placed_n++;
+    }
+
+    /* 2D overlay pass in viewport-local pixels. */
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    gluOrtho2D(0.0, (double)ctx->vw, 0.0, (double)ctx->vh);
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    /* Leaders first so glyphs paint over them. */
+    glLineWidth(1.0f);
+    glBegin(GL_LINES);
+    for (i = 0; i < ctx->count; i++) {
+        VertexLabel *l = &ctx->labels[i];
+        float d;
+        if (!l->drawn) continue;
+        d = l->draw_y - l->anchor_y;
+        if (d < 0.0f) d = -d;
+        if (d > VERTEX_LABEL_LEADER_MIN) {
+            glVertex2f(l->anchor_x, l->anchor_y);
+            glVertex2f(l->anchor_x, l->draw_y);
+        }
+    }
+    glEnd();
+
+    for (i = 0; i < ctx->count; i++) {
+        VertexLabel *l = &ctx->labels[i];
+        const char *c;
+        float y;
+        if (!l->drawn) continue;
+        y = l->draw_y;
+        /* The anchor is on-screen (off-screen vertices were culled at collect),
+         * but a declutter nudge can push draw_y past the top/bottom edge, where
+         * glRasterPos would invalidate and drop the whole string — keep Y in. */
+        if (y < 0.0f)                  y = 0.0f;
+        if (y > (float)ctx->vh - 1.0f) y = (float)ctx->vh - 1.0f;
+        glRasterPos2f(l->anchor_x, y);
+        for (c = l->idx;    *c; c++) glutBitmapCharacter(FONT_MONO, (unsigned char)*c);
+        for (c = l->detail; *c; c++) glutBitmapCharacter(FONT_TINY, (unsigned char)*c);
+    }
+
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
 }
 
 static void on_normal_vector_arrow(const ReplayVertexWalkState *state,
@@ -478,8 +711,14 @@ static ReplayVertexWalkContext edit_overlays_build_vertex_walk_context(
 
 void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
                                          OverlayVertexLabelMode mode,
-                                         int is_ortho) {
+                                         int is_ortho,
+                                         int all_instances) {
     ReplayVertexWalkContext ctx;
+    /* Big label store (the all-instances walk can collect a whole looped
+     * surface); keep it off the render stack. Render is single-threaded and
+     * this is reset per call. */
+    static VertexLabelCtx label_ctx;
+    GLint vp[4];
 
     if (mode == OVERLAY_VERTEX_LABEL_OFF)
         return;
@@ -493,7 +732,22 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     glDisable(GL_DEPTH_TEST);
     render3d_clr(RENDER3D_CLR_VERTEX_LABEL);
 
-    VertexLabelCtx label_ctx = { .mode = mode, .is_ortho = is_ortho };
+    label_ctx.mode            = mode;
+    label_ctx.is_ortho        = is_ortho;
+    label_ctx.view_inv_ok     = 0;
+    label_ctx.count           = 0;
+    label_ctx.all_instances   = all_instances;
+    label_ctx.block_instances = 0;
+    label_ctx.labelable_seen  = 0;
+
+    /* The scene's projection + viewport are live here and the walker leaves
+     * them intact (it only pushes/pops the modelview), so snapshot them once
+     * for the per-vertex projection in the callback. */
+    glGetFloatv(GL_PROJECTION_MATRIX, label_ctx.proj);
+    glGetIntegerv(GL_VIEWPORT, vp);
+    label_ctx.vw = vp[2];
+    label_ctx.vh = vp[3];
+
     if (mode == OVERLAY_VERTEX_LABEL_INDEX_WORLD) {
         /* The modelview here is the camera/view matrix — the walker has not yet
          * applied any model transform (it pushes/translates per cmd below). Cache
@@ -507,6 +761,9 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
         .on_vertex = on_vertex_number_label,
     };
     replay_walk_user_vertices(&ctx, &cb, &label_ctx);
+
+    if (label_ctx.vw > 0 && label_ctx.vh > 0)
+        vertex_labels_layout_and_draw(&label_ctx);
 
     glPopAttrib();
 }
@@ -698,7 +955,8 @@ void edit_overlays_post_overlays(void *user_data) {
         prof_begin(PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS);
         edit_overlays_render_vertex_numbers(&pack->walk,
                                             pack->vertex_label_mode,
-                                            pack->ortho_mode);
+                                            pack->ortho_mode,
+                                            pack->vertex_label_scope);
         prof_accum_end(PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS);
     }
     if (pack->show_normal_vectors) {

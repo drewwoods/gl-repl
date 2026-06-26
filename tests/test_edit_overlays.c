@@ -654,9 +654,12 @@ static void test_sanitize_zero(void) {
     ASSERT_TRUE("sanitize_zero(0.0051f) is 0.0051f", sanitize_zero(0.0051f) == 0.0051f);
 }
 
-/* on_vertex_number_label callback: builds the index / index+pos label text
- * and forwards it to the scene text helper (observable as a glRasterPos3f at
- * the vertex). Also exercise the mode guard. */
+/* on_vertex_number_label callback: builds the index / index+pos label text,
+ * projects the vertex to screen space, and *collects* the label into the ctx
+ * (the actual draw happens later in vertex_labels_layout_and_draw). The stub
+ * projection is identity over a {0,0,1024,768} viewport, so screen coords are
+ * ((x*0.5+0.5)*1024, (y*0.5+0.5)*768). Also exercises the mode guard and the
+ * off-screen cull. */
 static void test_on_vertex_number_label_callback(void) {
     printf("--- edit_overlays on_vertex_number_label ---\n");
 
@@ -664,45 +667,137 @@ static void test_on_vertex_number_label_callback(void) {
     memset(&state, 0, sizeof(state));
     state.vertex_idx_in_block = 2;
 
-    TraceLog log;
-
-    /* INDEX mode (3D): a single label drawn at the vertex. */
-    VertexLabelCtx idx_ctx = { .mode = OVERLAY_VERTEX_LABEL_INDEX, .is_ortho = 0 };
-    trace_begin();
-    on_vertex_number_label(&state, 1.0f, 2.0f, 3.0f, &idx_ctx);
-    trace_end(&log);
-    ASSERT_INT("index label sets raster pos at the vertex",
-               trace_count_line(&log, "glRasterPos3f 1 2 3"), 1);
-
-    /* INDEX_POS mode (2D ortho): still anchored at the vertex. */
-    VertexLabelCtx pos_ctx = { .mode = OVERLAY_VERTEX_LABEL_INDEX_POS, .is_ortho = 1 };
-    trace_begin();
-    on_vertex_number_label(&state, 4.0f, 5.0f, 6.0f, &pos_ctx);
-    trace_end(&log);
-    ASSERT_INT("index+pos label sets raster pos at the vertex",
-               trace_count_line(&log, "glRasterPos3f 4 5 6"), 1);
-
-    /* INDEX_WORLD mode (3D): exercises the world space logic via stubs. */
-    VertexLabelCtx world_ctx = { .mode = OVERLAY_VERTEX_LABEL_INDEX_WORLD, .is_ortho = 0, .view_inv_ok = 1 };
     float id[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
-    memcpy(world_ctx.view_inv, id, sizeof(id));
     extern float g_gl_stub_modelview_matrix[16];
     memcpy(g_gl_stub_modelview_matrix, id, sizeof(id));
 
-    trace_begin();
-    on_vertex_number_label(&state, 1.0f, 2.0f, 3.0f, &world_ctx);
-    trace_end(&log);
-    ASSERT_INT("index+world label sets raster pos at the vertex",
-               trace_count_line(&log, "glRasterPos3f 1 2 3"), 1);
+    /* INDEX mode: the vertex at the origin projects to the viewport center. */
+    VertexLabelCtx idx_ctx;
+    memset(&idx_ctx, 0, sizeof(idx_ctx));
+    idx_ctx.mode = OVERLAY_VERTEX_LABEL_INDEX;
+    memcpy(idx_ctx.proj, id, sizeof(id));
+    idx_ctx.vw = 1024;
+    idx_ctx.vh = 768;
+    idx_ctx.block_instances = 1;   /* inside the first selected block */
+    on_vertex_number_label(&state, 0.0f, 0.0f, 0.0f, &idx_ctx);
+    ASSERT_INT("index label collected", idx_ctx.count, 1);
+    ASSERT_TRUE("index label anchored at projected vertex",
+                idx_ctx.labels[0].anchor_x == 512.0f &&
+                idx_ctx.labels[0].anchor_y == 384.0f);
+    ASSERT_TRUE("index label text is the vertex index",
+                strcmp(idx_ctx.labels[0].idx, " v2") == 0);
 
-    /* OFF mode and NULL ctx draw nothing. */
-    VertexLabelCtx off_ctx = { .mode = OVERLAY_VERTEX_LABEL_OFF, .is_ortho = 0 };
-    trace_begin();
-    on_vertex_number_label(&state, 1.0f, 2.0f, 3.0f, &off_ctx);
-    on_vertex_number_label(&state, 1.0f, 2.0f, 3.0f, NULL);
-    trace_end(&log);
-    ASSERT_INT("off / NULL ctx draws nothing",
-               trace_count_sym(&log, "glRasterPos3f"), 0);
+    /* INDEX_POS mode (2D ortho): detail carries the ortho XY. */
+    VertexLabelCtx pos_ctx;
+    memset(&pos_ctx, 0, sizeof(pos_ctx));
+    pos_ctx.mode = OVERLAY_VERTEX_LABEL_INDEX_POS;
+    pos_ctx.is_ortho = 1;
+    memcpy(pos_ctx.proj, id, sizeof(id));
+    pos_ctx.vw = 1024;
+    pos_ctx.vh = 768;
+    pos_ctx.block_instances = 1;
+    on_vertex_number_label(&state, 0.25f, 0.5f, 0.0f, &pos_ctx);
+    ASSERT_INT("index+pos label collected", pos_ctx.count, 1);
+    ASSERT_TRUE("index+pos detail carries ortho coords",
+                strcmp(pos_ctx.labels[0].detail, " (0.25, 0.50)") == 0);
+
+    /* INDEX_WORLD mode: maps through modelview then view_inv (both identity). */
+    VertexLabelCtx world_ctx;
+    memset(&world_ctx, 0, sizeof(world_ctx));
+    world_ctx.mode = OVERLAY_VERTEX_LABEL_INDEX_WORLD;
+    world_ctx.view_inv_ok = 1;
+    memcpy(world_ctx.view_inv, id, sizeof(id));
+    memcpy(world_ctx.proj, id, sizeof(id));
+    world_ctx.vw = 1024;
+    world_ctx.vh = 768;
+    world_ctx.block_instances = 1;
+    on_vertex_number_label(&state, 0.0f, 0.0f, 0.0f, &world_ctx);
+    ASSERT_INT("index+world label collected", world_ctx.count, 1);
+    ASSERT_TRUE("index+world detail carries world coords",
+                strcmp(world_ctx.labels[0].detail, " (0.00, 0.00, 0.00)") == 0);
+
+    /* OFF mode and NULL ctx collect nothing. */
+    VertexLabelCtx off_ctx;
+    memset(&off_ctx, 0, sizeof(off_ctx));
+    off_ctx.mode = OVERLAY_VERTEX_LABEL_OFF;
+    memcpy(off_ctx.proj, id, sizeof(id));
+    off_ctx.vw = 1024;
+    off_ctx.vh = 768;
+    on_vertex_number_label(&state, 0.0f, 0.0f, 0.0f, &off_ctx);
+    on_vertex_number_label(&state, 0.0f, 0.0f, 0.0f, NULL);
+    ASSERT_INT("off / NULL ctx collects nothing", off_ctx.count, 0);
+
+    /* A vertex that projects outside the viewport is culled (the old direct
+     * glRasterPos3f would have been invalid there too). */
+    VertexLabelCtx cull_ctx;
+    memset(&cull_ctx, 0, sizeof(cull_ctx));
+    cull_ctx.mode = OVERLAY_VERTEX_LABEL_INDEX;
+    memcpy(cull_ctx.proj, id, sizeof(id));
+    cull_ctx.vw = 1024;
+    cull_ctx.vh = 768;
+    cull_ctx.block_instances = 1;
+    on_vertex_number_label(&state, 5.0f, 5.0f, 0.0f, &cull_ctx);
+    ASSERT_INT("off-screen vertex culled", cull_ctx.count, 0);
+}
+
+/* Label scope: one-instance mode labels only the first unrolled copy of a
+ * looped primitive (the parametric-torus duplicate-label fix), while
+ * all-instances mode labels every vertex with a globally-unique number. The
+ * walk resets vertex_idx_in_block to 0 at each block, which is how the callback
+ * detects block (loop-iteration) boundaries. */
+static void test_vertex_label_scope(void) {
+    printf("--- edit_overlays vertex label scope ---\n");
+
+    float id[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
+    extern float g_gl_stub_modelview_matrix[16];
+    memcpy(g_gl_stub_modelview_matrix, id, sizeof(id));
+
+    ReplayVertexWalkState state;
+    memset(&state, 0, sizeof(state));
+
+    /* Two unrolled blocks of two vertices each (v0,v1 then v0,v1 again), all
+     * projecting on-screen. */
+    const float verts[4][3] = {
+        { 0.0f, 0.0f, 0.0f }, { 0.25f, 0.0f, 0.0f },   /* block 0: idx 0,1 */
+        { -0.25f, 0.0f, 0.0f }, { 0.5f, 0.0f, 0.0f },  /* block 1: idx 0,1 */
+    };
+    const int vidx[4] = { 0, 1, 0, 1 };
+
+    /* One-instance: only block 0's two vertices, numbered by in-block index. */
+    VertexLabelCtx one;
+    memset(&one, 0, sizeof(one));
+    one.mode = OVERLAY_VERTEX_LABEL_INDEX;
+    one.all_instances = 0;
+    memcpy(one.proj, id, sizeof(id));
+    one.vw = 1024;
+    one.vh = 768;
+    for (int i = 0; i < 4; i++) {
+        state.vertex_idx_in_block = vidx[i];
+        on_vertex_number_label(&state, verts[i][0], verts[i][1], verts[i][2], &one);
+    }
+    ASSERT_INT("one-instance collects only the first block", one.count, 2);
+    ASSERT_TRUE("one-instance numbers by in-block index",
+                strcmp(one.labels[0].idx, " v0") == 0 &&
+                strcmp(one.labels[1].idx, " v1") == 0);
+
+    /* All-instances: every vertex, numbered globally and uniquely. */
+    VertexLabelCtx all;
+    memset(&all, 0, sizeof(all));
+    all.mode = OVERLAY_VERTEX_LABEL_INDEX;
+    all.all_instances = 1;
+    memcpy(all.proj, id, sizeof(id));
+    all.vw = 1024;
+    all.vh = 768;
+    for (int i = 0; i < 4; i++) {
+        state.vertex_idx_in_block = vidx[i];
+        on_vertex_number_label(&state, verts[i][0], verts[i][1], verts[i][2], &all);
+    }
+    ASSERT_INT("all-instances collects every vertex", all.count, 4);
+    ASSERT_TRUE("all-instances numbers globally (no duplicates)",
+                strcmp(all.labels[0].idx, " v0") == 0 &&
+                strcmp(all.labels[1].idx, " v1") == 0 &&
+                strcmp(all.labels[2].idx, " v2") == 0 &&
+                strcmp(all.labels[3].idx, " v3") == 0);
 }
 
 /* on_normal_vector_arrow callback: draws a GL_LINES arrow from the vertex to
@@ -733,18 +828,24 @@ static void test_on_normal_vector_arrow_callback(void) {
 static void test_vertex_numbers_use_source_begin_block(void) {
     printf("--- edit_overlays vertex labels source block selection ---\n");
 
+    /* Identity modelview so the stub's identity projection over a {0,0,1024,768}
+     * viewport gives deterministic screen coords: x=(0.25,-0.5,0) -> sx=640,256,512. */
+    float idm[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
+    extern float g_gl_stub_modelview_matrix[16];
+    memcpy(g_gl_stub_modelview_matrix, idm, sizeof(idm));
+
     GLCmd cmds[7];
     mk_cmd(&cmds[0], CMD_BEGIN, (float)GL_POINTS, 0, 0);
     cmds[0].src_cmd_idx = 0;
-    mk_cmd(&cmds[1], CMD_VERTEX3F, 1.0f, 0.0f, 0.0f);
+    mk_cmd(&cmds[1], CMD_VERTEX3F, 0.25f, 0.0f, 0.0f);
     cmds[1].src_cmd_idx = 2;
-    mk_cmd(&cmds[2], CMD_VERTEX3F, 2.0f, 0.0f, 0.0f);
+    mk_cmd(&cmds[2], CMD_VERTEX3F, -0.5f, 0.0f, 0.0f);
     cmds[2].src_cmd_idx = 2;
     mk_cmd(&cmds[3], CMD_END, 0, 0, 0);
     cmds[3].src_cmd_idx = 4;
     mk_cmd(&cmds[4], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
     cmds[4].src_cmd_idx = 10;
-    mk_cmd(&cmds[5], CMD_VERTEX3F, 9.0f, 0.0f, 0.0f);
+    mk_cmd(&cmds[5], CMD_VERTEX3F, 0.0f, 0.0f, 0.0f);
     cmds[5].src_cmd_idx = 11;
     mk_cmd(&cmds[6], CMD_END, 0, 0, 0);
     cmds[6].src_cmd_idx = 12;
@@ -765,15 +866,16 @@ static void test_vertex_numbers_use_source_begin_block(void) {
 
     TraceLog log;
     trace_begin();
-    edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX, 0);
+    edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX, 0,
+                                        /*all_instances=*/1);
     trace_end(&log);
 
     ASSERT_INT("earlier GL_POINTS vertex 0 not labelled",
-               trace_count_line(&log, "glRasterPos3f 1 0 0"), 0);
+               trace_count_line(&log, "glRasterPos2f 640 384"), 0);
     ASSERT_INT("earlier GL_POINTS vertex 1 not labelled",
-               trace_count_line(&log, "glRasterPos3f 2 0 0"), 0);
+               trace_count_line(&log, "glRasterPos2f 256 384"), 0);
     ASSERT_INT("cursor source block vertex labelled",
-               trace_count_line(&log, "glRasterPos3f 9 0 0"), 1);
+               trace_count_line(&log, "glRasterPos2f 512 384"), 1);
 }
 
 /* End-to-end: feed a real REPL program, flatten it, then drive the
@@ -800,7 +902,14 @@ static void test_render_via_repl_program(void) {
     repl_state_flat_program_set_current_block(
         0, repl_state_flat_program_view().cmd_count - 1, 0);
 
-    /* Vertex numbers: a raster-positioned label per vertex. */
+    /* Vertex numbers: each vertex is projected to screen space and labelled
+     * there. Identity modelview + the stub's identity projection over a
+     * {0,0,1024,768} viewport maps (x,y) -> ((x*0.5+0.5)*1024, (y*0.5+0.5)*768),
+     * so (0.25,0.5,*) -> (640,576) and (-0.25,-0.5,*) -> (384,192). */
+    float idm[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
+    extern float g_gl_stub_modelview_matrix[16];
+    memcpy(g_gl_stub_modelview_matrix, idm, sizeof(idm));
+
     trace_begin();
     OverlayWalkCtx walk;
     memset(&walk, 0, sizeof(walk));
@@ -809,12 +918,13 @@ static void test_render_via_repl_program(void) {
     walk.cursor.cursor_block_begin = repl_state_flat_program_current_block_begin();
     walk.cursor.cursor_block_end = repl_state_flat_program_current_block_end();
 
-    edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX_POS, 0);
+    edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX_POS, 0,
+                                        /*all_instances=*/1);
     trace_end(&log);
     ASSERT_INT("vertex-number label at first vertex",
-               trace_count_line(&log, "glRasterPos3f 0.25 0.5 0.75"), 1);
+               trace_count_line(&log, "glRasterPos2f 640 576"), 1);
     ASSERT_INT("vertex-number label at second vertex",
-               trace_count_line(&log, "glRasterPos3f -0.25 -0.5 0"), 1);
+               trace_count_line(&log, "glRasterPos2f 384 192"), 1);
 
     /* Normal vectors: arrow base at each vertex (scale GLR_NORMAL_ARROW_SCALE). */
     trace_begin();
@@ -869,7 +979,7 @@ static void test_render_via_repl_program(void) {
     ASSERT_TRUE("post_overlays emits the flattened vertices",
                 trace_count_line(&log, "glVertex3f 0.25 0.5 0.75") >= 1);
     ASSERT_INT("post_overlays draws vertex-number labels",
-               trace_count_sym(&log, "glRasterPos3f") >= 1, 1);
+               trace_count_sym(&log, "glRasterPos2f") >= 1, 1);
 
     /* NULL pack is a safe no-op. */
     edit_overlays_post_overlays(NULL);
@@ -1013,6 +1123,7 @@ int main(void) {
     test_mat4_math();
     test_sanitize_zero();
     test_on_vertex_number_label_callback();
+    test_vertex_label_scope();
     test_on_normal_vector_arrow_callback();
     test_vertex_numbers_use_source_begin_block();
     test_render_via_repl_program();
