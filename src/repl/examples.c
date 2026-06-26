@@ -343,7 +343,6 @@ static const char *const g_example_cond[] = {
  *              r * sin v)
  * with u sweeping the major (ring) angle and v the minor (tube) angle. */
 static const char *const g_example_torus[] = {
-    "// @cfg poly_highlight = 0",
     "// @cfg vertex_labels = 0",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -8.0f);",
@@ -636,7 +635,6 @@ static const char *const g_example_glow_particles[] = {
  * position and t for a shifting iridescent look. */
 
 static const char *const g_example_waves[] = {
-    "// @cfg poly_highlight = 0",
     "// @cfg vertex_labels = 0",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -5.0f);",
@@ -876,6 +874,7 @@ static const char *const g_example_grass_field[] = {
     "// @cfg vertex_points = 0",
     "// @cfg light_indicators = 0",
     "// @cfg poly_highlight = 0",
+    "// @cfg vertex_labels = 0",
     "// @cfg grid = GRID_THEME_SOIL",
     "// @cfg grid_extent = GRID_EXTENT_CLOSE",
     "// @cfg axes = AXES_THEME_OFF",
@@ -936,6 +935,7 @@ static const char *const g_example_grass_field[] = {
  * LINE_STRIPs whose tips lag the pulse. Marine snow drifts upward through
  * the frame via rem() wrapping. */
 static const char *const g_example_jellyfish[] = {
+    "// @cfg vertex_labels = 0",
     "// @cfg vertex_outlines = 0",
     "// @cfg vertex_points = 0",
     "// @cfg light_indicators = 0",
