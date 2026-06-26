@@ -144,7 +144,7 @@ void glr_ctrl_tick(void);
  */
 int glr_ctrl_router_handle_escape_key(unsigned char key);           /* Escape to close modals */
 int glr_ctrl_router_handle_save_key(unsigned char key);             /* Ctrl+S */
-int glr_ctrl_router_handle_debug_dump_key(unsigned char key);       /* Ctrl+P */
+int glr_ctrl_router_handle_debug_dump_key(unsigned char key);       /* Ctrl+Shift+D */
 
 int glr_ctrl_router_handle_quit_key(unsigned char key);             /* Ctrl+Q */
 int glr_ctrl_router_handle_config_menu_key(unsigned char key);      /* backtick → config menu */

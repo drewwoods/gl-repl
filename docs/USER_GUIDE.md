@@ -649,9 +649,9 @@ where the rig sits.
   each vertex of the primitive at the cursor, optionally with its
   coordinates.
 - **Normal vectors** (Ctrl+Shift+N): draws each vertex's normal as an arrow.
-- **Vertex outlines** (Ctrl+Shift+E) and **Vertex points**: outline polygons
+- **Vertex outlines** (Ctrl+Shift+E) and **Vertex points** (Ctrl+Shift+P): outline polygons
   and mark vertices *(both on by default)*.
-- **Poly highlight**: highlights the polygon under the cursor line.
+- **Poly highlight** (Ctrl+P): highlights the polygon under the cursor line.
 - **Auto-normals**: maintains generated `glNormal3f` lines for your
   geometry so lighting works without hand-written normals.
 
@@ -1069,7 +1069,7 @@ All screenshots and GIFs in this guide were captured that way.
 - **Memory profile** (Ctrl+Shift+W) — RSS history, baseline, and delta.
 - **Message history** — click the button at the right end of the bottom
   message line to review recent status messages.
-- **Ctrl+P** — dump debug state to stdout.
+- **Ctrl+Shift+D** — dump debug state to stdout.
 - Startup prints an init trace (`[init +N.NNNs] <phase>`) to stderr — useful
   for locating slow startup phases; `--detailed-prof` adds finer phases.
 
@@ -1122,13 +1122,15 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+Shift+N | Normal vectors |
 | Ctrl+Shift+E | Vertex outlines |
 | Ctrl+Shift+L | Light indicators |
-| Ctrl+Shift+P | Variable panel |
+| Ctrl+Shift+P | Vertex points |
+| Ctrl+P | Poly highlight |
+| Ctrl+Shift+K | Open Config menu |
 | Ctrl+W / Ctrl+Shift+W | CPU / memory profile panel |
 | F2–F10 | Config cycles (Shift steps backward) — see [Scene Display Options](#scene-display-options) |
 | F11 | Export .ply |
 | F12 / Shift+F12 | Next / previous example or scene |
 | F1 | Help overlay |
-| ` | Open Config menu |
+| ` | Variable panel |
 
 ### Camera
 
@@ -1148,7 +1150,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 |---|---|
 | Ctrl+S | Save scene |
 | Ctrl+Q | Quit (saves recovery file) |
-| Ctrl+P | Debug state dump |
+| Ctrl+Shift+D | Debug state dump |
 | Ctrl+Shift+A | Audio on/off |
 | Ctrl+Left / Ctrl+Right | Previous / next track |
 
