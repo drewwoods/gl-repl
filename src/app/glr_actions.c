@@ -243,7 +243,8 @@ const GlrConfigItem g_cfg_items[] = {
       .key_code = KM_KEY(GLR_VERTEX_POINTS), .modifiers = KM_MODS(GLR_VERTEX_POINTS) },
     { .label = "Poly highlight", .key = GLR_CONFIG_POLY_HIGHLIGHT, .state_count = 2,
       .key_code = KM_KEY(GLR_POLY_HIGHLIGHT), .modifiers = KM_MODS(GLR_POLY_HIGHLIGHT) },
-    { .label = "Winding", .key = GLR_CONFIG_WINDING_VIEW, .state_count = 2 },
+    { .label = "Winding", .key = GLR_CONFIG_WINDING_VIEW, .state_count = 2,
+      .key_code = KM_KEY(GLR_WINDING_VIEW), .modifiers = KM_MODS(GLR_WINDING_VIEW) },
     { .label = "---", .section_header = 1 },
 
     { .label = "### INTERFACE", .section_header = 1 },
@@ -855,12 +856,9 @@ void glr_action_help_tab_prev(void) {
  * modifier state and matched in two passes:
  *
  *   Pass A (only when Shift is held): prefer a row that *requires*
- *     Shift (modifiers & GLUT_ACTIVE_SHIFT) — e.g. Ctrl+Shift+V/O/C.
+ *     Shift (modifiers & GLUT_ACTIVE_SHIFT) — e.g. Ctrl+Shift+V/O/C/T.
  *   Pass B (always): fall back to the modifier-agnostic row
- *     (modifiers == 0). This keeps the deliberate quirk where one
- *     modifiers==0 row answers both forms — Ctrl+T toggles time and
- *     Ctrl+Shift+T resets it, both via the single Auto time row whose
- *     handler then inspects Shift itself.
+ *     (modifiers == 0).
  *
  * So a Shift row shadows the plain row only when Shift is actually
  * down; plain Ctrl+V still falls through to the editor (paste) because

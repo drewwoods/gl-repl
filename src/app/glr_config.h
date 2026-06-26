@@ -84,7 +84,7 @@ typedef struct {
      * "Ctrl+Shift+V") and dispatch: glr_cfg_handle_ascii_shortcut does
      * a two-pass match, preferring a Shift-requiring row when Shift is
      * held and falling back to the modifiers==0 row otherwise (so
-     * Ctrl+T and Ctrl+Shift+T can both reach one modifiers==0 row). */
+     * Ctrl+W and Ctrl+Shift+W can both reach distinct rows). */
     int          modifiers;
     GlrConfigKey key;
     int          state_count;    /* 2 = toggle; >2 = cycle */
