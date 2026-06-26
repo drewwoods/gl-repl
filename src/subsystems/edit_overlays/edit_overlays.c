@@ -738,7 +738,13 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
-    render3d_clr(RENDER3D_CLR_VERTEX_LABEL);
+    if (label_options == OVERLAY_VERTEX_LABEL_SCOPE_AT_VERTEX) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        render3d_clr_a(RENDER3D_CLR_VERTEX_LABEL, 0.5f);
+    } else {
+        render3d_clr(RENDER3D_CLR_VERTEX_LABEL);
+    }
 
     label_ctx.mode            = mode;
     label_ctx.is_ortho        = is_ortho;
