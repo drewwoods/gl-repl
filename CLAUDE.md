@@ -1260,7 +1260,7 @@ alongside `.cfg` (see the file-layout table for the tutorial catalog).
   Beginner" would render two "Beginner" headers in the Geometry
   flyout). The walker is the generic `src/ui/app/menu_bar.c::catalog_flyout_row_at`
   + [`CatalogFlyoutOps`](src/ui/app/menu_bar.c#L166) vtable, shared with the Scene example flyout
-  ([`ReplExampleEntry`](src/repl/examples.c#L2237) carries the same `.subheading` field — see
+  ([`ReplExampleEntry`](src/repl/examples.c#L2244) carries the same `.subheading` field — see
   `test_example_subheading_metadata`).
 
 ## Key Controls

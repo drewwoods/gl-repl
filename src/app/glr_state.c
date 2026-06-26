@@ -122,7 +122,7 @@ void glr_state_presentation_reset_example_defaults(void) {
      * loads in the F12 cycle — an example whose @cfg omits `view_mode`
      * gets the default 3D, not whatever the prior example set.
      * Fields outside this reset (autonormal, code_panel_layout,
-     * wrap_at_comma, highlight_current_poly) keep their current values
+     * wrap_at_comma) keep their current values
      * across example switches. */
     GlrPresentationState *p = &g_glr_state.presentation;
     p->wireframe             = CFG_DEFAULT_WIREFRAME;
@@ -136,6 +136,7 @@ void glr_state_presentation_reset_example_defaults(void) {
     p->show_normal_vectors   = CFG_DEFAULT_NORMAL_VECTORS;
     p->show_vertex_outlines  = CFG_DEFAULT_VERTEX_OUTLINES;
     p->show_vertex_points    = CFG_DEFAULT_VERTEX_POINTS;
+    p->highlight_current_poly = CFG_DEFAULT_HIGHLIGHT_POLY;
     p->xform_guide_mode      = CFG_DEFAULT_XFORM_GUIDE_MODE;
     p->show_light_indicators = CFG_DEFAULT_LIGHT_INDICATORS;
     p->light_theme           = CFG_DEFAULT_LIGHT_THEME;

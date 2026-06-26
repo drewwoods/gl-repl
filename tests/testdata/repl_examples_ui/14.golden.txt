@@ -24,7 +24,7 @@
 /* @cfg normal_vectors = 0 */
 /* @cfg vertex_outlines = 0 */
 /* @cfg vertex_points = 0 */
-/* @cfg poly_highlight = 1 */
+/* @cfg poly_highlight = 0 */
 /* @cfg variable_panel = 1 */
 /* @cfg compute_profile = 0 */
 /* @cfg memory_profile = 0 */
