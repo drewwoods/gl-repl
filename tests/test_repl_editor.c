@@ -4047,6 +4047,30 @@ int main() {
         glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP);
     }
 
+    /* Bugfix: modifying glcommands inside a function inside a glbegin scope breaks the indentation */
+    {
+        glr_ctrl_reset_all();
+        editor_feed_line("func0 {");
+        editor_feed_line("glBegin(GL_TRIANGLES);");
+        editor_feed_line("glVertex3f(0, sin(t), 0);");
+        editor_feed_line("glEnd();");
+        editor_feed_line("}");
+
+        /* Now edit line 2: glVertex3f(0, sin(t), 0); */
+        editor_state_edit_line_set(2);
+        editor_insert_mode_set(0);
+        editor_load_line_to_input(2);
+
+        /* Modify it: change sin(t) to cos(t) and commit via Enter key */
+        editor_input_set_text("glVertex3f(0, cos(t), 0)");
+        editor_handle_key('\r', 0, 0);
+
+        /* Verify that the indentation is NOT broken (should be 6 spaces) */
+        const char *line_text = editor_buffer_line(2);
+        ASSERT_TRUE("indentedCos", line_text != NULL);
+        ASSERT_STR("indentedCosText", line_text, "      glVertex3f(0, cos(t), 0);");
+    }
+
     printf("\n%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return (g_harness.passed == g_harness.run) ? 0 : 1;
 }

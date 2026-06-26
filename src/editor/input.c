@@ -432,7 +432,7 @@ static void navigate_to_line_raw_resolved(int target) {
  * With include_block_depth, adds 2 spaces per open for/func/if scope at pos.
  * Writes the result into text_out[text_sz]. */
 static void rewrite_source_text_with_indent(char *text_out, int text_sz,
-                                            int pos, int include_block_depth) {
+                                            int pos) {
     char stripped[MAX_LINE_LEN];
     const char *sp;
     int slen;
@@ -474,8 +474,7 @@ static void rewrite_source_text_with_indent(char *text_out, int text_sz,
      * with vars (which routes through this manual rewriter instead of the
      * parser's canonical text) must match the same matrix-depth indent. */
     indent_len += repl_source_scope_matrix_scope_depth_at(pos) * 2;
-    if (include_block_depth)
-        indent_len += repl_source_scope_block_depth_at(pos) * 2;
+    indent_len += repl_source_scope_block_depth_at(pos) * 2;
     char indent[REPL_INDENT_TEXT_MAX];
     if (indent_len > (int)sizeof(indent) - 1)
         indent_len = (int)sizeof(indent) - 1;
@@ -539,7 +538,7 @@ static int parse_input_for_enter_commit(GLCmd *cmd, char *text_out, int text_sz,
         parsed = repl_parser_parse_command_ctx(editor_state_input().input, &pl, &parse_ctx);
         if (parsed) {
             *cmd = pl.cmd;
-            rewrite_source_text_with_indent(text_out, text_sz, insert_idx, 1);
+            rewrite_source_text_with_indent(text_out, text_sz, insert_idx);
         }
     } else {
         ReplParseContext parse_ctx = {
@@ -556,7 +555,7 @@ static int parse_input_for_enter_commit(GLCmd *cmd, char *text_out, int text_sz,
             *cmd = pl.cmd;
             if (repl_eval_input_has_predef_vars(editor_state_input().input)) {
                 cmd->has_vars = 1;
-                rewrite_source_text_with_indent(text_out, text_sz, insert_idx, 0);
+                rewrite_source_text_with_indent(text_out, text_sz, insert_idx);
             } else {
                 /* No local vars: use the parsed canonical text directly. */
                 if (text_out && text_sz > 0)
@@ -878,7 +877,7 @@ static CommitResult commit_current_input(int enter_mode,
                 if (parsed) {
                     cmd = pl.cmd;
                     rewrite_source_text_with_indent(cmd_text, sizeof(cmd_text),
-                                                    insert_idx, 1);
+                                                    insert_idx);
                 }
             } else {
                 ReplParseContext parse_ctx = {
@@ -892,7 +891,13 @@ static CommitResult commit_current_input(int enter_mode,
                 parsed = repl_parser_parse_command_ctx(editor_state_input().input, &pl, &parse_ctx);
                 if (parsed) {
                     cmd = pl.cmd;
-                    repl_copy_string_fits(cmd_text, sizeof(cmd_text), pl.text);
+                    if (repl_eval_input_has_predef_vars(editor_state_input().input)) {
+                        cmd.has_vars = 1;
+                        rewrite_source_text_with_indent(cmd_text, sizeof(cmd_text),
+                                                        insert_idx);
+                    } else {
+                        repl_copy_string_fits(cmd_text, sizeof(cmd_text), pl.text);
+                    }
                 }
             }
             if (!parsed && parse_err_buf[0])
