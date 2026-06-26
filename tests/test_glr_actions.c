@@ -1131,7 +1131,7 @@ static void test_backdrop_grid_pairing_policy(void) {
     glr_config_set(GLR_CONFIG_GRID_THEME, GRID_THEME_SOIL);
     glr_cfg_cycle_row(grid_row, 1);
     ASSERT_INT("grid cycle skips hidden Star Chart forward",
-               glr_config_get(GLR_CONFIG_GRID_THEME), GRID_THEME_SKETCH);
+               glr_config_get(GLR_CONFIG_GRID_THEME), GRID_THEME_PLANES);
 
     glr_cfg_cycle_row(grid_row, -1);
     ASSERT_INT("grid cycle skips hidden Star Chart backward",
