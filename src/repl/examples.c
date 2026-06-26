@@ -109,8 +109,8 @@ static const char *const g_example_cube[] = {
 static const char *const g_example_ring[] = {
     "// camera",
     "glTranslatef(0.0f, 0.0f, -6.0f);",
-    "glRotatef(10.0f, 1.0f, 0.0f, 0.0f);",
-    "glRotatef(10.0f, 0.0f, 1.0f, 0.0f);",
+    "glRotatef(24.5000f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(43.7235f, 0.0f, 1.0f, 0.0f);",
     "glTranslatef(0.0f, 0.0f, 0.0f);",
     "",
     "glClearColor(0.05, 0.06, 0.08, 1.0);",
