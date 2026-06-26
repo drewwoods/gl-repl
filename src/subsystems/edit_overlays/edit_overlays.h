@@ -36,7 +36,7 @@ typedef struct OverlaySnapshotPack {
     OverlayWalkCtx walk;
     Render3dGuideSnapshot snapshot;
     OverlayVertexLabelMode vertex_label_mode;
-    int vertex_label_scope;    /* 0 = one loop instance, 1 = all (unique nums) */
+    int vertex_label_scope;    /* 0 = one loop instance, 1 = all, 2 = all instances at vertex (no declutter) */
     Render3dViewMode ortho_mode;
     int show_normal_vectors;
     int multisample_enabled;
@@ -52,7 +52,7 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx);
 void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *ctx,
                                          OverlayVertexLabelMode mode,
                                          int is_ortho,
-                                         int all_instances);
+                                         int label_options);
 
 void edit_overlays_render_normal_vectors(const OverlayWalkCtx *ctx);
 
