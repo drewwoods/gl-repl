@@ -526,7 +526,7 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
     /* One-instance mode: only the first unrolled copy (else the torus repeats
      * v0..vN once per ring). All-instances and At-vertex modes keep all copies;
      * declutter pass still drops whatever doesn't fit for All-instances. */
-    if (ctx->label_options == 0 && ctx->block_instances != 1)
+    if (ctx->label_options == OVERLAY_VERTEX_LABEL_SCOPE_ONE_INSTANCE && ctx->block_instances != 1)
         return;
     if (ctx->count >= VERTEX_LABEL_MAX)
         return;
@@ -542,7 +542,7 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
         return;  /* projects off-screen: a direct glRasterPos3f would have
                     produced an invalid raster position and drawn nothing here */
 
-    label_num = (ctx->label_options == 1) ? global_num : state->vertex_idx_in_block;
+    label_num = (ctx->label_options == OVERLAY_VERTEX_LABEL_SCOPE_ALL_INSTANCES) ? global_num : state->vertex_idx_in_block;
     lbl = &ctx->labels[ctx->count];
     snprintf(lbl->idx, sizeof(lbl->idx), " v%d", label_num);
     lbl->detail[0] = '\0';
@@ -595,7 +595,7 @@ static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
             l->width = 1.0f;
     }
 
-    if (ctx->label_options == 2) {
+    if (ctx->label_options == OVERLAY_VERTEX_LABEL_SCOPE_AT_VERTEX) {
         for (i = 0; i < ctx->count; i++) {
             VertexLabel *l = &ctx->labels[i];
             l->drawn = 1;
