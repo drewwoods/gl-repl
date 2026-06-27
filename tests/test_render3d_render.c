@@ -856,7 +856,8 @@ static void test_vertex2f_guide_cursor_dot(void) {
     ASSERT_TRUE("vertex2f(1,2): guide draws GL_POINTS (same as vertex3f)",
                 gl_stub_counts[GL_STUB_glBegin] > 0);
 
-    /* Partial entry: only one arg — should still produce a guide (plane), not a dot */
+    /* Partial entry: only one 2D arg. z is implicit, so only y remains free:
+     * this is a line guide, not the 3D one-arg plane guide. */
     const char *input2f_partial = "glVertex2f(1,";
     snap.input          = input2f_partial;
     snap.input_len      = (int)strlen(input2f_partial);
@@ -864,10 +865,20 @@ static void test_vertex2f_guide_cursor_dot(void) {
     snap.vertex_filled[0] = 1;
     snap.vertex_filled[1] = snap.vertex_filled[2] = 0;
     snap.vertex_n_filled = 1;
-    gl_stub_counts_reset();
+    TraceLog trace;
+    char begin_lines[64];
+    char begin_quads[64];
+    snprintf(begin_lines, sizeof(begin_lines), "glBegin %u",
+             (unsigned)GL_LINES);
+    snprintf(begin_quads, sizeof(begin_quads), "glBegin %u",
+             (unsigned)GL_QUADS);
+    trace_begin();
     render3d_geometry_guides_render_for_cursor(&snap);
-    ASSERT_TRUE("vertex2f(1,): partial entry still draws a guide",
-                gl_stub_counts[GL_STUB_glBegin] > 0);
+    trace_end(&trace);
+    ASSERT_TRUE("vertex2f(1,): partial entry draws a line guide",
+                trace_count_line(&trace, begin_lines) > 0);
+    ASSERT_INT("vertex2f(1,): partial entry does not draw a plane",
+               trace_count_line(&trace, begin_quads), 0);
 #else
     ASSERT_TRUE("vertex2f guide cursor dot (GL stubs only)", 1);
 #endif
