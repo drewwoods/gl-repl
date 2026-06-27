@@ -150,12 +150,13 @@ static void draw_vertex_line_guide(int free_axis, const float vals[3], float sz)
  * controller, so this module never touches repl_eval). The guide shows
  * where the vertex *could* land given what's typed:
  *
- *   1 coord typed  -> 2 DOF -> a plane (perpendicular to the typed axis)
- *   2 coords typed -> 1 DOF -> a line  (sweeping the one untyped axis)
+ *   1 coord fixed  -> 2 DOF -> a plane (perpendicular to the typed axis)
+ *   2 coords fixed -> 1 DOF -> a line  (sweeping the one untyped axis)
  *   all coords     -> 0 DOF -> a point (the exact vertex)
  *
- * glVertex2f is special-cased: two typed slots already pin a complete 2D
- * vertex at z=0, so it draws a point rather than a line.
+ * glVertex2f is special-cased: z is implicitly fixed at 0, so one typed slot
+ * leaves only one DOF (line), and two typed slots pin a complete 2D vertex
+ * (point).
  */
 static void draw_vertex_guides(const Render3dGuideSnapshot *snapshot) {
     if (!snapshot->show_guides)
@@ -169,9 +170,16 @@ static void draw_vertex_guides(const Render3dGuideSnapshot *snapshot) {
     int n = snapshot->vertex_n_filled;
     float vals[3] = { snapshot->vertex_args[0], snapshot->vertex_args[1],
                       snapshot->vertex_args[2] };
-    const int *filled = snapshot->vertex_filled;
+    int filled[3] = { snapshot->vertex_filled[0], snapshot->vertex_filled[1],
+                      snapshot->vertex_filled[2] };
     float sz = 3.0f;
     float as = snapshot->alpha_scale;
+
+    if (is_vertex2f && !filled[2]) {
+        vals[2] = 0.0f;
+        filled[2] = 1;
+        n++;
+    }
 
     geometry_guides_push_state();
     glDisable(GL_LIGHTING);
@@ -180,10 +188,7 @@ static void draw_vertex_guides(const Render3dGuideSnapshot *snapshot) {
      * overlapping guide elements reinforce rather than occlude. */
     glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 
-    if (n == 2 && is_vertex2f) {
-        /* 0 DOF: x,y typed for a 2D vertex => complete vertex at z=0. */
-        draw_vertex_point_marker(vals[0], vals[1], 0.0f);
-    } else if (n == 1) {
+    if (n == 1) {
         /* 2 DOF: one axis typed => plane perpendicular to it. */
         if      (filled[0]) draw_guide_axis_plane(0, vals[0], sz, as);
         else if (filled[1]) draw_guide_axis_plane(1, vals[1], sz, as);
