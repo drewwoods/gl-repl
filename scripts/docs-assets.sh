@@ -57,6 +57,13 @@ W=1200          # target width/height of every asset's source window
 H=800
 GIF_FUZZ=8%     # magick -layers Optimize fuzz for GIF delta compression
 
+# Loading an --example eases the camera into place (with damping) over the
+# first second or two of captured frames — a settle the docs GIFs shouldn't
+# show. gif() renders this many extra leading frames for --example clips and
+# discards them, so the clip starts settled at no cost to its length. One
+# captured frame is ~1/60 s of that ease, so 180 ≈ 3 s.
+WARM=180
+
 # README + docs/images core set.
 CORE_ASSETS=(
     hero first-triangle vertex-overlays wireframe light-theme-studio
@@ -153,14 +160,23 @@ still() {
 }
 
 # gif <out.gif> <frames> <step> <fps> <width> <args...> — record, take
-# every <step>th frame, assemble a palette-optimized looping GIF.
+# every <step>th frame, assemble a palette-optimized looping GIF. The kept
+# frame count (frames/step) and fps set the clip length.
+#
+# --example clips additionally render WARM extra leading frames and discard
+# them (the camera-ease warmup, see WARM), so the clip starts settled while
+# keeping the exact same frames/step at the same fps — identical length, just
+# past the settle. Staged scenes have no load ease, and replay's draw-by-draw
+# assembly IS the content, so a clip with no --example keeps frame 0.
 gif() {
     local out=$1 frames=$2 step=$3 fps=$4 width=$5; shift 5
-    render "$frames" 0 "$@"
+    local skip=0 a
+    for a in "$@"; do [[ "$a" == "--example" ]] && { skip=$WARM; break; }; done
+    render "$((skip + frames))" 0 "$@"
     rm -rf "$WORK/sub"; mkdir -p "$WORK/sub"
     local n=0 k=0 f
     for f in "$FRDIR"/f-*.ppm; do
-        if (( n % step == 0 )); then
+        if (( n >= skip && (n - skip) % step == 0 )); then
             cp "$f" "$WORK/sub/g-$(printf %04d $k).ppm"; k=$((k + 1))
         fi
         n=$((n + 1))
