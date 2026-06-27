@@ -636,11 +636,22 @@ static void render3d_pass_setup(const Render3dState *state,
 
 static void render3d_pass_hidden_line_wireframe(const Render3dRenderConfig *config) {
     /* Hidden-line rendering follows the fixed-function OpenGL recipe:
-     * draw every edge in the hidden color, seed the depth buffer with
-     * filled polygons while color writes are masked, then redraw only
-     * depth-passing edges in the visible color. */
+     * seed the depth buffer with filled polygons while color writes are
+     * masked, draw depth-failing edges in the hidden color, then redraw
+     * depth-passing edges in the visible color. Drawing the hidden-color
+     * edges after the depth fill keeps smoothed visible edges from blending
+     * over a hidden-line underpaint. */
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    glDisable(GL_BLEND);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
+    glDepthMask(GL_TRUE);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    render3d_execute_user_geometry(config, RENDER3D_EXEC_WIREFRAME_DEPTH_FILL);
+
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glDisable(GL_LIGHTING);
     if (config->line_smooth_enabled) {
         glEnable(GL_BLEND);
@@ -649,19 +660,11 @@ static void render3d_pass_hidden_line_wireframe(const Render3dRenderConfig *conf
         glDisable(GL_BLEND);
     }
     glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LEQUAL);
-    glDepthMask(GL_TRUE);
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glDepthFunc(GL_GREATER);
+    glDepthMask(GL_FALSE);
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     render3d_clr(RENDER3D_CLR_WIREFRAME_HIDDEN);
     render3d_execute_user_geometry(config, RENDER3D_EXEC_WIREFRAME_HIDDEN_LINES);
-
-    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LEQUAL);
-    glDepthMask(GL_TRUE);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    render3d_execute_user_geometry(config, RENDER3D_EXEC_WIREFRAME_DEPTH_FILL);
 
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glDisable(GL_LIGHTING);
