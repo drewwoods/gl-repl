@@ -9,7 +9,7 @@
  * must not call parser / compile / apply.
  *
  * See docs/MODULES.md "2D UI rendering and hit-test" for the prefix
- * discipline rule and `scripts/check-replay-ui-isolation.sh` for the
+ * discipline rule and `scripts/check/check-replay-ui-isolation.sh` for the
  * lighter feature-UI guard.
  */
 #ifndef REPLAY_UI_HUD_H

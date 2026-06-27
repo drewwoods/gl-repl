@@ -5,7 +5,7 @@
  * concepts (mode / PC / play-paused-done / speed / expand) and read
  * the replay snapshot. Must not own unrelated editor / REPL state and
  * must not call parser / compile / apply. Enforced by
- * `scripts/check-replay-ui-isolation.sh`.
+ * `scripts/check/check-replay-ui-isolation.sh`.
  */
 #include "ui/subsystems/replay_hud.h"
 #include "ui/app/snapshot.h"

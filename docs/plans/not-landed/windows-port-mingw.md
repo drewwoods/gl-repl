@@ -32,7 +32,7 @@ rewrite. The blockers are concentrated, not pervasive.
 **We target MinGW-w64.** Rationale, briefly:
 
 - **Toolchain identity is preserved.** GCC + `-std=c99` + `-Wall` + the
-  ASan/UBSan debug flags + `make` + `scripts/check-c99.sh` all work unchanged.
+  ASan/UBSan debug flags + `make` + `scripts/check/check-c99.sh` all work unchanged.
   MSVC has no `-std=c99` (only `/std:c11`+), and every warning / sanitizer /
   coverage flag would need translation — a large, ongoing tax for no benefit
   here.
@@ -219,7 +219,7 @@ A small `tests/support/` portability header (`os_compat.h`) collecting these
 
 ### 2C. C99 ratchet on MinGW
 Run `make check-c99` under MinGW and confirm it stays green (GL stubs fallback
-in `scripts/check-c99.sh` should cover the no-system-GL case identically).
+in `scripts/check/check-c99.sh` should cover the no-system-GL case identically).
 
 **Phase 2 exit:** `make test` and `make check-c99` pass on Windows/MinGW; RSS
 panel shows real numbers.

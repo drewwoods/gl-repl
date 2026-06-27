@@ -1295,83 +1295,83 @@ check-ui-no-repl-state-mut: ## Verify UI files do not mutate REPL state directly
 	@echo "UI mutation boundary $(GREEN)OK$(NC)"
 
 check-no-write-through-view: ## Verify no writes happen through pointer fields on view structs.
-	@bash scripts/check-no-write-through-view.sh scripts/allowlists/write-through-view.txt $(UI_SRCS) $(RENDER3D_SRCS)
+	@bash scripts/check/check-no-write-through-view.sh scripts/allowlists/write-through-view.txt $(UI_SRCS) $(RENDER3D_SRCS)
 
 check-runtime-state-value-fields: ## Verify ReplRuntimeState owns values, not pointer aliases.
-	@bash scripts/check-runtime-state-value-fields.sh src/repl/state.h
+	@bash scripts/check/check-runtime-state-value-fields.sh src/repl/state.h
 
 check-views-flat-types: ## Verify view/state snapshot structs avoid mutable pointer fields.
-	@bash scripts/check-views-flat.sh scripts/baselines/views-flat-violations.txt
+	@bash scripts/check/check-views-flat.sh scripts/baselines/views-flat-violations.txt
 
 check-public-state-no-writable-pointers: check-views-flat-types ## Alias for the public state/view writable pointer check.
 
 check-views-by-value-snapshot: ## Ratchet pointer-return snapshot accessors down over time.
-	@bash scripts/check-views-by-value-snapshot.sh scripts/baselines/by-value-snapshot-pointer-returns.txt
+	@bash scripts/check/check-views-by-value-snapshot.sh scripts/baselines/by-value-snapshot-pointer-returns.txt
 
 check-state-read-getters-return-values: check-views-by-value-snapshot ## Verify read getters return values or read-only views.
 
 check-ui-renderer-takes-view: ## Verify audited UI renderers use canonical snapshot signatures.
-	@bash scripts/check-ui-renderer-signatures.sh scripts/allowlists/ui-renderers-signature.txt
+	@bash scripts/check/check-ui-renderer-signatures.sh scripts/allowlists/ui-renderers-signature.txt
 
 check-renderer-no-direct-mutators: ## Verify audited renderers do not mutate state directly.
-	@bash scripts/check-renderer-purity.sh scripts/allowlists/renderer-purity.txt
+	@bash scripts/check/check-renderer-purity.sh scripts/allowlists/renderer-purity.txt
 
 check-output-actualization: ## Verify Ui*Output fields are consumed by controller actualization.
-	@bash scripts/check-output-actualization.sh
+	@bash scripts/check/check-output-actualization.sh
 
 check-state-c-shrinking: ## Ratchet src/repl/state.c line count down over time.
-	@bash scripts/check-state-c-shrinking.sh scripts/baselines/state-c-lines.txt src/repl/state.c
+	@bash scripts/check/check-state-c-shrinking.sh scripts/baselines/state-c-lines.txt src/repl/state.c
 
 check-repl-no-direct-editor: ## Forbid editor coupling in repl_*.{c,h} (Phase 7 of feature/source-document-port.md — hard zero).
-	@bash scripts/check-repl-no-direct-editor.sh
+	@bash scripts/check/check-repl-no-direct-editor.sh
 
 check-editor-no-app: ## Ratchet: forbid new app/glr_* coupling in src/editor/ (see audit #8).
-	@bash scripts/check-editor-no-app.sh
+	@bash scripts/check/check-editor-no-app.sh
 
 check-repl-no-app: ## Ratchet: forbid new app/glr_* coupling in src/repl/.
-	@bash scripts/check-repl-no-app.sh
+	@bash scripts/check/check-repl-no-app.sh
 
 check-repl-no-mut-reads: ## Ratchet: cap `_mut()` calls in src/repl/ outside owner files (audit #7/#14).
-	@bash scripts/check-repl-no-mut-reads.sh
+	@bash scripts/check/check-repl-no-mut-reads.sh
 
 check-render3d-no-upper-layers: ## Hard guard: src/render3d/ must not include from app/editor/ui/subsystems.
-	@bash scripts/check-render3d-no-upper-layers.sh
+	@bash scripts/check/check-render3d-no-upper-layers.sh
 
 check-ui-core-no-upper-layers: ## Hard guard: src/ui/core/ must not include from app/editor/repl/scene/subsystems/ui-app.
-	@bash scripts/check-ui-core-no-upper-layers.sh
+	@bash scripts/check/check-ui-core-no-upper-layers.sh
 
 check-repl-demo-no-editor: ## Forbid editor implementation in the standalone demo (Phase 7).
-	@bash scripts/check-repl-demo-no-editor.sh
+	@bash scripts/check/check-repl-demo-no-editor.sh
 
 check-repl-live-demo-no-editor: ## Forbid editor implementation in the standalone live REPL demo.
-	@bash scripts/check-repl-demo-no-editor.sh repl_live_demo REPL_LIVE_DEMO_DEP_SRCS
+	@bash scripts/check/check-repl-demo-no-editor.sh repl_live_demo REPL_LIVE_DEMO_DEP_SRCS
 
 check-memprof-demo-isolation: ## Forbid app/repl/editor coupling in the memprof demo link set.
-	@bash scripts/check-subsystem-demo-isolation.sh MEMPROF_DEMO_DEP_SRCS tools/memprof_demo memprof_demo
+	@bash scripts/check/check-subsystem-demo-isolation.sh MEMPROF_DEMO_DEP_SRCS tools/memprof_demo memprof_demo
 
 check-cpuprof-demo-isolation: ## Forbid app/repl/editor coupling in the cpuprof demo link set.
-	@bash scripts/check-subsystem-demo-isolation.sh CPUPROF_DEMO_DEP_SRCS tools/cpuprof_demo cpuprof_demo
+	@bash scripts/check/check-subsystem-demo-isolation.sh CPUPROF_DEMO_DEP_SRCS tools/cpuprof_demo cpuprof_demo
 
 check-cpuprof-standalone: ## Verify the generic CPU-profile timer compiles with no section catalog (fallback path).
-	@bash scripts/check-cpuprof-standalone.sh
+	@bash scripts/check/check-cpuprof-standalone.sh
 
 check-audio-nothread: ## Verify glr_audio.c compiles single-threaded (GLR_AUDIO_NO_THREAD=1, the Emscripten path).
-	@bash scripts/check-audio-nothread.sh
+	@bash scripts/check/check-audio-nothread.sh
 
 check-variable-panel-demo-isolation: ## Forbid app/repl/editor coupling in the variable-panel demo link set.
-	@bash scripts/check-subsystem-demo-isolation.sh VARIABLE_PANEL_DEMO_DEP_SRCS tools/variable_panel_demo variable_panel_demo
+	@bash scripts/check/check-subsystem-demo-isolation.sh VARIABLE_PANEL_DEMO_DEP_SRCS tools/variable_panel_demo variable_panel_demo
 
 check-color-picker-demo-isolation: ## Forbid app/repl/editor coupling in the color-picker demo link set.
-	@bash scripts/check-subsystem-demo-isolation.sh COLOR_PICKER_DEMO_DEP_SRCS tools/color_picker_demo color_picker_demo
+	@bash scripts/check/check-subsystem-demo-isolation.sh COLOR_PICKER_DEMO_DEP_SRCS tools/color_picker_demo color_picker_demo
 
 check-source-document-port-owners: ## source_document_* symbols only defined in approved host adapters (Phase 7).
-	@bash scripts/check-source-document-port-owners.sh
+	@bash scripts/check/check-source-document-port-owners.sh
 
 check-no-facade-include-in-views: ## Verify view/render files avoid repl_state facade headers.
-	@bash scripts/check-no-facade-include-in-views.sh scripts/allowlists/facade-includes-in-views.txt
+	@bash scripts/check/check-no-facade-include-in-views.sh scripts/allowlists/facade-includes-in-views.txt
 
 check-domain-owner-encapsulation: ## Enforce per-domain mutator encapsulation rules as domains migrate.
-	@bash scripts/check-domain-encapsulation.sh scripts/allowlists/domain-owner-encapsulation.txt
+	@bash scripts/check/check-domain-encapsulation.sh scripts/allowlists/domain-owner-encapsulation.txt
 
 check-ui-no-repl-state-read: ## Verify UI renderers consume the UiRenderSnapshot, not live repl_state_*().
 	@echo "Checking UI render entry points consume UiRenderSnapshot..."
@@ -1381,7 +1381,7 @@ check-ui-no-repl-state-read: ## Verify UI renderers consume the UiRenderSnapshot
 		echo "$(RED)ERROR: ui_*.c files outside the input-bridge allowlist read live repl_state_*():$(NC)"; \
 		echo "$$bad"; exit 1; \
 	fi
-	@bash scripts/check-ui-renderer-signatures.sh scripts/allowlists/ui-renderers-signature.txt
+	@bash scripts/check/check-ui-renderer-signatures.sh scripts/allowlists/ui-renderers-signature.txt
 	@echo "ui-no-repl-state-read $(GREEN)OK$(NC)"
 
 check-state-ownership: ## Run state-ownership contract checks (new + tightened existing checks).
@@ -1457,109 +1457,109 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 	done
 
 check-prof-sections-instrumented: ## Hard guard: every prof_sections.h catalog row has a prof_begin() site (no zombie profiler rows).
-	@bash scripts/check-prof-sections-instrumented.sh
+	@bash scripts/check/check-prof-sections-instrumented.sh
 
 check-public-api-usage: ## Scan public API declarations for unused functions (informational).
-	@bash scripts/check-unused-apis.sh
+	@bash scripts/check/check-unused-apis.sh
 
 check-duplicate-api-decls: ## Scan module public headers for duplicate function declarations; fails if any are found.
-	@bash scripts/check-duplicate-api-decls.sh
+	@bash scripts/check/check-duplicate-api-decls.sh
 
 audit-editor-ownership: ## Report editor/REPL/UI ownership drift (informational; see done/editor-owns-text-completion.md).
 	@bash scripts/audit_editor_ownership.sh
 
 check-editor-ownership-budget: ## Ratchet the editor/UI transitional-coupling budget down only.
-	@bash scripts/check-editor-ownership-budget.sh scripts/baselines/editor-ownership-budget.txt
+	@bash scripts/check/check-editor-ownership-budget.sh scripts/baselines/editor-ownership-budget.txt
 
 check-no-store-text-api: ## Verify repl_command_store_*_with_line[s] API stays gone.
-	@bash scripts/check-no-store-text-api.sh
+	@bash scripts/check/check-no-store-text-api.sh
 
 check-repl-no-direct-buffer-read: ## Verify repl_*.c readers go through EditorBufferView, not editor_buffer_line().
-	@bash scripts/check-repl-no-direct-buffer-read.sh scripts/allowlists/repl-no-direct-buffer-read.txt
+	@bash scripts/check/check-repl-no-direct-buffer-read.sh scripts/allowlists/repl-no-direct-buffer-read.txt
 
 check-glr-ctrl-not-editor-mirror: ## Verify imrepl_ctrl does not grow per-field editor wrappers.
-	@bash scripts/check-glr-ctrl-not-editor-mirror.sh
+	@bash scripts/check/check-glr-ctrl-not-editor-mirror.sh
 
 check-ui-returns-hits-only: ## Verify ui_*.c input helpers do not call REPL/editor mutators (ratchet down only).
-	@bash scripts/check-ui-returns-hits-only.sh scripts/baselines/ui-returns-hits-only.txt
+	@bash scripts/check/check-ui-returns-hits-only.sh scripts/baselines/ui-returns-hits-only.txt
 
 check-ui-text-panel-pure: ## Verify src/ui/core/text_panel.* stays REPL/editor-free.
-	@bash scripts/check-ui-text-panel-pure.sh
+	@bash scripts/check/check-ui-text-panel-pure.sh
 
 check-editor-repl-surface: ## Ratchet direct repl_* call surface in src/editor/input.c and commit.c.
-	@bash scripts/check-editor-repl-surface.sh scripts/baselines/editor-repl-surface.txt
+	@bash scripts/check/check-editor-repl-surface.sh scripts/baselines/editor-repl-surface.txt
 
 check-edit-ops-pure: ## Verify src/editor/edit_ops.* stays REPL-free (Phase 8 generic-primitives invariant).
-	@bash scripts/check-edit-ops-pure.sh
+	@bash scripts/check/check-edit-ops-pure.sh
 
 check-no-raw-undo-clear: ## Production code must use editor_undo_note_wholesale_replacement(), not raw editor_undo_clear().
-	@bash scripts/check-no-raw-undo-clear.sh
+	@bash scripts/check/check-no-raw-undo-clear.sh
 
 check-ui-panels-no-mutators: ## Hard guard: src/ui/app/panels.c references no input-dispatch mutators (Phase J2.2).
-	@bash scripts/check-ui-panels-no-mutators.sh
+	@bash scripts/check/check-ui-panels-no-mutators.sh
 
 check-replay-ui-isolation: ## Hard guard: replay_ui_*.c is feature-UI — no editor / REPL mutators or parser/compile/apply calls.
-	@bash scripts/check-replay-ui-isolation.sh
+	@bash scripts/check/check-replay-ui-isolation.sh
 
 check-color-picker-ui-isolation: ## Strict guard: src/ui/subsystems/color_picker.c is pure renderer/hit-test over ColorPickerView — no mutators, no live state reads, no parser/compile/apply.
-	@bash scripts/check-color-picker-ui-isolation.sh
+	@bash scripts/check/check-color-picker-ui-isolation.sh
 
 check-variable-panel-forwarders: ## Ratchet legacy variable_panel forwarder API uses (editor_state_variable_drag*, ui_state_variable_panel*, repl_var_drag_*).
-	@bash scripts/check-variable-panel-forwarders.sh scripts/baselines/variable-panel-forwarders.txt
+	@bash scripts/check/check-variable-panel-forwarders.sh scripts/baselines/variable-panel-forwarders.txt
 
 check-replay-forwarders: ## Ratchet legacy repl_state_replay* forwarder API uses (replay peer is the owner).
-	@bash scripts/check-replay-forwarders.sh scripts/baselines/replay-forwarders.txt
+	@bash scripts/check/check-replay-forwarders.sh scripts/baselines/replay-forwarders.txt
 
 check-no-repl-commit: ## Verify repl_commit.{c,h} stays deleted (commit dispatch lives in src/editor/commit.c).
-	@bash scripts/check-no-repl-commit.sh
+	@bash scripts/check/check-no-repl-commit.sh
 
 check-no-repl-editor-input-shim: ## Verify src/editor/input.c does not delegate to legacy repl_*_func entry points.
-	@bash scripts/check-no-repl-editor-input-shim.sh
+	@bash scripts/check/check-no-repl-editor-input-shim.sh
 
 check-no-set-status-in-repl-parser: ## Ratchet set_status calls inside src/repl/parser.c (parser diagnostics flow via ctx->err_buf).
-	@bash scripts/check-no-set-status-in-repl-parser.sh scripts/baselines/repl-parser-set-status.txt
+	@bash scripts/check/check-no-set-status-in-repl-parser.sh scripts/baselines/repl-parser-set-status.txt
 
 check-no-set-status-in-compile-apply: ## Verify src/repl/compile.c / src/repl/apply.c never call set_status (Phase C purity).
-	@bash scripts/check-no-set-status-in-compile-apply.sh
+	@bash scripts/check/check-no-set-status-in-compile-apply.sh
 
 check-no-load-line-to-input-in-pipeline: ## Verify REPL pipeline TUs do not call editor-side editor_load_line_to_input.
-	@bash scripts/check-no-load-line-to-input-in-pipeline.sh
+	@bash scripts/check/check-no-load-line-to-input-in-pipeline.sh
 
 check-repl-state-no-glr-state: ## Verify REPL pipeline TUs do not include src/app/glr_state.h or reference GlrState symbols.
-	@bash scripts/check-repl-state-no-glr-state.sh
+	@bash scripts/check/check-repl-state-no-glr-state.sh
 
 check-glr-state-no-repl-mutators: ## Verify src/app/glr_state.c does not call back into REPL state mutators.
-	@bash scripts/check-glr-state-no-repl-mutators.sh
+	@bash scripts/check/check-glr-state-no-repl-mutators.sh
 
 check-repl-scenes-cfg-clear-paired: ## Verify every g_user_scenes[X].used=0 in src/repl/scenes.c pairs with scene_cfg_clear.
-	@bash scripts/check-repl-scenes-cfg-clear-paired.sh
+	@bash scripts/check/check-repl-scenes-cfg-clear-paired.sh
 
 check-repl-export-no-ui-layout: ## Verify export/import TUs do not call ui_layout_* / ui_state_*.
-	@bash scripts/check-repl-export-no-ui-layout.sh
+	@bash scripts/check/check-repl-export-no-ui-layout.sh
 
 check-repl-export-via-bridge: ## Verify export/import TUs pull app/scene state only via controller-installed bridges (no scene_*/glr_* calls or scene/app includes).
-	@bash scripts/check-repl-export-via-bridge.sh
+	@bash scripts/check/check-repl-export-via-bridge.sh
 
 check-ui-no-export-resolver: ## Verify src/ui reads the snapshot-frozen reshape projection, never calls repl_export_reshape_projection_lines() live.
-	@bash scripts/check-ui-no-export-resolver.sh
+	@bash scripts/check/check-ui-no-export-resolver.sh
 
 check-no-feed-line-in-pipeline: ## Verify REPL pipeline TUs do not call editor_feed_line() (cleared by step 5b/7e).
-	@bash scripts/check-no-feed-line-in-pipeline.sh
+	@bash scripts/check/check-no-feed-line-in-pipeline.sh
 
 check-repl-no-direct-tutorial-runner: ## Verify REPL pipeline TUs request tutorial teardown through ReplHostEffects.
-	@bash scripts/check-repl-no-direct-tutorial-runner.sh
+	@bash scripts/check/check-repl-no-direct-tutorial-runner.sh
 
 check-module-prefixes: ## Verify stale pre-cleanup symbol prefixes have not reappeared under src/.
-	@bash scripts/check-module-prefixes.sh
+	@bash scripts/check/check-module-prefixes.sh
 
 check-repl-demo-stubs-shrinking: ## Ratchet on tools/repl_demo/stubs.c — must not grow past 0 stubs.
-	@bash scripts/check-repl-demo-stubs-shrinking.sh
+	@bash scripts/check/check-repl-demo-stubs-shrinking.sh
 
 check-include-style: ## Hard guard: project-local headers must use "X.h", not <X.h>.
-	@bash scripts/check-include-style.sh
+	@bash scripts/check/check-include-style.sh
 
 check-doc-links: ## Validate local Markdown file links and line anchors.
-	@python3 scripts/check-doc-links.py
+	@python3 scripts/check/check-doc-links.py
 
 check-keymap-no-dup: ## Hard guard: no two keymap.h bindings share a (key, mods) — a double-map.
 	@bash scripts/keymap.sh check
@@ -1568,13 +1568,13 @@ keymap-list: ## Print current key bindings + the free Ctrl / Ctrl+Shift / F-key 
 	@bash scripts/keymap.sh list
 
 check-c99: ## C99 build guard: gl-repl + bench + demo sources must syntax-check under gcc -std=c99 (non-pedantic; tests excluded; in the standard gate).
-	@C99_SRCS='$(SRCS)' bash scripts/check-c99.sh
+	@C99_SRCS='$(SRCS)' bash scripts/check/check-c99.sh
 
 check-tier-c-function-size: ## Size ratchet: parse_command and flatten_range must not grow past their baselines.
-	@bash scripts/check-tier-c-function-size.sh scripts/baselines/tier-c-function-size.txt
+	@bash scripts/check/check-tier-c-function-size.sh scripts/baselines/tier-c-function-size.txt
 
 check-no-test-default-output: ## Hard guard: tests may not call repl_save_default_output() (writes ./output.c in repo root).
-	@bash scripts/check-no-test-default-output.sh
+	@bash scripts/check/check-no-test-default-output.sh
 
 find-trailing-whitespace: ## Report all trailing whitespace in tracked source files (whole repo).
 	@git ls-files '*.c' '*.h' '*.md' Makefile | xargs grep -rn ' $$' || echo "no trailing whitespace found"

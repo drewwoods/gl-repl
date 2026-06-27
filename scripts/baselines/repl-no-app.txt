@@ -1,4 +1,4 @@
-# Baseline for scripts/check-repl-no-app.sh.
+# Baseline for scripts/check/check-repl-no-app.sh.
 #
 # Counts non-comment `#include "app/...` lines in src/repl/**.
 # The REPL program-model layer must not depend on the app shell.

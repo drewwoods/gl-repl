@@ -80,7 +80,7 @@ These are make variables or script/test env vars. Pass make variables as
 
 | Variable | Where | Effect |
 |---|---|---|
-| `CC` | Makefile, `scripts/check-c99.sh`, export tests. | Compiler command. The test runner passes it to export-compile checks as `REPL_EXPORT_CC`. |
+| `CC` | Makefile, `scripts/check/check-c99.sh`, export tests. | Compiler command. The test runner passes it to export-compile checks as `REPL_EXPORT_CC`. |
 | `CFLAGS` | Makefile. | Extra user C flags appended to the selected build mode. |
 | `CPPFLAGS` | Makefile compile rules. | Extra preprocessor flags, commonly `-DUI_THEME_DEFAULT=N` or `-DGLR_AUDIO_NO_THREAD=1`. |
 | `BUILD` | Makefile. | Build mode: `release`, `debug`, or `coverage`. Tests default to debug; app/bench/demo targets default to release. |
@@ -100,7 +100,7 @@ These are make variables or script/test env vars. Pass make variables as
 | `REPL_EXPORT_COMPILE_CFLAGS` | `tests/test_repl_core_examples`. | Extra C flags for exported standalone C smoke tests. |
 | `REPL_EXPORT_VERBOSE` | `tests/test_repl_core_examples`. | `1` prints per-example export/compile details. |
 | `REPL_EXPORT_KEEP_TEMP` | `tests/test_repl_core_examples`. | `1` keeps temporary export files for inspection. |
-| `C99_SRCS` | `scripts/check-c99.sh`. | Source list passed by `make check-c99`; script fallback is used when unset. |
+| `C99_SRCS` | `scripts/check/check-c99.sh`. | Source list passed by `make check-c99`; script fallback is used when unset. |
 | `CHECK_BASE` | Makefile `check-trailing-whitespace`. | Git ref used as the diff base; default `origin/main`. |
 | `COMPAT_REF` | `scripts/build-historical.sh`. | Git ref used to read compatibility headers; default `main`. |
 | `FREEGLUT_REPO` | `scripts/vendor-freeglut.sh`. | Source repo or local clone to re-vendor from. |

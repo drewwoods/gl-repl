@@ -557,7 +557,7 @@ must not own unrelated editor / REPL / app-router state and must not
 call parser / compile / apply. This keeps generic `ui_*` modules
 fully feature-agnostic without slowly punching holes through their
 allowlists. The contract is enforced by a per-feature lighter guard:
-`scripts/check-replay-ui-isolation.sh` covers `replay_ui_*`.
+`scripts/check/check-replay-ui-isolation.sh` covers `replay_ui_*`.
 
 | Module | Role |
 |--------|------|

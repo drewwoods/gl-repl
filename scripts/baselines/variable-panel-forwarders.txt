@@ -1,4 +1,4 @@
-# Baseline for scripts/check-variable-panel-forwarders.sh.
+# Baseline for scripts/check/check-variable-panel-forwarders.sh.
 #
 # Tracks how many call sites still use the legacy variable_panel
 # forwarder API (`editor_state_variable_drag*`, `ui_state_variable_panel*`,

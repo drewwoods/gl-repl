@@ -1,4 +1,4 @@
-# Baseline for scripts/check-ui-returns-hits-only.sh.
+# Baseline for scripts/check/check-ui-returns-hits-only.sh.
 #
 # UI input helpers (`ui_*.c`, excluding `src/ui/app/state.c`) compute neutral
 # `UiHit` values; `imrepl_ctrl` routes hits to the owning subsystem.

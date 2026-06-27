@@ -126,7 +126,7 @@ them:
   `src/repl/compile.c` appears, or the new files won't link / won't
   build under `USE_GL_STUBS=1`.
 - **Guard scripts hardcode the filename.**
-  `scripts/check-no-set-status-in-compile-apply.sh:21` greps a literal
+  `scripts/check/check-no-set-status-in-compile-apply.sh:21` greps a literal
   `src/repl/compile.c src/repl/apply.c` pair; the new TUs inherit the
   same "compile is a pure validator, never calls `set_status`"
   contract and must be added to that grep (and any sibling guards that

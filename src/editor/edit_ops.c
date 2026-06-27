@@ -4,7 +4,7 @@
  * See edit_ops.h for the contract. Implementation operates only on
  * the EditorState input slice (input buffer, cursor, selection
  * anchor). REPL-free by construction; locked by
- * scripts/check-edit-ops-pure.sh.
+ * scripts/check/check-edit-ops-pure.sh.
  */
 
 #include "edit_ops.h"

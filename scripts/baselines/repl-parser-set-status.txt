@@ -1,4 +1,4 @@
-# Baseline for scripts/check-no-set-status-in-repl-parser.sh.
+# Baseline for scripts/check/check-no-set-status-in-repl-parser.sh.
 #
 # Phase I commit 42b removed the parser core's set_status calls,
 # leaving one surviving site inside `parser_legacy_surface_to_status`

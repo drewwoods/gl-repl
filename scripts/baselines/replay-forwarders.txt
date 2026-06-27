@@ -1,4 +1,4 @@
-# Baseline for scripts/check-replay-forwarders.sh.
+# Baseline for scripts/check/check-replay-forwarders.sh.
 #
 # Tracks how many call sites still use the legacy `repl_state_replay*`
 # forwarder API outside the owner translation units (replay_state.c /

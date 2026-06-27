@@ -1746,7 +1746,7 @@ When a module starts owning mutable REPL state, follow this template:
    explicitly rather than folding them into [`ReplRuntimeState`](../src/repl/state.h#L18). REPL-pipeline
    TUs must not reach `glr_state`
    ([`check-repl-state-no-glr-state`](../Makefile#L1528),
-   [`scripts/check-repl-state-no-glr-state.sh`](../scripts/check-repl-state-no-glr-state.sh)).
+   [`scripts/check/check-repl-state-no-glr-state.sh`](../scripts/check/check-repl-state-no-glr-state.sh)).
 2. Add a named runtime slice in [`src/repl/state.h`](../src/repl/state.h), wire it into
    [`static ReplRuntimeState g_repl_state;`](../src/repl/state.c#L18), and say
    whether the read path is currently `facade-backed`, `direct-runtime`, or
