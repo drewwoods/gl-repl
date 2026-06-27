@@ -2221,6 +2221,7 @@ static void test_wireframe_renderer_ignores_user_draw_state(void) {
     editor_feed_line("glDepthMask(GL_FALSE);");
     editor_feed_line("glBegin(GL_TRIANGLES);");
     editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glEdgeFlag(GL_FALSE);");
     editor_feed_line("glVertex3f(1, 0, 0);");
     editor_feed_line("glVertex3f(0, 1, 0);");
     editor_feed_line("glEnd();");
@@ -2245,6 +2246,8 @@ static void test_wireframe_renderer_ignores_user_draw_state(void) {
                (int)gl_stub_counts[GL_STUB_glDepthFunc], 0);
     ASSERT_INT("wire renderer ignores user depth mask",
                (int)gl_stub_counts[GL_STUB_glDepthMask], 0);
+    ASSERT_INT("wire renderer honors edge flags",
+               (int)gl_stub_counts[GL_STUB_glEdgeFlag], 1);
     ASSERT_INT("wire renderer emits one primitive",
                (int)gl_stub_counts[GL_STUB_glBegin], 1);
     ASSERT_INT("wire renderer emits vertices",

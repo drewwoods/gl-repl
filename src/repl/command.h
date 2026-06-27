@@ -76,6 +76,7 @@ typedef enum {
     CMD_CLEAR_COLOR,
     CMD_DEPTH_MASK,
     CMD_COLOR_MASK,
+    CMD_EDGE_FLAG,
     CMD_RASTER_POS3F,
     CMD_LABEL,
     CMD_ELSE_IF,

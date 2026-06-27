@@ -184,6 +184,7 @@ static int hidden_lines_cursor_owns_cmd(CmdType type) {
     switch (type) {
     case CMD_BEGIN:
     case CMD_END:
+    case CMD_EDGE_FLAG:
     case CMD_VERTEX3F:
     case CMD_VERTEX2F:
     case CMD_GLUT_TORUS:

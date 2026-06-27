@@ -1246,6 +1246,48 @@ int main(void) {
         int ok = parse_for_test("glDepthMask(x)", &cmd);
         ASSERT_TRUE("glDepthMask(var) rejected", ok == 0);
     }
+
+    /* glEdgeFlag - bool-enum state command */
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glEdgeFlag(GL_FALSE)", &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glEdgeFlag(GL_FALSE) parse ok", ok == 1);
+        ASSERT_TRUE("glEdgeFlag type", cmd.type == CMD_EDGE_FLAG);
+        ASSERT_TRUE("glEdgeFlag mode GL_FALSE", (GLenum)cmd.args[0] == GL_FALSE);
+        ASSERT_TRUE("glEdgeFlag source canonicalized",
+                    strstr(cmd_text, "glEdgeFlag(GL_FALSE);") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("glEdgeFlag(GL_TRUE)", &cmd);
+        ASSERT_TRUE("glEdgeFlag(GL_TRUE) parse ok", ok == 1);
+        ASSERT_TRUE("glEdgeFlag GL_TRUE mode", (GLenum)cmd.args[0] == GL_TRUE);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        char cmd_text[MAX_LINE_LEN] = "";
+        int ok = parse_cmd_with_text("glEdgeFlag(1)", &cmd,
+                                     cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glEdgeFlag(1) parse ok", ok == 1);
+        ASSERT_TRUE("glEdgeFlag(1) -> GL_TRUE", (GLenum)cmd.args[0] == GL_TRUE);
+        ASSERT_TRUE("glEdgeFlag(1) canonicalized",
+                    strstr(cmd_text, "glEdgeFlag(GL_TRUE);") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        declare_test_vars();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("glEdgeFlag(x)", &cmd);
+        ASSERT_TRUE("glEdgeFlag(var) rejected", ok == 0);
+    }
     {
         glr_ctrl_reset_all();
         GLCmd cmd;

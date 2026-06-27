@@ -217,6 +217,7 @@ glMaterialfv(face, pname, (GLfloat[]){r, g, b, a})
 glLightModeli(pname, param), glFrontFace(mode)
 glDepthFunc(func), glDepthMask(GL_TRUE|GL_FALSE)
 glColorMask(r, g, b, a)      each channel GL_TRUE/GL_FALSE or 0/1
+glEdgeFlag(GL_TRUE|GL_FALSE) scalar boundary-edge flag; 0/1 accepted
 glRasterPos3f(x, y, z)       position for bitmap text (see label below)
 ```
 
