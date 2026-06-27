@@ -145,6 +145,7 @@ static void test_apply_state_cmd_edge_cases(void) {
     cmd.type = CMD_LIGHT_MODEL_I; cmd.args[0] = GL_LIGHT_MODEL_TWO_SIDE; cmd.args[1] = 1; repl_apply_state_cmd(&cmd, 1.0f);
     cmd.type = CMD_FRONT_FACE; cmd.args[0] = GL_CCW; repl_apply_state_cmd(&cmd, 1.0f);
     cmd.type = CMD_DEPTH_MASK; cmd.args[0] = 1; repl_apply_state_cmd(&cmd, 1.0f);
+    cmd.type = CMD_EDGE_FLAG; cmd.args[0] = GL_TRUE; repl_apply_state_cmd(&cmd, 1.0f);
     /* glPointParameterfv args[]: [0]=pname, [1..3]=coeffs. */
     cmd.type = CMD_POINT_PARAMETER_FV; cmd.args[0] = GL_POINT_DISTANCE_ATTENUATION; cmd.num_args = 4; repl_apply_state_cmd(&cmd, 1.0f);
     cmd.type = CMD_BLEND_FUNC; cmd.args[0] = GL_SRC_ALPHA; cmd.args[1] = GL_ONE_MINUS_SRC_ALPHA; repl_apply_state_cmd(&cmd, 1.0f);
@@ -180,6 +181,11 @@ static void test_enum_arg_gl_trace(void) {
     repl_apply_state_cmd(&cmd, 1.0f);
 
     memset(&cmd, 0, sizeof(cmd));
+    cmd.type = CMD_EDGE_FLAG; cmd.num_args = 1;
+    cmd.args[0] = GL_FALSE;
+    repl_apply_state_cmd(&cmd, 1.0f);
+
+    memset(&cmd, 0, sizeof(cmd));
     cmd.type = CMD_COLOR_MATERIAL; cmd.num_args = 2;
     cmd.args[0] = GL_FRONT_AND_BACK; cmd.args[1] = GL_AMBIENT_AND_DIFFUSE;
     repl_apply_state_cmd(&cmd, 1.0f);
@@ -210,6 +216,9 @@ static void test_enum_arg_gl_trace(void) {
     snprintf(want, sizeof(want), "glDepthMask %u\n", (unsigned)GL_FALSE);
     ASSERT_TRUE("glDepthMask receives flag", strstr(buf, want) != NULL);
 
+    snprintf(want, sizeof(want), "glEdgeFlag %u\n", (unsigned)GL_FALSE);
+    ASSERT_TRUE("glEdgeFlag receives flag", strstr(buf, want) != NULL);
+
     snprintf(want, sizeof(want), "glColorMaterial %u %u\n",
              (unsigned)GL_FRONT_AND_BACK, (unsigned)GL_AMBIENT_AND_DIFFUSE);
     ASSERT_TRUE("glColorMaterial receives (face, mode) in order",
@@ -233,6 +242,7 @@ static void test_enum_arg_end_to_end_trace(void) {
     editor_feed_line("glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);");
     editor_feed_line("glColorMask(GL_TRUE, GL_FALSE, GL_TRUE, GL_FALSE);");
     editor_feed_line("glDepthMask(1);");
+    editor_feed_line("glEdgeFlag(1);");
     editor_feed_line("glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);");
     editor_feed_line("glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);");
     repl_flatten_commands(editor_state_edit_line());
@@ -261,9 +271,12 @@ static void test_enum_arg_end_to_end_trace(void) {
     ASSERT_TRUE("e2e glColorMask 4-channel order preserved",
                 strstr(buf, want) != NULL);
 
-    /* glDepthMask(1) must reach GL as GL_TRUE (bool-slot canonicalize). */
     snprintf(want, sizeof(want), "glDepthMask %u\n", (unsigned)GL_TRUE);
     ASSERT_TRUE("e2e glDepthMask(1) -> GL_TRUE", strstr(buf, want) != NULL);
+
+    /* glEdgeFlag(1) must reach GL as GL_TRUE (bool-slot canonicalize). */
+    snprintf(want, sizeof(want), "glEdgeFlag %u\n", (unsigned)GL_TRUE);
+    ASSERT_TRUE("e2e glEdgeFlag(1) -> GL_TRUE", strstr(buf, want) != NULL);
 
     snprintf(want, sizeof(want), "glColorMaterial %u %u\n",
              (unsigned)GL_FRONT_AND_BACK, (unsigned)GL_AMBIENT_AND_DIFFUSE);

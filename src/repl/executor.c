@@ -361,6 +361,9 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
         glColorMask((GLboolean)cmd->args[0], (GLboolean)cmd->args[1],
                     (GLboolean)cmd->args[2], (GLboolean)cmd->args[3]);
         return 1;
+    case CMD_EDGE_FLAG:
+        glEdgeFlag((GLboolean)cmd->args[0]);
+        return 1;
     case CMD_POINT_PARAMETER_FV: {
         /* args[0]=pname, args[1..3]=const/linear/quadratic. Skipped
          * entirely when the runtime GL lacks glPointParameterfv; the
@@ -842,6 +845,7 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
     case CMD_DEPTH_FUNC:
     case CMD_DEPTH_MASK:
     case CMD_COLOR_MASK:
+    case CMD_EDGE_FLAG:
     case CMD_POINT_PARAMETER_FV:
     case CMD_BLEND_FUNC:
     case CMD_CLEAR_COLOR:

@@ -144,7 +144,7 @@ typedef enum {
     CMD_CAT_NORMAL,         /* glNormal3f / gluNormal */
     CMD_CAT_COLOR,          /* glColor* / glClearColor / glColorMaterial / glMaterialfv / gluColor */
     CMD_CAT_TRANSFORM,      /* glTranslate / glScale / glRotate / glPushMatrix / glPopMatrix */
-    CMD_CAT_STATE,          /* glEnable / glDisable / glShadeModel / glLineWidth / glPointSize / glBlendFunc / glDepthMask / glLightModeli / glFrontFace / glPointParameterfv */
+    CMD_CAT_STATE,          /* glEnable / glDisable / glShadeModel / glLineWidth / glPointSize / glBlendFunc / glDepthMask / glEdgeFlag / glLightModeli / glFrontFace / glPointParameterfv */
     CMD_CAT_LOOP,           /* for { ... } */
     CMD_CAT_FUNCTION,       /* funcN { ... } / call */
     CMD_CAT_VARIABLE,       /* float decl / assignment */

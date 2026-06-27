@@ -31,7 +31,7 @@ The pieces map onto standard interpreter parts:
 
 | General concept | Here |
 |---|---|
-| Lexer/parser → AST | [`parser.c`](src/repl/parser.c) → [`GLCmd`](src/repl/command.h#L86) records |
+| Lexer/parser → AST | [`parser.c`](src/repl/parser.c) → [`GLCmd`](src/repl/command.h#L87) records |
 | Static validation / compile pass | [`compile.c`](src/repl/compile.c) → [`ReplCompiledChange`](src/repl/compile.h#L129) (pure, never mutates) |
 | Expression evaluator | [`eval.c`](src/repl/eval.c) (recursive descent; `sin`, `cos`, `%`, comparisons, vars) |
 | IR / lowering | [`flatten.c`](src/repl/flatten.c): unrolls loops, inlines functions, resolves `if` → a flat command stream; [`flatten_query.c`](src/repl/flatten_query.c): live flat-program cost/cursor queries |
@@ -106,7 +106,7 @@ Inside the full app this is **layers 1 and 3** of the ownership map:
 - The editor proposes text; `repl_compile` validates it *purely* (it never
   edits state, never touches the cursor, never calls `set_status`).
 - On success the editor applies the change to REPL runtime state via
-  `repl_apply_*`, and `repl_command_store` does the low-level [`GLCmd`](src/repl/command.h#L86) array
+  `repl_apply_*`, and `repl_command_store` does the low-level [`GLCmd`](src/repl/command.h#L87) array
   shuffling.
 - Each frame, if the program is dirty, [`flatten.c`](src/repl/flatten.c) rebuilds the flat program
   and [`autonormal.c`](src/repl/autonormal.c) regenerates `glNormal3f`s; [`executor.c`](src/repl/executor.c) then renders it.
@@ -117,7 +117,7 @@ Inside the full app this is **layers 1 and 3** of the ownership map:
   separately in [`scenes.c`](src/repl/scenes.c) (as [`SceneSnapshot`](src/repl/scene_snapshot.h#L17)s); [`ReplRuntimeState`](src/repl/state.h#L18) only tracks the
   active example index and bound workspace dir.
 
-[`GLCmd`](src/repl/command.h#L86) is a pure parse result (type, args, flags, provenance) — it carries
+[`GLCmd`](src/repl/command.h#L87) is a pure parse result (type, args, flags, provenance) — it carries
 **no source text**; the per-line text lives in the editor's buffer. That
 split is what keeps the pipeline editor-agnostic (and what `repl_demo`
 proves by supplying its own line store).
@@ -135,16 +135,16 @@ file format (writer in [`export.c`](src/repl/export.c), reader in [`import.c`](s
 
 | File | Responsibility |
 |---|---|
-| [`command.h`](src/repl/command.h) | Core types: [`CmdType`](src/repl/command.h#L37), [`GLCmd`](src/repl/command.h#L86), control-flow predicates |
+| [`command.h`](src/repl/command.h) | Core types: [`CmdType`](src/repl/command.h#L37), [`GLCmd`](src/repl/command.h#L87), control-flow predicates |
 | [`command_spec.c`](src/repl/command_spec.c) / `.h` | Per-command descriptor tables (arity, enum args, highlight category) |
 | [`control_flow.h`](src/repl/control_flow.h), [`color_limits.h`](src/repl/color_limits.h), [`util.h`](src/repl/util.h) | Shared limits (goto cap, clear-color cap) and size-checked buffer helpers |
 | **Edit flow** | *text → program model* |
-| [`parser.c`](src/repl/parser.c) / `.h` | One source line → [`GLCmd`](src/repl/command.h#L86) + canonical text |
+| [`parser.c`](src/repl/parser.c) / `.h` | One source line → [`GLCmd`](src/repl/command.h#L87) + canonical text |
 | [`normalize.c`](src/repl/normalize.c) / `.h` | Parse-and-normalize pipeline |
 | [`eval.c`](src/repl/eval.c) / `.h` | Expression evaluator, predefined-variable lookup, REPL↔C translation |
 | [`compile.c`](src/repl/compile.c) / `.h` | Pure validators → [`ReplCompiledChange`](src/repl/compile.h#L129) (never mutates) |
 | [`apply.c`](src/repl/apply.c) / `.h` | Applies a compiled change to REPL runtime state (cmd store + predef/scratch/alias ops) |
-| [`command_store.c`](src/repl/command_store.c) / `.h` | Low-level [`GLCmd`](src/repl/command.h#L86) array mechanics (insert/replace/delete/load) |
+| [`command_store.c`](src/repl/command_store.c) / `.h` | Low-level [`GLCmd`](src/repl/command.h#L87) array mechanics (insert/replace/delete/load) |
 | [`load.c`](src/repl/load.c) / `.h` | Non-editor line loader + apply transaction (import/example/tutorial/tests) |
 | [`visible_vars.c`](src/repl/visible_vars.c) / `.h`, [`text_helpers.c`](src/repl/text_helpers.c) / `.h` | Loop/func-local variable collection; parse/extract/canonical-text helpers |
 | [`source_scope.c`](src/repl/source_scope.c) / `.h`, [`format.c`](src/repl/format.c) / `.h`, [`reformat.c`](src/repl/reformat.c) / `.h`, [`bootstrap.c`](src/repl/bootstrap.c) / `.h` | Depth/indent/block-lookup cache, pure indentation, source reformat, startup loading |
