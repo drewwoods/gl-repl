@@ -33,6 +33,64 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
     TEST_ASSERT_FLOAT_DEFAULT(&g_harness, label, got, exp); \
 } while (0)
 
+#ifdef GL_STUBS
+#define TRACE_PATH "/tmp/test_render3d_render_trace.txt"
+
+typedef struct TraceLog {
+    char lines[2048][128];
+    int n;
+} TraceLog;
+
+static void trace_begin(void) {
+    gl_stub_counts_reset();
+    gl_stub_trace_open(TRACE_PATH);
+}
+
+static void trace_end(TraceLog *log) {
+    FILE *f;
+    char buf[256];
+
+    gl_stub_trace_close();
+    if (!log)
+        return;
+    log->n = 0;
+    f = fopen(TRACE_PATH, "r");
+    if (!f)
+        return;
+    while (log->n < (int)(sizeof(log->lines) / sizeof(log->lines[0])) &&
+           fgets(buf, sizeof(buf), f)) {
+        size_t len = strlen(buf);
+        if (len && buf[len - 1] == '\n')
+            buf[--len] = '\0';
+        strncpy(log->lines[log->n], buf, sizeof(log->lines[0]) - 1);
+        log->lines[log->n][sizeof(log->lines[0]) - 1] = '\0';
+        log->n++;
+    }
+    fclose(f);
+}
+
+static int trace_count_line(const TraceLog *log, const char *exact) {
+    int count = 0;
+    if (!log || !exact)
+        return 0;
+    for (int i = 0; i < log->n; i++)
+        if (strcmp(log->lines[i], exact) == 0)
+            count++;
+    return count;
+}
+
+static int trace_find_after(const TraceLog *log, int start, const char *exact) {
+    if (!log || !exact)
+        return -1;
+    if (start < 0)
+        start = 0;
+    for (int i = start; i < log->n; i++)
+        if (strcmp(log->lines[i], exact) == 0)
+            return i;
+    return -1;
+}
+#endif
+
 /* Minimal execute callback for testing. */
 static void test_execute_noop(const Render3dExecuteContext *ctx, void *user_data) {
     (void)ctx;
@@ -647,15 +705,62 @@ static void test_wireframe_hidden_line_passes(void) {
     ASSERT_TRUE("wireframe applies fixed hidden/visible colors",
                 gl_stub_counts[GL_STUB_glColor4f] >= 2);
 
-    /* Test with line smoothing enabled. */
+    /* Test with line smoothing enabled. Counts alone cannot prove which
+     * capability glEnable received, so use the stub trace for arguments and
+     * the depth-fill/hidden/visible pass ordering. */
     cfg.line_smooth_enabled = 1;
-    gl_stub_counts_reset();
+    TraceLog trace;
+    char blend_enable[64];
+    char blend_func[96];
+    char color_mask_depth[64];
+    char depth_lequal[64];
+    char depth_greater[64];
+    char polygon_fill[64];
+    char polygon_line[64];
+    snprintf(blend_enable, sizeof(blend_enable), "glEnable %u",
+             (unsigned)GL_BLEND);
+    snprintf(blend_func, sizeof(blend_func), "glBlendFunc %u %u",
+             (unsigned)GL_SRC_ALPHA, (unsigned)GL_ONE_MINUS_SRC_ALPHA);
+    snprintf(color_mask_depth, sizeof(color_mask_depth),
+             "glColorMask %u %u %u %u",
+             (unsigned)GL_FALSE, (unsigned)GL_FALSE,
+             (unsigned)GL_FALSE, (unsigned)GL_FALSE);
+    snprintf(depth_lequal, sizeof(depth_lequal), "glDepthFunc %u",
+             (unsigned)GL_LEQUAL);
+    snprintf(depth_greater, sizeof(depth_greater), "glDepthFunc %u",
+             (unsigned)GL_GREATER);
+    snprintf(polygon_fill, sizeof(polygon_fill), "glPolygonMode %u %u",
+             (unsigned)GL_FRONT_AND_BACK, (unsigned)GL_FILL);
+    snprintf(polygon_line, sizeof(polygon_line), "glPolygonMode %u %u",
+             (unsigned)GL_FRONT_AND_BACK, (unsigned)GL_LINE);
+
+    trace_begin();
     ASSERT_INT("wireframe render with line smooth ok",
                render3d_draw_scene(&state, &cfg), 0);
-    ASSERT_TRUE("wireframe with line smooth enables blending",
-                gl_stub_counts[GL_STUB_glEnable] >= 2);
+    trace_end(&trace);
+    ASSERT_TRUE("wireframe with line smooth enables GL_BLEND",
+                trace_count_line(&trace, blend_enable) >= 2);
     ASSERT_TRUE("wireframe with line smooth sets blend func",
-                gl_stub_counts[GL_STUB_glBlendFunc] >= 2);
+                trace_count_line(&trace, blend_func) >= 2);
+
+    int depth_mask_idx = trace_find_after(&trace, 0, color_mask_depth);
+    int fill_mode_idx = trace_find_after(&trace, depth_mask_idx + 1,
+                                         polygon_fill);
+    int hidden_depth_idx = trace_find_after(&trace, fill_mode_idx + 1,
+                                            depth_greater);
+    int hidden_line_idx = trace_find_after(&trace, hidden_depth_idx + 1,
+                                           polygon_line);
+    int visible_depth_idx = trace_find_after(&trace, hidden_line_idx + 1,
+                                             depth_lequal);
+    int visible_line_idx = trace_find_after(&trace, visible_depth_idx + 1,
+                                            polygon_line);
+    ASSERT_TRUE("wireframe fills depth before drawing hidden lines",
+                depth_mask_idx >= 0 && fill_mode_idx > depth_mask_idx &&
+                hidden_depth_idx > fill_mode_idx &&
+                hidden_line_idx > hidden_depth_idx);
+    ASSERT_TRUE("wireframe draws visible lines after hidden lines",
+                visible_depth_idx > hidden_line_idx &&
+                visible_line_idx > visible_depth_idx);
 #else
     ASSERT_TRUE("wireframe hidden-line passes require GL stubs", 1);
 #endif
