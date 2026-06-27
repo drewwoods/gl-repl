@@ -646,6 +646,16 @@ static void test_wireframe_hidden_line_passes(void) {
                 gl_stub_counts[GL_STUB_glDepthMask] >= 3);
     ASSERT_TRUE("wireframe applies fixed hidden/visible colors",
                 gl_stub_counts[GL_STUB_glColor4f] >= 2);
+
+    /* Test with line smoothing enabled. */
+    cfg.line_smooth_enabled = 1;
+    gl_stub_counts_reset();
+    ASSERT_INT("wireframe render with line smooth ok",
+               render3d_draw_scene(&state, &cfg), 0);
+    ASSERT_TRUE("wireframe with line smooth enables blending",
+                gl_stub_counts[GL_STUB_glEnable] >= 2);
+    ASSERT_TRUE("wireframe with line smooth sets blend func",
+                gl_stub_counts[GL_STUB_glBlendFunc] >= 2);
 #else
     ASSERT_TRUE("wireframe hidden-line passes require GL stubs", 1);
 #endif
