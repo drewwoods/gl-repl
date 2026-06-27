@@ -13,8 +13,9 @@ hosts a text editor, a REPL language pipeline, and 2D/3D renderers. Because
 there is only one frontend, the useful boundary is not a generic render3d-plugin
 API. The useful boundary is:
 
-```text
-REPL/editor/app state -> controller-built snapshots -> render3d/UI renderers
+```mermaid
+flowchart LR
+    state["REPL / editor / app state"] --> snap["controller-built snapshots"] --> render["render3d / UI renderers"]
 ```
 
 Put plainly: the REPL is the dynamic user-programmed geometry. It turns the
@@ -102,24 +103,23 @@ globals or call `repl_state_*` APIs directly during rendering.
 
 Top-level frame orchestration belongs in the controller:
 
-```text
-gl_repl.c GLUT display callback
-  -> glr_ctrl_display_frame          (gl_repl.c calls controller directly; no shim)
-        -> tick profiling
-        -> rebuild autonormals if dirty
-        -> rebuild flat program if dirty                          [PROF_FLATTEN]
-        -> push editor snapshots (transformers / highlights /     [PROF_SNAPSHOT*]
-           virtual lines via replay_annotations_prepare)
-        -> save live predefined variable values
-        -> prepare replay frame if replay is active
-        -> update export/camera strings
-        -> build Render3dRenderConfig from REPL state                [PROF_SNAPSHOT_SCENE_CONFIG]
-        -> build UiRenderSnapshot from REPL state                 [PROF_SNAPSHOT_UI]
-        -> render3d_draw_scene(&render3d_cfg)                      [PROF_RENDER3D]
-        -> ui_panels_render_code_panel(&ui_snap)                  [PROF_CODE_PANEL]
-        -> ui_*_render(&ui_snap) overlays                         [PROF_UI_PANELS]
-        -> ui_profile_panel_render(&ui_snap)
-        -> restore flat count and predefined variable values
+```mermaid
+flowchart TD
+    cb["gl_repl.c GLUT display callback"] --> frame["glr_ctrl_display_frame<br/>(called directly; no shim)"]
+    frame --> s1["tick profiling"]
+    s1 --> s2["rebuild autonormals if dirty"]
+    s2 --> s3["rebuild flat program if dirty<br/><i>PROF_FLATTEN</i>"]
+    s3 --> s4["push editor snapshots — transformers /<br/>highlights / virtual lines<br/>(replay_annotations_prepare)<br/><i>PROF_SNAPSHOT*</i>"]
+    s4 --> s5["save live predefined variable values"]
+    s5 --> s6["prepare replay frame if replay is active"]
+    s6 --> s7["update export / camera strings"]
+    s7 --> s8["build Render3dRenderConfig from REPL state<br/><i>PROF_SNAPSHOT_SCENE_CONFIG</i>"]
+    s8 --> s9["build UiRenderSnapshot from REPL state<br/><i>PROF_SNAPSHOT_UI</i>"]
+    s9 --> s10["render3d_draw_scene(&render3d_cfg)<br/><i>PROF_RENDER3D</i>"]
+    s10 --> s11["ui_panels_render_code_panel(&ui_snap)<br/><i>PROF_CODE_PANEL</i>"]
+    s11 --> s12["ui_*_render(&ui_snap) overlays<br/><i>PROF_UI_PANELS</i>"]
+    s12 --> s13["ui_profile_panel_render(&ui_snap)"]
+    s13 --> s14["restore flat count & predefined variable values"]
 ```
 
 Profile sections wrap each producer so snapshot construction time is
@@ -129,21 +129,25 @@ transformers, highlights, virtual lines, scene config, and ui snapshot
 
 The render3d frame consumes the explicit config:
 
-```text
-render3d_draw_scene(&render3d_cfg)
-  -> set viewport
-  -> resolve and apply clear color from render3d_cfg.flat_program
-  -> for each accumulation sample:
-       -> prepare Render3dFrameRenderContext from render3d_cfg
-       -> apply projection using render3d-local jitter
-       -> apply camera and quality flags
-       -> set up baseline lighting/material state
-       -> execute user geometry through the narrow execution boundary
-       -> invoke optional `post_fill_fn` (controller's replay-fade overlay)
-       -> render backdrop, grid, axes, orbit target
-       -> render REPL-aware 3D overlays from frame snapshots
-       -> render light indicators and other render3d foreground helpers
-       -> accumulate sample if accumulation AA is active
+```mermaid
+flowchart TD
+    entry["render3d_draw_scene(&render3d_cfg)"] --> vp["set viewport"]
+    vp --> clear["resolve & apply clear color<br/>from render3d_cfg.flat_program"]
+    clear --> p1
+
+    subgraph loop["for each accumulation sample"]
+        direction TB
+        p1["prepare Render3dFrameRenderContext"] --> p2["apply projection (render3d-local jitter)"]
+        p2 --> p3["apply camera & quality flags"]
+        p3 --> p4["set up baseline lighting / material state"]
+        p4 --> p5["execute user geometry<br/>(narrow execution boundary)"]
+        p5 --> p6["optional post_fill_fn<br/>(controller's replay-fade overlay)"]
+        p6 --> p7["render backdrop, grid, axes, orbit target"]
+        p7 --> p8["render REPL-aware 3D overlays from snapshots"]
+        p8 --> p9["render light indicators &<br/>other foreground helpers"]
+        p9 --> p10["accumulate sample if accumulation AA active"]
+    end
+    p10 -.->|next sample| p1
 ```
 
 The exact ordering may preserve current visuals. The ownership rule still
@@ -163,15 +167,11 @@ data.
 
 The REPL keeps source commands and flattened commands separate.
 
-```text
-source commands
-  one visible/editor line per command
-
-flattened commands
-  loops expanded
-  functions inlined
-  conditionals resolved
-  provenance retained
+```mermaid
+flowchart LR
+    src["<b>source commands</b><br/>one visible/editor line per command"]
+    flat["<b>flattened commands</b><br/>loops expanded · functions inlined ·<br/>conditionals resolved · provenance retained"]
+    src -->|flatten| flat
 ```
 
 Source commands are the editing model.
@@ -306,14 +306,10 @@ editor_virtual_lines` are pointers into those slices.
 
 A user line follows this path:
 
-```text
-input text
-  -> commit handler
-  -> parser
-  -> source command store
-  -> flatten
-  -> render3d config / overlay snapshots
-  -> executor boundary
+```mermaid
+flowchart LR
+    a["input text"] --> b["commit handler"] --> c["parser"] --> d["source command store"]
+    d --> e["flatten"] --> f["render3d config /<br/>overlay snapshots"] --> g["executor boundary"]
 ```
 
 Owned stages:
