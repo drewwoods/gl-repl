@@ -7,7 +7,7 @@
  * Each function operates on EditorState's input buffer (cursor,
  * selection, input text) and is strictly REPL-free.
  *
- * Purity is locked by scripts/check-edit-ops-pure.sh: the
+ * Purity is locked by scripts/check/check-edit-ops-pure.sh: the
  * implementation must not include any repl/ header or reference
  * any repl_* symbol. The guard runs in `make check` and
  * `make check-state-ownership`.

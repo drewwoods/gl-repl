@@ -1,4 +1,4 @@
-# Baseline for scripts/check-editor-repl-surface.sh.
+# Baseline for scripts/check/check-editor-repl-surface.sh.
 #
 # Counts unique `repl_*(` symbols called from each editor file.
 # These are the direct REPL coupling that tools/editor_demo/repl_shim.c

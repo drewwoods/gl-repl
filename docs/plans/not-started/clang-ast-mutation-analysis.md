@@ -4,7 +4,7 @@
 
 No clang AST tool / LibTooling executable exists in `scripts/` or
 elsewhere in the tree. The shipped boundary enforcement is still grep-
-based (`scripts/check-*`). Stays in `not-started/`.
+based (`scripts/check/check-*`). Stays in `not-started/`.
 
 ## Context
 

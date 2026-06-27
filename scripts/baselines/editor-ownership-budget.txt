@@ -1,6 +1,6 @@
 # Editor / UI ownership transitional-coupling budget.
 #
-# Tracked by scripts/check-editor-ownership-budget.sh. Both signals
+# Tracked by scripts/check/check-editor-ownership-budget.sh. Both signals
 # ratchet down only — a commit cannot grow either count past these
 # baselines. Reductions are always allowed; ratchet by hand.
 #

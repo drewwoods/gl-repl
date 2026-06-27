@@ -4,7 +4,7 @@
  * Covers the relocated File-menu actions and repl_save_active_scene's
  * filename derivation. Never exercises the no-active-scene fallback
  * (that path writes ./output.c in the repo root — see
- * scripts/check-no-test-default-output.sh); the save test always has an
+ * scripts/check/check-no-test-default-output.sh); the save test always has an
  * active named scene + a mkdtemp workspace dir.
  */
 #include "app/glr_ctrl.h"

@@ -1,4 +1,4 @@
-# Baseline for scripts/check-editor-no-app.sh.
+# Baseline for scripts/check/check-editor-no-app.sh.
 #
 # Counts non-comment `#include "app/...` lines in src/editor/**.
 # The editor (layer 2) should not depend on the controller (layer 6).
