@@ -13,9 +13,8 @@ hosts a text editor, a REPL language pipeline, and 2D/3D renderers. Because
 there is only one frontend, the useful boundary is not a generic render3d-plugin
 API. The useful boundary is:
 
-```mermaid
-flowchart LR
-    state["REPL / editor / app state"] --> snap["controller-built snapshots"] --> render["render3d / UI renderers"]
+```text
+REPL / editor / app state  ──▶  controller-built snapshots  ──▶  render3d / UI renderers
 ```
 
 Put plainly: the REPL is the dynamic user-programmed geometry. It turns the
@@ -167,11 +166,15 @@ data.
 
 The REPL keeps source commands and flattened commands separate.
 
-```mermaid
-flowchart LR
-    src["<b>source commands</b><br/>one visible/editor line per command"]
-    flat["<b>flattened commands</b><br/>loops expanded · functions inlined ·<br/>conditionals resolved · provenance retained"]
-    src -->|flatten| flat
+```text
+source commands
+    one visible / editor line per command
+    │
+    │ flatten
+    ▼
+flattened commands
+    loops expanded · functions inlined ·
+    conditionals resolved · provenance retained
 ```
 
 Source commands are the editing model.
@@ -306,10 +309,26 @@ editor_virtual_lines` are pointers into those slices.
 
 A user line follows this path:
 
-```mermaid
-flowchart LR
-    a["input text"] --> b["commit handler"] --> c["parser"] --> d["source command store"]
-    d --> e["flatten"] --> f["render3d config /<br/>overlay snapshots"] --> g["executor boundary"]
+```text
+input text
+    │
+    ▼
+commit handler
+    │
+    ▼
+parser
+    │
+    ▼
+source command store
+    │
+    ▼
+flatten
+    │
+    ▼
+render3d config / overlay snapshots
+    │
+    ▼
+executor boundary
 ```
 
 Owned stages:
