@@ -642,7 +642,12 @@ static void render3d_pass_hidden_line_wireframe(const Render3dRenderConfig *conf
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 
     glDisable(GL_LIGHTING);
-    glDisable(GL_BLEND);
+    if (config->line_smooth_enabled) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    } else {
+        glDisable(GL_BLEND);
+    }
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
     glDepthMask(GL_TRUE);
@@ -660,7 +665,12 @@ static void render3d_pass_hidden_line_wireframe(const Render3dRenderConfig *conf
 
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glDisable(GL_LIGHTING);
-    glDisable(GL_BLEND);
+    if (config->line_smooth_enabled) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    } else {
+        glDisable(GL_BLEND);
+    }
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
     glDepthMask(GL_FALSE);
