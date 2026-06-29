@@ -836,6 +836,53 @@ static void test_camera_target_decay_override_resets_on_new_ease(void) {
                 cam.rx > 4.0f && cam.rx < 12.0f);
 }
 
+static void test_time_dirty_gate_uses_source_text(void) {
+    glr_ctrl_reset_all();
+
+    int t_idx = repl_eval_find_predef_var_idx("t");
+    ASSERT_TRUE("time dirty gate has t predef", t_idx >= 0);
+
+    {
+        const char *lines[] = {
+            "glVertex3f(1, 2, 3);",
+            "// t in a comment is not a dependency",
+        };
+        ASSERT_INT("load no-t source", source_document_load_lines(lines, 2), 1);
+        repl_state_document_count_set(2);
+        repl_state_mark_source_dirty();
+        repl_state_flat_program_clear_dirty();
+
+        repl_state_time_advance(0.25f);
+        ASSERT_INT("time advance without source t leaves flat clean",
+                   repl_state_flat_program_dirty(), 0);
+        ASSERT_TRUE("time advance still updates visible t",
+                    fabsf(g_predef_vars[t_idx].value - 0.25f) < 1e-6f);
+
+        repl_state_time_set(2.0f);
+        ASSERT_INT("set_time without source t leaves flat clean",
+                   repl_state_flat_program_dirty(), 0);
+    }
+
+    {
+        const char *lines[] = {
+            "glVertex3f(t, 0, 0);",
+        };
+        ASSERT_INT("load t source", source_document_load_lines(lines, 1), 1);
+        repl_state_document_count_set(1);
+        repl_state_mark_source_dirty();
+        repl_state_flat_program_clear_dirty();
+
+        repl_state_time_advance(0.25f);
+        ASSERT_INT("time advance with source t marks flat dirty",
+                   repl_state_flat_program_dirty(), 1);
+
+        repl_state_flat_program_clear_dirty();
+        repl_state_time_set(4.0f);
+        ASSERT_INT("set_time with source t marks flat dirty",
+                   repl_state_flat_program_dirty(), 1);
+    }
+}
+
 int main(void) {
     printf("--- repl_state tests ---\n");
     test_capture_restore_round_trip();
@@ -853,6 +900,7 @@ int main(void) {
     test_workspace_load_clears_scene_camera_default();
     test_camera_target_decay_override_applies();
     test_camera_target_decay_override_resets_on_new_ease();
+    test_time_dirty_gate_uses_source_text();
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return g_harness.passed == g_harness.run ? 0 : 1;
 }
