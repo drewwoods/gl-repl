@@ -47,7 +47,7 @@ The standard interpreter parts map cleanly onto files:
 | Lexer / parser → AST | [`parser.c`](src/repl/parser.c) → [`GLCmd`](src/repl/command.h#L87) records |
 | Symbol / spec table | [`command_spec.c`](src/repl/command_spec.c) (per-command arity, arg kinds, highlight category) |
 | Expression evaluator | [`eval.c`](src/repl/eval.c) (recursive descent: `+ - * / %`, comparisons, `sin`/`cos`/…, variables) |
-| Static validation / compile pass | [`compile.c`](src/repl/compile.c) → [`ReplCompiledChange`](src/repl/compile.h#L129) (**pure**; never mutates) |
+| Static validation / compile pass | [`compile.c`](src/repl/compile.c) → [`ReplCompiledChange`](compile.h#L130) (**pure**; never mutates) |
 | Mutation / "linker" | [`apply.c`](src/repl/apply.c) + [`command_store.c`](src/repl/command_store.c) (write the program model) |
 | IR lowering | [`flatten.c`](src/repl/flatten.c) (unroll loops, inline functions, resolve `if`) |
 | Bytecode VM / executor | [`executor.c`](src/repl/executor.c) (walk the flat program, emit GL) |
@@ -326,10 +326,10 @@ absolute and machine-checked:
 
 > A `repl_compile_*` function is **pure**: no editor mutation, no
 > command-store mutation, no status mutation, no undo entry. It returns
-> a [`ReplCompiledChange`](src/repl/compile.h#L129) describing what *should* happen, or fills an
+> a [`ReplCompiledChange`](compile.h#L130) describing what *should* happen, or fills an
 > `err` buffer.
 
-The compiler reads everything it needs from a [`ReplCompileContext`](src/repl/compile.h#L177)
+The compiler reads everything it needs from a [`ReplCompileContext`](compile.h#L178)
 snapshot (current cmds, edit line, source-scope view, predef table,
 func aliases) — it never reaches into REPL globals. Build one with
 `repl_compile_context_from_live(edit_line_idx)`; the caller supplies the
@@ -342,7 +342,7 @@ separate calls (`repl_apply_predef_ops`, `repl_apply_scratch_ops`,
 `repl_apply_alias_ops`) so the orchestrator can sequence them correctly
 relative to undo capture.
 
-### 4.2 [`ReplCompiledChange`](src/repl/compile.h#L129) — the descriptor
+### 4.2 [`ReplCompiledChange`](compile.h#L130) — the descriptor
 
 A compiled change ([`compile.h`](src/repl/compile.h)) is a *source-command-level* plan, not a
 flat program. Its `kind` selects the meaningful fields:
@@ -372,7 +372,7 @@ tests and the demo can compile-and-inspect without ever mutating state.
 
 ### 4.3 The compile dispatcher and handler order
 
-[`repl_compile_dispatch()`](src/repl/compile.h#L262) walks per-kind validators in **canonical
+[`repl_compile_dispatch()`](compile.h#L263) walks per-kind validators in **canonical
 order** and returns the first non-`NO_CHANGE` result:
 
 ```
@@ -391,7 +391,7 @@ Block constructs share a **kernel** (`repl_compile_*_kernel`) between two
 callers: the lean loader's thin wrapper and the editor's richer wrapper
 (which adds header-replace, one-liner-body, and paired-end branches).
 The kernel does the parse/validate work; the wrappers shape it into the
-right [`ReplCompiledChange`](src/repl/compile.h#L129). This is why import, examples, and live typing
+right [`ReplCompiledChange`](compile.h#L130). This is why import, examples, and live typing
 all agree on what a valid `for(...)` is.
 
 ### 4.4 The two apply paths
@@ -608,7 +608,7 @@ rationale is in [`eval.h`](src/repl/eval.h)):
   exceed the 32-slot table with "variable table full (max 32)".
 - **`MAX_EXPR_VARS = 32`** — the lexical scope size for *one* expression
   parse (visible loop iterators + function params). Predefined globals are
-  supplied separately through `ReplPredefView` / `ExprCtx`, so a full predef
+  supplied separately through [`ReplPredefView`](eval.h#L178) / [`ExprCtx`](eval.h#L142), so a full predef
   table does not consume expression-local slots.
   [`collect_visible_vars_in()`](src/repl/visible_vars.h#L16) ([`visible_vars.c`](src/repl/visible_vars.c)) builds this per parse;
   it reads no live state, so compile passes its context's document view.
@@ -801,9 +801,9 @@ flowchart LR
 
 Each line is fed to [`repl_load_apply_line()`](src/repl/load.h#L78) ([`load.c`](src/repl/load.c)) — the same
 non-editor entry the example loader and file importer use (§4.4). For
-each line it builds a [`ReplCompileContext`](src/repl/compile.h#L177), runs `repl_compile_dispatch`
+each line it builds a [`ReplCompileContext`](compile.h#L178), runs `repl_compile_dispatch`
 (falling back to the GL parser), and applies the resulting
-[`ReplCompiledChange`](src/repl/compile.h#L129) to the source array + variable table:
+[`ReplCompiledChange`](compile.h#L130) to the source array + variable table:
 
 ```
 float r;       src+1 (now 1)  [t=0.00 r=0.00]   ← compile float_decl → predef DECLARE r

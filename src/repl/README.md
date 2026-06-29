@@ -32,7 +32,7 @@ The pieces map onto standard interpreter parts:
 | General concept | Here |
 |---|---|
 | Lexer/parser → AST | [`parser.c`](src/repl/parser.c) → [`GLCmd`](src/repl/command.h#L87) records |
-| Static validation / compile pass | [`compile.c`](src/repl/compile.c) → [`ReplCompiledChange`](src/repl/compile.h#L129) (pure, never mutates) |
+| Static validation / compile pass | [`compile.c`](src/repl/compile.c) → [`ReplCompiledChange`](compile.h#L130) (pure, never mutates) |
 | Expression evaluator | [`eval.c`](src/repl/eval.c) (recursive descent; `sin`, `cos`, `%`, comparisons, vars) |
 | IR / lowering | [`flatten.c`](src/repl/flatten.c): unrolls loops, inlines functions, resolves `if` → a flat command stream; [`flatten_query.c`](src/repl/flatten_query.c): live flat-program cost/cursor queries |
 | Bytecode VM / executor | [`executor.c`](src/repl/executor.c): walks the flat stream emitting GL calls |
@@ -144,7 +144,7 @@ file format (writer in [`export.c`](src/repl/export.c), reader in [`import.c`](s
 | [`parser.c`](src/repl/parser.c) / `.h` | One source line → [`GLCmd`](src/repl/command.h#L87) + canonical text |
 | [`normalize.c`](src/repl/normalize.c) / `.h` | Parse-and-normalize pipeline |
 | [`eval.c`](src/repl/eval.c) / `.h` | Expression evaluator, predefined-variable lookup, REPL↔C translation |
-| [`compile.c`](src/repl/compile.c) / `.h` | Pure validators → [`ReplCompiledChange`](src/repl/compile.h#L129) (never mutates) |
+| [`compile.c`](src/repl/compile.c) / `.h` | Pure validators → [`ReplCompiledChange`](compile.h#L130) (never mutates) |
 | [`apply.c`](src/repl/apply.c) / `.h` | Applies a compiled change to REPL runtime state (cmd store + predef/scratch/alias ops) |
 | [`command_store.c`](src/repl/command_store.c) / `.h` | Low-level [`GLCmd`](src/repl/command.h#L87) array mechanics (insert/replace/delete/load) |
 | [`load.c`](src/repl/load.c) / `.h` | Non-editor line loader + apply transaction (import/example/tutorial/tests) |
