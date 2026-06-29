@@ -23,8 +23,8 @@
 /* @cfg vertex_labels = 1 */
 /* @cfg label_scope = 0 */
 /* @cfg normal_vectors = 0 */
-/* @cfg vertex_outlines = 0 */
-/* @cfg vertex_points = 0 */
+/* @cfg vertex_outlines = 1 */
+/* @cfg vertex_points = 1 */
 /* @cfg poly_highlight = 1 */
 /* @cfg winding = 0 */
 /* @cfg variable_panel = 1 */
@@ -87,51 +87,44 @@ void display(void) {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -6.0000f);
+  glTranslatef(0.0000f, 0.0000f, -4.0000f);
   glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  // Recursive triangle tree: child calls shrink and rotate from the parent
-  branch(depth, size, spin) {
-    glColor3f(0.62 - 0.065*depth, 0.52 + 0.045*depth, 0.95 + 0.0075*depth);
-    glBegin(GL_LINE_LOOP);
-      glNormal3f(0, 0, 1);
-      glVertex3f(0, size, 0);
-      glVertex3f(-0.866*size, -0.5*size, 0);
-      glVertex3f(0.866*size, -0.5*size, 0);
-    glEnd();
-    if(depth <= 0) {
-      glColor3f(0.98, 0.76, 0.36);
-      glBegin(GL_TRIANGLES);
+  shape(scale, phase) {
+    if(scale > 1) {
+      glColor3f(0.98, 0.46, 0.36);
+      glBegin(GL_QUADS);
         glNormal3f(0, 0, 1);
-        glVertex3f(0, size*0.55, 0);
-        glVertex3f(-0.48*size, -0.25*size, 0);
-        glVertex3f(0.48*size, -0.25*size, 0);
+        glVertex3f(-0.7*scale, -0.7*scale, 0);
+        glVertex3f(0.7*scale, -0.7*scale, 0);
+        glVertex3f(0.7*scale, 0.7*scale, 0);
+        glVertex3f(-0.7*scale, 0.7*scale, 0);
       glEnd();
     }
-    if(depth > 0) {
-      glPushMatrix();
-        glTranslatef(0, size*1.02, 0);
-        glRotatef(18 + spin*14, 0, 0, 1);
-        branch(depth - 1, size*0.62, spin + 0.15);
-      glPopMatrix();
-      glPushMatrix();
-        glTranslatef(-size*0.9, -size*0.38, 0);
-        glRotatef(-30 - spin*12, 0, 0, 1);
-        branch(depth - 1, size*0.58, spin + 0.12);
-      glPopMatrix();
-      glPushMatrix();
-        glTranslatef(size*0.9, -size*0.38, 0);
-        glRotatef(30 + spin*12, 0, 0, 1);
-        branch(depth - 1, size*0.58, spin + 0.12);
-      glPopMatrix();
+    if(scale <= 1) {
+      glColor3f(0.36, 0.7, 0.98);
+      glBegin(GL_TRIANGLES);
+        glNormal3f(0, 0, 1);
+        glVertex3f(cos(phase)*0.9*scale, sin(phase)*0.9*scale, 0);
+        glVertex3f(cos(phase+TAU/3)*0.9*scale, sin(phase+TAU/3)*0.9*scale, 0);
+        glVertex3f(cos(phase+2*TAU/3)*0.9*scale, sin(phase+2*TAU/3)*0.9*scale, 0);
+      glEnd();
     }
   }
-
   glClearColor(0.05, 0.06, 0.08, 1);
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_NORMALIZE);
-  glRotatef(sin(t*0.35)*12, 0, 0, 1);
-  branch(4, 1.05, sin(t*0.4));
+  glPushMatrix();
+    glTranslatef(-2.2, 0, 0);
+    shape(0.9, t);
+  glPopMatrix();
+  glPushMatrix();
+    shape(1.4, t*0.5);
+  glPopMatrix();
+  glPushMatrix();
+    glTranslatef(2.2, 0, 0);
+    shape(0.65, -t*0.8);
+  glPopMatrix();

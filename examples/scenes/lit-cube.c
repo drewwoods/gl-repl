@@ -1,0 +1,37 @@
+// camera
+glTranslatef(0.0f, 0.0f, -6.0f);
+glRotatef(20.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(35.0f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0f, 0.0f, 0.0f);
+
+glClearColor(0.1, 0.1, 0.1, 1.0);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_NORMALIZE);
+glShadeModel(GL_SMOOTH);
+glEnable(GL_LIGHT3);
+glEnable(GL_LIGHT2);
+//glEnable(GL_LINE_SMOOTH);
+glColor3f(1, 1, 1);
+glBegin(GL_QUAD_STRIP);
+glNormal3f(0, 1, 0);
+glVertex3f(1, 1, 1);
+glNormal3f(0, 1, 0);
+glVertex3f(-1, 1, 1);
+glNormal3f(0, 0, 1);
+glVertex3f(1, -1, 1);
+glNormal3f(0, 0, 1);
+glVertex3f(-1, -1, 1);
+glNormal3f(-0, -1, -0);
+glVertex3f(1, -1, -1);
+glNormal3f(-0, -1, -0);
+glVertex3f(-1, -1, -1);
+glNormal3f(0, 0, -1);
+glVertex3f(1, 1, -1);
+glNormal3f(0, 0, -1);
+glVertex3f(-1, 1, -1);
+glNormal3f(0, 1, -0);
+glVertex3f(1, 1, 1);
+glNormal3f(0, 1, -0);
+glVertex3f(-1, 1, 1);
+glEnd();

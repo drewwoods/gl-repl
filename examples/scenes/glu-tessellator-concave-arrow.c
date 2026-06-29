@@ -1,0 +1,38 @@
+// @cfg grid = GRID_THEME_TRON
+// @cfg grid_brightness = GRID_BRIGHTNESS_DIM
+// @cfg light_theme = LIGHT_THEME_HEADLIGHT
+// camera
+glTranslatef(0.0f, 0.0f, -6.0f);
+glRotatef(10.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(15.0f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0f, 0.0f, 0.0f);
+
+glClearColor(0.05, 0.06, 0.08, 1.0);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_NORMALIZE);
+glEnable(GL_LIGHT3);
+glEnable(GL_LIGHT2);
+glEnable(GL_LIGHT0);
+glShadeModel(GL_SMOOTH);
+glFrontFace(GL_CW);
+// Arrow shape - concave, tessellated with per-vertex color
+gluBegin(GLU_POLYGON);
+gluBegin(GLU_CONTOUR);
+gluNormal(0, 0, 1);
+gluColor(0.36, 0.70, 0.98, 1);
+gluVertex(-1.2, -0.45, 0);
+gluColor(0.36, 0.70, 0.98, 1);
+gluVertex(-1.2, 0.45, 0);
+gluColor(0.62, 0.52, 0.95, 1);
+gluVertex(0, 0.45, 0);
+gluColor(0.98, 0.46, 0.36, 1);
+gluVertex(0, 1.1, 0);
+gluColor(0.98, 0.76, 0.36, 1);
+gluVertex(1.3, 0, 0);
+gluColor(0.98, 0.46, 0.36, 1);
+gluVertex(0, -1.1, 0);
+gluColor(0.62, 0.52, 0.95, 1);
+gluVertex(0, -0.45, 0);
+gluEnd();
+gluEnd();

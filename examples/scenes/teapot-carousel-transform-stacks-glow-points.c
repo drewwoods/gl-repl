@@ -1,0 +1,143 @@
+// @cfg grid = GRID_THEME_CLASSIC
+// @cfg axes = AXES_THEME_OFF
+// @cfg backdrop = RENDER3D_BACKDROP_CITY_AND_STARS
+// @cfg light_theme = LIGHT_THEME_DEFAULT
+// @cfg normal_vectors = 0
+// @cfg vertex_outlines = 0
+// @cfg vertex_points = 0
+// @cfg light_indicators = 0
+// camera
+glTranslatef(0.0000f, 0.0000f, -8.8000f);
+glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);
+glRotatef(24.0000f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0000f, -1.2000f, 0.0000f);
+
+static float spinRate = 0.06;
+static float seats = 8;
+static float bulbs = 28;
+static float bob, glow, sel;
+
+drawSeat(ang) {
+  glPushMatrix();
+    glRotatef(ang, 0, 1, 0);
+    glTranslatef(2, 0, 0);
+
+    // Brass pole, deck to canopy
+    glColor3f(0.72, 0.58, 0.28);
+    glPushMatrix();
+      glTranslatef(0, 1, 0);
+      glScalef(0.05, 2, 0.05);
+      glutSolidCube(1);
+    glPopMatrix();
+
+    // Teapot seat: bobs with a per-seat phase, faces the travel direction
+    bob = 0.2 * sin(t*TAU*0.7 + ang*PI/180);
+    sel = fmod(ang/45, 3);
+    if(sel < 0.5) {
+      glColor3f(0.85, 0.22, 0.25);
+    }
+    if(sel > 0.5 && sel < 1.5) {
+      glColor3f(0.2, 0.6, 0.62);
+    }
+    if(sel > 1.5) {
+      glColor3f(0.9, 0.7, 0.25);
+    }
+    glPushMatrix();
+      glTranslatef(0, 0.55 + bob, 0);
+      glRotatef(90, 0, 1, 0);
+      glutSolidTeapot(0.38);
+    glPopMatrix();
+  glPopMatrix();
+}
+
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_NORMALIZE);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_LIGHT1);
+
+glPushMatrix();
+  glRotatef(t * spinRate * 360, 0, 1, 0);
+
+  // Deck: triangle-fan disc, rim swept by the bulb chase phase
+  // (i*TAU*4/bulbs ~= the bulbs' i*0.9 step, but closes the loop exactly)
+  glDisable(GL_LIGHTING);
+  glBegin(GL_TRIANGLE_FAN);
+    glColor3f(0.2, 0.12, 0.06);
+    glVertex3f(0, 0, 0);
+    for(i, 0, bulbs + 1) {
+      glow = 0.6 + 0.4 * sin(6*t + i*TAU*4/bulbs);
+      glColor3f(0.45, 0.07 + 0.31*glow, 0.16*glow);
+      glVertex3f(2.6*cos(i*TAU/bulbs), 0, 2.6*sin(i*TAU/bulbs));
+    }
+  glEnd();
+  glEnable(GL_LIGHTING);
+
+  // Center column
+  glColor3f(0.72, 0.58, 0.28);
+  glPushMatrix();
+    glTranslatef(0, 1, 0);
+    glScalef(0.16, 2, 0.16);
+    glutSolidCube(1);
+  glPopMatrix();
+
+  // Striped canopy: three stacked squashed spheres + gold finial
+  glColor3f(0.78, 0.16, 0.2);
+  glPushMatrix();
+    glTranslatef(0, 2, 0);
+    glScalef(2.9, 0.6, 2.9);
+    glutSolidSphere(1, 36, 18);
+  glPopMatrix();
+  glColor3f(0.92, 0.88, 0.8);
+  glPushMatrix();
+    glTranslatef(0, 2.22, 0);
+    glScalef(2.1, 0.5, 2.1);
+    glutSolidSphere(1, 32, 16);
+  glPopMatrix();
+  glColor3f(0.78, 0.16, 0.2);
+  glPushMatrix();
+    glTranslatef(0, 2.46, 0);
+    glScalef(1.3, 0.42, 1.3);
+    glutSolidSphere(1, 28, 14);
+  glPopMatrix();
+  glColor3f(0.95, 0.78, 0.3);
+  glPushMatrix();
+    glTranslatef(0, 2.95, 0);
+    glutSolidSphere(0.12, 16, 12);
+  glPopMatrix();
+
+  // Gold rim ring at the canopy edge -- mounts the bulb chase
+  glColor3f(0.72, 0.58, 0.28);
+  glPushMatrix();
+    glTranslatef(0, 1.75, 0);
+    glRotatef(90, 1, 0, 0);
+    glutSolidTorus(0.05, 2.7, 12, 48);
+  glPopMatrix();
+
+  for(i, 0, seats) {
+    drawSeat(i * 360 / seats);
+  }
+
+  // Fairground bulbs: additive points chasing around both rims
+  glDisable(GL_LIGHTING);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  glEnable(GL_POINT_SMOOTH);
+  glDepthMask(GL_FALSE);
+  glPointSize(26);
+  glBegin(GL_POINTS);
+  for(i, 0, bulbs) {
+    glow = 0.6 + 0.4 * sin(6*t - i*0.9);
+    glColor4f(1, 0.15 + 0.7*glow, 0.35*glow, glow);
+    glVertex3f(2.84*cos(i*TAU/bulbs), 1.78, 2.84*sin(i*TAU/bulbs));
+  }
+  glEnd();
+  glBegin(GL_POINTS);
+  for(i, 0, bulbs) {
+    glow = 0.6 + 0.4 * sin(6*t + i*0.9);
+    glColor4f(1, 0.15 + 0.7*glow, 0.35*glow, glow);
+    glVertex3f(2.66*cos(i*TAU/bulbs + 0.11), 0.06, 2.66*sin(i*TAU/bulbs + 0.11));
+  }
+  glEnd();
+  glDepthMask(GL_TRUE);
+glPopMatrix();

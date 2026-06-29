@@ -1,0 +1,38 @@
+// @cfg vertex_outlines = 0
+// @cfg vertex_points = 0
+// @cfg light_indicators = 0
+// @cfg poly_highlight = 0
+// @cfg grid = GRID_THEME_OFF
+// @cfg msaa = 1
+// @cfg line_smooth = 0
+// @cfg variable_panel = 0
+// camera
+glTranslatef(0.0f, 0.0f, -13.5f);
+glRotatef(0.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0f, 0.0f, 0.0f);
+static float flakeCount = 550; // @tune
+static float flakeX, flakeY; // particle position
+static float drift, fall; // per-flake horizontal drift, vertical fall speed
+static float depth; // [0,1] random; depth and shade both derive from it
+static float driftMax = 0.5; // max horizontal drift magnitude
+static float fallBase = -1.5; // base fall speed (NOT gravity)
+static float wrapX = 12, wrapY = 5; // half-extents of the wrap region
+static float depthScale = 10; // multiplier on `depth` for z position
+glClearColor(0.05, 0.05, 0.05, 1);
+glEnable(GL_DEPTH_TEST);
+glPointSize(10);
+glBegin(GL_POINTS);
+  for (p, 0, flakeCount) {
+    drift = driftMax * rand2(p, 1);
+    flakeX = rem(wrapX * rand2(p,4) + t * drift, 2 * wrapX);
+
+    fall = fallBase - rand(p, 2);
+    flakeY = rem(wrapY * rand2(p,3) + t * fall, 2 * wrapY);
+
+    depth = rand(p, 5); // z affects color and distance
+
+    glColor3f(0.5 + 0.5 * depth, 0.5 + 0.5 * depth, 0.5 + 0.5 * depth);
+    glVertex3f(flakeX, flakeY, depthScale * depth);
+  }
+glEnd();

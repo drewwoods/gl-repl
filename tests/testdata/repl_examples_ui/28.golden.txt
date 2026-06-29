@@ -1,0 +1,192 @@
+/* @cfg msaa = 1 */
+/* @cfg line_smooth = 0 */
+/* @cfg accum_effect = 1 */
+/* @cfg accum_passes = 1 */
+/* @cfg wireframe = 0 */
+/* @cfg point_attenuation = 1 */
+/* @cfg auto_time = 1 */
+/* @cfg replay = 0 */
+/* @cfg replay_mode = 1 */
+/* @cfg replay_expand = 1 */
+/* @cfg grid = GRID_THEME_STARCHART */
+/* @cfg grid_extent = GRID_EXTENT_FAR */
+/* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
+/* @cfg grid_major = GRID_MAJOR_1 */
+/* @cfg axes = AXES_THEME_OFF */
+/* @cfg xform_guides = 2 */
+/* @cfg light_indicators = 0 */
+/* @cfg light_theme = LIGHT_THEME_DEFAULT */
+/* @cfg backdrop = RENDER3D_BACKDROP_NEBULA */
+/* @cfg auto_normals = 0 */
+/* @cfg view_mode = RENDER3D_VIEW_3D */
+/* @cfg camera_rotate = 0 */
+/* @cfg vertex_labels = 1 */
+/* @cfg label_scope = 0 */
+/* @cfg normal_vectors = 0 */
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
+/* @cfg poly_highlight = 1 */
+/* @cfg winding = 0 */
+/* @cfg variable_panel = 1 */
+/* @cfg compute_profile = 0 */
+/* @cfg memory_profile = 0 */
+/* @cfg code_panel = 1 */
+/* @cfg wrap_at_commas = 1 */
+/* @cfg syntax_highlight = 2 */
+/* @cfg paren_match = 1 */
+/* @cfg paren_scope = 1 */
+/* @cfg audio = -1 */
+--- header_pre ---
+#define j0 _j0
+#define j1 _j1
+#define jn _jn
+#define y0 _y0
+#define y1 _y1
+#define yn _yn
+#define gamma _gamma
+#define lgamma _lgamma
+#define tgamma _tgamma
+#include <stddef.h>
+#if defined(__APPLE__)
+#include <OpenGL/gl.h>
+#include <OpenGL/glu.h>
+#include <GLUT/glut.h>
+#else
+#define GL_GLEXT_PROTOTYPES
+#include <GL/gl.h>
+#include <GL/glext.h>
+#include <GL/glu.h>
+#include <GL/freeglut.h>
+#endif
+#include <math.h>
+#include <stdlib.h>
+#undef j0
+#undef j1
+#undef jn
+#undef y0
+#undef y1
+#undef yn
+#undef gamma
+#undef lgamma
+#undef tgamma
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+static float g_angle = 0.0f;
+static int   g_rotating = 0;
+
+--- display_header ---
+void display(void) {
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glLoadIdentity();
+  glPushAttrib(GL_ALL_ATTRIB_BITS);
+  float A[8], B[8], C[8];
+--- render_state ---
+  glEnable(GL_MULTISAMPLE);
+  glDisable(GL_LINE_SMOOTH);
+--- camera ---
+  glTranslatef(0.0000f, 0.0000f, -12.5000f);
+  glRotatef(16.0000f, 1.0f, 0.0f, 0.0f);
+  glRotatef(-30.0000f, 0.0f, 1.0f, 0.0f);
+  glTranslatef(-0.0000f, -1.2000f, -0.0000f);
+--- header_post ---
+--- source ---
+  static float y, c, a;
+
+  // banded gas giant: quad strips over latitude, bands swirled by t
+  planet(rad, stacks, slices) {
+    for(i, 0, stacks) {
+      glBegin(GL_QUAD_STRIP);
+        for(j, 0, slices + 1) {
+          y = sin(-PI/2 + PI*i/stacks);
+          c = 0.5 + 0.5*sin(9*y + 0.5*sin(3*j*TAU/slices + 0.6*t) + 0.4*t);
+          glColor3f(0.46 + 0.34*c, 0.30 + 0.16*c, 0.62 - 0.20*c);
+          glNormal3f(cos(-PI/2 + PI*i/stacks)*cos(j*TAU/slices), y, cos(-PI/2 + PI*i/stacks)*sin(j*TAU/slices));
+          glVertex3f(rad*cos(-PI/2 + PI*i/stacks)*cos(j*TAU/slices), rad*y, rad*cos(-PI/2 + PI*i/stacks)*sin(j*TAU/slices));
+          y = sin(-PI/2 + PI*(i + 1)/stacks);
+          c = 0.5 + 0.5*sin(9*y + 0.5*sin(3*j*TAU/slices + 0.6*t) + 0.4*t);
+          glColor3f(0.46 + 0.34*c, 0.30 + 0.16*c, 0.62 - 0.20*c);
+          glNormal3f(cos(-PI/2 + PI*(i + 1)/stacks)*cos(j*TAU/slices), y, cos(-PI/2 + PI*(i + 1)/stacks)*sin(j*TAU/slices));
+          glVertex3f(rad*cos(-PI/2 + PI*(i + 1)/stacks)*cos(j*TAU/slices), rad*y, rad*cos(-PI/2 + PI*(i + 1)/stacks)*sin(j*TAU/slices));
+        }
+      glEnd();
+    }
+  }
+
+  // moon on a tilted circular orbit; caller sets the color
+  moon(orbit, rad, speed, tilt) {
+    glPushMatrix();
+      glRotatef(tilt, 0, 0, 1);
+      glRotatef(speed*t, 0, 1, 0);
+      glTranslatef(orbit, 0, 0);
+      glutSolidSphere(rad, 16, 12);
+    glPopMatrix();
+  }
+
+  // translucent ring band: bright inner lip fading outward
+  ring(inner, outer, fade) {
+    glBegin(GL_QUAD_STRIP);
+      for(j, 0, 41) {
+        c = 0.75 + 0.25*sin(j*0.9);
+        glColor4f(0.70*c, 0.58*c, 0.88*c, fade);
+        glVertex3f(inner*cos(j*TAU/40), 0, inner*sin(j*TAU/40));
+        glColor4f(0.45*c, 0.50*c, 0.85*c, 0.25*fade);
+        glVertex3f(outer*cos(j*TAU/40), 0, outer*sin(j*TAU/40));
+      }
+    glEnd();
+  }
+  // ===== Ringed gas giant under nebula skies =====
+  // NOTE: stays well under the 4096 flattened-command budget --
+  // the sphere loop costs stacks*(slices + 1)*10 flat commands.
+  glClearColor(0.04, 0.04, 0.1, 1);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_COLOR_MATERIAL);
+  glEnable(GL_NORMALIZE);
+  glShadeModel(GL_SMOOTH);
+
+  glPushMatrix();
+    glTranslatef(0, 1.7, 0);
+
+    glPushMatrix();
+      glRotatef(-6*t, 0, 1, 0);
+      planet(1.55, 18, 18);
+    glPopMatrix();
+
+    glColor3f(0.78, 0.72, 0.64);
+    moon(3.9, 0.22, 34, 9);
+    glColor3f(0.55, 0.66, 0.8);
+    moon(5.1, 0.16, -21, -14);
+
+    // translucent passes last: rings over the planet, then the comet
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE);
+    glPushMatrix();
+      glRotatef(26, 1, 0, 0.3);
+      ring(1.95, 2.45, 0.40);
+      ring(2.55, 3.05, 0.20);
+    glPopMatrix();
+
+    // comet: bright head + tail fading along its eccentric orbit
+    glBegin(GL_LINE_STRIP);
+      for(i, 0, 30) {
+        a = 0.7*t - 0.06*i;
+        glColor4f(0.55, 0.85, 1.0, 0.6*(1 - i/30));
+        glVertex3f(5.6*cos(a), 1.1*sin(2*a), 4.2*sin(a));
+      }
+    glEnd();
+    glPointSize(6);
+    glBegin(GL_POINTS);
+      glColor4f(0.85, 0.97, 1, 0.95);
+      glVertex3f(5.6*cos(0.7*t), 1.1*sin(1.4*t), 4.2*sin(0.7*t));
+    glEnd();
+
+    // leave shared GL state the way we found it
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
+  glPopMatrix();

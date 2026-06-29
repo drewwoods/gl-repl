@@ -1,0 +1,40 @@
+// @cfg vertex_outlines = 0
+// @cfg vertex_points = 0
+// @cfg grid = GRID_THEME_EMBER
+// @cfg grid_extent = GRID_EXTENT_MID
+// camera
+glTranslatef(0.0f, 0.0f, -5.0f);
+glRotatef(15.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(10.0f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0f, 0.0f, 0.0f);
+
+static float radius, angle, x, y, z; // per-particle: orbit radius, base angle, world pos
+static float count = 160;       // number of glow points
+static float radMin = 0.4;      // nearest orbital radius (xz plane)
+static float radSpan = 1.8;     // additional radius range; radius in [radMin, radMin+radSpan]
+static float orbitRate = 0.4;   // angular speed of the xz orbit (animates with t)
+static float yWobbleFreq = 1.3; // y wobble frequency relative to the base angle
+static float yWobbleRate = 0.6; // y wobble time-rate (animates with t)
+static float yAmp = 0.9;        // y wobble amplitude
+glClearColor(0.1, 0.1, 0.1, 1.0);
+// Glow sprites: additive blend + distance-attenuated point size.
+// Each particle orbits in xz at (radius, angle) while y wobbles independently.
+glDisable(GL_LIGHTING);
+glDisable(GL_DEPTH_TEST);
+glEnable(GL_BLEND);
+glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+glEnable(GL_POINT_SMOOTH);
+glPointSize(24);
+glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 0.2, 0, 0.15);
+glBegin(GL_POINTS);
+for(i, 0, count) {
+  angle = rand(i, 0)*TAU;                  // random base angle in [0, TAU)
+  radius = radMin + rand(i, 1)*radSpan;    // random radius in the configured range
+  x = cos(angle + t*orbitRate)*radius;
+  y = sin(angle*yWobbleFreq + t*yWobbleRate)*yAmp;
+  z = sin(angle + t*orbitRate)*radius;
+  // per-particle base color: rand seeds 2/3/4 keep r/g/b stable across frames
+  glColor4f(0.4 + 0.6*rand(i, 2), 0.3 + 0.5*rand(i, 3), 0.8 + 0.2*rand(i, 4), 0.55);
+  glVertex3f(x, y, z);
+}
+glEnd();

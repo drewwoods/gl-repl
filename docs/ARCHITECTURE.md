@@ -913,13 +913,12 @@ redesigned from a feature hodgepodge into one coherent dusk seascape that
 still exercises nested loops, recursion with `if`/`else if`/`else`, GLU
 tess + cutout, GLUT solids, a parametric surface, additive points,
 translucency, and bitmap text); the intent is the whole catalog over
-time. The palette is documented once as a comment
-block at the top of
-[`src/repl/examples.c`](../src/repl/examples.c) and applied as literal `glColor*` / `gluColor` /
-`glClearColor` values in the affected example arrays (the example data is
-raw GL source strings — there is no macro-substitution layer, so the
-comment block is the single source of truth and the values are spelled
-out per scene):
+time. The palette is documented once in
+[`examples/README.md`](../examples/README.md) and applied as literal
+`glColor*` / `gluColor` / `glClearColor` values in the affected scene files
+under [`examples/scenes/`](../examples/scenes/) (the example data is raw GL
+source strings — there is no macro-substitution layer, so the README is the
+single source of truth and the values are spelled out per scene):
 
 | Role | RGB | Use |
 |------|-----|-----|
@@ -1753,7 +1752,7 @@ When a module starts owning mutable REPL state, follow this template:
    sidecars (undo rings, user-scene slots) stay separate — call those out
    explicitly rather than folding them into [`ReplRuntimeState`](../src/repl/state.h#L18). REPL-pipeline
    TUs must not reach `glr_state`
-   ([`check-repl-state-no-glr-state`](../Makefile#L1528),
+   ([`check-repl-state-no-glr-state`](../Makefile#L1539),
    [`scripts/check/check-repl-state-no-glr-state.sh`](../scripts/check/check-repl-state-no-glr-state.sh)).
 2. Add a named runtime slice in [`src/repl/state.h`](../src/repl/state.h), wire it into
    [`static ReplRuntimeState g_repl_state;`](../src/repl/state.c#L18), and say

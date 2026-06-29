@@ -932,7 +932,7 @@ grouping is the mental model.)
 [`cfg_baseline.c`](src/repl/cfg_baseline.c)/`.h` (flat key/value config bag)
 
 **Program-adjacent data**
-[`examples.c`](src/repl/examples.c)/`.h` (built-in example data) ·
+[`examples.c`](src/repl/examples.c)/`.h` (generated built-in example catalog facade; authored from repository-level `examples/catalog.ini` + `examples/scenes/`) ·
 [`example_loader.c`](src/repl/example_loader.c)/`.h` (example load + `@cfg`/`// camera` metadata) ·
 [`tutorials.c`](src/repl/tutorials.c)/`.h` (tutorial catalog) ·
 [`catalog_tags.h`](src/repl/catalog_tags.h) (shared example/tutorial tag-bit helper) ·

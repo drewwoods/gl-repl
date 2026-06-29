@@ -1,0 +1,272 @@
+// @cfg vertex_outlines = 0
+// @cfg vertex_points = 0
+// @cfg light_indicators = 1
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_OFF
+// @cfg backdrop = RENDER3D_BACKDROP_STARS
+// camera
+glTranslatef(0.0f, 0.0f, -15.0f);
+glRotatef(26.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(-20.0f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0f, -0.3f, 0.0f);
+
+static float x, y, z, n, k, s;
+glClearColor(0.05, 0.06, 0.08, 1.0);
+// ===== Dusk lighthouse atoll - a coherent feature tour =====
+// One scene, many features: a parametric sea, a tessellated island with a
+// lagoon cutout, a lighthouse of stacked GLUT solids with a sweeping
+// translucent beam, a recursive tree (if / else if / else), GLUT-solid
+// rocks, additive-blended firefly points, and a moon with a halo ring.
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_NORMALIZE);
+glEnable(GL_COLOR_MATERIAL);
+glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+glEnable(GL_LIGHT0);
+glEnable(GL_LIGHT2);
+glEnable(GL_LIGHT3);
+glShadeModel(GL_SMOOTH);
+glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, 1);
+glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 16);
+
+// --- sea(): animated water sheet (nested for + analytic normals) ---
+// Colored by wave height: deep azure troughs lift to bright azure crests.
+sea(half, cells, amp) {
+  for(i, 0, cells) {
+    glBegin(GL_TRIANGLE_STRIP);
+    for(j, 0, cells + 1) {
+      x = -half + 2*half*j/cells;
+      z = -half + 2*half*i/cells;
+      y = amp*sin(x*1.5 + t)*cos(z*1.5 + t*0.6);
+      n = 1.0/sqrt(1 + amp*amp*2.25*(cos(x*1.5 + t)*cos(x*1.5 + t)*cos(z*1.5 + t*0.6)*cos(z*1.5 + t*0.6) + sin(x*1.5 + t)*sin(x*1.5 + t)*sin(z*1.5 + t*0.6)*sin(z*1.5 + t*0.6)));
+      glNormal3f(-amp*1.5*cos(x*1.5 + t)*cos(z*1.5 + t*0.6)*n, n, amp*1.5*sin(x*1.5 + t)*sin(z*1.5 + t*0.6)*n);
+      glColor3f(0.18 + 0.18*(0.5+0.5*y/amp), 0.34 + 0.36*(0.5+0.5*y/amp), 0.55 + 0.43*(0.5+0.5*y/amp));
+      glVertex3f(x, y, z);
+      z = -half + 2*half*(i + 1)/cells;
+      y = amp*sin(x*1.5 + t)*cos(z*1.5 + t*0.6);
+      n = 1.0/sqrt(1 + amp*amp*2.25*(cos(x*1.5 + t)*cos(x*1.5 + t)*cos(z*1.5 + t*0.6)*cos(z*1.5 + t*0.6) + sin(x*1.5 + t)*sin(x*1.5 + t)*sin(z*1.5 + t*0.6)*sin(z*1.5 + t*0.6)));
+      glNormal3f(-amp*1.5*cos(x*1.5 + t)*cos(z*1.5 + t*0.6)*n, n, amp*1.5*sin(x*1.5 + t)*sin(z*1.5 + t*0.6)*n);
+      glColor3f(0.18 + 0.18*(0.5+0.5*y/amp), 0.34 + 0.36*(0.5+0.5*y/amp), 0.55 + 0.43*(0.5+0.5*y/amp));
+      glVertex3f(x, y, z);
+    }
+    glEnd();
+  }
+}
+
+// --- island(): tessellated landmass with a lagoon cutout (GLU tess) ---
+island(r, lagoon) {
+  glFrontFace(GL_CW);
+  gluBegin(GLU_POLYGON);
+  // Outer wobbly coastline
+  gluBegin(GLU_CONTOUR);
+  gluNormal(0, 1, 0);
+  for(i, 0, 30) {
+    k = r*(1 + 0.16*sin(i*0.9) + 0.09*cos(i*1.7));
+    gluColor(0.22 + 0.12*sin(i*0.5), 0.40 + 0.10*cos(i*0.7), 0.46 + 0.08*sin(i));
+    gluVertex(k*cos(i*TAU/30), 0, k*sin(i*TAU/30));
+  }
+  gluEnd();
+  // Inner lagoon contour (tessellator infers the hole from the overlap)
+  gluBegin(GLU_CONTOUR);
+  for(i, 0, 20) {
+    x = lagoon*cos(-i*TAU/20) - r*0.35;
+    z = lagoon*sin(-i*TAU/20) + r*0.2;
+    gluColor(0.08, 0.14, 0.20);
+    gluVertex(x, 0, z);
+  }
+  gluEnd();
+  gluEnd();
+  glFrontFace(GL_CCW);
+}
+
+// --- lighthouse(): stacked GLUT solids (cone / torus / sphere) ---
+lighthouse() {
+  glPushMatrix();
+  // Base rock - cone, apex up
+  glColor3f(0.30, 0.34, 0.42);
+  glPushMatrix();
+  glRotatef(-90, 1, 0, 0);
+  glutSolidCone(0.55, 0.5, 18, 3);
+  glPopMatrix();
+  glTranslatef(0, 0.42, 0);
+  // Tapered tower
+  glColor3f(0.90, 0.93, 0.97);
+  glPushMatrix();
+  glRotatef(-90, 1, 0, 0);
+  glutSolidCone(0.34, 1.5, 22, 1);
+  glPopMatrix();
+  // Coral band wrapping the tower
+  glPushMatrix();
+  glTranslatef(0, 0.62, 0);
+  glRotatef(90, 1, 0, 0);
+  glColor3f(0.98, 0.46, 0.36);
+  glutSolidTorus(0.04, 0.22, 10, 22);
+  glPopMatrix();
+  // Lantern - shiny amber bulb
+  glTranslatef(0, 1.5, 0);
+  glColor3f(0.98, 0.82, 0.45);
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 90);
+  glutSolidSphere(0.2, 16, 12);
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 16);
+  // Violet roof cone
+  glColor3f(0.62, 0.52, 0.95);
+  glPushMatrix();
+  glTranslatef(0, 0.16, 0);
+  glRotatef(-90, 1, 0, 0);
+  glutSolidCone(0.24, 0.32, 14, 1);
+  glPopMatrix();
+  glPopMatrix();
+}
+
+// --- tree(): recursion with if / else if / else tiered coloring ---
+tree(depth, len, twist) {
+  if(depth >= 3) {
+    glColor3f(0.40, 0.36, 0.50);
+  } else if(depth >= 1) {
+    glColor3f(0.50 - 0.03*depth, 0.50, 0.92);
+  } else {
+    glColor3f(0.98, 0.74, 0.40);
+  }
+  glLineWidth(depth + 1);
+  glBegin(GL_LINES);
+  glNormal3f(0, 0, 1);
+  glVertex3f(0, 0, 0);
+  glVertex3f(0, len, 0);
+  glEnd();
+  if(depth > 0) {
+    glPushMatrix();
+    glTranslatef(0, len, 0);
+    glRotatef(26 + 7*sin(twist), 0, 0, 1);
+    glScalef(0.74, 0.74, 0.74);
+    tree(depth - 1, len, twist + 0.4);
+    glPopMatrix();
+    glPushMatrix();
+    glTranslatef(0, len, 0);
+    glRotatef(-29 - 6*cos(twist), 0, 0, 1);
+    glScalef(0.70, 0.70, 0.70);
+    tree(depth - 1, len, twist + 0.3);
+    glPopMatrix();
+    glPushMatrix();
+    glTranslatef(0, len*0.92, 0);
+    glRotatef(16 + 5*sin(twist*1.3), 1, 0, 0);
+    glScalef(0.60, 0.60, 0.60);
+    tree(depth - 1, len*0.86, twist + 0.5);
+    glPopMatrix();
+  } else {
+    // Blossom - small lit sphere at the twig tip
+    glColor3f(0.98, 0.55, 0.42);
+    glPushMatrix();
+    glTranslatef(0, len, 0);
+    glutSolidSphere(len*0.55, 8, 6);
+    glPopMatrix();
+  }
+}
+
+// ===== Scene composition =====
+glLineWidth(1);
+
+// Sea sheet under everything
+glPushMatrix();
+glTranslatef(0, -0.62, 0);
+sea(5.5, 10, 0.16);
+glPopMatrix();
+
+// Island shelf just above the water
+glPushMatrix();
+glTranslatef(0, -0.5, 0);
+island(2.2, 0.45);
+glPopMatrix();
+
+// Lighthouse on the island
+glPushMatrix();
+glTranslatef(0.5, -0.5, 0.1);
+lighthouse();
+glPopMatrix();
+
+// Sweeping light beams from the lantern (blend + depth-mask off)
+glPushMatrix();
+glTranslatef(0.5, 1.42, 0.1);
+glRotatef(t*55, 0, 1, 0);
+glDisable(GL_LIGHTING);
+glDepthMask(GL_FALSE);
+glEnable(GL_BLEND);
+glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+glBegin(GL_TRIANGLES);
+glColor4f(0.98, 0.82, 0.45, 0.55);
+glVertex3f(0, 0, 0);
+glColor4f(0.98, 0.82, 0.45, 0.0);
+glVertex3f(7, -0.5, 0.7);
+glVertex3f(7, 0.5, -0.7);
+glColor4f(0.98, 0.82, 0.45, 0.55);
+glVertex3f(0, 0, 0);
+glColor4f(0.98, 0.82, 0.45, 0.0);
+glVertex3f(-7, 0.5, 0.7);
+glVertex3f(-7, -0.5, -0.7);
+glEnd();
+glDepthMask(GL_TRUE);
+glDisable(GL_BLEND);
+glEnable(GL_LIGHTING);
+glPopMatrix();
+
+// Wind-swayed tree across the island
+glPushMatrix();
+glTranslatef(-1.2, -0.5, 0.4);
+glRotatef(4*sin(t*0.4), 0, 0, 1);
+tree(3, 0.62, t*0.2);
+glPopMatrix();
+
+// Ring of rocks around the shoreline (loop + GLUT solids)
+for(i, 0, 7) {
+  glPushMatrix();
+  glRotatef(i*360/7 + 20, 0, 1, 0);
+  glTranslatef(2.0, -0.55, 0);
+  glColor3f(0.28, 0.31, 0.40);
+  glScalef(1, 0.55, 1);
+  glutSolidSphere(0.16 + 0.07*rand(i, 7), 8, 6);
+  glPopMatrix();
+}
+
+// Fireflies - additive point sprites drifting over the atoll
+glDisable(GL_LIGHTING);
+glDepthMask(GL_FALSE);
+glEnable(GL_BLEND);
+glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+glEnable(GL_POINT_SMOOTH);
+glPointSize(7);
+glBegin(GL_POINTS);
+for(i, 0, 44) {
+  k = rand(i, 0)*TAU;
+  s = 1.2 + rand(i, 1)*2.6;
+  x = cos(k + t*(0.25 + rand(i, 2)*0.4))*s;
+  z = sin(k + t*(0.25 + rand(i, 2)*0.4))*s;
+  y = 0.1 + 1.4*rand(i, 3) + 0.18*sin(t*2 + i);
+  glColor4f(0.98, 0.74 + 0.22*rand(i, 4), 0.42, 0.75);
+  glVertex3f(x, y, z);
+}
+glEnd();
+glDisable(GL_POINT_SMOOTH);
+glDepthMask(GL_TRUE);
+glDisable(GL_BLEND);
+glEnable(GL_LIGHTING);
+
+// Moon with a violet halo ring, parked in the sky
+glPushMatrix();
+glTranslatef(-3.6, 3.0, -2.0);
+glDisable(GL_LIGHTING);
+glColor3f(0.92, 0.95, 0.98);
+glutSolidSphere(0.55, 22, 16);
+glBegin(GL_LINE_LOOP);
+for(i, 0, 48) {
+  glColor3f(0.62, 0.52, 0.95);
+  glVertex3f(0.92*cos(i*TAU/48), 0.92*sin(i*TAU/48), 0);
+}
+glEnd();
+glEnable(GL_LIGHTING);
+glPopMatrix();
+
+// Caption readout (glRasterPos + bitmap label)
+glDisable(GL_LIGHTING);
+glColor3f(0.92, 0.95, 0.98);
+glRasterPos3f(-3.2, 2.2, 0);
+label("dusk atoll");
+glEnable(GL_LIGHTING);

@@ -122,8 +122,10 @@ Inside the full app this is **layers 1 and 3** of the ownership map:
 split is what keeps the pipeline editor-agnostic (and what `repl_demo`
 proves by supplying its own line store).
 
-Beyond the core pipeline, this directory also owns program-adjacent data and
-services: built-in [`examples.c`](src/repl/examples.c), the [`tutorials.c`](src/repl/tutorials.c) catalog, the save/load
+Beyond the core pipeline, this directory also owns program-adjacent services:
+the generated built-in example facade [`examples.c`](src/repl/examples.c)
+(authored from repository-level `examples/catalog.ini` and
+`examples/scenes/`), the [`tutorials.c`](src/repl/tutorials.c) catalog, the save/load
 file format (writer in [`export.c`](src/repl/export.c), reader in [`import.c`](src/repl/import.c)) and workspace I/O
 ([`scenes.c`](src/repl/scenes.c) / [`workspace_io.c`](src/repl/workspace_io.c)), and the neutral F1 [`help_text.c`](src/repl/help_text.c) tables.
 
@@ -169,7 +171,7 @@ file format (writer in [`export.c`](src/repl/export.c), reader in [`import.c`](s
 | [`scenes.c`](src/repl/scenes.c) / `.h`, [`scene_snapshot.c`](src/repl/scene_snapshot.c) / `.h` | User-scene slots (LRU, promotion); copyable scene payload |
 | [`workspace_io.c`](src/repl/workspace_io.c) / `.h`, [`cfg_baseline.c`](src/repl/cfg_baseline.c) / `.h` | Workspace filesystem + file-naming mechanics; flat key/value config bag |
 | **Program-adjacent data** | |
-| [`examples.c`](src/repl/examples.c) / `.h`, [`example_loader.c`](src/repl/example_loader.c) / `.h` | Built-in example data; example load + `@cfg` / `// camera` metadata |
+| [`examples.c`](src/repl/examples.c) / `.h`, [`example_loader.c`](src/repl/example_loader.c) / `.h` | Generated built-in example catalog facade; example load + `@cfg` / `// camera` metadata. Authored source lives in repository-level `examples/catalog.ini` and `examples/scenes/` |
 | [`tutorials.c`](src/repl/tutorials.c) / `.h`, [`catalog_tags.h`](src/repl/catalog_tags.h) | Tutorial catalog; shared example/tutorial tag-bit helper |
 | [`help_text.c`](src/repl/help_text.c) / `.h`, [`keymap_format.c`](src/repl/keymap_format.c) | F1 help-text tables; user-facing keybinding labels |
 

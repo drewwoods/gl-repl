@@ -1,0 +1,48 @@
+// @cfg vertex_labels = 0
+// camera
+glTranslatef(0.0f, 0.0f, -5.0f);
+glRotatef(20.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(30.0f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0f, 0.0f, 0.0f);
+
+// @cfg vertex_points = 0
+static float grid, extent, x, y, z, invGradMag; // strip cell index, world extent, vertex coords, 1/|gradient|
+static float amp = 0.4;    // wave amplitude (peak |y|)
+static float freq = 2.5;   // spatial frequency along x and z
+static float zPhase = 0.7; // z-axis time phase: z evolves slower than x (<1)
+glClearColor(0.05, 0.06, 0.08, 1.0);
+// Animated surface: y = sin(freq*x + t) * cos(freq*z + zPhase*t) * amp
+// Drawn as a triangle strip per row with analytic per-vertex normals.
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_NORMALIZE);
+glEnable(GL_LIGHT3);
+glEnable(GL_LIGHT2);
+glEnable(GL_LIGHT1);
+glEnable(GL_LIGHT0);
+glShadeModel(GL_SMOOTH);
+grid = 16;     // rows/cols of strip cells
+extent = 3.0;  // total surface width along x and z
+for(i, 0, grid) {
+glBegin(GL_TRIANGLE_STRIP);
+for(j, 0, grid+1) {
+// row i (z fixed), step j across x; emit two vertices per j to feed the strip
+x = -extent/2 + extent*j/grid;
+z = -extent/2 + extent*i/grid;
+y = sin(x*freq + t)*cos(z*freq + zPhase*t)*amp;
+// gradient = (dy/dx, 0, dy/dz); normal = (-dy/dx, 1, -dy/dz) / |...|.
+// invGradMag = 1 / sqrt(1 + amp^2 * freq^2 * (cos^2*cos^2 + sin^2*sin^2)).
+invGradMag = 1.0/sqrt(1 + amp*amp*freq*freq*(cos(x*freq + t)*cos(x*freq + t)*cos(z*freq + zPhase*t)*cos(z*freq + zPhase*t) + sin(x*freq + t)*sin(x*freq + t)*sin(z*freq + zPhase*t)*sin(z*freq + zPhase*t)));
+glNormal3f(-amp*freq*cos(x*freq + t)*cos(z*freq + zPhase*t)*invGradMag, invGradMag, amp*freq*sin(x*freq + t)*sin(z*freq + zPhase*t)*invGradMag);
+glColor3f(0.98 - 0.62*(0.5+0.5*y/amp), 0.46 + 0.24*(0.5+0.5*y/amp), 0.36 + 0.62*(0.5+0.5*y/amp));
+glVertex3f(x, y, z);
+// second strip vertex: same x, but z stepped to row i+1
+z = -extent/2 + extent*(i + 1)/grid;
+y = sin(x*freq + t)*cos(z*freq + zPhase*t)*amp;
+invGradMag = 1.0/sqrt(1 + amp*amp*freq*freq*(cos(x*freq + t)*cos(x*freq + t)*cos(z*freq + zPhase*t)*cos(z*freq + zPhase*t) + sin(x*freq + t)*sin(x*freq + t)*sin(z*freq + zPhase*t)*sin(z*freq + zPhase*t)));
+glNormal3f(-amp*freq*cos(x*freq + t)*cos(z*freq + zPhase*t)*invGradMag, invGradMag, amp*freq*sin(x*freq + t)*sin(z*freq + zPhase*t)*invGradMag);
+glColor3f(0.98 - 0.62*(0.5+0.5*y/amp), 0.46 + 0.24*(0.5+0.5*y/amp), 0.36 + 0.62*(0.5+0.5*y/amp));
+glVertex3f(x, y, z);
+}
+glEnd();
+}
