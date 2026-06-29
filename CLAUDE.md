@@ -1399,9 +1399,9 @@ Variables: declared via `float name;` — only `t` is predefined (Ctrl+T toggles
 Scratch arrays: `A[8]`, `B[8]`, `C[8]` are fixed global runtime arrays for recursive/loop algorithms.
 Reads and writes use normal expression syntax; indices are truncated with `(int)` and must stay in `0..7`.
 Other names (`x`, `y`, `z`, etc.) must be declared before use.
-`MAX_PREDEF_VARS` = 24 (1 reserved for `t`, 23 user-declarable slots). The
+`MAX_PREDEF_VARS` = 32 (1 reserved for `t`, 31 user-declarable slots). The
 float-decl handler rejects new declarations once the table is full with
-`"variable table full (max 24)"`.
+`"variable table full (max 32)"`.
 
 Example:
 

@@ -142,7 +142,7 @@
 #define MAX_EXPR_VARS 32
 #endif
 #ifndef MAX_PREDEF_VARS
-#define MAX_PREDEF_VARS 24
+#define MAX_PREDEF_VARS 32
 #endif
 #if MAX_PREDEF_VARS > MAX_EXPR_VARS
 #error "MAX_PREDEF_VARS must be <= MAX_EXPR_VARS."

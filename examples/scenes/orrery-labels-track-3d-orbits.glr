@@ -39,9 +39,11 @@ planet(Drel, Yrel, phase, node, incl, Rrel, cr, cg, cb) {
   orbitR = ORB_BASE + ORB_SCALE*log(1 + Drel);
   th = phase + t*EARTH_RATE/Yrel;
   u = th - node;
-  px = orbitR*(cos(node)*cos(u) - sin(node)*sin(u)*cos(incl));
-  py = orbitR*sin(u)*sin(incl);
-  pz = orbitR*(sin(node)*cos(u) + cos(node)*sin(u)*cos(incl));
+  th = orbitR*cos(u);
+  u = orbitR*sin(u);
+  px = th*cos(node) - u*sin(node)*cos(incl);
+  py = u*sin(incl);
+  pz = th*sin(node) + u*cos(node)*cos(incl);
   glEnable(GL_LIGHTING);
   glColor3f(cr, cg, cb);
   glPushMatrix();
@@ -64,17 +66,30 @@ planetKepler(a0, adot, e0, edot, I0, Idot, L0, Ldot, peri0, peridot, node0, node
   eAn = eAn + (mK - (eAn - eK*sin(eAn)))/(1 - eK*cos(eAn));
   eAn = eAn + (mK - (eAn - eK*sin(eAn)))/(1 - eK*cos(eAn));
   eAn = eAn + (mK - (eAn - eK*sin(eAn)))/(1 - eK*cos(eAn));
-  u = pK - nK;
+  // 1. Calculate 2D position in orbital plane relative to perihelion
   xh = aK*(cos(eAn) - eK);
   yh = aK*sqrt(1 - eK*eK)*sin(eAn);
-  x1 = (cos(u)*cos(nK) - sin(u)*sin(nK)*cos(iK))*xh + (-sin(u)*cos(nK) - cos(u)*sin(nK)*cos(iK))*yh;
-  y1 = (cos(u)*sin(nK) + sin(u)*cos(nK)*cos(iK))*xh + (-sin(u)*sin(nK) + cos(u)*cos(nK)*cos(iK))*yh;
-  z1 = sin(u)*sin(iK)*xh + cos(u)*sin(iK)*yh;
-  u = sqrt(x1*x1 + y1*y1 + z1*z1);
-  orbitR = ORB_BASE + ORB_SCALE*log(1 + u);
-  px = orbitR*x1/u;
-  py = orbitR*z1/u;
-  pz = orbitR*y1/u;
+
+  // 2. Compute heliocentric distance (vector length is invariant under 3D rotations)
+  eAn = sqrt(xh*xh + yh*yh);
+  orbitR = ORB_BASE + ORB_SCALE*log(1 + eAn);
+
+  // 3. Decompose 3D rotation: Step A: Rotate in orbital plane by argument of perihelion (u = pK - nK)
+  // to align position relative to the ascending node line. Reuse aK, eK as xo, yo to stay under MAX_PREDEF_VARS.
+  u = pK - nK;
+  aK = xh*cos(u) - yh*sin(u);
+  eK = xh*sin(u) + yh*cos(u);
+
+  // 4. Decompose 3D rotation: Step B: Project from node line to ecliptic plane
+  // using ascending node longitude (nK) and inclination (iK)
+  x1 = aK*cos(nK) - eK*sin(nK)*cos(iK);
+  y1 = aK*sin(nK) + eK*cos(nK)*cos(iK);
+  z1 = eK*sin(iK);
+
+  // 5. Scale 3D unit direction vector by logarithmic orbit radius
+  px = orbitR*x1/eAn;
+  py = orbitR*z1/eAn;
+  pz = orbitR*y1/eAn;
   glEnable(GL_LIGHTING);
   glColor3f(cr, cg, cb);
   glPushMatrix();
