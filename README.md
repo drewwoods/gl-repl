@@ -2,15 +2,11 @@
 
 <br>
 
-<img src="docs/images/hero-wordmark.svg" alt="gl-repl — immediate mode, immediately" width="64%">
-
-<br><br>
+<img src="docs/images/hero-wordmark.svg" alt="gl-repl — immediate mode, immediately" width="70%">
 
 **gl-repl**
 
-<sub>Type a GL command. Press `;`. Watch it render.</sub>
-
-<br>
+<sub>Render as you type</sub>
 
 [![macOS CI](https://github.com/drewwoods/gl-repl/actions/workflows/ci-macos.yml/badge.svg)](https://github.com/drewwoods/gl-repl/actions/workflows/ci-macos.yml)
 [![Linux CI](https://github.com/drewwoods/gl-repl/actions/workflows/ci-linux.yml/badge.svg)](https://github.com/drewwoods/gl-repl/actions/workflows/ci-linux.yml)
