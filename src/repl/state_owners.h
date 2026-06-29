@@ -129,4 +129,9 @@ void repl_state_reset_program(void);
  * skips glr_ctrl_init_gl. */
 void repl_state_ensure_sentinels(void);
 
+/* Lazily scans current source text for the predefined time variable `t`.
+ * Returns 1 conservatively if the source view is unavailable for non-empty
+ * command storage. */
+int repl_state_source_uses_time(void);
+
 #endif /* REPL_STATE_OWNERS_H */

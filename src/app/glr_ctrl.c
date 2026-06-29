@@ -1583,7 +1583,8 @@ static void glr_ctrl_resolve_blur_subframe(Render3dRenderConfig *config) {
     if (camera_moved)
         mode = GLR_BLUR_CAMERA;
     else if (config->accum_effect == RENDER3D_ACCUM_EFFECT_BLUR &&
-             repl_state_variables().time_playing)
+             repl_state_variables().time_playing &&
+             repl_state_source_uses_time())
         mode = GLR_BLUR_TIME;   /* Blur (full) also blurs animation time;
                                  * Blur Camera does not -> AA fallback. */
 

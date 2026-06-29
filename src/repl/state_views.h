@@ -36,14 +36,14 @@ static inline int repl_light_enabled(unsigned mask, int slot) {
     return (int)((mask >> slot) & 1u);
 }
 
-/* Source document storage: canonical source commands and the source-level
- * auto-normal dirty flag. The edit-line cursor is editor-owned; REPL pipeline
- * code receives it as an argument or through the dispatch edit-line sink. */
+/* Source document storage: canonical source commands, source-level dirty flags,
+ * and cached source dependency metadata. The edit-line cursor is editor-owned;
+ * REPL pipeline code receives it as an argument or through the dispatch sink. */
 typedef struct {
     GLCmd cmds[MAX_COMMANDS];
     int   cmd_count;
     int   capacity;
-    int   normals_dirty;
+    int   normals_dirty, source_uses_time, source_uses_time_dirty;
 } ReplDocumentState;
 
 /* Expanded flat program rebuilt from the source document: flattened commands,

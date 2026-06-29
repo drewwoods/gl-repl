@@ -23,6 +23,7 @@ static void repl_state_apply_sentinels(ReplRuntimeState *s) {
     /* --- document --- */
     s->document.capacity       = MAX_COMMANDS;
     s->document.normals_dirty  = 1;
+    s->document.source_uses_time_dirty = 1;
 
     /* --- flat_program --- */
     s->flat_program.capacity                    = MAX_COMMANDS;
@@ -116,6 +117,34 @@ static void ensure_t_var_idx(void) {
                "t") == 0)
         return;
     g_repl_state.variables.time_var_idx = repl_eval_find_predef_var_idx("t");
+}
+
+static int scan_source_uses_time(void) {
+    SourceTextView text = source_document_view();
+    int line_count = text.line_count;
+
+    if (g_repl_state.document.cmd_count > 0 &&
+        (!text.lines || line_count < g_repl_state.document.cmd_count))
+        return 1;
+    if (!text.lines || line_count <= 0)
+        return 0;
+    if (line_count > MAX_COMMANDS)
+        line_count = MAX_COMMANDS;
+
+    for (int line_idx = 0; line_idx < line_count; line_idx++) {
+        if (repl_eval_source_uses_ident(source_text_line(text, line_idx), "t"))
+            return 1;
+    }
+    return 0;
+}
+
+int repl_state_source_uses_time(void) {
+    repl_state_ensure_sentinels();
+    if (g_repl_state.document.source_uses_time_dirty) {
+        g_repl_state.document.source_uses_time = scan_source_uses_time();
+        g_repl_state.document.source_uses_time_dirty = 0;
+    }
+    return g_repl_state.document.source_uses_time;
 }
 
 static void reset_time_state(void) {
@@ -268,6 +297,7 @@ void repl_state_mark_source_dirty(void) {
      * mutation goes through here, and that's the contract callers rely
      * on. */
     g_repl_state.document.normals_dirty = 1;
+    g_repl_state.document.source_uses_time_dirty = 1;
     g_repl_state.flat_program.dirty = 1;
     repl_source_scope_depth_cache_invalidate();
 }
@@ -313,7 +343,8 @@ void repl_state_time_advance(float dt) {
     if (g_repl_state.variables.time_playing &&
         g_repl_state.variables.time_var_idx >= 0) {
         g_predef_vars_mut[g_repl_state.variables.time_var_idx].value += dt;
-        g_repl_state.flat_program.dirty = 1;
+        if (repl_state_source_uses_time())
+            g_repl_state.flat_program.dirty = 1;
     }
 }
 
@@ -330,7 +361,8 @@ void repl_state_time_set(float value) {
         return;
 
     g_predef_vars_mut[g_repl_state.variables.time_var_idx].value = value;
-    g_repl_state.flat_program.dirty = 1;
+    if (repl_state_source_uses_time())
+        g_repl_state.flat_program.dirty = 1;
 }
 
 void repl_state_time_set_playing(int playing) {
@@ -424,6 +456,7 @@ void repl_state_restore(const ReplRuntimeState *snapshot) {
     g_repl_state = *snapshot;
     repl_state_bind_eval_predef_storage();
     ensure_t_var_idx();
+    g_repl_state.document.source_uses_time_dirty = 1;
     repl_source_scope_depth_cache_invalidate();
 }
 

@@ -297,15 +297,20 @@ right `t` (live each frame).
 
 ### 3.5 The dirty flags
 
-Two flags gate the frame flow ([`state_views.h`](src/repl/state_views.h)):
+Two flags gate the frame flow, with one source-derived cache used by the time
+clock ([`state_views.h`](src/repl/state_views.h)):
 
 - `ReplDocumentState.normals_dirty` — source-level auto-normals need a
   rebuild.
+- `ReplDocumentState.source_uses_time` / `_dirty` — lazy whole-source scan for
+  real `t` identifier references, used to decide whether a time tick can affect
+  the flat program.
 - `ReplFlatProgramState.dirty` — the flat program is stale.
 
 Any source mutation sets them via [`repl_state_mark_flat_dirty()`](src/repl/state_notify.h#L4) /
 [`repl_state_mark_source_dirty()`](src/repl/state_notify.h#L5) ([`state_notify.h`](src/repl/state_notify.h)). The controller
-checks them at frame top and rebuilds only when set.
+checks them at frame top and rebuilds only when set; the source-uses-time cache
+is refreshed lazily on the next time query.
 
 ---
 
@@ -516,7 +521,7 @@ typed slices ([`state_views.h`](src/repl/state_views.h)):
 
 | Slice | Holds |
 |---|---|
-| [`ReplDocumentState`](src/repl/state_views.h#L42) | source `GLCmd[]`, count, capacity, `normals_dirty` |
+| [`ReplDocumentState`](src/repl/state_views.h#L42) | source `GLCmd[]`, count, capacity, `normals_dirty`, cached source-uses-`t` metadata |
 | [`ReplFlatProgramState`](src/repl/state_views.h#L52) | flat `GLCmd[]`, `FlatCmdLocalVars[]`, dirty flag, cursor-block range, user-lighting flag |
 | [`ReplVariableState`](src/repl/state_views.h#L66) | predef var table, scratch arrays `A/B/C`, `funcN` aliases, the `t` clock (`anim_time`, `time_playing`) |
 | [`ReplRenderState`](src/repl/state_views.h#L100) | the runtime-mutated render *tail*: `light_enabled_mask`, `clear_color[]` |
@@ -621,9 +626,12 @@ without disturbing the free-running clock — used by motion-blur sub-frame
 sampling, where the caller re-flattens at the sub-step `t` and restores
 afterward.
 
-Because advancing `t` marks the flat program dirty, a playing animation
-**re-flattens the whole program every frame** — see §13 for why that is, what
-it simplifies, and what it would take to stop doing it.
+Advancing or setting `t` marks the flat program dirty only when the current
+source uses the `t` identifier. A cached whole-source scan keeps static scenes
+from re-flattening just because the clock is playing; if source text is
+unavailable for a non-empty command store, the check falls back to dirtying
+conservatively. See §13 for why `t`-dependent programs still re-flatten and what
+it would take to narrow that further.
 
 ---
 
@@ -963,11 +971,12 @@ so one runaway loop can't hang the rebuild. Example authors hoist
 loop-invariant work specifically to stay under 4096 — the budget is real
 because it is paid every frame.
 
-### 13.2 Why `t` forces a re-flatten
+### 13.2 Why `t` can force a re-flatten
 
-[`repl_state_time_advance()`](src/repl/state_owners.h#L62) sets `flat_program.dirty = 1` whenever the clock is
-playing ([`state.c`](src/repl/state.c)), so the controller rebuilds the flat program every frame.
-That is *required* because flatten is the only stage that resolves **program
+[`repl_state_time_advance()`](src/repl/state_owners.h#L62) updates the visible `t` binding whenever the
+clock is playing ([`state.c`](src/repl/state.c)). If the current source mentions `t`, it also
+sets `flat_program.dirty = 1`, so the controller rebuilds the flat program. That
+is *required* because flatten is the only stage that resolves **program
 structure**, and structure can depend on `t`:
 
 - **loop bounds** — `for(i, 0, floor(t))` changes the iteration count, hence
@@ -1018,8 +1027,16 @@ evaluation — see §13.6.)
 
 ### 13.5 Incremental win: a structure-stable fast path
 
-The cheapest improvement keeps the two-level model but skips the rebuild when
-it cannot change anything structural:
+The first cheap improvement keeps the two-level model and skips the rebuild for
+programs that cannot depend on time at all. [`ReplDocumentState`](state_views.h#L42) carries a lazy
+whole-source `source_uses_time` cache; source mutations invalidate it, and the
+next `t` tick scans real source text with `repl_eval_source_uses_ident(...,
+"t")`. If no real `t` token appears, the tick leaves the flat program clean and
+the profile panel's flattening section drops to zero for static examples such as
+the parametric torus. Full time-motion blur uses the same query before doing
+sub-frame re-flattens.
+
+The remaining improvement is a stricter structure-stability check:
 
 - On a variable change (the `t` tick, or a slider drag), decide whether that
   variable can reach a structural position — a loop bound, branch condition, or
@@ -1031,9 +1048,9 @@ This removes the ~8 ms for the typical "`t` only drives vertices / colors /
 transforms" program with no executor rewrite. The hard part is the dataflow
 analysis: it must be conservative (assignment chains, scratch arrays, and
 `funcN` params can launder `t` into a bound), and getting it wrong silently
-freezes an animation. A safe first cut is a whole-program property computed
-once at compile (not per frame): re-flatten unless the program contains **no**
-`t`-reachable loop bound or branch condition at all.
+freezes an animation. A safe next cut is a whole-program property computed
+once at compile (not per frame): re-flatten unless the program contains a
+`t`-reachable loop bound or branch condition.
 
 ### 13.6 Bigger future work: a control-flow-interpreting executor
 
