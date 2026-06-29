@@ -1,0 +1,2 @@
+# GL-REPL / tutorial script files: use C highlighting on GitHub
+*.glr linguist-language=C
