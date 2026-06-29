@@ -1011,12 +1011,6 @@ static void test_orrery_phase_alignment(void) {
     reset_repl();
 
     char err[256];
-    ASSERT_TRUE("declare ex", repl_eval_declare_predef_var("ex", err, sizeof(err)));
-    ASSERT_TRUE("declare ey", repl_eval_declare_predef_var("ey", err, sizeof(err)));
-    ASSERT_TRUE("declare ez", repl_eval_declare_predef_var("ez", err, sizeof(err)));
-    ASSERT_TRUE("declare mx", repl_eval_declare_predef_var("mx", err, sizeof(err)));
-    ASSERT_TRUE("declare my", repl_eval_declare_predef_var("my", err, sizeof(err)));
-    ASSERT_TRUE("declare mz", repl_eval_declare_predef_var("mz", err, sizeof(err)));
 
     /* Feed declarations and the planetKepler function from the example lines */
     int in_func = 0;
@@ -1050,12 +1044,10 @@ static void test_orrery_phase_alignment(void) {
     int ok;
     ok = repl_load_apply_line("planetKepler(1.00000261, 0.00000562, 0.01671123, -0.00004392, -0.00001531, -0.01294668, 100.46457166, 35999.37244981, 102.93768193, 0.32327364, 0, 0, 1.000, 0.3, 0.52, 0.95);", err, sizeof(err), &edit_line);
     ASSERT_TRUE("load Earth call", ok);
-    ok = repl_load_apply_line("ex = px; ey = py; ez = pz;", err, sizeof(err), &edit_line);
+    ok = repl_load_apply_line("mon = px; day = pz;", err, sizeof(err), &edit_line);
     ASSERT_TRUE("load Earth save", ok);
     ok = repl_load_apply_line("planetKepler(1.52371034, 0.00001847, 0.09339410, 0.00007882, 1.84969142, -0.00813131, -4.55343205, 19140.30268499, -23.94362959, 0.44441088, 49.55953891, -0.29257343, 0.532, 0.88, 0.45, 0.26);", err, sizeof(err), &edit_line);
     ASSERT_TRUE("load Mars call", ok);
-    ok = repl_load_apply_line("mx = px; my = py; mz = pz;", err, sizeof(err), &edit_line);
-    ASSERT_TRUE("load Mars save", ok);
 
     /* Real-world opposition dates for Earth and Mars (2020 through 2040)
      * paired with their corresponding animation time 't' (in seconds).
@@ -1090,10 +1082,12 @@ static void test_orrery_phase_alignment(void) {
         g_predef_vars_mut[0].value = oppositions[i].t;
         repl_execute_commands();
 
-        float ex_val = predef_val("ex");
-        float ez_val = predef_val("ez");
-        float mx_val = predef_val("mx");
-        float mz_val = predef_val("mz");
+        /* Earth's px and pz were saved into mon and day.
+         * Mars' px and pz are read directly since Mars runs last. */
+        float ex_val = predef_val("mon");
+        float ez_val = predef_val("day");
+        float mx_val = predef_val("px");
+        float mz_val = predef_val("pz");
 
         ASSERT_TRUE("positions are non-NaN", !isnan(ex_val) && !isnan(ez_val) && !isnan(mx_val) && !isnan(mz_val));
 

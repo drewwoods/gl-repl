@@ -100,6 +100,7 @@ void display(void) {
   static float ORB_SCALE = 10;
   static float aK, eK, iK, lK, pK, nK, mK, eAn;
   static float xh, yh, x1, y1, z1;
+  static float yr, leap, doy, mon, day; // year/month/day readout scratch
 
   OrbitRings(Drel, node, incl) {
     orbitR = ORB_BASE + ORB_SCALE*log(1 + Drel);
@@ -381,10 +382,72 @@ void display(void) {
   glColor3f(0.55, 0.65, 1);
   glRasterPos3f(px + 0.42, py + 0.34, pz);
   label("Neptune");
-  // live readout: simulation year, anchored in 3D below the system
+  // live readout: exact Gregorian calendar date, anchored in 3D below the system.
+  // The decimal sim year is split into year / month / day with real month lengths
+  // (leap years included via the 4/100/400 rule), so the readout tracks a true
+  // calendar to the day. The if/else-if chain peels off whole months; flatten
+  // evaluates it each frame, emitting only the live branch. t=0 is 2000-1-1.
+  th = 2000 + t*EARTH_RATE/TAU; // decimal year
+  yr = floor(th); // integer year
+  leap = (fmod(yr, 4) == 0 && fmod(yr, 100) != 0) || fmod(yr, 400) == 0; // 1 in leap years
+  doy = floor((th - yr)*(365 + leap)); // day of year, 0-based
+  if(doy < 31) {
+    mon = 1;
+    day = doy + 1;
+  } else if(doy < 59 + leap) {
+    mon = 2;
+    day = doy - 31 + 1;
+  } else if(doy < 90 + leap) {
+    mon = 3;
+    day = doy - 59 - leap + 1;
+  } else if(doy < 120 + leap) {
+    mon = 4;
+    day = doy - 90 - leap + 1;
+  } else if(doy < 151 + leap) {
+    mon = 5;
+    day = doy - 120 - leap + 1;
+  } else if(doy < 181 + leap) {
+    mon = 6;
+    day = doy - 151 - leap + 1;
+  } else if(doy < 212 + leap) {
+    mon = 7;
+    day = doy - 181 - leap + 1;
+  } else if(doy < 243 + leap) {
+    mon = 8;
+    day = doy - 212 - leap + 1;
+  } else if(doy < 273 + leap) {
+    mon = 9;
+    day = doy - 243 - leap + 1;
+  } else if(doy < 304 + leap) {
+    mon = 10;
+    day = doy - 273 - leap + 1;
+  } else if(doy < 334 + leap) {
+    mon = 11;
+    day = doy - 304 - leap + 1;
+  } else {
+    mon = 12;
+    day = doy - 334 - leap + 1;
+  }
   glColor3f(0.75, 0.8, 0.9);
   glRasterPos3f(-2.6, -5.6, 0);
-  label("Year = %f", 2000 + t*EARTH_RATE/TAU);
+  label("Date %f-%f-%f", yr, mon, day);
+
+  // Asteroid belt: a decorative dusty band between Mars and Jupiter (the main
+  // belt, ~2.2-3.3 AU). Not physical - each speck is scattered with rand() onto
+  // its own near-circular orbit, drifting at the Kepler rate for its radius
+  // (EARTH_RATE/a^1.5, so inner specks lap the outer ones) and riding the same
+  // log-distance scale as the planets. Drawn as small unlit points, depth-tested
+  // so the planets pass in front of and behind the band.
+  glDisable(GL_LIGHTING);
+  glEnable(GL_POINT_SMOOTH);
+  glPointSize(2);
+  glBegin(GL_POINTS);
+    for(i, 0, 280) {
+      u = rand(i, 2)*TAU + t*EARTH_RATE/pow(2.2 + 1.1*rand(i, 1), 1.5);
+      glColor3f((0.45 + 0.5*rand(i, 3))*0.55, (0.45 + 0.5*rand(i, 3))*0.48, (0.45 + 0.5*rand(i, 3))*0.4);
+      glVertex3f((ORB_BASE + ORB_SCALE*log(1 + 2.2 + 1.1*rand(i, 1)))*cos(u), rand2(i, 4)*0.35, (ORB_BASE + ORB_SCALE*log(1 + 2.2 + 1.1*rand(i, 1)))*sin(u));
+    }
+  glEnd();
 
   // faint orbit rings (unlit lines), one per planet at its inclination
   glDisable(GL_LIGHTING);
@@ -414,10 +477,3 @@ void display(void) {
   glColor4f(1, 0.85, 0.3, 0.5);
   glutSolidSphere(0.56 + cos(2*t)*0.012, 24, 24);
   glutSolidSphere(0.5 + sin(t)*0.012, 24, 24);
-  glDepthMask(GL_TRUE);
-  glutSolidSphere(0.45, 24, 24);
-  glDisable(GL_BLEND);
-  glDisable(GL_DEPTH_TEST);
-  glColor3f(0.5, 0.43, 0.25);
-  glRasterPos3f(0.62, 0.58, 0);
-  label("Sun");
