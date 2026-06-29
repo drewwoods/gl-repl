@@ -1,3 +1,5 @@
+# GL-REPL / tutorial script files: use C highlighting on GitHub
+*.glr linguist-language=C
 docs/images/**/*.png filter=lfs diff=lfs merge=lfs -text
 docs/images/**/*.gif filter=lfs diff=lfs merge=lfs -text
 docs/images/**/*.jpg filter=lfs diff=lfs merge=lfs -text
