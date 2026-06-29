@@ -8,13 +8,13 @@
 
 <sub>Every scene below ships in the binary. Cycle them with <b>F12</b>, or load one directly:</sub>
 
+</div>
+
 ```bash
 ./gl-repl --example "Jellyfish (glDepthMask translucency)"   # by name (case-insensitive)
 ./gl-repl --example 23                                       # or by 0-based index
 ./gl-repl --list-examples                                    # canonical names + indices
 ```
-
-</div>
 
 <!--
   ASSET NOTES — how the media on this page is produced.
