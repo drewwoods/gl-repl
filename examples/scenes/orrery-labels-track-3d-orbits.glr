@@ -303,6 +303,23 @@ glColor3f(0.75, 0.8, 0.9);
 glRasterPos3f(-2.6, -5.6, 0);
 label("Year = %f", 2000 + t*EARTH_RATE/TAU);
 
+// Asteroid belt: a decorative dusty band between Mars and Jupiter (the main
+// belt, ~2.2-3.3 AU). Not physical - each speck is scattered with rand() onto
+// its own near-circular orbit, drifting at the Kepler rate for its radius
+// (EARTH_RATE/a^1.5, so inner specks lap the outer ones) and riding the same
+// log-distance scale as the planets. Drawn as small unlit points, depth-tested
+// so the planets pass in front of and behind the band.
+glDisable(GL_LIGHTING);
+glEnable(GL_POINT_SMOOTH);
+glPointSize(2.0);
+glBegin(GL_POINTS);
+  for(i, 0, 280) {
+    u = rand(i, 2)*TAU + t*EARTH_RATE/pow(2.2 + 1.1*rand(i, 1), 1.5);
+    glColor3f((0.45 + 0.5*rand(i, 3))*0.55, (0.45 + 0.5*rand(i, 3))*0.48, (0.45 + 0.5*rand(i, 3))*0.4);
+    glVertex3f((ORB_BASE + ORB_SCALE*log(1 + 2.2 + 1.1*rand(i, 1)))*cos(u), rand2(i, 4)*0.35, (ORB_BASE + ORB_SCALE*log(1 + 2.2 + 1.1*rand(i, 1)))*sin(u));
+  }
+glEnd();
+
 // faint orbit rings (unlit lines), one per planet at its inclination
 glDisable(GL_LIGHTING);
 glColor3f(0.22, 0.24, 0.34);
