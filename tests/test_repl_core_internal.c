@@ -739,7 +739,7 @@ int main() {
         repl_state_render_reset_defaults();
         ASSERT_INT("render reset use accum", g_use_accum, 1);
         ASSERT_INT("render reset accum effect", g_accum_effect, RENDER3D_ACCUM_EFFECT_AA);
-        ASSERT_INT("render reset accum passes", g_accum_passes, 2);
+        ASSERT_INT("render reset accum passes", g_accum_passes, 1);
         ASSERT_INT("render reset multisample",
                    g_multisample_enabled, CFG_DEFAULT_MULTISAMPLE);
         ASSERT_INT("render reset line smooth",

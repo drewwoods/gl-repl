@@ -97,12 +97,29 @@
 #define CFG_DEFAULT_ATTENUATE_POINTS  1
 #define CFG_DEFAULT_AUTONORMAL        0
 #define CFG_DEFAULT_HIGHLIGHT_POLY    1
+/* use_accum is the "accum buffer is available" gate (the --noaccum
+ * switch), NOT the AA on/off toggle. AA renders only when BOTH this
+ * field and accum_effect are set: render.c gates on
+ *   do_accum = use_accum && accum_effect != OFF
+ * so the two are AND-ed, not an override relationship.
+ *
+ * This macro is only the compile-time initializer for the use_accum
+ * field (glr_state.c). It does NOT control the shipped binary: main()
+ * in gl_repl.c unconditionally calls glr_ctrl_set_accum(use_accum) at
+ * startup with a local that is 1 unless --noaccum is passed, clobbering
+ * whatever this default was. So changing this value only affects paths
+ * that build state without going through main() (tests, render3d_demo,
+ * headless capture). To change the app's default AA behavior, flip
+ * CFG_DEFAULT_ACCUM_EFFECT below — that is the user-facing effect
+ * selector. */
 #define CFG_DEFAULT_USE_ACCUM         1
 /* Effect defaults to AA (preserving the historic accum-AA-on-by-default
  * behavior); Blur is strictly opt-in. Passes default to 2 (the old
- * default sample count). */
+ * default sample count). Set this to RENDER3D_ACCUM_EFFECT_OFF to ship
+ * with AA off while leaving the accum buffer allocated for runtime
+ * F2/Blur use. */
 #define CFG_DEFAULT_ACCUM_EFFECT      RENDER3D_ACCUM_EFFECT_AA
-#define CFG_DEFAULT_ACCUM_PASSES      2
+#define CFG_DEFAULT_ACCUM_PASSES      1
 
 /* Scissor the accumulation-AA loop (per-pass glClear + glAccum read/return)
  * to the scene viewport instead of the whole window. On paper this is a
