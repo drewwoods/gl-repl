@@ -29,8 +29,8 @@ planet(orbitR, rate, phase, incl, prad, cr, cg, cb) {
   glEnable(GL_LIGHTING);
   glColor3f(cr, cg, cb);
   glPushMatrix();
-    glTranslatef(px, py, pz);
-    glutSolidSphere(prad, 24, 18);
+  glTranslatef(px, py, pz);
+  glutSolidSphere(prad, 24, 18);
   glPopMatrix();
   glDisable(GL_LIGHTING);
 }
@@ -74,13 +74,13 @@ label("Venus");
 // Earth (the reference radius) + Moon circling it
 planet(2.7, 0.85, 2.5, 0.0, 0.17, 0.3, 0.52, 0.95);
 glPushMatrix();
-  glTranslatef(px, py, pz);
-  glRotatef(t*160, 0, 1, 0);
-  glTranslatef(0.34, 0.03, 0);
-  glEnable(GL_LIGHTING);
-  glColor3f(0.72, 0.72, 0.7);
-  glutSolidSphere(0.046, 12, 10);
-  glDisable(GL_LIGHTING);
+glTranslatef(px, py, pz);
+glRotatef(t*160, 0, 1, 0);
+glTranslatef(0.34, 0.03, 0);
+glEnable(GL_LIGHTING);
+glColor3f(0.72, 0.72, 0.7);
+glutSolidSphere(0.046, 12, 10);
+glDisable(GL_LIGHTING);
 glPopMatrix();
 glColor3f(0.6, 0.8, 1);
 glRasterPos3f(px + 0.2, py + 0.22, pz);
@@ -100,26 +100,26 @@ label("Jupiter");
 // face may point at the camera.
 planet(5.8, 0.26, 3.4, 0.10, 0.52, 0.9, 0.8, 0.58);
 glPushMatrix();
-  glTranslatef(px, py, pz);
-  glRotatef(27, 1, 0, 0.35);
-  glDisable(GL_CULL_FACE);
-  glBegin(GL_TRIANGLE_STRIP);
+glTranslatef(px, py, pz);
+glRotatef(27, 1, 0, 0.35);
+glDisable(GL_CULL_FACE);
+glBegin(GL_TRIANGLE_STRIP);
   for(s, 0, 33) {
     glColor4f(0.85, 0.75, 0.55, 0.5);
     glVertex3f(cos(s*TAU/32)*0.66, 0, sin(s*TAU/32)*0.66);
     glColor4f(0.9, 0.82, 0.6, 0.3);
     glVertex3f(cos(s*TAU/32)*0.88, 0, sin(s*TAU/32)*0.88);
   }
-  glEnd();
-  glBegin(GL_TRIANGLE_STRIP);
+glEnd();
+glBegin(GL_TRIANGLE_STRIP);
   for(s, 0, 33) {
     glColor4f(0.8, 0.72, 0.5, 0.35);
     glVertex3f(cos(s*TAU/32)*0.93, 0, sin(s*TAU/32)*0.93);
     glColor4f(0.75, 0.68, 0.48, 0.12);
     glVertex3f(cos(s*TAU/32)*1.05, 0, sin(s*TAU/32)*1.05);
   }
-  glEnd();
-  glEnable(GL_CULL_FACE);
+glEnd();
+glEnable(GL_CULL_FACE);
 glPopMatrix();
 glColor3f(1, 0.9, 0.7);
 glRasterPos3f(px + 1.1, py + 0.4, pz);
@@ -128,18 +128,18 @@ label("Saturn");
 // the planet is tipped ~98 degrees, so its rings face the sun pole-on
 planet(6.8, 0.18, 5.2, 0.07, 0.34, 0.58, 0.82, 0.88);
 glPushMatrix();
-  glTranslatef(px, py, pz);
-  glRotatef(98, 0, 0, 1);
-  glDisable(GL_CULL_FACE);
-  glBegin(GL_TRIANGLE_STRIP);
+glTranslatef(px, py, pz);
+glRotatef(98, 0, 0, 1);
+glDisable(GL_CULL_FACE);
+glBegin(GL_TRIANGLE_STRIP);
   for(s, 0, 33) {
     glColor4f(0.72, 0.88, 0.92, 0.4);
     glVertex3f(cos(s*TAU/32)*0.44, 0, sin(s*TAU/32)*0.44);
     glColor4f(0.72, 0.88, 0.92, 0.1);
     glVertex3f(cos(s*TAU/32)*0.58, 0, sin(s*TAU/32)*0.58);
   }
-  glEnd();
-  glEnable(GL_CULL_FACE);
+glEnd();
+glEnable(GL_CULL_FACE);
 glPopMatrix();
 glColor3f(0.75, 0.92, 0.95);
 glRasterPos3f(px + 0.6, py + 0.35, pz);

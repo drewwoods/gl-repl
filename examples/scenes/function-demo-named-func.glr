@@ -8,12 +8,12 @@ glTranslatef(0.0f, 0.0f, 0.0f);
 glClearColor(0.05, 0.06, 0.08, 1.0);
 glEnable(GL_DEPTH_TEST);
 triangle() {
-glBegin(GL_TRIANGLES);
-glNormal3f(0, 0, 1);
-glVertex3f(0, 0.8, 0);
-glVertex3f(-0.7, -0.4, 0);
-glVertex3f(0.7, -0.4, 0);
-glEnd();
+  glBegin(GL_TRIANGLES);
+    glNormal3f(0, 0, 1);
+    glVertex3f(0, 0.8, 0);
+    glVertex3f(-0.7, -0.4, 0);
+    glVertex3f(0.7, -0.4, 0);
+  glEnd();
 }
 glColor3f(0.98, 0.46, 0.36);
 triangle();

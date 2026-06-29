@@ -513,7 +513,7 @@ Program-side state that is not the source command array itself.
 | `repl_config` | Config descriptor table for menu toggles and persisted render/audio settings |
 | `repl_scenes` | User-scene slots, workspace directory, LRU eviction, and scene-side command/text snapshots ([`SceneSnapshot`](../src/repl/scene_snapshot.h#L17) owns the copy/apply payload) |
 | `repl_example_loader` | Built-in example loading and active-example tracking |
-| `repl_examples` | Built-in example catalog facade: [`examples/catalog.ini`](../examples/catalog.ini) owns order/name/tags/group, [`examples/scenes/`](../examples/scenes/) owns `.glr` snippets or full `.c` import sources, and [`scripts/gen_examples.py`](../scripts/gen_examples.py) emits the compiled-in `ReplExampleEntry` table used by the `repl_example_tag_*` query API and `repl_example_subheading`. `--examples-dir` can load the same catalog shape at runtime for authoring. Symmetric with the tutorial catalog axes |
+| `repl_examples` | Built-in example catalog facade: [`examples/catalog.ini`](../examples/catalog.ini) owns order/name/tags/group, [`examples/scenes/`](../examples/scenes/) owns `.glr` snippets or full `.c` import sources, and [`scripts/gen_examples.py`](../scripts/gen_examples.py) emits the compiled-in [`ReplExampleEntry`](../src/repl/examples.c#L53) table used by the `repl_example_tag_*` query API and `repl_example_subheading`. `--examples-dir` can load the same catalog shape at runtime for authoring. Symmetric with the tutorial catalog axes |
 | `repl_autonormal` | Auto-generated `glNormal3f` maintenance and feeding-command lookup |
 | `repl_debug` | Program/debug dump helpers; takes editor text views when it needs source text |
 
