@@ -22,17 +22,17 @@ OrbitRings(Drel, tilt) {
 }
 // planet(): one lit sphere on an inclined circular orbit. The caller passes
 // TRUE ratios relative to Earth: distance from Sun (Drel), year length (Yrel),
-// and body radius (Rrel). The display applies documented compression for
-// orbit distance, orbit speed, and sphere size so the system fits on screen.
+// J2000 heliocentric longitude phase, and body radius (Rrel). The display
+// applies documented compression for orbit distance and sphere size only.
 // th/px/py/pz stay set after the call so the caller can hang a label off the
-// body.
+// body. t=0 is year 2000.0 (J2000 alignment).
 static float EARTH_R = 0.17;
 static float EARTH_RATE = 0.85;
 static float ORB_BASE = 0.00;
 static float ORB_SCALE = 10.00;
 planet(Drel, Yrel, phase, incl, Rrel, cr, cg, cb) {
   orbitR = ORB_BASE + ORB_SCALE*log(1 + Drel);
-  th = t*(EARTH_RATE/pow(Yrel, 1.0/3.0)) + phase;
+  th = phase + t*EARTH_RATE/Yrel;
   px = cos(th)*orbitR;
   py = sin(th)*orbitR*sin(incl);
   pz = sin(th)*orbitR*cos(incl);
@@ -76,10 +76,9 @@ glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, (GLfloat[]){18});
 //   | Sun     | 109.2  |  hero   |
 //   +---------+--------+---------+
 //
-// Orbit speeds: Y/E is the true year length relative to Earth, but planet()
-// displays angular rate with a cube-root squash:
-// rate = EARTH_RATE/Y/E^(1/3). That keeps the compressed orbits readable
-// instead of making the outer planets look detached.
+// Orbit speeds: Y/E is the true year length relative to Earth, and planet()
+// uses rate = EARTH_RATE/Y/E. Earth completes one orbit per simulated year,
+// and t=0 is year 2000.0: Year = 2000 + t*EARTH_RATE/TAU.
 // | Body    | Year length relative to Earth |
 // | ------- | ----------------------------: |
 // | Mercury |                     **0.241** |
@@ -92,12 +91,27 @@ glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, (GLfloat[]){18});
 // | Neptune |                     **164.8** |
 // | Sun     |                       **N/A** |
 //
+// J2000 alignment: the phase argument is approximate heliocentric ecliptic
+// longitude at 2000-01-01 12:00 TT, computed from JPL low-precision elements.
+// Circular display orbits use that longitude directly as the starting angle.
+// | Body    | J2000 heliocentric longitude |
+// | ------- | ---------------------------: |
+// | Mercury |                   253.78 deg |
+// | Venus   |                   182.61 deg |
+// | Earth   |                   100.38 deg |
+// | Mars    |                   359.45 deg |
+// | Jupiter |                    36.38 deg |
+// | Saturn  |                    45.58 deg |
+// | Uranus  |                   316.40 deg |
+// | Neptune |                   303.92 deg |
+// | Sun     |                         N/A  |
+//
 // Orbit distances: D/E is the true mean distance from the Sun relative to
 // Earth. planet() and OrbitRings() display it with a log scale:
-// orbitR = ORB_BASE + ORB_SCALE*log(1 + D/E). The larger base offset pushes
-// the inner system outward, while the log term spreads Mercury/Venus/Earth
-// more than a cube-root fit and keeps Neptune near the frame edge. The Sun
-// stays at the origin and does not use the orbit formula.
+// orbitR = ORB_BASE + ORB_SCALE*log(1 + D/E). log() is base-10 in the REPL.
+// The large scale pushes the inner system outward, while the log term spreads
+// Mercury/Venus/Earth more than a cube-root fit. The Sun stays at the origin
+// and does not use the formula.
 // | Body    | Distance from Sun relative to Earth |
 // | ------- | ----------------------------------: |
 // | Mercury |                           **0.387** |
@@ -110,17 +124,17 @@ glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, (GLfloat[]){18});
 // | Neptune |                           **30.07** |
 // | Sun     |                     **0.000 / N/A** |
 // Mercury (0.383 Earth radii, 0.241 Earth years)
-planet(0.387, 0.241, 0.0, 0.18, 0.383, 0.63, 0.58, 0.54);
+planet(0.387, 0.241, 253.78*PI/180, 0.18, 0.383, 0.63, 0.58, 0.54);
 glColor3f(0.9, 0.85, 0.8);
 glRasterPos3f(px + 0.14, py + 0.16, pz);
 label("Mercury");
 // Venus (0.950 Earth radii, 0.615 Earth years)
-planet(0.723, 0.615, 1.0, 0.06, 0.950, 0.93, 0.81, 0.55);
+planet(0.723, 0.615, 182.61*PI/180, 0.06, 0.950, 0.93, 0.81, 0.55);
 glColor3f(1, 0.9, 0.65);
 glRasterPos3f(px + 0.2, py + 0.22, pz);
 label("Venus");
 // Earth (the reference radius) + Moon circling it
-planet(1.000, 1.000, 2.5, 0.0, 1.000, 0.3, 0.52, 0.95);
+planet(1.000, 1.000, 100.38*PI/180, 0.0, 1.000, 0.3, 0.52, 0.95);
 glPushMatrix();
 glTranslatef(px, py, pz);
 glRotatef(t*160, 0, 1, 0);
@@ -134,12 +148,12 @@ glColor3f(0.6, 0.8, 1);
 glRasterPos3f(px + 0.2, py + 0.22, pz);
 label("Earth");
 // Mars (0.532 Earth radii, 1.881 Earth years)
-planet(1.524, 1.881, 4.0, 0.22, 0.532, 0.88, 0.45, 0.26);
+planet(1.524, 1.881, 359.45*PI/180, 0.22, 0.532, 0.88, 0.45, 0.26);
 glColor3f(1, 0.6, 0.45);
 glRasterPos3f(px + 0.16, py + 0.18, pz);
 label("Mars");
 // Jupiter (10.97 Earth radii, 11.86 Earth years)
-planet(5.203, 11.86, 1.8, 0.05, 10.97, 0.83, 0.69, 0.52);
+planet(5.203, 11.86, 36.38*PI/180, 0.05, 10.97, 0.83, 0.69, 0.52);
 glColor3f(1, 0.85, 0.65);
 glRasterPos3f(px + 0.62, py + 0.5, pz);
 label("Jupiter");
@@ -148,7 +162,7 @@ label("Jupiter");
 // Rings are translucent flat strips, so blending is on (additive, like the
 // corona) and culling is off while they draw - either face may point at the
 // camera. Depth writes are masked so the bands don't clip each other.
-planet(9.537, 29.46, 3.4, 0.10, 9.14, 0.9, 0.8, 0.58);
+planet(9.537, 29.46, 45.58*PI/180, 0.10, 9.14, 0.9, 0.8, 0.58);
 glPushMatrix();
 glTranslatef(px, py, pz);
 glRotatef(27, 1, 0, 0.35);
@@ -182,7 +196,7 @@ label("Saturn");
 // Uranus (3.98 Earth radii, 84.0 Earth years) + a thin ring standing nearly on
 // end:
 // the planet is tipped ~98 degrees, so its rings face the sun pole-on
-planet(19.19, 84.0, 5.2, 0.07, 3.98, 0.58, 0.82, 0.88);
+planet(19.19, 84.0, 316.40*PI/180, 0.07, 3.98, 0.58, 0.82, 0.88);
 glPushMatrix();
 glTranslatef(px, py, pz);
 glRotatef(98, 0, 0, 1);
@@ -206,14 +220,14 @@ glColor3f(0.75, 0.92, 0.95);
 glRasterPos3f(px + 0.6, py + 0.35, pz);
 label("Uranus");
 // Neptune (3.86 Earth radii, 164.8 Earth years)
-planet(30.07, 164.8, 0.7, 0.14, 3.86, 0.28, 0.42, 0.9);
+planet(30.07, 164.8, 303.92*PI/180, 0.14, 3.86, 0.28, 0.42, 0.9);
 glColor3f(0.55, 0.65, 1);
 glRasterPos3f(px + 0.42, py + 0.34, pz);
 label("Neptune");
-// live readout: Earth's orbital phase, anchored in 3D below the system
+// live readout: simulation year, anchored in 3D below the system
 glColor3f(0.75, 0.8, 0.9);
 glRasterPos3f(-2.6, -5.6, 0);
-label("Earth phase = %f", fmod(t*EARTH_RATE + 2.5, TAU));
+label("Year = %f", 2000 + t*EARTH_RATE/TAU);
 
 // faint orbit rings (unlit lines), one per planet at its inclination
 glDisable(GL_LIGHTING);
