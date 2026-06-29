@@ -1,5 +1,8 @@
 # Built-In Examples
 
+> For a rendered gallery of these scenes — screenshots, animations, and the
+> source behind them — see the [Showcase](../docs/SHOWCASE.md).
+
 Built-in examples are listed, in flat load order, by `examples/catalog.ini`.
 Their source files live under `examples/scenes/` and use one of two formats:
 

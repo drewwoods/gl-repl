@@ -9,9 +9,9 @@
 <sub>Every scene below ships in the binary. Cycle them with <b>F12</b>, or load one directly:</sub>
 
 ```bash
-./gl-repl --example "Torus knot (animated)"    # by name (case-insensitive)
-./gl-repl --example 15                         # or by 0-based index
-./gl-repl --list-examples                      # canonical names + indices
+./gl-repl --example "Jellyfish (glDepthMask translucency)"   # by name (case-insensitive)
+./gl-repl --example 23                                       # or by 0-based index
+./gl-repl --list-examples                                    # canonical names + indices
 ```
 
 </div>
@@ -46,29 +46,45 @@
 A few scenes worth seeing with their source — note how short each one is.
 The whole program is what you'd type into the REPL; there is no other file.
 
-### Torus knot
+### Jellyfish
 
-A `(p, q)` knot traced as a single `GL_LINE_LOOP`, hue cycling along the curve.
+A breathing bell of triangle strips and a fan of swaying line-strip tentacles,
+drawn with additive blending and **depth writes off** — `glDepthMask(GL_FALSE)`,
+the classic translucency trick that stops the bell's far side from z-fighting
+its near side.
 
-<!-- images/showcase/torus-knot.gif
-     Shot: the (2,3) knot rotating with color cycling along the curve.
-     Generate: scripts/docs-assets.sh sc-torus-knot
-     Intent: show that one for-loop + line loop reads as a complex object. -->
+<!-- images/showcase/jellyfish.gif
+     Shot: the translucent bell pulsing while the tentacles sway.
+     Generate: scripts/docs-assets.sh sc-jellyfish
+     Intent: the glow + glDepthMask ordering trick reads as a single creature. -->
 <div align="center">
-<img src="images/showcase/torus-knot.gif" alt="An animated (2,3) torus knot in cycling color" width="70%">
+<img src="images/showcase/jellyfish.gif" alt="A translucent, pulsing jellyfish" width="70%">
 </div>
 
 ```c
-n = 400;  p = 2;  q = 3;            // samples, winds around axis / through hole
-glBegin(GL_LINE_LOOP);
-  for(i, 0, n) {
-    ang = TAU * i/n;
-    rr = 2.0 + cos(q*ang);          // distance from the axis
-    glColor3f(0.5 + 0.5*sin(ang + t), 0.5 + 0.5*sin(ang + t + 2), 0.5 + 0.5*sin(ang + t + 4));
-    glVertex3f(rr*cos(p*ang), rr*sin(p*ang), sin(q*ang));
-  }
-glEnd();
+// additive glow with depth writes OFF (reads stay on) — the translucency
+// trick: without it the bell's far side z-fights its near side.
+glEnable(GL_BLEND);  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+glEnable(GL_DEPTH_TEST);  glDepthMask(GL_FALSE);
+
+pulse = sin(t*1.6);  bellR = 1.5*(1 + 0.10*pulse);   // the bell breathes
+for(i, 0, rings) {                  // latitude strips, crown down to the rim
+  glBegin(GL_TRIANGLE_STRIP);
+  for(j, 0, segs+1) { /* ring vertices; alpha fades toward the edge */ }
+  glEnd();
+}
+
+tentacle(angAt, attach, len, phase, amp, cr, cg, cb) {
+  glBegin(GL_LINE_STRIP);           // a swaying strand, alpha fading to the tip
+  for(s, 0, 14) { /* sway = f(t, phase, depth-along-strand) */ }
+  glEnd();
+}
+for(k, 0, tentacles) { tentacle(...); }
+
+glDepthMask(GL_TRUE);  glDisable(GL_BLEND);          // leave GL as we found it
 ```
+
+<sub>*(abridged — load the example for the full source)*</sub>
 
 ---
 
@@ -292,13 +308,12 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 </td>
 <td width="33%" align="center">
 
-<!-- images/showcase/jellyfish.gif
-     scripts/docs-assets.sh sc-jellyfish
-     Intent: the translucent bell — shows glDepthMask-style ordering tricks. -->
-<img src="images/showcase/jellyfish.gif" alt="Translucent jellyfish" width="100%">
+<!-- images/showcase/torus-knot.gif
+     scripts/docs-assets.sh sc-torus-knot -->
+<img src="images/showcase/torus-knot.gif" alt="An animated (2,3) torus knot in cycling color" width="100%">
 
-**Jellyfish**
-<br><sub>`glDepthMask` translucency</sub>
+**Torus knot**
+<br><sub>`(p,q)` knot, one `GL_LINE_LOOP`</sub>
 
 </td>
 </tr>
