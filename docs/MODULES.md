@@ -329,7 +329,7 @@ editor-overlay snapshot types in [`src/ui/app/editor.h`](../src/ui/app/editor.h)
   concepts; audited by `check-replay-ui-isolation`.
 - **Borrowed cross-module API types** — a header *referencing* a type
   another module owns is correct C design, not a defect:
-  [`ReplCompileContext`](../src/repl/compile.h#L177) / [`ReplCompiledChange`](../src/repl/compile.h#L129) in
+  [`ReplCompileContext`](../src/repl/compile.h#L178) / [`ReplCompiledChange`](../src/repl/compile.h#L130) in
   [`src/editor/commit.h`](../src/editor/commit.h); the `Repl*` snapshot fields in
   [`src/ui/app/snapshot.h`](../src/ui/app/snapshot.h); the export / replay-annotation bridge types in
   [`src/app/glr_ctrl.h`](../src/app/glr_ctrl.h); and [`VariablePanelViewState`](../src/subsystems/variable_panel/variable_panel_state.h#L26)

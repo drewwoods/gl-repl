@@ -338,7 +338,7 @@ Owned stages:
 | GLUT input dispatch (cross-subsystem routing) | [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c) |
 | Editor text-document input + commit orchestration | [`src/editor/input.c`](../src/editor/input.c) + [`src/editor/commit.c`](../src/editor/commit.c) |
 | Parsing | [`src/repl/parser.c`](../src/repl/parser.c) |
-| Validation / compilation (pure, returns [`ReplCompiledChange`](../src/repl/compile.h#L129)) | [`src/repl/compile.c`](../src/repl/compile.c) |
+| Validation / compilation (pure, returns [`ReplCompiledChange`](../src/repl/compile.h#L130)) | [`src/repl/compile.c`](../src/repl/compile.c) |
 | Apply (writes REPL runtime state only) | [`src/repl/apply.c`](../src/repl/apply.c) |
 | Source command mutation (low-level shifts) | [`src/repl/command_store.c`](../src/repl/command_store.c) |
 | Source scope/depth | [`src/repl/source_scope.c`](../src/repl/source_scope.c) |

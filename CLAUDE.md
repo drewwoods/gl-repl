@@ -489,9 +489,9 @@ explaining why the extra background is useful.
 | [`src/app/glr_config.c`](src/app/glr_config.c) | Config key implementation and descriptor table helpers. The tail of `glr_config_set` notifies the tutorial runner (`tutorial_notify_state_changed`) so REQUIRE steps observe every write path — direct setters (e.g. accum-passes Ctrl+=/-), `glr_cfg_cycle_row`'s early-return branches, and the bridge's `apply` during `@cfg` / example / workspace load |
 | [`src/app/glr_config.h`](src/app/glr_config.h) | `ReplConfigKey` / [`ReplConfigItem`](src/repl/cfg_baseline.h#L29) descriptor API for keyed config access |
 | [`src/repl/command.h`](src/repl/command.h) | Core command model types: [`CmdType`](src/repl/command.h#L37) enum, [`GLCmd`](src/repl/command.h#L87) struct (pure parse-result: type, args, flags, provenance — no `source[]` field) |
-| [`src/repl/compile.c`](src/repl/compile.c) | Pure source-text validators that produce [`ReplCompiledChange`](src/repl/compile.h#L129) descriptors; never mutates state |
-| [`src/repl/compile.h`](src/repl/compile.h) | [`ReplCompiledChange`](src/repl/compile.h#L129), [`ReplCompileResult`](src/repl/compile.h#L188), [`ReplCompileContext`](src/repl/compile.h#L177), compile entry points |
-| [`src/repl/apply.c`](src/repl/apply.c) | Applies a [`ReplCompiledChange`](src/repl/compile.h#L129) to REPL runtime command arrays |
+| [`src/repl/compile.c`](src/repl/compile.c) | Pure source-text validators that produce [`ReplCompiledChange`](src/repl/compile.h#L130) descriptors; never mutates state |
+| [`src/repl/compile.h`](src/repl/compile.h) | [`ReplCompiledChange`](src/repl/compile.h#L130), [`ReplCompileResult`](src/repl/compile.h#L189), [`ReplCompileContext`](src/repl/compile.h#L178), compile entry points |
+| [`src/repl/apply.c`](src/repl/apply.c) | Applies a [`ReplCompiledChange`](src/repl/compile.h#L130) to REPL runtime command arrays |
 | [`src/repl/apply.h`](src/repl/apply.h) | Apply public API (`repl_apply_compiled_change`, `repl_apply_predef_ops`) |
 | [`src/repl/normalize.c`](src/repl/normalize.c) | Parse-and-normalize pipeline (`repl_parse_and_normalize*`) |
 | [`src/repl/reformat.c`](src/repl/reformat.c) | Source reformatter (`repl_reformat_program`) |
@@ -955,7 +955,7 @@ Key details:
   detection runs before the "already declared" validation loop, and
   names carried over from the old decl are exempted from the duplicate
   check (they get undeclared before the new registration runs).
-- Deleting a declaration range goes through [`repl_compile_delete_range()`](src/repl/compile.h#L505),
+- Deleting a declaration range goes through [`repl_compile_delete_range()`](src/repl/compile.h#L506),
   which validates that no variable in the range is still referenced
   outside it (uses [`repl_eval_source_uses_ident()`](src/repl/eval.h#L297)). Deleting a decl
   together with all its uses is allowed; deleting an unreferenced decl
