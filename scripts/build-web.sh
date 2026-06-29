@@ -10,6 +10,7 @@ OUT_DIR="${SCRIPT_DIR}/out"
 
 # -- Emscripten environment -------------------------------
 STACK_SIZE=$((1024*1024)) # 1MB stack size for complex samples
+GL_MAX_TEMP_BUFFER_SIZE=$((1024*1024*16)) # 16MB temp buffer for complex samples
 INITIAL_MEMORY=$((1024 * 1024 * 384)) # 384 initial memory for REPL/Complex samples
 
 # ── Library Paths (edit these if your layout differs) ────────────────────────
@@ -269,7 +270,7 @@ build_one() {
                 OBJDIR=build/emscripten \
                 SAMPLE_BIN="${out_html}" \
                 GL_HEADER_CFLAGS="${em_flags}" \
-                GL_LDFLAGS="${BOOTSTRAP} ${GL4ES_LIB} ${GLU_LIB} ${FREEGLUT_LIB} -s USE_WEBGL2=1 -s FULL_ES2=1 -s INITIAL_MEMORY=${INITIAL_MEMORY} -s STACK_SIZE=${STACK_SIZE} ${repl_preload}"
+                GL_LDFLAGS="${BOOTSTRAP} ${GL4ES_LIB} ${GLU_LIB} ${FREEGLUT_LIB} -s USE_WEBGL2=1 -s FULL_ES2=1 -s INITIAL_MEMORY=${INITIAL_MEMORY} -s STACK_SIZE=${STACK_SIZE} -s GL_MAX_TEMP_BUFFER_SIZE=${GL_MAX_TEMP_BUFFER_SIZE} ${repl_preload}"
             local res=$?
             popd > /dev/null
 
@@ -284,7 +285,7 @@ build_one() {
         # --- Legacy flat-layout Makefiles (claude4.6-opus-thinking era) ---
         # Common variables that Makefiles use for libraries
         local em_flags="-include ${GL4ES_GL_H} -I${GL4ES_INCLUDE} -I${GLU_DIR}/include -I${FREEGLUT_INCLUDE} -I${PROJECT_INCLUDE} -DGL_SILENCE_DEPRECATION -DUSE_MGL_NAMESPACE"
-        local em_libs="${BOOTSTRAP} ${GL4ES_LIB} ${GLU_LIB} ${FREEGLUT_LIB} -lglut -s USE_WEBGL2=1 -s FULL_ES2=1 -s INITIAL_MEMORY=${INITIAL_MEMORY} -s STACK_SIZE=${STACK_SIZE} ${preload_flag}"
+        local em_libs="${BOOTSTRAP} ${GL4ES_LIB} ${GLU_LIB} ${FREEGLUT_LIB} -lglut -s USE_WEBGL2=1 -s FULL_ES2=1 -s INITIAL_MEMORY=${INITIAL_MEMORY} -s STACK_SIZE=${STACK_SIZE} -s GL_MAX_TEMP_BUFFER_SIZE=${GL_MAX_TEMP_BUFFER_SIZE} ${preload_flag}"
 
         pushd "${sample_dir}" > /dev/null
         # Attempt to build 'sample' or 'best' target if they exist, else just default 'make'
@@ -352,6 +353,7 @@ build_one() {
         -s FULL_ES2=1 \
         -s INITIAL_MEMORY=${INITIAL_MEMORY} \
         -s STACK_SIZE=${STACK_SIZE} \
+        -s GL_MAX_TEMP_BUFFER_SIZE=16777216 \
         -lglut \
         "${FREEGLUT_LIB}" \
         "${preload_args[@]}" \
