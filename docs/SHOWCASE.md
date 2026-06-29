@@ -46,7 +46,7 @@
 A few scenes worth seeing with their source — note how short each one is.
 The whole program is what you'd type into the REPL; there is no other file.
 
-### Jellyfish
+### [Jellyfish](../examples/scenes/jellyfish-gldepthmask-translucency.glr)
 
 A breathing bell of triangle strips and a fan of swaying line-strip tentacles,
 drawn with additive blending and **depth writes off** — `glDepthMask(GL_FALSE)`,
@@ -88,7 +88,7 @@ glDepthMask(GL_TRUE);  glDisable(GL_BLEND);          // leave GL as we found it
 
 ---
 
-### Snowfall — 550 deterministic particles
+### [Snowfall — 550 deterministic particles](../examples/scenes/snowfall-demo-550-particles.glr)
 
 No particle system, no stored state. Each flake is a pure function of its
 index and `t`, wrapped with `rem(...)`, so the whole field replays identically.
@@ -118,7 +118,7 @@ glEnd();
 
 ---
 
-### Parametric torus
+### [Parametric torus](../examples/scenes/parametric-torus-nested-for.glr)
 
 Two nested loops sweep a `GL_QUAD_STRIP` around the tube and the ring. The
 same example exports cleanly to `.ply` — it's the one in the
@@ -146,7 +146,7 @@ for(i, 0, n) {
 
 ---
 
-### Recursive triangle tree
+### [Recursive triangle tree](../examples/scenes/recursive-triangle-tree-func-recursion.glr)
 
 A `branch(depth, size, spin)` function that calls itself — recursion,
 inlined by the flattener, capped at depth 64.
@@ -185,7 +185,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      scripts/docs-assets.sh sc-spirograph -->
 <img src="images/showcase/spirograph.gif" alt="Animated spirograph curve" width="100%">
 
-**Animated spirograph**
+**[Animated spirograph](../examples/scenes/animated-spirograph-curve.glr)**
 <br><sub>epitrochoid swept by `t`</sub>
 
 </td>
@@ -195,7 +195,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      scripts/docs-assets.sh sc-ripple-ring -->
 <img src="images/showcase/ripple-ring.gif" alt="Traveling ripple ring" width="100%">
 
-**Traveling ripple ring**
+**[Traveling ripple ring](../examples/scenes/traveling-ripple-ring.glr)**
 <br><sub>a wave running around a loop</sub>
 
 </td>
@@ -203,7 +203,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 
 <img src="images/animated-ring.gif" alt="Animated ring" width="100%">
 
-**Animated ring**
+**[Animated ring](../examples/scenes/animated-ring-for-t.glr)**
 <br><sub>`for` + `t`, line loop + fan</sub>
 
 </td>
@@ -217,7 +217,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      ./gl-repl --example "Bezier curve with guides" -->
 <img src="images/showcase/bezier.png" alt="Bezier curve with control-point guides" width="100%">
 
-**Bézier curve**
+**[Bézier curve](../examples/scenes/bezier-curve-with-guides.glr)**
 <br><sub>with control-point guides</sub>
 
 </td>
@@ -227,7 +227,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      Still is fine. ./gl-repl --example "Scratch arrays (de Casteljau curve)" -->
 <img src="images/showcase/de-casteljau.png" alt="de Casteljau curve via scratch arrays" width="100%">
 
-**de Casteljau curve**
+**[de Casteljau curve](../examples/scenes/scratch-arrays-de-casteljau-curve.glr)**
 <br><sub>built with scratch arrays `A/B/C`</sub>
 
 </td>
@@ -238,7 +238,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      ./gl-repl --example "Annotated orbit plot (labels)" -->
 <img src="images/showcase/orbit-plot.png" alt="Annotated orbit plot with bitmap labels" width="100%">
 
-**Annotated orbit plot**
+**[Annotated orbit plot](../examples/scenes/annotated-orbit-plot-labels.glr)**
 <br><sub>bitmap `label(...)` text</sub>
 
 </td>
@@ -256,7 +256,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      Intent: the lighting rolling across the wave — normals are the star. -->
 <img src="images/showcase/wave-surface.gif" alt="Animated wave surface" width="100%">
 
-**Animated wave surface**
+**[Animated wave surface](../examples/scenes/animated-wave-surface-analytic-normals.glr)**
 <br><sub>analytic per-vertex normals</sub>
 
 </td>
@@ -266,7 +266,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      (stands in for the retired "Procedural terrain" example). -->
 <img src="images/showcase/ringed-planet.gif" alt="A ringed planet under nebula skies" width="100%">
 
-**Ringed planet**
+**[Ringed planet](../examples/scenes/ringed-planet-nebula-skies.glr)**
 <br><sub>sphere + ring bands, nebula sky</sub>
 
 </td>
@@ -277,7 +277,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      ./gl-repl --example "Lit cube" -->
 <img src="images/showcase/lit-cube.png" alt="A lit cube" width="100%">
 
-**Lit cube**
+**[Lit cube](../examples/scenes/lit-cube.glr)**
 <br><sub>lighting + material basics</sub>
 
 </td>
@@ -292,7 +292,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 
 <img src="images/glow-sprites.png" alt="Additive glow sprites" width="100%">
 
-**Glow sprites**
+**[Glow sprites](../examples/scenes/glow-sprites-blend-point-attenuation.glr)**
 <br><sub>additive blend + point attenuation</sub>
 
 </td>
@@ -302,7 +302,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      scripts/docs-assets.sh sc-grass -->
 <img src="images/showcase/grass.gif" alt="Swaying grass field" width="100%">
 
-**Swaying grass field**
+**[Swaying grass field](../examples/scenes/swaying-grass-field-rand-t.glr)**
 <br><sub>`rand` placement, `t` sway</sub>
 
 </td>
@@ -312,7 +312,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      scripts/docs-assets.sh sc-torus-knot -->
 <img src="images/showcase/torus-knot.gif" alt="An animated (2,3) torus knot in cycling color" width="100%">
 
-**Torus knot**
+**[Torus knot](../examples/scenes/torus-knot-animated.glr)**
 <br><sub>`(p,q)` knot, one `GL_LINE_LOOP`</sub>
 
 </td>
@@ -329,7 +329,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      Still. ./gl-repl --example "Function demo (named func)" -->
 <img src="images/showcase/function-demo.png" alt="Named function demo" width="100%">
 
-**Named function**
+**[Named function](../examples/scenes/function-demo-named-func.glr)**
 <br><sub>define once, reuse</sub>
 
 </td>
@@ -339,7 +339,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      Still. ./gl-repl --example "Function polygons (args + for)" -->
 <img src="images/showcase/function-polygons.png" alt="Function polygons" width="100%">
 
-**Function polygons**
+**[Function polygons](../examples/scenes/function-polygons-args-for.glr)**
 <br><sub>args + `for`</sub>
 
 </td>
@@ -349,7 +349,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      scripts/docs-assets.sh sc-conditional-colors -->
 <img src="images/showcase/conditional-colors.gif" alt="Conditional colors" width="100%">
 
-**Conditional colors**
+**[Conditional colors](../examples/scenes/conditional-colors-if-t.glr)**
 <br><sub>`if` + `t`</sub>
 
 </td>
@@ -364,7 +364,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 
 <img src="images/labels-orrery.png" alt="Orrery with labels tracking 3D orbits" width="100%">
 
-**Orrery**
+**[Orrery](../examples/scenes/orrery-labels-track-3d-orbits.glr)**
 <br><sub>`label()` text tracking 3D orbits</sub>
 
 </td>
@@ -375,7 +375,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      Intent: the flagship scene — lit model + particles together. -->
 <img src="images/showcase/whale.gif" alt="Whale: particle system + lit model" width="100%">
 
-**Whale**
+**[Whale](../examples/scenes/whale-particle-system-lit-model.glr)**
 <br><sub>particle system + lit model</sub>
 
 </td>
@@ -385,7 +385,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      (example: "Dusk lighthouse atoll (stress test)"). -->
 <img src="images/showcase/stress-test.gif" alt="Dusk lighthouse atoll — all-features stress test" width="100%">
 
-**Dusk lighthouse atoll**
+**[Dusk lighthouse atoll](../examples/scenes/dusk-lighthouse-atoll-stress-test.glr)**
 <br><sub>everything at once</sub>
 
 </td>
@@ -400,15 +400,15 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 
 <img src="images/glu-tess.png" alt="GLU tessellated concave arrow" width="100%">
 
-**GLU tessellator**
-<br><sub>concave polygon (+ cutout variant)</sub>
+**[GLU tessellator](../examples/scenes/glu-tessellator-concave-arrow.glr)**
+<br><sub>concave polygon (+ [cutout variant](../examples/scenes/glu-tessellator-concave-arrow-cutout.glr))</sub>
 
 </td>
 <td width="50%" align="center">
 
 <img src="images/transform-stress.png" alt="Transform stress with guides" width="100%">
 
-**Transform stress**
+**[Transform stress](../examples/scenes/transform-stress-translate-rotate-scale-guides.glr)**
 <br><sub>translate / rotate / scale guides</sub>
 
 </td>
