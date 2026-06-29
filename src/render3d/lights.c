@@ -375,7 +375,7 @@ void render3d_lights_render(const Render3dFrameRenderContext *frame_ctx) {
             snprintf(label, sizeof(label), " L%d", i);
             glColor4f(d[0] * 0.7f + 0.3f, d[1] * 0.7f + 0.3f,
                       d[2] * 0.7f + 0.3f, 0.8f);
-            render3d_draw_bitmap_text(FONT_SMALL, lx, ly, lz, label);
+            render3d_draw_bitmap_text(FONT_MONO, lx, ly, lz, label);
         } else {
             glPointSize(6.0f);
             glBegin(GL_POINTS);
