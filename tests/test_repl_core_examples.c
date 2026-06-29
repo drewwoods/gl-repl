@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
@@ -195,6 +196,17 @@ static char *slurp_path(const char *path) {
     if (f)
         fclose(f);
     return buf;
+}
+
+static int write_text_path(const char *path, const char *text) {
+    FILE *f = fopen(path, "w");
+    if (!f)
+        return 0;
+    if (fputs(text, f) == EOF) {
+        fclose(f);
+        return 0;
+    }
+    return fclose(f) == 0;
 }
 
 static char *dump_current_code_panel_text(void) {
@@ -809,6 +821,7 @@ static void test_example_catalog_metadata(void) {
         const char *name = repl_example_name(idx);
         const char *const *lines = repl_example_lines(idx);
         const char *group = repl_example_subheading(idx);
+        ReplExampleSourceFormat format = repl_example_source_format(idx);
 
         snprintf(label, sizeof(label), "example %d has name", idx);
         ASSERT_TRUE(label, name != NULL && name[0] != '\0');
@@ -816,6 +829,9 @@ static void test_example_catalog_metadata(void) {
         ASSERT_TRUE(label, lines != NULL && lines[0] != NULL);
         snprintf(label, sizeof(label), "example %d has group", idx);
         ASSERT_TRUE(label, group != NULL && group[0] != '\0');
+        snprintf(label, sizeof(label), "example %d has supported source format", idx);
+        ASSERT_TRUE(label, format == REPL_EXAMPLE_SOURCE_GLR ||
+                           format == REPL_EXAMPLE_SOURCE_C);
 
         for (int other = idx + 1; other < example_count; other++) {
             const char *other_name = repl_example_name(other);
@@ -825,11 +841,13 @@ static void test_example_catalog_metadata(void) {
                         !name || !other_name || strcmp(name, other_name) != 0);
         }
 
-        for (int li = 0; lines && lines[li]; li++) {
-            snprintf(label, sizeof(label),
-                     "example %d line %d does not carry catalog name metadata",
-                     idx, li);
-            ASSERT_TRUE(label, strstr(lines[li], "@scene-name") == NULL);
+        if (format == REPL_EXAMPLE_SOURCE_GLR) {
+            for (int li = 0; lines && lines[li]; li++) {
+                snprintf(label, sizeof(label),
+                         "example %d line %d does not carry catalog name metadata",
+                         idx, li);
+                ASSERT_TRUE(label, strstr(lines[li], "@scene-name") == NULL);
+            }
         }
     }
 
@@ -841,6 +859,130 @@ static void test_example_catalog_metadata(void) {
                 repl_example_lines(example_count) == NULL);
     ASSERT_TRUE("negative example lines are NULL",
                 repl_example_lines(-1) == NULL);
+    ASSERT_TRUE("out-of-range example format defaults to raw snippet",
+                repl_example_source_format(example_count) == REPL_EXAMPLE_SOURCE_GLR);
+}
+
+static void test_runtime_examples_dir_catalog(const char *temp_dir) {
+    int builtin_count = repl_example_count();
+    char root[512];
+    char scenes_dir[512];
+    char catalog_path[512];
+    char glr_path[512];
+    char c_path[512];
+    char bad_path[512];
+    char err[512];
+    char *dump;
+
+    snprintf(root, sizeof(root), "%s/runtime_examples", temp_dir);
+    snprintf(scenes_dir, sizeof(scenes_dir), "%s/scenes", root);
+    snprintf(catalog_path, sizeof(catalog_path), "%s/catalog.ini", root);
+    snprintf(glr_path, sizeof(glr_path), "%s/raw-points.glr", scenes_dir);
+    snprintf(c_path, sizeof(c_path), "%s/exported-lines.c", scenes_dir);
+    snprintf(bad_path, sizeof(bad_path), "%s/bad.txt", scenes_dir);
+
+    ASSERT_TRUE("runtime examples root mkdir", mkdir(root, 0700) == 0);
+    ASSERT_TRUE("runtime examples scenes mkdir", mkdir(scenes_dir, 0700) == 0);
+    ASSERT_TRUE("runtime .glr scene written",
+                write_text_path(glr_path,
+                                "// @cfg view_mode = 1\n"
+                                "glBegin(GL_POINTS);\n"
+                                "glVertex3f(0, 0, 0);\n"
+                                "glEnd();\n"));
+    ASSERT_TRUE("runtime .c scene written",
+                write_text_path(c_path,
+                                "#include <GL/glut.h>\n"
+                                "\n"
+                                "void display(void) {\n"
+                                "  // Snippet start\n"
+                                "  glBegin(GL_LINES);\n"
+                                "  glVertex3f(0, 0, 0);\n"
+                                "  glVertex3f(1, 0, 0);\n"
+                                "  glEnd();\n"
+                                "  // Snippet end\n"
+                                "}\n"));
+    ASSERT_TRUE("runtime catalog written",
+                write_text_path(catalog_path,
+                                "[raw-points]\n"
+                                "file = scenes/raw-points.glr\n"
+                                "name = Runtime raw points\n"
+                                "tags = 2D, Lines\n"
+                                "group = Runtime\n"
+                                "\n"
+                                "[exported-lines]\n"
+                                "file = scenes/exported-lines.c\n"
+                                "name = Runtime exported lines\n"
+                                "tags = 3D, Lines\n"
+                                "group = Runtime\n"));
+
+    err[0] = '\0';
+    ASSERT_TRUE("runtime examples dir loads",
+                repl_examples_load_dir(root, err, sizeof(err)));
+    ASSERT_TRUE("runtime examples replace compiled count",
+                repl_example_count() == 2 && builtin_count != 2);
+    ASSERT_TRUE("runtime first name from catalog",
+                strcmp(repl_example_name(0), "Runtime raw points") == 0);
+    ASSERT_TRUE("runtime first format is glr",
+                repl_example_source_format(0) == REPL_EXAMPLE_SOURCE_GLR);
+    ASSERT_TRUE("runtime second format is c",
+                repl_example_source_format(1) == REPL_EXAMPLE_SOURCE_C);
+    ASSERT_TRUE("runtime group from catalog",
+                strcmp(repl_example_subheading(1), "Runtime") == 0);
+    ASSERT_TRUE("runtime raw tags include 2D",
+                repl_example_has_tag(0, REPL_EXAMPLE_TAG_2D));
+    ASSERT_TRUE("runtime c tags include 3D",
+                repl_example_has_tag(1, REPL_EXAMPLE_TAG_3D));
+
+    load_example_for_test(0);
+    ASSERT_TRUE("runtime .glr example loads",
+                repl_state_document_count() == 3);
+    ASSERT_TRUE("runtime .glr cfg applies",
+                glr_state_presentation().ortho_mode == RENDER3D_VIEW_2D);
+
+    load_example_for_test(1);
+    ASSERT_TRUE("runtime .c example imports",
+                repl_state_document_count() == 4);
+    ASSERT_TRUE("runtime .c example keeps cmds valid",
+                examples_have_no_invalid_cmds());
+    dump = dump_current_code_panel_text();
+    ASSERT_TRUE("runtime .c dump alloc", dump != NULL);
+    if (dump) {
+        ASSERT_TRUE("runtime .c import loaded snippet body",
+                    strstr(dump, "glVertex3f(1, 0, 0);") != NULL);
+        ASSERT_TRUE("runtime .c import hid snippet markers",
+                    strstr(dump, "Snippet start") == NULL);
+        free(dump);
+    }
+
+    ASSERT_TRUE("runtime bad extension scene written",
+                write_text_path(bad_path, "glBegin(GL_POINTS);\n"));
+    ASSERT_TRUE("runtime bad catalog written",
+                write_text_path(catalog_path,
+                                "[bad]\n"
+                                "file = scenes/bad.txt\n"
+                                "name = Bad extension\n"
+                                "tags = 2D\n"
+                                "group = Runtime\n"));
+    err[0] = '\0';
+    ASSERT_TRUE("runtime loader rejects unsupported extension",
+                !repl_examples_load_dir(root, err, sizeof(err)) &&
+                strstr(err, ".glr or .c") != NULL);
+    ASSERT_TRUE("failed runtime load leaves previous catalog active",
+                repl_example_count() == 2 &&
+                strcmp(repl_example_name(0), "Runtime raw points") == 0);
+
+    repl_examples_clear_runtime_catalog();
+    ASSERT_TRUE("runtime examples clear restores compiled catalog",
+                repl_example_count() == builtin_count);
+
+    if (!g_keep_temp) {
+        remove(bad_path);
+        remove(c_path);
+        remove(glr_path);
+        remove(catalog_path);
+        rmdir(scenes_dir);
+        rmdir(root);
+    }
 }
 
 static void test_example_tag_metadata(void) {
@@ -1370,6 +1512,7 @@ int main(int argc, char **argv) {
     }
 
     repl_eval_init_predef_vars();
+    test_runtime_examples_dir_catalog(temp_dir);
     test_example_catalog_metadata();
     test_example_tag_metadata();
     test_example_subheading_metadata();

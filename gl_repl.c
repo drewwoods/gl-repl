@@ -4,6 +4,7 @@
 #include "app/glr_audio.h"
 #include "app/glr_mesh_export.h"
 #include "app/glr_paths.h"
+#include "repl/examples.h"
 
 #include <ctype.h>
 #include <dirent.h>
@@ -204,6 +205,8 @@ static void print_usage(const char *prog) {
             "               (for color-managed viewers; pair with --export-ply)\n"
             "  --example <name|idx>  Start on a built-in example (name is\n"
             "               case-insensitive; or a 0-based index)\n"
+            "  --examples-dir <dir>  Load example catalog.ini + scenes/ from\n"
+            "               <dir> at runtime instead of compiled-in examples\n"
             "  --list-examples  Print the built-in examples and exit\n"
             "  --time <secs>  Set the initial animation time t at startup\n"
             "               (else GLR_TIME; --time wins). Start animations later.\n"
@@ -426,6 +429,7 @@ static void on_sigint(int sig) {
 int main(int argc, char **argv) {
     const char *input_file = NULL;
     const char *example_arg = NULL;
+    const char *examples_dir = NULL;
     const char *assets_override = NULL;   /* --assets DIR (else GLR_ASSETS_DIR) */
     const char *time_arg = NULL;          /* --time SECS (else GLR_TIME) */
     int dump_code = 0;
@@ -433,6 +437,7 @@ int main(int argc, char **argv) {
     int dump_flat_histogram = 0;
     int dump_state_layout = 0;
     int no_audio  = 0;
+    int list_examples_flag = 0;
     int use_accum = 1;
     int window_w  = 1200;
     int window_h  = 800;
@@ -477,6 +482,8 @@ int main(int argc, char **argv) {
             assets_override = argv[++i];
         else if (strcmp(argv[i], "--example") == 0 && i + 1 < argc)
             example_arg = argv[++i];
+        else if (strcmp(argv[i], "--examples-dir") == 0 && i + 1 < argc)
+            examples_dir = argv[++i];
         else if (strcmp(argv[i], "--time") == 0 && i + 1 < argc)
             time_arg = argv[++i];
         else if (strcmp(argv[i], "--window") == 0 && i + 1 < argc) {
@@ -494,11 +501,24 @@ int main(int argc, char **argv) {
             }
         }
         else if (strcmp(argv[i], "--list-examples") == 0) {
-            list_examples(stdout);
-            return 0;
+            list_examples_flag = 1;
         }
         else if (!input_file)
             input_file = argv[i];
+    }
+
+    if (examples_dir) {
+        char err[512];
+        if (!repl_examples_load_dir(examples_dir, err, sizeof(err))) {
+            fprintf(stderr, "gl-repl: could not load examples from %s: %s\n",
+                    examples_dir, err[0] ? err : "unknown error");
+            return 1;
+        }
+    }
+
+    if (list_examples_flag) {
+        list_examples(stdout);
+        return 0;
     }
 
     /* Resolve --example up front: a bad name fails fast (before opening a

@@ -17,6 +17,11 @@ TAG_MACROS = {
     "Lines": "EXAMPLE_TAG_LINES",
 }
 
+FORMAT_MACROS = {
+    ".glr": "REPL_EXAMPLE_SOURCE_GLR",
+    ".c": "REPL_EXAMPLE_SOURCE_C",
+}
+
 REQUIRED_KEYS = {"file", "name", "tags", "group"}
 SECTION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 
@@ -132,8 +137,9 @@ def read_catalog(catalog_path: Path) -> list[dict[str, object]]:
             file_path.relative_to(scenes_dir)
         except ValueError as exc:
             raise ExampleError(f"[{section}] file must live under examples/scenes") from exc
-        if file_path.suffix != ".c":
-            raise ExampleError(f"[{section}] file must have a .c extension")
+        format_macro = FORMAT_MACROS.get(file_path.suffix)
+        if not format_macro:
+            raise ExampleError(f"[{section}] file must have a .glr or .c extension")
         if not file_path.is_file():
             raise ExampleError(f"[{section}] missing scene file: {rel_file}")
         if file_path in seen_files:
@@ -160,6 +166,7 @@ def read_catalog(catalog_path: Path) -> list[dict[str, object]]:
                 "file": rel_file,
                 "symbol": symbol,
                 "tags": tags,
+                "format": format_macro,
                 "lines": lines,
             }
         )
@@ -188,6 +195,7 @@ def render(entries: list[dict[str, object]]) -> str:
         tag_expr = " | ".join(entry["tags"])  # type: ignore[arg-type]
         out.append(f"    {{ {c_string(str(entry['name']))}, {entry['symbol']},")
         out.append(f"      {tag_expr},")
+        out.append(f"      {entry['format']},")
         out.append(f"      {c_string(str(entry['group']))} }},")
     out.append("};")
     out.append("")

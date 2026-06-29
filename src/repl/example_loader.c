@@ -377,9 +377,7 @@ static void emit_example_body_two_pass(const char *const *body,
     }
 }
 
-static int load_example_lines(const char *const *lines,
-                              unsigned int tag_mask) {
-    const char *const *body = lines;
+static void reset_example_load_state(unsigned int tag_mask) {
     ReplCommandStore store = repl_command_store_live();
 
     /* Ask the host to restore tutorial-mutated cfg before the example
@@ -406,6 +404,13 @@ static int load_example_lines(const char *const *lines,
      * outgoing scene so funcN free-slot allocation starts fresh. */
     repl_func_alias_clear_all();
     reset_example_presentation_defaults(tag_mask);
+}
+
+static int load_example_lines(const char *const *lines,
+                              unsigned int tag_mask) {
+    const char *const *body = lines;
+
+    reset_example_load_state(tag_mask);
 
     if (body)
         body += consume_example_cfg_header(body);
@@ -458,6 +463,22 @@ static int load_example_lines(const char *const *lines,
     return repl_state_document_count();
 }
 
+static int load_example_c_source(const char *const *lines,
+                                 unsigned int tag_mask,
+                                 const char *name) {
+    reset_example_load_state(tag_mask);
+
+    if (!repl_export_load_from_lines(lines, name ? name : "example.c", NULL)) {
+        repl_dispatch_input_reset();
+        repl_mark_source_dirty();
+        return 0;
+    }
+
+    repl_dispatch_input_reset();
+    repl_mark_source_dirty();
+    return repl_state_document_count();
+}
+
 static int load_example(int idx) {
     int count = repl_example_count();
     const char *const *lines;
@@ -477,7 +498,13 @@ static int load_example(int idx) {
      * cfg toggles before applying the destination's saved cfg. */
     repl_scenes_capture_pre_example_cfg_if_entering();
 
-    int new_edit_line = load_example_lines(lines, repl_example_tag_mask(idx));
+    int new_edit_line;
+    if (repl_example_source_format(idx) == REPL_EXAMPLE_SOURCE_C)
+        new_edit_line = load_example_c_source(lines, repl_example_tag_mask(idx), name);
+    else
+        new_edit_line = load_example_lines(lines, repl_example_tag_mask(idx));
+    if (new_edit_line <= 0)
+        return 0;
     repl_state_scenes_set_active_example_idx(idx);
     repl_scenes_mark_example_active();
     char msg[REPL_DIAG_TEXT_MAX];

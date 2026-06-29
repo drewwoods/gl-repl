@@ -1986,29 +1986,211 @@ static void import_flush_accum(ImportState *s, char *accum, int accum_line_no,
     *truncated = 0;
 }
 
-int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
+static void import_begin_load(ImportState *state, ReplImportResult *result) {
     if (result) {
         result->scene_name[0]    = '\0';
         result->workspace_dir[0] = '\0';
     }
     import_clear_pending_result_fields();
-    FILE *f = fopen(filename, "r");
-    if (!f) return 0;
-
-    ImportState state;
-    import_state_init(&state);
+    import_state_init(state);
     import_cam_parser_reset();
     repl_func_alias_clear_all();
+}
+
+static void import_process_physical_line(ImportState *state,
+                                         char *line,
+                                         char *accum,
+                                         int *accum_line_no,
+                                         int *accum_depth,
+                                         int *accum_truncated) {
+    char normalized_line[MAX_LINE_LEN];
+    const char *proc_line = line;
+
+    if (import_normalize_c89_comment_line(line, normalized_line, sizeof(normalized_line)))
+        proc_line = normalized_line;
+
+    if (is_line_comment_or_directive(proc_line)) {
+        /* A blank, comment, or directive line that falls inside an
+         * in-progress statement (open bracket, or no terminator
+         * seen yet) is dropped — keep accumulating rather than
+         * flushing a half-built statement. With nothing in progress
+         * it is a standalone line, processed as before. */
+        if (accum[0])
+            return;
+        const char *p = proc_line;
+        while (*p && isspace((unsigned char)*p)) p++;
+        import_process_line(state, p, proc_line);
+        return;
+    }
+
+    const char *app = proc_line;
+    while (*app && isspace((unsigned char)*app)) app++;
+
+    if (!accum[0]) {
+        *accum_line_no = state->line_no;
+        *accum_depth = 0;
+        *accum_truncated = 0;
+    }
+
+    size_t accum_len = strlen(accum);
+    if (accum_len > 0 && accum[accum_len - 1] != ' ') {
+        if (accum_len + 1 < MAX_LINE_LEN) {
+            accum[accum_len++] = ' ';
+            accum[accum_len] = '\0';
+        } else {
+            *accum_truncated = 1;
+        }
+    }
+
+    int code_len = 0;
+    char last = scan_code_line(app, accum_depth, &code_len);
+    /* Complete when no bracket is open and the last code char closes
+     * a statement (`;`), opens/closes a block (`{`/`}`), or ends a
+     * label (`:`). The depth gate is what stops a split compound
+     * literal — `(GLfloat[]){` — or a ternary `:` from flushing
+     * mid-expression. */
+    int complete = *accum_depth <= 0 && is_stmt_terminator(last);
+
+    /* On a continuation line, append only the code portion so a
+     * trailing `// ...` can't bleed into the rest of the statement.
+     * On the line that completes the statement, append it whole,
+     * including any trailing comment — the parser keeps inline
+     * comments on a command. */
+    size_t seg_len = complete ? strlen(app) : (size_t)code_len;
+    size_t avail = MAX_LINE_LEN - 1 - accum_len;
+    size_t take = seg_len <= avail ? seg_len : avail;
+    if (take < seg_len)
+        *accum_truncated = 1;
+    memcpy(accum + accum_len, app, take);
+    accum[accum_len + take] = '\0';
+
+    if (complete) {
+        import_flush_accum(state, accum, *accum_line_no, accum_truncated);
+        *accum_depth = 0;
+    }
+}
+
+static int import_finish_load(ImportState *state,
+                              ReplImportResult *result,
+                              const char *source_name,
+                              int had_read_err,
+                              int close_failed,
+                              int truncated_line,
+                              char *accum,
+                              int accum_line_no,
+                              int *accum_truncated) {
+    const char *label = source_name && source_name[0] ? source_name : "<memory>";
+
+    if (!truncated_line)
+        import_flush_accum(state, accum, accum_line_no, accum_truncated);
+
+    /* Mirror the save-side ferror/fclose pair: fgets returning NULL
+     * conflates EOF with read error, so the read-loop above can't
+     * surface I/O failures by itself. Check ferror before closing. */
+    if (had_read_err || close_failed) {
+        import_workspace_accum_reset(&state->workspace);
+        import_clear_pending_result_fields();
+        char msg[REPL_STATUS_TEXT_MAX];
+        snprintf(msg, sizeof(msg), "Error: cannot read %s", label);
+        repl_set_status_error(msg);
+        return 0;
+    }
+    if (truncated_line) {
+        import_workspace_accum_reset(&state->workspace);
+        import_clear_pending_result_fields();
+        char msg[REPL_STATUS_TEXT_MAX];
+        snprintf(msg, sizeof(msg), "Import failed: line too long in %s", label);
+        repl_set_status_error(msg);
+        return 0;
+    }
+
+    /* Values are restored directly when @declare is parsed from the stash. */
+
+    /* Drain @cfg accumulator: hand the parsed (slug, val) bag to the
+     * controller-installed bridge, which knows how to apply each slug
+     * to its owner's state. Without a bridge (the demo case), the
+     * accumulator is dropped silently — that's the architectural goal
+     * (no glr_config dependency from src/repl/import.c). */
+    import_workspace_cfg_apply_and_reset(&state->workspace);
+
+    if (result) {
+        snprintf(result->scene_name, sizeof(result->scene_name),
+                 "%s", g_pending_scene_name);
+        snprintf(result->workspace_dir, sizeof(result->workspace_dir),
+                 "%s", g_pending_workspace_dir);
+    }
+
+    if (state->loaded > 0) {
+        repl_source_scope_depth_cache_invalidate();
+        repl_reformat_program();
+        /* Publish the post-import cursor to the host. Without this,
+         * downstream callers (e.g. repl_load_scene_as_new_slot, which
+         * snapshots via repl_dispatch_edit_line_get right after this
+         * returns) see the pre-import value — leaving Load Scene From
+         * File parked at line 0 with insert mode off, so the next
+         * commit replaces the first imported command instead of
+         * appending (implemented in phase 4; see the
+         * edit-line-ownership plan doc). */
+        repl_dispatch_edit_line_set(state->edit_line);
+        char msg[REPL_STATUS_TEXT_MAX];
+        if (state->warnings > 0)
+            snprintf(msg, sizeof(msg),
+                     "Loaded %d commands from %s (%d warnings)",
+                     state->loaded, label, state->warnings);
+        else
+            snprintf(msg, sizeof(msg),
+                     "Loaded %d commands from %s", state->loaded, label);
+        repl_set_status(msg);
+        fprintf(stderr, "%s\n", msg);
+    }
+    return state->loaded > 0;
+}
+
+int repl_export_load_from_lines(const char *const *lines,
+                                const char *source_name,
+                                ReplImportResult *result) {
+    ImportState state;
+    import_begin_load(&state, result);
+
+    int truncated_line = 0;
+    char accum[MAX_LINE_LEN] = "";
+    int accum_line_no = 0;
+    int accum_depth = 0;
+    int accum_truncated = 0;
+
+    for (int i = 0; lines && lines[i]; i++) {
+        size_t raw_len = strlen(lines[i]);
+        if (raw_len >= sizeof(accum)) {
+            truncated_line = 1;
+            break;
+        }
+        char line[MAX_LINE_LEN];
+        memcpy(line, lines[i], raw_len + 1);
+        state.line_no++;
+        import_process_physical_line(&state, line, accum,
+                                     &accum_line_no, &accum_depth,
+                                     &accum_truncated);
+    }
+
+    return import_finish_load(&state, result, source_name,
+                              0, 0, truncated_line, accum,
+                              accum_line_no, &accum_truncated);
+}
+
+int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
+    ImportState state;
+    import_begin_load(&state, result);
+
+    FILE *f = fopen(filename, "r");
+    if (!f) return 0;
 
     char line[MAX_LINE_LEN];
     int truncated_line = 0;
     char accum[MAX_LINE_LEN] = "";
-    int accum_line_no   = 0;
-    int accum_depth     = 0;
+    int accum_line_no = 0;
+    int accum_depth = 0;
     int accum_truncated = 0;
     while (fgets(line, sizeof(line), f)) {
-        char normalized_line[MAX_LINE_LEN];
-        const char *proc_line = line;
         state.line_no++;
         size_t raw_len = strlen(line);
         if (raw_len > 0 &&
@@ -2025,131 +2207,14 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
         while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r'))
             line[--len] = '\0';
 
-        if (import_normalize_c89_comment_line(line, normalized_line, sizeof(normalized_line)))
-            proc_line = normalized_line;
-
-        if (is_line_comment_or_directive(proc_line)) {
-            /* A blank, comment, or directive line that falls inside an
-             * in-progress statement (open bracket, or no terminator
-             * seen yet) is dropped — keep accumulating rather than
-             * flushing a half-built statement. With nothing in progress
-             * it is a standalone line, processed as before. */
-            if (accum[0]) continue;
-            const char *p = proc_line;
-            while (*p && isspace((unsigned char)*p)) p++;
-            import_process_line(&state, p, proc_line);
-            continue;
-        }
-
-        const char *app = proc_line;
-        while (*app && isspace((unsigned char)*app)) app++;
-
-        if (!accum[0]) {
-            accum_line_no   = state.line_no;
-            accum_depth     = 0;
-            accum_truncated = 0;
-        }
-
-        size_t accum_len = strlen(accum);
-        if (accum_len > 0 && accum[accum_len - 1] != ' ') {
-            if (accum_len + 1 < sizeof(accum)) {
-                accum[accum_len++] = ' ';
-                accum[accum_len]   = '\0';
-            } else {
-                accum_truncated = 1;
-            }
-        }
-
-        int code_len = 0;
-        char last = scan_code_line(app, &accum_depth, &code_len);
-        /* Complete when no bracket is open and the last code char closes
-         * a statement (`;`), opens/closes a block (`{`/`}`), or ends a
-         * label (`:`). The depth gate is what stops a split compound
-         * literal — `(GLfloat[]){` — or a ternary `:` from flushing
-         * mid-expression. */
-        int complete = accum_depth <= 0 && is_stmt_terminator(last);
-
-        /* On a continuation line, append only the code portion so a
-         * trailing `// ...` can't bleed into the rest of the statement.
-         * On the line that completes the statement, append it whole,
-         * including any trailing comment — the parser keeps inline
-         * comments on a command. */
-        size_t seg_len = complete ? strlen(app) : (size_t)code_len;
-        size_t avail   = sizeof(accum) - 1 - accum_len;
-        size_t take    = seg_len <= avail ? seg_len : avail;
-        if (take < seg_len) accum_truncated = 1;
-        memcpy(accum + accum_len, app, take);
-        accum[accum_len + take] = '\0';
-
-        if (complete) {
-            import_flush_accum(&state, accum, accum_line_no, &accum_truncated);
-            accum_depth = 0;
-        }
+        import_process_physical_line(&state, line, accum,
+                                     &accum_line_no, &accum_depth,
+                                     &accum_truncated);
     }
 
-    if (!truncated_line)
-        import_flush_accum(&state, accum, accum_line_no, &accum_truncated);
-
-    /* Mirror the save-side ferror/fclose pair: fgets returning NULL
-     * conflates EOF with read error, so the read-loop above can't
-     * surface I/O failures by itself. Check ferror before closing. */
     int had_read_err = ferror(f);
     int close_failed = fclose(f) != 0;
-    if (had_read_err || close_failed) {
-        import_workspace_accum_reset(&state.workspace);
-        import_clear_pending_result_fields();
-        char msg[REPL_STATUS_TEXT_MAX];
-        snprintf(msg, sizeof(msg), "Error: cannot read %s", filename);
-        repl_set_status_error(msg);
-        return 0;
-    }
-    if (truncated_line) {
-        import_workspace_accum_reset(&state.workspace);
-        import_clear_pending_result_fields();
-        char msg[REPL_STATUS_TEXT_MAX];
-        snprintf(msg, sizeof(msg), "Import failed: line too long in %s", filename);
-        repl_set_status_error(msg);
-        return 0;
-    }
-
-    /* Values are restored directly when @declare is parsed from the stash. */
-
-    /* Drain @cfg accumulator: hand the parsed (slug, val) bag to the
-     * controller-installed bridge, which knows how to apply each slug
-     * to its owner's state. Without a bridge (the demo case), the
-     * accumulator is dropped silently — that's the architectural goal
-     * (no glr_config dependency from src/repl/import.c). */
-    import_workspace_cfg_apply_and_reset(&state.workspace);
-
-    if (result) {
-        snprintf(result->scene_name, sizeof(result->scene_name),
-                 "%s", g_pending_scene_name);
-        snprintf(result->workspace_dir, sizeof(result->workspace_dir),
-                 "%s", g_pending_workspace_dir);
-    }
-
-    if (state.loaded > 0) {
-        repl_source_scope_depth_cache_invalidate();
-        repl_reformat_program();
-        /* Publish the post-import cursor to the host. Without this,
-         * downstream callers (e.g. repl_load_scene_as_new_slot, which
-         * snapshots via repl_dispatch_edit_line_get right after this
-         * returns) see the pre-import value — leaving Load Scene From
-         * File parked at line 0 with insert mode off, so the next
-         * commit replaces the first imported command instead of
-         * appending (implemented in phase 4; see the
-         * edit-line-ownership plan doc). */
-        repl_dispatch_edit_line_set(state.edit_line);
-        char msg[REPL_STATUS_TEXT_MAX];
-        if (state.warnings > 0)
-            snprintf(msg, sizeof(msg),
-                     "Loaded %d commands from %s (%d warnings)",
-                     state.loaded, filename, state.warnings);
-        else
-            snprintf(msg, sizeof(msg),
-                     "Loaded %d commands from %s", state.loaded, filename);
-        repl_set_status(msg);
-        fprintf(stderr, "%s\n", msg);
-    }
-    return state.loaded > 0;
+    return import_finish_load(&state, result, filename,
+                              had_read_err, close_failed, truncated_line,
+                              accum, accum_line_no, &accum_truncated);
 }

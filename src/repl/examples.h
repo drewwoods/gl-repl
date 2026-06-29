@@ -1,15 +1,17 @@
 /*
  * src/repl/examples.h - Built-in example library.
  *
- * Registry of predefined example programs (geometry demos, shader examples,
- * animation techniques, etc.). Examples are compiled into the binary as constant
- * string arrays and can be loaded by the user via F12 cycling or the Example
- * dropdown menu.
+ * Registry of predefined example programs (geometry demos, animation
+ * techniques, etc.). Examples are normally compiled into the binary as
+ * generated string arrays and can be loaded by the user via F12 cycling or the
+ * Example dropdown menu. A runtime examples directory may replace the generated
+ * catalog for authoring.
  *
- * Example structure: Each example is an array of REPL source lines (commands,
- * declarations, for/func/if blocks, etc.) plus a display name. Lines are
- * formatted and ready to feed through the commit pipeline without modification.
- * Examples may include leading metadata:
+ * Example structure: Each example is an array of source lines plus a display
+ * name and source format. `.glr` examples are REPL source lines formatted and
+ * ready to feed through the commit pipeline without modification. `.c`
+ * examples are full exported/importable C sources and load through the import
+ * path. `.glr` examples may include leading metadata:
  *   - @cfg directives to customize scene presentation (grid theme, axes,
  *     overlays, backdrop, etc.). Metadata is stripped before the code-panel
  *     renders the example.
@@ -33,8 +35,9 @@
  *
  * Query API: repl_example_count() returns the total number of examples;
  * repl_example_name() retrieves an example's display name; repl_example_lines()
- * retrieves the source line array for loading. Used by the UI to populate the
- * Example dropdown and by src/repl/example_loader.c to load examples.
+ * retrieves the source line array, and repl_example_source_format() selects the
+ * loader. Used by the UI to populate the Example dropdown and by
+ * src/repl/example_loader.c to load examples.
  */
 #ifndef REPL_EXAMPLES_H
 #define REPL_EXAMPLES_H
@@ -43,11 +46,21 @@
 
 #include "repl/catalog_tags.h"  /* repl_catalog_tag_bit_for_count */
 
+typedef enum {
+    REPL_EXAMPLE_SOURCE_GLR = 0, /* raw REPL/example-source lines */
+    REPL_EXAMPLE_SOURCE_C        /* full exported/importable C source */
+} ReplExampleSourceFormat;
+
 /* Query the source line array for an example. Returns a null-terminated array
- * of REPL command strings (ready to feed through the commit pipeline). Index
- * must be in range [0, repl_example_count()). The returned pointer is valid
- * for the lifetime of the program. Used by src/repl/example_loader.c to load examples. */
+ * whose interpretation depends on repl_example_source_format(idx). Index must
+ * be in range [0, repl_example_count()). The returned pointer is valid until
+ * the runtime examples catalog is replaced or cleared. */
 const char *const *repl_example_lines(int idx);
+
+/* Query how repl_example_lines() should be loaded. `.glr` catalog files are
+ * raw REPL/example-source snippets; `.c` catalog files are complete exported-C
+ * files and must be fed through the import path. */
+ReplExampleSourceFormat repl_example_source_format(int idx);
 
 /* Query the display name of an example (shown in the Example dropdown and menu).
  * Returns a pointer to a constant string. Index must be in range [0,
@@ -94,6 +107,14 @@ int repl_example_visible_tag_at(int dense_idx);
  * chrome row. Catalog authors must keep same-subheading entries contiguous
  * per tag (enforced by test_example_subheading_metadata). */
 const char *repl_example_subheading(int example_idx);
+
+/* Optional runtime override for development/live iteration. `dir` must contain
+ * a catalog.ini with file paths under `dir/scenes`. On success, the query API
+ * serves that catalog instead of the compiled-in generated data. Passing a bad
+ * directory leaves the current catalog unchanged and writes a diagnostic to
+ * err_buf when provided. */
+int  repl_examples_load_dir(const char *dir, char *err_buf, int err_sz);
+void repl_examples_clear_runtime_catalog(void);
 
 static inline unsigned int repl_example_tag_bit(int tag_idx) {
     return repl_catalog_tag_bit_for_count(tag_idx, repl_example_tag_count());

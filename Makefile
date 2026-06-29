@@ -459,7 +459,7 @@ HDRS = \
 	source_document.h
 
 EXAMPLES_CATALOG = examples/catalog.ini
-EXAMPLE_SCENE_SRCS = $(wildcard examples/scenes/*.c)
+EXAMPLE_SCENE_SRCS = $(wildcard examples/scenes/*.glr) $(wildcard examples/scenes/*.c)
 GENERATED_EXAMPLES_INC = build/generated/repl_examples_data.inc
 
 UI_SRCS = $(UI_CORE_SRCS) $(UI_APP_SRCS)

@@ -171,7 +171,7 @@ file format (writer in [`export.c`](src/repl/export.c), reader in [`import.c`](s
 | [`scenes.c`](src/repl/scenes.c) / `.h`, [`scene_snapshot.c`](src/repl/scene_snapshot.c) / `.h` | User-scene slots (LRU, promotion); copyable scene payload |
 | [`workspace_io.c`](src/repl/workspace_io.c) / `.h`, [`cfg_baseline.c`](src/repl/cfg_baseline.c) / `.h` | Workspace filesystem + file-naming mechanics; flat key/value config bag |
 | **Program-adjacent data** | |
-| [`examples.c`](src/repl/examples.c) / `.h`, [`example_loader.c`](src/repl/example_loader.c) / `.h` | Generated built-in example catalog facade; example load + `@cfg` / `// camera` metadata. Authored source lives in repository-level `examples/catalog.ini` and `examples/scenes/` |
+| [`examples.c`](src/repl/examples.c) / `.h`, [`example_loader.c`](src/repl/example_loader.c) / `.h` | Built-in example catalog facade; example load + `.glr` snippets, `.c` import sources, and `@cfg` / `// camera` metadata. Authored source lives in repository-level `examples/catalog.ini` and `examples/scenes/`; `--examples-dir` can replace the compiled-in catalog at runtime for authoring |
 | [`tutorials.c`](src/repl/tutorials.c) / `.h`, [`catalog_tags.h`](src/repl/catalog_tags.h) | Tutorial catalog; shared example/tutorial tag-bit helper |
 | [`help_text.c`](src/repl/help_text.c) / `.h`, [`keymap_format.c`](src/repl/keymap_format.c) | F1 help-text tables; user-facing keybinding labels |
 

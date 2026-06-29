@@ -916,9 +916,10 @@ translucency, and bitmap text); the intent is the whole catalog over
 time. The palette is documented once in
 [`examples/README.md`](../examples/README.md) and applied as literal
 `glColor*` / `gluColor` / `glClearColor` values in the affected scene files
-under [`examples/scenes/`](../examples/scenes/) (the example data is raw GL
-source strings — there is no macro-substitution layer, so the README is the
-single source of truth and the values are spelled out per scene):
+under [`examples/scenes/`](../examples/scenes/) (`.glr` scenes are raw REPL
+source strings and `.c` scenes are full exported/importable files; neither has
+a macro-substitution layer, so the README is the single source of truth and
+the values are spelled out per scene):
 
 | Role | RGB | Use |
 |------|-----|-----|

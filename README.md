@@ -71,7 +71,7 @@ glEnd();
 make gl-repl
 
 ./gl-repl                  # fresh session — type GL commands, ; after each
-./gl-repl --example 8      # or start from a built-in (F12 cycles all 27)
+./gl-repl --example 8      # or start from a built-in (F12 cycles all 29)
 ./gl-repl output.c         # reload a saved session
 ```
 

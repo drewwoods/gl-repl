@@ -81,12 +81,15 @@ The most common contributions, recipe-style:
 `g_cfg_items[]` in [`src/app/glr_actions.c`](../src/app/glr_actions.c) under the right `### ` section.
 The count auto-computes and the item joins its section's flyout menu.
 
-**A new built-in example** — add a snippet under [`examples/scenes/`](../examples/scenes/)
+**A new built-in example** — add a scene under [`examples/scenes/`](../examples/scenes/)
 and a matching entry in [`examples/catalog.ini`](../examples/catalog.ini).
-Scene files may start with optional leading `// @cfg` lines and a `// camera`
-block; display name, tags, and group live in the catalog. Mind the 4096
-flat-command budget (hoist loop-invariant assignments out of loops), then run
-`make check-examples-catalog`.
+Use `.glr` for the short REPL snippet format; use `.c` only when the example
+should stay as a full exported/importable C file. `.glr` files may start with
+optional leading `// @cfg` lines and a `// camera` block; display name, tags,
+and group live in the catalog. Mind the 4096 flat-command budget (hoist
+loop-invariant assignments out of loops), then run `make check-examples-catalog`.
+Use `./gl-repl --examples-dir examples --example <name-or-idx>` to test catalog
+edits without rebuilding.
 
 **A new tutorial** — add a `TutorialStep[]` entry to `g_tutorials[]` in
 [`src/repl/tutorials.c`](../src/repl/tutorials.c) with a `.tags` mask; the metadata tests fail if you

@@ -275,6 +275,14 @@ typedef struct {
  * directives (if any) are copied into it before return; pass NULL to drop them. */
 int  repl_export_load_from_file(const char *filename, ReplImportResult *result);
 
+/* Import an in-memory, NULL-terminated source line array using the same parser
+ * as repl_export_load_from_file(). `source_name` is used only for diagnostics.
+ * This lets compiled-in/runtime example catalogs carry full exported-C sources
+ * without writing them to a temporary file first. */
+int  repl_export_load_from_lines(const char *const *lines,
+                                 const char *source_name,
+                                 ReplImportResult *result);
+
 /* Refresh the export header text from current state. Pre-builds the header metadata
  * lines (@cfg, @scene-name, @workspace-dir) from the current predefined
  * variables, render settings, and workspace directory. Called after mutations

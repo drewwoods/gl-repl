@@ -1,33 +1,54 @@
 # Built-In Examples
 
-Built-in examples are authored as REPL scene snippets under `examples/scenes/`
-and listed, in flat load order, by `examples/catalog.ini`.
+Built-in examples are listed, in flat load order, by `examples/catalog.ini`.
+Their source files live under `examples/scenes/` and use one of two formats:
+
+- `.glr` for concise REPL scene snippets. This is the default authoring format.
+- `.c` for full exported/importable C files. These load through the same import
+  path as `./gl-repl output.c`.
 
 Each catalog entry uses a stable section id plus explicit metadata:
 
 ```ini
 [lit-cube]
-file = scenes/lit-cube.c
+file = scenes/lit-cube.glr
 name = Lit cube
 tags = 3D, Polygons
 group = Basics
 ```
 
 - `name` is the user-visible name returned by `repl_example_name()`.
+- `file` must be a relative path under `scenes/` and must end in `.glr` or
+  `.c`.
 - `tags` must use the existing labels: `2D`, `3D`, `Polygons`, `Lines`.
   Do not list `All`; it is synthetic.
 - `group` is the Scene menu flyout subheading returned by
   `repl_example_subheading()`.
 - Section order is the F12 / `--example <idx>` order.
 
-Scene files are plain REPL source lines. They may start with leading
+`.glr` files are plain REPL source lines. They may start with leading
 `// @cfg <slug> = <value>` presentation metadata and then an optional
 `// camera` block before geometry source. Names, tags, and groups belong in the
 catalog, not in scene files.
 
+`.c` files should be normal exported C files with `// Snippet start` /
+`// Snippet end` markers. They are useful when an example is easier to keep as
+a complete import fixture than as the shortened REPL form.
+
 Run `make check-examples-catalog` after editing the catalog or scene files. The
 build generates `build/generated/repl_examples_data.inc` from this directory;
 do not edit generated files.
+
+For live iteration without regenerating or rebuilding, run:
+
+```bash
+./gl-repl --examples-dir examples --list-examples
+./gl-repl --examples-dir examples --example lit
+```
+
+The app still uses the compiled-in generated catalog by default, so app bundles
+and installed binaries do not need the repository `examples/` directory at
+runtime.
 
 ## Example Color Language
 
