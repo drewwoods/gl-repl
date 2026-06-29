@@ -828,7 +828,9 @@ the expected call), change a setting, or drag a variable slider to a target.
 
 **F12** cycles forward through the 29 built-in examples (then your saved
 scenes, then back); **Shift+F12** cycles backward. The Scene menu lists them
-grouped by tag. `./gl-repl --list-examples` prints the set:
+grouped by tag. `./gl-repl --list-examples` prints the compiled-in set.
+Developers can point the app at an editable catalog with
+`./gl-repl --examples-dir examples --example <name-or-idx>`:
 
 ```
  0  Lit cube                      15  Torus knot (animated)
@@ -1030,6 +1032,7 @@ runs.
 ./gl-repl [file.c | workspace-dir]   load a saved scene or a directory of scenes
 
 --example <name|idx>   start on a built-in example (case-insensitive name or index)
+--examples-dir <dir>   load examples from <dir>/catalog.ini and <dir>/scenes/
 --list-examples        print the built-in examples and exit
 --time <secs>          initial animation time t (also GLR_TIME; --time wins)
 --export-ply <path>    capture frame 1 geometry to PLY, then exit
