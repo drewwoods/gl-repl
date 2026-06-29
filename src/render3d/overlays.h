@@ -36,8 +36,9 @@ void render3d_draw_bitmap_text(void *font, float x, float y, float z,
                             const char *str);
 
 /* Outlines and vertex-point overlays are edit_overlays-subsystem passes, not
- * scene primitives. src/subsystems/edit_overlays/ re-executes the user's
- * geometry in GL_LINE or GL_POINT mode and chooses the surrounding GL state;
- * src/scene/ only provides the per-vertex label/arrow helpers above. */
+ * scene primitives. src/subsystems/edit_overlays/ walks authored vertices,
+ * redraws generated glutSolid* geometry in polygon line/point mode where
+ * needed, and chooses the surrounding GL state; src/scene/ only provides the
+ * per-vertex label/arrow helpers above. */
 
 #endif /* RENDER3D_OVERLAYS_H */

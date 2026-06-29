@@ -664,6 +664,14 @@ and section 14b of [`tests/test_repl_core_internal.c`](../tests/test_repl_core_i
 and asserts the shape is redrawn + polygon-mode/offset toggled, gated on
 `GL_STUBS`).
 
+The "Vertex points" overlay keeps its manual `glVertex*` walk for authored
+vertices and replay-only anchors, but has the same generated-geometry escape
+hatch for `glutSolid*`: when the user vertex-points toggle is on,
+`render_vertex_points_glut_pass` redraws GLUT solids under
+`glPolygonMode(GL_FRONT_AND_BACK, GL_POINT)`, then restores `GL_FILL`. This is
+intentionally not used for replay-only mode, where the overlay means "the
+single current authored anchor" rather than "every generated mesh vertex."
+
 ### Cursor Edit Guides
 
 The vertex/normal guides drawn at the cursor line
