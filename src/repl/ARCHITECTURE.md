@@ -597,11 +597,14 @@ C:     sinf(t), powf(2,3),  for (float i=0; i<10; i+=0.5) { … }   ← auto-tra
 Two distinct, independent capacity limits live in [`config.h`](config.h) (the long
 rationale is in [`eval.h`](src/repl/eval.h)):
 
-- **`MAX_PREDEF_VARS = 24`** — global `float x;` slots the user can
-  declare at once. One is reserved for built-in `t`; the float-decl
-  compiler rejects the 24th user var with "variable table full".
+- **`MAX_PREDEF_VARS = 32`** — global `float x;` slots the user can
+  declare at once. One is reserved for built-in `t`, so 31 user-declarable
+  slots remain; the float-decl compiler rejects declarations that would
+  exceed the 32-slot table with "variable table full (max 32)".
 - **`MAX_EXPR_VARS = 32`** — the lexical scope size for *one* expression
-  parse (predef vars + visible loop iterators + function params).
+  parse (visible loop iterators + function params). Predefined globals are
+  supplied separately through `ReplPredefView` / `ExprCtx`, so a full predef
+  table does not consume expression-local slots.
   [`collect_visible_vars_in()`](src/repl/visible_vars.h#L16) ([`visible_vars.c`](src/repl/visible_vars.c)) builds this per parse;
   it reads no live state, so compile passes its context's document view.
 

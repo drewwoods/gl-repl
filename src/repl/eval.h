@@ -60,14 +60,15 @@
  *  -------------
  *  This sizes the per-expression visible-variable list built when compiling a
  *  single expression. It's a lexical scope handed to repl_eval so it can
- *  resolve identifiers like i, j, function parameters, and predef vars at
- *  evaluation time without taking out a global lock.
+ *  resolve identifiers like i, j, and function parameters at evaluation time
+ *  without taking out a global lock. Predefined globals are supplied separately
+ *  through ReplPredefView / ExprCtx.predef_vars.
  *
  *  - Storage: per-call stack arrays — ExprVar vis[MAX_EXPR_VARS] in src/repl/compile.c,
  *    ExprVar vars[MAX_EXPR_VARS] in src/repl/flatten.c, and params[MAX_EXPR_VARS]
  *    in autocomplete hint generation.
  *  - Populated by collect_visible_vars() walking the active for-loop / function-def scope.
- *  - Includes function-call parameters, for-loop iterator vars, and visible predef vars.
+ *  - Includes function-call parameters and for-loop iterator vars, not predef vars.
  *  - Acts as a name-resolution snapshot during one parse/eval call; not persistent state.
  *
  *  Why two
@@ -76,14 +77,13 @@
  *  - MAX_PREDEF_VARS caps how many global identifiers can exist at once.
  *  - MAX_EXPR_VARS caps how many identifiers a single expression's lexical scope can hold while it's being parsed.
  *
- *  They are independent limits (MAX_PREDEF_VARS and MAX_EXPR_VARS need not
- *  be equal — see config.h) and not the same constraint:
+ *  They are independent limits and not the same constraint:
  *
- *  - MAX_EXPR_VARS actually needs to be MAX_PREDEF_VARS + worst-case nested
- *    locals to be fully correct. With deeply nested for-loops each declaring
- *    a fresh iterator name, the visible-name count can exceed MAX_EXPR_VARS;
- *    the parser then truncates the visible-list silently. (Not a great
- *    property, but the headroom between the two values hides it in practice.)
+ *  - The evaluator receives local vars and predefined globals as separate
+ *    lists, so filling MAX_PREDEF_VARS does not crowd out loop/function locals.
+ *  - Deeply nested for-loops or function parameters can still exceed
+ *    MAX_EXPR_VARS; the visible-local list is capped and editor paths surface
+ *    that as a scope-truncation warning.
  *  - MAX_PREDEF_VARS is the user-facing "how many float x; can I have" limit.
  */
 

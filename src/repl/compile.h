@@ -117,7 +117,8 @@ typedef struct {
  *     (MAX_NAMES_PER_DECL * 2 + 1).
  *   - Delete-range can UNDECLARE every live predef in one transaction
  *     (MAX_PREDEF_VARS).
- * MAX_PREDEF_VARS dominates today (24 vs. 17), so we pick that. */
+ * With the default config, MAX_PREDEF_VARS dominates MAX_NAMES_PER_DECL * 2 + 1
+ * (32 vs. 17), so we pick that. */
 #ifndef MAX_PREDEF_OPS_PER_COMMIT
 #define MAX_PREDEF_OPS_PER_COMMIT MAX_PREDEF_VARS
 #endif
