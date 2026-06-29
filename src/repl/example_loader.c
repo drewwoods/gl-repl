@@ -468,15 +468,10 @@ static int load_example_c_source(const char *const *lines,
                                  const char *name) {
     reset_example_load_state(tag_mask);
 
-    if (!repl_export_load_from_lines(lines, name ? name : "example.c", NULL)) {
-        repl_dispatch_input_reset();
-        repl_mark_source_dirty();
-        return 0;
-    }
-
+    int ok = repl_export_load_from_lines(lines, name ? name : "example.c", NULL);
     repl_dispatch_input_reset();
     repl_mark_source_dirty();
-    return repl_state_document_count();
+    return ok ? repl_state_document_count() : 0;
 }
 
 static int load_example(int idx) {
