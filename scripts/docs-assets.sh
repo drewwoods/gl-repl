@@ -261,13 +261,19 @@ EOF
 }
 
 stage_lights() { stage lights <<'EOF'
-/* @cfg light_theme = LIGHT_THEME_STUDIO */
+/* @cfg light_theme = LIGHT_THEME_DEFAULT */
+/* @cfg grid = GRID_THEME_OFF */
 /* @cfg light_indicators = 1 */
 /* @cfg vertex_outlines = 0 */
 /* @cfg vertex_points = 0 */
 /* @cfg code_panel = 3 */
 /* @cfg variable_panel = 0 */
+glTranslatef(0.0000f, 0.0000f, -7.0409f);
+glRotatef(15.5000f, 1.0f, 0.0f, 0.0f);
+glRotatef(-118.0000f, 0.0f, 1.0f, 0.0f);
+glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 // Snippet start
+glClearColor(0.0, 0.0, 0.0, 1.0);
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
 glEnable(GL_LIGHT0);
@@ -283,14 +289,17 @@ EOF
 stage_grid_theme() {  # $1 = GRID_THEME_<NAME>
     stage "grid-$1" <<EOF
 /* @cfg grid = $1 */
+/* @cfg grid_brightness = GRID_BRIGHTNESS_BOLD */
 /* @cfg code_panel = 3 */
 /* @cfg variable_panel = 0 */
-/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_outlines = 1 */
 /* @cfg vertex_points = 0 */
 /* @cfg light_indicators = 0 */
 // Snippet start
 glEnable(GL_DEPTH_TEST);
-glColor3f(0.9, 0.55, 0.15);
+//glColor3f(0.9, 0.55, 0.15);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
 glutSolidCube(0.8);
 // Snippet end
 EOF
@@ -310,13 +319,15 @@ glTranslatef(0.0f, -0.5f, 0.0f);'
 /* @cfg grid = GRID_THEME_OFF */
 /* @cfg code_panel = 3 */
 /* @cfg variable_panel = 0 */
-/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_outlines = 1 */
 /* @cfg vertex_points = 0 */
 /* @cfg light_indicators = 0 */
 $cam
 // Snippet start
 glEnable(GL_DEPTH_TEST);
-glColor3f(0.9, 0.55, 0.15);
+glColor3f(0.8, 0.8, 0.8);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT1);
 glutSolidCube(0.8);
 // Snippet end
 EOF
@@ -444,27 +455,27 @@ if want light-theme-studio; then
 fi
 
 if want grid-themes; then
-    for theme in TRON RADAR AURORA SYNTHWAVE; do
+    for theme in SKETCH RADAR PLANES OCEAN; do
         still "$WORK/grid_$theme.png" $FADE_FRAMES 16 \
             "$(stage_grid_theme GRID_THEME_$theme)"
     done
     montage2x2 "$WORK/grid-m.png" \
-        "$WORK"/grid_{TRON,RADAR,AURORA,SYNTHWAVE}.png
+        "$WORK"/grid_{SKETCH,RADAR,PLANES,OCEAN}.png
     magick "$WORK/grid-m.png" -resize "$W" "$OUT/grid-themes.png"
     echo "docs-assets: wrote $OUT/grid-themes.png"
 fi
 
 if want backdrops; then
-    still "$WORK/bd_CITYSCAPE.png" $FADE_FRAMES 16 \
-        "$(stage_backdrop RENDER3D_BACKDROP_CITYSCAPE flat)"
-    still "$WORK/bd_STARS.png" $FADE_FRAMES 16 \
-        "$(stage_backdrop RENDER3D_BACKDROP_STARS)"
+    still "$WORK/bd_POLAR_DAY_SNOW.png" $FADE_FRAMES 16 \
+        "$(stage_backdrop RENDER3D_BACKDROP_POLAR_DAY_SNOW)"
+    still "$WORK/bd_NEBULA.png" $FADE_FRAMES 16 \
+        "$(stage_backdrop RENDER3D_BACKDROP_NEBULA flat)"
     still "$WORK/bd_SUNSET.png" $FADE_FRAMES 16 \
-        "$(stage_backdrop RENDER3D_BACKDROP_SUNSET)"
+        "$(stage_backdrop RENDER3D_BACKDROP_SUNSET flat)"
     still "$WORK/bd_AURORA.png" $FADE_FRAMES 16 \
         "$(stage_backdrop RENDER3D_BACKDROP_AURORA flat)"
     montage2x2 "$WORK/bd-m.png" \
-        "$WORK"/bd_{CITYSCAPE,STARS,SUNSET,AURORA}.png
+        "$WORK"/bd_{POLAR_DAY_SNOW,NEBULA,SUNSET,AURORA}.png
     magick "$WORK/bd-m.png" -resize "$W" "$OUT/backdrops.png"
     echo "docs-assets: wrote $OUT/backdrops.png"
 fi
