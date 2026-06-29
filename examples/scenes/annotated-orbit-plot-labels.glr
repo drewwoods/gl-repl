@@ -18,30 +18,30 @@ glLineWidth(1.4);
 phase = fmod(t*0.2, 1);
 n = 72;
 for(r, 1, 4) {
-glColor4f(0.2, 0.35, 0.55, 0.45);
-glBegin(GL_LINE_LOOP);
-for(i, 0, n) {
-glVertex3f(cos(i*TAU/n)*r*0.6, sin(i*TAU/n)*r*0.6, 0);
-}
-glEnd();
-glRasterPos3f(r*0.6 + 0.08, 0, 0);
-label("r=%f", r*0.6);
+  glColor4f(0.2, 0.35, 0.55, 0.45);
+  glBegin(GL_LINE_LOOP);
+    for(i, 0, n) {
+      glVertex3f(cos(i*TAU/n)*r*0.6, sin(i*TAU/n)*r*0.6, 0);
+    }
+  glEnd();
+  glRasterPos3f(r*0.6 + 0.08, 0, 0);
+  label("r=%f", r*0.6);
 }
 glColor4f(0.45, 0.5, 0.65, 0.45);
 glBegin(GL_LINES);
-for(i, 0, 12) {
-glVertex3f(0, 0, 0);
-glVertex3f(cos(i*TAU/12)*2.4, sin(i*TAU/12)*2.4, 0);
-}
+  for(i, 0, 12) {
+    glVertex3f(0, 0, 0);
+    glVertex3f(cos(i*TAU/12)*2.4, sin(i*TAU/12)*2.4, 0);
+  }
 glEnd();
 glColor3f(1.0, 0.75, 0.25);
 glLineWidth(3);
 glBegin(GL_LINE_STRIP);
-for(i, 0, n+1) {
-sample = i/n;
-r = 1.0 + 0.5*sin(sample*TAU*3 + t);
-glVertex3f(cos(sample*TAU)*r, sin(sample*TAU)*r, 0);
-}
+  for(i, 0, n+1) {
+    sample = i/n;
+    r = 1.0 + 0.5*sin(sample*TAU*3 + t);
+    glVertex3f(cos(sample*TAU)*r, sin(sample*TAU)*r, 0);
+  }
 glEnd();
 sample = phase;
 r = 1.0 + 0.5*sin(sample*TAU*3 + t);
@@ -50,7 +50,7 @@ y = sin(sample*TAU)*r;
 glPointSize(11);
 glColor3f(0.1, 0.9, 1.0);
 glBegin(GL_POINTS);
-glVertex3f(x, y, 0);
+  glVertex3f(x, y, 0);
 glEnd();
 glColor3f(1.0, 1.0, 1.0);
 glRasterPos3f(-2.35, 2.35, 0);

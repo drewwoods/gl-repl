@@ -330,6 +330,7 @@ endif
 	check-editor-ownership-budget \
 	check-editor-repl-surface \
 	check-examples-catalog \
+	check-formatted \
 	check-gl-boundaries \
 	check-glr-ctrl-not-editor-mirror \
 	check-glr-state-no-repl-mutators \
@@ -1581,6 +1582,13 @@ keymap-list: ## Print current key bindings + the free Ctrl / Ctrl+Shift / F-key 
 check-examples-catalog: ## Validate the file-backed built-in example catalog.
 	@python3 scripts/gen_examples.py --check --catalog $(EXAMPLES_CATALOG)
 
+check-formatted: ## Verify that example scenes under examples/scenes are formatted correctly.
+	@python3 scripts/format_scenes.py --check || ( \
+		echo "$(RED)ERROR: Some example scenes are not formatted correctly.$(NC)"; \
+		echo "To format them automatically, run: $(CYAN)./scripts/format_scenes.py --write$(NC)"; \
+		exit 1; \
+	)
+
 check-c99: $(GENERATED_EXAMPLES_INC) ## C99 build guard: gl-repl + bench + demo sources must syntax-check under gcc -std=c99 (non-pedantic; tests excluded; in the standard gate).
 	@C99_SRCS='$(SRCS)' bash scripts/check/check-c99.sh
 
@@ -1609,6 +1617,7 @@ CHECK_TARGETS = \
 	check-trailing-whitespace \
 	check-doc-links \
 	check-examples-catalog \
+	check-formatted \
 	check-gl-boundaries \
 	check-layer-coupling \
 	check-state-ownership \
@@ -1637,7 +1646,7 @@ test-detailed: $(TEST_BINS) ## Run the full test suite with verbose example expo
 	TEST_JOBS="$(TEST_JOBS)" \
 	bash scripts/run-tests.sh $(TEST_RUNNER_CASES)
 
-test-stubs: check-doc-links check-trailing-whitespace check-examples-catalog check-gl-boundaries check-layer-coupling check-state-ownership ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs.
+test-stubs: check-doc-links check-trailing-whitespace check-examples-catalog check-formatted check-gl-boundaries check-layer-coupling check-state-ownership ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs.
 	$(MAKE) test USE_GL_STUBS=1
 
 test-msan: ## Build and run stubbed tests with MemorySanitizer.

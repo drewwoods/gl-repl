@@ -8,15 +8,15 @@ glClearColor(0.05, 0.06, 0.08, 1.0);
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_NORMALIZE);
 polygon(radius, sides, phase) {
-glBegin(GL_TRIANGLE_FAN);
-glNormal3f(0, 0, 1);
-glColor3f(0.92, 0.95, 0.98);
-glVertex3f(0, 0, 0);
-for(i, 0, sides + 1) {
-glColor3f(0.98 - 0.62*(sin(i*TAU/sides + phase)*0.5+0.5), 0.46 + 0.24*(sin(i*TAU/sides + phase)*0.5+0.5), 0.36 + 0.62*(sin(i*TAU/sides + phase)*0.5+0.5));
-glVertex3f(cos(i*TAU/sides + phase)*radius, sin(i*TAU/sides + phase)*radius, 0);
-}
-glEnd();
+  glBegin(GL_TRIANGLE_FAN);
+    glNormal3f(0, 0, 1);
+    glColor3f(0.92, 0.95, 0.98);
+    glVertex3f(0, 0, 0);
+    for(i, 0, sides + 1) {
+      glColor3f(0.98 - 0.62*(sin(i*TAU/sides + phase)*0.5+0.5), 0.46 + 0.24*(sin(i*TAU/sides + phase)*0.5+0.5), 0.36 + 0.62*(sin(i*TAU/sides + phase)*0.5+0.5));
+      glVertex3f(cos(i*TAU/sides + phase)*radius, sin(i*TAU/sides + phase)*radius, 0);
+    }
+  glEnd();
 }
 glPushMatrix();
 glTranslatef(-2.4, 0, 0);

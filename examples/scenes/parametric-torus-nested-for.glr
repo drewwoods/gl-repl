@@ -19,15 +19,15 @@ glShadeModel(GL_SMOOTH);
 n = floor(n); // keep an an integer
 n = min(25, max(n, 3)); // clamp to reasonable range
 for(i, 0, n) {
-glBegin(GL_QUAD_STRIP);
-for(j, 0, n+1) {
-// step v across the tube; emit two vertices, one at u=i and one at u=i+1
-v = j*TAU/n;
-u = i*TAU/n;
-glColor3f(sin(u)*0.4+0.6, cos(v)*0.4+0.6, 0.5);
-glVertex3f((R + r*cos(v))*cos(u), (R + r*cos(v))*sin(u), r*sin(v));
-u = (i+1)*TAU/n;
-glVertex3f((R + r*cos(v))*cos(u), (R + r*cos(v))*sin(u), r*sin(v));
-}
-glEnd();
+  glBegin(GL_QUAD_STRIP);
+    for(j, 0, n+1) {
+      // step v across the tube; emit two vertices, one at u=i and one at u=i+1
+      v = j*TAU/n;
+      u = i*TAU/n;
+      glColor3f(sin(u)*0.4+0.6, cos(v)*0.4+0.6, 0.5);
+      glVertex3f((R + r*cos(v))*cos(u), (R + r*cos(v))*sin(u), r*sin(v));
+      u = (i+1)*TAU/n;
+      glVertex3f((R + r*cos(v))*cos(u), (R + r*cos(v))*sin(u), r*sin(v));
+    }
+  glEnd();
 }

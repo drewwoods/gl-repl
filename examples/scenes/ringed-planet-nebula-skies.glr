@@ -25,18 +25,18 @@ glShadeModel(GL_SMOOTH);
 planet(rad, stacks, slices) {
   for(i, 0, stacks) {
     glBegin(GL_QUAD_STRIP);
-    for(j, 0, slices + 1) {
-      y = sin(-PI/2 + PI*i/stacks);
-      c = 0.5 + 0.5*sin(9*y + 0.5*sin(3*j*TAU/slices + 0.6*t) + 0.4*t);
-      glColor3f(0.46 + 0.34*c, 0.30 + 0.16*c, 0.62 - 0.20*c);
-      glNormal3f(cos(-PI/2 + PI*i/stacks)*cos(j*TAU/slices), y, cos(-PI/2 + PI*i/stacks)*sin(j*TAU/slices));
-      glVertex3f(rad*cos(-PI/2 + PI*i/stacks)*cos(j*TAU/slices), rad*y, rad*cos(-PI/2 + PI*i/stacks)*sin(j*TAU/slices));
-      y = sin(-PI/2 + PI*(i + 1)/stacks);
-      c = 0.5 + 0.5*sin(9*y + 0.5*sin(3*j*TAU/slices + 0.6*t) + 0.4*t);
-      glColor3f(0.46 + 0.34*c, 0.30 + 0.16*c, 0.62 - 0.20*c);
-      glNormal3f(cos(-PI/2 + PI*(i + 1)/stacks)*cos(j*TAU/slices), y, cos(-PI/2 + PI*(i + 1)/stacks)*sin(j*TAU/slices));
-      glVertex3f(rad*cos(-PI/2 + PI*(i + 1)/stacks)*cos(j*TAU/slices), rad*y, rad*cos(-PI/2 + PI*(i + 1)/stacks)*sin(j*TAU/slices));
-    }
+      for(j, 0, slices + 1) {
+        y = sin(-PI/2 + PI*i/stacks);
+        c = 0.5 + 0.5*sin(9*y + 0.5*sin(3*j*TAU/slices + 0.6*t) + 0.4*t);
+        glColor3f(0.46 + 0.34*c, 0.30 + 0.16*c, 0.62 - 0.20*c);
+        glNormal3f(cos(-PI/2 + PI*i/stacks)*cos(j*TAU/slices), y, cos(-PI/2 + PI*i/stacks)*sin(j*TAU/slices));
+        glVertex3f(rad*cos(-PI/2 + PI*i/stacks)*cos(j*TAU/slices), rad*y, rad*cos(-PI/2 + PI*i/stacks)*sin(j*TAU/slices));
+        y = sin(-PI/2 + PI*(i + 1)/stacks);
+        c = 0.5 + 0.5*sin(9*y + 0.5*sin(3*j*TAU/slices + 0.6*t) + 0.4*t);
+        glColor3f(0.46 + 0.34*c, 0.30 + 0.16*c, 0.62 - 0.20*c);
+        glNormal3f(cos(-PI/2 + PI*(i + 1)/stacks)*cos(j*TAU/slices), y, cos(-PI/2 + PI*(i + 1)/stacks)*sin(j*TAU/slices));
+        glVertex3f(rad*cos(-PI/2 + PI*(i + 1)/stacks)*cos(j*TAU/slices), rad*y, rad*cos(-PI/2 + PI*(i + 1)/stacks)*sin(j*TAU/slices));
+      }
     glEnd();
   }
 }
@@ -54,13 +54,13 @@ moon(orbit, rad, speed, tilt) {
 // translucent ring band: bright inner lip fading outward
 ring(inner, outer, fade) {
   glBegin(GL_QUAD_STRIP);
-  for(j, 0, 41) {
-    c = 0.75 + 0.25*sin(j*0.9);
-    glColor4f(0.70*c, 0.58*c, 0.88*c, fade);
-    glVertex3f(inner*cos(j*TAU/40), 0, inner*sin(j*TAU/40));
-    glColor4f(0.45*c, 0.50*c, 0.85*c, 0.25*fade);
-    glVertex3f(outer*cos(j*TAU/40), 0, outer*sin(j*TAU/40));
-  }
+    for(j, 0, 41) {
+      c = 0.75 + 0.25*sin(j*0.9);
+      glColor4f(0.70*c, 0.58*c, 0.88*c, fade);
+      glVertex3f(inner*cos(j*TAU/40), 0, inner*sin(j*TAU/40));
+      glColor4f(0.45*c, 0.50*c, 0.85*c, 0.25*fade);
+      glVertex3f(outer*cos(j*TAU/40), 0, outer*sin(j*TAU/40));
+    }
   glEnd();
 }
 
@@ -90,16 +90,16 @@ glPopMatrix();
 
 // comet: bright head + tail fading along its eccentric orbit
 glBegin(GL_LINE_STRIP);
-for(i, 0, 30) {
-  a = 0.7*t - 0.06*i;
-  glColor4f(0.55, 0.85, 1.0, 0.6*(1 - i/30));
-  glVertex3f(5.6*cos(a), 1.1*sin(2*a), 4.2*sin(a));
-}
+  for(i, 0, 30) {
+    a = 0.7*t - 0.06*i;
+    glColor4f(0.55, 0.85, 1.0, 0.6*(1 - i/30));
+    glVertex3f(5.6*cos(a), 1.1*sin(2*a), 4.2*sin(a));
+  }
 glEnd();
 glPointSize(6);
 glBegin(GL_POINTS);
-glColor4f(0.85, 0.97, 1.0, 0.95);
-glVertex3f(5.6*cos(0.7*t), 1.1*sin(1.4*t), 4.2*sin(0.7*t));
+  glColor4f(0.85, 0.97, 1.0, 0.95);
+  glVertex3f(5.6*cos(0.7*t), 1.1*sin(1.4*t), 4.2*sin(0.7*t));
 glEnd();
 
 // leave shared GL state the way we found it
