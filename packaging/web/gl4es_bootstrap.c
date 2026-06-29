@@ -4,6 +4,11 @@
 #include <string.h>
 #include <GL/gl.h>   /* gl4es's header (its -I precedes); maps gl* -> gl4es_gl* */
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
+
 /* Emscripten's built-in JS GLUT (library_glut.js) supplies the windowing/
  * event layer (the patched freeglut renames its own windowing to fg_glut*
  * so the JS implementation wins), but it does not implement
@@ -51,6 +56,32 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
 
     // 3. (Optional) Show gl4es debug info in the browser console
     setenv("LIBGL_DEBUG", "1", 1);
+
+#ifdef __EMSCRIPTEN__
+    /* Tag the WebGL drawing buffer Display-P3 so the web build's colors are as
+     * vibrant as the native build on wide-gamut displays. JS GLUT creates the
+     * context lazily inside glutCreateWindow (after this ctor runs), and tagging
+     * it mid-creation (wrapping getContext) proved unreliable — GLUT's initial
+     * reshape resizes the drawing buffer right after. So defer until the live
+     * context is current (Module.ctx, set by GL.makeContextCurrent) and tag it
+     * then, matching the timing that worked when called from the app. No-op on
+     * sRGB panels / browsers lacking the property. */
+    EM_ASM({
+        function tagP3() {
+            var gl = Module['ctx'];
+            if (!gl || !('drawingBufferColorSpace' in gl)) return false;
+            try { gl.drawingBufferColorSpace = 'display-p3'; } catch (e) { return false; }
+            console.log('[gl4es_bootstrap] drawingBufferColorSpace = display-p3');
+            return true;
+        }
+        if (!tagP3()) {
+            var tries = 0;
+            var iv = setInterval(function() {
+                if (tagP3() || ++tries > 200) clearInterval(iv); /* ~10s cap */
+            }, 50);
+        }
+    });
+#endif
 
     initialize_gl4es();
 
