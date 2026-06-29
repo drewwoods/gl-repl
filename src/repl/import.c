@@ -1997,12 +1997,16 @@ static void import_begin_load(ImportState *state, ReplImportResult *result) {
     repl_func_alias_clear_all();
 }
 
+typedef struct {
+    char accum[MAX_LINE_LEN];
+    int line_no;
+    int depth;
+    int truncated;
+} ImportAccum;
+
 static void import_process_physical_line(ImportState *state,
                                          char *line,
-                                         char *accum,
-                                         int *accum_line_no,
-                                         int *accum_depth,
-                                         int *accum_truncated) {
+                                         ImportAccum *acc) {
     char normalized_line[MAX_LINE_LEN];
     const char *proc_line = line;
 
@@ -2015,7 +2019,7 @@ static void import_process_physical_line(ImportState *state,
          * seen yet) is dropped — keep accumulating rather than
          * flushing a half-built statement. With nothing in progress
          * it is a standalone line, processed as before. */
-        if (accum[0])
+        if (acc->accum[0])
             return;
         const char *p = proc_line;
         while (*p && isspace((unsigned char)*p)) p++;
@@ -2026,30 +2030,30 @@ static void import_process_physical_line(ImportState *state,
     const char *app = proc_line;
     while (*app && isspace((unsigned char)*app)) app++;
 
-    if (!accum[0]) {
-        *accum_line_no = state->line_no;
-        *accum_depth = 0;
-        *accum_truncated = 0;
+    if (!acc->accum[0]) {
+        acc->line_no = state->line_no;
+        acc->depth = 0;
+        acc->truncated = 0;
     }
 
-    size_t accum_len = strlen(accum);
-    if (accum_len > 0 && accum[accum_len - 1] != ' ') {
+    size_t accum_len = strlen(acc->accum);
+    if (accum_len > 0 && acc->accum[accum_len - 1] != ' ') {
         if (accum_len + 1 < MAX_LINE_LEN) {
-            accum[accum_len++] = ' ';
-            accum[accum_len] = '\0';
+            acc->accum[accum_len++] = ' ';
+            acc->accum[accum_len] = '\0';
         } else {
-            *accum_truncated = 1;
+            acc->truncated = 1;
         }
     }
 
     int code_len = 0;
-    char last = scan_code_line(app, accum_depth, &code_len);
+    char last = scan_code_line(app, &acc->depth, &code_len);
     /* Complete when no bracket is open and the last code char closes
      * a statement (`;`), opens/closes a block (`{`/`}`), or ends a
      * label (`:`). The depth gate is what stops a split compound
      * literal — `(GLfloat[]){` — or a ternary `:` from flushing
      * mid-expression. */
-    int complete = *accum_depth <= 0 && is_stmt_terminator(last);
+    int complete = acc->depth <= 0 && is_stmt_terminator(last);
 
     /* On a continuation line, append only the code portion so a
      * trailing `// ...` can't bleed into the rest of the statement.
@@ -2060,13 +2064,13 @@ static void import_process_physical_line(ImportState *state,
     size_t avail = MAX_LINE_LEN - 1 - accum_len;
     size_t take = seg_len <= avail ? seg_len : avail;
     if (take < seg_len)
-        *accum_truncated = 1;
-    memcpy(accum + accum_len, app, take);
-    accum[accum_len + take] = '\0';
+        acc->truncated = 1;
+    memcpy(acc->accum + accum_len, app, take);
+    acc->accum[accum_len + take] = '\0';
 
     if (complete) {
-        import_flush_accum(state, accum, *accum_line_no, accum_truncated);
-        *accum_depth = 0;
+        import_flush_accum(state, acc->accum, acc->line_no, &acc->truncated);
+        acc->depth = 0;
     }
 }
 
@@ -2076,17 +2080,13 @@ static int import_finish_load(ImportState *state,
                               int had_read_err,
                               int close_failed,
                               int truncated_line,
-                              char *accum,
-                              int accum_line_no,
-                              int *accum_truncated) {
+                              ImportAccum *acc) {
     const char *label = source_name && source_name[0] ? source_name : "<memory>";
 
     if (!truncated_line)
-        import_flush_accum(state, accum, accum_line_no, accum_truncated);
+        import_flush_accum(state, acc->accum, acc->line_no, &acc->truncated);
 
-    /* Mirror the save-side ferror/fclose pair: fgets returning NULL
-     * conflates EOF with read error, so the read-loop above can't
-     * surface I/O failures by itself. Check ferror before closing. */
+    /* Caller passes the results of read/close checks from the file-based reader. */
     if (had_read_err || close_failed) {
         import_workspace_accum_reset(&state->workspace);
         import_clear_pending_result_fields();
@@ -2153,28 +2153,22 @@ int repl_export_load_from_lines(const char *const *lines,
     import_begin_load(&state, result);
 
     int truncated_line = 0;
-    char accum[MAX_LINE_LEN] = "";
-    int accum_line_no = 0;
-    int accum_depth = 0;
-    int accum_truncated = 0;
+    ImportAccum acc = { .accum = "", .line_no = 0, .depth = 0, .truncated = 0 };
 
     for (int i = 0; lines && lines[i]; i++) {
         size_t raw_len = strlen(lines[i]);
-        if (raw_len >= sizeof(accum)) {
+        if (raw_len >= sizeof(acc.accum)) {
             truncated_line = 1;
             break;
         }
         char line[MAX_LINE_LEN];
         memcpy(line, lines[i], raw_len + 1);
         state.line_no++;
-        import_process_physical_line(&state, line, accum,
-                                     &accum_line_no, &accum_depth,
-                                     &accum_truncated);
+        import_process_physical_line(&state, line, &acc);
     }
 
     return import_finish_load(&state, result, source_name,
-                              0, 0, truncated_line, accum,
-                              accum_line_no, &accum_truncated);
+                              0, 0, truncated_line, &acc);
 }
 
 int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
@@ -2186,10 +2180,7 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
 
     char line[MAX_LINE_LEN];
     int truncated_line = 0;
-    char accum[MAX_LINE_LEN] = "";
-    int accum_line_no = 0;
-    int accum_depth = 0;
-    int accum_truncated = 0;
+    ImportAccum acc = { .accum = "", .line_no = 0, .depth = 0, .truncated = 0 };
     while (fgets(line, sizeof(line), f)) {
         state.line_no++;
         size_t raw_len = strlen(line);
@@ -2207,14 +2198,15 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
         while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r'))
             line[--len] = '\0';
 
-        import_process_physical_line(&state, line, accum,
-                                     &accum_line_no, &accum_depth,
-                                     &accum_truncated);
+        import_process_physical_line(&state, line, &acc);
     }
 
+    /* Mirror the save-side ferror/fclose pair: fgets returning NULL
+     * conflates EOF with read error, so the read-loop above can't
+     * surface I/O failures by itself. Check ferror before closing. */
     int had_read_err = ferror(f);
     int close_failed = fclose(f) != 0;
     return import_finish_load(&state, result, filename,
                               had_read_err, close_failed, truncated_line,
-                              accum, accum_line_no, &accum_truncated);
+                              &acc);
 }

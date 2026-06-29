@@ -913,55 +913,12 @@ redesigned from a feature hodgepodge into one coherent dusk seascape that
 still exercises nested loops, recursion with `if`/`else if`/`else`, GLU
 tess + cutout, GLUT solids, a parametric surface, additive points,
 translucency, and bitmap text); the intent is the whole catalog over
-time. The palette is documented once in
-[`examples/README.md`](../examples/README.md) and applied as literal
-`glColor*` / `gluColor` / `glClearColor` values in the affected scene files
-under [`examples/scenes/`](../examples/scenes/) (`.glr` scenes are raw REPL
-source strings and `.c` scenes are full exported/importable files; neither has
-a macro-substitution layer, so the README is the single source of truth and
-the values are spelled out per scene):
+time. The Dusk color palette and its design guidelines are documented in detail in
+[`examples/README.md`](../examples/README.md).
 
-| Role | RGB | Use |
-|------|-----|-----|
-| Canvas (clear) | `0.05 0.06 0.08` | every scene's `glClearColor` |
-| CORAL  | `0.98 0.46 0.36` | warm key |
-| AMBER  | `0.98 0.76 0.36` | gold highlight / control points |
-| ROSE   | `0.95 0.44 0.66` | pink bridge (reserve) |
-| VIOLET | `0.62 0.52 0.95` | purple bridge / faint guides |
-| AZURE  | `0.36 0.70 0.98` | cool key |
-| TEAL   | `0.30 0.84 0.80` | aqua secondary |
-| MIST   | `0.92 0.95 0.98` | neutral near-white |
+These colors are applied as literal `glColor*` / `gluColor` / `glClearColor` values in the affected scene files under [`examples/scenes/`](../examples/scenes/) (`.glr` scenes are raw REPL source strings and `.c` scenes are full exported/importable files; neither has a macro-substitution layer).
 
-Design rules:
-
-- **One canvas.** Every covered scene clears to the same deep cool ink.
-  The `glClearColor` parser caps each channel at `REPL_CLEAR_COLOR_MAX_V`
-  (`0.1f`, [`src/repl/color_limits.h`](../src/repl/color_limits.h)) so the background can only ever be
-  dark; the ink sits just under that cap and the mid-bright accents
-  (uncapped `glColor`) pop against it. This replaced a mix of `0.1` gray,
-  pure black (bezier) and navy (de Casteljau / transform stress).
-- **Two-anchor ramps, not rainbows.** Procedural color sweeps interpolate
-  between two palette anchors (`color = A + (B-A)*s`, `s` in `[0,1]`)
-  instead of a full-saturation HSV sweep. The signature ramp is
-  CORAL→AZURE (warm→cool), driven by whatever scalar fits the scene — the
-  loop index (spirograph, assignment sketch), a phase angle (animated
-  ring, function polygons), or a physical quantity (the wave surface
-  ramps by height `y/amp`, so troughs read warm and crests cool). A few
-  scenes use VIOLET→AZURE (the recursive tree, ramped by recursion depth)
-  or an AMBER accent (the ripple ring's traveling bump, the bezier control
-  points) for variety while staying in family. Scenes that previously drew
-  with no `glColor` at all (spirograph, ripple ring) gained an in-family
-  ramp.
-- **Discrete sets pick distinct hues.** Scenes that color whole shapes
-  flat (the function demo's three triangles, transform stress's transform
-  groups, the GLU tessellator arrow's per-vertex stops) draw each from a
-  different palette member rather than ad-hoc primaries, so the set stays
-  varied but in-family.
-- **Locked by goldens.** [`tests/test_repl_core_examples.c`](../tests/test_repl_core_examples.c) snapshots each
-  example's flattened dump to `tests/testdata/repl_examples_ui/NN.golden.txt`;
-  the color literals are part of that fixture, so a drift off-palette
-  fails CI. Regenerate intentionally with
-  `build/release/test_repl_core_examples --dump-index N`.
+The correctness of the example colors is locked by golden tests: [`tests/test_repl_core_examples.c`](../tests/test_repl_core_examples.c) snapshots each example's flattened dump to `tests/testdata/repl_examples_ui/NN.golden.txt`; the color literals are part of that fixture, so a drift off-palette fails CI. Regenerate intentionally with `build/release/test_repl_core_examples --dump-index N`.
 
 Capture caveat: review these scenes with the **native** backend
 (`make gl-repl`, `FREEGLUT_CAPTURE_FRAMES=N ./gl-repl --example N`). The

@@ -635,9 +635,12 @@ see [Advanced Usage](ADVANCED_USAGE.md#cfg-backdropgrid-pairing) for the
 **Light themes** (**F9**) are preset light rigs: Default (three colored
 keys), Headlight (light 0 rides the camera), Solar (light 0 at the world
 origin — for orbit/planet scenes), Studio (warm key / cool rim / warm fill),
-Neon (saturated magenta/cyan/lime triad). A theme only positions and colors
-the four light slots — your program still chooses which ones are on via
-`glEnable(GL_LIGHT0..3)`.
+Neon (saturated magenta/cyan/lime triad).
+
+> [!NOTE]
+> A theme only positions and colors
+> the four light slots — your program still chooses which ones are on via
+> `glEnable(GL_LIGHT0..3)`.
 
 **Light indicators** (Ctrl+Shift+L) draw a marker at each light's position
 (labelled `L0..L3`, with *off* noted for disabled lights), so you can see
@@ -833,21 +836,21 @@ Developers can point the app at an editable catalog with
 `./gl-repl --examples-dir examples --example <name-or-idx>`:
 
 ```
- 0  Lit cube                      15  Torus knot (animated)
- 1  2D assignment sketch          16  Glow sprites (blend + attenuation)
- 2  Animated ring (for + t)       17  Snowfall demo (550 particles)
- 3  Conditional colors (if + t)   18  Swaying grass field (rand + t)
- 4  Function demo (named func)    19  Jellyfish (glDepthMask translucency)
- 5  Function polygons             20  Transform stress (guides)
- 6  Function branching            21  GLU tessellator (concave arrow)
- 7  Recursive triangle tree       22  GLU tessellator (arrow cutout)
- 8  Parametric torus              23  Stress test (all features)
- 9  Animated wave surface         24  Annotated orbit plot (labels)
-10  Procedural terrain            25  Orrery (labels track 3D orbits)
-11  Animated spirograph curve     26  Whale (particle system + lit model)
-12  Traveling ripple ring         27  Teapot carousel (transform stacks)
-13  Bezier curve with guides      28  Ringed planet (nebula skies)
-14  Scratch arrays (de Casteljau)
+ 0  Lit cube                                            15  Bezier curve with guides
+ 1  Rotating cube                                       16  Scratch arrays (de Casteljau curve)
+ 2  Animated ring (for + t)                             17  Annotated orbit plot (labels)
+ 3  Conditional colors (if + t)                         18  GLU tessellator (concave arrow)
+ 4  Transform stress (translate/rotate/scale guides)    19  GLU tessellator (concave arrow cutout)
+ 5  Parametric torus (nested for)                       20  Glow sprites (blend + point attenuation)
+ 6  Animated wave surface (analytic normals)            21  Snowfall demo (550 particles)
+ 7  Torus knot (animated)                               22  Swaying grass field (rand + t)
+ 8  2D assignment sketch (vars only)                    23  Jellyfish (glDepthMask translucency)
+ 9  Function demo (named func)                          24  Dusk lighthouse atoll (stress test)
+10  Function polygons (args + for)                      25  Orrery (labels track 3D orbits)
+11  Function branching (args + if)                      26  Whale (particle system + lit model)
+12  Recursive triangle tree (func + recursion)          27  Teapot carousel (transform stacks + glow points)
+13  Animated spirograph curve                           28  Ringed planet (nebula skies)
+14  Traveling ripple ring
 ```
 
 Examples may carry their own presentation presets (grid theme, backdrop,
