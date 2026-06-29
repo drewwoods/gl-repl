@@ -306,7 +306,7 @@ label("Neptune");
 // evaluates it each frame, emitting only the live branch. t=0 is 2000-1-1.
 th = 2000 + t*EARTH_RATE/TAU;            // decimal year
 yr = floor(th);                          // integer year
-leap = (yr % 4 == 0 && yr % 100 != 0) || yr % 400 == 0; // 1 in leap years
+leap = (fmod(yr, 4) == 0 && fmod(yr, 100) != 0) || fmod(yr, 400) == 0; // 1 in leap years
 doy = floor((th - yr)*(365 + leap));     // day of year, 0-based
 if(doy < 31) {
   mon = 1;
