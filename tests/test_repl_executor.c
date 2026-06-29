@@ -3,7 +3,10 @@
 #include "repl/pipeline.h"
 #include "editor/input.h"
 #include "repl/state.h"
+#include "repl/examples.h"
+#include "repl/load.h"
 #include "app/glr_ctrl.h"   /* glr_ctrl_reset_all (end-to-end P1 test) */
+#include "support/repl_test_support.h"
 
 // Include the C file directly to access its static callbacks.
 // We must NOT link repl_executor.o into test_repl_executor!
@@ -991,9 +994,126 @@ static void test_export_normal_encoding(void) {
                 gl_stub_counts[GL_STUB_glPassThrough] == 2);
 }
 
+static void test_orrery_phase_alignment(void) {
+    printf("test_orrery_phase_alignment\n");
+
+    int example_idx = -1;
+    for (int i = 0; i < repl_example_count(); i++) {
+        if (strcmp(repl_example_name(i), "Orrery (labels track 3D orbits)") == 0) {
+            example_idx = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("found orrery example", example_idx >= 0);
+    const char *const *lines = repl_example_lines(example_idx);
+    ASSERT_TRUE("example lines exists", lines != NULL);
+
+    reset_repl();
+
+    char err[256];
+    ASSERT_TRUE("declare ex", repl_eval_declare_predef_var("ex", err, sizeof(err)));
+    ASSERT_TRUE("declare ey", repl_eval_declare_predef_var("ey", err, sizeof(err)));
+    ASSERT_TRUE("declare ez", repl_eval_declare_predef_var("ez", err, sizeof(err)));
+    ASSERT_TRUE("declare mx", repl_eval_declare_predef_var("mx", err, sizeof(err)));
+    ASSERT_TRUE("declare my", repl_eval_declare_predef_var("my", err, sizeof(err)));
+    ASSERT_TRUE("declare mz", repl_eval_declare_predef_var("mz", err, sizeof(err)));
+
+    /* Feed declarations and the planetKepler function from the example lines */
+    int in_func = 0;
+    int parsed_func = 0;
+    int edit_line = 0;
+    for (int i = 0; lines[i] != NULL; i++) {
+        const char *line = lines[i];
+
+        /* Skip leading spaces for parsing */
+        const char *p = line;
+        while (*p && isspace((unsigned char)*p)) p++;
+
+        if (strncmp(p, "static float", 12) == 0) {
+            int ok = repl_load_apply_line(line, err, sizeof(err), &edit_line);
+            ASSERT_TRUE("load static float", ok);
+        } else if (!parsed_func && strncmp(p, "planetKepler(", 13) == 0) {
+            in_func = 1;
+            parsed_func = 1;
+            int ok = repl_load_apply_line(line, err, sizeof(err), &edit_line);
+            ASSERT_TRUE("load planetKepler signature", ok);
+        } else if (in_func) {
+            int ok = repl_load_apply_line(line, err, sizeof(err), &edit_line);
+            ASSERT_TRUE("load planetKepler body line", ok);
+            if (*p == '}') {
+                in_func = 0;
+            }
+        }
+    }
+
+    /* Feed test calls */
+    int ok;
+    ok = repl_load_apply_line("planetKepler(1.00000261, 0.00000562, 0.01671123, -0.00004392, -0.00001531, -0.01294668, 100.46457166, 35999.37244981, 102.93768193, 0.32327364, 0, 0, 1.000, 0.3, 0.52, 0.95);", err, sizeof(err), &edit_line);
+    ASSERT_TRUE("load Earth call", ok);
+    ok = repl_load_apply_line("ex = px; ey = py; ez = pz;", err, sizeof(err), &edit_line);
+    ASSERT_TRUE("load Earth save", ok);
+    ok = repl_load_apply_line("planetKepler(1.52371034, 0.00001847, 0.09339410, 0.00007882, 1.84969142, -0.00813131, -4.55343205, 19140.30268499, -23.94362959, 0.44441088, 49.55953891, -0.29257343, 0.532, 0.88, 0.45, 0.26);", err, sizeof(err), &edit_line);
+    ASSERT_TRUE("load Mars call", ok);
+    ok = repl_load_apply_line("mx = px; my = py; mz = pz;", err, sizeof(err), &edit_line);
+    ASSERT_TRUE("load Mars save", ok);
+
+    /* Real-world opposition dates for Earth and Mars (2020 through 2040)
+     * paired with their corresponding animation time 't' (in seconds).
+     *
+     * The J2000 epoch corresponds to t=0. The clock `t` maps to Julian centuries
+     * since J2000.0 (`th`) inside planetKepler via: th = t * EARTH_RATE / TAU / 100.0.
+     * Here, EARTH_RATE = 0.85 radians per year allows aligning the animation timeline
+     * with physical calendars.
+     *
+     * Since an opposition physically occurs when Earth is directly collinear
+     * between the Sun and Mars, their heliocentric ecliptic longitudes
+     * must align. Evaluating NASA's secular orbital elements and rates at these
+     * specific Julian centuries must therefore yield matching ecliptic longitudes
+     * (i.e. atan2(z, x) phase difference close to 0 modulo 2*PI). */
+    static const struct {
+        int year, month, day;
+        float t;
+    } oppositions[] = {
+        { 2020, 10, 13, 153.62776f },
+        { 2022, 12, 8, 169.53495f },
+        { 2025, 1, 16, 185.11832f },
+        { 2027, 2, 19, 200.58026f },
+        { 2029, 3, 25, 216.06244f },
+        { 2031, 5, 4, 231.64581f },
+        { 2033, 6, 27, 247.53276f },
+        { 2035, 9, 15, 263.92566f },
+        { 2037, 11, 19, 280.03522f },
+        { 2040, 1, 2, 295.69955f }
+    };
+
+    for (int i = 0; i < 10; i++) {
+        g_predef_vars_mut[0].value = oppositions[i].t;
+        repl_execute_commands();
+
+        float ex_val = predef_val("ex");
+        float ez_val = predef_val("ez");
+        float mx_val = predef_val("mx");
+        float mz_val = predef_val("mz");
+
+        ASSERT_TRUE("positions are non-NaN", !isnan(ex_val) && !isnan(ez_val) && !isnan(mx_val) && !isnan(mz_val));
+
+        float lon_earth = atan2f(ez_val, ex_val);
+        float lon_mars = atan2f(mz_val, mx_val);
+        float diff = lon_mars - lon_earth;
+        while (diff > 3.14159265f) diff -= 2.0f * 3.14159265f;
+        while (diff < -3.14159265f) diff += 2.0f * 3.14159265f;
+
+        char msg[128];
+        snprintf(msg, sizeof(msg), "opposition %d-%02d-%02d within tolerance: diff=%f deg",
+                 oppositions[i].year, oppositions[i].month, oppositions[i].day, diff * 180.0f / 3.14159265f);
+        ASSERT_TRUE(msg, fabsf(diff) < 0.0087f);
+    }
+}
+
 int main(void) {
     repl_executor_install_point_parameter_proc((ReplExecutorPointParameterProc)glPointParameterfv);
     test_tess_callbacks();
+    test_orrery_phase_alignment();
     test_export_normal_encoding();
     test_light_indicator_tracks_program();
     test_apply_state_bookkeeping();
