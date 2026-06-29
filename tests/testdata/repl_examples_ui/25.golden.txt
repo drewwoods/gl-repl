@@ -94,6 +94,8 @@ void display(void) {
 --- header_post ---
 --- source ---
   static float th, px, py, pz; // shared orbit scratch: angle + world position
+  static float EARTH_R = 0.17;
+  static float EARTH_RATE = 0.85;
 
   OrbitRings(rad, tilt) {
     glBegin(GL_LINE_LOOP);
@@ -102,9 +104,14 @@ void display(void) {
       }
     glEnd();
   }
-  // planet(): one lit sphere on an inclined circular orbit. th/px/py/pz
-  // stay set after the call so the caller can hang a label off the body.
-  planet(orbitR, rate, phase, incl, prad, cr, cg, cb) {
+  // planet(): one lit sphere on an inclined circular orbit. The caller
+  // passes the body's TRUE radius relative to Earth (Rrel); the display
+  // radius is cube-root compressed so the 0.38..11x span of the planets
+  // fits on screen while "bigger reads bigger" (true scale is hopeless:
+  // the Sun alone is 109x Earth). EARTH_R sets Earth's on-screen size.
+  // th/px/py/pz stay set after the call so the caller can hang a label
+  // off the body.
+  planet(orbitR, rate, phase, incl, Rrel, cr, cg, cb) {
     th = t*rate + phase;
     px = cos(th)*orbitR;
     py = sin(th)*orbitR*sin(incl);
@@ -113,7 +120,7 @@ void display(void) {
     glColor3f(cr, cg, cb);
     glPushMatrix();
       glTranslatef(px, py, pz);
-      glutSolidSphere(prad, 24, 18);
+      glutSolidSphere(EARTH_R * pow(Rrel, 1.0/3.0), 24, 18);
     glPopMatrix();
     glDisable(GL_LIGHTING);
   }
@@ -131,18 +138,51 @@ void display(void) {
   // a sun-glint.
   glEnable(GL_LIGHT0);
   glEnable(GL_COLOR_MATERIAL);
-  // Mercury (0.38 Earth radii)
-  planet(1.4, 1.6, 0.0, 0.18, 0.105, 0.63, 0.58, 0.54);
+  // Body sizes: R/E is the true radius relative to Earth; "display" is what
+  // this scene draws after the cube-root squash (display = EARTH_R*R/E^(1/3)),
+  // which keeps the 0.38..11x planet span legible. The Sun (109x!) is off the
+  // chart, so it stays a hand-tuned "hero" size rather than on the planet rule.
+  //   +---------+--------+---------+
+  //   | Body    |   R/E  | display |
+  //   +---------+--------+---------+
+  //   | Mercury |  0.383 |  0.124  |
+  //   | Venus   |  0.950 |  0.167  |
+  //   | Earth   |  1.000 |  0.170  |
+  //   | Mars    |  0.532 |  0.138  |
+  //   | Jupiter | 10.97  |  0.378  |
+  //   | Saturn  |  9.14  |  0.356  |
+  //   | Uranus  |  3.98  |  0.269  |
+  //   | Neptune |  3.86  |  0.267  |
+  //   | Sun     | 109.2  |  hero   |
+  //   +---------+--------+---------+
+  //
+  // Orbit speeds: year length is true relative to Earth, but the displayed
+  // angular rate uses a cube-root squash (rate = EARTH_RATE/year^(1/3)), matching
+  // the visual compression used for body sizes and keeping the compressed orbit
+  // distances readable instead of making the outer planets look detached.
+  // | Body    | Year length relative to Earth |
+  // | ------- | ----------------------------: |
+  // | Mercury |                     **0.241** |
+  // | Venus   |                     **0.615** |
+  // | Earth   |                     **1.000** |
+  // | Mars    |                     **1.881** |
+  // | Jupiter |                     **11.86** |
+  // | Saturn  |                     **29.46** |
+  // | Uranus  |                      **84.0** |
+  // | Neptune |                     **164.8** |
+  // | Sun     |                       **N/A** |
+  // Mercury (0.383 Earth radii, 0.241 Earth years)
+  planet(1.4, EARTH_RATE/pow(0.241, 1.0/3.0), 0.0, 0.18, 0.383, 0.63, 0.58, 0.54);
   glColor3f(0.9, 0.85, 0.8);
   glRasterPos3f(px + 0.14, py + 0.16, pz);
   label("Mercury");
-  // Venus (0.95 Earth radii)
-  planet(2.05, 1.15, 1.0, 0.06, 0.165, 0.93, 0.81, 0.55);
+  // Venus (0.950 Earth radii, 0.615 Earth years)
+  planet(2.05, EARTH_RATE/pow(0.615, 1.0/3.0), 1.0, 0.06, 0.950, 0.93, 0.81, 0.55);
   glColor3f(1, 0.9, 0.65);
   glRasterPos3f(px + 0.2, py + 0.22, pz);
   label("Venus");
   // Earth (the reference radius) + Moon circling it
-  planet(2.7, 0.85, 2.5, 0.0, 0.17, 0.3, 0.52, 0.95);
+  planet(2.7, EARTH_RATE/pow(1.000, 1.0/3.0), 2.5, 0.0, 1.000, 0.3, 0.52, 0.95);
   glPushMatrix();
     glTranslatef(px, py, pz);
     glRotatef(t*160, 0, 1, 0);
@@ -155,21 +195,22 @@ void display(void) {
   glColor3f(0.6, 0.8, 1);
   glRasterPos3f(px + 0.2, py + 0.22, pz);
   label("Earth");
-  // Mars (0.53 Earth radii)
-  planet(3.35, 0.62, 4.0, 0.22, 0.125, 0.88, 0.45, 0.26);
+  // Mars (0.532 Earth radii, 1.881 Earth years)
+  planet(3.35, EARTH_RATE/pow(1.881, 1.0/3.0), 4.0, 0.22, 0.532, 0.88, 0.45, 0.26);
   glColor3f(1, 0.6, 0.45);
   glRasterPos3f(px + 0.16, py + 0.18, pz);
   label("Mars");
-  // Jupiter (11.2 Earth radii before compression)
-  planet(4.5, 0.36, 1.8, 0.05, 0.57, 0.83, 0.69, 0.52);
+  // Jupiter (10.97 Earth radii, 11.86 Earth years)
+  planet(4.5, EARTH_RATE/pow(11.86, 1.0/3.0), 1.8, 0.05, 10.97, 0.83, 0.69, 0.52);
   glColor3f(1, 0.85, 0.65);
   glRasterPos3f(px + 0.62, py + 0.5, pz);
   label("Jupiter");
-  // Saturn (9.4 Earth radii) + two ring bands with a Cassini gap.
+  // Saturn (9.14 Earth radii, 29.46 Earth years) + two ring bands with a
+  // Cassini gap.
   // Rings are translucent flat strips, so blending is on (additive, like the
   // corona) and culling is off while they draw - either face may point at the
   // camera. Depth writes are masked so the bands don't clip each other.
-  planet(5.8, 0.26, 3.4, 0.10, 0.52, 0.9, 0.8, 0.58);
+  planet(5.8, EARTH_RATE/pow(29.46, 1.0/3.0), 3.4, 0.10, 9.14, 0.9, 0.8, 0.58);
   glPushMatrix();
     glTranslatef(px, py, pz);
     glRotatef(27, 1, 0, 0.35);
@@ -200,9 +241,10 @@ void display(void) {
   glColor3f(1, 0.9, 0.7);
   glRasterPos3f(px + 1.1, py + 0.4, pz);
   label("Saturn");
-  // Uranus (4.0 Earth radii) + a thin ring standing nearly on end:
+  // Uranus (3.98 Earth radii, 84.0 Earth years) + a thin ring standing nearly on
+  // end:
   // the planet is tipped ~98 degrees, so its rings face the sun pole-on
-  planet(6.8, 0.18, 5.2, 0.07, 0.34, 0.58, 0.82, 0.88);
+  planet(6.8, EARTH_RATE/pow(84.0, 1.0/3.0), 5.2, 0.07, 3.98, 0.58, 0.82, 0.88);
   glPushMatrix();
     glTranslatef(px, py, pz);
     glRotatef(98, 0, 0, 1);
@@ -225,15 +267,15 @@ void display(void) {
   glColor3f(0.75, 0.92, 0.95);
   glRasterPos3f(px + 0.6, py + 0.35, pz);
   label("Uranus");
-  // Neptune (3.9 Earth radii)
-  planet(7.7, 0.13, 0.7, 0.14, 0.335, 0.28, 0.42, 0.9);
+  // Neptune (3.86 Earth radii, 164.8 Earth years)
+  planet(7.7, EARTH_RATE/pow(164.8, 1.0/3.0), 0.7, 0.14, 3.86, 0.28, 0.42, 0.9);
   glColor3f(0.55, 0.65, 1);
   glRasterPos3f(px + 0.42, py + 0.34, pz);
   label("Neptune");
   // live readout: Earth's orbital phase, anchored in 3D below the system
   glColor3f(0.75, 0.8, 0.9);
   glRasterPos3f(-2.6, -5.6, 0);
-  label("Earth phase = %f", fmod(t*0.85 + 2.5, TAU));
+  label("Earth phase = %f", fmod(t*EARTH_RATE + 2.5, TAU));
 
   // faint orbit rings (unlit lines), one per planet at its inclination
   glDisable(GL_LIGHTING);
