@@ -1,0 +1,56 @@
+// @cfg vertex_outlines = 0
+// @cfg vertex_points = 0
+// camera
+glTranslatef(0.0f, 0.0f, -5.0f);
+glRotatef(00.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0f, -0.8f, 0.0f);
+
+glClearColor(0.05, 0.06, 0.08, 1);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_NORMALIZE);
+glEnable(GL_COLOR_MATERIAL);
+tri() {
+glBegin(GL_TRIANGLES);
+glNormal3f(0, 0, 1);
+glVertex3f(-0.3, -0.3, 0);
+glVertex3f(0.3, -0.3, 0);
+glVertex3f(0, 0.4, 0);
+glEnd();
+}
+glColor3f(0.98, 0.46, 0.36);
+glPushMatrix();
+glTranslatef(0, 0, 2);
+glRotatef(45, 0, 1, 0);
+glTranslatef(0, 0, -2);
+tri();
+glPopMatrix();
+glColor3f(0.30, 0.84, 0.80);
+glPushMatrix();
+glTranslatef(-2, 0, 0);
+glRotatef(3*t, 0, 1, 0);
+glScalef(1.5, 0.5, 1);
+tri();
+glPopMatrix();
+glColor3f(0.36, 0.70, 0.98);
+for(i, 0, 6) {
+glPushMatrix();
+glRotatef(i*60, 0, 1, 0);
+glTranslatef(2.5, 0, 0);
+glScalef(0.6, 0.6, 0.6);
+tri();
+glPopMatrix();
+}
+glColor3f(0.95, 0.44, 0.66);
+glPushMatrix();
+glTranslatef(0, 2, 0);
+glScalef(0.8, 0.8, 0.8);
+tri();
+glPopMatrix();
+glColor3f(0.98, 0.76, 0.36);
+glPushMatrix();
+glRotatef(t*30, 0, 1, 0);
+tri();
+glPopMatrix();

@@ -797,6 +797,52 @@ static void load_custom_example_lines_for_test(const char *const *lines) {
     settle_camera_transition_for_test();
 }
 
+static void test_example_catalog_metadata(void) {
+    int example_count = repl_example_count();
+
+    ASSERT_TRUE("example catalog is non-empty", example_count > 0);
+    ASSERT_TRUE("Rotating cube migrated from worktree catalog",
+                find_example_index_by_name("Rotating cube") >= 0);
+
+    for (int idx = 0; idx < example_count; idx++) {
+        char label[192];
+        const char *name = repl_example_name(idx);
+        const char *const *lines = repl_example_lines(idx);
+        const char *group = repl_example_subheading(idx);
+
+        snprintf(label, sizeof(label), "example %d has name", idx);
+        ASSERT_TRUE(label, name != NULL && name[0] != '\0');
+        snprintf(label, sizeof(label), "example %d has source lines", idx);
+        ASSERT_TRUE(label, lines != NULL && lines[0] != NULL);
+        snprintf(label, sizeof(label), "example %d has group", idx);
+        ASSERT_TRUE(label, group != NULL && group[0] != '\0');
+
+        for (int other = idx + 1; other < example_count; other++) {
+            const char *other_name = repl_example_name(other);
+            snprintf(label, sizeof(label), "example name unique: %s",
+                     name ? name : "(null)");
+            ASSERT_TRUE(label,
+                        !name || !other_name || strcmp(name, other_name) != 0);
+        }
+
+        for (int li = 0; lines && lines[li]; li++) {
+            snprintf(label, sizeof(label),
+                     "example %d line %d does not carry catalog name metadata",
+                     idx, li);
+            ASSERT_TRUE(label, strstr(lines[li], "@scene-name") == NULL);
+        }
+    }
+
+    ASSERT_TRUE("out-of-range example name is NULL",
+                repl_example_name(example_count) == NULL);
+    ASSERT_TRUE("negative example name is NULL",
+                repl_example_name(-1) == NULL);
+    ASSERT_TRUE("out-of-range example lines are NULL",
+                repl_example_lines(example_count) == NULL);
+    ASSERT_TRUE("negative example lines are NULL",
+                repl_example_lines(-1) == NULL);
+}
+
 static void test_example_tag_metadata(void) {
     int tag_count = repl_example_tag_count();
     int example_count = repl_example_count();
@@ -1324,6 +1370,7 @@ int main(int argc, char **argv) {
     }
 
     repl_eval_init_predef_vars();
+    test_example_catalog_metadata();
     test_example_tag_metadata();
     test_example_subheading_metadata();
     test_example_tag_default_cfg();

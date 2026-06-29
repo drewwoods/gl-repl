@@ -1,0 +1,67 @@
+// @cfg view_mode = RENDER3D_VIEW_2D
+// @cfg grid_brightness = GRID_BRIGHTNESS_BRIGHT
+// @cfg vertex_outlines = 0
+// @cfg vertex_points = 0
+// @cfg light_indicators = 0
+// @cfg poly_highlight = 0
+// @cfg msaa = 0
+// @cfg line_smooth = 1
+// camera
+glTranslatef(0.0f, 0.0f, -3.5f);
+glRotatef(0.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
+glTranslatef(-1.0f, -0.5f, 0.0f);
+static float x, y, x0, y0, x1 = 1, y1 = 1, x2 = 2, y2;
+static float period = 5;
+static float x_a, x_b, y_a, y_b;
+// current progress
+static float t0;
+bezier(x0, y0, x1, y1, x2, y2, u) {
+  x = pow(1-u, 2) * x0 + 2 * (1-u)*u * x1 + u*u * x2;
+  y = pow(1-u, 2) * y0 + 2 * (1-u)*u * y1 + u*u * y2;
+}
+glClearColor(0.05, 0.06, 0.08, 1);
+glEnable(GL_DEPTH_TEST);
+glDisable(GL_LIGHTING);
+glDisable(GL_MULTISAMPLE);
+glEnable(GL_LINE_SMOOTH);
+glEnable(GL_BLEND);
+glPointSize(8);
+glColor4f(0.98, 0.76, 0.36, 0.95);
+glLineWidth(1.3);
+t0 = (fmod(t, period)) / period;
+glBegin(GL_POINTS);
+  glVertex2f(x0, y0);
+  glVertex3f(x1, y1, 0);
+  glVertex2f(x2, y2);
+  bezier(x0, y0, x1, y1, x2, y2, t0);
+  glColor3f(0.98, 0.46, 0.36);
+  glVertex2f(x, y);
+glEnd();
+glColor4f(0.92, 0.95, 0.98, 0.95);
+glBegin(GL_LINE_STRIP);
+  for (u, 0, 1, 0.01f) {
+    bezier(x0, y0, x1, y1, x2, y2, u);
+    glVertex2f(x, y);
+  }
+glEnd();
+glColor4f(0.62, 0.52, 0.95, 0.40);
+x_a = x0*(1-t0) + x1*t0;
+y_a = y0*(1-t0) + y1*t0;
+x_b = x1*(1-t0) + x2*t0;
+y_b = y1*(1-t0) + y2*t0;
+glBegin(GL_POINTS);
+  glVertex2f(x_a, y_a);
+  glVertex2f(x_b, y_b);
+glEnd();
+glBegin(GL_LINES);
+  // Guide Line 1
+  glVertex2f(x0, y0);
+  glVertex2f(x1, y1);
+  // Guide Line 2
+  glVertex2f(x1, y1);
+  glVertex2f(x2, y2);
+  // Derived Line
+  glVertex2f(x_a, y_a);
+  glVertex2f(x_b, y_b);
+glEnd();

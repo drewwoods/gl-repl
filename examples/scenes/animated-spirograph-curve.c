@@ -1,0 +1,23 @@
+// @cfg view_mode = RENDER3D_VIEW_2D
+// @cfg vertex_outlines = 0
+// @cfg vertex_points = 0
+// @cfg poly_highlight = 0
+// @cfg vertex_labels = 0
+// camera
+glTranslatef(0.0f, 0.0f, -7.5f);
+glRotatef(0.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0f, 0.0f, 0.0f);
+static float dist, n, x, y, ang;
+glClearColor(0.05, 0.06, 0.08, 1.0);
+dist = 1.4;
+n = 400;
+glBegin(GL_LINE_LOOP);
+  for(i, 0, n) {
+    ang = TAU * i/n;
+    x = dist * cos(t*ang) + cos(ang);
+    y = dist * sin(t*ang) + sin(ang);
+    glColor3f(0.98 - 0.62*(0.5+0.5*sin(ang + t)), 0.46 + 0.24*(0.5+0.5*sin(ang + t)), 0.36 + 0.62*(0.5+0.5*sin(ang + t)));
+    glVertex3f(x, y, 0);
+  }
+glEnd();

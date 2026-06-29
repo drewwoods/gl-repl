@@ -8,14 +8,14 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_XZRULER */
+/* @cfg grid = GRID_THEME_CLASSIC */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
-/* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
+/* @cfg grid_brightness = GRID_BRIGHTNESS_DIM */
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg xform_guides = 2 */
-/* @cfg light_indicators = 0 */
-/* @cfg light_theme = LIGHT_THEME_DEFAULT */
+/* @cfg light_indicators = 1 */
+/* @cfg light_theme = LIGHT_THEME_NEON */
 /* @cfg backdrop = RENDER3D_BACKDROP_OFF */
 /* @cfg auto_normals = 0 */
 /* @cfg view_mode = RENDER3D_VIEW_3D */
@@ -87,26 +87,20 @@ void display(void) {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -6.0000f);
-  glRotatef(24.5000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(43.7235f, 0.0f, 1.0f, 0.0f);
+  glTranslatef(0.0000f, 0.0000f, -9.1513f);
+  glRotatef(12.0069f, 1.0f, 0.0f, 0.0f);
+  glRotatef(92.0173f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
 
-  glClearColor(0.05, 0.06, 0.08, 1);
+  glClearColor(0.1, 0.1, 0.1, 1);
   glEnable(GL_DEPTH_TEST);
-  glBegin(GL_LINE_LOOP);
-    for(i, 0, 48) {
-      glColor3f(0.98 - 0.62*(sin(i*TAU/48)*0.5+0.5), 0.46 + 0.24*(sin(i*TAU/48)*0.5+0.5), 0.36 + 0.62*(sin(i*TAU/48)*0.5+0.5));
-      glVertex3f(cos(i*TAU/48+t)*2, sin(i*TAU/48+t)*2, sin(i*TAU/12+t)*0.5);
-    }
-  glEnd();
-  glBegin(GL_TRIANGLE_FAN);
-    glColor3f(0.92, 0.95, 0.98);
-    glVertex3f(0, 0, 0);
-    for(i, 0, 25) {
-      glColor3f(0.98 - 0.62*(sin(i*TAU/24+t)*0.5+0.5), 0.46 + 0.24*(sin(i*TAU/24+t)*0.5+0.5), 0.36 + 0.62*(sin(i*TAU/24+t)*0.5+0.5));
-      glVertex3f(cos(i*TAU/24)*1.5, sin(i*TAU/24)*1.5, 0);
-    }
-  glEnd();
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT3);
+  glEnable(GL_LIGHT2);
+  glEnable(GL_LIGHT1);
+  glEnable(GL_LIGHT0);
+
+  glRotatef(40*t, 0, 1, 0);
+  glutSolidCube(2);
