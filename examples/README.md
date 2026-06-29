@@ -50,6 +50,17 @@ The app still uses the compiled-in generated catalog by default, so app bundles
 and installed binaries do not need the repository `examples/` directory at
 runtime.
 
+## Authoring notes
+
+No predefined `goto` examples are shipped: `goto` support is partial — top-level
+only (flatten rejects labels/gotos inside functions), not replay-safe (replay
+intentionally does not model dynamic goto traces), and not suitable for
+variable-driven geometry loops. Keep `goto` coverage in tests and docs rather
+than in F12 examples.
+
+Keep each scene under the 4096 flattened-command budget; hoist loop-invariant
+work out of `for` bodies so a dense example stays well clear of the cap.
+
 ## Example Color Language
 
 The built-in example scenes share one coherent "Dusk" palette so the set reads
@@ -59,7 +70,8 @@ scenes: animated ring, animated wave surface, GLU tessellator plus cutout, and
 transform stress. Extend it to the rest of the catalog as examples are touched.
 
 Every covered scene clears to the same deep cool ink and draws geometry from
-this curated accent set:
+this curated accent set — mid-bright, lightly desaturated, harmonious rather
+than garish:
 
 | Role | RGB | Use |
 |---|---|---|
@@ -72,7 +84,12 @@ this curated accent set:
 | TEAL | `0.30 0.84 0.80` | Aqua secondary |
 | MIST | `0.92 0.95 0.98` | Neutral near-white |
 
-Procedural color sweeps should lerp between two anchors, with the signature
-ramp being CORAL to AZURE. Flat-colored shape sets should pick distinct palette
-members rather than ad-hoc primaries. Keep `glClearColor` channels at or below
-`REPL_CLEAR_COLOR_MAX_V` (`0.1f`).
+Procedural color sweeps lerp between two anchors — `color = A + (B - A) * s`
+with `s` in `[0, 1]`. The signature ramp is CORAL → AZURE (warm to cool); a few
+scenes use VIOLET → AZURE or an AMBER accent for variety while staying in the
+family. Flat-colored discrete sets (triangle trios, transform groups, tess
+stops) pick distinct palette members rather than ad-hoc primaries.
+
+`glClearColor` channels are capped at `REPL_CLEAR_COLOR_MAX_V` (`0.1f`) so the
+canvas always stays dark; the accents above are full-range `glColor`. When
+touching these colors, keep the whole covered set on the palette.
