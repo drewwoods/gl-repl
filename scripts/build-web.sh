@@ -9,9 +9,9 @@ BOOTSTRAP="${SCRIPT_DIR}/gl4es_bootstrap.c"
 OUT_DIR="${SCRIPT_DIR}/out"
 
 # -- Emscripten environment -------------------------------
-STACK_SIZE=$((1024*1024)) # 1MB stack size for complex samples
-GL_MAX_TEMP_BUFFER_SIZE=$((1024*1024*16)) # 16MB temp buffer for complex samples
-INITIAL_MEMORY=$((1024 * 1024 * 384)) # 384 initial memory for REPL/Complex samples
+STACK_SIZE=$((8*1024*1024)) # 8MB stack size for complex samples
+GL_MAX_TEMP_BUFFER_SIZE=$((1024*1024*64)) # 64MB temp buffer for complex samples
+INITIAL_MEMORY=$((1024 * 1024 * 768)) # 768 initial memory for REPL/Complex samples
 
 # ── Library Paths (edit these if your layout differs) ────────────────────────
 GL4ES_INCLUDE="${SRC_DIR}/gl4es/include"
