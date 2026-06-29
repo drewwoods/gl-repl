@@ -455,27 +455,38 @@ if want light-theme-studio; then
 fi
 
 if want grid-themes; then
-    for theme in SKETCH RADAR PLANES OCEAN; do
+    themes=(SKETCH RADAR PLANES OCEAN)
+    files=()
+    for theme in "${themes[@]}"; do
         still "$WORK/grid_$theme.png" $FADE_FRAMES 16 \
             "$(stage_grid_theme GRID_THEME_$theme)"
+        files+=("$WORK/grid_$theme.png")
     done
-    montage2x2 "$WORK/grid-m.png" \
-        "$WORK"/grid_{SKETCH,RADAR,PLANES,OCEAN}.png
+    montage2x2 "$WORK/grid-m.png" "${files[@]}"
     magick "$WORK/grid-m.png" -resize "$W" "$OUT/grid-themes.png"
     echo "docs-assets: wrote $OUT/grid-themes.png"
 fi
 
 if want backdrops; then
-    still "$WORK/bd_POLAR_DAY_SNOW.png" $FADE_FRAMES 16 \
-        "$(stage_backdrop RENDER3D_BACKDROP_POLAR_DAY_SNOW)"
-    still "$WORK/bd_NEBULA.png" $FADE_FRAMES 16 \
-        "$(stage_backdrop RENDER3D_BACKDROP_NEBULA flat)"
-    still "$WORK/bd_SUNSET.png" $FADE_FRAMES 16 \
-        "$(stage_backdrop RENDER3D_BACKDROP_SUNSET flat)"
-    still "$WORK/bd_AURORA.png" $FADE_FRAMES 16 \
-        "$(stage_backdrop RENDER3D_BACKDROP_AURORA flat)"
-    montage2x2 "$WORK/bd-m.png" \
-        "$WORK"/bd_{POLAR_DAY_SNOW,NEBULA,SUNSET,AURORA}.png
+    backdrops=(
+        "POLAR_DAY_SNOW"
+        "NEBULA flat"
+        "SUNSET flat"
+        "AURORA flat"
+    )
+    files=()
+    for item in "${backdrops[@]}"; do
+        name="${item%% *}"
+        if [[ "$item" == *" "* ]]; then
+            cam="${item#* }"
+        else
+            cam=""
+        fi
+        still "$WORK/bd_$name.png" $FADE_FRAMES 16 \
+            "$(stage_backdrop RENDER3D_BACKDROP_$name "$cam")"
+        files+=("$WORK/bd_$name.png")
+    done
+    montage2x2 "$WORK/bd-m.png" "${files[@]}"
     magick "$WORK/bd-m.png" -resize "$W" "$OUT/backdrops.png"
     echo "docs-assets: wrote $OUT/backdrops.png"
 fi
