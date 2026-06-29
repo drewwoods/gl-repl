@@ -134,9 +134,11 @@
  *
  * They are independent limits: MAX_PREDEF_VARS caps persistent `float x;`
  * slots (one is reserved for built-in `t`), while MAX_EXPR_VARS caps a
- * single expression's visible identifier snapshot, including locals and
- * visible predef vars. Keep MAX_EXPR_VARS >= MAX_PREDEF_VARS so parsing
- * does not silently truncate the global variable table out of scope.
+ * single expression's visible local identifier snapshot (loop iterators and
+ * function parameters). Predefined globals are passed separately through
+ * ReplPredefView / ExprCtx, so a full global table does not consume local
+ * expression slots. The guard below keeps override builds on the conservative
+ * side for stack buffer sizing.
  */
 #ifndef MAX_EXPR_VARS
 #define MAX_EXPR_VARS 32
