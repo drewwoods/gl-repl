@@ -1,7 +1,7 @@
 /* @cfg msaa = 1 */
 /* @cfg line_smooth = 0 */
 /* @cfg accum_effect = 1 */
-/* @cfg accum_passes = 1 */
+/* @cfg accum_passes = 0 */
 /* @cfg wireframe = 0 */
 /* @cfg point_attenuation = 1 */
 /* @cfg auto_time = 1 */
