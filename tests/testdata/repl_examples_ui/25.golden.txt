@@ -98,6 +98,8 @@ void display(void) {
   static float EARTH_RATE = 0.85;
   static float ORB_BASE = 0;
   static float ORB_SCALE = 10;
+  static float aK, eK, iK, lK, pK, nK, mK, eAn;
+  static float xh, yh, x1, y1, z1;
 
   OrbitRings(Drel, node, incl) {
     orbitR = ORB_BASE + ORB_SCALE*log(1 + Drel);
@@ -123,6 +125,39 @@ void display(void) {
     px = orbitR*(cos(node)*cos(u) - sin(node)*sin(u)*cos(incl));
     py = orbitR*sin(u)*sin(incl);
     pz = orbitR*(sin(node)*cos(u) + cos(node)*sin(u)*cos(incl));
+    glEnable(GL_LIGHTING);
+    glColor3f(cr, cg, cb);
+    glPushMatrix();
+      glTranslatef(px, py, pz);
+      glutSolidSphere(EARTH_R * pow(Rrel, 1.0/3.0), 24, 18);
+    glPopMatrix();
+    glDisable(GL_LIGHTING);
+  }
+  planetKepler(a0, adot, e0, edot, I0, Idot, L0, Ldot, peri0, peridot, node0, nodedot, Rrel, cr, cg, cb) {
+    th = t*EARTH_RATE/TAU/100.0; // Julian centuries since J2000.0
+    aK = a0 + adot*th;
+    eK = e0 + edot*th;
+    iK = (I0 + Idot*th)*PI/180;
+    lK = (L0 + Ldot*th)*PI/180;
+    pK = (peri0 + peridot*th)*PI/180;
+    nK = (node0 + nodedot*th)*PI/180;
+    mK = rem(lK - pK, TAU);
+    eAn = mK + eK*sin(mK);
+    eAn = eAn + (mK - (eAn - eK*sin(eAn)))/(1 - eK*cos(eAn));
+    eAn = eAn + (mK - (eAn - eK*sin(eAn)))/(1 - eK*cos(eAn));
+    eAn = eAn + (mK - (eAn - eK*sin(eAn)))/(1 - eK*cos(eAn));
+    eAn = eAn + (mK - (eAn - eK*sin(eAn)))/(1 - eK*cos(eAn));
+    u = pK - nK;
+    xh = aK*(cos(eAn) - eK);
+    yh = aK*sqrt(1 - eK*eK)*sin(eAn);
+    x1 = (cos(u)*cos(nK) - sin(u)*sin(nK)*cos(iK))*xh + (-sin(u)*cos(nK) - cos(u)*sin(nK)*cos(iK))*yh;
+    y1 = (cos(u)*sin(nK) + sin(u)*cos(nK)*cos(iK))*xh + (-sin(u)*sin(nK) + cos(u)*cos(nK)*cos(iK))*yh;
+    z1 = sin(u)*sin(iK)*xh + cos(u)*sin(iK)*yh;
+    u = sqrt(x1*x1 + y1*y1 + z1*z1);
+    orbitR = ORB_BASE + ORB_SCALE*log(1 + u);
+    px = orbitR*x1/u;
+    py = orbitR*z1/u;
+    pz = orbitR*y1/u;
     glEnable(GL_LIGHTING);
     glColor3f(cr, cg, cb);
     glPushMatrix();
@@ -163,9 +198,10 @@ void display(void) {
   //   | Sun     | 109.2  |  hero   |
   //   +---------+--------+---------+
   //
-  // Orbit speeds: Y/E is the true year length relative to Earth, and planet()
-  // uses rate = EARTH_RATE/Y/E. Earth completes one orbit per simulated year,
-  // and t=0 is year 2000.0: Year = 2000 + t*EARTH_RATE/TAU.
+  // Orbit speeds: Y/E is the true year length relative to Earth. The circular
+  // planets use rate = EARTH_RATE/Y/E. Earth and Mars use JPL Keplerian element
+  // rates in planetKepler() below. t=0 is year 2000.0:
+  // Year = 2000 + t*EARTH_RATE/TAU.
   // | Body    | Year length relative to Earth |
   // | ------- | ----------------------------: |
   // | Mercury |                     **0.241** |
@@ -178,9 +214,10 @@ void display(void) {
   // | Neptune |                     **164.8** |
   // | Sun     |                       **N/A** |
   //
-  // J2000 alignment: the phase argument is approximate heliocentric ecliptic
-  // longitude at 2000-01-01 12:00 TT, computed from JPL low-precision elements.
-  // Circular display orbits use that longitude directly as the starting angle.
+  // J2000 alignment: for circular planets, the phase argument is approximate
+  // heliocentric ecliptic longitude at 2000-01-01 12:00 TT, computed from JPL
+  // low-precision elements. Earth and Mars use mean longitude/perihelion rates
+  // instead so their relative phase should align with real opposition dates.
   // | Body    | J2000 heliocentric longitude |
   // | ------- | ---------------------------: |
   // | Mercury |                   253.78 deg |
@@ -235,8 +272,11 @@ void display(void) {
   glColor3f(1, 0.9, 0.65);
   glRasterPos3f(px + 0.2, py + 0.22, pz);
   label("Venus");
+  // Earth and Mars use JPL low-precision Keplerian elements/rates instead of
+  // circular phase advance. These two phases should be accurate enough to align
+  // with real Mars-Earth opposition dates; the other planets remain visual.
   // Earth (the reference radius) + Moon circling it
-  planet(1.000, 1.000, 100.38*PI/180, 0.0, 0.0, 1.000, 0.3, 0.52, 0.95);
+  planetKepler(1.00000261, 0.00000562, 0.01671123, -0.00004392, -0.00001531, -0.01294668, 100.46457166, 35999.37244981, 102.93768193, 0.32327364, 0, 0, 1.000, 0.3, 0.52, 0.95);
   glPushMatrix();
     glTranslatef(px, py, pz);
     glRotatef(t*160, 0, 1, 0);
@@ -250,7 +290,7 @@ void display(void) {
   glRasterPos3f(px + 0.2, py + 0.22, pz);
   label("Earth");
   // Mars (0.532 Earth radii, 1.881 Earth years)
-  planet(1.524, 1.881, 359.45*PI/180, 49.56*PI/180, 1.850*PI/180, 0.532, 0.88, 0.45, 0.26);
+  planetKepler(1.52371034, 0.00001847, 0.09339410, 0.00007882, 1.84969142, -0.00813131, -4.55343205, 19140.30268499, -23.94362959, 0.44441088, 49.55953891, -0.29257343, 0.532, 0.88, 0.45, 0.26);
   glColor3f(1, 0.6, 0.45);
   glRasterPos3f(px + 0.16, py + 0.18, pz);
   label("Mars");
