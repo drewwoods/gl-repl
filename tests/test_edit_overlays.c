@@ -337,6 +337,60 @@ static void test_render_vertex_points(void) {
                trace_count_sym(&log, "glVertex3f"), 0);
 }
 
+/* glutSolid* shapes generate their mesh vertices inside GLUT, so the manual
+ * glVertex* walk above cannot mark them. Vertex-points redraws those shapes
+ * under polygon GL_POINT mode when the user toggle is on. */
+static void test_render_vertex_points_glut(void) {
+    printf("--- edit_overlays edit_overlays_render_vertex_points glut pass ---\n");
+
+    GLCmd cmds[2];
+    mk_cmd(&cmds[0], CMD_TRANSLATE3F, 2.0f, 0.0f, 0.0f);
+    mk_cmd(&cmds[1], CMD_GLUT_SPHERE, 0.5f, 8.0f, 6.0f);
+
+    OverlayWalkCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = cmds;
+    ctx.program.cmd_count = 2;
+    ctx.show_vertex_points = 1;
+
+    char polygon_point[64];
+    char polygon_fill[64];
+    snprintf(polygon_point, sizeof(polygon_point), "glPolygonMode %u %u",
+             (unsigned)GL_FRONT_AND_BACK, (unsigned)GL_POINT);
+    snprintf(polygon_fill, sizeof(polygon_fill), "glPolygonMode %u %u",
+             (unsigned)GL_FRONT_AND_BACK, (unsigned)GL_FILL);
+
+    TraceLog log;
+    trace_begin();
+    edit_overlays_render_vertex_points(&ctx);
+    trace_end(&log);
+
+    ASSERT_INT("glut solid re-drawn for vertex points",
+               (int)gl_stub_counts[GL_STUB_glutSolidSphere], 1);
+    ASSERT_INT("glut vertex points switch polygon mode to GL_POINT",
+               trace_count_line(&log, polygon_point), 1);
+    ASSERT_INT("glut vertex points restore polygon mode to GL_FILL",
+               trace_count_line(&log, polygon_fill), 1);
+    ASSERT_INT("glut vertex points use the large point size",
+               trace_count_line(&log, "glPointSize 4") >= 1, 1);
+    ASSERT_INT("glut vertex points track the modelview transform",
+               trace_count_line(&log, "glTranslatef 2 0 0") >= 1, 1);
+
+    /* Replay-only mode marks a single authored anchor. A glutSolid* anchor
+     * has no authored vertex to emit, so do not redraw the whole mesh unless
+     * the user explicitly enables vertex points. */
+    ctx.show_vertex_points = 0;
+    ctx.replay_vertex_points = 1;
+    ctx.replay_anchor_flat_idx = 1;
+    trace_begin();
+    edit_overlays_render_vertex_points(&ctx);
+    trace_end(&log);
+    ASSERT_INT("replay-only does not redraw a whole glut mesh",
+               (int)gl_stub_counts[GL_STUB_glutSolidSphere], 0);
+    ASSERT_INT("replay-only does not switch to GL_POINT polygon mode",
+               trace_count_line(&log, polygon_point), 0);
+}
+
 /* render_outlines_glbegin_pass (via the public entry): traces an outline
  * around overlay-eligible primitives but leaves line modes alone. */
 static void test_render_outlines_glbegin(void) {
@@ -1197,6 +1251,7 @@ int main(void) {
     test_outline_block_matches_cursor();
     test_build_vertex_walk_context();
     test_render_vertex_points();
+    test_render_vertex_points_glut();
     test_render_outlines_glbegin();
     test_render_outlines_tess();
     test_render_outlines_glut();

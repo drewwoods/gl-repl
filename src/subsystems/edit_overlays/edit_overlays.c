@@ -305,6 +305,48 @@ static void render_outlines_glut_pass(const OverlayWalkCtx *ctx) {
     glPopMatrix();
 }
 
+/* The manual vertex-point walk below only sees REPL-authored glVertex*
+ * commands. glutSolid* meshes are generated inside GLUT, so redraw those
+ * shapes with polygon rasterization switched to points. Keep this tied to
+ * show_vertex_points, not replay-only: replay-only is a single authored draw
+ * anchor, while GL_POINT mode exposes every generated mesh vertex. */
+static void render_vertex_points_glut_pass(const OverlayWalkCtx *ctx) {
+    const GLCmd *cmds = ctx->program.cmds;
+    int cmd_count = ctx->program.cmd_count;
+    int matrix_depth = 0;
+    int has_glut_solid = 0;
+
+    if (!ctx->show_vertex_points)
+        return;
+    for (int i = 0; i < cmd_count; i++) {
+        if (cmds[i].valid && repl_cmd_is_glut_solid(cmds[i].type)) {
+            has_glut_solid = 1;
+            break;
+        }
+    }
+    if (!has_glut_solid)
+        return;
+
+    glPushMatrix();
+    glPointSize(4.0f);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
+    for (int i = 0; i < cmd_count; i++) {
+        if (!cmds[i].valid) continue;
+
+        if (repl_cmd_is_transform(cmds[i].type)) {
+            apply_tracked_transform(&cmds[i], &matrix_depth);
+            continue;
+        }
+        if (!repl_cmd_is_glut_solid(cmds[i].type)) continue;
+
+        repl_executor_draw_glut_solid(&cmds[i]);
+    }
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    glPointSize(1.0f);
+    unwind_transform_stack(&matrix_depth);
+    glPopMatrix();
+}
+
 void edit_overlays_render_outlines(const OverlayWalkCtx *ctx,
                                    int multisample_enabled,
                                    int line_smooth_enabled) {
@@ -387,6 +429,8 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
         unwind_transform_stack(&matrix_depth);
     }
     glPopMatrix();
+
+    render_vertex_points_glut_pass(ctx);
 
     glPopAttrib();
 }
