@@ -257,7 +257,10 @@ build_one() {
         # patched freeglut renames its own windowing to fg_glut* and only
         # contributes solids/fonts/extension queries).
         if grep -q "^gl-repl:" "${input_file_abs}"; then
-            local em_flags="-include ${GL4ES_GL_H} -I${GL4ES_INCLUDE} -I${GLU_DIR}/include -I${FREEGLUT_INCLUDE} -DUSE_MGL_NAMESPACE -std=gnu99"
+            # Web-build config-default overrides (require the matching CFG_DEFAULT_*
+            # in gl-repl's glr_defaults.h to be #ifndef-guarded). Vertex outlines /
+            # points default off here — noisy/heavy in the browser.
+            local em_flags="-include ${GL4ES_GL_H} -I${GL4ES_INCLUDE} -I${GLU_DIR}/include -I${FREEGLUT_INCLUDE} -DUSE_MGL_NAMESPACE -DCFG_DEFAULT_VERTEX_OUTLINES=0 -DCFG_DEFAULT_VERTEX_POINTS=0 -std=gnu99"
             # Bundle only sample.mp3 (the `make app` small-download policy)
             # — gl-repl's assets/ can symlink a full multi-hundred-MB
             # playlist that file_packager would happily follow.
