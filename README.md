@@ -13,10 +13,9 @@
 
 </div>
 
-An interactive interpreter for fixed-function OpenGL. You write one line of
-GL, commit it, and the geometry appears immediately — beside the source that
-made it. No build step. No shaders. No scene files. Geometry and color,
-nothing else.
+An interactive interpreter for fixed-function OpenGL. As you type GL, the
+scene renders beside the source that made it. No build step, no shaders, no
+scene files; just geometry and color.
 
 <sub>Strictly a Read-Eval-**Render** Loop, but RERL is unpronounceable.</sub>
 
@@ -143,9 +142,9 @@ rate is just the scalar in front of `t`, and every line stays editable.
 - **Immediate mode.** The joy is the locality: the geometry is in the code,
   not hidden behind a data file.
 - **Limited state.** Animation is a pure function of time; particles come
-  from a deterministic `rand`. Run the same scene twice, see the same thing.
-- **No textures, just geometry and color.** The expressiveness has to come
-  from composition — that's the point.
+  from a deterministic `rand`.
+- **No textures, just geometry and color.** The expressiveness comes from
+  composition
 
 <br>
 
