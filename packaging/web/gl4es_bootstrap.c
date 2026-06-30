@@ -105,6 +105,24 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
     EM_ASM({
         var wheelCallback = $0;
 
+        /* Emscripten's own library_glut.js registers a handler on window for the
+         * legacy 'mousewheel' / 'DOMMouseScroll' events (GLUT.onMouseWheel) that
+         * synthesizes a GLUT mouse button 3/4 GLUT_DOWN with no matching UP. That
+         * collides with the clean canvas 'wheel' bridge below: the synthetic
+         * button press leaves a pointer button "stuck" and resets the camera zoom
+         * velocity the bridge just added, so 3D-scene zoom never happens (the
+         * code-panel scroll path, which ignores button state, still works — hence
+         * wheel appears to work there but not in the scene).
+         *
+         * Neutralize GLUT's handler at the source by stubbing it out. GLUT reads
+         * GLUT.onMouseWheel only when it registers the listener, inside glutInit
+         * (called from main, after this ctor), so overwriting it now means the
+         * stub is what gets registered. This touches no event propagation, so the
+         * bridge's 'wheel' listener is completely unaffected. */
+        if (typeof GLUT !== 'undefined') {
+            GLUT.onMouseWheel = function() {};
+        }
+
         function getCanvas() {
             return Module['canvas'] || document.querySelector('canvas');
         }
