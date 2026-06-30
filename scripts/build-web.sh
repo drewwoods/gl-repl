@@ -7,6 +7,7 @@ PROJECT_SRC="${SCRIPT_DIR}/../src"
 PROJECT_INCLUDE="${SCRIPT_DIR}/../include"
 BOOTSTRAP="${SCRIPT_DIR}/gl4es_bootstrap.c"
 OUT_DIR="${SCRIPT_DIR}/out"
+DEFAULT_GL_REPL_MAKEFILE="${SCRIPT_DIR}/../../gl-repl/Makefile"
 
 # -- Emscripten environment -------------------------------
 STACK_SIZE=$((8*1024*1024)) # 8MB stack size for complex samples
@@ -32,9 +33,11 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 usage() {
-    echo "Usage: $(basename "$0") [OPTIONS] <source.c | Makefile>"
+    local exit_code="${1:-0}"
+    echo "Usage: $(basename "$0") [OPTIONS] [source.c | Makefile]"
     echo ""
     echo "Compile OpenGL C samples to WebAssembly using Emscripten + gl4es + GLU"
+    echo "With no source argument, builds ../../gl-repl/Makefile."
     echo ""
     echo "Options:"
     echo "  --all       Build all best.c and sample.c files from ../src/** (direct emcc)"
@@ -42,10 +45,12 @@ usage() {
     echo "  --help      Show this help message"
     echo ""
     echo "Examples:"
+    echo "  $(basename "$0")"
+    echo "  $(basename "$0") ../../gl-repl/Makefile"
     echo "  $(basename "$0") ../src/sine-spin/best.c"
     echo "  $(basename "$0") ../src/immediate-mode-repl/claude4.6-opus-thinking/Makefile"
     echo "  $(basename "$0") --all"
-    exit 0
+    exit "${exit_code}"
 }
 
 # ── Dependency Checks ────────────────────────────────────────────────────────
@@ -437,7 +442,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ ${BUILD_ALL} -eq 0 && -z "${SOURCE_FILE}" ]]; then
-    usage
+    if [[ -f "${DEFAULT_GL_REPL_MAKEFILE}" ]]; then
+        SOURCE_FILE="${DEFAULT_GL_REPL_MAKEFILE}"
+    else
+        echo -e "${RED}Error: default gl-repl Makefile not found: ${DEFAULT_GL_REPL_MAKEFILE}${NC}"
+        echo ""
+        usage 1
+    fi
 fi
 
 # Check all dependencies

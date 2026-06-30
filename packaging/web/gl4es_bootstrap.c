@@ -1,4 +1,6 @@
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,6 +10,16 @@
 #include <emscripten.h>
 #endif
 
+#ifdef __EMSCRIPTEN__
+/* gl-repl provides this. Keep a weak no-op so the bootstrap remains reusable
+ * for smaller one-file samples that do not link the REPL controller. */
+__attribute__((weak)) void glr_ctrl_mousewheel(int wheel, int direction, int x, int y) {
+    (void)wheel;
+    (void)direction;
+    (void)x;
+    (void)y;
+}
+#endif
 
 /* Emscripten's built-in JS GLUT (library_glut.js) supplies the windowing/
  * event layer (the patched freeglut renames its own windowing to fg_glut*
@@ -81,6 +93,121 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
             }, 50);
         }
     });
+
+    /* Browser input defaults are hostile to a GLUT-style canvas: wheel scrolls
+     * the page, middle-click can start browser autoscroll, right-click opens a
+     * menu, and keys like Space/Backspace/arrows/F-keys/Ctrl+S go to the
+     * browser unless the canvas owns focus and cancels the default action.
+     * Emscripten's GLUT layer still receives the events because these handlers
+     * only call preventDefault(); they do not stop propagation. The explicit
+     * wheel bridge covers runtimes that do not implement freeglut's
+     * glutMouseWheelFunc extension. */
+    EM_ASM({
+        var wheelCallback = $0;
+
+        function getCanvas() {
+            return Module['canvas'] || document.querySelector('canvas');
+        }
+
+        function canvasCoords(canvas, event) {
+            var rect = canvas.getBoundingClientRect();
+            var sx = rect.width ? canvas.width / rect.width : 1;
+            var sy = rect.height ? canvas.height / rect.height : 1;
+            var p = new Array(2);
+            p[0] = Math.max(0, Math.min(canvas.width - 1,
+                Math.floor((event.clientX - rect.left) * sx)));
+            p[1] = Math.max(0, Math.min(canvas.height - 1,
+                Math.floor((event.clientY - rect.top) * sy)));
+            return p;
+        }
+
+        function isFunctionKey(key) {
+            var n;
+            if (key.length < 2 || key.length > 3 || key.charAt(0) !== 'F') return false;
+            n = Number(key.substring(1));
+            return n >= 1 && n <= 24;
+        }
+
+        function callWheel(direction, x, y) {
+            if (!wheelCallback) return;
+            getWasmTableEntry(wheelCallback)(0, direction, x, y);
+        }
+
+        function installInputGuards() {
+            var canvas = getCanvas();
+            if (!canvas) return false;
+            if (canvas.__glrInputGuardsInstalled) return true;
+            canvas.__glrInputGuardsInstalled = true;
+            canvas.tabIndex = canvas.tabIndex >= 0 ? canvas.tabIndex : 0;
+            canvas.style.outline = canvas.style.outline || 'none';
+
+            function focusCanvas() {
+                try { canvas.focus({ preventScroll: true }); }
+                catch (e) { try { canvas.focus(); } catch (ignore) {} }
+            }
+
+            function canvasActive() {
+                return document.activeElement === canvas;
+            }
+
+            function editableTarget(target) {
+                if (!target || target === canvas) return false;
+                var tag = target.tagName;
+                return target.isContentEditable ||
+                    tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+            }
+
+            function shouldCancelKey(event) {
+                if (!canvasActive() || editableTarget(event.target)) return false;
+                var key = event.key || "";
+                return event.ctrlKey || event.metaKey || event.altKey ||
+                    key === ' ' || key === 'Spacebar' || key === 'Tab' ||
+                    key === 'Backspace' || key === 'Escape' ||
+                    key === 'Home' || key === 'End' ||
+                    key === 'PageUp' || key === 'PageDown' ||
+                    key === 'Insert' || key === 'Delete' ||
+                    key.indexOf('Arrow') === 0 || isFunctionKey(key);
+            }
+
+            canvas.addEventListener('mousedown', function(event) {
+                focusCanvas();
+                if (event.button === 1 || event.button === 2) {
+                    event.preventDefault();
+                }
+            }, true);
+            canvas.addEventListener('auxclick', function(event) {
+                focusCanvas();
+                event.preventDefault();
+            }, true);
+            canvas.addEventListener('contextmenu', function(event) {
+                event.preventDefault();
+            }, true);
+            canvas.addEventListener('wheel', function(event) {
+                focusCanvas();
+                event.preventDefault();
+                if (event.deltaY === 0) return;
+                var p = canvasCoords(canvas, event);
+                callWheel(event.deltaY < 0 ? 1 : -1, p[0], p[1]);
+            }, { capture: true, passive: false });
+
+            document.addEventListener('keydown', function(event) {
+                if (shouldCancelKey(event)) event.preventDefault();
+            }, true);
+            document.addEventListener('keyup', function(event) {
+                if (shouldCancelKey(event)) event.preventDefault();
+            }, true);
+
+            console.log('[gl4es_bootstrap] installed canvas input guards');
+            return true;
+        }
+
+        if (!installInputGuards()) {
+            var guardTries = 0;
+            var guardTimer = setInterval(function() {
+                if (installInputGuards() || ++guardTries > 200) clearInterval(guardTimer);
+            }, 50);
+        }
+    }, glr_ctrl_mousewheel);
 #endif
 
     initialize_gl4es();
