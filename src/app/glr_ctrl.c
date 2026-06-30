@@ -2587,7 +2587,9 @@ void glr_ctrl_bootstrap_repl(const char *input_file) {
     editor_state_edit_line_set(repl_load_initial_commands(input_file));
     /* Startup banner. Lives on the controller side so pipeline TUs
      * don't own display-string side effects. */
-    repl_set_status("Ready - type GL commands, press ; to execute. F1 for help. F12 for examples.");
+    if (ui_state_status().kind != UI_STATUS_ERROR) {
+        repl_set_status("Ready - type GL commands, press ; to execute. F1 for help. F12 for examples.");
+    }
 }
 
 void glr_ctrl_set_accum(int enabled) {

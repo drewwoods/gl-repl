@@ -79,6 +79,7 @@ struct ImportState {
     int in_snippet;
     int past_snippet;
     int func_depth;                   /* depth inside a function definition */
+    int allow_raw_scene;              /* markerless files are plain REPL source */
     int loaded;
     int warnings;
     int edit_line;                    /* caller-owned cursor (Phase 3.6.4) */
@@ -1410,6 +1411,7 @@ static void import_state_init(ImportState *s) {
     s->in_snippet = 0;
     s->past_snippet = 0;
     s->func_depth = 0;
+    s->allow_raw_scene = 0;
     s->loaded = 0;
     s->warnings = 0;
     s->edit_line = 0;
@@ -1638,6 +1640,23 @@ static int import_try_snippet_start(ImportState *s, const char *p) {
     return 1;
 }
 
+static int import_try_raw_scene_body(ImportState *s, const char *p) {
+    if (!s->allow_raw_scene || s->func_depth != 0)
+        return 0;
+    const char *q = p;
+    while (*q && isspace((unsigned char)*q))
+        q++;
+    if (strncmp(q, "// camera", 9) == 0) {
+        q += 9;
+        while (*q && isspace((unsigned char)*q))
+            q++;
+        if (*q == '\0')
+            return 1;
+    }
+    import_feed_one_line(s, p);
+    return 1;
+}
+
 static int import_try_pending_comment(ImportState *s, const char *p) {
     if (*p == '\0') {
         s->pending_blank_run++;
@@ -1689,6 +1708,7 @@ typedef enum {
     IMPORT_LINE_FUNCTION_HEADER,
     IMPORT_LINE_PRE_SNIPPET_STASH_DECL,
     IMPORT_LINE_SNIPPET_START,
+    IMPORT_LINE_RAW_SCENE_BODY,
     IMPORT_LINE_PENDING_COMMENT,
     IMPORT_LINE_SNIPPET_END,
     IMPORT_LINE_BLANK,
@@ -1733,6 +1753,12 @@ static int import_handle_snippet_start(ImportState *s, const char *p,
                                        const char *raw) {
     (void)raw;
     return import_try_snippet_start(s, p);
+}
+
+static int import_handle_raw_scene_body(ImportState *s, const char *p,
+                                        const char *raw) {
+    (void)raw;
+    return import_try_raw_scene_body(s, p);
 }
 
 static int import_handle_pending_comment(ImportState *s, const char *p,
@@ -1797,6 +1823,7 @@ static const ImportLineHandlerSpec IMPORT_PRE_SNIPPET_HANDLERS[] = {
     { IMPORT_LINE_FUNCTION_HEADER,  import_handle_function_header },
     { IMPORT_LINE_PRE_SNIPPET_STASH_DECL, import_handle_stash_predef_decl },
     { IMPORT_LINE_SNIPPET_START,    import_handle_snippet_start },
+    { IMPORT_LINE_RAW_SCENE_BODY,   import_handle_raw_scene_body },
     { IMPORT_LINE_PENDING_COMMENT,  import_handle_pending_comment },
 };
 
@@ -2005,6 +2032,34 @@ typedef struct {
     int truncated;
 } ImportAccum;
 
+static int import_line_has_snippet_marker(const char *line) {
+    return line && strstr(line, "Snippet start") != NULL;
+}
+
+static int import_lines_have_snippet_marker(const char *const *lines) {
+    for (int i = 0; lines && lines[i]; i++) {
+        if (import_line_has_snippet_marker(lines[i]))
+            return 1;
+    }
+    return 0;
+}
+
+static int import_file_has_snippet_marker(FILE *f) {
+    char line[MAX_LINE_LEN];
+    int found = 0;
+
+    if (!f)
+        return 0;
+    while (fgets(line, sizeof(line), f)) {
+        if (import_line_has_snippet_marker(line)) {
+            found = 1;
+            break;
+        }
+    }
+    rewind(f);
+    return found;
+}
+
 static void import_process_physical_line(ImportState *state,
                                          char *line,
                                          ImportAccum *acc) {
@@ -2168,6 +2223,7 @@ int repl_export_load_from_lines(const char *const *lines,
                                 ReplImportResult *result) {
     ImportState state;
     import_begin_load(&state, result);
+    state.allow_raw_scene = !import_lines_have_snippet_marker(lines);
 
     int truncated_line = 0;
     ImportAccum acc = { .accum = "", .line_no = 0, .depth = 0, .truncated = 0 };
@@ -2201,6 +2257,7 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
         fprintf(stderr, "%s\n", msg);
         return 0;
     }
+    state.allow_raw_scene = !import_file_has_snippet_marker(f);
 
     char line[MAX_LINE_LEN];
     int truncated_line = 0;

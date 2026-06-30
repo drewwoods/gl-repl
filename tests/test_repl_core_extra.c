@@ -478,6 +478,55 @@ void test_workspace_initial_load_activates_first_slot() {
     }
 }
 
+void test_markerless_raw_scene_import() {
+    printf("--- Markerless raw scene import ---\n");
+    glr_ctrl_reset_all(); declare_test_vars();
+
+    const char *path = "/tmp/repl_markerless_raw_scene.c";
+    FILE *f = fopen(path, "w");
+    ASSERT_TRUE("raw scene fixture fopen", f != NULL);
+    if (f) {
+        fprintf(f, "// @cfg light_theme = LIGHT_THEME_NEON\n");
+        fprintf(f, "// camera\n");
+        fprintf(f, "glTranslatef(0.0000f, 0.0000f, -9.1513f);\n");
+        fprintf(f, "glRotatef(12.0069f, 1.0f, 0.0f, 0.0f);\n");
+        fprintf(f, "glRotatef(92.0173f, 0.0f, 1.0f, 0.0f);\n");
+        fprintf(f, "glTranslatef(-0.0000f, -0.0000f, -0.0000f);\n");
+        fprintf(f, "glColor3f(1, 0.4, 0.8);\n");
+        fprintf(f, "glutSolidTorus(0.3, 0.9, 24, 48);\n");
+        fclose(f);
+    }
+
+    ASSERT_INT("raw scene import succeeds",
+               repl_export_load_from_file(path, NULL), 1);
+    ASSERT_INT("only raw scene commands enter document",
+               repl_state_document_count(), 2);
+
+    unlink(path);
+}
+
+void test_initial_load_failure_does_not_load_default_example() {
+    printf("--- Initial load failure does not load default example ---\n");
+    glr_ctrl_reset_all(); declare_test_vars();
+
+    const char *path = "/tmp/repl_initial_load_bad_scene.c";
+    FILE *f = fopen(path, "w");
+    ASSERT_TRUE("bad initial-load fixture fopen", f != NULL);
+    if (f) {
+        fprintf(f, "this is not a repl command;\n");
+        fclose(f);
+    }
+
+    ASSERT_INT("failed initial load returns empty cursor",
+               repl_load_initial_commands(path), 0);
+    ASSERT_INT("failed initial load leaves document empty",
+               repl_state_document_count(), 0);
+    ASSERT_INT("failed initial load activates My Scene",
+               repl_active_user_scene(), 0);
+
+    unlink(path);
+}
+
 void test_workspace_save_slug_collisions() {
     printf("--- Workspace save slug collisions ---\n");
     glr_ctrl_reset_all(); declare_test_vars();
@@ -1766,6 +1815,8 @@ int main(int argc, char **argv) {
     test_inline_file_prompt_flow();
     test_workspace_round_trip();
     test_workspace_initial_load_activates_first_slot();
+    test_markerless_raw_scene_import();
+    test_initial_load_failure_does_not_load_default_example();
     test_workspace_save_slug_collisions();
     test_workspace_save_max_slug_collisions();
     test_scene_load_clears_func_aliases_and_saved_workspace_stays_clean();
