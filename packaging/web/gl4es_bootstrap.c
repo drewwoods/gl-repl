@@ -121,6 +121,28 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
          * bridge's 'wheel' listener is completely unaffected. */
         if (typeof GLUT !== 'undefined') {
             GLUT.onMouseWheel = function() {};
+
+            /* Backspace fix: emscripten's GLUT maps keyCode 8 to a non-standard
+             * "special" key (120) routed to glutSpecialFunc, instead of
+             * delivering ASCII 8 to glutKeyboardFunc the way real GLUT/freeglut
+             * does. gl-repl's editor expects KEY_BACKSPACE (ASCII 8) on the
+             * keyboard callback, and nothing handles special-120, so backspace is
+             * dead. Re-route at the source: drop backspace from the special-key
+             * map so onKeydown falls through to the ASCII path, and emit 8 there
+             * (keeping modifiers, unlike stock getASCIIKey which returns null
+             * under ctrl/alt/meta — gl-repl reads modifiers separately). Forward
+             * delete (keyCode 46 -> 111 GLUT_KEY_DELETE) is left alone; gl-repl
+             * already handles it. */
+            var glrOrigSpecialKey = GLUT.getSpecialKey;
+            GLUT.getSpecialKey = function(keycode) {
+                if (keycode === 8) return null;
+                return glrOrigSpecialKey(keycode);
+            };
+            var glrOrigAsciiKey = GLUT.getASCIIKey;
+            GLUT.getASCIIKey = function(event) {
+                if (event['keyCode'] === 8) return 8;
+                return glrOrigAsciiKey(event);
+            };
         }
 
         function getCanvas() {
