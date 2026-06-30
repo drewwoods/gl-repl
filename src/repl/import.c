@@ -24,6 +24,7 @@
  * WORKSPACE_DIRECTIVES dispatcher table here pairs each name with its reader
  * only, and export.c carries its own emit-only table.
  */
+#include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include "repl/export.h"          /* public reader API */
@@ -2142,6 +2143,22 @@ static int import_finish_load(ImportState *state,
                      "Loaded %d commands from %s", state->loaded, label);
         repl_set_status(msg);
         fprintf(stderr, "%s\n", msg);
+    } else {
+        /* File opened and read cleanly but produced no commands — an empty
+         * or non-REPL file, or one whose every line failed to parse. Without
+         * this the caller (repl_load_initial_commands) silently falls back to
+         * the default example, stranding any @cfg side effects already
+         * applied above (e.g. a light theme) on the wrong scene. */
+        char msg[REPL_STATUS_TEXT_MAX];
+        if (state->warnings > 0)
+            snprintf(msg, sizeof(msg),
+                     "Import failed: no commands loaded from %s (%d unparsed line%s)",
+                     label, state->warnings, state->warnings == 1 ? "" : "s");
+        else
+            snprintf(msg, sizeof(msg),
+                     "Import failed: no commands loaded from %s", label);
+        repl_set_status_error(msg);
+        fprintf(stderr, "%s\n", msg);
     }
     return state->loaded > 0;
 }
@@ -2176,7 +2193,14 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
     import_begin_load(&state, result);
 
     FILE *f = fopen(filename, "r");
-    if (!f) return 0;
+    if (!f) {
+        char msg[REPL_STATUS_TEXT_MAX];
+        snprintf(msg, sizeof(msg), "Error: cannot open %s: %s",
+                 filename && filename[0] ? filename : "<file>", strerror(errno));
+        repl_set_status_error(msg);
+        fprintf(stderr, "%s\n", msg);
+        return 0;
+    }
 
     char line[MAX_LINE_LEN];
     int truncated_line = 0;
