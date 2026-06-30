@@ -287,6 +287,7 @@ static const char *menu_item_label(int menu_id, int i) {
         if (i == GLR_FILE_ITEM_NEW_SCENE)     return "New Scene";
         if (i == GLR_FILE_ITEM_SAVE_SCENE)    return "Save Scene";
         if (i == GLR_FILE_ITEM_LOAD_SCENE)    return "Load Scene";
+        if (i == GLR_FILE_ITEM_LOAD_CLIPBOARD) return "Load Scene from Clipboard";
         if (i == GLR_FILE_ITEM_RENAME_SCENE)  return "Rename Scene";
         if (i == GLR_FILE_ITEM_EXPORT_PLY)    return "Export .ply";
         if (i == GLR_FILE_ITEM_SPLIT_DECL)    return "Split Declaration";

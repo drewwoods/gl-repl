@@ -884,6 +884,7 @@ gl-repl keeps up to 8 scenes in memory, shown as tabs below the menu bar.
 | File → New Scene | Start a fresh scene |
 | File → Save Scene (Ctrl+S) | Export the active scene as standalone C |
 | File → Load Scene | Load a `.c` file into a new scene slot |
+| File → Load Scene from Clipboard (macOS) | Load clipboard text, or the first Markdown fenced code block, into a new scene slot |
 | File → Save Workspace | Write every open scene as `<name>.c` in a directory |
 | File → Load Workspace | Load every `*.c` in a directory as scenes |
 

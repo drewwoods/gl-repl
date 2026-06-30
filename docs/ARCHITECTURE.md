@@ -1667,7 +1667,7 @@ The host-effect bridge ([ReplHostEffects](../src/repl/host_effects.h#L38)) insta
 
 #### 3. Export Bridges & Layout Inputs
 The exporter ([`src/repl/export.c`](../src/repl/export.c)) is GL-free and app-free. All app/render3d values are retrieved through controller-installed bridges:
-* **Config Bridge:** Installed via [`glr_actions_install_export_cfg_bridge()`](../src/app/glr_actions.h#L84) so the exporter can read/write `@cfg` blocks without direct coupling to app configuration modules.
+* **Config Bridge:** Installed via [`glr_actions_install_export_cfg_bridge()`](../src/app/glr_actions.h#L85) so the exporter can read/write `@cfg` blocks without direct coupling to app configuration modules.
 * **Camera Bridge:** Installed via [`glr_camera_export_install_bridge()`](../src/app/glr_camera_export.h#L14) to serialize camera coordinates (`// camera` blocks).
 * **Reshape-Projection Bridge:** Allows the exporter or code-panel calculations to query perspective or orthographic projections dynamically.
 * **Camera-Distance Source:** Injects the current camera distance into the command executor so that the dynamic point-attenuation fallback (scaling `glPointSize` manually when `glPointParameterfv` is unsupported) can function without linking [`glr_camera.c`](../src/app/glr_camera.c).
