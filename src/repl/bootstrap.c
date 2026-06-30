@@ -26,6 +26,12 @@ static void scroll_to_display_function(void) {
     repl_dispatch_scroll_to_line(target);
 }
 
+static int activate_empty_home_after_failed_import(void) {
+    repl_scenes_reset_for_transient();
+    repl_scenes_activate_home_slot(NULL);
+    return repl_state_document_count();
+}
+
 int repl_load_initial_commands(const char *import_file) {
     /* Returns the post-load cursor target. Caller (controller above
      * the beta boundary) applies via editor_state_edit_line_set
@@ -54,6 +60,7 @@ int repl_load_initial_commands(const char *import_file) {
                 return repl_state_document_count();
             }
         }
+        return activate_empty_home_after_failed_import();
     }
 
     /* Show example 0 as a starting demo, then anchor slot 0 ("My Scene")
