@@ -148,6 +148,14 @@ const char *repl_active_scene_export_path(const char *ext);
 int  repl_load_scene_as_new_slot(const char *path,
                                  ReplSceneLoadStatus *out_reason);
 
+/* Runtime "load text as new scene": same transactional slot semantics as
+ * repl_load_scene_as_new_slot(), but imports already-read scene text instead
+ * of probing a filesystem path. Used by clipboard/stdin-style callers.
+ * `fallback_name` names the slot when the text has no @scene-name metadata. */
+int  repl_load_scene_text_as_new_slot(const char *text,
+                                      const char *fallback_name,
+                                      ReplSceneLoadStatus *out_reason);
+
 /* Query/set the bound workspace directory (persisted across save/load).
  * repl_workspace_dir() returns "" if not bound. repl_set_workspace_dir(NULL)
  * clears the binding. String is copied internally. */

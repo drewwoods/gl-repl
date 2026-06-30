@@ -53,6 +53,11 @@
 #include "render3d/lights.h"           /* render3d_lights_apply_theme, render3d_light_theme_names */
 #include "subsystems/edit_overlays/edit_overlays.h"
 
+#if defined(__APPLE__)
+extern FILE *popen(const char *command, const char *mode);
+extern int pclose(FILE *stream);
+#endif
+
 static const char *replay_mode_names[] = { "Polygon", "Vertex" };
 static const char *backdrop_mode_names[RENDER3D_BACKDROP_COUNT] = {
     RENDER3D_BACKDROP_LIST(RENDER3D_BACKDROP_NAME_ENTRY)
@@ -100,6 +105,158 @@ static void bind_app_workspace_for_scene_save_if_needed(void) {
     if (glr_paths_cwd_supports_relative_saves())
         return;
     repl_set_workspace_dir(glr_paths_default_workspace_dir());
+}
+
+#define GLR_CLIPBOARD_MAX_BYTES (1024 * 1024)
+
+static char *glr_copy_text_range(const char *start, size_t len) {
+    char *out = (char *)malloc(len + 1);
+    if (!out)
+        return NULL;
+    memcpy(out, start, len);
+    out[len] = '\0';
+    return out;
+}
+
+static char *glr_scene_text_from_clipboard_text(const char *clipboard_text) {
+    if (!clipboard_text)
+        return NULL;
+
+    const char *open = strstr(clipboard_text, "```");
+    if (open) {
+        const char *body = strchr(open, '\n');
+        if (body) {
+            body++;
+            const char *close = strstr(body, "\n```");
+            if (close && close > body)
+                return glr_copy_text_range(body, (size_t)(close - body));
+        }
+    }
+
+    return glr_copy_text_range(clipboard_text, strlen(clipboard_text));
+}
+
+static char *glr_system_clipboard_read_text(char *err, int err_sz) {
+    if (err && err_sz > 0)
+        err[0] = '\0';
+#if defined(__APPLE__)
+    FILE *pipe = popen("/usr/bin/pbpaste", "r");
+    if (!pipe) {
+        if (err && err_sz > 0)
+            snprintf(err, (size_t)err_sz, "Clipboard read failed");
+        return NULL;
+    }
+
+    size_t cap = 4096;
+    size_t len = 0;
+    char *buf = (char *)malloc(cap);
+    if (!buf) {
+        pclose(pipe);
+        if (err && err_sz > 0)
+            snprintf(err, (size_t)err_sz, "Clipboard load: out of memory");
+        return NULL;
+    }
+
+    char chunk[1024];
+    size_t nread;
+    while ((nread = fread(chunk, 1, sizeof(chunk), pipe)) > 0) {
+        if (len + nread + 1 > GLR_CLIPBOARD_MAX_BYTES) {
+            free(buf);
+            pclose(pipe);
+            if (err && err_sz > 0)
+                snprintf(err, (size_t)err_sz, "Clipboard text is too large");
+            return NULL;
+        }
+        if (len + nread + 1 > cap) {
+            size_t new_cap = cap;
+            while (len + nread + 1 > new_cap)
+                new_cap *= 2;
+            char *next = (char *)realloc(buf, new_cap);
+            if (!next) {
+                free(buf);
+                pclose(pipe);
+                if (err && err_sz > 0)
+                    snprintf(err, (size_t)err_sz, "Clipboard load: out of memory");
+                return NULL;
+            }
+            buf = next;
+            cap = new_cap;
+        }
+        memcpy(buf + len, chunk, nread);
+        len += nread;
+    }
+
+    int read_failed = ferror(pipe);
+    int close_status = pclose(pipe);
+    if (read_failed || (close_status != 0 && len == 0)) {
+        free(buf);
+        if (err && err_sz > 0)
+            snprintf(err, (size_t)err_sz, "Clipboard read failed");
+        return NULL;
+    }
+    if (len == 0) {
+        free(buf);
+        if (err && err_sz > 0)
+            snprintf(err, (size_t)err_sz, "Clipboard is empty");
+        return NULL;
+    }
+    buf[len] = '\0';
+    return buf;
+#else
+    if (err && err_sz > 0)
+        snprintf(err, (size_t)err_sz,
+                 "Load Scene from Clipboard is macOS-only");
+    return NULL;
+#endif
+}
+
+static void glr_set_clipboard_scene_load_error(ReplSceneLoadStatus reason) {
+    switch (reason) {
+    case REPL_SCENE_LOAD_ERR_EMPTY_PATH:
+        repl_set_status_error("Clipboard is empty");
+        break;
+    case REPL_SCENE_LOAD_ERR_PARSE:
+        repl_set_status_error("Clipboard does not contain a loadable scene");
+        break;
+    case REPL_SCENE_LOAD_ERR_NO_SLOT:
+        repl_set_status_error("All scene slots full -- save workspace to free a slot");
+        break;
+    default:
+        repl_set_status_error("Load Scene from Clipboard failed");
+        break;
+    }
+}
+
+static void glr_action_load_scene_from_clipboard(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+    char *clipboard_text = glr_system_clipboard_read_text(err, (int)sizeof(err));
+    if (!clipboard_text) {
+        repl_set_status_error(err[0] ? err : "Clipboard read failed");
+        return;
+    }
+
+    char *scene_text = glr_scene_text_from_clipboard_text(clipboard_text);
+    free(clipboard_text);
+    if (!scene_text) {
+        repl_set_status_error("Clipboard load: out of memory");
+        return;
+    }
+
+    ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
+    int slot = repl_load_scene_text_as_new_slot(scene_text, "Clipboard Scene", &reason);
+    free(scene_text);
+
+    if (slot < 0) {
+        glr_set_clipboard_scene_load_error(reason);
+        return;
+    }
+
+    editor_undo_note_wholesale_replacement();
+    editor_load_line_to_input(editor_state_edit_line());
+
+    char msg[96];
+    snprintf(msg, sizeof(msg), "Loaded scene from clipboard (slot %d)", slot);
+    repl_set_status(msg);
 }
 
 /* Unified audio cfg: two-state on/off toggle.
@@ -936,6 +1093,9 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
         }
         case GLR_FILE_ITEM_LOAD_SCENE:
             editor_inline_file_prompt_begin(DEFAULT_SCENE_FILE);
+            return 1;
+        case GLR_FILE_ITEM_LOAD_CLIPBOARD:
+            glr_action_load_scene_from_clipboard();
             return 1;
         case GLR_FILE_ITEM_RENAME_SCENE: {
             int slot = repl_active_user_scene();

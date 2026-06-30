@@ -527,6 +527,53 @@ void test_initial_load_failure_does_not_load_default_example() {
     unlink(path);
 }
 
+void test_scene_text_load_as_new_slot() {
+    printf("--- Scene text load as new slot ---\n");
+    glr_ctrl_reset_all(); declare_test_vars();
+
+    const char *scene_text =
+        "// @cfg light_theme = LIGHT_THEME_NEON\n"
+        "// camera\n"
+        "glTranslatef(0.0000f, 0.0000f, -9.1513f);\n"
+        "glRotatef(12.0069f, 1.0f, 0.0f, 0.0f);\n"
+        "glRotatef(92.0173f, 0.0f, 1.0f, 0.0f);\n"
+        "glTranslatef(-0.0000f, -0.0000f, -0.0000f);\n"
+        "glColor3f(1, 0.4, 0.8);\n"
+        "glutSolidTorus(0.3, 0.9, 24, 48);\n";
+
+    ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
+    int slot = repl_load_scene_text_as_new_slot(scene_text, "Clipboard Scene", &reason);
+    ASSERT_TRUE("scene text load succeeds", slot >= 0);
+    ASSERT_INT("scene text load reason ok", reason, REPL_SCENE_LOAD_OK);
+    ASSERT_INT("scene text load activates slot", repl_active_user_scene(), slot);
+    ASSERT_STR("scene text fallback name",
+               repl_user_scene_name(slot), "Clipboard Scene");
+    ASSERT_INT("scene text commands enter document",
+               repl_state_document_count(), 2);
+
+    const char *cr_scene_text =
+        "glColor3f(0, 1, 0);\r"
+        "glutSolidCube(1);\r";
+    int cr_slot = repl_load_scene_text_as_new_slot(
+        cr_scene_text, "CR Clipboard", &reason);
+    ASSERT_TRUE("scene text load accepts CR line endings", cr_slot >= 0);
+    ASSERT_INT("CR scene text reason ok", reason, REPL_SCENE_LOAD_OK);
+    ASSERT_INT("CR scene text commands enter document",
+               repl_state_document_count(), 2);
+
+    editor_feed_line("glVertex3f(1,2,3);");
+    int before = repl_state_document_count();
+    int active_before = repl_active_user_scene();
+    int bad_slot = repl_load_scene_text_as_new_slot(
+        "this is not a repl command;\n", "Bad Clipboard", &reason);
+    ASSERT_INT("bad scene text load fails", bad_slot, -1);
+    ASSERT_INT("bad scene text reason parse", reason, REPL_SCENE_LOAD_ERR_PARSE);
+    ASSERT_INT("bad scene text preserves document",
+               repl_state_document_count(), before);
+    ASSERT_INT("bad scene text preserves active scene",
+               repl_active_user_scene(), active_before);
+}
+
 void test_workspace_save_slug_collisions() {
     printf("--- Workspace save slug collisions ---\n");
     glr_ctrl_reset_all(); declare_test_vars();
@@ -1817,6 +1864,7 @@ int main(int argc, char **argv) {
     test_workspace_initial_load_activates_first_slot();
     test_markerless_raw_scene_import();
     test_initial_load_failure_does_not_load_default_example();
+    test_scene_text_load_as_new_slot();
     test_workspace_save_slug_collisions();
     test_workspace_save_max_slug_collisions();
     test_scene_load_clears_func_aliases_and_saved_workspace_stays_clean();

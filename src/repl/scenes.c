@@ -515,7 +515,7 @@ const char *repl_active_scene_export_path(const char *ext) {
     return path;
 }
 
-static int load_scene_file_into_slot(const char *path) {
+static void reset_live_for_scene_import(void) {
     scene_snapshot_load_live_commands(NULL, NULL, 0, 0);
     /* Start each imported scene from the built-in predef baseline (`t`).
      * Workspace headers then re-declare any user vars on top. Clearing the
@@ -525,26 +525,73 @@ static int load_scene_file_into_slot(const char *path) {
     repl_eval_init_predef_vars();
     repl_func_alias_clear_all();
 
-    ReplImportResult import_result;
-    if (!repl_export_load_from_file(path, &import_result)) return -1;
+}
 
+static int save_imported_scene_to_free_slot(const ReplImportResult *import_result,
+                                            const char *fallback_name) {
     int slot = find_free_user_scene_slot();
     if (!g_user_scenes[0].used) slot = 0;
     if (slot < 0) return -1;
 
     char scene_name[USER_SCENE_NAME_MAX];
-    if (import_result.scene_name[0]) {
-        snprintf(scene_name, sizeof(scene_name), "%s", import_result.scene_name);
-    } else {
-        workspace_io_scene_name_from_filename(path, scene_name, sizeof(scene_name));
-        if (!scene_name[0])
-            snprintf(scene_name, sizeof(scene_name), "Scene %d", slot);
-    }
+    if (import_result && import_result->scene_name[0])
+        snprintf(scene_name, sizeof(scene_name), "%s", import_result->scene_name);
+    else if (fallback_name && fallback_name[0])
+        snprintf(scene_name, sizeof(scene_name), "%s", fallback_name);
+    else
+        snprintf(scene_name, sizeof(scene_name), "Scene %d", slot);
 
     char unique[USER_SCENE_NAME_MAX];
     derive_unique_scene_name(unique, sizeof(unique), scene_name, -1);
     save_scene_to_slot(slot, unique, repl_dispatch_edit_line_get());
     return slot;
+}
+
+static int load_scene_file_into_slot(const char *path) {
+    reset_live_for_scene_import();
+
+    ReplImportResult import_result;
+    if (!repl_export_load_from_file(path, &import_result)) return -1;
+
+    char fallback_name[USER_SCENE_NAME_MAX];
+    workspace_io_scene_name_from_filename(path, fallback_name, sizeof(fallback_name));
+    return save_imported_scene_to_free_slot(&import_result, fallback_name);
+}
+
+static int load_scene_lines_into_slot(const char *const *lines,
+                                      const char *source_name,
+                                      const char *fallback_name) {
+    reset_live_for_scene_import();
+
+    ReplImportResult import_result;
+    if (!repl_export_load_from_lines(lines, source_name, &import_result))
+        return -1;
+
+    return save_imported_scene_to_free_slot(&import_result, fallback_name);
+}
+
+typedef struct {
+    const char *path;
+} SceneFileLoadCtx;
+
+typedef struct {
+    const char *const *lines;
+    const char       *source_name;
+    const char       *fallback_name;
+} SceneTextLoadCtx;
+
+typedef int (*SceneSlotLoader)(void *ctx);
+
+static int scene_file_loader(void *ctx) {
+    SceneFileLoadCtx *c = (SceneFileLoadCtx *)ctx;
+    return load_scene_file_into_slot(c ? c->path : NULL);
+}
+
+static int scene_text_loader(void *ctx) {
+    SceneTextLoadCtx *c = (SceneTextLoadCtx *)ctx;
+    if (!c)
+        return -1;
+    return load_scene_lines_into_slot(c->lines, c->source_name, c->fallback_name);
 }
 
 int repl_load_workspace(const char *dir) {
@@ -710,6 +757,88 @@ int repl_scenes_create_empty_user_scene(void) {
     return slot;
 }
 
+static int repl_load_scene_via_loader(SceneSlotLoader loader,
+                                      void *ctx,
+                                      ReplSceneLoadStatus *out_reason) {
+    if (!loader) {
+        if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_PARSE;
+        return -1;
+    }
+
+    /* Persist the currently-active scene into ITS slot (not slot 0!)
+     * before the loader wipes live state. Using save_user_scene() here
+     * would clobber the home slot ("My Scene") any time the active scene
+     * was at slot 1+, losing the user's in-progress edits when they
+     * switched back via tabs / F12. */
+    repl_scenes_save_active_scene_if_any();
+
+    /* Stash so a parse failure or slots-full restore leaves the live
+     * document intact. The concrete loader clears live state as its
+     * first step, so we must capture before that point.
+     *
+     * Both scratches are heap-allocated up front; this function holds
+     * them simultaneously across a try_evict_lru call (which adds
+     * another SceneSnapshot on its own frame). On the stack that totals
+     * ~3.6 MB before redzones — close to overrun on default worker
+     * stacks. */
+    SceneSnapshot *stash = scene_snapshot_scratch_alloc();
+    UserScene *evicted_stash = (UserScene *)malloc(sizeof(UserScene));
+    if (!stash || !evicted_stash) {
+        scene_snapshot_scratch_free(stash);
+        free(evicted_stash);
+        if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_NO_SLOT;
+        return -1;
+    }
+    stash_live_state(stash);
+    int stash_example = g_example_idx;
+    int stash_active  = g_active_user_scene;
+
+    /* Eviction is transactional with the load: snapshot the victim
+     * slot's in-memory entry so a subsequent parse failure can
+     * restore the tab. Without this, a bad-syntax load would silently
+     * drop the LRU tab from the user's workspace. */
+    int evicted_slot = try_evict_lru(evicted_stash);
+    if (evicted_slot == -2) {
+        restore_live_from_stash(stash);
+        scene_snapshot_scratch_free(stash);
+        free(evicted_stash);
+        repl_state_scenes_set_active_example_idx(stash_example);
+        g_active_user_scene = stash_active;
+        if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_NO_SLOT;
+        return -1;
+    }
+    /* evicted_slot == -1 means no eviction was needed (a free slot
+     * already existed); >=0 means we evicted and snapshotted. */
+
+    int slot = loader(ctx);
+    if (slot < 0) {
+        restore_live_from_stash(stash);
+        repl_state_scenes_set_active_example_idx(stash_example);
+        g_active_user_scene = stash_active;
+        /* Roll back the eviction's in-memory mutation. The on-disk
+         * file written by evict_scene_to_workspace is left in place —
+         * it's a faithful copy of the scene's pre-eviction state, so
+         * after restore_evicted_slot the in-memory tab and the disk
+         * file agree, and the user has lost nothing. */
+        restore_evicted_slot(evicted_slot, evicted_stash);
+        scene_snapshot_scratch_free(stash);
+        free(evicted_stash);
+        if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_PARSE;
+        return -1;
+    }
+
+    scene_snapshot_scratch_free(stash);
+    free(evicted_stash);
+
+    /* The loader left live state == the loaded scene and stored a copy
+     * in the slot. Activate the slot so subsequent edits accumulate
+     * there and scene tabs reflect the new active. */
+    g_active_user_scene = slot;
+    repl_state_scenes_set_active_example_idx(-1);
+    if (out_reason) *out_reason = REPL_SCENE_LOAD_OK;
+    return slot;
+}
+
 int repl_load_scene_as_new_slot(const char *path,
                                 ReplSceneLoadStatus *out_reason) {
     if (out_reason) *out_reason = REPL_SCENE_LOAD_OK;
@@ -733,76 +862,96 @@ int repl_load_scene_as_new_slot(const char *path,
         return -1;
     }
 
-    /* Persist the currently-active scene into ITS slot (not slot 0!)
-     * before load_scene_file_into_slot wipes live state. Using
-     * save_user_scene() here would clobber the home slot ("My Scene")
-     * any time the active scene was at slot 1+, losing the user's
-     * in-progress edits when they switched back via tabs / F12. */
-    repl_scenes_save_active_scene_if_any();
+    SceneFileLoadCtx ctx = { path };
+    return repl_load_scene_via_loader(scene_file_loader, &ctx, out_reason);
+}
 
-    /* Stash so a parse failure or slots-full restore leaves the live
-     * document intact. load_scene_file_into_slot clears live state as
-     * its first step, so we must capture before that point.
-     *
-     * Both scratches are heap-allocated up front; this function holds
-     * them simultaneously across a try_evict_lru call (which adds
-     * another SceneSnapshot on its own frame). On the stack that totals
-     * ~3.6 MB before redzones — close to overrun on default worker
-     * stacks. */
-    SceneSnapshot *stash = scene_snapshot_scratch_alloc();
-    UserScene *evicted_stash = (UserScene *)malloc(sizeof(UserScene));
-    if (!stash || !evicted_stash) {
-        scene_snapshot_scratch_free(stash);
-        free(evicted_stash);
-        if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_NO_SLOT;
-        return -1;
-    }
-    stash_live_state(stash);
-    int stash_example = g_example_idx;
-    int stash_active  = g_active_user_scene;
+static int split_scene_text_lines(const char *text,
+                                  char ***out_lines,
+                                  char **out_storage) {
+    if (out_lines) *out_lines = NULL;
+    if (out_storage) *out_storage = NULL;
+    if (!text || !*text || !out_lines || !out_storage)
+        return 0;
 
-    /* Eviction is transactional with the load: snapshot the victim
-     * slot's in-memory entry so a subsequent parse failure can
-     * restore the tab. Without this, a bad-syntax file would silently
-     * drop the LRU tab from the user's workspace. */
-    int evicted_slot = try_evict_lru(evicted_stash);
-    if (evicted_slot == -2) {
-        restore_live_from_stash(stash);
-        scene_snapshot_scratch_free(stash);
-        free(evicted_stash);
-        repl_state_scenes_set_active_example_idx(stash_example);
-        g_active_user_scene = stash_active;
-        if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_NO_SLOT;
-        return -1;
-    }
-    /* evicted_slot == -1 means no eviction was needed (a free slot
-     * already existed); >=0 means we evicted and snapshotted. */
-
-    int slot = load_scene_file_into_slot(path);
-    if (slot < 0) {
-        restore_live_from_stash(stash);
-        repl_state_scenes_set_active_example_idx(stash_example);
-        g_active_user_scene = stash_active;
-        /* Roll back the eviction's in-memory mutation. The on-disk
-         * file written by evict_scene_to_workspace is left in place —
-         * it's a faithful copy of the scene's pre-eviction state, so
-         * after restore_evicted_slot the in-memory tab and the disk
-         * file agree, and the user has lost nothing. */
-        restore_evicted_slot(evicted_slot, evicted_stash);
-        scene_snapshot_scratch_free(stash);
-        free(evicted_stash);
-        if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_PARSE;
-        return -1;
+    size_t len = strlen(text);
+    int cap = 2;
+    for (size_t i = 0; i < len; i++) {
+        if (text[i] == '\r') {
+            cap++;
+            if (i + 1 < len && text[i + 1] == '\n')
+                i++;
+        } else if (text[i] == '\n') {
+            cap++;
+        }
     }
 
-    scene_snapshot_scratch_free(stash);
-    free(evicted_stash);
+    char *storage = (char *)malloc(len + 1);
+    char **lines = (char **)malloc((size_t)cap * sizeof(char *));
+    if (!storage || !lines) {
+        free(storage);
+        free(lines);
+        return 0;
+    }
+    memcpy(storage, text, len + 1);
 
-    /* load_scene_file_into_slot left live state == the loaded scene
-     * and stored a copy in the slot. Activate the slot so subsequent
-     * edits accumulate there and scene tabs reflect the new active. */
-    g_active_user_scene = slot;
-    repl_state_scenes_set_active_example_idx(-1);
+    int count = 0;
+    char *start = storage;
+    char *p = storage;
+    while (1) {
+        if (*p == '\r' || *p == '\n' || *p == '\0') {
+            char delim = *p;
+            *p = '\0';
+            if (count < cap - 1)
+                lines[count++] = start;
+            if (delim == '\0')
+                break;
+            if (delim == '\r' && p[1] == '\n') {
+                p++;
+                *p = '\0';
+            }
+            p++;
+            start = p;
+            if (*start == '\0')
+                break;
+        } else {
+            p++;
+        }
+    }
+    lines[count] = NULL;
+
+    *out_lines = lines;
+    *out_storage = storage;
+    return count;
+}
+
+int repl_load_scene_text_as_new_slot(const char *text,
+                                     const char *fallback_name,
+                                     ReplSceneLoadStatus *out_reason) {
+    if (out_reason) *out_reason = REPL_SCENE_LOAD_OK;
+    if (!text || !*text) {
+        if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_EMPTY_PATH;
+        return -1;
+    }
+
+    char **lines = NULL;
+    char *storage = NULL;
+    int line_count = split_scene_text_lines(text, &lines, &storage);
+    if (line_count <= 0) {
+        free(lines);
+        free(storage);
+        if (out_reason) *out_reason = REPL_SCENE_LOAD_ERR_EMPTY_PATH;
+        return -1;
+    }
+
+    SceneTextLoadCtx ctx = {
+        (const char *const *)lines,
+        "<clipboard>",
+        fallback_name,
+    };
+    int slot = repl_load_scene_via_loader(scene_text_loader, &ctx, out_reason);
+    free(lines);
+    free(storage);
     return slot;
 }
 
