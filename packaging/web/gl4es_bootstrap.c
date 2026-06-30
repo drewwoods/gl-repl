@@ -140,7 +140,21 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
             };
             var glrOrigAsciiKey = GLUT.getASCIIKey;
             GLUT.getASCIIKey = function(event) {
-                if (event['keyCode'] === 8) return 8;
+                var kc = event['keyCode'];
+                if (kc === 8) return 8;
+                /* Ctrl+letter: stock getASCIIKey returns null on ANY modifier,
+                 * so every Ctrl shortcut is dropped. freeglut delivers the
+                 * control code (Ctrl+A=1 .. Ctrl+Z=26) on the keyboard callback
+                 * with CTRL set in glutGetModifiers; gl-repl's keymap is built on
+                 * those KEY_CTRL_* bytes. saveModifiers (called by onKeydown)
+                 * already records the modifiers, so just emit the control code to
+                 * match native. Shift rides along for Ctrl+Shift+<key> bindings.
+                 * Alt/Meta combos are left to the stock path (the browser/OS owns
+                 * most Cmd shortcuts). */
+                if (event['ctrlKey'] && !event['altKey'] && !event['metaKey'] &&
+                    kc >= 65 && kc <= 90) {
+                    return kc - 64;
+                }
                 return glrOrigAsciiKey(event);
             };
         }
