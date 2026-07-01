@@ -315,6 +315,21 @@ static int parse_arg_slots(const char *src,
     return n_filled;
 }
 
+/* Light slot 0..MAX_LIGHTS-1 for a "glEnable(GL_LIGHTn" / "glDisable(GL_LIGHTn"
+ * text (committed line or live, still-being-typed input), else -1. The digit
+ * guard after "GL_LIGHT" rejects GL_LIGHTING / GL_LIGHT_MODEL*, and the missing
+ * close paren of a partial mid-typed line is irrelevant, so live feedback lands
+ * as soon as the digit is typed. */
+static int light_slot_from_text(const char *s) {
+    if (!s) return -1;
+    if (strncmp(s, "glEnable(", 9) != 0 && strncmp(s, "glDisable(", 10) != 0)
+        return -1;
+    const char *g = strstr(s, "GL_LIGHT");
+    if (!g) return -1;
+    char d = g[8]; /* char after "GL_LIGHT" */
+    return (d >= '0' && d < '0' + MAX_LIGHTS) ? d - '0' : -1;
+}
+
 /* Resolve the cursor-line vertex / normal args into floats so the scene
  * module can render its guides without depending on repl_eval. Sets the
  * pre-parsed fields on `snapshot` based on `input`. */
@@ -983,6 +998,27 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
         config->lights[i].enabled = repl_light_enabled(repl_render.light_enabled_mask, i);
     }
     config->show_light_indicators = presentation.show_light_indicators;
+
+    /* Emphasize the indicator for the light whose glEnable/glDisable line the
+     * cursor is on. Only meaningful when the indicators are drawn, so skip the
+     * work otherwise. Prefer the live input buffer (so a still-being-typed
+     * "glEnable(GL_LIGHT2" highlights immediately); fall back to the committed
+     * source cmd, mapping GL_LIGHTn (args[0]) to a slot as the executor does. */
+    config->highlight_light_slot = -1;
+    if (config->show_light_indicators) {
+        config->highlight_light_slot = light_slot_from_text(editor_state_input().input);
+        if (config->highlight_light_slot < 0) {
+            int edit_line = editor_state_edit_line();
+            if (edit_line >= 0 && edit_line < repl_state_document_count()) {
+                const GLCmd *cmd = repl_state_document_cmd_at(edit_line);
+                if (cmd && (cmd->type == CMD_ENABLE || cmd->type == CMD_DISABLE)) {
+                    int slot = (int)cmd->args[0] - (int)GL_LIGHT0;
+                    if (slot >= 0 && slot < MAX_LIGHTS)
+                        config->highlight_light_slot = slot;
+                }
+            }
+        }
+    }
 
     /* --- Environment --- */
     config->backdrop_mode = presentation.backdrop_mode;
