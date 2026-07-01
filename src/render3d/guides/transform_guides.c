@@ -5,7 +5,6 @@
 #include "repl/transform_utils.h"
 #include "render3d/palette.h"
 #include "render3d/occluded_ghost.h"
-#include "render3d/overlays.h" /* render3d_draw_bitmap_text */
 
 #include <ctype.h>  /* isspace */
 #include <math.h>   /* sqrtf, fminf, fmodf, cosf, sinf, fabsf, M_PI */
@@ -127,7 +126,12 @@ static void draw_translate_endpoint_label(const float tip_local[3],
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glColor4f(0.80f, 0.95f, 1.0f, 0.95f);
-    render3d_draw_bitmap_text(FONT_SMALL, tip_local[0], tip_local[1], tip_local[2], buf);
+    /* Emit the glyphs directly (rather than via render3d overlays) so this TU
+     * stays free of an overlays.o link dependency — the isolated guides test
+     * links only the guide objects. */
+    glRasterPos3f(tip_local[0], tip_local[1], tip_local[2]);
+    for (const char *c = buf; *c; c++)
+        glutBitmapCharacter(FONT_SMALL, (unsigned char)*c);
     transform_guides_pop_state();
 }
 
