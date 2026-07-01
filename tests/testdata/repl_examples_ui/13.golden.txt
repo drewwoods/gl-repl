@@ -93,10 +93,10 @@ void display(void) {
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  static float dist, n, x, y, ang;
+  static float dist = 1.4; // @tune
+  static float n = 400; // @tune
+  static float x, y, ang;
   glClearColor(0.05, 0.06, 0.08, 1);
-  dist = 1.4;
-  n = 400;
   glBegin(GL_LINE_LOOP);
     for(i, 0, n) {
       ang = TAU * i/n;

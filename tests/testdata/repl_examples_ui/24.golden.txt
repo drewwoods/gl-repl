@@ -94,6 +94,8 @@ void display(void) {
 --- header_post ---
 --- source ---
   static float x, y, z, n, k, s;
+  static float fireflies = 44; // @tune
+  static float flyRadius = 2.6; // @tune
 
   // --- sea(): animated water sheet (nested for + analytic normals) ---
   // Colored by wave height: deep azure troughs lift to bright azure crests.
@@ -318,9 +320,9 @@ void display(void) {
   glEnable(GL_POINT_SMOOTH);
   glPointSize(7);
   glBegin(GL_POINTS);
-    for(i, 0, 44) {
+    for(i, 0, fireflies) {
       k = rand(i, 0)*TAU;
-      s = 1.2 + rand(i, 1)*2.6;
+      s = 1.2 + rand(i, 1)*flyRadius;
       x = cos(k + t*(0.25 + rand(i, 2)*0.4))*s;
       z = sin(k + t*(0.25 + rand(i, 2)*0.4))*s;
       y = 0.1 + 1.4*rand(i, 3) + 0.18*sin(t*2 + i);

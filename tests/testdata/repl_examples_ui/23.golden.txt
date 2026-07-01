@@ -100,6 +100,7 @@ void display(void) {
   static float rings = 9; // bell latitude strips
   static float tentacles = 15; // @tune
   static float tentLen = 2.4; // @tune
+  static float marineSnow = 110; // @tune
 
   // one tentacle: a swaying line strip; alpha fades toward the tip and the
   // pulse tugs the strand upward (the drop*drop term makes tips lag the bell)
@@ -132,9 +133,9 @@ void display(void) {
   bellH = 1.1*(1 - 0.14*pulse);
 
   // marine snow: slow upward drift, wrapped with rem() so the field loops
-  glPointSize(5);
+  glPointSize(7);
   glBegin(GL_POINTS);
-    for(p, 0, 110) {
+    for(p, 0, marineSnow) {
       glColor4f(0.55, 0.75, 0.95, 0.08 + 0.22*rand(p, 4));
       // rise speed 0.15..0.5 per mote; rem() wraps y into [-3.2, 3.2]
       glVertex3f(4.5*rand2(p, 0) + 0.2*sin(t*0.4 + p), rem(3.2*rand2(p, 1) + t*(0.15 + 0.35*rand(p, 3)), 6.4), 4.5*rand2(p, 2));
