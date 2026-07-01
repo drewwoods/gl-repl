@@ -1,6 +1,6 @@
 *.o
 *.dSYM
-*.ini
+audio_state.ini
 # ...but the repl_live_demo ships a default config (not runtime state).
 !tools/repl_live_demo/repl_live_demo.ini
 # The built-in example catalog is authored source, not runtime state.
