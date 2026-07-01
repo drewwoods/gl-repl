@@ -1,3 +1,4 @@
+// @cfg label_scope = OVERLAY_VERTEX_LABEL_SCOPE_AT_VERTEX
 // @cfg view_mode = RENDER3D_VIEW_2D
 // camera
 glTranslatef(0.0f, 0.0f, -8.0f);
