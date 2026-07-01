@@ -269,6 +269,14 @@ void render3d_lights_render(const Render3dFrameRenderContext *frame_ctx) {
     float cam_wx = 0.0f, cam_wy = 0.0f, cam_wz = 0.0f;
     render3d_lights_camera_world_pos(&frame_ctx->config, &cam_wx, &cam_wy, &cam_wz);
 
+    /* Camera-facing basis (eye +X / +Y rotated into world) for the
+     * cursor-highlight ring — slot-independent, so compute it once. */
+    float hi_rx, hi_ry, hi_rz, hi_ux, hi_uy, hi_uz;
+    render3d_lights_eye_dir_to_world(&frame_ctx->config, 1.0f, 0.0f, 0.0f,
+                                     &hi_rx, &hi_ry, &hi_rz);
+    render3d_lights_eye_dir_to_world(&frame_ctx->config, 0.0f, 1.0f, 0.0f,
+                                     &hi_ux, &hi_uy, &hi_uz);
+
     for (int i = 0; i < MAX_LIGHTS; i++) {
         const Render3dLight *light = &frame_ctx->config.lights[i];
         const float *d = light->diffuse;
@@ -299,6 +307,24 @@ void render3d_lights_render(const Render3dFrameRenderContext *frame_ctx) {
             lx = p[0];
             ly = p[1];
             lz = p[2];
+        }
+
+        if (i == frame_ctx->config.highlight_light_slot) {
+            /* Cursor is on this light's glEnable/glDisable(GL_LIGHTn) line:
+             * ring the glyph with a pulsing camera-facing loop so it reads
+             * as "this one". Drawn for on and off lights alike. */
+            float r = 0.35f + breath * 0.08f;
+            glLineWidth(2.0f);
+            glBegin(GL_LINE_LOOP);
+            glColor4f(1.0f, 0.95f, 0.6f, 0.6f + breath * 0.35f);
+            for (int s = 0; s < 32; s++) {
+                float a = (float)s / 32.0f * 6.2831853f;
+                float c = cosf(a) * r, sn = sinf(a) * r;
+                glVertex3f(lx + hi_rx * c + hi_ux * sn,
+                           ly + hi_ry * c + hi_uy * sn,
+                           lz + hi_rz * c + hi_uz * sn);
+            }
+            glEnd();
         }
 
         if (on) {

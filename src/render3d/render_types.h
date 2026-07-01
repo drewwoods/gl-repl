@@ -213,6 +213,10 @@ typedef struct Render3dRenderConfig {
     int        user_lighting_enabled;
     Render3dLight lights[MAX_LIGHTS];
     int        show_light_indicators;
+    /* Slot 0..MAX_LIGHTS-1 of the light whose indicator to emphasize
+     * (the cursor is on its glEnable/glDisable(GL_LIGHTn) line), or -1
+     * for none. Only consulted when show_light_indicators is set. */
+    int        highlight_light_slot;
 
     /* --- Environment --- */
     Render3dBackdropMode backdrop_mode;
