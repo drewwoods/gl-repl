@@ -8,6 +8,7 @@ PROJECT_INCLUDE="${SCRIPT_DIR}/../include"
 BOOTSTRAP="${SCRIPT_DIR}/gl4es_bootstrap.c"
 OUT_DIR="${SCRIPT_DIR}/out"
 DEFAULT_GL_REPL_MAKEFILE="${SCRIPT_DIR}/../../gl-repl/Makefile"
+EMSCRIPTEN_INI="examples/catalog-emscripten.ini"
 
 # -- Emscripten environment -------------------------------
 STACK_SIZE=$((8*1024*1024)) # 8MB stack size for complex samples
@@ -273,10 +274,20 @@ build_one() {
             fi
 
             pushd "${sample_dir}" > /dev/null
+            # Ship a web-specific example set: a trimmed catalog (drop examples
+            # too heavy/unsupported in the browser) if the repo provides one,
+            # else fall back to the Makefile's default examples/catalog.ini.
+            local repl_catalog=""
+            if [[ -f "${sample_dir}/${EMSCRIPTEN_INI}" ]]; then
+                repl_catalog="EXAMPLES_CATALOG=${EMSCRIPTEN_INI}"
+                echo -e "${CYAN}  using web example catalog: ${EMSCRIPTEN_INI}${NC}"
+            fi
+
             emmake make "${out_html}" \
                 CC=emcc \
                 OBJDIR=build/emscripten \
                 SAMPLE_BIN="${out_html}" \
+                ${repl_catalog} \
                 GL_HEADER_CFLAGS="${em_flags}" \
                 GL_LDFLAGS="${BOOTSTRAP} ${GL4ES_LIB} ${GLU_LIB} ${FREEGLUT_LIB} -s USE_WEBGL2=1 -s FULL_ES2=1 -s INITIAL_MEMORY=${INITIAL_MEMORY} -s STACK_SIZE=${STACK_SIZE} -s GL_MAX_TEMP_BUFFER_SIZE=${GL_MAX_TEMP_BUFFER_SIZE} ${repl_preload}"
             local res=$?
