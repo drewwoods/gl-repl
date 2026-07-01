@@ -93,7 +93,9 @@ void display(void) {
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  static float grid, extent, x, y, z, invGradMag; // strip cell index, world extent, vertex coords, 1/|gradient|
+  static float grid = 16; // grid size @tune
+  static float extent = 3; // grid extent @tune
+  static float x, y, z, invGradMag; // vertex coords, 1/|gradient|
   static float amp = 0.4; // wave amplitude (peak |y|)
   static float freq = 2.5; // spatial frequency along x and z
   static float zPhase = 0.7; // z-axis time phase: z evolves slower than x (<1)
@@ -110,8 +112,6 @@ void display(void) {
   glEnable(GL_LIGHT1);
   glEnable(GL_LIGHT0);
   glShadeModel(GL_SMOOTH);
-  grid = 16; // rows/cols of strip cells
-  extent = 3.0; // total surface width along x and z
   for(i, 0, grid) {
     glBegin(GL_TRIANGLE_STRIP);
       for(j, 0, grid+1) {
