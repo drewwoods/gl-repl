@@ -5,9 +5,11 @@
 #include "repl/transform_utils.h"
 #include "render3d/palette.h"
 #include "render3d/occluded_ghost.h"
+#include "render3d/overlays.h" /* render3d_draw_bitmap_text */
 
 #include <ctype.h>  /* isspace */
 #include <math.h>   /* sqrtf, fminf, fmodf, cosf, sinf, fabsf, M_PI */
+#include <stdio.h>  /* snprintf */
 #include <string.h> /* strncmp, strlen */
 
 static void transform_guides_push_state(void) {
@@ -93,6 +95,40 @@ static void mat4_mul_col_major(const float a[16], const float b[16], float out[1
                 a[3 * 4 + row] * b[col * 4 + 3];
         }
     }
+}
+
+/* Transform a point through a column-major 4x4 (implicit w = 1). */
+static void mat4_point_col_major(const float m[16], const float p[3], float out[3]) {
+    out[0] = m[0] * p[0] + m[4] * p[1] + m[8]  * p[2] + m[12];
+    out[1] = m[1] * p[0] + m[5] * p[1] + m[9]  * p[2] + m[13];
+    out[2] = m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14];
+}
+
+/* Snap near-zero (incl. -0.0) to +0.0 so a label never reads "-0.00". */
+static float tg_snap_zero(float v) {
+    return (fabsf(v) < 0.005f) ? 0.0f : v;
+}
+
+/* Draw the translate endpoint's world position as a small text label at the
+ * arrow tip. `tip_local` is the tip in the currently loaded guide frame (so
+ * glRasterPos lands it on the arrowhead); `tip_world` is the same point in
+ * world space — the position the model matrix leaves the origin at through
+ * this line. Drawn once, depth-test off so the number is always legible. */
+static void draw_translate_endpoint_label(const float tip_local[3],
+                                          const float tip_world[3]) {
+    char buf[48];
+    snprintf(buf, sizeof(buf), " (%.2f, %.2f, %.2f)",
+             tg_snap_zero(tip_world[0]), tg_snap_zero(tip_world[1]),
+             tg_snap_zero(tip_world[2]));
+
+    transform_guides_push_state();
+    glDisable(GL_LIGHTING);
+    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColor4f(0.80f, 0.95f, 1.0f, 0.95f);
+    render3d_draw_bitmap_text(FONT_SMALL, tip_local[0], tip_local[1], tip_local[2], buf);
+    transform_guides_pop_state();
 }
 
 /* Walk flat cmds strictly before cursor_flat_idx, applying only transform
@@ -967,6 +1003,11 @@ void render3d_transform_guides_render_if_due(const Render3dGuideSnapshot *snapsh
         live_cmd = &snapshot->flat_program.cmds[flat_cmd_idx];
     }
     float guide_origin[3];
+    /* Before-cursor world frame, kept so the translate endpoint label can map
+     * the local arrow tip into world space. Only filled (have_frame) in FRAME
+     * mode; in WORLD mode the guide is already drawn in world coordinates. */
+    float frame[16];
+    int have_frame = 0;
 
     /* Replay (req 6) shares the FRAME/WORLD anchoring below: the plan already
      * pointed cursor_flat_idx at the replay-chosen transform, so the guide
@@ -974,9 +1015,9 @@ void render3d_transform_guides_render_if_due(const Render3dGuideSnapshot *snapsh
      * rather than on the vertex (which already sits post-transform). */
     glPushMatrix();
     if (snapshot->xform_guide_mode == RENDER3D_XFORM_GUIDE_FRAME) {
-        float frame[16];
         float guide_mv[16];
         compute_before_cursor_matrix(snapshot, plan->cursor_flat_idx, frame);
+        have_frame = 1;
         mat4_mul_col_major(cam_view, frame, guide_mv);
         glLoadMatrixf(guide_mv);
         guide_origin[0] = guide_origin[1] = guide_origin[2] = 0.0f;
@@ -1015,6 +1056,25 @@ void render3d_transform_guides_render_if_due(const Render3dGuideSnapshot *snapsh
         glDisable(GL_LINE_STIPPLE);
     }
     glPopAttrib();
+
+    /* Endpoint world-position label for a translate: the position the model
+     * matrix leaves the origin at through this line. Drawn once, over both
+     * passes, at the arrow tip. Scale/rotate have no single "ends at" point. */
+    if (live_cmd->type == CMD_TRANSLATE3F) {
+        float tip_local[3] = {
+            guide_origin[0] + live_cmd->args[0],
+            guide_origin[1] + live_cmd->args[1],
+            guide_origin[2] + live_cmd->args[2]
+        };
+        float tip_world[3];
+        if (have_frame)
+            mat4_point_col_major(frame, tip_local, tip_world);
+        else /* WORLD mode: guide already drawn in world coordinates */
+            tip_world[0] = tip_local[0],
+            tip_world[1] = tip_local[1],
+            tip_world[2] = tip_local[2];
+        draw_translate_endpoint_label(tip_local, tip_world);
+    }
 
     glPopMatrix();
     plan->consumed = 1;

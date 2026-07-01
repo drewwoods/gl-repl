@@ -452,7 +452,7 @@ metadata, and the [`Render3dFocusVertex`](../src/render3d/render_types.h#L123) /
 3D overlays.
 
 Render3d-local accumulation jitter does not live in the config. Derived
-per-pass data belongs in [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L285), for example camera world height,
+per-pass data belongs in [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L289), for example camera world height,
 focus vertex, and other values that helper renderers should share.
 
 ## Render3d Layer
@@ -997,7 +997,7 @@ include `ui_*` headers.
 
 ### Render3d state access
 
-Target rule: `render3d_*` files consume [`Render3dRenderConfig`](../src/render3d/render_types.h#L131), [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L285),
+Target rule: `render3d_*` files consume [`Render3dRenderConfig`](../src/render3d/render_types.h#L131), [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L289),
 or explicit snapshot structs. They should not call `repl_state_*` directly.
 
 `check-state-boundaries` enforces the current audited boundary.
