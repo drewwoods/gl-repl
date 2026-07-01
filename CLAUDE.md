@@ -1022,7 +1022,7 @@ pipeline, so it stays hidden from the code panel. `@cfg` parsing reuses
 these scene-presentation slugs:
 
 `wireframe`, `grid`, `grid_major`, `grid_extent`, `grid_brightness`, `axes`,
-`vertex_labels`, `normal_vectors`, `vertex_outlines`, `vertex_points`,
+`vertex_labels`, `label_scope`, `normal_vectors`, `vertex_outlines`, `vertex_points`,
 `xform_guides`, `light_indicators`, `light_theme`, `backdrop`,
 `view_mode`, `camera_rotate`, `variable_panel`.
 
