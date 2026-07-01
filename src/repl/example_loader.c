@@ -7,6 +7,7 @@
 #include "repl/examples.h"
 #include "repl/scenes.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "repl/example_loader.h"
 #include "repl/host_effects.h"
@@ -214,15 +215,14 @@ static int consume_example_cfg_header(const char *const *lines) {
 
 /* ----- Body emission with editor-canonical func_def placement ----- */
 
-/* Upper bound on an example's post-metadata body lines. Sizes the
- * func-reorder `kinds[]` buffer below and bounds every emission pass;
- * lines past it are silently dropped, so it must clear the largest
- * example (the "Dusk lighthouse atoll" stress test, ~260 lines). */
-#define EXAMPLE_BODY_LINES_MAX 384
-
 #define EXAMPLE_KIND_OTHER      0
 #define EXAMPLE_KIND_FUNC_BLOCK 1
 #define EXAMPLE_KIND_VAR_DECL   2
+
+static void example_load_error(const char *msg) {
+    repl_set_status_error(msg);
+    fprintf(stderr, "%s\n", msg);
+}
 
 /* Empty lines + `// ...` comments are equivalent for leading-run
  * detection: editor_compile_func_def's compile_func_leading_comment_start
@@ -283,11 +283,45 @@ static int example_line_brace_delta(const char *line) {
     return delta;
 }
 
-static void emit_example_body_two_pass(const char *const *body,
-                                       int *edit_line_inout) {
-    if (!body) return;
+static int example_body_count(const char *const *body, int *count_out) {
+    int n = 0;
 
+    if (!count_out)
+        return 0;
+    while (body && body[n]) {
+        if (n >= EXAMPLE_BODY_LINES_MAX) {
+            char msg[REPL_DIAG_TEXT_MAX];
+            snprintf(msg, sizeof(msg),
+                     "Example load failed: body exceeds EXAMPLE_BODY_LINES_MAX=%d",
+                     EXAMPLE_BODY_LINES_MAX);
+            example_load_error(msg);
+            return 0;
+        }
+        n++;
+    }
+    *count_out = n;
+    return 1;
+}
+
+static int apply_example_body_line(const char *line,
+                                   int body_line_idx,
+                                   int *edit_line_inout) {
     char err[REPL_DIAG_TEXT_MAX] = "";
+
+    if (!repl_load_apply_line(line, err, sizeof(err), edit_line_inout)) {
+        char msg[REPL_DIAG_TEXT_MAX];
+        snprintf(msg, sizeof(msg),
+                 "Example load failed at body line %d: %s",
+                 body_line_idx + 1, err[0] ? err : "parse error");
+        example_load_error(msg);
+        return 0;
+    }
+    return 1;
+}
+
+static int emit_example_body_two_pass(const char *const *body,
+                                      int *edit_line_inout) {
+    if (!body) return 1;
 
     /* Classify each line into one of three buckets so emission
      * matches the editor's canonical layout (decls first, then
@@ -303,9 +337,18 @@ static void emit_example_body_two_pass(const char *const *body,
      * KIND_OTHER:       setup commands, function calls, non-leading
      *                   comments — anything that should land below
      *                   the func defs in the canonical layout */
-    char kinds[EXAMPLE_BODY_LINES_MAX] = {0};
     int n = 0;
-    while (n < EXAMPLE_BODY_LINES_MAX && body[n]) n++;
+    if (!example_body_count(body, &n))
+        return 0;
+
+    char *kinds = NULL;
+    if (n > 0) {
+        kinds = (char *)calloc((size_t)n, sizeof(*kinds));
+        if (!kinds) {
+            example_load_error("Example load failed: out of memory");
+            return 0;
+        }
+    }
 
     int depth = 0;
     int comment_run_start = -1;
@@ -359,22 +402,31 @@ static void emit_example_body_two_pass(const char *const *body,
      * before func bodies that reference them compile). */
     for (int i = 0; i < n; i++) {
         if (kinds[i] != EXAMPLE_KIND_VAR_DECL) continue;
-        if (!repl_load_apply_line(body[i], err, sizeof(err), edit_line_inout))
-            err[0] = '\0';  /* soft-fail: keep going on parse errors */
+        if (!apply_example_body_line(body[i], i, edit_line_inout)) {
+            free(kinds);
+            return 0;
+        }
     }
     /* Pass 2: func_def blocks (with leading comments). */
     for (int i = 0; i < n; i++) {
         if (kinds[i] != EXAMPLE_KIND_FUNC_BLOCK) continue;
-        if (!repl_load_apply_line(body[i], err, sizeof(err), edit_line_inout))
-            err[0] = '\0';
+        if (!apply_example_body_line(body[i], i, edit_line_inout)) {
+            free(kinds);
+            return 0;
+        }
     }
     /* Pass 3: everything else (setup commands, function calls,
      * non-leading comments). */
     for (int i = 0; i < n; i++) {
         if (kinds[i] != EXAMPLE_KIND_OTHER) continue;
-        if (!repl_load_apply_line(body[i], err, sizeof(err), edit_line_inout))
-            err[0] = '\0';
+        if (!apply_example_body_line(body[i], i, edit_line_inout)) {
+            free(kinds);
+            return 0;
+        }
     }
+
+    free(kinds);
+    return 1;
 }
 
 static void reset_example_load_state(unsigned int tag_mask) {
@@ -452,7 +504,12 @@ static int load_example_lines(const char *const *lines,
      * (implemented as step 5b and in phase 3.6.4 / 3.6.5; see the
      * edit-line-ownership plan doc). */
     int loader_edit_line = 0;
-    emit_example_body_two_pass(body, &loader_edit_line);
+    if (!emit_example_body_two_pass(body, &loader_edit_line)) {
+        reset_example_load_state(tag_mask);
+        repl_dispatch_input_reset();
+        repl_mark_source_dirty();
+        return 0;
+    }
 
     /* Post-load editor cleanup mirrors the pre-load sink dispatch so a
      * stale input line or cursor doesn't survive the loaded body. */

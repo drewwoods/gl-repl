@@ -14,6 +14,12 @@
 #ifndef REPL_EXAMPLE_LOADER_H
 #define REPL_EXAMPLE_LOADER_H
 
+/* Maximum post-metadata body lines a `.glr` example can load. This is an
+ * example-authoring cap, separate from the larger source document /
+ * command-store capacity, so callers can surface the real example limit in
+ * editor or catalog diagnostics. */
+#define EXAMPLE_BODY_LINES_MAX 512
+
 /* Drive example loading from unit tests / bench drivers without going
  * through the GLUT example dropdown. `lines` is a NULL-terminated
  * array of source lines; the loader runs the same body-emission
