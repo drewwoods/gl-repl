@@ -465,6 +465,7 @@ static int cfg_key_in_scene_subset(GlrConfigKey key) {
     case GLR_CONFIG_GRID_BRIGHTNESS:
     case GLR_CONFIG_AXES_THEME:
     case GLR_CONFIG_VERTEX_LABELS:
+    case GLR_CONFIG_VERTEX_LABEL_SCOPE:
     case GLR_CONFIG_NORMAL_VECTORS:
     case GLR_CONFIG_VERTEX_OUTLINES:
     case GLR_CONFIG_VERTEX_POINTS:

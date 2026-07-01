@@ -1209,6 +1209,12 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     ASSERT_INT("  -> RENDER3D_BACKDROP_CITY_AND_STARS", out,
                RENDER3D_BACKDROP_CITY_AND_STARS);
 
+    out = -1;
+    ASSERT_TRUE("resolve label_scope: OVERLAY_VERTEX_LABEL_SCOPE_ALL_INSTANCES",
+                repl_cfg_resolve_text("label_scope", "OVERLAY_VERTEX_LABEL_SCOPE_ALL_INSTANCES", &out));
+    ASSERT_INT("  -> OVERLAY_VERTEX_LABEL_SCOPE_ALL_INSTANCES", out,
+               OVERLAY_VERTEX_LABEL_SCOPE_ALL_INSTANCES);
+
     /* Unknown name on a known slug must fail (don't fall back to
      * strtol — "GRID_THEME_XYZ" must NOT silently land as 0). */
     out = -42;
@@ -1253,6 +1259,7 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     glr_state_presentation_mut()->axes_theme = AXES_THEME_GIZMO;
     glr_state_presentation_mut()->backdrop_mode = RENDER3D_BACKDROP_CITY_AND_STARS;
     glr_state_presentation_mut()->light_theme = LIGHT_THEME_SOLAR;
+    glr_state_presentation_mut()->vertex_label_scope = OVERLAY_VERTEX_LABEL_SCOPE_AT_VERTEX;
 
     ReplConfigBag bag;
     repl_config_bag_clear(&bag);
@@ -1262,6 +1269,7 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     ASSERT_STR("fill_all axes is symbolic", repl_config_bag_get(&bag, "axes"), "AXES_THEME_GIZMO");
     ASSERT_STR("fill_all backdrop is symbolic", repl_config_bag_get(&bag, "backdrop"), "RENDER3D_BACKDROP_CITY_AND_STARS");
     ASSERT_STR("fill_all light_theme is symbolic", repl_config_bag_get(&bag, "light_theme"), "LIGHT_THEME_SOLAR");
+    ASSERT_STR("fill_all label_scope is symbolic", repl_config_bag_get(&bag, "label_scope"), "OVERLAY_VERTEX_LABEL_SCOPE_AT_VERTEX");
 
     ReplConfigBag scene_bag;
     repl_config_bag_clear(&scene_bag);
@@ -1271,6 +1279,7 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     ASSERT_STR("fill_scene_subset axes is symbolic", repl_config_bag_get(&scene_bag, "axes"), "AXES_THEME_GIZMO");
     ASSERT_STR("fill_scene_subset backdrop is symbolic", repl_config_bag_get(&scene_bag, "backdrop"), "RENDER3D_BACKDROP_CITY_AND_STARS");
     ASSERT_STR("fill_scene_subset light_theme is symbolic", repl_config_bag_get(&scene_bag, "light_theme"), "LIGHT_THEME_SOLAR");
+    ASSERT_STR("fill_scene_subset label_scope is symbolic", repl_config_bag_get(&scene_bag, "label_scope"), "OVERLAY_VERTEX_LABEL_SCOPE_AT_VERTEX");
 }
 
 static void test_cfg_bridge_enforces_backdrop_grid_pair_order(void) {
