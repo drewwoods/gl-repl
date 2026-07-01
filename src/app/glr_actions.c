@@ -540,7 +540,7 @@ static const GlrConfigItem *glr_export_cfg_find_item_by_slug(const char *slug) {
  *
  * The slug→table map below covers every enum-valued slug the catalogs
  * actually use today (grid / axes / grid_extent / grid_major / backdrop /
- * light_theme / view_mode). Other enum-shaped slugs
+ * light_theme / view_mode / label_scope). Other enum-shaped slugs
  * — replay, code_panel_layout, vertex_label, etc. — stay integer-only
  * in their saved form because no catalog literal carries them
  * symbolically. Add a table here if a new catalog needs symbolic
@@ -594,6 +594,11 @@ static const char *cfg_light_theme_symbols[LIGHT_THEME_COUNT] = {
     LIGHT_THEME_LIST(LIGHT_THEME_SYMBOL_ENTRY)
 #undef LIGHT_THEME_SYMBOL_ENTRY
 };
+static const char *cfg_vertex_label_scope_symbols[OVERLAY_VERTEX_LABEL_SCOPE_COUNT] = {
+#define VERTEX_LABEL_SCOPE_SYMBOL_ENTRY(name, str) [OVERLAY_VERTEX_LABEL_SCOPE_##name] = "OVERLAY_VERTEX_LABEL_SCOPE_" #name,
+    OVERLAY_VERTEX_LABEL_SCOPE_LIST(VERTEX_LABEL_SCOPE_SYMBOL_ENTRY)
+#undef VERTEX_LABEL_SCOPE_SYMBOL_ENTRY
+};
 
 /* The slug→table map shared by the symbolic resolver (read side) and the
  * value-to-string emitter (write side). Returns NULL (count untouched)
@@ -631,6 +636,10 @@ static const char *const *cfg_symbol_table_for_slug(const char *slug,
     if (strcmp(slug, "light_theme") == 0) {
         *count = LIGHT_THEME_COUNT;
         return cfg_light_theme_symbols;
+    }
+    if (strcmp(slug, "label_scope") == 0) {
+        *count = OVERLAY_VERTEX_LABEL_SCOPE_COUNT;
+        return cfg_vertex_label_scope_symbols;
     }
     return NULL;
 }
