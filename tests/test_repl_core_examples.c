@@ -809,6 +809,58 @@ static void load_custom_example_lines_for_test(const char *const *lines) {
     settle_camera_transition_for_test();
 }
 
+static void test_example_loader_body_import_limits(void) {
+    {
+        enum { OLD_EXAMPLE_BODY_LINES_MAX = 384 };
+        enum { LINE_COUNT = OLD_EXAMPLE_BODY_LINES_MAX + 1 };
+        const char **lines = (const char **)malloc((LINE_COUNT + 1) * sizeof(*lines));
+        int loaded;
+
+        ASSERT_TRUE("public example body cap is 512",
+                    EXAMPLE_BODY_LINES_MAX == 512);
+        ASSERT_TRUE("public example body cap clears old private cap",
+                    EXAMPLE_BODY_LINES_MAX >= LINE_COUNT);
+        ASSERT_TRUE("example body limit fixture alloc", lines != NULL);
+        if (lines) {
+            for (int i = 0; i < LINE_COUNT; i++)
+                lines[i] = "// body capacity sentinel";
+            lines[LINE_COUNT] = NULL;
+
+            glr_ctrl_reset_all(); declare_test_vars();
+            pin_code_panel_state();
+            loaded = repl_load_example_lines_for_test(lines);
+            ASSERT_TRUE("example body loads past old 384-line cap",
+                        loaded == LINE_COUNT);
+            ASSERT_TRUE("example body keeps every line past old cap",
+                        repl_state_document_count() == LINE_COUNT);
+            free(lines);
+        }
+    }
+
+    {
+        static const char *const bad_body[] = {
+            "glBegin(GL_POINTS);",
+            "notACommand(1, 2, 3);",
+            "glEnd();",
+            NULL
+        };
+        int loaded;
+        UiStatusState status;
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        pin_code_panel_state();
+        loaded = repl_load_example_lines_for_test(bad_body);
+        status = ui_state_status();
+        ASSERT_TRUE("example body parse failure aborts load", loaded == 0);
+        ASSERT_TRUE("example body parse failure clears partial document",
+                    repl_state_document_count() == 0);
+        ASSERT_TRUE("example body parse failure reports line",
+                    strstr(status.text, "Example load failed at body line 2") != NULL);
+        ASSERT_TRUE("example body parse failure is error status",
+                    status.kind == UI_STATUS_ERROR);
+    }
+}
+
 static void test_example_catalog_metadata(void) {
     int example_count = repl_example_count();
 
@@ -1513,6 +1565,7 @@ int main(int argc, char **argv) {
 
     repl_eval_init_predef_vars();
     test_runtime_examples_dir_catalog(temp_dir);
+    test_example_loader_body_import_limits();
     test_example_catalog_metadata();
     test_example_tag_metadata();
     test_example_subheading_metadata();
