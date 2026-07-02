@@ -762,15 +762,32 @@ static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
     glPopMatrix();
 }
 
+typedef struct NormalVectorRenderCtx {
+    float scale;
+    int replay_only;
+    int anchor_idx;
+    int *stop_flag;
+} NormalVectorRenderCtx;
+
 static void on_normal_vector_arrow(const ReplayVertexWalkState *state,
                                    float vx, float vy, float vz,
                                    void *user) {
-    float scale = *(const float *)user;
+    const NormalVectorRenderCtx *ctx = (const NormalVectorRenderCtx *)user;
+    if (!ctx)
+        return;
+    if (ctx->replay_only) {
+        if (state->flat_cmd_idx != ctx->anchor_idx)
+            return;
+        if (ctx->stop_flag)
+            *ctx->stop_flag = 1;
+        if (!state->lighting_enabled)
+            return;
+    }
     render3d_draw_normal_vector_arrow(vx, vy, vz,
                                    state->normal[0],
                                    state->normal[1],
                                    state->normal[2],
-                                   scale);
+                                   ctx->scale);
 }
 
 static ReplayVertexWalkContext edit_overlays_build_vertex_walk_context(
@@ -881,6 +898,18 @@ void edit_overlays_render_normal_vectors(const OverlayWalkCtx *walk_ctx) {
     if (!ctx.program.cmds || ctx.program.cmd_count <= 0)
         return;
 
+    int replay_only = walk_ctx && walk_ctx->replay_normal_vectors;
+    int stop = 0;
+    int anchor_idx = walk_ctx ? walk_ctx->replay_anchor_flat_idx : -1;
+    if (replay_only) {
+        if (anchor_idx < 0 || anchor_idx >= ctx.program.cmd_count)
+            return;
+        if (!ctx.program.cmds[anchor_idx].valid ||
+            !repl_cmd_emits_vertex(ctx.program.cmds[anchor_idx].type))
+            return;
+        ctx.stop_flag = &stop;
+    }
+
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
@@ -889,8 +918,13 @@ void edit_overlays_render_normal_vectors(const OverlayWalkCtx *walk_ctx) {
     static const ReplayVertexWalkCallbacks cb = {
         .on_vertex = on_normal_vector_arrow,
     };
-    float scale = GLR_NORMAL_ARROW_SCALE;
-    replay_walk_user_vertices(&ctx, &cb, &scale);
+    NormalVectorRenderCtx render_ctx = {
+        .scale = GLR_NORMAL_ARROW_SCALE,
+        .replay_only = replay_only,
+        .anchor_idx = anchor_idx,
+        .stop_flag = replay_only ? &stop : NULL,
+    };
+    replay_walk_user_vertices(&ctx, &cb, &render_ctx);
 
     glPopAttrib();
 }
@@ -1063,7 +1097,7 @@ void edit_overlays_post_overlays(void *user_data) {
                                             pack->vertex_label_scope);
         prof_accum_end(PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS);
     }
-    if (pack->show_normal_vectors) {
+    if (pack->show_normal_vectors || pack->walk.replay_normal_vectors) {
         prof_begin(PROF_RENDER3D_OVERLAY_NORMALS);
         edit_overlays_render_normal_vectors(&pack->walk);
         prof_accum_end(PROF_RENDER3D_OVERLAY_NORMALS);

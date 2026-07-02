@@ -180,6 +180,7 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
         .in_block            = 0,
         .block_selected      = selected_block_only ? 0 : 1,
         .vertex_idx_in_block = 0,
+        .lighting_enabled    = 0,
         .normal              = { 0.0f, 0.0f, 1.0f },
         .tess_normal         = { 0.0f, 0.0f, 1.0f },
     };
@@ -261,6 +262,14 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
             state.normal[0] = cmd->args[0];
             state.normal[1] = cmd->args[1];
             state.normal[2] = cmd->args[2];
+            break;
+        case CMD_ENABLE:
+            if ((GLenum)cmd->args[0] == GL_LIGHTING)
+                state.lighting_enabled = 1;
+            break;
+        case CMD_DISABLE:
+            if ((GLenum)cmd->args[0] == GL_LIGHTING)
+                state.lighting_enabled = 0;
             break;
         case CMD_TESS_NORMAL:
             state.tess_normal[0] = cmd->args[0];
