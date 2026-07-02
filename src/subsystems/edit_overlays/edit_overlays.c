@@ -775,6 +775,7 @@ static void on_normal_vector_arrow(const ReplayVertexWalkState *state,
                                    void *user) {
     const NormalVectorRenderCtx *ctx = (const NormalVectorRenderCtx *)user;
     int is_anchor;
+    int draw_focused;
     if (!ctx)
         return;
 
@@ -787,24 +788,40 @@ static void on_normal_vector_arrow(const ReplayVertexWalkState *state,
         if (!state->lighting_enabled)
             return;
     }
-    render3d_draw_normal_vector_arrow(vx, vy, vz,
-                                   state->normal[0],
-                                   state->normal[1],
-                                   state->normal[2],
-                                   ctx->scale);
 
-    if (ctx->replay_display == REPLAY_NORMAL_DISPLAY_DIRECTION &&
-        is_anchor &&
-        state->lighting_enabled) {
+    draw_focused = ctx->replay_display != REPLAY_NORMAL_DISPLAY_OFF &&
+                   is_anchor &&
+                   state->lighting_enabled;
+
+    if (ctx->show_all) {
+        render3d_clr(RENDER3D_CLR_NORMAL_LABEL);
+        render3d_draw_normal_vector_arrow(vx, vy, vz,
+                                       state->normal[0],
+                                       state->normal[1],
+                                       state->normal[2],
+                                       ctx->scale);
+    }
+
+    if (draw_focused) {
         char detail[48];
-        float tx = vx + state->normal[0] * ctx->scale;
-        float ty = vy + state->normal[1] * ctx->scale;
-        float tz = vz + state->normal[2] * ctx->scale;
-        snprintf(detail, sizeof(detail), " (%.2f, %.2f, %.2f)",
-                 sanitize_zero(state->normal[0]),
-                 sanitize_zero(state->normal[1]),
-                 sanitize_zero(state->normal[2]));
-        render3d_draw_vertex_label_text(tx, ty, tz, " n", detail);
+        const char *primary = NULL;
+        const char *detail_text = NULL;
+        if (ctx->replay_display == REPLAY_NORMAL_DISPLAY_DIRECTION) {
+            snprintf(detail, sizeof(detail), "=(%.2f, %.2f, %.2f)",
+                     sanitize_zero(state->normal[0]),
+                     sanitize_zero(state->normal[1]),
+                     sanitize_zero(state->normal[2]));
+            primary = " n";
+            detail_text = detail;
+        }
+        render3d_draw_focused_normal_glyph(vx, vy, vz,
+                                        state->normal[0],
+                                        state->normal[1],
+                                        state->normal[2],
+                                        ctx->scale,
+                                        1.0f,
+                                        primary,
+                                        detail_text);
     }
 }
 
@@ -1010,6 +1027,8 @@ void edit_overlays_render_normal_vectors(const OverlayWalkCtx *walk_ctx) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     render3d_clr(RENDER3D_CLR_NORMAL_LABEL);
 
     static const ReplayVertexWalkCallbacks cb = {

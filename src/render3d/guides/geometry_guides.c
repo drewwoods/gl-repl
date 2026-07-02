@@ -4,12 +4,13 @@
 #include "geometry_guides.h"
 #include "render3d/palette.h"
 #include "render3d/occluded_ghost.h"  /* RENDER3D_OCCLUDED_GHOST_STIPPLE */
+#include "render3d/overlays.h"
 
-#include <math.h>   /* sqrtf, fminf, fmodf, cosf, sinf */
+#include <math.h>   /* sqrtf, fminf */
+#include <stdio.h>  /* snprintf */
 #include <string.h> /* strncmp */
 
 #define GEOMETRY_GUIDE_VERTEX_MARK_POINT_SIZE 8.0f
-#define GEOMETRY_GUIDE_NORMAL_POINT_SIZE 8.0f
 
 static void geometry_guides_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -137,6 +138,78 @@ static void draw_vertex_line_guide(int free_axis, const float vals[3], float sz)
     glVertex3f(a[0], a[1], a[2]);
     glVertex3f(b[0], b[1], b[2]);
     glEnd();
+    glLineWidth(1.0f);
+}
+
+static float guide_sanitize_zero(float val) {
+    if (val > -0.005f && val < 0.005f)
+        return 0.0f;
+    return val;
+}
+
+static void draw_normal_component_handle(float vx, float vy, float vz,
+                                         const float unit_n[3],
+                                         int component,
+                                         float scale,
+                                         float alpha_scale) {
+    float axis[3] = { 0.0f, 0.0f, 0.0f };
+    float tangent[3];
+    float tlen;
+    float tip[3];
+    float handle_len = scale * 0.20f;
+    float alpha;
+
+    if (component < 0 || component > 2)
+        return;
+
+    alpha = fminf(0.95f * alpha_scale, 1.0f);
+    if (alpha <= 0.0f)
+        return;
+
+    axis[component] = 1.0f;
+    tangent[0] = axis[0] - unit_n[component] * unit_n[0];
+    tangent[1] = axis[1] - unit_n[component] * unit_n[1];
+    tangent[2] = axis[2] - unit_n[component] * unit_n[2];
+    tlen = sqrtf(tangent[0] * tangent[0] +
+                 tangent[1] * tangent[1] +
+                 tangent[2] * tangent[2]);
+
+    tip[0] = vx + unit_n[0] * scale;
+    tip[1] = vy + unit_n[1] * scale;
+    tip[2] = vz + unit_n[2] * scale;
+
+    render3d_clr_a(k_guide_line_clr[component], alpha);
+    if (tlen <= 1e-5f) {
+        glPointSize(10.0f);
+        glBegin(GL_POINTS);
+        glVertex3f(tip[0], tip[1], tip[2]);
+        glEnd();
+        glPointSize(1.0f);
+        return;
+    }
+
+    tangent[0] /= tlen;
+    tangent[1] /= tlen;
+    tangent[2] /= tlen;
+
+    glLineWidth(4.0f);
+    glBegin(GL_LINES);
+    glVertex3f(tip[0], tip[1], tip[2]);
+    glVertex3f(tip[0] + tangent[0] * handle_len,
+               tip[1] + tangent[1] * handle_len,
+               tip[2] + tangent[2] * handle_len);
+    glEnd();
+
+    render3d_clr_a(k_guide_line_clr[component], fminf(0.35f * alpha_scale, 1.0f));
+    glEnable(GL_LINE_STIPPLE);
+    glLineStipple(1, RENDER3D_OCCLUDED_GHOST_STIPPLE);
+    glBegin(GL_LINES);
+    glVertex3f(tip[0], tip[1], tip[2]);
+    glVertex3f(tip[0] - tangent[0] * handle_len,
+               tip[1] - tangent[1] * handle_len,
+               tip[2] - tangent[2] * handle_len);
+    glEnd();
+    glDisable(GL_LINE_STIPPLE);
     glLineWidth(1.0f);
 }
 
@@ -289,76 +362,32 @@ static void draw_normal_guides(const Render3dGuideSnapshot *snapshot) {
     if (!found)
         return;
 
-    float doubled[3] = { vals[0], vals[1], vals[2] };
-    float halved[3]  = { vals[0], vals[1], vals[2] };
-    doubled[component] *= 2.0f;
-    halved[component]  *= 0.5f;
-
-    float dlen = sqrtf(doubled[0]*doubled[0] + doubled[1]*doubled[1] +
-                       doubled[2]*doubled[2]);
-    if (dlen > 1e-8f) {
-        doubled[0] /= dlen;
-        doubled[1] /= dlen;
-        doubled[2] /= dlen;
-    }
-    float hlen = sqrtf(halved[0]*halved[0] + halved[1]*halved[1] +
-                       halved[2]*halved[2]);
-    if (hlen > 1e-8f) {
-        halved[0] /= hlen;
-        halved[1] /= hlen;
-        halved[2] /= hlen;
-    }
-
     float scale = 0.45f;
+    float clen = sqrtf(vals[0]*vals[0] + vals[1]*vals[1] + vals[2]*vals[2]);
+    float cn[3] = { 0.0f, 0.0f, 1.0f };
+    char detail[64];
+    if (clen > 1e-8f) {
+        cn[0] = vals[0] / clen;
+        cn[1] = vals[1] / clen;
+        cn[2] = vals[2] / clen;
+    }
+    snprintf(detail, sizeof(detail), "=(%.2f, %.2f, %.2f)",
+             guide_sanitize_zero(vals[0]),
+             guide_sanitize_zero(vals[1]),
+             guide_sanitize_zero(vals[2]));
 
     geometry_guides_push_state();
     glDisable(GL_LIGHTING);
+    glDisable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    float clen = sqrtf(vals[0]*vals[0] + vals[1]*vals[1] + vals[2]*vals[2]);
     float as = snapshot->alpha_scale;
-    if (clen > 1e-8f) {
-        float cn[3] = { vals[0]/clen, vals[1]/clen, vals[2]/clen };
-        render3d_clr_a(RENDER3D_CLR_GUIDE_NORMAL_BASE, fminf(0.4f * as, 1.0f));
-        glLineWidth(3.0f);
-        glBegin(GL_LINES);
-        glVertex3f(vx, vy, vz);
-        glVertex3f(vx + cn[0]*scale, vy + cn[1]*scale, vz + cn[2]*scale);
-        glEnd();
-    }
-
-    glEnable(GL_LINE_STIPPLE);
-    glLineStipple(1, RENDER3D_OCCLUDED_GHOST_STIPPLE);
-    glLineWidth(4.0f);
-
-    render3d_clr_a(RENDER3D_CLR_GUIDE_NORMAL_DOUBLE, 0.75f);
-    glBegin(GL_LINES);
-    glVertex3f(vx, vy, vz);
-    glVertex3f(vx + doubled[0]*scale, vy + doubled[1]*scale,
-               vz + doubled[2]*scale);
-    glEnd();
-
-    render3d_clr_a(RENDER3D_CLR_GUIDE_NORMAL_HALF, 0.75f);
-    glBegin(GL_LINES);
-    glVertex3f(vx, vy, vz);
-    glVertex3f(vx + halved[0]*scale, vy + halved[1]*scale,
-               vz + halved[2]*scale);
-    glEnd();
-
-    glDisable(GL_LINE_STIPPLE);
-    glLineWidth(1.0f);
-
-    glPointSize(GEOMETRY_GUIDE_NORMAL_POINT_SIZE);
-    glBegin(GL_POINTS);
-    render3d_clr_a(RENDER3D_CLR_GUIDE_NORMAL_DOUBLE, 0.85f);
-    glVertex3f(vx + doubled[0]*scale, vy + doubled[1]*scale,
-               vz + doubled[2]*scale);
-    render3d_clr_a(RENDER3D_CLR_GUIDE_NORMAL_HALF, 0.85f);
-    glVertex3f(vx + halved[0]*scale, vy + halved[1]*scale,
-               vz + halved[2]*scale);
-    glEnd();
-    glPointSize(1.0f);
+    render3d_draw_focused_normal_glyph(vx, vy, vz,
+                                    vals[0], vals[1], vals[2],
+                                    scale, as, " n", detail);
+    if (clen > 1e-8f)
+        draw_normal_component_handle(vx, vy, vz, cn, component, scale, as);
 
     glDisable(GL_BLEND);
     geometry_guides_pop_state();
