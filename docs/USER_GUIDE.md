@@ -800,6 +800,7 @@ loop-variable values substituted into the displayed text.
 | Left / Right | Step backward / forward (while paused) |
 | Ctrl+K | Jump the replay to the cursor line (first geometry at/after it) |
 | m / M | Toggle replay mode: Polygon / Vertex granularity |
+| n / N | Cycle replay normals: off / vector / vector + direction |
 | Esc | Stop replay |
 
 The HUD at the bottom of the viewport shows play state, position, and speed.

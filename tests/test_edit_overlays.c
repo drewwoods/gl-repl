@@ -84,6 +84,20 @@ static int trace_count_sym(const TraceLog *log, const char *sym) {
     return c;
 }
 
+static void trace_bitmap_text(const TraceLog *log, char *out, size_t out_sz) {
+    size_t used = 0;
+    if (!out || out_sz == 0)
+        return;
+    out[0] = '\0';
+    for (int i = 0; i < log->n && used + 1 < out_sz; i++) {
+        int ch;
+        if (sscanf(log->lines[i], "glutBitmapCharacter %d", &ch) == 1) {
+            out[used++] = (char)ch;
+            out[used] = '\0';
+        }
+    }
+}
+
 /* Initialize one valid GLCmd of `type` with up to three float args. */
 static void mk_cmd(GLCmd *c, CmdType type, float a0, float a1, float a2) {
     memset(c, 0, sizeof(*c));
@@ -949,7 +963,8 @@ static void test_on_normal_vector_arrow_callback(void) {
 
     NormalVectorRenderCtx ctx = {
         .scale = 2.0f,
-        .replay_only = 0,
+        .show_all = 1,
+        .replay_display = REPLAY_NORMAL_DISPLAY_OFF,
         .anchor_idx = -1,
         .stop_flag = NULL,
     };
@@ -986,7 +1001,7 @@ static void test_render_normal_vectors_replay_only(void) {
     memset(&walk, 0, sizeof(walk));
     walk.program.cmds = cmds;
     walk.program.cmd_count = 11;
-    walk.replay_normal_vectors = 1;
+    walk.replay_normal_display = REPLAY_NORMAL_DISPLAY_VECTOR;
     walk.replay_anchor_flat_idx = 3;
 
     TraceLog log;
@@ -1000,6 +1015,17 @@ static void test_render_normal_vectors_replay_only(void) {
                trace_count_line(&log, "glVertex3f 1 0.35 0"), 2);
     ASSERT_INT("replay normal skips lit non-anchor vertices",
                trace_count_line(&log, "glVertex3f 0 1 0"), 0);
+
+    walk.replay_normal_display = REPLAY_NORMAL_DISPLAY_DIRECTION;
+    trace_begin();
+    edit_overlays_render_normal_vectors(&walk);
+    trace_end(&log);
+    ASSERT_INT("replay normal direction label is anchored at the arrow tip",
+               trace_count_line(&log, "glRasterPos3f 1 0.35 0"), 1);
+    char label_text[128];
+    trace_bitmap_text(&log, label_text, sizeof(label_text));
+    ASSERT_TRUE("replay normal direction label uses %.2f precision",
+                strstr(label_text, " n (0.00, 1.00, 0.00)") != NULL);
 
     walk.replay_anchor_flat_idx = 9;
     trace_begin();
