@@ -10,6 +10,17 @@ static int replay_cancel_on_unrecognized(void) {
     return 1;
 }
 
+static const char *replay_normal_display_status(int mode) {
+    switch (mode) {
+    case REPLAY_NORMAL_DISPLAY_VECTOR:
+        return "Replay: normals vector";
+    case REPLAY_NORMAL_DISPLAY_DIRECTION:
+        return "Replay: normals direction";
+    default:
+        return "Replay: normals off";
+    }
+}
+
 int replay_handle_key(unsigned char key) {
     ReplayRuntimeState *state = replay_state_mut();
     if (!state->active) {
@@ -91,6 +102,18 @@ int replay_handle_key(unsigned char key) {
                  ? "Replay: expand args ON"
                  : "Replay: expand args OFF");
         return 1;
+    case 'n':
+    case 'N': {
+        int normal_display = state->normal_display;
+        if (normal_display < REPLAY_NORMAL_DISPLAY_OFF ||
+            normal_display >= REPLAY_NORMAL_DISPLAY_COUNT) {
+            normal_display = REPLAY_NORMAL_DISPLAY_OFF;
+        }
+        state->normal_display =
+            (normal_display + 1) % REPLAY_NORMAL_DISPLAY_COUNT;
+        repl_set_status(replay_normal_display_status(state->normal_display));
+        return 1;
+    }
     case KEY_ESC:
         replay_stop();
         repl_set_status("Replay: off");

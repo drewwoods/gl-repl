@@ -20,6 +20,7 @@
         .total_flat_cmds  = 0,                                  \
         .step_begin       = 0,                                  \
         .expand_args      = 1,                                  \
+        .normal_display   = REPLAY_NORMAL_DISPLAY_OFF,          \
         .saved_t_playing  = 1,                                  \
         .last_src_line    = -1,                                 \
         .fade_batch_count = 0,                                  \
@@ -72,6 +73,10 @@ int replay_mode(void) {
     return g_replay_runtime_state.mode;
 }
 
+int replay_normal_display(void) {
+    return g_replay_runtime_state.normal_display;
+}
+
 int replay_src_line(void) {
     return g_replay_runtime_state.src_line_idx;
 }
@@ -85,4 +90,3 @@ int replay_total_flat(void) {
 void replay_handle_pin_clicked(void) {
     replay_toggle_play_pause();
 }
-

@@ -32,6 +32,13 @@ typedef struct {
     float age;
 } ReplayFadeBatch;
 
+typedef enum {
+    REPLAY_NORMAL_DISPLAY_OFF = 0,
+    REPLAY_NORMAL_DISPLAY_VECTOR,
+    REPLAY_NORMAL_DISPLAY_DIRECTION,
+    REPLAY_NORMAL_DISPLAY_COUNT
+} ReplayNormalDisplayMode;
+
 /* Read-only view over the active fade batches; valid for one frame. */
 typedef struct {
     const ReplayFadeBatch *batches;
@@ -94,6 +101,7 @@ typedef struct {
                                           * begin via replay_prev_limit(pc) — an
                                           * O(N^2) per-frame walk — every frame. */
     int             expand_args;
+    int             normal_display;      /* ReplayNormalDisplayMode */
     ReplPredefSnapshot baseline_predef;
     float           baseline_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     int             saved_t_playing;
@@ -131,6 +139,7 @@ int    replay_active(void);          /* .active */
 int    replay_machine_state(void);   /* .state — REPLAY_OFF/PLAYING/PAUSED/DONE */
 int    replay_pc(void);              /* .pc — current program counter */
 int    replay_mode(void);            /* .mode — REPLAY_MODE_VERTEX/POLYGON */
+int    replay_normal_display(void);  /* .normal_display — ReplayNormalDisplayMode */
 int    replay_src_line(void);        /* .src_line_idx — source line of current cmd */
 int    replay_total_flat(void);      /* .total_flat_cmds — captured at start */
 

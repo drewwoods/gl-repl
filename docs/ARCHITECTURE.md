@@ -92,8 +92,8 @@ globals or call `repl_state_*` APIs directly during rendering.
 5. **The controller is the mixed layer.** The frame controller builds render3d and
    UI inputs from REPL state, calls the render3d renderer, then calls UI renderers.
    This role belongs in [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c).
-6. **Replay is REPL policy.** Replay state machine, PC, mode, baseline values,
-  and fade/highlight decisions belong in `src/subsystems/replay/` (primarily
+6. **Replay is REPL policy.** Replay state machine, PC, mode, normal-display,
+  baseline values, and fade/highlight decisions belong in `src/subsystems/replay/` (primarily
   [`replay_playback.c`](../src/subsystems/replay/replay_playback.c), [`replay_fade.c`](../src/subsystems/replay/replay_fade.c), and [`replay.c`](../src/subsystems/replay/replay.c)). Any render3d use of
   replay data should be via snapshots or
    documented transitional helpers.
@@ -682,10 +682,10 @@ funcN-local parameters or loop-assigned values, so the controller must override
 cursor arguments from the **flat** command stream before rendering guides inside
 functions or loops.
 
-[`edit_overlays_render_cursor_guides()`](../src/subsystems/edit_overlays/edit_overlays.h#L77) walks the current [`FlatProgramView`](../src/repl/flatten.h#L41) via
+[`edit_overlays_render_cursor_guides()`](../src/subsystems/edit_overlays/edit_overlays.h#L78) walks the current [`FlatProgramView`](../src/repl/flatten.h#L41) via
 the replay/user-vertex walkers while tracking the modelview with
 `apply_tracked_transform` / `unwind_transform_stack`. At the cursor's first flat
-command, [`cursor_guide_snapshot_with_flat_args()`](../src/subsystems/edit_overlays/edit_overlays.h#L82) replaces `vertex_args` or
+command, [`cursor_guide_snapshot_with_flat_args()`](../src/subsystems/edit_overlays/edit_overlays.h#L83) replaces `vertex_args` or
 `normal_args` from the already-substituted flat command. For normal guides it
 also walks forward to find the live anchor point, because source-line parsing
 alone cannot know the world-space vertex the normal belongs to. Argument-slot
@@ -722,7 +722,7 @@ recomputes its own anchor frame (`compute_before_cursor_matrix` /
 `glLoadMatrixf` an absolute matrix), so it does *not* depend on where the
 vertex walk happens to be.
 
-That independence is what makes [`edit_overlays_render_cursor_guides()`](../src/subsystems/edit_overlays/edit_overlays.h#L77) flush the
+That independence is what makes [`edit_overlays_render_cursor_guides()`](../src/subsystems/edit_overlays/edit_overlays.h#L78) flush the
 transform guide **after** the walk (and even when there is *no* walk):
 
 * The flat-program walk drives the geometry guides (which *do* render in the
@@ -934,7 +934,7 @@ should not own replay policy.
 
 Runtime shape:
 
-* the controller builds a [`ReplayFadePlan`](../src/subsystems/replay/replay_state.h#L53) snapshot once per frame (batches,
+* the controller builds a [`ReplayFadePlan`](../src/subsystems/replay/replay_state.h#L60) snapshot once per frame (batches,
   alpha, skip limits, baseline predef values)
 * render3d iterates the snapshot and owns the GL pass orchestration without
   calling `replay_*` or `repl_state_*`

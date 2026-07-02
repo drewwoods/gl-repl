@@ -595,7 +595,7 @@ explaining why the extra background is useful.
 | [`src/subsystems/variable_panel/variable_panel_drag.h`](src/subsystems/variable_panel/variable_panel_drag.h) | Drag state accessors + begin/motion/reset API |
 | [`src/subsystems/variable_panel/variable_panel_state.c`](src/subsystems/variable_panel/variable_panel_state.c) | Variable-panel peer subsystem: owns visibility flag + drag-state storage |
 | [`src/subsystems/variable_panel/variable_panel_state.h`](src/subsystems/variable_panel/variable_panel_state.h) | Peer-subsystem facade ([`VariablePanelState`](src/subsystems/variable_panel/variable_panel_state.h#L55), capture/restore/reset, view/drag accessors) |
-| [`src/subsystems/replay/replay_state.c`](src/subsystems/replay/replay_state.c) | Replay peer subsystem: owns [`ReplayRuntimeState`](src/subsystems/replay/replay_state.h#L75) storage |
+| [`src/subsystems/replay/replay_state.c`](src/subsystems/replay/replay_state.c) | Replay peer subsystem: owns [`ReplayRuntimeState`](src/subsystems/replay/replay_state.h#L82) storage |
 | [`src/subsystems/replay/replay_render.c`](src/subsystems/replay/replay_render.c) | Replay fade-batch GL rendering pass (`glPushAttrib`/`glMaterialfv`/`glBegin`), extracted out of [`src/render3d/render.c`](src/render3d/render.c) |
 | [`src/subsystems/edit_overlays/edit_overlays.c`](src/subsystems/edit_overlays/edit_overlays.c) | Cursor edit-guide + vertex/normal overlay orchestration: owns the cursor-guide snapshot and the flat-program walk that calls the scene overlay primitives; extracted out of [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c) |
 | [`src/subsystems/replay/replay_state.h`](src/subsystems/replay/replay_state.h) | Peer-subsystem facade (`replay_state_capture/restore/reset/view/mut`) |
@@ -672,7 +672,7 @@ explaining why the extra background is useful.
   facades: [`src/repl/state.h`](src/repl/state.h) for REPL program state (e.g., [`repl_state_render()`](src/repl/state_owners.h#L90),
   `repl_state_variables()`), [`src/editor/state.h`](src/editor/state.h) for editor session state
   (e.g., [`editor_state_input()`](src/editor/state.h#L282), [`editor_state_search()`](src/editor/state.h#L384)), and peer-subsystem
-  accessors for replay ([`replay_state_view()`](src/subsystems/replay/replay_state.h#L116)) and variable panel
+  accessors for replay ([`replay_state_view()`](src/subsystems/replay/replay_state.h#L124)) and variable panel
   (`variable_panel_state_view()`).
 - Static helpers are file-scoped; public API goes through module headers
 - Prefixes express ownership. Use `repl_*` for REPL language/source/program
@@ -1082,13 +1082,13 @@ behavior.
 ### Replay System
 
 Step-by-step execution visualization in `src/subsystems/replay/`:
-- [`ReplayRuntimeState`](src/subsystems/replay/replay_state.h#L75) (via [`replay_state_view()`](src/subsystems/replay/replay_state.h#L116)) tracks state
+- [`ReplayRuntimeState`](src/subsystems/replay/replay_state.h#L82) (via [`replay_state_view()`](src/subsystems/replay/replay_state.h#L124)) tracks state
   (OFF/PLAYING/PAUSED/DONE), program counter, and speed multiplier
 - [`replay_playback.c`](src/subsystems/replay/replay_playback.c) owns start/stop, seek, advance, and speed control
 - [`replay_fade.c`](src/subsystems/replay/replay_fade.c) owns the fade batch ring, skip limits, and fade decay
 - [`replay_input.c`](src/subsystems/replay/replay_input.c) routes replay-specific keyboard handling
 - [`replay.c`](src/subsystems/replay/replay.c) keeps the tess-preview and user-vertex walkers used by render paths
-- During playback, the flat command count is clamped to [`replay_exec_limit()`](src/subsystems/replay/replay.h#L77)
+- During playback, the flat command count is clamped to [`replay_exec_limit()`](src/subsystems/replay/replay.h#L78)
   so only commands up to the PC render
 - Fade batch ring buffer — fading geometry snapshots; old geometry fades out
   as new geometry appears, rendered in a separate blended pass after the

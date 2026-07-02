@@ -33,6 +33,7 @@
 #define g_replay_focus_call_depth (REPLAY_STATE->focus_call_depth)
 #define g_replay_total_flat  (REPLAY_STATE->total_flat_cmds)
 #define g_replay_expand_args (REPLAY_STATE->expand_args)
+#define g_replay_normal_display (REPLAY_STATE->normal_display)
 #define g_replay_fade_batch_count (REPLAY_STATE->fade_batch_count)
 
 #ifndef GLUT_KEY_LEFT
@@ -207,6 +208,18 @@ static void test_replay_input(void) {
 
     replay_handle_key('e');
     ASSERT_TRUE("e toggles expand args", g_replay_expand_args == 0);
+
+    ASSERT_TRUE("normal display off by default",
+                g_replay_normal_display == REPLAY_NORMAL_DISPLAY_OFF);
+    replay_handle_key('n');
+    ASSERT_TRUE("n toggles normal vectors on",
+                g_replay_normal_display == REPLAY_NORMAL_DISPLAY_VECTOR);
+    replay_handle_key('n');
+    ASSERT_TRUE("n toggles normal direction on",
+                g_replay_normal_display == REPLAY_NORMAL_DISPLAY_DIRECTION);
+    replay_handle_key('n');
+    ASSERT_TRUE("n cycles normal display back off",
+                g_replay_normal_display == REPLAY_NORMAL_DISPLAY_OFF);
 
     replay_handle_key(KEY_ESC);
     ASSERT_TRUE("Esc stops replay", !g_replay_active);
@@ -519,10 +532,17 @@ static void test_replay_regression_fixes(void) {
     replay_start();
     ASSERT_TRUE("active after restart", g_replay_active);
     ASSERT_TRUE("expand args on initially", g_replay_expand_args == 1);
+    ASSERT_TRUE("normal display off initially",
+                g_replay_normal_display == REPLAY_NORMAL_DISPLAY_OFF);
 
     consumed = replay_handle_key('e');
     ASSERT_TRUE("expand key consumed", consumed == 1);
     ASSERT_TRUE("expand args toggled", g_replay_expand_args == 0);
+
+    consumed = replay_handle_key('n');
+    ASSERT_TRUE("normal key consumed", consumed == 1);
+    ASSERT_TRUE("normal display toggled to vector",
+                g_replay_normal_display == REPLAY_NORMAL_DISPLAY_VECTOR);
 
     replay_stop();
 }
@@ -656,6 +676,7 @@ static void test_replay_rendering(void) {
     hud_snap.replay.speed = 1.0f;
     hud_snap.replay.mode = REPLAY_MODE_VERTEX;
     hud_snap.replay.expand_args = 1;
+    hud_snap.replay.normal_display = REPLAY_NORMAL_DISPLAY_DIRECTION;
     hud_snap.viewport.window_w = 800;
     hud_snap.viewport.window_h = 600;
     hud_snap.code_panel.layout_mode = CODE_PANEL_LAYOUT_LEFT;

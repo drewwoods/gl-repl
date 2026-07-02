@@ -764,7 +764,8 @@ static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
 
 typedef struct NormalVectorRenderCtx {
     float scale;
-    int replay_only;
+    int show_all;
+    int replay_display;
     int anchor_idx;
     int *stop_flag;
 } NormalVectorRenderCtx;
@@ -773,10 +774,13 @@ static void on_normal_vector_arrow(const ReplayVertexWalkState *state,
                                    float vx, float vy, float vz,
                                    void *user) {
     const NormalVectorRenderCtx *ctx = (const NormalVectorRenderCtx *)user;
+    int is_anchor;
     if (!ctx)
         return;
-    if (ctx->replay_only) {
-        if (state->flat_cmd_idx != ctx->anchor_idx)
+
+    is_anchor = ctx->anchor_idx >= 0 && state->flat_cmd_idx == ctx->anchor_idx;
+    if (!ctx->show_all) {
+        if (!is_anchor)
             return;
         if (ctx->stop_flag)
             *ctx->stop_flag = 1;
@@ -788,6 +792,20 @@ static void on_normal_vector_arrow(const ReplayVertexWalkState *state,
                                    state->normal[1],
                                    state->normal[2],
                                    ctx->scale);
+
+    if (ctx->replay_display == REPLAY_NORMAL_DISPLAY_DIRECTION &&
+        is_anchor &&
+        state->lighting_enabled) {
+        char detail[48];
+        float tx = vx + state->normal[0] * ctx->scale;
+        float ty = vy + state->normal[1] * ctx->scale;
+        float tz = vz + state->normal[2] * ctx->scale;
+        snprintf(detail, sizeof(detail), " (%.2f, %.2f, %.2f)",
+                 sanitize_zero(state->normal[0]),
+                 sanitize_zero(state->normal[1]),
+                 sanitize_zero(state->normal[2]));
+        render3d_draw_vertex_label_text(tx, ty, tz, " n", detail);
+    }
 }
 
 static ReplayVertexWalkContext edit_overlays_build_vertex_walk_context(
@@ -898,16 +916,31 @@ void edit_overlays_render_normal_vectors(const OverlayWalkCtx *walk_ctx) {
     if (!ctx.program.cmds || ctx.program.cmd_count <= 0)
         return;
 
-    int replay_only = walk_ctx && walk_ctx->replay_normal_vectors;
+    int replay_display = walk_ctx
+                         ? walk_ctx->replay_normal_display
+                         : REPLAY_NORMAL_DISPLAY_OFF;
+    int replay_requested;
+    int show_all;
     int stop = 0;
     int anchor_idx = walk_ctx ? walk_ctx->replay_anchor_flat_idx : -1;
-    if (replay_only) {
-        if (anchor_idx < 0 || anchor_idx >= ctx.program.cmd_count)
+    if (replay_display < REPLAY_NORMAL_DISPLAY_OFF ||
+        replay_display >= REPLAY_NORMAL_DISPLAY_COUNT) {
+        replay_display = REPLAY_NORMAL_DISPLAY_OFF;
+    }
+    replay_requested = replay_display != REPLAY_NORMAL_DISPLAY_OFF;
+    show_all = !walk_ctx || walk_ctx->show_normal_vectors || !replay_requested;
+    if (replay_requested) {
+        int anchor_valid = anchor_idx >= 0 && anchor_idx < ctx.program.cmd_count;
+        if (anchor_valid) {
+            anchor_valid = ctx.program.cmds[anchor_idx].valid &&
+                           repl_cmd_emits_vertex(ctx.program.cmds[anchor_idx].type);
+        }
+        if (!anchor_valid)
+            replay_display = REPLAY_NORMAL_DISPLAY_OFF;
+        if (replay_display == REPLAY_NORMAL_DISPLAY_OFF && !show_all)
             return;
-        if (!ctx.program.cmds[anchor_idx].valid ||
-            !repl_cmd_emits_vertex(ctx.program.cmds[anchor_idx].type))
-            return;
-        ctx.stop_flag = &stop;
+        if (!show_all)
+            ctx.stop_flag = &stop;
     }
 
     glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -920,9 +953,10 @@ void edit_overlays_render_normal_vectors(const OverlayWalkCtx *walk_ctx) {
     };
     NormalVectorRenderCtx render_ctx = {
         .scale = GLR_NORMAL_ARROW_SCALE,
-        .replay_only = replay_only,
+        .show_all = show_all,
+        .replay_display = replay_display,
         .anchor_idx = anchor_idx,
-        .stop_flag = replay_only ? &stop : NULL,
+        .stop_flag = show_all ? NULL : &stop,
     };
     replay_walk_user_vertices(&ctx, &cb, &render_ctx);
 
@@ -1097,7 +1131,9 @@ void edit_overlays_post_overlays(void *user_data) {
                                             pack->vertex_label_scope);
         prof_accum_end(PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS);
     }
-    if (pack->show_normal_vectors || pack->walk.replay_normal_vectors) {
+    if (pack->show_normal_vectors ||
+        pack->walk.show_normal_vectors ||
+        pack->walk.replay_normal_display != REPLAY_NORMAL_DISPLAY_OFF) {
         prof_begin(PROF_RENDER3D_OVERLAY_NORMALS);
         edit_overlays_render_normal_vectors(&pack->walk);
         prof_accum_end(PROF_RENDER3D_OVERLAY_NORMALS);
