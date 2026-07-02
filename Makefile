@@ -819,6 +819,7 @@ test_audio_LDLIBS = $(GL_LDFLAGS)
 test_audio_RUN ?= $(BINDIR)/test_audio
 
 test_render3d_guides_OBJS = $(OBJDIR)/$(TEST_DIR)/test_render3d_guides.o \
+	$(OBJDIR)/src/render3d/overlays.o \
 	$(OBJDIR)/src/render3d/guides/geometry_guides.o \
 	$(OBJDIR)/src/render3d/guides/transform_guides.o \
 	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o

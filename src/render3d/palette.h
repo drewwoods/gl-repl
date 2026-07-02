@@ -68,6 +68,9 @@ typedef enum {
     RENDER3D_CLR_GUIDE_NORMAL_BASE,   /* actual normal (gray)     0.80,0.80,0.80 */
     RENDER3D_CLR_GUIDE_NORMAL_DOUBLE, /* doubled (green)          0.20,0.95,0.20 */
     RENDER3D_CLR_GUIDE_NORMAL_HALF,   /* halved (red)             0.95,0.20,0.20 */
+    RENDER3D_CLR_FOCUSED_NORMAL_CORE,  /* focused normal ray       0.35,1.00,0.90 */
+    RENDER3D_CLR_FOCUSED_NORMAL_PLANE, /* focused normal tangent   0.25,0.65,1.00 */
+    RENDER3D_CLR_FOCUSED_NORMAL_ANCHOR, /* focused normal anchor    1.00,0.92,0.35 */
 
     /* Transform-guide reference geometry (transform_guides.c, routed
      * through tg_color4f so the ghost/solid pass multiplier applies). */
@@ -124,6 +127,9 @@ static const Render3dRgba g_scene_palette[RENDER3D_CLR_COUNT] = {
     [RENDER3D_CLR_GUIDE_NORMAL_BASE]   = { 0.80f, 0.80f, 0.80f, 1.0f },
     [RENDER3D_CLR_GUIDE_NORMAL_DOUBLE] = { 0.20f, 0.95f, 0.20f, 1.0f },
     [RENDER3D_CLR_GUIDE_NORMAL_HALF]   = { 0.95f, 0.20f, 0.20f, 1.0f },
+    [RENDER3D_CLR_FOCUSED_NORMAL_CORE] = { 0.35f, 1.00f, 0.90f, 1.0f },
+    [RENDER3D_CLR_FOCUSED_NORMAL_PLANE] = { 0.25f, 0.65f, 1.00f, 1.0f },
+    [RENDER3D_CLR_FOCUSED_NORMAL_ANCHOR] = { 1.00f, 0.92f, 0.35f, 1.0f },
 
     [RENDER3D_CLR_GUIDE_REF]           = { 0.55f, 0.55f, 0.55f, 1.0f },
     [RENDER3D_CLR_GUIDE_REF_TICK]      = { 0.90f, 0.90f, 0.90f, 1.0f },
