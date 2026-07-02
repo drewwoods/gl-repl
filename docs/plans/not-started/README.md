@@ -14,6 +14,7 @@ begun. They move to `plans/active/` once implementation starts.
 | `cursor-aware-enum-arg-completion.md` | Complete a prior enum argument at the cursor |
 | `float-returning-repl-functions.md` | Functions that return float values |
 | `historic-benchmark.md` | Historic bench trend tracking |
+| `rethinking-flattening-behaviour.md` | Skip unnecessary re-flattens (structure gate + arg rebake); staged VM executor |
 | `scene-close-capability.md` | Close/remove a user scene (design brief) |
 | `scoped-local-variables.md` | Scoped local variable reassignment |
 | `smooth-autonormals-with-loop-support.md` | Smooth autonormals with loop awareness |

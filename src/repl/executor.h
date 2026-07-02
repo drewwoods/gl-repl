@@ -11,10 +11,11 @@
  *   2. On-demand execution: Tests and tools can pass a FlatProgramView over
  *      temporary buffers for isolated execution without side effects.
  *
- * Each frame, expressions with the has_vars flag are re-evaluated with the
- * current predefined variable values (crucial for time-dependent expressions
- * like sin(t*speed) where 't' increments each frame). Expressions without
- * variable references use cached values.
+ * The executor evaluates no expression text: every command renders from the
+ * args[] baked by the most recent flatten. Time-dependent expressions like
+ * sin(t*speed) animate because a playing 't' marks the flat program dirty
+ * and the per-frame re-flatten re-bakes has_vars args before execution
+ * (see ARCHITECTURE.md section 13.4).
  *
  * Matrix stack tracking (repl_executor_apply_tracked_transform_cmd,
  * repl_executor_unwind_tracked_transform_stack) maintains a depth counter

@@ -687,7 +687,7 @@ explaining why the extra background is useful.
   auto-computes via `sizeof`
 - New GL commands: add to the [`CmdType`](src/repl/command.h#L37) enum in [`src/repl/command.h`](src/repl/command.h), then
   handle in [`repl_parser_parse_command_ctx()`](src/repl/parser.h#L92) in [`src/repl/parser.c`](src/repl/parser.c),
-  [`repl_execute_program()`](src/repl/executor.h#L172) in [`src/repl/executor.c`](src/repl/executor.c), and `flatten_range()`
+  [`repl_execute_program()`](src/repl/executor.h#L173) in [`src/repl/executor.c`](src/repl/executor.c), and `flatten_range()`
   (static, inside [`src/repl/flatten.c`](src/repl/flatten.c)). Add a `g_command_type_specs[]`
   entry in [`src/repl/command_spec.c`](src/repl/command_spec.c) with the right [`CmdSyntaxCategory`](src/repl/command_spec.h#L140)
   so the new command picks up its code-panel highlight color
@@ -891,7 +891,7 @@ The core data flow is **source commands → flat commands → GL calls**:
    visits), function calls inline the body with actual args, if-blocks
    evaluate conditions. Recursion depth limited to
    `MAX_FLATTEN_CALL_DEPTH = 64`.
-5. **Execute** — [`repl_execute_program()`](src/repl/executor.h#L172) walks the flat command array emitting GL
+5. **Execute** — [`repl_execute_program()`](src/repl/executor.h#L173) walks the flat command array emitting GL
    calls. Re-evaluates expressions with `has_vars` flag each frame
    (for animated `t`, etc.)
 
@@ -944,7 +944,7 @@ Key details:
   an existing decl still overwrites in place. Init expressions can
   therefore only reference already-declared predef vars — no scope
   locals are visible at block depth 0.
-- `CMD_VAR_DECLARE` is a no-op in [`repl_execute_program()`](src/repl/executor.h#L172) and
+- `CMD_VAR_DECLARE` is a no-op in [`repl_execute_program()`](src/repl/executor.h#L173) and
   `flatten_range()` — registration into the predefined-variable table happens at
   commit time via [`repl_eval_declare_predef_var()`](src/repl/eval.h#L287)
 - [`GLCmd`](src/repl/command.h#L87) fields (tagged-union payload, keyed on `type`):
