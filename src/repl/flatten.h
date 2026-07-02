@@ -12,9 +12,12 @@
  * result live in flatten_query.h.
  *
  * Local variables (loop counters, function params) are snapshotted into
- * FlatCmdLocalVars for each flat command so that expressions with variable
- * references can be re-evaluated at execution time with the correct variable
- * values (important for time-dependent t, or slider-modified variables).
+ * FlatCmdLocalVars for each flat command. Argument re-evaluation itself
+ * happens at flatten time (the per-frame re-flatten is what animates
+ * time-dependent t and slider-modified variables — the executor consumes
+ * baked args only); the stored snapshots serve consumers that reconstruct a
+ * flat command's scope after the fact, e.g. replay's value-tracing
+ * annotations.
  */
 
 #ifndef REPL_FLATTEN_H
@@ -27,8 +30,9 @@
 
 /* Local variable snapshot for a single flat command. Captured when the
  * command is emitted (e.g., loop counter value, function parameter binding).
- * Used at execution time to re-evaluate expressions with the correct variable
- * scope (for time-dependent 't' or slider-modified variables). */
+ * Not read by the executor (which consumes baked args); consumers that need
+ * a flat command's scope after the fact — replay's value-tracing
+ * annotations — read it to reconstruct per-instance bindings. */
 typedef struct {
     int     num_vars;
     ExprVar vars[MAX_EXPR_VARS];

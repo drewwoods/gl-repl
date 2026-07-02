@@ -283,17 +283,22 @@ surfaces it on the CLI.
 
 Loop counters and function parameters don't exist in the source
 command's own scope. When [`flatten.c`](src/repl/flatten.c) emits a flat command, it snapshots
-the live lexical bindings into a parallel [`FlatCmdLocalVars`](src/repl/flatten.h#L32) array
+the live lexical bindings into a parallel [`FlatCmdLocalVars`](flatten.h#L36) array
 ([`repl_state_flat_program_local_vars()`](src/repl/state_views.h#L145)):
 
 ```c
 typedef struct { int num_vars; ExprVar vars[MAX_EXPR_VARS]; } FlatCmdLocalVars;
 ```
 
-At execution time, a `has_vars` command re-evaluates its argument
-expressions against *its own* snapshot — that's how `glVertex3f(i, sin(t),
-0)` inside a loop gets both the right `i` (frozen at flatten) and the
-right `t` (live each frame).
+The re-evaluation itself happens at *flatten* time, not execution time:
+each re-flatten evaluates a `has_vars` command's argument expressions with
+the loop / call bindings live on its own walk — that's how `glVertex3f(i,
+sin(t), 0)` inside a loop gets both the right `i` (per unrolled iteration)
+and the right `t` (live each frame, because a playing `t` re-flattens per
+frame — §3.5, §13.2). The executor consumes the baked `args[]` untouched
+(§5.3). The stored snapshot array serves consumers that must reconstruct a
+flat command's scope after the fact — replay's value-tracing annotations
+read it to display per-instance bindings.
 
 ### 3.5 The dirty flags
 
@@ -447,7 +452,7 @@ takes the edit-line by reference.
 
 ### 5.2 Flatten — lowering source to flat
 
-[`repl_flatten_program()`](src/repl/flatten.h#L90) ([`flatten.c`](src/repl/flatten.c)) expands the source array into the
+[`repl_flatten_program()`](flatten.h#L94) ([`flatten.c`](src/repl/flatten.c)) expands the source array into the
 flat array:
 
 - **for-loops** iterate `[start, end)` by `step`, half-open, re-parsing
@@ -466,7 +471,7 @@ Expansion is recursive and **bounded**:
 
 On overflow it returns `ok = 0` with a status message and leaves the
 prior flat program in place. Every emitted flat command gets its
-provenance (§3.3) and a [`FlatCmdLocalVars`](src/repl/flatten.h#L32) snapshot (§3.4).
+provenance (§3.3) and a [`FlatCmdLocalVars`](flatten.h#L36) snapshot (§3.4).
 
 [`flatten.c`](src/repl/flatten.c) deliberately re-parses source lines with `skip_text` set in
 the [`ReplParseContext`](src/repl/parser.h#L44): it consumes the parsed [`GLCmd`](src/repl/command.h#L87) and discards the
@@ -474,18 +479,19 @@ canonical-text rendering, avoiding per-arg `snprintf` on the hot path.
 
 The live frame path goes through `repl_flatten_commands(edit_line_idx)`,
 but the engine is reusable: tests and replay tools flatten into a
-*temporary* buffer and pass a [`FlatProgramView`](src/repl/flatten.h#L41) over it, never touching
+*temporary* buffer and pass a [`FlatProgramView`](flatten.h#L45) over it, never touching
 the live arrays.
 
 ### 5.3 Execute — flat program to GL
 
-[`repl_execute_program()`](executor.h#L172) ([`executor.c`](src/repl/executor.c)) walks `flat_cmds[0..count)`
+[`repl_execute_program()`](executor.h#L173) ([`executor.c`](src/repl/executor.c)) walks `flat_cmds[0..count)`
 emitting GL. Key behaviors:
 
-- **Per-frame re-evaluation.** `has_vars` commands re-evaluate their
-  expressions against their local-var snapshot + the live predef table,
-  so `sin(t*speed)` animates. Commands without variable references use
-  their cached `args[]`.
+- **Baked args only.** Every command renders from its flatten-baked
+  `args[]` — the executor never evaluates expression text. `sin(t*speed)`
+  animates because a playing `t` marks the flat program dirty and the
+  per-frame re-flatten re-bakes `has_vars` args (§3.5, §13.2), not because
+  of any execute-time re-evaluation.
 - **Matrix-stack tracking.** `repl_executor_apply_tracked_transform_cmd`
   maintains a depth counter (push++/pop--) that overlays read to color
   geometry by transform depth. The GL matrix stack — not [`GLCmd`](src/repl/command.h#L87) — is the
@@ -757,7 +763,7 @@ flowchart LR
 
     subgraph frame_stage["Stage 4: frame loop"]
         tick["t changes<br/>0.00 → 0.25 → 0.50 → 0.75"]
-        rebake["has_vars re-evaluation<br/>r and t live, i frozen"]
+        rebake["reflatten re-bakes has_vars args<br/>r and t live, i frozen"]
         exec["repl_execute_program<br/>GL stubs in --trace; real GL in --render 4"]
         ring["rotating 6-point ring"]
     end
@@ -829,11 +835,11 @@ idx type              has_vars
 ```
 
 The loop is three commands (§3.2); the body carries `has_vars` (§3.1) so
-the executor knows to re-evaluate it from text.
+each re-flatten knows to re-evaluate it from text (§5.2).
 
 ### Stage 3 — flatten  (`repl_flatten_commands`)
 
-[`repl_flatten_program()`](src/repl/flatten.h#L90) (§5.2) lowers the nine source commands to eleven
+[`repl_flatten_program()`](flatten.h#L94) (§5.2) lowers the nine source commands to eleven
 flat ones — the loop body unrolled into six vertices, the `CMD_FOR_BEGIN`
 / `CMD_FOR_END` / `CMD_VAR_DECLARE` markers consumed:
 
@@ -956,7 +962,10 @@ grouping is the mental model.)
 
 Design rationale + future work. This explains why an animated `t` re-flattens
 the whole program every frame, what that buys, and what it would take to stop
-paying for it.
+paying for it. A staged implementation plan for both escape routes — the
+structure-stable fast path (§13.5) and the control-flow-interpreting VM
+(§13.6) — lives in
+[docs/plans/not-started/rethinking-flattening-behaviour.md](docs/plans/not-started/rethinking-flattening-behaviour.md).
 
 ### 13.1 The cost, and why the 4096 cap exists
 
@@ -995,8 +1004,8 @@ because branch selection is a flatten-time concern — §9.)
 Re-flattening per frame is a deliberate trade of CPU for simplicity:
 
 - **The executor stays trivial.** It walks `flat_cmds[0..count)` emitting GL
-  and re-evaluating only leaf `has_vars` expressions — no loop counter, no arm
-  skip-scan, no call stack, no execute-time visit budget.
+  straight from the baked `args[]` — no expression evaluation, no loop
+  counter, no arm skip-scan, no call stack, no execute-time visit budget.
 - **The flat array is correct-by-construction each frame.** There is no
   incremental "patch the flat program when `t` changed" path to get wrong.
 - **One static bound governs per-frame cost.** Because the thing walked every
@@ -1009,21 +1018,32 @@ Re-flattening per frame is a deliberate trade of CPU for simplicity:
 
 ### 13.4 The redundancy worth noticing
 
-For the *common* animation case, the per-frame re-flatten is pure waste.
-`glVertex3f(sin(t), …)`, `glColor3f(t, …)`, `glRotatef(t, …)` are leaf
-`has_vars` commands, and **the executor already re-evaluates `has_vars`
-arguments every frame** against the live variable table + the flat command's
-frozen local-var snapshot (§3.4). So when `t` appears only in leaf positions,
-the re-flatten produces a structurally identical flat program with re-baked
-args the executor would have re-baked anyway. Re-flatten is only *required*
-when `t` reaches a **structural** position: a loop bound, an `if` / `else if`
-condition, or a call arg that feeds one.
+The executor never evaluates expression text — every command renders from the
+`args[]` baked by the most recent flatten (§5.3). So when `t` is live, the
+per-frame re-flatten is not an optimization detail; it is the **only**
+mechanism that animates `glVertex3f(sin(t), …)`, `glColor3f(t, …)`,
+`glRotatef(t, …)`. The redundancy is that the full re-flatten conflates two
+jobs, and for the *common* animation case only one of them is needed:
 
-(Assignments are the exception to "leaves are free": `A[0] = A[0] + 1` is
+- **Arg re-baking** — re-evaluating leaf `has_vars` expressions against the
+  live variable table. This is the part animation actually needs, and its
+  inputs (the source line text, the per-command local-var snapshot §3.4, the
+  live predef table) all survive from the previous flatten.
+- **Structure resolution** — loop unrolling, `if` / `else if` arm selection,
+  call inlining, provenance stamping, and re-parsing every line (including
+  ones with no variables at all). When `t` appears only in leaf positions,
+  this recomputes a byte-identical structure every frame.
+
+Re-flatten is only *required* when `t` reaches a **structural** position: a
+loop bound, an `if` / `else if` condition, or a call arg (call-arg values are
+frozen into the §3.4 snapshots, and nothing short of a full flatten refreshes
+them).
+
+(Assignments are the wrinkle in "leaves are free": `A[0] = A[0] + 1` is
 evaluated and baked at flatten time, and the executor deliberately does *not*
 re-evaluate `CMD_VAR_ASSIGN` / `CMD_SCRATCH_ASSIGN` to avoid double-applying
-self-referential updates. Moving off per-frame flatten has to relocate that
-evaluation — see §13.6.)
+self-referential updates. Any scheme that skips the full flatten must still
+re-run assignments sequentially — see §13.5 and §13.6.)
 
 ### 13.5 Incremental win: a structure-stable fast path
 
@@ -1036,21 +1056,31 @@ the profile panel's flattening section drops to zero for static examples such as
 the parametric torus. Full time-motion blur uses the same query before doing
 sub-frame re-flattens.
 
-The remaining improvement is a stricter structure-stability check:
+The remaining improvement is a stricter structure-stability check **paired
+with an in-place arg re-bake pass**. (Skipping the re-flatten outright would
+freeze the animation: the executor consumes baked args and evaluates nothing —
+§13.4 — so something must still re-bake `has_vars` args each frame.)
 
 - On a variable change (the `t` tick, or a slider drag), decide whether that
   variable can reach a structural position — a loop bound, branch condition, or
-  a call arg feeding one — directly or transitively through assignments.
-- If it cannot, **do not mark the flat program dirty**; let the executor's
-  existing `has_vars` re-eval carry the frame. If it can, re-flatten as today.
+  a call arg — directly or transitively through assignments.
+- If it cannot, **don't re-flatten**; instead walk the *existing* flat array
+  in program order, re-evaluating each `has_vars` command's args from its
+  source line + its local-var snapshot (§3.4) and re-applying assignments
+  sequentially. Structure, provenance, snapshots, and counts stay untouched,
+  so every flat-array consumer keeps working by construction. If it can,
+  re-flatten as today.
 
 This removes the ~8 ms for the typical "`t` only drives vertices / colors /
-transforms" program with no executor rewrite. The hard part is the dataflow
-analysis: it must be conservative (assignment chains, scratch arrays, and
+transforms" program with no executor rewrite. The hard part is the
+classifier: it must be conservative (assignment chains, scratch arrays, and
 `funcN` params can launder `t` into a bound), and getting it wrong silently
-freezes an animation. A safe next cut is a whole-program property computed
-once at compile (not per frame): re-flatten unless the program contains a
-`t`-reachable loop bound or branch condition.
+freezes an animation. A safe cut is a whole-program property computed once
+per edit (not per frame): re-flatten unless every `for` header, `if` /
+`else if` condition, and call-arg list is free of predef vars, scratch
+arrays, and `rand`/`rand2`. The worked plan — classifier rule, dirty-flag
+routing, the re-bake pass, and its differential test strategy — is Phase A of
+[docs/plans/not-started/rethinking-flattening-behaviour.md](docs/plans/not-started/rethinking-flattening-behaviour.md).
 
 ### 13.6 Bigger future work: a control-flow-interpreting executor
 
@@ -1089,4 +1119,7 @@ reads the materialized flat array — provenance / cursor highlight, replay PC
 and fade batches, `--flat-histogram` — needs a way to attribute work over a
 symbolic walk instead of a concrete array. The current design is the deliberate
 opposite bet: pay CPU every frame to keep the executor and all its consumers
-dumb and the cost model a single static cap.
+dumb and the cost model a single static cap. A staged design for this VM — with
+the "VM is the one flattener" shape, milestones, and per-consumer migration
+stories — is Phase B of
+[docs/plans/not-started/rethinking-flattening-behaviour.md](docs/plans/not-started/rethinking-flattening-behaviour.md).

@@ -70,7 +70,7 @@ The UI owns the 2D editor/view.
 The controller translates REPL state into per-frame view inputs.
 ```
 
-Render3d modules may consume [`FlatProgramView`](../src/repl/flatten.h#L41), [`CmdType`](../src/repl/command.h#L37), and other
+Render3d modules may consume [`FlatProgramView`](../src/repl/flatten.h#L45), [`CmdType`](../src/repl/command.h#L37), and other
 command-domain data when that data is already present in the
 [`Render3dRenderConfig`](../src/render3d/render_types.h#L131) or a derived frame snapshot. They should not fetch REPL
 globals or call `repl_state_*` APIs directly during rendering.
@@ -181,7 +181,7 @@ Source commands are the editing model.
 
 Flattened commands are the execution, replay, export, and 3D annotation model.
 
-Code outside the command pipeline should use [`FlatProgramView`](../src/repl/flatten.h#L41) or a snapshot
+Code outside the command pipeline should use [`FlatProgramView`](../src/repl/flatten.h#L45) or a snapshot
 derived from it instead of poking raw global arrays.
 
 ### Flatten cache and render-pass reuse
@@ -207,7 +207,7 @@ emits calls such as `glVertex2f(cmd.args[0], cmd.args[1])`.
 While animation is playing, advancing `t` marks the flat program dirty, so
 expressions that depend on `t` re-evaluate once for that frame. Accumulation
 AA, replay overlay passes, and vertex outlines reuse the same frame-level
-[`FlatProgramView`](../src/repl/flatten.h#L41)/snapshot instead of reparsing, reflattening, or re-evaluating
+[`FlatProgramView`](../src/repl/flatten.h#L45)/snapshot instead of reparsing, reflattening, or re-evaluating
 expressions per sample. Those passes may reapply precomputed assignment
 commands from `args[]` while walking the flat stream, but the frame/probe
 side-effect brackets restore predefined variables and scratch arrays so
@@ -446,7 +446,7 @@ requirement.
 The controller builds the config once per frame, and [`render3d_draw_scene()`](../src/render3d/render.h#L135)
 consumes it directly without calling back into REPL globals or rebuilding the
 frame inputs itself. The config currently carries the execute callback,
-[`FlatProgramView`](../src/repl/flatten.h#L41), viewport, camera, animation, quality flags, lighting,
+[`FlatProgramView`](../src/repl/flatten.h#L45), viewport, camera, animation, quality flags, lighting,
 backdrop, overlay toggles, replay/HUD layout, grid tables, cursor-block
 metadata, and the [`Render3dFocusVertex`](../src/render3d/render_types.h#L123) / [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L16) snapshots needed by
 3D overlays.
@@ -650,7 +650,7 @@ vertices** — the geometry is generated inside GLU/freeglut, so the first
 two passes have nothing to trace. Instead, each shape is *re-drawn* under
 the already-active `glPolygonMode(GL_LINE)` + polygon offset, letting the
 GL pipeline rasterize the wireframe itself. The actual `glutSolid*` call
-goes through [`repl_executor_draw_glut_solid()`](../src/repl/executor.h#L196) (shared with the live
+goes through [`repl_executor_draw_glut_solid()`](../src/repl/executor.h#L197) (shared with the live
 render loop in [`src/repl/executor.c`](../src/repl/executor.c), so the dispatch stays in one place
 and the GLUT-symbol call site stays inside the executor TU). The
 membership predicate is [`repl_cmd_is_glut_solid()`](../src/repl/command.h#L190) in [`src/repl/command.h`](../src/repl/command.h)
@@ -682,7 +682,7 @@ funcN-local parameters or loop-assigned values, so the controller must override
 cursor arguments from the **flat** command stream before rendering guides inside
 functions or loops.
 
-[`edit_overlays_render_cursor_guides()`](../src/subsystems/edit_overlays/edit_overlays.h#L79) walks the current [`FlatProgramView`](../src/repl/flatten.h#L41) via
+[`edit_overlays_render_cursor_guides()`](../src/subsystems/edit_overlays/edit_overlays.h#L79) walks the current [`FlatProgramView`](../src/repl/flatten.h#L45) via
 the replay/user-vertex walkers while tracking the modelview with
 `apply_tracked_transform` / `unwind_transform_stack`. At the cursor's first flat
 command, [`cursor_guide_snapshot_with_flat_args()`](../src/subsystems/edit_overlays/edit_overlays.h#L84) replaces `vertex_args` or
@@ -773,7 +773,7 @@ signature for audited renderers.
   REPL-owned render *tail* ([`ReplRenderState`](../src/repl/state_views.h#L100): per-light state + clear
   color) remains a REPL slice.
 * pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L82), [`EditorInputView`](../src/editor/state.h#L68),
-  [`ReplImportExportView`](../src/repl/state_views.h#L128), [`FlatProgramView`](../src/repl/flatten.h#L41), [`ReplPredefView`](../src/repl/eval.h#L178))
+  [`ReplImportExportView`](../src/repl/state_views.h#L128), [`FlatProgramView`](../src/repl/flatten.h#L45), [`ReplPredefView`](../src/repl/eval.h#L178))
 * document/flat metadata (`document_cmds`, `document_count`, `edit_line`
   — sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L347),
   `flat_program_count`, …)
@@ -1048,7 +1048,7 @@ supported = GL_VERSION >= 1.4
 
 The version check comes first on purpose: an ARB/EXT-only test
 false-negatives on a 1.4+ core context that doesn't advertise the extension
-string. The result is stored via [`repl_executor_set_point_parameter_supported()`](../src/repl/executor.h#L252)
+string. The result is stored via [`repl_executor_set_point_parameter_supported()`](../src/repl/executor.h#L253)
 (the executor no-ops `CMD_POINT_PARAMETER_FV` and falls back to a
 camera-distance `glPointSize` approximation when unsupported) and mirrored
 into `Render3dRenderConfig.point_parameter_supported` so the star backdrop's
@@ -1689,7 +1689,7 @@ Scene-presentation policy and most render config live in the app-side owner [`sr
 * New user-geometry execution behavior: [`src/repl/executor.c`](../src/repl/executor.c).
 * New 3D world decorator: `render3d_*`.
 * New 3D REPL-aware overlay: current home is still `render3d_*`, consuming
-  [`FlatProgramView`](../src/repl/flatten.h#L41) or a snapshot from [`Render3dRenderConfig`](../src/render3d/render_types.h#L131).
+  [`FlatProgramView`](../src/repl/flatten.h#L45) or a snapshot from [`Render3dRenderConfig`](../src/render3d/render_types.h#L131).
 * New 2D UI: `ui_*` renderer plus `repl_*` model/action code if mutation is
   required.
 * New per-frame render3d/UI wiring: [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c).
