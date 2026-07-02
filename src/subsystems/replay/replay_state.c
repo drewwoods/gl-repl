@@ -21,6 +21,7 @@
         .step_begin       = 0,                                  \
         .expand_args      = 1,                                  \
         .normal_display   = REPLAY_NORMAL_DISPLAY_OFF,          \
+        .vertex_label     = 0,                                  \
         .saved_t_playing  = 1,                                  \
         .last_src_line    = -1,                                 \
         .fade_batch_count = 0,                                  \
@@ -75,6 +76,10 @@ int replay_mode(void) {
 
 int replay_normal_display(void) {
     return g_replay_runtime_state.normal_display;
+}
+
+int replay_vertex_label(void) {
+    return g_replay_runtime_state.vertex_label;
 }
 
 int replay_src_line(void) {

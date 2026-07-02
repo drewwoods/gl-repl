@@ -3,7 +3,8 @@
  *
  * Owns the transient playback state that should not live in the REPL document
  * model: replay on/off, machine state, program counter, playback speed, source
- * line tracking, and annotation expansion mode. The replay subsystem logic in
+ * line tracking, annotation expansion mode, and replay-only overlay toggles.
+ * The replay subsystem logic in
  * src/subsystems/replay/replay_playback.c, replay_fade.c, replay_input.c, and
  * replay.c writes this state; controller/UI code reads it for buttons,
  * shortcuts, and per-frame snapshots.
@@ -102,6 +103,7 @@ typedef struct {
                                           * O(N^2) per-frame walk — every frame. */
     int             expand_args;
     int             normal_display;      /* ReplayNormalDisplayMode */
+    int             vertex_label;        /* 1 = label focused replay vertex */
     ReplPredefSnapshot baseline_predef;
     float           baseline_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
     int             saved_t_playing;
@@ -140,6 +142,7 @@ int    replay_machine_state(void);   /* .state — REPLAY_OFF/PLAYING/PAUSED/DON
 int    replay_pc(void);              /* .pc — current program counter */
 int    replay_mode(void);            /* .mode — REPLAY_MODE_VERTEX/POLYGON */
 int    replay_normal_display(void);  /* .normal_display — ReplayNormalDisplayMode */
+int    replay_vertex_label(void);    /* .vertex_label */
 int    replay_src_line(void);        /* .src_line_idx — source line of current cmd */
 int    replay_total_flat(void);      /* .total_flat_cmds — captured at start */
 

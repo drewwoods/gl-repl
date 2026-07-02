@@ -497,6 +497,7 @@ static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3
     pack->walk.replay_tess_preview = replay_mode_vertex;
     pack->walk.show_vertex_points = presentation.show_vertex_points;
     pack->walk.replay_vertex_points = replay_mode_vertex;
+    pack->walk.replay_vertex_label = replay_mode_vertex && replay_vertex_label();
     pack->walk.show_normal_vectors = presentation.show_normal_vectors;
     pack->walk.replay_normal_display = replay_mode_vertex
                                        ? replay_normal_display()

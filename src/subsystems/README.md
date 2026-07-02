@@ -70,7 +70,7 @@ carved out of the editor/UI so neither becomes a grab bag. The flow for each
 is identical:
 
 1. State lives in the subsystem's own `*_state.c` (e.g.
-   [`ReplayRuntimeState`](src/subsystems/replay/replay_state.h#L82), the variable-panel drag transaction, the
+   [`ReplayRuntimeState`](src/subsystems/replay/replay_state.h#L83), the variable-panel drag transaction, the
    tutorial step/lock state).
 2. Input is routed to the subsystem's controller by `glr_ctrl` based on
    the [`UiHit`](src/ui/core/hit.h#L51) kind (e.g. `UI_HIT_VARIABLE_SLIDER` →
@@ -89,7 +89,7 @@ virtual lines), but it never *becomes* editor-owned.
 |---|---|
 | [`replay/replay.c`](src/subsystems/replay/replay.c) / `.h` | Replay state machine: PC, mode (OFF/PLAYING/PAUSED/DONE), speed, fade-batch ring |
 | [`replay/replay_annotations.c`](src/subsystems/replay/replay_annotations.c) / `.h` | Replay-time source annotations / virtual lines |
-| [`replay/replay_state.c`](src/subsystems/replay/replay_state.c) / `.h` | Owns [`ReplayRuntimeState`](src/subsystems/replay/replay_state.h#L82) storage + narrow accessors / snapshot view |
+| [`replay/replay_state.c`](src/subsystems/replay/replay_state.c) / `.h` | Owns [`ReplayRuntimeState`](src/subsystems/replay/replay_state.h#L83) storage + narrow accessors / snapshot view |
 | [`variable_panel/variable_panel_drag.c`](src/subsystems/variable_panel/variable_panel_drag.c) / `.h` | Slider drag transaction: begin/motion/reset, linear/log value writeback |
 | [`variable_panel/variable_panel_state.c`](src/subsystems/variable_panel/variable_panel_state.c) / `.h` | Owns the variable-panel visibility flag + drag-state storage |
 | [`color_picker/color_picker_state.c`](src/subsystems/color_picker/color_picker_state.c) / `.h` | Color-picker state, lifecycle, slider handlers, source-line writeback |

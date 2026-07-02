@@ -196,6 +196,7 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     replay->total_flat_cmds = 13;
     replay->expand_args = 0;
     replay->normal_display = REPLAY_NORMAL_DISPLAY_DIRECTION;
+    replay->vertex_label = 1;
 
     scenes = repl_state_scenes_mut();
     scenes->active_example_idx = 3;
@@ -359,6 +360,8 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_INT("replay normal display restored",
                replay_state_view().normal_display,
                REPLAY_NORMAL_DISPLAY_DIRECTION);
+    ASSERT_INT("replay vertex label restored",
+               replay_state_view().vertex_label, 1);
     ASSERT_INT("active example restored", repl_state_scenes().active_example_idx, 3);
     ASSERT_STR("workspace restored",
                repl_workspace_dir(),
@@ -420,6 +423,8 @@ static void test_reset_all_restores_default_runtime(void) {
     ASSERT_INT("reset_all replay normals",
                replay_state_view().normal_display,
                REPLAY_NORMAL_DISPLAY_OFF);
+    ASSERT_INT("reset_all replay vertex label",
+               replay_state_view().vertex_label, 0);
     ASSERT_STR("reset_all workspace dir", repl_workspace_dir(), "");
     ASSERT_INT("reset_all workspace header count",
                repl_state_import_export().workspace_header_line_count,

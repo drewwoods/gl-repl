@@ -20,6 +20,7 @@
  *   - Left/Right step one replay unit; Up/Down and +/- adjust speed.
  *   - M switches vertex/polygon replay mode; E toggles argument expansion.
  *   - N cycles replay normal display: off, vector, vector + direction.
+ *   - V toggles the replay focused-vertex label.
  *   - Esc stops replay.
  *
  * Step-back / seek restore baseline predefined-variable and scratch-array state

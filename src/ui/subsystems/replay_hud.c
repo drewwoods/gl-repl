@@ -2,7 +2,7 @@
  * replay_ui_hud.c - replay subsystem's UI surface (status HUD overlay).
  *
  * Feature-owned UI under the `replay_ui_*` prefix. May know replay
- * concepts (mode / PC / play-paused-done / speed / expand / normals) and read
+ * concepts (mode / PC / play-paused-done / speed / expand / overlays) and read
  * the replay snapshot. Must not own unrelated editor / REPL state and
  * must not call parser / compile / apply. Enforced by
  * `scripts/check/check-replay-ui-isolation.sh`.
@@ -29,9 +29,13 @@ static const char *replay_hud_normal_text(int mode) {
     }
 }
 
+static const char *replay_hud_vertex_label_text(int enabled) {
+    return enabled ? "VLabel On" : "VLabel Off";
+}
+
 void replay_ui_hud_render(const struct UiRenderSnapshot *snap) {
-    char progress_txt[96];
-    char kbd_txt[128];
+    char progress_txt[128];
+    char kbd_txt[160];
     float progress = 0.0f;
     int render3d_x, render3d_y, render3d_w, render3d_h;
 
@@ -114,10 +118,11 @@ void replay_ui_hud_render(const struct UiRenderSnapshot *snap) {
         snprintf(depth_seg, sizeof(depth_seg), "  | depth %d",
                  snap->replay.focus_call_depth);
     snprintf(progress_txt, sizeof(progress_txt),
-             "Replay  %11.1f cmd/s  | %7s  | %s  | %s%s",
+             "Replay  %11.1f cmd/s  | %7s  | %s  | %s  | %s%s",
              snap->replay.speed,
              snap->replay.mode == REPLAY_MODE_VERTEX ? "Vertex" : "Polygon",
              replay_hud_normal_text(snap->replay.normal_display),
+             replay_hud_vertex_label_text(snap->replay.vertex_label),
              snap->replay.expand_args ? "Code Expanded" : "",
              depth_seg
              );
@@ -155,7 +160,7 @@ void replay_ui_hud_render(const struct UiRenderSnapshot *snap) {
     /* Line 2 - compact kbd hints along the bottom in muted gray */
     snprintf(kbd_txt, sizeof(kbd_txt),
              /* 0xAB / 0xBB = Latin-1 « / » step-direction arrows */
-             "Space pause | +/- speed | m mode | e expand | n normals | %c %c step | Esc stop", 0xAB, 0xBB);
+             "Space pause | +/- speed | m mode | e expand | n normals | v label | %c %c step | Esc stop", 0xAB, 0xBB);
     ui_clr(UI_TOK_TEXT_MUTED);
     gl2d_draw_string((float)text_col_x,
                 (float)(hud_y + REPLAY_HUD_TEXT_LINE2_Y),

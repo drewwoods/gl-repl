@@ -1042,6 +1042,43 @@ static void test_render_normal_vectors_replay_only(void) {
                trace_count_sym(&log, "glPushAttrib"), 0);
 }
 
+static void test_render_replay_vertex_label(void) {
+    printf("--- edit_overlays replay vertex label ---\n");
+
+    GLCmd cmds[5];
+    mk_cmd(&cmds[0], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&cmds[1], CMD_VERTEX3F, 0.0f, 0.0f, 0.0f);
+    mk_cmd(&cmds[2], CMD_VERTEX3F, 0.25f, 0.0f, 0.0f);
+    mk_cmd(&cmds[3], CMD_VERTEX3F, 0.50f, 0.0f, 0.0f);
+    mk_cmd(&cmds[4], CMD_END, 0, 0, 0);
+
+    OverlayWalkCtx walk;
+    memset(&walk, 0, sizeof(walk));
+    walk.program.cmds = cmds;
+    walk.program.cmd_count = 5;
+    walk.replay_vertex_label = 1;
+    walk.replay_anchor_flat_idx = 2;
+
+    TraceLog log;
+    trace_begin();
+    edit_overlays_render_replay_vertex_label(&walk);
+    trace_end(&log);
+
+    ASSERT_INT("replay vertex label anchors at the focused vertex",
+               trace_count_line(&log, "glRasterPos3f 0.25 0 0"), 1);
+    char label_text[128];
+    trace_bitmap_text(&log, label_text, sizeof(label_text));
+    ASSERT_TRUE("replay vertex label uses the global all-instances index",
+                strstr(label_text, " v1") != NULL);
+
+    walk.replay_anchor_flat_idx = -1;
+    trace_begin();
+    edit_overlays_render_replay_vertex_label(&walk);
+    trace_end(&log);
+    ASSERT_INT("replay vertex label with no anchor returns before GL setup",
+               trace_count_sym(&log, "glPushAttrib"), 0);
+}
+
 static void test_vertex_numbers_use_source_begin_block(void) {
     printf("--- edit_overlays vertex labels source block selection ---\n");
 
@@ -1345,6 +1382,7 @@ int main(void) {
     test_vertex_label_visible_occlusion();
     test_on_normal_vector_arrow_callback();
     test_render_normal_vectors_replay_only();
+    test_render_replay_vertex_label();
     test_vertex_numbers_use_source_begin_block();
     test_render_via_repl_program();
     test_cursor_guides_render_for_unterminated_begin();

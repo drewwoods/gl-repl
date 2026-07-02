@@ -45,6 +45,7 @@ typedef struct OverlayWalkCtx {
     int              replay_tess_preview;
     int              show_vertex_points;
     int              replay_vertex_points;
+    int              replay_vertex_label;
     int              show_normal_vectors;
     int              replay_normal_display; /* ReplayNormalDisplayMode */
     int              replay_anchor_flat_idx; /* -1 or flat idx of current replay vertex */

@@ -907,6 +907,70 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     glPopAttrib();
 }
 
+typedef struct ReplayVertexLabelCtx {
+    int anchor_idx;
+    int next_vertex_idx;
+    int *stop_flag;
+} ReplayVertexLabelCtx;
+
+static void on_replay_vertex_label(const ReplayVertexWalkState *state,
+                                   float vx, float vy, float vz,
+                                   void *user) {
+    ReplayVertexLabelCtx *ctx = (ReplayVertexLabelCtx *)user;
+    int label_idx;
+    char text[24];
+
+    if (!ctx)
+        return;
+
+    label_idx = ctx->next_vertex_idx++;
+    if (state->flat_cmd_idx != ctx->anchor_idx)
+        return;
+
+    snprintf(text, sizeof(text), " v%d", label_idx);
+    render3d_draw_vertex_label_text(vx, vy, vz, text, "");
+    if (ctx->stop_flag)
+        *ctx->stop_flag = 1;
+}
+
+static void edit_overlays_render_replay_vertex_label(const OverlayWalkCtx *walk_ctx) {
+    ReplayVertexWalkContext ctx;
+    ReplayVertexLabelCtx label_ctx;
+    int stop = 0;
+    int anchor_idx;
+
+    if (!walk_ctx || !walk_ctx->replay_vertex_label)
+        return;
+
+    ctx = edit_overlays_build_vertex_walk_context(walk_ctx, 0);
+    if (!ctx.program.cmds || ctx.program.cmd_count <= 0)
+        return;
+
+    anchor_idx = walk_ctx->replay_anchor_flat_idx;
+    if (anchor_idx < 0 || anchor_idx >= ctx.program.cmd_count)
+        return;
+    if (!ctx.program.cmds[anchor_idx].valid ||
+        !repl_cmd_emits_vertex(ctx.program.cmds[anchor_idx].type))
+        return;
+
+    ctx.stop_flag = &stop;
+    label_ctx.anchor_idx = anchor_idx;
+    label_ctx.next_vertex_idx = 0;
+    label_ctx.stop_flag = &stop;
+
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    glDisable(GL_LIGHTING);
+    glDisable(GL_DEPTH_TEST);
+    render3d_clr(RENDER3D_CLR_VERTEX_LABEL);
+
+    static const ReplayVertexWalkCallbacks cb = {
+        .on_vertex = on_replay_vertex_label,
+    };
+    replay_walk_user_vertices(&ctx, &cb, &label_ctx);
+
+    glPopAttrib();
+}
+
 #define GLR_NORMAL_ARROW_SCALE 0.35f
 
 void edit_overlays_render_normal_vectors(const OverlayWalkCtx *walk_ctx) {
@@ -1129,6 +1193,11 @@ void edit_overlays_post_overlays(void *user_data) {
                                             pack->vertex_label_mode,
                                             pack->ortho_mode,
                                             pack->vertex_label_scope);
+        prof_accum_end(PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS);
+    }
+    if (pack->walk.replay_vertex_label) {
+        prof_begin(PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS);
+        edit_overlays_render_replay_vertex_label(&pack->walk);
         prof_accum_end(PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS);
     }
     if (pack->show_normal_vectors ||
