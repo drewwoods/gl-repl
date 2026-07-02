@@ -947,10 +947,15 @@ static void test_on_normal_vector_arrow_callback(void) {
     state.normal[1] = 0.0f;
     state.normal[2] = 1.0f;
 
-    float scale = 2.0f;
+    NormalVectorRenderCtx ctx = {
+        .scale = 2.0f,
+        .replay_only = 0,
+        .anchor_idx = -1,
+        .stop_flag = NULL,
+    };
     TraceLog log;
     trace_begin();
-    on_normal_vector_arrow(&state, 1.0f, 1.0f, 1.0f, &scale);
+    on_normal_vector_arrow(&state, 1.0f, 1.0f, 1.0f, &ctx);
     trace_end(&log);
 
     ASSERT_INT("arrow starts at the vertex",
@@ -959,6 +964,56 @@ static void test_on_normal_vector_arrow_callback(void) {
      * once as the line endpoint, once as the arrowhead point. */
     ASSERT_INT("arrow tip at vertex + normal*scale",
                trace_count_line(&log, "glVertex3f 1 1 3"), 2);
+}
+
+static void test_render_normal_vectors_replay_only(void) {
+    printf("--- edit_overlays replay-only normal vectors ---\n");
+
+    GLCmd cmds[11];
+    mk_cmd(&cmds[0], CMD_ENABLE, (float)GL_LIGHTING, 0, 0);
+    mk_cmd(&cmds[1], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&cmds[2], CMD_NORMAL3F, 0.0f, 1.0f, 0.0f);
+    mk_cmd(&cmds[3], CMD_VERTEX3F, 1.0f, 0.0f, 0.0f);
+    mk_cmd(&cmds[4], CMD_NORMAL3F, 0.0f, 0.0f, 1.0f);
+    mk_cmd(&cmds[5], CMD_VERTEX3F, 0.0f, 1.0f, 0.0f);
+    mk_cmd(&cmds[6], CMD_END, 0, 0, 0);
+    mk_cmd(&cmds[7], CMD_DISABLE, (float)GL_LIGHTING, 0, 0);
+    mk_cmd(&cmds[8], CMD_BEGIN, (float)GL_POINTS, 0, 0);
+    mk_cmd(&cmds[9], CMD_VERTEX3F, 0.0f, 0.0f, 1.0f);
+    mk_cmd(&cmds[10], CMD_END, 0, 0, 0);
+
+    OverlayWalkCtx walk;
+    memset(&walk, 0, sizeof(walk));
+    walk.program.cmds = cmds;
+    walk.program.cmd_count = 11;
+    walk.replay_normal_vectors = 1;
+    walk.replay_anchor_flat_idx = 3;
+
+    TraceLog log;
+    trace_begin();
+    edit_overlays_render_normal_vectors(&walk);
+    trace_end(&log);
+
+    ASSERT_INT("replay normal draws only the anchor vertex base",
+               trace_count_line(&log, "glVertex3f 1 0 0"), 1);
+    ASSERT_INT("replay normal uses the anchor's current normal",
+               trace_count_line(&log, "glVertex3f 1 0.35 0"), 2);
+    ASSERT_INT("replay normal skips lit non-anchor vertices",
+               trace_count_line(&log, "glVertex3f 0 1 0"), 0);
+
+    walk.replay_anchor_flat_idx = 9;
+    trace_begin();
+    edit_overlays_render_normal_vectors(&walk);
+    trace_end(&log);
+    ASSERT_INT("replay normal skips an unlit anchor",
+               trace_count_sym(&log, "glVertex3f"), 0);
+
+    walk.replay_anchor_flat_idx = -1;
+    trace_begin();
+    edit_overlays_render_normal_vectors(&walk);
+    trace_end(&log);
+    ASSERT_INT("replay normal with no anchor returns before GL setup",
+               trace_count_sym(&log, "glPushAttrib"), 0);
 }
 
 static void test_vertex_numbers_use_source_begin_block(void) {
@@ -1263,6 +1318,7 @@ int main(void) {
     test_vertex_label_scope();
     test_vertex_label_visible_occlusion();
     test_on_normal_vector_arrow_callback();
+    test_render_normal_vectors_replay_only();
     test_vertex_numbers_use_source_begin_block();
     test_render_via_repl_program();
     test_cursor_guides_render_for_unterminated_begin();

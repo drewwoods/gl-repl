@@ -835,6 +835,56 @@ static void test_walker_separates_glu_and_immediate_normals(void) {
     ASSERT_NEAR("gluVertex normal.z", rec.normal_at_gluvertex[2], 1.0f);
 }
 
+typedef struct {
+    int lighting_at_vertex[8];
+    int vertex_count;
+} LightingRecorder;
+
+static void on_vertex_capture_lighting(const ReplayVertexWalkState *state,
+                                       float vx, float vy, float vz,
+                                       void *user) {
+    LightingRecorder *rec = (LightingRecorder *)user;
+    (void)vx;
+    (void)vy;
+    (void)vz;
+    if (rec->vertex_count < 8)
+        rec->lighting_at_vertex[rec->vertex_count] = state->lighting_enabled;
+    rec->vertex_count++;
+}
+
+static void test_walker_tracks_lighting_state_for_vertices(void) {
+    glr_ctrl_reset_all();
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("glEnable(GL_LIGHTING);");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("glDisable(GL_LIGHTING);");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(2, 0, 0);");
+    editor_feed_line("glEnd();");
+
+    repl_state_mark_flat_dirty();
+    repl_flatten_commands(editor_state_edit_line());
+
+    LightingRecorder rec = {0};
+    ReplayVertexWalkCallbacks cb = {
+        .on_vertex = on_vertex_capture_lighting
+    };
+    ReplayVertexWalkContext ctx = make_ctx(-1);
+    replay_walk_user_vertices(&ctx, &cb, &rec);
+
+    ASSERT_INT("visited all lighting-state vertices", rec.vertex_count, 3);
+    ASSERT_INT("lighting defaults off at first vertex",
+               rec.lighting_at_vertex[0], 0);
+    ASSERT_INT("lighting is on after glEnable(GL_LIGHTING)",
+               rec.lighting_at_vertex[1], 1);
+    ASSERT_INT("lighting is off after glDisable(GL_LIGHTING)",
+               rec.lighting_at_vertex[2], 0);
+}
+
 int main(void) {
     test_walker_resolves_funcn_args_at_cursor();
     test_walker_fires_on_each_cmd_at_cursor();
@@ -847,6 +897,7 @@ int main(void) {
     test_starts_geometry_emit_predicate();
     test_is_glut_solid_predicate();
     test_walker_separates_glu_and_immediate_normals();
+    test_walker_tracks_lighting_state_for_vertices();
 
     printf("test_replay_walk: %d/%d passed\n",
            g_harness.passed, g_harness.run);
