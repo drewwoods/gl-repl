@@ -293,6 +293,7 @@ static void prepare_display_fixture(void) {
     replay_state_mut()->speed = 2.5f;
     replay_state_mut()->expand_args = 1;
     replay_state_mut()->normal_display = REPLAY_NORMAL_DISPLAY_DIRECTION;
+    replay_state_mut()->vertex_label = 1;
     replay_state_mut()->total_flat_cmds = 777;
 
     repl_state_flat_program_clear_dirty();
@@ -377,6 +378,8 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
     ASSERT_INT("HUD replay normal display on snap",
                g_last_replay_hud_snap.replay.normal_display,
                REPLAY_NORMAL_DISPLAY_DIRECTION);
+    ASSERT_INT("HUD replay vertex label on snap",
+               g_last_replay_hud_snap.replay.vertex_label, 1);
     ASSERT_INT("HUD replaying on snap", g_last_replay_hud_snap.replay.active, 1);
 
     ASSERT_FLOAT("scene saw live predef before mutation", g_predef_value_seen_in_scene, 9.0f);

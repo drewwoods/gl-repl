@@ -114,6 +114,13 @@ int replay_handle_key(unsigned char key) {
         repl_set_status(replay_normal_display_status(state->normal_display));
         return 1;
     }
+    case 'v':
+    case 'V':
+        state->vertex_label = !state->vertex_label;
+        repl_set_status(state->vertex_label
+                 ? "Replay: vertex label ON"
+                 : "Replay: vertex label OFF");
+        return 1;
     case KEY_ESC:
         replay_stop();
         repl_set_status("Replay: off");
