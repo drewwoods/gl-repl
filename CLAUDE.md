@@ -1076,7 +1076,7 @@ behavior.
   comments embedding workspace state (`@cfg setting=value`,
   `@scene-name <name>`, `@workspace-dir <path>`),
   camera state as the raw `glTranslatef`/`glRotatef` sequence the REPL
-  uses internally, predefined vars plus fixed scratch arrays `A/B/C[8]` as
+  uses internally, predefined vars plus fixed scratch arrays `A/B/C[16]` as
   globals, REPL functions as C
   functions, and `display()` body containing the user's geometry commands.
   The workspace iterator in [`src/repl/scenes.c`](src/repl/scenes.c) sets the export scene-name hint
@@ -1393,7 +1393,7 @@ goto name                  (jump to a label — CMD_GOTO)
 // comment
 float name[, name2, ...];  (variable declaration)
 var = expr;
-A[index] = expr;           (fixed scratch arrays: A/B/C, index 0..7)
+A[index] = expr;           (fixed scratch arrays: A/B/C, index 0..15)
 ```
 
 ## Math
@@ -1406,8 +1406,8 @@ to `[-1, 1]` — useful for centered jitter, signed offsets, etc. Both
 are deterministic for a given (seed, iter) pair.
 Constants: `PI`, `TAU`, `e`
 Variables: declared via `float name;` — only `t` is predefined (Ctrl+T toggles animation).
-Scratch arrays: `A[8]`, `B[8]`, `C[8]` are fixed global runtime arrays for recursive/loop algorithms.
-Reads and writes use normal expression syntax; indices are truncated with `(int)` and must stay in `0..7`.
+Scratch arrays: `A[16]`, `B[16]`, `C[16]` are fixed global runtime arrays for recursive/loop algorithms.
+Reads and writes use normal expression syntax; indices are truncated with `(int)` and must stay in `0..15`.
 Other names (`x`, `y`, `z`, etc.) must be declared before use.
 `MAX_PREDEF_VARS` = 32 (1 reserved for `t`, 31 user-declarable slots). The
 float-decl handler rejects new declarations once the table is full with

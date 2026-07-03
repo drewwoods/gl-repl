@@ -293,7 +293,7 @@ glVertex3f(x, y, z);    // use anywhere a number is expected
 
 ### Scratch arrays
 
-`A[8]`, `B[8]`, and `C[8]` are three fixed global arrays for loop and
+`A[16]`, `B[16]`, and `C[16]` are three fixed global arrays for loop and
 recursive algorithms:
 
 ```c
@@ -303,7 +303,7 @@ A[0] = A[0] + (A[1] - A[0]) * 0.25;
 glVertex3f(A[0], 0, 0);
 ```
 
-Indices truncate to int and must stay in `0..7`. Like variables, scratch
+Indices truncate to int and must stay in `0..15`. Like variables, scratch
 arrays persist and round-trip through save/load.
 
 ### For-loops

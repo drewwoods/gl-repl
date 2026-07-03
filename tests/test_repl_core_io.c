@@ -368,7 +368,7 @@ int main(void) {
         char buf[16384];
         read_text_file(scratch_path, buf, sizeof(buf));
         ASSERT_TRUE("scratch global A exported (used)",
-                    strstr(buf, "static float A[8] = {0};") != NULL);
+                    strstr(buf, "static float A[16] = {0};") != NULL);
         /* B and C are unreferenced in this snippet, so the emit-on-
          * demand gate must skip them. */
         ASSERT_TRUE("scratch global B omitted (unused)",
