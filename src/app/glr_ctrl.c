@@ -504,6 +504,7 @@ static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3
                                        : REPLAY_NORMAL_DISPLAY_OFF;
     pack->walk.replay_anchor_flat_idx = replay_mode_vertex
                                         ? replay_focus_anchor_flat_idx() : -1;
+    pack->walk.xform_guide_mode = presentation.xform_guide_mode;
 
     pack->snapshot = glr_ctrl_build_guide_snapshot(cfg);
     pack->vertex_label_mode = (OverlayVertexLabelMode)presentation.show_vertex_labels;

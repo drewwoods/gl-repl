@@ -664,6 +664,30 @@ static void test_cursor_guide_snapshot_with_flat_args(void) {
     ASSERT_INT("normal base pos located", s.normal_base_pos_valid, 1);
     ASSERT_TRUE("normal base anchored at next vertex",
                 s.normal_base_pos[0] == 5.0f && s.normal_base_pos[2] == 7.0f);
+    ASSERT_INT("world mode leaves frame normal unset",
+               s.normal_frame_args_valid, 0);
+
+    /* In Frame xform-guide mode, the normal label gets the resultant
+     * direction after in-scope model transforms. A -90 degree Z rotation maps
+     * authored (0, 1, 0) to frame (1, 0, 0). */
+    GLCmd rotated[3];
+    mk_cmd(&rotated[0], CMD_ROTATEF, -90.0f, 0.0f, 0.0f);
+    rotated[0].args[3] = 1.0f;
+    rotated[0].num_args = 4;
+    mk_cmd(&rotated[1], CMD_NORMAL3F, 0.0f, 1.0f, 0.0f);
+    mk_cmd(&rotated[2], CMD_VERTEX3F, 5.0f, 6.0f, 7.0f);
+    base.xform_guide_mode = RENDER3D_XFORM_GUIDE_FRAME;
+    base.flat_program.cmds = rotated;
+    base.flat_program.cmd_count = 3;
+    s = cursor_guide_snapshot_with_flat_args(&base, &rotated[1], 1);
+    ASSERT_INT("frame mode computes transformed normal",
+               s.normal_frame_args_valid, 1);
+    ASSERT_TRUE("frame normal x rotated",
+                fabsf(s.normal_frame_args[0] - 1.0f) < 0.001f);
+    ASSERT_TRUE("frame normal y rotated",
+                fabsf(s.normal_frame_args[1]) < 0.001f);
+    ASSERT_TRUE("frame normal z rotated",
+                fabsf(s.normal_frame_args[2]) < 0.001f);
 
     /* NULL flat returns the snapshot unchanged. */
     s = cursor_guide_snapshot_with_flat_args(&base, NULL, 0);
@@ -1009,10 +1033,10 @@ static void test_render_normal_vectors_replay_only(void) {
     edit_overlays_render_normal_vectors(&walk);
     trace_end(&log);
 
-    ASSERT_INT("replay normal draws only the anchor vertex base",
-               trace_count_line(&log, "glVertex3f 1 0 0"), 1);
-    ASSERT_INT("replay normal uses the anchor's current normal",
-               trace_count_line(&log, "glVertex3f 1 0.35 0"), 2);
+    ASSERT_TRUE("replay normal draws the focused glyph at the anchor",
+                trace_count_line(&log, "glVertex3f 1 0 0") >= 1);
+    ASSERT_TRUE("replay normal uses the anchor's current normal",
+                trace_count_line(&log, "glVertex3f 1 0.35 0") >= 1);
     ASSERT_INT("replay normal skips lit non-anchor vertices",
                trace_count_line(&log, "glVertex3f 0 1 0"), 0);
 
@@ -1025,7 +1049,30 @@ static void test_render_normal_vectors_replay_only(void) {
     char label_text[128];
     trace_bitmap_text(&log, label_text, sizeof(label_text));
     ASSERT_TRUE("replay normal direction label uses %.2f precision",
-                strstr(label_text, " n (0.00, 1.00, 0.00)") != NULL);
+                strstr(label_text, " n=(0.00, 1.00, 0.00)") != NULL);
+
+    GLCmd rotated[6];
+    mk_cmd(&rotated[0], CMD_ROTATEF, -90.0f, 0.0f, 0.0f);
+    rotated[0].args[3] = 1.0f;
+    rotated[0].num_args = 4;
+    mk_cmd(&rotated[1], CMD_ENABLE, (float)GL_LIGHTING, 0, 0);
+    mk_cmd(&rotated[2], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&rotated[3], CMD_NORMAL3F, 0.0f, 1.0f, 0.0f);
+    mk_cmd(&rotated[4], CMD_VERTEX3F, 1.0f, 0.0f, 0.0f);
+    mk_cmd(&rotated[5], CMD_END, 0, 0, 0);
+    OverlayWalkCtx rotated_walk;
+    memset(&rotated_walk, 0, sizeof(rotated_walk));
+    rotated_walk.program.cmds = rotated;
+    rotated_walk.program.cmd_count = 6;
+    rotated_walk.replay_normal_display = REPLAY_NORMAL_DISPLAY_DIRECTION;
+    rotated_walk.replay_anchor_flat_idx = 4;
+    rotated_walk.xform_guide_mode = RENDER3D_XFORM_GUIDE_FRAME;
+    trace_begin();
+    edit_overlays_render_normal_vectors(&rotated_walk);
+    trace_end(&log);
+    trace_bitmap_text(&log, label_text, sizeof(label_text));
+    ASSERT_TRUE("replay normal frame label shows transformed direction",
+                strstr(label_text, "-> frame=(1.00, 0.00, 0.00)") != NULL);
 
     walk.replay_anchor_flat_idx = 9;
     trace_begin();

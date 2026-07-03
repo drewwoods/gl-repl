@@ -10,9 +10,13 @@
 #include "repl/transform_utils.h"  /* apply_tracked_transform / unwind_transform_stack */
 #include "support/cpuprof.h"
 #include "config.h"
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define NORMAL_FRAME_STACK_MAX 128
+#define NORMAL_FRAME_EPS 1e-8f
 
 /* Transform a point by a column-major (OpenGL-layout) 4x4 matrix, dividing by
  * the resulting w (1 for the affine modelview transforms we deal with, but the
@@ -76,6 +80,158 @@ static int mat4_invert(const float m[16], float out[16]) {
     for (int i = 0; i < 16; i++)
         out[i] = inv[i] * det;
     return 1;
+}
+
+static void mat4_identity(float m[16]) {
+    for (int i = 0; i < 16; i++)
+        m[i] = 0.0f;
+    m[0] = m[5] = m[10] = m[15] = 1.0f;
+}
+
+static void mat4_copy(float dst[16], const float src[16]) {
+    memcpy(dst, src, 16 * sizeof(float));
+}
+
+static void mat4_mul_col_major(const float a[16], const float b[16],
+                               float out[16]) {
+    for (int col = 0; col < 4; col++) {
+        for (int row = 0; row < 4; row++) {
+            out[col * 4 + row] =
+                a[0 * 4 + row] * b[col * 4 + 0] +
+                a[1 * 4 + row] * b[col * 4 + 1] +
+                a[2 * 4 + row] * b[col * 4 + 2] +
+                a[3 * 4 + row] * b[col * 4 + 3];
+        }
+    }
+}
+
+static void mat4_post_mul(float m[16], const float rhs[16]) {
+    float tmp[16];
+    mat4_mul_col_major(m, rhs, tmp);
+    mat4_copy(m, tmp);
+}
+
+static void mat4_apply_translate(float m[16], float x, float y, float z) {
+    float t[16];
+    mat4_identity(t);
+    t[12] = x;
+    t[13] = y;
+    t[14] = z;
+    mat4_post_mul(m, t);
+}
+
+static void mat4_apply_scale(float m[16], float x, float y, float z) {
+    float s[16];
+    mat4_identity(s);
+    s[0] = x;
+    s[5] = y;
+    s[10] = z;
+    mat4_post_mul(m, s);
+}
+
+static void mat4_apply_rotate(float m[16], float angle_deg,
+                              float x, float y, float z) {
+    float axis_len = sqrtf(x * x + y * y + z * z);
+    float r[16];
+    float c, s, omc;
+
+    if (axis_len <= NORMAL_FRAME_EPS)
+        return;
+
+    x /= axis_len;
+    y /= axis_len;
+    z /= axis_len;
+
+    float angle = angle_deg * 0.01745329251994329577f;
+    c = cosf(angle);
+    s = sinf(angle);
+    omc = 1.0f - c;
+
+    mat4_identity(r);
+    r[0]  = x * x * omc + c;
+    r[1]  = y * x * omc + z * s;
+    r[2]  = x * z * omc - y * s;
+    r[4]  = x * y * omc - z * s;
+    r[5]  = y * y * omc + c;
+    r[6]  = y * z * omc + x * s;
+    r[8]  = x * z * omc + y * s;
+    r[9]  = y * z * omc - x * s;
+    r[10] = z * z * omc + c;
+    mat4_post_mul(m, r);
+}
+
+static int mat4_transform_normal_frame(const float model[16],
+                                       const float normal[3],
+                                       float out[3]) {
+    float inv[16];
+    float len;
+
+    if (!mat4_invert(model, inv))
+        return 0;
+
+    out[0] = inv[0] * normal[0] + inv[1] * normal[1] + inv[2] * normal[2];
+    out[1] = inv[4] * normal[0] + inv[5] * normal[1] + inv[6] * normal[2];
+    out[2] = inv[8] * normal[0] + inv[9] * normal[1] + inv[10] * normal[2];
+
+    len = sqrtf(out[0] * out[0] + out[1] * out[1] + out[2] * out[2]);
+    if (len <= NORMAL_FRAME_EPS)
+        return 0;
+
+    out[0] /= len;
+    out[1] /= len;
+    out[2] /= len;
+    return 1;
+}
+
+static int compute_normal_frame_args(const FlatProgramView *flat,
+                                     int flat_idx,
+                                     const float normal[3],
+                                     float out[3]) {
+    float model[16];
+    float stack[NORMAL_FRAME_STACK_MAX][16];
+    int depth = 0;
+
+    if (!flat || !flat->cmds || flat_idx < 0 || flat_idx > flat->cmd_count)
+        return 0;
+
+    mat4_identity(model);
+    for (int i = 0; i < flat_idx; i++) {
+        const GLCmd *cmd = &flat->cmds[i];
+        if (!cmd->valid)
+            continue;
+
+        switch (cmd->type) {
+        case CMD_PUSH_MATRIX:
+            if (depth >= NORMAL_FRAME_STACK_MAX)
+                return 0;
+            mat4_copy(stack[depth], model);
+            depth++;
+            break;
+        case CMD_POP_MATRIX:
+            if (depth > 0) {
+                depth--;
+                mat4_copy(model, stack[depth]);
+            }
+            break;
+        case CMD_LOAD_IDENTITY:
+            mat4_identity(model);
+            break;
+        case CMD_TRANSLATE3F:
+            mat4_apply_translate(model, cmd->args[0], cmd->args[1], cmd->args[2]);
+            break;
+        case CMD_SCALEF:
+            mat4_apply_scale(model, cmd->args[0], cmd->args[1], cmd->args[2]);
+            break;
+        case CMD_ROTATEF:
+            mat4_apply_rotate(model, cmd->args[0], cmd->args[1],
+                              cmd->args[2], cmd->args[3]);
+            break;
+        default:
+            break;
+        }
+    }
+
+    return mat4_transform_normal_frame(model, normal, out);
 }
 
 static int outline_begin_mode_has_overlay(GLenum mode) {
@@ -513,6 +669,22 @@ static float sanitize_zero(float val) {
     return val;
 }
 
+static int normalize_vec3(const float in[3], float out[3]) {
+    float len = sqrtf(in[0] * in[0] + in[1] * in[1] + in[2] * in[2]);
+    if (len <= NORMAL_FRAME_EPS)
+        return 0;
+    out[0] = in[0] / len;
+    out[1] = in[1] / len;
+    out[2] = in[2] / len;
+    return 1;
+}
+
+static int vec3_dirs_differ(const float a[3], const float b[3]) {
+    return fabsf(a[0] - b[0]) > 0.005f ||
+           fabsf(a[1] - b[1]) > 0.005f ||
+           fabsf(a[2] - b[2]) > 0.005f;
+}
+
 /* Multiply column-major (OpenGL-layout) 4x4 `m` by the homogeneous vector
  * (x, y, z, w), writing the 4-component result (no perspective divide). */
 static void mat4_mul_vec4(const float m[16], float x, float y, float z, float w,
@@ -767,6 +939,8 @@ typedef struct NormalVectorRenderCtx {
     int show_all;
     int replay_display;
     int anchor_idx;
+    int xform_guide_mode;
+    const FlatProgramView *program;
     int *stop_flag;
 } NormalVectorRenderCtx;
 
@@ -803,14 +977,35 @@ static void on_normal_vector_arrow(const ReplayVertexWalkState *state,
     }
 
     if (draw_focused) {
-        char detail[48];
+        char detail[128];
         const char *primary = NULL;
         const char *detail_text = NULL;
         if (ctx->replay_display == REPLAY_NORMAL_DISPLAY_DIRECTION) {
-            snprintf(detail, sizeof(detail), "=(%.2f, %.2f, %.2f)",
-                     sanitize_zero(state->normal[0]),
-                     sanitize_zero(state->normal[1]),
-                     sanitize_zero(state->normal[2]));
+            float authored[3] = { state->normal[0],
+                                  state->normal[1],
+                                  state->normal[2] };
+            float authored_unit[3];
+            float frame_normal[3];
+            if (ctx->xform_guide_mode == RENDER3D_XFORM_GUIDE_FRAME &&
+                ctx->program &&
+                normalize_vec3(authored, authored_unit) &&
+                compute_normal_frame_args(ctx->program, state->flat_cmd_idx,
+                                          authored, frame_normal) &&
+                vec3_dirs_differ(authored_unit, frame_normal)) {
+                snprintf(detail, sizeof(detail),
+                         "=(%.2f, %.2f, %.2f) -> frame=(%.2f, %.2f, %.2f)",
+                         sanitize_zero(state->normal[0]),
+                         sanitize_zero(state->normal[1]),
+                         sanitize_zero(state->normal[2]),
+                         sanitize_zero(frame_normal[0]),
+                         sanitize_zero(frame_normal[1]),
+                         sanitize_zero(frame_normal[2]));
+            } else {
+                snprintf(detail, sizeof(detail), "=(%.2f, %.2f, %.2f)",
+                         sanitize_zero(state->normal[0]),
+                         sanitize_zero(state->normal[1]),
+                         sanitize_zero(state->normal[2]));
+            }
             primary = " n";
             detail_text = detail;
         }
@@ -1039,6 +1234,9 @@ void edit_overlays_render_normal_vectors(const OverlayWalkCtx *walk_ctx) {
         .show_all = show_all,
         .replay_display = replay_display,
         .anchor_idx = anchor_idx,
+        .xform_guide_mode = walk_ctx ? walk_ctx->xform_guide_mode
+                                     : RENDER3D_XFORM_GUIDE_OFF,
+        .program = &ctx.program,
         .stop_flag = show_all ? NULL : &stop,
     };
     replay_walk_user_vertices(&ctx, &cb, &render_ctx);
@@ -1088,6 +1286,13 @@ Render3dGuideSnapshot cursor_guide_snapshot_with_flat_args(const Render3dGuideSn
         snap.normal_args[0] = flat->args[0];
         snap.normal_args[1] = flat->args[1];
         snap.normal_args[2] = flat->args[2];
+        snap.normal_frame_args_valid = 0;
+        if (snap.xform_guide_mode == RENDER3D_XFORM_GUIDE_FRAME &&
+            compute_normal_frame_args(&snap.flat_program, flat_idx,
+                                      snap.normal_args,
+                                      snap.normal_frame_args)) {
+            snap.normal_frame_args_valid = 1;
+        }
         if (find_next_vertex_args_in_flat(&snap.flat_program, flat_idx,
                                           snap.normal_base_pos))
             snap.normal_base_pos_valid = 1;

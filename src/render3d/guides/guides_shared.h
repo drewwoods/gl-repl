@@ -80,6 +80,13 @@ typedef struct Render3dGuideSnapshot {
     float normal_base_pos[3];
     int   normal_base_pos_valid;
 
+    /* Optional transformed normal direction for the normal label. Filled by
+     * edit_overlays when the cursor's flat-program instance is known and
+     * xform_guide_mode is FRAME. This is the authored normal transformed by
+     * the in-scope model normal matrix and normalized for display. */
+    float normal_frame_args[3];
+    int   normal_frame_args_valid;
+
     float alpha_scale; /* alpha boost to counter dark-bg crush; 1.0 = no change */
 } Render3dGuideSnapshot;
 
