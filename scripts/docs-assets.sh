@@ -89,7 +89,7 @@ JOBS=1
 ARGS=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --list) printf '%s\n' "${ALL_ASSETS[@]}"; exit 0 ;;
+        --list) printf '%s\n' "${ALL_ASSETS[@]}" | sort; exit 0 ;;
         -j|--jobs) JOBS="${2:?docs-assets: $1 needs a count}"; shift 2 ;;
         -j*) JOBS="${1#-j}"; shift ;;
         *) ARGS+=("$1"); shift ;;
@@ -600,8 +600,11 @@ if want sc-bezier; then
     still "$SHOW/bezier.png" $PLAIN_FRAMES 16 --example "Bezier curve with guides"
 fi
 if want sc-bubble-sort; then
-    gif "$SHOW/bubble-sort.gif" 260 2 20 560 \
-        --example "Bubble sort (scratch arrays)"
+    (
+        WARM=20
+        gif "$SHOW/bubble-sort.gif" 160 2 20 560 \
+            --example "Bubble sort (scratch arrays)"
+    )
 fi
 
 if want sc-orbit-plot; then
@@ -609,12 +612,13 @@ if want sc-orbit-plot; then
         --example "Annotated orbit plot (labels)"
 fi
 
-# Surfaces. (The old "Procedural terrain" example is gone; the new "Ringed
-# planet" stands in for the third surface tile.)
 if want sc-wave-surface; then
     gif "$SHOW/wave-surface.gif" 200 2 20 560 \
         --example "Animated wave surface (analytic normals)"
 fi
+
+# Surfaces. (The old "Procedural terrain" example is gone; the new "Ringed
+# planet" stands in for the third surface tile.)
 if want sc-ringed-planet; then
     gif "$SHOW/ringed-planet.gif" 200 2 20 560 --example "Ringed planet (nebula skies)"
 fi
