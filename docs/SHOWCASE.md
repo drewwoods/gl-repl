@@ -406,6 +406,25 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 </tr>
 </table>
 
+### Algorithms
+
+<table>
+<tr>
+<td width="33%" align="center">
+
+<!-- images/showcase/bubble-sort.gif
+     scripts/docs-assets.sh sc-bubble-sort -->
+<img src="images/showcase/bubble-sort.gif" alt="Bubble sort visualization" width="100%">
+
+**[Bubble sort](../examples/scenes/bubble-sort-scratch-arrays.glr)**
+<br><sub>array sort scrubbed by `t`</sub>
+
+</td>
+<td width="33%"></td>
+<td width="33%"></td>
+</tr>
+</table>
+
 ---
 
 ## ✦ Beyond the still image
