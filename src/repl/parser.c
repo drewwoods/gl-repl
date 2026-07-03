@@ -1089,6 +1089,18 @@ static int parse_matrix_stack_cmd(const char *func, GLCmd *cmd,
     return 0;
 }
 
+static void strip_trailing_comment(char *p) {
+    int in_str = 0;
+    for (char *q = p; *q; q++) {
+        if (*q == '"') {
+            in_str = !in_str;
+        } else if (!in_str && q[0] == '/' && q[1] == '/') {
+            *q = '\0';
+            break;
+        }
+    }
+}
+
 /* The REPL line parser: match one trimmed source line to a CmdType,
  * evaluate its argument expressions, and emit the canonical line text.
  * Deliberately one flat dispatcher — each command match is independent,
@@ -1108,6 +1120,17 @@ static int parse_matrix_stack_cmd(const char *func, GLCmd *cmd,
  * On success the matched arm sets cmd->type/args/valid and writes the
  * canonical text (indent derived from source scope); a trailing `// ...`
  * comment from the input is re-attached at the single exit point. */
+static int check_trailing_garbage(const char *after, const ReplParseContext *ctx) {
+    while (*after && isspace((unsigned char)*after)) after++;
+    if (*after == ';') after++;
+    while (*after && isspace((unsigned char)*after)) after++;
+    if (*after != '\0' && !(after[0] == '/' && after[1] == '/')) {
+        parser_emit_error_static(ctx, "unexpected text after ')'");
+        return 0;
+    }
+    return 1;
+}
+
 static int parse_command(const char *line, GLCmd *cmd,
                          char *text_out, int text_sz,
                          const ReplParseContext *ctx) {
@@ -1172,15 +1195,7 @@ static int parse_command(const char *line, GLCmd *cmd,
      * string-aware — a `//` inside a "..." literal is left in place, so
      * label("a // b") still reaches its dedicated "// forbidden" check. */
     {
-        int in_str = 0;
-        for (char *q = p; *q; q++) {
-            if (*q == '"') {
-                in_str = !in_str;
-            } else if (!in_str && q[0] == '/' && q[1] == '/') {
-                *q = '\0';
-                break;
-            }
-        }
+        strip_trailing_comment(p);
         len = (int)strlen(p);
         while (len > 0 && (p[len - 1] == ';' || isspace((unsigned char)p[len - 1])))
             p[--len] = '\0';
@@ -1217,15 +1232,8 @@ static int parse_command(const char *line, GLCmd *cmd,
          * silently dropped the `fafa` and committed the command as if it
          * weren't there. (glMaterialfv has its own compound-literal tail
          * check; the general `(...)` command path had none.) */
-        {
-            const char *after = close_p + 1;
-            while (*after && isspace((unsigned char)*after)) after++;
-            if (*after == ';') after++;
-            while (*after && isspace((unsigned char)*after)) after++;
-            if (*after != '\0' && !(after[0] == '/' && after[1] == '/')) {
-                parser_emit_error_static(ctx, "unexpected text after ')'");
-                return 0;
-            }
+        if (!check_trailing_garbage(close_p + 1, ctx)) {
+            return 0;
         }
     } else {
         if (!repl_copy_string_fits(func, sizeof(func), p))
