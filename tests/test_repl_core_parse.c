@@ -366,6 +366,56 @@ int main(void) {
         ASSERT_TRUE("func call keeps raw expr", strstr(cmd_text, "x + 1") != NULL);
     }
 
+    /* Trailing `// ...` comment containing a ')': the arg-list close paren
+     * must be located from the command, not the last ')' in the line (which
+     * lives inside the comment). Regression for the strrchr(p, ')') bug. */
+    {
+        glr_ctrl_reset_all();
+        declare_test_vars();
+        editor_state_edit_line_set(0);
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glColor3f(1, 0, 0); // tint (with paren)",
+                                     &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("gl call w/ paren-comment parses", ok == 1);
+        ASSERT_TRUE("gl call w/ paren-comment type", cmd.type == CMD_COLOR3F);
+        ASSERT_TRUE("gl call w/ paren-comment arg count", cmd.num_args == 3);
+        ASSERT_TRUE("gl call w/ paren-comment args intact",
+                    cmd.args[0] == 1.0f && cmd.args[1] == 0.0f && cmd.args[2] == 0.0f);
+        ASSERT_TRUE("gl call w/ paren-comment keeps comment",
+                    strstr(cmd_text, "// tint (with paren)") != NULL);
+    }
+
+    /* Same bug on a funcN call whose comment contains ')'. */
+    {
+        glr_ctrl_reset_all();
+        declare_test_vars();
+        editor_state_edit_line_set(0);
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("func0(x + 1, 2); // step (i of n)",
+                                     &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("func call w/ paren-comment parses", ok == 1);
+        ASSERT_TRUE("func call w/ paren-comment type", cmd.type == CMD_CALL);
+        ASSERT_TRUE("func call w/ paren-comment keeps raw expr",
+                    strstr(cmd_text, "x + 1") != NULL);
+        ASSERT_TRUE("func call w/ paren-comment keeps comment",
+                    strstr(cmd_text, "// step (i of n)") != NULL);
+    }
+
+    /* The fix must not weaken the "unexpected text after ')'" guard: real
+     * garbage after the close paren (not a // comment) still fails. */
+    {
+        glr_ctrl_reset_all();
+        g_status[0] = '\0';
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("glColor3f(1, 0, 0) garbage", &cmd);
+        ASSERT_TRUE("trailing garbage after ) still fails", ok == 0);
+    }
+
     {
         glr_ctrl_reset_all();
         GLCmd cmd;

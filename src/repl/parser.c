@@ -1162,6 +1162,30 @@ static int parse_command(const char *line, GLCmd *cmd,
         return 1;
     }
 
+    /* Strip a trailing `// ...` line comment from the working buffer before
+     * locating the arg-list parens below. parse_command finds the close
+     * paren with strrchr(p, ')'), so a ')' inside the comment (e.g.
+     * `glColor3f(1,0,0); // tint (a)`) would be mistaken for the command's
+     * close paren and corrupt arg extraction. The caller re-attaches the
+     * comment to the canonical text (repl_append_trailing_comment on the
+     * original line), so dropping it here only affects parsing. The scan is
+     * string-aware — a `//` inside a "..." literal is left in place, so
+     * label("a // b") still reaches its dedicated "// forbidden" check. */
+    {
+        int in_str = 0;
+        for (char *q = p; *q; q++) {
+            if (*q == '"') {
+                in_str = !in_str;
+            } else if (!in_str && q[0] == '/' && q[1] == '/') {
+                *q = '\0';
+                break;
+            }
+        }
+        len = (int)strlen(p);
+        while (len > 0 && (p[len - 1] == ';' || isspace((unsigned char)p[len - 1])))
+            p[--len] = '\0';
+    }
+
     char *open_p = strchr(p, '(');
     char *close_p = open_p ? strrchr(p, ')') : NULL;
     char func[64] = "";
