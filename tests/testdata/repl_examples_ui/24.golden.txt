@@ -134,7 +134,8 @@ void display(void) {
           gluVertex(k*cos(i*TAU/30), 0, k*sin(i*TAU/30));
         }
       gluEnd();
-      // Inner lagoon contour (tessellator infers the hole from the overlap)
+      // Inner lagoon contour, wound the opposite way (note the -i*TAU/20): under
+      // the tessellator's odd winding rule the reversed contour carves the hole.
       gluBegin(GLU_CONTOUR);
         for(i, 0, 20) {
           x = lagoon*cos(-i*TAU/20) - r*0.35;
@@ -230,6 +231,8 @@ void display(void) {
     }
   }
 
+  // shared scratch: x/y/z vertex position; n = 1/|gradient| (sea normals)
+  // k/s = radius/angle scratch (island coastline, firefly polar coords).
   glClearColor(0.05, 0.06, 0.08, 1);
   // ===== Dusk lighthouse atoll - a coherent feature tour =====
   // One scene, many features: a parametric sea, a tessellated island with a

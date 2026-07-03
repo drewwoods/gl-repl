@@ -93,12 +93,14 @@ void display(void) {
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
+  static float s; // color mix factor, 0..1
 
   glClearColor(0.05, 0.06, 0.08, 1);
   glEnable(GL_DEPTH_TEST);
   glBegin(GL_LINE_LOOP);
     for(i, 0, 48) {
-      glColor3f(0.98 - 0.62*(sin(i*TAU/48)*0.5+0.5), 0.46 + 0.24*(sin(i*TAU/48)*0.5+0.5), 0.36 + 0.62*(sin(i*TAU/48)*0.5+0.5));
+      s = sin(i*TAU/48)*0.5 + 0.5;
+      glColor3f(0.98 - 0.62*s, 0.46 + 0.24*s, 0.36 + 0.62*s); // CORAL -> AZURE
       glVertex3f(cos(i*TAU/48+t)*2, sin(i*TAU/48+t)*2, sin(i*TAU/12+t)*0.5);
     }
   glEnd();
@@ -106,7 +108,8 @@ void display(void) {
     glColor3f(0.92, 0.95, 0.98);
     glVertex3f(0, 0, 0);
     for(i, 0, 25) {
-      glColor3f(0.98 - 0.62*(sin(i*TAU/24+t)*0.5+0.5), 0.46 + 0.24*(sin(i*TAU/24+t)*0.5+0.5), 0.36 + 0.62*(sin(i*TAU/24+t)*0.5+0.5));
+      s = sin(i*TAU/24+t)*0.5 + 0.5;
+      glColor3f(0.98 - 0.62*s, 0.46 + 0.24*s, 0.36 + 0.62*s); // CORAL -> AZURE
       glVertex3f(cos(i*TAU/24)*1.5, sin(i*TAU/24)*1.5, 0);
     }
   glEnd();

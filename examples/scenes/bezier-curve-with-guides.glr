@@ -11,6 +11,8 @@ glTranslatef(0.0f, 0.0f, -3.5f);
 glRotatef(0.0f, 1.0f, 0.0f, 0.0f);
 glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
 glTranslatef(-1.0f, -0.5f, 0.0f);
+// Quadratic Bezier control points P0=(x0,y0), P1=(x1,y1), P2=(x2,y2).
+// x0/y0/y2 are intentionally left at their implicit 0 -> P0=(0,0), P2=(2,0).
 static float x, y, x0, y0, x1 = 1, y1 = 1, x2 = 2, y2;
 static float period = 5;
 static float x_a, x_b, y_a, y_b;
@@ -32,7 +34,7 @@ glLineWidth(1.3);
 t0 = (fmod(t, period)) / period;
 glBegin(GL_POINTS);
   glVertex2f(x0, y0);
-  glVertex3f(x1, y1, 0);
+  glVertex2f(x1, y1);
   glVertex2f(x2, y2);
   bezier(x0, y0, x1, y1, x2, y2, t0);
   glColor3f(0.98, 0.46, 0.36);
@@ -46,6 +48,9 @@ glBegin(GL_LINE_STRIP);
   }
 glEnd();
 glColor4f(0.62, 0.52, 0.95, 0.40);
+// De Casteljau level-1 points: lerp along each control leg (P0->P1 and
+// P1->P2) by t0. The "Derived Line" between them (drawn below) is tangent
+// to the curve, and the curve point at t0 sits on it.
 x_a = x0*(1-t0) + x1*t0;
 y_a = y0*(1-t0) + y1*t0;
 x_b = x1*(1-t0) + x2*t0;

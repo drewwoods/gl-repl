@@ -94,6 +94,9 @@ void display(void) {
 --- header_post ---
 --- source ---
   shape(scale, phase) {
+    // Two mutually-exclusive guards on the same arg -- an if/else written as
+    // a complementary pair (else/else-if exist too; kept explicit here so each
+    // branch reads as its own self-contained block): big -> quad, small -> tri.
     if(scale > 1) {
       glColor3f(0.98, 0.46, 0.36);
       glBegin(GL_QUADS);

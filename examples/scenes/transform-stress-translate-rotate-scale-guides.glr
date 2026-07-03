@@ -2,7 +2,7 @@
 // @cfg vertex_points = 0
 // camera
 glTranslatef(0.0f, 0.0f, -5.0f);
-glRotatef(00.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(0.0f, 1.0f, 0.0f, 0.0f);
 glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
 glTranslatef(0.0f, -0.8f, 0.0f);
 
@@ -20,6 +20,8 @@ tri() {
     glVertex3f(0, 0.4, 0);
   glEnd();
 }
+// Pivot rotation: translate out to z=2, rotate, translate back -- the tri
+// swings about a point 2 units away instead of its own origin.
 glColor3f(0.98, 0.46, 0.36);
 glPushMatrix();
 glTranslatef(0, 0, 2);
@@ -27,6 +29,7 @@ glRotatef(45, 0, 1, 0);
 glTranslatef(0, 0, -2);
 tri();
 glPopMatrix();
+// Animated spin + non-uniform scale, offset to the left.
 glColor3f(0.30, 0.84, 0.80);
 glPushMatrix();
 glTranslatef(-2, 0, 0);
@@ -34,6 +37,8 @@ glRotatef(3*t, 0, 1, 0);
 glScalef(1.5, 0.5, 1);
 tri();
 glPopMatrix();
+// Rotate-then-translate ring: 6 copies, each rotated then pushed out along
+// the rotated x-axis so they land evenly around a circle.
 glColor3f(0.36, 0.70, 0.98);
 for(i, 0, 6) {
   glPushMatrix();
@@ -43,12 +48,14 @@ for(i, 0, 6) {
   tri();
   glPopMatrix();
 }
+// Translate up + uniform scale.
 glColor3f(0.95, 0.44, 0.66);
 glPushMatrix();
 glTranslatef(0, 2, 0);
 glScalef(0.8, 0.8, 0.8);
 tri();
 glPopMatrix();
+// Spin in place about the origin.
 glColor3f(0.98, 0.76, 0.36);
 glPushMatrix();
 glRotatef(t*30, 0, 1, 0);

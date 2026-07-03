@@ -24,7 +24,7 @@
 /* @cfg label_scope = OVERLAY_VERTEX_LABEL_SCOPE_ONE_INSTANCE */
 /* @cfg normal_vectors = 0 */
 /* @cfg vertex_outlines = 1 */
-/* @cfg vertex_points = 1 */
+/* @cfg vertex_points = 0 */
 /* @cfg poly_highlight = 1 */
 /* @cfg winding = 0 */
 /* @cfg variable_panel = 1 */
@@ -100,7 +100,6 @@ void display(void) {
   static float freq = 2.5; // spatial frequency along x and z
   static float zPhase = 0.7; // z-axis time phase: z evolves slower than x (<1)
 
-  // @cfg vertex_points = 0
   glClearColor(0.05, 0.06, 0.08, 1);
   // Animated surface: y = sin(freq*x + t) * cos(freq*z + zPhase*t) * amp
   // Drawn as a triangle strip per row with analytic per-vertex normals.
