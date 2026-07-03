@@ -798,11 +798,14 @@ over **Accum passes** samples (`GLR_CONFIG_ACCUM_PASSES`: 1/2/4/8/12/16,
 Ctrl+=/Ctrl+−). Backing fields are `GlrRenderState.accum_effect/accum_passes`
 → [`Render3dRenderConfig`](src/render3d/render_types.h#L131). AA (the historic default, 2 passes) jitters the frustum
 per sample. **Blur** and **Blur Cam** are opt-in (expensive: they re-render the
-scene per sample with no temporal reuse). The two blur modes differ only in the
-no-camera-motion case: **Blur** also blurs the animation time, **Blur Cam**
-falls back to AA. **Blur and AA jitter are never combined** — a blur sample
-always renders with jitter 0, so a frame is exactly `accum_passes` renders
-either way (no doubling).
+scene per sample with no temporal reuse). The **effect picks the blur axis** —
+camera motion never overrides it: **Blur** is per-object (animation-time) blur
+only, even while the camera moves (so you can reposition the camera without
+losing the object motion blur); **Blur Cam** is camera-pose blur only. Each
+falls back to AA jitter when its axis has nothing to blur (Blur on a scene that
+doesn't use `t`; Blur Cam with a still camera). **Blur and AA jitter are never
+combined** — a blur sample always renders with jitter 0, so a frame is exactly
+`accum_passes` renders either way (no doubling).
 
 The accum loop lives in [`render3d_draw_scene()`](src/render3d/render.h#L135) ([`src/render3d/render.c`](src/render3d/render.c)); a
 sample is a "blur sample" when `RENDER3D_ACCUM_EFFECT_IS_BLUR(accum_effect)` and a
@@ -812,19 +815,26 @@ copy and calls `config->setup_subframe_fn(ud, pass_idx, pass_count, &pass_cfg)`
 `glr_ctrl_setup_subframe` in [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c)), so the scene stays
 camera/REPL-agnostic. Per frame the controller picks:
 
-- **Camera blur** (both Blur and Blur Cam) — if the camera pose changed since
+- **Camera blur** (Blur Cam only) — if the camera pose changed since
   last frame (`glr_camera_pose_changed`), interpolate `prev`↔`cur` pose across
   the samples (`glr_camera_pose_lerp`). The hook loads the interpolated
   modelview *and* writes the pose into `pass_cfg->cam_*` so
   grid/axes/orbit-target/lights and the ortho projection (recomputed per
-  sample) blur with the camera too.
-- **Time blur** (Blur only) — else if `t` is playing, sample the trailing
-  window `[t−dt, t]` (`dt = GLR_FRAME_DT_SECS`): the hook calls
+  sample) blur with the camera too. A still camera under Blur Cam ⇒ AA
+  fallback.
+- **Time blur** (Blur only) — if the source uses `t`, sample the trailing
+  window `[t−dt, t]` (`dt = GLR_FRAME_DT_SECS`) regardless of camera motion
+  (the camera renders crisp at the current pose for every sample): the hook calls
   [`repl_state_time_set_transient()`](src/repl/state_owners.h#L72) then [`repl_flatten_commands()`](src/repl/pipeline.h#L10) to re-bake
   geometry at the sub-step `t`. (Re-baking is required — the executor consumes
   baked `flat_cmds[].args`; animation is reflatten-per-frame, not execute-time
-  re-eval.)
-- **Fallback** — camera still (and not time-blurring) ⇒ the hook stays NULL and
+  re-eval.) This does **not** require `t` to be playing: a paused scene that
+  uses `t` still motion-blurs across one frame's worth of the shutter window,
+  so the blur is visible when animation is stopped (the shutter is anchored at
+  the current `t`, so `t_end` is just the paused value). Only scenes that don't
+  reference `t` fall through to the AA jitter fallback.
+- **Fallback** — the selected axis has nothing to blur (Blur on a scene that
+  doesn't use `t`, or Blur Cam with a still camera) ⇒ the hook stays NULL and
   the scene takes the AA jitter path. **Replay** also forces this (NULL hook): a
   per-sample reflatten would clobber the replay-narrowed flat count.
 
