@@ -25,12 +25,12 @@ static const char *replay_hud_normal_text(int mode) {
     case REPLAY_NORMAL_DISPLAY_DIRECTION:
         return "Direction";
     default:
-        return "Off";
+        return "";
     }
 }
 
 static const char *replay_hud_vertex_label_text(int enabled) {
-    return enabled ? "Labelled" : "Off";
+    return enabled ? "Labelled" : "";
 }
 
 static void center_format(char *buf, size_t size, const char *str, int width) {
@@ -97,6 +97,80 @@ static void build_replay_status(char *progress_buf, size_t progress_sz,
     }
 }
 
+/* Draws the main HUD panel background: a semi-transparent dark gray surface
+ * with a thin colored border outline matching the accent theme (accent glow). */
+static void draw_hud_panel(int x, int y, int w) {
+    ui_clr_a(UI_TOK_SURFACE, 0.94f);
+    glRectf((float)x, (float)y, (float)(x + w), (float)(y + REPLAY_HUD_HEIGHT));
+    ui_clr_a(UI_TOK_ACCENT_GLOW_BG, 0.95f);
+    glBegin(GL_LINE_LOOP);
+    glVertex2f((float)x + 0.5f,       (float)y + 0.5f);
+    glVertex2f((float)(x + w) - 0.5f, (float)y + 0.5f);
+    glVertex2f((float)(x + w) - 0.5f, (float)(y + REPLAY_HUD_HEIGHT) - 0.5f);
+    glVertex2f((float)x + 0.5f,       (float)(y + REPLAY_HUD_HEIGHT) - 0.5f);
+    glEnd();
+}
+
+/* Draws a 10px status glyph in the left gutter of Line 1:
+ * - Two vertical bars for REPLAY_PLAYING (Pause icon).
+ * - A solid square for REPLAY_DONE (Stopped/Complete).
+ * - A right-pointing triangle for paused/stopped states (Play icon). */
+static void draw_playback_icon(int cx, int cy, int sz, int state) {
+    ui_clr(UI_TOK_ACCENT);
+    if (state == REPLAY_PLAYING) {
+        float bw = 3.0f, gap = 3.0f;
+        float by0 = (float)cy - (float)sz * 0.5f;
+        glRectf((float)(cx - bw - gap * 0.5f), (float)by0, (float)(cx - bw - gap * 0.5f) + bw, by0 + (float)sz);
+        glRectf((float)(cx + gap * 0.5f),      (float)by0, (float)(cx + gap * 0.5f) + bw, by0 + (float)sz);
+    } else if (state == REPLAY_DONE) {
+        /* Square - run complete */
+        float sx = (float)cx - (float)sz * 0.5f;
+        float sy = (float)cy - (float)sz * 0.5f;
+        glRectf(sx, sy, sx + (float)sz, sy + (float)sz);
+    } else {
+        /* Play triangle - paused / stopped, click to (re)start */
+        float x0 = (float)cx - (float)sz * 0.5f;
+        glBegin(GL_TRIANGLES);
+        glVertex2f(x0,             (float)cy - (float)sz * 0.5f);
+        glVertex2f(x0,             (float)cy + (float)sz * 0.5f);
+        glVertex2f(x0 + (float)sz, (float)cy);
+        glEnd();
+    }
+}
+
+/* Draws the horizontal progress bar between Line 1 and Line 2:
+ * - A sunken dark background track/groove.
+ * - A bright accent-colored fill indicating replay progress fraction (pc / total_cmds).
+ * - A subtle accent-glow border outline around the groove. */
+static void draw_progress_groove(int x, int y, int w, float progress) {
+    ui_clr(UI_TOK_SUNKEN);
+    glRectf((float)x, (float)y, (float)(x + w), (float)(y + REPLAY_HUD_PROGRESS_H));
+    ui_clr(UI_TOK_ACCENT);
+    glRectf((float)x, (float)y, (float)(x + (float)w * progress), (float)(y + REPLAY_HUD_PROGRESS_H));
+    ui_clr(UI_TOK_ACCENT_GLOW_BG);  /* accent-glow groove border */
+    glBegin(GL_LINE_LOOP);
+    glVertex2f((float)x + 0.5f,       (float)y + 0.5f);
+    glVertex2f((float)(x + w) - 0.5f, (float)y + 0.5f);
+    glVertex2f((float)(x + w) - 0.5f, (float)(y + REPLAY_HUD_PROGRESS_H) - 0.5f);
+    glVertex2f((float)x + 0.5f,       (float)(y + REPLAY_HUD_PROGRESS_H) - 0.5f);
+    glEnd();
+}
+
+/* Renders the interactive 2D HUD overlay for the replay controls.
+ *
+ * Layout Structure:
+ * +--------------------------------------------------------------------------------------+
+ * | [Icon] Replay <Speed> | <Mode> | <Code Exp> | <Normals> | <Labels>        [PC/Total] |
+ * | [=== Progress Bar Groove ==========================================================] |
+ * | Space pause | +/- speed | m mode | e expand | n normals | v vertex | « » step ...    |
+ * +--------------------------------------------------------------------------------------+
+ *
+ * - Line 1: The current playback speed, replay mode (Vertex/Polygon), code expansion status,
+ *   normal vector overlay status, vertex index label status, nesting depth, and the command
+ *   program counter fraction (right-aligned).
+ * - Horizontal center bar: Visual progress groove showing commands executed.
+ * - Line 2: Compact key-binding shortcut hints in muted gray.
+ */
 void replay_ui_hud_render(const struct UiRenderSnapshot *snap) {
     char progress_txt[128];
     char kbd_txt[160];
@@ -132,51 +206,17 @@ void replay_ui_hud_render(const struct UiRenderSnapshot *snap) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    /* Neutral menubar surface; accent-glow border so the HUD reads as
-     * paired with the accent Replay button (both follow the theme). */
-    ui_clr_a(UI_TOK_SURFACE, 0.94f);
-    glRectf((float)(hud_x), (float)(hud_y), (float)(hud_x)+(float)(hud_w), (float)(hud_y)+(float)(REPLAY_HUD_HEIGHT));
-    ui_clr_a(UI_TOK_ACCENT_GLOW_BG, 0.95f);
-    glBegin(GL_LINE_LOOP);
-    glVertex2f((float)hud_x + 0.5f,                      (float)hud_y + 0.5f);
-    glVertex2f((float)(hud_x + hud_w) - 0.5f,            (float)hud_y + 0.5f);
-    glVertex2f((float)(hud_x + hud_w) - 0.5f,            (float)(hud_y + REPLAY_HUD_HEIGHT) - 0.5f);
-    glVertex2f((float)hud_x + 0.5f,                      (float)(hud_y + REPLAY_HUD_HEIGHT) - 0.5f);
-    glEnd();
+    /* Background panel */
+    draw_hud_panel(hud_x, hud_y, hud_w);
 
-    /* Column layout: icon in a fixed gutter, both text rows share one
-     * left edge so line1 (green status) and line2 (kbd hints) align. */
+    /* Playback icon */
     int text_col_x = hud_x + REPLAY_HUD_TEXT_PAD_X + 18;   /* after 18px icon gutter */
     int icon_cx    = hud_x + REPLAY_HUD_TEXT_PAD_X + 7;    /* centered in gutter */
     int icon_cy    = hud_y + REPLAY_HUD_TEXT_LINE1_Y + FONT_SMALL_H / 2;
     int icon_sz    = 10;
+    draw_playback_icon(icon_cx, icon_cy, icon_sz, snap->replay.state);
 
-    ui_clr(UI_TOK_ACCENT);
-    if (snap->replay.state == REPLAY_PLAYING) {
-        float bw = 3.0f, gap = 3.0f;
-        float by0 = (float)icon_cy - (float)icon_sz * 0.5f;
-        glRectf((float)(icon_cx - bw - gap * 0.5f), (float)(by0), (float)(icon_cx - bw - gap * 0.5f) + (float)(bw), (float)(by0) + (float)(icon_sz));
-        glRectf((float)(icon_cx + gap * 0.5f),      (float)(by0), (float)(icon_cx + gap * 0.5f) + (float)(bw), (float)(by0) + (float)(icon_sz));
-    } else if (snap->replay.state == REPLAY_DONE) {
-        /* Square - run complete */
-        float sx = (float)icon_cx - (float)icon_sz * 0.5f;
-        float sy = (float)icon_cy - (float)icon_sz * 0.5f;
-        glRectf((float)(sx), (float)(sy), (float)(sx) + (float)(icon_sz), (float)(sy) + (float)(icon_sz));
-    } else {
-        /* Play triangle - paused / stopped, click to (re)start */
-        float x0 = (float)icon_cx - (float)icon_sz * 0.5f;
-        float cy = (float)icon_cy;
-        glBegin(GL_TRIANGLES);
-        glVertex2f(x0,              cy - (float)icon_sz * 0.5f);
-        glVertex2f(x0,              cy + (float)icon_sz * 0.5f);
-        glVertex2f(x0 + icon_sz,    cy);
-        glEnd();
-    }
-
-    /* Line 1 - "Replay  4.0 cmd/s | Polygon" in green; command count
-     * is right-aligned so 4-digit totals don't push other fields around.
-     * A "depth N" segment appears only when the focused command came from a
-     * funcN(...) call, so recursion/nesting depth is visible while stepping. */
+    /* Status builder and Line 1 Text */
     char depth_seg[24] = "";
     if (snap->replay.focus_call_depth > 0)
         snprintf(depth_seg, sizeof(depth_seg), "  | depth %d",
@@ -210,11 +250,13 @@ void replay_ui_hud_render(const struct UiRenderSnapshot *snap) {
                         snap->replay.speed,
                         depth_seg,
                         fields, 4);
+
     ui_clr(UI_TOK_ACCENT);
     gl2d_draw_string((float)text_col_x,
                 (float)(hud_y + REPLAY_HUD_TEXT_LINE1_Y),
                 progress_txt, FONT_SMALL);
 
+    /* Command count */
     char count_txt[32];
     snprintf(count_txt, sizeof(count_txt), "%d / %d",
              snap->replay.pc, snap->replay.total_flat_cmds);
@@ -223,25 +265,13 @@ void replay_ui_hud_render(const struct UiRenderSnapshot *snap) {
                 (float)(hud_y + REPLAY_HUD_TEXT_LINE1_Y),
                 count_txt, FONT_SMALL);
 
-    /* Progress groove + green fill */
+    /* Progress groove */
     int groove_x = hud_x + REPLAY_HUD_TEXT_PAD_X;
     int groove_w = hud_w - 2 * REPLAY_HUD_TEXT_PAD_X;
     int groove_y = hud_y + REPLAY_HUD_PROGRESS_Y;
-    ui_clr(UI_TOK_SUNKEN);
-    glRectf((float)(groove_x), (float)(groove_y),
-              (float)(groove_x) + (float)(groove_w), (float)(groove_y) + (float)(REPLAY_HUD_PROGRESS_H));
-    ui_clr(UI_TOK_ACCENT);
-    glRectf((float)(groove_x), (float)(groove_y),
-              (float)(groove_x) + (float)(groove_w * progress), (float)(groove_y) + (float)(REPLAY_HUD_PROGRESS_H));
-    ui_clr(UI_TOK_ACCENT_GLOW_BG);  /* accent-glow groove border */
-    glBegin(GL_LINE_LOOP);
-    glVertex2f((float)groove_x + 0.5f,                     (float)groove_y + 0.5f);
-    glVertex2f((float)(groove_x + groove_w) - 0.5f,        (float)groove_y + 0.5f);
-    glVertex2f((float)(groove_x + groove_w) - 0.5f,        (float)(groove_y + REPLAY_HUD_PROGRESS_H) - 0.5f);
-    glVertex2f((float)groove_x + 0.5f,                     (float)(groove_y + REPLAY_HUD_PROGRESS_H) - 0.5f);
-    glEnd();
+    draw_progress_groove(groove_x, groove_y, groove_w, progress);
 
-    /* Line 2 - compact kbd hints along the bottom in muted gray (pre-formatted by builder) */
+    /* Line 2 text */
     ui_clr(UI_TOK_TEXT_MUTED);
     gl2d_draw_string((float)text_col_x,
                 (float)(hud_y + REPLAY_HUD_TEXT_LINE2_Y),
