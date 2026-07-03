@@ -420,7 +420,6 @@ EOF
 # ---- example names (stable; never reference examples by index) ----------
 
 EX_HERO="Teapot carousel (transform stacks + glow points)"
-EX_VIEW2D="2D assignment sketch (vars only)"
 EX_ORRERY="Orrery (labels track 3D orbits)"
 EX_GLU="GLU tessellator (concave arrow)"
 EX_GLOW="Glow sprites (blend + point attenuation)"
@@ -496,7 +495,18 @@ if want axes-compass; then
 fi
 
 if want view-mode-2d; then
-    still "$OUT/view-mode-2d.png" $PLAIN_FRAMES 16 --example "$EX_VIEW2D"
+    # A GIF that toggles View mode (Ctrl+Shift+V) on the animated wave surface,
+    # so the doc shows the 3D->2D->3D transition rather than a frozen 2D still.
+    # GLR_VIEW_TOGGLE_AT fires on gl_repl's rendered-frame clock (t = frame/60),
+    # which counts the WARM leading frames gif() renders and discards for
+    # --example clips. WARM=180 => 3.0s of that clock elapses before the kept
+    # clip begins, so a toggle at clock second S lands at (S*60 - WARM)/(step)
+    # kept frames in, i.e. output time (S*60 - WARM)/(step*fps) s. With
+    # step=2 fps=20: clock 4s -> 1.5s into the clip (3D->2D), clock 6s -> 4.5s
+    # (2D->3D). The 6s clip then holds ~1.5s of 3D before it loops.
+    ( export GLR_VIEW_TOGGLE_AT=4,6
+      gif "$OUT/view-mode-2d.gif" 240 2 20 560 \
+          --example "Animated wave surface (analytic normals)" )
 fi
 
 if want labels-orrery; then
