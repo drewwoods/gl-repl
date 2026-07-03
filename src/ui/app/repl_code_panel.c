@@ -1929,31 +1929,48 @@ static void repl_code_panel_draw_focus_kbd(int gx, int gy) {
 }
 
 static void repl_code_panel_draw_trash_icon(int kx, int ky, int kw, int kh) {
-    int cx = kx + kw / 2;
-    int top = ky + kh - 4;
-    int bot = ky + 4;
-    int left = cx - 5;
-    int right = cx + 5;
+#define TRASH_ICON_W 13
+#define TRASH_ICON_H 12
 
-    glBegin(GL_LINES);
-    glVertex2f((float)(left - 1), (float)top);
-    glVertex2f((float)(right + 1), (float)top);
-
-    glVertex2f((float)(cx - 2), (float)(top + 2));
-    glVertex2f((float)(cx + 2), (float)(top + 2));
-
-    glVertex2f((float)left, (float)(top - 2));
-    glVertex2f((float)(left + 1), (float)bot);
-    glVertex2f((float)right, (float)(top - 2));
-    glVertex2f((float)(right - 1), (float)bot);
-    glVertex2f((float)(left + 1), (float)bot);
-    glVertex2f((float)(right - 1), (float)bot);
-
-    glVertex2f((float)(cx - 2), (float)(top - 4));
-    glVertex2f((float)(cx - 2), (float)(bot + 2));
-    glVertex2f((float)(cx + 2), (float)(top - 4));
-    glVertex2f((float)(cx + 2), (float)(bot + 2));
-    glEnd();
+    /* 13×10  1bpp trash-can glyph, drawn with glBitmap so it matches
+     * the crisp pixel-art style of the ⇧ shift glyph and the bitmap
+     * font.  Rows are bottom-to-top (glBitmap scan order); bit 0x80
+     * of byte 0 = leftmost pixel (col 0).
+     *
+     *  row 11:  .....###.....   handle tab  (cols 5-7)
+     *  row 10:  .###########.   lid         (cols 1-11, overhangs body)
+     *  row 9:   .............   lid / body gap
+     *  row 8:   ..#########..   body top    (cols 2-10)
+     *  row 7:   ..#.#.#.#.#..   walls + 3 interior stripes
+     *  row 6:   ..#.#.#.#.#..
+     *  row 6:   ..#.#.#.#.#..
+     *  row 4:   ..#.#.#.#.#..
+     *  row 3:   ..#.#.#.#.#..
+     *  row 2:   ..#.#.#.#.#..
+     *  row 1:   ..#########..   body bottom (cols 2-10)
+     *  row 0:   .............   bottom padding                        */
+    static const GLubyte trash_bits[TRASH_ICON_H * 2] = {
+        0x00, 0x00,  /* row 0  padding                               */
+        0x3F, 0xE0,  /* row 1  body bottom  ..#########..            */
+        0x2A, 0xA0,  /* row 2  stripes      ..#.#.#.#.#..            */
+        0x2A, 0xA0,  /* row 3  stripes      ..#.#.#.#.#..            */
+        0x2A, 0xA0,  /* row 4  stripes      ..#.#.#.#.#..            */
+        0x2A, 0xA0,  /* row 5  stripes      ..#.#.#.#.#..            */
+        0x2A, 0xA0,  /* row 6  stripes      ..#.#.#.#.#..            */
+        0x2A, 0xA0,  /* row 7  stripes      ..#.#.#.#.#..            */
+        0x3F, 0xE0,  /* row 8  body top     ..#########..            */
+        0x00, 0x00,  /* row 9  lid gap                               */
+        0x7F, 0xF0,  /* row 10 lid          .###########.            */
+        0x07, 0x00   /* row 11 handle       .....###.....            */
+    };
+    GLint prev_align = 4;
+    int rx = kx + (kw - TRASH_ICON_W) / 2;   /* centre the 13×10 glyph        */
+    int ry = ky + (kh - TRASH_ICON_H) / 2;
+    glGetIntegerv(GL_UNPACK_ALIGNMENT, &prev_align);
+    glRasterPos2f((float)rx, (float)ry);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glBitmap(TRASH_ICON_W, TRASH_ICON_H, 0.0f, 0.0f, 0.0f, 0.0f, trash_bits);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, prev_align);
 }
 
 static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
