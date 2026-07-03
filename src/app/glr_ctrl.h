@@ -177,9 +177,9 @@ int glr_ctrl_router_handle_glut_scroll_wheel_button(int button, int state, int x
 
 /* Dispatch a code-panel UiHit to the owning subsystem. Switches on
  * hit.kind: code text / insert line / gutter / inline color swatch /
- * panel divider / pin button / menu button / menu item / variable
- * slider / floating color picker control. Returns 1 if the hit was
- * consumed (i.e. dispatched to an owner). The (x, y) screen coords
+ * clear-all chip / panel divider / pin button / menu button / menu item /
+ * variable slider / floating color picker control. Returns 1 if the hit
+ * was consumed (i.e. dispatched to an owner). The (x, y) screen coords
  * are passed through for helpers that need raw mouse coordinates
  * (e.g. color_picker_start expects screen-space my). */
 int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y);

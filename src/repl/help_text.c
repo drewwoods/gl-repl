@@ -437,7 +437,7 @@ const ReplHelpContent *repl_help_text_build(void) {
                           "Toggle light indicators");
     nk = key_emit(nk, "");
     nk = key_emit(nk, "Interface:");
-    nk = key_emit(nk, "  Statusbar keycaps    \tClick help or focus keycaps to toggle");
+    nk = key_emit(nk, "  Statusbar buttons    \tTrash clears; focus/help toggle");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_CONFIG_MENU), KM_MODS(GLR_CONFIG_MENU), 0, "", "Open Config menu");
     nk = key_emit(nk, "  Left-click item      \tCycle config entry forward");
     nk = key_emit(nk, "  Right-click item     \tCycle config entry backward");

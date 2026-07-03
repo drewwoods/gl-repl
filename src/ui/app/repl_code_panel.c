@@ -1713,11 +1713,12 @@ static void repl_code_panel_statusbar_sep(int *tx, int sy, int sh) {
     *tx += 8;
 }
 
-/* Right-aligned statusbar cluster: a "[focus] focus" keycap+label and
- * the existing "[F1] help" keycap+label. The geometry is derived once
- * here so the renderer and the hit-test agree on the clickable focus
- * keycap box (window / GL coords, bottom-left origin), with no
- * arithmetic duplicated across the two passes. */
+/* Right-aligned statusbar cluster: a clear-all trash chip, a
+ * "[focus] focus" keycap+label, and the existing "[F1] help"
+ * keycap+label. The geometry is derived once here so the renderer
+ * and the hit-test agree on the clickable chip boxes (window / GL
+ * coords, bottom-left origin), with no arithmetic duplicated across
+ * the two passes. */
 static const char *k_statusbar_help_kbd  = "F1";
 static const char *k_statusbar_help_lbl  = "help";
 static const char *k_statusbar_focus_lbl = "focus";
@@ -1829,7 +1830,9 @@ typedef struct {
     int text_y;
     int help_kx, help_lbl_x, help_kw;
     int focus_kx, focus_lbl_x, focus_kw;
+    int trash_kx, trash_kw;
     int ky, kh;                 /* keycap box y / h (shared) */
+    int trash_visible;          /* 0 when it would collide with left text */
     int focus_visible;          /* 0 when it would collide with left text */
     int help_visible;
 } ReplStatusbarHints;
@@ -1853,14 +1856,17 @@ static ReplStatusbarHints repl_code_panel_statusbar_hints(
     h.focus_kw    = STATUSBAR_FOCUS_KBD_CELLS * FONT_SMALL_W + 10;
     h.focus_lbl_x = h.help_kx - 12 - focus_lbl_w;
     h.focus_kx    = h.focus_lbl_x - h.focus_kw - 6;
+    h.trash_kw    = h.kh + 4;
+    h.trash_kx    = h.focus_kx - 12 - h.trash_kw;
 
     /* The right cluster is always drawn from the right edge; the left
      * text from the left. On narrow/default panels they collide, so
-     * suppress whichever right chip the left text would reach (focus
-     * first — it sits inboard of help). Keyboard Ctrl+Shift+F / F1
-     * still work when a chip is hidden. */
+     * suppress whichever right chip the left text would reach (trash
+     * first, then focus, because they sit inboard of help). Keyboard
+     * Ctrl+L / Ctrl+Shift+F / F1 still work when a chip is hidden. */
     h.help_visible  = (h.help_kx  >= left_end + gap);
     h.focus_visible = (h.focus_kx >= left_end + gap);
+    h.trash_visible = (h.trash_kx >= left_end + gap);
     return h;
 }
 
@@ -1920,6 +1926,34 @@ static void repl_code_panel_draw_focus_kbd(int gx, int gy) {
     repl_code_panel_draw_shift_glyph(gx + FONT_SMALL_W, gy);
     ch[0] = 'F';
     gl2d_draw_string((float)(gx + 2 * FONT_SMALL_W), (float)gy, ch, FONT_SMALL);
+}
+
+static void repl_code_panel_draw_trash_icon(int kx, int ky, int kw, int kh) {
+    int cx = kx + kw / 2;
+    int top = ky + kh - 4;
+    int bot = ky + 4;
+    int left = cx - 5;
+    int right = cx + 5;
+
+    glBegin(GL_LINES);
+    glVertex2f((float)(left - 1), (float)top);
+    glVertex2f((float)(right + 1), (float)top);
+
+    glVertex2f((float)(cx - 2), (float)(top + 2));
+    glVertex2f((float)(cx + 2), (float)(top + 2));
+
+    glVertex2f((float)left, (float)(top - 2));
+    glVertex2f((float)(left + 1), (float)bot);
+    glVertex2f((float)right, (float)(top - 2));
+    glVertex2f((float)(right - 1), (float)bot);
+    glVertex2f((float)(left + 1), (float)bot);
+    glVertex2f((float)(right - 1), (float)bot);
+
+    glVertex2f((float)(cx - 2), (float)(top - 4));
+    glVertex2f((float)(cx - 2), (float)(bot + 2));
+    glVertex2f((float)(cx + 2), (float)(top - 4));
+    glVertex2f((float)(cx + 2), (float)(bot + 2));
+    glEnd();
 }
 
 static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
@@ -2003,8 +2037,16 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
 
         /* Right cluster, drawn from the right edge. Each chip is
          * suppressed when the left status text would collide with it
-         * (focus first — it sits inboard of help); the keyboard
+         * (trash first, then focus); the keyboard Ctrl+L /
          * Ctrl+Shift+F / F1 paths still work when a chip is hidden. */
+        if (h.trash_visible) {
+            repl_code_panel_draw_keycap(h.trash_kx, h.ky,
+                                        h.trash_kw, h.kh);
+            ui_clr(UI_TOK_STATUS_ERR);
+            repl_code_panel_draw_trash_icon(h.trash_kx, h.ky,
+                                            h.trash_kw, h.kh);
+        }
+
         if (h.focus_visible) {
             /* Keycap glyphs use the "F1"-keycap color (TEXT_PRIMARY)
              * so the two chips read identically; ON/OFF state is
@@ -2159,6 +2201,12 @@ static int repl_code_panel_statusbar_hit_kind(
     int gl_y) {
     ReplStatusbarHints hints = repl_code_panel_statusbar_hints(
         snap, text_snap->cp_x, text_snap->cp_y, text_snap->cp_w, STATUSBAR_H);
+
+    if (hints.trash_visible &&
+        repl_code_panel_point_in_rect(mx, gl_y,
+                                      hints.trash_kx, hints.ky,
+                                      hints.trash_kw, hints.kh))
+        return UI_HIT_CODE_CLEAR_ALL;
 
     if (hints.focus_visible &&
         repl_code_panel_point_in_rect(mx, gl_y,

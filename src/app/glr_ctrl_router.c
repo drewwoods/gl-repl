@@ -922,6 +922,15 @@ static int route_code_focus_toggle_hit(void) {
     return 1;
 }
 
+/* UI_HIT_CODE_CLEAR_ALL: the statusbar trash chip. Same action as
+ * Ctrl+L, including tutorial guard, undo capture, and status text. */
+static int route_code_clear_all_hit(void) {
+    editor_clear_all_cmds();
+    glr_ctrl_router_reset_code_panel_drag();
+    editor_request_redraw();
+    return 1;
+}
+
 /* UI_HIT_HELP_TOGGLE: the statusbar "F1 help" keycap. Same action as
  * the F1 key — go through the shared toggle so the overlay tab/scroll
  * reset identically. */
@@ -1251,6 +1260,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_code_gutter_hit(&hit); break;
     case UI_HIT_CODE_PANEL_CHROME:
         consumed = route_code_panel_chrome_hit(); break;
+    case UI_HIT_CODE_CLEAR_ALL:
+        consumed = route_code_clear_all_hit(); break;
     case UI_HIT_CODE_FOCUS_TOGGLE:
         consumed = route_code_focus_toggle_hit(); break;
     case UI_HIT_HELP_TOGGLE:
