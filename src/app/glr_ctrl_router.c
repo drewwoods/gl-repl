@@ -999,6 +999,24 @@ static int glr_ctrl_router_handle_right_numeric_swatch_press(int x, int y) {
     return route_numeric_swatch_hit(&hit, numeric_swatch_scale(1));
 }
 
+/* Right-click over the editor/code-panel surface is inert: it should not
+ * forward to the scene camera, where right-drag starts pan. Numeric swatches,
+ * Config right-click, and variable sliders are routed before this helper so
+ * their right-button behavior stays active. */
+static int glr_ctrl_router_handle_right_code_panel_press(int button, int state,
+                                                         int x, int y) {
+    if (state != GLUT_DOWN || button != GLUT_RIGHT_BUTTON)
+        return 0;
+    if (!editor_input_point_in_code_panel(x, y) &&
+        !editor_input_point_on_code_panel_divider(x, y))
+        return 0;
+
+    color_picker_stop();
+    glr_ctrl_router_reset_code_panel_drag();
+    editor_request_redraw();
+    return 1;
+}
+
 /* UI_HIT_COLOR_SWATCH: floating picker slider control press. The
  * picker has its own internal hit-test for SV/hue/alpha regions and
  * starts a drag on press. */
@@ -1471,10 +1489,10 @@ void glr_ctrl_special(int key, int x, int y) {
  * owns its own rect that may overlap. Code-panel domain (proper /
  * divider / dropdown extension) goes to the editor. Scene region
  * tries the color picker overlay first, then camera. Right-click
- * dispatches the config dropdown, the variable panel (log mode), or
- * camera. The freeglut scroll-wheel emulation (buttons 3/4) routes
- * to help-overlay scroll, code-panel scroll (editor), or camera zoom
- * velocity. */
+ * dispatches the config dropdown, the variable panel (log mode), consumes
+ * inert editor/code-panel hits, or falls through to camera. The freeglut
+ * scroll-wheel emulation (buttons 3/4) routes to help-overlay scroll,
+ * code-panel scroll (editor), or camera zoom velocity. */
 void glr_ctrl_mouse(int button, int state, int x, int y) {
     glr_audio_on_user_gesture();
 
@@ -1545,6 +1563,10 @@ void glr_ctrl_mouse(int button, int state, int x, int y) {
             return;
         }
         if (glr_ctrl_router_handle_variable_panel_drag_begin(button, state, x, y)) {
+            glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+            return;
+        }
+        if (glr_ctrl_router_handle_right_code_panel_press(button, state, x, y)) {
             glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
             return;
         }
