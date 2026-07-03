@@ -118,10 +118,9 @@
  * selector. */
 #define CFG_DEFAULT_USE_ACCUM         1
 /* Effect defaults to AA (preserving the historic accum-AA-on-by-default
- * behavior); Blur is strictly opt-in. Passes default to 2 (the old
- * default sample count). Set this to RENDER3D_ACCUM_EFFECT_OFF to ship
- * with AA off while leaving the accum buffer allocated for runtime
- * F2/Blur use. */
+ * behavior); Blur is strictly opt-in. Passes default to 1. Set this to
+ * RENDER3D_ACCUM_EFFECT_OFF to ship with AA off while leaving the accum
+ * buffer allocated for runtime Accum effect / Blur use. */
 #define CFG_DEFAULT_ACCUM_EFFECT      RENDER3D_ACCUM_EFFECT_AA
 #define CFG_DEFAULT_ACCUM_PASSES      1
 

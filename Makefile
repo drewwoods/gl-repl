@@ -1574,6 +1574,9 @@ check-include-style: ## Hard guard: project-local headers must use "X.h", not <X
 check-doc-links: ## Validate local Markdown file links and line anchors.
 	@python3 scripts/check/check-doc-links.py
 
+check-user-guide-keymap: ## Validate USER_GUIDE shortcut claims against keymap.h.
+	@python3 scripts/check/check-user-guide-keymap.py
+
 check-keymap-no-dup: ## Hard guard: no two keymap.h bindings share a (key, mods) — a double-map.
 	@bash scripts/keymap.sh check
 
@@ -1617,6 +1620,7 @@ check-trailing-whitespace: ## Verify commits since origin/main contain no traili
 CHECK_TARGETS = \
 	check-trailing-whitespace \
 	check-doc-links \
+	check-user-guide-keymap \
 	check-examples-catalog \
 	check-formatted \
 	check-gl-boundaries \
@@ -1647,7 +1651,7 @@ test-detailed: $(TEST_BINS) ## Run the full test suite with verbose example expo
 	TEST_JOBS="$(TEST_JOBS)" \
 	bash scripts/run-tests.sh $(TEST_RUNNER_CASES)
 
-test-stubs: check-doc-links check-trailing-whitespace check-examples-catalog check-formatted check-gl-boundaries check-layer-coupling check-state-ownership ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs.
+test-stubs: check-doc-links check-user-guide-keymap check-trailing-whitespace check-examples-catalog check-formatted check-gl-boundaries check-layer-coupling check-state-ownership ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs.
 	$(MAKE) test USE_GL_STUBS=1
 
 test-msan: ## Build and run stubbed tests with MemorySanitizer.

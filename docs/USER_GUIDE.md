@@ -61,7 +61,7 @@ Run a fresh session, or reload earlier work:
 - **Scene tabs** — one tab per saved scene, below the menu bar. Click to
   switch.
 - **Status bar** — between panel and viewport: command count, current line,
-  the accumulation indicator (`AA 2x` / `Blur 8x`), and clickable keycaps
+  the accumulation indicator (`AA 1x` / `Blur 8x`), and clickable keycaps
   for *focus* (code focus) and *F1 help*.
 - **Message line** — the bottom row shows the most recent status message.
   Click the small button at its right end to pop up the recent-message
@@ -157,7 +157,7 @@ the code panel.
 | Ctrl+\ | Reformat all lines (re-indent blocks) |
 | Ctrl+/ | Toggle `//` comment on the current line |
 | Ctrl+Shift+S | Split a multi-name `float` declaration into one decl per line (also File → Split Declaration) |
-| Ctrl+Shift+F | Code focus — hide boilerplate chrome and keep just your code (also the *focus* keycap) |
+| Ctrl+Shift+F | Toggle code focus — the first-run view shows just your code; turn it off to show generated C/workspace chrome (also the *focus* keycap) |
 | Ctrl+B | Cycle code panel layout: Left / Top / Bottom / Hidden |
 | PgUp / PgDn | Scroll the active panel or overlay |
 
@@ -286,7 +286,7 @@ glVertex3f(x, y, z);    // use anywhere a number is expected
 
 - Declarations are hoisted to the top of the program automatically, so every
   reference follows its declaration.
-- Up to 23 user variables (plus the predefined `t`).
+- Up to 31 user variables (plus the predefined `t`).
 - Variables persist across commits and are saved/loaded with the scene.
 - Initializers are allowed: `float n = 1;`.
 
@@ -315,8 +315,9 @@ for(i, 0, n, 2) {        // optional step argument; multi-line body
 }
 ```
 
-Nesting is supported up to 4 levels. Loop bounds can be expressions (and can
-animate with `t`).
+The parser accepts up to 64 nested blocks. In practice, useful nesting is
+limited first by the flat-command budget and visible expression variables.
+Loop bounds can be expressions (and can animate with `t`).
 
 ### Functions
 
@@ -417,7 +418,7 @@ its current value and a slider:
   for dialing in a precise value.
 - The `t` row doubles as the animation timeline — see
   [Scrubbing the timeline](#scrubbing-the-timeline).
-- Toggle the panel with **Ctrl+Shift+P** or the *Variable panel* config item.
+- Toggle the panel with **`** backquote or the *Variable panel* config item.
 
 Edits write back through the normal commit pipeline, so scrubbing a slider
 is equivalent to retyping the assignment — undo works, and the scene follows
@@ -545,7 +546,7 @@ swatches.
 | Right-drag | Pan in the XZ plane |
 | Shift+Right-drag | Pan vertically (Y) |
 | Scroll wheel | Zoom, with momentum |
-| Ctrl+Shift+O | Focus origin — ease the orbit target back to (0,0,0) |
+| Ctrl+O | Focus origin — ease the orbit target back to (0,0,0) |
 | Ctrl+Shift+C | Reset the camera to its default pose (eased) |
 | Ctrl+Shift+R | Toggle camera auto-rotate |
 | Ctrl+Shift+V | Toggle View mode: 3D perspective / 2D ortho |
@@ -565,7 +566,7 @@ useful for plots, sketches, and UI-like drawings. Examples that declare
 
 ### The Config menu
 
-Open the **Config** dropdown (or press **`** backquote). Items are grouped
+Open the **Config** dropdown (or press **Ctrl+Shift+K**). Items are grouped
 into sections — hovering a section opens a flyout of its items, and the
 trailing **All** row shows the entire table at once (the mouse wheel scrolls
 flyouts taller than the window):
@@ -573,11 +574,11 @@ flyouts taller than the window):
 - **RENDERING** — MSAA, Line smooth, Accum effect, Accum passes, Wireframe,
   Point attenuation
 - **TIME & REPLAY** — Auto time, Replay, Replay mode, Replay expand
-- **OVERLAYS & SCENE** — Grid, Grid major, Grid extent, Axes, Xform guides,
-  Light indicators, Light theme, Backdrop, Auto-normals
+- **OVERLAYS & SCENE** — Grid, Grid extent, Grid brightness, Grid major,
+  Axes, Xform guides, Light indicators, Light theme, Backdrop, Auto-normals
 - **CAMERA** — View mode, Camera rotate, Focus origin, Reset camera
-- **GEOMETRY** — Vertex labels, Normal vectors, Vertex outlines, Vertex
-  points, Poly highlight
+- **GEOMETRY** — Vertex labels, Label scope, Normal vectors, Vertex outlines,
+  Vertex points, Poly highlight, Winding
 - **INTERFACE** — Variable panel, Compute profile, Memory profile, Code panel,
   Wrap at commas, Syntax highlight, Paren match, Paren scope
 - **AUDIO** — Audio on/off
@@ -590,13 +591,13 @@ backward):
 
 | Key | Cycles |
 |---|---|
-| F2 | Accum effect (Off / AA / Blur / Blur Cam) |
-| F3 | Grid theme |
-| F4 | Axes theme |
-| F5 | Vertex labels |
-| F6 | Backdrop |
-| F7 | Grid extent |
-| F8 | Transform guide mode |
+| F2 | Grid theme |
+| F3 | Grid extent |
+| F4 | Grid brightness |
+| F5 | Backdrop |
+| F6 | Axes theme |
+| F7 | Vertex labels |
+| F8 | Label scope |
 | F9 | Light theme |
 | F10 | Syntax highlight |
 
@@ -604,15 +605,16 @@ backward):
 
 ![Grid themes: Tron, Radar, Aurora, Synthwave](images/grid-themes.png)
 
-Twelve directly-selectable grid themes (**F3**): Off, Classic, Tron, Ember,
+Twelve directly-selectable grid themes (**F2**): Off, Classic, Tron, Ember,
 Ocean, XZ Ruler *(default)*, Adaptive Planes, Radar, Tilled Field, Sketchbook,
 Neon Graph, Graph Planes. Some backdrops enable hidden companion grids; see
 [Advanced Usage](ADVANCED_USAGE.md#cfg-backdropgrid-pairing).
-**Grid major** (Ctrl+O) cycles the major-tick spacing (1/2/5/10) and **Grid
-extent** (F7) the grid's reach (Close / Mid / Far). Theme changes cross-fade,
-so a newly chosen grid takes a few seconds to fully appear.
+**Grid major** (Ctrl+Shift+G) cycles the major-tick spacing (1/2/5/10),
+**Grid extent** (F3) the grid's reach (Close / Mid / Far), and **Grid
+brightness** (F4) the line weight (Dim / Normal / Bright / Bold). Theme
+changes cross-fade, so a newly chosen grid takes a few seconds to fully appear.
 
-Seven axes themes (**F4**): Off *(default)*, Classic, Pulse, Neon, Compass,
+Seven axes themes (**F6**): Off *(default)*, Classic, Pulse, Neon, Compass,
 Gizmo, Ruler.
 
 ![Compass axes](images/axes-compass.png)
@@ -621,8 +623,8 @@ Gizmo, Ruler.
 
 ![Backdrops: Cityscape, Stars, Sunset, Aurora](images/backdrops.png)
 
-**F6** cycles the scene backdrop: Off *(default)*, Cityscape, Stars,
-City+Stars, Sunset, Aurora, Nebula, Polar Day, Snowfall, Polar Day+Snow.
+**F5** cycles the scene backdrop: Off *(default)*, Cityscape, Stars,
+City+Stars, Sunset, Aurora, Nebula, Polar Day, Polar Day+Snow.
 
 Some backdrops enable a hidden companion grid. Nebula selects Star Chart;
 see [Advanced Usage](ADVANCED_USAGE.md#cfg-backdropgrid-pairing) for the
@@ -650,13 +652,17 @@ where the rig sits.
 
 ![Normal vectors, vertex points and outlines on a quad](images/vertex-overlays.png)
 
-- **Vertex labels** (F5): Off / Index / Index+Pos / Index+World — numbers
-  each vertex of the primitive at the cursor, optionally with its
-  coordinates.
+- **Vertex labels** (F7): Off / Index / Index+Pos / Index+World /
+  Index+World Fine — numbers each vertex of the primitive at the cursor,
+  optionally with its coordinates.
+- **Label scope** (F8): One instance / All instances / At vertex /
+  Visible only — controls how broadly vertex labels are shown around the
+  cursor.
 - **Normal vectors** (Ctrl+Shift+N): draws each vertex's normal as an arrow.
-- **Vertex outlines** (Ctrl+Shift+E) and **Vertex points** (Ctrl+Shift+P): outline polygons
+- **Vertex outlines** (Ctrl+Shift+O) and **Vertex points** (Ctrl+Shift+P): outline polygons
   and mark vertices *(both on by default)*.
 - **Poly highlight** (Ctrl+P): highlights the polygon under the cursor line.
+- **Winding** (Ctrl+Shift+B): toggles the winding-visualization view.
 - **Auto-normals**: maintains generated `glNormal3f` lines for your
   geometry so lighting works without hand-written normals.
 
@@ -668,7 +674,7 @@ guide follows:
 
 ### Transform guides
 
-With **Xform guides** on (F8), placing the cursor on a committed
+With **Xform guides** on (Ctrl+Shift+X), placing the cursor on a committed
 `glTranslatef` / `glRotatef` / `glScalef` line draws an overlay arrow or arc
 showing what that line does — color-coded by axis (X=red, Y=green, Z=blue
 blends), with a pulse traveling along the path:
@@ -748,25 +754,26 @@ all three guide types at once.
 
 ![Wireframe torus](images/wireframe.png)
 
-**Ctrl+G** toggles wireframe rendering with a hidden-line pass: all polygon
-edges draw first in a muted hidden-line color, the scene seeds the depth
-buffer with filled polygons, then visible edges draw again in a bright line
-color. Tip: vertex outlines/points are on by default and draw over the
-wires; turn them off for a clean wireframe look.
+**Ctrl+G** cycles Off / Wireframe / Hidden-line. Wireframe draws polygon
+edges over the scene. Hidden-line draws all polygon edges first in a muted
+hidden-line color, seeds the depth buffer with filled polygons, then draws
+visible edges again in a bright line color. Tip: vertex outlines/points are
+on by default and draw over the wires; turn them off for a clean wireframe
+look.
 
 ### Rendering quality
 
 - **MSAA** (Ctrl+U) — hardware multisampling on/off.
 - **Line smooth** — GL line antialiasing.
-- **Accum effect** (F2) + **Accum passes** (Ctrl+= / Ctrl+−) — the
+- **Accum effect** (Ctrl+Shift+U) + **Accum passes** (Ctrl+= / Ctrl+−) — the
   accumulation buffer drives antialiasing and motion blur:
-  - **AA** *(default, 2 passes)* — jitters the camera frustum per pass.
+  - **AA** *(default, 1 pass)* — jitters the camera frustum per pass.
   - **Blur** — re-renders the scene per pass across the frame's motion:
     camera motion when the camera is moving, otherwise the animation-time
     window (so spinning geometry smears realistically).
   - **Blur Cam** — blurs camera motion only; falls back to AA when still.
   - Passes: 1/2/4/8/12/16. The status bar shows the active mode
-    (`AA 2x`, `Blur 16x`). Blur is expensive — every pass is a full scene
+    (`AA 1x`, `Blur 16x`). Blur is expensive — every pass is a full scene
     render. `--noaccum` disables the accumulation buffer entirely.
 
   ![Motion blur on a spinning cube (Blur 16x)](images/motion-blur.png)
@@ -778,8 +785,8 @@ wires; turn them off for a clean wireframe look.
 
   ![Glow sprites example: blending + point attenuation](images/glow-sprites.png)
 
-- **Post-process filter** (Ctrl+N) — experimental viewport filters: Off /
-  Chromatic aberration / Vignette.
+- **Post-process filter** (Ctrl+N) — experimental viewport filters:
+  Off / Chromatic scene / Chromatic frame / Vignette scene / Vignette frame.
 
 ---
 
@@ -800,11 +807,13 @@ loop-variable values substituted into the displayed text.
 | Left / Right | Step backward / forward (while paused) |
 | Ctrl+K | Jump the replay to the cursor line (first geometry at/after it) |
 | m / M | Toggle replay mode: Polygon / Vertex granularity |
+| e / E | Toggle Replay expand while playback is live |
 | n / N | Cycle replay normals: off / vector / vector + direction |
 | v / V | Toggle the replay focused-vertex label |
 | Esc | Stop replay |
 
 The HUD at the bottom of the viewport shows play state, position, and speed.
+When a replay has finished, **Space** restarts it from the beginning.
 Two related config items: **Replay mode** (Polygon steps a primitive at a
 time, Vertex steps a vertex at a time) and **Replay expand** (whether loops
 expand iteration-by-iteration).
@@ -825,7 +834,7 @@ the expected call), change a setting, or drag a variable slider to a target.
 - Instruction lines are locked — the tutorial guards them against edits
   until you finish or exit.
 - The starter set: *First Triangle*, *Color & Transform*, *Feature Tour*,
-  *Variable Slider*, and *Depth Test Triangle*.
+  *Variable Slider*, *Depth Test Triangle*, and *Lighting Basics*.
 
 ---
 
@@ -1041,6 +1050,7 @@ runs.
 --examples-dir <dir>   load examples from <dir>/catalog.ini and <dir>/scenes/
 --list-examples        print the built-in examples and exit
 --time <secs>          initial animation time t (also GLR_TIME; --time wins)
+--window <WxH>         initial window size (default 1200x800)
 --export-ply <path>    capture frame 1 geometry to PLY, then exit
 --export-ply-srgb      decode vertex colors sRGB -> linear during PLY export
 --assets <dir>         scan this dir for *.mp3 (also GLR_ASSETS_DIR)
@@ -1129,11 +1139,13 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+R | Start/stop replay (Ctrl+K jump to cursor) |
 | Ctrl+G | Wireframe |
 | Ctrl+U | MSAA |
-| Ctrl+O | Grid major spacing |
+| Ctrl+Shift+U | Accum effect |
+| Ctrl+Shift+G | Grid major spacing |
 | Ctrl+N | Post-process filter |
 | Ctrl+= / Ctrl+− | Accum passes up/down |
+| Ctrl+Shift+X | Xform guides |
 | Ctrl+Shift+N | Normal vectors |
-| Ctrl+Shift+E | Vertex outlines |
+| Ctrl+Shift+O | Vertex outlines |
 | Ctrl+Shift+L | Light indicators |
 | Ctrl+Shift+P | Vertex points |
 | Ctrl+P | Poly highlight |
@@ -1152,7 +1164,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Left-drag | Orbit |
 | Right-drag | Pan XZ (Shift+Right-drag: pan Y) |
 | Scroll | Zoom (with momentum) |
-| Ctrl+Shift+O | Focus origin |
+| Ctrl+O | Focus origin |
 | Ctrl+Shift+C | Reset camera |
 | Ctrl+Shift+R | Auto-rotate |
 | Ctrl+Shift+V | 2D / 3D view mode |
