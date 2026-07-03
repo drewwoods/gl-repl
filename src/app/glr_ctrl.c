@@ -1395,6 +1395,8 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->edit_line           = editor_state_edit_line();
 
     snap->flat_program_count  = flat_program.cmd_count;
+    snap->can_undo            = editor_undo_can_undo();
+    snap->can_redo            = editor_undo_can_redo();
     /* Cursor budget readout: resolve the attribution kind to the short
      * statusbar prefix. A plain line costing <= 1 is suppressed (every
      * ordinary top-level line costs exactly 1 — noise, not signal). */

@@ -128,6 +128,24 @@ unsigned int editor_undo_generation(void) {
     return g_undo_generation;
 }
 
+int editor_undo_can_undo(void) {
+    int peek;
+
+    if (tutorial_active() || g_undo_count == 0)
+        return 0;
+    peek = (g_undo_head + REPL_UNDO_DEPTH - 1) % REPL_UNDO_DEPTH;
+    return g_undo_buf[peek].generation == g_undo_generation;
+}
+
+int editor_undo_can_redo(void) {
+    int peek;
+
+    if (tutorial_active() || g_redo_count == 0)
+        return 0;
+    peek = (g_redo_head + REPL_UNDO_DEPTH - 1) % REPL_UNDO_DEPTH;
+    return g_redo_buf[peek].generation == g_undo_generation;
+}
+
 void editor_undo_push_snapshot(void) {
     /* First mutation on a loaded example auto-promotes to a user scene,
      * inheriting the example's name. The snapshot captures the post-promotion

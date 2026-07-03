@@ -116,6 +116,8 @@ typedef struct UiRenderSnapshot {
 
     /* Convenience scalars (mirror editor_input/code_panel for terse access) */
     int                         flat_program_count;
+    int                         can_undo;
+    int                         can_redo;
     /* Cursor flat-cost readout: how many flat (expanded) commands the
      * cursor's enclosing scope / call site / line contributes this
      * frame (where the MAX_COMMANDS budget is being spent). The
