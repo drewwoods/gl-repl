@@ -100,33 +100,13 @@ rate is just the scalar in front of `t`, and every line stays editable.
 
 ### Keys
 
-<table>
-<tr>
-<td><code>;</code></td><td>commit</td>
-<td width="40"></td>
-<td><code>Ctrl+T</code></td><td>toggle time</td>
-</tr>
-<tr>
-<td><code>Tab</code></td><td>autocomplete</td>
-<td></td>
-<td><code>Ctrl+R</code></td><td>replay</td>
-</tr>
-<tr>
-<td><code>↑ ↓</code></td><td>navigate</td>
-<td></td>
-<td><code>Ctrl+S</code></td><td>save</td>
-</tr>
-<tr>
-<td><code>Ctrl+Z</code></td><td>undo</td>
-<td></td>
-<td><code>F1</code></td><td>help</td>
-</tr>
-<tr>
-<td><code>Ctrl+F</code></td><td>find</td>
-<td></td>
-<td><code>F12</code></td><td>next example</td>
-</tr>
-</table>
+| | | | |
+| :--- | :--- | :--- | :--- |
+| `;` | commit | `Ctrl+T` | toggle time |
+| `Tab` | autocomplete | `Ctrl+R` | replay |
+| `↑ ↓` | navigate | `Ctrl+S` | save |
+| `Ctrl+Z` | undo | `F1` | help |
+| `Ctrl+F` | find | `F12` | next example |
 
 <sub>On macOS, `Cmd`+letter works as `Ctrl`+letter. Full reference: [User Guide → Keyboard & Mouse](docs/USER_GUIDE.md#keyboard--mouse-reference).</sub>
 
