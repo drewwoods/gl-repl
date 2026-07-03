@@ -1,11 +1,11 @@
 // @cfg vertex_labels = 0
+// @cfg vertex_points = 0
 // camera
 glTranslatef(0.0f, 0.0f, -5.0f);
 glRotatef(20.0f, 1.0f, 0.0f, 0.0f);
 glRotatef(30.0f, 0.0f, 1.0f, 0.0f);
 glTranslatef(0.0f, 0.0f, 0.0f);
 
-// @cfg vertex_points = 0
 static float grid = 16; // grid size @tune
 static float extent = 3; // grid extent @tune
 static float x, y, z, invGradMag; // vertex coords, 1/|gradient|

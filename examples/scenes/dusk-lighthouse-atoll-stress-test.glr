@@ -10,6 +10,8 @@ glRotatef(26.0f, 1.0f, 0.0f, 0.0f);
 glRotatef(-20.0f, 0.0f, 1.0f, 0.0f);
 glTranslatef(0.0f, -0.3f, 0.0f);
 
+// shared scratch: x/y/z vertex position; n = 1/|gradient| (sea normals);
+// k/s = radius/angle scratch (island coastline, firefly polar coords).
 static float x, y, z, n, k, s;
 static float fireflies = 44; // @tune
 static float flyRadius = 2.6; // @tune
@@ -68,7 +70,8 @@ island(r, lagoon) {
     gluVertex(k*cos(i*TAU/30), 0, k*sin(i*TAU/30));
   }
   gluEnd();
-  // Inner lagoon contour (tessellator infers the hole from the overlap)
+  // Inner lagoon contour, wound the opposite way (note the -i*TAU/20): under
+  // the tessellator's odd winding rule the reversed contour carves the hole.
   gluBegin(GLU_CONTOUR);
   for(i, 0, 20) {
     x = lagoon*cos(-i*TAU/20) - r*0.35;

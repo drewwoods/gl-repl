@@ -93,7 +93,7 @@ void display(void) {
   glTranslatef(-0.0000f, -1.2000f, -0.0000f);
 --- header_post ---
 --- source ---
-  static float spinRate = 0.06;
+  static float spinRate = 0.06; // revolutions per second
   static float seats = 8;
   static float bulbs = 28;
   static float bob, glow, sel;
@@ -114,7 +114,11 @@ void display(void) {
 
       // Teapot seat: bobs with a per-seat phase, faces the travel direction
       bob = 0.2 * sin(t*TAU*0.7 + ang*PI/180);
-      sel = fmod(ang/45, 3);
+      // Cycle 3 seat colors by index. ang = seat*360/seats, so ang*seats/360
+      // is the integer seat number; fmod(.,3) picks the color. (Writing it as
+      // ang/45 would silently couple to seats == 8.) Three guards partition sel
+      // into a 3-way branch -- an if/else-if chain.
+      sel = fmod(ang*seats/360, 3);
       if(sel < 0.5) {
         glColor3f(0.85, 0.22, 0.25);
       }

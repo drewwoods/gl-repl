@@ -95,15 +95,14 @@ void display(void) {
 --- source ---
   glClearColor(0.1, 0.1, 0.1, 1);
   glEnable(GL_DEPTH_TEST);
-  glEnable(GL_NORMALIZE);
-  glEnable(GL_LIGHT3);
+  // Flat conditional colors: no GL_LIGHTING here, so glColor is shown
+  // verbatim (no normals / lights needed to see the if/else at work).
   glBegin(GL_QUADS);
     if(sin(t) > 0) {
       glColor3f(1, 0.2, 0.2);
     } else {
       glColor3f(0.2, 0.2, 1);
     }
-    glNormal3f(0, 0, 1);
     glVertex3f(-1, -1, 0);
     glVertex3f(1, -1, 0);
     glVertex3f(1, 1, 0);
@@ -113,7 +112,6 @@ void display(void) {
     } else {
       glColor3f(1, 1, 0.2);
     }
-    glNormal3f(0, 0, -1);
     glVertex3f(-1, -1, -1);
     glVertex3f(-1, 1, -1);
     glVertex3f(1, 1, -1);

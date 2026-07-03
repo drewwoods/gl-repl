@@ -102,8 +102,8 @@ void display(void) {
   static float particleX, particleY, particleZ;
   static float floorY = 0;
   static float spawnDelay;
-  static float emitDuration = 5.99568;
-  static float fluke_ang, fin_ang;
+  static float emitDuration = 6; // spout emission window (s); the clock loops at 2x this @tune
+  static float flukeAng, finAng;
   static float speed = 0.5;
   static float detail = 30;
   static float blowHoleX = 0.95, blowHoleY = 0.71, blowHoleZ;
@@ -113,6 +113,8 @@ void display(void) {
     // Velocity is linear in age: currentVelY = gravityY*ageSeconds + launchVelY.
     // Position is its integral:
     //   (gravityY/2)*ageSeconds^2 + launchVelY*ageSeconds + launchY
+    // currentVelY is computed for illustration (the velocity term above)
+    // only particleY is read by the caller.
     currentVelY = launchVelY + gravityY*ageSeconds;
     particleY = launchY + gravityY/2 * ageSeconds * ageSeconds + launchVelY * ageSeconds;
   }
@@ -140,15 +142,15 @@ void display(void) {
   }
 
   drawWhale(blowHoleX, blowHoleY, blowHoleZ) {
-    fluke_ang = sin(speed*t*TAU)* 30;
-    fin_ang = cos(speed*t*TAU)* 5;
+    flukeAng = sin(speed*t*TAU)* 30;
+    finAng = cos(speed*t*TAU)* 5;
     detail = max(12, floor(detail));
 
     // Shiny wet whale
     glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.2, 0.2, 0.2, 1});
     glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 100);
 
-    // Main body: elongated ellipsiod, dark blue-grey on top
+    // Main body: elongated ellipsoid, dark blue-grey on top
     glColor3f(0.24, 0.3, 0.4);
 
     glPushMatrix();
@@ -167,7 +169,7 @@ void display(void) {
     glColor3f(0.24, 0.3, 0.4);
     glPushMatrix(); // begin tail
       glTranslatef(-1.85, -0.2, 0);
-      glRotatef(fluke_ang/2, 0, 0, 1);
+      glRotatef(flukeAng/2, 0, 0, 1);
 
       // Tail peduncle (narrow part before the flukes)
       glPushMatrix();
@@ -175,10 +177,10 @@ void display(void) {
         glutSolidSphere(1, detail, detail);
       glPopMatrix();
 
-      // Tail flukes -- two flat libes, animated with fluke_angle
+      // Tail flukes -- two flat lobes, animated with flukeAng
       glPushMatrix();
         glTranslatef(-0.65, 0, 0);
-        glRotatef(fluke_ang, 0, 0, 1);
+        glRotatef(flukeAng, 0, 0, 1);
         glPushMatrix();
           glTranslatef(-0.1, 0, 0.55);
           glRotatef(15, 0, 1, 0);
@@ -196,8 +198,8 @@ void display(void) {
 
     // Pectoral fins
     glPushMatrix();
-      glRotatef(fin_ang, 0, 0, 1);
-      glRotatef(fin_ang/4, 0, 1, 0);
+      glRotatef(finAng, 0, 0, 1);
+      glRotatef(finAng/4, 0, 1, 0);
 
       glPushMatrix();
         glTranslatef(0.45, -0.25, 1);
@@ -239,6 +241,10 @@ void display(void) {
   glDepthFunc(GL_ALWAYS);
   glPointSize(10);
 
+  // Scene-looping trick: deliberately rewind the GLOBAL animation clock
+  // every 2*emitDuration (~12s) so the spout replays on a loop. Heads-up
+  // side effect -- this also resets t for replay and the Ctrl+T toggle,
+  // since t is app-wide, not scene-local.
   if(t > 2*emitDuration) {
     t = 0;
   }
