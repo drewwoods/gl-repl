@@ -1623,14 +1623,23 @@ static void glr_ctrl_resolve_blur_subframe(Render3dRenderConfig *config) {
     int camera_moved = g_prev_frame_pose_valid &&
         glr_camera_pose_changed(&g_prev_frame_pose, &g_cur_frame_pose);
 
+    /* The effect selects the blur axis; camera motion never overrides it.
+     * This lets you reposition the camera under full "Blur" without losing
+     * the per-object (time) blur. */
     GlrBlurMode mode = GLR_BLUR_NONE;
-    if (camera_moved)
+    if (config->accum_effect == RENDER3D_ACCUM_EFFECT_BLUR) {
+        /* Full "Blur" is per-object (time) blur only — even while the camera
+         * moves. Runs even when t is paused: the trailing shutter
+         * [t_end - dt, t_end] still samples a frame's worth of motion, so a
+         * paused scene that uses t stays motion-blurred. Scenes that don't
+         * reference t have nothing to interpolate -> AA jitter fallback. */
+        if (repl_state_source_uses_time())
+            mode = GLR_BLUR_TIME;
+    } else if (camera_moved) {
+        /* "Blur Cam": camera-pose blur, and only ever camera blur. Still
+         * camera -> AA jitter fallback. */
         mode = GLR_BLUR_CAMERA;
-    else if (config->accum_effect == RENDER3D_ACCUM_EFFECT_BLUR &&
-             repl_state_variables().time_playing &&
-             repl_state_source_uses_time())
-        mode = GLR_BLUR_TIME;   /* Blur (full) also blurs animation time;
-                                 * Blur Camera does not -> AA fallback. */
+    }
 
     if (mode == GLR_BLUR_NONE)
         return;  /* still camera (and not time-blurring) -> AA jitter fallback */
