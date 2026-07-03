@@ -21,16 +21,80 @@
 static const char *replay_hud_normal_text(int mode) {
     switch (mode) {
     case REPLAY_NORMAL_DISPLAY_VECTOR:
-        return "Normals Vector";
+        return "Vector";
     case REPLAY_NORMAL_DISPLAY_DIRECTION:
-        return "Normals Direction";
+        return "Direction";
     default:
-        return "Normals Off";
+        return "Off";
     }
 }
 
 static const char *replay_hud_vertex_label_text(int enabled) {
-    return enabled ? "VLabel On" : "VLabel Off";
+    return enabled ? "Labelled" : "Off";
+}
+
+static void center_format(char *buf, size_t size, const char *str, int width) {
+    int len = (int)strlen(str);
+    if (len >= width) {
+        snprintf(buf, size, "%s", str);
+        return;
+    }
+    int total_spaces = width - len;
+    int left = total_spaces / 2;
+    int right = total_spaces - left;
+    int pos = 0;
+    for (int i = 0; i < left && pos < (int)size - 1; i++) {
+        buf[pos++] = ' ';
+    }
+    for (int i = 0; i < len && pos < (int)size - 1; i++) {
+        buf[pos++] = str[i];
+    }
+    for (int i = 0; i < right && pos < (int)size - 1; i++) {
+        buf[pos++] = ' ';
+    }
+    buf[pos] = '\0';
+}
+
+struct ReplayStatusField {
+    const char *top;
+    const char *bottom;
+    int width;
+};
+
+static void build_replay_status(char *progress_buf, size_t progress_sz,
+                                char *kbd_buf, size_t kbd_sz,
+                                float speed, const char *depth_seg,
+                                const struct ReplayStatusField *fields, int field_count) {
+    snprintf(progress_buf, progress_sz, "Replay  %8.1f cmd/s", speed);
+    snprintf(kbd_buf, kbd_sz, "Space pause | +/- speed");
+
+    for (int i = 0; i < field_count; i++) {
+        char centered_top[32];
+        char centered_bottom[32];
+        center_format(centered_top, sizeof(centered_top), fields[i].top, fields[i].width);
+        center_format(centered_bottom, sizeof(centered_bottom), fields[i].bottom, fields[i].width);
+
+        const char *progress_sep = (i == 0) ? "  | " : " | ";
+        size_t len = strlen(progress_buf);
+        if (len < progress_sz) {
+            snprintf(progress_buf + len, progress_sz - len, "%s%s", progress_sep, centered_top);
+        }
+
+        size_t kbd_len = strlen(kbd_buf);
+        if (kbd_len < kbd_sz) {
+            snprintf(kbd_buf + kbd_len, kbd_sz - kbd_len, " | %s", centered_bottom);
+        }
+    }
+
+    size_t len = strlen(progress_buf);
+    if (len < progress_sz) {
+        snprintf(progress_buf + len, progress_sz - len, "%s", depth_seg);
+    }
+
+    size_t kbd_len = strlen(kbd_buf);
+    if (kbd_len < kbd_sz) {
+        snprintf(kbd_buf + kbd_len, kbd_sz - kbd_len, " | %c %c step | Esc stop", 0xAB, 0xBB);
+    }
 }
 
 void replay_ui_hud_render(const struct UiRenderSnapshot *snap) {
@@ -117,15 +181,35 @@ void replay_ui_hud_render(const struct UiRenderSnapshot *snap) {
     if (snap->replay.focus_call_depth > 0)
         snprintf(depth_seg, sizeof(depth_seg), "  | depth %d",
                  snap->replay.focus_call_depth);
-    snprintf(progress_txt, sizeof(progress_txt),
-             "Replay  %11.1f cmd/s  | %7s  | %s  | %s  | %s%s",
-             snap->replay.speed,
-             snap->replay.mode == REPLAY_MODE_VERTEX ? "Vertex" : "Polygon",
-             replay_hud_normal_text(snap->replay.normal_display),
-             replay_hud_vertex_label_text(snap->replay.vertex_label),
-             snap->replay.expand_args ? "Code Expanded" : "",
-             depth_seg
-             );
+
+    struct ReplayStatusField fields[4] = {
+        {
+            .top = snap->replay.mode == REPLAY_MODE_VERTEX ? "Vertex" : "Polygon",
+            .bottom = "m mode",
+            .width = 7
+        },
+        {
+            .top = snap->replay.expand_args ? "Code Expanded" : "",
+            .bottom = "e expand",
+            .width = 13
+        },
+        {
+            .top = replay_hud_normal_text(snap->replay.normal_display),
+            .bottom = "n normals",
+            .width = 9
+        },
+        {
+            .top = replay_hud_vertex_label_text(snap->replay.vertex_label),
+            .bottom = "v vertex",
+            .width = 8
+        }
+    };
+
+    build_replay_status(progress_txt, sizeof(progress_txt),
+                        kbd_txt, sizeof(kbd_txt),
+                        snap->replay.speed,
+                        depth_seg,
+                        fields, 4);
     ui_clr(UI_TOK_ACCENT);
     gl2d_draw_string((float)text_col_x,
                 (float)(hud_y + REPLAY_HUD_TEXT_LINE1_Y),
@@ -157,10 +241,7 @@ void replay_ui_hud_render(const struct UiRenderSnapshot *snap) {
     glVertex2f((float)groove_x + 0.5f,                     (float)(groove_y + REPLAY_HUD_PROGRESS_H) - 0.5f);
     glEnd();
 
-    /* Line 2 - compact kbd hints along the bottom in muted gray */
-    snprintf(kbd_txt, sizeof(kbd_txt),
-             /* 0xAB / 0xBB = Latin-1 « / » step-direction arrows */
-             "Space pause | +/- speed | m mode | e expand | n normals | v label | %c %c step | Esc stop", 0xAB, 0xBB);
+    /* Line 2 - compact kbd hints along the bottom in muted gray (pre-formatted by builder) */
     ui_clr(UI_TOK_TEXT_MUTED);
     gl2d_draw_string((float)text_col_x,
                 (float)(hud_y + REPLAY_HUD_TEXT_LINE2_Y),
