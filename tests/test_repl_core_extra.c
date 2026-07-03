@@ -363,6 +363,9 @@ void test_workspace_round_trip() {
     }
     ASSERT_TRUE("animated ring example present", ring_example >= 0);
     repl_load_example(ring_example);
+    /* Capture the loaded command count so the round-trip assertion
+     * below tracks the scene source instead of a stale literal. */
+    int ring_cmd_count = repl_state_document_count();
     int p2 = repl_promote_example_if_needed();
     ASSERT_TRUE("second promotion ok", p2 >= 1 && p2 != p1);
 
@@ -404,7 +407,7 @@ void test_workspace_round_trip() {
     if (ring_slot >= 0) {
         ASSERT_INT("load animated ring scene", repl_load_user_scene_idx(ring_slot), 1);
         ASSERT_INT("animated ring command count after workspace load",
-                   repl_state_document_count(), 17);
+                   repl_state_document_count(), ring_cmd_count);
     }
 
     /* Clean up scratch dir. */

@@ -621,7 +621,7 @@ rationale is in [`eval.h`](src/repl/eval.h)):
 
 **Scratch arrays** `A`/`B`/`C` (`REPL_SCRATCH_ARRAY_COUNT ×
 REPL_SCRATCH_ARRAY_LEN` = 3×8 floats) are fixed global runtime storage
-for loop/recursive algorithms, indexed `0..7`, written and read with
+for loop/recursive algorithms, indexed `0..15`, written and read with
 ordinary expression syntax.
 
 **Time.** `t` is the predefined animation clock. [`time.c`](src/repl/time.c) →

@@ -583,7 +583,7 @@ static void run_tests(void) {
         ASSERT_TRUE("scratch get A[2]",
                     repl_eval_scratch_get(0, 2, &value) && fabsf(value - 3.5f) < 1e-6f);
         ASSERT_TRUE("scratch reject bad element",
-                    !repl_eval_scratch_set(0, 8, 0.0f));
+                    !repl_eval_scratch_set(0, REPL_SCRATCH_ARRAY_LEN, 0.0f));
         repl_eval_copy_scratch_arrays(snapshot);
         repl_eval_scratch_set(0, 2, 9.0f);
         repl_eval_restore_scratch_arrays(snapshot);
@@ -607,9 +607,9 @@ static void run_tests(void) {
         }
         {
             char err[128] = {0};
-            ExprCtx ctx = { "A[8]", NULL, 0, err, sizeof(err) };
+            ExprCtx ctx = { "A[16]", NULL, 0, err, sizeof(err) };
             (void)repl_eval_expr(&ctx);
-            ASSERT_TRUE("scratch read A[8] errors", err[0] != '\0');
+            ASSERT_TRUE("scratch read A[16] errors", err[0] != '\0');
         }
         {
             char err[128] = {0};
@@ -995,7 +995,7 @@ static void run_tests(void) {
         ASSERT_VALIDATE_FAIL("r + unknown", lv, 2);
         ASSERT_VALIDATE_FAIL("A", NULL, 0);
         ASSERT_VALIDATE_FAIL("x[0]", NULL, 0);
-        ASSERT_VALIDATE_FAIL("A[8]", NULL, 0);
+        ASSERT_VALIDATE_FAIL("A[16]", NULL, 0);
         ASSERT_VALIDATE_FAIL("A[-1]", NULL, 0);
 
         /* Inline comment - scanner stops before it */

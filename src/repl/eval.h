@@ -96,7 +96,7 @@
 #endif
 
 #ifndef REPL_SCRATCH_ARRAY_LEN
-#define REPL_SCRATCH_ARRAY_LEN 8
+#define REPL_SCRATCH_ARRAY_LEN 16
 #endif
 
 /* Function slots: the REPL has a fixed `funcN` table (0..9). Each slot
