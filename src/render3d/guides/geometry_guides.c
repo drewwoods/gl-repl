@@ -6,7 +6,7 @@
 #include "render3d/occluded_ghost.h"  /* RENDER3D_OCCLUDED_GHOST_STIPPLE */
 #include "render3d/overlays.h"
 
-#include <math.h>   /* sqrtf, fminf */
+#include <math.h>   /* sqrtf, fminf, fabsf */
 #include <stdio.h>  /* snprintf */
 #include <string.h> /* strncmp */
 
@@ -145,6 +145,12 @@ static float guide_sanitize_zero(float val) {
     if (val > -0.005f && val < 0.005f)
         return 0.0f;
     return val;
+}
+
+static int normal_dirs_differ(const float a[3], const float b[3]) {
+    return fabsf(a[0] - b[0]) > 0.005f ||
+           fabsf(a[1] - b[1]) > 0.005f ||
+           fabsf(a[2] - b[2]) > 0.005f;
 }
 
 static void draw_normal_component_handle(float vx, float vy, float vz,
@@ -365,16 +371,29 @@ static void draw_normal_guides(const Render3dGuideSnapshot *snapshot) {
     float scale = 0.45f;
     float clen = sqrtf(vals[0]*vals[0] + vals[1]*vals[1] + vals[2]*vals[2]);
     float cn[3] = { 0.0f, 0.0f, 1.0f };
-    char detail[64];
+    char detail[128];
     if (clen > 1e-8f) {
         cn[0] = vals[0] / clen;
         cn[1] = vals[1] / clen;
         cn[2] = vals[2] / clen;
     }
-    snprintf(detail, sizeof(detail), "=(%.2f, %.2f, %.2f)",
-             guide_sanitize_zero(vals[0]),
-             guide_sanitize_zero(vals[1]),
-             guide_sanitize_zero(vals[2]));
+    if (snapshot->xform_guide_mode == RENDER3D_XFORM_GUIDE_FRAME &&
+        snapshot->normal_frame_args_valid &&
+        normal_dirs_differ(cn, snapshot->normal_frame_args)) {
+        snprintf(detail, sizeof(detail),
+                 "=(%.2f, %.2f, %.2f) -> frame=(%.2f, %.2f, %.2f)",
+                 guide_sanitize_zero(vals[0]),
+                 guide_sanitize_zero(vals[1]),
+                 guide_sanitize_zero(vals[2]),
+                 guide_sanitize_zero(snapshot->normal_frame_args[0]),
+                 guide_sanitize_zero(snapshot->normal_frame_args[1]),
+                 guide_sanitize_zero(snapshot->normal_frame_args[2]));
+    } else {
+        snprintf(detail, sizeof(detail), "=(%.2f, %.2f, %.2f)",
+                 guide_sanitize_zero(vals[0]),
+                 guide_sanitize_zero(vals[1]),
+                 guide_sanitize_zero(vals[2]));
+    }
 
     geometry_guides_push_state();
     glDisable(GL_LIGHTING);

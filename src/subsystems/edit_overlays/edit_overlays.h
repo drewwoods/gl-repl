@@ -49,6 +49,7 @@ typedef struct OverlayWalkCtx {
     int              show_normal_vectors;
     int              replay_normal_display; /* ReplayNormalDisplayMode */
     int              replay_anchor_flat_idx; /* -1 or flat idx of current replay vertex */
+    int              xform_guide_mode;       /* Render3dXformGuideMode */
 } OverlayWalkCtx;
 
 typedef struct OverlaySnapshotPack {
