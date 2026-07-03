@@ -3480,6 +3480,21 @@ int main() {
         g_mock_modifiers = saved_mods;
     }
 
+    /* Statusbar trash chip: same Clear All action as Ctrl+L. */
+    {
+        UiHit hit = ui_hit_none();
+
+        glr_ctrl_reset_all();
+        editor_feed_line("glVertex3f(1,1,1)");
+        ASSERT_INT("trash clear setup: 1 cmd", repl_state_document_count(), 1);
+
+        hit.kind = UI_HIT_CODE_CLEAR_ALL;
+        ASSERT_INT("trash clear: consumed",
+                   glr_ctrl_router_handle_code_panel_hit(hit, 0, 0), 1);
+        ASSERT_INT("trash clear: cleared all", repl_state_document_count(), 0);
+        ASSERT_STR("trash clear: status", g_status, "All commands cleared");
+    }
+
     /* Extra coverage: F12 cycling with user scenes */
     {
         glr_ctrl_reset_all();

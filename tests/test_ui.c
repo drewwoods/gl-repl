@@ -710,6 +710,24 @@ static void test_ui_panels_hit_test(void) {
         h = ui_panels_hit_test_current_snapshot(
                 cp_x + cp_w / 2, win_h - (cp_y + STATUSBAR_H / 2), 0);
         ASSERT_TRUE(lbl, h.kind == UI_HIT_CODE_PANEL_CHROME);
+
+        if (cp_w >= 700) {
+            UiRenderSnapshot status_snap;
+            int trash_mx = -1;
+            int status_my = win_h - (cp_y + STATUSBAR_H / 2);
+            int mx;
+
+            make_test_ui_snapshot(&status_snap);
+            for (mx = cp_x; mx < cp_x + cp_w; mx++) {
+                h = ui_panels_hit_test(&status_snap, mx, status_my, 0);
+                if (h.kind == UI_HIT_CODE_CLEAR_ALL) {
+                    trash_mx = mx;
+                    break;
+                }
+            }
+            snprintf(lbl, sizeof lbl, "statusbar trash hit kind%s", tag);
+            ASSERT_TRUE(lbl, trash_mx >= 0);
+        }
     }
 }
 

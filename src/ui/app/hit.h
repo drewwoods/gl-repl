@@ -12,6 +12,7 @@
  * off UI_HIT_CORE_COUNT, so the renderer needn't depend on ui/app. */
 typedef enum {
     UI_HIT_CODE_PANEL_CHROME = UI_HIT_CORE_COUNT,
+    UI_HIT_CODE_CLEAR_ALL,
     UI_HIT_CODE_FOCUS_TOGGLE,
     UI_HIT_HELP_TOGGLE,
     UI_HIT_CODE_PANEL_TAB,
