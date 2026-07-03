@@ -554,7 +554,7 @@ swatches.
 
 ### 2D mode
 
-![A 2D sketch in ortho view](images/view-mode-2d.png)
+![Toggling View mode between 3D perspective and 2D ortho on the wave surface](images/view-mode-2d.gif)
 
 *View mode* (Ctrl+Shift+V, or the CAMERA section of the Config menu) switches
 between the 3D perspective camera and a flat 2D orthographic projection —
