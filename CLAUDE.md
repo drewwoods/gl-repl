@@ -1107,7 +1107,7 @@ Circular snapshot buffers in [`src/editor/undo.c`](src/editor/undo.c):
   so editing an example auto-creates a user scene.
 - Pushing clears the redo stack; undo moves current state to redo
 - The rings are global, not per-scene. Any wholesale replacement of
-  the live REPL document **must** call [`editor_undo_clear()`](src/editor/undo.h#L126) first or a
+  the live REPL document **must** call [`editor_undo_clear()`](src/editor/undo.h#L128) first or a
   post-switch Ctrl+Z restores the previous scene's snapshot into the
   new one. Call sites: `glr_ctrl_reset_all`, the F12 cycle
   (`cycle_example_or_user_scene`), and the load-example /
