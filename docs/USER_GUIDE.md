@@ -275,7 +275,8 @@ Every numeric argument is a full expression, evaluated when the line runs:
 `rand` returns a deterministic value in `[0, 1]` for a given (seed, iter)
 pair; `rand2` is the same hash mapped to `[-1, 1]` — useful for centered
 jitter. Determinism means particle systems look the same every frame and
-every run.
+every run — it is the stateless substitute for storing random values, a
+pattern covered in [Working without state](#working-without-state).
 
 ### Variables
 
@@ -391,6 +392,62 @@ headless capture) exactly reproducible.
 - **Ctrl+Shift+B** toggles the winding-visualization view (the *Winding* config item).
 - `--time <secs>` (or the `GLR_TIME` env var) sets the starting `t` when
   launching — handy for headless captures of a later moment.
+
+### Working without state
+
+A frame being a pure function of `t` cuts both ways: there is nowhere to
+*accumulate* anything between frames. You cannot write `pos = pos + vel`
+once per frame and expect `pos` to remember where it was — next frame the
+scene re-evaluates from source, not from last frame's values. Scenes that
+would normally keep state use one of three patterns instead. They read a
+little differently from typical game-loop code, but they are not harder
+to write — and they are *easier to debug*, because any moment can be
+reproduced exactly by setting `t`, without replaying history to get there.
+
+**Deterministic randomness instead of stored random state.** Where a
+game loop would roll a particle's attributes once and store them, here
+each particle recomputes them every frame from `rand(seed, iter)` /
+`rand2` — the same (seed, iter) pair always returns the same value, so a
+particle's "random" drift, size, or tint is a stable per-particle
+constant keyed on its index. The *Snowfall demo (550 particles)* example
+derives every flake's drift, fall speed, and depth from `rand(p, slot)`
+with the particle index `p` as the seed; *Swaying grass field (rand + t)*
+does the same per blade (position, height, sway phase, tint), with a
+comment documenting its seed-slot convention so the RNG streams stay
+independent.
+
+**Integrate velocity in closed form.** Physics normally accumulates:
+`vel += accel*dt; pos += vel*dt`. Statelessly, position must instead be
+the *integral* of the velocity function, evaluated at the particle's age.
+For constant acceleration that is the familiar projectile polynomial; for
+dampened (decaying) velocity it is the integral of the decay curve. The
+*Whale (particle system + lit model)* example does both, with the math
+worked out in its comments: `computeVerticalMotion` integrates gravity
+(`launchY + gravityY/2*age^2 + launchVelY*age`), and
+`computeDriftX`/`computeDriftZ` integrate an exponentially decaying
+horizontal velocity (`velX(s) = launchVelX * dragDecay^(dragRate*s)`) to
+get drift-with-drag. Looping lifetimes fall out of `fmod`:
+`age = fmod(t - spawnDelay, particleLife)` respawns each particle forever
+with no bookkeeping.
+
+**Replay the algorithm from the start.** Some scenes really are
+history-dependent — a sort's array order depends on every swap before it.
+The stateless version recomputes that history each frame: start from the
+initial state and re-run the algorithm's steps up to the count implied by
+`t`. The *Bubble sort (scratch arrays)* example re-seeds `A[0..15]` with
+a deterministic shuffle and re-runs its compare-and-swap loops every
+frame, gating each compare on `p*15 + j < steps` where `steps` derives
+from `t` — the bars freeze mid-sort at exactly the right compare, and
+dragging the time slider scrubs the sort forwards *and backwards*.
+
+The payoff of all three is the same: reproducibility. A glitch spotted at
+`t ≈ 7.3` is inspected by pausing and dragging `t` to 7.3 — no waiting,
+no lucky re-run, no divergent state. It is also what makes
+[replay](#replay), timeline scrubbing, and `--time`-anchored headless
+captures possible at all. The cost is recomputation — the replay pattern
+in particular redoes work proportional to what `t` implies, every frame —
+see [Performance & Scope](#performance--scope) for where that ceiling
+sits and how export lifts it.
 
 ### Scrubbing the timeline
 
@@ -990,7 +1047,10 @@ The REPL is an interpreter. Every frame it re-evaluates expressions, and
 while anything is animating it re-flattens the whole program — loops
 unrolled, functions inlined, every argument expression parsed and evaluated
 again. That is what makes the live experience possible (edit any line, drag
-any slider, scrub time backwards), but it costs real CPU.
+any slider, scrub time backwards), but it costs real CPU. Scenes built on
+the [stateless patterns](#working-without-state) — especially the
+replay-from-the-start kind — add their own recompute cost on top, since
+each frame redoes all the work `t` implies.
 
 The exported C program has none of that machinery — it is the same scene as
 plain compiled GL calls, roughly **100× lighter on the CPU**. So the
