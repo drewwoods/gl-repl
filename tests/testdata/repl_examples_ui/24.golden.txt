@@ -14,8 +14,8 @@
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg xform_guides = 2 */
-/* @cfg light_indicators = 1 */
-/* @cfg light_theme = LIGHT_THEME_DEFAULT */
+/* @cfg light_indicators = 0 */
+/* @cfg light_theme = LIGHT_THEME_SOLAR */
 /* @cfg backdrop = RENDER3D_BACKDROP_STARS */
 /* @cfg auto_normals = 0 */
 /* @cfg view_mode = RENDER3D_VIEW_3D */
@@ -87,275 +87,413 @@ void display(void) {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -15.0000f);
-  glRotatef(26.0000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(-20.0000f, 0.0f, 1.0f, 0.0f);
-  glTranslatef(-0.0000f, -0.3000f, -0.0000f);
+  glTranslatef(0.0000f, 0.0000f, -19.0000f);
+  glRotatef(30.0000f, 1.0f, 0.0f, 0.0f);
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
-  static float x, y, z, n, k, s;
-  static float fireflies = 44; // @tune
-  static float flyRadius = 2.6; // @tune
+  static float th, u, px, py, pz, orbitR; // shared orbit scratch
+  static float ASTEROIDS = 280; // @tune
+  static float EARTH_R = 0.17; // @tune
+  static float EARTH_RATE = 0.85; // @tune
+  static float ORB_BASE = 0; // @tune
+  static float ORB_SCALE = 10; // @tune
+  static float aK, eK, iK, lK, pK, nK, mK, eAn;
+  static float xh, yh, x1, y1, z1;
+  static float yr, leap, doy, mon, day; // year/month/day readout scratch
 
-  // --- sea(): animated water sheet (nested for + analytic normals) ---
-  // Colored by wave height: deep azure troughs lift to bright azure crests.
-  sea(half, cells, amp) {
-    for(i, 0, cells) {
-      glBegin(GL_TRIANGLE_STRIP);
-        for(j, 0, cells + 1) {
-          x = -half + 2*half*j/cells;
-          z = -half + 2*half*i/cells;
-          y = amp*sin(x*1.5 + t)*cos(z*1.5 + t*0.6);
-          n = 1.0/sqrt(1 + amp*amp*2.25*(cos(x*1.5 + t)*cos(x*1.5 + t)*cos(z*1.5 + t*0.6)*cos(z*1.5 + t*0.6) + sin(x*1.5 + t)*sin(x*1.5 + t)*sin(z*1.5 + t*0.6)*sin(z*1.5 + t*0.6)));
-          glNormal3f(-amp*1.5*cos(x*1.5 + t)*cos(z*1.5 + t*0.6)*n, n, amp*1.5*sin(x*1.5 + t)*sin(z*1.5 + t*0.6)*n);
-          glColor3f(0.18 + 0.18*(0.5+0.5*y/amp), 0.34 + 0.36*(0.5+0.5*y/amp), 0.55 + 0.43*(0.5+0.5*y/amp));
-          glVertex3f(x, y, z);
-          z = -half + 2*half*(i + 1)/cells;
-          y = amp*sin(x*1.5 + t)*cos(z*1.5 + t*0.6);
-          n = 1.0/sqrt(1 + amp*amp*2.25*(cos(x*1.5 + t)*cos(x*1.5 + t)*cos(z*1.5 + t*0.6)*cos(z*1.5 + t*0.6) + sin(x*1.5 + t)*sin(x*1.5 + t)*sin(z*1.5 + t*0.6)*sin(z*1.5 + t*0.6)));
-          glNormal3f(-amp*1.5*cos(x*1.5 + t)*cos(z*1.5 + t*0.6)*n, n, amp*1.5*sin(x*1.5 + t)*sin(z*1.5 + t*0.6)*n);
-          glColor3f(0.18 + 0.18*(0.5+0.5*y/amp), 0.34 + 0.36*(0.5+0.5*y/amp), 0.55 + 0.43*(0.5+0.5*y/amp));
-          glVertex3f(x, y, z);
-        }
-      glEnd();
-    }
-  }
 
-  // --- island(): tessellated landmass with a lagoon cutout (GLU tess) ---
-  island(r, lagoon) {
-    glFrontFace(GL_CW);
-    gluBegin(GLU_POLYGON);
-      // Outer wobbly coastline
-      gluBegin(GLU_CONTOUR);
-        gluNormal(0, 1, 0);
-        for(i, 0, 30) {
-          k = r*(1 + 0.16*sin(i*0.9) + 0.09*cos(i*1.7));
-          gluColor(0.22 + 0.12*sin(i*0.5), 0.40 + 0.10*cos(i*0.7), 0.46 + 0.08*sin(i));
-          gluVertex(k*cos(i*TAU/30), 0, k*sin(i*TAU/30));
-        }
-      gluEnd();
-      // Inner lagoon contour, wound the opposite way (note the -i*TAU/20): under
-      // the tessellator's odd winding rule the reversed contour carves the hole.
-      gluBegin(GLU_CONTOUR);
-        for(i, 0, 20) {
-          x = lagoon*cos(-i*TAU/20) - r*0.35;
-          z = lagoon*sin(-i*TAU/20) + r*0.2;
-          gluColor(0.08, 0.14, 0.2, 1);
-          gluVertex(x, 0, z);
-        }
-      gluEnd();
-    gluEnd();
-    glFrontFace(GL_CCW);
-  }
-
-  // --- lighthouse(): stacked GLUT solids (cone / torus / sphere) ---
-  lighthouse() {
-    glPushMatrix();
-      // Base rock - cone, apex up
-      glColor3f(0.3, 0.34, 0.42);
-      glPushMatrix();
-        glRotatef(-90, 1, 0, 0);
-        glutSolidCone(0.55, 0.5, 18, 3);
-      glPopMatrix();
-      glTranslatef(0, 0.42, 0);
-      // Tapered tower
-      glColor3f(0.9, 0.93, 0.97);
-      glPushMatrix();
-        glRotatef(-90, 1, 0, 0);
-        glutSolidCone(0.34, 1.5, 22, 1);
-      glPopMatrix();
-      // Coral band wrapping the tower
-      glPushMatrix();
-        glTranslatef(0, 0.62, 0);
-        glRotatef(90, 1, 0, 0);
-        glColor3f(0.98, 0.46, 0.36);
-        glutSolidTorus(0.04, 0.22, 10, 22);
-      glPopMatrix();
-      // Lantern - shiny amber bulb
-      glTranslatef(0, 1.5, 0);
-      glColor3f(0.98, 0.82, 0.45);
-      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 90);
-      glutSolidSphere(0.2, 16, 12);
-      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 16);
-      // Violet roof cone
-      glColor3f(0.62, 0.52, 0.95);
-      glPushMatrix();
-        glTranslatef(0, 0.16, 0);
-        glRotatef(-90, 1, 0, 0);
-        glutSolidCone(0.24, 0.32, 14, 1);
-      glPopMatrix();
-    glPopMatrix();
-  }
-
-  // --- tree(): recursion with if / else if / else tiered coloring ---
-  tree(depth, len, twist) {
-    if(depth >= 3) {
-      glColor3f(0.4, 0.36, 0.5);
-    } else if(depth >= 1) {
-      glColor3f(0.50 - 0.03*depth, 0.50, 0.92);
-    } else {
-      glColor3f(0.98, 0.74, 0.4);
-    }
-    glLineWidth(depth + 1);
-    glBegin(GL_LINES);
-      glNormal3f(0, 0, 1);
-      glVertex3f(0, 0, 0);
-      glVertex3f(0, len, 0);
+  orbitRings(Drel, node, incl) {
+    orbitR = ORB_BASE + ORB_SCALE*log(1 + Drel);
+    glBegin(GL_LINE_LOOP);
+      for(i, 0, 96) {
+        th = i*TAU/96;
+        u = th - node;
+        glVertex3f(orbitR*(cos(node)*cos(u) - sin(node)*sin(u)*cos(incl)), orbitR*sin(u)*sin(incl), orbitR*(sin(node)*cos(u) + cos(node)*sin(u)*cos(incl)));
+      }
     glEnd();
-    if(depth > 0) {
-      glPushMatrix();
-        glTranslatef(0, len, 0);
-        glRotatef(26 + 7*sin(twist), 0, 0, 1);
-        glScalef(0.74, 0.74, 0.74);
-        tree(depth - 1, len, twist + 0.4);
-      glPopMatrix();
-      glPushMatrix();
-        glTranslatef(0, len, 0);
-        glRotatef(-29 - 6*cos(twist), 0, 0, 1);
-        glScalef(0.7, 0.7, 0.7);
-        tree(depth - 1, len, twist + 0.3);
-      glPopMatrix();
-      glPushMatrix();
-        glTranslatef(0, len*0.92, 0);
-        glRotatef(16 + 5*sin(twist*1.3), 1, 0, 0);
-        glScalef(0.6, 0.6, 0.6);
-        tree(depth - 1, len*0.86, twist + 0.5);
-      glPopMatrix();
-    } else {
-      // Blossom - small lit sphere at the twig tip
-      glColor3f(0.98, 0.55, 0.42);
-      glPushMatrix();
-        glTranslatef(0, len, 0);
-        glutSolidSphere(len*0.55, 8, 6);
-      glPopMatrix();
-    }
   }
-
-  // shared scratch: x/y/z vertex position; n = 1/|gradient| (sea normals)
-  // k/s = radius/angle scratch (island coastline, firefly polar coords).
-  glClearColor(0.05, 0.06, 0.08, 1);
-  // ===== Dusk lighthouse atoll - a coherent feature tour =====
-  // One scene, many features: a parametric sea, a tessellated island with a
-  // lagoon cutout, a lighthouse of stacked GLUT solids with a sweeping
-  // translucent beam, a recursive tree (if / else if / else), GLUT-solid
-  // rocks, additive-blended firefly points, and a moon with a halo ring.
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_LIGHTING);
-  glEnable(GL_NORMALIZE);
-  glEnable(GL_COLOR_MATERIAL);
-  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-  glEnable(GL_LIGHT0);
-  glEnable(GL_LIGHT2);
-  glEnable(GL_LIGHT3);
-  glShadeModel(GL_SMOOTH);
-  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, 1);
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 16);
-
-  // ===== Scene composition =====
-  glLineWidth(1);
-
-  // Sea sheet under everything
-  glPushMatrix();
-    glTranslatef(0, -0.62, 0);
-    sea(5.5, 10, 0.16);
-  glPopMatrix();
-
-  // Island shelf just above the water
-  glPushMatrix();
-    glTranslatef(0, -0.5, 0);
-    island(2.2, 0.45);
-  glPopMatrix();
-
-  // Lighthouse on the island
-  glPushMatrix();
-    glTranslatef(0.5, -0.5, 0.1);
-    lighthouse();
-  glPopMatrix();
-
-  // Sweeping light beams from the lantern (blend + depth-mask off)
-  glPushMatrix();
-    glTranslatef(0.5, 1.42, 0.1);
-    glRotatef(t*55, 0, 1, 0);
+  // planet(): one lit sphere on an inclined circular orbit. The caller passes
+  // TRUE ratios relative to Earth: distance from Sun (Drel), year length (Yrel),
+  // J2000 heliocentric longitude phase, J2000 node/inclination, and body radius
+  // (Rrel). The display applies documented compression for orbit distance and
+  // sphere size only.
+  // px/py/pz stay set after the call so the caller can hang a label off the
+  // body (th/u are internal scratch and get clobbered mid-function, so don't
+  // rely on them). t=0 is year 2000.0 (J2000 alignment).
+  planet(Drel, Yrel, phase, node, incl, Rrel, cr, cg, cb) {
+    orbitR = ORB_BASE + ORB_SCALE*log(1 + Drel);
+    th = phase + t*EARTH_RATE/Yrel;
+    u = th - node;
+    th = orbitR*cos(u);
+    u = orbitR*sin(u);
+    px = th*cos(node) - u*sin(node)*cos(incl);
+    py = u*sin(incl);
+    pz = th*sin(node) + u*cos(node)*cos(incl);
+    glEnable(GL_LIGHTING);
+    glColor3f(cr, cg, cb);
+    glPushMatrix();
+      glTranslatef(px, py, pz);
+      glutSolidSphere(EARTH_R * pow(Rrel, 1.0/3.0), 24, 18);
+    glPopMatrix();
     glDisable(GL_LIGHTING);
-    glDepthMask(GL_FALSE);
+  }
+  planetKepler(a0, adot, e0, edot, I0, Idot, L0, Ldot, peri0, peridot, node0, nodedot, Rrel, cr, cg, cb) {
+    th = t*EARTH_RATE/TAU/100.0; // Julian centuries since J2000.0
+    aK = a0 + adot*th;
+    eK = e0 + edot*th;
+    iK = (I0 + Idot*th)*PI/180;
+    lK = (L0 + Ldot*th)*PI/180;
+    pK = (peri0 + peridot*th)*PI/180;
+    nK = (node0 + nodedot*th)*PI/180;
+    mK = rem(lK - pK, TAU);
+    // Solve Kepler's equation M = E - e*sin(E) for the eccentric anomaly eAn
+    // via Newton's method: seed with mK, then 4 fixed refinement iterations.
+    eAn = mK + eK*sin(mK);
+    eAn = eAn + (mK - (eAn - eK*sin(eAn)))/(1 - eK*cos(eAn));
+    eAn = eAn + (mK - (eAn - eK*sin(eAn)))/(1 - eK*cos(eAn));
+    eAn = eAn + (mK - (eAn - eK*sin(eAn)))/(1 - eK*cos(eAn));
+    eAn = eAn + (mK - (eAn - eK*sin(eAn)))/(1 - eK*cos(eAn));
+    // 1. Calculate 2D position in orbital plane relative to perihelion
+    xh = aK*(cos(eAn) - eK);
+    yh = aK*sqrt(1 - eK*eK)*sin(eAn);
+
+    // 2. Compute heliocentric distance (vector length is invariant under 3D
+    // rotations). Reuse eAn (done with the eccentric anomaly now) to hold the
+    // radius r, staying under MAX_PREDEF_VARS.
+    eAn = sqrt(xh*xh + yh*yh);
+    orbitR = ORB_BASE + ORB_SCALE*log(1 + eAn);
+
+    // 3. Decompose 3D rotation: Step A: Rotate in orbital plane by argument of perihelion (u = pK - nK)
+    // to align position relative to the ascending node line. Reuse aK, eK as xo, yo to stay under MAX_PREDEF_VARS.
+    u = pK - nK;
+    aK = xh*cos(u) - yh*sin(u);
+    eK = xh*sin(u) + yh*cos(u);
+
+    // 4. Decompose 3D rotation: Step B: Project from node line to ecliptic plane
+    // using ascending node longitude (nK) and inclination (iK)
+    x1 = aK*cos(nK) - eK*sin(nK)*cos(iK);
+    y1 = aK*sin(nK) + eK*cos(nK)*cos(iK);
+    z1 = eK*sin(iK);
+
+    // 5. Scale 3D unit direction vector by logarithmic orbit radius
+    px = orbitR*x1/eAn;
+    py = orbitR*z1/eAn;
+    pz = orbitR*y1/eAn;
+    glEnable(GL_LIGHTING);
+    glColor3f(cr, cg, cb);
+    glPushMatrix();
+      glTranslatef(px, py, pz);
+      glutSolidSphere(EARTH_R * pow(Rrel, 1.0/3.0), 24, 18);
+    glPopMatrix();
+    glDisable(GL_LIGHTING);
+  }
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.35, 0.33, 0.3, 1});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, (GLfloat[]){18});
+  glClearColor(0.02, 0.02, 0.05, 1);
+  glEnable(GL_NORMALIZE);
+  glEnable(GL_CULL_FACE);
+  glEnable(GL_DEPTH_TEST);
+
+  // planets: opaque, lit by the central SOLAR light. Blending stays OFF here
+  // so each body is a solid sphere - planets never blend with one another.
+  // Only the sun's corona (drawn last, additive) glows over them. glColor
+  // rides GL_COLOR_MATERIAL and one shared specular material gives every body
+  // a sun-glint.
+  glEnable(GL_LIGHT0);
+  glEnable(GL_COLOR_MATERIAL);
+  // Body sizes: R/E is the true radius relative to Earth; "display" is what
+  // this scene draws after the cube-root squash (display = EARTH_R*R/E^(1/3)),
+  // which keeps the 0.38..11x planet span legible. The Sun (109x!) is off the
+  // chart, so it stays a hand-tuned "hero" size rather than on the planet rule.
+  //   +---------+--------+---------+
+  //   | Body    |   R/E  | display |
+  //   +---------+--------+---------+
+  //   | Mercury |  0.383 |  0.124  |
+  //   | Venus   |  0.950 |  0.167  |
+  //   | Earth   |  1.000 |  0.170  |
+  //   | Mars    |  0.532 |  0.138  |
+  //   | Jupiter | 10.97  |  0.378  |
+  //   | Saturn  |  9.14  |  0.356  |
+  //   | Uranus  |  3.98  |  0.269  |
+  //   | Neptune |  3.86  |  0.267  |
+  //   | Sun     | 109.2  |  hero   |
+  //   +---------+--------+---------+
+  //
+  // Orbit speeds: Y/E is the true year length relative to Earth. The circular
+  // planets use rate = EARTH_RATE/Y/E. Earth and Mars use JPL Keplerian element
+  // rates in planetKepler() below. t=0 is year 2000.0:
+  // Year = 2000 + t*EARTH_RATE/TAU.
+  // | Body    | Year length relative to Earth |
+  // | ------- | ----------------------------: |
+  // | Mercury |                     **0.241** |
+  // | Venus   |                     **0.615** |
+  // | Earth   |                     **1.000** |
+  // | Mars    |                     **1.881** |
+  // | Jupiter |                     **11.86** |
+  // | Saturn  |                     **29.46** |
+  // | Uranus  |                      **84.0** |
+  // | Neptune |                     **164.8** |
+  // | Sun     |                       **N/A** |
+  //
+  // J2000 alignment: for circular planets, the phase argument is approximate
+  // heliocentric ecliptic longitude at 2000-01-01 12:00 TT, computed from JPL
+  // low-precision elements. Earth and Mars use mean longitude/perihelion rates
+  // instead so their relative phase should align with real opposition dates.
+  // | Body    | J2000 heliocentric longitude |
+  // | ------- | ---------------------------: |
+  // | Mercury |                   253.78 deg |
+  // | Venus   |                   182.61 deg |
+  // | Earth   |                   100.38 deg |
+  // | Mars    |                   359.45 deg |
+  // | Jupiter |                    36.38 deg |
+  // | Saturn  |                    45.58 deg |
+  // | Uranus  |                   316.40 deg |
+  // | Neptune |                   303.92 deg |
+  // | Sun     |                         N/A  |
+  //
+  // Orbit planes: node/incl arguments use JPL J2000 longitude of ascending node
+  // and inclination relative to the J2000 ecliptic. Scene axes map ecliptic
+  // x/y/z to displayed x/z/y, so the ecliptic plane remains the main xz plane.
+  // | Body    | Inclination | Ascending node |
+  // | ------- | ----------: | -------------: |
+  // | Mercury |   7.005 deg |      48.33 deg |
+  // | Venus   |   3.395 deg |      76.68 deg |
+  // | Earth   |   0.000 deg |       0.00 deg |
+  // | Mars    |   1.850 deg |      49.56 deg |
+  // | Jupiter |   1.304 deg |     100.47 deg |
+  // | Saturn  |   2.486 deg |     113.66 deg |
+  // | Uranus  |   0.773 deg |      74.02 deg |
+  // | Neptune |   1.770 deg |     131.78 deg |
+  // | Sun     |         N/A |            N/A |
+  //
+  // Orbit distances: D/E is the true mean distance from the Sun relative to
+  // Earth. planet() and orbitRings() display it with a log scale:
+  // orbitR = ORB_BASE + ORB_SCALE*log(1 + D/E). log() is base-10 in the REPL.
+  // The large scale pushes the inner system outward, while the log term spreads
+  // Mercury/Venus/Earth more than a cube-root fit. The Sun stays at the origin
+  // and does not use the formula.
+  // | Body    | Distance from Sun relative to Earth |
+  // | ------- | ----------------------------------: |
+  // | Mercury |                           **0.387** |
+  // | Venus   |                           **0.723** |
+  // | Earth   |                           **1.000** |
+  // | Mars    |                           **1.524** |
+  // | Jupiter |                           **5.203** |
+  // | Saturn  |                           **9.537** |
+  // | Uranus  |                           **19.19** |
+  // | Neptune |                           **30.07** |
+  // | Sun     |                     **0.000 / N/A** |
+  // Mercury (0.383 Earth radii, 0.241 Earth years)
+  planet(0.387, 0.241, 253.78*PI/180, 48.33*PI/180, 7.005*PI/180, 0.383, 0.63, 0.58, 0.54);
+  glColor3f(0.9, 0.85, 0.8);
+  glRasterPos3f(px + 0.14, py + 0.16, pz);
+  label("Mercury");
+  // Venus (0.950 Earth radii, 0.615 Earth years)
+  planet(0.723, 0.615, 182.61*PI/180, 76.68*PI/180, 3.395*PI/180, 0.950, 0.93, 0.81, 0.55);
+  glColor3f(1, 0.9, 0.65);
+  glRasterPos3f(px + 0.2, py + 0.22, pz);
+  label("Venus");
+  // Earth and Mars use JPL low-precision Keplerian elements/rates instead of
+  // circular phase advance. These two phases should be accurate enough to align
+  // with real Mars-Earth opposition dates; the other planets remain visual.
+  // Earth (the reference radius) + Moon circling it
+  planetKepler(1.00000261, 0.00000562, 0.01671123, -0.00004392, -0.00001531, -0.01294668, 100.46457166, 35999.37244981, 102.93768193, 0.32327364, 0, 0, 1.000, 0.3, 0.52, 0.95);
+  glPushMatrix();
+    glTranslatef(px, py, pz);
+    glRotatef(t*160, 0, 1, 0);
+    glTranslatef(0.25, 0.06, 0);
+    glEnable(GL_LIGHTING);
+    glColor3f(0.72, 0.72, 0.7);
+    glutSolidSphere(0.046, 12, 10);
+    glDisable(GL_LIGHTING);
+  glPopMatrix();
+  glColor3f(0.6, 0.8, 1);
+  glRasterPos3f(px + 0.2, py + 0.22, pz);
+  label("Earth");
+  // Mars (0.532 Earth radii, 1.881 Earth years)
+  planetKepler(1.52371034, 0.00001847, 0.09339410, 0.00007882, 1.84969142, -0.00813131, -4.55343205, 19140.30268499, -23.94362959, 0.44441088, 49.55953891, -0.29257343, 0.532, 0.88, 0.45, 0.26);
+  glColor3f(1, 0.6, 0.45);
+  glRasterPos3f(px + 0.16, py + 0.18, pz);
+  label("Mars");
+  // Jupiter (10.97 Earth radii, 11.86 Earth years)
+  planet(5.203, 11.86, 36.38*PI/180, 100.47*PI/180, 1.304*PI/180, 10.97, 0.83, 0.69, 0.52);
+  glColor3f(1, 0.85, 0.65);
+  glRasterPos3f(px + 0.62, py + 0.5, pz);
+  label("Jupiter");
+  // Saturn (9.14 Earth radii, 29.46 Earth years) + two ring bands with a
+  // Cassini gap.
+  // Rings are translucent flat strips, so blending is on (additive, like the
+  // corona) and culling is off while they draw - either face may point at the
+  // camera. Depth writes are masked so the bands don't clip each other.
+  planet(9.537, 29.46, 45.58*PI/180, 113.66*PI/180, 2.486*PI/180, 9.14, 0.9, 0.8, 0.58);
+  glPushMatrix();
+    glTranslatef(px, py, pz);
+    glRotatef(27, 1, 0, 0.35);
+    glDisable(GL_CULL_FACE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-    glBegin(GL_TRIANGLES);
-      glColor4f(0.98, 0.82, 0.45, 0.55);
-      glVertex3f(0, 0, 0);
-      glColor4f(0.98, 0.82, 0.45, 0);
-      glVertex3f(7, -0.5, 0.7);
-      glVertex3f(7, 0.5, -0.7);
-      glColor4f(0.98, 0.82, 0.45, 0.55);
-      glVertex3f(0, 0, 0);
-      glColor4f(0.98, 0.82, 0.45, 0);
-      glVertex3f(-7, 0.5, 0.7);
-      glVertex3f(-7, -0.5, -0.7);
+    glDepthMask(GL_FALSE);
+    glBegin(GL_TRIANGLE_STRIP);
+      for(s, 0, 33) {
+        glColor4f(0.85, 0.75, 0.55, 0.5);
+        glVertex3f(cos(s*TAU/32)*0.66, 0, sin(s*TAU/32)*0.66);
+        glColor4f(0.9, 0.82, 0.6, 0.3);
+        glVertex3f(cos(s*TAU/32)*0.88, 0, sin(s*TAU/32)*0.88);
+      }
+    glEnd();
+    glBegin(GL_TRIANGLE_STRIP);
+      for(s, 0, 33) {
+        glColor4f(0.8, 0.72, 0.5, 0.35);
+        glVertex3f(cos(s*TAU/32)*0.93, 0, sin(s*TAU/32)*0.93);
+        glColor4f(0.75, 0.68, 0.48, 0.12);
+        glVertex3f(cos(s*TAU/32)*1.05, 0, sin(s*TAU/32)*1.05);
+      }
     glEnd();
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
-    glEnable(GL_LIGHTING);
+    glEnable(GL_CULL_FACE);
   glPopMatrix();
-
-  // Wind-swayed tree across the island
+  glColor3f(1, 0.9, 0.7);
+  glRasterPos3f(px + 1.1, py + 0.4, pz);
+  label("Saturn");
+  // Uranus (3.98 Earth radii, 84.0 Earth years) + a thin ring standing nearly on
+  // end:
+  // the planet is tipped ~98 degrees, so its rings face the sun pole-on
+  planet(19.19, 84.0, 316.40*PI/180, 74.02*PI/180, 0.773*PI/180, 3.98, 0.58, 0.82, 0.88);
   glPushMatrix();
-    glTranslatef(-1.2, -0.5, 0.4);
-    glRotatef(4*sin(t*0.4), 0, 0, 1);
-    tree(3, 0.62, t*0.2);
-  glPopMatrix();
-
-  // Ring of rocks around the shoreline (loop + GLUT solids)
-  for(i, 0, 7) {
-    glPushMatrix();
-      glRotatef(i*360/7 + 20, 0, 1, 0);
-      glTranslatef(2, -0.55, 0);
-      glColor3f(0.28, 0.31, 0.4);
-      glScalef(1, 0.55, 1);
-      glutSolidSphere(0.16 + 0.07*rand(i, 7), 8, 6);
-    glPopMatrix();
-  }
-
-  // Fireflies - additive point sprites drifting over the atoll
-  glDisable(GL_LIGHTING);
-  glDepthMask(GL_FALSE);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-  glEnable(GL_POINT_SMOOTH);
-  glPointSize(7);
-  glBegin(GL_POINTS);
-    for(i, 0, fireflies) {
-      k = rand(i, 0)*TAU;
-      s = 1.2 + rand(i, 1)*flyRadius;
-      x = cos(k + t*(0.25 + rand(i, 2)*0.4))*s;
-      z = sin(k + t*(0.25 + rand(i, 2)*0.4))*s;
-      y = 0.1 + 1.4*rand(i, 3) + 0.18*sin(t*2 + i);
-      glColor4f(0.98, 0.74 + 0.22*rand(i, 4), 0.42, 0.75);
-      glVertex3f(x, y, z);
-    }
-  glEnd();
-  glDisable(GL_POINT_SMOOTH);
-  glDepthMask(GL_TRUE);
-  glDisable(GL_BLEND);
-  glEnable(GL_LIGHTING);
-
-  // Moon with a violet halo ring, parked in the sky
-  glPushMatrix();
-    glTranslatef(-3.6, 3, -2);
-    glDisable(GL_LIGHTING);
-    glColor3f(0.92, 0.95, 0.98);
-    glutSolidSphere(0.55, 22, 16);
-    glBegin(GL_LINE_LOOP);
-      for(i, 0, 48) {
-        glColor3f(0.62, 0.52, 0.95);
-        glVertex3f(0.92*cos(i*TAU/48), 0.92*sin(i*TAU/48), 0);
+    glTranslatef(px, py, pz);
+    glRotatef(98, 0, 0, 1);
+    glDisable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    glDepthMask(GL_FALSE);
+    glBegin(GL_TRIANGLE_STRIP);
+      for(s, 0, 33) {
+        glColor4f(0.72, 0.88, 0.92, 0.4);
+        glVertex3f(cos(s*TAU/32)*0.44, 0, sin(s*TAU/32)*0.44);
+        glColor4f(0.72, 0.88, 0.92, 0.1);
+        glVertex3f(cos(s*TAU/32)*0.58, 0, sin(s*TAU/32)*0.58);
       }
     glEnd();
-    glEnable(GL_LIGHTING);
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
+    glEnable(GL_CULL_FACE);
   glPopMatrix();
+  glColor3f(0.75, 0.92, 0.95);
+  glRasterPos3f(px + 0.6, py + 0.35, pz);
+  label("Uranus");
+  // Neptune (3.86 Earth radii, 164.8 Earth years)
+  planet(30.07, 164.8, 303.92*PI/180, 131.78*PI/180, 1.770*PI/180, 3.86, 0.28, 0.42, 0.9);
+  glColor3f(0.55, 0.65, 1);
+  glRasterPos3f(px + 0.42, py + 0.34, pz);
+  label("Neptune");
+  // live readout: exact Gregorian calendar date, anchored in 3D below the system.
+  // The decimal sim year is split into year / month / day with real month lengths
+  // (leap years included via the 4/100/400 rule), so the readout tracks a true
+  // calendar to the day. The if/else-if chain peels off whole months; flatten
+  // evaluates it each frame, emitting only the live branch. t=0 is 2000-1-1.
+  th = 2000 + t*EARTH_RATE/TAU; // decimal year
+  yr = floor(th); // integer year
+  leap = (fmod(yr, 4) == 0 && fmod(yr, 100) != 0) || fmod(yr, 400) == 0; // 1 in leap years
+  doy = floor((th - yr)*(365 + leap)); // day of year, 0-based
+  if(doy < 31) {
+    mon = 1;
+    day = doy + 1;
+  } else if(doy < 59 + leap) {
+    mon = 2;
+    day = doy - 31 + 1;
+  } else if(doy < 90 + leap) {
+    mon = 3;
+    day = doy - 59 - leap + 1;
+  } else if(doy < 120 + leap) {
+    mon = 4;
+    day = doy - 90 - leap + 1;
+  } else if(doy < 151 + leap) {
+    mon = 5;
+    day = doy - 120 - leap + 1;
+  } else if(doy < 181 + leap) {
+    mon = 6;
+    day = doy - 151 - leap + 1;
+  } else if(doy < 212 + leap) {
+    mon = 7;
+    day = doy - 181 - leap + 1;
+  } else if(doy < 243 + leap) {
+    mon = 8;
+    day = doy - 212 - leap + 1;
+  } else if(doy < 273 + leap) {
+    mon = 9;
+    day = doy - 243 - leap + 1;
+  } else if(doy < 304 + leap) {
+    mon = 10;
+    day = doy - 273 - leap + 1;
+  } else if(doy < 334 + leap) {
+    mon = 11;
+    day = doy - 304 - leap + 1;
+  } else {
+    mon = 12;
+    day = doy - 334 - leap + 1;
+  }
+  glColor3f(0.75, 0.8, 0.9);
+  glRasterPos3f(-2.6, -5.6, 0);
+  label("Date %f-%f-%f", yr, mon, day);
 
-  // Caption readout (glRasterPos + bitmap label)
+  // Asteroid belt: a decorative dusty band between Mars and Jupiter (the main
+  // belt, ~2.2-3.3 AU). Not physical - each speck is scattered with rand() onto
+  // its own near-circular orbit, drifting at the Kepler rate for its radius
+  // (EARTH_RATE/a^1.5, so inner specks lap the outer ones) and riding the same
+  // log-distance scale as the planets. Drawn as small unlit points, depth-tested
+  // so the planets pass in front of and behind the band.
   glDisable(GL_LIGHTING);
-  glColor3f(0.92, 0.95, 0.98);
-  glRasterPos3f(-3.2, 2.2, 0);
-  label("dusk atoll");
-  glEnable(GL_LIGHTING);
+  glEnable(GL_POINT_SMOOTH);
+  glPointSize(2);
+  glBegin(GL_POINTS);
+    for(i, 0, ASTEROIDS) {
+      u = rand(i, 2)*TAU + t*EARTH_RATE/pow(2.2 + 1.1*rand(i, 1), 1.5);
+      glColor3f((0.45 + 0.5*rand(i, 3))*0.55, (0.45 + 0.5*rand(i, 3))*0.48, (0.45 + 0.5*rand(i, 3))*0.4);
+      glVertex3f((ORB_BASE + ORB_SCALE*log(1 + 2.2 + 1.1*rand(i, 1)))*cos(u), rand2(i, 4)*0.35, (ORB_BASE + ORB_SCALE*log(1 + 2.2 + 1.1*rand(i, 1)))*sin(u));
+    }
+  glEnd();
+
+  // faint orbit rings (unlit lines), one per planet at its inclination
+  glDisable(GL_LIGHTING);
+  glColor3f(0.22, 0.24, 0.34);
+  glLineWidth(1.2);
+  orbitRings(0.387, 48.33*PI/180, 7.005*PI/180);
+  orbitRings(0.723, 76.68*PI/180, 3.395*PI/180);
+  orbitRings(1.000, 0.0, 0.0);
+  orbitRings(1.524, 49.56*PI/180, 1.850*PI/180);
+  orbitRings(5.203, 100.47*PI/180, 1.304*PI/180);
+  orbitRings(9.537, 113.66*PI/180, 2.486*PI/180);
+  orbitRings(19.19, 74.02*PI/180, 0.773*PI/180);
+  orbitRings(30.07, 131.78*PI/180, 1.770*PI/180);
+
+  // the sun, drawn LAST so its soft corona composites over the rest of the
+  // scene: an additive glow (GL_ONE) that is still depth-tested - planets in
+  // front of the sun occlude it, planets behind it receive the glow (so only
+  // the corona blends with the planets). Depth writes are masked so the
+  // stacked shells don't clip each other; the opaque core then writes depth.
+  // Drawn unlit so it glows (it sits on the SOLAR light at the origin).
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  glDepthMask(GL_FALSE);
+  // soft corona: thin additive shells at constant low alpha - the nested
+  // layers accumulate, so brightness ramps smoothly toward the core (a
+  // radial falloff that. Each shell pulses at a phase offset to keep the
+  // shimmer.
+  glPushMatrix();
+    glScalef(1, 0.5, 1);
+    for(i, 0, 20) {
+      glColor4f(1, 0.75, 0.25, 0.02);
+      glutSolidSphere(0.5 + i*0.1 + sin(t*1.3 + i*0.7)*0.052, 24, 24);
+    }
+  glPopMatrix();
+  glDepthMask(GL_TRUE);
+  glColor4f(1, 0.85, 0.3, 0.5);
+  glutSolidSphere(0.45, 24, 24);
+  glDisable(GL_BLEND);
+  glDisable(GL_DEPTH_TEST);
+  glColor3f(1, 0.72, 0);
+  glRasterPos3f(0.62, 0.58, 0);
+  label("Sun");

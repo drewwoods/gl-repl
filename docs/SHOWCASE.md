@@ -223,16 +223,6 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 </td>
 <td align="center">
 
-<!-- images/showcase/de-casteljau.png
-     Still is fine. ./gl-repl --example "Scratch arrays (de Casteljau curve)" -->
-<img src="images/showcase/de-casteljau.png" alt="de Casteljau curve via scratch arrays" width="100%">
-
-**[de Casteljau curve](../examples/scenes/scratch-arrays-de-casteljau-curve.glr)**
-<br><sub>built with scratch arrays `A/B/C`</sub>
-
-</td>
-<td align="center">
-
 <!-- images/showcase/orbit-plot.png
      Still is fine — the point is the bitmap label() text annotating the plot.
      ./gl-repl --example "Annotated orbit plot (labels)" -->
@@ -242,6 +232,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 <br><sub>bitmap `label(...)` text</sub>
 
 </td>
+<td></td>
 </tr>
 </table>
 

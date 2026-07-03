@@ -905,7 +905,7 @@ Separate from the UI-chrome theming above: the *scene geometry* of the
 built-in examples shares one deliberate palette so the set reads as a
 designed family rather than a grab-bag of saturated primaries. The
 rollout started with the Scene menu "2D" tag (assignment sketch, function
-demos, recursive tree, spirograph, ripple ring, bezier, de Casteljau) and
+demos, recursive tree, spirograph, ripple ring, bezier) and
 now also covers the line/surface 3D scenes (animated ring, animated wave
 surface, GLU tessellator + cutout, transform stress) and the
 kitchen-sink showcase, "Dusk lighthouse atoll" (the stress test —

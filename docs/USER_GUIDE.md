@@ -849,19 +849,19 @@ Developers can point the app at an editable catalog with
 
 ```
  0  Lit cube                                            15  Bezier curve with guides
- 1  Rotating cube                                       16  Scratch arrays (de Casteljau curve)
- 2  Animated ring (for + t)                             17  Annotated orbit plot (labels)
- 3  Conditional colors (if + t)                         18  GLU tessellator (concave arrow)
- 4  Transform stress (translate/rotate/scale guides)    19  GLU tessellator (concave arrow cutout)
- 5  Parametric torus (nested for)                       20  Glow sprites (blend + point attenuation)
- 6  Animated wave surface (analytic normals)            21  Snowfall demo (550 particles)
- 7  Torus knot (animated)                               22  Swaying grass field (rand + t)
- 8  2D assignment sketch (vars only)                    23  Jellyfish (glDepthMask translucency)
- 9  Function demo (named func)                          24  Dusk lighthouse atoll (stress test)
-10  Function polygons (args + for)                      25  Orrery (labels track 3D orbits)
-11  Function branching (args + if)                      26  Whale (particle system + lit model)
-12  Recursive triangle tree (func + recursion)          27  Teapot carousel (transform stacks + glow points)
-13  Animated spirograph curve                           28  Ringed planet (nebula skies)
+ 1  Rotating cube                                       16  Annotated orbit plot (labels)
+ 2  Animated ring (for + t)                             17  GLU tessellator (concave arrow)
+ 3  Conditional colors (if + t)                         18  GLU tessellator (concave arrow cutout)
+ 4  Transform stress (translate/rotate/scale guides)    19  Glow sprites (blend + point attenuation)
+ 5  Parametric torus (nested for)                       20  Snowfall demo (550 particles)
+ 6  Animated wave surface (analytic normals)            21  Swaying grass field (rand + t)
+ 7  Torus knot (animated)                               22  Jellyfish (glDepthMask translucency)
+ 8  2D assignment sketch (vars only)                    23  Dusk lighthouse atoll (stress test)
+ 9  Function demo (named func)                          24  Orrery (labels track 3D orbits)
+10  Function polygons (args + for)                      25  Whale (particle system + lit model)
+11  Function branching (args + if)                      26  Teapot carousel (transform stacks + glow points)
+12  Recursive triangle tree (func + recursion)          27  Ringed planet (nebula skies)
+13  Animated spirograph curve                           28  Bubble sort (scratch arrays)
 14  Traveling ripple ring
 ```
 
