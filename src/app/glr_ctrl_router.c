@@ -935,6 +935,39 @@ static int route_code_clear_all_hit(void) {
     return 1;
 }
 
+/* Statusbar edit-action chips. These call the same editor primitives as
+ * the keyboard routes, so line selections, input selections, guards, undo
+ * capture, and status text stay centralized in editor/. */
+static int route_code_copy_hit(void) {
+    editor_clipboard_copy_current();
+    glr_ctrl_router_reset_code_panel_drag();
+    editor_request_redraw();
+    return 1;
+}
+
+static int route_code_cut_hit(void) {
+    editor_clipboard_cut_current();
+    glr_ctrl_router_reset_code_panel_drag();
+    editor_request_redraw();
+    return 1;
+}
+
+static int route_code_undo_hit(void) {
+    editor_undo_pop_snapshot();
+    editor_scroll_follow_cursor_set(0);
+    glr_ctrl_router_reset_code_panel_drag();
+    editor_request_redraw();
+    return 1;
+}
+
+static int route_code_redo_hit(void) {
+    editor_undo_do_redo();
+    editor_scroll_follow_cursor_set(0);
+    glr_ctrl_router_reset_code_panel_drag();
+    editor_request_redraw();
+    return 1;
+}
+
 /* UI_HIT_HELP_TOGGLE: the statusbar "F1 help" keycap. Same action as
  * the F1 key — go through the shared toggle so the overlay tab/scroll
  * reset identically. */
@@ -1284,6 +1317,14 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_code_panel_chrome_hit(); break;
     case UI_HIT_CODE_CLEAR_ALL:
         consumed = route_code_clear_all_hit(); break;
+    case UI_HIT_CODE_COPY:
+        consumed = route_code_copy_hit(); break;
+    case UI_HIT_CODE_CUT:
+        consumed = route_code_cut_hit(); break;
+    case UI_HIT_CODE_UNDO:
+        consumed = route_code_undo_hit(); break;
+    case UI_HIT_CODE_REDO:
+        consumed = route_code_redo_hit(); break;
     case UI_HIT_CODE_FOCUS_TOGGLE:
         consumed = route_code_focus_toggle_hit(); break;
     case UI_HIT_HELP_TOGGLE:

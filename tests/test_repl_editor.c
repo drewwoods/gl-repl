@@ -3495,6 +3495,64 @@ int main() {
         ASSERT_STR("trash clear: status", g_status, "All commands cleared");
     }
 
+    /* Statusbar edit chips: same editor actions as keyboard shortcuts. */
+    {
+        UiHit hit = ui_hit_none();
+        UiRenderSnapshot snap;
+
+        glr_ctrl_reset_all();
+        glr_ctrl_build_ui_snapshot(&snap);
+        ASSERT_INT("statusbar edit setup: undo disabled", snap.can_undo, 0);
+        ASSERT_INT("statusbar edit setup: redo disabled", snap.can_redo, 0);
+
+        editor_feed_line("glVertex3f(0,0,0)");
+        editor_feed_line("glVertex3f(1,1,1)");
+        ASSERT_INT("statusbar edit setup: 2 cmds", repl_state_document_count(), 2);
+
+        editor_state_selection_set(0, 1);
+        hit.kind = UI_HIT_CODE_COPY;
+        ASSERT_INT("statusbar copy: consumed",
+                   glr_ctrl_router_handle_code_panel_hit(hit, 0, 0), 1);
+        ASSERT_INT("statusbar copy: clipboard count",
+                   editor_state_clipboard_count(), 2);
+        ASSERT_STR("statusbar copy: first copied",
+                   editor_state_clipboard_mut()->lines[0],
+                   "  glVertex3f(0, 0, 0);");
+
+        editor_state_selection_set(0, 0);
+        hit.kind = UI_HIT_CODE_CUT;
+        ASSERT_INT("statusbar cut: consumed",
+                   glr_ctrl_router_handle_code_panel_hit(hit, 0, 0), 1);
+        ASSERT_INT("statusbar cut: document count", repl_state_document_count(), 1);
+        ASSERT_INT("statusbar cut: clipboard count",
+                   editor_state_clipboard_count(), 1);
+        ASSERT_STR("statusbar cut: survivor",
+                   editor_buffer_line(0), "  glVertex3f(1, 1, 1);");
+        glr_ctrl_build_ui_snapshot(&snap);
+        ASSERT_INT("statusbar cut: undo enabled", snap.can_undo, 1);
+        ASSERT_INT("statusbar cut: redo disabled", snap.can_redo, 0);
+
+        hit.kind = UI_HIT_CODE_UNDO;
+        ASSERT_INT("statusbar undo: consumed",
+                   glr_ctrl_router_handle_code_panel_hit(hit, 0, 0), 1);
+        ASSERT_INT("statusbar undo: restores count", repl_state_document_count(), 2);
+        ASSERT_STR("statusbar undo: first restored",
+                   editor_buffer_line(0), "  glVertex3f(0, 0, 0);");
+        glr_ctrl_build_ui_snapshot(&snap);
+        ASSERT_INT("statusbar undo: undo disabled", snap.can_undo, 0);
+        ASSERT_INT("statusbar undo: redo enabled", snap.can_redo, 1);
+
+        hit.kind = UI_HIT_CODE_REDO;
+        ASSERT_INT("statusbar redo: consumed",
+                   glr_ctrl_router_handle_code_panel_hit(hit, 0, 0), 1);
+        ASSERT_INT("statusbar redo: reapplies cut", repl_state_document_count(), 1);
+        ASSERT_STR("statusbar redo: survivor",
+                   editor_buffer_line(0), "  glVertex3f(1, 1, 1);");
+        glr_ctrl_build_ui_snapshot(&snap);
+        ASSERT_INT("statusbar redo: undo enabled", snap.can_undo, 1);
+        ASSERT_INT("statusbar redo: redo disabled", snap.can_redo, 0);
+    }
+
     /* Extra coverage: F12 cycling with user scenes */
     {
         glr_ctrl_reset_all();

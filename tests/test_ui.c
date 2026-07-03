@@ -713,20 +713,33 @@ static void test_ui_panels_hit_test(void) {
 
         if (cp_w >= 700) {
             UiRenderSnapshot status_snap;
-            int trash_mx = -1;
+            int saw_clear = 0;
+            int saw_copy = 0;
+            int saw_cut = 0;
+            int saw_undo = 0;
+            int saw_redo = 0;
             int status_my = win_h - (cp_y + STATUSBAR_H / 2);
             int mx;
 
             make_test_ui_snapshot(&status_snap);
             for (mx = cp_x; mx < cp_x + cp_w; mx++) {
                 h = ui_panels_hit_test(&status_snap, mx, status_my, 0);
-                if (h.kind == UI_HIT_CODE_CLEAR_ALL) {
-                    trash_mx = mx;
-                    break;
-                }
+                if (h.kind == UI_HIT_CODE_CLEAR_ALL) saw_clear = 1;
+                if (h.kind == UI_HIT_CODE_COPY)      saw_copy = 1;
+                if (h.kind == UI_HIT_CODE_CUT)       saw_cut = 1;
+                if (h.kind == UI_HIT_CODE_UNDO)      saw_undo = 1;
+                if (h.kind == UI_HIT_CODE_REDO)      saw_redo = 1;
             }
             snprintf(lbl, sizeof lbl, "statusbar trash hit kind%s", tag);
-            ASSERT_TRUE(lbl, trash_mx >= 0);
+            ASSERT_TRUE(lbl, saw_clear);
+            snprintf(lbl, sizeof lbl, "statusbar copy hit kind%s", tag);
+            ASSERT_TRUE(lbl, saw_copy);
+            snprintf(lbl, sizeof lbl, "statusbar cut hit kind%s", tag);
+            ASSERT_TRUE(lbl, saw_cut);
+            snprintf(lbl, sizeof lbl, "statusbar undo hit kind%s", tag);
+            ASSERT_TRUE(lbl, saw_undo);
+            snprintf(lbl, sizeof lbl, "statusbar redo hit kind%s", tag);
+            ASSERT_TRUE(lbl, saw_redo);
         }
     }
 }

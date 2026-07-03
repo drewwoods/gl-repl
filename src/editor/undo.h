@@ -106,6 +106,8 @@ void editor_undo_ring_state_restore(const EditorUndoRingState *state);
 void editor_undo_push_snapshot(void);
 void editor_undo_pop_snapshot(void);
 void editor_undo_do_redo(void);
+int  editor_undo_can_undo(void);
+int  editor_undo_can_redo(void);
 
 /* Semantic API for wholesale document replacement (scene switch,
  * example load, workspace load, full app reset).  Clears both undo

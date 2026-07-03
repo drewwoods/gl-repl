@@ -1713,12 +1713,12 @@ static void repl_code_panel_statusbar_sep(int *tx, int sy, int sh) {
     *tx += 8;
 }
 
-/* Right-aligned statusbar cluster: a clear-all trash chip, a
- * "[focus] focus" keycap+label, and the existing "[F1] help"
- * keycap+label. The geometry is derived once here so the renderer
- * and the hit-test agree on the clickable chip boxes (window / GL
- * coords, bottom-left origin), with no arithmetic duplicated across
- * the two passes. */
+/* Right-aligned statusbar cluster: compact editor action chips
+ * (undo/redo/copy/cut/clear), a "[focus] focus" keycap+label, and
+ * the existing "[F1] help" keycap+label. The geometry is derived once
+ * here so the renderer and the hit-test agree on the clickable chip
+ * boxes (window / GL coords, bottom-left origin), with no arithmetic
+ * duplicated across the two passes. */
 static const char *k_statusbar_help_kbd  = "F1";
 static const char *k_statusbar_help_lbl  = "help";
 static const char *k_statusbar_focus_lbl = "focus";
@@ -1831,8 +1831,16 @@ typedef struct {
     int help_kx, help_lbl_x, help_kw;
     int focus_kx, focus_lbl_x, focus_kw;
     int trash_kx, trash_kw;
+    int copy_kx, copy_kw;
+    int cut_kx, cut_kw;
+    int undo_kx, undo_kw;
+    int redo_kx, redo_kw;
     int ky, kh;                 /* keycap box y / h (shared) */
     int trash_visible;          /* 0 when it would collide with left text */
+    int copy_visible;
+    int cut_visible;
+    int undo_visible;
+    int redo_visible;
     int focus_visible;          /* 0 when it would collide with left text */
     int help_visible;
 } ReplStatusbarHints;
@@ -1858,15 +1866,26 @@ static ReplStatusbarHints repl_code_panel_statusbar_hints(
     h.focus_kx    = h.focus_lbl_x - h.focus_kw - 6;
     h.trash_kw    = h.kh + 4;
     h.trash_kx    = h.focus_kx - 12 - h.trash_kw;
+    h.cut_kw      = h.kh + 4;
+    h.cut_kx      = h.trash_kx - 6 - h.cut_kw;
+    h.copy_kw     = h.kh + 4;
+    h.copy_kx     = h.cut_kx - 4 - h.copy_kw;
+    h.redo_kw     = h.kh + 4;
+    h.redo_kx     = h.copy_kx - 6 - h.redo_kw;
+    h.undo_kw     = h.kh + 4;
+    h.undo_kx     = h.redo_kx - 4 - h.undo_kw;
 
     /* The right cluster is always drawn from the right edge; the left
      * text from the left. On narrow/default panels they collide, so
-     * suppress whichever right chip the left text would reach (trash
-     * first, then focus, because they sit inboard of help). Keyboard
-     * Ctrl+L / Ctrl+Shift+F / F1 still work when a chip is hidden. */
+     * suppress whichever right chip the left text would reach. Keyboard
+     * shortcuts still work when a chip is hidden. */
     h.help_visible  = (h.help_kx  >= left_end + gap);
     h.focus_visible = (h.focus_kx >= left_end + gap);
     h.trash_visible = (h.trash_kx >= left_end + gap);
+    h.cut_visible   = (h.cut_kx   >= left_end + gap);
+    h.copy_visible  = (h.copy_kx  >= left_end + gap);
+    h.redo_visible  = (h.redo_kx  >= left_end + gap);
+    h.undo_visible  = (h.undo_kx  >= left_end + gap);
     return h;
 }
 
@@ -1973,6 +1992,15 @@ static void repl_code_panel_draw_trash_icon(int kx, int ky, int kw, int kh) {
     glPixelStorei(GL_UNPACK_ALIGNMENT, prev_align);
 }
 
+static void repl_code_panel_draw_action_glyph(int kx, int ky, int kw, int kh,
+                                              const char *glyph) {
+    int gw = (int)strlen(glyph) * FONT_SMALL_W;
+    int gx = kx + (kw - gw) / 2;
+    int gy = ky + (kh - FONT_SMALL_H) / 2 + 1;
+
+    gl2d_draw_string((float)gx, (float)gy, glyph, FONT_SMALL);
+}
+
 static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
                                            const UiTextPanelRect *slot) {
     int sy;
@@ -2053,9 +2081,36 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
         }
 
         /* Right cluster, drawn from the right edge. Each chip is
-         * suppressed when the left status text would collide with it
-         * (trash first, then focus); the keyboard Ctrl+L /
-         * Ctrl+Shift+F / F1 paths still work when a chip is hidden. */
+         * suppressed when the left status text would collide with it;
+         * keyboard shortcuts still work when a chip is hidden. */
+        if (h.undo_visible) {
+            repl_code_panel_draw_keycap(h.undo_kx, h.ky, h.undo_kw, h.kh);
+            ui_clr(snap->can_undo ? UI_TOK_TEXT_PRIMARY : UI_TOK_TEXT_MUTED);
+            repl_code_panel_draw_action_glyph(h.undo_kx, h.ky,
+                                              h.undo_kw, h.kh, "U");
+        }
+
+        if (h.redo_visible) {
+            repl_code_panel_draw_keycap(h.redo_kx, h.ky, h.redo_kw, h.kh);
+            ui_clr(snap->can_redo ? UI_TOK_TEXT_PRIMARY : UI_TOK_TEXT_MUTED);
+            repl_code_panel_draw_action_glyph(h.redo_kx, h.ky,
+                                              h.redo_kw, h.kh, "R");
+        }
+
+        if (h.copy_visible) {
+            repl_code_panel_draw_keycap(h.copy_kx, h.ky, h.copy_kw, h.kh);
+            ui_clr(UI_TOK_TEXT_PRIMARY);
+            repl_code_panel_draw_action_glyph(h.copy_kx, h.ky,
+                                              h.copy_kw, h.kh, "C");
+        }
+
+        if (h.cut_visible) {
+            repl_code_panel_draw_keycap(h.cut_kx, h.ky, h.cut_kw, h.kh);
+            ui_clr(UI_TOK_TEXT_PRIMARY);
+            repl_code_panel_draw_action_glyph(h.cut_kx, h.ky,
+                                              h.cut_kw, h.kh, "X");
+        }
+
         if (h.trash_visible) {
             repl_code_panel_draw_keycap(h.trash_kx, h.ky,
                                         h.trash_kw, h.kh);
@@ -2224,6 +2279,30 @@ static int repl_code_panel_statusbar_hit_kind(
                                       hints.trash_kx, hints.ky,
                                       hints.trash_kw, hints.kh))
         return UI_HIT_CODE_CLEAR_ALL;
+
+    if (hints.cut_visible &&
+        repl_code_panel_point_in_rect(mx, gl_y,
+                                      hints.cut_kx, hints.ky,
+                                      hints.cut_kw, hints.kh))
+        return UI_HIT_CODE_CUT;
+
+    if (hints.copy_visible &&
+        repl_code_panel_point_in_rect(mx, gl_y,
+                                      hints.copy_kx, hints.ky,
+                                      hints.copy_kw, hints.kh))
+        return UI_HIT_CODE_COPY;
+
+    if (hints.redo_visible &&
+        repl_code_panel_point_in_rect(mx, gl_y,
+                                      hints.redo_kx, hints.ky,
+                                      hints.redo_kw, hints.kh))
+        return UI_HIT_CODE_REDO;
+
+    if (hints.undo_visible &&
+        repl_code_panel_point_in_rect(mx, gl_y,
+                                      hints.undo_kx, hints.ky,
+                                      hints.undo_kw, hints.kh))
+        return UI_HIT_CODE_UNDO;
 
     if (hints.focus_visible &&
         repl_code_panel_point_in_rect(mx, gl_y,

@@ -62,7 +62,8 @@ Run a fresh session, or reload earlier work:
   switch.
 - **Status bar** — between panel and viewport: command count, current line,
   the accumulation indicator (`AA 1x` / `Blur 8x`), and clickable controls
-  for clearing all commands, *focus* (code focus), and *F1 help*.
+  for undo/redo, copy/cut, clearing all commands, *focus* (code focus), and
+  *F1 help*.
 - **Message line** — the bottom row shows the most recent status message.
   Click the small button at its right end to pop up the recent-message
   history.
