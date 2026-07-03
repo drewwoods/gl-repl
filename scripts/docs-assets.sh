@@ -77,7 +77,7 @@ CORE_ASSETS=(
 # in an editor) are stand-ins, see the showcase section below.
 SHOWCASE_ASSETS=(
     sc-torus-knot sc-snowfall sc-parametric-torus sc-recursive-tree
-    sc-spirograph sc-ripple-ring sc-bezier sc-orbit-plot
+    sc-spirograph sc-ripple-ring sc-bezier sc-bubble-sort sc-orbit-plot
     sc-wave-surface sc-ringed-planet sc-lit-cube sc-grass sc-jellyfish
     sc-function-demo sc-function-polygons sc-conditional-colors
     sc-whale sc-stress-test sc-feature-time sc-feature-ply sc-feature-export-c
@@ -598,6 +598,10 @@ if want sc-ripple-ring; then
 fi
 if want sc-bezier; then
     still "$SHOW/bezier.png" $PLAIN_FRAMES 16 --example "Bezier curve with guides"
+fi
+if want sc-bubble-sort; then
+    gif "$SHOW/bubble-sort.gif" 260 2 20 560 \
+        --example "Bubble sort (scratch arrays)"
 fi
 
 if want sc-orbit-plot; then

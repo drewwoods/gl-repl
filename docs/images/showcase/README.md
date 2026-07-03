@@ -26,6 +26,7 @@ scripts/docs-assets.sh --list             # asset names
 | `spirograph.gif` | `sc-spirograph` | Animated spirograph curve |
 | `ripple-ring.gif` | `sc-ripple-ring` | Traveling ripple ring |
 | `bezier.png` | `sc-bezier` | Bezier curve with guides (draws its own control points) |
+| `bubble-sort.gif` | `sc-bubble-sort` | Bubble sort (scratch arrays) |
 | `orbit-plot.png` | `sc-orbit-plot` | Annotated orbit plot (labels) |
 | `wave-surface.gif` | `sc-wave-surface` | Animated wave surface (analytic normals) |
 | `ringed-planet.gif` | `sc-ringed-planet` | Ringed planet (nebula skies) — replaces the retired "Procedural terrain" |
