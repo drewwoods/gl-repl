@@ -1947,10 +1947,28 @@ static void repl_code_panel_draw_focus_kbd(int gx, int gy) {
     gl2d_draw_string((float)(gx + 2 * FONT_SMALL_W), (float)gy, ch, FONT_SMALL);
 }
 
-static void repl_code_panel_draw_trash_icon(int kx, int ky, int kw, int kh) {
 #define TRASH_ICON_W 13
 #define TRASH_ICON_H 12
+#define ACTION_ICON_W 13
+#define ACTION_ICON_H 12
 
+/* Centre an icon_w x icon_h 1bpp glyph in the (kx,ky,kw,kh) keycap box
+ * and draw it with glBitmap. Shared by the trash / undo / redo / copy /
+ * cut statusbar chips so each glyph is just a bit table. */
+static void repl_code_panel_draw_bitmap_icon(int kx, int ky, int kw, int kh,
+                                             int icon_w, int icon_h,
+                                             const GLubyte *bits) {
+    GLint prev_align = 4;
+    int rx = kx + (kw - icon_w) / 2;
+    int ry = ky + (kh - icon_h) / 2;
+    glGetIntegerv(GL_UNPACK_ALIGNMENT, &prev_align);
+    glRasterPos2f((float)rx, (float)ry);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glBitmap(icon_w, icon_h, 0.0f, 0.0f, 0.0f, 0.0f, bits);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, prev_align);
+}
+
+static void repl_code_panel_draw_trash_icon(int kx, int ky, int kw, int kh) {
     /* 13×10  1bpp trash-can glyph, drawn with glBitmap so it matches
      * the crisp pixel-art style of the ⇧ shift glyph and the bitmap
      * font.  Rows are bottom-to-top (glBitmap scan order); bit 0x80
@@ -1982,23 +2000,145 @@ static void repl_code_panel_draw_trash_icon(int kx, int ky, int kw, int kh) {
         0x7F, 0xF0,  /* row 10 lid          .###########.            */
         0x07, 0x00   /* row 11 handle       .....###.....            */
     };
-    GLint prev_align = 4;
-    int rx = kx + (kw - TRASH_ICON_W) / 2;   /* centre the 13×10 glyph        */
-    int ry = ky + (kh - TRASH_ICON_H) / 2;
-    glGetIntegerv(GL_UNPACK_ALIGNMENT, &prev_align);
-    glRasterPos2f((float)rx, (float)ry);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glBitmap(TRASH_ICON_W, TRASH_ICON_H, 0.0f, 0.0f, 0.0f, 0.0f, trash_bits);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, prev_align);
+    repl_code_panel_draw_bitmap_icon(kx, ky, kw, kh,
+                                     TRASH_ICON_W, TRASH_ICON_H, trash_bits);
 }
 
-static void repl_code_panel_draw_action_glyph(int kx, int ky, int kw, int kh,
-                                              const char *glyph) {
-    int gw = (int)strlen(glyph) * FONT_SMALL_W;
-    int gx = kx + (kw - gw) / 2;
-    int gy = ky + (kh - FONT_SMALL_H) / 2 + 1;
+static void repl_code_panel_draw_undo_icon(int kx, int ky, int kw, int kh) {
+    /* 13x12 1bpp "return hook" glyph: a riser down the right side that
+     * bends into a leftward-pointing arrowhead, i.e. the same shape as
+     * the redo icon mirrored left-right.
+     *
+     *  row 11:  .........##..   riser
+     *  row 10:  .........##..
+     *  row 9:   .........##..
+     *  row 8:   .........##..
+     *  row 7:   ....#....##..   arrowhead tip taper
+     *  row 6:   ...##....##..
+     *  row 5:   .##########..   shaft + arrowhead point
+     *  row 4:   .##########..
+     *  row 3:   ...##........   arrowhead tip taper
+     *  row 2:   ....#........
+     *  row 1:   .............
+     *  row 0:   .............                                        */
+    static const GLubyte undo_bits[ACTION_ICON_H * 2] = {
+        0x00, 0x00,  /* row 0  */
+        0x00, 0x00,  /* row 1  */
+        0x08, 0x00,  /* row 2  */
+        0x18, 0x00,  /* row 3  */
+        0x7F, 0xE0,  /* row 4  */
+        0x7F, 0xE0,  /* row 5  */
+        0x18, 0x60,  /* row 6  */
+        0x08, 0x60,  /* row 7  */
+        0x00, 0x60,  /* row 8  */
+        0x00, 0x60,  /* row 9  */
+        0x00, 0x60,  /* row 10 */
+        0x00, 0x60   /* row 11 */
+    };
+    repl_code_panel_draw_bitmap_icon(kx, ky, kw, kh,
+                                     ACTION_ICON_W, ACTION_ICON_H, undo_bits);
+}
 
-    gl2d_draw_string((float)gx, (float)gy, glyph, FONT_SMALL);
+static void repl_code_panel_draw_redo_icon(int kx, int ky, int kw, int kh) {
+    /* Mirror image of the undo glyph: riser down the left side bending
+     * into a rightward-pointing arrowhead.
+     *
+     *  row 11:  ..##.........
+     *  row 10:  ..##.........
+     *  row 9:   ..##.........
+     *  row 8:   ..##.........
+     *  row 7:   ..##....#....
+     *  row 6:   ..##....##...
+     *  row 5:   ..##########.
+     *  row 4:   ..##########.
+     *  row 3:   ........##...
+     *  row 2:   ........#....
+     *  row 1:   .............
+     *  row 0:   .............                                        */
+    static const GLubyte redo_bits[ACTION_ICON_H * 2] = {
+        0x00, 0x00,  /* row 0  */
+        0x00, 0x00,  /* row 1  */
+        0x00, 0x80,  /* row 2  */
+        0x00, 0xC0,  /* row 3  */
+        0x3F, 0xF0,  /* row 4  */
+        0x3F, 0xF0,  /* row 5  */
+        0x30, 0xC0,  /* row 6  */
+        0x30, 0x80,  /* row 7  */
+        0x30, 0x00,  /* row 8  */
+        0x30, 0x00,  /* row 9  */
+        0x30, 0x00,  /* row 10 */
+        0x30, 0x00   /* row 11 */
+    };
+    repl_code_panel_draw_bitmap_icon(kx, ky, kw, kh,
+                                     ACTION_ICON_W, ACTION_ICON_H, redo_bits);
+}
+
+static void repl_code_panel_draw_copy_icon(int kx, int ky, int kw, int kh) {
+    /* Two overlapping outlined squares (stacked pages), front page
+     * bottom-left occluding the back page's top-right corner.
+     *
+     *  row 11:  .....#######.
+     *  row 10:  .....#.....#.
+     *  row 9:   .....#.....#.
+     *  row 8:   .....#.....#.
+     *  row 7:   .#######...#.
+     *  row 6:   .#.....#...#.
+     *  row 5:   .#.....#####.
+     *  row 4:   .#.....#.....
+     *  row 3:   .#.....#.....
+     *  row 2:   .#.....#.....
+     *  row 1:   .#######.....
+     *  row 0:   .............                                        */
+    static const GLubyte copy_bits[ACTION_ICON_H * 2] = {
+        0x00, 0x00,  /* row 0  */
+        0x7F, 0x00,  /* row 1  */
+        0x41, 0x00,  /* row 2  */
+        0x41, 0x00,  /* row 3  */
+        0x41, 0x00,  /* row 4  */
+        0x41, 0xF0,  /* row 5  */
+        0x41, 0x10,  /* row 6  */
+        0x7F, 0x10,  /* row 7  */
+        0x04, 0x10,  /* row 8  */
+        0x04, 0x10,  /* row 9  */
+        0x04, 0x10,  /* row 10 */
+        0x07, 0xF0   /* row 11 */
+    };
+    repl_code_panel_draw_bitmap_icon(kx, ky, kw, kh,
+                                     ACTION_ICON_W, ACTION_ICON_H, copy_bits);
+}
+
+static void repl_code_panel_draw_cut_icon(int kx, int ky, int kw, int kh) {
+    /* Scissors: two blades crossing in an X, pointed tips at the top,
+     * a finger-loop ring at each bottom end.
+     *
+     *  row 11:  .............
+     *  row 10:  .............
+     *  row 9:   ..#.......#..
+     *  row 8:   ...#.....#...
+     *  row 7:   ....#...#....
+     *  row 6:   .....#.#.....
+     *  row 5:   ......#......
+     *  row 4:   .....#.#.....
+     *  row 3:   ..###...###..
+     *  row 2:   .####...####.
+     *  row 1:   .##.#...#.##.
+     *  row 0:   .####...####.                                        */
+    static const GLubyte cut_bits[ACTION_ICON_H * 2] = {
+        0x78, 0xF0,  /* row 0  */
+        0x68, 0xB0,  /* row 1  */
+        0x78, 0xF0,  /* row 2  */
+        0x38, 0xE0,  /* row 3  */
+        0x05, 0x00,  /* row 4  */
+        0x02, 0x00,  /* row 5  */
+        0x05, 0x00,  /* row 6  */
+        0x08, 0x80,  /* row 7  */
+        0x10, 0x40,  /* row 8  */
+        0x20, 0x20,  /* row 9  */
+        0x00, 0x00,  /* row 10 */
+        0x00, 0x00   /* row 11 */
+    };
+    repl_code_panel_draw_bitmap_icon(kx, ky, kw, kh,
+                                     ACTION_ICON_W, ACTION_ICON_H, cut_bits);
 }
 
 static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
@@ -2086,29 +2226,29 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
         if (h.undo_visible) {
             repl_code_panel_draw_keycap(h.undo_kx, h.ky, h.undo_kw, h.kh);
             ui_clr(snap->can_undo ? UI_TOK_TEXT_PRIMARY : UI_TOK_TEXT_MUTED);
-            repl_code_panel_draw_action_glyph(h.undo_kx, h.ky,
-                                              h.undo_kw, h.kh, "U");
+            repl_code_panel_draw_undo_icon(h.undo_kx, h.ky,
+                                           h.undo_kw, h.kh);
         }
 
         if (h.redo_visible) {
             repl_code_panel_draw_keycap(h.redo_kx, h.ky, h.redo_kw, h.kh);
             ui_clr(snap->can_redo ? UI_TOK_TEXT_PRIMARY : UI_TOK_TEXT_MUTED);
-            repl_code_panel_draw_action_glyph(h.redo_kx, h.ky,
-                                              h.redo_kw, h.kh, "R");
+            repl_code_panel_draw_redo_icon(h.redo_kx, h.ky,
+                                           h.redo_kw, h.kh);
         }
 
         if (h.copy_visible) {
             repl_code_panel_draw_keycap(h.copy_kx, h.ky, h.copy_kw, h.kh);
             ui_clr(UI_TOK_TEXT_PRIMARY);
-            repl_code_panel_draw_action_glyph(h.copy_kx, h.ky,
-                                              h.copy_kw, h.kh, "C");
+            repl_code_panel_draw_copy_icon(h.copy_kx, h.ky,
+                                           h.copy_kw, h.kh);
         }
 
         if (h.cut_visible) {
             repl_code_panel_draw_keycap(h.cut_kx, h.ky, h.cut_kw, h.kh);
             ui_clr(UI_TOK_TEXT_PRIMARY);
-            repl_code_panel_draw_action_glyph(h.cut_kx, h.ky,
-                                              h.cut_kw, h.kh, "X");
+            repl_code_panel_draw_cut_icon(h.cut_kx, h.ky,
+                                          h.cut_kw, h.kh);
         }
 
         if (h.trash_visible) {
