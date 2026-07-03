@@ -383,11 +383,11 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 </tr>
 </table>
 
-### Tessellation & guides
+### Tessellation, guides & algorithms
 
 <table>
 <tr>
-<td width="50%" align="center">
+<td width="33%" align="center">
 
 <img src="images/glu-tess.png" alt="GLU tessellated concave arrow" width="100%">
 
@@ -395,7 +395,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 <br><sub>concave polygon (+ [cutout variant](../examples/scenes/glu-tessellator-concave-arrow-cutout.glr))</sub>
 
 </td>
-<td width="50%" align="center">
+<td width="33%" align="center">
 
 <img src="images/transform-stress.png" alt="Transform stress with guides" width="100%">
 
@@ -403,13 +403,6 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 <br><sub>translate / rotate / scale guides</sub>
 
 </td>
-</tr>
-</table>
-
-### Algorithms
-
-<table>
-<tr>
 <td width="33%" align="center">
 
 <!-- images/showcase/bubble-sort.gif
@@ -420,8 +413,6 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 <br><sub>array sort scrubbed by `t`</sub>
 
 </td>
-<td width="33%"></td>
-<td width="33%"></td>
 </tr>
 </table>
 
