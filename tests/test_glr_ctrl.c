@@ -16,6 +16,8 @@
 #include "repl/pipeline.h"
 #include "repl/state_notify.h"
 #include "editor/input.h"
+#include "editor/search.h"
+#include "keys.h"
 #include "ui/app/layout.h"   /* CODE_PANEL_LAYOUT_* */
 #include "support/test_harness.h"
 #ifdef GL_STUBS
@@ -915,6 +917,38 @@ static void test_right_click_code_panel_does_not_start_camera_pan(void) {
     ASSERT_FLOAT("right-click editor leaves camera tz", after.tz, before.tz);
 
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x + 80, y + 40);
+}
+
+static void test_left_click_code_panel_exits_search_and_places_cursor(void) {
+    UiHit hit;
+    int x = -1;
+    int y = -1;
+
+    printf("--- imrepl_ctrl search click refocuses editor ---\n");
+
+    prepare_code_panel_mouse_fixture();
+    editor_handle_key(KEY_CTRL_F, 0, 0);
+    editor_handle_key('V', 0, 0);
+    ASSERT_INT("search active before code click", editor_state_search()->active, 1);
+    ASSERT_TRUE("search query populated before code click",
+                editor_state_search()->query_len > 0);
+
+    ASSERT_TRUE("found code text hit for search refocus test",
+                find_hit_point_in_code_panel(UI_HIT_CODE_TEXT, &hit, &x, &y));
+    ASSERT_TRUE("code text hit has line", hit.line_idx >= 0);
+    ASSERT_TRUE("code text hit has char", hit.char_idx >= 0);
+
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, x, y);
+
+    ASSERT_INT("left-click code exits search", editor_state_search()->active, 0);
+    ASSERT_INT("left-click code clears search query",
+               editor_state_search()->query_len, 0);
+    ASSERT_INT("left-click code moves edit line",
+               editor_state_edit_line(), hit.line_idx);
+    ASSERT_INT("left-click code places cursor",
+               editor_state_input().cursor_pos, hit.char_idx);
+
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, x, y);
 }
 
 /* Grid/axes in-out transition wiring: the controller diffs the
@@ -2728,6 +2762,7 @@ int main(void) {
     test_variable_drag_snapshot_wiring();
     test_pointer_state_tracks_controller_mouse_routes();
     test_right_click_code_panel_does_not_start_camera_pan();
+    test_left_click_code_panel_exits_search_and_places_cursor();
     test_overlay_transition_machine_wiring();
     test_view_mode_projection_transition_wiring();
     test_view_mode_3d_to_2d_uses_faster_decay();

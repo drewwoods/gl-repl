@@ -731,6 +731,8 @@ int glr_ctrl_router_apply_input_row_drag(int target_line, int target_char) {
  * autocomplete clear, selection clear, redraw. Mirrors the legacy
  * ui_panels_handle_code_panel_click tail. */
 static void route_code_click_epilog(void) {
+    if (editor_state_search()->active)
+        editor_search_clear_all();
     glr_action_cursor_blink_reset();
     /* On a click that landed the cursor on the tutorial's expected
      * commit line, refresh autocomplete so the shadow ghost
@@ -820,6 +822,8 @@ static int route_code_text_hit(const UiHit *hit) {
             g_code_panel_drag_moved  = 1;
             g_code_panel_drag_char_anchor = -1;
         }
+        if (editor_state_search()->active)
+            editor_search_clear_all();
         glr_action_cursor_blink_reset();
         editor_request_redraw();
         return 1;
