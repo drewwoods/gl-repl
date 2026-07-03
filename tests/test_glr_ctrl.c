@@ -216,6 +216,36 @@ static int vp_hit_row(int count, int gx, int gy, int *row) {
     return ui_variable_panel_hit_row(&v, gx, gy, row);
 }
 
+static int find_hit_point_in_code_panel(int desired_kind, UiHit *out_hit,
+                                        int *out_x, int *out_y) {
+    UiRenderSnapshot snap;
+    int cp_x, cp_y, cp_w, cp_h;
+    int win_h;
+
+    glr_ctrl_build_ui_snapshot(&snap);
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    win_h = ui_state_viewport().window_h;
+    if (cp_w <= 0 || cp_h <= 0 || win_h <= 0)
+        return 0;
+
+    for (int gl_y = cp_y + 1; gl_y < cp_y + cp_h - 1; gl_y++) {
+        int my = win_h - gl_y;
+        for (int mx = cp_x + 1; mx < cp_x + cp_w - 1; mx++) {
+            UiHit hit = ui_panels_hit_test(&snap, mx, my,
+                                           repl_eval_predef_view().count);
+            if (hit.kind == desired_kind &&
+                (desired_kind != UI_HIT_CODE_TEXT ||
+                 (hit.line_idx >= 0 && hit.char_idx >= 0))) {
+                if (out_hit) *out_hit = hit;
+                if (out_x) *out_x = mx;
+                if (out_y) *out_y = my;
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 static void prepare_display_fixture(void) {
     GLCmd *doc_cmds;
     GLCmd *flat_cmds;
@@ -840,6 +870,51 @@ static void test_pointer_state_tracks_controller_mouse_routes(void) {
     ASSERT_INT("mouse up route x", ui_state_pointer().mouse_x, 567);
     ASSERT_INT("mouse up route y", ui_state_pointer().mouse_y, 678);
     ASSERT_INT("mouse up route clears button", ui_state_pointer().mouse_button, -1);
+}
+
+static void prepare_code_panel_mouse_fixture(void) {
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(800, 600);
+    ui_state_code_panel_mut()->panel_frac = 0.45f;
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_ctrl_sync_ui_chrome();
+    ui_menu_bar_close();
+    ui_state_help_mut()->visible = 0;
+    variable_panel_set_visible(0);
+
+    editor_feed_line("glVertex3f(1, 2, 3);");
+    editor_feed_line("glColor3f(0.2, 0.4, 0.6);");
+    editor_navigate_to_line(0);
+}
+
+static void test_right_click_code_panel_does_not_start_camera_pan(void) {
+    UiHit hit;
+    int x = -1;
+    int y = -1;
+    GlrCameraState before;
+    GlrCameraState after;
+
+    printf("--- imrepl_ctrl right-click editor blocks camera pan ---\n");
+
+    prepare_code_panel_mouse_fixture();
+    ASSERT_TRUE("found code text hit for right-click test",
+                find_hit_point_in_code_panel(UI_HIT_CODE_TEXT, &hit, &x, &y));
+
+    glr_camera_set(20.0f, 30.0f, 5.0f, 1.0f, 2.0f, 3.0f, 0.0f);
+    glr_camera_controls_reset();
+    before = glr_camera();
+
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    glr_ctrl_motion(x + 80, y + 40);
+    after = glr_camera();
+
+    ASSERT_FLOAT("right-click editor leaves camera rx", after.rx, before.rx);
+    ASSERT_FLOAT("right-click editor leaves camera ry", after.ry, before.ry);
+    ASSERT_FLOAT("right-click editor leaves camera tx", after.tx, before.tx);
+    ASSERT_FLOAT("right-click editor leaves camera ty", after.ty, before.ty);
+    ASSERT_FLOAT("right-click editor leaves camera tz", after.tz, before.tz);
+
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x + 80, y + 40);
 }
 
 /* Grid/axes in-out transition wiring: the controller diffs the
@@ -2652,6 +2727,7 @@ int main(void) {
     test_variable_panel_motion_initializes_uninitialized_declaration();
     test_variable_drag_snapshot_wiring();
     test_pointer_state_tracks_controller_mouse_routes();
+    test_right_click_code_panel_does_not_start_camera_pan();
     test_overlay_transition_machine_wiring();
     test_view_mode_projection_transition_wiring();
     test_view_mode_3d_to_2d_uses_faster_decay();
