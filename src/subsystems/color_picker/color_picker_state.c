@@ -61,14 +61,30 @@ static const float CP_BASIC[10][3] = {
 /* Full palette: built lazily from HSV the first time it's needed (avoids a
  * 56-entry literal and keeps the colors in sync with hsv_to_rgb). Rows go
  * light tint -> pure -> dark shade per hue column, plus a trailing greyscale
- * row. Index is row-major: idx = row * CP_FULL_COLS + col. */
+ * row. Index is row-major: idx = row * CP_FULL_COLS + col.
+ *
+ * Column hues are curated named color-wheel stops, NOT an even c/COLS slice:
+ * HSV hue is perceptually non-uniform (yellow sits in a narrow band near
+ * 0.167, green spans a wide one near 0.333), so an even split skips yellow
+ * and lands two adjacent columns in the green band. These eight stops keep
+ * one column each on red/orange/yellow/green/cyan/blue/violet/magenta. */
+static const float CP_FULL_HUES[CP_FULL_COLS] = {
+    0.000f,   /* red     (  0 deg) */
+    0.083f,   /* orange  ( 30 deg) */
+    0.167f,   /* yellow  ( 60 deg) */
+    0.333f,   /* green   (120 deg) */
+    0.500f,   /* cyan    (180 deg) */
+    0.667f,   /* blue    (240 deg) */
+    0.750f,   /* violet  (270 deg) */
+    0.833f,   /* magenta (300 deg) */
+};
 static float g_cp_full[CP_FULL_COUNT][3];
 static int   g_cp_full_ready = 0;
 
 static void cp_ensure_full(void) {
     if (g_cp_full_ready) return;
     for (int c = 0; c < CP_FULL_COLS; c++) {
-        float h = (float)c / (float)CP_FULL_COLS;
+        float h = CP_FULL_HUES[c];
         if (h >= 1.0f) h = CP_HUE_MAX;
         for (int r = 0; r < CP_FULL_HUE_ROWS; r++) {
             float sat, val;
