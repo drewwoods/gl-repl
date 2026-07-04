@@ -264,7 +264,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 <td width="33%" align="center">
 
 <!-- images/showcase/lit-cube.png
-     Still. The default example 0 — lighting + material basics.
+     Still. Example 0 — lighting + material basics.
      ./gl-repl --example "Lit cube" -->
 <img src="images/showcase/lit-cube.png" alt="A lit cube" width="100%">
 
