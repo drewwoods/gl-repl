@@ -231,9 +231,7 @@ def validate_file(path: Path, root: Path, errors: list[str], strip: bool = False
             link_count += 1
             target_path = Path(unquote(target_path_raw)) if target_path_raw else path
             if not target_path.is_absolute():
-                doc_relative = (path.parent / target_path).resolve()
-                root_relative = (root / target_path).resolve()
-                target_path = doc_relative if doc_relative.exists() else root_relative
+                target_path = (path.parent / target_path).resolve()
 
             err = None
             if not target_path.exists():

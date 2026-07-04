@@ -10,6 +10,7 @@ and only links identifiers with a unique target.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -100,21 +101,21 @@ class Occurrence:
 
     def replacement(self) -> str:
         assert self.target is not None
-        import os
-        root = repo_root()
-        target_abs = (root / self.target.relpath).resolve()
-        source_dir_abs = self.source.parent.resolve()
-        rel_path = os.path.relpath(target_abs, source_dir_abs).replace("\\", "/")
-        if self.target.line is None:
-            markdown_url = rel_path
-        else:
-            markdown_url = f"{rel_path}#L{self.target.line}"
-        return f"[`{self.ident}`]({markdown_url})"
+        return f"[`{self.ident}`]({target_markdown_for_source(self.target, self.source, repo_root())})"
 
 
 def repo_root() -> Path:
     out = subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True)
     return Path(out.strip())
+
+
+def target_markdown_for_source(target: Target, source: Path, root: Path) -> str:
+    target_path = Path(target.relpath)
+    target_abs = target_path if target_path.is_absolute() else (root / target_path)
+    rel_path = os.path.relpath(target_abs.resolve(), source.parent.resolve()).replace("\\", "/")
+    if target.line is None:
+        return rel_path
+    return f"{rel_path}#L{target.line}"
 
 
 def git_files(root: Path, *patterns: str) -> list[str]:
@@ -475,7 +476,8 @@ def print_occurrences(root: Path, occurrences: list[Occurrence]) -> None:
     for occ in occurrences:
         rel = occ.source.relative_to(root)
         if occ.target is not None:
-            print(f"{rel}:{occ.line_no}:{occ.start + 1}: {occ.kind} `{occ.ident}` -> {occ.target.markdown()}")
+            target = target_markdown_for_source(occ.target, occ.source, root)
+            print(f"{rel}:{occ.line_no}:{occ.start + 1}: {occ.kind} `{occ.ident}` -> {target}")
         else:
             print(f"{rel}:{occ.line_no}:{occ.start + 1}: {occ.kind} `{occ.ident}` -> ({occ.reason})")
 

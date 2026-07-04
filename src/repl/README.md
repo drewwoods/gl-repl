@@ -31,12 +31,12 @@ The pieces map onto standard interpreter parts:
 
 | General concept | Here |
 |---|---|
-| Lexer/parser → AST | [`parser.c`](src/repl/parser.c) → [`GLCmd`](src/repl/command.h#L87) records |
-| Static validation / compile pass | [`compile.c`](src/repl/compile.c) → [`ReplCompiledChange`](compile.h#L130) (pure, never mutates) |
-| Expression evaluator | [`eval.c`](src/repl/eval.c) (recursive descent; `sin`, `cos`, `%`, comparisons, vars) |
-| IR / lowering | [`flatten.c`](src/repl/flatten.c): unrolls loops, inlines functions, resolves `if` → a flat command stream; [`flatten_query.c`](src/repl/flatten_query.c): live flat-program cost/cursor queries |
-| Bytecode VM / executor | [`executor.c`](src/repl/executor.c): walks the flat stream emitting GL calls |
-| Symbol/spec table | [`command_spec.c`](src/repl/command_spec.c) (per-command arity, arg kinds, highlight category) |
+| Lexer/parser → AST | [`parser.c`](parser.c) → [`GLCmd`](command.h#L87) records |
+| Static validation / compile pass | [`compile.c`](compile.c) → [`ReplCompiledChange`](compile.h#L130) (pure, never mutates) |
+| Expression evaluator | [`eval.c`](eval.c) (recursive descent; `sin`, `cos`, `%`, comparisons, vars) |
+| IR / lowering | [`flatten.c`](flatten.c): unrolls loops, inlines functions, resolves `if` → a flat command stream; [`flatten_query.c`](flatten_query.c): live flat-program cost/cursor queries |
+| Bytecode VM / executor | [`executor.c`](executor.c): walks the flat stream emitting GL calls |
+| Symbol/spec table | [`command_spec.c`](command_spec.c) (per-command arity, arg kinds, highlight category) |
 
 The defining design choice is a **two-level command model**:
 *source commands* (what the user wrote, with loops and calls intact) are
@@ -70,7 +70,7 @@ program as a rotating ring.
 
 The demo is representative of the **language pipeline**, not of the whole
 application. `--trace` is the broadest sample because it exercises the
-non-editor load transaction ([`compile.c`](src/repl/compile.c) + [`load.c`](src/repl/load.c) + [`apply.c`](src/repl/apply.c)), variable
+non-editor load transaction ([`compile.c`](compile.c) + [`load.c`](load.c) + [`apply.c`](apply.c)), variable
 side effects, typed block syntax, flatten provenance, local-var snapshots, and
 per-frame expression re-evaluation. The default samples are intentionally
 narrower boundary probes: one parses plain GL lines directly, one
@@ -94,10 +94,10 @@ The three print-summary samples each isolate one pipeline behavior:
 
 What the demo deliberately *does not* link tells you where the boundary is:
 the `float x;` / `x = expr;` / typed-as-text `for(...) {` flows live in
-[`src/editor/commit.c`](src/editor/commit.c) (editor business), so the demo hand-constructs commands
-instead. [`tools/repl_demo/stubs.c`](tools/repl_demo/stubs.c) is empty — the pipeline has zero
+[`src/editor/commit.c`](../editor/commit.c) (editor business), so the demo hand-constructs commands
+instead. [`tools/repl_demo/stubs.c`](../../tools/repl_demo/stubs.c) is empty — the pipeline has zero
 backfill dependencies once host effects flow through the one
-[`ReplHostEffects`](src/repl/host_effects.h#L38) bridge.
+[`ReplHostEffects`](host_effects.h#L38) bridge.
 
 ## In the REPL app
 
@@ -106,28 +106,28 @@ Inside the full app this is **layers 1 and 3** of the ownership map:
 - The editor proposes text; `repl_compile` validates it *purely* (it never
   edits state, never touches the cursor, never calls `set_status`).
 - On success the editor applies the change to REPL runtime state via
-  `repl_apply_*`, and `repl_command_store` does the low-level [`GLCmd`](src/repl/command.h#L87) array
+  `repl_apply_*`, and `repl_command_store` does the low-level [`GLCmd`](command.h#L87) array
   shuffling.
-- Each frame, if the program is dirty, [`flatten.c`](src/repl/flatten.c) rebuilds the flat program
-  and [`autonormal.c`](src/repl/autonormal.c) regenerates `glNormal3f`s; [`executor.c`](src/repl/executor.c) then renders it.
-- [`ReplRuntimeState`](src/repl/state.h#L18) ([`state.c`](src/repl/state.c)) owns the program model: parsed commands, the flat
+- Each frame, if the program is dirty, [`flatten.c`](flatten.c) rebuilds the flat program
+  and [`autonormal.c`](autonormal.c) regenerates `glNormal3f`s; [`executor.c`](executor.c) then renders it.
+- [`ReplRuntimeState`](state.h#L18) ([`state.c`](state.c)) owns the program model: parsed commands, the flat
   program, predefined variables, scratch arrays `A/B/C`, the `func0..func9`
   alias table, the `t` clock, and the runtime-mutated render tail
   (light-enable mask + clear color). The user-scene *catalog* slots live
-  separately in [`scenes.c`](src/repl/scenes.c) (as [`SceneSnapshot`](src/repl/scene_snapshot.h#L17)s); [`ReplRuntimeState`](src/repl/state.h#L18) only tracks the
+  separately in [`scenes.c`](scenes.c) (as [`SceneSnapshot`](scene_snapshot.h#L17)s); [`ReplRuntimeState`](state.h#L18) only tracks the
   active example index and bound workspace dir.
 
-[`GLCmd`](src/repl/command.h#L87) is a pure parse result (type, args, flags, provenance) — it carries
+[`GLCmd`](command.h#L87) is a pure parse result (type, args, flags, provenance) — it carries
 **no source text**; the per-line text lives in the editor's buffer. That
 split is what keeps the pipeline editor-agnostic (and what `repl_demo`
 proves by supplying its own line store).
 
 Beyond the core pipeline, this directory also owns program-adjacent services:
-the generated built-in example facade [`examples.c`](src/repl/examples.c)
+the generated built-in example facade [`examples.c`](examples.c)
 (authored from repository-level `examples/catalog.ini` and
-`examples/scenes/`), the [`tutorials.c`](src/repl/tutorials.c) catalog, the save/load
-file format (writer in [`export.c`](src/repl/export.c), reader in [`import.c`](src/repl/import.c)) and workspace I/O
-([`scenes.c`](src/repl/scenes.c) / [`workspace_io.c`](src/repl/workspace_io.c)), and the neutral F1 [`help_text.c`](src/repl/help_text.c) tables.
+`examples/scenes/`), the [`tutorials.c`](tutorials.c) catalog, the save/load
+file format (writer in [`export.c`](export.c), reader in [`import.c`](import.c)) and workspace I/O
+([`scenes.c`](scenes.c) / [`workspace_io.c`](workspace_io.c)), and the neutral F1 [`help_text.c`](help_text.c) tables.
 
 > For how all of this fits together — the two flows, the compile→apply
 > seam, the flatten budgets, the state slices, and the host-effects
@@ -137,45 +137,45 @@ file format (writer in [`export.c`](src/repl/export.c), reader in [`import.c`](s
 
 | File | Responsibility |
 |---|---|
-| [`command.h`](src/repl/command.h) | Core types: [`CmdType`](src/repl/command.h#L37), [`GLCmd`](src/repl/command.h#L87), control-flow predicates |
-| [`command_spec.c`](src/repl/command_spec.c) / `.h` | Per-command descriptor tables (arity, enum args, highlight category) |
-| [`control_flow.h`](src/repl/control_flow.h), [`color_limits.h`](src/repl/color_limits.h), [`util.h`](src/repl/util.h) | Shared limits (goto cap, clear-color cap) and size-checked buffer helpers |
+| [`command.h`](command.h) | Core types: [`CmdType`](command.h#L37), [`GLCmd`](command.h#L87), control-flow predicates |
+| [`command_spec.c`](command_spec.c) / `.h` | Per-command descriptor tables (arity, enum args, highlight category) |
+| [`control_flow.h`](control_flow.h), [`color_limits.h`](color_limits.h), [`util.h`](util.h) | Shared limits (goto cap, clear-color cap) and size-checked buffer helpers |
 | **Edit flow** | *text → program model* |
-| [`parser.c`](src/repl/parser.c) / `.h` | One source line → [`GLCmd`](src/repl/command.h#L87) + canonical text |
-| [`normalize.c`](src/repl/normalize.c) / `.h` | Parse-and-normalize pipeline |
-| [`eval.c`](src/repl/eval.c) / `.h` | Expression evaluator, predefined-variable lookup, REPL↔C translation |
-| [`compile.c`](src/repl/compile.c) / `.h` | Pure validators → [`ReplCompiledChange`](compile.h#L130) (never mutates) |
-| [`apply.c`](src/repl/apply.c) / `.h` | Applies a compiled change to REPL runtime state (cmd store + predef/scratch/alias ops) |
-| [`command_store.c`](src/repl/command_store.c) / `.h` | Low-level [`GLCmd`](src/repl/command.h#L87) array mechanics (insert/replace/delete/load) |
-| [`load.c`](src/repl/load.c) / `.h` | Non-editor line loader + apply transaction (import/example/tutorial/tests) |
-| [`visible_vars.c`](src/repl/visible_vars.c) / `.h`, [`text_helpers.c`](src/repl/text_helpers.c) / `.h` | Loop/func-local variable collection; parse/extract/canonical-text helpers |
-| [`source_scope.c`](src/repl/source_scope.c) / `.h`, [`format.c`](src/repl/format.c) / `.h`, [`reformat.c`](src/repl/reformat.c) / `.h`, [`bootstrap.c`](src/repl/bootstrap.c) / `.h` | Depth/indent/block-lookup cache, pure indentation, source reformat, startup loading |
+| [`parser.c`](parser.c) / `.h` | One source line → [`GLCmd`](command.h#L87) + canonical text |
+| [`normalize.c`](normalize.c) / `.h` | Parse-and-normalize pipeline |
+| [`eval.c`](eval.c) / `.h` | Expression evaluator, predefined-variable lookup, REPL↔C translation |
+| [`compile.c`](compile.c) / `.h` | Pure validators → [`ReplCompiledChange`](compile.h#L130) (never mutates) |
+| [`apply.c`](apply.c) / `.h` | Applies a compiled change to REPL runtime state (cmd store + predef/scratch/alias ops) |
+| [`command_store.c`](command_store.c) / `.h` | Low-level [`GLCmd`](command.h#L87) array mechanics (insert/replace/delete/load) |
+| [`load.c`](load.c) / `.h` | Non-editor line loader + apply transaction (import/example/tutorial/tests) |
+| [`visible_vars.c`](visible_vars.c) / `.h`, [`text_helpers.c`](text_helpers.c) / `.h` | Loop/func-local variable collection; parse/extract/canonical-text helpers |
+| [`source_scope.c`](source_scope.c) / `.h`, [`format.c`](format.c) / `.h`, [`reformat.c`](reformat.c) / `.h`, [`bootstrap.c`](bootstrap.c) / `.h` | Depth/indent/block-lookup cache, pure indentation, source reformat, startup loading |
 | **Frame flow** | *program model → GL* |
-| [`flatten.c`](src/repl/flatten.c) / `.h` | Source → flat program (unroll/inline/resolve `if`) |
-| [`flatten_query.c`](src/repl/flatten_query.c) / `.h` | Live flat-program cost/cursor queries |
-| [`autonormal.c`](src/repl/autonormal.c) | Auto-generated `glNormal3f` maintenance |
-| [`executor.c`](src/repl/executor.c) / `.h` | Walks the flat program emitting live GL calls (the only live-GL TU) |
-| [`transform_utils.h`](src/repl/transform_utils.h) | Shared GL matrix tracking helpers (no executor link dependency) |
-| [`pipeline.h`](src/repl/pipeline.h) | Controller-facing frame entry points (flatten/autonormal/refresh) |
-| [`program_query.c`](src/repl/program_query.c) / `.h`, [`geometry_query.h`](src/repl/geometry_query.h) | Read-only queries over the source/flat program |
+| [`flatten.c`](flatten.c) / `.h` | Source → flat program (unroll/inline/resolve `if`) |
+| [`flatten_query.c`](flatten_query.c) / `.h` | Live flat-program cost/cursor queries |
+| [`autonormal.c`](autonormal.c) | Auto-generated `glNormal3f` maintenance |
+| [`executor.c`](executor.c) / `.h` | Walks the flat program emitting live GL calls (the only live-GL TU) |
+| [`transform_utils.h`](transform_utils.h) | Shared GL matrix tracking helpers (no executor link dependency) |
+| [`pipeline.h`](pipeline.h) | Controller-facing frame entry points (flatten/autonormal/refresh) |
+| [`program_query.c`](program_query.c) / `.h`, [`geometry_query.h`](geometry_query.h) | Read-only queries over the source/flat program |
 | **State & ownership** | |
-| [`state.c`](src/repl/state.c) / `.h`, [`state_views.h`](src/repl/state_views.h), [`state_owners.h`](src/repl/state_owners.h) | [`ReplRuntimeState`](src/repl/state.h#L18) storage + capture/restore + typed read/mut facades |
-| [`state_notify.h`](src/repl/state_notify.h) | Dirty-flag invalidation entry points |
-| [`time.c`](src/repl/time.c) / `.h` | The predefined `t` animation clock |
-| [`host_effects.c`](src/repl/host_effects.c) / `.h` | Host side-effect bridge (status, cursor, completion, tutorial teardown) |
+| [`state.c`](state.c) / `.h`, [`state_views.h`](state_views.h), [`state_owners.h`](state_owners.h) | [`ReplRuntimeState`](state.h#L18) storage + capture/restore + typed read/mut facades |
+| [`state_notify.h`](state_notify.h) | Dirty-flag invalidation entry points |
+| [`time.c`](time.c) / `.h` | The predefined `t` animation clock |
+| [`host_effects.c`](host_effects.c) / `.h` | Host side-effect bridge (status, cursor, completion, tutorial teardown) |
 | **Persistence (save/load)** | |
-| [`export.c`](src/repl/export.c), [`import.c`](src/repl/import.c) | Writer half (file emit, header refresh) and reader half (import state machine) |
-| [`export_setup.c`](src/repl/export_setup.c), [`export_prologue.c`](src/repl/export_prologue.c), [`export_display.c`](src/repl/export_display.c), [`export_cmd_writer.c`](src/repl/export_cmd_writer.c) | C boilerplate, globals/predef prologue, `display()` body, per-command C emission |
-| [`export.h`](src/repl/export.h), [`export_internal.h`](src/repl/export_internal.h), [`export_state.h`](src/repl/export_state.h), [`export_format_shared.h`](src/repl/export_format_shared.h) | Export/import API and shared state-text dimensions |
+| [`export.c`](export.c), [`import.c`](import.c) | Writer half (file emit, header refresh) and reader half (import state machine) |
+| [`export_setup.c`](export_setup.c), [`export_prologue.c`](export_prologue.c), [`export_display.c`](export_display.c), [`export_cmd_writer.c`](export_cmd_writer.c) | C boilerplate, globals/predef prologue, `display()` body, per-command C emission |
+| [`export.h`](export.h), [`export_internal.h`](export_internal.h), [`export_state.h`](export_state.h), [`export_format_shared.h`](export_format_shared.h) | Export/import API and shared state-text dimensions |
 | **Scenes & workspaces** | |
-| [`scenes.c`](src/repl/scenes.c) / `.h`, [`scene_snapshot.c`](src/repl/scene_snapshot.c) / `.h` | User-scene slots (LRU, promotion); copyable scene payload |
-| [`workspace_io.c`](src/repl/workspace_io.c) / `.h`, [`cfg_baseline.c`](src/repl/cfg_baseline.c) / `.h` | Workspace filesystem + file-naming mechanics; flat key/value config bag |
+| [`scenes.c`](scenes.c) / `.h`, [`scene_snapshot.c`](scene_snapshot.c) / `.h` | User-scene slots (LRU, promotion); copyable scene payload |
+| [`workspace_io.c`](workspace_io.c) / `.h`, [`cfg_baseline.c`](cfg_baseline.c) / `.h` | Workspace filesystem + file-naming mechanics; flat key/value config bag |
 | **Program-adjacent data** | |
-| [`examples.c`](src/repl/examples.c) / `.h`, [`example_loader.c`](src/repl/example_loader.c) / `.h` | Built-in example catalog facade; example load + `.glr` snippets, `.c` import sources, and `@cfg` / `// camera` metadata. Authored source lives in repository-level `examples/catalog.ini` and `examples/scenes/`; `--examples-dir` can replace the compiled-in catalog at runtime for authoring |
-| [`tutorials.c`](src/repl/tutorials.c) / `.h`, [`catalog_tags.h`](src/repl/catalog_tags.h) | Tutorial catalog; shared example/tutorial tag-bit helper |
-| [`help_text.c`](src/repl/help_text.c) / `.h`, [`keymap_format.c`](src/repl/keymap_format.c) | F1 help-text tables; user-facing keybinding labels |
+| [`examples.c`](examples.c) / `.h`, [`example_loader.c`](example_loader.c) / `.h` | Built-in example catalog facade; example load + `.glr` snippets, `.c` import sources, and `@cfg` / `// camera` metadata. Authored source lives in repository-level `examples/catalog.ini` and `examples/scenes/`; `--examples-dir` can replace the compiled-in catalog at runtime for authoring |
+| [`tutorials.c`](tutorials.c) / `.h`, [`catalog_tags.h`](catalog_tags.h) | Tutorial catalog; shared example/tutorial tag-bit helper |
+| [`help_text.c`](help_text.c) / `.h`, [`keymap_format.c`](keymap_format.c) | F1 help-text tables; user-facing keybinding labels |
 
 **Boundary:** `src/repl` owns the program model and compiler. It does **not**
 own editor state, UI state, replay *runtime* state (a `src/subsystems/` peer), or
-live input dispatch. The only live GL in this layer is [`executor.c`](src/repl/executor.c).
+live input dispatch. The only live GL in this layer is [`executor.c`](executor.c).
 `ARCHITECTURE.md` §10 lists the guards that ratchet these boundaries.
