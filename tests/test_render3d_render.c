@@ -1144,8 +1144,49 @@ static void test_postprocess_filters(void) {
                 gl_stub_counts[GL_STUB_glBlendFunc] > 0);
 
     /* Test reset function */
+    /* RENDER3D_POST_FILTER_FILM_GRAIN */
+    /* 1. First render generates the texture */
+    gl_stub_counts_reset();
+    render3d_postprocess_filter_render(RENDER3D_POST_FILTER_FILM_GRAIN, 0, 0, 800, 600);
+    ASSERT_TRUE("film grain generates textures on first render",
+                gl_stub_counts[GL_STUB_glGenTextures] > 0);
+    ASSERT_TRUE("film grain uploads noise texture on first render",
+                gl_stub_counts[GL_STUB_glTexImage2D] > 0);
+    ASSERT_TRUE("film grain binds texture",
+                gl_stub_counts[GL_STUB_glBindTexture] > 0);
+    ASSERT_TRUE("film grain sets blend function",
+                gl_stub_counts[GL_STUB_glBlendFunc] > 0);
+    ASSERT_TRUE("film grain sets modulate mode",
+                gl_stub_counts[GL_STUB_glTexEnvi] > 0);
+    ASSERT_TRUE("film grain draws quads",
+                gl_stub_counts[GL_STUB_glBegin] > 0);
+
+    /* 2. Second render reuses the texture */
+    gl_stub_counts_reset();
+    render3d_postprocess_filter_render(RENDER3D_POST_FILTER_FILM_GRAIN, 0, 0, 800, 600);
+    ASSERT_INT("film grain does not regenerate texture on subsequent render",
+               (int)gl_stub_counts[GL_STUB_glGenTextures], 0);
+    ASSERT_INT("film grain does not upload texture again",
+               (int)gl_stub_counts[GL_STUB_glTexImage2D], 0);
+    ASSERT_TRUE("film grain binds texture on subsequent render",
+                gl_stub_counts[GL_STUB_glBindTexture] > 0);
+
+    /* Test reset function (which should clean up texture) */
+    gl_stub_counts_reset();
     render3d_postprocess_filter_reset();
-    ASSERT_TRUE("reset succeeded without crash", 1);
+    ASSERT_TRUE("reset deletes texture",
+                gl_stub_counts[GL_STUB_glDeleteTextures] > 0);
+
+    /* 3. Render after reset should regenerate the texture */
+    gl_stub_counts_reset();
+    render3d_postprocess_filter_render(RENDER3D_POST_FILTER_FILM_GRAIN, 0, 0, 800, 600);
+    ASSERT_TRUE("film grain regenerates texture after reset",
+                gl_stub_counts[GL_STUB_glGenTextures] > 0);
+    ASSERT_TRUE("film grain uploads noise texture after reset",
+                gl_stub_counts[GL_STUB_glTexImage2D] > 0);
+
+    /* Clean up again */
+    render3d_postprocess_filter_reset();
 
     /* Mode name strings */
     ASSERT_TRUE("chromatic name non-NULL",
@@ -1154,6 +1195,8 @@ static void test_postprocess_filters(void) {
                 render3d_postprocess_filter_mode_name(RENDER3D_POST_FILTER_VIGNETTE) != NULL);
     ASSERT_TRUE("scanlines name non-NULL",
                 render3d_postprocess_filter_mode_name(RENDER3D_POST_FILTER_SCANLINES) != NULL);
+    ASSERT_TRUE("film grain name matches",
+                strcmp(render3d_postprocess_filter_mode_name(RENDER3D_POST_FILTER_FILM_GRAIN), "Film grain") == 0);
 }
 
 #endif
