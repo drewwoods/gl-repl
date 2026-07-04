@@ -1898,6 +1898,60 @@ int main(int argc, char **argv) {
     }
 
     {
+        static const char *const spaced_cfg_camera_example[] = {
+            "// @cfg axes = 4",
+            "",
+            "// camera",
+            "glTranslatef(0.0f, 0.0f, -8.0f);",
+            "glRotatef(14.0f, 1.0f, 0.0f, 0.0f);",
+            "glRotatef(27.0f, 0.0f, 1.0f, 0.0f);",
+            "glTranslatef(-0.25f, 0.5f, -0.75f);",
+            "glBegin(GL_POINTS);",
+            "glVertex3f(0, 0, 0);",
+            "glEnd();",
+            NULL
+        };
+        char *dump;
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        pin_code_panel_state();
+        repl_load_example_lines_for_test(spaced_cfg_camera_example);
+        ASSERT_TRUE("spaced cfg camera allowed cfg applied",
+                    glr_state_presentation().axes_theme == 4);
+
+        dump = dump_current_code_panel_text();
+        ASSERT_TRUE("spaced cfg camera immediate dump alloc", dump != NULL);
+        if (dump) {
+            ASSERT_TRUE("spaced cfg camera immediate dump uses target",
+                        strstr(dump,
+                               "glTranslatef(0.0000f, 0.0000f, -8.0000f);") != NULL);
+            ASSERT_TRUE("spaced cfg camera marker hidden",
+                        strstr(dump, "// camera") == NULL);
+            ASSERT_TRUE("spaced cfg camera rotate hidden",
+                        strstr(dump,
+                               "glRotatef(14.0f, 1.0f, 0.0f, 0.0f);") == NULL);
+            ASSERT_TRUE("spaced cfg camera body kept",
+                        strstr(dump, "glVertex3f(0, 0, 0);") != NULL);
+            free(dump);
+        }
+
+        settle_camera_transition_for_test();
+        ASSERT_TRUE("spaced cfg camera rx preset",
+                    fabsf(glr_camera().rx - 14.0f) < 1e-4f);
+        ASSERT_TRUE("spaced cfg camera ry preset",
+                    fabsf(glr_camera().ry - 27.0f) < 1e-4f);
+        ASSERT_TRUE("spaced cfg camera dist preset",
+                    fabsf(glr_camera().dist - 8.0f) < 1e-4f);
+        ASSERT_TRUE("spaced cfg camera tx preset",
+                    fabsf(glr_camera().tx - 0.25f) < 1e-4f);
+        ASSERT_TRUE("spaced cfg camera ty preset",
+                    fabsf(glr_camera().ty - (-0.5f)) < 1e-4f);
+        ASSERT_TRUE("spaced cfg camera tz preset",
+                    fabsf(glr_camera().tz - 0.75f) < 1e-4f);
+        ASSERT_TRUE("spaced cfg camera body cmds loaded", repl_state_document_count() == 3);
+    }
+
+    {
         /* Shape-check fails (dist_x = 1.0f > 1e-4f) so the camera bridge
          * is NOT applied. Pre-#12 the loader still skipped the 5 lines
          * after `// camera` regardless, eating the marker + 4 would-be

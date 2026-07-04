@@ -105,6 +105,34 @@ static int example_cam_parse_rotate(const char *text,
     return 1;
 }
 
+static int example_line_is_blank_only(const char *line) {
+    if (!line)
+        return 0;
+    while (*line && isspace((unsigned char)*line))
+        line++;
+    return *line == '\0';
+}
+
+static int example_line_is_camera_marker(const char *line) {
+    const char *p = line;
+
+    if (!p)
+        return 0;
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    if (p[0] != '/' || p[1] != '/')
+        return 0;
+    p += 2;
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    if (strncmp(p, "camera", 6) != 0)
+        return 0;
+    p += 6;
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    return *p == '\0';
+}
+
 static int try_apply_example_camera_header(const char *const *lines) {
     /* Validate the example's `// camera` block shape before applying.
      * Pre-7e the loader called glr_camera_set_* directly, dragging
@@ -117,7 +145,7 @@ static int try_apply_example_camera_header(const char *const *lines) {
     float rx, ry;
     float tx, ty, tz;
 
-    if (!lines || !lines[0] || strcmp(lines[0], "// camera") != 0)
+    if (!lines || !lines[0] || !example_line_is_camera_marker(lines[0]))
         return 0;
     if (!lines[1] || !lines[2] || !lines[3] || !lines[4])
         return 0;
@@ -464,8 +492,11 @@ static int load_example_lines(const char *const *lines,
 
     reset_example_load_state(tag_mask);
 
-    if (body)
-        body += consume_example_cfg_header(body);
+    int cfg_count = 0;
+    if (body) {
+        cfg_count = consume_example_cfg_header(body);
+        body += cfg_count;
+    }
     /* Drain the @cfg accumulator: the leading example metadata is
      * parsed into the bag by parse_workspace_header_line; the bridge
      * applies it to live state. This moved out of an inline
@@ -473,14 +504,23 @@ static int load_example_lines(const char *const *lines,
      * plan). */
     repl_export_apply_pending_cfg();
 
-    if (body && body[0] && strcmp(body[0], "// camera") == 0) {
+    int metadata_blank_count = 0;
+    if (cfg_count > 0) {
+        while (body && body[metadata_blank_count] &&
+               example_line_is_blank_only(body[metadata_blank_count]))
+            metadata_blank_count++;
+    }
+
+    if (body && body[metadata_blank_count] &&
+        example_line_is_camera_marker(body[metadata_blank_count])) {
         /* Only consume the 5 header lines if the block was actually
          * validated; otherwise leave them for ordinary parsing so a
          * malformed camera header doesn't silently swallow real
          * geometry that happens to follow it (e.g., a truncated 4-line
          * header where the missing slot is filled by the first real
          * line of the example body). */
-        if (try_apply_example_camera_header(body)) {
+        if (try_apply_example_camera_header(body + metadata_blank_count)) {
+            body += metadata_blank_count;
             for (int skip = 0; skip < 5 && body[0]; skip++)
                 body++;
         }
