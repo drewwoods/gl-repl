@@ -1,8 +1,8 @@
 /*
  * src/repl/scenes.h - User-scene promotion, capture, and reset hooks.
  *
- * The slot model itself lives in src/repl/scenes.c (home slot, LRU eviction,
- * workspace persistence). This header exposes the lifecycle entry points that
+ * The slot model itself lives in src/repl/scenes.c (LRU eviction, workspace
+ * persistence). This header exposes the lifecycle entry points that
  * other REPL modules, the editor, and the controller call when an edit should
  * promote an example, an example load should capture/restore scene context, or
  * a full reset should discard scene state.
@@ -50,10 +50,7 @@ int  repl_promote_example_if_needed(void);
 void repl_scenes_save_active_scene_if_any(void);
 
 /* Detach the live document from examples and user-scene slots so a
- * transient buffer can take over without being written back into a slot.
- * Also captures the pre-tutorial buffer into slot 0 if home is not yet
- * populated, mirroring the example-load capture so fresh-buffer work
- * isn't silently discarded. */
+ * transient buffer can take over without being written back into a slot. */
 void repl_scenes_enter_transient_scene(void);
 
 /* Reset the REPL-side document / flat program / predef vars / func
@@ -70,12 +67,12 @@ void repl_scenes_reset_for_transient(void);
 int  repl_scenes_create_empty_user_scene(void);
 
 /* User scenes: persistent named snapshots (up to MAX_USER_SCENES slots).
- * Slot 0 is the "home" scene (captured on first example load) and is never
- * evicted by LRU. When every non-home, non-active slot is full and a new
- * promotion happens, the LRU slot is flushed to the workspace directory
- * (if bound) and reused. The active slot is the one currently loaded into
- * g_cmds[]; -1 means an example or fresh workspace is active instead.
- * Editing resets the "last touched" timestamp for LRU eviction. */
+ * Any slot can hold a user-created, imported, or promoted scene. When every
+ * inactive slot is full and a new promotion happens, the LRU slot is flushed
+ * to the workspace directory (if bound) and reused. The active slot is the one
+ * currently loaded into g_cmds[]; -1 means an example or transient buffer is
+ * active instead. Editing resets the "last touched" timestamp for LRU
+ * eviction. */
 int  repl_user_scene_valid(void);         /* 1 if any slot occupied */
 void repl_load_user_scene(void);          /* load slot 0 (back-compat) */
 int  repl_user_scene_count(void);         /* number of occupied slots */
@@ -85,25 +82,19 @@ int  repl_user_scene_rename(int slot, const char *new_name);
 int  repl_load_user_scene_idx(int slot);  /* load slot, returns 1 on success */
 int  repl_active_user_scene(void);        /* current slot index, -1 if none */
 
-/* On first example load only, capture the pre-example editor state
- * into the pinned "home" slot (slot 0) so the user can always return
- * to their starting work. */
-void repl_scenes_capture_home_if_needed(void);
-
 /* Snapshot the scene-presentation cfg subset when entering an example from
- * non-example state. The saved values are restored on the next user-scene/home
- * transition. Idempotent across consecutive example loads. */
+ * non-example state. The saved values are restored on the next user-scene or
+ * transient transition. Idempotent across consecutive example loads. */
 void repl_scenes_capture_pre_example_cfg_if_entering(void);
 
 /* Record that an example is currently the active scene (active_example_idx
  * already set by the loader; this updates derived state). */
 void repl_scenes_mark_example_active(void);
 
-/* Activate the pinned home slot (slot 0). `scene_name_hint` is the
- * `@scene-name` directive value parsed from a freshly-loaded file
- * (or NULL/"" for the no-import path); when non-empty it becomes
- * the slot 0 name, otherwise the slot picks the built-in default. */
-void repl_scenes_activate_home_slot(const char *scene_name_hint);
+/* Activate slot 0 from the current live document. `scene_name_hint` is the
+ * `@scene-name` directive value parsed from a freshly-loaded file; when empty,
+ * the slot uses a generic imported-scene name. */
+void repl_scenes_activate_loaded_document_slot(const char *scene_name_hint);
 
 /* Workspace I/O: load every *.c scene under `dir`. Returns the number of
  * files loaded, 0 for an empty directory argument, or -1 on I/O error. */

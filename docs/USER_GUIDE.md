@@ -937,8 +937,9 @@ section) — you never modify the built-ins themselves.
 
 gl-repl keeps up to 8 scenes in memory, shown as tabs below the menu bar.
 
-- **Slot 0 is "home"** — your pre-example editor state, captured the first
-  time you load an example, never evicted.
+- **Examples first** — a fresh launch opens on the default example. A user
+  scene is created when you choose File -> New Scene, load a scene file or
+  workspace, or edit an example.
 - **Auto-promotion** — editing a built-in example forks it into a fresh
   scene slot named after the example. Subsequent edits accumulate there.
 - **Rename** — File → Rename Scene opens an inline prompt in the status bar
