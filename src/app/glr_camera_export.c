@@ -32,7 +32,7 @@
 /* ----- Save-side formatting ------------------------------------------- */
 
 static void cam_format_block_impl(ReplExportCameraBlock *block, int use_g_angle) {
-    GlrCameraState cam = glr_camera();
+    GlrCameraState cam = glr_camera_destination();
     snprintf(block->lines[0], REPL_EXPORT_CAMERA_LINE_MAX,
              "  glTranslatef(0.0000f, 0.0000f, %.4ff);", -cam.dist);
     snprintf(block->lines[1], REPL_EXPORT_CAMERA_LINE_MAX,
@@ -61,7 +61,7 @@ static void cam_format_display_block(ReplExportCameraBlock *block) {
 static void cam_format_save_preamble(char *out, int out_sz) {
     if (!out || out_sz <= 0) return;
     snprintf(out, (size_t)out_sz,
-             "static float g_angle = %.4ff;", glr_camera().ry);
+             "static float g_angle = %.4ff;", glr_camera_destination().ry);
 }
 
 /* ----- Import-side parser -------------------------------------------- *
