@@ -191,17 +191,19 @@ void ui_color_picker_render(const ColorPickerView *view,
     }
 
     /* --- Palette tab strip --------------------------------------------- */
-    static const char *CP_TAB_LABELS[CP_TAB_COUNT] = { "Basic", "Full", "Harmony" };
+    /* Segment boundaries (proportional to label width) and labels come
+     * from the peer via the view, so the strip the user clicks matches
+     * the strip drawn here. */
     {
         glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        float seg_w = (float)view->tab_w / (float)CP_TAB_COUNT;
         for (int s = 0; s < CP_TAB_COUNT; s++) {
-            float tx = (float)view->tab_x + seg_w * (float)s;
+            float tx = (float)view->tab_seg_x[s];
+            float seg_w = (float)(view->tab_seg_x[s + 1] - view->tab_seg_x[s]);
             float ty = (float)view->tab_y - (float)view->tab_h;  /* bottom */
             int active = (s == view->palette_tab);
             ui_clr(active ? UI_TOK_MENU_LABEL_ACTIVE_BG : UI_TOK_RAISED);
             glRectf(tx, ty, tx + seg_w, ty + (float)view->tab_h);
-            const char *lbl = CP_TAB_LABELS[s];
+            const char *lbl = view->tab_labels[s];
             int lw = (int)strlen(lbl) * FONT_SMALL_W;
             float lx = tx + (seg_w - (float)lw) * 0.5f;
             float ly = ty + ((float)view->tab_h - FONT_SMALL_H) * 0.5f + 2.0f;
@@ -222,7 +224,7 @@ void ui_color_picker_render(const ColorPickerView *view,
         glEnd();
         glBegin(GL_LINES);
         for (int s = 1; s < CP_TAB_COUNT; s++) {
-            float dx = (float)view->tab_x + seg_w * (float)s;
+            float dx = (float)view->tab_seg_x[s];
             glVertex2f(dx, t_top); glVertex2f(dx, t_bot);
         }
         glEnd();

@@ -578,7 +578,7 @@ explaining why the extra background is useful.
 | [`src/ui/app/scene_tabs.c`](src/ui/app/scene_tabs.c) | Scene tab strip below the menu bar: snapshot-pure render + whole-band hit-test (TAB / inert CHROME); derived each frame, no persistent model |
 | [`src/ui/app/scene_tabs.h`](src/ui/app/scene_tabs.h) | Scene tab strip render/hit/`band_h` API |
 | [`src/subsystems/color_picker/color_picker_state.c`](src/subsystems/color_picker/color_picker_state.c) | Floating color picker peer: state, lifecycle, slider input handlers, source-line writeback through editor commit |
-| [`src/subsystems/color_picker/color_picker_state.h`](src/subsystems/color_picker/color_picker_state.h) | Peer API ([`ColorPickerView`](src/subsystems/color_picker/color_picker_state.h#L46), [`ColorPickerInputResult`](src/subsystems/color_picker/color_picker_state.h#L96), `color_picker_open/close/handle_*`, `color_picker_hsv_to_rgb`) |
+| [`src/subsystems/color_picker/color_picker_state.h`](src/subsystems/color_picker/color_picker_state.h) | Peer API ([`ColorPickerView`](src/subsystems/color_picker/color_picker_state.h#L47), [`ColorPickerInputResult`](src/subsystems/color_picker/color_picker_state.h#L105), `color_picker_open/close/handle_*`, `color_picker_hsv_to_rgb`) |
 | [`src/ui/subsystems/color_picker.c`](src/ui/subsystems/color_picker.c) | Floating color picker renderer + hit-test (pure, takes `ColorPickerView *`) |
 | [`src/ui/subsystems/color_picker.h`](src/ui/subsystems/color_picker.h) | Picker UI render/hit-test API + `UI_COLOR_SWATCH_W` |
 | [`src/ui/core/tabbed_overlay.c`](src/ui/core/tabbed_overlay.c) | Generic modal tabbed text overlay renderer (the F1 help overlay's UI shell) |

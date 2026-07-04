@@ -58,6 +58,22 @@ static const float CP_BASIC[10][3] = {
     { 0.75f, 0.30f, 0.80f },   /* magenta */
 };
 
+/* "Dusk" palette: the curated accent set the built-in example scenes share
+ * (see examples/README.md "Example Color Language"). One clickable row of the
+ * canvas ink plus seven mid-bright, lightly-desaturated accents, so a user
+ * editing a scene can stay on the family instead of ad-hoc primaries. Keep in
+ * sync with the table in examples/README.md. */
+static const float CP_DUSK[8][3] = {
+    { 0.05f, 0.06f, 0.08f },   /* Canvas — deep cool ink */
+    { 0.98f, 0.46f, 0.36f },   /* CORAL  — warm key */
+    { 0.98f, 0.76f, 0.36f },   /* AMBER  — gold highlight */
+    { 0.95f, 0.44f, 0.66f },   /* ROSE   — pink bridge */
+    { 0.62f, 0.52f, 0.95f },   /* VIOLET — purple bridge */
+    { 0.36f, 0.70f, 0.98f },   /* AZURE  — cool key */
+    { 0.30f, 0.84f, 0.80f },   /* TEAL   — aqua secondary */
+    { 0.92f, 0.95f, 0.98f },   /* MIST   — neutral near-white */
+};
+
 /* Full palette: built lazily from HSV the first time it's needed (avoids a
  * 56-entry literal and keeps the colors in sync with hsv_to_rgb). Rows go
  * light tint -> pure -> dark shade per hue column, plus a trailing greyscale
@@ -108,6 +124,33 @@ static void cp_ensure_full(void) {
         g_cp_full[idx][0] = g; g_cp_full[idx][1] = g; g_cp_full[idx][2] = g;
     }
     g_cp_full_ready = 1;
+}
+
+/* Palette tab labels, one per CpPaletteTab. Owned here (the peer owns the tab
+ * model, same as the swatch colors and hex readout); the renderer draws them
+ * via the view. */
+static const char *const CP_TAB_LABELS[CP_TAB_COUNT] = {
+    "Basic", "Full", "Dusk", "Harmony"
+};
+
+/* Fill seg_x[0..CP_TAB_COUNT] with the absolute x of each tab-segment
+ * boundary, sized proportionally to label width so a wide label
+ * ("Harmony") gets a wide enough slice to sit inside without crossing
+ * a divider. seg_x[0]==tab_x, seg_x[CP_TAB_COUNT]==tab_x+tab_w. Shared
+ * by the view builder and the hit-test so they never disagree. */
+static void cp_tab_seg_x(int tab_x, int tab_w, int seg_x[CP_TAB_COUNT + 1]) {
+    int wsum = 0;
+    for (int s = 0; s < CP_TAB_COUNT; s++)
+        wsum += (int)strlen(CP_TAB_LABELS[s]) * FONT_SMALL_W;
+    if (wsum <= 0) wsum = 1;
+    seg_x[0] = tab_x;
+    int acc = 0;
+    for (int s = 0; s < CP_TAB_COUNT; s++) {
+        acc += (int)strlen(CP_TAB_LABELS[s]) * FONT_SMALL_W;
+        /* Scale the running label-width sum into [tab_x, tab_x+tab_w];
+         * the last boundary lands exactly on the right edge. */
+        seg_x[s + 1] = tab_x + (int)((long)tab_w * acc / wsum);
+    }
 }
 
 /* g_cp_line >= 0: picker is open for that source-cmd index */
@@ -189,6 +232,7 @@ static int cp_total_w(void) {
 static int cp_tab_cols(CpPaletteTab t) {
     if (t == CP_TAB_BASIC)   return 10;
     if (t == CP_TAB_FULL)    return CP_FULL_COLS;
+    if (t == CP_TAB_DUSK)    return 8;
     return 4;                            /* harmony: chosen + 3 derived */
 }
 static int cp_tab_rows(CpPaletteTab t) {
@@ -197,6 +241,7 @@ static int cp_tab_rows(CpPaletteTab t) {
 static int cp_swatch_count(CpPaletteTab t) {
     if (t == CP_TAB_BASIC)   return 10;
     if (t == CP_TAB_FULL)    return CP_FULL_COUNT;
+    if (t == CP_TAB_DUSK)    return 8;
     return 4;
 }
 /* Square cell side: fit `cols` cells (with gaps) across cp_total_w(). */
@@ -237,6 +282,8 @@ static void cp_swatch_rgba(CpPaletteTab t, int i, float out[4]) {
     } else if (t == CP_TAB_FULL) {
         cp_ensure_full();
         out[0] = g_cp_full[i][0]; out[1] = g_cp_full[i][1]; out[2] = g_cp_full[i][2];
+    } else if (t == CP_TAB_DUSK) {
+        out[0] = CP_DUSK[i][0]; out[1] = CP_DUSK[i][1]; out[2] = CP_DUSK[i][2];
     } else {
         out[0] = CP_BASIC[i][0]; out[1] = CP_BASIC[i][1]; out[2] = CP_BASIC[i][2];
     }
@@ -272,6 +319,9 @@ static void cp_compute_palette(int px, int py, ColorPickerView *v) {
     v->palette_tab = (int)t;
     v->tab_x = px;  v->tab_y = tab_top;
     v->tab_w = cp_total_w();  v->tab_h = CP_TAB_H;
+    cp_tab_seg_x(v->tab_x, v->tab_w, v->tab_seg_x);
+    for (int s = 0; s < CP_TAB_COUNT; s++)
+        v->tab_labels[s] = CP_TAB_LABELS[s];
 
     v->pal_x    = px;
     v->pal_y    = cp_pal_top(py);
@@ -326,14 +376,16 @@ static int cp_palette_hit(int px, int py, int mx, int gl_y) {
     return -1;
 }
 
-/* Tab segment under mx within the tab strip, or -1 if mx is off-strip. */
+/* Tab segment under mx within the tab strip, or -1 if mx is off-strip.
+ * Walks the same proportional boundaries the renderer draws. */
 static int cp_tab_hit(int px, int mx) {
     int total_w = cp_total_w();
     if (mx < px || mx >= px + total_w) return -1;
-    int seg = (mx - px) * CP_TAB_COUNT / total_w;
-    if (seg < 0) seg = 0;
-    if (seg >= CP_TAB_COUNT) seg = CP_TAB_COUNT - 1;
-    return seg;
+    int seg_x[CP_TAB_COUNT + 1];
+    cp_tab_seg_x(px, total_w, seg_x);
+    for (int s = 0; s < CP_TAB_COUNT; s++)
+        if (mx >= seg_x[s] && mx < seg_x[s + 1]) return s;
+    return CP_TAB_COUNT - 1;
 }
 
 /* Re-clamp the popup's vertical anchor after its height changes (tab switch
