@@ -1,11 +1,11 @@
 # assets/
 
-Runtime data for the REPL sample. The audio backend ([`src/app/glr_audio.c`](src/app/glr_audio.c) via
-[`miniaudio.h`](include/miniaudio.h)) looks for background music here.
+Runtime data for the REPL sample. The audio backend ([`src/app/glr_audio.c`](../src/app/glr_audio.c) via
+[`miniaudio.h`](../include/miniaudio.h)) looks for background music here.
 
 ## Music
 
-[`gl_repl.c`](gl_repl.c) scans this folder at startup for files matching `*.mp3`,
+[`gl_repl.c`](../gl_repl.c) scans this folder at startup for files matching `*.mp3`,
 sorts them by filename, and plays them as a playlist. Drop one file,
 drop ten — the REPL just picks them up in alphabetical order.
 
