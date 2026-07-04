@@ -208,6 +208,37 @@ void test_io() {
     unlink(save_path);
 }
 
+void test_initial_load_uses_rotating_cube_in_my_scene() {
+    printf("--- Initial load seeds My Scene with rotating cube ---\n");
+    glr_ctrl_reset_all(); declare_test_vars();
+
+    int edit_line = repl_load_initial_commands(NULL);
+    ASSERT_INT("initial load activates My Scene slot",
+               repl_active_user_scene(), 0);
+    ASSERT_STR("initial load slot name",
+               repl_user_scene_name(0), "My Scene");
+    ASSERT_INT("initial load cursor at document end",
+               edit_line, repl_state_document_count());
+
+    SourceTextView text = source_document_view();
+    int saw_time_rotate = 0;
+    int saw_cube = 0;
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        const GLCmd *cmd = &repl_state_document_cmds()[i];
+        const char *line = source_text_line(text, i);
+
+        if (cmd->type == CMD_ROTATEF && strstr(line, "40*t"))
+            saw_time_rotate = 1;
+        if (cmd->type == CMD_GLUT_CUBE && cmd->num_args == 1 &&
+            fabsf(cmd->args[0] - 2.0f) < 1e-4f)
+            saw_cube = 1;
+    }
+    ASSERT_INT("initial My Scene contains rotating-cube transform",
+               saw_time_rotate, 1);
+    ASSERT_INT("initial My Scene contains solid cube",
+               saw_cube, 1);
+}
+
 void test_execution() {
     printf("--- Execution functions ---\n");
     glr_ctrl_reset_all(); declare_test_vars();
@@ -1851,6 +1882,7 @@ int main(int argc, char **argv) {
     test_unbalanced_brackets();
     test_repl_replay_advanced();
     test_io();
+    test_initial_load_uses_rotating_cube_in_my_scene();
     test_execution();
     test_examples();
     test_user_scene();

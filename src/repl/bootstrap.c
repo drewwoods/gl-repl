@@ -5,6 +5,7 @@
 #include "repl/bootstrap.h"
 
 #include "repl/example_loader.h"
+#include "repl/examples.h"
 #include "repl/export.h"
 #include "repl/host_effects.h"
 #include "repl/scenes.h"
@@ -13,6 +14,17 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+
+#define REPL_STARTUP_EXAMPLE_NAME "Rotating cube"
+
+static int startup_example_index(void) {
+    for (int idx = 0; idx < repl_example_count(); idx++) {
+        const char *name = repl_example_name(idx);
+        if (name && strcmp(name, REPL_STARTUP_EXAMPLE_NAME) == 0)
+            return idx;
+    }
+    return 0;
+}
 
 static void scroll_to_display_function(void) {
     repl_state_refresh_workspace_header_lines();
@@ -63,12 +75,12 @@ int repl_load_initial_commands(const char *import_file) {
         return activate_empty_home_after_failed_import();
     }
 
-    /* Show example 0 as a starting demo, then anchor slot 0 ("My Scene")
-     * to the current live state so user edits accumulate there and persist
-     * across example switches. The startup banner is the controller's
-     * to emit (see glr_ctrl_bootstrap_repl); pipeline TUs do not own
-     * display-string side effects. */
-    int example_edit_line = repl_load_example(0);
+    /* Show the startup demo, then anchor slot 0 ("My Scene") to the current
+     * live state so user edits accumulate there and persist across example
+     * switches. The startup banner is the controller's to emit (see
+     * glr_ctrl_bootstrap_repl); pipeline TUs do not own display-string side
+     * effects. */
+    int example_edit_line = repl_load_example(startup_example_index());
     repl_scenes_activate_home_slot(NULL);
     scroll_to_display_function();
     return example_edit_line;
