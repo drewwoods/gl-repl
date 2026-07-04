@@ -443,6 +443,8 @@ const ReplHelpContent *repl_help_text_build(void) {
     nk = key_emit(nk, "  Right-click item     \tCycle config entry backward");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_VARIABLE_PANEL), KM_MODS(GLR_VARIABLE_PANEL), 0, "",
                           "Toggle variable panel");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_SYNTAX_HL), KM_MODS(GLR_SYNTAX_HL), 0, "",
+                          "Cycle syntax highlight (Off / On / On+Shadow)");
     nk = key_emit(nk, "");
     nk = key_emit(nk, "Audio:");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_AUDIO), KM_MODS(GLR_AUDIO), 0, "", "Toggle audio (off / on)");

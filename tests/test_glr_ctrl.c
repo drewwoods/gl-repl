@@ -2762,50 +2762,85 @@ static void test_post_filter_key_cycling(void) {
     p->post_filter_mode = RENDER3D_POST_FILTER_OFF;
     p->compositor_filter_mode = RENDER3D_POST_FILTER_OFF;
 
+    /* F10 is the only entry point now (Ctrl+N was removed); direction is
+     * read live off the modifier state, so install the test seam up front. */
+    editor_input_set_modifier_provider_for_test(simulated_mods_provider);
+    g_simulated_mods = 0;
+
     /* Cycle 1: Chromatic aberration (scene) */
-    glr_ctrl_keyboard(KEY_CTRL_N, 0, 0);
+    glr_ctrl_special(GLUT_KEY_F10, 0, 0);
     ASSERT_INT("post_filter_mode becomes chromatic aberration", (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_CHROMATIC_ABERRATION);
     ASSERT_INT("compositor_filter_mode remains off", (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
 
     /* Cycle 2: Chromatic aberration (frame) */
-    glr_ctrl_keyboard(KEY_CTRL_N, 0, 0);
+    glr_ctrl_special(GLUT_KEY_F10, 0, 0);
     ASSERT_INT("post_filter_mode becomes off", (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
     ASSERT_INT("compositor_filter_mode becomes chromatic aberration", (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_CHROMATIC_ABERRATION);
 
     /* Cycle 3: Vignette (scene) */
-    glr_ctrl_keyboard(KEY_CTRL_N, 0, 0);
+    glr_ctrl_special(GLUT_KEY_F10, 0, 0);
     ASSERT_INT("post_filter_mode becomes vignette", (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_VIGNETTE);
     ASSERT_INT("compositor_filter_mode becomes off", (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
 
     /* Cycle 4: Vignette (frame) */
-    glr_ctrl_keyboard(KEY_CTRL_N, 0, 0);
+    glr_ctrl_special(GLUT_KEY_F10, 0, 0);
     ASSERT_INT("post_filter_mode becomes off", (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
     ASSERT_INT("compositor_filter_mode becomes vignette", (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_VIGNETTE);
 
     /* Cycle 5: Scanlines (scene) */
-    glr_ctrl_keyboard(KEY_CTRL_N, 0, 0);
+    glr_ctrl_special(GLUT_KEY_F10, 0, 0);
     ASSERT_INT("post_filter_mode becomes scanlines", (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_SCANLINES);
     ASSERT_INT("compositor_filter_mode becomes off", (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
 
     /* Cycle 6: Scanlines (frame) */
-    glr_ctrl_keyboard(KEY_CTRL_N, 0, 0);
+    glr_ctrl_special(GLUT_KEY_F10, 0, 0);
     ASSERT_INT("post_filter_mode becomes off", (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
     ASSERT_INT("compositor_filter_mode becomes scanlines", (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_SCANLINES);
 
     /* Cycle 7: Film grain (scene) */
-    glr_ctrl_keyboard(KEY_CTRL_N, 0, 0);
+    glr_ctrl_special(GLUT_KEY_F10, 0, 0);
     ASSERT_INT("post_filter_mode becomes film grain", (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_FILM_GRAIN);
     ASSERT_INT("compositor_filter_mode becomes off", (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
 
     /* Cycle 8: Film grain (frame) */
-    glr_ctrl_keyboard(KEY_CTRL_N, 0, 0);
+    glr_ctrl_special(GLUT_KEY_F10, 0, 0);
     ASSERT_INT("post_filter_mode becomes off", (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
     ASSERT_INT("compositor_filter_mode becomes film grain", (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_FILM_GRAIN);
 
     /* Cycle 9: Off */
-    glr_ctrl_keyboard(KEY_CTRL_N, 0, 0);
+    glr_ctrl_special(GLUT_KEY_F10, 0, 0);
     ASSERT_INT("post_filter_mode cycles back to off", (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
     ASSERT_INT("compositor_filter_mode cycles back to off", (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
+
+    /* Ctrl+N was removed as a post-filter shortcut; it must now be a
+     * complete no-op on this state (falls through to the editor, which has
+     * no binding on plain Ctrl+N either). */
+    glr_ctrl_keyboard(KEY_CTRL_N, 0, 0);
+    ASSERT_INT("Ctrl+N no longer touches post_filter_mode", (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
+    ASSERT_INT("Ctrl+N no longer touches compositor_filter_mode", (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
+
+    /* F10 still drives the cycle forward; Shift+F10 steps it backward. */
+    glr_ctrl_special(GLUT_KEY_F10, 0, 0);
+    ASSERT_INT("F10 steps to chromatic aberration (scene)",
+               (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_CHROMATIC_ABERRATION);
+    ASSERT_INT("F10 leaves compositor filter off",
+               (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
+
+    g_simulated_mods = GLUT_ACTIVE_SHIFT;
+    glr_ctrl_special(GLUT_KEY_F10, 0, 0);
+    ASSERT_INT("Shift+F10 steps back to off",
+               (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
+    ASSERT_INT("Shift+F10 leaves compositor filter off",
+               (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
+
+    glr_ctrl_special(GLUT_KEY_F10, 0, 0);
+    ASSERT_INT("Shift+F10 wraps backward to film grain (frame)",
+               (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
+    ASSERT_INT("Shift+F10 wraps backward to film grain (frame), compositor side",
+               (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_FILM_GRAIN);
+
+    g_simulated_mods = 0;
+    editor_input_set_modifier_provider_for_test(NULL);
 }
 
 int main(void) {

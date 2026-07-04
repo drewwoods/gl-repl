@@ -965,7 +965,7 @@ flowchart LR
     %% and it reuses the viewport postprocess primitive over the FULL window
     %% rect. The 3D viewport pass (render3dR i40@--> spost) is the separate
     %% per-stage viewport; the controller keeps the two mutually exclusive
-    %% (Ctrl+N: Off -> scene -> frame).
+    %% (F10 / Shift+F10: Off -> scene -> frame).
     ctrl i43@--> glrcompositor
     glrcompositor i44@--> spost
 
@@ -1024,7 +1024,7 @@ Reading the diagram:
   (`render3dR i40@--> spost`, inside `render3d_draw_scene`) and the
   whole-frame compositor pass (`ctrl i43@--> glrcompositor i44@--> spost`,
   at frame end after every UI layer). The controller keeps them mutually
-  exclusive via `Ctrl+N`, which walks each effect (chromatic aberration,
+  exclusive via `F10` / `Shift+F10`, which walks each effect (chromatic aberration,
   vignette) through both scopes. Each scope is timed by its own
   CPU-profile section (`PROF_RENDER3D_POST_PROCESS` "post FX (scene)" /
   `PROF_COMPOSITOR` "Compositor FX").

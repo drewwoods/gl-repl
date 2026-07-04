@@ -7,7 +7,7 @@
  * the resolved scene rect is copied into one texture and redrawn.
  *
  * Experimental: not in the Config menu, not persisted via @cfg, no
- * GlrConfigKey. Controlled only by the hidden Ctrl+N shortcut. The
+ * GlrConfigKey. Controlled only by the hidden F10 / Shift+F10 shortcut. The
  * selected mode flows through Render3dRenderConfig so the effect also
  * works for the non-REPL render3d_demo binary and src/scene/ stays
  * REPL-independent. The effect only touches the scene viewport rect;

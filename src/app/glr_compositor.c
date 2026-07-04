@@ -10,8 +10,9 @@
  * to the entire composited frame (scene + 2D UI).
  *
  * The scene viewport filter and this compositor filter are kept mutually
- * exclusive by the Ctrl+N controller (see glr_ctrl_router_handle_post_filter_key),
- * so they never both run in one frame; the shared scratch texture inside
+ * exclusive by the F10 / Shift+F10 controller (see
+ * glr_ctrl_router_handle_post_filter_special_key), so they never both run
+ * in one frame; the shared scratch texture inside
  * postprocess_filter.c is therefore never contended, and even if both
  * ran it would only grow to the larger (window) rect and stay correct.
  */

@@ -608,6 +608,19 @@ static void test_ascii_shortcut_modifiers(void) {
     ASSERT_INT("Ctrl+Shift+P left Poly highlight alone",
                glr_config_get(GLR_CONFIG_POLY_HIGHLIGHT), ph1);
 
+    /* Syntax highlight moved from F10 to Ctrl+Shift+Y. Plain Ctrl+Y is
+     * not a g_cfg_items row (Redo owns it in the editor), so it must be
+     * declined here; Ctrl+Shift+Y must cycle Syntax highlight. */
+    g_test_mods = 0;
+    ASSERT_INT("plain Ctrl+Y declined (-> editor redo)",
+               glr_cfg_handle_ascii_shortcut(KEY_CTRL_Y), 0);
+
+    g_test_mods = GLUT_ACTIVE_SHIFT;
+    int sh0 = glr_config_get(GLR_CONFIG_SYNTAX_HIGHLIGHT);
+    ASSERT_INT("Ctrl+Shift+Y handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_Y), 1);
+    ASSERT_TRUE("Ctrl+Shift+Y cycled Syntax highlight",
+                glr_config_get(GLR_CONFIG_SYNTAX_HIGHLIGHT) != sh0);
+
     editor_input_set_modifier_provider_for_test(NULL);
     g_test_mods = 0;
 }
@@ -1390,7 +1403,6 @@ static void test_fkey_reassignment_and_alt_shortcuts(void) {
         { GLUT_KEY_F2,  GLR_CONFIG_GRID_THEME,      "Grid theme"      },
         { GLUT_KEY_F5,  GLR_CONFIG_BACKDROP,        "Backdrop"        },
         { GLUT_KEY_F3,  GLR_CONFIG_GRID_EXTENT,     "Grid extent"     },
-        { GLUT_KEY_F10, GLR_CONFIG_SYNTAX_HIGHLIGHT,"Syntax highlight"},
     };
     for (unsigned i = 0; i < sizeof(fmap)/sizeof(fmap[0]); i++) {
         int before = glr_config_get(fmap[i].key);
@@ -1399,6 +1411,13 @@ static void test_fkey_reassignment_and_alt_shortcuts(void) {
         ASSERT_TRUE("reassigned F-key cycles its config",
                     glr_config_get(fmap[i].key) != before);
     }
+
+    /* F10 moved off the g_cfg_items table entirely (it now drives the
+     * hidden post-process filter cycle via a bespoke special-key handler,
+     * not glr_cfg_handle_special_shortcut) — Syntax highlight lives on
+     * Ctrl+Shift+Y instead, covered in test_ascii_shortcut_modifiers. */
+    ASSERT_INT("F10 no longer claimed by the cfg special-shortcut dispatcher",
+               glr_cfg_handle_special_shortcut(GLUT_KEY_F10), 0);
 
     /* Wireframe -> plain Ctrl+G. */
     glr_state_presentation_mut()->wireframe = 0;

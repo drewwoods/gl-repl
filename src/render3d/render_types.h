@@ -240,7 +240,7 @@ typedef struct Render3dRenderConfig {
      * memset — the safe default. */
     int nv_fog_distance_supported;
     /* Experimental scene-viewport post-processing.
-     * Runtime-only (Ctrl+N); never persisted via @cfg. */
+     * Runtime-only (F10 / Shift+F10); never persisted via @cfg. */
     Render3dPostFilterMode post_filter_mode;
     Render3dWireframeMode wireframe;
     /* Winding-visualization view: replace the normal user-color fill with a

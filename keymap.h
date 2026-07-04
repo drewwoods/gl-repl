@@ -74,10 +74,13 @@
 /* No includes on purpose — see the dependency contract above. */
 
 /* ---- Special-key (function-key) bindings ----------------------------- *
- * Delivered to the GLUT special callback. The F2..F10 config cycles read
+ * Delivered to the GLUT special callback. The F2..F9 config cycles read
  * Shift as direction (forward / backward) in the cfg dispatcher, not as a
- * binding requirement, so their mods are 0. */
+ * binding requirement, so their mods are 0. F10 (below) follows the same
+ * "mods always 0, Shift read live" idiom for a hidden (non-g_cfg_items)
+ * feature via its own bespoke handler instead of the cfg dispatcher. */
 #define GLR_HELP             GLUT_KEY_F1, 0    /* toggle help overlay */
+#define GLR_POST_FILTER_CYCLE GLUT_KEY_F10, 0  /* cycle experimental post-process filter; Shift+F10 = backward, read live (glr_ctrl_router_handle_post_filter_special_key) */
 #define GLR_PREV_EXAMPLE     GLUT_KEY_F12, GLUT_ACTIVE_SHIFT   /* previous example / scene */
 #define GLR_NEXT_EXAMPLE     GLUT_KEY_F12, 0   /* next example / scene */
 #define GLR_EXPORT_PLY       GLUT_KEY_F11, 0   /* export geometry to output.ply */
@@ -90,7 +93,6 @@
 #define GLR_DEBUG_DUMP       KEY_CTRL_D, GLUT_ACTIVE_SHIFT   /* dump state */
 #define GLR_CONFIG_MENU      KEY_CTRL_K, GLUT_ACTIVE_SHIFT   /* open Config dropdown */
 #define GLR_ESCAPE           KEY_ESC, 0        /* clear input / close overlay */
-#define GLR_POST_FILTER      KEY_CTRL_N, 0     /* cycle post-process (pairs w/ Normal vectors) */
 #define GLR_CODE_FOCUS       KEY_CTRL_F, GLUT_ACTIVE_SHIFT  /* pairs w/ Search (plain Ctrl+F) */
 
 /* ---- Config-row bindings (g_cfg_items[] in glr_actions.c) ------------- *
@@ -104,14 +106,13 @@
 #define GLR_VERTEX_LABELS    GLUT_KEY_F7, 0
 #define GLR_VERTEX_LABEL_SCOPE GLUT_KEY_F8, 0
 #define GLR_LIGHT_THEME      GLUT_KEY_F9, 0
-#define GLR_SYNTAX_HL        GLUT_KEY_F10, 0
 #define GLR_AUDIO            KEY_CTRL_A, GLUT_ACTIVE_SHIFT  /* plain Ctrl+A = Line start */
 #define GLR_CODE_PANEL       KEY_CTRL_B, 0
 #define GLR_RESET_CAMERA     KEY_CTRL_C, GLUT_ACTIVE_SHIFT  /* plain Ctrl+C = Copy */
 #define GLR_WIREFRAME        KEY_CTRL_G, 0
 #define GLR_GRID_MAJOR       KEY_CTRL_G, GLUT_ACTIVE_SHIFT
 #define GLR_LIGHT_INDICATORS KEY_CTRL_L, GLUT_ACTIVE_SHIFT  /* plain Ctrl+L = Clear all */
-#define GLR_NORMAL_VECTORS   KEY_CTRL_N, GLUT_ACTIVE_SHIFT  /* plain Ctrl+N = Post filter */
+#define GLR_NORMAL_VECTORS   KEY_CTRL_N, GLUT_ACTIVE_SHIFT  /* plain Ctrl+N is unbound */
 #define GLR_FOCUS_ORIGIN     KEY_CTRL_O, 0
 #define GLR_VERTEX_OUTLINES  KEY_CTRL_O, GLUT_ACTIVE_SHIFT
 #define GLR_POLY_HIGHLIGHT   KEY_CTRL_P, 0
@@ -127,6 +128,7 @@
 #define GLR_CPU_PROFILE      KEY_CTRL_W, 0     /* pairs w/ Memory profile */
 #define GLR_MEMORY_PROFILE   KEY_CTRL_W, GLUT_ACTIVE_SHIFT  /* plain Ctrl+W = CPU profile */
 #define GLR_XFORM_GUIDES     KEY_CTRL_X, GLUT_ACTIVE_SHIFT
+#define GLR_SYNTAX_HL        KEY_CTRL_Y, GLUT_ACTIVE_SHIFT  /* plain Ctrl+Y = Redo */
 #define GLR_VARIABLE_PANEL   '`', 0            /* open variable panel */
 
 /* ---- Editor text-editing bindings (src/editor/input.c) --------------- *
@@ -139,7 +141,7 @@
 #define GLR_PASTE            KEY_CTRL_V, 0     /* pairs w/ View mode */
 #define GLR_DELETE_LINE      KEY_CTRL_D, 0
 #define GLR_UNDO             KEY_CTRL_Z, 0     /* Shift -> redo (read in handler) */
-#define GLR_REDO             KEY_CTRL_Y, 0
+#define GLR_REDO             KEY_CTRL_Y, 0     /* pairs w/ Syntax highlight (Ctrl+Shift+Y) */
 #define GLR_CLEAR_ALL        KEY_CTRL_L, 0     /* pairs w/ Light indicators */
 #define GLR_REFORMAT         KEY_CTRL_BACKSLASH, 0
 #define GLR_SEARCH           KEY_CTRL_F, 0     /* pairs w/ Code focus (Ctrl+Shift+F) */
