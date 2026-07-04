@@ -2705,9 +2705,10 @@ void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
  */
 
 
-/* Ctrl+N: cycle the experimental post-process effects. One key walks
- * every (effect, target) position plus Off, keeping the two mode fields
- * mutually exclusive so an effect never runs twice in one frame:
+/* Shared stepper behind glr_ctrl_router_handle_post_filter_special_key
+ * below. One key walks every (effect, target) position plus Off, keeping
+ * the two mode fields mutually exclusive so an effect never runs twice in
+ * one frame:
  *
  *   Off
  *   -> Chromatic aberration (scene)   post_filter_mode, over the scene rect
@@ -2724,11 +2725,9 @@ void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
  * slot feeds the glr_compositor hook at frame end. Table-driven so a new
  * Render3dPostFilterMode is two rows, not new branches. Hidden shortcut
  * only — no Config row, no @cfg. Session-level state on
- * GlrPresentationState. */
-int glr_ctrl_router_handle_post_filter_key(unsigned char key) {
-    if (!keymap_event_is(key, GLR_POST_FILTER))
-        return 0;
-
+ * GlrPresentationState. `delta` may be negative (F10's Shift-held case);
+ * the wrap math below stays correct either way. */
+static void post_filter_cycle_step(int delta) {
     static const struct {
         Render3dPostFilterMode scene;   /* -> post_filter_mode       */
         Render3dPostFilterMode frame;   /* -> compositor_filter_mode */
@@ -2758,7 +2757,7 @@ int glr_ctrl_router_handle_post_filter_key(unsigned char key) {
             break;
         }
     }
-    int next = (cur + 1) % n;
+    int next = ((cur + delta) % n + n) % n;
     p->post_filter_mode       = cycle[next].scene;
     p->compositor_filter_mode = cycle[next].frame;
 
@@ -2768,6 +2767,19 @@ int glr_ctrl_router_handle_post_filter_key(unsigned char key) {
     snprintf(msg, sizeof(msg), "Post filter: %s%s",
              render3d_postprocess_filter_mode_name(shown), cycle[next].where);
     repl_set_status(msg);
+}
+
+/* F10 / Shift+F10: cycles the filter either direction. Bypasses
+ * keymap_event_is (whose exact-modifier match would reject Shift+F10
+ * against a mods=0 binding) and instead reads Shift live, matching
+ * glr_cfg_handle_special_shortcut's treatment of the F2-F9 cfg cycles —
+ * this feature just isn't a g_cfg_items row, so it gets its own tiny
+ * version of that dispatch. */
+int glr_ctrl_router_handle_post_filter_special_key(int key) {
+    if (key != KM_KEY(GLR_POST_FILTER_CYCLE))
+        return 0;
+    int delta = (editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT) ? -1 : 1;
+    post_filter_cycle_step(delta);
     return 1;
 }
 

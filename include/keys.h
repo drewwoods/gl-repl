@@ -62,8 +62,10 @@
 #define KEY_CTRL_T    20   /* toggle animated 't' time variable (Shift: reset to 0) */
 #define KEY_CTRL_U    21   /* toggle MSAA (Ctrl+U) */
 #define KEY_CTRL_O    15   /* cycle grid major spacing (Ctrl+O) */
-#define KEY_CTRL_N    14   /* cycle experimental post-processing filter
-                              (Ctrl+N) — hidden session toggle, see the
+#define KEY_CTRL_N    14   /* plain Ctrl+N is unbound; Ctrl+Shift+N toggles
+                              normal vectors (GLR_NORMAL_VECTORS). The
+                              experimental post-processing filter cycle
+                              moved to F10 / Shift+F10 — see the
                               g_cfg_items[] note in glr_actions.c */
 #define KEY_CTRL_W    23   /* cycle CPU profile panel (Ctrl+W) */
 #define KEY_CTRL_DASH 31   /* decrement accum AA samples (Apple GLUT quirk, Ctrl+-) */

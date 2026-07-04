@@ -657,7 +657,6 @@ backward):
 | F7 | Vertex labels |
 | F8 | Label scope |
 | F9 | Light theme |
-| F10 | Syntax highlight |
 
 ### Grid & axes
 
@@ -843,7 +842,7 @@ look.
 
   ![Glow sprites example: blending + point attenuation](images/glow-sprites.png)
 
-- **Post-process filter** (Ctrl+N) — experimental viewport filters:
+- **Post-process filter** (F10 forward / Shift+F10 backward) — experimental viewport filters:
   Off / Chromatic scene / Chromatic frame / Vignette scene / Vignette frame.
 
 ---
@@ -1189,6 +1188,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+Shift+S | Split multi-variable declaration |
 | Ctrl+Shift+F | Toggle code focus |
 | Ctrl+B | Cycle code panel layout |
+| Ctrl+Shift+Y | Cycle syntax highlight |
 | Esc | Clear input / close overlay |
 
 ### Scene & rendering
@@ -1203,7 +1203,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+U | MSAA |
 | Ctrl+Shift+U | Accum effect |
 | Ctrl+Shift+G | Grid major spacing |
-| Ctrl+N | Post-process filter |
+| F10 / Shift+F10 | Post-process filter (forward / backward) |
 | Ctrl+= / Ctrl+− | Accum passes up/down |
 | Ctrl+Shift+X | Xform guides |
 | Ctrl+Shift+N | Normal vectors |

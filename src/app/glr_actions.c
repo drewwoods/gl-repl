@@ -291,8 +291,8 @@ static const char *accum_passes_names[] = { "1", "2", "4", "8", "12", "16" };
  * the table a reader scans for "what config exists"; these live
  * elsewhere on purpose:
  *
- *   Ctrl+N        post-processing filter cycle
- *                 -> glr_ctrl_router_handle_post_filter_key
+ *   F10 /         post-processing filter cycle, either direction
+ *   Shift+F10     -> glr_ctrl_router_handle_post_filter_special_key
  *                    (glr_ctrl.c); GlrPresentationState.post_filter_mode
  *   Ctrl+Shift+F  code-panel focus (hide boilerplate chrome)
  *                 -> glr_ctrl_router_handle_code_focus_key /
@@ -302,7 +302,7 @@ static const char *accum_passes_names[] = { "1", "2", "4", "8", "12", "16" };
  *                    (UI_HIT_CODE_FOCUS_TOGGLE) and the F1 help catalog
  *                    (src/repl/help_text.c).
  *
- * Both Ctrl-key bindings are defined in keymap.h (GLR_POST_FILTER,
+ * Both bindings are defined in keymap.h (GLR_POST_FILTER_CYCLE,
  * GLR_CODE_FOCUS). */
 
 /* Runtime display label for the MSAA row ("MSAAx<n>" once the GL sample
@@ -430,7 +430,7 @@ const GlrConfigItem g_cfg_items[] = {
     { .label = "Wrap at commas", .key = GLR_CONFIG_WRAP_AT_COMMA, .state_count = 2 },
     { .label = "Syntax highlight", .key = GLR_CONFIG_SYNTAX_HIGHLIGHT,
       .state_count = 3, .state_names = syntax_hl_names,
-      .key_code = KM_KEY(GLR_SYNTAX_HL), .modifiers = KM_MODS(GLR_SYNTAX_HL), .is_special = 1 },
+      .key_code = KM_KEY(GLR_SYNTAX_HL), .modifiers = KM_MODS(GLR_SYNTAX_HL) },
     { .label = "Paren match", .key = GLR_CONFIG_PAREN_MATCH, .state_count = 2 },
     { .label = "Paren scope", .key = GLR_CONFIG_PAREN_SCOPE, .state_count = 2 },
     { .label = "---", .section_header = 1 },
