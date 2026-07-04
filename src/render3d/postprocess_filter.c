@@ -10,7 +10,11 @@
  * corners. No capture needed (it only darkens), so it skips the
  * texture machinery entirely.
  *
- * Both are pure fixed-function GL (no shaders, no FBOs). The same rect
+ * Iteration 3: scanlines (CRT mask). Dark 1px horizontal GL_LINES
+ * every 3px, multiplicatively blended (GL_DST_COLOR, GL_ZERO) to
+ * darken existing pixels without adding light. Capture-free overlay.
+ *
+ * All are pure fixed-function GL (no shaders, no FBOs). The same rect
  * the scene renders into is reused over the whole window by the
  * app-level glr_compositor, so each effect works at scene-viewport and
  * full-frame scope alike. render3d_postprocess_filter_render() dispatches
@@ -34,6 +38,7 @@ const char *render3d_postprocess_filter_mode_name(Render3dPostFilterMode mode) {
     switch (mode) {
     case RENDER3D_POST_FILTER_CHROMATIC_ABERRATION: return "Chromatic aberration";
     case RENDER3D_POST_FILTER_VIGNETTE:             return "Vignette";
+    case RENDER3D_POST_FILTER_SCANLINES:            return "Scanlines";
     case RENDER3D_POST_FILTER_OFF:
     case RENDER3D_POST_FILTER_COUNT:
     default:                                     return "Off";
@@ -241,6 +246,37 @@ static void postprocess_filter_render_vignette(int sx, int sy,
     postprocess_filter_end_2d(saved_matrix_mode);
 }
 
+/* Scanlines / CRT mask: dark 1px horizontal lines every 3 scanlines,
+ * multiplicatively blended over the frame via GL_DST_COLOR × GL_ZERO
+ * (darkens existing pixels, never adds light). The line color is a dim
+ * gray (0.65) — when multiplied against the framebuffer, bright areas
+ * dim by 35% on the scanline rows while the gaps stay untouched,
+ * giving the classic CRT phosphor-mask look. Capture-free. */
+static void postprocess_filter_render_scanlines(int sx, int sy,
+                                                int sw, int sh) {
+    GLint saved_matrix_mode = 0;
+    postprocess_filter_begin_2d(sx, sy, sw, sh, &saved_matrix_mode);
+
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_DST_COLOR, GL_ZERO); /* multiply: fb *= line_color */
+    glLineWidth(1.0f);
+
+    const float gray = 0.75f;
+    glColor4f(gray, gray, gray, 1.0f);
+
+    const int spacing = 3; /* one dark scanline every 3 rows */
+    glBegin(GL_LINES);
+    for (int y = 0; y < sh; y += spacing) {
+        float fy = (float)y + 0.5f; /* centre of the pixel row */
+        glVertex2f(0.0f,      fy);
+        glVertex2f((float)sw, fy);
+    }
+    glEnd();
+
+    postprocess_filter_end_2d(saved_matrix_mode);
+}
+
 void render3d_postprocess_filter_render(Render3dPostFilterMode mode, int sx, int sy,
                                      int sw, int sh) {
     if (sw <= 0 || sh <= 0)
@@ -252,6 +288,9 @@ void render3d_postprocess_filter_render(Render3dPostFilterMode mode, int sx, int
         break;
     case RENDER3D_POST_FILTER_VIGNETTE:
         postprocess_filter_render_vignette(sx, sy, sw, sh);
+        break;
+    case RENDER3D_POST_FILTER_SCANLINES:
+        postprocess_filter_render_scanlines(sx, sy, sw, sh);
         break;
     case RENDER3D_POST_FILTER_OFF:
     case RENDER3D_POST_FILTER_COUNT:
