@@ -38,9 +38,9 @@ static void scroll_to_display_function(void) {
     repl_dispatch_scroll_to_line(target);
 }
 
-static int activate_empty_home_after_failed_import(void) {
+static int activate_empty_transient_after_failed_import(void) {
+    repl_scenes_enter_transient_scene();
     repl_scenes_reset_for_transient();
-    repl_scenes_activate_home_slot(NULL);
     return repl_state_document_count();
 }
 
@@ -58,8 +58,7 @@ int repl_load_initial_commands(const char *import_file) {
                  * startup). On a CLI bootstrap that strands the user on
                  * an empty buffer with all the workspace tabs visible
                  * but none of them active. Land on the first occupied
-                 * slot — symmetric with the single-file branch below
-                 * (which activates the home slot). */
+                 * slot. */
                 repl_scenes_activate_first_loaded_slot();
                 scroll_to_display_function();
                 return repl_state_document_count();
@@ -67,21 +66,19 @@ int repl_load_initial_commands(const char *import_file) {
         } else {
             ReplImportResult import_result;
             if (repl_export_load_from_file(import_file, &import_result)) {
-                repl_scenes_activate_home_slot(import_result.scene_name);
+                repl_scenes_activate_loaded_document_slot(import_result.scene_name);
                 scroll_to_display_function();
                 return repl_state_document_count();
             }
         }
-        return activate_empty_home_after_failed_import();
+        return activate_empty_transient_after_failed_import();
     }
 
-    /* Show the startup demo, then anchor slot 0 ("My Scene") to the current
-     * live state so user edits accumulate there and persist across example
-     * switches. The startup banner is the controller's to emit (see
-     * glr_ctrl_bootstrap_repl); pipeline TUs do not own display-string side
-     * effects. */
+    /* Show the startup demo as an example. A user scene is created only when
+     * the user explicitly creates one or edits an example (promotion). The
+     * startup banner is the controller's to emit (see glr_ctrl_bootstrap_repl);
+     * pipeline TUs do not own display-string side effects. */
     int example_edit_line = repl_load_example(startup_example_index());
-    repl_scenes_activate_home_slot(NULL);
     scroll_to_display_function();
     return example_edit_line;
 }

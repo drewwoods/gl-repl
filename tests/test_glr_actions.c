@@ -389,8 +389,10 @@ static void test_load_workspace_activates_scene(void) {
         return;
     ASSERT_INT("loadws chdir", chdir(made_dir), 0);
 
-    /* Build a one-scene workspace on disk under ./ws (editing an example
-     * promotes the edits into slot 0, which the save then writes out). */
+    /* Build a one-scene workspace on disk under ./ws. Fresh startup no longer
+     * creates an implicit user scene, so make the source scene explicit. */
+    ASSERT_INT("loadws create source scene",
+               repl_scenes_create_empty_user_scene(), 0);
     editor_feed_line("glVertex3f(1, 1, 1);");
     repl_load_example(0);
     ASSERT_INT("loadws workspace slot occupied", repl_user_scene_slot_used(0), 1);

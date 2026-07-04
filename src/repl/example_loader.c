@@ -581,10 +581,10 @@ static int load_example(int idx) {
     name = repl_example_name(idx);
     if (!lines || !name) return 0;
 
-    /* Preserve the user's work (once, into slot 0) before overwriting with
-     * an example. Subsequent example loads leave the home slot untouched. */
+    /* Preserve the active user scene, if any, before overwriting live state
+     * with an example. Browsing examples does not create a user-scene slot;
+     * editing an example promotes it later through repl_promote_example_if_needed. */
     repl_scenes_save_active_scene_if_any();
-    repl_scenes_capture_home_if_needed();
     /* Snapshot the user's pre-example presentation cfg so the next
      * transition out of example state can roll back any in-example
      * cfg toggles before applying the destination's saved cfg. */

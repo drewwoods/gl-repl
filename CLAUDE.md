@@ -984,9 +984,10 @@ Key details:
 ### User Scenes & Auto-Promotion
 
 The REPL keeps up to `MAX_USER_SCENES = 8` independent scenes in
-`g_user_scenes[]` ([`src/repl/scenes.c`](src/repl/scenes.c)). Slot 0 is the pinned "home" scene —
-the pre-example editor state captured on first example load, never
-auto-evicted. Each [`UserScene`](src/repl/scenes.c#L79) stores command array + count + edit_line
+`g_user_scenes[]` ([`src/repl/scenes.c`](src/repl/scenes.c)). There is no automatic
+startup user scene; the app starts on the default example, and user-scene slots
+are created by File -> New Scene, scene-file loads, workspace loads, or
+auto-promotion when an example is edited. Each [`UserScene`](src/repl/scenes.c#L79) stores command array + count + edit_line
 + predef variable values + scene `name` + `last_touch` tick.
 
 - **Active slot.** [`repl_active_user_scene()`](src/repl/scenes.h#L86) returns the current slot
@@ -998,9 +999,9 @@ auto-evicted. Each [`UserScene`](src/repl/scenes.c#L79) stores command array + c
   `derive_unique_scene_name`), and sets the active slot. The user never
   sees the promotion directly — subsequent edits accumulate into the
   new user scene.
-- **LRU eviction.** When every non-home slot is full *and* a workspace
-  directory is bound, the next promotion evicts the LRU non-pinned,
-  non-active slot to `<workspace_dir>/<slug>.c` and reuses the index.
+- **LRU eviction.** When every inactive slot is full *and* a workspace
+  directory is bound, the next promotion evicts the LRU non-active slot
+  to `<workspace_dir>/<slug>.c` and reuses the index.
   With no workspace bound, promotion is rejected with a status message
   (the user must save a workspace first).
 - **F12 cycle.** `examples → user scenes (in slot order) → back to first

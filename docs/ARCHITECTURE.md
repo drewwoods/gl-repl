@@ -2351,7 +2351,7 @@ work can either close the gap or document the intentional behaviour.
 - Float-decl overwrite cascade ([`tests/test_repl_editor.c`](../tests/test_repl_editor.c)'s
   `overwrite shared` / `expand decl` cases).
 - Predef-table full (`MAX_PREDEF_VARS`) — same file.
-- LRU eviction when every non-home slot is occupied
+- LRU eviction when every inactive user-scene slot is occupied
   (`tests/test_repl_core_extra.c::test_user_scene_promote_*`).
 - Func alias roundtrip and `if`/`for`/`goto` not hijacked
   ([`tests/test_repl_core_io.c`](../tests/test_repl_core_io.c)).

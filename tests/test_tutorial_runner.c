@@ -903,7 +903,7 @@ static void test_complete_and_menu_actions(void) {
                     repl_tutorial_visible_tag_count() + 2) == 1);
 }
 
-static void test_start_captures_home_for_unsaved_buffer(void) {
+static void test_start_leaves_unsaved_buffer_transient(void) {
     reset_fixture();
     /* Type a line into a fresh buffer (no example, no user scene) so the
      * pre-tutorial state lives only in the live document. */
@@ -912,8 +912,8 @@ static void test_start_captures_home_for_unsaved_buffer(void) {
                repl_state_document_count(), 1);
 
     tutorial_start(0);
-    ASSERT_TRUE("home slot captured before transient discard",
-                repl_user_scene_slot_used(0));
+    ASSERT_INT("tutorial start does not create a user scene",
+               repl_user_scene_count(), 0);
     ASSERT_TRUE("tutorial active after start", tutorial_active());
 }
 
@@ -2912,7 +2912,7 @@ int main(void) {
     test_invalid_user_scene_load_does_not_exit_tutorial();
     test_fade_duration_math();
     test_complete_and_menu_actions();
-    test_start_captures_home_for_unsaved_buffer();
+    test_start_leaves_unsaved_buffer_transient();
     test_start_rejects_out_of_range_idx();
     test_catalog_starter_steps_are_append();
     test_catalog_cfg_lines();

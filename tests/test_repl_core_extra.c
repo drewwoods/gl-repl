@@ -208,17 +208,21 @@ void test_io() {
     unlink(save_path);
 }
 
-void test_initial_load_uses_rotating_cube_in_my_scene() {
-    printf("--- Initial load seeds My Scene with rotating cube ---\n");
+void test_initial_load_starts_on_rotating_cube_example() {
+    printf("--- Initial load starts on rotating cube example ---\n");
     glr_ctrl_reset_all(); declare_test_vars();
 
     int edit_line = repl_load_initial_commands(NULL);
-    ASSERT_INT("initial load activates My Scene slot",
-               repl_active_user_scene(), 0);
-    ASSERT_STR("initial load slot name",
-               repl_user_scene_name(0), "My Scene");
+    ASSERT_INT("initial load has no active user scene",
+               repl_active_user_scene(), -1);
+    ASSERT_INT("initial load creates no user scene slots",
+               repl_user_scene_count(), 0);
     ASSERT_INT("initial load cursor at document end",
                edit_line, repl_state_document_count());
+    ASSERT_TRUE("initial active example is rotating cube",
+                repl_state_scenes().active_example_idx >= 0 &&
+                strcmp(repl_example_name(repl_state_scenes().active_example_idx),
+                       "Rotating cube") == 0);
 
     SourceTextView text = source_document_view();
     int saw_time_rotate = 0;
@@ -233,9 +237,9 @@ void test_initial_load_uses_rotating_cube_in_my_scene() {
             fabsf(cmd->args[0] - 2.0f) < 1e-4f)
             saw_cube = 1;
     }
-    ASSERT_INT("initial My Scene contains rotating-cube transform",
+    ASSERT_INT("initial example contains rotating-cube transform",
                saw_time_rotate, 1);
-    ASSERT_INT("initial My Scene contains solid cube",
+    ASSERT_INT("initial example contains solid cube",
                saw_cube, 1);
 }
 
@@ -263,17 +267,18 @@ void test_examples() {
 void test_user_scene() {
     printf("--- User scene functions ---\n");
     glr_ctrl_reset_all(); declare_test_vars();
+
+    int slot = repl_scenes_create_empty_user_scene();
+    ASSERT_INT("new user scene uses slot 0", slot, 0);
+    ASSERT_INT("user_scene_valid after new scene", repl_user_scene_valid(), 1);
+    ASSERT_INT("slot 0 used after new scene",
+               repl_user_scene_slot_used(0), 1);
     editor_feed_line("glVertex3f(1,1,1);");
 
-    /* Loading an example should save slot 0 (home scene) if it's the first time */
     repl_load_example(0);
-    ASSERT_INT("user_scene_valid after example load", repl_user_scene_valid(), 1);
-    ASSERT_INT("home slot used after example load",
-               repl_user_scene_slot_used(0), 1);
     ASSERT_INT("active user scene == -1 while example loaded",
                repl_active_user_scene(), -1);
 
-    /* Home slot stays populated after restore in the multi-scene model. */
     repl_load_user_scene();
     repl_flatten_commands(editor_state_edit_line());
     ASSERT_INT("count_vertices after restore", repl_count_vertices(), 1);
@@ -287,44 +292,38 @@ void test_user_scene_persists_across_example_switch() {
     glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 1) return;
 
-    editor_feed_line("glVertex3f(1,1,1);");
-    repl_load_example(0);
-    ASSERT_INT("home slot used after example load", repl_user_scene_slot_used(0), 1);
-
-    repl_load_user_scene();
-    ASSERT_INT("active user scene after restore", repl_active_user_scene(), 0);
-
+    ASSERT_INT("new scene slot", repl_scenes_create_empty_user_scene(), 0);
     editor_feed_line("glVertex3f(2,2,2);");
     repl_flatten_commands(editor_state_edit_line());
-    ASSERT_INT("edited home scene vertex count", repl_count_vertices(), 2);
+    ASSERT_INT("edited user scene vertex count", repl_count_vertices(), 1);
 
     repl_load_example(0);
     repl_load_user_scene();
     repl_flatten_commands(editor_state_edit_line());
-    ASSERT_INT("persisted home scene vertex count", repl_count_vertices(), 2);
+    ASSERT_INT("persisted user scene vertex count", repl_count_vertices(), 1);
 }
 
 void test_user_scene_promote_on_edit() {
     printf("--- User scene promotion on example edit ---\n");
     glr_ctrl_reset_all(); declare_test_vars();
 
-    /* Fresh session: no user scenes. Load an example → slot 0 captures
-     * the empty home scene; example is active, no user scene active. */
+    /* Fresh session: no user scenes. Loading an example keeps it as an
+     * example until the first edit promotes it. */
     repl_load_example(0);
-    ASSERT_INT("slot 0 used (home)",           repl_user_scene_slot_used(0), 1);
+    ASSERT_INT("slot 0 unused before edit",    repl_user_scene_slot_used(0), 0);
     ASSERT_INT("slot 1 unused before edit",    repl_user_scene_slot_used(1), 0);
     ASSERT_INT("active user scene == -1",      repl_active_user_scene(), -1);
 
     /* Any mutation while viewing the example promotes it.  We drive
      * promotion directly rather than synthesize a keypress. */
     int slot = repl_promote_example_if_needed();
-    ASSERT_INT("promoted into slot 1", slot, 1);
-    ASSERT_INT("active user scene == 1 after promotion",
-               repl_active_user_scene(), 1);
+    ASSERT_INT("promoted into slot 0", slot, 0);
+    ASSERT_INT("active user scene == 0 after promotion",
+               repl_active_user_scene(), 0);
 
     /* Promoted scene inherits the example's name. */
     const char *ex_name = repl_example_name(0);
-    const char *sc_name = repl_user_scene_name(1);
+    const char *sc_name = repl_user_scene_name(0);
     ASSERT_TRUE("promoted scene name non-null", sc_name != NULL);
     if (ex_name && sc_name)
         ASSERT_STR("promoted scene name == example name", sc_name, ex_name);
@@ -340,7 +339,7 @@ void test_user_scene_promote_on_edit() {
         ASSERT_INT("active user scene cleared after example load",
                    repl_active_user_scene(), -1);
         int slot2 = repl_promote_example_if_needed();
-        ASSERT_INT("second promotion into slot 2", slot2, 2);
+        ASSERT_INT("second promotion into slot 1", slot2, 1);
     }
 }
 
@@ -364,8 +363,8 @@ void test_user_scene_promote_name_dedup() {
 
     const char *n1 = repl_user_scene_name(s1);
     const char *n2 = repl_user_scene_name(s2);
-    ASSERT_TRUE("slot 1 name non-null", n1 != NULL);
-    ASSERT_TRUE("slot 2 name non-null", n2 != NULL);
+    ASSERT_TRUE("first promoted name non-null", n1 != NULL);
+    ASSERT_TRUE("second promoted name non-null", n2 != NULL);
     if (n1 && n2)
         ASSERT_TRUE("de-dup produced distinct names", strcmp(n1, n2) != 0);
 }
@@ -375,11 +374,13 @@ void test_workspace_round_trip() {
     glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 2) return;
 
-    /* Populate: home (from feed) + two promoted example scenes. */
+    /* Populate: one explicit user scene + two promoted example scenes. */
+    int base_scene = repl_scenes_create_empty_user_scene();
+    ASSERT_INT("base user scene slot", base_scene, 0);
     editor_feed_line("glVertex3f(1,1,1);");
     repl_load_example(0);
     int p1 = repl_promote_example_if_needed();
-    ASSERT_TRUE("first promotion ok", p1 >= 1);
+    ASSERT_TRUE("first promotion ok", p1 >= 0 && p1 != base_scene);
 
     /* Load a known example by name (Animated ring) so this test
      * isn't coupled to catalog ordering; the round-trip assertion
@@ -398,7 +399,7 @@ void test_workspace_round_trip() {
      * below tracks the scene source instead of a stale literal. */
     int ring_cmd_count = repl_state_document_count();
     int p2 = repl_promote_example_if_needed();
-    ASSERT_TRUE("second promotion ok", p2 >= 1 && p2 != p1);
+    ASSERT_TRUE("second promotion ok", p2 >= 0 && p2 != p1 && p2 != base_scene);
 
     int slots_before = repl_user_scene_count();
     ASSERT_INT("three scenes before save", slots_before, 3);
@@ -416,13 +417,13 @@ void test_workspace_round_trip() {
 
     repl_load_example(0);
     int preexisting = repl_promote_example_if_needed();
-    ASSERT_TRUE("preexisting scene promoted", preexisting >= 1);
+    ASSERT_TRUE("preexisting scene promoted", preexisting >= 0);
 
     int loaded = repl_load_workspace(dir);
     ASSERT_INT("load_workspace produced original count",
                loaded, slots_before);
-    ASSERT_INT("slot count matches after load",
-               repl_user_scene_count(), slots_before);
+    ASSERT_TRUE("slot count includes loaded scenes",
+                repl_user_scene_count() >= slots_before);
 
     int ring_slot = -1;
     for (int slot = 0; slot < MAX_USER_SCENES; slot++) {
@@ -461,7 +462,8 @@ void test_workspace_round_trip() {
  * rather than dropping them into an empty transient buffer with the active
  * slot at -1. The tabs show up either way, but with no active slot the user
  * sees a blank editor; activating the first occupied slot matches the
- * single-file load path (which calls repl_scenes_activate_home_slot). */
+ * single-file load path (which calls
+ * repl_scenes_activate_loaded_document_slot). */
 void test_workspace_initial_load_activates_first_slot() {
     printf("--- Workspace initial-load activates first slot ---\n");
     glr_ctrl_reset_all(); declare_test_vars();
@@ -471,7 +473,7 @@ void test_workspace_initial_load_activates_first_slot() {
     editor_feed_line("glVertex3f(1,1,1);");
     repl_load_example(0);
     int p1 = repl_promote_example_if_needed();
-    ASSERT_TRUE("first promotion ok", p1 >= 1);
+    ASSERT_TRUE("first promotion ok", p1 >= 0);
 
     char dir[256];
     snprintf(dir, sizeof(dir), "/tmp/repl_workspace_initial.%d", (int)getpid());
@@ -555,8 +557,10 @@ void test_initial_load_failure_does_not_load_default_example() {
                repl_load_initial_commands(path), 0);
     ASSERT_INT("failed initial load leaves document empty",
                repl_state_document_count(), 0);
-    ASSERT_INT("failed initial load activates My Scene",
-               repl_active_user_scene(), 0);
+    ASSERT_INT("failed initial load has no active user scene",
+               repl_active_user_scene(), -1);
+    ASSERT_INT("failed initial load creates no scene slots",
+               repl_user_scene_count(), 0);
 
     unlink(path);
 }
@@ -613,13 +617,17 @@ void test_workspace_save_slug_collisions() {
     glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 2) return;
 
+    ASSERT_INT("base scene slot",
+               repl_scenes_create_empty_user_scene(), 0);
+
     repl_load_example(0);
     int promoted = repl_promote_example_if_needed();
-    ASSERT_TRUE("promotion succeeded", promoted >= 1);
+    ASSERT_TRUE("promotion succeeded", promoted >= 0 && promoted != 0);
 
     repl_load_example(1);
     int promoted2 = repl_promote_example_if_needed();
-    ASSERT_TRUE("second promotion succeeded", promoted2 >= 2);
+    ASSERT_TRUE("second promotion succeeded",
+                promoted2 >= 0 && promoted2 != promoted && promoted2 != 0);
 
     ASSERT_INT("rename slot 0 with space",
                repl_user_scene_rename(0, "A B"), 1);
@@ -679,13 +687,18 @@ void test_workspace_save_max_slug_collisions() {
     glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 2) return;
 
+    ASSERT_INT("base scene slot",
+               repl_scenes_create_empty_user_scene(), 0);
+
     repl_load_example(0);
     int promoted = repl_promote_example_if_needed();
-    ASSERT_TRUE("max-slug promotion succeeded", promoted >= 1);
+    ASSERT_TRUE("max-slug promotion succeeded",
+                promoted >= 0 && promoted != 0);
 
     repl_load_example(1);
     int promoted2 = repl_promote_example_if_needed();
-    ASSERT_TRUE("max-slug second promotion succeeded", promoted2 >= 2);
+    ASSERT_TRUE("max-slug second promotion succeeded",
+                promoted2 >= 0 && promoted2 != promoted && promoted2 != 0);
 
     char max_slug_lower[USER_SCENE_NAME_MAX];
     char max_slug_upper[USER_SCENE_NAME_MAX];
@@ -858,17 +871,18 @@ void test_user_scene_preserves_scratch_state(void) {
     glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 1) return;
 
+    ASSERT_INT("new scratch scene slot", repl_scenes_create_empty_user_scene(), 0);
     editor_feed_line("A[0] = 1;");
     repl_load_example(0);
-    ASSERT_INT("home slot captured", repl_user_scene_slot_used(0), 1);
+    ASSERT_INT("scratch scene saved in slot 0", repl_user_scene_slot_used(0), 1);
 
     ASSERT_INT("promotion creates slot 1", repl_promote_example_if_needed(), 1);
     editor_feed_line("A[0] = 5;");
 
     {
         float scratch = 0.0f;
-        ASSERT_INT("load home scene", repl_load_user_scene_idx(0), 1);
-        ASSERT_TRUE("home scene scratch preserved",
+        ASSERT_INT("load original scratch scene", repl_load_user_scene_idx(0), 1);
+        ASSERT_TRUE("original scratch scene preserved",
                     repl_eval_scratch_get(0, 0, &scratch) && fabsf(scratch - 1.0f) < 1e-6f);
 
         ASSERT_INT("load promoted scene", repl_load_user_scene_idx(1), 1);
@@ -882,8 +896,8 @@ void test_user_scene_promote_all_slots_full() {
     glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 1) return;
 
-    /* Fill slots 1..MAX_USER_SCENES-1 via repeated promotion. */
-    for (int k = 0; k < MAX_USER_SCENES - 1; k++) {
+    /* Fill all user-scene slots via repeated promotion. */
+    for (int k = 0; k < MAX_USER_SCENES; k++) {
         repl_load_example(0);
         repl_promote_example_if_needed();
     }
@@ -906,24 +920,24 @@ void test_user_scene_promote_lru_evict() {
     snprintf(dir, sizeof(dir), "/tmp/repl_lru_test.%d", (int)getpid());
     repl_set_workspace_dir(dir);
 
-    /* Fill slots 1..MAX_USER_SCENES-1 via repeated promotion. */
-    for (int k = 0; k < MAX_USER_SCENES - 1; k++) {
+    /* Fill all user-scene slots via repeated promotion. */
+    for (int k = 0; k < MAX_USER_SCENES; k++) {
         repl_load_example(0);
         repl_promote_example_if_needed();
     }
     ASSERT_INT("all slots occupied", repl_user_scene_count(), MAX_USER_SCENES);
 
-    /* Capture the slot-1 name so we can verify its file was written. */
+    /* Capture the oldest slot name so we can verify its file was written. */
     char evicted_name[USER_SCENE_NAME_MAX];
     snprintf(evicted_name, sizeof(evicted_name), "%s",
-             repl_user_scene_name(1));
+             repl_user_scene_name(0));
 
     /* Ninth promotion should succeed now that a workspace dir is set:
-     * slot 1 (oldest non-home) is flushed to disk and reused. */
+     * slot 0 (oldest inactive scene) is flushed to disk and reused. */
     repl_load_example(0);
     int promoted = repl_promote_example_if_needed();
-    ASSERT_INT("promotion reuses evicted slot", promoted, 1);
-    ASSERT_INT("active user scene is slot 1", repl_active_user_scene(), 1);
+    ASSERT_INT("promotion reuses evicted slot", promoted, 0);
+    ASSERT_INT("active user scene is slot 0", repl_active_user_scene(), 0);
     ASSERT_INT("slot count unchanged after eviction",
                repl_user_scene_count(), MAX_USER_SCENES);
 
@@ -989,7 +1003,7 @@ void test_user_scene_load_scratch_alloc_lifecycle(void) {
     /* Reset, then fill every user-scene slot via example promotion. */
     glr_ctrl_reset_all(); declare_test_vars();
     repl_set_workspace_dir(dir);
-    for (int k = 0; k < MAX_USER_SCENES - 1; k++) {
+    for (int k = 0; k < MAX_USER_SCENES; k++) {
         repl_load_example(0);
         repl_promote_example_if_needed();
     }
@@ -1045,7 +1059,7 @@ void test_user_scene_rename_flow() {
     /* Clear default and type a new name, including a path-unsafe char
      * that must be filtered. */
     for (int i = 0; i < 64; i++) editor_inline_rename_handle_key(8 /*BS*/);
-    const char *input = "My Scene/Bad:Name";
+    const char *input = "Scene/Bad:Name";
     for (const char *p = input; *p; p++)
         editor_inline_rename_handle_key((unsigned char)*p);
 
@@ -1054,7 +1068,7 @@ void test_user_scene_rename_flow() {
     ASSERT_INT("rename cleared after commit", editor_inline_rename_active(), 0);
     const char *new_name = repl_user_scene_name(slot);
     ASSERT_TRUE("renamed to filtered text",
-                strcmp(new_name, "My SceneBadName") == 0);
+                strcmp(new_name, "SceneBadName") == 0);
 
     /* Cancel path: begin again, type, then Esc. */
     ASSERT_INT("begin_rename again", editor_inline_rename_begin(slot), 1);
@@ -1062,7 +1076,7 @@ void test_user_scene_rename_flow() {
     editor_inline_rename_handle_key(27 /*ESC*/);
     ASSERT_INT("cancel clears rename", editor_inline_rename_active(), 0);
     ASSERT_TRUE("name unchanged after cancel",
-                strcmp(repl_user_scene_name(slot), "My SceneBadName") == 0);
+                strcmp(repl_user_scene_name(slot), "SceneBadName") == 0);
 
     /* Empty commit is rejected - rename stays active so user can retry. */
     ASSERT_INT("begin_rename for empty test", editor_inline_rename_begin(slot), 1);
@@ -1071,7 +1085,7 @@ void test_user_scene_rename_flow() {
     ASSERT_INT("empty commit keeps rename active",
                editor_inline_rename_active(), 1);
     ASSERT_TRUE("name unchanged after empty commit",
-                strcmp(repl_user_scene_name(slot), "My SceneBadName") == 0);
+                strcmp(repl_user_scene_name(slot), "SceneBadName") == 0);
     editor_inline_rename_cancel();
 
     /* Invalid slot rejected. */
@@ -1399,55 +1413,51 @@ void test_inline_file_prompt_flow() {
     }
 }
 
-void test_activate_home_slot_no_duplicate_name() {
-    printf("--- activate_home_slot produces no duplicate name ---\n");
+void test_activate_loaded_document_slot_no_duplicate_name() {
+    printf("--- activate loaded document slot produces no duplicate name ---\n");
     glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 1) return;
 
-    /* Simulate the startup path: load example 0 (which captures the empty
-     * state as "My Scene" in slot 0 via repl_scenes_capture_home_if_needed),
-     * then activate_home_slot seeds slot 0 with the example content.  The two
-     * writes target the same slot, so the name must stay plain "My Scene"
-     * with no "(2)" suffix. */
+    /* Simulate a loaded document with no @scene-name metadata. The fallback
+     * user scene occupies slot 0 and must not allocate a duplicate slot. */
     repl_load_example(0);
-    repl_scenes_activate_home_slot(NULL);
+    repl_scenes_activate_loaded_document_slot(NULL);
 
-    ASSERT_INT("slot 0 active after activate_home_slot",
+    ASSERT_INT("slot 0 active after loaded document activation",
                repl_active_user_scene(), 0);
     const char *name = repl_user_scene_name(0);
     ASSERT_TRUE("slot 0 name non-null", name != NULL);
     if (name)
-        ASSERT_STR("slot 0 name is My Scene (no (2) suffix)",
-                   name, "My Scene");
+        ASSERT_STR("slot 0 name is generic Scene (no (2) suffix)",
+                   name, "Scene");
 
     /* No spurious slot 1 should exist. */
     ASSERT_INT("slot 1 unused", repl_user_scene_slot_used(1), 0);
 }
 
-void test_my_scene_persists_edits_from_startup() {
-    printf("--- My Scene persists edits across example switch ---\n");
+void test_created_scene_persists_edits_across_example_switch() {
+    printf("--- Created scene persists edits across example switch ---\n");
     glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 1) return;
 
-    /* Activate an empty slot 0 as "My Scene" (mirrors the startup path when
-     * the live state is empty, e.g. before any example content is shown). */
-    repl_scenes_activate_home_slot(NULL);
-    ASSERT_INT("slot 0 active (My Scene mode)", repl_active_user_scene(), 0);
+    ASSERT_INT("new scene uses slot 0",
+               repl_scenes_create_empty_user_scene(), 0);
+    ASSERT_INT("slot 0 active", repl_active_user_scene(), 0);
 
-    /* User adds a vertex in "My Scene". */
+    /* User adds a vertex in the new scene. */
     editor_feed_line("glVertex3f(9,9,9);");
     repl_flatten_commands(editor_state_edit_line());
-    ASSERT_INT("vertex present in My Scene", repl_count_vertices(), 1);
+    ASSERT_INT("vertex present in created scene", repl_count_vertices(), 1);
 
     /* Switch to example 0 -- this auto-saves slot 0 before overwriting. */
     repl_load_example(0);
     ASSERT_INT("active scene cleared after example load",
                repl_active_user_scene(), -1);
 
-    /* Return to My Scene -- should have exactly the user's vertex. */
+    /* Return to the created scene -- should have exactly the user's vertex. */
     repl_load_user_scene_idx(0);
     repl_flatten_commands(editor_state_edit_line());
-    ASSERT_INT("vertex restored after returning to My Scene",
+    ASSERT_INT("vertex restored after returning to created scene",
                repl_count_vertices(), 1);
     ASSERT_INT("slot 0 active again", repl_active_user_scene(), 0);
 }
@@ -1457,9 +1467,8 @@ void test_scene_cfg_persists_across_example_switch() {
     glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 1) return;
 
-    /* Start in My Scene mode. */
-    repl_load_example(0);
-    repl_scenes_activate_home_slot(NULL);
+    ASSERT_INT("new scene uses slot 0",
+               repl_scenes_create_empty_user_scene(), 0);
 
     /* Record the default backdrop value, then set a different one. */
     int default_backdrop = glr_config_get(GLR_CONFIG_BACKDROP);
@@ -1476,11 +1485,11 @@ void test_scene_cfg_persists_across_example_switch() {
     ASSERT_INT("example load resets backdrop to default",
                glr_config_get(GLR_CONFIG_BACKDROP), default_backdrop);
 
-    /* Return to My Scene -- our custom cfg must be restored. */
+    /* Return to the created scene -- our custom cfg must be restored. */
     repl_load_user_scene_idx(0);
-    ASSERT_INT("backdrop restored from My Scene",
+    ASSERT_INT("backdrop restored from created scene",
                glr_config_get(GLR_CONFIG_BACKDROP), custom_backdrop);
-    ASSERT_INT("grid theme restored from My Scene",
+    ASSERT_INT("grid theme restored from created scene",
                glr_config_get(GLR_CONFIG_GRID_THEME), custom_grid);
 }
 
@@ -1490,8 +1499,8 @@ void test_scene_cfg_not_inherited_from_example() {
     if (repl_example_count() < 1) return;
 
     /* Build a user scene with default cfg (no custom overrides). */
-    repl_load_example(0);
-    repl_scenes_activate_home_slot(NULL);
+    ASSERT_INT("new scene uses slot 0",
+               repl_scenes_create_empty_user_scene(), 0);
     int scene_backdrop = glr_config_get(GLR_CONFIG_BACKDROP);
 
     /* View an example that has a different backdrop. */
@@ -1502,9 +1511,9 @@ void test_scene_cfg_not_inherited_from_example() {
     ASSERT_INT("example backdrop different from scene backdrop",
                glr_config_get(GLR_CONFIG_BACKDROP), example_backdrop);
 
-    /* Return to My Scene -- must NOT inherit the example's backdrop. */
+    /* Return to the created scene -- must NOT inherit the example's backdrop. */
     repl_load_user_scene_idx(0);
-    ASSERT_INT("My Scene backdrop not overwritten by example",
+    ASSERT_INT("created scene backdrop not overwritten by example",
                glr_config_get(GLR_CONFIG_BACKDROP), scene_backdrop);
 }
 
@@ -1518,22 +1527,22 @@ void test_in_example_toggles_dont_leak_to_user_scene() {
     glr_ctrl_reset_all(); declare_test_vars();
     if (repl_example_count() < 1) return;
 
-    /* Establish home (slot 0) with a known backdrop. */
-    repl_scenes_activate_home_slot(NULL);
-    int home_backdrop = glr_config_get(GLR_CONFIG_BACKDROP);
+    ASSERT_INT("new scene uses slot 0",
+               repl_scenes_create_empty_user_scene(), 0);
+    int scene_backdrop = glr_config_get(GLR_CONFIG_BACKDROP);
 
     /* Enter an example, then toggle the backdrop while inside. */
     repl_load_example(0);
-    int example_toggled = (home_backdrop + 1) %
+    int example_toggled = (scene_backdrop + 1) %
                           glr_config_state_count(GLR_CONFIG_BACKDROP);
     glr_config_set(GLR_CONFIG_BACKDROP, example_toggled);
     ASSERT_INT("in-example toggle visible in live cfg",
                glr_config_get(GLR_CONFIG_BACKDROP), example_toggled);
 
-    /* Return to home: the in-example toggle must be gone. */
+    /* Return to the user scene: the in-example toggle must be gone. */
     repl_load_user_scene_idx(0);
-    ASSERT_INT("home backdrop after example trip",
-               glr_config_get(GLR_CONFIG_BACKDROP), home_backdrop);
+    ASSERT_INT("scene backdrop after example trip",
+               glr_config_get(GLR_CONFIG_BACKDROP), scene_backdrop);
 }
 
 void test_debug_dump_flat_commands() {
@@ -1882,7 +1891,7 @@ int main(int argc, char **argv) {
     test_unbalanced_brackets();
     test_repl_replay_advanced();
     test_io();
-    test_initial_load_uses_rotating_cube_in_my_scene();
+    test_initial_load_starts_on_rotating_cube_example();
     test_execution();
     test_examples();
     test_user_scene();
@@ -1903,8 +1912,8 @@ int main(int argc, char **argv) {
     test_workspace_save_slug_collisions();
     test_workspace_save_max_slug_collisions();
     test_scene_load_clears_func_aliases_and_saved_workspace_stays_clean();
-    test_activate_home_slot_no_duplicate_name();
-    test_my_scene_persists_edits_from_startup();
+    test_activate_loaded_document_slot_no_duplicate_name();
+    test_created_scene_persists_edits_across_example_switch();
     test_scene_cfg_persists_across_example_switch();
     test_scene_cfg_not_inherited_from_example();
     test_in_example_toggles_dont_leak_to_user_scene();

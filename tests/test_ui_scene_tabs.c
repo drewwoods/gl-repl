@@ -163,7 +163,7 @@ static void test_double_click_rename(void) {
     UiRenderSnapshot snap;
     UiHit h = ui_hit_none();
 
-    /* Active user (home) tab: single click does not rename; a second
+    /* Active user tab: single click does not rename; a second
      * click on the same tab within the window opens inline rename. */
     reset_fixture();
     seed_user_scene();

@@ -54,10 +54,6 @@
 
 /* User scene slots for the workspace / example-promotion system.
  *
- * Slot 0 is the pinned "home" scene: the user's pre-example state, captured
- * once before the first example load and never LRU-evicted. Slots 1..N are
- * promoted examples / user scenes.
- *
  *   g_active_user_scene  >= 0  => that slot is loaded into repl_state_document_cmds_mut()[]
  *                        == -1 => an example or fresh workspace is active
  *
@@ -122,9 +118,6 @@ static void scene_cfg_reset_all(void) {
         repl_config_bag_clear(&g_user_scenes[i].snapshot.cfg);
     pre_example_cfg_clear();
 }
-
-/* Default home-scene name -- used when slot 0 is captured on first example load. */
-#define USER_SCENE_HOME_NAME "My Scene"
 
 static uint32_t next_user_scene_tick(void) {
     return ++g_user_scene_tick;
@@ -194,8 +187,6 @@ static void save_scene_to_slot(int idx, const char *name, int edit_line) {
     if (name && *name) {
         if (name != s->name)
             snprintf(s->name, sizeof(s->name), "%s", name);
-    } else if (s->name[0] == '\0') {
-        snprintf(s->name, sizeof(s->name), "%s", USER_SCENE_HOME_NAME);
     }
     s->used       = 1;
     s->last_touch = next_user_scene_tick();
@@ -232,10 +223,6 @@ static void load_scene_from_slot(int idx) {
     repl_set_status(msg);
 }
 
-static void save_user_scene(void) {
-    save_scene_to_slot(0, USER_SCENE_HOME_NAME, repl_dispatch_edit_line_get());
-}
-
 void repl_scenes_save_active_scene_if_any(void) {
     if (g_active_user_scene >= 0 && g_active_user_scene < MAX_USER_SCENES) {
         save_scene_to_slot(g_active_user_scene,
@@ -246,7 +233,6 @@ void repl_scenes_save_active_scene_if_any(void) {
 
 void repl_scenes_enter_transient_scene(void) {
     repl_scenes_save_active_scene_if_any();
-    repl_scenes_capture_home_if_needed();
     restore_pre_example_cfg_if_valid();
     g_export_scene_name_hint_writable = NULL;
     g_pending_scene_name_writable[0] = '\0';
@@ -277,7 +263,7 @@ static void restore_user_scene(void) {
 }
 
 static int find_free_user_scene_slot(void) {
-    for (int s = 1; s < MAX_USER_SCENES; s++)
+    for (int s = 0; s < MAX_USER_SCENES; s++)
         if (!g_user_scenes[s].used) return s;
     return -1;
 }
@@ -530,7 +516,6 @@ static void reset_live_for_scene_import(void) {
 static int save_imported_scene_to_free_slot(const ReplImportResult *import_result,
                                             const char *fallback_name) {
     int slot = find_free_user_scene_slot();
-    if (!g_user_scenes[0].used) slot = 0;
     if (slot < 0) return -1;
 
     char scene_name[USER_SCENE_NAME_MAX];
@@ -682,7 +667,7 @@ static int pick_lru_user_scene_slot(void);      /* defined below */
  * in place either way (the user's data is preserved both in-memory after
  * restore AND on disk via Load Workspace). */
 static int try_evict_lru(UserScene *out_stash) {
-    if (find_free_user_scene_slot() >= 0 || !g_user_scenes[0].used)
+    if (find_free_user_scene_slot() >= 0)
         return -1;
     if (!g_workspace_dir[0]) return -2;
     int victim = pick_lru_user_scene_slot();
@@ -716,9 +701,6 @@ static void restore_evicted_slot(int slot, const UserScene *stash) {
 }
 
 static int reserve_user_scene_slot_for_new(void) {
-    if (!g_user_scenes[0].used)
-        return 0;
-
     int slot = find_free_user_scene_slot();
     if (slot >= 0)
         return slot;
@@ -765,11 +747,8 @@ static int repl_load_scene_via_loader(SceneSlotLoader loader,
         return -1;
     }
 
-    /* Persist the currently-active scene into ITS slot (not slot 0!)
-     * before the loader wipes live state. Using save_user_scene() here
-     * would clobber the home slot ("My Scene") any time the active scene
-     * was at slot 1+, losing the user's in-progress edits when they
-     * switched back via tabs / F12. */
+    /* Persist the currently-active scene into its own slot before the
+     * loader wipes live state. */
     repl_scenes_save_active_scene_if_any();
 
     /* Stash so a parse failure or slots-full restore leaves the live
@@ -956,7 +935,7 @@ int repl_load_scene_text_as_new_slot(const char *text,
 }
 
 static int evict_scene_to_workspace(int slot) {
-    if (slot <= 0 || slot >= MAX_USER_SCENES) return 0;
+    if (slot < 0 || slot >= MAX_USER_SCENES) return 0;
     if (!g_user_scenes[slot].used)            return 0;
     if (!g_workspace_dir[0])                  return 0;
 
@@ -989,7 +968,7 @@ static int evict_scene_to_workspace(int slot) {
 static int pick_lru_user_scene_slot(void) {
     int best = -1;
     uint32_t best_tick = 0;
-    for (int s = 1; s < MAX_USER_SCENES; s++) {
+    for (int s = 0; s < MAX_USER_SCENES; s++) {
         if (!g_user_scenes[s].used)    continue;
         if (s == g_active_user_scene)  continue;
         if (best < 0 || g_user_scenes[s].last_touch < best_tick) {
@@ -1003,9 +982,6 @@ static int pick_lru_user_scene_slot(void) {
 int repl_promote_example_if_needed(void) {
     if (g_active_user_scene >= 0) return -1;
     if (g_example_idx < 0)        return -1;
-
-    if (!g_user_scenes[0].used)
-        save_user_scene();
 
     int slot = find_free_user_scene_slot();
     if (slot < 0) {
@@ -1113,11 +1089,6 @@ int repl_user_scene_rename(int slot, const char *new_name) {
     return 1;
 }
 
-void repl_scenes_capture_home_if_needed(void) {
-    if (!g_user_scenes[0].used)
-        save_user_scene();
-}
-
 void repl_scenes_capture_pre_example_cfg_if_entering(void) {
     /* Capture only on the transition from non-example -> example.
      * Subsequent example->example F12 cycles leave the snapshot
@@ -1131,13 +1102,13 @@ void repl_scenes_mark_example_active(void) {
     g_active_user_scene = -1;
 }
 
-void repl_scenes_activate_home_slot(const char *scene_name_hint) {
+void repl_scenes_activate_loaded_document_slot(const char *scene_name_hint) {
     const char *name = (scene_name_hint && scene_name_hint[0]) ? scene_name_hint
-                                                              : USER_SCENE_HOME_NAME;
+                                                              : "Scene";
     char unique[USER_SCENE_NAME_MAX];
     derive_unique_scene_name(unique, sizeof(unique), name, 0);
     /* Drop any pending example sandbox: workspace import / explicit
-     * home activation establishes a fresh user-controlled state. */
+     * document-slot activation establishes a fresh user-controlled state. */
     restore_pre_example_cfg_if_valid();
     save_scene_to_slot(0, unique, repl_dispatch_edit_line_get());
     g_active_user_scene = 0;
