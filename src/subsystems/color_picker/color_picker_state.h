@@ -32,10 +32,11 @@ typedef struct {
 } ColorPickerRects;
 
 /* Palette tab selector. The picker carries one of these as session state;
- * the renderer draws a 3-segment tab strip and the matching swatch grid. */
+ * the renderer draws a 4-segment tab strip and the matching swatch grid. */
 typedef enum {
     CP_TAB_BASIC = 0,   /* one row of ~10 common named colors */
     CP_TAB_FULL,        /* hue x tint/shade grid + greyscale ramp */
+    CP_TAB_DUSK,        /* one row of the example scenes' "Dusk" palette */
     CP_TAB_HARMONY,     /* chosen color + tetradic set, derived live from HSV */
     CP_TAB_COUNT
 } CpPaletteTab;
@@ -72,7 +73,15 @@ typedef struct {
     /* --- Palette section (below the preview swatch) --------------------- */
     int   palette_tab;          /* active CpPaletteTab */
     int   tab_x, tab_y;         /* tab strip top-left (y-up) */
-    int   tab_w, tab_h;         /* tab strip extent (3 equal segments) */
+    int   tab_w, tab_h;         /* tab strip extent */
+    /* Absolute x of each segment boundary, tab_seg_x[0]==tab_x and
+     * tab_seg_x[CP_TAB_COUNT]==tab_x+tab_w. Segments are sized in
+     * proportion to their label width (not equal shares) so a long
+     * label ("Harmony") doesn't overflow its slice and collide with
+     * the neighbour. Render and hit-test both read these so they stay
+     * in sync. tab_labels are the peer-owned static strings. */
+    int         tab_seg_x[CP_TAB_COUNT + 1];
+    const char *tab_labels[CP_TAB_COUNT];
     int   pal_x, pal_y;         /* swatch grid top-left (y-up) */
     int   pal_cols, pal_rows;   /* grid shape of the active palette */
     int   pal_cell, pal_gap;    /* square cell side + inter-cell gap */

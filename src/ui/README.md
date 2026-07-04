@@ -106,7 +106,7 @@ source-line targets.
 | [`app/variable_panel_view.c`](src/ui/app/variable_panel_view.c) / `.h` | Projects app snapshots into the variable-slider panel view |
 | [`app/autocomplete_panel.c`](src/ui/app/autocomplete_panel.c) / `.h` | Completion popup renderer |
 | [`app/editor.h`](src/ui/app/editor.h) | `Ui*` editor-overlay snapshot types (swatches, sliders, highlights) |
-| [`subsystems/color_picker.c`](src/ui/subsystems/color_picker.c) / `.h` | Feature-UI: color-picker renderer + hit-test over [`ColorPickerView`](src/subsystems/color_picker/color_picker_state.h#L46) |
+| [`subsystems/color_picker.c`](src/ui/subsystems/color_picker.c) / `.h` | Feature-UI: color-picker renderer + hit-test over [`ColorPickerView`](../subsystems/color_picker/color_picker_state.h#L47) |
 | [`subsystems/variable_panel.c`](src/ui/subsystems/variable_panel.c) / `.h` | Feature-UI: variable-slider panel chrome (the peer owns drag/visibility) |
 | [`subsystems/replay_hud.c`](src/ui/subsystems/replay_hud.c) / `.h` | Feature-UI: 2D replay HUD (reads the replay peer snapshot) |
 | [`support/cpuprof.c`](src/ui/support/cpuprof.c) / `.h` | CPU profiling overlay renderer and geometry helpers |
