@@ -2716,6 +2716,8 @@ void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
  *   -> Vignette (frame)
  *   -> Scanlines (scene)
  *   -> Scanlines (frame)
+ *   -> Film grain (scene)
+ *   -> Film grain (frame)
  *   -> Off ...
  *
  * The scene slot feeds render3d_draw_scene's per-scene pass; the frame
@@ -2739,6 +2741,8 @@ int glr_ctrl_router_handle_post_filter_key(unsigned char key) {
         { RENDER3D_POST_FILTER_OFF,                  RENDER3D_POST_FILTER_VIGNETTE,             " (frame)" },
         { RENDER3D_POST_FILTER_SCANLINES,            RENDER3D_POST_FILTER_OFF,                  " (scene)" },
         { RENDER3D_POST_FILTER_OFF,                  RENDER3D_POST_FILTER_SCANLINES,            " (frame)" },
+        { RENDER3D_POST_FILTER_FILM_GRAIN,           RENDER3D_POST_FILTER_OFF,                  " (scene)" },
+        { RENDER3D_POST_FILTER_OFF,                  RENDER3D_POST_FILTER_FILM_GRAIN,           " (frame)" },
     };
     int n = (int)(sizeof(cycle) / sizeof(cycle[0]));
 
