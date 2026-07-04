@@ -987,10 +987,10 @@ The REPL keeps up to `MAX_USER_SCENES = 8` independent scenes in
 `g_user_scenes[]` ([`src/repl/scenes.c`](src/repl/scenes.c)). There is no automatic
 startup user scene; the app starts on the default example, and user-scene slots
 are created by File -> New Scene, scene-file loads, workspace loads, or
-auto-promotion when an example is edited. Each [`UserScene`](src/repl/scenes.c#L79) stores command array + count + edit_line
+auto-promotion when an example is edited. Each [`UserScene`](src/repl/scenes.c#L75) stores command array + count + edit_line
 + predef variable values + scene `name` + `last_touch` tick.
 
-- **Active slot.** [`repl_active_user_scene()`](src/repl/scenes.h#L86) returns the current slot
+- **Active slot.** [`repl_active_user_scene()`](src/repl/scenes.h#L83) returns the current slot
   index, or `-1` when an example or fresh empty workspace is loaded.
 - **Auto-promote on first edit.** [`editor_undo_push_snapshot()`](src/editor/undo.h#L106) calls
   [`repl_promote_example_if_needed()`](src/repl/scenes.h#L46) before every mutation. When the

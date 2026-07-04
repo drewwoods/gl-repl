@@ -14,6 +14,12 @@
  * every 3px, multiplicatively blended (GL_DST_COLOR, GL_ZERO) to
  * darken existing pixels without adding light. Capture-free overlay.
  *
+ * Iteration 4: film grain. A small luminance noise tile generated once,
+ * repeated over the rect at one texel per pixel and alpha-blended so
+ * every pixel is pulled slightly toward a random gray. The tile origin
+ * is re-jittered from a deterministic LCG each call, so the grain
+ * crawls frame to frame like film stock. No frame capture needed.
+ *
  * All are pure fixed-function GL (no shaders, no FBOs). The same rect
  * the scene renders into is reused over the whole window by the
  * app-level glr_compositor, so each effect works at scene-viewport and
@@ -34,11 +40,26 @@ static int    g_tex_h      = 0;
  * (e.g. GL stubs) so the size guard is not enforced. */
 static GLint  g_max_tex_size = 0;
 
+/* Film-grain noise tile (GL_LUMINANCE, generated once per context) and
+ * the LCG that fills it / jitters its per-frame origin. Seed is reset
+ * alongside the texture so captures replay the same grain sequence. */
+#define GRAIN_TEX_SIZE   64
+#define GRAIN_STRENGTH   0.05f  /* blend toward the noise gray per pixel */
+#define GRAIN_RNG_SEED   0x9E3779B9u
+static GLuint   g_grain_tex = 0;
+static unsigned g_grain_rng = GRAIN_RNG_SEED;
+
+static unsigned grain_rng_next(void) {
+    g_grain_rng = g_grain_rng * 1664525u + 1013904223u;
+    return g_grain_rng >> 16; /* LCG low bits are weak; use the top */
+}
+
 const char *render3d_postprocess_filter_mode_name(Render3dPostFilterMode mode) {
     switch (mode) {
     case RENDER3D_POST_FILTER_CHROMATIC_ABERRATION: return "Chromatic aberration";
     case RENDER3D_POST_FILTER_VIGNETTE:             return "Vignette";
     case RENDER3D_POST_FILTER_SCANLINES:            return "Scanlines";
+    case RENDER3D_POST_FILTER_FILM_GRAIN:           return "Film grain";
     case RENDER3D_POST_FILTER_OFF:
     case RENDER3D_POST_FILTER_COUNT:
     default:                                     return "Off";
@@ -53,6 +74,11 @@ void render3d_postprocess_filter_reset(void) {
     g_tex_w = 0;
     g_tex_h = 0;
     g_max_tex_size = 0; /* re-query against the (possibly new) context */
+    if (g_grain_tex) {
+        glDeleteTextures(1, &g_grain_tex);
+        g_grain_tex = 0;
+    }
+    g_grain_rng = GRAIN_RNG_SEED;
 }
 
 /* NPOT textures are an OpenGL 2.0 feature; the fixed-function GL 1.1
@@ -277,6 +303,61 @@ static void postprocess_filter_render_scanlines(int sx, int sy,
     postprocess_filter_end_2d(saved_matrix_mode);
 }
 
+/* Film grain: tile a small luminance noise texture over the rect at one
+ * texel per pixel (GL_NEAREST + GL_REPEAT keep it crisp and seamless)
+ * and alpha-blend it so each pixel moves GRAIN_STRENGTH of the way
+ * toward its texel's random gray — brightening shadows and darkening
+ * highlights like real grain, unlike a darken-only overlay. The texcoord
+ * origin jumps to a random texel offset every call, so the pattern
+ * decorrelates frame to frame. No frame capture needed. */
+static void postprocess_filter_render_grain(int sx, int sy,
+                                            int sw, int sh) {
+    GLint saved_matrix_mode = 0;
+    postprocess_filter_begin_2d(sx, sy, sw, sh, &saved_matrix_mode);
+
+    if (g_grain_tex == 0) {
+        GLubyte noise[GRAIN_TEX_SIZE * GRAIN_TEX_SIZE];
+        for (int i = 0; i < GRAIN_TEX_SIZE * GRAIN_TEX_SIZE; i++)
+            noise[i] = (GLubyte)(grain_rng_next() & 0xFF);
+        glGenTextures(1, &g_grain_tex);
+        glBindTexture(GL_TEXTURE_2D, g_grain_tex);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE,
+                     GRAIN_TEX_SIZE, GRAIN_TEX_SIZE, 0,
+                     GL_LUMINANCE, GL_UNSIGNED_BYTE, noise);
+    } else {
+        glBindTexture(GL_TEXTURE_2D, g_grain_tex);
+    }
+
+    /* begin_2d sets GL_REPLACE for the chromatic path; grain wants the
+     * luminance texel modulated by the constant-alpha color below, then
+     * standard alpha blending. Both restored by end_2d's glPopAttrib. */
+    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColor4f(1.0f, 1.0f, 1.0f, GRAIN_STRENGTH);
+
+    /* Texel-aligned random tile origin; one texel per screen pixel. */
+    float ju = (float)(grain_rng_next() % GRAIN_TEX_SIZE)*2 / (float)GRAIN_TEX_SIZE;
+    float jv = (float)(grain_rng_next() % GRAIN_TEX_SIZE)*2 / (float)GRAIN_TEX_SIZE;
+    float uspan = (float)sw / (float)GRAIN_TEX_SIZE;
+    float vspan = (float)sh / (float)GRAIN_TEX_SIZE;
+    float w = (float)sw;
+    float h = (float)sh;
+
+    glBegin(GL_QUADS);
+        glTexCoord2f(ju,         jv);         glVertex2f(0.0f, 0.0f);
+        glTexCoord2f(ju + uspan, jv);         glVertex2f(w,    0.0f);
+        glTexCoord2f(ju + uspan, jv + vspan); glVertex2f(w,    h);
+        glTexCoord2f(ju,         jv + vspan); glVertex2f(0.0f, h);
+    glEnd();
+
+    postprocess_filter_end_2d(saved_matrix_mode);
+}
+
 void render3d_postprocess_filter_render(Render3dPostFilterMode mode, int sx, int sy,
                                      int sw, int sh) {
     if (sw <= 0 || sh <= 0)
@@ -291,6 +372,9 @@ void render3d_postprocess_filter_render(Render3dPostFilterMode mode, int sx, int
         break;
     case RENDER3D_POST_FILTER_SCANLINES:
         postprocess_filter_render_scanlines(sx, sy, sw, sh);
+        break;
+    case RENDER3D_POST_FILTER_FILM_GRAIN:
+        postprocess_filter_render_grain(sx, sy, sw, sh);
         break;
     case RENDER3D_POST_FILTER_OFF:
     case RENDER3D_POST_FILTER_COUNT:
