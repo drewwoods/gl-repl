@@ -1116,7 +1116,7 @@ static void test_scene_lights_indicators(void) {
 }
 
 static void test_postprocess_filters(void) {
-    printf("--- postprocess filters (vignette & chromatic aberration) ---\n");
+    printf("--- postprocess filters (vignette & chromatic aberration & scanlines) ---\n");
 
     /* RENDER3D_POST_FILTER_OFF does nothing */
     render3d_postprocess_filter_render(RENDER3D_POST_FILTER_OFF, 0, 0, 800, 600);
@@ -1135,6 +1135,14 @@ static void test_postprocess_filters(void) {
     ASSERT_TRUE("vignette draws triangle strips",
                 gl_stub_counts[GL_STUB_glBegin] > 0);
 
+    /* RENDER3D_POST_FILTER_SCANLINES */
+    gl_stub_counts_reset();
+    render3d_postprocess_filter_render(RENDER3D_POST_FILTER_SCANLINES, 0, 0, 800, 600);
+    ASSERT_TRUE("scanlines calls glBegin (GL_LINES)",
+                gl_stub_counts[GL_STUB_glBegin] > 0);
+    ASSERT_TRUE("scanlines calls glBlendFunc",
+                gl_stub_counts[GL_STUB_glBlendFunc] > 0);
+
     /* Test reset function */
     render3d_postprocess_filter_reset();
     ASSERT_TRUE("reset succeeded without crash", 1);
@@ -1144,6 +1152,8 @@ static void test_postprocess_filters(void) {
                 render3d_postprocess_filter_mode_name(RENDER3D_POST_FILTER_CHROMATIC_ABERRATION) != NULL);
     ASSERT_TRUE("vignette name non-NULL",
                 render3d_postprocess_filter_mode_name(RENDER3D_POST_FILTER_VIGNETTE) != NULL);
+    ASSERT_TRUE("scanlines name non-NULL",
+                render3d_postprocess_filter_mode_name(RENDER3D_POST_FILTER_SCANLINES) != NULL);
 }
 
 #endif

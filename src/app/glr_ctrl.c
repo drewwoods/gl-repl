@@ -2714,6 +2714,8 @@ void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
  *   -> Chromatic aberration (frame)   compositor_filter_mode, whole frame
  *   -> Vignette (scene)
  *   -> Vignette (frame)
+ *   -> Scanlines (scene)
+ *   -> Scanlines (frame)
  *   -> Off ...
  *
  * The scene slot feeds render3d_draw_scene's per-scene pass; the frame
@@ -2735,6 +2737,8 @@ int glr_ctrl_router_handle_post_filter_key(unsigned char key) {
         { RENDER3D_POST_FILTER_OFF,                  RENDER3D_POST_FILTER_CHROMATIC_ABERRATION, " (frame)" },
         { RENDER3D_POST_FILTER_VIGNETTE,             RENDER3D_POST_FILTER_OFF,                  " (scene)" },
         { RENDER3D_POST_FILTER_OFF,                  RENDER3D_POST_FILTER_VIGNETTE,             " (frame)" },
+        { RENDER3D_POST_FILTER_SCANLINES,            RENDER3D_POST_FILTER_OFF,                  " (scene)" },
+        { RENDER3D_POST_FILTER_OFF,                  RENDER3D_POST_FILTER_SCANLINES,            " (frame)" },
     };
     int n = (int)(sizeof(cycle) / sizeof(cycle[0]));
 

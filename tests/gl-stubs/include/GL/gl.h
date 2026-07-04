@@ -218,6 +218,8 @@ typedef double GLclampd;
 #define GL_TEXTURE_WRAP_T 0x2803
 #define GL_CLAMP_TO_EDGE 0x812F
 #define GL_MAX_TEXTURE_SIZE 0x0D33
+#define GL_DST_COLOR 0x0306
+#define GL_ZERO 0
 
 /* Feedback / render-mode (scene/render.c ortho-freeze eye-distance probe). */
 #define GL_RENDER 0x1C00
