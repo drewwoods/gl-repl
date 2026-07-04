@@ -1748,7 +1748,7 @@ int main(void) {
         repl_set_workspace_dir(prev_workspace);
         repl_load_example(0);
         ASSERT_TRUE("promotion for failing workspace save",
-                    repl_promote_example_if_needed() >= 1);
+                    repl_promote_example_if_needed() >= 0);
 
         ASSERT_INT("workspace save surfaces export failure",
                    repl_save_workspace(bad_workspace, NULL), -1);

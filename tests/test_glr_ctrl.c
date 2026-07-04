@@ -2749,6 +2749,65 @@ static void test_code_panel_scroll_clamping_and_follow(void) {
                 follow_doc_line < editor_scroll() + visible_lines);
 }
 
+static void test_post_filter_key_cycling(void) {
+    printf("--- imrepl_ctrl post filter key cycling ---\n");
+    prepare_display_fixture();
+
+    /* Make sure replay doesn't intercept keys (prepare_display_fixture sets active=1) */
+    replay_state_mut()->active = 0;
+    replay_state_mut()->state = REPLAY_OFF;
+
+    /* Make sure we start at OFF for both scene and frame filters */
+    GlrPresentationState *p = glr_state_presentation_mut();
+    p->post_filter_mode = RENDER3D_POST_FILTER_OFF;
+    p->compositor_filter_mode = RENDER3D_POST_FILTER_OFF;
+
+    /* Cycle 1: Chromatic aberration (scene) */
+    glr_ctrl_keyboard(KEY_CTRL_N, 0, 0);
+    ASSERT_INT("post_filter_mode becomes chromatic aberration", (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_CHROMATIC_ABERRATION);
+    ASSERT_INT("compositor_filter_mode remains off", (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
+
+    /* Cycle 2: Chromatic aberration (frame) */
+    glr_ctrl_keyboard(KEY_CTRL_N, 0, 0);
+    ASSERT_INT("post_filter_mode becomes off", (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
+    ASSERT_INT("compositor_filter_mode becomes chromatic aberration", (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_CHROMATIC_ABERRATION);
+
+    /* Cycle 3: Vignette (scene) */
+    glr_ctrl_keyboard(KEY_CTRL_N, 0, 0);
+    ASSERT_INT("post_filter_mode becomes vignette", (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_VIGNETTE);
+    ASSERT_INT("compositor_filter_mode becomes off", (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
+
+    /* Cycle 4: Vignette (frame) */
+    glr_ctrl_keyboard(KEY_CTRL_N, 0, 0);
+    ASSERT_INT("post_filter_mode becomes off", (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
+    ASSERT_INT("compositor_filter_mode becomes vignette", (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_VIGNETTE);
+
+    /* Cycle 5: Scanlines (scene) */
+    glr_ctrl_keyboard(KEY_CTRL_N, 0, 0);
+    ASSERT_INT("post_filter_mode becomes scanlines", (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_SCANLINES);
+    ASSERT_INT("compositor_filter_mode becomes off", (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
+
+    /* Cycle 6: Scanlines (frame) */
+    glr_ctrl_keyboard(KEY_CTRL_N, 0, 0);
+    ASSERT_INT("post_filter_mode becomes off", (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
+    ASSERT_INT("compositor_filter_mode becomes scanlines", (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_SCANLINES);
+
+    /* Cycle 7: Film grain (scene) */
+    glr_ctrl_keyboard(KEY_CTRL_N, 0, 0);
+    ASSERT_INT("post_filter_mode becomes film grain", (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_FILM_GRAIN);
+    ASSERT_INT("compositor_filter_mode becomes off", (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
+
+    /* Cycle 8: Film grain (frame) */
+    glr_ctrl_keyboard(KEY_CTRL_N, 0, 0);
+    ASSERT_INT("post_filter_mode becomes off", (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
+    ASSERT_INT("compositor_filter_mode becomes film grain", (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_FILM_GRAIN);
+
+    /* Cycle 9: Off */
+    glr_ctrl_keyboard(KEY_CTRL_N, 0, 0);
+    ASSERT_INT("post_filter_mode cycles back to off", (int)p->post_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
+    ASSERT_INT("compositor_filter_mode cycles back to off", (int)p->compositor_filter_mode, (int)RENDER3D_POST_FILTER_OFF);
+}
+
 int main(void) {
     printf("--- imrepl_ctrl tests ---\n");
 
@@ -2793,6 +2852,7 @@ int main(void) {
     test_export_light_bridge_reads_app_state();
     test_mouse_routing_and_hit_testing();
     test_special_key_shortcuts();
+    test_post_filter_key_cycling();
     test_app_lifecycle_bootstrap_shutdown();
     test_init_gl_requires_loaded_point_parameter_proc();
     test_code_panel_scroll_clamping_and_follow();
