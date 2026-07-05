@@ -886,8 +886,7 @@ int render3d_draw_scene(Render3dState *state,
         prof_begin(PROF_RENDER3D_POST_PROCESS);
         render3d_postprocess_filter_render(config->post_filter_mode,
                                         config->render3d_x, config->render3d_y,
-                                        config->render3d_w, config->render3d_h,
-                                        config->anim_time);
+                                        config->render3d_w, config->render3d_h);
         prof_accum_end(PROF_RENDER3D_POST_PROCESS);
     }
     return 0;

@@ -12,12 +12,13 @@
  *
  * Iteration 3: scanlines (CRT mask). The resolved scene is captured
  * and redrawn on a tessellated barrel-warp surface (postprocess_surface),
- * so the whole image bulges toward the viewer like a CRT tube and gains
- * a subtle time-driven ripple; dark scanlines are then bent onto that
- * same surface and multiplicatively blended (GL_DST_COLOR, GL_ZERO) to
- * darken existing pixels without adding light. The barrel grid — not the
- * texture work — is the trick, so the surface stays a reusable primitive
- * (see postprocess_surface.h) other filters can adopt.
+ * so the whole image bulges toward the viewer like a CRT tube; dark
+ * scanlines are then bent onto that same surface and multiplicatively
+ * blended (GL_DST_COLOR, GL_ZERO) to darken existing pixels without
+ * adding light. The barrel grid — not the texture work — is the trick,
+ * so the surface stays a reusable primitive (see postprocess_surface.h):
+ * it also offers a RIPPLE type (an animated underwater wobble) that no
+ * filter wires up yet.
  *
  * Iteration 4: film grain. A small luminance noise tile generated once,
  * repeated over the rect at one texel per pixel and alpha-blended so
@@ -289,20 +290,20 @@ static void postprocess_filter_render_vignette(int sx, int sy,
 
 /* Scanlines / CRT mask, on a tessellated barrel surface. The resolved
  * scene is captured and redrawn on a POST_SURFACE_GRID barrel grid so the
- * image bulges toward the viewer like a CRT tube (plus a subtle t-driven
- * ripple), then dark scanlines are bent onto the same surface and
- * multiplicatively blended via GL_DST_COLOR × GL_ZERO (darkens existing
- * pixels, never adds light). The dim-gray line color (0.75) dims the
- * bright scanline rows ~25% while the gaps stay untouched — the classic
- * phosphor mask, now curving with the tube. */
+ * image bulges toward the viewer like a CRT tube, then dark scanlines are
+ * bent onto the same surface and multiplicatively blended via
+ * GL_DST_COLOR × GL_ZERO (darkens existing pixels, never adds light). The
+ * dim-gray line color (0.75) dims the bright scanline rows ~25% while the
+ * gaps stay untouched — the classic phosphor mask, now curving with the
+ * tube. The barrel overscans the corners, so the warped grid always
+ * covers the rect (no backing fill needed). */
 #define POST_SURFACE_GRID_COLS  32
 #define POST_SURFACE_GRID_ROWS  24
 #define SCANLINE_BULGE          0.10f  /* barrel strength (corners overscan ~20%) */
-#define SCANLINE_WOBBLE_PX      1.8f   /* animated ripple amplitude in pixels */
 #define SCANLINE_SPACING        3      /* one dark scanline every 3 device rows */
 
 static void postprocess_filter_render_scanlines(int sx, int sy,
-                                                int sw, int sh, float t) {
+                                                int sw, int sh) {
     GLint saved_matrix_mode = 0;
     postprocess_filter_begin_2d(sx, sy, sw, sh, &saved_matrix_mode);
 
@@ -312,26 +313,8 @@ static void postprocess_filter_render_scanlines(int sx, int sy,
         return; /* texture would exceed the GL limit — skip this frame */
     }
 
-    Render3dPostSurface surf;
-    surf.sw = sw;
-    surf.sh = sh;
-    surf.t = t;
-    surf.bulge = SCANLINE_BULGE;
-    surf.wobble = SCANLINE_WOBBLE_PX;
-
-    /* Black backing: the barrel overscans so it leaves no gaps, but the
-     * ripple can momentarily expose the rect edges — paint them CRT black
-     * rather than let the un-warped scene beneath show through. Drawn
-     * opaque (begin_2d left blending off) before the warped image. */
-    glDisable(GL_TEXTURE_2D);
-    glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
-    glBegin(GL_QUADS);
-        glVertex2f(0.0f,      0.0f);
-        glVertex2f((float)sw, 0.0f);
-        glVertex2f((float)sw, (float)sh);
-        glVertex2f(0.0f,      (float)sh);
-    glEnd();
-    glEnable(GL_TEXTURE_2D);
+    Render3dPostSurface surf = render3d_post_surface_barrel(sw, sh,
+                                                            SCANLINE_BULGE);
 
     /* Captured scene redrawn on the barrel grid. begin_2d already set
      * GL_REPLACE + texturing on, so the vertex color is ignored. */
@@ -407,7 +390,7 @@ static void postprocess_filter_render_grain(int sx, int sy,
 }
 
 void render3d_postprocess_filter_render(Render3dPostFilterMode mode, int sx, int sy,
-                                     int sw, int sh, float t) {
+                                     int sw, int sh) {
     if (sw <= 0 || sh <= 0)
         return;
 
@@ -419,7 +402,7 @@ void render3d_postprocess_filter_render(Render3dPostFilterMode mode, int sx, int
         postprocess_filter_render_vignette(sx, sy, sw, sh);
         break;
     case RENDER3D_POST_FILTER_SCANLINES:
-        postprocess_filter_render_scanlines(sx, sy, sw, sh, t);
+        postprocess_filter_render_scanlines(sx, sy, sw, sh);
         break;
     case RENDER3D_POST_FILTER_FILM_GRAIN:
         postprocess_filter_render_grain(sx, sy, sw, sh);

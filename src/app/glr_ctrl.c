@@ -1911,8 +1911,7 @@ void glr_ctrl_display_frame(void) {
     prof_begin(PROF_COMPOSITOR);
     glr_compositor_postprocess_frame(
         glr_state_presentation().compositor_filter_mode,
-        ui_snap.viewport.window_w, ui_snap.viewport.window_h,
-        ui_snap.anim_time);
+        ui_snap.viewport.window_w, ui_snap.viewport.window_h);
     prof_end(PROF_COMPOSITOR);
 
     prof_begin(PROF_FRAME_RESTORE);
