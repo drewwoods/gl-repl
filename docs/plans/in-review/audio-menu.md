@@ -38,4 +38,3 @@ Do not make `playlist.ini` or `g_cfg_items[]` the source of truth. The existing 
 ## Assumptions
 - V1 does not implement `playlist.ini`, tag files, track removal, recursive music scanning, or persistent loop-mode storage.
 - A later `playlist.ini` overlay can fill `display_name` and `group`, but unlisted files must still appear under their discovered default group.
-

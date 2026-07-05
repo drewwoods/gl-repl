@@ -12,6 +12,12 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ASSERT_TRUE(label, cond) \
     TEST_ASSERT_TRUE(&g_harness, label, cond)
 
+#define ASSERT_INT(label, got, exp) \
+    TEST_ASSERT_INT(&g_harness, label, got, exp)
+
+#define ASSERT_STR(label, got, exp) \
+    TEST_ASSERT_STR(&g_harness, label, got, exp)
+
 static int wait_for_current_track(const char *expected_path,
                                   unsigned int baseline_generation,
                                   int timeout_ms) {
@@ -37,6 +43,14 @@ int main() {
         const char *paths[] = { "test1.mp3", "test2.mp3", "test3.mp3" };
         int n = glr_audio_set_playlist(paths, 3);
         ASSERT_TRUE("set_playlist returns count", n == 3);
+        ASSERT_INT("track_count after path playlist", glr_audio_track_count(), 3);
+        ASSERT_STR("path playlist default group",
+                   glr_audio_track_group(0), "Music");
+        ASSERT_STR("path playlist derives display name",
+                   glr_audio_track_display_name(1), "test2");
+        ASSERT_INT("current index before load", glr_audio_current_index(), -1);
+        ASSERT_TRUE("unknown duration before load",
+                    glr_audio_track_duration_seconds(1) < 0.0f);
 
         /* Test truncation to REPL_AUDIO_MAX_TRACKS (64) */
         const char *many_paths[128];
@@ -47,6 +61,30 @@ int main() {
         /* Test null/invalid args */
         ASSERT_TRUE("set_playlist null paths", glr_audio_set_playlist(NULL, 5) == -1);
         ASSERT_TRUE("set_playlist negative count", glr_audio_set_playlist(paths, -1) == -1);
+    }
+
+    /* 1b. Track specs copy groups/display names and derive missing names. */
+    {
+        GlrAudioTrackSpec specs[] = {
+            { "assets/alpha_track.mp3", "Assets", "Alpha Display" },
+            { "bundle/BETA.MP3", "Bundled", NULL },
+            { "user/no_extension", "My Music", "" },
+        };
+        ASSERT_INT("set_playlist_specs returns count",
+                   glr_audio_set_playlist_specs(specs, 3), 3);
+        ASSERT_INT("spec track count", glr_audio_track_count(), 3);
+        ASSERT_STR("spec explicit display name",
+                   glr_audio_track_display_name(0), "Alpha Display");
+        ASSERT_STR("spec group copied",
+                   glr_audio_track_group(1), "Bundled");
+        ASSERT_STR("spec uppercase mp3 stem",
+                   glr_audio_track_display_name(1), "BETA");
+        ASSERT_STR("spec extensionless display name",
+                   glr_audio_track_display_name(2), "no_extension");
+        ASSERT_TRUE("spec out-of-range display NULL",
+                    glr_audio_track_display_name(3) == NULL);
+        ASSERT_TRUE("play_track_index before init fails",
+                    glr_audio_play_track_index(0) == -1);
     }
 
     /* 2. Test loop modes */

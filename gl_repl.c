@@ -105,7 +105,9 @@ static int cmp_mp3_path(const void *a, const void *b) {
  * added (so each music source stays in filename order). Returns the
  * new count. A missing/unreadable dir is a no-op (returns `start`). */
 static int scan_dir_into(const char *dir,
+                         const char *group,
                          char out_paths[][AUDIO_MUSIC_MAX_LEN],
+                         GlrAudioTrackSpec out_tracks[],
                          int start, int max_paths) {
     DIR *d = opendir(dir);
     if (!d) return start;
@@ -124,6 +126,11 @@ static int scan_dir_into(const char *dir,
     if (count - start > 1) {
         qsort(out_paths[start], (size_t)(count - start),
               sizeof(out_paths[0]), cmp_mp3_path);
+    }
+    for (int i = start; i < count; i++) {
+        out_tracks[i].path = out_paths[i];
+        out_tracks[i].group = group;
+        out_tracks[i].display_name = NULL;
     }
     return count;
 }
@@ -157,8 +164,10 @@ static int executable_dir(char *buf, size_t buflen) {
  * total number of paths written. */
 static int build_mp3_playlist(const char *assets_dir,
                               char out_paths[][AUDIO_MUSIC_MAX_LEN],
+                              GlrAudioTrackSpec out_tracks[],
                               int max_paths) {
-    int n = scan_dir_into(assets_dir, out_paths, 0, max_paths);
+    int n = scan_dir_into(assets_dir, "Assets",
+                          out_paths, out_tracks, 0, max_paths);
 
     char exedir[AUDIO_MUSIC_MAX_LEN];
     if (executable_dir(exedir, sizeof(exedir))) {
@@ -166,7 +175,8 @@ static int build_mp3_playlist(const char *assets_dir,
         char bundled[AUDIO_MUSIC_MAX_LEN + 64];
         snprintf(bundled, sizeof(bundled), "%s/../Resources/%s",
                  exedir, AUDIO_ASSETS_DIR);
-        n = scan_dir_into(bundled, out_paths, n, max_paths);
+        n = scan_dir_into(bundled, "Bundled",
+                          out_paths, out_tracks, n, max_paths);
     }
 
     char udir[AUDIO_MUSIC_MAX_LEN];
@@ -175,7 +185,8 @@ static int build_mp3_playlist(const char *assets_dir,
         if (glr_paths_ensure_dir(udir, &created) && created) {
             fprintf(stderr, "repl_audio: add more music in %s\n", udir);
         }
-        n = scan_dir_into(udir, out_paths, n, max_paths);
+        n = scan_dir_into(udir, "My Music",
+                          out_paths, out_tracks, n, max_paths);
     }
     return n;
 }
@@ -618,6 +629,7 @@ int main(int argc, char **argv) {
         glr_audio_set_state_file(AUDIO_STATE_FILE);
         static char music_paths[AUDIO_MUSIC_MAX_PATHS]
                                [AUDIO_MUSIC_MAX_LEN];
+        static GlrAudioTrackSpec music_tracks[AUDIO_MUSIC_MAX_PATHS];
         /* --assets wins over GLR_ASSETS_DIR wins over the default. */
         const char *assets_dir = assets_override;
         if (!assets_dir) {
@@ -625,7 +637,8 @@ int main(int argc, char **argv) {
             if (env && env[0]) assets_dir = env;
         }
         if (!assets_dir) assets_dir = AUDIO_ASSETS_DIR;
-        int n = build_mp3_playlist(assets_dir, music_paths, AUDIO_MUSIC_MAX_PATHS);
+        int n = build_mp3_playlist(assets_dir, music_paths, music_tracks,
+                                   AUDIO_MUSIC_MAX_PATHS);
         /* opendir/readdir over the candidate music dirs. Cheap when
          * local; worth timing when the working directory lives on
          * iCloud. */
@@ -635,15 +648,17 @@ int main(int argc, char **argv) {
             init_trace(buf);
         }
         if (n > 0) {
-            const char *ptrs[AUDIO_MUSIC_MAX_PATHS];
-            for (int i = 0; i < n; i++) ptrs[i] = music_paths[i];
-            glr_audio_set_playlist(ptrs, n);
+            glr_audio_set_playlist_specs(music_tracks, n);
             glr_audio_play_playlist();
         } else {
             /* Back-compat: no .mp3 files found, fall back to the
              * legacy single-file default so existing setups that use
              * assets/song.mp3 keep working. */
-            glr_audio_play_music(AUDIO_DEFAULT_MUSIC);
+            GlrAudioTrackSpec fallback_track = {
+                AUDIO_DEFAULT_MUSIC, "Default", NULL
+            };
+            glr_audio_set_playlist_specs(&fallback_track, 1);
+            glr_audio_play_playlist();
         }
         /* play_playlist() reads audio_state.ini synchronously on the
          * caller (see glr_audio.c header comment) before posting the

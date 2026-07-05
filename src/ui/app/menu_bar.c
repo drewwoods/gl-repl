@@ -8,6 +8,7 @@
 #include "repl/scenes.h"
 #include "repl/examples.h"
 #include "repl/tutorials.h"
+#include "app/glr_audio.h"
 #include "app/glr_config.h"
 #include "keymap.h"
 #include "keys.h"
@@ -33,11 +34,12 @@ enum {
     MENU_SCENE = GLR_MENU_SCENE,
     MENU_TUTORIALS = GLR_MENU_TUTORIALS,
     MENU_CONFIG = GLR_MENU_CONFIG,
+    MENU_AUDIO = GLR_MENU_AUDIO,
     NUM_MENUS = GLR_MENU_COUNT
 };
 
 static const char *g_menu_labels[NUM_MENUS] = {
-    "File", "Scene", "Tutorials", "Config"
+    "File", "Scene", "Tutorials", "Config", "Audio"
 };
 
 /* Menubar bottom hairline: intentionally pure #000 in every theme
@@ -141,6 +143,63 @@ int ui_menu_bar_tutorial_parent_row_for_tag(int tag_idx) {
     return -1;
 }
 
+static const char *audio_group_label_for_track(int track_idx) {
+    const char *group = glr_audio_track_group(track_idx);
+    return (group && group[0]) ? group : "Music";
+}
+
+static int audio_group_differs(const char *a, const char *b) {
+    if (a == b)
+        return 0;
+    if (!a || !b)
+        return 1;
+    return strcmp(a, b) != 0;
+}
+
+static int audio_visible_group_count(void) {
+    int count = glr_audio_track_count();
+    int groups = 0;
+    const char *prev = NULL;
+    for (int i = 0; i < count; i++) {
+        const char *group = audio_group_label_for_track(i);
+        if (i == 0 || audio_group_differs(group, prev))
+            groups++;
+        prev = group;
+    }
+    return groups;
+}
+
+static int audio_group_start_for_parent_row(int row) {
+    int count = glr_audio_track_count();
+    int group_ord = -1;
+    const char *prev = NULL;
+    if (row < 0)
+        return -1;
+    for (int i = 0; i < count; i++) {
+        const char *group = audio_group_label_for_track(i);
+        if (i == 0 || audio_group_differs(group, prev)) {
+            group_ord++;
+            if (group_ord == row)
+                return i;
+        }
+        prev = group;
+    }
+    return -1;
+}
+
+static int audio_group_end_for_parent_row(int row) {
+    int start = audio_group_start_for_parent_row(row);
+    int count = glr_audio_track_count();
+    const char *group;
+    if (start < 0)
+        return -1;
+    group = audio_group_label_for_track(start);
+    for (int i = start + 1; i < count; i++)
+        if (audio_group_differs(audio_group_label_for_track(i), group))
+            return i;
+    return count;
+}
+
 /* True if two subheadings are equivalent for grouping purposes: same
  * pointer (covers both NULL), or non-NULL strings with equal contents. */
 static int subheadings_equal(const char *a, const char *b) {
@@ -151,17 +210,17 @@ static int subheadings_equal(const char *a, const char *b) {
     return strcmp(a, b) == 0;
 }
 
-/* Per-tag flyout walker shared by the Scene (examples) and Tutorials
- * menus. The two catalogs are independent data sources but the in-flyout
+/* Catalog flyout walker shared by the Scene (examples), Tutorials, and
+ * Audio menus. The catalogs are independent data sources but the in-flyout
  * row layout is identical: walk entries in catalog order filtered to the
- * tag, and whenever an entry's non-NULL subheading differs from the
+ * tag/group, and whenever an entry's non-NULL subheading differs from the
  * previous emitted one, emit a HEADER row (label = subheading,
  * abs_idx = -1) before its ITEM row. Authoring rule: same-subheading
  * entries must be contiguous per tag (enforced by
  * test_example_subheading_metadata and test_catalog_subheading_metadata).
  *
  * Backing the walker is a tiny ops table — four catalog query function
- * pointers — so the algorithm has one home and both menus stay in
+ * pointers — so the algorithm has one home and every menu stays in
  * lockstep when the rule changes. */
 typedef struct {
     int         (*count_for_tag)(int tag);
@@ -182,6 +241,39 @@ static const CatalogFlyoutOps kTutorialCatalogOps = {
     .index_for_tag = repl_tutorial_index_for_tag,
     .name_of       = repl_tutorial_name,
     .subheading_of = repl_tutorial_subheading,
+};
+
+static int audio_count_for_group(int group) {
+    int start = audio_group_start_for_parent_row(group);
+    int end = audio_group_end_for_parent_row(group);
+    if (start < 0 || end < start)
+        return 0;
+    return end - start;
+}
+
+static int audio_index_for_group(int group, int ord) {
+    int start = audio_group_start_for_parent_row(group);
+    int end = audio_group_end_for_parent_row(group);
+    int idx = start + ord;
+    if (start < 0 || ord < 0 || idx >= end)
+        return -1;
+    return idx;
+}
+
+static const char *audio_track_name_for_menu(int idx) {
+    return glr_audio_track_display_name(idx);
+}
+
+static const char *audio_track_subheading_for_menu(int idx) {
+    (void)idx;
+    return NULL;
+}
+
+static const CatalogFlyoutOps kAudioCatalogOps = {
+    .count_for_tag = audio_count_for_group,
+    .index_for_tag = audio_index_for_group,
+    .name_of       = audio_track_name_for_menu,
+    .subheading_of = audio_track_subheading_for_menu,
 };
 
 /* Total visible rows in one per-tag flyout (subheading HEADER chrome +
@@ -267,6 +359,10 @@ static int menu_item_count(int menu_id, const UiRenderSnapshot *snap) {
          * glr_config_section_count() never counts All (implemented per
          * plan Finding #2). */
         return glr_config_section_count() + 1;
+    case MENU_AUDIO: {
+        int group_count = audio_visible_group_count();
+        return group_count > 0 ? group_count + GLR_AUDIO_FIXED_COUNT : 0;
+    }
     }
     return 0;
 }
@@ -274,6 +370,15 @@ static int menu_item_count(int menu_id, const UiRenderSnapshot *snap) {
 /* Index of the synthetic Config "All" parent row (last row). */
 static int config_all_parent_row(void) {
     return glr_config_section_count();
+}
+
+static const char *audio_loop_mode_label(void) {
+    int mode = glr_audio_get_loop_mode();
+    if (mode == GLR_AUDIO_LOOP_OFF)
+        return "Off";
+    if (mode == GLR_AUDIO_LOOP_SONG)
+        return "Song";
+    return "All";
 }
 
 /* Row label for dropdown row `i` of `menu_id` — the single label table
@@ -331,6 +436,27 @@ static const char *menu_item_label(int menu_id, int i) {
             return "All";
         return glr_config_section_display_label(i);
     }
+    if (menu_id == MENU_AUDIO) {
+        static char loop_label[32];
+        int group_count = audio_visible_group_count();
+        if (i >= 0 && i < group_count) {
+            int start = audio_group_start_for_parent_row(i);
+            return start >= 0 ? audio_group_label_for_track(start) : NULL;
+        }
+        if (group_count <= 0)
+            return NULL;
+        if (i == group_count + GLR_AUDIO_OFF_SEP)  return "---";
+        if (i == group_count + GLR_AUDIO_OFF_PLAY)
+            return glr_audio_is_paused() ? "Play" : "Pause";
+        if (i == group_count + GLR_AUDIO_OFF_NEXT) return "Next Track";
+        if (i == group_count + GLR_AUDIO_OFF_PREV) return "Previous Track";
+        if (i == group_count + GLR_AUDIO_OFF_LOOP) {
+            snprintf(loop_label, sizeof(loop_label), "Loop: %s",
+                     audio_loop_mode_label());
+            return loop_label;
+        }
+        return NULL;
+    }
     return NULL;
 }
 
@@ -348,6 +474,18 @@ static const char *menu_item_shortcut(int menu_id, int i) {
     if (menu_id == MENU_SCENE) return NULL;
     if (menu_id == MENU_TUTORIALS)
         return NULL;
+    if (menu_id == MENU_AUDIO) {
+        int group_count = audio_visible_group_count();
+        if (i == group_count + GLR_AUDIO_OFF_NEXT)
+            return keymap_binding_to_string(buf, (int)sizeof(buf),
+                                            KM_KEY(GLR_AUDIO_NEXT),
+                                            KM_MODS(GLR_AUDIO_NEXT), 1);
+        if (i == group_count + GLR_AUDIO_OFF_PREV)
+            return keymap_binding_to_string(buf, (int)sizeof(buf),
+                                            KM_KEY(GLR_AUDIO_PREV),
+                                            KM_MODS(GLR_AUDIO_PREV), 1);
+        return NULL;
+    }
     /* Config: top-level rows are section parents — no shortcut at this
      * level; the per-item shortcut renders inside the flyout (Step 8). */
     (void)i;
@@ -698,6 +836,37 @@ static const FlyoutProvider kTutorialProvider = {
     .row_kind      = tutorial_flyout_row_kind,
 };
 
+/* --- Audio provider --- */
+
+static int audio_flyout_row_count(int parent_row) {
+    return catalog_flyout_row_count(&kAudioCatalogOps, parent_row);
+}
+static const char *audio_flyout_row_label(int parent_row, int ordinal) {
+    const char *label = NULL;
+    catalog_flyout_row_at(&kAudioCatalogOps, parent_row,
+                          ordinal, NULL, NULL, &label);
+    return label;
+}
+static int audio_flyout_row_abs_index(int parent_row, int ordinal) {
+    int abs_idx = -1;
+    catalog_flyout_row_at(&kAudioCatalogOps, parent_row,
+                          ordinal, NULL, &abs_idx, NULL);
+    return abs_idx;
+}
+static GlrConfigRowKind audio_flyout_row_kind(int parent_row, int ordinal) {
+    GlrConfigRowKind kind = GLR_CFG_ROW_ITEM;
+    catalog_flyout_row_at(&kAudioCatalogOps, parent_row,
+                          ordinal, &kind, NULL, NULL);
+    return kind;
+}
+
+static const FlyoutProvider kAudioProvider = {
+    .row_count     = audio_flyout_row_count,
+    .row_label     = audio_flyout_row_label,
+    .row_abs_index = audio_flyout_row_abs_index,
+    .row_kind      = audio_flyout_row_kind,
+};
+
 /* --- Config provider --- */
 
 static int config_flyout_row_count_fn(int parent_row) {
@@ -741,6 +910,7 @@ static const FlyoutProvider *flyout_provider_for(int menu_id) {
     if (menu_id == MENU_SCENE)     return &kSceneProvider;
     if (menu_id == MENU_TUTORIALS) return &kTutorialProvider;
     if (menu_id == MENU_CONFIG)    return &kConfigProvider;
+    if (menu_id == MENU_AUDIO)     return &kAudioProvider;
     return NULL;
 }
 
@@ -758,8 +928,9 @@ static const char *submenu_row_label(int menu_id, int parent_row,
 }
 
 /* Absolute target index the row activates: a global flat example index
- * for Scene, a global tutorial index for Tutorials (-1 for in-flyout
- * subheading header rows in both), a g_cfg_items[] index for Config. */
+ * for Scene, a global tutorial index for Tutorials, a playlist index
+ * for Audio (-1 for in-flyout subheading header rows), or a
+ * g_cfg_items[] index for Config. */
 static int submenu_row_abs_index(int menu_id, int parent_row,
                                  int ordinal) {
     const FlyoutProvider *p = flyout_provider_for(menu_id);
@@ -772,9 +943,8 @@ static GlrConfigRowKind submenu_row_kind(int menu_id, int parent_row,
     return p ? p->row_kind(parent_row, ordinal) : GLR_CFG_ROW_ITEM;
 }
 
-/* Extra right-column px the Config flyout reserves for the per-item
- * keyboard shortcut + state label. 0 for non-Config submenus (Scene
- * rows are a bare label). */
+/* Extra right-column px a flyout reserves for per-row chrome: Config
+ * uses shortcut + state label; Audio uses elapsed / duration. */
 /* Widest keyboard-shortcut label (px) across a Config flyout's rows.
  * Constant per flyout — both the shortcut and the state-value column
  * are aligned to fixed x's derived from it, so they don't jitter
@@ -794,14 +964,19 @@ static int config_submenu_max_sc_px(int parent_row) {
     return max_sc;
 }
 
-static int config_submenu_extra_w(int menu_id, int parent_row) {
-    if (menu_id != MENU_CONFIG)
-        return 0;
-    int max_sc = config_submenu_max_sc_px(parent_row);
-    int extra = cfg_max_state_chars() * FONT_SMALL_W + 20;
-    if (max_sc > 0)
-        extra += max_sc + DROPDOWN_SC_GAP;
-    return extra;
+static int submenu_extra_w(int menu_id, int parent_row) {
+    if (menu_id == MENU_CONFIG) {
+        int max_sc = config_submenu_max_sc_px(parent_row);
+        int extra = cfg_max_state_chars() * FONT_SMALL_W + 20;
+        if (max_sc > 0)
+            extra += max_sc + DROPDOWN_SC_GAP;
+        return extra;
+    }
+    if (menu_id == MENU_AUDIO) {
+        (void)parent_row;
+        return 16 * FONT_SMALL_W + 20;
+    }
+    return 0;
 }
 
 /* Does dropdown row `row` of `menu_id` own a flyout submenu? */
@@ -869,7 +1044,7 @@ static int submenu_rect(int menu_id, int parent_row,
         }
         if (max_lbl < 80)
             max_lbl = 80;
-        width = max_lbl + DROPDOWN_PAD_X + config_submenu_extra_w(menu_id, parent_row);
+        width = max_lbl + DROPDOWN_PAD_X + submenu_extra_w(menu_id, parent_row);
         {
             /* Clamp tall flyouts (the Config "All" list is ~47 rows,
              * taller than an 800px window) to the viewport so every row
@@ -1261,6 +1436,12 @@ static int submenu_row_is_active(int menu_id, int parent_row, int ordinal,
         return tutorial_idx >= 0 &&
                tutorial_idx == snap->tutorial.tutorial_idx;
     }
+    if (menu_id == MENU_AUDIO) {
+        int track_idx = submenu_row_abs_index(menu_id, parent_row,
+                                              ordinal);
+        return track_idx >= 0 &&
+               track_idx == glr_audio_current_index();
+    }
     return 0;
 }
 
@@ -1364,6 +1545,46 @@ static void paint_config_row_columns(const UiRenderSnapshot *snap,
                      (float)ey, st, FONT_SMALL);
 }
 
+static void audio_format_time(float seconds, char *out, int out_size) {
+    int total, mins, secs;
+    if (!out || out_size <= 0)
+        return;
+    if (seconds < 0.0f) {
+        snprintf(out, (size_t)out_size, "--:--");
+        return;
+    }
+    total = (int)(seconds + 0.5f);
+    if (total < 0)
+        total = 0;
+    mins = total / 60;
+    secs = total % 60;
+    snprintf(out, (size_t)out_size, "%d:%02d", mins, secs);
+}
+
+static void paint_audio_row_columns(int track_idx, int ey, int right,
+                                    int on_hilite, float alpha) {
+    char elapsed[16];
+    char duration[16];
+    char label[40];
+    int label_px;
+
+    if (track_idx < 0 || track_idx != glr_audio_current_index())
+        return;
+
+    audio_format_time(glr_audio_current_cursor_seconds(),
+                      elapsed, (int)sizeof(elapsed));
+    audio_format_time(glr_audio_track_duration_seconds(track_idx),
+                      duration, (int)sizeof(duration));
+    snprintf(label, sizeof(label), "%s / %s", elapsed, duration);
+    label_px = (int)strlen(label) * FONT_SMALL_W;
+
+    if (on_hilite)
+        ui_clr_a(UI_TOK_TEXT_ON_HILITE, alpha);
+    else
+        ui_clr_a(UI_TOK_TEXT_MUTED, alpha);
+    gl2d_draw_string((float)(right - label_px), (float)ey, label, FONT_SMALL);
+}
+
 static void render_active_submenu(const UiRenderSnapshot *snap) {
     int sx, sy, sw, sh;
     int menu_id    = g_submenu_menu_id;
@@ -1392,6 +1613,7 @@ static void render_active_submenu(const UiRenderSnapshot *snap) {
                               ? config_submenu_max_sc_px(parent_row) : 0;
     int cfg_state_right = cfg_sc_right
                               - (cfg_max_sc > 0 ? cfg_max_sc + DROPDOWN_SC_GAP : 0);
+    int audio_time_right = sx + sw - 14;
 
     ui_clr_a(UI_TOK_RAISED, 0.98f * alpha);
     glRectf((float)sx, (float)sy, (float)(sx + sw), (float)(sy + sh));
@@ -1450,6 +1672,11 @@ static void render_active_submenu(const UiRenderSnapshot *snap) {
             paint_config_row_columns(snap, parent_row, ordinal,
                                      ey, cfg_state_right,
                                      cfg_sc_right, alpha);
+        if (menu_id == MENU_AUDIO)
+            paint_audio_row_columns(submenu_row_abs_index(menu_id, parent_row,
+                                                          ordinal),
+                                    ey, audio_time_right,
+                                    ordinal == hover_ordinal, alpha);
 
         ey -= LINE_H;
     }

@@ -2810,12 +2810,11 @@ void glr_ctrl_tick(void) {
         unsigned int gen = glr_audio_track_generation();
         if (gen != last_track_gen) {
             last_track_gen = gen;
-            const char *path = glr_audio_get_current_track();
-            if (path && *path) {
-                const char *base = strrchr(path, '/');
-                base = base ? base + 1 : path;
+            int track_idx = glr_audio_current_index();
+            const char *name = glr_audio_track_display_name(track_idx);
+            if (name && *name) {
                 char msg[REPL_DIAG_TEXT_MAX];
-                snprintf(msg, sizeof(msg), "Now playing: %s", base);
+                snprintf(msg, sizeof(msg), "Now playing: %s", name);
                 repl_set_status(msg);
             }
         }

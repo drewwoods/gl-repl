@@ -28,6 +28,7 @@ typedef enum {
     GLR_MENU_SCENE,
     GLR_MENU_TUTORIALS,
     GLR_MENU_CONFIG,
+    GLR_MENU_AUDIO,
     GLR_MENU_COUNT
 } GlrMenuId;
 
@@ -72,6 +73,22 @@ enum {
     GLR_TUTORIAL_OFF_RESTART = 1,
     GLR_TUTORIAL_OFF_EXIT    = 2,
     GLR_TUTORIAL_FIXED_COUNT = 3
+};
+
+/* Audio menu layout:
+ *   [0..g-1]               source group rows (g = visible audio groups)
+ *   [g + AUDIO_OFF_SEP]    "---" separator row
+ *   [g + AUDIO_OFF_PLAY]   "Play" / "Pause" action
+ *   [g + AUDIO_OFF_NEXT]   "Next Track" action
+ *   [g + AUDIO_OFF_PREV]   "Previous Track" action
+ *   [g + AUDIO_OFF_LOOP]   "Loop: <mode>" action */
+enum {
+    GLR_AUDIO_OFF_SEP  = 0,
+    GLR_AUDIO_OFF_PLAY = 1,
+    GLR_AUDIO_OFF_NEXT = 2,
+    GLR_AUDIO_OFF_PREV = 3,
+    GLR_AUDIO_OFF_LOOP = 4,
+    GLR_AUDIO_FIXED_COUNT = 5
 };
 
 /* Apply initial presentation configuration defaults at startup. Initializes the
