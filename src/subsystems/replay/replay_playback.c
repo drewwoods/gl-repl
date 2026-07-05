@@ -1,6 +1,7 @@
 #include "subsystems/replay/replay_internal.h"
 #include <stdio.h>
 #include "repl/flatten.h"
+#include "repl/flatten_query.h"
 #include "repl/host_effects.h"
 #include "repl/pipeline.h"
 #include <string.h>
@@ -119,6 +120,39 @@ static int replay_last_meaningful_src(int begin, int end_exclusive) {
     if (flat_idx < 0)
         return -1;
     return repl_state_flat_program_view().cmds[flat_idx].src_cmd_idx;
+}
+
+static int replay_flat_cmd_exact_src_match(const GLCmd *cmd, int target_line) {
+    if (!cmd || !cmd->valid || target_line < 0)
+        return 0;
+    return cmd->src_cmd_idx == target_line ||
+           cmd->call_src_cmd_idx == target_line ||
+           cmd->root_call_src_cmd_idx == target_line;
+}
+
+static int replay_step_has_exact_src_match(int begin, int end_exclusive,
+                                           int target_line,
+                                           FlatProgramView flat_program) {
+    for (int flat_idx = begin;
+         flat_idx < end_exclusive && flat_idx < flat_program.cmd_count;
+         flat_idx++) {
+        if (replay_flat_cmd_exact_src_match(&flat_program.cmds[flat_idx],
+                                            target_line))
+            return 1;
+    }
+    return 0;
+}
+
+static int replay_step_matches_cursor_scope(int begin, int end_exclusive,
+                                            int target_line,
+                                            FlatProgramView flat_program) {
+    for (int flat_idx = begin;
+         flat_idx < end_exclusive && flat_idx < flat_program.cmd_count;
+         flat_idx++) {
+        if (repl_flat_cmd_matches_cursor(flat_idx, target_line))
+            return 1;
+    }
+    return 0;
 }
 
 void replay_set_src_line(int src_line) {
@@ -402,7 +436,6 @@ void replay_seek(int new_pc) {
 }
 
 int replay_seek_to_src_line(int target_line) {
-    int pc = 0;
     int landed_pc = -1;
     int landed_src = -1;
     FlatProgramView flat_program;
@@ -412,23 +445,41 @@ int replay_seek_to_src_line(int target_line) {
     flat_program = repl_state_flat_program_view();
     num_flat_cmds = flat_program.cmd_count;
 
-    while (pc < num_flat_cmds) {
+    for (int pass = 0; pass < 3 && landed_pc < 0; pass++) {
+        int pc = 0;
         int fade_begin = -1;
         int fade_end = -1;
-        int next_pc = (replay_state_view().mode == REPLAY_MODE_POLYGON)
-                    ? replay_next_polygon_limit(pc, &fade_begin, &fade_end)
-                    : replay_next_vertex_limit(pc, &fade_begin, &fade_end);
 
-        if (next_pc <= pc)
-            break;
+        while (pc < num_flat_cmds) {
+            int next_pc = (replay_state_view().mode == REPLAY_MODE_POLYGON)
+                        ? replay_next_polygon_limit(pc, &fade_begin, &fade_end)
+                        : replay_next_vertex_limit(pc, &fade_begin, &fade_end);
 
-        int step_src = replay_last_meaningful_src(pc, next_pc);
-        if (step_src >= target_line) {
-            landed_pc = next_pc;
-            landed_src = step_src;
-            break;
+            if (next_pc <= pc)
+                break;
+
+            int step_src = replay_last_meaningful_src(pc, next_pc);
+            if (pass == 0 &&
+                replay_step_has_exact_src_match(pc, next_pc, target_line,
+                                                flat_program)) {
+                landed_pc = next_pc;
+                landed_src = target_line;
+                break;
+            }
+            if (pass == 1 &&
+                replay_step_matches_cursor_scope(pc, next_pc, target_line,
+                                                 flat_program)) {
+                landed_pc = next_pc;
+                landed_src = target_line;
+                break;
+            }
+            if (pass == 2 && step_src >= target_line) {
+                landed_pc = next_pc;
+                landed_src = step_src;
+                break;
+            }
+            pc = next_pc;
         }
-        pc = next_pc;
     }
 
     if (landed_pc < 0)

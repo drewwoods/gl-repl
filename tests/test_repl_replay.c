@@ -804,6 +804,79 @@ static void test_replay_focus_call_site_provenance(void) {
     ASSERT_TRUE("inactive replay focus is -1", replay_focus_flat_idx() == -1);
 }
 
+/* Ctrl+K / replay_seek_to_src_line should understand flattened function
+ * provenance. A cursor on func0() must jump into that call expansion, not skip
+ * forward to the next top-level source line just because the focused command's
+ * src_cmd_idx points back into the function body. */
+static void test_replay_seek_function_aware_jump(void) {
+    const GLCmd *flat;
+    int landed;
+    int focus;
+
+    glr_ctrl_reset_all();
+    editor_feed_line("func0() {");                  /* 0 */
+    editor_feed_line("glBegin(GL_POINTS);");        /* 1 */
+    editor_feed_line("glVertex3f(1, 1, 1);");       /* 2 */
+    editor_feed_line("glEnd();");                   /* 3 */
+    editor_feed_line("}");                          /* 4 */
+    editor_feed_line("func0();");                   /* 5 */
+    editor_feed_line("glVertex3f(9, 9, 9);");       /* 6 */
+    repl_flatten_commands(editor_state_edit_line());
+
+    replay_start();
+    g_replay_mode = REPLAY_MODE_VERTEX;
+    g_replay_state = REPLAY_PAUSED;
+    flat = repl_state_flat_program_view().cmds;
+
+    landed = replay_seek_to_src_line(5);
+    focus = replay_focus_flat_idx();
+    ASSERT_TRUE("seek on function call returns cursor line", landed == 5);
+    ASSERT_TRUE("seek on function call lands in first call expansion",
+                g_replay_pc == 2);
+    ASSERT_TRUE("seek on function call focuses called body",
+                focus >= 0 && flat[focus].src_cmd_idx == 2);
+    ASSERT_TRUE("seek on function call preserves call provenance",
+                focus >= 0 && flat[focus].call_src_cmd_idx == 5);
+
+    landed = replay_seek_to_src_line(4);
+    focus = replay_focus_flat_idx();
+    ASSERT_TRUE("seek on function end returns cursor line", landed == 4);
+    ASSERT_TRUE("seek on function end lands in function scope",
+                g_replay_pc == 2);
+    ASSERT_TRUE("seek on function end focuses scoped body",
+                focus >= 0 && flat[focus].func_scope_mask != 0u);
+    replay_stop();
+
+    glr_ctrl_reset_all();
+    editor_feed_line("func1(a) {");                 /* 0 */
+    editor_feed_line("glBegin(GL_POINTS);");        /* 1 */
+    editor_feed_line("glVertex3f(a, 0, 0);");       /* 2 */
+    editor_feed_line("glEnd();");                   /* 3 */
+    editor_feed_line("}");                          /* 4 */
+    editor_feed_line("func0(scale) {");             /* 5 */
+    editor_feed_line("func1(scale);");              /* 6 */
+    editor_feed_line("}");                          /* 7 */
+    editor_feed_line("func0(2);");                  /* 8 */
+    editor_feed_line("func0(4);");                  /* 9 */
+    repl_flatten_commands(editor_state_edit_line());
+
+    replay_start();
+    g_replay_mode = REPLAY_MODE_VERTEX;
+    g_replay_state = REPLAY_PAUSED;
+    flat = repl_state_flat_program_view().cmds;
+
+    landed = replay_seek_to_src_line(8);
+    focus = replay_focus_flat_idx();
+    ASSERT_TRUE("seek on nested root call returns cursor line", landed == 8);
+    ASSERT_TRUE("seek on nested root call lands in first expansion",
+                g_replay_pc == 2);
+    ASSERT_TRUE("seek on nested root call matches root provenance",
+                focus >= 0 && flat[focus].root_call_src_cmd_idx == 8);
+    ASSERT_TRUE("seek on nested root call keeps immediate provenance",
+                focus >= 0 && flat[focus].call_src_cmd_idx == 6);
+    replay_stop();
+}
+
 /* Request 2: the focused flat command's funcN call-frame depth surfaces as
  * ReplayRuntimeState.focus_call_depth, which the HUD shows as "depth N". A
  * recursive function should make the depth climb step by step. */
@@ -943,6 +1016,7 @@ int main(void) {
     test_replay_basic_controls();
     test_replay_stepping();
     test_replay_focus_call_site_provenance();
+    test_replay_seek_function_aware_jump();
     test_replay_focus_call_depth();
     test_replay_focus_anchor_flat_idx();
     test_replay_focus_anchor_glut_solid();
