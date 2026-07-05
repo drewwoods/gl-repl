@@ -50,7 +50,7 @@ CLAIMS: list[tuple[str, str, list[str]]] = [
      ["| {key} | Light theme |",
       "**Light themes** (**{key}**)"]),
     ("Syntax highlight shortcut", "GLR_SYNTAX_HL",
-     ["| {key} | Syntax highlight |"]),
+     ["| {key} | Cycle syntax highlight |"]),
     ("Accum effect shortcut", "GLR_ACCUM_EFFECT",
      ["**Accum effect** ({key})",
       "| {key} | Accum effect |"]),
@@ -60,9 +60,9 @@ CLAIMS: list[tuple[str, str, list[str]]] = [
     ("Vertex outlines shortcut", "GLR_VERTEX_OUTLINES",
      ["**Vertex outlines** ({key})",
       "| {key} | Vertex outlines |"]),
-    ("Post-process shortcut", "GLR_POST_FILTER",
-     ["**Post-process filter** ({key})",
-      "| {key} | Post-process filter |"]),
+    ("Post-process shortcut", "GLR_POST_FILTER_CYCLE",
+     ["**Post-process filter** ({key} forward / Shift+{key} backward)",
+      "| {key} / Shift+{key} | Post-process filter (forward / backward) |"]),
 ]
 
 
