@@ -96,6 +96,7 @@ void display(void) {
   static float x, y, z, n, k, s;
   static float fireflies = 44; // @tune
   static float flyRadius = 2.6; // @tune
+  static float c = 3; // color scaling factor for sea sheet
 
   // --- sea(): animated water sheet (nested for + analytic normals) ---
   // Colored by wave height: deep azure troughs lift to bright azure crests.
@@ -108,13 +109,13 @@ void display(void) {
           y = amp*sin(x*1.5 + t)*cos(z*1.5 + t*0.6);
           n = 1.0/sqrt(1 + amp*amp*2.25*(cos(x*1.5 + t)*cos(x*1.5 + t)*cos(z*1.5 + t*0.6)*cos(z*1.5 + t*0.6) + sin(x*1.5 + t)*sin(x*1.5 + t)*sin(z*1.5 + t*0.6)*sin(z*1.5 + t*0.6)));
           glNormal3f(-amp*1.5*cos(x*1.5 + t)*cos(z*1.5 + t*0.6)*n, n, amp*1.5*sin(x*1.5 + t)*sin(z*1.5 + t*0.6)*n);
-          glColor3f(0.18 + 0.18*(0.5+0.5*y/amp), 0.34 + 0.36*(0.5+0.5*y/amp), 0.55 + 0.43*(0.5+0.5*y/amp));
+          glColor3f(0.18 + 0.18/c*(0.5+0.5*y/amp), 0.34 + 0.36/c*(0.5+0.5*y/amp), 0.55 + 0.43/c*(0.5+0.5*y/amp));
           glVertex3f(x, y, z);
           z = -half + 2*half*(i + 1)/cells;
           y = amp*sin(x*1.5 + t)*cos(z*1.5 + t*0.6);
           n = 1.0/sqrt(1 + amp*amp*2.25*(cos(x*1.5 + t)*cos(x*1.5 + t)*cos(z*1.5 + t*0.6)*cos(z*1.5 + t*0.6) + sin(x*1.5 + t)*sin(x*1.5 + t)*sin(z*1.5 + t*0.6)*sin(z*1.5 + t*0.6)));
           glNormal3f(-amp*1.5*cos(x*1.5 + t)*cos(z*1.5 + t*0.6)*n, n, amp*1.5*sin(x*1.5 + t)*sin(z*1.5 + t*0.6)*n);
-          glColor3f(0.18 + 0.18*(0.5+0.5*y/amp), 0.34 + 0.36*(0.5+0.5*y/amp), 0.55 + 0.43*(0.5+0.5*y/amp));
+          glColor3f(0.18 + 0.18/c*(0.5+0.5*y/amp), 0.34 + 0.36/c*(0.5+0.5*y/amp), 0.55 + 0.43/c*(0.5+0.5*y/amp));
           glVertex3f(x, y, z);
         }
       glEnd();
@@ -233,6 +234,7 @@ void display(void) {
 
   // shared scratch: x/y/z vertex position; n = 1/|gradient| (sea normals)
   // k/s = radius/angle scratch (island coastline, firefly polar coords).
+
   glClearColor(0.05, 0.06, 0.08, 1);
   // ===== Dusk lighthouse atoll - a coherent feature tour =====
   // One scene, many features: a parametric sea, a tessellated island with a
@@ -257,7 +259,7 @@ void display(void) {
   // Sea sheet under everything
   glPushMatrix();
     glTranslatef(0, -0.62, 0);
-    sea(5.5, 10, 0.16);
+    sea(5.5, 13, 0.16);
   glPopMatrix();
 
   // Island shelf just above the water
