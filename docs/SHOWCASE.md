@@ -88,7 +88,7 @@ glDepthMask(GL_TRUE);  glDisable(GL_BLEND);          // leave GL as we found it
 
 ---
 
-### [Snowfall — 550 deterministic particles](../examples/scenes/snowfall-demo-550-particles.glr)
+### [Snowfall — deterministic particles](../examples/scenes/snowfall-particles.glr)
 
 No particle system, no stored state. Each flake is a pure function of its
 index and `t`, wrapped with `rem(...)`, so the whole field replays identically.
