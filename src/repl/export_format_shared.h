@@ -40,6 +40,7 @@
     "/* @workspace: REPL state (auto-saved) */"
 
 #define REPL_SNIPPET_DIRECTIVE_DECLARE       "declare"
+#define REPL_SNIPPET_DIRECTIVE_FUNC_BODY     "func-body"
 #define REPL_EXPORT_C89_LOOP_SCOPE_MARKER    "repl-export-c89-loop-scope"
 #define REPL_EXPORT_C89_LOOP_VAR_MARKER      "repl-export-c89-loop-var"
 #define REPL_EXPORT_GLFLOAT1_HELPER          "repl_glfloat1"

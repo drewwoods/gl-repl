@@ -251,6 +251,20 @@ static int comment_run_attached_func_idx(int start, int end_idx) {
     return -1;
 }
 
+static void write_func_body_marker(FILE *f, int func_idx) {
+    int slot;
+
+    if (func_idx < 0 || func_idx >= repl_state_document_count())
+        return;
+    if (!repl_state_document_cmds()[func_idx].valid ||
+        repl_state_document_cmds()[func_idx].type != CMD_FUNC_DEF)
+        return;
+
+    slot = (int)repl_state_document_cmds()[func_idx].args[0];
+    fprintf(f, "  /* @%s %d */\n",
+            REPL_SNIPPET_DIRECTIVE_FUNC_BODY, slot);
+}
+
 /* The per-command writer for the exported display() body: emit one
  * source command as standalone C. One independent case per command
  * family — most canonical REPL text is already valid C and passes
@@ -445,6 +459,7 @@ void write_render_body_range_as_c(FILE *f, int start, int end_idx,
              repl_state_document_cmds()[cmd_idx].type == CMD_EMPTY)) {
             int attached_func = comment_run_attached_func_idx(cmd_idx, end_idx);
             if (attached_func >= 0) {
+                write_func_body_marker(f, attached_func);
                 cmd_idx = find_export_block_end(attached_func);
                 continue;
             }
@@ -460,8 +475,10 @@ void write_render_body_range_as_c(FILE *f, int start, int end_idx,
             write_for_end_as_c(f, export_document_text(cmd_idx));
             break;
         case CMD_FUNC_DEF:
-            if (skip_func_defs)
+            if (skip_func_defs) {
+                write_func_body_marker(f, cmd_idx);
                 cmd_idx = find_export_block_end(cmd_idx);
+            }
             break;
         case CMD_FUNC_END:
             break;

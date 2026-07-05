@@ -2593,6 +2593,35 @@ static void test_import_robustness(void) {
     ASSERT_TRUE("func1 still defined (not swallowed)",
                 strstr(editor_buffer_line(3), "func1") != NULL);
 
+    /* 8. Exported files write user function definitions before draw_scene()
+     * for C, then leave comment-only @func-body markers inside the snippet so
+     * import can reconstruct the original source order. A user command before
+     * the function must stay before that function after import. */
+    f = fopen(test_path, "w");
+    fprintf(f, "/* @workspace: REPL state (auto-saved) */\n");
+    fprintf(f, "/* @func 0 = gear */\n");
+    fprintf(f, "static void gear(void) {\n");
+    fprintf(f, "  glVertex3f(1, 1, 1);\n");
+    fprintf(f, "}\n");
+    fprintf(f, "static void draw_scene(void) {\n");
+    fprintf(f, "  // Snippet start\n");
+    fprintf(f, "  glColor3f(0.1, 0.2, 0.3);\n");
+    fprintf(f, "  /* @func-body 0 */\n");
+    fprintf(f, "  glColor3f(0.4, 0.5, 0.6);\n");
+    fprintf(f, "  // Snippet end\n");
+    fprintf(f, "}\n");
+    fclose(f);
+    glr_ctrl_reset_all(); declare_test_vars();
+    ASSERT_TRUE("load func-body marker file",
+                repl_export_load_from_file(test_path, NULL) == 1);
+    ASSERT_INT("func-body marker order count", repl_state_document_count(), 5);
+    ASSERT_TRUE("pre-function command remains first",
+                strstr(editor_buffer_line(0), "glColor3f(0.1, 0.2, 0.3);") != NULL);
+    ASSERT_TRUE("function placed at marker",
+                strstr(editor_buffer_line(1), "gear") != NULL);
+    ASSERT_TRUE("post-function command follows function",
+                strstr(editor_buffer_line(4), "glColor3f(0.4, 0.5, 0.6);") != NULL);
+
     remove(test_path);
 }
 
