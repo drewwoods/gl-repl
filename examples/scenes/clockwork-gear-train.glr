@@ -1,0 +1,235 @@
+// @cfg vertex_outlines = 0
+// @cfg vertex_points = 0
+// @cfg light_indicators = 0
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_OFF
+// @cfg light_theme = LIGHT_THEME_STUDIO
+
+// camera
+glTranslatef(0.0000f, 0.0000f, -9.2000f);
+glRotatef(7.0000f, 1.0f, 0.0f, 0.0f);
+glRotatef(-14.0000f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0000f, -0.2000f, 0.0000f);
+
+// ===== Clockwork gear train - a ticking escapement drives exact ratios =====
+// The pendulum beats, the anchor rocks, and the escape wheel advances one
+// tooth per beat. Every other wheel is slaved to it through exact tooth
+// ratios (angle_b = -angle_a * Na/Nb + half-pitch offset), so the whole
+// train ticks forward together. All gears share module 2*rp/n = 0.075, so
+// any two mesh when their centers sit exactly rp1 + rp2 apart.
+static float tickRate = 1.4; // beats per second @tune
+static float swingAmp = 20; // pendulum swing, degrees @tune
+static float u, stepA, swing, rock, side;
+static float aE, a1, a2, a3;
+
+glClearColor(0.16, 0.15, 0.17, 1.0);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_NORMALIZE);
+glEnable(GL_COLOR_MATERIAL);
+glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+glEnable(GL_LIGHT0);
+glEnable(GL_LIGHT1);
+glEnable(GL_LIGHT2);
+glShadeModel(GL_SMOOTH);
+glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, 1);
+glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.85, 0.8, 0.65, 1});
+glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 55);
+
+// --- gear(n, rp): rim + 4 spokes + n teeth as radial cubes. Tooth size is
+// constant because every wheel shares the same module. ---
+gear(n, rp) {
+  glPushMatrix();
+  glScalef(1, 1, 0.5);
+  glutSolidTorus(0.11, rp - 0.14, 10, 44);
+  glPopMatrix();
+  glPushMatrix();
+  glScalef(0.14, 0.14, 0.3);
+  glutSolidSphere(1, 16, 12);
+  glPopMatrix();
+  for(i, 0, 4) {
+    glPushMatrix();
+    glRotatef(i*90 + 45, 0, 0, 1);
+    glTranslatef(rp*0.45, 0, 0);
+    glScalef(rp*0.8, 0.08, 0.09);
+    glutSolidCube(1);
+    glPopMatrix();
+  }
+  for(i, 0, n) {
+    glPushMatrix();
+    glRotatef(i*360/n, 0, 0, 1);
+    glTranslatef(rp, 0, 0);
+    glScalef(0.17, 0.11, 0.13);
+    glutSolidCube(1);
+    glPopMatrix();
+  }
+}
+
+// --- escWheel(n, rp): like gear() but with slanted ratchet teeth, so the
+// faces the anchor pallets catch are visually obvious. ---
+escWheel(n, rp) {
+  glPushMatrix();
+  glScalef(1, 1, 0.4);
+  glutSolidTorus(0.09, rp - 0.1, 10, 40);
+  glPopMatrix();
+  glPushMatrix();
+  glScalef(0.12, 0.12, 0.26);
+  glutSolidSphere(1, 16, 12);
+  glPopMatrix();
+  for(i, 0, 4) {
+    glPushMatrix();
+    glRotatef(i*90, 0, 0, 1);
+    glTranslatef(rp*0.42, 0, 0);
+    glScalef(rp*0.74, 0.07, 0.08);
+    glutSolidCube(1);
+    glPopMatrix();
+  }
+  for(i, 0, n) {
+    glPushMatrix();
+    glRotatef(i*360/n, 0, 0, 1);
+    glTranslatef(rp - 0.02, 0, 0);
+    glRotatef(35, 0, 0, 1);
+    glScalef(0.2, 0.05, 0.1);
+    glutSolidCube(1);
+    glPopMatrix();
+  }
+}
+
+// --- axle(): brass arbor pin capped by a synthetic-ruby jewel bearing ---
+axle() {
+  glColor3f(0.78, 0.6, 0.24);
+  glPushMatrix();
+  glScalef(0.06, 0.06, 1.15);
+  glutSolidCube(1);
+  glPopMatrix();
+  glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, (GLfloat[]){0.22, 0.01, 0.04, 1});
+  glColor3f(0.6, 0.05, 0.12);
+  glPushMatrix();
+  glTranslatef(0, 0, 0.62);
+  glutSolidSphere(0.055, 12, 10);
+  glPopMatrix();
+  glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, (GLfloat[]){0, 0, 0, 1});
+}
+
+// Beat clock: u counts beats. The escape wheel snaps one 15-degree tooth
+// forward during the first 1/7th of each beat (floor + clamped ramp), then
+// dwells -- tick, tock. The pendulum is fastest at the release instant,
+// exactly like a real deadbeat escapement.
+u = t*tickRate;
+stepA = floor(u) + min(1, fmod(u, 1)*7);
+swing = swingAmp*sin(PI*u);
+rock = 9*sin(PI*u);
+// The train. Each wheel counter-rotates its driver, scaled by the tooth
+// ratio; the half-pitch constants (180/N: 5, 10, 15) interleave the teeth.
+aE = -stepA*15;
+a1 = -aE*24/36 + 5;
+a2 = -a1*36/18 + 10;
+a3 = -a2*18/12 + 15;
+
+// Walnut back panel
+glColor3f(0.23, 0.17, 0.12);
+glBegin(GL_QUADS);
+  glNormal3f(0, 0, 1);
+  glVertex3f(-3.5, -3.0, -0.85);
+  glVertex3f(3.5, -3.0, -0.85);
+  glVertex3f(3.5, 3.2, -0.85);
+  glVertex3f(-3.5, 3.2, -0.85);
+glEnd();
+
+// Escape wheel: 24 steel ratchet teeth, one per beat
+glPushMatrix();
+glTranslatef(-1.35, 1.15, 0);
+axle();
+glRotatef(aE, 0, 0, 1);
+glColor3f(0.62, 0.66, 0.72);
+escWheel(24, 0.9);
+glPopMatrix();
+
+// Center wheel, brass: 36T meshing the escape wheel from below (24:36)
+glPushMatrix();
+glTranslatef(-1.35, -1.1, 0);
+axle();
+glRotatef(a1, 0, 0, 1);
+glColor3f(0.8, 0.62, 0.26);
+gear(36, 1.35);
+glPopMatrix();
+
+// Second wheel, copper: 18T, geared up 2:1 off the center wheel
+glPushMatrix();
+glTranslatef(0.675, -1.1, 0);
+axle();
+glRotatef(a2, 0, 0, 1);
+glColor3f(0.72, 0.42, 0.28);
+gear(18, 0.675);
+glPopMatrix();
+
+// Third wheel, steel: 12T, the fast end of the train (7s per turn)
+glPushMatrix();
+glTranslatef(1.8, -1.1, 0);
+axle();
+glRotatef(a3, 0, 0, 1);
+glColor3f(0.66, 0.7, 0.76);
+gear(12, 0.45);
+glPopMatrix();
+
+// Anchor: rocks on the beat; ruby pallets dip between the ratchet teeth
+glPushMatrix();
+glTranslatef(-1.35, 2.42, 0);
+glRotatef(rock, 0, 0, 1);
+glColor3f(0.62, 0.66, 0.72);
+glPushMatrix();
+glScalef(0.09, 0.09, 0.22);
+glutSolidSphere(1, 12, 10);
+glPopMatrix();
+for(i, 0, 2) {
+  side = i*2 - 1;
+  glPushMatrix();
+  glRotatef(-90 + side*38, 0, 0, 1);
+  glColor3f(0.62, 0.66, 0.72);
+  glPushMatrix();
+  glTranslatef(0.25, 0, 0);
+  glScalef(0.5, 0.07, 0.08);
+  glutSolidCube(1);
+  glPopMatrix();
+  glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, (GLfloat[]){0.22, 0.01, 0.04, 1});
+  glColor3f(0.6, 0.05, 0.12);
+  glPushMatrix();
+  glTranslatef(0.5, 0, 0);
+  glScalef(0.12, 0.05, 0.09);
+  glutSolidCube(1);
+  glPopMatrix();
+  glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, (GLfloat[]){0, 0, 0, 1});
+  glPopMatrix();
+}
+glPopMatrix();
+
+// Pendulum: steel rod + brass bob, swinging behind the train
+glPushMatrix();
+glTranslatef(-1.35, 2.42, -0.55);
+glRotatef(swing, 0, 0, 1);
+glColor3f(0.55, 0.58, 0.64);
+glPushMatrix();
+glTranslatef(0, -1.7, 0);
+glScalef(0.055, 3.4, 0.055);
+glutSolidCube(1);
+glPopMatrix();
+glColor3f(0.83, 0.66, 0.3);
+glPushMatrix();
+glTranslatef(0, -3.35, 0);
+glScalef(1, 1, 0.45);
+glutSolidSphere(0.42, 24, 18);
+glPopMatrix();
+glPopMatrix();
+
+// Tooth-count labels sit beside their wheels
+glDisable(GL_LIGHTING);
+glColor3f(0.85, 0.8, 0.62);
+glRasterPos3f(-2.95, 1.05, 0.3);
+label("%fT", 24);
+glRasterPos3f(-1.5, -2.75, 0.3);
+label("%fT", 36);
+glRasterPos3f(0.5, -2.05, 0.3);
+label("%fT", 18);
+glRasterPos3f(1.65, -1.85, 0.3);
+label("%fT", 12);
+glEnable(GL_LIGHTING);
