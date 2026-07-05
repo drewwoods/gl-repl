@@ -24,12 +24,13 @@
 #include "render3d/postprocess_filter.h"  /* Render3dPostFilterMode */
 
 /* Apply the selected post-process filter to the whole window
- * (0, 0, win_w, win_h), in GL bottom-left window coordinates. No-op for
- * RENDER3D_POST_FILTER_OFF, an out-of-range mode, or non-positive
- * dimensions. Must be called after all of the frame's geometry and 2D
- * UI have been drawn (it samples the back buffer in place) and before
- * glutSwapBuffers(). */
+ * (0, 0, win_w, win_h), in GL bottom-left window coordinates. `t` is the
+ * animation time in seconds, forwarded to the time-driven filters (the
+ * scanlines barrel ripple). No-op for RENDER3D_POST_FILTER_OFF, an
+ * out-of-range mode, or non-positive dimensions. Must be called after all
+ * of the frame's geometry and 2D UI have been drawn (it samples the back
+ * buffer in place) and before glutSwapBuffers(). */
 void glr_compositor_postprocess_frame(Render3dPostFilterMode mode,
-                                      int win_w, int win_h);
+                                      int win_w, int win_h, float t);
 
 #endif /* GLR_COMPOSITOR_H */

@@ -35,8 +35,10 @@ void render3d_postprocess_filter_reset(void);
 
 /* Apply the selected filter to the scene rect (GL bottom-left window
  * coords: the same rect render3d_draw_scene() rendered into via
- * glViewport). No-op for RENDER3D_POST_FILTER_OFF or invalid rects. */
+ * glViewport). `t` is the animation time in seconds, used only by the
+ * time-driven filters (the scanlines barrel ripple); the others ignore
+ * it. No-op for RENDER3D_POST_FILTER_OFF or invalid rects. */
 void render3d_postprocess_filter_render(Render3dPostFilterMode mode,
-                                     int sx, int sy, int sw, int sh);
+                                     int sx, int sy, int sw, int sh, float t);
 
 #endif /* RENDER3D_POSTPROCESS_FILTER_H */
