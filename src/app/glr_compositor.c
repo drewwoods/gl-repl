@@ -21,11 +21,11 @@
 #include "render3d/postprocess_filter.h"
 
 void glr_compositor_postprocess_frame(Render3dPostFilterMode mode,
-                                      int win_w, int win_h) {
+                                      int win_w, int win_h, float t) {
     if (mode <= RENDER3D_POST_FILTER_OFF || mode >= RENDER3D_POST_FILTER_COUNT)
         return;
     if (win_w <= 0 || win_h <= 0)
         return;
 
-    render3d_postprocess_filter_render(mode, 0, 0, win_w, win_h);
+    render3d_postprocess_filter_render(mode, 0, 0, win_w, win_h, t);
 }

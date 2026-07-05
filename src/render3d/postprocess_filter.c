@@ -10,9 +10,14 @@
  * corners. No capture needed (it only darkens), so it skips the
  * texture machinery entirely.
  *
- * Iteration 3: scanlines (CRT mask). Dark 1px horizontal GL_LINES
- * every 3px, multiplicatively blended (GL_DST_COLOR, GL_ZERO) to
- * darken existing pixels without adding light. Capture-free overlay.
+ * Iteration 3: scanlines (CRT mask). The resolved scene is captured
+ * and redrawn on a tessellated barrel-warp surface (postprocess_surface),
+ * so the whole image bulges toward the viewer like a CRT tube and gains
+ * a subtle time-driven ripple; dark scanlines are then bent onto that
+ * same surface and multiplicatively blended (GL_DST_COLOR, GL_ZERO) to
+ * darken existing pixels without adding light. The barrel grid — not the
+ * texture work — is the trick, so the surface stays a reusable primitive
+ * (see postprocess_surface.h) other filters can adopt.
  *
  * Iteration 4: film grain. A small luminance noise tile generated once,
  * repeated over the rect at one texel per pixel and alpha-blended so
@@ -28,6 +33,7 @@
  */
 #include "postprocess_filter.h"
 
+#include "postprocess_surface.h"
 #include "gl_includes.h"
 
 #include <math.h>   /* cosf / sinf / sqrtf for the vignette ring */
@@ -158,8 +164,19 @@ static void postprocess_filter_draw_quad(int sw, int sh,
     glEnd();
 }
 
-static void postprocess_filter_render_chromatic(int sx, int sy,
-                                                int sw, int sh) {
+/* Ensure the scratch texture exists and is at least the rect size, bind
+ * it, and copy the resolved scene rect into it. MUST run inside the
+ * begin_2d bracket: glPushAttrib's GL_TEXTURE_BIT group (pulled in by
+ * GL_ALL_ATTRIB_BITS) snapshots GL_TEXTURE_BINDING_2D at push time, so
+ * glPopAttrib restores the caller's binding only if the push precedes our
+ * bind here — OpenGL 2.1 spec §6.1.16 / the glPushAttrib reference page,
+ * https://registry.khronos.org/OpenGL-Refpages/gl2.1/xhtml/glPushAttrib.xml
+ * Allocation/copy are matrix/viewport-independent, so running them inside
+ * the bracket is safe. Returns the used sub-rectangle of the POT texture
+ * via the umax/vmax out-params and 1 on success; 0 when the required POT
+ * size would exceed GL_MAX_TEXTURE_SIZE (the caller should bail). */
+static int postprocess_filter_capture_scene(int sx, int sy, int sw, int sh,
+                                             float *umax, float *vmax) {
     if (g_max_tex_size == 0) {
         glGetIntegerv(GL_MAX_TEXTURE_SIZE, &g_max_tex_size);
         if (g_max_tex_size <= 0)
@@ -170,21 +187,7 @@ static void postprocess_filter_render_chromatic(int sx, int sy,
     int tex_h = next_pow2(sh);
     if (g_max_tex_size > 0 &&
         (tex_w > g_max_tex_size || tex_h > g_max_tex_size))
-        return; /* would exceed the GL texture limit — skip this frame */
-
-    /* The state guard MUST start before the first glBindTexture.
-     * glPushAttrib's GL_TEXTURE_BIT group (pulled in by
-     * GL_ALL_ATTRIB_BITS) saves "the current texture bindings (for
-     * example, GL_TEXTURE_BINDING_2D)" — OpenGL 2.1 spec §6.1.16
-     * (state tables) / glPushAttrib reference page,
-     * https://registry.khronos.org/OpenGL-Refpages/gl2.1/xhtml/glPushAttrib.xml
-     * It snapshots that binding at push time, so glPopAttrib restores
-     * the caller's GL_TEXTURE_BINDING_2D only if the push precedes our
-     * bind. Allocation/copy are matrix/viewport-independent, so running
-     * them inside the 2D bracket is safe. Do not reorder a
-     * glBindTexture before this call. */
-    GLint saved_matrix_mode = 0;
-    postprocess_filter_begin_2d(sx, sy, sw, sh, &saved_matrix_mode);
+        return 0; /* would exceed the GL texture limit */
 
     if (g_filter_tex == 0 || tex_w > g_tex_w || tex_h > g_tex_h) {
         if (g_filter_tex == 0)
@@ -202,13 +205,25 @@ static void postprocess_filter_render_chromatic(int sx, int sy,
         glBindTexture(GL_TEXTURE_2D, g_filter_tex);
     }
 
-    /* Capture the resolved scene image. GL window coords (bottom-left
-     * origin); (sx,sy,sw,sh) is the same rect the scene rendered into,
-     * so no Y flip is needed. */
+    /* GL window coords (bottom-left origin); (sx,sy,sw,sh) is the same
+     * rect the scene rendered into, so no Y flip is needed. */
     glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sx, sy, sw, sh);
 
-    float umax = (float)sw / (float)g_tex_w;
-    float vmax = (float)sh / (float)g_tex_h;
+    *umax = (float)sw / (float)g_tex_w;
+    *vmax = (float)sh / (float)g_tex_h;
+    return 1;
+}
+
+static void postprocess_filter_render_chromatic(int sx, int sy,
+                                                int sw, int sh) {
+    GLint saved_matrix_mode = 0;
+    postprocess_filter_begin_2d(sx, sy, sw, sh, &saved_matrix_mode);
+
+    float umax = 0.0f, vmax = 0.0f;
+    if (!postprocess_filter_capture_scene(sx, sy, sw, sh, &umax, &vmax)) {
+        postprocess_filter_end_2d(saved_matrix_mode);
+        return; /* texture would exceed the GL limit — skip this frame */
+    }
 
     /* Base image: full RGB, unshifted. */
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
@@ -272,33 +287,66 @@ static void postprocess_filter_render_vignette(int sx, int sy,
     postprocess_filter_end_2d(saved_matrix_mode);
 }
 
-/* Scanlines / CRT mask: dark 1px horizontal lines every 3 scanlines,
- * multiplicatively blended over the frame via GL_DST_COLOR × GL_ZERO
- * (darkens existing pixels, never adds light). The line color is a dim
- * gray (0.65) — when multiplied against the framebuffer, bright areas
- * dim by 35% on the scanline rows while the gaps stay untouched,
- * giving the classic CRT phosphor-mask look. Capture-free. */
+/* Scanlines / CRT mask, on a tessellated barrel surface. The resolved
+ * scene is captured and redrawn on a POST_SURFACE_GRID barrel grid so the
+ * image bulges toward the viewer like a CRT tube (plus a subtle t-driven
+ * ripple), then dark scanlines are bent onto the same surface and
+ * multiplicatively blended via GL_DST_COLOR × GL_ZERO (darkens existing
+ * pixels, never adds light). The dim-gray line color (0.75) dims the
+ * bright scanline rows ~25% while the gaps stay untouched — the classic
+ * phosphor mask, now curving with the tube. */
+#define POST_SURFACE_GRID_COLS  32
+#define POST_SURFACE_GRID_ROWS  24
+#define SCANLINE_BULGE          0.10f  /* barrel strength (corners overscan ~20%) */
+#define SCANLINE_WOBBLE_PX      1.8f   /* animated ripple amplitude in pixels */
+#define SCANLINE_SPACING        3      /* one dark scanline every 3 device rows */
+
 static void postprocess_filter_render_scanlines(int sx, int sy,
-                                                int sw, int sh) {
+                                                int sw, int sh, float t) {
     GLint saved_matrix_mode = 0;
     postprocess_filter_begin_2d(sx, sy, sw, sh, &saved_matrix_mode);
 
+    float umax = 0.0f, vmax = 0.0f;
+    if (!postprocess_filter_capture_scene(sx, sy, sw, sh, &umax, &vmax)) {
+        postprocess_filter_end_2d(saved_matrix_mode);
+        return; /* texture would exceed the GL limit — skip this frame */
+    }
+
+    Render3dPostSurface surf;
+    surf.sw = sw;
+    surf.sh = sh;
+    surf.t = t;
+    surf.bulge = SCANLINE_BULGE;
+    surf.wobble = SCANLINE_WOBBLE_PX;
+
+    /* Black backing: the barrel overscans so it leaves no gaps, but the
+     * ripple can momentarily expose the rect edges — paint them CRT black
+     * rather than let the un-warped scene beneath show through. Drawn
+     * opaque (begin_2d left blending off) before the warped image. */
+    glDisable(GL_TEXTURE_2D);
+    glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
+    glBegin(GL_QUADS);
+        glVertex2f(0.0f,      0.0f);
+        glVertex2f((float)sw, 0.0f);
+        glVertex2f((float)sw, (float)sh);
+        glVertex2f(0.0f,      (float)sh);
+    glEnd();
+    glEnable(GL_TEXTURE_2D);
+
+    /* Captured scene redrawn on the barrel grid. begin_2d already set
+     * GL_REPLACE + texturing on, so the vertex color is ignored. */
+    render3d_post_surface_draw_textured(&surf, POST_SURFACE_GRID_COLS,
+                                        POST_SURFACE_GRID_ROWS, umax, vmax);
+
+    /* Scanlines bent onto the same surface, multiplicatively blended. */
     glDisable(GL_TEXTURE_2D);
     glEnable(GL_BLEND);
     glBlendFunc(GL_DST_COLOR, GL_ZERO); /* multiply: fb *= line_color */
     glLineWidth(1.0f);
-
     const float gray = 0.75f;
     glColor4f(gray, gray, gray, 1.0f);
-
-    const int spacing = 3; /* one dark scanline every 3 rows */
-    glBegin(GL_LINES);
-    for (int y = 0; y < sh; y += spacing) {
-        float fy = (float)y + 0.5f; /* centre of the pixel row */
-        glVertex2f(0.0f,      fy);
-        glVertex2f((float)sw, fy);
-    }
-    glEnd();
+    render3d_post_surface_draw_scanlines(&surf, POST_SURFACE_GRID_COLS,
+                                         SCANLINE_SPACING);
 
     postprocess_filter_end_2d(saved_matrix_mode);
 }
@@ -359,7 +407,7 @@ static void postprocess_filter_render_grain(int sx, int sy,
 }
 
 void render3d_postprocess_filter_render(Render3dPostFilterMode mode, int sx, int sy,
-                                     int sw, int sh) {
+                                     int sw, int sh, float t) {
     if (sw <= 0 || sh <= 0)
         return;
 
@@ -371,7 +419,7 @@ void render3d_postprocess_filter_render(Render3dPostFilterMode mode, int sx, int
         postprocess_filter_render_vignette(sx, sy, sw, sh);
         break;
     case RENDER3D_POST_FILTER_SCANLINES:
-        postprocess_filter_render_scanlines(sx, sy, sw, sh);
+        postprocess_filter_render_scanlines(sx, sy, sw, sh, t);
         break;
     case RENDER3D_POST_FILTER_FILM_GRAIN:
         postprocess_filter_render_grain(sx, sy, sw, sh);
