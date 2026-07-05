@@ -27,6 +27,7 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "repl/export.h"          /* public reader API */
 #include "repl/export_format_shared.h"
 #include "source_document.h"      /* source_document_insert_line */
@@ -73,6 +74,18 @@ typedef struct {
     float value;
 } ImportFloatStash;
 
+typedef struct ImportStagedFuncLine {
+    char text[MAX_LINE_LEN];
+    struct ImportStagedFuncLine *next;
+} ImportStagedFuncLine;
+
+typedef struct {
+    int present;
+    int flushed;
+    ImportStagedFuncLine *head;
+    ImportStagedFuncLine *tail;
+} ImportStagedFunction;
+
 #define IMPORT_MAX_PENDING_COMMENTS 16
 
 struct ImportState {
@@ -80,6 +93,8 @@ struct ImportState {
     int past_snippet;
     int func_depth;                   /* depth inside a function definition */
     int allow_raw_scene;              /* markerless files are plain REPL source */
+    int has_func_body_markers;         /* exported snippets can place staged funcs */
+    int active_staged_func_slot;       /* pre-snippet function currently buffered */
     int loaded;
     int warnings;
     int edit_line;                    /* caller-owned cursor (Phase 3.6.4) */
@@ -90,6 +105,9 @@ struct ImportState {
     int  line_no;
     ImportFloatStash float_stash[MAX_PREDEF_VARS];
     int              float_stash_count;
+    ImportStagedFunction staged_funcs[REPL_FUNC_SLOT_COUNT];
+    int staged_func_order[REPL_FUNC_SLOT_COUNT];
+    int staged_func_order_count;
 };
 
 /* Public single-line parser batching state. repl_export_load_from_file uses
@@ -227,6 +245,70 @@ static void import_state_warn_parse_status(ImportState *s, int line_no,
     fputc('\n', stderr);
     if (s)
         s->warnings++;
+}
+
+static void import_flush_staged_function(ImportState *s, int slot);
+static void import_flush_all_staged_functions(ImportState *s);
+
+static int import_staged_func_append_line(ImportState *s, int slot,
+                                          const char *line) {
+    ImportStagedFunction *fn;
+    ImportStagedFuncLine *node;
+
+    if (!s || slot < 0 || slot >= REPL_FUNC_SLOT_COUNT)
+        return 0;
+
+    fn = &s->staged_funcs[slot];
+    node = (ImportStagedFuncLine *)malloc(sizeof(*node));
+    if (!node) {
+        import_state_warn(s, "out of memory while staging func%d", slot);
+        return 0;
+    }
+    snprintf(node->text, sizeof(node->text), "%s", line ? line : "");
+    node->next = NULL;
+
+    if (fn->tail)
+        fn->tail->next = node;
+    else
+        fn->head = node;
+    fn->tail = node;
+    if (!fn->present &&
+        s->staged_func_order_count < REPL_FUNC_SLOT_COUNT)
+        s->staged_func_order[s->staged_func_order_count++] = slot;
+    fn->present = 1;
+    return 1;
+}
+
+static void import_staged_functions_clear(ImportState *s) {
+    if (!s)
+        return;
+
+    for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {
+        ImportStagedFuncLine *line = s->staged_funcs[slot].head;
+        while (line) {
+            ImportStagedFuncLine *next = line->next;
+            free(line);
+            line = next;
+        }
+        s->staged_funcs[slot].present = 0;
+        s->staged_funcs[slot].flushed = 0;
+        s->staged_funcs[slot].head = NULL;
+        s->staged_funcs[slot].tail = NULL;
+    }
+    s->staged_func_order_count = 0;
+}
+
+static int import_repl_func_line_slot(const char *line) {
+    const char *p = line;
+    int slot = -1;
+
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    if (!repl_parse_func_name_token(&p, &slot))
+        return -1;
+    if (slot < 0 || slot >= REPL_FUNC_SLOT_COUNT)
+        return -1;
+    return slot;
 }
 
 /* --- workspace-dir --------------------------------------------------------- */
@@ -687,8 +769,34 @@ static int parse_snippet_declare(const char *args, ImportState *s) {
     return 1;
 }
 
+static int parse_snippet_func_body(const char *args, ImportState *s) {
+    const char *p = args;
+    int slot = 0;
+
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    if (!isdigit((unsigned char)*p)) {
+        import_state_warn(s, "@%s missing function slot",
+                          REPL_SNIPPET_DIRECTIVE_FUNC_BODY);
+        return 1;
+    }
+    while (isdigit((unsigned char)*p)) {
+        slot = slot * 10 + (*p - '0');
+        p++;
+    }
+    if (slot < 0 || slot >= REPL_FUNC_SLOT_COUNT) {
+        import_state_warn(s, "@%s slot %d is out of range",
+                          REPL_SNIPPET_DIRECTIVE_FUNC_BODY, slot);
+        return 1;
+    }
+
+    import_flush_staged_function(s, slot);
+    return 1;
+}
+
 static const SnippetDirective SNIPPET_DIRECTIVES[] = {
     SNIPPET_DIR(REPL_SNIPPET_DIRECTIVE_DECLARE, parse_snippet_declare),
+    SNIPPET_DIR(REPL_SNIPPET_DIRECTIVE_FUNC_BODY, parse_snippet_func_body),
 };
 
 #define SNIPPET_DIRECTIVE_COUNT \
@@ -1412,6 +1520,8 @@ static void import_state_init(ImportState *s) {
     s->past_snippet = 0;
     s->func_depth = 0;
     s->allow_raw_scene = 0;
+    s->has_func_body_markers = 0;
+    s->active_staged_func_slot = -1;
     s->loaded = 0;
     s->warnings = 0;
     s->edit_line = 0;
@@ -1420,6 +1530,28 @@ static void import_state_init(ImportState *s) {
     s->pending_blank_run = 0;
     s->line_no = 0;
     s->float_stash_count = 0;
+    s->staged_func_order_count = 0;
+    for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {
+        s->staged_funcs[slot].present = 0;
+        s->staged_funcs[slot].flushed = 0;
+        s->staged_funcs[slot].head = NULL;
+        s->staged_funcs[slot].tail = NULL;
+    }
+}
+
+static void import_translate_repl_line(const char *line,
+                                       char *repl_line,
+                                       int repl_line_sz) {
+    if (import_make_repl_for_header(line, repl_line, repl_line_sz))
+        return;
+    if (import_make_repl_tess_line(line, repl_line, repl_line_sz) ||
+        import_make_repl_materialfv_line(line, repl_line, repl_line_sz) ||
+        import_make_repl_point_parameter_line(line, repl_line, repl_line_sz) ||
+        import_make_repl_label(line, repl_line, repl_line_sz) ||
+        import_make_repl_glut_bitmap_string(line, repl_line, repl_line_sz))
+        return;
+
+    repl_eval_c_expr_to_repl(line, repl_line, repl_line_sz);
 }
 
 static void import_feed_one_line(ImportState *s, const char *line) {
@@ -1438,21 +1570,9 @@ static void import_feed_one_line(ImportState *s, const char *line) {
      * editor_feed_line. Same compile + apply, no editor input dispatch
      * (implemented in step 5b). */
     char load_err[REPL_STATUS_TEXT_MAX] = "";
-    if (import_make_repl_for_header(line, repl_line, sizeof(repl_line))) {
-        handled = repl_load_apply_line(repl_line, load_err, (int)sizeof(load_err),
-                                       &s->edit_line);
-    } else if (import_make_repl_tess_line(line, repl_line, sizeof(repl_line)) ||
-               import_make_repl_materialfv_line(line, repl_line, sizeof(repl_line)) ||
-               import_make_repl_point_parameter_line(line, repl_line, sizeof(repl_line)) ||
-               import_make_repl_label(line, repl_line, sizeof(repl_line)) ||
-               import_make_repl_glut_bitmap_string(line, repl_line, sizeof(repl_line))) {
-        handled = repl_load_apply_line(repl_line, load_err, (int)sizeof(load_err),
-                                       &s->edit_line);
-    } else {
-        repl_eval_c_expr_to_repl(line, repl_line, sizeof(repl_line));
-        handled = repl_load_apply_line(repl_line, load_err, (int)sizeof(load_err),
-                                       &s->edit_line);
-    }
+    import_translate_repl_line(line, repl_line, sizeof(repl_line));
+    handled = repl_load_apply_line(repl_line, load_err, (int)sizeof(load_err),
+                                   &s->edit_line);
 
     if (repl_state_document_count() > before) s->loaded += (repl_state_document_count() - before);
     if (!handled) {
@@ -1463,6 +1583,31 @@ static void import_feed_one_line(ImportState *s, const char *line) {
          * and similar import failures showed up as the generic
          * "could not parse line" with no clue why. */
         import_state_warn_parse_line(s, line, load_err);
+    }
+}
+
+static void import_flush_staged_function(ImportState *s, int slot) {
+    ImportStagedFunction *fn;
+
+    if (!s || slot < 0 || slot >= REPL_FUNC_SLOT_COUNT)
+        return;
+
+    fn = &s->staged_funcs[slot];
+    if (!fn->present || fn->flushed)
+        return;
+
+    for (ImportStagedFuncLine *line = fn->head; line; line = line->next)
+        import_feed_one_line(s, line->text);
+    fn->flushed = 1;
+}
+
+static void import_flush_all_staged_functions(ImportState *s) {
+    if (!s)
+        return;
+
+    for (int order_idx = 0; order_idx < s->staged_func_order_count; order_idx++) {
+        int slot = s->staged_func_order[order_idx];
+        import_flush_staged_function(s, slot);
     }
 }
 
@@ -1601,8 +1746,16 @@ static int import_try_function_body(ImportState *s, const char *p) {
     if (s->func_depth <= 0) return 0;
     if (import_is_c89_loop_marker_line(p))
         return 1;
-    import_feed_one_line(s, p);
+    if (s->active_staged_func_slot >= 0) {
+        char repl_line[MAX_LINE_LEN];
+        import_translate_repl_line(p, repl_line, sizeof(repl_line));
+        import_staged_func_append_line(s, s->active_staged_func_slot, repl_line);
+    } else {
+        import_feed_one_line(s, p);
+    }
     s->func_depth += code_brace_delta(p);
+    if (s->func_depth <= 0)
+        s->active_staged_func_slot = -1;
     return 1;
 }
 
@@ -1611,6 +1764,18 @@ static int import_try_function_header(ImportState *s, const char *p, const char 
     if (!import_make_repl_func_header(p, repl_func_line, sizeof(repl_func_line)))
         return 0;
     import_flush_pending_blank_run(s);
+    if (!s->allow_raw_scene) {
+        int slot = import_repl_func_line_slot(repl_func_line);
+        if (slot >= 0) {
+            for (int comment_idx = 0; comment_idx < s->pending_comment_count; comment_idx++)
+                import_staged_func_append_line(s, slot, s->pending_comments[comment_idx]);
+            import_reset_pending_function_prelude(s);
+            import_staged_func_append_line(s, slot, repl_func_line);
+            s->func_depth = 1;
+            s->active_staged_func_slot = slot;
+            return 1;
+        }
+    }
     /* Feed accumulated pending comments before the function header. */
     for (int comment_idx = 0; comment_idx < s->pending_comment_count; comment_idx++)
         import_feed_one_line(s, s->pending_comments[comment_idx]);
@@ -1637,6 +1802,8 @@ static int import_try_snippet_start(ImportState *s, const char *p) {
      * the end of the command list. */
     repl_dispatch_insert_mode_off();
     s->edit_line = repl_state_document_count();
+    if (!s->has_func_body_markers)
+        import_flush_all_staged_functions(s);
     return 1;
 }
 
@@ -1675,6 +1842,7 @@ static int import_try_pending_comment(ImportState *s, const char *p) {
 
 static int import_try_snippet_end(ImportState *s, const char *p) {
     if (strncmp(p, "// Snippet end", 14) != 0) return 0;
+    import_flush_all_staged_functions(s);
     s->in_snippet   = 0;
     s->past_snippet = 1;
     return 1;
@@ -2036,9 +2204,23 @@ static int import_line_has_snippet_marker(const char *line) {
     return line && strstr(line, "Snippet start") != NULL;
 }
 
+static int import_line_has_func_body_marker(const char *line) {
+    return line &&
+           strstr(line, "@") != NULL &&
+           strstr(line, REPL_SNIPPET_DIRECTIVE_FUNC_BODY) != NULL;
+}
+
 static int import_lines_have_snippet_marker(const char *const *lines) {
     for (int i = 0; lines && lines[i]; i++) {
         if (import_line_has_snippet_marker(lines[i]))
+            return 1;
+    }
+    return 0;
+}
+
+static int import_lines_have_func_body_marker(const char *const *lines) {
+    for (int i = 0; lines && lines[i]; i++) {
+        if (import_line_has_func_body_marker(lines[i]))
             return 1;
     }
     return 0;
@@ -2052,6 +2234,22 @@ static int import_file_has_snippet_marker(FILE *f) {
         return 0;
     while (fgets(line, sizeof(line), f)) {
         if (import_line_has_snippet_marker(line)) {
+            found = 1;
+            break;
+        }
+    }
+    rewind(f);
+    return found;
+}
+
+static int import_file_has_func_body_marker(FILE *f) {
+    char line[MAX_LINE_LEN];
+    int found = 0;
+
+    if (!f)
+        return 0;
+    while (fgets(line, sizeof(line), f)) {
+        if (import_line_has_func_body_marker(line)) {
             found = 1;
             break;
         }
@@ -2138,6 +2336,7 @@ static int import_finish_load(ImportState *state,
                               int truncated_line,
                               ImportAccum *acc) {
     const char *label = source_name && source_name[0] ? source_name : "<memory>";
+    int ok;
 
     if (!truncated_line)
         import_flush_accum(state, acc->accum, acc->line_no, &acc->truncated);
@@ -2149,6 +2348,7 @@ static int import_finish_load(ImportState *state,
         char msg[REPL_STATUS_TEXT_MAX];
         snprintf(msg, sizeof(msg), "Error: cannot read %s", label);
         repl_set_status_error(msg);
+        import_staged_functions_clear(state);
         return 0;
     }
     if (truncated_line) {
@@ -2157,6 +2357,7 @@ static int import_finish_load(ImportState *state,
         char msg[REPL_STATUS_TEXT_MAX];
         snprintf(msg, sizeof(msg), "Import failed: line too long in %s", label);
         repl_set_status_error(msg);
+        import_staged_functions_clear(state);
         return 0;
     }
 
@@ -2215,7 +2416,9 @@ static int import_finish_load(ImportState *state,
         repl_set_status_error(msg);
         fprintf(stderr, "%s\n", msg);
     }
-    return state->loaded > 0;
+    ok = state->loaded > 0;
+    import_staged_functions_clear(state);
+    return ok;
 }
 
 int repl_export_load_from_lines(const char *const *lines,
@@ -2224,6 +2427,7 @@ int repl_export_load_from_lines(const char *const *lines,
     ImportState state;
     import_begin_load(&state, result);
     state.allow_raw_scene = !import_lines_have_snippet_marker(lines);
+    state.has_func_body_markers = import_lines_have_func_body_marker(lines);
 
     int truncated_line = 0;
     ImportAccum acc = { .accum = "", .line_no = 0, .depth = 0, .truncated = 0 };
@@ -2258,6 +2462,7 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
         return 0;
     }
     state.allow_raw_scene = !import_file_has_snippet_marker(f);
+    state.has_func_body_markers = import_file_has_func_body_marker(f);
 
     char line[MAX_LINE_LEN];
     int truncated_line = 0;
