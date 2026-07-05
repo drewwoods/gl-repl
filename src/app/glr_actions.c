@@ -262,7 +262,7 @@ static void glr_action_load_scene_from_clipboard(void) {
 /* Unified audio cfg: two-state on/off toggle.
  * Indices:
  *   0 = Off  - paused
- *   1 = On   - playing, loop mode ALL (playlist, wrap forever)
+ *   1 = On   - playing, preserving the current loop mode
  * Old 4-state ini values (1/2/3) are all remapped to On in
  * glr_actions_apply_defaults() via the > AUDIO_CFG_ALL clamp. */
 #define AUDIO_CFG_PAUSE 0
@@ -274,6 +274,37 @@ static const char *wireframe_mode_names[] = { "Off", "Wireframe", "Hidden-line" 
 static const char *vertex_label_names[OVERLAY_VERTEX_LABEL_COUNT] = {
     OVERLAY_VERTEX_LABEL_LIST(OVERLAY_VERTEX_LABEL_NAME_ENTRY)
 };
+
+static int audio_menu_group_differs(const char *a, const char *b) {
+    if (a == b)
+        return 0;
+    if (!a || !b)
+        return 1;
+    return strcmp(a, b) != 0;
+}
+
+static int audio_menu_group_count(void) {
+    int count = glr_audio_track_count();
+    int groups = 0;
+    const char *prev = NULL;
+    for (int i = 0; i < count; i++) {
+        const char *group = glr_audio_track_group(i);
+        if (!group || !group[0])
+            group = "Music";
+        if (i == 0 || audio_menu_group_differs(group, prev))
+            groups++;
+        prev = group;
+    }
+    return groups;
+}
+
+static const char *audio_loop_status_label(int mode) {
+    if (mode == GLR_AUDIO_LOOP_OFF)
+        return "Off";
+    if (mode == GLR_AUDIO_LOOP_SONG)
+        return "Song";
+    return "All";
+}
 static const char *vertex_label_scope_names[OVERLAY_VERTEX_LABEL_SCOPE_COUNT] = {
     OVERLAY_VERTEX_LABEL_SCOPE_LIST(OVERLAY_VERTEX_LABEL_SCOPE_NAME_ENTRY)
 };
@@ -818,7 +849,6 @@ void glr_actions_apply_audio_cfg_mode(int mode) {
         glr_audio_set_paused(1);
     } else {
         glr_audio_set_paused(0);
-        glr_audio_set_loop_mode(GLR_AUDIO_LOOP_ALL);
     }
 }
 
@@ -1219,6 +1249,45 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
          * per-toggle feel. */
         (void)item_idx;
         return 0;
+
+    case GLR_MENU_AUDIO: {
+        int group_count = audio_menu_group_count();
+        int rel = item_idx - group_count;
+        char msg[48];
+
+        if (group_count <= 0)
+            return 1;
+        if (item_idx >= 0 && item_idx < group_count)
+            return 0;
+        if (rel == GLR_AUDIO_OFF_PLAY) {
+            int next = glr_config_get(GLR_CONFIG_AUDIO_MODE) ? AUDIO_CFG_PAUSE
+                                                             : AUDIO_CFG_ALL;
+            glr_config_set(GLR_CONFIG_AUDIO_MODE, next);
+            repl_set_status(next == AUDIO_CFG_PAUSE ? "Audio: off"
+                                                    : "Audio: on");
+            return 0;
+        }
+        if (rel == GLR_AUDIO_OFF_NEXT) {
+            glr_audio_next_track();
+            return 1;
+        }
+        if (rel == GLR_AUDIO_OFF_PREV) {
+            glr_audio_prev_track();
+            return 1;
+        }
+        if (rel == GLR_AUDIO_OFF_LOOP) {
+            int mode = glr_audio_get_loop_mode();
+            int next = mode + 1;
+            if (next > GLR_AUDIO_LOOP_ALL)
+                next = GLR_AUDIO_LOOP_OFF;
+            glr_audio_set_loop_mode(next);
+            snprintf(msg, sizeof(msg), "Loop: %s",
+                     audio_loop_status_label(next));
+            repl_set_status(msg);
+            return 0;
+        }
+        return 1;
+    }
 
     default:
         return 1;

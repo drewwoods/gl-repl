@@ -2,6 +2,7 @@
 #include "app/glr_ctrl.h"
 #include "ui/app/menu_bar.h"
 #include "ui/app/view_mode_swatch.h"
+#include "app/glr_audio.h"
 #include "app/glr_actions.h"
 #include "app/glr_config.h"
 #include "repl/scenes.h"
@@ -333,6 +334,67 @@ static int submenu_row_point(int sx, int sy, int sw, int sh, int ordinal,
     if (out_my)
         *out_my = ui_state_viewport().window_h - ry;
     return 1;
+}
+
+static void install_audio_menu_playlist(void) {
+    GlrAudioTrackSpec tracks[] = {
+        { "assets/alpha.mp3", "Assets", NULL },
+        { "assets/beta.mp3", "Assets", "Beta Song" },
+        { "bundle/gamma.mp3", "Bundled", NULL },
+    };
+    ASSERT_INT_EQ("audio menu fixture playlist",
+                  glr_audio_set_playlist_specs(tracks, 3), 3);
+}
+
+static void test_audio_menu_flyout_hits(void) {
+    int group_mx = -1, group_my = -1;
+    int play_mx = -1, play_my = -1;
+    int loop_mx = -1, loop_my = -1;
+    int sx = 0, sy = 0, sw = 0, sh = 0;
+    int row_mx = -1, row_my = -1;
+    UiHit hit;
+
+    reset_menu_bar_fixture(1000, 600);
+    install_audio_menu_playlist();
+
+    ASSERT_TRUE("found first Audio group row",
+                find_dropdown_item_point(GLR_MENU_AUDIO, 0,
+                                         &group_mx, &group_my));
+    hit = ui_menu_bar_hit_test(group_mx, group_my);
+    ASSERT_INT_EQ("audio group row hit kind", hit.kind, UI_HIT_MENU_ITEM);
+    ASSERT_INT_EQ("audio group row hit menu", hit.cmd_idx, GLR_MENU_AUDIO);
+    ASSERT_INT_EQ("audio group row hit idx", hit.item_idx, 0);
+    ASSERT_INT_EQ("Audio group row activation keeps menu open",
+                  glr_action_menu_item_activate(GLR_MENU_AUDIO, 0), 0);
+
+    ASSERT_TRUE("audio hover opens group flyout",
+                ui_menu_bar_update_pointer_hover(group_mx, group_my, 0.0f));
+    ASSERT_TRUE("audio flyout rect",
+                ui_menu_bar_submenu_rect_for_test(GLR_MENU_AUDIO, 0,
+                                                  &sx, &sy, &sw, &sh));
+    ASSERT_TRUE("audio submenu row point",
+                submenu_row_point(sx, sy, sw, sh, 1, &row_mx, &row_my));
+    hit = ui_menu_bar_hit_test(row_mx, row_my);
+    ASSERT_INT_EQ("audio submenu row kind", hit.kind, UI_HIT_SUBMENU_ITEM);
+    ASSERT_INT_EQ("audio submenu carries menu_id", hit.cmd_idx, GLR_MENU_AUDIO);
+    ASSERT_INT_EQ("audio submenu carries track index", hit.item_idx, 1);
+    ASSERT_INT_EQ("audio submenu carries ordinal", hit.line_idx, 1);
+
+    ASSERT_TRUE("found Audio Play row",
+                find_dropdown_item_point(GLR_MENU_AUDIO,
+                                         2 + GLR_AUDIO_OFF_PLAY,
+                                         &play_mx, &play_my));
+    hit = ui_menu_bar_hit_test(play_mx, play_my);
+    ASSERT_INT_EQ("audio Play row hit", hit.item_idx,
+                  2 + GLR_AUDIO_OFF_PLAY);
+
+    ASSERT_TRUE("found Audio Loop row",
+                find_dropdown_item_point(GLR_MENU_AUDIO,
+                                         2 + GLR_AUDIO_OFF_LOOP,
+                                         &loop_mx, &loop_my));
+    hit = ui_menu_bar_hit_test(loop_mx, loop_my);
+    ASSERT_INT_EQ("audio Loop row hit", hit.item_idx,
+                  2 + GLR_AUDIO_OFF_LOOP);
 }
 
 #ifdef GL_STUBS
@@ -1119,6 +1181,7 @@ int main(void) {
     test_open_close_state();
     test_top_level_hits();
     test_dropdown_and_config_press();
+    test_audio_menu_flyout_hits();
     test_config_submenu_right_press();
     test_config_section_labels();
     test_config_all_flyout_scroll();

@@ -1137,7 +1137,9 @@ static int route_menu_item_hit(const UiHit *hit) {
  *    glr_action_menu_item_activate, whose Config branch is the inert
  *    parent-row guard) and KEEP the dropdown + flyout open so repeated
  *    toggles work, matching the old flat Config dropdown. (Parent-row
- *    guard added in Step 5 of config-menu-submenu-sections.md.) */
+ *    guard added in Step 5 of config-menu-submenu-sections.md.)
+ *  - MENU_AUDIO: item_idx = playlist track index → request playback and
+ *    dismiss the menu when accepted. */
 static int route_submenu_item_hit(const UiHit *hit) {
     if (hit->item_idx < 0)
         return 0;
@@ -1151,6 +1153,14 @@ static int route_submenu_item_hit(const UiHit *hit) {
         ui_menu_bar_close();
         editor_request_redraw();
         return 1;
+    }
+    if (hit->cmd_idx == GLR_MENU_AUDIO) {
+        if (glr_audio_play_track_index(hit->item_idx) == 0) {
+            ui_menu_bar_close();
+            editor_request_redraw();
+            return 1;
+        }
+        return 0;
     }
     glr_scene_load_example(hit->item_idx);
     ui_menu_bar_close();

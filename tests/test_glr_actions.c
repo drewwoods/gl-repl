@@ -230,12 +230,13 @@ static void test_cfg_cycling(void) {
     ASSERT_STR("status point attenuation ON", g_last_status, "Point attenuation: ON");
 
     /* Test Audio modes (2-state: off/on) */
+    glr_audio_set_loop_mode(GLR_AUDIO_LOOP_SONG);
     glr_config_set(GLR_CONFIG_AUDIO_MODE, 0); // Off (pause)
     glr_cfg_cycle_row(audio_row, 1); // -> On
     ASSERT_INT("audio mode On", glr_config_get(GLR_CONFIG_AUDIO_MODE), 1);
     ASSERT_STR("status audio On", g_last_status, "Audio: on");
     ASSERT_INT("audio engine not paused", glr_audio_is_paused(), 0);
-    ASSERT_INT("audio engine loop mode ALL", glr_audio_get_loop_mode(), GLR_AUDIO_LOOP_ALL);
+    ASSERT_INT("audio On preserves loop mode", glr_audio_get_loop_mode(), GLR_AUDIO_LOOP_SONG);
 
     glr_cfg_cycle_row(audio_row, 1); // -> Off
     ASSERT_INT("audio mode Off", glr_config_get(GLR_CONFIG_AUDIO_MODE), 0);
@@ -751,6 +752,57 @@ static void test_audio_config_direct_set(void) {
     glr_config_set(GLR_CONFIG_AUDIO_MODE, 99);
     ASSERT_INT("direct-set clamps to max valid",
                glr_audio_get_cfg_mode(), glr_config_state_count(GLR_CONFIG_AUDIO_MODE) - 1);
+}
+
+static void test_audio_menu_actions(void) {
+    GlrAudioTrackSpec tracks[] = {
+        { "assets/a.mp3", "Assets", "A" },
+        { "assets/b.mp3", "Assets", "B" },
+    };
+    int group_count = 1;
+
+    glr_ctrl_reset_all();
+    ASSERT_INT("audio menu fixture playlist",
+               glr_audio_set_playlist_specs(tracks, 2), 2);
+
+    ASSERT_INT("audio group row inert",
+               glr_action_menu_item_activate(GLR_MENU_AUDIO, 0), 0);
+
+    glr_config_set(GLR_CONFIG_AUDIO_MODE, 1);
+    ASSERT_INT("audio menu pause row stays open",
+               glr_action_menu_item_activate(GLR_MENU_AUDIO,
+                                             group_count + GLR_AUDIO_OFF_PLAY),
+               0);
+    ASSERT_INT("audio menu pause writes cfg",
+               glr_config_get(GLR_CONFIG_AUDIO_MODE), 0);
+    ASSERT_INT("audio menu pause reaches audio module",
+               glr_audio_is_paused(), 1);
+
+    ASSERT_INT("audio menu play row stays open",
+               glr_action_menu_item_activate(GLR_MENU_AUDIO,
+                                             group_count + GLR_AUDIO_OFF_PLAY),
+               0);
+    ASSERT_INT("audio menu play writes cfg",
+               glr_config_get(GLR_CONFIG_AUDIO_MODE), 1);
+    ASSERT_INT("audio menu play reaches audio module",
+               glr_audio_is_paused(), 0);
+
+    glr_audio_set_loop_mode(GLR_AUDIO_LOOP_OFF);
+    ASSERT_INT("audio menu loop row stays open",
+               glr_action_menu_item_activate(GLR_MENU_AUDIO,
+                                             group_count + GLR_AUDIO_OFF_LOOP),
+               0);
+    ASSERT_INT("audio menu loop cycles to Song",
+               glr_audio_get_loop_mode(), GLR_AUDIO_LOOP_SONG);
+
+    ASSERT_INT("audio menu next closes",
+               glr_action_menu_item_activate(GLR_MENU_AUDIO,
+                                             group_count + GLR_AUDIO_OFF_NEXT),
+               1);
+    ASSERT_INT("audio menu previous closes",
+               glr_action_menu_item_activate(GLR_MENU_AUDIO,
+                                             group_count + GLR_AUDIO_OFF_PREV),
+               1);
 }
 
 static void test_msaa_display_label_override(void) {
@@ -1646,6 +1698,7 @@ int main(void) {
     test_tutorial_start_applies_cfg();
     test_tutorial_menu_dispatch();
     test_audio_config_direct_set();
+    test_audio_menu_actions();
     test_msaa_display_label_override();
     test_config_none_handling();
     test_menu_out_of_range_indices();

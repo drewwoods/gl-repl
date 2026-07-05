@@ -2533,6 +2533,24 @@ static void test_mouse_routing_and_hit_testing(void) {
     rc = route_submenu_item_hit(&hit);
     ASSERT_INT("submenu tutorial item consumed", rc, 1);
 
+    // Test route_submenu_item_hit for Audio
+    {
+        GlrAudioTrackSpec tracks[] = {
+            { "missing_audio_menu_track.mp3", "Assets", "Missing" },
+        };
+        setenv("GLR_AUDIO_NO_DEVICE", "1", 1);
+        glr_audio_shutdown();
+        ASSERT_INT("audio route init no-device", glr_audio_init(), 0);
+        ASSERT_INT("audio route playlist",
+                   glr_audio_set_playlist_specs(tracks, 1), 1);
+        hit.cmd_idx = GLR_MENU_AUDIO;
+        hit.item_idx = 0;
+        rc = route_submenu_item_hit(&hit);
+        ASSERT_INT("submenu audio item consumed", rc, 1);
+        glr_audio_shutdown();
+        unsetenv("GLR_AUDIO_NO_DEVICE");
+    }
+
     // Test route_panel_divider_hit
     hit.kind = UI_HIT_PANEL_DIVIDER;
     ui_state_code_panel_mut()->resizing_panel = 0;

@@ -120,6 +120,9 @@ static int g_gesture_done = 0;  /* have we satisfied browser autoplay policy? */
 
 /* Playlist: caller-registered tracks, in play order. */
 static char g_playlist[GLR_AUDIO_MAX_TRACKS][GLR_AUDIO_MAX_PATH];
+static char g_playlist_group[GLR_AUDIO_MAX_TRACKS][64];
+static char g_playlist_display_name[GLR_AUDIO_MAX_TRACKS][128];
+static float g_playlist_duration_secs[GLR_AUDIO_MAX_TRACKS];
 static int  g_playlist_count = 0;
 static int  g_playlist_pos   = 0;  /* index of the currently-loaded track */
 
@@ -209,6 +212,12 @@ static void reset_audio_module_state(void) {
 
     g_playlist_count = 0;
     g_playlist_pos = 0;
+    for (int i = 0; i < GLR_AUDIO_MAX_TRACKS; i++) {
+        g_playlist[i][0] = '\0';
+        g_playlist_group[i][0] = '\0';
+        g_playlist_display_name[i][0] = '\0';
+        g_playlist_duration_secs[i] = -1.0f;
+    }
     g_loop_mode = GLR_AUDIO_LOOP_ALL;
 
     g_pending_start = 0;
@@ -227,6 +236,54 @@ static void reset_audio_module_state(void) {
     g_state_file[0] = '\0';
     g_cfg_mode = -1;
     g_last_save_time = 0;
+}
+
+static void audio_copy_string(char *dst, size_t dst_size,
+                              const char *src, const char *fallback) {
+    const char *s = (src && *src) ? src : fallback;
+    size_t len;
+
+    if (!dst || dst_size == 0)
+        return;
+    if (!s)
+        s = "";
+    len = strlen(s);
+    if (len >= dst_size)
+        len = dst_size - 1;
+    memcpy(dst, s, len);
+    dst[len] = '\0';
+}
+
+static const char *audio_basename(const char *path) {
+    const char *base = path ? path : "";
+    for (const char *p = base; *p; p++) {
+        if (*p == '/' || *p == '\\')
+            base = p + 1;
+    }
+    return base;
+}
+
+static void audio_derive_display_name(const char *path,
+                                      char *out, size_t out_size) {
+    const char *base = audio_basename(path);
+    size_t len;
+
+    if (!out || out_size == 0)
+        return;
+    len = strlen(base);
+    if (len >= 4 &&
+        base[len - 4] == '.' &&
+        (base[len - 3] == 'm' || base[len - 3] == 'M') &&
+        (base[len - 2] == 'p' || base[len - 2] == 'P') &&
+        base[len - 1] == '3') {
+        len -= 4;
+    }
+    if (len >= out_size)
+        len = out_size - 1;
+    memcpy(out, base, len);
+    out[len] = '\0';
+    if (!out[0])
+        audio_copy_string(out, out_size, path, "(track)");
 }
 
 /* ------------------------------------------------------------------ */
@@ -570,6 +627,7 @@ static void worker_uninit_all(void) {
 static int worker_load(int idx, float seek_secs) {
     char path[GLR_AUDIO_MAX_PATH];
     int  target, old, loop_song, paused;
+    float duration_secs = -1.0f;
 
     audio_lock();
     if (idx < 0 || idx >= g_playlist_count) { audio_unlock(); return -1; }
@@ -600,6 +658,16 @@ static int worker_load(int idx, float seek_secs) {
                 path, (int)r);
         audio_lock(); g_loading = 0; audio_unlock();
         return -1;
+    }
+
+    {
+        ma_uint64 length_frames = 0;
+        ma_uint32 sr = ma_engine_get_sample_rate(&g_engine);
+        if (sr > 0 &&
+            ma_sound_get_length_in_pcm_frames(&g_slot[target],
+                                              &length_frames) == MA_SUCCESS) {
+            duration_secs = (float)length_frames / (float)sr;
+        }
     }
 
     ma_sound_set_looping(&g_slot[target], loop_song ? MA_TRUE : MA_FALSE);
@@ -639,6 +707,7 @@ static int worker_load(int idx, float seek_secs) {
     g_active              = target;
     g_music_loaded        = 1;
     g_playlist_pos        = idx;
+    g_playlist_duration_secs[idx] = duration_secs;
     g_track_generation++;
     g_loading             = 0;
     audio_unlock();
@@ -982,6 +1051,21 @@ void glr_audio_set_hitch_log_elapsed_fn(GlrAudioElapsedSecondsFn fn) {
 int glr_audio_set_playlist(const char *const *paths, int count) {
     if (!paths || count < 0) return -1;
 
+    GlrAudioTrackSpec specs[GLR_AUDIO_MAX_TRACKS];
+    int n = count;
+    if (n > GLR_AUDIO_MAX_TRACKS)
+        n = GLR_AUDIO_MAX_TRACKS;
+    for (int i = 0; i < n; i++) {
+        specs[i].path = paths[i];
+        specs[i].group = "Music";
+        specs[i].display_name = NULL;
+    }
+    return glr_audio_set_playlist_specs(specs, count);
+}
+
+int glr_audio_set_playlist_specs(const GlrAudioTrackSpec *tracks, int count) {
+    if (!tracks || count < 0) return -1;
+
     /* Retire any current sound asynchronously; never block the caller. */
     worker_post(AWR_UNINIT, 0, GLR_AUDIO_NO_SEEK);
 
@@ -1003,11 +1087,30 @@ int glr_audio_set_playlist(const char *const *paths, int count) {
     }
 
     for (int i = 0; i < n; i++) {
-        const char *p = paths[i] ? paths[i] : "";
+        const char *p = tracks[i].path ? tracks[i].path : "";
         size_t len = strlen(p);
         if (len >= GLR_AUDIO_MAX_PATH) len = GLR_AUDIO_MAX_PATH - 1;
         memcpy(g_playlist[i], p, len);
         g_playlist[i][len] = '\0';
+
+        audio_copy_string(g_playlist_group[i], sizeof(g_playlist_group[i]),
+                          tracks[i].group, "Music");
+        if (tracks[i].display_name && tracks[i].display_name[0]) {
+            audio_copy_string(g_playlist_display_name[i],
+                              sizeof(g_playlist_display_name[i]),
+                              tracks[i].display_name, NULL);
+        } else {
+            audio_derive_display_name(g_playlist[i],
+                                      g_playlist_display_name[i],
+                                      sizeof(g_playlist_display_name[i]));
+        }
+        g_playlist_duration_secs[i] = -1.0f;
+    }
+    for (int i = n; i < GLR_AUDIO_MAX_TRACKS; i++) {
+        g_playlist[i][0] = '\0';
+        g_playlist_group[i][0] = '\0';
+        g_playlist_display_name[i][0] = '\0';
+        g_playlist_duration_secs[i] = -1.0f;
     }
     g_playlist_count = n;
     audio_unlock();
@@ -1053,6 +1156,17 @@ int glr_audio_prev_track(void) {
     if (prev < 0) prev = g_playlist_count - 1;
     audio_unlock();
     return request_start(prev, GLR_AUDIO_NO_SEEK);
+}
+
+int glr_audio_play_track_index(int idx) {
+    if (!g_inited || g_playlist_count == 0) return -1;
+    audio_lock();
+    if (idx < 0 || idx >= g_playlist_count) {
+        audio_unlock();
+        return -1;
+    }
+    audio_unlock();
+    return request_start(idx, GLR_AUDIO_NO_SEEK);
 }
 
 void glr_audio_tick(void) {
@@ -1164,6 +1278,61 @@ const char *glr_audio_get_current_track(void) {
     memcpy(buf, g_playlist[g_playlist_pos], sizeof(buf));
     audio_unlock();
     return buf;
+}
+
+int glr_audio_track_count(void) {
+    audio_lock();
+    int n = g_playlist_count;
+    audio_unlock();
+    return n;
+}
+
+const char *glr_audio_track_display_name(int idx) {
+    audio_lock();
+    if (idx < 0 || idx >= g_playlist_count) {
+        audio_unlock();
+        return NULL;
+    }
+    const char *name = g_playlist_display_name[idx];
+    audio_unlock();
+    return name;
+}
+
+const char *glr_audio_track_group(int idx) {
+    audio_lock();
+    if (idx < 0 || idx >= g_playlist_count) {
+        audio_unlock();
+        return NULL;
+    }
+    const char *group = g_playlist_group[idx];
+    audio_unlock();
+    return group;
+}
+
+int glr_audio_current_index(void) {
+    audio_lock();
+    int idx = -1;
+    if (g_music_loaded &&
+        g_playlist_pos >= 0 && g_playlist_pos < g_playlist_count)
+        idx = g_playlist_pos;
+    audio_unlock();
+    return idx;
+}
+
+float glr_audio_current_cursor_seconds(void) {
+    audio_lock();
+    float s = (g_music_loaded ? cursor_seconds_locked() : 0.0f);
+    audio_unlock();
+    return s;
+}
+
+float glr_audio_track_duration_seconds(int idx) {
+    audio_lock();
+    float s = -1.0f;
+    if (idx >= 0 && idx < g_playlist_count)
+        s = g_playlist_duration_secs[idx];
+    audio_unlock();
+    return s;
 }
 
 unsigned int glr_audio_track_generation(void) {

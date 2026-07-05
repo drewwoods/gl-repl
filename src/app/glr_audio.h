@@ -45,6 +45,12 @@ typedef enum {
     GLR_AUDIO_LOOP_ALL  = 2,
 } GlrAudioLoopMode;
 
+typedef struct {
+    const char *path;
+    const char *group;
+    const char *display_name;
+} GlrAudioTrackSpec;
+
 typedef double (*GlrAudioElapsedSecondsFn)(void);
 
 int  glr_audio_init(void);
@@ -60,6 +66,7 @@ void glr_audio_set_hitch_log_elapsed_fn(GlrAudioElapsedSecondsFn fn);
  * warning is printed). Returns the number of tracks accepted, or -1
  * on error. */
 int  glr_audio_set_playlist(const char *const *paths, int count);
+int  glr_audio_set_playlist_specs(const GlrAudioTrackSpec *tracks, int count);
 
 /* Start playing track 0 of the registered playlist (respects the
  * current loop mode and the deferred-gesture rule on the web). */
@@ -75,6 +82,14 @@ int  glr_audio_play_music(const char *path);
  * initialized. Return 0 on success, -1 otherwise. */
 int  glr_audio_next_track(void);
 int  glr_audio_prev_track(void);
+int  glr_audio_play_track_index(int idx);
+
+int         glr_audio_track_count(void);
+const char *glr_audio_track_display_name(int idx);
+const char *glr_audio_track_group(int idx);
+int         glr_audio_current_index(void);
+float       glr_audio_current_cursor_seconds(void);
+float       glr_audio_track_duration_seconds(int idx);
 
 /* Poll once per frame. When the current track is finished and the
  * loop mode is OFF or ALL, advances to the next track (or wraps, or
