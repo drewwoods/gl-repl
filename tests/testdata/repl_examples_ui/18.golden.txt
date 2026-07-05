@@ -142,7 +142,7 @@ void display(void) {
         // Side 3
       gluColor(0.98, 0.46, 0.36, 1);
         glColor3f(0.98, 0.46, 0.36);
-        glNormal3f(-1, 0, 0);
+        glNormal3f(0, 1, 0);
         glVertex3f(0, 1.1, 0);
         glVertex3f(0, 1.1, z);
       gluVertex(0, 1.1, 0);
@@ -156,7 +156,7 @@ void display(void) {
         // Side 5
       gluColor(0.98, 0.46, 0.36, 1);
         glColor3f(0.98, 0.46, 0.36);
-        glNormal3f(-1, 0, 0);
+        glNormal3f(0, -1, 0);
         glVertex3f(0, -1.1, 0);
         glVertex3f(0, -1.1, z);
       gluVertex(0, -1.1, 0);
