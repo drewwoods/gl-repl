@@ -11,8 +11,11 @@
  *
  * The types are:
  *   - FLAT   : an identity quad-grid (the flat<->warp morph's zero point).
- *   - BARREL : a CRT bulge — the corners overscan outward, so the image
- *              bulges toward the viewer. Paired with the scanlines filter.
+ *   - BARREL : a convex CRT bulge — the centre stays ~1:1, the edges
+ *              compress, and the corners pull inward, so the image bulges
+ *              toward the viewer and the rectangular corners fall outside
+ *              it (draw a black fill behind the mesh for the vignette).
+ *              Paired with the scanlines filter.
  *   - RIPPLE : an animated sine wobble (an "underwater" warp). Fully
  *              implemented and tested, but reserved for a future filter —
  *              nothing wires it up yet.
@@ -52,8 +55,11 @@ typedef struct Render3dPostSurface {
 /* Identity grid: maps (u,v) straight to (u*sw, v*sh). */
 Render3dPostSurface render3d_post_surface_flat(int sw, int sh);
 
-/* CRT bulge: `bulge` is the barrel strength (0 = flat, ~0.1 = a gentle
- * tube; the corners overscan so the warped grid always covers the rect). */
+/* Convex CRT bulge: `bulge` is the barrel strength (0 = flat, ~0.1 = a
+ * gentle tube). The corners pull inward, so they fall outside the image —
+ * the caller should fill the rect with black behind the mesh for the
+ * rounded-tube vignette. Keep bulge below ~0.5 (beyond it a corner's
+ * scale 1 - 2*bulge goes negative and the geometry inverts). */
 Render3dPostSurface render3d_post_surface_barrel(int sw, int sh, float bulge);
 
 /* Animated sine wobble (underwater), reserved for a future filter:

@@ -295,11 +295,12 @@ static void postprocess_filter_render_vignette(int sx, int sy,
  * GL_DST_COLOR × GL_ZERO (darkens existing pixels, never adds light). The
  * dim-gray line color (0.75) dims the bright scanline rows ~25% while the
  * gaps stay untouched — the classic phosphor mask, now curving with the
- * tube. The barrel overscans the corners, so the warped grid always
- * covers the rect (no backing fill needed). */
+ * tube. The convex barrel pulls the corners inward, so the rectangular
+ * corners fall outside the warped image; a black backing fill supplies
+ * the rounded-tube vignette there. */
 #define POST_SURFACE_GRID_COLS  32
 #define POST_SURFACE_GRID_ROWS  24
-#define SCANLINE_BULGE          0.10f  /* barrel strength (corners overscan ~20%) */
+#define SCANLINE_BULGE          0.025f  /* convex barrel strength */
 #define SCANLINE_SPACING        3      /* one dark scanline every 3 device rows */
 
 static void postprocess_filter_render_scanlines(int sx, int sy,
@@ -315,6 +316,21 @@ static void postprocess_filter_render_scanlines(int sx, int sy,
 
     Render3dPostSurface surf = render3d_post_surface_barrel(sw, sh,
                                                             SCANLINE_BULGE);
+
+    /* Black backing: the convex barrel pulls the corners inward, so the
+     * rectangular corners fall outside the warped image — fill the rect
+     * with CRT black (the rounded-tube vignette) rather than let the
+     * un-warped scene show through there. Drawn opaque (begin_2d left
+     * blending off) before the warped image. */
+    glDisable(GL_TEXTURE_2D);
+    glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
+    glBegin(GL_QUADS);
+        glVertex2f(0.0f,      0.0f);
+        glVertex2f((float)sw, 0.0f);
+        glVertex2f((float)sw, (float)sh);
+        glVertex2f(0.0f,      (float)sh);
+    glEnd();
+    glEnable(GL_TEXTURE_2D);
 
     /* Captured scene redrawn on the barrel grid. begin_2d already set
      * GL_REPLACE + texturing on, so the vertex color is ignored. */

@@ -58,11 +58,14 @@ void render3d_post_surface_point(const Render3dPostSurface *s,
         /* Centred, normalized to [-1,1] with the corners at r^2 = 2. */
         float nx = 2.0f * u - 1.0f;
         float ny = 2.0f * v - 1.0f;
-        /* Push each vertex outward from the centre, more at the edges
-         * (r^2 term), so the image bulges toward the viewer and overscans
-         * the corners. For strength >= 0 every vertex moves outward, so
-         * the warped grid strictly contains the rect — no black gaps. */
-        float scale = 1.0f + s->strength * (nx * nx + ny * ny);
+        /* Pull each vertex inward toward the centre, more at the edges
+         * (r^2 term), so magnification falls off with radius: the centre
+         * stays ~1:1, the edges compress, and the corners pull in the
+         * most — a convex bulge toward the viewer (barrel). The
+         * rectangular corners fall outside the image, so the caller draws
+         * a black fill behind the mesh for the CRT vignette. (The inverse,
+         * scale = 1 + k*r^2, would be pincushion — a concave dish.) */
+        float scale = 1.0f - s->strength * (nx * nx + ny * ny);
         *out_x = cx + nx * scale * cx;
         *out_y = cy + ny * scale * cy;
         break;

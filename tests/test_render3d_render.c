@@ -1230,20 +1230,30 @@ static void test_postprocess_surface_math(void) {
     ASSERT_TRUE("flat (1,1) maps to rect far corner",
                 fabsf(x - W) < 0.01f && fabsf(y - H) < 0.01f);
 
-    /* BARREL: the centre stays put while the corners are pushed outward
-     * past the rect (overscan), so the warped grid strictly contains the
-     * rect and no black gaps appear — this is why scanlines needs no
-     * backing fill. */
+    /* BARREL (convex CRT bulge): the centre stays put, the edges bow
+     * outward, and the corners pull inward — so the rectangular corners
+     * fall outside the image (the black vignette the scanlines filter
+     * fills behind the mesh). */
     Render3dPostSurface barrel = render3d_post_surface_barrel(W, H, 0.10f);
     render3d_post_surface_point(&barrel, 0.5f, 0.5f, &x, &y);
     ASSERT_TRUE("barrel centre is fixed",
                 fabsf(x - W * 0.5f) < 0.01f && fabsf(y - H * 0.5f) < 0.01f);
+    /* Far corner (u=1,v=1) pulled inward: inside the rect, still in the
+     * far quadrant. */
     render3d_post_surface_point(&barrel, 1.0f, 1.0f, &x, &y);
-    ASSERT_TRUE("barrel pushes the far corner outward (overscan)",
-                x > (float)W && y > (float)H);
+    ASSERT_TRUE("barrel pulls the far corner inward",
+                x < (float)W && y < (float)H && x > W * 0.5f && y > H * 0.5f);
+    /* Near corner (u=0,v=0) pulled inward likewise. */
     render3d_post_surface_point(&barrel, 0.0f, 0.0f, &x, &y);
-    ASSERT_TRUE("barrel pushes the near corner outward (overscan)",
-                x < 0.0f && y < 0.0f);
+    ASSERT_TRUE("barrel pulls the near corner inward",
+                x > 0.0f && y > 0.0f && x < W * 0.5f && y < H * 0.5f);
+    /* Convexity: the top-edge midpoint bows further out (higher y) than
+     * the top corner — the tell-tale barrel (vs. concave pincushion). */
+    float mid_x, mid_y, cor_x, cor_y;
+    render3d_post_surface_point(&barrel, 0.5f, 1.0f, &mid_x, &mid_y);
+    render3d_post_surface_point(&barrel, 1.0f, 1.0f, &cor_x, &cor_y);
+    ASSERT_TRUE("barrel top edge bows outward (convex, not concave)",
+                mid_y > cor_y);
 
     /* RIPPLE (reserved for a future underwater filter): an animated
      * horizontal offset — the same grid point moves in x as t advances,
