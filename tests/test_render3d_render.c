@@ -1121,11 +1121,11 @@ static void test_postprocess_filters(void) {
     printf("--- postprocess filters (vignette & chromatic aberration & scanlines) ---\n");
 
     /* RENDER3D_POST_FILTER_OFF does nothing */
-    render3d_postprocess_filter_render(RENDER3D_POST_FILTER_OFF, 0, 0, 800, 600, 0.0f);
+    render3d_postprocess_filter_render(RENDER3D_POST_FILTER_OFF, 0, 0, 800, 600);
 
     /* RENDER3D_POST_FILTER_CHROMATIC_ABERRATION */
     gl_stub_counts_reset();
-    render3d_postprocess_filter_render(RENDER3D_POST_FILTER_CHROMATIC_ABERRATION, 0, 0, 800, 600, 0.0f);
+    render3d_postprocess_filter_render(RENDER3D_POST_FILTER_CHROMATIC_ABERRATION, 0, 0, 800, 600);
     ASSERT_TRUE("chromatic aberration calls glCopyTexSubImage2D",
                 gl_stub_counts[GL_STUB_glCopyTexSubImage2D] > 0);
     ASSERT_TRUE("chromatic aberration calls glColorMask",
@@ -1133,7 +1133,7 @@ static void test_postprocess_filters(void) {
 
     /* RENDER3D_POST_FILTER_VIGNETTE */
     gl_stub_counts_reset();
-    render3d_postprocess_filter_render(RENDER3D_POST_FILTER_VIGNETTE, 0, 0, 800, 600, 0.0f);
+    render3d_postprocess_filter_render(RENDER3D_POST_FILTER_VIGNETTE, 0, 0, 800, 600);
     ASSERT_TRUE("vignette draws triangle strips",
                 gl_stub_counts[GL_STUB_glBegin] > 0);
 
@@ -1143,7 +1143,7 @@ static void test_postprocess_filters(void) {
      * blend, and draw many tessellated primitives (grid strips + one
      * GL_LINE_STRIP per scanline row). */
     gl_stub_counts_reset();
-    render3d_postprocess_filter_render(RENDER3D_POST_FILTER_SCANLINES, 0, 0, 800, 600, 0.0f);
+    render3d_postprocess_filter_render(RENDER3D_POST_FILTER_SCANLINES, 0, 0, 800, 600);
     ASSERT_TRUE("scanlines captures the scene (barrel surface)",
                 gl_stub_counts[GL_STUB_glCopyTexSubImage2D] > 0);
     ASSERT_TRUE("scanlines draws tessellated primitives",
@@ -1156,7 +1156,7 @@ static void test_postprocess_filters(void) {
     /* RENDER3D_POST_FILTER_FILM_GRAIN */
     /* 1. First render generates the texture */
     gl_stub_counts_reset();
-    render3d_postprocess_filter_render(RENDER3D_POST_FILTER_FILM_GRAIN, 0, 0, 800, 600, 0.0f);
+    render3d_postprocess_filter_render(RENDER3D_POST_FILTER_FILM_GRAIN, 0, 0, 800, 600);
     ASSERT_TRUE("film grain generates textures on first render",
                 gl_stub_counts[GL_STUB_glGenTextures] > 0);
     ASSERT_TRUE("film grain uploads noise texture on first render",
@@ -1172,7 +1172,7 @@ static void test_postprocess_filters(void) {
 
     /* 2. Second render reuses the texture */
     gl_stub_counts_reset();
-    render3d_postprocess_filter_render(RENDER3D_POST_FILTER_FILM_GRAIN, 0, 0, 800, 600, 0.0f);
+    render3d_postprocess_filter_render(RENDER3D_POST_FILTER_FILM_GRAIN, 0, 0, 800, 600);
     ASSERT_INT("film grain does not regenerate texture on subsequent render",
                (int)gl_stub_counts[GL_STUB_glGenTextures], 0);
     ASSERT_INT("film grain does not upload texture again",
@@ -1188,7 +1188,7 @@ static void test_postprocess_filters(void) {
 
     /* 3. Render after reset should regenerate the texture */
     gl_stub_counts_reset();
-    render3d_postprocess_filter_render(RENDER3D_POST_FILTER_FILM_GRAIN, 0, 0, 800, 600, 0.0f);
+    render3d_postprocess_filter_render(RENDER3D_POST_FILTER_FILM_GRAIN, 0, 0, 800, 600);
     ASSERT_TRUE("film grain regenerates texture after reset",
                 gl_stub_counts[GL_STUB_glGenTextures] > 0);
     ASSERT_TRUE("film grain uploads noise texture after reset",
@@ -1210,17 +1210,16 @@ static void test_postprocess_filters(void) {
 
 #endif
 
-/* Pure geometry check of the barrel/ripple warp surface — no GL calls,
- * so it runs in both the stub and real-GL builds. */
+/* Pure geometry check of the warp-surface types — no GL calls, so it
+ * runs in both the stub and real-GL builds. */
 static void test_postprocess_surface_math(void) {
-    printf("--- postprocess barrel/ripple surface (pure) ---\n");
+    printf("--- postprocess warp-surface types (pure) ---\n");
     const int W = 800, H = 600;
     float x, y;
 
-    /* Flat surface (bulge=0, wobble=0): the grid is an identity map onto
-     * the rect — the flat<->barrel morph's zero point. */
-    Render3dPostSurface flat;
-    flat.sw = W; flat.sh = H; flat.t = 0.0f; flat.bulge = 0.0f; flat.wobble = 0.0f;
+    /* FLAT: an identity map onto the rect — the flat<->warp morph's zero
+     * point. */
+    Render3dPostSurface flat = render3d_post_surface_flat(W, H);
     render3d_post_surface_point(&flat, 0.5f, 0.5f, &x, &y);
     ASSERT_TRUE("flat centre maps to rect centre",
                 fabsf(x - W * 0.5f) < 0.01f && fabsf(y - H * 0.5f) < 0.01f);
@@ -1231,12 +1230,11 @@ static void test_postprocess_surface_math(void) {
     ASSERT_TRUE("flat (1,1) maps to rect far corner",
                 fabsf(x - W) < 0.01f && fabsf(y - H) < 0.01f);
 
-    /* Barrel (bulge>0): the centre stays put while the corners are pushed
-     * outward past the rect (overscan), so the warped grid strictly
-     * contains the rect and no black gaps appear. */
-    Render3dPostSurface barrel;
-    barrel.sw = W; barrel.sh = H; barrel.t = 0.0f;
-    barrel.bulge = 0.10f; barrel.wobble = 0.0f;
+    /* BARREL: the centre stays put while the corners are pushed outward
+     * past the rect (overscan), so the warped grid strictly contains the
+     * rect and no black gaps appear — this is why scanlines needs no
+     * backing fill. */
+    Render3dPostSurface barrel = render3d_post_surface_barrel(W, H, 0.10f);
     render3d_post_surface_point(&barrel, 0.5f, 0.5f, &x, &y);
     ASSERT_TRUE("barrel centre is fixed",
                 fabsf(x - W * 0.5f) < 0.01f && fabsf(y - H * 0.5f) < 0.01f);
@@ -1247,12 +1245,11 @@ static void test_postprocess_surface_math(void) {
     ASSERT_TRUE("barrel pushes the near corner outward (overscan)",
                 x < 0.0f && y < 0.0f);
 
-    /* Ripple: an animated horizontal offset — the same grid point moves
-     * in x as t advances, and only in x (the wobble is horizontal). */
-    Render3dPostSurface ra = barrel, rb = barrel;
-    ra.wobble = rb.wobble = 4.0f;
-    ra.t = 0.0f;
-    rb.t = 0.4f;
+    /* RIPPLE (reserved for a future underwater filter): an animated
+     * horizontal offset — the same grid point moves in x as t advances,
+     * and only in x (the wobble is horizontal). */
+    Render3dPostSurface ra = render3d_post_surface_ripple(W, H, 0.0f, 4.0f);
+    Render3dPostSurface rb = render3d_post_surface_ripple(W, H, 0.4f, 4.0f);
     float xa, ya, xb, yb;
     render3d_post_surface_point(&ra, 0.25f, 0.30f, &xa, &ya);
     render3d_post_surface_point(&rb, 0.25f, 0.30f, &xb, &yb);

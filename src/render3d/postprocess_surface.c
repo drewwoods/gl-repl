@@ -1,11 +1,10 @@
 /*
  * postprocess_surface.c - see postprocess_surface.h.
  *
- * The warp is computed once per vertex in render3d_post_surface_point and
- * reused by both the textured-grid emitter and the scanline emitter, so
- * the image and its scanline mask always ride the exact same curved
- * surface. Barrel first (radial outward push), ripple second (a
- * horizontal sine travelling vertically, animated by t).
+ * The warp is computed once per vertex in render3d_post_surface_point,
+ * dispatched on the surface kind, and reused by both the textured-grid
+ * emitter and the scanline emitter so the image and its scanline mask
+ * always ride the exact same curved surface.
  */
 #include "postprocess_surface.h"
 
@@ -14,34 +13,76 @@
 #include <math.h>   /* sinf for the ripple */
 
 /* Ripple spatial frequency (radians across the rect height) and temporal
- * speed (radians/sec). Kept subtle so the sine reads as CRT signal
- * shimmer under the scanlines rather than a full underwater warp — a
- * caller wanting the "underwater" look just raises wobble. */
+ * speed (radians/sec) for the RIPPLE surface. */
 #define POST_SURFACE_RIPPLE_FREQ   9.0f
 #define POST_SURFACE_RIPPLE_SPEED  2.2f
+
+Render3dPostSurface render3d_post_surface_flat(int sw, int sh) {
+    Render3dPostSurface s;
+    s.kind = RENDER3D_POST_SURFACE_FLAT;
+    s.sw = sw;
+    s.sh = sh;
+    s.t = 0.0f;
+    s.strength = 0.0f;
+    return s;
+}
+
+Render3dPostSurface render3d_post_surface_barrel(int sw, int sh, float bulge) {
+    Render3dPostSurface s;
+    s.kind = RENDER3D_POST_SURFACE_BARREL;
+    s.sw = sw;
+    s.sh = sh;
+    s.t = 0.0f;
+    s.strength = bulge;
+    return s;
+}
+
+Render3dPostSurface render3d_post_surface_ripple(int sw, int sh,
+                                                 float t, float amplitude_px) {
+    Render3dPostSurface s;
+    s.kind = RENDER3D_POST_SURFACE_RIPPLE;
+    s.sw = sw;
+    s.sh = sh;
+    s.t = t;
+    s.strength = amplitude_px;
+    return s;
+}
 
 void render3d_post_surface_point(const Render3dPostSurface *s,
                                  float u, float v,
                                  float *out_x, float *out_y) {
-    float cx = 0.5f * (float)s->sw;
-    float cy = 0.5f * (float)s->sh;
-    /* Centred, normalized to [-1,1] with the corners landing at r^2 = 2. */
-    float nx = 2.0f * u - 1.0f;
-    float ny = 2.0f * v - 1.0f;
-    /* Barrel: push each vertex outward from the centre, more at the edges
-     * (r^2 term), so the image bulges toward the viewer and overscans the
-     * corners. For bulge >= 0 every vertex moves outward, so the warped
-     * grid strictly contains the rect — no black gaps. */
-    float scale = 1.0f + s->bulge * (nx * nx + ny * ny);
-    float px = cx + nx * scale * cx;
-    float py = cy + ny * scale * cy;
-    /* Ripple: a horizontal sine that travels vertically and animates with
-     * time — the wobble that makes a time-driven scene shimmer. */
-    if (s->wobble != 0.0f)
-        px += s->wobble * sinf(ny * POST_SURFACE_RIPPLE_FREQ
-                               + s->t * POST_SURFACE_RIPPLE_SPEED);
-    *out_x = px;
-    *out_y = py;
+    switch (s->kind) {
+    case RENDER3D_POST_SURFACE_BARREL: {
+        float cx = 0.5f * (float)s->sw;
+        float cy = 0.5f * (float)s->sh;
+        /* Centred, normalized to [-1,1] with the corners at r^2 = 2. */
+        float nx = 2.0f * u - 1.0f;
+        float ny = 2.0f * v - 1.0f;
+        /* Push each vertex outward from the centre, more at the edges
+         * (r^2 term), so the image bulges toward the viewer and overscans
+         * the corners. For strength >= 0 every vertex moves outward, so
+         * the warped grid strictly contains the rect — no black gaps. */
+        float scale = 1.0f + s->strength * (nx * nx + ny * ny);
+        *out_x = cx + nx * scale * cx;
+        *out_y = cy + ny * scale * cy;
+        break;
+    }
+    case RENDER3D_POST_SURFACE_RIPPLE: {
+        /* Flat base plus a horizontal sine that travels vertically and
+         * animates with time — the underwater wobble. */
+        float ny = 2.0f * v - 1.0f;
+        *out_x = u * (float)s->sw
+                 + s->strength * sinf(ny * POST_SURFACE_RIPPLE_FREQ
+                                      + s->t * POST_SURFACE_RIPPLE_SPEED);
+        *out_y = v * (float)s->sh;
+        break;
+    }
+    case RENDER3D_POST_SURFACE_FLAT:
+    default:
+        *out_x = u * (float)s->sw;
+        *out_y = v * (float)s->sh;
+        break;
+    }
 }
 
 void render3d_post_surface_draw_textured(const Render3dPostSurface *s,
