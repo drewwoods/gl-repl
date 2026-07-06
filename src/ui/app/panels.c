@@ -471,6 +471,38 @@ static UiHit status_history_hit_test(const UiRenderSnapshot *snap,
     return h;
 }
 
+/* 8x13 eighth-note pixel glyph, drawn via glBitmap in the current GL
+ * color: GLUT bitmap fonts are ASCII-only, so a literal UTF-8 note in
+ * the message text would render as multi-byte garbage. Rows are
+ * bottom-first (OpenGL bitmap order), MSB = leftmost pixel; the cell
+ * matches the FONT_SMALL 8x13 metrics so it sits inline with the text.
+ * (x, y) is the bottom-left of the cell, like a glRasterPos'd glyph. */
+static void status_draw_note_bitmap(float x, float y) {
+    static const GLubyte k_note_bits[13] = {
+        0x60, /* row 0 .##..... */
+        0xF0, /* row 1 ####.... */
+        0xF0, /* row 2 ####.... */
+        0xF0, /* row 3 ####.... */
+        0x70, /* row 4 .###.... */
+        0x10, /* row 5 ...#.... */
+        0x10, /* row 6 ...#.... */
+        0x10, /* row 7 ...#.... */             
+        0x12, /* row 8 ...#..#. */
+        0x12, /* row 9 ...#..#. */
+        0x14, /* row 10 ...#.#.. */
+        0x18, /* row 11 ...##... */
+        0x10  /* row 12 ...#..... */
+    };
+    GLint align;
+    /* Bitmap rows honor GL_UNPACK_ALIGNMENT (default 4 would read the
+     * 1-byte rows on a 4-byte stride); pin to 1 and restore. */
+    glGetIntegerv(GL_UNPACK_ALIGNMENT, &align);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glRasterPos2f(x, y);
+    glBitmap(8, 13, 0.0f, 0.0f, 0.0f, 0.0f, k_note_bits);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, align);
+}
+
 /* Telescoping transient status banner. It grows out of the bell's left
  * edge toward the scene's left edge as `anim.ext` rises; the leading (left)
  * edge alpha lerps with the extension so the strip appears to stream out of
@@ -532,20 +564,25 @@ static void status_banner_render(const UiRenderSnapshot *snap,
     glVertex2f(right, y1);
     glEnd();
 
-    /* Severity dot at the text's left margin. */
+    /* Severity dot at the text's left margin; MUSIC swaps it for the
+     * eighth-note glyph on the text baseline. */
     tx     = sc_x + CODE_MARGIN_X + 10;
     text_y = sc_y + (STATUSBAR_H - FONT_SMALL_H) / 2 + 1;
     dot_cx = sc_x + CODE_MARGIN_X + 3;
     dot_cy = sc_y + STATUSBAR_H / 2;
     glColor4f(fg_rgb[0], fg_rgb[1], fg_rgb[2], ta);
-    glBegin(GL_TRIANGLE_FAN);
-    glVertex2f((float)dot_cx, (float)dot_cy);
-    for (i = 0; i <= 12; i++) {
-        float ang = (float)i * (6.2831853f / 12.0f);
-        glVertex2f((float)dot_cx + cosf(ang) * 3.0f,
-                   (float)dot_cy + sinf(ang) * 3.0f);
+    if (snap->status.kind == UI_STATUS_MUSIC) {
+        status_draw_note_bitmap((float)(dot_cx - 4), (float)text_y);
+    } else {
+        glBegin(GL_TRIANGLE_FAN);
+        glVertex2f((float)dot_cx, (float)dot_cy);
+        for (i = 0; i <= 12; i++) {
+            float ang = (float)i * (6.2831853f / 12.0f);
+            glVertex2f((float)dot_cx + cosf(ang) * 3.0f,
+                       (float)dot_cy + sinf(ang) * 3.0f);
+        }
+        glEnd();
     }
-    glEnd();
 
     /* Message text, truncated to the room left of the bell. */
     max_px = bx - 8 - tx;

@@ -119,6 +119,10 @@ void ui_state_status_set_error(const char *message) {
     ui_state_status_set_kind(message, UI_STATUS_ERROR);
 }
 
+void ui_state_status_set_music(const char *message) {
+    ui_state_status_set_kind(message, UI_STATUS_MUSIC);
+}
+
 UiStatusHistory ui_state_status_history(void) {
     return g_ui_state.status_history;
 }

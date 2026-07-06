@@ -64,10 +64,13 @@ typedef struct {
 
 /* Status banner severity. Renderer picks the palette from this. INFO is
  * the historical amber; ERROR is a red palette so failures (flatten
- * limit, command-buffer full, parse errors) are unmissable. */
+ * limit, command-buffer full, parse errors) are unmissable. MUSIC uses
+ * the INFO palette but swaps the severity dot for an eighth-note glyph
+ * (now-playing announcements). */
 typedef enum {
     UI_STATUS_INFO = 0,
-    UI_STATUS_ERROR
+    UI_STATUS_ERROR,
+    UI_STATUS_MUSIC
 } UiStatusKind;
 
 typedef struct {

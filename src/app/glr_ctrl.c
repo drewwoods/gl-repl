@@ -2815,7 +2815,7 @@ void glr_ctrl_tick(void) {
             if (name && *name) {
                 char msg[REPL_DIAG_TEXT_MAX];
                 snprintf(msg, sizeof(msg), "Now playing: %s", name);
-                repl_set_status(msg);
+                ui_state_status_set_music(msg);
             }
         }
     }
