@@ -266,7 +266,10 @@ build_one() {
             # — gl-repl's assets/ can symlink a full multi-hundred-MB
             # playlist that file_packager would happily follow.
             local repl_preload=""
-            if [[ -f "${sample_dir}/assets/sample.mp3" ]]; then
+            if [[ -d "${sample_dir}/assets/favorite" ]]; then
+                repl_preload="--preload-file ${sample_dir}/assets/favorite@/assets"
+                echo -e "${CYAN}  bundling assets/favorite → /assets${NC}"
+            elif [[ -f "${sample_dir}/assets/sample.mp3" ]]; then
                 repl_preload="--preload-file ${sample_dir}/assets/sample.mp3@/assets/sample.mp3"
                 echo -e "${CYAN}  bundling assets/sample.mp3 only → /assets${NC}"
             elif [[ -n "${preload_flag}" ]]; then
