@@ -1023,6 +1023,183 @@ static void test_runtime_examples_dir_catalog(const char *temp_dir) {
                 repl_example_count() == 2 &&
                 strcmp(repl_example_name(0), "Runtime raw points") == 0);
 
+    /* Additional catalog parsing/validation error test cases to cover examples.c paths */
+
+    /* Empty/NULL directory paths */
+    err[0] = '\0';
+    ASSERT_TRUE("reject empty dir", !repl_examples_load_dir("", err, sizeof(err)));
+    ASSERT_TRUE("reject NULL dir", !repl_examples_load_dir(NULL, err, sizeof(err)));
+
+    /* Non-existent directory */
+    err[0] = '\0';
+    ASSERT_TRUE("reject non-existent dir", !repl_examples_load_dir("/tmp/nonexistent_catalog_path_xyz", err, sizeof(err)));
+
+    /* Missing scenes subdirectory */
+    char no_scenes_root[512];
+    char no_scenes_cat[512];
+    snprintf(no_scenes_root, sizeof(no_scenes_root), "%s/no_scenes_root", temp_dir);
+    snprintf(no_scenes_cat, sizeof(no_scenes_cat), "%s/catalog.ini", no_scenes_root);
+    if (mkdir(no_scenes_root, 0700) == 0) {
+        write_text_path(no_scenes_cat, "[sec]\nfile = scenes/raw-points.glr\nname = Raw\ntags = 2D\ngroup = G\n");
+        err[0] = '\0';
+        ASSERT_TRUE("reject catalog when scenes dir missing", !repl_examples_load_dir(no_scenes_root, err, sizeof(err)));
+        remove(no_scenes_cat);
+        rmdir(no_scenes_root);
+    }
+
+    /* Missing catalog.ini */
+    char no_cat_root[512];
+    char no_cat_scenes[512];
+    snprintf(no_cat_root, sizeof(no_cat_root), "%s/no_cat_root", temp_dir);
+    snprintf(no_cat_scenes, sizeof(no_cat_scenes), "%s/scenes", no_cat_root);
+    if (mkdir(no_cat_root, 0700) == 0) {
+        if (mkdir(no_cat_scenes, 0700) == 0) {
+            err[0] = '\0';
+            ASSERT_TRUE("reject when catalog.ini missing", !repl_examples_load_dir(no_cat_root, err, sizeof(err)));
+            rmdir(no_cat_scenes);
+        }
+        rmdir(no_cat_root);
+    }
+
+    /* Empty catalog.ini */
+    write_text_path(catalog_path, "\n");
+    err[0] = '\0';
+    ASSERT_TRUE("empty catalog.ini fails", !repl_examples_load_dir(root, err, sizeof(err)));
+
+    /* Key outside section */
+    write_text_path(catalog_path, "file = scenes/raw-points.glr\n");
+    err[0] = '\0';
+    ASSERT_TRUE("reject key outside section", !repl_examples_load_dir(root, err, sizeof(err)));
+
+    /* Missing '=' in key-value */
+    write_text_path(catalog_path, "[sec]\nfile scenes/raw-points.glr\n");
+    err[0] = '\0';
+    ASSERT_TRUE("reject missing eq", !repl_examples_load_dir(root, err, sizeof(err)));
+
+    /* Unknown key */
+    write_text_path(catalog_path, "[sec]\nunknown_key_name = value\n");
+    err[0] = '\0';
+    ASSERT_TRUE("reject unknown key", !repl_examples_load_dir(root, err, sizeof(err)));
+
+    /* Duplicate key */
+    write_text_path(catalog_path, "[sec]\nfile = scenes/raw-points.glr\nfile = scenes/raw-points.glr\n");
+    err[0] = '\0';
+    ASSERT_TRUE("reject duplicate key", !repl_examples_load_dir(root, err, sizeof(err)));
+
+    /* Duplicate section */
+    write_text_path(catalog_path, "[sec]\nfile = scenes/raw-points.glr\n[sec]\nfile = scenes/raw-points.glr\n");
+    err[0] = '\0';
+    ASSERT_TRUE("reject duplicate section", !repl_examples_load_dir(root, err, sizeof(err)));
+
+    /* Missing closing ']' in section header */
+    write_text_path(catalog_path, "[sec\nfile = scenes/raw-points.glr\n");
+    err[0] = '\0';
+    ASSERT_TRUE("reject missing closing brace", !repl_examples_load_dir(root, err, sizeof(err)));
+
+    /* Extra chars in section header */
+    write_text_path(catalog_path, "[sec] extra_chars\nfile = scenes/raw-points.glr\n");
+    err[0] = '\0';
+    ASSERT_TRUE("reject extra characters in section header", !repl_examples_load_dir(root, err, sizeof(err)));
+
+    /* Empty section name */
+    write_text_path(catalog_path, "[]\nfile = scenes/raw-points.glr\n");
+    err[0] = '\0';
+    ASSERT_TRUE("reject empty section name", !repl_examples_load_dir(root, err, sizeof(err)));
+
+    /* Missing required keys */
+    write_text_path(catalog_path, "[sec]\nfile = scenes/raw-points.glr\n");
+    err[0] = '\0';
+    ASSERT_TRUE("reject missing required keys", !repl_examples_load_dir(root, err, sizeof(err)));
+
+    /* Empty values in required keys */
+    write_text_path(catalog_path, "[sec]\nfile = \nname = Raw\ntags = 2D\ngroup = G\n");
+    err[0] = '\0';
+    ASSERT_TRUE("reject empty values in required keys", !repl_examples_load_dir(root, err, sizeof(err)));
+
+    /* Duplicate example name */
+    write_text_path(catalog_path,
+                    "[sec1]\nfile = scenes/raw-points.glr\nname = SameName\ntags = 2D\ngroup = G\n"
+                    "[sec2]\nfile = scenes/exported-lines.c\nname = SameName\ntags = 2D\ngroup = G\n");
+    err[0] = '\0';
+    ASSERT_TRUE("reject duplicate example name", !repl_examples_load_dir(root, err, sizeof(err)));
+
+    /* Absolute path in file */
+    write_text_path(catalog_path, "[sec]\nfile = /tmp/scenes/raw-points.glr\nname = Raw\ntags = 2D\ngroup = G\n");
+    err[0] = '\0';
+    ASSERT_TRUE("reject absolute path", !repl_examples_load_dir(root, err, sizeof(err)));
+
+    /* File not under scenes */
+    write_text_path(catalog_path, "[sec]\nfile = ../raw-points.glr\nname = Raw\ntags = 2D\ngroup = G\n");
+    err[0] = '\0';
+    ASSERT_TRUE("reject file not under scenes", !repl_examples_load_dir(root, err, sizeof(err)));
+
+    /* Duplicate scene file */
+    write_text_path(catalog_path,
+                    "[sec1]\nfile = scenes/raw-points.glr\nname = Raw1\ntags = 2D\ngroup = G\n"
+                    "[sec2]\nfile = scenes/raw-points.glr\nname = Raw2\ntags = 2D\ngroup = G\n");
+    err[0] = '\0';
+    ASSERT_TRUE("reject duplicate scene file", !repl_examples_load_dir(root, err, sizeof(err)));
+
+    /* Nonexistent scene file */
+    write_text_path(catalog_path, "[sec]\nfile = scenes/nonexistent.glr\nname = Raw\ntags = 2D\ngroup = G\n");
+    err[0] = '\0';
+    ASSERT_TRUE("reject nonexistent scene file", !repl_examples_load_dir(root, err, sizeof(err)));
+
+    /* Tag validation errors */
+    write_text_path(catalog_path, "[sec]\nfile = scenes/raw-points.glr\nname = Raw\ntags = All\ngroup = G\n");
+    err[0] = '\0';
+    ASSERT_TRUE("reject synthetic tag All", !repl_examples_load_dir(root, err, sizeof(err)));
+
+    write_text_path(catalog_path, "[sec]\nfile = scenes/raw-points.glr\nname = Raw\ntags = 2D,UnknownTag\ngroup = G\n");
+    err[0] = '\0';
+    ASSERT_TRUE("reject unknown tag", !repl_examples_load_dir(root, err, sizeof(err)));
+
+    write_text_path(catalog_path, "[sec]\nfile = scenes/raw-points.glr\nname = Raw\ntags = 2D,2D\ngroup = G\n");
+    err[0] = '\0';
+    ASSERT_TRUE("reject duplicate tags", !repl_examples_load_dir(root, err, sizeof(err)));
+
+    /* Empty scene file */
+    char empty_scene[512];
+    snprintf(empty_scene, sizeof(empty_scene), "%s/empty.glr", scenes_dir);
+    write_text_path(empty_scene, "");
+    write_text_path(catalog_path, "[sec]\nfile = scenes/empty.glr\nname = Raw\ntags = 2D\ngroup = G\n");
+    err[0] = '\0';
+    ASSERT_TRUE("reject empty scene file", !repl_examples_load_dir(root, err, sizeof(err)));
+    remove(empty_scene);
+
+    /* Scene line exceeds MAX_LINE_LEN */
+    char long_line[300];
+    memset(long_line, 'a', 258);
+    long_line[258] = '\n';
+    long_line[259] = '\0';
+    char long_glr_path[512];
+    snprintf(long_glr_path, sizeof(long_glr_path), "%s/long.glr", scenes_dir);
+    write_text_path(long_glr_path, long_line);
+    write_text_path(catalog_path, "[sec]\nfile = scenes/long.glr\nname = Raw\ntags = 2D\ngroup = G\n");
+    err[0] = '\0';
+    ASSERT_TRUE("reject scene line exceeding MAX_LINE_LEN", !repl_examples_load_dir(root, err, sizeof(err)));
+    remove(long_glr_path);
+
+    /* Catalog line exceeds MAX_LINE_LEN */
+    char long_cat_line[300];
+    memset(long_cat_line, 'a', 258);
+    long_cat_line[258] = '\n';
+    long_cat_line[259] = '\0';
+    write_text_path(catalog_path, long_cat_line);
+    err[0] = '\0';
+    ASSERT_TRUE("reject catalog line exceeding MAX_LINE_LEN", !repl_examples_load_dir(root, err, sizeof(err)));
+
+    /* Boundary bounds checks for active examples getters */
+    int current_example_count = repl_example_count();
+    ASSERT_TRUE("out of bounds example name is NULL", repl_example_name(current_example_count) == NULL);
+    ASSERT_TRUE("negative example name is NULL", repl_example_name(-1) == NULL);
+    ASSERT_TRUE("out of bounds example lines is NULL", repl_example_lines(current_example_count) == NULL);
+    ASSERT_TRUE("negative example lines is NULL", repl_example_lines(-1) == NULL);
+    ASSERT_TRUE("out of bounds example subheading is NULL", repl_example_subheading(current_example_count) == NULL);
+    ASSERT_TRUE("negative example subheading is NULL", repl_example_subheading(-1) == NULL);
+    ASSERT_TRUE("out of bounds example tag mask is 0", repl_example_tag_mask(current_example_count) == 0u);
+    ASSERT_TRUE("negative example tag mask is 0", repl_example_tag_mask(-1) == 0u);
+
     repl_examples_clear_runtime_catalog();
     ASSERT_TRUE("runtime examples clear restores compiled catalog",
                 repl_example_count() == builtin_count);

@@ -1640,6 +1640,109 @@ static void test_keymap_binding_to_string(void) {
                                         KM_KEY(GLR_ESCAPE),
                                         KM_MODS(GLR_ESCAPE), 0),
                "Escape");
+
+    /* Modifier combinations */
+    ASSERT_STR("format Alt letter",
+               keymap_binding_to_string(buf, (int)sizeof(buf), 'A', GLUT_ACTIVE_ALT, 0),
+               "Alt+A");
+    ASSERT_STR("format Ctrl+Shift+Alt letter",
+               keymap_binding_to_string(buf, (int)sizeof(buf), 'A',
+                                        GLUT_ACTIVE_CTRL | GLUT_ACTIVE_SHIFT | GLUT_ACTIVE_ALT, 0),
+               "Ctrl+Shift+Alt+A");
+
+    /* Special keys list */
+    ASSERT_STR("format special Left",
+               keymap_binding_to_string(buf, (int)sizeof(buf), GLUT_KEY_LEFT, 0, 1),
+               "Left");
+    ASSERT_STR("format special Right",
+               keymap_binding_to_string(buf, (int)sizeof(buf), GLUT_KEY_RIGHT, 0, 1),
+               "Right");
+    ASSERT_STR("format special Up",
+               keymap_binding_to_string(buf, (int)sizeof(buf), GLUT_KEY_UP, 0, 1),
+               "Up");
+    ASSERT_STR("format special Down",
+               keymap_binding_to_string(buf, (int)sizeof(buf), GLUT_KEY_DOWN, 0, 1),
+               "Down");
+    ASSERT_STR("format special Home",
+               keymap_binding_to_string(buf, (int)sizeof(buf), GLUT_KEY_HOME, 0, 1),
+               "Home");
+    ASSERT_STR("format special End",
+               keymap_binding_to_string(buf, (int)sizeof(buf), GLUT_KEY_END, 0, 1),
+               "End");
+    ASSERT_STR("format special Page Up",
+               keymap_binding_to_string(buf, (int)sizeof(buf), GLUT_KEY_PAGE_UP, 0, 1),
+               "Page Up");
+    ASSERT_STR("format special Page Down",
+               keymap_binding_to_string(buf, (int)sizeof(buf), GLUT_KEY_PAGE_DOWN, 0, 1),
+               "Page Down");
+    ASSERT_STR("format special Insert",
+               keymap_binding_to_string(buf, (int)sizeof(buf), GLUT_KEY_INSERT, 0, 1),
+               "Insert");
+#ifndef USE_GLUT
+    ASSERT_STR("format special Delete",
+               keymap_binding_to_string(buf, (int)sizeof(buf), GLUT_KEY_DELETE, 0, 1),
+               "Delete");
+#endif
+    ASSERT_STR("format special F1",
+               keymap_binding_to_string(buf, (int)sizeof(buf), GLUT_KEY_F1, 0, 1),
+               "F1");
+    ASSERT_STR("format special F12",
+               keymap_binding_to_string(buf, (int)sizeof(buf), GLUT_KEY_F12, 0, 1),
+               "F12");
+    ASSERT_STR("format unknown special key",
+               keymap_binding_to_string(buf, (int)sizeof(buf), 9999, 0, 1),
+               "Key9999");
+
+    /* Non-special keys */
+    ASSERT_STR("format Backspace",
+               keymap_binding_to_string(buf, (int)sizeof(buf), KEY_BACKSPACE, 0, 0),
+               "Backspace");
+    ASSERT_STR("format Delete",
+               keymap_binding_to_string(buf, (int)sizeof(buf), KEY_DELETE, 0, 0),
+               "Delete");
+    ASSERT_STR("format Tab",
+               keymap_binding_to_string(buf, (int)sizeof(buf), '\t', 0, 0),
+               "Tab");
+    ASSERT_STR("format Enter (LF)",
+               keymap_binding_to_string(buf, (int)sizeof(buf), '\n', 0, 0),
+               "Enter");
+    ASSERT_STR("format Enter (CR)",
+               keymap_binding_to_string(buf, (int)sizeof(buf), '\r', 0, 0),
+               "Enter");
+    ASSERT_STR("format Space",
+               keymap_binding_to_string(buf, (int)sizeof(buf), ' ', 0, 0),
+               "Space");
+    ASSERT_STR("format Ctrl Backslash",
+               keymap_binding_to_string(buf, (int)sizeof(buf), KEY_CTRL_BACKSLASH, 0, 0),
+               "Ctrl+\\");
+    ASSERT_STR("format Ctrl Dash",
+               keymap_binding_to_string(buf, (int)sizeof(buf), KEY_CTRL_DASH, 0, 0),
+               "Ctrl+-");
+    ASSERT_STR("format Key 128",
+               keymap_binding_to_string(buf, (int)sizeof(buf), 128, 0, 0),
+               "Key128");
+
+    /* Boundary / error guards */
+    ASSERT_STR("null buffer check",
+               keymap_binding_to_string(NULL, 10, 'A', 0, 0),
+               "");
+    ASSERT_STR("zero buffer size check",
+               keymap_binding_to_string(buf, 0, 'A', 0, 0),
+               "");
+    ASSERT_STR("negative buffer size check",
+               keymap_binding_to_string(buf, -5, 'A', 0, 0),
+               "");
+
+    /* Truncation / boundary snprintf tests in append_label_part */
+    ASSERT_STR("exact size no truncation",
+               keymap_binding_to_string(buf, 7, 'A', GLUT_ACTIVE_CTRL, 0),
+               "Ctrl+A");
+    ASSERT_STR("truncation case Ctrl+",
+               keymap_binding_to_string(buf, 5, 'A', GLUT_ACTIVE_CTRL, 0),
+               "Ctrl");
+    ASSERT_STR("truncation case Ctrl+Sh",
+               keymap_binding_to_string(buf, 8, 'A', GLUT_ACTIVE_CTRL | GLUT_ACTIVE_SHIFT, 0),
+               "Ctrl+Sh");
 }
 
 static int help_tab_contains_binding(const char *tab_label,
