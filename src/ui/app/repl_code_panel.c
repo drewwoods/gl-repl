@@ -1969,36 +1969,38 @@ static void repl_code_panel_draw_bitmap_icon(int kx, int ky, int kw, int kh,
 }
 
 static void repl_code_panel_draw_trash_icon(int kx, int ky, int kw, int kh) {
-    /* 13×10  1bpp trash-can glyph, drawn with glBitmap so it matches
+    /* 13×12  1bpp trash-can glyph, drawn with glBitmap so it matches
      * the crisp pixel-art style of the ⇧ shift glyph and the bitmap
      * font.  Rows are bottom-to-top (glBitmap scan order); bit 0x80
-     * of byte 0 = leftmost pixel (col 0).
+     * of byte 0 = leftmost pixel (col 0).  The three interior slats
+     * are inset a pixel from both rims so they read as ribs inside
+     * the can, not bars fused to it.
      *
-     *  row 11:  .....###.....   handle tab  (cols 5-7)
+     *  row 11:  ....#####....   handle tab  (cols 4-8)
      *  row 10:  .###########.   lid         (cols 1-11, overhangs body)
      *  row 9:   .............   lid / body gap
      *  row 8:   ..#########..   body top    (cols 2-10)
-     *  row 7:   ..#.#.#.#.#..   walls + 3 interior stripes
-     *  row 6:   ..#.#.#.#.#..
-     *  row 6:   ..#.#.#.#.#..
+     *  row 7:   ..#.......#..   walls only (slat inset)
+     *  row 6:   ..#.#.#.#.#..   walls + 3 interior slats
+     *  row 5:   ..#.#.#.#.#..
      *  row 4:   ..#.#.#.#.#..
      *  row 3:   ..#.#.#.#.#..
      *  row 2:   ..#.#.#.#.#..
-     *  row 1:   ..#########..   body bottom (cols 2-10)
-     *  row 0:   .............   bottom padding                        */
+     *  row 1:   ..#.......#..   walls only (slat inset)
+     *  row 0:   ..#########..   body bottom (cols 2-10)               */
     static const GLubyte trash_bits[TRASH_ICON_H * 2] = {
-        0x00, 0x00,  /* row 0  padding                               */
-        0x3F, 0xE0,  /* row 1  body bottom  ..#########..            */
-        0x2A, 0xA0,  /* row 2  stripes      ..#.#.#.#.#..            */
-        0x2A, 0xA0,  /* row 3  stripes      ..#.#.#.#.#..            */
-        0x2A, 0xA0,  /* row 4  stripes      ..#.#.#.#.#..            */
-        0x2A, 0xA0,  /* row 5  stripes      ..#.#.#.#.#..            */
-        0x2A, 0xA0,  /* row 6  stripes      ..#.#.#.#.#..            */
-        0x2A, 0xA0,  /* row 7  stripes      ..#.#.#.#.#..            */
+        0x3F, 0xE0,  /* row 0  body bottom  ..#########..            */
+        0x20, 0x20,  /* row 1  walls        ..#.......#..            */
+        0x2A, 0xA0,  /* row 2  slats        ..#.#.#.#.#..            */
+        0x2A, 0xA0,  /* row 3  slats        ..#.#.#.#.#..            */
+        0x2A, 0xA0,  /* row 4  slats        ..#.#.#.#.#..            */
+        0x2A, 0xA0,  /* row 5  slats        ..#.#.#.#.#..            */
+        0x2A, 0xA0,  /* row 6  slats        ..#.#.#.#.#..            */
+        0x20, 0x20,  /* row 7  walls        ..#.......#..            */
         0x3F, 0xE0,  /* row 8  body top     ..#########..            */
         0x00, 0x00,  /* row 9  lid gap                               */
         0x7F, 0xF0,  /* row 10 lid          .###########.            */
-        0x07, 0x00   /* row 11 handle       .....###.....            */
+        0x0F, 0x80   /* row 11 handle       ....#####....            */
     };
     repl_code_panel_draw_bitmap_icon(kx, ky, kw, kh,
                                      TRASH_ICON_W, TRASH_ICON_H, trash_bits);
