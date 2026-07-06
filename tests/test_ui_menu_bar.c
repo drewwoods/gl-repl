@@ -29,6 +29,9 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ASSERT_INT_EQ(label, got, exp) \
     TEST_ASSERT_INT(&g_harness, label, got, exp)
 
+#define ASSERT_STR_EQ(label, got, exp) \
+    TEST_ASSERT_STR(&g_harness, label, got, exp)
+
 static void reset_menu_bar_fixture(int window_w, int window_h) {
     glr_ctrl_reset_all();
     ui_state_reset();
@@ -352,6 +355,7 @@ static void test_audio_menu_flyout_hits(void) {
     int loop_mx = -1, loop_my = -1;
     int sx = 0, sy = 0, sw = 0, sh = 0;
     int row_mx = -1, row_my = -1;
+    const char *shortcut;
     UiHit hit;
 
     reset_menu_bar_fixture(1000, 600);
@@ -387,6 +391,18 @@ static void test_audio_menu_flyout_hits(void) {
     hit = ui_menu_bar_hit_test(play_mx, play_my);
     ASSERT_INT_EQ("audio Play row hit", hit.item_idx,
                   2 + GLR_AUDIO_OFF_PLAY);
+    shortcut = ui_menu_bar_menu_item_shortcut_for_test(GLR_MENU_AUDIO,
+                                                       2 + GLR_AUDIO_OFF_PLAY);
+    ASSERT_STR_EQ("audio Play shortcut", shortcut ? shortcut : "(null)",
+                  "Ctrl+Shift+A");
+    shortcut = ui_menu_bar_menu_item_shortcut_for_test(GLR_MENU_AUDIO,
+                                                       2 + GLR_AUDIO_OFF_NEXT);
+    ASSERT_STR_EQ("audio Next shortcut", shortcut ? shortcut : "(null)",
+                  "Ctrl+Right");
+    shortcut = ui_menu_bar_menu_item_shortcut_for_test(GLR_MENU_AUDIO,
+                                                       2 + GLR_AUDIO_OFF_PREV);
+    ASSERT_STR_EQ("audio Previous shortcut", shortcut ? shortcut : "(null)",
+                  "Ctrl+Left");
 
     ASSERT_TRUE("found Audio Loop row",
                 find_dropdown_item_point(GLR_MENU_AUDIO,
@@ -802,7 +818,6 @@ static void test_config_section_labels(void) {
         "CAMERA",
         "GEOMETRY",
         "INTERFACE",
-        "AUDIO",
     };
     static const char *expected_display[] = {
         "Rendering",
@@ -811,11 +826,10 @@ static void test_config_section_labels(void) {
         "Camera",
         "Geometry",
         "Interface",
-        "Audio",
     };
     int n = glr_config_section_count();
-    ASSERT_INT_EQ("section count", n, 7);
-    for (int i = 0; i < n && i < 7; i++) {
+    ASSERT_INT_EQ("section count", n, 6);
+    for (int i = 0; i < n && i < 6; i++) {
         const char *label = glr_config_section_label(i);
         ASSERT_TRUE("section label not null", label != NULL);
         if (label)

@@ -476,6 +476,10 @@ static const char *menu_item_shortcut(int menu_id, int i) {
         return NULL;
     if (menu_id == MENU_AUDIO) {
         int group_count = audio_visible_group_count();
+        if (i == group_count + GLR_AUDIO_OFF_PLAY)
+            return keymap_binding_to_string(buf, (int)sizeof(buf),
+                                            KM_KEY(GLR_AUDIO),
+                                            KM_MODS(GLR_AUDIO), 0);
         if (i == group_count + GLR_AUDIO_OFF_NEXT)
             return keymap_binding_to_string(buf, (int)sizeof(buf),
                                             KM_KEY(GLR_AUDIO_NEXT),
@@ -1096,6 +1100,10 @@ int ui_menu_bar_submenu_rect_for_test(int menu_id, int parent_row,
                                       int *sx, int *sy,
                                       int *sw, int *sh) {
     return submenu_rect(menu_id, parent_row, sx, sy, sw, sh);
+}
+
+const char *ui_menu_bar_menu_item_shortcut_for_test(int menu_id, int item_idx) {
+    return menu_item_shortcut(menu_id, item_idx);
 }
 
 /* Classify a raw dropdown label as header / separator / item — the

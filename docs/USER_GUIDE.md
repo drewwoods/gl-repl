@@ -55,7 +55,7 @@ Run a fresh session, or reload earlier work:
   **Ctrl+B** or the *Code panel* config item.
 - **3D viewport** — your geometry, rendered every frame. Drag to orbit,
   scroll to zoom.
-- **Menu bar** — *File*, *Scene*, *Tutorials*, *Config* dropdowns, a
+- **Menu bar** — *File*, *Scene*, *Tutorials*, *Config*, *Audio* dropdowns, a
   *search...* slot (same as Ctrl+F), and the *Replay* button at the far
   right.
 - **Scene tabs** — one tab per saved scene, below the menu bar. Click to
@@ -639,7 +639,6 @@ flyouts taller than the window):
   Vertex points, Poly highlight, Winding
 - **INTERFACE** — Variable panel, Compute profile, Memory profile, Code panel,
   Wrap at commas, Syntax highlight, Paren match, Paren scope
-- **AUDIO** — Audio on/off
 
 **Left-click** a flyout item to cycle it forward, **right-click** to cycle
 backward. Multi-state items show their current state name.
@@ -1094,10 +1093,10 @@ three places combined:
 
 | Key | Action |
 |---|---|
-| Ctrl+Shift+A | Toggle audio off / on |
+| Ctrl+Shift+A | Play / pause |
 | Ctrl+Left / Ctrl+Right | Previous / next track |
 
-`--no-audio` skips audio entirely. The audio on/off state persists across
+`--no-audio` skips audio entirely. The play/pause state persists across
 runs.
 
 ---
@@ -1238,7 +1237,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+S | Save scene |
 | Ctrl+Q | Quit (saves recovery file) |
 | Ctrl+Shift+D | Debug state dump |
-| Ctrl+Shift+A | Audio on/off |
+| Ctrl+Shift+A | Play / pause |
 | Ctrl+Left / Ctrl+Right | Previous / next track |
 
 > **macOS note:** Cmd+letter works the same as Ctrl+letter. F11 may be

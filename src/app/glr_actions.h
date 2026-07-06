@@ -102,6 +102,7 @@ void glr_actions_apply_defaults(void);
 void glr_actions_install_export_cfg_bridge(void);
 void glr_actions_set_msaa_label(int samples);
 void glr_actions_apply_audio_cfg_mode(int mode);
+void glr_action_toggle_audio_play_pause(void);
 
 /* Cycle a config item by delta steps. row is the config item index; delta is
  * +1 to cycle forward, -1 to cycle backward. Wraps around at boundaries.

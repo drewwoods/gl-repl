@@ -188,6 +188,13 @@ int glr_ctrl_router_handle_cfg_shortcut_key(unsigned char key) {
     return glr_cfg_handle_ascii_shortcut(key);
 }
 
+int glr_ctrl_router_handle_audio_key(unsigned char key) {
+    if (!keymap_event_is(key, GLR_AUDIO))
+        return 0;
+    glr_action_toggle_audio_play_pause();
+    return 1;
+}
+
 /* Ctrl+= / Ctrl+- step the Config "Accum passes" cycle (1/2/4/8/12/16,
  * clamped, no wrap), so the keyboard and the menu are one coherent model.
  * Gated on use_accum (no accumulation buffer under --noaccum) and on the
@@ -1478,6 +1485,7 @@ void glr_ctrl_keyboard(unsigned char key, int x, int y) {
      * non-config replay keys (Ctrl+K, space, +/- and friends) still
      * forward to replay_handle_key. */
     if (glr_ctrl_router_handle_config_menu_key(key) ||
+        glr_ctrl_router_handle_audio_key(key) ||
         glr_ctrl_router_handle_cfg_shortcut_key(key) ||
         glr_ctrl_router_handle_replay_key(key) ||
         glr_ctrl_router_handle_save_key(key) ||
