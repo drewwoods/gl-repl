@@ -310,8 +310,8 @@ static const char *audio_loop_status_label(int mode) {
         return "Song";
     return "All";
 }
-static const char *vertex_label_scope_names[OVERLAY_VERTEX_LABEL_SCOPE_COUNT] = {
-    OVERLAY_VERTEX_LABEL_SCOPE_LIST(OVERLAY_VERTEX_LABEL_SCOPE_NAME_ENTRY)
+static const char *overlay_scope_names[OVERLAY_SCOPE_COUNT] = {
+    OVERLAY_SCOPE_LIST(OVERLAY_SCOPE_NAME_ENTRY)
 };
 /* Accumulation buffer split into two rows: the effect mode (Off / AA
  * jitter / motion Blur) and the sample/pass count. The passes cycle maps
@@ -430,10 +430,10 @@ const GlrConfigItem g_cfg_items[] = {
       .state_count = OVERLAY_VERTEX_LABEL_COUNT, .state_names = vertex_label_names,
       .key_code = KM_KEY(GLR_VERTEX_LABELS), .modifiers = KM_MODS(GLR_VERTEX_LABELS),
       .is_special = 1 },
-    { .label = "Overlay scope", .key = GLR_CONFIG_VERTEX_LABEL_SCOPE,
-      .state_count = OVERLAY_VERTEX_LABEL_SCOPE_COUNT,
-      .state_names = vertex_label_scope_names,
-      .key_code = KM_KEY(GLR_VERTEX_LABEL_SCOPE), .modifiers = KM_MODS(GLR_VERTEX_LABEL_SCOPE),
+    { .label = "Overlay scope", .key = GLR_CONFIG_OVERLAY_SCOPE,
+      .state_count = OVERLAY_SCOPE_COUNT,
+      .state_names = overlay_scope_names,
+      .key_code = KM_KEY(GLR_OVERLAY_SCOPE), .modifiers = KM_MODS(GLR_OVERLAY_SCOPE),
       .is_special = 1 },
     { .label = "Normal vectors", .key = GLR_CONFIG_NORMAL_VECTORS, .state_count = 2,
       .key_code = KM_KEY(GLR_NORMAL_VECTORS), .modifiers = KM_MODS(GLR_NORMAL_VECTORS) },
@@ -495,7 +495,7 @@ static int cfg_key_in_scene_subset(GlrConfigKey key) {
     case GLR_CONFIG_GRID_BRIGHTNESS:
     case GLR_CONFIG_AXES_THEME:
     case GLR_CONFIG_VERTEX_LABELS:
-    case GLR_CONFIG_VERTEX_LABEL_SCOPE:
+    case GLR_CONFIG_OVERLAY_SCOPE:
     case GLR_CONFIG_NORMAL_VECTORS:
     case GLR_CONFIG_VERTEX_OUTLINES:
     case GLR_CONFIG_VERTEX_POINTS:
@@ -575,7 +575,7 @@ static int glr_export_cfg_slug_is_hidden_audio(const char *slug) {
  *
  * The slug→table map below covers every enum-valued slug the catalogs
  * actually use today (grid / axes / grid_extent / grid_major / backdrop /
- * light_theme / view_mode / label_scope). Other enum-shaped slugs
+ * light_theme / view_mode / overlay_scope). Other enum-shaped slugs
  * — replay, code_panel_layout, vertex_label, etc. — stay integer-only
  * in their saved form because no catalog literal carries them
  * symbolically. Add a table here if a new catalog needs symbolic
@@ -629,10 +629,10 @@ static const char *cfg_light_theme_symbols[LIGHT_THEME_COUNT] = {
     LIGHT_THEME_LIST(LIGHT_THEME_SYMBOL_ENTRY)
 #undef LIGHT_THEME_SYMBOL_ENTRY
 };
-static const char *cfg_vertex_label_scope_symbols[OVERLAY_VERTEX_LABEL_SCOPE_COUNT] = {
-#define VERTEX_LABEL_SCOPE_SYMBOL_ENTRY(name, str) [OVERLAY_VERTEX_LABEL_SCOPE_##name] = "OVERLAY_VERTEX_LABEL_SCOPE_" #name,
-    OVERLAY_VERTEX_LABEL_SCOPE_LIST(VERTEX_LABEL_SCOPE_SYMBOL_ENTRY)
-#undef VERTEX_LABEL_SCOPE_SYMBOL_ENTRY
+static const char *cfg_overlay_scope_symbols[OVERLAY_SCOPE_COUNT] = {
+#define OVERLAY_SCOPE_SYMBOL_ENTRY(name, str) [OVERLAY_SCOPE_##name] = "OVERLAY_SCOPE_" #name,
+    OVERLAY_SCOPE_LIST(OVERLAY_SCOPE_SYMBOL_ENTRY)
+#undef OVERLAY_SCOPE_SYMBOL_ENTRY
 };
 
 /* The slug→table map shared by the symbolic resolver (read side) and the
@@ -672,9 +672,9 @@ static const char *const *cfg_symbol_table_for_slug(const char *slug,
         *count = LIGHT_THEME_COUNT;
         return cfg_light_theme_symbols;
     }
-    if (strcmp(slug, "label_scope") == 0) {
-        *count = OVERLAY_VERTEX_LABEL_SCOPE_COUNT;
-        return cfg_vertex_label_scope_symbols;
+    if (strcmp(slug, "overlay_scope") == 0) {
+        *count = OVERLAY_SCOPE_COUNT;
+        return cfg_overlay_scope_symbols;
     }
     return NULL;
 }

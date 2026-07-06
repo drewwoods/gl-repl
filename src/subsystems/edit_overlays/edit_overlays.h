@@ -21,27 +21,27 @@ typedef enum OverlayVertexLabelMode {
     OVERLAY_VERTEX_LABEL_COUNT
 } OverlayVertexLabelMode;
 
-#define OVERLAY_VERTEX_LABEL_SCOPE_LIST(X) \
-    X(ONE_INSTANCE, "One instance")        \
+#define OVERLAY_SCOPE_LIST(X) \
+    X(FIRST_INSTANCE, "First instance")    \
     X(ALL_INSTANCES, "All instances")      \
     X(AT_VERTEX, "At vertex")              \
     X(VISIBLE, "Visible only")
 
-#define OVERLAY_VERTEX_LABEL_SCOPE_NAME_ENTRY(name, str) [OVERLAY_VERTEX_LABEL_SCOPE_##name] = str,
+#define OVERLAY_SCOPE_NAME_ENTRY(name, str) [OVERLAY_SCOPE_##name] = str,
 
-typedef enum OverlayVertexLabelScope {
-#define OVERLAY_VERTEX_LABEL_SCOPE_ENUM_ENTRY(name, str) OVERLAY_VERTEX_LABEL_SCOPE_##name,
-    OVERLAY_VERTEX_LABEL_SCOPE_LIST(OVERLAY_VERTEX_LABEL_SCOPE_ENUM_ENTRY)
-#undef OVERLAY_VERTEX_LABEL_SCOPE_ENUM_ENTRY
-    OVERLAY_VERTEX_LABEL_SCOPE_COUNT
-} OverlayVertexLabelScope;
+typedef enum OverlayScope {
+#define OVERLAY_SCOPE_ENUM_ENTRY(name, str) OVERLAY_SCOPE_##name,
+    OVERLAY_SCOPE_LIST(OVERLAY_SCOPE_ENUM_ENTRY)
+#undef OVERLAY_SCOPE_ENUM_ENTRY
+    OVERLAY_SCOPE_COUNT
+} OverlayScope;
 
 
 typedef struct OverlayWalkCtx {
     FlatProgramView  program;
     CursorBlockState cursor;
     /* Mirrors overlay scope for cursor-bound guide/highlight passes. */
-    OverlayVertexLabelScope cursor_label_scope;
+    OverlayScope cursor_overlay_scope;
     int              show_vertex_outlines;
     int              highlight_current_poly;
     int              replay_tess_preview;
@@ -58,8 +58,8 @@ typedef struct OverlaySnapshotPack {
     OverlayWalkCtx walk;
     Render3dGuideSnapshot snapshot;
     OverlayVertexLabelMode vertex_label_mode;
-    int vertex_label_scope;    /* 0 = one loop instance, 1 = all, 2 = all at vertex
-                                * (no declutter), 3 = all but depth-tested (visible) */
+    int overlay_scope;    /* 0 = first loop instance, 1 = all, 2 = all at vertex
+                            * (no declutter), 3 = all but depth-tested (visible) */
     Render3dViewMode ortho_mode;
     int show_normal_vectors;
     int multisample_enabled;

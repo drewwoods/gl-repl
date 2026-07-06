@@ -21,7 +21,7 @@
 /* @cfg view_mode = RENDER3D_VIEW_2D */
 /* @cfg camera_rotate = 0 */
 /* @cfg vertex_labels = 0 */
-/* @cfg label_scope = OVERLAY_VERTEX_LABEL_SCOPE_ONE_INSTANCE */
+/* @cfg overlay_scope = OVERLAY_SCOPE_FIRST_INSTANCE */
 /* @cfg normal_vectors = 0 */
 /* @cfg vertex_outlines = 0 */
 /* @cfg vertex_points = 0 */

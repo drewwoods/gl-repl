@@ -1,4 +1,4 @@
-// @cfg label_scope = OVERLAY_VERTEX_LABEL_SCOPE_AT_VERTEX
+// @cfg overlay_scope = OVERLAY_SCOPE_AT_VERTEX
 // @cfg axes = AXES_THEME_OFF
 // @cfg vertex_outlines = 0
 // @cfg vertex_points = 0
