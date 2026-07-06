@@ -58,47 +58,6 @@ if ( time -p true ) >/dev/null 2>&1; then
     have_time=1
 fi
 
-active=0
-for spec do
-    name=${spec%%:::*}
-    cmd=${spec#*:::}
-
-    if [ "$name" = "$spec" ] || [ -z "$name" ] || [ -z "$cmd" ]; then
-        printf 'invalid test spec: %s\n' "$spec" >&2
-        exit 2
-    fi
-
-    log="$log_dir/$name.log"
-    status="$log_dir/$name.status"
-    time_file="$log_dir/$name.time"
-
-    (
-        if [ -n "$child_force_color" ]; then
-            FORCE_COLOR=$child_force_color
-            export FORCE_COLOR
-        fi
-        # rc must come from the test command, never from `time`.
-        if [ "$have_time" -eq 1 ]; then
-            { time -p sh -c "$cmd" >"$log" 2>&1; } 2>"$time_file"
-            rc=$?
-        else
-            sh -c "$cmd" >"$log" 2>&1
-            rc=$?
-            : >"$time_file"
-        fi
-        printf '%d\n' "$rc" >"$status"
-        exit 0
-    ) &
-
-    active=$((active + 1))
-    if [ "$jobs" -gt 0 ] && [ "$active" -ge "$jobs" ]; then
-        wait
-        active=0
-    fi
-done
-
-wait
-
 parse_counts() {
     awk '
     {
@@ -156,63 +115,157 @@ timings_file="$log_dir/timings.txt"
 : >"$failed_tests_file"
 : >"$timings_file"
 
-for spec do
+# We store specifications in arrays to track status of parallel jobs
+specs=( "$@" )
+job_names=()
+job_cmds=()
+job_pids=()
+job_started=()
+job_completed=()
+
+for ((i=0; i<total_bins; i++)); do
+    spec="${specs[i]}"
     name=${spec%%:::*}
-    log="$log_dir/$name.log"
-    status="$log_dir/$name.status"
-    time_file="$log_dir/$name.time"
+    cmd=${spec#*:::}
 
-    if [ -f "$status" ]; then
-        rc=$(cat "$status")
-    else
-        rc=127
+    if [ "$name" = "$spec" ] || [ -z "$name" ] || [ -z "$cmd" ]; then
+        printf 'invalid test spec: %s\n' "$spec" >&2
+        exit 2
     fi
 
-    # Extract elapsed time from time output
-    if [ -f "$time_file" ]; then
-        elapsed_str=$(parse_time_output "$time_file")
-        if [ -z "$elapsed_str" ]; then
-            elapsed_str="unknown"
-        else
-            # Record timing for top 3 analysis (in seconds for sorting)
-            elapsed_secs=$(time_to_seconds "$elapsed_str")
-            printf '%s %s\n' "$elapsed_secs" "$name" >>"$timings_file"
-            elapsed_str="${elapsed_secs}s"
+    job_names[i]=$name
+    job_cmds[i]=$cmd
+    job_pids[i]=0
+    job_started[i]=0
+    job_completed[i]=0
+done
+
+concurrency=$jobs
+if [ "$concurrency" -le 0 ]; then
+    concurrency=$total_bins
+fi
+
+completed_count=0
+started_count=0
+running_count=0
+
+while [ "$completed_count" -lt "$total_bins" ]; do
+    # 1. Start new jobs up to capacity
+    while [ "$running_count" -lt "$concurrency" ] && [ "$started_count" -lt "$total_bins" ]; do
+        # Find first unstarted job
+        for ((i=0; i<total_bins; i++)); do
+            if [ "${job_started[i]}" -eq 0 ]; then
+                name="${job_names[i]}"
+                cmd="${job_cmds[i]}"
+                log="$log_dir/$name.log"
+                status="$log_dir/$name.status"
+                time_file="$log_dir/$name.time"
+
+                (
+                    if [ -n "$child_force_color" ]; then
+                        FORCE_COLOR=$child_force_color
+                        export FORCE_COLOR
+                    fi
+                    if [ "$have_time" -eq 1 ]; then
+                        { time -p sh -c "$cmd" >"$log" 2>&1; } 2>"$time_file"
+                        rc=$?
+                    else
+                        sh -c "$cmd" >"$log" 2>&1
+                        rc=$?
+                        : >"$time_file"
+                    fi
+                    printf '%d\n' "$rc" >"$status"
+                    exit 0
+                ) &
+
+                job_pids[i]=$!
+                job_started[i]=1
+                started_count=$((started_count + 1))
+                running_count=$((running_count + 1))
+                break
+            fi
+        done
+    done
+
+    # 2. Check for completed jobs
+    any_changed=0
+    for ((i=0; i<total_bins; i++)); do
+        if [ "${job_started[i]}" -eq 1 ] && [ "${job_completed[i]}" -eq 0 ]; then
+            name="${job_names[i]}"
+            status="$log_dir/$name.status"
+            pid="${job_pids[i]}"
+
+            if [ -f "$status" ] || { [ "$pid" -ne 0 ] && ! kill -0 "$pid" 2>/dev/null; }; then
+                # Reap process
+                wait "$pid" 2>/dev/null
+
+                if [ -f "$status" ]; then
+                    rc=$(cat "$status")
+                    if [ -z "$rc" ]; then
+                        rc=127
+                    fi
+                else
+                    rc=127
+                fi
+
+                log="$log_dir/$name.log"
+                time_file="$log_dir/$name.time"
+
+                # Extract elapsed time
+                if [ -f "$time_file" ]; then
+                    elapsed_str=$(parse_time_output "$time_file")
+                    if [ -z "$elapsed_str" ]; then
+                        elapsed_str="unknown"
+                    else
+                        elapsed_secs=$(time_to_seconds "$elapsed_str")
+                        printf '%s %s\n' "$elapsed_secs" "$name" >>"$timings_file"
+                        elapsed_str="${elapsed_secs}s"
+                    fi
+                else
+                    elapsed_str="unknown"
+                fi
+
+                counts=$(parse_counts "$log")
+                test_passed=${counts%% *}
+                test_total=${counts#* }
+
+                if [ "$rc" -eq 0 ]; then
+                    passed_bins=$((passed_bins + 1))
+                    printf '[%02d/%d] %bPASS%b %s' "$((completed_count + 1))" "$total_bins" "$green" "$reset" "$name"
+                else
+                    failed_bins=$((failed_bins + 1))
+                    printf '%b════════════════════════════════════════════════════════════%b\n' "$red" "$reset"
+                    printf '[%02d/%d] %bFAIL%b %s (exit %d)' "$((completed_count + 1))" "$total_bins" "$red" "$reset" "$name" "$rc"
+                    printf '%s\n' "$name" >>"$failed_tests_file"
+                fi
+
+                if [ "$test_total" -ge 0 ]; then
+                    passed_tests=$((passed_tests + test_passed))
+                    total_tests=$((total_tests + test_total))
+                    printf ' [%d/%d tests] (%s)\n' "$test_passed" "$test_total" "$elapsed_str"
+                    printf '%s %s %d %d %d\n' "$name" "$rc" "$test_passed" "$test_total" "$((test_total - test_passed))" >>"$summary_file"
+                else
+                    unknown_stats=$((unknown_stats + 1))
+                    printf ' [test count unknown] (%s)\n' "$elapsed_str"
+                    printf '%s %s unknown unknown unknown\n' "$name" "$rc" >>"$summary_file"
+                fi
+
+                if [ "$rc" -ne 0 ] && [ -s "$log" ]; then
+                    printf '%b==> %s output:%b\n' "$cyan" "$name" "$reset"
+                    cat "$log"
+                    printf '%b════════════════════════════════════════════════════════════%b\n' "$red" "$reset"
+                fi
+
+                job_completed[i]=1
+                completed_count=$((completed_count + 1))
+                running_count=$((running_count - 1))
+                any_changed=1
+            fi
         fi
-    else
-        elapsed_str="unknown"
-    fi
+    done
 
-    counts=$(parse_counts "$log")
-    test_passed=${counts%% *}
-    test_total=${counts#* }
-
-    if [ "$rc" -eq 0 ]; then
-        passed_bins=$((passed_bins + 1))
-        printf '%bPASS%b %s' "$green" "$reset" "$name"
-    else
-        failed_bins=$((failed_bins + 1))
-        printf '%b════════════════════════════════════════════════════════════%b\n' "$red" "$reset"
-        printf '%bFAIL%b %s (exit %d)' "$red" "$reset" "$name" "$rc"
-        printf '%s\n' "$name" >>"$failed_tests_file"
-    fi
-
-    if [ "$test_total" -ge 0 ]; then
-        passed_tests=$((passed_tests + test_passed))
-        total_tests=$((total_tests + test_total))
-        printf ' [%d/%d tests] (%s)\n' "$test_passed" "$test_total" "$elapsed_str"
-        printf '%s %s %d %d %d\n' "$name" "$rc" "$test_passed" "$test_total" "$((test_total - test_passed))" >>"$summary_file"
-    else
-        unknown_stats=$((unknown_stats + 1))
-        printf ' [test count unknown] (%s)\n' "$elapsed_str"
-        printf '%s %s unknown unknown unknown\n' "$name" "$rc" >>"$summary_file"
-    fi
-
-    # Show test output only for failed tests
-    if [ "$rc" -ne 0 ] && [ -s "$log" ]; then
-        printf '%b==> %s output:%b\n' "$cyan" "$name" "$reset"
-        cat "$log"
-        printf '%b════════════════════════════════════════════════════════════%b\n' "$red" "$reset"
+    if [ "$any_changed" -eq 0 ]; then
+        sleep 0.1
     fi
 done
 
