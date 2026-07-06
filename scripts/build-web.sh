@@ -7,6 +7,7 @@ PROJECT_SRC="${SCRIPT_DIR}/../src"
 PROJECT_INCLUDE="${SCRIPT_DIR}/../include"
 BOOTSTRAP="${SCRIPT_DIR}/gl4es_bootstrap.c"
 OUT_DIR="${SCRIPT_DIR}/out"
+SHELL_FILE="${SCRIPT_DIR}/shell.html"
 DEFAULT_GL_REPL_MAKEFILE="${SCRIPT_DIR}/../../gl-repl/Makefile"
 EMSCRIPTEN_INI="examples/catalog-emscripten.ini"
 
@@ -286,13 +287,14 @@ build_one() {
                 echo -e "${CYAN}  using web example catalog: ${EMSCRIPTEN_INI}${NC}"
             fi
 
+            rm -f "${out_html}"
             emmake make "${out_html}" \
                 CC=emcc \
                 OBJDIR=build/emscripten \
                 SAMPLE_BIN="${out_html}" \
                 ${repl_catalog} \
                 GL_HEADER_CFLAGS="${em_flags}" \
-                GL_LDFLAGS="${BOOTSTRAP} ${GL4ES_LIB} ${GLU_LIB} ${FREEGLUT_LIB} -s USE_WEBGL2=1 -s FULL_ES2=1 -s INITIAL_MEMORY=${INITIAL_MEMORY} -s STACK_SIZE=${STACK_SIZE} -s GL_MAX_TEMP_BUFFER_SIZE=${GL_MAX_TEMP_BUFFER_SIZE} ${repl_preload}"
+                GL_LDFLAGS="${BOOTSTRAP} ${GL4ES_LIB} ${GLU_LIB} ${FREEGLUT_LIB} --shell-file ${SHELL_FILE} -s USE_WEBGL2=1 -s FULL_ES2=1 -s INITIAL_MEMORY=${INITIAL_MEMORY} -s STACK_SIZE=${STACK_SIZE} -s GL_MAX_TEMP_BUFFER_SIZE=${GL_MAX_TEMP_BUFFER_SIZE} ${repl_preload}"
             local res=$?
             popd > /dev/null
 
@@ -307,7 +309,7 @@ build_one() {
         # --- Legacy flat-layout Makefiles (claude4.6-opus-thinking era) ---
         # Common variables that Makefiles use for libraries
         local em_flags="-include ${GL4ES_GL_H} -I${GL4ES_INCLUDE} -I${GLU_DIR}/include -I${FREEGLUT_INCLUDE} -I${PROJECT_INCLUDE} -DGL_SILENCE_DEPRECATION -DUSE_MGL_NAMESPACE"
-        local em_libs="${BOOTSTRAP} ${GL4ES_LIB} ${GLU_LIB} ${FREEGLUT_LIB} -lglut -s USE_WEBGL2=1 -s FULL_ES2=1 -s INITIAL_MEMORY=${INITIAL_MEMORY} -s STACK_SIZE=${STACK_SIZE} -s GL_MAX_TEMP_BUFFER_SIZE=${GL_MAX_TEMP_BUFFER_SIZE} ${preload_flag}"
+        local em_libs="${BOOTSTRAP} ${GL4ES_LIB} ${GLU_LIB} ${FREEGLUT_LIB} -lglut --shell-file ${SHELL_FILE} -s USE_WEBGL2=1 -s FULL_ES2=1 -s INITIAL_MEMORY=${INITIAL_MEMORY} -s STACK_SIZE=${STACK_SIZE} -s GL_MAX_TEMP_BUFFER_SIZE=${GL_MAX_TEMP_BUFFER_SIZE} ${preload_flag}"
 
         pushd "${sample_dir}" > /dev/null
         # Attempt to build 'sample' or 'best' target if they exist, else just default 'make'
@@ -318,6 +320,7 @@ build_one() {
             make_target="best"
         fi
 
+        rm -f "${out_html}"
         emmake make ${make_target} \
             CC=emcc \
             CXX=em++ \
@@ -361,25 +364,33 @@ build_one() {
         fi
     fi
 
-    emcc "${all_srcs[@]}" "${BOOTSTRAP}" \
-        -include "${GL4ES_GL_H}" \
-        "${GL4ES_LIB}" \
-        "${GLU_LIB}" \
-        -I "${GL4ES_INCLUDE}" \
-        -I "${GLU_DIR}/include" \
-        -I "${FREEGLUT_INCLUDE}" \
-        -I "${PROJECT_INCLUDE}" \
-        -I "${sample_dir}" \
-        -DUSE_MGL_NAMESPACE \
-        -s USE_WEBGL2=1 \
-        -s FULL_ES2=1 \
-        -s INITIAL_MEMORY=${INITIAL_MEMORY} \
-        -s STACK_SIZE=${STACK_SIZE} \
-        -s GL_MAX_TEMP_BUFFER_SIZE=16777216 \
-        -lglut \
-        "${FREEGLUT_LIB}" \
-        "${preload_args[@]}" \
-        -o "${out_html}"
+    local emcc_args=(
+        "${all_srcs[@]}"
+        "${BOOTSTRAP}"
+        -include "${GL4ES_GL_H}"
+        "${GL4ES_LIB}"
+        "${GLU_LIB}"
+        -I "${GL4ES_INCLUDE}"
+        -I "${GLU_DIR}/include"
+        -I "${FREEGLUT_INCLUDE}"
+        -I "${PROJECT_INCLUDE}"
+        -I "${sample_dir}"
+        -DUSE_MGL_NAMESPACE
+        -s USE_WEBGL2=1
+        -s FULL_ES2=1
+        -s INITIAL_MEMORY=${INITIAL_MEMORY}
+        -s STACK_SIZE=${STACK_SIZE}
+        -s GL_MAX_TEMP_BUFFER_SIZE=16777216
+        --shell-file "${SHELL_FILE}"
+        -lglut
+        "${FREEGLUT_LIB}"
+    )
+    if [[ ${#preload_args[@]} -gt 0 ]]; then
+        emcc_args+=("${preload_args[@]}")
+    fi
+    emcc_args+=(-o "${out_html}")
+
+    emcc "${emcc_args[@]}"
 
     if [[ $? -eq 0 ]]; then
         echo -e "${GREEN}  ✓ ${sample_name}${NC}"
