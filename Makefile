@@ -1203,6 +1203,18 @@ endif
 endif
 endif
 
+RUN_STATE_OWNERSHIP_CHECKS = \
+	REPL_SRCS='$(REPL_SRCS)' \
+	RENDER3D_SRCS='$(RENDER3D_SRCS)' \
+	UI_SRCS='$(UI_SRCS)' \
+	STATE_NEUTRAL_SRCS='$(STATE_NEUTRAL_SRCS)' \
+	REPL_LIVE_DEMO_DEP_SRCS='$(REPL_LIVE_DEMO_DEP_SRCS)' \
+	MEMPROF_DEMO_DEP_SRCS='$(MEMPROF_DEMO_DEP_SRCS)' \
+	CPUPROF_DEMO_DEP_SRCS='$(CPUPROF_DEMO_DEP_SRCS)' \
+	VARIABLE_PANEL_DEMO_DEP_SRCS='$(VARIABLE_PANEL_DEMO_DEP_SRCS)' \
+	COLOR_PICKER_DEMO_DEP_SRCS='$(COLOR_PICKER_DEMO_DEP_SRCS)' \
+	bash scripts/check/run-state-ownership.sh
+
 # Layering boundary enforcement ------------------------------------------
 check-gl-boundaries: ## Verify GL/GLUT calls are isolated to allowed files.
 	@echo "    Checking GL/GLU drawing calls isolation..."
@@ -1221,91 +1233,22 @@ check-layer-coupling: ## Verify UI and scene layers don't include each other's h
 
 
 check-controller-boundaries: ## Verify controller owns the scene/UI wiring boundary.
-	@echo "Checking controller boundaries..."
-	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"scene/' $(REPL_SRCS) src/app/glr_ctrl.c src/app/glr_ctrl_router.c \
-		| grep -v '^src/app/glr_ctrl\.c$$' || true); \
-	if [ -n "$$bad" ]; then \
-		echo "$(RED)ERROR: scene headers included outside src/app/glr_ctrl.c:$(NC)"; \
-		echo "$$bad"; exit 1; \
-	fi
-	@# Boundary allowlist for ui/ includes: src/app/glr_ctrl.c is the
-	@# router/controller and explicitly orchestrates UI; src/app/glr_actions.c
-	@# is the menu/shortcut dispatch; repl_editor.c stays in the list as a
-	@# historical breadcrumb (the file is deleted but the regex
-	@# tolerates absence). The previously-listed repl_(debug|config|
-	@# camera_controls) entries are gone — those files were renamed
-	@# into the glr_* namespace and are no longer matched by
-	@# REPL_SRCS, so the check skips them entirely.
-	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"ui/' $(REPL_SRCS) src/app/glr_ctrl.c src/app/glr_ctrl_router.c \
-		| grep -vE '^src/app/(glr_ctrl|glr_ctrl_router|glr_actions)\.c$$|^repl_editor\.c$$' || true); \
-	if [ -n "$$bad" ]; then \
-		echo "$(RED)ERROR: new ui headers included outside approved exceptions:$(NC)"; \
-		echo "$$bad"; exit 1; \
-	fi
-	@echo "Controller boundaries $(GREEN)OK$(NC)"
+	@$(RUN_STATE_OWNERSHIP_CHECKS) check-controller-boundaries
 
 check-render3d-no-repl-state-mut: ## Verify scene code does not mutate REPL state directly.
-	@echo "Checking scene renderers do not mutate REPL state..."
-	@bad=$$(grep -nE 'repl_state_[A-Za-z0-9_]*_mut[[:space:]]*\(' $(RENDER3D_SRCS) || true); \
-	if [ -n "$$bad" ]; then \
-		echo "$(RED)ERROR: scene files mutate REPL state:$(NC)"; \
-		echo "$$bad"; exit 1; \
-	fi
-	@echo "Scene mutation boundary $(GREEN)OK$(NC)"
+	@$(RUN_STATE_OWNERSHIP_CHECKS) check-render3d-no-repl-state-mut
 
 check-pure-render3d-no-repl-state: ## Verify scene files do not reach into REPL state/replay APIs.
-	@echo "Checking scene files do not reach into REPL state/replay APIs..."
-	@bad=$$(grep -nE 'repl_(state|replay)_' $(RENDER3D_SRCS) || true); \
-	if [ -n "$$bad" ]; then \
-		echo "$(RED)ERROR: scene files reach into REPL state/replay APIs:$(NC)"; \
-		echo "$$bad"; exit 1; \
-	fi
-	@echo "Pure-render3d boundary $(GREEN)OK$(NC)"
+	@$(RUN_STATE_OWNERSHIP_CHECKS) check-pure-render3d-no-repl-state
 
 check-state-boundaries: ## Verify REPL state facade usage stays in owned modules.
-	@echo "Checking state facade boundaries..."
-	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"repl/state\.h"' $(RENDER3D_SRCS) $(STATE_NEUTRAL_SRCS) 2>/dev/null || true); \
-	if [ -n "$$bad" ]; then \
-		echo "$(RED)ERROR: scene or state-neutral files include src/repl/state.h:$(NC)"; \
-		echo "$$bad"; exit 1; \
-	fi
-	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"repl/core_internal\.h"' \
-		src/app/glr_ctrl.c $(RENDER3D_SRCS) $(UI_SRCS) $(STATE_NEUTRAL_SRCS) 2>/dev/null \
-		| grep -vE '^ui_(color_picker|panels)\.c$$' || true); \
-	if [ -n "$$bad" ]; then \
-		echo "$(RED)ERROR: unapproved view/utility files include src/repl/core_internal.h:$(NC)"; \
-		echo "$$bad"; exit 1; \
-	fi
-	@bad=$$(grep -lE 'repl_state_[A-Za-z0-9_]*_mut[[:space:]]*\(' $(UI_SRCS) 2>/dev/null \
-		| grep -vE '^(ui_(color_picker|help_overlay|panels))\.c$$' || true); \
-	if [ -n "$$bad" ]; then \
-		echo "$(RED)ERROR: unapproved UI files mutate REPL state directly:$(NC)"; \
-		echo "$$bad"; exit 1; \
-	fi
-	@bad=$$(grep -nE 'repl_(state|replay)_' $(RENDER3D_SRCS) 2>/dev/null || true); \
-	if [ -n "$$bad" ]; then \
-		echo "$(RED)ERROR: scene files reach into REPL state/replay APIs:$(NC)"; \
-		echo "$$bad"; exit 1; \
-	fi
-	@echo "State facade boundaries $(GREEN)OK$(NC)"
+	@$(RUN_STATE_OWNERSHIP_CHECKS) check-state-boundaries
 
 check-views-no-owners: ## Verify scene/UI files do not include src/repl/state_owners.h.
-	@echo "Checking scene/UI view files do not include src/repl/state_owners.h..."
-	@bad=$$(grep -lE '#[[:space:]]*include[[:space:]]+"repl/state_owners\.h"' $(RENDER3D_SRCS) $(UI_SRCS) 2>/dev/null || true); \
-	if [ -n "$$bad" ]; then \
-		echo "$(RED)ERROR: scene/UI view files include src/repl/state_owners.h:$(NC)"; \
-		echo "$$bad"; exit 1; \
-	fi
-	@echo "View-file ownership boundary $(GREEN)OK$(NC)"
+	@$(RUN_STATE_OWNERSHIP_CHECKS) check-views-no-owners
 
 check-ui-no-repl-state-mut: ## Verify UI files do not mutate REPL state directly.
-	@echo "Checking UI files do not mutate REPL state directly..."
-	@bad=$$(grep -nE 'repl_state_[A-Za-z0-9_]*_mut[[:space:]]*\(' $(UI_SRCS) || true); \
-	if [ -n "$$bad" ]; then \
-		echo "$(RED)ERROR: UI files mutate REPL state:$(NC)"; \
-		echo "$$bad"; exit 1; \
-	fi
-	@echo "UI mutation boundary $(GREEN)OK$(NC)"
+	@$(RUN_STATE_OWNERSHIP_CHECKS) check-ui-no-repl-state-mut
 
 check-no-write-through-view: ## Verify no writes happen through pointer fields on view structs.
 	@bash scripts/check/check-no-write-through-view.sh scripts/allowlists/write-through-view.txt $(UI_SRCS) $(RENDER3D_SRCS)
@@ -1398,76 +1341,7 @@ check-ui-no-repl-state-read: ## Verify UI renderers consume the UiRenderSnapshot
 	@echo "ui-no-repl-state-read $(GREEN)OK$(NC)"
 
 check-state-ownership: ## Run state-ownership contract checks (new + tightened existing checks).
-	@set -e -o pipefail; \
-	for target in \
-		check-controller-boundaries \
-		check-render3d-no-repl-state-mut \
-		check-pure-render3d-no-repl-state \
-		check-state-boundaries \
-		check-views-no-owners \
-		check-ui-no-repl-state-mut \
-		check-no-write-through-view \
-		check-runtime-state-value-fields \
-		check-public-state-no-writable-pointers \
-		check-state-read-getters-return-values \
-		check-ui-renderer-takes-view \
-		check-renderer-no-direct-mutators \
-		check-output-actualization \
-		check-state-c-shrinking \
-		check-no-facade-include-in-views \
-		check-domain-owner-encapsulation \
-		check-ui-no-repl-state-read \
-		check-editor-ownership-budget \
-		check-no-store-text-api \
-		check-repl-no-direct-buffer-read \
-		check-glr-ctrl-not-editor-mirror \
-		check-ui-returns-hits-only \
-		check-ui-panels-no-mutators \
-		check-replay-ui-isolation \
-		check-color-picker-ui-isolation \
-		check-variable-panel-forwarders \
-		check-replay-forwarders \
-		check-no-repl-commit \
-		check-no-repl-editor-input-shim \
-		check-no-set-status-in-repl-parser \
-		check-no-set-status-in-compile-apply \
-		check-no-load-line-to-input-in-pipeline \
-		check-repl-state-no-glr-state \
-		check-glr-state-no-repl-mutators \
-		check-repl-scenes-cfg-clear-paired \
-		check-repl-export-no-ui-layout \
-		check-repl-export-via-bridge \
-		check-ui-no-export-resolver \
-		check-no-feed-line-in-pipeline \
-		check-repl-no-direct-tutorial-runner \
-		check-repl-demo-stubs-shrinking \
-		check-repl-no-direct-editor \
-		check-repl-demo-no-editor \
-		check-repl-live-demo-no-editor \
-		check-memprof-demo-isolation \
-		check-cpuprof-demo-isolation \
-		check-cpuprof-standalone \
-		check-audio-nothread \
-		check-variable-panel-demo-isolation \
-		check-color-picker-demo-isolation \
-		check-editor-repl-surface \
-		check-edit-ops-pure \
-		check-no-raw-undo-clear \
-		check-source-document-port-owners \
-		check-editor-no-app \
-		check-repl-no-app \
-		check-repl-no-mut-reads \
-		check-render3d-no-upper-layers \
-		check-ui-core-no-upper-layers \
-		check-module-prefixes \
-		check-include-style \
-		check-tier-c-function-size \
-		check-no-test-default-output \
-		check-prof-sections-instrumented \
-		check-keymap-no-dup; do \
-		printf "  $(YELLOW)▶$(NC) $$target\n"; \
-		$(MAKE) --no-print-directory $$target 2>&1 | sed 's/^/    /' | sed $$'s/ OK / \033[0;32mOK\033[0m /g; s/ OK$$/ \033[0;32mOK\033[0m/' || exit $$?; \
-	done
+	@$(RUN_STATE_OWNERSHIP_CHECKS)
 
 check-prof-sections-instrumented: ## Hard guard: every prof_sections.h catalog row has a prof_begin() site (no zombie profiler rows).
 	@bash scripts/check/check-prof-sections-instrumented.sh
