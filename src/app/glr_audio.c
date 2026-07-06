@@ -1287,6 +1287,13 @@ int glr_audio_track_count(void) {
     return n;
 }
 
+/* Returns a borrowed pointer into g_playlist_display_name[idx] that
+ * outlives the lock. Safe because the name/group tables are mutated
+ * only by glr_audio_set_playlist_specs() on the main thread and read
+ * only on the main thread; the audio worker never touches them (it
+ * writes g_playlist_duration_secs[] alone — hence the duration accessor
+ * below returns by value). Keep that invariant if the worker ever gains
+ * a reason to rewrite track metadata. */
 const char *glr_audio_track_display_name(int idx) {
     audio_lock();
     if (idx < 0 || idx >= g_playlist_count) {

@@ -1146,7 +1146,8 @@ static int route_menu_item_hit(const UiHit *hit) {
  *    toggles work, matching the old flat Config dropdown. (Parent-row
  *    guard added in Step 5 of config-menu-submenu-sections.md.)
  *  - MENU_AUDIO: item_idx = playlist track index → request playback and
- *    dismiss the menu when accepted. */
+ *    KEEP the dropdown + flyout open (like Config) so the active-track
+ *    highlight follows the pick and the user can switch again. */
 static int route_submenu_item_hit(const UiHit *hit) {
     if (hit->item_idx < 0)
         return 0;
@@ -1163,7 +1164,9 @@ static int route_submenu_item_hit(const UiHit *hit) {
     }
     if (hit->cmd_idx == GLR_MENU_AUDIO) {
         if (glr_audio_play_track_index(hit->item_idx) == 0) {
-            ui_menu_bar_close();
+            /* Keep the dropdown open so the active-track highlight moves
+             * to the picked row and the user can browse/switch again,
+             * like the Config flyout's repeated toggles. */
             editor_request_redraw();
             return 1;
         }

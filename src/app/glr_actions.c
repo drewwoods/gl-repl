@@ -282,6 +282,12 @@ static int audio_menu_group_differs(const char *a, const char *b) {
     return strcmp(a, b) != 0;
 }
 
+/* Mirror of menu_bar.c's audio_visible_group_count(): the number of
+ * source-group parent rows the Audio dropdown renders. glr_action_menu_
+ * item_activate subtracts this from the clicked item_idx to recover the
+ * control-row offset (Play/Next/Prev/Loop), so it MUST match the menu's
+ * layout count exactly. Both read the same glr_audio_track_* accessors on
+ * the main thread; keep the two in lockstep if the grouping rule changes. */
 static int audio_menu_group_count(void) {
     int count = glr_audio_track_count();
     int groups = 0;
@@ -1282,6 +1288,10 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             glr_action_toggle_audio_play_pause();
             return 0;
         }
+        /* Play/Pause and Loop keep the dropdown open (repeated toggles);
+         * Next/Prev are one-shot navigation and close it. This split is
+         * intentional and pinned by test_glr_actions ("audio menu next/
+         * previous closes"). */
         if (rel == GLR_AUDIO_OFF_NEXT) {
             glr_audio_next_track();
             return 1;
