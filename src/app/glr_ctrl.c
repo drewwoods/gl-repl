@@ -252,6 +252,36 @@ static int glr_ctrl_cmd_is_focus_vertex(const GLCmd *cmd) {
     return cmd->valid && repl_cmd_emits_vertex(cmd->type);
 }
 
+static int glr_ctrl_first_flat_color_consumer_for_source_line(int line_idx) {
+    FlatProgramView flat = repl_state_flat_program_view();
+
+    for (int i = 0; i < flat.cmd_count; i++) {
+        const GLCmd *cmd = &flat.cmds[i];
+        if (!cmd->valid)
+            continue;
+        if (cmd->src_cmd_idx == line_idx &&
+            repl_cmd_consumes_current_color(cmd->type))
+            return i;
+    }
+    return -1;
+}
+
+static int glr_ctrl_find_affecting_transform_highlights(int line_idx,
+                                                        int *out,
+                                                        int out_cap) {
+    GlrPresentationState presentation = glr_state_presentation();
+
+    if (presentation.vertex_label_scope == OVERLAY_VERTEX_LABEL_SCOPE_ONE_INSTANCE) {
+        int flat_idx = glr_ctrl_first_flat_color_consumer_for_source_line(line_idx);
+        if (flat_idx >= 0)
+            return repl_find_affecting_transforms_for_flat_vertex(
+                flat_idx, out, out_cap);
+        return 0;
+    }
+
+    return repl_find_affecting_transforms_flat(line_idx, out, out_cap);
+}
+
 static Render3dFocusVertex glr_ctrl_build_focus_vertex(void) {
     Render3dFocusVertex focus = { .valid = 0 };
     int edit_line = editor_state_edit_line();
@@ -488,6 +518,7 @@ static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3
             &pack->walk.cursor.cursor_source_block_begin,
             &pack->walk.cursor.cursor_source_block_end);
     pack->walk.cursor.cursor_func_scope_mask = 0;
+    pack->walk.cursor_label_scope = presentation.vertex_label_scope;
 
     /* Silhouette outlines only make sense over filled geometry; in any
      * wireframe mode the fill is replaced by edges, so suppress them. */
@@ -557,7 +588,7 @@ static void glr_ctrl_push_highlights(void) {
              * its dirty flag. */
             if (!replay_active()) {
                 int xform_lines[MAX_AFFECTING_TRANSFORMS];
-                int xform_count = repl_find_affecting_transforms_flat(
+                int xform_count = glr_ctrl_find_affecting_transform_highlights(
                     edit_line, xform_lines, MAX_AFFECTING_TRANSFORMS);
                 if (xform_count == 0 && repl_state_flat_program_view().cmd_count == 0)
                     xform_count = repl_find_affecting_transforms(

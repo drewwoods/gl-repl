@@ -40,6 +40,8 @@ typedef enum OverlayVertexLabelScope {
 typedef struct OverlayWalkCtx {
     FlatProgramView  program;
     CursorBlockState cursor;
+    /* Mirrors overlay scope for cursor-bound guide/highlight passes. */
+    OverlayVertexLabelScope cursor_label_scope;
     int              show_vertex_outlines;
     int              highlight_current_poly;
     int              replay_tess_preview;

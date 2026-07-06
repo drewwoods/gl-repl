@@ -430,7 +430,7 @@ const GlrConfigItem g_cfg_items[] = {
       .state_count = OVERLAY_VERTEX_LABEL_COUNT, .state_names = vertex_label_names,
       .key_code = KM_KEY(GLR_VERTEX_LABELS), .modifiers = KM_MODS(GLR_VERTEX_LABELS),
       .is_special = 1 },
-    { .label = "Label scope", .key = GLR_CONFIG_VERTEX_LABEL_SCOPE,
+    { .label = "Overlay scope", .key = GLR_CONFIG_VERTEX_LABEL_SCOPE,
       .state_count = OVERLAY_VERTEX_LABEL_SCOPE_COUNT,
       .state_names = vertex_label_scope_names,
       .key_code = KM_KEY(GLR_VERTEX_LABEL_SCOPE), .modifiers = KM_MODS(GLR_VERTEX_LABEL_SCOPE),
