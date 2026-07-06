@@ -1995,6 +1995,58 @@ int main(void) {
     }
 
     glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("for(i, 0, 2) {");              /* 0 */
+    editor_feed_line("glBegin(GL_TRIANGLE_STRIP);"); /* 1 */
+    editor_feed_line("glVertex3f(i, 0, 0);");        /* 2 */
+    editor_feed_line("glVertex3f(i, 1, 0);");        /* 3 */
+    editor_feed_line("glEnd();");                    /* 4 */
+    editor_feed_line("}");                           /* 5 */
+    editor_feed_line("glBegin(GL_TRIANGLES);");      /* 6 */
+    editor_feed_line("glVertex3f(10, 0, 0);");       /* 7 */
+    editor_feed_line("glVertex3f(11, 0, 0);");       /* 8 */
+    editor_feed_line("glVertex3f(12, 0, 0);");       /* 9 */
+    editor_feed_line("glEnd();");                    /* 10 */
+    repl_flatten_commands(7);
+    {
+        int begin = repl_state_flat_program_current_block_begin();
+        int end = repl_state_flat_program_current_block_end();
+        ASSERT_TRUE("current block after loop maps to later begin",
+                    begin >= 0 &&
+                    repl_state_flat_program_cmds_mut()[begin].src_cmd_idx == 6);
+        ASSERT_TRUE("current block after loop maps to later end",
+                    end >= begin &&
+                    repl_state_flat_program_cmds_mut()[end].src_cmd_idx == 10);
+    }
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("for(i, 0, 2) {");              /* 0 */
+    editor_feed_line("glBegin(GL_TRIANGLE_STRIP);"); /* 1 */
+    editor_feed_line("glVertex3f(i, 0, 0);");        /* 2 */
+    editor_feed_line("glEnd();");                    /* 3 */
+    editor_feed_line("}");                           /* 4 */
+    editor_feed_line("func0 {");                     /* 5 */
+    editor_feed_line("glBegin(GL_LINES);");          /* 6 */
+    editor_feed_line("glVertex3f(0, 0, 0);");        /* 7 */
+    editor_feed_line("glVertex3f(0, 1, 0);");        /* 8 */
+    editor_feed_line("glEnd();");                    /* 9 */
+    editor_feed_line("}");                           /* 10 */
+    editor_feed_line("func0();");                    /* 11 */
+    /* Function definitions are promoted before earlier top-level commands:
+     * final source line 2 is the first function-body vertex, while the loop
+     * still expands before the top-level call in the flat stream. */
+    repl_flatten_commands(2);
+    {
+        int begin = repl_state_flat_program_current_block_begin();
+        int end = repl_state_flat_program_current_block_end();
+        ASSERT_TRUE("function block after loop maps to function begin",
+                    begin >= 0 &&
+                    repl_state_flat_program_cmds_mut()[begin].src_cmd_idx == 1);
+        ASSERT_TRUE("function block after loop maps to function end",
+                    end >= begin &&
+                    repl_state_flat_program_cmds_mut()[end].src_cmd_idx == 4);
+    }
+
+    glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0(depth) {");
     editor_feed_line("if(depth <= 0) {");
     editor_feed_line("glVertex3f(0, 0, 0);");

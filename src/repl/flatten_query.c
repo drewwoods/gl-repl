@@ -9,13 +9,97 @@
 #define FLAT_QUERY_FUNC_SCOPE_MASK_BITS 32
 #define FLAT_QUERY_SCOPE_STACK_MAX 128
 
-static int flatten_source_cmd_is_flat_omitted(CmdType type) {
-    return repl_cmd_is_block_head(type) ||
-           repl_cmd_is_block_end(type) ||
-           type == CMD_CALL ||
-           type == CMD_COMMENT ||
-           type == CMD_EMPTY ||
-           type == CMD_VAR_DECLARE;
+/* Find the source-level immediate-mode block that owns edit_line_idx.
+ *
+ * This deliberately walks the source document only. A previous version tried
+ * to walk source and flat commands in lockstep, but a single source command can
+ * expand to many flat commands once loops/functions are involved. Keeping this
+ * as a source-only query gives us stable begin/end provenance to look up in the
+ * flat stream afterward. */
+static int flatten_current_begin_block_source_extent(int edit_line_idx,
+                                                     int *out_begin,
+                                                     int *out_end) {
+    const GLCmd *document_cmds = repl_state_document_cmds();
+    int document_count = repl_state_document_count();
+    int open_begin = -1;
+
+    if (out_begin) *out_begin = -1;
+    if (out_end) *out_end = -1;
+    if (edit_line_idx < 0 || edit_line_idx >= document_count)
+        return 0;
+
+    for (int i = 0; i < document_count; i++) {
+        if (!document_cmds[i].valid)
+            continue;
+
+        if (document_cmds[i].type == CMD_BEGIN) {
+            open_begin = i;
+        } else if (document_cmds[i].type == CMD_END && open_begin >= 0) {
+            if (open_begin <= edit_line_idx && edit_line_idx < i) {
+                if (out_begin) *out_begin = open_begin;
+                if (out_end) *out_end = i;
+                return 1;
+            }
+            open_begin = -1;
+        }
+    }
+
+    if (open_begin >= 0 && open_begin <= edit_line_idx) {
+        if (out_begin) *out_begin = open_begin;
+        if (out_end) *out_end = -1;
+        return 1;
+    }
+
+    return 0;
+}
+
+/* Map a source glBegin/glEnd pair to the flat program by provenance.
+ *
+ * For loops there may be several flat begin/end pairs with the same source
+ * indices; returning the first one preserves the long-standing "one instance"
+ * cursor-block behavior. The important part is that we no longer infer the
+ * flat index by counting source rows, which is what let earlier loop-expanded
+ * geometry get selected for later source blocks. */
+static int flatten_find_flat_begin_block_extent(int source_begin,
+                                                int source_end,
+                                                int *out_begin,
+                                                int *out_end) {
+    const GLCmd *flat_cmds = repl_state_flat_program_cmds();
+    int flat_cmd_count = repl_state_flat_program_count();
+
+    if (out_begin) *out_begin = -1;
+    if (out_end) *out_end = -1;
+    if (source_begin < 0)
+        return 0;
+
+    for (int i = 0; i < flat_cmd_count; i++) {
+        if (!flat_cmds[i].valid)
+            continue;
+        if (flat_cmds[i].type != CMD_BEGIN ||
+            flat_cmds[i].src_cmd_idx != source_begin)
+            continue;
+
+        for (int j = i + 1; j < flat_cmd_count; j++) {
+            if (!flat_cmds[j].valid)
+                continue;
+            if (flat_cmds[j].type != CMD_END)
+                continue;
+            if (source_end < 0 || flat_cmds[j].src_cmd_idx == source_end) {
+                if (out_begin) *out_begin = i;
+                if (out_end) *out_end = j;
+                return 1;
+            }
+            break;
+        }
+
+        if (source_end < 0) {
+            if (out_begin) *out_begin = i;
+            if (out_end) *out_end = flat_cmd_count - 1;
+            return 1;
+        }
+    }
+
+    return 0;
 }
 
 /* Determine which flat-command range corresponds to the innermost
@@ -27,40 +111,23 @@ static int flatten_source_cmd_is_flat_omitted(CmdType type) {
  * edit_line_idx is supplied by the caller so this REPL pipeline helper does
  * not need to reach into editor state. */
 void repl_flatten_refresh_current_block_highlight(int edit_line_idx) {
-    const GLCmd *flat_cmds = repl_state_flat_program_cmds();
-    int flat_cmd_count = repl_state_flat_program_count();
     int current_block_begin = -1;
     int current_block_end = -1;
+    int source_begin = -1;
+    int source_end = -1;
 
-    /* Scan repl_state_document_cmds() alongside g_flat_cmds to find the
-     * innermost BEGIN/END block (in flat-cmd indices) that contains
-     * edit_line_idx in source-cmd space. Skips structural and
-     * document-only rows that don't appear in the flat stream. */
-    {
-        int begin_src = -1, begin_flat = -1;
-        int fcur = 0;
-        const GLCmd *document_cmds = repl_state_document_cmds();
-        for (int ci = 0; ci < repl_state_document_count() && fcur < flat_cmd_count; ci++) {
-            if (!document_cmds[ci].valid) continue;
-            CmdType ct = document_cmds[ci].type;
-            if (flatten_source_cmd_is_flat_omitted(ct))
-                continue;
-            while (fcur < flat_cmd_count && !flat_cmds[fcur].valid) fcur++;
-            if (fcur >= flat_cmd_count) break;
-            if (document_cmds[ci].type == CMD_BEGIN) {
-                if (ci <= edit_line_idx) { begin_src = ci; begin_flat = fcur; }
-            } else if (document_cmds[ci].type == CMD_END) {
-                if (begin_src >= 0 && ci > edit_line_idx) {
-                    current_block_begin = begin_flat;
-                    current_block_end = fcur;
-                    break;
-                } else if (begin_src >= 0 && ci <= edit_line_idx) {
-                    begin_src = -1; begin_flat = -1;
-                }
-            }
-            fcur++;
-        }
-    }
+    /* Two-step lookup:
+     *   1. identify the source glBegin/glEnd block under the cursor;
+     *   2. find the corresponding flat begin/end pair by src_cmd_idx.
+     *
+     * This avoids assuming flat/source alignment across unrolled loops and
+     * inlined function bodies. */
+    if (flatten_current_begin_block_source_extent(edit_line_idx,
+                                                  &source_begin,
+                                                  &source_end))
+        flatten_find_flat_begin_block_extent(source_begin, source_end,
+                                             &current_block_begin,
+                                             &current_block_end);
 
     repl_state_flat_program_set_current_block(current_block_begin,
                                               current_block_end,
@@ -262,8 +329,11 @@ int repl_flat_cmd_matches_cursor(int flat_idx, int edit_line_idx) {
     if (flat_idx < 0 || flat_idx >= flat_cmd_count) return 0;
     if (edit_line_idx < 0 || edit_line_idx >= repl_state_document_count()) return 0;
     if (!flat_cmds[flat_idx].valid) return 0;
-    if (current_block_line != edit_line_idx)
+    if (current_block_line != edit_line_idx) {
         repl_flatten_refresh_current_block_highlight(edit_line_idx);
+        current_block_begin = repl_state_flat_program_current_block_begin();
+        current_block_end = repl_state_flat_program_current_block_end();
+    }
 
     const GLCmd *cmd = &flat_cmds[flat_idx];
     const GLCmd *cursor_cmd = &repl_state_document_cmds()[edit_line_idx];
