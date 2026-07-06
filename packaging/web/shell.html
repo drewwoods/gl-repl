@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>OpenGL Sample</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: #111;
+        color: #ddd;
+        font-family: Arial, sans-serif;
+      }
+
+      .emscripten {
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+        padding-right: 0;
+      }
+
+      div.emscripten {
+        text-align: center;
+      }
+
+      .topbar {
+        align-items: center;
+        display: flex;
+        gap: 16px;
+        justify-content: space-between;
+        min-height: 42px;
+        padding: 8px 12px;
+      }
+
+      .status-group {
+        align-items: center;
+        display: flex;
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .spinner {
+        animation: rotation 0.8s linear infinite;
+        border: 4px solid rgb(78, 86, 94);
+        border-top-color: rgb(195, 204, 214);
+        border-radius: 100%;
+        display: inline-block;
+        flex: 0 0 auto;
+        height: 22px;
+        width: 22px;
+      }
+
+      @keyframes rotation {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+
+      #status {
+        color: #bbb;
+        font-size: 14px;
+        font-weight: bold;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      #controls {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        justify-content: flex-end;
+        font-size: 13px;
+      }
+
+      #controls label {
+        align-items: center;
+        display: inline-flex;
+        gap: 4px;
+      }
+
+      #progress {
+        height: 16px;
+        width: min(320px, calc(100vw - 24px));
+      }
+
+      .emscripten_border {
+        border: 0;
+        width: 100vw;
+      }
+
+      canvas.emscripten {
+        background-color: black;
+        border: 0 none;
+        display: block;
+        width: 100vw;
+        height: calc(100vh - 58px - 200px);
+      }
+
+      #output {
+        background-color: black;
+        border: 0;
+        color: white;
+        display: block;
+        font-family: "Lucida Console", Monaco, monospace;
+        height: 200px;
+        margin: 0 auto;
+        outline: none;
+        padding: 0;
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <div class="status-group">
+        <div class="spinner" id="spinner"></div>
+        <div id="status">Downloading...</div>
+      </div>
+
+      <span id="controls">
+        <label><input type="checkbox" id="resize">Resize canvas</label>
+        <label><input type="checkbox" id="pointerLock" checked>Lock/hide mouse pointer</label>
+        <input type="button" value="Fullscreen" onclick="Module.requestFullscreen(document.getElementById('pointerLock').checked,
+                                                                                  document.getElementById('resize').checked)">
+      </span>
+    </div>
+
+    <div class="emscripten">
+      <progress value="0" max="100" id="progress" hidden=1></progress>
+    </div>
+
+    <div class="emscripten_border">
+      <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex=-1></canvas>
+    </div>
+    <textarea id="output" rows="8"></textarea>
+
+    <script type="text/javascript">
+      var statusElement = document.getElementById('status');
+      var progressElement = document.getElementById('progress');
+      var spinnerElement = document.getElementById('spinner');
+      var canvasElement = document.getElementById('canvas');
+      var outputElement = document.getElementById('output');
+      if (outputElement) outputElement.value = '';
+
+      canvasElement.addEventListener('webglcontextlost', (e) => {
+        alert('WebGL context lost. You will need to reload the page.');
+        e.preventDefault();
+      }, false);
+
+      var setStatus = (text) => {
+        if (!setStatus.last) setStatus.last = { time: Date.now(), text: '' };
+        if (text === setStatus.last.text) return;
+        var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
+        var now = Date.now();
+        if (m && now - setStatus.last.time < 30) return;
+        setStatus.last.time = now;
+        setStatus.last.text = text;
+        if (m) {
+          text = m[1];
+          progressElement.value = parseInt(m[2]) * 100;
+          progressElement.max = parseInt(m[4]) * 100;
+          progressElement.hidden = false;
+          spinnerElement.hidden = false;
+        } else {
+          progressElement.value = null;
+          progressElement.max = null;
+          progressElement.hidden = true;
+          if (!text) spinnerElement.style.display = 'none';
+        }
+        statusElement.innerHTML = text;
+      };
+
+#if MODULARIZE && !EXPORT_ES6
+      var moduleArgs = {
+#else
+      var Module = {
+#endif
+        print(...args) {
+          console.log(...args);
+          if (outputElement) {
+            var text = args.join(' ');
+            outputElement.value += text + "\n";
+            outputElement.scrollTop = outputElement.scrollHeight;
+          }
+        },
+        canvas: canvasElement,
+        setStatus: setStatus,
+        totalDependencies: 0,
+        monitorRunDependencies(left) {
+          this.totalDependencies = Math.max(this.totalDependencies, left);
+          setStatus(left ? 'Preparing... (' + (this.totalDependencies - left) + '/' + this.totalDependencies + ')' : 'All downloads complete.');
+        }
+      };
+      setStatus('Downloading...');
+      window.onerror = window.onunhandledrejection = () => {
+        setStatus('Exception thrown, see JavaScript console');
+        spinnerElement.style.display = 'none';
+        setStatus = (text) => {
+          if (text) console.error('[post-exception status] ' + text);
+        };
+      };
+    </script>
+    {{{ SCRIPT }}}
+#if MODULARIZE && !EXPORT_ES6
+    <script type="text/javascript">
+      {{{ EXPORT_NAME }}}(moduleArgs);
+    </script>
+#endif
+  </body>
+</html>
