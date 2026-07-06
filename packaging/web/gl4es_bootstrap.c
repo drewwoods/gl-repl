@@ -142,6 +142,15 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
             GLUT.getASCIIKey = function(event) {
                 var kc = event['keyCode'];
                 if (kc === 8) return 8;
+                /* Emscripten's stock GLUT returns raw digit keyCodes for
+                 * Shift+0..9 (`1` instead of `!`, etc.; its source has a TODO
+                 * for this case). Match the US keyboard symbols that native
+                 * GLUT receives from the OS for shifted number-row keys. */
+                if (event['shiftKey'] && !event['ctrlKey'] &&
+                    !event['altKey'] && !event['metaKey'] &&
+                    kc >= 48 && kc <= 57) {
+                    return ")!@#$%^&*(".charCodeAt(kc - 48);
+                }
                 /* Ctrl+letter: stock getASCIIKey returns null on ANY modifier,
                  * so every Ctrl shortcut is dropped. freeglut delivers the
                  * control code (Ctrl+A=1 .. Ctrl+Z=26) on the keyboard callback
