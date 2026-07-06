@@ -2074,32 +2074,34 @@ static void repl_code_panel_draw_redo_icon(int kx, int ky, int kw, int kh) {
 }
 
 static void repl_code_panel_draw_copy_icon(int kx, int ky, int kw, int kh) {
-    /* Two overlapping outlined squares (stacked pages), front page
-     * bottom-left occluding the back page's top-right corner.
+    /* Two stacked portrait pages: the front sheet (bottom-left, 7x9
+     * outline) occludes the back sheet, whose top-left corner and
+     * right/bottom edges peek out behind it with a 1px gap all round
+     * so the outlines never fuse.
      *
-     *  row 11:  .....#######.
+     *  row 11:  .....#######.   back page top
      *  row 10:  .....#.....#.
-     *  row 9:   .....#.....#.
-     *  row 8:   .....#.....#.
-     *  row 7:   .#######...#.
+     *  row 9:   ...........#.
+     *  row 8:   .#######...#.   front page top
+     *  row 7:   .#.....#...#.
      *  row 6:   .#.....#...#.
-     *  row 5:   .#.....#####.
-     *  row 4:   .#.....#.....
-     *  row 3:   .#.....#.....
+     *  row 5:   .#.....#...#.
+     *  row 4:   .#.....#...#.
+     *  row 3:   .#.....#.###.   back page bottom (visible part)
      *  row 2:   .#.....#.....
-     *  row 1:   .#######.....
-     *  row 0:   .............                                        */
+     *  row 1:   .#.....#.....
+     *  row 0:   .#######.....   front page bottom                    */
     static const GLubyte copy_bits[ACTION_ICON_H * 2] = {
-        0x00, 0x00,  /* row 0  */
-        0x7F, 0x00,  /* row 1  */
+        0x7F, 0x00,  /* row 0  */
+        0x41, 0x00,  /* row 1  */
         0x41, 0x00,  /* row 2  */
-        0x41, 0x00,  /* row 3  */
-        0x41, 0x00,  /* row 4  */
-        0x41, 0xF0,  /* row 5  */
+        0x41, 0x70,  /* row 3  */
+        0x41, 0x10,  /* row 4  */
+        0x41, 0x10,  /* row 5  */
         0x41, 0x10,  /* row 6  */
-        0x7F, 0x10,  /* row 7  */
-        0x04, 0x10,  /* row 8  */
-        0x04, 0x10,  /* row 9  */
+        0x41, 0x10,  /* row 7  */
+        0x7F, 0x10,  /* row 8  */
+        0x00, 0x10,  /* row 9  */
         0x04, 0x10,  /* row 10 */
         0x07, 0xF0   /* row 11 */
     };
