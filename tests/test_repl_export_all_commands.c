@@ -7,6 +7,7 @@
  */
 #include "repl/command_spec.h"  /* cmd_type_name */
 #include "repl/export.h"
+#include "repl/export_internal.h"
 #include "source_document.h"
 #include "editor/input.h"
 #include "repl/command.h"
@@ -135,6 +136,9 @@ static char *slurp_stream(FILE *f) {
     size_t len = 0;
     int c;
 
+    if (!f) return NULL;
+    rewind(f);
+
     while ((c = fgetc(f)) != EOF) {
         if (len + 1 >= cap) {
             cap = cap ? cap * 2 : 4096;
@@ -181,7 +185,145 @@ static char *slurp_path(const char *path) {
     return buf;
 }
 
+static void test_export_prologue_direct(void) {
+    char err_buf[128];
+
+    /* Initialize and register a persistent variable */
+    repl_eval_init_predef_vars();
+    repl_eval_declare_predef_var("persistent_var", err_buf, sizeof(err_buf));
+    repl_eval_declare_predef_var("t", err_buf, sizeof(err_buf)); /* "t" is non-persistent */
+
+    /* 1. export_has_persistent_predef_vars */
+    ASSERT_TRUE("export_has_persistent_predef_vars is true", export_has_persistent_predef_vars());
+
+    /* 2. write_predef_var_globals */
+    FILE *f1 = tmpfile();
+    if (f1) {
+        write_predef_var_globals(f1);
+        char *str = slurp_stream(f1);
+        ASSERT_TRUE("globals contains persistent_var", str && strstr(str, "static float persistent_var") != NULL);
+        ASSERT_TRUE("globals contains t", str && strstr(str, "static float t") != NULL);
+        free(str);
+        fclose(f1);
+    }
+
+    /* 3. write_save_restore_helpers */
+    FILE *f2 = tmpfile();
+    if (f2) {
+        write_save_restore_helpers(f2);
+        char *str = slurp_stream(f2);
+        ASSERT_TRUE("save/restore contains persistent_var", str && strstr(str, "_saved_persistent_var") != NULL);
+        ASSERT_TRUE("save/restore does not contain t", str && strstr(str, "_saved_t") == NULL);
+        free(str);
+        fclose(f2);
+    }
+
+    /* 4. write_rand_helper */
+    FILE *f3 = tmpfile();
+    if (f3) {
+        write_rand_helper(f3);
+        char *str = slurp_stream(f3);
+        ASSERT_TRUE("rand helper written", str && strstr(str, "repl_randf") != NULL);
+        free(str);
+        fclose(f3);
+    }
+
+    /* 5. write_glfloat_vector_helpers */
+    FILE *f4 = tmpfile();
+    if (f4) {
+        write_glfloat_vector_helpers(f4);
+        char *str = slurp_stream(f4);
+        ASSERT_TRUE("glfloat helpers written", str && strstr(str, "repl_glfloat4_buf") != NULL);
+        free(str);
+        fclose(f4);
+    }
+
+    /* 6. write_label_helper */
+    FILE *f5 = tmpfile();
+    if (f5) {
+        write_label_helper(f5);
+        char *str = slurp_stream(f5);
+        ASSERT_TRUE("label helper written", str && strstr(str, "void label(const char *fmt, ...)") != NULL);
+        free(str);
+        fclose(f5);
+    }
+
+    /* 7. write_tess_preamble */
+    FILE *f6 = tmpfile();
+    if (f6) {
+        write_tess_preamble(f6);
+        char *str = slurp_stream(f6);
+        ASSERT_TRUE("tess preamble written", str && strstr(str, "GLUtesselator") != NULL);
+        free(str);
+        fclose(f6);
+    }
+
+    /* 8. write_render_helper_as_c */
+    glr_ctrl_reset_all();
+    declare_test_vars();
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glEnd();");
+    export_set_source_text_view(source_document_view());
+    FILE *f7 = tmpfile();
+    if (f7) {
+        write_render_helper_as_c(f7, "my_draw_scene");
+        char *str = slurp_stream(f7);
+        ASSERT_TRUE("render helper name", str && strstr(str, "static void my_draw_scene(void)") != NULL);
+        ASSERT_TRUE("render helper body", str && strstr(str, "glVertex3f(0, 0, 0);") != NULL);
+        free(str);
+        fclose(f7);
+    }
+
+    /* Unbalanced Begin/End rendering */
+    glr_ctrl_reset_all();
+    declare_test_vars();
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    export_set_source_text_view(source_document_view());
+    FILE *f7b = tmpfile();
+    if (f7b) {
+        write_render_helper_as_c(f7b, "my_draw_scene_unbalanced");
+        char *str = slurp_stream(f7b);
+        ASSERT_TRUE("unbalanced render helper ends", str && strstr(str, "glEnd();") != NULL);
+        free(str);
+        fclose(f7b);
+    }
+
+    /* 9. write_func_defs_as_c */
+    glr_ctrl_reset_all();
+    declare_test_vars();
+    editor_feed_line("func0() {");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("}");
+    export_set_source_text_view(source_document_view());
+    FILE *f8 = tmpfile();
+    if (f8) {
+        write_func_defs_as_c(f8);
+        char *str = slurp_stream(f8);
+        ASSERT_TRUE("func def written", str && strstr(str, "static void func0(void) {") != NULL);
+        free(str);
+        fclose(f8);
+    }
+
+    glr_ctrl_reset_all();
+    declare_test_vars();
+    editor_feed_line("func1(x, i) {");
+    editor_feed_line("glVertex3f(x, i, 0);");
+    editor_feed_line("}");
+    export_set_source_text_view(source_document_view());
+    FILE *f9 = tmpfile();
+    if (f9) {
+        write_func_defs_as_c(f9);
+        char *str = slurp_stream(f9);
+        ASSERT_TRUE("func def with params written", str && strstr(str, "static void func1(float x, float i) {") != NULL);
+        free(str);
+        fclose(f9);
+    }
+}
+
 int main(void) {
+    test_export_prologue_direct();
     const char *path1 = "/tmp/repl_export_all_commands_1.c";
     const char *path2 = "/tmp/repl_export_all_commands_2.c";
     int cmd_count_before = 0;
