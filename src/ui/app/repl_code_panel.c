@@ -2108,34 +2108,35 @@ static void repl_code_panel_draw_copy_icon(int kx, int ky, int kw, int kh) {
 }
 
 static void repl_code_panel_draw_cut_icon(int kx, int ky, int kw, int kh) {
-    /* Scissors: two blades crossing in an X, pointed tips at the top,
-     * a finger-loop ring at each bottom end.
+    /* Scissors: two 2px blades crossing in an X, tapering to pointed
+     * tips at the top; handles diverge below the pivot into open
+     * finger-loop rings that connect to the handle ends.
      *
-     *  row 11:  .............
-     *  row 10:  .............
-     *  row 9:   ..#.......#..
-     *  row 8:   ...#.....#...
-     *  row 7:   ....#...#....
-     *  row 6:   .....#.#.....
-     *  row 5:   ......#......
-     *  row 4:   .....#.#.....
-     *  row 3:   ..###...###..
-     *  row 2:   .####...####.
-     *  row 1:   .##.#...#.##.
-     *  row 0:   .####...####.                                        */
+     *  row 11:  .#.........#.   blade tips (pointed)
+     *  row 10:  ..##.....##..
+     *  row 9:   ...##...##...
+     *  row 8:   ....##.##....
+     *  row 7:   .....###.....
+     *  row 6:   ......#......   pivot
+     *  row 5:   .....#.#.....
+     *  row 4:   ....#...#....   handles
+     *  row 3:   ..###...###..   ring tops (join handles at cols 4 / 8)
+     *  row 2:   .#...#.#...#.
+     *  row 1:   .#...#.#...#.
+     *  row 0:   ..###...###..   ring bottoms                          */
     static const GLubyte cut_bits[ACTION_ICON_H * 2] = {
-        0x78, 0xF0,  /* row 0  */
-        0x68, 0xB0,  /* row 1  */
-        0x78, 0xF0,  /* row 2  */
+        0x38, 0xE0,  /* row 0  */
+        0x45, 0x10,  /* row 1  */
+        0x45, 0x10,  /* row 2  */
         0x38, 0xE0,  /* row 3  */
-        0x05, 0x00,  /* row 4  */
-        0x02, 0x00,  /* row 5  */
-        0x05, 0x00,  /* row 6  */
-        0x08, 0x80,  /* row 7  */
-        0x10, 0x40,  /* row 8  */
-        0x20, 0x20,  /* row 9  */
-        0x00, 0x00,  /* row 10 */
-        0x00, 0x00   /* row 11 */
+        0x08, 0x80,  /* row 4  */
+        0x05, 0x00,  /* row 5  */
+        0x02, 0x00,  /* row 6  */
+        0x07, 0x00,  /* row 7  */
+        0x0D, 0x80,  /* row 8  */
+        0x18, 0xC0,  /* row 9  */
+        0x30, 0x60,  /* row 10 */
+        0x40, 0x10   /* row 11 */
     };
     repl_code_panel_draw_bitmap_icon(kx, ky, kw, kh,
                                      ACTION_ICON_W, ACTION_ICON_H, cut_bits);
