@@ -486,12 +486,12 @@ static void status_draw_note_bitmap(float x, float y) {
         0x70, /* row 4 .###.... */
         0x10, /* row 5 ...#.... */
         0x10, /* row 6 ...#.... */
-        0x10, /* row 7 ...#.... */             
+        0x10, /* row 7 ...#.... */
         0x12, /* row 8 ...#..#. */
         0x12, /* row 9 ...#..#. */
         0x14, /* row 10 ...#.#.. */
         0x18, /* row 11 ...##... */
-        0x10  /* row 12 ...#..... */
+        0x10  /* row 12 ...#.... */
     };
     GLint align;
     /* Bitmap rows honor GL_UNPACK_ALIGNMENT (default 4 would read the
