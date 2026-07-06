@@ -105,7 +105,7 @@
 #define GLR_BACKDROP         GLUT_KEY_F5, 0
 #define GLR_AXES             GLUT_KEY_F6, 0
 #define GLR_VERTEX_LABELS    GLUT_KEY_F7, 0
-#define GLR_VERTEX_LABEL_SCOPE GLUT_KEY_F8, 0
+#define GLR_OVERLAY_SCOPE   GLUT_KEY_F8, 0
 #define GLR_LIGHT_THEME      GLUT_KEY_F9, 0
 #define GLR_CODE_PANEL       KEY_CTRL_B, 0
 #define GLR_RESET_CAMERA     KEY_CTRL_C, GLUT_ACTIVE_SHIFT  /* plain Ctrl+C = Copy */

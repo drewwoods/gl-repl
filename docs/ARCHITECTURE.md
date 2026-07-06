@@ -683,10 +683,10 @@ funcN-local parameters or loop-assigned values, so the controller must override
 cursor arguments from the **flat** command stream before rendering guides inside
 functions or loops.
 
-[`edit_overlays_render_cursor_guides()`](../src/subsystems/edit_overlays/edit_overlays.h#L80) walks the current [`FlatProgramView`](../src/repl/flatten.h#L45) via
+[`edit_overlays_render_cursor_guides()`](../src/subsystems/edit_overlays/edit_overlays.h#L82) walks the current [`FlatProgramView`](../src/repl/flatten.h#L45) via
 the replay/user-vertex walkers while tracking the modelview with
 `apply_tracked_transform` / `unwind_transform_stack`. At the cursor's first flat
-command, [`cursor_guide_snapshot_with_flat_args()`](../src/subsystems/edit_overlays/edit_overlays.h#L85) replaces `vertex_args` or
+command, [`cursor_guide_snapshot_with_flat_args()`](../src/subsystems/edit_overlays/edit_overlays.h#L87) replaces `vertex_args` or
 `normal_args` from the already-substituted flat command. For normal guides it
 also walks forward to find the live anchor point, because source-line parsing
 alone cannot know the world-space vertex the normal belongs to. Argument-slot
@@ -723,7 +723,7 @@ recomputes its own anchor frame (`compute_before_cursor_matrix` /
 `glLoadMatrixf` an absolute matrix), so it does *not* depend on where the
 vertex walk happens to be.
 
-That independence is what makes [`edit_overlays_render_cursor_guides()`](../src/subsystems/edit_overlays/edit_overlays.h#L80) flush the
+That independence is what makes [`edit_overlays_render_cursor_guides()`](../src/subsystems/edit_overlays/edit_overlays.h#L82) flush the
 transform guide **after** the walk (and even when there is *no* walk):
 
 * The flat-program walk drives the geometry guides (which *do* render in the

@@ -485,8 +485,8 @@ static void test_render_outlines_glbegin(void) {
                 trace_count_sym(&log, "glEnd") >= 1);
 }
 
-static void test_current_poly_highlight_respects_label_scope(void) {
-    printf("--- edit_overlays current-poly highlight label scope ---\n");
+static void test_current_poly_highlight_respects_overlay_scope(void) {
+    printf("--- edit_overlays current-poly highlight overlay scope ---\n");
 
     GLCmd cmds[6];
     mk_cmd(&cmds[0], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
@@ -509,18 +509,18 @@ static void test_current_poly_highlight_respects_label_scope(void) {
     ctx.show_vertex_outlines = 0;
 
     TraceLog log;
-    ctx.cursor_label_scope = OVERLAY_VERTEX_LABEL_SCOPE_ONE_INSTANCE;
+    ctx.cursor_overlay_scope = OVERLAY_SCOPE_FIRST_INSTANCE;
     trace_begin();
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
-    ASSERT_INT("one-instance highlights only the first matching block",
+    ASSERT_INT("first-instance highlights only the first matching block",
                trace_count_line(&log, "glLineWidth 3"), 1);
-    ASSERT_INT("one-instance draws first highlighted block",
+    ASSERT_INT("first-instance draws first highlighted block",
                trace_count_line(&log, "glVertex3f 1 0 0"), 1);
-    ASSERT_INT("one-instance skips later matching blocks",
+    ASSERT_INT("first-instance skips later matching blocks",
                trace_count_line(&log, "glVertex3f 2 0 0"), 0);
 
-    ctx.cursor_label_scope = OVERLAY_VERTEX_LABEL_SCOPE_ALL_INSTANCES;
+    ctx.cursor_overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES;
     trace_begin();
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
@@ -892,13 +892,13 @@ static void test_on_vertex_number_label_callback(void) {
     ASSERT_INT("off-screen vertex culled", cull_ctx.count, 0);
 }
 
-/* Label scope: one-instance mode labels only the first unrolled copy of a
+/* Overlay scope: first-instance mode labels only the first unrolled copy of a
  * looped primitive (the parametric-torus duplicate-label fix), while
  * all-instances mode labels every vertex with a globally-unique number. The
  * walk resets vertex_idx_in_block to 0 at each block, which is how the callback
  * detects block (loop-iteration) boundaries. */
-static void test_vertex_label_scope(void) {
-    printf("--- edit_overlays vertex label scope ---\n");
+static void test_overlay_scope(void) {
+    printf("--- edit_overlays overlay scope ---\n");
 
     float id[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
     extern float g_gl_stub_modelview_matrix[16];
@@ -915,11 +915,11 @@ static void test_vertex_label_scope(void) {
     };
     const int vidx[4] = { 0, 1, 0, 1 };
 
-    /* One-instance: only block 0's two vertices, numbered by in-block index. */
+    /* First-instance: only block 0's two vertices, numbered by in-block index. */
     VertexLabelCtx one;
     memset(&one, 0, sizeof(one));
     one.mode = OVERLAY_VERTEX_LABEL_INDEX;
-    one.label_options = OVERLAY_VERTEX_LABEL_SCOPE_ONE_INSTANCE;
+    one.label_options = OVERLAY_SCOPE_FIRST_INSTANCE;
     memcpy(one.proj, id, sizeof(id));
     one.vw = 1024;
     one.vh = 768;
@@ -927,8 +927,8 @@ static void test_vertex_label_scope(void) {
         state.vertex_idx_in_block = vidx[i];
         on_vertex_number_label(&state, verts[i][0], verts[i][1], verts[i][2], &one);
     }
-    ASSERT_INT("one-instance collects only the first block", one.count, 2);
-    ASSERT_TRUE("one-instance numbers by in-block index",
+    ASSERT_INT("first-instance collects only the first block", one.count, 2);
+    ASSERT_TRUE("first-instance numbers by in-block index",
                 strcmp(one.labels[0].idx, " v0") == 0 &&
                 strcmp(one.labels[1].idx, " v1") == 0);
 
@@ -936,7 +936,7 @@ static void test_vertex_label_scope(void) {
     VertexLabelCtx all;
     memset(&all, 0, sizeof(all));
     all.mode = OVERLAY_VERTEX_LABEL_INDEX;
-    all.label_options = OVERLAY_VERTEX_LABEL_SCOPE_ALL_INSTANCES;
+    all.label_options = OVERLAY_SCOPE_ALL_INSTANCES;
     memcpy(all.proj, id, sizeof(id));
     all.vw = 1024;
     all.vh = 768;
@@ -955,7 +955,7 @@ static void test_vertex_label_scope(void) {
     VertexLabelCtx at_vert;
     memset(&at_vert, 0, sizeof(at_vert));
     at_vert.mode = OVERLAY_VERTEX_LABEL_INDEX;
-    at_vert.label_options = OVERLAY_VERTEX_LABEL_SCOPE_AT_VERTEX;
+    at_vert.label_options = OVERLAY_SCOPE_AT_VERTEX;
     memcpy(at_vert.proj, id, sizeof(id));
     at_vert.vw = 1024;
     at_vert.vh = 768;
@@ -1004,7 +1004,7 @@ static void test_vertex_label_visible_occlusion(void) {
     VertexLabelCtx ctx;
     memset(&ctx, 0, sizeof(ctx));
     ctx.mode = OVERLAY_VERTEX_LABEL_INDEX;
-    ctx.label_options = OVERLAY_VERTEX_LABEL_SCOPE_VISIBLE;
+    ctx.label_options = OVERLAY_SCOPE_VISIBLE;
     memcpy(ctx.proj, id, sizeof(id));
     ctx.vw = 4;
     ctx.vh = 4;
@@ -1213,7 +1213,7 @@ static void test_vertex_numbers_use_source_begin_block(void) {
     TraceLog log;
     trace_begin();
     edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX, 0,
-                                        OVERLAY_VERTEX_LABEL_SCOPE_ALL_INSTANCES);
+                                        OVERLAY_SCOPE_ALL_INSTANCES);
     trace_end(&log);
 
     ASSERT_INT("earlier GL_POINTS vertex 0 not labelled",
@@ -1265,7 +1265,7 @@ static void test_render_via_repl_program(void) {
     walk.cursor.cursor_block_end = repl_state_flat_program_current_block_end();
 
     edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX_POS, 0,
-                                        OVERLAY_VERTEX_LABEL_SCOPE_ALL_INSTANCES);
+                                        OVERLAY_SCOPE_ALL_INSTANCES);
     trace_end(&log);
     ASSERT_INT("vertex-number label at first vertex",
                trace_count_line(&log, "glRasterPos2f 640 576"), 1);
@@ -1463,7 +1463,7 @@ int main(void) {
     test_render_vertex_points();
     test_render_vertex_points_glut();
     test_render_outlines_glbegin();
-    test_current_poly_highlight_respects_label_scope();
+    test_current_poly_highlight_respects_overlay_scope();
     test_render_outlines_tess();
     test_render_outlines_glut();
     test_find_next_vertex_args();
@@ -1471,7 +1471,7 @@ int main(void) {
     test_mat4_math();
     test_sanitize_zero();
     test_on_vertex_number_label_callback();
-    test_vertex_label_scope();
+    test_overlay_scope();
     test_vertex_label_visible_occlusion();
     test_on_normal_vector_arrow_callback();
     test_render_normal_vectors_replay_only();

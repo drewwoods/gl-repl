@@ -271,7 +271,7 @@ static int glr_ctrl_find_affecting_transform_highlights(int line_idx,
                                                         int out_cap) {
     GlrPresentationState presentation = glr_state_presentation();
 
-    if (presentation.vertex_label_scope == OVERLAY_VERTEX_LABEL_SCOPE_ONE_INSTANCE) {
+    if (presentation.overlay_scope == OVERLAY_SCOPE_FIRST_INSTANCE) {
         int flat_idx = glr_ctrl_first_flat_color_consumer_for_source_line(line_idx);
         if (flat_idx >= 0)
             return repl_find_affecting_transforms_for_flat_vertex(
@@ -518,7 +518,7 @@ static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3
             &pack->walk.cursor.cursor_source_block_begin,
             &pack->walk.cursor.cursor_source_block_end);
     pack->walk.cursor.cursor_func_scope_mask = 0;
-    pack->walk.cursor_label_scope = presentation.vertex_label_scope;
+    pack->walk.cursor_overlay_scope = presentation.overlay_scope;
 
     /* Silhouette outlines only make sense over filled geometry; in any
      * wireframe mode the fill is replaced by edges, so suppress them. */
@@ -539,7 +539,7 @@ static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3
 
     pack->snapshot = glr_ctrl_build_guide_snapshot(cfg);
     pack->vertex_label_mode = (OverlayVertexLabelMode)presentation.show_vertex_labels;
-    pack->vertex_label_scope = presentation.vertex_label_scope;
+    pack->overlay_scope = presentation.overlay_scope;
     pack->ortho_mode = presentation.ortho_mode;
     pack->show_normal_vectors = presentation.show_normal_vectors;
     pack->multisample_enabled = cfg ? cfg->multisample_enabled : 0;

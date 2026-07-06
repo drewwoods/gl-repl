@@ -43,7 +43,7 @@ CLAIMS: list[tuple[str, str, list[str]]] = [
     ("Vertex labels shortcut", "GLR_VERTEX_LABELS",
      ["| {key} | Vertex labels |",
       "**Vertex labels** ({key})"]),
-    ("Overlay scope shortcut", "GLR_VERTEX_LABEL_SCOPE",
+    ("Overlay scope shortcut", "GLR_OVERLAY_SCOPE",
      ["| {key} | Overlay scope |",
       "**Overlay scope** ({key})"]),
     ("Light theme shortcut", "GLR_LIGHT_THEME",

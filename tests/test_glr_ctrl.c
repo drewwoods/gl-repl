@@ -1748,21 +1748,21 @@ static void test_replay_focus_vertex_affecting_transforms(void) {
     ASSERT_INT("second replay vertex shows second translate",
                count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 8), 1);
 
-    /* Off replay the edit-cursor set now follows label_scope. One-instance
+    /* Off replay the edit-cursor set now follows overlay_scope. First-instance
      * resolves the first flat expansion of the cursor line, so it shows only
      * that expansion's transform set. */
     replay_stop();
-    glr_state_presentation_mut()->vertex_label_scope = OVERLAY_VERTEX_LABEL_SCOPE_ONE_INSTANCE;
+    glr_state_presentation_mut()->overlay_scope = OVERLAY_SCOPE_FIRST_INSTANCE;
     glr_ctrl_push_highlights();
-    ASSERT_INT("post-replay one-instance shows first translate",
+    ASSERT_INT("post-replay first-instance shows first translate",
                count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 5), 1);
-    ASSERT_INT("post-replay one-instance hides second-call rotate",
+    ASSERT_INT("post-replay first-instance hides second-call rotate",
                count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 7), 0);
-    ASSERT_INT("post-replay one-instance hides second-call translate",
+    ASSERT_INT("post-replay first-instance hides second-call translate",
                count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 8), 0);
 
     /* All-instances restores the old source-line union behavior. */
-    glr_state_presentation_mut()->vertex_label_scope = OVERLAY_VERTEX_LABEL_SCOPE_ALL_INSTANCES;
+    glr_state_presentation_mut()->overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES;
     glr_ctrl_push_highlights();
     ASSERT_INT("post-replay all-instances shows first translate",
                count_highlight_kind_on_line(HIGHLIGHT_AFFECTING_TRANSFORM, 5), 1);

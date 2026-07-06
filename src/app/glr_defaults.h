@@ -34,11 +34,12 @@
 #define CFG_DEFAULT_GRID_BRIGHTNESS_IDX GRID_BRIGHTNESS_NORMAL
 #define CFG_DEFAULT_AXES_THEME        AXES_THEME_OFF
 #define CFG_DEFAULT_VERTEX_LABELS     OVERLAY_VERTEX_LABEL_INDEX
-/* Vertex-label scope: 0 = label one representative copy of a looped primitive
- * (so the parametric torus shows v0..vN once, not duplicated per ring);
+/* Overlay scope: 0 = label/highlight the first representative copy of a
+ * looped primitive (so the parametric torus shows v0..vN once, not
+ * duplicated per ring);
  * 1 = label every unrolled vertex with a globally-unique number;
  * 2 = label all instances at their vertex positions (without decluttering). */
-#define CFG_DEFAULT_VERTEX_LABEL_SCOPE 0
+#define CFG_DEFAULT_OVERLAY_SCOPE 0
 #define CFG_DEFAULT_VERTEX_INDICES    1
 #define CFG_DEFAULT_NORMAL_VECTORS    0
 #ifndef CFG_DEFAULT_VERTEX_OUTLINES

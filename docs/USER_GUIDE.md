@@ -715,7 +715,7 @@ where the rig sits.
 - **Vertex labels** (F7): Off / Index / Index+Pos / Index+World /
   Index+World Fine — numbers each vertex of the primitive at the cursor,
   optionally with its coordinates.
-- **Overlay scope** (F8): One instance / All instances / At vertex /
+- **Overlay scope** (F8): First instance / All instances / At vertex /
   Visible only — controls how broadly cursor-bound overlays are shown around
   repeated function/loop instances. Label-specific modes still control label
   placement and visible-only filtering.

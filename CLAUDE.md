@@ -1033,7 +1033,7 @@ pipeline, so it stays hidden from the code panel. `@cfg` parsing reuses
 these scene-presentation slugs:
 
 `wireframe`, `grid`, `grid_major`, `grid_extent`, `grid_brightness`, `axes`,
-`vertex_labels`, `label_scope`, `normal_vectors`, `vertex_outlines`, `vertex_points`,
+`vertex_labels`, `overlay_scope`, `normal_vectors`, `vertex_outlines`, `vertex_points`,
 `xform_guides`, `light_indicators`, `light_theme`, `backdrop`,
 `view_mode`, `camera_rotate`, `variable_panel`.
 
@@ -1307,7 +1307,7 @@ alongside `.cfg` (see the file-layout table for the tutorial catalog).
 | Ctrl+Shift+R | Toggle camera auto-rotate |
 | Ctrl+Shift+V | Toggle View mode (2D / 3D) |
 | F1 | Help overlay — also the clickable statusbar "F1 help" keycap |
-| F2-F9 | Cycle the bound config forward. Each drives a multi-state cycle: F2 Grid, F3 Grid extent, F4 Grid brightness, F5 Backdrop, F6 Axes, F7 Vertex labels, F8 Label scope, F9 Light theme |
+| F2-F9 | Cycle the bound config forward. Each drives a multi-state cycle: F2 Grid, F3 Grid extent, F4 Grid brightness, F5 Backdrop, F6 Axes, F7 Vertex labels, F8 Overlay scope, F9 Light theme |
 | F10 | Cycle the experimental post-process filter forward (Off / Chromatic aberration / Vignette / Scanlines / Film grain, each scene- then frame-targeted) — hidden feature, no Config row |
 | Ctrl+= / Ctrl+− | Step Accum passes up/down (1/2/4/8/12/16; active when Accum effect ≠ Off) |
 | Shift+F2-F10 | Step the bound cycle backward |

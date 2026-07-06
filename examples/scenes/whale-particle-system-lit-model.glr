@@ -1,4 +1,4 @@
-// @cfg label_scope = OVERLAY_VERTEX_LABEL_SCOPE_AT_VERTEX
+// @cfg overlay_scope = OVERLAY_SCOPE_AT_VERTEX
 // @cfg grid = GRID_THEME_OCEAN
 // @cfg axes = AXES_THEME_OFF
 // @cfg grid_extent = GRID_EXTENT_MID

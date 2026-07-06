@@ -289,9 +289,7 @@ static int outline_block_matches_cursor(int begin_idx, int is_tess,
 
 static int cursor_scope_allows_instance(const OverlayWalkCtx *ctx,
                                         int selected_instance) {
-    if (!ctx)
-        return 0;
-    return ctx->cursor_label_scope != OVERLAY_VERTEX_LABEL_SCOPE_ONE_INSTANCE ||
+    return ctx->cursor_overlay_scope != OVERLAY_SCOPE_FIRST_INSTANCE ||
            selected_instance == 1;
 }
 
@@ -783,10 +781,10 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
         ctx->block_instances++;
     global_num = ctx->labelable_seen++;
 
-    /* One-instance mode: only the first unrolled copy (else the torus repeats
+    /* First-instance mode: only the first unrolled copy (else the torus repeats
      * v0..vN once per ring). All-instances and At-vertex modes keep all copies;
      * declutter pass still drops whatever doesn't fit for All-instances. */
-    if (ctx->label_options == OVERLAY_VERTEX_LABEL_SCOPE_ONE_INSTANCE && ctx->block_instances != 1)
+    if (ctx->label_options == OVERLAY_SCOPE_FIRST_INSTANCE && ctx->block_instances != 1)
         return;
     if (ctx->count >= VERTEX_LABEL_MAX)
         return;
@@ -811,8 +809,8 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
             return;
     }
 
-    label_num = (ctx->label_options == OVERLAY_VERTEX_LABEL_SCOPE_ALL_INSTANCES ||
-                 ctx->label_options == OVERLAY_VERTEX_LABEL_SCOPE_VISIBLE)
+    label_num = (ctx->label_options == OVERLAY_SCOPE_ALL_INSTANCES ||
+                 ctx->label_options == OVERLAY_SCOPE_VISIBLE)
                 ? global_num : state->vertex_idx_in_block;
     lbl = &ctx->labels[ctx->count];
     snprintf(lbl->idx, sizeof(lbl->idx), " v%d", label_num);
@@ -870,7 +868,7 @@ static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
             l->width = 1.0f;
     }
 
-    if (ctx->label_options == OVERLAY_VERTEX_LABEL_SCOPE_AT_VERTEX) {
+    if (ctx->label_options == OVERLAY_SCOPE_AT_VERTEX) {
         for (i = 0; i < ctx->count; i++) {
             VertexLabel *l = &ctx->labels[i];
             l->drawn = 1;
@@ -1089,7 +1087,7 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
-    if (label_options == OVERLAY_VERTEX_LABEL_SCOPE_AT_VERTEX) {
+    if (label_options == OVERLAY_SCOPE_AT_VERTEX) {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE);
         render3d_clr_a(RENDER3D_CLR_VERTEX_LABEL, 0.5f);
@@ -1118,7 +1116,7 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
      * not a per-vertex GL round-trip) so the callback can cull occluded
      * vertices. The scene geometry has already drawn its depths by the time
      * overlays run. Indexed viewport-local (bottom-up), matching project_to_screen. */
-    if (label_options == OVERLAY_VERTEX_LABEL_SCOPE_VISIBLE &&
+    if (label_options == OVERLAY_SCOPE_VISIBLE &&
         label_ctx.vw > 0 && label_ctx.vh > 0) {
         size_t n = (size_t)label_ctx.vw * (size_t)label_ctx.vh;
         depthbuf = malloc(n * sizeof(float));
@@ -1448,7 +1446,7 @@ void edit_overlays_post_overlays(void *user_data) {
         edit_overlays_render_vertex_numbers(&pack->walk,
                                             pack->vertex_label_mode,
                                             pack->ortho_mode,
-                                            pack->vertex_label_scope);
+                                            pack->overlay_scope);
         prof_accum_end(PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS);
     }
     if (pack->walk.replay_vertex_label) {
