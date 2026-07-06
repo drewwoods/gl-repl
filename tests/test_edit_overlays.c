@@ -485,6 +485,51 @@ static void test_render_outlines_glbegin(void) {
                 trace_count_sym(&log, "glEnd") >= 1);
 }
 
+static void test_current_poly_highlight_respects_label_scope(void) {
+    printf("--- edit_overlays current-poly highlight label scope ---\n");
+
+    GLCmd cmds[6];
+    mk_cmd(&cmds[0], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&cmds[1], CMD_VERTEX3F, 1.0f, 0.0f, 0.0f);
+    cmds[1].src_cmd_idx = 7;
+    mk_cmd(&cmds[2], CMD_END, 0, 0, 0);
+    mk_cmd(&cmds[3], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&cmds[4], CMD_VERTEX3F, 2.0f, 0.0f, 0.0f);
+    cmds[4].src_cmd_idx = 7;
+    mk_cmd(&cmds[5], CMD_END, 0, 0, 0);
+
+    OverlayWalkCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = cmds;
+    ctx.program.cmd_count = 6;
+    ctx.cursor.edit_line_idx = 7;
+    ctx.cursor.cursor_block_begin = -1;
+    ctx.cursor.cursor_block_end = -1;
+    ctx.highlight_current_poly = 1;
+    ctx.show_vertex_outlines = 0;
+
+    TraceLog log;
+    ctx.cursor_label_scope = OVERLAY_VERTEX_LABEL_SCOPE_ONE_INSTANCE;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("one-instance highlights only the first matching block",
+               trace_count_line(&log, "glLineWidth 3"), 1);
+    ASSERT_INT("one-instance draws first highlighted block",
+               trace_count_line(&log, "glVertex3f 1 0 0"), 1);
+    ASSERT_INT("one-instance skips later matching blocks",
+               trace_count_line(&log, "glVertex3f 2 0 0"), 0);
+
+    ctx.cursor_label_scope = OVERLAY_VERTEX_LABEL_SCOPE_ALL_INSTANCES;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("all-instances highlights both matching blocks",
+               trace_count_line(&log, "glLineWidth 3"), 2);
+    ASSERT_INT("all-instances draws later matching block",
+               trace_count_line(&log, "glVertex3f 2 0 0"), 1);
+}
+
 /* render_outlines_tess_pass: draws each tess contour as a GL_LINE_LOOP. */
 static void test_render_outlines_tess(void) {
     printf("--- edit_overlays render_outlines (tess pass) ---\n");
@@ -1418,6 +1463,7 @@ int main(void) {
     test_render_vertex_points();
     test_render_vertex_points_glut();
     test_render_outlines_glbegin();
+    test_current_poly_highlight_respects_label_scope();
     test_render_outlines_tess();
     test_render_outlines_glut();
     test_find_next_vertex_args();

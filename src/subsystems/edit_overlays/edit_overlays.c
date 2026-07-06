@@ -287,12 +287,21 @@ static int outline_block_matches_cursor(int begin_idx, int is_tess,
     return 0;
 }
 
+static int cursor_scope_allows_instance(const OverlayWalkCtx *ctx,
+                                        int selected_instance) {
+    if (!ctx)
+        return 0;
+    return ctx->cursor_label_scope != OVERLAY_VERTEX_LABEL_SCOPE_ONE_INSTANCE ||
+           selected_instance == 1;
+}
+
 static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
     const GLCmd *cmds = ctx->program.cmds;
     int cmd_count = ctx->program.cmd_count;
     int in_begin = 0;
     int matrix_depth = 0;
     int block_is_current = 0;
+    int selected_block_instances = 0;
 
     glPushMatrix();
     for (int i = 0; i < cmd_count; i++) {
@@ -307,9 +316,16 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
         switch (cmds[i].type) {
         case CMD_BEGIN: {
             int draw_outline = outline_begin_mode_has_overlay((GLenum)cmds[i].args[0]);
+            int block_matches_current = ctx->highlight_current_poly &&
+                                        outline_block_matches_cursor(i, 0, ctx);
             if (in_begin) glEnd();
-            block_is_current = ctx->highlight_current_poly &&
-                               outline_block_matches_cursor(i, 0, ctx);
+            if (block_matches_current) {
+                selected_block_instances++;
+                block_is_current =
+                    cursor_scope_allows_instance(ctx, selected_block_instances);
+            } else {
+                block_is_current = 0;
+            }
             if (block_is_current) {
                 glLineWidth(3.0f);
                 render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
@@ -360,6 +376,7 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
     int matrix_depth = 0;
     int tess_in_contour = 0;
     int tess_poly_is_current = 0;
+    int selected_poly_instances = 0;
 
     glPushMatrix();
     for (int i = 0; i < cmd_count; i++) {
@@ -373,8 +390,17 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
 
         switch (cmds[i].type) {
         case CMD_TESS_BEGIN_POLYGON:
-            tess_poly_is_current = ctx->highlight_current_poly &&
-                                   outline_block_matches_cursor(i, 1, ctx);
+            {
+                int poly_matches_current = ctx->highlight_current_poly &&
+                                           outline_block_matches_cursor(i, 1, ctx);
+                if (poly_matches_current) {
+                    selected_poly_instances++;
+                    tess_poly_is_current =
+                        cursor_scope_allows_instance(ctx, selected_poly_instances);
+                } else {
+                    tess_poly_is_current = 0;
+                }
+            }
             break;
         case CMD_TESS_BEGIN_CONTOUR:
             if (ctx->replay_tess_preview) break;
@@ -432,6 +458,7 @@ static void render_outlines_glut_pass(const OverlayWalkCtx *ctx) {
     const GLCmd *cmds = ctx->program.cmds;
     int cmd_count = ctx->program.cmd_count;
     int matrix_depth = 0;
+    int selected_shape_instances = 0;
 
     glPushMatrix();
     for (int i = 0; i < cmd_count; i++) {
@@ -445,6 +472,11 @@ static void render_outlines_glut_pass(const OverlayWalkCtx *ctx) {
 
         int is_current = ctx->highlight_current_poly &&
                          outline_cmd_matches_cursor(i, ctx);
+        if (is_current) {
+            selected_shape_instances++;
+            is_current = cursor_scope_allows_instance(ctx,
+                                                      selected_shape_instances);
+        }
         if (is_current) {
             glLineWidth(3.0f);
             render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);

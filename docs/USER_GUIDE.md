@@ -638,7 +638,7 @@ flyouts taller than the window):
 - **OVERLAYS & SCENE** — Grid, Grid extent, Grid brightness, Grid major,
   Axes, Xform guides, Light indicators, Light theme, Backdrop, Auto-normals
 - **CAMERA** — View mode, Camera rotate, Focus origin, Reset camera
-- **GEOMETRY** — Vertex labels, Label scope, Normal vectors, Vertex outlines,
+- **GEOMETRY** — Vertex labels, Overlay scope, Normal vectors, Vertex outlines,
   Vertex points, Poly highlight, Winding
 - **INTERFACE** — Variable panel, Compute profile, Memory profile, Code panel,
   Wrap at commas, Syntax highlight, Paren match, Paren scope
@@ -657,8 +657,9 @@ backward):
 | F5 | Backdrop |
 | F6 | Axes theme |
 | F7 | Vertex labels |
-| F8 | Label scope |
+| F8 | Overlay scope |
 | F9 | Light theme |
+| F10 / Shift+F10 | Post-process filter (forward / backward) |
 
 ### Grid & axes
 
@@ -714,9 +715,10 @@ where the rig sits.
 - **Vertex labels** (F7): Off / Index / Index+Pos / Index+World /
   Index+World Fine — numbers each vertex of the primitive at the cursor,
   optionally with its coordinates.
-- **Label scope** (F8): One instance / All instances / At vertex /
-  Visible only — controls how broadly vertex labels are shown around the
-  cursor.
+- **Overlay scope** (F8): One instance / All instances / At vertex /
+  Visible only — controls how broadly cursor-bound overlays are shown around
+  repeated function/loop instances. Label-specific modes still control label
+  placement and visible-only filtering.
 - **Normal vectors** (Ctrl+Shift+N): draws each vertex's normal as an arrow.
 - **Vertex outlines** (Ctrl+Shift+O) and **Vertex points** (Ctrl+Shift+P): outline polygons
   and mark vertices *(both on by default)*.
