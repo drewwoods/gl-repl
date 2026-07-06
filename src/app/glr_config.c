@@ -286,6 +286,9 @@ static const GlrConfigItem *find_item_by_key(GlrConfigKey key) {
 }
 
 int glr_config_state_count(GlrConfigKey key) {
+    if (key == GLR_CONFIG_AUDIO_MODE)
+        return 2;
+
     const GlrConfigItem *item = find_item_by_key(key);
     if (!item || item->section_header)
         return 0;
@@ -293,6 +296,14 @@ int glr_config_state_count(GlrConfigKey key) {
 }
 
 const char *glr_config_state_name(GlrConfigKey key, int value) {
+    if (key == GLR_CONFIG_AUDIO_MODE) {
+        if (value == 0)
+            return "off";
+        if (value == 1)
+            return "on";
+        return NULL;
+    }
+
     const GlrConfigItem *item = find_item_by_key(key);
     if (!item || item->section_header)
         return NULL;

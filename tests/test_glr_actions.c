@@ -162,7 +162,6 @@ static void test_cfg_cycling(void) {
     /* Find some row indices */
     int wireframe_row = -1;
     int auto_time_row = -1;
-    int audio_row = -1;
     int code_panel_row = -1;
     int auto_normals_row = -1;
     int replay_row = -1;
@@ -173,7 +172,6 @@ static void test_cfg_cycling(void) {
         if (!item) continue;
         if (item->key == GLR_CONFIG_WIREFRAME) wireframe_row = i;
         if (item->key == GLR_CONFIG_AUTO_TIME) auto_time_row = i;
-        if (item->key == GLR_CONFIG_AUDIO_MODE) audio_row = i;
         if (item->key == GLR_CONFIG_CODE_PANEL_LAYOUT) code_panel_row = i;
         if (item->key == GLR_CONFIG_AUTO_NORMALS) auto_normals_row = i;
         if (item->key == GLR_CONFIG_REPLAY) replay_row = i;
@@ -229,16 +227,17 @@ static void test_cfg_cycling(void) {
     ASSERT_INT("point attenuation ON", glr_config_get(GLR_CONFIG_POINT_ATTENUATION), 1);
     ASSERT_STR("status point attenuation ON", g_last_status, "Point attenuation: ON");
 
-    /* Test Audio modes (2-state: off/on) */
+    /* Audio is no longer a Config menu row, but its hidden config key
+     * still drives the Play/Pause action through glr_config_set. */
     glr_audio_set_loop_mode(GLR_AUDIO_LOOP_SONG);
     glr_config_set(GLR_CONFIG_AUDIO_MODE, 0); // Off (pause)
-    glr_cfg_cycle_row(audio_row, 1); // -> On
+    glr_action_toggle_audio_play_pause(); // -> On
     ASSERT_INT("audio mode On", glr_config_get(GLR_CONFIG_AUDIO_MODE), 1);
     ASSERT_STR("status audio On", g_last_status, "Audio: on");
     ASSERT_INT("audio engine not paused", glr_audio_is_paused(), 0);
     ASSERT_INT("audio On preserves loop mode", glr_audio_get_loop_mode(), GLR_AUDIO_LOOP_SONG);
 
-    glr_cfg_cycle_row(audio_row, 1); // -> Off
+    glr_action_toggle_audio_play_pause(); // -> Off
     ASSERT_INT("audio mode Off", glr_config_get(GLR_CONFIG_AUDIO_MODE), 0);
     ASSERT_STR("status audio Off", g_last_status, "Audio: off");
     ASSERT_INT("audio engine paused", glr_audio_is_paused(), 1);
@@ -471,11 +470,13 @@ static void test_shortcuts(void) {
 }
 
 static void test_config_sections(void) {
-    /* g_cfg_items[] has seven "### " sections. The section model must
+    /* g_cfg_items[] has six "### " sections. Audio has its own menu, so
+     * GLR_CONFIG_AUDIO_MODE is intentionally no longer surfaced here.
+     * The section model must
      * be data-faithful: only real headers counted, "---" excluded, the
      * synthetic "All" view NOT counted here (plan Finding #2). */
     int n = glr_config_section_count();
-    ASSERT_INT("section count", n, 7);
+    ASSERT_INT("section count", n, 6);
 
     /* glr_config_section_label is data-faithful: it returns the raw
      * "### " label with the marker stripped (still UPPERCASE). The
@@ -483,7 +484,7 @@ static void test_config_sections(void) {
      * menu_item_label, not here. */
     const char *expect[] = {
         "RENDERING", "TIME & REPLAY", "OVERLAYS & SCENE", "CAMERA",
-        "GEOMETRY", "INTERFACE", "AUDIO",
+        "GEOMETRY", "INTERFACE",
     };
     for (int s = 0; s < n; s++)
         ASSERT_STR("section label (### stripped)",
@@ -515,6 +516,9 @@ static void test_config_sections(void) {
 
     int headers = 0, seps = 0, items = 0;
     for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        const GlrConfigItem *it = glr_config_item_at(i);
+        ASSERT_TRUE("Audio is not a visible Config row",
+                    !it || it->key != GLR_CONFIG_AUDIO_MODE);
         switch (glr_config_row_kind(i)) {
         case GLR_CFG_ROW_HEADER:    headers++; break;
         case GLR_CFG_ROW_SEPARATOR: seps++;    break;
@@ -617,6 +621,9 @@ static void test_ascii_shortcut_modifiers(void) {
                glr_cfg_handle_ascii_shortcut(KEY_CTRL_Y), 0);
 
     g_test_mods = GLUT_ACTIVE_SHIFT;
+    ASSERT_INT("Ctrl+Shift+A not claimed by cfg (Audio has own router)",
+               glr_cfg_handle_ascii_shortcut(KEY_CTRL_A), 0);
+
     int sh0 = glr_config_get(GLR_CONFIG_SYNTAX_HIGHLIGHT);
     ASSERT_INT("Ctrl+Shift+Y handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_Y), 1);
     ASSERT_TRUE("Ctrl+Shift+Y cycled Syntax highlight",
@@ -742,6 +749,13 @@ static void test_tutorial_menu_dispatch(void) {
  * the audio module's cfg_mode setter, not a raw pointer write. */
 static void test_audio_config_direct_set(void) {
     glr_ctrl_reset_all();
+
+    ASSERT_INT("hidden audio config still has two states",
+               glr_config_state_count(GLR_CONFIG_AUDIO_MODE), 2);
+    ASSERT_STR("hidden audio state 0 name",
+               glr_config_state_name(GLR_CONFIG_AUDIO_MODE, 0), "off");
+    ASSERT_STR("hidden audio state 1 name",
+               glr_config_state_name(GLR_CONFIG_AUDIO_MODE, 1), "on");
 
     glr_config_set(GLR_CONFIG_AUDIO_MODE, 1);
     ASSERT_INT("direct-set audio mode 1", glr_audio_get_cfg_mode(), 1);
@@ -1337,6 +1351,10 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     ASSERT_STR("fill_all backdrop is symbolic", repl_config_bag_get(&bag, "backdrop"), "RENDER3D_BACKDROP_CITY_AND_STARS");
     ASSERT_STR("fill_all light_theme is symbolic", repl_config_bag_get(&bag, "light_theme"), "LIGHT_THEME_SOLAR");
     ASSERT_STR("fill_all label_scope is symbolic", repl_config_bag_get(&bag, "label_scope"), "OVERLAY_VERTEX_LABEL_SCOPE_AT_VERTEX");
+    ASSERT_TRUE("fill_all includes hidden audio cfg",
+                repl_config_bag_get(&bag, "audio") != NULL);
+    ASSERT_INT("hidden audio cfg slug remains known",
+               repl_config_bridge()->is_known("audio"), 1);
 
     ReplConfigBag scene_bag;
     repl_config_bag_clear(&scene_bag);

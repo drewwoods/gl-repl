@@ -3,7 +3,7 @@
 ## Summary
 Add a top-level `Audio` menu that reuses the existing catalog flyout engine in [menu_bar.c](/Users/drew/src/code/openGL/samples/gen-ai/gl-repl-worktree/src/ui/app/menu_bar.c). V1 groups discovered tracks by source (`Assets`, `Bundled`, `My Music`, fallback `Default`), displays filename stems, highlights the playing track, and shows live `m:ss / m:ss` only beside the active track while the menu is open.
 
-Do not make `playlist.ini` or `g_cfg_items[]` the source of truth. The existing Config `AUDIO` row remains the global off/on toggle.
+Do not make `playlist.ini` or `g_cfg_items[]` the source of truth. Audio has its own top-level menu; Play/Pause still writes `GLR_CONFIG_AUDIO_MODE` through the config layer so persistence and tutorial `REQUIRE` observers keep one write path.
 
 ## Public Interfaces
 - Add `GLR_MENU_AUDIO` to `GlrMenuId` in [glr_actions.h](/Users/drew/src/code/openGL/samples/gen-ai/gl-repl-worktree/src/app/glr_actions.h), plus Audio menu offsets for `---`, `Play/Pause`, `Next Track`, `Previous Track`, and `Loop: <mode>`.

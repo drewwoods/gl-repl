@@ -54,7 +54,7 @@ static const char *const k_tab_overview[] = {
     "  3D viewport        \tYour geometry, lit and rendered every frame",
     "  Code panel         \tThe live, editable list of GL commands",
     "  Status bar         \tMessages, AA / profile info, clickable keycaps",
-    "  Menu bar (top)     \tFile / Scene / Tutorials / Config dropdowns",
+    "  Menu bar (top)     \tFile / Scene / Tutorials / Config / Audio dropdowns",
     "  Scene tabs         \tSwitch between your saved scenes",
     "",
     "The menu bar:",
@@ -62,6 +62,7 @@ static const char *const k_tab_overview[] = {
     "  Scene              \tLoad a built-in example or one of my scenes",
     "  Tutorials          \tGuided, step-by-step lessons",
     "  Config             \tToggle grid, axes, lighting, backdrop, etc.",
+    "  Audio              \tPick tracks, play/pause, next/previous, loop",
     "  Replay (far right) \tStep through the scene one command at a time",
     "  search...          \tFind text in the code buffer",
     "",
@@ -447,7 +448,7 @@ const ReplHelpContent *repl_help_text_build(void) {
                           "Cycle syntax highlight (Off / On / On+Shadow)");
     nk = key_emit(nk, "");
     nk = key_emit(nk, "Audio:");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_AUDIO), KM_MODS(GLR_AUDIO), 0, "", "Toggle audio (off / on)");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_AUDIO), KM_MODS(GLR_AUDIO), 0, "", "Play / pause");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_AUDIO_PREV), KM_MODS(GLR_AUDIO_PREV), 1, "", "Previous track");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_AUDIO_NEXT), KM_MODS(GLR_AUDIO_NEXT), 1, "", "Next track");
     nk = key_emit(nk, "");

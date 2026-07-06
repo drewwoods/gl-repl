@@ -267,7 +267,6 @@ static void glr_action_load_scene_from_clipboard(void) {
  * glr_actions_apply_defaults() via the > AUDIO_CFG_ALL clamp. */
 #define AUDIO_CFG_PAUSE 0
 #define AUDIO_CFG_ALL   1
-static const char *audio_cfg_names[] = { "off", "on" };
 static const char *syntax_hl_names[] = { "Off", "On", "On+Shadow" };
 static const char *view_mode_names[] = { "3D", "2D" };
 static const char *wireframe_mode_names[] = { "Off", "Wireframe", "Hidden-line" };
@@ -464,12 +463,6 @@ const GlrConfigItem g_cfg_items[] = {
       .key_code = KM_KEY(GLR_SYNTAX_HL), .modifiers = KM_MODS(GLR_SYNTAX_HL) },
     { .label = "Paren match", .key = GLR_CONFIG_PAREN_MATCH, .state_count = 2 },
     { .label = "Paren scope", .key = GLR_CONFIG_PAREN_SCOPE, .state_count = 2 },
-    { .label = "---", .section_header = 1 },
-
-    { .label = "### AUDIO", .section_header = 1 },
-    { .label = "Audio", .key = GLR_CONFIG_AUDIO_MODE,
-      .state_count = 2, .state_names = audio_cfg_names,
-      .key_code = KM_KEY(GLR_AUDIO), .modifiers = KM_MODS(GLR_AUDIO) },
 };
 
 const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
@@ -562,6 +555,10 @@ static const GlrConfigItem *glr_export_cfg_find_item_by_slug(const char *slug) {
             return item;
     }
     return NULL;
+}
+
+static int glr_export_cfg_slug_is_hidden_audio(const char *slug) {
+    return slug && strcmp(slug, "audio") == 0;
 }
 
 /* Symbolic-name → enum-value tables. Built-in catalogs (examples,
@@ -751,6 +748,13 @@ static void glr_export_cfg_fill_all(ReplConfigBag *cfg) {
                                        val_str, sizeof(val_str));
         repl_config_bag_set(cfg, glr_config_item_slug(item), val_str);
     }
+    {
+        char val_str[REPL_CFG_VALUE_MAX];
+        glr_export_cfg_value_to_string("audio",
+                                       glr_config_get(GLR_CONFIG_AUDIO_MODE),
+                                       val_str, sizeof(val_str));
+        repl_config_bag_set(cfg, "audio", val_str);
+    }
 }
 
 static void glr_export_cfg_fill_scene_subset(ReplConfigBag *cfg) {
@@ -797,14 +801,19 @@ static void glr_export_cfg_apply(const ReplConfigBag *cfg) {
                 val = PROFILE_PANEL_MODE_COUNT - 1;
         }
         const GlrConfigItem *item = glr_export_cfg_find_item_by_slug(slug);
-        if (item)
+        if (item) {
             glr_config_set(item->key, val);
+        } else if (glr_export_cfg_slug_is_hidden_audio(slug)) {
+            glr_config_set(GLR_CONFIG_AUDIO_MODE, val);
+        }
         /* Unknown slugs silently ignored — same behaviour as the pre-bridge
          * parse_cfg path: drop unrecognised cfg keys. */
     }
 }
 
 static int glr_export_cfg_get_int(const char *slug, int fallback) {
+    if (glr_export_cfg_slug_is_hidden_audio(slug))
+        return glr_config_get(GLR_CONFIG_AUDIO_MODE);
     const GlrConfigItem *item = glr_export_cfg_find_item_by_slug(slug);
     if (item)
         return glr_config_get(item->key);
@@ -812,6 +821,8 @@ static int glr_export_cfg_get_int(const char *slug, int fallback) {
 }
 
 static int glr_export_cfg_is_known(const char *slug) {
+    if (glr_export_cfg_slug_is_hidden_audio(slug))
+        return 1;
     return glr_export_cfg_find_item_by_slug(slug) ? 1 : 0;
 }
 
@@ -850,6 +861,14 @@ void glr_actions_apply_audio_cfg_mode(int mode) {
     } else {
         glr_audio_set_paused(0);
     }
+}
+
+void glr_action_toggle_audio_play_pause(void) {
+    int next = glr_config_get(GLR_CONFIG_AUDIO_MODE) ? AUDIO_CFG_PAUSE
+                                                     : AUDIO_CFG_ALL;
+    glr_config_set(GLR_CONFIG_AUDIO_MODE, next);
+    repl_set_status(next == AUDIO_CFG_PAUSE ? "Audio: off"
+                                            : "Audio: on");
 }
 
 int glr_scene_menu_slot_for_dense_index(int scene_idx) {
@@ -1260,11 +1279,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
         if (item_idx >= 0 && item_idx < group_count)
             return 0;
         if (rel == GLR_AUDIO_OFF_PLAY) {
-            int next = glr_config_get(GLR_CONFIG_AUDIO_MODE) ? AUDIO_CFG_PAUSE
-                                                             : AUDIO_CFG_ALL;
-            glr_config_set(GLR_CONFIG_AUDIO_MODE, next);
-            repl_set_status(next == AUDIO_CFG_PAUSE ? "Audio: off"
-                                                    : "Audio: on");
+            glr_action_toggle_audio_play_pause();
             return 0;
         }
         if (rel == GLR_AUDIO_OFF_NEXT) {

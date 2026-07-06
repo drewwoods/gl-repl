@@ -94,6 +94,7 @@
 #define GLR_CONFIG_MENU      KEY_CTRL_K, GLUT_ACTIVE_SHIFT   /* open Config dropdown */
 #define GLR_ESCAPE           KEY_ESC, 0        /* clear input / close overlay */
 #define GLR_CODE_FOCUS       KEY_CTRL_F, GLUT_ACTIVE_SHIFT  /* pairs w/ Search (plain Ctrl+F) */
+#define GLR_AUDIO            KEY_CTRL_A, GLUT_ACTIVE_SHIFT  /* play/pause; plain Ctrl+A = Line start */
 
 /* ---- Config-row bindings (g_cfg_items[] in glr_actions.c) ------------- *
  * Ctrl-letter rows that double up with an editor / app action carry
@@ -106,7 +107,6 @@
 #define GLR_VERTEX_LABELS    GLUT_KEY_F7, 0
 #define GLR_VERTEX_LABEL_SCOPE GLUT_KEY_F8, 0
 #define GLR_LIGHT_THEME      GLUT_KEY_F9, 0
-#define GLR_AUDIO            KEY_CTRL_A, GLUT_ACTIVE_SHIFT  /* plain Ctrl+A = Line start */
 #define GLR_CODE_PANEL       KEY_CTRL_B, 0
 #define GLR_RESET_CAMERA     KEY_CTRL_C, GLUT_ACTIVE_SHIFT  /* plain Ctrl+C = Copy */
 #define GLR_WIREFRAME        KEY_CTRL_G, 0
@@ -134,7 +134,7 @@
 /* ---- Editor text-editing bindings (src/editor/input.c) --------------- *
  * Plain Ctrl bytes; the Ctrl+Shift twin of several is a config row above,
  * claimed first by the cfg dispatcher (so these stay mods-agnostic). */
-#define GLR_LINE_START       KEY_CTRL_A, 0     /* pairs w/ Audio */
+#define GLR_LINE_START       KEY_CTRL_A, 0     /* pairs w/ Audio play/pause */
 #define GLR_LINE_END         KEY_CTRL_E, 0     /* pairs w/ Vertex outlines */
 #define GLR_COPY             KEY_CTRL_C, 0     /* pairs w/ Reset camera */
 #define GLR_CUT              KEY_CTRL_X, 0

@@ -2634,6 +2634,26 @@ static void test_special_key_shortcuts(void) {
     ASSERT_INT("audio next handled", rc, 1);
     g_simulated_mods = 0;
 
+    /* Ctrl+Shift+A toggles Audio play/pause through the controller-owned
+     * audio route. Plain Ctrl+A is still editor line-start and must not
+     * toggle audio here. */
+    glr_config_set(GLR_CONFIG_AUDIO_MODE, 1);
+    ASSERT_INT("plain Ctrl+A not claimed by audio route",
+               glr_ctrl_router_handle_audio_key(KEY_CTRL_A), 0);
+    ASSERT_INT("plain Ctrl+A leaves audio on",
+               glr_config_get(GLR_CONFIG_AUDIO_MODE), 1);
+
+    g_simulated_mods = GLUT_ACTIVE_SHIFT;
+    ASSERT_INT("Ctrl+Shift+A audio route handled",
+               glr_ctrl_router_handle_audio_key(KEY_CTRL_A), 1);
+    ASSERT_INT("Ctrl+Shift+A pauses audio",
+               glr_config_get(GLR_CONFIG_AUDIO_MODE), 0);
+
+    ASSERT_INT("Ctrl+Shift+A audio route handled again",
+               glr_ctrl_router_handle_audio_key(KEY_CTRL_A), 1);
+    ASSERT_INT("Ctrl+Shift+A resumes audio",
+               glr_config_get(GLR_CONFIG_AUDIO_MODE), 1);
+    g_simulated_mods = 0;
 
     /* 4. Help overlay actions */
     ui_state_help_mut()->visible = 1;
