@@ -156,6 +156,14 @@ static int audio_group_differs(const char *a, const char *b) {
     return strcmp(a, b) != 0;
 }
 
+/* Number of consecutive distinct source groups in the playlist. This is
+ * the count of Audio-menu parent rows; the control rows (Play/Next/Prev/
+ * Loop) sit at offsets past it. INVARIANT: glr_actions.c's
+ * audio_menu_group_count() must compute the identical value — it turns a
+ * clicked top-level item_idx back into a control-row offset by subtracting
+ * this count, so if the two ever disagree the control clicks misfire. Both
+ * read the same glr_audio_track_* accessors on the main thread, so they
+ * cannot diverge; keep them in lockstep if the grouping rule changes. */
 static int audio_visible_group_count(void) {
     int count = glr_audio_track_count();
     int groups = 0;
@@ -447,7 +455,12 @@ static const char *menu_item_label(int menu_id, int i) {
             return NULL;
         if (i == group_count + GLR_AUDIO_OFF_SEP)  return "---";
         if (i == group_count + GLR_AUDIO_OFF_PLAY)
-            return glr_audio_is_paused() ? "Play" : "Pause";
+            /* Read the same GLR_CONFIG_AUDIO_MODE the Play/Pause toggle
+             * writes, so the label always names what a click will do
+             * (on -> "Pause", off -> "Play"). Deriving it from the live
+             * glr_audio_is_paused() playback state could disagree with
+             * the config intent (e.g. web autoplay-gesture deferral). */
+            return glr_config_get(GLR_CONFIG_AUDIO_MODE) ? "Pause" : "Play";
         if (i == group_count + GLR_AUDIO_OFF_NEXT) return "Next Track";
         if (i == group_count + GLR_AUDIO_OFF_PREV) return "Previous Track";
         if (i == group_count + GLR_AUDIO_OFF_LOOP) {
