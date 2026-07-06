@@ -162,10 +162,11 @@ the code panel.
 | Ctrl+B | Cycle code panel layout: Left / Top / Bottom / Hidden |
 | PgUp / PgDn | Scroll the active panel or overlay |
 
-Two more code-panel toggles live in the Config menu: **Wrap at commas**
+More code-panel toggles live in the Config menu: **Wrap at commas**
 (long calls wrap at argument boundaries), **Syntax highlight**
-(Off / On / On+Shadow), and **Paren match** / **Paren scope** (highlight the
-matching bracket under the caret, and the span of the enclosing parens).
+(Ctrl+Shift+Y; Off / On / On+Shadow), and **Paren match** / **Paren scope**
+(highlight the matching bracket under the caret, and the span of the
+enclosing parens).
 
 ### Inline numeric stepper
 
@@ -389,7 +390,6 @@ headless capture) exactly reproducible.
 - **Ctrl+T** plays/pauses time (the *Auto time* config item is the same
   toggle).
 - **Ctrl+Shift+T** resets time `t` to zero.
-- **Ctrl+Shift+B** toggles the winding-visualization view (the *Winding* config item).
 - `--time <secs>` (or the `GLR_TIME` env var) sets the starting `t` when
   launching — handy for headless captures of a later moment.
 
@@ -547,6 +547,9 @@ The exported knobs use the same step size as the in-app numeric swatch:
 | `< 10` | `0.05` |
 | `10..99.999` | `0.5` |
 | `100..999.999` | `5` |
+
+The pattern continues by decade — values in the thousands step by `50`,
+and so on (the step is `0.05` scaled by the value's power of ten).
 
 The same modifier keys apply in the exported program:
 
@@ -718,7 +721,9 @@ where the rig sits.
 - **Vertex outlines** (Ctrl+Shift+O) and **Vertex points** (Ctrl+Shift+P): outline polygons
   and mark vertices *(both on by default)*.
 - **Poly highlight** (Ctrl+P): highlights the polygon under the cursor line.
-- **Winding** (Ctrl+Shift+B): toggles the winding-visualization view.
+- **Winding** (Ctrl+Shift+B): re-renders the scene with front-facing
+  polygons in green and back-facing ones in red (as decided by the active
+  `glFrontFace`), so flipped or inside-out faces stand out immediately.
 - **Auto-normals**: maintains generated `glNormal3f` lines for your
   geometry so lighting works without hand-written normals.
 
@@ -804,7 +809,7 @@ The Config menu has an **Xform guide mode** toggle with two options:
   `(0, 0, 0)` → `(-4, 0, 0)`.
 
 The *Transform stress* example (F12 to cycle to it) is built to exercise
-all three guide types at once.
+all three transform guides (translate, rotate, scale) at once.
 
 ### Wireframe
 
@@ -1202,7 +1207,6 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+U | MSAA |
 | Ctrl+Shift+U | Accum effect |
 | Ctrl+Shift+G | Grid major spacing |
-| F10 / Shift+F10 | Post-process filter (forward / backward) |
 | Ctrl+= / Ctrl+− | Accum passes up/down |
 | Ctrl+Shift+X | Xform guides |
 | Ctrl+Shift+N | Normal vectors |
