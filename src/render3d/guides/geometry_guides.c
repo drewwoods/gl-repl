@@ -310,6 +310,26 @@ static void draw_vertex_guides(const Render3dGuideSnapshot *snapshot) {
     geometry_guides_pop_state();
 }
 
+static void draw_raster_pos_guide(const Render3dGuideSnapshot *snapshot) {
+    if (!snapshot->show_guides)
+        return;
+    if (strncmp(snapshot->input, "glRasterPos3f(", 14) != 0 ||
+        snapshot->input_len <= 14 ||
+        snapshot->raster_pos_n_filled < 3)
+        return;
+
+    geometry_guides_push_state();
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    draw_vertex_point_marker(snapshot,
+                             snapshot->raster_pos_args[0],
+                             snapshot->raster_pos_args[1],
+                             snapshot->raster_pos_args[2]);
+    glDisable(GL_BLEND);
+    geometry_guides_pop_state();
+}
+
 static void draw_normal_guides(const Render3dGuideSnapshot *snapshot) {
     if (!snapshot->show_guides)
         return;
@@ -441,5 +461,6 @@ void render3d_geometry_guides_render_for_cursor(const Render3dGuideSnapshot *sna
     if (!snapshot)
         return;
     draw_vertex_guides(snapshot);
+    draw_raster_pos_guide(snapshot);
     draw_normal_guides(snapshot);
 }

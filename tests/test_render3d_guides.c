@@ -442,7 +442,28 @@ static void test_geometry_guides_render(void) {
         ASSERT_TRUE("normal guide with base pos renders", gl_stub_counts[GL_STUB_glBegin] > 0);
     }
 
-    /* 3. Normal guide with valid source search fallback */
+    /* 3. Raster-position guide uses the same breathing point marker as a
+     * fully specified vertex guide. */
+    {
+        Render3dGuideSnapshot snapshot = {0};
+        snapshot.show_guides = 1;
+        snapshot.input = "glRasterPos3f(1.0, 2.0, 3.0)";
+        snapshot.input_len = (int)strlen(snapshot.input);
+        snapshot.raster_pos_n_filled = 3;
+        snapshot.raster_pos_args[0] = 1.0f;
+        snapshot.raster_pos_args[1] = 2.0f;
+        snapshot.raster_pos_args[2] = 3.0f;
+        snapshot.alpha_scale = 1.0f;
+
+        gl_stub_counts_reset();
+        render3d_geometry_guides_render_for_cursor(&snapshot);
+        ASSERT_TRUE("raster-pos guide renders point marker",
+                    gl_stub_counts[GL_STUB_glBegin] > 0);
+        ASSERT_INT("raster-pos marker emits halo and core vertices",
+                   (int)gl_stub_counts[GL_STUB_glVertex3f], 2);
+    }
+
+    /* 4. Normal guide with valid source search fallback */
     {
         GLCmd source_cmds[2] = {0};
         source_cmds[0].type = CMD_NORMAL3F;
@@ -472,7 +493,7 @@ static void test_geometry_guides_render(void) {
         ASSERT_TRUE("normal guide with source fallback renders", gl_stub_counts[GL_STUB_glBegin] > 0);
     }
 
-    /* 4. Normal guide with invalid/no anchor found */
+    /* 5. Normal guide with invalid/no anchor found */
     {
         GLCmd source_cmds[1] = {0};
         source_cmds[0].type = CMD_NORMAL3F;

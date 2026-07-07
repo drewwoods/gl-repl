@@ -360,12 +360,13 @@ static int light_slot_from_text(const char *s) {
     return (d >= '0' && d < '0' + MAX_LIGHTS) ? d - '0' : -1;
 }
 
-/* Resolve the cursor-line vertex / normal args into floats so the scene
+/* Resolve the cursor-line geometry args into floats so the scene
  * module can render its guides without depending on repl_eval. Sets the
  * pre-parsed fields on `snapshot` based on `input`. */
 static void fill_guide_arg_slots(Render3dGuideSnapshot *snapshot,
                                  const char *input, int input_len) {
     snapshot->vertex_n_filled = 0;
+    snapshot->raster_pos_n_filled = 0;
     snapshot->normal_n_filled = 0;
     snapshot->vertex_filled[0] = snapshot->vertex_filled[1] =
         snapshot->vertex_filled[2] = 0;
@@ -386,6 +387,13 @@ static void fill_guide_arg_slots(Render3dGuideSnapshot *snapshot,
         snapshot->vertex_n_filled = parse_arg_slots(
             vertex_args, predef.vars, predef.count,
             snapshot->vertex_args, snapshot->vertex_filled, 3);
+    }
+
+    if (strncmp(input, "glRasterPos3f(", 14) == 0 && input_len > 14) {
+        int raster_filled[3];
+        snapshot->raster_pos_n_filled = parse_arg_slots(
+            input + 14, predef.vars, predef.count,
+            snapshot->raster_pos_args, raster_filled, 3);
     }
 
     /* Live transform args (glTranslatef / glScalef / glRotatef), parsed the
