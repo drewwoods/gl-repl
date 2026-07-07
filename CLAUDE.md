@@ -304,15 +304,15 @@ compatibility wrappers.
 ./gl-repl workspace/       # Load every *.c under workspace/ as a user scene
 ./gl-repl --noaccum        # Disable the accumulation buffer (AA + motion blur)
 ./gl-repl --dump-code      # Print loaded buffer to stdout
-./gl-repl --example 28 --flat-histogram   # Per-function / per-line flat-command budget breakdown (the --dump-* family honors --example)
+./gl-repl --example 29 --flat-histogram   # Per-function / per-line flat-command budget breakdown (the --dump-* family honors --example)
 ./gl-repl --no-audio       # Skip audio init entirely (isolates startup stalls)
 ./gl-repl --assets ~/Music/glr  # Scan this dir for *.mp3 instead of ./assets (also GLR_ASSETS_DIR)
 ./gl-repl --detailed-prof  # Add fine-grained init-trace phases (default off)
-./gl-repl --example torus  # Start on a built-in example (name, case-insensitive, or 0-based index)
+./gl-repl --example torus  # Start on a built-in example (name, case-insensitive, or 1-based index)
 ./gl-repl --list-examples  # Print the built-in examples and exit
 ./gl-repl --time 5         # Set the initial animation time t at startup (also GLR_TIME; --time wins)
-./gl-repl --example 8 --export-ply out.ply   # Capture an example's geometry to PLY on frame 1, then exit
-./gl-repl --example 8 --export-ply out.ply --export-ply-srgb  # ...decoding vertex colors sRGB -> linear (color-managed viewers)
+./gl-repl --example 9 --export-ply out.ply   # Capture an example's geometry to PLY on frame 1, then exit
+./gl-repl --example 9 --export-ply out.ply --export-ply-srgb  # ...decoding vertex colors sRGB -> linear (color-managed viewers)
 GLR_NO_POINT_PARAMETER=1 ./gl-repl   # Force the no-glPointParameterfv path
 GLR_NO_GPU_PROF=1 ./gl-repl          # Disable GPU timer-query profiling (profile panel's GPU column reads "--")
 GLR_AUDIO_HITCH_MS=10 ./gl-repl      # Lower the audio-worker hitch threshold

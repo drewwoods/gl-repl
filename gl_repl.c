@@ -215,7 +215,7 @@ static void print_usage(const char *prog) {
             "  --export-ply-srgb  Decode vertex colors sRGB -> linear on export\n"
             "               (for color-managed viewers; pair with --export-ply)\n"
             "  --example <name|idx>  Start on a built-in example (name is\n"
-            "               case-insensitive; or a 0-based index)\n"
+            "               case-insensitive; or a 1-based index)\n"
             "  --examples-dir <dir>  Load example catalog.ini + scenes/ from\n"
             "               <dir> at runtime instead of compiled-in examples\n"
             "  --list-examples  Print the built-in examples and exit\n"
@@ -270,7 +270,7 @@ static void list_examples(FILE *out) {
     int n = glr_scene_example_count();
     fprintf(out, "Built-in examples (%d):\n", n);
     for (int i = 0; i < n; i++)
-        fprintf(out, "  %2d  %s\n", i, glr_scene_example_name(i));
+        fprintf(out, "  %2d  %s\n", i + 1, glr_scene_example_name(i));
 }
 
 /* Resolve --example <arg> to a built-in example index. `arg` is either an
@@ -284,7 +284,7 @@ static int resolve_example_index(const char *arg) {
     for (const char *p = arg; *p; p++)
         if (!isdigit((unsigned char)*p)) { all_digits = 0; break; }
     if (all_digits) {
-        int idx = atoi(arg);
+        int idx = atoi(arg) - 1;
         return (idx >= 0 && idx < n) ? idx : -1;
     }
 
