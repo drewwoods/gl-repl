@@ -96,6 +96,12 @@
 
       .keycap:hover { border-color: var(--amber); color: var(--amber); }
 
+      .keycap:disabled {
+        border-color: var(--border);
+        color: #515861;
+        cursor: default;
+      }
+
       .keycap[aria-pressed="true"] {
         border-color: var(--green);
         color: var(--green);
@@ -232,6 +238,9 @@
         <span class="tagline">OpenGL immediate-mode REPL &mdash; render as you type.</span>
       </div>
       <div class="spacer"></div>
+      <input type="file" id="sceneFileInput" accept=".c,text/plain" hidden>
+      <button type="button" class="keycap" id="openSceneButton" disabled>open</button>
+      <button type="button" class="keycap" id="downloadSceneButton" disabled>download</button>
       <button type="button" class="keycap" id="consoleToggle" aria-pressed="false">console</button>
       <button type="button" class="keycap"
               onclick="Module.requestFullscreen(false, true)">fullscreen</button>
@@ -261,7 +270,97 @@
       var overlayElement = document.getElementById('overlay');
       var canvasElement = document.getElementById('canvas');
       var outputElement = document.getElementById('output');
+      var sceneFileInput = document.getElementById('sceneFileInput');
+      var openSceneButton = document.getElementById('openSceneButton');
+      var downloadSceneButton = document.getElementById('downloadSceneButton');
+      var lastSceneFilename = 'gl-repl-scene.c';
       if (outputElement) outputElement.value = '';
+
+      var sceneControlsReady = false;
+      var setSceneControlsReady = (ready) => {
+        sceneControlsReady = ready;
+        openSceneButton.disabled = !ready;
+        downloadSceneButton.disabled = !ready;
+      };
+
+      var fallbackSceneName = (name) => {
+        if (!name) return 'Imported Scene';
+        return name.replace(/\.[^.]*$/, '') || name;
+      };
+
+      var safeDownloadName = (name) => {
+        var base = (name || 'gl-repl-scene.c').replace(/[\\/:*?"<>|]+/g, '-');
+        return /\.c$/i.test(base) ? base : base + '.c';
+      };
+
+      var readSceneFile = (file) => {
+        if (!file || !sceneControlsReady) return;
+        file.text().then((text) => {
+          var ok = Module.ccall('glr_web_load_scene_text', 'number',
+                                ['string', 'string'],
+                                [text, fallbackSceneName(file.name)]);
+          if (ok) {
+            lastSceneFilename = safeDownloadName(file.name);
+            canvasElement.focus();
+          }
+        }).catch((err) => {
+          console.error('Failed to read scene file:', err);
+        });
+      };
+
+      var downloadActiveScene = () => {
+        if (!sceneControlsReady) return;
+        var path = '/tmp/gl-repl-browser-export.c';
+        var ok = Module.ccall('glr_web_export_scene', 'number', ['string'], [path]);
+        if (!ok) return;
+
+        var text = Module.FS.readFile(path, { encoding: 'utf8' });
+        try { Module.FS.unlink(path); } catch (err) {}
+
+        var blob = new Blob([text], { type: 'text/x-csrc;charset=utf-8' });
+        var url = URL.createObjectURL(blob);
+        var link = document.createElement('a');
+        link.href = url;
+        link.download = safeDownloadName(lastSceneFilename);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+        canvasElement.focus();
+      };
+
+      openSceneButton.addEventListener('click', () => {
+        if (sceneControlsReady) sceneFileInput.click();
+      });
+      downloadSceneButton.addEventListener('click', downloadActiveScene);
+      sceneFileInput.addEventListener('change', (e) => {
+        readSceneFile(e.target.files && e.target.files[0]);
+        e.target.value = '';
+      });
+
+      document.addEventListener('dragover', (e) => {
+        if (!sceneControlsReady) return;
+        e.preventDefault();
+      });
+      document.addEventListener('drop', (e) => {
+        if (!sceneControlsReady) return;
+        e.preventDefault();
+        readSceneFile(e.dataTransfer && e.dataTransfer.files &&
+                      e.dataTransfer.files[0]);
+      });
+      document.addEventListener('keydown', (e) => {
+        if (!sceneControlsReady || !(e.ctrlKey || e.metaKey) || e.altKey) return;
+        var key = e.key ? e.key.toLowerCase() : '';
+        if (key === 's') {
+          e.preventDefault();
+          e.stopPropagation();
+          downloadActiveScene();
+        } else if (key === 'o') {
+          e.preventDefault();
+          e.stopPropagation();
+          sceneFileInput.click();
+        }
+      }, true);
 
       document.getElementById('consoleToggle').addEventListener('click', (e) => {
         var open = document.body.classList.toggle('console-open');
@@ -349,6 +448,7 @@
         },
         canvas: canvasElement,
         setStatus: setStatus,
+        postRun: [() => setSceneControlsReady(true)],
         totalDependencies: 0,
         monitorRunDependencies(left) {
           this.totalDependencies = Math.max(this.totalDependencies, left);
