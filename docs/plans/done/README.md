@@ -101,6 +101,7 @@ historical context and are not in the table below.
 | `remove-remaining-repl-mut-reads.md` | 2026-06-08 | Finalized REPL state-access pattern: targeted setters and `_writable()` accessors in `state_owners.h`; zeroed the `_mut()` read ratchet across all non-owner modules. |
 | `color-picker-palettes.md` | Color picker — Basic / Full / Harmony palettes |
 | `rename-scene-to-render3d.md` | 2026-06-24 | Renamed the 3D scene-renderer module `src/scene/` → `src/render3d/` (`scene_*`/`Scene*`/`SCENE_*` → `render3d_*`/`Render3d*`/`RENDER3D_*`, `render3d_draw_scene`, `Render3dState`, `render3d_demo`, renamed guards/tests, `PROF_RENDER3D_*`) to end the collision with the user-scene concept. Behavior-neutral; user-scene tokens untouched. Includes review. |
+| `audio-menu.md` | 2026-07-06 | Add a top-level Audio menu grouping discovered tracks by source, highlighting the playing track, displaying track duration, and integrating Play/Pause, Next/Previous controls, and loop modes. |
 
 Plans not in this directory are active, not-started, not-landed, or
 external; see the sibling subdirectories.
