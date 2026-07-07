@@ -644,7 +644,7 @@ flyouts taller than the window):
 - **TIME & REPLAY** — Auto time, Replay, Replay mode, Replay expand
 - **OVERLAYS & SCENE** — Grid, Grid extent, Grid brightness, Grid major,
   Axes, Xform guides, Light indicators, Light theme, Backdrop, Auto-normals,
-  Post-process filter
+  Post FX Scope, Post FX Effect
 - **CAMERA** — View mode, Camera rotate, Focus origin, Reset camera
 - **GEOMETRY** — Vertex labels, Overlay scope, Normal vectors, Vertex outlines,
   Vertex points, Poly highlight, Winding
@@ -667,7 +667,7 @@ backward):
 | F7 | Vertex labels |
 | F8 | Overlay scope |
 | F9 | Light theme |
-| F10 | Post-process filter |
+| F10 | Post FX Scope |
 
 ### Grid & axes
 
@@ -856,8 +856,10 @@ look.
 
   ![Glow sprites example: blending + point attenuation](images/glow-sprites.png)
 
-- **Post-process filter** (F10 forward / Shift+F10 backward) — viewport filters:
-  Off / Chromatic scene / Chromatic frame / Vignette scene / Vignette frame.
+- **Post FX Scope** (F10 forward / Shift+F10 backward) — where the selected
+  effect applies: Off / 3D View / Frame.
+- **Post FX Effect** — the selected operation: Chromatic aberration, Vignette,
+  Scanlines, or Film grain.
 
 ---
 

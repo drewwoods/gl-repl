@@ -136,8 +136,8 @@ Subsystems](#peer-subsystems-and-neutral-support) and
 
 | State (type) | Owns | Does not own |
 |---|---|---|
-| [`ReplRuntimeState`](../src/repl/state.h#L18) | Parsed command array, flat program, REPL variable state (scalar predefined vars plus fixed scratch arrays `A/B/C` of `REPL_SCRATCH_ARRAY_LEN` floats and the `func0..func9` user-alias table), active scene/workspace identity, import/export metadata | Render/presentation config ([`GlrState`](../src/app/glr_state.h#L92), app layer), user-scene slot payloads (`repl_scenes`), replay runtime state (peer), variable-panel state (peer), help-session state (peer), color-picker state (peer), editable text, cursor, selection, search query, UI visibility, pointer/viewport chrome |
-| [`GlrState`](../src/app/glr_state.h#L92) (app) | App-level presentation/render toggles (grid/axes themes, wireframe, overlays, backdrop, scene + whole-frame post-process filters, camera-rotate, etc.). Defaults from [`glr_defaults.h`](../src/app/glr_defaults.h) (`CFG_DEFAULT_*`). Read/written through the `glr_config` keyed bridge and per-scene snapshots | Program model, editable text, REPL grammar |
+| [`ReplRuntimeState`](../src/repl/state.h#L18) | Parsed command array, flat program, REPL variable state (scalar predefined vars plus fixed scratch arrays `A/B/C` of `REPL_SCRATCH_ARRAY_LEN` floats and the `func0..func9` user-alias table), active scene/workspace identity, import/export metadata | Render/presentation config ([`GlrState`](../src/app/glr_state.h#L99), app layer), user-scene slot payloads (`repl_scenes`), replay runtime state (peer), variable-panel state (peer), help-session state (peer), color-picker state (peer), editable text, cursor, selection, search query, UI visibility, pointer/viewport chrome |
+| [`GlrState`](../src/app/glr_state.h#L99) (app) | App-level presentation/render toggles (grid/axes themes, wireframe, overlays, backdrop, scene + whole-frame post-process filters, camera-rotate, etc.). Defaults from [`glr_defaults.h`](../src/app/glr_defaults.h) (`CFG_DEFAULT_*`). Read/written through the `glr_config` keyed bridge and per-scene snapshots | Program model, editable text, REPL grammar |
 | [`EditorState`](../src/editor/state.h#L175) | Editable text buffer, active input, cursor/edit-line, insert mode, selection, clipboard, search/autocomplete, scroll, **cursor blink** (the editor controls cursor visibility/blink — UI just renders), undo/redo, editor transactions | Variable-panel drag (owned by the variable_panel peer), parsed command semantics, GL execution, menu chrome, transient status banners, render-output pixel coordinates |
 | [`UiState`](../src/ui/app/state.h#L20) | Viewport, pointer, status text TTL, help-overlay visibility (chrome flag), profile-panel visibility, panel-divider geometry (panel_frac + resizing_panel) | Help-session tab/scroll (peer), variable-panel state (peer), camera pose (lives on `glr_camera`), program model, editable text, command validation, cursor blink (editor owns), per-frame render-output (uses `Ui*Output`) |
 | [`Render3dState`](../src/render3d/render.h#L95) | Per-renderer 3D stage state that must persist across frames: ortho reference distance, active ortho edge tracking, and the most recent zero-jitter projection descriptor | REPL program state, editor text/session state, UI chrome, saved user-scene slots, app-level presentation config |
@@ -964,8 +964,8 @@ flowchart LR
     %% frame end (after all 3D stage + UI drawing, before the buffer swap),
     %% and it reuses the viewport postprocess primitive over the FULL window
     %% rect. The 3D viewport pass (render3dR i40@--> spost) is the separate
-    %% per-stage viewport; the controller keeps the two mutually exclusive
-    %% (F10 / Shift+F10: Off -> scene -> frame).
+    %% per-stage viewport; Post FX Scope keeps the two mutually exclusive
+    %% (F10 / Shift+F10: Off -> 3D View -> Frame).
     ctrl i43@--> glrcompositor
     glrcompositor i44@--> spost
 
@@ -1023,9 +1023,10 @@ Reading the diagram:
   fixed-function `postprocess_filter` primitive: the scene-viewport pass
   (`render3dR i40@--> spost`, inside `render3d_draw_scene`) and the
   whole-frame compositor pass (`ctrl i43@--> glrcompositor i44@--> spost`,
-  at frame end after every UI layer). The controller keeps them mutually
-  exclusive via `F10` / `Shift+F10`, which walks each effect (chromatic aberration,
-  vignette) through both scopes. Each scope is timed by its own
+  at frame end after every UI layer). `Post FX Scope` keeps them mutually
+  exclusive (`Off` / `3D View` / `Frame`), while `Post FX Effect` selects
+  the operation (chromatic aberration, vignette, scanlines, film grain).
+  Each scope is timed by its own
   CPU-profile section (`PROF_RENDER3D_POST_PROCESS` "post FX (scene)" /
   `PROF_COMPOSITOR` "Compositor FX").
 

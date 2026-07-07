@@ -42,13 +42,17 @@ typedef struct {
     int show_light_indicators;
     int light_theme;
     int backdrop_mode;
-    /* Scene post-processing filter (Render3dPostFilterMode).
-     * Backed by post_filter Config row, persisted in @cfg. */
+    /* Post FX config: scope is Off / 3D View / Frame; effect is the
+     * operation selected when scope is not Off. Backed by the Post FX Scope
+     * and Post FX Effect config rows, persisted in @cfg. */
+    int post_fx_scope;
+    int post_fx_effect;
+    /* Scene post-processing filter (Render3dPostFilterMode), derived from
+     * the Post FX config rows. */
     int post_filter_mode;
     /* Whole-frame (compositor) post-processing (Render3dPostFilterMode),
      * applied over the entire composited frame by the glr_compositor hook
-     * at the end of glr_ctrl_display_frame. Managed via same post_filter
-     * Config row. */
+     * at the end of glr_ctrl_display_frame. Also derived from Post FX. */
     int compositor_filter_mode;
     int highlight_current_poly;
     /* Winding-visualization view: paint front faces green, back (inside-out)

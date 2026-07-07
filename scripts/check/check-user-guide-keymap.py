@@ -60,9 +60,9 @@ CLAIMS: list[tuple[str, str, list[str]]] = [
     ("Vertex outlines shortcut", "GLR_VERTEX_OUTLINES",
      ["**Vertex outlines** ({key})",
       "| {key} | Vertex outlines |"]),
-    ("Post-process shortcut", "GLR_POST_FILTER_CYCLE",
-     ["**Post-process filter** ({key} forward / Shift+{key} backward)",
-      "| {key} | Post-process filter |"]),
+    ("Post FX Scope shortcut", "GLR_POST_FX_SCOPE_CYCLE",
+     ["**Post FX Scope** ({key} forward / Shift+{key} backward)",
+      "| {key} | Post FX Scope |"]),
 ]
 
 

@@ -1482,12 +1482,14 @@ static void test_fkey_reassignment_and_alt_shortcuts(void) {
                     glr_config_get(fmap[i].key) != before);
     }
 
-    /* F10 is now part of the config table, and handles the post-process filter cycle. */
-    glr_state_presentation_mut()->post_filter_mode = 0;
-    glr_state_presentation_mut()->compositor_filter_mode = 0;
+    /* F10 is part of the config table and cycles Post FX Scope. */
+    glr_config_set(GLR_CONFIG_POST_FX_EFFECT, GLR_POST_FX_EFFECT_CHROMATIC_ABERRATION);
+    glr_config_set(GLR_CONFIG_POST_FX_SCOPE, GLR_POST_FX_SCOPE_OFF);
     ASSERT_INT("F10 is claimed by the cfg special-shortcut dispatcher",
                glr_cfg_handle_special_shortcut(GLUT_KEY_F10), 1);
-    ASSERT_INT("F10 cycles to chromatic aberration (scene)",
+    ASSERT_INT("F10 cycles Post FX Scope to 3D View",
+               glr_config_get(GLR_CONFIG_POST_FX_SCOPE), GLR_POST_FX_SCOPE_VIEW_3D);
+    ASSERT_INT("3D View scope applies the selected effect to the scene",
                (int)glr_state_presentation().post_filter_mode, (int)RENDER3D_POST_FILTER_CHROMATIC_ABERRATION);
 
     /* Wireframe -> plain Ctrl+G. */

@@ -53,7 +53,8 @@ typedef enum GlrConfigKey {
     GLR_CONFIG_FOCUS_ORIGIN,   /* action row: no state; eases target to origin */
     GLR_CONFIG_RESET_CAMERA,   /* action row: no state; eases camera to default */
     GLR_CONFIG_AUTO_NORMALS,
-    GLR_CONFIG_POST_FILTER,
+    GLR_CONFIG_POST_FX_SCOPE,
+    GLR_CONFIG_POST_FX_EFFECT,
     GLR_CONFIG_VERTEX_LABELS,
     GLR_CONFIG_OVERLAY_SCOPE,
     GLR_CONFIG_NORMAL_VECTORS,

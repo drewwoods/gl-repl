@@ -88,10 +88,15 @@ static const char *grid_brightness_names[GRID_BRIGHTNESS_COUNT] = {
 static const char *axes_theme_names[AXES_THEME_COUNT] = {
     AXES_THEME_LIST(AXES_THEME_NAME_ENTRY)
 };
-static const char *post_filter_names[POST_FILTER_COUNT] = {
-#define POST_FILTER_NAME_ENTRY(suffix, view3d_mode, frame_mode, name_str, symbol_str) [GLR_POST_FILTER_##suffix] = name_str,
-    POST_FILTER_LIST(POST_FILTER_NAME_ENTRY)
-#undef POST_FILTER_NAME_ENTRY
+static const char *post_fx_scope_names[GLR_POST_FX_SCOPE_COUNT] = {
+#define POST_FX_SCOPE_NAME_ENTRY(suffix, name_str, symbol_str) [GLR_POST_FX_SCOPE_##suffix] = name_str,
+    POST_FX_SCOPE_LIST(POST_FX_SCOPE_NAME_ENTRY)
+#undef POST_FX_SCOPE_NAME_ENTRY
+};
+static const char *post_fx_effect_names[GLR_POST_FX_EFFECT_COUNT] = {
+#define POST_FX_EFFECT_NAME_ENTRY(suffix, render_mode, name_str, symbol_str) [GLR_POST_FX_EFFECT_##suffix] = name_str,
+    POST_FX_EFFECT_LIST(POST_FX_EFFECT_NAME_ENTRY)
+#undef POST_FX_EFFECT_NAME_ENTRY
 };
 static char cfg_status_buf[REPL_STATUS_TEXT_MAX];
 
@@ -411,10 +416,12 @@ const GlrConfigItem g_cfg_items[] = {
       .state_count = RENDER3D_BACKDROP_COUNT, .state_names = backdrop_mode_names,
       .key_code = KM_KEY(GLR_BACKDROP), .modifiers = KM_MODS(GLR_BACKDROP), .is_special = 1 },
     { .label = "Auto-normals", .key = GLR_CONFIG_AUTO_NORMALS, .state_count = 2 },
-    { .label = "Post filter", .key = GLR_CONFIG_POST_FILTER,
-      .state_count = POST_FILTER_COUNT, .state_names = post_filter_names,
-      .key_code = KM_KEY(GLR_POST_FILTER_CYCLE), .modifiers = KM_MODS(GLR_POST_FILTER_CYCLE),
+    { .label = "Post FX Scope", .key = GLR_CONFIG_POST_FX_SCOPE,
+      .state_count = GLR_POST_FX_SCOPE_COUNT, .state_names = post_fx_scope_names,
+      .key_code = KM_KEY(GLR_POST_FX_SCOPE_CYCLE), .modifiers = KM_MODS(GLR_POST_FX_SCOPE_CYCLE),
       .is_special = 1 },
+    { .label = "Post FX Effect", .key = GLR_CONFIG_POST_FX_EFFECT,
+      .state_count = GLR_POST_FX_EFFECT_COUNT, .state_names = post_fx_effect_names },
     { .label = "---", .section_header = 1 },
 
     { .label = "### CAMERA", .section_header = 1 },
@@ -640,10 +647,15 @@ static const char *cfg_overlay_scope_symbols[OVERLAY_SCOPE_COUNT] = {
     OVERLAY_SCOPE_LIST(OVERLAY_SCOPE_SYMBOL_ENTRY)
 #undef OVERLAY_SCOPE_SYMBOL_ENTRY
 };
-static const char *cfg_post_filter_symbols[POST_FILTER_COUNT] = {
-#define POST_FILTER_SYMBOL_ENTRY(suffix, view3d_mode, frame_mode, name_str, symbol_str) [GLR_POST_FILTER_##suffix] = symbol_str,
-    POST_FILTER_LIST(POST_FILTER_SYMBOL_ENTRY)
-#undef POST_FILTER_SYMBOL_ENTRY
+static const char *cfg_post_fx_scope_symbols[GLR_POST_FX_SCOPE_COUNT] = {
+#define POST_FX_SCOPE_SYMBOL_ENTRY(suffix, name_str, symbol_str) [GLR_POST_FX_SCOPE_##suffix] = symbol_str,
+    POST_FX_SCOPE_LIST(POST_FX_SCOPE_SYMBOL_ENTRY)
+#undef POST_FX_SCOPE_SYMBOL_ENTRY
+};
+static const char *cfg_post_fx_effect_symbols[GLR_POST_FX_EFFECT_COUNT] = {
+#define POST_FX_EFFECT_SYMBOL_ENTRY(suffix, render_mode, name_str, symbol_str) [GLR_POST_FX_EFFECT_##suffix] = symbol_str,
+    POST_FX_EFFECT_LIST(POST_FX_EFFECT_SYMBOL_ENTRY)
+#undef POST_FX_EFFECT_SYMBOL_ENTRY
 };
 
 /* The slug→table map shared by the symbolic resolver (read side) and the
@@ -687,9 +699,13 @@ static const char *const *cfg_symbol_table_for_slug(const char *slug,
         *count = OVERLAY_SCOPE_COUNT;
         return cfg_overlay_scope_symbols;
     }
-    if (strcmp(slug, "post_filter") == 0) {
-        *count = POST_FILTER_COUNT;
-        return cfg_post_filter_symbols;
+    if (strcmp(slug, "post_fx_scope") == 0) {
+        *count = GLR_POST_FX_SCOPE_COUNT;
+        return cfg_post_fx_scope_symbols;
+    }
+    if (strcmp(slug, "post_fx_effect") == 0) {
+        *count = GLR_POST_FX_EFFECT_COUNT;
+        return cfg_post_fx_effect_symbols;
     }
     return NULL;
 }
