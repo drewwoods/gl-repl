@@ -1305,9 +1305,10 @@ static void test_render_via_repl_program(void) {
     ASSERT_INT("guides off -> no GL emitted",
                trace_count_sym(&log, "glPushAttrib"), 0);
 
-    /* post_overlays orchestrator: runs outlines + points + guides + labels
-     * + normals in one pass. Build the snapshot pack and verify it emits the
-     * flattened vertices through at least one overlay path. */
+    /* post_overlays orchestrator: runs outlines + points + guides + normals
+     * in one pass (labels moved to the post-resolve hook below). Build the
+     * snapshot pack and verify it emits the flattened vertices through at
+     * least one overlay path. */
     OverlaySnapshotPack pack;
     memset(&pack, 0, sizeof(pack));
     pack.walk.program = repl_state_flat_program_view();
@@ -1324,11 +1325,21 @@ static void test_render_via_repl_program(void) {
     trace_end(&log);
     ASSERT_TRUE("post_overlays emits the flattened vertices",
                 trace_count_line(&log, "glVertex3f 0.25 0.5 0.75") >= 1);
-    ASSERT_INT("post_overlays draws vertex-number labels",
+    /* The per-pass orchestrator must NOT draw the bitmap-text labels any
+     * more — inside the accumulation loop they'd ghost across sub-passes. */
+    ASSERT_INT("post_overlays draws no vertex-number labels",
+               trace_count_sym(&log, "glRasterPos2f"), 0);
+
+    /* The once-per-frame post-resolve hook owns the label pass. */
+    trace_begin();
+    edit_overlays_post_resolve_overlays(&pack);
+    trace_end(&log);
+    ASSERT_INT("post_resolve_overlays draws vertex-number labels",
                trace_count_sym(&log, "glRasterPos2f") >= 1, 1);
 
     /* NULL pack is a safe no-op. */
     edit_overlays_post_overlays(NULL);
+    edit_overlays_post_resolve_overlays(NULL);
 }
 
 static void test_cursor_guides_render_for_unterminated_begin(void) {

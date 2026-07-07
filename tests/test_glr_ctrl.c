@@ -375,6 +375,8 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
                 g_last_scene_config.post_fill_fn != NULL);
     ASSERT_TRUE("post_overlays_fn wired",
                 g_last_scene_config.post_overlays_fn != NULL);
+    ASSERT_TRUE("post_resolve_overlays_fn wired (label passes)",
+                g_last_scene_config.post_resolve_overlays_fn != NULL);
     ASSERT_INT("tess preview marked active for VERTEX replay mode",
                g_replay_fade_plan.tess_preview_active, 1);
     ASSERT_FLOAT("clear color default r", g_last_scene_config.clear_color[0],
@@ -1604,6 +1606,11 @@ static void test_display_frame_scene_config_is_stable_across_frames(void) {
      * hook always carries a non-NULL user_data alongside the fn. */
     ASSERT_TRUE("post_overlays_user_data non-NULL",
                 frame2.post_overlays_user_data != NULL);
+    /* Same contract for the once-per-frame label hook. */
+    ASSERT_TRUE("post_resolve_overlays_fn wired in frame 2",
+                frame2.post_resolve_overlays_fn != NULL);
+    ASSERT_TRUE("post_resolve_overlays_user_data non-NULL",
+                frame2.post_resolve_overlays_user_data != NULL);
 }
 
 /* Audit #14 prep: the replay-fade overlay is the largest of the

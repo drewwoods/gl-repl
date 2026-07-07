@@ -889,6 +889,22 @@ int render3d_draw_scene(Render3dState *state,
         render_3d_scene_pass(state, config, 0.0f, 0.0f);
     }
 
+    /* Screen-anchored annotation (bitmap-text labels) draws once per
+     * frame on the resolved image so accum sub-passes can't ghost it.
+     * The last pass left a jittered (AA) or blur-subframe projection;
+     * re-derive and apply the canonical zero-jitter one. The modelview
+     * still holds the caller's camera (the blur hook's last subframe
+     * lands on the true pose), so 3D-anchored label walks project
+     * exactly where a jitter-free pass would have put them. */
+    if (config->post_resolve_overlays_fn) {
+        prof_begin(PROF_RENDER3D_OVERLAYS);
+        render3d_compute_active_projection(state, config);
+        render3d_apply_projection(state, config, 0.0f, 0.0f);
+        glMatrixMode(GL_MODELVIEW);
+        config->post_resolve_overlays_fn(config->post_resolve_overlays_user_data);
+        prof_accum_end(PROF_RENDER3D_OVERLAYS);
+    }
+
     /* Once per frame, on the fully resolved scene image (covers both
      * the accum and non-accum branches), before any 2D overlay. */
     if (config->post_filter_mode > RENDER3D_POST_FILTER_OFF) {

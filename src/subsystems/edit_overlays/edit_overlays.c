@@ -636,7 +636,25 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
  * few rows of its anchor is dropped rather than stacked arbitrarily far. That
  * keeps a dense block (e.g. a 50-vertex parametric-torus quad strip) from
  * piling every label into a tall column of long leader streaks — the
- * earlier-in-walk labels are the ones that survive. */
+ * earlier-in-walk labels are the ones that survive.
+ *
+ * The solve is also TEMPORALLY STICKY. A memoryless per-frame solve made
+ * continuous anchor motion (camera orbit, animated geometry) flip overlap
+ * tests discretely: labels popped whole rows, flapped between the -dy and
+ * +dy candidates, and strobed in/out at the crowding boundary. Each label's
+ * placement is remembered across frames in g_label_sticky[], keyed by its
+ * stable number (the walk-order numbering is camera-independent), and per
+ * frame:
+ *   - an incumbent first homes to a row nearer its anchor, but only with
+ *     comfortable headroom (VERTEX_LABEL_ENTER_PAD) so home-and-back can't
+ *     flap; failing that it keeps its held row, judged leniently
+ *     (VERTEX_LABEL_KEEP_SHRINK) so a boundary graze doesn't evict it;
+ *   - a label that wasn't visible last frame enters only with the same
+ *     headroom margin, so the crowding boundary doesn't strobe;
+ *   - the drawn offset eases toward the solved row (VERTEX_LABEL_EASE per
+ *     frame) so a forced row change glides instead of popping. Collision
+ *     boxes always use the quantized target row, so placement decisions
+ *     stay stable while a label is mid-glide. */
 
 /* Collection ceiling. The cursor's "block" can be a whole looped surface (the
  * parametric torus selects ~1200 vertices), and we want to consider all of
@@ -654,15 +672,36 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
  * ~equals the buffer there; the bias absorbs projection/raster precision so
  * front vertices aren't culled, while anything clearly behind is dropped. */
 #define VERTEX_LABEL_OCCLUDE_BIAS  0.002f
+/* Temporal-coherence knobs (see the TEMPORALLY STICKY note above). */
+#define VERTEX_LABEL_ENTER_PAD     3.0f  /* headroom (px) to appear or home    */
+#define VERTEX_LABEL_KEEP_SHRINK   2.0f  /* leniency (px) before eviction      */
+#define VERTEX_LABEL_EASE          0.35f /* per-frame glide toward the row     */
 
 typedef struct {
     float anchor_x, anchor_y;  /* projected vertex point, viewport-local px   */
     float width;               /* measured glyph width, px (filled at layout) */
     float draw_y;              /* baseline Y after declutter                  */
     int   drawn;               /* 0 if dropped as un-placeable (too crowded)  */
+    int   num;                 /* stable label number (sticky-table key)      */
     char  idx[16];             /* "v<n>" run, FONT_MONO                       */
     char  detail[48];          /* " (x, y, z)" run, FONT_TINY (may be empty)  */
 } VertexLabel;
+
+/* Sticky per-label placement memory. Direct-indexed by the label's stable
+ * number, which is bounded by MAX_COMMANDS (every labelable vertex is one
+ * flat command). last_drawn is a g_label_sticky_frame stamp; an entry is an
+ * incumbent when it drew on the immediately preceding layout pass. */
+typedef struct {
+    unsigned last_drawn;  /* frame stamp of the last actual draw            */
+    int      row;         /* signed nudge row held on that frame            */
+    float    eased_dy;    /* eased pixel offset the label actually drew at  */
+} VertexLabelSticky;
+
+static VertexLabelSticky g_label_sticky[MAX_COMMANDS];
+static unsigned g_label_sticky_frame = 1; /* starts past 0 so zeroed entries
+                                           * never read as incumbents */
+static int g_label_sticky_scope = -1;
+static int g_label_sticky_mode  = -1;
 
 typedef struct {
     OverlayVertexLabelMode mode;
@@ -750,11 +789,21 @@ static float bitmap_text_width(void *font, const char *s) {
     return w;
 }
 
-/* Axis-aligned box overlap; both boxes share the fixed height `h`. */
-static int label_box_overlap(float ax, float ay, float aw,
-                             float bx, float by, float bw, float h) {
-    return ax < bx + bw && bx < ax + aw &&
-           ay < by + h  && by < ay + h;
+/* Does a candidate label box — inflated by `margin` px on every side —
+ * overlap any already-placed box? All boxes share VERTEX_LABEL_LINE_H.
+ * margin > 0 demands headroom (a label entering or homing); margin < 0 is
+ * lenient (an incumbent keeping its held row). */
+static int label_cand_clashes(const float *px, const float *py,
+                              const float *pw, int placed_n,
+                              float x, float y, float w, float margin) {
+    const float h = VERTEX_LABEL_LINE_H;
+    int p;
+    for (p = 0; p < placed_n; p++) {
+        if (x - margin < px[p] + pw[p] && px[p] < x + w + margin &&
+            y - margin < py[p] + h    && py[p] < y + h + margin)
+            return 1;
+    }
+    return 0;
 }
 
 static void on_vertex_number_label(const ReplayVertexWalkState *state,
@@ -813,6 +862,7 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
                  ctx->label_options == OVERLAY_SCOPE_VISIBLE)
                 ? global_num : state->vertex_idx_in_block;
     lbl = &ctx->labels[ctx->count];
+    lbl->num = label_num;
     snprintf(lbl->idx, sizeof(lbl->idx), " v%d", label_num);
     lbl->detail[0] = '\0';
     if (ctx->mode == OVERLAY_VERTEX_LABEL_INDEX_POS) {
@@ -855,7 +905,7 @@ static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
           placed_w[VERTEX_LABEL_MAX];
     int   placed_n = 0;
     const float dy = VERTEX_LABEL_LINE_H + VERTEX_LABEL_GAP;
-    int i, oi, step, s, p;
+    int i, oi, step, s;
 
     if (ctx->count <= 0)
         return;
@@ -880,27 +930,75 @@ static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
          * the anchor vs. gets nudged/dropped as the camera moves. Sorting by depth
          * instead made near-equal depths flip every frame (a z-fighting-like
          * shimmer). The trade is that the kept subset is the earlier-in-walk one
-         * rather than strictly the closest. */
+         * rather than strictly the closest.
+         *
+         * On top of that ordering, each label's placement is temporally
+         * sticky across frames (see the TEMPORALLY STICKY note above). */
+        g_label_sticky_frame++;
+        if ((int)ctx->mode != g_label_sticky_mode ||
+            ctx->label_options != g_label_sticky_scope) {
+            memset(g_label_sticky, 0, sizeof(g_label_sticky));
+            g_label_sticky_mode  = (int)ctx->mode;
+            g_label_sticky_scope = ctx->label_options;
+        }
         for (oi = 0; oi < ctx->count; oi++) {
             VertexLabel *l = &ctx->labels[oi];
-            float best_y = 0.0f;
-            int   found = 0;
-            for (step = 0; step <= VERTEX_LABEL_NUDGE_STEPS && !found; step++) {
-                for (s = (step == 0 ? 0 : -1); s <= 1; s += 2) {
-                    float cand = l->anchor_y + (float)s * (float)step * dy;
-                    int clash = 0;
-                    for (p = 0; p < placed_n; p++) {
-                        if (label_box_overlap(l->anchor_x, cand, l->width,
-                                              placed_x[p], placed_y[p],
-                                              placed_w[p], VERTEX_LABEL_LINE_H)) {
-                            clash = 1;
-                            break;
+            VertexLabelSticky *st =
+                (l->num >= 0 && l->num < MAX_COMMANDS) ? &g_label_sticky[l->num]
+                                                       : NULL;
+            int   was_drawn = st && st->last_drawn + 1u == g_label_sticky_frame;
+            int   prev_row  = was_drawn ? st->row : 0;
+            int   prev_dist = prev_row < 0 ? -prev_row : prev_row;
+            int   best_row  = 0;
+            int   found     = 0;
+            float target_dy, draw_dy;
+
+            /* Phase A: incumbent homing. A row nearer the anchor than the
+             * held one, taken only with comfortable headroom so
+             * home-and-back can't flap. */
+            if (was_drawn && prev_row != 0) {
+                for (step = 0; step < prev_dist && !found; step++) {
+                    for (s = (step == 0 ? 0 : -1); s <= 1 && !found; s += 2) {
+                        int row = s * step;
+                        if (!label_cand_clashes(placed_x, placed_y, placed_w,
+                                                placed_n, l->anchor_x,
+                                                l->anchor_y + (float)row * dy,
+                                                l->width,
+                                                VERTEX_LABEL_ENTER_PAD)) {
+                            best_row = row;
+                            found = 1;
                         }
                     }
-                    if (!clash) {
-                        best_y = cand;
-                        found = 1;
-                        break;
+                }
+            }
+            /* Phase B: keep the held row, judged leniently — evicting a
+             * visible label needs a real collision, not a boundary graze. */
+            if (was_drawn && !found &&
+                !label_cand_clashes(placed_x, placed_y, placed_w, placed_n,
+                                    l->anchor_x,
+                                    l->anchor_y + (float)prev_row * dy,
+                                    l->width, -VERTEX_LABEL_KEEP_SHRINK)) {
+                best_row = prev_row;
+                found = 1;
+            }
+            /* Phase C: plain near-to-far scan. A label that wasn't visible
+             * last frame enters only with headroom, so the crowding
+             * boundary doesn't strobe. */
+            if (!found) {
+                float margin = was_drawn ? 0.0f : VERTEX_LABEL_ENTER_PAD;
+                for (step = 0; step <= VERTEX_LABEL_NUDGE_STEPS && !found;
+                     step++) {
+                    for (s = (step == 0 ? 0 : -1); s <= 1 && !found; s += 2) {
+                        int row = s * step;
+                        if (was_drawn && row == prev_row)
+                            continue; /* already tested leniently */
+                        if (!label_cand_clashes(placed_x, placed_y, placed_w,
+                                                placed_n, l->anchor_x,
+                                                l->anchor_y + (float)row * dy,
+                                                l->width, margin)) {
+                            best_row = row;
+                            found = 1;
+                        }
                     }
                 }
             }
@@ -909,9 +1007,25 @@ static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
             l->drawn = found;
             if (!found)
                 continue;
-            l->draw_y          = best_y;
+            target_dy = (float)best_row * dy;
+            draw_dy   = target_dy;
+            if (st) {
+                if (was_drawn) {
+                    /* Glide from last frame's drawn offset toward the solved
+                     * row; snap when close so it settles exactly. */
+                    float d = target_dy - st->eased_dy;
+                    if (d > 0.5f || d < -0.5f)
+                        draw_dy = st->eased_dy + d * VERTEX_LABEL_EASE;
+                }
+                st->eased_dy   = draw_dy;
+                st->row        = best_row;
+                st->last_drawn = g_label_sticky_frame;
+            }
+            l->draw_y          = l->anchor_y + draw_dy;
+            /* Collision record uses the quantized slot, not the eased draw
+             * position, so decisions stay stable while a label glides. */
             placed_x[placed_n] = l->anchor_x;
-            placed_y[placed_n] = best_y;
+            placed_y[placed_n] = l->anchor_y + target_dy;
             placed_w[placed_n] = l->width;
             placed_n++;
         }
@@ -1441,6 +1555,24 @@ void edit_overlays_post_overlays(void *user_data) {
     edit_overlays_render_cursor_guides(&pack->snapshot, &pack->walk);
     prof_accum_end(PROF_RENDER3D_OVERLAY_TRANSFORM_GUIDES);
 
+    if (pack->show_normal_vectors ||
+        pack->walk.show_normal_vectors ||
+        pack->walk.replay_normal_display != REPLAY_NORMAL_DISPLAY_OFF) {
+        prof_begin(PROF_RENDER3D_OVERLAY_NORMALS);
+        edit_overlays_render_normal_vectors(&pack->walk);
+        prof_accum_end(PROF_RENDER3D_OVERLAY_NORMALS);
+    }
+}
+
+/* Bitmap-text label passes. Runs once per frame via the scene's
+ * post_resolve_overlays_fn — after the accumulation resolve, not inside
+ * the per-pass loop — so AA jitter / blur sub-passes can't stamp the
+ * pixel-snapped glyphs at N slightly different positions and ghost the
+ * text (the geometry overlays above stay in-pass and accumulate). */
+void edit_overlays_post_resolve_overlays(void *user_data) {
+    const OverlaySnapshotPack *pack = (const OverlaySnapshotPack *)user_data;
+    if (!pack) return;
+
     if (pack->vertex_label_mode != OVERLAY_VERTEX_LABEL_OFF) {
         prof_begin(PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS);
         edit_overlays_render_vertex_numbers(&pack->walk,
@@ -1453,12 +1585,5 @@ void edit_overlays_post_overlays(void *user_data) {
         prof_begin(PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS);
         edit_overlays_render_replay_vertex_label(&pack->walk);
         prof_accum_end(PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS);
-    }
-    if (pack->show_normal_vectors ||
-        pack->walk.show_normal_vectors ||
-        pack->walk.replay_normal_display != REPLAY_NORMAL_DISPLAY_OFF) {
-        prof_begin(PROF_RENDER3D_OVERLAY_NORMALS);
-        edit_overlays_render_normal_vectors(&pack->walk);
-        prof_accum_end(PROF_RENDER3D_OVERLAY_NORMALS);
     }
 }
