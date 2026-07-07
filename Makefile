@@ -1049,7 +1049,8 @@ web: ## Build the Emscripten/wasm web target (needs emcc on PATH -- see scripts/
 		exit 1; \
 	}
 	scripts/web-deps.sh
-	$(MAKE) WEB=1 sample
+	$(MAKE) WEB=1 $(WEB_BINDIR)/index.html
+	@echo "Built $(WEB_BINDIR)/index.html -- run 'make web-serve' to try it."
 
 web-serve: ## Serve the built web target over HTTP (run `make web` first).
 	@echo "Serving $(WEB_BINDIR)/ at http://localhost:8000/ (Ctrl+C to stop) ..."
