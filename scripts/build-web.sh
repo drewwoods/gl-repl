@@ -276,6 +276,7 @@ build_one() {
             elif [[ -n "${preload_flag}" ]]; then
                 repl_preload="${preload_flag}"
             fi
+            local repl_web_exports="-sEXPORTED_FUNCTIONS=_main,_glr_web_load_scene_text,_glr_web_export_scene -sEXPORTED_RUNTIME_METHODS=ccall,FS"
 
             pushd "${sample_dir}" > /dev/null
             # Ship a web-specific example set: a trimmed catalog (drop examples
@@ -294,7 +295,7 @@ build_one() {
                 SAMPLE_BIN="${out_html}" \
                 ${repl_catalog} \
                 GL_HEADER_CFLAGS="${em_flags}" \
-                GL_LDFLAGS="${BOOTSTRAP} ${GL4ES_LIB} ${GLU_LIB} ${FREEGLUT_LIB} --shell-file ${SHELL_FILE} -s USE_WEBGL2=1 -s FULL_ES2=1 -s INITIAL_MEMORY=${INITIAL_MEMORY} -s STACK_SIZE=${STACK_SIZE} -s GL_MAX_TEMP_BUFFER_SIZE=${GL_MAX_TEMP_BUFFER_SIZE} ${repl_preload}"
+                GL_LDFLAGS="${BOOTSTRAP} ${GL4ES_LIB} ${GLU_LIB} ${FREEGLUT_LIB} --shell-file ${SHELL_FILE} -s USE_WEBGL2=1 -s FULL_ES2=1 -s INITIAL_MEMORY=${INITIAL_MEMORY} -s STACK_SIZE=${STACK_SIZE} -s GL_MAX_TEMP_BUFFER_SIZE=${GL_MAX_TEMP_BUFFER_SIZE} ${repl_web_exports} ${repl_preload}"
             local res=$?
             popd > /dev/null
 
