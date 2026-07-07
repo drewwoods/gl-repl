@@ -11,6 +11,10 @@
 #include <string.h> /* strncmp */
 
 #define GEOMETRY_GUIDE_VERTEX_MARK_POINT_SIZE 8.0f
+/* Breathing pulse for the full-vertex marker, in rad/s on the
+ * free-running anim clock (~2s per breath) so the highlight stays
+ * alive while t is paused. */
+#define GEOMETRY_GUIDE_VERTEX_MARK_BREATH_RATE 3.0f
 
 static void geometry_guides_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -108,18 +112,39 @@ static int input_is_vertex_kind(const Render3dGuideSnapshot *snapshot,
     return 0;
 }
 
-/* Solid point marker at (x,y,z) for a fully-determined vertex (0 DOF).
- * Depth test is temporarily disabled so the mark stays visible through
- * scene geometry. Caller sets up blend state. */
-static void draw_vertex_point_marker(float x, float y, float z) {
+/* Solid point marker at (x,y,z) for a fully-determined vertex (0 DOF),
+ * breathing on the free-running anim clock so it reads as "this is the
+ * live vertex" at a glance: a soft round halo swells and fades around a
+ * gently pulsing core. Depth test is temporarily disabled so the mark
+ * stays visible through scene geometry. Caller sets up blend state
+ * (additive, so the halo glows over the scene). */
+static void draw_vertex_point_marker(const Render3dGuideSnapshot *snapshot,
+                                     float x, float y, float z) {
+    float as = snapshot->alpha_scale;
+    float breath = 0.5f + 0.5f *
+        sinf(snapshot->anim_time * GEOMETRY_GUIDE_VERTEX_MARK_BREATH_RATE);
     int depth = glIsEnabled(GL_DEPTH_TEST);
     if (depth) glDisable(GL_DEPTH_TEST);
-    render3d_clr_a(RENDER3D_CLR_GUIDE_VERTEX_MARK, 0.9f);
-    glPointSize(GEOMETRY_GUIDE_VERTEX_MARK_POINT_SIZE);
+    glEnable(GL_POINT_SMOOTH);
+    glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
+
+    /* Halo: large, faint, swelling with the breath. */
+    render3d_clr_a(RENDER3D_CLR_GUIDE_VERTEX_MARK,
+                   fminf((0.15f + 0.25f * breath) * as, 1.0f));
+    glPointSize(GEOMETRY_GUIDE_VERTEX_MARK_POINT_SIZE * (1.7f + 1.1f * breath));
     glBegin(GL_POINTS);
     glVertex3f(x, y, z);
     glEnd();
+
+    /* Core: bright, with a subtler swell so it never shrinks away. */
+    render3d_clr_a(RENDER3D_CLR_GUIDE_VERTEX_MARK, fminf(0.9f * as, 1.0f));
+    glPointSize(GEOMETRY_GUIDE_VERTEX_MARK_POINT_SIZE * (1.0f + 0.35f * breath));
+    glBegin(GL_POINTS);
+    glVertex3f(x, y, z);
+    glEnd();
+
     glPointSize(1.0f);
+    glDisable(GL_POINT_SMOOTH);
     if (depth) glEnable(GL_DEPTH_TEST);
 }
 
@@ -278,7 +303,7 @@ static void draw_vertex_guides(const Render3dGuideSnapshot *snapshot) {
         draw_vertex_line_guide(free_axis, vals, sz);
     } else {
         /* 0 DOF: all coords typed => exact vertex point. */
-        draw_vertex_point_marker(vals[0], vals[1], vals[2]);
+        draw_vertex_point_marker(snapshot, vals[0], vals[1], vals[2]);
     }
 
     glDisable(GL_BLEND);
