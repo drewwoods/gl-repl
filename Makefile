@@ -1036,8 +1036,15 @@ sample: gl-repl ## Alias for the main gl-repl sample binary.
 web: ## Build the Emscripten/wasm web target (needs emcc on PATH -- see scripts/build-web.sh for a cold start).
 	@command -v emcc >/dev/null 2>&1 || { \
 		echo "ERROR: emcc not found on PATH."; \
-		echo "Run scripts/build-web.sh (sources emsdk for you), or source"; \
-		echo "emsdk_env.sh yourself first, then re-run 'make web'."; \
+		echo ""; \
+		echo "Either:"; \
+		echo "  1. Run 'source ~/src/emsdk/emsdk_env.sh' (as 'source', not"; \
+		echo "     './emsdk_env.sh') in THIS shell, then re-run 'make web'."; \
+		echo "     scripts/build-web.sh only sources emsdk inside its own"; \
+		echo "     subprocess, so running it does not put emcc on PATH for"; \
+		echo "     your shell's later 'make web' calls."; \
+		echo "  2. Or just run scripts/build-web.sh instead of 'make web' --"; \
+		echo "     it sources emsdk and builds in one shot, every time."; \
 		exit 1; \
 	}
 	scripts/web-deps.sh
