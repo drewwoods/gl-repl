@@ -4,11 +4,11 @@
 // @cfg poly_highlight = 0
 // @cfg vertex_labels = 0
 // camera
-glTranslatef(0.0f, 0.0f, -7.5f);
+glTranslatef(0.0f, 0.0f, -4.5f);
 glRotatef(0.0f, 1.0f, 0.0f, 0.0f);
 glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
 glTranslatef(0.0f, 0.0f, 0.0f);
-static float dist = 1.4; // @tune
+static float dist = 0.5; // @tune
 static float n = 400; // @tune
 static float x, y, ang;
 glClearColor(0.05, 0.06, 0.08, 1.0);
