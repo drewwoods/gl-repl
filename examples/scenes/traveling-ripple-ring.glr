@@ -3,7 +3,7 @@
 // @cfg vertex_outlines = 0
 // @cfg vertex_points = 0
 // camera
-glTranslatef(0.0f, 0.0f, -3.5f);
+glTranslatef(0.0f, 0.0f, -3.50f);
 glRotatef(0.0f, 1.0f, 0.0f, 0.0f);
 glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
 glTranslatef(0.0f, 0.0f, 0.0f);

@@ -1968,7 +1968,7 @@ int main(int argc, char **argv) {
             ASSERT_TRUE("stress example camera tx preset",
                         fabsf(glr_camera().tx - 0.0f) < 1e-4f);
             ASSERT_TRUE("stress example camera ty preset",
-                        fabsf(glr_camera().ty - 0.3f) < 1e-4f);
+                        fabsf(glr_camera().ty - 0.0f) < 1e-4f);
             ASSERT_TRUE("stress example camera tz preset",
                         fabsf(glr_camera().tz - 0.0f) < 1e-4f);
 

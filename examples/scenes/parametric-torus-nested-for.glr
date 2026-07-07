@@ -1,6 +1,6 @@
 // @cfg vertex_labels = 0
 // camera
-glTranslatef(0.0f, 0.0f, -8.0f);
+glTranslatef(0.0f, 0.0f, -8.00f);
 glRotatef(20.0f, 1.0f, 0.0f, 0.0f);
 glRotatef(35.0f, 0.0f, 1.0f, 0.0f);
 glTranslatef(0.0f, 0.0f, 0.0f);

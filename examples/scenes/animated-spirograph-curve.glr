@@ -4,7 +4,7 @@
 // @cfg poly_highlight = 0
 // @cfg vertex_labels = 0
 // camera
-glTranslatef(0.0f, 0.0f, -4.5f);
+glTranslatef(0.0f, 0.0f, -4.50f);
 glRotatef(0.0f, 1.0f, 0.0f, 0.0f);
 glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
 glTranslatef(0.0f, 0.0f, 0.0f);

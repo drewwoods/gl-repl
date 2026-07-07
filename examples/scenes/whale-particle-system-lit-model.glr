@@ -7,10 +7,10 @@
 // @cfg vertex_outlines = 0
 // @cfg vertex_points = 0
 // camera
-glTranslatef(0.0000f, 0.0000f, -6.5473f);
-glRotatef(20.6076f, 1.0f, 0.0f, 0.0f);
-glRotatef(-114.3999f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.2893f, -0.0000f, -0.0242f);
+glTranslatef(0.0f, 0.0f, -6.55f);
+glRotatef(20.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(-115f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0f, 0.0f, 0.0f);
 
 static float launchVelX, launchVelY, launchVelZ;
 static float currentVelY;

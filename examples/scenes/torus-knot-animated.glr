@@ -3,10 +3,10 @@
 // @cfg vertex_outlines = 0
 // @cfg vertex_points = 0
 // camera
-glTranslatef(0.0f, 0.0f, -9.0f);
-glRotatef(23.0, 1.0f, 0.0f, 0.0f);
-glRotatef(52.6, 0.0f, 1.0f, 0.0f);
-glTranslatef(-0.0000f, -0.0000f, -0.0000f);
+glTranslatef(0.0f, 0.0f, -9.00f);
+glRotatef(23.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(52.0f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0f, 0.0f, 0.0f);
 static float n, p, q, ang, rr, x, y, z; // samples, winds, angle, ring radius, coords
 static float s;                         // palette mix in [0,1]
 glClearColor(0.05, 0.06, 0.08, 1.0);

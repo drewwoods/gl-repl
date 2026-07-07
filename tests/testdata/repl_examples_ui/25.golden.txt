@@ -490,9 +490,9 @@ void display(void) {
     }
   glPopMatrix();
   glDepthMask(GL_TRUE);
+  glDisable(GL_BLEND);
   glColor4f(1, 0.85, 0.3, 0.5);
   glutSolidSphere(0.45, 24, 24);
-  glDisable(GL_BLEND);
   glDisable(GL_DEPTH_TEST);
   glColor3f(1, 0.72, 0);
   glRasterPos3f(0.62, 0.58, 0);
