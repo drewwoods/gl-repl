@@ -23,15 +23,19 @@
 
 /* Variable-row data presentation + drag-state indicators. Deliberately
  * NOT theme tokens (theme.h "named constant" bucket): the green-name /
- * yellow-value two-tone and the log/linear/idle handle states encode
- * meaning and must stay fixed across every UI scheme. */
+ * yellow-value two-tone, dim written-variable variants, and the
+ * log/linear/idle handle states encode meaning and must stay fixed across
+ * every UI scheme. */
 static const float k_var_name[3]           = { 0.70f, 0.85f, 0.70f };
 static const float k_var_value[3]          = { 0.90f, 0.90f, 0.60f };
+static const float k_var_name_written[3]   = { 0.38f, 0.48f, 0.38f };
+static const float k_var_value_written[3]  = { 0.48f, 0.48f, 0.34f };
 static const float k_var_drag_log_bg[4]    = { 0.30f, 0.20f, 0.05f, 0.60f };
 static const float k_var_drag_linear_bg[4] = { 0.20f, 0.20f, 0.40f, 0.60f };
 static const float k_var_handle_log[4]     = { 1.00f, 0.55f, 0.10f, 0.95f };
 static const float k_var_handle_linear[4]  = { 1.00f, 0.80f, 0.20f, 0.95f };
 static const float k_var_handle_idle[4]    = { 0.55f, 0.70f, 1.00f, 0.90f };
+static const float k_var_handle_written[4] = { 0.34f, 0.42f, 0.60f, 0.70f };
 
 static int clamp_var_count(int count) {
     if (count < 0) return 0;
@@ -227,13 +231,13 @@ void ui_variable_panel_render(const UiVariablePanelView *view) {
         }
 
         /* Label */
-        glColor3fv(k_var_name);
+        glColor3fv(var->written ? k_var_name_written : k_var_name);
         gl2d_draw_string((float)label_x, (float)text_y, truncate_var_name(var->name, VAR_NAME_MAX_CHARS), FONT_SMALL);
 
         /* Value */
         char valstr[16];
         snprintf(valstr, sizeof(valstr), "%*.*f", VAR_VALUE_FMT_WIDTH, VAR_VALUE_FMT_PREC, (double)val);
-        glColor3fv(k_var_value);
+        glColor3fv(var->written ? k_var_value_written : k_var_value);
         gl2d_draw_string((float)val_x, (float)text_y, valstr, FONT_SMALL);
 
         /* Slider track */
@@ -256,7 +260,7 @@ void ui_variable_panel_render(const UiVariablePanelView *view) {
         if (view->drag_active_var == i) {
             glColor4fv(view->drag_log_mode ? k_var_handle_log : k_var_handle_linear);
         } else {
-            glColor4fv(k_var_handle_idle);
+            glColor4fv(var->written ? k_var_handle_written : k_var_handle_idle);
         }
         glRectf(hx, (float)(row_y + VAR_HANDLE_PAD_TOP), hx + (float)handle_w,
                 (float)(row_y + VAR_ROW_H - VAR_HANDLE_PAD_BOTTOM));

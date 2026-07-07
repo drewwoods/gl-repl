@@ -37,6 +37,7 @@ typedef struct {
     char         name[UI_VARIABLE_NAME_MAX];
     const float *value;
     int          tuned;   /* 1 if @tune-tagged (exported as a keyboard knob) */
+    int          written; /* 1 if source contains CMD_VAR_ASSIGN writing it */
 } UiVariable;
 
 typedef struct {

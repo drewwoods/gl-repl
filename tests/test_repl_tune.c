@@ -91,6 +91,48 @@ static void test_swatch_parity(void) {
     TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "swatch 500", repl_eval_swatch_step(500.0f), 5.0f);
 }
 
+static void test_written_var_slot_marker(void) {
+    int written[MAX_PREDEF_VARS];
+    int radius_idx;
+    int accum_idx;
+    int t_idx;
+    int n;
+
+    reset_repl();
+    editor_feed_line("float radius = 1;");
+    editor_feed_line("float accum = 0;");
+    editor_feed_line("glVertex3f(radius, 0, 0);");
+
+    n = repl_mark_written_var_slots(repl_state_document_cmds(),
+                                    repl_state_document_count(),
+                                    written, MAX_PREDEF_VARS);
+    ASSERT_INT("read-only vars not marked written", n, 0);
+
+    editor_feed_line("accum = accum + radius;");
+    radius_idx = repl_eval_find_predef_var_idx("radius");
+    accum_idx = repl_eval_find_predef_var_idx("accum");
+    t_idx = repl_eval_find_predef_var_idx("t");
+    ASSERT_TRUE("radius declared", radius_idx >= 0);
+    ASSERT_TRUE("accum declared", accum_idx >= 0);
+    ASSERT_TRUE("t declared", t_idx >= 0);
+
+    n = repl_mark_written_var_slots(repl_state_document_cmds(),
+                                    repl_state_document_count(),
+                                    written, MAX_PREDEF_VARS);
+    ASSERT_INT("one written var marked", n, 1);
+    if (radius_idx >= 0 && accum_idx >= 0 && t_idx >= 0) {
+        ASSERT_INT("accum marked written", written[accum_idx], 1);
+        ASSERT_INT("radius remains config", written[radius_idx], 0);
+        ASSERT_INT("runtime time var not source-written", written[t_idx], 0);
+    }
+
+    editor_feed_line("accum = accum + 1;");
+    n = repl_mark_written_var_slots(repl_state_document_cmds(),
+                                    repl_state_document_count(),
+                                    written, MAX_PREDEF_VARS);
+    ASSERT_INT("duplicate assignments count once", n, 1);
+}
+
 static void test_collector_and_export(void) {
     const char *path = "/tmp/repl_tune_export.c";
     reset_repl();
@@ -349,6 +391,7 @@ static void test_compile_gate(void) {
 int main(void) {
     test_tag_predicate();
     test_swatch_parity();
+    test_written_var_slot_marker();
     test_collector_and_export();
     test_untagged_baseline();
     test_roundtrip();

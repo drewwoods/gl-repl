@@ -478,9 +478,16 @@ its current value and a slider:
   [Scrubbing the timeline](#scrubbing-the-timeline).
 - Toggle the panel with **`** backquote or the *Variable panel* config item.
 
-Edits write back through the normal commit pipeline, so scrubbing a slider
-is equivalent to retyping the assignment — undo works, and the scene follows
-live.
+Row brightness distinguishes knobs from storage:
+
+- **Bright** — read-only parameter/config variables; best for sliders.
+- **Dim** — variables written by committed `name = expr;` lines. You can
+  drag them, but a later assignment may overwrite the value.
+- The `// @tune` accent is separate from brightness. `t` only dims if your
+  source explicitly assigns `t = ...;`.
+
+Slider edits are undoable and go through the normal commit pipeline; when a
+declaration exists, dragging rewrites its initializer.
 
 ---
 

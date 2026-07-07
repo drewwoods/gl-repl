@@ -64,6 +64,8 @@ static UiVariablePanelView demo_build_view(void) {
     for (int i = 0; i < DEMO_VAR_COUNT; i++) {
         snprintf(rows[i].name, sizeof(rows[i].name), "%s", g_vars[i].name);
         rows[i].value = &g_vars[i].value;
+        rows[i].tuned = 0;
+        rows[i].written = 0;
     }
     UiVariablePanelView v;
     v.visible        = variable_panel_visible();
