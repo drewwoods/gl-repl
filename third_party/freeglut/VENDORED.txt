@@ -1,8 +1,8 @@
 freeglut vendored into this tree.
 
 upstream: /Users/drew/src/freeglut-fork
-ref:      capture-windowed-backends
-sha:      c9582c41abbfd1dd9db8d6df1b4bf27c2a28c97f
+ref:      emscripten-backend
+sha:      df8d7c620b5dec5a9c73950836fcd468f1b0a806
 
 Produced by scripts/vendor-freeglut.sh. Do NOT edit the vendored tree by hand;
 re-run the script with a ref to update. The Makefile's libglut.a rule depends

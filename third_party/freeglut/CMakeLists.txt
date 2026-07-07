@@ -106,6 +106,12 @@ ELSE()
     SET(OGC OFF)
 ENDIF()
 
+# Emscripten (WebAssembly) support
+IF(EMSCRIPTEN)
+    SET(FREEGLUT_BUILD_SHARED_LIBS OFF)
+    SET(FREEGLUT_GLES OFF)
+ENDIF()
+
 #######################
 # SOURCE SELECTION
 #######################
@@ -255,6 +261,24 @@ ELSEIF(ANDROID OR BLACKBERRY)
         )
     ENDIF()
 
+ELSEIF(EMSCRIPTEN)
+    LIST(APPEND FREEGLUT_SRCS
+        src/emscripten/fg_cursor_emscripten.c
+        src/emscripten/fg_display_emscripten.c
+        src/emscripten/fg_ext_emscripten.c
+        src/emscripten/fg_gamemode_emscripten.c
+        src/emscripten/fg_init_emscripten.c
+        src/emscripten/fg_internal_emscripten.h
+        src/emscripten/fg_input_devices_emscripten.c
+        src/emscripten/fg_joystick_emscripten.c
+        src/emscripten/fg_main_emscripten.c
+        src/emscripten/fg_spaceball_emscripten.c
+        src/emscripten/fg_state_emscripten.c
+        src/emscripten/fg_structure_emscripten.c
+        src/emscripten/fg_window_emscripten.c
+    )
+    SET(FREEGLUT_BUILD_SHARED_LIBS OFF)
+
 ELSEIF(OGC)
 
     LIST(APPEND FREEGLUT_SRCS
@@ -373,7 +397,7 @@ ENDIF()
 
 INCLUDE(CheckIncludeFiles)
 
-IF(UNIX AND NOT(ANDROID OR BLACKBERRY OR FREEGLUT_WAYLAND OR OGC OR FREEGLUT_COCOA OR FREEGLUT_OSMESA))
+IF(UNIX AND NOT(ANDROID OR BLACKBERRY OR FREEGLUT_WAYLAND OR OGC OR FREEGLUT_COCOA OR FREEGLUT_OSMESA OR EMSCRIPTEN))
     FIND_PACKAGE(X11 REQUIRED)
     INCLUDE_DIRECTORIES(${X11_X11_INCLUDE_PATH})
     LIST(APPEND LIBS ${X11_X11_LIB})
@@ -401,12 +425,23 @@ IF(CMAKE_SYSTEM_NAME STREQUAL FreeBSD OR CMAKE_SYSTEM_NAME STREQUAL NetBSD)
     ENDIF()
 ENDIF()
 
+# Emscripten provides its own OpenGL ES / WebGL implementation.
+# No need to find OpenGL, EGL, or GLU libraries.
+IF(EMSCRIPTEN)
+    # Emscripten users typically force-include GL headers via -include flag
+    # (e.g. from gl4es). Define FREEGLUT_NO_GL_INCLUDE so freeglut_std.h
+    # does not try to pull in GL/glu.h which may not be available.
+    LIST(APPEND PUBLIC_DEFINITIONS -DFREEGLUT_NO_GL_INCLUDE)
+    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -include ${CMAKE_CURRENT_SOURCE_DIR}/include/GL/emscripten_hide_glut.h")
+    LIST(APPEND LIBS m)
+    LIST(APPEND CMAKE_REQUIRED_LIBRARIES m)
+
 # For OpenGL ES (GLES): compile with -DFREEGLUT_GLES to cleanly
 # bootstrap headers inclusion in freeglut_std.h; this constant also
 # need to be defined in client applications (e.g. through pkg-config),
 # but do use GLES constants directly for all other needs
 # GLES1 and GLES2 libraries are compatible and can be co-linked.
-IF(FREEGLUT_OSMESA)
+ELSEIF(FREEGLUT_OSMESA)
     # OSMesa provides both the GL context and the GL entry points; no
     # window-system GL (GLX/EGL/Cocoa) is found or linked.
     INCLUDE(FindPkgConfig)
@@ -561,7 +596,7 @@ ENDIF()
 
 IF(CMAKE_COMPILER_IS_GNUCC)
   SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
-  IF(NOT(ANDROID OR BLACKBERRY OR FREEGLUT_WAYLAND))
+  IF(NOT(ANDROID OR BLACKBERRY OR FREEGLUT_WAYLAND OR EMSCRIPTEN))
     # not setting -ansi as EGL/KHR headers doesn't support it
     SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic")
   ENDIF()

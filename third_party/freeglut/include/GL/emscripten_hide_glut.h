@@ -1,0 +1,85 @@
+#ifndef EMSCRIPTEN_HIDE_GLUT_H
+#define EMSCRIPTEN_HIDE_GLUT_H
+
+// Hide Emscripten's built-in GLUT functions from FreeGLUT's namespace
+// so that FreeGLUT's static library doesn't override Emscripten's JS library.
+#define glutInit fg_glutInit
+#define glutInitDisplayMode fg_glutInitDisplayMode
+#define glutInitDisplayString fg_glutInitDisplayString
+#define glutInitWindowPosition fg_glutInitWindowPosition
+#define glutInitWindowSize fg_glutInitWindowSize
+#define glutMainLoop fg_glutMainLoop
+#define glutLeaveMainLoop fg_glutLeaveMainLoop
+#define glutCreateWindow fg_glutCreateWindow
+#define glutCreateSubWindow fg_glutCreateSubWindow
+#define glutDestroyWindow fg_glutDestroyWindow
+#define glutPostRedisplay fg_glutPostRedisplay
+#define glutPostWindowRedisplay fg_glutPostWindowRedisplay
+#define glutSwapBuffers fg_glutSwapBuffers
+#define glutGetWindow fg_glutGetWindow
+#define glutSetWindow fg_glutSetWindow
+#define glutSetWindowTitle fg_glutSetWindowTitle
+#define glutSetIconTitle fg_glutSetIconTitle
+#define glutPositionWindow fg_glutPositionWindow
+#define glutReshapeWindow fg_glutReshapeWindow
+#define glutPopWindow fg_glutPopWindow
+#define glutPushWindow fg_glutPushWindow
+#define glutIconifyWindow fg_glutIconifyWindow
+#define glutShowWindow fg_glutShowWindow
+#define glutHideWindow fg_glutHideWindow
+#define glutFullScreen fg_glutFullScreen
+#define glutSetCursor fg_glutSetCursor
+#define glutWarpPointer fg_glutWarpPointer
+#define glutEstablishOverlay fg_glutEstablishOverlay
+#define glutRemoveOverlay fg_glutRemoveOverlay
+#define glutUseLayer fg_glutUseLayer
+#define glutPostOverlayRedisplay fg_glutPostOverlayRedisplay
+#define glutPostWindowOverlayRedisplay fg_glutPostWindowOverlayRedisplay
+#define glutShowOverlay fg_glutShowOverlay
+#define glutHideOverlay fg_glutHideOverlay
+#define glutCreateMenu fg_glutCreateMenu
+#define glutDestroyMenu fg_glutDestroyMenu
+#define glutGetMenu fg_glutGetMenu
+#define glutSetMenu fg_glutSetMenu
+#define glutAddMenuEntry fg_glutAddMenuEntry
+#define glutAddSubMenu fg_glutAddSubMenu
+#define glutChangeToMenuEntry fg_glutChangeToMenuEntry
+#define glutChangeToSubMenu fg_glutChangeToSubMenu
+#define glutRemoveMenuItem fg_glutRemoveMenuItem
+#define glutAttachMenu fg_glutAttachMenu
+#define glutDetachMenu fg_glutDetachMenu
+#define glutDisplayFunc fg_glutDisplayFunc
+#define glutReshapeFunc fg_glutReshapeFunc
+#define glutKeyboardFunc fg_glutKeyboardFunc
+#define glutMouseFunc fg_glutMouseFunc
+#define glutMotionFunc fg_glutMotionFunc
+#define glutPassiveMotionFunc fg_glutPassiveMotionFunc
+#define glutEntryFunc fg_glutEntryFunc
+#define glutVisibilityFunc fg_glutVisibilityFunc
+#define glutIdleFunc fg_glutIdleFunc
+#define glutTimerFunc fg_glutTimerFunc
+#define glutMenuStateFunc fg_glutMenuStateFunc
+#define glutSpecialFunc fg_glutSpecialFunc
+#define glutSpaceballMotionFunc fg_glutSpaceballMotionFunc
+#define glutSpaceballRotateFunc fg_glutSpaceballRotateFunc
+#define glutSpaceballButtonFunc fg_glutSpaceballButtonFunc
+#define glutButtonBoxFunc fg_glutButtonBoxFunc
+#define glutDialsFunc fg_glutDialsFunc
+#define glutTabletMotionFunc fg_glutTabletMotionFunc
+#define glutTabletButtonFunc fg_glutTabletButtonFunc
+#define glutMenuStatusFunc fg_glutMenuStatusFunc
+#define glutOverlayDisplayFunc fg_glutOverlayDisplayFunc
+#define glutWindowStatusFunc fg_glutWindowStatusFunc
+#define glutKeyboardUpFunc fg_glutKeyboardUpFunc
+#define glutSpecialUpFunc fg_glutSpecialUpFunc
+#define glutJoystickFunc fg_glutJoystickFunc
+#define glutSetColor fg_glutSetColor
+#define glutGetColor fg_glutGetColor
+#define glutCopyColormap fg_glutCopyColormap
+#define glutGet fg_glutGet
+#define glutDeviceGet fg_glutDeviceGet
+#define glutExtensionSupported fg_glutExtensionSupported
+#define glutGetModifiers fg_glutGetModifiers
+#define glutLayerGet fg_glutLayerGet
+
+#endif
