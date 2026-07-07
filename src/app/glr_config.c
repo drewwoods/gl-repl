@@ -17,6 +17,7 @@
 #include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
 #include "render3d/lights.h"   /* render3d_lights_apply_theme + eye-space init */
+#include "render3d/postprocess_filter.h"
 
 typedef struct {
     Render3dBackdropMode backdrop;
@@ -28,6 +29,21 @@ static const GlrBackdropGridPair k_backdrop_grid_pairs[] =
 
 static int g_pair_restore_grid_valid = 0;
 static Render3dGridTheme g_pair_restore_grid = GRID_THEME_OFF;
+
+/* Post-processing filter mapping table.
+ * The scene slot feeds render3d_draw_scene's per-scene pass; the frame
+ * slot feeds the glr_compositor hook at frame end. Table-driven so a new
+ * Render3dPostFilterMode is two rows, not new branches. Mutual exclusivity
+ * is maintained between the two fields (scene mode and frame mode) so an
+ * effect never runs twice in one frame (Off -> scene -> frame -> Off). */
+static const struct {
+    Render3dPostFilterMode scene;
+    Render3dPostFilterMode frame;
+} k_post_filter_cycle[POST_FILTER_COUNT] = {
+#define POST_FILTER_MAPPING(suffix, view3d_mode, frame_mode, name_str, symbol_str) { view3d_mode, frame_mode },
+    POST_FILTER_LIST(POST_FILTER_MAPPING)
+#undef POST_FILTER_MAPPING
+};
 
 static int clamp_int(int v, int lo, int hi) {
     if (v < lo) return lo;
@@ -199,6 +215,7 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_FOCUS_ORIGIN:        return NULL; /* action row: no backing state */
     case GLR_CONFIG_RESET_CAMERA:        return NULL; /* action row: no backing state */
     case GLR_CONFIG_AUTO_NORMALS:        return &glr_state_presentation_mut()->autonormal;
+    case GLR_CONFIG_POST_FILTER:         return NULL; /* cycle: composite setting */
     case GLR_CONFIG_VERTEX_LABELS:       return &glr_state_presentation_mut()->show_vertex_labels;
     case GLR_CONFIG_OVERLAY_SCOPE:       return &glr_state_presentation_mut()->overlay_scope;
     case GLR_CONFIG_NORMAL_VECTORS:      return &glr_state_presentation_mut()->show_normal_vectors;
@@ -255,6 +272,17 @@ int glr_config_get(GlrConfigKey key) {
     case GLR_CONFIG_FOCUS_ORIGIN:        return 0;
     case GLR_CONFIG_RESET_CAMERA:        return 0;
     case GLR_CONFIG_AUTO_NORMALS:        return glr_state_presentation().autonormal;
+    case GLR_CONFIG_POST_FILTER: {
+        int scene = glr_state_presentation().post_filter_mode;
+        int frame = glr_state_presentation().compositor_filter_mode;
+        for (int i = 0; i < POST_FILTER_COUNT; i++) {
+            if (k_post_filter_cycle[i].scene == scene &&
+                k_post_filter_cycle[i].frame == frame) {
+                return i;
+            }
+        }
+        return 0;
+    }
     case GLR_CONFIG_VERTEX_LABELS:       return glr_state_presentation().show_vertex_labels;
     case GLR_CONFIG_OVERLAY_SCOPE:       return glr_state_presentation().overlay_scope;
     case GLR_CONFIG_NORMAL_VECTORS:      return glr_state_presentation().show_normal_vectors;
@@ -372,6 +400,11 @@ void glr_config_set(GlrConfigKey key, int value) {
             value = forced_grid;
         }
         glr_state_presentation_mut()->grid_theme = value;
+    } else if (key == GLR_CONFIG_POST_FILTER) {
+        if (value >= 0 && value < POST_FILTER_COUNT) {
+            glr_state_presentation_mut()->post_filter_mode = k_post_filter_cycle[value].scene;
+            glr_state_presentation_mut()->compositor_filter_mode = k_post_filter_cycle[value].frame;
+        }
     } else {
         int *target = config_value_ptr(key);
         if (!target)

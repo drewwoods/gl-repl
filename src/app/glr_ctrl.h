@@ -81,7 +81,7 @@ void glr_ctrl_sync_ui_chrome(void);
  * chrome). Shared by the Ctrl+Shift+F shortcut and the status-bar
  * keycap click so both paths sync chrome, request follow-scroll, and
  * post the same status line. Session-only state, like the F1 help
- * overlay and the F10 post-filter — no Config row, no @cfg. */
+ * overlay — no Config row, no @cfg. */
 void glr_ctrl_toggle_code_focus(void);
 
 /* Toggle the F1 help overlay. Shared by the F1 key and the status-bar
@@ -151,7 +151,6 @@ int glr_ctrl_router_handle_config_menu_key(unsigned char key);      /* backtick 
 int glr_ctrl_router_handle_replay_key(unsigned char key);    /* replay key surface excluding config-owned Ctrl+R */
 int glr_ctrl_router_handle_cfg_shortcut_key(unsigned char key);     /* glr_cfg_handle_ascii_shortcut */
 int glr_ctrl_router_handle_accum_samples_key(unsigned char key);    /* Ctrl+= / Ctrl+- */
-int glr_ctrl_router_handle_post_filter_special_key(int key);        /* F10 / Shift+F10 (experimental post-process) */
 int glr_ctrl_router_handle_code_focus_key(unsigned char key);       /* Ctrl+Shift+F (code-panel focus) */
 int glr_ctrl_router_handle_tutorial_ack_key(unsigned char key);     /* Enter/Tab/Space ack during tutorial SET steps */
 int glr_ctrl_router_handle_replay_special(int key);                 /* replay-active forwarding */

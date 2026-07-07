@@ -80,7 +80,7 @@
  * "mods always 0, Shift read live" idiom for a hidden (non-g_cfg_items)
  * feature via its own bespoke handler instead of the cfg dispatcher. */
 #define GLR_HELP             GLUT_KEY_F1, 0    /* toggle help overlay */
-#define GLR_POST_FILTER_CYCLE GLUT_KEY_F10, 0  /* cycle experimental post-process filter; Shift+F10 = backward, read live (glr_ctrl_router_handle_post_filter_special_key) */
+#define GLR_POST_FILTER_CYCLE GLUT_KEY_F10, 0  /* cycle post-process filter; Shift+F10 = backward (via config table) */
 #define GLR_PREV_EXAMPLE     GLUT_KEY_F12, GLUT_ACTIVE_SHIFT   /* previous example / scene */
 #define GLR_NEXT_EXAMPLE     GLUT_KEY_F12, 0   /* next example / scene */
 #define GLR_EXPORT_PLY       GLUT_KEY_F11, 0   /* export geometry to output.ply */

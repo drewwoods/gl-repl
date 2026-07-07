@@ -62,7 +62,7 @@ CLAIMS: list[tuple[str, str, list[str]]] = [
       "| {key} | Vertex outlines |"]),
     ("Post-process shortcut", "GLR_POST_FILTER_CYCLE",
      ["**Post-process filter** ({key} forward / Shift+{key} backward)",
-      "| {key} / Shift+{key} | Post-process filter (forward / backward) |"]),
+      "| {key} | Post-process filter |"]),
 ]
 
 

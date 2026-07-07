@@ -27,6 +27,7 @@
 #include "repl/examples.h"
 #include "repl/scenes.h"
 #include "app/glr_config.h"
+#include "render3d/postprocess_filter.h"
 #include "editor/input.h"
 #include "editor/commit.h"
 #include "editor/completion.h"
@@ -86,6 +87,11 @@ static const char *grid_brightness_names[GRID_BRIGHTNESS_COUNT] = {
 };
 static const char *axes_theme_names[AXES_THEME_COUNT] = {
     AXES_THEME_LIST(AXES_THEME_NAME_ENTRY)
+};
+static const char *post_filter_names[POST_FILTER_COUNT] = {
+#define POST_FILTER_NAME_ENTRY(suffix, view3d_mode, frame_mode, name_str, symbol_str) [GLR_POST_FILTER_##suffix] = name_str,
+    POST_FILTER_LIST(POST_FILTER_NAME_ENTRY)
+#undef POST_FILTER_NAME_ENTRY
 };
 static char cfg_status_buf[REPL_STATUS_TEXT_MAX];
 
@@ -327,9 +333,6 @@ static const char *accum_passes_names[] = { "1", "2", "4", "8", "12", "16" };
  * the table a reader scans for "what config exists"; these live
  * elsewhere on purpose:
  *
- *   F10 /         post-processing filter cycle, either direction
- *   Shift+F10     -> glr_ctrl_router_handle_post_filter_special_key
- *                    (glr_ctrl.c); GlrPresentationState.post_filter_mode
  *   Ctrl+Shift+F  code-panel focus (hide boilerplate chrome)
  *                 -> glr_ctrl_router_handle_code_focus_key /
  *                    glr_ctrl_toggle_code_focus (glr_ctrl.c);
@@ -338,8 +341,7 @@ static const char *accum_passes_names[] = { "1", "2", "4", "8", "12", "16" };
  *                    (UI_HIT_CODE_FOCUS_TOGGLE) and the F1 help catalog
  *                    (src/repl/help_text.c).
  *
- * Both bindings are defined in keymap.h (GLR_POST_FILTER_CYCLE,
- * GLR_CODE_FOCUS). */
+ * This binding is defined in keymap.h (GLR_CODE_FOCUS). */
 
 /* Runtime display label for the MSAA row ("MSAAx<n>" once the GL sample
  * count is known); set by glr_actions_set_msaa_label(). */
@@ -409,6 +411,10 @@ const GlrConfigItem g_cfg_items[] = {
       .state_count = RENDER3D_BACKDROP_COUNT, .state_names = backdrop_mode_names,
       .key_code = KM_KEY(GLR_BACKDROP), .modifiers = KM_MODS(GLR_BACKDROP), .is_special = 1 },
     { .label = "Auto-normals", .key = GLR_CONFIG_AUTO_NORMALS, .state_count = 2 },
+    { .label = "Post filter", .key = GLR_CONFIG_POST_FILTER,
+      .state_count = POST_FILTER_COUNT, .state_names = post_filter_names,
+      .key_code = KM_KEY(GLR_POST_FILTER_CYCLE), .modifiers = KM_MODS(GLR_POST_FILTER_CYCLE),
+      .is_special = 1 },
     { .label = "---", .section_header = 1 },
 
     { .label = "### CAMERA", .section_header = 1 },
@@ -634,6 +640,11 @@ static const char *cfg_overlay_scope_symbols[OVERLAY_SCOPE_COUNT] = {
     OVERLAY_SCOPE_LIST(OVERLAY_SCOPE_SYMBOL_ENTRY)
 #undef OVERLAY_SCOPE_SYMBOL_ENTRY
 };
+static const char *cfg_post_filter_symbols[POST_FILTER_COUNT] = {
+#define POST_FILTER_SYMBOL_ENTRY(suffix, view3d_mode, frame_mode, name_str, symbol_str) [GLR_POST_FILTER_##suffix] = symbol_str,
+    POST_FILTER_LIST(POST_FILTER_SYMBOL_ENTRY)
+#undef POST_FILTER_SYMBOL_ENTRY
+};
 
 /* The slug→table map shared by the symbolic resolver (read side) and the
  * value-to-string emitter (write side). Returns NULL (count untouched)
@@ -675,6 +686,10 @@ static const char *const *cfg_symbol_table_for_slug(const char *slug,
     if (strcmp(slug, "overlay_scope") == 0) {
         *count = OVERLAY_SCOPE_COUNT;
         return cfg_overlay_scope_symbols;
+    }
+    if (strcmp(slug, "post_filter") == 0) {
+        *count = POST_FILTER_COUNT;
+        return cfg_post_filter_symbols;
     }
     return NULL;
 }

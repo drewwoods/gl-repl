@@ -251,8 +251,8 @@ typedef struct Render3dRenderConfig {
      * themes are untouched. 0 for non-detecting callers (render3d_demo) via
      * memset — the safe default. */
     int nv_fog_distance_supported;
-    /* Experimental scene-viewport post-processing.
-     * Runtime-only (F10 / Shift+F10); never persisted via @cfg. */
+    /* Scene-viewport post-processing.
+     * Backed by Config row, persisted via @cfg. */
     Render3dPostFilterMode post_filter_mode;
     Render3dWireframeMode wireframe;
     /* Winding-visualization view: replace the normal user-color fill with a

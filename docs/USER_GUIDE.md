@@ -643,7 +643,8 @@ flyouts taller than the window):
   Point attenuation
 - **TIME & REPLAY** — Auto time, Replay, Replay mode, Replay expand
 - **OVERLAYS & SCENE** — Grid, Grid extent, Grid brightness, Grid major,
-  Axes, Xform guides, Light indicators, Light theme, Backdrop, Auto-normals
+  Axes, Xform guides, Light indicators, Light theme, Backdrop, Auto-normals,
+  Post-process filter
 - **CAMERA** — View mode, Camera rotate, Focus origin, Reset camera
 - **GEOMETRY** — Vertex labels, Overlay scope, Normal vectors, Vertex outlines,
   Vertex points, Poly highlight, Winding
@@ -666,7 +667,7 @@ backward):
 | F7 | Vertex labels |
 | F8 | Overlay scope |
 | F9 | Light theme |
-| F10 / Shift+F10 | Post-process filter (forward / backward) |
+| F10 | Post-process filter |
 
 ### Grid & axes
 
@@ -855,7 +856,7 @@ look.
 
   ![Glow sprites example: blending + point attenuation](images/glow-sprites.png)
 
-- **Post-process filter** (F10 forward / Shift+F10 backward) — experimental viewport filters:
+- **Post-process filter** (F10 forward / Shift+F10 backward) — viewport filters:
   Off / Chromatic scene / Chromatic frame / Vignette scene / Vignette frame.
 
 ---
