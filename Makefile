@@ -1038,13 +1038,14 @@ web: ## Build the Emscripten/wasm web target (needs emcc on PATH -- see scripts/
 		echo "ERROR: emcc not found on PATH."; \
 		echo ""; \
 		echo "Either:"; \
-		echo "  1. Run 'source ~/src/emsdk/emsdk_env.sh' (as 'source', not"; \
-		echo "     './emsdk_env.sh') in THIS shell, then re-run 'make web'."; \
-		echo "     scripts/build-web.sh only sources emsdk inside its own"; \
-		echo "     subprocess, so running it does not put emcc on PATH for"; \
-		echo "     your shell's later 'make web' calls."; \
+		echo "  1. Run 'source <your-emsdk-checkout>/emsdk_env.sh' (as 'source',"; \
+		echo "     not by executing the file) in THIS shell, then re-run"; \
+		echo "     'make web'. scripts/build-web.sh only sources emsdk inside"; \
+		echo "     its own subprocess, so running it does not put emcc on"; \
+		echo "     PATH for your shell's later 'make web' calls."; \
 		echo "  2. Or just run scripts/build-web.sh instead of 'make web' --"; \
 		echo "     it sources emsdk and builds in one shot, every time."; \
+		echo "     Defaults to ~/src/emsdk; override with EMSDK=<path>."; \
 		exit 1; \
 	}
 	scripts/web-deps.sh

@@ -170,9 +170,12 @@ windowing/GL/audio/input-shim details and `make help-details` for the knobs.
 emsdk inside its own subprocess, so it does **not** leave `emcc` on `PATH`
 for a later bare `make web` in your interactive shell — each
 `scripts/build-web.sh` run is self-contained instead. To make plain `make
-web` work directly in a shell, run `source ~/src/emsdk/emsdk_env.sh` (as
-`source`, not `./emsdk_env.sh`) in that shell yourself first; it then stays
-on `PATH` for the rest of that shell session.
+web` work directly in a shell, run `source <your-emsdk-checkout>/emsdk_env.sh`
+(as `source`, not by executing the file) in that shell yourself first; it
+then stays on `PATH` for the rest of that shell session.
+`scripts/build-web.sh` locates its own emsdk checkout via the `EMSDK` env var
+(default `~/src/emsdk`; override with `EMSDK=<path> scripts/build-web.sh` if
+yours lives elsewhere).
 
 ### macOS app bundle (`make app`)
 
