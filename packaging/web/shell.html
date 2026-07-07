@@ -3,51 +3,190 @@
   <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>OpenGL Sample</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>gl-repl &mdash; OpenGL immediate-mode REPL</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%2316181c'/%3E%3Cpath d='M8 2.2 12.8 5v6L8 13.8 3.2 11V5Z M3.2 5 8 7.8 12.8 5 M8 7.8v6' fill='none' stroke='%23d99a4e' stroke-width='1.1' stroke-linejoin='round'/%3E%3C/svg%3E">
     <style>
-      html,
-      body {
+      :root {
+        --bg: #0e1013;
+        --panel: #16181c;
+        --panel-2: #0a0c0e;
+        --border: #26292f;
+        --text: #c6ccd4;
+        --dim: #7a828c;
+        --amber: #d99a4e;
+        --green: #35c04f;
+        --mono: "SF Mono", "Cascadia Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
         margin: 0;
-        min-height: 100%;
-        background: #111;
-        color: #ddd;
-        font-family: Arial, sans-serif;
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--mono);
+        overflow: hidden;
       }
 
-      .emscripten {
-        display: block;
-        margin-left: auto;
-        margin-right: auto;
-        padding-right: 0;
+      body {
+        display: flex;
+        flex-direction: column;
       }
 
-      div.emscripten {
-        text-align: center;
-      }
+      /* ── Header ─────────────────────────────────────────── */
 
       .topbar {
         align-items: center;
+        background: var(--panel);
+        border-bottom: 1px solid var(--border);
         display: flex;
-        gap: 16px;
-        justify-content: space-between;
-        min-height: 42px;
-        padding: 8px 12px;
+        flex: 0 0 auto;
+        gap: 12px;
+        min-height: 44px;
+        padding: 6px 14px;
       }
 
-      .status-group {
-        align-items: center;
+      .brand {
+        align-items: baseline;
         display: flex;
-        gap: 12px;
+        gap: 10px;
         min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+      }
+
+      .brand .mark {
+        align-self: center;
+        flex: 0 0 auto;
+        height: 18px;
+        width: 18px;
+      }
+
+      .brand .name {
+        color: var(--amber);
+        font-size: 15px;
+        font-weight: bold;
+        letter-spacing: 0.04em;
+      }
+
+      .brand .tagline {
+        color: var(--dim);
+        font-size: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .topbar .spacer { flex: 1 1 auto; }
+
+      .keycap {
+        background: var(--panel-2);
+        border: 1px solid #3a3f46;
+        border-radius: 4px;
+        color: var(--text);
+        cursor: pointer;
+        flex: 0 0 auto;
+        font-family: var(--mono);
+        font-size: 12px;
+        line-height: 1;
+        padding: 6px 10px;
+        transition: border-color 0.12s, color 0.12s;
+      }
+
+      .keycap:hover { border-color: var(--amber); color: var(--amber); }
+
+      .keycap[aria-pressed="true"] {
+        border-color: var(--green);
+        color: var(--green);
+      }
+
+      /* ── Canvas ─────────────────────────────────────────── */
+
+      main {
+        flex: 1 1 auto;
+        min-height: 0;
+        position: relative;
+      }
+
+      canvas.emscripten {
+        background: black;
+        border: 0 none;
+        display: block;
+        height: 100%;
+        outline: none;
+        width: 100%;
+      }
+
+      /* ── Console drawer ─────────────────────────────────── */
+
+      #console {
+        border-top: 1px solid var(--border);
+        display: none;
+        flex: 0 0 auto;
+        height: 180px;
+      }
+
+      body.console-open #console { display: block; }
+
+      #output {
+        background: var(--panel-2);
+        border: 0;
+        color: #9aa3ad;
+        display: block;
+        font-family: var(--mono);
+        font-size: 11px;
+        height: 100%;
+        line-height: 1.45;
+        margin: 0;
+        outline: none;
+        padding: 8px 12px;
+        resize: none;
+        width: 100%;
+      }
+
+      /* ── Loading / error overlay ────────────────────────── */
+
+      #overlay {
+        align-items: center;
+        background: var(--bg);
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        inset: 0;
+        justify-content: center;
+        position: absolute;
+        transition: opacity 0.45s ease;
+        z-index: 10;
+      }
+
+      #overlay.hidden {
+        opacity: 0;
+        pointer-events: none;
+        visibility: hidden;
+        transition: opacity 0.45s ease, visibility 0s 0.45s;
+      }
+
+      #overlay .mark { height: 56px; width: 56px; }
+
+      #overlay .title {
+        color: var(--amber);
+        font-size: 22px;
+        font-weight: bold;
+        letter-spacing: 0.06em;
+      }
+
+      #overlay .subtitle {
+        color: var(--dim);
+        font-size: 13px;
+        margin-top: -10px;
       }
 
       .spinner {
         animation: rotation 0.8s linear infinite;
-        border: 4px solid rgb(78, 86, 94);
-        border-top-color: rgb(195, 204, 214);
+        border: 3px solid var(--border);
+        border-top-color: var(--amber);
         border-radius: 100%;
-        display: inline-block;
-        flex: 0 0 auto;
         height: 22px;
         width: 22px;
       }
@@ -58,97 +197,122 @@
       }
 
       #status {
-        color: #bbb;
-        font-size: 14px;
-        font-weight: bold;
+        color: var(--dim);
+        font-size: 13px;
+        max-width: min(480px, 90vw);
         overflow: hidden;
+        text-align: center;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
 
-      #controls {
-        align-items: center;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        justify-content: flex-end;
-        font-size: 13px;
-      }
-
-      #controls label {
-        align-items: center;
-        display: inline-flex;
-        gap: 4px;
-      }
+      #overlay.error #status { color: #e06c60; }
 
       #progress {
-        height: 16px;
-        width: min(320px, calc(100vw - 24px));
-      }
-
-      .emscripten_border {
-        border: 0;
-        width: 100vw;
-      }
-
-      canvas.emscripten {
-        background-color: black;
-        border: 0 none;
-        display: block;
-        width: 100vw;
-        height: calc(100vh - 58px - 200px);
-      }
-
-      #output {
-        background-color: black;
-        border: 0;
-        color: white;
-        display: block;
-        font-family: "Lucida Console", Monaco, monospace;
-        height: 200px;
-        margin: 0 auto;
-        outline: none;
-        padding: 0;
-        width: 100%;
+        accent-color: var(--amber);
+        height: 6px;
+        width: min(320px, 70vw);
       }
     </style>
   </head>
   <body>
-    <div class="topbar">
-      <div class="status-group">
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <defs>
+        <g id="cube-mark">
+          <path d="M8 2.2 12.8 5v6L8 13.8 3.2 11V5Z M3.2 5 8 7.8 12.8 5 M8 7.8v6"
+                fill="none" stroke="#d99a4e" stroke-width="1.1" stroke-linejoin="round"/>
+        </g>
+      </defs>
+    </svg>
+
+    <header class="topbar">
+      <div class="brand">
+        <svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><use href="#cube-mark"/></svg>
+        <span class="name">gl-repl</span>
+        <span class="tagline">OpenGL immediate-mode REPL &mdash; render as you type.</span>
+      </div>
+      <div class="spacer"></div>
+      <button type="button" class="keycap" id="consoleToggle" aria-pressed="false">console</button>
+      <button type="button" class="keycap"
+              onclick="Module.requestFullscreen(false, true)">fullscreen</button>
+    </header>
+
+    <main>
+      <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex="0"></canvas>
+
+      <div id="overlay">
+        <svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><use href="#cube-mark"/></svg>
+        <div class="title">gl-repl</div>
+        <div class="subtitle">OpenGL immediate-mode REPL &middot; WebAssembly build</div>
         <div class="spinner" id="spinner"></div>
         <div id="status">Downloading...</div>
+        <progress value="0" max="100" id="progress" hidden></progress>
       </div>
+    </main>
 
-      <span id="controls">
-        <label><input type="checkbox" id="resize">Resize canvas</label>
-        <label><input type="checkbox" id="pointerLock" checked>Lock/hide mouse pointer</label>
-        <input type="button" value="Fullscreen" onclick="Module.requestFullscreen(document.getElementById('pointerLock').checked,
-                                                                                  document.getElementById('resize').checked)">
-      </span>
+    <div id="console">
+      <textarea id="output" readonly spellcheck="false"></textarea>
     </div>
-
-    <div class="emscripten">
-      <progress value="0" max="100" id="progress" hidden=1></progress>
-    </div>
-
-    <div class="emscripten_border">
-      <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex=-1></canvas>
-    </div>
-    <textarea id="output" rows="8"></textarea>
 
     <script type="text/javascript">
       var statusElement = document.getElementById('status');
       var progressElement = document.getElementById('progress');
       var spinnerElement = document.getElementById('spinner');
+      var overlayElement = document.getElementById('overlay');
       var canvasElement = document.getElementById('canvas');
       var outputElement = document.getElementById('output');
       if (outputElement) outputElement.value = '';
 
+      document.getElementById('consoleToggle').addEventListener('click', (e) => {
+        var open = document.body.classList.toggle('console-open');
+        e.currentTarget.setAttribute('aria-pressed', open ? 'true' : 'false');
+        syncCanvasSize();
+      });
+
+      var showOverlayError = (text) => {
+        overlayElement.classList.remove('hidden');
+        overlayElement.classList.add('error');
+        spinnerElement.style.display = 'none';
+        progressElement.hidden = true;
+        statusElement.innerHTML = text;
+      };
+
       canvasElement.addEventListener('webglcontextlost', (e) => {
-        alert('WebGL context lost. You will need to reload the page.');
+        showOverlayError('WebGL context lost &mdash; reload the page.');
         e.preventDefault();
       }, false);
+
+      // Keep the GL framebuffer 1:1 with the canvas element so the app fills
+      // the window with no CSS stretch. Window resizes are already synced by
+      // Emscripten's GLUT (GLUT.onResize), but the initial glutInitWindowSize
+      // and element-only reflows (console drawer toggle) are not; route both
+      // through Browser.setCanvasSize, which fires the app's reshape callback.
+      // Browser/GLUT are globals in non-MODULARIZE builds; poll until GLUT
+      // has registered its reshape listener before driving sizes.
+      var glutReady = false;
+      var syncCanvasSize = () => {
+        if (!glutReady) return;
+        var w = Math.max(320, canvasElement.clientWidth | 0);
+        var h = Math.max(240, canvasElement.clientHeight | 0);
+        if (canvasElement.width !== w || canvasElement.height !== h) {
+          Browser.setCanvasSize(w, h);
+        }
+      };
+      var readyPoll = setInterval(() => {
+        if (typeof Browser === 'undefined' || !Browser.resizeListeners.length) return;
+        clearInterval(readyPoll);
+        glutReady = true;
+        syncCanvasSize();
+        if (typeof ResizeObserver !== 'undefined') {
+          var pending = 0;
+          new ResizeObserver(() => {
+            clearTimeout(pending);
+            pending = setTimeout(syncCanvasSize, 60);
+          }).observe(canvasElement);
+        } else {
+          window.addEventListener('resize', syncCanvasSize);
+        }
+      }, 50);
 
       var setStatus = (text) => {
         if (!setStatus.last) setStatus.last = { time: Date.now(), text: '' };
@@ -163,12 +327,9 @@
           progressElement.value = parseInt(m[2]) * 100;
           progressElement.max = parseInt(m[4]) * 100;
           progressElement.hidden = false;
-          spinnerElement.hidden = false;
         } else {
-          progressElement.value = null;
-          progressElement.max = null;
           progressElement.hidden = true;
-          if (!text) spinnerElement.style.display = 'none';
+          if (!text) overlayElement.classList.add('hidden');
         }
         statusElement.innerHTML = text;
       };
@@ -196,8 +357,7 @@
       };
       setStatus('Downloading...');
       window.onerror = window.onunhandledrejection = () => {
-        setStatus('Exception thrown, see JavaScript console');
-        spinnerElement.style.display = 'none';
+        showOverlayError('Exception thrown &mdash; see the JavaScript console.');
         setStatus = (text) => {
           if (text) console.error('[post-exception status] ' + text);
         };
