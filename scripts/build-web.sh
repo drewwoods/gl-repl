@@ -276,7 +276,7 @@ build_one() {
             elif [[ -n "${preload_flag}" ]]; then
                 repl_preload="${preload_flag}"
             fi
-            local repl_web_exports="-sEXPORTED_FUNCTIONS=_main,_glr_web_load_scene_text,_glr_web_export_scene -sEXPORTED_RUNTIME_METHODS=ccall,FS"
+            local repl_web_exports="-sEXPORTED_FUNCTIONS=_main,_glr_web_new_scene,_glr_web_load_scene_text,_glr_web_export_scene -sEXPORTED_RUNTIME_METHODS=ccall,FS"
 
             pushd "${sample_dir}" > /dev/null
             # Ship a web-specific example set: a trimmed catalog (drop examples

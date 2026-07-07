@@ -239,6 +239,7 @@
       </div>
       <div class="spacer"></div>
       <input type="file" id="sceneFileInput" accept=".c,text/plain" hidden>
+      <button type="button" class="keycap" id="newSceneButton" disabled>new</button>
       <button type="button" class="keycap" id="openSceneButton" disabled>open</button>
       <button type="button" class="keycap" id="downloadSceneButton" disabled>download</button>
       <button type="button" class="keycap" id="consoleToggle" aria-pressed="false">console</button>
@@ -271,6 +272,7 @@
       var canvasElement = document.getElementById('canvas');
       var outputElement = document.getElementById('output');
       var sceneFileInput = document.getElementById('sceneFileInput');
+      var newSceneButton = document.getElementById('newSceneButton');
       var openSceneButton = document.getElementById('openSceneButton');
       var downloadSceneButton = document.getElementById('downloadSceneButton');
       var lastSceneFilename = 'gl-repl-scene.c';
@@ -279,6 +281,7 @@
       var sceneControlsReady = false;
       var setSceneControlsReady = (ready) => {
         sceneControlsReady = ready;
+        newSceneButton.disabled = !ready;
         openSceneButton.disabled = !ready;
         downloadSceneButton.disabled = !ready;
       };
@@ -329,6 +332,14 @@
         canvasElement.focus();
       };
 
+      newSceneButton.addEventListener('click', () => {
+        if (!sceneControlsReady) return;
+        var ok = Module.ccall('glr_web_new_scene', 'number', [], []);
+        if (ok) {
+          lastSceneFilename = 'gl-repl-scene.c';
+          canvasElement.focus();
+        }
+      });
       openSceneButton.addEventListener('click', () => {
         if (sceneControlsReady) sceneFileInput.click();
       });
