@@ -166,6 +166,14 @@ above) supplies solids/fonts. `make web-serve` serves the result at
 gitignored `third_party/web/`. See [`packaging/web/README.md`](packaging/web/README.md) for the
 windowing/GL/audio/input-shim details and `make help-details` for the knobs.
 
+**`emcc` on `PATH` is per-shell.** Running `scripts/build-web.sh` sources
+emsdk inside its own subprocess, so it does **not** leave `emcc` on `PATH`
+for a later bare `make web` in your interactive shell — each
+`scripts/build-web.sh` run is self-contained instead. To make plain `make
+web` work directly in a shell, run `source ~/src/emsdk/emsdk_env.sh` (as
+`source`, not `./emsdk_env.sh`) in that shell yourself first; it then stays
+on `PATH` for the rest of that shell session.
+
 ### macOS app bundle (`make app`)
 
 `make app` packages the binary into `gl-repl.app` so the Dock/Finder show
