@@ -18,6 +18,7 @@
 /* @cfg light_theme = LIGHT_THEME_DEFAULT */
 /* @cfg backdrop = RENDER3D_BACKDROP_OFF */
 /* @cfg auto_normals = 0 */
+/* @cfg post_filter = GLR_POST_FILTER_OFF */
 /* @cfg view_mode = RENDER3D_VIEW_3D */
 /* @cfg camera_rotate = 0 */
 /* @cfg vertex_labels = 1 */

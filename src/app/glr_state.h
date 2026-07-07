@@ -42,14 +42,13 @@ typedef struct {
     int show_light_indicators;
     int light_theme;
     int backdrop_mode;
-    /* Experimental scene post-processing (Render3dPostFilterMode).
-     * Session-level only: F10 / Shift+F10 cycles it; never in @cfg / examples. */
+    /* Scene post-processing filter (Render3dPostFilterMode).
+     * Backed by post_filter Config row, persisted in @cfg. */
     int post_filter_mode;
-    /* Experimental whole-frame (compositor) post-processing
-     * (Render3dPostFilterMode), applied over the entire composited frame by
-     * the glr_compositor hook at the end of glr_ctrl_display_frame.
-     * Session-level only; the same F10 / Shift+F10 cycle drives it, kept
-     * mutually exclusive with post_filter_mode (Off -> scene -> frame -> Off). */
+    /* Whole-frame (compositor) post-processing (Render3dPostFilterMode),
+     * applied over the entire composited frame by the glr_compositor hook
+     * at the end of glr_ctrl_display_frame. Managed via same post_filter
+     * Config row. */
     int compositor_filter_mode;
     int highlight_current_poly;
     /* Winding-visualization view: paint front faces green, back (inside-out)

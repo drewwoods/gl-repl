@@ -1482,12 +1482,13 @@ static void test_fkey_reassignment_and_alt_shortcuts(void) {
                     glr_config_get(fmap[i].key) != before);
     }
 
-    /* F10 moved off the g_cfg_items table entirely (it now drives the
-     * hidden post-process filter cycle via a bespoke special-key handler,
-     * not glr_cfg_handle_special_shortcut) — Syntax highlight lives on
-     * Ctrl+Shift+Y instead, covered in test_ascii_shortcut_modifiers. */
-    ASSERT_INT("F10 no longer claimed by the cfg special-shortcut dispatcher",
-               glr_cfg_handle_special_shortcut(GLUT_KEY_F10), 0);
+    /* F10 is now part of the config table, and handles the post-process filter cycle. */
+    glr_state_presentation_mut()->post_filter_mode = 0;
+    glr_state_presentation_mut()->compositor_filter_mode = 0;
+    ASSERT_INT("F10 is claimed by the cfg special-shortcut dispatcher",
+               glr_cfg_handle_special_shortcut(GLUT_KEY_F10), 1);
+    ASSERT_INT("F10 cycles to chromatic aberration (scene)",
+               (int)glr_state_presentation().post_filter_mode, (int)RENDER3D_POST_FILTER_CHROMATIC_ABERRATION);
 
     /* Wireframe -> plain Ctrl+G. */
     glr_state_presentation_mut()->wireframe = 0;

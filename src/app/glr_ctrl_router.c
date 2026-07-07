@@ -241,10 +241,9 @@ void glr_ctrl_toggle_code_focus(void) {
 }
 
 /* Ctrl+Shift+F: toggle the code-panel focus view. Ctrl+F (no Shift)
- * stays the search shortcut handled downstream in editor_handle_key;
- * the Shift modifier disambiguates, and this router runs ahead of the
- * editor so search never sees the shifted form. Hidden shortcut only —
- * no Config row, no @cfg (mirrors the F10 post-filter pattern). */
+ * stays the search shortcut handled downstream in editor_handle_key; the Shift
+ * modifier disambiguates, and this router runs ahead of the editor so search
+ * never sees the shifted form. Hidden shortcut only — no Config row, no @cfg. */
 int glr_ctrl_router_handle_code_focus_key(unsigned char key) {
     if (!keymap_event_is(key, GLR_CODE_FOCUS))
         return 0;
@@ -1531,7 +1530,6 @@ void glr_ctrl_special(int key, int x, int y) {
 
     if (glr_ctrl_router_handle_replay_special(key) ||
         glr_ctrl_router_handle_cfg_special_shortcut(key) ||
-        glr_ctrl_router_handle_post_filter_special_key(key) ||
         glr_ctrl_router_handle_horizontal_audio_special(key) ||
         glr_ctrl_router_handle_help_tab_special(key) ||
         glr_ctrl_router_handle_help_scroll_special(key) ||
