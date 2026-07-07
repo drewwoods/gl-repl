@@ -144,10 +144,14 @@ upstream: $UPSTREAM_URL
 ref:      $REF
 sha:      $SHA
 
-Produced by scripts/vendor-freeglut.sh. Do NOT edit the vendored tree by hand;
-re-run the script with a ref to update. The Makefile's libglut.a rule depends
-on this file, so the next \`make\` rebuilds the static library from the new
-source and relinks; \`make freeglut-clean\` forces a full from-scratch rebuild.
+Produced by:
+  FREEGLUT_REPO=$UPSTREAM_URL scripts/vendor-freeglut.sh $REF
+
+Do NOT edit the vendored tree by hand; re-run the command above (with a
+different <ref>, or FREEGLUT_REPO, to update) instead. The Makefile's
+libglut.a rule depends on this file, so the next \`make\` rebuilds the
+static library from the new source and relinks; \`make freeglut-clean\`
+forces a full from-scratch rebuild.
 EOF
 
 echo

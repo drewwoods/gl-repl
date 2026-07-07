@@ -1,10 +1,14 @@
 freeglut vendored into this tree.
 
-upstream: /Users/drew/src/freeglut-fork
+upstream: https://github.com/drewwoods/freeglut
 ref:      emscripten-backend
 sha:      df8d7c620b5dec5a9c73950836fcd468f1b0a806
 
-Produced by scripts/vendor-freeglut.sh. Do NOT edit the vendored tree by hand;
-re-run the script with a ref to update. The Makefile's libglut.a rule depends
-on this file, so the next `make` rebuilds the static library from the new
-source and relinks; `make freeglut-clean` forces a full from-scratch rebuild.
+Produced by:
+  FREEGLUT_REPO=https://github.com/drewwoods/freeglut scripts/vendor-freeglut.sh emscripten-backend
+
+Do NOT edit the vendored tree by hand; re-run the command above (with a
+different <ref>, or FREEGLUT_REPO, to update) instead. The Makefile's
+libglut.a rule depends on this file, so the next `make` rebuilds the
+static library from the new source and relinks; `make freeglut-clean`
+forces a full from-scratch rebuild.
