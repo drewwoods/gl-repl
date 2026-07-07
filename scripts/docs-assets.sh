@@ -421,7 +421,7 @@ EOF
 
 EX_HERO="Teapot carousel (transform stacks + glow points)"
 EX_ORRERY="Orrery (labels track 3D orbits)"
-EX_GLU="GLU tessellator (concave arrow)"
+EX_GLU="GLU concave arrow"
 EX_GLOW="Glow sprites (blend + point attenuation)"
 EX_XFORM="Transform stress (translate/rotate/scale guides)"
 EX_RING="Animated ring (for + t)"
