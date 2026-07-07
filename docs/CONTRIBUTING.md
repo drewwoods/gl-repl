@@ -28,6 +28,11 @@ has a versioned name. `test-msan` also sets `GLR_AUDIO_NO_DEVICE=1` so
 the audio tests exercise the engine without opening host audio backends.
 `make test BUILD=release` is the fast unsanitized run.
 
+`make web` (or `scripts/build-web.sh` for a cold start with no emsdk
+sourced yet) builds the Emscripten/wasm browser target; see the
+"Web build (Emscripten)" section of `CLAUDE.md` and
+[`packaging/web/README.md`](../packaging/web/README.md).
+
 ## The guard suite
 
 CI-grade checks live in the Makefile, and a PR is expected to keep them

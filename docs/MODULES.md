@@ -193,6 +193,10 @@ Compiled neutral helpers live under [`src/support/`](../src/support/README.md)
 instead of the repository root. That directory is for source-backed utilities
 with no ownership of REPL/editor/render3d/UI/app state.
 
+Project-owned files for the Emscripten/wasm web build live under
+[`packaging/web/`](../packaging/web/README.md) (the themed shell + gl4es
+bootstrap TU); see the `Web build (Emscripten)` section of `CLAUDE.md`.
+
 ## Standalone Demo Binaries (Layer Independence Proofs)
 
 Several binaries under `tools/` build with deliberately slim object
