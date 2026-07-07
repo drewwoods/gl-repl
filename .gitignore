@@ -16,6 +16,9 @@ build/
 # tree. The vendored *source* under third_party/freeglut/ is checked in; only
 # its build*/ trees are generated.
 third_party/freeglut/build*/
+# gl4es + GLU wasm static libs and checkouts, fetched/built by
+# scripts/web-deps.sh for the WEB=1 build.
+third_party/web/
 workspace/
 bench_repl
 /render3d_demo

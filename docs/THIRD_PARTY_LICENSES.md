@@ -54,6 +54,59 @@ license text, reproduced verbatim from `third_party/freeglut/COPYING`:
 
 ---
 
+## gl4es
+
+- **Upstream:** <https://github.com/ptitSeb/gl4es>
+- **Fetched/built by:** `scripts/web-deps.sh`, into gitignored
+  `third_party/web/gl4es/` (not vendored in-tree — the build is
+  toolchain-specific to the pinned Emscripten SDK). Pinned SHA recorded in
+  `third_party/web/PINNED.txt` after a build; default pin at time of writing
+  is `17f0894e19d1553e4176276c759915dab44c08e2`.
+- **License:** MIT. Reproduced verbatim from gl4es's `LICENSE`:
+
+```
+Copyright (c) 2016-2018 Sebastien Chevalier
+Copyright (c) 2013-2016 Ryan Hileman
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+```
+
+---
+
+## GLU
+
+- **Upstream:** <https://github.com/ptitSeb/GLU> — a standalone-buildable
+  extraction of Mesa's GLU (tessellator, quadrics, NURBS, projection
+  helpers), used here only for its Emscripten static build.
+- **Fetched/built by:** `scripts/web-deps.sh`, into gitignored
+  `third_party/web/GLU/` (same rationale as gl4es above). Pinned SHA
+  recorded in `third_party/web/PINNED.txt`; default pin at time of writing
+  is `2fed2bda2b725d2b9e32c435b48d5141cc95827f`.
+- **License:** SGI Free Software License B (the license Mesa's GLU
+  implementation ships under, which this fork is derived from) — permissive,
+  no attribution required in binary distributions. The checkout carries no
+  bundled `LICENSE`/`COPYING` file; see the upstream repo or
+  <https://www.khronos.org/legal/free_and_open_source_notices> for the exact
+  license text.
+
+---
+
 ## miniaudio
 
 - **Upstream:** <https://github.com/mackron/miniaudio>
