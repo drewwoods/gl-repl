@@ -42,6 +42,16 @@ static const char *g_menu_labels[NUM_MENUS] = {
     "File", "Scene", "Tutorials", "Config", "Audio"
 };
 
+/* The browser shell owns file I/O in Emscripten: New/Open/Download are
+ * DOM controls wired to web-safe import/export bridges, not path prompts. */
+static int menu_visible(int menu_id) {
+#if defined(__EMSCRIPTEN__)
+    if (menu_id == MENU_FILE)
+        return 0;
+#endif
+    return menu_id >= 0 && menu_id < NUM_MENUS;
+}
+
 /* Menubar bottom hairline: intentionally pure #000 in every theme
  * (design ref) - a theme-stable rule, not an accent. Kept as a named
  * constant per theme.h's "named constant" bucket, not a token. */
@@ -582,6 +592,11 @@ static void menubar_rects(int menu_x[NUM_MENUS], int menu_w[NUM_MENUS],
 
     int x = cp_x + CODE_MARGIN_X;
     for (int i = 0; i < NUM_MENUS; i++) {
+        if (!menu_visible(i)) {
+            menu_x[i] = x;
+            menu_w[i] = 0;
+            continue;
+        }
         int label_w = (int)strlen(g_menu_labels[i]) * FONT_SMALL_W;
         menu_w[i] = label_w + MENU_LABEL_PAD_X;
         menu_x[i] = x;
@@ -601,7 +616,7 @@ static void menubar_rects(int menu_x[NUM_MENUS], int menu_w[NUM_MENUS],
     pin_x[PIN_VIEW_MODE] = pin_x[PIN_REPLAY] - pin_w[PIN_VIEW_MODE];
 
     /* PIN_SEARCH - fills the gap between the last menu and PIN_VIEW_MODE. */
-    int menus_right = menu_x[NUM_MENUS - 1] + menu_w[NUM_MENUS - 1];
+    int menus_right = x;
     int search_w = pin_x[PIN_VIEW_MODE] - menus_right;
     if (search_w < PIN_SEARCH_MIN_W) search_w = PIN_SEARCH_MIN_W;
     pin_w[PIN_SEARCH] = search_w;
@@ -617,8 +632,10 @@ static int ui_menu_bar_menu_hit(int gx, int gy) {
     int ry = ui_state_viewport().window_h - gy;
     menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
     if (ry < by || ry >= by + bh) return -1;
-    for (int i = 0; i < NUM_MENUS; i++)
+    for (int i = 0; i < NUM_MENUS; i++) {
+        if (!menu_visible(i)) continue;
         if (gx >= menu_x[i] && gx < menu_x[i] + menu_w[i]) return i;
+    }
     return -1;
 }
 
@@ -650,7 +667,7 @@ static struct {
  * transition). Returns 0 when no menu is open. */
 static int menu_dropdown_rect(int *dx, int *dy, int *dw, int *dh) {
     int win_w, win_h;
-    if (g_open_menu < 0) return 0;
+    if (g_open_menu < 0 || !menu_visible(g_open_menu)) return 0;
     if (!ui_menu_bar_panel_visible()) return 0;
 
     win_w = ui_state_viewport().window_w;
@@ -1314,7 +1331,7 @@ void ui_menu_bar_close(void) {
 }
 
 void ui_menu_bar_set_open_menu(int menu_id, float now) {
-    if (menu_id < 0 || menu_id >= NUM_MENUS) {
+    if (menu_id < 0 || menu_id >= NUM_MENUS || !menu_visible(menu_id)) {
         ui_menu_bar_close();
         return;
     }
@@ -1902,6 +1919,7 @@ static void paint_menu_labels(const int *menu_x, const int *menu_w,
                               int by, int bh, int hover_menu) {
     int i;
     for (i = 0; i < NUM_MENUS; i++) {
+        if (!menu_visible(i)) continue;
         int active = (g_open_menu == i);
         int hover  = (hover_menu == i);
         if (active) {
