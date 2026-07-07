@@ -963,19 +963,27 @@ extern SFG_State fgState;
  * A call to this function makes us sure that the Display and Structure
  * subsystems have been properly initialized and are ready to be used
  */
+#ifdef __EMSCRIPTEN__
+#define  FREEGLUT_EXIT_IF_NOT_INITIALISED( string )
+#else
 #define  FREEGLUT_EXIT_IF_NOT_INITIALISED( string )               \
   if ( ! fgState.Initialised )                                    \
   {                                                               \
     fgError ( " ERROR:  Function <%s> called"                     \
               " without first calling 'glutInit'.", (string) ) ;  \
   }
+#endif
 
+#ifdef __EMSCRIPTEN__
+#define  FREEGLUT_INTERNAL_ERROR_EXIT_IF_NOT_INITIALISED( string )
+#else
 #define  FREEGLUT_INTERNAL_ERROR_EXIT_IF_NOT_INITIALISED( string )  \
   if ( ! fgState.Initialised )                                      \
   {                                                                 \
     fgError ( " ERROR:  Internal <%s> function called"              \
               " without first calling 'glutInit'.", (string) ) ;    \
   }
+#endif
 
 #define  FREEGLUT_INTERNAL_ERROR_EXIT( cond, string, function )  \
   if ( ! ( cond ) )                                              \
