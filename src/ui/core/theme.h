@@ -7,7 +7,7 @@
  * runtime theme switch (ui_theme_select) updates exactly one storage
  * site rather than one copy per TU.
  *
- * Three buckets of color (see docs/plans/active/UI-Color-Theming-Infrastructure.md):
+ * Three buckets of color (see docs/plans/done/UI-Color-Theming-Infrastructure.md):
  *   1. Theme token    -> ui_clr(UI_TOK_*) here.
  *   2. Named constant  -> a local #define / static const at the use site
  *                         (fixed, non-theme one-offs; not table slots).

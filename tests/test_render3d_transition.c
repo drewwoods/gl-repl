@@ -1,6 +1,6 @@
 /*
  * test_scene_transition.c - pure grid/axes fade state machine.
- * Maps to docs/plans/active/grid-axes-transitions.md rules.
+ * Maps to docs/plans/done/grid-axes-transitions.md rules.
  */
 #include "render3d/render3d_transition.h"
 #include "support/test_harness.h"

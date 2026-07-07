@@ -70,7 +70,7 @@ if [ "$count" -gt "$baseline" ]; then
     echo "       repl_state_document_cmds(), repl_eval_predef_view()) or" >&2
     echo "       move the write into an owner file (state.c / apply.c /" >&2
     echo "       command_store.c / eval.c). See audit #7/#14 in" >&2
-    echo "       docs/plans/active/src-repl-code-smell-audit-2.md." >&2
+    echo "       docs/plans/done/src-repl-code-smell-audit-2.md." >&2
     exit 1
 fi
 

@@ -558,7 +558,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
 # controllers are not linked at all; the demo provides its own
 # generic input dispatcher (tools/editor_demo/input.c) and File menu
 # (tools/editor_demo/menu.c). Phase 5 of
-# docs/plans/in-review/edit-line-ownership.md deleted the former
+# docs/plans/done/edit-line-ownership.md deleted the former
 # tools/editor_demo/repl_shim.c — the prior ~85-stub shim went away
 # with the controller files (Phase 8.7 of editor-demo.md) and the
 # residual edit-line forwarder went away with the storage flip
@@ -1050,7 +1050,7 @@ repl_demo: FORCE $(REPL_DEMO_BIN) ## Build the standalone REPL pipeline demo.
 # stand in for the REPL-flavored controller files
 # (src/editor/{input,commit,clipboard,undo,reformat,search,completion}.c
 # and the inline overlays), which Phase 8.7 dropped from this link
-# set entirely. Phase 5 of docs/plans/in-review/edit-line-ownership.md
+# set entirely. Phase 5 of docs/plans/done/edit-line-ownership.md
 # deleted the former tools/editor_demo/repl_shim.c — after Phase 4
 # moved edit-line storage to EditorState, the shim's
 # repl_state_edit_line stubs had no remaining callers.
