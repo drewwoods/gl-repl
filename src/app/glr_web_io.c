@@ -7,6 +7,7 @@
  */
 #if defined(__EMSCRIPTEN__)
 
+#include "app/glr_camera.h"
 #include "app/glr_ctrl_export.h"
 #include "editor/input.h"
 #include "editor/state.h"
@@ -18,6 +19,19 @@
 
 #include <emscripten/emscripten.h>
 #include <stdio.h>
+
+/* Browser shell "new" button: mirror File > New Scene's app-side effects
+ * without exposing the native File menu in the web build. */
+EMSCRIPTEN_KEEPALIVE
+int glr_web_new_scene(void) {
+    int slot = repl_scenes_create_empty_user_scene();
+    if (slot < 0)
+        return 0;
+
+    editor_undo_note_wholesale_replacement();
+    glr_camera_clear_scene_default();
+    return 1;
+}
 
 static void web_load_error_status(ReplSceneLoadStatus reason) {
     switch (reason) {

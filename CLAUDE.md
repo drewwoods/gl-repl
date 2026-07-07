@@ -1270,7 +1270,7 @@ alongside `.cfg` (see the file-layout table for the tutorial catalog).
   fails on interleaving (e.g., catalog order "Beginner, Intermediate,
   Beginner" would render two "Beginner" headers in the Geometry
   flyout). The walker is the generic `src/ui/app/menu_bar.c::catalog_flyout_row_at`
-  + [`CatalogFlyoutOps`](src/ui/app/menu_bar.c#L233) vtable, shared with the Scene example flyout
+  + [`CatalogFlyoutOps`](src/ui/app/menu_bar.c#L248) vtable, shared with the Scene example flyout
   ([`examples/catalog.ini`](examples/catalog.ini) carries the example `group` values
   that generate `ReplExampleEntry.subheading` — see `test_example_subheading_metadata`).
 
