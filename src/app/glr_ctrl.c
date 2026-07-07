@@ -965,6 +965,13 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
     config->post_overlays_fn        = edit_overlays_post_overlays;
     config->post_overlays_user_data = &g_overlay_pack;
 
+    /* --- Post-resolve overlays hook (bitmap-text labels) ---
+     * Same pack, but invoked once per frame after the accumulation
+     * resolve so AA jitter / blur sub-passes can't ghost the
+     * pixel-snapped label glyphs. */
+    config->post_resolve_overlays_fn        = edit_overlays_post_resolve_overlays;
+    config->post_resolve_overlays_user_data = &g_overlay_pack;
+
     /* --- Background clear color ---
      * Resolve from the user's last CMD_CLEAR_COLOR (or the editor
      * default if none). Scene takes the pre-resolved float[4] and

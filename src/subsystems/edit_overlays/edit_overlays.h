@@ -84,6 +84,11 @@ void edit_overlays_render_cursor_guides(const Render3dGuideSnapshot *snapshot,
 
 void edit_overlays_post_overlays(void *user_data);
 
+/* Once-per-frame bitmap-text label passes (vertex numbers + replay
+ * vertex label), run on the resolved frame via post_resolve_overlays_fn
+ * instead of inside the accumulation loop. */
+void edit_overlays_post_resolve_overlays(void *user_data);
+
 Render3dGuideSnapshot cursor_guide_snapshot_with_flat_args(const Render3dGuideSnapshot *snapshot,
                                                         const GLCmd *flat,
                                                         int flat_idx);

@@ -149,6 +149,18 @@ typedef struct Render3dRenderConfig {
     void (*post_overlays_fn)(void *user_data);
     void  *post_overlays_user_data;
 
+    /* --- Optional post-resolve overlays hook ---
+     * Invoked ONCE per frame on the fully resolved scene image — after
+     * the accumulation resolve (glAccum GL_RETURN), or after the single
+     * pass when accumulation is off — with the canonical jitter-free
+     * projection re-applied and the caller's camera modelview live.
+     * Bitmap-text annotation (vertex-number labels) draws here: inside
+     * the accum loop each AA/blur sub-pass would stamp the pixel-snapped
+     * glyphs at a slightly different position, ghosting the text. The
+     * REPL controller installs this; non-REPL callers leave it NULL. */
+    void (*post_resolve_overlays_fn)(void *user_data);
+    void  *post_resolve_overlays_user_data;
+
     /* --- Background clear color (RGBA) ---
      * Populated by the controller from the user's CMD_CLEAR_COLOR (or a
      * default if none was set). The scene module no longer scans the

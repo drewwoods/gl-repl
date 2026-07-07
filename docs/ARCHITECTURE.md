@@ -453,7 +453,7 @@ metadata, and the [`Render3dFocusVertex`](../src/render3d/render_types.h#L123) /
 3D overlays.
 
 Render3d-local accumulation jitter does not live in the config. Derived
-per-pass data belongs in [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L289), for example camera world height,
+per-pass data belongs in [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L301), for example camera world height,
 focus vertex, and other values that helper renderers should share.
 
 ## Render3d Layer
@@ -686,7 +686,7 @@ functions or loops.
 [`edit_overlays_render_cursor_guides()`](../src/subsystems/edit_overlays/edit_overlays.h#L82) walks the current [`FlatProgramView`](../src/repl/flatten.h#L45) via
 the replay/user-vertex walkers while tracking the modelview with
 `apply_tracked_transform` / `unwind_transform_stack`. At the cursor's first flat
-command, [`cursor_guide_snapshot_with_flat_args()`](../src/subsystems/edit_overlays/edit_overlays.h#L87) replaces `vertex_args` or
+command, [`cursor_guide_snapshot_with_flat_args()`](../src/subsystems/edit_overlays/edit_overlays.h#L92) replaces `vertex_args` or
 `normal_args` from the already-substituted flat command. For normal guides it
 also walks forward to find the live anchor point, because source-line parsing
 alone cannot know the world-space vertex the normal belongs to. Argument-slot
@@ -998,7 +998,7 @@ include `ui_*` headers.
 
 ### Render3d state access
 
-Target rule: `render3d_*` files consume [`Render3dRenderConfig`](../src/render3d/render_types.h#L131), [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L289),
+Target rule: `render3d_*` files consume [`Render3dRenderConfig`](../src/render3d/render_types.h#L131), [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L301),
 or explicit snapshot structs. They should not call `repl_state_*` directly.
 
 `check-state-boundaries` enforces the current audited boundary.
