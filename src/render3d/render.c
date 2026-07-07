@@ -836,6 +836,7 @@ int render3d_draw_scene(Render3dState *state,
         /* Full-window clear once — this is the frame's only clear, so the
          * chrome regions outside the scene rect (menu bar, status bar,
          * code-panel backdrop) depend on it before the 2D overlays paint. */
+        prof_begin(PROF_RENDER3D_ACCUM_EFFECT);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT);
         /* Optionally confine the repeated per-pass clears and the glAccum
          * read/return to the scene viewport: glClear/glAccum are bounded by
@@ -851,8 +852,10 @@ int render3d_draw_scene(Render3dState *state,
             glScissor(config->render3d_x, config->render3d_y,
                       config->render3d_w, config->render3d_h);
         }
+        prof_accum_end(PROF_RENDER3D_ACCUM_EFFECT);
         float weight = 1.0f / (float)accum_passes;
         for (int pass_idx = 0; pass_idx < accum_passes; pass_idx++) {
+            prof_begin(PROF_RENDER3D_ACCUM_EFFECT);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             if (blur) {
                 /* Per-pass mutable copy: the callback may rewrite cam_* so
@@ -864,17 +867,23 @@ int render3d_draw_scene(Render3dState *state,
                 config->setup_subframe_fn(config->setup_subframe_user_data,
                                           pass_idx, accum_passes, &pass_cfg);
                 render3d_compute_active_projection(state, &pass_cfg);
+                prof_accum_end(PROF_RENDER3D_ACCUM_EFFECT);
                 render_3d_scene_pass(state, &pass_cfg, 0.0f, 0.0f);
             } else {
+                prof_accum_end(PROF_RENDER3D_ACCUM_EFFECT);
                 render_3d_scene_pass(state, config,
                                      g_jitter_table[pass_idx % MAX_ACCUM_SAMPLES][0],
                                      g_jitter_table[pass_idx % MAX_ACCUM_SAMPLES][1]);
             }
+            prof_begin(PROF_RENDER3D_ACCUM_EFFECT);
             glAccum(GL_ACCUM, weight);
+            prof_accum_end(PROF_RENDER3D_ACCUM_EFFECT);
         }
+        prof_begin(PROF_RENDER3D_ACCUM_EFFECT);
         glAccum(GL_RETURN, 1.0f);
         if (use_scissor)
             glDisable(GL_SCISSOR_TEST);
+        prof_accum_end(PROF_RENDER3D_ACCUM_EFFECT);
     } else {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         render_3d_scene_pass(state, config, 0.0f, 0.0f);

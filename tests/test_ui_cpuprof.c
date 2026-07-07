@@ -30,6 +30,8 @@ static void test_cpuprof_metrics(void) {
 static void test_gpu_section_policy(void) {
     /* GL-emitting sections are GPU-bracketed... */
     ASSERT_INT_EQ("scene 3d is gpu", glr_prof_section_is_gpu(PROF_RENDER3D), 1);
+    ASSERT_INT_EQ("accum effect is gpu",
+                  glr_prof_section_is_gpu(PROF_RENDER3D_ACCUM_EFFECT), 1);
     ASSERT_INT_EQ("code panel is gpu", glr_prof_section_is_gpu(PROF_CODE_PANEL), 1);
     ASSERT_INT_EQ("frame total is gpu", glr_prof_section_is_gpu(PROF_FRAME_TOTAL), 1);
     /* ...pure-CPU sections and the per-fade-batch budget exclusions are not. */
