@@ -12,7 +12,7 @@
 
 ```bash
 ./gl-repl --example "Jellyfish (glDepthMask translucency)"   # by name (case-insensitive)
-./gl-repl --example 23                                       # or by 0-based index
+./gl-repl --example 24                                       # or by 1-based index
 ./gl-repl --list-examples                                    # canonical names + indices
 ```
 

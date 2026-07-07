@@ -20,7 +20,7 @@ gl-repl [file.c | workspace/] [--example name|n] [--time secs]
 |---|---|
 | *file*.c | Reload a previously saved session from a single file. |
 | *workspace*/ | Load every `*.c` under the directory as a separate scene. |
-| `--example` *name*\|*n* | Start on a built-in example (case-insensitive name, or 0-based index). |
+| `--example` *name*\|*n* | Start on a built-in example (case-insensitive name, or 1-based index). |
 | `--list-examples` | Print the built-in examples and exit. |
 | `--time` *secs* | Initial value of the animation variable `t` (applied after any `--example` load). |
 | `--export-ply` *out*.ply | Capture the scene geometry to an ASCII PLY mesh on frame 1, then exit. |
@@ -127,7 +127,7 @@ running headless process** by sending it `SIGUSR1`:
 ```bash
 brew install mesa mesa-glu                       # macOS deps (Linux: apt-get install libosmesa6-dev)
 make gl-repl FREEGLUT_OSMESA=1
-FREEGLUT_CAPTURE_FILE=/tmp/shot ./build/release-osmesa/gl-repl --example 8 --no-audio &
+FREEGLUT_CAPTURE_FILE=/tmp/shot ./build/release-osmesa/gl-repl --example 9 --no-audio &
 kill -USR1 $!                                    # writes /tmp/shot-0000.ppm
 magick /tmp/shot-0000.ppm shot.png               # PPM -> PNG to view
 ```
@@ -145,7 +145,7 @@ later point in the timeline, set the initial `t` with `--time <secs>` (or
 `GLR_TIME`):
 
 ```bash
-./build/release-osmesa/gl-repl --example 2 --time 5 --no-audio &
+./build/release-osmesa/gl-repl --example 3 --time 5 --no-audio &
 ```
 
 **Posing the cursor.** Cursor-bound overlays (transform guides, vertex
@@ -164,8 +164,8 @@ rendered frame to a numbered PPM and exits after N frames.
 
 ```bash
 make gl-repl FREEGLUT_OSMESA=1
-scripts/record-gif.sh --example 2 --duration 3 --out ring        # ring.gif + ring.mp4
-scripts/record-gif.sh --example 8 --duration 4 --fps 30 --scale 600 --time 5 --out torus
+scripts/record-gif.sh --example 3 --duration 3 --out ring        # ring.gif + ring.mp4
+scripts/record-gif.sh --example 9 --duration 4 --fps 30 --scale 600 --time 5 --out torus
 ```
 
 `--duration <secs>` × `--fps` sets the frame count; `--scale <w>` downsizes;
@@ -251,8 +251,8 @@ synthesized.
 Headless / scripted capture:
 
 ```bash
-./gl-repl --example 8 --export-ply out.ply                     # capture on frame 1, then exit
-./gl-repl --example 8 --export-ply out.ply --export-ply-srgb   # decode colors sRGB -> linear
+./gl-repl --example 9 --export-ply out.ply                     # capture on frame 1, then exit
+./gl-repl --example 9 --export-ply out.ply --export-ply-srgb   # decode colors sRGB -> linear
 ```
 
 Line primitives (`glBegin(GL_LINES/LINE_STRIP/LINE_LOOP)`) export as a PLY

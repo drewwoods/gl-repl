@@ -1021,7 +1021,7 @@ the REPL. Two rules keep the round trip clean:
   inside a `for`/`if` block (the block's per-frame cost), `call cmds 96` on
   a call line (that call's inclusive expansion), `line cmds 12` on a plain
   line that expands more than once. For an offline breakdown,
-  `./gl-repl --example 28 --flat-histogram` prints per-function and
+  `./gl-repl --example 29 --flat-histogram` prints per-function and
   per-line costs sorted by spend.
 
 > **Advanced — extending the REPL itself.** If you want a GL call the REPL
@@ -1045,8 +1045,8 @@ primitives export as PLY edges.
 Headless / scripted capture:
 
 ```bash
-./gl-repl --example 8 --export-ply out.ply                 # capture frame 1, exit
-./gl-repl --example 8 --export-ply out.ply --export-ply-srgb   # decode colors sRGB->linear
+./gl-repl --example 9 --export-ply out.ply                 # capture frame 1, exit
+./gl-repl --example 9 --export-ply out.ply --export-ply-srgb   # decode colors sRGB->linear
 ```
 
 Use `--export-ply-srgb` when the viewer is color-managed and treats PLY
@@ -1120,7 +1120,7 @@ runs.
 ```
 ./gl-repl [file.c | workspace-dir]   load a saved scene or a directory of scenes
 
---example <name|idx>   start on a built-in example (case-insensitive name or index)
+--example <name|idx>   start on a built-in example (case-insensitive name or 1-based index)
 --examples-dir <dir>   load examples from <dir>/catalog.ini and <dir>/scenes/
 --list-examples        print the built-in examples and exit
 --time <secs>          initial animation time t (also GLR_TIME; --time wins)
