@@ -16,6 +16,7 @@
 
 
 #include "support/test_harness.h"
+#include "support/cpuprof.h"
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -116,6 +117,21 @@ static void test_execute_count_purpose(const Render3dExecuteContext *ctx,
     glVertex3f(1.0f, 0.0f, 0.0f);
     glVertex3f(0.0f, 1.0f, 0.0f);
     glEnd();
+}
+
+typedef struct SubframeCountCtx {
+    int calls;
+} SubframeCountCtx;
+
+static void test_setup_subframe_count(void *user_data, int pass_idx,
+                                      int pass_count,
+                                      Render3dRenderConfig *pass_config) {
+    SubframeCountCtx *count_ctx = (SubframeCountCtx *)user_data;
+    (void)pass_idx;
+    (void)pass_count;
+    (void)pass_config;
+    if (count_ctx)
+        count_ctx->calls++;
 }
 
 /* Build a test Render3dRenderConfig with sensible defaults. */
@@ -260,6 +276,48 @@ static void test_scene_renderer_state_aa_invariant(void) {
                  (float)p1.ortho_top, (float)p16.ortho_top);
 #else
     ASSERT_TRUE("AA invariant requires GL stubs", 1);
+#endif
+}
+
+static void test_scene_accum_effect_profile_section(void) {
+    printf("--- accumulation effect profile section ---\n");
+
+#ifdef GL_STUBS
+    Render3dRenderConfig cfg = make_test_config();
+    Render3dState state;
+    render3d_state_init(&state);
+
+    cfg.use_accum = 1;
+    cfg.accum_effect = RENDER3D_ACCUM_EFFECT_AA;
+    cfg.accum_passes = 4;
+
+    prof_accum_reset(PROF_RENDER3D_ACCUM_EFFECT);
+    gl_stub_counts_reset();
+    ASSERT_INT("AA render ok", render3d_draw_scene(&state, &cfg), 0);
+    prof_accum_commit(PROF_RENDER3D_ACCUM_EFFECT);
+
+    ASSERT_TRUE("AA effect section sampled",
+                !prof_section_is_stale(PROF_RENDER3D_ACCUM_EFFECT));
+    ASSERT_INT("AA path accumulates each sample plus return",
+               (int)gl_stub_counts[GL_STUB_glAccum], 5);
+
+    SubframeCountCtx subframes;
+    memset(&subframes, 0, sizeof(subframes));
+    cfg.accum_effect = RENDER3D_ACCUM_EFFECT_BLUR;
+    cfg.setup_subframe_fn = test_setup_subframe_count;
+    cfg.setup_subframe_user_data = &subframes;
+
+    prof_accum_reset(PROF_RENDER3D_ACCUM_EFFECT);
+    gl_stub_counts_reset();
+    ASSERT_INT("blur render ok", render3d_draw_scene(&state, &cfg), 0);
+    prof_accum_commit(PROF_RENDER3D_ACCUM_EFFECT);
+
+    ASSERT_INT("blur profile wraps every subframe setup",
+               subframes.calls, cfg.accum_passes);
+    ASSERT_TRUE("blur effect section sampled",
+                !prof_section_is_stale(PROF_RENDER3D_ACCUM_EFFECT));
+#else
+    ASSERT_TRUE("accum effect profile section requires GL stubs", 1);
 #endif
 }
 
@@ -1287,6 +1345,7 @@ int main(int argc, char **argv) {
     test_scene_renderer_state_init_defaults();
     test_scene_renderer_state_independence();
     test_scene_renderer_state_aa_invariant();
+    test_scene_accum_effect_profile_section();
     test_scene_projection_modes();
     test_scene_ortho_zoom_rescales();
     test_frame_ctx_defaults();

@@ -31,6 +31,7 @@
 typedef enum {
     PROF_RENDER3D = 0,  /* render3d_draw_scene() */
     PROF_RENDER3D_SETUP,     /* projection/camera/lights/material setup */
+    PROF_RENDER3D_ACCUM_EFFECT, /* accumulation clears/resolve + blur subframe prep */
     PROF_RENDER3D_FILL,      /* execute_commands() main fill pass */
     PROF_RENDER3D_FADE,      /* replay fade batches pass */
     PROF_RENDER3D_FADE_BATCH_PREP,  /* per-batch find-open + color */

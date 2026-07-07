@@ -29,6 +29,7 @@
 static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_RENDER3D]                          = { "Render 3D",       0, 0 },
     [PROF_RENDER3D_SETUP]                    = { "setup",           1, 0 },
+    [PROF_RENDER3D_ACCUM_EFFECT]             = { "accum effect",    1, 0 },
     [PROF_RENDER3D_FILL]                     = { "fill",            1, 0 },
     [PROF_RENDER3D_FADE]                     = { "fade batches",    1, 0 },
     [PROF_RENDER3D_FADE_BATCH_PREP]          = { "batch prep",      2, 0 },
@@ -91,6 +92,7 @@ ProfSectionInfo prof_section_info(ProfSection s) {
 static const unsigned char k_gpu_sections[PROF_SECTION_COUNT] = {
     [PROF_RENDER3D]                          = 1,
     [PROF_RENDER3D_SETUP]                    = 1,
+    [PROF_RENDER3D_ACCUM_EFFECT]             = 1,
     [PROF_RENDER3D_FILL]                     = 1,
     [PROF_RENDER3D_FADE]                     = 1,
     [PROF_RENDER3D_HELPERS]                  = 1,
