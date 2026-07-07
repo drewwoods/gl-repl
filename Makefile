@@ -388,6 +388,7 @@ endif
 	debug \
 	debug-msan \
 	demos \
+	fix-doc-links \
 	glut \
 	help \
 	help-details \
@@ -1447,6 +1448,9 @@ check-include-style: ## Hard guard: project-local headers must use "X.h", not <X
 
 check-doc-links: ## Validate local Markdown file links and line anchors.
 	@python3 scripts/check/check-doc-links.py
+
+fix-doc-links: ## Attempt to repair Markdown file/line links, then verify.
+	@bash scripts/check/fix-doc-links.sh
 
 check-user-guide-keymap: ## Validate USER_GUIDE shortcut claims against keymap.h.
 	@python3 scripts/check/check-user-guide-keymap.py

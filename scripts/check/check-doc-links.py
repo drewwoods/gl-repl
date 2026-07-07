@@ -306,6 +306,7 @@ def main(argv: list[str]) -> int:
                 display = err
             print(f"    {display}", file=sys.stderr)
         print("\n    Fix suggestions:", file=sys.stderr)
+        print("      - Try automatic repair: `make fix-doc-links`", file=sys.stderr)
         print("      - Strip broken links: `./scripts/check/check-doc-links.py --strip`", file=sys.stderr)
         print("      - Regenerate identifier links: `./scripts/link-doc-identifiers.py --write`", file=sys.stderr)
         return 1
