@@ -7,9 +7,8 @@
  * and scene-cycle routing, and the SIGINT-quit lifecycle. Pure routing — it
  * calls back into glr_ctrl.c only through the seams in glr_ctrl_internal.h
  * (drag snapshot, input-effect apply) and the public glr_ctrl.h surface, and
- * reaches no scene/ header (the one scene-using helper,
- * glr_ctrl_router_handle_post_filter_special_key, stays in glr_ctrl.c). It includes
- * ui/ headers, so it is on the check-controller-boundaries ui allowlist.
+ * reaches no scene/ headers. It includes ui/ headers, so it is on the
+ * check-controller-boundaries ui allowlist.
  */
 #include "app/glr_ctrl.h"
 #include "app/glr_ctrl_export.h"
