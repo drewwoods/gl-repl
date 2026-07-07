@@ -47,15 +47,41 @@ build system.
 - The `0001-...patch` file then retires (lives in fork history); do not
   copy it into this repo.
 
-### 2. `packaging/web/` — project-owned web files
+### 2. Replay git history + land files in `packaging/web/`
 
-Move in (adjusting only path comments):
+Bring the three project-owned files over **with their OpenGL-Vibe git
+history** (23 commits touch them) instead of a plain copy, so `git log`
+in gl-repl preserves the why behind each shim/flag:
+
+- First, in OpenGL-Vibe: commit the currently **uncommitted**
+  `emscripten/shell.html` working-tree change (git status shows ` M`) so
+  the replay captures the latest state.
+- `git format-patch --root -o <scratchpad>/web-history -- emscripten/shell.html
+  emscripten/build.sh emscripten/gl4es_bootstrap.c` in OpenGL-Vibe — one
+  chronological series, diffs limited to those paths (commits that also
+  touched other files contribute only their relevant hunks).
+- Rewrite paths inside the patch files with `gsed` (the `diff --git`,
+  `---`/`+++`, and any `rename` header lines):
+  - `emscripten/shell.html` → `packaging/web/shell.html`
+  - `emscripten/gl4es_bootstrap.c` → `packaging/web/gl4es_bootstrap.c`
+  - `emscripten/build.sh` → `scripts/build-web.sh` (its final resting
+    name — step 5's rewrite then lands as a normal commit on top)
+- `git am` the series in gl-repl (on a branch first, per the worktree
+  memory — integrate via `push HEAD:main`). Authorship, dates, and
+  messages carry over. If any patch fails to apply cleanly (context
+  drift from commits outside the path filter), fall back to
+  `git am -3`; content is guaranteed identical at series end.
+- Skip-list: commits in the series that only touched the *other*
+  OpenGL-Vibe samples' handling inside build.sh still apply — they're
+  legitimate history of the file; no pruning.
+
+Resulting files (adjusting only path comments in follow-up commits):
 - `packaging/web/shell.html`
 - `packaging/web/gl4es_bootstrap.c` — compiled at **link time** (listed in
   `GL_LDFLAGS`, as today), so it never joins `$(SRCS)`; the C99 ratchet
   (`check-c99`) is untouched even though this TU needs gnu99/EM_ASM.
-- `packaging/web/README.md` — deps, build flow, browser-input/shim notes
-  (distill the memory-file knowledge: JS GLUT windowing vs freeglut
+- `packaging/web/README.md` (new) — deps, build flow, browser-input/shim
+  notes (distill the memory-file knowledge: JS GLUT windowing vs freeglut
   solids, wheel/backspace/Ctrl fixes, Display-P3 tagging).
 
 ### 3. `scripts/web-deps.sh` — fetch & build gl4es + GLU
@@ -141,9 +167,12 @@ Follow the `FREEGLUT_OSMESA` / `USE_GL_STUBS` precedents:
   `ifeq ($(WEB),1)` guards or new variables that default to today's
   values. Tests/demos are not wired for WEB=1 (unsupported, as today).
 
-### 5. `scripts/build-web.sh` — thin wrapper
+### 5. `scripts/build-web.sh` — rewrite the replayed build.sh into a thin wrapper
 
-For the "cold start" path (no emsdk in the shell):
+The history replay (step 2) lands the full build.sh at
+`scripts/build-web.sh`; now rewrite it in place (a normal commit on top of
+the replayed history) to the thin wrapper for the "cold start" path (no
+emsdk in the shell):
 - `EMSDK ?= ~/src/emsdk`; source `emsdk_env.sh` (error with build.sh's
   install instructions if absent).
 - Run `scripts/web-deps.sh`, then `emmake make web`.
@@ -164,6 +193,11 @@ For the "cold start" path (no emsdk in the shell):
 
 ## Verification
 
+0. **History replay**: `git log --oneline -- packaging/web/shell.html
+   packaging/web/gl4es_bootstrap.c scripts/build-web.sh` in gl-repl shows
+   the 23 replayed OpenGL-Vibe commits with original authorship/dates, and
+   each file's content at series end is byte-identical to the OpenGL-Vibe
+   working tree (`diff` against the originals).
 1. **Fork/re-vendor sanity**: after step 1, `make gl-repl` and
    `make gl-repl FREEGLUT_OSMESA=1` still build; `make test-stubs` green.
 2. **Web build**: `scripts/build-web.sh` from a shell without emsdk →
