@@ -7,10 +7,10 @@
 // @cfg vertex_points = 0
 // @cfg light_indicators = 0
 // camera
-glTranslatef(0.0000f, 0.0000f, -8.8000f);
-glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);
-glRotatef(24.0000f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.0000f, -1.2000f, 0.0000f);
+glTranslatef(0.0f, 0.0f, -9.00f);
+glRotatef(10.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(24.0f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0f, -1.20f, 0.0f);
 
 static float spinRate = 0.06; // revolutions per second
 static float seats = 8;

@@ -1,7 +1,7 @@
 // @cfg overlay_scope = OVERLAY_SCOPE_AT_VERTEX
 // @cfg view_mode = RENDER3D_VIEW_2D
 // camera
-glTranslatef(0.0f, 0.0f, -2.5f);
+glTranslatef(0.0f, 0.0f, -2.50f);
 glRotatef(0.0f, 1.0f, 0.0f, 0.0f);
 glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
 glTranslatef(0.0f, 0.0f, 0.0f);

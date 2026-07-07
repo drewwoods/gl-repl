@@ -88,8 +88,8 @@ void display(void) {
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
   glTranslatef(0.0000f, 0.0000f, -6.0000f);
-  glRotatef(24.5000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(43.7235f, 0.0f, 1.0f, 0.0f);
+  glRotatef(24.0000f, 1.0f, 0.0f, 0.0f);
+  glRotatef(43.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---

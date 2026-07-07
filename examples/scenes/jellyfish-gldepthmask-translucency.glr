@@ -6,10 +6,10 @@
 // @cfg grid = GRID_THEME_OFF
 // @cfg axes = AXES_THEME_OFF
 // camera
-glTranslatef(0.0f, 0.0f, -7.5f);
-glRotatef(4.0f, 1.0f, 0.0f, 0.0f);
+glTranslatef(0.0f, 0.0f, -7.50f);
+glRotatef(4.00f, 1.0f, 0.0f, 0.0f);
 glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.0f, 0.7f, 0.0f);
+glTranslatef(0.0f, 0.700f, 0.0f);
 static float pulse, bellR, bellH; // breath phase; bell radius/height pulse in opposition
 static float ang, phi, phi2, rad, rad2, topY, botY; // bell strip scratch
 static float ax, az, sway, drop; // tentacle scratch

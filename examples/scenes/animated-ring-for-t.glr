@@ -1,8 +1,8 @@
 // @cfg overlay_scope = OVERLAY_SCOPE_AT_VERTEX
 // camera
-glTranslatef(0.0f, 0.0f, -6.0f);
-glRotatef(24.5000f, 1.0f, 0.0f, 0.0f);
-glRotatef(43.7235f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0f, 0.0f, -6.00f);
+glRotatef(24.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(43.0f, 0.0f, 1.0f, 0.0f);
 glTranslatef(0.0f, 0.0f, 0.0f);
 
 static float s; // color mix factor, 0..1

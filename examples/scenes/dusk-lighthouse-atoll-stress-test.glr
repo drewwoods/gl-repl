@@ -8,7 +8,7 @@
 glTranslatef(0.0f, 0.0f, -15.0f);
 glRotatef(26.0f, 1.0f, 0.0f, 0.0f);
 glRotatef(-20.0f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.0f, -0.3f, 0.0f);
+glTranslatef(0.0f, 0.0f, 0.0f);
 
 // shared scratch: x/y/z vertex position; n = 1/|gradient| (sea normals);
 // k/s = radius/angle scratch (island coastline, firefly polar coords).

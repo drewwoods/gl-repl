@@ -87,10 +87,10 @@ void display(void) {
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -6.0020f);
+  glTranslatef(0.0000f, 0.0000f, -6.0000f);
   glRotatef(5.0000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(32.6714f, 0.0f, 1.0f, 0.0f);
-  glTranslatef(-0.0074f, -0.9000f, -0.4837f);
+  glRotatef(32.0000f, 0.0f, 1.0f, 0.0f);
+  glTranslatef(-0.0000f, -0.9000f, -0.5000f);
 --- header_post ---
 --- source ---
   static float bladeCount = 78; // @tune

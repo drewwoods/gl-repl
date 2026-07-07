@@ -9,10 +9,10 @@
 // @cfg msaa = 1
 // @cfg variable_panel = 0
 // camera
-glTranslatef(0.0000f, 0.0000f, -6.0020f);
-glRotatef(5.0000f, 1.0f, 0.0f, 0.0f);
-glRotatef(32.6714f, 0.0f, 1.0f, 0.0f);
-glTranslatef(-0.0074f, -0.9000f, -0.4837f);
+glTranslatef(0.0f, 0.0f, -6.00f);
+glRotatef(5.00f, 1.0f, 0.0f, 0.0f);
+glRotatef(32.0f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0f, -0.900f, -0.5f);
 
 static float bladeCount = 78; // @tune
 static float field = 3.65; // half-width @tune

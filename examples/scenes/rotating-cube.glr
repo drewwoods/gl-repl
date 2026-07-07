@@ -4,10 +4,10 @@
 // @cfg light_theme = LIGHT_THEME_NEON
 // @cfg grid_brightness = GRID_BRIGHTNESS_DIM
 // camera
-glTranslatef(0.0000f, 0.0000f, -9.1513f);
-glRotatef(12.0069f, 1.0f, 0.0f, 0.0f);
-glRotatef(92.0173f, 0.0f, 1.0f, 0.0f);
-glTranslatef(-0.0000f, -0.0000f, -0.0000f);
+glTranslatef(0.0f, 0.0f, -9.00f);
+glRotatef(12.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(92.0f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0f, 0.0f, 0.0f);
 
 glClearColor(0.1, 0.1, 0.1, 1);
 glEnable(GL_DEPTH_TEST);

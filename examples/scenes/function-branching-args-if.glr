@@ -1,6 +1,6 @@
 // @cfg view_mode = RENDER3D_VIEW_2D
 // camera
-glTranslatef(0.0f, 0.0f, -4.0f);
+glTranslatef(0.0f, 0.0f, -4.00f);
 glRotatef(0.0f, 1.0f, 0.0f, 0.0f);
 glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
 glTranslatef(0.0f, 0.0f, 0.0f);

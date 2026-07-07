@@ -89,7 +89,7 @@ void display(void) {
 --- camera ---
   glTranslatef(0.0000f, 0.0000f, -9.0000f);
   glRotatef(23.0000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(52.6000f, 0.0f, 1.0f, 0.0f);
+  glRotatef(52.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---
