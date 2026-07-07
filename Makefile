@@ -61,13 +61,36 @@ FREEGLUT_VENDOR     ?= 1
 # re-vendoring from a freeglut that carries it (see VENDORED.txt). Build dir and
 # static-lib name are kept distinct from the Cocoa build so the two coexist.
 FREEGLUT_OSMESA     ?= 0
-ifeq ($(FREEGLUT_OSMESA),1)
+
+# WEB=1 builds against Emscripten (emcc) for the browser/wasm target instead
+# of a native GL backend: CC becomes emcc, and GL/GLU/freeglut all come from
+# the toolchain-built archives in third_party/web/ (scripts/web-deps.sh) plus
+# the vendored freeglut's Emscripten backend. Mutually exclusive with
+# FREEGLUT_OSMESA / USE_GL_STUBS -- don't combine them. See `make web`.
+WEB                 ?= 0
+ifeq ($(WEB),1)
+  CC := emcc
+endif
+
+# Where scripts/web-deps.sh fetches/builds gl4es + GLU (WEB=1 only).
+# Overridable to reuse an existing checkout -- see scripts/web-deps.sh.
+GL4ES_DIR ?= third_party/web/gl4es
+GLU_DIR   ?= third_party/web/GLU
+
+ifeq ($(WEB),1)
+  FREEGLUT_BUILD          := $(FREEGLUT_SRC)/build-wasm
+  FREEGLUT_STATIC_LIB     := $(FREEGLUT_BUILD)/lib/libglut.a
+  FREEGLUT_CMAKE_LAUNCHER := emcmake
+  FREEGLUT_CMAKE_BACKEND  := -DFREEGLUT_REPLACE_GLUT=ON -DCMAKE_C_FLAGS="-include $(abspath $(GL4ES_DIR))/include/GL/gl.h -I$(abspath $(GL4ES_DIR))/include"
+else ifeq ($(FREEGLUT_OSMESA),1)
   FREEGLUT_BUILD          := $(FREEGLUT_SRC)/build-osmesa
   FREEGLUT_STATIC_LIB     := $(FREEGLUT_BUILD)/lib/libglut_osmesa.a
+  FREEGLUT_CMAKE_LAUNCHER :=
   FREEGLUT_CMAKE_BACKEND  := -DFREEGLUT_OSMESA=ON -DFREEGLUT_GLES=OFF
 else
   FREEGLUT_BUILD          := $(FREEGLUT_SRC)/build
   FREEGLUT_STATIC_LIB     := $(FREEGLUT_BUILD)/lib/libglut.a
+  FREEGLUT_CMAKE_LAUNCHER :=
   FREEGLUT_CMAKE_BACKEND  := -DFREEGLUT_COCOA=ON
 endif
 
@@ -298,6 +321,38 @@ GLUT_GL_LDFLAGS = $(GL_STUB_LDFLAGS)
 GL_LDFLAGS = $(GL_STUB_LDFLAGS)
 endif
 
+# WEB=1: swap native GL headers/libs for gl4es + the vendored freeglut's
+# Emscripten backend + GLU, all built by scripts/web-deps.sh /
+# $(FREEGLUT_STATIC_LIB) into third_party/web/ and third_party/freeglut/.
+# The windowing layer at runtime is Emscripten's own JS GLUT
+# (library_glut.js); the patched freeglut only supplies solids/fonts (see
+# packaging/web/README.md).
+ifeq ($(WEB),1)
+GL_HEADER_CFLAGS = \
+	-include $(GL4ES_DIR)/include/GL/gl.h \
+	-I$(GL4ES_DIR)/include -I$(GLU_DIR)/include -I$(FREEGLUT_SRC)/include \
+	-DUSE_MGL_NAMESPACE -DCFG_DEFAULT_VERTEX_OUTLINES=0 \
+	-DCFG_DEFAULT_VERTEX_POINTS=0 -std=gnu99
+# The trailing -std=gnu99 lands after COMMON_CFLAGS' -std=c99 on the compile
+# line (GL_HEADER_CFLAGS is folded in after -std=c99 there), so it wins for
+# this build only -- miniaudio's WebAudio backend needs EM_ASM, a gnu-mode
+# extension. The native -std=c99 check-c99 ratchet never sees WEB=1 objects.
+
+# Bundle only sample.mp3 (the `make app` small-download policy) unless a
+# curated assets/favorite/ dir exists -- gl-repl's assets/ can symlink a
+# multi-hundred-MB playlist that file_packager would happily follow whole.
+WEB_PRELOAD := $(if $(wildcard assets/favorite),--preload-file assets/favorite@/assets,$(if $(wildcard assets/sample.mp3),--preload-file assets/sample.mp3@/assets/sample.mp3,))
+
+GL_LDFLAGS = \
+	packaging/web/gl4es_bootstrap.c $(GL4ES_DIR)/lib/libGL.a $(GLU_DIR)/.libs/libGLU.a \
+	$(FREEGLUT_STATIC_LIB) --shell-file packaging/web/shell.html \
+	-sUSE_WEBGL2=1 -sFULL_ES2=1 -sINITIAL_MEMORY=805306368 \
+	-sSTACK_SIZE=8388608 -sGL_MAX_TEMP_BUFFER_SIZE=67108864 \
+	-sEXPORTED_FUNCTIONS=_main,_glr_web_new_scene,_glr_web_load_scene_text,_glr_web_export_scene \
+	-sEXPORTED_RUNTIME_METHODS=ccall,FS $(WEB_PRELOAD)
+GLUT_GL_LDFLAGS = $(GL_LDFLAGS)
+endif
+
 ifeq ($(BUILD),coverage)
 COVERAGE_LDFLAGS = --coverage
 else
@@ -401,6 +456,8 @@ endif
 	test-full \
 	test-msan \
 	test-stubs \
+	web \
+	web-serve \
 	FORCE
 
 all: gl-repl install-hooks
@@ -460,7 +517,11 @@ HDRS = \
 	gl_repl.h \
 	source_document.h
 
+ifeq ($(WEB),1)
+EXAMPLES_CATALOG = examples/catalog-emscripten.ini
+else
 EXAMPLES_CATALOG = examples/catalog.ini
+endif
 EXAMPLE_SCENE_SRCS = $(wildcard examples/scenes/*.glr) $(wildcard examples/scenes/*.c)
 GENERATED_EXAMPLES_INC = build/generated/repl_examples_data.inc
 
@@ -639,8 +700,12 @@ REPL_LIVE_DEMO_DEP_SRCS = $(REPL_DEMO_DEP_SRCS) \
                           src/ui/subsystems/variable_panel.c \
                           src/ui/core/theme.c
 
-OBJDIR = build/$(BUILD)$(if $(filter debug,$(BUILD)),$(DEBUG_SAN_SUFFIX),)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)$(if $(filter 1,$(FREEGLUT_OSMESA)),-osmesa,)
+OBJDIR = build/$(BUILD)$(if $(filter debug,$(BUILD)),$(DEBUG_SAN_SUFFIX),)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)$(if $(filter 1,$(FREEGLUT_OSMESA)),-osmesa,)$(if $(filter 1,$(WEB)),-web,)
 BINDIR = $(OBJDIR)
+# Fixed web-build bindir, independent of the ambient WEB flag -- lets
+# `make web-serve` find the output without the caller having to repeat
+# WEB=1 (mirrors how `make web` itself re-invokes with WEB=1 internally).
+WEB_BINDIR = build/$(BUILD)-web
 OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS) -include config.h -include prof_sections.h
 DEPFLAGS = -MMD -MP
 
@@ -754,6 +819,9 @@ ROOT_BIN_LINKS = gl-repl render3d_demo repl_demo repl_live_demo editor_demo memp
 .PHONY: sample $(ROOT_BIN_LINKS) $(TEST_BINS) $(BENCH_BINS)
 
 SAMPLE_BIN = $(BINDIR)/gl-repl
+ifeq ($(WEB),1)
+SAMPLE_BIN = $(BINDIR)/index.html
+endif
 RENDER3D_DEMO_BIN = $(BINDIR)/render3d_demo
 REPL_DEMO_BIN = $(BINDIR)/repl_demo
 REPL_LIVE_DEMO_BIN = $(BINDIR)/repl_live_demo
@@ -939,7 +1007,7 @@ $(OBJDIR)/%.o: %.c
 FREEGLUT_PKG_CONFIG_PATH := $(if $(filter 1,$(FREEGLUT_OSMESA)),$(if $(filter Darwin,$(UNAME_S)),$(shell brew --prefix mesa 2>/dev/null)/lib/pkgconfig),)
 $(FREEGLUT_STATIC_LIB): $(FREEGLUT_SRC)/VENDORED.txt
 	PKG_CONFIG_PATH="$(FREEGLUT_PKG_CONFIG_PATH):$$PKG_CONFIG_PATH" \
-	cmake -S $(FREEGLUT_SRC) -B $(FREEGLUT_BUILD) \
+	$(FREEGLUT_CMAKE_LAUNCHER) cmake -S $(FREEGLUT_SRC) -B $(FREEGLUT_BUILD) \
 	  $(FREEGLUT_CMAKE_BACKEND) -DFREEGLUT_BUILD_STATIC_LIBS=ON \
 	  -DFREEGLUT_BUILD_SHARED_LIBS=OFF -DFREEGLUT_BUILD_DEMOS=OFF \
 	  -DCMAKE_BUILD_TYPE=Release
@@ -949,6 +1017,13 @@ freeglut-clean: ## Remove the vendored freeglut CMake build (forces a rebuild).
 	rm -rf $(FREEGLUT_BUILD)
 .PHONY: freeglut-clean
 
+# WEB=1: shell.html and gl4es_bootstrap.c are link-time inputs (not objects
+# in $(SAMPLE_OBJS) -- see GL_LDFLAGS above), so add them as prerequisites
+# here or editing either would silently not trigger a relink.
+ifeq ($(WEB),1)
+$(SAMPLE_BIN): packaging/web/shell.html packaging/web/gl4es_bootstrap.c
+endif
+
 $(SAMPLE_BIN): $(SAMPLE_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) -o $@ $(SAMPLE_OBJS) $(GL_LDFLAGS)
@@ -957,6 +1032,20 @@ gl-repl: FORCE $(SAMPLE_BIN) ## Build the main gl-repl binary using release flag
 	ln -sfn $(SAMPLE_BIN) $@
 
 sample: gl-repl ## Alias for the main gl-repl sample binary.
+
+web: ## Build the Emscripten/wasm web target (needs emcc on PATH -- see scripts/build-web.sh for a cold start).
+	@command -v emcc >/dev/null 2>&1 || { \
+		echo "ERROR: emcc not found on PATH."; \
+		echo "Run scripts/build-web.sh (sources emsdk for you), or source"; \
+		echo "emsdk_env.sh yourself first, then re-run 'make web'."; \
+		exit 1; \
+	}
+	scripts/web-deps.sh
+	$(MAKE) WEB=1 sample
+
+web-serve: ## Serve the built web target over HTTP (run `make web` first).
+	@echo "Serving $(WEB_BINDIR)/ at http://localhost:8000/ (Ctrl+C to stop) ..."
+	cd $(WEB_BINDIR) && python3 -m http.server 8000
 
 # macOS .app bundle so the Dock/Finder show the gl-repl cube icon instead of
 # the launching terminal's icon. Pure packaging — no source changes, so the
@@ -1820,6 +1909,8 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "  debug:         \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(DEBUG_CFLAGS))"
 	@printf "  coverage:      \$$(common_flags) %s \n\n" "$(filter-out $(COMMON_CFLAGS),$(COVERAGE_CFLAGS))"
 	@printf "GL stubs:        make test-stubs, or add USE_GL_STUBS=1 to any target.\n"
+	@printf "Web build:       make web (or scripts/build-web.sh for a cold start with no\n"
+	@printf "                 emsdk sourced yet), then make web-serve. See packaging/web/README.md.\n"
 	@printf "Runtime env:     GLR_NO_POINT_PARAMETER=1 ./gl-repl forces the no-glPointParameterfv\n"
 	@printf "                 path (camera-distance glPointSize fallback). Support is otherwise\n"
 	@printf "                 auto-detected from the GL context at startup; there is no build\n"
