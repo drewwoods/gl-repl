@@ -56,3 +56,33 @@ int repl_collect_tuned_vars(const GLCmd *cmds, int count, SourceTextView text,
         *total_out = total;
     return written;
 }
+
+int repl_mark_written_var_slots(const GLCmd *cmds, int count,
+                                int *written_slots, int written_count) {
+    int unique = 0;
+
+    if (written_slots && written_count > 0) {
+        for (int i = 0; i < written_count; i++)
+            written_slots[i] = 0;
+    } else {
+        written_count = 0;
+    }
+
+    if (!cmds || count < 0 || !written_slots || written_count <= 0)
+        return 0;
+
+    for (int i = 0; i < count; i++) {
+        int slot;
+        if (!cmds[i].valid || cmds[i].type != CMD_VAR_ASSIGN)
+            continue;
+        slot = cmds[i].var_idx;
+        if (slot < 0 || slot >= written_count)
+            continue;
+        if (!written_slots[slot]) {
+            written_slots[slot] = 1;
+            unique++;
+        }
+    }
+
+    return unique;
+}

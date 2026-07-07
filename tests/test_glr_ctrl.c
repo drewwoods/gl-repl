@@ -841,6 +841,48 @@ static void test_variable_drag_snapshot_wiring(void) {
     glr_ctrl_reset_all();
 }
 
+static int find_variable_panel_row(const UiRenderSnapshot *snap,
+                                   const char *name) {
+    for (int i = 0; i < snap->variable_panel_vars.count; i++) {
+        if (strcmp(snap->variable_panel_vars.vars[i].name, name) == 0)
+            return i;
+    }
+    return -1;
+}
+
+static void test_variable_panel_written_snapshot_wiring(void) {
+    UiRenderSnapshot snap;
+    int radius_row;
+    int accum_row;
+    int t_row;
+
+    printf("--- imrepl_ctrl variable panel written snapshot wiring ---\n");
+
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(800, 600);
+    editor_feed_line("float radius = 1;");
+    editor_feed_line("float accum = 0;");
+    editor_feed_line("glVertex3f(radius, 0, 0);");
+    editor_feed_line("accum = accum + radius;");
+
+    glr_ctrl_build_ui_snapshot(&snap);
+    radius_row = find_variable_panel_row(&snap, "radius");
+    accum_row = find_variable_panel_row(&snap, "accum");
+    t_row = find_variable_panel_row(&snap, "t");
+
+    ASSERT_TRUE("radius row present", radius_row >= 0);
+    ASSERT_TRUE("accum row present", accum_row >= 0);
+    ASSERT_TRUE("t row present", t_row >= 0);
+    if (radius_row >= 0 && accum_row >= 0 && t_row >= 0) {
+        ASSERT_INT("read-only radius is not dimmed",
+                   snap.variable_panel_vars.vars[radius_row].written, 0);
+        ASSERT_INT("assigned accum is dimmed",
+                   snap.variable_panel_vars.vars[accum_row].written, 1);
+        ASSERT_INT("runtime time var is not source-written",
+                   snap.variable_panel_vars.vars[t_row].written, 0);
+    }
+}
+
 static void test_pointer_state_tracks_controller_mouse_routes(void) {
     printf("--- imrepl_ctrl pointer state routing ---\n");
 
@@ -2904,6 +2946,7 @@ int main(void) {
     test_variable_panel_motion_preserves_reset_assignment_without_declaration();
     test_variable_panel_motion_initializes_uninitialized_declaration();
     test_variable_drag_snapshot_wiring();
+    test_variable_panel_written_snapshot_wiring();
     test_pointer_state_tracks_controller_mouse_routes();
     test_right_click_code_panel_does_not_start_camera_pan();
     test_left_click_code_panel_exits_search_and_places_cursor();

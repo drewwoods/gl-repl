@@ -25,4 +25,11 @@ int         repl_count_vertices(void);
 int repl_collect_tuned_vars(const GLCmd *cmds, int count, SourceTextView text,
                             const char **out, int max, int *total_out);
 
+/* Mark predef-variable slots that are written by committed `name = expr;`
+ * commands. `written_slots[0..written_count)` is cleared first; each
+ * CMD_VAR_ASSIGN with a valid current var_idx sets one slot. Returns the
+ * number of unique slots marked. Neutral: cmds are parameters, no globals. */
+int repl_mark_written_var_slots(const GLCmd *cmds, int count,
+                                int *written_slots, int written_count);
+
 #endif /* REPL_PROGRAM_QUERY_H */

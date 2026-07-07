@@ -1156,6 +1156,7 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
 static void glr_ctrl_fill_ui_variable_panel_vars(UiRenderSnapshot *snap,
                                                     ReplPredefView predef) {
     int count = predef.count;
+    int written_slots[MAX_PREDEF_VARS];
 
     if (count < 0 || !predef.vars)
         count = 0;
@@ -1169,6 +1170,9 @@ static void glr_ctrl_fill_ui_variable_panel_vars(UiRenderSnapshot *snap,
     int tuned_count = repl_collect_tuned_vars(
         repl_state_document_cmds(), repl_state_document_count(),
         source_document_view(), tuned_names, MAX_PREDEF_VARS, NULL);
+    repl_mark_written_var_slots(repl_state_document_cmds(),
+                                repl_state_document_count(),
+                                written_slots, MAX_PREDEF_VARS);
 
     snap->variable_panel_vars.vars = snap->variable_panel_var_storage;
     snap->variable_panel_vars.count = count;
@@ -1185,6 +1189,7 @@ static void glr_ctrl_fill_ui_variable_panel_vars(UiRenderSnapshot *snap,
             }
         }
         snap->variable_panel_var_storage[i].tuned = tuned;
+        snap->variable_panel_var_storage[i].written = written_slots[i];
     }
 }
 
