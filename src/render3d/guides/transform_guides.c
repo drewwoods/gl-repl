@@ -19,6 +19,29 @@ static void transform_guides_pop_state(void) {
     glPopAttrib();
 }
 
+/* Common unlit-overlay GL state for every guide draw helper. Cull is
+ * disabled because the cone arrowheads are open fans the user's
+ * glEnable(GL_CULL_FACE) would clip; smooth shading is required for the
+ * cones' ring-shaded vertex colors to interpolate. Depth writes are off:
+ * the guide is a blended overlay that must not self-occlude — coplanar
+ * self-overlaps (a >360° rotate arc lapping itself, the dial/ticks/
+ * sector sharing the rotation plane) would otherwise z-fight their own
+ * first lap. Depth *testing* against scene geometry still applies in
+ * the solid pass. The one exception is draw_cone_head, which brackets
+ * itself with depth writes back on: the cone is a solid, not a coplanar
+ * wash, and needs real self-occlusion (cap behind side fan) to look
+ * right from every view angle. All of it is restored by the paired
+ * transform_guides_pop_state(). */
+static void transform_guides_begin_overlay_state(void) {
+    transform_guides_push_state();
+    glDisable(GL_LIGHTING);
+    glDisable(GL_CULL_FACE);
+    glShadeModel(GL_SMOOTH);
+    glDepthMask(GL_FALSE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+}
+
 /* Shared arrowhead sizing, used by every translate/scale guide path:
  * head length = clamp(segment_len * FRAC, MIN, MAX), fins are FIN_FRAC
  * of the head length. TG_ARC_SEGS is the rotate-guide arc resolution;
@@ -35,6 +58,32 @@ static void transform_guides_pop_state(void) {
 #define TG_FIN_FRAC      0.45f
 #define TG_ARC_SEGS      48
 
+/* Arrowheads are filled cones (a fan of TG_CONE_SLICES side triangles
+ * plus a base cap). A solid silhouette stays readable at any viewing
+ * angle — the old 4-fin wireframe head vanished edge-on — and it
+ * survives the depth-off ghost pass, where glLineStipple dashes lines
+ * but leaves filled triangles whole. */
+#define TG_CONE_SLICES   12
+
+/* Shaft styling: a wide near-black contrast halo drawn under a bright
+ * core line. The halo buys legibility over same-hue geometry and busy
+ * backdrops; the core carries the guide color at full weight so the
+ * guide reads instantly instead of riding on the traveling pulse. */
+#define TG_SHAFT_CORE_W     2.5f
+#define TG_SHAFT_HALO_W     5.5f
+#define TG_SHAFT_CORE_ALPHA 0.85f
+#define TG_HALO_ALPHA       0.40f
+#define TG_HALO_R 0.02f
+#define TG_HALO_G 0.02f
+#define TG_HALO_B 0.05f
+
+/* Guide-specific ghost-pass multiplier, deliberately brighter than the
+ * shared RENDER3D_OCCLUDED_GHOST_ALPHA (0.4): a transform guide usually
+ * sits fully inside the geometry it shapes (the mesh at the cursor is
+ * exactly what the translate/rotate moves), so the occluded pass
+ * carries more of the read than for other scene overlays. */
+#define TG_GHOST_ALPHA_MUL 0.55f
+
 /* Clamp the head length to the [min, max] ladder. When dlen itself is
  * below min we still want a proportional little nubbin, hence the
  * dlen*0.5 path; otherwise saturate at min. Caller picks which
@@ -48,12 +97,11 @@ static float clamp_head_len(float dlen, float frac, float min_len, float max_len
 
 /* Per-pass alpha multiplier (formerly the file-static
  * g_guide_alpha_mul). The render dispatcher draws each guide twice:
- * a depth-test-off ghost pass at RENDER3D_OCCLUDED_GHOST_ALPHA (~0.4)
- * so rotated geometry can't fully hide the guide, then a
- * depth-tested solid pass at 1.0 on top. The value is threaded as a
- * parameter through every draw helper so an early-return or
- * exception couldn't strand a 40%-alpha state and cripple
- * subsequent frames. */
+ * a depth-test-off ghost pass at TG_GHOST_ALPHA_MUL so geometry can't
+ * fully hide the guide, then a depth-tested solid pass at 1.0 on top.
+ * The value is threaded as a parameter through every draw helper so an
+ * early-return or exception couldn't strand a ghost-alpha state and
+ * cripple subsequent frames. */
 static void tg_color4f(float r, float g, float b, float a, float alpha_mul) {
     a *= alpha_mul;
     if (a < 0.0f) a = 0.0f;
@@ -204,18 +252,103 @@ static void xform_axis_color(float x, float y, float z, float out[3]) {
     out[2] = az / m;
 }
 
-/* Pulse shader for a straight segment in the axes-pulse style: a dim solid
- * base line, a bright dot traveling a→b, and a short trail behind the dot. */
+/* Solid shaft from a to b: a wide near-black contrast halo drawn first,
+ * then the bright guide-colored core on top. See the TG_SHAFT_* block
+ * for why this replaced the old dim (0.30-alpha) base line. */
+static void draw_shaft_segment(const Render3dGuideSnapshot *snapshot,
+                               const float a[3], const float b[3],
+                               const float rgb[3], float alpha_mul) {
+    float as = snapshot->alpha_scale;
+    glLineWidth(TG_SHAFT_HALO_W);
+    tg_color4f(TG_HALO_R, TG_HALO_G, TG_HALO_B, TG_HALO_ALPHA, alpha_mul);
+    glBegin(GL_LINES);
+    glVertex3fv(a);
+    glVertex3fv(b);
+    glEnd();
+    glLineWidth(TG_SHAFT_CORE_W);
+    tg_color4f(rgb[0], rgb[1], rgb[2],
+               fminf(TG_SHAFT_CORE_ALPHA * as, 1.0f), alpha_mul);
+    glBegin(GL_LINES);
+    glVertex3fv(a);
+    glVertex3fv(b);
+    glEnd();
+    glLineWidth(1.0f);
+}
+
+/* Helper: filled cone arrowhead at `tip` pointing along `dir` (unit).
+ * Side fan + base cap, with ring-angle vertex shading (bright on one
+ * flank fading to dim on the other) faking a little dimensionality
+ * without lighting, and a thin dark rim keeping the silhouette crisp
+ * against same-hue geometry. Radius follows the old fin spread
+ * (head_len * TG_FIN_FRAC) so the proportions carry over. */
+static void draw_cone_head(const float tip[3], const float dir[3],
+                           float head_len, const float rgb[3],
+                           float alpha_mul) {
+    float r[3], b[3];
+    /* Depth writes back on for the cone only: unlike the coplanar arc/
+     * sector washes the overlay state protects (see
+     * transform_guides_begin_overlay_state), the cone is a solid whose
+     * base cap must be occluded by its side fan or the head reads as a
+     * flat dark disc when viewed tip-on. No-op in the ghost pass, where
+     * GL_DEPTH_TEST is disabled (a disabled depth test also disables
+     * depth writes), so the translucent ghost cone is unchanged. */
+    glDepthMask(GL_TRUE);
+    make_arrow_basis(dir, r, b);
+    float base[3] = {
+        tip[0] - dir[0] * head_len,
+        tip[1] - dir[1] * head_len,
+        tip[2] - dir[2] * head_len
+    };
+    float rad = head_len * TG_FIN_FRAC;
+    float ring[TG_CONE_SLICES + 1][3];
+    float shade[TG_CONE_SLICES + 1];
+    for (int k = 0; k <= TG_CONE_SLICES; k++) {
+        float th = (float)(2.0 * M_PI) * (float)k / (float)TG_CONE_SLICES;
+        float c = cosf(th), s = sinf(th);
+        ring[k][0] = base[0] + (r[0] * c + b[0] * s) * rad;
+        ring[k][1] = base[1] + (r[1] * c + b[1] * s) * rad;
+        ring[k][2] = base[2] + (r[2] * c + b[2] * s) * rad;
+        shade[k] = 0.62f + 0.38f * c;
+    }
+
+    /* Side surface: fan from the (brightest) tip around the ring. */
+    glBegin(GL_TRIANGLE_FAN);
+    tg_color4f(rgb[0], rgb[1], rgb[2], 0.95f, alpha_mul);
+    glVertex3fv(tip);
+    for (int k = 0; k <= TG_CONE_SLICES; k++) {
+        tg_color4f(rgb[0] * shade[k], rgb[1] * shade[k], rgb[2] * shade[k],
+                   0.95f, alpha_mul);
+        glVertex3fv(ring[k]);
+    }
+    glEnd();
+
+    /* Base cap, uniformly darker so the back face reads as the back. */
+    glBegin(GL_TRIANGLE_FAN);
+    tg_color4f(rgb[0] * 0.5f, rgb[1] * 0.5f, rgb[2] * 0.5f, 0.95f, alpha_mul);
+    glVertex3fv(base);
+    for (int k = TG_CONE_SLICES; k >= 0; k--)
+        glVertex3fv(ring[k]);
+    glEnd();
+
+    /* Dark rim around the base circle. */
+    glLineWidth(1.5f);
+    tg_color4f(TG_HALO_R, TG_HALO_G, TG_HALO_B, 0.55f, alpha_mul);
+    glBegin(GL_LINE_LOOP);
+    for (int k = 0; k < TG_CONE_SLICES; k++)
+        glVertex3fv(ring[k]);
+    glEnd();
+    glLineWidth(1.0f);
+    glDepthMask(GL_FALSE);
+}
+
+/* Pulse shader for a straight segment in the axes-pulse style: a solid
+ * halo+core base shaft, a bright dot traveling a→b, and a short trail
+ * behind the dot. */
 static void draw_pulse_segment(const Render3dGuideSnapshot *snapshot,
                                const float a[3], const float b[3],
                                const float rgb[3], float alpha_mul) {
     float as = snapshot->alpha_scale;
-    glLineWidth(2.0f);
-    glBegin(GL_LINES);
-    tg_color4f(rgb[0], rgb[1], rgb[2], fminf(0.30f * as, 1.0f), alpha_mul);
-    glVertex3f(a[0], a[1], a[2]);
-    glVertex3f(b[0], b[1], b[2]);
-    glEnd();
+    draw_shaft_segment(snapshot, a, b, rgb, alpha_mul);
 
     float ph = fmodf(snapshot->anim_time * 0.6f, 1.0f);
     float glow = sinf(ph * (float)M_PI) * 0.8f + 0.2f;
@@ -250,8 +383,8 @@ static void draw_pulse_segment(const Render3dGuideSnapshot *snapshot,
 }
 
 /* Arrow starting at p_after in the current local frame and extending by the
- * translate command's vector. Shaft is an axes-pulse-style traveling dot
- * over a dim base line; the solid 4-fin arrowhead at the tip keeps the
+ * translate command's vector. Shaft is a solid halo+core line with an
+ * axes-pulse-style traveling dot; a filled cone at the tip keeps the
  * direction unambiguous. Shaft color is (|tx|,|ty|,|tz|)/max mapped to RGB. */
 static void draw_translate_guide(const Render3dGuideSnapshot *snapshot,
                                  const GLCmd *cmd, const float p_after[3],
@@ -264,20 +397,13 @@ static void draw_translate_guide(const Render3dGuideSnapshot *snapshot,
     if (dlen < 1e-6f)
         return;
     float dir[3] = { tx / dlen, ty / dlen, tz / dlen };
-    float dx = dir[0], dy = dir[1], dz = dir[2];
-
-    float rvec[3], bvec[3];
-    make_arrow_basis(dir, rvec, bvec);
-    float rx = rvec[0], ry = rvec[1], rz = rvec[2];
-    float bx = bvec[0], by = bvec[1], bz = bvec[2];
 
     float head_len = clamp_head_len(dlen, TG_HEAD_LEN_FRAC,
                                     TG_HEAD_LEN_MIN, TG_HEAD_LEN_MAX);
-    float fin = head_len * TG_FIN_FRAC;
     float base[3] = {
-        p1[0] - dx * head_len,
-        p1[1] - dy * head_len,
-        p1[2] - dz * head_len
+        p1[0] - dir[0] * head_len,
+        p1[1] - dir[1] * head_len,
+        p1[2] - dir[2] * head_len
     };
 
     float rgb[3];
@@ -288,70 +414,19 @@ static void draw_translate_guide(const Render3dGuideSnapshot *snapshot,
         rgb[2] * 0.6f + 0.4f
     };
 
-    transform_guides_push_state();
-    glDisable(GL_LIGHTING);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    transform_guides_begin_overlay_state();
 
     draw_pulse_segment(snapshot, p0, base, rgb, alpha_mul);
-
-    glLineWidth(3.0f);
-    tg_color4f(head_rgb[0], head_rgb[1], head_rgb[2], 0.95f, alpha_mul);
-    glBegin(GL_LINES);
-    for (int i = 0; i < 4; i++) {
-        float sx = (i == 0 ?  rx : i == 1 ? -rx : i == 2 ?  bx : -bx);
-        float sy = (i == 0 ?  ry : i == 1 ? -ry : i == 2 ?  by : -by);
-        float sz = (i == 0 ?  rz : i == 1 ? -rz : i == 2 ?  bz : -bz);
-        glVertex3f(p1[0], p1[1], p1[2]);
-        glVertex3f(base[0] + sx * fin, base[1] + sy * fin, base[2] + sz * fin);
-    }
-    glVertex3f(base[0] + rx*fin, base[1] + ry*fin, base[2] + rz*fin);
-    glVertex3f(base[0] + bx*fin, base[1] + by*fin, base[2] + bz*fin);
-    glVertex3f(base[0] + bx*fin, base[1] + by*fin, base[2] + bz*fin);
-    glVertex3f(base[0] - rx*fin, base[1] - ry*fin, base[2] - rz*fin);
-    glVertex3f(base[0] - rx*fin, base[1] - ry*fin, base[2] - rz*fin);
-    glVertex3f(base[0] - bx*fin, base[1] - by*fin, base[2] - bz*fin);
-    glVertex3f(base[0] - bx*fin, base[1] - by*fin, base[2] - bz*fin);
-    glVertex3f(base[0] + rx*fin, base[1] + ry*fin, base[2] + rz*fin);
-    glEnd();
-    glLineWidth(1.0f);
+    draw_cone_head(p1, dir, head_len, head_rgb, alpha_mul);
 
     glPointSize(4.0f);
     glBegin(GL_POINTS);
     tg_color4f(rgb[0], rgb[1], rgb[2], 0.7f, alpha_mul);
     glVertex3f(p0[0], p0[1], p0[2]);
     glEnd();
-    glPointSize(6.0f);
-    glBegin(GL_POINTS);
-    tg_color4f(head_rgb[0], head_rgb[1], head_rgb[2], 1.0f, alpha_mul);
-    glVertex3f(p1[0], p1[1], p1[2]);
-    glEnd();
     glPointSize(1.0f);
 
-    glDisable(GL_BLEND);
     transform_guides_pop_state();
-}
-
-/* Arc from p_start swept by glRotatef(angle, ax,ay,az) about local origin. */
-/* Helper: small 4-fin arrowhead from `tip` pointing along `dir` (unit). */
-static void draw_arrow_head(const float tip[3], const float dir[3], float head_len) {
-    float r[3], b[3];
-    make_arrow_basis(dir, r, b);
-    float base[3] = {
-        tip[0] - dir[0] * head_len,
-        tip[1] - dir[1] * head_len,
-        tip[2] - dir[2] * head_len
-    };
-    float fin = head_len * TG_FIN_FRAC;
-    glBegin(GL_LINES);
-    for (int k = 0; k < 4; k++) {
-        float sx = (k == 0 ?  r[0] : k == 1 ? -r[0] : k == 2 ?  b[0] : -b[0]);
-        float sy = (k == 0 ?  r[1] : k == 1 ? -r[1] : k == 2 ?  b[1] : -b[1]);
-        float sz = (k == 0 ?  r[2] : k == 1 ? -r[2] : k == 2 ?  b[2] : -b[2]);
-        glVertex3f(tip[0], tip[1], tip[2]);
-        glVertex3f(base[0] + sx * fin, base[1] + sy * fin, base[2] + sz * fin);
-    }
-    glEnd();
 }
 
 /* Scale guide. Draws the identity reference (origin → axis·1, gray) with a
@@ -368,10 +443,7 @@ static void draw_scale_guide(const Render3dGuideSnapshot *snapshot,
     float p0[3] = { p_start[0], p_start[1], p_start[2] };
     float plen = sqrtf(p0[0]*p0[0] + p0[1]*p0[1] + p0[2]*p0[2]);
 
-    transform_guides_push_state();
-    glDisable(GL_LIGHTING);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    transform_guides_begin_overlay_state();
 
     if (plen > 1e-4f) {
         float p1[3] = { p0[0]*sx, p0[1]*sy, p0[2]*sz };
@@ -411,18 +483,7 @@ static void draw_scale_guide(const Render3dGuideSnapshot *snapshot,
             };
 
             draw_pulse_segment(snapshot, p0, base, rgb, alpha_mul);
-
-            glLineWidth(3.0f);
-            tg_color4f(head_rgb[0], head_rgb[1], head_rgb[2], 0.95f, alpha_mul);
-            draw_arrow_head(p1, dir, head_len);
-            glLineWidth(1.0f);
-
-            glPointSize(6.0f);
-            glBegin(GL_POINTS);
-            tg_color4f(head_rgb[0], head_rgb[1], head_rgb[2], 1.0f, alpha_mul);
-            glVertex3f(p1[0], p1[1], p1[2]);
-            glEnd();
-            glPointSize(1.0f);
+            draw_cone_head(p1, dir, head_len, head_rgb, alpha_mul);
         }
     } else {
         const float axes[3][3] = { {1,0,0}, {0,1,0}, {0,0,1} };
@@ -486,23 +547,13 @@ static void draw_scale_guide(const Render3dGuideSnapshot *snapshot,
                 tip[2] - dir[2] * head_len
             };
 
+            float head_rgb[3] = {
+                axis_rgb[a][0]*0.6f + 0.4f,
+                axis_rgb[a][1]*0.6f + 0.4f,
+                axis_rgb[a][2]*0.6f + 0.4f
+            };
             draw_pulse_segment(snapshot, from, base, axis_rgb[a], alpha_mul);
-
-            glLineWidth(2.5f);
-            tg_color4f(axis_rgb[a][0]*0.6f + 0.4f,
-                      axis_rgb[a][1]*0.6f + 0.4f,
-                      axis_rgb[a][2]*0.6f + 0.4f, 0.95f, alpha_mul);
-            draw_arrow_head(tip, dir, head_len);
-            glLineWidth(1.0f);
-
-            glPointSize(5.0f);
-            glBegin(GL_POINTS);
-            tg_color4f(axis_rgb[a][0]*0.6f + 0.4f,
-                      axis_rgb[a][1]*0.6f + 0.4f,
-                      axis_rgb[a][2]*0.6f + 0.4f, 1.0f, alpha_mul);
-            glVertex3f(tip[0], tip[1], tip[2]);
-            glEnd();
-            glPointSize(1.0f);
+            draw_cone_head(tip, dir, head_len, head_rgb, alpha_mul);
         }
     }
 
@@ -512,13 +563,13 @@ static void draw_scale_guide(const Render3dGuideSnapshot *snapshot,
 
 /* --- draw_rotate_guide phases ---
  *
- * Three distinct geometry generators + one shared pulse animator,
- * conditionally swept depending on whether the rotation origin is
- * (effectively) p_start (build_rotate_arc) or coincides with the
- * world origin (build_rotate_helix). The pulse runs along arc[]
- * regardless. Extracted into named helpers so a reader doesn't have
- * to mentally separate the rotation-matrix multiply from the helix
- * basis construction from the post-build draw. */
+ * One geometry generator (build_rotate_arc, Rodrigues rotation of a
+ * start point) + one pulse animator. When the anchor point sits on the
+ * rotation axis (no orbit circle to sweep — notably the default FRAME
+ * guide mode, whose anchor is the local origin), the guide substitutes
+ * a synthetic start point on the axis-perpendicular plane at a
+ * gizmo-sized radius, so the same arc/dial/cone/label path renders a
+ * Blender-style planar rotation dial instead of degenerating. */
 
 /* Rodrigues rotation: rotate p_start by angle_rad about the unit
  * axis (ax, ay, az), sampled at segs+1 points along [0, angle_rad].
@@ -538,46 +589,28 @@ static void build_rotate_arc(const float p_start[3],
     }
 }
 
-/* Origin-anchored rotation has no usable arc — the rotated p_start is
- * the same point. Build a helix instead, sampled along an axial span
- * proportional to angle_rad / tau. The {u, v} basis is computed from
- * a world-up helper, normalized, then v = a × u. */
-static void build_rotate_helix(float ax, float ay, float az,
-                               float angle_rad, float axis_len,
-                               int segs, float arc[][3]) {
+/* Perpendicular {u, v} basis for a unit rotation axis (ax, ay, az):
+ * u is computed from a world-up helper and normalized, then v = a × u.
+ * Used to place the synthetic dial start point for on-axis anchors. */
+static void rotate_axis_basis(float ax, float ay, float az,
+                              float u[3], float v[3]) {
     float helper[3] = {1.0f, 0.0f, 0.0f};
     if (fabsf(ax) > 0.9f) { helper[0] = 0.0f; helper[1] = 1.0f; }
-    float u[3] = {
-        helper[1]*az - helper[2]*ay,
-        helper[2]*ax - helper[0]*az,
-        helper[0]*ay - helper[1]*ax,
-    };
+    u[0] = helper[1]*az - helper[2]*ay;
+    u[1] = helper[2]*ax - helper[0]*az;
+    u[2] = helper[0]*ay - helper[1]*ax;
     float ul = sqrtf(u[0]*u[0] + u[1]*u[1] + u[2]*u[2]);
     if (ul < 1e-6f) ul = 1.0f;
     u[0] /= ul; u[1] /= ul; u[2] /= ul;
-    float v[3] = {
-        ay*u[2] - az*u[1],
-        az*u[0] - ax*u[2],
-        ax*u[1] - ay*u[0],
-    };
-
-    float radius = axis_len * 0.28f;
-    float pitch  = axis_len * 0.50f;
-    const float tau = 6.28318530717958647692f;
-    float axial_span = pitch * (fabsf(angle_rad) / tau);
-    if (axial_span > axis_len * 1.4f) axial_span = axis_len * 1.4f;
-    float axial_start = -axial_span * 0.5f;
-
-    for (int i = 0; i <= segs; i++) {
-        float t = (float)i / (float)segs;
-        float th = angle_rad * t;
-        float c = cosf(th), s = sinf(th);
-        float a = axial_start + axial_span * t;
-        arc[i][0] = ax*a + radius * (c*u[0] + s*v[0]);
-        arc[i][1] = ay*a + radius * (c*u[1] + s*v[1]);
-        arc[i][2] = az*a + radius * (c*u[2] + s*v[2]);
-    }
+    v[0] = ay*u[2] - az*u[1];
+    v[1] = az*u[0] - ax*u[2];
+    v[2] = ax*u[1] - ay*u[0];
 }
+
+/* Dial ring radius for on-axis anchors, as a fraction of the drawn
+ * axis length. Sized to ring typical unit-scale geometry rather than
+ * hide inside it. */
+#define TG_DIAL_RADIUS_FRAC 0.85f
 
 /* Animate a traveling glow dot + trail along arc[0..segs]. Same
  * shape as draw_pulse_segment's straight-line version, but the
@@ -634,6 +667,27 @@ static void draw_rotate_pulse(const Render3dGuideSnapshot *snapshot,
     glPointSize(1.0f);
 }
 
+/* Swept-angle text label near the arc midpoint. Mirrors
+ * draw_translate_endpoint_label: depth-test off and drawn once (the
+ * caller gates it to the solid pass) so the number is always legible.
+ * 0xB0 is the ISO-8859-1 degree sign — the GLUT bitmap fonts carry the
+ * full 8-bit Latin-1 set. */
+static void draw_rotate_angle_label(const float pos[3], float angle_deg) {
+    char buf[24];
+    snprintf(buf, sizeof(buf), " %+.0f\xB0", (double)angle_deg);
+
+    transform_guides_push_state();
+    glDisable(GL_LIGHTING);
+    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColor4f(0.80f, 0.95f, 1.0f, 0.95f);
+    glRasterPos3f(pos[0], pos[1], pos[2]);
+    for (const char *c = buf; *c; c++)
+        glutBitmapCharacter(FONT_SMALL, (unsigned char)*c);
+    transform_guides_pop_state();
+}
+
 static void draw_rotate_guide(const Render3dGuideSnapshot *snapshot,
                               const GLCmd *cmd, const float p_start[3],
                               float alpha_mul) {
@@ -660,13 +714,10 @@ static void draw_rotate_guide(const Render3dGuideSnapshot *snapshot,
     float plen = sqrtf(p_start[0]*p_start[0] + p_start[1]*p_start[1] +
                        p_start[2]*p_start[2]);
 
-    transform_guides_push_state();
-    glDisable(GL_LIGHTING);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    transform_guides_begin_overlay_state();
 
     /* Rotation axis line through the origin */
-    float axis_len = (plen > 0.5f ? plen : 0.5f) * 1.1f;
+    float axis_len = (plen > 1.0f ? plen : 1.0f) * 1.1f;
     float as = snapshot->alpha_scale;
     glLineWidth(2.0f);
     tg_color4f(rgb[0], rgb[1], rgb[2], fminf(0.55f * as, 1.0f), alpha_mul);
@@ -675,40 +726,156 @@ static void draw_rotate_guide(const Render3dGuideSnapshot *snapshot,
     glVertex3f( ax*axis_len,  ay*axis_len,  az*axis_len);
     glEnd();
 
-    /* Build either a swept arc (off-origin p_start) or a helix
-     * (origin-anchored — no meaningful arc to sweep). */
+    /* Effective sweep-start point. When the anchor sits (near) the
+     * rotation axis its orbit circle degenerates — notably the default
+     * FRAME guide mode, whose anchor is the local origin — so substitute
+     * a point on the axis-perpendicular plane through the anchor at a
+     * gizmo-sized radius. Everything downstream (arc, dial, cone, label)
+     * then renders one uniform design instead of the old screw helix,
+     * which drew at a fixed tiny radius and disappeared next to
+     * unit-scale geometry. */
+    float axial0 = p_start[0]*ax + p_start[1]*ay + p_start[2]*az;
+    float radial0[3] = {
+        p_start[0] - ax*axial0,
+        p_start[1] - ay*axial0,
+        p_start[2] - az*axial0
+    };
+    float rlen0 = sqrtf(radial0[0]*radial0[0] + radial0[1]*radial0[1] +
+                        radial0[2]*radial0[2]);
+    int on_axis = (rlen0 < 0.05f);
+    float p_eff[3] = { p_start[0], p_start[1], p_start[2] };
+    if (on_axis) {
+        float u[3], v[3];
+        rotate_axis_basis(ax, ay, az, u, v);
+        float dial_r = axis_len * TG_DIAL_RADIUS_FRAC;
+        p_eff[0] = ax*axial0 + u[0]*dial_r;
+        p_eff[1] = ay*axial0 + u[1]*dial_r;
+        p_eff[2] = az*axial0 + u[2]*dial_r;
+    }
+
     const int segs = TG_ARC_SEGS;
     float angle_rad = angle_deg * (float)(M_PI / 180.0);
     float arc[TG_ARC_SEGS + 1][3];
-    if (plen >= 0.05f)
-        build_rotate_arc(p_start, ax, ay, az, angle_rad, segs, arc);
-    else
-        build_rotate_helix(ax, ay, az, angle_rad, axis_len, segs, arc);
+    build_rotate_arc(p_eff, ax, ay, az, angle_rad, segs, arc);
 
-    /* Base arc line */
-    glLineWidth(2.0f);
-    tg_color4f(rgb[0], rgb[1], rgb[2], fminf(0.30f * as, 1.0f), alpha_mul);
+    /* Rotation-dial context: a faint full ring showing the circle the
+     * sweep rides, and a translucent sector fan filling the swept angle
+     * from the ring's center like a protractor. Together they make the
+     * guide read as *rotation* at a glance, where the bare arc could
+     * pass for a curved translate. Drawn before the arc stroke so the
+     * solid arc sits on top. */
+    {
+        float circle[TG_ARC_SEGS + 1][3];
+        build_rotate_arc(p_eff, ax, ay, az, (float)(2.0 * M_PI), segs,
+                         circle);
+        float center[3] = { ax*axial0, ay*axial0, az*axial0 };
+
+        /* Sector sweep capped at one full turn: past 360° the fan would
+         * lap itself and double-blend the overlapped wedge. The arc,
+         * pulse, and label still carry the full wrapped sweep. */
+        const float (*sector_pts)[3] = arc;
+        float sector[TG_ARC_SEGS + 1][3];
+        const float tau = (float)(2.0 * M_PI);
+        if (fabsf(angle_rad) > tau) {
+            build_rotate_arc(p_eff, ax, ay, az,
+                             (angle_rad > 0.0f ? tau : -tau), segs, sector);
+            sector_pts = sector;
+        }
+
+        glLineWidth(1.5f);
+        tg_color4f(rgb[0], rgb[1], rgb[2], fminf(0.32f * as, 1.0f), alpha_mul);
+        glBegin(GL_LINE_STRIP);
+        for (int i = 0; i <= segs; i++) glVertex3fv(circle[i]);
+        glEnd();
+        glLineWidth(1.0f);
+
+        tg_color4f(rgb[0], rgb[1], rgb[2], fminf(0.18f * as, 1.0f), alpha_mul);
+        glBegin(GL_TRIANGLE_FAN);
+        glVertex3fv(center);
+        for (int i = 0; i <= segs; i++) glVertex3fv(sector_pts[i]);
+        glEnd();
+
+        /* Radial edges bounding the sector. */
+        glLineWidth(1.5f);
+        tg_color4f(rgb[0], rgb[1], rgb[2], fminf(0.45f * as, 1.0f), alpha_mul);
+        glBegin(GL_LINES);
+        glVertex3fv(center); glVertex3fv(sector_pts[0]);
+        glVertex3fv(center); glVertex3fv(sector_pts[segs]);
+        glEnd();
+        glLineWidth(1.0f);
+    }
+
+    /* Base arc line: dark contrast halo under a solid core (the arc's
+     * curved twin of draw_shaft_segment). */
+    glLineWidth(TG_SHAFT_HALO_W);
+    tg_color4f(TG_HALO_R, TG_HALO_G, TG_HALO_B, TG_HALO_ALPHA, alpha_mul);
     glBegin(GL_LINE_STRIP);
     for (int i = 0; i <= segs; i++) glVertex3fv(arc[i]);
     glEnd();
+    glLineWidth(TG_SHAFT_CORE_W);
+    tg_color4f(rgb[0], rgb[1], rgb[2],
+               fminf(TG_SHAFT_CORE_ALPHA * as, 1.0f), alpha_mul);
+    glBegin(GL_LINE_STRIP);
+    for (int i = 0; i <= segs; i++) glVertex3fv(arc[i]);
+    glEnd();
+    glLineWidth(1.0f);
 
     /* Animated traveling pulse along the arc */
     draw_rotate_pulse(snapshot, arc, segs, rgb, bright, alpha_mul);
 
-    /* Endpoint markers */
-    glPointSize(4.0f);
-    glBegin(GL_POINTS);
-    tg_color4f(rgb[0], rgb[1], rgb[2], 0.7f, alpha_mul);
-    glVertex3f(p_start[0], p_start[1], p_start[2]);
-    glEnd();
-    glPointSize(5.0f);
-    glBegin(GL_POINTS);
-    tg_color4f(bright[0], bright[1], bright[2], 0.95f, alpha_mul);
-    glVertex3fv(arc[segs]);
-    glEnd();
-    glPointSize(1.0f);
+    /* Sweep-direction cone at the arc end, along the end tangent — the
+     * arc alone doesn't say which way the rotation goes. Sized from the
+     * approximate arc length so short arcs get a proportional nubbin. */
+    float tan_dir[3] = {
+        arc[segs][0] - arc[segs - 1][0],
+        arc[segs][1] - arc[segs - 1][1],
+        arc[segs][2] - arc[segs - 1][2]
+    };
+    float tan_len = sqrtf(tan_dir[0]*tan_dir[0] + tan_dir[1]*tan_dir[1] +
+                          tan_dir[2]*tan_dir[2]);
+    if (tan_len > 1e-6f) {
+        tan_dir[0] /= tan_len; tan_dir[1] /= tan_len; tan_dir[2] /= tan_len;
+        float arc_len = tan_len * (float)segs; /* uniform-angle sampling */
+        float head_len = clamp_head_len(arc_len, TG_HEAD_LEN_FRAC,
+                                        TG_HEAD_LEN_MIN, TG_HEAD_LEN_MAX);
+        draw_cone_head(arc[segs], tan_dir, head_len, bright, alpha_mul);
+    }
 
-    glDisable(GL_BLEND);
+    /* Start marker — only for a real off-axis anchor; the synthetic
+     * dial start point is not a position the user authored. */
+    if (!on_axis) {
+        glPointSize(4.0f);
+        glBegin(GL_POINTS);
+        tg_color4f(rgb[0], rgb[1], rgb[2], 0.7f, alpha_mul);
+        glVertex3f(p_start[0], p_start[1], p_start[2]);
+        glEnd();
+        glPointSize(1.0f);
+    }
+
+    /* Swept-angle label at the arc midpoint, once (solid pass only —
+     * the label helper is depth-off, so a ghost-pass copy would just
+     * double-print). Pushed radially outward from the rotation axis so
+     * the text clears the arc stroke and sector fill. */
+    if (alpha_mul >= 1.0f) {
+        int mid = segs / 2;
+        float m_ax = arc[mid][0]*ax + arc[mid][1]*ay + arc[mid][2]*az;
+        float radial[3] = {
+            arc[mid][0] - ax*m_ax,
+            arc[mid][1] - ay*m_ax,
+            arc[mid][2] - az*m_ax
+        };
+        float rlen = sqrtf(radial[0]*radial[0] + radial[1]*radial[1] +
+                           radial[2]*radial[2]);
+        float label_pos[3] = { arc[mid][0], arc[mid][1], arc[mid][2] };
+        if (rlen > 1e-4f) {
+            float push = (0.08f + rlen * 0.10f) / rlen;
+            label_pos[0] += radial[0] * push;
+            label_pos[1] += radial[1] * push;
+            label_pos[2] += radial[2] * push;
+        }
+        draw_rotate_angle_label(label_pos, angle_deg);
+    }
+
     transform_guides_pop_state();
 }
 
@@ -1030,8 +1197,11 @@ void render3d_transform_guides_render_if_due(const Render3dGuideSnapshot *snapsh
         compute_after_cursor_origin(snapshot, plan->after_flat_idx, guide_origin);
     }
 
-    /* Pass 0: depth-test off, 0.4x alpha - a ghost the geometry can't hide
-     * (rotation guides in particular often sit inside the rotating mesh).
+    /* Pass 0: depth-test off, TG_GHOST_ALPHA_MUL alpha - a ghost the
+     * geometry can't hide (rotation guides in particular often sit inside
+     * the rotating mesh). Lines take the shared occluded-ghost stipple;
+     * the filled cone heads render whole (stipple only dashes lines), so
+     * an occluded arrowhead still reads as a solid translucent shape.
      * Pass 1: depth-tested, full alpha, drawn over the ghost so the guide
      * still reads crisply where it isn't occluded. The draw helpers each
      * glPushAttrib(GL_ALL_ATTRIB_BITS), so they capture and restore
@@ -1044,7 +1214,7 @@ void render3d_transform_guides_render_if_due(const Render3dGuideSnapshot *snapsh
             glDisable(GL_DEPTH_TEST);
             glEnable(GL_LINE_STIPPLE);
             glLineStipple(1, RENDER3D_OCCLUDED_GHOST_STIPPLE);
-            alpha_mul = RENDER3D_OCCLUDED_GHOST_ALPHA;
+            alpha_mul = TG_GHOST_ALPHA_MUL;
         } else {
             glEnable(GL_DEPTH_TEST);
             alpha_mul = 1.0f;
