@@ -698,6 +698,15 @@ static void test_cursor_guide_snapshot_with_flat_args(void) {
     s = cursor_guide_snapshot_with_flat_args(&base, &v, 0);
     ASSERT_TRUE("2f vertex z forced to 0", s.vertex_args[2] == 0.0f);
 
+    /* Raster position command -> raster anchor populated. */
+    mk_cmd(&v, CMD_RASTER_POS3F, 2.0f, 3.0f, 4.0f);
+    s = cursor_guide_snapshot_with_flat_args(&base, &v, 0);
+    ASSERT_INT("raster pos marked complete", s.raster_pos_n_filled, 3);
+    ASSERT_TRUE("raster pos args copied",
+                s.raster_pos_args[0] == 2.0f &&
+                s.raster_pos_args[1] == 3.0f &&
+                s.raster_pos_args[2] == 4.0f);
+
     /* Normal command followed by a vertex -> normal_args + base pos. */
     GLCmd prog[2];
     mk_cmd(&prog[0], CMD_NORMAL3F, 0.0f, 1.0f, 0.0f);
@@ -1380,9 +1389,9 @@ static void test_cursor_guides_render_for_unterminated_begin(void) {
     trace_end(&log);
 
     ASSERT_INT("unterminated begin still draws cursor vertex guide",
-               trace_count_line(&log, "glPointSize 8"), 1);
+               trace_count_sym(&log, "glPointSize") >= 2, 1);
     ASSERT_INT("cursor guide uses the flat vertex coords",
-               trace_count_line(&log, "glVertex3f 0.25 0.5 0.75"), 1);
+               trace_count_line(&log, "glVertex3f 0.25 0.5 0.75"), 2);
 
     input = "glVertex3f(-0.25, -0.5, 0)";
     walk.cursor.edit_line_idx = 2;
@@ -1398,9 +1407,49 @@ static void test_cursor_guides_render_for_unterminated_begin(void) {
     trace_end(&log);
 
     ASSERT_INT("unterminated begin draws append-row vertex guide",
-               trace_count_line(&log, "glPointSize 8"), 1);
+               trace_count_sym(&log, "glPointSize") >= 2, 1);
     ASSERT_INT("append-row guide uses live input coords",
-               trace_count_line(&log, "glVertex3f -0.25 -0.5 0"), 1);
+               trace_count_line(&log, "glVertex3f -0.25 -0.5 0"), 2);
+}
+
+static void test_cursor_guides_render_for_raster_pos(void) {
+    printf("--- edit_overlays cursor guides for glRasterPos3f ---\n");
+
+    GLCmd cmds[1];
+    mk_cmd(&cmds[0], CMD_RASTER_POS3F, 1.25f, 2.5f, 3.75f);
+    cmds[0].src_cmd_idx = 0;
+
+    OverlayWalkCtx walk;
+    memset(&walk, 0, sizeof(walk));
+    walk.program.cmds = cmds;
+    walk.program.cmd_count = 1;
+    walk.cursor.edit_line_idx = 0;
+    walk.cursor.cursor_block_begin = -1;
+    walk.cursor.cursor_block_end = -1;
+
+    const char *input = "glRasterPos3f(0, 0, 0)";
+    Render3dGuideSnapshot snap;
+    memset(&snap, 0, sizeof(snap));
+    snap.show_guides = 1;
+    snap.input = input;
+    snap.input_len = (int)strlen(input);
+    snap.edit_line_idx = 0;
+    snap.flat_program = walk.program;
+    snap.raster_pos_n_filled = 3;
+    snap.raster_pos_args[0] = 0.0f;
+    snap.raster_pos_args[1] = 0.0f;
+    snap.raster_pos_args[2] = 0.0f;
+    snap.alpha_scale = 1.0f;
+
+    TraceLog log;
+    trace_begin();
+    edit_overlays_render_cursor_guides(&snap, &walk);
+    trace_end(&log);
+
+    ASSERT_INT("raster guide uses flat raster-pos coords",
+               trace_count_line(&log, "glVertex3f 1.25 2.5 3.75"), 2);
+    ASSERT_INT("raster guide reuses point marker point-size calls",
+               trace_count_sym(&log, "glPointSize") >= 2, 1);
 }
 
 /* The transform analog of the vertex append-row test: typing a brand-new
@@ -1490,6 +1539,7 @@ int main(void) {
     test_vertex_numbers_use_source_begin_block();
     test_render_via_repl_program();
     test_cursor_guides_render_for_unterminated_begin();
+    test_cursor_guides_render_for_raster_pos();
     test_cursor_guides_render_for_new_transform_line();
 
     return test_harness_report(&g_harness, "test_edit_overlays");

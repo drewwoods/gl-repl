@@ -42,15 +42,19 @@ typedef struct Render3dGuideSnapshot {
     int source_cmd_count;
     FlatProgramView flat_program;
 
-    /* Pre-parsed vertex / normal cursor args. The controller evaluates the
-     * partial input string (e.g. `glVertex3f(1, t*2, `) using the live REPL
-     * variable table and writes the floats here so the scene module can
-     * draw guides without needing repl_eval. vertex_n_filled = 0 when the
-     * input doesn't look like glVertex2f / glVertex3f / gluVertex(.
-     * normal_n_filled < 3 means "don't draw a normal guide". */
+    /* Pre-parsed vertex / raster-position / normal cursor args. The
+     * controller evaluates the partial input string (e.g.
+     * `glVertex3f(1, t*2, `) using the live REPL variable table and writes
+     * the floats here so the scene module can draw guides without needing
+     * repl_eval. vertex_n_filled = 0 when the input doesn't look like
+     * glVertex2f / glVertex3f / gluVertex(. raster_pos_n_filled < 3 means
+     * "don't draw a raster-position marker". normal_n_filled < 3 means
+     * "don't draw a normal guide". */
     float vertex_args[3];
     int   vertex_filled[3];
     int   vertex_n_filled;
+    float raster_pos_args[3];
+    int   raster_pos_n_filled;
     float normal_args[3];
     int   normal_n_filled;
 

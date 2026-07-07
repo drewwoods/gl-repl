@@ -1426,6 +1426,11 @@ Render3dGuideSnapshot cursor_guide_snapshot_with_flat_args(const Render3dGuideSn
         snap.vertex_args[1] = flat->args[1];
         snap.vertex_args[2] = (flat->type == CMD_VERTEX2F) ? 0.0f
                                                            : flat->args[2];
+    } else if (flat->type == CMD_RASTER_POS3F) {
+        snap.raster_pos_args[0] = flat->args[0];
+        snap.raster_pos_args[1] = flat->args[1];
+        snap.raster_pos_args[2] = flat->args[2];
+        snap.raster_pos_n_filled = 3;
     } else if (flat->type == CMD_NORMAL3F || flat->type == CMD_TESS_NORMAL) {
         snap.normal_args[0] = flat->args[0];
         snap.normal_args[1] = flat->args[1];
