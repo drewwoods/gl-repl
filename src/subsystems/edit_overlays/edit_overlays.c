@@ -673,9 +673,9 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
  * front vertices aren't culled, while anything clearly behind is dropped. */
 #define VERTEX_LABEL_OCCLUDE_BIAS  0.002f
 /* Temporal-coherence knobs (see the TEMPORALLY STICKY note above). */
-#define VERTEX_LABEL_ENTER_PAD     3.0f  /* headroom (px) to appear or home    */
-#define VERTEX_LABEL_KEEP_SHRINK   2.0f  /* leniency (px) before eviction      */
-#define VERTEX_LABEL_EASE          0.35f /* per-frame glide toward the row     */
+#define VERTEX_LABEL_ENTER_PAD     15.0f  /* headroom (px) to appear or home    */
+#define VERTEX_LABEL_KEEP_SHRINK   4.0f  /* leniency (px) before eviction      */
+#define VERTEX_LABEL_EASE          0.20f /* per-frame glide toward the row     */
 
 typedef struct {
     float anchor_x, anchor_y;  /* projected vertex point, viewport-local px   */
