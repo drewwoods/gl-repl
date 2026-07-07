@@ -15,9 +15,11 @@
  * STIPPLE consumers: render.c (orbit-target gizmo),
  * guides/transform_guides.c (transform guides), axes.c (negative axes),
  * lights.c (directional-light ray + indicator cross),
- * guides/geometry_guides.c. ALPHA is used only by the true two-pass
- * ghost helpers (render.c, transform_guides.c). Scene-internal, so it
- * lives under src/scene/ rather than at the repo root.
+ * guides/geometry_guides.c. ALPHA is used only by render.c's two-pass
+ * ghost helper; transform_guides.c uses a deliberately brighter local
+ * TG_GHOST_ALPHA_MUL (its guides usually sit inside the geometry they
+ * shape). Scene-internal, so it lives under src/scene/ rather than at
+ * the repo root.
  */
 #ifndef RENDER3D_OCCLUDED_GHOST_H
 #define RENDER3D_OCCLUDED_GHOST_H
