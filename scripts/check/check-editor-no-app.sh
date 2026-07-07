@@ -7,7 +7,7 @@
 # layering: changes to app/* propagate down into the text-document
 # model.
 #
-# Audit finding #8 in docs/plans/in-review/src-editor-code-smell-audit.md
+# Audit finding #8 in docs/plans/done/src-editor-code-smell-audit.md
 # documents the current four violations in src/editor/input.c; the
 # week-pass fix hoists those call sites into src/app/glr_ctrl.c.
 # Until that lands, this ratchet prevents the count from growing.

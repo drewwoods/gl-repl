@@ -13,7 +13,7 @@
 # kept around to record the comment-counting view; the live check uses
 # the comment-stripped view.
 #
-# Phase 0 of docs/plans/in-review/edit-line-ownership.md repointed the
+# Phase 0 of docs/plans/done/edit-line-ownership.md repointed the
 # glob from `repl_*.c repl_*.h` at the repo root (where the REPL code
 # no longer lives — it moved to src/repl/ during the
 # source-document-port work) to src/repl/**.

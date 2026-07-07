@@ -23,7 +23,7 @@ moves to `not-started/`.
 No decision recorded on which scope fork to pursue; stays in `in-review/`.
 
 Dependency note: this is **separate** from
-`plans/in-review/glcolormask-gl-bool-tokens.md`. The glColorMask Path C
+`plans/done/glcolormask-gl-bool-tokens.md`. The glColorMask Path C
 work must make ordinary end-of-input enum completion N-slot aware as
 part of the enum-spec refactor. This plan owns the larger cursor-aware
 mid-line behavior: relaxing the end-of-input guard, computing the slot

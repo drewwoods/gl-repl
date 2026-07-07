@@ -2,7 +2,7 @@
  * src/repl/import.c — Reader half of the export/import file format.
  *
  * Split out of src/repl/export.c (audit #69 in
- * docs/plans/active/src-repl-code-smell-audit-2.md). The writer (file emit,
+ * docs/plans/done/src-repl-code-smell-audit-2.md). The writer (file emit,
  * code-panel dump, header-line refresh) stays in export.c. This file
  * owns:
  *

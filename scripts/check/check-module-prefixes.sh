@@ -1,7 +1,7 @@
 #!/bin/bash
 # Hard guard: stale cross-module symbol prefixes do not reappear.
 #
-# The module-naming cleanup (docs/plans/in-review/module-naming-convention.md)
+# The module-naming cleanup (docs/plans/done/module-naming-convention.md)
 # renamed every exported symbol so its prefix follows the owning
 # directory (src/repl -> repl_/Repl, src/editor -> editor_/Editor,
 # src/ui -> ui_/Ui, src/app -> glr_/Glr, src/render3d -> render3d_/Render3d,
@@ -40,7 +40,7 @@ violations=$(printf '%s\n' "$violations" | grep -vE '^[[:space:]]*$' || true)
 if [ -n "$violations" ]; then
     echo "ERROR: a stale pre-cleanup symbol prefix reappeared under src/." >&2
     echo "Prefix must follow the owning directory; see" >&2
-    echo "docs/plans/in-review/module-naming-convention.md and the" >&2
+    echo "docs/plans/done/module-naming-convention.md and the" >&2
     echo "Sanctioned Exceptions / Conventions in docs/MODULES.md." >&2
     echo "Hits:" >&2
     printf '%s\n' "$violations" >&2
