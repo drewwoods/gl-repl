@@ -14,8 +14,17 @@
  * instruction comment above the earlier labeled command line so
  * tutorials can teach "draw first, then insert setup before the batch".
  *
- * Four step kinds exist (TutorialStepKind):
+ * Five step kinds exist (TutorialStepKind):
  *   COMMAND      the original "type the expected GL call" step.
+ *                `comment` is OPTIONAL: NULL (or empty) commits the
+ *                expected command with no locked instruction row above
+ *                it — the autocomplete ghost and status hint still
+ *                teach the command, so runs of related commands don't
+ *                need a narration comment each.
+ *   NOTE         a comment-only step: reveal the instruction comment,
+ *                wait for an ack key (Enter/Tab/Space), advance. The
+ *                showcase flow of SET without a cfg write. `expected`
+ *                MUST be NULL and `comment` MUST be non-empty.
  *   SET          apply `cfg_slug = cfg_value` on entry so the user sees
  *                the result; advance on Enter/Tab/Space. `expected` MUST
  *                be NULL.
@@ -31,8 +40,12 @@
  *                user can type the assignment. `expected` MUST be NULL
  *                and `var_name` MUST be non-empty.
  *
- * The sentinel that terminates a step array has `comment == NULL`
- * (any kind; expected may be NULL too for COMMAND-only sentinels).
+ * The sentinel that terminates a step array has BOTH `comment == NULL`
+ * and `expected == NULL` (see repl_tutorial_step_is_sentinel). Every
+ * real step carries at least one of the two: COMMAND requires
+ * `expected`; every other kind requires `comment`. (Before COMMAND
+ * comments became optional the sentinel was `comment == NULL` alone —
+ * a comment-less COMMAND step would have read as the terminator.)
  *
  * Catalog validation runs once at tutorial_start before any state
  * mutation; see repl_tutorial_validate(). Slug validity for
@@ -71,7 +84,9 @@ typedef enum {
 } TutorialStepPlacementKind;
 
 typedef enum {
-    /* Default — type the expected GL command. */
+    /* Default — type the expected GL command. `comment` optional:
+     * NULL/empty commits with no locked instruction row (the ghost and
+     * status hint still teach the command). */
     TUTORIAL_STEP_KIND_COMMAND = 0,
     /* Showcase — apply cfg_slug=cfg_value, wait for ack key, advance. */
     TUTORIAL_STEP_KIND_SET,
@@ -82,6 +97,10 @@ typedef enum {
      * commit or a variable-panel slider drag satisfies the step;
      * document mutation stays allowed. */
     TUTORIAL_STEP_KIND_REQUIRE_VAR,
+    /* Comment-only — reveal the instruction comment, wait for an ack
+     * key (Enter/Tab/Space), advance. SET's showcase flow without the
+     * cfg write; the document is frozen while it waits. */
+    TUTORIAL_STEP_KIND_NOTE,
 } TutorialStepKind;
 
 typedef struct {
@@ -118,6 +137,17 @@ typedef struct {
     int                       comment_binding_mods;
     int                       comment_binding_is_special;
 } TutorialStep;
+
+/* The step-array terminator: a record with NEITHER comment NOR expected.
+ * Every real step has at least one (COMMAND requires expected, all other
+ * kinds require a comment), so the pair-NULL record is unambiguous even
+ * now that COMMAND comments are optional. Single definition — every
+ * walker (accessors, validators, the runner) must use this rather than
+ * open-coding a `!comment` test, which would misread a comment-less
+ * COMMAND step as the terminator. */
+static inline int repl_tutorial_step_is_sentinel(const TutorialStep *step) {
+    return step->comment == NULL && step->expected == NULL;
+}
 
 /* Curated metadata tags used by the Tutorials menu. Tutorials keep their
  * flat identity; tags are only a secondary discovery index. Tag index 0
@@ -266,14 +296,17 @@ const char               *repl_tutorial_subheading(int tutorial_idx);
  * returns 0 and writes a short diagnostic into `err` (when err_size > 0).
  *
  * Rules enforced:
- *   - Sentinel: first step with `comment == NULL` terminates the array.
- *   - COMMAND steps require non-null comment and expected, and each
- *     expected parses to a single source command and lands at the
- *     runner's chosen row (v1 catalog rule, syntactic best-effort: no
- *     `;`, no `\n`, no block-open `{`/`}`, no `float` declarations of
- *     any shape — single-name float decls are relocated to the top of
- *     non-decl code on commit, which breaks pending.commit_line).
- *   - SET / REQUIRE steps require non-null comment, non-empty cfg_slug,
+ *   - Sentinel: first step with both `comment == NULL` and
+ *     `expected == NULL` terminates the array
+ *     (repl_tutorial_step_is_sentinel).
+ *   - COMMAND steps require non-null expected (comment is optional),
+ *     and each expected parses to a single source command and lands at
+ *     the runner's chosen row (v1 catalog rule, syntactic best-effort:
+ *     no `;`, no `\n`, no block-open `{`/`}`, no `float` declarations
+ *     of any shape — single-name float decls are relocated to the top
+ *     of non-decl code on commit, which breaks pending.commit_line).
+ *   - NOTE steps require a non-empty comment and expected == NULL.
+ *   - SET / REQUIRE steps require non-empty comment and cfg_slug,
  *     and expected == NULL. Slug *validity* is checked at runtime in
  *     tutorial_start once the config bridge is installed.
  *   - Every non-empty label is unique within the tutorial.

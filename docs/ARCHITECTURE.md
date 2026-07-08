@@ -841,9 +841,9 @@ before code-panel/camera wheel handlers so scroll does not leak behind menus.
 
 **Tutorial menu.** Tutorials use the same flyout engine, but the catalog owner
 is `src/repl/tutorials.{c,h}`. Each tutorial entry declares a
-[`ReplTutorialTagMask`](../src/repl/tutorials.h#L144); the synthetic `ALL` tag is folded into every entry's
+[`ReplTutorialTagMask`](../src/repl/tutorials.h#L174); the synthetic `ALL` tag is folded into every entry's
 mask by `repl_tutorial_tag_mask`, so catalog literals only name real domain
-tags. Top-level visible rows are tags ([`repl_tutorial_visible_tag_count()`](../src/repl/tutorials.h#L252)
+tags. Top-level visible rows are tags ([`repl_tutorial_visible_tag_count()`](../src/repl/tutorials.h#L282)
 hides unused tags), followed by `Restart Tutorial` / `Exit Tutorial` rows while
 a tutorial is active. Tag rows are inert hover-only parents; selecting a flyout
 tutorial routes through the controller to `tutorial_start(index)` and dismisses
@@ -2058,17 +2058,23 @@ checklist above (its steps 1–2), a structured command touches:
 
 ### Adding A New Tutorial Step Kind
 
-Tutorial step kinds ([`TutorialStepKind`](../src/repl/tutorials.h#L73) in [`src/repl/tutorials.h`](../src/repl/tutorials.h)) name the
+Tutorial step kinds ([`TutorialStepKind`](../src/repl/tutorials.h#L86) in [`src/repl/tutorials.h`](../src/repl/tutorials.h)) name the
 contract between a catalog entry and the runtime: what extra fields the
 step carries, what UI it shows, what user action advances it, and which
 guard rails apply. Current kinds are:
 
 | Kind          | Carrier fields              | Advance signal                            |
 |---------------|-----------------------------|-------------------------------------------|
-| `COMMAND`     | `expected`                  | User commits a line matching `expected`.  |
+| `COMMAND`     | `expected` (`comment` optional) | User commits a line matching `expected`. A NULL/empty `comment` emits no locked instruction row — the command commits at the insertion row itself, taught by the autocomplete ghost + status hint; after the commit the committed row is recorded as the step's label anchor and locked (`tutorial_note_expected_commit_applied`). |
+| `NOTE`        | `comment` only              | Ack key (Enter / Tab / Space) — SET's showcase flow without the cfg write; the document stays frozen while it waits. |
 | `SET`         | `cfg_slug`, `cfg_value` (`_name`) | Ack key (Enter / Tab / Space) after auto-apply. |
 | `REQUIRE`     | `cfg_slug`, `cfg_value` (`_name`) | Live cfg slug matches target (notify from `glr_config_set`). |
 | `REQUIRE_VAR` | `var_name`, `var_target`    | Live predef variable matches target (notify at the tail of the predef-writeback commit, after editor post-effects). |
+
+The step-array sentinel is the record with BOTH `comment` and
+`expected` NULL (`repl_tutorial_step_is_sentinel` in [`src/repl/tutorials.h`](../src/repl/tutorials.h));
+every real step carries at least one of the two — COMMAND requires
+`expected`, every other kind requires a non-empty `comment`.
 
 Use this section as a checklist when adding a new kind. The
 `REQUIRE_VAR` rollout is the most recent worked example — its commits
@@ -2076,8 +2082,8 @@ land in roughly the order below.
 
 #### 1. Catalog layer (`src/repl/tutorials.{h,c}`)
 
-- Add the new enum value to [`TutorialStepKind`](../src/repl/tutorials.h#L73).
-- Add any extra fields to [`TutorialStep`](../src/repl/tutorials.h#L87). **Place new fields AFTER all
+- Add the new enum value to [`TutorialStepKind`](../src/repl/tutorials.h#L86).
+- Add any extra fields to [`TutorialStep`](../src/repl/tutorials.h#L106). **Place new fields AFTER all
   existing ones** so positional initializers in `STEP_APPEND` / `STEP_AT`
   / `STEP_SET` / `STEP_REQUIRE` / `STEP_SENTINEL` keep zero-initializing
   to the new defaults — adding fields mid-struct silently shifts other
@@ -2133,7 +2139,7 @@ land in roughly the order below.
   the commit-side advance must stay a no-op for it: the notify hook is
   the authoritative advance. The mechanism is `tutorial_advance_if_commit_ok`
   (in [`src/editor/input.c`](../src/editor/input.c)), which advances ONLY when
-  [`tutorial_note_expected_commit_applied()`](../src/subsystems/tutorial/tutorial.h#L156) returns 1 — i.e. a pending
+  [`tutorial_note_expected_commit_applied()`](../src/subsystems/tutorial/tutorial.h#L158) returns 1 — i.e. a pending
   COMMAND expected-command attempt was in flight. A free-form REQUIRE_VAR
   commit sets no pending record, so it returns 0 and the commit path does
   not advance. This is load-bearing: the REQUIRE_VAR notify fires *inside*
