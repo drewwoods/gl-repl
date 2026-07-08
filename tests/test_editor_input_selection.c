@@ -1063,5 +1063,37 @@ int main(void) {
                    editor_clipboard_input_text(), "sin(t)");
     }
 
+    printf("\n--- edit_op_backspace selection-aware backspace primitive ---\n");
+    {
+        glr_ctrl_reset_all();
+        load_input("abcdef");
+        editor_cursor_pos_set(3);
+
+        /* 1. Without selection, backspace deletes char left of cursor */
+        int changed = edit_op_backspace();
+        ASSERT_TRUE("backspace changed buffer", changed);
+        ASSERT_STR("backspace deleted 'c'", editor_state_input_mut()->input, "abdef");
+        ASSERT_INT("cursor moved left", editor_cursor_pos(), 2);
+
+        /* 2. With selection, backspace deletes selection, cursor collapses to selection start */
+        load_input("abcdef");
+        editor_cursor_pos_set(4);
+        editor_input_anchor_set(1);
+        ASSERT_TRUE("selection active", editor_input_selection_active());
+        changed = edit_op_backspace();
+        ASSERT_TRUE("backspace with selection changed buffer", changed);
+        ASSERT_STR("selection deleted", editor_state_input_mut()->input, "aef");
+        ASSERT_INT("cursor at selection lo", editor_cursor_pos(), 1);
+        ASSERT_TRUE("anchor cleared", editor_input_anchor() == -1);
+
+        /* 3. Backspace at position 0 does nothing */
+        load_input("abcdef");
+        editor_cursor_pos_set(0);
+        changed = edit_op_backspace();
+        ASSERT_TRUE("backspace at 0 did not change buffer", !changed);
+        ASSERT_STR("buffer unchanged", editor_state_input_mut()->input, "abcdef");
+    }
+
     return test_harness_report(&g_harness, "test_editor_input_selection");
 }
+

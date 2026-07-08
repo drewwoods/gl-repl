@@ -1012,6 +1012,27 @@ static void test_replay_focus_anchor_glut_solid(void) {
     replay_stop();
 }
 
+static void test_replay_polygon_limits(void) {
+    glr_ctrl_reset_all();
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("  glVertex3f(1, 2, 3);");
+    editor_feed_line("glEnd();");
+    repl_state_mark_flat_dirty();
+    repl_flatten_commands(editor_state_edit_line());
+
+    replay_start();
+    g_replay_mode = REPLAY_MODE_POLYGON;
+    g_replay_state = REPLAY_PAUSED;
+
+    /* Advance should jump the whole glBegin/glEnd block as one step */
+    replay_advance(repl_state_flat_program_view());
+    ASSERT_TRUE("polygon mode advance jumps past end", g_replay_pc == 3);
+
+    replay_step_back();
+    ASSERT_TRUE("polygon mode step back returns to start", g_replay_pc == 0);
+    replay_stop();
+}
+
 int main(void) {
     test_replay_basic_controls();
     test_replay_stepping();
@@ -1020,6 +1041,7 @@ int main(void) {
     test_replay_focus_call_depth();
     test_replay_focus_anchor_flat_idx();
     test_replay_focus_anchor_glut_solid();
+    test_replay_polygon_limits();
     test_replay_tessellation_stepping();
     test_replay_fade_batches();
     test_replay_input();
