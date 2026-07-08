@@ -98,7 +98,13 @@ edits without rebuilding.
 
 **A new tutorial** — add a `TutorialStep[]` entry to `g_tutorials[]` in
 [`src/repl/tutorials.c`](../src/repl/tutorials.c) with a `.tags` mask; the metadata tests fail if you
-forget the tags.
+forget the tags. Use the catalog macros for the intended step shape:
+`STEP_APPEND` / `STEP_AT` for commented command steps, `STEP_CMD` for a
+comment-less command taught by ghost text, `STEP_NOTE` for comment-only
+acknowledgement, and `STEP_SET` / `STEP_REQUIRE` / `STEP_REQUIRE_VAR` for
+state-driven steps. Step arrays terminate only on the pair-NULL sentinel
+(`comment == NULL && expected == NULL`), so comment-less command steps are valid
+real steps.
 
 **A new keyboard shortcut** — one `#define GLR_<ACTION> <key>, <mods>` pair
 in [`keymap.h`](../keymap.h); `make keymap-list` prints current bindings and free slots.

@@ -2172,8 +2172,10 @@ The notify hook is `tutorial_notify_state_changed(void)`. New kinds
 share the function — they only add new *call sites* where the watched
 state can change. Today's sites:
 
-- **`src/app/glr_config.c::glr_config_set`** — fires for cfg-slug-shaped
-  kinds (SET / REQUIRE).
+- **`src/app/glr_config.c::glr_config_set`** — fires after every cfg write;
+  REQUIRE consumes it to advance when the watched slug reaches its target.
+  SET writes also flow through this setter on entry, but SET advancement is
+  ack-key driven rather than notify-driven.
 - **`src/editor/commit.c::notify_tutorial_if_predef_changed`** — fires
   once if any predef op is applied by the commit. Covers REQUIRE_VAR for
   typed `name = expr;` assignments, `float n = 5;` declarations-with-
@@ -2205,11 +2207,11 @@ same operation performs, so the advance sees a settled document.
 - `tutorial_reject_noncommand_commit_with_hint` (in
   [`tutorial_runner.c`](../src/subsystems/tutorial/tutorial_runner.c)) decides whether a typed commit attempt is
   hard-rejected with a kind-specific hint. Return 1 for kinds that
-  forbid typed commits (SET / REQUIRE) and 0 for kinds that allow
+  forbid typed commits (NOTE / SET / REQUIRE) and 0 for kinds that allow
   them (COMMAND / REQUIRE_VAR).
 - `tutorial_handle_ack_key` consumes Enter / Tab / Space only when
-  the current step is SET. Extend if a new kind also wants ack-key
-  advancement.
+  the current step is SET or NOTE. Extend if a new kind also wants
+  ack-key advancement.
 - For ghost text: `tutorial_shadow_suffix` returns the untyped
   portion of `expected`. If the new kind has no fixed `expected` but
   still benefits from passive guidance, synthesize an expected string

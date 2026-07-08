@@ -908,7 +908,8 @@ expand iteration-by-iteration).
 The **Tutorials** menu offers guided, step-by-step lessons rendered directly
 in the code panel — instruction comments appear with a typewriter reveal, and
 each step either asks you to type a command (autocomplete ghost text shows
-the expected call), change a setting, or drag a variable slider to a target.
+the expected call), acknowledge a short note, change a setting, or drag a
+variable slider to a target.
 
 - Tutorials are grouped by tag (hover a tag row for its flyout); flyouts
   group entries under difficulty subheadings.
