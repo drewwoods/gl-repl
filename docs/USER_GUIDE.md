@@ -618,6 +618,7 @@ swatches.
 | Ctrl+Shift+C | Reset the camera to its default pose (eased) |
 | Ctrl+Shift+R | Toggle camera auto-rotate |
 | Ctrl+Shift+V | Toggle View mode: 3D perspective / 2D ortho |
+| Ctrl+Shift+E | Toggle Projection: Perspective / Ortho (free camera) |
 
 ### 2D mode
 
@@ -627,6 +628,15 @@ swatches.
 between the 3D perspective camera and a flat 2D orthographic projection —
 useful for plots, sketches, and UI-like drawings. Examples that declare
 `@cfg view_mode = RENDER3D_VIEW_2D` start in 2D automatically.
+
+### Projection
+
+*Projection* (Ctrl+Shift+E, or the CAMERA section of the Config menu) toggles between
+perspective and orthographic projection while maintaining a free, interactive camera.
+Unlike *View mode* (which flattens and locks the camera to a top-down 2D view), toggling
+*Projection* keeps the current camera orbit angle, allowing you to view and navigate
+the scene orthographically. Examples can declare `@cfg projection = 1` to start with
+orthographic projection.
 
 ---
 
@@ -645,7 +655,7 @@ flyouts taller than the window):
 - **OVERLAYS & SCENE** — Grid, Grid extent, Grid brightness, Grid major,
   Axes, Xform guides, Light indicators, Light theme, Backdrop, Auto-normals,
   Post FX Scope, Post FX Effect
-- **CAMERA** — View mode, Camera rotate, Focus origin, Reset camera
+- **CAMERA** — View mode, Projection, Camera rotate, Focus origin, Reset camera
 - **GEOMETRY** — Vertex labels, Overlay scope, Normal vectors, Vertex outlines,
   Vertex points, Poly highlight, Winding
 - **INTERFACE** — Variable panel, Compute profile, Memory profile, Code panel,
@@ -1245,6 +1255,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+Shift+C | Reset camera |
 | Ctrl+Shift+R | Auto-rotate |
 | Ctrl+Shift+V | 2D / 3D view mode |
+| Ctrl+Shift+E | Projection (Perspective / Ortho) |
 
 ### Session & audio
 

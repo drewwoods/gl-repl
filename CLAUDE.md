@@ -1332,11 +1332,12 @@ alongside `.cfg` (see the file-layout table for the tutorial catalog).
 | Ctrl+Shift+T | Reset time `t` to 0 |
 | Ctrl+Shift+B | Toggle winding view |
 | Ctrl+G | Toggle wireframe |
+| Ctrl+O | Focus origin — ease the orbit target to (0,0,0) |
 | Ctrl+Shift+N | Toggle normal vectors |
-| Ctrl+Shift+E | Toggle vertex outlines |
+| Ctrl+Shift+E | Toggle Projection (Perspective / Ortho) |
+| Ctrl+Shift+O | Toggle vertex outlines |
 | Ctrl+Shift+L | Toggle light indicators |
 | Ctrl+Shift+F | Toggle code focus (hide boilerplate chrome) — also the statusbar "focus" keycap |
-| Ctrl+Shift+O | Focus origin — ease the orbit target to (0,0,0) |
 | Ctrl+Shift+C | Reset camera to default (eased) |
 | Ctrl+Shift+R | Toggle camera auto-rotate |
 | Ctrl+Shift+V | Toggle View mode (2D / 3D) |

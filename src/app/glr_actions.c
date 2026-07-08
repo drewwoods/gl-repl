@@ -431,9 +431,10 @@ const GlrConfigItem g_cfg_items[] = {
       .key_code = KM_KEY(GLR_VIEW_MODE), .modifiers = KM_MODS(GLR_VIEW_MODE) },
     /* Projection matrix (perspective/ortho) with a free camera — distinct
      * from "View mode", which flattens & locks the camera to a top-down 2D
-     * view. Menu-only for now (no keybinding). */
+     * view. Keybound to Ctrl+Shift+E. */
     { .label = "Projection", .key = GLR_CONFIG_PROJECTION,
-      .state_count = 2, .state_names = projection_names },
+      .state_count = 2, .state_names = projection_names,
+      .key_code = KM_KEY(GLR_PROJECTION), .modifiers = KM_MODS(GLR_PROJECTION) },
     { .label = "Camera rotate", .key = GLR_CONFIG_CAMERA_ROTATE, .state_count = 2,
       .key_code = KM_KEY(GLR_CAMERA_ROTATE), .modifiers = KM_MODS(GLR_CAMERA_ROTATE) },
     /* Action rows: no state to cycle (state_count 0); activation fires
