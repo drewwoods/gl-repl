@@ -67,14 +67,14 @@
  * TUTORIAL_LOCKED_LINE_MAX bounds how many source lines the runtime
  * can hold "locked" against edits at once.
  *
- * The two used to be one constant. They're equal today and sized 64
- * because a tutorial with N steps can produce up to N locked lines in
- * the worst case, but the meanings are independent — a future audit
- * that lowers the step ceiling shouldn't silently shrink the lock
- * table. The static-assert below pins the today-relationship without
- * fusing the constants. */
+ * The two used to be one constant. The lock table is now larger than
+ * the step ceiling because preloaded `setup` scaffold rows are locked
+ * too (every setup row + up to one lock per step must fit); the
+ * catalog validator enforces `setup lines + steps <=
+ * TUTORIAL_LOCKED_LINE_MAX` per entry. The static-assert below pins
+ * the >= relationship without fusing the constants. */
 #define TUTORIAL_MAX_STEPS         64
-#define TUTORIAL_LOCKED_LINE_MAX   64
+#define TUTORIAL_LOCKED_LINE_MAX   128
 STATIC_ASSERT(TUTORIAL_LOCKED_LINE_MAX >= TUTORIAL_MAX_STEPS,
               "Locked-line capacity must hold every possible per-step lock");
 
@@ -182,6 +182,20 @@ typedef struct {
      * bridge (see CLAUDE.md). NULL = no scene-presentation overrides
      * (the default; existing catalog entries get this implicitly). */
     const char *const  *cfg;
+    /* Optional NULL-terminated array of scaffold source lines preloaded
+     * into the transient scene at tutorial start, BEFORE step 0 — so a
+     * tutorial can build on code an earlier tutorial taught without
+     * making the learner re-type it. Honors the example header
+     * vocabulary: leading `// @cfg slug = value` lines and an optional
+     * 5-line `// camera` block are consumed like example metadata
+     * (setup @cfg slugs join the teardown-restore baseline); the
+     * remaining body lines are REPL source fed through the non-editor
+     * loader. Every loaded row is LOCKED (read-only for the duration
+     * of the tutorial). Body lines may define `:name` goto labels;
+     * label-placement steps can target those (see target_label).
+     * NULL = start from an empty scene (the default). See
+     * docs/plans/active/tutorial-setup-scaffold.md for the design. */
+    const char *const  *setup;
     /* Tag bitmask for menu grouping (REPL_TUTORIAL_TAG_* bits OR-ed
      * via the private TUTORIAL_TAG_* macros in tutorials.c). The
      * synthetic ALL bit is folded in by repl_tutorial_tag_mask() so
@@ -268,6 +282,11 @@ static inline float repl_tutorial_step_var_target(int idx, int step_idx) {
  * when it has none. Out-of-range idx → NULL. */
 const char *const        *repl_tutorial_cfg_lines(int idx);
 
+/* The tutorial's preloaded scaffold lines (NULL-terminated array), or
+ * NULL when it starts from an empty scene. Out-of-range idx → NULL.
+ * See TutorialEntry.setup. */
+const char *const        *repl_tutorial_setup_lines(int idx);
+
 /* Tag query API — mirrors the example tag API in src/repl/examples.h.
  * `tag_count` includes the synthetic ALL at index 0. `tag_mask` ORs the
  * ALL bit into the entry's stored mask so every query (has_tag,
@@ -309,12 +328,16 @@ const char               *repl_tutorial_subheading(int tutorial_idx);
  *   - SET / REQUIRE steps require non-empty comment and cfg_slug,
  *     and expected == NULL. Slug *validity* is checked at runtime in
  *     tutorial_start once the config bridge is installed.
- *   - Every non-empty label is unique within the tutorial.
+ *   - Every non-empty label is unique within the tutorial AND does not
+ *     collide with a `:name` goto label defined in the setup scaffold.
  *   - TUTORIAL_STEP_APPEND has no non-empty target_label.
  *   - TUTORIAL_STEP_LABEL has a non-null non-empty target_label that
- *     names an earlier non-empty label in the same tutorial (forward
- *     references rejected).
- *   - Step count stays within TUTORIAL_MAX_STEPS. */
+ *     names an earlier non-empty step label in the same tutorial
+ *     (forward references rejected) OR a `:name` goto label defined in
+ *     the setup scaffold.
+ *   - Step count stays within TUTORIAL_MAX_STEPS, and setup lines +
+ *     steps together fit the locked-line table
+ *     (TUTORIAL_LOCKED_LINE_MAX). */
 int repl_tutorial_validate(int idx, char *err, int err_size);
 
 /* Validate an out-of-catalog TutorialEntry. Same rules as above; the

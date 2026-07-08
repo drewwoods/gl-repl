@@ -2268,6 +2268,206 @@ static void test_comment_less_command_commits_without_instruction_row(void) {
                 row && strstr(row, "glVertex3f(-0.7, -0.5, 0)") != NULL);
 }
 
+/* --- Setup scaffold (Option A) ------------------------------------------- */
+/* A tutorial can preload starting code (TutorialEntry.setup) so it builds
+ * on what an earlier tutorial taught without the learner re-typing it.
+ * See docs/plans/active/tutorial-setup-scaffold.md. */
+
+static void test_catalog_color_interp_uses_setup_scaffold(void) {
+    int idx = find_tutorial_idx("Color Interpolation");
+    ASSERT_TRUE("Color Interpolation is in catalog", idx >= 0);
+    if (idx < 0) return;
+
+    const char *const *setup = repl_tutorial_setup_lines(idx);
+    ASSERT_TRUE("Color Interpolation has a setup scaffold", setup != NULL);
+    ASSERT_TRUE("setup leads with an @cfg header line",
+                setup && setup[0] && strstr(setup[0], "@cfg") != NULL);
+
+    ASSERT_INT("step 0 is a NOTE",
+               (int)repl_tutorial_step_kind(idx, 0),
+               (int)TUTORIAL_STEP_KIND_NOTE);
+    int label_targeted = 0;
+    int total = repl_tutorial_step_count(idx);
+    for (int s = 0; s < total; s++) {
+        if (repl_tutorial_step_placement(idx, s) == TUTORIAL_STEP_LABEL) {
+            /* The targets anchor on setup goto labels, not step labels. */
+            const char *target = repl_tutorial_step_target_label(idx, s);
+            ASSERT_TRUE("label-targeted step has a target",
+                        target && target[0]);
+            label_targeted++;
+        }
+    }
+    ASSERT_INT("two steps splice into the scaffold", label_targeted, 2);
+
+    /* Setup stays genuinely opt-in. */
+    int first = find_tutorial_idx("First Triangle");
+    ASSERT_TRUE("First Triangle has no setup scaffold",
+                first >= 0 && repl_tutorial_setup_lines(first) == NULL);
+    ASSERT_TRUE("out-of-range setup is NULL",
+                repl_tutorial_setup_lines(repl_tutorial_count()) == NULL);
+}
+
+static void test_setup_scaffold_preloads_locked_rows_and_cfg(void) {
+    reset_fixture();
+    int idx = find_tutorial_idx("Color Interpolation");
+    ASSERT_TRUE("Color Interpolation found", idx >= 0);
+    if (idx < 0) return;
+
+    int expected_2d = -1;
+    ASSERT_TRUE("RENDER3D_VIEW_2D resolves through the bridge",
+                repl_cfg_resolve_text("view_mode", "RENDER3D_VIEW_2D",
+                                      &expected_2d));
+    int view_baseline = repl_cfg_get_int("view_mode", -1);
+
+    tutorial_start(idx);
+    ASSERT_TRUE("tutorial active", tutorial_active());
+
+    /* Scaffold body = 9 rows (comment, glBegin, glColor3f, vertex,
+     * left:, vertex, right:, vertex, glEnd); the step-0 NOTE comment
+     * appends one more. */
+    int scaffold_rows = 9;
+    ASSERT_INT("scaffold + NOTE instruction rows loaded",
+               repl_state_document_count(), scaffold_rows + 1);
+    for (int r = 0; r < scaffold_rows; r++)
+        ASSERT_TRUE("scaffold row is locked", tutorial_line_is_locked(r));
+    ASSERT_INT("setup @cfg header applied (2D view)",
+               repl_cfg_get_int("view_mode", -1), expected_2d);
+
+    /* Setup @cfg slugs join the restore baseline like entry @cfg. */
+    tutorial_stop();
+    ASSERT_TRUE("tutorial inactive after exit", !tutorial_active());
+    ASSERT_INT("view_mode restored to pre-tutorial baseline",
+               repl_cfg_get_int("view_mode", -1), view_baseline);
+}
+
+static void test_setup_label_targeted_steps_splice_into_scaffold(void) {
+    reset_fixture();
+    int idx = find_tutorial_idx("Color Interpolation");
+    ASSERT_TRUE("Color Interpolation found", idx >= 0);
+    if (idx < 0) return;
+
+    tutorial_start(idx);
+    glr_ctrl_keyboard('\r', 0, 0);                     /* ack the NOTE */
+    TutorialRuntimeState st = tutorial_state_view();
+    ASSERT_INT("on the first label-targeted step", st.step, 1);
+    ASSERT_TRUE("commit row pinned inside the scaffold",
+                st.expected_commit_line >= 0);
+
+    ASSERT_TRUE("commit the green corner color",
+                commit_command_step(idx, 1));
+
+    /* Final step: commit directly — commit_command_step's step-advance
+     * check can't observe completion (teardown resets the step). */
+    const char *blue_expected = repl_tutorial_step_expected(idx, 2);
+    ASSERT_TRUE("final step has expected text", blue_expected != NULL);
+    set_input_text(blue_expected ? blue_expected : "");
+    editor_handle_key(';', 0, 0);
+    ASSERT_TRUE("tutorial completes after the final splice",
+                !tutorial_active());
+
+    /* Final document order: each color lands immediately above its
+     * anchor label, so it executes before that corner's vertex. */
+    SourceTextView doc = source_document_view();
+    int green = -1, blue = -1, left = -1, right = -1;
+    int n = repl_state_document_count();
+    for (int r = 0; r < n; r++) {
+        const char *line = source_text_line(doc, r);
+        if (!line) continue;
+        if (strstr(line, "glColor3f(0.2, 1, 0.3)"))  green = r;
+        if (strstr(line, "glColor3f(0.2, 0.3, 1)"))  blue  = r;
+        if (strcmp(trim_leading_ws(line), "left:") == 0)  left  = r;
+        if (strcmp(trim_leading_ws(line), "right:") == 0) right = r;
+    }
+    ASSERT_TRUE("green color row committed", green >= 0);
+    ASSERT_TRUE("blue color row committed", blue >= 0);
+    ASSERT_TRUE("left anchor label present", left >= 0);
+    ASSERT_TRUE("right anchor label present", right >= 0);
+    ASSERT_TRUE("green splice sits above the left anchor",
+                green >= 0 && left >= 0 && green < left);
+    ASSERT_TRUE("blue splice sits between the anchors",
+                blue >= 0 && right >= 0 && left < blue && blue < right);
+}
+
+static void test_validate_setup_label_rules(void) {
+    static const char *const setup_lines[] = {
+        "glBegin(GL_TRIANGLES)",
+        ":anchor",
+        "glEnd()",
+        NULL,
+    };
+
+    /* A target_label resolving to a setup goto label validates. */
+    static const TutorialStep at_setup_steps[] = {
+        { NULL, "// splice above the anchor", "glPointSize(2)",
+          TUTORIAL_STEP_LABEL, "anchor",
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+    };
+    TutorialEntry ok = { .name = "setup_anchor_ok",
+                         .steps = at_setup_steps,
+                         .setup = setup_lines };
+    char err[160] = "";
+    ASSERT_TRUE("target_label may name a setup goto label",
+                repl_tutorial_validate_entry(&ok, err, sizeof(err)));
+
+    /* A step label shadowing a setup goto label is ambiguous. */
+    static const TutorialStep collide_steps[] = {
+        { "anchor", "// shadows the setup label", "glPointSize(2)",
+          TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+    };
+    TutorialEntry collide = { .name = "setup_anchor_collision",
+                              .steps = collide_steps,
+                              .setup = setup_lines };
+    err[0] = '\0';
+    ASSERT_TRUE("step label colliding with setup goto label rejected",
+                !repl_tutorial_validate_entry(&collide, err, sizeof(err)));
+    ASSERT_TRUE("collision diagnostic mentions 'collides'",
+                err[0] != '\0' && strstr(err, "collides") != NULL);
+
+    /* Unknown targets stay rejected even with a setup present. */
+    static const TutorialStep missing_steps[] = {
+        { NULL, "// no such anchor", "glPointSize(2)",
+          TUTORIAL_STEP_LABEL, "nope",
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+    };
+    TutorialEntry missing = { .name = "setup_anchor_missing",
+                              .steps = missing_steps,
+                              .setup = setup_lines };
+    err[0] = '\0';
+    ASSERT_TRUE("unknown target_label still rejected",
+                !repl_tutorial_validate_entry(&missing, err, sizeof(err)));
+}
+
+static void test_validate_setup_capacity(void) {
+    /* setup rows are all locked, so setup lines + steps must fit the
+     * locked-line table. */
+    static const char *big_setup[TUTORIAL_LOCKED_LINE_MAX + 2];
+    for (int i = 0; i < TUTORIAL_LOCKED_LINE_MAX + 1; i++)
+        big_setup[i] = "glPointSize(1)";
+    big_setup[TUTORIAL_LOCKED_LINE_MAX + 1] = NULL;
+
+    static const TutorialStep one_step[] = {
+        { NULL, "// one step", "glEnd()", TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+    };
+    TutorialEntry entry = { .name = "setup_too_big",
+                            .steps = one_step,
+                            .setup = (const char *const *)big_setup };
+    char err[160] = "";
+    ASSERT_TRUE("oversized setup rejected",
+                !repl_tutorial_validate_entry(&entry, err, sizeof(err)));
+    ASSERT_TRUE("capacity diagnostic mentions locked-line capacity",
+                err[0] != '\0' && strstr(err, "locked-line") != NULL);
+}
+
 /* SET/REQUIRE steps must reject typed commits with a kind-appropriate hint
  * — not the misleading "Move cursor to the tutorial insertion line". */
 static void test_commit_blocked_with_hint_during_set_step(void) {
@@ -3198,6 +3398,12 @@ int main(void) {
     test_catalog_feature_tour_uses_relaxed_step_shapes();
     test_note_step_waits_for_ack_and_freezes_document();
     test_comment_less_command_commits_without_instruction_row();
+    /* Setup scaffold (Option A — preloaded starting code). */
+    test_catalog_color_interp_uses_setup_scaffold();
+    test_setup_scaffold_preloads_locked_rows_and_cfg();
+    test_setup_label_targeted_steps_splice_into_scaffold();
+    test_validate_setup_label_rules();
+    test_validate_setup_capacity();
     test_commit_blocked_with_hint_during_set_step();
     test_workspace_load_during_tutorial_restores_baseline();
     /* REQUIRE_VAR step kind. */

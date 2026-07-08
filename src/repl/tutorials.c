@@ -308,6 +308,43 @@ static const TutorialStep g_tutorial_lighting_basics_steps[] = {
     STEP_SENTINEL,
 };
 
+/* "Color Interpolation" — the first tutorial that BUILDS ON prior work
+ * via a preloaded `setup` scaffold instead of making the user re-type
+ * it (see docs/plans/active/tutorial-setup-scaffold.md). The scaffold
+ * is the flat triangle from "First Triangle" drawn in one solid color,
+ * loaded locked before step 0; its leading `// @cfg` header uses the
+ * example metadata vocabulary. The `:left` / `:right` goto-label rows
+ * are the anchors: the two label-targeted steps splice per-vertex
+ * glColor3f calls above them, so the user only types what's new and
+ * watches the gradient appear. */
+static const char *const g_tutorial_color_interp_setup[] = {
+    "// @cfg view_mode = RENDER3D_VIEW_2D",
+    "// A triangle drawn in a single warm red.",
+    "glBegin(GL_TRIANGLES)",
+    "glColor3f(1, 0.3, 0.2)",
+    "glVertex3f(0, 0.8, 0)",
+    ":left",
+    "glVertex3f(-0.8, -0.6, 0)",
+    ":right",
+    "glVertex3f(0.8, -0.6, 0)",
+    "glEnd()",
+    NULL,
+};
+
+static const TutorialStep g_tutorial_color_interp_steps[] = {
+    STEP_NOTE(
+        "// Every vertex uses the same color. Give each corner its own."),
+    STEP_AT(NULL,
+        "// Set green before the lower-left vertex; OpenGL blends between vertex colors.",
+        "glColor3f(0.2, 1, 0.3)",
+        "left"),
+    STEP_AT(NULL,
+        "// Set blue before the lower-right vertex to complete the gradient.",
+        "glColor3f(0.2, 0.3, 1)",
+        "right"),
+    STEP_SENTINEL,
+};
+
 /* REPL_TUTORIAL_TAG_ALL is a synthetic tag: every tutorial is a member.
  * It is not listed in any g_tutorials[] mask literal; instead
  * repl_tutorial_tag_mask() ORs its bit into every entry's mask, so the
@@ -398,6 +435,19 @@ static const TutorialEntry g_tutorials[] = {
         .name       = "Lighting Basics",
         .steps      = g_tutorial_lighting_basics_steps,
         .tags       = TUTORIAL_TAG_DEPTH_LIGHTING,
+        .subheading = "Intermediate",
+    },
+    {
+        /* Builds on First Triangle via a preloaded setup scaffold —
+         * the learner colors the corners without re-drawing the
+         * triangle. Trails the catalog so the Intermediate run stays
+         * contiguous in the ALL flyout and in the COLOR_TRANSFORMS
+         * flyout (Color & Transform, Variable Slider = Beginner run,
+         * then this). */
+        .name       = "Color Interpolation",
+        .steps      = g_tutorial_color_interp_steps,
+        .setup      = g_tutorial_color_interp_setup,
+        .tags       = TUTORIAL_TAG_COLOR_TRANSFORMS,
         .subheading = "Intermediate",
     },
 };
@@ -497,6 +547,11 @@ const char *const *repl_tutorial_cfg_lines(int idx) {
     return entry ? entry->cfg : NULL;
 }
 
+const char *const *repl_tutorial_setup_lines(int idx) {
+    const TutorialEntry *entry = tutorial_entry_at(idx);
+    return entry ? entry->setup : NULL;
+}
+
 int repl_tutorial_tag_count(void) {
     return REPL_TUTORIAL_TAG_COUNT;
 }
@@ -518,6 +573,62 @@ const char *repl_tutorial_subheading(int tutorial_idx) {
 
 static int label_is_empty(const char *s) {
     return !s || s[0] == '\0';
+}
+
+/* Syntactic mirror of the parser's goto-label rule (src/repl/parser.c):
+ * a setup line whose trimmed text is `:name` or `name:` (optionally
+ * followed by a `;`) defines the goto label `name`. Used to validate
+ * step target_labels against the setup scaffold without running the
+ * live parser; the runtime resolves the actual row by walking the
+ * loaded document's CMD_GOTO_LABEL commands. */
+static int setup_line_goto_label(const char *line,
+                                 char *name, int name_sz) {
+    const char *p = line;
+    int n = 0;
+
+    if (!line || name_sz <= 1)
+        return 0;
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    if (*p == ':') {
+        p++;
+        while ((isalnum((unsigned char)*p) || *p == '_') && n < name_sz - 1)
+            name[n++] = *p++;
+    } else {
+        while ((isalnum((unsigned char)*p) || *p == '_') && n < name_sz - 1)
+            name[n++] = *p++;
+        if (*p != ':') {
+            name[0] = '\0';
+            return 0;
+        }
+        p++;
+    }
+    name[n] = '\0';
+    if (n == 0)
+        return 0;
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    if (*p == ';')
+        p++;
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    return *p == '\0';
+}
+
+/* Does the entry's setup scaffold define goto label `name`? */
+static int setup_defines_goto_label(const TutorialEntry *entry,
+                                    const char *name) {
+    char setup_label[REPL_GOTO_LABEL_MAX];
+
+    if (!entry || !entry->setup || label_is_empty(name))
+        return 0;
+    for (int i = 0; entry->setup[i]; i++) {
+        if (setup_line_goto_label(entry->setup[i], setup_label,
+                                  (int)sizeof(setup_label)) &&
+            strcmp(setup_label, name) == 0)
+            return 1;
+    }
+    return 0;
 }
 
 /* v1 catalog rule: each `expected` must parse to exactly one
@@ -759,7 +870,9 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
             return 0;
         }
 
-        /* Unique non-empty labels. */
+        /* Unique non-empty labels — and no shadowing of a `:name` goto
+         * label the setup scaffold defines, so a target_label always
+         * resolves unambiguously to one anchor. */
         if (!label_is_empty(step->label)) {
             for (int j = 0; j < i; j++) {
                 if (!label_is_empty(entry->steps[j].label) &&
@@ -771,6 +884,15 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
                                  step->label);
                     return 0;
                 }
+            }
+            if (setup_defines_goto_label(entry, step->label)) {
+                if (err_size > 0)
+                    snprintf(err, (size_t)err_size,
+                             "tutorial '%s' step %d label '%s' collides "
+                             "with a setup goto label",
+                             entry->name ? entry->name : "?", i,
+                             step->label);
+                return 0;
             }
         }
 
@@ -800,6 +922,12 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
                     break;
                 }
             }
+            /* A target can also anchor on a `:name` goto label the
+             * setup scaffold defines — that's how steps splice new
+             * commands INTO preloaded code (resolved at step entry by
+             * walking the live document's CMD_GOTO_LABEL rows). */
+            if (!found && setup_defines_goto_label(entry, step->target_label))
+                found = 1;
             if (!found) {
                 if (err_size > 0)
                     snprintf(err, (size_t)err_size,
@@ -817,6 +945,26 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
             return 0;
         }
         step_count++;
+    }
+
+    /* Every preloaded setup row is locked, plus up to one lock per
+     * step (instruction comment or comment-less committed row), so
+     * both together must fit the runtime lock table. Counting every
+     * setup line (headers included) slightly overcounts — safely. */
+    if (entry->setup) {
+        int setup_count = 0;
+        while (entry->setup[setup_count])
+            setup_count++;
+        if (setup_count + step_count > TUTORIAL_LOCKED_LINE_MAX) {
+            if (err_size > 0)
+                snprintf(err, (size_t)err_size,
+                         "tutorial '%s' setup lines (%d) + steps (%d) "
+                         "exceed the locked-line capacity (%d)",
+                         entry->name ? entry->name : "?",
+                         setup_count, step_count,
+                         TUTORIAL_LOCKED_LINE_MAX);
+            return 0;
+        }
     }
     return 1;
 }

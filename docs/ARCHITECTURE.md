@@ -843,7 +843,7 @@ before code-panel/camera wheel handlers so scroll does not leak behind menus.
 is `src/repl/tutorials.{c,h}`. Each tutorial entry declares a
 [`ReplTutorialTagMask`](../src/repl/tutorials.h#L174); the synthetic `ALL` tag is folded into every entry's
 mask by `repl_tutorial_tag_mask`, so catalog literals only name real domain
-tags. Top-level visible rows are tags ([`repl_tutorial_visible_tag_count()`](../src/repl/tutorials.h#L282)
+tags. Top-level visible rows are tags ([`repl_tutorial_visible_tag_count()`](../src/repl/tutorials.h#L301)
 hides unused tags), followed by `Restart Tutorial` / `Exit Tutorial` rows while
 a tutorial is active. Tag rows are inert hover-only parents; selecting a flyout
 tutorial routes through the controller to `tutorial_start(index)` and dismisses
@@ -2075,6 +2075,17 @@ The step-array sentinel is the record with BOTH `comment` and
 `expected` NULL (`repl_tutorial_step_is_sentinel` in [`src/repl/tutorials.h`](../src/repl/tutorials.h));
 every real step carries at least one of the two — COMMAND requires
 `expected`, every other kind requires a non-empty `comment`.
+
+Orthogonal to step kinds, a tutorial may declare a `setup` scaffold
+(`TutorialEntry.setup`): starting code preloaded locked into the
+transient scene before step 0, so a tutorial builds on what an earlier
+tutorial taught without the learner re-typing it. Setup honors the
+example header vocabulary (leading `// @cfg` run, optional 5-line
+`// camera` block), its `@cfg` slugs join the teardown-restore
+baseline, and its body may define `:name` goto labels that
+label-placement steps target to splice commands into the scaffold
+(resolved against the live document at step entry). See
+[`docs/plans/active/tutorial-setup-scaffold.md`](plans/active/tutorial-setup-scaffold.md).
 
 Use this section as a checklist when adding a new kind. The
 `REQUIRE_VAR` rollout is the most recent worked example — its commits

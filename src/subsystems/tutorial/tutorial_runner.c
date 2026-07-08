@@ -9,9 +9,12 @@
 #include "repl/host_effects.h"
 #include "repl/cfg_baseline.h" /* For repl_cfg_get_int, repl_cfg_set_int, and repl_cfg_known */
 #include "repl/eval.h"          /* repl_eval_find_predef_var_idx + predef-vars view */
+#include "repl/example_loader.h" /* repl_example_consume_camera_header (setup scaffold) */
 #include "repl/load.h"
 #include "repl/scenes.h"
 #include "repl/state_views.h"
+#include "repl/text_helpers.h"  /* repl_extract_label_name (setup goto-label anchors) */
+#include "source_document.h"    /* live line text for setup goto-label resolution */
 #include "repl/state_notify.h" /* For repl_state_mark_flat_dirty, repl_state_mark_source_dirty, and repl_state_parse_workspace_header_line */
 #include "repl/tutorials.h"
 #include "repl/export.h"
@@ -87,6 +90,15 @@ static void tutorial_baseline_capture(int idx) {
         if (repl_config_extract_slug(cfg[i], slug, sizeof slug, NULL))
             tutorial_cfg_baseline_record_one(slug);
     }
+    /* The setup scaffold's leading `// @cfg` header uses the same
+     * vocabulary and is applied the same way, so its slugs join the
+     * restore baseline too. Only the leading contiguous run counts —
+     * a later `// @cfg` inside the body is an ordinary comment. */
+    const char *const *setup = repl_tutorial_setup_lines(idx);
+    for (int i = 0; setup && setup[i] &&
+                    repl_config_extract_slug(setup[i], slug,
+                                             sizeof slug, NULL); i++)
+        tutorial_cfg_baseline_record_one(slug);
     int n = repl_tutorial_step_count(idx);
     for (int s = 0; s < n; s++) {
         TutorialStepKind k = repl_tutorial_step_kind(idx, s);
@@ -381,6 +393,26 @@ static int tutorial_step_instruction_line(int tutorial_idx, int step,
         }
     }
     if (target_step < 0) {
+        /* Not a step label — try the setup scaffold's `:name` goto
+         * labels. Resolved against the LIVE document at step-entry
+         * time (not a row recorded at load), so rows shifted by
+         * earlier splices are handled by construction. The validator
+         * guarantees the label exists in setup and doesn't collide
+         * with any step label. */
+        SourceTextView text = source_document_view();
+        int n = repl_state_document_count();
+        const GLCmd *cmds = repl_state_document_cmds();
+        for (int row = 0; row < n; row++) {
+            char row_label[REPL_GOTO_LABEL_MAX];
+            if (cmds[row].type != CMD_GOTO_LABEL)
+                continue;
+            if (repl_extract_label_name(source_text_line(text, row),
+                                        row_label, sizeof(row_label)) &&
+                strcmp(row_label, target) == 0) {
+                *out_line = row;
+                return 1;
+            }
+        }
         repl_set_status("Tutorial step target label not found");
         return 0;
     }
@@ -479,6 +511,31 @@ int tutorial_validate_entry_against_bridge(const TutorialEntry *entry,
             return 0;
         }
     }
+    /* The setup scaffold's leading `// @cfg` header run gets the same
+     * slug + symbolic-value validation — it is applied through the
+     * same bridge at tutorial_start. */
+    const char *const *setup = entry->setup;
+    for (int i = 0; setup && setup[i] &&
+                    repl_config_extract_slug(setup[i], slug,
+                                             sizeof slug, NULL); i++) {
+        if (!repl_cfg_known(slug)) {
+            if (err_size > 0)
+                snprintf(err, (size_t)err_size,
+                         "tutorial '%s' setup @cfg uses unknown slug '%s'",
+                         name, slug);
+            return 0;
+        }
+        char bad_value[REPL_CFG_VALUE_MAX] = "";
+        if (!tutorial_cfg_line_value_resolves(setup[i], slug,
+                                              bad_value, sizeof bad_value)) {
+            if (err_size > 0)
+                snprintf(err, (size_t)err_size,
+                         "tutorial '%s' setup @cfg '%s = %s' has unknown "
+                         "symbolic value",
+                         name, slug, bad_value);
+            return 0;
+        }
+    }
     if (!entry->steps) return 1;
     for (int s = 0; !repl_tutorial_step_is_sentinel(&entry->steps[s]); s++) {
         const TutorialStep *step = &entry->steps[s];
@@ -512,6 +569,74 @@ int tutorial_validate_entry_against_bridge(const TutorialEntry *entry,
 static int tutorial_validate_slugs(int idx, char *err, int err_size) {
     return tutorial_validate_entry_against_bridge(repl_tutorial_entry(idx),
                                                   err, err_size);
+}
+
+static int setup_line_is_blank(const char *line) {
+    if (!line)
+        return 1;
+    while (*line && isspace((unsigned char)*line))
+        line++;
+    return *line == '\0';
+}
+
+/* Preload the tutorial's setup scaffold (TutorialEntry.setup) into the
+ * just-reset transient scene, before step 0. Honors the example header
+ * vocabulary: a leading contiguous `// @cfg` run (parsed into the
+ * pending bag, applied through the bridge), optional blank spacing,
+ * an optional 5-line `// camera` block, then body lines fed through
+ * the non-editor loader. Every loaded row is locked. Returns 1 on
+ * success; 0 (with a status message set) on any load failure —
+ * tutorial_start unwinds via the baseline restore. Runs BEFORE
+ * `state->active` is set so the cfg writes cannot trigger step
+ * auto-advancement, mirroring tutorial_baseline_apply. */
+static int tutorial_load_setup_lines(int idx) {
+    const char *const *lines = repl_tutorial_setup_lines(idx);
+    char slug[REPL_CFG_KEY_MAX];
+    char err[TUTORIAL_STATUS_MAX] = "";
+    int pos = 0;
+
+    if (!lines)
+        return 1;
+
+    while (lines[pos] &&
+           repl_config_extract_slug(lines[pos], slug, sizeof slug, NULL)) {
+        repl_state_parse_workspace_header_line(lines[pos]);
+        pos++;
+    }
+    repl_export_apply_pending_cfg();
+
+    while (lines[pos] && setup_line_is_blank(lines[pos]))
+        pos++;
+    if (lines[pos])
+        pos += repl_example_consume_camera_header(lines + pos);
+
+    int loader_edit_line = 0;
+    repl_dispatch_insert_mode_off();
+    for (; lines[pos]; pos++) {
+        if (setup_line_is_blank(lines[pos]))
+            continue;
+        if (!repl_load_apply_line(lines[pos], err, (int)sizeof(err),
+                                  &loader_edit_line)) {
+            char msg[TUTORIAL_STATUS_MAX];
+            snprintf(msg, sizeof msg, "Tutorial setup line failed: %s",
+                     err[0] ? err : lines[pos]);
+            repl_set_status(msg);
+            return 0;
+        }
+    }
+
+    /* Lock the whole scaffold — read-only for the tutorial's duration,
+     * like instruction rows. The range covers every loaded row even
+     * where the loader reordered them (float decls auto-promote to the
+     * document top). Capacity is validator-guaranteed (setup lines +
+     * steps <= TUTORIAL_LOCKED_LINE_MAX). */
+    int rows = repl_state_document_count();
+    for (int r = 0; r < rows; r++)
+        tutorial_append_locked_line(r);
+
+    repl_state_mark_flat_dirty();
+    repl_state_mark_source_dirty();
+    return 1;
 }
 
 void tutorial_start(int idx) {
@@ -550,6 +675,17 @@ void tutorial_start(int idx) {
     tutorial_state_reset_except_baseline();
 
     tutorial_baseline_apply(idx);
+
+    /* Preload the setup scaffold (if any) into the fresh transient
+     * scene before step 0 — still before `active = 1`, so its cfg
+     * writes cannot auto-advance a REQUIRE step 0. On failure unwind
+     * the pieces teardown would (cfg baseline restore + state reset);
+     * active was never set, so tutorial_teardown itself would no-op. */
+    if (!tutorial_load_setup_lines(idx)) {
+        tutorial_baseline_restore();
+        tutorial_state_reset();
+        return;
+    }
 
     /* No predef pre-declaration: a REQUIRE_VAR step whose variable does
      * not exist yet is treated as a DECLARATION step (see
