@@ -201,6 +201,46 @@ int main() {
         ASSERT_INT("cmd_indent buf_sz=1 writes only '\\0'", small[0], '\0');
     }
 
+    /* 6c. matrix_close_indent and block_extent helper tests */
+    {
+        glr_ctrl_reset_all();
+        editor_feed_line("glPushMatrix();");      /* 0 */
+        editor_feed_line("  glTranslatef(1,2,3);"); /* 1 */
+        editor_feed_line("  glPushMatrix();");    /* 2 */
+        editor_feed_line("    glScalef(2,2,2);");   /* 3 */
+        editor_feed_line("  glPopMatrix();");     /* 4 */
+        editor_feed_line("glPopMatrix();");       /* 5 */
+
+        /* Matrix close indent tests */
+        char indent_buf[32];
+        repl_source_scope_matrix_close_indent(4, indent_buf, sizeof(indent_buf));
+        ASSERT_STR("matrix close indent 1", indent_buf, "    ");
+
+        repl_source_scope_matrix_close_indent(5, indent_buf, sizeof(indent_buf));
+        ASSERT_STR("matrix close indent 2", indent_buf, "  ");
+
+        /* block_extent tests with if-else-if chains */
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("if (x > 0) {");         /* 0 */
+        editor_feed_line("  y = 1;");              /* 1 */
+        editor_feed_line("} else if (x < 0) {");   /* 2 */
+        editor_feed_line("  y = 2;");              /* 3 */
+        editor_feed_line("} else {");              /* 4 */
+        editor_feed_line("  y = 3;");              /* 5 */
+        editor_feed_line("}");                     /* 6 */
+
+        int start_idx = -1, count = 0;
+        int ok = repl_source_scope_block_extent(2, &start_idx, &count);
+        ASSERT_TRUE("block extent on else if", ok);
+        ASSERT_INT("block extent start on else if", start_idx, 0);
+        ASSERT_INT("block extent count on else if", count, 7);
+
+        ok = repl_source_scope_block_extent(4, &start_idx, &count);
+        ASSERT_TRUE("block extent on else", ok);
+        ASSERT_INT("block extent start on else", start_idx, 0);
+        ASSERT_INT("block extent count on else", count, 7);
+    }
+
     /* 7. collect_visible_vars */
     {
         glr_ctrl_reset_all(); declare_test_vars();

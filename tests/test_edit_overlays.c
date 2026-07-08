@@ -785,6 +785,25 @@ static void test_mat4_math(void) {
     ASSERT_TRUE("transform point ty", pt[1] == 8.0f);
     ASSERT_TRUE("transform point tz", pt[2] == 10.0f);
 
+    /* Apply translation */
+    float m_tr[16];
+    mat4_identity(m_tr);
+    mat4_apply_translate(m_tr, 2.0f, -3.0f, 4.0f);
+    ASSERT_TRUE("apply_translate tx", m_tr[12] == 2.0f);
+    ASSERT_TRUE("apply_translate ty", m_tr[13] == -3.0f);
+    ASSERT_TRUE("apply_translate tz", m_tr[14] == 4.0f);
+    ASSERT_TRUE("apply_translate diagonal 1", m_tr[0] == 1.0f && m_tr[5] == 1.0f && m_tr[10] == 1.0f && m_tr[15] == 1.0f);
+
+    /* Apply scale */
+    float m_sc[16];
+    mat4_identity(m_sc);
+    mat4_apply_scale(m_sc, 2.0f, 3.0f, 4.0f);
+    ASSERT_TRUE("apply_scale sx", m_sc[0] == 2.0f);
+    ASSERT_TRUE("apply_scale sy", m_sc[5] == 3.0f);
+    ASSERT_TRUE("apply_scale sz", m_sc[10] == 4.0f);
+    ASSERT_TRUE("apply_scale components zero", m_sc[1] == 0.0f && m_sc[12] == 0.0f);
+    ASSERT_TRUE("apply_scale bottom-right 1", m_sc[15] == 1.0f);
+
     /* Singular matrix */
     float sing[16] = { 0 };
     ASSERT_INT("invert singular fails", mat4_invert(sing, out), 0);
