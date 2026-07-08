@@ -280,6 +280,7 @@ static void glr_action_load_scene_from_clipboard(void) {
 #define AUDIO_CFG_ALL   1
 static const char *syntax_hl_names[] = { "Off", "On", "On+Shadow" };
 static const char *view_mode_names[] = { "3D", "2D" };
+static const char *projection_names[] = { "Perspective", "Ortho" };
 static const char *wireframe_mode_names[] = { "Off", "Wireframe", "Hidden-line" };
 static const char *vertex_label_names[OVERLAY_VERTEX_LABEL_COUNT] = {
     OVERLAY_VERTEX_LABEL_LIST(OVERLAY_VERTEX_LABEL_NAME_ENTRY)
@@ -428,6 +429,11 @@ const GlrConfigItem g_cfg_items[] = {
     { .label = "View mode", .key = GLR_CONFIG_ORTHO_MODE,
       .state_count = 2, .state_names = view_mode_names,
       .key_code = KM_KEY(GLR_VIEW_MODE), .modifiers = KM_MODS(GLR_VIEW_MODE) },
+    /* Projection matrix (perspective/ortho) with a free camera — distinct
+     * from "View mode", which flattens & locks the camera to a top-down 2D
+     * view. Menu-only for now (no keybinding). */
+    { .label = "Projection", .key = GLR_CONFIG_PROJECTION,
+      .state_count = 2, .state_names = projection_names },
     { .label = "Camera rotate", .key = GLR_CONFIG_CAMERA_ROTATE, .state_count = 2,
       .key_code = KM_KEY(GLR_CAMERA_ROTATE), .modifiers = KM_MODS(GLR_CAMERA_ROTATE) },
     /* Action rows: no state to cycle (state_count 0); activation fires
@@ -518,6 +524,7 @@ static int cfg_key_in_scene_subset(GlrConfigKey key) {
     case GLR_CONFIG_LIGHT_THEME:
     case GLR_CONFIG_BACKDROP:
     case GLR_CONFIG_ORTHO_MODE:
+    case GLR_CONFIG_PROJECTION:
     case GLR_CONFIG_CAMERA_ROTATE:
     case GLR_CONFIG_VARIABLE_PANEL:
         return 1;

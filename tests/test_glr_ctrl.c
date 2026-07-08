@@ -1255,6 +1255,89 @@ static void test_view_mode_3d_to_2d_uses_faster_decay(void) {
     }
 }
 
+/* The Projection config (GLR_CONFIG_PROJECTION) is a SECOND, independent
+ * projection blend combined with the view-mode blend via min() (ortho wins).
+ * Unlike View mode (RENDER3D_VIEW_2D), it must NOT flatten or lock the
+ * camera: it swaps the projection matrix only, so the scene renders ortho
+ * from the live orbit angle. This test pins the two load-bearing properties:
+ * (1) toggling it to Ortho eases projection_mix to 0 while the camera stays
+ * put at the fixture's (rx=11, ry=22) with control mode 3D and no ease in
+ * flight, and (2) the combine is min() — 3D view + Ortho toggle still yields
+ * projection_mix 0. */
+static void test_projection_toggle_free_camera(void) {
+    GlrCameraState cam;
+    int projection_settle_ticks =
+        (int)(GLR_VIEW_PROJECTION_TRANSITION_SECS / 0.016f) + 4;
+
+    printf("--- imrepl_ctrl projection toggle (free-camera ortho) ---\n");
+    prepare_display_fixture();
+    replay_state_mut()->active = 0;
+    replay_state_mut()->state = REPLAY_OFF;
+
+    glr_ctrl_display_frame();
+    ASSERT_FLOAT("projection toggle starts perspective",
+                 g_last_scene_config.projection_mix, 1.0f);
+    ASSERT_INT("view mode stays 3d perspective",
+               glr_state_presentation().ortho_mode, RENDER3D_VIEW_3D);
+
+    /* Toggle Projection -> Ortho via the config path (exercises the wiring). */
+    glr_config_set(GLR_CONFIG_PROJECTION, 1);
+    ASSERT_INT("projection config reads back ortho",
+               glr_config_get(GLR_CONFIG_PROJECTION), 1);
+    glr_ctrl_tick();
+    glr_ctrl_display_frame();
+    ASSERT_TRUE("projection starts easing toward ortho (free camera)",
+                g_last_scene_config.projection_mix < 1.0f &&
+                g_last_scene_config.projection_mix > 0.0f);
+    /* The distinguishing property vs. View mode 2D: NO camera flatten, NO
+     * control-mode switch, NO ease kicked off. */
+    ASSERT_INT("camera stays in 3d control mode under projection toggle",
+               glr_camera_control_mode(), GLR_CAMERA_CONTROL_3D);
+    ASSERT_INT("projection toggle starts no camera ease",
+               glr_camera_target_active(), 0);
+    cam = glr_camera();
+    ASSERT_FLOAT("camera rx unchanged by projection toggle", cam.rx, 11.0f);
+    ASSERT_FLOAT("camera ry unchanged by projection toggle", cam.ry, 22.0f);
+
+    for (int i = 0; i < projection_settle_ticks; i++)
+        glr_ctrl_tick();
+    glr_ctrl_display_frame();
+    /* min(view_mix=1, toggle_mix=0) == 0 — the combine picks the ortho
+     * contributor even though View mode is still 3D perspective. */
+    ASSERT_FLOAT("projection settles on ortho (min picks the toggle)",
+                 g_last_scene_config.projection_mix, 0.0f);
+    ASSERT_INT("view mode still 3d after projection settles on ortho",
+               glr_state_presentation().ortho_mode, RENDER3D_VIEW_3D);
+    ASSERT_INT("camera still 3d control mode in free ortho",
+               glr_camera_control_mode(), GLR_CAMERA_CONTROL_3D);
+    cam = glr_camera();
+    ASSERT_FLOAT("camera rx still at orbit angle in free ortho", cam.rx, 11.0f);
+    ASSERT_FLOAT("camera ry still at orbit angle in free ortho", cam.ry, 22.0f);
+
+    /* Toggle back to Perspective -> eases to 1, camera never moved. */
+    glr_config_set(GLR_CONFIG_PROJECTION, 0);
+    for (int i = 0; i < projection_settle_ticks; i++)
+        glr_ctrl_tick();
+    glr_ctrl_display_frame();
+    ASSERT_FLOAT("projection returns to perspective",
+                 g_last_scene_config.projection_mix, 1.0f);
+    cam = glr_camera();
+    ASSERT_FLOAT("camera rx never moved across the toggle", cam.rx, 11.0f);
+    ASSERT_FLOAT("camera ry never moved across the toggle", cam.ry, 22.0f);
+
+    /* reset_all clears the toggle blend back to perspective. */
+    glr_config_set(GLR_CONFIG_PROJECTION, 1);
+    for (int i = 0; i < projection_settle_ticks; i++)
+        glr_ctrl_tick();
+    glr_ctrl_reset_all();
+    prepare_display_fixture();
+    glr_ctrl_display_frame();
+    ASSERT_INT("reset clears projection config to perspective",
+               glr_state_presentation().projection_ortho, 0);
+    ASSERT_FLOAT("reset clears projection blend to perspective",
+                 g_last_scene_config.projection_mix, 1.0f);
+}
+
 /* The controller's saved-3D snapshot drives the 2D->3D restoration.
  * Without an external refresh, switching examples while dwelling in 2D
  * leaves the snapshot pointing at the pose captured on 2D entry — so
@@ -2966,6 +3049,7 @@ int main(void) {
     test_overlay_transition_machine_wiring();
     test_view_mode_projection_transition_wiring();
     test_view_mode_3d_to_2d_uses_faster_decay();
+    test_projection_toggle_free_camera();
     test_view_mode_2d_honors_pending_camera_ease();
     test_view_mode_3d_restore_tracks_example_loaded_midblend();
     test_view_record_external_3d_pose_tracks_in_ortho();

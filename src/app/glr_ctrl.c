@@ -1024,7 +1024,13 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
     config->cam_ty = cam.ty;
     config->cam_tz = cam.tz;
     config->cam_motion_glow = cam.motion_glow;
-    config->projection_mix = glr_ctrl_view_projection_mix();
+    /* Two independent projection blends combined by min() (0 = ortho, 1 =
+     * perspective): the 2D/3D view-mode transition and the free-camera
+     * Projection toggle. Min ⇒ ortho wins — the scene is orthographic if
+     * EITHER control asks for it. The view-mode 2D path additionally
+     * flattens/locks the camera; the toggle leaves the camera free. */
+    config->projection_mix = fminf(glr_ctrl_view_projection_mix(),
+                                   glr_ctrl_projection_toggle_mix());
 
     /* --- Rendering quality --- */
     config->multisample_enabled = render.multisample_enabled;

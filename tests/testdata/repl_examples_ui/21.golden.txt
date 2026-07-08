@@ -21,6 +21,7 @@
 /* @cfg post_fx_scope = GLR_POST_FX_SCOPE_OFF */
 /* @cfg post_fx_effect = GLR_POST_FX_EFFECT_CHROMATIC_ABERRATION */
 /* @cfg view_mode = RENDER3D_VIEW_3D */
+/* @cfg projection = 0 */
 /* @cfg camera_rotate = 0 */
 /* @cfg vertex_labels = 1 */
 /* @cfg overlay_scope = OVERLAY_SCOPE_AT_VERTEX */
