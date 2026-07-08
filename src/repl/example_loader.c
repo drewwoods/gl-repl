@@ -192,6 +192,12 @@ static int try_apply_example_camera_header(const char *const *lines) {
     return 1;
 }
 
+int repl_example_consume_camera_header(const char *const *lines) {
+    if (!lines || !lines[0] || !example_line_is_camera_marker(lines[0]))
+        return 0;
+    return try_apply_example_camera_header(lines) ? 5 : 0;
+}
+
 static void reset_example_presentation_defaults(unsigned int tag_mask) {
     /* presentation slice moved to glr_state.c in step 7a; the
      * controller-installed sink does the actual reset. The demo
