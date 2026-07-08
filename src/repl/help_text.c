@@ -394,6 +394,8 @@ const ReplHelpContent *repl_help_text_build(void) {
                           "Toggle camera auto-rotate");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_VIEW_MODE), KM_MODS(GLR_VIEW_MODE), 0, "",
                           "Toggle View mode (2D / 3D)");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_PROJECTION), KM_MODS(GLR_PROJECTION), 0, "",
+                          "Toggle Projection (Perspective / Ortho)");
     nk = key_emit(nk, "");
     nk = key_emit(nk, "Time & Replay:");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_AUTO_TIME), KM_MODS(GLR_AUTO_TIME), 0, "",

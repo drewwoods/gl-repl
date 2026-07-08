@@ -124,6 +124,7 @@
 #define GLR_MSAA             KEY_CTRL_U, 0
 #define GLR_ACCUM_EFFECT     KEY_CTRL_U, GLUT_ACTIVE_SHIFT  /* Shift toggles accum-AA (read in handler) */
 #define GLR_VIEW_MODE        KEY_CTRL_V, GLUT_ACTIVE_SHIFT  /* plain Ctrl+V = Paste */
+#define GLR_PROJECTION       KEY_CTRL_E, GLUT_ACTIVE_SHIFT  /* pairs w/ Line end */
 #define GLR_CPU_PROFILE      KEY_CTRL_W, 0     /* pairs w/ Memory profile */
 #define GLR_MEMORY_PROFILE   KEY_CTRL_W, GLUT_ACTIVE_SHIFT  /* plain Ctrl+W = CPU profile */
 #define GLR_XFORM_GUIDES     KEY_CTRL_X, GLUT_ACTIVE_SHIFT
@@ -134,7 +135,7 @@
  * Plain Ctrl bytes; the Ctrl+Shift twin of several is a config row above,
  * claimed first by the cfg dispatcher (so these stay mods-agnostic). */
 #define GLR_LINE_START       KEY_CTRL_A, 0     /* pairs w/ Audio play/pause */
-#define GLR_LINE_END         KEY_CTRL_E, 0     /* pairs w/ Vertex outlines */
+#define GLR_LINE_END         KEY_CTRL_E, 0     /* pairs w/ Projection */
 #define GLR_COPY             KEY_CTRL_C, 0     /* pairs w/ Reset camera */
 #define GLR_CUT              KEY_CTRL_X, 0
 #define GLR_PASTE            KEY_CTRL_V, 0     /* pairs w/ View mode */
