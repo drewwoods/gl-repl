@@ -471,8 +471,10 @@ static const char *menu_item_label(int menu_id, int i) {
              * glr_audio_is_paused() playback state could disagree with
              * the config intent (e.g. web autoplay-gesture deferral). */
             return glr_config_get(GLR_CONFIG_AUDIO_MODE) ? "Pause" : "Play";
-        if (i == group_count + GLR_AUDIO_OFF_NEXT) return "Next Track";
-        if (i == group_count + GLR_AUDIO_OFF_PREV) return "Previous Track";
+        if (i == group_count + GLR_AUDIO_OFF_BACK10) return "Jump Back 10s";
+        if (i == group_count + GLR_AUDIO_OFF_FWD10)  return "Jump Forward 10s";
+        if (i == group_count + GLR_AUDIO_OFF_NEXT)   return "Next Track";
+        if (i == group_count + GLR_AUDIO_OFF_PREV)   return "Previous Track";
         if (i == group_count + GLR_AUDIO_OFF_LOOP) {
             snprintf(loop_label, sizeof(loop_label), "Loop: %s",
                      audio_loop_mode_label());

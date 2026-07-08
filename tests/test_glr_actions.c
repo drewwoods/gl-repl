@@ -809,6 +809,20 @@ static void test_audio_menu_actions(void) {
     ASSERT_INT("audio menu loop cycles to Song",
                glr_audio_get_loop_mode(), GLR_AUDIO_LOOP_SONG);
 
+    ASSERT_INT("audio menu back10 row stays open",
+               glr_action_menu_item_activate(GLR_MENU_AUDIO,
+                                             group_count + GLR_AUDIO_OFF_BACK10),
+               0);
+    ASSERT_STR("audio menu back10 sets status",
+               g_last_status, "Jump Back 10s (0:00)");
+
+    ASSERT_INT("audio menu fwd10 row stays open",
+               glr_action_menu_item_activate(GLR_MENU_AUDIO,
+                                             group_count + GLR_AUDIO_OFF_FWD10),
+               0);
+    ASSERT_STR("audio menu fwd10 sets status",
+               g_last_status, "Jump Forward 10s (0:00)");
+
     ASSERT_INT("audio menu next closes",
                glr_action_menu_item_activate(GLR_MENU_AUDIO,
                                              group_count + GLR_AUDIO_OFF_NEXT),

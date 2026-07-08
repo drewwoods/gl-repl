@@ -83,12 +83,14 @@ enum {
  *   [g + AUDIO_OFF_PREV]   "Previous Track" action
  *   [g + AUDIO_OFF_LOOP]   "Loop: <mode>" action */
 enum {
-    GLR_AUDIO_OFF_SEP  = 0,
-    GLR_AUDIO_OFF_PLAY = 1,
-    GLR_AUDIO_OFF_NEXT = 2,
-    GLR_AUDIO_OFF_PREV = 3,
-    GLR_AUDIO_OFF_LOOP = 4,
-    GLR_AUDIO_FIXED_COUNT = 5
+    GLR_AUDIO_OFF_SEP    = 0,
+    GLR_AUDIO_OFF_PLAY   = 1,
+    GLR_AUDIO_OFF_BACK10 = 2,
+    GLR_AUDIO_OFF_FWD10  = 3,
+    GLR_AUDIO_OFF_NEXT   = 4,
+    GLR_AUDIO_OFF_PREV   = 5,
+    GLR_AUDIO_OFF_LOOP   = 6,
+    GLR_AUDIO_FIXED_COUNT = 7
 };
 
 /* Apply initial presentation configuration defaults at startup. Initializes the

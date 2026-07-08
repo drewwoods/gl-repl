@@ -395,6 +395,27 @@ static void test_audio_menu_flyout_hits(void) {
                                                        2 + GLR_AUDIO_OFF_PLAY);
     ASSERT_STR_EQ("audio Play shortcut", shortcut ? shortcut : "(null)",
                   "Ctrl+Shift+A");
+
+    int back_mx = -1;
+    int back_my = -1;
+    ASSERT_TRUE("found Audio Back row",
+                find_dropdown_item_point(GLR_MENU_AUDIO,
+                                         2 + GLR_AUDIO_OFF_BACK10,
+                                         &back_mx, &back_my));
+    hit = ui_menu_bar_hit_test(back_mx, back_my);
+    ASSERT_INT_EQ("audio Back row hit", hit.item_idx,
+                  2 + GLR_AUDIO_OFF_BACK10);
+
+    int fwd_mx = -1;
+    int fwd_my = -1;
+    ASSERT_TRUE("found Audio Forward row",
+                find_dropdown_item_point(GLR_MENU_AUDIO,
+                                         2 + GLR_AUDIO_OFF_FWD10,
+                                         &fwd_mx, &fwd_my));
+    hit = ui_menu_bar_hit_test(fwd_mx, fwd_my);
+    ASSERT_INT_EQ("audio Forward row hit", hit.item_idx,
+                  2 + GLR_AUDIO_OFF_FWD10);
+
     shortcut = ui_menu_bar_menu_item_shortcut_for_test(GLR_MENU_AUDIO,
                                                        2 + GLR_AUDIO_OFF_NEXT);
     ASSERT_STR_EQ("audio Next shortcut", shortcut ? shortcut : "(null)",
