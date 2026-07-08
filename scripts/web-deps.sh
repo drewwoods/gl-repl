@@ -30,6 +30,9 @@ WEB_DEPS_ROOT="$ROOT/third_party/web"
 
 GL4ES_URL="https://github.com/ptitSeb/gl4es.git"
 GL4ES_SHA="17f0894e19d1553e4176276c759915dab44c08e2"
+GL4ES_PATCHES=(
+	"$ROOT/packaging/web/patches/gl4es-rasterpos-perspective-divide.patch"
+)
 GLU_URL="https://github.com/ptitSeb/GLU.git"
 GLU_SHA="2fed2bda2b725d2b9e32c435b48d5141cc95827f"
 
@@ -59,6 +62,23 @@ if ! command -v emcc >/dev/null 2>&1; then
 	exit 1
 fi
 
+# Local fixes not yet in a public gl4es fork (see each patch file's header
+# for the why). Idempotent: `git apply --check` skips a patch that's
+# already applied -- so reusing an existing GL4ES_DIR that already carries
+# the fix (e.g. a local working checkout) or re-running against an
+# already-patched clone is a no-op, not a failure.
+apply_gl4es_patches() {
+	local patch
+	for patch in "${GL4ES_PATCHES[@]}"; do
+		if ( cd "$GL4ES_DIR" && git apply --check "$patch" 2>/dev/null ); then
+			echo -e "${CYAN}Applying $(basename "$patch") ...${NC}"
+			( cd "$GL4ES_DIR" && git apply "$patch" )
+		else
+			echo -e "${GREEN}$(basename "$patch") already applied (or not needed).${NC}"
+		fi
+	done
+}
+
 build_gl4es() {
 	if [ -f "$GL4ES_LIB" ]; then
 		echo -e "${GREEN}gl4es already built -> $GL4ES_LIB${NC}"
@@ -70,6 +90,8 @@ build_gl4es() {
 		git clone --quiet "$GL4ES_URL" "$GL4ES_DIR"
 		git -C "$GL4ES_DIR" checkout --quiet "$GL4ES_SHA"
 	fi
+
+	apply_gl4es_patches
 
 	echo -e "${CYAN}Building gl4es ...${NC}"
 	mkdir -p "$GL4ES_DIR/build_wasm"
