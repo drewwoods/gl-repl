@@ -62,6 +62,9 @@ license text, reproduced verbatim from `third_party/freeglut/COPYING`:
   toolchain-specific to the pinned Emscripten SDK). Pinned SHA recorded in
   `third_party/web/PINNED.txt` after a build; default pin at time of writing
   is `17f0894e19d1553e4176276c759915dab44c08e2`.
+- **Local patch:** `packaging/web/patches/gl4es-rasterpos-perspective-divide.patch`
+  (a `glRasterPos3f` perspective-divide fix, not yet upstream or in a public
+  fork) is applied by `scripts/web-deps.sh` after cloning, before building.
 - **License:** MIT. Reproduced verbatim from gl4es's `LICENSE`:
 
 ```

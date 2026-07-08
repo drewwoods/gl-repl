@@ -1,0 +1,44 @@
+Fix glRasterPos3f in gl4es to perspective-divide by the clip-space w
+component before deriving NDC / viewport coordinates. Without this, the
+raster position is wrong under any non-identity projection (e.g. gl-repl's
+label()/glRasterPos3f pairing in a perspective scene), since transl[0..2]
+are clip-space, not NDC, until divided by transl[3].
+
+Local fix in ~/src/gl4es (uncommitted upstream at time of writing; not yet
+in a public fork). Applied by scripts/web-deps.sh after cloning gl4es,
+before building, so the wasm web build gets it without depending on that
+local checkout.
+
+diff --git a/src/gl/raster.c b/src/gl/raster.c
+index 1235a49d..cc80b690 100644
+--- a/src/gl/raster.c
++++ b/src/gl/raster.c
+@@ -34,14 +34,20 @@ void APIENTRY_GL4ES gl4es_glRasterPos3f(GLfloat x, GLfloat y, GLfloat z) {
+     matrix_transpose(glmatrix, modelview);
+     matrix_vector(modelview, transl, t);
+     matrix_vector(projection, t, transl);
+-    GLfloat w2, h2;
+-    w2=glstate->raster.viewport.width/2.0f;
+-    h2=glstate->raster.viewport.height/2.0f;
+-    
+-    if ((transl[0] * w2 + w2) >= 0 && (transl[1] * h2 + h2) >= 0 && transl[2] >= 0) {
+-      glstate->raster.rPos.x = transl[0]*w2+w2;
+-      glstate->raster.rPos.y = transl[1]*h2+h2;
+-      glstate->raster.rPos.z = transl[2];
++    if (transl[3] != 0.0f) {
++      GLfloat invw = 1.0f / transl[3];
++      GLfloat ndc_x = transl[0] * invw;
++      GLfloat ndc_y = transl[1] * invw;
++      GLfloat ndc_z = transl[2] * invw;
++      GLfloat w2, h2;
++      w2=glstate->raster.viewport.width/2.0f;
++      h2=glstate->raster.viewport.height/2.0f;
++
++      if ((ndc_x * w2 + w2) >= 0 && (ndc_y * h2 + h2) >= 0 && ndc_z >= -1.0f) {
++        glstate->raster.rPos.x = ndc_x*w2+w2;
++        glstate->raster.rPos.y = ndc_y*h2+h2;
++        glstate->raster.rPos.z = ndc_z*0.5f+0.5f;
++      }
+     }
+ }
+ #if !defined(NO_EGL) && !defined(NOX11)
