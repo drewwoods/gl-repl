@@ -160,7 +160,7 @@ to WebAssembly for the browser: gl4es maps `gl*` calls to WebGL2, Emscripten's
 own JS GLUT supplies windowing/events, and the vendored freeglut's Emscripten
 backend (stacked onto the same tree the Cocoa/OSMesa backends live in — see
 above) supplies solids/fonts. `make web-serve` serves the result at
-`http://localhost:8000/`. Project-owned web files (`gl4es_bootstrap.c`,
+`http://localhost:8000/`. Project-owned web files ([`gl4es_bootstrap.c`](packaging/web/gl4es_bootstrap.c),
 `shell.html`, and a README on the shim knowledge) live in `packaging/web/`;
 `scripts/web-deps.sh` fetches and builds the pinned gl4es + GLU archives into
 gitignored `third_party/web/`. See [`packaging/web/README.md`](packaging/web/README.md) for the

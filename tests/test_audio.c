@@ -322,6 +322,67 @@ int main() {
             glr_audio_shutdown();
             remove(state_file);
         }
+
+        /* 11. Seek and relative seek tests */
+        {
+            ASSERT_TRUE("seek: init", glr_audio_init() == 0);
+            /* Seek when nothing is active/pending should return -1 */
+            ASSERT_INT("seek: fails when no active/pending", glr_audio_seek(10.0f), -1);
+
+            /* Set up a playlist and set state file to trigger resume with offset */
+            const char *state_file = "test_audio_seek.ini";
+            const char *fallback = "assets/sample.mp3";
+            const char *tracks[] = { fallback };
+            FILE *f = NULL;
+            unsigned int base_generation;
+
+            remove(state_file);
+            glr_audio_set_state_file(state_file);
+            f = fopen(state_file, "w");
+            ASSERT_TRUE("seek: state file opened", f != NULL);
+            if (f) {
+                fprintf(f, "track=%s\n", fallback);
+                fprintf(f, "offset=5.000\n");
+                fclose(f);
+            }
+
+            glr_audio_set_playlist(tracks, 1);
+            base_generation = glr_audio_track_generation();
+            /* Start playing, which will load and seek to 5.0s */
+            ASSERT_INT("seek: play starts", glr_audio_play_playlist(), 0);
+
+            /* While it is loading, we can do a seek.
+             * Since the worker hasn't finished loading yet, g_active is still -1, and g_req is AWR_START.
+             * Testing seek when g_req == AWR_START: */
+            ASSERT_INT("seek: updates queued start offset", glr_audio_seek(10.0f), 0);
+
+            /* Wait for the track to actually load */
+            ASSERT_TRUE("seek: loaded", wait_for_current_track(fallback, base_generation, 2000));
+
+            /* Once loaded, we can verify the seek position.
+             * With ma_sound_seek_to_pcm_frame, the change is reflected on cursor queries. */
+            float pos = glr_audio_current_cursor_seconds();
+            printf("Cursor position after loading and seek: %.3f\n", pos);
+
+            /* Perform a synchronous absolute seek to 15.0s */
+            ASSERT_INT("seek: absolute seek to 15.0s", glr_audio_seek(15.0f), 0);
+
+            pos = glr_audio_current_cursor_seconds();
+            ASSERT_TRUE("seek: cursor is 15.0s", pos >= 14.9f && pos <= 15.1f);
+
+            /* Perform a relative seek of -10.0s */
+            ASSERT_INT("seek: relative seek -10s", glr_audio_seek_relative(-10.0f), 0);
+            pos = glr_audio_current_cursor_seconds();
+            ASSERT_TRUE("seek: cursor after relative -10s is 5.0s", pos >= 4.9f && pos <= 5.1f);
+
+            /* Perform a relative seek of +20.0s */
+            ASSERT_INT("seek: relative seek +20s", glr_audio_seek_relative(20.0f), 0);
+            pos = glr_audio_current_cursor_seconds();
+            ASSERT_TRUE("seek: cursor after relative +20s is 25.0s", pos >= 24.9f && pos <= 25.1f);
+
+            glr_audio_shutdown();
+            remove(state_file);
+        }
     } else {
         printf("Skipping engine-active tests as init failed.\n");
     }

@@ -1170,6 +1170,27 @@ int glr_cfg_handle_special_shortcut(int key) {
     return 0;
 }
 
+static void format_and_set_seek_status(const char *action_name) {
+    float current_time = glr_audio_current_cursor_seconds();
+    int track_idx = glr_audio_current_index();
+    float duration = (track_idx >= 0) ? glr_audio_track_duration_seconds(track_idx) : -1.0f;
+    char time_str[64];
+    char msg[128];
+    int cur_mins = (int)current_time / 60;
+    int cur_secs = (int)current_time % 60;
+    if (duration >= 0.0f) {
+        int dur_mins = (int)duration / 60;
+        int dur_secs = (int)duration % 60;
+        snprintf(time_str, sizeof(time_str), "%d:%02d / %d:%02d",
+                 cur_mins, cur_secs, dur_mins, dur_secs);
+    } else {
+        snprintf(time_str, sizeof(time_str), "%d:%02d",
+                 cur_mins, cur_secs);
+    }
+    snprintf(msg, sizeof(msg), "%s (%s)", action_name, time_str);
+    ui_state_status_set_music(msg);
+}
+
 int glr_action_menu_item_activate(int menu_id, int item_idx) {
     switch (menu_id) {
     case GLR_MENU_FILE:
@@ -1319,7 +1340,17 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             glr_action_toggle_audio_play_pause();
             return 0;
         }
-        /* Play/Pause and Loop keep the dropdown open (repeated toggles);
+        if (rel == GLR_AUDIO_OFF_BACK10) {
+            glr_audio_seek_relative(-10.0f);
+            format_and_set_seek_status("Jump Back 10s");
+            return 0;
+        }
+        if (rel == GLR_AUDIO_OFF_FWD10) {
+            glr_audio_seek_relative(10.0f);
+            format_and_set_seek_status("Jump Forward 10s");
+            return 0;
+        }
+        /* Play/Pause, Loop, and Jump Back/Forward keep the dropdown open (repeated toggles);
          * Next/Prev are one-shot navigation and close it. This split is
          * intentional and pinned by test_glr_actions ("audio menu next/
          * previous closes"). */
@@ -1339,7 +1370,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             glr_audio_set_loop_mode(next);
             snprintf(msg, sizeof(msg), "Loop: %s",
                      audio_loop_status_label(next));
-            repl_set_status(msg);
+            ui_state_status_set_music(msg);
             return 0;
         }
         return 1;

@@ -1169,6 +1169,74 @@ int glr_audio_play_track_index(int idx) {
     return request_start(idx, GLR_AUDIO_NO_SEEK);
 }
 
+int glr_audio_seek(float seek_secs) {
+    audio_lock();
+    if (!g_inited) {
+        audio_unlock();
+        return -1;
+    }
+
+    if (seek_secs < 0.0f) {
+        seek_secs = 0.0f;
+    }
+
+    if (g_active >= 0 && g_slot_inited[g_active]) {
+        int idx = g_playlist_pos;
+        float dur = g_playlist_duration_secs[idx];
+        if (dur >= 0.0f && seek_secs > dur) {
+            seek_secs = dur;
+        }
+        ma_uint32 sr = ma_engine_get_sample_rate(&g_engine);
+        if (sr > 0) {
+            ma_sound_seek_to_pcm_frame(&g_slot[g_active], (ma_uint64)(seek_secs * (float)sr));
+            audio_unlock();
+            return 0;
+        }
+        audio_unlock();
+        return -1;
+    }
+
+    /* Active slot doesn't exist yet. Check if a start is pending. */
+    if (g_pending_start) {
+        g_pending_seek = seek_secs;
+        audio_unlock();
+        return 0;
+    }
+
+    if (g_req == AWR_START) {
+        g_req_seek = seek_secs;
+        audio_unlock();
+        return 0;
+    }
+
+    audio_unlock();
+    return -1;
+}
+
+int glr_audio_seek_relative(float offset_secs) {
+    audio_lock();
+    if (!g_inited) {
+        audio_unlock();
+        return -1;
+    }
+
+    float current = 0.0f;
+    if (g_active >= 0 && g_slot_inited[g_active]) {
+        current = cursor_seconds_locked();
+    } else if (g_pending_start) {
+        current = (g_pending_seek >= 0.0f) ? g_pending_seek : 0.0f;
+    } else if (g_req == AWR_START) {
+        current = (g_req_seek >= 0.0f) ? g_req_seek : 0.0f;
+    } else {
+        audio_unlock();
+        return -1;
+    }
+
+    float target = current + offset_secs;
+    audio_unlock();
+    return glr_audio_seek(target);
+}
+
 void glr_audio_tick(void) {
     /* All work here is messaging the dispatch path; with audio down
      * nothing is (or can be) playing, so there is nothing to do. */

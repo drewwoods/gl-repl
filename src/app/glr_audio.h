@@ -83,6 +83,8 @@ int  glr_audio_play_music(const char *path);
 int  glr_audio_next_track(void);
 int  glr_audio_prev_track(void);
 int  glr_audio_play_track_index(int idx);
+int  glr_audio_seek(float seek_secs);
+int  glr_audio_seek_relative(float offset_secs);
 
 int         glr_audio_track_count(void);
 const char *glr_audio_track_display_name(int idx);
