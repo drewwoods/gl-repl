@@ -501,13 +501,43 @@ static void test_scene_backdrop_render(void) {
 
     Render3dFrameRenderContext ctx = make_test_frame_ctx();
 
-    render3d_backdrop_render(&ctx);
-    ASSERT_TRUE("render3d_backdrop_render did not crash", 1);
+    /* Test all backdrop modes for setup_lights and rendering to cover backdrop.c */
+    for (int mode = 0; mode < RENDER3D_BACKDROP_COUNT; mode++) {
+        ctx.config.backdrop_mode = mode;
 
-    /* With different backdrop mode. */
-    ctx.config.backdrop_mode = 1;
-    render3d_backdrop_render(&ctx);
-    ASSERT_TRUE("render3d_backdrop_render with different mode did not crash", 1);
+        /* Set parameters so drawing functions are fully exercised */
+        ctx.config.anim_time = 1.5f;
+        ctx.config.point_parameter_supported = 1;
+        ctx.config.point_parameter_proc = (void (APIENTRY *)(GLenum, const GLfloat *))glPointParameterfv;
+        ctx.config.nv_fog_distance_supported = 1;
+
+        render3d_backdrop_setup_lights(&ctx);
+        render3d_backdrop_render(&ctx);
+    }
+
+    ASSERT_TRUE("render3d_backdrop_render and setup_lights did not crash for all modes", 1);
+}
+
+static void test_render3d_winding_and_gizmo(void) {
+    printf("--- render3d winding view and camera glow ---\n");
+
+#ifdef GL_STUBS
+    Render3dRenderConfig cfg = make_test_config();
+    cfg.winding_view = 1;
+    cfg.cam_motion_glow = 1.0f;
+    cfg.cam_dist = 5.0f;
+    cfg.cam_tx = 1.0f;
+    cfg.cam_ty = 2.0f;
+    cfg.cam_tz = 3.0f;
+
+    Render3dState state;
+    render3d_state_init(&state);
+
+    gl_stub_counts_reset();
+    int res = render3d_draw_scene(&state, &cfg);
+    ASSERT_INT("winding view draw ok", res, 0);
+    ASSERT_TRUE("winding view and glow calls glBegin/glEnd", gl_stub_counts[GL_STUB_glBegin] > 0);
+#endif
 }
 
 /* --- Tests for render3d_lights_setup/render (minimal) --------------- */
@@ -1364,6 +1394,7 @@ int main(int argc, char **argv) {
     test_scene_grid_render();
     test_scene_axes_render();
     test_scene_backdrop_render();
+    test_render3d_winding_and_gizmo();
     test_scene_lights();
     test_scene_overlays();
     test_anim_time_propagation();

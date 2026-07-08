@@ -1096,4 +1096,3 @@ int main(void) {
 
     return test_harness_report(&g_harness, "test_editor_input_selection");
 }
-
