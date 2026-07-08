@@ -8,7 +8,10 @@
 #include <stdint.h>
 #include <time.h>
 
-#if defined(__APPLE__)
+#if defined(__EMSCRIPTEN__)
+#  include <emscripten/emscripten.h>
+#  include <emscripten/heap.h>
+#elif defined(__APPLE__)
 #  include <mach/mach.h>
 #  include <mach/mach_time.h>
 #  include <mach/task.h>
@@ -34,17 +37,28 @@ static MemSample       g_memprof_ring[MEMPROF_HISTORY_CAP];
 static double          g_memprof_ring_t[MEMPROF_HISTORY_CAP];
 static MemprofReaderFn g_memprof_reader      = NULL; /* NULL -> memprof_read */
 
+static void memprof_sample_clear(MemSample *out) {
+    if (!out) return;
+    out->rss_bytes = 0;
+    out->limit_bytes = 0;
+}
+
 /* ========================================================================= */
 /* Reader (platform-conditional)                                              */
 /* ========================================================================= */
 
 static int memprof_read(MemSample *out) {
-#if defined(__APPLE__)
+#if defined(__EMSCRIPTEN__)
+    uintptr_t *sbrk_ptr = emscripten_get_sbrk_ptr();
+    out->rss_bytes = sbrk_ptr ? (unsigned long long)(*sbrk_ptr) : 0ULL;
+    out->limit_bytes = (unsigned long long)emscripten_get_heap_max();
+    return out->rss_bytes != 0;
+#elif defined(__APPLE__)
     mach_task_basic_info_data_t info = {0};
     mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
     kern_return_t kr = task_info(mach_task_self(), MACH_TASK_BASIC_INFO,
                                  (task_info_t)&info, &count);
-    if (kr != KERN_SUCCESS) { out->rss_bytes = 0; return 0; }
+    if (kr != KERN_SUCCESS) return 0;
     out->rss_bytes = (unsigned long long)info.resident_size;
     return 1;
 #elif defined(__linux__)
@@ -59,27 +73,36 @@ static int memprof_read(MemSample *out) {
      * dominated by huge unmapped reservations, so VSZ is not portable
      * useful — RSS is the comparable signal). */
     FILE *f = fopen("/proc/self/statm", "r");
-    if (!f) { out->rss_bytes = 0; return 0; }
+    if (!f) return 0;
     unsigned long size_p = 0, rss_p = 0;
     int n = fscanf(f, "%lu %lu", &size_p, &rss_p);
     fclose(f);
-    if (n != 2) { out->rss_bytes = 0; return 0; }
+    if (n != 2) return 0;
     (void)size_p;
     long pagesz = sysconf(_SC_PAGESIZE);
     if (pagesz <= 0) pagesz = 4096;
     out->rss_bytes = (unsigned long long)rss_p * (unsigned long long)pagesz;
     return 1;
 #else
-    out->rss_bytes = 0;
     return 0;
 #endif
+}
+
+static int memprof_read_current(MemSample *out) {
+    MemprofReaderFn reader = g_memprof_reader ? g_memprof_reader : memprof_read;
+    memprof_sample_clear(out);
+    return reader(out);
 }
 
 /* ========================================================================= */
 /* Monotonic clock                                                            */
 /* ========================================================================= */
 
-#if defined(__APPLE__)
+#if defined(__EMSCRIPTEN__)
+static double memprof_now_s(void) {
+    return emscripten_get_now() / 1000.0;
+}
+#elif defined(__APPLE__)
 static double memprof_now_s(void) {
     static mach_timebase_info_data_t tb = {0, 0};
     if (tb.denom == 0) mach_timebase_info(&tb);
@@ -120,9 +143,8 @@ void memprof_init_at(double t0_seconds) {
     if (g_memprof_initialized) return;
     g_memprof_t0_seconds  = t0_seconds;
     g_memprof_last_push_s = 0.0;
-    MemprofReaderFn reader = g_memprof_reader ? g_memprof_reader : memprof_read;
-    /* `current` is live from frame 1 so the RSS row is never blank. */
-    reader(&g_memprof_current);
+    /* `current` is live from frame 1 so the primary row is never blank. */
+    memprof_read_current(&g_memprof_current);
     /* The baseline ("init") is DEFERRED to the first sample push rather
      * than captured here. The reading taken at process init sits well
      * below the app's warmed-up working set (GL solid-shape display-list
@@ -133,6 +155,7 @@ void memprof_init_at(double t0_seconds) {
      * the first push pins it to the first plotted point and makes the delta
      * meaningful. Until then memprof_baseline() reports 0 ("--"). */
     g_memprof_baseline.rss_bytes = 0;
+    g_memprof_baseline.limit_bytes = 0;
     g_memprof_baseline_pending   = 1;
     g_memprof_initialized = 1;
 }
@@ -143,9 +166,9 @@ void memprof_reset(void) {
     g_memprof_last_push_s = 0.0;
     g_memprof_count       = 0;
     g_memprof_head        = 0;
-    g_memprof_baseline.rss_bytes = 0;
+    memprof_sample_clear(&g_memprof_baseline);
     g_memprof_baseline_pending   = 0;
-    g_memprof_current.rss_bytes  = 0;
+    memprof_sample_clear(&g_memprof_current);
     g_memprof_reader = NULL;
     /* Ring contents left as-is; count=0 makes them unreachable. */
 }
@@ -153,8 +176,7 @@ void memprof_reset(void) {
 void memprof_frame_tick_at(double now_seconds) {
     if (!g_memprof_initialized) return;
     double t_rel = now_seconds - g_memprof_t0_seconds;
-    MemprofReaderFn reader = g_memprof_reader ? g_memprof_reader : memprof_read;
-    reader(&g_memprof_current);
+    memprof_read_current(&g_memprof_current);
     if (t_rel - g_memprof_last_push_s >= MEMPROF_PUSH_INTERVAL_S) {
         /* First push establishes the deferred baseline (see memprof_init_at). */
         if (g_memprof_baseline_pending) {
@@ -177,7 +199,7 @@ int memprof_history_capacity(void) { return MEMPROF_HISTORY_CAP; }
 
 void memprof_history_get(int i, MemSample *out, double *sample_seconds_out) {
     if (i < 0 || i >= g_memprof_count) {
-        if (out) out->rss_bytes = 0;
+        memprof_sample_clear(out);
         if (sample_seconds_out) *sample_seconds_out = 0.0;
         return;
     }
@@ -197,6 +219,14 @@ double memprof_history_latest_t(void) {
     int newest = (g_memprof_head - 1 + MEMPROF_HISTORY_CAP)
                  % MEMPROF_HISTORY_CAP;
     return g_memprof_ring_t[newest];
+}
+
+const char *memprof_primary_label(void) {
+#if defined(__EMSCRIPTEN__)
+    return "Wasm";
+#else
+    return "RSS";
+#endif
 }
 
 unsigned long long memprof_history_max_rss(void) {

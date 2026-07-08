@@ -21,7 +21,7 @@
 #define MEM_PANEL_MARGIN     12
 #define MEM_ROW_H            14
 #define MEM_HEADER_H         18
-#define MEM_TEXT_BLOCK_H     (3 * MEM_ROW_H + 4)  /* 3 rows + divider */
+#define MEM_TEXT_BLOCK_H     (4 * MEM_ROW_H + 4)  /* 4 rows + divider */
 #define MEM_GRAPH_H          90
 #define MEM_Y_GUTTER         56   /* room for "999.9 MB" / "9.99 GB" tiny labels */
 #define MEM_BOTTOM_PAD       16   /* X labels + margin */
@@ -52,10 +52,10 @@ static int mem_panel_height(void) {
 /* Format a signed delta using memprof's formatter for the magnitude.
  * memprof_format_bytes right-aligns the digit portion to
  * MEMPROF_FMT_WIDTH chars (leading-space padded), so the unit suffix
- * lands in the same column for RSS / init / delta rows. To keep that
+ * lands in the same column for primary / init / delta rows. To keep that
  * column alignment, the sign character overwrites the rightmost
  * leading space rather than prepending — prepending would push the
- * digits one column right of the RSS / init rows.
+ * digits one column right of the primary / init rows.
  *
  * Either side being zero (reader-failure sentinel — current/baseline
  * rows render "--" for that case) propagates as "--" so the delta row
@@ -68,7 +68,7 @@ static void fmt_delta(char *buf, int buf_sz,
     }
     if (cur == base) {
         /* Zero delta: render as "0.0 MB" with the same width formatting
-         * as RSS / init so the unit column lines up. */
+         * as primary / init so the unit column lines up. */
         snprintf(buf, (size_t)buf_sz, "%*.1f MB", MEMPROF_FMT_WIDTH, 0.0);
         return;
     }
@@ -86,6 +86,30 @@ static void fmt_delta(char *buf, int buf_sz,
          * not pad). Prepend sign; this row may sit one column left of the
          * MB/GB rows but is rare for a long-running REPL. */
         snprintf(buf, (size_t)buf_sz, "%c%s", sign, tmp);
+    }
+}
+
+static const char *skip_leading_spaces(const char *s) {
+    while (*s == ' ') s++;
+    return s;
+}
+
+static void fmt_limit(char *buf, int buf_sz,
+                      unsigned long long cur, unsigned long long limit) {
+    if (cur == 0 || limit == 0) {
+        snprintf(buf, (size_t)buf_sz, "--");
+        return;
+    }
+
+    char limit_buf[64];
+    memprof_format_bytes(limit_buf, (int)sizeof(limit_buf), limit);
+    double pct = (double)cur * 100.0 / (double)limit;
+    if (pct < 1000.0) {
+        snprintf(buf, (size_t)buf_sz, "%5.1f%% / %s",
+                 pct, skip_leading_spaces(limit_buf));
+    } else {
+        snprintf(buf, (size_t)buf_sz, "%.0f%% / %s",
+                 pct, skip_leading_spaces(limit_buf));
     }
 }
 
@@ -151,10 +175,11 @@ void ui_memory_panel_render(const UiMemoryPanelView *view) {
 
     ty -= MEM_HEADER_H;
 
-    /* Text block: three single-column rows showing current / init / delta
-     * RSS. VSZ deliberately dropped — on macOS it counts the whole virtual
+    /* Text block: current / init / delta plus a platform limit when one is
+     * known. VSZ deliberately dropped — on macOS it counts the whole virtual
      * address reservation including unmapped pages and renders as GB-scale
-     * noise that swamps the graph; RSS is the portable leak signal. */
+     * noise that swamps the graph; RSS is the native leak signal. On
+     * Emscripten the primary row is the Wasm sbrk position instead. */
     MemSample cur  = memprof_current();
     MemSample base = memprof_baseline();
 
@@ -163,7 +188,8 @@ void ui_memory_panel_render(const UiMemoryPanelView *view) {
     char val_buf[256];
 
     ui_clr(UI_TOK_TEXT_SECTION);
-    gl2d_draw_string((float)col_label, (float)ty, "RSS",   FONT_SMALL);
+    gl2d_draw_string((float)col_label, (float)ty,
+                     memprof_primary_label(), FONT_SMALL);
     ui_clr(UI_TOK_TEXT_PRIMARY);
     memprof_format_bytes(val_buf, (int)sizeof(val_buf), cur.rss_bytes);
     gl2d_draw_string((float)col_value, (float)ty, val_buf, FONT_SMALL);
@@ -183,6 +209,13 @@ void ui_memory_panel_render(const UiMemoryPanelView *view) {
     gl2d_draw_string((float)col_value, (float)ty, val_buf, FONT_SMALL);
     ty -= MEM_ROW_H;
 
+    ui_clr(UI_TOK_TEXT_SECTION);
+    gl2d_draw_string((float)col_label, (float)ty, "limit", FONT_SMALL);
+    ui_clr(cur.limit_bytes ? UI_TOK_TEXT_PRIMARY : UI_TOK_TEXT_MUTED);
+    fmt_limit(val_buf, (int)sizeof(val_buf), cur.rss_bytes, cur.limit_bytes);
+    gl2d_draw_string((float)col_value, (float)ty, val_buf, FONT_SMALL);
+    ty -= MEM_ROW_H;
+
     /* Divider before graph */
     ui_clr_a(UI_TOK_DIVIDER, 0.80f);
     glEnable(GL_BLEND);
@@ -198,7 +231,7 @@ void ui_memory_panel_render(const UiMemoryPanelView *view) {
     int plot_w = MEM_PANEL_W - MEM_Y_GUTTER - 8;
     int plot_y = panel_y + MEM_BOTTOM_PAD;
 
-    /* Auto-fit Y range from RSS history. */
+    /* Auto-fit Y range from primary memory-signal history. */
     unsigned long long hi = memprof_history_max_rss();
 
     if (hi == 0) {
@@ -269,11 +302,11 @@ void ui_memory_panel_render(const UiMemoryPanelView *view) {
         if (step == 0) break;
     }
 
-    /* Plot the RSS history. The X axis spans the ACTUAL stored window —
-     * the oldest sample's timestamp through the newest's — so it adapts to
-     * whatever cadence the samples arrived at instead of assuming a fixed
-     * MEMPROF_PUSH_INTERVAL_S per slot. The newest sample pins to the right
-     * edge ("now"); the oldest pins to the left. */
+    /* Plot the primary memory-signal history. The X axis spans the ACTUAL
+     * stored window — the oldest sample's timestamp through the newest's —
+     * so it adapts to whatever cadence the samples arrived at instead of
+     * assuming a fixed MEMPROF_PUSH_INTERVAL_S per slot. The newest sample
+     * pins to the right edge ("now"); the oldest pins to the left. */
     int n = memprof_history_count();
     double t_latest = memprof_history_latest_t();
     double span_s = 0.0;

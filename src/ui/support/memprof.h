@@ -1,7 +1,8 @@
 /*
  * ui_memprof.h - Process memory overlay panel.
  *
- * Sibling of ui_profile_panel that visualizes process RSS over time.
+ * Sibling of ui_profile_panel that visualizes the process memory signal over
+ * time: RSS natively, Wasm sbrk position in Emscripten.
  * Reads samples + baseline from src/support/memprof.c.
  *
  * Toggle: Config > "Memory profile" and Ctrl+Shift+W (matches the
@@ -27,9 +28,9 @@ typedef struct {
 } UiMemoryPanelView;
 
 /* Render the memory profile panel overlay once per frame from the supplied
- * view. Reads samples from src/support/memprof.c and draws three text rows
- * (current/baseline/delta) plus a time-anchored line graph. Renders nothing
- * if the memory panel is disabled. */
+ * view. Reads samples from src/support/memprof.c and draws current,
+ * baseline, delta, and limit rows plus a time-anchored line graph. Renders
+ * nothing if the memory panel is disabled. */
 void ui_memory_panel_render(const UiMemoryPanelView *view);
 
 /* Panel footprint in pixels, exposed so the controller (which owns

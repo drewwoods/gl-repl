@@ -41,6 +41,7 @@ static void test_memprof_render_off(void) {
 
 static int mock_reader_zeros(MemSample *out) {
     out->rss_bytes = 0;
+    out->limit_bytes = 0;
     return 1;
 }
 
@@ -68,6 +69,7 @@ static void test_memprof_render_on_empty(void) {
 
 static int mock_reader_data(MemSample *out) {
     out->rss_bytes = 100 * 1024 * 1024;
+    out->limit_bytes = 256 * 1024 * 1024;
     return 1;
 }
 

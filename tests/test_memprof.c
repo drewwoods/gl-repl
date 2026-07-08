@@ -22,11 +22,13 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 
 /* Fake-reader machinery for deterministic cadence/ring assertions. */
 static unsigned long long g_test_rss = 100;
+static unsigned long long g_test_limit = 0;
 static int g_test_reader_calls = 0;
 
 static int fake_reader(MemSample *out) {
     g_test_reader_calls++;
     out->rss_bytes = g_test_rss;
+    out->limit_bytes = g_test_limit;
     return 1;
 }
 
@@ -62,6 +64,7 @@ static void test_baseline_deferred_to_first_push(void) {
     printf("test_baseline_deferred_to_first_push\n");
     memprof_reset();
     memprof_set_reader(fake_reader);
+    g_test_limit = 0;
 
     g_test_rss = 100;          /* cold reading at init */
     memprof_init_at(0.0);
@@ -96,6 +99,7 @@ static void test_cadence_honored(void) {
     memprof_reset();
     memprof_set_reader(fake_reader);
     g_test_rss = 100;
+    g_test_limit = 0;
     memprof_init_at(0.0);
 
     /* Init should not push anything. */
@@ -122,6 +126,7 @@ static void test_ring_wraps(void) {
     memprof_reset();
     memprof_set_reader(fake_reader);
     g_test_rss = 0;
+    g_test_limit = 0;
     memprof_init_at(0.0);
 
     const int cap = memprof_history_capacity();
@@ -145,6 +150,7 @@ static void test_history_latest_t_right_anchored(void) {
     printf("test_history_latest_t_right_anchored\n");
     memprof_reset();
     memprof_set_reader(fake_reader);
+    g_test_limit = 0;
     memprof_init_at(0.0);
 
     /* No samples yet: latest_t should be 0. */
@@ -162,6 +168,30 @@ static void test_history_latest_t_right_anchored(void) {
     /* Within an epsilon of the last pushed t_rel. */
     ASSERT_TRUE("latest_t ~ third interval after 3 pushes",
                 latest > t3 - 0.01 && latest < t3 + 0.01);
+}
+
+static void test_limit_propagates_to_samples(void) {
+    printf("test_limit_propagates_to_samples\n");
+    memprof_reset();
+    memprof_set_reader(fake_reader);
+    g_test_rss = 128;
+    g_test_limit = 512;
+
+    memprof_init_at(0.0);
+    MemSample cur = memprof_current();
+    ASSERT_TRUE("current limit from reader", cur.limit_bytes == 512);
+
+    memprof_frame_tick_at(MEMPROF_PUSH_INTERVAL_S);
+    MemSample base = memprof_baseline();
+    ASSERT_TRUE("baseline captures limit on first push",
+                base.limit_bytes == 512);
+
+    MemSample hist;
+    memprof_history_get(0, &hist, NULL);
+    ASSERT_TRUE("history sample carries limit", hist.limit_bytes == 512);
+
+    g_test_limit = 0;
+    memprof_set_reader(NULL);
 }
 
 static void test_format_bytes_ranges(void) {
@@ -192,6 +222,7 @@ static void test_set_reader_null_restores_platform(void) {
     /* Install a fake, init via the fake, then swap back to platform reader. */
     memprof_set_reader(fake_reader);
     g_test_rss = 1234;
+    g_test_limit = 0;
     memprof_init_at(0.0);
 
     MemSample cur_fake = memprof_current();
@@ -218,6 +249,7 @@ int main(void) {
     test_cadence_honored();
     test_ring_wraps();
     test_history_latest_t_right_anchored();
+    test_limit_propagates_to_samples();
     test_format_bytes_ranges();
     test_set_reader_null_restores_platform();
 
