@@ -1,8 +1,8 @@
 /*
  * memprof.h - Process memory profiling instrumentation.
  *
- * Tracks current resident set size (RSS) and virtual size (VSZ) of the
- * running process, holds a ring of historical samples taken every
+ * Tracks the current process memory signal, holds a ring of historical
+ * samples taken every
  * MEMPROF_PUSH_INTERVAL_S seconds, and provides a pure formatter for
  * byte counts. Mirrors src/support/cpuprof.{c,h} in conventions: file-scope
  * statics with `g_` prefix, no GL/UI deps, platform-conditional reader.
@@ -19,8 +19,19 @@
 #define MEMPROF_FMT_WIDTH          6
 
 typedef struct {
+    /* Native: resident set size (RSS). Emscripten: current sbrk position
+     * inside Wasm linear memory, which is the closest lightweight in-app
+     * signal for proximity to the allocation limit. */
     unsigned long long rss_bytes;
+    /* Hard cap for rss_bytes-style growth when the platform exposes one.
+     * Emscripten fills this with emscripten_get_heap_max(); native platforms
+     * leave it 0 because RSS has no comparable per-process cap. */
+    unsigned long long limit_bytes;
 } MemSample;
+
+/* Short label for the primary sample metric: "RSS" on native platforms,
+ * "Wasm" on Emscripten. */
+const char *memprof_primary_label(void);
 
 /* Start sampling using the module's monotonic clock as t0. The baseline
  * ("init") is NOT captured here — it is deferred to the first history push
@@ -63,12 +74,12 @@ void memprof_set_reader(MemprofReaderFn reader);
 /* Cached current reading (always fresh - refreshed in every frame_tick). */
 MemSample memprof_current(void);
 
-/* Baseline ("init") RSS. DEFERRED: reports 0 (rendered "--") from init
- * until the first history push captures it, so the baseline reflects the
- * app's warmed-up steady state rather than the cold process-start reading.
- * Pinning it to the first plotted sample keeps it inside the graph's
- * auto-scaled range and keeps the current-minus-baseline delta meaningful
- * for leak detection. */
+/* Baseline ("init") primary memory signal. DEFERRED: reports 0 (rendered
+ * "--") from init until the first history push captures it, so the baseline
+ * reflects the app's warmed-up steady state rather than the cold
+ * process-start reading. Pinning it to the first plotted sample keeps it
+ * inside the graph's auto-scaled range and keeps the current-minus-baseline
+ * delta meaningful for leak detection. */
 MemSample memprof_baseline(void);
 
 /* History ring: oldest-first traversal for the renderer.

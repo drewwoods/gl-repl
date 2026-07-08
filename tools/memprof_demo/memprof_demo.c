@@ -2,15 +2,15 @@
  * tools/memprof_demo/memprof_demo.c — standalone driver for the memory
  * profiling subsystem.
  *
- * Isolation proof: links ONLY src/support/memprof.c (the pure RSS
+ * Isolation proof: links ONLY src/support/memprof.c (the pure memory
  * sampler) + src/ui/support/memprof.c (the overlay panel) + src/ui/core
  * (theme). No src/ui/app, no src/app, no src/repl, no src/editor — see
  * MEMPROF_DEMO_DEP_SRCS in the Makefile and check-memprof-demo-isolation.sh.
  *
  * What it shows: a spinning teapot as filler scene plus the live memory
- * panel overlay (current / baseline / delta RSS + a time-anchored RSS
- * graph). Press 'a' to allocate a ~4 MB block, 'f' to free the newest,
- * 'c' to free all — and watch RSS and the graph respond.
+ * panel overlay (current / baseline / delta / limit + a time-anchored graph).
+ * Press 'a' to allocate a ~4 MB block, 'f' to free the newest, 'c' to free
+ * all — and watch the memory signal and graph respond.
  *
  * The panel renderer is snapshot-free: it consumes a UiMemoryPanelView
  * whose panel_x/panel_y this demo bakes directly (top-right corner),
@@ -148,7 +148,7 @@ int main(int argc, char **argv) {
     glutIdleFunc(idle_func);
 
     printf("memprof_demo: a=alloc 4MB  f=free  c=free all  m=toggle panel  q=quit\n");
-    printf("  RSS/delta text updates every frame; the graph samples every ~5s.\n");
+    printf("  Current/delta text updates every frame; the graph samples every ~5s.\n");
     glutMainLoop();
     return 0;
 }
