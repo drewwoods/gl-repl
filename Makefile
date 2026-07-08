@@ -1052,7 +1052,7 @@ web: ## Build the Emscripten/wasm web target (needs emcc on PATH -- see scripts/
 	$(MAKE) WEB=1 $(WEB_BINDIR)/index.html
 	@echo "Built $(WEB_BINDIR)/index.html -- run 'make web-serve' to try it."
 
-web-serve: ## Serve the built web target over HTTP (run `make web` first).
+web-serve: web ## Serve the built web target over HTTP (builds it first if needed).
 	@echo "Serving $(WEB_BINDIR)/ at http://localhost:8000/ (Ctrl+C to stop) ..."
 	cd $(WEB_BINDIR) && python3 -m http.server 8000
 
