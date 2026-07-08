@@ -204,7 +204,7 @@ void glr_ctrl_tick_view_transition(float dt) {
      * blend toward the current Projection config. No camera work — the
      * camera stays free, so this renders ortho from the live orbit angle. */
     glr_ctrl_step_mix_toward(&g_projection_toggle_mix,
-                             glr_state_presentation().projection_ortho ? 0.0f : 1.0f,
+                             (glr_state_presentation().projection_mode == PROJ_ORTHO) ? 0.0f : 1.0f,
                              dt);
 
     glr_ctrl_sync_camera_control_mode();

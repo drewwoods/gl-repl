@@ -2,7 +2,7 @@
 // @cfg light_theme = LIGHT_THEME_HEADLIGHT
 // @cfg vertex_points = 0
 // @cfg projection = PROJ_ORTHO
-// @cfg wireframe = 2
+// @cfg wireframe = WIREFRAME_HIDDEN
 // @cfg accum_passes = 2
 // @cfg grid = GRID_THEME_OFF
 

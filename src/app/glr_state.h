@@ -19,6 +19,7 @@
 
 #include "render3d/guides/xform_guide_mode.h"
 #include "render3d/view_mode.h"
+#include "render3d/projection_mode.h"
 #include "render3d/render_types.h"   /* Render3dLight, MAX_LIGHTS for the theme-seeded lights[] */
 
 /* Scene-presentation policy: what chrome and overlays the app should show, how
@@ -61,15 +62,15 @@ typedef struct {
      * snapshot/default-reset subset so F12 example switches do not change it. */
     int winding_view;
     Render3dViewMode ortho_mode;
-    /* Projection mode, INDEPENDENT of ortho_mode's 2D-flatten view: 0 =
-     * perspective, 1 = orthographic. Unlike ortho_mode (which flattens and
-     * locks the camera to a top-down 2D view), this only swaps the
-     * projection matrix — the camera stays free, so it renders ortho from
-     * any orbit angle. The controller eases a separate projection-blend
+    /* Projection mode, INDEPENDENT of ortho_mode's 2D-flatten view:
+     * PROJ_PERSPECTIVE = perspective, PROJ_ORTHO = orthographic.
+     * Unlike ortho_mode (which flattens and locks the camera to a top-down 2D view),
+     * this only swaps the projection matrix — the camera stays free, so it renders
+     * ortho from any orbit angle. The controller eases a separate projection-blend
      * scalar for it and combines the two blends with min() (ortho wins:
      * the scene is orthographic if EITHER control asks for it). Config-
      * backed (GLR_CONFIG_PROJECTION), saved in @cfg / per-scene subset. */
-    int projection_ortho;
+    Render3dProjectionMode projection_mode;
     int wrap_at_comma;
     int code_panel_layout;
     int syntax_highlight;   /* 0 = off, 1 = on, 2 = on + drop-shadow */

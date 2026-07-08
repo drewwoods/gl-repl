@@ -635,7 +635,7 @@ useful for plots, sketches, and UI-like drawings. Examples that declare
 perspective and orthographic projection while maintaining a free, interactive camera.
 Unlike *View mode* (which flattens and locks the camera to a top-down 2D view), toggling
 *Projection* keeps the current camera orbit angle, allowing you to view and navigate
-the scene orthographically. Examples can declare `@cfg projection = 1` to start with
+the scene orthographically. Examples can declare `@cfg projection = PROJ_ORTHO` to start with
 orthographic projection.
 
 ---

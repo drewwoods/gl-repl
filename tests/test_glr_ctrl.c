@@ -1281,9 +1281,9 @@ static void test_projection_toggle_free_camera(void) {
                glr_state_presentation().ortho_mode, RENDER3D_VIEW_3D);
 
     /* Toggle Projection -> Ortho via the config path (exercises the wiring). */
-    glr_config_set(GLR_CONFIG_PROJECTION, 1);
+    glr_config_set(GLR_CONFIG_PROJECTION, PROJ_ORTHO);
     ASSERT_INT("projection config reads back ortho",
-               glr_config_get(GLR_CONFIG_PROJECTION), 1);
+               glr_config_get(GLR_CONFIG_PROJECTION), PROJ_ORTHO);
     glr_ctrl_tick();
     glr_ctrl_display_frame();
     ASSERT_TRUE("projection starts easing toward ortho (free camera)",
@@ -1315,7 +1315,7 @@ static void test_projection_toggle_free_camera(void) {
     ASSERT_FLOAT("camera ry still at orbit angle in free ortho", cam.ry, 22.0f);
 
     /* Toggle back to Perspective -> eases to 1, camera never moved. */
-    glr_config_set(GLR_CONFIG_PROJECTION, 0);
+    glr_config_set(GLR_CONFIG_PROJECTION, PROJ_PERSPECTIVE);
     for (int i = 0; i < projection_settle_ticks; i++)
         glr_ctrl_tick();
     glr_ctrl_display_frame();
@@ -1326,14 +1326,14 @@ static void test_projection_toggle_free_camera(void) {
     ASSERT_FLOAT("camera ry never moved across the toggle", cam.ry, 22.0f);
 
     /* reset_all clears the toggle blend back to perspective. */
-    glr_config_set(GLR_CONFIG_PROJECTION, 1);
+    glr_config_set(GLR_CONFIG_PROJECTION, PROJ_ORTHO);
     for (int i = 0; i < projection_settle_ticks; i++)
         glr_ctrl_tick();
     glr_ctrl_reset_all();
     prepare_display_fixture();
     glr_ctrl_display_frame();
     ASSERT_INT("reset clears projection config to perspective",
-               glr_state_presentation().projection_ortho, 0);
+               glr_state_presentation().projection_mode, PROJ_PERSPECTIVE);
     ASSERT_FLOAT("reset clears projection blend to perspective",
                  g_last_scene_config.projection_mix, 1.0f);
 }

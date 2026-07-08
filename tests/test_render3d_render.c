@@ -196,7 +196,7 @@ static void test_scene_renderer_state_init_defaults(void) {
 
     Render3dProjectionDesc p;
     render3d_get_active_projection(&state, &p);
-    ASSERT_INT("init: ortho off", p.ortho, 0);
+    ASSERT_INT("init: ortho off", p.projection, PROJ_PERSPECTIVE);
     ASSERT_FLOAT("init: fovy_deg = 45", (float)p.fovy_deg, 45.0f);
     ASSERT_TRUE("init: near_z > 0", p.near_z > 0.0);
     ASSERT_TRUE("init: far_z > near_z", p.far_z > p.near_z);
@@ -204,7 +204,7 @@ static void test_scene_renderer_state_init_defaults(void) {
     /* Defensive NULL state still hands back the same defaults. */
     Render3dProjectionDesc q;
     render3d_get_active_projection(NULL, &q);
-    ASSERT_INT("NULL state defaults: ortho", q.ortho, p.ortho);
+    ASSERT_INT("NULL state defaults: ortho", q.projection, p.projection);
     ASSERT_FLOAT("NULL state defaults: fovy", (float)q.fovy_deg, (float)p.fovy_deg);
 }
 
@@ -236,8 +236,8 @@ static void test_scene_renderer_state_independence(void) {
     render3d_get_active_projection(&state_a, &pa);
     render3d_get_active_projection(&state_b, &pb);
 
-    ASSERT_INT("state A keeps perspective", pa.ortho, 0);
-    ASSERT_INT("state B keeps ortho",       pb.ortho, 1);
+    ASSERT_INT("state A keeps perspective", pa.projection, PROJ_PERSPECTIVE);
+    ASSERT_INT("state B keeps ortho",       pb.projection, PROJ_ORTHO);
 #else
     ASSERT_TRUE("state independence requires GL stubs", 1);
 #endif
@@ -269,7 +269,7 @@ static void test_scene_renderer_state_aa_invariant(void) {
     render3d_get_active_projection(&s1, &p1);
     render3d_get_active_projection(&s16, &p16);
 
-    ASSERT_INT("ortho field identical", p1.ortho, p16.ortho);
+    ASSERT_INT("ortho field identical", p1.projection, p16.projection);
     ASSERT_FLOAT("near_z identical", (float)p1.near_z, (float)p16.near_z);
     ASSERT_FLOAT("far_z identical",  (float)p1.far_z,  (float)p16.far_z);
     ASSERT_FLOAT("ortho_top identical",
@@ -766,7 +766,7 @@ static void test_wireframe_hidden_line_passes(void) {
     cfg.use_accum = 0;
     cfg.accum_effect = RENDER3D_ACCUM_EFFECT_OFF;
     cfg.accum_passes = 1;
-    cfg.wireframe = RENDER3D_WIREFRAME_HIDDEN;
+    cfg.wireframe = WIREFRAME_HIDDEN;
 
     Render3dState state;
     render3d_state_init(&state);
@@ -868,7 +868,7 @@ static void test_plain_wireframe_uses_main_fill(void) {
     cfg.use_accum = 0;
     cfg.accum_effect = RENDER3D_ACCUM_EFFECT_OFF;
     cfg.accum_passes = 1;
-    cfg.wireframe = RENDER3D_WIREFRAME_PLAIN;
+    cfg.wireframe = WIREFRAME_PLAIN;
 
     Render3dState state;
     render3d_state_init(&state);

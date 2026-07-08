@@ -18,6 +18,7 @@
 #define RENDER3D_RENDER_H
 
 #include "render_types.h"
+#include "projection_mode.h"
 
 /* Accumulation-buffer AA supports 1, 2, 4, 8, and 16-sample passes. The
  * controller cycles across that fixed ladder, and the scene renderer keeps a
@@ -56,7 +57,7 @@ void render3d_init_gl(void);
  * matrix. ortho_top is the aspect-independent half-height (callers
  * multiply by their own aspect). */
 typedef struct Render3dProjectionDesc {
-    int    ortho;        /* 0 = perspective, 1 = orthographic */
+    Render3dProjectionMode projection; /* perspective / orthographic */
     double fovy_deg;     /* perspective vertical field of view */
     double near_z;       /* perspective near plane (> 0) */
     double far_z;        /* perspective far plane */

@@ -509,7 +509,7 @@ explaining why the extra background is useful.
 |------|----------------|
 | [`gl_repl.c`](gl_repl.c) | GLUT callback registration, `main()`, window setup, buffer swap; forwards directly to `glr_ctrl_*` |
 | [`gl_repl.h`](gl_repl.h) | Small shared header: standard includes and `M_PI`; types/defaults live in dedicated headers |
-| [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c) | App-frame controller: `glr_ctrl_display_frame`, `glr_ctrl_reshape`, `glr_ctrl_init_gl`; builds [`Render3dRenderConfig`](src/render3d/render_types.h#L131), calls scene/UI renderers |
+| [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c) | App-frame controller: `glr_ctrl_display_frame`, `glr_ctrl_reshape`, `glr_ctrl_init_gl`; builds [`Render3dRenderConfig`](src/render3d/render_types.h#L136), calls scene/UI renderers |
 | [`src/app/glr_ctrl.h`](src/app/glr_ctrl.h) | Controller public surface: display, reshape, init-GL entrypoints |
 | [`src/app/glr_config.c`](src/app/glr_config.c) | Config key implementation and descriptor table helpers. The tail of `glr_config_set` notifies the tutorial runner (`tutorial_notify_state_changed`) so REQUIRE steps observe every write path — direct setters (e.g. accum-passes Ctrl+=/-), `glr_cfg_cycle_row`'s early-return branches, and the bridge's `apply` during `@cfg` / example / workspace load |
 | [`src/app/glr_config.h`](src/app/glr_config.h) | `ReplConfigKey` / [`ReplConfigItem`](src/repl/cfg_baseline.h#L29) descriptor API for keyed config access |
@@ -656,7 +656,7 @@ explaining why the extra background is useful.
 | [`src/support/gpuprof.h`](src/support/gpuprof.h) | GPU profiler API (`gpu_prof_init/frame_begin/begin/end`, `gpu_prof_section_avg_us/_has_data`, `gpu_prof_uses_timestamps`) + the injected [`GpuProfGlFns`](src/support/gpuprof.h#L57) table (`query_counter` optional → timestamp mode) |
 | [`src/app/glr_prof.c`](src/app/glr_prof.c) | gl-repl's [`prof_section_info()`](src/support/cpuprof.h#L48) table: per-section `{ label, depth, is_total }` (bare label + explicit nesting depth — the panel derives indentation from depth). Also the GPU-bracketing policy: `k_gpu_sections[]` (which sections get timer queries — GL-emitting ones only; per-fade-batch subsections excluded for query-budget reasons), the cpuprof hook pair that routes them into gpuprof, and the per-frame capture mode (Off/Plot → no queries, Sections → depth-0 rows only, Details → full subset; set by the controller at frame top, since query boundaries cost real GPU time on GL-on-Metal). The demos implement their own `prof_section_info` |
 | [`src/app/glr_prof.h`](src/app/glr_prof.h) | GPU-section policy API (`glr_prof_section_is_gpu`, `glr_prof_install_gpu_section_hooks`, `glr_prof_set_gpu_capture_mode`) |
-| [`src/render3d/render_types.h`](src/render3d/render_types.h) | Shared [`Render3dRgba`](src/render3d/render_types.h#L59) / [`Render3dRenderConfig`](src/render3d/render_types.h#L131) / [`Render3dFrameRenderContext`](src/render3d/render_types.h#L301) types for scene helpers |
+| [`src/render3d/render_types.h`](src/render3d/render_types.h) | Shared [`Render3dRgba`](src/render3d/render_types.h#L59) / [`Render3dRenderConfig`](src/render3d/render_types.h#L136) / [`Render3dFrameRenderContext`](src/render3d/render_types.h#L306) types for scene helpers |
 | [`src/render3d/guides/guides_shared.h`](src/render3d/guides/guides_shared.h) | Shared guide snapshot and planning types for REPL-aware 3D overlay passes |
 | [`src/render3d/guides/geometry_guides.c`](src/render3d/guides/geometry_guides.c) | Vertex/primitive guide rendering (input context at cursor) from [`Render3dGuideSnapshot`](src/render3d/guides/guides_shared.h#L16) |
 | [`src/render3d/guides/geometry_guides.h`](src/render3d/guides/geometry_guides.h) | Geometry guides render entrypoint |
@@ -789,7 +789,7 @@ explaining why the extra background is useful.
 is no shim layer.
 1. Rebuild autonormals and flat program if dirty; save predef var values;
    prepare replay frame if active; update export/camera strings
-2. Build [`Render3dRenderConfig`](src/render3d/render_types.h#L131) from REPL state. Load the camera via
+2. Build [`Render3dRenderConfig`](src/render3d/render_types.h#L136) from REPL state. Load the camera via
    `glr_camera_load_modelview(&pose)` (from [`src/app/glr_camera.h`](src/app/glr_camera.h)),
    then call `render3d_draw_scene(&g_scene_renderer, &cfg)` once. The
    accumulation loop (when `accum_effect` is AA or Blur with
@@ -821,7 +821,7 @@ The accumulation buffer drives several effects, selected by the **Accum
 effect** config (`GLR_CONFIG_ACCUM_EFFECT`: Off / AA / Blur / Blur Cam, F2)
 over **Accum passes** samples (`GLR_CONFIG_ACCUM_PASSES`: 1/2/4/8/12/16,
 Ctrl+=/Ctrl+−). Backing fields are `GlrRenderState.accum_effect/accum_passes`
-→ [`Render3dRenderConfig`](src/render3d/render_types.h#L131). AA (the historic default, 2 passes) jitters the frustum
+→ [`Render3dRenderConfig`](src/render3d/render_types.h#L136). AA (the historic default, 2 passes) jitters the frustum
 per sample. **Blur** and **Blur Cam** are opt-in (expensive: they re-render the
 scene per sample with no temporal reuse). The **effect picks the blur axis** —
 camera motion never overrides it: **Blur** is per-object (animation-time) blur
@@ -832,9 +832,9 @@ doesn't use `t`; Blur Cam with a still camera). **Blur and AA jitter are never
 combined** — a blur sample always renders with jitter 0, so a frame is exactly
 `accum_passes` renders either way (no doubling).
 
-The accum loop lives in [`render3d_draw_scene()`](src/render3d/render.h#L135) ([`src/render3d/render.c`](src/render3d/render.c)); a
+The accum loop lives in [`render3d_draw_scene()`](src/render3d/render.h#L136) ([`src/render3d/render.c`](src/render3d/render.c)); a
 sample is a "blur sample" when `RENDER3D_ACCUM_EFFECT_IS_BLUR(accum_effect)` and a
-hook is installed. For blur the scene makes a per-sample [`Render3dRenderConfig`](src/render3d/render_types.h#L131)
+hook is installed. For blur the scene makes a per-sample [`Render3dRenderConfig`](src/render3d/render_types.h#L136)
 copy and calls `config->setup_subframe_fn(ud, pass_idx, pass_count, &pass_cfg)`
 — a hook the **controller** installs (`glr_ctrl_resolve_blur_subframe` →
 `glr_ctrl_setup_subframe` in [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c)), so the scene stays
@@ -1063,19 +1063,19 @@ these scene-presentation slugs:
 `view_mode`, `projection`, `camera_rotate`, `variable_panel`.
 
 `projection` is the perspective/ortho projection toggle
-(`GLR_CONFIG_PROJECTION`), independent of `view_mode`: `0` = perspective,
-`1` = orthographic. Unlike `view_mode = 1` (which flattens and locks the
-camera to a top-down 2D view), `projection = 1` only swaps the projection
+(`GLR_CONFIG_PROJECTION`), independent of `view_mode`: `PROJ_PERSPECTIVE` = perspective,
+`PROJ_ORTHO` = orthographic. Unlike `view_mode = RENDER3D_VIEW_2D` (which flattens and locks the
+camera to a top-down 2D view), `projection = PROJ_ORTHO` only swaps the projection
 matrix, so the scene renders orthographically from the live free-camera
 orbit angle. The controller eases a separate projection blend for it and
 combines the two with `min()` (ortho wins). Reset per example load like
 `view_mode`.
 
 `view_mode` is the 2D/3D projection toggle (slug for the "View mode"
-config row → `GLR_CONFIG_ORTHO_MODE`): `0` = 3D perspective, `1` = 2D
-ortho. It is reset per example load like the other scene-presentation
-toggles (not sticky), so a 3D example loaded after a 2D one snaps back
-to 3D unless it declares otherwise.
+config row → `GLR_CONFIG_ORTHO_MODE`): `RENDER3D_VIEW_3D` = 3D perspective,
+`RENDER3D_VIEW_2D` = 2D ortho. It is reset per example load like the other
+scene-presentation toggles (not sticky), so a 3D example loaded after a 2D
+one snaps back to 3D unless it declares otherwise.
 
 Non-leading `@cfg` lines are not metadata — they stay as ordinary
 comments.

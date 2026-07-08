@@ -51,6 +51,7 @@
 #include "editor/undo.h"
 #include "render3d/themes.h"
 #include "render3d/view_mode.h"         /* RENDER3D_VIEW_LIST — derives the view_mode cfg symbols */
+#include "render3d/projection_mode.h"   /* RENDER3D_PROJ_LIST — derives the projection cfg symbols */
 #include "render3d/lights.h"           /* render3d_lights_apply_theme, render3d_light_theme_names */
 #include "subsystems/edit_overlays/edit_overlays.h"
 
@@ -371,7 +372,7 @@ const GlrConfigItem g_cfg_items[] = {
     { .label = "Accum passes", .key = GLR_CONFIG_ACCUM_PASSES,
       .state_count = 6, .state_names = accum_passes_names },
     { .label = "Wireframe", .key = GLR_CONFIG_WIREFRAME,
-      .state_count = RENDER3D_WIREFRAME_COUNT, .state_names = wireframe_mode_names,
+      .state_count = WIREFRAME_COUNT, .state_names = wireframe_mode_names,
       .key_code = KM_KEY(GLR_WIREFRAME), .modifiers = KM_MODS(GLR_WIREFRAME) },
     { .label = "Point attenuation", .key = GLR_CONFIG_POINT_ATTENUATION, .state_count = 2 },
     { .label = "---", .section_header = 1 },
@@ -433,7 +434,7 @@ const GlrConfigItem g_cfg_items[] = {
      * from "View mode", which flattens & locks the camera to a top-down 2D
      * view. Keybound to Ctrl+Shift+E. */
     { .label = "Projection", .key = GLR_CONFIG_PROJECTION,
-      .state_count = 2, .state_names = projection_names,
+      .state_count = PROJ_COUNT, .state_names = projection_names,
       .key_code = KM_KEY(GLR_PROJECTION), .modifiers = KM_MODS(GLR_PROJECTION) },
     { .label = "Camera rotate", .key = GLR_CONFIG_CAMERA_ROTATE, .state_count = 2,
       .key_code = KM_KEY(GLR_CAMERA_ROTATE), .modifiers = KM_MODS(GLR_CAMERA_ROTATE) },
@@ -640,6 +641,16 @@ static const char *cfg_view_mode_symbols[RENDER3D_VIEW_COUNT] = {
     RENDER3D_VIEW_LIST(SCENE_VIEW_SYMBOL_ENTRY)
 #undef SCENE_VIEW_SYMBOL_ENTRY
 };
+static const char *cfg_projection_symbols[PROJ_COUNT] = {
+#define SCENE_PROJ_SYMBOL_ENTRY(name) [PROJ_##name] = "PROJ_" #name,
+    PROJ_LIST(SCENE_PROJ_SYMBOL_ENTRY)
+#undef SCENE_PROJ_SYMBOL_ENTRY
+};
+static const char *cfg_wireframe_symbols[WIREFRAME_COUNT] = {
+#define SCENE_WIREFRAME_SYMBOL_ENTRY(name) [WIREFRAME_##name] = "WIREFRAME_" #name,
+    WIREFRAME_LIST(SCENE_WIREFRAME_SYMBOL_ENTRY)
+#undef SCENE_WIREFRAME_SYMBOL_ENTRY
+};
 static const char *cfg_backdrop_mode_symbols[RENDER3D_BACKDROP_COUNT] = {
 #define SCENE_BACKDROP_SYMBOL_ENTRY(name, str) [RENDER3D_BACKDROP_##name] = "RENDER3D_BACKDROP_" #name,
     RENDER3D_BACKDROP_LIST(SCENE_BACKDROP_SYMBOL_ENTRY)
@@ -694,6 +705,14 @@ static const char *const *cfg_symbol_table_for_slug(const char *slug,
     if (strcmp(slug, "view_mode") == 0) {
         *count = RENDER3D_VIEW_COUNT;
         return cfg_view_mode_symbols;
+    }
+    if (strcmp(slug, "projection") == 0) {
+        *count = PROJ_COUNT;
+        return cfg_projection_symbols;
+    }
+    if (strcmp(slug, "wireframe") == 0) {
+        *count = WIREFRAME_COUNT;
+        return cfg_wireframe_symbols;
     }
     if (strcmp(slug, "backdrop") == 0) {
         *count = RENDER3D_BACKDROP_COUNT;

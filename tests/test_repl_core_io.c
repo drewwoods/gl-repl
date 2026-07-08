@@ -1174,7 +1174,7 @@ int main(void) {
          * value that differs from BOTH scenes' saved values for
          * wireframe (e.g. 0 here — only matches scene B).  Pre-fix,
          * scene A would also be exported with wireframe=0. */
-        glr_state_presentation_mut()->wireframe = RENDER3D_WIREFRAME_OFF;
+        glr_state_presentation_mut()->wireframe = WIREFRAME_OFF;
 
         int saved = repl_save_workspace(workspace_out, NULL);
         ASSERT_TRUE("p1 save_workspace wrote 2 files", saved == 2);
@@ -1189,17 +1189,17 @@ int main(void) {
         ASSERT_TRUE("p1 saved scene_a opens", na > 0);
         ASSERT_TRUE("p1 saved scene_b opens", nb > 0);
         ASSERT_TRUE("p1 scene A keeps wireframe=1 across workspace save",
-                    strstr(buf_a, "/* @cfg wireframe = 1 */") != NULL);
+                    strstr(buf_a, "/* @cfg wireframe = WIREFRAME_PLAIN */") != NULL);
         ASSERT_TRUE("p1 scene B keeps wireframe=0 across workspace save",
-                    strstr(buf_b, "/* @cfg wireframe = 0 */") != NULL);
+                    strstr(buf_b, "/* @cfg wireframe = WIREFRAME_OFF */") != NULL);
         ASSERT_TRUE("p1 scene A export does NOT leak the live wireframe=0",
-                    strstr(buf_a, "/* @cfg wireframe = 0 */") == NULL);
+                    strstr(buf_a, "/* @cfg wireframe = WIREFRAME_OFF */") == NULL);
 
         /* The post-save live cfg should also match what was set before
          * the save (the loop's restore_live_from_stash now includes
          * cfg). */
         ASSERT_TRUE("p1 live wireframe survives the save",
-                    glr_state_presentation().wireframe == 0);
+                    glr_state_presentation().wireframe == WIREFRAME_OFF);
     }
 
     /* --- Regression: workspace save preserves per-scene camera ---
@@ -2060,20 +2060,20 @@ int main(void) {
          * ImportState until the load succeeds, so the partial read must not
          * mutate live config either. */
         glr_ctrl_reset_all(); declare_test_vars();
-        glr_state_presentation_mut()->wireframe = 0;
+        glr_state_presentation_mut()->wireframe = WIREFRAME_OFF;
 
         int rc = repl_export_load_from_file(leak_path, NULL);
         ASSERT_INT("leak fixture import fails (truncated line)", rc, 0);
         ASSERT_INT("failed load did not apply @cfg before success",
-                   glr_state_presentation().wireframe, 0);
+                   glr_state_presentation().wireframe, WIREFRAME_OFF);
 
         /* Reset live wireframe back to 0 so a leaked accumulator
          * re-apply through repl_export_apply_pending_cfg becomes a
          * visible mutation we can assert against. */
-        glr_state_presentation_mut()->wireframe = 0;
+        glr_state_presentation_mut()->wireframe = WIREFRAME_OFF;
         repl_export_apply_pending_cfg();
         ASSERT_INT("failed load did not leak @cfg into pending accumulator",
-                   glr_state_presentation().wireframe, 0);
+                   glr_state_presentation().wireframe, WIREFRAME_OFF);
 
         remove(leak_path);
     }

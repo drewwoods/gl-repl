@@ -78,7 +78,7 @@ void render3d_state_init(Render3dState *state) {
     /* Default mirrors the steady 3D frustum so a getter call before
      * the first frame is still sane. */
     state->active_projection = (Render3dProjectionDesc){
-        .ortho      = 0,
+        .projection = PROJ_PERSPECTIVE,
         .fovy_deg   = RENDER3D_DEFAULT_FOVY_DEG,
         .near_z     = RENDER3D_DEFAULT_NEAR_Z,
         .far_z      = RENDER3D_DEFAULT_FAR_Z,
@@ -356,7 +356,7 @@ static void render3d_compute_active_projection(Render3dState *state,
 
     double ortho_ref = render3d_effective_ortho_ref(state, config);
     state->active_projection = (Render3dProjectionDesc){
-        .ortho      = (mix < 0.5f) ? 1 : 0,
+        .projection = (mix < 0.5f) ? PROJ_ORTHO : PROJ_PERSPECTIVE,
         .fovy_deg   = RENDER3D_DEFAULT_FOVY_DEG,
         .near_z     = near_z,
         .far_z      = far_z,
@@ -478,7 +478,7 @@ static void render3d_apply_quality_config(const Render3dRenderConfig *config) {
 }
 
 static void render3d_apply_wireframe_config(const Render3dRenderConfig *config) {
-    if (config->wireframe == RENDER3D_WIREFRAME_PLAIN)
+    if (config->wireframe == WIREFRAME_PLAIN)
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 }
 
@@ -740,7 +740,7 @@ static void render3d_pass_winding(const Render3dRenderConfig *config) {
 
 static void render3d_pass_fill(const Render3dRenderConfig *config) {
     prof_begin(PROF_RENDER3D_FILL);
-    if (config->wireframe == RENDER3D_WIREFRAME_HIDDEN)
+    if (config->wireframe == WIREFRAME_HIDDEN)
         render3d_pass_hidden_line_wireframe(config);
     else if (config->winding_view)
         render3d_pass_winding(config);
@@ -751,7 +751,7 @@ static void render3d_pass_fill(const Render3dRenderConfig *config) {
     if (config->post_fill_fn)
         config->post_fill_fn(config->post_fill_user_data);
 
-    if (config->wireframe == RENDER3D_WIREFRAME_PLAIN)
+    if (config->wireframe == WIREFRAME_PLAIN)
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
 
