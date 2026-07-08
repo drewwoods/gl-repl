@@ -141,6 +141,8 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
             var glrOrigAsciiKey = GLUT.getASCIIKey;
             GLUT.getASCIIKey = function(event) {
                 var kc = event['keyCode'];
+                var key = event['key'] || "";
+                var code = event['code'] || "";
                 if (kc === 8) return 8;
                 /* Emscripten's stock GLUT returns raw digit keyCodes for
                  * Shift+0..9 (`1` instead of `!`, etc.; its source has a TODO
@@ -150,6 +152,16 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
                     !event['altKey'] && !event['metaKey'] &&
                     kc >= 48 && kc <= 57) {
                     return ")!@#$%^&*(".charCodeAt(kc - 48);
+                }
+                /* Ctrl+slash: the editor's comment toggle is native GLUT's
+                 * ASCII '/' plus CTRL modifier, not a KEY_CTRL_* control byte.
+                 * Stock getASCIIKey drops it for the same "any modifier"
+                 * reason as Ctrl+letters. */
+                if (event['ctrlKey'] && !event['altKey'] &&
+                    !event['metaKey'] &&
+                    (key === "/" || (!event['shiftKey'] &&
+                                      (code === "Slash" || kc === 191)))) {
+                    return 47;
                 }
                 /* Ctrl+letter: stock getASCIIKey returns null on ANY modifier,
                  * so every Ctrl shortcut is dropped. freeglut delivers the
