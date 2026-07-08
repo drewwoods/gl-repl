@@ -40,6 +40,13 @@ void  glr_ctrl_tick_view_transition(float dt);
  * scene-config builder. */
 float glr_ctrl_view_projection_mix(void);
 
+/* Smoothed projection-toggle blend in [0,1] (0 = ortho, 1 = perspective),
+ * driven by GLR_CONFIG_PROJECTION independently of the 2D/3D view mode (free
+ * camera, no flatten). The scene-config builder combines it with
+ * glr_ctrl_view_projection_mix() via min() — the scene is orthographic if
+ * EITHER blend is below 1. */
+float glr_ctrl_projection_toggle_mix(void);
+
 /* Reset the transition state machine to the perspective default (reset_all). */
 void  glr_ctrl_view_reset(void);
 

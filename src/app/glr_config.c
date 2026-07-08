@@ -223,6 +223,7 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_POLY_HIGHLIGHT:      return &glr_state_presentation_mut()->highlight_current_poly;
     case GLR_CONFIG_BACKDROP:            return &glr_state_presentation_mut()->backdrop_mode;
     case GLR_CONFIG_ORTHO_MODE:          return NULL; /* enum: see glr_config_set */
+    case GLR_CONFIG_PROJECTION:          return &glr_state_presentation_mut()->projection_ortho;
     case GLR_CONFIG_CAMERA_ROTATE:       return &glr_camera_mut()->auto_rotate;
     case GLR_CONFIG_FOCUS_ORIGIN:        return NULL; /* action row: no backing state */
     case GLR_CONFIG_RESET_CAMERA:        return NULL; /* action row: no backing state */
@@ -281,6 +282,7 @@ int glr_config_get(GlrConfigKey key) {
     case GLR_CONFIG_POLY_HIGHLIGHT:      return glr_state_presentation().highlight_current_poly;
     case GLR_CONFIG_BACKDROP:            return glr_state_presentation().backdrop_mode;
     case GLR_CONFIG_ORTHO_MODE:          return glr_state_presentation().ortho_mode;
+    case GLR_CONFIG_PROJECTION:          return glr_state_presentation().projection_ortho;
     case GLR_CONFIG_CAMERA_ROTATE:       return glr_camera().auto_rotate;
     case GLR_CONFIG_FOCUS_ORIGIN:        return 0;
     case GLR_CONFIG_RESET_CAMERA:        return 0;

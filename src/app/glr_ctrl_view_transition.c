@@ -14,6 +14,12 @@
 #include "render3d/view_mode.h"          /* GLR_VIEW_PROJECTION_TRANSITION_SECS */
 
 static float g_projection_mix = 1.0f; /* 0 = ortho, 1 = perspective */
+/* Independent projection-toggle blend (GLR_CONFIG_PROJECTION), eased on the
+ * same schedule as g_projection_mix but driven purely by the Projection
+ * config — no camera flatten, no control-mode change. The controller combines
+ * this with the view-mode blend via min() (ortho wins). Kept separate so the
+ * view-mode 2D/3D state machine below stays exactly as it was. */
+static float g_projection_toggle_mix = 1.0f; /* 0 = ortho, 1 = perspective */
 typedef enum {
     GLR_VIEW_XN_IDLE = 0,
     GLR_VIEW_XN_CAMERA_TO_2D,
@@ -131,24 +137,31 @@ void glr_ctrl_view_record_external_3d_pose(float rx, float ry, float tz) {
     g_saved_3d_camera.tz = tz;
 }
 
-static int glr_ctrl_step_projection_toward(float target, float dt) {
+/* Step *mix toward target at the shared projection-transition rate. Returns
+ * 1 when it has reached (or already sat at) the target, 0 while still easing.
+ * Shared by the view-mode blend and the independent projection-toggle blend. */
+static int glr_ctrl_step_mix_toward(float *mix, float target, float dt) {
     if (GLR_VIEW_PROJECTION_TRANSITION_SECS <= 0.0f) {
-        g_projection_mix = target;
+        *mix = target;
         return 1;
     }
 
     float step = dt / GLR_VIEW_PROJECTION_TRANSITION_SECS;
-    if (g_projection_mix != target) {
-        float sign = (g_projection_mix < target) ? 1.0f : -1.0f;
-        g_projection_mix += sign * step;
-        if ((sign > 0.0f && g_projection_mix >= target) ||
-            (sign < 0.0f && g_projection_mix <= target)) {
-            g_projection_mix = target;
+    if (*mix != target) {
+        float sign = (*mix < target) ? 1.0f : -1.0f;
+        *mix += sign * step;
+        if ((sign > 0.0f && *mix >= target) ||
+            (sign < 0.0f && *mix <= target)) {
+            *mix = target;
             return 1;
         }
         return 0;
     }
     return 1;
+}
+
+static int glr_ctrl_step_projection_toward(float target, float dt) {
+    return glr_ctrl_step_mix_toward(&g_projection_mix, target, dt);
 }
 
 void glr_ctrl_tick_view_transition(float dt) {
@@ -187,6 +200,13 @@ void glr_ctrl_tick_view_transition(float dt) {
             break;
     }
 
+    /* Independent of the phase machine above: ease the projection-toggle
+     * blend toward the current Projection config. No camera work — the
+     * camera stays free, so this renders ortho from the live orbit angle. */
+    glr_ctrl_step_mix_toward(&g_projection_toggle_mix,
+                             glr_state_presentation().projection_ortho ? 0.0f : 1.0f,
+                             dt);
+
     glr_ctrl_sync_camera_control_mode();
 }
 
@@ -194,8 +214,13 @@ float glr_ctrl_view_projection_mix(void) {
     return smoothstep01(g_projection_mix);
 }
 
+float glr_ctrl_projection_toggle_mix(void) {
+    return smoothstep01(g_projection_toggle_mix);
+}
+
 void glr_ctrl_view_reset(void) {
     g_projection_mix         = 1.0f;
+    g_projection_toggle_mix  = 1.0f;
     g_view_mode_target_ortho = 0;
     g_view_xn_phase          = GLR_VIEW_XN_IDLE;
     g_saved_3d_camera_valid  = 0;

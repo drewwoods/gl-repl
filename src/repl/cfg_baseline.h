@@ -24,7 +24,7 @@
  * silently drops the overflow and the last @cfg lines stop round-tripping
  * (caught by test_workspace_header_budget_worst_case). Bump this — and
  * MAX_WORKSPACE_HEADER_LINES in export_state.h, which is sized from it. */
-#define REPL_CFG_MAX_ITEMS   40
+#define REPL_CFG_MAX_ITEMS   44
 
 typedef struct {
     char key[REPL_CFG_KEY_MAX];      /* opaque slug */

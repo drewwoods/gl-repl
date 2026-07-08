@@ -1060,7 +1060,16 @@ these scene-presentation slugs:
 `wireframe`, `grid`, `grid_major`, `grid_extent`, `grid_brightness`, `axes`,
 `vertex_labels`, `overlay_scope`, `normal_vectors`, `vertex_outlines`, `vertex_points`,
 `xform_guides`, `light_indicators`, `light_theme`, `backdrop`,
-`view_mode`, `camera_rotate`, `variable_panel`.
+`view_mode`, `projection`, `camera_rotate`, `variable_panel`.
+
+`projection` is the perspective/ortho projection toggle
+(`GLR_CONFIG_PROJECTION`), independent of `view_mode`: `0` = perspective,
+`1` = orthographic. Unlike `view_mode = 1` (which flattens and locks the
+camera to a top-down 2D view), `projection = 1` only swaps the projection
+matrix, so the scene renders orthographically from the live free-camera
+orbit angle. The controller eases a separate projection blend for it and
+combines the two with `min()` (ortho wins). Reset per example load like
+`view_mode`.
 
 `view_mode` is the 2D/3D projection toggle (slug for the "View mode"
 config row → `GLR_CONFIG_ORTHO_MODE`): `0` = 3D perspective, `1` = 2D

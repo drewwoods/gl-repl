@@ -49,6 +49,7 @@ typedef enum GlrConfigKey {
     GLR_CONFIG_POLY_HIGHLIGHT,
     GLR_CONFIG_BACKDROP,
     GLR_CONFIG_ORTHO_MODE,
+    GLR_CONFIG_PROJECTION,     /* perspective/ortho projection, free camera (independent of ORTHO_MODE) */
     GLR_CONFIG_CAMERA_ROTATE,
     GLR_CONFIG_FOCUS_ORIGIN,   /* action row: no state; eases target to origin */
     GLR_CONFIG_RESET_CAMERA,   /* action row: no state; eases camera to default */

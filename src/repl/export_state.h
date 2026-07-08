@@ -14,8 +14,8 @@
  *     1   @scene-name
  *     1   @workspace-dir
  *    10   @func  (REPL_FUNC_SLOT_COUNT)
- *    40   @cfg   (REPL_CFG_MAX_ITEMS — the cfg bag's own cap)
- *   = 53; rounded up for headroom. A STATIC_ASSERT in src/repl/export.c
+ *    44   @cfg   (REPL_CFG_MAX_ITEMS — the cfg bag's own cap)
+ *   = 57; rounded up for headroom. A STATIC_ASSERT in src/repl/export.c
  * pins this against the real constants, and emit_cfgs() warns on stderr
  * if it ever still has to drop a @cfg line. */
 #define MAX_WORKSPACE_HEADER_LINES 80
