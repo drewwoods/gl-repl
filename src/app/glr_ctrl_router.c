@@ -158,8 +158,8 @@ int glr_ctrl_router_handle_quit_key(unsigned char key) {
     return 0;
 }
 
-/* SET-step ack: while a tutorial SET (showcase) step is waiting, Enter /
- * Tab / Space advances. Scoped strictly to SET steps inside
+/* Showcase-step ack: while a tutorial SET or NOTE step is waiting,
+ * Enter / Tab / Space advances. Scoped strictly to those kinds inside
  * tutorial_handle_ack_key so REQUIRE / COMMAND steps never have their
  * keys swallowed here. Runs AFTER the existing controller routes (so
  * Ctrl-keys, replay, cfg shortcuts, save, quit keep priority) and

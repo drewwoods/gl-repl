@@ -60,13 +60,15 @@ typedef struct {
      * precheck immediately after the matcher passes; consumed by the
      * success or rejection paths. */
     TutorialPendingCommit pending;
-    /* Per-step source line of each step's INSTRUCTION COMMENT (not
-     * the committed command), used to resolve target_label at the
-     * moment a later step starts. Anchoring on the instruction
-     * comment lets a label-targeted step splice ABOVE the original
+    /* Per-step anchor row used to resolve target_label at the moment
+     * a later step starts. For steps with an instruction comment this
+     * is the COMMENT's row (not the committed command): anchoring
+     * there lets a label-targeted step splice ABOVE the original
      * (instruction, command) pair so the comment stays adjacent to
-     * the command it describes. -1 until the step's instruction
-     * has been emitted. Shifted alongside locked_lines and
+     * the command it describes. For comment-less COMMAND steps it is
+     * the COMMITTED COMMAND's row, recorded after the commit lands
+     * (tutorial_note_expected_commit_applied) — the step's only row.
+     * -1 until recorded. Shifted alongside locked_lines and
      * fade_line_idx by tutorial_shift_tracked_lines_from. Sized to
      * TUTORIAL_MAX_STEPS (one slot per catalog step). */
     int                   instruction_line_for_step[TUTORIAL_MAX_STEPS];

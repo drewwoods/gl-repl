@@ -16,6 +16,21 @@
     { (label), (c), (e), TUTORIAL_STEP_APPEND, NULL, \
       TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL, NULL, 0.0f }
 
+/* Comment-less append COMMAND step: commits `e` with no locked
+ * instruction row above it — the autocomplete ghost and status hint
+ * still teach the command. Use for runs of related commands where a
+ * narration comment per line would just be noise. */
+#define STEP_CMD(label, e) \
+    { (label), NULL, (e), TUTORIAL_STEP_APPEND, NULL, \
+      TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL, NULL, 0.0f }
+
+/* Comment-only step: reveal the instruction comment, wait for an ack
+ * key (Enter/Tab/Space), advance. SET's showcase flow without the cfg
+ * write — narration between commands with no GL call to type. */
+#define STEP_NOTE(c) \
+    { NULL, (c), NULL, TUTORIAL_STEP_APPEND, NULL, \
+      TUTORIAL_STEP_KIND_NOTE, NULL, 0, NULL, NULL, 0.0f }
+
 #define STEP_AT(label, c, e, target) \
     { (label), (c), (e), TUTORIAL_STEP_LABEL, (target), \
       TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL, NULL, 0.0f }
@@ -63,9 +78,10 @@
     { (label), (c), NULL, TUTORIAL_STEP_APPEND, NULL, \
       TUTORIAL_STEP_KIND_REQUIRE_VAR, NULL, 0, NULL, (var), (target) }
 
-/* Sentinel: comment == NULL is the only field the terminator scan reads
- * (SET/REQUIRE legitimately have NULL `expected`, so the old
- * comment&&expected check would misread the first SET as a sentinel). */
+/* Sentinel: comment AND expected both NULL (repl_tutorial_step_is_sentinel).
+ * Every real step carries at least one of the two — SET/REQUIRE/NOTE have
+ * NULL `expected` but a comment; comment-less COMMAND steps have NULL
+ * `comment` but an expected. */
 #define STEP_SENTINEL { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL, \
                         TUTORIAL_STEP_KIND_COMMAND, NULL, 0, NULL, NULL, 0.0f }
 
@@ -161,12 +177,17 @@ static const char *const g_tutorial_first_triangle_cfg[] = {
     NULL,
 };
 
-/* "Feature Tour" — exercises the new step kinds:
- *   1) Five COMMAND steps draw a triangle in 3D.
- *   2) One REQUIRE step asks the user to enable vertex outlines (using
+/* "Feature Tour" — exercises the non-COMMAND step kinds and the
+ * relaxed step shapes:
+ *   1) A NOTE step opens the tour (comment-only; ack key advances).
+ *   2) Five COMMAND steps draw a triangle in 3D. The two lower-corner
+ *      vertex steps are comment-less (STEP_CMD) — the autocomplete
+ *      ghost and status hint carry the instruction, demonstrating
+ *      that a narration comment per command is not required.
+ *   3) One REQUIRE step asks the user to enable vertex outlines (using
  *      the GLR_VERTEX_OUTLINES binding) so they see how the feature
  *      changes the rendering.
- *   3) Two SET steps showcase Radar and Aurora grid themes;
+ *   4) Two SET steps showcase Radar and Aurora grid themes;
  *      the user presses Enter/Tab/Space to advance through them.
  *
  * The entry-level `@cfg` block guarantees a known baseline (3D view,
@@ -175,18 +196,16 @@ static const char *const g_tutorial_first_triangle_cfg[] = {
  * steps use symbolic cfg values so enum reordering in src/scene/themes.h
  * does not silently retarget the showcase. */
 static const TutorialStep g_tutorial_feature_tour_steps[] = {
+    STEP_NOTE(
+        "// A quick tour of the REPL's scene features."),
     STEP_APPEND(NULL,
         "// Open a triangle batch.",
         "glBegin(GL_TRIANGLES)"),
     STEP_APPEND(NULL,
-        "// Top vertex.",
+        "// Add the three corners, starting at the top.",
         "glVertex3f(0, 0.7, 0)"),
-    STEP_APPEND(NULL,
-        "// Lower-left vertex.",
-        "glVertex3f(-0.7, -0.5, 0)"),
-    STEP_APPEND(NULL,
-        "// Lower-right vertex.",
-        "glVertex3f(0.7, -0.5, 0)"),
+    STEP_CMD(NULL, "glVertex3f(-0.7, -0.5, 0)"),
+    STEP_CMD(NULL, "glVertex3f(0.7, -0.5, 0)"),
     STEP_APPEND(NULL,
         "// Close the batch - the filled triangle appears.",
         "glEnd()"),
@@ -419,12 +438,9 @@ const TutorialStep *repl_tutorial_step_get(int idx, int step_idx) {
     if (!entry || !entry->steps || step_idx < 0)
         return NULL;
 
-    /* Sentinel keyed on `comment` alone: SET/REQUIRE steps legitimately
-     * have NULL `expected`, so the old comment&&expected check would
-     * misread them as the terminator. */
     for (int i = 0; i <= step_idx; i++) {
         const TutorialStep *step = &entry->steps[i];
-        if (!step->comment)
+        if (repl_tutorial_step_is_sentinel(step))
             return NULL;
         if (i == step_idx)
             return step;
@@ -464,7 +480,7 @@ int repl_tutorial_step_count(int idx) {
         return 0;
 
     int count = 0;
-    while (entry->steps[count].comment)
+    while (!repl_tutorial_step_is_sentinel(&entry->steps[count]))
         count++;
     return count;
 }
@@ -620,13 +636,13 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
 
     /* Walk steps, validating each as we go. Forward references are
      * rejected naturally because target_label can only match a label
-     * we have already seen. Sentinel is `comment == NULL` alone — SET
-     * and REQUIRE steps legitimately leave `expected` NULL. */
+     * we have already seen. Sentinel is comment AND expected both NULL
+     * — SET/REQUIRE/NOTE steps legitimately leave `expected` NULL, and
+     * comment-less COMMAND steps legitimately leave `comment` NULL. */
     int step_count = 0;
     for (int i = 0;; i++) {
         const TutorialStep *step = &entry->steps[i];
-        if (!step->comment) {
-            /* sentinel */
+        if (repl_tutorial_step_is_sentinel(step)) {
             break;
         }
         if (step_count >= TUTORIAL_MAX_STEPS) {
@@ -641,6 +657,8 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
          * of this slug?) is a runtime check at tutorial_start because
          * it depends on the controller-installed config bridge. */
         if (step->kind == TUTORIAL_STEP_KIND_COMMAND) {
+            /* `comment` is optional for COMMAND — NULL/empty commits the
+             * expected command with no locked instruction row. */
             if (!step->expected) {
                 if (err_size > 0)
                     snprintf(err, (size_t)err_size,
@@ -650,6 +668,23 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
             }
             if (!expected_is_single_command(step->expected, err, err_size))
                 return 0;
+        } else if (step->kind == TUTORIAL_STEP_KIND_NOTE) {
+            if (step->expected) {
+                if (err_size > 0)
+                    snprintf(err, (size_t)err_size,
+                             "tutorial '%s' step %d NOTE must leave "
+                             "expected NULL",
+                             entry->name ? entry->name : "?", i);
+                return 0;
+            }
+            if (label_is_empty(step->comment)) {
+                if (err_size > 0)
+                    snprintf(err, (size_t)err_size,
+                             "tutorial '%s' step %d NOTE needs non-empty "
+                             "comment",
+                             entry->name ? entry->name : "?", i);
+                return 0;
+            }
         } else if (step->kind == TUTORIAL_STEP_KIND_SET ||
                    step->kind == TUTORIAL_STEP_KIND_REQUIRE) {
             if (step->expected) {
@@ -667,6 +702,16 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
                     snprintf(err, (size_t)err_size,
                              "tutorial '%s' step %d %s needs non-empty "
                              "cfg_slug",
+                             entry->name ? entry->name : "?", i,
+                             step->kind == TUTORIAL_STEP_KIND_SET
+                                 ? "SET" : "REQUIRE");
+                return 0;
+            }
+            if (label_is_empty(step->comment)) {
+                if (err_size > 0)
+                    snprintf(err, (size_t)err_size,
+                             "tutorial '%s' step %d %s needs non-empty "
+                             "comment",
                              entry->name ? entry->name : "?", i,
                              step->kind == TUTORIAL_STEP_KIND_SET
                                  ? "SET" : "REQUIRE");
@@ -696,6 +741,14 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
                              "'%s' is reserved",
                              entry->name ? entry->name : "?", i,
                              step->var_name);
+                return 0;
+            }
+            if (label_is_empty(step->comment)) {
+                if (err_size > 0)
+                    snprintf(err, (size_t)err_size,
+                             "tutorial '%s' step %d REQUIRE_VAR needs "
+                             "non-empty comment",
+                             entry->name ? entry->name : "?", i);
                 return 0;
             }
         } else {

@@ -1863,16 +1863,43 @@ static int commit_command_step(int idx, int step) {
     return tutorial_state_view().step > step;
 }
 
-/* Walk the Feature Tour up through its 5 COMMAND steps so the runner lands
- * on step 5 (the REQUIRE vertex_outlines step). Returns the tutorial idx
- * on success, -1 if the catalog doesn't contain Feature Tour. */
+/* Walk the Feature Tour through its leading NOTE + COMMAND steps so the
+ * runner lands on the REQUIRE vertex_outlines step. NOTE steps are acked
+ * through the controller keyboard route; COMMAND steps (comment-full or
+ * comment-less) commit their expected text. Returns the tutorial idx on
+ * success, -1 if the catalog doesn't contain Feature Tour or a step
+ * fails to advance. */
 static int start_feature_tour_and_walk_commands(void) {
     int idx = find_tutorial_idx("Feature Tour");
     if (idx < 0) return -1;
     tutorial_start(idx);
-    for (int s = 0; s < 5; s++)
-        if (!commit_command_step(idx, s)) return -1;
-    return idx;
+    int total = repl_tutorial_step_count(idx);
+    for (int guard = 0; guard < total && tutorial_active(); guard++) {
+        int step = tutorial_state_view().step;
+        TutorialStepKind kind = repl_tutorial_step_kind(idx, step);
+        if (kind == TUTORIAL_STEP_KIND_NOTE) {
+            glr_ctrl_keyboard('\r', 0, 0);
+            if (tutorial_state_view().step <= step) return -1;
+        } else if (kind == TUTORIAL_STEP_KIND_COMMAND) {
+            if (!commit_command_step(idx, step)) return -1;
+        } else {
+            return idx;  /* landed on REQUIRE/SET — walk complete */
+        }
+    }
+    return tutorial_active() ? idx : -1;
+}
+
+/* The catalog index of Feature Tour's REQUIRE vertex_outlines step —
+ * the step start_feature_tour_and_walk_commands stops on. Derived, not
+ * hardcoded, so catalog edits (added NOTE / comment-less steps) don't
+ * invalidate the tests that assert step positions. */
+static int feature_tour_require_step(int idx) {
+    int total = repl_tutorial_step_count(idx);
+    for (int s = 0; s < total; s++) {
+        if (repl_tutorial_step_kind(idx, s) == TUTORIAL_STEP_KIND_REQUIRE)
+            return s;
+    }
+    return -1;
 }
 
 /* Regression for the cursor-park bug the user hit in interactive testing:
@@ -1884,15 +1911,17 @@ static int start_feature_tour_and_walk_commands(void) {
 static void test_set_and_require_step_park_cursor_past_comment(void) {
     reset_fixture();
     int idx = start_feature_tour_and_walk_commands();
-    ASSERT_TRUE("feature tour walks 5 commands", idx >= 0);
+    ASSERT_TRUE("feature tour walks its NOTE + COMMAND steps", idx >= 0);
     ASSERT_TRUE("tutorial still active at REQUIRE", tutorial_active());
 
+    int require_step = feature_tour_require_step(idx);
+    ASSERT_TRUE("Feature Tour has a REQUIRE step", require_step >= 0);
     TutorialRuntimeState st = tutorial_state_view();
-    ASSERT_INT("on REQUIRE step (step 5)", st.step, 5);
+    ASSERT_INT("on the REQUIRE step", st.step, require_step);
     ASSERT_INT("REQUIRE step kind",
                (int)tutorial_current_step_kind(),
                (int)TUTORIAL_STEP_KIND_REQUIRE);
-    int instr_line = st.instruction_line_for_step[5];
+    int instr_line = st.instruction_line_for_step[require_step];
     ASSERT_TRUE("REQUIRE instruction line recorded", instr_line >= 0);
     /* Cursor must NOT be on the instruction-comment row; the runner
      * parks it at instruction_line + 1 (the virtual trailing row). */
@@ -1903,11 +1932,12 @@ static void test_set_and_require_step_park_cursor_past_comment(void) {
      * in glr_config_set drives this). The next step is SET grid=Radar. */
     glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);
     st = tutorial_state_view();
-    ASSERT_INT("REQUIRE advanced to SET grid=Radar", st.step, 6);
+    ASSERT_INT("REQUIRE advanced to SET grid=Radar", st.step,
+               require_step + 1);
     ASSERT_INT("SET step kind",
                (int)tutorial_current_step_kind(),
                (int)TUTORIAL_STEP_KIND_SET);
-    int set_instr = st.instruction_line_for_step[6];
+    int set_instr = st.instruction_line_for_step[require_step + 1];
     ASSERT_TRUE("SET instruction line recorded", set_instr >= 0);
     ASSERT_INT("cursor parked past SET comment row",
                editor_state_edit_line(), set_instr + 1);
@@ -1920,16 +1950,18 @@ static void test_set_step_applies_cfg_and_advances_on_ack(void) {
     reset_fixture();
     int idx = start_feature_tour_and_walk_commands();
     ASSERT_TRUE("walked into REQUIRE", idx >= 0);
+    int require_step = feature_tour_require_step(idx);
     /* Drive through REQUIRE to reach the first SET (grid = Radar). */
     glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);
-    ASSERT_INT("entered SET grid=Radar", tutorial_state_view().step, 6);
+    ASSERT_INT("entered SET grid=Radar", tutorial_state_view().step,
+               require_step + 1);
     ASSERT_INT("cfg grid applied to Radar",
                repl_cfg_get_int("grid", -1), GRID_THEME_RADAR);
 
     /* Ack via the controller router; SET advances to next SET (Aurora). */
     glr_ctrl_keyboard('\r', 0, 0);
     ASSERT_INT("ack key advanced to SET grid=Aurora",
-               tutorial_state_view().step, 7);
+               tutorial_state_view().step, require_step + 2);
     ASSERT_INT("cfg grid applied to Aurora",
                repl_cfg_get_int("grid", -1), GRID_THEME_AURORA);
 
@@ -1981,10 +2013,11 @@ static void test_validate_accepts_set_and_require_steps(void) {
     ASSERT_TRUE("mixed COMMAND+SET+REQUIRE validates",
                 repl_tutorial_validate_entry(&entry, err, sizeof(err)));
     ASSERT_STR("err empty on success", err, "");
-    /* Step count must include the non-command steps too — sentinel is
-     * keyed on `comment` alone now. */
+    /* Step count must include the non-command steps too — the sentinel
+     * needs BOTH comment and expected NULL, so SET/REQUIRE rows (NULL
+     * expected, non-NULL comment) don't terminate the walk. */
     int n = 0;
-    while (steps[n].comment) n++;
+    while (!repl_tutorial_step_is_sentinel(&steps[n])) n++;
     ASSERT_INT("mixed entry has 3 steps", n, 3);
 }
 
@@ -2022,6 +2055,219 @@ static void test_validate_rejects_require_with_expected(void) {
                 err[0] != '\0' && strstr(err, "expected") != NULL);
 }
 
+/* Relaxed COMMAND shape: `comment` is optional. A comment-less COMMAND
+ * step (NULL comment, non-NULL expected) must validate AND must not be
+ * mistaken for the array sentinel (which needs BOTH fields NULL). */
+static void test_validate_accepts_comment_less_command_step(void) {
+    static const TutorialStep steps[] = {
+        { NULL, "// open the batch", "glBegin(GL_TRIANGLES)",
+          TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+        { NULL, NULL, "glVertex3f(0, 0.7, 0)",
+          TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+        { NULL, NULL, "glEnd()",
+          TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+    };
+    TutorialEntry entry = { .name = "comment_less_ok", .steps = steps };
+    char err[160] = "";
+    ASSERT_TRUE("comment-less COMMAND steps validate",
+                repl_tutorial_validate_entry(&entry, err, sizeof(err)));
+    ASSERT_STR("err empty on success", err, "");
+    int n = 0;
+    while (!repl_tutorial_step_is_sentinel(&steps[n])) n++;
+    ASSERT_INT("comment-less steps counted, sentinel still terminates",
+               n, 3);
+    /* A comment-less COMMAND still needs a real expected: the pair-NULL
+     * shape is reserved for the sentinel, and expected content rules
+     * (single command, no ';', ...) still apply. */
+    static const TutorialStep bad_steps[] = {
+        { NULL, NULL, "glPointSize(1); glPointSize(2)",
+          TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+    };
+    TutorialEntry bad = { .name = "comment_less_multi", .steps = bad_steps };
+    err[0] = '\0';
+    ASSERT_TRUE("comment-less step still rejects multi-statement expected",
+                !repl_tutorial_validate_entry(&bad, err, sizeof(err)));
+}
+
+/* NOTE step shape rules: expected must stay NULL and the comment must be
+ * non-empty (a NOTE is nothing BUT its comment). */
+static void test_validate_note_step_shapes(void) {
+    static const TutorialStep ok_steps[] = {
+        { NULL, "// welcome to the tour", NULL,
+          TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_NOTE, NULL, 0 },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+    };
+    TutorialEntry ok = { .name = "note_ok", .steps = ok_steps };
+    char err[160] = "";
+    ASSERT_TRUE("comment-only NOTE step validates",
+                repl_tutorial_validate_entry(&ok, err, sizeof(err)));
+
+    static const TutorialStep expected_steps[] = {
+        { NULL, "// note with a command", "glEnd()",
+          TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_NOTE, NULL, 0 },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+    };
+    TutorialEntry with_expected = { .name = "note_with_expected",
+                                    .steps = expected_steps };
+    err[0] = '\0';
+    ASSERT_TRUE("NOTE with non-NULL expected rejected",
+                !repl_tutorial_validate_entry(&with_expected,
+                                              err, sizeof(err)));
+    ASSERT_TRUE("error mentions expected",
+                err[0] != '\0' && strstr(err, "expected") != NULL);
+
+    static const TutorialStep empty_steps[] = {
+        { NULL, "", NULL,
+          TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_NOTE, NULL, 0 },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
+          TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
+    };
+    TutorialEntry empty = { .name = "note_empty_comment",
+                            .steps = empty_steps };
+    err[0] = '\0';
+    ASSERT_TRUE("NOTE with empty comment rejected",
+                !repl_tutorial_validate_entry(&empty, err, sizeof(err)));
+    ASSERT_TRUE("error mentions comment",
+                err[0] != '\0' && strstr(err, "comment") != NULL);
+}
+
+/* Feature Tour is the catalog's showcase for the relaxed shapes: it must
+ * open with a NOTE step and carry comment-less COMMAND steps, and
+ * step_count must include them (they'd vanish if any walker still used
+ * the old `comment == NULL` sentinel). */
+static void test_catalog_feature_tour_uses_relaxed_step_shapes(void) {
+    int idx = find_tutorial_idx("Feature Tour");
+    ASSERT_TRUE("Feature Tour is in catalog", idx >= 0);
+    if (idx < 0) return;
+
+    ASSERT_INT("Feature Tour opens with a NOTE step",
+               (int)repl_tutorial_step_kind(idx, 0),
+               (int)TUTORIAL_STEP_KIND_NOTE);
+    ASSERT_TRUE("NOTE step has a comment",
+                repl_tutorial_step_comment(idx, 0) != NULL);
+    ASSERT_TRUE("NOTE step has no expected",
+                repl_tutorial_step_expected(idx, 0) == NULL);
+
+    int comment_less = 0;
+    int total = repl_tutorial_step_count(idx);
+    for (int s = 0; s < total; s++) {
+        if (repl_tutorial_step_kind(idx, s) == TUTORIAL_STEP_KIND_COMMAND &&
+            repl_tutorial_step_comment(idx, s) == NULL) {
+            ASSERT_TRUE("comment-less step still has expected",
+                        repl_tutorial_step_expected(idx, s) != NULL);
+            comment_less++;
+        }
+    }
+    ASSERT_INT("Feature Tour has two comment-less COMMAND steps",
+               comment_less, 2);
+}
+
+/* Runtime NOTE behavior: the instruction comment is emitted and locked,
+ * the document is frozen (typed commits reject with the ack hint), a
+ * non-ack key is not consumed, and an ack key advances. */
+static void test_note_step_waits_for_ack_and_freezes_document(void) {
+    reset_fixture();
+    int idx = find_tutorial_idx("Feature Tour");
+    ASSERT_TRUE("Feature Tour found", idx >= 0);
+    if (idx < 0) return;
+
+    tutorial_start(idx);
+    ASSERT_TRUE("tutorial active", tutorial_active());
+    ASSERT_INT("on the NOTE step", tutorial_state_view().step, 0);
+    ASSERT_INT("NOTE comment emitted as the only document row",
+               repl_state_document_count(), 1);
+    ASSERT_TRUE("NOTE comment row is locked", tutorial_line_is_locked(0));
+    ASSERT_INT("no expected commit row during NOTE",
+               tutorial_state_view().expected_commit_line, -1);
+
+    /* Typed commit is rejected with the ack hint, not committed. */
+    set_input_text("glPointSize(2)");
+    editor_handle_key(';', 0, 0);
+    ASSERT_INT("step unchanged after rejected commit during NOTE",
+               tutorial_state_view().step, 0);
+    ASSERT_INT("document unchanged after rejected commit",
+               repl_state_document_count(), 1);
+    ASSERT_STR("ack hint shown for NOTE",
+               status_text(), "Press Enter / Tab / Space to continue");
+
+    /* Non-ack keys are not consumed by the ack router. */
+    ASSERT_INT("non-ack key not consumed", tutorial_handle_ack_key('x'), 0);
+    ASSERT_INT("still on the NOTE step", tutorial_state_view().step, 0);
+
+    /* Ack via the controller keyboard route advances to the first
+     * COMMAND step. */
+    glr_ctrl_keyboard(' ', 0, 0);
+    ASSERT_INT("ack advanced past the NOTE step",
+               tutorial_state_view().step, 1);
+    ASSERT_INT("next step is COMMAND",
+               (int)tutorial_current_step_kind(),
+               (int)TUTORIAL_STEP_KIND_COMMAND);
+}
+
+/* Runtime comment-less COMMAND behavior: no instruction row is emitted
+ * (the document grows by exactly one row — the committed command), the
+ * commit lands at the parked cursor row, and after the commit that row
+ * is recorded as the step's anchor and locked. */
+static void test_comment_less_command_commits_without_instruction_row(void) {
+    reset_fixture();
+    int idx = find_tutorial_idx("Feature Tour");
+    ASSERT_TRUE("Feature Tour found", idx >= 0);
+    if (idx < 0) return;
+
+    tutorial_start(idx);
+    glr_ctrl_keyboard('\r', 0, 0);                      /* ack the NOTE   */
+    ASSERT_TRUE("commit glBegin step",
+                commit_command_step(idx, tutorial_state_view().step));
+    ASSERT_TRUE("commit top-vertex step",
+                commit_command_step(idx, tutorial_state_view().step));
+
+    /* Now paused on the first comment-less vertex step. */
+    int step = tutorial_state_view().step;
+    ASSERT_TRUE("current step is comment-less COMMAND",
+                repl_tutorial_step_kind(idx, step) ==
+                    TUTORIAL_STEP_KIND_COMMAND &&
+                repl_tutorial_step_comment(idx, step) == NULL);
+
+    int doc_before = repl_state_document_count();
+    TutorialRuntimeState st = tutorial_state_view();
+    ASSERT_INT("commit row is the trailing row (no comment inserted)",
+               st.expected_commit_line, doc_before);
+    ASSERT_INT("cursor parked on the commit row",
+               editor_state_edit_line(), doc_before);
+    ASSERT_INT("no anchor recorded before the commit",
+               st.instruction_line_for_step[step], -1);
+
+    ASSERT_TRUE("commit the comment-less step",
+                commit_command_step(idx, step));
+    ASSERT_INT("document grew by exactly the committed command",
+               repl_state_document_count(), doc_before + 1);
+    st = tutorial_state_view();
+    ASSERT_INT("committed row recorded as the step's anchor",
+               st.instruction_line_for_step[step], doc_before);
+    ASSERT_TRUE("committed row is locked",
+                tutorial_line_is_locked(doc_before));
+
+    /* The committed row holds the expected command (no comment row was
+     * inserted above it). */
+    SourceTextView doc = source_document_view();
+    const char *row = source_text_line(doc, doc_before);
+    ASSERT_TRUE("committed row holds the expected command",
+                row && strstr(row, "glVertex3f(-0.7, -0.5, 0)") != NULL);
+}
+
 /* SET/REQUIRE steps must reject typed commits with a kind-appropriate hint
  * — not the misleading "Move cursor to the tutorial insertion line". */
 static void test_commit_blocked_with_hint_during_set_step(void) {
@@ -2030,7 +2276,7 @@ static void test_commit_blocked_with_hint_during_set_step(void) {
     ASSERT_TRUE("walked into REQUIRE", idx >= 0);
     glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);
     int step_before = tutorial_state_view().step;
-    ASSERT_INT("at SET step", step_before, 6);
+    ASSERT_INT("at SET step", step_before, feature_tour_require_step(idx) + 1);
 
     /* Attempt to commit arbitrary text — the precheck must reject with
      * the SET hint. */
@@ -2059,7 +2305,8 @@ static void test_workspace_load_during_tutorial_restores_baseline(void) {
     int idx = start_feature_tour_and_walk_commands();
     ASSERT_TRUE("walked into REQUIRE", idx >= 0);
     glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);  /* advances past REQUIRE */
-    ASSERT_INT("now on SET grid=Radar", tutorial_state_view().step, 6);
+    ASSERT_INT("now on SET grid=Radar", tutorial_state_view().step,
+               feature_tour_require_step(idx) + 1);
     ASSERT_INT("grid is RADAR mid-tutorial",
                repl_cfg_get_int("grid", -1), GRID_THEME_RADAR);
 
@@ -2099,7 +2346,8 @@ static void test_exit_on_require_does_not_autoadvance(void) {
 
     int idx = start_feature_tour_and_walk_commands();
     ASSERT_TRUE("walked into REQUIRE", idx >= 0);
-    ASSERT_INT("on REQUIRE step", tutorial_state_view().step, 5);
+    ASSERT_INT("on REQUIRE step", tutorial_state_view().step,
+               feature_tour_require_step(idx));
     ASSERT_INT("REQUIRE kind",
                (int)tutorial_current_step_kind(),
                (int)TUTORIAL_STEP_KIND_REQUIRE);
@@ -2944,6 +3192,12 @@ int main(void) {
     test_validate_accepts_set_and_require_steps();
     test_validate_rejects_set_with_empty_slug();
     test_validate_rejects_require_with_expected();
+    /* Relaxed step shapes: NOTE kind + comment-less COMMAND steps. */
+    test_validate_accepts_comment_less_command_step();
+    test_validate_note_step_shapes();
+    test_catalog_feature_tour_uses_relaxed_step_shapes();
+    test_note_step_waits_for_ack_and_freezes_document();
+    test_comment_less_command_commits_without_instruction_row();
     test_commit_blocked_with_hint_during_set_step();
     test_workspace_load_during_tutorial_restores_baseline();
     /* REQUIRE_VAR step kind. */

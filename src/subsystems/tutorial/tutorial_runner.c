@@ -480,7 +480,7 @@ int tutorial_validate_entry_against_bridge(const TutorialEntry *entry,
         }
     }
     if (!entry->steps) return 1;
-    for (int s = 0; entry->steps[s].comment; s++) {
+    for (int s = 0; !repl_tutorial_step_is_sentinel(&entry->steps[s]); s++) {
         const TutorialStep *step = &entry->steps[s];
         if (step->kind != TUTORIAL_STEP_KIND_SET &&
             step->kind != TUTORIAL_STEP_KIND_REQUIRE)
@@ -698,16 +698,32 @@ int tutorial_status_is_hint(const char *text) {
                    sizeof TUTORIAL_STATUS_PREFIX - 1) == 0;
 }
 
-static TutorialStepResult tutorial_enter_step_command(int idx, int step, int instruction_line, TutorialRuntimeState *state) {
-    /* Original typing setup: cursor on the row immediately below
-     * the new instruction; insert mode iff mid-document. */
-    state->expected_commit_line = instruction_line + 1;
+static TutorialStepResult tutorial_enter_step_command(int idx, int step, int commit_line, TutorialRuntimeState *state) {
+    /* Typing setup: cursor on the row the expected command should
+     * commit at (below the instruction comment when the step emitted
+     * one, the insertion row itself for comment-less steps); insert
+     * mode iff mid-document. */
+    state->expected_commit_line = commit_line;
     repl_dispatch_host_cursor_park(state->expected_commit_line,
                                    state->expected_commit_line <
                                    repl_state_document_count());
     tutorial_set_step_status(idx, step);
     /* Refresh autocomplete so the shadow ghost for the expected
      * command appears on the next frame, not the next keystroke. */
+    repl_dispatch_completion_update();
+    return TUTORIAL_STEP_PAUSED;
+}
+
+static TutorialStepResult tutorial_enter_step_note(int instruction_line, TutorialRuntimeState *state) {
+    /* Comment-only showcase: the instruction comment was already
+     * emitted; wait for an ack key (Enter/Tab/Space). Same frozen-
+     * document, park-past-the-comment flow as SET, minus the cfg
+     * write. */
+    state->expected_commit_line = -1;
+    repl_dispatch_host_cursor_park(instruction_line + 1,
+                                   (instruction_line + 1) <
+                                   repl_state_document_count());
+    tutorial_set_status_ack_set();
     repl_dispatch_completion_update();
     return TUTORIAL_STEP_PAUSED;
 }
@@ -839,15 +855,19 @@ static TutorialStepResult tutorial_enter_step(int step) {
     TutorialRuntimeState *state = tutorial_state_mut();
     int idx = state->tutorial_idx;
 
-    const char *comment = repl_tutorial_step_comment(idx, step);
-    if (!comment) {
+    if (!repl_tutorial_step_get(idx, step)) {
         /* Past the last step — tutorial complete. teardown restores
-         * cfg + resets state; status set BEFORE teardown so it survives. */
+         * cfg + resets state; status set BEFORE teardown so it survives.
+         * (Keyed on the step lookup, not a NULL comment — comment-less
+         * COMMAND steps legitimately have no comment.) */
         repl_set_status("Tutorial complete");
         tutorial_teardown();
         repl_dispatch_completion_update();
         return TUTORIAL_STEP_TERMINAL;
     }
+
+    const char *comment = repl_tutorial_step_comment(idx, step);
+    int have_comment = (comment != NULL && comment[0] != '\0');
 
     int instruction_line = 0;
     if (!tutorial_step_instruction_line(idx, step, &instruction_line)) {
@@ -872,7 +892,11 @@ static TutorialStepResult tutorial_enter_step(int step) {
                         repl_eval_find_predef_var_idx(
                             repl_tutorial_step_var_name(idx, step)) < 0);
 
-    if (!declare_step &&
+    /* Comment-less COMMAND steps (have_comment == 0) emit nothing: the
+     * expected command commits directly at instruction_line, taught by
+     * the autocomplete ghost + status hint alone. The validator
+     * guarantees every non-COMMAND kind carries a non-empty comment. */
+    if (!declare_step && have_comment &&
         !tutorial_emit_instruction_comment(comment, instruction_line)) {
         tutorial_teardown();
         return TUTORIAL_STEP_TERMINAL;
@@ -880,7 +904,14 @@ static TutorialStepResult tutorial_enter_step(int step) {
 
     switch (kind) {
     case TUTORIAL_STEP_KIND_COMMAND:
-        return tutorial_enter_step_command(idx, step, instruction_line, state);
+        /* Commit row: below the instruction comment when one was
+         * emitted; the insertion row itself when the step has none. */
+        return tutorial_enter_step_command(idx, step,
+                                           instruction_line +
+                                           (have_comment ? 1 : 0),
+                                           state);
+    case TUTORIAL_STEP_KIND_NOTE:
+        return tutorial_enter_step_note(instruction_line, state);
     case TUTORIAL_STEP_KIND_SET:
         return tutorial_enter_step_set(idx, step, instruction_line, state);
     case TUTORIAL_STEP_KIND_REQUIRE:
@@ -957,7 +988,8 @@ void tutorial_notify_state_changed(void) {
 int tutorial_handle_ack_key(unsigned char key) {
     if (!tutorial_active())
         return 0;
-    if (tutorial_current_step_kind() != TUTORIAL_STEP_KIND_SET)
+    TutorialStepKind k = tutorial_current_step_kind();
+    if (k != TUTORIAL_STEP_KIND_SET && k != TUTORIAL_STEP_KIND_NOTE)
         return 0;
     if (key != '\r' && key != '\n' && key != '\t' && key != ' ')
         return 0;
@@ -969,7 +1001,7 @@ int tutorial_reject_noncommand_commit_with_hint(void) {
     if (!tutorial_active())
         return 0;
     TutorialStepKind k = tutorial_current_step_kind();
-    if (k == TUTORIAL_STEP_KIND_SET) {
+    if (k == TUTORIAL_STEP_KIND_SET || k == TUTORIAL_STEP_KIND_NOTE) {
         tutorial_set_status_ack_set();
         return 1;
     }
@@ -1031,12 +1063,12 @@ int tutorial_guard_source_change(int pos, int delete_count, int insert_count) {
     if (delete_count == 0 && insert_count == 0)
         return 1;
 
-    /* SET / REQUIRE steps freeze the document: no expected_commit_line
-     * and no locked-line region to anchor to past the last instruction,
-     * so paste/delete/comment-toggle/etc. would otherwise slip through
-     * after the last locked row. Reject every non-no-op mutation while
-     * a non-writable step is active; the editor precheck pairs this with
-     * a kind-aware commit hint
+    /* SET / REQUIRE / NOTE steps freeze the document: no
+     * expected_commit_line and no locked-line region to anchor to past
+     * the last instruction, so paste/delete/comment-toggle/etc. would
+     * otherwise slip through after the last locked row. Reject every
+     * non-no-op mutation while a non-writable step is active; the
+     * editor precheck pairs this with a kind-aware commit hint
      * (tutorial_reject_noncommand_commit_with_hint).
      *
      * REQUIRE_VAR is the exception — the step is satisfied either by a
@@ -1134,6 +1166,23 @@ int tutorial_note_expected_commit_applied(void) {
          * instruction is at expected_commit_line - 1), so they
          * never need to shift for an in-flight commit. */
         tutorial_shift_tracked_lines_from(state->pending.commit_line, delta);
+    }
+
+    /* Comment-less COMMAND steps recorded no instruction row at entry
+     * (nothing was emitted). Record the committed command row instead,
+     * so a later label-targeted step can anchor on this step, and lock
+     * it — with no instruction comment emitted above later rows, the
+     * transitive locked-line protection the comment-full flow relies
+     * on doesn't cover this row. Recorded AFTER the shift above so the
+     * value isn't itself shifted (the commit row is where the command
+     * now lives). */
+    if (state->pending.step_idx >= 0 &&
+        state->pending.step_idx < TUTORIAL_MAX_STEPS &&
+        state->instruction_line_for_step[state->pending.step_idx] < 0 &&
+        state->pending.commit_line >= 0) {
+        state->instruction_line_for_step[state->pending.step_idx] =
+            state->pending.commit_line;
+        tutorial_append_locked_line(state->pending.commit_line);
     }
 
     tutorial_pending_reset(state);

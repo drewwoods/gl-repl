@@ -114,18 +114,20 @@ TutorialStepKind     tutorial_current_step_kind(void);
  * cheap and safe. */
 void                 tutorial_notify_state_changed(void);
 
-/* SET-step ack: if the current step is SET and `key` is Enter / Tab /
- * Space, advance to the next step and return 1 (consumed); else return
- * 0 (not consumed — caller continues its dispatch chain). */
+/* Showcase-step ack: if the current step is SET or NOTE and `key` is
+ * Enter / Tab / Space, advance to the next step and return 1
+ * (consumed); else return 0 (not consumed — caller continues its
+ * dispatch chain). */
 int                  tutorial_handle_ack_key(unsigned char key);
 
-/* Editor precheck helper: when the current step is SET or REQUIRE,
- * set a kind-appropriate status hint ("Press Enter / Tab / Space …" for
- * SET; "Set <slug> = <value> …" for REQUIRE) and return 1 to tell the
- * editor to reject the commit. Returns 0 for COMMAND / inactive (let the
- * normal commit path run). Lives in tutorial.c so input.c gains zero
- * new direct repl_* calls — check-editor-repl-surface stays at its
- * baseline of 21 unique repl_* symbols. */
+/* Editor precheck helper: when the current step is SET, NOTE, or
+ * REQUIRE, set a kind-appropriate status hint ("Press Enter / Tab /
+ * Space …" for SET/NOTE; "Set <slug> = <value> …" for REQUIRE) and
+ * return 1 to tell the editor to reject the commit. Returns 0 for
+ * COMMAND / inactive (let the normal commit path run). Lives in
+ * tutorial.c so input.c gains zero new direct repl_* calls —
+ * check-editor-repl-surface stays at its baseline of 21 unique
+ * repl_* symbols. */
 int                  tutorial_reject_noncommand_commit_with_hint(void);
 
 /* The source row the next user commit should land on. -1 when no
