@@ -531,7 +531,7 @@ static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3
     /* Silhouette outlines only make sense over filled geometry; in any
      * wireframe mode the fill is replaced by edges, so suppress them. */
     pack->walk.show_vertex_outlines = presentation.show_vertex_outlines &&
-                                      presentation.wireframe == RENDER3D_WIREFRAME_OFF;
+                                      presentation.wireframe == WIREFRAME_OFF;
     pack->walk.highlight_current_poly = presentation.highlight_current_poly && !replaying;
     pack->walk.replay_tess_preview = replay_mode_vertex;
     pack->walk.show_vertex_points = presentation.show_vertex_points;
@@ -2079,7 +2079,7 @@ static void glr_ctrl_export_reshape_projection(ReplExportProjectionBlock *blk) {
 
     render3d_get_active_projection(&g_scene_renderer, &p);
     blk->count = 0;
-    if (p.ortho) {
+    if (p.projection == PROJ_ORTHO) {
         snprintf(blk->lines[blk->count++], REPL_EXPORT_PROJ_LINE_MAX,
                  "  double _t = %.6g, _r = _t * (double)w / (double)h;",
                  p.ortho_top);

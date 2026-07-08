@@ -2,13 +2,13 @@
 /* @cfg line_smooth = 0 */
 /* @cfg accum_effect = 1 */
 /* @cfg accum_passes = 0 */
-/* @cfg wireframe = 0 */
+/* @cfg wireframe = WIREFRAME_HIDDEN */
 /* @cfg point_attenuation = 1 */
 /* @cfg auto_time = 1 */
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_XZRULER */
+/* @cfg grid = GRID_THEME_OFF */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_DIM */
 /* @cfg grid_major = GRID_MAJOR_1 */
@@ -21,13 +21,13 @@
 /* @cfg post_fx_scope = GLR_POST_FX_SCOPE_OFF */
 /* @cfg post_fx_effect = GLR_POST_FX_EFFECT_CHROMATIC_ABERRATION */
 /* @cfg view_mode = RENDER3D_VIEW_3D */
-/* @cfg projection = 0 */
+/* @cfg projection = PROJ_ORTHO */
 /* @cfg camera_rotate = 0 */
 /* @cfg vertex_labels = 1 */
 /* @cfg overlay_scope = OVERLAY_SCOPE_FIRST_INSTANCE */
 /* @cfg normal_vectors = 0 */
 /* @cfg vertex_outlines = 1 */
-/* @cfg vertex_points = 1 */
+/* @cfg vertex_points = 0 */
 /* @cfg poly_highlight = 1 */
 /* @cfg winding = 0 */
 /* @cfg variable_panel = 1 */
@@ -91,8 +91,8 @@ void display(void) {
   glDisable(GL_LINE_SMOOTH);
 --- camera ---
   glTranslatef(0.0000f, 0.0000f, -6.0000f);
-  glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(35.0000f, 0.0f, 1.0f, 0.0f);
+  glRotatef(35.2500f, 1.0f, 0.0f, 0.0f);
+  glRotatef(45.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- source ---

@@ -77,11 +77,16 @@ typedef enum Render3dExecutePurpose {
     RENDER3D_EXEC_WINDING                  /* winding view: two-sided front/back fill */
 } Render3dExecutePurpose;
 
+#define WIREFRAME_LIST(X) \
+    X(OFF)                \
+    X(PLAIN)              \
+    X(HIDDEN)
+
 typedef enum Render3dWireframeMode {
-    RENDER3D_WIREFRAME_OFF = 0,
-    RENDER3D_WIREFRAME_PLAIN,
-    RENDER3D_WIREFRAME_HIDDEN,
-    RENDER3D_WIREFRAME_COUNT
+#define WIREFRAME_ENUM_ENTRY(name) WIREFRAME_##name,
+    WIREFRAME_LIST(WIREFRAME_ENUM_ENTRY)
+#undef WIREFRAME_ENUM_ENTRY
+    WIREFRAME_COUNT
 } Render3dWireframeMode;
 
 /* Accumulation-buffer effect mode. OFF = single pass (no accum); AA =

@@ -2,7 +2,7 @@
 /* @cfg line_smooth = 0 */
 /* @cfg accum_effect = 1 */
 /* @cfg accum_passes = 0 */
-/* @cfg wireframe = 0 */
+/* @cfg wireframe = WIREFRAME_OFF */
 /* @cfg point_attenuation = 1 */
 /* @cfg auto_time = 1 */
 /* @cfg replay = 0 */
@@ -21,7 +21,7 @@
 /* @cfg post_fx_scope = GLR_POST_FX_SCOPE_OFF */
 /* @cfg post_fx_effect = GLR_POST_FX_EFFECT_CHROMATIC_ABERRATION */
 /* @cfg view_mode = RENDER3D_VIEW_2D */
-/* @cfg projection = 0 */
+/* @cfg projection = PROJ_PERSPECTIVE */
 /* @cfg camera_rotate = 0 */
 /* @cfg vertex_labels = 1 */
 /* @cfg overlay_scope = OVERLAY_SCOPE_AT_VERTEX */

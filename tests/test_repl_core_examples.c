@@ -1445,7 +1445,7 @@ static void test_example_cfg_uses_symbolic_names(void) {
 
 static void test_example_tag_default_cfg(void) {
     int bezier_idx     = find_example_index_by_name("Bezier curve with guides");
-    int cube_idx       = find_example_index_by_name("Lit cube");
+    int cube_idx       = find_example_index_by_name("Conditional colors (if + t)");
     int stress_idx     = find_example_index_by_name("Dusk lighthouse atoll (stress test)");
     int whale_idx      = find_example_index_by_name("Whale (particle system + lit model)");
     int spirograph_idx =

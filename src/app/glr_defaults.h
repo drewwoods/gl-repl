@@ -24,10 +24,11 @@
 #include "render3d/guides/xform_guide_mode.h"
 #include "render3d/themes.h"
 #include "render3d/view_mode.h"
+#include "render3d/projection_mode.h"
 #include "subsystems/edit_overlays/edit_overlays.h"
 #include "ui/app/layout.h"
 
-#define CFG_DEFAULT_WIREFRAME         0
+#define CFG_DEFAULT_WIREFRAME         WIREFRAME_OFF
 #define CFG_DEFAULT_GRID_THEME        GRID_THEME_XZRULER
 #define CFG_DEFAULT_GRID_MAJOR_IDX    GRID_MAJOR_1
 #define CFG_DEFAULT_GRID_EXTENT_IDX   GRID_EXTENT_FAR
@@ -53,7 +54,7 @@
 #define CFG_DEFAULT_LIGHT_THEME       LIGHT_THEME_DEFAULT
 #define CFG_DEFAULT_BACKDROP_MODE     RENDER3D_BACKDROP_OFF
 #define CFG_DEFAULT_ORTHO_MODE        RENDER3D_VIEW_3D
-#define CFG_DEFAULT_PROJECTION        0   /* 0 = perspective, 1 = orthographic (free camera) */
+#define CFG_DEFAULT_PROJECTION        PROJ_PERSPECTIVE
 #define CFG_DEFAULT_CAMERA_ROTATE     0
 #define CFG_DEFAULT_VARIABLE_PANEL    1
 #define CFG_DEFAULT_WRAP_AT_COMMA     1

@@ -68,7 +68,7 @@ static const float g_grid_extents[GRID_EXTENT_COUNT] = {
         .compositor_filter_mode = RENDER3D_POST_FILTER_OFF, \
         .highlight_current_poly = CFG_DEFAULT_HIGHLIGHT_POLY, \
         .ortho_mode             = CFG_DEFAULT_ORTHO_MODE, \
-        .projection_ortho       = CFG_DEFAULT_PROJECTION, \
+        .projection_mode        = CFG_DEFAULT_PROJECTION, \
         .wrap_at_comma          = CFG_DEFAULT_WRAP_AT_COMMA, \
         .code_panel_layout      = CFG_DEFAULT_CODE_PANEL_LAYOUT, \
         .syntax_highlight       = CFG_DEFAULT_SYNTAX_HIGHLIGHT, \
@@ -150,7 +150,7 @@ void glr_state_presentation_reset_example_defaults(void) {
     /* Reset alongside ortho_mode so the projection choice doesn't leak
      * across example loads in the F12 cycle (an example whose @cfg omits
      * `projection` gets the default perspective). */
-    p->projection_ortho      = CFG_DEFAULT_PROJECTION;
+    p->projection_mode      = CFG_DEFAULT_PROJECTION;
 }
 
 void glr_state_render_reset_defaults(void) {

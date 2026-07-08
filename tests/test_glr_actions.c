@@ -1524,10 +1524,10 @@ static void test_fkey_reassignment_and_alt_shortcuts(void) {
     ASSERT_INT("Ctrl+Shift+L toggles light indicators",
                glr_state_presentation().show_light_indicators, 1);
 
-    glr_state_presentation_mut()->projection_ortho = 0;
+    glr_state_presentation_mut()->projection_mode = PROJ_PERSPECTIVE;
     ASSERT_INT("Ctrl+Shift+E consumed", glr_cfg_handle_ascii_shortcut(KEY_CTRL_E), 1);
     ASSERT_INT("Ctrl+Shift+E toggles projection",
-               glr_state_presentation().projection_ortho, 1);
+               glr_state_presentation().projection_mode, PROJ_ORTHO);
 
     /* Without Shift, the cfg layer must NOT claim Ctrl+N/E/L (they fall
      * through to the post-filter router / editor cursor-end / clear-all). */
