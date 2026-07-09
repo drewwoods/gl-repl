@@ -74,6 +74,8 @@ Goals:
 
 - materially reduce steady-state flatten CPU for Grass, Orrery, Wave, Ringed
   planet, and the rest of the corpus;
+- keep variable-panel dragging on a warm cache and route each motion through
+  value-dirty/full-dirty dependency masks instead of source invalidation;
 - preserve current results and side effects exactly, including sequential
   assignments such as `n = n + 1`, scratch writes, provenance, replay scopes,
   and blur subframe isolation;
@@ -112,13 +114,19 @@ Extend `bench/bench_repl.c` before changing runtime code:
 6. Add a Whale dynamic-topology case sampled at several `t` values. Record the
    flat count with each timing and retain at least two samples with different
    counts. This case measures warm compiled **full flatten**, never rebake.
+7. Add two slider-transaction cases: a value-only variable that should rebake
+   on every motion and a structural variable that should warm-full-flatten.
+   Time a 100-motion drag separately from the single release-time persistence
+   edit; assert zero cache rebuilds during motion and exactly one on release.
 
 The benchmark must restore values before every inner iteration, consume result
 counts/status, use release `-O2`, and retain `USE_GL_STUBS=1` support. Default
 `make bench` remains non-gating; saved before/after CSV from the same machine is
 the review artifact.
 
-## Phase 1 — Remove needless parsing for literal commands
+## Phase 1 — Cheap fast paths and slider transaction split
+
+### 1A. Remove needless parsing for literal commands
 
 In `flatten_reparse_line`, append the already-committed `src_cmd` directly when
 `src_cmd->has_vars == 0`, even inside a loop/function scope. Still snapshot the
@@ -135,6 +143,60 @@ Ship this independently if it improves at least one named/corpus case and
 causes no benchmark regression over 5%. Do not bundle speculative block-end or
 function-signature caches: the measured structural remainder is too small to
 justify them unless new phase data changes that conclusion.
+
+### 1B. Keep slider motion value-only
+
+The variable-panel path currently calls `repl_compile_set_predef_value` for
+every pointer-motion event. For a declared variable that produces both a
+`SET_VALUE` op and `REPL_COMPILED_REPLACE_ONE` for the declaration initializer;
+the replacement calls `repl_state_mark_source_dirty`. If left unchanged, Phase
+2 would invalidate/rebuild the entire expression cache on every drag event and
+Phase 3's value-change routing would be bypassed.
+
+Split the drag transaction deliberately:
+
+1. **Drag begin:** capture name/start value as today. Extend
+   `VariablePanelDragState` with `value_changed` and `final_value`; initialize
+   them to false/start value. Keep `undo_snapshot_pushed` as the independent
+   undo-coalescing flag.
+2. **Each motion:** compile/apply a **live-only** change containing
+   `REPL_COMPILED_NO_CHANGE + REPL_PREDEF_OP_SET_VALUE`; never rewrite editor
+   text or the command store. Capture the undo snapshot on the first successful
+   motion exactly as today, notify tutorial REQUIRE_VAR through the existing
+   external-change tail, and record the applied final value on the peer-owned
+   drag state.
+3. **Mouse release:** if `value_changed`, compile/apply one **source-only**
+   persistence change. If the variable has a declaration, rewrite its
+   initializer with `REPL_COMPILED_REPLACE_ONE` but emit no predef op (the live
+   value is already final); if it has no declaration, return
+   `REPL_COMPILED_NO_CHANGE`. Do not capture another undo snapshot and do not
+   send a second tutorial variable notification. Then reset drag state.
+4. **No-motion release:** perform no compile/apply work and create no undo
+   entry.
+
+Add two compile entry points rather than assembling changes in the controller:
+
+```c
+ReplCompileResult repl_compile_set_predef_value_live(...);    /* SET_VALUE only */
+ReplCompileResult repl_compile_persist_predef_value(...);     /* source only */
+```
+
+Keep `repl_compile_set_predef_value` as the existing combined semantic for any
+non-drag caller; implement the three entry points over shared lookup/rewrite
+kernels so formatting cannot drift. Add a peer-owned
+`variable_panel_drag_note_applied_value(float)` helper instead of mutating drag
+fields from the app router.
+
+The declaration shown in the code panel intentionally remains at its drag-start
+text until mouse-up; the variable panel and rendered scene use the live value
+throughout. On release, the one source replacement invalidates the cache and
+forces one cold full flatten, preserving saved-source behavior. If release-time
+persistence unexpectedly fails, report the error, retain the already-applied
+live value (Undo still restores the drag-start snapshot), and end the drag.
+
+This plan deliberately keeps whole-cache invalidation at the source-dirty seam.
+Per-line cache invalidation is not needed to make slider motion warm and would
+add cache-index shifting/generation complexity for insert/delete operations.
 
 ## Phase 2 — Compile expressions once
 
@@ -172,7 +234,9 @@ Invalidate the live cache from the single source-mutation seam,
 `repl_state_mark_source_dirty`. Rebuild lazily per source line on the next full
 flatten. Undo/redo, scene/workspace/example loads, autonormal source rewrites,
 and declaration-table reshapes already pass through that seam and therefore do
-not need special cache logic.
+not need special cache logic. Variable-panel motion is no longer a source
+mutation (Phase 1B); only its one mouse-up persistence edit invalidates the
+cache.
 
 ### Do not duplicate the grammar
 
@@ -298,9 +362,11 @@ otherwise                           -> no flat work
 ```
 
 Route `repl_state_time_advance`/`_time_set` through the `t` slot bit. Route
-predef `SET_VALUE` through the changed slot bit; declaration-table reshaping
-never uses the bit fast path. Multiple value changes accumulate, and a later
-structural change escalates to full dirty.
+predef `SET_VALUE`—including every variable-panel motion—through the changed
+slot bit; declaration-table reshaping never uses the bit fast path. Multiple
+value changes accumulate, and a later structural change escalates to full
+dirty. The mouse-up declaration rewrite is a real source edit and intentionally
+performs one cache invalidation/full flatten after the drag.
 
 ### Rebake API and behavior
 
@@ -342,6 +408,11 @@ the frame's true `t`, as today.
 ## Public/internal interface changes
 
 - New REPL-internal expression program/cache API in `expr_program.h`.
+- `compile.h` gains separate live-only and persistence-only predef-value
+  compile entry points; the variable-panel router uses one during motion and
+  the other on release.
+- `VariablePanelDragState` gains `value_changed`/`final_value` plus a peer-owned
+  applied-value notifier.
 - `ReplFlattenOptions` gains an optional cache view.
 - `ReplFlattenResult` gains `structural_dep_mask` and `value_dep_mask` so
   temporary-buffer callers can inspect the same analysis.
@@ -379,18 +450,25 @@ All additions remain C99 and use the project `STATIC_ASSERT` shim to enforce
 5. **Dirty routing:** value-only change sets args dirty, structural change
    escalates to full, unused value schedules nothing, edit/declare/undeclare
    force full, and full flatten clears both masks.
-6. **Failure rollback:** cache allocation/compile miss, parse fallback,
+6. **Slider transaction:** repeated motion leaves declaration text and the
+   expression-cache generation unchanged, updates live rendering, sends the
+   changed slot through dependency routing, and captures one undo snapshot.
+   Release rewrites an initialized or uninitialized declaration once, performs
+   one cache invalidation/full dirty, and creates no second tutorial notify;
+   no-declaration and no-motion releases are no-ops. Undo/redo restore both
+   source and value across the whole drag.
+7. **Failure rollback:** cache allocation/compile miss, parse fallback,
    scratch-range failure, and rebake failure restore the baseline before full
    fallback; no partially rebaked stream becomes visible.
-7. **Consumer regressions:** replay seek/fade/annotations, flat-cost queries,
+8. **Consumer regressions:** replay seek/fade/annotations, flat-cost queries,
    current-block highlight, guides/edit overlays, autonormal, and PLY export
    behave identically after rebake.
-8. **Blur:** 2/4/8/12/16 time-blur samples match forced-full-flatten output and
+9. **Blur:** 2/4/8/12/16 time-blur samples match forced-full-flatten output and
    do not compound assignment/scratch state between samples.
-9. **End-to-end pixels:** OSMesa captures of Grass and Orrery at two distinct
+10. **End-to-end pixels:** OSMesa captures of Grass and Orrery at two distinct
    times must (a) differ across time and (b) match forced-full-flatten captures
    at the same time.
-10. **Variable-length canary:** full-flatten Whale across a time grid spanning
+11. **Variable-length canary:** full-flatten Whale across a time grid spanning
     particle spawn/expiry boundaries; assert at least two distinct flat counts,
     exact command/provenance parity with cache disabled, and that the `t` dirty
     route always selects full flatten.
@@ -410,12 +488,16 @@ Record Phase 0 CSV before each phase and compare on the same idle machine.
 - Cold cache build + first full flatten should remain below 12 ms for every
   built-in on the baseline machine. Cache memory must stay below the 16 MiB
   cap and perform zero warm-path allocations.
+- A 100-event slider drag must perform zero source/cache invalidations during
+  motion, exactly one on release when a declaration exists, and no cold-cache
+  work until release. Motion cost is compared separately for value-only rebake
+  and structural warm-full-flatten cases.
 - In the live detailed profile, stable-topology animation should show
   `Flatten` only after edits/structural value changes and `Rebake` during
   steady animation; forced-full and optimized frame outputs must match.
 
-Land in three reviewable changes (benchmark/literal fast path, expression
-cache, dependency masks/rebake). Run `make test`, `make test-stubs`,
+Land in three reviewable changes (benchmark + Phase 1 fast paths/slider split,
+expression cache, dependency masks/rebake). Run `make test`, `make test-stubs`,
 `make check-state-ownership`, `make check-c99`, and the benchmark suite after
 each. Because this touches C99 portability, state ownership, and build inputs,
 finish with the documented real-GCC `check-c99` + `test-stubs` verification on
