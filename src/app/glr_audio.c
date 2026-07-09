@@ -56,6 +56,815 @@
 #include <string.h>
 #include <time.h>
 
+#if defined(__EMSCRIPTEN__)
+
+#include <emscripten/emscripten.h>
+
+#define GLR_AUDIO_MAX_TRACKS 64
+#define GLR_AUDIO_MAX_PATH   512
+#define STATE_SAVE_INTERVAL_SECS 5
+#define GLR_AUDIO_NO_SEEK (-1.0f)
+
+static int g_inited       = 0;
+static int g_music_loaded = 0;
+static int g_muted        = 0;
+static int g_paused       = 0;
+static int g_gesture_done = 0;
+
+static char g_playlist[GLR_AUDIO_MAX_TRACKS][GLR_AUDIO_MAX_PATH];
+static char g_playlist_group[GLR_AUDIO_MAX_TRACKS][64];
+static char g_playlist_display_name[GLR_AUDIO_MAX_TRACKS][128];
+static float g_playlist_duration_secs[GLR_AUDIO_MAX_TRACKS];
+static int  g_playlist_count = 0;
+static int  g_playlist_pos   = 0;
+
+static int g_loop_mode = GLR_AUDIO_LOOP_ALL;
+
+static int g_pending_start = 0;
+static int g_pending_idx = 0;
+static float g_pending_seek = GLR_AUDIO_NO_SEEK;
+static int g_play_when_manifest_ready = 0;
+static int g_error_skip_count = 0;
+
+static unsigned int g_track_generation = 0;
+static char  g_state_file[GLR_AUDIO_MAX_PATH] = "";
+static int g_cfg_mode = -1;
+static time_t g_last_save_time = 0;
+
+EM_JS(int, web_audio_js_init, (void), {
+    if (!Module.glrAudio) {
+        var audio = new Audio();
+        audio.preload = 'auto';
+        Module.glrAudio = {
+            audio: audio,
+            ended: false,
+            error: false,
+            pendingSeek: NaN
+        };
+        audio.addEventListener('ended', function() {
+            Module.glrAudio.ended = true;
+        });
+        audio.addEventListener('error', function() {
+            Module.glrAudio.error = true;
+        });
+        audio.addEventListener('loadedmetadata', function() {
+            var s = Module.glrAudio;
+            if (Number.isFinite(s.pendingSeek)) {
+                try { audio.currentTime = Math.max(0, s.pendingSeek); } catch (e) {}
+                s.pendingSeek = NaN;
+            }
+        });
+    }
+    return 0;
+});
+
+EM_JS(void, web_audio_js_shutdown, (void), {
+    var s = Module.glrAudio;
+    if (!s || !s.audio) return;
+    try { s.audio.pause(); } catch (e) {}
+    s.audio.removeAttribute('src');
+    try { s.audio.load(); } catch (e) {}
+    s.ended = false;
+    s.error = false;
+    s.pendingSeek = NaN;
+});
+
+EM_JS(void, web_audio_js_request_manifest, (void), {
+    if (Module.glrAudioManifestRequested) return;
+    Module.glrAudioManifestRequested = true;
+
+    fetch('assets/music.json', { cache: 'no-store' })
+        .then(function(resp) {
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            return resp.json();
+        })
+        .then(function(data) {
+            var tracks = Array.isArray(data) ? data : (data && data.tracks);
+            if (!Array.isArray(tracks)) tracks = [];
+
+            Module.ccall('glr_audio_web_manifest_begin', 'number',
+                         ['number'], [tracks.length]);
+            tracks.forEach(function(t) {
+                if (!t) return;
+                var path = t.path || t.url || "";
+                if (!path) return;
+                Module.ccall('glr_audio_web_manifest_add', 'number',
+                             ['string', 'string', 'string'],
+                             [path, t.group || 'Music',
+                              t.display_name || t.name || ""]);
+            });
+            Module.ccall('glr_audio_web_manifest_finish', 'number', [], []);
+        })
+        .catch(function(err) {
+            console.warn('gl-repl audio manifest unavailable:', err);
+            Module.ccall('glr_audio_web_manifest_begin', 'number',
+                         ['number'], [0]);
+            Module.ccall('glr_audio_web_manifest_finish', 'number', [], []);
+        });
+});
+
+EM_JS(int, web_audio_js_start, (const char *path_ptr, int loop,
+                               int paused, int muted, double seek), {
+    var s = Module.glrAudio;
+    if (!s || !s.audio) return -1;
+
+    var audio = s.audio;
+    var path = UTF8ToString(path_ptr);
+    s.ended = false;
+    s.error = false;
+    s.pendingSeek = seek >= 0 ? seek : NaN;
+
+    if (audio.getAttribute('src') !== path) {
+        audio.src = path;
+        try { audio.load(); } catch (e) {}
+    }
+    audio.loop = !!loop;
+    audio.muted = !!muted;
+
+    if (Number.isFinite(s.pendingSeek)) {
+        try {
+            audio.currentTime = Math.max(0, s.pendingSeek);
+            s.pendingSeek = NaN;
+        } catch (e) {
+            /* loadedmetadata will apply the queued seek. */
+        }
+    }
+
+    if (paused) {
+        audio.pause();
+        return 0;
+    }
+
+    var p = audio.play();
+    if (p && p.catch) {
+        p.catch(function(err) {
+            if (err && err.name === 'NotAllowedError') return;
+            console.warn('gl-repl audio play failed:', err);
+        });
+    }
+    return 0;
+});
+
+EM_JS(void, web_audio_js_set_paused, (int paused), {
+    var s = Module.glrAudio;
+    if (!s || !s.audio) return;
+    if (paused) {
+        s.audio.pause();
+    } else {
+        var p = s.audio.play();
+        if (p && p.catch) {
+            p.catch(function(err) {
+                if (err && err.name === 'NotAllowedError') return;
+                console.warn('gl-repl audio resume failed:', err);
+            });
+        }
+    }
+});
+
+EM_JS(void, web_audio_js_set_muted, (int muted), {
+    var s = Module.glrAudio;
+    if (s && s.audio) s.audio.muted = !!muted;
+});
+
+EM_JS(void, web_audio_js_set_loop, (int loop), {
+    var s = Module.glrAudio;
+    if (s && s.audio) s.audio.loop = !!loop;
+});
+
+EM_JS(void, web_audio_js_seek, (double seconds), {
+    var s = Module.glrAudio;
+    if (!s || !s.audio) return;
+    try { s.audio.currentTime = Math.max(0, seconds); } catch (e) {
+        s.pendingSeek = Math.max(0, seconds);
+    }
+});
+
+EM_JS(double, web_audio_js_current_time, (void), {
+    var s = Module.glrAudio;
+    if (!s || !s.audio || !Number.isFinite(s.audio.currentTime)) return 0;
+    return s.audio.currentTime;
+});
+
+EM_JS(double, web_audio_js_duration, (void), {
+    var s = Module.glrAudio;
+    if (!s || !s.audio || !Number.isFinite(s.audio.duration)) return -1;
+    return s.audio.duration;
+});
+
+EM_JS(int, web_audio_js_take_ended, (void), {
+    var s = Module.glrAudio;
+    if (!s || !s.ended) return 0;
+    s.ended = false;
+    return 1;
+});
+
+EM_JS(int, web_audio_js_take_error, (void), {
+    var s = Module.glrAudio;
+    if (!s || !s.error) return 0;
+    s.error = false;
+    return 1;
+});
+
+EM_JS(int, web_audio_js_load_state_track, (const char *key_ptr,
+                                           char *track_ptr, int track_sz), {
+    var key = UTF8ToString(key_ptr || 0);
+    var track = "";
+    try {
+        var raw = key ? localStorage.getItem('gl-repl-audio:' + key) : null;
+        var state = raw ? JSON.parse(raw) : null;
+        if (state && typeof state.track === 'string') track = state.track;
+    } catch (e) {}
+    if (track_ptr && track_sz > 0) stringToUTF8(track, track_ptr, track_sz);
+    return track ? 1 : 0;
+});
+
+EM_JS(double, web_audio_js_load_state_offset, (const char *key_ptr), {
+    var key = UTF8ToString(key_ptr || 0);
+    try {
+        var raw = key ? localStorage.getItem('gl-repl-audio:' + key) : null;
+        var state = raw ? JSON.parse(raw) : null;
+        if (state && Number.isFinite(state.offset)) return state.offset;
+    } catch (e) {}
+    return 0;
+});
+
+EM_JS(int, web_audio_js_load_state_cfg, (const char *key_ptr), {
+    var key = UTF8ToString(key_ptr || 0);
+    try {
+        var raw = key ? localStorage.getItem('gl-repl-audio:' + key) : null;
+        var state = raw ? JSON.parse(raw) : null;
+        if (state && Number.isFinite(state.cfg_mode)) return state.cfg_mode | 0;
+    } catch (e) {}
+    return -1;
+});
+
+EM_JS(void, web_audio_js_save_state, (const char *key_ptr,
+                                      const char *track_ptr,
+                                      double offset, int cfg_mode), {
+    var key = UTF8ToString(key_ptr || 0);
+    if (!key) return;
+    var track = track_ptr ? UTF8ToString(track_ptr) : "";
+    var state = {};
+    if (track) {
+        state.track = track;
+        state.offset = Number.isFinite(offset) ? offset : 0;
+    }
+    if (cfg_mode >= 0) state.cfg_mode = cfg_mode;
+    try {
+        localStorage.setItem('gl-repl-audio:' + key, JSON.stringify(state));
+    } catch (e) {}
+});
+
+static void reset_audio_module_state(void) {
+    g_inited = 0;
+    g_music_loaded = 0;
+    g_muted = 0;
+    g_paused = 0;
+    g_gesture_done = 0;
+
+    g_playlist_count = 0;
+    g_playlist_pos = 0;
+    for (int i = 0; i < GLR_AUDIO_MAX_TRACKS; i++) {
+        g_playlist[i][0] = '\0';
+        g_playlist_group[i][0] = '\0';
+        g_playlist_display_name[i][0] = '\0';
+        g_playlist_duration_secs[i] = -1.0f;
+    }
+
+    g_loop_mode = GLR_AUDIO_LOOP_ALL;
+    g_pending_start = 0;
+    g_pending_idx = 0;
+    g_pending_seek = GLR_AUDIO_NO_SEEK;
+    g_play_when_manifest_ready = 0;
+    g_error_skip_count = 0;
+    g_track_generation = 0;
+    g_state_file[0] = '\0';
+    g_cfg_mode = -1;
+    g_last_save_time = 0;
+}
+
+static void audio_copy_string(char *dst, size_t dst_size,
+                              const char *src, const char *fallback) {
+    const char *s = (src && *src) ? src : fallback;
+    size_t len;
+
+    if (!dst || dst_size == 0)
+        return;
+    if (!s)
+        s = "";
+    len = strlen(s);
+    if (len >= dst_size)
+        len = dst_size - 1;
+    memcpy(dst, s, len);
+    dst[len] = '\0';
+}
+
+static const char *audio_basename(const char *path) {
+    const char *base = path ? path : "";
+    for (const char *p = base; *p; p++) {
+        if (*p == '/' || *p == '\\')
+            base = p + 1;
+    }
+    return base;
+}
+
+static void audio_derive_display_name(const char *path,
+                                      char *out, size_t out_size) {
+    const char *base = audio_basename(path);
+    size_t len;
+
+    if (!out || out_size == 0)
+        return;
+    len = strlen(base);
+    if (len >= 4 &&
+        base[len - 4] == '.' &&
+        (base[len - 3] == 'm' || base[len - 3] == 'M') &&
+        (base[len - 2] == 'p' || base[len - 2] == 'P') &&
+        base[len - 1] == '3') {
+        len -= 4;
+    }
+    if (len >= out_size)
+        len = out_size - 1;
+    memcpy(out, base, len);
+    out[len] = '\0';
+    if (!out[0])
+        audio_copy_string(out, out_size, path, "(track)");
+}
+
+static int web_playlist_add(const GlrAudioTrackSpec *track) {
+    int i;
+    const char *p;
+    size_t len;
+
+    if (!track || !track->path || !track->path[0])
+        return -1;
+    if (g_playlist_count >= GLR_AUDIO_MAX_TRACKS)
+        return -1;
+
+    i = g_playlist_count;
+    p = track->path;
+    len = strlen(p);
+    if (len >= GLR_AUDIO_MAX_PATH)
+        len = GLR_AUDIO_MAX_PATH - 1;
+    memcpy(g_playlist[i], p, len);
+    g_playlist[i][len] = '\0';
+
+    audio_copy_string(g_playlist_group[i], sizeof(g_playlist_group[i]),
+                      track->group, "Music");
+    if (track->display_name && track->display_name[0]) {
+        audio_copy_string(g_playlist_display_name[i],
+                          sizeof(g_playlist_display_name[i]),
+                          track->display_name, NULL);
+    } else {
+        audio_derive_display_name(g_playlist[i],
+                                  g_playlist_display_name[i],
+                                  sizeof(g_playlist_display_name[i]));
+    }
+    g_playlist_duration_secs[i] = -1.0f;
+    g_playlist_count++;
+    return 0;
+}
+
+static int web_load_state(float *out_offset) {
+    char saved_track[GLR_AUDIO_MAX_PATH] = "";
+    int cfg_mode;
+
+    if (out_offset)
+        *out_offset = 0.0f;
+    if (!g_state_file[0])
+        return -1;
+
+    cfg_mode = web_audio_js_load_state_cfg(g_state_file);
+    if (cfg_mode >= 0)
+        g_cfg_mode = cfg_mode;
+
+    if (!web_audio_js_load_state_track(g_state_file, saved_track,
+                                       (int)sizeof(saved_track)))
+        return -1;
+    if (out_offset) {
+        double offset = web_audio_js_load_state_offset(g_state_file);
+        *out_offset = (offset > 0.0) ? (float)offset : 0.0f;
+    }
+
+    for (int i = 0; i < g_playlist_count; i++) {
+        if (strcmp(g_playlist[i], saved_track) == 0)
+            return i;
+    }
+    return -1;
+}
+
+static void web_save_state(void) {
+    const char *track = NULL;
+    double offset = 0.0;
+
+    if (!g_state_file[0])
+        return;
+    if (g_music_loaded &&
+        g_playlist_pos >= 0 && g_playlist_pos < g_playlist_count) {
+        track = g_playlist[g_playlist_pos];
+        offset = web_audio_js_current_time();
+    }
+    web_audio_js_save_state(g_state_file, track, offset, g_cfg_mode);
+    g_last_save_time = time(NULL);
+}
+
+static int web_start_track(int idx, float seek_secs) {
+    double seek = (seek_secs >= 0.0f) ? (double)seek_secs : -1.0;
+
+    if (!g_inited || idx < 0 || idx >= g_playlist_count)
+        return -1;
+
+    if (web_audio_js_start(g_playlist[idx],
+                           g_loop_mode == GLR_AUDIO_LOOP_SONG,
+                           g_paused, g_muted, seek) != 0)
+        return -1;
+
+    g_music_loaded = 1;
+    g_playlist_pos = idx;
+    g_track_generation++;
+    g_error_skip_count = 0;
+    return 0;
+}
+
+static int request_start(int idx, float seek_secs) {
+    if (!g_inited || idx < 0 || idx >= g_playlist_count)
+        return -1;
+
+    if (!g_gesture_done) {
+        g_pending_start = 1;
+        g_pending_idx = idx;
+        g_playlist_pos = idx;
+        g_pending_seek = seek_secs;
+        return 0;
+    }
+    return web_start_track(idx, seek_secs);
+}
+
+static void web_stop_current(void) {
+    web_audio_js_set_paused(1);
+    g_music_loaded = 0;
+    g_pending_start = 0;
+}
+
+static void web_advance_after_end_or_error(int from_error) {
+    int next;
+
+    if (g_playlist_count <= 0) {
+        web_stop_current();
+        return;
+    }
+
+    if (from_error) {
+        g_error_skip_count++;
+        if (g_error_skip_count >= g_playlist_count) {
+            web_stop_current();
+            return;
+        }
+    } else {
+        g_error_skip_count = 0;
+    }
+
+    next = g_playlist_pos + 1;
+    if (next >= g_playlist_count) {
+        if (g_loop_mode == GLR_AUDIO_LOOP_ALL)
+            next = 0;
+        else {
+            web_stop_current();
+            return;
+        }
+    }
+    request_start(next, GLR_AUDIO_NO_SEEK);
+}
+
+static void web_manifest_finish_autoplay(void) {
+    if (g_playlist_count <= 0)
+        return;
+    if (g_play_when_manifest_ready) {
+        g_play_when_manifest_ready = 0;
+        glr_audio_play_playlist();
+    }
+}
+
+EMSCRIPTEN_KEEPALIVE int glr_audio_web_manifest_begin(int count) {
+    (void)count;
+    g_playlist_count = 0;
+    g_playlist_pos = 0;
+    g_music_loaded = 0;
+    for (int i = 0; i < GLR_AUDIO_MAX_TRACKS; i++) {
+        g_playlist[i][0] = '\0';
+        g_playlist_group[i][0] = '\0';
+        g_playlist_display_name[i][0] = '\0';
+        g_playlist_duration_secs[i] = -1.0f;
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE int glr_audio_web_manifest_add(const char *path,
+                                                    const char *group,
+                                                    const char *display_name) {
+    GlrAudioTrackSpec track;
+    track.path = path;
+    track.group = group;
+    track.display_name = display_name;
+    return web_playlist_add(&track);
+}
+
+EMSCRIPTEN_KEEPALIVE int glr_audio_web_manifest_finish(void) {
+    web_manifest_finish_autoplay();
+    return g_playlist_count;
+}
+
+double glr_audio_hitch_threshold_ms_for_test(void) {
+    return 0.0;
+}
+
+void glr_audio_set_hitch_log_elapsed_fn(GlrAudioElapsedSecondsFn fn) {
+    (void)fn;
+}
+
+int glr_audio_init(void) {
+    if (g_inited)
+        return 0;
+    if (web_audio_js_init() != 0)
+        return -1;
+    g_inited = 1;
+    web_audio_js_request_manifest();
+    return 0;
+}
+
+void glr_audio_shutdown(void) {
+    if (!g_inited)
+        return;
+    web_save_state();
+    web_audio_js_shutdown();
+    reset_audio_module_state();
+}
+
+int glr_audio_set_playlist(const char *const *paths, int count) {
+    if (!paths || count < 0) return -1;
+
+    GlrAudioTrackSpec specs[GLR_AUDIO_MAX_TRACKS];
+    int n = count;
+    if (n > GLR_AUDIO_MAX_TRACKS)
+        n = GLR_AUDIO_MAX_TRACKS;
+    for (int i = 0; i < n; i++) {
+        specs[i].path = paths[i];
+        specs[i].group = "Music";
+        specs[i].display_name = NULL;
+    }
+    return glr_audio_set_playlist_specs(specs, count);
+}
+
+int glr_audio_set_playlist_specs(const GlrAudioTrackSpec *tracks, int count) {
+    int n;
+
+    if (!tracks || count < 0) return -1;
+
+    web_stop_current();
+    g_playlist_count = 0;
+    g_playlist_pos = 0;
+    g_pending_start = 0;
+
+    n = count;
+    if (n > GLR_AUDIO_MAX_TRACKS) {
+        fprintf(stderr,
+                "repl_audio: playlist has %d tracks; truncating to %d\n",
+                count, GLR_AUDIO_MAX_TRACKS);
+        n = GLR_AUDIO_MAX_TRACKS;
+    }
+
+    for (int i = 0; i < n; i++)
+        web_playlist_add(&tracks[i]);
+    for (int i = g_playlist_count; i < GLR_AUDIO_MAX_TRACKS; i++) {
+        g_playlist[i][0] = '\0';
+        g_playlist_group[i][0] = '\0';
+        g_playlist_display_name[i][0] = '\0';
+        g_playlist_duration_secs[i] = -1.0f;
+    }
+
+    web_manifest_finish_autoplay();
+    return g_playlist_count;
+}
+
+int glr_audio_play_playlist(void) {
+    float offset = 0.0f;
+    int idx;
+
+    if (!g_inited)
+        return -1;
+    idx = web_load_state(&offset);
+    if (g_playlist_count == 0) {
+        g_play_when_manifest_ready = 1;
+        return 0;
+    }
+    if (idx >= 0)
+        return request_start(idx, offset);
+    return request_start(0, GLR_AUDIO_NO_SEEK);
+}
+
+int glr_audio_play_music(const char *path) {
+    if (!path || !*path) return -1;
+    const char *arr[1] = { path };
+    if (glr_audio_set_playlist(arr, 1) < 0) return -1;
+    return glr_audio_play_playlist();
+}
+
+int glr_audio_next_track(void) {
+    int next;
+
+    if (!g_inited || g_playlist_count == 0) return -1;
+    next = g_playlist_pos + 1;
+    if (next >= g_playlist_count) next = 0;
+    return request_start(next, GLR_AUDIO_NO_SEEK);
+}
+
+int glr_audio_prev_track(void) {
+    int prev;
+
+    if (!g_inited || g_playlist_count == 0) return -1;
+    prev = g_playlist_pos - 1;
+    if (prev < 0) prev = g_playlist_count - 1;
+    return request_start(prev, GLR_AUDIO_NO_SEEK);
+}
+
+int glr_audio_play_track_index(int idx) {
+    if (!g_inited || idx < 0 || idx >= g_playlist_count) return -1;
+    return request_start(idx, GLR_AUDIO_NO_SEEK);
+}
+
+int glr_audio_seek(float seek_secs) {
+    if (!g_inited)
+        return -1;
+    if (seek_secs < 0.0f)
+        seek_secs = 0.0f;
+    if (g_music_loaded) {
+        int idx = g_playlist_pos;
+        float dur = g_playlist_duration_secs[idx];
+        if (dur >= 0.0f && seek_secs > dur)
+            seek_secs = dur;
+        web_audio_js_seek((double)seek_secs);
+        return 0;
+    }
+    if (g_pending_start) {
+        g_pending_seek = seek_secs;
+        return 0;
+    }
+    return -1;
+}
+
+int glr_audio_seek_relative(float offset_secs) {
+    float current = 0.0f;
+
+    if (!g_inited)
+        return -1;
+    if (g_music_loaded)
+        current = (float)web_audio_js_current_time();
+    else if (g_pending_start)
+        current = (g_pending_seek >= 0.0f) ? g_pending_seek : 0.0f;
+    else
+        return -1;
+    return glr_audio_seek(current + offset_secs);
+}
+
+void glr_audio_tick(void) {
+    if (!g_inited)
+        return;
+
+    if (g_music_loaded &&
+        g_playlist_pos >= 0 && g_playlist_pos < g_playlist_count) {
+        double dur = web_audio_js_duration();
+        if (dur >= 0.0)
+            g_playlist_duration_secs[g_playlist_pos] = (float)dur;
+    }
+
+    if (g_state_file[0] && g_music_loaded) {
+        time_t now = time(NULL);
+        if (difftime(now, g_last_save_time) >= STATE_SAVE_INTERVAL_SECS)
+            web_save_state();
+    }
+
+    if (web_audio_js_take_error()) {
+        web_advance_after_end_or_error(1);
+    } else if (g_loop_mode != GLR_AUDIO_LOOP_SONG &&
+               web_audio_js_take_ended()) {
+        web_advance_after_end_or_error(0);
+    }
+}
+
+void glr_audio_set_loop_mode(int mode) {
+    if (mode < GLR_AUDIO_LOOP_OFF)  mode = GLR_AUDIO_LOOP_OFF;
+    if (mode > GLR_AUDIO_LOOP_ALL)  mode = GLR_AUDIO_LOOP_ALL;
+    g_loop_mode = mode;
+    web_audio_js_set_loop(g_loop_mode == GLR_AUDIO_LOOP_SONG);
+}
+
+int glr_audio_get_loop_mode(void) {
+    return g_loop_mode;
+}
+
+void glr_audio_set_paused(int paused) {
+    g_paused = paused ? 1 : 0;
+    if (g_music_loaded && !g_pending_start)
+        web_audio_js_set_paused(g_paused);
+}
+
+int glr_audio_is_paused(void) {
+    return g_paused;
+}
+
+void glr_audio_set_muted(int muted) {
+    g_muted = muted ? 1 : 0;
+    web_audio_js_set_muted(g_muted);
+}
+
+int glr_audio_is_muted(void) {
+    return g_muted;
+}
+
+const char *glr_audio_get_current_track(void) {
+    if (!g_music_loaded ||
+        g_playlist_pos < 0 || g_playlist_pos >= g_playlist_count)
+        return NULL;
+    return g_playlist[g_playlist_pos];
+}
+
+int glr_audio_track_count(void) {
+    return g_playlist_count;
+}
+
+const char *glr_audio_track_display_name(int idx) {
+    if (idx < 0 || idx >= g_playlist_count)
+        return NULL;
+    return g_playlist_display_name[idx];
+}
+
+const char *glr_audio_track_group(int idx) {
+    if (idx < 0 || idx >= g_playlist_count)
+        return NULL;
+    return g_playlist_group[idx];
+}
+
+int glr_audio_current_index(void) {
+    if (g_music_loaded &&
+        g_playlist_pos >= 0 && g_playlist_pos < g_playlist_count)
+        return g_playlist_pos;
+    return -1;
+}
+
+float glr_audio_current_cursor_seconds(void) {
+    return g_music_loaded ? (float)web_audio_js_current_time() : 0.0f;
+}
+
+float glr_audio_track_duration_seconds(int idx) {
+    if (idx < 0 || idx >= g_playlist_count)
+        return -1.0f;
+    if (idx == g_playlist_pos && g_music_loaded) {
+        double dur = web_audio_js_duration();
+        if (dur >= 0.0)
+            g_playlist_duration_secs[idx] = (float)dur;
+    }
+    return g_playlist_duration_secs[idx];
+}
+
+unsigned int glr_audio_track_generation(void) {
+    return g_track_generation;
+}
+
+void glr_audio_set_state_file(const char *path) {
+    if (!path) {
+        g_state_file[0] = '\0';
+    } else {
+        size_t len = strlen(path);
+        if (len >= GLR_AUDIO_MAX_PATH) len = GLR_AUDIO_MAX_PATH - 1;
+        memcpy(g_state_file, path, len);
+        g_state_file[len] = '\0';
+    }
+    g_last_save_time = 0;
+}
+
+void glr_audio_on_user_gesture(void) {
+    if (!g_inited || g_gesture_done)
+        return;
+    g_gesture_done = 1;
+    if (g_pending_start) {
+        int idx = g_pending_idx;
+        float seek = g_pending_seek;
+        g_pending_start = 0;
+        g_pending_seek = GLR_AUDIO_NO_SEEK;
+        request_start(idx, seek);
+    }
+}
+
+void glr_audio_set_cfg_mode(int mode) {
+    g_cfg_mode = mode;
+}
+
+int glr_audio_get_cfg_mode(void) {
+    return g_cfg_mode;
+}
+
+#else  /* !__EMSCRIPTEN__ */
+
 /* Threading model selection. Default: use the background worker thread.
  * Auto-disabled on Emscripten; overridable on any platform by defining
  * GLR_AUDIO_NO_THREAD on the command line (0 forces the thread on). */
@@ -1467,3 +2276,5 @@ int glr_audio_get_cfg_mode(void) {
     audio_unlock();
     return v;
 }
+
+#endif  /* !__EMSCRIPTEN__ */
