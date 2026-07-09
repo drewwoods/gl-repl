@@ -680,6 +680,65 @@ static void test_single_polygon_highlight_fan_anchor(void) {
     ASSERT_INT("fan triangle draws v3", trace_count_line(&log, "glVertex3f 3 0 0"), 1);
 }
 
+/* Bold vertex-outline style scales VERTEX_OUTLINE_EDGE_WIDTH by
+ * VERTEX_OUTLINE_BOLD_SCALE (1.2 * 2.5 = 3.0), an exact tie with the
+ * unscaled VERTEX_OUTLINE_ACTIVE_WIDTH (3.0f). SINGLE_POLYGON's highlight
+ * fires, then falls through to the plain-outline pass (show_vertex_outlines
+ * redraws the whole block, including the selected primitive, at edge
+ * width/color) — so an unscaled highlight width was an exact tie with that
+ * later redraw and got fully overwritten. The highlight width must scale
+ * the same way so it stays strictly thicker than the bold edge redraw. */
+static void test_single_polygon_highlight_bold_style(void) {
+    printf("--- edit_overlays single-polygon highlight (bold style) ---\n");
+
+    GLCmd cmds[10];
+    mk_cmd(&cmds[0], CMD_BEGIN, (float)GL_QUADS, 0, 0);
+    mk_cmd(&cmds[1], CMD_VERTEX3F, 0, 0, 0); cmds[1].src_cmd_idx = 7; /* v0 */
+    mk_cmd(&cmds[2], CMD_VERTEX3F, 1, 0, 0);                          /* v1 */
+    mk_cmd(&cmds[3], CMD_VERTEX3F, 2, 0, 0);                          /* v2 */
+    mk_cmd(&cmds[4], CMD_VERTEX3F, 3, 0, 0);                          /* v3 */
+    mk_cmd(&cmds[5], CMD_VERTEX3F, 4, 0, 0);                          /* v4 */
+    mk_cmd(&cmds[6], CMD_VERTEX3F, 5, 0, 0);                          /* v5 */
+    mk_cmd(&cmds[7], CMD_VERTEX3F, 6, 0, 0);                          /* v6 */
+    mk_cmd(&cmds[8], CMD_VERTEX3F, 7, 0, 0);                          /* v7 */
+    mk_cmd(&cmds[9], CMD_END, 0, 0, 0);
+
+    OverlayWalkCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = cmds;
+    ctx.program.cmd_count = 10;
+    ctx.cursor.edit_line_idx = 7;
+    ctx.cursor.cursor_block_begin = -1;
+    ctx.cursor.cursor_block_end = -1;
+    ctx.highlight_current_poly = 1;
+    ctx.show_vertex_outlines = 1;  /* triggers the fall-through redraw */
+    ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD;
+    ctx.cursor_overlay_scope = OVERLAY_SCOPE_SINGLE_POLYGON;
+    ctx.cursor_poly_valid = 1;
+    ctx.cursor_poly_first = 4;  /* second quad: v4..v7 */
+    ctx.cursor_poly_last = 7;
+
+    /* Sanity: bold edge width lands exactly on the unscaled active width —
+     * the tie this test guards against. */
+    ASSERT_TRUE("bold edge width ties the unscaled active width",
+                fabsf(VERTEX_OUTLINE_EDGE_WIDTH * VERTEX_OUTLINE_BOLD_SCALE -
+                      VERTEX_OUTLINE_ACTIVE_WIDTH) < 0.0005f);
+
+    TraceLog log;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+
+    float bold_active = VERTEX_OUTLINE_ACTIVE_WIDTH * VERTEX_OUTLINE_BOLD_SCALE;
+    float bold_edge = VERTEX_OUTLINE_EDGE_WIDTH * VERTEX_OUTLINE_BOLD_SCALE;
+    ASSERT_INT("bold single-polygon highlight scales past the bold edge redraw",
+               trace_count_line_width_near(&log, bold_active), 1);
+    ASSERT_INT("bold edge redraw still present at its own (lower) width",
+               trace_count_line_width_near(&log, bold_edge), 1);
+    ASSERT_INT("highlight draws the selected quad's v4",
+               trace_count_line(&log, "glVertex3f 4 0 0"), 2);
+}
+
 /* render_outlines_tess_pass: draws each tess contour as a GL_LINE_LOOP. */
 static void test_render_outlines_tess(void) {
     printf("--- edit_overlays render_outlines (tess pass) ---\n");
@@ -1836,6 +1895,7 @@ int main(void) {
     test_current_poly_highlight_respects_overlay_scope();
     test_single_polygon_highlight();
     test_single_polygon_highlight_fan_anchor();
+    test_single_polygon_highlight_bold_style();
     test_render_outlines_tess();
     test_render_outlines_glut();
     test_find_next_vertex_args();
