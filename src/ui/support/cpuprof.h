@@ -89,17 +89,20 @@ int  ui_fps_panel_height(void);
 
 /* --- Section histogram panel ---
  *
- * A third floating panel (its own overlay-layout slot) drawing the fixed
- * timing histograms from support/cpuprof.c as one graph: every top-level
- * (depth 0) section overlaid, additively blended, so their distributions can
- * be compared directly instead of through the section listing's single EMA
- * number. Nested detail sections are never plotted — forty overlaid series
- * would be noise — so the panel looks the same in SECTIONS and DETAILS mode,
- * which is also where it is visible.
+ * A third floating panel (its own overlay-layout slot) drawing the timing
+ * histograms from support/cpuprof.c as one graph: every top-level (depth 0)
+ * section overlaid, additively blended, so their distributions can be compared
+ * directly instead of through the section listing's single EMA number. Nested
+ * detail sections are never plotted — forty overlaid series would be noise —
+ * so the panel looks the same in SECTIONS and DETAILS mode, which is also
+ * where it is visible.
  *
- * Counts are plotted on a log y axis: a section that spends nearly every
- * frame in one bin would otherwise flatten every spread-out neighbor to the
- * baseline. */
+ * Both axes are logarithmic. Time (x) because the bins themselves are
+ * log-spaced and the axis is linear in bin index: the sections span four or
+ * five decades at once, and a linear time axis would pile every cheap one into
+ * a single indistinguishable bar at the origin. Counts (y) because a section
+ * that spends nearly every frame in one bin would otherwise flatten every
+ * spread-out neighbour to the baseline. */
 typedef struct {
     int window_w, window_h;
     int visible;            /* profile mode is SECTIONS or DETAILS */
@@ -110,27 +113,22 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view);
 int  ui_histogram_panel_width(void);
 int  ui_histogram_panel_height(void);
 
-/* The panel's x-axis policy, pure and separately testable.
+/* The panel's x-axis policy, exposed for tests.
  *
- * Given one series' PROF_HISTOGRAM_BIN_COUNT bins, returns the lowest bin at
- * or below which at least 95% of that series' samples fall — its robust
- * "typical maximum" — or -1 for a series with no samples. The panel's axis is
- * the max of this across the plotted series.
+ * Writes the inclusive bin range the plot draws: the occupied bins across
+ * every plotted series, widened to a minimum span so a one-bin distribution is
+ * still drawable. Returns 0 (leaving the outputs untouched) when no plotted
+ * series has any samples.
  *
- * A percentile rather than the true maximum because the bins span a fixed
- * 0..100 ms: one pathological frame (the first-frame display-list compile, a
- * stalled swap) otherwise parks a sample in the overflow bin and pins the axis
- * at 100 ms for the rest of the run, crushing every real distribution into the
- * leftmost pixel. Samples above the axis are counted and reported as "+N off"
- * rather than silently dropped, and the listing panel's Max column still
- * reports the worst case — so the tail stays discoverable, just not in charge
- * of the scale.
+ * No percentile trim is needed, because the bins are log-spaced: the axis is
+ * linear in bin index and so logarithmic in time, and an outlier lands a
+ * bounded number of bins to the right rather than 30x further along. It costs
+ * the axis a slice of width instead of collapsing every real distribution into
+ * the leftmost pixel, so the panel can show the full range including the tail.
  *
- * Per series rather than over the pooled distribution: most sections run in
- * well under one bin's 97.7 µs, so pooling buries the percentile in bin 0 and
- * clips the slowest section's real spread. Taking each series' own 95th
- * percentile and maxing means the axis tracks the slowest section's bulk and
- * a cheap section can never shrink it. */
-int ui_histogram_series_axis_bin(const ProfHistogramBin *bins);
+ * Reads the live histograms rather than taking them as arguments, so it is not
+ * pure; it is separated out because the range policy is the panel's one piece
+ * of non-obvious logic. */
+int ui_histogram_axis_range(int *lo_bin, int *hi_bin);
 
 #endif /* UI_CPUPROF_H */

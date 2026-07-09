@@ -14,6 +14,7 @@
 #include "repl/state_notify.h"
 #include "repl/state_owners.h"
 #include "source_document.h"     /* source_document_clear */
+#include "support/cpuprof.h"     /* prof_histogram_reset on example switch */
 #include "config.h"              /* REPL_DIAG_TEXT_MAX */
 
 static const char *example_cam_skip_ws(const char *text) {
@@ -613,7 +614,17 @@ static int load_example(int idx) {
 }
 
 int repl_load_example(int idx) {
-    return load_example(idx);
+    int edit_line = load_example(idx);
+    if (edit_line > 0) {
+        /* The timing histograms are cumulative and describe the *previous*
+         * example's geometry — a heavy scene's spread would haunt a light one
+         * for the rest of the session. The EMAs re-converge on their own, so
+         * only the histograms need clearing. Done here rather than in the
+         * callers because every example path (menu, F12 cycle, --example,
+         * startup bootstrap) funnels through this entry point. */
+        prof_histogram_reset();
+    }
+    return edit_line;
 }
 
 int repl_load_example_lines_for_test(const char *const *lines) {

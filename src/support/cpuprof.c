@@ -4,6 +4,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "support/cpuprof.h"
 
+#include <math.h>
 #include <time.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -102,12 +103,39 @@ static double prof_now_us(void) {
     return prof_platform_now_us();
 }
 
-static int prof_histogram_bin_for_us(double elapsed_us) {
-    if (!(elapsed_us > 0.0)) return 0;
-    if (elapsed_us >= PROF_HISTOGRAM_MAX_US)
-        return PROF_HISTOGRAM_BIN_COUNT - 1;
-    return (int)(elapsed_us * (double)PROF_HISTOGRAM_BIN_COUNT
-                 / PROF_HISTOGRAM_MAX_US);
+/* Decades per bin. The whole log-bin layout derives from this one constant. */
+#define PROF_HIST_DECADES_PER_BIN \
+    (PROF_HISTOGRAM_DECADES / (double)PROF_HISTOGRAM_BIN_COUNT)
+
+int prof_histogram_bin_for_us(double us) {
+    /* Underflow (including zero and the negative that a non-monotonic clock
+     * could hand us) folds into bin 0; overflow into the last bin. */
+    if (!(us > PROF_HISTOGRAM_MIN_US)) return 0;
+    if (us >= PROF_HISTOGRAM_MAX_US) return PROF_HISTOGRAM_BIN_COUNT - 1;
+
+    /* The epsilon makes a bin's exact lower edge land in that bin rather than
+     * the one below: prof_histogram_bin_lo_us() reaches the edge through
+     * pow(), and log10(pow(10, x)) comes back a hair under x, so the floor
+     * would drop it. 1e-9 decades is ~1e-9 of a bin — far below any real
+     * timing resolution — so it can only ever fix that boundary. */
+    int bin = (int)(log10(us / PROF_HISTOGRAM_MIN_US)
+                    / PROF_HIST_DECADES_PER_BIN + 1e-9);
+    if (bin < 0) bin = 0;
+    if (bin > PROF_HISTOGRAM_BIN_COUNT - 1) bin = PROF_HISTOGRAM_BIN_COUNT - 1;
+    return bin;
+}
+
+double prof_histogram_bin_lo_us(int bin) {
+    if (bin <= 0) return PROF_HISTOGRAM_MIN_US;
+    if (bin > PROF_HISTOGRAM_BIN_COUNT - 1) bin = PROF_HISTOGRAM_BIN_COUNT - 1;
+    return PROF_HISTOGRAM_MIN_US
+         * pow(10.0, (double)bin * PROF_HIST_DECADES_PER_BIN);
+}
+
+double prof_histogram_bin_hi_us(int bin) {
+    if (bin < 0) bin = 0;
+    if (bin >= PROF_HISTOGRAM_BIN_COUNT - 1) return PROF_HISTOGRAM_MAX_US;
+    return prof_histogram_bin_lo_us(bin + 1);
 }
 
 static void prof_histogram_record(ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT],
@@ -304,6 +332,15 @@ int prof_frame_time_histogram(ProfHistogramBin *out, int max_bins) {
     for (int i = 0; i < n; i++)
         out[i] = g_frame_time_hist[i];
     return n;
+}
+
+void prof_histogram_reset(void) {
+    init_if_needed();
+    for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++)
+        for (int bin_idx = 0; bin_idx < PROF_HISTOGRAM_BIN_COUNT; bin_idx++)
+            g_prof_hist[section_idx][bin_idx] = 0;
+    for (int bin_idx = 0; bin_idx < PROF_HISTOGRAM_BIN_COUNT; bin_idx++)
+        g_frame_time_hist[bin_idx] = 0;
 }
 
 #ifdef GL_STUBS

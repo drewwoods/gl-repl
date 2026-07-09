@@ -20,6 +20,7 @@
 #include "render3d/render.h"
 #include "render3d/themes.h"       /* GRID_THEME_*, AXES_THEME_*, RENDER3D_BACKDROP_* */
 #include "app/glr_defaults.h"   /* CFG_DEFAULT_* */
+#include "support/cpuprof.h"   /* prof_histogram_reset on example load */
 
 #define g_accum_effect        (glr_state_render_mut()->accum_effect)
 #define g_multisample_enabled (glr_state_render_mut()->multisample_enabled)
@@ -1443,6 +1444,38 @@ static void test_example_cfg_uses_symbolic_names(void) {
     }
 }
 
+/* Switching examples replaces the measured workload, so the cumulative timing
+ * histograms must not carry the previous example's distribution (or its
+ * startup outliers) into the new one. repl_load_example is the chokepoint
+ * every path funnels through — menu, F12 cycle, --example, bootstrap. */
+static void test_example_load_resets_histograms(void) {
+    ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
+    int total;
+
+    ASSERT_TRUE("catalog has at least one example", repl_example_count() > 0);
+
+    prof_test_reset();
+    prof_test_set_now_us(1000.0);
+    prof_begin(PROF_FLATTEN);
+    prof_test_set_now_us(31000.0);
+    prof_end(PROF_FLATTEN);
+    prof_test_clear_now_us();
+
+    prof_section_histogram(PROF_FLATTEN, bins, PROF_HISTOGRAM_BIN_COUNT);
+    total = 0;
+    for (int i = 0; i < PROF_HISTOGRAM_BIN_COUNT; i++) total += (int)bins[i];
+    ASSERT_TRUE("histogram holds the pre-switch sample", total == 1);
+
+    ASSERT_TRUE("example loads", repl_load_example(0) > 0);
+
+    prof_section_histogram(PROF_FLATTEN, bins, PROF_HISTOGRAM_BIN_COUNT);
+    total = 0;
+    for (int i = 0; i < PROF_HISTOGRAM_BIN_COUNT; i++) total += (int)bins[i];
+    ASSERT_TRUE("example load clears the stale histogram", total == 0);
+
+    prof_test_reset();
+}
+
 static void test_example_tag_default_cfg(void) {
     int bezier_idx     = find_example_index_by_name("Bezier curve with guides");
     int cube_idx       = find_example_index_by_name("Conditional colors (if + t)");
@@ -1746,6 +1779,7 @@ int main(int argc, char **argv) {
     test_example_catalog_metadata();
     test_example_tag_metadata();
     test_example_subheading_metadata();
+    test_example_load_resets_histograms();
     test_example_tag_default_cfg();
     test_example_tag_default_dispatch();
     test_example_cfg_uses_symbolic_names();
