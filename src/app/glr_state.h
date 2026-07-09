@@ -37,6 +37,7 @@ typedef struct {
     int show_normal_vectors;
     int show_vertex_indices;
     int show_vertex_outlines;
+    int vertex_outline_style;
     int show_vertex_points;
     Render3dXformGuideMode xform_guide_mode;
     int autonormal;

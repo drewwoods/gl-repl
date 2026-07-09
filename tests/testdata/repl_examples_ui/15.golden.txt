@@ -27,6 +27,7 @@
 /* @cfg overlay_scope = OVERLAY_SCOPE_FIRST_INSTANCE */
 /* @cfg normal_vectors = 0 */
 /* @cfg vertex_outlines = 0 */
+/* @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT */
 /* @cfg vertex_points = 0 */
 /* @cfg poly_highlight = 0 */
 /* @cfg winding = 0 */

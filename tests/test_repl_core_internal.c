@@ -702,6 +702,8 @@ int main() {
         glr_state_presentation_mut()->show_normal_vectors = 1;
         glr_state_presentation_mut()->show_vertex_indices = 1; glr_ctrl_sync_ui_chrome();
         glr_state_presentation_mut()->show_vertex_outlines = 1;
+        glr_state_presentation_mut()->vertex_outline_style =
+            VERTEX_OUTLINE_STYLE_BOLD_INVERTED;
         glr_state_presentation_mut()->show_vertex_points = 1;
         glr_state_presentation_mut()->xform_guide_mode = RENDER3D_XFORM_GUIDE_FRAME;
         glr_state_presentation_mut()->autonormal = 1;
@@ -734,6 +736,9 @@ int main() {
                    glr_state_presentation().show_vertex_indices, CFG_DEFAULT_VERTEX_INDICES);
         ASSERT_INT("presentation reset outlines",
                    glr_state_presentation().show_vertex_outlines, CFG_DEFAULT_VERTEX_OUTLINES);
+        ASSERT_INT("presentation reset vertex outline style",
+                   glr_state_presentation().vertex_outline_style,
+                   CFG_DEFAULT_VERTEX_OUTLINE_STYLE);
         ASSERT_INT("presentation reset points",
                    glr_state_presentation().show_vertex_points, CFG_DEFAULT_VERTEX_POINTS);
         ASSERT_INT("presentation reset xform guide",

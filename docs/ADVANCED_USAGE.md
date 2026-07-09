@@ -299,11 +299,12 @@ which choice it selects:
 | `grid_extent` | `GRID_EXTENT_CLOSE` `_MID` `_FAR` |
 | `grid_major` | `GRID_MAJOR_1` `_2` `_5` `_10` (the major-tick spacing) |
 | `view_mode` | `RENDER3D_VIEW_3D` `RENDER3D_VIEW_2D` (perspective vs. 2D ortho) |
+| `vertex_outline_style` | `VERTEX_OUTLINE_STYLE_DEFAULT` `_BOLD` `_INVERTED` `_BOLD_INVERTED` |
 
 **Integer slugs** carry a plain index: the toggles `wireframe`,
-`normal_vectors`, `vertex_outlines`, `vertex_points`, `light_indicators`,
-`camera_rotate`, `variable_panel` are `0`/`1`; `vertex_labels` and
-`xform_guides` are small multi-state cycles saved as their index.
+`normal_vectors`, `vertex_outlines`, `vertex_points`, `light_indicators`, `camera_rotate`, `variable_panel`
+are `0`/`1`; `vertex_labels` and `xform_guides` are small multi-state
+cycles saved as their index.
 
 ```c
 // @cfg grid = GRID_THEME_OCEAN

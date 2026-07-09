@@ -56,6 +56,7 @@ static const float g_grid_extents[GRID_EXTENT_COUNT] = {
         .show_normal_vectors    = CFG_DEFAULT_NORMAL_VECTORS, \
         .show_vertex_indices    = CFG_DEFAULT_VERTEX_INDICES, \
         .show_vertex_outlines   = CFG_DEFAULT_VERTEX_OUTLINES, \
+        .vertex_outline_style   = CFG_DEFAULT_VERTEX_OUTLINE_STYLE, \
         .show_vertex_points     = CFG_DEFAULT_VERTEX_POINTS, \
         .xform_guide_mode       = CFG_DEFAULT_XFORM_GUIDE_MODE, \
         .autonormal             = CFG_DEFAULT_AUTONORMAL, \
@@ -140,6 +141,7 @@ void glr_state_presentation_reset_example_defaults(void) {
     p->show_vertex_indices   = CFG_DEFAULT_VERTEX_INDICES;
     p->show_normal_vectors   = CFG_DEFAULT_NORMAL_VECTORS;
     p->show_vertex_outlines  = CFG_DEFAULT_VERTEX_OUTLINES;
+    p->vertex_outline_style  = CFG_DEFAULT_VERTEX_OUTLINE_STYLE;
     p->show_vertex_points    = CFG_DEFAULT_VERTEX_POINTS;
     p->highlight_current_poly = CFG_DEFAULT_HIGHLIGHT_POLY;
     p->xform_guide_mode      = CFG_DEFAULT_XFORM_GUIDE_MODE;

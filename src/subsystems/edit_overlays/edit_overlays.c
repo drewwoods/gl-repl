@@ -18,6 +18,31 @@
 #define NORMAL_FRAME_STACK_MAX 128
 #define NORMAL_FRAME_EPS 1e-8f
 
+static int vertex_outline_style_bold(const OverlayWalkCtx *ctx) {
+    int style = ctx ? ctx->vertex_outline_style : VERTEX_OUTLINE_STYLE_DEFAULT;
+    return style == VERTEX_OUTLINE_STYLE_BOLD ||
+           style == VERTEX_OUTLINE_STYLE_BOLD_INVERTED;
+}
+
+static int vertex_outline_style_inverted(const OverlayWalkCtx *ctx) {
+    int style = ctx ? ctx->vertex_outline_style : VERTEX_OUTLINE_STYLE_DEFAULT;
+    return style == VERTEX_OUTLINE_STYLE_INVERTED ||
+           style == VERTEX_OUTLINE_STYLE_BOLD_INVERTED;
+}
+
+static float vertex_outline_width(const OverlayWalkCtx *ctx, float base_width) {
+    return vertex_outline_style_bold(ctx) ? base_width * VERTEX_OUTLINE_BOLD_SCALE : base_width;
+}
+
+static void vertex_outline_color(const OverlayWalkCtx *ctx, Render3dColorToken token) {
+    if (vertex_outline_style_inverted(ctx)) {
+        Render3dRgba c = render3d_rgba(token);
+        glColor4f(1.0f - c.r, 1.0f - c.g, 1.0f - c.b, c.a);
+    } else {
+        render3d_clr(token);
+    }
+}
+
 /* Transform a point by a column-major (OpenGL-layout) 4x4 matrix, dividing by
  * the resulting w (1 for the affine modelview transforms we deal with, but the
  * divide keeps it correct if a projection ever slips in). */
@@ -325,11 +350,11 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
                 block_is_current = 0;
             }
             if (block_is_current) {
-                glLineWidth(3.0f);
+                glLineWidth(VERTEX_OUTLINE_ACTIVE_WIDTH);
                 render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
             } else if (ctx->show_vertex_outlines && draw_outline) {
-                glLineWidth(1.2f);
-                render3d_clr(RENDER3D_CLR_OUTLINE_EDGE);
+                glLineWidth(vertex_outline_width(ctx, VERTEX_OUTLINE_EDGE_WIDTH));
+                vertex_outline_color(ctx, RENDER3D_CLR_OUTLINE_EDGE);
             } else {
                 in_begin = 0;
                 break;
@@ -407,11 +432,13 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
                 glLineWidth(1.0f);
             }
             if (ctx->show_vertex_outlines || tess_poly_is_current) {
-                glLineWidth(1.5f);
-                if (tess_poly_is_current)
+                if (tess_poly_is_current) {
+                    glLineWidth(VERTEX_OUTLINE_TESS_WIDTH);
                     render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
-                else
-                    render3d_clr(RENDER3D_CLR_OUTLINE);
+                } else {
+                    glLineWidth(vertex_outline_width(ctx, VERTEX_OUTLINE_TESS_WIDTH));
+                    vertex_outline_color(ctx, RENDER3D_CLR_OUTLINE);
+                }
                 glBegin(GL_LINE_LOOP);
                 tess_in_contour = 1;
             }
@@ -476,11 +503,11 @@ static void render_outlines_glut_pass(const OverlayWalkCtx *ctx) {
                                                       selected_shape_instances);
         }
         if (is_current) {
-            glLineWidth(3.0f);
+            glLineWidth(VERTEX_OUTLINE_ACTIVE_WIDTH);
             render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
         } else if (ctx->show_vertex_outlines) {
-            glLineWidth(1.2f);
-            render3d_clr(RENDER3D_CLR_OUTLINE_EDGE);
+            glLineWidth(vertex_outline_width(ctx, VERTEX_OUTLINE_EDGE_WIDTH));
+            vertex_outline_color(ctx, RENDER3D_CLR_OUTLINE_EDGE);
         } else {
             continue;
         }

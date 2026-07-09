@@ -286,6 +286,9 @@ static const char *wireframe_mode_names[] = { "Off", "Wireframe", "Hidden-line" 
 static const char *vertex_label_names[OVERLAY_VERTEX_LABEL_COUNT] = {
     OVERLAY_VERTEX_LABEL_LIST(OVERLAY_VERTEX_LABEL_NAME_ENTRY)
 };
+static const char *vertex_outline_style_names[VERTEX_OUTLINE_STYLE_COUNT] = {
+    VERTEX_OUTLINE_STYLE_LIST(VERTEX_OUTLINE_STYLE_NAME_ENTRY)
+};
 
 static int audio_menu_group_differs(const char *a, const char *b) {
     if (a == b)
@@ -460,6 +463,8 @@ const GlrConfigItem g_cfg_items[] = {
       .key_code = KM_KEY(GLR_NORMAL_VECTORS), .modifiers = KM_MODS(GLR_NORMAL_VECTORS) },
     { .label = "Vertex outlines", .key = GLR_CONFIG_VERTEX_OUTLINES, .state_count = 2,
       .key_code = KM_KEY(GLR_VERTEX_OUTLINES), .modifiers = KM_MODS(GLR_VERTEX_OUTLINES) },
+    { .label = "Vertex outline style", .key = GLR_CONFIG_VERTEX_OUTLINE_STYLE,
+      .state_count = VERTEX_OUTLINE_STYLE_COUNT, .state_names = vertex_outline_style_names },
     { .label = "Vertex points", .key = GLR_CONFIG_VERTEX_POINTS, .state_count = 2,
       .key_code = KM_KEY(GLR_VERTEX_POINTS), .modifiers = KM_MODS(GLR_VERTEX_POINTS) },
     { .label = "Poly highlight", .key = GLR_CONFIG_POLY_HIGHLIGHT, .state_count = 2,
@@ -519,6 +524,7 @@ static int cfg_key_in_scene_subset(GlrConfigKey key) {
     case GLR_CONFIG_OVERLAY_SCOPE:
     case GLR_CONFIG_NORMAL_VECTORS:
     case GLR_CONFIG_VERTEX_OUTLINES:
+    case GLR_CONFIG_VERTEX_OUTLINE_STYLE:
     case GLR_CONFIG_VERTEX_POINTS:
     case GLR_CONFIG_POLY_HIGHLIGHT:
     case GLR_CONFIG_XFORM_GUIDE_MODE:
@@ -597,7 +603,7 @@ static int glr_export_cfg_slug_is_hidden_audio(const char *slug) {
  *
  * The slug→table map below covers every enum-valued slug the catalogs
  * actually use today (grid / axes / grid_extent / grid_major / backdrop /
- * light_theme / view_mode / overlay_scope). Other enum-shaped slugs
+ * light_theme / view_mode / overlay_scope / vertex_outline_style). Other enum-shaped slugs
  * — replay, code_panel_layout, vertex_label, etc. — stay integer-only
  * in their saved form because no catalog literal carries them
  * symbolically. Add a table here if a new catalog needs symbolic
@@ -666,6 +672,11 @@ static const char *cfg_overlay_scope_symbols[OVERLAY_SCOPE_COUNT] = {
     OVERLAY_SCOPE_LIST(OVERLAY_SCOPE_SYMBOL_ENTRY)
 #undef OVERLAY_SCOPE_SYMBOL_ENTRY
 };
+static const char *cfg_vertex_outline_style_symbols[VERTEX_OUTLINE_STYLE_COUNT] = {
+#define VERTEX_OUTLINE_STYLE_SYMBOL_ENTRY(name, str) [VERTEX_OUTLINE_STYLE_##name] = "VERTEX_OUTLINE_STYLE_" #name,
+    VERTEX_OUTLINE_STYLE_LIST(VERTEX_OUTLINE_STYLE_SYMBOL_ENTRY)
+#undef VERTEX_OUTLINE_STYLE_SYMBOL_ENTRY
+};
 static const char *cfg_post_fx_scope_symbols[GLR_POST_FX_SCOPE_COUNT] = {
 #define POST_FX_SCOPE_SYMBOL_ENTRY(suffix, name_str, symbol_str) [GLR_POST_FX_SCOPE_##suffix] = symbol_str,
     POST_FX_SCOPE_LIST(POST_FX_SCOPE_SYMBOL_ENTRY)
@@ -725,6 +736,10 @@ static const char *const *cfg_symbol_table_for_slug(const char *slug,
     if (strcmp(slug, "overlay_scope") == 0) {
         *count = OVERLAY_SCOPE_COUNT;
         return cfg_overlay_scope_symbols;
+    }
+    if (strcmp(slug, "vertex_outline_style") == 0) {
+        *count = VERTEX_OUTLINE_STYLE_COUNT;
+        return cfg_vertex_outline_style_symbols;
     }
     if (strcmp(slug, "post_fx_scope") == 0) {
         *count = GLR_POST_FX_SCOPE_COUNT;

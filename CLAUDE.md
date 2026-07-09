@@ -1229,7 +1229,7 @@ Declarative toggle system in [`src/app/glr_actions.c`](src/app/glr_actions.c):
   `glr_config_row_kind`); it counts only real `### ` headers — the
   `All` row is owned in the menu layer (`config_all_parent_row`), never
   double-counted. The `All` flyout spans the whole table 1:1 with
-  `### `/`---` rows rendered as inert chrome ([`GlrConfigRowKind`](src/app/glr_config.h#L195)).
+  `### `/`---` rows rendered as inert chrome ([`GlrConfigRowKind`](src/app/glr_config.h#L196)).
 - **Scrolling long flyouts.** A flyout taller than the viewport (for example,
   the synthetic **All** flyout in a short window) is
   clamped to fit by `submenu_rect`, and the mouse wheel pages through the

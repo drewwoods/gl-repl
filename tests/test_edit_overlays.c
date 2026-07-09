@@ -10,6 +10,7 @@
 #include "app/glr_ctrl.h"
 #include "subsystems/edit_overlays/edit_overlays.h"
 #include "support/test_harness.h"
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -69,6 +70,18 @@ static int trace_count_line(const TraceLog *log, const char *exact) {
     int c = 0;
     for (int i = 0; i < log->n; i++)
         if (strcmp(log->lines[i], exact) == 0) c++;
+    return c;
+}
+
+static int trace_count_line_width_near(const TraceLog *log, float expected) {
+    int c = 0;
+    for (int i = 0; i < log->n; i++) {
+        float width;
+        char tail;
+        if (sscanf(log->lines[i], "glLineWidth %f %c", &width, &tail) == 1 &&
+            fabsf(width - expected) < 0.0005f)
+            c++;
+    }
     return c;
 }
 
@@ -435,9 +448,37 @@ static void test_render_outlines_glbegin(void) {
     ASSERT_INT("outline traces the 2f vertex",
                trace_count_line(&log, "glVertex2f 0.4 0.5"), 1);
     ASSERT_INT("edge outline width applied",
-               trace_count_line(&log, "glLineWidth 1.2"), 1);
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_EDGE_WIDTH), 1);
     ASSERT_INT("polygon mode toggled to lines and back",
                trace_count_sym(&log, "glPolygonMode") >= 2, 1);
+
+    ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("bold edge outline applies scale",
+               trace_count_line_width_near(
+                   &log, VERTEX_OUTLINE_EDGE_WIDTH * VERTEX_OUTLINE_BOLD_SCALE), 1);
+
+    ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_INVERTED;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("inverted edge outline flips black to white",
+               trace_count_line(&log, "glColor4f 1 1 1 1"), 1);
+    ASSERT_INT("inverted edge outline keeps default width",
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_EDGE_WIDTH), 1);
+
+    ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD_INVERTED;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("bold inverted edge outline applies scale",
+               trace_count_line_width_near(
+                   &log, VERTEX_OUTLINE_EDGE_WIDTH * VERTEX_OUTLINE_BOLD_SCALE), 1);
+    ASSERT_INT("bold inverted edge outline flips color",
+               trace_count_line(&log, "glColor4f 1 1 1 1"), 1);
+    ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT;
 
     /* GL_LINES has no overlay: with only show_vertex_outlines, the begin
      * block is skipped entirely (no vertices traced). */
@@ -452,16 +493,22 @@ static void test_render_outlines_glbegin(void) {
      * thick active-outline width even for a line primitive. */
     mk_cmd(&cmds[0], CMD_BEGIN, (float)GL_LINES, 0, 0);
     cmds[1].src_cmd_idx = 7;
-    ctx.show_vertex_outlines = 0;
+    ctx.show_vertex_outlines = 1;
+    ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD_INVERTED;
     ctx.highlight_current_poly = 1;
     ctx.cursor.edit_line_idx = 7;
     trace_begin();
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("current-poly highlight uses the thick width",
-               trace_count_line(&log, "glLineWidth 3"), 1);
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 1);
+    ASSERT_INT("current-poly highlight ignores inverted outline color",
+               trace_count_line(&log, "glColor4f 1 1 1 1"), 0);
+    ASSERT_INT("current-poly highlight keeps active color",
+               trace_count_line(&log, "glColor4f 0 0.9 0.9 1"), 1);
     ASSERT_INT("current-poly highlight still traces its vertex",
                trace_count_line(&log, "glVertex3f 0.1 0.2 0.3"), 1);
+    ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT;
 
     /* A begin block left open at end of program triggers the trailing
      * glEnd cleanup after the loop. */
@@ -514,7 +561,7 @@ static void test_current_poly_highlight_respects_overlay_scope(void) {
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("first-instance highlights only the first matching block",
-               trace_count_line(&log, "glLineWidth 3"), 1);
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 1);
     ASSERT_INT("first-instance draws first highlighted block",
                trace_count_line(&log, "glVertex3f 1 0 0"), 1);
     ASSERT_INT("first-instance skips later matching blocks",
@@ -525,7 +572,7 @@ static void test_current_poly_highlight_respects_overlay_scope(void) {
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("all-instances highlights both matching blocks",
-               trace_count_line(&log, "glLineWidth 3"), 2);
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 2);
     ASSERT_INT("all-instances draws later matching block",
                trace_count_line(&log, "glVertex3f 2 0 0"), 1);
 }
@@ -560,7 +607,26 @@ static void test_render_outlines_tess(void) {
     ASSERT_INT("tess contour vertex 1 traced",
                trace_count_line(&log, "glVertex3f -1 -2 0"), 1);
     ASSERT_INT("contour outline width applied",
-               trace_count_line(&log, "glLineWidth 1.5"), 1);
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_TESS_WIDTH), 1);
+
+    ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("bold tess contour outline applies scale",
+               trace_count_line_width_near(
+                   &log, VERTEX_OUTLINE_TESS_WIDTH * VERTEX_OUTLINE_BOLD_SCALE), 1);
+
+    ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_INVERTED;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("inverted tess contour flips outline color",
+               trace_count_line(&log, "glColor4f 0.45 0.8 0.3 1"), 1);
+    ASSERT_INT("inverted tess contour keeps default width",
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_TESS_WIDTH), 1);
+
+    ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT;
 
     /* replay_tess_preview suppresses the tess outline entirely. */
     ctx.replay_tess_preview = 1;
@@ -591,12 +657,19 @@ static void test_render_outlines_tess(void) {
     tctx.cursor.cursor_block_begin = -1;
     tctx.cursor.cursor_block_end = -1;
     tctx.highlight_current_poly = 1;
+    tctx.show_vertex_outlines = 1;
+    tctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD_INVERTED;
     trace_begin();
     edit_overlays_render_outlines(&tctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("first contour vertex traced", trace_count_sym(&log, "glVertex3f") >= 2, 1);
     ASSERT_TRUE("multi-contour opens two line loops",
-                trace_count_line(&log, "glLineWidth 1.5") >= 2);
+                trace_count_line_width_near(&log, VERTEX_OUTLINE_TESS_WIDTH) >= 2);
+    ASSERT_INT("tess current-poly highlight ignores bold outline width",
+               trace_count_line_width_near(
+                   &log, VERTEX_OUTLINE_TESS_WIDTH * VERTEX_OUTLINE_BOLD_SCALE), 0);
+    ASSERT_INT("tess current-poly highlight ignores inverted outline color",
+               trace_count_line(&log, "glColor4f 0.45 0.8 0.3 1"), 0);
 }
 
 /* render_outlines_glut_pass: re-draws glutSolid* shapes in wireframe under
@@ -629,10 +702,27 @@ static void test_render_outlines_glut(void) {
     ASSERT_INT("modelview transform tracked before the shape",
                trace_count_line(&log, "glTranslatef 2 0 0") >= 1, 1);
 
+    ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("bold glut solid outline applies scale",
+               trace_count_line_width_near(
+                   &log, VERTEX_OUTLINE_EDGE_WIDTH * VERTEX_OUTLINE_BOLD_SCALE), 1);
+
+    ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_INVERTED;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("inverted glut solid outline flips black to white",
+               trace_count_line(&log, "glColor4f 1 1 1 1"), 1);
+    ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT;
+
     /* highlight_current_poly: a glut solid matching the cursor gets the
      * thick active outline width. */
     cmds[1].src_cmd_idx = 5;
-    ctx.show_vertex_outlines = 0;
+    ctx.show_vertex_outlines = 1;
+    ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD_INVERTED;
     ctx.highlight_current_poly = 1;
     ctx.cursor.edit_line_idx = 5;
     trace_begin();
@@ -641,7 +731,11 @@ static void test_render_outlines_glut(void) {
     ASSERT_INT("active glut solid still drawn",
                (int)gl_stub_counts[GL_STUB_glutSolidCube], 1);
     ASSERT_TRUE("active glut solid uses the thick width",
-                trace_count_line(&log, "glLineWidth 3") >= 1);
+                trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH) >= 1);
+    ASSERT_INT("active glut solid ignores inverted outline color",
+               trace_count_line(&log, "glColor4f 1 1 1 1"), 0);
+    ASSERT_TRUE("active glut solid keeps active color",
+                trace_count_line(&log, "glColor4f 0 0.9 0.9 1") >= 1);
 }
 
 /* find_next_vertex_args_in_flat: scans forward for the next vertex, stopping

@@ -46,6 +46,7 @@
 #ifndef CFG_DEFAULT_VERTEX_OUTLINES
 #define CFG_DEFAULT_VERTEX_OUTLINES   1   /* overridable via -D (e.g. web build) */
 #endif
+#define CFG_DEFAULT_VERTEX_OUTLINE_STYLE VERTEX_OUTLINE_STYLE_DEFAULT
 #ifndef CFG_DEFAULT_VERTEX_POINTS
 #define CFG_DEFAULT_VERTEX_POINTS     1   /* overridable via -D (e.g. web build) */
 #endif
