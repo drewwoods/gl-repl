@@ -48,6 +48,7 @@ typedef struct {
     ReplFuncAliasView func_aliases;
     ReplSourceScopeView source_scope;
     int               max_call_depth;
+    int               force_reparse;    /* test seam: skip the literal fast path */
     int call_depth;
     int abort;
     int visit_budget;
@@ -377,12 +378,25 @@ static int flatten_cmd_is_source_only_cond_marker(CmdType type) {
 }
 
 /* Re-parse a source line into the flat buffer, evaluating expressions
- * against the current variable bindings.  Three paths converge here:
+ * against the current variable bindings.  Four paths converge here:
+ *   0. src_cmd->has_vars == 0 → literal line: append the committed command
+ *      verbatim, no parse (see below)
  *   1. local vars present  → pass vars to the parser, keep src has_vars
  *   2. no local vars but src has predefined-var refs → re-eval, force has_vars=1
  *   3. no vars at all      → re-parse for fresh args, clear has_vars
  * On parse failure in path 3, the original src_cmd is copied through
  * unchanged (the line was already invalid at commit time).
+ *
+ * Path 0 is the fast path. `has_vars` is decided at commit time against every
+ * variable visible at that source position — predefs plus the enclosing
+ * loop/function bindings (input_has_any_visible_vars) — and the source array
+ * is replaced transactionally on each successful edit. So a `has_vars == 0`
+ * command's args and payload are already the parse of its current text under
+ * bindings that cannot influence it, and re-parsing only reproduces them.
+ * It still records the enclosing local snapshot, which replay's value-tracing
+ * annotations read. Set ReplFlattenOptions.force_reparse to route path 0 back
+ * through the parser; the flatten differential test compares the two.
+ *
  * Returns 1 on success, 0 if the flat buffer overflowed (caller should
  * return immediately). Single-exit so the PROF_FLATTEN_REPARSE probe is
  * one begin/accum_end pair spanning the whole reparse. */
@@ -396,6 +410,18 @@ static int flatten_reparse_line(FlattenContext *ctx,
     parse_err[0] = '\0';
 
     int has_local_vars = (vars && nv > 0);
+
+    if (!src_cmd->has_vars && !ctx->force_reparse) {
+        int rv;
+        prof_begin(PROF_FLATTEN_REPARSE);
+        rv = flatten_append_cmd(ctx, src_cmd, i, call_src_cmd_idx,
+                                root_call_src_cmd_idx, func_scope_mask,
+                                has_local_vars ? vars : NULL,
+                                has_local_vars ? nv : 0);
+        prof_accum_end(PROF_FLATTEN_REPARSE);
+        return rv;
+    }
+
     ReplParseContext parse_ctx = {
         .source_line_idx = i,
         .vars = has_local_vars ? vars : NULL,
@@ -412,6 +438,13 @@ static int flatten_reparse_line(FlattenContext *ctx,
     ReplParsedLine tmp_pl;
     int rv = 1;
 
+    /* Seed from the committed command: the parser writes only the fields its
+     * command type owns, so var_idx, is_auto, and the inactive payload member
+     * would otherwise be whatever was on the stack (GLCmd's contract for an
+     * unused payload is "zeroed", and an auto-normal reparsed inside a loop
+     * body must keep its is_auto flag). Reparse refreshes the rest. */
+    tmp_pl.cmd = *src_cmd;
+
     prof_begin(PROF_FLATTEN_REPARSE);
     if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
         GLCmd tmp = tmp_pl.cmd;
@@ -419,10 +452,8 @@ static int flatten_reparse_line(FlattenContext *ctx,
             tmp.has_vars = src_cmd->has_vars;
         else if (src_cmd->has_vars)
             tmp.has_vars = 1;
-        else {
+        else
             tmp.has_vars = 0;
-            tmp.is_auto = src_cmd->is_auto;
-        }
         rv = flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
                                 root_call_src_cmd_idx, func_scope_mask,
                                 has_local_vars ? vars : NULL,
@@ -672,6 +703,7 @@ int repl_flatten_program(const ReplFlattenOptions *options,
         .func_aliases = options ? options->func_aliases : (ReplFuncAliasView){0},
         .max_call_depth = options && options->max_call_depth > 0
                         ? options->max_call_depth : MAX_FLATTEN_CALL_DEPTH,
+        .force_reparse = options ? options->force_reparse : 0,
         .call_depth = 0,
         .abort = 0,
         .visit_budget = options && options->visit_budget > 0

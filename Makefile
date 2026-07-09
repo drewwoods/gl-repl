@@ -780,6 +780,7 @@ TEST_BINS = \
 	test_repl_autonormal \
 	test_repl_replay \
 	test_repl_compile \
+	test_repl_flatten_differential \
 	test_tutorial_match \
 	test_tutorial_runner \
 	test_glr_camera

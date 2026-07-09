@@ -452,7 +452,7 @@ takes the edit-line by reference.
 
 ### 5.2 Flatten — lowering source to flat
 
-[`repl_flatten_program()`](flatten.h#L94) ([`flatten.c`](flatten.c)) expands the source array into the
+[`repl_flatten_program()`](flatten.h#L100) ([`flatten.c`](flatten.c)) expands the source array into the
 flat array:
 
 - **for-loops** iterate `[start, end)` by `step`, half-open, re-parsing
@@ -476,6 +476,17 @@ provenance (§3.3) and a [`FlatCmdLocalVars`](flatten.h#L36) snapshot (§3.4).
 [`flatten.c`](flatten.c) deliberately re-parses source lines with `skip_text` set in
 the [`ReplParseContext`](parser.h#L44): it consumes the parsed [`GLCmd`](command.h#L88) and discards the
 canonical-text rendering, avoiding per-arg `snprintf` on the hot path.
+
+A command whose `has_vars` is 0 skips the parser entirely and is appended
+verbatim from the source array. `has_vars` is decided at commit time against
+every variable visible at that source position — predefs plus enclosing
+loop/function bindings — and the source array is replaced transactionally on
+each successful edit, so a literal command's args and payload are already the
+parse of its current text. The command still records the enclosing local-var
+snapshot. `ReplFlattenOptions.force_reparse` disables the fast path;
+`tests/test_repl_flatten_differential.c` flattens the whole example corpus both
+ways at several `t` values and compares every flat command, local snapshot,
+provenance field, and the post-flatten predef/scratch state.
 
 The live frame path goes through `repl_flatten_commands(edit_line_idx)`,
 but the engine is reusable: tests and replay tools flatten into a
@@ -839,7 +850,7 @@ each re-flatten knows to re-evaluate it from text (§5.2).
 
 ### Stage 3 — flatten  (`repl_flatten_commands`)
 
-[`repl_flatten_program()`](flatten.h#L94) (§5.2) lowers the nine source commands to eleven
+[`repl_flatten_program()`](flatten.h#L100) (§5.2) lowers the nine source commands to eleven
 flat ones — the loop body unrolled into six vertices, the `CMD_FOR_BEGIN`
 / `CMD_FOR_END` / `CMD_VAR_DECLARE` markers consumed:
 
