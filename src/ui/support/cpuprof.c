@@ -21,6 +21,7 @@
 #include "ui/core/theme.h"
 #include "support/cpuprof.h"
 #include "support/gpuprof.h"
+#include "c_compat.h"      /* STATIC_ASSERT */
 
 #include <math.h>
 #include <stdio.h>
@@ -471,14 +472,15 @@ void ui_fps_panel_render(const UiFpsPanelView *view) {
 #define HIST_BOTTOM_PAD     8
 #define HIST_MARGIN        12
 
-/* Fraction of a series' samples the x axis must cover — see
- * ui_histogram_series_axis_bin() for why this is a per-series percentile and
- * not the true maximum. 95% rather than something tighter because startup
- * transients are a real chunk of a short run: on a 150-frame capture the
- * first-frame costs are ~4% of the Frame Total series, so a 99% trim still
- * lets them drag the axis out past 60 ms. */
-#define HIST_AXIS_COVERAGE  0.95
-#define HIST_MIN_AXIS_BINS  4
+/* The x axis spans the occupied bins, with a floor so a single-bin
+ * distribution still gets a drawable span. There is no percentile trim: the
+ * bins are log-spaced (see support/cpuprof.h), so the axis is linear in bin
+ * index and therefore logarithmic in time. A 100 ms stall then sits a bounded
+ * number of bins to the right of a 3 ms frame instead of 30x further along a
+ * linear scale — it costs the axis a slice of width rather than flattening
+ * every real distribution into the leftmost pixel. That is what lets the panel
+ * show the whole distribution, tail included, instead of trimming it away. */
+#define HIST_MIN_AXIS_BINS  64
 
 /* Floor for the log-y ceiling. Early in a run the tallest bin holds one or
  * two samples, and scaling to that draws every occupied bin at full height —
@@ -487,10 +489,11 @@ void ui_fps_panel_render(const UiFpsPanelView *view) {
  * any bin passes 10. */
 #define HIST_MIN_PEAK  10UL
 
-/* µs covered by one histogram bin — the resolution floor of the whole plot.
- * At the current 1024 bins over 100 ms that is ~97.7 µs, so every section
- * that runs in well under 100 µs piles into bin 0 by construction. */
-#define HIST_BIN_US  (PROF_HISTOGRAM_MAX_US / (double)PROF_HISTOGRAM_BIN_COUNT)
+/* Upper bound on the plot's pixel width, so the per-column envelopes below can
+ * be plain stack arrays. */
+#define HIST_MAX_COLS  512
+STATIC_ASSERT(HIST_PANEL_W - HIST_PLOT_GUTTER - 12 <= HIST_MAX_COLS,
+              "histogram plot is wider than the per-column envelope buffer");
 
 /* The plotted set: top-level sections only (see the header). Mirrors
  * section_visible()'s "no label means this binary doesn't use the slot". */
@@ -562,51 +565,58 @@ int ui_histogram_panel_height(void) {
          + HIST_MARGIN;
 }
 
-int ui_histogram_series_axis_bin(const ProfHistogramBin *bins) {
-    unsigned long total = 0;
-    for (int bin_idx = 0; bin_idx < PROF_HISTOGRAM_BIN_COUNT; bin_idx++)
-        total += bins[bin_idx];
-    if (total == 0) return -1;
+int ui_histogram_axis_range(int *lo_bin, int *hi_bin) {
+    ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
+    int lo = PROF_HISTOGRAM_BIN_COUNT, hi = -1;
 
-    /* Round the keep target UP so the trim can never bite into a series too
-     * small for the percentile to mean anything: ceil() of a positive product
-     * is >= 1, so a lone sample always defines its own axis. */
-    unsigned long keep = (unsigned long)ceil((double)total * HIST_AXIS_COVERAGE);
-
-    unsigned long cum = 0;
-    for (int bin_idx = 0; bin_idx < PROF_HISTOGRAM_BIN_COUNT; bin_idx++) {
-        cum += bins[bin_idx];
-        if (cum >= keep) return bin_idx;
+    for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
+        ProfSection s = (ProfSection)section_idx;
+        if (!hist_series_visible(s)) continue;
+        prof_section_histogram(s, bins, PROF_HISTOGRAM_BIN_COUNT);
+        for (int bin_idx = 0; bin_idx < PROF_HISTOGRAM_BIN_COUNT; bin_idx++) {
+            if (!bins[bin_idx]) continue;
+            if (bin_idx < lo) lo = bin_idx;
+            if (bin_idx > hi) hi = bin_idx;
+        }
     }
-    return PROF_HISTOGRAM_BIN_COUNT - 1;   /* unreachable: cum reaches total */
+    if (hi < 0) return 0;
+
+    /* Widen a too-narrow span symmetrically, then slide it back inside the
+     * bin range if that pushed an edge out. */
+    int span = hi - lo + 1;
+    if (span < HIST_MIN_AXIS_BINS) {
+        int grow = (HIST_MIN_AXIS_BINS - span + 1) / 2;
+        lo -= grow;
+        hi += grow;
+        if (lo < 0) { hi -= lo; lo = 0; }
+        if (hi > PROF_HISTOGRAM_BIN_COUNT - 1) {
+            lo -= hi - (PROF_HISTOGRAM_BIN_COUNT - 1);
+            hi  = PROF_HISTOGRAM_BIN_COUNT - 1;
+            if (lo < 0) lo = 0;
+        }
+    }
+    *lo_bin = lo;
+    *hi_bin = hi;
+    return 1;
 }
 
-/* Axis extent across every plotted series, plus the samples it leaves off the
- * right edge. Returns -1 when no series has any samples. */
-static int hist_axis_last_bin(unsigned long *off_scale) {
+/* Collapse one series' bins onto the plot's pixel columns, taking the tallest
+ * bin per column. The axis spans up to 1024 bins across ~338 px, so several
+ * bins share a column; the max (rather than the sum) keeps a column's height
+ * on the same "samples in a bin" scale as the y axis and the peak. */
+static void hist_series_columns(ProfSection s, int lo_bin, int hi_bin,
+                                int cols, unsigned int *out) {
     ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
-    int last_bin = -1;
+    int span = hi_bin - lo_bin + 1;
 
-    *off_scale = 0;
-    for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
-        ProfSection s = (ProfSection)section_idx;
-        if (!hist_series_visible(s)) continue;
-        prof_section_histogram(s, bins, PROF_HISTOGRAM_BIN_COUNT);
-        int series_bin = ui_histogram_series_axis_bin(bins);
-        if (series_bin > last_bin) last_bin = series_bin;
+    prof_section_histogram(s, bins, PROF_HISTOGRAM_BIN_COUNT);
+    for (int col = 0; col < cols; col++) out[col] = 0;
+    for (int bin_idx = lo_bin; bin_idx <= hi_bin; bin_idx++) {
+        if (!bins[bin_idx]) continue;
+        int col = (bin_idx - lo_bin) * cols / span;
+        if (col >= cols) col = cols - 1;
+        if (bins[bin_idx] > out[col]) out[col] = bins[bin_idx];
     }
-    if (last_bin < 0) return -1;
-
-    if (last_bin < HIST_MIN_AXIS_BINS - 1) last_bin = HIST_MIN_AXIS_BINS - 1;
-
-    for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
-        ProfSection s = (ProfSection)section_idx;
-        if (!hist_series_visible(s)) continue;
-        prof_section_histogram(s, bins, PROF_HISTOGRAM_BIN_COUNT);
-        for (int bin_idx = last_bin + 1; bin_idx < PROF_HISTOGRAM_BIN_COUNT; bin_idx++)
-            *off_scale += bins[bin_idx];
-    }
-    return last_bin;
 }
 
 void ui_histogram_panel_render(const UiHistogramPanelView *view) {
@@ -617,27 +627,26 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
     int panel_y = view->panel_y;
 
     ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
-    unsigned long off_scale = 0;
-    int last_bin = hist_axis_last_bin(&off_scale);
+    int lo_bin = 0, hi_bin = 0;
+    int have_data = ui_histogram_axis_range(&lo_bin, &hi_bin);
 
-    /* Tallest single bin of any one series inside the drawn range — the log-y
-     * ceiling. Per series, not the summed height across series: each series is
-     * drawn against this scale independently, so a pooled ceiling would shrink
-     * every bar by however many sections happen to share its bin. The same
-     * sweep records each series' sample count, which the legend needs to dim
-     * sections that never ran. */
+    /* Tallest single bin of any one series — the log-y ceiling. Per series,
+     * not the summed height across series: each series is drawn against this
+     * scale independently, so a pooled ceiling would shrink every bar by
+     * however many sections happen to share its bin. The same sweep records
+     * each series' sample count, which the legend needs to dim sections that
+     * never ran. */
     unsigned long peak = 0;
     unsigned long series_samples[PROF_SECTION_COUNT];
     memset(series_samples, 0, sizeof(series_samples));
-    if (last_bin >= 0) {
+    if (have_data) {
         for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
             ProfSection s = (ProfSection)section_idx;
             if (!hist_series_visible(s)) continue;
             prof_section_histogram(s, bins, PROF_HISTOGRAM_BIN_COUNT);
             for (int bin_idx = 0; bin_idx < PROF_HISTOGRAM_BIN_COUNT; bin_idx++) {
                 series_samples[section_idx] += bins[bin_idx];
-                if (bin_idx <= last_bin && bins[bin_idx] > peak)
-                    peak = bins[bin_idx];
+                if (bins[bin_idx] > peak) peak = bins[bin_idx];
             }
         }
     }
@@ -659,10 +668,7 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
     gl2d_draw_string((float)tx, (float)ty, "Section Histograms", FONT_SMALL);
     {
         char meta[40];
-        if (off_scale > 0)
-            snprintf(meta, sizeof(meta), "peak %lu  +%lu off", peak, off_scale);
-        else
-            snprintf(meta, sizeof(meta), "peak %lu", peak);
+        snprintf(meta, sizeof(meta), "peak %lu", peak);
         int mw = (int)strlen(meta) * FONT_SMALL_W + 2;
         ui_clr(UI_TOK_TEXT_MUTED);
         gl2d_draw_string((float)(panel_x + HIST_PANEL_W - 8 - mw), (float)ty,
@@ -684,7 +690,7 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
                      (float)plot_w, (float)plot_h,
                      UI_TOK_SUNKEN, 0.4f, UI_TOK_BORDER, 0.6f);
 
-    if (last_bin < 0 || peak == 0) {
+    if (!have_data || peak == 0) {
         glDisable(GL_BLEND);
         ui_clr(UI_TOK_TEXT_PLACEHOLDER);
         const char *empty = "(collecting)";
@@ -700,9 +706,15 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
      * true tallest bin (reported in the header); this is only the scale. */
     unsigned long scale_peak = (peak < HIST_MIN_PEAK) ? HIST_MIN_PEAK : peak;
     double log_peak = log10((double)scale_peak + 1.0);
-    float  bin_w    = (float)plot_w / (float)(last_bin + 1);
 
-    /* Decade gridlines behind the series. */
+    /* One column per pixel of plot width: the axis carries up to 1024 bins, so
+     * drawing per bin would emit thousands of sub-pixel vertices per series. */
+    int cols = plot_w;
+    if (cols > HIST_MAX_COLS) cols = HIST_MAX_COLS;
+    unsigned int col_h[HIST_MAX_COLS];
+    float col_w = (float)plot_w / (float)cols;
+
+    /* Count (y) gridlines behind the series. */
     ui_clr_a(UI_TOK_DIVIDER, 0.30f);
     glBegin(GL_LINES);
     for (unsigned long decade = 1; decade <= scale_peak; decade *= 10UL) {
@@ -710,6 +722,19 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
                  + hist_bar_frac((unsigned int)decade, log_peak) * (float)plot_h;
         glVertex2f((float)plot_x,          gy);
         glVertex2f((float)(plot_x + plot_w), gy);
+    }
+    /* Time (x) gridlines: one per decade boundary inside the drawn range. The
+     * axis is linear in bin index, and bins are log-spaced, so decades land at
+     * even pixel intervals. */
+    for (double dec = PROF_HISTOGRAM_MIN_US; dec <= PROF_HISTOGRAM_MAX_US;
+         dec *= 10.0) {
+        int b = prof_histogram_bin_for_us(dec);
+        if (b <= lo_bin || b >= hi_bin) continue;
+        float gx = (float)plot_x
+                 + (float)plot_w * (float)(b - lo_bin)
+                                 / (float)(hi_bin - lo_bin + 1);
+        glVertex2f(gx, (float)plot_y);
+        glVertex2f(gx, (float)(plot_y + plot_h));
     }
     glEnd();
 
@@ -724,16 +749,16 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
 
         float col[3];
         hist_series_color(ordinal++, col);
-        prof_section_histogram(s, bins, PROF_HISTOGRAM_BIN_COUNT);
+        hist_series_columns(s, lo_bin, hi_bin, cols, col_h);
 
         glColor4f(col[0], col[1], col[2], 0.30f);
         glBegin(GL_QUADS);
-        for (int bin_idx = 0; bin_idx <= last_bin; bin_idx++) {
-            if (bins[bin_idx] == 0) continue;
-            float x0 = (float)plot_x + (float)bin_idx * bin_w;
-            float x1 = x0 + bin_w;
-            if (x1 - x0 < 1.0f) x1 = x0 + 1.0f;   /* sub-pixel bins stay visible */
-            float bar_h = hist_bar_frac(bins[bin_idx], log_peak) * (float)plot_h;
+        for (int c = 0; c < cols; c++) {
+            if (col_h[c] == 0) continue;
+            float x0 = (float)plot_x + (float)c * col_w;
+            float x1 = x0 + col_w;
+            if (x1 - x0 < 1.0f) x1 = x0 + 1.0f;   /* sub-pixel columns stay visible */
+            float bar_h = hist_bar_frac(col_h[c], log_peak) * (float)plot_h;
             glVertex2f(x0, (float)plot_y);
             glVertex2f(x1, (float)plot_y);
             glVertex2f(x1, (float)plot_y + bar_h);
@@ -742,9 +767,9 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
         glEnd();
     }
 
-    /* Silhouettes over the fills, back on straight alpha: at a couple of
-     * pixels per bin the additive fills merge into a wash, and the step
-     * outline is what keeps each series' shape readable. */
+    /* Silhouettes over the fills, back on straight alpha: at a pixel or two
+     * per column the additive fills merge into a wash, and the step outline is
+     * what keeps each series' shape readable. */
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     ordinal = 0;
     for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
@@ -753,18 +778,28 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
 
         float col[3];
         hist_series_color(ordinal++, col);
-        prof_section_histogram(s, bins, PROF_HISTOGRAM_BIN_COUNT);
+        hist_series_columns(s, lo_bin, hi_bin, cols, col_h);
 
+        /* Staircase with equal-height runs collapsed. A per-column strip would
+         * emit two vertices for every pixel of every series; almost all of
+         * those sit on the empty baseline between the humps, and the profile
+         * panel is expensive enough already without redrawing them. */
         glColor4f(col[0], col[1], col[2], 0.85f);
         glBegin(GL_LINE_STRIP);
-        for (int bin_idx = 0; bin_idx <= last_bin; bin_idx++) {
-            float x0 = (float)plot_x + (float)bin_idx * bin_w;
-            float x1 = x0 + bin_w;
-            float by = (float)plot_y
-                     + hist_bar_frac(bins[bin_idx], log_peak) * (float)plot_h;
-            glVertex2f(x0, by);
-            glVertex2f(x1, by);
+        unsigned int run_h = col_h[0];
+        glVertex2f((float)plot_x,
+                   (float)plot_y + hist_bar_frac(run_h, log_peak) * (float)plot_h);
+        for (int c = 1; c < cols; c++) {
+            if (col_h[c] == run_h) continue;
+            float x = (float)plot_x + (float)c * col_w;
+            glVertex2f(x, (float)plot_y
+                          + hist_bar_frac(run_h, log_peak) * (float)plot_h);
+            run_h = col_h[c];
+            glVertex2f(x, (float)plot_y
+                          + hist_bar_frac(run_h, log_peak) * (float)plot_h);
         }
+        glVertex2f((float)(plot_x + plot_w),
+                   (float)plot_y + hist_bar_frac(run_h, log_peak) * (float)plot_h);
         glEnd();
     }
     glDisable(GL_BLEND);
@@ -781,29 +816,39 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
                          (float)(gy - 4), lab, FONT_SMALL);
     }
 
-    /* X labels: 0 / midpoint / axis max, in time units. The last one is
-     * right-aligned so it can't run past the plot's right edge. */
+    /* X labels: the axis bounds, plus a centered tick per decade boundary. The
+     * bounds are the drawn range's real times, so they read as the actual
+     * fastest/slowest sample rather than the histogram's fixed 1us..1s span. */
     {
-        double axis_max_us = (double)(last_bin + 1) * HIST_BIN_US;
-        int    label_y     = plot_y - HIST_XAXIS_H + 2;
-        char   lab[24];
+        int  label_y = plot_y - HIST_XAXIS_H + 2;
+        char lab[24];
 
-        gl2d_draw_string((float)plot_x, (float)label_y, "0", FONT_SMALL);
+        fmt_us(lab, (int)sizeof(lab), prof_histogram_bin_lo_us(lo_bin));
+        gl2d_draw_string((float)plot_x, (float)label_y, lab, FONT_SMALL);
 
-        fmt_us(lab, (int)sizeof(lab), axis_max_us * 0.5);
-        int mid_w = (int)strlen(lab) * FONT_SMALL_W;
-        int mid_x = plot_x + (plot_w - mid_w) / 2;
-        gl2d_draw_string((float)mid_x, (float)label_y, lab, FONT_SMALL);
-
-        fmt_us(lab, (int)sizeof(lab), axis_max_us);
+        fmt_us(lab, (int)sizeof(lab), prof_histogram_bin_hi_us(hi_bin));
         int max_x = plot_x + plot_w - (int)strlen(lab) * FONT_SMALL_W;
         gl2d_draw_string((float)max_x, (float)label_y, lab, FONT_SMALL);
+
+        /* Decade ticks, skipped where they would collide with either bound. */
+        for (double dec = PROF_HISTOGRAM_MIN_US; dec <= PROF_HISTOGRAM_MAX_US;
+             dec *= 10.0) {
+            int b = prof_histogram_bin_for_us(dec);
+            if (b <= lo_bin || b >= hi_bin) continue;
+            fmt_us(lab, (int)sizeof(lab), dec);
+            int lw = (int)strlen(lab) * FONT_SMALL_W;
+            int gx = plot_x + plot_w * (b - lo_bin) / (hi_bin - lo_bin + 1);
+            int lx = gx - lw / 2;
+            if (lx < plot_x + FONT_SMALL_W * 5) continue;   /* clear of the low bound */
+            if (lx + lw > max_x - FONT_SMALL_W) continue;   /* clear of the high bound */
+            gl2d_draw_string((float)lx, (float)label_y, lab, FONT_SMALL);
+        }
     }
 
     /* Legend: catalog order, filling columns left to right. A series with no
      * samples keeps its slot (so the panel height is stable) but is dimmed. */
     {
-        int col_w = (HIST_PANEL_W - 16) / HIST_LEGEND_COLS;
+        int legend_col_w = (HIST_PANEL_W - 16) / HIST_LEGEND_COLS;
         ordinal = 0;
         for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
             ProfSection s = (ProfSection)section_idx;
@@ -811,7 +856,7 @@ void ui_histogram_panel_render(const UiHistogramPanelView *view) {
 
             int row = ordinal / HIST_LEGEND_COLS;
             int col = ordinal % HIST_LEGEND_COLS;
-            int lx  = tx + col * col_w;
+            int lx  = tx + col * legend_col_w;
             int ly  = panel_y + HIST_BOTTOM_PAD
                     + (legend_rows - 1 - row) * HIST_LEGEND_ROW_H;
 

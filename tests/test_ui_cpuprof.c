@@ -9,6 +9,7 @@
 #include <GL/gl_stub_counts.h>
 #endif
 
+#include <stdlib.h>   /* abs */
 #include <stdio.h>
 #include <string.h>
 
@@ -21,12 +22,11 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ASSERT_INT_EQ(label, got, exp) \
     TEST_ASSERT_INT(&g_harness, label, got, exp)
 
+/* The bins are log-spaced, so tests ask the profiler where a duration lands
+ * rather than reimplementing the mapping. prof_histogram_bin_for_us is tested
+ * directly in test_cpuprof_log_bin_layout. */
 static int hist_bin_for_us(double us) {
-    if (!(us > 0.0)) return 0;
-    if (us >= PROF_HISTOGRAM_MAX_US)
-        return PROF_HISTOGRAM_BIN_COUNT - 1;
-    return (int)(us * (double)PROF_HISTOGRAM_BIN_COUNT
-                 / PROF_HISTOGRAM_MAX_US);
+    return prof_histogram_bin_for_us(us);
 }
 
 static int hist_sum(const ProfHistogramBin *bins) {
@@ -77,7 +77,7 @@ static void test_cpuprof_section_histogram_direct(void) {
                   prof_section_histogram(PROF_FLATTEN, bins,
                                          PROF_HISTOGRAM_BIN_COUNT),
                   PROF_HISTOGRAM_BIN_COUNT);
-    ASSERT_INT_EQ("50ms section sample lands in fixed bin",
+    ASSERT_INT_EQ("50ms section sample lands in its log bin",
                   bins[hist_bin_for_us(50000.0)], 1);
     ASSERT_INT_EQ("direct section histogram has one sample",
                   hist_sum(bins), 1);
@@ -140,7 +140,7 @@ static void test_cpuprof_frame_time_histogram(void) {
                   prof_frame_time_histogram(bins,
                                             PROF_HISTOGRAM_BIN_COUNT),
                   PROF_HISTOGRAM_BIN_COUNT);
-    ASSERT_INT_EQ("17ms frame sample lands in fixed bin",
+    ASSERT_INT_EQ("17ms frame sample lands in its log bin",
                   bins[hist_bin_for_us(17000.0)], 1);
     ASSERT_INT_EQ("frame histogram has one sample",
                   hist_sum(bins), 1);
@@ -164,86 +164,236 @@ static void test_cpuprof_histogram_saturates_16_bit_bins(void) {
                   bins[0], 65535);
 }
 
-/* The x-axis policy in isolation. */
-static void test_histogram_series_axis_bin(void) {
-    static ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
+static void test_cpuprof_histogram_reset(void) {
+    ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
 
-    memset(bins, 0, sizeof(bins));
-    ASSERT_INT_EQ("an empty series has no axis",
-                  ui_histogram_series_axis_bin(bins), -1);
+    prof_test_reset();
+    prof_test_set_now_us(1000.0);
+    prof_begin(PROF_FLATTEN);
+    prof_test_set_now_us(51000.0);
+    prof_end(PROF_FLATTEN);
+    prof_frame_tick();
+    prof_test_set_now_us(68000.0);
+    prof_frame_tick();
 
-    /* The shape a real Frame Total series has after a short capture: a tight
-     * bulk plus a handful of startup transients trailing out to the overflow
-     * bin. The axis must follow the bulk, not the transients. */
-    memset(bins, 0, sizeof(bins));
-    for (int i = 26; i <= 35; i++) bins[i] = 14;   /* 140 typical frames */
-    bins[44] = 1; bins[62] = 1;
-    bins[PROF_HISTOGRAM_BIN_COUNT - 1] = 1;        /* a >100 ms stall */
-    ASSERT_TRUE("startup transients do not pin the axis at the overflow bin",
-                ui_histogram_series_axis_bin(bins) <= 35);
-    ASSERT_TRUE("the axis still covers the bulk of the distribution",
-                ui_histogram_series_axis_bin(bins) >= 33);
+    prof_section_histogram(PROF_FLATTEN, bins, PROF_HISTOGRAM_BIN_COUNT);
+    ASSERT_INT_EQ("section histogram has a sample before reset",
+                  hist_sum(bins), 1);
+    prof_frame_time_histogram(bins, PROF_HISTOGRAM_BIN_COUNT);
+    ASSERT_INT_EQ("frame histogram has a sample before reset",
+                  hist_sum(bins), 1);
 
-    /* A genuinely bimodal series is not an outlier: 10% of samples at 100 ms
-     * is real behavior the axis has to show. */
-    memset(bins, 0, sizeof(bins));
-    bins[10] = 90;
-    bins[PROF_HISTOGRAM_BIN_COUNT - 1] = 10;
-    ASSERT_INT_EQ("a fat tail stays on-axis",
-                  ui_histogram_series_axis_bin(bins),
-                  PROF_HISTOGRAM_BIN_COUNT - 1);
+    double avg_before = prof_section_avg_us(PROF_FLATTEN);
+    prof_histogram_reset();
 
-    /* A series too small for a percentile to mean anything keeps its sample:
-     * ceil() of the keep target never rounds the only sample away. */
-    memset(bins, 0, sizeof(bins));
-    bins[500] = 1;
-    ASSERT_INT_EQ("a lone sample defines its own axis",
-                  ui_histogram_series_axis_bin(bins), 500);
+    prof_section_histogram(PROF_FLATTEN, bins, PROF_HISTOGRAM_BIN_COUNT);
+    ASSERT_INT_EQ("reset clears the section histogram", hist_sum(bins), 0);
+    prof_frame_time_histogram(bins, PROF_HISTOGRAM_BIN_COUNT);
+    ASSERT_INT_EQ("reset clears the frame-time histogram", hist_sum(bins), 0);
 
-    /* Every sub-100us section looks like this: all mass in bin 0. */
-    memset(bins, 0, sizeof(bins));
-    bins[0] = 500;
-    ASSERT_INT_EQ("an all-in-bin-0 series asks for the narrowest axis",
-                  ui_histogram_series_axis_bin(bins), 0);
+    /* Only the cumulative data is dropped: the EMAs and staleness re-converge
+     * on their own and must survive, or every example switch would blank the
+     * listing panel's columns. */
+    ASSERT_TRUE("reset leaves the section EMA intact",
+                prof_section_avg_us(PROF_FLATTEN) == avg_before);
+    ASSERT_INT_EQ("reset leaves section staleness intact",
+                  prof_section_is_stale(PROF_FLATTEN), 0);
+
+    /* Post-reset samples land in a fresh distribution. */
+    prof_test_set_now_us(100000.0);
+    prof_begin(PROF_FLATTEN);
+    prof_test_set_now_us(100000.0 + 20000.0);
+    prof_end(PROF_FLATTEN);
+    prof_section_histogram(PROF_FLATTEN, bins, PROF_HISTOGRAM_BIN_COUNT);
+    ASSERT_INT_EQ("post-reset sample lands in its own bin",
+                  bins[hist_bin_for_us(20000.0)], 1);
+    ASSERT_INT_EQ("post-reset histogram holds only the new sample",
+                  hist_sum(bins), 1);
+    prof_test_reset();
 }
 
-/* The panel's axis is the max across series, so the many sub-100us sections
- * (all mass in bin 0) must not be able to clip the slowest section's spread —
- * the flaw a pooled percentile would have. Observable through the rendered
- * bar count: a wide axis emits more silhouette vertices than a 4-bin one. */
-static void test_histogram_axis_follows_slowest_series(void) {
+/* The log bin layout: constant *relative* width, underflow/overflow clamps,
+ * and edges that agree with the mapping. This is what lets a 3 us section and
+ * a 30 ms one both be measured precisely. */
+static void test_cpuprof_log_bin_layout(void) {
+    ASSERT_INT_EQ("zero lands in the underflow bin",
+                  prof_histogram_bin_for_us(0.0), 0);
+    ASSERT_INT_EQ("a negative duration lands in the underflow bin",
+                  prof_histogram_bin_for_us(-5.0), 0);
+    ASSERT_INT_EQ("sub-minimum durations land in the underflow bin",
+                  prof_histogram_bin_for_us(PROF_HISTOGRAM_MIN_US * 0.25), 0);
+    ASSERT_INT_EQ("the minimum itself is the underflow bin's lower edge",
+                  prof_histogram_bin_for_us(PROF_HISTOGRAM_MIN_US), 0);
+    ASSERT_INT_EQ("the maximum lands in the overflow bin",
+                  prof_histogram_bin_for_us(PROF_HISTOGRAM_MAX_US),
+                  PROF_HISTOGRAM_BIN_COUNT - 1);
+    ASSERT_INT_EQ("beyond the maximum stays in the overflow bin",
+                  prof_histogram_bin_for_us(PROF_HISTOGRAM_MAX_US * 1000.0),
+                  PROF_HISTOGRAM_BIN_COUNT - 1);
+
+    /* Monotonic, and each decade is the same number of bins apart. */
+    int b_1us   = prof_histogram_bin_for_us(1.0);
+    int b_10us  = prof_histogram_bin_for_us(10.0);
+    int b_100us = prof_histogram_bin_for_us(100.0);
+    int b_1ms   = prof_histogram_bin_for_us(1000.0);
+    ASSERT_TRUE("bins increase with duration",
+                b_1us < b_10us && b_10us < b_100us && b_100us < b_1ms);
+    /* A decade is 1024/6 = 170.67 bins, so consecutive decades differ by one
+     * bin depending on where the floor lands. Even to within that. */
+    ASSERT_TRUE("decades are evenly spaced (1us->10us vs 10us->100us)",
+                abs((b_10us - b_1us) - (b_100us - b_10us)) <= 1);
+    ASSERT_TRUE("decades are evenly spaced (100us->1ms)",
+                abs((b_1ms - b_100us) - (b_100us - b_10us)) <= 1);
+
+    /* The sub-100us sections a linear layout could not tell apart. */
+    ASSERT_TRUE("3us and 30us occupy different bins",
+                prof_histogram_bin_for_us(3.0) != prof_histogram_bin_for_us(30.0));
+    ASSERT_TRUE("6us and 128us occupy different bins",
+                prof_histogram_bin_for_us(6.0) != prof_histogram_bin_for_us(128.0));
+
+    /* Edges are consistent with the mapping. */
+    for (int b = 1; b < PROF_HISTOGRAM_BIN_COUNT - 1; b += 97) {
+        double lo = prof_histogram_bin_lo_us(b);
+        double hi = prof_histogram_bin_hi_us(b);
+        ASSERT_TRUE("bin edges ascend", hi > lo);
+        ASSERT_INT_EQ("a bin's lower edge maps back to that bin",
+                      prof_histogram_bin_for_us(lo), b);
+        ASSERT_INT_EQ("a bin's upper edge maps to the next bin",
+                      prof_histogram_bin_for_us(hi), b + 1);
+    }
+}
+
+/* The axis spans the occupied bins. An outlier extends it, but only by the
+ * bounded number of bins that separates it on a log scale — the whole reason
+ * the panel needs no percentile trim. */
+static void test_histogram_axis_range(void) {
+    int lo = -1, hi = -1;
+
+    prof_test_reset();
+    ASSERT_INT_EQ("no samples means no axis",
+                  ui_histogram_axis_range(&lo, &hi), 0);
+
+    /* One section around 2 ms. */
+    prof_test_reset();
+    for (int i = 0; i < 50; i++) {
+        prof_test_set_now_us((double)i * 100000.0);
+        prof_begin(PROF_FRAME_TOTAL);
+        prof_test_set_now_us((double)i * 100000.0 + 2000.0 + (double)(i % 10));
+        prof_end(PROF_FRAME_TOTAL);
+    }
+    ASSERT_INT_EQ("a populated series yields an axis",
+                  ui_histogram_axis_range(&lo, &hi), 1);
+    ASSERT_TRUE("axis spans at least the minimum width", hi - lo + 1 >= 64);
+    ASSERT_TRUE("axis stays inside the bin range",
+                lo >= 0 && hi <= PROF_HISTOGRAM_BIN_COUNT - 1);
+    ASSERT_TRUE("axis contains the 2ms samples",
+                prof_histogram_bin_for_us(2000.0) >= lo &&
+                prof_histogram_bin_for_us(2000.0) <= hi);
+    int hi_before = hi;
+
+    /* Add one 200 ms stall: the axis must grow to include it, and by far less
+     * than the 100x ratio in time — that is the log scale doing its job. */
+    prof_test_set_now_us(9000000.0);
+    prof_begin(PROF_FRAME_TOTAL);
+    prof_test_set_now_us(9000000.0 + 200000.0);
+    prof_end(PROF_FRAME_TOTAL);
+
+    int lo_before = lo;
+    ASSERT_INT_EQ("axis still resolves", ui_histogram_axis_range(&lo, &hi), 1);
+    ASSERT_TRUE("the outlier is on-axis, not trimmed",
+                hi >= prof_histogram_bin_for_us(200000.0));
+
+    /* The whole point of log bins: a 100x-slower outlier pushes the axis out
+     * by ~two decades' worth of bins, not by 100x its width. On the old linear
+     * bins the same sample multiplied the axis span by ~100 and squashed the
+     * 2 ms bulk into the leftmost pixel. */
+    int decade_bins = prof_histogram_bin_for_us(100.0)
+                    - prof_histogram_bin_for_us(10.0);
+    int span_before = hi_before - lo_before + 1;
+    int span_after  = hi - lo + 1;
+    ASSERT_TRUE("the outlier widens the axis", span_after > span_before);
+    ASSERT_TRUE("a 100x outlier costs about two decades of bins, not 100x",
+                span_after <= span_before + 2 * decade_bins + 8);
+    prof_test_reset();
+}
+
+/* A cheap section must not stop the axis from reaching a slow one, and the
+ * cheap section must still land in its own bin rather than a shared floor. */
+static void test_histogram_axis_covers_cheap_and_slow(void) {
+    int lo = -1, hi = -1;
+
+    prof_test_reset();
+    for (int i = 0; i < 100; i++) {
+        double base = (double)i * 100000.0;
+        prof_test_set_now_us(base);
+        prof_begin(PROF_FLATTEN);              /* ~6 us */
+        prof_test_set_now_us(base + 6.0);
+        prof_end(PROF_FLATTEN);
+
+        prof_begin(PROF_FRAME_TOTAL);          /* ~2 ms */
+        prof_test_set_now_us(base + 2000.0);
+        prof_end(PROF_FRAME_TOTAL);
+    }
+
+    ASSERT_INT_EQ("axis resolves", ui_histogram_axis_range(&lo, &hi), 1);
+    ASSERT_TRUE("axis reaches the 6us section",
+                prof_histogram_bin_for_us(6.0) >= lo);
+    ASSERT_TRUE("axis reaches the 2ms section",
+                prof_histogram_bin_for_us(2000.0) <= hi);
+    ASSERT_TRUE("the two sections are distinguishable on the axis",
+                prof_histogram_bin_for_us(2000.0)
+                    - prof_histogram_bin_for_us(6.0) > 8);
+    prof_test_reset();
+}
+
+/* The axis can carry ~1000 bins across ~338 plot pixels for a dozen series. A
+ * silhouette vertex per column per series would be thousands of vertices, most
+ * of them tracing the empty baseline between humps; equal-height runs collapse
+ * instead. Guards against a rewrite quietly reinstating the per-column strip. */
+static void test_histogram_silhouette_collapses_flat_runs(void) {
     UiHistogramPanelView view = {
         .window_w = 800, .window_h = 600,
         .visible = 1, .panel_x = 10, .panel_y = 10
     };
+    /* Sections spread across four decades — the sparse, humped shape the
+     * collapse exists for. */
+    static const double dur_us[] = { 0.4, 6.0, 128.0, 560.0, 2090.0 };
+    static const ProfSection secs[] = {
+        PROF_FRAME_RESTORE, PROF_FLATTEN, PROF_SNAPSHOT,
+        PROF_CODE_PANEL, PROF_FRAME_TOTAL
+    };
+    const int series = (int)(sizeof(secs) / sizeof(secs[0]));
 
-    /* Only cheap sections: every sample under one bin's width. */
     prof_test_reset();
-    for (int i = 0; i < 200; i++) {
-        prof_test_set_now_us((double)i * 1000.0);
-        prof_begin(PROF_FLATTEN);
-        prof_end(PROF_FLATTEN);
+    double now = 0.0;
+    for (int frame = 0; frame < 200; frame++) {
+        for (int k = 0; k < series; k++) {
+            prof_test_set_now_us(now);
+            prof_begin(secs[k]);
+            now += dur_us[k] * (1.0 + 0.05 * (double)((frame % 7) - 3));
+            prof_test_set_now_us(now);
+            prof_end(secs[k]);
+            now += 10.0;
+        }
     }
+
+    int lo = 0, hi = 0;
+    ASSERT_INT_EQ("axis resolves", ui_histogram_axis_range(&lo, &hi), 1);
+    ASSERT_TRUE("axis is wide enough for the collapse to matter",
+                hi - lo + 1 > 200);
+
     gl_stub_counts_reset();
     ui_histogram_panel_render(&view);
-    unsigned long long narrow_verts = gl_stub_counts[GL_STUB_glVertex2f];
 
-    /* Same cheap section, plus one slow section spread around 20 ms. Its
-     * spread must widen the axis rather than be buried by the bin-0 mass. */
-    prof_test_reset();
-    for (int i = 0; i < 200; i++) {
-        prof_test_set_now_us((double)i * 100000.0);
-        prof_begin(PROF_FLATTEN);
-        prof_end(PROF_FLATTEN);
-
-        prof_begin(PROF_FRAME_TOTAL);
-        prof_test_set_now_us((double)i * 100000.0 + 20000.0 + (double)(i % 8) * 200.0);
-        prof_end(PROF_FRAME_TOTAL);
-    }
-    gl_stub_counts_reset();
-    ui_histogram_panel_render(&view);
-    ASSERT_TRUE("a slow series widens the axis past the bin-0 crowd",
-                gl_stub_counts[GL_STUB_glVertex2f] > narrow_verts);
+    /* A per-column strip alone would emit 2 verts x plot_w for EVERY plotted
+     * series (all of the catalog's depth-0 rows, not just the 5 fed above), so
+     * even one series' worth of naive vertices is a generous ceiling here. */
+    unsigned long long naive_one_series =
+        (unsigned long long)(2 * ui_histogram_panel_width());
+    ASSERT_TRUE("silhouettes collapse flat runs",
+                gl_stub_counts[GL_STUB_glVertex2f] < naive_one_series);
+    ASSERT_TRUE("the panel still draws its series",
+                gl_stub_counts[GL_STUB_glVertex2f] > 50);
     prof_test_reset();
 }
 
@@ -390,8 +540,11 @@ int main(void) {
     test_cpuprof_section_histogram_accum_commit();
     test_cpuprof_frame_time_histogram();
     test_cpuprof_histogram_saturates_16_bit_bins();
-    test_histogram_series_axis_bin();
-    test_histogram_axis_follows_slowest_series();
+    test_cpuprof_histogram_reset();
+    test_cpuprof_log_bin_layout();
+    test_histogram_axis_range();
+    test_histogram_axis_covers_cheap_and_slow();
+    test_histogram_silhouette_collapses_flat_runs();
     test_histogram_panel_metrics();
     test_histogram_render_hidden();
     test_histogram_render_empty();

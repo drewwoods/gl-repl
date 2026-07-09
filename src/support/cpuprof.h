@@ -94,9 +94,20 @@ int    prof_section_is_stale(ProfSection s);
 
 /* --- Fixed timing histograms ---
  *
- * Each histogram is 1024 fixed bins spanning 0..100 ms. Bin i covers
- * [i * width, (i + 1) * width) in microseconds, except the last bin also
- * receives samples >= 100 ms. Bin counts are 16-bit and saturate at 65535.
+ * Each histogram is 1024 bins spaced *logarithmically* over 1 us .. 1 s, so
+ * every bin is the same constant ratio (~1.36%) wide rather than the same
+ * number of microseconds. Bin counts are 16-bit and saturate at 65535.
+ *
+ * Log spacing, not linear, because the sections being timed span four or five
+ * decades at once: a whole frame runs in milliseconds while the cheap sections
+ * around it run in microseconds. Linear bins wide enough to reach a 100 ms
+ * stall (~100 us each) drop every sub-100 us section into bin 0, where they
+ * are mutually indistinguishable and no plot can pull them apart. Constant
+ * *relative* resolution measures a 3 us section as precisely as a 30 ms one,
+ * and demotes an outlier from "blows out the whole scale" to "one more bin".
+ *
+ * Bin 0 also absorbs the underflow (samples below 1 us, i.e. the sections that
+ * are effectively free); the last bin also absorbs the overflow (>= 1 s).
  *
  * Section histograms are fed when a section publishes a sample:
  * prof_end() for direct sections and prof_accum_commit() for accumulated
@@ -104,13 +115,33 @@ int    prof_section_is_stale(ProfSection s);
  * wall-clock delta between frame ticks, so it captures overall frame cadence
  * rather than just display-callback body time. */
 #define PROF_HISTOGRAM_BIN_COUNT 1024
-#define PROF_HISTOGRAM_MAX_US    100000.0
+#define PROF_HISTOGRAM_MIN_US    1.0        /* bin 0's nominal lower edge */
+#define PROF_HISTOGRAM_MAX_US    1000000.0  /* last bin's upper edge (1 s) */
+#define PROF_HISTOGRAM_DECADES   6.0        /* log10(MAX_US / MIN_US)      */
 typedef uint16_t ProfHistogramBin;
+
+/* Bin containing `us`, clamped into [0, PROF_HISTOGRAM_BIN_COUNT - 1]. */
+int prof_histogram_bin_for_us(double us);
+
+/* The bin's time bounds in us: [lo, hi). bin 0's true lower bound is 0 and
+ * the last bin's true upper bound is infinite (see the underflow/overflow
+ * note above); these report the nominal log-spaced edges. */
+double prof_histogram_bin_lo_us(int bin);
+double prof_histogram_bin_hi_us(int bin);
 
 int prof_section_histogram(ProfSection s,
                            ProfHistogramBin *out,
                            int max_bins);
 int prof_frame_time_histogram(ProfHistogramBin *out, int max_bins);
+
+/* Zero every section histogram and the frame-time histogram, so the next
+ * samples start a fresh distribution. Call when the measured workload is
+ * replaced wholesale (loading a different example / scene) — the old shape
+ * describes different geometry, and its startup outliers would otherwise sit
+ * in the bins forever. Leaves the EMAs, staleness and FPS history alone:
+ * those are self-correcting over a few frames, the histograms are cumulative
+ * and are not. */
+void prof_histogram_reset(void);
 
 /* --- FPS history (fed by prof_frame_tick) ---
  *
