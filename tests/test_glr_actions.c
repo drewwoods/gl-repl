@@ -470,21 +470,21 @@ static void test_shortcuts(void) {
 }
 
 static void test_config_sections(void) {
-    /* g_cfg_items[] has six "### " sections. Audio has its own menu, so
+    /* g_cfg_items[] has seven "### " sections. Audio has its own menu, so
      * GLR_CONFIG_AUDIO_MODE is intentionally no longer surfaced here.
      * The section model must
      * be data-faithful: only real headers counted, "---" excluded, the
      * synthetic "All" view NOT counted here (plan Finding #2). */
     int n = glr_config_section_count();
-    ASSERT_INT("section count", n, 6);
+    ASSERT_INT("section count", n, 7);
 
     /* glr_config_section_label is data-faithful: it returns the raw
      * "### " label with the marker stripped (still UPPERCASE). The
      * leading-uppercase prettify is a menu-display concern applied in
      * menu_item_label, not here. */
     const char *expect[] = {
-        "RENDERING", "TIME & REPLAY", "OVERLAYS & SCENE", "CAMERA",
-        "GEOMETRY", "INTERFACE",
+        "RENDERING", "TIME & REPLAY", "SCENE", "CAMERA",
+        "GEOMETRY", "OVERLAYS", "INTERFACE",
     };
     for (int s = 0; s < n; s++)
         ASSERT_STR("section label (### stripped)",
@@ -596,21 +596,21 @@ static void test_ascii_shortcut_modifiers(void) {
     ASSERT_INT("Ctrl+Shift+T handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_T), 1);
     ASSERT_TRUE("Ctrl+Shift+T reset time to 0", fabsf(g_predef_vars[t_idx].value) < 1e-6f);
 
-    /* Plain Ctrl+P (no Shift) toggles Poly highlight. */
+    /* Plain Ctrl+P (no Shift) toggles Polygon highlight. */
     g_test_mods = 0;
     int ph0 = glr_config_get(GLR_CONFIG_POLY_HIGHLIGHT);
     ASSERT_INT("plain Ctrl+P handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_P), 1);
-    ASSERT_TRUE("plain Ctrl+P toggled Poly highlight",
+    ASSERT_TRUE("plain Ctrl+P toggled Polygon highlight",
                 glr_config_get(GLR_CONFIG_POLY_HIGHLIGHT) != ph0);
 
-    /* Ctrl+Shift+P toggles Vertex points. Poly highlight must NOT toggle. */
+    /* Ctrl+Shift+P toggles Vertex points. Polygon highlight must NOT toggle. */
     g_test_mods = GLUT_ACTIVE_SHIFT;
     int ph1 = glr_config_get(GLR_CONFIG_POLY_HIGHLIGHT);
     int vp0 = glr_config_get(GLR_CONFIG_VERTEX_POINTS);
     ASSERT_INT("Ctrl+Shift+P handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_P), 1);
     ASSERT_TRUE("Ctrl+Shift+P toggled Vertex points",
                 glr_config_get(GLR_CONFIG_VERTEX_POINTS) != vp0);
-    ASSERT_INT("Ctrl+Shift+P left Poly highlight alone",
+    ASSERT_INT("Ctrl+Shift+P left Polygon highlight alone",
                glr_config_get(GLR_CONFIG_POLY_HIGHLIGHT), ph1);
 
     /* Syntax highlight moved from F10 to Ctrl+Shift+Y. Plain Ctrl+Y is
@@ -1305,9 +1305,21 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
                RENDER3D_BACKDROP_CITY_AND_STARS);
 
     out = -1;
-    ASSERT_TRUE("resolve overlay_scope: OVERLAY_SCOPE_ALL_INSTANCES",
-                repl_cfg_resolve_text("overlay_scope", "OVERLAY_SCOPE_ALL_INSTANCES", &out));
+    ASSERT_TRUE("resolve label_highlight_scope: OVERLAY_SCOPE_ALL_INSTANCES",
+                repl_cfg_resolve_text("label_highlight_scope", "OVERLAY_SCOPE_ALL_INSTANCES", &out));
     ASSERT_INT("  -> OVERLAY_SCOPE_ALL_INSTANCES", out,
+               OVERLAY_SCOPE_ALL_INSTANCES);
+
+    out = -1;
+    ASSERT_TRUE("resolve legacy overlay_scope alias",
+                repl_cfg_resolve_text("overlay_scope", "OVERLAY_SCOPE_ALL_INSTANCES", &out));
+    ASSERT_INT("  -> OVERLAY_SCOPE_ALL_INSTANCES via legacy", out,
+               OVERLAY_SCOPE_ALL_INSTANCES);
+
+    out = -1;
+    ASSERT_TRUE("resolve legacy label_scope alias",
+                repl_cfg_resolve_text("label_scope", "OVERLAY_SCOPE_ALL_INSTANCES", &out));
+    ASSERT_INT("  -> OVERLAY_SCOPE_ALL_INSTANCES via legacy label_scope", out,
                OVERLAY_SCOPE_ALL_INSTANCES);
     ASSERT_TRUE("resolve vertex_outline_style: VERTEX_OUTLINE_STYLE_BOLD_INVERTED",
                 repl_cfg_resolve_text("vertex_outline_style",
@@ -1373,7 +1385,7 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     ASSERT_STR("fill_all axes is symbolic", repl_config_bag_get(&bag, "axes"), "AXES_THEME_GIZMO");
     ASSERT_STR("fill_all backdrop is symbolic", repl_config_bag_get(&bag, "backdrop"), "RENDER3D_BACKDROP_CITY_AND_STARS");
     ASSERT_STR("fill_all light_theme is symbolic", repl_config_bag_get(&bag, "light_theme"), "LIGHT_THEME_SOLAR");
-    ASSERT_STR("fill_all overlay_scope is symbolic", repl_config_bag_get(&bag, "overlay_scope"), "OVERLAY_SCOPE_AT_VERTEX");
+    ASSERT_STR("fill_all label_highlight_scope is symbolic", repl_config_bag_get(&bag, "label_highlight_scope"), "OVERLAY_SCOPE_AT_VERTEX");
     ASSERT_STR("fill_all vertex_outline_style is symbolic",
                repl_config_bag_get(&bag, "vertex_outline_style"),
                "VERTEX_OUTLINE_STYLE_BOLD_INVERTED");
@@ -1390,7 +1402,7 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     ASSERT_STR("fill_scene_subset axes is symbolic", repl_config_bag_get(&scene_bag, "axes"), "AXES_THEME_GIZMO");
     ASSERT_STR("fill_scene_subset backdrop is symbolic", repl_config_bag_get(&scene_bag, "backdrop"), "RENDER3D_BACKDROP_CITY_AND_STARS");
     ASSERT_STR("fill_scene_subset light_theme is symbolic", repl_config_bag_get(&scene_bag, "light_theme"), "LIGHT_THEME_SOLAR");
-    ASSERT_STR("fill_scene_subset overlay_scope is symbolic", repl_config_bag_get(&scene_bag, "overlay_scope"), "OVERLAY_SCOPE_AT_VERTEX");
+    ASSERT_STR("fill_scene_subset label_highlight_scope is symbolic", repl_config_bag_get(&scene_bag, "label_highlight_scope"), "OVERLAY_SCOPE_AT_VERTEX");
     ASSERT_STR("fill_scene_subset vertex_outline_style is symbolic",
                repl_config_bag_get(&scene_bag, "vertex_outline_style"),
                "VERTEX_OUTLINE_STYLE_BOLD_INVERTED");

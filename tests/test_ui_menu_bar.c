@@ -835,22 +835,24 @@ static void test_config_section_labels(void) {
     static const char *expected_raw[] = {
         "RENDERING",
         "TIME & REPLAY",
-        "OVERLAYS & SCENE",
+        "SCENE",
         "CAMERA",
         "GEOMETRY",
+        "OVERLAYS",
         "INTERFACE",
     };
     static const char *expected_display[] = {
         "Rendering",
         "Time & replay",
-        "Overlays & scene",
+        "Scene",
         "Camera",
         "Geometry",
+        "Overlays",
         "Interface",
     };
     int n = glr_config_section_count();
-    ASSERT_INT_EQ("section count", n, 6);
-    for (int i = 0; i < n && i < 6; i++) {
+    ASSERT_INT_EQ("section count", n, 7);
+    for (int i = 0; i < n && i < 7; i++) {
         const char *label = glr_config_section_label(i);
         ASSERT_TRUE("section label not null", label != NULL);
         if (label)

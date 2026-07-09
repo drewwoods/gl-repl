@@ -303,7 +303,7 @@ which choice it selects:
 
 **Integer slugs** carry a plain index: the toggles `wireframe`,
 `normal_vectors`, `vertex_outlines`, `vertex_points`, `light_indicators`, `camera_rotate`, `variable_panel`
-are `0`/`1`; `vertex_labels` and `xform_guides` are small multi-state
+are `0`/`1`; `vertex_labels` and `transform_guides` are small multi-state
 cycles saved as their index.
 
 ```c

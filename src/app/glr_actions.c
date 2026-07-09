@@ -374,10 +374,13 @@ const GlrConfigItem g_cfg_items[] = {
       .key_code = KM_KEY(GLR_ACCUM_EFFECT), .modifiers = KM_MODS(GLR_ACCUM_EFFECT) },
     { .label = "Accum passes", .key = GLR_CONFIG_ACCUM_PASSES,
       .state_count = 6, .state_names = accum_passes_names },
-    { .label = "Wireframe", .key = GLR_CONFIG_WIREFRAME,
-      .state_count = WIREFRAME_COUNT, .state_names = wireframe_mode_names,
-      .key_code = KM_KEY(GLR_WIREFRAME), .modifiers = KM_MODS(GLR_WIREFRAME) },
     { .label = "Point attenuation", .key = GLR_CONFIG_POINT_ATTENUATION, .state_count = 2 },
+    { .label = "Post FX Scope", .key = GLR_CONFIG_POST_FX_SCOPE,
+      .state_count = GLR_POST_FX_SCOPE_COUNT, .state_names = post_fx_scope_names,
+      .key_code = KM_KEY(GLR_POST_FX_SCOPE_CYCLE), .modifiers = KM_MODS(GLR_POST_FX_SCOPE_CYCLE),
+      .is_special = 1 },
+    { .label = "Post FX Effect", .key = GLR_CONFIG_POST_FX_EFFECT,
+      .state_count = GLR_POST_FX_EFFECT_COUNT, .state_names = post_fx_effect_names },
     { .label = "---", .section_header = 1 },
 
     { .label = "### TIME & REPLAY", .section_header = 1 },
@@ -390,10 +393,13 @@ const GlrConfigItem g_cfg_items[] = {
     { .label = "Replay expand", .key = GLR_CONFIG_REPLAY_EXPAND, .state_count = 2 },
     { .label = "---", .section_header = 1 },
 
-    { .label = "### OVERLAYS & SCENE", .section_header = 1 },
+    { .label = "### SCENE", .section_header = 1 },
     { .label = "Grid", .key = GLR_CONFIG_GRID_THEME,
       .state_count = GRID_THEME_COUNT, .state_names = grid_theme_names,
       .key_code = KM_KEY(GLR_GRID), .modifiers = KM_MODS(GLR_GRID), .is_special = 1 },
+    { .label = "Grid major", .key = GLR_CONFIG_GRID_MAJOR,
+      .state_count = GRID_MAJOR_COUNT, .state_names = grid_major_names,
+      .key_code = KM_KEY(GLR_GRID_MAJOR), .modifiers = KM_MODS(GLR_GRID_MAJOR) },
     { .label = "Grid extent", .key = GLR_CONFIG_GRID_EXTENT,
       .state_count = GRID_EXTENT_COUNT, .state_names = grid_extent_names,
       .key_code = KM_KEY(GLR_GRID_EXTENT), .modifiers = KM_MODS(GLR_GRID_EXTENT),
@@ -402,31 +408,18 @@ const GlrConfigItem g_cfg_items[] = {
       .state_count = GRID_BRIGHTNESS_COUNT, .state_names = grid_brightness_names,
       .key_code = KM_KEY(GLR_GRID_BRIGHTNESS), .modifiers = KM_MODS(GLR_GRID_BRIGHTNESS),
       .is_special = 1 },
-    { .label = "Grid major", .key = GLR_CONFIG_GRID_MAJOR,
-      .state_count = GRID_MAJOR_COUNT, .state_names = grid_major_names,
-      .key_code = KM_KEY(GLR_GRID_MAJOR), .modifiers = KM_MODS(GLR_GRID_MAJOR) },
     { .label = "Axes", .key = GLR_CONFIG_AXES_THEME,
       .state_count = AXES_THEME_COUNT, .state_names = axes_theme_names,
       .key_code = KM_KEY(GLR_AXES), .modifiers = KM_MODS(GLR_AXES), .is_special = 1 },
-    { .label = "Xform guides", .key = GLR_CONFIG_XFORM_GUIDE_MODE,
-      .state_count = RENDER3D_XFORM_GUIDE_COUNT, .state_names = xform_guide_mode_names,
-      .key_code = KM_KEY(GLR_XFORM_GUIDES), .modifiers = KM_MODS(GLR_XFORM_GUIDES) },
-    { .label = "Light indicators", .key = GLR_CONFIG_LIGHT_INDICATORS, .state_count = 2,
-      .key_code = KM_KEY(GLR_LIGHT_INDICATORS), .modifiers = KM_MODS(GLR_LIGHT_INDICATORS) },
+    { .label = "Backdrop", .key = GLR_CONFIG_BACKDROP,
+      .state_count = RENDER3D_BACKDROP_COUNT, .state_names = backdrop_mode_names,
+      .key_code = KM_KEY(GLR_BACKDROP), .modifiers = KM_MODS(GLR_BACKDROP), .is_special = 1 },
     { .label = "Light theme", .key = GLR_CONFIG_LIGHT_THEME,
       .state_count = LIGHT_THEME_COUNT, .state_names = render3d_light_theme_names,
       .key_code = KM_KEY(GLR_LIGHT_THEME), .modifiers = KM_MODS(GLR_LIGHT_THEME),
       .is_special = 1 },
-    { .label = "Backdrop", .key = GLR_CONFIG_BACKDROP,
-      .state_count = RENDER3D_BACKDROP_COUNT, .state_names = backdrop_mode_names,
-      .key_code = KM_KEY(GLR_BACKDROP), .modifiers = KM_MODS(GLR_BACKDROP), .is_special = 1 },
-    { .label = "Auto-normals", .key = GLR_CONFIG_AUTO_NORMALS, .state_count = 2 },
-    { .label = "Post FX Scope", .key = GLR_CONFIG_POST_FX_SCOPE,
-      .state_count = GLR_POST_FX_SCOPE_COUNT, .state_names = post_fx_scope_names,
-      .key_code = KM_KEY(GLR_POST_FX_SCOPE_CYCLE), .modifiers = KM_MODS(GLR_POST_FX_SCOPE_CYCLE),
-      .is_special = 1 },
-    { .label = "Post FX Effect", .key = GLR_CONFIG_POST_FX_EFFECT,
-      .state_count = GLR_POST_FX_EFFECT_COUNT, .state_names = post_fx_effect_names },
+    { .label = "Light indicators", .key = GLR_CONFIG_LIGHT_INDICATORS, .state_count = 2,
+      .key_code = KM_KEY(GLR_LIGHT_INDICATORS), .modifiers = KM_MODS(GLR_LIGHT_INDICATORS) },
     { .label = "---", .section_header = 1 },
 
     { .label = "### CAMERA", .section_header = 1 },
@@ -450,27 +443,37 @@ const GlrConfigItem g_cfg_items[] = {
     { .label = "---", .section_header = 1 },
 
     { .label = "### GEOMETRY", .section_header = 1 },
-    { .label = "Vertex labels", .key = GLR_CONFIG_VERTEX_LABELS,
-      .state_count = OVERLAY_VERTEX_LABEL_COUNT, .state_names = vertex_label_names,
-      .key_code = KM_KEY(GLR_VERTEX_LABELS), .modifiers = KM_MODS(GLR_VERTEX_LABELS),
-      .is_special = 1 },
-    { .label = "Overlay scope", .key = GLR_CONFIG_OVERLAY_SCOPE,
+    { .label = "Wireframe", .key = GLR_CONFIG_WIREFRAME,
+      .state_count = WIREFRAME_COUNT, .state_names = wireframe_mode_names,
+      .key_code = KM_KEY(GLR_WIREFRAME), .modifiers = KM_MODS(GLR_WIREFRAME) },
+    { .label = "Winding", .key = GLR_CONFIG_WINDING_VIEW, .state_count = 2,
+      .key_code = KM_KEY(GLR_WINDING_VIEW), .modifiers = KM_MODS(GLR_WINDING_VIEW) },
+    { .label = "Auto-normals", .key = GLR_CONFIG_AUTO_NORMALS, .state_count = 2 },
+    { .label = "---", .section_header = 1 },
+
+    { .label = "### OVERLAYS", .section_header = 1 },
+    { .label = "Label & highlight scope", .key = GLR_CONFIG_OVERLAY_SCOPE,
       .state_count = OVERLAY_SCOPE_COUNT,
       .state_names = overlay_scope_names,
       .key_code = KM_KEY(GLR_OVERLAY_SCOPE), .modifiers = KM_MODS(GLR_OVERLAY_SCOPE),
       .is_special = 1 },
-    { .label = "Normal vectors", .key = GLR_CONFIG_NORMAL_VECTORS, .state_count = 2,
-      .key_code = KM_KEY(GLR_NORMAL_VECTORS), .modifiers = KM_MODS(GLR_NORMAL_VECTORS) },
+    { .label = "Vertex labels", .key = GLR_CONFIG_VERTEX_LABELS,
+      .state_count = OVERLAY_VERTEX_LABEL_COUNT, .state_names = vertex_label_names,
+      .key_code = KM_KEY(GLR_VERTEX_LABELS), .modifiers = KM_MODS(GLR_VERTEX_LABELS),
+      .is_special = 1 },
+    { .label = "Vertex points", .key = GLR_CONFIG_VERTEX_POINTS, .state_count = 2,
+      .key_code = KM_KEY(GLR_VERTEX_POINTS), .modifiers = KM_MODS(GLR_VERTEX_POINTS) },
     { .label = "Vertex outlines", .key = GLR_CONFIG_VERTEX_OUTLINES, .state_count = 2,
       .key_code = KM_KEY(GLR_VERTEX_OUTLINES), .modifiers = KM_MODS(GLR_VERTEX_OUTLINES) },
     { .label = "Vertex outline style", .key = GLR_CONFIG_VERTEX_OUTLINE_STYLE,
       .state_count = VERTEX_OUTLINE_STYLE_COUNT, .state_names = vertex_outline_style_names },
-    { .label = "Vertex points", .key = GLR_CONFIG_VERTEX_POINTS, .state_count = 2,
-      .key_code = KM_KEY(GLR_VERTEX_POINTS), .modifiers = KM_MODS(GLR_VERTEX_POINTS) },
-    { .label = "Poly highlight", .key = GLR_CONFIG_POLY_HIGHLIGHT, .state_count = 2,
+    { .label = "Normal vectors", .key = GLR_CONFIG_NORMAL_VECTORS, .state_count = 2,
+      .key_code = KM_KEY(GLR_NORMAL_VECTORS), .modifiers = KM_MODS(GLR_NORMAL_VECTORS) },
+    { .label = "Polygon highlight", .key = GLR_CONFIG_POLY_HIGHLIGHT, .state_count = 2,
       .key_code = KM_KEY(GLR_POLY_HIGHLIGHT), .modifiers = KM_MODS(GLR_POLY_HIGHLIGHT) },
-    { .label = "Winding", .key = GLR_CONFIG_WINDING_VIEW, .state_count = 2,
-      .key_code = KM_KEY(GLR_WINDING_VIEW), .modifiers = KM_MODS(GLR_WINDING_VIEW) },
+    { .label = "Transform guides", .key = GLR_CONFIG_XFORM_GUIDE_MODE,
+      .state_count = RENDER3D_XFORM_GUIDE_COUNT, .state_names = xform_guide_mode_names,
+      .key_code = KM_KEY(GLR_XFORM_GUIDES), .modifiers = KM_MODS(GLR_XFORM_GUIDES) },
     { .label = "---", .section_header = 1 },
 
     { .label = "### INTERFACE", .section_header = 1 },
@@ -566,6 +569,21 @@ static void glr_export_cfg_normalize_legacy_alias(const char **slug, int *val,
             if (*val >= PROFILE_PANEL_MODE_COUNT)
                 *val = PROFILE_PANEL_MODE_COUNT - 1;
         }
+    }
+
+    if (strcmp(*slug, "overlay_scope") == 0 || strcmp(*slug, "label_scope") == 0) {
+        snprintf(slug_buf, slug_buf_sz, "%s", "label_highlight_scope");
+        *slug = slug_buf;
+    }
+
+    if (strcmp(*slug, "xform_guides") == 0) {
+        snprintf(slug_buf, slug_buf_sz, "%s", "transform_guides");
+        *slug = slug_buf;
+    }
+
+    if (strcmp(*slug, "poly_highlight") == 0) {
+        snprintf(slug_buf, slug_buf_sz, "%s", "polygon_highlight");
+        *slug = slug_buf;
     }
 }
 
@@ -733,7 +751,7 @@ static const char *const *cfg_symbol_table_for_slug(const char *slug,
         *count = LIGHT_THEME_COUNT;
         return cfg_light_theme_symbols;
     }
-    if (strcmp(slug, "overlay_scope") == 0) {
+    if (strcmp(slug, "label_highlight_scope") == 0 || strcmp(slug, "label_scope") == 0 || strcmp(slug, "overlay_scope") == 0) {
         *count = OVERLAY_SCOPE_COUNT;
         return cfg_overlay_scope_symbols;
     }

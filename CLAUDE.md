@@ -1058,8 +1058,8 @@ pipeline, so it stays hidden from the code panel. `@cfg` parsing reuses
 these scene-presentation slugs:
 
 `wireframe`, `grid`, `grid_major`, `grid_extent`, `grid_brightness`, `axes`,
-`vertex_labels`, `overlay_scope`, `normal_vectors`, `vertex_outlines`, `vertex_points`,
-`xform_guides`, `light_indicators`, `light_theme`, `backdrop`,
+`vertex_labels`, `label_highlight_scope`, `normal_vectors`, `vertex_outlines`, `vertex_points`,
+`transform_guides`, `light_indicators`, `light_theme`, `backdrop`,
 `view_mode`, `projection`, `camera_rotate`, `variable_panel`.
 
 `projection` is the perspective/ortho projection toggle
@@ -1342,7 +1342,7 @@ alongside `.cfg` (see the file-layout table for the tutorial catalog).
 | Ctrl+Shift+R | Toggle camera auto-rotate |
 | Ctrl+Shift+V | Toggle View mode (2D / 3D) |
 | F1 | Help overlay — also the clickable statusbar "F1 help" keycap |
-| F2-F10 | Cycle the bound config forward. Each drives a multi-state cycle: F2 Grid, F3 Grid extent, F4 Grid brightness, F5 Backdrop, F6 Axes, F7 Vertex labels, F8 Overlay scope, F9 Light theme, F10 Post FX Scope |
+| F2-F10 | Cycle the bound config forward. Each drives a multi-state cycle: F2 Grid, F3 Grid extent, F4 Grid brightness, F5 Backdrop, F6 Axes, F7 Vertex labels, F8 Label & highlight scope, F9 Light theme, F10 Post FX Scope |
 | Ctrl+= / Ctrl+− | Step Accum passes up/down (1/2/4/8/12/16; active when Accum effect ≠ Off) |
 | Shift+F2-F10 | Step the bound cycle backward |
 | F11 | Export scene geometry to PLY (also File → Export .ply). File is named after the active scene like Save Scene — `<scene>.ply` (in the workspace dir if bound), else `output.ply`. On macOS F11 may be claimed by "Show Desktop" — use the menu item then |
