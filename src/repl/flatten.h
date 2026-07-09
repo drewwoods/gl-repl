@@ -72,6 +72,12 @@ typedef struct {
     ReplFuncAliasView func_aliases;     /* aliases visible while reparsing source text */
     int               max_call_depth;   /* recursion limit (default MAX_FLATTEN_CALL_DEPTH) */
     int               visit_budget;     /* total command visits allowed (default MAX_FLATTEN_VISIT_BUDGET) */
+    /* Differential seam: force every command line back through the text
+     * parser, disabling the literal-command fast path that appends a
+     * `has_vars == 0` source command verbatim. Zero (the live default) takes
+     * the fast path; the flatten differential test flattens each corpus scene
+     * both ways and compares. Not a user-facing knob. */
+    int               force_reparse;
 } ReplFlattenOptions;
 
 /* Result: whether flattening succeeded, how many commands were generated,
