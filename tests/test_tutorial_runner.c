@@ -953,9 +953,10 @@ static void test_catalog_starter_steps_are_append(void) {
 
 static void test_catalog_cfg_lines(void) {
     /* First Triangle ships a leading `@cfg view_mode = RENDER3D_VIEW_2D` so the
-     * flat triangle renders in true 2D; every other shipped tutorial omits
-     * cfg (NULL = no presentation overrides). Out-of-range idx → NULL. */
-    int first = -1;
+     * flat triangle renders in true 2D. First Animation pauses auto_time so
+     * Ctrl+T visibly starts its cube. All other shipped tutorials omit cfg
+     * (NULL = no presentation overrides). Out-of-range idx → NULL. */
+    int first = -1, first_animation = -1;
     for (int i = 0; i < repl_tutorial_count(); i++) {
         const char *name = repl_tutorial_name(i);
         if (name && strcmp(name, "First Triangle") == 0) { first = i; break; }
@@ -974,12 +975,33 @@ static void test_catalog_cfg_lines(void) {
         }
     }
 
+    for (int i = 0; i < repl_tutorial_count(); i++) {
+        const char *name = repl_tutorial_name(i);
+        if (name && strcmp(name, "First Animation") == 0) {
+            first_animation = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("First Animation is in catalog", first_animation >= 0);
+    if (first_animation >= 0) {
+        const char *const *cfg = repl_tutorial_cfg_lines(first_animation);
+        ASSERT_TRUE("First Animation has cfg lines", cfg != NULL);
+        if (cfg) {
+            ASSERT_TRUE("First Animation cfg pauses auto_time",
+                        cfg[0] != NULL &&
+                        strstr(cfg[0], "auto_time = 0") != NULL);
+            ASSERT_TRUE("First Animation cfg is NULL-terminated after 1 line",
+                        cfg[1] == NULL);
+        }
+    }
+
     /* Tutorials that opt into entry-level @cfg list them by name here; the
      * rest must leave cfg NULL so the field stays genuinely opt-in. */
     for (int i = 0; i < repl_tutorial_count(); i++) {
         const char *name = repl_tutorial_name(i);
         if (name && (strcmp(name, "First Triangle") == 0 ||
-                     strcmp(name, "Feature Tour") == 0))
+                     strcmp(name, "Feature Tour") == 0 ||
+                     strcmp(name, "First Animation") == 0))
             continue;
         ASSERT_TRUE("tutorials without an entry-level @cfg have NULL cfg",
                     repl_tutorial_cfg_lines(i) == NULL);
@@ -1851,6 +1873,80 @@ static int find_tutorial_idx(const char *name) {
         if (n && strcmp(n, name) == 0) return i;
     }
     return -1;
+}
+
+static int commit_command_step(int idx, int step);
+
+/* First Animation keeps the built-in `t` clock paused while its two
+ * commands are entered, then enables Auto time only when Ctrl+T is pressed.
+ * This protects the tutorial's core visual promise: the shortcut starts the
+ * motion rather than pausing an already moving cube. */
+static void test_first_animation_starts_on_ctrl_t(void) {
+    reset_fixture();
+
+    int idx = find_tutorial_idx("First Animation");
+    ASSERT_TRUE("First Animation is in catalog", idx >= 0);
+    if (idx < 0) return;
+
+    ASSERT_TRUE("First Animation is tagged Animation",
+                repl_tutorial_has_tag(idx, REPL_TUTORIAL_TAG_ANIMATION));
+    ASSERT_INT("First Animation has intro, two commands, a REQUIRE, and a closing NOTE",
+               repl_tutorial_step_count(idx), 5);
+    const char *const *cfg = repl_tutorial_cfg_lines(idx);
+    ASSERT_TRUE("First Animation pauses Auto time in its cfg",
+                cfg != NULL && cfg[0] != NULL &&
+                strstr(cfg[0], "auto_time = 0") != NULL);
+
+    tutorial_start(idx);
+    ASSERT_TRUE("First Animation starts", tutorial_active());
+    ASSERT_INT("Auto time starts paused", repl_state_variables().time_playing, 0);
+    ASSERT_INT("First Animation opens with a NOTE",
+               (int)tutorial_current_step_kind(),
+               (int)TUTORIAL_STEP_KIND_NOTE);
+
+    glr_ctrl_keyboard('\r', 0, 0);
+    ASSERT_TRUE("intro acknowledgement reaches rotation command",
+                tutorial_current_expected_text() != NULL);
+    ASSERT_STR("rotation command uses the t clock",
+               tutorial_current_expected_text(),
+               "glRotatef(t * 45, 0, 1, 0)");
+    ASSERT_TRUE("rotation command commits",
+                commit_command_step(idx, tutorial_state_view().step));
+    ASSERT_STR("cube command follows rotation",
+               tutorial_current_expected_text(), "glutSolidCube(1)");
+    ASSERT_TRUE("cube command commits",
+                commit_command_step(idx, tutorial_state_view().step));
+
+    const TutorialStep *step = repl_tutorial_step_get(
+        idx, tutorial_state_view().step);
+    ASSERT_TRUE("motion-start step is present", step != NULL);
+    if (!step) return;
+    ASSERT_INT("motion-start step requires a config action", (int)step->kind,
+               (int)TUTORIAL_STEP_KIND_REQUIRE);
+    ASSERT_STR("motion-start step watches Auto time", step->cfg_slug, "auto_time");
+    ASSERT_INT("motion-start step waits for Auto time on", step->cfg_value, 1);
+    ASSERT_INT("motion-start step advertises Ctrl+T", step->comment_binding_key,
+               KEY_CTRL_T);
+
+    glr_ctrl_keyboard(KEY_CTRL_T, 0, 0);
+    ASSERT_TRUE("Ctrl+T leaves the tutorial open to show the motion",
+                tutorial_active());
+    ASSERT_INT("Ctrl+T leaves time playing", repl_state_variables().time_playing, 1);
+    ASSERT_INT("Ctrl+T advances to the closing NOTE",
+               (int)tutorial_current_step_kind(),
+               (int)TUTORIAL_STEP_KIND_NOTE);
+    int time_idx = repl_eval_find_predef_var_idx("t");
+    ASSERT_TRUE("the built-in t variable exists", time_idx >= 0);
+    if (time_idx >= 0) {
+        float time_before_tick = repl_eval_predef_view().vars[time_idx].value;
+        glr_ctrl_tick();
+        ASSERT_TRUE("the clock advances while the final NOTE is displayed",
+                    repl_eval_predef_view().vars[time_idx].value > time_before_tick);
+    }
+
+    glr_ctrl_keyboard('\r', 0, 0);
+    ASSERT_TRUE("closing acknowledgement completes First Animation",
+                !tutorial_active());
 }
 
 /* Drive one COMMAND step's commit via the ; key route. Returns 1 on success
@@ -3392,6 +3488,7 @@ int main(void) {
     test_validate_accepts_set_and_require_steps();
     test_validate_rejects_set_with_empty_slug();
     test_validate_rejects_require_with_expected();
+    test_first_animation_starts_on_ctrl_t();
     /* Relaxed step shapes: NOTE kind + comment-less COMMAND steps. */
     test_validate_accepts_comment_less_command_step();
     test_validate_note_step_shapes();
