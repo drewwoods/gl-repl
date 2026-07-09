@@ -39,4 +39,32 @@ typedef struct {
 
 ReplFlatCost repl_flatten_cost_at_line(int line_idx);
 
+/* ---- Single-polygon cursor resolution (SINGLE_POLYGON overlay scope) ----
+ *
+ * Which primitive of the cursor's glBegin/glEnd block is "current"? The
+ * cursor's position between vertex lines picks the polygon being built
+ * there: any line after glBegin up to the Nth vertex of a primitive
+ * belongs to that primitive; the line after its last vertex starts the
+ * next one. The result is a block-local vertex-ordinal range over the
+ * FIRST flat instance of the source block (loop-unrolled copies follow
+ * first-instance semantics).
+ *
+ * valid == 0 means no single primitive was resolved and callers should
+ * fall back to whole-block behavior: cursor outside any glBegin block,
+ * cursor on the glBegin line itself, a mode where the block IS one
+ * primitive (GL_POLYGON, GL_LINE_LOOP), or a vertex-less block. Tess
+ * (GLU) polygons are never resolved here — the block cache tracks
+ * CMD_BEGIN blocks only — so GLU geometry keeps its existing scoping.
+ *
+ * fan_anchor == 1 marks GL_TRIANGLE_FAN's shared center: ordinal 0
+ * belongs to the selected triangle in addition to [first, last]. */
+typedef struct {
+    int valid;
+    int first;       /* first vertex ordinal in the block, inclusive */
+    int last;        /* last vertex ordinal, inclusive */
+    int fan_anchor;  /* 1 = ordinal 0 (fan center) is also selected */
+} ReplCursorPolygon;
+
+ReplCursorPolygon repl_flatten_cursor_polygon(int edit_line_idx);
+
 #endif /* REPL_FLATTEN_QUERY_H */

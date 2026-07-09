@@ -734,9 +734,9 @@ where the rig sits.
   Index+World Fine — numbers each vertex of the primitive at the cursor,
   optionally with its coordinates.
 - **Label & highlight scope** (F8): First instance / All instances / At vertex /
-  Visible only — controls how broadly cursor-bound overlays are shown around
-  repeated function/loop instances. Label-specific modes still control label
-  placement and visible-only filtering.
+  Visible only / Single polygon — controls how broadly cursor-bound overlays
+  are shown around repeated function/loop instances. Label-specific modes
+  still control label placement and visible-only filtering.
 - **Normal vectors** (Ctrl+Shift+N): draws each vertex's normal as an arrow.
 - **Vertex outlines** (Ctrl+Shift+O) and **Vertex points** (Ctrl+Shift+P): outline polygons
   and mark vertices *(both on by default)*.
@@ -746,6 +746,20 @@ where the rig sits.
   `glFrontFace`), so flipped or inside-out faces stand out immediately.
 - **Auto-normals**: maintains generated `glNormal3f` lines for your
   geometry so lighting works without hand-written normals.
+
+**Single polygon** scope narrows labels and the polygon highlight down to
+just the one primitive your cursor is building, instead of the whole
+`glBegin`/`glEnd` block — handy for a multi-face batch like a cube drawn as
+one `glBegin(GL_QUADS)` with several faces packed into it. The cursor's
+position between vertex lines picks the primitive: any line up through a
+primitive's last vertex belongs to it, and the next line starts the next
+one.
+
+![Single polygon scope: cursor on the second quad's second vertex highlights and labels only that quad](images/single-polygon-scope.png)
+
+Here the cursor sits on the second quad's `glVertex3f(1.6, -0.8, 0)` line;
+only that quad outlines and labels (`v4`..`v7`) — the first quad is left
+alone even though both share the same `glBegin`/`glEnd` pair.
 
 A cursor crosshair guide also marks the vertex your cursor line refers to,
 with its position label — move the cursor through a `glBegin` block and the

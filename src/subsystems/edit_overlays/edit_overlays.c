@@ -314,8 +314,55 @@ static int outline_block_matches_cursor(int begin_idx, int is_tess,
 
 static int cursor_scope_allows_instance(const OverlayWalkCtx *ctx,
                                         int selected_instance) {
-    return ctx->cursor_overlay_scope != OVERLAY_SCOPE_FIRST_INSTANCE ||
-           selected_instance == 1;
+    /* SINGLE_POLYGON narrows FIRST_INSTANCE, so it shares the
+     * first-unrolled-copy gate (tess and glut shapes, which the
+     * per-primitive filter deliberately excludes, degrade to
+     * first-instance behavior). */
+    if (ctx->cursor_overlay_scope == OVERLAY_SCOPE_FIRST_INSTANCE ||
+        ctx->cursor_overlay_scope == OVERLAY_SCOPE_SINGLE_POLYGON)
+        return selected_instance == 1;
+    return 1;
+}
+
+/* SINGLE_POLYGON scope with a resolved primitive range: does block-local
+ * vertex ordinal `ord` belong to the cursor's primitive? */
+static int cursor_poly_contains_ordinal(const OverlayWalkCtx *ctx, int ord) {
+    return (ord >= ctx->cursor_poly_first && ord <= ctx->cursor_poly_last) ||
+           (ctx->cursor_poly_fan_anchor && ord == 0);
+}
+
+/* Emit only the cursor's primitive from the glBegin block headed at
+ * begin_idx, in the active-highlight style. Re-issuing the block's own
+ * mode with just the selected ordinal run renders exactly one primitive
+ * for every grouping the resolver produces: a quad/triangle/line/point
+ * group, a strip sub-window, or a fan triangle (center vertex 0 plus
+ * the [first, last] pair). Transforms cannot occur inside a begin
+ * block, so re-walking the range under the caller's modelview is safe. */
+static void render_single_polygon_highlight(const OverlayWalkCtx *ctx,
+                                            int begin_idx) {
+    const GLCmd *cmds = ctx->program.cmds;
+    int cmd_count = ctx->program.cmd_count;
+    int ord = 0;
+
+    glLineWidth(VERTEX_OUTLINE_ACTIVE_WIDTH);
+    render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
+    glBegin((GLenum)cmds[begin_idx].args[0]);
+    for (int i = begin_idx + 1; i < cmd_count; i++) {
+        if (!cmds[i].valid) continue;
+        if (cmds[i].type == CMD_END) break;
+        if (cmds[i].type != CMD_VERTEX3F && cmds[i].type != CMD_VERTEX2F)
+            continue;
+        if (cursor_poly_contains_ordinal(ctx, ord)) {
+            if (cmds[i].type == CMD_VERTEX3F)
+                glVertex3f(cmds[i].args[0], cmds[i].args[1], cmds[i].args[2]);
+            else
+                glVertex2f(cmds[i].args[0], cmds[i].args[1]);
+        }
+        ord++;
+    }
+    glEnd();
+    glLineWidth(1.0f);
+    render3d_clr(RENDER3D_CLR_OUTLINE_EDGE);
 }
 
 static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
@@ -347,6 +394,14 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
                 block_is_current =
                     cursor_scope_allows_instance(ctx, selected_block_instances);
             } else {
+                block_is_current = 0;
+            }
+            if (block_is_current &&
+                ctx->cursor_overlay_scope == OVERLAY_SCOPE_SINGLE_POLYGON &&
+                ctx->cursor_poly_valid) {
+                /* Highlight only the cursor's primitive; the rest of the
+                 * block falls through to the plain outline (or nothing). */
+                render_single_polygon_highlight(ctx, i);
                 block_is_current = 0;
             }
             if (block_is_current) {
@@ -749,10 +804,17 @@ typedef struct {
      * primitive (the parametric torus shows v0..vN once, not per ring);
      * 1 labels every unrolled vertex with a globally-unique number;
      * 2 labels all instances at their vertex positions (without decluttering);
-     * 3 (visible) is like 1 but depth-tested so occluded vertices are dropped. */
+     * 3 (visible) is like 1 but depth-tested so occluded vertices are dropped;
+     * 4 (single polygon) is 0 narrowed to the primitive under the cursor. */
     int   label_options;
     int   block_instances;   /* selected blocks (loop iterations) seen so far  */
     int   labelable_seen;    /* running index over all visited labelable verts */
+    /* SINGLE_POLYGON scope: the cursor primitive's block-local ordinal range
+     * (copied from OverlayWalkCtx). poly_valid == 0 -> whole-block labels. */
+    int   poly_valid;
+    int   poly_first;
+    int   poly_last;
+    int   poly_fan_anchor;
     /* Visible-only scope: scene depth buffer (vw*vh, viewport-local, bottom-up)
      * read once before the walk; NULL for every other scope. */
     const float *depthbuf;
@@ -859,9 +921,21 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
 
     /* First-instance mode: only the first unrolled copy (else the torus repeats
      * v0..vN once per ring). All-instances and At-vertex modes keep all copies;
-     * declutter pass still drops whatever doesn't fit for All-instances. */
-    if (ctx->label_options == OVERLAY_SCOPE_FIRST_INSTANCE && ctx->block_instances != 1)
+     * declutter pass still drops whatever doesn't fit for All-instances.
+     * Single-polygon narrows first-instance further to the primitive under the
+     * cursor — but only for glBegin blocks (primitive_mode != 0); tess (GLU)
+     * polygons keep whole-block labels by design. */
+    if ((ctx->label_options == OVERLAY_SCOPE_FIRST_INSTANCE ||
+         ctx->label_options == OVERLAY_SCOPE_SINGLE_POLYGON) &&
+        ctx->block_instances != 1)
         return;
+    if (ctx->label_options == OVERLAY_SCOPE_SINGLE_POLYGON &&
+        ctx->poly_valid && state->primitive_mode != 0) {
+        int ord = state->vertex_idx_in_block;
+        if (!((ord >= ctx->poly_first && ord <= ctx->poly_last) ||
+              (ctx->poly_fan_anchor && ord == 0)))
+            return;
+    }
     if (ctx->count >= VERTEX_LABEL_MAX)
         return;
 
@@ -1244,6 +1318,10 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     label_ctx.block_instances = 0;
     label_ctx.labelable_seen  = 0;
     label_ctx.depthbuf        = NULL;
+    label_ctx.poly_valid      = walk_ctx ? walk_ctx->cursor_poly_valid : 0;
+    label_ctx.poly_first      = walk_ctx ? walk_ctx->cursor_poly_first : 0;
+    label_ctx.poly_last       = walk_ctx ? walk_ctx->cursor_poly_last : 0;
+    label_ctx.poly_fan_anchor = walk_ctx ? walk_ctx->cursor_poly_fan_anchor : 0;
 
     /* The scene's projection + viewport are live here and the walker leaves
      * them intact (it only pushes/pops the modelview), so snapshot them once

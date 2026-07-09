@@ -269,6 +269,114 @@ ReplFlatCost repl_flatten_cost_at_line(int line_idx) {
     return out;
 }
 
+/* ---- Single-polygon cursor resolution (see flatten_query.h) ---------- */
+
+/* Vertex-ordinal range of the primitive containing (or being built at)
+ * cursor ordinal `ord` under glBegin mode `mode`, over a block of
+ * `count` vertices. Fixed-size modes group independently; strips and
+ * fans resolve to the single segment/triangle/quad the vertex
+ * completes (the first full primitive when ord sits below one window).
+ * Returns 0 when the whole block is one primitive (GL_POLYGON,
+ * GL_LINE_LOOP) or the mode is unknown. */
+static int cursor_polygon_group_range(GLenum mode, int ord, int count,
+                                      ReplCursorPolygon *out) {
+    int first, last;
+
+    switch (mode) {
+    case GL_POINTS:
+        first = ord; last = ord;
+        break;
+    case GL_LINES:
+        first = (ord / 2) * 2; last = first + 1;
+        break;
+    case GL_TRIANGLES:
+        first = (ord / 3) * 3; last = first + 2;
+        break;
+    case GL_QUADS:
+        first = (ord / 4) * 4; last = first + 3;
+        break;
+    case GL_LINE_STRIP:
+        /* Segment completed by the vertex. */
+        first = (ord < 1) ? 0 : ord - 1; last = first + 1;
+        break;
+    case GL_TRIANGLE_STRIP:
+        /* Triangle completed by the vertex. */
+        first = (ord < 2) ? 0 : ord - 2; last = first + 2;
+        break;
+    case GL_TRIANGLE_FAN:
+        /* Triangle completed by the vertex: {0, ord-1, ord}. */
+        first = (ord < 2) ? 1 : ord - 1; last = first + 1;
+        out->fan_anchor = 1;
+        break;
+    case GL_QUAD_STRIP:
+        /* Quad k spans ordinals 2k..2k+3; pick the quad the vertex
+         * completes, else the earliest quad containing it. */
+        first = (ord < 2) ? 0 : ((ord - 2) / 2) * 2;
+        last = first + 3;
+        break;
+    default:
+        return 0;  /* GL_POLYGON / GL_LINE_LOOP: the block IS the primitive */
+    }
+
+    if (last > count - 1) last = count - 1;
+    if (first > last) first = last;
+    if (first < 0) first = 0;
+    out->first = first;
+    out->last = last;
+    return 1;
+}
+
+ReplCursorPolygon repl_flatten_cursor_polygon(int edit_line_idx) {
+    ReplCursorPolygon out = { 0, 0, 0, 0 };
+    const GLCmd *flat_cmds = repl_state_flat_program_cmds();
+    int flat_cmd_count = repl_state_flat_program_count();
+    int begin, end;
+    int vtx_count = 0;
+    int cursor_ord = -1;
+
+    if (edit_line_idx < 0 || edit_line_idx >= repl_state_document_count())
+        return out;
+
+    /* Reuse the cached cursor-block resolution (lazy refresh, same as
+     * repl_flat_cmd_matches_cursor). The cache only tracks CMD_BEGIN
+     * blocks, so tess (GLU) polygons never resolve here by design. */
+    if (repl_state_flat_program_current_block_source_line() != edit_line_idx)
+        repl_flatten_refresh_current_block_highlight(edit_line_idx);
+    begin = repl_state_flat_program_current_block_begin();
+    end = repl_state_flat_program_current_block_end();
+
+    if (begin < 0 || end <= begin || end >= flat_cmd_count)
+        return out;
+    if (!flat_cmds[begin].valid || flat_cmds[begin].type != CMD_BEGIN)
+        return out;
+    /* Cursor on the glBegin line itself: the whole block is current. */
+    if (flat_cmds[begin].src_cmd_idx == edit_line_idx)
+        return out;
+
+    /* Cursor ordinal = the first vertex (in emission order) whose source
+     * line is at or after the cursor; a cursor past the last vertex line
+     * builds the block's final primitive. Matching in emission order
+     * resolves a cursor inside an inner loop body to the first unrolled
+     * iteration (first-instance semantics). */
+    for (int i = begin + 1; i < end; i++) {
+        if (!flat_cmds[i].valid) continue;
+        if (flat_cmds[i].type != CMD_VERTEX3F &&
+            flat_cmds[i].type != CMD_VERTEX2F)
+            continue;
+        if (cursor_ord < 0 && flat_cmds[i].src_cmd_idx >= edit_line_idx)
+            cursor_ord = vtx_count;
+        vtx_count++;
+    }
+    if (vtx_count <= 0)
+        return out;
+    if (cursor_ord < 0)
+        cursor_ord = vtx_count - 1;
+
+    out.valid = cursor_polygon_group_range((GLenum)flat_cmds[begin].args[0],
+                                           cursor_ord, vtx_count, &out);
+    return out;
+}
+
 static unsigned int line_func_scope_mask(int line) {
     unsigned int mask = 0;
     int stack[FLAT_QUERY_FUNC_SCOPE_MASK_BITS];
