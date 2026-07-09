@@ -32,6 +32,9 @@ static double g_prof_last_us[PROF_SECTION_COUNT];  /* last measured wall µs */
 static double g_prof_avg_us[PROF_SECTION_COUNT];   /* EMA in µs             */
 static int    g_prof_stale[PROF_SECTION_COUNT];    /* frames since last sample */
 static double g_prof_accum_pending[PROF_SECTION_COUNT]; /* running total for accum-commit */
+static int    g_prof_accum_sampled[PROF_SECTION_COUNT]; /* accum_end ran since reset */
+static ProfHistogramBin
+              g_prof_hist[PROF_SECTION_COUNT][PROF_HISTOGRAM_BIN_COUNT];
 static int    g_prof_initialized = 0;
 
 static ProfSectionHookFn g_prof_begin_hook = 0;
@@ -59,13 +62,19 @@ typedef struct {
 static ProfFpsWindow g_fps_win[PROF_FPS_WIN_COUNT];
 static double g_fps_last_tick_us = 0.0;
 static double g_fps_ema = 0.0;
+static ProfHistogramBin g_frame_time_hist[PROF_HISTOGRAM_BIN_COUNT];
+
+#ifdef GL_STUBS
+static int g_prof_test_now_enabled = 0;
+static double g_prof_test_now_us = 0.0;
+#endif
 
 /* ========================================================================= */
 /* Helpers                                                                    */
 /* ========================================================================= */
 
 #ifdef __APPLE__
-static double prof_now_us(void) {
+static double prof_platform_now_us(void) {
     static mach_timebase_info_data_t tb = {0, 0};
     if (tb.denom == 0) mach_timebase_info(&tb);
     /* mach_absolute_time returns ticks; convert to nanoseconds via the
@@ -76,7 +85,7 @@ static double prof_now_us(void) {
     return nsec / 1000.0;
 }
 #else
-static double prof_now_us(void) {
+static double prof_platform_now_us(void) {
     struct timespec ts;
     /* CLOCK_MONOTONIC is served by the vDSO on Linux, so this is a
      * single register-load worth of overhead rather than a full syscall. */
@@ -84,6 +93,29 @@ static double prof_now_us(void) {
     return (double)ts.tv_sec * 1e6 + (double)ts.tv_nsec / 1000.0;
 }
 #endif
+
+static double prof_now_us(void) {
+#ifdef GL_STUBS
+    if (g_prof_test_now_enabled)
+        return g_prof_test_now_us;
+#endif
+    return prof_platform_now_us();
+}
+
+static int prof_histogram_bin_for_us(double elapsed_us) {
+    if (!(elapsed_us > 0.0)) return 0;
+    if (elapsed_us >= PROF_HISTOGRAM_MAX_US)
+        return PROF_HISTOGRAM_BIN_COUNT - 1;
+    return (int)(elapsed_us * (double)PROF_HISTOGRAM_BIN_COUNT
+                 / PROF_HISTOGRAM_MAX_US);
+}
+
+static void prof_histogram_record(ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT],
+                                  double elapsed_us) {
+    int bin = prof_histogram_bin_for_us(elapsed_us);
+    if (bins[bin] < UINT16_MAX)
+        bins[bin]++;
+}
 
 static void init_if_needed(void) {
     if (g_prof_initialized) return;
@@ -93,6 +125,7 @@ static void init_if_needed(void) {
         g_prof_avg_us[section_idx]        = 0.0;
         g_prof_stale[section_idx]         = PROF_STALE_FRAMES; /* treat as stale until first sample */
         g_prof_accum_pending[section_idx] = 0.0;
+        g_prof_accum_sampled[section_idx] = 0;
     }
     g_prof_initialized = 1;
 }
@@ -126,6 +159,7 @@ void prof_end(ProfSection s) {
 
     g_prof_last_us[s] = elapsed;
     g_prof_stale[s]   = 0;
+    prof_histogram_record(g_prof_hist[s], elapsed);
 
     if (g_prof_avg_us[s] == 0.0)
         g_prof_avg_us[s] = elapsed;  /* seed with first sample */
@@ -138,6 +172,7 @@ void prof_accum_reset(ProfSection s) {
     if (s < 0 || s >= PROF_SECTION_COUNT) return;
     init_if_needed();
     g_prof_accum_pending[s] = 0.0;
+    g_prof_accum_sampled[s] = 0;
 }
 
 void prof_accum_end(ProfSection s) {
@@ -147,6 +182,7 @@ void prof_accum_end(ProfSection s) {
     if (elapsed < 0.0) elapsed = 0.0;
     if (g_prof_end_hook) g_prof_end_hook(s);
     g_prof_accum_pending[s] += elapsed;
+    g_prof_accum_sampled[s] = 1;
     g_prof_stale[s] = 0;
 }
 
@@ -155,6 +191,10 @@ void prof_accum_commit(ProfSection s) {
     init_if_needed();
     double total = g_prof_accum_pending[s];
     g_prof_last_us[s] = total;
+    if (g_prof_accum_sampled[s]) {
+        prof_histogram_record(g_prof_hist[s], total);
+        g_prof_accum_sampled[s] = 0;
+    }
     if (g_prof_avg_us[s] == 0.0)
         g_prof_avg_us[s] = total;
     else
@@ -177,6 +217,7 @@ void prof_frame_tick(void) {
     if (g_fps_last_tick_us > 0.0) {
         double dt = now - g_fps_last_tick_us;
         if (dt > 0.0) {
+            prof_histogram_record(g_frame_time_hist, dt);
             double inst = 1e6 / dt;
             g_fps_ema = (g_fps_ema == 0.0)
                 ? inst
@@ -241,3 +282,67 @@ int prof_section_is_stale(ProfSection s) {
     if (s < 0 || s >= PROF_SECTION_COUNT) return 1;
     return g_prof_stale[s] >= PROF_STALE_FRAMES;
 }
+
+int prof_section_histogram(ProfSection s,
+                           ProfHistogramBin *out,
+                           int max_bins) {
+    if (s < 0 || s >= PROF_SECTION_COUNT || !out || max_bins <= 0)
+        return 0;
+    int n = max_bins < PROF_HISTOGRAM_BIN_COUNT
+          ? max_bins
+          : PROF_HISTOGRAM_BIN_COUNT;
+    for (int i = 0; i < n; i++)
+        out[i] = g_prof_hist[s][i];
+    return n;
+}
+
+int prof_frame_time_histogram(ProfHistogramBin *out, int max_bins) {
+    if (!out || max_bins <= 0) return 0;
+    int n = max_bins < PROF_HISTOGRAM_BIN_COUNT
+          ? max_bins
+          : PROF_HISTOGRAM_BIN_COUNT;
+    for (int i = 0; i < n; i++)
+        out[i] = g_frame_time_hist[i];
+    return n;
+}
+
+#ifdef GL_STUBS
+void prof_test_reset(void) {
+    for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
+        g_prof_start[section_idx]         = 0.0;
+        g_prof_last_us[section_idx]       = 0.0;
+        g_prof_avg_us[section_idx]        = 0.0;
+        g_prof_stale[section_idx]         = PROF_STALE_FRAMES;
+        g_prof_accum_pending[section_idx] = 0.0;
+        g_prof_accum_sampled[section_idx] = 0;
+        for (int bin_idx = 0; bin_idx < PROF_HISTOGRAM_BIN_COUNT; bin_idx++)
+            g_prof_hist[section_idx][bin_idx] = 0;
+    }
+    for (int win_idx = 0; win_idx < PROF_FPS_WIN_COUNT; win_idx++) {
+        g_fps_win[win_idx].head = 0;
+        g_fps_win[win_idx].count = 0;
+        g_fps_win[win_idx].bucket_start_us = 0.0;
+        g_fps_win[win_idx].bucket_frames = 0;
+        for (int sample_idx = 0; sample_idx < PROF_FPS_HISTORY_CAP; sample_idx++)
+            g_fps_win[win_idx].ring[sample_idx] = 0.0f;
+    }
+    for (int bin_idx = 0; bin_idx < PROF_HISTOGRAM_BIN_COUNT; bin_idx++)
+        g_frame_time_hist[bin_idx] = 0;
+    g_fps_last_tick_us = 0.0;
+    g_fps_ema = 0.0;
+    g_prof_initialized = 0;
+    g_prof_begin_hook = 0;
+    g_prof_end_hook = 0;
+    g_prof_test_now_enabled = 0;
+    g_prof_test_now_us = 0.0;
+}
+
+void prof_test_set_now_us(double now_us) {
+    g_prof_test_now_enabled = 1;
+    g_prof_test_now_us = now_us;
+}
+
+void prof_test_clear_now_us(void) {
+    g_prof_test_now_enabled = 0;
+}
+#endif

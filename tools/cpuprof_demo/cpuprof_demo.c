@@ -180,7 +180,11 @@ static void display_func(void) {
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
 
-    /* CPU profile panel overlay — anchored top-right (gl2d is y-up). */
+    /* CPU profile panel overlay — anchored top-right (gl2d is y-up), with
+     * the section-histogram panel stacked directly beneath it. Two of the
+     * three sections above are display-list paths whose per-frame cost is
+     * near-constant while the immediate-mode row's is not, so the overlaid
+     * histograms show the spread the panel's single EMA column hides. */
     prof_begin(CP_PANEL);
     UiProfilePanelView view;
     view.window_w = g_window_w;
@@ -189,6 +193,14 @@ static void display_func(void) {
     view.panel_x  = g_window_w - ui_profile_panel_width()      - 16;
     view.panel_y  = g_window_h - ui_profile_panel_height(g_mode) - 16;
     ui_profile_panel_render(&view);
+
+    UiHistogramPanelView hist;
+    hist.window_w = g_window_w;
+    hist.window_h = g_window_h;
+    hist.visible  = 1;
+    hist.panel_x  = g_window_w - ui_histogram_panel_width() - 16;
+    hist.panel_y  = view.panel_y - ui_histogram_panel_height() - 8;
+    ui_histogram_panel_render(&hist);
     prof_end(CP_PANEL);
 
     prof_end(CP_FRAME_TOTAL);

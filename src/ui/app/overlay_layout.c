@@ -70,6 +70,13 @@ UiOverlayLayoutIn ui_overlay_layout_inputs(int var_visible, int var_count,
     in.panels[UI_OVERLAY_PANEL_PROFILE].h =
         ui_profile_panel_height((UiProfilePanelMode)profile_mode);
 
+    /* The histogram panel plots the same top-level sections the listing
+     * shows, so it rides the listing's visibility levels exactly. */
+    in.panels[UI_OVERLAY_PANEL_HISTOGRAM].visible =
+        in.panels[UI_OVERLAY_PANEL_PROFILE].visible;
+    in.panels[UI_OVERLAY_PANEL_HISTOGRAM].w = ui_histogram_panel_width();
+    in.panels[UI_OVERLAY_PANEL_HISTOGRAM].h = ui_histogram_panel_height();
+
     in.panels[UI_OVERLAY_PANEL_MEMORY].visible =
         (memory_mode != MEMORY_PANEL_OFF);
     in.panels[UI_OVERLAY_PANEL_MEMORY].w = ui_memory_panel_width();

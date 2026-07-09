@@ -1615,6 +1615,21 @@ static UiProfilePanelView glr_ctrl_build_profile_panel_view(const UiRenderSnapsh
     return v;
 }
 
+/* Compute-profile section histograms: shares the section listing's
+ * visibility levels, its own overlay-layout slot. */
+static UiHistogramPanelView glr_ctrl_build_histogram_panel_view(
+        const UiRenderSnapshot *snap) {
+    UiHistogramPanelView v;
+    v.window_w = snap->viewport.window_w;
+    v.window_h = snap->viewport.window_h;
+    v.visible  = (snap->profile_panel.mode == PROFILE_PANEL_SECTIONS ||
+                  snap->profile_panel.mode == PROFILE_PANEL_DETAILS);
+    UiOverlayLayoutIn in = glr_ctrl_overlay_layout_inputs(snap);
+    ui_overlay_layout_panel_pos(&in, UI_OVERLAY_PANEL_HISTOGRAM,
+                                &v.panel_x, &v.panel_y);
+    return v;
+}
+
 /* FPS plot panel (Compute profile level 1): its own overlay-layout slot,
  * visible at every non-OFF profile level. */
 static UiFpsPanelView glr_ctrl_build_fps_panel_view(const UiRenderSnapshot *snap) {
@@ -1944,12 +1959,15 @@ void glr_ctrl_display_frame(void) {
 
     prof_begin(PROF_PROFILE_PANEL);
     {
-        /* Both compute-profile surfaces: the FPS plot panel and the section
-         * listing (each renderer no-ops below its own visibility level). */
+        /* All three compute-profile surfaces: the FPS plot panel, the section
+         * listing, and the section histograms (each renderer no-ops below its
+         * own visibility level). */
         UiFpsPanelView fps_view = glr_ctrl_build_fps_panel_view(&ui_snap);
         ui_fps_panel_render(&fps_view);
         UiProfilePanelView prof_view = glr_ctrl_build_profile_panel_view(&ui_snap);
         ui_profile_panel_render(&prof_view);
+        UiHistogramPanelView hist_view = glr_ctrl_build_histogram_panel_view(&ui_snap);
+        ui_histogram_panel_render(&hist_view);
     }
     prof_end(PROF_PROFILE_PANEL);
 

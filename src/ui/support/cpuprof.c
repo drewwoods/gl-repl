@@ -1,10 +1,20 @@
 /*
- * ui_cpuprof.c - per-section profiling overlay panel.
+ * ui_cpuprof.c - the compute-profile overlay panels.
  *
- * Three time columns per section, all EMAs: CPU (wall time from
- * support/cpuprof), GPU (timer-query elapsed time from support/gpuprof;
- * "--" for sections that are CPU-only or when GPU timing is unavailable),
- * and Max (the worse of the two — the binding cost for the section).
+ * Three independent floating panels live here, each with its own
+ * overlay-layout slot:
+ *
+ *  - the section listing, three time columns per section, all EMAs: CPU (wall
+ *    time from support/cpuprof), GPU (timer-query elapsed time from
+ *    support/gpuprof; "--" for sections that are CPU-only or when GPU timing
+ *    is unavailable), and Max (the worse of the two — the binding cost for
+ *    the section);
+ *  - the FPS plot, three overlaid time windows off the prof_fps_* history;
+ *  - the section histograms, every top-level section's fixed timing histogram
+ *    overlaid on one graph. Where the listing collapses a section to one EMA,
+ *    this shows the whole distribution: a section that is usually fast but
+ *    occasionally stalls looks identical to a uniformly mediocre one in the
+ *    Max column, and quite different here.
  */
 #include "ui/support/cpuprof.h"
 #include "ui/core/gl_2d.h"
@@ -12,6 +22,7 @@
 #include "support/cpuprof.h"
 #include "support/gpuprof.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -441,6 +452,387 @@ void ui_fps_panel_render(const UiFpsPanelView *view) {
         int gy = plot_y + (int)((v / y_hi) * (float)plot_h);
         gl2d_draw_string((float)(panel_x + FPS_PLOT_GUTTER + 2 - lw),
                          (float)(gy - 4), lab, FONT_SMALL);
+    }
+
+    gl2d_end();
+}
+
+/* ========================================================================= */
+/* Section histogram panel                                                    */
+/* ========================================================================= */
+
+#define HIST_PANEL_W       PROFILE_PANEL_W
+#define HIST_HEADER_H      20
+#define HIST_PLOT_H       104
+#define HIST_PLOT_GUTTER   34   /* y-axis label gutter ("10k") */
+#define HIST_XAXIS_H       14
+#define HIST_LEGEND_ROW_H  12
+#define HIST_LEGEND_COLS    2
+#define HIST_BOTTOM_PAD     8
+#define HIST_MARGIN        12
+
+/* Fraction of a series' samples the x axis must cover — see
+ * ui_histogram_series_axis_bin() for why this is a per-series percentile and
+ * not the true maximum. 95% rather than something tighter because startup
+ * transients are a real chunk of a short run: on a 150-frame capture the
+ * first-frame costs are ~4% of the Frame Total series, so a 99% trim still
+ * lets them drag the axis out past 60 ms. */
+#define HIST_AXIS_COVERAGE  0.95
+#define HIST_MIN_AXIS_BINS  4
+
+/* Floor for the log-y ceiling. Early in a run the tallest bin holds one or
+ * two samples, and scaling to that draws every occupied bin at full height —
+ * a presence band rather than a histogram. Pinning the ceiling at 10 lets the
+ * bars grow up out of the baseline as samples accumulate, and is inert once
+ * any bin passes 10. */
+#define HIST_MIN_PEAK  10UL
+
+/* µs covered by one histogram bin — the resolution floor of the whole plot.
+ * At the current 1024 bins over 100 ms that is ~97.7 µs, so every section
+ * that runs in well under 100 µs piles into bin 0 by construction. */
+#define HIST_BIN_US  (PROF_HISTOGRAM_MAX_US / (double)PROF_HISTOGRAM_BIN_COUNT)
+
+/* The plotted set: top-level sections only (see the header). Mirrors
+ * section_visible()'s "no label means this binary doesn't use the slot". */
+static int hist_series_visible(ProfSection s) {
+    ProfSectionInfo info = prof_section_info(s);
+    if (info.label == NULL || info.label[0] == '\0')
+        return 0;
+    return info.depth == 0;
+}
+
+static int hist_series_count(void) {
+    int series_count = 0;
+    for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
+        if (hist_series_visible((ProfSection)section_idx))
+            series_count++;
+    }
+    return series_count;
+}
+
+/* Series identity colors — the same fixed data-viz exclusion as the FPS
+ * plot's three window colors, but generated rather than hand-picked: hue
+ * rotates by the golden ratio per series, which keeps any number of catalog
+ * sections mutually distinguishable without a palette that has to grow every
+ * time a section is added. Value is floored so pure blue still reads on the
+ * sunken panel background. */
+static void hist_series_color(int ordinal, float rgb[3]) {
+    float hue = fmodf((float)ordinal * 0.6180339887f, 1.0f) * 6.0f;
+    float x   = 1.0f - fabsf(fmodf(hue, 2.0f) - 1.0f);
+    float r = 0.0f, g = 0.0f, b = 0.0f;
+    if      (hue < 1.0f) { r = 1.0f; g = x;    }
+    else if (hue < 2.0f) { r = x;    g = 1.0f; }
+    else if (hue < 3.0f) { g = 1.0f; b = x;    }
+    else if (hue < 4.0f) { g = x;    b = 1.0f; }
+    else if (hue < 5.0f) { r = x;    b = 1.0f; }
+    else                 { r = 1.0f; b = x;    }
+    rgb[0] = 0.30f + 0.70f * r;
+    rgb[1] = 0.30f + 0.70f * g;
+    rgb[2] = 0.30f + 0.70f * b;
+}
+
+/* Log-scaled bar height fraction. count 0 -> 0; count == peak -> 1. */
+static float hist_bar_frac(unsigned int count, double log_peak) {
+    if (count == 0 || log_peak <= 0.0) return 0.0f;
+    return (float)(log10((double)count + 1.0) / log_peak);
+}
+
+static void hist_fmt_count(char *buf, int buf_sz, unsigned long v) {
+    if (v >= 1000UL)
+        snprintf(buf, (size_t)buf_sz, "%luk", v / 1000UL);
+    else
+        snprintf(buf, (size_t)buf_sz, "%lu", v);
+}
+
+int ui_histogram_panel_width(void) {
+    return HIST_PANEL_W;
+}
+
+int ui_histogram_panel_height(void) {
+    /* Legend rows come from the catalog, not from which series happen to
+     * have samples this frame, so the panel doesn't resize under the stack
+     * as sections start and stop running. */
+    int legend_rows = (hist_series_count() + HIST_LEGEND_COLS - 1)
+                    / HIST_LEGEND_COLS;
+    return HIST_HEADER_H
+         + HIST_PLOT_H
+         + HIST_XAXIS_H
+         + legend_rows * HIST_LEGEND_ROW_H
+         + HIST_BOTTOM_PAD
+         + HIST_MARGIN;
+}
+
+int ui_histogram_series_axis_bin(const ProfHistogramBin *bins) {
+    unsigned long total = 0;
+    for (int bin_idx = 0; bin_idx < PROF_HISTOGRAM_BIN_COUNT; bin_idx++)
+        total += bins[bin_idx];
+    if (total == 0) return -1;
+
+    /* Round the keep target UP so the trim can never bite into a series too
+     * small for the percentile to mean anything: ceil() of a positive product
+     * is >= 1, so a lone sample always defines its own axis. */
+    unsigned long keep = (unsigned long)ceil((double)total * HIST_AXIS_COVERAGE);
+
+    unsigned long cum = 0;
+    for (int bin_idx = 0; bin_idx < PROF_HISTOGRAM_BIN_COUNT; bin_idx++) {
+        cum += bins[bin_idx];
+        if (cum >= keep) return bin_idx;
+    }
+    return PROF_HISTOGRAM_BIN_COUNT - 1;   /* unreachable: cum reaches total */
+}
+
+/* Axis extent across every plotted series, plus the samples it leaves off the
+ * right edge. Returns -1 when no series has any samples. */
+static int hist_axis_last_bin(unsigned long *off_scale) {
+    ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
+    int last_bin = -1;
+
+    *off_scale = 0;
+    for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
+        ProfSection s = (ProfSection)section_idx;
+        if (!hist_series_visible(s)) continue;
+        prof_section_histogram(s, bins, PROF_HISTOGRAM_BIN_COUNT);
+        int series_bin = ui_histogram_series_axis_bin(bins);
+        if (series_bin > last_bin) last_bin = series_bin;
+    }
+    if (last_bin < 0) return -1;
+
+    if (last_bin < HIST_MIN_AXIS_BINS - 1) last_bin = HIST_MIN_AXIS_BINS - 1;
+
+    for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
+        ProfSection s = (ProfSection)section_idx;
+        if (!hist_series_visible(s)) continue;
+        prof_section_histogram(s, bins, PROF_HISTOGRAM_BIN_COUNT);
+        for (int bin_idx = last_bin + 1; bin_idx < PROF_HISTOGRAM_BIN_COUNT; bin_idx++)
+            *off_scale += bins[bin_idx];
+    }
+    return last_bin;
+}
+
+void ui_histogram_panel_render(const UiHistogramPanelView *view) {
+    if (!view || !view->visible) return;
+
+    int panel_h = ui_histogram_panel_height();
+    int panel_x = view->panel_x;
+    int panel_y = view->panel_y;
+
+    ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
+    unsigned long off_scale = 0;
+    int last_bin = hist_axis_last_bin(&off_scale);
+
+    /* Tallest single bin of any one series inside the drawn range — the log-y
+     * ceiling. Per series, not the summed height across series: each series is
+     * drawn against this scale independently, so a pooled ceiling would shrink
+     * every bar by however many sections happen to share its bin. The same
+     * sweep records each series' sample count, which the legend needs to dim
+     * sections that never ran. */
+    unsigned long peak = 0;
+    unsigned long series_samples[PROF_SECTION_COUNT];
+    memset(series_samples, 0, sizeof(series_samples));
+    if (last_bin >= 0) {
+        for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
+            ProfSection s = (ProfSection)section_idx;
+            if (!hist_series_visible(s)) continue;
+            prof_section_histogram(s, bins, PROF_HISTOGRAM_BIN_COUNT);
+            for (int bin_idx = 0; bin_idx < PROF_HISTOGRAM_BIN_COUNT; bin_idx++) {
+                series_samples[section_idx] += bins[bin_idx];
+                if (bin_idx <= last_bin && bins[bin_idx] > peak)
+                    peak = bins[bin_idx];
+            }
+        }
+    }
+
+    gl2d_begin(view->window_w, view->window_h);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    gl2d_panel_frame((float)panel_x, (float)panel_y,
+                     (float)HIST_PANEL_W, (float)panel_h,
+                     UI_TOK_SUNKEN, 0.91f, UI_TOK_BORDER, 0.85f);
+    glDisable(GL_BLEND);
+
+    int tx = panel_x + 8;
+    int ty = panel_y + panel_h - HIST_HEADER_H + 2;
+
+    /* Title + peak / off-scale readout. */
+    ui_clr(UI_TOK_TEXT_PRIMARY);
+    gl2d_draw_string((float)tx, (float)ty, "Section Histograms", FONT_SMALL);
+    {
+        char meta[40];
+        if (off_scale > 0)
+            snprintf(meta, sizeof(meta), "peak %lu  +%lu off", peak, off_scale);
+        else
+            snprintf(meta, sizeof(meta), "peak %lu", peak);
+        int mw = (int)strlen(meta) * FONT_SMALL_W + 2;
+        ui_clr(UI_TOK_TEXT_MUTED);
+        gl2d_draw_string((float)(panel_x + HIST_PANEL_W - 8 - mw), (float)ty,
+                         meta, FONT_SMALL);
+    }
+
+    /* Plot rect: legend rows sit under the x-axis labels. */
+    int legend_rows = (hist_series_count() + HIST_LEGEND_COLS - 1)
+                    / HIST_LEGEND_COLS;
+    int plot_x = panel_x + HIST_PLOT_GUTTER + 4;
+    int plot_w = HIST_PANEL_W - HIST_PLOT_GUTTER - 12;
+    int plot_y = panel_y + HIST_BOTTOM_PAD
+               + legend_rows * HIST_LEGEND_ROW_H + HIST_XAXIS_H;
+    int plot_h = HIST_PLOT_H;
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    gl2d_panel_frame((float)plot_x, (float)plot_y,
+                     (float)plot_w, (float)plot_h,
+                     UI_TOK_SUNKEN, 0.4f, UI_TOK_BORDER, 0.6f);
+
+    if (last_bin < 0 || peak == 0) {
+        glDisable(GL_BLEND);
+        ui_clr(UI_TOK_TEXT_PLACEHOLDER);
+        const char *empty = "(collecting)";
+        int ew = (int)strlen(empty) * FONT_SMALL_W;
+        gl2d_draw_string((float)plot_x + ((float)plot_w - (float)ew) * 0.5f,
+                         (float)plot_y + (float)plot_h * 0.5f,
+                         empty, FONT_SMALL);
+        gl2d_end();
+        return;
+    }
+
+    /* The y ceiling the bars, gridlines and labels all share. "peak" stays the
+     * true tallest bin (reported in the header); this is only the scale. */
+    unsigned long scale_peak = (peak < HIST_MIN_PEAK) ? HIST_MIN_PEAK : peak;
+    double log_peak = log10((double)scale_peak + 1.0);
+    float  bin_w    = (float)plot_w / (float)(last_bin + 1);
+
+    /* Decade gridlines behind the series. */
+    ui_clr_a(UI_TOK_DIVIDER, 0.30f);
+    glBegin(GL_LINES);
+    for (unsigned long decade = 1; decade <= scale_peak; decade *= 10UL) {
+        float gy = (float)plot_y
+                 + hist_bar_frac((unsigned int)decade, log_peak) * (float)plot_h;
+        glVertex2f((float)plot_x,          gy);
+        glVertex2f((float)(plot_x + plot_w), gy);
+    }
+    glEnd();
+
+    /* Filled bars, additively blended: overlaps brighten instead of hiding
+     * whichever series happens to draw last, so the plot is order-independent
+     * and a section buried under a taller one still shows through. */
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    int ordinal = 0;
+    for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
+        ProfSection s = (ProfSection)section_idx;
+        if (!hist_series_visible(s)) continue;
+
+        float col[3];
+        hist_series_color(ordinal++, col);
+        prof_section_histogram(s, bins, PROF_HISTOGRAM_BIN_COUNT);
+
+        glColor4f(col[0], col[1], col[2], 0.30f);
+        glBegin(GL_QUADS);
+        for (int bin_idx = 0; bin_idx <= last_bin; bin_idx++) {
+            if (bins[bin_idx] == 0) continue;
+            float x0 = (float)plot_x + (float)bin_idx * bin_w;
+            float x1 = x0 + bin_w;
+            if (x1 - x0 < 1.0f) x1 = x0 + 1.0f;   /* sub-pixel bins stay visible */
+            float bar_h = hist_bar_frac(bins[bin_idx], log_peak) * (float)plot_h;
+            glVertex2f(x0, (float)plot_y);
+            glVertex2f(x1, (float)plot_y);
+            glVertex2f(x1, (float)plot_y + bar_h);
+            glVertex2f(x0, (float)plot_y + bar_h);
+        }
+        glEnd();
+    }
+
+    /* Silhouettes over the fills, back on straight alpha: at a couple of
+     * pixels per bin the additive fills merge into a wash, and the step
+     * outline is what keeps each series' shape readable. */
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    ordinal = 0;
+    for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
+        ProfSection s = (ProfSection)section_idx;
+        if (!hist_series_visible(s)) continue;
+
+        float col[3];
+        hist_series_color(ordinal++, col);
+        prof_section_histogram(s, bins, PROF_HISTOGRAM_BIN_COUNT);
+
+        glColor4f(col[0], col[1], col[2], 0.85f);
+        glBegin(GL_LINE_STRIP);
+        for (int bin_idx = 0; bin_idx <= last_bin; bin_idx++) {
+            float x0 = (float)plot_x + (float)bin_idx * bin_w;
+            float x1 = x0 + bin_w;
+            float by = (float)plot_y
+                     + hist_bar_frac(bins[bin_idx], log_peak) * (float)plot_h;
+            glVertex2f(x0, by);
+            glVertex2f(x1, by);
+        }
+        glEnd();
+    }
+    glDisable(GL_BLEND);
+
+    /* Y labels (sample counts, log scale) right-aligned in the gutter. */
+    ui_clr(UI_TOK_TEXT_MUTED);
+    for (unsigned long decade = 1; decade <= scale_peak; decade *= 10UL) {
+        char lab[12];
+        hist_fmt_count(lab, (int)sizeof(lab), decade);
+        int lw = (int)strlen(lab) * FONT_SMALL_W;
+        int gy = plot_y + (int)(hist_bar_frac((unsigned int)decade, log_peak)
+                                * (float)plot_h);
+        gl2d_draw_string((float)(panel_x + HIST_PLOT_GUTTER + 2 - lw),
+                         (float)(gy - 4), lab, FONT_SMALL);
+    }
+
+    /* X labels: 0 / midpoint / axis max, in time units. The last one is
+     * right-aligned so it can't run past the plot's right edge. */
+    {
+        double axis_max_us = (double)(last_bin + 1) * HIST_BIN_US;
+        int    label_y     = plot_y - HIST_XAXIS_H + 2;
+        char   lab[24];
+
+        gl2d_draw_string((float)plot_x, (float)label_y, "0", FONT_SMALL);
+
+        fmt_us(lab, (int)sizeof(lab), axis_max_us * 0.5);
+        int mid_w = (int)strlen(lab) * FONT_SMALL_W;
+        int mid_x = plot_x + (plot_w - mid_w) / 2;
+        gl2d_draw_string((float)mid_x, (float)label_y, lab, FONT_SMALL);
+
+        fmt_us(lab, (int)sizeof(lab), axis_max_us);
+        int max_x = plot_x + plot_w - (int)strlen(lab) * FONT_SMALL_W;
+        gl2d_draw_string((float)max_x, (float)label_y, lab, FONT_SMALL);
+    }
+
+    /* Legend: catalog order, filling columns left to right. A series with no
+     * samples keeps its slot (so the panel height is stable) but is dimmed. */
+    {
+        int col_w = (HIST_PANEL_W - 16) / HIST_LEGEND_COLS;
+        ordinal = 0;
+        for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
+            ProfSection s = (ProfSection)section_idx;
+            if (!hist_series_visible(s)) continue;
+
+            int row = ordinal / HIST_LEGEND_COLS;
+            int col = ordinal % HIST_LEGEND_COLS;
+            int lx  = tx + col * col_w;
+            int ly  = panel_y + HIST_BOTTOM_PAD
+                    + (legend_rows - 1 - row) * HIST_LEGEND_ROW_H;
+
+            float rgb[3];
+            hist_series_color(ordinal++, rgb);
+
+            unsigned long samples = series_samples[section_idx];
+            if (samples > 0)
+                glColor3fv(rgb);
+            else
+                glColor3fv(k_prof_dim);
+            glRectf((float)lx, (float)ly + 2.0f,
+                    (float)lx + 7.0f, (float)ly + 9.0f);
+
+            if (samples > 0)
+                ui_clr(UI_TOK_TEXT_PRIMARY);
+            else
+                glColor3fv(k_prof_stale);
+            gl2d_draw_string((float)(lx + 12), (float)ly,
+                             prof_section_info(s).label, FONT_SMALL);
+        }
     }
 
     gl2d_end();

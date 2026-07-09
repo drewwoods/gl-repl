@@ -29,6 +29,7 @@ typedef enum {
     UI_OVERLAY_PANEL_VARIABLE = 0,  /* variable slider panel (stack bottom) */
     UI_OVERLAY_PANEL_FPS,           /* FPS plot panel (Compute profile level 1) */
     UI_OVERLAY_PANEL_PROFILE,       /* compute-profile section listing */
+    UI_OVERLAY_PANEL_HISTOGRAM,     /* compute-profile section histograms */
     UI_OVERLAY_PANEL_MEMORY,        /* memory (RSS) panel */
     UI_OVERLAY_PANEL_COUNT
 } UiOverlayPanelId;
