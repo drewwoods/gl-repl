@@ -348,7 +348,7 @@ GL_LDFLAGS = \
 	$(FREEGLUT_STATIC_LIB) --shell-file packaging/web/shell.html \
 	-sUSE_WEBGL2=1 -sFULL_ES2=1 -sINITIAL_MEMORY=805306368 \
 	-sSTACK_SIZE=8388608 -sGL_MAX_TEMP_BUFFER_SIZE=67108864 \
-	-sEXPORTED_FUNCTIONS=_main,_glr_web_new_scene,_glr_web_load_scene_text,_glr_web_export_scene \
+	-sEXPORTED_FUNCTIONS=_main,_glr_web_new_scene,_glr_web_load_scene_text,_glr_web_export_scene,_glr_web_clipboard_copy,_glr_web_clipboard_cut,_glr_web_clipboard_text,_glr_web_clipboard_kind,_glr_web_clipboard_paste_text \
 	-sEXPORTED_RUNTIME_METHODS=ccall,FS $(WEB_PRELOAD)
 GLUT_GL_LDFLAGS = $(GL_LDFLAGS)
 endif

@@ -105,6 +105,22 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
     EM_ASM({
         var wheelCallback = $0;
 
+        /* Plain (no Shift/Alt) Ctrl/Cmd+C/X/V: the browser/OS clipboard owns
+         * these on web, not JS GLUT's keyboardFunc route (see below and the
+         * getASCIIKey override) -- Ctrl+Shift+C (reset camera) and
+         * Ctrl+Shift+V (view mode toggle) are NOT clipboard shortcuts and
+         * must keep flowing to GLUT unchanged, hence the shiftKey bail-out. */
+        function glrIsPlainClipboardCombo(event) {
+            if (event.shiftKey || event.altKey) return false;
+            if (!(event.ctrlKey || event.metaKey)) return false;
+            var key = (event.key || '').toLowerCase();
+            if (key === 'c' || key === 'x' || key === 'v') return true;
+            var code = event.code || '';
+            if (code === 'KeyC' || code === 'KeyX' || code === 'KeyV') return true;
+            var kc = event.keyCode;
+            return kc === 67 || kc === 88 || kc === 86;
+        }
+
         /* Emscripten's own library_glut.js registers a handler on window for the
          * legacy 'mousewheel' / 'DOMMouseScroll' events (GLUT.onMouseWheel) that
          * synthesizes a GLUT mouse button 3/4 GLUT_DOWN with no matching UP. That
@@ -144,6 +160,15 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
                 var key = event['key'] || "";
                 var code = event['code'] || "";
                 if (kc === 8) return 8;
+                /* Browser/OS clipboard is authoritative for plain Ctrl/Cmd+C/X/V
+                 * on web (see packaging/web/shell.html's copy/cut/paste
+                 * listeners). Returning null here means onKeydown's
+                 * `key !== null && GLUT.keyboardFunc` check is false, so it
+                 * calls neither keyboardFunc (gl-repl's own Ctrl+C/X/V path,
+                 * which would otherwise also fire) nor preventDefault() --
+                 * leaving the key's default action live, which is what makes
+                 * the browser synthesize the native copy/cut/paste event. */
+                if (glrIsPlainClipboardCombo(event)) return null;
                 /* Emscripten's stock GLUT returns raw digit keyCodes for
                  * Shift+0..9 (`1` instead of `!`, etc.; its source has a TODO
                  * for this case). Match the US keyboard symbols that native
@@ -234,6 +259,7 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
 
             function shouldCancelKey(event) {
                 if (!canvasActive() || editableTarget(event.target)) return false;
+                if (glrIsPlainClipboardCombo(event)) return false;
                 var key = event.key || "";
                 return event.ctrlKey || event.metaKey || event.altKey ||
                     key === ' ' || key === 'Spacebar' || key === 'Tab' ||

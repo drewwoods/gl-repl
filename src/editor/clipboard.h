@@ -53,4 +53,14 @@ void editor_clipboard_copy_current(void);    /* copy selection to buffer, or cur
 void editor_clipboard_cut_current(void);     /* cut to buffer and delete, guarded */
 void editor_clipboard_paste_current(void);   /* paste buffer at edit line */
 
+/* Same operations, reporting whether a fresh clipboard payload was actually
+ * produced (1) vs. a no-op/blocked case (0: insert mode with no input
+ * selection, nothing to copy/cut, var-decl guard, tutorial guard, ...). The
+ * void editor_clipboard_copy_current()/cut_current() above are thin wrappers
+ * around these for native callers that don't need the result. Bridges that
+ * must not export a stale clipboard after a blocked operation (e.g. the web
+ * build's OS-clipboard bridge) should call these instead. */
+int editor_clipboard_copy_current_with_result(void);
+int editor_clipboard_cut_current_with_result(void);
+
 #endif /* EDITOR_CLIPBOARD_H */

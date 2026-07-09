@@ -356,6 +356,50 @@
         e.target.value = '';
       });
 
+      // OS clipboard bridge for Ctrl/Cmd+C/X/V: the browser/OS clipboard is
+      // authoritative on web (gl4es_bootstrap.c's GLUT.getASCIIKey override
+      // declines these combos so JS GLUT never handles them, leaving the
+      // browser free to fire the native copy/cut/paste events these listen
+      // for). text/plain carries the snippet for interop with other apps;
+      // the custom MIME type below round-trips the exact gl-repl clipboard
+      // kind (input-buffer text vs. source lines) when pasting back into
+      // gl-repl itself.
+      var glrClipboardKindMime = 'application/x-gl-repl-clipboard-kind';
+
+      document.addEventListener('copy', (event) => {
+        if (!sceneControlsReady || document.activeElement !== canvasElement) return;
+        var ok = Module.ccall('glr_web_clipboard_copy', 'number', [], []);
+        if (!ok) return;
+        var text = Module.ccall('glr_web_clipboard_text', 'string', [], []);
+        var kind = Module.ccall('glr_web_clipboard_kind', 'string', [], []);
+        event.clipboardData.setData('text/plain', text);
+        event.clipboardData.setData(glrClipboardKindMime, kind || 'lines');
+        event.preventDefault();
+      });
+
+      document.addEventListener('cut', (event) => {
+        if (!sceneControlsReady || document.activeElement !== canvasElement) return;
+        var ok = Module.ccall('glr_web_clipboard_cut', 'number', [], []);
+        if (!ok) return;
+        var text = Module.ccall('glr_web_clipboard_text', 'string', [], []);
+        var kind = Module.ccall('glr_web_clipboard_kind', 'string', [], []);
+        event.clipboardData.setData('text/plain', text);
+        event.clipboardData.setData(glrClipboardKindMime, kind || 'lines');
+        event.preventDefault();
+      });
+
+      document.addEventListener('paste', (event) => {
+        if (!sceneControlsReady || document.activeElement !== canvasElement) return;
+        var data = event.clipboardData || window.clipboardData;
+        if (!data) return;
+        var text = data.getData('text/plain');
+        if (!text) return;
+        var kind = data.getData(glrClipboardKindMime);
+        var ok = Module.ccall('glr_web_clipboard_paste_text', 'number',
+                              ['string', 'string'], [text, kind || '']);
+        if (ok) event.preventDefault();
+      });
+
       document.addEventListener('dragover', (e) => {
         if (!sceneControlsReady) return;
         e.preventDefault();
