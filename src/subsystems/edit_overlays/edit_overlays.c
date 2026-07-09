@@ -337,14 +337,26 @@ static int cursor_poly_contains_ordinal(const OverlayWalkCtx *ctx, int ord) {
  * for every grouping the resolver produces: a quad/triangle/line/point
  * group, a strip sub-window, or a fan triangle (center vertex 0 plus
  * the [first, last] pair). Transforms cannot occur inside a begin
- * block, so re-walking the range under the caller's modelview is safe. */
+ * block, so re-walking the range under the caller's modelview is safe.
+ *
+ * Unlike the whole-block active-highlight path (which skips the plain
+ * outline pass entirely via block_is_current), this fires while
+ * block_is_current is forced back to 0, so the caller's plain-outline
+ * branch still redraws the WHOLE block afterward at the edge width/color
+ * — including the primitive just highlighted here. In the default outline
+ * style that redraw is thinner (EDGE_WIDTH) than this highlight
+ * (ACTIVE_WIDTH) and stays visible around it, but Bold scales EDGE_WIDTH
+ * by the same factor ACTIVE_WIDTH would need to stay ahead of it
+ * (1.2 * 2.5 = 3.0 = ACTIVE_WIDTH), so an unscaled highlight is an exact
+ * width tie with the later edge redraw and gets fully overwritten. Scale
+ * this width the same way so it stays strictly thicker in Bold too. */
 static void render_single_polygon_highlight(const OverlayWalkCtx *ctx,
                                             int begin_idx) {
     const GLCmd *cmds = ctx->program.cmds;
     int cmd_count = ctx->program.cmd_count;
     int ord = 0;
 
-    glLineWidth(VERTEX_OUTLINE_ACTIVE_WIDTH);
+    glLineWidth(vertex_outline_width(ctx, VERTEX_OUTLINE_ACTIVE_WIDTH));
     render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
     glBegin((GLenum)cmds[begin_idx].args[0]);
     for (int i = begin_idx + 1; i < cmd_count; i++) {
