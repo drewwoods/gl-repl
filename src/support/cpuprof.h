@@ -20,6 +20,8 @@
 #ifndef CPUPROF_H
 #define CPUPROF_H
 
+#include <stdint.h>
+
 /* Fallback catalog: active only when prof_sections.h was not force-included
  * (PROF_SECTIONS_PROVIDED unset). Keeps the generic timer self-contained. */
 #ifndef PROF_SECTIONS_PROVIDED
@@ -90,6 +92,26 @@ double prof_section_last_us(ProfSection s);
 double prof_section_avg_us(ProfSection s);
 int    prof_section_is_stale(ProfSection s);
 
+/* --- Fixed timing histograms ---
+ *
+ * Each histogram is 1024 fixed bins spanning 0..100 ms. Bin i covers
+ * [i * width, (i + 1) * width) in microseconds, except the last bin also
+ * receives samples >= 100 ms. Bin counts are 16-bit and saturate at 65535.
+ *
+ * Section histograms are fed when a section publishes a sample:
+ * prof_end() for direct sections and prof_accum_commit() for accumulated
+ * sections. The frame-time histogram is fed by prof_frame_tick() using the
+ * wall-clock delta between frame ticks, so it captures overall frame cadence
+ * rather than just display-callback body time. */
+#define PROF_HISTOGRAM_BIN_COUNT 1024
+#define PROF_HISTOGRAM_MAX_US    100000.0
+typedef uint16_t ProfHistogramBin;
+
+int prof_section_histogram(ProfSection s,
+                           ProfHistogramBin *out,
+                           int max_bins);
+int prof_frame_time_histogram(ProfHistogramBin *out, int max_bins);
+
 /* --- FPS history (fed by prof_frame_tick) ---
  *
  * Three fixed time windows, each a ring of PROF_FPS_HISTORY_CAP buckets
@@ -112,5 +134,12 @@ double prof_fps_window_secs(int window);
 /* Copy up to max_samples of a window's bucket history into out,
  * oldest -> newest. Returns the number of samples written. */
 int    prof_fps_history(int window, float *out, int max_samples);
+
+#ifdef GL_STUBS
+/* Test support: deterministic clock/reset hooks for stubbed tests. */
+void prof_test_reset(void);
+void prof_test_set_now_us(double now_us);
+void prof_test_clear_now_us(void);
+#endif
 
 #endif /* CPUPROF_H */

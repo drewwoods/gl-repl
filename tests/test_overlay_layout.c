@@ -40,6 +40,8 @@ static UiOverlayLayoutIn base_inputs(void) {
         (UiOverlayPanelReq){ 0, 300, 142 };  /* hidden in the base shape */
     in.panels[UI_OVERLAY_PANEL_PROFILE] =
         (UiOverlayPanelReq){ 1, 384, 200 };
+    in.panels[UI_OVERLAY_PANEL_HISTOGRAM] =
+        (UiOverlayPanelReq){ 0, 384, 230 };  /* hidden in the base shape */
     in.panels[UI_OVERLAY_PANEL_MEMORY] =
         (UiOverlayPanelReq){ 1, 220, 150 };
     return in;
@@ -125,6 +127,32 @@ int main(void) {
                 char label[64];
                 snprintf(label, sizeof(label),
                          "fps: no overlap %d vs %d", a, b);
+                AT(label, !rects_overlap(
+                       x[a], y[a], in.panels[a].w, in.panels[a].h,
+                       x[b], y[b], in.panels[b].w, in.panels[b].h));
+            }
+    }
+
+    /* --- Every compute-profile panel on at once: the histogram joins the
+     * stack above the listing and, in a scene this short, spills into a
+     * fresh column rather than overlapping anything. --- */
+    {
+        UiOverlayLayoutIn in = base_inputs();
+        in.panels[UI_OVERLAY_PANEL_FPS].visible = 1;
+        in.panels[UI_OVERLAY_PANEL_HISTOGRAM].visible = 1;
+        int x[UI_OVERLAY_PANEL_COUNT], y[UI_OVERLAY_PANEL_COUNT];
+        ui_overlay_layout_solve(&in, x, y);
+        AT("hist: spills left of the listing it would not fit above",
+           x[UI_OVERLAY_PANEL_HISTOGRAM] < x[UI_OVERLAY_PANEL_PROFILE]);
+        AT("hist: spilled column starts at the stack base",
+           y[UI_OVERLAY_PANEL_HISTOGRAM] == 22 + BASE_Y);
+        for (int a = 0; a < UI_OVERLAY_PANEL_COUNT; a++)
+            for (int b = a + 1; b < UI_OVERLAY_PANEL_COUNT; b++) {
+                if (!in.panels[a].visible || !in.panels[b].visible)
+                    continue;
+                char label[64];
+                snprintf(label, sizeof(label),
+                         "hist: no overlap %d vs %d", a, b);
                 AT(label, !rects_overlap(
                        x[a], y[a], in.panels[a].w, in.panels[a].h,
                        x[b], y[b], in.panels[b].w, in.panels[b].h));
