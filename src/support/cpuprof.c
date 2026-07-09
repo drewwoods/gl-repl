@@ -65,10 +65,8 @@ static double g_fps_last_tick_us = 0.0;
 static double g_fps_ema = 0.0;
 static ProfHistogramBin g_frame_time_hist[PROF_HISTOGRAM_BIN_COUNT];
 
-#ifdef GL_STUBS
 static int g_prof_test_now_enabled = 0;
 static double g_prof_test_now_us = 0.0;
-#endif
 
 /* ========================================================================= */
 /* Helpers                                                                    */
@@ -96,10 +94,8 @@ static double prof_platform_now_us(void) {
 #endif
 
 static double prof_now_us(void) {
-#ifdef GL_STUBS
     if (g_prof_test_now_enabled)
         return g_prof_test_now_us;
-#endif
     return prof_platform_now_us();
 }
 
@@ -343,7 +339,6 @@ void prof_histogram_reset(void) {
         g_frame_time_hist[bin_idx] = 0;
 }
 
-#ifdef GL_STUBS
 void prof_test_reset(void) {
     for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
         g_prof_start[section_idx]         = 0.0;
@@ -382,4 +377,3 @@ void prof_test_set_now_us(double now_us) {
 void prof_test_clear_now_us(void) {
     g_prof_test_now_enabled = 0;
 }
-#endif
