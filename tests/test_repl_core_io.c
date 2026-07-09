@@ -2735,8 +2735,8 @@ static void test_workspace_header_budget_worst_case(void) {
                             "VERTEX_OUTLINE_STYLE_BOLD_INVERTED */") != NULL);
     ASSERT_TRUE("worst case: @cfg vertex_points present",
                 strstr(buf, "/* @cfg vertex_points = 1 */") != NULL);
-    ASSERT_TRUE("worst case: @cfg poly_highlight present",
-                strstr(buf, "/* @cfg poly_highlight = 1 */") != NULL);
+    ASSERT_TRUE("worst case: @cfg polygon_highlight present",
+                strstr(buf, "/* @cfg polygon_highlight = 1 */") != NULL);
     /* "Audio" is the very last CFG_ITEM in emit order — its presence is
      * the strongest "nothing fell off the end" check. If this fails after
      * adding a config toggle, the emitted @cfg count outgrew a capacity:

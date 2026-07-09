@@ -143,16 +143,27 @@ static void accum_passes_set_cycle(int value) {
 
 static void cfg_slug_from_label(const char *label, char *out, size_t out_sz) {
     size_t out_idx = 0;
+    int last_was_underscore = 0;
 
     for (size_t i = 0; label[i] && out_idx + 1 < out_sz; i++) {
         unsigned char c = (unsigned char)label[i];
         if (c == ' ' || c == '\t' || c == '-' || c == '/') {
-            out[out_idx++] = '_';
+            if (!last_was_underscore) {
+                out[out_idx++] = '_';
+                last_was_underscore = 1;
+            }
         } else if (isalnum(c)) {
             out[out_idx++] = (char)tolower(c);
+            last_was_underscore = 0;
         } else if (c == '_') {
-            out[out_idx++] = '_';
+            if (!last_was_underscore) {
+                out[out_idx++] = '_';
+                last_was_underscore = 1;
+            }
         }
+    }
+    if (out_idx > 0 && out[out_idx - 1] == '_') {
+        out_idx--;
     }
     if (out_sz > 0)
         out[out_idx] = '\0';

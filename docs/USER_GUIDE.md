@@ -649,15 +649,15 @@ into sections — hovering a section opens a flyout of its items, and the
 trailing **All** row shows the entire table at once (the mouse wheel scrolls
 flyouts taller than the window):
 
-- **RENDERING** — MSAA, Line smooth, Accum effect, Accum passes, Wireframe,
-  Point attenuation
-- **TIME & REPLAY** — Auto time, Replay, Replay mode, Replay expand
-- **OVERLAYS & SCENE** — Grid, Grid extent, Grid brightness, Grid major,
-  Axes, Xform guides, Light indicators, Light theme, Backdrop, Auto-normals,
+- **RENDERING** — MSAA, Line smooth, Accum effect, Accum passes, Point attenuation,
   Post FX Scope, Post FX Effect
+- **TIME & REPLAY** — Auto time, Replay, Replay mode, Replay expand
+- **SCENE** — Grid, Grid major, Grid extent, Grid brightness, Axes, Backdrop, Light theme,
+  Light indicators
 - **CAMERA** — View mode, Projection, Camera rotate, Focus origin, Reset camera
-- **GEOMETRY** — Vertex labels, Overlay scope, Normal vectors, Vertex outlines,
-  Vertex points, Poly highlight, Winding
+- **GEOMETRY** — Wireframe, Winding, Auto-normals
+- **OVERLAYS** — Label & highlight scope, Vertex labels, Vertex points, Vertex outlines,
+  Vertex outline style, Normal vectors, Polygon highlight, Transform guides
 - **INTERFACE** — Variable panel, Compute profile, Memory profile, Code panel,
   Wrap at commas, Syntax highlight, Paren match, Paren scope
 
@@ -675,7 +675,7 @@ backward):
 | F5 | Backdrop |
 | F6 | Axes theme |
 | F7 | Vertex labels |
-| F8 | Overlay scope |
+| F8 | Label & highlight scope |
 | F9 | Light theme |
 | F10 | Post FX Scope |
 
@@ -733,14 +733,14 @@ where the rig sits.
 - **Vertex labels** (F7): Off / Index / Index+Pos / Index+World /
   Index+World Fine — numbers each vertex of the primitive at the cursor,
   optionally with its coordinates.
-- **Overlay scope** (F8): First instance / All instances / At vertex /
+- **Label & highlight scope** (F8): First instance / All instances / At vertex /
   Visible only — controls how broadly cursor-bound overlays are shown around
   repeated function/loop instances. Label-specific modes still control label
   placement and visible-only filtering.
 - **Normal vectors** (Ctrl+Shift+N): draws each vertex's normal as an arrow.
 - **Vertex outlines** (Ctrl+Shift+O) and **Vertex points** (Ctrl+Shift+P): outline polygons
   and mark vertices *(both on by default)*.
-- **Poly highlight** (Ctrl+P): highlights the polygon under the cursor line.
+- **Polygon highlight** (Ctrl+P): highlights the polygon under the cursor line.
 - **Winding** (Ctrl+Shift+B): re-renders the scene with front-facing
   polygons in green and back-facing ones in red (as decided by the active
   `glFrontFace`), so flipped or inside-out faces stand out immediately.
@@ -755,7 +755,7 @@ guide follows:
 
 ### Transform guides
 
-With **Xform guides** on (Ctrl+Shift+X), placing the cursor on a committed
+With **Transform guides** on (Ctrl+Shift+X), placing the cursor on a committed
 `glTranslatef` / `glRotatef` / `glScalef` line draws an overlay arrow or arc
 showing what that line does — color-coded by axis (X=red, Y=green, Z=blue
 blends), with a pulse traveling along the path:
@@ -1231,12 +1231,12 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+Shift+U | Accum effect |
 | Ctrl+Shift+G | Grid major spacing |
 | Ctrl+= / Ctrl+− | Accum passes up/down |
-| Ctrl+Shift+X | Xform guides |
+| Ctrl+Shift+X | Transform guides |
 | Ctrl+Shift+N | Normal vectors |
 | Ctrl+Shift+O | Vertex outlines |
 | Ctrl+Shift+L | Light indicators |
 | Ctrl+Shift+P | Vertex points |
-| Ctrl+P | Poly highlight |
+| Ctrl+P | Polygon highlight |
 | Ctrl+Shift+K | Open Config menu |
 | Ctrl+W / Ctrl+Shift+W | CPU / memory profile panel |
 | F2–F10 | Config cycles (Shift steps backward) — see [Scene Display Options](#scene-display-options) |
