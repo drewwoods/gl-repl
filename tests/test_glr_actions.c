@@ -1311,6 +1311,12 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
                OVERLAY_SCOPE_ALL_INSTANCES);
 
     out = -1;
+    ASSERT_TRUE("resolve label_highlight_scope: OVERLAY_SCOPE_SINGLE_POLYGON",
+                repl_cfg_resolve_text("label_highlight_scope", "OVERLAY_SCOPE_SINGLE_POLYGON", &out));
+    ASSERT_INT("  -> OVERLAY_SCOPE_SINGLE_POLYGON", out,
+               OVERLAY_SCOPE_SINGLE_POLYGON);
+
+    out = -1;
     ASSERT_TRUE("resolve legacy overlay_scope alias",
                 repl_cfg_resolve_text("overlay_scope", "OVERLAY_SCOPE_ALL_INSTANCES", &out));
     ASSERT_INT("  -> OVERLAY_SCOPE_ALL_INSTANCES via legacy", out,

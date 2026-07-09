@@ -1104,6 +1104,258 @@ int main() {
         ASSERT_INT("oob cost kind (past end)", (int)c.kind, REPL_FLAT_COST_NONE);
     }
 
+    /* repl_flatten_cursor_polygon: SINGLE_POLYGON overlay-scope resolution.
+     * Two GL_QUADS quads (+Y face, -Y face) with comment/color/normal state
+     * lines interleaved, mirroring a real cube example so the cursor-line ->
+     * vertex-ordinal mapping is exercised against non-vertex lines too. */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glBegin(GL_QUADS);");         /* 0  */
+        editor_feed_line("// +Y face");                 /* 1  */
+        editor_feed_line("glColor3f(0.95, 0.25, 1);");  /* 2  */
+        editor_feed_line("glNormal3f(0, 1, 0);");        /* 3  */
+        editor_feed_line("glVertex3f(-1, 1, 1);");       /* 4  vtx 0 */
+        editor_feed_line("glVertex3f(1, 1, 1);");        /* 5  vtx 1 */
+        editor_feed_line("glVertex3f(1, 1, -1);");       /* 6  vtx 2 */
+        editor_feed_line("glVertex3f(-1, 1, -1);");      /* 7  vtx 3 */
+        editor_feed_line("// -Y face");                 /* 8  */
+        editor_feed_line("glNormal3f(0, -1, 0);");       /* 9  */
+        editor_feed_line("glVertex3f(-1, -1, -1);");     /* 10 vtx 4 */
+        editor_feed_line("glVertex3f(1, -1, -1);");      /* 11 vtx 5 */
+        editor_feed_line("glVertex3f(1, -1, 1);");       /* 12 vtx 6 */
+        editor_feed_line("glVertex3f(-1, -1, 1);");      /* 13 vtx 7 */
+        editor_feed_line("glEnd();");                    /* 14 */
+        repl_flatten_commands(editor_state_edit_line());
+
+        ReplCursorPolygon p;
+
+        p = repl_flatten_cursor_polygon(0);
+        ASSERT_INT("cursor on glBegin line: whole block (invalid)", p.valid, 0);
+
+        /* Comment/state lines before the first vertex belong to quad 0. */
+        p = repl_flatten_cursor_polygon(1);
+        ASSERT_TRUE("leading comment maps to quad 0", p.valid && p.first == 0 && p.last == 3);
+        p = repl_flatten_cursor_polygon(3);
+        ASSERT_TRUE("glNormal3f before v0 maps to quad 0", p.valid && p.first == 0 && p.last == 3);
+
+        /* Every vertex line 0..3 selects quad 0 (ordinals 0..3). */
+        p = repl_flatten_cursor_polygon(4);
+        ASSERT_TRUE("v0 maps to quad 0", p.valid && p.first == 0 && p.last == 3);
+        p = repl_flatten_cursor_polygon(7);
+        ASSERT_TRUE("v3 (last of quad 0) maps to quad 0", p.valid && p.first == 0 && p.last == 3);
+
+        /* State lines after v3 and before v4 already belong to quad 1. */
+        p = repl_flatten_cursor_polygon(8);
+        ASSERT_TRUE("comment after v3 maps to quad 1", p.valid && p.first == 4 && p.last == 7);
+        p = repl_flatten_cursor_polygon(9);
+        ASSERT_TRUE("glNormal3f before v4 maps to quad 1", p.valid && p.first == 4 && p.last == 7);
+
+        /* Vertex lines 4..7 select quad 1 (ordinals 4..7). */
+        p = repl_flatten_cursor_polygon(10);
+        ASSERT_TRUE("v4 maps to quad 1", p.valid && p.first == 4 && p.last == 7);
+        p = repl_flatten_cursor_polygon(13);
+        ASSERT_TRUE("v7 (last of quad 1) maps to quad 1", p.valid && p.first == 4 && p.last == 7);
+
+        /* The cursor-block source-extent cache (shared with the other
+         * scopes' block highlighting) treats the CMD_END line itself as
+         * outside the block — edit_line_idx < end_line, not <=. So the
+         * cursor sitting exactly on glEnd() resolves no block at all,
+         * same as the pre-existing FIRST_INSTANCE/ALL_INSTANCES behavior. */
+        p = repl_flatten_cursor_polygon(14);
+        ASSERT_INT("glEnd line itself is outside the block", p.valid, 0);
+        ASSERT_INT("no fan anchor for GL_QUADS", p.fan_anchor, 0);
+
+        /* Outside any glBegin block: invalid. */
+        editor_feed_line("glColor3f(1, 1, 1);");          /* 15 */
+        repl_flatten_commands(editor_state_edit_line());
+        p = repl_flatten_cursor_polygon(15);
+        ASSERT_INT("top-level line outside block is invalid", p.valid, 0);
+    }
+
+    /* repl_flatten_cursor_polygon: per-mode grouping (GL_TRIANGLES,
+     * GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN, GL_QUAD_STRIP, GL_LINES,
+     * GL_LINE_STRIP, GL_POINTS) and the whole-block modes (GL_POLYGON,
+     * GL_LINE_LOOP) that never resolve a single primitive. */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glBegin(GL_TRIANGLES);"); /* 0 */
+        editor_feed_line("glVertex3f(0,0,0);");      /* 1 v0 */
+        editor_feed_line("glVertex3f(1,0,0);");      /* 2 v1 */
+        editor_feed_line("glVertex3f(0,1,0);");      /* 3 v2 */
+        editor_feed_line("glVertex3f(0,0,1);");      /* 4 v3 */
+        editor_feed_line("glVertex3f(1,1,0);");      /* 5 v4 */
+        editor_feed_line("glVertex3f(0,1,1);");      /* 6 v5 */
+        editor_feed_line("glEnd();");                /* 7 */
+        repl_flatten_commands(editor_state_edit_line());
+
+        ReplCursorPolygon p;
+        p = repl_flatten_cursor_polygon(1);
+        ASSERT_TRUE("GL_TRIANGLES v0 -> triangle 0", p.valid && p.first == 0 && p.last == 2);
+        p = repl_flatten_cursor_polygon(3);
+        ASSERT_TRUE("GL_TRIANGLES v2 -> triangle 0", p.valid && p.first == 0 && p.last == 2);
+        p = repl_flatten_cursor_polygon(4);
+        ASSERT_TRUE("GL_TRIANGLES v3 -> triangle 1", p.valid && p.first == 3 && p.last == 5);
+        p = repl_flatten_cursor_polygon(6);
+        ASSERT_TRUE("GL_TRIANGLES v5 -> triangle 1", p.valid && p.first == 3 && p.last == 5);
+    }
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glBegin(GL_TRIANGLE_STRIP);"); /* 0 */
+        editor_feed_line("glVertex3f(0,0,0);");            /* 1 v0 */
+        editor_feed_line("glVertex3f(1,0,0);");            /* 2 v1 */
+        editor_feed_line("glVertex3f(0,1,0);");            /* 3 v2 */
+        editor_feed_line("glVertex3f(1,1,0);");            /* 4 v3 */
+        editor_feed_line("glEnd();");                       /* 5 */
+        repl_flatten_commands(editor_state_edit_line());
+
+        ReplCursorPolygon p;
+        /* v0 and v1 are before the first triangle completes: both fall
+         * back to the earliest triangle {0,1,2}. */
+        p = repl_flatten_cursor_polygon(1);
+        ASSERT_TRUE("GL_TRIANGLE_STRIP v0 -> tri {0,1,2}", p.valid && p.first == 0 && p.last == 2);
+        p = repl_flatten_cursor_polygon(2);
+        ASSERT_TRUE("GL_TRIANGLE_STRIP v1 -> tri {0,1,2}", p.valid && p.first == 0 && p.last == 2);
+        p = repl_flatten_cursor_polygon(3);
+        ASSERT_TRUE("GL_TRIANGLE_STRIP v2 -> tri {0,1,2}", p.valid && p.first == 0 && p.last == 2);
+        p = repl_flatten_cursor_polygon(4);
+        ASSERT_TRUE("GL_TRIANGLE_STRIP v3 -> tri {1,2,3}", p.valid && p.first == 1 && p.last == 3);
+        ASSERT_INT("no fan anchor for GL_TRIANGLE_STRIP", p.fan_anchor, 0);
+    }
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glBegin(GL_TRIANGLE_FAN);"); /* 0 */
+        editor_feed_line("glVertex3f(0,0,0);");          /* 1 v0 (center) */
+        editor_feed_line("glVertex3f(1,0,0);");          /* 2 v1 */
+        editor_feed_line("glVertex3f(0,1,0);");          /* 3 v2 */
+        editor_feed_line("glVertex3f(-1,0,0);");         /* 4 v3 */
+        editor_feed_line("glEnd();");                     /* 5 */
+        repl_flatten_commands(editor_state_edit_line());
+
+        ReplCursorPolygon p;
+        p = repl_flatten_cursor_polygon(2);
+        ASSERT_TRUE("GL_TRIANGLE_FAN v1 -> tri {center,1,2}",
+                    p.valid && p.first == 1 && p.last == 2 && p.fan_anchor);
+        p = repl_flatten_cursor_polygon(3);
+        ASSERT_TRUE("GL_TRIANGLE_FAN v2 -> tri {center,1,2}",
+                    p.valid && p.first == 1 && p.last == 2 && p.fan_anchor);
+        p = repl_flatten_cursor_polygon(4);
+        ASSERT_TRUE("GL_TRIANGLE_FAN v3 -> tri {center,2,3}",
+                    p.valid && p.first == 2 && p.last == 3 && p.fan_anchor);
+    }
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glBegin(GL_QUAD_STRIP);"); /* 0 */
+        editor_feed_line("glVertex3f(0,0,0);");        /* 1 v0 */
+        editor_feed_line("glVertex3f(1,0,0);");        /* 2 v1 */
+        editor_feed_line("glVertex3f(0,1,0);");        /* 3 v2 */
+        editor_feed_line("glVertex3f(1,1,0);");        /* 4 v3 */
+        editor_feed_line("glVertex3f(0,2,0);");        /* 5 v4 */
+        editor_feed_line("glVertex3f(1,2,0);");        /* 6 v5 */
+        editor_feed_line("glEnd();");                   /* 7 */
+        repl_flatten_commands(editor_state_edit_line());
+
+        ReplCursorPolygon p;
+        p = repl_flatten_cursor_polygon(1);
+        ASSERT_TRUE("GL_QUAD_STRIP v0 -> quad {0..3}", p.valid && p.first == 0 && p.last == 3);
+        p = repl_flatten_cursor_polygon(4);
+        ASSERT_TRUE("GL_QUAD_STRIP v3 -> quad {0..3}", p.valid && p.first == 0 && p.last == 3);
+        p = repl_flatten_cursor_polygon(5);
+        ASSERT_TRUE("GL_QUAD_STRIP v4 -> quad {2..5}", p.valid && p.first == 2 && p.last == 5);
+        p = repl_flatten_cursor_polygon(6);
+        ASSERT_TRUE("GL_QUAD_STRIP v5 -> quad {2..5}", p.valid && p.first == 2 && p.last == 5);
+    }
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glBegin(GL_LINES);");   /* 0 */
+        editor_feed_line("glVertex3f(0,0,0);");    /* 1 v0 */
+        editor_feed_line("glVertex3f(1,0,0);");    /* 2 v1 */
+        editor_feed_line("glVertex3f(0,1,0);");    /* 3 v2 */
+        editor_feed_line("glVertex3f(1,1,0);");    /* 4 v3 */
+        editor_feed_line("glEnd();");               /* 5 */
+        repl_flatten_commands(editor_state_edit_line());
+
+        ReplCursorPolygon p;
+        p = repl_flatten_cursor_polygon(1);
+        ASSERT_TRUE("GL_LINES v0 -> segment {0,1}", p.valid && p.first == 0 && p.last == 1);
+        p = repl_flatten_cursor_polygon(3);
+        ASSERT_TRUE("GL_LINES v2 -> segment {2,3}", p.valid && p.first == 2 && p.last == 3);
+    }
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glBegin(GL_LINE_STRIP);"); /* 0 */
+        editor_feed_line("glVertex3f(0,0,0);");        /* 1 v0 */
+        editor_feed_line("glVertex3f(1,0,0);");        /* 2 v1 */
+        editor_feed_line("glVertex3f(0,1,0);");        /* 3 v2 */
+        editor_feed_line("glEnd();");                   /* 4 */
+        repl_flatten_commands(editor_state_edit_line());
+
+        ReplCursorPolygon p;
+        p = repl_flatten_cursor_polygon(1);
+        ASSERT_TRUE("GL_LINE_STRIP v0 -> segment {0,1}", p.valid && p.first == 0 && p.last == 1);
+        p = repl_flatten_cursor_polygon(2);
+        ASSERT_TRUE("GL_LINE_STRIP v1 -> segment {0,1}", p.valid && p.first == 0 && p.last == 1);
+        p = repl_flatten_cursor_polygon(3);
+        ASSERT_TRUE("GL_LINE_STRIP v2 -> segment {1,2}", p.valid && p.first == 1 && p.last == 2);
+    }
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glBegin(GL_POINTS);");  /* 0 */
+        editor_feed_line("glVertex3f(0,0,0);");    /* 1 v0 */
+        editor_feed_line("glVertex3f(1,0,0);");    /* 2 v1 */
+        editor_feed_line("glEnd();");               /* 3 */
+        repl_flatten_commands(editor_state_edit_line());
+
+        ReplCursorPolygon p;
+        p = repl_flatten_cursor_polygon(1);
+        ASSERT_TRUE("GL_POINTS v0 -> single point {0,0}", p.valid && p.first == 0 && p.last == 0);
+        p = repl_flatten_cursor_polygon(2);
+        ASSERT_TRUE("GL_POINTS v1 -> single point {1,1}", p.valid && p.first == 1 && p.last == 1);
+    }
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glBegin(GL_POLYGON);"); /* 0 */
+        editor_feed_line("glVertex3f(0,0,0);");    /* 1 */
+        editor_feed_line("glVertex3f(1,0,0);");    /* 2 */
+        editor_feed_line("glVertex3f(0,1,0);");    /* 3 */
+        editor_feed_line("glEnd();");               /* 4 */
+        repl_flatten_commands(editor_state_edit_line());
+
+        ReplCursorPolygon p = repl_flatten_cursor_polygon(2);
+        ASSERT_INT("GL_POLYGON never resolves a single primitive", p.valid, 0);
+    }
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glBegin(GL_LINE_LOOP);"); /* 0 */
+        editor_feed_line("glVertex3f(0,0,0);");      /* 1 */
+        editor_feed_line("glVertex3f(1,0,0);");      /* 2 */
+        editor_feed_line("glVertex3f(0,1,0);");      /* 3 */
+        editor_feed_line("glEnd();");                 /* 4 */
+        repl_flatten_commands(editor_state_edit_line());
+
+        ReplCursorPolygon p = repl_flatten_cursor_polygon(2);
+        ASSERT_INT("GL_LINE_LOOP never resolves a single primitive", p.valid, 0);
+    }
+
+    /* repl_flatten_cursor_polygon inside a for-loop: first-instance
+     * semantics — the cursor's polygon is resolved against the FIRST
+     * unrolled iteration only, matching the existing current-block cache. */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("for(i, 0, 2) {");           /* 0 */
+        editor_feed_line("  glBegin(GL_QUADS);");     /* 1 */
+        editor_feed_line("  glVertex3f(i,0,0);");     /* 2 v0 */
+        editor_feed_line("  glVertex3f(i,1,0);");     /* 3 v1 */
+        editor_feed_line("  glVertex3f(i,1,1);");     /* 4 v2 */
+        editor_feed_line("  glVertex3f(i,0,1);");     /* 5 v3 */
+        editor_feed_line("  glEnd();");                /* 6 */
+        editor_feed_line("}");                         /* 7 */
+        repl_flatten_commands(editor_state_edit_line());
+
+        ReplCursorPolygon p = repl_flatten_cursor_polygon(3);
+        ASSERT_TRUE("looped GL_QUADS body resolves against first iteration",
+                    p.valid && p.first == 0 && p.last == 3);
+    }
+
     /* #4 regression: repl_config_bag_set must detect snprintf truncation
      * and refuse the write. Pre-fix, an over-long key truncated silently
      * and the function returned 1 — subsequent gets against the

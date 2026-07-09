@@ -25,7 +25,8 @@ typedef enum OverlayVertexLabelMode {
     X(FIRST_INSTANCE, "First instance")    \
     X(ALL_INSTANCES, "All instances")      \
     X(AT_VERTEX, "At vertex")              \
-    X(VISIBLE, "Visible only")
+    X(VISIBLE, "Visible only")             \
+    X(SINGLE_POLYGON, "Single polygon")
 
 #define OVERLAY_SCOPE_NAME_ENTRY(name, str) [OVERLAY_SCOPE_##name] = str,
 
@@ -72,6 +73,15 @@ typedef struct OverlayWalkCtx {
     int              replay_normal_display; /* ReplayNormalDisplayMode */
     int              replay_anchor_flat_idx; /* -1 or flat idx of current replay vertex */
     int              xform_guide_mode;       /* Render3dXformGuideMode */
+    /* SINGLE_POLYGON scope: block-local vertex-ordinal range of the primitive
+     * under the cursor, resolved by the controller (repl_flatten_cursor_polygon).
+     * cursor_poly_valid == 0 means "no single primitive" (cursor on the glBegin
+     * line, GL_POLYGON/GL_LINE_LOOP, tess block, ...) and the whole block is
+     * treated as current, matching the other scopes. */
+    int              cursor_poly_valid;
+    int              cursor_poly_first;      /* first ordinal, inclusive */
+    int              cursor_poly_last;       /* last ordinal, inclusive */
+    int              cursor_poly_fan_anchor; /* 1 = ordinal 0 (fan center) too */
 } OverlayWalkCtx;
 
 typedef struct OverlaySnapshotPack {

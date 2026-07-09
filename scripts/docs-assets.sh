@@ -70,6 +70,7 @@ CORE_ASSETS=(
     grid-themes backdrops axes-compass view-mode-2d labels-orrery
     glu-tess glow-sprites transform-stress variable-panel tune-badges
     motion-blur xform-guide-still xform-guide replay animated-ring
+    single-polygon-scope
 )
 
 # docs/SHOWCASE.md gallery set (-> docs/images/showcase/). Recordable scenes
@@ -240,6 +241,33 @@ glVertex3f(-1, -1, 0);
 glVertex3f(1, -1, 0);
 glVertex3f(1, 1, 0);
 glVertex3f(-1, 1, 0);
+glEnd();
+// Snippet end
+EOF
+}
+
+
+# Two quads in one glBegin/glEnd block. GLR_EDIT_LINE parks the cursor on
+# the second quad's second vertex (line 9) so Single polygon scope narrows
+# the highlight/labels to just that quad, not the whole shared block.
+stage_single_polygon() { stage single_polygon <<'EOF'
+/* @cfg poly_highlight = 1 */
+/* @cfg vertex_labels = 1 */
+/* @cfg label_highlight_scope = OVERLAY_SCOPE_SINGLE_POLYGON */
+/* @cfg grid = GRID_THEME_OFF */
+// Snippet start
+glEnable(GL_DEPTH_TEST);
+glBegin(GL_QUADS);
+glColor3f(0.95, 0.25, 1);
+glVertex3f(-1.6, -0.8, 0);
+glVertex3f(-0.2, -0.8, 0);
+glVertex3f(-0.2, 0.8, 0);
+glVertex3f(-1.6, 0.8, 0);
+glColor3f(0.25, 0.675, 1);
+glVertex3f(0.2, -0.8, 0);
+glVertex3f(1.6, -0.8, 0);
+glVertex3f(1.6, 0.8, 0);
+glVertex3f(0.2, 0.8, 0);
 glEnd();
 // Snippet end
 EOF
@@ -443,6 +471,11 @@ fi
 
 if want vertex-overlays; then
     still "$OUT/vertex-overlays.png" $PLAIN_FRAMES 16 "$(stage_overlays)"
+fi
+
+if want single-polygon-scope; then
+    ( export GLR_EDIT_LINE=9
+      still "$OUT/single-polygon-scope.png" $PLAIN_FRAMES 16 "$(stage_single_polygon)" )
 fi
 
 if want wireframe; then

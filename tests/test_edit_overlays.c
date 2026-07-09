@@ -577,6 +577,109 @@ static void test_current_poly_highlight_respects_overlay_scope(void) {
                trace_count_line(&log, "glVertex3f 2 0 0"), 1);
 }
 
+/* SINGLE_POLYGON scope: only the cursor's primitive within the matched
+ * block gets the active highlight; the rest of the block is either bare
+ * (show_vertex_outlines off) or a plain edge outline (on). */
+static void test_single_polygon_highlight(void) {
+    printf("--- edit_overlays single-polygon highlight ---\n");
+
+    GLCmd cmds[10];
+    mk_cmd(&cmds[0], CMD_BEGIN, (float)GL_QUADS, 0, 0);
+    mk_cmd(&cmds[1], CMD_VERTEX3F, 0, 0, 0); cmds[1].src_cmd_idx = 7; /* v0 */
+    mk_cmd(&cmds[2], CMD_VERTEX3F, 1, 0, 0);                          /* v1 */
+    mk_cmd(&cmds[3], CMD_VERTEX3F, 2, 0, 0);                          /* v2 */
+    mk_cmd(&cmds[4], CMD_VERTEX3F, 3, 0, 0);                          /* v3 */
+    mk_cmd(&cmds[5], CMD_VERTEX3F, 4, 0, 0);                          /* v4 */
+    mk_cmd(&cmds[6], CMD_VERTEX3F, 5, 0, 0);                          /* v5 */
+    mk_cmd(&cmds[7], CMD_VERTEX3F, 6, 0, 0);                          /* v6 */
+    mk_cmd(&cmds[8], CMD_VERTEX3F, 7, 0, 0);                          /* v7 */
+    mk_cmd(&cmds[9], CMD_END, 0, 0, 0);
+
+    OverlayWalkCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = cmds;
+    ctx.program.cmd_count = 10;
+    ctx.cursor.edit_line_idx = 7;
+    ctx.cursor.cursor_block_begin = -1;
+    ctx.cursor.cursor_block_end = -1;
+    ctx.highlight_current_poly = 1;
+    ctx.show_vertex_outlines = 0;
+    ctx.cursor_overlay_scope = OVERLAY_SCOPE_SINGLE_POLYGON;
+    ctx.cursor_poly_valid = 1;
+    ctx.cursor_poly_first = 4;  /* second quad: v4..v7 */
+    ctx.cursor_poly_last = 7;
+
+    TraceLog log;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+
+    ASSERT_INT("single-polygon highlights exactly one primitive",
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 1);
+    ASSERT_INT("single-polygon draws v4 (selected quad)",
+               trace_count_line(&log, "glVertex3f 4 0 0"), 1);
+    ASSERT_INT("single-polygon draws v7 (selected quad)",
+               trace_count_line(&log, "glVertex3f 7 0 0"), 1);
+    ASSERT_INT("single-polygon skips v0 (other quad, outlines off)",
+               trace_count_line(&log, "glVertex3f 0 0 0"), 0);
+    ASSERT_INT("single-polygon skips v3 (other quad, outlines off)",
+               trace_count_line(&log, "glVertex3f 3 0 0"), 0);
+
+    /* With show_vertex_outlines also on, the rest of the block still draws
+     * as a plain edge outline; the selected quad draws twice (once via the
+     * active highlight, once via the plain outline pass over the block). */
+    ctx.show_vertex_outlines = 1;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("plain outline still draws the other quad's v0",
+               trace_count_line(&log, "glVertex3f 0 0 0"), 1);
+    ASSERT_INT("selected quad's v4 draws via both passes",
+               trace_count_line(&log, "glVertex3f 4 0 0"), 2);
+    ASSERT_INT("active highlight still isolated to one primitive",
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 1);
+}
+
+/* SINGLE_POLYGON scope with GL_TRIANGLE_FAN: the shared center vertex
+ * (ordinal 0) is highlighted alongside the selected [first, last] pair. */
+static void test_single_polygon_highlight_fan_anchor(void) {
+    printf("--- edit_overlays single-polygon highlight (fan anchor) ---\n");
+
+    GLCmd cmds[6];
+    mk_cmd(&cmds[0], CMD_BEGIN, (float)GL_TRIANGLE_FAN, 0, 0);
+    mk_cmd(&cmds[1], CMD_VERTEX3F, 9, 9, 9); cmds[1].src_cmd_idx = 3; /* center */
+    mk_cmd(&cmds[2], CMD_VERTEX3F, 1, 0, 0);                          /* v1 */
+    mk_cmd(&cmds[3], CMD_VERTEX3F, 2, 0, 0);                          /* v2 */
+    mk_cmd(&cmds[4], CMD_VERTEX3F, 3, 0, 0);                          /* v3 */
+    mk_cmd(&cmds[5], CMD_END, 0, 0, 0);
+
+    OverlayWalkCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = cmds;
+    ctx.program.cmd_count = 6;
+    ctx.cursor.edit_line_idx = 3;
+    ctx.cursor.cursor_block_begin = -1;
+    ctx.cursor.cursor_block_end = -1;
+    ctx.highlight_current_poly = 1;
+    ctx.cursor_overlay_scope = OVERLAY_SCOPE_SINGLE_POLYGON;
+    ctx.cursor_poly_valid = 1;
+    ctx.cursor_poly_first = 2;  /* triangle {center, v2, v3} */
+    ctx.cursor_poly_last = 3;
+    ctx.cursor_poly_fan_anchor = 1;
+
+    TraceLog log;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+
+    ASSERT_INT("fan anchor draws the shared center vertex",
+               trace_count_line(&log, "glVertex3f 9 9 9"), 1);
+    ASSERT_INT("fan triangle skips v1 (not in {center,2,3})",
+               trace_count_line(&log, "glVertex3f 1 0 0"), 0);
+    ASSERT_INT("fan triangle draws v2", trace_count_line(&log, "glVertex3f 2 0 0"), 1);
+    ASSERT_INT("fan triangle draws v3", trace_count_line(&log, "glVertex3f 3 0 0"), 1);
+}
+
 /* render_outlines_tess_pass: draws each tess contour as a GL_LINE_LOOP. */
 static void test_render_outlines_tess(void) {
     printf("--- edit_overlays render_outlines (tess pass) ---\n");
@@ -1101,6 +1204,100 @@ static void test_overlay_scope(void) {
     ASSERT_TRUE("label 1 draw_y equals anchor_y", at_vert.labels[1].draw_y == at_vert.labels[1].anchor_y);
     ASSERT_TRUE("label 2 draw_y equals anchor_y", at_vert.labels[2].draw_y == at_vert.labels[2].anchor_y);
     ASSERT_TRUE("label 3 draw_y equals anchor_y", at_vert.labels[3].draw_y == at_vert.labels[3].anchor_y);
+}
+
+/* Single-polygon label scope: narrows first-instance further to the
+ * ordinal range of the cursor's primitive, but only inside a glBegin
+ * block (primitive_mode != 0) — tess (GLU) polygons keep whole-block
+ * labels regardless of the resolved range. */
+static void test_single_polygon_label_scope(void) {
+    printf("--- edit_overlays single-polygon label scope ---\n");
+
+    float id[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
+    extern float g_gl_stub_modelview_matrix[16];
+    memcpy(g_gl_stub_modelview_matrix, id, sizeof(id));
+
+    const float verts[8][3] = {
+        { 0.0f, 0.0f, 0.0f }, { 0.1f, 0.0f, 0.0f },
+        { 0.2f, 0.0f, 0.0f }, { 0.3f, 0.0f, 0.0f },
+        { -0.1f, 0.0f, 0.0f }, { -0.2f, 0.0f, 0.0f },
+        { -0.3f, 0.0f, 0.0f }, { -0.4f, 0.0f, 0.0f },
+    };
+
+    ReplayVertexWalkState state;
+    memset(&state, 0, sizeof(state));
+
+    /* A single glBegin(GL_QUADS) block (nonzero primitive_mode): only
+     * ordinals [4, 7] (the second quad) get labeled, numbered by
+     * in-block index. */
+    VertexLabelCtx quad;
+    memset(&quad, 0, sizeof(quad));
+    quad.mode = OVERLAY_VERTEX_LABEL_INDEX;
+    quad.label_options = OVERLAY_SCOPE_SINGLE_POLYGON;
+    quad.poly_valid = 1;
+    quad.poly_first = 4;
+    quad.poly_last = 7;
+    memcpy(quad.proj, id, sizeof(id));
+    quad.vw = 1024;
+    quad.vh = 768;
+    state.primitive_mode = GL_QUADS;
+    for (int i = 0; i < 8; i++) {
+        state.vertex_idx_in_block = i;
+        on_vertex_number_label(&state, verts[i][0], verts[i][1], verts[i][2], &quad);
+    }
+    ASSERT_INT("single-polygon labels only the selected quad's 4 vertices",
+               quad.count, 4);
+    ASSERT_TRUE("single-polygon numbers by in-block index",
+                strcmp(quad.labels[0].idx, " v4") == 0 &&
+                strcmp(quad.labels[1].idx, " v5") == 0 &&
+                strcmp(quad.labels[2].idx, " v6") == 0 &&
+                strcmp(quad.labels[3].idx, " v7") == 0);
+
+    /* A tess (GLU) polygon reports primitive_mode == 0: the per-primitive
+     * filter is bypassed and every vertex in the (first) block labels,
+     * same as plain first-instance scope. */
+    VertexLabelCtx tess;
+    memset(&tess, 0, sizeof(tess));
+    tess.mode = OVERLAY_VERTEX_LABEL_INDEX;
+    tess.label_options = OVERLAY_SCOPE_SINGLE_POLYGON;
+    tess.poly_valid = 1;
+    tess.poly_first = 0;
+    tess.poly_last = 0;  /* would filter to just ordinal 0 if applied */
+    memcpy(tess.proj, id, sizeof(id));
+    tess.vw = 1024;
+    tess.vh = 768;
+    state.primitive_mode = 0;
+    for (int i = 0; i < 8; i++) {
+        state.vertex_idx_in_block = i;
+        on_vertex_number_label(&state, verts[i][0], verts[i][1], verts[i][2], &tess);
+    }
+    ASSERT_INT("tess (primitive_mode 0) bypasses the per-primitive filter",
+               tess.count, 8);
+
+    /* GL_TRIANGLE_FAN: the fan center (ordinal 0) labels alongside the
+     * selected [first, last] pair. */
+    VertexLabelCtx fan;
+    memset(&fan, 0, sizeof(fan));
+    fan.mode = OVERLAY_VERTEX_LABEL_INDEX;
+    fan.label_options = OVERLAY_SCOPE_SINGLE_POLYGON;
+    fan.poly_valid = 1;
+    fan.poly_first = 2;
+    fan.poly_last = 3;
+    fan.poly_fan_anchor = 1;
+    memcpy(fan.proj, id, sizeof(id));
+    fan.vw = 1024;
+    fan.vh = 768;
+    state.primitive_mode = GL_TRIANGLE_FAN;
+    for (int i = 0; i < 4; i++) {
+        state.vertex_idx_in_block = i;
+        on_vertex_number_label(&state, verts[i][0], verts[i][1], verts[i][2], &fan);
+    }
+    ASSERT_INT("fan anchor labels center + selected pair (3 vertices)",
+               fan.count, 3);
+    ASSERT_TRUE("fan anchor label set is {v0, v2, v3}",
+                strcmp(fan.labels[0].idx, " v0") == 0 &&
+                strcmp(fan.labels[1].idx, " v2") == 0 &&
+                strcmp(fan.labels[2].idx, " v3") == 0);
 }
 
 /* Visible-only scope: a vertex is dropped when the scene depth buffer holds
@@ -1637,6 +1834,8 @@ int main(void) {
     test_render_vertex_points_glut();
     test_render_outlines_glbegin();
     test_current_poly_highlight_respects_overlay_scope();
+    test_single_polygon_highlight();
+    test_single_polygon_highlight_fan_anchor();
     test_render_outlines_tess();
     test_render_outlines_glut();
     test_find_next_vertex_args();
@@ -1645,6 +1844,7 @@ int main(void) {
     test_sanitize_zero();
     test_on_vertex_number_label_callback();
     test_overlay_scope();
+    test_single_polygon_label_scope();
     test_vertex_label_visible_occlusion();
     test_on_normal_vector_arrow_callback();
     test_render_normal_vectors_replay_only();

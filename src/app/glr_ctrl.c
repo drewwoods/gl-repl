@@ -271,7 +271,8 @@ static int glr_ctrl_find_affecting_transform_highlights(int line_idx,
                                                         int out_cap) {
     GlrPresentationState presentation = glr_state_presentation();
 
-    if (presentation.overlay_scope == OVERLAY_SCOPE_FIRST_INSTANCE) {
+    if (presentation.overlay_scope == OVERLAY_SCOPE_FIRST_INSTANCE ||
+        presentation.overlay_scope == OVERLAY_SCOPE_SINGLE_POLYGON) {
         int flat_idx = glr_ctrl_first_flat_color_consumer_for_source_line(line_idx);
         if (flat_idx >= 0)
             return repl_find_affecting_transforms_for_flat_vertex(
@@ -527,6 +528,19 @@ static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3
             &pack->walk.cursor.cursor_source_block_end);
     pack->walk.cursor.cursor_func_scope_mask = 0;
     pack->walk.cursor_overlay_scope = presentation.overlay_scope;
+
+    pack->walk.cursor_poly_valid = 0;
+    pack->walk.cursor_poly_first = 0;
+    pack->walk.cursor_poly_last = 0;
+    pack->walk.cursor_poly_fan_anchor = 0;
+    if (presentation.overlay_scope == OVERLAY_SCOPE_SINGLE_POLYGON) {
+        ReplCursorPolygon poly =
+            repl_flatten_cursor_polygon(pack->walk.cursor.edit_line_idx);
+        pack->walk.cursor_poly_valid = poly.valid;
+        pack->walk.cursor_poly_first = poly.first;
+        pack->walk.cursor_poly_last = poly.last;
+        pack->walk.cursor_poly_fan_anchor = poly.fan_anchor;
+    }
 
     /* Silhouette outlines only make sense over filled geometry; in any
      * wireframe mode the fill is replaced by edges, so suppress them. */
