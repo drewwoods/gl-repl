@@ -16,6 +16,7 @@
 #include "repl/export.h"
 #include "repl/executor.h"
 #include "ui/app/state.h"
+#include "subsystems/edit_overlays/edit_overlays.h"
 
 #include "support/test_harness.h"
 #include <errno.h>
@@ -2643,6 +2644,7 @@ static void test_config_variants_export(void) {
     glr_config_set(GLR_CONFIG_MSAA, 1);
     glr_config_set(GLR_CONFIG_LINE_SMOOTH, 1);
     glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);
+    glr_config_set(GLR_CONFIG_VERTEX_OUTLINE_STYLE, VERTEX_OUTLINE_STYLE_BOLD_INVERTED);
     glr_config_set(GLR_CONFIG_VERTEX_POINTS, 1);
     glr_config_set(GLR_CONFIG_POINT_ATTENUATION, 1);
 
@@ -2713,6 +2715,7 @@ static void test_workspace_header_budget_worst_case(void) {
     /* Turn on toggles that live late in the @cfg emit order — these are
      * the first to be dropped when the budget is too small. */
     glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 1);
+    glr_config_set(GLR_CONFIG_VERTEX_OUTLINE_STYLE, VERTEX_OUTLINE_STYLE_BOLD_INVERTED);
     glr_config_set(GLR_CONFIG_VERTEX_POINTS, 1);
     glr_config_set(GLR_CONFIG_POLY_HIGHLIGHT, 1);
 
@@ -2727,6 +2730,9 @@ static void test_workspace_header_budget_worst_case(void) {
     /* Every late @cfg line must survive even with the var table full. */
     ASSERT_TRUE("worst case: @cfg vertex_outlines present",
                 strstr(buf, "/* @cfg vertex_outlines = 1 */") != NULL);
+    ASSERT_TRUE("worst case: @cfg vertex_outline_style present",
+                strstr(buf, "/* @cfg vertex_outline_style = "
+                            "VERTEX_OUTLINE_STYLE_BOLD_INVERTED */") != NULL);
     ASSERT_TRUE("worst case: @cfg vertex_points present",
                 strstr(buf, "/* @cfg vertex_points = 1 */") != NULL);
     ASSERT_TRUE("worst case: @cfg poly_highlight present",
@@ -2745,11 +2751,18 @@ static void test_workspace_header_budget_worst_case(void) {
     /* Round-trip: a fresh state must come back with the toggle restored. */
     glr_ctrl_reset_all();
     glr_config_set(GLR_CONFIG_VERTEX_OUTLINES, 0);
+    glr_config_set(GLR_CONFIG_VERTEX_OUTLINE_STYLE, VERTEX_OUTLINE_STYLE_DEFAULT);
     ASSERT_INT("worst case: outlines cleared before load",
                glr_config_get(GLR_CONFIG_VERTEX_OUTLINES), 0);
+    ASSERT_INT("worst case: vertex outline style cleared before load",
+               glr_config_get(GLR_CONFIG_VERTEX_OUTLINE_STYLE),
+               VERTEX_OUTLINE_STYLE_DEFAULT);
     repl_export_load_from_file(export_path, NULL);
     ASSERT_INT("worst case: vertex_outlines restored on load",
                glr_config_get(GLR_CONFIG_VERTEX_OUTLINES), 1);
+    ASSERT_INT("worst case: vertex_outline_style restored on load",
+               glr_config_get(GLR_CONFIG_VERTEX_OUTLINE_STYLE),
+               VERTEX_OUTLINE_STYLE_BOLD_INVERTED);
 
     remove(export_path);
 }

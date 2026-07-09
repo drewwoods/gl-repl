@@ -1309,6 +1309,11 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
                 repl_cfg_resolve_text("overlay_scope", "OVERLAY_SCOPE_ALL_INSTANCES", &out));
     ASSERT_INT("  -> OVERLAY_SCOPE_ALL_INSTANCES", out,
                OVERLAY_SCOPE_ALL_INSTANCES);
+    ASSERT_TRUE("resolve vertex_outline_style: VERTEX_OUTLINE_STYLE_BOLD_INVERTED",
+                repl_cfg_resolve_text("vertex_outline_style",
+                                      "VERTEX_OUTLINE_STYLE_BOLD_INVERTED", &out));
+    ASSERT_INT("  -> VERTEX_OUTLINE_STYLE_BOLD_INVERTED", out,
+               VERTEX_OUTLINE_STYLE_BOLD_INVERTED);
 
     /* Unknown name on a known slug must fail (don't fall back to
      * strtol — "GRID_THEME_XYZ" must NOT silently land as 0). */
@@ -1355,6 +1360,10 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     glr_state_presentation_mut()->backdrop_mode = RENDER3D_BACKDROP_CITY_AND_STARS;
     glr_state_presentation_mut()->light_theme = LIGHT_THEME_SOLAR;
     glr_state_presentation_mut()->overlay_scope = OVERLAY_SCOPE_AT_VERTEX;
+    glr_config_set(GLR_CONFIG_VERTEX_OUTLINE_STYLE, VERTEX_OUTLINE_STYLE_BOLD_INVERTED);
+    ASSERT_INT("vertex_outline_style set/get",
+               glr_config_get(GLR_CONFIG_VERTEX_OUTLINE_STYLE),
+               VERTEX_OUTLINE_STYLE_BOLD_INVERTED);
 
     ReplConfigBag bag;
     repl_config_bag_clear(&bag);
@@ -1365,6 +1374,9 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     ASSERT_STR("fill_all backdrop is symbolic", repl_config_bag_get(&bag, "backdrop"), "RENDER3D_BACKDROP_CITY_AND_STARS");
     ASSERT_STR("fill_all light_theme is symbolic", repl_config_bag_get(&bag, "light_theme"), "LIGHT_THEME_SOLAR");
     ASSERT_STR("fill_all overlay_scope is symbolic", repl_config_bag_get(&bag, "overlay_scope"), "OVERLAY_SCOPE_AT_VERTEX");
+    ASSERT_STR("fill_all vertex_outline_style is symbolic",
+               repl_config_bag_get(&bag, "vertex_outline_style"),
+               "VERTEX_OUTLINE_STYLE_BOLD_INVERTED");
     ASSERT_TRUE("fill_all includes hidden audio cfg",
                 repl_config_bag_get(&bag, "audio") != NULL);
     ASSERT_INT("hidden audio cfg slug remains known",
@@ -1379,6 +1391,9 @@ static void test_cfg_bridge_resolves_symbolic_names(void) {
     ASSERT_STR("fill_scene_subset backdrop is symbolic", repl_config_bag_get(&scene_bag, "backdrop"), "RENDER3D_BACKDROP_CITY_AND_STARS");
     ASSERT_STR("fill_scene_subset light_theme is symbolic", repl_config_bag_get(&scene_bag, "light_theme"), "LIGHT_THEME_SOLAR");
     ASSERT_STR("fill_scene_subset overlay_scope is symbolic", repl_config_bag_get(&scene_bag, "overlay_scope"), "OVERLAY_SCOPE_AT_VERTEX");
+    ASSERT_STR("fill_scene_subset vertex_outline_style is symbolic",
+               repl_config_bag_get(&scene_bag, "vertex_outline_style"),
+               "VERTEX_OUTLINE_STYLE_BOLD_INVERTED");
 }
 
 static void test_cfg_bridge_enforces_backdrop_grid_pair_order(void) {

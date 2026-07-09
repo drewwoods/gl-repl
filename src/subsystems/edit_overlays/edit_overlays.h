@@ -36,6 +36,25 @@ typedef enum OverlayScope {
     OVERLAY_SCOPE_COUNT
 } OverlayScope;
 
+#define VERTEX_OUTLINE_STYLE_LIST(X) \
+    X(DEFAULT, "Default")            \
+    X(BOLD, "Bold")                  \
+    X(INVERTED, "Inverted")          \
+    X(BOLD_INVERTED, "Bold inverted")
+
+#define VERTEX_OUTLINE_STYLE_NAME_ENTRY(name, str) [VERTEX_OUTLINE_STYLE_##name] = str,
+
+typedef enum VertexOutlineStyle {
+#define VERTEX_OUTLINE_STYLE_ENUM_ENTRY(name, str) VERTEX_OUTLINE_STYLE_##name,
+    VERTEX_OUTLINE_STYLE_LIST(VERTEX_OUTLINE_STYLE_ENUM_ENTRY)
+#undef VERTEX_OUTLINE_STYLE_ENUM_ENTRY
+    VERTEX_OUTLINE_STYLE_COUNT
+} VertexOutlineStyle;
+
+#define VERTEX_OUTLINE_BOLD_SCALE 2.5f
+#define VERTEX_OUTLINE_EDGE_WIDTH 1.2f
+#define VERTEX_OUTLINE_TESS_WIDTH 1.5f
+#define VERTEX_OUTLINE_ACTIVE_WIDTH 3.0f
 
 typedef struct OverlayWalkCtx {
     FlatProgramView  program;
@@ -43,6 +62,7 @@ typedef struct OverlayWalkCtx {
     /* Mirrors overlay scope for cursor-bound guide/highlight passes. */
     OverlayScope cursor_overlay_scope;
     int              show_vertex_outlines;
+    int              vertex_outline_style;
     int              highlight_current_poly;
     int              replay_tess_preview;
     int              show_vertex_points;

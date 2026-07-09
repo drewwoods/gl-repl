@@ -532,6 +532,7 @@ static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3
      * wireframe mode the fill is replaced by edges, so suppress them. */
     pack->walk.show_vertex_outlines = presentation.show_vertex_outlines &&
                                       presentation.wireframe == WIREFRAME_OFF;
+    pack->walk.vertex_outline_style = presentation.vertex_outline_style;
     pack->walk.highlight_current_poly = presentation.highlight_current_poly && !replaying;
     pack->walk.replay_tess_preview = replay_mode_vertex;
     pack->walk.show_vertex_points = presentation.show_vertex_points;
