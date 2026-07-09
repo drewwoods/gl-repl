@@ -166,11 +166,9 @@ double prof_fps_window_secs(int window);
  * oldest -> newest. Returns the number of samples written. */
 int    prof_fps_history(int window, float *out, int max_samples);
 
-#ifdef GL_STUBS
-/* Test support: deterministic clock/reset hooks for stubbed tests. */
+/* Test support: deterministic clock/reset hooks for tests. */
 void prof_test_reset(void);
 void prof_test_set_now_us(double now_us);
 void prof_test_clear_now_us(void);
-#endif
 
 #endif /* CPUPROF_H */
