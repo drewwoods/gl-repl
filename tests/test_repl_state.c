@@ -6,7 +6,9 @@
 #include "repl/state_owners.h"
 #include "repl/flatten.h"
 #include "repl/scenes.h"
+#include "repl/example_loader.h"
 #include "editor/state.h"
+#include "editor/undo.h"
 #include "ui/app/state.h"
 #include "app/glr_camera.h"
 #include "ui/support/cpuprof.h"
@@ -698,19 +700,37 @@ static void test_camera_clear_scene_default_falls_back(void) {
                 fabsf(cam.dist - 5.0f) < 0.5f);
 }
 
+static const char *const k_test_camera_example[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -8.0f);",
+    "glRotatef(30.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(40.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(1.0f, 2.0f, 3.0f);",
+    "glBegin(GL_TRIANGLES);",
+    "glVertex3f(0, 0, 0);",
+    "glEnd();",
+    NULL
+};
+
+static void load_test_camera_example(void) {
+    glr_ctrl_reset_transients();
+    editor_undo_note_wholesale_replacement();
+    editor_state_edit_line_set(repl_load_example_lines_for_test(k_test_camera_example));
+}
+
 static void test_example_load_sets_scene_camera_default(void) {
     glr_ctrl_reset_all();
 
-    glr_scene_load_example(0);
+    load_test_camera_example();
 
     for (int i = 0; i < 500; i++)
         glr_camera_tick();
 
     GlrCameraState after_load = glr_camera();
-    ASSERT_TRUE("example 0 camera dist ~6",
-                fabsf(after_load.dist - 6.5f) < 0.5f);
-    ASSERT_TRUE("example 0 camera rx ~35.25",
-                fabsf(after_load.rx - 35.25f) < 0.5f);
+    ASSERT_TRUE("example camera dist ~8",
+                fabsf(after_load.dist - 8.0f) < 0.5f);
+    ASSERT_TRUE("example camera rx ~30",
+                fabsf(after_load.rx - 30.0f) < 0.5f);
 
     glr_camera_set(0.0f, 0.0f, 2.0f, 0.0f, 0.0f, 0.0f, 0.0f);
 
@@ -720,18 +740,18 @@ static void test_example_load_sets_scene_camera_default(void) {
         glr_camera_tick();
 
     GlrCameraState cam = glr_camera();
-    ASSERT_TRUE("Ctrl+Shift+C reaches example dist (6), not built-in (5)",
-                fabsf(cam.dist - 6.5f) < 0.5f);
-    ASSERT_TRUE("Ctrl+Shift+C reaches example rx (35.25)",
-                fabsf(cam.rx - 35.25f) < 0.5f);
-    ASSERT_TRUE("Ctrl+Shift+C reaches example ry (45)",
-                fabsf(cam.ry - 45.0f) < 0.5f);
+    ASSERT_TRUE("Ctrl+Shift+C reaches example dist (8), not built-in (5)",
+                fabsf(cam.dist - 8.0f) < 0.5f);
+    ASSERT_TRUE("Ctrl+Shift+C reaches example rx (30)",
+                fabsf(cam.rx - 30.0f) < 0.5f);
+    ASSERT_TRUE("Ctrl+Shift+C reaches example ry (40)",
+                fabsf(cam.ry - 40.0f) < 0.5f);
 }
 
 static void test_user_scene_load_clears_scene_camera_default(void) {
     glr_ctrl_reset_all();
 
-    glr_scene_load_example(0);
+    load_test_camera_example();
     for (int i = 0; i < 500; i++)
         glr_camera_tick();
 
@@ -764,9 +784,9 @@ static void test_workspace_load_clears_scene_camera_default(void) {
 
     glr_ctrl_reset_all();
 
-    /* Example 0 has a // camera block → cam_apply_example_block records
+    /* Test camera example has a // camera block → cam_apply_example_block records
      * the pose as the per-scene camera default. */
-    glr_scene_load_example(0);
+    load_test_camera_example();
     for (int i = 0; i < 500; i++)
         glr_camera_tick();
 
@@ -782,8 +802,8 @@ static void test_workspace_load_clears_scene_camera_default(void) {
     ASSERT_INT("menu LOAD_WORKSPACE activated", activated, 1);
 
     /* Ctrl+Shift+C → ease_to_default. With the scene default still set
-     * (bug), the camera converges to example 0's pose (dist=6, rx=20,
-     * ry=35). After the fix, it falls back to built-in (dist=5, rx=20,
+     * (bug), the camera converges to the test example's pose (dist=8, rx=30,
+     * ry=40). After the fix, it falls back to built-in (dist=5, rx=20,
      * ry=30). */
     glr_camera_set(0.0f, 0.0f, 2.0f, 0.0f, 0.0f, 0.0f, 0.0f);
     glr_camera_ease_to_default();
