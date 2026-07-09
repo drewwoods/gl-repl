@@ -196,12 +196,29 @@
  * when drawing wire outlines over the filled pass. Dependency-free
  * compile-time constants — folded here from the former
  * outline_offset.h, matching this header's cross-layer-constant
- * contract. */
+ * contract.
+ *
+ * The FACTOR term must be O(1), not epsilon: a wide outline
+ * (glLineWidth > 1) centered on a polygon edge overhangs the polygon
+ * boundary by half its width, and those overhang fragments extrapolate
+ * the face's plane — landing *behind* an adjacent face's fill by that
+ * face's depth slope per pixel. Only the slope-proportional factor term
+ * can beat that; with a near-zero factor the depth test clips half the
+ * line wherever the neighboring face is steep, making outline widths
+ * vary visibly along a single edge (1-4 px at width 3). -2 is the
+ * canonical line-over-fill bias (verified against the lit-cube example;
+ * hidden edges stay correctly occluded). */
+
+/* The above works well sparsely, but with dense geometry the factor term can
+ * push the outline infront the fill of a neighboring face. The -0.1 factor is a
+ * compromise that keeps outlines visible in dense scenes while still avoiding
+ * z-fighting on most edges. But instead bump the UNITS to -1000*/
 #ifndef REPL_OUTLINE_POLYGON_OFFSET_FACTOR
-#define REPL_OUTLINE_POLYGON_OFFSET_FACTOR (-0.01f)
+#define REPL_OUTLINE_POLYGON_OFFSET_FACTOR (-0.1f)
+//#define REPL_OUTLINE_POLYGON_OFFSET_FACTOR (-2.0f)
 #endif
 #ifndef REPL_OUTLINE_POLYGON_OFFSET_UNITS
-#define REPL_OUTLINE_POLYGON_OFFSET_UNITS  (-100.0f)
+#define REPL_OUTLINE_POLYGON_OFFSET_UNITS  (-1000.0f)
 #endif
 
 /* Shared frame clock delta-time (seconds, representing ~60 fps).
