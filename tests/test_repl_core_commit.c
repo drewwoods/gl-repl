@@ -2392,6 +2392,80 @@ int main(void) {
                     repl_state_document_count() == 4);
     }
 
+    /* editor_clipboard_copy_current_with_result() /
+     * editor_clipboard_cut_current_with_result(): the web build's OS-clipboard
+     * bridge (src/app/glr_web_io.c) needs to know whether a fresh payload was
+     * actually produced before it exports EditorClipboardState, so a blocked
+     * copy/cut doesn't leak a stale clipboard. The void wrappers below must
+     * keep behaving identically (checked incidentally by every other
+     * clipboard test in this file, which still call them). */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glEnable(GL_BLEND);");
+        editor_feed_line("glDisable(GL_BLEND);");
+
+        /* Real current line, no selections: copy succeeds. */
+        editor_navigate_to_line(0);
+        ASSERT_TRUE("copy-result: current line succeeds",
+                    editor_clipboard_copy_current_with_result() == 1);
+        ASSERT_TRUE("copy-result: kind is LINES",
+                    editor_state_clipboard_kind() == EDITOR_CLIPBOARD_LINES);
+
+        /* Insert mode with no input selection: copy is a documented no-op. */
+        editor_handle_key('\r', 0, 0);
+        ASSERT_TRUE("copy-result: insert mode set", editor_insert_mode());
+        ASSERT_TRUE("copy-result: insert-mode no-op returns 0",
+                    editor_clipboard_copy_current_with_result() == 0);
+
+        /* Input-buffer character selection wins over line-range and
+         * succeeds even mid-line-edit. */
+        editor_handle_key(27 /* Esc */, 0, 0);
+        editor_input_set_text("glVertex3f");
+        editor_cursor_pos_set(4);
+        editor_input_anchor_set(0);
+        ASSERT_TRUE("copy-result: input selection active",
+                    editor_input_selection_active());
+        ASSERT_TRUE("copy-result: input-selection copy succeeds",
+                    editor_clipboard_copy_current_with_result() == 1);
+        ASSERT_TRUE("copy-result: kind is INPUT_TEXT",
+                    editor_state_clipboard_kind() == EDITOR_CLIPBOARD_INPUT_TEXT);
+        editor_input_set_text("");
+
+        /* A line-range selection over a float decl is guarded — copy/cut
+         * must both report 0, and cut must not touch the document. New
+         * decls are always inserted at the top of non-decl code (see
+         * CMD_VAR_DECLARE's placement rule), so the decl lands at index 0
+         * regardless of where it was fed from, pushing the two lines above
+         * to indices 1 and 2. */
+        editor_feed_line("float m = 4;");
+        int decl_idx = 0;
+        int doc_count_before_guard = repl_state_document_count();
+        editor_selection_start(decl_idx);
+        editor_selection_set_end(decl_idx);
+        ASSERT_TRUE("copy-result: var-decl copy is blocked",
+                    editor_clipboard_copy_current_with_result() == 0);
+
+        editor_selection_start(decl_idx);
+        editor_selection_set_end(decl_idx);
+        ASSERT_TRUE("cut-result: var-decl cut is blocked",
+                    editor_clipboard_cut_current_with_result() == 0);
+        ASSERT_TRUE("cut-result: blocked cut left doc untouched",
+                    repl_state_document_count() == doc_count_before_guard);
+
+        /* Real current line (the non-decl glEnable at index 1, not the
+         * still-selected decl at 0), no selection: cut succeeds and
+         * deletes. Clear the line-range selection left over from the
+         * blocked attempts above first — cut prioritizes an active
+         * selection over the cursor's current line. */
+        editor_selection_clear_line_range();
+        int doc_count_before_cut = repl_state_document_count();
+        editor_navigate_to_line(1);
+        ASSERT_TRUE("cut-result: current line succeeds",
+                    editor_clipboard_cut_current_with_result() == 1);
+        ASSERT_TRUE("cut-result: doc shrank by one",
+                    repl_state_document_count() == doc_count_before_cut - 1);
+    }
+
     printf("repl_core_commit: %d/%d passed\n", g_harness.passed, g_harness.run);
     return (g_harness.run == g_harness.passed) ? 0 : 1;
 }

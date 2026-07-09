@@ -33,6 +33,21 @@ original `OpenGL-Vibe/emscripten/` prototyping tree (`git log -- packaging/web/*
   page scroll; backspace is delivered as ASCII 8; Ctrl+letter is delivered as
   control codes so editor shortcuts fire; shifted digit keys are translated
   correctly.
+- **OS clipboard**: plain Ctrl/Cmd+C/X/V bypass JS GLUT entirely — gl4es_bootstrap.c's
+  `GLUT.getASCIIKey` override returns `null` for them so neither `keyboardFunc`
+  (gl-repl's own Ctrl+C/X/V path) nor `preventDefault()` fire, leaving the
+  browser free to synthesize its native `copy`/`cut`/`paste` events, which
+  shell.html's listeners bridge to `src/app/glr_web_io.c`'s clipboard exports
+  (reusing the existing editor clipboard copy/cut/paste machinery). Ctrl+Shift+C
+  (reset camera) and Ctrl+Shift+V (view mode toggle) are excluded and still
+  flow through GLUT unchanged. `text/plain` carries the snippet for
+  interop with other apps; a custom `application/x-gl-repl-clipboard-kind`
+  MIME type round-trips the exact gl-repl clipboard kind (input-buffer text
+  vs. source lines) when the clipboard comes back into gl-repl itself, with a
+  plain-text heuristic (multiline → source lines; single-line → replaces an
+  active input selection / inserts in insert mode, else becomes one source
+  line) when it doesn't survive (external apps, or a browser that drops
+  custom clipboard types).
 - **Canvas sizing**: the canvas framebuffer is synced 1:1 to element size via
   `Browser.setCanvasSize` plus a `ResizeObserver`, polling until GLUT's
   reshape listener registers (emscripten's `GLUT.onResize` covers window

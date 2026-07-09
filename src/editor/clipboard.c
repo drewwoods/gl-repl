@@ -276,16 +276,18 @@ static void clipboard_set_paste_failed_status(int line_no, int count,
     repl_set_status_error(msg);
 }
 
-void editor_clipboard_copy_current(void) {
+int editor_clipboard_copy_current_with_result(void) {
+    int result = 0;
+
     /* Input-buffer selection wins over line-range / current line.
      * Works in insert mode too — the cut/copy of a partial input
      * substring is a pure input-buffer mutation. */
     if (editor_clipboard_copy_input_selection())
-        return;
+        return 1;
 
     if (editor_insert_mode()) {
         editor_selection_clear_line_range();
-        return;
+        return 0;
     }
 
     if (editor_clipboard_sel_active()) {
@@ -293,10 +295,10 @@ void editor_clipboard_copy_current(void) {
         int count;
 
         if (!selected_cmd_range(&start, &count))
-            return;
+            return 0;
         if (repl_range_contains_var_decl(start, count)) {
             editor_selection_set_var_decl_action_status("copy");
-            return;
+            return 0;
         }
 
         clipboard_copy_range(start, count);
@@ -307,16 +309,17 @@ void editor_clipboard_copy_current(void) {
                      editor_state_clipboard_count() > 1 ? "s" : "");
             repl_set_status(msg);
         }
+        result = 1;
     } else if (editor_state_edit_line() < repl_state_document_count()) {
         int start;
         int count;
         int copying_block = 0;
 
         if (!current_copy_range(&start, &count, &copying_block))
-            return;
+            return 0;
         if (repl_range_contains_var_decl(start, count)) {
             editor_selection_set_var_decl_action_status("copy");
-            return;
+            return 0;
         }
 
         clipboard_copy_range(start, count);
@@ -328,14 +331,20 @@ void editor_clipboard_copy_current(void) {
         } else {
             repl_set_status("Copied line");
         }
+        result = 1;
     } else {
         editor_state_clipboard_clear();
     }
 
     editor_selection_clear_line_range();
+    return result;
 }
 
-void editor_clipboard_cut_current(void) {
+void editor_clipboard_copy_current(void) {
+    (void)editor_clipboard_copy_current_with_result();
+}
+
+int editor_clipboard_cut_current_with_result(void) {
     int start;
     int count;
 
@@ -344,28 +353,33 @@ void editor_clipboard_cut_current(void) {
      * cut works in insert mode, where line-range cut is intentionally
      * disabled. */
     if (editor_clipboard_cut_input_selection())
-        return;
+        return 1;
 
     if (editor_insert_mode()) {
         editor_selection_clear_line_range();
-        return;
+        return 0;
     }
 
     if (!current_cut_range(&start, &count)) {
         editor_state_clipboard_clear();
         editor_selection_clear_line_range();
-        return;
+        return 0;
     }
     if (!tutorial_guard_clipboard_change_or_status(start, count, 0))
-        return;
+        return 0;
 
     if (repl_range_contains_var_decl(start, count)) {
         editor_selection_set_var_decl_action_status("remove");
-        return;
+        return 0;
     }
 
     clipboard_copy_range(start, count);
     editor_delete_cmd_range(start, count, "Cut");
+    return 1;
+}
+
+void editor_clipboard_cut_current(void) {
+    (void)editor_clipboard_cut_current_with_result();
 }
 
 void editor_clipboard_paste_current(void) {

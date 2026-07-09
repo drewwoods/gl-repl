@@ -372,4 +372,3 @@ Leave those controls as internal clipboard operations for this change.
    - Dispatch Ctrl+Shift+C and Ctrl+Shift+V and confirm the existing app
      shortcuts still fire rather than browser clipboard events.
 4. `make check-c99`.
-
