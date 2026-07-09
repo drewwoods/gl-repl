@@ -932,7 +932,8 @@ variable slider to a target.
 - Instruction lines are locked — the tutorial guards them against edits
   until you finish or exit.
 - The starter set: *First Triangle*, *Color & Transform*, *Feature Tour*,
-  *Variable Slider*, *Depth Test Triangle*, and *Lighting Basics*.
+  *Variable Slider*, *First Animation*, *Depth Test Triangle*, *Lighting
+  Basics*, and *Color Interpolation*.
 
 ---
 

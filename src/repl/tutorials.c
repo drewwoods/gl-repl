@@ -308,6 +308,36 @@ static const TutorialStep g_tutorial_lighting_basics_steps[] = {
     STEP_SENTINEL,
 };
 
+/* "First Animation" — introduces the built-in `t` clock without asking the
+ * learner to declare or edit it. The entry cfg pauses Auto time before the
+ * first step, so the cube is visibly frozen until the REQUIRE step asks the
+ * learner to press Ctrl+T. The closing NOTE leaves the motion on-screen
+ * before teardown. `t` is reserved (rather than a user predef variable), so
+ * this deliberately watches the app-level auto_time configuration instead of
+ * using REQUIRE_VAR. */
+static const TutorialStep g_tutorial_first_animation_steps[] = {
+    STEP_NOTE(
+        "// The built-in t value is a clock in seconds; use it inside a number to animate that number."),
+    STEP_APPEND(NULL,
+        "// Rotate later geometry 45 degrees per second around the vertical Y axis.",
+        "glRotatef(t * 45, 0, 1, 0)"),
+    STEP_APPEND(NULL,
+        "// Draw a cube. It stays frozen until you start the t clock.",
+        "glutSolidCube(1)"),
+    STEP_REQUIRE_KEY(NULL,
+        "// Press %s to start the clock and watch the cube spin.",
+        "auto_time", 1,
+        KM_KEY(GLR_AUTO_TIME), KM_MODS(GLR_AUTO_TIME), 0),
+    STEP_NOTE(
+        "// t now advances every frame. Watch a turn, then press Enter to finish."),
+    STEP_SENTINEL,
+};
+
+static const char *const g_tutorial_first_animation_cfg[] = {
+    "// @cfg auto_time = 0",  /* Ctrl+T has a visible start-the-motion payoff. */
+    NULL,
+};
+
 /* "Color Interpolation" — the first tutorial that BUILDS ON prior work
  * via a preloaded `setup` scaffold instead of making the user re-type
  * it (see docs/plans/active/tutorial-setup-scaffold.md). The scaffold
@@ -376,7 +406,7 @@ STATIC_ASSERT((int)(sizeof(g_tutorial_tag_labels) /
 /* Subheading labels here are catalog-author choices, not a fixed
  * vocabulary — the menu just emits `### subheading` chrome rows when
  * the subheading changes. "Beginner" / "Intermediate" suit the current
- * 4-tutorial catalog; future catalogs (e.g. a REPL-vs-OpenGL split)
+ * catalog; future catalogs (e.g. a REPL-vs-OpenGL split)
  * can use any labels that group sensibly within each tag flyout.
  *
  * Catalog order matters: entries sharing a subheading should be
@@ -416,6 +446,17 @@ static const TutorialEntry g_tutorials[] = {
         .name       = "Variable Slider",
         .steps      = g_tutorial_variable_slider_steps,
         .tags       = TUTORIAL_TAG_COLOR_TRANSFORMS,
+        .subheading = "Beginner",
+    },
+    {
+        /* Keep this Beginner entry before the first Intermediate entry so
+         * the All flyout's section headers remain a single contiguous
+         * Beginner run followed by Intermediate. This is the first entry
+         * carrying ANIMATION, so that tag becomes visible in the menu. */
+        .name       = "First Animation",
+        .steps      = g_tutorial_first_animation_steps,
+        .cfg        = g_tutorial_first_animation_cfg,
+        .tags       = TUTORIAL_TAG_ANIMATION,
         .subheading = "Beginner",
     },
     {
