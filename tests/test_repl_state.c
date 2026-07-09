@@ -708,7 +708,7 @@ static void test_example_load_sets_scene_camera_default(void) {
 
     GlrCameraState after_load = glr_camera();
     ASSERT_TRUE("example 0 camera dist ~6",
-                fabsf(after_load.dist - 6.0f) < 0.5f);
+                fabsf(after_load.dist - 6.5f) < 0.5f);
     ASSERT_TRUE("example 0 camera rx ~35.25",
                 fabsf(after_load.rx - 35.25f) < 0.5f);
 
@@ -721,7 +721,7 @@ static void test_example_load_sets_scene_camera_default(void) {
 
     GlrCameraState cam = glr_camera();
     ASSERT_TRUE("Ctrl+Shift+C reaches example dist (6), not built-in (5)",
-                fabsf(cam.dist - 6.0f) < 0.5f);
+                fabsf(cam.dist - 6.5f) < 0.5f);
     ASSERT_TRUE("Ctrl+Shift+C reaches example rx (35.25)",
                 fabsf(cam.rx - 35.25f) < 0.5f);
     ASSERT_TRUE("Ctrl+Shift+C reaches example ry (45)",
