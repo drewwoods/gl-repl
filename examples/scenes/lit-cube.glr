@@ -1,30 +1,32 @@
 // @cfg grid_brightness = GRID_BRIGHTNESS_DIM
 // @cfg vertex_points = 0
 // @cfg projection = PROJ_ORTHO
-// @cfg light_theme = LIGHT_THEME_SOLAR
+// @cfg light_theme = LIGHT_THEME_HEADLIGHT
 // @cfg accum_passes = 2
-// @cfg grid = GRID_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+// @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD_INVERTED
 
 // camera
-glTranslatef(0.0f, 0.0f, -6.00f);
+glTranslatef(0.0f, 0.0f, -6.50f);
 glRotatef(35.25f, 1.0f, 0.0f, 0.0f);
 glRotatef(45.0f, 0.0f, 1.0f, 0.0f);
 glTranslatef(0.0f, 0.0f, 0.0f);
 
+// gl-repl logo
 glClearColor(0.05, 0.06, 0.08, 1);
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
 glEnable(GL_NORMALIZE);
 glShadeModel(GL_SMOOTH);
 glEnable(GL_LIGHT0);
-glEnable(GL_LIGHT1);
-glEnable(GL_LIGHT2);
-glEnable(GL_LIGHT3);
 
-// gl-repl logo
+// Position the cube so that it sits on the grid plane (Y=0) instead of being
+// centered at the origin.
+glTranslatef(0.0f, 1.0f, 0.0f);
+
 // An open cube with distinct front and back colors.
 // Normals are defined per-face for crisp, flat-lit lighting.
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0, 0, 0, 0});
+//glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0, 0, 0, 0});
 
 glClearColor(0.05, 0.06, 0.08, 1);
 glEnable(GL_DEPTH_TEST);
