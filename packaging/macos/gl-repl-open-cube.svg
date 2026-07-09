@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="gl-repl">
+  <!-- The adopted gl-repl mark: the open cube from examples/scenes/lit-cube.glr
+       (grid off), seen down its own body diagonal.  Quiet near-white exterior;
+       azure interior wall and magenta interior floor showing through the
+       missing face; white edges; dark squircle ground.  Hand-traced vector
+       twin of the app's own render — regenerate the raster master by loading
+       lit-cube.glr headlessly (OSMesa capture). -->
+  <defs>
+    <radialGradient id="bg" cx="0.5" cy="0.42" r="0.75">
+      <stop offset="0" stop-color="#191c23"/>
+      <stop offset="0.65" stop-color="#0f1116"/>
+      <stop offset="1" stop-color="#090a0d"/>
+    </radialGradient>
+    <linearGradient id="top" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#b6bad5"/>
+      <stop offset="1" stop-color="#d9dbeb"/>
+    </linearGradient>
+    <linearGradient id="side" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e1e3e9"/>
+      <stop offset="1" stop-color="#bfc2cb"/>
+    </linearGradient>
+    <linearGradient id="wall" x1="0" y1="0.5" x2="1" y2="0.3">
+      <stop offset="0" stop-color="#2b96ec"/>
+      <stop offset="1" stop-color="#5ab4f6"/>
+    </linearGradient>
+    <linearGradient id="floor" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fb4ce4"/>
+      <stop offset="1" stop-color="#ee35d6"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="229" ry="229" fill="url(#bg)"/>
+  <!-- Isometric basis: hexagon corners at (±45.2, ∓26.1), (0, ±52.3); the
+       shared center vertex is the origin.  Same silhouette as the shell.html
+       cube-mark path, scaled. -->
+  <g transform="translate(512,520) scale(7)">
+    <polygon points="-45.2,-26.1 0,-52.3 45.2,-26.1 0,0" fill="url(#top)"/>
+    <polygon points="0,0 45.2,-26.1 45.2,26.1 0,52.3" fill="url(#side)"/>
+    <polygon points="-45.2,-26.1 0,0 -45.2,26.1" fill="url(#wall)"/>
+    <polygon points="0,0 0,52.3 -45.2,26.1" fill="url(#floor)"/>
+    <g fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round">
+      <polygon points="0,-52.3 45.2,-26.1 45.2,26.1 0,52.3 -45.2,26.1 -45.2,-26.1"/>
+      <polyline points="-45.2,-26.1 0,0 45.2,-26.1"/>
+      <polyline points="0,0 0,52.3"/>
+      <polyline points="0,0 -45.2,26.1"/>
+    </g>
+  </g>
+</svg>

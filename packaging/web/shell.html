@@ -5,7 +5,7 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>gl-repl &mdash; OpenGL immediate-mode REPL</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%2316181c'/%3E%3Cpath d='M8 2.2 12.8 5v6L8 13.8 3.2 11V5Z M3.2 5 8 7.8 12.8 5 M8 7.8v6' fill='none' stroke='%23d99a4e' stroke-width='1.1' stroke-linejoin='round'/%3E%3C/svg%3E">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%2316181c'/%3E%3Cpolygon points='8,2.2 12.8,5 8,7.8 3.2,5' fill='%23c9cce0'/%3E%3Cpolygon points='12.8,5 12.8,11 8,13.8 8,7.8' fill='%23d2d5db'/%3E%3Cpolygon points='3.2,5 8,7.8 3.2,11' fill='%233da8f5'/%3E%3Cpolygon points='8,7.8 8,13.8 3.2,11' fill='%23f841e0'/%3E%3Cpath d='M8 2.2 12.8 5v6L8 13.8 3.2 11V5Z M3.2 5 8 7.8 12.8 5 M8 7.8v6' fill='none' stroke='%23ffffff' stroke-width='1.1' stroke-linejoin='round'/%3E%3C/svg%3E">
     <style>
       :root {
         --bg: #0e1013;
@@ -233,6 +233,17 @@
         <g id="cube-mark">
           <path d="M8 2.2 12.8 5v6L8 13.8 3.2 11V5Z M3.2 5 8 7.8 12.8 5 M8 7.8v6"
                 fill="none" stroke="#d99a4e" stroke-width="1.1" stroke-linejoin="round"/>
+          <!-- open-cube seam: the one interior line the missing face reveals -->
+          <path d="M8 7.8 3.2 11" fill="none" stroke="#d99a4e" stroke-width="0.7" opacity="0.75"/>
+        </g>
+        <!-- full-color rendition (lit-cube.glr palette): loading overlay + favicon -->
+        <g id="cube-mark-color">
+          <polygon points="8,2.2 12.8,5 8,7.8 3.2,5" fill="#c9cce0"/>
+          <polygon points="12.8,5 12.8,11 8,13.8 8,7.8" fill="#d2d5db"/>
+          <polygon points="3.2,5 8,7.8 3.2,11" fill="#3da8f5"/>
+          <polygon points="8,7.8 8,13.8 3.2,11" fill="#f841e0"/>
+          <path d="M8 2.2 12.8 5v6L8 13.8 3.2 11V5Z M3.2 5 8 7.8 12.8 5 M8 7.8v6"
+                fill="none" stroke="#ffffff" stroke-width="1.1" stroke-linejoin="round"/>
         </g>
       </defs>
     </svg>
@@ -256,7 +267,7 @@
       <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex="0"></canvas>
 
       <div id="overlay">
-        <svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><use href="#cube-mark"/></svg>
+        <svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><use href="#cube-mark-color"/></svg>
         <div class="title">gl-repl</div>
         <div class="subtitle">OpenGL immediate-mode REPL &middot; WebAssembly build</div>
         <div class="spinner" id="spinner"></div>

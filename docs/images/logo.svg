@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="488" viewBox="0 0 240 244" role="img" aria-label="gl-repl logo: an open cube seen down its diagonal, azure and magenta interior showing through the missing face">
+  <!-- The gl-repl mark — vector twin of the app's own render of
+       examples/scenes/lit-cube.glr (grid off), seen down the cube's body
+       diagonal.  Only the interior wears color; the exterior is quiet and the
+       ground is always dark.  Companion assets: packaging/macos/
+       gl-repl-open-cube.svg (app icon), the shell.html favicon (flat-fill
+       16px rendition). -->
+  <defs>
+    <linearGradient id="top" gradientUnits="userSpaceOnUse" x1="60" y1="70" x2="165" y2="125">
+      <stop offset="0" stop-color="#b6bad5"/>
+      <stop offset="1" stop-color="#d9dbeb"/>
+    </linearGradient>
+    <linearGradient id="side" gradientUnits="userSpaceOnUse" x1="150" y1="70" x2="165" y2="200">
+      <stop offset="0" stop-color="#e1e3e9"/>
+      <stop offset="1" stop-color="#bfc2cb"/>
+    </linearGradient>
+    <linearGradient id="wall" gradientUnits="userSpaceOnUse" x1="52" y1="130" x2="118" y2="105">
+      <stop offset="0" stop-color="#2b96ec"/>
+      <stop offset="1" stop-color="#5ab4f6"/>
+    </linearGradient>
+    <linearGradient id="floor" gradientUnits="userSpaceOnUse" x1="118" y1="128" x2="70" y2="185">
+      <stop offset="0" stop-color="#fb4ce4"/>
+      <stop offset="1" stop-color="#ee35d6"/>
+    </linearGradient>
+  </defs>
+  <rect width="240" height="244" fill="#000000"/>
+  <polygon points="52.2,80.4 120,43.5 187.8,80.4 120,122" fill="url(#top)"/>
+  <polygon points="120,122 187.8,80.4 187.8,161.6 120,200.5" fill="url(#side)"/>
+  <polygon points="52.2,80.4 120,122 52.2,161.6" fill="url(#wall)"/>
+  <polygon points="120,122 120,200.5 52.2,161.6" fill="url(#floor)"/>
+  <g fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round">
+    <polygon points="120,43.5 187.8,80.4 187.8,161.6 120,200.5 52.2,161.6 52.2,80.4"/>
+    <polyline points="52.2,80.4 120,122 187.8,80.4"/>
+    <polyline points="120,122 120,200.5"/>
+    <polyline points="120,122 52.2,161.6"/>
+  </g>
+</svg>
