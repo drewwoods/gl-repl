@@ -169,6 +169,7 @@ SAN ?= address
 DEBUG_SAN_SUFFIX =
 
 ifeq ($(NO_SAN),1)
+DEBUG_SAN_SUFFIX = -nosan
 DEBUG_CFLAGS = \
 	$(COMMON_CFLAGS) \
 	-O0
@@ -1627,8 +1628,9 @@ test-detailed: $(TEST_BINS) ## Run the full test suite with verbose example expo
 	TEST_JOBS="$(TEST_JOBS)" \
 	bash scripts/run-tests.sh $(TEST_RUNNER_CASES)
 
+test-stubs: NO_SAN ?= 1
 test-stubs: check-doc-links check-user-guide-keymap check-trailing-whitespace check-examples-catalog check-formatted check-gl-boundaries check-layer-coupling check-state-ownership ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs.
-	$(MAKE) test USE_GL_STUBS=1
+	$(MAKE) test USE_GL_STUBS=1 NO_SAN=$(NO_SAN)
 
 test-msan: ## Build and run stubbed tests with MemorySanitizer.
 ifeq ($(UNAME_S),Darwin)
@@ -1646,7 +1648,7 @@ test-full: ## Full gate: stub tests + MSan tests + checks + build gl-repl, bench
 	$(MAKE) --no-print-directory color_picker_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory render3d_demo USE_GL_STUBS=1
 	$(MAKE) --no-print-directory check
-	$(MAKE) --no-print-directory test-stubs
+	$(MAKE) --no-print-directory test-stubs NO_SAN=0
 	$(MAKE) --no-print-directory test-msan
 	$(MAKE) --no-print-directory gl-repl
 	$(MAKE) --no-print-directory gl-tests
