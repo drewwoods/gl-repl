@@ -339,18 +339,13 @@ GL_HEADER_CFLAGS = \
 # this build only -- miniaudio's WebAudio backend needs EM_ASM, a gnu-mode
 # extension. The native -std=c99 check-c99 ratchet never sees WEB=1 objects.
 
-# Bundle only sample.mp3 (the `make app` small-download policy) unless a
-# curated assets/favorite/ dir exists -- gl-repl's assets/ can symlink a
-# multi-hundred-MB playlist that file_packager would happily follow whole.
-WEB_PRELOAD := $(if $(wildcard assets/favorite),--preload-file assets/favorite@/assets,$(if $(wildcard assets/sample.mp3),--preload-file assets/sample.mp3@/assets/sample.mp3,))
-
 GL_LDFLAGS = \
 	packaging/web/gl4es_bootstrap.c $(GL4ES_DIR)/lib/libGL.a $(GLU_DIR)/.libs/libGLU.a \
 	$(FREEGLUT_STATIC_LIB) --shell-file packaging/web/shell.html \
 	-sUSE_WEBGL2=1 -sFULL_ES2=1 -sINITIAL_MEMORY=805306368 \
 	-sSTACK_SIZE=8388608 -sGL_MAX_TEMP_BUFFER_SIZE=67108864 \
-	-sEXPORTED_FUNCTIONS=_main,_glr_web_new_scene,_glr_web_load_scene_text,_glr_web_export_scene,_glr_web_clipboard_copy,_glr_web_clipboard_cut,_glr_web_clipboard_text,_glr_web_clipboard_kind,_glr_web_clipboard_paste_text \
-	-sEXPORTED_RUNTIME_METHODS=ccall,FS $(WEB_PRELOAD)
+	-sEXPORTED_FUNCTIONS=_main,_glr_web_new_scene,_glr_web_load_scene_text,_glr_web_export_scene,_glr_web_clipboard_copy,_glr_web_clipboard_cut,_glr_web_clipboard_text,_glr_web_clipboard_kind,_glr_web_clipboard_paste_text,_glr_audio_web_manifest_begin,_glr_audio_web_manifest_add,_glr_audio_web_manifest_finish \
+	-sEXPORTED_RUNTIME_METHODS=ccall,FS
 GLUT_GL_LDFLAGS = $(GL_LDFLAGS)
 endif
 
@@ -707,6 +702,11 @@ BINDIR = $(OBJDIR)
 # `make web-serve` find the output without the caller having to repeat
 # WEB=1 (mirrors how `make web` itself re-invokes with WEB=1 internally).
 WEB_BINDIR = build/$(BUILD)-web
+# Copy browser music as ordinary static files instead of putting it into an
+# Emscripten .data preload bundle. The web audio backend streams these URLs via
+# the browser's media stack, so startup no longer waits for the playlist.
+WEB_FAVORITE_MP3S := $(wildcard assets/favorite/*.mp3)
+WEB_MUSIC_SRC_DIR ?= $(if $(WEB_FAVORITE_MP3S),assets/favorite,assets)
 OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS) -include config.h -include prof_sections.h
 DEPFLAGS = -MMD -MP
 
@@ -1051,6 +1051,7 @@ web: ## Build the Emscripten/wasm web target (needs emcc on PATH -- see scripts/
 	}
 	scripts/web-deps.sh
 	$(MAKE) WEB=1 $(WEB_BINDIR)/index.html
+	bash scripts/web-audio-assets.sh "$(WEB_MUSIC_SRC_DIR)" "$(WEB_BINDIR)/assets"
 	@echo "Built $(WEB_BINDIR)/index.html -- run 'make web-serve' to try it."
 
 web-serve: web ## Serve the built web target over HTTP (builds it first if needed).

@@ -52,10 +52,10 @@ static void init_trace_detail(const char *phase) {
     if (g_detailed_prof) init_trace(phase);
 }
 
-/* Music assets live here. Relative to gl-repl's working directory
- * on native, and to the Emscripten virtual FS mount point set up by
- * --preload-file in emscripten/build.sh. Any *.mp3 files dropped into
- * this folder are picked up in filename order as a playlist.
+/* Native music assets live here, relative to gl-repl's working directory.
+ * Any *.mp3 files dropped into this folder are picked up in filename order
+ * as a playlist. The web build gets its playlist from assets/music.json and
+ * streams those files directly via the browser.
  *
  * The playlist is built from three sources, in order (see
  * build_mp3_playlist): the primary assets dir — this working-directory
@@ -84,6 +84,7 @@ static void init_trace_detail(const char *phase) {
 #define AUDIO_MUSIC_MAX_PATHS 64
 #define AUDIO_MUSIC_MAX_LEN   512
 
+#if !defined(__EMSCRIPTEN__)
 static int has_mp3_ext(const char *name) {
     size_t n = name ? strlen(name) : 0;
     if (n < 5) return 0;  /* need at least "x.mp3" */
@@ -190,6 +191,7 @@ static int build_mp3_playlist(const char *assets_dir,
     }
     return n;
 }
+#endif
 
 static void print_usage(const char *prog) {
     const char *name = (prog && prog[0]) ? prog : "gl-repl";
@@ -619,17 +621,19 @@ int main(int argc, char **argv) {
     init_trace("REPL bootstrap done");
     glr_ctrl_set_accum(use_accum);
 
-    /* Audio: init once, scan assets/ *.mp3 for a playlist, play the
-     * first track, shutdown on exit. Failures here are non-fatal: the
-     * REPL keeps running without sound.
-     * Skipped entirely when --no-audio was passed. */
+    /* Audio: init once, register a playlist, play the first track, and
+     * shutdown on exit. Native scans assets/; web streams manifest-listed
+     * files from normal URLs. Failures here are non-fatal: the REPL keeps
+     * running without sound. Skipped entirely when --no-audio was passed. */
     if (!no_audio) init_trace("glr_audio_init begin");
     if (!no_audio && glr_audio_init() == 0) {
         init_trace("glr_audio_init done");
         glr_audio_set_state_file(AUDIO_STATE_FILE);
+#if !defined(__EMSCRIPTEN__)
         static char music_paths[AUDIO_MUSIC_MAX_PATHS]
                                [AUDIO_MUSIC_MAX_LEN];
         static GlrAudioTrackSpec music_tracks[AUDIO_MUSIC_MAX_PATHS];
+#endif
         /* --assets wins over GLR_ASSETS_DIR wins over the default. */
         const char *assets_dir = assets_override;
         if (!assets_dir) {
@@ -637,6 +641,14 @@ int main(int argc, char **argv) {
             if (env && env[0]) assets_dir = env;
         }
         if (!assets_dir) assets_dir = AUDIO_ASSETS_DIR;
+#if defined(__EMSCRIPTEN__)
+        (void)assets_dir;
+        /* Web music is listed by build/web/assets/music.json and streamed
+         * from normal URLs by the browser audio backend. There is no MEMFS
+         * directory to scan here because music is no longer preloaded. */
+        glr_audio_play_playlist();
+        init_trace_detail("web audio manifest requested");
+#else
         int n = build_mp3_playlist(assets_dir, music_paths, music_tracks,
                                    AUDIO_MUSIC_MAX_PATHS);
         /* opendir/readdir over the candidate music dirs. Cheap when
@@ -660,10 +672,11 @@ int main(int argc, char **argv) {
             glr_audio_set_playlist_specs(&fallback_track, 1);
             glr_audio_play_playlist();
         }
+#endif
         /* play_playlist() reads audio_state.ini synchronously on the
-         * caller (see glr_audio.c header comment) before posting the
-         * slow media-open request to the worker. The actual sound load
-         * runs off-thread so it never lands here. */
+         * caller (see glr_audio.c header comment). Native posts the slow
+         * media-open request to the worker; web waits for the async manifest
+         * and then streams the selected track from a browser URL. */
         init_trace_detail("playlist start requested");
         /* Apply saved audio cfg after play_playlist() so load_state() has
          * already populated g_cfg_mode. The action layer maps that UI config

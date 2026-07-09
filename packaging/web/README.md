@@ -24,9 +24,14 @@ original `OpenGL-Vibe/emscripten/` prototyping tree (`git log -- packaging/web/*
   which maps `gl*` calls to `gl4es_gl*` over WebGL2. `glGetString` etc. resolve
   through gl4es, so `glutExtensionSupported` above reads the real live
   extension string.
-- **Audio**: no `-pthread` — `pthread_create` fails, so `glr_audio_init`
-  returns -1 gracefully and music stays off. Enabling it would need
-  `-pthread` plus COOP/COEP response headers from whatever serves the page.
+- **Audio**: web builds use the browser media stack instead of miniaudio's
+  file-backed decoder. `scripts/web-audio-assets.sh` copies MP3s beside the
+  built page and writes `assets/music.json`; `src/app/glr_audio.c` fetches that
+  manifest, registers the tracks through the normal `glr_audio_*` facade, and
+  streams the selected URL with `HTMLAudioElement`. The native miniaudio path is
+  unchanged, and music is no longer put in an Emscripten `.data` preload
+  package. Browser autoplay policy is still honored: startup queues playback,
+  and the first keyboard/mouse gesture begins the stream.
 - **Browser input shims** (see the replayed commit history in
   `git log -- packaging/web/shell.html` for the specific fixes): mouse wheel
   is neutralized in JS GLUT's own handler so 3D-scene zoom works instead of
