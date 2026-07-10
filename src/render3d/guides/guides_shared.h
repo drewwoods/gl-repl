@@ -91,6 +91,20 @@ typedef struct Render3dGuideSnapshot {
     float normal_frame_args[3];
     int   normal_frame_args_valid;
 
+    /* When the cursor line is glClipPlane(GL_CLIP_PLANEi, ...):
+     * clip_plane_idx is the plane slot (0..5; -1 = not a clip-plane
+     * line), clip_plane_args are the evaluated equation coefficients
+     * (a, b, c, d) typed so far, clip_plane_n_filled counts them, and
+     * clip_plane_cap_enabled says whether the program's net
+     * glEnable/glDisable state turns that plane's cap on (the guide
+     * dims when it's off). Pre-parsed by the controller like the
+     * vertex/xform slots; the flat-program walk overrides args from
+     * the cursor's flat cmd so animated coefficients track. */
+    int   clip_plane_idx;
+    float clip_plane_args[4];
+    int   clip_plane_n_filled;
+    int   clip_plane_cap_enabled;
+
     float alpha_scale; /* alpha boost to counter dark-bg crush; 1.0 = no change */
 } Render3dGuideSnapshot;
 

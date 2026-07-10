@@ -371,6 +371,9 @@ static void fill_guide_arg_slots(Render3dGuideSnapshot *snapshot,
     snapshot->normal_n_filled = 0;
     snapshot->vertex_filled[0] = snapshot->vertex_filled[1] =
         snapshot->vertex_filled[2] = 0;
+    snapshot->clip_plane_idx = -1;
+    snapshot->clip_plane_n_filled = 0;
+    snapshot->clip_plane_cap_enabled = 0;
 
     if (!input) return;
 
@@ -427,6 +430,39 @@ static void fill_guide_arg_slots(Render3dGuideSnapshot *snapshot,
     if (normal_args) {
         snapshot->normal_n_filled = repl_eval_parse_exprs(
             normal_args, snapshot->normal_args, 3, (ExprVar *)predef.vars, predef.count);
+    }
+
+    /* Live clip-plane args. The plane digit lands the guide as soon as
+     * it's typed; coefficients follow after the first comma, with an
+     * optional (GLdouble[]){ prefix (the canonical committed form). */
+    if (strncmp(input, "glClipPlane(GL_CLIP_PLANE", 25) == 0 &&
+        input_len > 25 && input[25] >= '0' && input[25] <= '5') {
+        snapshot->clip_plane_idx = input[25] - '0';
+        const char *cp_args = strchr(input + 25, ',');
+        if (cp_args) {
+            int cp_filled[4];
+            cp_args++;
+            while (*cp_args == ' ' || *cp_args == '\t') cp_args++;
+            if (strncmp(cp_args, "(GLdouble[]){", 13) == 0)
+                cp_args += 13;
+            snapshot->clip_plane_n_filled = parse_arg_slots(
+                cp_args, predef.vars, predef.count,
+                snapshot->clip_plane_args, cp_filled, 4);
+        }
+        /* Net enable state for this plane's cap: last glEnable/glDisable
+         * in document order wins. Loop/if nesting is ignored — this is a
+         * hint for the guide's dimmed "cap off" styling, not execution. */
+        {
+            GLenum cap = (GLenum)(GL_CLIP_PLANE0 + snapshot->clip_plane_idx);
+            for (int i = 0; i < snapshot->source_cmd_count; i++) {
+                const GLCmd *cmd = &snapshot->source_cmds[i];
+                if (!cmd->valid) continue;
+                if (cmd->type == CMD_ENABLE && (GLenum)cmd->args[0] == cap)
+                    snapshot->clip_plane_cap_enabled = 1;
+                else if (cmd->type == CMD_DISABLE && (GLenum)cmd->args[0] == cap)
+                    snapshot->clip_plane_cap_enabled = 0;
+            }
+        }
     }
 }
 

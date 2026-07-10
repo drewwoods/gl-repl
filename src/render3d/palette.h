@@ -58,6 +58,10 @@ typedef enum {
     RENDER3D_CLR_GUIDE_PLANE_Z_FILL,
     RENDER3D_CLR_GUIDE_PLANE_Z_EDGE,
 
+    /* Clip-plane edit guide (geometry_guides.c). */
+    RENDER3D_CLR_GUIDE_CLIP_FILL,     /* clip-plane sheet fill    0.45,0.85,0.95 */
+    RENDER3D_CLR_GUIDE_CLIP_EDGE,     /* clip-plane rim + grid    0.25,0.80,0.95 */
+
     /* Vertex marker + 1-DOF constraint lines (geometry_guides.c). */
     RENDER3D_CLR_GUIDE_VERTEX_MARK,   /* full-vertex point        1.00,0.30,0.30 */
     RENDER3D_CLR_GUIDE_LINE_X,        /* x-free constraint        1.00,0.35,0.35 */
@@ -118,6 +122,9 @@ static const Render3dRgba g_scene_palette[RENDER3D_CLR_COUNT] = {
     [RENDER3D_CLR_GUIDE_PLANE_Y_EDGE]  = { 0.30f, 0.70f, 0.30f, 1.0f },
     [RENDER3D_CLR_GUIDE_PLANE_Z_FILL]  = { 0.60f, 0.65f, 0.90f, 1.0f },
     [RENDER3D_CLR_GUIDE_PLANE_Z_EDGE]  = { 0.30f, 0.30f, 0.80f, 1.0f },
+
+    [RENDER3D_CLR_GUIDE_CLIP_FILL]     = { 0.45f, 0.85f, 0.95f, 1.0f },
+    [RENDER3D_CLR_GUIDE_CLIP_EDGE]     = { 0.25f, 0.80f, 0.95f, 1.0f },
 
     [RENDER3D_CLR_GUIDE_VERTEX_MARK]   = { 1.00f, 0.30f, 0.30f, 1.0f },
     [RENDER3D_CLR_GUIDE_LINE_X]        = { 1.00f, 0.35f, 0.35f, 1.0f },
