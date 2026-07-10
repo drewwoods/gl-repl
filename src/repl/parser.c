@@ -718,23 +718,30 @@ static int parse_canonical_float_list(const char *text, float *out_args, int max
     return repl_eval_parse_exprs(text, out_args, max_args, vars, num_vars);
 }
 
-static int parse_glfloat_compound_literal_arg(const char *arg,
-                                              char *interior_buf,
-                                              int interior_sz,
-                                              const char **out_to_parse,
-                                              const ReplParseContext *ctx) {
-    static const char k_compound_prefix[] = "(GLfloat[]){";
-    const size_t k_compound_prefix_len = sizeof k_compound_prefix - 1;
+/* Shared scaffold for the compound-literal value arg of glMaterialfv /
+ * glClipPlane: if `arg` starts with `prefix` (e.g. "(GLfloat[]){"),
+ * extract the brace interior into interior_buf and point *out_to_parse
+ * at it; otherwise leave *out_to_parse on the raw arg (flat shorthand).
+ * `unclosed_msg` / `trailing_msg` are the per-command diagnostics. */
+static int parse_compound_literal_arg(const char *arg,
+                                      const char *prefix,
+                                      const char *unclosed_msg,
+                                      const char *trailing_msg,
+                                      char *interior_buf,
+                                      int interior_sz,
+                                      const char **out_to_parse,
+                                      const ReplParseContext *ctx) {
+    size_t prefix_len = prefix ? strlen(prefix) : 0;
 
-    if (!arg || !interior_buf || interior_sz <= 0 || !out_to_parse)
+    if (!arg || !prefix || !interior_buf || interior_sz <= 0 || !out_to_parse)
         return 0;
 
     *out_to_parse = arg;
-    if (strncmp(arg, k_compound_prefix, k_compound_prefix_len) != 0)
+    if (strncmp(arg, prefix, prefix_len) != 0)
         return 1;
 
     {
-        const char *istart = arg + k_compound_prefix_len;
+        const char *istart = arg + prefix_len;
         int brace_depth = 1;
         const char *q = istart;
         while (*q && brace_depth > 0) {
@@ -748,7 +755,7 @@ static int parse_glfloat_compound_literal_arg(const char *arg,
             q++;
         }
         if (brace_depth != 0) {
-            parser_emit_error_static(ctx, "Unclosed (GLfloat[]){...} literal");
+            parser_emit_error_static(ctx, unclosed_msg);
             return 0;
         }
         {
@@ -763,8 +770,7 @@ static int parse_glfloat_compound_literal_arg(const char *arg,
             while (*tail && isspace((unsigned char)*tail))
                 tail++;
             if (*tail != '\0') {
-                parser_emit_error_static(ctx,
-                    "Trailing content after (GLfloat[]){...} compound literal");
+                parser_emit_error_static(ctx, trailing_msg);
                 return 0;
             }
         }
@@ -806,9 +812,12 @@ static int parse_materialfv(const char *args, GLCmd *cmd,
 
     const char *to_parse = val_arg;
     char interior_buf[MAX_LINE_LEN];
-    if (!parse_glfloat_compound_literal_arg(val_arg, interior_buf,
-                                            (int)sizeof(interior_buf),
-                                            &to_parse, ctx))
+    if (!parse_compound_literal_arg(val_arg, "(GLfloat[]){",
+                                    "Unclosed (GLfloat[]){...} literal",
+                                    "Trailing content after (GLfloat[]){...} compound literal",
+                                    interior_buf,
+                                    (int)sizeof(interior_buf),
+                                    &to_parse, ctx))
         return 0;
 
     float parsed_args[8];
@@ -924,9 +933,12 @@ static int parse_point_parameter_fv(const char *args, GLCmd *cmd,
     float parsed_args[4];
     const char *to_parse = rest;
     char interior_buf[MAX_LINE_LEN];
-    if (!parse_glfloat_compound_literal_arg(rest, interior_buf,
-                                            (int)sizeof(interior_buf),
-                                            &to_parse, ctx))
+    if (!parse_compound_literal_arg(rest, "(GLfloat[]){",
+                                    "Unclosed (GLfloat[]){...} literal",
+                                    "Trailing content after (GLfloat[]){...} compound literal",
+                                    interior_buf,
+                                    (int)sizeof(interior_buf),
+                                    &to_parse, ctx))
         return 0;
     int num_parsed = parse_canonical_float_list(to_parse, parsed_args, 4, vars, num_vars, ctx);
     if (num_parsed < 0) return 0;
@@ -951,6 +963,108 @@ static int parse_point_parameter_fv(const char *args, GLCmd *cmd,
                  "%sglPointParameterfv(%s, (GLfloat[]){%g, %g, %g});",
                  indent, pname_str, parsed_args[0], parsed_args[1], parsed_args[2]);
     return 1;
+}
+
+/* glClipPlane(plane, ...) — same aggregate-value shape as glMaterialfv.
+ * Accepts the canonical compound-literal form `(GLdouble[]){a, b, c, d}`
+ * or the flat shorthand `plane, a, b, c, d`, which is rewritten to the
+ * compound-literal form in the canonical text. The equation is stored
+ * as floats in args[1..4] (GL widens to double at the glClipPlane call
+ * in the executor). */
+static int parse_clip_plane(const char *args, GLCmd *cmd,
+                            char *text_out, int text_sz,
+                            const char *indent,
+                            const ReplParseContext *ctx) {
+    ExprVar *vars = ctx->vars;
+    int num_vars = ctx->num_vars;
+    char plane_str[REPL_ENUM_ARG_MAX] = "";
+    char rest[MAX_LINE_LEN] = "";
+
+    if (!split_two_args(args, plane_str, sizeof(plane_str), rest, sizeof(rest))) {
+        parser_emit_error_static(ctx,
+            "Usage: glClipPlane(plane, (GLdouble[]){a, b, c, d})");
+        return 0;
+    }
+
+    GLenum plane = 0;
+    int found = 0;
+    const ReplEnumEntry *planes = repl_clip_plane_entries();
+    for (int i = 0; planes[i].name; i++) {
+        if (strcmp(plane_str, planes[i].name) == 0) {
+            plane = planes[i].value;
+            found = 1;
+            break;
+        }
+    }
+    if (!found) {
+        parser_emit_error_static(ctx, "plane: GL_CLIP_PLANE0 .. GL_CLIP_PLANE5");
+        return 0;
+    }
+
+    const char *to_parse = rest;
+    char interior_buf[MAX_LINE_LEN];
+    if (!parse_compound_literal_arg(rest, "(GLdouble[]){",
+                                    "Unclosed (GLdouble[]){...} literal",
+                                    "Trailing content after (GLdouble[]){...} compound literal",
+                                    interior_buf,
+                                    (int)sizeof(interior_buf),
+                                    &to_parse, ctx))
+        return 0;
+
+    float parsed_args[5];
+    int num_parsed = parse_canonical_float_list(to_parse, parsed_args, 5, vars, num_vars, ctx);
+    if (num_parsed < 0) return 0;
+
+    if (num_parsed != 4) {
+        parser_emit_error_static(ctx,
+            "Expected 4 floats: plane equation a*x + b*y + c*z + d >= 0");
+        return 0;
+    }
+
+    cmd->type = CMD_CLIP_PLANE;
+    cmd->valid = 1;
+    cmd->args[0] = (float)plane;
+    for (int k = 0; k < 4; k++) cmd->args[k + 1] = parsed_args[k];
+    cmd->num_args = 5;
+    cmd->has_vars = input_has_any_visible_vars(to_parse, vars, num_vars);
+
+    if (text_out && text_sz > 0)
+        snprintf(text_out, (size_t)text_sz,
+                 "%sglClipPlane(%s, (GLdouble[]){%g, %g, %g, %g});",
+                 indent, plane_str,
+                 parsed_args[0], parsed_args[1], parsed_args[2], parsed_args[3]);
+    return 1;
+}
+
+/* Dispatcher for the custom-branch commands that escape both spec
+ * tables. Returns -1 when `func` matches none of them (the caller
+ * falls through to the remaining parsers); otherwise the handler's
+ * 0/1 result.
+ *
+ * label("fmt", a, b, c, d) is custom because one arg is a string
+ * literal the std-table parsers don't tokenize and the
+ * substitution-arg count is variable (forbidden inside the format
+ * string: '//', '(', ')', ',', and any backslash — these keep the
+ * string-unaware parser scaffolding honest; see
+ * repl_label_split_args()). The others carry an aggregate value arg
+ * (a compound literal) or, for glMaterialf, share glMaterialfv's
+ * face/pname scaffold. */
+static int try_parse_custom_arg_command(const char *func, const char *args,
+                                        GLCmd *cmd,
+                                        char *text_out, int text_sz,
+                                        const char *indent,
+                                        const ReplParseContext *ctx) {
+    if (strcmp(func, "label") == 0)
+        return parse_label(args, cmd, text_out, text_sz, indent, ctx);
+    if (strcmp(func, "glMaterialfv") == 0)
+        return parse_materialfv(args, cmd, text_out, text_sz, indent, ctx);
+    if (strcmp(func, "glMaterialf") == 0)
+        return parse_materialf(args, cmd, text_out, text_sz, indent, ctx);
+    if (strcmp(func, "glPointParameterfv") == 0)
+        return parse_point_parameter_fv(args, cmd, text_out, text_sz, indent, ctx);
+    if (strcmp(func, "glClipPlane") == 0)
+        return parse_clip_plane(args, cmd, text_out, text_sz, indent, ctx);
+    return -1;
 }
 
 static int parse_func_call(const char *args, int fn, GLCmd *cmd,
@@ -1324,29 +1438,16 @@ static int parse_command(const char *line, GLCmd *cmd,
         }
     }
 
-    /* label("fmt", a, b, c, d)
-     *
-     * printf-style text emission at the current raster position
-     * (set by a preceding glRasterPos3f). Custom branch — not
-     * table-driven — because one arg is a string literal that the
-     * std-table parsers don't tokenize, and the substitution-arg
-     * count is variable.
-     *
-     * Forbidden inside the format string: '/' followed by '/',
-     * '(', ')', ',', and any backslash. These constraints keep the
-     * surrounding (string-unaware) parser scaffolding honest.
-     * See repl_label_split_args() for the split helper. */
-    if (strcmp(func, "label") == 0)
-        return parse_label(args, cmd, text_out, text_sz, indent, ctx);
-
-    if (strcmp(func, "glMaterialfv") == 0)
-        return parse_materialfv(args, cmd, text_out, text_sz, indent, ctx);
-
-    if (strcmp(func, "glMaterialf") == 0)
-        return parse_materialf(args, cmd, text_out, text_sz, indent, ctx);
-
-    if (strcmp(func, "glPointParameterfv") == 0)
-        return parse_point_parameter_fv(args, cmd, text_out, text_sz, indent, ctx);
+    /* Custom-branch commands (label / glMaterialfv / glMaterialf /
+     * glPointParameterfv / glClipPlane) — see the dispatcher for why
+     * each escapes the tables. */
+    {
+        int custom_rv = try_parse_custom_arg_command(func, args, cmd,
+                                                     text_out, text_sz,
+                                                     indent, ctx);
+        if (custom_rv >= 0)
+            return custom_rv;
+    }
 
     /* glPushMatrix() / glPopMatrix() / glLoadIdentity() */
     if (parse_matrix_stack_cmd(func, cmd, text_out, text_sz, indent,

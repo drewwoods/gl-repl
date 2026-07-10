@@ -81,6 +81,7 @@ typedef enum {
     CMD_LABEL,
     CMD_ELSE_IF,
     CMD_ELSE,
+    CMD_CLIP_PLANE,
     CMD_TYPE_COUNT
 } CmdType;
 

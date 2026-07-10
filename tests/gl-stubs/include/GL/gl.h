@@ -154,6 +154,13 @@ typedef double GLclampd;
 #define GL_STENCIL_TEST 0x0B90
 #define GL_TEXTURE_2D 0x0DE1
 
+#define GL_CLIP_PLANE0 0x3000
+#define GL_CLIP_PLANE1 0x3001
+#define GL_CLIP_PLANE2 0x3002
+#define GL_CLIP_PLANE3 0x3003
+#define GL_CLIP_PLANE4 0x3004
+#define GL_CLIP_PLANE5 0x3005
+
 #define GL_LIGHT0 0x4000
 #define GL_LIGHT1 0x4001
 #define GL_LIGHT2 0x4002
@@ -276,6 +283,7 @@ static inline void glColor4fv(const GLfloat *v) { GL_STUB_TRACE_LINE("glColor4fv
 static inline void glColorMask(GLboolean red, GLboolean green, GLboolean blue, GLboolean alpha) { GL_STUB_TRACE_LINE("glColorMask %u %u %u %u\n", (unsigned)red, (unsigned)green, (unsigned)blue, (unsigned)alpha); gl_stub_tick(GL_STUB_glColorMask); }
 static inline void glColorMaterial(GLenum face, GLenum mode) { GL_STUB_TRACE_LINE("glColorMaterial %u %u\n", (unsigned)face, (unsigned)mode); gl_stub_tick(GL_STUB_glColorMaterial); }
 static inline void glDepthFunc(GLenum func) { GL_STUB_TRACE_LINE("glDepthFunc %u\n", (unsigned)func); gl_stub_tick(GL_STUB_glDepthFunc); }
+static inline void glClipPlane(GLenum plane, const GLdouble *equation) { GL_STUB_TRACE_LINE("glClipPlane %u %g %g %g %g\n", (unsigned)plane, equation[0], equation[1], equation[2], equation[3]); gl_stub_tick(GL_STUB_glClipPlane); }
 static inline void glDepthMask(GLboolean flag) { GL_STUB_TRACE_LINE("glDepthMask %u\n", (unsigned)flag); gl_stub_tick(GL_STUB_glDepthMask); }
 static inline void glDisable(GLenum cap) { GL_STUB_TRACE_LINE("glDisable %u\n", (unsigned)cap); gl_stub_tick(GL_STUB_glDisable); }
 static inline void glEdgeFlag(GLboolean flag) { GL_STUB_TRACE_LINE("glEdgeFlag %u\n", (unsigned)flag); gl_stub_tick(GL_STUB_glEdgeFlag); }

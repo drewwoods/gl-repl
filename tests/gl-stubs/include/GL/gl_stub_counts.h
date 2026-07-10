@@ -38,6 +38,7 @@ extern "C" {
     X(glBlendFunc)                     \
     X(glClear)                         \
     X(glClearColor)                    \
+    X(glClipPlane)                     \
     X(glColor3f)                       \
     X(glColor3fv)                      \
     X(glColor4dv)                      \

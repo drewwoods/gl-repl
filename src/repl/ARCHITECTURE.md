@@ -44,7 +44,7 @@ The standard interpreter parts map cleanly onto files:
 
 | Interpreter part | Here |
 |---|---|
-| Lexer / parser → AST | [`parser.c`](parser.c) → [`GLCmd`](command.h#L87) records |
+| Lexer / parser → AST | [`parser.c`](parser.c) → [`GLCmd`](command.h#L88) records |
 | Symbol / spec table | [`command_spec.c`](command_spec.c) (per-command arity, arg kinds, highlight category) |
 | Expression evaluator | [`eval.c`](eval.c) (recursive descent: `+ - * / %`, comparisons, `sin`/`cos`/…, variables) |
 | Static validation / compile pass | [`compile.c`](compile.c) → [`ReplCompiledChange`](compile.h#L130) (**pure**; never mutates) |
@@ -196,9 +196,9 @@ flowchart LR
 
 This is the core data structure. Read this section before anything else.
 
-### 3.1 [`GLCmd`](command.h#L87) — the universal command record
+### 3.1 [`GLCmd`](command.h#L88) — the universal command record
 
-A single [`GLCmd`](command.h#L87) ([`command.h`](command.h)) represents one command in *either* level.
+A single [`GLCmd`](command.h#L88) ([`command.h`](command.h)) represents one command in *either* level.
 It is a **pure parse result** — it carries type, evaluated args, flags,
 and provenance, but **no source text**. The per-line canonical text
 lives in the editor's buffer, not here. That omission is what keeps the
@@ -426,7 +426,7 @@ editor input widget. Keeping it separate from [`compile.c`](compile.c) preserves
 purity boundary — [`compile.c`](compile.c) only *describes* changes; [`load.c`](load.c) owns the
 apply orchestration.
 
-[`command_store.c`](command_store.c) underneath is the lowest layer: pure [`GLCmd`](command.h#L87) array
+[`command_store.c`](command_store.c) underneath is the lowest layer: pure [`GLCmd`](command.h#L88) array
 mechanics (insert/replace/delete/load, range normalization, capacity
 checks). It owns array shifting and bounds; callers own parsing, undo,
 variable registration, and cursor policy. Cursor shifting is opt-in per
@@ -474,7 +474,7 @@ prior flat program in place. Every emitted flat command gets its
 provenance (§3.3) and a [`FlatCmdLocalVars`](flatten.h#L36) snapshot (§3.4).
 
 [`flatten.c`](flatten.c) deliberately re-parses source lines with `skip_text` set in
-the [`ReplParseContext`](parser.h#L44): it consumes the parsed [`GLCmd`](command.h#L87) and discards the
+the [`ReplParseContext`](parser.h#L44): it consumes the parsed [`GLCmd`](command.h#L88) and discards the
 canonical-text rendering, avoiding per-arg `snprintf` on the hot path.
 
 The live frame path goes through `repl_flatten_commands(edit_line_idx)`,
@@ -494,7 +494,7 @@ emitting GL. Key behaviors:
   of any execute-time re-evaluation.
 - **Matrix-stack tracking.** `repl_executor_apply_tracked_transform_cmd`
   maintains a depth counter (push++/pop--) that overlays read to color
-  geometry by transform depth. The GL matrix stack — not [`GLCmd`](command.h#L87) — is the
+  geometry by transform depth. The GL matrix stack — not [`GLCmd`](command.h#L88) — is the
   canonical transform truth at execution time.
 - **Replay clamp.** The caller passes `flat_cmd_count` (full count, or
   the replay program counter when replay is active) so only commands up

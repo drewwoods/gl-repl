@@ -332,6 +332,10 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
         if (!write_point_parameterfv_as_c89(f, source_text))
             write_cmd_source_as_c(f, source_text, cmd->has_vars);
         break;
+    case CMD_CLIP_PLANE:
+        if (!write_clip_plane_as_c89(f, source_text))
+            write_cmd_source_as_c(f, source_text, cmd->has_vars);
+        break;
     case CMD_TESS_BEGIN_POLYGON:
         fprintf(f, "  { _tv_n = 0; gluTessBeginPolygon(g_tess, NULL); }\n");
         *tess_depth = 1;
@@ -651,5 +655,49 @@ int write_point_parameterfv_as_c89(FILE *f, const char *source_text) {
     fprintf(f, "%.*sglPointParameterfv(%s, %s(%s, %s, %s));\n",
             indent, source_text, pname, REPL_EXPORT_GLFLOAT3_HELPER,
             c_args[0], c_args[1], c_args[2]);
+    return 1;
+}
+
+/* glClipPlane(plane, (GLdouble[]){a, b, c, d}) — compound literals are
+ * C99, so the exported C89 line routes the equation through the
+ * repl_gldouble4 helper instead. */
+int write_clip_plane_as_c89(FILE *f, const char *source_text) {
+    const char *p = source_text;
+    const char *payload_start;
+    const char *payload_end;
+    char plane[MAX_LINE_LEN];
+    char vector_payload[MAX_LINE_LEN];
+    char c_args[4][MAX_LINE_LEN];
+    int indent = 0;
+    int payload_len;
+    char payload[MAX_LINE_LEN];
+    const char *payload_p;
+
+    while (p[indent] && isspace((unsigned char)p[indent]))
+        indent++;
+    p += indent;
+    if (strncmp(p, "glClipPlane", 11) != 0)
+        return 0;
+    payload_start = strchr(p, '(');
+    payload_end = strrchr(p, ')');
+    if (!payload_start || !payload_end || payload_end <= payload_start)
+        return 0;
+    payload_len = (int)(payload_end - payload_start - 1);
+    if (payload_len <= 0 || payload_len >= (int)sizeof(payload))
+        return 0;
+    memcpy(payload, payload_start + 1, (size_t)payload_len);
+    payload[payload_len] = '\0';
+
+    payload_p = payload;
+    if (!export_copy_first_arg(&payload_p, plane, sizeof(plane)))
+        return 0;
+    if (!export_extract_vector_payload(payload_p, vector_payload, sizeof(vector_payload)))
+        return 0;
+    if (!export_translate_vector_args(vector_payload, c_args, 4))
+        return 0;
+
+    fprintf(f, "%.*sglClipPlane(%s, %s(%s, %s, %s, %s));\n",
+            indent, source_text, plane, REPL_EXPORT_GLDOUBLE4_HELPER,
+            c_args[0], c_args[1], c_args[2], c_args[3]);
     return 1;
 }

@@ -1365,6 +1365,93 @@ static int import_make_repl_point_parameter_line(const char *line, char *out, in
                             pname, repl_args[0], repl_args[1], repl_args[2]);
 }
 
+/* C-to-REPL line translator: `glClipPlane(plane, <equation>)` where
+ * <equation> is either a compound literal `(GLdouble[]){...}` or the
+ * exporter's repl_gldouble4 helper call. The plane token carries over
+ * verbatim; the 4 coefficient expressions run through the C-to-REPL
+ * converter and re-emit in the canonical compound-literal form. */
+static int import_make_repl_clip_plane_line(const char *line, char *out, int out_sz) {
+    const char *p = line;
+    const char *open;
+    const char *close;
+    const char *comma;
+    const char *brace_open;
+    const char *brace_close;
+    char payload[MAX_LINE_LEN];
+    char plane[64];
+    char coeffs[MAX_LINE_LEN];
+    char raw_args[4][MAX_LINE_LEN];
+    char repl_args[4][MAX_LINE_LEN];
+    int payload_len;
+    int plane_len;
+    int coeff_len;
+    int count;
+
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    static const char kClipPlanePrefix[] = "glClipPlane(";
+    if (strncmp(p, kClipPlanePrefix, sizeof(kClipPlanePrefix) - 1) != 0)
+        return 0;
+
+    open = strchr(p, '(');
+    close = strrchr(p, ')');
+    if (!open || !close || close <= open + 1)
+        return 0;
+
+    payload_len = (int)(close - open - 1);
+    if (payload_len <= 0 || payload_len >= (int)sizeof(payload))
+        return 0;
+    memcpy(payload, open + 1, (size_t)payload_len);
+    payload[payload_len] = '\0';
+
+    comma = strchr(payload, ',');
+    if (!comma)
+        return 0;
+    plane_len = (int)(comma - payload);
+    if (plane_len <= 0 || plane_len >= (int)sizeof(plane))
+        return 0;
+    memcpy(plane, payload, (size_t)plane_len);
+    plane[plane_len] = '\0';
+    trim_in_place(plane);
+
+    brace_open = strchr(comma + 1, '{');
+    brace_close = strrchr(comma + 1, '}');
+    if (brace_open && brace_close && brace_close > brace_open) {
+        coeff_len = (int)(brace_close - brace_open - 1);
+        if (coeff_len <= 0 || coeff_len >= (int)sizeof(coeffs))
+            return 0;
+        memcpy(coeffs, brace_open + 1, (size_t)coeff_len);
+        coeffs[coeff_len] = '\0';
+    } else {
+        const char *helper = strstr(comma + 1, REPL_EXPORT_GLDOUBLE4_HELPER);
+        const char *helper_open;
+        const char *helper_close;
+        if (!helper)
+            return 0;
+        helper_open = strchr(helper, '(');
+        helper_close = helper_open ? strrchr(helper_open, ')') : NULL;
+        if (!helper_open || !helper_close || helper_close <= helper_open + 1)
+            return 0;
+        coeff_len = (int)(helper_close - helper_open - 1);
+        if (coeff_len <= 0 || coeff_len >= (int)sizeof(coeffs))
+            return 0;
+        memcpy(coeffs, helper_open + 1, (size_t)coeff_len);
+        coeffs[coeff_len] = '\0';
+    }
+
+    count = split_top_level_args(coeffs, raw_args, 4);
+    if (count != 4)
+        return 0;
+
+    for (int arg_idx = 0; arg_idx < count; arg_idx++)
+        repl_eval_c_expr_to_repl(raw_args[arg_idx], repl_args[arg_idx], sizeof(repl_args[arg_idx]));
+
+    return repl_format_fits(out, (size_t)out_sz,
+                            "glClipPlane(%s, (GLdouble[]){%s, %s, %s, %s});",
+                            plane,
+                            repl_args[0], repl_args[1], repl_args[2], repl_args[3]);
+}
+
 /* C-to-REPL line translator: `glMaterialfv(face, pname, <values>)`
  * where <values> is either a compound literal `(GLfloat[]){...}` or one
  * of the exporter's GLfloat1/GLfloat4 helper calls. The face/pname
@@ -1547,6 +1634,7 @@ static void import_translate_repl_line(const char *line,
     if (import_make_repl_tess_line(line, repl_line, repl_line_sz) ||
         import_make_repl_materialfv_line(line, repl_line, repl_line_sz) ||
         import_make_repl_point_parameter_line(line, repl_line, repl_line_sz) ||
+        import_make_repl_clip_plane_line(line, repl_line, repl_line_sz) ||
         import_make_repl_label(line, repl_line, repl_line_sz) ||
         import_make_repl_glut_bitmap_string(line, repl_line, repl_line_sz))
         return;

@@ -101,10 +101,21 @@ void write_glfloat_vector_helpers(FILE *f) {
         "  repl_glfloat4_buf[2] = c;\n"
         "  repl_glfloat4_buf[3] = d;\n"
         "  return repl_glfloat4_buf;\n"
+        "}\n"
+        "\n"
+        "static GLdouble repl_gldouble4_buf[4];\n"
+        "\n"
+        "static GLdouble *%s(GLdouble a, GLdouble b, GLdouble c, GLdouble d) {\n"
+        "  repl_gldouble4_buf[0] = a;\n"
+        "  repl_gldouble4_buf[1] = b;\n"
+        "  repl_gldouble4_buf[2] = c;\n"
+        "  repl_gldouble4_buf[3] = d;\n"
+        "  return repl_gldouble4_buf;\n"
         "}\n",
         REPL_EXPORT_GLFLOAT1_HELPER,
         REPL_EXPORT_GLFLOAT3_HELPER,
-        REPL_EXPORT_GLFLOAT4_HELPER);
+        REPL_EXPORT_GLFLOAT4_HELPER,
+        REPL_EXPORT_GLDOUBLE4_HELPER);
 }
 /* Wrapper for the REPL `label("fmt", ...)` primitive. Walks the format
  * string and substitutes each `%f` with `%g`-formatted output (matching
