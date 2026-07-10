@@ -1969,7 +1969,9 @@ int repl_eval_parse_for_header(const ReplForHeaderParseConfig *cfg) {
     p++;
 
     /* Start and end expressions share the same ExprCtx; we only need to
-     * re-seat ctx.p at each argument boundary since eval_expr advances it. */
+     * re-seat ctx.p at each argument boundary since eval_expr advances it.
+     * Each bound's capture span is [seat point, post-eval position] — the
+     * exact text the evaluator consumed. */
     ExprCtx ctx = {
         .p = p,
         .vars = vars,
@@ -1978,6 +1980,9 @@ int repl_eval_parse_for_header(const ReplForHeaderParseConfig *cfg) {
         .predef_count = cfg->predef_count,
     };
     *cfg->start = repl_eval_expr(&ctx);
+    if (cfg->capture && cfg->capture->fn)
+        cfg->capture->fn(cfg->capture->user_data,
+                         REPL_EXPR_ROLE_LOOP_START, 0, p, ctx.p);
     p = ctx.p;
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != ',') return 0;
@@ -1985,6 +1990,9 @@ int repl_eval_parse_for_header(const ReplForHeaderParseConfig *cfg) {
 
     ctx.p = p;
     *cfg->end = repl_eval_expr(&ctx);
+    if (cfg->capture && cfg->capture->fn)
+        cfg->capture->fn(cfg->capture->user_data,
+                         REPL_EXPR_ROLE_LOOP_END, 0, p, ctx.p);
     p = ctx.p;
     while (*p && isspace((unsigned char)*p)) p++;
 
@@ -1994,6 +2002,9 @@ int repl_eval_parse_for_header(const ReplForHeaderParseConfig *cfg) {
         p++;
         ctx.p = p;
         *cfg->step = repl_eval_expr(&ctx);
+        if (cfg->capture && cfg->capture->fn)
+            cfg->capture->fn(cfg->capture->user_data,
+                             REPL_EXPR_ROLE_LOOP_STEP, 0, p, ctx.p);
         p = ctx.p;
         while (*p && isspace((unsigned char)*p)) p++;
     }

@@ -54,6 +54,7 @@ typedef struct {
 } FlattenRun;
 
 static FlattenRun g_fast;
+static FlattenRun g_warm;
 static FlattenRun g_reparse;
 
 typedef struct {
@@ -72,8 +73,11 @@ static void baseline_restore(const Baseline *b) {
 }
 
 /* Flatten the live document into `run`'s private buffers. force_reparse
- * selects the old always-reparse path. The live flat program is untouched. */
-static void flatten_into(FlattenRun *run, int force_reparse) {
+ * selects the old always-reparse path; use_cache attaches the live
+ * compiled-expression cache (invalidated by every source mutation, so
+ * example loads reset it exactly as the app's loads do). The live flat
+ * program is untouched. */
+static void flatten_into(FlattenRun *run, int force_reparse, int use_cache) {
     ReplFlattenOptions opts;
 
     memset(run->cmds, 0, sizeof(run->cmds));
@@ -91,6 +95,7 @@ static void flatten_into(FlattenRun *run, int force_reparse) {
         .max_call_depth   = 0,
         .visit_budget     = 0,
         .force_reparse    = force_reparse,
+        .expr_cache       = use_cache ? repl_expr_cache_live() : NULL,
     };
     repl_flatten_program(&opts, &run->result);
 
@@ -141,72 +146,97 @@ static int flat_locals_equal(const FlatCmdLocalVars *a,
     return 1;
 }
 
-/* Load `example_idx`, then flatten it both ways at `t` from the identical
- * post-load baseline and compare everything the two runs produce. */
-static void compare_example_at_time(int example_idx, float t) {
+/* Compare everything two flatten runs produce. `tag` names the pair (which
+ * fast path ran against the forced-reparse reference). */
+static void compare_runs(const char *name, float t, const char *tag,
+                         const FlattenRun *a, const FlattenRun *b) {
     char label[192];
-    const char *name = repl_example_name(example_idx);
-    Baseline base;
     int mismatch_cmd = -1;
     int mismatch_locals = -1;
 
-    repl_load_example_lines_for_test(repl_example_lines(example_idx));
-    baseline_capture(&base);
+    snprintf(label, sizeof(label), "%s @ t=%g [%s]: result ok",
+             name, (double)t, tag);
+    TEST_ASSERT_INT(&g_harness, label, a->result.ok, b->result.ok);
 
-    repl_set_time(t);
-    flatten_into(&g_fast, /*force_reparse=*/0);
+    snprintf(label, sizeof(label), "%s @ t=%g [%s]: flat count",
+             name, (double)t, tag);
+    TEST_ASSERT_INT(&g_harness, label, a->result.flat_cmd_count,
+                    b->result.flat_cmd_count);
 
-    baseline_restore(&base);
-    repl_set_time(t);
-    flatten_into(&g_reparse, /*force_reparse=*/1);
+    snprintf(label, sizeof(label), "%s @ t=%g [%s]: lighting",
+             name, (double)t, tag);
+    TEST_ASSERT_INT(&g_harness, label, a->result.user_lighting_enabled,
+                    b->result.user_lighting_enabled);
 
-    baseline_restore(&base);
+    snprintf(label, sizeof(label), "%s @ t=%g [%s]: status",
+             name, (double)t, tag);
+    TEST_ASSERT_STR(&g_harness, label, a->result.status, b->result.status);
 
-    snprintf(label, sizeof(label), "%s @ t=%g: result ok", name, (double)t);
-    TEST_ASSERT_INT(&g_harness, label, g_fast.result.ok, g_reparse.result.ok);
-
-    snprintf(label, sizeof(label), "%s @ t=%g: flat count", name, (double)t);
-    TEST_ASSERT_INT(&g_harness, label, g_fast.result.flat_cmd_count,
-                    g_reparse.result.flat_cmd_count);
-
-    snprintf(label, sizeof(label), "%s @ t=%g: lighting", name, (double)t);
-    TEST_ASSERT_INT(&g_harness, label, g_fast.result.user_lighting_enabled,
-                    g_reparse.result.user_lighting_enabled);
-
-    snprintf(label, sizeof(label), "%s @ t=%g: status", name, (double)t);
-    TEST_ASSERT_STR(&g_harness, label, g_fast.result.status,
-                    g_reparse.result.status);
-
-    if (g_fast.result.flat_cmd_count != g_reparse.result.flat_cmd_count)
+    if (a->result.flat_cmd_count != b->result.flat_cmd_count)
         return;   /* counts already reported; per-command diffs would spam */
 
-    for (int i = 0; i < g_fast.result.flat_cmd_count; i++) {
-        if (mismatch_cmd < 0 && !flat_cmd_equal(&g_fast.cmds[i], &g_reparse.cmds[i]))
+    for (int i = 0; i < a->result.flat_cmd_count; i++) {
+        if (mismatch_cmd < 0 && !flat_cmd_equal(&a->cmds[i], &b->cmds[i]))
             mismatch_cmd = i;
         if (mismatch_locals < 0 &&
-            !flat_locals_equal(&g_fast.locals[i], &g_reparse.locals[i]))
+            !flat_locals_equal(&a->locals[i], &b->locals[i]))
             mismatch_locals = i;
     }
 
-    snprintf(label, sizeof(label), "%s @ t=%g: flat cmds identical (first diff)",
-             name, (double)t);
+    snprintf(label, sizeof(label),
+             "%s @ t=%g [%s]: flat cmds identical (first diff)",
+             name, (double)t, tag);
     TEST_ASSERT_INT(&g_harness, label, mismatch_cmd, -1);
 
-    snprintf(label, sizeof(label), "%s @ t=%g: local snapshots identical (first diff)",
-             name, (double)t);
+    snprintf(label, sizeof(label),
+             "%s @ t=%g [%s]: local snapshots identical (first diff)",
+             name, (double)t, tag);
     TEST_ASSERT_INT(&g_harness, label, mismatch_locals, -1);
 
-    snprintf(label, sizeof(label), "%s @ t=%g: post-flatten predef state",
-             name, (double)t);
+    snprintf(label, sizeof(label), "%s @ t=%g [%s]: post-flatten predef state",
+             name, (double)t, tag);
     TEST_ASSERT_INT(&g_harness, label,
-                    memcmp(g_fast.predef, g_reparse.predef,
-                           sizeof(g_fast.predef)) == 0, 1);
+                    memcmp(a->predef, b->predef, sizeof(a->predef)) == 0, 1);
 
-    snprintf(label, sizeof(label), "%s @ t=%g: post-flatten scratch state",
-             name, (double)t);
+    snprintf(label, sizeof(label), "%s @ t=%g [%s]: post-flatten scratch state",
+             name, (double)t, tag);
     TEST_ASSERT_INT(&g_harness, label,
-                    memcmp(g_fast.scratch, g_reparse.scratch,
-                           sizeof(g_fast.scratch)) == 0, 1);
+                    memcmp(a->scratch, b->scratch, sizeof(a->scratch)) == 0, 1);
+}
+
+/* Flatten the live document three ways at `t` from an identical baseline
+ * and compare against the forced-reparse reference:
+ *   - cold: fast paths + an empty expression cache (this run builds it);
+ *   - warm: the same cache, now READY — the compiled path proper.
+ * The cache carries over between the cold and warm runs only; the example
+ * load's source-dirty invalidation cleared it beforehand. */
+static void compare_document_at_time(const char *name, float t) {
+    Baseline base;
+
+    baseline_capture(&base);
+
+    repl_set_time(t);
+    flatten_into(&g_fast, /*force_reparse=*/0, /*use_cache=*/1);   /* cold */
+
+    baseline_restore(&base);
+    repl_set_time(t);
+    flatten_into(&g_warm, /*force_reparse=*/0, /*use_cache=*/1);   /* warm */
+
+    baseline_restore(&base);
+    repl_set_time(t);
+    flatten_into(&g_reparse, /*force_reparse=*/1, /*use_cache=*/0);
+
+    baseline_restore(&base);
+
+    compare_runs(name, t, "cold-cache", &g_fast, &g_reparse);
+    compare_runs(name, t, "warm-cache", &g_warm, &g_reparse);
+}
+
+/* Load `example_idx`, then compare the fast/cached paths against the forced
+ * reparse at `t` from the identical post-load baseline. */
+static void compare_example_at_time(int example_idx, float t) {
+    repl_load_example_lines_for_test(repl_example_lines(example_idx));
+    compare_document_at_time(repl_example_name(example_idx), t);
 }
 
 /* t=0 is the loaded state; the other samples move animated scenes off their
@@ -229,7 +259,7 @@ static void test_literal_cmd_keeps_local_snapshot(void) {
     editor_feed_line("glVertex3f(1, 2, 3);");
     editor_feed_line("}");
 
-    flatten_into(&g_fast, /*force_reparse=*/0);
+    flatten_into(&g_fast, /*force_reparse=*/0, /*use_cache=*/1);
 
     TEST_ASSERT_INT(&g_harness, "literal-in-loop flat count",
                     g_fast.result.flat_cmd_count, 3);
@@ -274,7 +304,7 @@ static void load_auto_normal_doc(void) {
  * is_auto flag into the flat program. */
 static void test_literal_cmd_keeps_is_auto(void) {
     load_auto_normal_doc();
-    flatten_into(&g_fast, /*force_reparse=*/0);
+    flatten_into(&g_fast, /*force_reparse=*/0, /*use_cache=*/1);
 
     TEST_ASSERT_INT(&g_harness, "auto normals reach the flat program as is_auto",
                     count_auto_normals(&g_fast), EXPECTED_AUTO_NORMALS);
@@ -289,9 +319,9 @@ static void test_literal_cmd_keeps_is_auto(void) {
  * built-in example carries an auto-normal, so the field never differs there. */
 static void test_auto_normal_differential(void) {
     load_auto_normal_doc();
-    flatten_into(&g_fast, /*force_reparse=*/0);
+    flatten_into(&g_fast, /*force_reparse=*/0, /*use_cache=*/1);
     load_auto_normal_doc();
-    flatten_into(&g_reparse, /*force_reparse=*/1);
+    flatten_into(&g_reparse, /*force_reparse=*/1, /*use_cache=*/0);
 
     TEST_ASSERT_INT(&g_harness, "auto-normal doc: same flat count",
                     g_fast.result.flat_cmd_count,
@@ -322,7 +352,8 @@ static void test_var_assign_differential(void) {
         editor_feed_line("float k;");
         editor_feed_line("k = 2;");
         editor_feed_line("glVertex3f(1, 0, 0);");
-        flatten_into(pass == 0 ? &g_fast : &g_reparse, /*force_reparse=*/pass);
+        flatten_into(pass == 0 ? &g_fast : &g_reparse, /*force_reparse=*/pass,
+                     /*use_cache=*/pass == 0);
     }
 
     TEST_ASSERT_INT(&g_harness, "var-assign doc: same flat count",
@@ -362,10 +393,10 @@ static void test_direct_eval_differential(void) {
     baseline_capture(&base);
 
     repl_set_time(0.75f);
-    flatten_into(&g_fast, /*force_reparse=*/0);
+    flatten_into(&g_fast, /*force_reparse=*/0, /*use_cache=*/0);
     baseline_restore(&base);
     repl_set_time(0.75f);
-    flatten_into(&g_reparse, /*force_reparse=*/1);
+    flatten_into(&g_reparse, /*force_reparse=*/1, /*use_cache=*/0);
     baseline_restore(&base);
 
     TEST_ASSERT_INT(&g_harness, "direct eval: same flat count",
@@ -387,11 +418,68 @@ static void test_direct_eval_differential(void) {
                               g_fast.cmds[1].args[2], -1.5f);
 }
 
+/* One synthetic scene touching every command family the expression cache
+ * captures, with variables in each expression slot so every family takes
+ * its compiled path warm. The built-in corpus covers the common families;
+ * this pins the rare ones (glMaterialfv value lists, glMaterialf,
+ * glPointParameterfv, an ENUM_OR_EXPR slot, label substitutions, gluColor's
+ * defaulted alpha, the glClearColor clamp, scratch assigns, if/else-if
+ * chains, and function-call args) regardless of catalog churn. */
+static void test_capture_construct_coverage(void) {
+    static const float k_times[] = { 0.0f, 1.3f };
+
+    glr_ctrl_reset_all();
+    editor_feed_line("float n;");
+    editor_feed_line("n = t / 4 + 2;");
+    editor_feed_line("glClearColor(n, 0.02, 0.05, 1);");
+    editor_feed_line("glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, n - 1);");
+    editor_feed_line("glMaterialfv(GL_FRONT, GL_DIFFUSE, (GLfloat[]){n / 4, 0.5, sin(n), 1});");
+    editor_feed_line("glMaterialf(GL_FRONT, GL_SHININESS, n * 10);");
+    editor_feed_line("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1, n / 2, 0);");
+    editor_feed_line("A[0] = n * 2;");
+    editor_feed_line("A[1] = A[0] + rand(n);");
+    editor_feed_line("func0(a) {");
+    editor_feed_line("glTranslatef(a, 0, 0);");
+    editor_feed_line("glutSolidCube(a / 2 + 0.1);");
+    editor_feed_line("}");
+    editor_feed_line("func0(n / 3);");
+    editor_feed_line("for(i, 0, n + 1) {");
+    editor_feed_line("if(i > n / 2) {");
+    editor_feed_line("glColor3f(i / 4, 0.5, 0.5);");
+    editor_feed_line("} else if(i > 1) {");
+    editor_feed_line("glColor3f(0.5, i / 4, 0.5);");
+    editor_feed_line("} else {");
+    editor_feed_line("glColor3f(0.5, 0.5, i + 0.25);");
+    editor_feed_line("}");
+    editor_feed_line("glVertex3f(i, n, sin(i));");
+    editor_feed_line("}");
+    editor_feed_line("glRasterPos3f(n, 0, A[1]);");
+    editor_feed_line("label(\"v=%f\", n + 1);");
+    editor_feed_line("gluBegin(GLU_POLYGON);");
+    editor_feed_line("gluColor(n / 4, 0.5, 0.25);");
+    editor_feed_line("gluVertex(0, 0, n);");
+    editor_feed_line("gluVertex(1, 0, n);");
+    editor_feed_line("gluVertex(0, 1, n);");
+    editor_feed_line("gluEnd();");
+
+    /* The scene above committed line by line, so the live cache may hold
+     * partial builds from intermediate states; a source-dirty already
+     * invalidated it on every commit — the last one leaves it EMPTY. */
+    for (size_t s = 0; s < sizeof(k_times) / sizeof(k_times[0]); s++)
+        compare_document_at_time("construct coverage", k_times[s]);
+
+    TEST_ASSERT_INT(&g_harness, "construct scene flattens ok",
+                    g_warm.result.ok, 1);
+    TEST_ASSERT_INT(&g_harness, "construct scene emits commands",
+                    g_warm.result.flat_cmd_count > 10, 1);
+}
+
 int main(void) {
     repl_eval_init_predef_vars();
     glr_ctrl_reset_all();   /* binds the live command store before the first load */
 
     test_corpus_differential();
+    test_capture_construct_coverage();
     test_literal_cmd_keeps_local_snapshot();
     test_literal_cmd_keeps_is_auto();
     test_auto_normal_differential();

@@ -540,14 +540,25 @@ int split_top_level_args(const char *src, char args[][MAX_LINE_LEN], int max_arg
     return count;
 }
 
-float repl_eval_if_condition(const char *src_text,
-                             const ExprVar *vars, int num_vars,
-                             float fallback) {
+float repl_eval_if_condition_captured(const char *src_text,
+                                      const ExprVar *vars, int num_vars,
+                                      float fallback,
+                                      const ReplExprCaptureSink *capture) {
     char paren_text[MAX_LINE_LEN];
     if (!repl_extract_paren_payload(src_text, paren_text, sizeof(paren_text)))
         return fallback;
     char repl_cond[MAX_LINE_LEN];
     repl_eval_c_expr_to_repl(paren_text, repl_cond, sizeof(repl_cond));
+    if (capture && capture->fn)
+        capture->fn(capture->user_data, REPL_EXPR_ROLE_CONDITION, 0,
+                    repl_cond, repl_cond + strlen(repl_cond));
     ExprCtx ctx = { repl_cond, vars, num_vars, NULL, 0 };
     return repl_eval_expr(&ctx);
+}
+
+float repl_eval_if_condition(const char *src_text,
+                             const ExprVar *vars, int num_vars,
+                             float fallback) {
+    return repl_eval_if_condition_captured(src_text, vars, num_vars,
+                                           fallback, NULL);
 }

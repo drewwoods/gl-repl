@@ -524,7 +524,7 @@ explaining why the extra background is useful.
 | [`src/repl/reformat.c`](src/repl/reformat.c) | Source reformatter (`repl_reformat_program`) |
 | [`src/repl/bootstrap.c`](src/repl/bootstrap.c) | Startup loading helpers (`repl_load_initial_commands`) |
 | [`src/repl/parser.c`](src/repl/parser.c) | REPL source-line parser, expression validation, canonical line text emission via `ReplParsedLine.text` (the per-line text lives in [`EditorState`](src/editor/state.h#L175)'s editor buffer, not on [`GLCmd`](src/repl/command.h#L88)) |
-| [`src/repl/parser.h`](src/repl/parser.h) | Parser entrypoints (`repl_parser_parse_command*`, `repl_parser_parse_command_ctx`), [`ReplParseContext`](src/repl/parser.h#L44), [`ReplParsedLine`](src/repl/parser.h#L72) |
+| [`src/repl/parser.h`](src/repl/parser.h) | Parser entrypoints (`repl_parser_parse_command*`, `repl_parser_parse_command_ctx`), [`ReplParseContext`](src/repl/parser.h#L44), [`ReplParsedLine`](src/repl/parser.h#L80) |
 | [`src/repl/source_scope.c`](src/repl/source_scope.c) | Source prefix-depth cache, indentation helpers, block lookup |
 | [`src/repl/source_scope.h`](src/repl/source_scope.h) | Source-scope query API (`repl_source_scope_block_depth_at`, `repl_source_scope_find_block_end`, indent helpers) |
 | [`src/repl/command_spec.c`](src/repl/command_spec.c) | Command type metadata and specifications (parsing, formatting, completion requirements) |
@@ -568,6 +568,8 @@ explaining why the extra background is useful.
 | [`src/repl/flatten.h`](src/repl/flatten.h) | Flatten public API (`repl_flatten_program`, `repl_flatten_commands`) |
 | [`src/repl/flatten_query.c`](src/repl/flatten_query.c) | Live flat-program query helpers: cursor matching, current-block highlight refresh, and per-line flat-cost attribution |
 | [`src/repl/flatten_query.h`](src/repl/flatten_query.h) | Flatten query public API (`repl_flat_cmd_matches_cursor`, `repl_flatten_cost_at_line`, `repl_flatten_refresh_current_block_highlight`) |
+| [`src/repl/expr_program.c`](src/repl/expr_program.c) | Compiled expression programs + per-source-line cache: postfix compiler mirroring `repl_eval_expr`'s grammar, bit-identical evaluator returning value + predef dependency mask, heap arenas (16 MiB cap, zero warm-path allocation). Fed by the [`ReplExprCaptureSink`](src/repl/eval.h#L378) spans the parser/eval helpers fire during a flatten's first visit to a line; invalidated wholesale from `repl_state_mark_source_dirty` |
+| [`src/repl/expr_program.h`](src/repl/expr_program.h) | Cache/compile/eval API (`repl_expr_cache_live/_invalidate/_compile*`, `repl_expr_program_eval`, per-line entry lookups) + [`ReplExprDepMask`](src/repl/expr_program.h#L47) / [`ReplExprValue`](src/repl/expr_program.h#L55) types; the capture contract ([`ReplExprRole`](src/repl/eval.h#L343), [`ReplExprCaptureSink`](src/repl/eval.h#L378)) lives in [`src/repl/eval.h`](src/repl/eval.h) |
 | [`src/repl/pipeline.h`](src/repl/pipeline.h) | Pipeline and lifecycle surface for frame orchestration (flatten, autonormal, replay snapshots) |
 | [`src/repl/autonormal.c`](src/repl/autonormal.c) | Auto-generated `glNormal3f` maintenance for source commands |
 | [`src/subsystems/replay/replay.c`](src/subsystems/replay/replay.c) | Replay-side walkers for tess preview and user-vertex traversal |
@@ -713,7 +715,7 @@ explaining why the extra background is useful.
   descriptor entry to `g_cfg_items[]` in [`src/app/glr_actions.c`](src/app/glr_actions.c); `CFG_ITEM_COUNT`
   auto-computes via `sizeof`
 - New GL commands: add to the [`CmdType`](src/repl/command.h#L37) enum in [`src/repl/command.h`](src/repl/command.h), then
-  handle in [`repl_parser_parse_command_ctx()`](src/repl/parser.h#L92) in [`src/repl/parser.c`](src/repl/parser.c),
+  handle in [`repl_parser_parse_command_ctx()`](src/repl/parser.h#L100) in [`src/repl/parser.c`](src/repl/parser.c),
   [`repl_execute_program()`](src/repl/executor.h#L173) in [`src/repl/executor.c`](src/repl/executor.c), and `flatten_range()`
   (static, inside [`src/repl/flatten.c`](src/repl/flatten.c)). Add a `g_command_type_specs[]`
   entry in [`src/repl/command_spec.c`](src/repl/command_spec.c) with the right [`CmdSyntaxCategory`](src/repl/command_spec.h#L140)
@@ -747,7 +749,7 @@ explaining why the extra background is useful.
   *intentionally* narrower (e.g. autonormal's gl-vertex-vs-tess split),
   spell it out inline with a comment rather than adding a predicate.
 - Splitting a function call's comma-separated args: use
-  [`repl_scan_next_arg_delim()`](src/repl/eval.h#L350) from [`src/repl/eval.h`](src/repl/eval.h), never a bare
+  [`repl_scan_next_arg_delim()`](src/repl/eval.h#L431) from [`src/repl/eval.h`](src/repl/eval.h), never a bare
   `strchr(s, ',')` or `*s != ',' && *s != ')'` loop — those are
   paren-naive and stop at the first inner `)` of e.g.
   `cos(i + phase)`, silently truncating the slot.
@@ -780,7 +782,7 @@ explaining why the extra background is useful.
   called at the top of `glr_ctrl_keyboard` so every downstream
   dispatcher sees Cmd+B identically to Ctrl+B.
 - Expression variables: [`ExprVar`](src/repl/eval.h#L135) struct in [`src/repl/eval.h`](src/repl/eval.h), predefined set
-  accessible via `repl_state_variables()` and managed by [`repl_eval_declare_predef_var()`](src/repl/eval.h#L287)
+  accessible via `repl_state_variables()` and managed by [`repl_eval_declare_predef_var()`](src/repl/eval.h#L309)
 
 ## Architecture
 
@@ -983,7 +985,7 @@ Key details:
   locals are visible at block depth 0.
 - `CMD_VAR_DECLARE` is a no-op in [`repl_execute_program()`](src/repl/executor.h#L173) and
   `flatten_range()` — registration into the predefined-variable table happens at
-  commit time via [`repl_eval_declare_predef_var()`](src/repl/eval.h#L287)
+  commit time via [`repl_eval_declare_predef_var()`](src/repl/eval.h#L309)
 - [`GLCmd`](src/repl/command.h#L88) fields (tagged-union payload, keyed on `type`):
   `payload.decl.names[MAX_NAMES_PER_DECL][16]`, `payload.decl.count`
   (active for `CMD_VAR_DECLARE`); `payload.label.fmt[GLUT_BITMAP_FMT_MAX]`
@@ -994,7 +996,7 @@ Key details:
   check (they get undeclared before the new registration runs).
 - Deleting a declaration range goes through [`repl_compile_delete_range()`](src/repl/compile.h#L534),
   which validates that no variable in the range is still referenced
-  outside it (uses [`repl_eval_source_uses_ident()`](src/repl/eval.h#L297)). Deleting a decl
+  outside it (uses [`repl_eval_source_uses_ident()`](src/repl/eval.h#L319)). Deleting a decl
   together with all its uses is allowed; deleting an unreferenced decl
   by itself is allowed. Cut/copy/paste of decl rows remain blocked
   outright (clipboard semantics — see commit 72be1dd).
@@ -1003,10 +1005,10 @@ Key details:
   the `CMD_VAR_DECLARE` commands, bypassing `editor_try_commit_float_decl`
 - [`src/repl/examples.c`](src/repl/examples.c) has multi-name declarations (e.g. `"float n, x, y, z, j, k;"`)
   — if simplifying to single-name, these must be split into separate lines
-- Related helpers in [`src/repl/eval.c`](src/repl/eval.c): [`repl_eval_declare_predef_var()`](src/repl/eval.h#L287),
-  [`repl_eval_undeclare_predef_var()`](src/repl/eval.h#L293), [`repl_eval_find_predef_var_idx()`](src/repl/eval.h#L277),
-  [`repl_eval_is_reserved_ident()`](src/repl/eval.h#L295), [`repl_eval_source_uses_ident()`](src/repl/eval.h#L297),
-  [`repl_eval_validate_expression_idents()`](src/repl/eval.h#L310)
+- Related helpers in [`src/repl/eval.c`](src/repl/eval.c): [`repl_eval_declare_predef_var()`](src/repl/eval.h#L309),
+  [`repl_eval_undeclare_predef_var()`](src/repl/eval.h#L315), [`repl_eval_find_predef_var_idx()`](src/repl/eval.h#L299),
+  [`repl_eval_is_reserved_ident()`](src/repl/eval.h#L317), [`repl_eval_source_uses_ident()`](src/repl/eval.h#L319),
+  [`repl_eval_validate_expression_idents()`](src/repl/eval.h#L332)
 
 ### User Scenes & Auto-Promotion
 

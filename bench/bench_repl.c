@@ -472,18 +472,60 @@ static BenchResult bench_flatten_one(const char *bench_name, int example_idx,
     return r;
 }
 
+/* Cold-cache variant of bench_flatten_one: each timed flatten starts from an
+ * invalidated expression cache, so the sample includes rebuilding every
+ * line's compiled programs (the cost an edit pays on its next frame). The
+ * warm rows above never see this — their cache builds once before the timer
+ * — so an edit-time regression cannot hide inside a steady-state number. */
+static BenchResult bench_flatten_one_cold(const char *bench_name,
+                                          int example_idx, int iters,
+                                          int inner, int *flat_cmds_out) {
+    BenchResult r = { .name = bench_name, .unit = "flattens",
+                      .min_sec = 1e18 };
+    BenchBaseline base;
+
+    repl_load_example_lines_for_test(repl_example_lines(example_idx));
+    baseline_capture(&base);
+    repl_flatten_commands(editor_state_edit_line());
+
+    for (int it = 0; it < iters; it++) {
+        double sample = 0.0;
+        for (int k = 0; k < inner; k++) {
+            baseline_restore(&base);
+            repl_expr_cache_invalidate(repl_expr_cache_live());
+            double t0 = now_seconds();
+            repl_flatten_commands(editor_state_edit_line());
+            sample += now_seconds() - t0;
+        }
+        if (sample < r.min_sec) r.min_sec = sample;
+        r.total_sec += sample;
+        r.ops += inner;
+        r.iters++;
+    }
+
+    if (flat_cmds_out)
+        *flat_cmds_out = repl_state_flat_program_count();
+    baseline_restore(&base);
+    return r;
+}
+
 /* Named real-scene case, resolved by exact display name. A missing case is a
- * hard error (g_case_missing), never a silently skipped row. */
+ * hard error (g_case_missing), never a silently skipped row. Reports two
+ * rows: the warm compiled full flatten (the steady-state animated-frame
+ * cost) and the cold-cache full flatten (the first frame after an edit). */
 static void run_named_flatten(const char *bench_name, const char *display_name,
                               int iters) {
     int idx = example_index_by_name(display_name);
     int flat_cmds = 0;
+    char cold_name[96];
     if (idx < 0)
         return;
     report(bench_flatten_one(bench_name, idx, iters, 16, &flat_cmds));
     if (!g_csv)
         fprintf(stderr, "  (%s: \"%s\" idx=%d, flat_cmds=%d)\n",
                 bench_name, display_name, idx, flat_cmds);
+    snprintf(cold_name, sizeof(cold_name), "%s_cold", bench_name);
+    report(bench_flatten_one_cold(cold_name, idx, iters, 16, NULL));
 }
 
 /* ---- bench: full flatten of every built-in ---------------------------- */
@@ -1668,7 +1710,10 @@ static void usage(const char *prog) {
         "    feed_examples     full editor_feed_line path on every example\n"
         "    flatten_examples  repl_flatten_commands per example\n"
         "    flatten_grass     full flatten of \"Swaying grass field (rand + t)\"\n"
+        "                      (warm compiled row + a _cold row that rebuilds the\n"
+        "                      expression cache inside the timer)\n"
         "    flatten_orrery    full flatten of \"Orrery (labels track 3D orbits)\"\n"
+        "                      (same warm + _cold pair)\n"
         "    flatten_corpus    full flatten of every built-in, one row per index\n"
         "    flatten_phases    reparse / assign / remainder split of a full flatten\n"
         "    flatten_whale     dynamic-topology full flatten across a t grid\n"

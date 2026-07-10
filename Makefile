@@ -576,6 +576,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/repl/export_display.c \
                      src/repl/export_prologue.c \
                      src/repl/export_setup.c \
+                     src/repl/expr_program.c \
                      src/repl/flatten.c \
                      src/repl/flatten_query.c \
                      src/repl/host_effects.c \
