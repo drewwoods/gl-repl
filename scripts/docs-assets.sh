@@ -70,7 +70,8 @@ CORE_ASSETS=(
     grid-themes backdrops axes-compass view-mode-2d labels-orrery
     glu-tess glow-sprites transform-stress variable-panel tune-badges
     motion-blur xform-guide-still xform-guide replay animated-ring
-    single-polygon-scope
+    single-polygon-scope vertex-guide-plane vertex-guide-line
+    clip-plane clip-plane-sweep
 )
 
 # docs/SHOWCASE.md gallery set (-> docs/images/showcase/). Recordable scenes
@@ -428,6 +429,71 @@ glPopMatrix();
 EOF
 }
 
+# Vertex entry guides: the snippet ends on an OPEN glBegin block, so the
+# cursor lands on the in-block append row after load, and GLR_TYPE_KEYS
+# (exported at the call site) types a partial glVertex3f( there — the
+# only way to pose the 2-DOF sheet / 1-DOF line guides, which exist only
+# mid-typing (a committed line always has all three coordinates).
+stage_vertex_entry() { stage vertex_entry <<'EOF'
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
+/* @cfg variable_panel = 0 */
+/* @cfg light_indicators = 0 */
+/* @cfg grid = GRID_THEME_FAINT */
+// Snippet start
+glEnable(GL_DEPTH_TEST);
+glColor3f(0.9, 0.55, 0.25);
+glBegin(GL_TRIANGLES);
+glVertex3f(-1, 0, 0);
+glVertex3f(1, 0, 0);
+glVertex3f(0, 1.4, 0);
+// Snippet end
+EOF
+}
+
+# Clip plane: cursor parks on the glClipPlane line (GLR_EDIT_LINE=4 at the
+# call site) so the clip-plane guide renders — gridded disc, ghost rim,
+# kept-half-space arrow with the P0 readout.
+stage_clip_plane() { stage clip_plane <<'EOF'
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
+/* @cfg variable_panel = 0 */
+/* @cfg light_indicators = 0 */
+// Snippet start
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_COLOR_MATERIAL);
+glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0.2, 1, 0.3, 0.4});
+glEnable(GL_CLIP_PLANE0);
+glColor3f(0.9, 0.5, 0.25);
+glutSolidSphere(1.5, 32, 24);
+// Snippet end
+EOF
+}
+
+# Animated clip plane: d = sin(t*3)*1.1 sweeps one full cycle in ~126
+# frames (t*3 has period TAU/3 = 2.09 s = 126 captured frames), so the
+# GIF loops seamlessly. Cursor parks on the glClipPlane line so the
+# guide disc sweeps with the plane.
+stage_clip_sweep() { stage clip_sweep <<'EOF'
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
+/* @cfg variable_panel = 0 */
+/* @cfg light_indicators = 0 */
+// Snippet start
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_COLOR_MATERIAL);
+glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0, 1, 0, sin(t*3)*1.1});
+glEnable(GL_CLIP_PLANE0);
+glColor3f(0.35, 0.65, 0.9);
+glutSolidTorus(0.5, 1.2, 24, 36);
+// Snippet end
+EOF
+}
+
 stage_replay() { stage replay <<'EOF'
 /* @cfg replay = 1 */
 /* @cfg variable_panel = 0 */
@@ -582,6 +648,29 @@ fi
 if want xform-guide-still; then
     ( export GLR_EDIT_LINE=4
       still "$OUT/xform-guide-still.png" $PLAIN_FRAMES 16 "$(stage_guide)" )
+fi
+
+# Mid-typing states: GLR_TYPE_KEYS feeds the partial line through the
+# real keyboard dispatch after load (see stage_vertex_entry). One typed
+# coordinate -> the 2-DOF graph-paper sheet; two -> the 1-DOF tick line.
+if want vertex-guide-plane; then
+    ( export GLR_TYPE_KEYS='glVertex3f(1.2'
+      still "$OUT/vertex-guide-plane.png" $PLAIN_FRAMES 16 "$(stage_vertex_entry)" )
+fi
+
+if want vertex-guide-line; then
+    ( export GLR_TYPE_KEYS='glVertex3f(1.2, 0.8'
+      still "$OUT/vertex-guide-line.png" $PLAIN_FRAMES 16 "$(stage_vertex_entry)" )
+fi
+
+if want clip-plane; then
+    ( export GLR_EDIT_LINE=4
+      still "$OUT/clip-plane.png" $PLAIN_FRAMES 16 "$(stage_clip_plane)" )
+fi
+
+if want clip-plane-sweep; then
+    ( export GLR_EDIT_LINE=4
+      gif "$OUT/clip-plane-sweep.gif" 126 1 20 720 "$(stage_clip_sweep)" )
 fi
 
 if want xform-guide; then
