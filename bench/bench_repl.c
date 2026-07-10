@@ -30,6 +30,9 @@
  *                       from the existing PROF_FLATTEN_* profiler sections
  *   flatten_whale     - full flatten of the dynamic-topology Whale scene at
  *                       several `t` values; reports the flat count per sample
+ *   slider_drag       - variable-panel drag: 100 motion events timed apart
+ *                       from the single mouse-up persistence edit, for a
+ *                       value-only and a structural variable
  *   source_scope_query- sweep source-scope depth/scope queries over a deep
  *                       synthetic document (isolates the amortized-O(1)
  *                       prefix-depth cache lookup the Finding-4 view refactor
@@ -60,6 +63,7 @@
 #define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
+#include "editor/input.h"         /* editor_feed_line */
 #include "editor/state.h"         /* editor_state_edit_line */
 #include <math.h>
 #include "repl/flatten.h"
@@ -75,6 +79,9 @@
 #include "repl/normalize.h"      /* repl_parse_and_normalize_strict */
 #include "repl/parser.h"
 #include "repl/source_scope.h"   /* prefix-depth queries + cache invalidate */
+#include "repl/state_views.h"     /* repl_state_normals_dirty — source-dirty probe */
+#include "repl/state_owners.h"    /* repl_state_normals_dirty_clear */
+#include "subsystems/variable_panel/variable_panel_state.h"
 #include "repl/time.h"           /* repl_set_time — Whale topology sweep */
 #include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
@@ -680,6 +687,146 @@ static void bench_flatten_whale(int iters) {
                 "no longer varies with t\n", distinct);
         g_case_missing = 1;
     }
+}
+
+/* ---- bench: variable-panel slider drag transaction --------------------- */
+
+/* A slider drag is 100+ pointer-motion events and one mouse-up. Phase 1B split
+ * the transaction: motion applies the live value only, and the declaration is
+ * rewritten once on release. So a drag must perform *zero* source-dirty marks
+ * during motion (the seam every source-derived cache invalidates from) and
+ * exactly one on release.
+ *
+ * Two cases, by what the dragged variable feeds:
+ *   value      — `amp` only scales already-emitted vertices, so a later rebake
+ *                phase can keep the flat topology and rebake values in place;
+ *   structural — `bound` is a loop bound, so a change must re-flatten fully.
+ * Both drags cost the same today (every motion just marks the flat program
+ * dirty); the split is here so the rebake phase has a before/after pair.
+ *
+ * The mouse-up persistence edit is timed separately from the motion loop:
+ * folding a once-per-drag source rewrite into a per-motion mean would hide it.
+ */
+static void bench_slider_drag_case(const char *label,
+                                   const char *const *scene,
+                                   const char *var_name,
+                                   int iters) {
+    enum { MOTIONS = 100 };
+    char motion_name[48];
+    char release_name[48];
+    BenchResult motion, release;
+    int var_idx;
+    int source_dirty_during_motion = 0;
+    int source_dirty_on_release = 0;
+
+    snprintf(motion_name, sizeof(motion_name), "%s_motion", label);
+    snprintf(release_name, sizeof(release_name), "%s_release", label);
+    motion = (BenchResult){ .name = motion_name, .unit = "motions",
+                            .min_sec = 1e18 };
+    release = (BenchResult){ .name = release_name, .unit = "releases",
+                             .min_sec = 1e18 };
+
+    for (int it = 0; it < iters; it++) {
+        double motion_sec = 0.0, release_sec = 0.0;
+        double t0;
+
+        /* Fresh document per iteration: the release edit rewrites the
+         * declaration, so a reused document would drift its start value.
+         * glr_ctrl_reset_all (not fresh_repl) — the scene declares its own
+         * variable, and declare_test_idents would claim the name first and
+         * make the `float ...` line a redeclaration error, leaving no
+         * declaration row for the release edit to rewrite. */
+        glr_ctrl_reset_all();
+        variable_panel_set_visible(1);
+        for (int i = 0; scene[i]; i++)
+            editor_feed_line(scene[i]);
+        repl_flatten_commands(editor_state_edit_line());
+
+        var_idx = repl_eval_find_predef_var_idx(var_name);
+        if (var_idx < 0) {
+            fprintf(stderr, "ERROR: %s: variable '%s' not declared\n",
+                    label, var_name);
+            g_case_missing = 1;
+            return;
+        }
+
+        variable_panel_handle_drag_begin(var_idx, /*log_mode=*/0, /*x=*/0);
+        repl_state_normals_dirty_clear();
+
+        t0 = now_seconds();
+        for (int m = 1; m <= MOTIONS; m++)
+            glr_ctrl_router_handle_variable_panel_motion(m, 0);
+        motion_sec = now_seconds() - t0;
+        if (repl_state_normals_dirty())
+            source_dirty_during_motion = 1;
+
+        t0 = now_seconds();
+        glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP);
+        release_sec = now_seconds() - t0;
+        if (repl_state_normals_dirty())
+            source_dirty_on_release = 1;
+
+        if (motion_sec < motion.min_sec) motion.min_sec = motion_sec;
+        motion.total_sec += motion_sec;
+        motion.ops += MOTIONS;
+        motion.iters++;
+
+        if (release_sec < release.min_sec) release.min_sec = release_sec;
+        release.total_sec += release_sec;
+        release.ops += 1;
+        release.iters++;
+    }
+
+    report(motion);
+    report(release);
+
+    /* The transaction invariant, asserted rather than just timed: a fast
+     * motion loop that silently rewrote source would be a correctness bug the
+     * timings alone would not reveal. */
+    if (source_dirty_during_motion || !source_dirty_on_release) {
+        fprintf(stderr,
+                "ERROR: %s: expected zero source invalidations during motion "
+                "and exactly one on release (motion=%d, release=%d)\n",
+                label, source_dirty_during_motion, source_dirty_on_release);
+        g_case_missing = 1;
+    }
+    if (!g_csv)
+        fprintf(stderr, "  (%s: %d motions, source dirty during motion=%d, "
+                        "on release=%d)\n",
+                label, MOTIONS, source_dirty_during_motion,
+                source_dirty_on_release);
+}
+
+/* `amp` scales emitted vertices: value-only, no loop bound or condition. */
+static const char *const k_slider_value_scene[] = {
+    "float amp = 1;",
+    "for(i, 0, 40) {",
+        "glBegin(GL_TRIANGLES);",
+        "glVertex3f(amp*i, 0, 0);",
+        "glVertex3f(amp*i, amp, 0);",
+        "glVertex3f(amp*i, 0, amp);",
+        "glEnd();",
+    "}",
+    NULL,
+};
+
+/* `bound` is the loop bound: changing it changes the flat-command count. */
+static const char *const k_slider_structural_scene[] = {
+    "float bound = 20;",
+    "for(i, 0, bound) {",
+        "glBegin(GL_TRIANGLES);",
+        "glVertex3f(i, 0, 0);",
+        "glVertex3f(i, 1, 0);",
+        "glVertex3f(i, 0, 1);",
+        "glEnd();",
+    "}",
+    NULL,
+};
+
+static void bench_slider_drag(int iters) {
+    bench_slider_drag_case("slider_value", k_slider_value_scene, "amp", iters);
+    bench_slider_drag_case("slider_structural", k_slider_structural_scene,
+                           "bound", iters);
 }
 
 /* ---- bench: cursor flat-cost query (statusbar budget readout) --------- */
@@ -1455,6 +1602,7 @@ static void usage(const char *prog) {
         "    flatten_corpus    full flatten of every built-in, one row per index\n"
         "    flatten_phases    reparse / assign / remainder split of a full flatten\n"
         "    flatten_whale     dynamic-topology full flatten across a t grid\n"
+        "    slider_drag       100-motion variable-panel drag + release persist\n"
         "    flat_cost_query   repl_flatten_cost_at_line over every cursor line\n"
         "    source_scope_query  source-scope depth queries over a deep document (warm cache)\n"
         "    source_scope_churn  source-scope cache rebuild per op (invalidate + query)\n"
@@ -1564,6 +1712,8 @@ int main(int argc, char **argv) {
         bench_flatten_phases(iters);
     if (wants(only, "flatten_whale"))
         bench_flatten_whale(iters);
+    if (wants(only, "slider_drag"))
+        bench_slider_drag(iters);
     if (wants(only, "flat_cost_query"))
         report(bench_flat_cost_query(iters));
     if (wants(only, "source_scope_query"))

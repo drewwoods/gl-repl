@@ -1290,11 +1290,22 @@ ReplCompileResult repl_compile_var_assign(const char *input,
     return REPL_COMPILE_OK;
 }
 
-ReplCompileResult repl_compile_set_predef_value(const char *name,
-                                                float value,
-                                                const ReplCompileContext *ctx,
-                                                ReplCompiledChange *out,
-                                                char *err, int err_size) {
+/* Shared kernel behind the three predef-value compile entry points.
+ *
+ * `emit_predef_op` stages the live REPL_PREDEF_OP_SET_VALUE side effect;
+ * `emit_source_rewrite` stages the REPL_COMPILED_REPLACE_ONE that rewrites the
+ * declaration's initializer. The combined entry sets both; the variable-panel
+ * drag uses one during motion and the other on release (see the drag
+ * transaction split in docs/plans/in-review/flatten-performance-without-vm.md).
+ * They share this one lookup + rewrite so the emitted declaration text cannot
+ * drift between them. */
+static ReplCompileResult compile_predef_value_change(const char *name,
+                                                     float value,
+                                                     const ReplCompileContext *ctx,
+                                                     int emit_predef_op,
+                                                     int emit_source_rewrite,
+                                                     ReplCompiledChange *out,
+                                                     char *err, int err_size) {
     int var_idx;
     int decl_idx;
 
@@ -1311,14 +1322,20 @@ ReplCompileResult repl_compile_set_predef_value(const char *name,
         return compile_set_err(err, err_size,
                                "undeclared variable '%s'", name);
 
-    out->predef_ops[0].kind = REPL_PREDEF_OP_SET_VALUE;
-    repl_copy_string_fits(out->predef_ops[0].name,
-                          sizeof(out->predef_ops[0].name), name);
-    out->predef_ops[0].value = value;
-    out->predef_ops[0].has_value = 1;
-    out->predef_op_count = 1;
     snprintf(out->commit_message, sizeof(out->commit_message),
              "%s = %g", name, (double)value);
+
+    if (emit_predef_op) {
+        out->predef_ops[0].kind = REPL_PREDEF_OP_SET_VALUE;
+        repl_copy_string_fits(out->predef_ops[0].name,
+                              sizeof(out->predef_ops[0].name), name);
+        out->predef_ops[0].value = value;
+        out->predef_ops[0].has_value = 1;
+        out->predef_op_count = 1;
+    }
+
+    if (!emit_source_rewrite)
+        return REPL_COMPILE_OK;
 
     decl_idx = compile_find_var_decl(ctx, name);
     if (decl_idx >= 0) {
@@ -1336,6 +1353,39 @@ ReplCompileResult repl_compile_set_predef_value(const char *name,
     }
 
     return REPL_COMPILE_OK;
+}
+
+ReplCompileResult repl_compile_set_predef_value(const char *name,
+                                                float value,
+                                                const ReplCompileContext *ctx,
+                                                ReplCompiledChange *out,
+                                                char *err, int err_size) {
+    return compile_predef_value_change(name, value, ctx,
+                                       /*emit_predef_op=*/1,
+                                       /*emit_source_rewrite=*/1,
+                                       out, err, err_size);
+}
+
+ReplCompileResult repl_compile_set_predef_value_live(const char *name,
+                                                     float value,
+                                                     const ReplCompileContext *ctx,
+                                                     ReplCompiledChange *out,
+                                                     char *err, int err_size) {
+    return compile_predef_value_change(name, value, ctx,
+                                       /*emit_predef_op=*/1,
+                                       /*emit_source_rewrite=*/0,
+                                       out, err, err_size);
+}
+
+ReplCompileResult repl_compile_persist_predef_value(const char *name,
+                                                    float value,
+                                                    const ReplCompileContext *ctx,
+                                                    ReplCompiledChange *out,
+                                                    char *err, int err_size) {
+    return compile_predef_value_change(name, value, ctx,
+                                       /*emit_predef_op=*/0,
+                                       /*emit_source_rewrite=*/1,
+                                       out, err, err_size);
 }
 
 ReplCompileResult repl_compile_empty_line(int line_idx,

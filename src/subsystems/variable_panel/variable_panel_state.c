@@ -70,3 +70,11 @@ int variable_panel_drag_undo_snapshot_pushed(void) {
 void variable_panel_drag_mark_undo_snapshot_pushed(void) {
     variable_panel_drag_mut()->undo_snapshot_pushed = 1;
 }
+
+void variable_panel_drag_note_applied_value(float value) {
+    VariablePanelDragState *drag = variable_panel_drag_mut();
+    if (drag->var_idx < 0)
+        return;
+    drag->value_changed = 1;
+    drag->final_value = value;
+}

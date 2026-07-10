@@ -618,10 +618,10 @@ explaining why the extra background is useful.
 | [`src/ui/app/autocomplete_panel.h`](src/ui/app/autocomplete_panel.h) | Autocomplete popup render entrypoint |
 | [`src/editor/inline_rename.c`](src/editor/inline_rename.c) | Inline scene-rename input buffer and key handling (status-bar overlay) |
 | [`src/editor/inline_rename.h`](src/editor/inline_rename.h) | Rename begin/active/cancel/key/special API |
-| [`src/subsystems/variable_panel/variable_panel_drag.c`](src/subsystems/variable_panel/variable_panel_drag.c) | Variable slider drag transaction: begin/motion/reset, linear/log value writeback |
+| [`src/subsystems/variable_panel/variable_panel_drag.c`](src/subsystems/variable_panel/variable_panel_drag.c) | Variable slider drag transaction: begin/motion/reset, linear/log value writeback. The drag is split so motion never mutates source: each motion compiles `repl_compile_set_predef_value_live` (predef `SET_VALUE` only) and records the applied value on the peer via `variable_panel_drag_note_applied_value`; mouse-up compiles `repl_compile_persist_predef_value` once (declaration rewrite, no predef op) — so a 100-event drag marks the source dirty exactly once, at the end, and captures exactly one (coalesced) undo snapshot, at the start. A no-motion release, or a variable with no declaration row, does nothing |
 | [`src/subsystems/variable_panel/variable_panel_drag.h`](src/subsystems/variable_panel/variable_panel_drag.h) | Drag state accessors + begin/motion/reset API |
-| [`src/subsystems/variable_panel/variable_panel_state.c`](src/subsystems/variable_panel/variable_panel_state.c) | Variable-panel peer subsystem: owns visibility flag + drag-state storage |
-| [`src/subsystems/variable_panel/variable_panel_state.h`](src/subsystems/variable_panel/variable_panel_state.h) | Peer-subsystem facade ([`VariablePanelState`](src/subsystems/variable_panel/variable_panel_state.h#L55), capture/restore/reset, view/drag accessors) |
+| [`src/subsystems/variable_panel/variable_panel_state.c`](src/subsystems/variable_panel/variable_panel_state.c) | Variable-panel peer subsystem: owns visibility flag + drag-state storage (incl. the drag's `value_changed` / `final_value` the release-time persist reads) |
+| [`src/subsystems/variable_panel/variable_panel_state.h`](src/subsystems/variable_panel/variable_panel_state.h) | Peer-subsystem facade ([`VariablePanelState`](src/subsystems/variable_panel/variable_panel_state.h#L66), capture/restore/reset, view/drag accessors) |
 | [`src/subsystems/replay/replay_state.c`](src/subsystems/replay/replay_state.c) | Replay peer subsystem: owns [`ReplayRuntimeState`](src/subsystems/replay/replay_state.h#L83) storage |
 | [`src/subsystems/replay/replay_render.c`](src/subsystems/replay/replay_render.c) | Replay fade-batch GL rendering pass (`glPushAttrib`/`glMaterialfv`/`glBegin`), extracted out of [`src/render3d/render.c`](src/render3d/render.c) |
 | [`src/subsystems/edit_overlays/edit_overlays.c`](src/subsystems/edit_overlays/edit_overlays.c) | Cursor edit-guide + vertex/normal overlay orchestration: owns the cursor-guide snapshot and the flat-program walk that calls the scene overlay primitives; extracted out of [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c) |
@@ -992,7 +992,7 @@ Key details:
   detection runs before the "already declared" validation loop, and
   names carried over from the old decl are exempted from the duplicate
   check (they get undeclared before the new registration runs).
-- Deleting a declaration range goes through [`repl_compile_delete_range()`](src/repl/compile.h#L506),
+- Deleting a declaration range goes through [`repl_compile_delete_range()`](src/repl/compile.h#L534),
   which validates that no variable in the range is still referenced
   outside it (uses [`repl_eval_source_uses_ident()`](src/repl/eval.h#L297)). Deleting a decl
   together with all its uses is allowed; deleting an unreferenced decl

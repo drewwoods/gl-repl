@@ -1047,6 +1047,101 @@ static void test_set_predef_value_live_only_without_source(void) {
     }
 }
 
+/* The live half: predef op, never a source rewrite — even when a declaration
+ * row exists. This is what every variable-panel motion event compiles. */
+static void test_compile_set_predef_value_live_leaves_declaration(void) {
+    glr_ctrl_reset_all();
+
+    editor_feed_line("float x = 2;");
+
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    ReplCompileResult r = repl_compile_set_predef_value_live(
+        "x", 7.25f, &ctx, &change, err, sizeof(err));
+    ASSERT_INT("live set compile OK", r, REPL_COMPILE_OK);
+    ASSERT_INT("live set makes no source change", change.kind,
+               REPL_COMPILED_NO_CHANGE);
+    ASSERT_INT("live set carries the predef op", change.predef_op_count, 1);
+
+    ASSERT_INT("live set apply OK",
+               editor_commit_apply_external_change(&change, 0, 0), 1);
+    ASSERT_STR("live set leaves the declaration text alone",
+               editor_buffer_line(0), "  static float x = 2;");
+    {
+        int x_idx = repl_eval_find_predef_var_idx("x");
+        ASSERT_TRUE("live set x exists", x_idx >= 0);
+        ASSERT_FLOAT("live set updates the live value",
+                     g_predef_vars[x_idx].value, 7.25f, 1e-6f);
+    }
+}
+
+/* The persistence half: source rewrite, no predef op (the live value is
+ * already final, and a predef op would fire a second tutorial notify). This is
+ * what the variable-panel drag compiles once, on mouse-up. */
+static void test_compile_persist_predef_value_rewrites_declaration(void) {
+    glr_ctrl_reset_all();
+
+    editor_feed_line("float a = 1, x = 2, y; // vars");
+
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    ReplCompileResult r = repl_compile_persist_predef_value(
+        "x", 2.5f, &ctx, &change, err, sizeof(err));
+    ASSERT_INT("persist compile OK", r, REPL_COMPILE_OK);
+    ASSERT_INT("persist replaces the decl row", change.kind,
+               REPL_COMPILED_REPLACE_ONE);
+    ASSERT_INT("persist carries no predef op", change.predef_op_count, 0);
+    /* Byte-identical to the combined entry's rewrite: same kernel. */
+    ASSERT_STR("persist decl text",
+               change.text[0], "  static float a = 1, x = 2.5, y; // vars");
+
+    ASSERT_INT("persist apply OK",
+               editor_commit_apply_external_change(&change, 0, 0), 1);
+    ASSERT_STR("persist decl buffer line updated",
+               editor_buffer_line(0), "  static float a = 1, x = 2.5, y; // vars");
+}
+
+/* No declaration row to rewrite: persistence is a no-op the caller can skip. */
+static void test_compile_persist_predef_value_without_declaration(void) {
+    glr_ctrl_reset_all();
+
+    editor_feed_line("t = 0;");
+
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    ReplCompileResult r = repl_compile_persist_predef_value(
+        "t", 3.5f, &ctx, &change, err, sizeof(err));
+    ASSERT_INT("persist-no-decl compile OK", r, REPL_COMPILE_OK);
+    ASSERT_INT("persist-no-decl is a no-change", change.kind,
+               REPL_COMPILED_NO_CHANGE);
+    ASSERT_INT("persist-no-decl carries no predef op", change.predef_op_count, 0);
+    ASSERT_STR("persist-no-decl leaves the assignment alone",
+               editor_buffer_line(0), "  t = 0;");
+}
+
+static void test_compile_predef_value_split_rejects_undeclared(void) {
+    glr_ctrl_reset_all();
+
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    ASSERT_INT("live set rejects undeclared name",
+               repl_compile_set_predef_value_live("nope", 1.0f, &ctx, &change,
+                                                  err, sizeof(err)),
+               REPL_COMPILE_ERROR);
+    ASSERT_INT("persist rejects undeclared name",
+               repl_compile_persist_predef_value("nope", 1.0f, &ctx, &change,
+                                                 err, sizeof(err)),
+               REPL_COMPILE_ERROR);
+}
+
 static void test_set_predef_value_marks_flat_dirty_only_on_change(void) {
     glr_ctrl_reset_all();
 
@@ -1447,6 +1542,10 @@ int main(void) {
     test_set_predef_value_rewrites_declaration_and_keeps_expression_sources();
     test_set_predef_value_does_not_rewrite_assignment_without_decl();
     test_set_predef_value_live_only_without_source();
+    test_compile_set_predef_value_live_leaves_declaration();
+    test_compile_persist_predef_value_rewrites_declaration();
+    test_compile_persist_predef_value_without_declaration();
+    test_compile_predef_value_split_rejects_undeclared();
     test_set_predef_value_marks_flat_dirty_only_on_change();
     test_orchestration_compile_failure_returns_diagnostic();
     test_orchestration_no_change_falls_through();
