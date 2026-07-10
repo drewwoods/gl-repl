@@ -1,11 +1,12 @@
 /*
  * test_repl_flatten_differential.c - Flatten fast-path differential.
  *
- * flatten_reparse_line() appends a `has_vars == 0` source command verbatim
- * instead of re-parsing its text (docs/plans/in-review/
- * flatten-performance-without-vm.md, phase 1A). The claim that makes it safe
- * is that a literal command's committed args/payload are already the parse of
- * its current text: nothing visible at that source position can change them.
+ * Phase 1's flatten fast paths reuse committed command structure instead of
+ * rediscovering it from source text on every expanded instance:
+ *
+ *   - has_vars == 0 appends the committed command verbatim (Phase 1A),
+ *   - standard numeric commands evaluate only their known argument list,
+ *   - scalar assignments evaluate their already-canonical REPL RHS directly.
  *
  * This suite tests that claim over the whole built-in corpus. Each example is
  * flattened twice from an identical baseline — once normally, once with
@@ -28,6 +29,7 @@
 #include "editor/state.h"
 #include "app/glr_ctrl.h"
 #include "repl/command.h"
+#include "repl/color_limits.h"
 #include "repl/eval.h"
 #include "repl/example_loader.h"
 #include "repl/examples.h"
@@ -345,6 +347,46 @@ static void test_var_assign_differential(void) {
                     checked, 1);
 }
 
+/* Exercise both Phase 1C paths together. k's assignment is evaluated without
+ * the redundant C->REPL translation, then the known glClearColor shape is
+ * evaluated without command-name dispatch. The dynamic RGB clamp is a parser
+ * post-processing rule that the direct path must preserve. */
+static void test_direct_eval_differential(void) {
+    Baseline base;
+
+    glr_ctrl_reset_all();
+    editor_feed_line("float k;");
+    editor_feed_line("k = t * 2;");
+    editor_feed_line("glClearColor(k, k + 0.1, -k, 1);");
+    editor_feed_line("glVertex3f(k, t, 0); // direct path");
+    baseline_capture(&base);
+
+    repl_set_time(0.75f);
+    flatten_into(&g_fast, /*force_reparse=*/0);
+    baseline_restore(&base);
+    repl_set_time(0.75f);
+    flatten_into(&g_reparse, /*force_reparse=*/1);
+    baseline_restore(&base);
+
+    TEST_ASSERT_INT(&g_harness, "direct eval: same flat count",
+                    g_fast.result.flat_cmd_count,
+                    g_reparse.result.flat_cmd_count);
+    for (int i = 0; i < g_fast.result.flat_cmd_count; i++)
+        TEST_ASSERT_INT(&g_harness, "direct eval: command matches parser",
+                        flat_cmd_equal(&g_fast.cmds[i], &g_reparse.cmds[i]), 1);
+    TEST_ASSERT_INT(&g_harness, "direct eval: post-flatten predefs match",
+                    memcmp(g_fast.predef, g_reparse.predef,
+                           sizeof(g_fast.predef)) == 0, 1);
+
+    /* k=1.5, so positive RGB channels must clamp while -k remains intact. */
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "direct eval: red clamp",
+                              g_fast.cmds[1].args[0], REPL_CLEAR_COLOR_MAX_V);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "direct eval: green clamp",
+                              g_fast.cmds[1].args[1], REPL_CLEAR_COLOR_MAX_V);
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, "direct eval: negative blue kept",
+                              g_fast.cmds[1].args[2], -1.5f);
+}
+
 int main(void) {
     repl_eval_init_predef_vars();
     glr_ctrl_reset_all();   /* binds the live command store before the first load */
@@ -354,6 +396,7 @@ int main(void) {
     test_literal_cmd_keeps_is_auto();
     test_auto_normal_differential();
     test_var_assign_differential();
+    test_direct_eval_differential();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_repl_flatten_differential");

@@ -198,6 +198,25 @@ This plan deliberately keeps whole-cache invalidation at the source-dirty seam.
 Per-line cache invalidation is not needed to make slider motion warm and would
 add cache-index shifting/generation complexity for insert/delete operations.
 
+### 1C. Evaluate known command shapes directly
+
+The source command already records the parsed `CmdType`, argument count, and
+payload. For variable-bearing standard numeric commands, use that committed
+shape to extract and evaluate only the argument list; do not redispatch,
+revalidate, or canonicalize the entire line on each expanded instance. Preserve
+command-specific postprocessing such as the dynamic `glClearColor` clamp, and
+fall back to the general parser whenever the direct shape check misses.
+
+Likewise, a committed scalar assignment's editor/import text is already
+canonical REPL syntax. Extract its RHS with the existing assignment helper and
+evaluate it directly instead of defensively translating it through C syntax on
+every visit. `force_reparse` retains the old path as the differential reference.
+
+This remains an always-full-flatten design: loops, calls, conditions, output
+materialization, provenance, and local snapshots are rebuilt normally. It is
+the understandable no-cache baseline against which Phase 2 must justify its
+additional machinery.
+
 ## Phase 2 — Compile expressions once
 
 ### Representation and ownership

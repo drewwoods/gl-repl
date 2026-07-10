@@ -8,6 +8,8 @@
 #include "repl/pipeline.h"
 #include "source_document.h"
 #include "repl/command.h"
+#include "repl/command_spec.h"
+#include "repl/color_limits.h"
 #include "repl/eval.h"
 #include "repl/text_helpers.h"
 #include "repl/flatten.h"
@@ -377,6 +379,57 @@ static int flatten_cmd_is_source_only_cond_marker(CmdType type) {
     return (type == CMD_IF_END || repl_cmd_is_if_branch_separator(type));
 }
 
+/* A committed standard command already records its command type and arity.
+ * Re-evaluate only the argument substring instead of redispatching and
+ * revalidating the whole source line. Returning 0 is deliberately a soft
+ * miss: unusual-but-valid text (for example a trailing comment containing
+ * ')') falls back to the general parser below. */
+static const ReplStdCommandSpec *flatten_std_spec_for_type(CmdType type) {
+    const ReplStdCommandSpec *def;
+
+    for (def = repl_std_command_specs(); def->name; def++)
+        if (def->type == type)
+            return def;
+    return NULL;
+}
+
+static int flatten_eval_std_cmd(const GLCmd *src_cmd, const char *text,
+                                ExprVar *vars, int nv, GLCmd *out) {
+    const ReplStdCommandSpec *def = flatten_std_spec_for_type(src_cmd->type);
+    const char *open;
+    const char *close;
+    char args[MAX_LINE_LEN];
+    int arg_len;
+    int exact_count = 0;
+
+    if (!def || !text || !out)
+        return 0;
+    open = strchr(text, '(');
+    close = open ? strrchr(open + 1, ')') : NULL;
+    if (!open || !close || close <= open)
+        return 0;
+    arg_len = (int)(close - open - 1);
+    if (arg_len < 0 || arg_len >= (int)sizeof(args))
+        return 0;
+    memcpy(args, open + 1, (size_t)arg_len);
+    args[arg_len] = '\0';
+
+    *out = *src_cmd;
+    if (!parse_expr_list_exact(args, out->args, def->num_args,
+                               vars, nv, &exact_count) ||
+        exact_count != def->num_args)
+        return 0;
+    out->num_args = exact_count;
+
+    /* Preserve the parser's post-evaluation behavior for dynamic colors. */
+    if (out->type == CMD_CLEAR_COLOR) {
+        for (int ci = 0; ci < 3; ci++)
+            if (out->args[ci] > REPL_CLEAR_COLOR_MAX_V)
+                out->args[ci] = REPL_CLEAR_COLOR_MAX_V;
+    }
+    return 1;
+}
+
 /* Re-parse a source line into the flat buffer, evaluating expressions
  * against the current variable bindings.  Four paths converge here:
  *   0. src_cmd->has_vars == 0 → literal line: append the committed command
@@ -439,7 +492,12 @@ static int flatten_reparse_line(FlattenContext *ctx,
     int rv = 1;
 
     prof_begin(PROF_FLATTEN_REPARSE);
-    if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
+    if ((!ctx->force_reparse &&
+         flatten_eval_std_cmd(src_cmd, text,
+                              has_local_vars ? vars : NULL,
+                              has_local_vars ? nv : 0,
+                              &tmp_pl.cmd)) ||
+        repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
         GLCmd tmp = tmp_pl.cmd;
         /* Restore is_auto after the parse, not before it: the parser memsets
          * the whole ReplParsedLine as its first statement, so a seed written
@@ -496,10 +554,20 @@ static int flatten_var_assign(FlattenContext *ctx, const GLCmd *src_cmd, int i,
 
     if (repl_extract_assignment_parts(src_text, NULL, 0,
                                       rhs, sizeof(rhs)) && rhs[0]) {
-        char repl_rhs[MAX_LINE_LEN];
-        repl_eval_c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
-        ExprCtx expr_ctx = { repl_rhs, vars, nv, NULL, 0 };
-        value = repl_eval_expr(&expr_ctx);
+        if (!ctx->force_reparse) {
+            /* Editor/import source is canonical REPL text. The committed
+             * command already validated the assignment, so evaluate its RHS
+             * directly and avoid the defensive REPL->C->REPL translation. */
+            ExprCtx expr_ctx = { rhs, vars, nv, NULL, 0 };
+            value = repl_eval_expr(&expr_ctx);
+        } else {
+            /* Differential reference: retain the pre-Phase-1C path. */
+            char repl_rhs[MAX_LINE_LEN];
+            ExprCtx expr_ctx;
+            repl_eval_c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
+            expr_ctx = (ExprCtx){ repl_rhs, vars, nv, NULL, 0 };
+            value = repl_eval_expr(&expr_ctx);
+        }
         if (vars && nv > 0)
             local_rhs_vars = input_has_expr_vars(rhs, vars, nv);
     }
