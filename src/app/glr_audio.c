@@ -962,6 +962,12 @@ static unsigned int g_track_generation = 0;
 /* Flag set to cancel a load in-flight when playlist is reset. */
 static int g_load_cancelled = 0;
 
+/* Seek requested while a worker load is in flight (g_active still -1).
+ * Recorded by glr_audio_seek() and picked up by worker_load() just before
+ * it publishes the slot, so a seek issued mid-load isn't dropped.
+ * GLR_AUDIO_NO_SEEK means "no pending mid-load seek". */
+static float g_load_seek = GLR_AUDIO_NO_SEEK;
+
 /* ------------------------------------------------------------------ */
 /* Background worker (owns all file-blocking miniaudio + state I/O)     */
 /* ------------------------------------------------------------------ */
@@ -1033,6 +1039,7 @@ static void reset_audio_module_state(void) {
     g_pending_seek = GLR_AUDIO_NO_SEEK;
     g_track_generation = 0;
     g_load_cancelled = 0;
+    g_load_seek = GLR_AUDIO_NO_SEEK;
 
 #if !GLR_AUDIO_NO_THREAD
     g_worker_running = 0;
@@ -1447,11 +1454,38 @@ static int worker_load(int idx, float seek_secs) {
     paused    = g_paused;
     g_loading = 1;
     g_load_cancelled = 0;
+    /* g_load_seek is reset at dequeue time (audio_dequeue_and_run), not
+     * here: a seek arriving between dequeue and this point must survive. */
     audio_unlock();
 
     if (g_slot_inited[target]) {           /* stale (failed prior load) */
         ma_sound_uninit(&g_slot[target]);
         g_slot_inited[target] = 0;
+    }
+
+    /* Pre-flight the path with a plain fopen before handing it to
+     * miniaudio. A streamed sound (MA_SOUND_FLAG_STREAM) that fails to
+     * open triggers a heap-use-after-free *inside miniaudio*:
+     * ma_sound_init_from_file_internal ma_free()s the resource-manager
+     * data-stream object on the failure path while the resource manager's
+     * own job thread is still processing the queued load_data_stream job
+     * for it (ma_job_process__resource_manager__load_data_stream writes
+     * into the freed region). The fallback walk hits missing files
+     * routinely (a saved resume track that was deleted, a stale playlist),
+     * so this is a live crash, not just a test artifact. Refusing to open
+     * an unreadable path sidesteps miniaudio's buggy failed-stream
+     * teardown entirely; the caller's fallback walk then moves on to the
+     * next entry exactly as it would on an ma_sound_init_from_file error. */
+    {
+        FILE *probe = fopen(path, "rb");
+        if (!probe) {
+            fprintf(stderr,
+                    "repl_audio: cannot open \"%s\" for streaming (skipping)\n",
+                    path);
+            audio_lock(); g_loading = 0; audio_unlock();
+            return -1;
+        }
+        fclose(probe);
     }
 
     /* STREAM: decode on demand (small memory, fine for music).
@@ -1504,6 +1538,7 @@ static int worker_load(int idx, float seek_secs) {
     if (paused)
         ma_sound_stop(&g_slot[target]);
 
+    float mid_load_seek;
     audio_lock();
     if (g_load_cancelled) {
         g_loading = 0;
@@ -1518,8 +1553,22 @@ static int worker_load(int idx, float seek_secs) {
     g_playlist_pos        = idx;
     g_playlist_duration_secs[idx] = duration_secs;
     g_track_generation++;
+    /* A seek that arrived while g_loading was set recorded itself in
+     * g_load_seek rather than touching the not-yet-published slot. Clear
+     * g_loading atomically with capturing it so a seek racing right here
+     * either lands in g_load_seek (applied below) or, once g_loading is 0
+     * and g_active is set, takes the direct-seek path — no lost-seek gap. */
+    mid_load_seek = g_load_seek;
+    g_load_seek   = GLR_AUDIO_NO_SEEK;
     g_loading             = 0;
     audio_unlock();
+
+    if (mid_load_seek >= 0.0f) {
+        ma_uint32 sr = ma_engine_get_sample_rate(&g_engine);
+        if (sr > 0)
+            ma_sound_seek_to_pcm_frame(
+                &g_slot[target], (ma_uint64)(mid_load_seek * (float)sr));
+    }
 
     /* Retire the previous slot now that the new one is live. Off-lock:
      * stream teardown may block, but only the worker is here. */
@@ -1618,7 +1667,17 @@ static AudioWorkerReq audio_run_request(AudioWorkerReq k, int idx,
 
     double t0 = worker_now_ms();
     const char *op = "save";
-    if (k == AWR_START)        { op = "load";    worker_start_or_fallback(idx, seek); }
+    if (k == AWR_START) {
+        op = "load";
+        if (worker_start_or_fallback(idx, seek) != 0) {
+            /* No track was published (bad index, or every candidate failed
+             * to open). g_loading was claimed at dequeue time; a failing
+             * worker_load clears it, but the early bad-index return in
+             * worker_start_or_fallback doesn't run worker_load at all, so
+             * clear it here to guarantee the flag is resolved. */
+            audio_lock(); g_loading = 0; audio_unlock();
+        }
+    }
     else if (k == AWR_ADVANCE) { op = "advance"; worker_advance(); }
     else if (k == AWR_UNINIT)  { op = "uninit";  worker_uninit_all(); }
 
@@ -1656,6 +1715,23 @@ static AudioWorkerReq audio_dequeue_and_run(void) {
     int            save = g_req_save;
     g_req      = AWR_NONE;
     g_req_save = 0;
+    /* For a start request, mark "load in flight" the instant we clear the
+     * request, before releasing the lock. worker_load() sets g_loading
+     * again once it starts, but that leaves a gap here (g_req cleared,
+     * g_loading not yet set) in which a concurrent glr_audio_seek() would
+     * see neither AWR_START nor g_loading and drop the seek. Claiming
+     * g_loading now, atomically with clearing g_req, closes that gap;
+     * audio_run_request clears it if the start ultimately publishes no
+     * track. Reset g_load_seek here too (not in worker_load) so a seek that
+     * arrives in this window isn't wiped by a later reset.
+     *
+     * AWR_ADVANCE is deliberately excluded: worker_advance may end the
+     * playlist without ever calling worker_load, which would strand
+     * g_loading at 1; its own worker_load sets the flag when it does load. */
+    if (k == AWR_START) {
+        g_loading   = 1;
+        g_load_seek = GLR_AUDIO_NO_SEEK;
+    }
     audio_unlock();
 
     if (k == AWR_NONE && !save)
@@ -2018,6 +2094,16 @@ int glr_audio_seek(float seek_secs) {
         return 0;
     }
 
+    /* The worker has consumed AWR_START (g_req back to AWR_NONE) but hasn't
+     * published the slot yet: g_loading is still 1 and g_active is -1.
+     * Record the seek so worker_load() applies it at publish time instead
+     * of dropping it on the floor. */
+    if (g_loading) {
+        g_load_seek = seek_secs;
+        audio_unlock();
+        return 0;
+    }
+
     audio_unlock();
     return -1;
 }
@@ -2036,6 +2122,11 @@ int glr_audio_seek_relative(float offset_secs) {
         current = (g_pending_seek >= 0.0f) ? g_pending_seek : 0.0f;
     } else if (g_req == AWR_START) {
         current = (g_req_seek >= 0.0f) ? g_req_seek : 0.0f;
+    } else if (g_loading) {
+        /* Mid-load window: base the relative seek on any recorded mid-load
+         * seek, else the request's start offset, else 0. */
+        current = (g_load_seek >= 0.0f) ? g_load_seek
+                : (g_req_seek >= 0.0f)  ? g_req_seek : 0.0f;
     } else {
         audio_unlock();
         return -1;
