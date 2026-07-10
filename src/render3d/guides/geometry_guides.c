@@ -457,10 +457,166 @@ static void draw_normal_guides(const Render3dGuideSnapshot *snapshot) {
     geometry_guides_pop_state();
 }
 
+/* Segments for the clip-plane guide disc rim / fan. */
+#define GEOMETRY_GUIDE_CLIP_DISC_SEGS 48
+/* Disc radius, matching the vertex guide's axis-plane half-size. */
+#define GEOMETRY_GUIDE_CLIP_DISC_RADIUS 3.0f
+
+/*
+ * Edit guide for the glClipPlane command under the cursor: a soft
+ * "glass sheet" lying in the plane a*x + b*y + c*z + d = 0, in the
+ * modelview frame where the call executes (GL transforms the equation
+ * by the modelview at call time, so the guide is drawn in that same
+ * frame by the cursor-guide walk).
+ *
+ *   - a radially-fading translucent disc (additive, so it glows over
+ *     the scene rather than dimming it)
+ *   - faint in-plane grid chords whose alpha peaks mid-chord and fades
+ *     to nothing at the rim — the "gridded glass" read
+ *   - a solid rim under depth test plus a stippled ghost rim over it
+ *     (the shared occluded-ghost dash language: dashes = behind things)
+ *   - the focused-normal arrow glyph pointing into the KEPT half-space
+ *     (a*x+b*y+c*z+d >= 0), labeled " Pn" with the equation readout
+ *
+ * The whole guide dims when the program never enables the plane's
+ * GL_CLIP_PLANEn cap, and the readout appends "(off)".
+ */
+static void draw_clip_plane_guide(const Render3dGuideSnapshot *snapshot) {
+    if (!snapshot->show_guides)
+        return;
+    if (strncmp(snapshot->input, "glClipPlane(", 12) != 0 ||
+        snapshot->input_len <= 12)
+        return;
+    if (snapshot->clip_plane_idx < 0 || snapshot->clip_plane_n_filled < 3)
+        return;
+
+    float a = snapshot->clip_plane_args[0];
+    float b = snapshot->clip_plane_args[1];
+    float c = snapshot->clip_plane_args[2];
+    float d = (snapshot->clip_plane_n_filled >= 4)
+                  ? snapshot->clip_plane_args[3] : 0.0f;
+    float len = sqrtf(a * a + b * b + c * c);
+    if (len < 1e-6f)
+        return;
+
+    float n[3] = { a / len, b / len, c / len };
+    /* Point on the plane closest to the origin: -d/|n| along n. */
+    float p0[3] = { -d / len * n[0], -d / len * n[1], -d / len * n[2] };
+
+    /* In-plane tangent basis (u, v). */
+    float ref[3] = { 0.0f, 1.0f, 0.0f };
+    if (fabsf(n[1]) > 0.9f) { ref[0] = 1.0f; ref[1] = 0.0f; }
+    float u[3] = { n[1] * ref[2] - n[2] * ref[1],
+                   n[2] * ref[0] - n[0] * ref[2],
+                   n[0] * ref[1] - n[1] * ref[0] };
+    float ulen = sqrtf(u[0] * u[0] + u[1] * u[1] + u[2] * u[2]);
+    if (ulen < 1e-6f)
+        return;
+    u[0] /= ulen; u[1] /= ulen; u[2] /= ulen;
+    float v[3] = { n[1] * u[2] - n[2] * u[1],
+                   n[2] * u[0] - n[0] * u[2],
+                   n[0] * u[1] - n[1] * u[0] };
+
+    float sz = GEOMETRY_GUIDE_CLIP_DISC_RADIUS;
+    float as = snapshot->alpha_scale;
+    /* Dim the whole guide when the plane's cap is never enabled. */
+    float on = snapshot->clip_plane_cap_enabled ? 1.0f : 0.45f;
+
+    geometry_guides_push_state();
+    glDisable(GL_LIGHTING);
+    glDisable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+
+    /* Soft radial sheet: brighter center fading to a transparent rim. */
+    glShadeModel(GL_SMOOTH);
+    glBegin(GL_TRIANGLE_FAN);
+    render3d_clr_a(RENDER3D_CLR_GUIDE_CLIP_FILL, fminf(0.30f * as * on, 1.0f));
+    glVertex3f(p0[0], p0[1], p0[2]);
+    render3d_clr_a(RENDER3D_CLR_GUIDE_CLIP_FILL, 0.02f * as * on);
+    for (int k = 0; k <= GEOMETRY_GUIDE_CLIP_DISC_SEGS; k++) {
+        float ang = (float)(2.0 * M_PI) * (float)k /
+                    (float)GEOMETRY_GUIDE_CLIP_DISC_SEGS;
+        float ca = cosf(ang), sa = sinf(ang);
+        glVertex3f(p0[0] + (ca * u[0] + sa * v[0]) * sz,
+                   p0[1] + (ca * u[1] + sa * v[1]) * sz,
+                   p0[2] + (ca * u[2] + sa * v[2]) * sz);
+    }
+    glEnd();
+
+    /* In-plane grid chords: alpha peaks mid-chord, fades to 0 at the
+     * rim (two smooth-shaded segments per chord). */
+    glLineWidth(1.0f);
+    for (int axis = 0; axis < 2; axis++) {
+        const float *ga = axis ? v : u; /* chord offset direction */
+        const float *gb = axis ? u : v; /* chord line direction */
+        for (int gi = -2; gi <= 2; gi++) {
+            float o = (float)gi * (sz / 3.0f);
+            float h = sqrtf(sz * sz * 0.98f - o * o);
+            float mid[3] = { p0[0] + o * ga[0], p0[1] + o * ga[1],
+                             p0[2] + o * ga[2] };
+            float mid_alpha = fminf(0.28f * as * on, 1.0f);
+            glBegin(GL_LINE_STRIP);
+            render3d_clr_a(RENDER3D_CLR_GUIDE_CLIP_EDGE, 0.0f);
+            glVertex3f(mid[0] - h * gb[0], mid[1] - h * gb[1],
+                       mid[2] - h * gb[2]);
+            render3d_clr_a(RENDER3D_CLR_GUIDE_CLIP_EDGE, mid_alpha);
+            glVertex3f(mid[0], mid[1], mid[2]);
+            render3d_clr_a(RENDER3D_CLR_GUIDE_CLIP_EDGE, 0.0f);
+            glVertex3f(mid[0] + h * gb[0], mid[1] + h * gb[1],
+                       mid[2] + h * gb[2]);
+            glEnd();
+        }
+    }
+
+    /* Rim, two passes: solid under depth test, then the stippled ghost
+     * with depth off so the outline reads through occluding geometry. */
+    for (int ghost = 0; ghost < 2; ghost++) {
+        if (ghost) {
+            glDisable(GL_DEPTH_TEST);
+            glEnable(GL_LINE_STIPPLE);
+            glLineStipple(1, RENDER3D_OCCLUDED_GHOST_STIPPLE);
+            render3d_clr_a(RENDER3D_CLR_GUIDE_CLIP_EDGE,
+                           fminf(0.30f * as * on, 1.0f));
+        } else {
+            render3d_clr_a(RENDER3D_CLR_GUIDE_CLIP_EDGE,
+                           fminf(0.55f * as * on, 1.0f));
+        }
+        glBegin(GL_LINE_LOOP);
+        for (int k = 0; k < GEOMETRY_GUIDE_CLIP_DISC_SEGS; k++) {
+            float ang = (float)(2.0 * M_PI) * (float)k /
+                        (float)GEOMETRY_GUIDE_CLIP_DISC_SEGS;
+            float ca = cosf(ang), sa = sinf(ang);
+            glVertex3f(p0[0] + (ca * u[0] + sa * v[0]) * sz,
+                       p0[1] + (ca * u[1] + sa * v[1]) * sz,
+                       p0[2] + (ca * u[2] + sa * v[2]) * sz);
+        }
+        glEnd();
+    }
+    glDisable(GL_LINE_STIPPLE);
+
+    /* Kept-half-space arrow + equation readout (depth already off). */
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    char primary[16];
+    char detail[128];
+    snprintf(primary, sizeof(primary), " P%d", snapshot->clip_plane_idx);
+    snprintf(detail, sizeof(detail), "=(%.2f, %.2f, %.2f, %.2f)%s",
+             guide_sanitize_zero(a), guide_sanitize_zero(b),
+             guide_sanitize_zero(c), guide_sanitize_zero(d),
+             snapshot->clip_plane_cap_enabled ? "" : " (off)");
+    render3d_draw_focused_normal_glyph(p0[0], p0[1], p0[2],
+                                    n[0], n[1], n[2],
+                                    0.9f, as * on, primary, detail);
+
+    glDisable(GL_BLEND);
+    geometry_guides_pop_state();
+}
+
 void render3d_geometry_guides_render_for_cursor(const Render3dGuideSnapshot *snapshot) {
     if (!snapshot)
         return;
     draw_vertex_guides(snapshot);
     draw_raster_pos_guide(snapshot);
     draw_normal_guides(snapshot);
+    draw_clip_plane_guide(snapshot);
 }

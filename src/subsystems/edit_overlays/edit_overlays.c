@@ -1548,6 +1548,15 @@ Render3dGuideSnapshot cursor_guide_snapshot_with_flat_args(const Render3dGuideSn
         snap.raster_pos_args[1] = flat->args[1];
         snap.raster_pos_args[2] = flat->args[2];
         snap.raster_pos_n_filled = 3;
+    } else if (flat->type == CMD_CLIP_PLANE) {
+        /* args[0] is the plane enum; the equation follows. Flatten
+         * re-bakes these each frame for has_vars lines, so an animated
+         * plane (d = t, say) sweeps live. */
+        snap.clip_plane_args[0] = flat->args[1];
+        snap.clip_plane_args[1] = flat->args[2];
+        snap.clip_plane_args[2] = flat->args[3];
+        snap.clip_plane_args[3] = flat->args[4];
+        snap.clip_plane_n_filled = 4;
     } else if (flat->type == CMD_NORMAL3F || flat->type == CMD_TESS_NORMAL) {
         snap.normal_args[0] = flat->args[0];
         snap.normal_args[1] = flat->args[1];
@@ -1659,6 +1668,15 @@ void edit_overlays_render_cursor_guides(const Render3dGuideSnapshot *snapshot,
                                              ctx.xform_plan.cursor_flat_idx,
                                              ctx.cam_view);
     }
+
+    /* A clip-plane line the walk never anchored (brand-new / uncommitted
+     * row, or an empty program) still previews live while typing —
+     * rendered in the world frame, since there's no flat instance whose
+     * transform context could be replayed yet. Committed lines take the
+     * walk path above and render in their true modelview. */
+    if (!ctx.geometry_guide_done && !snapshot->replaying &&
+        strncmp(snapshot->input, "glClipPlane(", 12) == 0)
+        render3d_geometry_guides_render_for_cursor(snapshot);
 
     glPopMatrix();
     glPopAttrib();
