@@ -28,8 +28,8 @@ int main(void) {
                         g_ui_theme_table[th][t][3] > 0.0f);
 
     /* 2. Neutral chrome tokens are identical across every theme row
-     * (UI_TOK_SURFACE .. UI_TOK_STATUS_ERR is the theme-stable band). */
-    for (int t = UI_TOK_SURFACE; t <= UI_TOK_STATUS_ERR; t++)
+     * (UI_TOK_SURFACE .. UI_TOK_STATUS_ERR_TEXT is the theme-stable band). */
+    for (int t = UI_TOK_SURFACE; t <= UI_TOK_STATUS_ERR_TEXT; t++)
         for (int th = 1; th < UI_THEME_COUNT; th++)
             for (int k = 0; k < 4; k++)
                 ASSERT_F("neutral token stable across themes",

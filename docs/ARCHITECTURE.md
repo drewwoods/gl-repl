@@ -861,7 +861,7 @@ subheading runs.
 
 All 2D UI chrome resolves color through [`src/ui/core/theme.h`](../src/ui/core/theme.h) (header-only,
 the [`gl_2d.h`](../src/ui/core/gl_2d.h) pattern) instead of scattered `glColor*` literals. It
-defines ~19 semantic `UI_TOK_*` tokens and a
+defines ~20 semantic `UI_TOK_*` tokens and a
 `g_ui_theme_table[UiTheme][UI_TOK_COUNT]` with six rows (green default,
 plus warm / cyan / amber / violet / mono from the design-rework
 bundle). Neutral chrome columns are identical across rows; only the
@@ -876,10 +876,14 @@ Color falls into three buckets:
 1. **Theme token** — accent + shared neutral chrome (surfaces, borders,
    dividers, text tiers, hover/selection): `ui_clr(UI_TOK_*)`.
 2. **Named constant** — fixed, non-theme one-offs that must keep their
-   hue in every scheme: the blue inline-rename modal, the amber status
-   banner, the ephemeral example-tab amber, the variable-row data
-   palette, dim/stale text tiers, the `#000` menubar rule. A local
-   `static const` documented at the use site.
+   hue in every scheme: the ephemeral example-tab amber, the
+   variable-row data palette, dim/stale text tiers, the `#000` menubar
+   rule. A local `static const` documented at the use site. (The status
+   banner, messages bell/list, and inline-rename modal strip moved to
+   bucket 1: neutral `RAISED`/`BORDER` surfaces with severity carried by
+   the dot/text/edge-stripe via `UI_TOK_ACCENT` /
+   `UI_TOK_STATUS_ERR[_TEXT]`, and the modal strip on the
+   accent-derived tokens so it re-tints per scheme.)
 3. **Left as-is** — computed/domain palettes that must not follow the
    accent: [`src/ui/subsystems/color_picker.c`](../src/ui/subsystems/color_picker.c) HSV math,
    [`src/ui/app/repl_code_panel.c`](../src/ui/app/repl_code_panel.c) syntax-highlight palette, the
@@ -892,8 +896,8 @@ single compile-time knob: a bare integer (`0` green … `5` mono — kept
 type-free so [`config.h`](../config.h) stays clear of UI types per its dependency
 note) used to initialize `g_ui_theme`. It is `#ifndef`-guarded and
 build-overridable, e.g. `make gl-repl CPPFLAGS=-DUI_THEME_DEFAULT=1`;
-[`theme.h`](../src/ui/core/theme.h) `STATIC_ASSERT`s the value is in range against the [`UiTheme`](../src/ui/core/theme.h#L62)
-enum. The [`ui_theme_select()`](../src/ui/core/theme.h#L113) / [`ui_theme_active()`](../src/ui/core/theme.h#L114) seam keeps call
+[`theme.h`](../src/ui/core/theme.h) `STATIC_ASSERT`s the value is in range against the [`UiTheme`](../src/ui/core/theme.h#L65)
+enum. The [`ui_theme_select()`](../src/ui/core/theme.h#L117) / [`ui_theme_active()`](../src/ui/core/theme.h#L118) seam keeps call
 sites stable for a future runtime switcher (e.g. a [`GlrConfigKey`](../src/app/glr_config.h#L29)
 cycle) that would relocate the active index into one `.c` TU.
 [`tests/test_ui_theme.c`](../tests/test_ui_theme.c) (header-only) guards table integrity: no

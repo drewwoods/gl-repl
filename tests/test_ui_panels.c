@@ -186,8 +186,10 @@ static void test_scene_status_error_banner(void) {
 
     ASSERT_TRUE("error banner draws (color calls exist)",
                 err_color4f > 0);
-    ASSERT_INT_EQ("error and info use same number of color calls",
-                  (int)err_color4f, (int)info_color4f);
+    /* Error renders the info structure plus exactly one extra color set:
+     * the UI_TOK_STATUS_ERR leading-edge stripe on the neutral band. */
+    ASSERT_INT_EQ("error adds exactly the edge-stripe color call",
+                  (int)err_color4f, (int)info_color4f + 1);
 }
 
 static void test_scene_status_no_render_when_inactive(void) {

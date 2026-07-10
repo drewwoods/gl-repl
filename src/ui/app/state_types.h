@@ -62,10 +62,11 @@ typedef struct {
     int mode;
 } UiMemoryPanelState;
 
-/* Status banner severity. Renderer picks the palette from this. INFO is
- * the historical amber; ERROR is a red palette so failures (flatten
- * limit, command-buffer full, parse errors) are unmissable. MUSIC uses
- * the INFO palette but swaps the severity dot for an eighth-note glyph
+/* Status banner severity. Renderer picks the palette from this. INFO
+ * renders on the neutral themed band with an accent dot; ERROR adds the
+ * error text hue and a leading-edge stripe so failures (flatten limit,
+ * command-buffer full, parse errors) are unmissable. MUSIC uses the
+ * INFO palette but swaps the severity dot for an eighth-note glyph
  * (now-playing announcements). */
 typedef enum {
     UI_STATUS_INFO = 0,
