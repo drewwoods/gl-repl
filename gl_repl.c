@@ -4,6 +4,7 @@
 #include "app/glr_audio.h"
 #include "app/glr_mesh_export.h"
 #include "app/glr_paths.h"
+#include "app/splash.h"
 #include "repl/examples.h"
 
 #include <ctype.h>
@@ -388,6 +389,11 @@ static void display_func(void) {
         exit(n < 0 ? 1 : 0);
     }
 
+    /* Startup splash banner along the bottom; frame-counted, fades out.
+     * Drawn over the composited frame so the scene/UI warm up underneath. */
+    if (splash_active())
+        splash_render(glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT));
+
     glFinish(); /* ensure all GL commands are done before we timestamp the swap */
     glutSwapBuffers();
     if (trace_this) {
@@ -402,6 +408,7 @@ static void reshape_func(int w, int h) {
 }
 
 static void keyboard_func(unsigned char key, int x, int y) {
+    splash_skip(); /* any keypress dismisses the startup banner */
     glr_ctrl_keyboard(key, x, y);
 }
 
