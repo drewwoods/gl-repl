@@ -179,7 +179,8 @@
         transition: opacity 0.45s ease, visibility 0s 0.45s;
       }
 
-      #overlay .mark { height: 56px; width: 56px; }
+      /* The rotating open-cube mark doubles as the loading spinner. */
+      #overlay .mark { height: 96px; width: 98px; }
 
       #overlay .title {
         color: var(--amber);
@@ -192,20 +193,6 @@
         color: var(--dim);
         font-size: 13px;
         margin-top: -10px;
-      }
-
-      .spinner {
-        animation: rotation 0.8s linear infinite;
-        border: 3px solid var(--border);
-        border-top-color: var(--amber);
-        border-radius: 100%;
-        height: 22px;
-        width: 22px;
-      }
-
-      @keyframes rotation {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
       }
 
       #status {
@@ -267,10 +254,9 @@
       <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex="0"></canvas>
 
       <div id="overlay">
-        <svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><use href="#cube-mark-color"/></svg>
+        <canvas class="mark" id="splashCube" width="192" height="196" aria-hidden="true"></canvas>
         <div class="title">gl-repl</div>
         <div class="subtitle">OpenGL immediate-mode REPL &middot; WebAssembly build</div>
-        <div class="spinner" id="spinner"></div>
         <div id="status">Downloading...</div>
         <progress value="0" max="100" id="progress" hidden></progress>
       </div>
@@ -283,7 +269,6 @@
     <script type="text/javascript">
       var statusElement = document.getElementById('status');
       var progressElement = document.getElementById('progress');
-      var spinnerElement = document.getElementById('spinner');
       var overlayElement = document.getElementById('overlay');
       var stageElement = document.getElementById('stage');
       var canvasElement = document.getElementById('canvas');
@@ -295,6 +280,78 @@
       var fullscreenButton = document.getElementById('fullscreenButton');
       var lastSceneFilename = 'gl-repl-scene.c';
       if (outputElement) outputElement.value = '';
+
+      // Loading-overlay splash: the rotating open-cube mark (lit-cube.glr's
+      // 4-faced cube, both X faces open), same software projection as the
+      // native splash and scripts/gen_rotating_cube.py.  Doubles as the
+      // spinner; freezes when the overlay hides (or errors) and never
+      // animates under prefers-reduced-motion.
+      (function () {
+        var cv = document.getElementById('splashCube');
+        if (!cv || !cv.getContext) return;
+        var ctx = cv.getContext('2d');
+        var W = cv.width, H = cv.height;
+        var PITCH = 0.6155, REST = Math.PI / 4;
+        var V = [[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],
+                 [-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]];
+        var F = [
+          { v: [4,5,6,7], ext: [210,213,219], inn: [ 79,169,240] }, // +z wall
+          { v: [0,3,2,1], ext: [214,216,222], inn: [ 61,168,245] }, // -z wall
+          { v: [2,3,7,6], ext: [199,202,222], inn: [143,150,187] }, // +y top
+          { v: [0,1,5,4], ext: [185,188,198], inn: [248, 65,224] }  // -y floor
+        ];
+        var rot = function (v, yaw) {
+          var cy = Math.cos(yaw), sy = Math.sin(yaw);
+          var x = v[0]*cy + v[2]*sy, z1 = -v[0]*sy + v[2]*cy;
+          var cb = Math.cos(PITCH), sb = Math.sin(PITCH);
+          return [x, v[1]*cb - z1*sb, v[1]*sb + z1*cb];
+        };
+        var shade = function (c, k) {
+          return 'rgb(' + Math.min(255, c[0]*k|0) + ',' +
+            Math.min(255, c[1]*k|0) + ',' + Math.min(255, c[2]*k|0) + ')';
+        };
+        var draw = function (yaw) {
+          ctx.clearRect(0, 0, W, H);
+          var s = W * 0.31, cx = W / 2, cy = H / 2;
+          var p = V.map(function (v) { return rot(v, yaw); });
+          var scr = p.map(function (v) { return [cx + v[0]*s, cy - v[1]*s]; });
+          var passes = [[false, 1.4, 0.6], [true, 2.2, 0.96]];
+          passes.forEach(function (pass) {
+            F.forEach(function (f) {
+              var a = p[f.v[0]], b = p[f.v[1]], c = p[f.v[2]];
+              var nx = (b[1]-a[1])*(c[2]-b[2]) - (b[2]-a[2])*(c[1]-b[1]);
+              var ny = (b[2]-a[2])*(c[0]-b[0]) - (b[0]-a[0])*(c[2]-b[2]);
+              var nz = (b[0]-a[0])*(c[1]-b[1]) - (b[1]-a[1])*(c[0]-b[0]);
+              var n = Math.sqrt(nx*nx + ny*ny + nz*nz);
+              nz = n ? nz / n : 0;
+              if ((nz > 0) !== pass[0]) return;
+              ctx.beginPath();
+              ctx.moveTo(scr[f.v[0]][0], scr[f.v[0]][1]);
+              for (var i = 1; i < 4; i++) ctx.lineTo(scr[f.v[i]][0], scr[f.v[i]][1]);
+              ctx.closePath();
+              ctx.fillStyle = pass[0] ? shade(f.ext, 0.86 + 0.14*nz)
+                                      : shade(f.inn, 0.78 - 0.22*nz);
+              ctx.fill();
+              ctx.strokeStyle = 'rgba(255,255,255,' + pass[2] + ')';
+              ctx.lineWidth = pass[1];
+              ctx.lineJoin = 'round';
+              ctx.stroke();
+            });
+          });
+        };
+        var reduce = window.matchMedia &&
+          window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (reduce) { draw(REST); return; }
+        var t0 = null;
+        var tick = function (ts) {
+          if (overlayElement.classList.contains('hidden') ||
+              overlayElement.classList.contains('error')) return;
+          if (t0 === null) t0 = ts;
+          draw(REST + (ts - t0) * 2 * Math.PI / 12000);  // one rev / 12 s
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      })();
 
       var sceneControlsReady = false;
       var setSceneControlsReady = (ready) => {
@@ -444,7 +501,6 @@
       var showOverlayError = (text) => {
         overlayElement.classList.remove('hidden');
         overlayElement.classList.add('error');
-        spinnerElement.style.display = 'none';
         progressElement.hidden = true;
         statusElement.innerHTML = text;
       };
