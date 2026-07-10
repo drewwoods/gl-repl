@@ -88,6 +88,8 @@ extern "C" {
 #define GLUT_CURSOR_FULL_CROSSHAIR 102
 
 #define GLUT_ELAPSED_TIME 700
+#define GLUT_WINDOW_WIDTH 102
+#define GLUT_WINDOW_HEIGHT 103
 
 static const char glut_bitmap_8_by_13_stub = 0;
 static const char glut_bitmap_9_by_15_stub = 0;
