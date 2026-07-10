@@ -59,6 +59,8 @@ void variable_panel_handle_drag_begin(int row, int log_mode, int x) {
     g_drag_start_x = x;
     snprintf(drag->name, sizeof(drag->name), "%s", name);
     drag->undo_snapshot_pushed = 0;
+    drag->value_changed = 0;
+    drag->final_value = value;
 }
 
 void variable_panel_handle_drag_reset(void) {
@@ -69,6 +71,8 @@ void variable_panel_handle_drag_reset(void) {
     g_drag_start_x = 0;
     drag->name[0] = '\0';
     drag->undo_snapshot_pushed = 0;
+    drag->value_changed = 0;
+    drag->final_value = 0.0f;
 }
 
 static float drag_log_value(float start_value, int dx) {

@@ -41,13 +41,21 @@ typedef struct {
 /* Variable slider drag transaction: which variable is being dragged,
  * the variable name captured at drag-begin, the starting value, the
  * cursor anchor x in window pixels, and whether the controller has
- * already captured the coalesced undo snapshot for this drag. */
+ * already captured the coalesced undo snapshot for this drag.
+ *
+ * `value_changed` / `final_value` record what the motion handler actually
+ * applied. Motion only updates the live predef value; the declaration row in
+ * the code panel is rewritten once, on mouse-up, from `final_value` — so a
+ * drag performs no source mutation until it ends. `value_changed` also makes
+ * a no-motion click (press + release, no move) a complete no-op. */
 typedef struct {
     int   var_idx;
     int   log_mode;
     float start_value;
     char  name[REPL_PREDEF_NAME_MAX];
     int   undo_snapshot_pushed;
+    int   value_changed;
+    float final_value;
 } VariablePanelDragState;
 
 /* Composite peer state. The two slices keep their existing value types so the
@@ -96,6 +104,11 @@ int  variable_panel_drag_undo_snapshot_pushed(void);
 
 /* Mark the current drag's undo snapshot as captured. */
 void variable_panel_drag_mark_undo_snapshot_pushed(void);
+
+/* Record the value a motion event successfully applied to the live variable.
+ * Peer-owned so the app router never writes drag fields directly; mouse-up
+ * reads it back through variable_panel_drag() to decide whether to persist. */
+void variable_panel_drag_note_applied_value(float value);
 
 /* Begin a drag transaction on a variable row. */
 void variable_panel_handle_drag_begin(int row, int log_mode, int x);

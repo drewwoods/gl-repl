@@ -595,13 +595,22 @@ static void test_variable_panel_motion_routes_through_compile_and_coalesces_undo
     editor_undo_ring_state_capture(&undo_state);
     ASSERT_INT("drag motions coalesce to one undo snapshot",
                undo_state.undo_count, 1);
-    ASSERT_STR("drag rewrites declaration source through compiler",
-               editor_buffer_line(0), "  static float testvar = 6;");
+    /* Motion is live-only: the declaration keeps its drag-start text until
+     * mouse-up, so a drag performs no source mutation per pointer event. */
+    ASSERT_STR("drag leaves declaration source at its start text",
+               editor_buffer_line(0), "  static float testvar = 1;");
     ASSERT_FLOAT("drag updates live predef value", g_predef_vars[var_idx].value, 6.0f);
 
     ASSERT_INT("drag release handled",
                glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP),
                1);
+    ASSERT_STR("release rewrites declaration source through compiler",
+               editor_buffer_line(0), "  static float testvar = 6;");
+    ASSERT_FLOAT("release keeps live predef value",
+                 g_predef_vars[var_idx].value, 6.0f);
+    editor_undo_ring_state_capture(&undo_state);
+    ASSERT_INT("release captures no second undo snapshot",
+               undo_state.undo_count, 1);
     ASSERT_TRUE("drag inactive after release", !variable_panel_drag_active());
     ASSERT_INT("undo flag cleared after release",
                variable_panel_drag_undo_snapshot_pushed(), 0);
@@ -660,12 +669,14 @@ static void test_variable_panel_shift_left_drag_uses_fine_scale(void) {
     ASSERT_FLOAT("fine drag applies shared fine scale",
                  g_predef_vars[var_idx].value,
                  1.0f + 5.0f * GLR_ADJUST_FINE_SCALE);
-    ASSERT_STR("fine drag rewrites declaration source",
-               editor_buffer_line(0), "  static float testvar = 2;");
+    ASSERT_STR("fine drag motion leaves declaration source alone",
+               editor_buffer_line(0), "  static float testvar = 1;");
 
     ASSERT_INT("fine drag release handled",
                glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP),
                1);
+    ASSERT_STR("fine drag release rewrites declaration source",
+               editor_buffer_line(0), "  static float testvar = 2;");
     ASSERT_TRUE("fine drag inactive after release", !variable_panel_drag_active());
 
     g_simulated_mods = 0;
@@ -786,14 +797,16 @@ static void test_variable_panel_motion_initializes_uninitialized_declaration(voi
     editor_undo_ring_state_capture(&undo_state);
     ASSERT_INT("uninitialized drag motions coalesce to one undo snapshot",
                undo_state.undo_count, 1);
-    ASSERT_STR("uninitialized drag adds explicit initializer",
-               editor_buffer_line(0), "  static float testvar = 5;");
+    ASSERT_STR("uninitialized drag motion leaves the bare declaration",
+               editor_buffer_line(0), "  static float testvar;");
     ASSERT_FLOAT("uninitialized drag updates live predef value",
                  g_predef_vars[var_idx].value, 5.0f);
 
     ASSERT_INT("uninitialized drag release handled",
                glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP),
                1);
+    ASSERT_STR("uninitialized drag release adds explicit initializer",
+               editor_buffer_line(0), "  static float testvar = 5;");
     ASSERT_TRUE("uninitialized drag inactive after release",
                 !variable_panel_drag_active());
     ASSERT_INT("uninitialized undo flag cleared after release",
@@ -804,6 +817,173 @@ static void test_variable_panel_motion_initializes_uninitialized_declaration(voi
                editor_buffer_line(0), "  static float testvar;");
     ASSERT_FLOAT("undo restores live value to zero",
                  g_predef_vars[var_idx].value, 0.0f);
+}
+
+/* Find the window-space y that hits `var_idx`'s slider row. */
+static int vp_click_y_for_row(int click_x, int var_idx) {
+    int px, py, pw, ph;
+    int window_h = ui_state_viewport().window_h;
+    vp_rect(g_num_predef_vars, &px, &py, &pw, &ph);
+    for (int gl_y = py; gl_y < py + ph; gl_y++) {
+        int candidate_y = window_h - gl_y;
+        int hit_row = -1;
+        if (vp_hit_row(g_num_predef_vars, click_x, candidate_y, &hit_row) &&
+            hit_row == var_idx)
+            return candidate_y;
+    }
+    return -1;
+}
+
+/* The drag transaction split (docs/plans/in-review/
+ * flatten-performance-without-vm.md, phase 1B): motion applies the live value
+ * only. repl_state_mark_source_dirty() is the single seam every source-derived
+ * cache invalidates from — autonormals, the flat program, the source-scope
+ * depth cache — so a drag that never trips it during motion is a drag that
+ * cannot rebuild those caches per pointer event. Mouse-up trips it exactly
+ * once. */
+static void test_variable_panel_drag_motion_never_marks_source_dirty(void) {
+    int px, py, pw, ph;
+    int click_x, click_y;
+    int var_idx;
+
+    printf("--- imrepl_ctrl variable panel drag defers source write ---\n");
+
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(1000, 1000);
+    variable_panel_set_visible(1);
+    editor_feed_line("float testvar = 1.0;");
+
+    var_idx = repl_eval_find_predef_var_idx("testvar");
+    ASSERT_TRUE("deferred-write testvar declared", var_idx >= 0);
+
+    vp_rect(g_num_predef_vars, &px, &py, &pw, &ph);
+    click_x = px + pw / 2;
+    click_y = vp_click_y_for_row(click_x, var_idx);
+    ASSERT_TRUE("found click target for deferred-write row", click_y >= 0);
+
+    ASSERT_INT("deferred-write drag begin handled",
+               glr_ctrl_router_handle_variable_panel_drag_begin(
+                   GLUT_LEFT_BUTTON, GLUT_DOWN, click_x, click_y),
+               1);
+
+    /* 100 motion events, the plan's drag benchmark shape. */
+    repl_state_normals_dirty_clear();
+    for (int step = 1; step <= 100; step++)
+        ASSERT_INT("deferred-write motion handled",
+                   glr_ctrl_router_handle_variable_panel_motion(
+                       click_x + step, click_y),
+                   1);
+
+    ASSERT_INT("100 motions mark the source dirty zero times",
+               repl_state_normals_dirty(), 0);
+    ASSERT_STR("100 motions leave the declaration text alone",
+               editor_buffer_line(0), "  static float testvar = 1;");
+    ASSERT_FLOAT("100 motions update the live value",
+                 g_predef_vars[var_idx].value, 1.0f + 100.0f * 0.05f);
+
+    ASSERT_INT("deferred-write release handled",
+               glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP),
+               1);
+    ASSERT_INT("release marks the source dirty once",
+               repl_state_normals_dirty(), 1);
+    ASSERT_STR("release persists the settled value",
+               editor_buffer_line(0), "  static float testvar = 6;");
+    ASSERT_FLOAT("release keeps the live value",
+                 g_predef_vars[var_idx].value, 6.0f);
+}
+
+/* Press + release with no motion in between: no compile, no source write, no
+ * undo entry. */
+static void test_variable_panel_drag_release_without_motion_is_a_noop(void) {
+    int px, py, pw, ph;
+    int click_x, click_y;
+    int var_idx;
+    EditorUndoRingState undo_state;
+
+    printf("--- imrepl_ctrl variable panel no-motion release ---\n");
+
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(1000, 1000);
+    variable_panel_set_visible(1);
+    editor_feed_line("float testvar = 1.0;");
+
+    var_idx = repl_eval_find_predef_var_idx("testvar");
+    ASSERT_TRUE("no-motion testvar declared", var_idx >= 0);
+
+    vp_rect(g_num_predef_vars, &px, &py, &pw, &ph);
+    click_x = px + pw / 2;
+    click_y = vp_click_y_for_row(click_x, var_idx);
+    ASSERT_TRUE("found click target for no-motion row", click_y >= 0);
+
+    ASSERT_INT("no-motion drag begin handled",
+               glr_ctrl_router_handle_variable_panel_drag_begin(
+                   GLUT_LEFT_BUTTON, GLUT_DOWN, click_x, click_y),
+               1);
+    repl_state_normals_dirty_clear();
+
+    ASSERT_INT("no-motion release handled",
+               glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP),
+               1);
+    ASSERT_INT("no-motion release does not mark the source dirty",
+               repl_state_normals_dirty(), 0);
+    ASSERT_STR("no-motion release leaves the declaration text alone",
+               editor_buffer_line(0), "  static float testvar = 1;");
+    ASSERT_FLOAT("no-motion release leaves the live value alone",
+                 g_predef_vars[var_idx].value, 1.0f);
+    editor_undo_ring_state_capture(&undo_state);
+    ASSERT_INT("no-motion release creates no undo entry",
+               undo_state.undo_count, 0);
+    ASSERT_TRUE("no-motion drag inactive after release",
+                !variable_panel_drag_active());
+}
+
+/* A dragged variable with no declaration row (only `t = 0;`) has nothing to
+ * persist: release compiles a NO_CHANGE and touches neither source nor undo. */
+static void test_variable_panel_drag_release_without_declaration_is_a_noop(void) {
+    int px, py, pw, ph;
+    int click_x, click_y;
+    int var_idx;
+    EditorUndoRingState undo_state;
+
+    printf("--- imrepl_ctrl variable panel release without decl ---\n");
+
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(1000, 1000);
+    variable_panel_set_visible(1);
+    editor_feed_line("t = 0;");
+
+    var_idx = repl_eval_find_predef_var_idx("t");
+    ASSERT_TRUE("no-decl t is predefined", var_idx >= 0);
+
+    vp_rect(g_num_predef_vars, &px, &py, &pw, &ph);
+    click_x = px + pw / 2;
+    click_y = vp_click_y_for_row(click_x, var_idx);
+    ASSERT_TRUE("found click target for no-decl row", click_y >= 0);
+
+    ASSERT_INT("no-decl drag begin handled",
+               glr_ctrl_router_handle_variable_panel_drag_begin(
+                   GLUT_LEFT_BUTTON, GLUT_DOWN, click_x, click_y),
+               1);
+    ASSERT_INT("no-decl motion handled",
+               glr_ctrl_router_handle_variable_panel_motion(click_x + 100, click_y),
+               1);
+    repl_state_normals_dirty_clear();
+    editor_undo_ring_state_capture(&undo_state);
+    ASSERT_INT("no-decl motion captures one undo snapshot",
+               undo_state.undo_count, 1);
+
+    ASSERT_INT("no-decl release handled",
+               glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP),
+               1);
+    ASSERT_INT("no-decl release does not mark the source dirty",
+               repl_state_normals_dirty(), 0);
+    ASSERT_STR("no-decl release preserves the assignment row",
+               editor_buffer_line(0), "  t = 0;");
+    ASSERT_FLOAT("no-decl release keeps the live value",
+                 g_predef_vars[var_idx].value, 5.0f);
+    editor_undo_ring_state_capture(&undo_state);
+    ASSERT_INT("no-decl release captures no second undo snapshot",
+               undo_state.undo_count, 1);
 }
 
 /* Audit #18 (Tier B, commit 783d7e3) regression: variable_drag must arrive
@@ -3041,6 +3221,9 @@ int main(void) {
     test_variable_panel_shift_left_drag_uses_fine_scale();
     test_variable_panel_motion_preserves_reset_assignment_without_declaration();
     test_variable_panel_motion_initializes_uninitialized_declaration();
+    test_variable_panel_drag_motion_never_marks_source_dirty();
+    test_variable_panel_drag_release_without_motion_is_a_noop();
+    test_variable_panel_drag_release_without_declaration_is_a_noop();
     test_variable_drag_snapshot_wiring();
     test_variable_panel_written_snapshot_wiring();
     test_pointer_state_tracks_controller_mouse_routes();
