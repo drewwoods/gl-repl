@@ -74,10 +74,11 @@ static void push_vert_tex(float *buf, int *n, float wx, float wy, float wz,
 /* ---- PLY readback --------------------------------------------------------- */
 #define MAXV 64
 typedef struct {
-    int nverts, nfaces;
+    int nverts, nfaces, nedges;
     float vx[MAXV], vy[MAXV], vz[MAXV], nx[MAXV], ny[MAXV], nz[MAXV];
     int cr[MAXV], cg[MAXV], cb[MAXV], ca[MAXV];
     int f[MAXV][3];
+    int e[MAXV][2];
 } Ply;
 
 /* Run the writer to a tmpfile (explicit capture) and slurp the text back. */
@@ -85,7 +86,7 @@ static int run_writer_cap(const float *buf, int n, const MeshPlyCapture *cap,
                           const MeshPlyOptions *opt, char *text, size_t tcap) {
     FILE *fp = tmpfile();
     if (!fp) return -999;
-    int rc = mesh_ply_write(fp, buf, n, cap, opt);
+    int rc = mesh_ply_write(fp, buf, n, cap, opt, NULL);
     fflush(fp);
     rewind(fp);
     size_t rd = fread(text, 1, tcap - 1, fp);
@@ -108,13 +109,15 @@ static int parse_ply(const char *src, Ply *p) {
 
     char *save = NULL;
     char *line = strtok_r(buf, "\n", &save);
-    int in_body = 0, vi = 0, fi = 0;
+    int in_body = 0, vi = 0, fi = 0, ei = 0;
     while (line) {
         if (!in_body) {
             if (strncmp(line, "element vertex ", 15) == 0)
                 p->nverts = atoi(line + 15);
             else if (strncmp(line, "element face ", 13) == 0)
                 p->nfaces = atoi(line + 13);
+            else if (strncmp(line, "element edge ", 13) == 0)
+                p->nedges = atoi(line + 13);
             else if (strcmp(line, "end_header") == 0)
                 in_body = 1;
         } else if (vi < p->nverts) {
@@ -132,10 +135,15 @@ static int parse_ply(const char *src, Ply *p) {
                              &p->f[fi][0], &p->f[fi][1], &p->f[fi][2]);
             if (got != 4 || cnt != 3) return 0;
             fi++;
+        } else if (ei < p->nedges) {
+            if (ei >= MAXV) return 0;
+            int got = sscanf(line, "%d %d", &p->e[ei][0], &p->e[ei][1]);
+            if (got != 2) return 0;
+            ei++;
         }
         line = strtok_r(NULL, "\n", &save);
     }
-    return vi == p->nverts && fi == p->nfaces;
+    return vi == p->nverts && fi == p->nfaces && ei == p->nedges;
 }
 
 /* ---- tests ---------------------------------------------------------------- */
@@ -176,6 +184,10 @@ static void test_single_triangle(void) {
     ASSERT_FLT("normal x", p.nx[0], 0.0f);
     ASSERT_FLT("normal y", p.ny[0], 0.0f);
     ASSERT_FLT("normal z", p.nz[0], 1.0f);
+
+    /* No lines captured -> no edge element declared. */
+    ASSERT_TRUE("no edge element without lines",
+                strstr(text, "element edge") == NULL);
 }
 
 static void test_quad_two_faces(void) {
@@ -236,8 +248,10 @@ static void test_shared_edge_weld(void) {
 
 static void test_skip_alignment(void) {
     printf("test_skip_alignment\n");
-    /* A polygon preceded by every skipped token kind. If any skip length is
-     * wrong, the trailing triangle misaligns and the counts/coords break. */
+    /* A polygon preceded by every other token kind. If any record length is
+     * wrong, the trailing triangle misaligns and the counts/coords break.
+     * Points and lines are captured (loose vertex / edge); bitmap stays a
+     * pure skip. */
     float buf[128]; int n = 0;
     push_tok(buf, &n, MESH_PLY_TOK_POINT);
     push_vert(buf, &n, 5, 5, 5, 1, 1, 1, 1);             /* 1 vertex */
@@ -247,6 +261,8 @@ static void test_skip_alignment(void) {
     push_tok(buf, &n, MESH_PLY_TOK_LINE_RESET);
     push_vert(buf, &n, 3, 3, 3, 1, 1, 1, 1);             /* 2 vertices */
     push_vert(buf, &n, 4, 4, 4, 1, 1, 1, 1);
+    push_tok(buf, &n, MESH_PLY_TOK_BITMAP);
+    push_vert(buf, &n, 6, 6, 6, 1, 1, 1, 1);             /* 1 vertex, skipped */
     push_tok(buf, &n, MESH_PLY_TOK_PASS_THROUGH);
     push_val(buf, &n, 42.0f);                            /* 1 value */
     push_tok(buf, &n, MESH_PLY_TOK_POLYGON);
@@ -257,15 +273,106 @@ static void test_skip_alignment(void) {
 
     char text[8192];
     int rc = run_writer(buf, n, &OPT_WELD, text, sizeof(text));
-    ASSERT_INT("alignment: only the polygon survives", rc, 1);
+    ASSERT_INT("alignment: one triangle", rc, 1);
 
     Ply p;
     ASSERT_TRUE("alignment parses", parse_ply(text, &p));
-    ASSERT_INT("alignment nverts", p.nverts, 3);
+    /* 3 tri corners + 4 line endpoints + 1 point; bitmap vertex skipped. */
+    ASSERT_INT("alignment nverts", p.nverts, 8);
     ASSERT_INT("alignment nfaces", p.nfaces, 1);
-    /* The trailing triangle's coords are intact (skips consumed exactly). */
+    ASSERT_INT("alignment nedges", p.nedges, 2);
+    /* The trailing triangle's coords are intact (records consumed exactly);
+     * triangle corners always precede line/point vertices in the output. */
     ASSERT_FLT("alignment B.x", p.vx[1], 2.0f);
     ASSERT_FLT("alignment C.y", p.vy[2], 2.0f);
+    /* Edges reference the line-endpoint vertices behind the tri corners. */
+    ASSERT_INT("alignment edge0 v1", p.e[0][0], 3);
+    ASSERT_INT("alignment edge0 v2", p.e[0][1], 4);
+    ASSERT_INT("alignment edge1 v1", p.e[1][0], 5);
+    ASSERT_INT("alignment edge1 v2", p.e[1][1], 6);
+    /* The loose point vertex lands last. */
+    ASSERT_FLT("alignment point x", p.vx[7], 5.0f);
+}
+
+static void test_points_and_lines(void) {
+    printf("test_points_and_lines\n");
+    /* Two colored points + a two-segment line strip (feedback emits the strip
+     * pairwise: LINE_RESET then LINE, repeating the shared middle vertex).
+     * Points become loose vertices; segments become edge records; welding
+     * merges the strip's shared endpoint so the edges chain. */
+    float buf[128]; int n = 0;
+    push_tok(buf, &n, MESH_PLY_TOK_POINT);
+    push_vert(buf, &n, 10, 0, 0, 1, 0, 0, 1);            /* red point */
+    push_tok(buf, &n, MESH_PLY_TOK_POINT);
+    push_vert(buf, &n, 0, 10, 0, 0, 1, 0, 1);            /* green point */
+    push_tok(buf, &n, MESH_PLY_TOK_LINE_RESET);
+    push_vert(buf, &n, 0, 0, 0, 1, 1, 1, 1);
+    push_vert(buf, &n, 1, 0, 0, 1, 1, 1, 1);
+    push_tok(buf, &n, MESH_PLY_TOK_LINE);
+    push_vert(buf, &n, 1, 0, 0, 1, 1, 1, 1);             /* shared endpoint */
+    push_vert(buf, &n, 2, 0, 0, 1, 1, 1, 1);
+
+    char text[8192];
+    int rc = run_writer(buf, n, &OPT_WELD, text, sizeof(text));
+    ASSERT_INT("points+lines: 0 triangles", rc, 0);
+    ASSERT_TRUE("points+lines declares edge element",
+                strstr(text, "element edge 2") != NULL);
+
+    Ply p;
+    ASSERT_TRUE("points+lines parses", parse_ply(text, &p));
+    /* 3 welded strip vertices + 2 points. */
+    ASSERT_INT("points+lines nverts", p.nverts, 5);
+    ASSERT_INT("points+lines nfaces", p.nfaces, 0);
+    ASSERT_INT("points+lines nedges", p.nedges, 2);
+    /* The strip chains through the welded shared vertex. */
+    ASSERT_INT("strip edge0 v2 == edge1 v1", p.e[0][1], p.e[1][0]);
+    ASSERT_FLT("strip start x", p.vx[p.e[0][0]], 0.0f);
+    ASSERT_FLT("strip mid x", p.vx[p.e[0][1]], 1.0f);
+    ASSERT_FLT("strip end x", p.vx[p.e[1][1]], 2.0f);
+    /* Point coords and colors round-trip (points land after line verts). */
+    ASSERT_FLT("point0 x", p.vx[3], 10.0f);
+    ASSERT_INT("point0 red", p.cr[3], 255);
+    ASSERT_FLT("point1 y", p.vy[4], 10.0f);
+    ASSERT_INT("point1 green", p.cg[4], 255);
+
+    /* Flat mode keeps every endpoint distinct: 4 line verts + 2 points. */
+    rc = run_writer(buf, n, &OPT_FLAT, text, sizeof(text));
+    ASSERT_INT("flat points+lines: 0 triangles", rc, 0);
+    ASSERT_TRUE("flat points+lines parses", parse_ply(text, &p));
+    ASSERT_INT("flat points+lines nverts", p.nverts, 6);
+    ASSERT_INT("flat points+lines nedges", p.nedges, 2);
+    ASSERT_INT("flat edge1 v1", p.e[1][0], 2);
+    ASSERT_INT("flat edge1 v2", p.e[1][1], 3);
+}
+
+static void test_point_line_authored_normals(void) {
+    printf("test_point_line_authored_normals\n");
+    /* Under a NORMALS passthrough marker (11-float stride), point and line
+     * vertices carry authored world-space normals in the texcoord channel,
+     * exactly like polygon corners. */
+    float buf[128]; int n = 0;
+    push_tok(buf, &n, MESH_PLY_TOK_PASS_THROUGH);
+    push_val(buf, &n, MESH_PLY_PASS_NORMALS);
+    push_tok(buf, &n, MESH_PLY_TOK_POINT);
+    push_vert_tex(buf, &n, 5, 0, 0, 1, 1, 1, 1,   0, 2, 0, 0);   /* +Y */
+    push_tok(buf, &n, MESH_PLY_TOK_LINE);
+    push_vert_tex(buf, &n, 0, 0, 0, 1, 1, 1, 1,   3, 0, 0, 0);   /* +X */
+    push_vert_tex(buf, &n, 1, 0, 0, 1, 1, 1, 1,   3, 0, 0, 0);
+
+    char text[8192];
+    int rc = run_writer_cap(buf, n, &CAP_TEX, &OPT_WELD, text, sizeof text);
+    ASSERT_INT("authored pt/line: 0 triangles", rc, 0);
+
+    Ply p;
+    ASSERT_TRUE("authored pt/line parses", parse_ply(text, &p));
+    ASSERT_INT("authored pt/line nverts", p.nverts, 3);
+    ASSERT_INT("authored pt/line nedges", p.nedges, 1);
+    /* Line endpoints (first two verts) -> normalized +X. */
+    ASSERT_FLT("line normal nx=1", p.nx[0], 1.0f);
+    ASSERT_FLT("line normal ny=0", p.ny[0], 0.0f);
+    /* Point (last vert) -> normalized +Y. */
+    ASSERT_FLT("point normal ny=1", p.ny[2], 1.0f);
+    ASSERT_FLT("point normal nx=0", p.nx[2], 0.0f);
 }
 
 static void test_error_cases(void) {
@@ -404,6 +511,8 @@ int main(void) {
     test_quad_two_faces();
     test_shared_edge_weld();
     test_skip_alignment();
+    test_points_and_lines();
+    test_point_line_authored_normals();
     test_error_cases();
     test_empty_buffer();
     test_color_clamp();

@@ -1175,7 +1175,8 @@ the REPL. Two rules keep the round trip clean:
 named after the active scene — `glVertex` polygons, GLU-tessellated shapes,
 and GLUT solids all export through one GL feedback pass. Authored per-vertex
 normals are preserved; the rest are synthesized and smoothed. Line
-primitives export as PLY edges.
+primitives export as PLY edges; point primitives export as loose vertices
+(a point cloud).
 
 Headless / scripted capture:
 

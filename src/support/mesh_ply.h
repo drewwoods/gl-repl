@@ -8,7 +8,12 @@
  * Parses a feedback float stream (per vertex: window-coord x y z + RGBA),
  * inverts the known ortho + viewport + depth-range transform back to world
  * coordinates, fan-triangulates polygons, optionally welds shared vertices
- * and smooths normals, then writes an ASCII PLY document.
+ * and smooths normals, then writes an ASCII PLY document. Point and line
+ * primitives are exported too: each point becomes a loose vertex (the PLY
+ * point-cloud convention — a vertex referenced by no face), and each line
+ * segment becomes an `element edge` record (`property int vertex1/vertex2`,
+ * the CloudCompare/Blender convention; the edge element is only emitted when
+ * the capture contains lines, so triangle-only output is unchanged).
  *
  * This module calls NO GL functions and includes NO GL header — it only
  * reads a plain float buffer, so it is fully unit-testable with synthetic
@@ -83,7 +88,16 @@ typedef struct {
                               the on-screen look). */
 } MeshPlyOptions;
 
+/* Per-primitive counts of what a mesh_ply_write call emitted, for status
+ * reporting. `points` counts loose point vertices (already included in
+ * `verts`); `edges` counts line segments written to the edge element. */
+typedef struct {
+    int verts, tris, edges, points;
+} MeshPlyStats;
+
 /* Parse feedback[0 .. float_count) and write an ASCII PLY mesh to `out`.
+ * When `stats` is non-NULL it receives the emitted per-primitive counts
+ * (zeroed on error).
  *
  * Returns the number of triangles written (>= 0) on success, or a NEGATIVE
  * value on a parse error (unknown / misaligned / truncated token) or an I/O
@@ -91,6 +105,7 @@ typedef struct {
  * still writes a valid 0-vertex / 0-face header. On a mid-stream I/O failure
  * the file may be partially written; the caller surfaces an error status. */
 int mesh_ply_write(FILE *out, const float *feedback, int float_count,
-                   const MeshPlyCapture *cap, const MeshPlyOptions *opts);
+                   const MeshPlyCapture *cap, const MeshPlyOptions *opts,
+                   MeshPlyStats *stats);
 
 #endif /* MESH_PLY_H */
