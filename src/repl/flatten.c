@@ -7,6 +7,7 @@
 #include "repl/host_effects.h"
 #include "repl/pipeline.h"
 #include "source_document.h"
+#include "repl/color_limits.h"   /* REPL_CLEAR_COLOR_MAX_V (compiled-path clamp) */
 #include "repl/command.h"
 #include "repl/command_spec.h"
 #include "repl/color_limits.h"
@@ -51,6 +52,12 @@ typedef struct {
     ReplSourceScopeView source_scope;
     int               max_call_depth;
     int               force_reparse;    /* test seam: skip the literal fast path */
+    ReplExprCache    *expr_cache;       /* optional compiled-expression cache */
+    /* Cache-build bookkeeping for the line currently being built (compiled
+     * during its first text parse, via the capture sink). -1 when idle. */
+    int               build_line;
+    int               build_failed;
+    ReplExprCompileEnv build_env;
     int call_depth;
     int abort;
     int visit_budget;
@@ -158,6 +165,144 @@ static void flatten_range(FlattenContext *ctx,
                           int call_src_cmd_idx, int root_call_src_cmd_idx,
                           unsigned int func_scope_mask);
 
+/* ---- Compiled-expression cache plumbing ---------------------------------
+ *
+ * Each expression-bearing line has three cache states. READY: evaluate the
+ * line's compiled programs instead of text-parsing (the warm path). EMPTY:
+ * this visit runs the text path as before, but with a capture sink
+ * installed so every expression span the parse evaluates is compiled and
+ * recorded; the line finishes READY (or FAILED if anything didn't compile).
+ * FAILED: plain text path until the next source-dirty invalidation.
+ * force_reparse bypasses the cache entirely — the differential seam
+ * compares pure-text output against the cached run. */
+
+/* Capture callback: compile the span the text evaluator is consuming and
+ * attach it to the line being built. List roles arrive as one whole
+ * argument-list span and are split by the matching mirror splitter, each
+ * member recorded as CMD_ARG at (list base ordinal) + k. */
+static int flatten_capture_expr(void *user_data, ReplExprRole role,
+                                int ordinal, const char *begin,
+                                const char *end) {
+    FlattenContext *ctx = (FlattenContext *)user_data;
+
+    if (!ctx || !ctx->expr_cache || ctx->build_line < 0 || ctx->build_failed)
+        return 0;
+
+    if (role == REPL_EXPR_ROLE_CMD_ARG_LIST ||
+        role == REPL_EXPR_ROLE_CMD_ARG_LIST_LENIENT) {
+        char list_text[MAX_LINE_LEN];
+        int progs[8];
+        int len = (int)(end - begin);
+        int n;
+
+        if (len < 0 || len >= (int)sizeof(list_text)) {
+            ctx->build_failed = 1;
+            return 0;
+        }
+        memcpy(list_text, begin, (size_t)len);
+        list_text[len] = '\0';
+        /* Max 8 = GLCmd.args[] width. A site that accepted fewer members
+         * than 8 either failed its parse (no cache survives) or ignores
+         * the extra programs (the compiled path only reads ordinals below
+         * the committed num_args). */
+        n = repl_expr_cache_compile_list(
+            ctx->expr_cache, list_text,
+            role == REPL_EXPR_ROLE_CMD_ARG_LIST, 8, progs, &ctx->build_env);
+        if (n < 0) {
+            ctx->build_failed = 1;
+            return 0;
+        }
+        for (int k = 0; k < n; k++) {
+            if (!repl_expr_cache_line_add(ctx->expr_cache, ctx->build_line,
+                                          REPL_EXPR_ROLE_CMD_ARG,
+                                          ordinal + k, progs[k])) {
+                ctx->build_failed = 1;
+                return 0;
+            }
+        }
+        return 1;
+    }
+
+    {
+        int prog = repl_expr_cache_compile_span(ctx->expr_cache, begin, end,
+                                                &ctx->build_env);
+        if (prog < 0 ||
+            !repl_expr_cache_line_add(ctx->expr_cache, ctx->build_line,
+                                      role, ordinal, prog)) {
+            ctx->build_failed = 1;
+            return 0;
+        }
+    }
+    return 1;
+}
+
+/* Open a cache build for line i if the cache is active and the line has
+ * never been built. Returns 1 when a build is open (the caller must pair
+ * with flatten_build_finish and install the capture sink). */
+static int flatten_build_begin(FlattenContext *ctx, int i,
+                               const ExprVar *vars, int nv) {
+    if (!ctx->expr_cache || ctx->force_reparse)
+        return 0;
+    if (repl_expr_cache_line_state(ctx->expr_cache, i) !=
+        REPL_EXPR_LINE_EMPTY)
+        return 0;
+    if (!repl_expr_cache_line_begin(ctx->expr_cache, i))
+        return 0;
+    ctx->build_line = i;
+    ctx->build_failed = 0;
+    ctx->build_env.predef = repl_eval_predef_view();
+    ctx->build_env.locals = vars;
+    ctx->build_env.num_locals = nv;
+    return 1;
+}
+
+/* Close the build for line i. `parsed_ok` is the text path's own verdict;
+ * a failed parse or a failed capture both mark the line FAILED so it never
+ * serves a half-built program set. */
+static void flatten_build_finish(FlattenContext *ctx, int i, int parsed_ok) {
+    if (ctx->build_line != i)
+        return;
+    repl_expr_cache_line_finish(ctx->expr_cache, i,
+                                parsed_ok && !ctx->build_failed);
+    ctx->build_line = -1;
+}
+
+static ReplExprCaptureSink flatten_capture_sink(FlattenContext *ctx) {
+    ReplExprCaptureSink sink;
+    sink.fn = flatten_capture_expr;
+    sink.user_data = ctx;
+    return sink;
+}
+
+/* 1 when line i's compiled programs are usable this visit. */
+static int flatten_line_ready(const FlattenContext *ctx, int i) {
+    return ctx->expr_cache && !ctx->force_reparse &&
+           repl_expr_cache_line_state(ctx->expr_cache, i) ==
+               REPL_EXPR_LINE_READY;
+}
+
+/* Evaluate one compiled program under the current flatten bindings against
+ * the live predef table — the same resolution the text evaluator performs.
+ * `used_local_out` (optional) reports whether any identifier resolved to a
+ * local binding, the compiled twin of input_has_expr_vars. */
+static float flatten_eval_cached(const FlattenContext *ctx, int prog,
+                                 const ExprVar *vars, int nv,
+                                 int *used_local_out) {
+    ReplExprEvalEnv env;
+    ReplPredefView predef = repl_eval_predef_view();
+    ReplExprValue v;
+
+    memset(&env, 0, sizeof(env));
+    env.locals = vars;
+    env.num_locals = nv;
+    env.predef_vars = predef.vars;
+    env.predef_count = predef.count;
+    v = repl_expr_program_eval(ctx->expr_cache, prog, &env);
+    if (used_local_out)
+        *used_local_out = env.used_local;
+    return v.value;
+}
+
 static void flatten_for_loop(FlattenContext *ctx,
                              const GLCmd *src_cmd, int i,
                              ExprVar *vars, int nv,
@@ -172,10 +317,31 @@ static void flatten_for_loop(FlattenContext *ctx,
     flatten_get_for_var_name(ctx->text, i, var_name, sizeof(var_name));
 
     if (src_cmd->has_vars) {
-        const char *unused_body;
-        float re_start, re_end, re_step;
-        char rv[16];
-        if (repl_eval_parse_for_header(
+        if (flatten_line_ready(ctx, i)) {
+            /* Warm path: evaluate the compiled header bounds. An absent
+             * step program means the source omitted it — the committed
+             * args[2] already bakes the 1.0 default. */
+            int prog_start = repl_expr_cache_line_find(
+                ctx->expr_cache, i, REPL_EXPR_ROLE_LOOP_START, 0);
+            int prog_end = repl_expr_cache_line_find(
+                ctx->expr_cache, i, REPL_EXPR_ROLE_LOOP_END, 0);
+            int prog_step = repl_expr_cache_line_find(
+                ctx->expr_cache, i, REPL_EXPR_ROLE_LOOP_STEP, 0);
+            if (prog_start >= 0)
+                start_val = flatten_eval_cached(ctx, prog_start, vars, nv,
+                                                NULL);
+            if (prog_end >= 0)
+                end_val = flatten_eval_cached(ctx, prog_end, vars, nv, NULL);
+            if (prog_step >= 0)
+                step_val = flatten_eval_cached(ctx, prog_step, vars, nv,
+                                               NULL);
+        } else {
+            const char *unused_body;
+            float re_start, re_end, re_step;
+            char rv[16];
+            int building = flatten_build_begin(ctx, i, vars, nv);
+            ReplExprCaptureSink sink = flatten_capture_sink(ctx);
+            int parsed = repl_eval_parse_for_header(
                 &(ReplForHeaderParseConfig){
                     .input = src_text,
                     .var_name = rv,
@@ -186,10 +352,15 @@ static void flatten_for_loop(FlattenContext *ctx,
                     .body_start = &unused_body,
                     .vars = vars,
                     .num_vars = nv,
-                })) {
-            start_val = re_start;
-            end_val   = re_end;
-            step_val  = re_step;
+                    .capture = building ? &sink : NULL,
+                });
+            if (building)
+                flatten_build_finish(ctx, i, parsed);
+            if (parsed) {
+                start_val = re_start;
+                end_val   = re_end;
+                step_val  = re_step;
+            }
         }
     }
 
@@ -260,12 +431,49 @@ static void flatten_call(FlattenContext *ctx,
                                        param_names, MAX_EXPR_VARS,
                                        &param_count))
             break;
-        if (!extract_func_call_args_text(call_text, NULL,
-                                         arg_text, sizeof(arg_text)))
-            break;
-        if (!parse_expr_list_exact(arg_text, arg_vals, MAX_EXPR_VARS,
-                                   vars, nv, &arg_count))
-            break;
+        if (flatten_line_ready(ctx, i)) {
+            /* Warm path: evaluate the compiled call arguments. The count
+             * was frozen when the line built; the param-count check below
+             * still runs against the current definition. */
+            arg_count = repl_expr_cache_line_role_count(
+                ctx->expr_cache, i, REPL_EXPR_ROLE_CALL_ARG);
+            for (int a = 0; a < arg_count && a < MAX_EXPR_VARS; a++) {
+                int prog = repl_expr_cache_line_find(
+                    ctx->expr_cache, i, REPL_EXPR_ROLE_CALL_ARG, a);
+                arg_vals[a] = (prog >= 0)
+                            ? flatten_eval_cached(ctx, prog, vars, nv, NULL)
+                            : 0.0f;
+            }
+        } else {
+            int building;
+            if (!extract_func_call_args_text(call_text, NULL,
+                                             arg_text, sizeof(arg_text)))
+                break;
+            building = flatten_build_begin(ctx, i, vars, nv);
+            if (!parse_expr_list_exact(arg_text, arg_vals, MAX_EXPR_VARS,
+                                       vars, nv, &arg_count)) {
+                if (building)
+                    flatten_build_finish(ctx, i, 0);
+                break;
+            }
+            if (building) {
+                int progs[MAX_EXPR_VARS];
+                int n = repl_expr_cache_compile_list(
+                    ctx->expr_cache, arg_text, /*strict=*/1, MAX_EXPR_VARS,
+                    progs, &ctx->build_env);
+                if (n != arg_count) {
+                    ctx->build_failed = 1;
+                } else {
+                    for (int a = 0; a < n && !ctx->build_failed; a++) {
+                        if (!repl_expr_cache_line_add(
+                                ctx->expr_cache, i,
+                                REPL_EXPR_ROLE_CALL_ARG, a, progs[a]))
+                            ctx->build_failed = 1;
+                    }
+                }
+                flatten_build_finish(ctx, i, 1);
+            }
+        }
         if (arg_count != param_count) {
             char msg[REPL_DIAG_TEXT_MAX];
             const char *alias = NULL;
@@ -331,8 +539,26 @@ static int flatten_if_arm_boundary(const FlattenContext *ctx,
 static float flatten_eval_if_line(FlattenContext *ctx,
                                   const GLCmd *src_cmd, int line_idx,
                                   ExprVar *vars, int nv) {
-    return repl_eval_if_condition(flatten_src_text(ctx->text, line_idx),
-                                  vars, nv, src_cmd->args[0]);
+    if (flatten_line_ready(ctx, line_idx)) {
+        int prog = repl_expr_cache_line_find(ctx->expr_cache, line_idx,
+                                             REPL_EXPR_ROLE_CONDITION, 0);
+        /* No condition program on a READY line: the paren payload failed
+         * to extract when the line built, which is the text path's
+         * fallback-to-args[0] case. */
+        if (prog < 0)
+            return src_cmd->args[0];
+        return flatten_eval_cached(ctx, prog, vars, nv, NULL);
+    }
+    {
+        int building = flatten_build_begin(ctx, line_idx, vars, nv);
+        ReplExprCaptureSink sink = flatten_capture_sink(ctx);
+        float v = repl_eval_if_condition_captured(
+            flatten_src_text(ctx->text, line_idx),
+            vars, nv, src_cmd->args[0], building ? &sink : NULL);
+        if (building)
+            flatten_build_finish(ctx, line_idx, 1);
+        return v;
+    }
 }
 
 static void flatten_if_block(FlattenContext *ctx,
@@ -475,6 +701,42 @@ static int flatten_reparse_line(FlattenContext *ctx,
         return rv;
     }
 
+    if (flatten_line_ready(ctx, i)) {
+        /* Warm compiled path: the committed command already carries the
+         * right type / num_args / enum tokens / payload; only the
+         * expression-backed arg slots re-evaluate. Slots without a program
+         * (enum tokens, omitted defaults like gluColor's alpha) keep their
+         * baked value — every expression slot was captured when the line
+         * built, or the line would be FAILED. */
+        GLCmd tmp = *src_cmd;
+        int rv;
+
+        prof_begin(PROF_FLATTEN_REPARSE);
+        for (int k = 0; k < tmp.num_args && k < 8; k++) {
+            int prog = repl_expr_cache_line_find(ctx->expr_cache, i,
+                                                 REPL_EXPR_ROLE_CMD_ARG, k);
+            if (prog >= 0)
+                tmp.args[k] = flatten_eval_cached(ctx, prog, vars, nv, NULL);
+        }
+        /* Mirror the parser's post-eval fixup: glClearColor clamps each
+         * RGB channel at commit AND on every reparse. */
+        if (tmp.type == CMD_CLEAR_COLOR) {
+            for (int ci = 0; ci < 3; ci++) {
+                if (tmp.args[ci] > REPL_CLEAR_COLOR_MAX_V)
+                    tmp.args[ci] = REPL_CLEAR_COLOR_MAX_V;
+            }
+        }
+        /* has_vars stays the committed value — identical to the text
+         * branch's rules for a has_vars source command (kept under local
+         * bindings, forced 1 otherwise; it is 1 here either way). */
+        rv = flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
+                                root_call_src_cmd_idx, func_scope_mask,
+                                has_local_vars ? vars : NULL,
+                                has_local_vars ? nv : 0);
+        prof_accum_end(PROF_FLATTEN_REPARSE);
+        return rv;
+    }
+
     ReplParseContext parse_ctx = {
         .source_line_idx = i,
         .vars = has_local_vars ? vars : NULL,
@@ -489,15 +751,27 @@ static int flatten_reparse_line(FlattenContext *ctx,
     };
     const char *text = flatten_src_text(ctx->text, i);
     ReplParsedLine tmp_pl;
+    ReplExprCaptureSink sink = flatten_capture_sink(ctx);
+    int building = flatten_build_begin(ctx, i, vars, nv);
+    int parsed;
     int rv = 1;
 
+    if (building)
+        parse_ctx.capture = &sink;
+
     prof_begin(PROF_FLATTEN_REPARSE);
-    if ((!ctx->force_reparse &&
-         flatten_eval_std_cmd(src_cmd, text,
-                              has_local_vars ? vars : NULL,
-                              has_local_vars ? nv : 0,
-                              &tmp_pl.cmd)) ||
-        repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
+    if (!building && !ctx->force_reparse &&
+        flatten_eval_std_cmd(src_cmd, text,
+                             has_local_vars ? vars : NULL,
+                             has_local_vars ? nv : 0,
+                             &tmp_pl.cmd)) {
+        parsed = 1;
+    } else {
+        parsed = repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx);
+        if (building)
+            flatten_build_finish(ctx, i, parsed);
+    }
+    if (parsed) {
         GLCmd tmp = tmp_pl.cmd;
         /* Restore is_auto after the parse, not before it: the parser memsets
          * the whole ReplParsedLine as its first statement, so a seed written
@@ -552,24 +826,43 @@ static int flatten_var_assign(FlattenContext *ctx, const GLCmd *src_cmd, int i,
     int local_rhs_vars = 0;
     const char *src_text = flatten_src_text(ctx->text, i);
 
-    if (repl_extract_assignment_parts(src_text, NULL, 0,
-                                      rhs, sizeof(rhs)) && rhs[0]) {
-        if (!ctx->force_reparse) {
-            /* Editor/import source is canonical REPL text. The committed
-             * command already validated the assignment, so evaluate its RHS
-             * directly and avoid the defensive REPL->C->REPL translation. */
-            ExprCtx expr_ctx = { rhs, vars, nv, NULL, 0 };
-            value = repl_eval_expr(&expr_ctx);
-        } else {
-            /* Differential reference: retain the pre-Phase-1C path. */
-            char repl_rhs[MAX_LINE_LEN];
-            ExprCtx expr_ctx;
-            repl_eval_c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
-            expr_ctx = (ExprCtx){ repl_rhs, vars, nv, NULL, 0 };
-            value = repl_eval_expr(&expr_ctx);
+    if (flatten_line_ready(ctx, i)) {
+        /* Warm path. A READY line without an RHS program mirrors the text
+         * branch's extract-failure case: keep the baked args[0]. */
+        int prog = repl_expr_cache_line_find(ctx->expr_cache, i,
+                                             REPL_EXPR_ROLE_ASSIGN_RHS, 0);
+        if (prog >= 0) {
+            int used_local = 0;
+            value = flatten_eval_cached(ctx, prog, vars, nv, &used_local);
+            if (vars && nv > 0)
+                local_rhs_vars = used_local;
         }
+    } else if (repl_extract_assignment_parts(src_text, NULL, 0,
+                                             rhs, sizeof(rhs)) && rhs[0]) {
+        char repl_rhs[MAX_LINE_LEN];
+        const char *eval_rhs = rhs;
+        int building = flatten_build_begin(ctx, i, vars, nv);
+        /* Editor/import source is canonical REPL text. Only the forced
+         * differential reference retains the old defensive translation. */
+        if (ctx->force_reparse) {
+            repl_eval_c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
+            eval_rhs = repl_rhs;
+        }
+        if (building) {
+            /* Compile the exact text evaluated below. */
+            flatten_capture_expr(ctx, REPL_EXPR_ROLE_ASSIGN_RHS, 0,
+                                 eval_rhs, eval_rhs + strlen(eval_rhs));
+            flatten_build_finish(ctx, i, 1);
+        }
+        ExprCtx expr_ctx = { eval_rhs, vars, nv, NULL, 0 };
+        value = repl_eval_expr(&expr_ctx);
         if (vars && nv > 0)
             local_rhs_vars = input_has_expr_vars(rhs, vars, nv);
+    } else {
+        /* No evaluable RHS: freeze that verdict so later visits take the
+         * warm keep-baked branch instead of re-extracting every time. */
+        if (flatten_build_begin(ctx, i, vars, nv))
+            flatten_build_finish(ctx, i, 1);
     }
     if (var_idx >= 0 && var_idx < g_num_predef_vars)
         g_predef_vars_mut[var_idx].value = value;
@@ -606,14 +899,44 @@ static int flatten_scratch_assign(FlattenContext *ctx, const GLCmd *src_cmd,
     int local_rhs_vars = 0;
     const char *src_text = flatten_src_text(ctx->text, i);
 
-    if (repl_extract_assignment_target_parts(src_text,
+    if (flatten_line_ready(ctx, i)) {
+        /* Warm path. Programs absent on a READY line mean the target
+         * extraction failed when the line built — keep the baked args,
+         * like the text branch below. */
+        int prog_index = repl_expr_cache_line_find(
+            ctx->expr_cache, i, REPL_EXPR_ROLE_SCRATCH_INDEX, 0);
+        int prog_rhs = repl_expr_cache_line_find(
+            ctx->expr_cache, i, REPL_EXPR_ROLE_SCRATCH_RHS, 0);
+        if (prog_index >= 0 && prog_rhs >= 0) {
+            int used_local_index = 0;
+            int used_local_rhs = 0;
+            elem_idx = (int)flatten_eval_cached(ctx, prog_index, vars, nv,
+                                                &used_local_index);
+            value = flatten_eval_cached(ctx, prog_rhs, vars, nv,
+                                        &used_local_rhs);
+            if (vars && nv > 0) {
+                local_index_vars = used_local_index;
+                local_rhs_vars = used_local_rhs;
+            }
+        }
+    } else if (repl_extract_assignment_target_parts(src_text,
                                             name, sizeof(name),
                                             index_expr, sizeof(index_expr),
                                             rhs, sizeof(rhs))) {
         char repl_index[MAX_LINE_LEN];
         char repl_rhs[MAX_LINE_LEN];
+        int building = flatten_build_begin(ctx, i, vars, nv);
         repl_eval_c_expr_to_repl(index_expr, repl_index, sizeof(repl_index));
         repl_eval_c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
+        if (building) {
+            /* Compile the translated index + RHS — the exact texts
+             * evaluated below. */
+            flatten_capture_expr(ctx, REPL_EXPR_ROLE_SCRATCH_INDEX, 0,
+                                 repl_index, repl_index + strlen(repl_index));
+            flatten_capture_expr(ctx, REPL_EXPR_ROLE_SCRATCH_RHS, 0,
+                                 repl_rhs, repl_rhs + strlen(repl_rhs));
+            flatten_build_finish(ctx, i, 1);
+        }
 
         ExprCtx index_ctx = { repl_index, vars, nv, NULL, 0 };
         ExprCtx rhs_ctx = { repl_rhs, vars, nv, NULL, 0 };
@@ -623,6 +946,10 @@ static int flatten_scratch_assign(FlattenContext *ctx, const GLCmd *src_cmd,
             local_index_vars = input_has_expr_vars(index_expr, vars, nv);
             local_rhs_vars = input_has_expr_vars(rhs, vars, nv);
         }
+    } else {
+        /* Extraction failed: freeze the keep-baked verdict. */
+        if (flatten_build_begin(ctx, i, vars, nv))
+            flatten_build_finish(ctx, i, 1);
     }
 
     if (elem_idx < 0 || elem_idx >= REPL_SCRATCH_ARRAY_LEN) {
@@ -782,6 +1109,8 @@ int repl_flatten_program(const ReplFlattenOptions *options,
         .max_call_depth = options && options->max_call_depth > 0
                         ? options->max_call_depth : MAX_FLATTEN_CALL_DEPTH,
         .force_reparse = options ? options->force_reparse : 0,
+        .expr_cache = options ? options->expr_cache : NULL,
+        .build_line = -1,
         .call_depth = 0,
         .abort = 0,
         .visit_budget = options && options->visit_budget > 0
@@ -855,7 +1184,8 @@ void repl_flatten_commands(int edit_line_idx) {
         .text = source_document_view(),
         .func_aliases = repl_func_alias_view(),
         .max_call_depth = MAX_FLATTEN_CALL_DEPTH,
-        .visit_budget = MAX_FLATTEN_VISIT_BUDGET
+        .visit_budget = MAX_FLATTEN_VISIT_BUDGET,
+        .expr_cache = repl_expr_cache_live()
     };
     ReplFlattenResult result;
 

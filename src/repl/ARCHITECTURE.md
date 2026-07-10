@@ -283,7 +283,7 @@ surfaces it on the CLI.
 
 Loop counters and function parameters don't exist in the source
 command's own scope. When [`flatten.c`](flatten.c) emits a flat command, it snapshots
-the live lexical bindings into a parallel [`FlatCmdLocalVars`](flatten.h#L36) array
+the live lexical bindings into a parallel [`FlatCmdLocalVars`](flatten.h#L37) array
 ([`repl_state_flat_program_local_vars()`](state_views.h#L145)):
 
 ```c
@@ -452,7 +452,7 @@ takes the edit-line by reference.
 
 ### 5.2 Flatten — lowering source to flat
 
-[`repl_flatten_program()`](flatten.h#L100) ([`flatten.c`](flatten.c)) expands the source array into the
+[`repl_flatten_program()`](flatten.h#L111) ([`flatten.c`](flatten.c)) expands the source array into the
 flat array:
 
 - **for-loops** iterate `[start, end)` by `step`, half-open, re-parsing
@@ -471,7 +471,7 @@ Expansion is recursive and **bounded**:
 
 On overflow it returns `ok = 0` with a status message and leaves the
 prior flat program in place. Every emitted flat command gets its
-provenance (§3.3) and a [`FlatCmdLocalVars`](flatten.h#L36) snapshot (§3.4).
+provenance (§3.3) and a [`FlatCmdLocalVars`](flatten.h#L37) snapshot (§3.4).
 
 [`flatten.c`](flatten.c) deliberately re-parses source lines with `skip_text` set in
 the [`ReplParseContext`](parser.h#L44): it consumes the parsed [`GLCmd`](command.h#L88) and discards the
@@ -484,13 +484,13 @@ loop/function bindings — and the source array is replaced transactionally on
 each successful edit, so a literal command's args and payload are already the
 parse of its current text. The command still records the enclosing local-var
 snapshot. `ReplFlattenOptions.force_reparse` disables the fast path;
-`tests/test_repl_flatten_differential.c` flattens the whole example corpus both
+[`tests/test_repl_flatten_differential.c`](../../tests/test_repl_flatten_differential.c) flattens the whole example corpus both
 ways at several `t` values and compares every flat command, local snapshot,
 provenance field, and the post-flatten predef/scratch state.
 
 The live frame path goes through `repl_flatten_commands(edit_line_idx)`,
 but the engine is reusable: tests and replay tools flatten into a
-*temporary* buffer and pass a [`FlatProgramView`](flatten.h#L45) over it, never touching
+*temporary* buffer and pass a [`FlatProgramView`](flatten.h#L46) over it, never touching
 the live arrays.
 
 ### 5.3 Execute — flat program to GL
@@ -850,7 +850,7 @@ each re-flatten knows to re-evaluate it from text (§5.2).
 
 ### Stage 3 — flatten  (`repl_flatten_commands`)
 
-[`repl_flatten_program()`](flatten.h#L100) (§5.2) lowers the nine source commands to eleven
+[`repl_flatten_program()`](flatten.h#L111) (§5.2) lowers the nine source commands to eleven
 flat ones — the loop body unrolled into six vertices, the `CMD_FOR_BEGIN`
 / `CMD_FOR_END` / `CMD_VAR_DECLARE` markers consumed:
 

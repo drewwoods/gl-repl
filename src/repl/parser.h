@@ -64,6 +64,14 @@ typedef struct {
      * the parser uses top-level/default indentation and does not read live REPL
      * state. */
     const ReplSourceScopeView *source_scope;
+    /* Optional expression-span capture (see ReplExprCaptureSink in
+     * repl/eval.h). When set, the parser fires the sink at every point it
+     * text-evaluates an expression, so the compiled-expression cache can
+     * compile exactly the spans this parse evaluated. NULL (the default for
+     * commit/reformat/tests) is today's behavior. Every parser branch that
+     * evaluates expressions must fire it — a branch that doesn't would make
+     * the compiled path bake stale args for that command family. */
+    const ReplExprCaptureSink *capture;
 } ReplParseContext;
 
 /* Parser output struct. On success, cmd holds the parsed command and text

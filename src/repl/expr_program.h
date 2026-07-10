@@ -57,38 +57,10 @@ typedef struct {
     ReplExprDepMask deps;
 } ReplExprValue;
 
-/* What position an expression occupies in its source line. Structural roles
- * (loop bounds, conditions, call args) can change flat-stream topology or
- * frozen local snapshots; value roles only change baked args. The cache
- * stores (role, ordinal) per program so flatten can look up exactly the
- * expression it is about to evaluate. */
-typedef enum {
-    REPL_EXPR_ROLE_CMD_ARG = 0,   /* GL command argument (ordinal = args[] slot) */
-    REPL_EXPR_ROLE_LOOP_START,
-    REPL_EXPR_ROLE_LOOP_END,
-    REPL_EXPR_ROLE_LOOP_STEP,
-    REPL_EXPR_ROLE_CONDITION,     /* if / else-if condition payload */
-    REPL_EXPR_ROLE_CALL_ARG,      /* funcN(...) argument (ordinal = arg index) */
-    REPL_EXPR_ROLE_ASSIGN_RHS,    /* scalar `name = expr` RHS */
-    REPL_EXPR_ROLE_SCRATCH_INDEX, /* A[index] subscript */
-    REPL_EXPR_ROLE_SCRATCH_RHS,   /* A[i] = expr RHS */
-    REPL_EXPR_ROLE_COUNT
-} ReplExprRole;
-
-/* Neutral expression-span capture contract. The parser and the flatten
- * helpers call the sink at each point they text-evaluate an expression;
- * the receiver compiles the span during the callback (the pointers never
- * outlive the source/helper buffer). A NULL sink is today's behavior.
- * Return 0 from fn to mark the capture failed (the whole line falls back
- * to the text path); nonzero to continue. */
-typedef int (*ReplExprCaptureFn)(void *user_data,
-                                 ReplExprRole role, int ordinal,
-                                 const char *begin, const char *end);
-
-typedef struct {
-    ReplExprCaptureFn fn;
-    void             *user_data;
-} ReplExprCaptureSink;
+/* The expression-role and capture-sink contract (ReplExprRole,
+ * ReplExprCaptureSink) lives in repl/eval.h: the capture points sit inside
+ * the shared parse helpers (parser argument lists, the for-header parser,
+ * the if-condition kernel), which must not depend on this module. */
 
 /* Total live heap budget for one cache (all arenas together). Exceeding it
  * fails the current compile; the line stays text-evaluated. */

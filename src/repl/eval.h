@@ -332,6 +332,54 @@ typedef struct {
 int  repl_eval_validate_expression_idents(
     const ReplExprIdentValidationConfig *cfg);
 
+/* ---- Expression-span capture (compiled-expression cache feed) ---------- */
+
+/* What position an expression occupies in its source line. Structural roles
+ * (loop bounds, conditions, call args) can change flat-stream topology or
+ * frozen local snapshots; value roles only change baked args. The compiled
+ * program cache (src/repl/expr_program.h) stores (role, ordinal) per
+ * program so flatten can look up exactly the expression it is about to
+ * evaluate. */
+typedef enum {
+    REPL_EXPR_ROLE_CMD_ARG = 0,   /* GL command argument (ordinal = args[] slot) */
+    /* Whole comma-separated argument-list spans. Fired once per list; the
+     * receiver splits with the matching splitter (LIST mirrors
+     * parse_expr_list_exact, LIST_LENIENT mirrors repl_eval_parse_exprs)
+     * and records each member as CMD_ARG at ordinal (list base) + k. */
+    REPL_EXPR_ROLE_CMD_ARG_LIST,
+    REPL_EXPR_ROLE_CMD_ARG_LIST_LENIENT,
+    REPL_EXPR_ROLE_LOOP_START,
+    REPL_EXPR_ROLE_LOOP_END,
+    REPL_EXPR_ROLE_LOOP_STEP,
+    REPL_EXPR_ROLE_CONDITION,     /* if / else-if condition payload */
+    REPL_EXPR_ROLE_CALL_ARG,      /* funcN(...) argument (ordinal = arg index) */
+    REPL_EXPR_ROLE_ASSIGN_RHS,    /* scalar `name = expr` RHS */
+    REPL_EXPR_ROLE_SCRATCH_INDEX, /* A[index] subscript */
+    REPL_EXPR_ROLE_SCRATCH_RHS,   /* A[i] = expr RHS */
+    REPL_EXPR_ROLE_COUNT
+} ReplExprRole;
+
+/* Neutral expression-span capture contract. The parser and the shared parse
+ * helpers call the sink at each point they text-evaluate an expression; the
+ * receiver compiles the span during the callback (the pointers never
+ * outlive the source/helper buffer). A NULL sink is today's behavior.
+ * Return 0 from fn to mark the capture failed (the receiver's line falls
+ * back to the text path); nonzero to continue. The span is always the text
+ * the expression evaluator actually consumes — for translated inputs
+ * (C-to-REPL rewrites) that is the translated buffer, not the source line.
+ *
+ * Every expression-evaluation boundary in the parser must either fire the
+ * sink or leave the whole command family uncaptured; a partially captured
+ * command would bake stale args on the compiled path. */
+typedef int (*ReplExprCaptureFn)(void *user_data,
+                                 ReplExprRole role, int ordinal,
+                                 const char *begin, const char *end);
+
+typedef struct {
+    ReplExprCaptureFn fn;
+    void             *user_data;
+} ReplExprCaptureSink;
+
 /* ---- Expression evaluator (recursive descent) -------------------------- */
 
 /* Parse and evaluate a single expression from ctx->p. Advances ctx->p past
@@ -359,6 +407,17 @@ int   repl_eval_parse_exprs(const char *s, float *out, int max,
 float repl_eval_if_condition(const char *src_text,
                              const ExprVar *vars, int num_vars,
                              float fallback);
+
+/* Capture-aware variant: identical evaluation, but when `capture` is
+ * non-NULL and the paren payload extracts, fires the sink once with
+ * (REPL_EXPR_ROLE_CONDITION, 0) over the translated (C-to-REPL) condition
+ * text — the exact string the evaluator consumes. A failed extraction
+ * returns `fallback` and fires nothing, so a cache built from the capture
+ * reproduces the fallback by having no condition program. */
+float repl_eval_if_condition_captured(const char *src_text,
+                                      const ExprVar *vars, int num_vars,
+                                      float fallback,
+                                      const ReplExprCaptureSink *capture);
 
 /* Advance past one comma-separated argument and return the pointer to the
  * next top-level `,`, `)`, or `\0`. Treats nested `(...)` as a unit so
@@ -440,6 +499,12 @@ typedef struct {
      * ReplCompileContext snapshot here. */
     const ExprVar *predef_vars;
     int            predef_count;
+    /* Optional expression-span capture: when set, the parser fires the sink
+     * for each bound expression it evaluates (REPL_EXPR_ROLE_LOOP_START /
+     * _END / _STEP, ordinal 0) with the exact span the evaluator consumed.
+     * An omitted step fires nothing (the cache reproduces the 1.0 default
+     * by having no step program). NULL is today's behavior. */
+    const ReplExprCaptureSink *capture;
 } ReplForHeaderParseConfig;
 
 /* Parse REPL for-loop header: for(var, start, end[, step]) body.
