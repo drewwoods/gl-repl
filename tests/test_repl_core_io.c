@@ -213,7 +213,7 @@ int main(void) {
                 find_init_line_substr("GLU_TESS_EDGE_FLAG") < 0);
 
     int before_n = repl_state_document_count();
-    CmdType before_types[MAX_COMMANDS];
+    CmdType before_types[MAX_EDITOR_COMMANDS];
     for (int i = 0; i < before_n; i++)
         before_types[i] = repl_state_document_cmds_mut()[i].type;
 
@@ -671,7 +671,7 @@ int main(void) {
         editor_feed_line("glEnd();");
 
         int else_n = repl_state_document_count();
-        CmdType else_types[MAX_COMMANDS];
+        CmdType else_types[MAX_EDITOR_COMMANDS];
         int built_elif = 0, built_else = 0;
         for (int i = 0; i < else_n; i++) {
             else_types[i] = repl_state_document_cmds_mut()[i].type;

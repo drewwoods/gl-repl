@@ -26,26 +26,26 @@ int scene_snapshot_copy(SceneSnapshot *dst, const SceneSnapshot *src) {
 }
 
 static const char *const *scene_snapshot_line_ptrs(
-    const char lines[MAX_COMMANDS][MAX_LINE_LEN],
+    const char lines[MAX_EDITOR_COMMANDS][MAX_LINE_LEN],
     int num_cmds) {
-    static const char *ptrs[MAX_COMMANDS];
+    static const char *ptrs[MAX_EDITOR_COMMANDS];
 
     if (!lines)
         return NULL;
-    for (int i = 0; i < num_cmds && i < MAX_COMMANDS; i++)
+    for (int i = 0; i < num_cmds && i < MAX_EDITOR_COMMANDS; i++)
         ptrs[i] = lines[i];
     return ptrs;
 }
 
 int scene_snapshot_load_live_commands(
     const GLCmd *cmds,
-    const char lines[MAX_COMMANDS][MAX_LINE_LEN],
+    const char lines[MAX_EDITOR_COMMANDS][MAX_LINE_LEN],
     int num_cmds,
     int edit_line) {
     if (num_cmds < 0)
         num_cmds = 0;
-    if (num_cmds > MAX_COMMANDS)
-        num_cmds = MAX_COMMANDS;
+    if (num_cmds > MAX_EDITOR_COMMANDS)
+        num_cmds = MAX_EDITOR_COMMANDS;
 
     /* Source text first so a bulk-load failure (capacity, fixture
      * refusal) leaves the cmd-store untouched and the caller can
@@ -83,8 +83,8 @@ void scene_snapshot_capture_live(SceneSnapshot *dst) {
     int count = repl_state_document_count();
     if (count < 0)
         count = 0;
-    if (count > MAX_COMMANDS)
-        count = MAX_COMMANDS;
+    if (count > MAX_EDITOR_COMMANDS)
+        count = MAX_EDITOR_COMMANDS;
 
     memcpy(dst->cmds, repl_state_document_cmds(),
            (size_t)count * sizeof(GLCmd));

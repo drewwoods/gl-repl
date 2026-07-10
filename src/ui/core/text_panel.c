@@ -98,7 +98,7 @@ static int text_panel_row_text_len(const UiTextPanelSnapshot *snap,
  *
  * Cap matches the practical UI_REPL_CODE_PANEL_MAX_ROWS upper bound
  * (~4-5K rows for a full document + virtual lines + chrome) without
- * pulling MAX_COMMANDS into the lower layer. Snapshots that exceed
+ * pulling MAX_EDITOR_COMMANDS into the lower layer. Snapshots that exceed
  * the cap bypass the cache entirely. */
 #define UI_TEXT_PANEL_WRAP_CACHE_MAX 8192
 static struct {

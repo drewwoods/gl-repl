@@ -35,15 +35,15 @@
  * Rebuilt once at the start of render_code_panel to avoid O(N × replay_pc)
  * work when annotating variable assignments during replay. */
 static int   s_replay_cache_pc = -2;                 /* replay_pc when built */
-static int   s_replay_flat_map[MAX_COMMANDS];         /* src_cmd_idx → flat_idx */
+static int   s_replay_flat_map[MAX_EDITOR_COMMANDS];         /* src_cmd_idx → flat_idx */
 static int   s_replay_current_flat_idx = -1;          /* flat cmd for src_line */
 /* Predef-variable snapshots: one per source command, taken at the flat_idx
  * stored in s_replay_flat_map[src].  Built by a single O(replay_pc) forward
  * simulation so each snapshot reflects the correct variable state BEFORE
  * executing that specific flat command. */
-static ReplPredefSnapshot s_replay_predef_snap[MAX_COMMANDS];
-static float s_replay_scratch_snap[MAX_COMMANDS][REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
-static int   s_replay_predef_snap_valid[MAX_COMMANDS];
+static ReplPredefSnapshot s_replay_predef_snap[MAX_EDITOR_COMMANDS];
+static float s_replay_scratch_snap[MAX_EDITOR_COMMANDS][REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
+static int   s_replay_predef_snap_valid[MAX_EDITOR_COMMANDS];
 
 /* Per-frame editor-text view, set by the public entry points
  * (`replay_annotations_prepare`,

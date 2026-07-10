@@ -253,7 +253,7 @@ through the other.
 | Contents | what the user wrote: loops, calls, `if` intact | fully expanded: loops unrolled, funcs inlined, `if` resolved |
 | Mutated by | the **edit flow** (compile → apply) | the **frame flow** (`flatten`) |
 | Lifetime | persists across frames | rebuilt whenever dirty |
-| Capacity | `MAX_COMMANDS` (4096) | `MAX_FLAT_COMMANDS` (8192) |
+| Capacity | `MAX_EDITOR_COMMANDS` (1024) | `MAX_FLAT_COMMANDS` (8192) |
 
 A `for(i, 0, 4) { glVertex3f(i,0,0) }` is **three** source commands
 (`CMD_FOR_BEGIN` / body / `CMD_FOR_END`) but **four** flat commands (one
@@ -1033,7 +1033,7 @@ structure-stable fast path (§13.5) and the control-flow-interpreting VM
 (§13.6) — lives in
 [docs/plans/not-started/rethinking-flattening-behaviour.md](../../docs/plans/not-started/rethinking-flattening-behaviour.md).
 
-### 13.1 The cost, and why the 4096 cap exists
+### 13.1 The cost, and why the flat-command cap exists
 
 The flat program is both **rebuilt** (flatten + assignment evaluation) and
 **walked** (execute) every frame, and both costs scale with the flat command
@@ -1043,7 +1043,7 @@ the cap on the flat array, is the lever that bounds it: cap the materialized len
 and you cap the per-frame flatten *and* execute cost at once.
 `MAX_FLATTEN_VISIT_BUDGET = 200000` is the matching guard on flatten's own work
 so one runaway loop can't hang the rebuild. Example authors hoist
-loop-invariant work specifically to stay under 4096 — the budget is real
+loop-invariant work specifically to stay under the flat cap — the budget is real
 because it is paid every frame.
 
 ### 13.2 Why `t` can force a re-flatten

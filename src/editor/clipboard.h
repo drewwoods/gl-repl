@@ -6,7 +6,7 @@
  * selections are not supported. Selection state persists across operations
  * until cleared.
  *
- * Clipboard buffer stores a contiguous range of commands (up to MAX_COMMANDS).
+ * Clipboard buffer stores a contiguous range of commands (up to MAX_EDITOR_COMMANDS).
  * Copy/cut operations snapshot the selected commands into the buffer; paste
  * inserts them at the current edit line. Multiple pastes use the same buffer
  * without re-copying.

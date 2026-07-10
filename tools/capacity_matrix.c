@@ -23,6 +23,7 @@
 #include "repl/command.h"
 #include "repl/command_spec.h"
 #include "repl/compile.h"
+#include "repl/flatten.h"   /* FlatCmdLocalVars (MAX_FLAT_COMMANDS row) */
 #include <stdbool.h>
 #include "repl/scenes.h"
 #include "repl/eval.h"
@@ -46,23 +47,31 @@ typedef struct {
 } CapRow;
 
 static const CapRow rows[] = {
-    /* Source-line + flat-program capacity. Dominates total state. */
-    { "MAX_COMMANDS", MAX_COMMANDS,
+    /* Source-line capacity. Fans out into every full document copy. */
+    { "MAX_EDITOR_COMMANDS", MAX_EDITOR_COMMANDS,
       sizeof(GLCmd) * UNDO_RING_DEPTH * UNDO_REDO_RING_PAIRS
-        + sizeof(GLCmd) * 2 /* live document + flat program */
+        + sizeof(GLCmd) * 1 /* live document */
         + MAX_LINE_LEN * UNDO_RING_DEPTH * UNDO_REDO_RING_PAIRS
         + MAX_LINE_LEN * 1 /* editor_buffer */
         + (sizeof(GLCmd) + MAX_LINE_LEN) * MAX_USER_SCENES,
-      "undo+redo rings (×64) + document + flat + editor_buffer + user scenes (×8)" },
+      "undo+redo rings (×64) + document + editor_buffer + user scenes (×8)" },
+
+    /* Flat-program capacity (split from the source cap 2026-07-10).
+     * One live array pair — no undo/scene fan-out. */
+    { "MAX_FLAT_COMMANDS", MAX_FLAT_COMMANDS,
+      sizeof(GLCmd) + sizeof(FlatCmdLocalVars)
+        + sizeof(unsigned) + sizeof(int) + sizeof(float)
+          /* VertexLabelSticky (file-private to edit_overlays.c) */,
+      "ReplFlatProgramState.cmds + .local_vars + vertex-label sticky table" },
 
     /* Per-line text width. Multiplies into every full-document buffer. */
     { "MAX_LINE_LEN", MAX_LINE_LEN,
-      MAX_COMMANDS * UNDO_RING_DEPTH * UNDO_REDO_RING_PAIRS
-        + MAX_COMMANDS
-        + MAX_COMMANDS * MAX_USER_SCENES
+      MAX_EDITOR_COMMANDS * UNDO_RING_DEPTH * UNDO_REDO_RING_PAIRS
+        + MAX_EDITOR_COMMANDS
+        + MAX_EDITOR_COMMANDS * MAX_USER_SCENES
         + MAX_WORKSPACE_HEADER_LINES
         + MAX_INPUT_LEN /* editor input + ghost + hint scratch ≈ a few input slots */,
-      "editor_buffer + undo/redo (×64) + user scenes (×8) lines, all multiplied by MAX_COMMANDS" },
+      "editor_buffer + undo/redo (×64) + user scenes (×8) lines, all multiplied by MAX_EDITOR_COMMANDS" },
 
     /* Single-line input buffer + a small handful of scratch buffers. */
     { "MAX_INPUT_LEN", MAX_INPUT_LEN,
@@ -80,18 +89,18 @@ static const CapRow rows[] = {
     /* Per-expression visible-scope size. Mostly transient. */
     { "MAX_EXPR_VARS", MAX_EXPR_VARS,
       0,
-      "transient stack scopes (compile + autocomplete); durable use sits inside flat-program GLCmds, counted under MAX_COMMANDS" },
+      "transient stack scopes (compile + autocomplete); durable use sits inside FlatCmdLocalVars, counted under MAX_FLAT_COMMANDS" },
 
     /* Names per `float a, b, c;` declaration. */
     { "MAX_NAMES_PER_DECL", MAX_NAMES_PER_DECL,
       sizeof(ExprVar) * 2 /* GLCmd.payload.decl.names slots in document + flat */
-        + sizeof(ExprVar) * 0, /* nominally inside MAX_COMMANDS too */
-      "GLCmd.payload.decl.names[][16]; effective cost folds into MAX_COMMANDS" },
+        + sizeof(ExprVar) * 0, /* nominally inside the command rows too */
+      "GLCmd.payload.decl.names[][16]; effective cost folds into MAX_EDITOR_COMMANDS + MAX_FLAT_COMMANDS" },
 
     /* User-scene slots. Each slot holds a full document copy. */
     { "MAX_USER_SCENES", MAX_USER_SCENES,
-      sizeof(GLCmd) * MAX_COMMANDS
-        + MAX_LINE_LEN * MAX_COMMANDS
+      sizeof(GLCmd) * MAX_EDITOR_COMMANDS
+        + MAX_LINE_LEN * MAX_EDITOR_COMMANDS
         + (sizeof(float) + 16) * MAX_PREDEF_VARS
         + 96 /* approximate: name + scene_cfg + last_touch + edit_line + flags */,
       "approx 1 UserScene = 1 EditorUndoSnapshot worth of bytes (file-private struct)" },
@@ -190,7 +199,7 @@ int main(void) {
         format_bytes(durable_total, buf, sizeof(buf));
         printf("Sum across rows (rough total durable state): %s\n", buf);
     }
-    printf("Note: rows overlap (e.g. MAX_COMMANDS and MAX_LINE_LEN both\n");
+    printf("Note: rows overlap (e.g. MAX_EDITOR_COMMANDS and MAX_LINE_LEN both\n");
     printf("count editor_buffer + undo rings) — the sum overstates the\n");
     printf("true footprint. For an authoritative figure, sum sizeof of\n");
     printf("g_repl_state + g_undo_buf + g_redo_buf + g_user_scenes.\n\n");
@@ -217,14 +226,24 @@ int main(void) {
         char dbl[32], quad[32];
         size_t per = 0;
         for (size_t i = 0; i < sizeof(rows) / sizeof(rows[0]); i++)
-            if (__builtin_strcmp(rows[i].name, "MAX_COMMANDS") == 0)
+            if (__builtin_strcmp(rows[i].name, "MAX_EDITOR_COMMANDS") == 0)
                 per = rows[i].per_unit_bytes;
-        format_bytes(per * MAX_COMMANDS,     dbl,  sizeof(dbl));
-        format_bytes(per * MAX_COMMANDS * 3, quad, sizeof(quad));
-        printf("  MAX_COMMANDS %d → %d : +%s\n",
-               MAX_COMMANDS, MAX_COMMANDS * 2, dbl);
-        printf("  MAX_COMMANDS %d → %d : +%s\n",
-               MAX_COMMANDS, MAX_COMMANDS * 4, quad);
+        format_bytes(per * MAX_EDITOR_COMMANDS,     dbl,  sizeof(dbl));
+        format_bytes(per * MAX_EDITOR_COMMANDS * 3, quad, sizeof(quad));
+        printf("  MAX_EDITOR_COMMANDS %d → %d : +%s\n",
+               MAX_EDITOR_COMMANDS, MAX_EDITOR_COMMANDS * 2, dbl);
+        printf("  MAX_EDITOR_COMMANDS %d → %d : +%s\n",
+               MAX_EDITOR_COMMANDS, MAX_EDITOR_COMMANDS * 4, quad);
+    }
+    {
+        char dbl[32];
+        size_t per = 0;
+        for (size_t i = 0; i < sizeof(rows) / sizeof(rows[0]); i++)
+            if (__builtin_strcmp(rows[i].name, "MAX_FLAT_COMMANDS") == 0)
+                per = rows[i].per_unit_bytes;
+        format_bytes(per * MAX_FLAT_COMMANDS, dbl, sizeof(dbl));
+        printf("  MAX_FLAT_COMMANDS %d → %d : +%s\n",
+               MAX_FLAT_COMMANDS, MAX_FLAT_COMMANDS * 2, dbl);
     }
     printf("\n");
     return 0;

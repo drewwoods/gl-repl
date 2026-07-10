@@ -559,7 +559,7 @@ int main() {
         ASSERT_INT("command_store_load reject keeps count", repl_state_document_count(), 2);
         ASSERT_INT("command_store_load rejects overflow",
                    repl_command_store_load(&store, loaded,
-                                           MAX_COMMANDS + 1), 0);
+                                           MAX_EDITOR_COMMANDS + 1), 0);
         ASSERT_INT("command_store_load overflow keeps count", repl_state_document_count(), 2);
         ASSERT_INT("command_store_load empty ok",
                    repl_command_store_load(&store, NULL, 0), 1);

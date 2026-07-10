@@ -7,7 +7,7 @@
  * static line store instead of glr_source_document.c (which forwards
  * to EditorState).
  *
- * The store is a fixed MAX_COMMANDS x MAX_LINE_LEN array. The
+ * The store is a fixed MAX_EDITOR_COMMANDS x MAX_LINE_LEN array. The
  * full-app adapter and this demo backend implement the same
  * source_document_* surface; pipeline TUs cannot tell them apart.
  */
@@ -16,7 +16,7 @@
 
 #include <string.h>
 
-static char g_demo_lines[MAX_COMMANDS][MAX_LINE_LEN];
+static char g_demo_lines[MAX_EDITOR_COMMANDS][MAX_LINE_LEN];
 static int  g_demo_line_count;
 
 SourceTextView source_document_view(void) {
@@ -37,7 +37,7 @@ static void demo_copy_into(int dst, const char *line) {
 
 int source_document_insert_line(int pos, const char *line) {
     if (pos < 0 || pos > g_demo_line_count) return 0;
-    if (g_demo_line_count >= MAX_COMMANDS) return 0;
+    if (g_demo_line_count >= MAX_EDITOR_COMMANDS) return 0;
     for (int i = g_demo_line_count; i > pos; i--)
         memcpy(g_demo_lines[i], g_demo_lines[i - 1], sizeof(g_demo_lines[i]));
     demo_copy_into(pos, line);
@@ -53,7 +53,7 @@ int source_document_replace_line(int pos, const char *line) {
 
 int source_document_load_lines(const char *const *lines, int count) {
     if (count < 0) count = 0;
-    if (count > MAX_COMMANDS) count = MAX_COMMANDS;
+    if (count > MAX_EDITOR_COMMANDS) count = MAX_EDITOR_COMMANDS;
     for (int i = 0; i < count; i++)
         demo_copy_into(i, lines ? lines[i] : "");
     g_demo_line_count = count;

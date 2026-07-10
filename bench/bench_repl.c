@@ -1093,16 +1093,20 @@ static BenchResult bench_replay_examples(int iters) {
 /* Build a single scene that flattens to a large flat-cmd stream so we
  * get a longer-running replay test that is comparable across machines.
  *
- * Sized to fit within MAX_COMMANDS (4096) after expansion: when flatten
- * would exceed that, flatten_append_cmd sets ctx->abort=1 and
- * repl_flatten_program then resets flat_count to 0 (capacity overflow
- * is treated as a hard failure, not a soft cap). The outer for-loop
- * emits 12 flat cmds per iteration, with 3 setup cmds before it
- * (two CMD_VAR_DECLARE rows are flatten-omitted): 12*340 + 3 = 4083.
+ * Sized to fit within the flat-program capacity (MAX_FLAT_COMMANDS,
+ * historically 4096) after expansion: when flatten would exceed that,
+ * flatten_append_cmd sets ctx->abort=1 and repl_flatten_program then
+ * resets flat_count to 0 (capacity overflow is treated as a hard
+ * failure, not a soft cap). The outer for-loop emits 12 flat cmds per
+ * iteration, with 3 setup cmds before it (two CMD_VAR_DECLARE rows are
+ * flatten-omitted): 12*340 + 3 = 4083.
  *
- * Iteration count was 600 before MAX_COMMANDS dropped from 8192 to 4096
- * on 2026-04-30 (commit 804d794 "config: reduce max commands"); the
- * 7203-cmd expansion that used to fit no longer does. */
+ * Iteration count was 600 before the then-unified MAX_COMMANDS cap
+ * dropped from 8192 to 4096 on 2026-04-30 (commit 804d794 "config:
+ * reduce max commands"); the 7203-cmd expansion that used to fit no
+ * longer did. The 2026-07-10 cap split restored flat headroom
+ * (MAX_FLAT_COMMANDS = 8192), but the scene stays at 340 iterations so
+ * bench results remain comparable across SHAs. */
 static const char *const k_long_replay_scene[] = {
     "glClearColor(0.05, 0.05, 0.05, 1);",
     "glEnable(GL_DEPTH_TEST);",
@@ -1286,13 +1290,16 @@ static BenchResult bench_replay_anchor(int iters) {
 /* Scene built to emit a long flat-command stream of many small primitives
  * so we can exercise the fade-batch rendering pass with large old_pc
  * indices. We unroll a for-loop that emits one triangle per iteration.
- * Sized to fit within MAX_COMMANDS (4096): exceeding it makes flatten
- * abort and discard the partial flat stream (flat_count → 0). The loop
- * body emits 11 flat cmds per iter with 2 setup cmds before it
- * (CMD_VAR_DECLARE rows are flatten-omitted): 11*370 + 2 = 4072.
+ * Sized to fit within the flat-program capacity (MAX_FLAT_COMMANDS,
+ * historically 4096): exceeding it makes flatten abort and discard the
+ * partial flat stream (flat_count → 0). The loop body emits 11 flat
+ * cmds per iter with 2 setup cmds before it (CMD_VAR_DECLARE rows are
+ * flatten-omitted): 11*370 + 2 = 4072.
  *
- * Iteration count was 600 before MAX_COMMANDS dropped from 8192 to 4096
- * on 2026-04-30 (commit 804d794 "config: reduce max commands"). */
+ * Iteration count was 600 before the then-unified MAX_COMMANDS cap
+ * dropped from 8192 to 4096 on 2026-04-30 (commit 804d794 "config:
+ * reduce max commands"); it stays at 370 post-split for cross-SHA
+ * comparability. */
 static const char *const k_fade_bench_scene[] = {
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
@@ -1334,7 +1341,7 @@ static int populate_late_batches(int flat_cmds, int *old_pcs, int *new_pcs,
     int span = flat_cmds - tail_start;
     if (span < count * 2) {
         /* Fallback for tiny flat counts - keeps the bench usable even if
-         * MAX_COMMANDS is reduced. */
+         * MAX_FLAT_COMMANDS is reduced. */
         count = span / 2;
         if (count < 1) count = 1;
     }

@@ -80,7 +80,7 @@ void repl_source_scope_view_bind(ReplSourceScopeView *view,
                                  const GLCmd *cmds, int count) {
     if (!view) return;
     if (count < 0) count = 0;
-    if (count > MAX_COMMANDS) count = MAX_COMMANDS;
+    if (count > MAX_EDITOR_COMMANDS) count = MAX_EDITOR_COMMANDS;
     view->cmds = cmds;
     view->count = count;
     view->built = 0;
@@ -169,10 +169,10 @@ int repl_source_scope_matrix_scope_depth_at(int pos) {
  * per-iteration GL-correctness check. Block-scoped matching would be a
  * follow-up.
  *
- * Off-stack static scratch (MAX_COMMANDS deep) mirrors the depth-cache
+ * Off-stack static scratch (MAX_EDITOR_COMMANDS deep) mirrors the depth-cache
  * arrays above and keeps this O(n) single-pass helper allocation-free. */
-static int g_unbal_matrix_stack[MAX_COMMANDS];
-static int g_unbal_begin_stack[MAX_COMMANDS];
+static int g_unbal_matrix_stack[MAX_EDITOR_COMMANDS];
+static int g_unbal_begin_stack[MAX_EDITOR_COMMANDS];
 
 int repl_source_scope_view_collect_unbalanced(const ReplSourceScopeView *view,
                                               int *out_lines, int max) {
@@ -188,14 +188,14 @@ int repl_source_scope_view_collect_unbalanced(const ReplSourceScopeView *view,
             continue;
         switch (cmds[i].type) {
         case CMD_PUSH_MATRIX:
-            if (msp < MAX_COMMANDS) g_unbal_matrix_stack[msp++] = i;
+            if (msp < MAX_EDITOR_COMMANDS) g_unbal_matrix_stack[msp++] = i;
             break;
         case CMD_POP_MATRIX:
             if (msp > 0)            msp--;                       /* matched */
             else if (n < max)       out_lines[n++] = i;          /* orphan pop */
             break;
         case CMD_BEGIN:
-            if (bsp < MAX_COMMANDS) g_unbal_begin_stack[bsp++] = i;
+            if (bsp < MAX_EDITOR_COMMANDS) g_unbal_begin_stack[bsp++] = i;
             break;
         case CMD_END:
             if (bsp > 0)            bsp--;                       /* matched */

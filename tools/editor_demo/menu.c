@@ -73,12 +73,12 @@ static void demo_action_load(void) {
     }
     /* Static storage so the const char *[] passed to
      * editor_buffer_load_lines stays valid for the duration of the
-     * call. MAX_COMMANDS is the buffer's row capacity; any
+     * call. MAX_EDITOR_COMMANDS is the buffer's row capacity; any
      * additional lines in the file are dropped with a warning. */
-    static char lines[MAX_COMMANDS][MAX_LINE_LEN];
-    const char *ptrs[MAX_COMMANDS];
+    static char lines[MAX_EDITOR_COMMANDS][MAX_LINE_LEN];
+    const char *ptrs[MAX_EDITOR_COMMANDS];
     int n = 0;
-    while (n < MAX_COMMANDS && fgets(lines[n], MAX_LINE_LEN, f) != NULL) {
+    while (n < MAX_EDITOR_COMMANDS && fgets(lines[n], MAX_LINE_LEN, f) != NULL) {
         size_t len = strlen(lines[n]);
         while (len > 0 &&
                (lines[n][len - 1] == '\n' || lines[n][len - 1] == '\r'))
@@ -86,7 +86,7 @@ static void demo_action_load(void) {
         ptrs[n] = lines[n];
         n++;
     }
-    int truncated = (n == MAX_COMMANDS) &&
+    int truncated = (n == MAX_EDITOR_COMMANDS) &&
                     (fgetc(f) != EOF);  /* probe one past the limit */
     fclose(f);
 
@@ -101,8 +101,8 @@ static void demo_action_load(void) {
 
     if (truncated) {
         fprintf(stderr,
-                "[demo-menu] Loaded %d line(s) from %s (truncated at MAX_COMMANDS=%d)\n",
-                n, DEMO_SAVE_PATH, MAX_COMMANDS);
+                "[demo-menu] Loaded %d line(s) from %s (truncated at MAX_EDITOR_COMMANDS=%d)\n",
+                n, DEMO_SAVE_PATH, MAX_EDITOR_COMMANDS);
     } else {
         fprintf(stderr, "[demo-menu] Loaded %d line(s) from %s\n",
                 n, DEMO_SAVE_PATH);

@@ -1454,11 +1454,11 @@ int main() {
         repl_copy_string_fits(editor_state_clipboard_mut()->lines[0], MAX_LINE_LEN,
                               editor_buffer_line(0));
         editor_state_clipboard_count_set(1);
-        repl_state_document_count_set(MAX_COMMANDS);
+        repl_state_document_count_set(MAX_EDITOR_COMMANDS);
 
         editor_handle_key(22, 0, 0);
 
-        ASSERT_INT("paste full: no mutation", repl_state_document_count(), MAX_COMMANDS);
+        ASSERT_INT("paste full: no mutation", repl_state_document_count(), MAX_EDITOR_COMMANDS);
         ASSERT_INT("paste full: clipboard preserved", editor_state_clipboard_count(), 1);
         assert_status_contains("paste full: status", "Command buffer full");
     }

@@ -109,10 +109,10 @@ static int verify_all_commands_present(void) {
     int cmd_count = repl_state_document_count();
 
     /* Mark which commands were found */
-    int found[MAX_COMMANDS] = {0};
+    int found[MAX_EDITOR_COMMANDS] = {0};
     for (int i = 0; i < cmd_count; i++) {
         CmdType type = cmds[i].type;
-        if (type >= 0 && type < MAX_COMMANDS) {
+        if (type >= 0 && type < MAX_EDITOR_COMMANDS) {
             found[type] = 1;
         }
     }
@@ -328,7 +328,7 @@ int main(void) {
     const char *path1 = "/tmp/repl_export_all_commands_1.c";
     const char *path2 = "/tmp/repl_export_all_commands_2.c";
     int cmd_count_before = 0;
-    CmdType cmd_types_before[MAX_COMMANDS];
+    CmdType cmd_types_before[MAX_EDITOR_COMMANDS];
     char *code_before = NULL;
     char *code_after = NULL;
     char *code_reexport = NULL;
@@ -417,7 +417,7 @@ int main(void) {
     ASSERT_TRUE("all supported commands present", verify_all_commands_present());
 
     /* Save command types for verification */
-    for (int i = 0; i < cmd_count_before && i < MAX_COMMANDS; i++) {
+    for (int i = 0; i < cmd_count_before && i < MAX_EDITOR_COMMANDS; i++) {
         cmd_types_before[i] = repl_state_document_cmds()[i].type;
     }
 

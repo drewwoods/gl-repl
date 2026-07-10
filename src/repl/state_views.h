@@ -40,7 +40,7 @@ static inline int repl_light_enabled(unsigned mask, int slot) {
  * and cached source dependency metadata. The edit-line cursor is editor-owned;
  * REPL pipeline code receives it as an argument or through the dispatch sink. */
 typedef struct {
-    GLCmd cmds[MAX_COMMANDS];
+    GLCmd cmds[MAX_EDITOR_COMMANDS];
     int   cmd_count;
     int   capacity;
     int   normals_dirty, source_uses_time, source_uses_time_dirty;
