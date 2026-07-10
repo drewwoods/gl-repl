@@ -152,14 +152,15 @@ render() {
         >/dev/null 2>&1
 }
 
-# png8 <in> <out> [pre-args...] — final PNG writer: apply any pre-args
-# (crop/resize), then quantize to a 255-color palette with Floyd-Steinberg
-# dithering. The screenshots are flat UI plus smooth gradients; the dithered
-# palette is visually lossless at roughly a third of the truecolor bytes,
-# which keeps the docs tree light without lowering capture resolution.
-png8() {
+# write_png <in> <out> [pre-args...] — final PNG writer: apply any pre-args
+# (crop/resize) and write TRUECOLOR at max lossless compression. Do NOT
+# palette-quantize (png8/-colors): the smooth 3D gradients (backdrops,
+# glows, accum-AA edges) band and speckle visibly under a 256-color
+# dither — tried and reverted.
+write_png() {
     local in=$1 out=$2; shift 2
-    magick "$in" "$@" -dither FloydSteinberg -colors 255 "png8:$out"
+    magick "$in" "$@" -define png:compression-level=9 \
+        -define png:exclude-chunk=time "$out"
 }
 
 # still <out.png> <frames> <aa> <args...> — keep the LAST frame.
@@ -168,7 +169,7 @@ still() {
     render "$frames" "$aa" "$@"
     local last
     last="$(ls "$FRDIR"/f-*.ppm | tail -1)"
-    png8 "$last" "$out"
+    write_png "$last" "$out"
     rm -rf "$FRDIR"
     echo "docs-assets: wrote $out"
 }
@@ -745,7 +746,7 @@ if want grid-themes; then
         files+=("$WORK/grid_$theme.png")
     done
     montage2x2 "$WORK/grid-m.png" "${files[@]}"
-    png8 "$WORK/grid-m.png" "$OUT/grid-themes.png" -resize "$W"
+    write_png "$WORK/grid-m.png" "$OUT/grid-themes.png" -resize "$W"
     echo "docs-assets: wrote $OUT/grid-themes.png"
 fi
 
@@ -769,7 +770,7 @@ if want backdrops; then
         files+=("$WORK/bd_$name.png")
     done
     montage2x2 "$WORK/bd-m.png" "${files[@]}"
-    png8 "$WORK/bd-m.png" "$OUT/backdrops.png" -resize "$W"
+    write_png "$WORK/bd-m.png" "$OUT/backdrops.png" -resize "$W"
     echo "docs-assets: wrote $OUT/backdrops.png"
 fi
 
@@ -869,8 +870,8 @@ fi
 if want numeric-stepper; then
     ( export GLR_EDIT_LINE=0
       still "$WORK/numeric-stepper-full.png" $PLAIN_FRAMES 16 "$(stage_stepper)" )
-    magick "$WORK/numeric-stepper-full.png" -crop 1200x110+0+28 +repage \
-        "png8:$OUT/numeric-stepper.png"
+    write_png "$WORK/numeric-stepper-full.png" "$OUT/numeric-stepper.png" \
+        -crop 1200x110+0+28 +repage
     echo "docs-assets: wrote $OUT/numeric-stepper.png"
 fi
 
