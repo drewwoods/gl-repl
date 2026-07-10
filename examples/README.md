@@ -61,7 +61,7 @@ intentionally does not model dynamic goto traces), and not suitable for
 variable-driven geometry loops. Keep `goto` coverage in tests and docs rather
 than in F12 examples.
 
-Keep each scene under the 4096 flattened-command budget; hoist loop-invariant
+Keep each scene under the 8192 flattened-command budget; hoist loop-invariant
 work out of `for` bodies so a dense example stays well clear of the cap.
 
 ## Example Color Language

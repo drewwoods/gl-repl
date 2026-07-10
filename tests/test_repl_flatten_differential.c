@@ -44,10 +44,10 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 
 /* One flatten's full observable output: the temp flat program plus the
  * runtime state the expansion writes as a side effect. Static so the two
- * MAX_COMMANDS-sized buffers stay off the stack. */
+ * MAX_FLAT_COMMANDS-sized buffers stay off the stack. */
 typedef struct {
-    GLCmd             cmds[MAX_COMMANDS];
-    FlatCmdLocalVars  locals[MAX_COMMANDS];
+    GLCmd             cmds[MAX_FLAT_COMMANDS];
+    FlatCmdLocalVars  locals[MAX_FLAT_COMMANDS];
     ReplFlattenResult result;
     float             predef[MAX_PREDEF_VARS];
     float             scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
@@ -89,7 +89,7 @@ static void flatten_into(FlattenRun *run, int force_reparse, int use_cache) {
         .source_cmd_count = repl_state_document_count(),
         .flat_cmds        = run->cmds,
         .flat_local_vars  = run->locals,
-        .flat_capacity    = MAX_COMMANDS,
+        .flat_capacity    = MAX_FLAT_COMMANDS,
         .text             = source_document_view(),
         .func_aliases     = repl_func_alias_view(),
         .max_call_depth   = 0,

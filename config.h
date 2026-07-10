@@ -103,6 +103,17 @@
 #define MAX_COMMANDS 4096
 #endif
 
+/* Storage capacity of the expanded flat program (loop-unrolled, inlined).
+ * Split from MAX_COMMANDS: the flat side is the flatten-budget ceiling for
+ * hero scenes, while MAX_COMMANDS fans out into undo rings and user-scene
+ * slots (32+8 copies of the source arrays), so growing the flat cap must
+ * not grow those. Only flat-indexed storage may use this constant:
+ * ReplFlatProgramState, the vertex-label sticky table, and displays of
+ * the flatten budget. */
+#ifndef MAX_FLAT_COMMANDS
+#define MAX_FLAT_COMMANDS 8192
+#endif
+
 /* Maximum characters in a single canonical source line, including the
  * trailing NUL. Same neutrality argument as MAX_COMMANDS. */
 #ifndef MAX_LINE_LEN

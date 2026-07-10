@@ -1149,11 +1149,11 @@ the REPL. Two rules keep the round trip clean:
   commands and syntax in [The REPL Language](#the-repl-language). Lines the
   importer doesn't recognize are skipped with a warning. (Anything goes
   *outside* the snippet markers, but those edits live only in the C file.)
-- **Stay within the command budget** — the document and its flattened
-  program each hold 4096 commands (the status bar shows usage, e.g.
-  `1345/4096 cmds`). Loops count once as source but every unrolled iteration
-  lands in the flat program, so a heavy particle loop reaches the cap long
-  before line 4096.
+- **Stay within the command budget** — the source document holds 4096
+  lines and its flattened program 8192 commands (the status bar shows
+  flat usage, e.g. `1345/8192 cmds`). Loops count once as source but
+  every unrolled iteration lands in the flat program, so a heavy
+  particle loop reaches the flat cap long before line 4096.
 
   To see *where* the budget goes, watch the last left-aligned status-bar
   segment as you move the cursor: `fn cmds 2480` on or inside a function
@@ -1330,7 +1330,7 @@ runs.
 --noaccum              disable the accumulation buffer (AA + motion blur)
 --dump-code            print the loaded buffer to stdout
 --flat-histogram       print per-function / per-line flat-command costs
-                       (where the 4096 budget goes; works with --example)
+                       (where the 8192 budget goes; works with --example)
 --detailed-prof        verbose startup timing trace (also GLR_DETAILED_PROF=1)
 -h, --help             usage
 ```

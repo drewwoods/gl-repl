@@ -27,7 +27,7 @@ static void repl_state_apply_sentinels(ReplRuntimeState *s) {
     s->document.source_uses_time_dirty = 1;
 
     /* --- flat_program --- */
-    s->flat_program.capacity                    = MAX_COMMANDS;
+    s->flat_program.capacity                    = MAX_FLAT_COMMANDS;
     s->flat_program.dirty                       = 1;
     s->flat_program.current_block_begin_idx      = -1;
     s->flat_program.current_block_end_idx        = -1;
@@ -232,8 +232,8 @@ int repl_state_flat_program_count(void) {
 void repl_state_flat_program_set_count(int cmd_count) {
     if (cmd_count < 0)
         cmd_count = 0;
-    if (cmd_count > MAX_COMMANDS)
-        cmd_count = MAX_COMMANDS;
+    if (cmd_count > MAX_FLAT_COMMANDS)
+        cmd_count = MAX_FLAT_COMMANDS;
     g_repl_state.flat_program.cmd_count = cmd_count;
 }
 

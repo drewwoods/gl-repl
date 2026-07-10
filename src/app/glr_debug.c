@@ -97,7 +97,7 @@ void glr_debug_dump_flat_histogram(FILE *out, SourceTextView text) {
     if (doc_count > MAX_COMMANDS) doc_count = MAX_COMMANDS;
 
     fprintf(dst, "=== REPL Flat-Cost Histogram ===\n");
-    fprintf(dst, "flat total: %d/%d\n", num_flat_cmds, MAX_COMMANDS);
+    fprintf(dst, "flat total: %d/%d\n", num_flat_cmds, MAX_FLAT_COMMANDS);
 
     fprintf(dst, "-- functions (inclusive, all call sites) --\n");
     for (int slot = 0; slot < REPL_FUNC_SLOT_COUNT; slot++) {
