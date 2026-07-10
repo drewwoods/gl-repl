@@ -209,7 +209,7 @@ glPushMatrix(), glPopMatrix(), glLoadIdentity()
 glEnable(CAP), glDisable(CAP)
   CAP: GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL, GL_NORMALIZE,
        GL_LINE_SMOOTH, GL_POINT_SMOOTH, GL_BLEND, GL_CULL_FACE,
-       GL_LIGHT0..GL_LIGHT3
+       GL_LIGHT0..GL_LIGHT3, GL_CLIP_PLANE0..GL_CLIP_PLANE5
 glShadeModel(MODE)
 glPointSize(size), glLineWidth(width)
 glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)
@@ -220,12 +220,14 @@ glLightModeli(pname, param), glFrontFace(mode)
 glDepthFunc(func), glDepthMask(GL_TRUE|GL_FALSE)
 glColorMask(r, g, b, a)      each channel GL_TRUE/GL_FALSE or 0/1
 glEdgeFlag(GL_TRUE|GL_FALSE) scalar boundary-edge flag; 0/1 accepted
+glClipPlane(plane, (GLdouble[]){a, b, c, d})   user clip plane (see Clip planes)
 glRasterPos3f(x, y, z)       position for bitmap text (see label below)
 ```
 
 `glMaterialfv` also accepts the flat shorthand
 `glMaterialfv(face, pname, r, g, b, a)` — the parser rewrites it to the
-compound-literal form.
+compound-literal form. `glClipPlane` accepts the same flat shorthand
+(`glClipPlane(plane, a, b, c, d)`).
 
 ### GLUT solid shapes
 
@@ -261,6 +263,38 @@ label("Earth phase = %f", t);
   contain `//`, `(`, `)`, `,`, or backslashes.
 - This is a REPL convenience, not a real GL call — exported C files include
   a self-contained `label()` helper so they still compile standalone.
+
+### Clip planes
+
+![Cursor on the glClipPlane line: the guide draws the plane as a gridded disc with a kept-side arrow](images/clip-plane.png)
+
+```c
+glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0.2, 1, 0.3, 0.4});
+glEnable(GL_CLIP_PLANE0);
+```
+
+`glClipPlane` sets the plane equation `a*x + b*y + c*z + d >= 0` — GL keeps
+the half-space the inequality selects and clips everything on the other
+side. Six planes are available (`GL_CLIP_PLANE0..5`); each does nothing
+until its cap is enabled. The equation is interpreted in the coordinate
+frame active at the call, so transforms before the line position the plane
+just like they position geometry. The flat shorthand
+`glClipPlane(plane, a, b, c, d)` is rewritten to the compound-literal form.
+
+Park the cursor on a committed `glClipPlane` line and the plane draws
+itself: a translucent gridded disc lying in the plane, a dashed ghost rim
+that reads through occluding geometry, and an arrow pointing into the
+*kept* half-space with a `P0 =(a, b, c, d)` readout. If the program never
+enables that plane's cap, the guide dims and the readout appends `(off)`.
+
+Coefficients are full expressions, so a plane can animate — a `d` driven by
+`t` sweeps a live cross-section through the scene:
+
+![An animated clip plane sweeping a torus](images/clip-plane-sweep.gif)
+
+Exporting keeps clip planes standalone-compilable: the C file routes the
+equation through a small `repl_gldouble4` helper (compound literals are
+C99; the export targets C89) and reload converts it back.
 
 ### Math expressions
 
@@ -766,6 +800,34 @@ with its position label — move the cursor through a `glBegin` block and the
 guide follows:
 
 ![Cursor guide and Tron grid in the Transform stress example](images/transform-stress.png)
+
+### Vertex entry guides
+
+While a `glVertex3f(` line is still being typed, the scene shows where the
+vertex *could* land given what's entered so far — one guide per remaining
+degree of freedom, colored by the axis you typed (X red, Y green, Z blue):
+
+- **One coordinate typed** → a translucent graph-paper sheet spanning the
+  two open axes, with integer grid lines (the zero lines brighter), a
+  dashed ghost rim visible through geometry, and an `x = 1.2` readout
+  naming the pinned coordinate:
+
+![Typing glVertex3f(1.2 — the two open coordinates span a graph-paper sheet at x = 1.2](images/vertex-guide-plane.png)
+
+- **Two coordinates typed** → the locus collapses to a line along the one
+  open axis, with integer tick dots (the 0 tick larger), end fades, a
+  dashed ghost pass through occluders, and the still-free axis named at
+  the positive end:
+
+![Typing glVertex3f(1.2, 0.8 — one open coordinate leaves a tick-marked line along z](images/vertex-guide-line.png)
+
+- **All three typed** → a pulsing point marker at the exact position (also
+  shown when the cursor sits on a committed vertex line, as above).
+
+`glVertex2f` pins `z = 0` implicitly, so its first coordinate already
+narrows the guide to a line. Guides follow the cursor's transform context —
+inside a `glPushMatrix`/`glTranslatef` frame the sheet and line render in
+that frame, matching where the vertex will actually land.
 
 ### Transform guides
 
