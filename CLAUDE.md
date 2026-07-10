@@ -1196,9 +1196,21 @@ Symbol matching and function parameter hints in [`src/app/glr_completion.c`](src
 - `editor_state_autocomplete()->hint` — parameter list hint shown below cursor
 - Modes: `AC_MODE_FUNC_PREFIX` (after `foo(` → param hints),
   `AC_MODE_ENUM_SLOT` (slot-indexed GL constant completion over
-  `def->args[slot].enums`; the active slot is the top-level comma
-  count),
+  `def->args[slot].enums`; the active slot is the count of top-level
+  commas *before the cursor*),
   `AC_MODE_POINT_PARAM` (3D point coordinates)
+- **Mid-line enum completion.** The enum modes (`ENUM_SLOT` /
+  `POINT_PARAM`) also fire away from end-of-input when the cursor sits
+  at the end of the token being completed and everything after it is
+  only trailing call args (`tail_is_only_trailing_args`): parking the
+  cursor after `GL_FR` in `glColorMaterial(GL_FR, GL_DIFFUSE);` offers
+  `GL_FRONT`, and Tab splices the candidate at the cursor (no `", "` /
+  `")"` suffix — the trailing text already has it), preserving the tail
+  and leaving the cursor after the inserted token. The inline ghost
+  stays end-of-input-only (the renderer gates on `cursor == input_len`);
+  mid-line the floating popup is the preview. Function-name completion
+  and param hints remain end-of-input-only — the `interior` flag in
+  `update_autocomplete` gates them off.
 
 ### Search
 

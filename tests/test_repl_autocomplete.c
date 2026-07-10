@@ -46,6 +46,16 @@ static void set_input_text(const char *text) {
     editor_cursor_pos_set(inp->input_len);
 }
 
+/* Mid-line staging: park the cursor at the end of `head` within the
+ * full line `head` + `tail` (e.g. head "glColorMaterial(GL_FR",
+ * tail ", GL_DIFFUSE);" puts the cursor right after GL_FR). */
+static void set_input_text_cursor_mid(const char *head, const char *tail) {
+    EditorInputState *inp = editor_state_input_mut();
+    snprintf(inp->input, sizeof(inp->input), "%s%s", head, tail);
+    inp->input_len = (int)strlen(inp->input);
+    editor_cursor_pos_set((int)strlen(head));
+}
+
 static int has_insert_match(const char *text) {
     for (int i = 0; i < g_ac_count; i++) {
         if (g_ac_insert_matches[i] &&
@@ -191,6 +201,103 @@ int main() {
         ASSERT_INT("shininess is not a color-material mode", g_ac_count, 0);
     }
 
+    /* 3b. Mid-line enum completion: cursor at the end of a prior arg's
+     * token with later args already typed. Accept splices the candidate
+     * at the cursor, preserves the trailing text, adds no suffix, and
+     * leaves the cursor after the inserted token. */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        set_input_text_cursor_mid("glColorMaterial(GL_FR", ", GL_DIFFUSE);");
+        editor_completion_update();
+        ASSERT_TRUE("mid-line arg1 matches", g_ac_count > 0);
+        ASSERT_STR("mid-line arg1 match", g_ac_insert_matches[0], "GL_FRONT");
+        glr_completion_accept_autocomplete();
+        ASSERT_STR("mid-line arg1 accept splices",
+                   editor_state_input().input,
+                   "glColorMaterial(GL_FRONT, GL_DIFFUSE);");
+        ASSERT_INT("mid-line arg1 cursor after token",
+                   editor_cursor_pos(),
+                   (int)strlen("glColorMaterial(GL_FRONT"));
+
+        /* Last arg with only the closing paren after the cursor. */
+        set_input_text_cursor_mid("glColorMaterial(GL_FRONT, GL_AMB", ")");
+        editor_completion_update();
+        ASSERT_STR("mid-line arg2 match", g_ac_insert_matches[0], "GL_AMBIENT");
+        glr_completion_accept_autocomplete();
+        ASSERT_STR("mid-line arg2 accept keeps close paren",
+                   editor_state_input().input,
+                   "glColorMaterial(GL_FRONT, GL_AMBIENT)");
+
+        /* Slot selection: completing a middle bool of glColorMask. */
+        set_input_text_cursor_mid("glColorMask(GL_TRUE, GL_FA",
+                                  ", GL_TRUE, GL_TRUE)");
+        editor_completion_update();
+        ASSERT_STR("mid-line colormask slot2 match",
+                   g_ac_insert_matches[0], "GL_FALSE");
+        glr_completion_accept_autocomplete();
+        ASSERT_STR("mid-line colormask slot2 accept",
+                   editor_state_input().input,
+                   "glColorMask(GL_TRUE, GL_FALSE, GL_TRUE, GL_TRUE)");
+
+        /* Empty prefix inside empty parens offers the full slot table. */
+        set_input_text_cursor_mid("glBegin(", ")");
+        editor_completion_update();
+        ASSERT_TRUE("mid-line empty prefix offers slot enums",
+                    has_insert_match("GL_TRIANGLES"));
+
+        /* Case correction works mid-line too. */
+        set_input_text_cursor_mid("glBegin(gl_tri", ");");
+        editor_completion_update();
+        ASSERT_STR("mid-line ci enum match", g_ac_insert_matches[0],
+                   "GL_TRIANGLES");
+        glr_completion_accept_autocomplete();
+        ASSERT_STR("mid-line ci enum accept corrects case",
+                   editor_state_input().input, "glBegin(GL_TRIANGLES);");
+    }
+
+    /* 3c. Mid-line gating: no completion when the cursor is mid-token,
+     * inside the command name, or on a non-enum command. */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+
+        /* Cursor mid-token (between GL_F and R). */
+        set_input_text_cursor_mid("glColorMaterial(GL_F", "R, GL_DIFFUSE);");
+        editor_completion_update();
+        ASSERT_INT("mid-token cursor offers nothing", g_ac_count, 0);
+
+        /* Cursor inside the command name. */
+        set_input_text_cursor_mid("glColorMat", "erial(GL_FRONT, GL_DIFFUSE);");
+        editor_completion_update();
+        ASSERT_INT("cursor in command name offers nothing", g_ac_count, 0);
+
+        /* Non-enum command mid-line: function-name completion must not
+         * fire away from end-of-input. */
+        set_input_text_cursor_mid("glVertex3f(1, 2", ", 3);");
+        editor_completion_update();
+        ASSERT_INT("non-enum command mid-line offers nothing", g_ac_count, 0);
+
+        /* Trailing tail that is not just call args. */
+        set_input_text_cursor_mid("glBegin(GL_TRI", " x");
+        editor_completion_update();
+        ASSERT_INT("non-arg tail offers nothing", g_ac_count, 0);
+    }
+
+    /* 3d. Mid-line slot scan is depth-aware: a comma inside a nested
+     * paren after the cursor doesn't break the tail gate, and one
+     * before the cursor doesn't advance the slot. */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        set_input_text_cursor_mid("glMaterialfv(GL_FR",
+                                  ", GL_AMBIENT, (GLfloat[]){1, 0, 0, 1});");
+        editor_completion_update();
+        ASSERT_STR("mid-line face slot match with compound-literal tail",
+                   g_ac_insert_matches[0], "GL_FRONT");
+        glr_completion_accept_autocomplete();
+        ASSERT_STR("mid-line face slot accept",
+                   editor_state_input().input,
+                   "glMaterialfv(GL_FRONT, GL_AMBIENT, (GLfloat[]){1, 0, 0, 1});");
+    }
+
     /* 4. glPointParameterfv custom completion */
     {
         glr_ctrl_reset_all(); declare_test_vars();
@@ -201,6 +308,17 @@ int main() {
         ASSERT_STR("ghost", g_ac_ghost, "ANCE_ATTENUATION, ");
         glr_completion_accept_autocomplete();
         ASSERT_STR("input", editor_state_input().input, "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, ");
+
+        /* Mid-line: pname token with the float args already typed. */
+        set_input_text_cursor_mid("glPointParameterfv(GL_POINT_DIST",
+                                  ", 1, 0, 0);");
+        editor_completion_update();
+        ASSERT_STR("mid-line pname match", g_ac_insert_matches[0],
+                   "GL_POINT_DISTANCE_ATTENUATION");
+        glr_completion_accept_autocomplete();
+        ASSERT_STR("mid-line pname accept keeps float args",
+                   editor_state_input().input,
+                   "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1, 0, 0);");
     }
 
     /* 4b. glColorMask - 4 bool slots; non-last slots suffix ", ",
