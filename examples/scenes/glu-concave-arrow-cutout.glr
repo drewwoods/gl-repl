@@ -14,6 +14,7 @@ glEnable(GL_NORMALIZE);
 glEnable(GL_LIGHT3);
 glEnable(GL_LIGHT2);
 glEnable(GL_LIGHT0);
+glEnable(GL_COLOR_MATERIAL);
 glShadeModel(GL_SMOOTH);
 glFrontFace(GL_CW);
 glRotatef(10*t, 0, 0, 1);

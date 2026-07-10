@@ -106,6 +106,7 @@ void display(void) {
   glEnable(GL_LIGHT3);
   glEnable(GL_LIGHT2);
   glEnable(GL_LIGHT0);
+  glEnable(GL_COLOR_MATERIAL);
   glShadeModel(GL_SMOOTH);
   glFrontFace(GL_CW);
   z = -0.55;
