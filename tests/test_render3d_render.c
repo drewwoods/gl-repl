@@ -957,18 +957,21 @@ static void test_vertex2f_guide_cursor_dot(void) {
     snap.vertex_n_filled = 1;
     TraceLog trace;
     char begin_lines[64];
-    char begin_quads[64];
+    char begin_fan[64];
+    /* The 1-DOF locus renders as an end-faded GL_LINE_STRIP; the 2-DOF
+     * sheet's fill is a GL_TRIANGLE_FAN. Presence of the strip and
+     * absence of the fan distinguishes line-guide from plane-guide. */
     snprintf(begin_lines, sizeof(begin_lines), "glBegin %u",
-             (unsigned)GL_LINES);
-    snprintf(begin_quads, sizeof(begin_quads), "glBegin %u",
-             (unsigned)GL_QUADS);
+             (unsigned)GL_LINE_STRIP);
+    snprintf(begin_fan, sizeof(begin_fan), "glBegin %u",
+             (unsigned)GL_TRIANGLE_FAN);
     trace_begin();
     render3d_geometry_guides_render_for_cursor(&snap);
     trace_end(&trace);
     ASSERT_TRUE("vertex2f(1,): partial entry draws a line guide",
                 trace_count_line(&trace, begin_lines) > 0);
     ASSERT_INT("vertex2f(1,): partial entry does not draw a plane",
-               trace_count_line(&trace, begin_quads), 0);
+               trace_count_line(&trace, begin_fan), 0);
 #else
     ASSERT_TRUE("vertex2f guide cursor dot (GL stubs only)", 1);
 #endif

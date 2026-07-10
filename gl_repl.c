@@ -614,6 +614,19 @@ int main(int argc, char **argv) {
         if (l_src && *l_src)
             glr_ctrl_set_edit_line(atoi(l_src));
     }
+    /* Typed-input override: GLR_TYPE_KEYS=<text> feeds each character
+     * through the keyboard dispatch exactly as typing would (guides,
+     * autocomplete ghost, and all). Headless-capture hook for
+     * mid-typing states — e.g. a partially-entered glVertex3f( whose
+     * 2-DOF plane / 1-DOF line guide can't be posed from a committed
+     * line. Applied after GLR_EDIT_LINE so it can extend a loaded line
+     * or (on a fresh row) start a new one. */
+    {
+        const char *k_src = getenv("GLR_TYPE_KEYS");
+        if (k_src)
+            for (const char *k = k_src; *k; k++)
+                glr_ctrl_keyboard((unsigned char)*k, 0, 0);
+    }
     /* Accumulation-AA boost: GLR_ACCUM_PASSES=<count> (1/2/4/8/12/16)
      * raises the accumulation sample count. Capture hook: the 2D UI
      * renders outside the accumulation loop, so this antialiases the

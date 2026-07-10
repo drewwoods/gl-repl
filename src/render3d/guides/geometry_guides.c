@@ -38,49 +38,123 @@ static const Render3dColorToken k_guide_plane_edge[3] = {
     RENDER3D_CLR_GUIDE_PLANE_Z_EDGE,
 };
 
-/* Draw a semi-transparent plane perpendicular to `free_axis` at
- * coordinate v. `free_axis` ∈ {0=X, 1=Y, 2=Z}; the other two axes span
- * the [-sz, +sz] face. `as` is the snapshot's alpha-scale boost. The
- * three call sites used to be near-identical 13-line yz/xz/xy_plane
- * helpers — this one indexes the per-axis tokens and computes the four
- * corner vertices from a single basis. */
+/* Axis letters for guide labels, indexed like the color tables. */
+static const char k_guide_axis_letter[3] = { 'x', 'y', 'z' };
+
+/* Draw a semi-transparent "coordinate paper" sheet perpendicular to
+ * `free_axis` at coordinate v. `free_axis` ∈ {0=X, 1=Y, 2=Z}; the
+ * other two axes span the [-sz, +sz] face. `as` is the snapshot's
+ * alpha-scale boost. Same soft-glass language as the clip-plane
+ * guide, keeping the per-axis color identity and the square shape
+ * (axis-aligned sheets are square; arbitrary clip planes are round):
+ *
+ *   - a radially-fading fill (fan from the sheet center, so the
+ *     wash doesn't flood the whole scene like the old uniform quad)
+ *   - integer grid chords with mid-peak alpha — the sheet reads as
+ *     graph paper, so the two open coordinates can be eyeballed;
+ *     the two zero lines (the in-plane axes) render brighter
+ *   - a solid rim under depth test plus a stippled ghost rim with
+ *     depth off (shared occluded-ghost dash language)
+ *   - an "x=1.2"-style readout naming the typed coordinate
+ */
 static void draw_guide_axis_plane(int free_axis, float v, float sz, float as) {
-    /* Corner offsets in the basis (a, b) of the free face. */
-    static const float corners[4][2] = {
-        { -1.0f, -1.0f },
-        { +1.0f, -1.0f },
-        { +1.0f, +1.0f },
-        { -1.0f, +1.0f },
-    };
-    /* The free axis is held at v; the other two axes get the corner
-     * offsets * sz. This indexing table picks (a-axis, b-axis) for
-     * each free axis. */
     int a_axis, b_axis;
     if (free_axis == 0)      { a_axis = 1; b_axis = 2; } /* YZ plane */
     else if (free_axis == 1) { a_axis = 0; b_axis = 2; } /* XZ plane */
     else                     { a_axis = 0; b_axis = 1; } /* XY plane */
 
-    render3d_clr_a(k_guide_plane_fill[free_axis], fminf(0.40f * as, 1.0f));
-    glBegin(GL_QUADS);
-    for (int i = 0; i < 4; i++) {
-        float p[3];
-        p[free_axis] = v;
-        p[a_axis] = corners[i][0] * sz;
-        p[b_axis] = corners[i][1] * sz;
-        glVertex3f(p[0], p[1], p[2]);
-    }
+    /* Square perimeter, corners + edge midpoints, wound as one loop.
+     * Offsets in the (a, b) basis of the free face. */
+    static const float perim[8][2] = {
+        { -1.0f, -1.0f }, {  0.0f, -1.0f }, { +1.0f, -1.0f },
+        { +1.0f,  0.0f }, { +1.0f, +1.0f }, {  0.0f, +1.0f },
+        { -1.0f, +1.0f }, { -1.0f,  0.0f },
+    };
+
+#define GUIDE_PLANE_POINT(pa_, pb_) do {              \
+        float p_[3];                                   \
+        p_[free_axis] = v;                             \
+        p_[a_axis] = (pa_);                            \
+        p_[b_axis] = (pb_);                            \
+        glVertex3f(p_[0], p_[1], p_[2]);               \
+    } while (0)
+
+    glShadeModel(GL_SMOOTH);
+
+    /* Radial-fade fill: bright at the sheet center, near-clear rim. */
+    glBegin(GL_TRIANGLE_FAN);
+    render3d_clr_a(k_guide_plane_fill[free_axis], fminf(0.30f * as, 1.0f));
+    GUIDE_PLANE_POINT(0.0f, 0.0f);
+    render3d_clr_a(k_guide_plane_fill[free_axis], 0.03f * as);
+    for (int i = 0; i <= 8; i++)
+        GUIDE_PLANE_POINT(perim[i % 8][0] * sz, perim[i % 8][1] * sz);
     glEnd();
 
-    render3d_clr_a(k_guide_plane_edge[free_axis], fminf(0.25f * as, 1.0f));
-    glBegin(GL_LINE_LOOP);
-    for (int i = 0; i < 4; i++) {
-        float p[3];
-        p[free_axis] = v;
-        p[a_axis] = corners[i][0] * sz;
-        p[b_axis] = corners[i][1] * sz;
-        glVertex3f(p[0], p[1], p[2]);
+    /* Integer grid chords, mid-peak alpha fading to 0 at the rim.
+     * The o == 0 pair are the in-plane axes — drawn brighter. */
+    glLineWidth(1.0f);
+    for (int axis = 0; axis < 2; axis++) {
+        for (int gi = (int)-sz + 1; gi <= (int)sz - 1; gi++) {
+            float o = (float)gi;
+            float mid_alpha = fminf((gi == 0 ? 0.45f : 0.22f) * as, 1.0f);
+            glBegin(GL_LINE_STRIP);
+            render3d_clr_a(k_guide_plane_edge[free_axis], 0.0f);
+            if (axis) GUIDE_PLANE_POINT(o, -sz); else GUIDE_PLANE_POINT(-sz, o);
+            render3d_clr_a(k_guide_plane_edge[free_axis], mid_alpha);
+            if (axis) GUIDE_PLANE_POINT(o, 0.0f); else GUIDE_PLANE_POINT(0.0f, o);
+            render3d_clr_a(k_guide_plane_edge[free_axis], 0.0f);
+            if (axis) GUIDE_PLANE_POINT(o, sz); else GUIDE_PLANE_POINT(sz, o);
+            glEnd();
+        }
     }
-    glEnd();
+
+    /* Rim, two passes: solid under depth test, stippled ghost over. */
+    for (int ghost = 0; ghost < 2; ghost++) {
+        int depth_was = glIsEnabled(GL_DEPTH_TEST);
+        if (ghost) {
+            if (depth_was) glDisable(GL_DEPTH_TEST);
+            glEnable(GL_LINE_STIPPLE);
+            glLineStipple(1, RENDER3D_OCCLUDED_GHOST_STIPPLE);
+            render3d_clr_a(k_guide_plane_edge[free_axis],
+                           fminf(0.20f * as, 1.0f));
+        } else {
+            render3d_clr_a(k_guide_plane_edge[free_axis],
+                           fminf(0.45f * as, 1.0f));
+        }
+        glBegin(GL_LINE_LOOP);
+        for (int i = 0; i < 8; i++)
+            GUIDE_PLANE_POINT(perim[i][0] * sz, perim[i][1] * sz);
+        glEnd();
+        if (ghost) {
+            glDisable(GL_LINE_STIPPLE);
+            if (depth_was) glEnable(GL_DEPTH_TEST);
+        }
+    }
+
+    /* Typed-coordinate readout at the sheet's top edge (depth off so
+     * it stays legible; the outer push/pop attrib restores). "Top"
+     * prefers the in-plane world-up axis when the sheet has one, so
+     * the label floats above the scene instead of projecting into the
+     * lower screen corners. */
+    {
+        char label[32];
+        float p[3];
+        int up_axis = (a_axis == 1) ? a_axis : b_axis;
+        int side_axis = (up_axis == a_axis) ? b_axis : a_axis;
+        snprintf(label, sizeof(label), "%c = %g",
+                 k_guide_axis_letter[free_axis], (double)v);
+        p[free_axis] = v;
+        /* Mid-height keeps the readout inside the default camera's
+         * view (the sheet's top edge projects off-screen); the small
+         * sideways nudge lifts it off the center gridline. */
+        p[up_axis] = sz * 0.55f;
+        p[side_axis] = sz * 0.08f;
+        glDisable(GL_DEPTH_TEST);
+        render3d_clr_a(k_guide_plane_edge[free_axis], fminf(0.9f * as, 1.0f));
+        render3d_draw_bitmap_text(FONT_SMALL, p[0], p[1], p[2], label);
+    }
+
+#undef GUIDE_PLANE_POINT
 }
 
 /* Per-free-axis color token for the n==2 line guide, indexed by the
@@ -150,20 +224,79 @@ static void draw_vertex_point_marker(const Render3dGuideSnapshot *snapshot,
 
 /* Line locus of a vertex with one coordinate still untyped (1 DOF): the
  * two filled axes are pinned to vals[], and `free_axis` sweeps the
- * [-sz, +sz] range. */
-static void draw_vertex_line_guide(int free_axis, const float vals[3], float sz) {
-    float a[3] = { vals[0], vals[1], vals[2] };
-    float b[3] = { vals[0], vals[1], vals[2] };
-    a[free_axis] = -sz;
-    b[free_axis] =  sz;
+ * [-sz, +sz] range. Polished to the same soft language as the sheet:
+ * the line's alpha peaks where the free coordinate crosses 0 and fades
+ * to nothing at the ends (no more hard-cut bar), integer tick dots
+ * make the open coordinate readable, a stippled depth-off ghost keeps
+ * the locus visible through geometry, and the still-free axis is named
+ * at the line's positive end. */
+static void draw_vertex_line_guide(int free_axis, const float vals[3],
+                                   float sz, float as) {
+    float p[3] = { vals[0], vals[1], vals[2] };
 
-    render3d_clr_a(k_guide_line_clr[free_axis], 0.9f);
-    glLineWidth(2.0f);
-    glBegin(GL_LINES);
-    glVertex3f(a[0], a[1], a[2]);
-    glVertex3f(b[0], b[1], b[2]);
-    glEnd();
+#define GUIDE_LINE_POINT(s_) do {                     \
+        float q_[3] = { p[0], p[1], p[2] };            \
+        q_[free_axis] = (s_);                          \
+        glVertex3f(q_[0], q_[1], q_[2]);               \
+    } while (0)
+
+    glShadeModel(GL_SMOOTH);
+
+    /* Two passes: solid under depth test, stippled ghost with depth
+     * off. Both fade end -> mid -> end. */
+    for (int ghost = 0; ghost < 2; ghost++) {
+        int depth_was = glIsEnabled(GL_DEPTH_TEST);
+        float mid_alpha = fminf((ghost ? 0.40f : 0.95f) * as, 1.0f);
+        if (ghost) {
+            if (depth_was) glDisable(GL_DEPTH_TEST);
+            glEnable(GL_LINE_STIPPLE);
+            glLineStipple(1, RENDER3D_OCCLUDED_GHOST_STIPPLE);
+        }
+        glLineWidth(2.0f);
+        glBegin(GL_LINE_STRIP);
+        render3d_clr_a(k_guide_line_clr[free_axis], 0.0f);
+        GUIDE_LINE_POINT(-sz);
+        render3d_clr_a(k_guide_line_clr[free_axis], mid_alpha);
+        GUIDE_LINE_POINT(0.0f);
+        render3d_clr_a(k_guide_line_clr[free_axis], 0.0f);
+        GUIDE_LINE_POINT(sz);
+        glEnd();
+        if (ghost) {
+            glDisable(GL_LINE_STIPPLE);
+            if (depth_was) glEnable(GL_DEPTH_TEST);
+        }
+    }
     glLineWidth(1.0f);
+
+    /* Integer tick dots along the free axis so the open coordinate can
+     * be eyeballed; the 0 tick is larger and brighter. Depth off so the
+     * scale stays readable through geometry. */
+    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_POINT_SMOOTH);
+    glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
+    for (int gi = (int)-sz + 1; gi <= (int)sz - 1; gi++) {
+        float fade = 1.0f - (float)(gi < 0 ? -gi : gi) / sz;
+        glPointSize(gi == 0 ? 6.0f : 4.0f);
+        render3d_clr_a(k_guide_line_clr[free_axis],
+                       fminf((gi == 0 ? 0.95f : 0.55f * fade + 0.15f) * as,
+                             1.0f));
+        glBegin(GL_POINTS);
+        GUIDE_LINE_POINT((float)gi);
+        glEnd();
+    }
+    glPointSize(1.0f);
+    glDisable(GL_POINT_SMOOTH);
+
+    /* Name the still-free axis at the line's positive end. */
+    {
+        char label[2] = { k_guide_axis_letter[free_axis], '\0' };
+        float q[3] = { p[0], p[1], p[2] };
+        q[free_axis] = sz * 1.05f;
+        render3d_clr_a(k_guide_line_clr[free_axis], fminf(0.9f * as, 1.0f));
+        render3d_draw_bitmap_text(FONT_SMALL, q[0], q[1], q[2], label);
+    }
+
+#undef GUIDE_LINE_POINT
 }
 
 static float guide_sanitize_zero(float val) {
@@ -300,7 +433,7 @@ static void draw_vertex_guides(const Render3dGuideSnapshot *snapshot) {
     } else if (n == 2) {
         /* 1 DOF: two axes typed => line along the remaining free axis. */
         int free_axis = !filled[2] ? 2 : (!filled[1] ? 1 : 0);
-        draw_vertex_line_guide(free_axis, vals, sz);
+        draw_vertex_line_guide(free_axis, vals, sz, as);
     } else {
         /* 0 DOF: all coords typed => exact vertex point. */
         draw_vertex_point_marker(snapshot, vals[0], vals[1], vals[2]);

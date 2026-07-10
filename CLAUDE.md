@@ -345,6 +345,7 @@ GLR_DETAILED_PROF=1 ./gl-repl        # Same as --detailed-prof, via env
 GLR_ASSETS_DIR=/path/to/music ./gl-repl   # Same as --assets, via env (--assets wins)
 GLR_TIME=5 ./gl-repl                 # Initial animation time t in seconds (--time wins)
 GLR_EDIT_LINE=4 ./gl-repl scene.c    # Park the cursor on source line 4 (0-based, clamped) after load
+GLR_TYPE_KEYS='glVertex3f(1.2' ./gl-repl scene.c  # Feed keystrokes through the keyboard dispatch after load (headless capture of mid-typing states: partial-input guides, autocomplete ghost)
 GLR_ACCUM_PASSES=16 ./gl-repl        # Accumulation AA sample count (1/2/4/8/12/16; capture hook)
 GLR_VIEW_TOGGLE_AT=0.5,2.0 ./gl-repl # Toggle 2D/3D view mode at t=0.5s and t=2.0s (records the swatch transition headlessly)
 ```
