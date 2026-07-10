@@ -14,7 +14,7 @@ int  repl_flat_cmd_matches_cursor(int flat_idx, int edit_line_idx);
 /* ---- Flat-cost attribution (command-budget readout) ----
  *
  * How many commands of the flat (expanded) program are attributable to
- * the source line under the cursor — i.e. where the MAX_COMMANDS
+ * the source line under the cursor — i.e. where the MAX_FLAT_COMMANDS
  * flatten budget is being spent. Counts aggregate over the whole
  * frame: a line inside a loop counts once per iteration, a function
  * counts across every call site (via func_scope_mask, exact at any

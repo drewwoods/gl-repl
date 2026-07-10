@@ -142,7 +142,7 @@ void display(void) {
     glEnd();
   }
   // ===== Ringed gas giant under nebula skies =====
-  // NOTE: stays well under the 4096 flattened-command budget --
+  // NOTE: stays well under the 8192 flattened-command budget --
   // the sphere loop costs stacks*(slices + 1)*10 flat commands.
   glClearColor(0.04, 0.04, 0.1, 1);
   glEnable(GL_DEPTH_TEST);

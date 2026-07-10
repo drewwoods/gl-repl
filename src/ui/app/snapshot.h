@@ -120,7 +120,7 @@ typedef struct UiRenderSnapshot {
     int                         can_redo;
     /* Cursor flat-cost readout: how many flat (expanded) commands the
      * cursor's enclosing scope / call site / line contributes this
-     * frame (where the MAX_COMMANDS budget is being spent). The
+     * frame (where the MAX_FLAT_COMMANDS budget is being spent). The
      * controller resolves the attribution kind to the short statusbar
      * prefix ("fn" / "scope" / "call" / "line"); an empty label hides
      * the segment. */

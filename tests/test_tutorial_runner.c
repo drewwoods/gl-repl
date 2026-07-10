@@ -762,11 +762,11 @@ static void test_rejected_commit_does_not_advance_tutorial(void) {
     reset_fixture();
     tutorial_start(0);
 
-    for (int i = repl_state_document_count(); i < MAX_COMMANDS; i++)
+    for (int i = repl_state_document_count(); i < MAX_EDITOR_COMMANDS; i++)
         editor_feed_line("glPointSize(1);");
 
     ASSERT_INT("document filled to capacity",
-               repl_state_document_count(), MAX_COMMANDS);
+               repl_state_document_count(), MAX_EDITOR_COMMANDS);
 
     set_input_text(tutorial_current_expected_text());
     (void)editor_handle_key(';', 0, 0);
@@ -1590,7 +1590,7 @@ static void test_phase3_pending_clears_after_match_failure(void) {
     tutorial_start(0);
 
     /* Fill the buffer to capacity so the eventual commit fails. */
-    for (int i = repl_state_document_count(); i < MAX_COMMANDS; i++)
+    for (int i = repl_state_document_count(); i < MAX_EDITOR_COMMANDS; i++)
         editor_feed_line("glPointSize(1);");
 
     /* Move cursor to expected_commit_line so the position check

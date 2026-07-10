@@ -74,7 +74,7 @@ void glr_debug_dump_flat_commands_sync(FILE *out, SourceTextView text) {
     fflush(dst);
 }
 
-/* --flat-histogram: where the MAX_COMMANDS flatten budget is being
+/* --flat-histogram: where the MAX_FLAT_COMMANDS flatten budget is being
  * spent. Two sections: per-function inclusive costs (func_scope_mask —
  * exact across nesting/recursion; a nested call's commands count
  * toward every function on its chain, so the section can sum past the
@@ -83,8 +83,8 @@ void glr_debug_dump_flat_commands_sync(FILE *out, SourceTextView text) {
  * this section sums to the flat total). */
 void glr_debug_dump_flat_histogram(FILE *out, SourceTextView text) {
     FILE *dst = out ? out : stdout;
-    static int line_counts[MAX_COMMANDS];
-    static int order[MAX_COMMANDS];
+    static int line_counts[MAX_EDITOR_COMMANDS];
+    static int order[MAX_EDITOR_COMMANDS];
 
     if (repl_state_flat_program_dirty())
         repl_flatten_commands(editor_state_edit_line());
@@ -94,7 +94,7 @@ void glr_debug_dump_flat_histogram(FILE *out, SourceTextView text) {
     int num_flat_cmds = flat_program.cmd_count;
     const GLCmd *doc = repl_state_document_cmds();
     int doc_count = repl_state_document_count();
-    if (doc_count > MAX_COMMANDS) doc_count = MAX_COMMANDS;
+    if (doc_count > MAX_EDITOR_COMMANDS) doc_count = MAX_EDITOR_COMMANDS;
 
     fprintf(dst, "=== REPL Flat-Cost Histogram ===\n");
     fprintf(dst, "flat total: %d/%d\n", num_flat_cmds, MAX_FLAT_COMMANDS);
@@ -125,7 +125,7 @@ void glr_debug_dump_flat_histogram(FILE *out, SourceTextView text) {
     memset(line_counts, 0, sizeof(line_counts));
     for (int i = 0; i < num_flat_cmds; i++) {
         int src = flat_cmds[i].src_cmd_idx;
-        if (src >= 0 && src < MAX_COMMANDS)
+        if (src >= 0 && src < MAX_EDITOR_COMMANDS)
             line_counts[src]++;
     }
     int used = 0;
@@ -133,7 +133,7 @@ void glr_debug_dump_flat_histogram(FILE *out, SourceTextView text) {
         if (line_counts[i] > 0)
             order[used++] = i;
     /* Selection sort, descending by count (ties: line order). Offline
-     * dump over <= MAX_COMMANDS entries — simplicity over speed. */
+     * dump over <= MAX_EDITOR_COMMANDS entries — simplicity over speed. */
     for (int a = 0; a < used - 1; a++) {
         int best = a;
         for (int b = a + 1; b < used; b++)

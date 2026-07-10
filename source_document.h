@@ -12,13 +12,13 @@
  *   Tests: link whichever adapter matches the scenario under test.
  *
  * The header intentionally includes only config.h so the port stays neutral.
- * MAX_COMMANDS, MAX_LINE_LEN, and MAX_COMMIT_CMDS live there so these structs
+ * MAX_EDITOR_COMMANDS, MAX_LINE_LEN, and MAX_COMMIT_CMDS live there so these structs
  * can be sized without pulling in REPL grammar or editor types.
  */
 #ifndef SOURCE_DOCUMENT_H
 #define SOURCE_DOCUMENT_H
 
-#include "config.h"  /* MAX_COMMANDS, MAX_LINE_LEN, MAX_COMMIT_CMDS */
+#include "config.h"  /* MAX_EDITOR_COMMANDS, MAX_LINE_LEN, MAX_COMMIT_CMDS */
 
 /* Read-only view over the live source document. Pointer + count;
  * passed by value to REPL consumers that need source text (replay

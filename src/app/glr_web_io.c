@@ -175,13 +175,13 @@ const char *glr_web_clipboard_kind(void) {
  * EditorClipboardState.lines, dropping empty segments (in particular the
  * trailing one a terminal newline produces) so a blank-line-separated
  * external paste doesn't abort the whole multi-line paste on a blank
- * "command". Clamped to MAX_COMMANDS lines of MAX_LINE_LEN-1 chars each. */
+ * "command". Clamped to MAX_EDITOR_COMMANDS lines of MAX_LINE_LEN-1 chars each. */
 static void web_clipboard_stage_lines(const char *text) {
     EditorClipboardState *cb = editor_state_clipboard_mut();
     int n = 0;
     const char *p = text;
 
-    while (*p && n < MAX_COMMANDS) {
+    while (*p && n < MAX_EDITOR_COMMANDS) {
         const char *eol = strchr(p, '\n');
         size_t len = eol ? (size_t)(eol - p) : strlen(p);
         if (len > 0 && p[len - 1] == '\r')

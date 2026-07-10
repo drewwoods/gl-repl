@@ -1149,11 +1149,11 @@ the REPL. Two rules keep the round trip clean:
   commands and syntax in [The REPL Language](#the-repl-language). Lines the
   importer doesn't recognize are skipped with a warning. (Anything goes
   *outside* the snippet markers, but those edits live only in the C file.)
-- **Stay within the command budget** — the source document holds 4096
+- **Stay within the command budget** — the source document holds 1024
   lines and its flattened program 8192 commands (the status bar shows
   flat usage, e.g. `1345/8192 cmds`). Loops count once as source but
   every unrolled iteration lands in the flat program, so a heavy
-  particle loop reaches the flat cap long before line 4096.
+  particle loop reaches the flat cap long before line 1024.
 
   To see *where* the budget goes, watch the last left-aligned status-bar
   segment as you move the cursor: `fn cmds 2480` on or inside a function
@@ -1169,10 +1169,12 @@ the REPL. Two rules keep the round trip clean:
 > [*Adding A New Command*](ARCHITECTURE.md#adding-a-new-command) in
 > `ARCHITECTURE.md` for the full recipe (command type, spec-table row,
 > executor case, replay annotation, help text, save/load round-trip). To
-> raise the command budget, bump `MAX_COMMANDS` in [`config.h`](../config.h) — it is
-> `#ifndef`-guarded, so `-DMAX_COMMANDS=8192` on the compiler command line
-> works without editing the file. Expect proportionally more per-frame work:
-> the flattened program re-executes every frame.
+> raise the flat command budget, bump `MAX_FLAT_COMMANDS` in
+> [`config.h`](../config.h) — it is `#ifndef`-guarded, so
+> `-DMAX_FLAT_COMMANDS=16384` on the compiler command line works without
+> editing the file (`MAX_EDITOR_COMMANDS` is the separate source-line cap).
+> Expect proportionally more per-frame work: the flattened program
+> re-executes every frame.
 
 ### Mesh export (PLY)
 

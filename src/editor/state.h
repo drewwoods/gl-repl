@@ -24,7 +24,7 @@
  * EditorState owns the buffer; src/repl/state_views.h no longer defines or
  * declares anything related to it. */
 typedef struct {
-    char lines[MAX_COMMANDS][MAX_LINE_LEN];
+    char lines[MAX_EDITOR_COMMANDS][MAX_LINE_LEN];
     int  line_count;
 } EditorBuffer;
 
@@ -106,7 +106,7 @@ typedef enum {
 typedef struct {
     EditorClipboardKind kind;
 
-    char  lines[MAX_COMMANDS][MAX_LINE_LEN];
+    char  lines[MAX_EDITOR_COMMANDS][MAX_LINE_LEN];
     int   line_count;
 
     char  input_text[MAX_INPUT_LEN];
@@ -226,7 +226,7 @@ void        editor_buffer_set_count(int count);
  *       Shift lines[pos..line_count) to the right by count, then
  *       fill lines[pos..pos+count) from `lines[0..count)` (or "" if
  *       lines is NULL or lines[i] is NULL). line_count grows by
- *       count, clamped to MAX_COMMANDS.
+ *       count, clamped to MAX_EDITOR_COMMANDS.
  *   insert_line(pos, line)
  *       Convenience wrapper for inserting a single line.
  *   replace_line(pos, line)

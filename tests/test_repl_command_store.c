@@ -38,7 +38,7 @@ static void test_repl_command_store_live(void) {
     ReplCommandStore store = repl_command_store_live();
     ASSERT_TRUE("live store has cmds pointer", store.cmds != NULL);
     ASSERT_TRUE("live store has count pointer", store.count != NULL);
-    ASSERT_INT("live store has capacity", store.capacity, MAX_COMMANDS);
+    ASSERT_INT("live store has capacity", store.capacity, MAX_EDITOR_COMMANDS);
     /* No edit_line pointer post Phase 1 — cursor is caller-owned. */
 }
 
@@ -59,7 +59,7 @@ static void test_repl_command_store_capacity(void) {
     glr_ctrl_reset_all();
 
     ReplCommandStore store = repl_command_store_live();
-    ASSERT_INT("store capacity", repl_command_store_capacity(&store), MAX_COMMANDS);
+    ASSERT_INT("store capacity", repl_command_store_capacity(&store), MAX_EDITOR_COMMANDS);
     ASSERT_INT("capacity with NULL store", repl_command_store_capacity(NULL), 0);
 }
 
@@ -342,7 +342,7 @@ static void test_repl_command_store_load(void) {
     ASSERT_INT("count after load empty", repl_command_store_count(&store), 0);
 
     ASSERT_INT("load rejects overflow",
-               repl_command_store_load(&store, cmds, MAX_COMMANDS + 1), 0);
+               repl_command_store_load(&store, cmds, MAX_EDITOR_COMMANDS + 1), 0);
 
     ASSERT_INT("load rejects NULL cmds with count > 0",
                repl_command_store_load(&store, NULL, 1), 0);

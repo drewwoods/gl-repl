@@ -9,7 +9,7 @@
 #ifndef UI_EDITOR_H
 #define UI_EDITOR_H
 
-#include "repl/command.h"   /* MAX_COMMANDS (line-override cap) */
+#include "repl/command.h"   /* MAX_EDITOR_COMMANDS (line-override cap) */
 
 typedef enum {
     TRANSFORMER_COLOR_PICKER
@@ -116,13 +116,13 @@ typedef struct {
  * editor row-count and render read this slice with a buffer fallback.
  * Sparse — only lines with a real override appear. */
 #define MAX_LINE_OVERRIDE_TEXT 256
-/* Capped at MAX_COMMANDS so the override list can hold one entry per
+/* Capped at MAX_EDITOR_COMMANDS so the override list can hold one entry per
  * source command — layout and render both index by source line and
  * must never disagree on whether a given line carries an override.
  * (When the cap was 512, busy replays exceeded it and layout fell
  * back to buffer text while render kept computing live, drifting
  * wrap rows / scroll / hit-testing.) */
-#define MAX_LINE_OVERRIDES     MAX_COMMANDS
+#define MAX_LINE_OVERRIDES     MAX_EDITOR_COMMANDS
 
 typedef struct {
     int  line_idx;

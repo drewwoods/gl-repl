@@ -55,8 +55,8 @@
  * replacement (scene switch, workspace load) intervened, and the
  * snapshot belongs to a different world. */
 typedef struct {
-    GLCmd cmds[MAX_COMMANDS];
-    char  editor_lines[MAX_COMMANDS][MAX_LINE_LEN];
+    GLCmd cmds[MAX_EDITOR_COMMANDS];
+    char  editor_lines[MAX_EDITOR_COMMANDS][MAX_LINE_LEN];
     int   num_cmds;
     int   edit_line;
     float predef_vals[MAX_PREDEF_VARS];

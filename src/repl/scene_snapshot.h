@@ -15,8 +15,8 @@
 #include "repl/export.h"
 
 typedef struct SceneSnapshot {
-    GLCmd cmds[MAX_COMMANDS];
-    char  lines[MAX_COMMANDS][MAX_LINE_LEN];
+    GLCmd cmds[MAX_EDITOR_COMMANDS];
+    char  lines[MAX_EDITOR_COMMANDS][MAX_LINE_LEN];
     int   num_cmds;
     int   edit_line;
 
@@ -46,7 +46,7 @@ int  scene_snapshot_apply_live(const SceneSnapshot *src,
 void scene_snapshot_set_edit_line(SceneSnapshot *snapshot, int edit_line);
 int  scene_snapshot_load_live_commands(
     const GLCmd *cmds,
-    const char lines[MAX_COMMANDS][MAX_LINE_LEN],
+    const char lines[MAX_EDITOR_COMMANDS][MAX_LINE_LEN],
     int num_cmds,
     int edit_line);
 

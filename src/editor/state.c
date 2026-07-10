@@ -80,13 +80,13 @@ const EditorBuffer *editor_state_buffer(void) {
 }
 
 const char *editor_buffer_line(int idx) {
-    if (idx < 0 || idx >= MAX_COMMANDS)
+    if (idx < 0 || idx >= MAX_EDITOR_COMMANDS)
         return "";
     return g_editor_state.buffer.lines[idx];
 }
 
 void editor_buffer_set_line(int idx, const char *text) {
-    if (idx < 0 || idx >= MAX_COMMANDS)
+    if (idx < 0 || idx >= MAX_EDITOR_COMMANDS)
         return;
     if (!text) text = "";
     char *dst = g_editor_state.buffer.lines[idx];
@@ -102,7 +102,7 @@ int editor_buffer_count(void) {
 
 void editor_buffer_set_count(int count) {
     if (count < 0) count = 0;
-    if (count > MAX_COMMANDS) count = MAX_COMMANDS;
+    if (count > MAX_EDITOR_COMMANDS) count = MAX_EDITOR_COMMANDS;
     g_editor_state.buffer.line_count = count;
 }
 
@@ -121,7 +121,7 @@ int editor_buffer_insert_lines(int pos, const char *const *lines, int count) {
     int old_count = buf->line_count;
 
     if (count <= 0) return 1;
-    if (old_count + count > MAX_COMMANDS) return 0;
+    if (old_count + count > MAX_EDITOR_COMMANDS) return 0;
     if (pos < 0) pos = 0;
     if (pos > old_count) pos = old_count;
 
@@ -147,7 +147,7 @@ int editor_buffer_replace_line(int pos, const char *line) {
      * [line_count, pos-1]. The insert path (editor_buffer_insert_lines)
      * already forecloses the same gap by clamping. pos == line_count is
      * still allowed (a contiguous append of one line, no gap). */
-    if (pos < 0 || pos >= MAX_COMMANDS || pos > buf->line_count) return 0;
+    if (pos < 0 || pos >= MAX_EDITOR_COMMANDS || pos > buf->line_count) return 0;
     editor_buffer_write_slot(buf->lines[pos], line ? line : "");
     if (buf->line_count <= pos)
         buf->line_count = pos + 1;
@@ -175,7 +175,7 @@ int editor_buffer_delete_range(int start, int count) {
 int editor_buffer_load_lines(const char *const *lines, int count) {
     EditorBuffer *buf = &g_editor_state.buffer;
     if (count < 0) return 0;
-    if (count > MAX_COMMANDS) count = MAX_COMMANDS;
+    if (count > MAX_EDITOR_COMMANDS) count = MAX_EDITOR_COMMANDS;
 
     for (int i = 0; i < count; i++) {
         const char *text = (lines && lines[i]) ? lines[i] : "";
@@ -237,7 +237,7 @@ EditorBufferView editor_buffer_view(void) {
 }
 
 const char *editor_buffer_view_line(EditorBufferView view, int idx) {
-    if (!view.lines || idx < 0 || idx >= MAX_COMMANDS)
+    if (!view.lines || idx < 0 || idx >= MAX_EDITOR_COMMANDS)
         return "";
     return view.lines[idx];
 }
@@ -537,8 +537,8 @@ EditorClipboardKind editor_state_clipboard_kind(void) {
 void editor_state_clipboard_count_set(int line_count) {
     if (line_count < 0)
         line_count = 0;
-    if (line_count > MAX_COMMANDS)
-        line_count = MAX_COMMANDS;
+    if (line_count > MAX_EDITOR_COMMANDS)
+        line_count = MAX_EDITOR_COMMANDS;
     /* _count_set(0) is a full clipboard reset, not a "drop the lines
      * but keep stale input_text" partial — otherwise a previous
      * INPUT_TEXT payload would survive as EMPTY-kind with non-zero

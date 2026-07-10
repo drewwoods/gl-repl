@@ -22,7 +22,7 @@ static ReplRuntimeState g_repl_state;  /* BSS zero-initialised */
  * ReplRuntimeState from raw zero-fill. */
 static void repl_state_apply_sentinels(ReplRuntimeState *s) {
     /* --- document --- */
-    s->document.capacity       = MAX_COMMANDS;
+    s->document.capacity       = MAX_EDITOR_COMMANDS;
     s->document.normals_dirty  = 1;
     s->document.source_uses_time_dirty = 1;
 
@@ -129,8 +129,8 @@ static int scan_source_uses_time(void) {
         return 1;
     if (!text.lines || line_count <= 0)
         return 0;
-    if (line_count > MAX_COMMANDS)
-        line_count = MAX_COMMANDS;
+    if (line_count > MAX_EDITOR_COMMANDS)
+        line_count = MAX_EDITOR_COMMANDS;
 
     for (int line_idx = 0; line_idx < line_count; line_idx++) {
         if (repl_eval_source_uses_ident(source_text_line(text, line_idx), "t"))
@@ -187,7 +187,7 @@ void repl_state_document_count_set(int cmd_count) {
 }
 
 int repl_state_document_capacity(void) {
-    return MAX_COMMANDS;
+    return MAX_EDITOR_COMMANDS;
 }
 
 int repl_state_normals_dirty(void) {

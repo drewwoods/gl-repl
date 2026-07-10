@@ -444,7 +444,7 @@ static void test_reset_all_restores_default_runtime(void) {
  * Push 600 distinct overrides; verify all 600 are retrievable. The
  * pre-fix cap of 512 silently dropped entries 512..599; this test
  * fails on that build (override_for(513) returns NULL) and passes
- * after MAX_LINE_OVERRIDES bumps to MAX_COMMANDS. */
+ * after MAX_LINE_OVERRIDES bumps to MAX_EDITOR_COMMANDS. */
 static void test_line_override_cap_covers_busy_replay(void) {
     const int N = 600;
     char buf[64];
@@ -537,12 +537,12 @@ static void test_source_document_load_all_rejects_oversized(void) {
 static void test_source_document_apply_change_combined_atomic_on_failure(void) {
     glr_ctrl_reset_all();
 
-    editor_buffer_set_count(MAX_COMMANDS - 1);
+    editor_buffer_set_count(MAX_EDITOR_COMMANDS - 1);
     editor_buffer_set_line(0, "line0");
     editor_buffer_set_line(1, "line1");
     editor_buffer_set_line(2, "line2");
     editor_buffer_set_line(3, "line3");
-    editor_buffer_set_line(MAX_COMMANDS - 2, "tail");
+    editor_buffer_set_line(MAX_EDITOR_COMMANDS - 2, "tail");
 
     SourceTextChange change;
     memset(&change, 0, sizeof(change));
@@ -550,7 +550,7 @@ static void test_source_document_apply_change_combined_atomic_on_failure(void) {
     change.delete_pos = 1;
     change.delete_count = 2;
     change.pos = 1;
-    change.count = 4; /* final size would exceed MAX_COMMANDS by one */
+    change.count = 4; /* final size would exceed MAX_EDITOR_COMMANDS by one */
     snprintf(change.text[0], MAX_LINE_LEN, "new1");
     snprintf(change.text[1], MAX_LINE_LEN, "new2");
     snprintf(change.text[2], MAX_LINE_LEN, "new3");
@@ -559,7 +559,7 @@ static void test_source_document_apply_change_combined_atomic_on_failure(void) {
     int ok = source_document_apply_change(&change);
     ASSERT_INT("combined delete+insert-many rejects overflow", ok, 0);
     ASSERT_INT("combined failure keeps line count unchanged",
-               source_document_view().line_count, MAX_COMMANDS - 1);
+               source_document_view().line_count, MAX_EDITOR_COMMANDS - 1);
     ASSERT_TRUE("combined failure keeps line1",
                 strcmp(source_text_line(source_document_view(), 1),
                        "line1") == 0);
@@ -567,7 +567,7 @@ static void test_source_document_apply_change_combined_atomic_on_failure(void) {
                 strcmp(source_text_line(source_document_view(), 2),
                        "line2") == 0);
     ASSERT_TRUE("combined failure keeps tail",
-                strcmp(source_text_line(source_document_view(), MAX_COMMANDS - 2),
+                strcmp(source_text_line(source_document_view(), MAX_EDITOR_COMMANDS - 2),
                        "tail") == 0);
 }
 

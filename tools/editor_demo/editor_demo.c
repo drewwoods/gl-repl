@@ -53,7 +53,7 @@
 
 #define DEMO_WINDOW_W 800
 #define DEMO_WINDOW_H 600
-#define DEMO_MAX_ROWS  (MAX_COMMANDS + 1)
+#define DEMO_MAX_ROWS  (MAX_EDITOR_COMMANDS + 1)
 
 static int  g_demo_vp_w = DEMO_WINDOW_W;
 static int  g_demo_vp_h = DEMO_WINDOW_H;

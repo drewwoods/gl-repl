@@ -213,7 +213,7 @@ void repl_recompute_autonormals(int autonormal_enabled,
         GLenum mode = (GLenum)repl_state_document_cmds()[i].args[0];
         i++;
 
-        int vi[MAX_COMMANDS];
+        int vi[MAX_EDITOR_COMMANDS];
         int nv = 0;
         int any_vertex_has_vars = 0;
         int block_end = repl_state_document_count();
@@ -247,7 +247,7 @@ void repl_recompute_autonormals(int autonormal_enabled,
             continue;
         }
 
-        float norms[MAX_COMMANDS][3];
+        float norms[MAX_EDITOR_COMMANDS][3];
         compute_block_normals(mode, front_face, vi, nv, norms);
 
         int offset = 0;

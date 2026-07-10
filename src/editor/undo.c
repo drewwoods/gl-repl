@@ -33,11 +33,11 @@ static int g_redo_count = 0;
 static unsigned int g_undo_generation = 0;
 
 static const char *const *undo_snapshot_line_ptrs(const EditorUndoSnapshot *snapshot) {
-    static const char *lines[MAX_COMMANDS];
+    static const char *lines[MAX_EDITOR_COMMANDS];
 
     if (!snapshot)
         return NULL;
-    for (int i = 0; i < snapshot->num_cmds && i < MAX_COMMANDS; i++)
+    for (int i = 0; i < snapshot->num_cmds && i < MAX_EDITOR_COMMANDS; i++)
         lines[i] = snapshot->editor_lines[i];
     return lines;
 }

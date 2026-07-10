@@ -68,8 +68,8 @@ typedef struct {
     int total_lines;
     int cursor_doc_line;
     int follow_doc_line;
-    int cmd_main_rows[MAX_COMMANDS];
-    int replay_extra_rows[MAX_COMMANDS];
+    int cmd_main_rows[MAX_EDITOR_COMMANDS];
+    int replay_extra_rows[MAX_EDITOR_COMMANDS];
 } UiReplCodePanelLayout;
 
 int ui_repl_code_panel_compute_text_x(const UiRenderSnapshot *snap);

@@ -131,7 +131,7 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
             if (err && err_size > 0 && err[0] == '\0')
                 snprintf(err, (size_t)err_size,
                          "command store at capacity (max %d)",
-                         MAX_COMMANDS);
+                         MAX_EDITOR_COMMANDS);
             return 0;
         }
 
@@ -216,7 +216,7 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
         if (err && err_size > 0 && err[0] == '\0')
             snprintf(err, (size_t)err_size,
                      "command store at capacity (max %d)",
-                     MAX_COMMANDS);
+                     MAX_EDITOR_COMMANDS);
         return 0;
     }
     if (wrote_local)

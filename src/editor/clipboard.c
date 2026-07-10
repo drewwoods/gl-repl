@@ -85,7 +85,7 @@ static void clipboard_copy_range(int start, int count) {
     EditorClipboardState *clipboard = editor_state_clipboard_mut();
     EditorBufferView text = editor_buffer_view();
     int n = 0;
-    for (int i = start; i < start + count && n < MAX_COMMANDS; i++) {
+    for (int i = start; i < start + count && n < MAX_EDITOR_COMMANDS; i++) {
         repl_copy_string_fits(clipboard->lines[n], MAX_LINE_LEN,
                               editor_buffer_view_line(text, i));
         n++;
@@ -421,7 +421,7 @@ void editor_clipboard_paste_current(void) {
     /* Snapshot the clipboard text before any state mutation — defensive
      * against any path that could mutate the clipboard mid-loop, and
      * sized by count so the snapshot doesn't allocate the 1 MB
-     * MAX_COMMANDS × MAX_LINE_LEN worst case on the stack. Allocated
+     * MAX_EDITOR_COMMANDS × MAX_LINE_LEN worst case on the stack. Allocated
      * before the undo push so a malloc failure leaves no side effects. */
     char (*buf)[MAX_LINE_LEN] = malloc((size_t)count * MAX_LINE_LEN);
     if (!buf) {

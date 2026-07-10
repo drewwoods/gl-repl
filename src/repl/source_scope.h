@@ -42,10 +42,10 @@ typedef struct ReplSourceScopeView {
     const GLCmd *cmds;
     int count;
     int built;
-    int block_depth_prefix[MAX_COMMANDS + 1];
-    int begin_depth_prefix[MAX_COMMANDS + 1];
-    int tess_depth_prefix[MAX_COMMANDS + 1];
-    int matrix_depth_prefix[MAX_COMMANDS + 1];
+    int block_depth_prefix[MAX_EDITOR_COMMANDS + 1];
+    int begin_depth_prefix[MAX_EDITOR_COMMANDS + 1];
+    int tess_depth_prefix[MAX_EDITOR_COMMANDS + 1];
+    int matrix_depth_prefix[MAX_EDITOR_COMMANDS + 1];
 } ReplSourceScopeView;
 
 typedef struct {

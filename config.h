@@ -96,26 +96,31 @@
 /* ---- Shared storage capacities ---------------------------------------- */
 
 /* Storage capacity of the source command document and the matching
- * editor buffer. Surfaces here (not in src/repl/command.h) so neutral
- * boundary headers — source_document.h in particular — can size their
- * structs without including REPL grammar types. */
-#ifndef MAX_COMMANDS
-#define MAX_COMMANDS 4096
+ * editor buffer (formerly MAX_COMMANDS, renamed when the flat cap split
+ * off as MAX_FLAT_COMMANDS). This constant fans out into every full
+ * document copy — the 32x2 undo/redo rings and 8 user-scene slots — so
+ * it is kept deliberately small; loops multiply into the flat program,
+ * not into source lines, so hand-typed documents don't need more.
+ * Surfaces here (not in src/repl/command.h) so neutral boundary headers
+ * — source_document.h in particular — can size their structs without
+ * including REPL grammar types. */
+#ifndef MAX_EDITOR_COMMANDS
+#define MAX_EDITOR_COMMANDS 1024
 #endif
 
 /* Storage capacity of the expanded flat program (loop-unrolled, inlined).
- * Split from MAX_COMMANDS: the flat side is the flatten-budget ceiling for
- * hero scenes, while MAX_COMMANDS fans out into undo rings and user-scene
- * slots (32+8 copies of the source arrays), so growing the flat cap must
- * not grow those. Only flat-indexed storage may use this constant:
- * ReplFlatProgramState, the vertex-label sticky table, and displays of
- * the flatten budget. */
+ * Split from the source cap: the flat side is the flatten-budget ceiling
+ * for hero scenes, while MAX_EDITOR_COMMANDS fans out into undo rings and
+ * user-scene slots (32+8 copies of the source arrays), so growing the
+ * flat cap must not grow those. Only flat-indexed storage may use this
+ * constant: ReplFlatProgramState, the vertex-label sticky table, and
+ * displays of the flatten budget. */
 #ifndef MAX_FLAT_COMMANDS
 #define MAX_FLAT_COMMANDS 8192
 #endif
 
 /* Maximum characters in a single canonical source line, including the
- * trailing NUL. Same neutrality argument as MAX_COMMANDS. */
+ * trailing NUL. Same neutrality argument as MAX_EDITOR_COMMANDS. */
 #ifndef MAX_LINE_LEN
 #define MAX_LINE_LEN 256
 #endif
