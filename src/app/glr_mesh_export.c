@@ -172,7 +172,8 @@ int glr_export_mesh_ply(const char *path, int srgb_decode) {
         .weld = 1, .weld_eps = 1e-3f, .smooth_normals = 1, .triangulate = 1,
         .srgb_decode = srgb_decode,
     };
-    int ntris = mesh_ply_write(fp, buf, written, &cap, &opts);
+    MeshPlyStats stats;
+    int ntris = mesh_ply_write(fp, buf, written, &cap, &opts, &stats);
     int close_err = (fclose(fp) != 0);
     free(buf);
 
@@ -181,8 +182,23 @@ int glr_export_mesh_ply(const char *path, int srgb_decode) {
         return -1;
     }
 
-    char msg[160];
-    snprintf(msg, sizeof msg, "Exported %d triangles to %s", ntris, path);
+    /* "Exported 12 triangles[, 8 edges][, 3 points] to <path>" — edge/point
+     * counts appear only when present; a triangle-less capture still leads
+     * with "0 triangles" unless lines/points carried the scene. */
+    char prims[96];
+    int off = 0;
+    if (stats.tris > 0 || (stats.edges == 0 && stats.points == 0))
+        off += snprintf(prims + off, sizeof prims - (size_t)off,
+                        "%d triangles", stats.tris);
+    if (stats.edges > 0)
+        off += snprintf(prims + off, sizeof prims - (size_t)off, "%s%d edges",
+                        off > 0 ? ", " : "", stats.edges);
+    if (stats.points > 0)
+        snprintf(prims + off, sizeof prims - (size_t)off, "%s%d points",
+                 off > 0 ? ", " : "", stats.points);
+
+    char msg[224];
+    snprintf(msg, sizeof msg, "Exported %s to %s", prims, path);
     repl_set_status(msg);
     return ntris;
 }

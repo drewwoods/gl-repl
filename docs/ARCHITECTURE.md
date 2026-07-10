@@ -1392,7 +1392,7 @@ the projection backwards to world space: identity modelview (no camera),
 a containing `glOrtho(-R, R, …)` with `R = 1000` (clips nothing a
 hand-typed scene reaches at ~1e-4 float precision), a `1024²` viewport,
 and `glDepthRange(0, 1)`. The writer inverts exactly this
-([`MeshPlyCapture`](../src/support/mesh_ply.h#L56) carries `ortho_r` / viewport / depth-range) — note
+([`MeshPlyCapture`](../src/support/mesh_ply.h#L61) carries `ortho_r` / viewport / depth-range) — note
 `glOrtho` maps world `z → -z/R`, so the depth inversion negates. State is
 saved/restored (`glPushAttrib(GL_ALL_ATTRIB_BITS)` + both matrix stacks
 pushed explicitly, since `glPushAttrib` doesn't cover them), and feedback
@@ -1428,19 +1428,29 @@ rejected mid-primitive.)
 
 **The pure writer is two-pass.** Pass 1 parses the token stream into
 transient `corners[]` (3 per triangle, n-gons fan-triangulated) +
-per-triangle face normals, and collects any **deferred edge endpoints**
-(see below). Pass 2 builds the output vertex set — welded by
-`(quantized pos, 8-bit color)` when `weld && smooth_normals`, else 1:1
+per-triangle face normals, plus separate line-endpoint and point-vertex
+lists (see below), which are then appended behind the triangle corners.
+Pass 2 builds the output vertex set over that one unified array — welded
+by `(quantized pos, 8-bit color)` when `weld && smooth_normals`, else 1:1
 flat — resolves per-vertex normals (authored wins, else
-face-normal-averaged), then resolves edges and writes
-`vertex`/`face`(/`edge`) elements.
+face-normal-averaged), then writes `vertex`/`face`(/`edge`) elements.
 
-**Line edges.** Line geometry is exported as a PLY `edge`
-element ([`src/support/mesh_ply.c`](../src/support/mesh_ply.c)):
-`glBegin(GL_LINES/LINE_STRIP/LINE_LOOP)` arrive as `GL_LINE` /
-`GL_LINE_RESET` feedback tokens. Their endpoints are collected in pass 1
-(the weld table doesn't exist yet) and resolved in pass 2 against a
-key→index table seeded with the face vertices.
+**Points and line edges.** Point and line geometry export too
+([`src/support/mesh_ply.c`](../src/support/mesh_ply.c)): `glBegin(GL_POINTS)` arrives as `GL_POINT`
+feedback tokens and becomes **loose vertices** (the PLY point-cloud
+convention — vertices referenced by no face);
+`glBegin(GL_LINES/LINE_STRIP/LINE_LOOP)` arrives as `GL_LINE` /
+`GL_LINE_RESET` tokens, one record per segment, and becomes a PLY
+**`edge` element** (`property int vertex1/vertex2` — the
+CloudCompare/Blender convention). The edge element is declared only when
+the capture contains lines, so triangle-only output is unchanged for
+viewers that predate the convention. Point/line vertices ride the same
+weld pass as face corners, so a line strip's repeated shared endpoints
+merge and its edges chain through common vertices; authored normals from
+the texcoord channel apply to them exactly as to polygon corners
+(vertices with neither an authored normal nor a face contribution write a
+zero normal). `MeshPlyStats` returns the per-primitive counts so the
+status line can report "N triangles, M edges, K points".
 
 Edges **always weld** — endpoints coincident with a face vertex or
 another endpoint collapse onto it; the rest append as new vertices (with

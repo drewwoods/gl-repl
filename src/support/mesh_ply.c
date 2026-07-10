@@ -64,6 +64,25 @@ static RawVert invert_vertex(const MeshPlyCapture *cap, const float *v, int has_
     return rv;
 }
 
+/* Full per-vertex decode shared by polygon, line, and point records: window
+ * -> world inversion, optional sRGB decode, and the authored-normal check
+ * (a nonzero texcoord under a NORMALS passthrough marker). */
+static RawVert parse_vertex(const MeshPlyCapture *cap, const float *v,
+                            int has_tex, int normals_mode,
+                            const MeshPlyOptions *opts) {
+    RawVert rv = invert_vertex(cap, v, has_tex);
+    if (opts->srgb_decode) {
+        rv.r = srgb_to_linear(rv.r);
+        rv.g = srgb_to_linear(rv.g);
+        rv.b = srgb_to_linear(rv.b);    /* alpha stays linear */
+    }
+    if (has_tex && normals_mode) {
+        float l2 = rv.anx * rv.anx + rv.any * rv.any + rv.anz * rv.anz;
+        rv.has_authored = (l2 > 1e-12f);  /* nonzero = real normal */
+    }
+    return rv;
+}
+
 static Vec3 face_normal(const RawVert *a, const RawVert *b, const RawVert *c) {
     float ux = b->x - a->x, uy = b->y - a->y, uz = b->z - a->z;
     float vx = c->x - a->x, vy = c->y - a->y, vz = c->z - a->z;
@@ -121,13 +140,23 @@ static int ensure_cap(void **arr, int *cap, int need, size_t esz) {
 }
 
 int mesh_ply_write(FILE *out, const float *feedback, int float_count,
-                   const MeshPlyCapture *cap, const MeshPlyOptions *opts) {
+                   const MeshPlyCapture *cap, const MeshPlyOptions *opts,
+                   MeshPlyStats *stats) {
     int rc = -1;
 
-    /* Parsed triangle corners (3 per triangle) + per-triangle face normal. */
+    /* Parsed triangle corners (3 per triangle) + per-triangle face normal.
+     * Line-segment endpoints (2 per edge) and loose point vertices are
+     * collected separately during the parse, then appended to `corners` so
+     * the weld / flat vertex build and the authored-normal accumulation run
+     * over one unified array: [0, ntric) triangle corners,
+     * [ntric, ntric + 2*nedges) edge endpoints, then npoints loose verts. */
     RawVert *corners = NULL; int corners_cap = 0, ncorners = 0;
     Vec3 *fnorm = NULL;      int fnorm_cap = 0, ntris = 0;
     RawVert *poly = NULL;    int poly_cap = 0;   /* reused per polygon */
+    RawVert *lverts = NULL;  int lverts_cap = 0, nlverts = 0;
+    RawVert *pverts = NULL;  int pverts_cap = 0, npoints = 0;
+
+    if (stats) memset(stats, 0, sizeof *stats);
 
     /* Output (welded or 1:1) vertices. */
     Vec3 *opos = NULL; unsigned char (*ocol)[4] = NULL; Vec3 *onrm = NULL;
@@ -166,18 +195,8 @@ int mesh_ply_write(FILE *out, const float *feedback, int float_count,
             if (!ensure_cap((void **)&poly, &poly_cap, n, sizeof *poly))
                 goto done;
             for (int k = 0; k < n; k++) {
-                poly[k] = invert_vertex(cap, &feedback[i + k * stride], has_tex);
-                if (opts->srgb_decode) {
-                    poly[k].r = srgb_to_linear(poly[k].r);
-                    poly[k].g = srgb_to_linear(poly[k].g);
-                    poly[k].b = srgb_to_linear(poly[k].b);  /* alpha stays linear */
-                }
-                if (has_tex && normals_mode) {
-                    float l2 = poly[k].anx * poly[k].anx +
-                               poly[k].any * poly[k].any +
-                               poly[k].anz * poly[k].anz;
-                    poly[k].has_authored = (l2 > 1e-12f);  /* nonzero = real normal */
-                }
+                poly[k] = parse_vertex(cap, &feedback[i + k * stride], has_tex,
+                                       normals_mode, opts);
             }
             i += n * stride;
             /* Fan-triangulate: (0, k, k+1) for k in 1..n-2. */
@@ -194,19 +213,54 @@ int mesh_ply_write(FILE *out, const float *feedback, int float_count,
                 ncorners += 3;
                 ntris++;
             }
-        } else if (tok == MESH_PLY_TOK_POINT || tok == MESH_PLY_TOK_BITMAP ||
+        } else if (tok == MESH_PLY_TOK_POINT) {
+            if (stride > float_count - i) goto done;
+            if (!ensure_cap((void **)&pverts, &pverts_cap, npoints + 1,
+                            sizeof *pverts))
+                goto done;
+            pverts[npoints++] = parse_vertex(cap, &feedback[i], has_tex,
+                                             normals_mode, opts);
+            i += stride;
+        } else if (tok == MESH_PLY_TOK_BITMAP ||
                    tok == MESH_PLY_TOK_DRAW_PIXEL || tok == MESH_PLY_TOK_COPY_PIXEL) {
             if (stride > float_count - i) goto done;
             i += stride;                                /* skip 1 vertex */
         } else if (tok == MESH_PLY_TOK_LINE || tok == MESH_PLY_TOK_LINE_RESET) {
             if (2 * stride > float_count - i) goto done;
-            i += 2 * stride;                            /* skip 2 vertices */
+            if (!ensure_cap((void **)&lverts, &lverts_cap, nlverts + 2,
+                            sizeof *lverts))
+                goto done;
+            lverts[nlverts++] = parse_vertex(cap, &feedback[i], has_tex,
+                                             normals_mode, opts);
+            lverts[nlverts++] = parse_vertex(cap, &feedback[i + stride], has_tex,
+                                             normals_mode, opts);
+            i += 2 * stride;
         } else if (tok == MESH_PLY_TOK_PASS_THROUGH) {
             if (1 > float_count - i) goto done;
             normals_mode = (fabsf(feedback[i] - MESH_PLY_PASS_NORMALS) < 0.5f);
             i += 1;                                     /* the pass-through value */
         } else {
             goto done;                                  /* unknown token -> error */
+        }
+    }
+
+    /* Append edge endpoints and loose point vertices behind the triangle
+     * corners so one pass builds the whole output vertex set. Welding also
+     * merges a line strip's shared endpoints (segments arrive pairwise from
+     * feedback) so the strip references a chain of shared vertices. */
+    int ntric = ncorners;               /* triangle-corner region boundary */
+    int nedges = nlverts / 2;
+    if (nlverts + npoints > 0) {
+        if (!ensure_cap((void **)&corners, &corners_cap,
+                        ncorners + nlverts + npoints, sizeof *corners))
+            goto done;
+        if (nlverts > 0) {
+            memcpy(corners + ncorners, lverts, (size_t)nlverts * sizeof *corners);
+            ncorners += nlverts;
+        }
+        if (npoints > 0) {
+            memcpy(corners + ncorners, pverts, (size_t)npoints * sizeof *corners);
+            ncorners += npoints;
         }
     }
 
@@ -299,6 +353,9 @@ int mesh_ply_write(FILE *out, const float *feedback, int float_count,
     }
 
     /* --- Write the PLY document. ----------------------------------------- */
+    /* The edge element (line segments) is only declared when the capture
+     * contains lines, so triangle-only output stays byte-identical for
+     * viewers that predate the edge convention. */
     if (fprintf(out,
                 "ply\n"
                 "format ascii 1.0\n"
@@ -315,9 +372,17 @@ int mesh_ply_write(FILE *out, const float *feedback, int float_count,
                 "property uchar blue\n"
                 "property uchar alpha\n"
                 "element face %d\n"
-                "property list uchar int vertex_indices\n"
-                "end_header\n",
+                "property list uchar int vertex_indices\n",
                 nverts, ntris) < 0)
+        goto done;
+    if (nedges > 0 &&
+        fprintf(out,
+                "element edge %d\n"
+                "property int vertex1\n"
+                "property int vertex2\n",
+                nedges) < 0)
+        goto done;
+    if (fprintf(out, "end_header\n") < 0)
         goto done;
 
     for (int v = 0; v < nverts; v++) {
@@ -332,14 +397,27 @@ int mesh_ply_write(FILE *out, const float *feedback, int float_count,
                     corner_vidx[3 * t + 1], corner_vidx[3 * t + 2]) < 0)
             goto done;
     }
+    for (int e = 0; e < nedges; e++) {
+        if (fprintf(out, "%d %d\n", corner_vidx[ntric + 2 * e + 0],
+                    corner_vidx[ntric + 2 * e + 1]) < 0)
+            goto done;
+    }
     if (ferror(out)) goto done;
 
+    if (stats) {
+        stats->verts = nverts;
+        stats->tris = ntris;
+        stats->edges = nedges;
+        stats->points = npoints;
+    }
     rc = ntris;
 
 done:
     free(corners);
     free(fnorm);
     free(poly);
+    free(lverts);
+    free(pverts);
     free(opos);
     free(ocol);
     free(onrm);
