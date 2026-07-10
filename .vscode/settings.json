@@ -1,3 +1,4 @@
 {
-    "editor.formatOnSave": false
+    "editor.formatOnSave": false,
+    "cmake.sourceDirectory": "/Users/drew/src/code/openGL/samples/gen-ai/gl-repl/third_party/freeglut"
 }

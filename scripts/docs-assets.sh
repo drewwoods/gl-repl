@@ -66,12 +66,14 @@ WARM=180
 
 # README + docs/images core set.
 CORE_ASSETS=(
-    hero first-triangle vertex-overlays wireframe light-theme-studio
+    hero first-triangle window-tour vertex-overlays wireframe hidden-line
+    winding-view light-theme-studio
     grid-themes backdrops axes-compass view-mode-2d labels-orrery
     glu-tess glow-sprites transform-stress variable-panel tune-badges
     motion-blur xform-guide-still xform-guide replay animated-ring
     single-polygon-scope vertex-guide-plane vertex-guide-line
     clip-plane clip-plane-sweep
+    autocomplete color-picker numeric-stepper profile-panels
 )
 
 # docs/SHOWCASE.md gallery set (-> docs/images/showcase/). Recordable scenes
@@ -150,13 +152,23 @@ render() {
         >/dev/null 2>&1
 }
 
+# png8 <in> <out> [pre-args...] — final PNG writer: apply any pre-args
+# (crop/resize), then quantize to a 255-color palette with Floyd-Steinberg
+# dithering. The screenshots are flat UI plus smooth gradients; the dithered
+# palette is visually lossless at roughly a third of the truecolor bytes,
+# which keeps the docs tree light without lowering capture resolution.
+png8() {
+    local in=$1 out=$2; shift 2
+    magick "$in" "$@" -dither FloydSteinberg -colors 255 "png8:$out"
+}
+
 # still <out.png> <frames> <aa> <args...> — keep the LAST frame.
 still() {
     local out=$1 frames=$2 aa=$3; shift 3
     render "$frames" "$aa" "$@"
     local last
     last="$(ls "$FRDIR"/f-*.ppm | tail -1)"
-    magick "$last" "$out"
+    png8 "$last" "$out"
     rm -rf "$FRDIR"
     echo "docs-assets: wrote $out"
 }
@@ -511,6 +523,164 @@ glEnd();
 EOF
 }
 
+# Hidden-line render mode: same torus as stage_wireframe, wireframe = 2.
+stage_hidden_line() { stage hidden_line <<'EOF'
+/* @cfg wireframe = 2 */
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
+/* @cfg code_panel = 3 */
+/* @cfg variable_panel = 0 */
+/* @cfg light_indicators = 0 */
+// Snippet start
+glEnable(GL_DEPTH_TEST);
+glColor3f(0.3, 0.9, 1);
+glutSolidTorus(0.4, 1.2, 24, 36);
+// Snippet end
+EOF
+}
+
+# Winding view: one CCW triangle (front-facing, renders green) beside one
+# CW triangle (back-facing, renders red) — the diagnostic's whole point.
+stage_winding() { stage winding <<'EOF'
+/* @cfg winding = 1 */
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
+/* @cfg variable_panel = 0 */
+/* @cfg light_indicators = 0 */
+/* @cfg grid = GRID_THEME_FAINT */
+// Snippet start
+glEnable(GL_DEPTH_TEST);
+glBegin(GL_TRIANGLES);
+glVertex3f(-1.5, -0.8, 0);
+glVertex3f(-0.2, -0.8, 0);
+glVertex3f(-0.85, 0.8, 0);
+glVertex3f(0.2, -0.8, 0);
+glVertex3f(0.85, 0.8, 0);
+glVertex3f(1.5, -0.8, 0);
+glEnd();
+// Snippet end
+EOF
+}
+
+# Autocomplete popup: a committed backdrop line, then GLR_TYPE_KEYS (at the
+# call site) types a partial glEnable(GL_LI on the fresh append row — the
+# enum-slot popup lists the GL_LI* candidates with the ghost text inline.
+stage_autocomplete() { stage autocomplete <<'EOF'
+/* @cfg variable_panel = 0 */
+/* @cfg light_indicators = 0 */
+/* @cfg grid = GRID_THEME_FAINT */
+// Snippet start
+glEnable(GL_DEPTH_TEST);
+glColor3f(0.9, 0.55, 0.15);
+glutSolidTeapot(0.8);
+// Snippet end
+EOF
+}
+
+# Color picker: GLR_EDIT_LINE parks the cursor on the glColor3f line (its
+# swatch shows at the panel's right edge) and GLR_OPEN_COLOR_PICKER opens
+# the floating picker on it, as clicking the swatch would.
+stage_color_picker() { stage color_picker <<'EOF'
+/* @cfg variable_panel = 0 */
+/* @cfg light_indicators = 0 */
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
+/* @cfg grid = GRID_THEME_FAINT */
+// Snippet start
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_LIGHT1);
+glEnable(GL_LIGHT2);
+glEnable(GL_COLOR_MATERIAL);
+glColor3f(0.9, 0.45, 0.2);
+glutSolidTeapot(0.9);
+// Snippet end
+EOF
+}
+
+# Numeric stepper: GLR_EDIT_LINE parks the cursor on the declaration line;
+# loading it puts the cursor at end-of-line, inside the initializer's
+# number, so the inline stepper appears at the panel's right edge.
+stage_stepper() { stage stepper <<'EOF'
+/* @cfg variable_panel = 0 */
+/* @cfg light_indicators = 0 */
+/* @cfg grid = GRID_THEME_FAINT */
+// Snippet start
+float radius = 1.5;
+glEnable(GL_DEPTH_TEST);
+glColor3f(0.3, 0.8, 0.9);
+glutSolidSphere(radius, 32, 16);
+// Snippet end
+EOF
+}
+
+# Profile panels: Sections mode shows the section listing (CPU/GPU/Max
+# columns), the log-log section histogram, and the FPS plot at once. The
+# scene is a real workload (animated nested-for mesh, so flatten + execute
+# both cost) rather than an empty frame of zeros. Stock AA: raising the
+# accum passes would multiply every section's cost 16x and distort the
+# numbers the panel is there to show.
+stage_profile() { stage profile <<'EOF'
+/* @cfg compute_profile = 2 */
+/* @cfg variable_panel = 0 */
+/* @cfg light_indicators = 0 */
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
+// Snippet start
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_COLOR_MATERIAL);
+glColor3f(0.4, 0.7, 1);
+glRotatef(t*20, 0, 1, 0);
+glBegin(GL_QUADS);
+for(i, 0, 24) {
+for(j, 0, 12) {
+glNormal3f(cos(i*TAU/24), 0, sin(i*TAU/24));
+glVertex3f(cos(i*TAU/24)*(1+j*0.04), -0.8+j*0.13, sin(i*TAU/24)*(1+j*0.04));
+glVertex3f(cos((i+1)*TAU/24)*(1+j*0.04), -0.8+j*0.13, sin((i+1)*TAU/24)*(1+j*0.04));
+glVertex3f(cos((i+1)*TAU/24)*(1+(j+1)*0.04), -0.8+(j+1)*0.13, sin((i+1)*TAU/24)*(1+(j+1)*0.04));
+glVertex3f(cos(i*TAU/24)*(1+(j+1)*0.04), -0.8+(j+1)*0.13, sin(i*TAU/24)*(1+(j+1)*0.04));
+}
+}
+glEnd();
+// Snippet end
+EOF
+}
+
+# Window tour: a two-scene workspace so the scene-tab strip shows, with the
+# variable panel on — one shot covering every piece of window chrome the
+# guide's "The window" section names.
+stage_window_tour_dir() {
+    local ws="$WORK/tour-ws"
+    mkdir -p "$ws"
+    cat > "$ws/triangle.c" <<'EOF'
+// @scene-name First Triangle
+// Snippet start
+float lift = 1;
+glColor3f(1, 0.6, 0.1);
+glBegin(GL_TRIANGLES);
+glVertex3f(0, lift, 0);
+glVertex3f(-1, -1, 0);
+glVertex3f(1, -1, 0);
+glEnd();
+// Snippet end
+EOF
+    cat > "$ws/ring.c" <<'EOF'
+// @scene-name Ring Sketch
+// Snippet start
+glColor3f(0.3, 0.8, 0.9);
+glBegin(GL_LINE_LOOP);
+for(i, 0, 32) {
+glVertex3f(cos(i*TAU/32), sin(i*TAU/32), 0);
+}
+glEnd();
+// Snippet end
+EOF
+    echo "$ws"
+}
+
 # ---- example names (stable; never reference examples by index) ----------
 
 EX_HERO="Teapot carousel (transform stacks + glow points)"
@@ -548,6 +718,20 @@ if want wireframe; then
     still "$OUT/wireframe.png" $PLAIN_FRAMES 16 "$(stage_wireframe)"
 fi
 
+if want hidden-line; then
+    still "$OUT/hidden-line.png" $PLAIN_FRAMES 16 "$(stage_hidden_line)"
+fi
+
+if want winding-view; then
+    still "$OUT/winding-view.png" $PLAIN_FRAMES 16 "$(stage_winding)"
+fi
+
+# 200 frames: past the ~186-frame splash fade, so the wordmark doesn't
+# occlude the variable panel this shot is naming.
+if want window-tour; then
+    still "$OUT/window-tour.png" 200 16 "$(stage_window_tour_dir)"
+fi
+
 if want light-theme-studio; then
     still "$OUT/light-theme-studio.png" $PLAIN_FRAMES 16 "$(stage_lights)"
 fi
@@ -561,7 +745,7 @@ if want grid-themes; then
         files+=("$WORK/grid_$theme.png")
     done
     montage2x2 "$WORK/grid-m.png" "${files[@]}"
-    magick "$WORK/grid-m.png" -resize "$W" "$OUT/grid-themes.png"
+    png8 "$WORK/grid-m.png" "$OUT/grid-themes.png" -resize "$W"
     echo "docs-assets: wrote $OUT/grid-themes.png"
 fi
 
@@ -585,7 +769,7 @@ if want backdrops; then
         files+=("$WORK/bd_$name.png")
     done
     montage2x2 "$WORK/bd-m.png" "${files[@]}"
-    magick "$WORK/bd-m.png" -resize "$W" "$OUT/backdrops.png"
+    png8 "$WORK/bd-m.png" "$OUT/backdrops.png" -resize "$W"
     echo "docs-assets: wrote $OUT/backdrops.png"
 fi
 
@@ -661,6 +845,39 @@ fi
 if want vertex-guide-line; then
     ( export GLR_TYPE_KEYS='glVertex3f(1.2, 0.8'
       still "$OUT/vertex-guide-line.png" $PLAIN_FRAMES 16 "$(stage_vertex_entry)" )
+fi
+
+# Autocomplete: the popup + inline ghost exist only mid-typing, so
+# GLR_TYPE_KEYS poses them (same trick as the vertex-entry guides). The
+# full window keeps the popup in context beside the scene.
+if want autocomplete; then
+    ( export GLR_TYPE_KEYS='glEnable(GL_LI'
+      still "$OUT/autocomplete.png" $PLAIN_FRAMES 16 "$(stage_autocomplete)" )
+fi
+
+# Color picker: opened via the GLR_OPEN_COLOR_PICKER capture hook (the
+# picker otherwise needs a swatch click). Line 6 = the glColor3f.
+if want color-picker; then
+    ( export GLR_EDIT_LINE=6 GLR_OPEN_COLOR_PICKER=6
+      still "$OUT/color-picker.png" $PLAIN_FRAMES 16 "$(stage_color_picker)" )
+fi
+
+# Numeric stepper: parking the cursor on the decl line loads it with the
+# cursor at end-of-line — inside the initializer's number — so the
+# stepper shows at the panel's right edge. Cropped to the code-panel top:
+# the widget is 16px, a full-window shot would reduce it to a speck.
+if want numeric-stepper; then
+    ( export GLR_EDIT_LINE=0
+      still "$WORK/numeric-stepper-full.png" $PLAIN_FRAMES 16 "$(stage_stepper)" )
+    magick "$WORK/numeric-stepper-full.png" -crop 1200x110+0+28 +repage \
+        "png8:$OUT/numeric-stepper.png"
+    echo "docs-assets: wrote $OUT/numeric-stepper.png"
+fi
+
+# Profile panels: extra frames so the FPS history and per-section
+# histograms have real data to plot; stock AA (see stage_profile).
+if want profile-panels; then
+    still "$OUT/profile-panels.png" 240 0 "$(stage_profile)"
 fi
 
 if want clip-plane; then
