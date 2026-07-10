@@ -1292,11 +1292,13 @@ gl-tests: $(addprefix $(BINDIR)/,$(GL_TEST_BINS)) ## Run real-GL UI state tests 
 # an order-only `|` would build the lib first but skip the relink, stranding
 # the binary on a stale archive after a re-vendor. Skipped under `make glut` (FREEGLUT_VENDOR=0)
 # and on the default Linux path / GL stubs (FREEGLUT_LIB is empty there too).
-# Vendored freeglut is built on macOS (Cocoa or OSMesa) and on Linux ONLY for
-# the OSMesa backend (FREEGLUT_OSMESA=1); the default Linux path uses system
-# freeglut and needs no archive prereq.
+# Vendored freeglut is built on macOS (Cocoa or OSMesa), on Linux for the
+# OSMesa backend (FREEGLUT_OSMESA=1), and for the Emscripten/wasm web target
+# (WEB=1, all platforms -- see FREEGLUT_BUILD/FREEGLUT_STATIC_LIB up top);
+# the default native Linux path uses system freeglut and needs no archive
+# prereq.
 ifeq ($(FREEGLUT_VENDOR),1)
-ifneq ($(filter Darwin,$(UNAME_S))$(filter 1,$(FREEGLUT_OSMESA)),)
+ifneq ($(filter Darwin,$(UNAME_S))$(filter 1,$(FREEGLUT_OSMESA))$(filter 1,$(WEB)),)
 ifneq ($(USE_GL_STUBS),1)
 $(SAMPLE_BIN) $(RENDER3D_DEMO_BIN) $(REPL_DEMO_BIN) $(REPL_LIVE_DEMO_BIN) $(EDITOR_DEMO_BIN) \
 $(MEMPROF_DEMO_BIN) $(CPUPROF_DEMO_BIN) $(VARIABLE_PANEL_DEMO_BIN) \

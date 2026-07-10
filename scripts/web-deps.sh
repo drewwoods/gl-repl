@@ -119,9 +119,33 @@ build_glu() {
 	fi
 
 	echo -e "${CYAN}Building GLU ...${NC}"
+	# GLU's configure falls back to AC_CHECK_LIB([GL], [glBegin], ...) when
+	# no gl.pc is found (gl4es ships none). That probe force-includes
+	# GL4ES_GL_H via CFLAGS below, whose gl_mangle.h renames glBegin to
+	# gl4es_glBegin -- colliding with autoconf's own synthesized
+	# `char glBegin();` declaration and failing the link test even though
+	# gl4es's libGL.a is perfectly usable. Seed the cache variable the test
+	# would have set, skipping the broken probe (same trick cross-compiling
+	# toolchains use for tests that can't run/link correctly for the
+	# target). A plain env var doesn't survive the `config.status --recheck`
+	# that `make` triggers on its own, so persist it via --cache-file
+	# instead -- config.status re-reads the same cache file.
+	local glu_cache="$GLU_DIR/config.cache"
+	printf 'ac_cv_lib_GL_glBegin=${ac_cv_lib_GL_glBegin=yes}\n' > "$glu_cache"
+	# A fresh git checkout gives every autotools-generated file the same
+	# checkout mtime, so make's maintainer-mode rules see aclocal.m4 /
+	# configure / Makefile.in as "older than their sources" and try to
+	# regenerate them via a `config.status --recheck` that does not carry
+	# our --cache-file (or the CFLAGS/CXXFLAGS `emmake make` sets), which
+	# then fails both the glBegin probe and an "environment changed"
+	# guard. Touch them oldest-to-newest (before *and* after configure,
+	# since configure itself rewrites config.status/Makefile) so nothing
+	# ever looks stale to make.
 	( cd "$GLU_DIR" \
 	  && { [ -f configure ] || autoreconf -fi; } \
-	  && emconfigure ./configure --disable-shared --enable-static \
+	  && touch aclocal.m4 configure config.h.in Makefile.am Makefile.in \
+	  && emconfigure ./configure --disable-shared --enable-static --cache-file="$glu_cache" \
+	  && touch aclocal.m4 configure config.h.in Makefile.am Makefile.in config.status Makefile \
 	  && emmake make \
 	       CFLAGS="-include $GL4ES_GL_H -I$GL4ES_INCLUDE -D__EMSCRIPTEN__ -DUSE_MGL_NAMESPACE" \
 	       CXXFLAGS="-include $GL4ES_GL_H -I$GL4ES_INCLUDE -D__EMSCRIPTEN__ -DUSE_MGL_NAMESPACE -Wno-register" )
