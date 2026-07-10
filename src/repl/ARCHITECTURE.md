@@ -253,11 +253,11 @@ through the other.
 | Contents | what the user wrote: loops, calls, `if` intact | fully expanded: loops unrolled, funcs inlined, `if` resolved |
 | Mutated by | the **edit flow** (compile → apply) | the **frame flow** (`flatten`) |
 | Lifetime | persists across frames | rebuilt whenever dirty |
-| Capacity | `MAX_COMMANDS` (4096) | `MAX_COMMANDS` (4096) |
+| Capacity | `MAX_COMMANDS` (4096) | `MAX_FLAT_COMMANDS` (8192) |
 
 A `for(i, 0, 4) { glVertex3f(i,0,0) }` is **three** source commands
 (`CMD_FOR_BEGIN` / body / `CMD_FOR_END`) but **four** flat commands (one
-`CMD_VERTEX3F` per iteration). The 4096 flat cap is the real budget —
+`CMD_VERTEX3F` per iteration). The 8192 flat cap is the real budget —
 example authors hoist loop-invariant work to stay under it.
 
 ### 3.3 Provenance: mapping flat → source
@@ -1038,8 +1038,8 @@ structure-stable fast path (§13.5) and the control-flow-interpreting VM
 The flat program is both **rebuilt** (flatten + assignment evaluation) and
 **walked** (execute) every frame, and both costs scale with the flat command
 count. In practice flatten + variable assignment can run **~8 ms per frame**
-for a large program — over half of a 60 Hz budget. `MAX_COMMANDS = 4096`, the
-cap on the flat array, is the lever that bounds it: cap the materialized length
+for a large program — over half of a 60 Hz budget. `MAX_FLAT_COMMANDS = 8192`,
+the cap on the flat array, is the lever that bounds it: cap the materialized length
 and you cap the per-frame flatten *and* execute cost at once.
 `MAX_FLATTEN_VISIT_BUDGET = 200000` is the matching guard on flatten's own work
 so one runaway loop can't hang the rebuild. Example authors hoist
@@ -1075,7 +1075,7 @@ Re-flattening per frame is a deliberate trade of CPU for simplicity:
 - **The flat array is correct-by-construction each frame.** There is no
   incremental "patch the flat program when `t` changed" path to get wrong.
 - **One static bound governs per-frame cost.** Because the thing walked every
-  frame *is* the materialized flat array, `MAX_COMMANDS` is a single,
+  frame *is* the materialized flat array, `MAX_FLAT_COMMANDS` is a single,
   cheap-to-enforce cap — no dynamic emission accounting at execute time.
 - **Downstream consumers read the materialized array for free** — provenance
   (`src_cmd_idx`, `func_scope_mask`, …; §3.3), cursor-block highlight, replay
@@ -1165,7 +1165,7 @@ interprets control flow over a compiled-once stream:
   frames.
 - **Replace the static flat-length cap with a runtime budget.** With loops
   symbolic, the compiled program is short (a loop is a few instructions, not N
-  copies), so `MAX_COMMANDS` as a *storage* limit can relax sharply. But
+  copies), so `MAX_FLAT_COMMANDS` as a *storage* limit can relax sharply. But
   per-frame *work* is still O(emitted ops), so a dynamic per-frame
   emission / visit budget must be checked during execution — the same shape as
   today's `REPL_GOTO_LOOP_LIMIT` guard, with clamp + status on overflow

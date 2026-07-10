@@ -782,8 +782,8 @@ typedef struct {
 } VertexLabel;
 
 /* Sticky per-label placement memory. Direct-indexed by the label's stable
- * number, which is bounded by MAX_COMMANDS (every labelable vertex is one
- * flat command). last_drawn is a g_label_sticky_frame stamp; an entry is an
+ * number, which is bounded by MAX_FLAT_COMMANDS (every labelable vertex is
+ * one flat command). last_drawn is a g_label_sticky_frame stamp; an entry is an
  * incumbent when it drew on the immediately preceding layout pass. */
 typedef struct {
     unsigned last_drawn;  /* frame stamp of the last actual draw            */
@@ -791,7 +791,7 @@ typedef struct {
     float    eased_dy;    /* eased pixel offset the label actually drew at  */
 } VertexLabelSticky;
 
-static VertexLabelSticky g_label_sticky[MAX_COMMANDS];
+static VertexLabelSticky g_label_sticky[MAX_FLAT_COMMANDS];
 static unsigned g_label_sticky_frame = 1; /* starts past 0 so zeroed entries
                                            * never read as incumbents */
 static int g_label_sticky_scope = -1;
@@ -1057,8 +1057,9 @@ static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
         for (oi = 0; oi < ctx->count; oi++) {
             VertexLabel *l = &ctx->labels[oi];
             VertexLabelSticky *st =
-                (l->num >= 0 && l->num < MAX_COMMANDS) ? &g_label_sticky[l->num]
-                                                       : NULL;
+                (l->num >= 0 && l->num < MAX_FLAT_COMMANDS)
+                    ? &g_label_sticky[l->num]
+                    : NULL;
             int   was_drawn = st && st->last_drawn + 1u == g_label_sticky_frame;
             int   prev_row  = was_drawn ? st->row : 0;
             int   prev_dist = prev_row < 0 ? -prev_row : prev_row;

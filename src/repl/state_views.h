@@ -50,8 +50,8 @@ typedef struct {
  * per-flat-command local-variable bindings, and the current cursor-block range
  * used by highlight/guides/replay helpers. */
 typedef struct {
-    GLCmd            cmds[MAX_COMMANDS];
-    FlatCmdLocalVars local_vars[MAX_COMMANDS];
+    GLCmd            cmds[MAX_FLAT_COMMANDS];
+    FlatCmdLocalVars local_vars[MAX_FLAT_COMMANDS];
     int              cmd_count;
     int              capacity;
     int              dirty;

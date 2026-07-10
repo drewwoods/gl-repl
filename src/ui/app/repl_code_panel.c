@@ -1760,7 +1760,7 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
     int edit_line = snap->edit_line;
 
     snprintf(L.cmds, sizeof L.cmds, "%d/%d cmds",
-             snap->flat_program_count, MAX_COMMANDS);
+             snap->flat_program_count, MAX_FLAT_COMMANDS);
     L.cmds_w = (int)strlen(L.cmds) * FONT_SMALL_W;
     tx += L.cmds_w;
     tx += STATUSBAR_SEP_W;
