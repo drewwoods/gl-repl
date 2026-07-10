@@ -1,10 +1,20 @@
-# Cursor-aware enum-arg autocomplete (complete a prior argument) — scope pending
+# Cursor-aware enum-arg autocomplete (complete a prior argument)
 
-Status: **in-review** — the enum-matching change is small and low-risk,
-but it sits behind a system-wide "completion only appends at end of
-input" assumption. How far to relax that assumption is a scope fork not
-yet decided. Do not implement until a direction is chosen and the file
-moves to `not-started/`.
+Status: **done** (2026-07-10) — implemented as the recommended
+token-tail-only subset (fork A), enum commands + `glPointParameterfv`
+only (fork B), cursor-at-token-end (fork C). In
+`src/app/glr_completion.c`: the end-of-input guard is relaxed via
+`tail_is_only_trailing_args()`; the enum block's slot scan is now
+depth-aware and cursor-bounded; `g_ac_token_start` records the splice
+point; accept splices the candidate at the cursor (no `", "`/`")"`
+suffix mid-line) and preserves the trailing text. Function-name
+completion / param hints stay end-of-input-only (`interior` gate).
+The inline ghost render gate (`cursor == input_len` in
+`src/ui/core/text_panel.c`) is untouched — mid-line the floating
+popup is the preview. Tests: the mid-line blocks in
+`tests/test_repl_autocomplete.c` (3b/3c/3d + the glPointParameterfv
+case). Fully-general mid-line splice and FUNC_PREFIX mid-line remain
+out of scope, as recommended below.
 
 ## 2026-05-23 audit
 

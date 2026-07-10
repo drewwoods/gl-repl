@@ -33,6 +33,12 @@ typedef enum {
 
 static AutocompleteMode g_ac_mode = AC_MODE_NONE;
 static int g_ac_token_len = 0;
+/* Absolute offset into the live input buffer where the token being
+ * completed starts. With end-of-input completion this is always
+ * input_len - g_ac_token_len; with mid-line enum completion (cursor
+ * parked at a token end with trailing args after it) it marks the
+ * splice point the accept path replaces. */
+static int g_ac_token_start = 0;
 static char g_ac_suffix[8] = "";
 /* Offset into the live input buffer where the completion prefix
  * starts. Non-zero when the user has typed `... = ` and the matcher
@@ -58,9 +64,39 @@ static int ac_prefix_match_ci(const char *cand, const char *pre, int n) {
     return 1;
 }
 
+/* Gate for mid-line completion. Accepts a cursor tail that is nothing
+ * but the remainder of the current call's argument list —
+ * `[ws] [, args…] ) [;] [ws]` — so completion can finish a prior enum
+ * arg (`glColorMaterial(GL_FR|, GL_DIFFUSE);`) without firing inside
+ * arbitrary expressions. The closing `)` may be absent (call still
+ * being typed). Depth covers nested (), {}, [] the same way the
+ * param-hint walker does, so a trailing compound literal doesn't end
+ * the scan early. */
+static int tail_is_only_trailing_args(const char *p) {
+    int depth = 0;
+    while (*p == ' ' || *p == '\t') p++;
+    if (*p != ',' && *p != ')')
+        return 0;
+    for (; *p; p++) {
+        char ch = *p;
+        if (depth == 0 && ch == ')')
+            break;
+        if (ch == '(' || ch == '{' || ch == '[')      depth++;
+        else if ((ch == ')' || ch == '}' || ch == ']') && depth > 0) depth--;
+    }
+    if (*p == '\0')
+        return 1; /* still-unclosed call: `, GL_…` with no `)` yet */
+    p++; /* past the top-level ')' */
+    while (*p == ' ' || *p == '\t') p++;
+    if (*p == ';') p++;
+    while (*p == ' ' || *p == '\t') p++;
+    return *p == '\0';
+}
+
 static void reset_ac_statics(void) {
     g_ac_mode = AC_MODE_NONE;
     g_ac_token_len = 0;
+    g_ac_token_start = 0;
     g_ac_input_offset = 0;
     g_ac_suffix[0] = '\0';
     for (int i = 0; i < MAX_AC_MATCHES; i++) {
@@ -307,8 +343,19 @@ static void update_autocomplete(void) {
 
     if (raw_input_len == 0) return;
 
-    /* Only offer completions when cursor is at the end of input. */
-    if (editor_cursor_pos() != raw_input_len) return;
+    /* Completions historically fire only with the cursor at the end of
+     * input. One relaxation: the enum-slot modes also fire mid-line
+     * when the cursor sits at the end of the token being completed and
+     * everything after it is only trailing call arguments (e.g.
+     * `glColorMaterial(GL_FR|, GL_DIFFUSE);` offers GL_FRONT). The
+     * other modes (function names, param hints) keep the historic
+     * end-of-input-only behavior — `interior` gates them off below. */
+    int cursor = editor_cursor_pos();
+    int interior = (cursor != raw_input_len);
+    if (interior) {
+        if (cursor <= 0) return;
+        if (!tail_is_only_trailing_args(raw_input + cursor)) return;
+    }
 
     /* Skip past a leading `... = ` so the matcher works on the RHS
      * rather than the whole line. Examples:
@@ -318,11 +365,16 @@ static void update_autocomplete(void) {
      * Distinguishes assignment `=` from `==`/`<=`/`>=`/`!=` so a
      * partial conditional doesn't get treated as an assignment. */
     {
+        /* Mid-line, only an `=` before the cursor can establish the
+         * RHS-prefix context for the token being completed; scanning
+         * past it would push g_ac_input_offset beyond the cursor and
+         * break the offset math below. */
+        int scan_len = interior ? cursor : raw_input_len;
         int last_eq = -1;
-        for (int i = 0; i < raw_input_len; i++) {
+        for (int i = 0; i < scan_len; i++) {
             if (raw_input[i] != '=') continue;
             /* skip both chars of '==' so it isn't read as assignment */
-            if (i + 1 < raw_input_len && raw_input[i + 1] == '=') { i++; continue; }
+            if (i + 1 < scan_len && raw_input[i + 1] == '=') { i++; continue; }
             if (i > 0 && (raw_input[i - 1] == '<' ||
                           raw_input[i - 1] == '>' ||
                           raw_input[i - 1] == '!' ||
@@ -331,7 +383,7 @@ static void update_autocomplete(void) {
         }
         if (last_eq >= 0) {
             int o = last_eq + 1;
-            while (o < raw_input_len && isspace((unsigned char)raw_input[o])) o++;
+            while (o < scan_len && isspace((unsigned char)raw_input[o])) o++;
             g_ac_input_offset = o;
         }
     }
@@ -345,10 +397,16 @@ static void update_autocomplete(void) {
         static const char prefix[] = "glPointParameterfv(";
         const ReplEnumEntry *point_param_pnames = repl_point_param_pname_entries();
         int plen = (int)sizeof(prefix) - 1;
+        /* Completion stops at the cursor: mid-line the pname token ends
+         * there and trailing `, const, linear, quadratic)` text is kept;
+         * at end-of-input effective_len is the whole (post-`=`) input,
+         * matching the historic behavior. Only the pname slot completes,
+         * so any comma before the cursor disqualifies. */
+        int effective_len = interior ? (cursor - g_ac_input_offset) : input_len;
+        int alen = effective_len - plen;
         if (strncmp(input, prefix, plen) == 0 && input_len > plen &&
-            strchr(input + plen, ',') == NULL) {
+            alen >= 0 && memchr(input + plen, ',', (size_t)alen) == NULL) {
             const char *after = input + plen;
-            int alen = input_len - plen;
             for (int j = 0; point_param_pnames[j].name && ac->match_count < MAX_AC_MATCHES; j++) {
                 if (ac_prefix_match_ci(point_param_pnames[j].name, after, alen) &&
                     (int)strlen(point_param_pnames[j].name) > alen) {
@@ -361,7 +419,9 @@ static void update_autocomplete(void) {
             if (ac->match_count > 0) {
                 g_ac_mode = AC_MODE_POINT_PARAM;
                 g_ac_token_len = alen;
-                snprintf(g_ac_suffix, sizeof(g_ac_suffix), ", ");
+                g_ac_token_start = (int)(after - raw_input);
+                snprintf(g_ac_suffix, sizeof(g_ac_suffix), "%s",
+                         interior ? "" : ", ");
                 update_selected_autocomplete_preview();
                 return;
             }
@@ -372,11 +432,15 @@ static void update_autocomplete(void) {
      *
      * One path for every positional enum slot: the active slot is the
      * count of top-level commas between '(' and the cursor; the token
-     * being completed is the trailing segment after the last comma.
-     * Matches come from def->args[slot].enums; the accept suffix is
-     * ")" for the last enum slot, ", " otherwise. abs(num_args) is the
-     * slot count so the custom glMaterialfv row (num_args -2) still
-     * offers face/param completion even though the parser skips it. */
+     * being completed is the segment after the last such comma, ending
+     * at the cursor (== end of input in the historic case; mid-line the
+     * trailing `, args…)` text is left alone and the accept path
+     * splices at the cursor). Matches come from def->args[slot].enums;
+     * the accept suffix is ")" for the last enum slot, ", " otherwise,
+     * and "" mid-line (the trailing text already has the separator).
+     * abs(num_args) is the slot count so the custom glMaterialfv row
+     * (num_args -2) still offers face/param completion even though the
+     * parser skips it. */
     const ReplEnumCommandSpec *enum_cmds = repl_enum_command_specs();
     for (int i = 0; enum_cmds[i].name; i++) {
         char prefix[64];
@@ -392,11 +456,25 @@ static void update_autocomplete(void) {
         if (nargs > MAX_ENUM_ARGS)
             nargs = MAX_ENUM_ARGS;
 
+        int effective_len = interior ? (cursor - g_ac_input_offset) : input_len;
+        if (effective_len < plen)
+            return; /* cursor inside the command name — nothing to complete */
+
+        /* Depth-aware top-level comma scan up to the cursor, mirroring
+         * build_param_hint_text: commas inside nested (), {}, [] (a
+         * compound literal, `cos(a, b)`) must not advance the slot. */
         const char *after = input + plen;
+        const char *end = input + effective_len;
         int slot = 0;
         const char *seg = after;
-        for (const char *q = after; *q; q++) {
-            if (*q == ',') { slot++; seg = q + 1; }
+        {
+            int depth = 0;
+            for (const char *q = after; q < end; q++) {
+                char ch = *q;
+                if (depth == 0 && ch == ',') { slot++; seg = q + 1; continue; }
+                if (ch == '(' || ch == '{' || ch == '[')      depth++;
+                else if ((ch == ')' || ch == '}' || ch == ']') && depth > 0) depth--;
+            }
         }
         if (slot >= nargs) {
             /* Past the last enum slot. For positive num_args the call
@@ -409,8 +487,8 @@ static void update_autocomplete(void) {
                 update_input_param_hint();
             return;
         }
-        while (*seg == ' ') seg++;
-        int seg_len = input_len - (int)(seg - input);
+        while (seg < end && *seg == ' ') seg++;
+        int seg_len = (int)(end - seg);
         if (seg_len < 0) seg_len = 0;
 
         const ReplEnumEntry *tbl = enum_cmds[i].args[slot].enums;
@@ -426,19 +504,34 @@ static void update_autocomplete(void) {
         if (ac->match_count > 0) {
             g_ac_mode = AC_MODE_ENUM_SLOT;
             g_ac_token_len = seg_len;
-            /* Negative num_args (custom-parser rows like glMaterialfv,
-             * num_args = -2) means the function has *more* args after
-             * the last enum slot (e.g. the compound literal). Always
-             * use ", " as the accept suffix for those — closing with
-             * ")" would strand the user mid-call. Positive num_args
-             * are exhaustive: the last enum slot IS the last arg. */
-            int more_args_after = (enum_cmds[i].num_args < 0);
-            snprintf(g_ac_suffix, sizeof(g_ac_suffix), "%s",
-                     (slot + 1 == nargs && !more_args_after) ? ")" : ", ");
+            g_ac_token_start = (int)(seg - raw_input);
+            if (interior) {
+                /* Mid-line the trailing text already supplies the
+                 * separator / closing paren — accept splices the bare
+                 * token at the cursor. */
+                g_ac_suffix[0] = '\0';
+            } else {
+                /* Negative num_args (custom-parser rows like
+                 * glMaterialfv, num_args = -2) means the function has
+                 * *more* args after the last enum slot (e.g. the
+                 * compound literal). Always use ", " as the accept
+                 * suffix for those — closing with ")" would strand the
+                 * user mid-call. Positive num_args are exhaustive: the
+                 * last enum slot IS the last arg. */
+                int more_args_after = (enum_cmds[i].num_args < 0);
+                snprintf(g_ac_suffix, sizeof(g_ac_suffix), "%s",
+                         (slot + 1 == nargs && !more_args_after) ? ")" : ", ");
+            }
             update_selected_autocomplete_preview();
         }
         return;
     }
+
+    /* Mid-line completion is enum-slot-only: function-name completion
+     * and the param hint keep their end-of-input-only behavior (their
+     * accept/ghost mechanics are append-shaped). */
+    if (interior)
+        return;
 
     /* Complete function names. */
     const ReplFuncCompletion *completions = repl_func_completions();
@@ -471,32 +564,47 @@ void glr_completion_accept_autocomplete(void) {
          * case, but replacement also corrects the case (matching is
          * case-insensitive) — e.g. "glco" -> "glColor3f(",
          * "gl_depth_test" -> "GL_DEPTH_TEST". `already_typed` is the
-         * length of the trailing token the candidate replaces; `suffix`
-         * is the post-candidate text (", " / ")" for an enum slot,
-         * nothing for a function-name completion). */
+         * length of the token the candidate replaces, starting at
+         * `tok_start`; `suffix` is the post-candidate text (", " / ")"
+         * for an end-of-input enum slot, nothing for a function-name
+         * completion or a mid-line enum slot). Any text after the token
+         * (the trailing args of a mid-line enum completion) is preserved
+         * by the splice; end-of-input completions have an empty tail, so
+         * this is the historic replace-and-append there. */
         int already_typed;
+        int tok_start;
         const char *suffix;
         if (g_ac_mode == AC_MODE_FUNC_PREFIX) {
             already_typed = inp->input_len - g_ac_input_offset;
+            tok_start = g_ac_input_offset;
             suffix = "";
         } else { /* AC_MODE_ENUM_SLOT / AC_MODE_POINT_PARAM */
             already_typed = g_ac_token_len;
+            tok_start = g_ac_token_start;
             suffix = g_ac_suffix;
         }
         if (already_typed < 0) already_typed = 0;
-        if (already_typed > inp->input_len) already_typed = inp->input_len;
+        if (tok_start < 0) tok_start = 0;
+        if (tok_start > inp->input_len) tok_start = inp->input_len;
+        if (already_typed > inp->input_len - tok_start)
+            already_typed = inp->input_len - tok_start;
 
         const char *cand = ac->insert_matches[ac->selected_idx];
-        int base_len   = inp->input_len - already_typed;
         int cand_len   = (int)strlen(cand);
         int suffix_len = (int)strlen(suffix);
+        int tail_start = tok_start + already_typed;
+        int tail_len   = inp->input_len - tail_start;
+        int new_len    = tok_start + cand_len + suffix_len + tail_len;
 
-        if (base_len + cand_len + suffix_len < MAX_INPUT_LEN - 1) {
-            memcpy(inp->input + base_len, cand, (size_t)cand_len);
-            memcpy(inp->input + base_len + cand_len, suffix, (size_t)suffix_len);
-            inp->input_len = base_len + cand_len + suffix_len;
-            inp->input[inp->input_len] = '\0';
-            editor_cursor_pos_set(inp->input_len);
+        if (new_len < MAX_INPUT_LEN - 1) {
+            memmove(inp->input + tok_start + cand_len + suffix_len,
+                    inp->input + tail_start, (size_t)tail_len);
+            memcpy(inp->input + tok_start, cand, (size_t)cand_len);
+            memcpy(inp->input + tok_start + cand_len, suffix,
+                   (size_t)suffix_len);
+            inp->input_len = new_len;
+            inp->input[new_len] = '\0';
+            editor_cursor_pos_set(tok_start + cand_len + suffix_len);
         } else {
             repl_set_status_error("Input buffer full!");
         }
