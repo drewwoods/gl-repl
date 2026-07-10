@@ -80,7 +80,8 @@
 #include "repl/parser.h"
 #include "repl/source_scope.h"   /* prefix-depth queries + cache invalidate */
 #include "repl/state_views.h"     /* repl_state_normals_dirty — source-dirty probe */
-#include "repl/state_owners.h"    /* repl_state_normals_dirty_clear */
+#include "repl/state_owners.h"    /* repl_state_normals_dirty_clear,
+                                     repl_state_flat_program_{dirty,clear_dirty} */
 #include "subsystems/variable_panel/variable_panel_state.h"
 #include "repl/time.h"           /* repl_set_time — Whale topology sweep */
 #include "subsystems/replay/replay.h"
@@ -492,25 +493,36 @@ static void run_named_flatten(const char *bench_name, const char *display_name,
 typedef struct {
     int        example_idx;
     int        flat_cmds;
-    double     mean_ms;
+    double     mean_ms;    /* reported: mean per-iteration wall time */
+    double     min_op_us;  /* ranking key: fastest observed per-flatten time */
     BenchResult result;
     char       row_name[CORPUS_ROW_NAME_MAX];
 } CorpusCase;
 
+/* Rank by the minimum per-flatten time, not the mean. Benchmark noise is
+ * one-sided — a scheduling stall can only ever add time — so the minimum is
+ * the least-contaminated estimate of a scene's true cost, while the mean lets
+ * a single descheduled iteration crown the wrong scene. In the phase-0 baseline
+ * that is not hypothetical: Orrery's corpus mean reads 30.27 ms against a
+ * 5.87 ms minimum (and a 4.46 ms dedicated flatten_orrery row), a 5x inflation
+ * that would sort it far above scenes that are genuinely more expensive. The
+ * mean stays in the reported columns as information. */
 static int corpus_case_cmp_slower_first(const void *a, const void *b) {
-    double da = ((const CorpusCase *)a)->mean_ms;
-    double db = ((const CorpusCase *)b)->mean_ms;
+    double da = ((const CorpusCase *)a)->min_op_us;
+    double db = ((const CorpusCase *)b)->min_op_us;
     if (da < db) return 1;
     if (da > db) return -1;
     return 0;
 }
 
 /* Time a full flatten of every built-in. Human output lists all cases sorted
- * slowest-first (the "which scene actually costs the most" question the old
- * flat-command-count heuristic in spike_flatten_largest got wrong); CSV emits
+ * slowest-first by min-per-flatten (the "which scene actually costs the most"
+ * question the old flat-command-count heuristic in spike_flatten_largest got
+ * wrong, and that a mean-based sort gets wrong again under load); CSV emits
  * one row per catalog index, in catalog order, preceded by a `#` comment line
  * carrying the display name so the existing CSV columns stay unchanged. */
 static void bench_flatten_corpus(int iters) {
+    enum { CORPUS_INNER = 8 };
     int n = repl_example_count();
     CorpusCase *cases = (CorpusCase *)malloc(sizeof(*cases) * (size_t)n);
     if (!cases)
@@ -521,13 +533,20 @@ static void bench_flatten_corpus(int iters) {
         cases[e].flat_cmds = 0;
         snprintf(cases[e].row_name, sizeof(cases[e].row_name),
                  "flatten_corpus_%02d", e);
-        cases[e].result = bench_flatten_one(cases[e].row_name, e, iters, 8,
-                                            &cases[e].flat_cmds);
+        cases[e].result = bench_flatten_one(cases[e].row_name, e, iters,
+                                            CORPUS_INNER, &cases[e].flat_cmds);
         cases[e].result.name = cases[e].row_name;
         cases[e].mean_ms = (cases[e].result.iters > 0)
                          ? cases[e].result.total_sec * 1000.0 /
                            (double)cases[e].result.iters
                          : 0.0;
+        /* min_sec is the fastest iteration, i.e. a batch of CORPUS_INNER
+         * flattens; normalize to one flatten so the key is comparable to the
+         * per_op_us column. */
+        cases[e].min_op_us = (cases[e].result.iters > 0)
+                           ? cases[e].result.min_sec * 1e6 /
+                             (double)CORPUS_INNER
+                           : 0.0;
     }
 
     if (g_csv) {
@@ -537,11 +556,15 @@ static void bench_flatten_corpus(int iters) {
             report(cases[e].result);
         }
     } else {
+        /* Sorted slowest-first by min-per-flatten; per_op_us below is the mean
+         * and may disagree on a contended machine (that is why it is not the
+         * key). Print the key so the ordering is checkable by eye. */
         qsort(cases, (size_t)n, sizeof(*cases), corpus_case_cmp_slower_first);
         for (int e = 0; e < n; e++) {
-            printf("  # %s = %s (flat_cmds=%d)\n", cases[e].row_name,
+            printf("  # %s = %s (flat_cmds=%d, min-per-flatten=%.3f us)\n",
+                   cases[e].row_name,
                    repl_example_name(cases[e].example_idx),
-                   cases[e].flat_cmds);
+                   cases[e].flat_cmds, cases[e].min_op_us);
             report(cases[e].result);
         }
     }
@@ -691,18 +714,44 @@ static void bench_flatten_whale(int iters) {
 
 /* ---- bench: variable-panel slider drag transaction --------------------- */
 
+/* Consume a pending flat-program rebuild the way glr_ctrl_display_frame() does:
+ * flatten when dirty, then clear the flag (repl_flatten_commands does NOT clear
+ * it itself). Returns 1 if a rebuild ran, 0 if the program was already clean.
+ *
+ * This *is* the rebuild counter. repl_state_normals_dirty() is not: it gates
+ * autonormal recomputation, a different flag on a different cache. Without this
+ * drain a motion loop only marks dirty and returns, so it times pointer-event
+ * routing (~10 us/motion) and never the flatten it defers (~ms), which is the
+ * cost Phase 3 exists to change. */
+static int drain_pending_flatten(void) {
+    if (!repl_state_flat_program_dirty())
+        return 0;
+    repl_flatten_commands(editor_state_edit_line());
+    repl_state_flat_program_clear_dirty();
+    return 1;
+}
+
 /* A slider drag is 100+ pointer-motion events and one mouse-up. Phase 1B split
  * the transaction: motion applies the live value only, and the declaration is
  * rewritten once on release. So a drag must perform *zero* source-dirty marks
  * during motion (the seam every source-derived cache invalidates from) and
  * exactly one on release.
  *
+ * Each motion is followed by drain_pending_flatten(), so a timed motion is a
+ * full event -> dirty -> frame-rebuild round trip, as the app performs it.
+ *
  * Two cases, by what the dragged variable feeds:
  *   value      — `amp` only scales already-emitted vertices, so a later rebake
  *                phase can keep the flat topology and rebake values in place;
  *   structural — `bound` is a loop bound, so a change must re-flatten fully.
- * Both drags cost the same today (every motion just marks the flat program
- * dirty); the split is here so the rebake phase has a before/after pair.
+ * Today both re-flatten fully; the split is here so the rebake phase has a
+ * before/after pair, and the timed region now contains the flatten that phase
+ * makes cheaper for the `value` case.
+ *
+ * Read each row against its own future self, not against the other row: the
+ * scenes differ in trip count (40 vs bound=20) and in how many flattened
+ * commands carry variable args, so the absolute value/structural gap reflects
+ * scene size, not the rebake distinction.
  *
  * The mouse-up persistence edit is timed separately from the motion loop:
  * folding a once-per-drag source rewrite into a per-motion mean would hide it.
@@ -718,6 +767,7 @@ static void bench_slider_drag_case(const char *label,
     int var_idx;
     int source_dirty_during_motion = 0;
     int source_dirty_on_release = 0;
+    long long motion_rebuilds = 0;
 
     snprintf(motion_name, sizeof(motion_name), "%s_motion", label);
     snprintf(release_name, sizeof(release_name), "%s_release", label);
@@ -752,16 +802,22 @@ static void bench_slider_drag_case(const char *label,
 
         variable_panel_handle_drag_begin(var_idx, /*log_mode=*/0, /*x=*/0);
         repl_state_normals_dirty_clear();
+        /* Enter the loop with a clean flat program so the first motion's
+         * rebuild is attributable to that motion and not to the load above. */
+        drain_pending_flatten();
 
         t0 = now_seconds();
-        for (int m = 1; m <= MOTIONS; m++)
+        for (int m = 1; m <= MOTIONS; m++) {
             glr_ctrl_router_handle_variable_panel_motion(m, 0);
+            motion_rebuilds += drain_pending_flatten();
+        }
         motion_sec = now_seconds() - t0;
         if (repl_state_normals_dirty())
             source_dirty_during_motion = 1;
 
         t0 = now_seconds();
         glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP);
+        (void)drain_pending_flatten();
         release_sec = now_seconds() - t0;
         if (repl_state_normals_dirty())
             source_dirty_on_release = 1;
@@ -790,10 +846,24 @@ static void bench_slider_drag_case(const char *label,
                 label, source_dirty_during_motion, source_dirty_on_release);
         g_case_missing = 1;
     }
+    /* Every motion moves the value, so every motion must have left a rebuild
+     * for the frame to consume. If this drops to zero the timed region has
+     * stopped containing a flatten and the row is measuring event routing
+     * again — the exact defect this benchmark was rewritten to avoid. */
+    {
+        long long expect = (long long)MOTIONS * motion.iters;
+        if (motion_rebuilds != expect) {
+            fprintf(stderr,
+                    "ERROR: %s: expected %lld flat-program rebuilds during "
+                    "motion (one per motion), got %lld\n",
+                    label, expect, motion_rebuilds);
+            g_case_missing = 1;
+        }
+    }
     if (!g_csv)
-        fprintf(stderr, "  (%s: %d motions, source dirty during motion=%d, "
-                        "on release=%d)\n",
-                label, MOTIONS, source_dirty_during_motion,
+        fprintf(stderr, "  (%s: %d motions, %lld rebuilds, source dirty during "
+                        "motion=%d, on release=%d)\n",
+                label, MOTIONS, motion_rebuilds, source_dirty_during_motion,
                 source_dirty_on_release);
 }
 
