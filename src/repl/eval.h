@@ -270,6 +270,28 @@ void repl_restore_predef_values(const float *src, int max_vals);
 void repl_eval_init_predef_vars(void);
 const char *repl_eval_eat_identifier(const char *p, const char **out_start);
 int  repl_eval_is_builtin_function(const char *name);
+
+/* ---- Builtin-function table view --------------------------------------- */
+
+/* Read-only view of one entry in the evaluator's builtin table (sin, cos,
+ * rand, ...). `eval` is the same function pointer the text evaluator calls,
+ * so a caller that evaluates through it (the compiled-expression path in
+ * src/repl/expr_program.c) is bit-identical with text evaluation by
+ * construction. args[] carries arity_max floats. */
+typedef struct {
+    const char *name;
+    int         arity_min;
+    int         arity_max;
+    float     (*eval)(const float *args);
+} ReplEvalBuiltinView;
+
+int  repl_eval_builtin_count(void);
+ReplEvalBuiltinView repl_eval_builtin_at(int idx);
+/* Index into the builtin table for `name`, or -1 when it is not a builtin. */
+int  repl_eval_builtin_index_of(const char *name);
+/* Named expression constants (PI, TAU, e, NAN, INFINITY, ...). Returns 1 and
+ * writes *out (out may be NULL for a pure membership test), 0 otherwise. */
+int  repl_eval_named_constant(const char *name, float *out);
 /* Query: does input contain references to runtime-bound values (predef vars or
  * scratch arrays), not just literals? */
 int  repl_eval_input_has_predef_vars(const char *s);
