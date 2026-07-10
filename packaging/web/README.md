@@ -26,7 +26,7 @@ original `OpenGL-Vibe/emscripten/` prototyping tree (`git log -- packaging/web/*
   extension string.
 - **Audio**: web builds use the browser media stack instead of miniaudio's
   file-backed decoder. `scripts/web-audio-assets.sh` copies MP3s beside the
-  built page and writes `assets/music.json`; `src/app/glr_audio.c` fetches that
+  built page and writes `assets/music.json`; [`src/app/glr_audio.c`](../../src/app/glr_audio.c) fetches that
   manifest, registers the tracks through the normal `glr_audio_*` facade, and
   streams the selected URL with `HTMLAudioElement`. The native miniaudio path is
   unchanged, and music is no longer put in an Emscripten `.data` preload
@@ -42,7 +42,7 @@ original `OpenGL-Vibe/emscripten/` prototyping tree (`git log -- packaging/web/*
   `GLUT.getASCIIKey` override returns `null` for them so neither `keyboardFunc`
   (gl-repl's own Ctrl+C/X/V path) nor `preventDefault()` fire, leaving the
   browser free to synthesize its native `copy`/`cut`/`paste` events, which
-  shell.html's listeners bridge to `src/app/glr_web_io.c`'s clipboard exports
+  shell.html's listeners bridge to [`src/app/glr_web_io.c`](../../src/app/glr_web_io.c)'s clipboard exports
   (reusing the existing editor clipboard copy/cut/paste machinery). Ctrl+Shift+C
   (reset camera) and Ctrl+Shift+V (view mode toggle) are excluded and still
   flow through GLUT unchanged. `text/plain` carries the snippet for

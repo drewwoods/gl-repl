@@ -8,30 +8,33 @@ step-by-step, and export as a standalone C program.
 
 ![gl-repl rendering the Whale example](images/hero.png)
 
-This guide covers every user-facing feature. For headless rendering, the
-full CLI/env-var reference, and recording, see
+This guide follows the shape of a session: you [start the app](#getting-started)
+and [write some code](#writing-code) in [the REPL language](#the-repl-language),
+[make it move](#making-it-move), lean on the [visual feedback](#seeing-what-youre-doing)
+to understand and debug what you built, and finally [keep and ship](#scenes--workspaces)
+the result. Reference material — the full [CLI](#command-line-options) and
+[keyboard](#keyboard--mouse-reference) listings — sits at the end. For headless
+rendering, recording, and every environment variable, see
 [`ADVANCED_USAGE.md`](ADVANCED_USAGE.md); for project internals,
 [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## Contents
 
 - [Getting Started](#getting-started)
-- [Entering & Editing Code](#entering--editing-code)
+- [Writing Code](#writing-code)
 - [The REPL Language](#the-repl-language)
-- [Animation & the Time Variable](#animation--the-time-variable)
-- [The Variable Panel](#the-variable-panel)
+- [Making It Move](#making-it-move)
 - [Tunable Variables (`// @tune`)](#tunable-variables--tune)
-- [Camera & Views](#camera--views)
-- [Scene Display Options](#scene-display-options)
+- [Seeing What You're Doing](#seeing-what-youre-doing)
 - [Replay](#replay)
 - [Tutorials](#tutorials)
 - [Built-in Examples](#built-in-examples)
 - [Scenes & Workspaces](#scenes--workspaces)
 - [Exporting & Importing](#exporting--importing)
 - [Performance & Scope](#performance--scope)
+- [Profiling & Diagnostics](#profiling--diagnostics)
 - [Music](#music)
 - [Command-Line Options](#command-line-options)
-- [Profiling & Diagnostics](#profiling--diagnostics)
 - [Keyboard & Mouse Reference](#keyboard--mouse-reference)
 
 ---
@@ -48,27 +51,28 @@ Run a fresh session, or reload earlier work:
 
 ### The window
 
-![A first triangle](images/first-triangle.png)
+![The window: scene tabs, code panel, status bar, viewport, variable panel](images/window-tour.png)
 
-- **Code panel** — the live, editable list of GL commands. By default it sits
-  above the viewport; cycle its position (Left / Top / Bottom / Hidden) with
-  **Ctrl+B** or the *Code panel* config item.
-- **3D viewport** — your geometry, rendered every frame. Drag to orbit,
-  scroll to zoom.
+Top to bottom:
+
 - **Menu bar** — *File*, *Scene*, *Tutorials*, *Config*, *Audio* dropdowns, a
   *search...* slot (same as Ctrl+F), and the *Replay* button at the far
   right.
-- **Scene tabs** — one tab per saved scene, below the menu bar. Click to
-  switch.
-- **Status bar** — between panel and viewport: command count, current line,
-  the accumulation indicator (`AA 1x` / `Blur 8x`), and clickable controls
-  for undo/redo, copy/cut, clearing all commands, *focus* (code focus), and
-  *F1 help*.
+- **Scene tabs** — one tab per open scene (here *First Triangle* and *Ring
+  Sketch*). Click to switch.
+- **Code panel** — the live, editable list of GL commands. By default it sits
+  above the viewport; cycle its position (Left / Top / Bottom / Hidden) with
+  **Ctrl+B** or the *Code panel* config item.
+- **Status bar** — command count, current line, the accumulation indicator
+  (`AA 1x` / `Blur 8x`), and clickable controls for undo/redo, copy/cut,
+  clearing all commands, *focus* (code focus), and *F1 help*.
+- **3D viewport** — your geometry, rendered every frame. Drag to orbit,
+  scroll to zoom.
+- **Variable panel** — bottom-right overlay listing every declared variable
+  with a draggable slider (see [The Variable Panel](#the-variable-panel)).
 - **Message line** — the bottom row shows the most recent status message.
   Click the small button at its right end to pop up the recent-message
   history.
-- **Variable panel** — bottom-right overlay listing every declared variable
-  with a draggable slider (see [The Variable Panel](#the-variable-panel)).
 
 ### Your first triangle
 
@@ -84,6 +88,8 @@ glVertex3f(1, -1, 0)
 glEnd()
 ```
 
+![A first triangle](images/first-triangle.png)
+
 The triangle appears as soon as the vertices commit. Now:
 
 - Drag in the viewport to orbit, scroll to zoom.
@@ -96,7 +102,11 @@ The triangle appears as soon as the vertices commit. Now:
 
 ---
 
-## Entering & Editing Code
+## Writing Code
+
+Everything in gl-repl happens through one input row in the code panel. You
+type there, commit lines into the scene, arrow back up to change your mind,
+and the viewport answers every keystroke. This section is that loop.
 
 ### Committing lines
 
@@ -110,7 +120,27 @@ The triangle appears as soon as the vertices commit. Now:
 - A line that fails to parse is *not* committed — the status line explains
   why, and your input stays put for fixing.
 
-### Selection
+### Autocomplete
+
+You rarely have to type a GL name (or constant) to the end. Press **Tab**
+while typing:
+
+![Typing glEnable(GL_LI: the popup lists the matching constants, ghost text completes inline](images/autocomplete.png)
+
+- A unique match completes in place; multiple matches pop up a list (Tab or
+  Enter accepts, arrows move).
+- Ghost text shows the pending completion inline — in the shot above the
+  dimmed `GHTO)` after the typed `glEnable(GL_LI` is what Tab will accept.
+- After typing `foo(`, a parameter hint appears for GL commands and your own
+  functions.
+- Inside an enum argument slot (e.g. `glEnable(`), completion offers the GL
+  constants valid for that slot — this works mid-line too, when the cursor
+  sits at the end of the token being completed.
+
+### Editing what's there
+
+Navigation plus a full selection model, so reshaping a committed scene feels
+like a normal editor:
 
 - **Shift+Left/Right** extends a character selection inside the input row;
   **Shift+Home/End** extends to the row start/end.
@@ -120,9 +150,6 @@ The triangle appears as soon as the vertices commit. Now:
 - **Double-click** selects the word under the cursor.
 - **Shift+click** extends a selection from the cursor to the click point —
   same row gives a character selection, a different row gives a line range.
-
-### Clipboard & undo
-
 - **Ctrl+C / Ctrl+X / Ctrl+V** — copy / cut / paste. A character selection in
   the input row wins over a line selection: the substring is copied/cut and
   pasted at the cursor. With no character selection, whole command lines are
@@ -132,26 +159,42 @@ The triangle appears as soon as the vertices commit. Now:
 - **Ctrl+D** deletes the current line or selection; **Ctrl+L** clears all
   commands.
 
-### Autocomplete
+**Ctrl+F** (or the *search...* menu slot) opens case-insensitive substring
+search over the whole buffer. Type to refine, **Enter** jumps to the next
+match, **Esc** closes. Matches are highlighted in the code panel.
 
-Press **Tab** while typing:
+### Adjusting values without retyping
 
-- A unique match completes in place; multiple matches pop up a list (Tab or
-  Enter accepts, arrows move).
-- Ghost text shows the pending completion inline.
-- After typing `foo(`, a parameter hint appears for GL commands and your own
-  functions.
-- Inside an enum argument slot (e.g. `glEnable(`), completion offers the GL
-  constants valid for that slot.
+Two in-panel widgets close the loop between "committed line" and "number I
+want to nudge" without a retype-and-recommit round trip.
 
-### Search
+**The inline numeric stepper.** Put the cursor on any number in a committed
+line and a small up/down stepper appears at the panel's right edge:
 
-**Ctrl+F** (or click the *search...* slot in the menu bar) opens
-case-insensitive substring search over the whole buffer. Type to refine,
-**Enter** jumps to the next match, **Esc** closes. Matches are highlighted in
-the code panel.
+![Cursor on the initializer: the stepper appears at the right edge of the row](images/numeric-stepper.png)
 
-### Buffer operations
+- **Click** the arrows to nudge the value (step scales with the value's
+  magnitude).
+- **Right-click** steps coarse (×10); **Shift+click** steps fine (×1/5).
+
+The line re-commits automatically, so the scene updates as you click.
+
+**The color picker.** Committed `glColor3f` / `glColor4f` / `glClearColor` /
+`glMaterialfv` lines show a small color swatch at the right edge of the code
+panel. Click it to open the floating picker:
+
+![The color picker open on a glColor3f line, with the teapot tracking it live](images/color-picker.png)
+
+- An HSV square plus hue strip (and an alpha strip for 4-component colors),
+  with the current value as a hex readout.
+- Four palette tabs: **Basic** (common named colors), **Full** (hue ×
+  tint/shade grid with a greyscale ramp), **Dusk** (the curated accent set
+  the built-in examples share), **Harmony** (the current color plus a
+  tetradic set derived live from it).
+- Every change writes straight back to the source line, so the scene follows
+  the picker in real time. Click outside to close.
+
+### Keeping the buffer tidy
 
 | Key | Action |
 |---|---|
@@ -168,33 +211,13 @@ More code-panel toggles live in the Config menu: **Wrap at commas**
 (highlight the matching bracket under the caret, and the span of the
 enclosing parens).
 
-### Inline numeric stepper
-
-Put the cursor on any number in a committed line and a small up/down stepper
-appears:
-
-- **Click** the arrows to nudge the value (step scales with the value's
-  magnitude).
-- **Right-click** steps coarse (×10); **Shift+click** steps fine (×1/5).
-
-The line re-commits automatically, so the scene updates as you click.
-
-### Inline color swatch & color picker
-
-Committed `glColor3f` / `glColor4f` / `glClearColor` / `glMaterialfv` lines
-show a small color swatch at the right edge of the code panel. Click it to
-open the floating color picker:
-
-- An HSV square plus hue strip (and an alpha strip for 4-component colors).
-- Three palette tabs: **Basic** (common named colors), **Full** (hue ×
-  tint/shade grid with a greyscale ramp), **Harmony** (the current color plus
-  a tetradic set derived live from it).
-- Every change writes straight back to the source line, so the scene follows
-  the picker in real time. Click outside to close.
-
 ---
 
 ## The REPL Language
+
+The language is immediate-mode OpenGL with just enough structure around it —
+variables, loops, functions, conditionals — to build real scenes. Every
+numeric argument everywhere is a full math expression.
 
 ### Supported GL commands
 
@@ -266,8 +289,6 @@ label("Earth phase = %f", t);
 
 ### Clip planes
 
-![Cursor on the glClipPlane line: the guide draws the plane as a gridded disc with a kept-side arrow](images/clip-plane.png)
-
 ```c
 glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0.2, 1, 0.3, 0.4});
 glEnable(GL_CLIP_PLANE0);
@@ -278,23 +299,18 @@ the half-space the inequality selects and clips everything on the other
 side. Six planes are available (`GL_CLIP_PLANE0..5`); each does nothing
 until its cap is enabled. The equation is interpreted in the coordinate
 frame active at the call, so transforms before the line position the plane
-just like they position geometry. The flat shorthand
-`glClipPlane(plane, a, b, c, d)` is rewritten to the compound-literal form.
-
-Park the cursor on a committed `glClipPlane` line and the plane draws
-itself: a translucent gridded disc lying in the plane, a dashed ghost rim
-that reads through occluding geometry, and an arrow pointing into the
-*kept* half-space with a `P0 =(a, b, c, d)` readout. If the program never
-enables that plane's cap, the guide dims and the readout appends `(off)`.
+just like they position geometry.
 
 Coefficients are full expressions, so a plane can animate — a `d` driven by
 `t` sweeps a live cross-section through the scene:
 
 ![An animated clip plane sweeping a torus](images/clip-plane-sweep.gif)
 
-Exporting keeps clip planes standalone-compilable: the C file routes the
-equation through a small `repl_gldouble4` helper (compound literals are
-C99; the export targets C89) and reload converts it back.
+A plane equation is hard to picture from four numbers, so the cursor draws
+it for you — see [the clip-plane guide](#the-clip-plane-guide). Exporting
+keeps clip planes standalone-compilable: the C file routes the equation
+through a small `repl_gldouble4` helper (compound literals are C99; the
+export targets C89) and reload converts it back.
 
 ### Math expressions
 
@@ -401,7 +417,7 @@ tunable knob (see [Tunable Variables](#tunable-variables--tune)).
 
 ---
 
-## Animation & the Time Variable
+## Making It Move
 
 ![The Animated ring example](images/animated-ring.gif)
 
@@ -443,7 +459,7 @@ game loop would roll a particle's attributes once and store them, here
 each particle recomputes them every frame from `rand(seed, iter)` /
 `rand2` — the same (seed, iter) pair always returns the same value, so a
 particle's "random" drift, size, or tint is a stable per-particle
-constant keyed on its index. The *Snowfall demo (550 particles)* example
+constant keyed on its index. The *Snowfall particles* example
 derives every flake's drift, fall speed, and depth from `rand(p, slot)`
 with the particle index `p` as the seed; *Swaying grass field (rand + t)*
 does the same per blade (position, height, sway phase, tint), with a
@@ -483,19 +499,7 @@ in particular redoes work proportional to what `t` implies, every frame —
 see [Performance & Scope](#performance--scope) for where that ceiling
 sits and how export lifts it.
 
-### Scrubbing the timeline
-
-Because `t` is just a variable, it gets a row in the
-[variable panel](#the-variable-panel) like any other — and dragging that row
-is a timeline scrubber. Pause with **Ctrl+T**, then drag the `t` row to move
-the whole animation back and forth; release and press **Ctrl+T** again to
-resume playing from wherever you left it. The usual drag speeds apply:
-plain drag scrubs linearly, **right-click drag** is the fast scrub,
-**Shift+drag** the slow one (see the panel section below).
-
----
-
-## The Variable Panel
+### The Variable Panel
 
 ![Variable panel with sliders](images/variable-panel.png)
 
@@ -508,8 +512,6 @@ its current value and a slider:
   quickly — and staying fine near zero.
 - **Shift + click drag** is the *slow* scrub: linear deltas at 1/5 speed,
   for dialing in a precise value.
-- The `t` row doubles as the animation timeline — see
-  [Scrubbing the timeline](#scrubbing-the-timeline).
 - Toggle the panel with **`** backquote or the *Variable panel* config item.
 
 Row brightness distinguishes knobs from storage:
@@ -522,6 +524,15 @@ Row brightness distinguishes knobs from storage:
 
 Slider edits are undoable and go through the normal commit pipeline; when a
 declaration exists, dragging rewrites its initializer.
+
+### Scrubbing the timeline
+
+Because `t` is just a variable, it gets a row in the variable panel like any
+other — and dragging that row is a timeline scrubber. Pause with **Ctrl+T**,
+then drag the `t` row to move the whole animation back and forth; release
+and press **Ctrl+T** again to resume playing from wherever you left it. The
+usual drag speeds apply: plain drag scrubs linearly, **right-click drag** is
+the fast scrub, **Shift+drag** the slow one.
 
 ---
 
@@ -581,7 +592,7 @@ rest were capped.
 
 ### Step size
 
-The exported knobs use the same step size as the in-app numeric swatch:
+The exported knobs use the same step size as the in-app numeric stepper:
 
 | Current value magnitude | Step |
 |---:|---:|
@@ -636,11 +647,21 @@ exports keep working.
 
 The generated keyboard controls live only in the standalone exported C.
 Inside gl-repl, adjust values through the variable panel or inline numeric
-swatches.
+steppers.
 
 ---
 
-## Camera & Views
+## Seeing What You're Doing
+
+Immediate-mode GL is invisible state: the current color, the current
+matrix, the winding of the polygon you just typed. Most of gl-repl's
+surface area exists to make that state *visible* — guides that draw what
+the cursor line means, overlays that annotate the geometry, and display
+options that dress the stage. This section walks them roughly in the order
+you meet them: camera first, then the cursor-following guides, then the
+scene-wide diagnostics and looks.
+
+### Camera & views
 
 | Input | Action |
 |---|---|
@@ -654,152 +675,18 @@ swatches.
 | Ctrl+Shift+V | Toggle View mode: 3D perspective / 2D ortho |
 | Ctrl+Shift+E | Toggle Projection: Perspective / Ortho (free camera) |
 
-### 2D mode
+**2D mode.** *View mode* (Ctrl+Shift+V, or the CAMERA section of the Config
+menu) switches between the 3D perspective camera and a flat 2D orthographic
+projection — useful for plots, sketches, and UI-like drawings. Examples that
+declare `@cfg view_mode = RENDER3D_VIEW_2D` start in 2D automatically.
 
 ![Toggling View mode between 3D perspective and 2D ortho on the wave surface](images/view-mode-2d.gif)
 
-*View mode* (Ctrl+Shift+V, or the CAMERA section of the Config menu) switches
-between the 3D perspective camera and a flat 2D orthographic projection —
-useful for plots, sketches, and UI-like drawings. Examples that declare
-`@cfg view_mode = RENDER3D_VIEW_2D` start in 2D automatically.
-
-### Projection
-
-*Projection* (Ctrl+Shift+E, or the CAMERA section of the Config menu) toggles between
-perspective and orthographic projection while maintaining a free, interactive camera.
-Unlike *View mode* (which flattens and locks the camera to a top-down 2D view), toggling
-*Projection* keeps the current camera orbit angle, allowing you to view and navigate
-the scene orthographically. Examples can declare `@cfg projection = PROJ_ORTHO` to start with
-orthographic projection.
-
----
-
-## Scene Display Options
-
-### The Config menu
-
-Open the **Config** dropdown (or press **Ctrl+Shift+K**). Items are grouped
-into sections — hovering a section opens a flyout of its items, and the
-trailing **All** row shows the entire table at once (the mouse wheel scrolls
-flyouts taller than the window):
-
-- **RENDERING** — MSAA, Line smooth, Accum effect, Accum passes, Point attenuation,
-  Post FX Scope, Post FX Effect
-- **TIME & REPLAY** — Auto time, Replay, Replay mode, Replay expand
-- **SCENE** — Grid, Grid major, Grid extent, Grid brightness, Axes, Backdrop, Light theme,
-  Light indicators
-- **CAMERA** — View mode, Projection, Camera rotate, Focus origin, Reset camera
-- **GEOMETRY** — Wireframe, Winding, Auto-normals
-- **OVERLAYS** — Label & highlight scope, Vertex labels, Vertex points, Vertex outlines,
-  Vertex outline style, Normal vectors, Polygon highlight, Transform guides
-- **INTERFACE** — Variable panel, Compute profile, Memory profile, Code panel,
-  Wrap at commas, Syntax highlight, Paren match, Paren scope
-
-**Left-click** a flyout item to cycle it forward, **right-click** to cycle
-backward. Multi-state items show their current state name.
-
-Function keys drive the most common cycles directly (**Shift+F\<n\>** steps
-backward):
-
-| Key | Cycles |
-|---|---|
-| F2 | Grid theme |
-| F3 | Grid extent |
-| F4 | Grid brightness |
-| F5 | Backdrop |
-| F6 | Axes theme |
-| F7 | Vertex labels |
-| F8 | Label & highlight scope |
-| F9 | Light theme |
-| F10 | Post FX Scope |
-
-### Grid & axes
-
-![Grid themes: Tron, Radar, Aurora, Synthwave](images/grid-themes.png)
-
-Twelve directly-selectable grid themes (**F2**): Off, Classic, Tron, Ember,
-Ocean, XZ Ruler *(default)*, Adaptive Planes, Radar, Tilled Field, Sketchbook,
-Neon Graph, Graph Planes. Some backdrops enable hidden companion grids; see
-[Advanced Usage](ADVANCED_USAGE.md#cfg-backdropgrid-pairing).
-**Grid major** (Ctrl+Shift+G) cycles the major-tick spacing (1/2/5/10),
-**Grid extent** (F3) the grid's reach (Close / Mid / Far), and **Grid
-brightness** (F4) the line weight (Dim / Normal / Bright / Bold). Theme
-changes cross-fade, so a newly chosen grid takes a few seconds to fully appear.
-
-Seven axes themes (**F6**): Off *(default)*, Classic, Pulse, Neon, Compass,
-Gizmo, Ruler.
-
-![Compass axes](images/axes-compass.png)
-
-### Backdrops
-
-![Backdrops: Cityscape, Stars, Sunset, Aurora](images/backdrops.png)
-
-**F5** cycles the scene backdrop: Off *(default)*, Cityscape, Stars,
-City+Stars, Sunset, Aurora, Nebula, Polar Day, Polar Day+Snow.
-
-Some backdrops enable a hidden companion grid. Nebula selects Star Chart;
-see [Advanced Usage](ADVANCED_USAGE.md#cfg-backdropgrid-pairing) for the
-`@cfg` details.
-
-### Lighting
-
-![Studio light theme on the teapot, with a light indicator](images/light-theme-studio.png)
-
-**Light themes** (**F9**) are preset light rigs: Default (three colored
-keys), Headlight (light 0 rides the camera), Solar (light 0 at the world
-origin — for orbit/planet scenes), Studio (warm key / cool rim / warm fill),
-Neon (saturated magenta/cyan/lime triad).
-
-> [!NOTE]
-> A theme only positions and colors
-> the four light slots — your program still chooses which ones are on via
-> `glEnable(GL_LIGHT0..3)`.
-
-**Light indicators** (Ctrl+Shift+L) draw a marker at each light's position
-(labelled `L0..L3`, with *off* noted for disabled lights), so you can see
-where the rig sits.
-
-### Geometry overlays
-
-![Normal vectors, vertex points and outlines on a quad](images/vertex-overlays.png)
-
-- **Vertex labels** (F7): Off / Index / Index+Pos / Index+World /
-  Index+World Fine — numbers each vertex of the primitive at the cursor,
-  optionally with its coordinates.
-- **Label & highlight scope** (F8): First instance / All instances / At vertex /
-  Visible only / Single polygon — controls how broadly cursor-bound overlays
-  are shown around repeated function/loop instances. Label-specific modes
-  still control label placement and visible-only filtering.
-- **Normal vectors** (Ctrl+Shift+N): draws each vertex's normal as an arrow.
-- **Vertex outlines** (Ctrl+Shift+O) and **Vertex points** (Ctrl+Shift+P): outline polygons
-  and mark vertices *(both on by default)*.
-- **Polygon highlight** (Ctrl+P): highlights the polygon under the cursor line.
-- **Winding** (Ctrl+Shift+B): re-renders the scene with front-facing
-  polygons in green and back-facing ones in red (as decided by the active
-  `glFrontFace`), so flipped or inside-out faces stand out immediately.
-- **Auto-normals**: maintains generated `glNormal3f` lines for your
-  geometry so lighting works without hand-written normals.
-
-**Single polygon** scope narrows labels and the polygon highlight down to
-just the one primitive your cursor is building, instead of the whole
-`glBegin`/`glEnd` block — handy for a multi-face batch like a cube drawn as
-one `glBegin(GL_QUADS)` with several faces packed into it. The cursor's
-position between vertex lines picks the primitive: any line up through a
-primitive's last vertex belongs to it, and the next line starts the next
-one.
-
-![Single polygon scope: cursor on the second quad's second vertex highlights and labels only that quad](images/single-polygon-scope.png)
-
-Here the cursor sits on the second quad's `glVertex3f(1.6, -0.8, 0)` line;
-only that quad outlines and labels (`v4`..`v7`) — the first quad is left
-alone even though both share the same `glBegin`/`glEnd` pair.
-
-A cursor crosshair guide also marks the vertex your cursor line refers to,
-with its position label — move the cursor through a `glBegin` block and the
-guide follows:
-
-![Cursor guide and Tron grid in the Transform stress example](images/transform-stress.png)
+**Projection.** *Projection* (Ctrl+Shift+E) toggles between perspective and
+orthographic projection while keeping the free, interactive camera. Unlike
+*View mode* (which flattens and locks the camera to a top-down 2D view), it
+keeps the current orbit angle, so you can navigate the scene
+orthographically. Examples can declare `@cfg projection = PROJ_ORTHO`.
 
 ### Vertex entry guides
 
@@ -822,12 +709,52 @@ degree of freedom, colored by the axis you typed (X red, Y green, Z blue):
 ![Typing glVertex3f(1.2, 0.8 — one open coordinate leaves a tick-marked line along z](images/vertex-guide-line.png)
 
 - **All three typed** → a pulsing point marker at the exact position (also
-  shown when the cursor sits on a committed vertex line, as above).
+  shown when the cursor sits on a committed vertex line).
 
 `glVertex2f` pins `z = 0` implicitly, so its first coordinate already
 narrows the guide to a line. Guides follow the cursor's transform context —
 inside a `glPushMatrix`/`glTranslatef` frame the sheet and line render in
 that frame, matching where the vertex will actually land.
+
+### Cursor guides & vertex overlays
+
+Once lines are committed, the cursor keeps pointing into the scene. A
+crosshair guide marks the vertex your cursor line refers to, with its
+position label — move the cursor through a `glBegin` block and the guide
+follows:
+
+![Cursor guide and Tron grid in the Transform stress example](images/transform-stress.png)
+
+The overlay toggles annotate geometry scene-wide:
+
+![Normal vectors, vertex points and outlines on a quad](images/vertex-overlays.png)
+
+- **Vertex labels** (F7): Off / Index / Index+Pos / Index+World /
+  Index+World Fine — numbers each vertex of the primitive at the cursor,
+  optionally with its coordinates.
+- **Label & highlight scope** (F8): First instance / All instances / At vertex /
+  Visible only / Single polygon — controls how broadly cursor-bound overlays
+  are shown around repeated function/loop instances.
+- **Normal vectors** (Ctrl+Shift+N): draws each vertex's normal as an arrow.
+- **Vertex outlines** (Ctrl+Shift+O) and **Vertex points** (Ctrl+Shift+P):
+  outline polygons and mark vertices *(both on by default)*.
+- **Polygon highlight** (Ctrl+P): highlights the polygon under the cursor line.
+- **Auto-normals**: maintains generated `glNormal3f` lines for your
+  geometry so lighting works without hand-written normals.
+
+**Single polygon** scope narrows labels and the polygon highlight down to
+just the one primitive your cursor is building, instead of the whole
+`glBegin`/`glEnd` block — handy for a multi-face batch like a cube drawn as
+one `glBegin(GL_QUADS)` with several faces packed into it. The cursor's
+position between vertex lines picks the primitive: any line up through a
+primitive's last vertex belongs to it, and the next line starts the next
+one.
+
+![Single polygon scope: cursor on the second quad's second vertex highlights and labels only that quad](images/single-polygon-scope.png)
+
+Here the cursor sits on the second quad's `glVertex3f(1.6, -0.8, 0)` line;
+only that quad outlines and labels (`v4`..`v7`) — the first quad is left
+alone even though both share the same `glBegin`/`glEnd` pair.
 
 ### Transform guides
 
@@ -907,16 +834,133 @@ The Config menu has an **Xform guide mode** toggle with two options:
 The *Transform stress* example (F12 to cycle to it) is built to exercise
 all three transform guides (translate, rotate, scale) at once.
 
-### Wireframe
+### The clip-plane guide
+
+Park the cursor on a committed `glClipPlane` line and the plane draws
+itself: a translucent gridded disc lying in the plane, a dashed ghost rim
+that reads through occluding geometry, and an arrow pointing into the
+*kept* half-space with a `P0 =(a, b, c, d)` readout. If the program never
+enables that plane's cap, the guide dims and the readout appends `(off)`.
+
+![Cursor on the glClipPlane line: the guide draws the plane as a gridded disc with a kept-side arrow](images/clip-plane.png)
+
+Like the vertex guides, the disc renders in the coordinate frame active at
+the call, so it sits exactly where the plane cuts.
+
+### Winding & face diagnosis
+
+**Winding** (Ctrl+Shift+B) re-renders the scene with front-facing polygons
+in green and back-facing ones in red (as decided by the active
+`glFrontFace`), so flipped or inside-out faces stand out immediately:
+
+![Winding view: the left triangle is wound counter-clockwise (front, green), the right clockwise (back, red)](images/winding-view.png)
+
+Both triangles here list three vertices; only the order differs. When
+culling or lighting misbehaves, this view usually names the culprit in one
+glance.
+
+### Wireframe & hidden-line
+
+**Ctrl+G** cycles Off / Wireframe / Hidden-line.
+
+Wireframe draws polygon edges over the scene:
 
 ![Wireframe torus](images/wireframe.png)
 
-**Ctrl+G** cycles Off / Wireframe / Hidden-line. Wireframe draws polygon
-edges over the scene. Hidden-line draws all polygon edges first in a muted
-hidden-line color, seeds the depth buffer with filled polygons, then draws
-visible edges again in a bright line color. Tip: vertex outlines/points are
-on by default and draw over the wires; turn them off for a clean wireframe
-look.
+Hidden-line draws all polygon edges first in a muted hidden-line color,
+seeds the depth buffer with filled polygons, then draws visible edges again
+in a bright line color — so the silhouette reads bright while occluded
+structure stays faint:
+
+![Hidden-line torus: visible edges bright, occluded edges muted](images/hidden-line.png)
+
+Tip: vertex outlines/points are on by default and draw over the wires; turn
+them off for a clean wireframe look.
+
+### The Config menu
+
+Everything above — and the stage dressing below — has a home menu. Open the
+**Config** dropdown (or press **Ctrl+Shift+K**). Items are grouped into
+sections — hovering a section opens a flyout of its items, and the trailing
+**All** row shows the entire table at once (the mouse wheel scrolls flyouts
+taller than the window):
+
+- **RENDERING** — MSAA, Line smooth, Accum effect, Accum passes, Point attenuation,
+  Post FX Scope, Post FX Effect
+- **TIME & REPLAY** — Auto time, Replay, Replay mode, Replay expand
+- **SCENE** — Grid, Grid major, Grid extent, Grid brightness, Axes, Backdrop, Light theme,
+  Light indicators
+- **CAMERA** — View mode, Projection, Camera rotate, Focus origin, Reset camera
+- **GEOMETRY** — Wireframe, Winding, Auto-normals
+- **OVERLAYS** — Label & highlight scope, Vertex labels, Vertex points, Vertex outlines,
+  Vertex outline style, Normal vectors, Polygon highlight, Transform guides
+- **INTERFACE** — Variable panel, Compute profile, Memory profile, Code panel,
+  Wrap at commas, Syntax highlight, Paren match, Paren scope
+
+**Left-click** a flyout item to cycle it forward, **right-click** to cycle
+backward. Multi-state items show their current state name.
+
+Function keys drive the most common cycles directly (**Shift+F\<n\>** steps
+backward):
+
+| Key | Cycles |
+|---|---|
+| F2 | Grid theme |
+| F3 | Grid extent |
+| F4 | Grid brightness |
+| F5 | Backdrop |
+| F6 | Axes theme |
+| F7 | Vertex labels |
+| F8 | Label & highlight scope |
+| F9 | Light theme |
+| F10 | Post FX Scope |
+
+### Grid & axes
+
+![Grid themes: Sketchbook, Radar, Adaptive Planes, Ocean](images/grid-themes.png)
+
+Twelve directly-selectable grid themes (**F2**): Off, Classic, Tron, Ember,
+Ocean, XZ Ruler *(default)*, Adaptive Planes, Radar, Tilled Field, Sketchbook,
+Neon Graph, Graph Planes. Some backdrops enable hidden companion grids; see
+[Advanced Usage](ADVANCED_USAGE.md#cfg-backdropgrid-pairing).
+**Grid major** (Ctrl+Shift+G) cycles the major-tick spacing (1/2/5/10),
+**Grid extent** (F3) the grid's reach (Close / Mid / Far), and **Grid
+brightness** (F4) the line weight (Dim / Normal / Bright / Bold). Theme
+changes cross-fade, so a newly chosen grid takes a few seconds to fully appear.
+
+Seven axes themes (**F6**): Off *(default)*, Classic, Pulse, Neon, Compass,
+Gizmo, Ruler.
+
+![Compass axes](images/axes-compass.png)
+
+### Backdrops
+
+![Backdrops: Polar Day+Snow, Nebula, Sunset, Aurora](images/backdrops.png)
+
+**F5** cycles the scene backdrop: Off *(default)*, Cityscape, Stars,
+City+Stars, Sunset, Aurora, Nebula, Polar Day, Polar Day+Snow.
+
+Some backdrops enable a hidden companion grid. Nebula selects Star Chart;
+see [Advanced Usage](ADVANCED_USAGE.md#cfg-backdropgrid-pairing) for the
+`@cfg` details.
+
+### Lighting
+
+![Studio light theme on the teapot, with a light indicator](images/light-theme-studio.png)
+
+**Light themes** (**F9**) are preset light rigs: Default (three colored
+keys), Headlight (light 0 rides the camera), Solar (light 0 at the world
+origin — for orbit/planet scenes), Studio (warm key / cool rim / warm fill),
+Neon (saturated magenta/cyan/lime triad).
+
+> [!NOTE]
+> A theme only positions and colors
+> the four light slots — your program still chooses which ones are on via
+> `glEnable(GL_LIGHT0..3)`.
+
+**Light indicators** (Ctrl+Shift+L) draw a marker at each light's position
+(labelled `L0..L3`, with *off* noted for disabled lights), so you can see
+where the rig sits.
 
 ### Rendering quality
 
@@ -1001,28 +1045,28 @@ variable slider to a target.
 
 ## Built-in Examples
 
-**F12** cycles forward through the 29 built-in examples (then your saved
+**F12** cycles forward through the 30 built-in examples (then your saved
 scenes, then back); **Shift+F12** cycles backward. The Scene menu lists them
 grouped by tag. `./gl-repl --list-examples` prints the compiled-in set.
 Developers can point the app at an editable catalog with
 `./gl-repl --examples-dir examples --example <name-or-idx>`:
 
 ```
- 0  Lit cube                                            15  Bezier curve with guides
- 1  Rotating cube                                       16  Annotated orbit plot (labels)
- 2  Animated ring (for + t)                             17  GLU concave arrow
- 3  Conditional colors (if + t)                         18  GLU concave arrow cutout
- 4  Transform stress (translate/rotate/scale guides)    19  GLU concave arrow extrusion
- 5  Parametric torus (nested for)                       20  Glow sprites (blend + point attenuation)
- 6  Animated wave surface (analytic normals)            21  Snowfall particles
- 7  Torus knot (animated)                               22  Swaying grass field (rand + t)
- 8  2D assignment sketch (vars only)                    23  Jellyfish (glDepthMask translucency)
- 9  Function demo (named func)                          24  Dusk lighthouse atoll (stress test)
-10  Function polygons (args + for)                      25  Orrery (labels track 3D orbits)
-11  Function branching (args + if)                      26  Whale (particle system + lit model)
-12  Recursive triangle tree (func + recursion)          27  Teapot carousel (transform stacks + glow points)
-13  Animated spirograph curve                           28  Ringed planet (nebula skies)
-14  Traveling ripple ring                               29  Bubble sort (scratch arrays)
+ 1  Lit cube                                            16  Bezier curve with guides
+ 2  Rotating cube                                       17  Annotated orbit plot (labels)
+ 3  Animated ring (for + t)                             18  GLU concave arrow
+ 4  Conditional colors (if + t)                         19  GLU concave arrow cutout
+ 5  Transform stress (translate/rotate/scale guides)    20  GLU concave arrow extrusion
+ 6  Parametric torus (nested for)                       21  Glow sprites (blend + point attenuation)
+ 7  Animated wave surface (analytic normals)            22  Snowfall particles
+ 8  Torus knot (animated)                               23  Swaying grass field (rand + t)
+ 9  2D assignment sketch (vars only)                    24  Jellyfish (glDepthMask translucency)
+10  Function demo (named func)                          25  Dusk lighthouse atoll (stress test)
+11  Function polygons (args + for)                      26  Orrery (labels track 3D orbits)
+12  Function branching (args + if)                      27  Whale (particle system + lit model)
+13  Recursive triangle tree (func + recursion)          28  Teapot carousel (transform stacks + glow points)
+14  Animated spirograph curve                           29  Ringed planet (nebula skies)
+15  Traveling ripple ring                               30  Bubble sort (scratch arrays)
 ```
 
 Examples may carry their own presentation presets (grid theme, backdrop,
@@ -1112,7 +1156,7 @@ the REPL. Two rules keep the round trip clean:
   inside a `for`/`if` block (the block's per-frame cost), `call cmds 96` on
   a call line (that call's inclusive expansion), `line cmds 12` on a plain
   line that expands more than once. For an offline breakdown,
-  `./gl-repl --example 29 --flat-histogram` prints per-function and
+  `./gl-repl --example 30 --flat-histogram` prints per-function and
   per-line costs sorted by spend.
 
 > **Advanced — extending the REPL itself.** If you want a GL call the REPL
@@ -1185,6 +1229,63 @@ The export is the product; the REPL is where it is born.
 
 ---
 
+## Profiling & Diagnostics
+
+When a scene starts feeling heavy, the built-in profilers show where the
+frame goes before you reach for the export.
+
+### The compute profile (Ctrl+W)
+
+**Ctrl+W** cycles the compute profile through Off / Plot / Sections /
+Details. *Plot* shows a floating FPS graph; *Sections* adds the per-section
+listing **and** the section histograms; *Details* expands the listing's
+nested sub-sections.
+
+![Sections mode: the section listing (CPU/GPU/Max), the log-log section histograms, and the FPS plot](images/profile-panels.png)
+
+Three floating panels work together:
+
+- **The section listing** (right) breaks the frame into named sections —
+  *Render 3D*, *Code Panel*, *Flatten*, and so on, down to *Frame Total*.
+  The **CPU** column is a running average of wall-clock time per frame; the
+  **GPU** column comes from asynchronous GL timer queries (no stalls — the
+  numbers arrive a few frames late), and reads `--` where the driver lacks
+  timer queries or a section emits no GL. **Max** shows the worse of the
+  two averages — the number to watch when deciding what to trim. Sections
+  that did nothing this frame dim out.
+- **The section histograms** (center) overlay every top-level section's
+  timing distribution on one graph. Both axes are logarithmic: microsecond
+  sections and a 100 ms stall fit on the same plot, so a rare spike shows
+  up as a small bump far to the right instead of vanishing into an average.
+  Each section keeps its listing color; the legend below maps them.
+- **The FPS plot** (bottom-right) graphs frame rate over the last 10
+  seconds, minute, and 10 minutes as three overlaid series, with the
+  current rate in the corner.
+
+The histograms are the tool for *hitches*: a scene that averages 60 fps but
+stutters once a second shows a clean main hump plus a second bump at the
+stall duration — and the bump's color names the section responsible. The
+histograms accumulate from load (they reset when you switch examples), so
+leave the panel up while you reproduce the hiccup.
+
+GPU timing needs timer-query support (GL 3.3 / `ARB_timer_query`, or the
+`EXT_timer_query` fallback); `GLR_NO_GPU_PROF=1` disables it explicitly, and
+the GPU column then reads `--`.
+
+### Memory, messages, and startup
+
+- **Memory profile** (Ctrl+Shift+W) — a floating panel with the process RSS
+  history, a session baseline, and the delta since baseline. Useful for
+  confirming a long editing session isn't growing without bound.
+- **Message history** — click the button at the right end of the bottom
+  message line to review recent status messages (parse errors you dismissed,
+  save confirmations, budget warnings).
+- **Ctrl+Shift+D** — dump debug state to stdout.
+- Startup prints an init trace (`[init +N.NNNs] <phase>`) to stderr — useful
+  for locating slow startup phases; `--detailed-prof` adds finer phases.
+
+---
+
 ## Music
 
 gl-repl plays background `.mp3`s found at startup, in filename order, from
@@ -1231,6 +1332,11 @@ runs.
 Useful environment variables: `GLR_TIME`, `GLR_ASSETS_DIR`,
 `GLR_EDIT_LINE=<n>` (park the cursor on source line *n* after load — poses
 cursor-bound overlays like transform guides for headless captures),
+`GLR_TYPE_KEYS=<text>` (feed keystrokes through the keyboard dispatch after
+load — poses mid-typing states like the vertex entry guides and the
+autocomplete popup),
+`GLR_OPEN_COLOR_PICKER=<n>` (open the color picker on source line *n* —
+poses the picker, which otherwise needs a swatch click),
 `GLR_ACCUM_PASSES=<n>` (accumulation AA sample count, 1/2/4/8/12/16 — lets
 headless captures smooth 3D edges at full UI text size),
 `GLR_VIEW_TOGGLE_AT=<secs,...>` (toggle 2D/3D mode during deterministic
@@ -1239,25 +1345,12 @@ captures),
 `GLR_NO_GPU_PROF=1` (disable GPU timer-query profiling),
 `GLR_AUDIO_HITCH_MS` (audio worker stall-warning threshold).
 
-For fully headless rendering — screenshots and GIF/MP4 recordings with no
-window at all — build with `FREEGLUT_OSMESA=1` and see [*Headless rendering
-(OSMesa)* in `ADVANCED_USAGE.md`](ADVANCED_USAGE.md#headless-rendering-osmesa).
-All screenshots and GIFs in this guide were captured that way.
-
----
-
-## Profiling & Diagnostics
-
-- **Compute profile** (Ctrl+W) — Off / Plot / Sections / Details. Plot is a
-  floating FPS graph (last 10 s / 1 min / 10 min as three overlaid series);
-  Sections adds the per-frame section listing with CPU and GPU columns;
-  Details expands the nested sub-sections.
-- **Memory profile** (Ctrl+Shift+W) — RSS history, baseline, and delta.
-- **Message history** — click the button at the right end of the bottom
-  message line to review recent status messages.
-- **Ctrl+Shift+D** — dump debug state to stdout.
-- Startup prints an init trace (`[init +N.NNNs] <phase>`) to stderr — useful
-  for locating slow startup phases; `--detailed-prof` adds finer phases.
+For scripted screenshots and GIF/MP4 recordings, the deterministic
+frame-record mode captures exactly N rendered frames and exits — every
+screenshot and GIF in this guide was generated that way
+(`scripts/docs-assets.sh`). For fully *headless* rendering with no window at
+all, build with `FREEGLUT_OSMESA=1`; both are covered in
+[*Headless rendering (OSMesa)* in `ADVANCED_USAGE.md`](ADVANCED_USAGE.md#headless-rendering-osmesa).
 
 ---
 
@@ -1316,7 +1409,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+P | Polygon highlight |
 | Ctrl+Shift+K | Open Config menu |
 | Ctrl+W / Ctrl+Shift+W | CPU / memory profile panel |
-| F2–F10 | Config cycles (Shift steps backward) — see [Scene Display Options](#scene-display-options) |
+| F2–F10 | Config cycles (Shift steps backward) — see [The Config menu](#the-config-menu) |
 | F11 | Export .ply |
 | F12 / Shift+F12 | Next / previous example or scene |
 | F1 | Help overlay |

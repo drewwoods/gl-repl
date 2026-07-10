@@ -203,7 +203,7 @@ The cache is not an OpenGL display list, VBO, or already-submitted driver
 command stream; [`src/repl/executor.c`](../src/repl/executor.c) still walks the cached `GLCmd[]` and
 emits calls such as `glVertex2f(cmd.args[0], cmd.args[1])`.
 
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L113) rebuilds the flat program only when it is dirty.
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L119) rebuilds the flat program only when it is dirty.
 While animation is playing, advancing `t` marks the flat program dirty, so
 expressions that depend on `t` re-evaluate once for that frame. Accumulation
 AA, replay overlay passes, and vertex outlines reuse the same frame-level
@@ -683,10 +683,10 @@ funcN-local parameters or loop-assigned values, so the controller must override
 cursor arguments from the **flat** command stream before rendering guides inside
 functions or loops.
 
-`edit_overlays_render_cursor_guides()` walks the current [`FlatProgramView`](../src/repl/flatten.h#L45) via
+[`edit_overlays_render_cursor_guides()`](../src/subsystems/edit_overlays/edit_overlays.h#L112) walks the current [`FlatProgramView`](../src/repl/flatten.h#L45) via
 the replay/user-vertex walkers while tracking the modelview with
 `apply_tracked_transform` / `unwind_transform_stack`. At the cursor's first flat
-command, `cursor_guide_snapshot_with_flat_args()` replaces `vertex_args` or
+command, [`cursor_guide_snapshot_with_flat_args()`](../src/subsystems/edit_overlays/edit_overlays.h#L122) replaces `vertex_args` or
 `normal_args` from the already-substituted flat command. For normal guides it
 also walks forward to find the live anchor point, because source-line parsing
 alone cannot know the world-space vertex the normal belongs to. Argument-slot
@@ -723,7 +723,7 @@ recomputes its own anchor frame (`compute_before_cursor_matrix` /
 `glLoadMatrixf` an absolute matrix), so it does *not* depend on where the
 vertex walk happens to be.
 
-That independence is what makes `edit_overlays_render_cursor_guides()` flush the
+That independence is what makes [`edit_overlays_render_cursor_guides()`](../src/subsystems/edit_overlays/edit_overlays.h#L112) flush the
 transform guide **after** the walk (and even when there is *no* walk):
 
 * The flat-program walk drives the geometry guides (which *do* render in the
@@ -759,7 +759,7 @@ Responsibilities:
 
 UI renderers draw from a single per-frame [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L70) (defined in
 [`src/ui/app/snapshot.h`](../src/ui/app/snapshot.h)) that the controller builds once via
-[`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L93) and passes to every `ui_*_render*()`
+[`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L99) and passes to every `ui_*_render*()`
 entry point. Render code does not call `repl_state_*()` directly. The
 `check-ui-no-repl-state-read` Makefile guard enforces the snapshot-shaped
 signature for audited renderers.
@@ -1154,7 +1154,7 @@ state and (b) read by more than one consumer in the frame loop:
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
 *opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L136) in
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L113) (snapshot/follow-scroll → render3d render →
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L119) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
 that frame — here a 2D/3D switch would let row-count see one
@@ -1181,7 +1181,7 @@ stored as a unique sentinel constant
 Per the rule above:
 
 * **Code panel (per frame):** the controller resolves the block once in
-  [`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L93) into
+  [`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L99) into
   `UiRenderSnapshot.reshape_proj_lines/_count`; both panel passes read
   that frozen copy and never touch the resolver. This is the canonical
   shape — UI reads the snapshot only (the symmetric counterpart of
@@ -1676,7 +1676,7 @@ The exporter ([`src/repl/export.c`](../src/repl/export.c)) is GL-free and app-fr
 
 #### 4. Global State Reset & Dispatch Separation
 * **Dispatch Location:** Pure structured-block validators stay in the REPL compiler ([`src/repl/compile.c`](../src/repl/compile.c)), and the non-editor [`repl_load_apply_line()`](../src/repl/load.h#L78) ([`src/repl/load.c`](../src/repl/load.c)) handles the example/import/tutorial paths.
-* **State Reset:** [`repl_state_reset_program()`](../src/repl/state_owners.h#L121) handles core REPL-only resets. The app controller owns [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L48), which resets the editor, UI, and peer subsystems simultaneously when a program load or wholesale replacement occurs.
+* **State Reset:** [`repl_state_reset_program()`](../src/repl/state_owners.h#L121) handles core REPL-only resets. The app controller owns [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L54), which resets the editor, UI, and peer subsystems simultaneously when a program load or wholesale replacement occurs.
 * **App-Service Bootstrapping:** Dump-only CLI paths (e.g., `--dump-code` and `--dump-flat`) bypass normal OpenGL initialization, but still load/export REPL state correctly by running the idempotent `glr_ctrl_install_app_services()` installer prior to loading commands.
 
 ### App-Frame State Ownership
@@ -1722,7 +1722,7 @@ When a module starts owning mutable REPL state, follow this template:
    actualizes back into state.
 4. Extend the ownership tests in the same change: keep
    [`repl_state_capture()`](../src/repl/state.h#L29), [`repl_state_restore()`](../src/repl/state.h#L30), and
-   [`repl_state_reset_program()`](../src/repl/state_owners.h#L121) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L48)
+   [`repl_state_reset_program()`](../src/repl/state_owners.h#L121) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L54)
    (full-world) current for runtime slices, and add focused behavior
    coverage in the module's own tests.
 

@@ -2787,6 +2787,18 @@ void glr_ctrl_set_edit_line(int line) {
     editor_load_line_to_input(line);
 }
 
+void glr_ctrl_open_color_picker(int line) {
+    int count = repl_state_document_count();
+    int sy = 0, sh = 0;
+    if (line < 0 || count <= 0) return;
+    if (line >= count) line = count - 1;
+    /* my (GLUT screen y) anchors the popup vertically; centering on the
+     * scene rect keeps it clear of the code panel and window edges. */
+    ui_layout_scene_rect(NULL, &sy, NULL, &sh);
+    color_picker_start(line,
+                       ui_state_viewport().window_h - (sy + sh / 2));
+}
+
 void glr_ctrl_set_accum_passes(int count) {
     static const int steps[] = { 1, 2, 4, 8, 12, 16 };
     for (int i = 0; i < (int)(sizeof(steps) / sizeof(steps[0])); i++) {

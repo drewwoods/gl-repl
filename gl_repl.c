@@ -241,6 +241,14 @@ static void print_usage(const char *prog) {
             "               2D/3D swatch transition headlessly; drives one\n"
             "               fixed-dt animation tick per captured frame so the\n"
             "               transition advances deterministically.\n"
+            "  GLR_TYPE_KEYS=<text>  Feed each character through the keyboard\n"
+            "               dispatch after load, exactly as typing would.\n"
+            "               Poses mid-typing states (partial-input guides,\n"
+            "               autocomplete ghost) for headless captures.\n"
+            "  GLR_OPEN_COLOR_PICKER=<n>  Open the floating color picker on\n"
+            "               source line n (0-based; the line must be an\n"
+            "               editable color command). Poses the picker for\n"
+            "               captures - it otherwise needs a swatch click.\n"
             "\n"
             "Arguments:\n"
             "  input.c      Optional saved session to load at startup\n"
@@ -348,8 +356,25 @@ static void maybe_capture_view_toggle(void) {
     frame++;
 }
 
+/* Capture affordance, sibling of GLR_VIEW_TOGGLE_AT: GLR_OPEN_COLOR_PICKER=
+ * <line> opens the floating color picker on that source line (0-based,
+ * clamped; no-op unless the line is a picker-editable color command). The
+ * picker only opens via a swatch click, which a capture run has no mouse to
+ * deliver. Applied on the first display callback — not at bootstrap —
+ * because the popup placement clamps against the live viewport, which
+ * reshape has not populated until the main loop starts. */
+static void maybe_capture_open_color_picker(void) {
+    static int done = 0;
+    if (done) return;
+    done = 1;
+    const char *s = getenv("GLR_OPEN_COLOR_PICKER");
+    if (s && *s)
+        glr_ctrl_open_color_picker(atoi(s));
+}
+
 static void display_func(void) {
     maybe_capture_view_toggle();
+    maybe_capture_open_color_picker();
     /* Trace the first two frames separately (gated on g_detailed_prof
      * — see --detailed-prof / GLR_DETAILED_PROF). The first frame
      * pays one-shot costs (GLUT solid-shape display-list compile,
@@ -627,6 +652,10 @@ int main(int argc, char **argv) {
             for (const char *k = k_src; *k; k++)
                 glr_ctrl_keyboard((unsigned char)*k, 0, 0);
     }
+    /* GLR_OPEN_COLOR_PICKER is applied on the first display callback
+     * (maybe_capture_open_color_picker), not here: the picker clamps its
+     * placement against the live viewport, which reshape has not
+     * populated yet at bootstrap time. */
     /* Accumulation-AA boost: GLR_ACCUM_PASSES=<count> (1/2/4/8/12/16)
      * raises the accumulation sample count. Capture hook: the 2D UI
      * renders outside the accumulation loop, so this antialiases the
