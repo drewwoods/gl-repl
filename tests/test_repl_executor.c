@@ -152,6 +152,8 @@ static void test_apply_state_cmd_edge_cases(void) {
     /* glPointParameterfv args[]: [0]=pname, [1..3]=coeffs. */
     cmd.type = CMD_POINT_PARAMETER_FV; cmd.args[0] = GL_POINT_DISTANCE_ATTENUATION; cmd.num_args = 4; repl_apply_state_cmd(&cmd, 1.0f);
     cmd.type = CMD_BLEND_FUNC; cmd.args[0] = GL_SRC_ALPHA; cmd.args[1] = GL_ONE_MINUS_SRC_ALPHA; repl_apply_state_cmd(&cmd, 1.0f);
+    /* glClipPlane args[]: [0]=plane, [1..4]=equation. */
+    cmd.type = CMD_CLIP_PLANE; cmd.args[0] = GL_CLIP_PLANE0; cmd.args[1] = 0; cmd.args[2] = 1; cmd.args[3] = 0; cmd.args[4] = 0.5f; cmd.num_args = 5; repl_apply_state_cmd(&cmd, 1.0f);
 }
 
 /* Regression net for the enum-arg storage migration: assert the actual
@@ -193,6 +195,12 @@ static void test_enum_arg_gl_trace(void) {
     cmd.args[0] = GL_FRONT_AND_BACK; cmd.args[1] = GL_AMBIENT_AND_DIFFUSE;
     repl_apply_state_cmd(&cmd, 1.0f);
 
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.type = CMD_CLIP_PLANE; cmd.num_args = 5;
+    cmd.args[0] = GL_CLIP_PLANE1;
+    cmd.args[1] = 0.25f; cmd.args[2] = 1; cmd.args[3] = 0; cmd.args[4] = 0.5f;
+    repl_apply_state_cmd(&cmd, 1.0f);
+
     gl_stub_trace_close();
 
     char buf[4096] = "";
@@ -225,6 +233,11 @@ static void test_enum_arg_gl_trace(void) {
     snprintf(want, sizeof(want), "glColorMaterial %u %u\n",
              (unsigned)GL_FRONT_AND_BACK, (unsigned)GL_AMBIENT_AND_DIFFUSE);
     ASSERT_TRUE("glColorMaterial receives (face, mode) in order",
+                strstr(buf, want) != NULL);
+
+    snprintf(want, sizeof(want), "glClipPlane %u 0.25 1 0 0.5\n",
+             (unsigned)GL_CLIP_PLANE1);
+    ASSERT_TRUE("glClipPlane receives (plane, a, b, c, d) in order",
                 strstr(buf, want) != NULL);
 }
 

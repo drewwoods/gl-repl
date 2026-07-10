@@ -100,6 +100,7 @@ static const CmdType expected_commands[] = {
     CMD_TESS_END,
     CMD_RASTER_POS3F,
     CMD_LABEL,
+    CMD_CLIP_PLANE,
 };
 
 static int verify_all_commands_present(void) {
@@ -371,6 +372,7 @@ int main(void) {
 
     /* Blend/depth commands */
     editor_feed_line("glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);");
+    editor_feed_line("glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0, 1, 0, 0.5});");
     editor_feed_line("glClearColor(0.2, 0.2, 0.2, 1);");
     editor_feed_line("glDepthMask(GL_TRUE);");
     editor_feed_line("glEdgeFlag(GL_TRUE);");
@@ -433,6 +435,10 @@ int main(void) {
                 strstr(export_text, "(GLfloat[]){") == NULL);
     ASSERT_TRUE("export emits C89 GLfloat vector helpers",
                 strstr(export_text, "static GLfloat *repl_glfloat4") != NULL);
+    ASSERT_TRUE("export avoids C99 compound GLdouble literals",
+                strstr(export_text, "(GLdouble[]){") == NULL);
+    ASSERT_TRUE("export emits C89 GLdouble vector helper",
+                strstr(export_text, "static GLdouble *repl_gldouble4") != NULL);
     ASSERT_TRUE("export uses prototyped display",
                 strstr(export_text, "void display(void)") != NULL &&
                 strstr(export_text, "void display()") == NULL);

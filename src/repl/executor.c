@@ -348,6 +348,17 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
     case CMD_LIGHT_MODEL_I:
         glLightModeli((GLenum)cmd->args[0], (GLint)cmd->args[1]);
         return 1;
+    case CMD_CLIP_PLANE: {
+        /* args[0]=plane, args[1..4]=equation. GL transforms the equation
+         * by the modelview current at this call, so user transforms
+         * preceding the command position the plane — native semantics. */
+        GLdouble eq[4] = {
+            (GLdouble)cmd->args[1], (GLdouble)cmd->args[2],
+            (GLdouble)cmd->args[3], (GLdouble)cmd->args[4]
+        };
+        glClipPlane((GLenum)cmd->args[0], eq);
+        return 1;
+    }
     case CMD_FRONT_FACE:
         glFrontFace((GLenum)cmd->args[0]);
         return 1;
@@ -849,6 +860,7 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
     case CMD_POINT_PARAMETER_FV:
     case CMD_BLEND_FUNC:
     case CMD_CLEAR_COLOR:
+    case CMD_CLIP_PLANE:
         /* General state filter: a render pass that owns its own material/
          * lighting/cull state (the winding view) suppresses the program's
          * conflicting state commands here. Bookkeeping (light mask / clear

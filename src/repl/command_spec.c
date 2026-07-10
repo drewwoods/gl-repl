@@ -19,6 +19,12 @@ static const ReplEnumEntry k_begin_modes[] = {
 
 static const ReplEnumEntry k_enable_caps[] = {
     { "GL_BLEND",           GL_BLEND },
+    { "GL_CLIP_PLANE0",     GL_CLIP_PLANE0 },
+    { "GL_CLIP_PLANE1",     GL_CLIP_PLANE1 },
+    { "GL_CLIP_PLANE2",     GL_CLIP_PLANE2 },
+    { "GL_CLIP_PLANE3",     GL_CLIP_PLANE3 },
+    { "GL_CLIP_PLANE4",     GL_CLIP_PLANE4 },
+    { "GL_CLIP_PLANE5",     GL_CLIP_PLANE5 },
     { "GL_COLOR_MATERIAL",  GL_COLOR_MATERIAL },
     { "GL_CULL_FACE",       GL_CULL_FACE },
     { "GL_DEPTH_TEST",      GL_DEPTH_TEST },
@@ -99,6 +105,19 @@ static const ReplEnumEntry k_light_model_params[] = {
     { NULL, 0 }
 };
 
+/* The six planes GL guarantees (GL_MAX_CLIP_PLANES >= 6). Slot 0 of the
+ * custom-parsed glClipPlane command; also merged into k_enable_caps
+ * above so glEnable/glDisable can toggle them. */
+static const ReplEnumEntry k_clip_planes[] = {
+    { "GL_CLIP_PLANE0", GL_CLIP_PLANE0 },
+    { "GL_CLIP_PLANE1", GL_CLIP_PLANE1 },
+    { "GL_CLIP_PLANE2", GL_CLIP_PLANE2 },
+    { "GL_CLIP_PLANE3", GL_CLIP_PLANE3 },
+    { "GL_CLIP_PLANE4", GL_CLIP_PLANE4 },
+    { "GL_CLIP_PLANE5", GL_CLIP_PLANE5 },
+    { NULL, 0 }
+};
+
 static const ReplEnumEntry k_bool_vals[] = {
     { "GL_TRUE",  GL_TRUE  },
     { "GL_FALSE", GL_FALSE },
@@ -175,9 +194,9 @@ static const ReplFuncCompletion k_func_completions[] = {
     /* --- Render state --- */
     { "glEnable(",           "glEnable(cap)",                                            1, { "cap" },
         "Enable a GL capability\n"
-        "GL_BLEND, GL_COLOR_MATERIAL, GL_CULL_FACE, GL_DEPTH_TEST\n"
-        "GL_LIGHTING, GL_LIGHT0..GL_LIGHT3, GL_LINE_SMOOTH, GL_LINE_STIPPLE\n"
-        "GL_MULTISAMPLE, GL_NORMALIZE, GL_POINT_SMOOTH",
+        "GL_BLEND, GL_CLIP_PLANE0..GL_CLIP_PLANE5, GL_COLOR_MATERIAL\n"
+        "GL_CULL_FACE, GL_DEPTH_TEST, GL_LIGHTING, GL_LIGHT0..GL_LIGHT3\n"
+        "GL_LINE_SMOOTH, GL_LINE_STIPPLE, GL_MULTISAMPLE, GL_NORMALIZE, GL_POINT_SMOOTH",
         REPL_HELP_GROUP_STATE },
     { "glDisable(",          "glDisable(cap)",                                           1, { "cap" },
         "Disable a GL capability (same caps as glEnable)", REPL_HELP_GROUP_STATE },
@@ -187,6 +206,12 @@ static const ReplFuncCompletion k_func_completions[] = {
         "Rasterized point diameter", REPL_HELP_GROUP_STATE },
     { "glLineWidth(",        "glLineWidth(width)",                                       1, { "width" },
         "Rasterized line width", REPL_HELP_GROUP_STATE },
+    { "glClipPlane(",        "glClipPlane(plane, (GLdouble[]){a, b, c, d})",             2, { "plane", "(GLdouble[]){a, b, c, d}" },
+        "Set a clip plane equation a*x + b*y + c*z + d >= 0 (kept half-space),\n"
+        "in the coordinate frame active at the call. plane: GL_CLIP_PLANE0..5.\n"
+        "Enable with glEnable(GL_CLIP_PLANEi). Flat shorthand accepted:\n"
+        "glClipPlane(plane, a, b, c, d).",
+        REPL_HELP_GROUP_STATE },
     /* --- Raster position & bitmap text --- */
     { "glRasterPos3f(",      "glRasterPos3f(x, y, z)",                                   3, { "x", "y", "z" },
         "Set the current raster position (transformed through modelview/projection).\n"
@@ -360,6 +385,12 @@ static const ReplEnumCommandSpec k_enum_command_specs[] = {
     { "glBlendFunc",     CMD_BLEND_FUNC,     2, "%sglBlendFunc(%s, %s);",    0,
         .args = { ENUM_SLOT_TOK(k_blend_src_factors, "sfactor: GL_SRC_ALPHA"),
                   ENUM_SLOT_TOK(k_blend_dst_factors, "dfactor: GL_ONE_MINUS_SRC_ALPHA, GL_ONE") } },
+    /* glClipPlane is parsed by a custom branch (num_args -1). args[] is
+     * kept only so slot-indexed autocomplete offers the plane tokens;
+     * the (GLdouble[]){a, b, c, d} equation is handled by the custom
+     * parser, not the generalized enum loop. */
+    { "glClipPlane",     CMD_CLIP_PLANE,    -1, NULL,                        0,
+        .args = { ENUM_SLOT_TOK(k_clip_planes, "plane: GL_CLIP_PLANE0 .. GL_CLIP_PLANE5") } },
     { "glColorMask",     CMD_COLOR_MASK,     4, "%sglColorMask(%s, %s, %s, %s);", 0,
         .args = { ENUM_SLOT_BOOL("red: GL_TRUE or GL_FALSE"),
                   ENUM_SLOT_BOOL("green: GL_TRUE or GL_FALSE"),
@@ -511,6 +542,7 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_LABEL,              "label",               1, CMD_CAT_GLUT_SHAPE),
     CMD_TYPE_SPEC(CMD_ELSE_IF,                    1, CMD_CAT_CONDITIONAL),
     CMD_TYPE_SPEC(CMD_ELSE,                       1, CMD_CAT_CONDITIONAL),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_CLIP_PLANE,         "glClipPlane",         1, CMD_CAT_STATE),
 };
 
 const ReplCommandTypeSpec *repl_command_type_spec(CmdType type) {
@@ -574,6 +606,10 @@ const ReplEnumEntry *repl_material_param_entries(void) {
 
 const ReplEnumEntry *repl_point_param_pname_entries(void) {
     return k_point_param_pnames;
+}
+
+const ReplEnumEntry *repl_clip_plane_entries(void) {
+    return k_clip_planes;
 }
 
 const char *repl_begin_mode_name(GLenum mode) {

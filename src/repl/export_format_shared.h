@@ -46,5 +46,6 @@
 #define REPL_EXPORT_GLFLOAT1_HELPER          "repl_glfloat1"
 #define REPL_EXPORT_GLFLOAT3_HELPER          "repl_glfloat3"
 #define REPL_EXPORT_GLFLOAT4_HELPER          "repl_glfloat4"
+#define REPL_EXPORT_GLDOUBLE4_HELPER         "repl_gldouble4"
 
 #endif /* REPL_EXPORT_FORMAT_SHARED_H */

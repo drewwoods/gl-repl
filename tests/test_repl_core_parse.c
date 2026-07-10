@@ -1127,6 +1127,77 @@ int main(void) {
                     strcmp(cmd_text, cmd_text2) == 0);
     }
 
+    /* glClipPlane */
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        ExprVar vars[1] = { { "cut", 0.5f } };
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test_with_vars(
+            "glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0, 1, 0, 0.5})",
+            &cmd, vars, 1);
+        ASSERT_TRUE("glClipPlane parse ok", ok == 1);
+        ASSERT_TRUE("glClipPlane type", cmd.type == CMD_CLIP_PLANE);
+        ASSERT_TRUE("glClipPlane num_args", cmd.num_args == 5);
+        ASSERT_TRUE("glClipPlane plane enum",
+                    (GLenum)cmd.args[0] == GL_CLIP_PLANE0);
+        ASSERT_TRUE("glClipPlane equation baked",
+                    cmd.args[1] == 0.0f && cmd.args[2] == 1.0f &&
+                    cmd.args[3] == 0.0f && cmd.args[4] == 0.5f);
+        ASSERT_TRUE("glClipPlane literal has_vars false", cmd.has_vars == 0);
+
+        memset(&cmd, 0, sizeof(cmd));
+        ok = parse_for_test_with_vars(
+            "glClipPlane(GL_CLIP_PLANE1, (GLdouble[]){0, 1, 0, cut})",
+            &cmd, vars, 1);
+        ASSERT_TRUE("glClipPlane var parse ok", ok == 1);
+        ASSERT_TRUE("glClipPlane var has_vars", cmd.has_vars == 1);
+        ASSERT_TRUE("glClipPlane var value baked", cmd.args[4] == 0.5f);
+    }
+
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        GLCmd cmd2;
+        char cmd_text[MAX_LINE_LEN] = "";
+        char cmd_text2[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        memset(&cmd2, 0, sizeof(cmd2));
+        int ok = parse_cmd_with_text(
+            "glClipPlane(GL_CLIP_PLANE0, 0, 1, 0, 0.5)",
+            &cmd, cmd_text, sizeof(cmd_text));
+        ASSERT_TRUE("glClipPlane flat parse ok", ok == 1);
+        ASSERT_TRUE("glClipPlane flat canonical emits compound literal",
+                    strstr(cmd_text,
+                           "glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0, 1, 0, 0.5})")
+                        != NULL);
+
+        ok = parse_cmd_with_text(cmd_text, &cmd2, cmd_text2, sizeof(cmd_text2));
+        ASSERT_TRUE("glClipPlane canonical re-parses", ok == 1);
+        ASSERT_TRUE("glClipPlane canonical type", cmd2.type == CMD_CLIP_PLANE);
+        ASSERT_TRUE("glClipPlane canonical num_args", cmd2.num_args == 5);
+        ASSERT_TRUE("glClipPlane canonical text stable",
+                    strcmp(cmd_text, cmd_text2) == 0);
+    }
+
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("glClipPlane(GL_FRONT, 0, 1, 0, 0)", &cmd);
+        ASSERT_TRUE("glClipPlane bad plane token rejected", ok == 0);
+
+        memset(&cmd, 0, sizeof(cmd));
+        ok = parse_for_test("glClipPlane(GL_CLIP_PLANE0, 0, 1, 0)", &cmd);
+        ASSERT_TRUE("glClipPlane wrong coeff count rejected", ok == 0);
+
+        memset(&cmd, 0, sizeof(cmd));
+        ok = parse_for_test(
+            "glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0, 1, 0, 0.5} junk)",
+            &cmd);
+        ASSERT_TRUE("glClipPlane trailing junk rejected", ok == 0);
+    }
+
     /* Incomplete commands should not be reported as unknown commands. */
     {
         glr_ctrl_reset_all();
