@@ -438,16 +438,26 @@ static int flatten_reparse_line(FlattenContext *ctx,
     ReplParsedLine tmp_pl;
     int rv = 1;
 
-    /* Seed from the committed command: the parser writes only the fields its
-     * command type owns, so var_idx, is_auto, and the inactive payload member
-     * would otherwise be whatever was on the stack (GLCmd's contract for an
-     * unused payload is "zeroed", and an auto-normal reparsed inside a loop
-     * body must keep its is_auto flag). Reparse refreshes the rest. */
-    tmp_pl.cmd = *src_cmd;
-
     prof_begin(PROF_FLATTEN_REPARSE);
     if (repl_parser_parse_command_ctx(text, &tmp_pl, &parse_ctx)) {
         GLCmd tmp = tmp_pl.cmd;
+        /* Restore is_auto after the parse, not before it: the parser memsets
+         * the whole ReplParsedLine as its first statement, so a seed written
+         * ahead of the call is erased. The parser never sets is_auto (it only
+         * clears it, for CMD_EMPTY and CMD_COMMENT), so without this a
+         * synthesized normal that takes the reparse branch loses the flag and
+         * stops being recognized as generated. The literal fast path above
+         * appends the committed command verbatim and keeps it; restoring here
+         * is what makes the two paths agree.
+         *
+         * Nothing else needs restoring. `valid` is parser-owned: a line that
+         * fails to reparse must not inherit a stale valid=1. `var_idx` is
+         * commit-time state, but its only carrier (CMD_VAR_ASSIGN) is routed
+         * to flatten_var_assign before it can reach here, as is
+         * CMD_VAR_DECLARE with payload.decl. The parser's memset already
+         * zeroes the payload union (GLCmd's "unused payload is zeroed"
+         * contract) and refills payload.label for CMD_LABEL. */
+        tmp.is_auto = src_cmd->is_auto;
         if (has_local_vars)
             tmp.has_vars = src_cmd->has_vars;
         else if (src_cmd->has_vars)

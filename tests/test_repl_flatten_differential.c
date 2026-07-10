@@ -245,12 +245,17 @@ static void test_literal_cmd_keeps_local_snapshot(void) {
                               g_fast.cmds[1].args[2], 3.0f);
 }
 
-/* An auto-generated normal is a literal command; the fast path must carry its
- * is_auto flag into the flat program (the reparse path never set it inside a
- * loop body — it read whatever was on the stack). */
-static void test_literal_cmd_keeps_is_auto(void) {
-    int found_auto = 0;
+/* Feed a triangle and synthesize its normal, leaving an is_auto CMD_NORMAL3F
+ * in the source document. Returns the count of auto-normals in `run`. */
+static int count_auto_normals(const FlattenRun *run) {
+    int n = 0;
+    for (int i = 0; i < run->result.flat_cmd_count; i++)
+        if (run->cmds[i].type == CMD_NORMAL3F && run->cmds[i].is_auto)
+            n++;
+    return n;
+}
 
+static void load_auto_normal_doc(void) {
     glr_ctrl_reset_all();
     editor_feed_line("glBegin(GL_TRIANGLES);");
     editor_feed_line("glVertex3f(0, 0, 0);");
@@ -258,14 +263,86 @@ static void test_literal_cmd_keeps_is_auto(void) {
     editor_feed_line("glVertex3f(0, 1, 0);");
     editor_feed_line("glEnd();");
     repl_recompute_autonormals(1, NULL);
+}
 
+/* The document synthesizes one auto-normal per triangle vertex. */
+#define EXPECTED_AUTO_NORMALS 3
+
+/* An auto-generated normal is a literal command; the fast path must carry its
+ * is_auto flag into the flat program. */
+static void test_literal_cmd_keeps_is_auto(void) {
+    load_auto_normal_doc();
     flatten_into(&g_fast, /*force_reparse=*/0);
-    for (int i = 0; i < g_fast.result.flat_cmd_count; i++)
-        if (g_fast.cmds[i].type == CMD_NORMAL3F && g_fast.cmds[i].is_auto)
-            found_auto = 1;
 
-    TEST_ASSERT_INT(&g_harness, "auto normal reaches the flat program as is_auto",
-                    found_auto, 1);
+    TEST_ASSERT_INT(&g_harness, "auto normals reach the flat program as is_auto",
+                    count_auto_normals(&g_fast), EXPECTED_AUTO_NORMALS);
+}
+
+/* The two paths must agree on the synthesized normal too. The forced path runs
+ * repl_parser_parse_command_ctx, which memsets the whole ReplParsedLine and
+ * never writes is_auto (except to clear it for CMD_EMPTY / CMD_COMMENT) or
+ * var_idx at all — so without an explicit post-parse restore in
+ * flatten_reparse_line, the reparsed normal loses is_auto and the seam is not
+ * semantically equivalent. test_corpus_differential cannot catch this: no
+ * built-in example carries an auto-normal, so the field never differs there. */
+static void test_auto_normal_differential(void) {
+    load_auto_normal_doc();
+    flatten_into(&g_fast, /*force_reparse=*/0);
+    load_auto_normal_doc();
+    flatten_into(&g_reparse, /*force_reparse=*/1);
+
+    TEST_ASSERT_INT(&g_harness, "auto-normal doc: same flat count",
+                    g_fast.result.flat_cmd_count,
+                    g_reparse.result.flat_cmd_count);
+    TEST_ASSERT_INT(&g_harness, "auto-normal doc: fast path has auto normals",
+                    count_auto_normals(&g_fast), EXPECTED_AUTO_NORMALS);
+    TEST_ASSERT_INT(&g_harness, "auto normals survive the forced reparse",
+                    count_auto_normals(&g_reparse), EXPECTED_AUTO_NORMALS);
+
+    for (int i = 0; i < g_fast.result.flat_cmd_count; i++)
+        TEST_ASSERT_INT(&g_harness,
+                        "auto-normal doc: fast and forced flat cmds agree",
+                        flat_cmd_equal(&g_fast.cmds[i], &g_reparse.cmds[i]), 1);
+}
+
+/* var_idx is commit-time state (compile.c) that the parser never writes, so a
+ * reparse would zero it — retargeting the assignment at predef slot 0 (`t`).
+ * flatten_reparse_line does NOT restore it, and does not need to: flatten_range
+ * routes CMD_VAR_ASSIGN to flatten_var_assign before the reparse path can see
+ * it. That routing is the invariant this test pins. If a future change lets a
+ * var-assign reach flatten_reparse_line, var_idx starts surviving only by
+ * accident and this test fails under force_reparse. */
+static void test_var_assign_differential(void) {
+    int checked = 0;
+
+    for (int pass = 0; pass < 2; pass++) {
+        glr_ctrl_reset_all();
+        editor_feed_line("float k;");
+        editor_feed_line("k = 2;");
+        editor_feed_line("glVertex3f(1, 0, 0);");
+        flatten_into(pass == 0 ? &g_fast : &g_reparse, /*force_reparse=*/pass);
+    }
+
+    TEST_ASSERT_INT(&g_harness, "var-assign doc: same flat count",
+                    g_fast.result.flat_cmd_count,
+                    g_reparse.result.flat_cmd_count);
+
+    for (int i = 0; i < g_fast.result.flat_cmd_count; i++) {
+        if (g_fast.cmds[i].type == CMD_VAR_ASSIGN) {
+            checked = 1;
+            TEST_ASSERT_INT(&g_harness,
+                            "var-assign keeps a nonzero var_idx (not slot 0/t)",
+                            g_fast.cmds[i].var_idx > 0, 1);
+            TEST_ASSERT_INT(&g_harness,
+                            "var-assign var_idx identical under force_reparse",
+                            g_reparse.cmds[i].var_idx, g_fast.cmds[i].var_idx);
+        }
+        TEST_ASSERT_INT(&g_harness,
+                        "var-assign doc: fast and forced flat cmds agree",
+                        flat_cmd_equal(&g_fast.cmds[i], &g_reparse.cmds[i]), 1);
+    }
+    TEST_ASSERT_INT(&g_harness, "var-assign doc reached a CMD_VAR_ASSIGN",
+                    checked, 1);
 }
 
 int main(void) {
@@ -275,6 +352,8 @@ int main(void) {
     test_corpus_differential();
     test_literal_cmd_keeps_local_snapshot();
     test_literal_cmd_keeps_is_auto();
+    test_auto_normal_differential();
+    test_var_assign_differential();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_repl_flatten_differential");
