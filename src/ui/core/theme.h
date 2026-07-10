@@ -49,7 +49,10 @@ typedef enum {
     UI_TOK_CARET,                  /* text / search caret               */
     UI_TOK_STATUS_OK,              /* semantic success            #70c070 */
     UI_TOK_STATUS_WARN,            /* semantic warning            #e0a040 */
-    UI_TOK_STATUS_ERR,             /* semantic error              #c9442e */
+    UI_TOK_STATUS_ERR,             /* semantic error (accent/fill) #c9442e */
+    UI_TOK_STATUS_ERR_TEXT,        /* error body text on dark bg  #ff8e7e
+                                    * (STATUS_ERR is tuned as an accent /
+                                    * fill hue and is too dark for text) */
 
     /* Accent-derived - varies per theme row. */
     UI_TOK_ACCENT,                 /* primary accent (green #6fb36f)     */
@@ -69,7 +72,7 @@ typedef enum {
     UI_THEME_COUNT
 } UiTheme;
 
-/* The 16 neutral columns, shared verbatim by every theme row so a new
+/* The 17 neutral columns, shared verbatim by every theme row so a new
  * scheme only fills the 3 accent tokens below it. */
 #define UI_THEME_NEUTRAL_COLUMNS \
     [UI_TOK_SURFACE]              = { 0.114f, 0.114f, 0.114f, 1.0f }, \
@@ -87,7 +90,8 @@ typedef enum {
     [UI_TOK_CARET]                = { 0.950f, 0.800f, 0.240f, 1.0f }, \
     [UI_TOK_STATUS_OK]            = { 0.439f, 0.753f, 0.439f, 1.0f }, \
     [UI_TOK_STATUS_WARN]          = { 0.878f, 0.627f, 0.251f, 1.0f }, \
-    [UI_TOK_STATUS_ERR]           = { 0.788f, 0.267f, 0.180f, 1.0f }
+    [UI_TOK_STATUS_ERR]           = { 0.788f, 0.267f, 0.180f, 1.0f }, \
+    [UI_TOK_STATUS_ERR_TEXT]      = { 1.000f, 0.557f, 0.494f, 1.0f }
 
 extern const UiRgba g_ui_theme_table[UI_THEME_COUNT][UI_TOK_COUNT];
 extern int g_ui_theme;
@@ -113,7 +117,7 @@ static inline void ui_clr_a(UiThemeToken t, float a) {
 static inline void ui_theme_select(UiTheme th) { g_ui_theme = (int)th; }
 static inline UiTheme ui_theme_active(void) { return (UiTheme)g_ui_theme; }
 
-STATIC_ASSERT(UI_TOK_COUNT == 19,
+STATIC_ASSERT(UI_TOK_COUNT == 20,
               "UiThemeToken count changed - update g_ui_theme_table and test_ui_theme");
 STATIC_ASSERT(UI_THEME_COUNT == 6,
               "UiTheme row count changed - update g_ui_theme_table and test_ui_theme");

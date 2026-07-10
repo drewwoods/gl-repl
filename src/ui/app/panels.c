@@ -13,6 +13,7 @@
 #include "ui/core/metrics.h"
 #include "ui/app/repl_code_panel.h"
 #include "ui/app/scene_tabs.h"
+#include "ui/core/theme.h"
 #include "ui/subsystems/variable_panel.h"
 #include "ui/app/variable_panel_view.h"
 
@@ -20,33 +21,22 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Two deliberately non-accent semantic surfaces, theme-stable in every
- * scheme (see theme.h's "named constant" bucket - fixed, non-theme
- * one-offs that must NOT follow the UI accent):
- *   - the inline-rename modal: a distinct blue so it reads as modal;
- *   - the bottom status banner: amber, the conventional status hue. */
-static const float k_rename_bar_bg[4]   = { 0.078f, 0.122f, 0.298f, 0.95f };
-static const float k_rename_bar_rule[4] = { 0.310f, 0.510f, 0.860f, 1.0f };
-static const float k_rename_bar_text[4] = { 0.780f, 0.870f, 1.000f, 1.0f };
-static const float k_status_bar_bg[3]   = { 0.227f, 0.165f, 0.063f };
-static const float k_status_bar_edge[3] = { 0.102f, 0.071f, 0.031f };
-static const float k_status_bar_fg[3]   = { 0.941f, 0.753f, 0.439f };
-/* Parallel red palette for UI_STATUS_ERROR. Same luminance band as the
- * amber set above so the bar still reads against the scene background;
- * only the hue differs. */
-static const float k_status_bar_bg_err[3]   = { 0.290f, 0.078f, 0.078f };
-static const float k_status_bar_edge_err[3] = { 0.137f, 0.027f, 0.027f };
-static const float k_status_bar_fg_err[3]   = { 1.000f, 0.557f, 0.494f };
+/* Status / modal-strip surfaces draw from the theme token table
+ * (theme.h bucket 1) like the rest of the chrome: neutral RAISED /
+ * BORDER surfaces, severity carried by the dot / text / edge stripe
+ * (UI_TOK_ACCENT for INFO, UI_TOK_STATUS_ERR[_TEXT] for ERROR) rather
+ * than by a colored band. The modal prompt strip rides the
+ * accent-derived tokens so it stays visually "modal" but re-tints with
+ * the active scheme. */
 
-/* Messages-button + recent-message-list palette. Neutral surfaces (not
- * theme tokens) so the affordance reads the same across schemes, matching
- * the deliberately non-accent status banner above. */
-static const float k_msgbtn_bg[4]    = { 0.137f, 0.137f, 0.157f, 0.95f };
-static const float k_msgbtn_bg_lit[4]= { 0.204f, 0.204f, 0.243f, 0.97f };
-static const float k_msgbtn_edge[4]  = { 0.392f, 0.392f, 0.451f, 1.0f };
-static const float k_msgbtn_fg[3]    = { 0.780f, 0.780f, 0.820f };
-static const float k_msglist_bg[4]   = { 0.090f, 0.090f, 0.110f, 0.96f };
-static const float k_msglist_edge[4] = { 0.353f, 0.353f, 0.404f, 1.0f };
+/* Alpha the translucent bottom-band surfaces render at (banner, bell
+ * button, history list) - slightly see-through over the scene, same
+ * value the old hardcoded palette used. */
+#define STATUS_SURFACE_ALPHA 0.95f
+/* Width of the UI_TOK_STATUS_ERR edge stripe on the banner's leading
+ * (left) edge - the "unmissable" error cue now that the band itself
+ * is neutral. */
+#define STATUS_ERR_STRIPE_W 3.0f
 
 void ui_panels_render_code_panel(const UiRenderSnapshot *snap,
                                  UiCodePanelOutput *out) {
@@ -109,7 +99,8 @@ static void draw_modal_strip(const UiRenderSnapshot *snap,
 
     if (!status_strip_begin(snap, &f))
         return;
-    status_strip_paint_bar(&f, k_rename_bar_bg, k_rename_bar_rule);
+    status_strip_paint_bar(&f, ui_rgba(UI_TOK_ACCENT_GLOW_BG),
+                           ui_rgba(UI_TOK_ACCENT));
 
     tx = f.sc_x + CODE_MARGIN_X;
     max_px = f.sc_w - 2 * CODE_MARGIN_X;
@@ -122,7 +113,7 @@ static void draw_modal_strip(const UiRenderSnapshot *snap,
         snprintf(trunc, sizeof(trunc), "%.*s", max_chars, msg);
         msg = trunc;
     }
-    glColor4fv(k_rename_bar_text);
+    ui_clr(UI_TOK_TEXT_ON_HILITE);
     gl2d_draw_string((float)tx, (float)f.text_y, msg, FONT_SMALL);
 
     status_strip_end();
@@ -324,7 +315,7 @@ static void status_history_render_button(const UiRenderSnapshot *snap,
                                          StatusAnim anim) {
     int bx, by, bw, bh;
     char label[32];
-    const float *bg;
+    const float *rest;
     float cx, ry, glow;
     float bell[3];
     int text_x, text_y, i;
@@ -333,12 +324,11 @@ static void status_history_render_button(const UiRenderSnapshot *snap,
         return;
 
     status_history_button_label(snap, label, (int)sizeof(label));
-    bg = (snap->status_history.open || anim.active)
-             ? k_msgbtn_bg_lit : k_msgbtn_bg;
-
-    glColor4fv(bg);
+    ui_clr_a((snap->status_history.open || anim.active)
+                 ? UI_TOK_MENU_LABEL_HOVER_BG : UI_TOK_RAISED,
+             STATUS_SURFACE_ALPHA);
     glRectf((float)bx, (float)by, (float)(bx + bw), (float)(by + bh));
-    glColor4fv(k_msgbtn_edge);
+    ui_clr(UI_TOK_BORDER);
     glBegin(GL_LINE_LOOP);
     glVertex2f((float)bx + 0.5f, (float)by + 0.5f);
     glVertex2f((float)(bx + bw) - 0.5f, (float)by + 0.5f);
@@ -347,16 +337,19 @@ static void status_history_render_button(const UiRenderSnapshot *snap,
     glEnd();
 
     /* Bell hue: rest neutral, warm to the live message color while it
-     * animates (amber for INFO, red for ERROR), brightened by the pulse. */
+     * animates (accent for INFO, error red for ERROR), brightened by
+     * the pulse. */
     int ry_i = by + (bh - BELL_ICON_H) / 2 + 1;
     cx = (float)(bx + MSGBTN_PAD_X) + BELL_ICON_W * 0.5f;
     ry = (float)ry_i;
     glow = anim.active ? (0.45f + 0.55f * anim.pulse) : 0.0f;
+    rest = ui_rgba(UI_TOK_TEXT_MUTED);
     {
         const float *hue = (snap->status.kind == UI_STATUS_ERROR)
-                               ? k_status_bar_fg_err : k_status_bar_fg;
+                               ? ui_rgba(UI_TOK_STATUS_ERR_TEXT)
+                               : ui_rgba(UI_TOK_ACCENT);
         for (i = 0; i < 3; i++)
-            bell[i] = k_msgbtn_fg[i] + (hue[i] - k_msgbtn_fg[i]) * glow;
+            bell[i] = rest[i] + (hue[i] - rest[i]) * glow;
     }
 
     /* Sound ring when the bell is emitting: a faint arc expanding off the
@@ -377,13 +370,13 @@ static void status_history_render_button(const UiRenderSnapshot *snap,
 
     text_x = bx + MSGBTN_PAD_X + BELL_ICON_W + BELL_GAP;
     text_y = by + (bh - FONT_SMALL_H) / 2 + 1;
-    glColor3fv(k_msgbtn_fg);
+    ui_clr(UI_TOK_TEXT_MUTED);
     gl2d_draw_string((float)text_x, (float)text_y, label, FONT_SMALL);
 }
 
 /* Draw the inline history list when the toggle is open. Newest entry sits
  * at the bottom (just above the button); older rows stack upward, dimmed
- * by age. ERROR entries take the red status hue, INFO the amber. */
+ * by age. ERROR entries take the error text hue, INFO the primary. */
 static void status_history_render_list(const UiRenderSnapshot *snap) {
     const UiStatusHistory *hist = &snap->status_history;
     int lx, ly, lw, lh, vis;
@@ -395,9 +388,9 @@ static void status_history_render_list(const UiRenderSnapshot *snap) {
     if (vis <= 0)
         return;
 
-    glColor4fv(k_msglist_bg);
+    ui_clr_a(UI_TOK_RAISED, STATUS_SURFACE_ALPHA);
     glRectf((float)lx, (float)ly, (float)(lx + lw), (float)(ly + lh));
-    glColor4fv(k_msglist_edge);
+    ui_clr(UI_TOK_BORDER);
     glBegin(GL_LINE_LOOP);
     glVertex2f((float)lx + 0.5f, (float)ly + 0.5f);
     glVertex2f((float)(lx + lw) - 0.5f, (float)ly + 0.5f);
@@ -424,8 +417,8 @@ static void status_history_render_list(const UiRenderSnapshot *snap) {
         if (idx < 0)
             continue;
         e = &hist->entries[idx];
-        fg = (e->kind == UI_STATUS_ERROR) ? k_status_bar_fg_err
-                                          : k_status_bar_fg;
+        fg = (e->kind == UI_STATUS_ERROR) ? ui_rgba(UI_TOK_STATUS_ERR_TEXT)
+                                          : ui_rgba(UI_TOK_TEXT_PRIMARY);
         /* Newest at full strength; older rows fade toward 0.45 alpha. */
         dim = 1.0f - 0.55f * ((float)r / (float)(vis > 1 ? vis - 1 : 1));
 
@@ -511,10 +504,11 @@ static void status_banner_render(const UiRenderSnapshot *snap,
                                  StatusAnim anim) {
     int sc_x, sc_y, sc_w, sc_h;
     int bx, by, bw, bh;
-    const float *bg_rgb, *edge_rgb, *fg_rgb;
+    const float *bg_rgb, *edge_rgb, *fg_rgb, *dot_rgb;
     float right, left_full, rev_left, y0, y1;
     float bg_a, lead_a, ta;
     int tx, text_y, dot_cx, dot_cy, max_px, max_chars, n, i;
+    int is_err;
     char msg[REPL_STATUS_TEXT_MAX];
 
     if (!anim.active || anim.ext <= 0.002f)
@@ -525,15 +519,15 @@ static void status_banner_render(const UiRenderSnapshot *snap,
     if (sc_w <= 0 || sc_h <= 0)
         return;
 
-    if (snap->status.kind == UI_STATUS_ERROR) {
-        bg_rgb = k_status_bar_bg_err;
-        edge_rgb = k_status_bar_edge_err;
-        fg_rgb = k_status_bar_fg_err;
-    } else {
-        bg_rgb = k_status_bar_bg;
-        edge_rgb = k_status_bar_edge;
-        fg_rgb = k_status_bar_fg;
-    }
+    /* Neutral band in every severity; the dot / text (and, for ERROR,
+     * the leading-edge stripe) carry the semantic hue. */
+    is_err   = snap->status.kind == UI_STATUS_ERROR;
+    bg_rgb   = ui_rgba(UI_TOK_RAISED);
+    edge_rgb = ui_rgba(UI_TOK_BORDER);
+    fg_rgb   = is_err ? ui_rgba(UI_TOK_STATUS_ERR_TEXT)
+                      : ui_rgba(UI_TOK_TEXT_PRIMARY);
+    dot_rgb  = is_err ? ui_rgba(UI_TOK_STATUS_ERR_TEXT)
+                      : ui_rgba(UI_TOK_ACCENT);
 
     right     = (float)bx;                       /* banner abuts the bell */
     left_full = (float)sc_x;
@@ -564,13 +558,22 @@ static void status_banner_render(const UiRenderSnapshot *snap,
     glVertex2f(right, y1);
     glEnd();
 
+    /* ERROR: solid stripe on the leading edge so failures stay
+     * unmissable on the neutral band. Rides the telescope with the
+     * leading edge's alpha. */
+    if (is_err) {
+        const float *st = ui_rgba(UI_TOK_STATUS_ERR);
+        glColor4f(st[0], st[1], st[2], lead_a);
+        glRectf(rev_left, y0, rev_left + STATUS_ERR_STRIPE_W, y1);
+    }
+
     /* Severity dot at the text's left margin; MUSIC swaps it for the
      * eighth-note glyph on the text baseline. */
     tx     = sc_x + CODE_MARGIN_X + 10;
     text_y = sc_y + (STATUSBAR_H - FONT_SMALL_H) / 2 + 1;
     dot_cx = sc_x + CODE_MARGIN_X + 3;
     dot_cy = sc_y + STATUSBAR_H / 2;
-    glColor4f(fg_rgb[0], fg_rgb[1], fg_rgb[2], ta);
+    glColor4f(dot_rgb[0], dot_rgb[1], dot_rgb[2], ta);
     if (snap->status.kind == UI_STATUS_MUSIC) {
         status_draw_note_bitmap((float)(dot_cx - 4), (float)text_y);
     } else {
