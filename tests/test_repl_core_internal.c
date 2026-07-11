@@ -421,22 +421,24 @@ int main() {
     }
 
     /* 8a. The live flat program has its own capacity, independent of the
-     * source/editor document cap. Exercise the range above the historical
-     * 4096-command ceiling so a future accidental MAX_EDITOR_COMMANDS (or
-     * stale unified-cap) use cannot silently discard a large expansion. */
+     * source/editor document cap. Expand close to the configured ceiling so
+     * the test follows future capacity changes and catches a stale, smaller
+     * limit anywhere on the production flatten path. */
     {
-        const int expanded_count = 5000;
+        const int capacity_margin = 8;
+        const int expanded_count = MAX_FLAT_COMMANDS - capacity_margin;
+        char loop_line[64];
 
         glr_ctrl_reset_all(); declare_test_vars();
-        editor_feed_line("for(i, 0, 5000) {");
+        snprintf(loop_line, sizeof(loop_line), "for(i, 0, %d) {",
+                 expanded_count);
+        editor_feed_line(loop_line);
         editor_feed_line("  glVertex3f(i, 0, 0);");
         editor_feed_line("}");
 
         repl_flatten_commands(editor_state_edit_line());
 
-        ASSERT_TRUE("flat capacity exceeds historical 4096 cap",
-                    MAX_FLAT_COMMANDS > 4096);
-        ASSERT_INT("live flatten expands beyond historical cap",
+        ASSERT_INT("live flatten expands near configured flat capacity",
                    repl_state_flat_program_count(), expanded_count);
     }
 
