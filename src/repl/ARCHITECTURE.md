@@ -473,20 +473,75 @@ On overflow it returns `ok = 0` with a status message and leaves the
 prior flat program in place. Every emitted flat command gets its
 provenance (§3.3) and a [`FlatCmdLocalVars`](flatten.h#L37) snapshot (§3.4).
 
-[`flatten.c`](flatten.c) deliberately re-parses source lines with `skip_text` set in
-the [`ReplParseContext`](parser.h#L44): it consumes the parsed [`GLCmd`](command.h#L88) and discards the
-canonical-text rendering, avoiding per-arg `snprintf` on the hot path.
+#### Expression paths and cache lifecycle
 
-A command whose `has_vars` is 0 skips the parser entirely and is appended
-verbatim from the source array. `has_vars` is decided at commit time against
-every variable visible at that source position — predefs plus enclosing
-loop/function bindings — and the source array is replaced transactionally on
-each successful edit, so a literal command's args and payload are already the
-parse of its current text. The command still records the enclosing local-var
-snapshot. `ReplFlattenOptions.force_reparse` disables the fast path;
-[`tests/test_repl_flatten_differential.c`](../../tests/test_repl_flatten_differential.c) flattens the whole example corpus both
-ways at several `t` values and compares every flat command, local snapshot,
-provenance field, and the post-flatten predef/scratch state.
+Flatten always performs the same control-flow walk and rebuilds the complete
+flat program when it is dirty. Within that walk it uses progressively cheaper
+expression paths which all produce the same baked [`GLCmd`](command.h#L88)
+stream:
+
+1. A command whose `has_vars` is 0 is appended verbatim from the committed
+   source array. `has_vars` is decided at commit time against predefs and the
+   enclosing loop/function bindings, so its baked args cannot change between
+   frames. The enclosing [`FlatCmdLocalVars`](flatten.h#L37) snapshot is still
+   recorded for replay annotations.
+2. On an uncached variable-bearing numeric command, the direct evaluator uses
+   the committed command type/arity to extract and evaluate only the known
+   argument list. Scalar assignments similarly evaluate their canonical REPL
+   RHS. Unsupported shapes fall through to the general parser, with
+   `ReplParseContext.skip_text` suppressing unused canonical rendering.
+3. With a READY cache line, compiled expression programs evaluate those same
+   argument, condition, loop-bound, call-argument, and assignment roles. Loop,
+   call, and branch expansion itself remains ordinary C control flow; it is not
+   cached or replaced by a VM.
+
+[`expr_program.c`](expr_program.c) owns the expression bytecode and
+arena-backed per-line index. [`flatten_expr.c`](flatten_expr.c) is the narrow
+integration boundary: it owns line build state, parser capture callbacks, and
+warm evaluation. `flatten.c` asks it for values by `(source line, expression
+role, ordinal)` and does not manipulate program handles or cache entries.
+
+The live cache is ephemeral process state returned by
+`repl_expr_cache_live()`; it is deliberately outside
+[`ReplRuntimeState`](state.h#L18), undo snapshots, scene snapshots, and saved
+workspaces. Its allocation is capped by `REPL_EXPR_CACHE_MAX_BYTES` (16 MiB by
+default), and warm evaluation allocates nothing. Each source line has one of
+three states:
+
+- **EMPTY** — not attempted since the last invalidation. Its next text/direct
+  visit installs a capture sink and compiles the expression spans consumed by
+  that visit.
+- **READY** — every captured program compiled; later full flattens evaluate
+  them directly.
+- **FAILED** — parsing, compilation, capture, or the allocation cap failed.
+  Full flatten keeps using the direct/text fallback for that line.
+
+Source mutation invalidates the whole live expression cache at the single
+`repl_state_mark_source_dirty()` seam. Inserts/deletes therefore need no cache
+index surgery. Example/workspace loads, undo/redo, declaration reshapes, and
+source rewrites already cross that seam. Variable-slider motion changes only a
+live predef value and keeps the cache warm; its one release-time declaration
+rewrite invalidates the cache normally. FAILED lines become EMPTY and may be
+attempted again after such an invalidation.
+
+#### Disabling the expression cache
+
+There are three intentional cache-free/reference modes:
+
+| Scope | Mechanism | What remains enabled |
+|---|---|---|
+| Live application/benchmark process | Start with `GLR_NO_FLATTEN_CACHE=1` | Literal and direct-evaluation fast paths remain; dirty frames still fully flatten. |
+| One `repl_flatten_program()` call | Set `ReplFlattenOptions.expr_cache = NULL` | Same cache-free direct/text behavior, without changing the live cache or other callers. |
+| Strong differential reference | Set `force_reparse = 1` (normally with `expr_cache = NULL`) | Disables literal/direct paths as well as compiled evaluation and forces the legacy general-parser path. |
+
+`GLR_NO_FLATTEN_CACHE` is a diagnostic/startup switch, not a live toggle: it
+is read once on the first live flatten, so restart the process after changing
+it. There is no file-format or UI setting.
+
+[`tests/test_repl_flatten_differential.c`](../../tests/test_repl_flatten_differential.c)
+flattens the whole example corpus through optimized and forced-parser paths at
+several `t` values and compares every flat command, local snapshot, provenance
+field, and post-flatten predef/scratch state.
 
 The live frame path goes through `repl_flatten_commands(edit_line_idx)`,
 but the engine is reusable: tests and replay tools flatten into a
