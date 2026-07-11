@@ -57,7 +57,7 @@
     <g transform="translate(640 70) scale(1.2)" text-anchor="middle">
       <text class="wm-dark" fill="url(#r11c-dark)" font-family="'Courier New', ui-monospace, monospace" font-size="64" font-weight="900" letter-spacing="-3">gl-repl</text>
       <text class="wm-light" fill="url(#r11c-light)" font-family="'Courier New', ui-monospace, monospace" font-size="64" font-weight="900" letter-spacing="-3">gl-repl</text>
-      <text y="32" fill="url(#r11a-tag-illum)" font-family="ui-monospace, 'SF Mono', monospace" font-size="13" letter-spacing="1">immediate mode, immediately</text>
+      <text y="32" fill="url(#r11a-tag-illum)" font-family="ui-monospace, 'SF Mono', monospace" font-size="18" font-weight="700" letter-spacing="1">immediate mode, immediately</text>
     </g>
   </g>
   <g font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="12" letter-spacing="0">
