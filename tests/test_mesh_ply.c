@@ -375,6 +375,32 @@ static void test_point_line_authored_normals(void) {
     ASSERT_FLT("point normal nx=0", p.nx[2], 0.0f);
 }
 
+static void test_solidified_points_and_lines(void) {
+    printf("test_solidified_points_and_lines\n");
+    /* Mesh-only viewers ignore loose vertices and edge elements. With the
+     * compatibility scale enabled, one point becomes an 8-triangle octahedron
+     * and one line becomes a 24-triangle capped six-sided tube. The semantic
+     * point vertex and edge record remain present too. */
+    float buf[64]; int n = 0;
+    push_tok(buf, &n, MESH_PLY_TOK_POINT);
+    push_vert(buf, &n, 0, 2, 0, 1, 0.5f, 0, 1);
+    push_tok(buf, &n, MESH_PLY_TOK_LINE);
+    push_vert(buf, &n, 0, 0, 0, 0, 1, 0, 1);
+    push_vert(buf, &n, 2, 0, 0, 0, 0, 1, 1);
+
+    MeshPlyOptions opt = OPT_WELD;
+    opt.primitive_radius_scale = 0.1f;
+    char text[8192];
+    int rc = run_writer(buf, n, &opt, text, sizeof text);
+    ASSERT_INT("solidified point+line triangle count", rc, 32);
+
+    Ply p;
+    ASSERT_TRUE("solidified point+line parses", parse_ply(text, &p));
+    ASSERT_INT("solidified point+line faces", p.nfaces, 32);
+    ASSERT_INT("solidified point+line keeps edge", p.nedges, 1);
+    ASSERT_TRUE("solidified point expands scene bounds", p.nverts > 3);
+}
+
 static void test_error_cases(void) {
     printf("test_error_cases\n");
     char text[8192];
@@ -513,6 +539,7 @@ int main(void) {
     test_skip_alignment();
     test_points_and_lines();
     test_point_line_authored_normals();
+    test_solidified_points_and_lines();
     test_error_cases();
     test_empty_buffer();
     test_color_clamp();

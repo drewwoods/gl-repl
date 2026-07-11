@@ -1395,7 +1395,7 @@ the projection backwards to world space: identity modelview (no camera),
 a containing `glOrtho(-R, R, …)` with `R = 1000` (clips nothing a
 hand-typed scene reaches at ~1e-4 float precision), a `1024²` viewport,
 and `glDepthRange(0, 1)`. The writer inverts exactly this
-([`MeshPlyCapture`](../src/support/mesh_ply.h#L61) carries `ortho_r` / viewport / depth-range) — note
+([`MeshPlyCapture`](../src/support/mesh_ply.h#L63) carries `ortho_r` / viewport / depth-range) — note
 `glOrtho` maps world `z → -z/R`, so the depth inversion negates. State is
 saved/restored (`glPushAttrib(GL_ALL_ATTRIB_BITS)` + both matrix stacks
 pushed explicitly, since `glPushAttrib` doesn't cover them), and feedback
@@ -1452,16 +1452,19 @@ weld pass as face corners, so a line strip's repeated shared endpoints
 merge and its edges chain through common vertices; authored normals from
 the texcoord channel apply to them exactly as to polygon corners
 (vertices with neither an authored normal nor a face contribution write a
-zero normal). [`MeshPlyStats`](../src/support/mesh_ply.h#L94) returns the per-primitive counts so the
+zero normal). [`MeshPlyStats`](../src/support/mesh_ply.h#L103) returns the per-primitive counts so the
 status line can report "N triangles, M edges, K points".
 
-Edges **always weld** — endpoints coincident with a face vertex or
-another endpoint collapse onto it; the rest append as new vertices (with
-a degenerate `(0,0,0)` normal, since they touch no face) — and this holds
-even on the flat face path, so a flat export still gets a coherent edge
-index set. Edges are stored undirected (`a ≤ b`) and deduped by sort +
-unique; `mesh_ply_write` reports the deduped count via an `out_edges`
-out-param (the return value stays the triangle count).
+PLY viewer support for loose vertices and `edge` elements is uneven: Xcode
+and Quick Look only draw faces. App exports therefore set
+`MeshPlyOptions.primitive_radius_scale`, adding an octahedron for every point
+and a capped six-sided tube for every line segment while retaining the native
+point/edge records for consumers that understand them. The tube radius is a
+small fraction of the captured geometry's largest world-space span and point
+radius is twice that. This is deliberately world-space and view-independent;
+feedback does not carry `glPointSize` / `glLineWidth`, whose units are screen
+pixels. Pure-writer callers leave the option at zero when they want only the
+native PLY representation.
 
 **Coverage gap.** Real feedback needs a live GL context, so the
 capture/encode contract can only be exercised end-to-end with a display
