@@ -22,7 +22,7 @@ glBegin(GL_LINE_LOOP);
     y = rr * sin(p*ang);
     z = sin(q*ang) + 0.4*sin(4*ang - t*1.5);    // a ripple travels along the curve
     s = 0.5 + 0.5*sin(2.0*ang + t); // palette mix in [0,1], swept along the curve
-    glColor3f(0.98 - 0.62*s, 0.46 + 0.24*s, 0.36 + 0.62*s); // CORAL -> AZURE
+    glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
     glVertex3f(x, y, z);
   }
 glEnd();

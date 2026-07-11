@@ -23,7 +23,7 @@ branch(depth, size, spin) {
   // depth 0 caps the branch with a filled leaf; otherwise recurse into 3
   // children.
   if(depth <= 0) {
-    glColor3f(0.98, 0.76, 0.36);
+    glColor3f(1, 0.85, 0.15);
     glBegin(GL_TRIANGLES);
       glNormal3f(0, 0, 1);
       glVertex3f(0, size*0.55, 0);

@@ -15,11 +15,11 @@ triangle() {
     glVertex3f(0.7, -0.4, 0);
   glEnd();
 }
-glColor3f(0.98, 0.46, 0.36);
+glColor3f(1, 0.35, 0.2);
 triangle();
 glTranslatef(2, 0, 0);
-glColor3f(0.30, 0.84, 0.80);
+glColor3f(0.1, 0.95, 0.85);
 triangle();
 glTranslatef(-4, 0, 0);
-glColor3f(0.62, 0.52, 0.95);
+glColor3f(0.55, 0.3, 1);
 triangle();

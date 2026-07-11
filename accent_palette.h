@@ -8,14 +8,16 @@
  * startup splash and the SVG logo assets (examples/README.md "Example
  * Color Language"). Three levels:
  *
- *   palette — a named anchor set (PALETTE_DUSK_ANCHORS today).
+ *   palette — a named anchor set (PALETTE_DUSK_MAGENTA_ANCHORS today;
+ *             PALETTE_DUSK_ANCHORS is the previous set, kept for an
+ *             easy flip back).
  *   anchor  — a named color inside a set (PAL_CORAL, PAL_AZURE, ...).
  *   role    — a semantic slot consumers bind to (PAL_ROLE_WARM_KEY).
  *
  * C consumers bind to ROLES — never raw literals, and normally not
  * anchors — so retuning stays local to this header:
  *
- *   - Reassign a role (say, warm key CORAL -> ROSE): edit that one
+ *   - Reassign a role (say, warm key CORAL -> AMBER): edit that one
  *     PAL_ROLE_* line. Consumers rebind on rebuild. Scene-file literals
  *     are anchors, not roles, so they are deliberately unaffected.
  *   - Swap the whole palette: add a PALETTE_<NAME>_ANCHORS list, repoint
@@ -62,9 +64,39 @@
     X(TEAL,   0.30f, 0.84f, 0.80f) /* aqua secondary                 */ \
     X(MIST,   0.92f, 0.95f, 0.98f) /* neutral near-white             */
 
+/* "Dusk Magenta": Dusk with the pink-bridge slot re-anchored on the
+ * original brand-mark magenta (lit-cube.glr's pre-Dusk floor material),
+ * so the scene family matches the original logo/splash theming instead
+ * of the mark matching the family. Experiment (2026-07-11); flip
+ * PALETTE_ACTIVE_* back to Dusk to undo. */
+#define PALETTE_DUSK_MAGENTA_ANCHORS(X) \
+    X(CANVAS,  0.05f, 0.06f, 0.08f) /* deep cool ink - clear color    */ \
+    X(CORAL,   0.98f, 0.46f, 0.36f) /* warm key                       */ \
+    X(AMBER,   0.98f, 0.76f, 0.36f) /* gold highlight / control points */ \
+    X(MAGENTA, 0.95f, 0.25f, 1.00f) /* magenta bridge (= mark floor)  */ \
+    X(VIOLET,  0.62f, 0.52f, 0.95f) /* purple bridge / faint guides   */ \
+    X(AZURE,   0.36f, 0.70f, 0.98f) /* cool key                       */ \
+    X(TEAL,    0.30f, 0.84f, 0.80f) /* aqua secondary                 */ \
+    X(MIST,    0.92f, 0.95f, 0.98f) /* neutral near-white             */
+
+/* "Neon": electric accents on the same deep ink. Keeps CANVAS and MIST
+ * (lit-cube's ink + exterior are scene anchors) and Dusk Magenta's
+ * MAGENTA (= the brand mark's floor material, the family's tie to the
+ * logo); the other five slots go saturated/electric. Experiment
+ * (2026-07-11), like Dusk Magenta above. */
+#define PALETTE_NEON_ANCHORS(X) \
+    X(CANVAS,  0.05f, 0.06f, 0.08f) /* deep cool ink - clear color    */ \
+    X(CORAL,   1.00f, 0.35f, 0.20f) /* neon warm key          #ff5933 */ \
+    X(AMBER,   1.00f, 0.85f, 0.15f) /* neon yellow highlight  #ffd926 */ \
+    X(MAGENTA, 0.95f, 0.25f, 1.00f) /* magenta bridge (= mark floor)  */ \
+    X(VIOLET,  0.55f, 0.30f, 1.00f) /* electric violet bridge #8c4dff */ \
+    X(AZURE,   0.15f, 0.55f, 1.00f) /* electric cool key      #268cff */ \
+    X(TEAL,    0.10f, 0.95f, 0.85f) /* neon cyan secondary    #1af2d9 */ \
+    X(MIST,    0.92f, 0.95f, 0.98f) /* neutral near-white             */
+
 /* ---- Active palette ------------------------------------------------ */
-#define PALETTE_ACTIVE_NAME    "Dusk"
-#define PALETTE_ACTIVE_ANCHORS PALETTE_DUSK_ANCHORS
+#define PALETTE_ACTIVE_NAME    "Neon"
+#define PALETTE_ACTIVE_ANCHORS PALETTE_NEON_ANCHORS
 
 /* ---- Brand-mark anchors ---------------------------------------------
  * The adopted identity mark — the open cube. "The logo is what the app
@@ -72,16 +104,17 @@
  * examples/scenes/lit-cube.glr, and this list is its color vocabulary
  * at both ends of the render. A separate list from the scene accents,
  * and not switched by PALETTE_ACTIVE_*: the mark is palette-independent
- * brand vocabulary pinned to what the scene paints (today its floor
- * happens to be the Dusk ROSE anchor; its wall material is not).
+ * brand vocabulary pinned to what the scene paints (today its floor is
+ * the original magenta, which the active Dusk Magenta palette's MAGENTA
+ * anchor deliberately matches; its wall material stays mark-specific).
  *
  * Two tiers, kept in sync by make check-palette:
  *   - _MAT anchors: the raw glColor3f materials lit-cube.glr paints
  *     with (the scene is validated against this list, not just the
- *     Dusk accents — its exterior MIST and CANVAS ink are already
- *     scene anchors). The floor material was re-anchored on Dusk ROSE
- *     (2026-07-11, replacing the pre-Dusk magenta) so the mark's warm
- *     face sits on the family; the wall material stays mark-specific.
+ *     active accents — its exterior MIST and CANVAS ink are already
+ *     scene anchors). The floor briefly sat on Dusk ROSE before the
+ *     Dusk Magenta experiment restored the original magenta
+ *     (2026-07-11) so the family matches the mark instead.
  *   - Flat + _LO/_HI anchors: the *rendered* colors those materials
  *     produce under the scene's lighting — the canonical chips the
  *     startup splash draws with (src/app/splash.c) and the gradient
@@ -93,13 +126,13 @@
  * old values. */
 #define PALETTE_MARK_ANCHORS(X) \
     X(MARK_WALL_MAT,  0.25f, 0.675f, 1.0f)   /* lit-cube wall material   */ \
-    X(MARK_FLOOR_MAT, 0.95f, 0.44f,  0.66f)  /* lit-cube floor material (= Dusk ROSE) */ \
+    X(MARK_FLOOR_MAT, 0.95f, 0.25f,  1.0f)   /* lit-cube floor material (= MAGENTA anchor) */ \
     X(MARK_WALL,     0.239f, 0.659f, 0.961f) /* interior azure    #3da8f5 */ \
     X(MARK_WALL_LO,  0.169f, 0.588f, 0.925f) /* wall grad stop    #2b96ec */ \
     X(MARK_WALL_HI,  0.353f, 0.706f, 0.965f) /* wall grad stop    #5ab4f6 */ \
-    X(MARK_FLOOR,    0.949f, 0.439f, 0.659f) /* interior rose     #f270a8 */ \
-    X(MARK_FLOOR_LO, 0.910f, 0.392f, 0.620f) /* floor grad stop   #e8649e */ \
-    X(MARK_FLOOR_HI, 0.961f, 0.482f, 0.675f) /* floor grad stop   #f57bac */ \
+    X(MARK_FLOOR,    0.973f, 0.255f, 0.878f) /* interior magenta  #f841e0 */ \
+    X(MARK_FLOOR_LO, 0.933f, 0.208f, 0.839f) /* floor grad stop   #ee35d6 */ \
+    X(MARK_FLOOR_HI, 0.984f, 0.298f, 0.894f) /* floor grad stop   #fb4ce4 */ \
     X(MARK_TOP,      0.780f, 0.792f, 0.871f) /* exterior top      #c7cade */ \
     X(MARK_TOP_LO,   0.714f, 0.729f, 0.835f) /* top grad stop     #b6bad5 */ \
     X(MARK_TOP_HI,   0.851f, 0.859f, 0.922f) /* top grad stop     #d9dbeb */ \
