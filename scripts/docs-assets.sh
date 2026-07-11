@@ -84,7 +84,8 @@ SHOWCASE_ASSETS=(
     sc-spirograph sc-ripple-ring sc-bezier sc-bubble-sort sc-orbit-plot
     sc-wave-surface sc-ringed-planet sc-lit-cube sc-grass sc-jellyfish
     sc-function-demo sc-function-polygons sc-conditional-colors
-    sc-whale sc-stress-test sc-feature-time sc-feature-ply sc-feature-export-c
+    sc-whale sc-stress-test sc-aurora-observatory
+    sc-feature-time sc-feature-ply sc-feature-export-c
 )
 
 ALL_ASSETS=("${CORE_ASSETS[@]}" "${SHOWCASE_ASSETS[@]}")
@@ -993,6 +994,12 @@ fi
 if want sc-stress-test; then
     gif "$SHOW/stress-test.gif" 240 2 22 560 \
         --example "Dusk lighthouse atoll (stress test)"
+fi
+if want sc-aurora-observatory; then
+    # Post-warm clip spans t in [3, 6.3]: one coral beacon blink (period
+    # ~3.9 s) rides mid-clip while the dish drifts and the pulses cycle.
+    gif "$SHOW/aurora-observatory.gif" 200 2 20 560 \
+        --example "Aurora observatory (dish tracks the sky)"
 fi
 
 # "Beyond the still image" — interactive features. feature-time is a real

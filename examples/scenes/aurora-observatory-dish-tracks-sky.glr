@@ -1,0 +1,256 @@
+// @cfg overlay_scope = OVERLAY_SCOPE_AT_VERTEX
+// @cfg axes = AXES_THEME_OFF
+// @cfg vertex_outlines = 0
+// @cfg vertex_points = 0
+// @cfg light_indicators = 0
+// @cfg grid = GRID_THEME_AURORA
+// @cfg grid_extent = GRID_EXTENT_MID
+// @cfg backdrop = RENDER3D_BACKDROP_AURORA
+// @cfg variable_panel = 0
+// camera
+glTranslatef(0.0f, 0.0f, -10.5f);
+glRotatef(13.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(-18.0f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0f, -1.35f, 0.0f);
+static float th, dd, blink, ink;
+// ===== Aurora observatory: a lonely dish tracking the sky =====
+// NOTE: budget -- dome costs stacks*(slices+1)*5 flat commands and the
+// dish rings*(spokes+1)*5; at 10/24 and 6/28 the whole station stays
+// near a third of the 8192 flat cap.
+glClearColor(0.05, 0.06, 0.08, 1.0);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_COLOR_MATERIAL);
+glEnable(GL_NORMALIZE);
+glShadeModel(GL_SMOOTH);
+glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, 1);
+
+// concrete pad a building stands on
+pad(rad) {
+  glBegin(GL_TRIANGLE_FAN);
+    glNormal3f(0, 1, 0);
+    glVertex3f(0, 0.02, 0);
+    for(j, 0, 25) {
+      glVertex3f(rad*cos(j*TAU/24), 0.02, rad*sin(j*TAU/24));
+    }
+  glEnd();
+}
+
+// cylinder wall between y0 and y1
+drum(rad, y0, y1, segs) {
+  glBegin(GL_QUAD_STRIP);
+    for(j, 0, segs + 1) {
+      th = j*TAU/segs;
+      glNormal3f(cos(th), 0, sin(th));
+      glVertex3f(rad*cos(th), y1, rad*sin(th));
+      glVertex3f(rad*cos(th), y0, rad*sin(th));
+    }
+  glEnd();
+}
+
+// dome with an observation slit; the gap is centered on local -z
+dome(rad, stacks, slices) {
+  for(i, 0, stacks) {
+    glBegin(GL_QUAD_STRIP);
+      for(j, 0, slices + 1) {
+        th = -PI/2 + 0.31 + j*(TAU - 0.62)/slices;
+        glNormal3f(cos(1.48*i/stacks)*cos(th), sin(1.48*i/stacks), cos(1.48*i/stacks)*sin(th));
+        glVertex3f(rad*cos(1.48*i/stacks)*cos(th), rad*sin(1.48*i/stacks), rad*cos(1.48*i/stacks)*sin(th));
+        glNormal3f(cos(1.48*(i + 1)/stacks)*cos(th), sin(1.48*(i + 1)/stacks), cos(1.48*(i + 1)/stacks)*sin(th));
+        glVertex3f(rad*cos(1.48*(i + 1)/stacks)*cos(th), rad*sin(1.48*(i + 1)/stacks), rad*cos(1.48*(i + 1)/stacks)*sin(th));
+      }
+    glEnd();
+  }
+}
+
+// parabolic reflector opening along local +y
+dish(rad, rings, spokes, depth) {
+  for(i, 0, rings) {
+    glBegin(GL_QUAD_STRIP);
+      for(j, 0, spokes + 1) {
+        th = j*TAU/spokes;
+        glNormal3f(-2*depth*(i/rings)*cos(th), 1, -2*depth*(i/rings)*sin(th));
+        glVertex3f(rad*(i/rings)*cos(th), depth*(i/rings)*(i/rings), rad*(i/rings)*sin(th));
+        glNormal3f(-2*depth*((i + 1)/rings)*cos(th), 1, -2*depth*((i + 1)/rings)*sin(th));
+        glVertex3f(rad*((i + 1)/rings)*cos(th), depth*((i + 1)/rings)*((i + 1)/rings), rad*((i + 1)/rings)*sin(th));
+      }
+    glEnd();
+  }
+}
+
+// snow drift: a squashed mound
+drift(x, z, s) {
+  glPushMatrix();
+  glTranslatef(x, 0, z);
+  glScalef(s*1.5, s*0.4, s);
+  glutSolidSphere(1, 12, 8);
+  glPopMatrix();
+}
+
+// ---- lit opaque pass ----
+ink = 0.55;
+glColor3f(0.92*ink, 0.95*ink, 0.98*ink);
+drift(-4.4, -1.0, 0.6);
+drift(3.7, 2.1, 0.5);
+drift(-1.1, 2.8, 0.4);
+drift(1.0, -3.2, 0.7);
+drift(-3.5, -3.1, 0.55);
+
+ink = 3.3;
+glColor3f(0.05*ink, 0.06*ink, 0.08*ink);
+glPushMatrix();
+glTranslatef(-2.4, 0, 0.3);
+pad(1.9);
+glPopMatrix();
+glPushMatrix();
+glTranslatef(1.8, 0, 0.5);
+pad(1.6);
+glPopMatrix();
+
+// observatory building: drum + slit dome, slit turned toward camera-east
+glPushMatrix();
+glTranslatef(1.8, 0, 0.5);
+ink = 6;
+glColor3f(0.05*ink, 0.06*ink, 0.08*ink);
+drum(1.05, 0, 1.0, 24);
+glTranslatef(0, 1.0, 0);
+glRotatef(-135, 0, 1, 0);
+ink = 8;
+glColor3f(0.05*ink, 0.06*ink, 0.08*ink);
+dome(1.05, 10, 24);
+glPopMatrix();
+
+// radio dish: pylon, yoke, articulated bowl slowly sweeping the sky
+glPushMatrix();
+glTranslatef(-2.4, 0, 0.3);
+ink = 5.2;
+glColor3f(0.05*ink, 0.06*ink, 0.08*ink);
+glPushMatrix();
+glRotatef(-90, 1, 0, 0);
+glutSolidCone(0.42, 1.3, 14, 4);
+glPopMatrix();
+glTranslatef(0, 1.3, 0);
+glutSolidSphere(0.15, 10, 8);
+glRotatef(16*sin(0.22*t) - 12, 0, 1, 0);
+glRotatef(-38, 1, 0, 0);
+ink = 7.5;
+glColor3f(0.05*ink, 0.06*ink, 0.08*ink);
+// faint self-glow keeps the bowl's shaded side steel-blue, not black
+glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, (GLfloat[]){0.06, 0.09, 0.13, 1});
+dish(1.25, 6, 28, 0.38);
+glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, (GLfloat[]){0, 0, 0, 1});
+glPopMatrix();
+
+// ---- unlit glow pass: slit light, windows, mast, beacon, dish pulses ----
+glDisable(GL_LIGHTING);
+glEnable(GL_BLEND);
+glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+glDepthMask(GL_FALSE);
+
+// warm light spilling from the dome slit
+glPushMatrix();
+glTranslatef(1.8, 1.0, 0.5);
+glRotatef(-135, 0, 1, 0);
+glBegin(GL_QUADS);
+  glColor4f(1.0, 0.85, 0.15, 0.65);
+  glVertex3f(-0.24, 0.02, -0.42);
+  glVertex3f(0.24, 0.02, -0.42);
+  glColor4f(1.0, 0.85, 0.15, 0.20);
+  glVertex3f(0.15, 0.92, -0.28);
+  glVertex3f(-0.15, 0.92, -0.28);
+glEnd();
+glPopMatrix();
+
+// two amber windows on the drum's south face
+glPushMatrix();
+glTranslatef(1.8, 0, 0.5);
+glBegin(GL_QUADS);
+  glColor4f(1.0, 0.85, 0.15, 0.85);
+  glVertex3f(-0.42, 0.38, 0.99);
+  glVertex3f(-0.18, 0.38, 1.04);
+  glVertex3f(-0.18, 0.62, 1.04);
+  glVertex3f(-0.42, 0.62, 0.99);
+  glVertex3f(0.16, 0.38, 1.04);
+  glVertex3f(0.40, 0.38, 0.99);
+  glVertex3f(0.40, 0.62, 0.99);
+  glVertex3f(0.16, 0.62, 1.04);
+glEnd();
+glPopMatrix();
+
+// comms mast with guy wires, far right
+glLineWidth(2);
+glBegin(GL_LINES);
+  ink = 0.65;
+  glColor4f(0.92*ink, 0.95*ink, 0.98*ink, 0.9);
+  glVertex3f(3.1, 0, -1.6);
+  glVertex3f(3.1, 2.7, -1.6);
+glEnd();
+glLineWidth(1);
+glBegin(GL_LINES);
+  glColor4f(0.92*ink, 0.95*ink, 0.98*ink, 0.4);
+  glVertex3f(3.1, 2.3, -1.6);
+  glVertex3f(2.1, 0, -0.9);
+  glVertex3f(3.1, 2.3, -1.6);
+  glVertex3f(4.1, 0, -0.9);
+  glVertex3f(3.1, 2.3, -1.6);
+  glVertex3f(3.1, 0, -2.9);
+glEnd();
+
+// blinking coral beacon: the station's one warm signal
+blink = pow(max(0, sin(1.6*t)), 6);
+glPointSize(14);
+glBegin(GL_POINTS);
+  glColor4f(1.0, 0.35, 0.20, 0.30*blink);
+  glVertex3f(3.1, 2.72, -1.6);
+glEnd();
+glPointSize(5);
+glBegin(GL_POINTS);
+  glColor4f(1.0, 0.35, 0.20, 0.95*blink);
+  glVertex3f(3.1, 2.72, -1.6);
+glEnd();
+
+// feed struts + expanding teal pulses in the dish frame (additive)
+glPushMatrix();
+glTranslatef(-2.4, 1.3, 0.3);
+glRotatef(16*sin(0.22*t) - 12, 0, 1, 0);
+glRotatef(-38, 1, 0, 0);
+glLineWidth(1);
+glBegin(GL_LINES);
+  glColor4f(0.92*ink, 0.95*ink, 0.98*ink, 0.8);
+  glVertex3f(0, 0.38, 1.25);
+  glVertex3f(0, 0.9, 0);
+  glVertex3f(-1.0825, 0.38, -0.625);
+  glVertex3f(0, 0.9, 0);
+  glVertex3f(1.0825, 0.38, -0.625);
+  glVertex3f(0, 0.9, 0);
+glEnd();
+glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+// aurora light catching the dish rim
+glBegin(GL_LINE_LOOP);
+  for(j, 0, 32) {
+    glColor4f(0.10, 0.95, 0.85, 0.55);
+    glVertex3f(1.25*cos(j*TAU/32), 0.38, 1.25*sin(j*TAU/32));
+  }
+glEnd();
+glPointSize(6);
+glBegin(GL_POINTS);
+  glColor4f(0.10, 0.95, 0.85, 0.9);
+  glVertex3f(0, 0.9, 0);
+glEnd();
+for(i, 0, 4) {
+  dd = fmod(0.8*t + i*0.6, 2.4);
+  glBegin(GL_LINE_LOOP);
+    for(j, 0, 32) {
+      glColor4f(0.10, 0.95, 0.85, 0.5*(1 - dd/2.4));
+      glVertex3f((0.5 + 0.4*dd)*cos(j*TAU/32), 0.9 + dd, (0.5 + 0.4*dd)*sin(j*TAU/32));
+    }
+  glEnd();
+}
+glPopMatrix();
+
+// leave shared GL state the way we found it
+glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+glDepthMask(GL_TRUE);
+glDisable(GL_BLEND);
+glEnable(GL_LIGHTING);
