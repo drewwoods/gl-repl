@@ -28,6 +28,8 @@
  *   flatten_phases    - per-phase split (reparse / scalar assign / scratch
  *                       assign / derived remainder) of a full flatten, read
  *                       from the existing PROF_FLATTEN_* profiler sections
+ *   flatten_refresh   - t refresh of Grass, Orrery, and value-only Wave
+ *                       through the production full-vs-rebake boundary
  *   flatten_whale     - full flatten of the dynamic-topology Whale scene at
  *                       several `t` values; reports the flat count per sample
  *   slider_drag       - variable-panel drag: 100 motion events timed apart
@@ -683,6 +685,95 @@ static void bench_flatten_phases(int iters) {
     }
 }
 
+/* ---- bench: production refresh boundary on real animated scenes -------- */
+
+static BenchResult bench_flatten_refresh_one(const char *name,
+                                             int example_idx, int iters) {
+    enum { INNER = 32 };
+    BenchResult r = { .name = name, .unit = "refreshes", .min_sec = 1e18 };
+    BenchBaseline base;
+    int t_idx;
+    float sample_time;
+    ReplFlatRefreshKind expected;
+    int t_structural;
+    int rebake_ok;
+
+    repl_load_example_lines_for_test(repl_example_lines(example_idx));
+    baseline_capture(&base);
+    repl_flatten_commands(editor_state_edit_line());
+    repl_state_flat_program_clear_dirty();
+    t_idx = repl_state_variables().time_var_idx;
+    if (t_idx < 0 || t_idx >= MAX_PREDEF_VARS) {
+        fprintf(stderr, "ERROR: %s has no t slot\n", name);
+        g_case_missing = 1;
+        return r;
+    }
+    sample_time = base.predef[t_idx] + 0.75f;
+    {
+        ReplExprDepMask t_bit = (ReplExprDepMask)1u << t_idx;
+        t_structural =
+            (repl_state_flat_program_structural_dep_mask() & t_bit) != 0;
+        rebake_ok = repl_state_flat_program_rebake_ok();
+        if (t_structural)
+            expected = REPL_FLAT_REFRESH_FULL;
+        else if ((repl_state_flat_program_value_dep_mask() & t_bit) &&
+                 rebake_ok)
+            expected = REPL_FLAT_REFRESH_REBAKE;
+        else
+            expected = REPL_FLAT_REFRESH_NONE;
+    }
+    if (expected == REPL_FLAT_REFRESH_NONE) {
+        fprintf(stderr, "ERROR: %s does not depend on t\n", name);
+        g_case_missing = 1;
+        return r;
+    }
+
+    for (int it = 0; it < iters; it++) {
+        double sample = 0.0;
+        for (int k = 0; k < INNER; k++) {
+            ReplFlatRefreshKind kind;
+            baseline_restore(&base);
+            repl_set_time(sample_time + 0.01f * (float)(k & 1));
+            double t0 = now_seconds();
+            kind = repl_refresh_flat_program(editor_state_edit_line());
+            sample += now_seconds() - t0;
+            if (kind != expected) {
+                fprintf(stderr,
+                        "ERROR: %s expected refresh route %d, got %d\n",
+                        name, (int)expected, (int)kind);
+                g_case_missing = 1;
+                baseline_restore(&base);
+                return r;
+            }
+        }
+        if (sample < r.min_sec) r.min_sec = sample;
+        r.total_sec += sample;
+        r.ops += INNER;
+        r.iters++;
+    }
+    baseline_restore(&base);
+    if (!g_csv)
+        fprintf(stderr,
+                "  (%s: flat_cmds=%d, route=%s%s, rebake_ok=%d)\n",
+                name, repl_state_flat_program_count(),
+                expected == REPL_FLAT_REFRESH_REBAKE ? "rebake" : "full",
+                t_structural ? ", t-structural" : "", rebake_ok);
+    return r;
+}
+
+static void bench_flatten_refresh(int iters) {
+    static const struct { const char *row; const char *display; } cases[] = {
+        { "refresh_grass", "Swaying grass field (rand + t)" },
+        { "refresh_orrery", "Orrery (labels track 3D orbits)" },
+        { "refresh_wave", "Animated wave surface (analytic normals)" },
+    };
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        int idx = example_index_by_name(cases[i].display);
+        if (idx >= 0)
+            report(bench_flatten_refresh_one(cases[i].row, idx, iters));
+    }
+}
+
 /* ---- bench: dynamic-topology full flatten (Whale) ---------------------- */
 
 /* Whale's droplets are gated by per-particle `if((t - spawnDelay) > 0 && ...)`
@@ -760,20 +851,22 @@ static void bench_flatten_whale(int iters) {
 /* ---- bench: variable-panel slider drag transaction --------------------- */
 
 /* Consume a pending flat-program rebuild the way glr_ctrl_display_frame() does:
- * flatten when dirty, then clear the flag (repl_flatten_commands does NOT clear
- * it itself). Returns 1 if a rebuild ran, 0 if the program was already clean.
+ * full dirty (source edit / structural value change) runs a full flatten;
+ * a value-only change (args_dirty_mask, Phase 3a routing) re-bakes the stream
+ * in place; otherwise the program is already current. Returns 1 if any rebuild
+ * ran, 0 if it was clean.
  *
- * This *is* the rebuild counter. repl_state_normals_dirty() is not: it gates
- * autonormal recomputation, a different flag on a different cache. Without this
- * drain a motion loop only marks dirty and returns, so it times pointer-event
- * routing (~10 us/motion) and never the flatten it defers (~ms), which is the
- * cost Phase 3 exists to change. */
+ * This *is* the rebuild counter. Checking only repl_state_flat_program_dirty()
+ * would undercount: after Phase 3a a value-only slider change lands in
+ * args_dirty_mask, not the full flag, so the `value` row's motion would drain
+ * nothing and refresh zero times. repl_state_normals_dirty() is likewise not
+ * the counter — it gates autonormal recomputation, a different cache. Without
+ * this drain a motion loop only routes the change and returns, timing
+ * pointer-event dispatch (~10 us/motion) and never the flatten/rebake it
+ * defers, which is the cost Phase 3 exists to change. */
 static int drain_pending_flatten(void) {
-    if (!repl_state_flat_program_dirty())
-        return 0;
-    repl_flatten_commands(editor_state_edit_line());
-    repl_state_flat_program_clear_dirty();
-    return 1;
+    return repl_refresh_flat_program(editor_state_edit_line()) !=
+           REPL_FLAT_REFRESH_NONE;
 }
 
 /* A slider drag is 100+ pointer-motion events and one mouse-up. Phase 1B split
@@ -1726,6 +1819,7 @@ static void usage(const char *prog) {
         "                      (same warm + _cold pair)\n"
         "    flatten_corpus    full flatten of every built-in, one row per index\n"
         "    flatten_phases    reparse / assign / remainder split of a full flatten\n"
+        "    flatten_refresh   production t refresh of Grass/Orrery/Wave (route shown)\n"
         "    flatten_whale     dynamic-topology full flatten across a t grid\n"
         "    slider_drag       100-motion variable-panel drag + release persist\n"
         "    flat_cost_query   repl_flatten_cost_at_line over every cursor line\n"
@@ -1850,6 +1944,8 @@ int main(int argc, char **argv) {
         bench_flatten_corpus(iters);
     if (wants(only, "flatten_phases"))
         bench_flatten_phases(iters);
+    if (wants(only, "flatten_refresh"))
+        bench_flatten_refresh(iters);
     if (wants(only, "flatten_whale"))
         bench_flatten_whale(iters);
     if (wants(only, "slider_drag"))

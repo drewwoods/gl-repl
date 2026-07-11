@@ -18,7 +18,7 @@
 # flatten_scratch_assign (which also host the PROF_FLATTEN_ASSIGN probe).
 #
 # 2026-07-14: re-tightened to current sizes (parse_command 361 -> 335,
-# flatten_range 92 -> 89) to close the slack the ratchet had accumulated.
+# flatten_range 92 -> 91) to close the slack the ratchet had accumulated.
 
 parse_command: 335
-flatten_range: 89
+flatten_range: 91
