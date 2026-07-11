@@ -48,6 +48,9 @@ void repl_flatten_expr_init(ReplFlattenExprEngine *engine,
     engine->cache = cache;
     engine->force_text = force_text ? 1 : 0;
     engine->build_line = -1;
+    engine->rebake_ok = 1;
+    for (int slot = 0; slot < MAX_PREDEF_VARS; slot++)
+        engine->predef_deps[slot] = (ReplExprDepMask)1u << slot;
 }
 
 int repl_flatten_expr_line_ready(const ReplFlattenExprEngine *engine,
@@ -64,7 +67,7 @@ int repl_flatten_expr_build_begin(ReplFlattenExprEngine *engine,
         return 0;
     if (repl_expr_cache_line_state(engine->cache, line_idx) !=
         REPL_EXPR_LINE_EMPTY)
-        return 0;
+        return -1;
     if (!repl_expr_cache_line_begin(engine->cache, line_idx))
         return 0;
     engine->build_line = line_idx;
@@ -99,8 +102,7 @@ int repl_flatten_expr_capture_span(ReplFlattenExprEngine *engine,
 }
 
 int repl_flatten_expr_compile_active_list(ReplFlattenExprEngine *engine,
-                                          ReplExprRole role,
-                                          int base_ordinal,
+                                          ReplExprRole role, int base_ordinal,
                                           const char *text, int strict,
                                           int max_programs) {
     int programs[MAX_EXPR_VARS];
@@ -139,10 +141,12 @@ int repl_flatten_expr_role_count(const ReplFlattenExprEngine *engine,
 ReplFlattenExprValue repl_flatten_expr_eval(
     const ReplFlattenExprEngine *engine, int line_idx,
     ReplExprRole role, int ordinal,
-    const ExprVar *locals, int num_locals) {
-    ReplFlattenExprValue result = { 0.0f, 0, 0 };
+    const ExprVar *locals, const ReplExprDepMask *local_deps,
+    int num_locals, int structural) {
+    ReplFlattenExprValue result = { 0.0f, REPL_EXPR_DEP_ALL, 0, 0 };
     ReplExprEvalEnv env;
     ReplPredefView predef;
+    ReplExprValue value;
     int prog;
 
     if (!repl_flatten_expr_line_ready(engine, line_idx))
@@ -154,11 +158,112 @@ ReplFlattenExprValue repl_flatten_expr_eval(
     memset(&env, 0, sizeof(env));
     predef = repl_eval_predef_view();
     env.locals = locals;
+    env.local_deps = local_deps;
     env.num_locals = num_locals;
     env.predef_vars = predef.vars;
     env.predef_count = predef.count;
-    result.value = repl_expr_program_eval(engine->cache, prog, &env).value;
+    env.predef_deps = engine->predef_deps;
+    value = repl_expr_program_eval(engine->cache, prog, &env);
+
+    result.value = value.value;
+    result.deps = structural &&
+                  repl_expr_program_has_scratch_read(engine->cache, prog)
+                ? REPL_EXPR_DEP_ALL : value.deps;
     result.found = 1;
     result.used_local = env.used_local;
     return result;
+}
+
+ReplExprDepMask repl_flatten_expr_deps(
+    const ReplFlattenExprEngine *engine, int line_idx,
+    ReplExprRole role, int ordinal,
+    const ExprVar *locals, const ReplExprDepMask *local_deps,
+    int num_locals, int structural, int missing_ok) {
+    ReplFlattenExprValue value = repl_flatten_expr_eval(
+        engine, line_idx, role, ordinal, locals, local_deps, num_locals,
+        structural);
+    if (value.found)
+        return value.deps;
+    if (missing_ok && repl_flatten_expr_line_ready(engine, line_idx))
+        return 0;
+    return REPL_EXPR_DEP_ALL;
+}
+
+ReplExprDepMask repl_flatten_expr_header_value(
+    const ReplFlattenExprEngine *engine, int line_idx,
+    ReplExprRole role, const ExprVar *locals,
+    const ReplExprDepMask *local_deps, int num_locals,
+    float *value_inout, int missing_all_bits) {
+    ReplFlattenExprValue value = repl_flatten_expr_eval(
+        engine, line_idx, role, 0, locals, local_deps, num_locals,
+        /*structural=*/1);
+    if (!value.found)
+        return missing_all_bits ? REPL_EXPR_DEP_ALL : 0;
+    *value_inout = value.value;
+    return value.deps;
+}
+
+void repl_flatten_expr_note_value(ReplFlattenExprEngine *engine,
+                                  ReplExprDepMask deps) {
+    engine->value_dep_mask |= deps;
+}
+
+void repl_flatten_expr_note_structural(ReplFlattenExprEngine *engine,
+                                       ReplExprDepMask deps) {
+    engine->structural_dep_mask |= deps;
+}
+
+void repl_flatten_expr_set_predef_deps(ReplFlattenExprEngine *engine,
+                                       int slot, ReplExprDepMask deps) {
+    if (slot >= 0 && slot < MAX_PREDEF_VARS)
+        engine->predef_deps[slot] = deps;
+}
+
+void repl_flatten_expr_note_emitted(ReplFlattenExprEngine *engine,
+                                    int has_vars, int line_idx) {
+    if (has_vars && !repl_flatten_expr_line_ready(engine, line_idx))
+        engine->rebake_ok = 0;
+}
+
+ReplExprDepMask repl_flatten_expr_value_deps(
+    const ReplFlattenExprEngine *engine) {
+    return engine->value_dep_mask;
+}
+
+ReplExprDepMask repl_flatten_expr_structural_deps(
+    const ReplFlattenExprEngine *engine) {
+    return engine->structural_dep_mask;
+}
+
+int repl_flatten_expr_rebake_ok(const ReplFlattenExprEngine *engine) {
+    return engine->rebake_ok;
+}
+
+int repl_flatten_expr_rebake_line_ready(const ReplExprCache *cache,
+                                        int line_idx) {
+    return cache && repl_expr_cache_line_state(cache, line_idx) ==
+                        REPL_EXPR_LINE_READY;
+}
+
+int repl_flatten_expr_rebake_eval(const ReplExprCache *cache, int line_idx,
+                                  ReplExprRole role, int ordinal,
+                                  const ExprVar *locals, int num_locals,
+                                  float *value_out) {
+    ReplExprEvalEnv env;
+    ReplPredefView predef;
+    int prog;
+
+    if (!repl_flatten_expr_rebake_line_ready(cache, line_idx))
+        return 0;
+    prog = repl_expr_cache_line_find(cache, line_idx, role, ordinal);
+    if (prog < 0)
+        return 0;
+    memset(&env, 0, sizeof(env));
+    predef = repl_eval_predef_view();
+    env.locals = locals;
+    env.num_locals = num_locals;
+    env.predef_vars = predef.vars;
+    env.predef_count = predef.count;
+    *value_out = repl_expr_program_eval(cache, prog, &env).value;
+    return 1;
 }

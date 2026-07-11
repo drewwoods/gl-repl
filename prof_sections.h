@@ -80,6 +80,7 @@ typedef enum {
     PROF_FLATTEN_REPARSE,       /* re-parse + arg-expression eval of GL command lines */
     PROF_FLATTEN_VAR_ASSIGN,    /* scalar `name = expr` RHS eval */
     PROF_FLATTEN_SCRATCH_ASSIGN,/* `A[i] = expr` index + RHS eval */
+    PROF_REBAKE,        /* repl_flatten_rebake_commands() (value-only dirt) */
     PROF_REFORMAT,      /* repl_reformat_program() (on demand) */
     PROF_AUTONORMAL,    /* recompute_autonormals() (only when dirty) */
     PROF_REPLAY_HUD,    /* replay_ui_hud_render() (only when replaying) */

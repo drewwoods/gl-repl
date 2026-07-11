@@ -10,7 +10,6 @@
 #include "repl/color_limits.h"   /* REPL_CLEAR_COLOR_MAX_V (compiled-path clamp) */
 #include "repl/command.h"
 #include "repl/command_spec.h"
-#include "repl/color_limits.h"
 #include "repl/eval.h"
 #include "repl/text_helpers.h"
 #include "repl/flatten.h"
@@ -54,6 +53,9 @@ typedef struct {
     ReplSourceScopeView source_scope;
     int               max_call_depth;
     int               force_reparse;    /* test seam: skip the literal fast path */
+    /* Narrow boundary around compiled caching and dependency propagation.
+     * The expansion walk sees semantic roles/values, never cache entries or
+     * program handles. */
     ReplFlattenExprEngine expr;
     int call_depth;
     int abort;
@@ -167,13 +169,16 @@ static int flatten_append_cmd(FlattenContext *ctx, const GLCmd *cmd,
 }
 
 static void flatten_range(FlattenContext *ctx,
-                          int start, int end_idx, ExprVar *vars, int nv,
+                          int start, int end_idx,
+                          ExprVar *vars, const ReplExprDepMask *var_deps,
+                          int nv,
                           int call_src_cmd_idx, int root_call_src_cmd_idx,
                           unsigned int func_scope_mask);
 
 static void flatten_for_loop(FlattenContext *ctx,
                              const GLCmd *src_cmd, int i,
-                             ExprVar *vars, int nv,
+                             ExprVar *vars, const ReplExprDepMask *var_deps,
+                             int nv,
                              int call_src_cmd_idx, int root_call_src_cmd_idx,
                              unsigned int func_scope_mask,
                              int loop_end) {
@@ -181,36 +186,36 @@ static void flatten_for_loop(FlattenContext *ctx,
     float start_val = src_cmd->args[0];
     float end_val   = src_cmd->args[1];
     float step_val  = src_cmd->args[2];
+    /* The header bounds decide the unrolled iteration count, so their deps
+     * are structural, and the iterator local conservatively carries their
+     * union. A constant header contributes nothing. */
+    ReplExprDepMask header_deps = 0;
     const char *src_text = flatten_src_text(ctx->text, i);
     flatten_get_for_var_name(ctx->text, i, var_name, sizeof(var_name));
 
     if (src_cmd->has_vars) {
         if (repl_flatten_expr_line_ready(&ctx->expr, i)) {
-            /* Warm path: evaluate the compiled header bounds. An absent
-             * step program means the source omitted it — the committed
-             * args[2] already bakes the 1.0 default. */
-            ReplFlattenExprValue v;
-            v = repl_flatten_expr_eval(&ctx->expr, i,
-                                       REPL_EXPR_ROLE_LOOP_START, 0,
-                                       vars, nv);
-            if (v.found)
-                start_val = v.value;
-            v = repl_flatten_expr_eval(&ctx->expr, i,
-                                       REPL_EXPR_ROLE_LOOP_END, 0,
-                                       vars, nv);
-            if (v.found)
-                end_val = v.value;
-            v = repl_flatten_expr_eval(&ctx->expr, i,
-                                       REPL_EXPR_ROLE_LOOP_STEP, 0,
-                                       vars, nv);
-            if (v.found)
-                step_val = v.value;
+            /* Warm path: evaluate the compiled header bounds, taking each
+             * bound's deps from the SAME eval (no second dep-only pass).
+             * An absent start/end program on a READY line widens to all
+             * bits (structural uncertainty); an absent step program means
+             * the source omitted it — the committed args[2] already bakes
+             * the 1.0 default, so it contributes no deps. */
+            header_deps |= repl_flatten_expr_header_value(
+                &ctx->expr, i, REPL_EXPR_ROLE_LOOP_START, vars, var_deps, nv,
+                &start_val, /*missing_all_bits=*/1);
+            header_deps |= repl_flatten_expr_header_value(
+                &ctx->expr, i, REPL_EXPR_ROLE_LOOP_END, vars, var_deps, nv,
+                &end_val, /*missing_all_bits=*/1);
+            header_deps |= repl_flatten_expr_header_value(
+                &ctx->expr, i, REPL_EXPR_ROLE_LOOP_STEP, vars, var_deps, nv,
+                &step_val, /*missing_all_bits=*/0);
         } else {
             const char *unused_body;
             float re_start, re_end, re_step;
             char rv[16];
-            int building = repl_flatten_expr_build_begin(
-                &ctx->expr, i, vars, nv);
+            int building = repl_flatten_expr_build_begin(&ctx->expr, i,
+                                                         vars, nv);
             ReplExprCaptureSink sink =
                 repl_flatten_expr_capture_sink(&ctx->expr);
             int parsed = repl_eval_parse_for_header(
@@ -233,7 +238,20 @@ static void flatten_for_loop(FlattenContext *ctx,
                 end_val   = re_end;
                 step_val  = re_step;
             }
+            /* Build/FAILED visit: one dep-only pass over the just-built
+             * programs (start/end required, step's absence baked; uncached
+             * headers widen to all bits). */
+            header_deps |= repl_flatten_expr_deps(
+                &ctx->expr, i, REPL_EXPR_ROLE_LOOP_START, 0, vars, var_deps,
+                nv, /*structural=*/1, /*missing_ok=*/0);
+            header_deps |= repl_flatten_expr_deps(
+                &ctx->expr, i, REPL_EXPR_ROLE_LOOP_END, 0, vars, var_deps,
+                nv, 1, 0);
+            header_deps |= repl_flatten_expr_deps(
+                &ctx->expr, i, REPL_EXPR_ROLE_LOOP_STEP, 0, vars, var_deps,
+                nv, 1, /*missing_ok=*/1);
         }
+        repl_flatten_expr_note_structural(&ctx->expr, header_deps);
     }
 
     if (fabsf(step_val) < 1e-9f ||
@@ -248,16 +266,20 @@ static void flatten_for_loop(FlattenContext *ctx,
         if (--max_iters < 0) break;
         if (ctx->abort) return;
         ExprVar lvars[MAX_EXPR_VARS];
+        ReplExprDepMask ldeps[MAX_EXPR_VARS];
         int lnv = 0;
         repl_copy_string_fits(lvars[lnv].name,
                               sizeof(lvars[lnv].name),
                               var_name);
         lvars[lnv].value = val;
+        ldeps[lnv] = header_deps;
         lnv++;
         if (vars)
-            for (int v = 0; v < nv && lnv < MAX_EXPR_VARS; v++)
+            for (int v = 0; v < nv && lnv < MAX_EXPR_VARS; v++) {
+                ldeps[lnv] = var_deps ? var_deps[v] : 0;
                 lvars[lnv++] = vars[v];
-        flatten_range(ctx, i + 1, loop_end, lvars, lnv,
+            }
+        flatten_range(ctx, i + 1, loop_end, lvars, ldeps, lnv,
                       call_src_cmd_idx, root_call_src_cmd_idx,
                       func_scope_mask);
     }
@@ -265,7 +287,8 @@ static void flatten_for_loop(FlattenContext *ctx,
 
 static void flatten_call(FlattenContext *ctx,
                          const GLCmd *src_cmd, int i,
-                         ExprVar *vars, int nv,
+                         ExprVar *vars, const ReplExprDepMask *var_deps,
+                         int nv,
                          int root_call_src_cmd_idx,
                          unsigned int func_scope_mask) {
     int func_num = (int)src_cmd->args[0];
@@ -295,32 +318,37 @@ static void flatten_call(FlattenContext *ctx,
         char param_names[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
         char arg_text[MAX_LINE_LEN];
         float arg_vals[MAX_EXPR_VARS];
+        ReplExprDepMask arg_deps[MAX_EXPR_VARS];
         int arg_count = 0;
         const char *def_text = flatten_src_text(ctx->text, k);
         const char *call_text = flatten_src_text(ctx->text, i);
 
+        int warm_call = 0;
         if (!parse_repl_func_signature(def_text, &def_fn,
                                        param_names, MAX_EXPR_VARS,
                                        &param_count))
             break;
-        if (repl_flatten_expr_line_ready(&ctx->expr, i)) {
-            /* Warm path: evaluate the compiled call arguments. The count
-             * was frozen when the line built; the param-count check below
-             * still runs against the current definition. */
+        warm_call = repl_flatten_expr_line_ready(&ctx->expr, i);
+        if (warm_call) {
+            /* Warm path: evaluate the compiled call arguments (one eval per
+             * arg, deps collected from the same pass). The count was frozen
+             * when the line built; the param-count check below still runs
+             * against the current definition. */
             arg_count = repl_flatten_expr_role_count(
                 &ctx->expr, i, REPL_EXPR_ROLE_CALL_ARG);
             for (int a = 0; a < arg_count && a < MAX_EXPR_VARS; a++) {
                 ReplFlattenExprValue v = repl_flatten_expr_eval(
-                    &ctx->expr, i, REPL_EXPR_ROLE_CALL_ARG, a, vars, nv);
-                arg_vals[a] = v.found ? v.value : 0.0f;
+                    &ctx->expr, i, REPL_EXPR_ROLE_CALL_ARG, a, vars,
+                    var_deps, nv, /*structural=*/1);
+                arg_vals[a] = v.value;
+                arg_deps[a] = v.deps;
             }
         } else {
             int building;
             if (!extract_func_call_args_text(call_text, NULL,
                                              arg_text, sizeof(arg_text)))
                 break;
-            building = repl_flatten_expr_build_begin(
-                &ctx->expr, i, vars, nv);
+            building = repl_flatten_expr_build_begin(&ctx->expr, i, vars, nv);
             if (!parse_expr_list_exact(arg_text, arg_vals, MAX_EXPR_VARS,
                                        vars, nv, &arg_count)) {
                 if (building)
@@ -328,13 +356,25 @@ static void flatten_call(FlattenContext *ctx,
                 break;
             }
             if (building) {
-                int n = repl_flatten_expr_compile_active_list(
+                int compiled = repl_flatten_expr_compile_active_list(
                     &ctx->expr, REPL_EXPR_ROLE_CALL_ARG, 0, arg_text,
                     /*strict=*/1, MAX_EXPR_VARS);
                 repl_flatten_expr_build_finish(&ctx->expr, i,
-                                               n == arg_count);
+                                               compiled == arg_count);
             }
         }
+        /* Call-argument values freeze into per-flat-command local snapshots,
+         * so their deps are structural. The warm branch filled arg_deps from
+         * its value evals; the build/text branch takes one dep-only pass
+         * here (all-bits for anything that didn't compile). */
+        if (!warm_call) {
+            for (int a = 0; a < arg_count && a < MAX_EXPR_VARS; a++)
+                arg_deps[a] = repl_flatten_expr_deps(
+                    &ctx->expr, i, REPL_EXPR_ROLE_CALL_ARG, a, vars, var_deps, nv,
+                    /*structural=*/1, /*missing_ok=*/0);
+        }
+        for (int a = 0; a < arg_count && a < MAX_EXPR_VARS; a++)
+            repl_flatten_expr_note_structural(&ctx->expr, arg_deps[a]);
         if (arg_count != param_count) {
             char msg[REPL_DIAG_TEXT_MAX];
             const char *alias = NULL;
@@ -357,16 +397,20 @@ static void flatten_call(FlattenContext *ctx,
         }
 
         ExprVar lvars[MAX_EXPR_VARS];
+        ReplExprDepMask ldeps[MAX_EXPR_VARS];
         int lnv = 0;
         for (int p = 0; p < param_count && lnv < MAX_EXPR_VARS; p++) {
             repl_copy_string_fits(lvars[lnv].name,
                                   sizeof(lvars[lnv].name),
                                   param_names[p]);
             lvars[lnv].value = arg_vals[p];
+            ldeps[lnv] = arg_deps[p];   /* params inherit their arg's mask */
             lnv++;
         }
-        for (int v = 0; vars && v < nv && lnv < MAX_EXPR_VARS; v++)
+        for (int v = 0; vars && v < nv && lnv < MAX_EXPR_VARS; v++) {
+            ldeps[lnv] = var_deps ? var_deps[v] : 0;
             lvars[lnv++] = vars[v];
+        }
 
         unsigned int nested_func_mask = func_scope_mask;
         if (func_num >= 0 && func_num < FUNC_SCOPE_MASK_BITS)
@@ -375,7 +419,7 @@ static void flatten_call(FlattenContext *ctx,
                              ? root_call_src_cmd_idx : i;
 
         ctx->call_depth++;
-        flatten_range(ctx, k + 1, body_end, lvars, lnv,
+        flatten_range(ctx, k + 1, body_end, lvars, ldeps, lnv,
                       i, nested_root_call, nested_func_mask);
         if (ctx->call_depth > 0) ctx->call_depth--;
     } while (0);
@@ -397,22 +441,31 @@ static int flatten_if_arm_boundary(const FlattenContext *ctx,
     return if_end;
 }
 
+/* Evaluate an if / else-if condition line. Every evaluated condition's deps
+ * are structural (they select which arm's commands exist in the flat
+ * stream); conditions that were never evaluated this flatten (short-
+ * circuited by an earlier taken arm) contribute nothing — a root that only
+ * they read cannot matter until an evaluated condition changes first, and
+ * that condition's deps are already in the mask. */
 static float flatten_eval_if_line(FlattenContext *ctx,
                                   const GLCmd *src_cmd, int line_idx,
-                                  ExprVar *vars, int nv) {
+                                  ExprVar *vars,
+                                  const ReplExprDepMask *var_deps, int nv) {
     if (repl_flatten_expr_line_ready(&ctx->expr, line_idx)) {
         ReplFlattenExprValue v = repl_flatten_expr_eval(
-            &ctx->expr, line_idx, REPL_EXPR_ROLE_CONDITION, 0, vars, nv);
+            &ctx->expr, line_idx, REPL_EXPR_ROLE_CONDITION, 0,
+            vars, var_deps, nv, /*structural=*/1);
         /* No condition program on a READY line: the paren payload failed
          * to extract when the line built, which is the text path's
-         * fallback-to-args[0] case. */
+         * fallback-to-args[0] case — a baked constant, no deps. */
         if (!v.found)
             return src_cmd->args[0];
+        repl_flatten_expr_note_structural(&ctx->expr, v.deps);
         return v.value;
     }
     {
-        int building = repl_flatten_expr_build_begin(
-            &ctx->expr, line_idx, vars, nv);
+        int building = repl_flatten_expr_build_begin(&ctx->expr, line_idx,
+                                                     vars, nv);
         ReplExprCaptureSink sink =
             repl_flatten_expr_capture_sink(&ctx->expr);
         float v = repl_eval_if_condition_captured(
@@ -420,22 +473,30 @@ static float flatten_eval_if_line(FlattenContext *ctx,
             vars, nv, src_cmd->args[0], building ? &sink : NULL);
         if (building)
             repl_flatten_expr_build_finish(&ctx->expr, line_idx, 1);
+        /* Build/FAILED visit: one dep-only pass over the just-built program
+         * (all-bits when it never compiled). */
+        repl_flatten_expr_note_structural(
+            &ctx->expr,
+            repl_flatten_expr_deps(
+                &ctx->expr, line_idx, REPL_EXPR_ROLE_CONDITION, 0,
+                vars, var_deps, nv, /*structural=*/1, /*missing_ok=*/1));
         return v;
     }
 }
 
 static void flatten_if_block(FlattenContext *ctx,
                              const GLCmd *src_cmd, int i,
-                             ExprVar *vars, int nv,
+                             ExprVar *vars, const ReplExprDepMask *var_deps,
+                             int nv,
                              int call_src_cmd_idx, int root_call_src_cmd_idx,
                              unsigned int func_scope_mask,
                              int if_end) {
     int arm_start = i + 1;
     int arm_end = flatten_if_arm_boundary(ctx, arm_start, if_end);
-    float cond = flatten_eval_if_line(ctx, src_cmd, i, vars, nv);
+    float cond = flatten_eval_if_line(ctx, src_cmd, i, vars, var_deps, nv);
 
     if (cond != 0.0f) {
-        flatten_range(ctx, arm_start, arm_end, vars, nv,
+        flatten_range(ctx, arm_start, arm_end, vars, var_deps, nv,
                       call_src_cmd_idx, root_call_src_cmd_idx,
                       func_scope_mask);
         return;
@@ -446,15 +507,18 @@ static void flatten_if_block(FlattenContext *ctx,
         int next_arm_end = flatten_if_arm_boundary(ctx, branch_idx + 1, if_end);
 
         if (branch->type == CMD_ELSE_IF) {
-            cond = flatten_eval_if_line(ctx, branch, branch_idx, vars, nv);
+            cond = flatten_eval_if_line(ctx, branch, branch_idx, vars,
+                                        var_deps, nv);
             if (cond != 0.0f) {
-                flatten_range(ctx, branch_idx + 1, next_arm_end, vars, nv,
+                flatten_range(ctx, branch_idx + 1, next_arm_end, vars,
+                              var_deps, nv,
                               call_src_cmd_idx, root_call_src_cmd_idx,
                               func_scope_mask);
                 return;
             }
         } else if (branch->type == CMD_ELSE) {
-            flatten_range(ctx, branch_idx + 1, next_arm_end, vars, nv,
+            flatten_range(ctx, branch_idx + 1, next_arm_end, vars, var_deps,
+                          nv,
                           call_src_cmd_idx, root_call_src_cmd_idx,
                           func_scope_mask);
             return;
@@ -544,7 +608,8 @@ static int flatten_eval_std_cmd(const GLCmd *src_cmd, const char *text,
  * one begin/accum_end pair spanning the whole reparse. */
 static int flatten_reparse_line(FlattenContext *ctx,
                                 const GLCmd *src_cmd, int i,
-                                ExprVar *vars, int nv,
+                                ExprVar *vars,
+                                const ReplExprDepMask *var_deps, int nv,
                                 int call_src_cmd_idx,
                                 int root_call_src_cmd_idx,
                                 unsigned int func_scope_mask) {
@@ -577,9 +642,12 @@ static int flatten_reparse_line(FlattenContext *ctx,
         prof_begin(PROF_FLATTEN_REPARSE);
         for (int k = 0; k < tmp.num_args && k < 8; k++) {
             ReplFlattenExprValue v = repl_flatten_expr_eval(
-                &ctx->expr, i, REPL_EXPR_ROLE_CMD_ARG, k, vars, nv);
-            if (v.found)
+                &ctx->expr, i, REPL_EXPR_ROLE_CMD_ARG, k,
+                vars, var_deps, nv, /*structural=*/0);
+            if (v.found) {
                 tmp.args[k] = v.value;
+                repl_flatten_expr_note_value(&ctx->expr, v.deps);
+            }
         }
         /* Mirror the parser's post-eval fixup: glClearColor clamps each
          * RGB channel at commit AND on every reparse. */
@@ -614,8 +682,7 @@ static int flatten_reparse_line(FlattenContext *ctx,
     };
     const char *text = flatten_src_text(ctx->text, i);
     ReplParsedLine tmp_pl;
-    ReplExprCaptureSink sink =
-        repl_flatten_expr_capture_sink(&ctx->expr);
+    ReplExprCaptureSink sink = repl_flatten_expr_capture_sink(&ctx->expr);
     int building = repl_flatten_expr_build_begin(&ctx->expr, i, vars, nv);
     int parsed;
     int rv = 1;
@@ -660,6 +727,22 @@ static int flatten_reparse_line(FlattenContext *ctx,
             tmp.has_vars = 1;
         else
             tmp.has_vars = 0;
+        /* Build/FAILED visit of a var-bearing command: one dep-only pass
+         * over the just-built programs (all-bits when the line stayed
+         * FAILED; slots without a program on a READY line are baked
+         * enum/constant slots). A has_vars command whose line never
+         * reached READY can't be re-evaluated in place, so it also
+         * forfeits rebake for this flat program. */
+        if (tmp.has_vars) {
+            for (int k = 0; k < tmp.num_args && k < 8; k++)
+                repl_flatten_expr_note_value(
+                    &ctx->expr,
+                    repl_flatten_expr_deps(
+                        &ctx->expr, i, REPL_EXPR_ROLE_CMD_ARG, k,
+                        vars, var_deps, nv,
+                        /*structural=*/0, /*missing_ok=*/1));
+            repl_flatten_expr_note_emitted(&ctx->expr, tmp.has_vars, i);
+        }
         rv = flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
                                 root_call_src_cmd_idx, func_scope_mask,
                                 has_local_vars ? vars : NULL,
@@ -679,7 +762,9 @@ static int flatten_reparse_line(FlattenContext *ctx,
  * Extracted out of flatten_range so the PROF_FLATTEN_ASSIGN probe is one
  * begin/accum_end pair per call and flatten_range stays under its size cap. */
 static int flatten_var_assign(FlattenContext *ctx, const GLCmd *src_cmd, int i,
-                              ExprVar *vars, int nv, int call_src_cmd_idx,
+                              ExprVar *vars,
+                              const ReplExprDepMask *var_deps, int nv,
+                              int call_src_cmd_idx,
                               int root_call_src_cmd_idx,
                               unsigned int func_scope_mask) {
     prof_begin(PROF_FLATTEN_VAR_ASSIGN);
@@ -688,15 +773,24 @@ static int flatten_var_assign(FlattenContext *ctx, const GLCmd *src_cmd, int i,
     float value = src_cmd->args[0];
     char rhs[MAX_LINE_LEN] = "";
     int local_rhs_vars = 0;
+    /* Assignment dataflow: the destination slot's mask becomes the RHS's
+     * mask (a warm eval yields it directly; build/text visits take one
+     * dep-only pass below). A constant RHS is 0 — `n = 5` correctly makes
+     * a later slider change to n a routing no-op, since any reflatten
+     * re-bakes n = 5 over it. */
+    ReplExprDepMask rhs_deps = 0;
+    int warm = repl_flatten_expr_line_ready(&ctx->expr, i);
     const char *src_text = flatten_src_text(ctx->text, i);
 
-    if (repl_flatten_expr_line_ready(&ctx->expr, i)) {
+    if (warm) {
         /* Warm path. A READY line without an RHS program mirrors the text
          * branch's extract-failure case: keep the baked args[0]. */
         ReplFlattenExprValue v = repl_flatten_expr_eval(
-            &ctx->expr, i, REPL_EXPR_ROLE_ASSIGN_RHS, 0, vars, nv);
+            &ctx->expr, i, REPL_EXPR_ROLE_ASSIGN_RHS, 0,
+            vars, var_deps, nv, /*structural=*/0);
         if (v.found) {
             value = v.value;
+            rhs_deps = v.deps;
             if (vars && nv > 0)
                 local_rhs_vars = v.used_local;
         }
@@ -704,8 +798,7 @@ static int flatten_var_assign(FlattenContext *ctx, const GLCmd *src_cmd, int i,
                                              rhs, sizeof(rhs)) && rhs[0]) {
         char repl_rhs[MAX_LINE_LEN];
         const char *eval_rhs = rhs;
-        int building = repl_flatten_expr_build_begin(
-            &ctx->expr, i, vars, nv);
+        int building = repl_flatten_expr_build_begin(&ctx->expr, i, vars, nv);
         /* Editor/import source is canonical REPL text. Only the forced
          * differential reference retains the old defensive translation. */
         if (ctx->force_reparse) {
@@ -729,12 +822,21 @@ static int flatten_var_assign(FlattenContext *ctx, const GLCmd *src_cmd, int i,
         if (repl_flatten_expr_build_begin(&ctx->expr, i, vars, nv))
             repl_flatten_expr_build_finish(&ctx->expr, i, 1);
     }
+    if (!warm)
+        rhs_deps = repl_flatten_expr_deps(
+            &ctx->expr, i, REPL_EXPR_ROLE_ASSIGN_RHS, 0,
+            vars, var_deps, nv,
+            /*structural=*/0, /*missing_ok=*/1);
     if (var_idx >= 0 && var_idx < g_num_predef_vars)
         g_predef_vars_mut[var_idx].value = value;
+    if (var_idx >= 0 && var_idx < MAX_PREDEF_VARS)
+        repl_flatten_expr_set_predef_deps(&ctx->expr, var_idx, rhs_deps);
+    repl_flatten_expr_note_value(&ctx->expr, rhs_deps);
     {
         GLCmd tmp = *src_cmd;
         tmp.args[0] = value;
         tmp.has_vars = src_cmd->has_vars || local_rhs_vars;
+        repl_flatten_expr_note_emitted(&ctx->expr, tmp.has_vars, i);
         if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
                                 root_call_src_cmd_idx, func_scope_mask,
                                 vars, nv))
@@ -748,7 +850,8 @@ static int flatten_var_assign(FlattenContext *ctx, const GLCmd *src_cmd, int i,
  * scratch cell, and append the resolved command. Returns 1 on success, 0 if
  * the index is out of range or the flat buffer overflowed (caller aborts). */
 static int flatten_scratch_assign(FlattenContext *ctx, const GLCmd *src_cmd,
-                                  int i, ExprVar *vars, int nv,
+                                  int i, ExprVar *vars,
+                                  const ReplExprDepMask *var_deps, int nv,
                                   int call_src_cmd_idx,
                                   int root_call_src_cmd_idx,
                                   unsigned int func_scope_mask) {
@@ -762,19 +865,27 @@ static int flatten_scratch_assign(FlattenContext *ctx, const GLCmd *src_cmd,
     char rhs[MAX_LINE_LEN] = "";
     int local_index_vars = 0;
     int local_rhs_vars = 0;
+    /* Index and RHS are both value positions: a rebake re-evaluates them
+     * and rewrites the cell in stream order, so scratch reads downstream
+     * see the updated value without any per-cell dependency metadata. */
+    ReplExprDepMask assign_deps = 0;
+    int warm = repl_flatten_expr_line_ready(&ctx->expr, i);
     const char *src_text = flatten_src_text(ctx->text, i);
 
-    if (repl_flatten_expr_line_ready(&ctx->expr, i)) {
+    if (warm) {
         /* Warm path. Programs absent on a READY line mean the target
          * extraction failed when the line built — keep the baked args,
          * like the text branch below. */
         ReplFlattenExprValue vi = repl_flatten_expr_eval(
-            &ctx->expr, i, REPL_EXPR_ROLE_SCRATCH_INDEX, 0, vars, nv);
+            &ctx->expr, i, REPL_EXPR_ROLE_SCRATCH_INDEX, 0,
+            vars, var_deps, nv, /*structural=*/0);
         ReplFlattenExprValue vr = repl_flatten_expr_eval(
-            &ctx->expr, i, REPL_EXPR_ROLE_SCRATCH_RHS, 0, vars, nv);
+            &ctx->expr, i, REPL_EXPR_ROLE_SCRATCH_RHS, 0,
+            vars, var_deps, nv, /*structural=*/0);
         if (vi.found && vr.found) {
             elem_idx = (int)vi.value;
             value = vr.value;
+            assign_deps = vi.deps | vr.deps;
             if (vars && nv > 0) {
                 local_index_vars = vi.used_local;
                 local_rhs_vars = vr.used_local;
@@ -786,8 +897,7 @@ static int flatten_scratch_assign(FlattenContext *ctx, const GLCmd *src_cmd,
                                             rhs, sizeof(rhs))) {
         char repl_index[MAX_LINE_LEN];
         char repl_rhs[MAX_LINE_LEN];
-        int building = repl_flatten_expr_build_begin(
-            &ctx->expr, i, vars, nv);
+        int building = repl_flatten_expr_build_begin(&ctx->expr, i, vars, nv);
         repl_eval_c_expr_to_repl(index_expr, repl_index, sizeof(repl_index));
         repl_eval_c_expr_to_repl(rhs, repl_rhs, sizeof(repl_rhs));
         if (building) {
@@ -815,6 +925,16 @@ static int flatten_scratch_assign(FlattenContext *ctx, const GLCmd *src_cmd,
         if (repl_flatten_expr_build_begin(&ctx->expr, i, vars, nv))
             repl_flatten_expr_build_finish(&ctx->expr, i, 1);
     }
+    if (!warm)
+        assign_deps =
+            repl_flatten_expr_deps(
+                &ctx->expr, i, REPL_EXPR_ROLE_SCRATCH_INDEX, 0,
+                vars, var_deps, nv,
+                /*structural=*/0, /*missing_ok=*/1) |
+            repl_flatten_expr_deps(
+                &ctx->expr, i, REPL_EXPR_ROLE_SCRATCH_RHS, 0,
+                vars, var_deps, nv, 0, 1);
+    repl_flatten_expr_note_value(&ctx->expr, assign_deps);
 
     if (elem_idx < 0 || elem_idx >= REPL_SCRATCH_ARRAY_LEN) {
         char msg[REPL_DIAG_TEXT_MAX];
@@ -833,6 +953,7 @@ static int flatten_scratch_assign(FlattenContext *ctx, const GLCmd *src_cmd,
         tmp.args[2] = value;
         tmp.num_args = 3;
         tmp.has_vars = src_cmd->has_vars || local_index_vars || local_rhs_vars;
+        repl_flatten_expr_note_emitted(&ctx->expr, tmp.has_vars, i);
         if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
                                 root_call_src_cmd_idx, func_scope_mask,
                                 vars, nv))
@@ -846,9 +967,12 @@ static int flatten_scratch_assign(FlattenContext *ctx, const GLCmd *src_cmd,
  * flat buffer named by FlattenContext. For-loops are unrolled, function calls
  * are inlined, and if-blocks with loop-variable conditions are evaluated.
  * `vars`/`nv` carry loop-variable and function-parameter bindings from
- * enclosing scopes. */
+ * enclosing scopes; `var_deps` (parallel to `vars`, NULL ⇒ all zero) carries
+ * each binding's predef dependency mask for phase-3 dep propagation. */
 static void flatten_range(FlattenContext *ctx,
-                          int start, int end_idx, ExprVar *vars, int nv,
+                          int start, int end_idx,
+                          ExprVar *vars, const ReplExprDepMask *var_deps,
+                          int nv,
                           int call_src_cmd_idx, int root_call_src_cmd_idx,
                           unsigned int func_scope_mask) {
     int i = start;
@@ -864,7 +988,7 @@ static void flatten_range(FlattenContext *ctx,
 
         if (src_cmd->type == CMD_FOR_BEGIN) {
             int loop_end = flatten_repl_source_scope_find_block_end(ctx, i);
-            flatten_for_loop(ctx, src_cmd, i, vars, nv,
+            flatten_for_loop(ctx, src_cmd, i, vars, var_deps, nv,
                              call_src_cmd_idx, root_call_src_cmd_idx,
                              func_scope_mask, loop_end);
             i = (loop_end < ctx->source_count) ? loop_end + 1 : ctx->source_count;
@@ -881,7 +1005,7 @@ static void flatten_range(FlattenContext *ctx,
         if (src_cmd->type == CMD_FUNC_END) { i++; continue; }
 
         if (src_cmd->type == CMD_CALL) {
-            flatten_call(ctx, src_cmd, i, vars, nv,
+            flatten_call(ctx, src_cmd, i, vars, var_deps, nv,
                          root_call_src_cmd_idx, func_scope_mask);
             i++;
             continue;
@@ -889,7 +1013,7 @@ static void flatten_range(FlattenContext *ctx,
 
         if (src_cmd->type == CMD_IF_BEGIN) {
             int if_end = flatten_repl_source_scope_find_block_end(ctx, i);
-            flatten_if_block(ctx, src_cmd, i, vars, nv,
+            flatten_if_block(ctx, src_cmd, i, vars, var_deps, nv,
                              call_src_cmd_idx, root_call_src_cmd_idx,
                              func_scope_mask, if_end);
             i = (if_end < ctx->source_count) ? if_end + 1 : ctx->source_count;
@@ -912,7 +1036,7 @@ static void flatten_range(FlattenContext *ctx,
 
         /* Variable assignments: update predefined var and pass through */
         if (src_cmd->type == CMD_VAR_ASSIGN) {
-            if (!flatten_var_assign(ctx, src_cmd, i, vars, nv,
+            if (!flatten_var_assign(ctx, src_cmd, i, vars, var_deps, nv,
                                     call_src_cmd_idx, root_call_src_cmd_idx,
                                     func_scope_mask))
                 return;
@@ -921,7 +1045,7 @@ static void flatten_range(FlattenContext *ctx,
         }
 
         if (src_cmd->type == CMD_SCRATCH_ASSIGN) {
-            if (!flatten_scratch_assign(ctx, src_cmd, i, vars, nv,
+            if (!flatten_scratch_assign(ctx, src_cmd, i, vars, var_deps, nv,
                                         call_src_cmd_idx, root_call_src_cmd_idx,
                                         func_scope_mask))
                 return;
@@ -929,7 +1053,7 @@ static void flatten_range(FlattenContext *ctx,
             continue;
         }
 
-        if (!flatten_reparse_line(ctx, src_cmd, i, vars, nv,
+        if (!flatten_reparse_line(ctx, src_cmd, i, vars, var_deps, nv,
                                   call_src_cmd_idx, root_call_src_cmd_idx,
                                   func_scope_mask))
             return;
@@ -980,12 +1104,13 @@ int repl_flatten_program(const ReplFlattenOptions *options,
                       ? options->visit_budget : MAX_FLATTEN_VISIT_BUDGET
     };
 
-    if (!result)
-        result = &local_result;
-    memset(result, 0, sizeof(*result));
     repl_flatten_expr_init(&ctx.expr,
                            options ? options->expr_cache : NULL,
                            ctx.force_reparse);
+
+    if (!result)
+        result = &local_result;
+    memset(result, 0, sizeof(*result));
 
     if (ctx.source_count < 0 || ctx.flat_capacity < 0 ||
         (ctx.source_count > 0 && !ctx.source_cmds) ||
@@ -1024,7 +1149,7 @@ int repl_flatten_program(const ReplFlattenOptions *options,
     prof_accum_reset(PROF_FLATTEN_REPARSE);
     prof_accum_reset(PROF_FLATTEN_VAR_ASSIGN);
     prof_accum_reset(PROF_FLATTEN_SCRATCH_ASSIGN);
-    flatten_range(&ctx, 0, ctx.source_count, NULL, 0, -1, -1, 0);
+    flatten_range(&ctx, 0, ctx.source_count, NULL, NULL, 0, -1, -1, 0);
     prof_accum_commit(PROF_FLATTEN_REPARSE);
     prof_accum_commit(PROF_FLATTEN_VAR_ASSIGN);
     prof_accum_commit(PROF_FLATTEN_SCRATCH_ASSIGN);
@@ -1044,8 +1169,145 @@ int repl_flatten_program(const ReplFlattenOptions *options,
     result->user_lighting_enabled = result->ok
         ? flatten_flat_lighting_enabled(ctx.flat_cmds, ctx.flat_count)
         : 0;
+    if (!result->ok) {
+        /* A failed expansion (depth/budget/capacity overflow) leaves an empty
+         * flat program; report all-bits so any predef change retries a full
+         * flatten rather than being routed away from the failure. */
+        result->structural_dep_mask = REPL_EXPR_DEP_ALL;
+        result->value_dep_mask = REPL_EXPR_DEP_ALL;
+        result->rebake_ok = 0;
+    } else {
+        result->structural_dep_mask =
+            repl_flatten_expr_structural_deps(&ctx.expr);
+        result->value_dep_mask = repl_flatten_expr_value_deps(&ctx.expr);
+        result->rebake_ok = repl_flatten_expr_rebake_ok(&ctx.expr);
+    }
     repl_copy_string_fits(result->status, sizeof(result->status), ctx.status);
     return result->ok;
+}
+
+/* ---- In-place rebake (flatten plan phase 3b) --------------------------- */
+
+/* Re-bake one flat command's baked values in place. `line` is its owning
+ * source line (src_cmd_idx). Assignments update the live predef/scratch
+ * tables so later commands in the walk read the new values, mirroring the
+ * full flatten's stream-order threading. Returns 1 on success. */
+static int rebake_one_cmd(const ReplRebakeOptions *o, int k,
+                          ReplRebakeResult *result) {
+    GLCmd *cmd = &o->flat_cmds[k];
+    const FlatCmdLocalVars *locals =
+        o->flat_local_vars ? &o->flat_local_vars[k] : NULL;
+    int line = cmd->src_cmd_idx;
+    int ok = 1;
+
+    if (!cmd->valid)
+        return 1;
+
+    /* Eligibility was derived by the last full flatten, but a source/cache
+     * invalidation can occur before this walk. Never mistake a stale line's
+     * missing programs for optional baked constants. */
+    if (cmd->has_vars &&
+        !repl_flatten_expr_rebake_line_ready(o->expr_cache, line)) {
+        snprintf(result->status, sizeof(result->status),
+                 "Expression cache line %d is not ready", line);
+        return 0;
+    }
+
+    if (cmd->type == CMD_VAR_ASSIGN) {
+        float value = cmd->args[0];
+        if (cmd->has_vars)
+            ok = repl_flatten_expr_rebake_eval(
+                o->expr_cache, line, REPL_EXPR_ROLE_ASSIGN_RHS, 0,
+                locals ? locals->vars : NULL, locals ? locals->num_vars : 0,
+                &value);
+        if (cmd->has_vars && !ok) {
+            /* A has_vars assignment with no RHS program on a READY line is
+             * the "no evaluable RHS" case the full flatten also leaves at
+             * the baked args[0] — keep it, don't fail. */
+            return 1;
+        }
+        if (cmd->var_idx >= 0 && cmd->var_idx < g_num_predef_vars)
+            g_predef_vars_mut[cmd->var_idx].value = value;
+        cmd->args[0] = value;
+        return 1;
+    }
+
+    if (cmd->type == CMD_SCRATCH_ASSIGN) {
+        float idx_f = cmd->args[1];
+        float value = cmd->args[2];
+        int ok_idx = 1;
+        int ok_rhs = 1;
+        if (cmd->has_vars) {
+            ok_idx = repl_flatten_expr_rebake_eval(
+                o->expr_cache, line, REPL_EXPR_ROLE_SCRATCH_INDEX, 0,
+                locals ? locals->vars : NULL, locals ? locals->num_vars : 0,
+                &idx_f);
+            ok_rhs = repl_flatten_expr_rebake_eval(
+                o->expr_cache, line, REPL_EXPR_ROLE_SCRATCH_RHS, 0,
+                locals ? locals->vars : NULL, locals ? locals->num_vars : 0,
+                &value);
+        }
+        int elem_idx;
+        if (!ok_idx || !ok_rhs)
+            return 1;   /* extraction-failure case: keep baked args */
+        elem_idx = (int)idx_f;
+        if (elem_idx < 0 || elem_idx >= REPL_SCRATCH_ARRAY_LEN) {
+            snprintf(result->status, sizeof(result->status),
+                     "scratch array index out of range: %d", elem_idx);
+            return 0;
+        }
+        repl_eval_scratch_set((int)cmd->args[0], elem_idx, value);
+        cmd->args[1] = (float)elem_idx;
+        cmd->args[2] = value;
+        return 1;
+    }
+
+    if (!cmd->has_vars)
+        return 1;   /* constant non-assignment commands need no work */
+
+    /* Generic GL command: re-evaluate the expression-backed arg slots.
+     * Slots without a program (enum tokens, omitted defaults) keep their
+     * baked value — the same rule flatten_reparse_line's warm path uses. */
+    for (int a = 0; a < cmd->num_args && a < 8; a++) {
+        float v = 0.0f;
+        int slot_ok = repl_flatten_expr_rebake_eval(
+            o->expr_cache, line, REPL_EXPR_ROLE_CMD_ARG, a,
+            locals ? locals->vars : NULL, locals ? locals->num_vars : 0,
+            &v);
+        if (slot_ok)
+            cmd->args[a] = v;
+    }
+    if (cmd->type == CMD_CLEAR_COLOR) {
+        for (int ci = 0; ci < 3; ci++)
+            if (cmd->args[ci] > REPL_CLEAR_COLOR_MAX_V)
+                cmd->args[ci] = REPL_CLEAR_COLOR_MAX_V;
+    }
+    return 1;
+}
+
+int repl_flatten_rebake_program(const ReplRebakeOptions *options,
+                                ReplRebakeResult *result) {
+    ReplRebakeResult local_result;
+
+    if (!result)
+        result = &local_result;
+    memset(result, 0, sizeof(*result));
+
+    if (!options || !options->expr_cache || options->flat_count < 0 ||
+        (options->flat_count > 0 && !options->flat_cmds)) {
+        repl_copy_string_fits(result->status, sizeof(result->status),
+                              "Invalid rebake options");
+        return 0;
+    }
+
+    for (int k = 0; k < options->flat_count; k++) {
+        if (!rebake_one_cmd(options, k, result)) {
+            result->ok = 0;
+            return 0;
+        }
+    }
+    result->ok = 1;
+    return 1;
 }
 
 /* Diagnostic/reference switch for the live pipeline. Read once because this
@@ -1062,6 +1324,40 @@ static ReplExprCache *flatten_live_expr_cache(void) {
         initialized = 1;
     }
     return disabled ? NULL : repl_expr_cache_live();
+}
+
+static int flatten_rebake_live(void) {
+    ReplFlatProgramState *flat_program = repl_state_flat_program_writable();
+    float base_predef[MAX_PREDEF_VARS] = { 0 };
+    float base_scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN]
+        = { { 0.0f } };
+    ReplRebakeOptions options;
+    ReplRebakeResult result;
+    int rv;
+
+    if (!repl_state_flat_program_rebake_ok())
+        return 0;   /* not every has_vars command has compiled programs */
+
+    /* Snapshot the pre-rebake tables so a mid-walk failure can be rolled
+     * back cleanly before the caller escalates to a full flatten. */
+    repl_copy_predef_values(base_predef, MAX_PREDEF_VARS);
+    repl_eval_copy_scratch_arrays(base_scratch);
+
+    options = (ReplRebakeOptions){
+        .flat_cmds = flat_program->cmds,
+        .flat_local_vars = flat_program->local_vars,
+        .flat_count = flat_program->cmd_count,
+        .expr_cache = flatten_live_expr_cache(),
+    };
+    rv = repl_flatten_rebake_program(&options, &result);
+
+    if (!rv) {
+        repl_restore_predef_values(base_predef, MAX_PREDEF_VARS);
+        repl_eval_restore_scratch_arrays(base_scratch);
+        return 0;
+    }
+    repl_state_flat_program_clear_args_dirty();
+    return 1;
 }
 
 void repl_flatten_commands(int edit_line_idx) {
@@ -1088,21 +1384,82 @@ void repl_flatten_commands(int edit_line_idx) {
             : 0;
     repl_state_flat_program_set_user_lighting_enabled(
         result.user_lighting_enabled);
+    /* Refresh the dependency-routing state: a full flatten re-derives both
+     * masks and subsumes any pending args-only dirt. */
+    repl_state_flat_program_set_dep_state(result.structural_dep_mask,
+                                          result.value_dep_mask,
+                                          result.rebake_ok);
     if (result.status[0])
         repl_set_status_error(result.status);
 
     repl_flatten_refresh_current_block_highlight(edit_line_idx);
 }
 
-void repl_ensure_flat_program_with_live_vars(int edit_line_idx) {
-    if (repl_state_flat_program_dirty()) {
-        float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
-        float live_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN] = { { 0.0f } };
-        repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
-        repl_eval_copy_scratch_arrays(live_scratch_arrays);
-        repl_flatten_commands(edit_line_idx);
-        repl_state_flat_program_clear_dirty();
-        repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
-        repl_eval_restore_scratch_arrays(live_scratch_arrays);
+static ReplFlatRefreshKind flatten_refresh_live(int edit_line_idx,
+                                                int require_full,
+                                                int require_values) {
+    if (!require_full && !require_values)
+        return REPL_FLAT_REFRESH_NONE;
+
+    if (!require_full) {
+        int rebaked;
+        prof_begin(PROF_REBAKE);
+        rebaked = flatten_rebake_live();
+        prof_end(PROF_REBAKE);
+        if (rebaked)
+            return REPL_FLAT_REFRESH_REBAKE;
     }
+
+    /* A failed rebake restored the live value tables. Rebuilding here,
+     * before returning through the public boundary, also overwrites any
+     * command arguments changed earlier in that failed walk. */
+    prof_begin(PROF_FLATTEN);
+    repl_flatten_commands(edit_line_idx);
+    repl_state_flat_program_clear_dirty();
+    prof_end(PROF_FLATTEN);
+    return REPL_FLAT_REFRESH_FULL;
+}
+
+ReplFlatRefreshKind repl_refresh_flat_program(int edit_line_idx) {
+    return flatten_refresh_live(
+        edit_line_idx,
+        repl_state_flat_program_dirty(),
+        repl_state_flat_program_args_dirty_mask() != 0);
+}
+
+ReplFlatRefreshKind repl_refresh_flat_program_for_deps(
+    int edit_line_idx, ReplExprDepMask changed_deps) {
+    ReplExprDepMask structural =
+        repl_state_flat_program_structural_dep_mask();
+    ReplExprDepMask values = repl_state_flat_program_value_dep_mask();
+
+    if (changed_deps == 0 || ((structural | values) & changed_deps) == 0)
+        return REPL_FLAT_REFRESH_NONE;
+    return flatten_refresh_live(
+        edit_line_idx,
+        (structural & changed_deps) != 0 ||
+            !repl_state_flat_program_rebake_ok(),
+        (values & changed_deps) != 0);
+}
+
+void repl_ensure_flat_program_with_live_vars(int edit_line_idx) {
+    /* Full dirty wins (source edit / structural value change); otherwise a
+     * value-only change re-bakes in place; otherwise nothing. Both the
+     * full flatten and the rebake mutate the live predef/scratch tables as
+     * they thread assignments, so both run inside a save/restore of the
+     * caller's live values. A rebake that fails restores the baseline
+     * itself and returns 0 — we fall through to the full flatten. */
+    if (!repl_state_flat_program_dirty() &&
+        !repl_state_flat_program_args_dirty_mask())
+        return;
+
+    float live_predef_vals[MAX_PREDEF_VARS] = { 0 };
+    float live_scratch_arrays[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN] = { { 0.0f } };
+    repl_copy_predef_values(live_predef_vals, MAX_PREDEF_VARS);
+    repl_eval_copy_scratch_arrays(live_scratch_arrays);
+
+    repl_refresh_flat_program(edit_line_idx);
+
+    repl_restore_predef_values(live_predef_vals, MAX_PREDEF_VARS);
+    repl_eval_restore_scratch_arrays(live_scratch_arrays);
 }

@@ -62,6 +62,21 @@ typedef struct {
     int              current_block_begin_idx;
     int              current_block_end_idx;
     int              current_block_source_line_idx;
+    /* Dependency-routing state (flatten plan phase 3). The two dep masks
+     * describe the CURRENT flat program — refreshed by every full flatten:
+     * structural_dep_mask holds the predef roots that can change topology
+     * or frozen local snapshots (loop bounds, if conditions, call args);
+     * value_dep_mask holds the roots any baked value/assignment reads.
+     * args_dirty_mask accumulates value-changed roots since the last
+     * refresh (routed in via repl_state_notify_predef_value_changed);
+     * full dirty always subsumes and clears it. rebake_ok is 1 when every
+     * has_vars flat command has compiled programs, i.e. an in-place rebake
+     * can re-evaluate the whole stream; 0 escalates value changes to a
+     * full flatten. */
+    ReplExprDepMask  structural_dep_mask;
+    ReplExprDepMask  value_dep_mask;
+    ReplExprDepMask  args_dirty_mask;
+    int              rebake_ok;
 } ReplFlatProgramState;
 
 /* Predefined-variable runtime: named float table, scratch arrays, optional
@@ -150,6 +165,10 @@ const GLCmd      *repl_state_flat_program_cmds(void);
 const FlatCmdLocalVars *repl_state_flat_program_local_vars(void);
 int               repl_state_flat_program_count(void);
 int               repl_state_flat_program_dirty(void);
+ReplExprDepMask   repl_state_flat_program_structural_dep_mask(void);
+ReplExprDepMask   repl_state_flat_program_value_dep_mask(void);
+ReplExprDepMask   repl_state_flat_program_args_dirty_mask(void);
+int               repl_state_flat_program_rebake_ok(void);
 int               repl_state_flat_program_user_lighting_enabled(void);
 int               repl_state_flat_program_current_block_begin(void);
 int               repl_state_flat_program_current_block_end(void);

@@ -290,6 +290,16 @@ static void test_capture_restore_round_trip(void) {
     glr_ctrl_reset_all();
     populate_runtime_snapshot_fixture(scene_hint);
     repl_state_capture(&snapshot);
+    /* repl_state_restore intentionally does NOT preserve the flat program's
+     * derived invalidation state: it forces a full re-flatten (dirty=1) and
+     * drops rebake eligibility / pending args-dirt, because the restored
+     * document invalidates the compiled-expression cache wholesale. So
+     * normalize those three fields in the pre-restore snapshot to the values
+     * a restore produces, leaving the whole-struct memcmp below to assert the
+     * genuinely-preserved state round-trips. */
+    snapshot.flat_program.dirty = 1;
+    snapshot.flat_program.args_dirty_mask = 0;
+    snapshot.flat_program.rebake_ok = 0;
     glr_state_capture(&glr_snap);
     glr_camera_capture(&camera_snap);
     editor_state_capture(&editor_snap);
@@ -926,50 +936,78 @@ static void test_camera_target_decay_override_resets_on_new_ease(void) {
                 cam.rx > 4.0f && cam.rx < 12.0f);
 }
 
-static void test_time_dirty_gate_uses_source_text(void) {
+/* Time advance/set route t's change by the flat program's dependency
+ * masks (repl_state_notify_predef_value_changed) — value-only roots
+ * accumulate into args_dirty_mask, structural roots take the full flag,
+ * unused roots are a no-op. Seed each mask state directly; the
+ * source-to-mask derivation is covered by the flatten dep tests. */
+static void test_time_dirty_gate_routes_by_dep_masks(void) {
     glr_ctrl_reset_all();
 
     int t_idx = repl_eval_find_predef_var_idx("t");
     ASSERT_TRUE("time dirty gate has t predef", t_idx >= 0);
+    ReplExprDepMask t_bit = (ReplExprDepMask)1u << t_idx;
 
     {
-        const char *lines[] = {
-            "glVertex3f(1, 2, 3);",
-            "// t in a comment is not a dependency",
-        };
-        ASSERT_INT("load no-t source", source_document_load_lines(lines, 2), 1);
-        repl_state_document_count_set(2);
-        repl_state_mark_source_dirty();
+        /* t unused by the current flat program: advancing is a no-op. */
+        repl_state_flat_program_set_dep_state(0, 0, 1);
         repl_state_flat_program_clear_dirty();
 
         repl_state_time_advance(0.25f);
-        ASSERT_INT("time advance without source t leaves flat clean",
+        ASSERT_INT("time advance with unused t leaves flat clean",
                    repl_state_flat_program_dirty(), 0);
+        ASSERT_INT("time advance with unused t leaves args-dirty clean",
+                   (int)repl_state_flat_program_args_dirty_mask(), 0);
         ASSERT_TRUE("time advance still updates visible t",
                     fabsf(g_predef_vars[t_idx].value - 0.25f) < 1e-6f);
 
         repl_state_time_set(2.0f);
-        ASSERT_INT("set_time without source t leaves flat clean",
+        ASSERT_INT("set_time with unused t leaves flat clean",
                    repl_state_flat_program_dirty(), 0);
     }
 
     {
-        const char *lines[] = {
-            "glVertex3f(t, 0, 0);",
-        };
-        ASSERT_INT("load t source", source_document_load_lines(lines, 1), 1);
-        repl_state_document_count_set(1);
-        repl_state_mark_source_dirty();
+        /* t as a value-only root: the change routes to t's args-dirty
+         * bit (an in-place rebake suffices), not the full flag. */
+        repl_state_flat_program_set_dep_state(0, t_bit, 1);
         repl_state_flat_program_clear_dirty();
 
         repl_state_time_advance(0.25f);
-        ASSERT_INT("time advance with source t marks flat dirty",
-                   repl_state_flat_program_dirty(), 1);
+        ASSERT_INT("time advance with value-only t leaves full flag clean",
+                   repl_state_flat_program_dirty(), 0);
+        ASSERT_INT("time advance with value-only t sets t's args-dirty bit",
+                   (int)((repl_state_flat_program_args_dirty_mask()
+                          >> t_idx) & 1u), 1);
 
-        repl_state_flat_program_clear_dirty();
+        repl_state_flat_program_set_dep_state(0, t_bit, 1);
         repl_state_time_set(4.0f);
-        ASSERT_INT("set_time with source t marks flat dirty",
+        ASSERT_INT("set_time with value-only t sets t's args-dirty bit",
+                   (int)((repl_state_flat_program_args_dirty_mask()
+                          >> t_idx) & 1u), 1);
+    }
+
+    {
+        /* t as a structural root: full dirty, pending args dirt cleared. */
+        repl_state_flat_program_set_dep_state(t_bit, t_bit, 1);
+        repl_state_flat_program_clear_dirty();
+
+        repl_state_time_advance(0.25f);
+        ASSERT_INT("time advance with structural t marks flat dirty",
                    repl_state_flat_program_dirty(), 1);
+        ASSERT_INT("time advance with structural t clears args-dirty",
+                   (int)repl_state_flat_program_args_dirty_mask(), 0);
+    }
+
+    {
+        /* Value-only root without rebake support escalates to full. */
+        repl_state_flat_program_set_dep_state(0, t_bit, 0);
+        repl_state_flat_program_clear_dirty();
+
+        repl_state_time_advance(0.25f);
+        ASSERT_INT("value change without rebake escalates to full dirty",
+                   repl_state_flat_program_dirty(), 1);
+        ASSERT_INT("value change without rebake leaves args-dirty clean",
+                   (int)repl_state_flat_program_args_dirty_mask(), 0);
     }
 }
 
@@ -1292,7 +1330,7 @@ int main(void) {
     test_workspace_load_clears_scene_camera_default();
     test_camera_target_decay_override_applies();
     test_camera_target_decay_override_resets_on_new_ease();
-    test_time_dirty_gate_uses_source_text();
+    test_time_dirty_gate_routes_by_dep_masks();
     test_gl_state_report_tracks_explicit_writes_before_checkpoint();
     test_gl_state_report_uses_flat_call_provenance();
     test_gl_state_report_includes_generated_fixed_function_state();
