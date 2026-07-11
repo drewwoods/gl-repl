@@ -8,9 +8,9 @@
  * startup splash and the SVG logo assets (examples/README.md "Example
  * Color Language"). Three levels:
  *
- *   palette — a named anchor set (PALETTE_DUSK_MAGENTA_ANCHORS today;
- *             PALETTE_DUSK_ANCHORS is the previous set, kept for an
- *             easy flip back).
+ *   palette — a named anchor set (PALETTE_NEON_ANCHORS today; the
+ *             earlier PALETTE_DUSK_ANCHORS / PALETTE_DUSK_MAGENTA_ANCHORS
+ *             are kept for an easy flip back).
  *   anchor  — a named color inside a set (PAL_CORAL, PAL_AZURE, ...).
  *   role    — a semantic slot consumers bind to (PAL_ROLE_WARM_KEY).
  *
@@ -105,8 +105,8 @@
  * at both ends of the render. A separate list from the scene accents,
  * and not switched by PALETTE_ACTIVE_*: the mark is palette-independent
  * brand vocabulary pinned to what the scene paints (today its floor is
- * the original magenta, which the active Dusk Magenta palette's MAGENTA
- * anchor deliberately matches; its wall material stays mark-specific).
+ * the original magenta, which the active Neon palette's MAGENTA anchor
+ * deliberately matches; its wall material stays mark-specific).
  *
  * Two tiers, kept in sync by make check-palette:
  *   - _MAT anchors: the raw glColor3f materials lit-cube.glr paints

@@ -119,6 +119,19 @@ scenes use VIOLET → AZURE or an AMBER accent for variety while staying in the
 family. Flat-colored discrete sets (triangle trios, transform groups, tess
 stops) pick distinct palette members rather than ad-hoc primaries.
 
+**Neon design language.** The current anchors are deliberately electric:
+saturated hues at full value against the deep ink, so lit surfaces and
+line work read like a vector display rather than a softened print
+palette. Author with the anchors at full strength — depth cues should
+come from lighting and the black-interpolating ramps, not from
+pre-dimmed colors. MAGENTA is the family's fixed point (it *is* the
+brand mark's floor material, restored from the original logo); AMBER is
+the hottest accent and works best sparingly, as a highlight or control
+point rather than a fill. Swapping the whole family for a calmer one
+later (the Dusk sets are one `PALETTE_ACTIVE_*` repoint away) re-themes
+the grid ruler and picker swatches at compile time, and `make
+check-palette` enumerates the scene literals to migrate.
+
 `glClearColor` channels are capped at `REPL_CLEAR_COLOR_MAX_V` (`0.1f`) so the
 canvas always stays dark; the accents above are full-range `glColor`. When
 touching these colors, keep the whole covered set on the palette.
