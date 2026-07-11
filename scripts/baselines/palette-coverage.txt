@@ -10,6 +10,7 @@ examples/scenes/clip-planes-carve-solids.glr
 examples/scenes/dusk-lighthouse-atoll-stress-test.glr
 examples/scenes/glu-concave-arrow-extrusion.glr
 examples/scenes/jellyfish-gldepthmask-translucency.glr
+examples/scenes/mothership-exodus-endless-flight.glr
 examples/scenes/orrery-labels-track-3d-orbits.glr
 examples/scenes/ringed-planet-nebula-skies.glr
 examples/scenes/swaying-grass-field-rand-t.glr
