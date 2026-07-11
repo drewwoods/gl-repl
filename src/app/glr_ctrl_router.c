@@ -497,9 +497,50 @@ int glr_ctrl_router_handle_variable_panel_drag_begin(int button, int state, int 
     return 1;
 }
 
+/* Mouse-up: write the value the drag settled on back into the variable's
+ * declaration, once. Motion applied the live value only (see
+ * glr_ctrl_apply_variable_panel_value_change), so this is the drag's single
+ * source mutation — one dirty mark, one re-flatten from cold state, and the
+ * saved source matches what the scene renders.
+ *
+ * No undo snapshot: the first motion already captured one at the drag-start
+ * value. No tutorial notify: the change carries no predef op, and the live
+ * value it persists was notified when it was applied. A drag with no motion,
+ * or a variable with no declaration row, does no work at all. */
+static void glr_ctrl_persist_variable_panel_drag_value(
+        const VariablePanelDragState *drag) {
+    ReplCompiledChange compiled;
+    ReplCompileContext ctx;
+    char err[REPL_STATUS_TEXT_MAX] = "";
+
+    if (!drag->value_changed || !drag->name[0])
+        return;
+
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ctx.insert_mode = editor_insert_mode();
+    if (repl_compile_persist_predef_value(drag->name, drag->final_value,
+                                          &ctx, &compiled,
+                                          err, sizeof(err)) != REPL_COMPILE_OK) {
+        repl_set_status_error(err[0] ? err : "Variable update failed");
+        return;
+    }
+    if (compiled.kind == REPL_COMPILED_NO_CHANGE)
+        return;   /* no declaration row to rewrite */
+
+    /* On failure the already-applied live value stands; Undo still restores
+     * the drag-start snapshot. */
+    if (!editor_commit_apply_external_change(&compiled, /*capture_undo=*/0,
+                                             /*publish_status=*/0))
+        repl_set_status_error("Command buffer full!");
+}
+
 int glr_ctrl_router_handle_variable_panel_drag_release(int state) {
+    VariablePanelDragState drag;
+
     if (state != GLUT_UP) return 0;
     if (!variable_panel_drag_active()) return 0;
+    drag = variable_panel_drag();
+    glr_ctrl_persist_variable_panel_drag_value(&drag);
     variable_panel_handle_drag_reset();
     editor_request_redraw();
     return 1;
@@ -575,9 +616,14 @@ static void glr_ctrl_apply_variable_panel_value_change(
      * (non-editor convention); the editor-side caller knows the live
      * value and overrides. */
     ctx.insert_mode = editor_insert_mode();
-    if (repl_compile_set_predef_value(value_change->name, value_change->value,
-                                      &ctx, &compiled,
-                                      err, sizeof(err)) != REPL_COMPILE_OK) {
+    /* Live-only: motion updates the variable's value, never its declaration
+     * text. Rewriting the source on every pointer event would mark the source
+     * dirty hundreds of times per drag; the release handler persists the
+     * settled value once instead. */
+    if (repl_compile_set_predef_value_live(value_change->name,
+                                           value_change->value,
+                                           &ctx, &compiled,
+                                           err, sizeof(err)) != REPL_COMPILE_OK) {
         repl_set_status_error(err[0] ? err : "Variable update failed");
         return;
     }
@@ -589,6 +635,7 @@ static void glr_ctrl_apply_variable_panel_value_change(
     }
     if (capture_undo)
         variable_panel_drag_mark_undo_snapshot_pushed();
+    variable_panel_drag_note_applied_value(value_change->value);
 }
 
 int glr_ctrl_router_handle_variable_panel_motion(int x, int y) {

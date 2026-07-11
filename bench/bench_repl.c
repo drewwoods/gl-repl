@@ -19,6 +19,20 @@
  *   parse_lines       - repl_parse_command on every example line
  *   feed_examples     - full editor_feed_line path on every example
  *   flatten_examples  - load each example then call repl_flatten_commands
+ *   flatten_grass     - full flatten of the "Swaying grass field (rand + t)"
+ *                       built-in, resolved by display name
+ *   flatten_orrery    - full flatten of the "Orrery (labels track 3D orbits)"
+ *                       built-in, resolved by display name
+ *   flatten_corpus    - full flatten of every built-in, one row per catalog
+ *                       index (human output sorted by mean)
+ *   flatten_phases    - per-phase split (reparse / scalar assign / scratch
+ *                       assign / derived remainder) of a full flatten, read
+ *                       from the existing PROF_FLATTEN_* profiler sections
+ *   flatten_whale     - full flatten of the dynamic-topology Whale scene at
+ *                       several `t` values; reports the flat count per sample
+ *   slider_drag       - variable-panel drag: 100 motion events timed apart
+ *                       from the single mouse-up persistence edit, for a
+ *                       value-only and a structural variable
  *   source_scope_query- sweep source-scope depth/scope queries over a deep
  *                       synthetic document (isolates the amortized-O(1)
  *                       prefix-depth cache lookup the Finding-4 view refactor
@@ -49,6 +63,7 @@
 #define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
+#include "editor/input.h"         /* editor_feed_line */
 #include "editor/state.h"         /* editor_state_edit_line */
 #include <math.h>
 #include "repl/flatten.h"
@@ -64,8 +79,14 @@
 #include "repl/normalize.h"      /* repl_parse_and_normalize_strict */
 #include "repl/parser.h"
 #include "repl/source_scope.h"   /* prefix-depth queries + cache invalidate */
+#include "repl/state_views.h"     /* repl_state_normals_dirty — source-dirty probe */
+#include "repl/state_owners.h"    /* repl_state_normals_dirty_clear,
+                                     repl_state_flat_program_{dirty,clear_dirty} */
+#include "subsystems/variable_panel/variable_panel_state.h"
+#include "repl/time.h"           /* repl_set_time — Whale topology sweep */
 #include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
+#include "support/cpuprof.h"     /* PROF_FLATTEN_* phase readback */
 #include "app/glr_ctrl.h"
 
 #include <stdio.h>
@@ -157,6 +178,46 @@ static void declare_test_idents(void) {
 static void fresh_repl(void) {
     glr_ctrl_reset_all();
     declare_test_idents();
+}
+
+/* Set when a named real-scene case cannot be resolved. main() returns
+ * non-zero so a renamed/removed built-in fails the run loudly instead of
+ * silently dropping a benchmark row. */
+static int g_case_missing = 0;
+
+/* Resolve a benchmark case by its exact catalog display name. Indices are
+ * deliberately not hard-coded: the catalog is reordered whenever an example
+ * is added. */
+static int example_index_by_name(const char *display_name) {
+    int n = repl_example_count();
+    for (int i = 0; i < n; i++) {
+        const char *name = repl_example_name(i);
+        if (name && strcmp(name, display_name) == 0)
+            return i;
+    }
+    fprintf(stderr, "ERROR: benchmark case not found: \"%s\"\n", display_name);
+    g_case_missing = 1;
+    return -1;
+}
+
+/* Post-load runtime baseline. flatten writes g_predef_vars[] on
+ * CMD_VAR_ASSIGN and the scratch arrays on CMD_SCRATCH_ASSIGN, so every
+ * repeated flatten must start from the same values or each sample measures a
+ * different workload (and, for the scratch examples, a different one every
+ * time). */
+typedef struct {
+    float predef[MAX_PREDEF_VARS];
+    float scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
+} BenchBaseline;
+
+static void baseline_capture(BenchBaseline *b) {
+    repl_copy_predef_values(b->predef, MAX_PREDEF_VARS);
+    repl_eval_copy_scratch_arrays(b->scratch);
+}
+
+static void baseline_restore(const BenchBaseline *b) {
+    repl_restore_predef_values(b->predef, MAX_PREDEF_VARS);
+    repl_eval_restore_scratch_arrays(b->scratch);
 }
 
 static int example_line_count(int idx) {
@@ -369,6 +430,515 @@ static BenchResult bench_flatten_examples(int iters) {
                 repl_state_flat_program_count());
     }
     return r;
+}
+
+/* ---- bench: full flatten of the real built-in scenes ------------------- */
+
+/* Shared kernel for the named real-scene cases, flatten_corpus, and
+ * flatten_phases: load one built-in, then time `inner` full flattens per
+ * timer sample, each starting from the identical post-load baseline. */
+static BenchResult bench_flatten_one(const char *bench_name, int example_idx,
+                                     int iters, int inner, int *flat_cmds_out) {
+    BenchResult r = { .name = bench_name, .unit = "flattens",
+                      .min_sec = 1e18 };
+    BenchBaseline base;
+
+    repl_load_example_lines_for_test(repl_example_lines(example_idx));
+    baseline_capture(&base);
+    /* One warm flatten outside the timer so the source-scope depth cache is
+     * built and the first timed sample isn't billed for it. */
+    repl_flatten_commands(editor_state_edit_line());
+
+    /* The timer brackets each flatten alone: the baseline restore between
+     * them is setup, not workload, and leaving it inside would bill it to
+     * flatten and desynchronize this row from the flatten_phases split. */
+    for (int it = 0; it < iters; it++) {
+        double sample = 0.0;
+        for (int k = 0; k < inner; k++) {
+            baseline_restore(&base);
+            double t0 = now_seconds();
+            repl_flatten_commands(editor_state_edit_line());
+            sample += now_seconds() - t0;
+        }
+        if (sample < r.min_sec) r.min_sec = sample;
+        r.total_sec += sample;
+        r.ops += inner;
+        r.iters++;
+    }
+
+    if (flat_cmds_out)
+        *flat_cmds_out = repl_state_flat_program_count();
+    baseline_restore(&base);
+    return r;
+}
+
+/* Cold-cache variant of bench_flatten_one: each timed flatten starts from an
+ * invalidated expression cache, so the sample includes rebuilding every
+ * line's compiled programs (the cost an edit pays on its next frame). The
+ * warm rows above never see this — their cache builds once before the timer
+ * — so an edit-time regression cannot hide inside a steady-state number. */
+static BenchResult bench_flatten_one_cold(const char *bench_name,
+                                          int example_idx, int iters,
+                                          int inner, int *flat_cmds_out) {
+    BenchResult r = { .name = bench_name, .unit = "flattens",
+                      .min_sec = 1e18 };
+    BenchBaseline base;
+
+    repl_load_example_lines_for_test(repl_example_lines(example_idx));
+    baseline_capture(&base);
+    repl_flatten_commands(editor_state_edit_line());
+
+    for (int it = 0; it < iters; it++) {
+        double sample = 0.0;
+        for (int k = 0; k < inner; k++) {
+            baseline_restore(&base);
+            repl_expr_cache_invalidate(repl_expr_cache_live());
+            double t0 = now_seconds();
+            repl_flatten_commands(editor_state_edit_line());
+            sample += now_seconds() - t0;
+        }
+        if (sample < r.min_sec) r.min_sec = sample;
+        r.total_sec += sample;
+        r.ops += inner;
+        r.iters++;
+    }
+
+    if (flat_cmds_out)
+        *flat_cmds_out = repl_state_flat_program_count();
+    baseline_restore(&base);
+    return r;
+}
+
+/* Named real-scene case, resolved by exact display name. A missing case is a
+ * hard error (g_case_missing), never a silently skipped row. Reports two
+ * rows: the warm compiled full flatten (the steady-state animated-frame
+ * cost) and the cold-cache full flatten (the first frame after an edit). */
+static void run_named_flatten(const char *bench_name, const char *display_name,
+                              int iters) {
+    int idx = example_index_by_name(display_name);
+    int flat_cmds = 0;
+    char cold_name[96];
+    if (idx < 0)
+        return;
+    report(bench_flatten_one(bench_name, idx, iters, 16, &flat_cmds));
+    if (!g_csv)
+        fprintf(stderr, "  (%s: \"%s\" idx=%d, flat_cmds=%d)\n",
+                bench_name, display_name, idx, flat_cmds);
+    snprintf(cold_name, sizeof(cold_name), "%s_cold", bench_name);
+    report(bench_flatten_one_cold(cold_name, idx, iters, 16, NULL));
+}
+
+/* ---- bench: full flatten of every built-in ---------------------------- */
+
+#define CORPUS_ROW_NAME_MAX 32
+
+typedef struct {
+    int        example_idx;
+    int        flat_cmds;
+    double     mean_ms;    /* reported: mean per-iteration wall time */
+    double     min_op_us;  /* ranking key: fastest observed per-flatten time */
+    BenchResult result;
+    char       row_name[CORPUS_ROW_NAME_MAX];
+} CorpusCase;
+
+/* Rank by the minimum per-flatten time, not the mean. Benchmark noise is
+ * one-sided — a scheduling stall can only ever add time — so the minimum is
+ * the least-contaminated estimate of a scene's true cost, while the mean lets
+ * a single descheduled iteration crown the wrong scene. In the phase-0 baseline
+ * that is not hypothetical: Orrery's corpus mean reads 30.27 ms against a
+ * 5.87 ms minimum (and a 4.46 ms dedicated flatten_orrery row), a 5x inflation
+ * that would sort it far above scenes that are genuinely more expensive. The
+ * mean stays in the reported columns as information. */
+static int corpus_case_cmp_slower_first(const void *a, const void *b) {
+    double da = ((const CorpusCase *)a)->min_op_us;
+    double db = ((const CorpusCase *)b)->min_op_us;
+    if (da < db) return 1;
+    if (da > db) return -1;
+    return 0;
+}
+
+/* Time a full flatten of every built-in. Human output lists all cases sorted
+ * slowest-first by min-per-flatten (the "which scene actually costs the most"
+ * question the old flat-command-count heuristic in spike_flatten_largest got
+ * wrong, and that a mean-based sort gets wrong again under load); CSV emits
+ * one row per catalog index, in catalog order, preceded by a `#` comment line
+ * carrying the display name so the existing CSV columns stay unchanged. */
+static void bench_flatten_corpus(int iters) {
+    enum { CORPUS_INNER = 8 };
+    int n = repl_example_count();
+    CorpusCase *cases = (CorpusCase *)malloc(sizeof(*cases) * (size_t)n);
+    if (!cases)
+        return;
+
+    for (int e = 0; e < n; e++) {
+        cases[e].example_idx = e;
+        cases[e].flat_cmds = 0;
+        snprintf(cases[e].row_name, sizeof(cases[e].row_name),
+                 "flatten_corpus_%02d", e);
+        cases[e].result = bench_flatten_one(cases[e].row_name, e, iters,
+                                            CORPUS_INNER, &cases[e].flat_cmds);
+        cases[e].result.name = cases[e].row_name;
+        cases[e].mean_ms = (cases[e].result.iters > 0)
+                         ? cases[e].result.total_sec * 1000.0 /
+                           (double)cases[e].result.iters
+                         : 0.0;
+        /* min_sec is the fastest iteration, i.e. a batch of CORPUS_INNER
+         * flattens; normalize to one flatten so the key is comparable to the
+         * per_op_us column. */
+        cases[e].min_op_us = (cases[e].result.iters > 0)
+                           ? cases[e].result.min_sec * 1e6 /
+                             (double)CORPUS_INNER
+                           : 0.0;
+    }
+
+    if (g_csv) {
+        for (int e = 0; e < n; e++) {
+            printf("# %s = %s (flat_cmds=%d)\n", cases[e].row_name,
+                   repl_example_name(e), cases[e].flat_cmds);
+            report(cases[e].result);
+        }
+    } else {
+        /* Sorted slowest-first by min-per-flatten; per_op_us below is the mean
+         * and may disagree on a contended machine (that is why it is not the
+         * key). Print the key so the ordering is checkable by eye. */
+        qsort(cases, (size_t)n, sizeof(*cases), corpus_case_cmp_slower_first);
+        for (int e = 0; e < n; e++) {
+            printf("  # %s = %s (flat_cmds=%d, min-per-flatten=%.3f us)\n",
+                   cases[e].row_name,
+                   repl_example_name(cases[e].example_idx),
+                   cases[e].flat_cmds, cases[e].min_op_us);
+            report(cases[e].result);
+        }
+    }
+    free(cases);
+}
+
+/* ---- bench: per-phase split of a full flatten -------------------------- */
+
+/* Splits one full flatten into the three eval-heavy leaf phases the
+ * PROF_FLATTEN_* probes already accumulate, plus the derived structural
+ * remainder (loop/if/call iteration + append). Reads prof_section_last_us
+ * after each flatten — repl_flatten_program commits the accumulators once per
+ * call — so no new timers are added inside the evaluator primitives. */
+static void bench_flatten_phases_case(const char *label, int example_idx,
+                                      int iters) {
+    enum { INNER = 16 };
+    BenchBaseline base;
+    char names[5][48];
+    BenchResult rows[5];
+    static const char *const suffix[5] = {
+        "total", "reparse", "var_assign", "scratch_assign", "remainder"
+    };
+
+    for (int p = 0; p < 5; p++) {
+        snprintf(names[p], sizeof(names[p]), "%s_%s", label, suffix[p]);
+        rows[p] = (BenchResult){ .name = names[p], .unit = "flattens",
+                                 .min_sec = 1e18 };
+    }
+
+    repl_load_example_lines_for_test(repl_example_lines(example_idx));
+    baseline_capture(&base);
+    repl_flatten_commands(editor_state_edit_line());
+
+    for (int it = 0; it < iters; it++) {
+        double sample[5] = { 0.0, 0.0, 0.0, 0.0, 0.0 };
+
+        for (int k = 0; k < INNER; k++) {
+            baseline_restore(&base);
+            double t0 = now_seconds();
+            repl_flatten_commands(editor_state_edit_line());
+            sample[0] += now_seconds() - t0;
+            sample[1] += prof_section_last_us(PROF_FLATTEN_REPARSE) * 1e-6;
+            sample[2] += prof_section_last_us(PROF_FLATTEN_VAR_ASSIGN) * 1e-6;
+            sample[3] += prof_section_last_us(PROF_FLATTEN_SCRATCH_ASSIGN) * 1e-6;
+        }
+        sample[4] = sample[0] - sample[1] - sample[2] - sample[3];
+        if (sample[4] < 0.0) sample[4] = 0.0;
+
+        for (int p = 0; p < 5; p++) {
+            if (sample[p] < rows[p].min_sec) rows[p].min_sec = sample[p];
+            rows[p].total_sec += sample[p];
+            rows[p].ops += INNER;
+            rows[p].iters++;
+        }
+    }
+    baseline_restore(&base);
+
+    for (int p = 0; p < 5; p++)
+        report(rows[p]);
+}
+
+static void bench_flatten_phases(int iters) {
+    static const struct { const char *label; const char *display; } cases[] = {
+        { "phase_grass",  "Swaying grass field (rand + t)" },
+        { "phase_orrery", "Orrery (labels track 3D orbits)" },
+    };
+    for (size_t c = 0; c < sizeof(cases) / sizeof(cases[0]); c++) {
+        int idx = example_index_by_name(cases[c].display);
+        if (idx < 0) continue;
+        bench_flatten_phases_case(cases[c].label, idx, iters);
+    }
+}
+
+/* ---- bench: dynamic-topology full flatten (Whale) ---------------------- */
+
+/* Whale's droplets are gated by per-particle `if((t - spawnDelay) > 0 && ...)`
+ * conditions, so its *flat-command count* changes with `t` as particles enter
+ * and leave their active interval. That makes it the canary for the rebake
+ * fast path: a `t` change here can never reuse the existing flat topology, so
+ * this case always measures a warm compiled FULL flatten, never a rebake.
+ *
+ * We sample several `t` values, report the flat count alongside each timing,
+ * and fail the run unless at least two samples disagree on the count (i.e. the
+ * scene really is dynamic-topology). */
+static void bench_flatten_whale(int iters) {
+    static const float k_times[] = { 0.0f, 0.4f, 1.0f, 2.0f, 4.0f, 8.0f };
+    enum { N_TIMES = (int)(sizeof(k_times) / sizeof(k_times[0])), INNER = 8 };
+    int idx = example_index_by_name("Whale (particle system + lit model)");
+    int flat_counts[N_TIMES];
+    BenchBaseline base;
+    char names[N_TIMES][40];
+
+    if (idx < 0)
+        return;
+
+    repl_load_example_lines_for_test(repl_example_lines(idx));
+    baseline_capture(&base);
+    repl_set_time(k_times[0]);
+    repl_flatten_commands(editor_state_edit_line());
+
+    for (int s = 0; s < N_TIMES; s++) {
+        BenchResult r;
+        snprintf(names[s], sizeof(names[s]), "flatten_whale_t%.1f",
+                 (double)k_times[s]);
+        r = (BenchResult){ .name = names[s], .unit = "flattens",
+                           .min_sec = 1e18 };
+
+        for (int it = 0; it < iters; it++) {
+            double sample = 0.0;
+            for (int k = 0; k < INNER; k++) {
+                baseline_restore(&base);
+                repl_set_time(k_times[s]);
+                double t0 = now_seconds();
+                repl_flatten_commands(editor_state_edit_line());
+                sample += now_seconds() - t0;
+            }
+            if (sample < r.min_sec) r.min_sec = sample;
+            r.total_sec += sample;
+            r.ops += INNER;
+            r.iters++;
+        }
+        flat_counts[s] = repl_state_flat_program_count();
+
+        if (g_csv)
+            printf("# %s: flat_cmds=%d\n", names[s], flat_counts[s]);
+        report(r);
+        if (!g_csv)
+            fprintf(stderr, "  (%s: flat_cmds=%d)\n", names[s], flat_counts[s]);
+    }
+    baseline_restore(&base);
+
+    int distinct = 0;
+    for (int s = 0; s < N_TIMES; s++) {
+        int seen = 0;
+        for (int p = 0; p < s; p++)
+            if (flat_counts[p] == flat_counts[s]) { seen = 1; break; }
+        if (!seen) distinct++;
+    }
+    if (distinct < 2) {
+        fprintf(stderr,
+                "ERROR: flatten_whale expected >= 2 distinct flat counts "
+                "across the time grid, got %d — the dynamic-topology canary "
+                "no longer varies with t\n", distinct);
+        g_case_missing = 1;
+    }
+}
+
+/* ---- bench: variable-panel slider drag transaction --------------------- */
+
+/* Consume a pending flat-program rebuild the way glr_ctrl_display_frame() does:
+ * flatten when dirty, then clear the flag (repl_flatten_commands does NOT clear
+ * it itself). Returns 1 if a rebuild ran, 0 if the program was already clean.
+ *
+ * This *is* the rebuild counter. repl_state_normals_dirty() is not: it gates
+ * autonormal recomputation, a different flag on a different cache. Without this
+ * drain a motion loop only marks dirty and returns, so it times pointer-event
+ * routing (~10 us/motion) and never the flatten it defers (~ms), which is the
+ * cost Phase 3 exists to change. */
+static int drain_pending_flatten(void) {
+    if (!repl_state_flat_program_dirty())
+        return 0;
+    repl_flatten_commands(editor_state_edit_line());
+    repl_state_flat_program_clear_dirty();
+    return 1;
+}
+
+/* A slider drag is 100+ pointer-motion events and one mouse-up. Phase 1B split
+ * the transaction: motion applies the live value only, and the declaration is
+ * rewritten once on release. So a drag must perform *zero* source-dirty marks
+ * during motion (the seam every source-derived cache invalidates from) and
+ * exactly one on release.
+ *
+ * Each motion is followed by drain_pending_flatten(), so a timed motion is a
+ * full event -> dirty -> frame-rebuild round trip, as the app performs it.
+ *
+ * Two cases, by what the dragged variable feeds:
+ *   value      — `amp` only scales already-emitted vertices, so a later rebake
+ *                phase can keep the flat topology and rebake values in place;
+ *   structural — `bound` is a loop bound, so a change must re-flatten fully.
+ * Today both re-flatten fully; the split is here so the rebake phase has a
+ * before/after pair, and the timed region now contains the flatten that phase
+ * makes cheaper for the `value` case.
+ *
+ * Read each row against its own future self, not against the other row: the
+ * scenes differ in trip count (40 vs bound=20) and in how many flattened
+ * commands carry variable args, so the absolute value/structural gap reflects
+ * scene size, not the rebake distinction.
+ *
+ * The mouse-up persistence edit is timed separately from the motion loop:
+ * folding a once-per-drag source rewrite into a per-motion mean would hide it.
+ */
+static void bench_slider_drag_case(const char *label,
+                                   const char *const *scene,
+                                   const char *var_name,
+                                   int iters) {
+    enum { MOTIONS = 100 };
+    char motion_name[48];
+    char release_name[48];
+    BenchResult motion, release;
+    int var_idx;
+    int source_dirty_during_motion = 0;
+    int source_dirty_on_release = 0;
+    long long motion_rebuilds = 0;
+
+    snprintf(motion_name, sizeof(motion_name), "%s_motion", label);
+    snprintf(release_name, sizeof(release_name), "%s_release", label);
+    motion = (BenchResult){ .name = motion_name, .unit = "motions",
+                            .min_sec = 1e18 };
+    release = (BenchResult){ .name = release_name, .unit = "releases",
+                             .min_sec = 1e18 };
+
+    for (int it = 0; it < iters; it++) {
+        double motion_sec = 0.0, release_sec = 0.0;
+        double t0;
+
+        /* Fresh document per iteration: the release edit rewrites the
+         * declaration, so a reused document would drift its start value.
+         * glr_ctrl_reset_all (not fresh_repl) — the scene declares its own
+         * variable, and declare_test_idents would claim the name first and
+         * make the `float ...` line a redeclaration error, leaving no
+         * declaration row for the release edit to rewrite. */
+        glr_ctrl_reset_all();
+        variable_panel_set_visible(1);
+        for (int i = 0; scene[i]; i++)
+            editor_feed_line(scene[i]);
+        repl_flatten_commands(editor_state_edit_line());
+
+        var_idx = repl_eval_find_predef_var_idx(var_name);
+        if (var_idx < 0) {
+            fprintf(stderr, "ERROR: %s: variable '%s' not declared\n",
+                    label, var_name);
+            g_case_missing = 1;
+            return;
+        }
+
+        variable_panel_handle_drag_begin(var_idx, /*log_mode=*/0, /*x=*/0);
+        repl_state_normals_dirty_clear();
+        /* Enter the loop with a clean flat program so the first motion's
+         * rebuild is attributable to that motion and not to the load above. */
+        drain_pending_flatten();
+
+        t0 = now_seconds();
+        for (int m = 1; m <= MOTIONS; m++) {
+            glr_ctrl_router_handle_variable_panel_motion(m, 0);
+            motion_rebuilds += drain_pending_flatten();
+        }
+        motion_sec = now_seconds() - t0;
+        if (repl_state_normals_dirty())
+            source_dirty_during_motion = 1;
+
+        t0 = now_seconds();
+        glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP);
+        (void)drain_pending_flatten();
+        release_sec = now_seconds() - t0;
+        if (repl_state_normals_dirty())
+            source_dirty_on_release = 1;
+
+        if (motion_sec < motion.min_sec) motion.min_sec = motion_sec;
+        motion.total_sec += motion_sec;
+        motion.ops += MOTIONS;
+        motion.iters++;
+
+        if (release_sec < release.min_sec) release.min_sec = release_sec;
+        release.total_sec += release_sec;
+        release.ops += 1;
+        release.iters++;
+    }
+
+    report(motion);
+    report(release);
+
+    /* The transaction invariant, asserted rather than just timed: a fast
+     * motion loop that silently rewrote source would be a correctness bug the
+     * timings alone would not reveal. */
+    if (source_dirty_during_motion || !source_dirty_on_release) {
+        fprintf(stderr,
+                "ERROR: %s: expected zero source invalidations during motion "
+                "and exactly one on release (motion=%d, release=%d)\n",
+                label, source_dirty_during_motion, source_dirty_on_release);
+        g_case_missing = 1;
+    }
+    /* Every motion moves the value, so every motion must have left a rebuild
+     * for the frame to consume. If this drops to zero the timed region has
+     * stopped containing a flatten and the row is measuring event routing
+     * again — the exact defect this benchmark was rewritten to avoid. */
+    {
+        long long expect = (long long)MOTIONS * motion.iters;
+        if (motion_rebuilds != expect) {
+            fprintf(stderr,
+                    "ERROR: %s: expected %lld flat-program rebuilds during "
+                    "motion (one per motion), got %lld\n",
+                    label, expect, motion_rebuilds);
+            g_case_missing = 1;
+        }
+    }
+    if (!g_csv)
+        fprintf(stderr, "  (%s: %d motions, %lld rebuilds, source dirty during "
+                        "motion=%d, on release=%d)\n",
+                label, MOTIONS, motion_rebuilds, source_dirty_during_motion,
+                source_dirty_on_release);
+}
+
+/* `amp` scales emitted vertices: value-only, no loop bound or condition. */
+static const char *const k_slider_value_scene[] = {
+    "float amp = 1;",
+    "for(i, 0, 40) {",
+        "glBegin(GL_TRIANGLES);",
+        "glVertex3f(amp*i, 0, 0);",
+        "glVertex3f(amp*i, amp, 0);",
+        "glVertex3f(amp*i, 0, amp);",
+        "glEnd();",
+    "}",
+    NULL,
+};
+
+/* `bound` is the loop bound: changing it changes the flat-command count. */
+static const char *const k_slider_structural_scene[] = {
+    "float bound = 20;",
+    "for(i, 0, bound) {",
+        "glBegin(GL_TRIANGLES);",
+        "glVertex3f(i, 0, 0);",
+        "glVertex3f(i, 1, 0);",
+        "glVertex3f(i, 0, 1);",
+        "glEnd();",
+    "}",
+    NULL,
+};
+
+static void bench_slider_drag(int iters) {
+    bench_slider_drag_case("slider_value", k_slider_value_scene, "amp", iters);
+    bench_slider_drag_case("slider_structural", k_slider_structural_scene,
+                           "bound", iters);
 }
 
 /* ---- bench: cursor flat-cost query (statusbar budget readout) --------- */
@@ -1139,6 +1709,15 @@ static void usage(const char *prog) {
         "    parse_lines       repl_parse_command on every example line\n"
         "    feed_examples     full editor_feed_line path on every example\n"
         "    flatten_examples  repl_flatten_commands per example\n"
+        "    flatten_grass     full flatten of \"Swaying grass field (rand + t)\"\n"
+        "                      (warm compiled row + a _cold row that rebuilds the\n"
+        "                      expression cache inside the timer)\n"
+        "    flatten_orrery    full flatten of \"Orrery (labels track 3D orbits)\"\n"
+        "                      (same warm + _cold pair)\n"
+        "    flatten_corpus    full flatten of every built-in, one row per index\n"
+        "    flatten_phases    reparse / assign / remainder split of a full flatten\n"
+        "    flatten_whale     dynamic-topology full flatten across a t grid\n"
+        "    slider_drag       100-motion variable-panel drag + release persist\n"
         "    flat_cost_query   repl_flatten_cost_at_line over every cursor line\n"
         "    source_scope_query  source-scope depth queries over a deep document (warm cache)\n"
         "    source_scope_churn  source-scope cache rebuild per op (invalidate + query)\n"
@@ -1236,6 +1815,20 @@ int main(int argc, char **argv) {
         report(bench_feed_examples(iters));
     if (wants(only, "flatten_examples"))
         report(bench_flatten_examples(iters));
+    if (wants(only, "flatten_grass"))
+        run_named_flatten("flatten_grass", "Swaying grass field (rand + t)",
+                          iters);
+    if (wants(only, "flatten_orrery"))
+        run_named_flatten("flatten_orrery", "Orrery (labels track 3D orbits)",
+                          iters);
+    if (wants(only, "flatten_corpus"))
+        bench_flatten_corpus(iters);
+    if (wants(only, "flatten_phases"))
+        bench_flatten_phases(iters);
+    if (wants(only, "flatten_whale"))
+        bench_flatten_whale(iters);
+    if (wants(only, "slider_drag"))
+        bench_slider_drag(iters);
     if (wants(only, "flat_cost_query"))
         report(bench_flat_cost_query(iters));
     if (wants(only, "source_scope_query"))
@@ -1263,5 +1856,8 @@ int main(int argc, char **argv) {
         report(bench_fade_batches(iters));
     }
 
-    return 0;
+    /* A named case that no longer resolves (renamed/removed built-in), or a
+     * Whale scene that stopped varying its flat count with t, invalidates the
+     * comparison this suite exists to support. Fail loudly. */
+    return g_case_missing ? 1 : 0;
 }

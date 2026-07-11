@@ -1,0 +1,100 @@
+# machine: mac-mini Darwin 24.6.0 arm64
+name,unit,iters,ops,total_sec,min_iter_ms,per_iter_ms,per_op_us,ops_per_sec
+parse_lines,lines,5,12020,0.003913,0.678000,0.7826,0.3255,3071812
+feed_examples,lines,5,12020,0.025066,4.834000,5.0132,2.0854,479534
+flatten_examples,flattens,5,160,0.893248,174.316000,178.6496,5582.8000,179
+flatten_grass,flattens,5,80,0.434106,61.028999,86.8212,5426.3250,184
+flatten_orrery,flattens,5,80,0.356556,70.724000,71.3112,4456.9500,224
+# flatten_corpus_00 = Lit cube (flat_cmds=43)
+flatten_corpus_00,flattens,5,40,0.000393,0.076000,0.0786,9.8250,101781
+# flatten_corpus_01 = Rotating cube (flat_cmds=9)
+flatten_corpus_01,flattens,5,40,0.000082,0.015000,0.0164,2.0500,487801
+# flatten_corpus_02 = Animated ring (for + t) (flat_cmds=227)
+flatten_corpus_02,flattens,5,40,0.005723,1.102000,1.1446,143.0750,6989
+# flatten_corpus_03 = Conditional colors (if + t) (flat_cmds=14)
+flatten_corpus_03,flattens,5,40,0.000172,0.034000,0.0344,4.3000,232558
+# flatten_corpus_04 = Transform stress (translate/rotate/scale guides) (flat_cmds=118)
+flatten_corpus_04,flattens,5,40,0.001106,0.218000,0.2212,27.6500,36166
+# flatten_corpus_05 = Parametric torus (nested for) (flat_cmds=3825)
+flatten_corpus_05,flattens,5,40,0.098787,19.550000,19.7574,2469.6750,405
+# flatten_corpus_06 = Animated wave surface (analytic normals) (flat_cmds=3639)
+flatten_corpus_06,flattens,5,40,0.126587,25.169000,25.3174,3164.6750,316
+# flatten_corpus_07 = Torus knot (animated) (flat_cmds=3207)
+flatten_corpus_07,flattens,5,40,0.073236,14.267000,14.6472,1830.9000,546
+# flatten_corpus_08 = 2D assignment sketch (vars only) (flat_cmds=197)
+flatten_corpus_08,flattens,5,40,0.004346,0.797000,0.8692,108.6500,9204
+# flatten_corpus_09 = Function demo (named func) (flat_cmds=25)
+flatten_corpus_09,flattens,5,40,0.000231,0.043000,0.0462,5.7750,173160
+# flatten_corpus_10 = Function polygons (args + for) (flat_cmds=70)
+flatten_corpus_10,flattens,5,40,0.002617,0.514000,0.5234,65.4250,15285
+# flatten_corpus_11 = Function branching (args + if) (flat_cmds=33)
+flatten_corpus_11,flattens,5,40,0.000568,0.107000,0.1136,14.2000,70423
+# flatten_corpus_12 = Recursive triangle tree (func + recursion) (flat_cmds=1898)
+flatten_corpus_12,flattens,5,40,0.026880,5.312000,5.3760,672.0000,1488
+# flatten_corpus_13 = Animated spirograph curve (flat_cmds=2003)
+flatten_corpus_13,flattens,5,40,0.054914,10.836000,10.9828,1372.8500,728
+# flatten_corpus_14 = Traveling ripple ring (flat_cmds=2081)
+flatten_corpus_14,flattens,5,40,0.044221,8.663000,8.8442,1105.5250,905
+# flatten_corpus_15 = Bezier curve with guides (flat_cmds=339)
+flatten_corpus_15,flattens,5,40,0.009577,1.906000,1.9154,239.4250,4177
+# flatten_corpus_16 = Annotated orbit plot (labels) (flat_cmds=505)
+flatten_corpus_16,flattens,5,40,0.012959,2.588000,2.5918,323.9750,3087
+# flatten_corpus_17 = GLU concave arrow (flat_cmds=28)
+flatten_corpus_17,flattens,5,40,0.000287,0.055999,0.0574,7.1750,139373
+# flatten_corpus_18 = GLU concave arrow cutout (flat_cmds=39)
+flatten_corpus_18,flattens,5,40,0.000412,0.082000,0.0824,10.3000,97087
+# flatten_corpus_19 = GLU concave arrow extrusion (flat_cmds=102)
+flatten_corpus_19,flattens,5,40,0.001084,0.216000,0.2168,27.1000,36900
+# flatten_corpus_20 = Glow sprites (blend + point attenuation) (flat_cmds=1130)
+flatten_corpus_20,flattens,5,40,0.030598,6.058000,6.1196,764.9500,1307
+# flatten_corpus_21 = Snowfall particles (flat_cmds=3855)
+flatten_corpus_21,flattens,5,40,0.101509,20.047000,20.3018,2537.7250,394
+# flatten_corpus_22 = Swaying grass field (rand + t) (flat_cmds=4063)
+flatten_corpus_22,flattens,5,40,0.152213,30.330000,30.4426,3805.3250,263
+# flatten_corpus_23 = Jellyfish (glDepthMask translucency) (flat_cmds=2844)
+flatten_corpus_23,flattens,5,40,0.179677,24.673000,35.9354,4491.9250,223
+# flatten_corpus_24 = Dusk lighthouse atoll (stress test) (flat_cmds=3739)
+flatten_corpus_24,flattens,5,40,0.492380,57.023000,98.4760,12309.5000,81
+# flatten_corpus_25 = Orrery (labels track 3D orbits) (flat_cmds=3860)
+flatten_corpus_25,flattens,5,40,1.210945,46.954000,242.1890,30273.6250,33
+# flatten_corpus_26 = Whale (particle system + lit model) (flat_cmds=1335)
+flatten_corpus_26,flattens,5,40,0.044541,8.588000,8.9082,1113.5250,898
+# flatten_corpus_27 = Teapot carousel (transform stacks + glow points) (flat_cmds=459)
+flatten_corpus_27,flattens,5,40,0.009151,1.816000,1.8302,228.7750,4371
+# flatten_corpus_28 = Ringed planet (nebula skies) (flat_cmds=4003)
+flatten_corpus_28,flattens,5,40,0.164747,32.823000,32.9494,4118.6750,243
+# flatten_corpus_29 = Bubble sort (scratch arrays) (flat_cmds=162)
+flatten_corpus_29,flattens,5,40,0.009489,1.892000,1.8978,237.2250,4215
+phase_grass_total,flattens,5,80,0.301083,59.851000,60.2166,3763.5375,266
+phase_grass_reparse,flattens,5,80,0.146028,28.971774,29.2055,1825.3452,548
+phase_grass_var_assign,flattens,5,80,0.145695,29.002777,29.1389,1821.1832,549
+phase_grass_scratch_assign,flattens,5,80,0.000000,0.000000,0.0000,0.0000,0
+phase_grass_remainder,flattens,5,80,0.009361,1.855869,1.8721,117.0091,8546
+phase_orrery_total,flattens,5,80,0.351849,70.089000,70.3698,4398.1125,227
+phase_orrery_reparse,flattens,5,80,0.277362,55.277327,55.4725,3467.0299,288
+phase_orrery_var_assign,flattens,5,80,0.067557,13.426423,13.5114,844.4595,1184
+phase_orrery_scratch_assign,flattens,5,80,0.000000,0.000000,0.0000,0.0000,0
+phase_orrery_remainder,flattens,5,80,0.006930,1.367636,1.3860,86.6230,11544
+# flatten_whale_t0.0: flat_cmds=1335
+flatten_whale_t0.0,flattens,5,40,0.086942,8.762000,17.3884,2173.5500,460
+# flatten_whale_t0.4: flat_cmds=1497
+flatten_whale_t0.4,flattens,5,40,0.165879,22.011000,33.1758,4146.9750,241
+# flatten_whale_t1.0: flat_cmds=1767
+flatten_whale_t1.0,flattens,5,40,0.131732,19.291000,26.3464,3293.3000,304
+# flatten_whale_t2.0: flat_cmds=2355
+flatten_whale_t2.0,flattens,5,40,0.260752,44.383001,52.1504,6518.8000,153
+# flatten_whale_t4.0: flat_cmds=2835
+flatten_whale_t4.0,flattens,5,40,0.643602,79.534000,128.7204,16090.0500,62
+# flatten_whale_t8.0: flat_cmds=2319
+flatten_whale_t8.0,flattens,5,40,0.244459,37.081000,48.8918,6111.4750,164
+flat_cost_query,sweeps,5,160,0.032056,5.831000,6.4112,200.3500,4991
+source_scope_query,sweeps,5,40,0.000721,0.139000,0.1442,18.0250,55478
+source_scope_churn,rebuilds,5,1000,0.008363,1.633000,1.6726,8.3630,119574
+normalize_large_doc,normalizes,5,10000,0.003524,0.698000,0.7048,0.3524,2837684
+reformat_large_doc,reformats,5,5,0.127364,25.241000,25.4728,25472.8000,39
+spike_flatten_largest,flattens,5,5000,32.030471,5608.692000,6406.0942,6406.0942,156
+replay_examples,steps,5,219410,1.211471,76.790000,242.2942,5.5215,181110
+replay_long,steps,5,20420,0.030125,5.981000,6.0250,1.4753,677842
+replay_focus,calls,5,1000,0.000004,0.000000,0.0008,0.0040,249998096
+replay_anchor,calls,5,1000,0.000004,0.000000,0.0008,0.0040,249998096
+fade_batches,calls,5,1000,0.288575,57.307000,57.7150,288.5750,3465

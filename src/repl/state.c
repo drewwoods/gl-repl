@@ -6,6 +6,7 @@
 #include "repl/command_store.h"
 #include "source_document.h" /* source_document_clear */
 #include "repl/eval.h"
+#include "repl/expr_program.h"
 #include "repl/pipeline.h"
 #include "repl/scenes.h"
 #include "repl/source_scope.h"
@@ -292,6 +293,8 @@ void repl_state_mark_source_dirty(void) {
      * - The flat program rebuilds on demand.
      * - The source-scope depth cache (block depths, indent) rebuilds
      *   on demand.
+     * - The compiled-expression cache rebuilds lazily per line on the
+     *   next full flatten.
      *
      * Don't try to invalidate caches independently — every source
      * mutation goes through here, and that's the contract callers rely
@@ -300,6 +303,7 @@ void repl_state_mark_source_dirty(void) {
     g_repl_state.document.source_uses_time_dirty = 1;
     g_repl_state.flat_program.dirty = 1;
     repl_source_scope_depth_cache_invalidate();
+    repl_expr_cache_invalidate(repl_expr_cache_live());
 }
 
 void repl_mark_source_dirty(void) {
@@ -458,6 +462,10 @@ void repl_state_restore(const ReplRuntimeState *snapshot) {
     ensure_t_var_idx();
     g_repl_state.document.source_uses_time_dirty = 1;
     repl_source_scope_depth_cache_invalidate();
+    /* The restored snapshot carries a different document (and possibly a
+     * reshaped predef table), so compiled expressions — line indices and
+     * compile-time-resolved predef slots — are stale wholesale. */
+    repl_expr_cache_invalidate(repl_expr_cache_live());
 }
 
 void repl_state_import_export_reset(void) {

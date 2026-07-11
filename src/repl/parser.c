@@ -50,6 +50,19 @@ static void parser_emit_error(const ReplParseContext *ctx, const char *fmt, ...)
     va_end(ap);
 }
 
+static void write_text(char *out, int sz, const char *fmt, ...);
+
+/* Fire the parse context's expression-span capture (if any) over a whole
+ * NUL-terminated helper buffer. The sink compiles the span during the
+ * call, so handing out pointers into parser-local buffers is safe. */
+static void parser_capture_expr_span(const ReplParseContext *ctx,
+                                     ReplExprRole role, int ordinal,
+                                     const char *text) {
+    if (ctx && ctx->capture && ctx->capture->fn)
+        ctx->capture->fn(ctx->capture->user_data, role, ordinal,
+                         text, text + strlen(text));
+}
+
 static void parser_emit_error_static(const ReplParseContext *ctx, const char *msg) {
     parser_emit_error(ctx, "%s", msg ? msg : "");
 }
@@ -273,7 +286,7 @@ static int is_known_incomplete_func_name(const char *func) {
  * Returns 1 with *out_val / emit[] filled, or 0 after emitting the
  * slot's diagnostic.
  */
-static int resolve_enum_arg_slot(const char *raw,
+static int resolve_enum_arg_slot(const char *raw, int slot_idx,
                                  const ReplEnumArgSpec *as,
                                  ExprVar *vars, int num_vars,
                                  float *out_val,
@@ -343,6 +356,11 @@ static int resolve_enum_arg_slot(const char *raw,
             parser_emit_error_static(ctx, as->usage);
             return 0;
         }
+        /* Expression-resolved slot (the token table didn't match): the
+         * compiled path re-evaluates exactly this slot. Token-matched
+         * slots are never captured — their baked enum value is the
+         * command's constant argument. */
+        parser_capture_expr_span(ctx, REPL_EXPR_ROLE_CMD_ARG, slot_idx, raw);
         *out_val = fv;
         /* %.*s precision (not bare %s) so -Wformat-truncation sees the
          * bound made explicit at the format level. snprintf already
@@ -515,7 +533,7 @@ static int try_parse_table_driven_enum_command(const char *func,
         char slot_emit[MAX_ENUM_ARGS][ENUM_SLOT_TEXT_MAX];
         int any_vars = 0;
         for (int slot = 0; slot < num_slots; slot++) {
-            if (!resolve_enum_arg_slot(slot_raw[slot], &def->args[slot],
+            if (!resolve_enum_arg_slot(slot_raw[slot], slot, &def->args[slot],
                                        vars, num_vars, &slot_val[slot],
                                        slot_emit[slot],
                                        (int)sizeof(slot_emit[slot]),
@@ -556,6 +574,36 @@ static int try_parse_table_driven_enum_command(const char *func,
  * ctx->err_buf). `indent` is the pre-computed source-scope indent
  * string for source_line_idx. */
 
+/* gluColor(r, g, b[, a]) — per-vertex tessellator color. Alpha defaults to
+ * 1.0 when omitted; num_args is always canonicalized to 4. */
+static int parse_glu_color(const char *args, GLCmd *cmd,
+                           char *text_out, int text_sz,
+                           const char *tess_indent,
+                           const ReplParseContext *ctx) {
+    ExprVar *vars = ctx->vars;
+    int num_vars = ctx->num_vars;
+
+    if (!parser_validate_expression_idents(args, vars, num_vars, ctx))
+        return 0;
+    parser_capture_expr_span(ctx, REPL_EXPR_ROLE_CMD_ARG_LIST_LENIENT,
+                             0, args);
+    cmd->num_args = repl_eval_parse_exprs(args, cmd->args, 4, vars, num_vars);
+    if (cmd->num_args >= 3) {
+        if (cmd->num_args < 4) cmd->args[3] = 1.0f;
+        cmd->num_args = 4;
+        cmd->type = CMD_TESS_COLOR;
+        cmd->valid = 1;
+        cmd->has_vars = input_has_any_visible_vars(args, vars, num_vars);
+        if (text_out && text_sz > 0)
+            write_text(text_out, text_sz, "%sgluColor(%g, %g, %g, %g);",
+                       tess_indent, cmd->args[0], cmd->args[1],
+                       cmd->args[2], cmd->args[3]);
+        return 1;
+    }
+    parser_emit_error_static(ctx, "Usage: gluColor(r, g, b) or gluColor(r, g, b, a)");
+    return 0;
+}
+
 static int parse_label(const char *args, GLCmd *cmd,
                        char *text_out, int text_sz,
                        const char *indent,
@@ -579,6 +627,8 @@ static int parse_label(const char *args, GLCmd *cmd,
     if (post_args[0]) {
         if (!parser_validate_expression_idents(post_args, vars, num_vars, ctx))
             return 0;
+        parser_capture_expr_span(ctx, REPL_EXPR_ROLE_CMD_ARG_LIST_LENIENT,
+                                 0, post_args);
         float subs_full[GLUT_BITMAP_MAX_SUB_ARGS + 4];
         int parsed = repl_eval_parse_exprs(
             post_args, subs_full,
@@ -823,6 +873,9 @@ static int parse_materialfv(const char *args, GLCmd *cmd,
     float parsed_args[8];
     int num_parsed = parse_canonical_float_list(to_parse, parsed_args, 8, vars, num_vars, ctx);
     if (num_parsed < 0) return 0;
+    /* Value list lands at args[2..]; face/pname stay baked enum tokens. */
+    parser_capture_expr_span(ctx, REPL_EXPR_ROLE_CMD_ARG_LIST_LENIENT,
+                             2, to_parse);
 
     if (num_parsed != 1 && num_parsed != 4) {
         parser_emit_error_static(ctx, "Expected 1 or 4 float values");
@@ -880,6 +933,9 @@ static int parse_materialf(const char *args, GLCmd *cmd,
     float parsed_args[2];
     int num_parsed = parse_canonical_float_list(val_arg, parsed_args, 2, vars, num_vars, ctx);
     if (num_parsed < 0) return 0;
+    /* Shininess value lands at args[2]; face/pname stay baked. */
+    parser_capture_expr_span(ctx, REPL_EXPR_ROLE_CMD_ARG_LIST_LENIENT,
+                             2, val_arg);
 
     if (num_parsed != 1) {
         parser_emit_error_static(ctx, "Expected 1 float value");
@@ -942,6 +998,9 @@ static int parse_point_parameter_fv(const char *args, GLCmd *cmd,
         return 0;
     int num_parsed = parse_canonical_float_list(to_parse, parsed_args, 4, vars, num_vars, ctx);
     if (num_parsed < 0) return 0;
+    /* Coefficients land at args[1..3]; the pname stays baked. */
+    parser_capture_expr_span(ctx, REPL_EXPR_ROLE_CMD_ARG_LIST_LENIENT,
+                             1, to_parse);
 
     if (num_parsed != 3) {
         parser_emit_error_static(ctx,
@@ -1401,6 +1460,8 @@ static int parse_command(const char *line, GLCmd *cmd,
             if (parse_expr_list_exact(args, cmd->args, def->num_args,
                                       vars, num_vars, &exact_count) &&
                 exact_count == def->num_args) {
+                parser_capture_expr_span(ctx, REPL_EXPR_ROLE_CMD_ARG_LIST,
+                                         0, args);
                 cmd->num_args = exact_count;
                 cmd->type = def->type;
                 cmd->valid = 1;
@@ -1498,23 +1559,8 @@ static int parse_command(const char *line, GLCmd *cmd,
     }
 
     /* gluColor(r, g, b[, a]) - set per-vertex color for tessellator */
-    if (strcmp(func, "gluColor") == 0) {
-        if (!parser_validate_expression_idents(args, vars, num_vars, ctx))
-            return 0;
-        cmd->num_args = repl_eval_parse_exprs(args, cmd->args, 4, vars, num_vars);
-        if (cmd->num_args >= 3) {
-            if (cmd->num_args < 4) cmd->args[3] = 1.0f;
-            cmd->num_args = 4;
-            cmd->type = CMD_TESS_COLOR;
-            cmd->valid = 1;
-            cmd->has_vars = input_has_any_visible_vars(args, vars, num_vars);
-            WRITE_TEXT("%sgluColor(%g, %g, %g, %g);",
-                       tess_indent, cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
-            return 1;
-        }
-        parser_emit_error_static(ctx, "Usage: gluColor(r, g, b) or gluColor(r, g, b, a)");
-        return 0;
-    }
+    if (strcmp(func, "gluColor") == 0)
+        return parse_glu_color(args, cmd, text_out, text_sz, tess_indent, ctx);
 
     /* goto label - jump to a named label.
      *
