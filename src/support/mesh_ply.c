@@ -139,6 +139,138 @@ static int ensure_cap(void **arr, int *cap, int need, size_t esz) {
     return 1;
 }
 
+/* Append one synthesized triangle to the same corner/face-normal arrays used
+ * by captured polygons. Proxy geometry deliberately clears authored normals:
+ * its normals describe the generated surface, not the source point/line. */
+static int append_triangle(RawVert **corners, int *corners_cap, int *ncorners,
+                           Vec3 **fnorm, int *fnorm_cap, int *ntris,
+                           RawVert a, RawVert b, RawVert c) {
+    if (!ensure_cap((void **)corners, corners_cap, *ncorners + 3,
+                    sizeof **corners) ||
+        !ensure_cap((void **)fnorm, fnorm_cap, *ntris + 1, sizeof **fnorm))
+        return 0;
+    a.has_authored = b.has_authored = c.has_authored = 0;
+    (*corners)[*ncorners + 0] = a;
+    (*corners)[*ncorners + 1] = b;
+    (*corners)[*ncorners + 2] = c;
+    (*fnorm)[*ntris] = face_normal(&a, &b, &c);
+    *ncorners += 3;
+    (*ntris)++;
+    return 1;
+}
+
+static RawVert moved_vert(const RawVert *src, float x, float y, float z) {
+    RawVert v = *src;
+    v.x = x; v.y = y; v.z = z;
+    v.anx = v.any = v.anz = 0.0f;
+    v.has_authored = 0;
+    return v;
+}
+
+/* An octahedron is a compact, view-independent point proxy (8 triangles). */
+static int append_point_proxy(RawVert **corners, int *corners_cap, int *ncorners,
+                              Vec3 **fnorm, int *fnorm_cap, int *ntris,
+                              const RawVert *p, float radius) {
+    RawVert v[6];
+    int ring[4] = {0, 5, 1, 4};  /* +X, -Z, -X, +Z around the Y axis */
+    v[0] = moved_vert(p, p->x + radius, p->y, p->z);
+    v[1] = moved_vert(p, p->x - radius, p->y, p->z);
+    v[2] = moved_vert(p, p->x, p->y + radius, p->z);
+    v[3] = moved_vert(p, p->x, p->y - radius, p->z);
+    v[4] = moved_vert(p, p->x, p->y, p->z + radius);
+    v[5] = moved_vert(p, p->x, p->y, p->z - radius);
+    for (int k = 0; k < 4; k++) {
+        int next = (k + 1) & 3;
+        if (!append_triangle(corners, corners_cap, ncorners,
+                             fnorm, fnorm_cap, ntris,
+                             v[2], v[ring[k]], v[ring[next]]) ||
+            !append_triangle(corners, corners_cap, ncorners,
+                             fnorm, fnorm_cap, ntris,
+                             v[3], v[ring[next]], v[ring[k]]))
+            return 0;
+    }
+    return 1;
+}
+
+/* Capped six-sided tube for one line segment (12 side + 12 cap triangles).
+ * Endpoint colors are retained, so a line whose GL colors vary still grades
+ * from a to b after it becomes a conventional triangle mesh. */
+static int append_line_proxy(RawVert **corners, int *corners_cap, int *ncorners,
+                             Vec3 **fnorm, int *fnorm_cap, int *ntris,
+                             const RawVert *a, const RawVert *b, float radius) {
+    enum { SIDES = 6 };
+    RawVert ar[SIDES], br[SIDES];
+    float dx = b->x - a->x, dy = b->y - a->y, dz = b->z - a->z;
+    float len = sqrtf(dx * dx + dy * dy + dz * dz);
+    float rx, ry, rz, ux, uy, uz, vx, vy, vz, ul;
+    const float tau = 6.2831853071795864769f;
+    if (len <= 1e-12f)
+        return 1;
+    dx /= len; dy /= len; dz /= len;
+
+    /* Pick a reference axis that cannot be nearly parallel to the segment. */
+    if (fabsf(dx) <= fabsf(dy) && fabsf(dx) <= fabsf(dz)) {
+        rx = 1.0f; ry = 0.0f; rz = 0.0f;
+    } else if (fabsf(dy) <= fabsf(dz)) {
+        rx = 0.0f; ry = 1.0f; rz = 0.0f;
+    } else {
+        rx = 0.0f; ry = 0.0f; rz = 1.0f;
+    }
+    ux = dy * rz - dz * ry;
+    uy = dz * rx - dx * rz;
+    uz = dx * ry - dy * rx;
+    ul = sqrtf(ux * ux + uy * uy + uz * uz);
+    ux /= ul; uy /= ul; uz /= ul;
+    vx = dy * uz - dz * uy;
+    vy = dz * ux - dx * uz;
+    vz = dx * uy - dy * ux;
+
+    for (int k = 0; k < SIDES; k++) {
+        float angle = tau * (float)k / (float)SIDES;
+        float ox = radius * (cosf(angle) * ux + sinf(angle) * vx);
+        float oy = radius * (cosf(angle) * uy + sinf(angle) * vy);
+        float oz = radius * (cosf(angle) * uz + sinf(angle) * vz);
+        ar[k] = moved_vert(a, a->x + ox, a->y + oy, a->z + oz);
+        br[k] = moved_vert(b, b->x + ox, b->y + oy, b->z + oz);
+    }
+    for (int k = 0; k < SIDES; k++) {
+        int next = (k + 1) % SIDES;
+        RawVert ac = moved_vert(a, a->x, a->y, a->z);
+        RawVert bc = moved_vert(b, b->x, b->y, b->z);
+        if (!append_triangle(corners, corners_cap, ncorners,
+                             fnorm, fnorm_cap, ntris,
+                             ar[k], ar[next], br[next]) ||
+            !append_triangle(corners, corners_cap, ncorners,
+                             fnorm, fnorm_cap, ntris,
+                             ar[k], br[next], br[k]) ||
+            !append_triangle(corners, corners_cap, ncorners,
+                             fnorm, fnorm_cap, ntris,
+                             ac, ar[next], ar[k]) ||
+            !append_triangle(corners, corners_cap, ncorners,
+                             fnorm, fnorm_cap, ntris,
+                             bc, br[k], br[next]))
+            return 0;
+    }
+    return 1;
+}
+
+static void bounds_include(const RawVert *v, float *xmin, float *ymin, float *zmin,
+                           float *xmax, float *ymax, float *zmax, int *have) {
+    if (!*have) {
+        *xmin = *xmax = v->x;
+        *ymin = *ymax = v->y;
+        *zmin = *zmax = v->z;
+        *have = 1;
+        return;
+    }
+    if (v->x < *xmin) *xmin = v->x;
+    if (v->x > *xmax) *xmax = v->x;
+    if (v->y < *ymin) *ymin = v->y;
+    if (v->y > *ymax) *ymax = v->y;
+    if (v->z < *zmin) *zmin = v->z;
+    if (v->z > *zmax) *zmax = v->z;
+}
+
 int mesh_ply_write(FILE *out, const float *feedback, int float_count,
                    const MeshPlyCapture *cap, const MeshPlyOptions *opts,
                    MeshPlyStats *stats) {
@@ -241,6 +373,42 @@ int mesh_ply_write(FILE *out, const float *feedback, int float_count,
             i += 1;                                     /* the pass-through value */
         } else {
             goto done;                                  /* unknown token -> error */
+        }
+    }
+
+    /* Optional compatibility mesh. PLY defines loose points and edge records,
+     * but Xcode/Quick Look and many mesh importers only draw faces. Scale the
+     * proxies from the actual captured bounds rather than the +-1000 capture
+     * cube, which is intentionally much larger than normal scene geometry. */
+    if (opts->primitive_radius_scale > 0.0f && (nlverts > 0 || npoints > 0)) {
+        float xmin = 0.0f, ymin = 0.0f, zmin = 0.0f;
+        float xmax = 0.0f, ymax = 0.0f, zmax = 0.0f;
+        int have_bounds = 0;
+        for (int c = 0; c < ncorners; c++)
+            bounds_include(&corners[c], &xmin, &ymin, &zmin,
+                           &xmax, &ymax, &zmax, &have_bounds);
+        for (int k = 0; k < nlverts; k++)
+            bounds_include(&lverts[k], &xmin, &ymin, &zmin,
+                           &xmax, &ymax, &zmax, &have_bounds);
+        for (int k = 0; k < npoints; k++)
+            bounds_include(&pverts[k], &xmin, &ymin, &zmin,
+                           &xmax, &ymax, &zmax, &have_bounds);
+        float span = fmaxf(xmax - xmin, fmaxf(ymax - ymin, zmax - zmin));
+        if (span <= 1e-6f) span = 1.0f;
+        float line_radius = span * opts->primitive_radius_scale;
+        float point_radius = line_radius * 2.0f;
+        for (int e = 0; e < nlverts / 2; e++) {
+            if (!append_line_proxy(&corners, &corners_cap, &ncorners,
+                                   &fnorm, &fnorm_cap, &ntris,
+                                   &lverts[2 * e], &lverts[2 * e + 1],
+                                   line_radius))
+                goto done;
+        }
+        for (int p = 0; p < npoints; p++) {
+            if (!append_point_proxy(&corners, &corners_cap, &ncorners,
+                                    &fnorm, &fnorm_cap, &ntris,
+                                    &pverts[p], point_radius))
+                goto done;
         }
     }
 

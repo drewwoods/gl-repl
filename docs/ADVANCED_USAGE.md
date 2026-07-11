@@ -257,8 +257,10 @@ Headless / scripted capture:
 ./gl-repl --example 9 --export-ply out.ply --export-ply-srgb   # decode colors sRGB -> linear
 ```
 
-Line primitives (`glBegin(GL_LINES/LINE_STRIP/LINE_LOOP)`) export as a PLY
-`edge` element. See *Mesh Export (PLY via GL_FEEDBACK)* in
+Point and line primitives are preserved as PLY loose vertices / `edge`
+elements. Because mesh-only viewers such as Xcode ignore those records, the
+app export also adds small octahedron / capped-tube triangle proxies whose
+radius scales with the scene bounds. See *Mesh Export (PLY via GL_FEEDBACK)* in
 [`ARCHITECTURE.md`](ARCHITECTURE.md) for the capture/encode design.
 
 ## Scene-file headers

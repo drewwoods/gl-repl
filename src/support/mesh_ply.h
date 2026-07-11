@@ -13,7 +13,9 @@
  * point-cloud convention — a vertex referenced by no face), and each line
  * segment becomes an `element edge` record (`property int vertex1/vertex2`,
  * the CloudCompare/Blender convention; the edge element is only emitted when
- * the capture contains lines, so triangle-only output is unchanged).
+ * the capture contains lines, so triangle-only output is unchanged). Callers
+ * may also request triangle proxies for points and lines because mesh-only
+ * viewers such as Xcode ignore loose vertices and edge elements.
  *
  * This module calls NO GL functions and includes NO GL header — it only
  * reads a plain float buffer, so it is fully unit-testable with synthetic
@@ -86,6 +88,13 @@ typedef struct {
                               to R/G/B only; alpha stays linear. Default 0 =
                               raw pass-through (matches sRGB-naive viewers and
                               the on-screen look). */
+    float primitive_radius_scale;
+                           /* > 0: also turn points into octahedra and line
+                              segments into capped six-sided tubes so mesh-only
+                              PLY viewers display them. This is the tube radius
+                              as a fraction of the captured scene's largest
+                              world-space span; point radius is twice that.
+                              0 preserves loose-vertex / edge-only output. */
 } MeshPlyOptions;
 
 /* Per-primitive counts of what a mesh_ply_write call emitted, for status

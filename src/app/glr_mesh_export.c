@@ -171,6 +171,9 @@ int glr_export_mesh_ply(const char *path, int srgb_decode) {
     MeshPlyOptions opts = {
         .weld = 1, .weld_eps = 1e-3f, .smooth_normals = 1, .triangulate = 1,
         .srgb_decode = srgb_decode,
+        /* Xcode/Quick Look ignore PLY loose vertices and edge elements. Keep
+         * those records, but also emit small face meshes for broad viewers. */
+        .primitive_radius_scale = 0.0025f,
     };
     MeshPlyStats stats;
     int ntris = mesh_ply_write(fp, buf, written, &cap, &opts, &stats);
