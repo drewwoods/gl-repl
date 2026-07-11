@@ -108,8 +108,11 @@ Inside the full app this is **layers 1 and 3** of the ownership map:
 - On success the editor applies the change to REPL runtime state via
   `repl_apply_*`, and `repl_command_store` does the low-level [`GLCmd`](command.h#L90) array
   shuffling.
-- Each frame, if the program is dirty, [`flatten.c`](flatten.c) rebuilds the flat program
-  and [`autonormal.c`](autonormal.c) regenerates `glNormal3f`s; [`executor.c`](executor.c) then renders it.
+- Each frame, [`repl_refresh_flat_program()`](pipeline.h) brings the flat
+  program current: it either does nothing, rebakes values in place, or asks
+  [`flatten.c`](flatten.c) for a full rebuild. [`autonormal.c`](autonormal.c)
+  regenerates `glNormal3f`s when needed; [`executor.c`](executor.c) then
+  renders the flat result.
 - [`ReplRuntimeState`](state.h#L18) ([`state.c`](state.c)) owns the program model: parsed commands, the flat
   program, predefined variables, scratch arrays `A/B/C`, the `func0..func9`
   alias table, the `t` clock, and the runtime-mutated render tail
@@ -157,7 +160,8 @@ at build time, like the example catalog.
 | [`source_scope.c`](source_scope.c) / `.h`, [`format.c`](format.c) / `.h`, [`reformat.c`](reformat.c) / `.h`, [`bootstrap.c`](bootstrap.c) / `.h` | Depth/indent/block-lookup cache, pure indentation, source reformat, startup loading |
 | **Frame flow** | *program model → GL* |
 | [`flatten.c`](flatten.c) / `.h` | Source → flat program (unroll/inline/resolve `if`) |
-| [`flatten_expr.c`](flatten_expr.c) / `.h` | Internal compiled-expression cache boundary used by flatten |
+| [`expr_program.c`](expr_program.c) / `.h` | Compiled expression programs and ephemeral per-line cache |
+| [`flatten_expr.c`](flatten_expr.c) / `.h` | Internal cache/evaluation/dependency boundary used by flatten and rebake |
 | [`flatten_query.c`](flatten_query.c) / `.h` | Live flat-program cost/cursor queries |
 | [`init_state.h`](init_state.h) | Read-only access to the effective REPL-modifiable state commands applied by `init()` |
 | [`gl_state_inspector.c`](gl_state_inspector.c) / `.h` | Pure source-checkpoint fold of every generated `init()`/`display()` state write plus REPL commands through the selected point; includes generated lights, camera/modelview, render toggles, and attribute-stack depth, and reports touched values, their latest source, and OpenGL 2.1 initial defaults without issuing GL calls |

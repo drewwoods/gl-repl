@@ -569,10 +569,10 @@ explaining why the extra background is useful.
 | [`src/ui/app/repl_code_panel.h`](src/ui/app/repl_code_panel.h) | [`UiReplCodePanelLayout`](src/ui/app/repl_code_panel.h#L66) plus REPL adapter render/hit/layout entrypoints |
 | [`src/repl/executor.c`](src/repl/executor.c) | Narrow live-GL dispatch: walks the flat command array emitting OpenGL calls |
 | [`src/repl/executor.h`](src/repl/executor.h) | Executor public API (`repl_execute_program`, transform helpers) |
-| [`src/repl/flatten.c`](src/repl/flatten.c) | Source-to-flat program builder: unrolls loops, inlines functions, resolves if-blocks |
-| [`src/repl/flatten.h`](src/repl/flatten.h) | Flatten public API (`repl_flatten_program`, `repl_flatten_commands`) |
-| [`src/repl/flatten_expr.c`](src/repl/flatten_expr.c) | Internal boundary for compiled-expression line lifecycle, capture, and warm evaluation; keeps cache entries/program handles out of [`flatten.c`](src/repl/flatten.c) |
-| [`src/repl/flatten_expr.h`](src/repl/flatten_expr.h) | Narrow `(line, role, ordinal)` cache integration API used only by the flatten walk |
+| [`src/repl/flatten.c`](src/repl/flatten.c) | Source-to-flat program builder: unrolls loops, inlines functions, resolves if-blocks. Also derives per-predef dependency masks (structural/value) + `rebake_ok` per full flatten, and the in-place **rebake** (`repl_flatten_rebake_program`/`_commands`) that re-evaluates baked values without re-expanding topology for a value-only predef change (dep-routing model in [`src/repl/ARCHITECTURE.md`](src/repl/ARCHITECTURE.md) §3.5) |
+| [`src/repl/flatten.h`](src/repl/flatten.h) | Flatten public API (`repl_flatten_program`, `repl_flatten_commands`) + rebake API (`repl_flatten_rebake_program`/`_commands`, [`ReplRebakeOptions`](src/repl/flatten.h#L151)/`Result`) + [`ReplFlattenResult`](src/repl/flatten.h#L122) dep masks |
+| [`src/repl/flatten_expr.c`](src/repl/flatten_expr.c) | Internal boundary for compiled-expression line lifecycle, capture, warm evaluation, dependency accumulation, and rebake lookup; keeps cache entries/program handles out of [`flatten.c`](src/repl/flatten.c) |
+| [`src/repl/flatten_expr.h`](src/repl/flatten_expr.h) | Narrow `(line, role, ordinal)` cache integration API used by the full flatten and rebake walks |
 | [`src/repl/flatten_query.c`](src/repl/flatten_query.c) | Live flat-program query helpers: cursor matching, current-block highlight refresh, and per-line flat-cost attribution |
 | [`src/repl/flatten_query.h`](src/repl/flatten_query.h) | Flatten query public API (`repl_flat_cmd_matches_cursor`, `repl_flatten_cost_at_line`, `repl_flatten_refresh_current_block_highlight`) |
 | [`src/repl/expr_program.c`](src/repl/expr_program.c) | Compiled expression programs + per-source-line cache: postfix compiler mirroring `repl_eval_expr`'s grammar, bit-identical evaluator returning value + predef dependency mask, heap arenas (16 MiB cap, zero warm-path allocation). Fed by the [`ReplExprCaptureSink`](src/repl/eval.h#L378) spans the parser/eval helpers fire during a flatten's first visit to a line; invalidated wholesale from `repl_state_mark_source_dirty` |
@@ -707,7 +707,7 @@ explaining why the extra background is useful.
 
 - File-private statics use `g_` prefix (e.g., `g_cfg_items[]`, `g_user_scenes[]`).
   Runtime state that crosses module boundaries is accessed through typed
-  facades: [`src/repl/state.h`](src/repl/state.h) for REPL program state (e.g., [`repl_state_render()`](src/repl/state_owners.h#L90),
+  facades: [`src/repl/state.h`](src/repl/state.h) for REPL program state (e.g., [`repl_state_render()`](src/repl/state_owners.h#L100),
   `repl_state_variables()`), [`src/editor/state.h`](src/editor/state.h) for editor session state
   (e.g., [`editor_state_input()`](src/editor/state.h#L282), [`editor_state_search()`](src/editor/state.h#L384)), and peer-subsystem
   accessors for replay ([`replay_state_view()`](src/subsystems/replay/replay_state.h#L126)) and variable panel
@@ -864,7 +864,7 @@ camera/REPL-agnostic. Per frame the controller picks:
 - **Time blur** (Blur only) — if the source uses `t`, sample the trailing
   window `[t−dt, t]` (`dt = GLR_FRAME_DT_SECS`) regardless of camera motion
   (the camera renders crisp at the current pose for every sample): the hook calls
-  [`repl_state_time_set_transient()`](src/repl/state_owners.h#L72) then [`repl_flatten_commands()`](src/repl/pipeline.h#L10) to re-bake
+  [`repl_state_time_set_transient()`](src/repl/state_owners.h#L82) then [`repl_refresh_flat_program_for_deps()`](src/repl/pipeline.h#L26) to re-bake
   geometry at the sub-step `t`. (Re-baking is required — the executor consumes
   baked `flat_cmds[].args`; animation is reflatten-per-frame, not execute-time
   re-eval.) This does **not** require `t` to be playing: a paused scene that

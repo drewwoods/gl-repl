@@ -211,7 +211,7 @@ derived from it instead of poking raw global arrays.
 
 ### Flatten cache and render-pass reuse
 
-[`repl_flatten_commands()`](../src/repl/pipeline.h#L10) is the expensive interpreter boundary. It expands
+[`repl_flatten_commands()`](../src/repl/pipeline.h#L21) is the expensive interpreter boundary. It expands
 loops/functions/conditionals, evaluates expressions and variable/scratch
 assignments against the current bindings, and stores resolved [`GLCmd`](../src/repl/command.h#L90) records
 in the flat program. For example:
@@ -228,10 +228,15 @@ The cache is not an OpenGL display list, VBO, or already-submitted driver
 command stream; [`src/repl/executor.c`](../src/repl/executor.c) still walks the cached `GLCmd[]` and
 emits calls such as `glVertex2f(cmd.args[0], cmd.args[1])`.
 
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L133) rebuilds the flat program only when it is dirty.
-While animation is playing, advancing `t` marks the flat program dirty, so
-expressions that depend on `t` re-evaluate once for that frame. Accumulation
-AA, replay overlay passes, and vertex outlines reuse the same frame-level
+[`repl_refresh_flat_program()`](../src/repl/pipeline.h) is the single live
+freshness boundary used by the frame, exports, diagnostics, and replay
+freshness checks. It chooses no work, an in-place value rebake, or a full
+flatten from the dependency/dirty state and owns the matching profiler
+section. A failed rebake restores its value-table baseline and full-flattens
+before returning. While animation is playing, advancing `t` is routed by its
+dependency bit: stable value-only scenes rebake, while `t`-dependent loops or
+conditions full-flatten. Accumulation AA, replay overlay passes, and vertex
+outlines reuse the same frame-level
 [`FlatProgramView`](../src/repl/flatten.h#L46)/snapshot instead of reparsing, reflattening, or re-evaluating
 expressions per sample. Those passes may reapply precomputed assignment
 commands from `args[]` while walking the flat stream, but the frame/probe
@@ -738,10 +743,10 @@ signature for audited renderers.
   and most render config live **app-side**
   on `glr_state` ([`src/app/glr_state.c`](../src/app/glr_state.c)), not on [`ReplRuntimeState`](../src/repl/state.h#L18); the
   controller reads them from there when filling the snapshot. Only the
-  REPL-owned render *tail* ([`ReplRenderState`](../src/repl/state_views.h#L103): per-light state + clear
+  REPL-owned render *tail* ([`ReplRenderState`](../src/repl/state_views.h#L118): per-light state + clear
   color) remains a REPL slice.
-* pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L85), [`EditorInputView`](../src/editor/state.h#L68),
-  [`ReplImportExportView`](../src/repl/state_views.h#L132), [`FlatProgramView`](../src/repl/flatten.h#L46), [`ReplPredefView`](../src/repl/eval.h#L178))
+* pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L100), [`EditorInputView`](../src/editor/state.h#L68),
+  [`ReplImportExportView`](../src/repl/state_views.h#L147), [`FlatProgramView`](../src/repl/flatten.h#L46), [`ReplPredefView`](../src/repl/eval.h#L178))
 * document/flat metadata (`document_cmds`, `document_count`, `edit_line`
   — sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L347),
   `flat_program_count`, …)
@@ -1144,7 +1149,7 @@ values through these seams:
   [`src/repl/compile.c`](../src/repl/compile.c). The non-editor
   [`repl_load_apply_line()`](../src/repl/load.h#L78) transaction handles example, import, and
   tutorial loads.
-- **Reset:** [`repl_state_reset_program()`](../src/repl/state_owners.h#L121) resets core REPL
+- **Reset:** [`repl_state_reset_program()`](../src/repl/state_owners.h#L131) resets core REPL
   state. [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L62) resets the editor, UI, and peer
   subsystems when a program is replaced wholesale.
 - **App-service bootstrap:** Dump-only CLI paths bypass normal GL
@@ -1157,7 +1162,7 @@ Scene-presentation policy and most render config live in the app-side owner
 [`src/app/glr_state.c`](../src/app/glr_state.c). REPL-pipeline translation units do not include
 [`glr_state.h`](../src/app/glr_state.h); `check-repl-state-no-glr-state` enforces that boundary.
 App, editor, UI, and render3d code may consume it. Only the REPL-owned render
-tail—[`ReplRenderState`](../src/repl/state_views.h#L103), containing per-light state and clear
+tail—[`ReplRenderState`](../src/repl/state_views.h#L121), containing per-light state and clear
 color—remains a REPL slice.
 
 ## Core Subsystem Features & Integrations
@@ -1209,7 +1214,7 @@ line to stderr that distinguishes the two causes:
   (GL_VERSION ...)"` (and points at the env var for forced testing).
 
 > [!WARNING]
-> Detection MUST run before [`repl_apply_init_bootstrap()`](../src/repl/pipeline.h#L16) in the same
+> Detection MUST run before [`repl_apply_init_bootstrap()`](../src/repl/pipeline.h#L33) in the same
 > function: on unsupported hardware the injected `point_attenuation` bootstrap
 > entry has to be skipped entirely rather than invoking the missing entry
 > point.
@@ -1496,7 +1501,7 @@ passes + stripped tess are the load-bearing reason here); reach for
 **Side effects across auxiliary passes.** Both mechanisms can run the program
 more than once per frame (the wireframe's three passes; a depth probe).
 `scene_execute_adapter` in [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c)
-snapshots and restores predef vars / scratch arrays / [`ReplRenderState`](../src/repl/state_views.h#L103)
+snapshots and restores predef vars / scratch arrays / [`ReplRenderState`](../src/repl/state_views.h#L118)
 around any pass whose [`Render3dExecutePurpose`](../src/render3d/render_types.h#L70) is *not* the one
 side-effecting fill — so `t = t + 1` style assignment animation advances
 exactly once per frame. `RENDER3D_EXEC_MAIN_FILL`, the wireframe's visible-
@@ -1826,7 +1831,7 @@ When a module starts owning mutable REPL state, follow this template:
    actualizes back into state.
 4. Extend the ownership tests in the same change: keep
    [`repl_state_capture()`](../src/repl/state.h#L29), [`repl_state_restore()`](../src/repl/state.h#L30), and
-   [`repl_state_reset_program()`](../src/repl/state_owners.h#L121) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L62)
+   [`repl_state_reset_program()`](../src/repl/state_owners.h#L131) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L62)
    (full-world) current for runtime slices, and add focused behavior
    coverage in the module's own tests.
 

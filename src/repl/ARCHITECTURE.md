@@ -284,7 +284,7 @@ surfaces it on the CLI.
 Loop counters and function parameters don't exist in the source
 command's own scope. When [`flatten.c`](flatten.c) emits a flat command, it snapshots
 the live lexical bindings into a parallel [`FlatCmdLocalVars`](flatten.h#L37) array
-([`repl_state_flat_program_local_vars()`](state_views.h#L150)):
+([`repl_state_flat_program_local_vars()`](state_views.h#L165)):
 
 ```c
 typedef struct { int num_vars; ExprVar vars[MAX_EXPR_VARS]; } FlatCmdLocalVars;
@@ -300,22 +300,44 @@ frame — §3.5, §13.2). The executor consumes the baked `args[]` untouched
 flat command's scope after the fact — replay's value-tracing annotations
 read it to display per-instance bindings.
 
-### 3.5 The dirty flags
+### 3.5 The dirty flags and value-change routing
 
-Two flags gate the frame flow, with one source-derived cache used by the time
-clock ([`state_views.h`](state_views.h)):
+Frame flow is gated by a full-dirty flag plus a *value-change* channel, both on
+[`ReplFlatProgramState`](state_views.h#L52) ([`state_views.h`](state_views.h)):
 
 - `ReplDocumentState.normals_dirty` — source-level auto-normals need a
   rebuild.
 - `ReplDocumentState.source_uses_time` / `_dirty` — lazy whole-source scan for
-  real `t` identifier references, used to decide whether a time tick can affect
-  the flat program.
-- `ReplFlatProgramState.dirty` — the flat program is stale.
+  real `t` identifier references. It no longer gates the flat-program dirty
+  decision (see below); it now feeds only the *blur-axis* choice (does the
+  scene animate on `t` at all, §Accumulation Motion Blur).
+- `ReplFlatProgramState.dirty` — the flat program is stale and needs a full
+  re-flatten (source edits, declare/undeclare, structural value changes).
+- `ReplFlatProgramState.args_dirty_mask` / `structural_dep_mask` /
+  `value_dep_mask` / `rebake_ok` — the phase-3 dependency-routing state. Each
+  full flatten records, per predef root, which roots can change flat-stream
+  *topology* (`structural`) versus only baked *values* (`value`), and whether
+  every `has_vars` command has compiled programs (`rebake_ok`).
 
-Any source mutation sets them via [`repl_state_mark_flat_dirty()`](state_notify.h#L4) /
-[`repl_state_mark_source_dirty()`](state_notify.h#L5) ([`state_notify.h`](state_notify.h)). The controller
-checks them at frame top and rebuilds only when set; the source-uses-time cache
-is refreshed lazily on the next time query.
+Source mutations still mark the whole program dirty via
+[`repl_state_mark_flat_dirty()`](state_notify.h#L4) /
+[`repl_state_mark_source_dirty()`](state_notify.h#L5) ([`state_notify.h`](state_notify.h)).
+A predef *value* change (a time tick, a slider-drag `SET_VALUE`) instead routes
+through [`repl_state_notify_predef_value_changed()`](state_notify.h) by the changed
+slot's bit:
+
+```text
+changed ∈ structural_dep_mask  -> full dirty (args_dirty_mask cleared)
+changed ∈ value_dep_mask       -> OR the bit into args_dirty_mask (rebake)
+                                  (escalates to full dirty when !rebake_ok)
+otherwise                      -> no flat work (root unused by this program)
+```
+
+At frame top the controller re-flattens when `dirty` is set, otherwise re-bakes
+in place when `args_dirty_mask` is non-empty (§Phase-3b rebake), otherwise does
+nothing. A full flatten always clears `args_dirty_mask` — it subsumes any
+pending value dirt. The source-uses-time cache is still refreshed lazily on the
+next time query, for the blur-axis use.
 
 ---
 
@@ -444,7 +466,7 @@ before render3d renders.
 
 [`autonormal.c`](autonormal.c) keeps `glNormal3f` commands in sync with the geometry, at
 the **source** level. When enabled and `normals_dirty` is set,
-[`repl_recompute_autonormals()`](pipeline.h#L11) recomputes face normals (cross product of
+[`repl_recompute_autonormals()`](pipeline.h#L28) recomputes face normals (cross product of
 triangle edges, normalized) and inserts/updates `is_auto` `CMD_NORMAL3F`
 commands ahead of the vertices that feed them. Because it edits the
 source array (and can shift the cursor), it runs *before* flatten and
@@ -452,7 +474,7 @@ takes the edit-line by reference.
 
 ### 5.2 Flatten — lowering source to flat
 
-[`repl_flatten_program()`](flatten.h#L116) ([`flatten.c`](flatten.c)) expands the source array into the
+[`repl_flatten_program()`](flatten.h#L129) ([`flatten.c`](flatten.c)) expands the source array into the
 flat array:
 
 - **for-loops** iterate `[start, end)` by `step`, half-open, re-parsing
@@ -475,10 +497,8 @@ provenance (§3.3) and a [`FlatCmdLocalVars`](flatten.h#L37) snapshot (§3.4).
 
 #### Expression paths and cache lifecycle
 
-Flatten always performs the same control-flow walk and rebuilds the complete
-flat program when it is dirty. Within that walk it uses progressively cheaper
-expression paths which all produce the same baked [`GLCmd`](command.h#L90)
-stream:
+Flatten has one control-flow walk and several progressively cheaper expression
+paths. They all produce the same baked [`GLCmd`](command.h#L90) stream:
 
 1. A command whose `has_vars` is 0 is appended verbatim from the committed
    source array. `has_vars` is decided at commit time against predefs and the
@@ -487,34 +507,36 @@ stream:
    recorded for replay annotations.
 2. On an uncached variable-bearing numeric command, the direct evaluator uses
    the committed command type/arity to extract and evaluate only the known
-   argument list. Scalar assignments similarly evaluate their canonical REPL
-   RHS. Unsupported shapes fall through to the general parser, with
-   `ReplParseContext.skip_text` suppressing unused canonical rendering.
+   argument list. Scalar assignments similarly evaluate their already
+   canonical REPL RHS. Unsupported shapes fall through to the general parser,
+   with `ReplParseContext.skip_text` suppressing unused canonical rendering.
 3. With a READY cache line, compiled expression programs evaluate those same
-   argument, condition, loop-bound, call-argument, and assignment roles. Loop,
-   call, and branch expansion itself remains ordinary C control flow; it is not
-   cached or replaced by a VM.
+   argument, condition, loop-bound, call-argument, and assignment roles. The
+   loop/call/branch walk itself is never cached or replaced by a VM.
 
-[`expr_program.c`](expr_program.c) owns the expression bytecode and
-arena-backed per-line index. [`flatten_expr.c`](flatten_expr.c) is the narrow
-integration boundary: it owns line build state, parser capture callbacks, and
-warm evaluation. [`flatten.c`](flatten.c) asks it for values by `(source line, expression
-role, ordinal)` and does not manipulate program handles or cache entries.
+[`expr_program.c`](expr_program.c) owns the expression bytecode and arena-backed
+per-line index. [`flatten_expr.c`](flatten_expr.c) is the narrow integration
+boundary: it owns line build state, parser capture callbacks, warm evaluation,
+dependency accumulation, and compiled-only rebake lookups.
+[`flatten.c`](flatten.c) asks it for values by `(source line, expression role,
+ordinal)` and does not manipulate program handles or cache entries.
 
 The live cache is ephemeral process state returned by
 [`repl_expr_cache_live()`](expr_program.h#L106); it is deliberately outside
 [`ReplRuntimeState`](state.h#L18), undo snapshots, scene snapshots, and saved
 workspaces. Its allocation is capped by `REPL_EXPR_CACHE_MAX_BYTES` (16 MiB by
-default), and warm evaluation allocates nothing. Each source line has one of
-three states:
+default), and a warm evaluation allocates nothing. Each source line is in one
+of three externally visible states:
 
-- **EMPTY** — not attempted since the last invalidation. Its next text/direct
-  visit installs a capture sink and compiles the expression spans consumed by
-  that visit.
-- **READY** — every captured program compiled; later full flattens evaluate
-  them directly.
+- **EMPTY** — not attempted since the last invalidation. The next text/direct
+  visit installs a capture sink and compiles the exact expression spans that
+  visit consumes.
+- **READY** — all captured programs for the line compiled; later full
+  flattens and eligible rebakes use them directly.
 - **FAILED** — parsing, compilation, capture, or the allocation cap failed.
-  Full flatten keeps using the direct/text fallback for that line.
+  Full flatten keeps using the direct/text fallback for that line. Rebake never
+  guesses from a FAILED/stale line; it escalates through the refresh boundary
+  to a full flatten.
 
 Source mutation invalidates the whole live expression cache at the single
 [`repl_state_mark_source_dirty()`](state_notify.h#L5) seam. Inserts/deletes therefore need no cache
@@ -522,30 +544,44 @@ index surgery. Example/workspace loads, undo/redo, declaration reshapes, and
 source rewrites already cross that seam. Variable-slider motion changes only a
 live predef value and keeps the cache warm; its one release-time declaration
 rewrite invalidates the cache normally. FAILED lines become EMPTY and may be
-attempted again after such an invalidation.
+attempted again only after such an invalidation.
+
+Compiled evaluation also returns a predef dependency mask. A full flatten
+stores the union of structural dependencies (loop bounds, selected conditions,
+and frozen call-argument locals), value dependencies, and whether every
+variable-bearing emitted command is rebakeable. The live
+[`repl_refresh_flat_program()`](pipeline.h#L22) boundary then chooses:
+
+- full dirty or a changed structural root → full flatten;
+- changed value-only root with complete READY programs → in-place rebake;
+- no relevant changed root → no flatten work.
+
+Assignments are replayed in flat-stream order during rebake, including
+constant assignments: although a constant assignment's own baked arg does not
+change, its write may reset the input to a later self-referential assignment.
+Any failed partial rebake restores predef/scratch state and full-flattens before
+the refresh boundary returns.
 
 #### Disabling the expression cache
 
-There are three intentional cache-free/reference modes:
+There are three intentional disable/reference modes:
 
 | Scope | Mechanism | What remains enabled |
 |---|---|---|
-| Live application/benchmark process | Start with `GLR_NO_FLATTEN_CACHE=1` | Literal and direct-evaluation fast paths remain; dirty frames still fully flatten. |
-| One [`repl_flatten_program()`](flatten.h#L116) call | Set `ReplFlattenOptions.expr_cache = NULL` | Same cache-free direct/text behavior, without changing the live cache or other callers. |
-| Strong differential reference | Set `force_reparse = 1` (normally with `expr_cache = NULL`) | Disables literal/direct paths as well as compiled evaluation and forces the legacy general-parser path. |
+| Live application/benchmark process | Start with `GLR_NO_FLATTEN_CACHE=1` | Literal and direct-evaluation fast paths remain; every relevant value change full-flattens and no rebake is attempted. |
+| One [`repl_flatten_program()`](flatten.h#L129) call | Set `ReplFlattenOptions.expr_cache = NULL` | Same cache-free direct/text behavior, without changing the live cache or other callers. |
+| Strong differential reference | Set `force_reparse = 1` (normally with `expr_cache = NULL`) | Disables the literal/direct paths as well as compiled evaluation and forces the legacy general-parser path. |
 
 `GLR_NO_FLATTEN_CACHE` is a diagnostic/startup switch, not a live toggle: it
 is read once on the first live flatten, so restart the process after changing
-it. There is no file-format or UI setting.
+it. There is no file-format or UI setting. The cache-free mode is a supported
+correctness/performance reference, exercised alongside cold- and warm-cache
+paths by
+[`tests/test_repl_flatten_differential.c`](../../tests/test_repl_flatten_differential.c).
 
-[`tests/test_repl_flatten_differential.c`](../../tests/test_repl_flatten_differential.c)
-flattens the whole example corpus through optimized and forced-parser paths at
-several `t` values and compares every flat command, local snapshot, provenance
-field, and post-flatten predef/scratch state.
-
-The live frame path goes through `repl_flatten_commands(edit_line_idx)`,
-but the engine is reusable: tests and replay tools flatten into a
-*temporary* buffer and pass a [`FlatProgramView`](flatten.h#L46) over it, never touching
+The live frame path goes through `repl_flatten_commands(edit_line_idx)`, but
+the engine is reusable: tests and replay tools flatten into a *temporary*
+buffer and pass a [`FlatProgramView`](flatten.h#L46) over it, never touching
 the live arrays.
 
 ### 5.3 Execute — flat program to GL
@@ -595,10 +631,10 @@ typed slices ([`state_views.h`](state_views.h)):
 |---|---|
 | [`ReplDocumentState`](state_views.h#L42) | source `GLCmd[]`, count, capacity, `normals_dirty`, cached source-uses-`t` metadata |
 | [`ReplFlatProgramState`](state_views.h#L52) | flat `GLCmd[]`, `FlatCmdLocalVars[]`, dirty flag, cursor-block range, user-lighting flag |
-| [`ReplVariableState`](state_views.h#L69) | predef var table, scratch arrays `A/B/C`, `funcN` aliases, the `t` clock (`anim_time`, `time_playing`) |
-| [`ReplRenderState`](state_views.h#L103) | the runtime-mutated render *tail*: `light_enabled_mask`, `clear_color[]` |
-| [`ReplSceneRuntimeState`](state_views.h#L111) | active example index, bound workspace dir |
-| [`ReplImportExportState`](state_views.h#L119) | cached header/render/camera text + pending import metadata |
+| [`ReplVariableState`](state_views.h#L84) | predef var table, scratch arrays `A/B/C`, `funcN` aliases, the `t` clock (`anim_time`, `time_playing`) |
+| [`ReplRenderState`](state_views.h#L118) | the runtime-mutated render *tail*: `light_enabled_mask`, `clear_color[]` |
+| [`ReplSceneRuntimeState`](state_views.h#L126) | active example index, bound workspace dir |
+| [`ReplImportExportState`](state_views.h#L134) | cached header/render/camera text + pending import metadata |
 
 [`repl_state_capture()`](state.h#L29) / [`repl_state_restore()`](state.h#L30) snapshot exactly these
 slices — and nothing else (no editor, UI, replay, or app presentation
@@ -614,7 +650,7 @@ State access is intentionally two-tiered:
 - **[`state_owners.h`](state_owners.h)** — mutable `_mut()` accessors, setters, and reset
   helpers. For owner modules and the controller only.
 
-[`repl_state_ensure_sentinels()`](state_owners.h#L130) patches the non-zero defaults (most
+[`repl_state_ensure_sentinels()`](state_owners.h#L140) patches the non-zero defaults (most
 importantly the array capacities — under raw BSS zero-fill they'd be 0
 and reject every insert). It's idempotent and matters for CLI paths like
 `--dump-code` that skip `glr_ctrl_init_gl`.
@@ -905,7 +941,7 @@ each re-flatten knows to re-evaluate it from text (§5.2).
 
 ### Stage 3 — flatten  (`repl_flatten_commands`)
 
-[`repl_flatten_program()`](flatten.h#L116) (§5.2) lowers the nine source commands to eleven
+[`repl_flatten_program()`](flatten.h#L129) (§5.2) lowers the nine source commands to eleven
 flat ones — the loop body unrolled into six vertices, the `CMD_FOR_BEGIN`
 / `CMD_FOR_END` / `CMD_VAR_DECLARE` markers consumed:
 
@@ -1055,7 +1091,7 @@ export, and flat-program queries never see the wrapped contents as valid.
 
 ### 13.2 Why `t` can force a re-flatten
 
-[`repl_state_time_advance()`](state_owners.h#L62) updates the visible `t` binding whenever the
+[`repl_state_time_advance()`](state_owners.h#L72) updates the visible `t` binding whenever the
 clock is playing ([`state.c`](state.c)). If the current source mentions `t`, it also
 sets `flat_program.dirty = 1`, so the controller rebuilds the flat program. That
 is *required* because flatten is the only stage that resolves **program
