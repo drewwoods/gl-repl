@@ -381,6 +381,21 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 
 </td>
 </tr>
+<tr>
+<td width="33%" align="center">
+
+<!-- images/showcase/aurora-observatory.gif — docs-assets.sh sc-aurora-observatory
+     Intent: the Aurora backdrop+grid pairing's hero — dish sweeping under
+     the curtains, teal pulses, coral beacon blink. -->
+<img src="images/showcase/aurora-observatory.gif" alt="Aurora observatory — a radio dish tracking the aurora" width="100%">
+
+**[Aurora observatory](../examples/scenes/aurora-observatory-dish-tracks-sky.glr)**
+<br><sub>aurora sky + grid, additive glow accents</sub>
+
+</td>
+<td width="33%"></td>
+<td width="33%"></td>
+</tr>
 </table>
 
 ### Tessellation, guides & algorithms
