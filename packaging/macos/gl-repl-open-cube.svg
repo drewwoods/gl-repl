@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="gl-repl">
   <!-- The adopted gl-repl mark: the open cube from examples/scenes/lit-cube.glr
        (grid off), seen down its own body diagonal.  Quiet near-white exterior;
-       azure interior wall and magenta interior floor showing through the
+       azure interior wall and rose interior floor showing through the
        missing face; white edges; dark squircle ground.  Hand-traced vector
        twin of the app's own render — regenerate the raster master by loading
        lit-cube.glr headlessly (OSMesa capture). -->
@@ -24,8 +24,8 @@
       <stop offset="1" stop-color="#5ab4f6"/>
     </linearGradient>
     <linearGradient id="floor" x1="1" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fb4ce4"/>
-      <stop offset="1" stop-color="#ee35d6"/>
+      <stop offset="0" stop-color="#f57bac"/>
+      <stop offset="1" stop-color="#e8649e"/>
     </linearGradient>
   </defs>
   <rect width="1024" height="1024" rx="229" ry="229" fill="url(#bg)"/>

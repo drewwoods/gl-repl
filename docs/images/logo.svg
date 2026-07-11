@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="480" height="488" viewBox="0 0 240 244" role="img" aria-label="gl-repl logo: an open cube seen down its diagonal, azure and magenta interior showing through the missing face">
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="488" viewBox="0 0 240 244" role="img" aria-label="gl-repl logo: an open cube seen down its diagonal, azure and rose interior showing through the missing face">
   <!-- The gl-repl mark — vector twin of the app's own render of
        examples/scenes/lit-cube.glr (grid off), seen down the cube's body
        diagonal.  Only the interior wears color; the exterior is quiet and the
@@ -19,8 +19,8 @@
       <stop offset="1" stop-color="#5ab4f6"/>
     </linearGradient>
     <linearGradient id="floor" gradientUnits="userSpaceOnUse" x1="118" y1="128" x2="70" y2="185">
-      <stop offset="0" stop-color="#fb4ce4"/>
-      <stop offset="1" stop-color="#ee35d6"/>
+      <stop offset="0" stop-color="#f57bac"/>
+      <stop offset="1" stop-color="#e8649e"/>
     </linearGradient>
   </defs>
   <rect width="240" height="244" fill="#000000"/>

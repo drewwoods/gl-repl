@@ -72,14 +72,16 @@
  * examples/scenes/lit-cube.glr, and this list is its color vocabulary
  * at both ends of the render. A separate list from the scene accents,
  * and not switched by PALETTE_ACTIVE_*: the mark is palette-independent
- * brand vocabulary (its magenta is deliberately off-Dusk until the
- * source scene itself is re-adopted).
+ * brand vocabulary pinned to what the scene paints (today its floor
+ * happens to be the Dusk ROSE anchor; its wall material is not).
  *
  * Two tiers, kept in sync by make check-palette:
  *   - _MAT anchors: the raw glColor3f materials lit-cube.glr paints
  *     with (the scene is validated against this list, not just the
  *     Dusk accents — its exterior MIST and CANVAS ink are already
- *     scene anchors).
+ *     scene anchors). The floor material was re-anchored on Dusk ROSE
+ *     (2026-07-11, replacing the pre-Dusk magenta) so the mark's warm
+ *     face sits on the family; the wall material stays mark-specific.
  *   - Flat + _LO/_HI anchors: the *rendered* colors those materials
  *     produce under the scene's lighting — the canonical chips the
  *     startup splash draws with (src/app/splash.c) and the gradient
@@ -91,13 +93,13 @@
  * old values. */
 #define PALETTE_MARK_ANCHORS(X) \
     X(MARK_WALL_MAT,  0.25f, 0.675f, 1.0f)   /* lit-cube wall material   */ \
-    X(MARK_FLOOR_MAT, 0.95f, 0.25f,  1.0f)   /* lit-cube floor material  */ \
+    X(MARK_FLOOR_MAT, 0.95f, 0.44f,  0.66f)  /* lit-cube floor material (= Dusk ROSE) */ \
     X(MARK_WALL,     0.239f, 0.659f, 0.961f) /* interior azure    #3da8f5 */ \
     X(MARK_WALL_LO,  0.169f, 0.588f, 0.925f) /* wall grad stop    #2b96ec */ \
     X(MARK_WALL_HI,  0.353f, 0.706f, 0.965f) /* wall grad stop    #5ab4f6 */ \
-    X(MARK_FLOOR,    0.973f, 0.255f, 0.878f) /* interior magenta  #f841e0 */ \
-    X(MARK_FLOOR_LO, 0.933f, 0.208f, 0.839f) /* floor grad stop   #ee35d6 */ \
-    X(MARK_FLOOR_HI, 0.984f, 0.298f, 0.894f) /* floor grad stop   #fb4ce4 */ \
+    X(MARK_FLOOR,    0.949f, 0.439f, 0.659f) /* interior rose     #f270a8 */ \
+    X(MARK_FLOOR_LO, 0.910f, 0.392f, 0.620f) /* floor grad stop   #e8649e */ \
+    X(MARK_FLOOR_HI, 0.961f, 0.482f, 0.675f) /* floor grad stop   #f57bac */ \
     X(MARK_TOP,      0.780f, 0.792f, 0.871f) /* exterior top      #c7cade */ \
     X(MARK_TOP_LO,   0.714f, 0.729f, 0.835f) /* top grad stop     #b6bad5 */ \
     X(MARK_TOP_HI,   0.851f, 0.859f, 0.922f) /* top grad stop     #d9dbeb */ \
