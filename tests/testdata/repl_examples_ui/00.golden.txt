@@ -128,7 +128,7 @@ void display(void) {
   glColorMaterial(GL_BACK, GL_AMBIENT_AND_DIFFUSE);
   glBegin(GL_QUADS);
     // +Y face
-    glColor3f(0.95, 0.44, 0.66);
+    glColor3f(0.95, 0.25, 1);
     glNormal3f(0, 1, 0);
     glVertex3f(-1, 1, 1);
     glVertex3f(1, 1, 1);

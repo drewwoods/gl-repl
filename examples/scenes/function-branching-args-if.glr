@@ -12,7 +12,7 @@ shape(scale, phase) {
   // a complementary pair (else/else-if exist too; kept explicit here so each
   // branch reads as its own self-contained block): big -> quad, small -> tri.
   if(scale > 1) {
-    glColor3f(0.98, 0.46, 0.36);
+    glColor3f(1, 0.35, 0.2);
     glBegin(GL_QUADS);
       glNormal3f(0, 0, 1);
       glVertex3f(-0.7*scale, -0.7*scale, 0);
@@ -22,7 +22,7 @@ shape(scale, phase) {
     glEnd();
   }
   if(scale <= 1) {
-    glColor3f(0.36, 0.70, 0.98);
+    glColor3f(0.15, 0.55, 1);
     glBegin(GL_TRIANGLES);
       glNormal3f(0, 0, 1);
       glVertex3f(cos(phase)*0.9*scale, sin(phase)*0.9*scale, 0);

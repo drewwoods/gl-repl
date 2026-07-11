@@ -35,7 +35,7 @@ for(i, 0, grid) {
       dydx = amp*freq*cos(x*freq + t)*cos(z*freq + zPhase*t);
       dydz = -amp*freq*sin(x*freq + t)*sin(z*freq + zPhase*t);
       glNormal3f(-dydx, 1, -dydz);
-      glColor3f(0.98 - 0.62*(0.5+0.5*y/amp), 0.46 + 0.24*(0.5+0.5*y/amp), 0.36 + 0.62*(0.5+0.5*y/amp));
+      glColor3f(1 - 0.85*(0.5+0.5*y/amp), 0.35 + 0.2*(0.5+0.5*y/amp), 0.2 + 0.8*(0.5+0.5*y/amp));
       glVertex3f(x, y, z);
       // second strip vertex: same x, but z stepped to row i+1
       z = -extent/2 + extent*(i + 1)/grid;
@@ -43,7 +43,7 @@ for(i, 0, grid) {
       dydx = amp*freq*cos(x*freq + t)*cos(z*freq + zPhase*t);
       dydz = -amp*freq*sin(x*freq + t)*sin(z*freq + zPhase*t);
       glNormal3f(-dydx, 1, -dydz);
-      glColor3f(0.98 - 0.62*(0.5+0.5*y/amp), 0.46 + 0.24*(0.5+0.5*y/amp), 0.36 + 0.62*(0.5+0.5*y/amp));
+      glColor3f(1 - 0.85*(0.5+0.5*y/amp), 0.35 + 0.2*(0.5+0.5*y/amp), 0.2 + 0.8*(0.5+0.5*y/amp));
       glVertex3f(x, y, z);
     }
   glEnd();

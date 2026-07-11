@@ -14,7 +14,7 @@
  * The cube is projected in software (rotY -> rotX, drop Z — the same
  * projection as scripts/gen_rotating_cube.py and the baked SMIL logo) and
  * drawn as 2D fills inside a gl2d_begin/end scope.  Faces are two-sided:
- * quiet near-white exterior, azure wall + rose floor interior showing
+ * quiet near-white exterior, azure wall + magenta floor interior showing
  * through the openings.  Painter order needs no sorting: for a convex
  * solid the back faces never overlap each other, nor do the front faces,
  * so the passes are simply interior fills, interior edges, exterior

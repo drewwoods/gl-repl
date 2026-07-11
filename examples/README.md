@@ -66,8 +66,11 @@ work out of `for` bodies so a dense example stays well clear of the cap.
 
 ## Example Color Language
 
-The built-in example scenes share one coherent "Dusk" palette so the set reads
-as a designed family instead of a grab-bag of saturated primaries. The rollout
+The built-in example scenes share one coherent palette — currently
+"Neon", electric accents around the brand mark's original magenta on the
+same deep ink (the earlier "Dusk" / "Dusk Magenta" sets are kept in
+`accent_palette.h` for an easy flip back) — so the set reads as a
+designed family instead of a grab-bag of unrelated primaries. The rollout
 began with the Scene menu "2D" tag and now also covers the line/surface 3D
 scenes: animated ring, animated wave surface, GLU tessellator plus cutout, and
 transform stress. Extend it to the rest of the catalog as examples are touched.
@@ -80,18 +83,17 @@ screenshots, the showcase, and a fresh session all read as one family. Keep
 those on the palette too when touching them.
 
 Every covered scene clears to the same deep cool ink and draws geometry from
-this curated accent set — mid-bright, lightly desaturated, harmonious rather
-than garish:
+this curated accent set — bright, electric, but still one family:
 
 | Role | RGB | Use |
 |---|---|---|
 | Canvas | `0.05 0.06 0.08` | Deep cool ink, all channels under the clear-color cap |
-| CORAL | `0.98 0.46 0.36` | Warm key |
-| AMBER | `0.98 0.76 0.36` | Gold highlight / control points |
-| ROSE | `0.95 0.44 0.66` | Pink bridge |
-| VIOLET | `0.62 0.52 0.95` | Purple bridge / faint guides |
-| AZURE | `0.36 0.70 0.98` | Cool key |
-| TEAL | `0.30 0.84 0.80` | Aqua secondary |
+| CORAL | `1.00 0.35 0.20` | Neon warm key |
+| AMBER | `1.00 0.85 0.15` | Neon yellow highlight / control points |
+| MAGENTA | `0.95 0.25 1.00` | Magenta bridge (= the brand mark's floor material) |
+| VIOLET | `0.55 0.30 1.00` | Electric violet bridge / faint guides |
+| AZURE | `0.15 0.55 1.00` | Electric cool key |
+| TEAL | `0.10 0.95 0.85` | Neon cyan secondary |
 | MIST | `0.92 0.95 0.98` | Neutral near-white |
 
 The machine-readable source of truth for this palette is
@@ -106,7 +108,7 @@ and every covered scene against the header. Scenes not yet migrated are
 listed in `scripts/baselines/palette-coverage.txt` — a remove-only
 ratchet; never add new scenes to it. `make palette-list` prints the
 anchors as floats + hex for SVG and doc work. To retune a role (say,
-move the warm key from CORAL to ROSE) edit its one `PAL_ROLE_*` line; to
+move the warm key from CORAL to MAGENTA) edit its one `PAL_ROLE_*` line; to
 swap the whole palette, add a new anchor list, repoint
 `PALETTE_ACTIVE_*`, and let `make check-palette` enumerate the scenes
 that need re-authoring.

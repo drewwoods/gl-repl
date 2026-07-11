@@ -32,8 +32,8 @@
       <stop offset="1" stop-color="#5ab4f6"/>
     </linearGradient>
     <linearGradient id="floor" gradientUnits="userSpaceOnUse" x1="108" y1="115" x2="75" y2="160">
-      <stop offset="0" stop-color="#f57bac"/>
-      <stop offset="1" stop-color="#e8649e"/>
+      <stop offset="0" stop-color="#fb4ce4"/>
+      <stop offset="1" stop-color="#ee35d6"/>
     </linearGradient>
   </defs>
   <rect class="bg" width="620" height="220" fill="#000000"/>

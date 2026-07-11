@@ -135,7 +135,7 @@ void display(void) {
   glBegin(GL_QUADS);
     for(i, 0, 16) {
       s = A[i];
-      glColor3f(0.98 - 0.62*s, 0.46 + 0.24*s, 0.36 + 0.62*s); // CORAL -> AZURE
+      glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
       x = (i - 7.5)*0.42;
       h = 0.3 + 2.4*s;
       glVertex3f(x - 0.15, -1.5, 0);
@@ -148,7 +148,7 @@ void display(void) {
     // Two dots mark the pair the sort is comparing right now
     cur = fmod(floor(steps), 15);
     glPointSize(7);
-    glColor3f(0.98, 0.76, 0.36);
+    glColor3f(1, 0.85, 0.15);
     glBegin(GL_POINTS);
       glVertex3f((cur - 7.5)*0.42, -1.75, 0);
       glVertex3f((cur - 6.5)*0.42, -1.75, 0);

@@ -103,18 +103,18 @@ void display(void) {
   // verbatim (no normals / lights needed to see the if/else at work).
   glBegin(GL_QUADS);
     if(sin(t) > 0) {
-      glColor3f(0.98, 0.46, 0.36);
+      glColor3f(1, 0.35, 0.2);
     } else {
-      glColor3f(0.36, 0.7, 0.98);
+      glColor3f(0.15, 0.55, 1);
     }
     glVertex3f(-1, -1, 0);
     glVertex3f(1, -1, 0);
     glVertex3f(1, 1, 0);
     glVertex3f(-1, 1, 0);
     if(cos(t) > 0) {
-      glColor3f(0.3, 0.84, 0.8);
+      glColor3f(0.1, 0.95, 0.85);
     } else {
-      glColor3f(0.98, 0.76, 0.36);
+      glColor3f(1, 0.85, 0.15);
     }
     glVertex3f(-1, -1, -1);
     glVertex3f(-1, 1, -1);

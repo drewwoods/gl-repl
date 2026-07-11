@@ -106,12 +106,12 @@ void display(void) {
   width = PI / 8;
   glBegin(GL_LINE_LOOP);
     for(i, 0, n) {
-      glColor3f(0.36, 0.7, 0.98);
+      glColor3f(0.15, 0.55, 1);
       x = cos(TAU * i / n);
       y = sin(TAU * i / n);
       delta = fmod(TAU * i / n - phase + TAU, TAU);
       if(delta < width) {
-        glColor3f(0.98, 0.76, 0.36);
+        glColor3f(1, 0.85, 0.15);
         x = x + amp * x * sin(delta * TAU / width);
         y = y + amp * y * sin(delta * TAU / width);
       }
