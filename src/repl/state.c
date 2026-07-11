@@ -247,9 +247,8 @@ int repl_state_flat_program_dirty(void) {
     return g_repl_state.flat_program.dirty;
 }
 
-void repl_state_flat_program_clear_dirty(void) {
-    g_repl_state.flat_program.dirty = 0;
-}
+void repl_state_flat_program_clear_dirty(void) { g_repl_state.flat_program.dirty = 0; }
+void repl_state_flat_program_clear_args_dirty(void) { g_repl_state.flat_program.args_dirty_mask = 0; }
 
 int repl_state_flat_program_user_lighting_enabled(void) {
     return g_repl_state.flat_program.user_lighting_enabled;
@@ -271,6 +270,44 @@ void repl_state_flat_program_set_user_lighting_enabled(int enabled) {
     g_repl_state.flat_program.user_lighting_enabled = enabled ? 1 : 0;
 }
 
+ReplExprDepMask repl_state_flat_program_structural_dep_mask(void) { return g_repl_state.flat_program.structural_dep_mask; }
+ReplExprDepMask repl_state_flat_program_value_dep_mask(void) { return g_repl_state.flat_program.value_dep_mask; }
+ReplExprDepMask repl_state_flat_program_args_dirty_mask(void) { return g_repl_state.flat_program.args_dirty_mask; }
+int repl_state_flat_program_rebake_ok(void) { return g_repl_state.flat_program.rebake_ok; }
+
+void repl_state_flat_program_set_dep_state(ReplExprDepMask structural_dep_mask,
+                                           ReplExprDepMask value_dep_mask,
+                                           int rebake_ok) {
+    /* A full flatten just re-derived the masks; whatever args-only dirt
+     * was pending is subsumed by that rebuild. */
+    g_repl_state.flat_program.structural_dep_mask = structural_dep_mask;
+    g_repl_state.flat_program.value_dep_mask = value_dep_mask;
+    g_repl_state.flat_program.args_dirty_mask = 0;
+    g_repl_state.flat_program.rebake_ok = rebake_ok ? 1 : 0;
+}
+
+void repl_state_notify_predef_value_changed(int slot) {
+    ReplFlatProgramState *fp = &g_repl_state.flat_program;
+
+    if (fp->dirty)
+        return; /* full rebuild already pending; it subsumes everything */
+    if (slot < 0 || slot >= MAX_PREDEF_VARS) {
+        fp->dirty = 1;
+        return;
+    }
+    ReplExprDepMask bit = (ReplExprDepMask)1u << slot;
+    if (fp->structural_dep_mask & bit) {
+        fp->dirty = 1;
+        fp->args_dirty_mask = 0;
+    } else if (fp->value_dep_mask & bit) {
+        if (fp->rebake_ok)
+            fp->args_dirty_mask |= bit;
+        else
+            fp->dirty = 1;
+    }
+    /* else: root unused by the current flat program — nothing to do. */
+}
+
 void repl_state_flat_program_set_current_block(int begin_idx, int end_idx,
                                                int source_line_idx) {
     g_repl_state.flat_program.current_block_begin_idx = begin_idx;
@@ -289,6 +326,10 @@ void repl_state_flat_program_reset(void) {
     g_repl_state.flat_program.cmd_count = g_repl_state.flat_program.overflow_cmd_count = 0;
     g_repl_state.flat_program.dirty = 1;
     g_repl_state.flat_program.user_lighting_enabled = 0;
+    g_repl_state.flat_program.structural_dep_mask = 0;
+    g_repl_state.flat_program.value_dep_mask = 0;
+    g_repl_state.flat_program.args_dirty_mask = 0;
+    g_repl_state.flat_program.rebake_ok = 0;
     repl_state_flat_program_clear_current_block();
 }
 
@@ -356,8 +397,10 @@ void repl_state_time_advance(float dt) {
     if (g_repl_state.variables.time_playing &&
         g_repl_state.variables.time_var_idx >= 0) {
         g_predef_vars_mut[g_repl_state.variables.time_var_idx].value += dt;
-        if (repl_state_source_uses_time())
-            g_repl_state.flat_program.dirty = 1;
+        /* Route by the flat program's dep masks (phase 3), not the textual
+         * source_uses_time scan: t may be value-only, structural, or unused. */
+        repl_state_notify_predef_value_changed(
+            g_repl_state.variables.time_var_idx);
     }
 }
 
@@ -374,8 +417,7 @@ void repl_state_time_set(float value) {
         return;
 
     g_predef_vars_mut[g_repl_state.variables.time_var_idx].value = value;
-    if (repl_state_source_uses_time())
-        g_repl_state.flat_program.dirty = 1;
+    repl_state_notify_predef_value_changed(g_repl_state.variables.time_var_idx);
 }
 
 void repl_state_time_set_playing(int playing) {
@@ -476,6 +518,13 @@ void repl_state_restore(const ReplRuntimeState *snapshot) {
      * reshaped predef table), so compiled expressions — line indices and
      * compile-time-resolved predef slots — are stale wholesale. */
     repl_expr_cache_invalidate(repl_expr_cache_live());
+    /* The snapshot's dep-routing state describes its own (now-discarded)
+     * flat program and cache. Force a full flatten and drop any inherited
+     * rebake eligibility / pending args dirt, so no rebake runs against the
+     * just-invalidated cache. */
+    g_repl_state.flat_program.dirty = 1;
+    g_repl_state.flat_program.args_dirty_mask = 0;
+    g_repl_state.flat_program.rebake_ok = 0;
 }
 
 /* No in-tree callers today; kept so every state slice has a reset in

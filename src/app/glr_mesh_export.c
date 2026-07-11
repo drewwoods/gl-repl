@@ -117,8 +117,7 @@ int glr_export_mesh_ply(const char *path, int srgb_decode) {
 
     /* Export runs outside the per-frame flatten-if-dirty in display_frame, so
      * make the flat program current first (decision 7: freshness). */
-    if (repl_state_flat_program_dirty())
-        repl_flatten_commands(editor_state_edit_line());
+    repl_refresh_flat_program(editor_state_edit_line());
 
     /* Match "what's on screen": clamp to the replay PC when replaying. */
     int flat_count = replay_active() ? replay_exec_limit()

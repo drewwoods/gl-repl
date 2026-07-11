@@ -3424,8 +3424,14 @@ static void test_variable_panel_t_change_reflattens_when_time_paused(void) {
     ASSERT_TRUE("variable-panel t motion consumed",
                 glr_ctrl_router_handle_variable_panel_motion(50, 0));
     ASSERT_FLOAT("variable panel changed t", g_predef_vars[t_idx].value, 2.5f);
-    ASSERT_INT("panel t change marks flat dirty",
-               repl_state_flat_program_dirty(), 1);
+    /* glVertex3f(t, ...) is a value-only use of t, so the drag routes to
+     * args_dirty_mask (rebake) rather than the full flat-dirty flag; the
+     * frame gate below still rebuilds from it. */
+    ASSERT_INT("panel t change leaves full flag clean",
+               repl_state_flat_program_dirty(), 0);
+    ASSERT_INT("panel t change sets t's args-dirty bit",
+               (int)((repl_state_flat_program_args_dirty_mask()
+                      >> t_idx) & 1u), 1);
 
     glr_ctrl_display_frame();
 
@@ -3444,6 +3450,8 @@ static void test_variable_panel_t_change_reflattens_when_time_paused(void) {
                  g_predef_vars[t_idx].value, 2.5f);
     ASSERT_INT("same-value variable-panel leaves flat clean",
                repl_state_flat_program_dirty(), 0);
+    ASSERT_INT("same-value variable-panel leaves args-dirty clean",
+               (int)repl_state_flat_program_args_dirty_mask(), 0);
 }
 
 /* scene_execute_adapter is called by render.c on both the main fill

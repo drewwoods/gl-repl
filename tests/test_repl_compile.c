@@ -1149,6 +1149,10 @@ static void test_set_predef_value_marks_flat_dirty_only_on_change(void) {
     ASSERT_TRUE("dirty-gate t exists", t_idx >= 0);
     g_predef_vars_mut[t_idx].value = 3.5f;
     repl_state_flat_program_clear_dirty();
+    /* Value changes route by the flat program's dep masks; seed a state
+     * where t is a value-only root so a real change is observable (as t's
+     * args-dirty bit) while a same-value SET_VALUE stays a no-op. */
+    repl_state_flat_program_set_dep_state(0, (ReplExprDepMask)1u << t_idx, 1);
 
     ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
     ReplCompiledChange change;
@@ -1165,6 +1169,8 @@ static void test_set_predef_value_marks_flat_dirty_only_on_change(void) {
                  g_predef_vars[t_idx].value, 3.5f, 1e-6f);
     ASSERT_INT("same-value set_predef keeps flat clean",
                repl_state_flat_program_dirty(), 0);
+    ASSERT_INT("same-value set_predef keeps args-dirty clean",
+               (int)repl_state_flat_program_args_dirty_mask(), 0);
 
     r = repl_compile_set_predef_value(
         "t", 4.0f, &ctx, &change, err, sizeof(err));
@@ -1173,8 +1179,11 @@ static void test_set_predef_value_marks_flat_dirty_only_on_change(void) {
                editor_commit_apply_external_change(&change, 0, 0), 1);
     ASSERT_FLOAT("changed set_predef updates value",
                  g_predef_vars[t_idx].value, 4.0f, 1e-6f);
-    ASSERT_INT("changed set_predef marks flat dirty",
-               repl_state_flat_program_dirty(), 1);
+    ASSERT_INT("changed set_predef sets t's args-dirty bit",
+               (int)((repl_state_flat_program_args_dirty_mask()
+                      >> t_idx) & 1u), 1);
+    ASSERT_INT("changed set_predef leaves full flag clean",
+               repl_state_flat_program_dirty(), 0);
 }
 
 /* Live dispatch compile-failure path: redeclaring an existing predef

@@ -39,11 +39,21 @@ int               repl_state_flat_program_count(void);
 void              repl_state_flat_program_set_count(int cmd_count);
 int               repl_state_flat_program_dirty(void);
 void              repl_state_flat_program_clear_dirty(void);
+/* Clear the pending value-change (args-dirty) mask after an in-place
+ * rebake has re-evaluated every routed value. */
+void              repl_state_flat_program_clear_args_dirty(void);
 int               repl_state_flat_program_user_lighting_enabled(void);
 int               repl_state_flat_program_current_block_begin(void);
 int               repl_state_flat_program_current_block_end(void);
 int               repl_state_flat_program_current_block_source_line(void);
 void              repl_state_flat_program_set_user_lighting_enabled(int enabled);
+/* Install a full flatten's dependency-routing results (see the field docs in
+ * ReplFlatProgramState). Clears args_dirty_mask: the rebuild that produced
+ * these masks subsumes any pending args-only dirt. */
+void              repl_state_flat_program_set_dep_state(
+                      ReplExprDepMask structural_dep_mask,
+                      ReplExprDepMask value_dep_mask,
+                      int rebake_ok);
 void              repl_state_flat_program_set_current_block(int begin_idx,
                                                             int end_idx,
                                                             int source_line_idx);

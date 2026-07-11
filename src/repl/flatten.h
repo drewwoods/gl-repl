@@ -105,6 +105,19 @@ typedef struct {
      * other failures; equal to flat_cmd_count on success. */
     int  required_flat_capacity;
     int  user_lighting_enabled;
+    /* Per-predef-root dependency masks for the produced flat program
+     * (flatten plan phase 3): structural roots can change flat-stream
+     * topology or frozen local snapshots (loop bounds, if/else-if
+     * conditions, call args — plus everything conservatively widened to
+     * all-bits: scratch reads in structural positions, uncached/failed
+     * expressions); value roots feed baked args or assignments. Runs
+     * without an expression cache report all-bits in both (fully
+     * conservative). rebake_ok is 1 when every has_vars flat command has
+     * compiled programs, so an in-place rebake could re-evaluate the
+     * whole stream. */
+    ReplExprDepMask structural_dep_mask;
+    ReplExprDepMask value_dep_mask;
+    int  rebake_ok;
     char status[REPL_DIAG_TEXT_MAX];     /* error or informational message */
 } ReplFlattenResult;
 
@@ -115,5 +128,41 @@ typedef struct {
  * (e.g., recursion depth exceeded, visit budget exhausted). */
 int  repl_flatten_program(const ReplFlattenOptions *options,
                           ReplFlattenResult *result);
+
+/* ---- In-place rebake (flatten plan phase 3b) -----------------------------
+ *
+ * Re-evaluate the VALUES of an existing flat command stream without
+ * re-expanding it: baked argument slots and assignment results are
+ * recomputed from each command's compiled programs under its frozen local
+ * snapshot, and assignments (scalar + scratch) are re-applied in stream
+ * order so later reads see them — the same threading a full flatten
+ * performs. Topology, provenance, flags, local snapshots, and lighting
+ * classification are never touched; that is what makes it valid only for
+ * value-routed changes (args_dirty_mask): any structural root change must
+ * take repl_flatten_program instead. Compiled-only by design — a needed
+ * program that is missing (line not READY) fails the walk, it never falls
+ * back to text parsing. */
+typedef struct {
+    GLCmd                  *flat_cmds;        /* args re-baked in place */
+    const FlatCmdLocalVars *flat_local_vars;  /* frozen per-cmd local snapshots
+                                               * (NULL: no command has locals) */
+    int                     flat_count;
+    ReplExprCache          *expr_cache;       /* required */
+} ReplRebakeOptions;
+
+typedef struct {
+    int  ok;
+    char status[REPL_DIAG_TEXT_MAX];
+} ReplRebakeResult;
+
+/* Returns 1 on success. On failure (invalid options, a required program
+ * missing, scratch index out of range) returns 0 with result->status set;
+ * the stream may be partially re-baked and the caller owns recovery (the
+ * live wrapper below restores state and callers escalate to a full
+ * flatten, which overwrites the stream wholesale). Like
+ * repl_flatten_program, the walk applies assignments to the live
+ * predef/scratch tables as it goes. */
+int  repl_flatten_rebake_program(const ReplRebakeOptions *options,
+                                 ReplRebakeResult *result);
 
 #endif /* REPL_FLATTEN_H */

@@ -50,8 +50,8 @@ void glr_debug_dump_flat_commands_sync(FILE *out, SourceTextView text) {
     const GLCmd *flat_cmds = flat_program.cmds;
     int num_flat_cmds = flat_program.cmd_count;
 
-    if (repl_state_flat_program_dirty()) {
-        repl_flatten_commands(editor_state_edit_line());
+    if (repl_refresh_flat_program(editor_state_edit_line()) !=
+        REPL_FLAT_REFRESH_NONE) {
         flat_program = repl_state_flat_program_view();
         flat_cmds = flat_program.cmds;
         num_flat_cmds = flat_program.cmd_count;
@@ -86,8 +86,7 @@ void glr_debug_dump_flat_histogram(FILE *out, SourceTextView text) {
     static int line_counts[MAX_EDITOR_COMMANDS];
     static int order[MAX_EDITOR_COMMANDS];
 
-    if (repl_state_flat_program_dirty())
-        repl_flatten_commands(editor_state_edit_line());
+    repl_refresh_flat_program(editor_state_edit_line());
 
     FlatProgramView flat_program = repl_state_flat_program_view();
     const GLCmd *flat_cmds = flat_program.cmds;

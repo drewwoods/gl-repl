@@ -167,7 +167,10 @@ void repl_apply_predef_ops(const ReplCompiledChange *change) {
             int idx = repl_eval_find_predef_var_idx(op->name);
             if (idx >= 0) {
                 if (g_predef_vars[idx].value != op->value)
-                    repl_state_mark_flat_dirty();
+                    /* Value-only change (e.g. a slider drag's live
+                     * SET_VALUE): route by the flat program's dep masks —
+                     * args-rebake bit, full dirty, or nothing. */
+                    repl_state_notify_predef_value_changed(idx);
                 g_predef_vars_mut[idx].value = op->value;
             }
         }

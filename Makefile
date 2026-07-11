@@ -792,6 +792,8 @@ TEST_BINS = \
 	test_repl_replay \
 	test_repl_compile \
 	test_repl_flatten_differential \
+	test_repl_flatten_deps \
+	test_repl_flatten_rebake \
 	test_expr_program \
 	test_tutorial_match \
 	test_tutorial_runner \

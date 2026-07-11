@@ -1753,9 +1753,17 @@ static void glr_ctrl_setup_subframe(void *ud, int pass_idx, int pass_count,
         /* Trailing shutter [t_end - dt, t_end]: re-bake geometry at the
          * sub-step t (the modelview stays at the current camera pose). The
          * last sample (f==1) bakes at exactly t_end, so the flat program is
-         * left at the true frame time. */
+         * left at the true frame time. Route by the `t` bit like the frame
+         * gate: when t is value-only (rebake_ok and t ∉ structural mask) an
+         * in-place rebake suffices per sample; otherwise re-flatten fully.
+         * The per-sample baseline reset above already restored the frame's
+         * predef/scratch, so both paths thread assignments from the same
+         * start each sample (no compounding). */
+        int t_idx = repl_state_variables().time_var_idx;
+        ReplExprDepMask t_bit = (t_idx >= 0 && t_idx < MAX_PREDEF_VARS)
+                              ? (ReplExprDepMask)1u << t_idx : 0;
         repl_state_time_set_transient(c->t_end - c->dt * (1.0f - f));
-        repl_flatten_commands(c->edit_line);
+        repl_refresh_flat_program_for_deps(c->edit_line, t_bit);
     }
 }
 
@@ -1861,13 +1869,17 @@ void glr_ctrl_display_frame(void) {
         repl_state_normals_dirty_clear();
         prof_end(PROF_AUTONORMAL);
     }
-    if (repl_state_flat_program_dirty()) {
-        prof_begin(PROF_FLATTEN);
-        repl_flatten_commands(editor_state_edit_line());
-        repl_state_flat_program_clear_dirty();
-        prof_end(PROF_FLATTEN);
-        flat_program = repl_state_flat_program_view();
-        num_flat_cmds = flat_program.cmd_count;
+    /* Bring the flat program current through the one refresh boundary. It
+     * owns dirty routing, rebake fallback, and PROF_REBAKE/PROF_FLATTEN.
+     * This runs inside the frame-level predef/scratch save/restore below, so
+     * assignment threading is undone after the frame. */
+    {
+        ReplFlatRefreshKind refreshed =
+            repl_refresh_flat_program(editor_state_edit_line());
+        if (refreshed != REPL_FLAT_REFRESH_NONE) {
+            flat_program = repl_state_flat_program_view();
+            num_flat_cmds = flat_program.cmd_count;
+        }
     }
 
     /* Snapshot production: every per-frame list/snapshot the UI consumes
