@@ -1073,6 +1073,12 @@ static int parse_clip_plane(const char *args, GLCmd *cmd,
     float parsed_args[5];
     int num_parsed = parse_canonical_float_list(to_parse, parsed_args, 5, vars, num_vars, ctx);
     if (num_parsed < 0) return 0;
+    /* Coefficients land at args[1..4]; the plane enum stays baked. Keep
+     * this custom aggregate parser on the same capture contract as
+     * glMaterialfv and glPointParameterfv so warm flatten re-evaluates
+     * variable-backed equations instead of retaining commit-time args. */
+    parser_capture_expr_span(ctx, REPL_EXPR_ROLE_CMD_ARG_LIST_LENIENT,
+                             1, to_parse);
 
     if (num_parsed != 4) {
         parser_emit_error_static(ctx,

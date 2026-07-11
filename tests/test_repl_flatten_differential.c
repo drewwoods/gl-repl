@@ -422,9 +422,9 @@ static void test_direct_eval_differential(void) {
  * captures, with variables in each expression slot so every family takes
  * its compiled path warm. The built-in corpus covers the common families;
  * this pins the rare ones (glMaterialfv value lists, glMaterialf,
- * glPointParameterfv, an ENUM_OR_EXPR slot, label substitutions, gluColor's
- * defaulted alpha, the glClearColor clamp, scratch assigns, if/else-if
- * chains, and function-call args) regardless of catalog churn. */
+ * glPointParameterfv, glClipPlane, an ENUM_OR_EXPR slot, label substitutions,
+ * gluColor's defaulted alpha, the glClearColor clamp, scratch assigns,
+ * if/else-if chains, and function-call args) regardless of catalog churn. */
 static void test_capture_construct_coverage(void) {
     static const float k_times[] = { 0.0f, 1.3f };
 
@@ -436,6 +436,7 @@ static void test_capture_construct_coverage(void) {
     editor_feed_line("glMaterialfv(GL_FRONT, GL_DIFFUSE, (GLfloat[]){n / 4, 0.5, sin(n), 1});");
     editor_feed_line("glMaterialf(GL_FRONT, GL_SHININESS, n * 10);");
     editor_feed_line("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1, n / 2, 0);");
+    editor_feed_line("glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){1, 0, 0, n / 3});");
     editor_feed_line("A[0] = n * 2;");
     editor_feed_line("A[1] = A[0] + rand(n);");
     editor_feed_line("func0(a) {");
