@@ -18,6 +18,7 @@
 
 #include "repl/command_store.h"
 #include "repl/eval.h"
+#include "repl/expr_program.h"
 #include "repl/state_owners.h"
 
 int repl_apply_can_apply_compiled_change(const ReplCompiledChange *change) {
@@ -144,6 +145,11 @@ void repl_apply_predef_ops(const ReplCompiledChange *change) {
         if (slot < 0) continue;
         repl_eval_undeclare_predef_var(op->name);
         repl_state_mark_flat_dirty();
+        /* Undeclare shifts every higher predef slot down, so compiled
+         * expressions' compile-time-resolved slots are stale. The source
+         * edit carried by the same change invalidates too; this keeps the
+         * cache safe even for a predef-op-only change. */
+        repl_expr_cache_invalidate(repl_expr_cache_live());
         for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
             if (repl_state_document_cmds()[cmd_idx].type == CMD_VAR_ASSIGN &&
                 repl_state_document_cmds()[cmd_idx].var_idx > slot)

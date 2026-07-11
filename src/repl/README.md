@@ -152,6 +152,7 @@ file format (writer in [`export.c`](export.c), reader in [`import.c`](import.c))
 | [`source_scope.c`](source_scope.c) / `.h`, [`format.c`](format.c) / `.h`, [`reformat.c`](reformat.c) / `.h`, [`bootstrap.c`](bootstrap.c) / `.h` | Depth/indent/block-lookup cache, pure indentation, source reformat, startup loading |
 | **Frame flow** | *program model → GL* |
 | [`flatten.c`](flatten.c) / `.h` | Source → flat program (unroll/inline/resolve `if`) |
+| [`flatten_expr.c`](flatten_expr.c) / `.h` | Internal compiled-expression cache boundary used by flatten |
 | [`flatten_query.c`](flatten_query.c) / `.h` | Live flat-program cost/cursor queries |
 | [`autonormal.c`](autonormal.c) | Auto-generated `glNormal3f` maintenance |
 | [`executor.c`](executor.c) / `.h` | Walks the flat program emitting live GL calls (the only live-GL TU) |

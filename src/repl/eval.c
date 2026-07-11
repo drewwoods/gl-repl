@@ -427,6 +427,35 @@ int repl_eval_is_builtin_function(const char *name) {
     return name && find_expr_builtin(name) != NULL;
 }
 
+int repl_eval_builtin_count(void) {
+    return (int)(sizeof(k_expr_builtins) / sizeof(k_expr_builtins[0]));
+}
+
+ReplEvalBuiltinView repl_eval_builtin_at(int idx) {
+    ReplEvalBuiltinView view = { NULL, 0, 0, NULL };
+    if (idx < 0 || idx >= repl_eval_builtin_count())
+        return view;
+    view.name = k_expr_builtins[idx].name;
+    view.arity_min = k_expr_builtins[idx].arity_min;
+    view.arity_max = k_expr_builtins[idx].arity_max;
+    view.eval = k_expr_builtins[idx].eval;
+    return view;
+}
+
+int repl_eval_builtin_index_of(const char *name) {
+    if (!name)
+        return -1;
+    for (int i = 0; i < repl_eval_builtin_count(); i++) {
+        if (strcmp(name, k_expr_builtins[i].name) == 0)
+            return i;
+    }
+    return -1;
+}
+
+int repl_eval_named_constant(const char *name, float *out) {
+    return repl_eval_named_constant_value(name, out);
+}
+
 void repl_eval_init_predef_vars(void) {
     g_num_predef_vars_mut = 1;
     strncpy(g_predef_vars_mut[0].name, "t", sizeof(g_predef_vars_mut[0].name) - 1);
@@ -1940,7 +1969,9 @@ int repl_eval_parse_for_header(const ReplForHeaderParseConfig *cfg) {
     p++;
 
     /* Start and end expressions share the same ExprCtx; we only need to
-     * re-seat ctx.p at each argument boundary since eval_expr advances it. */
+     * re-seat ctx.p at each argument boundary since eval_expr advances it.
+     * Each bound's capture span is [seat point, post-eval position] — the
+     * exact text the evaluator consumed. */
     ExprCtx ctx = {
         .p = p,
         .vars = vars,
@@ -1949,6 +1980,9 @@ int repl_eval_parse_for_header(const ReplForHeaderParseConfig *cfg) {
         .predef_count = cfg->predef_count,
     };
     *cfg->start = repl_eval_expr(&ctx);
+    if (cfg->capture && cfg->capture->fn)
+        cfg->capture->fn(cfg->capture->user_data,
+                         REPL_EXPR_ROLE_LOOP_START, 0, p, ctx.p);
     p = ctx.p;
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != ',') return 0;
@@ -1956,6 +1990,9 @@ int repl_eval_parse_for_header(const ReplForHeaderParseConfig *cfg) {
 
     ctx.p = p;
     *cfg->end = repl_eval_expr(&ctx);
+    if (cfg->capture && cfg->capture->fn)
+        cfg->capture->fn(cfg->capture->user_data,
+                         REPL_EXPR_ROLE_LOOP_END, 0, p, ctx.p);
     p = ctx.p;
     while (*p && isspace((unsigned char)*p)) p++;
 
@@ -1965,6 +2002,9 @@ int repl_eval_parse_for_header(const ReplForHeaderParseConfig *cfg) {
         p++;
         ctx.p = p;
         *cfg->step = repl_eval_expr(&ctx);
+        if (cfg->capture && cfg->capture->fn)
+            cfg->capture->fn(cfg->capture->user_data,
+                             REPL_EXPR_ROLE_LOOP_STEP, 0, p, ctx.p);
         p = ctx.p;
         while (*p && isspace((unsigned char)*p)) p++;
     }

@@ -483,6 +483,34 @@ ReplCompileResult repl_compile_set_predef_value(const char *name,
                                                 ReplCompiledChange *out,
                                                 char *err, int err_size);
 
+/* The two halves of the above, for callers that need to separate the live
+ * value from its persistence — the variable-panel drag applies the live half
+ * on every pointer motion and the source half once, on mouse-up.
+ *
+ * `_live` emits only REPL_PREDEF_OP_SET_VALUE with REPL_COMPILED_NO_CHANGE:
+ * no editor text is rewritten and no command-store row is touched, so a drag
+ * does not mark the source dirty on every motion event.
+ *
+ * `_persist` emits only the declaration rewrite and no predef op (the live
+ * value is already final), or REPL_COMPILED_NO_CHANGE when the variable has
+ * no declaration row. Because it carries no predef op, applying it does not
+ * fire a second tutorial variable notification.
+ *
+ * All three share one lookup/rewrite kernel, so the declaration text they
+ * emit cannot drift apart. Both are pure, like every other compile helper.
+ */
+ReplCompileResult repl_compile_set_predef_value_live(const char *name,
+                                                     float value,
+                                                     const ReplCompileContext *ctx,
+                                                     ReplCompiledChange *out,
+                                                     char *err, int err_size);
+
+ReplCompileResult repl_compile_persist_predef_value(const char *name,
+                                                    float value,
+                                                    const ReplCompileContext *ctx,
+                                                    ReplCompiledChange *out,
+                                                    char *err, int err_size);
+
 /* Compile a delete-range operation: clamp `start`/`count` to the
  * document, validate that no CMD_VAR_DECLARE in the range owns a name
  * still referenced outside the range, and populate UNDECLARE predef

@@ -25,6 +25,7 @@
 
 #include "repl/command.h"
 #include "repl/eval.h"
+#include "repl/expr_program.h" /* ReplExprCache (optional compiled-expression cache) */
 #include "source_document.h"  /* SourceTextView (Phase 1 of feature/source-document-port.md) */
 #include "config.h"           /* REPL_DIAG_TEXT_MAX */
 
@@ -72,6 +73,22 @@ typedef struct {
     ReplFuncAliasView func_aliases;     /* aliases visible while reparsing source text */
     int               max_call_depth;   /* recursion limit (default MAX_FLATTEN_CALL_DEPTH) */
     int               visit_budget;     /* total command visits allowed (default MAX_FLATTEN_VISIT_BUDGET) */
+    /* Differential seam: force every command line back through the text
+     * parser, disabling BOTH the literal-command fast path (which appends a
+     * `has_vars == 0` source command verbatim) and the compiled-expression
+     * cache below. Zero (the live default) takes the fast paths; the
+     * flatten differential test flattens each corpus scene both ways and
+     * compares. Not a user-facing knob. */
+    int               force_reparse;
+    /* Optional compiled-expression cache. NULL (the zero-initialized
+     * default for tests/tools and temporary-buffer callers) keeps the pure
+     * text paths. The live repl_flatten_commands wrapper passes
+     * repl_expr_cache_live(): lines whose expressions compiled on an
+     * earlier flatten evaluate their programs instead of re-parsing text;
+     * EMPTY lines are built (compiled during the text parse via the capture
+     * sink) as they are first visited; FAILED lines stay on the text path
+     * until the next source-dirty invalidation. */
+    ReplExprCache    *expr_cache;
 } ReplFlattenOptions;
 
 /* Result: whether flattening succeeded, how many commands were generated,

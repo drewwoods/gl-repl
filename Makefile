@@ -576,7 +576,9 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/repl/export_display.c \
                      src/repl/export_prologue.c \
                      src/repl/export_setup.c \
+                     src/repl/expr_program.c \
                      src/repl/flatten.c \
+                     src/repl/flatten_expr.c \
                      src/repl/flatten_query.c \
                      src/repl/host_effects.c \
                      src/repl/import.c \
@@ -780,6 +782,8 @@ TEST_BINS = \
 	test_repl_autonormal \
 	test_repl_replay \
 	test_repl_compile \
+	test_repl_flatten_differential \
+	test_expr_program \
 	test_tutorial_match \
 	test_tutorial_runner \
 	test_glr_camera
