@@ -578,7 +578,7 @@ plane — these draw in the **XY plane** at `z = GRID_2D_Z` (just behind the
 z=0 user geometry), so they read as a flat, front-facing grid when the
 camera looks down −Z. In 3D they render as a vertical wall at z=0;
 filtering theme availability by view mode is a deliberate later step (the
-look was the first goal). Both use the Dusk scene palette, route line
+look was the first goal). Both use the shared scene accent palette, route line
 alpha through `grid_color()` (so the show/hide fade still applies), and
 carry no [`GridThemeSpec`](../src/render3d/grid.c#L136), so [`render3d_grid_theme_uses_edge_fade()`](../src/render3d/grid.h#L55) is
 false and the radial edge-fade machinery is skipped. They live as custom
@@ -904,7 +904,7 @@ cycle) that would relocate the active index into one `.c` TU.
 zeroed token, neutral tokens stable across rows, green accent ==
 `#6fb36f`, and the dropdown hover is green (the Issue-1 regression).
 
-### Example Color Language (the "Dusk" palette)
+### Example Color Language (the shared accent palette)
 
 Separate from the UI-chrome theming above: the *scene geometry* of the
 built-in examples shares one deliberate palette so the set reads as a
@@ -918,7 +918,10 @@ redesigned from a feature hodgepodge into one coherent dusk seascape that
 still exercises nested loops, recursion with `if`/`else if`/`else`, GLU
 tess + cutout, GLUT solids, a parametric surface, additive points,
 translucency, and bitmap text); the intent is the whole catalog over
-time. The Dusk color palette and its design guidelines are documented in detail in
+time. The active palette (currently "Neon" — electric accents around the
+brand mark's magenta; the earlier "Dusk" sets remain in
+[`accent_palette.h`](../accent_palette.h) for an easy flip back) and its design
+guidelines are documented in detail in
 [`examples/README.md`](../examples/README.md).
 
 These colors are applied as literal `glColor*` / `gluColor` / `glClearColor` values in the affected scene files under [`examples/scenes/`](../examples/scenes/) (`.glr` scenes are raw REPL source strings and `.c` scenes are full exported/importable files; neither has a macro-substitution layer).

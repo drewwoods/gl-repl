@@ -585,7 +585,7 @@ static void grid_ruler_line_color(float v, int is_major,
     float a = (is_major ? 0.18f : 0.07f) * fade;
     /* Near-neutral warm/cool grays: the directional coding survives as a
      * whisper, but hundreds of lines compressing at the horizon no longer
-     * pile up into a saturated orange/blue wash (Dusk-palette rework). */
+     * pile up into a saturated orange/blue wash (accent-palette rework). */
     out->x_const = rgba(0.62f, 0.56f, 0.50f, a);
     out->z_const = rgba(0.50f, 0.56f, 0.66f, a);
 }
@@ -1528,7 +1528,7 @@ int render3d_grid_theme_uses_fog(Render3dGridTheme grid_theme) {
  * z=0 scene geometry) instead of the XZ ground plane, so they read as a flat,
  * front-facing grid in the 2D ortho view (camera looking down -Z). In 3D they
  * render as a vertical wall at z=0 — acceptable until grids are filtered by
- * view mode. Both use the Dusk scene palette and route line alpha through
+ * view mode. Both use the shared scene accent palette and route line alpha through
  * grid_color() so the show/hide transition fade still applies. Custom themes:
  * no GridThemeSpec entry, so render3d_grid_theme_uses_edge_fade() is false and
  * the radial edge-fade machinery is skipped.
@@ -1781,7 +1781,7 @@ static void render3d_grid_render_neon_theme(const GridDrawContext *grid_ctx) {
  * gets real coordinate labels (GLUT stroke glyphs, billboarded to the camera).
  * Only one plane is labelled at a time — they're chosen by the face weights
  * xy_w / zy_w / xz_w (which sum to 1), and labels only appear above a head-on
- * threshold, fading in as the view squares up. Dusk palette: XY azure, ZY
+ * threshold, fading in as the view squares up. Accent palette: XY azure, ZY
  * amber, XZ floor cool-grey. Custom dispatch arm (no edge-fade).
  * ========================================================================= */
 
