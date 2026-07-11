@@ -420,6 +420,26 @@ int main() {
                    repl_state_flat_program_count(), live_count);
     }
 
+    /* 8a. The live flat program has its own capacity, independent of the
+     * source/editor document cap. Exercise the range above the historical
+     * 4096-command ceiling so a future accidental MAX_EDITOR_COMMANDS (or
+     * stale unified-cap) use cannot silently discard a large expansion. */
+    {
+        const int expanded_count = 5000;
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("for(i, 0, 5000) {");
+        editor_feed_line("  glVertex3f(i, 0, 0);");
+        editor_feed_line("}");
+
+        repl_flatten_commands(editor_state_edit_line());
+
+        ASSERT_TRUE("flat capacity exceeds historical 4096 cap",
+                    MAX_FLAT_COMMANDS > 4096);
+        ASSERT_INT("live flatten expands beyond historical cap",
+                   repl_state_flat_program_count(), expanded_count);
+    }
+
     /* 8b. user_lighting_enabled respects control flow (regression for #10).
      * Pre-fix walked the source array, so glEnable(GL_LIGHTING) inside an
      * if(0) block or an unreferenced funcN body counted as effective. */
