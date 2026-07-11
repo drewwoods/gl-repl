@@ -582,8 +582,11 @@ static void grid_ruler_line_color(float v, int is_major,
     float dist_frac = fabsf(v) / ctx->extent;
     float fade = 1.0f - dist_frac * dist_frac;
     float a = (is_major ? 0.18f : 0.07f) * fade;
-    out->x_const = rgba(0.82f, 0.42f, 0.18f, a);
-    out->z_const = rgba(0.22f, 0.42f, 0.88f, a);
+    /* Near-neutral warm/cool grays: the directional coding survives as a
+     * whisper, but hundreds of lines compressing at the horizon no longer
+     * pile up into a saturated orange/blue wash (Dusk-palette rework). */
+    out->x_const = rgba(0.62f, 0.56f, 0.50f, a);
+    out->z_const = rgba(0.50f, 0.56f, 0.66f, a);
 }
 
 static const GridThemeSpec g_grid_theme_specs[GRID_THEME_COUNT] = {
@@ -1326,23 +1329,23 @@ static void render3d_grid_render_xzruler_theme(const GridDrawContext *grid_ctx) 
         for (int i = 0; i + 1 < grid_ctx->ef_n; i++) {
             float m0 = grid_ctx->ef_mul[i], m1 = grid_ctx->ef_mul[i + 1];
             float p0 = grid_ctx->ef_bp[i],  p1 = grid_ctx->ef_bp[i + 1];
-            /* X axis (z=0, along X) */
-            grid_color(grid_ctx, 0.88f, 0.28f, 0.12f, 0.70f * m0);
+            /* X axis (z=0, along X) — Dusk CORAL */
+            grid_color(grid_ctx, 0.98f, 0.46f, 0.36f, 0.60f * m0);
             glVertex3f(p0, 0, 0);
-            grid_color(grid_ctx, 0.88f, 0.28f, 0.12f, 0.70f * m1);
+            grid_color(grid_ctx, 0.98f, 0.46f, 0.36f, 0.60f * m1);
             glVertex3f(p1, 0, 0);
-            /* Z axis (x=0, along Z) */
-            grid_color(grid_ctx, 0.12f, 0.32f, 0.88f, 0.70f * m0);
+            /* Z axis (x=0, along Z) — Dusk AZURE */
+            grid_color(grid_ctx, 0.36f, 0.70f, 0.98f, 0.60f * m0);
             glVertex3f(0, 0, p0);
-            grid_color(grid_ctx, 0.12f, 0.32f, 0.88f, 0.70f * m1);
+            grid_color(grid_ctx, 0.36f, 0.70f, 0.98f, 0.60f * m1);
             glVertex3f(0, 0, p1);
         }
     } else {
-        /* X axis (z=0, runs along X) */
-        grid_color(grid_ctx, 0.88f, 0.28f, 0.12f, 0.70f);
+        /* X axis (z=0, runs along X) — Dusk CORAL */
+        grid_color(grid_ctx, 0.98f, 0.46f, 0.36f, 0.60f);
         glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
-        /* Z axis (x=0, runs along Z) */
-        grid_color(grid_ctx, 0.12f, 0.32f, 0.88f, 0.70f);
+        /* Z axis (x=0, runs along Z) — Dusk AZURE */
+        grid_color(grid_ctx, 0.36f, 0.70f, 0.98f, 0.60f);
         glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
     }
     glEnd();
@@ -1354,13 +1357,13 @@ static void render3d_grid_render_xzruler_theme(const GridDrawContext *grid_ctx) 
     glBegin(GL_LINES);
     for (float v = -extent; v <= extent + GRID_LOOP_EPSILON; v += major) {
         if (fabsf(v) < GRID_ORIGIN_SKIP_EPSILON) continue;
-        float ta = (fabsf(v) <= major * 2.5f) ? 0.48f : 0.22f;
+        float ta = (fabsf(v) <= major * 2.5f) ? 0.44f : 0.20f;
         ta = fminf(ta * as, 1.0f) * grid_edge_fade_mul(grid_ctx, v);
-        /* Ticks crossing the X axis in the Z direction */
-        grid_color(grid_ctx, 0.88f, 0.28f, 0.12f, ta);
+        /* Ticks crossing the X axis in the Z direction — CORAL */
+        grid_color(grid_ctx, 0.98f, 0.46f, 0.36f, ta);
         glVertex3f(v, 0, -tick); glVertex3f(v, 0, tick);
-        /* Ticks crossing the Z axis in the X direction */
-        grid_color(grid_ctx, 0.12f, 0.32f, 0.88f, ta);
+        /* Ticks crossing the Z axis in the X direction — AZURE */
+        grid_color(grid_ctx, 0.36f, 0.70f, 0.98f, ta);
         glVertex3f(-tick, 0, v); glVertex3f(tick, 0, v);
     }
     glEnd();

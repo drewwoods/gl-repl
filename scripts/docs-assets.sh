@@ -229,7 +229,7 @@ montage2x2() {
 
 stage_triangle() { stage triangle <<'EOF'
 // Snippet start
-glColor3f(1, 0.6, 0.1);
+glColor3f(0.98, 0.76, 0.36);
 glBegin(GL_TRIANGLES);
 glVertex3f(0, 1, 0);
 glVertex3f(-1, -1, 0);
@@ -245,10 +245,10 @@ stage_overlays() { stage overlays <<'EOF'
 /* @cfg vertex_outlines = 1 */
 /* @cfg vertex_points = 1 */
 /* @cfg poly_highlight = 1 */
-/* @cfg grid = GRID_THEME_FAINT */
+/* @cfg grid = GRID_THEME_XZRULER */
 // Snippet start
 glEnable(GL_DEPTH_TEST);
-glColor3f(0.2, 0.7, 1);
+glColor3f(0.36, 0.7, 0.98);
 glBegin(GL_QUADS);
 glNormal3f(0, 0, 1);
 glVertex3f(-1, -1, 0);
@@ -272,12 +272,12 @@ stage_single_polygon() { stage single_polygon <<'EOF'
 // Snippet start
 glEnable(GL_DEPTH_TEST);
 glBegin(GL_QUADS);
-glColor3f(0.95, 0.25, 1);
+glColor3f(0.95, 0.44, 0.66);
 glVertex3f(-1.6, -0.8, 0);
 glVertex3f(-0.2, -0.8, 0);
 glVertex3f(-0.2, 0.8, 0);
 glVertex3f(-1.6, 0.8, 0);
-glColor3f(0.25, 0.675, 1);
+glColor3f(0.36, 0.7, 0.98);
 glVertex3f(0.2, -0.8, 0);
 glVertex3f(1.6, -0.8, 0);
 glVertex3f(1.6, 0.8, 0);
@@ -296,7 +296,7 @@ stage_wireframe() { stage wireframe <<'EOF'
 /* @cfg light_indicators = 0 */
 // Snippet start
 glEnable(GL_DEPTH_TEST);
-glColor3f(0.3, 0.9, 1);
+glColor3f(0.3, 0.84, 0.8);
 glutSolidTorus(0.4, 1.2, 24, 36);
 // Snippet end
 EOF
@@ -339,7 +339,7 @@ stage_grid_theme() {  # $1 = GRID_THEME_<NAME>
 /* @cfg light_indicators = 0 */
 // Snippet start
 glEnable(GL_DEPTH_TEST);
-//glColor3f(0.9, 0.55, 0.15);
+//glColor3f(0.98, 0.46, 0.36);
 glEnable(GL_LIGHTING);
 glEnable(GL_LIGHT0);
 glutSolidCube(0.8);
@@ -377,13 +377,13 @@ EOF
 
 stage_axes() { stage axes <<'EOF'
 /* @cfg axes = AXES_THEME_COMPASS */
-/* @cfg grid = GRID_THEME_FAINT */
+/* @cfg grid = GRID_THEME_XZRULER */
 /* @cfg code_panel = 3 */
 /* @cfg variable_panel = 0 */
 /* @cfg light_indicators = 0 */
 // Snippet start
 glEnable(GL_DEPTH_TEST);
-glColor3f(0.9, 0.55, 0.15);
+glColor3f(0.98, 0.46, 0.36);
 glutSolidCube(0.8);
 // Snippet end
 EOF
@@ -395,7 +395,7 @@ stage_tune() { stage tune <<'EOF'
 float amp = 1.2; // @tune
 float freq = 2; // @tune
 float spread = 0.8;
-glColor3f(0.4, 0.8, 1);
+glColor3f(0.36, 0.7, 0.98);
 glBegin(GL_LINE_STRIP);
 for(i, 0, 64) {
 glVertex3f(-1.6 + i*0.05, sin(i*0.1*freq + t)*amp*0.4, spread*cos(i*0.05));
@@ -416,7 +416,7 @@ stage_blur() { stage blur <<'EOF'
 glEnable(GL_DEPTH_TEST);
 glPushMatrix();
 glRotatef(t*200, 0, 1, 0);
-glColor3f(0.9, 0.55, 0.15);
+glColor3f(0.98, 0.46, 0.36);
 glTranslatef(1.2, 0, 0);
 glutSolidCube(0.6);
 glPopMatrix();
@@ -428,14 +428,14 @@ EOF
 stage_guide() { stage guide <<'EOF'
 /* @cfg variable_panel = 0 */
 /* @cfg light_indicators = 0 */
-/* @cfg grid = GRID_THEME_FAINT */
+/* @cfg grid = GRID_THEME_XZRULER */
 // Snippet start
 glEnable(GL_DEPTH_TEST);
-glColor3f(0.9, 0.55, 0.15);
+glColor3f(0.98, 0.46, 0.36);
 glutSolidCube(0.5);
 glPushMatrix();
 glTranslatef(2, 0.8, 0);
-glColor3f(0.3, 0.8, 0.9);
+glColor3f(0.3, 0.84, 0.8);
 glutSolidCube(0.5);
 glPopMatrix();
 // Snippet end
@@ -452,10 +452,10 @@ stage_vertex_entry() { stage vertex_entry <<'EOF'
 /* @cfg vertex_points = 0 */
 /* @cfg variable_panel = 0 */
 /* @cfg light_indicators = 0 */
-/* @cfg grid = GRID_THEME_FAINT */
+/* @cfg grid = GRID_THEME_XZRULER */
 // Snippet start
 glEnable(GL_DEPTH_TEST);
-glColor3f(0.9, 0.55, 0.25);
+glColor3f(0.98, 0.46, 0.36);
 glBegin(GL_TRIANGLES);
 glVertex3f(-1, 0, 0);
 glVertex3f(1, 0, 0);
@@ -479,7 +479,7 @@ glEnable(GL_LIGHT0);
 glEnable(GL_COLOR_MATERIAL);
 glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0.2, 1, 0.3, 0.4});
 glEnable(GL_CLIP_PLANE0);
-glColor3f(0.9, 0.5, 0.25);
+glColor3f(0.98, 0.46, 0.36);
 glutSolidSphere(1.5, 32, 24);
 // Snippet end
 EOF
@@ -501,7 +501,7 @@ glEnable(GL_LIGHT0);
 glEnable(GL_COLOR_MATERIAL);
 glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0, 1, 0, sin(t*3)*1.1});
 glEnable(GL_CLIP_PLANE0);
-glColor3f(0.35, 0.65, 0.9);
+glColor3f(0.36, 0.7, 0.98);
 glutSolidTorus(0.5, 1.2, 24, 36);
 // Snippet end
 EOF
@@ -514,7 +514,7 @@ stage_replay() { stage replay <<'EOF'
 glEnable(GL_DEPTH_TEST);
 glBegin(GL_TRIANGLES);
 for(i, 0, 12) {
-glColor3f(0.5 + 0.5*cos(i*TAU/12), 0.6, 0.5 + 0.5*sin(i*TAU/12));
+glColor3f(0.67 + 0.31*cos(i*TAU/12), 0.58 - 0.12*cos(i*TAU/12), 0.67 - 0.31*cos(i*TAU/12));
 glVertex3f(cos(i*TAU/12)*1.5, sin(i*TAU/12)*1.5, 0);
 glVertex3f(cos((i+0.6)*TAU/12)*1.5, sin((i+0.6)*TAU/12)*1.5, 0);
 glVertex3f(cos((i+0.3)*TAU/12)*0.7, sin((i+0.3)*TAU/12)*0.7, 0);
@@ -534,7 +534,7 @@ stage_hidden_line() { stage hidden_line <<'EOF'
 /* @cfg light_indicators = 0 */
 // Snippet start
 glEnable(GL_DEPTH_TEST);
-glColor3f(0.3, 0.9, 1);
+glColor3f(0.3, 0.84, 0.8);
 glutSolidTorus(0.4, 1.2, 24, 36);
 // Snippet end
 EOF
@@ -548,7 +548,7 @@ stage_winding() { stage winding <<'EOF'
 /* @cfg vertex_points = 0 */
 /* @cfg variable_panel = 0 */
 /* @cfg light_indicators = 0 */
-/* @cfg grid = GRID_THEME_FAINT */
+/* @cfg grid = GRID_THEME_XZRULER */
 // Snippet start
 glEnable(GL_DEPTH_TEST);
 glBegin(GL_TRIANGLES);
@@ -569,10 +569,10 @@ EOF
 stage_autocomplete() { stage autocomplete <<'EOF'
 /* @cfg variable_panel = 0 */
 /* @cfg light_indicators = 0 */
-/* @cfg grid = GRID_THEME_FAINT */
+/* @cfg grid = GRID_THEME_XZRULER */
 // Snippet start
 glEnable(GL_DEPTH_TEST);
-glColor3f(0.9, 0.55, 0.15);
+glColor3f(0.98, 0.46, 0.36);
 glutSolidTeapot(0.8);
 // Snippet end
 EOF
@@ -586,7 +586,7 @@ stage_color_picker() { stage color_picker <<'EOF'
 /* @cfg light_indicators = 0 */
 /* @cfg vertex_outlines = 0 */
 /* @cfg vertex_points = 0 */
-/* @cfg grid = GRID_THEME_FAINT */
+/* @cfg grid = GRID_THEME_XZRULER */
 // Snippet start
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
@@ -594,7 +594,7 @@ glEnable(GL_LIGHT0);
 glEnable(GL_LIGHT1);
 glEnable(GL_LIGHT2);
 glEnable(GL_COLOR_MATERIAL);
-glColor3f(0.9, 0.45, 0.2);
+glColor3f(0.98, 0.46, 0.36);
 glutSolidTeapot(0.9);
 // Snippet end
 EOF
@@ -606,11 +606,11 @@ EOF
 stage_stepper() { stage stepper <<'EOF'
 /* @cfg variable_panel = 0 */
 /* @cfg light_indicators = 0 */
-/* @cfg grid = GRID_THEME_FAINT */
+/* @cfg grid = GRID_THEME_XZRULER */
 // Snippet start
 float radius = 1.5;
 glEnable(GL_DEPTH_TEST);
-glColor3f(0.3, 0.8, 0.9);
+glColor3f(0.3, 0.84, 0.8);
 glutSolidSphere(radius, 32, 16);
 // Snippet end
 EOF
@@ -633,7 +633,7 @@ glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
 glEnable(GL_LIGHT0);
 glEnable(GL_COLOR_MATERIAL);
-glColor3f(0.4, 0.7, 1);
+glColor3f(0.36, 0.7, 0.98);
 glRotatef(t*20, 0, 1, 0);
 glBegin(GL_QUADS);
 for(i, 0, 24) {
@@ -660,7 +660,7 @@ stage_window_tour_dir() {
 // @scene-name First Triangle
 // Snippet start
 float lift = 1;
-glColor3f(1, 0.6, 0.1);
+glColor3f(0.98, 0.76, 0.36);
 glBegin(GL_TRIANGLES);
 glVertex3f(0, lift, 0);
 glVertex3f(-1, -1, 0);
@@ -671,7 +671,7 @@ EOF
     cat > "$ws/ring.c" <<'EOF'
 // @scene-name Ring Sketch
 // Snippet start
-glColor3f(0.3, 0.8, 0.9);
+glColor3f(0.3, 0.84, 0.8);
 glBegin(GL_LINE_LOOP);
 for(i, 0, 32) {
 glVertex3f(cos(i*TAU/32), sin(i*TAU/32), 0);
@@ -917,7 +917,7 @@ if want sc-torus-knot; then
     gif "$SHOW/torus-knot.gif" 200 2 20 720 --example "Torus knot (animated)"
 fi
 if want sc-snowfall; then
-    gif "$SHOW/snowfall.gif" 220 2 22 720 --example "Snowfall demo (550 particles)"
+    gif "$SHOW/snowfall.gif" 220 2 22 720 --example "Snowfall particles"
 fi
 if want sc-parametric-torus; then
     # Static geometry (nested for, no t) — a still, not a frozen GIF.
