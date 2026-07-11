@@ -1744,5 +1744,55 @@ int main(void) {
         assert_status_contains("overlong funcN: status", "Command too long");
     }
 
+    /* Canonical-text float round-trip: a constant expression folds at
+     * parse time and the canonical text re-prints the folded value; that
+     * text is the command's only source of record (flatten force_reparse
+     * re-evaluates it, save/load round-trips it), so re-parsing it must
+     * reproduce the committed arg bits exactly. 0.92f*0.55f is a
+     * discriminator: its product is NOT the float nearest "0.506", so
+     * the old 6-digit "%g" emit broke the round trip. Covers the std
+     * table plus every hand-written arg emitter. */
+    {
+        static const char *const lines[] = {
+            "glColor3f(0.92*0.55, 0.95*0.55, 0.98*0.55);",
+            "glTranslatef(1.25*cos(PI/2), 0.38, 1.25*sin(PI*7/6));",
+            "gluColor(0.92*0.55, 0.2, 0.3);",
+            "label(\"x %f\", 0.92*0.55);",
+            "glMaterialfv(GL_FRONT, GL_DIFFUSE, 0.92*0.55, 0.2, 0.3, 1);",
+            "glMaterialf(GL_FRONT, GL_SHININESS, 0.92*0.55*128);",
+            "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 0.92*0.55, 0, 0.01*3);",
+            "glClipPlane(GL_CLIP_PLANE0, 0.92*0.55, 0, 1, 0.1*3);",
+        };
+        for (size_t li = 0; li < sizeof(lines) / sizeof(lines[0]); li++) {
+            GLCmd a, b;
+            char text[MAX_LINE_LEN];
+            char label_buf[128];
+            memset(&a, 0, sizeof(a));
+            memset(&b, 0, sizeof(b));
+
+            snprintf(label_buf, sizeof(label_buf),
+                     "canonical float round-trip: parse [%s]", lines[li]);
+            ASSERT_TRUE(label_buf,
+                        parse_cmd_with_text(lines[li], &a, text,
+                                            sizeof(text)) == 1);
+
+            snprintf(label_buf, sizeof(label_buf),
+                     "canonical float round-trip: reparse [%s]", lines[li]);
+            ASSERT_TRUE(label_buf,
+                        parse_cmd_with_text(text, &b, NULL, 0) == 1);
+
+            snprintf(label_buf, sizeof(label_buf),
+                     "canonical float round-trip: num_args [%s]", lines[li]);
+            ASSERT_TRUE(label_buf, a.num_args == b.num_args);
+
+            snprintf(label_buf, sizeof(label_buf),
+                     "canonical float round-trip: bits [%s]", lines[li]);
+            ASSERT_TRUE(label_buf,
+                        a.num_args > 0 &&
+                        memcmp(a.args, b.args,
+                               (size_t)a.num_args * sizeof(a.args[0])) == 0);
+        }
+    }
+
     return test_harness_report(&g_harness, "repl_core_parse");
 }

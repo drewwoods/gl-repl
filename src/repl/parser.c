@@ -378,11 +378,26 @@ static int resolve_enum_arg_slot(const char *raw, int slot_idx,
     return 0;
 }
 
+/* Format one float arg for canonical line text. Round-trip exact
+ * (strtof(text) == v) via repl_format_source_float: for a !has_vars
+ * command the canonical text is the only source-of-record of a folded
+ * constant expression, and the flatten force-reparse path re-evaluates
+ * that text expecting the committed bits — a lossy "%g" here (6
+ * significant digits) made e.g. `glColor3f(0.92*0.55, ...)` commit
+ * arg bits its own canonical text no longer reproduced. */
+static const char *fmt_source_float(char buf[REPL_SOURCE_FLOAT_TEXT_MAX],
+                                    float v) {
+    repl_format_source_float(buf, REPL_SOURCE_FLOAT_TEXT_MAX, v);
+    return buf;
+}
+
 static void format_std_command_text(char *out, int out_sz,
                                     const char *indent,
                                     const ReplStdCommandSpec *def,
                                     const float *args) {
     int off;
+    int ai = 0;
+    const char *f;
 
     if (!out || out_sz <= 0 || !def || !def->fmt)
         return;
@@ -391,34 +406,25 @@ static void format_std_command_text(char *out, int out_sz,
     if (off < 0 || off >= out_sz)
         return;
 
-    switch (def->num_args) {
-    case 1:
-        snprintf(out + off, (size_t)(out_sz - off), def->fmt, args[0]);
-        break;
-    case 2:
-        snprintf(out + off, (size_t)(out_sz - off),
-                 def->fmt, args[0], args[1]);
-        break;
-    case 3:
-        snprintf(out + off, (size_t)(out_sz - off),
-                 def->fmt, args[0], args[1], args[2]);
-        break;
-    case 4:
-        snprintf(out + off, (size_t)(out_sz - off),
-                 def->fmt, args[0], args[1], args[2], args[3]);
-        break;
-    case 5:
-        snprintf(out + off, (size_t)(out_sz - off),
-                 def->fmt, args[0], args[1], args[2], args[3], args[4]);
-        break;
-    case 6:
-        snprintf(out + off, (size_t)(out_sz - off),
-                 def->fmt, args[0], args[1], args[2],
-                 args[3], args[4], args[5]);
-        break;
-    default:
-        break;
+    /* def->fmt is a printf template whose only directives are one %g
+     * per argument; substitute each with the round-trip-exact form. */
+    for (f = def->fmt; *f && off < out_sz - 1; f++) {
+        if (f[0] == '%' && f[1] == 'g' && ai < def->num_args) {
+            char fbuf[REPL_SOURCE_FLOAT_TEXT_MAX];
+            int n = snprintf(out + off, (size_t)(out_sz - off), "%s",
+                             fmt_source_float(fbuf, args[ai]));
+            if (n < 0 || n >= out_sz - off) {
+                out[out_sz - 1] = '\0';
+                return;
+            }
+            off += n;
+            ai++;
+            f++;               /* skip the 'g' */
+        } else {
+            out[off++] = *f;
+        }
     }
+    out[off] = '\0';
 }
 
 /* Split a table-driven enum command's argument list into exactly N
@@ -594,10 +600,16 @@ static int parse_glu_color(const char *args, GLCmd *cmd,
         cmd->type = CMD_TESS_COLOR;
         cmd->valid = 1;
         cmd->has_vars = input_has_any_visible_vars(args, vars, num_vars);
-        if (text_out && text_sz > 0)
-            write_text(text_out, text_sz, "%sgluColor(%g, %g, %g, %g);",
-                       tess_indent, cmd->args[0], cmd->args[1],
-                       cmd->args[2], cmd->args[3]);
+        if (text_out && text_sz > 0) {
+            char b0[REPL_SOURCE_FLOAT_TEXT_MAX], b1[REPL_SOURCE_FLOAT_TEXT_MAX];
+            char b2[REPL_SOURCE_FLOAT_TEXT_MAX], b3[REPL_SOURCE_FLOAT_TEXT_MAX];
+            write_text(text_out, text_sz, "%sgluColor(%s, %s, %s, %s);",
+                       tess_indent,
+                       fmt_source_float(b0, cmd->args[0]),
+                       fmt_source_float(b1, cmd->args[1]),
+                       fmt_source_float(b2, cmd->args[2]),
+                       fmt_source_float(b3, cmd->args[3]));
+        }
         return 1;
     }
     parser_emit_error_static(ctx, "Usage: gluColor(r, g, b) or gluColor(r, g, b, a)");
@@ -679,8 +691,9 @@ static int parse_label(const char *args, GLCmd *cmd,
         int off = snprintf(text_out, (size_t)text_sz,
                            "%slabel(\"%s\"", indent, fmt_str);
         for (int i = 0; i < sub_count && off < (int)text_sz - 6; i++) {
+            char fbuf[REPL_SOURCE_FLOAT_TEXT_MAX];
             off += snprintf(text_out + off, (size_t)(text_sz - off),
-                            ", %g", subs[i]);
+                            ", %s", fmt_source_float(fbuf, subs[i]));
         }
         snprintf(text_out + off, (size_t)(text_sz - off), ");");
     }
@@ -895,15 +908,21 @@ static int parse_materialfv(const char *args, GLCmd *cmd,
     cmd->has_vars = input_has_any_visible_vars(to_parse, vars, num_vars);
 
     if (text_out && text_sz > 0) {
+        char b0[REPL_SOURCE_FLOAT_TEXT_MAX], b1[REPL_SOURCE_FLOAT_TEXT_MAX];
+        char b2[REPL_SOURCE_FLOAT_TEXT_MAX], b3[REPL_SOURCE_FLOAT_TEXT_MAX];
         if (num_parsed == 1)
             snprintf(text_out, (size_t)text_sz,
-                     "%sglMaterialfv(%s, %s, (GLfloat[]){%g});",
-                     indent, face_str, pname_str, parsed_args[0]);
+                     "%sglMaterialfv(%s, %s, (GLfloat[]){%s});",
+                     indent, face_str, pname_str,
+                     fmt_source_float(b0, parsed_args[0]));
         else
             snprintf(text_out, (size_t)text_sz,
-                     "%sglMaterialfv(%s, %s, (GLfloat[]){%g, %g, %g, %g});",
+                     "%sglMaterialfv(%s, %s, (GLfloat[]){%s, %s, %s, %s});",
                      indent, face_str, pname_str,
-                     parsed_args[0], parsed_args[1], parsed_args[2], parsed_args[3]);
+                     fmt_source_float(b0, parsed_args[0]),
+                     fmt_source_float(b1, parsed_args[1]),
+                     fmt_source_float(b2, parsed_args[2]),
+                     fmt_source_float(b3, parsed_args[3]));
     }
     return 1;
 }
@@ -950,9 +969,12 @@ static int parse_materialf(const char *args, GLCmd *cmd,
     cmd->num_args = 3;
     cmd->has_vars = input_has_any_visible_vars(val_arg, vars, num_vars);
 
-    if (text_out && text_sz > 0)
-        snprintf(text_out, (size_t)text_sz, "%sglMaterialf(%s, %s, %g);",
-                 indent, face_str, pname_str, parsed_args[0]);
+    if (text_out && text_sz > 0) {
+        char b0[REPL_SOURCE_FLOAT_TEXT_MAX];
+        snprintf(text_out, (size_t)text_sz, "%sglMaterialf(%s, %s, %s);",
+                 indent, face_str, pname_str,
+                 fmt_source_float(b0, parsed_args[0]));
+    }
     return 1;
 }
 
@@ -1017,10 +1039,16 @@ static int parse_point_parameter_fv(const char *args, GLCmd *cmd,
     cmd->num_args = 4;
     cmd->has_vars = input_has_any_visible_vars(to_parse, vars, num_vars);
 
-    if (text_out && text_sz > 0)
+    if (text_out && text_sz > 0) {
+        char b0[REPL_SOURCE_FLOAT_TEXT_MAX], b1[REPL_SOURCE_FLOAT_TEXT_MAX];
+        char b2[REPL_SOURCE_FLOAT_TEXT_MAX];
         snprintf(text_out, (size_t)text_sz,
-                 "%sglPointParameterfv(%s, (GLfloat[]){%g, %g, %g});",
-                 indent, pname_str, parsed_args[0], parsed_args[1], parsed_args[2]);
+                 "%sglPointParameterfv(%s, (GLfloat[]){%s, %s, %s});",
+                 indent, pname_str,
+                 fmt_source_float(b0, parsed_args[0]),
+                 fmt_source_float(b1, parsed_args[1]),
+                 fmt_source_float(b2, parsed_args[2]));
+    }
     return 1;
 }
 
@@ -1093,11 +1121,17 @@ static int parse_clip_plane(const char *args, GLCmd *cmd,
     cmd->num_args = 5;
     cmd->has_vars = input_has_any_visible_vars(to_parse, vars, num_vars);
 
-    if (text_out && text_sz > 0)
+    if (text_out && text_sz > 0) {
+        char b0[REPL_SOURCE_FLOAT_TEXT_MAX], b1[REPL_SOURCE_FLOAT_TEXT_MAX];
+        char b2[REPL_SOURCE_FLOAT_TEXT_MAX], b3[REPL_SOURCE_FLOAT_TEXT_MAX];
         snprintf(text_out, (size_t)text_sz,
-                 "%sglClipPlane(%s, (GLdouble[]){%g, %g, %g, %g});",
+                 "%sglClipPlane(%s, (GLdouble[]){%s, %s, %s, %s});",
                  indent, plane_str,
-                 parsed_args[0], parsed_args[1], parsed_args[2], parsed_args[3]);
+                 fmt_source_float(b0, parsed_args[0]),
+                 fmt_source_float(b1, parsed_args[1]),
+                 fmt_source_float(b2, parsed_args[2]),
+                 fmt_source_float(b3, parsed_args[3]));
+    }
     return 1;
 }
 
