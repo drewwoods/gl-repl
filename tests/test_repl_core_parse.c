@@ -1762,6 +1762,10 @@ int main(void) {
             "glMaterialf(GL_FRONT, GL_SHININESS, 0.92*0.55*128);",
             "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 0.92*0.55, 0, 0.01*3);",
             "glClipPlane(GL_CLIP_PLANE0, 0.92*0.55, 0, 1, 0.1*3);",
+            /* Shared formatter boundaries: fixed-point 1e38f exceeds the
+             * 32-byte source-float buffer, and -0 must keep its sign bit. */
+            "glVertex3f(1e38, 0, 0);",
+            "glVertex3f(-0, 0, 0);",
         };
         for (size_t li = 0; li < sizeof(lines) / sizeof(lines[0]); li++) {
             GLCmd a, b;
