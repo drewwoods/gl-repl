@@ -335,6 +335,10 @@ check_keymap_no_dup() {
     bash scripts/keymap.sh check
 }
 
+check_palette() {
+    python3 scripts/check/check-palette.py
+}
+
 run_check() {
     local target="$1"
     local func="$2"
@@ -430,4 +434,5 @@ else
     run_check check-no-test-default-output check_no_test_default_output
     run_check check-prof-sections-instrumented check_prof_sections_instrumented
     run_check check-keymap-no-dup check_keymap_no_dup
+    run_check check-palette check_palette
 fi

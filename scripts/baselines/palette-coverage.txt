@@ -1,0 +1,20 @@
+# Scenes not yet migrated to the shared accent palette (accent_palette.h).
+# File-level ratchet, checked by scripts/check/check-palette.py:
+# files listed here may carry off-palette literal color triples; once a
+# file goes fully on-palette the check fails until its line is removed.
+# Migrate scenes off this list as they are touched (examples/README.md
+# "Example Color Language" rollout policy). Never add a new scene here —
+# author new scenes on the palette.
+examples/scenes/annotated-orbit-plot-labels.glr
+examples/scenes/clip-planes-carve-solids.glr
+examples/scenes/dusk-lighthouse-atoll-stress-test.glr
+examples/scenes/glow-sprites-blend-point-attenuation.glr
+examples/scenes/glu-concave-arrow-extrusion.glr
+examples/scenes/jellyfish-gldepthmask-translucency.glr
+examples/scenes/orrery-labels-track-3d-orbits.glr
+examples/scenes/ringed-planet-nebula-skies.glr
+examples/scenes/rotating-cube.glr
+examples/scenes/snowfall-particles.glr
+examples/scenes/swaying-grass-field-rand-t.glr
+examples/scenes/teapot-carousel-transform-stacks-glow-points.glr
+examples/scenes/whale-particle-system-lit-model.glr

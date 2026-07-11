@@ -25,6 +25,7 @@
 #include <math.h>
 #include <string.h>
 
+#include "accent_palette.h"  /* brand-mark anchors: face + edge colors */
 #include "config.h"
 #include "ui/core/gl_2d.h"
 #include "ui/core/theme.h"
@@ -81,19 +82,23 @@ static const int k_faces[4][4] = {
     {0, 1, 5, 4},   /* -y floor */
 };
 
-/* Palette sampled from the lit-cube.glr render (the adopted logo). */
-static const float k_ext[4][3] = {
-    {0.824f, 0.835f, 0.859f},   /* +z: grey side           */
-    {0.839f, 0.847f, 0.871f},   /* -z: grey side           */
-    {0.780f, 0.792f, 0.871f},   /* +y: lavender top        */
-    {0.725f, 0.737f, 0.776f},   /* -y: bottom              */
-};
-static const float k_inn[4][3] = {
-    {0.310f, 0.663f, 0.941f},   /* +z: azure wall          */
-    {0.239f, 0.659f, 0.961f},   /* -z: azure wall          */
-    {0.561f, 0.588f, 0.733f},   /* +y: dim ceiling         */
-    {0.973f, 0.255f, 0.878f},   /* -y: magenta floor       */
-};
+/* Face base colors come from the shared brand-mark anchors
+ * (accent_palette.h) — the same vocabulary the SVG twins are checked
+ * against — so retuning the mark there re-themes this splash too. The
+ * two faces the vector mark never shows lit (the exterior underside,
+ * the dim interior ceiling) are splash-only shading nuances and stay
+ * local named constants. */
+static const float k_ext_bottom[3]  = {0.725f, 0.737f, 0.776f};
+static const float k_inn_ceiling[3] = {0.561f, 0.588f, 0.733f};
+
+/* Base color for face f (k_faces order: +z, -z, +y, -y). */
+static const float *splash_face_base(int f, int interior) {
+    if (interior)
+        return (f == 2) ? k_inn_ceiling
+             : palette_anchor_rgb(f == 3 ? PAL_MARK_FLOOR : PAL_MARK_WALL);
+    if (f == 3) return k_ext_bottom;
+    return palette_anchor_rgb(f == 2 ? PAL_MARK_TOP : PAL_MARK_SIDE);
+}
 
 /* 12 edges: vertex pair + the (up to 2) existing faces each borders,
  * as indices into k_faces (-1 = the adjacent face is an opening).  An
@@ -122,8 +127,9 @@ static void splash_edge_pass(const float px[8], const float py[8],
                              const int front[4], int want_front,
                              float width, float alpha) {
     int e;
+    const float *edge = palette_anchor_rgb(PAL_MARK_EDGE);
     glLineWidth(width);
-    glColor4f(1.0f, 1.0f, 1.0f, alpha);
+    glColor4f(edge[0], edge[1], edge[2], alpha);
     glBegin(GL_LINES);
     for (e = 0; e < 12; e++) {
         int fa = k_edges[e][2], fb = k_edges[e][3];
@@ -166,14 +172,14 @@ static void splash_draw_cube(float cx, float cy, float s,
     /* Interior surfaces (seen through the openings), then their seams. */
     for (f = 0; f < 4; f++)
         if (!front[f])
-            splash_fill_face(px, py, k_faces[f], k_inn[f],
+            splash_fill_face(px, py, k_faces[f], splash_face_base(f, 1),
                              0.78f + 0.22f * -nz[f], alpha);
     splash_edge_pass(px, py, front, 0, 1.0f, alpha * 0.55f);
 
     /* Quiet exterior on top, then the white front edges. */
     for (f = 0; f < 4; f++)
         if (front[f])
-            splash_fill_face(px, py, k_faces[f], k_ext[f],
+            splash_fill_face(px, py, k_faces[f], splash_face_base(f, 0),
                              0.86f + 0.14f * nz[f], alpha);
     splash_edge_pass(px, py, front, 1, 1.5f, alpha * 0.95f);
 }

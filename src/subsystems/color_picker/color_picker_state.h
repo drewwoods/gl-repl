@@ -36,7 +36,7 @@ typedef struct {
 typedef enum {
     CP_TAB_BASIC = 0,   /* one row of ~10 common named colors */
     CP_TAB_FULL,        /* hue x tint/shade grid + greyscale ramp */
-    CP_TAB_DUSK,        /* one row of the example scenes' "Dusk" palette */
+    CP_TAB_SCENE,       /* one row of the active accent palette (accent_palette.h) */
     CP_TAB_HARMONY,     /* chosen color + tetradic set, derived live from HSV */
     CP_TAB_COUNT
 } CpPaletteTab;

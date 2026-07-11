@@ -3,6 +3,7 @@
  */
 #include "grid.h"
 #include "overlay_xn.h"  /* Render3dOverlayXn + shared resolve helper */
+#include "accent_palette.h"  /* shared accent palette: ruler axis role colors */
 #include <math.h>     /* sinf, cosf, sqrtf, fabsf, fmodf, M_PI (via gl_includes.h) */
 #include <stdio.h>    /* snprintf (2D grid label text) */
 
@@ -1306,6 +1307,12 @@ static void render3d_grid_render_xzruler_theme(const GridDrawContext *grid_ctx) 
     float step = grid_ctx->step;
     float major_tol = grid_ctx->major_tol;
     float as = grid_ctx->alpha_scale;
+    /* Axis + tick colors come from the shared accent palette's role map
+     * (accent_palette.h) so the ruler retunes with the examples: warm key
+     * on X, cool key on Z. The field lines above stay derived
+     * near-neutrals; the overlay tokens stay in render3d/palette.h. */
+    const float *ax = palette_anchor_rgb(PAL_ROLE_WARM_KEY);
+    const float *az = palette_anchor_rgb(PAL_ROLE_COOL_KEY);
 
     /* Non-origin grid lines with directional colour coding */
     glBegin(GL_LINES);
@@ -1329,23 +1336,23 @@ static void render3d_grid_render_xzruler_theme(const GridDrawContext *grid_ctx) 
         for (int i = 0; i + 1 < grid_ctx->ef_n; i++) {
             float m0 = grid_ctx->ef_mul[i], m1 = grid_ctx->ef_mul[i + 1];
             float p0 = grid_ctx->ef_bp[i],  p1 = grid_ctx->ef_bp[i + 1];
-            /* X axis (z=0, along X) — Dusk CORAL */
-            grid_color(grid_ctx, 0.98f, 0.46f, 0.36f, 0.60f * m0);
+            /* X axis (z=0, along X) — warm key */
+            grid_color(grid_ctx, ax[0], ax[1], ax[2], 0.60f * m0);
             glVertex3f(p0, 0, 0);
-            grid_color(grid_ctx, 0.98f, 0.46f, 0.36f, 0.60f * m1);
+            grid_color(grid_ctx, ax[0], ax[1], ax[2], 0.60f * m1);
             glVertex3f(p1, 0, 0);
-            /* Z axis (x=0, along Z) — Dusk AZURE */
-            grid_color(grid_ctx, 0.36f, 0.70f, 0.98f, 0.60f * m0);
+            /* Z axis (x=0, along Z) — cool key */
+            grid_color(grid_ctx, az[0], az[1], az[2], 0.60f * m0);
             glVertex3f(0, 0, p0);
-            grid_color(grid_ctx, 0.36f, 0.70f, 0.98f, 0.60f * m1);
+            grid_color(grid_ctx, az[0], az[1], az[2], 0.60f * m1);
             glVertex3f(0, 0, p1);
         }
     } else {
-        /* X axis (z=0, runs along X) — Dusk CORAL */
-        grid_color(grid_ctx, 0.98f, 0.46f, 0.36f, 0.60f);
+        /* X axis (z=0, runs along X) — warm key */
+        grid_color(grid_ctx, ax[0], ax[1], ax[2], 0.60f);
         glVertex3f(-extent, 0, 0); glVertex3f(extent, 0, 0);
-        /* Z axis (x=0, runs along Z) — Dusk AZURE */
-        grid_color(grid_ctx, 0.36f, 0.70f, 0.98f, 0.60f);
+        /* Z axis (x=0, runs along Z) — cool key */
+        grid_color(grid_ctx, az[0], az[1], az[2], 0.60f);
         glVertex3f(0, 0, -extent); glVertex3f(0, 0, extent);
     }
     glEnd();
@@ -1359,11 +1366,11 @@ static void render3d_grid_render_xzruler_theme(const GridDrawContext *grid_ctx) 
         if (fabsf(v) < GRID_ORIGIN_SKIP_EPSILON) continue;
         float ta = (fabsf(v) <= major * 2.5f) ? 0.44f : 0.20f;
         ta = fminf(ta * as, 1.0f) * grid_edge_fade_mul(grid_ctx, v);
-        /* Ticks crossing the X axis in the Z direction — CORAL */
-        grid_color(grid_ctx, 0.98f, 0.46f, 0.36f, ta);
+        /* Ticks crossing the X axis in the Z direction — warm key */
+        grid_color(grid_ctx, ax[0], ax[1], ax[2], ta);
         glVertex3f(v, 0, -tick); glVertex3f(v, 0, tick);
-        /* Ticks crossing the Z axis in the X direction — AZURE */
-        grid_color(grid_ctx, 0.36f, 0.70f, 0.98f, ta);
+        /* Ticks crossing the Z axis in the X direction — cool key */
+        grid_color(grid_ctx, az[0], az[1], az[2], ta);
         glVertex3f(-tick, 0, v); glVertex3f(tick, 0, v);
     }
     glEnd();

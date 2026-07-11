@@ -1569,6 +1569,12 @@ check-keymap-no-dup: ## Hard guard: no two keymap.h bindings share a (key, mods)
 keymap-list: ## Print current key bindings + the free Ctrl / Ctrl+Shift / F-key slots.
 	@bash scripts/keymap.sh list
 
+check-palette: ## Hard guard: covered scenes + README table stay on the active accent palette (accent_palette.h).
+	@python3 scripts/check/check-palette.py
+
+palette-list: ## Print the active accent palette anchors (floats + hex) and the role map.
+	@python3 scripts/check/check-palette.py --list
+
 check-examples-catalog: ## Validate the file-backed built-in example catalog.
 	@python3 scripts/gen_examples.py --check --catalog $(EXAMPLES_CATALOG)
 
