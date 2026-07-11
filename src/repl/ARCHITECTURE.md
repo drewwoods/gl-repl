@@ -498,11 +498,11 @@ stream:
 [`expr_program.c`](expr_program.c) owns the expression bytecode and
 arena-backed per-line index. [`flatten_expr.c`](flatten_expr.c) is the narrow
 integration boundary: it owns line build state, parser capture callbacks, and
-warm evaluation. `flatten.c` asks it for values by `(source line, expression
+warm evaluation. [`flatten.c`](flatten.c) asks it for values by `(source line, expression
 role, ordinal)` and does not manipulate program handles or cache entries.
 
 The live cache is ephemeral process state returned by
-`repl_expr_cache_live()`; it is deliberately outside
+[`repl_expr_cache_live()`](expr_program.h#L106); it is deliberately outside
 [`ReplRuntimeState`](state.h#L18), undo snapshots, scene snapshots, and saved
 workspaces. Its allocation is capped by `REPL_EXPR_CACHE_MAX_BYTES` (16 MiB by
 default), and warm evaluation allocates nothing. Each source line has one of
@@ -517,7 +517,7 @@ three states:
   Full flatten keeps using the direct/text fallback for that line.
 
 Source mutation invalidates the whole live expression cache at the single
-`repl_state_mark_source_dirty()` seam. Inserts/deletes therefore need no cache
+[`repl_state_mark_source_dirty()`](state_notify.h#L5) seam. Inserts/deletes therefore need no cache
 index surgery. Example/workspace loads, undo/redo, declaration reshapes, and
 source rewrites already cross that seam. Variable-slider motion changes only a
 live predef value and keeps the cache warm; its one release-time declaration
@@ -531,7 +531,7 @@ There are three intentional cache-free/reference modes:
 | Scope | Mechanism | What remains enabled |
 |---|---|---|
 | Live application/benchmark process | Start with `GLR_NO_FLATTEN_CACHE=1` | Literal and direct-evaluation fast paths remain; dirty frames still fully flatten. |
-| One `repl_flatten_program()` call | Set `ReplFlattenOptions.expr_cache = NULL` | Same cache-free direct/text behavior, without changing the live cache or other callers. |
+| One [`repl_flatten_program()`](flatten.h#L111) call | Set `ReplFlattenOptions.expr_cache = NULL` | Same cache-free direct/text behavior, without changing the live cache or other callers. |
 | Strong differential reference | Set `force_reparse = 1` (normally with `expr_cache = NULL`) | Disables literal/direct paths as well as compiled evaluation and forces the legacy general-parser path. |
 
 `GLR_NO_FLATTEN_CACHE` is a diagnostic/startup switch, not a live toggle: it

@@ -4,6 +4,8 @@
  */
 #include "subsystems/color_picker/color_picker_state.h"
 
+#include "accent_palette.h"  /* active accent palette: swatch row + tab label */
+
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -58,21 +60,16 @@ static const float CP_BASIC[10][3] = {
     { 0.75f, 0.30f, 0.80f },   /* magenta */
 };
 
-/* "Dusk" palette: the curated accent set the built-in example scenes share
- * (see examples/README.md "Example Color Language"). One clickable row of the
- * canvas ink plus seven mid-bright, lightly-desaturated accents, so a user
- * editing a scene can stay on the family instead of ad-hoc primaries. Keep in
- * sync with the table in examples/README.md. */
-static const float CP_DUSK[8][3] = {
-    { 0.05f, 0.06f, 0.08f },   /* Canvas — deep cool ink */
-    { 0.98f, 0.46f, 0.36f },   /* CORAL  — warm key */
-    { 0.98f, 0.76f, 0.36f },   /* AMBER  — gold highlight */
-    { 0.95f, 0.44f, 0.66f },   /* ROSE   — pink bridge */
-    { 0.62f, 0.52f, 0.95f },   /* VIOLET — purple bridge */
-    { 0.36f, 0.70f, 0.98f },   /* AZURE  — cool key */
-    { 0.30f, 0.84f, 0.80f },   /* TEAL   — aqua secondary */
-    { 0.92f, 0.95f, 0.98f },   /* MIST   — neutral near-white */
+/* Scene palette: the curated accent set the built-in example scenes share
+ * (examples/README.md "Example Color Language"). One clickable row, so a user
+ * editing a scene can stay on the family instead of ad-hoc primaries.
+ * Generated from the accent_palette.h anchor list — cannot drift from the
+ * grid / README / checker view of the palette. */
+#define CP_SCENE_PAL_ROW(name, r, g, b) { r, g, b },
+static const float CP_SCENE_PAL[PAL_SCENE_ANCHOR_COUNT][3] = {
+    PALETTE_ACTIVE_ANCHORS(CP_SCENE_PAL_ROW)
 };
+#undef CP_SCENE_PAL_ROW
 
 /* Full palette: built lazily from HSV the first time it's needed (avoids a
  * 56-entry literal and keeps the colors in sync with hsv_to_rgb). Rows go
@@ -130,7 +127,7 @@ static void cp_ensure_full(void) {
  * model, same as the swatch colors and hex readout); the renderer draws them
  * via the view. */
 static const char *const CP_TAB_LABELS[CP_TAB_COUNT] = {
-    "Basic", "Full", "Dusk", "Harmony"
+    "Basic", "Full", PALETTE_ACTIVE_NAME, "Harmony"
 };
 
 /* Fill seg_x[0..CP_TAB_COUNT] with the absolute x of each tab-segment
@@ -232,7 +229,7 @@ static int cp_total_w(void) {
 static int cp_tab_cols(CpPaletteTab t) {
     if (t == CP_TAB_BASIC)   return 10;
     if (t == CP_TAB_FULL)    return CP_FULL_COLS;
-    if (t == CP_TAB_DUSK)    return 8;
+    if (t == CP_TAB_SCENE)   return PAL_SCENE_ANCHOR_COUNT;
     return 4;                            /* harmony: chosen + 3 derived */
 }
 static int cp_tab_rows(CpPaletteTab t) {
@@ -241,7 +238,7 @@ static int cp_tab_rows(CpPaletteTab t) {
 static int cp_swatch_count(CpPaletteTab t) {
     if (t == CP_TAB_BASIC)   return 10;
     if (t == CP_TAB_FULL)    return CP_FULL_COUNT;
-    if (t == CP_TAB_DUSK)    return 8;
+    if (t == CP_TAB_SCENE)   return PAL_SCENE_ANCHOR_COUNT;
     return 4;
 }
 /* Square cell side: fit `cols` cells (with gaps) across cp_total_w(). */
@@ -282,8 +279,8 @@ static void cp_swatch_rgba(CpPaletteTab t, int i, float out[4]) {
     } else if (t == CP_TAB_FULL) {
         cp_ensure_full();
         out[0] = g_cp_full[i][0]; out[1] = g_cp_full[i][1]; out[2] = g_cp_full[i][2];
-    } else if (t == CP_TAB_DUSK) {
-        out[0] = CP_DUSK[i][0]; out[1] = CP_DUSK[i][1]; out[2] = CP_DUSK[i][2];
+    } else if (t == CP_TAB_SCENE) {
+        out[0] = CP_SCENE_PAL[i][0]; out[1] = CP_SCENE_PAL[i][1]; out[2] = CP_SCENE_PAL[i][2];
     } else {
         out[0] = CP_BASIC[i][0]; out[1] = CP_BASIC[i][1]; out[2] = CP_BASIC[i][2];
     }

@@ -74,7 +74,7 @@ transform stress. Extend it to the rest of the catalog as examples are touched.
 
 Beyond the examples, the palette also anchors the default **XZ Ruler grid
 theme** (`grid_ruler_line_color` + the axis/tick colors in
-`src/render3d/grid.c`: CORAL X axis, AZURE Z axis, near-neutral field lines)
+[`src/render3d/grid.c`](../src/render3d/grid.c): CORAL X axis, AZURE Z axis, near-neutral field lines)
 and every staged snippet object in `scripts/docs-assets.sh` — so the docs
 screenshots, the showcase, and a fresh session all read as one family. Keep
 those on the palette too when touching them.
@@ -93,6 +93,23 @@ than garish:
 | AZURE | `0.36 0.70 0.98` | Cool key |
 | TEAL | `0.30 0.84 0.80` | Aqua secondary |
 | MIST | `0.92 0.95 0.98` | Neutral near-white |
+
+The machine-readable source of truth for this palette is
+[`accent_palette.h`](../accent_palette.h) at the repo root: named anchor
+sets, the active-palette select, and the semantic role map
+(`PAL_ROLE_*`) that C consumers — the XZ Ruler axes in
+[`src/render3d/grid.c`](../src/render3d/grid.c), the color picker's
+palette swatch row — bind to instead of literals. Scene files cannot
+`#include`, so they keep literal anchor triples; `make check-palette`
+(also part of `make check-state-ownership`) cross-checks the table above
+and every covered scene against the header. Scenes not yet migrated are
+listed in `scripts/baselines/palette-coverage.txt` — a remove-only
+ratchet; never add new scenes to it. `make palette-list` prints the
+anchors as floats + hex for SVG and doc work. To retune a role (say,
+move the warm key from CORAL to ROSE) edit its one `PAL_ROLE_*` line; to
+swap the whole palette, add a new anchor list, repoint
+`PALETTE_ACTIVE_*`, and let `make check-palette` enumerate the scenes
+that need re-authoring.
 
 Procedural color sweeps lerp between two anchors — `color = A + (B - A) * s`
 with `s` in `[0, 1]`. The signature ramp is CORAL → AZURE (warm to cool); a few

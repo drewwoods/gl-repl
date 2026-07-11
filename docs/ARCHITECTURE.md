@@ -580,7 +580,7 @@ camera looks down −Z. In 3D they render as a vertical wall at z=0;
 filtering theme availability by view mode is a deliberate later step (the
 look was the first goal). Both use the Dusk scene palette, route line
 alpha through `grid_color()` (so the show/hide fade still applies), and
-carry no [`GridThemeSpec`](../src/render3d/grid.c#L135), so [`render3d_grid_theme_uses_edge_fade()`](../src/render3d/grid.h#L55) is
+carry no [`GridThemeSpec`](../src/render3d/grid.c#L136), so [`render3d_grid_theme_uses_edge_fade()`](../src/render3d/grid.h#L55) is
 false and the radial edge-fade machinery is skipped. They live as custom
 arms in `grid_dispatch_theme` in [`src/render3d/grid.c`](../src/render3d/grid.c).
 
@@ -1449,7 +1449,7 @@ weld pass as face corners, so a line strip's repeated shared endpoints
 merge and its edges chain through common vertices; authored normals from
 the texcoord channel apply to them exactly as to polygon corners
 (vertices with neither an authored normal nor a face contribution write a
-zero normal). `MeshPlyStats` returns the per-primitive counts so the
+zero normal). [`MeshPlyStats`](../src/support/mesh_ply.h#L94) returns the per-primitive counts so the
 status line can report "N triangles, M edges, K points".
 
 Edges **always weld** — endpoints coincident with a face vertex or
