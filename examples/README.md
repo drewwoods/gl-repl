@@ -72,6 +72,13 @@ began with the Scene menu "2D" tag and now also covers the line/surface 3D
 scenes: animated ring, animated wave surface, GLU tessellator plus cutout, and
 transform stress. Extend it to the rest of the catalog as examples are touched.
 
+Beyond the examples, the palette also anchors the default **XZ Ruler grid
+theme** (`grid_ruler_line_color` + the axis/tick colors in
+`src/render3d/grid.c`: CORAL X axis, AZURE Z axis, near-neutral field lines)
+and every staged snippet object in `scripts/docs-assets.sh` — so the docs
+screenshots, the showcase, and a fresh session all read as one family. Keep
+those on the palette too when touching them.
+
 Every covered scene clears to the same deep cool ink and draws geometry from
 this curated accent set — mid-bright, lightly desaturated, harmonious rather
 than garish:

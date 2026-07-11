@@ -87,7 +87,7 @@ glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
 glEnable(GL_LIGHT0);
 glRotatef(t * 30, 0, 1, 0);
-glColor3f(1, 0.4, 0.8);
+glColor3f(0.95, 0.44, 0.66);
 glutSolidTorus(0.3, 0.9, 24, 48);
 ```
 

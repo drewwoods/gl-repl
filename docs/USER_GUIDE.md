@@ -80,7 +80,7 @@ Type each line and press `;` to commit it — the `;` keystroke runs the line,
 you don't type a literal semicolon at the end:
 
 ```c
-glColor3f(1, 0.6, 0.1)
+glColor3f(0.98, 0.76, 0.36)
 glBegin(GL_TRIANGLES)
 glVertex3f(0, 1, 0)
 glVertex3f(-1, -1, 0)
