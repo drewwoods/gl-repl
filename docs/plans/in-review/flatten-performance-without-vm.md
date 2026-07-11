@@ -49,7 +49,7 @@ slower target make the extra complexity worthwhile.
   internal `flatten_expr.c/.h` boundary.
 - [x] Document cache ownership, invalidation, and supported disable/reference
   modes in `src/repl/ARCHITECTURE.md`.
-- [ ] Complete final verification after the Phase 2/Phase 3 history split.
+- [x] Complete final verification after the Phase 2/Phase 3 history split.
 
 ## Measured baseline and conclusions
 
@@ -108,6 +108,17 @@ rows for future comparisons.
 This is the dominant gain and retains one source-to-flat execution path.
 Phase 3's experimental results and differential rebake coverage live on its
 separate follow-up branch.
+
+### Phase 2 split verification
+
+The cleaned always-full-flatten branch passed:
+
+- `make check-c99`;
+- the full stub suite: 59/59 binaries and 17,426/17,426 assertions;
+- the optimized-versus-forced-parser differential under ASan+UBSan:
+  1,987/1,987 assertions;
+- cache-enabled and `GLR_NO_FLATTEN_CACHE=1` Grass/Orrery benchmark runs;
+- documentation links: 25 files and 1,636 local file/line links.
 
 ## Goals and non-goals
 
