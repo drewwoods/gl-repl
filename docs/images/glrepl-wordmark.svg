@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="620" height="220" viewBox="0 0 620 220" role="img" aria-label="gl-repl — immediate mode, immediately">
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="220" viewBox="0 0 640 220" role="img" aria-label="gl-repl — immediate mode, immediately">
   <!-- gl-repl wordmark lockup: the adopted open-cube mark (vector twin of the
        app's own render of examples/scenes/lit-cube.glr, grid off) beside the
        name and tagline.  Its background is transparent so the README's
@@ -9,11 +9,11 @@
   <style>
     .edge { stroke: #ffffff; }
     .name { fill: #e6eaf5; }
-    .tag  { fill: #8a93a3; }
+    .tag  { fill: #aab4c4; }
     @media (prefers-color-scheme: light) {
       .edge { stroke: #232a36; }
       .name { fill: #10151d; }
-      .tag  { fill: #5c6572; }
+      .tag  { fill: #474f5d; }
     }
   </style>
   <defs>
@@ -49,6 +49,6 @@
   </g>
   <g font-family="'Courier New', ui-monospace, 'SF Mono', Menlo, monospace">
     <text class="name" x="228" y="122" font-size="72" font-weight="900" letter-spacing="-3" fill="#e6eaf5">gl-repl</text>
-    <text class="tag" x="232" y="156" font-size="16" letter-spacing="2" fill="#8a93a3">immediate mode, immediately</text>
+    <text class="tag" x="230" y="160" font-size="21" font-weight="700" letter-spacing="1" fill="#aab4c4">immediate mode, immediately</text>
   </g>
 </svg>
