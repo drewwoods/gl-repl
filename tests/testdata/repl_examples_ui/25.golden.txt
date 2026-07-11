@@ -193,8 +193,6 @@ void display(void) {
     glPopMatrix();
     glDisable(GL_LIGHTING);
   }
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.35, 0.33, 0.3, 1});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, (GLfloat[]){18});
   glClearColor(0.02, 0.02, 0.05, 1);
   glEnable(GL_NORMALIZE);
   glEnable(GL_CULL_FACE);
@@ -207,6 +205,8 @@ void display(void) {
   // a sun-glint.
   glEnable(GL_LIGHT0);
   glEnable(GL_COLOR_MATERIAL);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.35, 0.33, 0.3, 1});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, (GLfloat[]){18});
   // Body sizes: R/E is the true radius relative to Earth; "display" is what
   // this scene draws after the cube-root squash (display = EARTH_R*R/E^(1/3)),
   // which keeps the 0.38..11x planet span legible. The Sun (109x!) is off the

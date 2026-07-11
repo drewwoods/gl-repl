@@ -282,10 +282,14 @@ static int example_line_is_var_decl(const char *line) {
 
 static int example_line_is_func_def(const char *line) {
     /* Match `funcN(...) {` or `name(...) {` shape. The cheap test
-     * is "identifier followed by `(`, with a `{` somewhere after"
-     * — that distinguishes a definition from a function CALL.
+     * is "identifier followed by `(`, with the body's opening `{`
+     * as the line's last non-space character" — that distinguishes
+     * a definition from a function CALL, and from a command whose
+     * argument is a compound literal (`glClipPlane(...,
+     * (GLdouble[]){0, 1, 0, 0});` ends with `;`, not `{`).
      * Comments and other prefix forms (control-flow keywords) are
      * rejected by the alphabetic-identifier prefix. */
+    const char *brace;
     while (*line && isspace((unsigned char)*line)) line++;
     if (!isalpha((unsigned char)*line) && *line != '_') return 0;
 
@@ -303,7 +307,11 @@ static int example_line_is_func_def(const char *line) {
     /* Skip any whitespace between identifier and `(`. */
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != '(') return 0;
-    return strchr(p, '{') != NULL;
+    brace = strrchr(p, '{');
+    if (!brace) return 0;
+    for (brace++; *brace; brace++)
+        if (!isspace((unsigned char)*brace)) return 0;
+    return 1;
 }
 
 static int example_line_brace_delta(const char *line) {
