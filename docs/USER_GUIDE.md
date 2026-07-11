@@ -312,6 +312,10 @@ keeps clip planes standalone-compilable: the C file routes the equation
 through a small `repl_gldouble4` helper (compound literals are C99; the
 export targets C89) and reload converts it back.
 
+The *Clip planes carve solids (glClipPlane)* example walks the three core
+moves — one plane (a sphere becomes a dome), two planes meeting at an angle
+(a 120° wedge), and an animated `d` (a cutaway sweeping through a torus).
+
 ### Math expressions
 
 Every numeric argument is a full expression, evaluated when the line runs:
@@ -1045,28 +1049,29 @@ variable slider to a target.
 
 ## Built-in Examples
 
-**F12** cycles forward through the 30 built-in examples (then your saved
+**F12** cycles forward through the 31 built-in examples (then your saved
 scenes, then back); **Shift+F12** cycles backward. The Scene menu lists them
 grouped by tag. `./gl-repl --list-examples` prints the compiled-in set.
 Developers can point the app at an editable catalog with
 `./gl-repl --examples-dir examples --example <name-or-idx>`:
 
 ```
- 1  Lit cube                                            16  Bezier curve with guides
- 2  Rotating cube                                       17  Annotated orbit plot (labels)
- 3  Animated ring (for + t)                             18  GLU concave arrow
- 4  Conditional colors (if + t)                         19  GLU concave arrow cutout
- 5  Transform stress (translate/rotate/scale guides)    20  GLU concave arrow extrusion
- 6  Parametric torus (nested for)                       21  Glow sprites (blend + point attenuation)
- 7  Animated wave surface (analytic normals)            22  Snowfall particles
- 8  Torus knot (animated)                               23  Swaying grass field (rand + t)
- 9  2D assignment sketch (vars only)                    24  Jellyfish (glDepthMask translucency)
-10  Function demo (named func)                          25  Dusk lighthouse atoll (stress test)
-11  Function polygons (args + for)                      26  Orrery (labels track 3D orbits)
-12  Function branching (args + if)                      27  Whale (particle system + lit model)
-13  Recursive triangle tree (func + recursion)          28  Teapot carousel (transform stacks + glow points)
-14  Animated spirograph curve                           29  Ringed planet (nebula skies)
-15  Traveling ripple ring                               30  Bubble sort (scratch arrays)
+ 1  Lit cube                                            17  Annotated orbit plot (labels)
+ 2  Rotating cube                                       18  GLU concave arrow
+ 3  Animated ring (for + t)                             19  GLU concave arrow cutout
+ 4  Conditional colors (if + t)                         20  GLU concave arrow extrusion
+ 5  Transform stress (translate/rotate/scale guides)    21  Glow sprites (blend + point attenuation)
+ 6  Parametric torus (nested for)                       22  Snowfall particles
+ 7  Animated wave surface (analytic normals)            23  Swaying grass field (rand + t)
+ 8  Torus knot (animated)                               24  Jellyfish (glDepthMask translucency)
+ 9  2D assignment sketch (vars only)                    25  Dusk lighthouse atoll (stress test)
+10  Function demo (named func)                          26  Orrery (labels track 3D orbits)
+11  Function polygons (args + for)                      27  Whale (particle system + lit model)
+12  Function branching (args + if)                      28  Teapot carousel (transform stacks + glow points)
+13  Recursive triangle tree (func + recursion)          29  Ringed planet (nebula skies)
+14  Animated spirograph curve                           30  Bubble sort (scratch arrays)
+15  Traveling ripple ring                               31  Clip planes carve solids (glClipPlane)
+16  Bezier curve with guides
 ```
 
 Examples may carry their own presentation presets (grid theme, backdrop,
