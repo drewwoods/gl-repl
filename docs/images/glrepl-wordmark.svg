@@ -1,18 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="620" height="220" viewBox="0 0 620 220" role="img" aria-label="gl-repl — immediate mode, immediately">
   <!-- gl-repl wordmark lockup: the adopted open-cube mark (vector twin of the
        app's own render of examples/scenes/lit-cube.glr, grid off) beside the
-       name and tagline.  Theme-aware like hero-wordmark.svg: dark ground with
-       white edges by default; on prefers-color-scheme:light the ground goes
-       white and the edges/name go ink (the dark-edged reading matches the
-       original lit-cube screenshots).  Companions: docs/images/logo.svg
+       name and tagline.  Its background is transparent so the README's
+       theme supplies the ground; on prefers-color-scheme:light the
+       edges/name go ink (the dark-edged reading matches the original
+       lit-cube screenshots).  Companions: docs/images/logo.svg
        (mark alone), packaging/macos/gl-repl-open-cube.svg (app icon). -->
   <style>
-    .bg   { fill: #000000; }
     .edge { stroke: #ffffff; }
     .name { fill: #e6eaf5; }
     .tag  { fill: #8a93a3; }
     @media (prefers-color-scheme: light) {
-      .bg   { fill: #ffffff; }
       .edge { stroke: #232a36; }
       .name { fill: #10151d; }
       .tag  { fill: #5c6572; }
@@ -36,7 +34,6 @@
       <stop offset="1" stop-color="#ee35d6"/>
     </linearGradient>
   </defs>
-  <rect class="bg" width="620" height="220" fill="#000000"/>
   <!-- the mark: isometric basis, hexagon corners (±45.2, ∓26.1), (0, ±52.3) -->
   <g transform="translate(110,110) scale(1.7)">
     <polygon points="-45.2,-26.1 0,-52.3 45.2,-26.1 0,0" fill="url(#top)"/>
