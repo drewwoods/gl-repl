@@ -3,10 +3,11 @@
 ## Summary
 
 Reduce animated-frame flatten cost without replacing the source/flat-command
-model or introducing a control-flow VM. The work has two complementary parts:
+model or introducing a control-flow VM. The investigation considered two
+complementary parts:
 
 1. compile source expressions once and evaluate the compiled expression
-   programs during flatten/rebake, removing repeated command parsing and string
+   programs during flatten, removing repeated command parsing and string
    processing;
 2. when changed variables cannot affect loop counts, selected `if` arms, or
    function-parameter snapshots, keep the existing flat topology and rebake
@@ -22,6 +23,33 @@ every frame.
 This plan supersedes **Phase A and Phase A.5** of
 `docs/plans/not-started/rethinking-flattening-behaviour.md`. Its VM phase remains
 separate future work and is explicitly out of scope here.
+
+## Landing decision (2026-07-11)
+
+The main landing branch stops after Phase 2 and deliberately keeps the
+always-full-flatten frame model. Phase 1C reduced the representative scenes to
+roughly 2–3 ms; Phase 2 reduced warm full flatten further to roughly
+0.55–0.67 ms. Phase 3 saved only about another 0.2 ms in scenes eligible for
+rebake, while adding dependency masks, dirty routing, rollback, and a second
+update path. Orrery and Whale cannot use that path because `t` changes their
+selected source structure.
+
+Phase 3 is therefore preserved on a separate branch based on this Phase 2
+landing branch, not included here. It remains available if future scenes or a
+slower target make the extra complexity worthwhile.
+
+## Phase 0–2 implementation task list
+
+- [x] Add representative named/corpus/dynamic-topology benchmarks.
+- [x] Add literal and known-shape direct evaluation fast paths.
+- [x] Keep slider motion value-only so it does not rebuild the cache per event.
+- [x] Compile expression programs once and evaluate them during each full
+  flatten.
+- [x] Put cache line lifecycle, capture, and warm evaluation behind the narrow
+  internal `flatten_expr.c/.h` boundary.
+- [x] Document cache ownership, invalidation, and supported disable/reference
+  modes in `src/repl/ARCHITECTURE.md`.
+- [ ] Complete final verification after the Phase 2/Phase 3 history split.
 
 ## Measured baseline and conclusions
 
@@ -68,14 +96,27 @@ Therefore:
 - `rand`/`rand2` are deterministic pure functions of their arguments and do
   not independently make topology dynamic.
 
+### Results after Phases 1C–2
+
+Phase 1C supplies an intentionally cache-free comparison point. On the same
+machine, its always-full direct evaluator reduced Grass from roughly 4.5 ms to
+2.06 ms and Orrery from roughly 5.2 ms to 2.63 ms. Phase 2's warm compiled full
+flatten reduced Grass to roughly 0.63–0.67 ms and Orrery to roughly
+0.55–0.62 ms. These figures vary with host load; use the committed benchmark
+rows for future comparisons.
+
+This is the dominant gain and retains one source-to-flat execution path.
+Phase 3's experimental results and differential rebake coverage live on its
+separate follow-up branch.
+
 ## Goals and non-goals
 
 Goals:
 
 - materially reduce steady-state flatten CPU for Grass, Orrery, Wave, Ringed
   planet, and the rest of the corpus;
-- keep variable-panel dragging on a warm cache and route each motion through
-  value-dirty/full-dirty dependency masks instead of source invalidation;
+- keep variable-panel dragging on a warm cache instead of invalidating and
+  rebuilding it on every motion event;
 - preserve current results and side effects exactly, including sequential
   assignments such as `n = n + 1`, scratch writes, provenance, replay scopes,
   and blur subframe isolation;
@@ -108,16 +149,16 @@ Extend `bench/bench_repl.c` before changing runtime code:
 4. Add phase rows for full flatten: total, reparse, scalar assignment, scratch
    assignment, and derived remainder. Use the existing profiler sections; do
    not add timers inside evaluator primitives.
-5. After later phases exist, add warm-cache full-flatten and rebake rows for
-   Grass and Orrery. Report cold cache construction separately so an edit-time
-   cost cannot disappear into the steady-state number.
+5. Add warm-cache full-flatten rows for Grass and Orrery. Report cold cache
+   construction separately so an edit-time cost cannot disappear into the
+   steady-state number. Production rebake rows belong to the separate Phase 3
+   branch.
 6. Add a Whale dynamic-topology case sampled at several `t` values. Record the
    flat count with each timing and retain at least two samples with different
    counts. This case measures warm compiled **full flatten**, never rebake.
-7. Add two slider-transaction cases: a value-only variable that should rebake
-   on every motion and a structural variable that should warm-full-flatten.
-   Time a 100-motion drag separately from the single release-time persistence
-   edit; assert zero cache rebuilds during motion and exactly one on release.
+7. Add slider-transaction coverage that times a 100-motion drag separately
+   from the single release-time persistence edit; assert zero cache rebuilds
+   during motion and exactly one on release.
 
 The benchmark must restore values before every inner iteration, consume result
 counts/status, use release `-O2`, and retain `USE_GL_STUBS=1` support. Default

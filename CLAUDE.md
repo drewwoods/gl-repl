@@ -566,6 +566,8 @@ explaining why the extra background is useful.
 | [`src/repl/executor.h`](src/repl/executor.h) | Executor public API (`repl_execute_program`, transform helpers) |
 | [`src/repl/flatten.c`](src/repl/flatten.c) | Source-to-flat program builder: unrolls loops, inlines functions, resolves if-blocks |
 | [`src/repl/flatten.h`](src/repl/flatten.h) | Flatten public API (`repl_flatten_program`, `repl_flatten_commands`) |
+| [`src/repl/flatten_expr.c`](src/repl/flatten_expr.c) | Internal boundary for compiled-expression line lifecycle, capture, and warm evaluation; keeps cache entries/program handles out of `flatten.c` |
+| [`src/repl/flatten_expr.h`](src/repl/flatten_expr.h) | Narrow `(line, role, ordinal)` cache integration API used only by the flatten walk |
 | [`src/repl/flatten_query.c`](src/repl/flatten_query.c) | Live flat-program query helpers: cursor matching, current-block highlight refresh, and per-line flat-cost attribution |
 | [`src/repl/flatten_query.h`](src/repl/flatten_query.h) | Flatten query public API (`repl_flat_cmd_matches_cursor`, `repl_flatten_cost_at_line`, `repl_flatten_refresh_current_block_highlight`) |
 | [`src/repl/expr_program.c`](src/repl/expr_program.c) | Compiled expression programs + per-source-line cache: postfix compiler mirroring `repl_eval_expr`'s grammar, bit-identical evaluator returning value + predef dependency mask, heap arenas (16 MiB cap, zero warm-path allocation). Fed by the [`ReplExprCaptureSink`](src/repl/eval.h#L378) spans the parser/eval helpers fire during a flatten's first visit to a line; invalidated wholesale from `repl_state_mark_source_dirty` |
