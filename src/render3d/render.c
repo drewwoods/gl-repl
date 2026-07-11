@@ -649,7 +649,16 @@ static void render3d_pass_hidden_line_wireframe(const Render3dRenderConfig *conf
     glDepthFunc(GL_LEQUAL);
     glDepthMask(GL_TRUE);
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    /* Offset the depth seed behind the edges: LINE- and FILL-mode
+     * rasterization interpolate depth differently along a shared edge,
+     * so without this bias the visible-line GL_LEQUAL pass loses random
+     * pixels to the seeded depth (z-fighting) and the hidden-line
+     * GL_GREATER pass falsely marks silhouette edges hidden at glancing
+     * angles. The slope factor covers steep, near-edge-on faces. */
+    glEnable(GL_POLYGON_OFFSET_FILL);
+    glPolygonOffset(1.0f, 2.0f);
     render3d_execute_user_geometry(config, RENDER3D_EXEC_WIREFRAME_DEPTH_FILL);
+    glDisable(GL_POLYGON_OFFSET_FILL);
 
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glDisable(GL_LIGHTING);
