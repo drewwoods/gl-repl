@@ -40,7 +40,11 @@ void repl_format_source_float(char *out, int out_sz, float v) {
         return;
     }
     if (v == 0.0f) {
-        snprintf(out, (size_t)out_sz, "0");
+        /* Preserve IEEE signed zero: canonical parser text is reparsed and
+         * compared bit-for-bit with the committed float args. Spell the
+         * negative case as a floating literal so generated C preserves it
+         * too (`-0` would be integer zero before conversion). */
+        snprintf(out, (size_t)out_sz, "%s", signbit(v) ? "-0.0" : "0");
         return;
     }
 
@@ -60,7 +64,12 @@ void repl_format_source_float(char *out, int out_sz, float v) {
             if (*tail == '.')
                 *tail = '\0';
         }
-        if (strtof(candidate, &end) == v && end && *end == '\0') {
+        /* Large finite floats can have exact fixed-point spellings longer
+         * than REPL_SOURCE_FLOAT_TEXT_MAX (e.g. 1e38f). Do not validate the
+         * full scratch candidate and then silently truncate it into `out`;
+         * let the compact %g search below choose an exponent form instead. */
+        if ((int)strlen(candidate) < out_sz &&
+            strtof(candidate, &end) == v && end && *end == '\0') {
             snprintf(out, (size_t)out_sz, "%s", candidate);
             return;
         }
@@ -71,7 +80,8 @@ void repl_format_source_float(char *out, int out_sz, float v) {
         char *end = NULL;
 
         snprintf(candidate, sizeof(candidate), "%.*g", prec, (double)v);
-        if (strtof(candidate, &end) == v && end && *end == '\0') {
+        if ((int)strlen(candidate) < out_sz &&
+            strtof(candidate, &end) == v && end && *end == '\0') {
             snprintf(out, (size_t)out_sz, "%s", candidate);
             return;
         }
