@@ -34,7 +34,7 @@ is_keyword() {
     case "$1" in
         if|for|while|switch|return|sizeof|typedef|struct|enum|union|\
         static|extern|inline|const|void|int|float|double|char|long|\
-        short|unsigned|signed|size_t|bool|NULL|true|false) return 0 ;;
+        short|unsigned|signed|size_t|bool|NULL|true|false|STATIC_ASSERT) return 0 ;;
     esac
     return 1
 }

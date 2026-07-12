@@ -103,6 +103,9 @@
  * stub headers deliberately do NOT get included here - the Makefile
  * picks between stub and system GL headers via -I ordering. */
 #include "gl_includes.h"
+#ifdef __APPLE__
+#include <ApplicationServices/ApplicationServices.h>
+#endif
 #endif
 
 /* ---- Timekeeping ------------------------------------------------------- */
@@ -1762,20 +1765,35 @@ static int wants(const char *filter, const char *name) {
  * that ticks a counter and returns, so no context is needed (or
  * even available - the stub build intentionally has no GL libs).
  *
- * If the process has no display (e.g. headless CI without $DISPLAY),
- * glutInit() will exit non-zero with its own error message; that's
- * the cue to re-run with USE_GL_STUBS=1. */
-static void bench_gl_context_init(int *argc, char **argv) {
+ * On macOS, preflight CoreGraphics and skip this GL-only case when no
+ * active display exists; Cocoa freeglut otherwise traps while querying
+ * its empty screen list. Other window backends retain their native
+ * no-display error, which is the cue to re-run with USE_GL_STUBS=1. */
+static int bench_gl_context_init(int *argc, char **argv) {
 #ifndef GL_STUBS
     static int glut_inited = 0;
-    if (glut_inited) return;
+    if (glut_inited) return 1;
+#ifdef __APPLE__
+    {
+        uint32_t display_count = 0;
+        if (CGGetActiveDisplayList(0, NULL, &display_count) != kCGErrorSuccess ||
+            display_count == 0) {
+            fprintf(stderr,
+                    "bench_repl: no active macOS display; skipping "
+                    "fade_batches\n");
+            return 0;
+        }
+    }
+#endif
     glutInit(argc, argv);
     glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
     glutInitWindowSize(1, 1);
     glutCreateWindow("bench_repl");
     glut_inited = 1;
+    return 1;
 #else
     (void)argc; (void)argv;
+    return 1;
 #endif
 }
 
@@ -1859,8 +1877,8 @@ int main(int argc, char **argv) {
 
     // GL benchmarks
     if (wants(only, "fade_batches")) {
-        bench_gl_context_init(&argc, argv);
-        report(bench_fade_batches(iters));
+        if (bench_gl_context_init(&argc, argv))
+            report(bench_fade_batches(iters));
     }
 
     /* A named case that no longer resolves (renamed/removed built-in), or a
