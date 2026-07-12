@@ -58,10 +58,10 @@ H=800
 GIF_FUZZ=8%     # magick -layers Optimize fuzz for GIF delta compression
 
 # Loading an --example eases the camera into place (with damping) over the
-# first second or two of captured frames — a settle the docs GIFs shouldn't
+# first second or two of captured frames — a settle the docs assets shouldn't
 # show. gif() renders this many extra leading frames for --example clips and
-# discards them, so the clip starts settled at no cost to its length. One
-# captured frame is ~1/60 s of that ease, so 180 ≈ 3 s.
+# discards them; one-shot stills can use the same 60 Hz warmup before capture.
+# One rendered frame is ~1/60 s of that ease, so 180 ≈ 3 s.
 WARM=180
 
 # README + docs/images core set.
@@ -175,6 +175,55 @@ still() {
     echo "docs-assets: wrote $out"
 }
 
+# one_shot_still <out.png> <warmup-frames> <args...> — run at the normal
+# interactive 60 Hz cadence for the requested warmup, then ask freeglut for
+# one SIGUSR1 snapshot. This is for screenshots whose contents measure
+# wall-clock frame cadence: record mode would read back and write every warmup
+# frame, polluting the measurement.
+one_shot_still() {
+    local out=$1 warmup_frames=$2; shift 2
+    local warmup_seconds
+    warmup_seconds="$(awk -v frames="$warmup_frames" \
+        'BEGIN { printf "%.6f", frames / 60.0 }')"
+    local prefix="$WORK/one-shot" ppm="$WORK/one-shot-0000.ppm"
+    local log="$WORK/one-shot.log"
+
+    (
+        local pid i
+        trap '[[ -z "${pid:-}" ]] || kill "$pid" 2>/dev/null || true' EXIT
+        FREEGLUT_CAPTURE_FILE="$prefix" \
+            "$BIN" "$@" --window ${W}x${H} --no-audio \
+            >"$log" 2>&1 &
+        pid=$!
+
+        sleep "$warmup_seconds"
+        if ! kill -0 "$pid" 2>/dev/null; then
+            echo "docs-assets: gl-repl exited before one-shot capture" >&2
+            cat "$log" >&2
+            exit 1
+        fi
+        kill -USR1 "$pid"
+
+        i=0
+        while [[ ! -f "$ppm" && $i -lt 100 ]]; do
+            sleep 0.05
+            i=$((i + 1))
+        done
+        if [[ ! -f "$ppm" ]]; then
+            echo "docs-assets: timed out waiting for one-shot capture" >&2
+            cat "$log" >&2
+            exit 1
+        fi
+
+        kill "$pid" 2>/dev/null || true
+        wait "$pid" 2>/dev/null || true
+        pid=
+    )
+
+    write_png "$ppm" "$out"
+    echo "docs-assets: wrote $out"
+}
+
 # gif <out.gif> <frames> <step> <fps> <width> <args...> — record, take
 # every <step>th frame, assemble a palette-optimized looping GIF. The kept
 # frame count (frames/step) and fps set the clip length.
@@ -209,6 +258,20 @@ gif() {
 stage() {
     cat > "$WORK/$1.c"
     echo "$WORK/$1.c"
+}
+
+# stage_scene <name> <scene> — write capture-specific headers from stdin,
+# then append an existing example scene as the body. This lets an asset use a
+# catalog scene as its base while overriding presentation-only @cfg state.
+stage_scene() {
+    local name=$1 scene=$2 out="$WORK/$1.c"
+    [[ -f "$scene" ]] || {
+        echo "docs-assets: example scene not found: $scene" >&2
+        return 1
+    }
+    cat > "$out"
+    cat "$scene" >> "$out"
+    echo "$out"
 }
 
 # montage2x2 <out> <a> <b> <c> <d> — tile four images 2x2 with a thin black
@@ -618,36 +681,18 @@ EOF
 }
 
 # Profile panels: Sections mode shows the section listing (CPU/GPU/Max
-# columns), the log-log section histogram, and the FPS plot at once. The
-# scene is a real workload (animated nested-for mesh, so flatten + execute
-# both cost) rather than an empty frame of zeros. Stock AA: raising the
-# accum passes would multiply every section's cost 16x and distort the
-# numbers the panel is there to show.
-stage_profile() { stage profile <<'EOF'
+# columns), the log-log section histogram, and the FPS plot at once. Use the
+# real animated-wave example as the workload, with asset-specific presentation
+# config prepended to it. Stock AA: raising the accum passes would multiply
+# every section's cost 16x and distort the numbers the panel is there to show.
+stage_profile() {
+    stage_scene profile \
+        "$ROOT/examples/scenes/animated-wave-surface-analytic-normals.glr" <<'EOF'
 /* @cfg compute_profile = 2 */
 /* @cfg variable_panel = 0 */
 /* @cfg light_indicators = 0 */
 /* @cfg vertex_outlines = 0 */
 /* @cfg vertex_points = 0 */
-// Snippet start
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
-glEnable(GL_COLOR_MATERIAL);
-glColor3f(0.15, 0.55, 1);
-glRotatef(t*20, 0, 1, 0);
-glBegin(GL_QUADS);
-for(i, 0, 24) {
-for(j, 0, 12) {
-glNormal3f(cos(i*TAU/24), 0, sin(i*TAU/24));
-glVertex3f(cos(i*TAU/24)*(1+j*0.04), -0.8+j*0.13, sin(i*TAU/24)*(1+j*0.04));
-glVertex3f(cos((i+1)*TAU/24)*(1+j*0.04), -0.8+j*0.13, sin((i+1)*TAU/24)*(1+j*0.04));
-glVertex3f(cos((i+1)*TAU/24)*(1+(j+1)*0.04), -0.8+(j+1)*0.13, sin((i+1)*TAU/24)*(1+(j+1)*0.04));
-glVertex3f(cos(i*TAU/24)*(1+(j+1)*0.04), -0.8+(j+1)*0.13, sin(i*TAU/24)*(1+(j+1)*0.04));
-}
-}
-glEnd();
-// Snippet end
 EOF
 }
 
@@ -876,10 +921,14 @@ if want numeric-stepper; then
     echo "docs-assets: wrote $OUT/numeric-stepper.png"
 fi
 
-# Profile panels: extra frames so the FPS history and per-section
-# histograms have real data to plot; stock AA (see stage_profile).
+# Profile panels: run normally while the FPS history and per-section
+# histograms fill, then take one SIGUSR1 snapshot. Capturing every warmup frame
+# would make the FPS plot measure PPM readback/write throughput instead.
 if want profile-panels; then
-    still "$OUT/profile-panels.png" 240 0 "$(stage_profile)"
+    (
+        WARM=720
+        one_shot_still "$OUT/profile-panels.png" $WARM "$(stage_profile)"
+    )
 fi
 
 if want clip-plane; then
