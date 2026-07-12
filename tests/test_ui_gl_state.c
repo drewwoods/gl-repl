@@ -16,6 +16,10 @@
 
 #include <stdio.h>
 
+#ifdef __APPLE__
+#include <ApplicationServices/ApplicationServices.h>
+#endif
+
 static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ASSERT_TRUE(label, cond) TEST_ASSERT_TRUE(&g_harness, label, cond)
 
@@ -66,6 +70,14 @@ static void test_gl2d_restores_state(void) {
 }
 
 int main(int argc, char **argv) {
+#ifdef __APPLE__
+    uint32_t display_count = 0;
+    if (CGGetActiveDisplayList(0, NULL, &display_count) != kCGErrorSuccess ||
+        display_count == 0) {
+        fprintf(stderr, "test_ui_gl_state: no active macOS display; skipping\n");
+        return 0;
+    }
+#endif
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH);
     glutInitWindowSize(64, 64);

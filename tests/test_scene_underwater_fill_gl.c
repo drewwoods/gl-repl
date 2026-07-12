@@ -53,6 +53,10 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+
+#ifdef __APPLE__
+#include <ApplicationServices/ApplicationServices.h>
+#endif
 #include <string.h>
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
@@ -187,6 +191,16 @@ static void test_underwater_fill_covers_viewport(void) {
 }
 
 int main(int argc, char **argv) {
+#ifdef __APPLE__
+    uint32_t display_count = 0;
+    if (CGGetActiveDisplayList(0, NULL, &display_count) != kCGErrorSuccess ||
+        display_count == 0) {
+        fprintf(stderr,
+                "test_scene_underwater_fill_gl: no active macOS display; "
+                "skipping\n");
+        return 0;
+    }
+#endif
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH);
     glutInitWindowSize(1200, 440);

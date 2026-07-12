@@ -483,6 +483,7 @@ static void test_display_frame_profile_coverage(void) {
         PROF_UI_PANELS,
         PROF_PROFILE_PANEL,
         PROF_MEMORY_PANEL,
+        PROF_COMPOSITOR,
         PROF_FRAME_RESTORE,
     };
     for (size_t i = 0; i < sizeof(major) / sizeof(major[0]); i++) {
@@ -495,7 +496,8 @@ static void test_display_frame_profile_coverage(void) {
      * fraction of PROF_FRAME_TOTAL. PROF_SNAPSHOT / PROF_RENDER3D
      * are themselves aggregates, so summing them with the leaves
      * outside (autonormal, flatten, replay_hud, code_panel,
-     * ui_panels, profile_panel, frame_restore) covers the
+     * ui_panels, profile_panel, memory_panel, compositor,
+     * frame_restore) covers the
      * controller's whole frame body. */
     double total_us = prof_section_last_us(PROF_FRAME_TOTAL);
     double sum_us =
@@ -508,6 +510,7 @@ static void test_display_frame_profile_coverage(void) {
         prof_section_last_us(PROF_UI_PANELS) +
         prof_section_last_us(PROF_PROFILE_PANEL) +
         prof_section_last_us(PROF_MEMORY_PANEL) +
+        prof_section_last_us(PROF_COMPOSITOR) +
         prof_section_last_us(PROF_FRAME_RESTORE);
 
     /* Both should be positive (frame did real work). */
