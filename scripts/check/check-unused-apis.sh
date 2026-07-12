@@ -40,7 +40,7 @@ is_keyword() {
     case "$1" in
         if|for|while|switch|return|sizeof|typedef|struct|enum|union|\
         static|extern|inline|const|void|int|float|double|char|long|\
-        short|unsigned|signed|size_t|bool|NULL|true|false) return 0 ;;
+        short|unsigned|signed|size_t|bool|NULL|true|false|STATIC_ASSERT) return 0 ;;
     esac
     return 1
 }
@@ -86,7 +86,16 @@ flatten_header() {
     ' "$1"
 }
 
-unused=""
+tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/check-unused-apis.XXXXXX") || exit 1
+trap 'rm -rf "$tmp_dir"' EXIT HUP INT TERM
+candidates_file="$tmp_dir/candidates.tsv"
+source_files="$tmp_dir/source-files.txt"
+unused_file="$tmp_dir/unused.txt"
+
+# Build the audited declaration set once. The old implementation ran a
+# repository-wide `git grep` for every function found here; on this tree that
+# meant hundreds of full source scans and roughly 40 seconds of process and
+# I/O overhead.
 for hdr in $headers; do
     [ -f "$hdr" ] || continue
 
@@ -105,20 +114,56 @@ for hdr in $headers; do
     for func in $funcs; do
         [ -z "$func" ] && continue
         is_keyword "$func" && continue
-
-        # Count word-boundary references in all tracked source files.
-        count=$(git grep -c "\\b$func\\b" -- '*.c' '*.h' 2>/dev/null \
-                | awk -F: '{s+=$NF} END {print s+0}')
-
-        if [ "$count" -le 2 ]; then
-            unused="$unused$hdr: $func() — $count refs\n"
-        fi
+        printf '%s\t%s\n' "$hdr" "$func" >> "$candidates_file"
     done
 done
 
-if [ -n "$unused" ]; then
+# Count all candidate identifiers in one pass over the tracked source set.
+# `git grep -c` counted matching *lines*, not raw occurrences, so `seen[]`
+# deliberately increments a candidate at most once per source line.
+git ls-files -- '*.c' '*.h' > "$source_files"
+LC_ALL=C awk -F '\t' -v candidates="$candidates_file" -v files="$source_files" '
+    BEGIN {
+        while ((getline row < candidates) > 0) {
+            split(row, field, "\t")
+            candidate_count++
+            candidate_header[candidate_count] = field[1]
+            candidate_name[candidate_count] = field[2]
+            wanted[field[2]] = 1
+        }
+        close(candidates)
+
+        while ((getline path < files) > 0) {
+            while ((getline source_line < path) > 0) {
+                source_line_id++
+                rest = source_line
+                while (match(rest, /[A-Za-z_][A-Za-z0-9_]*/)) {
+                    identifier = substr(rest, RSTART, RLENGTH)
+                    if ((identifier in wanted) &&
+                        seen_on_line[identifier] != source_line_id) {
+                        reference_count[identifier]++
+                        seen_on_line[identifier] = source_line_id
+                    }
+                    rest = substr(rest, RSTART + RLENGTH)
+                }
+            }
+            close(path)
+        }
+        close(files)
+
+        for (i = 1; i <= candidate_count; i++) {
+            name = candidate_name[i]
+            count = reference_count[name] + 0
+            if (count <= 2)
+                printf "%s: %s() — %d refs\n",
+                       candidate_header[i], name, count
+        }
+    }
+' > "$unused_file"
+
+if [ -s "$unused_file" ]; then
     echo "⚠️  Potentially unused APIs found:"
-    printf "%b" "$unused" | sort
+    sort "$unused_file"
     echo ""
     echo "   Heuristic: <= 2 refs across .c/.h (1 decl + 1 def, no callers)."
     echo "   Inspect each before acting — callback registrations, X-macros,"
