@@ -91,6 +91,8 @@ int ui_overlay_layout_last_band_h(void) {
 void ui_overlay_layout_solve(const UiOverlayLayoutIn *in,
                              int out_x[UI_OVERLAY_PANEL_COUNT],
                              int out_y[UI_OVERLAY_PANEL_COUNT]) {
+    int order[UI_OVERLAY_PANEL_COUNT];
+    int order_count = 0;
     int base = (in->band_h > OVL_BASE_Y) ? in->band_h : OVL_BASE_Y;
     int y0 = in->render3d_y + in->bottom_inset + base;
     int top_limit = in->render3d_y + in->render3d_h - OVL_EDGE_PAD;
@@ -98,7 +100,21 @@ void ui_overlay_layout_solve(const UiOverlayLayoutIn *in,
     int col_left  = col_right;
     int y = y0;
 
-    for (int id = 0; id < UI_OVERLAY_PANEL_COUNT; id++) {
+    order[order_count++] = UI_OVERLAY_PANEL_VARIABLE;
+    order[order_count++] = UI_OVERLAY_PANEL_FPS;
+    /* Memory and FPS are one right-edge telemetry stack. Keep them together
+     * before the larger compute panels spill into columns to the left. */
+    if (in->panels[UI_OVERLAY_PANEL_FPS].visible &&
+        in->panels[UI_OVERLAY_PANEL_MEMORY].visible)
+        order[order_count++] = UI_OVERLAY_PANEL_MEMORY;
+    order[order_count++] = UI_OVERLAY_PANEL_PROFILE;
+    order[order_count++] = UI_OVERLAY_PANEL_HISTOGRAM;
+    if (!(in->panels[UI_OVERLAY_PANEL_FPS].visible &&
+          in->panels[UI_OVERLAY_PANEL_MEMORY].visible))
+        order[order_count++] = UI_OVERLAY_PANEL_MEMORY;
+
+    for (int order_idx = 0; order_idx < order_count; order_idx++) {
+        int id = order[order_idx];
         const UiOverlayPanelReq *p = &in->panels[id];
 
         /* Stack ran out of vertical room: spill into a fresh column left of

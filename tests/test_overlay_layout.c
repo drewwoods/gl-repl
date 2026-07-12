@@ -109,7 +109,8 @@ int main(void) {
             }
     }
 
-    /* --- FPS plot panel joins the stack between variable and profile. --- */
+    /* --- FPS and memory stay grouped in the right telemetry stack; the
+     * compute listing spills left when it no longer fits above them. --- */
     {
         UiOverlayLayoutIn in = base_inputs();
         in.panels[UI_OVERLAY_PANEL_FPS].visible = 1;
@@ -117,9 +118,13 @@ int main(void) {
         ui_overlay_layout_solve(&in, x, y);
         AI("fps: above var",
            y[UI_OVERLAY_PANEL_FPS], (22 + BASE_Y) + 92 + STACK_GAP);
-        AI("fps: prof above fps",
-           y[UI_OVERLAY_PANEL_PROFILE],
+        AI("fps: memory above fps",
+           y[UI_OVERLAY_PANEL_MEMORY],
            (22 + BASE_Y) + 92 + STACK_GAP + 142 + STACK_GAP);
+        AI("fps: profile restarts at column base",
+           y[UI_OVERLAY_PANEL_PROFILE], 22 + BASE_Y);
+        AT("fps: profile spills left of telemetry stack",
+           x[UI_OVERLAY_PANEL_PROFILE] < x[UI_OVERLAY_PANEL_FPS]);
         for (int a = 0; a < UI_OVERLAY_PANEL_COUNT; a++)
             for (int b = a + 1; b < UI_OVERLAY_PANEL_COUNT; b++) {
                 if (!in.panels[a].visible || !in.panels[b].visible)
@@ -133,19 +138,25 @@ int main(void) {
             }
     }
 
-    /* --- Every compute-profile panel on at once: the histogram joins the
-     * stack above the listing and, in a scene this short, spills into a
-     * fresh column rather than overlapping anything. --- */
+    /* --- Every compute-profile panel on at once: memory remains above FPS
+     * in the right telemetry stack. The listing starts a column to its left,
+     * and the histogram uses the remaining room above the listing. --- */
     {
         UiOverlayLayoutIn in = base_inputs();
         in.panels[UI_OVERLAY_PANEL_FPS].visible = 1;
         in.panels[UI_OVERLAY_PANEL_HISTOGRAM].visible = 1;
         int x[UI_OVERLAY_PANEL_COUNT], y[UI_OVERLAY_PANEL_COUNT];
         ui_overlay_layout_solve(&in, x, y);
-        AT("hist: spills left of the listing it would not fit above",
-           x[UI_OVERLAY_PANEL_HISTOGRAM] < x[UI_OVERLAY_PANEL_PROFILE]);
-        AT("hist: spilled column starts at the stack base",
-           y[UI_OVERLAY_PANEL_HISTOGRAM] == 22 + BASE_Y);
+        AI("all compute: memory remains above fps",
+           y[UI_OVERLAY_PANEL_MEMORY],
+           y[UI_OVERLAY_PANEL_FPS] +
+               in.panels[UI_OVERLAY_PANEL_FPS].h + STACK_GAP);
+        AT("all compute: listing spills left of telemetry stack",
+           x[UI_OVERLAY_PANEL_PROFILE] < x[UI_OVERLAY_PANEL_FPS]);
+        AI("all compute: histogram stacks above listing",
+           y[UI_OVERLAY_PANEL_HISTOGRAM],
+           y[UI_OVERLAY_PANEL_PROFILE] +
+               in.panels[UI_OVERLAY_PANEL_PROFILE].h + STACK_GAP);
         for (int a = 0; a < UI_OVERLAY_PANEL_COUNT; a++)
             for (int b = a + 1; b < UI_OVERLAY_PANEL_COUNT; b++) {
                 if (!in.panels[a].visible || !in.panels[b].visible)
