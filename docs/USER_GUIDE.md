@@ -195,7 +195,7 @@ panel. Click it to open the floating picker:
 - Four palette tabs: **Basic** (common named colors), **Full** (hue ×
   tint/shade grid with a greyscale ramp), **Neon** (the curated accent set
   the built-in examples share; the tab is named after the active palette
-  in `accent_palette.h`), **Harmony** (the current color plus a
+  in [`accent_palette.h`](../accent_palette.h)), **Harmony** (the current color plus a
   tetradic set derived live from it).
 - Every change writes straight back to the source line, so the scene follows
   the picker in real time. Click outside to close.

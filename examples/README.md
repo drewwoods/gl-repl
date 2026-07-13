@@ -31,8 +31,10 @@ group = Basics
 
 `.glr` files are plain REPL source lines. They may start with leading
 `// @cfg <slug> = <value>` presentation metadata and then an optional
-`// camera` block before geometry source. Names, tags, and groups belong in the
-catalog, not in scene files.
+camera block before geometry source. Its marker may be the compact `// camera`
+form or a decorated section heading such as `// --- Camera ---`; punctuation
+and case are ignored, but the comment's alphabetic text must be exactly
+`camera`. Names, tags, and groups belong in the catalog, not in scene files.
 
 `.c` files should be normal exported C files with `// Snippet start` /
 `// Snippet end` markers. They are useful when an example is easier to keep as
@@ -69,7 +71,7 @@ work out of `for` bodies so a dense example stays well clear of the cap.
 The built-in example scenes share one coherent palette — currently
 "Neon", electric accents around the brand mark's original magenta on the
 same deep ink (the earlier "Dusk" / "Dusk Magenta" sets are kept in
-`accent_palette.h` for an easy flip back) — so the set reads as a
+[`accent_palette.h`](../accent_palette.h) for an easy flip back) — so the set reads as a
 designed family instead of a grab-bag of unrelated primaries. The rollout
 began with the Scene menu "2D" tag and now also covers the line/surface 3D
 scenes: animated ring, animated wave surface, GLU tessellator plus cutout, and

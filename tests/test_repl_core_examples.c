@@ -2112,7 +2112,7 @@ int main(int argc, char **argv) {
         static const char *const spaced_cfg_camera_example[] = {
             "// @cfg axes = 4",
             "",
-            "// camera",
+            "// --- Camera -------------------------",
             "glTranslatef(0.0f, 0.0f, -8.0f);",
             "glRotatef(14.0f, 1.0f, 0.0f, 0.0f);",
             "glRotatef(27.0f, 0.0f, 1.0f, 0.0f);",
@@ -2136,8 +2136,8 @@ int main(int argc, char **argv) {
             ASSERT_TRUE("spaced cfg camera immediate dump uses target",
                         strstr(dump,
                                "glTranslatef(0.0000f, 0.0000f, -8.0000f);") != NULL);
-            ASSERT_TRUE("spaced cfg camera marker hidden",
-                        strstr(dump, "// camera") == NULL);
+            ASSERT_TRUE("decorated camera marker hidden",
+                        strstr(dump, "// --- Camera") == NULL);
             ASSERT_TRUE("spaced cfg camera rotate hidden",
                         strstr(dump,
                                "glRotatef(14.0f, 1.0f, 0.0f, 0.0f);") == NULL);
@@ -2160,6 +2160,38 @@ int main(int argc, char **argv) {
         ASSERT_TRUE("spaced cfg camera tz preset",
                     fabsf(glr_camera().tz - 0.75f) < 1e-4f);
         ASSERT_TRUE("spaced cfg camera body cmds loaded", repl_state_document_count() == 3);
+    }
+
+    {
+        /* Normalization is exact after punctuation is removed. A prose
+         * comment containing "camera" must remain ordinary scene source,
+         * along with the transforms that follow it. */
+        static const char *const prose_camera_example[] = {
+            "// The camera starts here.",
+            "glTranslatef(0.0f, 0.0f, -8.0f);",
+            "glRotatef(14.0f, 1.0f, 0.0f, 0.0f);",
+            "glRotatef(27.0f, 0.0f, 1.0f, 0.0f);",
+            "glTranslatef(-0.25f, 0.5f, -0.75f);",
+            "glBegin(GL_POINTS);",
+            "glVertex3f(0, 0, 0);",
+            "glEnd();",
+            NULL
+        };
+        char *dump;
+
+        load_custom_example_lines_for_test(prose_camera_example);
+        ASSERT_TRUE("camera prose keeps every source line",
+                    repl_state_document_count() == 8);
+
+        dump = dump_current_code_panel_text();
+        ASSERT_TRUE("camera prose dump alloc", dump != NULL);
+        if (dump) {
+            ASSERT_TRUE("camera prose comment remains visible",
+                        strstr(dump, "// The camera starts here.") != NULL);
+            ASSERT_TRUE("camera prose transforms remain visible",
+                        strstr(dump, "glRotatef(14") != NULL);
+            free(dump);
+        }
     }
 
     {

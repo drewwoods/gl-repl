@@ -6,6 +6,7 @@
 #include "repl/command_store.h"
 #include "repl/examples.h"
 #include "repl/scenes.h"
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -116,6 +117,7 @@ static int example_line_is_blank_only(const char *line) {
 
 static int example_line_is_camera_marker(const char *line) {
     const char *p = line;
+    const char *word = "camera";
 
     if (!p)
         return 0;
@@ -124,14 +126,22 @@ static int example_line_is_camera_marker(const char *line) {
     if (p[0] != '/' || p[1] != '/')
         return 0;
     p += 2;
-    while (*p && isspace((unsigned char)*p))
-        p++;
-    if (strncmp(p, "camera", 6) != 0)
-        return 0;
-    p += 6;
-    while (*p && isspace((unsigned char)*p))
-        p++;
-    return *p == '\0';
+
+    /* Treat punctuation as presentation, not syntax, so both the compact
+     * `// camera` marker and a section heading such as
+     * `// --- Camera ---` identify the same metadata block. Require the
+     * normalized alphabetic payload to equal "camera" exactly: prose such
+     * as `// The camera starts here` must remain ordinary scene source. */
+    while (*p) {
+        unsigned char c = (unsigned char)*p++;
+
+        if (!isalpha(c))
+            continue;
+        if (*word == '\0' || tolower(c) != (unsigned char)*word)
+            return 0;
+        word++;
+    }
+    return *word == '\0';
 }
 
 static int try_apply_example_camera_header(const char *const *lines) {
