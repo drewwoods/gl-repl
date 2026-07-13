@@ -159,17 +159,35 @@ static int flat_cost_count_call_site(int line_idx) {
     return count;
 }
 
-static int flat_cost_count_range(int lo, int hi) {
+/* Does flat command `fc` trace back to a source line in [lo, hi] —
+ * directly, or via the call site / root call site of an inlined body? */
+static int flat_scope_member(const GLCmd *fc, int lo, int hi) {
+    return (fc->src_cmd_idx >= lo && fc->src_cmd_idx <= hi) ||
+           (fc->call_src_cmd_idx >= lo && fc->call_src_cmd_idx <= hi) ||
+           (fc->root_call_src_cmd_idx >= lo && fc->root_call_src_cmd_idx <= hi);
+}
+
+/* Flat commands attributable to a source range, counted for a SINGLE
+ * invocation of that range rather than aggregated over the whole frame.
+ *
+ * A block's flat expansion is contiguous per invocation: within one pass
+ * through a for/if scope every command it emits (its own iterations,
+ * inlined calls, and all) stays in-scope, and the run breaks only when
+ * control leaves the scope. So the FIRST maximal in-scope run is exactly
+ * one invocation's cost. This is what makes nested scopes distinct: an
+ * inner loop reports one enclosing-iteration's worth (e.g. sea()'s inner
+ * strip loop), while the outer loop — invoked once — still reports its
+ * whole run. A top-level or singly-invoked block's first run equals its
+ * frame total, so those readouts are unchanged. */
+static int flat_cost_count_first_run(int lo, int hi) {
     const GLCmd *flat = repl_state_flat_program_cmds();
     int n = repl_state_flat_program_count();
+    int i = 0;
     int count = 0;
-    for (int i = 0; i < n; i++) {
-        const GLCmd *fc = &flat[i];
-        if ((fc->src_cmd_idx >= lo && fc->src_cmd_idx <= hi) ||
-            (fc->call_src_cmd_idx >= lo && fc->call_src_cmd_idx <= hi) ||
-            (fc->root_call_src_cmd_idx >= lo && fc->root_call_src_cmd_idx <= hi))
-            count++;
-    }
+    while (i < n && !flat_scope_member(&flat[i], lo, hi))
+        i++;
+    for (; i < n && flat_scope_member(&flat[i], lo, hi); i++)
+        count++;
     return count;
 }
 
@@ -264,7 +282,7 @@ ReplFlatCost repl_flatten_cost_at_line(int line_idx) {
         if (end >= doc_count) end = doc_count - 1;
         out.kind = (doc[head].type == CMD_FUNC_DEF)
                    ? REPL_FLAT_COST_FUNC : REPL_FLAT_COST_BLOCK;
-        out.count = flat_cost_count_range(head, end);
+        out.count = flat_cost_count_first_run(head, end);
     }
     return out;
 }
