@@ -98,15 +98,6 @@ static UiTextPanelColor repl_code_panel_rgb(float r, float g, float b) {
     return color;
 }
 
-/* Derived-C boilerplate sub-palette. Deliberately outside the theme
- * tokens (this is the syntax / generated-code color domain, like
- * k_category_colors / k_syntax_shade above): CHROME is the dim
- * gray-blue of the static header/footer chrome lines; STATE is the
- * slightly brighter tint of the synthesized render-state / camera /
- * lights lines. Each expands to an r,g,b argument triple. */
-#define REPL_CODE_PANEL_CHROME_RGB 0.38f, 0.38f, 0.42f
-#define REPL_CODE_PANEL_STATE_RGB  0.50f, 0.45f, 0.55f
-
 static UiTextPanelColor repl_code_panel_rgba(float r, float g, float b, float a) {
     UiTextPanelColor color = { r, g, b, a, 1 };
     return color;
@@ -1057,6 +1048,48 @@ static int repl_syntax_is_ident_char(int c) {
     return isalnum((unsigned char)c) || c == '_';
 }
 
+static int repl_syntax_is_c_keyword(const char *name) {
+    static const char *const keywords[] = {
+        "auto", "break", "case", "char", "const", "continue",
+        "default", "defined", "do", "double", "else", "enum",
+        "extern", "float", "for", "goto", "if", "inline", "int",
+        "long", "register", "restrict", "return", "short", "signed",
+        "sizeof", "static", "struct", "switch", "typedef", "union",
+        "unsigned", "void", "volatile", "while",
+        "define", "elif", "endif", "error", "ifdef", "ifndef",
+        "include", "pragma", "undef",
+        "GLenum", "GLboolean", "GLbitfield", "GLbyte", "GLshort",
+        "GLint", "GLsizei", "GLubyte", "GLushort", "GLuint",
+        "GLfloat", "GLclampf", "GLdouble", "GLclampd",
+        "GLUtesselator", "size_t", "va_list",
+        NULL
+    };
+
+    for (int i = 0; keywords[i]; i++)
+        if (strcmp(name, keywords[i]) == 0)
+            return 1;
+    return 0;
+}
+
+static int repl_syntax_is_macro_constant(const char *name) {
+    int has_alpha = 0;
+
+    if (!name || !name[0])
+        return 0;
+    if (strcmp(name, "NULL") == 0 || strcmp(name, "M_PI") == 0)
+        return 1;
+    for (int i = 0; name[i]; i++) {
+        unsigned char c = (unsigned char)name[i];
+        if (islower(c))
+            return 0;
+        if (isupper(c))
+            has_alpha = 1;
+        else if (!isdigit(c) && c != '_')
+            return 0;
+    }
+    return has_alpha;
+}
+
 static int repl_code_panel_is_predef(const UiRenderSnapshot *snap, const char *name) {
     if (snap) {
         for (int v = 0; v < snap->variable_panel_vars.count; v++) {
@@ -1090,15 +1123,20 @@ int ui_repl_code_panel_classify_syntax(const UiRenderSnapshot *snap,
         if (c == '/' && text[i + 1] == '/')
             break;
 
-        /* Quoted string: the whole run (incl. quotes) is one literal. Do
-         * not descend into a label("...") format string. */
-        if (c == '"') {
+        /* Quoted string/character: the whole run (including quotes) is one
+         * literal. Generated C adds character constants to the REPL's string
+         * vocabulary, so recognize both delimiters here. */
+        if (c == '"' || c == '\'') {
             int start = i;
+            int quote = c;
 
             i++;
-            while (text[i] && text[i] != '"')
+            while (text[i] && text[i] != quote) {
+                if (text[i] == '\\' && text[i + 1])
+                    i++;
                 i++;
-            if (text[i] == '"')
+            }
+            if (text[i] == quote)
                 i++;
             out[n++] = (UiSyntaxSpan){ start, i - start, REPL_SYNTAX_LITERAL };
             continue;
@@ -1110,19 +1148,30 @@ int ui_repl_code_panel_classify_syntax(const UiRenderSnapshot *snap,
             (c == '.' && isdigit((unsigned char)text[i + 1]))) {
             int start = i;
 
-            while (text[i] &&
-                   (isdigit((unsigned char)text[i]) || text[i] == '.'))
-                i++;
-            if ((text[i] == 'e' || text[i] == 'E') &&
-                (isdigit((unsigned char)text[i + 1]) ||
-                 ((text[i + 1] == '+' || text[i + 1] == '-') &&
-                  isdigit((unsigned char)text[i + 2])))) {
-                i++;
-                if (text[i] == '+' || text[i] == '-')
+            if (text[i] == '0' &&
+                (text[i + 1] == 'x' || text[i + 1] == 'X')) {
+                i += 2;
+                while (isxdigit((unsigned char)text[i]))
                     i++;
-                while (isdigit((unsigned char)text[i]))
+            } else {
+                while (text[i] &&
+                       (isdigit((unsigned char)text[i]) || text[i] == '.'))
                     i++;
+                if ((text[i] == 'e' || text[i] == 'E') &&
+                    (isdigit((unsigned char)text[i + 1]) ||
+                     ((text[i + 1] == '+' || text[i + 1] == '-') &&
+                      isdigit((unsigned char)text[i + 2])))) {
+                    i++;
+                    if (text[i] == '+' || text[i] == '-')
+                        i++;
+                    while (isdigit((unsigned char)text[i]))
+                        i++;
+                }
             }
+            while (text[i] == 'f' || text[i] == 'F' ||
+                   text[i] == 'l' || text[i] == 'L' ||
+                   text[i] == 'u' || text[i] == 'U')
+                i++;
             out[n++] = (UiSyntaxSpan){ start, i - start, REPL_SYNTAX_LITERAL };
             continue;
         }
@@ -1165,8 +1214,12 @@ int ui_repl_code_panel_classify_syntax(const UiRenderSnapshot *snap,
                  * it must classify as a variable, not as structural. */
                 out[n++] = (UiSyntaxSpan){ start, len,
                                              REPL_SYNTAX_VARIABLE };
-            } else if (repl_eval_is_reserved_ident(name)) {
-                /* reserved keyword / math fn used bare — structural */
+            } else if (repl_syntax_is_macro_constant(name)) {
+                out[n++] = (UiSyntaxSpan){ start, len,
+                                             REPL_SYNTAX_CONSTANT };
+            } else if (repl_eval_is_reserved_ident(name) ||
+                       repl_syntax_is_c_keyword(name)) {
+                /* REPL/C keyword, type, or math fn used bare — structural */
             } else {
                 /* loop var, funcN param, or otherwise-unknown ident */
                 out[n++] = (UiSyntaxSpan){ start, len,
@@ -1181,20 +1234,137 @@ int ui_repl_code_panel_classify_syntax(const UiRenderSnapshot *snap,
     return n;
 }
 
+static int repl_code_panel_first_call_name(const char *text,
+                                           char out[64]) {
+    int i = 0;
+
+    if (!text || !out)
+        return 0;
+    out[0] = '\0';
+    while (text[i]) {
+        if (text[i] == '/' && (text[i + 1] == '/' || text[i + 1] == '*'))
+            return 0;
+        if (text[i] == '"' || text[i] == '\'') {
+            int quote = text[i++];
+            while (text[i] && text[i] != quote) {
+                if (text[i] == '\\' && text[i + 1])
+                    i++;
+                i++;
+            }
+            if (text[i]) i++;
+            continue;
+        }
+        if (repl_syntax_is_ident_start((unsigned char)text[i])) {
+            int start = i;
+            int len;
+            int j;
+            while (text[i] && repl_syntax_is_ident_char(text[i]))
+                i++;
+            len = i - start;
+            j = i;
+            while (text[j] == ' ' || text[j] == '\t')
+                j++;
+            if (text[j] == '(' && len < 64) {
+                memcpy(out, text + start, (size_t)len);
+                out[len] = '\0';
+                return 1;
+            }
+            continue;
+        }
+        i++;
+    }
+    return 0;
+}
+
+static CmdSyntaxCategory repl_code_panel_call_category(const char *name) {
+    const ReplEnumCommandSpec *enum_spec;
+    const ReplStdCommandSpec *std_spec;
+
+    for (enum_spec = repl_enum_command_specs(); enum_spec->name; enum_spec++)
+        if (strcmp(name, enum_spec->name) == 0)
+            return repl_cmd_type_category(enum_spec->type);
+    for (std_spec = repl_std_command_specs(); std_spec->name; std_spec++)
+        if (strcmp(name, std_spec->name) == 0)
+            return repl_cmd_type_category(std_spec->type);
+
+    if (strncmp(name, "glVertex", 8) == 0)
+        return CMD_CAT_VERTEX;
+    if (strncmp(name, "glNormal", 8) == 0)
+        return CMD_CAT_NORMAL;
+    if (strncmp(name, "glColor", 7) == 0 ||
+        strncmp(name, "glMaterial", 10) == 0 ||
+        strcmp(name, "glClearColor") == 0)
+        return CMD_CAT_COLOR;
+    if (strncmp(name, "glTranslate", 11) == 0 ||
+        strncmp(name, "glRotate", 8) == 0 ||
+        strncmp(name, "glScale", 7) == 0 ||
+        strcmp(name, "glLoadIdentity") == 0 ||
+        strcmp(name, "glPushMatrix") == 0 ||
+        strcmp(name, "glPopMatrix") == 0 ||
+        strcmp(name, "glOrtho") == 0 ||
+        strcmp(name, "gluPerspective") == 0 ||
+        strcmp(name, "gluLookAt") == 0)
+        return CMD_CAT_TRANSFORM;
+    if (strcmp(name, "glBegin") == 0 || strcmp(name, "glEnd") == 0)
+        return CMD_CAT_PRIMITIVE;
+    if (strncmp(name, "gluTess", 7) == 0)
+        return CMD_CAT_TESS_BLOCK;
+    if (strncmp(name, "glutSolid", 9) == 0 ||
+        strncmp(name, "glutWire", 8) == 0)
+        return CMD_CAT_GLUT_SHAPE;
+    if (strncmp(name, "gl", 2) == 0 || strncmp(name, "glu", 3) == 0)
+        return CMD_CAT_STATE;
+    return CMD_CAT_FUNCTION;
+}
+
+CmdSyntaxCategory ui_repl_code_panel_generated_category(const char *text) {
+    const char *p = text ? text : "";
+    char call[64];
+
+    while (*p == ' ' || *p == '\t') p++;
+    if (p[0] == '/' && (p[1] == '/' || p[1] == '*'))
+        return CMD_CAT_COMMENT;
+    if (*p == '#') {
+        p++;
+        while (*p == ' ' || *p == '\t') p++;
+        if (strncmp(p, "if", 2) == 0 || strncmp(p, "else", 4) == 0 ||
+            strncmp(p, "endif", 5) == 0)
+            return CMD_CAT_CONDITIONAL;
+        return CMD_CAT_STATE;
+    }
+    if ((strncmp(p, "if", 2) == 0 && !repl_syntax_is_ident_char(p[2])) ||
+        (strncmp(p, "else", 4) == 0 && !repl_syntax_is_ident_char(p[4])) ||
+        (strncmp(p, "switch", 6) == 0 && !repl_syntax_is_ident_char(p[6])))
+        return CMD_CAT_CONDITIONAL;
+    if ((strncmp(p, "for", 3) == 0 && !repl_syntax_is_ident_char(p[3])) ||
+        (strncmp(p, "while", 5) == 0 && !repl_syntax_is_ident_char(p[5])) ||
+        (strncmp(p, "do", 2) == 0 && !repl_syntax_is_ident_char(p[2])))
+        return CMD_CAT_LOOP;
+    if (strncmp(p, "return", 6) == 0 && !repl_syntax_is_ident_char(p[6]))
+        return CMD_CAT_FUNCTION;
+    if (repl_code_panel_first_call_name(p, call))
+        return repl_code_panel_call_category(call);
+    if (strncmp(p, "static", 6) == 0 || strncmp(p, "const", 5) == 0 ||
+        strncmp(p, "float", 5) == 0 || strncmp(p, "double", 6) == 0 ||
+        strncmp(p, "int", 3) == 0 || strncmp(p, "char", 4) == 0 ||
+        strncmp(p, "GL", 2) == 0 || strchr(p, '=') != NULL)
+        return CMD_CAT_VARIABLE;
+    return CMD_CAT_DEFAULT;
+}
+
 /* mode: 0 = off (no spans), 1 = on, 2 = on + drop-shadow constants. */
-static void repl_code_panel_apply_syntax_segments(const UiRenderSnapshot *snap,
-                                                  const char *text,
-                                                  CmdType type,
-                                                  int mode,
-                                                  UiTextPanelRow *row) {
+static void repl_code_panel_apply_syntax_segments_for_category(
+    const UiRenderSnapshot *snap,
+    const char *text,
+    CmdSyntaxCategory cat,
+    int mode,
+    UiTextPanelRow *row) {
     UiSyntaxSpan spans[UI_TEXT_PANEL_MAX_COLOR_SEGMENTS];
-    CmdSyntaxCategory cat;
     int count;
 
     if (!row || !text || !text[0] || mode <= 0)
         return;
 
-    cat = repl_cmd_type_category(type);
     if (cat == CMD_CAT_COMMENT)
         return;  /* whole comment line keeps the comment color */
 
@@ -1221,6 +1391,15 @@ static void repl_code_panel_apply_syntax_segments(const UiRenderSnapshot *snap,
                            spans[i].kind == REPL_SYNTAX_CONSTANT),
             };
     }
+}
+
+static void repl_code_panel_apply_syntax_segments(const UiRenderSnapshot *snap,
+                                                  const char *text,
+                                                  CmdType type,
+                                                  int mode,
+                                                  UiTextPanelRow *row) {
+    repl_code_panel_apply_syntax_segments_for_category(
+        snap, text, repl_cmd_type_category(type), mode, row);
 }
 
 /* Color a command line's trailing `// ...` comment with the comment
@@ -1254,10 +1433,40 @@ static void repl_code_panel_apply_trailing_comment_segment(const char *text,
         };
 }
 
+/* Generated C is informative but not editable. Preserve the normal syntax
+ * hues, then pull every color toward its own luminance (lower saturation) and
+ * scale it down (lower brightness). Applying this after token classification
+ * keeps the same visual grammar as user code without competing with it. */
+static UiTextPanelColor repl_code_panel_muted_generated_color(
+    UiTextPanelColor color) {
+    const float saturation = 0.52f;
+    const float brightness = 0.72f;
+    float lum = 0.30f * color.r + 0.59f * color.g + 0.11f * color.b;
+
+    color.r = repl_clamp01((lum + (color.r - lum) * saturation) * brightness);
+    color.g = repl_clamp01((lum + (color.g - lum) * saturation) * brightness);
+    color.b = repl_clamp01((lum + (color.b - lum) * saturation) * brightness);
+    return color;
+}
+
+static void repl_code_panel_mute_generated_row(UiTextPanelRow *row) {
+    if (!row)
+        return;
+    row->color = repl_code_panel_muted_generated_color(row->color);
+    for (int i = 0; i < row->color_segment_count; i++) {
+        row->color_segments[i].color = repl_code_panel_muted_generated_color(
+            row->color_segments[i].color);
+        /* The generated layer is deliberately subordinate even in the
+         * user's "On + Shadow" syntax mode. */
+        row->color_segments[i].shadow = 0;
+    }
+}
+
 static void repl_code_panel_add_static_row(ReplCodePanelBuilder *builder,
-                                           const char *text,
-                                           UiTextPanelColor color) {
+                                           const char *text) {
     UiTextPanelRow *row = repl_code_panel_push_row(builder);
+    CmdSyntaxCategory cat;
+    float r, g, b;
 
     if (!row)
         return;
@@ -1265,8 +1474,15 @@ static void repl_code_panel_add_static_row(ReplCodePanelBuilder *builder,
     row->text = text ? text : "";
     row->kind = UI_TEXT_PANEL_ROW_STATIC;
     row->left_gutter_label = builder->file_line++;
-    row->color = color;
+    cat = ui_repl_code_panel_generated_category(row->text);
+    repl_code_panel_category_rgb(cat, &r, &g, &b);
+    row->color = repl_code_panel_rgb(r, g, b);
     row->hit_eligible = 0;
+    repl_code_panel_apply_syntax_segments_for_category(
+        builder->snap, row->text, cat,
+        builder->snap->code_panel.syntax_highlight, row);
+    repl_code_panel_apply_trailing_comment_segment(row->text, row);
+    repl_code_panel_mute_generated_row(row);
 }
 
 static void repl_code_panel_add_input_row(ReplCodePanelBuilder *builder,
@@ -1432,26 +1648,24 @@ typedef struct {
 
 static void repl_code_panel_add_static_null_terminated_lines(
     ReplCodePanelBuilder *builder,
-    const char *const *lines,
-    UiTextPanelColor color) {
+    const char *const *lines) {
     if (!builder || !lines)
         return;
 
     for (int i = 0; lines[i]; i++)
-        repl_code_panel_add_static_row(builder, lines[i], color);
+        repl_code_panel_add_static_row(builder, lines[i]);
 }
 
 static void repl_code_panel_add_static_buffer_lines(
     ReplCodePanelBuilder *builder,
     int count,
     size_t line_size,
-    const char lines[count][line_size],
-    UiTextPanelColor color) {
+    const char lines[count][line_size]) {
     if (!builder || !lines)
         return;
 
     for (int i = 0; i < count; i++)
-        repl_code_panel_add_static_row(builder, lines[i], color);
+        repl_code_panel_add_static_row(builder, lines[i]);
 }
 
 static void repl_code_panel_add_header_rows(ReplCodePanelBuilder *builder) {
@@ -1468,55 +1682,45 @@ static void repl_code_panel_add_header_rows(ReplCodePanelBuilder *builder) {
         builder,
         snap->import_export.workspace_header_line_count,
         sizeof(snap->import_export.workspace_header_lines[0]),
-        snap->import_export.workspace_header_lines,
-        repl_code_panel_rgb(0.45f, 0.55f, 0.42f));
+        snap->import_export.workspace_header_lines);
     repl_code_panel_add_static_null_terminated_lines(
-        builder, g_header_pre,
-        repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
+        builder, g_header_pre);
     repl_code_panel_add_static_null_terminated_lines(
-        builder, g_display_header,
-        repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
+        builder, g_display_header);
 
     repl_code_panel_add_static_buffer_lines(
         builder,
         RENDER_STATE_LINE_COUNT,
         sizeof(snap->import_export.render_state_lines[0]),
-        snap->import_export.render_state_lines,
-        repl_code_panel_rgb(REPL_CODE_PANEL_STATE_RGB));
+        snap->import_export.render_state_lines);
     repl_code_panel_add_static_buffer_lines(
         builder,
         snap->lights_pre_camera_count,
         sizeof(snap->lights_pre_camera_lines[0]),
-        snap->lights_pre_camera_lines,
-        repl_code_panel_rgb(REPL_CODE_PANEL_STATE_RGB));
+        snap->lights_pre_camera_lines);
     if (snap->import_export.camera_comment_line[0]) {
         repl_code_panel_add_static_row(
             builder,
-            snap->import_export.camera_comment_line,
-            repl_code_panel_category_color(CMD_COMMENT));
+            snap->import_export.camera_comment_line);
     }
     repl_code_panel_add_static_buffer_lines(
         builder,
         REPL_EXPORT_CAMERA_LINES,
         sizeof(snap->import_export.cam_lines[0]),
-        snap->import_export.cam_lines,
-        repl_code_panel_rgb(REPL_CODE_PANEL_STATE_RGB));
+        snap->import_export.cam_lines);
     repl_code_panel_add_static_buffer_lines(
         builder,
         snap->lights_display_count,
         sizeof(snap->lights_display_lines[0]),
-        snap->lights_display_lines,
-        repl_code_panel_rgb(REPL_CODE_PANEL_STATE_RGB));
+        snap->lights_display_lines);
     repl_code_panel_add_static_null_terminated_lines(
-        builder, g_header_post,
-        repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
+        builder, g_header_post);
 
     /* Scratch decoration row: panel-only (the exporter emits the arrays as
      * file-scope statics on demand instead). Keep it adjacent to the user
      * source so its role is clear. */
     repl_code_panel_add_static_row(
-        builder, REPL_CODE_PANEL_SCRATCH_DECL_LINE,
-        repl_code_panel_category_color(CMD_VAR_DECLARE));
+        builder, REPL_CODE_PANEL_SCRATCH_DECL_LINE);
 }
 
 static void repl_code_panel_add_footer_rows(ReplCodePanelBuilder *builder) {
@@ -1540,24 +1744,19 @@ static void repl_code_panel_add_footer_rows(ReplCodePanelBuilder *builder) {
                 builder,
                 snap->reshape_proj_count,
                 sizeof(snap->reshape_proj_lines[0]),
-                snap->reshape_proj_lines,
-                repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
+                snap->reshape_proj_lines);
             continue;
         }
-        repl_code_panel_add_static_row(
-            builder, g_footer_pre_init[i],
-            repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
+        repl_code_panel_add_static_row(builder, g_footer_pre_init[i]);
     }
 
     repl_code_panel_add_static_buffer_lines(
         builder,
         snap->init_section_count,
         sizeof(snap->init_section_lines[0]),
-        snap->init_section_lines,
-        repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
+        snap->init_section_lines);
     repl_code_panel_add_static_null_terminated_lines(
-        builder, g_footer_post_init,
-        repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
+        builder, g_footer_post_init);
 }
 
 static void repl_code_panel_begin_walk_line(ReplCodePanelWalkState *state,
@@ -2612,6 +2811,32 @@ int ui_repl_code_panel_row_aux_label_for_test(int source_line_idx,
             continue;
         if (out_label)
             snprintf(out_label, 8, "%s", row->left_aux_label);
+        return 1;
+    }
+    return 0;
+}
+
+int ui_repl_code_panel_generated_row_style_for_test(
+        const UiRenderSnapshot *snap, const char *needle,
+        float out_rgb[3], int *out_segment_count) {
+    ReplCodePanelBuilder builder;
+
+    if (!snap || !needle || !needle[0] ||
+        !repl_code_panel_init_builder(&builder, snap))
+        return 0;
+    repl_code_panel_build_rows(&builder);
+    for (int i = 0; i < builder.text_snap.row_count; i++) {
+        const UiTextPanelRow *row = &builder.text_snap.rows[i];
+        if (row->kind != UI_TEXT_PANEL_ROW_STATIC ||
+            !strstr(row->text, needle))
+            continue;
+        if (out_rgb) {
+            out_rgb[0] = row->color.r;
+            out_rgb[1] = row->color.g;
+            out_rgb[2] = row->color.b;
+        }
+        if (out_segment_count)
+            *out_segment_count = row->color_segment_count;
         return 1;
     }
     return 0;
