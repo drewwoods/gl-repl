@@ -32,6 +32,7 @@
 #include "editor/commit.h"
 #include "editor/completion.h"
 #include "keys.h"
+#include "c_compat.h"                /* ARRAY_LEN */
 #include "repl/help_text.h"
 #include "repl/tutorials.h"
 #include "subsystems/replay/replay.h"
@@ -332,9 +333,10 @@ static const char *overlay_scope_names[OVERLAY_SCOPE_COUNT] = {
 /* Accumulation buffer split into two rows: the effect mode (Off / AA
  * jitter / motion Blur) and the sample/pass count. The passes cycle maps
  * its state index to an actual count on the supported ladder in
- * glr_config.c (accum_passes_*_cycle). */
+ * glr_config.c (accum_passes_*_cycle); these labels and that int table
+ * both expand from GLR_ACCUM_PASS_LADDER (glr_config.h). */
 static const char *accum_effect_names[] = { "Off", "AA", "Blur", "Blur Cam" };
-static const char *accum_passes_names[] = { "1", "2", "4", "8", "12", "16" };
+static const char *accum_passes_names[] = { GLR_ACCUM_PASS_LADDER(GLR_ACCUM_PASS_NAME_ENTRY) };
 
 /* Hidden session toggles — intentionally NOT rows in this table (no
  * menu entry, no keyboard-shortcut field here, no @cfg persistence).
@@ -370,10 +372,10 @@ const GlrConfigItem g_cfg_items[] = {
       .display_label_override = &g_msaa_display_label },
     { .label = "Line smooth", .key = GLR_CONFIG_LINE_SMOOTH, .state_count = 2 },
     { .label = "Accum effect", .key = GLR_CONFIG_ACCUM_EFFECT,
-      .state_count = 4, .state_names = accum_effect_names,
+      .state_count = ARRAY_LEN(accum_effect_names), .state_names = accum_effect_names,
       .key_code = KM_KEY(GLR_ACCUM_EFFECT), .modifiers = KM_MODS(GLR_ACCUM_EFFECT) },
     { .label = "Accum passes", .key = GLR_CONFIG_ACCUM_PASSES,
-      .state_count = 6, .state_names = accum_passes_names },
+      .state_count = ARRAY_LEN(accum_passes_names), .state_names = accum_passes_names },
     { .label = "Point attenuation", .key = GLR_CONFIG_POINT_ATTENUATION, .state_count = 2 },
     { .label = "Post FX Scope", .key = GLR_CONFIG_POST_FX_SCOPE,
       .state_count = GLR_POST_FX_SCOPE_COUNT, .state_names = post_fx_scope_names,
@@ -389,7 +391,7 @@ const GlrConfigItem g_cfg_items[] = {
     { .label = "Replay", .key = GLR_CONFIG_REPLAY, .state_count = 2,
       .key_code = KM_KEY(GLR_REPLAY), .modifiers = KM_MODS(GLR_REPLAY) },
     { .label = "Replay mode", .key = GLR_CONFIG_REPLAY_MODE,
-      .state_count = 2, .state_names = replay_mode_names },
+      .state_count = ARRAY_LEN(replay_mode_names), .state_names = replay_mode_names },
     { .label = "Replay expand", .key = GLR_CONFIG_REPLAY_EXPAND, .state_count = 2 },
     { .label = "---", .section_header = 1 },
 
@@ -424,7 +426,7 @@ const GlrConfigItem g_cfg_items[] = {
 
     { .label = "### CAMERA", .section_header = 1 },
     { .label = "View mode", .key = GLR_CONFIG_ORTHO_MODE,
-      .state_count = 2, .state_names = view_mode_names,
+      .state_count = ARRAY_LEN(view_mode_names), .state_names = view_mode_names,
       .key_code = KM_KEY(GLR_VIEW_MODE), .modifiers = KM_MODS(GLR_VIEW_MODE) },
     /* Projection matrix (perspective/ortho) with a free camera — distinct
      * from "View mode", which flattens & locks the camera to a top-down 2D
@@ -494,7 +496,7 @@ const GlrConfigItem g_cfg_items[] = {
       .key_code = KM_KEY(GLR_CODE_PANEL), .modifiers = KM_MODS(GLR_CODE_PANEL) },
     { .label = "Wrap at commas", .key = GLR_CONFIG_WRAP_AT_COMMA, .state_count = 2 },
     { .label = "Syntax highlight", .key = GLR_CONFIG_SYNTAX_HIGHLIGHT,
-      .state_count = 3, .state_names = syntax_hl_names,
+      .state_count = ARRAY_LEN(syntax_hl_names), .state_names = syntax_hl_names,
       .key_code = KM_KEY(GLR_SYNTAX_HL), .modifiers = KM_MODS(GLR_SYNTAX_HL) },
     { .label = "Paren match", .key = GLR_CONFIG_PAREN_MATCH, .state_count = 2 },
     { .label = "Paren scope", .key = GLR_CONFIG_PAREN_SCOPE, .state_count = 2 },

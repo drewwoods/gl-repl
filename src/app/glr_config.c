@@ -1,5 +1,6 @@
 #include "app/glr_config.h"
 #include "app/glr_actions.h"
+#include "c_compat.h"                /* ARRAY_LEN */
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
@@ -65,7 +66,7 @@ static int clamp_int(int v, int lo, int hi) {
 
 int glr_config_backdrop_forces_grid(Render3dBackdropMode backdrop,
                                     Render3dGridTheme *grid_out) {
-    size_t n = sizeof(k_backdrop_grid_pairs) / sizeof(k_backdrop_grid_pairs[0]);
+    size_t n = ARRAY_LEN(k_backdrop_grid_pairs);
     for (size_t i = 0; i < n; i++) {
         if (k_backdrop_grid_pairs[i].backdrop == backdrop) {
             if (grid_out)
@@ -77,7 +78,7 @@ int glr_config_backdrop_forces_grid(Render3dBackdropMode backdrop,
 }
 
 int glr_config_grid_user_selectable(Render3dGridTheme grid) {
-    size_t n = sizeof(k_backdrop_grid_pairs) / sizeof(k_backdrop_grid_pairs[0]);
+    size_t n = ARRAY_LEN(k_backdrop_grid_pairs);
     if (grid < 0 || grid >= GRID_THEME_COUNT)
         return 0;
     for (size_t i = 0; i < n; i++) {
@@ -121,9 +122,10 @@ static int grid_cycle_user_selectable(int value, int delta, int count) {
  * cycle whose state index maps to an actual sample count on the supported
  * ladder; like the audio-cfg collapse, config_value_ptr() returns NULL for
  * the passes key and glr_config_get/set special-case it via the helpers
- * below. */
-#define ACCUM_PASS_STATE_COUNT 6
-static const int k_accum_pass_steps[ACCUM_PASS_STATE_COUNT] = { 1, 2, 4, 8, 12, 16 };
+ * below. The step table and its count both derive from GLR_ACCUM_PASS_LADDER
+ * (glr_config.h) — the same list the menu labels expand from. */
+static const int k_accum_pass_steps[] = { GLR_ACCUM_PASS_LADDER(GLR_ACCUM_PASS_STEP_ENTRY) };
+#define ACCUM_PASS_STATE_COUNT ((int)ARRAY_LEN(k_accum_pass_steps))
 
 static int accum_passes_get_cycle(void) {
     int n = glr_state_render().accum_passes;
