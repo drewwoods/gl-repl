@@ -1067,9 +1067,9 @@ int replay_code_panel_get_command_display_text(SourceTextView text,
         build_replay_assignment_inline_comment(cmd_idx, flat_idx,
                                                comment, sizeof(comment));
     } else if (type == CMD_CALL) {
-        /* Literal-arg calls resolve to their own text — nothing to add. */
-        if (!has_vars)
-            return 1;
+        /* No has_vars gate: showing the resolved args confirms the active
+         * invocation (and the alias name) even when the source args are
+         * literals. Zero-arg calls fall out inside the builder. */
         build_replay_call_inline_comment(cmd_idx, comment, sizeof(comment));
     } else if (type == CMD_FOR_BEGIN) {
         /* No has_vars gate: the loop variable is dynamic even when the
