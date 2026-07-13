@@ -12,9 +12,16 @@
  * the negative-size diagnostic shows) — acceptable. A distinct __LINE__
  * keeps the fallback typedef names unique; all current call sites are on
  * separate lines. Valid at both file and block scope (it is a typedef).
+ *
+ * ARRAY_LEN(a): element count of a true C array (NOT a pointer). The
+ * result is a compile-time constant, so it is valid in static
+ * initializers and STATIC_ASSERT — use it instead of hand-counting a
+ * length that a sibling array or table already fixes.
  */
 #ifndef C_COMPAT_H
 #define C_COMPAT_H
+
+#define ARRAY_LEN(a) (sizeof(a) / sizeof((a)[0]))
 
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
 #  define STATIC_ASSERT(expr, msg) _Static_assert(expr, msg)

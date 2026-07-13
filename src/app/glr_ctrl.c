@@ -2800,8 +2800,8 @@ void glr_ctrl_open_color_picker(int line) {
 }
 
 void glr_ctrl_set_accum_passes(int count) {
-    static const int steps[] = { 1, 2, 4, 8, 12, 16 };
-    for (int i = 0; i < (int)(sizeof(steps) / sizeof(steps[0])); i++) {
+    static const int steps[] = { GLR_ACCUM_PASS_LADDER(GLR_ACCUM_PASS_STEP_ENTRY) };
+    for (int i = 0; i < (int)ARRAY_LEN(steps); i++) {
         if (steps[i] == count) {
             glr_state_render_mut()->accum_passes = count;
             return;

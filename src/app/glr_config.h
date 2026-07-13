@@ -102,6 +102,23 @@ typedef struct {
     const char **display_label_override;
 } GlrConfigItem;
 
+/* The "Accum passes" ladder: the fixed set of accumulation sample counts
+ * the cycle steps through, low to high. Single source of truth — the
+ * display-name array (glr_actions.c), the int step table (glr_config.c),
+ * and the GLR_ACCUM_PASSES startup validator (glr_ctrl.c) all derive
+ * from this one list via the X-macro idiom, so the ladder is edited in
+ * exactly one place and the three views can never drift. Each consumer
+ * feeds one of the entry macros below to GLR_ACCUM_PASS_LADDER. */
+#define GLR_ACCUM_PASS_LADDER(X) \
+    X(1)  \
+    X(2)  \
+    X(4)  \
+    X(8)  \
+    X(12) \
+    X(16)
+#define GLR_ACCUM_PASS_NAME_ENTRY(n) #n,   /* -> "1", "2", ...  (menu labels) */
+#define GLR_ACCUM_PASS_STEP_ENTRY(n) n,    /* -> 1, 2, ...      (sample counts) */
+
 /* Exported config item table and count. g_cfg_items[] lives in
  * glr_actions.c; CFG_ITEM_COUNT is the count (auto-computed via sizeof). Used
  * by the menu UI and config accessor functions to iterate items. */
