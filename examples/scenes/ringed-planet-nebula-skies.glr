@@ -16,7 +16,7 @@ glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
 glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});
 glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
-static float y, c, a;
+static float y, c, a; // planet latitude sin; color/brightness mix in [0,1]; comet orbit angle
 // ===== Ringed gas giant under nebula skies =====
 // NOTE: stays well under the 8192 flattened-command budget --
 // the sphere loop costs stacks*(slices + 1)*10 flat commands.
