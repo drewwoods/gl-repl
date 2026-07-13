@@ -74,9 +74,11 @@ static const CmdType expected_commands[] = {
     CMD_DISABLE,
     CMD_SHADE_MODEL,
     CMD_FRONT_FACE,
+    CMD_CULL_FACE,
     CMD_DEPTH_FUNC,
     CMD_POINT_SIZE,
     CMD_LINE_WIDTH,
+    CMD_LINE_STIPPLE,
     CMD_POINT_PARAMETER_FV,
     CMD_BLEND_FUNC,
     CMD_CLEAR_COLOR,
@@ -363,11 +365,13 @@ int main(void) {
     editor_feed_line("glDisable(GL_DEPTH_TEST);");
     editor_feed_line("glShadeModel(GL_SMOOTH);");
     editor_feed_line("glFrontFace(GL_CCW);");
+    editor_feed_line("glCullFace(GL_BACK);");
     editor_feed_line("glDepthFunc(GL_LEQUAL);");
 
     /* Attribute commands */
     editor_feed_line("glPointSize(5);");
     editor_feed_line("glLineWidth(2);");
+    editor_feed_line("glLineStipple(2, 61680);");
     editor_feed_line("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1, 0, 0.01);");
 
     /* Blend/depth commands */

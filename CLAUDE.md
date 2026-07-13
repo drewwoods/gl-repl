@@ -515,7 +515,7 @@ explaining why the extra background is useful.
 | [`src/app/glr_ctrl.h`](src/app/glr_ctrl.h) | Controller public surface: display, reshape, init-GL entrypoints |
 | [`src/app/glr_config.c`](src/app/glr_config.c) | Config key implementation and descriptor table helpers. The tail of `glr_config_set` notifies the tutorial runner (`tutorial_notify_state_changed`) so REQUIRE steps observe every write path — direct setters (e.g. accum-passes Ctrl+=/-), `glr_cfg_cycle_row`'s early-return branches, and the bridge's `apply` during `@cfg` / example / workspace load |
 | [`src/app/glr_config.h`](src/app/glr_config.h) | `ReplConfigKey` / [`ReplConfigItem`](src/repl/cfg_baseline.h#L29) descriptor API for keyed config access |
-| [`src/repl/command.h`](src/repl/command.h) | Core command model types: [`CmdType`](src/repl/command.h#L37) enum, [`GLCmd`](src/repl/command.h#L88) struct (pure parse-result: type, args, flags, provenance — no `source[]` field) |
+| [`src/repl/command.h`](src/repl/command.h) | Core command model types: [`CmdType`](src/repl/command.h#L37) enum, [`GLCmd`](src/repl/command.h#L90) struct (pure parse-result: type, args, flags, provenance — no `source[]` field) |
 | [`src/repl/compile.c`](src/repl/compile.c) | Pure source-text validators that produce [`ReplCompiledChange`](src/repl/compile.h#L130) descriptors; never mutates state |
 | [`src/repl/compile.h`](src/repl/compile.h) | [`ReplCompiledChange`](src/repl/compile.h#L130), [`ReplCompileResult`](src/repl/compile.h#L189), [`ReplCompileContext`](src/repl/compile.h#L178), compile entry points |
 | [`src/repl/apply.c`](src/repl/apply.c) | Applies a [`ReplCompiledChange`](src/repl/compile.h#L130) to REPL runtime command arrays |
@@ -523,13 +523,13 @@ explaining why the extra background is useful.
 | [`src/repl/normalize.c`](src/repl/normalize.c) | Parse-and-normalize pipeline (`repl_parse_and_normalize*`) |
 | [`src/repl/reformat.c`](src/repl/reformat.c) | Source reformatter (`repl_reformat_program`) |
 | [`src/repl/bootstrap.c`](src/repl/bootstrap.c) | Startup loading helpers (`repl_load_initial_commands`) |
-| [`src/repl/parser.c`](src/repl/parser.c) | REPL source-line parser, expression validation, canonical line text emission via `ReplParsedLine.text` (the per-line text lives in [`EditorState`](src/editor/state.h#L175)'s editor buffer, not on [`GLCmd`](src/repl/command.h#L88)) |
+| [`src/repl/parser.c`](src/repl/parser.c) | REPL source-line parser, expression validation, canonical line text emission via `ReplParsedLine.text` (the per-line text lives in [`EditorState`](src/editor/state.h#L175)'s editor buffer, not on [`GLCmd`](src/repl/command.h#L90)) |
 | [`src/repl/parser.h`](src/repl/parser.h) | Parser entrypoints (`repl_parser_parse_command*`, `repl_parser_parse_command_ctx`), [`ReplParseContext`](src/repl/parser.h#L44), [`ReplParsedLine`](src/repl/parser.h#L80) |
 | [`src/repl/source_scope.c`](src/repl/source_scope.c) | Source prefix-depth cache, indentation helpers, block lookup |
 | [`src/repl/source_scope.h`](src/repl/source_scope.h) | Source-scope query API (`repl_source_scope_block_depth_at`, `repl_source_scope_find_block_end`, indent helpers) |
 | [`src/repl/command_spec.c`](src/repl/command_spec.c) | Command type metadata and specifications (parsing, formatting, completion requirements) |
 | [`src/repl/command_spec.h`](src/repl/command_spec.h) | Command spec query API |
-| [`src/repl/command_store.c`](src/repl/command_store.c) | Low-level [`GLCmd`](src/repl/command.h#L88) array mechanics: insert, delete, replace, bulk-load (no text-buffer writes) |
+| [`src/repl/command_store.c`](src/repl/command_store.c) | Low-level [`GLCmd`](src/repl/command.h#L90) array mechanics: insert, delete, replace, bulk-load (no text-buffer writes) |
 | [`src/repl/command_store.h`](src/repl/command_store.h) | Command-store public API (`repl_command_store_insert_one`, etc.) |
 | [`src/repl/state.c`](src/repl/state.c) | Owns `g_repl_state`, lifecycle, snapshot assembly (`repl_state_capture` / `repl_state_restore`) |
 | [`src/repl/state.h`](src/repl/state.h) | Typed runtime-state facade, reset helpers, and focused accessors over the live REPL state |
@@ -881,9 +881,9 @@ exactly `t_end`, so the flat program is left at the true frame time.
 The core data flow is **source commands → flat commands → GL calls**:
 
 - **Source array** (`repl_state_document_cmds()`, count via
-  `repl_state_document_count()`) — each [`GLCmd`](src/repl/command.h#L88) holds parsed type/args
+  `repl_state_document_count()`) — each [`GLCmd`](src/repl/command.h#L90) holds parsed type/args
   and flags (`has_vars`, `valid`, `is_auto`). Per-line canonical text is
-  *not* on [`GLCmd`](src/repl/command.h#L88); it lives in [`EditorState`](src/editor/state.h#L175)'s editor buffer (accessed via
+  *not* on [`GLCmd`](src/repl/command.h#L90); it lives in [`EditorState`](src/editor/state.h#L175)'s editor buffer (accessed via
   [`editor_buffer_view_line()`](src/editor/state.h#L276)) and is the editor's writable model.
 - **Flat array** (`repl_state_flat_cmds()`) — expanded copy. For-loops are
   unrolled, function calls are inlined, if-blocks are resolved.
@@ -924,7 +924,7 @@ The core data flow is **source commands → flat commands → GL calls**:
 3. **Parse** — `parse_command()` in [`src/repl/parser.c`](src/repl/parser.c) matches the line to a
    [`CmdType`](src/repl/command.h#L37), evaluates argument expressions via `eval_expr()`, stores
    result in `GLCmd.args[]`. Per-line canonical text lives in
-   [`EditorState`](src/editor/state.h#L175)'s editor buffer (not on [`GLCmd`](src/repl/command.h#L88)); the parser returns it as
+   [`EditorState`](src/editor/state.h#L175)'s editor buffer (not on [`GLCmd`](src/repl/command.h#L90)); the parser returns it as
    `ReplParsedLine.text` for the commit path to write into the editor
    buffer. Internal call sites pass `ReplParseContext.source_line_idx`
    instead of temporarily changing the edit-line cursor.
@@ -989,7 +989,7 @@ Key details:
 - `CMD_VAR_DECLARE` is a no-op in [`repl_execute_program()`](src/repl/executor.h#L173) and
   `flatten_range()` — registration into the predefined-variable table happens at
   commit time via [`repl_eval_declare_predef_var()`](src/repl/eval.h#L309)
-- [`GLCmd`](src/repl/command.h#L88) fields (tagged-union payload, keyed on `type`):
+- [`GLCmd`](src/repl/command.h#L90) fields (tagged-union payload, keyed on `type`):
   `payload.decl.names[MAX_NAMES_PER_DECL][16]`, `payload.decl.count`
   (active for `CMD_VAR_DECLARE`); `payload.label.fmt[GLUT_BITMAP_FMT_MAX]`
   (active for `CMD_LABEL`). Other types must not read the payload.
@@ -1407,11 +1407,24 @@ glClipPlane(plane, (GLdouble[]){a, b, c, d})
 glShadeModel(MODE)
 glPointSize(size)
 glLineWidth(width)
+glLineStipple(factor, pattern)
+  Dashed/dotted lines: `factor` (>=1) stretches the 16-bit `pattern`
+  bitmask, low bit first. `pattern` is a plain integer (the REPL has no
+  hex literals) — e.g. 255 for 0x00FF dashes, 43690 for 0xAAAA dots.
+  Enable with glEnable(GL_LINE_STIPPLE). Both args may be expressions.
 glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)
   - Runtime-gated: silent no-op when the GL context lacks
     glPointParameterfv or GLR_NO_POINT_PARAMETER is set (see the
     GLR_NO_POINT_PARAMETER section under Run).
-glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA|GL_ONE)
+glBlendFunc(sfactor, dfactor)
+  Pixel = src*sfactor + dst*dfactor.
+  sfactor: GL_ZERO, GL_ONE, GL_DST_COLOR, GL_ONE_MINUS_DST_COLOR,
+           GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_DST_ALPHA,
+           GL_ONE_MINUS_DST_ALPHA, GL_SRC_ALPHA_SATURATE
+  dfactor: GL_ZERO, GL_ONE, GL_SRC_COLOR, GL_ONE_MINUS_SRC_COLOR,
+           GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_DST_ALPHA,
+           GL_ONE_MINUS_DST_ALPHA
+  (classic fixed-function split; the slots are strict token-only)
 glColorMaterial(face, mode), glMaterialfv(face, pname, (GLfloat[]){r, g, b, a})
   glColorMaterial mode: GL_AMBIENT, GL_DIFFUSE, GL_SPECULAR, GL_EMISSION, GL_AMBIENT_AND_DIFFUSE
   glMaterialfv accepts either the (GLfloat[]){...} compound literal (the
@@ -1419,6 +1432,9 @@ glColorMaterial(face, mode), glMaterialfv(face, pname, (GLfloat[]){r, g, b, a})
   the flat input shorthand "face, pname, r, g, b, a" / "face, pname,
   shininess", which the parser rewrites to the compound-literal form.
 glLightModeli(pname, param), glFrontFace(mode)
+glCullFace(mode)
+  mode: GL_BACK, GL_FRONT, GL_FRONT_AND_BACK. Which faces
+  glEnable(GL_CULL_FACE) discards.
 glDepthFunc(func)
   func: GL_NEVER, GL_LESS, GL_EQUAL, GL_LEQUAL, GL_GREATER,
         GL_NOTEQUAL, GL_GEQUAL, GL_ALWAYS

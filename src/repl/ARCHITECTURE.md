@@ -44,7 +44,7 @@ The standard interpreter parts map cleanly onto files:
 
 | Interpreter part | Here |
 |---|---|
-| Lexer / parser → AST | [`parser.c`](parser.c) → [`GLCmd`](command.h#L88) records |
+| Lexer / parser → AST | [`parser.c`](parser.c) → [`GLCmd`](command.h#L90) records |
 | Symbol / spec table | [`command_spec.c`](command_spec.c) (per-command arity, arg kinds, highlight category) |
 | Expression evaluator | [`eval.c`](eval.c) (recursive descent: `+ - * / %`, comparisons, `sin`/`cos`/…, variables) |
 | Static validation / compile pass | [`compile.c`](compile.c) → [`ReplCompiledChange`](compile.h#L130) (**pure**; never mutates) |
@@ -196,9 +196,9 @@ flowchart LR
 
 This is the core data structure. Read this section before anything else.
 
-### 3.1 [`GLCmd`](command.h#L88) — the universal command record
+### 3.1 [`GLCmd`](command.h#L90) — the universal command record
 
-A single [`GLCmd`](command.h#L88) ([`command.h`](command.h)) represents one command in *either* level.
+A single [`GLCmd`](command.h#L90) ([`command.h`](command.h)) represents one command in *either* level.
 It is a **pure parse result** — it carries type, evaluated args, flags,
 and provenance, but **no source text**. The per-line canonical text
 lives in the editor's buffer, not here. That omission is what keeps the
@@ -426,7 +426,7 @@ editor input widget. Keeping it separate from [`compile.c`](compile.c) preserves
 purity boundary — [`compile.c`](compile.c) only *describes* changes; [`load.c`](load.c) owns the
 apply orchestration.
 
-[`command_store.c`](command_store.c) underneath is the lowest layer: pure [`GLCmd`](command.h#L88) array
+[`command_store.c`](command_store.c) underneath is the lowest layer: pure [`GLCmd`](command.h#L90) array
 mechanics (insert/replace/delete/load, range normalization, capacity
 checks). It owns array shifting and bounds; callers own parsing, undo,
 variable registration, and cursor policy. Cursor shifting is opt-in per
@@ -477,7 +477,7 @@ provenance (§3.3) and a [`FlatCmdLocalVars`](flatten.h#L37) snapshot (§3.4).
 
 Flatten always performs the same control-flow walk and rebuilds the complete
 flat program when it is dirty. Within that walk it uses progressively cheaper
-expression paths which all produce the same baked [`GLCmd`](command.h#L88)
+expression paths which all produce the same baked [`GLCmd`](command.h#L90)
 stream:
 
 1. A command whose `has_vars` is 0 is appended verbatim from the committed
@@ -560,7 +560,7 @@ emitting GL. Key behaviors:
   of any execute-time re-evaluation.
 - **Matrix-stack tracking.** `repl_executor_apply_tracked_transform_cmd`
   maintains a depth counter (push++/pop--) that overlays read to color
-  geometry by transform depth. The GL matrix stack — not [`GLCmd`](command.h#L88) — is the
+  geometry by transform depth. The GL matrix stack — not [`GLCmd`](command.h#L90) — is the
   canonical transform truth at execution time.
 - **Replay clamp.** The caller passes `flat_cmd_count` (full count, or
   the replay program counter when replay is active) so only commands up

@@ -129,14 +129,34 @@ static const ReplEnumEntry k_point_param_pnames[] = {
     { NULL, 0 }
 };
 
+/* Blend factors are split into the source (sfactor) and destination
+ * (dfactor) sets that classic fixed-function GL accepts: GL_SRC_COLOR /
+ * GL_ONE_MINUS_SRC_COLOR are dfactor-only, GL_DST_COLOR /
+ * GL_ONE_MINUS_DST_COLOR and GL_SRC_ALPHA_SATURATE are sfactor-only, and
+ * the rest are shared. Slots are strict token-only, so the asymmetry
+ * teaches the GL 1.1 rule at autocomplete time. */
 static const ReplEnumEntry k_blend_src_factors[] = {
-    { "GL_SRC_ALPHA", GL_SRC_ALPHA },
+    { "GL_ZERO",                GL_ZERO },
+    { "GL_ONE",                 GL_ONE },
+    { "GL_DST_COLOR",           GL_DST_COLOR },
+    { "GL_ONE_MINUS_DST_COLOR", GL_ONE_MINUS_DST_COLOR },
+    { "GL_SRC_ALPHA",           GL_SRC_ALPHA },
+    { "GL_ONE_MINUS_SRC_ALPHA", GL_ONE_MINUS_SRC_ALPHA },
+    { "GL_DST_ALPHA",           GL_DST_ALPHA },
+    { "GL_ONE_MINUS_DST_ALPHA", GL_ONE_MINUS_DST_ALPHA },
+    { "GL_SRC_ALPHA_SATURATE",  GL_SRC_ALPHA_SATURATE },
     { NULL, 0 }
 };
 
 static const ReplEnumEntry k_blend_dst_factors[] = {
-    { "GL_ONE_MINUS_SRC_ALPHA", GL_ONE_MINUS_SRC_ALPHA },
+    { "GL_ZERO",                GL_ZERO },
     { "GL_ONE",                 GL_ONE },
+    { "GL_SRC_COLOR",           GL_SRC_COLOR },
+    { "GL_ONE_MINUS_SRC_COLOR", GL_ONE_MINUS_SRC_COLOR },
+    { "GL_SRC_ALPHA",           GL_SRC_ALPHA },
+    { "GL_ONE_MINUS_SRC_ALPHA", GL_ONE_MINUS_SRC_ALPHA },
+    { "GL_DST_ALPHA",           GL_DST_ALPHA },
+    { "GL_ONE_MINUS_DST_ALPHA", GL_ONE_MINUS_DST_ALPHA },
     { NULL, 0 }
 };
 
@@ -206,6 +226,10 @@ static const ReplFuncCompletion k_func_completions[] = {
         "Rasterized point diameter", REPL_HELP_GROUP_STATE },
     { "glLineWidth(",        "glLineWidth(width)",                                       1, { "width" },
         "Rasterized line width", REPL_HELP_GROUP_STATE },
+    { "glLineStipple(",      "glLineStipple(factor, pattern)",                           2, { "factor", "pattern" },
+        "Dashed lines: factor stretches the 16-bit pattern bitmask (e.g. 255 = 0x00FF).\n"
+        "Enable with glEnable(GL_LINE_STIPPLE).",
+        REPL_HELP_GROUP_STATE },
     { "glClipPlane(",        "glClipPlane(plane, (GLdouble[]){a, b, c, d})",             2, { "plane", "(GLdouble[]){a, b, c, d}" },
         "Set a clip plane equation a*x + b*y + c*z + d >= 0 (kept half-space),\n"
         "in the coordinate frame active at the call. plane: GL_CLIP_PLANE0..5.\n"
@@ -228,7 +252,13 @@ static const ReplFuncCompletion k_func_completions[] = {
         "Distance attenuation: size *= 1/sqrt(const + linear*d + quadratic*d*d)",
         REPL_HELP_GROUP_BLEND },
     { "glBlendFunc(",        "glBlendFunc(sfactor, dfactor)",                            2, { "sfactor", "dfactor" },
-        "GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA / GL_ONE", REPL_HELP_GROUP_BLEND },
+        "Pixel = src*sfactor + dst*dfactor. Common: GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA (alpha)\n"
+        "or GL_SRC_ALPHA, GL_ONE (additive glow).\n"
+        "sfactor: GL_ZERO/GL_ONE, GL_DST_COLOR, GL_ONE_MINUS_DST_COLOR, GL_SRC_ALPHA,\n"
+        "  GL_ONE_MINUS_SRC_ALPHA, GL_DST_ALPHA, GL_ONE_MINUS_DST_ALPHA, GL_SRC_ALPHA_SATURATE\n"
+        "dfactor: GL_ZERO/GL_ONE, GL_SRC_COLOR, GL_ONE_MINUS_SRC_COLOR, GL_SRC_ALPHA,\n"
+        "  GL_ONE_MINUS_SRC_ALPHA, GL_DST_ALPHA, GL_ONE_MINUS_DST_ALPHA",
+        REPL_HELP_GROUP_BLEND },
     /* --- Matrix transforms --- */
     { "glTranslatef(",       "glTranslatef(x, y, z)",                                    3, { "x", "y", "z" },
         "Translate the modelview matrix", REPL_HELP_GROUP_TRANSFORM },
@@ -243,6 +273,9 @@ static const ReplFuncCompletion k_func_completions[] = {
     { "glLoadIdentity()",    "glLoadIdentity()",                                         0, { NULL },
         "Reset the current matrix to identity", REPL_HELP_GROUP_TRANSFORM },
     /* --- Depth & write-mask state --- */
+    { "glCullFace(",         "glCullFace(mode)",                                         1, { "mode" },
+        "GL_BACK, GL_FRONT, GL_FRONT_AND_BACK (which faces glEnable(GL_CULL_FACE) discards)",
+        REPL_HELP_GROUP_DEPTH_MASK },
     { "glFrontFace(",        "glFrontFace(mode)",                                        1, { "mode" },
         "GL_CW, GL_CCW", REPL_HELP_GROUP_DEPTH_MASK },
     { "glDepthFunc(",        "glDepthFunc(func)",                                        1, { "func" },
@@ -399,6 +432,8 @@ static const ReplEnumCommandSpec k_enum_command_specs[] = {
     { "glColorMaterial", CMD_COLOR_MATERIAL, 2, "%sglColorMaterial(%s, %s);", 0,
         .args = { ENUM_SLOT_TOK(k_face_types, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"),
                   ENUM_SLOT_TOK(k_color_material_modes, "mode: GL_AMBIENT, GL_DIFFUSE, GL_SPECULAR, GL_EMISSION, GL_AMBIENT_AND_DIFFUSE") } },
+    { "glCullFace",      CMD_CULL_FACE,      1, "%sglCullFace(%s);",         0,
+        .args = { ENUM_SLOT_TOK(k_face_types, "Try GL_BACK, GL_FRONT, or GL_FRONT_AND_BACK") } },
     { "glDepthFunc",     CMD_DEPTH_FUNC,     1, "%sglDepthFunc(%s);",        0,
         .args = { ENUM_SLOT_TOK(k_depth_funcs, "Try GL_LESS, GL_LEQUAL, GL_ALWAYS, ...") } },
     { "glDepthMask",     CMD_DEPTH_MASK,     1, "%sglDepthMask(%s);",        0,
@@ -439,6 +474,7 @@ static const ReplStdCommandSpec k_std_command_specs[] = {
     { "glClearColor",   CMD_CLEAR_COLOR,      4, "glClearColor(%g, %g, %g, %g);",   "Usage: glClearColor(r, g, b, a)", 0 },
     { "glColor3f",      CMD_COLOR3F,          3, "glColor3f(%g, %g, %g);",          "Usage: glColor3f(r, g, b)", 0 },
     { "glColor4f",      CMD_COLOR4F,          4, "glColor4f(%g, %g, %g, %g);",      "Usage: glColor4f(r, g, b, a)", 0 },
+    { "glLineStipple",  CMD_LINE_STIPPLE,     2, "glLineStipple(%g, %g);",          "Usage: glLineStipple(factor, pattern)", 0 },
     { "glLineWidth",    CMD_LINE_WIDTH,       1, "glLineWidth(%g);",                "Usage: glLineWidth(width)", 0 },
     { "glNormal3f",     CMD_NORMAL3F,         3, "glNormal3f(%g, %g, %g);",         "Usage: glNormal3f(nx, ny, nz)", 0 },
     { "glPointSize",    CMD_POINT_SIZE,       1, "glPointSize(%g);",                "Usage: glPointSize(size)", 0 },
@@ -502,6 +538,7 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC(CMD_COLOR_MATERIAL,               1, CMD_CAT_COLOR),
     CMD_TYPE_SPEC(CMD_LIGHT_MODEL_I,                1, CMD_CAT_STATE),
     CMD_TYPE_SPEC(CMD_FRONT_FACE,                   1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC(CMD_CULL_FACE,                    1, CMD_CAT_STATE),
     CMD_TYPE_SPEC(CMD_DEPTH_FUNC,                   1, CMD_CAT_STATE),
     CMD_TYPE_SPEC(CMD_FOR_BEGIN,                    1, CMD_CAT_LOOP),
     CMD_TYPE_SPEC(CMD_FOR_END,                      1, CMD_CAT_LOOP),
@@ -532,6 +569,7 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC(CMD_MATERIALF,                    1, CMD_CAT_COLOR),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_POINT_SIZE,         "glPointSize",         1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_LINE_WIDTH,         "glLineWidth",         1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_LINE_STIPPLE,       "glLineStipple",       1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_POINT_PARAMETER_FV, "glPointParameterfv",  1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_BLEND_FUNC,         "glBlendFunc",         1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_CLEAR_COLOR,        "glClearColor",        1, CMD_CAT_COLOR),
