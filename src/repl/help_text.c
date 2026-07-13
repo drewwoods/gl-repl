@@ -350,6 +350,7 @@ const ReplHelpContent *repl_help_text_build(void) {
         g_tab_commands[HELP_CMD_LINES_MAX - 1] = NULL;
 
     int nk = 0;
+    nk = key_emit(nk, "----- Editor -----------------------------------------");
     nk = key_emit(nk, "Editing:");
     nk = key_emit(nk, "  ;                    \tCommit current line");
     nk = key_emit(nk, "  Enter                \tInsert new line");
@@ -405,6 +406,7 @@ const ReplHelpContent *repl_help_text_build(void) {
     nk = key_emit_binding(nk, "", KM_KEY(GLR_ESCAPE), KM_MODS(GLR_ESCAPE), 0, "",
                           "Clear input / close overlay");
     nk = key_emit(nk, "");
+    nk = key_emit(nk, "----- 3D Scene ---------------------------------------");
     nk = key_emit(nk, "Camera:");
     nk = key_emit(nk, "  Left-drag            \tOrbit");
     nk = key_emit(nk, "  Right-drag           \tPan (XZ)");
