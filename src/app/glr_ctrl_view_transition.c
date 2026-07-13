@@ -58,10 +58,13 @@ static void glr_ctrl_start_camera_to_2d(void) {
      * into 2D (and clobber the example's ease), so the ortho zoom would lock
      * onto the old camera distance. */
     GlrCameraState cam = glr_camera_destination();
-    if (!g_saved_3d_camera_valid || g_view_xn_phase == GLR_VIEW_XN_IDLE) {
-        g_saved_3d_camera = cam;
-        g_saved_3d_camera_valid = 1;
-    }
+    /* Refresh on every new 3D->2D leg, including a reversal while the prior
+     * 2D->3D camera ease is still active. The destination is the intended 3D
+     * pose in both cases and also reflects an intervening Reset camera action;
+     * retaining the older snapshot here would resurrect the pre-reset orbit
+     * on the next return to 3D. */
+    g_saved_3d_camera = cam;
+    g_saved_3d_camera_valid = 1;
     glr_camera_ease_to(0.0f, 0.0f, cam.dist, cam.tx, cam.ty, 0.0f);
     /* Use a faster decay for this leg only — the orbit flattening
      * shouldn't drag the projection blend that follows it. The override

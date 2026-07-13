@@ -1616,6 +1616,63 @@ static void tick_until_projection_mix(float want, int max_iters) {
     }
 }
 
+/* Once the projection has returned to 3D, its camera-restore leg may still be
+ * easing toward the saved orbit. Resetting during that short window and then
+ * entering 2D again must snapshot the reset destination, not retain the old
+ * saved orbit for the next 2D->3D restore. */
+static void test_view_mode_restore_honors_pending_camera_reset(void) {
+    GlrCameraState cam;
+
+    printf("--- imrepl_ctrl 3d reset survives 2d round trip ---\n");
+    prepare_display_fixture();
+    replay_state_mut()->active = 0;
+    replay_state_mut()->state = REPLAY_OFF;
+    glr_ctrl_display_frame();
+
+    editor_input_set_modifier_provider_for_test(simulated_mods_provider);
+    g_simulated_mods = GLUT_ACTIVE_SHIFT;
+
+    /* First round trip reaches a perspective projection but deliberately
+     * stops while the camera is still restoring the modified fixture pose. */
+    glr_ctrl_keyboard(KEY_CTRL_V, 0, 0);
+    tick_until_projection_mix(0.0f, 400);
+    glr_ctrl_keyboard(KEY_CTRL_V, 0, 0);
+    tick_until_projection_mix(1.0f, 400);
+    ASSERT_INT("precondition: 3d camera restore is still easing",
+               glr_camera_target_active(), 1);
+
+    /* Exact user route in that window: Ctrl+Shift+C starts the camera reset,
+     * followed immediately by Ctrl+Shift+V before the reset ease has settled. */
+    glr_ctrl_keyboard(KEY_CTRL_C, 0, 0);
+    ASSERT_INT("camera reset starts an ease", glr_camera_target_active(), 1);
+    glr_ctrl_keyboard(KEY_CTRL_V, 0, 0);
+    tick_until_projection_mix(0.0f, 400);
+
+    /* Return to 3D through the same shortcut and settle both legs. */
+    glr_ctrl_keyboard(KEY_CTRL_V, 0, 0);
+    for (int i = 0; i < 600; i++) {
+        glr_ctrl_tick();
+        glr_ctrl_display_frame();
+        if (g_last_scene_config.projection_mix == 1.0f &&
+            !glr_camera_target_active())
+            break;
+    }
+
+    cam = glr_camera();
+    ASSERT_TRUE("reset rx restored after 2d round trip",
+                fabsf(cam.rx - 20.0f) < 0.05f);
+    ASSERT_TRUE("reset ry restored after 2d round trip",
+                fabsf(cam.ry - 30.0f) < 0.05f);
+    ASSERT_TRUE("reset distance restored after 2d round trip",
+                fabsf(cam.dist - 5.0f) < 0.05f);
+    ASSERT_FLOAT("reset tx restored after 2d round trip", cam.tx, 0.0f);
+    ASSERT_FLOAT("reset ty restored after 2d round trip", cam.ty, 0.0f);
+    ASSERT_FLOAT("reset tz restored after 2d round trip", cam.tz, 0.0f);
+
+    g_simulated_mods = 0;
+    editor_input_set_modifier_provider_for_test(NULL);
+}
+
 /* Cycling 2D-example -> 3D-example-A -> 3D-example-B fast: example A
  * starts a 2D->3D projection blend; example B loads mid-blend. The
  * saved-3D snapshot (consumed by start_camera_to_3d when the blend ends)
@@ -3237,6 +3294,7 @@ int main(void) {
     test_view_mode_3d_to_2d_uses_faster_decay();
     test_projection_toggle_free_camera();
     test_view_mode_2d_honors_pending_camera_ease();
+    test_view_mode_restore_honors_pending_camera_reset();
     test_view_mode_3d_restore_tracks_example_loaded_midblend();
     test_view_record_external_3d_pose_tracks_in_ortho();
     test_view_record_external_3d_pose_noop_in_perspective();
