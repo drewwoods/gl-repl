@@ -1126,6 +1126,50 @@ int main() {
         ASSERT_INT("oob cost kind (past end)", (int)c.kind, REPL_FLAT_COST_NONE);
     }
 
+    /* Nested-loop BLOCK cost is per-invocation, not whole-frame aggregate,
+     * so an inner loop is distinct from the outer one that contains it.
+     *
+     * Program shape: outer for (3 iters), one outer-only color line, an
+     * inner for (4 iters) emitting one vertex each. Flat layout per outer
+     * iter = 1 color + 4 vertices = 5; total 15. */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("for(k, 0, 3) {");         /* 0  outer head  */
+        editor_feed_line("  glColor3f(k, 0, 0);");  /* 1  outer body  */
+        editor_feed_line("  for(i, 0, 4) {");       /* 2  inner head  */
+        editor_feed_line("    glVertex3f(k, i, 0);");/* 3  inner body  */
+        editor_feed_line("  }");                     /* 4  inner end   */
+        editor_feed_line("}");                       /* 5  outer end   */
+        repl_flatten_commands(editor_state_edit_line());
+        ASSERT_INT("nested-cost setup: flat total",
+                   repl_state_flat_program_count(), 15);
+
+        ReplFlatCost c;
+
+        /* Outer loop, invoked once -> its single run is the whole frame. */
+        c = repl_flatten_cost_at_line(0);
+        ASSERT_INT("outer for cost kind", (int)c.kind, REPL_FLAT_COST_BLOCK);
+        ASSERT_INT("outer for cost count (whole)", c.count, 15);
+
+        /* Inner loop, invoked once per outer iteration -> one iteration's
+         * worth (4 vertices), NOT 3 x 4 = 12. This is the fix: the inner
+         * scope is smaller than, and distinct from, the outer scope. */
+        c = repl_flatten_cost_at_line(2);
+        ASSERT_INT("inner for cost kind (head)", (int)c.kind, REPL_FLAT_COST_BLOCK);
+        ASSERT_INT("inner for cost count (per outer iter)", c.count, 4);
+        c = repl_flatten_cost_at_line(3);
+        ASSERT_INT("inner for cost kind (body)", (int)c.kind, REPL_FLAT_COST_BLOCK);
+        ASSERT_INT("inner for cost count (body)", c.count, 4);
+        c = repl_flatten_cost_at_line(4);
+        ASSERT_INT("inner for cost kind (end)", (int)c.kind, REPL_FLAT_COST_BLOCK);
+        ASSERT_INT("inner for cost count (end)", c.count, 4);
+
+        /* The outer-only color line resolves to the outer block. */
+        c = repl_flatten_cost_at_line(1);
+        ASSERT_INT("outer-body line cost kind", (int)c.kind, REPL_FLAT_COST_BLOCK);
+        ASSERT_INT("outer-body line cost count", c.count, 15);
+    }
+
     /* repl_flatten_cursor_polygon: SINGLE_POLYGON overlay-scope resolution.
      * Two GL_QUADS quads (+Y face, -Y face) with comment/color/normal state
      * lines interleaved, mirroring a real cube example so the cursor-line ->
