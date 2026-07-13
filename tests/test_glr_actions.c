@@ -324,13 +324,13 @@ static void test_menu_actions(void) {
     }
 
     /* Scene actions now live in the File menu (Scene menu is a pure
-     * selector). New Scene creates a real empty user-scene slot so the
+     * selector). New Scene creates a fresh user-scene slot so the
      * tab strip reflects it immediately. */
     ASSERT_INT("File New Scene", glr_action_menu_item_activate(GLR_MENU_FILE, GLR_FILE_ITEM_NEW_SCENE), 1);
     ASSERT_INT("active example cleared", repl_state_scenes().active_example_idx, -1);
     ASSERT_TRUE("active user scene created", repl_active_user_scene() >= 0);
-    ASSERT_INT("New Scene clears document",
-               source_document_view().line_count, 0);
+    ASSERT_INT("New Scene seeds display baseline",
+               source_document_view().line_count, 5);
 
     /* Save Scene writes the active named scene's slug; run sandboxed so
      * it cannot touch a repo file. */

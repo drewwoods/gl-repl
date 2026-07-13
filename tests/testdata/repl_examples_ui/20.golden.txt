@@ -105,6 +105,11 @@ void display(void) {
   static float yWobbleFreq = 1.3; // y wobble frequency relative to the base angle
   static float yWobbleRate = 0.6; // y wobble time-rate (animates with t)
   static float yAmp = 0.9; // y wobble amplitude
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
   glClearColor(0.1, 0.1, 0.1, 1);
   // Glow sprites: additive blend + distance-attenuated point size.

@@ -191,16 +191,16 @@ int main(void) {
                 find_init_line("static GLUquadric *g_quadric = NULL;") < 0);
     ASSERT_TRUE("init omits tess init line",
                 find_init_line("  g_tess = gluNewTess();") < 0);
-    ASSERT_TRUE("init has color material enable bootstrap",
-                find_init_line_substr("glEnable(GL_COLOR_MATERIAL);") >= 0);
-    ASSERT_TRUE("init has color material mode bootstrap",
-                find_init_line_substr("glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);") >= 0);
-    ASSERT_TRUE("init has material specular bootstrap",
-                find_init_line_substr("glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR") >= 0);
-    ASSERT_TRUE("init has material shininess bootstrap",
-                find_init_line_substr("glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS") >= 0);
-    ASSERT_TRUE("init has two-side bootstrap",
-                find_init_line_substr("glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);") >= 0);
+    ASSERT_TRUE("init omits editable color material enable",
+                find_init_line_substr("glEnable(GL_COLOR_MATERIAL);") < 0);
+    ASSERT_TRUE("init omits editable color material mode",
+                find_init_line_substr("glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);") < 0);
+    ASSERT_TRUE("init omits editable material specular",
+                find_init_line_substr("glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR") < 0);
+    ASSERT_TRUE("init omits editable material shininess",
+                find_init_line_substr("GL_SHININESS") < 0);
+    ASSERT_TRUE("init omits editable two-side lighting",
+                find_init_line_substr("glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);") < 0);
     ASSERT_TRUE("init has blend enable bootstrap",
                 find_init_line_substr("glEnable(GL_BLEND);") >= 0);
     ASSERT_TRUE("init has blend func bootstrap",
@@ -297,16 +297,10 @@ int main(void) {
                     strstr(buf, "g_tess = gluNewTess();") == NULL);
         ASSERT_TRUE("saved non-tess export omits tess callback line",
                     strstr(buf, "GLU_TESS_EDGE_FLAG") == NULL);
-        const char *color_material_line =
-            strstr(buf, "glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);");
-        const char *init_func = strstr(buf, "\nvoid init(void)");
-        ASSERT_TRUE("saved color material line once",
-                    count_substr(buf, "glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);") == 1);
-        ASSERT_TRUE("saved color material appears inside init()",
-                    color_material_line && init_func &&
-                    color_material_line > init_func);
-        ASSERT_TRUE("saved init light model line once",
-                    count_substr(buf, "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);") == 1);
+        ASSERT_TRUE("saved init omits color material mode",
+                    count_substr(buf, "glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);") == 0);
+        ASSERT_TRUE("saved init omits two-side light model",
+                    count_substr(buf, "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);") == 0);
         ASSERT_TRUE("saved init point attenuation line once",
                     count_substr(buf, "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION") == 1);
     }

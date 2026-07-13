@@ -120,6 +120,12 @@ void display(void) {
       }
     glEnd();
   }
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
+
   glClearColor(0.015, 0.03, 0.07, 1);
   // Everything glows: additive blend with depth WRITES off (reads stay on).
   // glDepthMask(GL_FALSE) is the classic translucency trick - without it the

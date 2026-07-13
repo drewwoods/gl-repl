@@ -43,6 +43,7 @@
 #include "inline_file_prompt.h"
 #include "inline_rename.h"
 #include "input.h"
+#include "repl/load.h"
 #include "reformat.h"
 #include "search.h"
 #include "subsystems/color_picker/color_picker_state.h"
@@ -316,11 +317,18 @@ static void editor_reset_document_to_empty(void) {
 }
 
 void editor_clear_all_cmds(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+
     if (!tutorial_guard_source_change_or_status(0, repl_state_document_count(), 0))
         return;
 
     editor_undo_push_snapshot();
     editor_reset_document_to_empty();
+    if (!repl_load_default_display_baseline(err, sizeof(err), NULL)) {
+        repl_set_status_error(err[0] ? err : "Could not restore display defaults");
+        return;
+    }
+    repl_mark_source_dirty();
     repl_set_status("All commands cleared");
 }
 

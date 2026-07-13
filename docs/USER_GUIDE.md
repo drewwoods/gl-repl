@@ -156,8 +156,13 @@ like a normal editor:
   copied/cut/pasted.
 - **Ctrl+Z** undo, **Ctrl+Y** (or Ctrl+Shift+Z) redo. Undo covers source
   mutations — deletes, pastes, reformat, commits.
-- **Ctrl+D** deletes the current line or selection; **Ctrl+L** clears all
-  commands.
+- **Ctrl+D** deletes the current line or selection; **Ctrl+L** clears the
+  scene and restores the five editable display defaults for color material,
+  two-sided lighting, specular color, and shininess. Delete or comment those
+  lines explicitly when a scene needs different state.
+
+These five defaults are real commands, not hidden setup. They remain visible
+in code-focus mode and run with the rest of the scene every frame.
 
 **Ctrl+F** (or the *search...* menu slot) opens case-insensitive substring
 search over the whole buffer. Type to refine, **Enter** jumps to the next

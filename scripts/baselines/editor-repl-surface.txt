@@ -64,8 +64,13 @@
 # editor commits. This keeps editor insertion/replacement effects local
 # while reusing the same branch validation as the loader/import path.
 #
+# 2026-07-13: input_c bumped +1 for
+# repl_load_default_display_baseline. Clear All owns the editor reset and
+# undo transaction, then asks the REPL loader to restore the five ordinary
+# source commands that replace the former hidden init material state.
+#
 # Ratchet down as migrations land. The plan target
 # (docs/plans/done/editor-demo.md) is ~5 per file.
 
-input_c: 25
+input_c: 26
 commit_c: 29

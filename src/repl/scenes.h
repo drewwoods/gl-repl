@@ -60,10 +60,11 @@ void repl_scenes_enter_transient_scene(void);
  * `repl_scenes_enter_transient_scene` to detach the slot markers. */
 void repl_scenes_reset_for_transient(void);
 
-/* Create an empty, named user-scene slot and make it active. This is the
- * File -> New Scene path: unlike tutorial/transient buffers, it must appear
- * in the scene tab strip immediately. Returns the active slot index, or -1
- * if every slot is full and no workspace-backed LRU eviction is available. */
+/* Create a fresh, named user-scene slot, seed its editable display defaults,
+ * and make it active. This is the File -> New Scene path: unlike
+ * tutorial/transient buffers, it must appear in the scene tab strip
+ * immediately. Returns the active slot index, or -1 if every slot is full
+ * and no workspace-backed LRU eviction is available. */
 int  repl_scenes_create_empty_user_scene(void);
 
 /* User scenes: persistent named snapshots (up to MAX_USER_SCENES slots).
