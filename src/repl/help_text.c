@@ -178,6 +178,30 @@ static const char *const k_lang_sections_tail[] = {
     NULL
 };
 
+/* About tab: attribution for the third-party libraries the build links
+ * against. freeglut (windowing/solids/fonts) and miniaudio (playback)
+ * ship in every build; the web build adds Emscripten (toolchain +
+ * JS windowing) and gl4es (GL -> WebGL2), so those two lines are
+ * compiled in only under __EMSCRIPTEN__. Immortal static strings,
+ * handed to the renderer by pointer like k_tab_overview. */
+static const char *const k_tab_about[] = {
+    "OpenGL Immediate-Mode REPL",
+    "",
+    "  An interactive OpenGL command interpreter: type classic GL",
+    "  calls, watch the geometry build up live, and export a scene",
+    "  as standalone C.",
+    "",
+    "Powered by:",
+    "  freeglut",
+    "  miniaudio",
+#if defined(__EMSCRIPTEN__)
+    "  Emscripten",
+    "  gl4es",
+#endif
+    "",
+    NULL
+};
+
 #define HELP_KEYS_MAX 128
 #define HELP_KEY_LINE_BUF 144
 
@@ -197,7 +221,7 @@ static const char *g_tab_keys[HELP_KEYS_MAX];
 static char        g_cmd_strbuf[HELP_CMD_LINES_MAX][HELP_CMD_LINE_BUF];
 static const char *g_tab_commands[HELP_CMD_LINES_MAX];
 
-static ReplHelpTab g_tabs[3];
+static ReplHelpTab g_tabs[4];
 static ReplHelpContent g_content;
 
 static const char *help_group_header(ReplHelpGroup g) {
@@ -492,6 +516,8 @@ const ReplHelpContent *repl_help_text_build(void) {
     g_tabs[1].lines = g_tab_commands;
     g_tabs[2].label = "Keys";
     g_tabs[2].lines = g_tab_keys;
+    g_tabs[3].label = "About";
+    g_tabs[3].lines = k_tab_about;
 
     g_content.title     = "HELP";
     g_content.tabs      = g_tabs;
