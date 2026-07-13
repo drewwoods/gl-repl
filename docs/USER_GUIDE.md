@@ -747,6 +747,12 @@ The overlay toggles annotate geometry scene-wide:
 - **Auto-normals**: maintains generated `glNormal3f` lines for your
   geometry so lighting works without hand-written normals.
 
+Decluttered label scopes give active edit-guide text priority: vertex labels
+move to a nearby row, or are omitted when the bounded layout has no clear row,
+rather than covering partial-vertex, normal, clip-plane, translate, or rotate
+labels. **At vertex** remains the explicit exact-position mode and bypasses
+this decluttering.
+
 **Single polygon** scope narrows labels and the polygon highlight down to
 just the one primitive your cursor is building, instead of the whole
 `glBegin`/`glEnd` block — handy for a multi-face batch like a cube drawn as

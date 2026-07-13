@@ -25,6 +25,9 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ASSERT_INT(label, got, exp) \
     TEST_ASSERT_INT(&g_harness, label, got, exp)
 
+#define ASSERT_FLOAT(label, got, exp) \
+    TEST_ASSERT_FLOAT_DEFAULT(&g_harness, label, got, exp)
+
 /* ---------------------------------------------------------------------------
  * GL-stub call trace harness.
  *
@@ -1075,6 +1078,172 @@ static void test_sanitize_zero(void) {
     ASSERT_TRUE("sanitize_zero(0.0051f) is 0.0051f", sanitize_zero(0.0051f) == 0.0051f);
 }
 
+static void set_identity(float m[16]) {
+    int i;
+    for (i = 0; i < 16; i++)
+        m[i] = (i % 5) == 0 ? 1.0f : 0.0f;
+}
+
+static void test_guide_label_obstacle_record_and_projection(void) {
+    printf("--- edit_overlays guide label obstacle projection ---\n");
+
+    extern float g_gl_stub_modelview_matrix[16];
+    float identity[16];
+    float ox[GUIDE_LABEL_OBSTACLE_MAX];
+    float oy[GUIDE_LABEL_OBSTACLE_MAX];
+    float ow[GUIDE_LABEL_OBSTACLE_MAX];
+    Render3dGuideLabelSpec label;
+    VertexLabelCtx ctx;
+    int projected;
+
+    set_identity(identity);
+    memcpy(g_gl_stub_modelview_matrix, identity, sizeof(identity));
+    g_gl_stub_modelview_matrix[12] = 0.5f;
+
+    memset(&label, 0, sizeof(label));
+    label.runs[0].font = FONT_MONO;
+    label.runs[0].text = "ab";
+    label.runs[1].font = FONT_TINY;
+    label.runs[1].text = "c";
+    label.run_count = 2;
+
+    guide_label_obstacles_reset();
+    guide_label_obstacles_record(NULL, &label);
+    ASSERT_INT("compound guide label records one obstacle",
+               g_guide_label_obstacles.count, 1);
+    ASSERT_FLOAT("compound obstacle width sums both font runs",
+                 g_guide_label_obstacles.items[0].width, 24.0f);
+
+    /* Change the live stub matrix after recording: projection must use the
+     * saved +0.5 X modelview, not whatever matrix happens to be current now. */
+    memcpy(g_gl_stub_modelview_matrix, identity, sizeof(identity));
+    memset(&ctx, 0, sizeof(ctx));
+    memcpy(ctx.proj, identity, sizeof(identity));
+    ctx.vw = 1024;
+    ctx.vh = 768;
+    projected = project_guide_label_obstacles(
+        &ctx, ox, oy, ow, GUIDE_LABEL_OBSTACLE_MAX);
+    ASSERT_INT("recorded guide obstacle projects on the canonical pass",
+               projected, 1);
+    ASSERT_FLOAT("saved modelview positions projected obstacle X", ox[0], 768.0f);
+    ASSERT_FLOAT("projected obstacle Y", oy[0], 384.0f);
+    ASSERT_FLOAT("projected obstacle keeps measured width", ow[0], 24.0f);
+
+    guide_label_obstacles_reset();
+    projected = project_guide_label_obstacles(
+        &ctx, ox, oy, ow, GUIDE_LABEL_OBSTACLE_MAX);
+    ASSERT_INT("obstacle reset clears the prior subpass", projected, 0);
+
+    label.pos[0] = 5.0f;
+    guide_label_obstacles_record(NULL, &label);
+    projected = project_guide_label_obstacles(
+        &ctx, ox, oy, ow, GUIDE_LABEL_OBSTACLE_MAX);
+    ASSERT_INT("off-screen guide label is not a layout obstacle", projected, 0);
+    guide_label_obstacles_reset();
+}
+
+static void init_test_vertex_label_ctx(VertexLabelCtx *ctx, int scope) {
+    float identity[16];
+    memset(ctx, 0, sizeof(*ctx));
+    set_identity(identity);
+    memcpy(ctx->proj, identity, sizeof(identity));
+    ctx->mode = OVERLAY_VERTEX_LABEL_INDEX;
+    ctx->label_options = scope;
+    ctx->vw = 1024;
+    ctx->vh = 768;
+    ctx->count = 1;
+    ctx->labels[0].num = 0;
+    ctx->labels[0].anchor_x = 512.0f;
+    ctx->labels[0].anchor_y = 384.0f;
+    strcpy(ctx->labels[0].idx, " v0");
+}
+
+static void reset_test_label_sticky(void) {
+    memset(g_label_sticky, 0, sizeof(g_label_sticky));
+    g_label_sticky_frame = 1;
+    g_label_sticky_scope = -1;
+    g_label_sticky_mode = -1;
+}
+
+static void add_identity_guide_obstacle(float sx, float sy, float width) {
+    GuideLabelObstacle *obstacle;
+    float identity[16];
+
+    ASSERT_TRUE("test obstacle capacity",
+                g_guide_label_obstacles.count < GUIDE_LABEL_OBSTACLE_MAX);
+    if (g_guide_label_obstacles.count >= GUIDE_LABEL_OBSTACLE_MAX)
+        return;
+    obstacle = &g_guide_label_obstacles.items[g_guide_label_obstacles.count++];
+    set_identity(identity);
+    memcpy(obstacle->modelview, identity, sizeof(identity));
+    obstacle->pos[0] = sx / 512.0f - 1.0f;
+    obstacle->pos[1] = sy / 384.0f - 1.0f;
+    obstacle->pos[2] = 0.0f;
+    obstacle->width = width;
+}
+
+static void test_vertex_label_guide_obstacle_layout(void) {
+    printf("--- edit_overlays vertex labels avoid guide obstacles ---\n");
+
+    float placed_x[1] = { 0.0f };
+    float placed_y[1] = { 0.0f };
+    float placed_w[1] = { 10.0f };
+    float obstacle_x[1] = { 0.0f };
+    float obstacle_y[1] = { 0.0f };
+    float obstacle_w[1] = { 10.0f };
+    VertexLabelCtx ctx;
+    VertexLabelCtx at_vertex;
+    int row;
+
+    /* A 2 px vertex/vertex overlap is tolerated by the 4 px incumbent
+     * shrink, but the identical guide obstacle remains a strict collision. */
+    ASSERT_INT("incumbent leniency can relax vertex overlap",
+               vertex_label_cand_clashes(
+                   placed_x, placed_y, placed_w, 1,
+                   obstacle_x, obstacle_y, obstacle_w, 0,
+                   8.0f, 0.0f, 10.0f, -VERTEX_LABEL_KEEP_SHRINK), 0);
+    ASSERT_INT("incumbent leniency never relaxes guide overlap",
+               vertex_label_cand_clashes(
+                   placed_x, placed_y, placed_w, 0,
+                   obstacle_x, obstacle_y, obstacle_w, 1,
+                   8.0f, 0.0f, 10.0f, -VERTEX_LABEL_KEEP_SHRINK), 1);
+
+    reset_test_label_sticky();
+    guide_label_obstacles_reset();
+    add_identity_guide_obstacle(512.0f, 384.0f, 32.0f);
+    init_test_vertex_label_ctx(&ctx, OVERLAY_SCOPE_FIRST_INSTANCE);
+    vertex_labels_layout_and_draw(&ctx);
+    ASSERT_INT("vertex label remains drawable beside one guide obstacle",
+               ctx.labels[0].drawn, 1);
+    ASSERT_TRUE("vertex label moves away from the fixed guide label",
+                ctx.labels[0].draw_y != ctx.labels[0].anchor_y);
+
+    at_vertex = ctx;
+    at_vertex.label_options = OVERLAY_SCOPE_AT_VERTEX;
+    at_vertex.labels[0].draw_y = 0.0f;
+    vertex_labels_layout_and_draw(&at_vertex);
+    ASSERT_INT("At vertex still draws through guide obstacles",
+               at_vertex.labels[0].drawn, 1);
+    ASSERT_FLOAT("At vertex preserves the exact anchor",
+                 at_vertex.labels[0].draw_y, at_vertex.labels[0].anchor_y);
+
+    reset_test_label_sticky();
+    guide_label_obstacles_reset();
+    for (row = -VERTEX_LABEL_NUDGE_STEPS;
+         row <= VERTEX_LABEL_NUDGE_STEPS; row++) {
+        add_identity_guide_obstacle(
+            512.0f,
+            384.0f + (float)row *
+                     (VERTEX_LABEL_LINE_H + VERTEX_LABEL_GAP),
+            32.0f);
+    }
+    init_test_vertex_label_ctx(&ctx, OVERLAY_SCOPE_FIRST_INSTANCE);
+    vertex_labels_layout_and_draw(&ctx);
+    ASSERT_INT("label drops when every bounded row is obstructed",
+               ctx.labels[0].drawn, 0);
+    guide_label_obstacles_reset();
+}
+
 /* on_vertex_number_label callback: builds the index / index+pos label text,
  * projects the vertex to screen space, and *collects* the label into the ctx
  * (the actual draw happens later in vertex_labels_layout_and_draw). The stub
@@ -1464,8 +1633,12 @@ static void test_render_normal_vectors_replay_only(void) {
                trace_count_line(&log, "glVertex3f 0 1 0"), 0);
 
     walk.replay_normal_display = REPLAY_NORMAL_DISPLAY_DIRECTION;
+    Render3dGuideLabelSink label_sink;
+    memset(&label_sink, 0, sizeof(label_sink));
+    label_sink.record = guide_label_obstacles_record;
+    guide_label_obstacles_reset();
     trace_begin();
-    edit_overlays_render_normal_vectors(&walk);
+    edit_overlays_render_normal_vectors_with_sink(&walk, &label_sink);
     trace_end(&log);
     ASSERT_INT("replay normal direction label is anchored at the arrow tip",
                trace_count_line(&log, "glRasterPos3f 1 0.35 0"), 1);
@@ -1473,6 +1646,15 @@ static void test_render_normal_vectors_replay_only(void) {
     trace_bitmap_text(&log, label_text, sizeof(label_text));
     ASSERT_TRUE("replay normal direction label uses %.2f precision",
                 strstr(label_text, " n=(0.00, 1.00, 0.00)") != NULL);
+    ASSERT_INT("replay normal direction records one guide obstacle",
+               g_guide_label_obstacles.count, 1);
+    ASSERT_FLOAT("replay normal obstacle uses the arrow-tip X",
+                 g_guide_label_obstacles.items[0].pos[0], 1.0f);
+    ASSERT_FLOAT("replay normal obstacle uses the arrow-tip Y",
+                 g_guide_label_obstacles.items[0].pos[1], 0.35f);
+    ASSERT_TRUE("replay normal obstacle measures both text runs",
+                g_guide_label_obstacles.items[0].width > 0.0f);
+    guide_label_obstacles_reset();
 
     GLCmd rotated[6];
     mk_cmd(&rotated[0], CMD_ROTATEF, -90.0f, 0.0f, 0.0f);
@@ -1883,6 +2065,51 @@ static void test_cursor_guides_render_for_new_transform_line(void) {
                 trace_count_sym(&log, "glBegin") > 0);
 }
 
+static void test_guide_obstacle_store_per_subpass(void) {
+    printf("--- edit_overlays guide obstacle store per subpass ---\n");
+
+    GLCmd unused_cmd;
+    OverlaySnapshotPack pack;
+    const char *input = "glTranslatef(2,0,0)";
+
+    memset(&unused_cmd, 0, sizeof(unused_cmd));
+    memset(&pack, 0, sizeof(pack));
+    pack.walk.program.cmds = &unused_cmd;
+    pack.walk.program.cmd_count = 0;
+    pack.walk.cursor.edit_line_idx = 0;
+    pack.snapshot.show_guides = 1;
+    pack.snapshot.input = input;
+    pack.snapshot.input_len = (int)strlen(input);
+    pack.snapshot.edit_line_idx = 0;
+    pack.snapshot.source_cmd_count = 0;
+    pack.snapshot.flat_program = pack.walk.program;
+    pack.snapshot.xform_guide_mode = RENDER3D_XFORM_GUIDE_FRAME;
+    pack.snapshot.xform_args[0] = 2.0f;
+    pack.snapshot.xform_filled[0] = 1;
+    pack.snapshot.xform_filled[1] = 1;
+    pack.snapshot.xform_filled[2] = 1;
+    pack.snapshot.xform_n_filled = 3;
+    pack.snapshot.alpha_scale = 1.0f;
+    pack.vertex_label_mode = OVERLAY_VERTEX_LABEL_INDEX;
+    pack.overlay_scope = OVERLAY_SCOPE_FIRST_INSTANCE;
+
+    guide_label_obstacles_reset();
+    edit_overlays_post_overlays(&pack);
+    ASSERT_INT("active subpass rebuilds the translate-label obstacle",
+               g_guide_label_obstacles.count, 1);
+
+    pack.snapshot.show_guides = 0;
+    edit_overlays_post_overlays(&pack);
+    ASSERT_INT("next subpass clears stale guide-label obstacles",
+               g_guide_label_obstacles.count, 0);
+
+    pack.snapshot.show_guides = 1;
+    pack.overlay_scope = OVERLAY_SCOPE_AT_VERTEX;
+    edit_overlays_post_overlays(&pack);
+    ASSERT_INT("At vertex bypass does not collect guide-label obstacles",
+               g_guide_label_obstacles.count, 0);
+}
+
 int main(void) {
     printf("--- edit_overlays tests ---\n");
     test_outline_begin_mode_has_overlay();
@@ -1902,6 +2129,8 @@ int main(void) {
     test_cursor_guide_snapshot_with_flat_args();
     test_mat4_math();
     test_sanitize_zero();
+    test_guide_label_obstacle_record_and_projection();
+    test_vertex_label_guide_obstacle_layout();
     test_on_vertex_number_label_callback();
     test_overlay_scope();
     test_single_polygon_label_scope();
@@ -1914,6 +2143,7 @@ int main(void) {
     test_cursor_guides_render_for_unterminated_begin();
     test_cursor_guides_render_for_raster_pos();
     test_cursor_guides_render_for_new_transform_line();
+    test_guide_obstacle_store_per_subpass();
 
     return test_harness_report(&g_harness, "test_edit_overlays");
 }
