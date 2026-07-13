@@ -1821,6 +1821,9 @@ clean: ## Remove built binaries and object files.
 		gl-repl.app packaging/macos/gl-repl.icns packaging/macos/gl-repl.iconset \
 		callgraph*.mmd callgraph*.dot callgraph*.html callgrind.out*
 
+really-clean: clean freeglut-clean ## clean + drop the vendored freeglut CMake build (also clears its stale SDK/framework cache).
+.PHONY: really-clean
+
 glut: ## Rebuild using the Apple GLUT framework instead of freeglut.
 	$(MAKE) all \
 		BUILD="$(BUILD)" \
