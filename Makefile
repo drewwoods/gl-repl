@@ -1643,8 +1643,26 @@ test-detailed: $(TEST_BINS) ## Run the full test suite with verbose example expo
 	TEST_JOBS="$(TEST_JOBS)" \
 	bash scripts/run-tests.sh $(TEST_RUNNER_CASES)
 
+# Run these from the recipe instead of declaring them as prerequisites: the
+# default -j build would fan them out and wait for concurrent checks after one
+# has already failed.
+TEST_STUBS_PRECHECKS = \
+	check-doc-links \
+	check-user-guide-keymap \
+	check-trailing-whitespace \
+	check-examples-catalog \
+	check-formatted \
+	check-gl-boundaries \
+	check-layer-coupling \
+	check-state-ownership
+
 test-stubs: NO_SAN ?= 1
-test-stubs: check-doc-links check-user-guide-keymap check-trailing-whitespace check-examples-catalog check-formatted check-gl-boundaries check-layer-coupling check-state-ownership ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs.
+
+test-stubs: ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs.
+	@set -e; \
+	for target in $(TEST_STUBS_PRECHECKS); do \
+		$(MAKE) --no-print-directory $$target; \
+	done
 	$(MAKE) test USE_GL_STUBS=1 NO_SAN=$(NO_SAN)
 
 test-msan: ## Build and run stubbed tests with MemorySanitizer.
