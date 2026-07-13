@@ -17,7 +17,7 @@
 #include "ui/app/state.h"
 #include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
-#include "render3d/lights.h"   /* render3d_lights_apply_theme + eye-space init */
+#include "render3d/lights.h"   /* render3d_lights_apply_theme */
 #include "render3d/postprocess_filter.h"
 
 typedef struct {

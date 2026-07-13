@@ -45,10 +45,9 @@ typedef struct {
     GLenum   id;         /* GL_LIGHT0 .. GL_LIGHT3 */
     int      enabled;
     /* True when pos[] is interpreted in eye (camera-relative) space.
-     * The runtime pushes POSITION for these slots once at identity
-     * modelview, and the exporter routes their POSITION line to init()
-     * instead of display(). Set by render3d_lights_apply_theme based on
-     * the chosen theme. */
+     * The runtime submits these positions with an identity modelview, and the
+     * exporter places their POSITION line in display() before the camera
+     * transform. Set by render3d_lights_apply_theme based on the theme. */
     int      pos_is_eye_space;
     float    pos[4];     /* xyz + w (0=directional, 1=positional) */
     float    diffuse[4];

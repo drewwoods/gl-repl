@@ -86,10 +86,10 @@ void display(void) {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glLoadIdentity();
   glPushAttrib(GL_ALL_ATTRIB_BITS);
-  float A[16], B[16], C[16];
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
+--- lights_pre_camera ---
 --- camera ---
   // camera
   glTranslatef(0.0000f, 0.0000f, -10.5000f);
@@ -97,6 +97,7 @@ void display(void) {
   glRotatef(-18.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -1.3500f, -0.0000f);
 --- header_post ---
+  float A[16], B[16], C[16];
 --- source ---
   static float th, dd, blink, ink; // angle; expanding-pulse distance; beacon blink; brightness multiplier on the base ink color
 

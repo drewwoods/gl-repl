@@ -109,8 +109,23 @@ int main(void) {
         ASSERT_TRUE(label, found);
     }
 
-    /* Display-section lines should land between `void display(void) {` and
-     * the closing `glPopAttrib`. */
+    /* Pre-camera and post-camera position lines should both land in
+     * display(), on their respective sides of the camera transforms. */
+    int n_pre = repl_export_lights_pre_camera_line_count();
+    for (int i = 0; i < n_pre; i++) {
+        char line[256];
+        char expected[256];
+        repl_export_lights_pre_camera_line(i, line, sizeof(line));
+        expected_export_line(expected, sizeof(expected), line);
+        const char *needle = expected;
+        while (*needle == ' ') needle++;
+        char label[512];
+        snprintf(label, sizeof(label),
+                 "pre-camera line %d appears in display() body: %s", i, needle);
+        ASSERT_TRUE(label, substring_in_window(
+            text, "void display(void) {", "glPopAttrib();", needle));
+    }
+
     int n_disp = repl_export_lights_display_line_count();
     ASSERT_TRUE("display line count > 0", n_disp > 0);
     for (int i = 0; i < n_disp; i++) {
@@ -132,8 +147,8 @@ int main(void) {
 
     /* Headlight round-trip: switch theme to HEADLIGHT (mirrors what a
      * saved `@cfg light_theme = HEADLIGHT` load triggers), re-export,
-     * and check that slot-0 POSITION moves from display() to init()
-     * while slots 1..3 stay in display(). */
+     * and check that slot-0 POSITION is in display() before the camera while
+     * slots 1..3 remain after it. */
     glr_config_set(GLR_CONFIG_LIGHT_THEME, LIGHT_THEME_HEADLIGHT);
     const char *path_hl = "/tmp/repl_export_lights_headlight.c";
     repl_export_save_output(path_hl, source_document_view(), NULL);
@@ -149,17 +164,26 @@ int main(void) {
         int slot1_in_display = substring_in_window(
             text_hl, "void display(void) {", "glPopAttrib();",
             "glLightfv(GL_LIGHT1, GL_POSITION");
-        ASSERT_TRUE("headlight: GL_LIGHT0 POSITION lives in init()",
-                    slot0_in_init);
-        ASSERT_TRUE("headlight: GL_LIGHT0 POSITION absent from display()",
-                    !slot0_in_display);
+        const char *slot0 = strstr(text_hl,
+            "glLightfv(GL_LIGHT0, GL_POSITION");
+        const char *camera = strstr(text_hl, "  glTranslatef(");
+        const char *slot1 = strstr(text_hl,
+            "glLightfv(GL_LIGHT1, GL_POSITION");
+        ASSERT_TRUE("headlight: GL_LIGHT0 POSITION absent from init()",
+                    !slot0_in_init);
+        ASSERT_TRUE("headlight: GL_LIGHT0 POSITION lives in display()",
+                    slot0_in_display);
+        ASSERT_TRUE("headlight: GL_LIGHT0 POSITION precedes camera",
+                    slot0 && camera && slot0 < camera);
         ASSERT_TRUE("headlight: GL_LIGHT1 POSITION still in display()",
                     slot1_in_display);
+        ASSERT_TRUE("headlight: GL_LIGHT1 POSITION follows camera",
+                    slot1 && camera && slot1 > camera);
         free(text_hl);
     }
 
     /* Reload the headlight-themed file into a fresh REPL state, then
-     * re-export — the same slot-0-in-init invariant must hold, proving
+     * re-export — the same slot-0-before-camera invariant must hold, proving
      * that @cfg drives the cfg bridge → glr_config_set hook →
      * render3d_lights_apply_theme path on load. */
     glr_ctrl_reset_all();
@@ -177,10 +201,15 @@ int main(void) {
         int slot0_in_display = substring_in_window(
             text_rt, "void display(void) {", "glPopAttrib();",
             "glLightfv(GL_LIGHT0, GL_POSITION");
-        ASSERT_TRUE("round-trip: GL_LIGHT0 POSITION still in init()",
-                    slot0_in_init);
-        ASSERT_TRUE("round-trip: GL_LIGHT0 POSITION still absent from display()",
-                    !slot0_in_display);
+        const char *slot0 = strstr(text_rt,
+            "glLightfv(GL_LIGHT0, GL_POSITION");
+        const char *camera = strstr(text_rt, "  glTranslatef(");
+        ASSERT_TRUE("round-trip: GL_LIGHT0 POSITION absent from init()",
+                    !slot0_in_init);
+        ASSERT_TRUE("round-trip: GL_LIGHT0 POSITION still in display()",
+                    slot0_in_display);
+        ASSERT_TRUE("round-trip: GL_LIGHT0 POSITION still precedes camera",
+                    slot0 && camera && slot0 < camera);
         free(text_rt);
     }
 

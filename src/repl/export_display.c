@@ -316,14 +316,25 @@ static void emit_export_display_begin(FILE *f) {
     /* Emit render state configuration lines (lighting, depth, etc). */
     for (int state_line_idx = 0; state_line_idx < RENDER_STATE_LINE_COUNT; state_line_idx++)
         export_write_c89_line(f, g_render_state_lines[state_line_idx]);
+    /* Eye-space positions are submitted with the identity modelview, once per
+     * frame, before the camera transform is applied. */
+    {
+        int n_pos = repl_export_lights_pre_camera_line_count();
+        for (int pos_idx = 0; pos_idx < n_pos; pos_idx++) {
+            char line[MAX_LINE_LEN];
+            repl_export_lights_pre_camera_line(pos_idx, line, sizeof(line));
+            export_write_c89_line(f, line);
+        }
+    }
     if (g_camera_comment_line[0])
         export_write_c89_line(f, g_camera_comment_line);
     emit_export_cam_lines(f);
     /* Light positions are set after the camera transforms so
      * glLightfv(GL_POSITION) snapshots the post-camera modelview and
      * lights stay anchored in world space as the camera orbits. The
-     * non-positional light state (colors + baseline glDisable) is
-     * emitted into init() — see emit_export_init_section_to_file.
+     * Eye-space positions were emitted above, before the camera. The
+     * non-positional light state (colors + baseline glDisable) is emitted
+     * into init() — see emit_export_init_section_to_file.
      *
      * Lights are emitted before g_header_post to match the panel's
      * rendering order; both consumers walk: display_header →

@@ -1108,11 +1108,10 @@ void glr_cfg_cycle_row(int row, int delta) {
         repl_set_status(glr_config_get(GLR_CONFIG_POINT_ATTENUATION) ? "Point attenuation: ON"
                                                                   : "Point attenuation: OFF");
     } else if (item->key == GLR_CONFIG_LIGHT_THEME) {
-        /* render3d_lights_apply_theme + eye-space init already ran inside
-         * glr_config_set above (so @cfg-driven theme loads get the
-         * same treatment). The cycle handler just needs to re-apply
-         * the init bootstrap so the exporter / code-panel light lines
-         * pick up the new positions and colors. */
+        /* render3d_lights_apply_theme already ran inside glr_config_set above
+         * (so @cfg-driven theme loads get the same treatment). The cycle
+         * handler just needs to re-apply the init bootstrap so the exporter /
+         * code-panel light lines pick up the new positions and colors. */
         repl_apply_init_bootstrap();
         snprintf(cfg_status_buf, sizeof(cfg_status_buf), "%s: %s",
                  glr_config_item_display_label(item),

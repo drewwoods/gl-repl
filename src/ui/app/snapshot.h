@@ -199,6 +199,8 @@ typedef struct UiRenderSnapshot {
 
     TutorialFadeView            tutorial_fade;
 
+    char                        lights_pre_camera_lines[UI_LIGHTS_DISPLAY_MAX][MAX_LINE_LEN];
+    int                         lights_pre_camera_count;
     char                        lights_display_lines[UI_LIGHTS_DISPLAY_MAX][MAX_LINE_LEN];
     int                         lights_display_count;
 

@@ -442,13 +442,20 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
     /* Dump display() opening lines (shared with export). */
     for (int line_idx = 0; g_display_header[line_idx]; line_idx++)
         fprintf(dst, "%s\n", g_display_header[line_idx]);
-    /* Scratch decoration follows the display() opening — panel-only. */
-    fprintf(dst, "%s\n", REPL_CODE_PANEL_SCRATCH_DECL_LINE);
-
     fprintf(dst, "--- render_state ---\n");
     /* Dump render state configuration. */
     for (int state_line_idx = 0; state_line_idx < RENDER_STATE_LINE_COUNT; state_line_idx++)
         fprintf(dst, "%s\n", g_render_state_lines[state_line_idx]);
+
+    fprintf(dst, "--- lights_pre_camera ---\n");
+    {
+        int n = repl_export_lights_pre_camera_line_count();
+        for (int i = 0; i < n; i++) {
+            char line[MAX_LINE_LEN];
+            repl_export_lights_pre_camera_line(i, line, sizeof(line));
+            fprintf(dst, "%s\n", line);
+        }
+    }
 
     fprintf(dst, "--- camera ---\n");
     /* Dump the optional authored heading plus camera transformation lines. */
@@ -461,6 +468,8 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
     /* Dump post-header lines (light setup, etc). */
     for (int line_idx = 0; g_header_post[line_idx]; line_idx++)
         fprintf(dst, "%s\n", g_header_post[line_idx]);
+    /* Panel-only scratch declaration, adjacent to the source that uses it. */
+    fprintf(dst, "%s\n", REPL_CODE_PANEL_SCRATCH_DECL_LINE);
 
     fprintf(dst, "--- source ---\n");
     /* Dump all valid user commands. */

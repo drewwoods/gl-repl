@@ -208,12 +208,13 @@ static int repl_code_panel_header_row_count(const UiRenderSnapshot *snap,
         rows += repl_code_panel_row_count(snap, g_header_pre[i], text_x, panel_w);
     for (int i = 0; g_display_header[i]; i++)
         rows += repl_code_panel_row_count(snap, g_display_header[i], text_x, panel_w);
-    rows += repl_code_panel_row_count(snap, REPL_CODE_PANEL_SCRATCH_DECL_LINE,
-                                      text_x, panel_w);
     for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
         rows += repl_code_panel_row_count(snap,
                                           import_export.render_state_lines[i],
                                           text_x, panel_w);
+    for (int i = 0; i < snap->lights_pre_camera_count; i++)
+        rows += repl_code_panel_row_count(
+            snap, snap->lights_pre_camera_lines[i], text_x, panel_w);
     if (import_export.camera_comment_line[0])
         rows += repl_code_panel_row_count(snap,
                                           import_export.camera_comment_line,
@@ -229,6 +230,8 @@ static int repl_code_panel_header_row_count(const UiRenderSnapshot *snap,
     }
     for (int i = 0; g_header_post[i]; i++)
         rows += repl_code_panel_row_count(snap, g_header_post[i], text_x, panel_w);
+    rows += repl_code_panel_row_count(snap, REPL_CODE_PANEL_SCRATCH_DECL_LINE,
+                                      text_x, panel_w);
     return rows;
 }
 
@@ -1474,17 +1477,17 @@ static void repl_code_panel_add_header_rows(ReplCodePanelBuilder *builder) {
         builder, g_display_header,
         repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
 
-    /* Scratch decoration row: panel-only (the exporter emits the
-     * arrays as file-scope statics on demand instead). */
-    repl_code_panel_add_static_row(
-        builder, REPL_CODE_PANEL_SCRATCH_DECL_LINE,
-        repl_code_panel_category_color(CMD_VAR_DECLARE));
-
     repl_code_panel_add_static_buffer_lines(
         builder,
         RENDER_STATE_LINE_COUNT,
         sizeof(snap->import_export.render_state_lines[0]),
         snap->import_export.render_state_lines,
+        repl_code_panel_rgb(REPL_CODE_PANEL_STATE_RGB));
+    repl_code_panel_add_static_buffer_lines(
+        builder,
+        snap->lights_pre_camera_count,
+        sizeof(snap->lights_pre_camera_lines[0]),
+        snap->lights_pre_camera_lines,
         repl_code_panel_rgb(REPL_CODE_PANEL_STATE_RGB));
     if (snap->import_export.camera_comment_line[0]) {
         repl_code_panel_add_static_row(
@@ -1507,6 +1510,13 @@ static void repl_code_panel_add_header_rows(ReplCodePanelBuilder *builder) {
     repl_code_panel_add_static_null_terminated_lines(
         builder, g_header_post,
         repl_code_panel_rgb(REPL_CODE_PANEL_CHROME_RGB));
+
+    /* Scratch decoration row: panel-only (the exporter emits the arrays as
+     * file-scope statics on demand instead). Keep it adjacent to the user
+     * source so its role is clear. */
+    repl_code_panel_add_static_row(
+        builder, REPL_CODE_PANEL_SCRATCH_DECL_LINE,
+        repl_code_panel_category_color(CMD_VAR_DECLARE));
 }
 
 static void repl_code_panel_add_footer_rows(ReplCodePanelBuilder *builder) {
