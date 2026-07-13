@@ -129,7 +129,7 @@ static void test_help_tab_actions(void) {
     editor_help_session_set_tab(0);
     editor_help_session_set_scroll(50);
 
-    /* Tabs: Overview(0) -> Commands(1) -> Keys(2). */
+    /* Tabs: Overview(0) -> Commands(1) -> Keys(2) -> About(3). */
     glr_action_help_tab_next();
     ASSERT_INT("help tab next moves to 1", editor_help_session_tab_idx(), 1);
     ASSERT_INT("help tab next resets scroll", editor_help_session_scroll(), 0);
@@ -137,14 +137,20 @@ static void test_help_tab_actions(void) {
     glr_action_help_tab_next();
     ASSERT_INT("help tab next moves to 2", editor_help_session_tab_idx(), 2);
 
+    glr_action_help_tab_next();
+    ASSERT_INT("help tab next moves to 3", editor_help_session_tab_idx(), 3);
+
     editor_help_session_set_scroll(30);
     glr_action_help_tab_next();
-    ASSERT_INT("help tab next stays at 2 (max)", editor_help_session_tab_idx(), 2);
+    ASSERT_INT("help tab next stays at 3 (max)", editor_help_session_tab_idx(), 3);
     ASSERT_INT("help tab next at max keeps scroll", editor_help_session_scroll(), 30);
 
     glr_action_help_tab_prev();
-    ASSERT_INT("help tab prev moves to 1", editor_help_session_tab_idx(), 1);
+    ASSERT_INT("help tab prev moves to 2", editor_help_session_tab_idx(), 2);
     ASSERT_INT("help tab prev resets scroll", editor_help_session_scroll(), 0);
+
+    glr_action_help_tab_prev();
+    ASSERT_INT("help tab prev moves to 1", editor_help_session_tab_idx(), 1);
 
     glr_action_help_tab_prev();
     ASSERT_INT("help tab prev moves to 0", editor_help_session_tab_idx(), 0);
