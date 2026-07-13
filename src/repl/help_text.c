@@ -35,6 +35,13 @@ void repl_help_text_install_fkey_provider(const ReplHelpFkeyProvider *provider) 
 #define _HELP_STR2(x) #x
 #define _HELP_STR(x)  _HELP_STR2(x)
 
+/* Leading byte that marks a titled divider row: ui_tabbed_overlay draws
+ * it as an accent label + a GL rule out to the right edge (see the 0x13
+ * branch there), so the marker glyph never renders as text. Octal \023
+ * == 0x13 (DC3) — octal caps at 3 digits, so the following label's
+ * letters can't extend the escape the way a \x13 hex escape would. */
+#define HELP_SEP "\023"
+
 /* Overview tab: orientation for a first-time user — what the program
  * is, what each region of the window is, what the menu bar does, and
  * where to look next. Static/immortal strings (handed to the renderer
@@ -350,7 +357,7 @@ const ReplHelpContent *repl_help_text_build(void) {
         g_tab_commands[HELP_CMD_LINES_MAX - 1] = NULL;
 
     int nk = 0;
-    nk = key_emit(nk, "----- Editor -----------------------------------------");
+    nk = key_emit(nk, HELP_SEP "Editor");
     nk = key_emit(nk, "Editing:");
     nk = key_emit(nk, "  ;                    \tCommit current line");
     nk = key_emit(nk, "  Enter                \tInsert new line");
@@ -406,7 +413,7 @@ const ReplHelpContent *repl_help_text_build(void) {
     nk = key_emit_binding(nk, "", KM_KEY(GLR_ESCAPE), KM_MODS(GLR_ESCAPE), 0, "",
                           "Clear input / close overlay");
     nk = key_emit(nk, "");
-    nk = key_emit(nk, "----- 3D Scene ---------------------------------------");
+    nk = key_emit(nk, HELP_SEP "3D Scene");
     nk = key_emit(nk, "Camera:");
     nk = key_emit(nk, "  Left-drag            \tOrbit");
     nk = key_emit(nk, "  Right-drag           \tPan (XZ)");
@@ -465,6 +472,7 @@ const ReplHelpContent *repl_help_text_build(void) {
     nk = key_emit_binding(nk, "", KM_KEY(GLR_LIGHT_INDICATORS), KM_MODS(GLR_LIGHT_INDICATORS), 0, "",
                           "Toggle light indicators");
     nk = key_emit(nk, "");
+    nk = key_emit(nk, HELP_SEP "Interface & Audio");
     nk = key_emit(nk, "Interface:");
     nk = key_emit(nk, "  Statusbar buttons    \tUndo/redo, copy/cut, trash, focus/help");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_CONFIG_MENU), KM_MODS(GLR_CONFIG_MENU), 0, "", "Open Config menu");

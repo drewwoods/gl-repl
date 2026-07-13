@@ -238,6 +238,30 @@ void ui_tabbed_overlay_render(const UiOverlayState *in) {
         if (ty < hy + pad_bot - LINE_H) break;
         if (text[i][0] == '\0') continue;
 
+        /* Titled divider: a leading 0x13 (DC3) byte marks a GL-drawn
+         * section separator rather than a text line — the label at the
+         * left in accent, then a thin rule out to the right edge. The
+         * marker byte itself never draws. Used to group the Keys tab
+         * (Editor / 3D Scene / Interface). */
+        if ((unsigned char)text[i][0] == 0x13) {
+            const char *label = text[i] + 1;
+            int label_len = (int)strlen(label);
+            ui_clr_a(UI_TOK_ACCENT, 0.95f);
+            gl2d_draw_string((float)tx, (float)ty, label, FONT_SMALL);
+            /* Rule from just past the label to the right edge, tinted
+             * with the accent so it reads as one titled divider. y is
+             * the glyph baseline, so nudge up ~1/3 the cap height to
+             * cross the label's vertical midline. */
+            float rule_x0 = (float)(tx + (label_len ? label_len * FONT_SMALL_W + 8 : 0));
+            float rule_x1 = (float)(hx + hw - 14);
+            float rule_y  = (float)ty + (float)FONT_SMALL_H * 0.34f;
+            if (rule_x1 > rule_x0) {
+                ui_clr_a(UI_TOK_ACCENT, 0.35f);
+                glRectf(rule_x0, rule_y, rule_x1, rule_y + 1.0f);
+            }
+            continue;
+        }
+
         /* '\t' marks the left/right column boundary */
         const char *tab = strchr(text[i], '\t');
         if (tab) {
