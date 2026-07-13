@@ -860,13 +860,184 @@ static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
     }
 }
 
+/* Find the CMD_FUNC_DEF for funcN and copy out its parameter names.
+ * parse_repl_func_signature resolves both bare `funcN(...)` headers and
+ * custom `NAME(...)` aliases (via the live alias table) to a slot number,
+ * so matching on def_fn works for either form. Returns 1 on a match. */
+static int replay_find_func_params(int fn,
+                                   char names[][REPL_PREDEF_NAME_MAX],
+                                   int max_names, int *count) {
+    const GLCmd *doc = repl_state_document_cmds();
+    int n = repl_state_document_count();
+
+    for (int i = 0; i < n; i++) {
+        int def_fn = -1;
+        int param_count = 0;
+        if (!doc[i].valid || doc[i].type != CMD_FUNC_DEF)
+            continue;
+        if (parse_repl_func_signature(replay_document_text(i), &def_fn,
+                                      names, max_names, &param_count) &&
+            def_fn == fn) {
+            if (count)
+                *count = param_count;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* Resolve a funcN call site to " // name(v0, v1, ...)" showing the
+ * arguments the current (most recent at or before replay_pc) invocation
+ * was called with. Reads the resolved param values straight off an inlined
+ * body flat command — flatten binds each param to its evaluated argument
+ * (flatten_call), so this stays correct even when the argument expressions
+ * reference caller-scope loop vars or predefs that a param happens to
+ * shadow by name. The call name is copied verbatim from the source so an
+ * alias renders as its own name. Returns 1 when a comment was written. */
+static int build_replay_call_inline_comment(int cmd_idx, char *out, int out_size) {
+    ReplayRuntimeState replay = replay_state_view();
+    const GLCmd *doc = repl_state_document_cmds();
+    const GLCmd *flat_cmds = repl_state_flat_program_cmds();
+    const FlatCmdLocalVars *local_vars = repl_state_flat_program_local_vars();
+    char param_names[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
+    int param_count = 0;
+    int flat_count = repl_state_flat_program_count();
+    int scan_from = (replay.pc < flat_count ? replay.pc : flat_count);
+    int fn;
+    int rep = -1;
+    int oi;
+
+    if (!out || out_size <= 0)
+        return 0;
+    out[0] = '\0';
+
+    fn = (int)doc[cmd_idx].args[0];
+    if (!replay_find_func_params(fn, param_names, MAX_EXPR_VARS, &param_count) ||
+        param_count <= 0)
+        return 0;
+
+    /* Most recent inlined body command expanded from this exact call site. */
+    for (int j = scan_from - 1; j >= 0; j--) {
+        if (flat_cmds[j].valid && flat_cmds[j].call_src_cmd_idx == cmd_idx) {
+            rep = j;
+            break;
+        }
+    }
+    if (rep < 0)
+        return 0;
+
+    {
+        const char *src = skip_leading_ws(replay_document_text(cmd_idx));
+        const char *paren = strchr(src, '(');
+        int nlen;
+        if (!paren)
+            return 0;
+        nlen = (int)(paren - src);
+        while (nlen > 0 && isspace((unsigned char)src[nlen - 1]))
+            nlen--;
+        oi = snprintf(out, out_size, " // %.*s(", nlen, src);
+    }
+
+    for (int p = 0; p < param_count && oi < out_size - 1; p++) {
+        int vi = visible_var_index(local_vars[rep].vars,
+                                   local_vars[rep].num_vars, param_names[p]);
+        float v = (vi >= 0) ? local_vars[rep].vars[vi].value : 0.0f;
+        oi += snprintf(out + oi, out_size - oi, "%s%g", p ? ", " : "", v);
+    }
+    if (oi < out_size - 1)
+        snprintf(out + oi, out_size - oi, ")");
+    return 1;
+}
+
+static int expr_text_has_ident(const char *s) {
+    for (; s && *s; s++)
+        if (isalpha((unsigned char)*s) || *s == '_')
+            return 1;
+    return 0;
+}
+
+/* Resolve a for-loop header to " // i = <iter>, n = <limit>".
+ *   - iteration: the loop var's current value, shown only while the current
+ *     replay position sits inside this loop's body (so it is genuinely live).
+ *   - limit: the end bound, shown when it is a var-bearing expression,
+ *     resolved against the current step's runtime snapshot. A literal bound
+ *     (e.g. `for(i, 0, 10)`) adds no limit — the text already shows it.
+ * Returns 1 when a comment was written. */
+static int build_replay_for_inline_comment(int cmd_idx, char *out, int out_size) {
+    ReplayRuntimeState replay = replay_state_view();
+    const FlatCmdLocalVars *local_vars = repl_state_flat_program_local_vars();
+    char var_name[REPL_PREDEF_NAME_MAX];
+    char args_text[MAX_LINE_LEN];
+    char bounds[3][MAX_LINE_LEN];
+    int nbounds;
+    int for_end;
+    int cur_flat;
+    int have_iter = 0;
+    int have_limit = 0;
+    float iter_val = 0.0f;
+    float limit_val = 0.0f;
+    const char *end_expr = NULL;
+    int oi;
+
+    if (!out || out_size <= 0)
+        return 0;
+    out[0] = '\0';
+
+    if (!extract_for_args_text(replay_document_text(cmd_idx),
+                               var_name, sizeof(var_name),
+                               args_text, sizeof(args_text)) ||
+        !var_name[0])
+        return 0;
+
+    for_end = repl_source_scope_find_block_end(cmd_idx);
+    cur_flat = replay_current_flat_cmd();
+
+    /* Iteration: current line must be inside this loop for the var to be live. */
+    if (cur_flat >= 0 && replay.src_line_idx > cmd_idx &&
+        replay.src_line_idx < for_end) {
+        int vi = visible_var_index(local_vars[cur_flat].vars,
+                                   local_vars[cur_flat].num_vars, var_name);
+        if (vi >= 0) {
+            iter_val = local_vars[cur_flat].vars[vi].value;
+            have_iter = 1;
+        }
+    }
+
+    /* Limit: resolve the end bound when it references a variable. */
+    nbounds = split_top_level_args(args_text, bounds, 3);
+    if (nbounds >= 2)
+        end_expr = skip_leading_ws(bounds[1]);
+    if (cur_flat >= 0 && end_expr && expr_text_has_ident(end_expr)) {
+        ReplPredefSnapshot predef;
+        float scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
+        memset(&predef, 0, sizeof(predef));
+        if (replay_load_runtime_state_for(replay.src_line_idx, cur_flat,
+                                          &predef, scratch) &&
+            replay_eval_expr_with_state(cur_flat, end_expr, &predef, scratch,
+                                        &limit_val))
+            have_limit = 1;
+    }
+
+    if (!have_iter && !have_limit)
+        return 0;
+
+    oi = snprintf(out, out_size, " // ");
+    if (have_iter)
+        oi += snprintf(out + oi, out_size - oi, "%s = %g", var_name, iter_val);
+    if (have_limit && oi < out_size - 1)
+        oi += snprintf(out + oi, out_size - oi, "%s%s = %g",
+                       have_iter ? ", " : "", end_expr, limit_val);
+    return 1;
+}
+
 int replay_code_panel_get_command_display_text(SourceTextView text,
                                                     int cmd_idx,
                                                     char *out, int out_size) {
     ReplayRuntimeState replay = replay_state_view();
     s_replay_text_view = text;
-    int flat_idx;
     char comment[REPL_REPLAY_COMMENT_BUF];
+    CmdType type;
+    int has_vars;
 
     if (!out || out_size <= 0)
         return 0;
@@ -879,24 +1050,37 @@ int replay_code_panel_get_command_display_text(SourceTextView text,
 
     snprintf(out, out_size, "%s", base);
 
-    if (!replay.active ||
-        !replay.expand_args ||
-        !repl_state_document_cmds()[cmd_idx].has_vars)
+    if (!replay.active || !replay.expand_args)
         return 1;
 
-    if (repl_state_document_cmds()[cmd_idx].type != CMD_VAR_ASSIGN &&
-        repl_state_document_cmds()[cmd_idx].type != CMD_SCRATCH_ASSIGN)
-        return 1;
+    type = repl_state_document_cmds()[cmd_idx].type;
+    has_vars = repl_state_document_cmds()[cmd_idx].has_vars;
+    comment[0] = '\0';
 
-    flat_idx = find_replay_assignment_flat_cmd(cmd_idx);
-    if (flat_idx < 0)
+    if (type == CMD_VAR_ASSIGN || type == CMD_SCRATCH_ASSIGN) {
+        int flat_idx;
+        if (!has_vars)
+            return 1;
+        flat_idx = find_replay_assignment_flat_cmd(cmd_idx);
+        if (flat_idx < 0)
+            return 1;
+        build_replay_assignment_inline_comment(cmd_idx, flat_idx,
+                                               comment, sizeof(comment));
+    } else if (type == CMD_CALL) {
+        /* Literal-arg calls resolve to their own text — nothing to add. */
+        if (!has_vars)
+            return 1;
+        build_replay_call_inline_comment(cmd_idx, comment, sizeof(comment));
+    } else if (type == CMD_FOR_BEGIN) {
+        /* No has_vars gate: the loop variable is dynamic even when the
+         * bounds are literals, so the iteration readout is still useful. */
+        build_replay_for_inline_comment(cmd_idx, comment, sizeof(comment));
+    } else {
         return 1;
-
-    if (build_replay_assignment_inline_comment(cmd_idx, flat_idx,
-                                               comment, sizeof(comment)) &&
-        comment[0]) {
-        snprintf(out, out_size, "%s%s", base, comment);
     }
+
+    if (comment[0])
+        snprintf(out, out_size, "%s%s", base, comment);
 
     return 1;
 }
