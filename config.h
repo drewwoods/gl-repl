@@ -230,7 +230,7 @@
  * compromise that keeps outlines visible in dense scenes while still avoiding
  * z-fighting on most edges. But instead bump the UNITS to -1000*/
 #ifndef REPL_OUTLINE_POLYGON_OFFSET_FACTOR
-#define REPL_OUTLINE_POLYGON_OFFSET_FACTOR (-0.1f)
+#define REPL_OUTLINE_POLYGON_OFFSET_FACTOR (0.1f)
 //#define REPL_OUTLINE_POLYGON_OFFSET_FACTOR (-2.0f)
 #endif
 #ifndef REPL_OUTLINE_POLYGON_OFFSET_UNITS
