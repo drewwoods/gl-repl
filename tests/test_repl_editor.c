@@ -251,11 +251,17 @@ static int code_panel_header_row_count(void) {
         rows += test_code_panel_row_count_for_text(g_header_pre[i], text_x, panel_w);
     for (int i = 0; g_display_header[i]; i++)
         rows += test_code_panel_row_count_for_text(g_display_header[i], text_x, panel_w);
-    rows += test_code_panel_row_count_for_text(REPL_CODE_PANEL_SCRATCH_DECL_LINE,
-                                               text_x, panel_w);
     for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
         rows += test_code_panel_row_count_for_text(g_render_state_lines[i],
                                                    text_x, panel_w);
+    {
+        char line[MAX_LINE_LEN];
+        int n = repl_export_lights_pre_camera_line_count();
+        for (int pos_idx = 0; pos_idx < n; pos_idx++) {
+            repl_export_lights_pre_camera_line(pos_idx, line, sizeof(line));
+            rows += test_code_panel_row_count_for_text(line, text_x, panel_w);
+        }
+    }
     if (g_camera_comment_line[0])
         rows += test_code_panel_row_count_for_text(g_camera_comment_line,
                                                    text_x, panel_w);
@@ -271,6 +277,8 @@ static int code_panel_header_row_count(void) {
     }
     for (int i = 0; g_header_post[i]; i++)
         rows += test_code_panel_row_count_for_text(g_header_post[i], text_x, panel_w);
+    rows += test_code_panel_row_count_for_text(REPL_CODE_PANEL_SCRATCH_DECL_LINE,
+                                               text_x, panel_w);
     return rows;
 }
 

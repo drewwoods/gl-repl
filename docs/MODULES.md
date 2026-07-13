@@ -552,7 +552,7 @@ scratch, `world_*` or `stage_*` would be more direct.
 | `src/render3d/themes` | Shared 3D theme enums (grid/axes themes, backdrop modes, grid spacing/extent) — the vocabulary app/UI config code and render3d renderers share (header-only) |
 | [`src/render3d/guides/geometry_guides.c`](../src/render3d/guides/geometry_guides.c) | Vertex/primitive guide rendering from a [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L42). The controller fills the snapshot's cursor args from the flat program (funcN-local resolution) before calling in — see [Architecture: Cursor Edit Guides](ARCHITECTURE.md#cursor-edit-guides) |
 | [`src/render3d/guides/transform_guides.c`](../src/render3d/guides/transform_guides.c) | Transform-guide rendering from a [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L42) (REPL-aware) |
-| `glr_camera` | Camera/view transform helpers — orbit/pan/zoom drag state machine. `glr_ctrl_router_handle_camera_mouse` drives input; render3d consumes final camera state through [`Render3dRenderConfig`](../src/render3d/render_types.h#L136). (Future `render3d_camera_controls` move is still possible if the render3d/viewport split lands.) |
+| `glr_camera` | Camera/view transform helpers — orbit/pan/zoom drag state machine. `glr_ctrl_router_handle_camera_mouse` drives input; render3d consumes final camera state through [`Render3dRenderConfig`](../src/render3d/render_types.h#L135). (Future `render3d_camera_controls` move is still possible if the render3d/viewport split lands.) |
 | `transform_utils` | Header-only GL matrix helpers ([`src/repl/transform_utils.h`](../src/repl/transform_utils.h)). Consumed by [`src/render3d/guides/transform_guides.c`](../src/render3d/guides/transform_guides.c), [`src/subsystems/edit_overlays/edit_overlays.c`](../src/subsystems/edit_overlays/edit_overlays.c), and [`src/subsystems/replay/replay.c`](../src/subsystems/replay/replay.c) |
 | `guides_shared` | Shared guide snapshot/planning types for REPL-aware 3D overlays ([`src/render3d/guides/guides_shared.h`](../src/render3d/guides/guides_shared.h), paired with the guides modules) |
 
@@ -1124,7 +1124,7 @@ render-neutral types belong in explicit shared headers such as
 | New REPL syntax | `repl_parser`, `repl_command_spec`, `repl_compile`, `repl_flatten`, `repl_executor` |
 | New user-geometry execution behavior | `repl_executor` |
 | New 3D world decorator | `render3d_*` |
-| New 3D REPL-aware overlay | `render3d_*`, consuming snapshots/configs from [`Render3dRenderConfig`](../src/render3d/render_types.h#L136) |
+| New 3D REPL-aware overlay | `render3d_*`, consuming snapshots/configs from [`Render3dRenderConfig`](../src/render3d/render_types.h#L135) |
 | New 2D UI render | `ui_*` render path, snapshot-only |
 | New 2D UI input behavior | `ui_*` hit-test that returns a [`UiHit`](../src/ui/core/hit.h#L51); if a new region needs distinguishing, add a [`UiHitKind`](../src/ui/core/hit.h#L17) value |
 | New owning subsystem (variable panel, replay, etc.) | Its own `subsystem_*` files plus a route from `glr_ctrl` based on `UiHit.kind` |

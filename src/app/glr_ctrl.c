@@ -1604,6 +1604,17 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->user_scene_count = repl_user_scene_count();
 
     {
+        int lc = repl_export_lights_pre_camera_line_count();
+        if (lc < 0) lc = 0;
+        if (lc > UI_LIGHTS_DISPLAY_MAX) lc = UI_LIGHTS_DISPLAY_MAX;
+        snap->lights_pre_camera_count = lc;
+        for (int i = 0; i < lc; i++) {
+            repl_export_lights_pre_camera_line(
+                i, snap->lights_pre_camera_lines[i], MAX_LINE_LEN);
+        }
+    }
+
+    {
         int lc = repl_export_lights_display_line_count();
         if (lc < 0) lc = 0;
         if (lc > UI_LIGHTS_DISPLAY_MAX) lc = UI_LIGHTS_DISPLAY_MAX;

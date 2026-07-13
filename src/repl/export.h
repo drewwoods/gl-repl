@@ -295,15 +295,15 @@ void repl_state_refresh_workspace_header_lines(void);
 int  repl_export_init_section_line_count(void);
 void repl_export_init_section_line(int i, char *buf, size_t n);
 
-/* Light-setup text lines. Init lines (per-light DIFFUSE/AMBIENT/SPECULAR +
- * baseline glDisable) belong in the init() section. Display lines (POSITION)
- * belong in display() after the camera transforms — glLightfv(GL_POSITION)
- * snapshots the active modelview, so positions set before the camera would
- * not orbit with the scene. The editor's code panel renders these verbatim
- * and the exported C file writes the same text, so a single generator
- * keeps the two surfaces in lockstep. */
+/* Light-setup text lines. Init lines contain per-light
+ * DIFFUSE/AMBIENT/SPECULAR + baseline glDisable. POSITION lines belong in
+ * display() because glLightfv snapshots the active modelview: eye-space slots
+ * are emitted before the camera transforms and world-space slots after them.
+ * The editor's code panel and exported C share these generators. */
 int  repl_export_lights_init_line_count(void);
 void repl_export_lights_init_line(int i, char *buf, size_t n);
+int  repl_export_lights_pre_camera_line_count(void);
+void repl_export_lights_pre_camera_line(int i, char *buf, size_t n);
 int  repl_export_lights_display_line_count(void);
 void repl_export_lights_display_line(int i, char *buf, size_t n);
 

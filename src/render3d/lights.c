@@ -48,9 +48,9 @@ void render3d_lights_init_global_ambient(void) {
  * example's @cfg) re-enables the slots they need.
  *
  * `.pos_is_eye_space` is 1 for slots whose POSITION must be set at
- * identity modelview (currently only HEADLIGHT slot 0); the runtime
- * pushes those positions in render3d_init_gl, and the exporter
- * routes their POSITION line to init() instead of display(). */
+ * identity modelview (currently only HEADLIGHT slot 0); the runtime uses an
+ * identity push per frame, and exported code places those writes in display()
+ * before the camera transform. */
 static const Render3dLight g_light_themes[LIGHT_THEME_COUNT][MAX_LIGHTS] = {
     /* DEFAULT: warm key + cool fill + orange rim + disabled directional.
      * Matches the historical 4-light layout. */
