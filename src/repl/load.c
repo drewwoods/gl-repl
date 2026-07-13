@@ -27,6 +27,14 @@
 #include <stdio.h>
 #include <string.h>
 
+static const char *const k_default_display_baseline[] = {
+    "glEnable(GL_COLOR_MATERIAL);",
+    "glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);",
+    "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);",
+    "glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});",
+    "glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);",
+};
+
 int repl_load_apply_compiled_change_transaction(
     const ReplCompiledChange *change,
     int cursor,
@@ -221,5 +229,20 @@ int repl_load_apply_line(const char *line, char *err, int err_size,
     }
     if (wrote_local)
         repl_dispatch_edit_line_set(*edit_line_inout);
+    return 1;
+}
+
+int repl_load_default_display_baseline(char *err, int err_size,
+                                       int *edit_line_inout) {
+    int line_count = (int)(sizeof(k_default_display_baseline) /
+                           sizeof(k_default_display_baseline[0]));
+
+    if (err && err_size > 0)
+        err[0] = '\0';
+    for (int i = 0; i < line_count; i++) {
+        if (!repl_load_apply_line(k_default_display_baseline[i],
+                                  err, err_size, edit_line_inout))
+            return 0;
+    }
     return 1;
 }

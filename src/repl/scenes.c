@@ -10,6 +10,7 @@
 #include <string.h>
 #include <stdint.h>
 #include "repl/host_effects.h"
+#include "repl/load.h"
 #include "repl/state_notify.h"
 #include "repl/cfg_baseline.h"   /* ReplConfigBag + bridge for per-scene cfg */
 #include "repl/export.h"          /* ReplExportCameraBlock + camera bridge */
@@ -714,6 +715,7 @@ static int reserve_user_scene_slot_for_new(void) {
 }
 
 int repl_scenes_create_empty_user_scene(void) {
+    char seed_err[REPL_STATUS_TEXT_MAX];
     int slot = reserve_user_scene_slot_for_new();
     if (slot < 0) {
         repl_set_status_error("All user scene slots full -- save workspace to free a slot");
@@ -726,6 +728,12 @@ int repl_scenes_create_empty_user_scene(void) {
     g_pending_scene_name_writable[0] = '\0';
 
     repl_scenes_reset_for_transient();
+    if (!repl_load_default_display_baseline(seed_err, sizeof(seed_err), NULL)) {
+        repl_set_status_error(seed_err[0] ? seed_err
+                                         : "Could not create scene defaults");
+        return -1;
+    }
+    repl_mark_source_dirty();
 
     char unique[USER_SCENE_NAME_MAX];
     derive_unique_scene_name(unique, sizeof(unique), "New Scene", -1);

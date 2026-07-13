@@ -62,7 +62,8 @@ static void rmdir_empty_parents_to(const char *path, const char *stop) {
     }
 }
 
-/* File -> New Scene creates a real empty user-scene slot so the scene
+/* File -> New Scene creates a fresh user-scene slot with the editable display
+ * baseline so the scene
  * tab strip gets a tab immediately. It must not reuse the previous
  * active slot, or Save Scene would overwrite that scene's file with the
  * emptied buffer. */
@@ -93,8 +94,8 @@ static void test_new_scene_creates_active_tab(void) {
                     snap.scene_tabs.tabs[snap.scene_tabs.active_idx].kind ==
                     UI_SCENE_TAB_USER);
     }
-    ASSERT_INT_EQ("New Scene clears the document",
-                  repl_state_document_count(), 0);
+    ASSERT_INT_EQ("New Scene seeds display baseline",
+                  repl_state_document_count(), 5);
     ASSERT_INT_EQ("New Scene clears the active example",
                   repl_state_scenes().active_example_idx, -1);
 }

@@ -7,6 +7,12 @@ glTranslatef(0.0f, 0.0f, -9.00f);
 glRotatef(23.0f, 1.0f, 0.0f, 0.0f);
 glRotatef(52.0f, 0.0f, 1.0f, 0.0f);
 glTranslatef(0.0f, 0.0f, 0.0f);
+glEnable(GL_COLOR_MATERIAL);
+glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});
+glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
+
 static float n, p, q, ang, rr, x, y, z; // samples, winds, angle, ring radius, coords
 static float s;                         // palette mix in [0,1]
 glClearColor(0.05, 0.06, 0.08, 1.0);

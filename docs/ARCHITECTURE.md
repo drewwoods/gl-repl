@@ -138,7 +138,7 @@ flowchart TD
         direction TB
         p1["prepare Render3dFrameRenderContext"] --> p2["apply projection (render3d-local jitter)"]
         p2 --> p3["apply camera & quality flags"]
-        p3 --> p4["set up baseline lighting / material state"]
+        p3 --> p4["set up generated light state"]
         p4 --> p5["execute user geometry<br/>(narrow execution boundary)"]
         p5 --> p6["optional post_fill_fn<br/>(controller's replay-fade overlay)"]
         p6 --> p7["render backdrop, grid, axes, orbit target"]
@@ -465,7 +465,7 @@ Responsibilities:
 * viewport and projection setup
 * camera transform
 * accumulation-buffer sampling with render3d-local jitter
-* baseline 3D lighting and material state
+* generated 3D light positions and colors
 * grid, axes, backdrop, light indicators, orbit target
 * REPL-aware 3D overlays while they remain under `render3d_*`
 * replay fade rendering owned by the replay peer
@@ -476,6 +476,12 @@ Neutral render3d modules such as [`src/render3d/grid.c`](../src/render3d/grid.c)
 [`src/render3d/backdrop.c`](../src/render3d/backdrop.c), and [`src/render3d/lights.c`](../src/render3d/lights.c) should remain free of REPL
 state access. REPL-aware overlays live under `src/render3d/guides/` and consume
 the explicit [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L42) rather than pulling globals directly.
+
+The default color-material enable/mode, two-sided lighting, specular color,
+and shininess are ordinary editable scene commands. Fresh scenes, Clear All,
+and built-in examples place those commands in the per-frame program so code
+focus exposes the state that controls the rendered material. Generated light
+colors remain initialization state.
 
 ### Grid Edge-Fade Dissolve (world-radial alpha)
 

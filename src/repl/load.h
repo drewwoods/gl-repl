@@ -78,4 +78,11 @@ int repl_load_apply_compiled_change_transaction(
 int repl_load_apply_line(const char *line, char *err, int err_size,
                          int *edit_line_inout);
 
+/* Seed the editable per-frame material/lighting defaults used by fresh
+ * documents. The commands are ordinary source lines: callers may edit,
+ * comment, or delete them after insertion. Passing NULL uses and advances
+ * the ambient host cursor, matching repl_load_apply_line(). */
+int repl_load_default_display_baseline(char *err, int err_size,
+                                       int *edit_line_inout);
+
 #endif /* REPL_LOAD_H */
