@@ -1898,16 +1898,6 @@ static int import_try_snippet_start(ImportState *s, const char *p) {
 static int import_try_raw_scene_body(ImportState *s, const char *p) {
     if (!s->allow_raw_scene || s->func_depth != 0)
         return 0;
-    const char *q = p;
-    while (*q && isspace((unsigned char)*q))
-        q++;
-    if (strncmp(q, "// camera", 9) == 0) {
-        q += 9;
-        while (*q && isspace((unsigned char)*q))
-            q++;
-        if (*q == '\0')
-            return 1;
-    }
     import_feed_one_line(s, p);
     return 1;
 }
@@ -1958,6 +1948,7 @@ static int import_try_snippet_body_line(ImportState *s, const char *p) {
 /* --- dispatch --------------------------------------------------------------- */
 
 typedef enum {
+    IMPORT_LINE_CAMERA_COMMENT,
     IMPORT_LINE_CAMERA,
     IMPORT_LINE_WORKSPACE_HEADER,
     IMPORT_LINE_FUNCTION_BODY,
@@ -1979,6 +1970,21 @@ typedef struct {
     ImportLineKind    kind;
     ImportLineHandler handle;
 } ImportLineHandlerSpec;
+
+static int import_handle_camera_comment(ImportState *s, const char *p,
+                                        const char *raw) {
+    const char *marker = p;
+
+    (void)raw;
+    if (s->in_snippet || s->func_depth != 0 ||
+        !repl_comment_alpha_payload_equals(p, "camera"))
+        return 0;
+    while (*marker && isspace((unsigned char)*marker))
+        marker++;
+    snprintf(g_camera_comment_line_writable,
+             REPL_EXPORT_CAMERA_LINE_MAX, "  %s", marker);
+    return 1;
+}
 
 static int import_handle_camera(ImportState *s, const char *p,
                                 const char *raw) {
@@ -2070,6 +2076,7 @@ static int import_run_handlers(const ImportLineHandlerSpec *handlers,
 #define IMPORT_HANDLER_COUNT(table) ((int)(sizeof(table) / sizeof((table)[0])))
 
 static const ImportLineHandlerSpec IMPORT_EARLY_NON_SNIPPET_HANDLERS[] = {
+    { IMPORT_LINE_CAMERA_COMMENT, import_handle_camera_comment },
     { IMPORT_LINE_CAMERA, import_handle_camera },
 };
 
@@ -2128,6 +2135,7 @@ static void import_process_line(ImportState *s, const char *p, const char *raw) 
 static void import_clear_pending_result_fields(void) {
     g_pending_scene_name_writable[0]    = '\0';
     g_pending_workspace_dir_writable[0] = '\0';
+    g_camera_comment_line_writable[0]   = '\0';
 }
 
 static const char *import_find_block_comment_start(const char *s) {

@@ -38,6 +38,7 @@
 #define g_export_scene_name_hint_writable (IMPORT_EXPORT_WRITABLE->export_scene_name_hint)
 #define g_pending_scene_name_writable     (IMPORT_EXPORT_WRITABLE->pending_scene_name)
 #define g_pending_workspace_dir_writable  (IMPORT_EXPORT_WRITABLE->pending_workspace_dir)
+#define g_camera_comment_line_writable    (IMPORT_EXPORT_WRITABLE->camera_comment_line)
 
 /* The per-scene cfg subset is selected by a controller-installed
  * bridge (ReplConfigBridge.fill_scene_subset / .apply) rather
@@ -237,6 +238,7 @@ void repl_scenes_enter_transient_scene(void) {
     restore_pre_example_cfg_if_valid();
     g_export_scene_name_hint_writable = NULL;
     g_pending_scene_name_writable[0] = '\0';
+    g_camera_comment_line_writable[0] = '\0';
     g_active_user_scene = -1;
     repl_state_scenes_set_active_example_idx(-1);
 }
@@ -256,6 +258,7 @@ void repl_scenes_reset_for_transient(void) {
     repl_dispatch_input_reset();
     repl_eval_init_predef_vars();
     repl_func_alias_clear_all();
+    g_camera_comment_line_writable[0] = '\0';
 }
 
 static void restore_user_scene(void) {
@@ -511,6 +514,7 @@ static void reset_live_for_scene_import(void) {
      * built-in name. */
     repl_eval_init_predef_vars();
     repl_func_alias_clear_all();
+    g_camera_comment_line_writable[0] = '\0';
 
 }
 

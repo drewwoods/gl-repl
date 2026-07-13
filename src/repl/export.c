@@ -451,7 +451,9 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
         fprintf(dst, "%s\n", g_render_state_lines[state_line_idx]);
 
     fprintf(dst, "--- camera ---\n");
-    /* Dump camera transformation lines. */
+    /* Dump the optional authored heading plus camera transformation lines. */
+    if (g_camera_comment_line[0])
+        fprintf(dst, "%s\n", g_camera_comment_line);
     for (int cam_line_idx = 0; cam_line_idx < REPL_EXPORT_CAMERA_LINES; cam_line_idx++)
         fprintf(dst, "%s\n", g_cam_lines[cam_line_idx]);
 

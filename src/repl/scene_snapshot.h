@@ -28,6 +28,7 @@ typedef struct SceneSnapshot {
     char func_aliases[REPL_FUNC_SLOT_COUNT][REPL_FUNC_NAME_MAX];
 
     ReplConfigBag cfg;
+    char camera_comment_line[REPL_EXPORT_CAMERA_LINE_MAX];
     ReplExportCameraBlock camera_block;
 } SceneSnapshot;
 

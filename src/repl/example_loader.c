@@ -14,6 +14,7 @@
 #include "repl/host_effects.h"
 #include "repl/state_notify.h"
 #include "repl/state_owners.h"
+#include "repl/text_helpers.h"
 #include "source_document.h"     /* source_document_clear */
 #include "support/cpuprof.h"     /* prof_histogram_reset on example switch */
 #include "config.h"              /* REPL_DIAG_TEXT_MAX */
@@ -116,32 +117,9 @@ static int example_line_is_blank_only(const char *line) {
 }
 
 static int example_line_is_camera_marker(const char *line) {
-    const char *p = line;
-    const char *word = "camera";
-
-    if (!p)
-        return 0;
-    while (*p && isspace((unsigned char)*p))
-        p++;
-    if (p[0] != '/' || p[1] != '/')
-        return 0;
-    p += 2;
-
-    /* Treat punctuation as presentation, not syntax, so both the compact
-     * `// camera` marker and a section heading such as
-     * `// --- Camera ---` identify the same metadata block. Require the
-     * normalized alphabetic payload to equal "camera" exactly: prose such
-     * as `// The camera starts here` must remain ordinary scene source. */
-    while (*p) {
-        unsigned char c = (unsigned char)*p++;
-
-        if (!isalpha(c))
-            continue;
-        if (*word == '\0' || tolower(c) != (unsigned char)*word)
-            return 0;
-        word++;
-    }
-    return *word == '\0';
+    /* Treat punctuation as presentation, not syntax, while requiring the
+     * complete alphabetic payload to be exactly "camera". */
+    return repl_comment_alpha_payload_equals(line, "camera");
 }
 
 static int try_apply_example_camera_header(const char *const *lines) {
@@ -206,7 +184,20 @@ static int try_apply_example_camera_header(const char *const *lines) {
 int repl_example_consume_camera_header(const char *const *lines) {
     if (!lines || !lines[0] || !example_line_is_camera_marker(lines[0]))
         return 0;
-    return try_apply_example_camera_header(lines) ? 5 : 0;
+    if (!try_apply_example_camera_header(lines))
+        return 0;
+
+    /* The camera transforms are metadata, but their authored marker is useful
+     * as a section heading in the expanded (Code Focus off) code panel. Keep
+     * its punctuation/case verbatim and indent it to match display() body
+     * boilerplate. */
+    {
+        const char *marker = example_cam_skip_ws(lines[0]);
+        ReplImportExportState *io = repl_state_import_export_writable();
+        snprintf(io->camera_comment_line, sizeof(io->camera_comment_line),
+                 "  %s", marker);
+    }
+    return 5;
 }
 
 static void reset_example_presentation_defaults(unsigned int tag_mask) {
@@ -508,6 +499,7 @@ static void reset_example_load_state(unsigned int tag_mask) {
     /* Examples use bare funcN; clear any user-aliased names from the
      * outgoing scene so funcN free-slot allocation starts fresh. */
     repl_func_alias_clear_all();
+    repl_state_import_export_writable()->camera_comment_line[0] = '\0';
     reset_example_presentation_defaults(tag_mask);
 }
 
@@ -536,17 +528,18 @@ static int load_example_lines(const char *const *lines,
             metadata_blank_count++;
     }
 
-    if (body && body[metadata_blank_count] &&
-        example_line_is_camera_marker(body[metadata_blank_count])) {
+    if (body && body[metadata_blank_count]) {
         /* Only consume the 5 header lines if the block was actually
          * validated; otherwise leave them for ordinary parsing so a
          * malformed camera header doesn't silently swallow real
          * geometry that happens to follow it (e.g., a truncated 4-line
          * header where the missing slot is filled by the first real
          * line of the example body). */
-        if (try_apply_example_camera_header(body + metadata_blank_count)) {
+        int camera_line_count =
+            repl_example_consume_camera_header(body + metadata_blank_count);
+        if (camera_line_count > 0) {
             body += metadata_blank_count;
-            for (int skip = 0; skip < 5 && body[0]; skip++)
+            for (int skip = 0; skip < camera_line_count && body[0]; skip++)
                 body++;
         }
     }

@@ -284,7 +284,7 @@ surfaces it on the CLI.
 Loop counters and function parameters don't exist in the source
 command's own scope. When [`flatten.c`](flatten.c) emits a flat command, it snapshots
 the live lexical bindings into a parallel [`FlatCmdLocalVars`](flatten.h#L37) array
-([`repl_state_flat_program_local_vars()`](state_views.h#L145)):
+([`repl_state_flat_program_local_vars()`](state_views.h#L147)):
 
 ```c
 typedef struct { int num_vars; ExprVar vars[MAX_EXPR_VARS]; } FlatCmdLocalVars;
