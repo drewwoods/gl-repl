@@ -1033,6 +1033,100 @@ static void test_replay_polygon_limits(void) {
     replay_stop();
 }
 
+static int find_doc_cmd_of_type(CmdType type) {
+    const GLCmd *doc = repl_state_document_cmds();
+    int n = repl_state_document_count();
+    for (int i = 0; i < n; i++)
+        if (doc[i].valid && doc[i].type == type)
+            return i;
+    return -1;
+}
+
+/* A funcN call site should expand to " // name(v0, v1)" showing the
+ * resolved arguments the current invocation was called with — including
+ * caller-scope var references the source args used. */
+static void test_replay_call_site_expands_args(void) {
+    glr_ctrl_reset_all();
+    editor_feed_line("float n = 3;");           /* 0 */
+    editor_feed_line("func0(a, b) {");          /* 1 */
+    editor_feed_line("glVertex3f(a, b, 0);");   /* 2 */
+    editor_feed_line("}");                       /* 3 */
+    editor_feed_line("func0(n * 2, 5);");       /* 4 */
+    repl_flatten_commands(editor_state_edit_line());
+
+    int call_line = find_doc_cmd_of_type(CMD_CALL);
+    ASSERT_TRUE("found the call source line", call_line >= 0);
+
+    replay_start();
+    g_replay_mode = REPLAY_MODE_VERTEX;
+    g_replay_state = REPLAY_PAUSED;
+
+    int safety = 1024;
+    while (g_replay_pc < g_replay_total_flat && safety-- > 0)
+        replay_advance(repl_state_flat_program_view());
+    ASSERT_TRUE("replay reached end", safety > 0);
+    ASSERT_TRUE("expand args on", g_replay_expand_args == 1);
+
+    SourceTextView text = source_document_view();
+    char display[256];
+    replay_code_panel_get_command_display_text(text, call_line,
+                                               display, sizeof(display));
+    /* n*2 = 6 with n = 3; the literal 5 passes through. */
+    ASSERT_TRUE("call site shows resolved args func0(6, 5)",
+                strstr(display, "func0(6, 5)") != NULL);
+
+    replay_stop();
+}
+
+/* A for-loop header should expand to " // i = <iter>, n = <limit>" while
+ * the replay position is inside the loop, and to the limit alone once the
+ * position has moved past the loop. */
+static void test_replay_for_header_expands_iter_and_limit(void) {
+    glr_ctrl_reset_all();
+    editor_feed_line("float n = 4;");           /* 0 */
+    editor_feed_line("for(i, 0, n) {");         /* 1 */
+    editor_feed_line("glVertex3f(i, 0, 0);");   /* 2 */
+    editor_feed_line("}");                       /* 3 */
+    editor_feed_line("glVertex3f(9, 9, 9);");   /* 4 (after the loop) */
+    repl_flatten_commands(editor_state_edit_line());
+
+    int for_line = find_doc_cmd_of_type(CMD_FOR_BEGIN);
+    ASSERT_TRUE("found the for source line", for_line >= 0);
+
+    replay_start();
+    g_replay_mode = REPLAY_MODE_VERTEX;
+    g_replay_state = REPLAY_PAUSED;
+
+    SourceTextView text = source_document_view();
+    char display[256];
+
+    /* One step lands inside the loop body: iteration + limit both show. */
+    replay_advance(repl_state_flat_program_view());
+    ASSERT_TRUE("first step is inside the loop body", g_replay_src_line == 2);
+    replay_code_panel_get_command_display_text(text, for_line,
+                                               display, sizeof(display));
+    ASSERT_TRUE("loop header shows the live iteration var",
+                strstr(display, "i = ") != NULL);
+    ASSERT_TRUE("loop header resolves the limit n = 4",
+                strstr(display, "n = 4") != NULL);
+
+    /* Advance to the trailing post-loop vertex: loop var is no longer live,
+     * so only the limit remains. */
+    int safety = 1024;
+    while (g_replay_pc < g_replay_total_flat && safety-- > 0)
+        replay_advance(repl_state_flat_program_view());
+    ASSERT_TRUE("replay reached end", safety > 0);
+    ASSERT_TRUE("final step is past the loop", g_replay_src_line == 4);
+    replay_code_panel_get_command_display_text(text, for_line,
+                                               display, sizeof(display));
+    ASSERT_TRUE("idle loop header still resolves the limit",
+                strstr(display, "n = 4") != NULL);
+    ASSERT_TRUE("idle loop header drops the iteration readout",
+                strstr(display, "i = ") == NULL);
+
+    replay_stop();
+}
+
 int main(void) {
     test_replay_basic_controls();
     test_replay_stepping();
@@ -1049,6 +1143,8 @@ int main(void) {
     test_bench_helpers();
     test_misc_helpers();
     test_replay_var_assign_uses_flatten_args();
+    test_replay_call_site_expands_args();
+    test_replay_for_header_expands_iter_and_limit();
     test_replay_single_arg_shape_gets_eval_annotation();
     test_replay_baseline_restore_survives_predef_reshape();
     test_replay_regression_fixes();
