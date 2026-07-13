@@ -247,14 +247,15 @@ void ui_tabbed_overlay_render(const UiOverlayState *in) {
             const char *label = text[i] + 1;
             int label_len = (int)strlen(label);
             ui_clr_a(UI_TOK_ACCENT, 0.95f);
-            gl2d_draw_string((float)tx, (float)ty, label, FONT_SMALL);
+            gl2d_draw_string((float)tx, (float)ty, label, FONT_MONO);
             /* Rule from just past the label to the right edge, tinted
              * with the accent so it reads as one titled divider. y is
              * the glyph baseline, so nudge up ~1/3 the cap height to
-             * cross the label's vertical midline. */
-            float rule_x0 = (float)(tx + (label_len ? label_len * FONT_SMALL_W + 8 : 0));
+             * cross the label's vertical midline. Label uses the larger
+             * FONT_MONO (FONT_W / FONT_H metrics) for extra weight. */
+            float rule_x0 = (float)(tx + (label_len ? label_len * FONT_W + 8 : 0));
             float rule_x1 = (float)(hx + hw - 14);
-            float rule_y  = (float)ty + (float)FONT_SMALL_H * 0.34f;
+            float rule_y  = (float)ty + (float)FONT_H * 0.34f;
             if (rule_x1 > rule_x0) {
                 ui_clr_a(UI_TOK_ACCENT, 0.35f);
                 glRectf(rule_x0, rule_y, rule_x1, rule_y + 1.0f);
