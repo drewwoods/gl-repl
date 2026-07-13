@@ -770,6 +770,7 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
 #define VERTEX_LABEL_ENTER_PAD     15.0f  /* headroom (px) to appear or home    */
 #define VERTEX_LABEL_KEEP_SHRINK   4.0f  /* leniency (px) before eviction      */
 #define VERTEX_LABEL_EASE          0.20f /* per-frame glide toward the row     */
+#define GUIDE_LABEL_OBSTACLE_MAX      32  /* fixed edit-guide label rectangles  */
 
 typedef struct {
     float anchor_x, anchor_y;  /* projected vertex point, viewport-local px   */
@@ -796,6 +797,23 @@ static unsigned g_label_sticky_frame = 1; /* starts past 0 so zeroed entries
                                            * never read as incumbents */
 static int g_label_sticky_scope = -1;
 static int g_label_sticky_mode  = -1;
+
+/* Edit-guide labels draw in the in-pass overlay stage, before vertex labels.
+ * Record their object-space raster anchor, current modelview, and measured
+ * width on the final accumulation subpass; the post-resolve vertex-label pass
+ * reprojects them with the canonical jitter-free projection. */
+typedef struct {
+    float pos[3];
+    float modelview[16];
+    float width;
+} GuideLabelObstacle;
+
+typedef struct {
+    GuideLabelObstacle items[GUIDE_LABEL_OBSTACLE_MAX];
+    int count;
+} GuideLabelObstacleStore;
+
+static GuideLabelObstacleStore g_guide_label_obstacles;
 
 typedef struct {
     OverlayVertexLabelMode mode;
@@ -890,6 +908,70 @@ static float bitmap_text_width(void *font, const char *s) {
     return w;
 }
 
+static void guide_label_obstacles_reset(void) {
+    g_guide_label_obstacles.count = 0;
+}
+
+static void guide_label_obstacles_record(
+    void *user_data,
+    const Render3dGuideLabelSpec *label) {
+    GuideLabelObstacle *obstacle;
+    float width = 0.0f;
+    int run_count;
+    int i;
+
+    (void)user_data;
+    if (!label || g_guide_label_obstacles.count >= GUIDE_LABEL_OBSTACLE_MAX)
+        return;
+
+    run_count = label->run_count;
+    if (run_count < 0)
+        run_count = 0;
+    if (run_count > RENDER3D_GUIDE_LABEL_MAX_RUNS)
+        run_count = RENDER3D_GUIDE_LABEL_MAX_RUNS;
+    for (i = 0; i < run_count; i++) {
+        if (label->runs[i].font && label->runs[i].text)
+            width += bitmap_text_width(label->runs[i].font,
+                                       label->runs[i].text);
+    }
+    if (width < 1.0f)
+        return;
+
+    obstacle = &g_guide_label_obstacles.items[g_guide_label_obstacles.count++];
+    obstacle->pos[0] = label->pos[0];
+    obstacle->pos[1] = label->pos[1];
+    obstacle->pos[2] = label->pos[2];
+    obstacle->width = width;
+    glGetFloatv(GL_MODELVIEW_MATRIX, obstacle->modelview);
+}
+
+static int project_guide_label_obstacles(
+    const VertexLabelCtx *ctx,
+    float *out_x, float *out_y, float *out_w, int out_cap) {
+    int count = 0;
+    int i;
+
+    if (!ctx || !out_x || !out_y || !out_w || out_cap <= 0)
+        return 0;
+
+    for (i = 0; i < g_guide_label_obstacles.count && count < out_cap; i++) {
+        const GuideLabelObstacle *obstacle = &g_guide_label_obstacles.items[i];
+        float sx, sy, depth;
+        if (!project_to_screen(obstacle->modelview, ctx->proj, ctx->vw, ctx->vh,
+                               obstacle->pos[0], obstacle->pos[1],
+                               obstacle->pos[2], &sx, &sy, &depth))
+            continue;
+        if (sx < 0.0f || sx >= (float)ctx->vw ||
+            sy < 0.0f || sy >= (float)ctx->vh)
+            continue;
+        out_x[count] = sx;
+        out_y[count] = sy;
+        out_w[count] = obstacle->width;
+        count++;
+    }
+    return count;
+}
+
 /* Does a candidate label box — inflated by `margin` px on every side —
  * overlap any already-placed box? All boxes share VERTEX_LABEL_LINE_H.
  * margin > 0 demands headroom (a label entering or homing); margin < 0 is
@@ -905,6 +987,24 @@ static int label_cand_clashes(const float *px, const float *py,
             return 1;
     }
     return 0;
+}
+
+/* Guide labels are fixed-priority obstacles. Positive entry/homing margin
+ * applies to them just like placed vertex labels, but incumbent keep-shrink
+ * never relaxes them below strict non-overlap. */
+static int vertex_label_cand_clashes(
+    const float *placed_x, const float *placed_y, const float *placed_w,
+    int placed_n,
+    const float *obstacle_x, const float *obstacle_y, const float *obstacle_w,
+    int obstacle_n,
+    float x, float y, float w, float margin) {
+    float obstacle_margin = margin > 0.0f ? margin : 0.0f;
+
+    if (label_cand_clashes(placed_x, placed_y, placed_w, placed_n,
+                           x, y, w, margin))
+        return 1;
+    return label_cand_clashes(obstacle_x, obstacle_y, obstacle_w, obstacle_n,
+                              x, y, w, obstacle_margin);
 }
 
 static void on_vertex_number_label(const ReplayVertexWalkState *state,
@@ -1016,7 +1116,11 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
 static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
     float placed_x[VERTEX_LABEL_MAX], placed_y[VERTEX_LABEL_MAX],
           placed_w[VERTEX_LABEL_MAX];
+    float obstacle_x[GUIDE_LABEL_OBSTACLE_MAX];
+    float obstacle_y[GUIDE_LABEL_OBSTACLE_MAX];
+    float obstacle_w[GUIDE_LABEL_OBSTACLE_MAX];
     int   placed_n = 0;
+    int   obstacle_n = 0;
     const float dy = VERTEX_LABEL_LINE_H + VERTEX_LABEL_GAP;
     int i, oi, step, s;
 
@@ -1038,6 +1142,9 @@ static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
             l->draw_y = l->anchor_y;
         }
     } else {
+        obstacle_n = project_guide_label_obstacles(
+            ctx, obstacle_x, obstacle_y, obstacle_w,
+            GUIDE_LABEL_OBSTACLE_MAX);
         /* Place in collection (walk) order — a camera-independent priority — so two
          * labels competing for the same screen region never swap which one claims
          * the anchor vs. gets nudged/dropped as the camera moves. Sorting by depth
@@ -1074,11 +1181,12 @@ static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
                 for (step = 0; step < prev_dist && !found; step++) {
                     for (s = (step == 0 ? 0 : -1); s <= 1 && !found; s += 2) {
                         int row = s * step;
-                        if (!label_cand_clashes(placed_x, placed_y, placed_w,
-                                                placed_n, l->anchor_x,
-                                                l->anchor_y + (float)row * dy,
-                                                l->width,
-                                                VERTEX_LABEL_ENTER_PAD)) {
+                        if (!vertex_label_cand_clashes(
+                                placed_x, placed_y, placed_w, placed_n,
+                                obstacle_x, obstacle_y, obstacle_w, obstacle_n,
+                                l->anchor_x,
+                                l->anchor_y + (float)row * dy,
+                                l->width, VERTEX_LABEL_ENTER_PAD)) {
                             best_row = row;
                             found = 1;
                         }
@@ -1088,10 +1196,12 @@ static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
             /* Phase B: keep the held row, judged leniently — evicting a
              * visible label needs a real collision, not a boundary graze. */
             if (was_drawn && !found &&
-                !label_cand_clashes(placed_x, placed_y, placed_w, placed_n,
-                                    l->anchor_x,
-                                    l->anchor_y + (float)prev_row * dy,
-                                    l->width, -VERTEX_LABEL_KEEP_SHRINK)) {
+                !vertex_label_cand_clashes(
+                    placed_x, placed_y, placed_w, placed_n,
+                    obstacle_x, obstacle_y, obstacle_w, obstacle_n,
+                    l->anchor_x,
+                    l->anchor_y + (float)prev_row * dy,
+                    l->width, -VERTEX_LABEL_KEEP_SHRINK)) {
                 best_row = prev_row;
                 found = 1;
             }
@@ -1106,10 +1216,12 @@ static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
                         int row = s * step;
                         if (was_drawn && row == prev_row)
                             continue; /* already tested leniently */
-                        if (!label_cand_clashes(placed_x, placed_y, placed_w,
-                                                placed_n, l->anchor_x,
-                                                l->anchor_y + (float)row * dy,
-                                                l->width, margin)) {
+                        if (!vertex_label_cand_clashes(
+                                placed_x, placed_y, placed_w, placed_n,
+                                obstacle_x, obstacle_y, obstacle_w, obstacle_n,
+                                l->anchor_x,
+                                l->anchor_y + (float)row * dy,
+                                l->width, margin)) {
                             best_row = row;
                             found = 1;
                         }
@@ -1200,6 +1312,7 @@ typedef struct NormalVectorRenderCtx {
     int xform_guide_mode;
     const FlatProgramView *program;
     int *stop_flag;
+    Render3dGuideLabelSink label_sink;
 } NormalVectorRenderCtx;
 
 static void on_normal_vector_arrow(const ReplayVertexWalkState *state,
@@ -1266,6 +1379,24 @@ static void on_normal_vector_arrow(const ReplayVertexWalkState *state,
             }
             primary = " n";
             detail_text = detail;
+        }
+        if (primary && ctx->label_sink.record) {
+            float authored[3] = { state->normal[0], state->normal[1],
+                                  state->normal[2] };
+            float unit[3];
+            if (normalize_vec3(authored, unit)) {
+                Render3dGuideLabelSpec label;
+                memset(&label, 0, sizeof(label));
+                label.pos[0] = vx + unit[0] * ctx->scale;
+                label.pos[1] = vy + unit[1] * ctx->scale;
+                label.pos[2] = vz + unit[2] * ctx->scale;
+                label.runs[0].font = FONT_MONO;
+                label.runs[0].text = primary;
+                label.runs[1].font = FONT_TINY;
+                label.runs[1].text = detail_text;
+                label.run_count = 2;
+                ctx->label_sink.record(ctx->label_sink.user_data, &label);
+            }
         }
         render3d_draw_focused_normal_glyph(vx, vy, vz,
                                         state->normal[0],
@@ -1447,7 +1578,9 @@ static void edit_overlays_render_replay_vertex_label(const OverlayWalkCtx *walk_
 
 #define GLR_NORMAL_ARROW_SCALE 0.35f
 
-void edit_overlays_render_normal_vectors(const OverlayWalkCtx *walk_ctx) {
+static void edit_overlays_render_normal_vectors_with_sink(
+    const OverlayWalkCtx *walk_ctx,
+    const Render3dGuideLabelSink *label_sink) {
     ReplayVertexWalkContext ctx;
 
     ctx = edit_overlays_build_vertex_walk_context(walk_ctx, 0);
@@ -1500,10 +1633,16 @@ void edit_overlays_render_normal_vectors(const OverlayWalkCtx *walk_ctx) {
                                      : RENDER3D_XFORM_GUIDE_OFF,
         .program = &ctx.program,
         .stop_flag = show_all ? NULL : &stop,
+        .label_sink = label_sink ? *label_sink
+                                 : (Render3dGuideLabelSink){0},
     };
     replay_walk_user_vertices(&ctx, &cb, &render_ctx);
 
     glPopAttrib();
+}
+
+void edit_overlays_render_normal_vectors(const OverlayWalkCtx *walk_ctx) {
+    edit_overlays_render_normal_vectors_with_sink(walk_ctx, NULL);
 }
 
 typedef struct {
@@ -1685,7 +1824,22 @@ void edit_overlays_render_cursor_guides(const Render3dGuideSnapshot *snapshot,
 
 void edit_overlays_post_overlays(void *user_data) {
     const OverlaySnapshotPack *pack = (const OverlaySnapshotPack *)user_data;
+    Render3dGuideSnapshot snapshot;
+    const Render3dGuideLabelSink *normal_label_sink = NULL;
     if (!pack) return;
+
+    /* One call per scene subpass. Clearing here means the final accumulation
+     * pass replaces earlier jittered/blurred records; the saved modelviews are
+     * reprojected later with the canonical post-resolve projection. */
+    guide_label_obstacles_reset();
+    snapshot = pack->snapshot;
+    snapshot.label_sink = (Render3dGuideLabelSink){0};
+    if (pack->vertex_label_mode != OVERLAY_VERTEX_LABEL_OFF &&
+        pack->overlay_scope != OVERLAY_SCOPE_AT_VERTEX) {
+        snapshot.label_sink.record = guide_label_obstacles_record;
+        snapshot.label_sink.user_data = NULL;
+        normal_label_sink = &snapshot.label_sink;
+    }
 
     prof_begin(PROF_RENDER3D_OVERLAY_OUTLINES);
     edit_overlays_render_outlines(&pack->walk, pack->multisample_enabled, pack->line_smooth_enabled);
@@ -1693,14 +1847,15 @@ void edit_overlays_post_overlays(void *user_data) {
     prof_accum_end(PROF_RENDER3D_OVERLAY_OUTLINES);
 
     prof_begin(PROF_RENDER3D_OVERLAY_TRANSFORM_GUIDES);
-    edit_overlays_render_cursor_guides(&pack->snapshot, &pack->walk);
+    edit_overlays_render_cursor_guides(&snapshot, &pack->walk);
     prof_accum_end(PROF_RENDER3D_OVERLAY_TRANSFORM_GUIDES);
 
     if (pack->show_normal_vectors ||
         pack->walk.show_normal_vectors ||
         pack->walk.replay_normal_display != REPLAY_NORMAL_DISPLAY_OFF) {
         prof_begin(PROF_RENDER3D_OVERLAY_NORMALS);
-        edit_overlays_render_normal_vectors(&pack->walk);
+        edit_overlays_render_normal_vectors_with_sink(&pack->walk,
+                                                      normal_label_sink);
         prof_accum_end(PROF_RENDER3D_OVERLAY_NORMALS);
     }
 }

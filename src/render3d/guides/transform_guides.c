@@ -156,12 +156,32 @@ static float tg_snap_zero(float v) {
     return (fabsf(v) < 0.005f) ? 0.0f : v;
 }
 
+static void transform_guides_record_label(
+    const Render3dGuideSnapshot *snapshot,
+    const float pos[3], void *font, const char *text) {
+    Render3dGuideLabelSpec label;
+
+    if (!snapshot || !snapshot->label_sink.record || !pos || !font ||
+        !text || !text[0])
+        return;
+
+    memset(&label, 0, sizeof(label));
+    label.pos[0] = pos[0];
+    label.pos[1] = pos[1];
+    label.pos[2] = pos[2];
+    label.runs[0].font = font;
+    label.runs[0].text = text;
+    label.run_count = 1;
+    snapshot->label_sink.record(snapshot->label_sink.user_data, &label);
+}
+
 /* Draw the translate endpoint's world position as a small text label at the
  * arrow tip. `tip_local` is the tip in the currently loaded guide frame (so
  * glRasterPos lands it on the arrowhead); `tip_world` is the same point in
  * world space — the position the model matrix leaves the origin at through
  * this line. Drawn once, depth-test off so the number is always legible. */
-static void draw_translate_endpoint_label(const float tip_local[3],
+static void draw_translate_endpoint_label(const Render3dGuideSnapshot *snapshot,
+                                          const float tip_local[3],
                                           const float tip_world[3]) {
     char buf[48];
     snprintf(buf, sizeof(buf), " (%.2f, %.2f, %.2f)",
@@ -177,6 +197,7 @@ static void draw_translate_endpoint_label(const float tip_local[3],
     /* Emit the glyphs directly (rather than via render3d overlays) so this TU
      * stays free of an overlays.o link dependency — the isolated guides test
      * links only the guide objects. */
+    transform_guides_record_label(snapshot, tip_local, FONT_SMALL, buf);
     glRasterPos3f(tip_local[0], tip_local[1], tip_local[2]);
     for (const char *c = buf; *c; c++)
         glutBitmapCharacter(FONT_SMALL, (unsigned char)*c);
@@ -672,7 +693,8 @@ static void draw_rotate_pulse(const Render3dGuideSnapshot *snapshot,
  * caller gates it to the solid pass) so the number is always legible.
  * 0xB0 is the ISO-8859-1 degree sign — the GLUT bitmap fonts carry the
  * full 8-bit Latin-1 set. */
-static void draw_rotate_angle_label(const float pos[3], float angle_deg) {
+static void draw_rotate_angle_label(const Render3dGuideSnapshot *snapshot,
+                                    const float pos[3], float angle_deg) {
     char buf[24];
     snprintf(buf, sizeof(buf), " %+.0f\xB0", (double)angle_deg);
 
@@ -682,6 +704,7 @@ static void draw_rotate_angle_label(const float pos[3], float angle_deg) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glColor4f(0.80f, 0.95f, 1.0f, 0.95f);
+    transform_guides_record_label(snapshot, pos, FONT_SMALL, buf);
     glRasterPos3f(pos[0], pos[1], pos[2]);
     for (const char *c = buf; *c; c++)
         glutBitmapCharacter(FONT_SMALL, (unsigned char)*c);
@@ -873,7 +896,7 @@ static void draw_rotate_guide(const Render3dGuideSnapshot *snapshot,
             label_pos[1] += radial[1] * push;
             label_pos[2] += radial[2] * push;
         }
-        draw_rotate_angle_label(label_pos, angle_deg);
+        draw_rotate_angle_label(snapshot, label_pos, angle_deg);
     }
 
     transform_guides_pop_state();
@@ -1247,7 +1270,7 @@ void render3d_transform_guides_render_if_due(const Render3dGuideSnapshot *snapsh
             tip_world[0] = tip_local[0],
             tip_world[1] = tip_local[1],
             tip_world[2] = tip_local[2];
-        draw_translate_endpoint_label(tip_local, tip_world);
+        draw_translate_endpoint_label(snapshot, tip_local, tip_world);
     }
 
     glPopMatrix();

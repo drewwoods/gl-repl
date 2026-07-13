@@ -19,6 +19,56 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
     TEST_ASSERT_INT(&g_harness, label, got, exp); \
 } while (0)
 
+#define TEST_GUIDE_LABEL_CAP 8
+
+typedef struct TestGuideLabelRecord {
+    float pos[3];
+    void *font[RENDER3D_GUIDE_LABEL_MAX_RUNS];
+    char text[RENDER3D_GUIDE_LABEL_MAX_RUNS][160];
+    int run_count;
+} TestGuideLabelRecord;
+
+typedef struct TestGuideLabelCapture {
+    TestGuideLabelRecord labels[TEST_GUIDE_LABEL_CAP];
+    int count;
+} TestGuideLabelCapture;
+
+static void test_guide_label_record(void *user_data,
+                                    const Render3dGuideLabelSpec *label) {
+    TestGuideLabelCapture *capture = (TestGuideLabelCapture *)user_data;
+    TestGuideLabelRecord *record;
+    int run_count;
+    int i;
+
+    if (!capture || !label || capture->count >= TEST_GUIDE_LABEL_CAP)
+        return;
+    record = &capture->labels[capture->count++];
+    memset(record, 0, sizeof(*record));
+    record->pos[0] = label->pos[0];
+    record->pos[1] = label->pos[1];
+    record->pos[2] = label->pos[2];
+    run_count = label->run_count;
+    if (run_count < 0) run_count = 0;
+    if (run_count > RENDER3D_GUIDE_LABEL_MAX_RUNS)
+        run_count = RENDER3D_GUIDE_LABEL_MAX_RUNS;
+    record->run_count = run_count;
+    for (i = 0; i < run_count; i++) {
+        record->font[i] = label->runs[i].font;
+        if (label->runs[i].text) {
+            strncpy(record->text[i], label->runs[i].text,
+                    sizeof(record->text[i]) - 1);
+            record->text[i][sizeof(record->text[i]) - 1] = '\0';
+        }
+    }
+}
+
+static void install_test_label_sink(Render3dGuideSnapshot *snapshot,
+                                    TestGuideLabelCapture *capture) {
+    memset(capture, 0, sizeof(*capture));
+    snapshot->label_sink.record = test_guide_label_record;
+    snapshot->label_sink.user_data = capture;
+}
+
 static Render3dGuideSnapshot base_snapshot(const GLCmd *source_cmds,
                                         int source_count,
                                         const GLCmd *flat_cmds,
@@ -71,6 +121,8 @@ static void test_transform_guides_render(void) {
         snapshot.alpha_scale = 1.0f;
         snapshot.anim_time = 0.0f;
         snapshot.xform_guide_mode = RENDER3D_XFORM_GUIDE_FRAME;
+        TestGuideLabelCapture capture;
+        install_test_label_sink(&snapshot, &capture);
 
         int prepared = render3d_transform_guides_prepare(&snapshot, &plan);
         ASSERT_INT("translate prepared", prepared, 1);
@@ -86,6 +138,9 @@ static void test_transform_guides_render(void) {
         render3d_transform_guides_render_if_due(&snapshot, &plan, 0, cam_view);
         ASSERT_TRUE("translate rendering calls glBegin", gl_stub_counts[GL_STUB_glBegin] > 0);
         ASSERT_TRUE("translate rendering calls glPushAttrib", gl_stub_counts[GL_STUB_glPushAttrib] > 0);
+        ASSERT_INT("translate records one endpoint label", capture.count, 1);
+        ASSERT_TRUE("translate label records endpoint coordinates",
+                    strstr(capture.labels[0].text[0], "2.00") != NULL);
     }
 
     /* 2. Scale guide rendering */
@@ -114,6 +169,8 @@ static void test_transform_guides_render(void) {
         snapshot.alpha_scale = 1.0f;
         snapshot.anim_time = 0.0f;
         snapshot.xform_guide_mode = RENDER3D_XFORM_GUIDE_FRAME;
+        TestGuideLabelCapture capture;
+        install_test_label_sink(&snapshot, &capture);
 
         int prepared = render3d_transform_guides_prepare(&snapshot, &plan);
         ASSERT_INT("scale prepared", prepared, 1);
@@ -128,6 +185,7 @@ static void test_transform_guides_render(void) {
         gl_stub_counts_reset();
         render3d_transform_guides_render_if_due(&snapshot, &plan, 0, cam_view);
         ASSERT_TRUE("scale rendering calls glBegin", gl_stub_counts[GL_STUB_glBegin] > 0);
+        ASSERT_INT("scale guide has no text label to record", capture.count, 0);
     }
 
     /* 3. Rotate guide rendering */
@@ -158,6 +216,8 @@ static void test_transform_guides_render(void) {
         snapshot.alpha_scale = 1.0f;
         snapshot.anim_time = 0.0f;
         snapshot.xform_guide_mode = RENDER3D_XFORM_GUIDE_FRAME;
+        TestGuideLabelCapture capture;
+        install_test_label_sink(&snapshot, &capture);
 
         int prepared = render3d_transform_guides_prepare(&snapshot, &plan);
         ASSERT_INT("rotate prepared", prepared, 1);
@@ -172,6 +232,9 @@ static void test_transform_guides_render(void) {
         gl_stub_counts_reset();
         render3d_transform_guides_render_if_due(&snapshot, &plan, 0, cam_view);
         ASSERT_TRUE("rotate rendering calls glBegin", gl_stub_counts[GL_STUB_glBegin] > 0);
+        ASSERT_INT("rotate records one angle label", capture.count, 1);
+        ASSERT_TRUE("rotate label records the swept angle",
+                    strstr(capture.labels[0].text[0], "+45") != NULL);
     }
 
     /* 4. World-aligned translation guide rendering (exercises compute_after_cursor_origin) */
@@ -400,9 +463,29 @@ static void test_replay_transform_guide_render(void) {
 static void test_geometry_guides_render(void) {
     printf("--- geometry guides rendering ---\n");
 
-    /* 1. 1-DOF vertex line guide */
+    /* 1. 2-DOF vertex plane guide */
     {
         Render3dGuideSnapshot snapshot = {0};
+        TestGuideLabelCapture capture;
+        snapshot.show_guides = 1;
+        snapshot.input = "glVertex3f(1.0,";
+        snapshot.input_len = (int)strlen(snapshot.input);
+        snapshot.vertex_n_filled = 1;
+        snapshot.vertex_filled[0] = 1;
+        snapshot.vertex_args[0] = 1.0f;
+        snapshot.alpha_scale = 1.0f;
+        install_test_label_sink(&snapshot, &capture);
+
+        render3d_geometry_guides_render_for_cursor(&snapshot);
+        ASSERT_INT("vertex plane records one coordinate label", capture.count, 1);
+        ASSERT_TRUE("vertex plane label names the pinned coordinate",
+                    strcmp(capture.labels[0].text[0], "x = 1") == 0);
+    }
+
+    /* 2. 1-DOF vertex line guide */
+    {
+        Render3dGuideSnapshot snapshot = {0};
+        TestGuideLabelCapture capture;
         snapshot.show_guides = 1;
         snapshot.input = "glVertex3f(1.0, 2.0,";
         snapshot.input_len = (int)strlen(snapshot.input);
@@ -414,15 +497,20 @@ static void test_geometry_guides_render(void) {
         snapshot.vertex_args[1] = 2.0f;
         snapshot.vertex_args[2] = 0.0f;
         snapshot.alpha_scale = 1.0f;
+        install_test_label_sink(&snapshot, &capture);
 
         gl_stub_counts_reset();
         render3d_geometry_guides_render_for_cursor(&snapshot);
         ASSERT_TRUE("1-DOF vertex line guide renders", gl_stub_counts[GL_STUB_glBegin] > 0);
+        ASSERT_INT("vertex line records one free-axis label", capture.count, 1);
+        ASSERT_TRUE("vertex line label names the free axis",
+                    strcmp(capture.labels[0].text[0], "z") == 0);
     }
 
-    /* 2. Normal guide with valid base pos (normal_base_pos_valid = 1) */
+    /* 3. Normal guide with valid base pos (normal_base_pos_valid = 1) */
     {
         Render3dGuideSnapshot snapshot = {0};
+        TestGuideLabelCapture capture;
         snapshot.show_guides = 1;
         snapshot.input = "glNormal3f(0.0, 1.0, 0.0)";
         snapshot.input_len = (int)strlen(snapshot.input);
@@ -436,13 +524,21 @@ static void test_geometry_guides_render(void) {
         snapshot.normal_base_pos[2] = 3.0f;
         snapshot.normal_base_pos_valid = 1;
         snapshot.alpha_scale = 1.0f;
+        install_test_label_sink(&snapshot, &capture);
 
         gl_stub_counts_reset();
         render3d_geometry_guides_render_for_cursor(&snapshot);
         ASSERT_TRUE("normal guide with base pos renders", gl_stub_counts[GL_STUB_glBegin] > 0);
+        ASSERT_INT("normal guide records one compound label", capture.count, 1);
+        ASSERT_INT("normal guide label has primary and detail runs",
+                   capture.labels[0].run_count, 2);
+        ASSERT_TRUE("normal guide records the n prefix",
+                    strcmp(capture.labels[0].text[0], " n") == 0);
+        ASSERT_TRUE("normal guide records direction detail",
+                    strstr(capture.labels[0].text[1], "(0.00, 1.00, 0.00)") != NULL);
     }
 
-    /* 3. Raster-position guide uses the same breathing point marker as a
+    /* 4. Raster-position guide uses the same breathing point marker as a
      * fully specified vertex guide. */
     {
         Render3dGuideSnapshot snapshot = {0};
@@ -463,7 +559,7 @@ static void test_geometry_guides_render(void) {
                    (int)gl_stub_counts[GL_STUB_glVertex3f], 2);
     }
 
-    /* 4. Normal guide with valid source search fallback */
+    /* 5. Normal guide with valid source search fallback */
     {
         GLCmd source_cmds[2] = {0};
         source_cmds[0].type = CMD_NORMAL3F;
@@ -493,7 +589,7 @@ static void test_geometry_guides_render(void) {
         ASSERT_TRUE("normal guide with source fallback renders", gl_stub_counts[GL_STUB_glBegin] > 0);
     }
 
-    /* 5. Normal guide with invalid/no anchor found */
+    /* 6. Normal guide with invalid/no anchor found */
     {
         GLCmd source_cmds[1] = {0};
         source_cmds[0].type = CMD_NORMAL3F;
@@ -516,6 +612,30 @@ static void test_geometry_guides_render(void) {
         gl_stub_counts_reset();
         render3d_geometry_guides_render_for_cursor(&snapshot);
         ASSERT_INT("normal guide with no vertex does not render", (int)gl_stub_counts[GL_STUB_glBegin], 0);
+    }
+
+    /* 7. Clip-plane guide compound label. */
+    {
+        Render3dGuideSnapshot snapshot = {0};
+        TestGuideLabelCapture capture;
+        snapshot.show_guides = 1;
+        snapshot.input = "glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0,1,0,0})";
+        snapshot.input_len = (int)strlen(snapshot.input);
+        snapshot.clip_plane_idx = 0;
+        snapshot.clip_plane_args[1] = 1.0f;
+        snapshot.clip_plane_n_filled = 4;
+        snapshot.clip_plane_cap_enabled = 1;
+        snapshot.alpha_scale = 1.0f;
+        install_test_label_sink(&snapshot, &capture);
+
+        render3d_geometry_guides_render_for_cursor(&snapshot);
+        ASSERT_INT("clip plane records one compound label", capture.count, 1);
+        ASSERT_INT("clip-plane label has primary and detail runs",
+                   capture.labels[0].run_count, 2);
+        ASSERT_TRUE("clip-plane label records its slot",
+                    strcmp(capture.labels[0].text[0], " P0") == 0);
+        ASSERT_TRUE("clip-plane label records its equation",
+                    strstr(capture.labels[0].text[1], "(0.00, 1.00, 0.00, 0.00)") != NULL);
     }
 }
 #endif

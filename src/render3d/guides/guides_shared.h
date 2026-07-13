@@ -13,6 +13,32 @@
 #include "repl/flatten.h"
 #include "render3d/guides/xform_guide_mode.h"
 
+#define RENDER3D_GUIDE_LABEL_MAX_RUNS 2
+
+/* Optional immediate reporting channel for bitmap labels emitted by edit
+ * guides. Text pointers only need to remain valid for the duration of the
+ * callback. The sink records placement metadata; guide renderers remain the
+ * owners of drawing and do not depend on the consumer. */
+typedef struct Render3dGuideLabelRun {
+    void       *font;
+    const char *text;
+} Render3dGuideLabelRun;
+
+typedef struct Render3dGuideLabelSpec {
+    float pos[3];
+    Render3dGuideLabelRun runs[RENDER3D_GUIDE_LABEL_MAX_RUNS];
+    int run_count;
+} Render3dGuideLabelSpec;
+
+typedef void (*Render3dGuideLabelRecordFn)(
+    void *user_data,
+    const Render3dGuideLabelSpec *label);
+
+typedef struct Render3dGuideLabelSink {
+    Render3dGuideLabelRecordFn record;
+    void *user_data;
+} Render3dGuideLabelSink;
+
 typedef struct Render3dGuideSnapshot {
     int show_guides;
     int replaying;
@@ -106,6 +132,11 @@ typedef struct Render3dGuideSnapshot {
     int   clip_plane_cap_enabled;
 
     float alpha_scale; /* alpha boost to counter dark-bg crush; 1.0 = no change */
+
+    /* Nullable observer for labels drawn by the active edit guide. The
+     * controller leaves this empty; edit_overlays installs it only while
+     * vertex-label decluttering needs fixed guide-label obstacles. */
+    Render3dGuideLabelSink label_sink;
 } Render3dGuideSnapshot;
 
 typedef struct Render3dTransformGuidePlan {

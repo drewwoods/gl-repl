@@ -41,6 +41,32 @@ static const Render3dColorToken k_guide_plane_edge[3] = {
 /* Axis letters for guide labels, indexed like the color tables. */
 static const char k_guide_axis_letter[3] = { 'x', 'y', 'z' };
 
+static void geometry_guides_record_label(
+    const Render3dGuideSnapshot *snapshot,
+    const float pos[3],
+    void *primary_font, const char *primary_text,
+    void *detail_font, const char *detail_text) {
+    Render3dGuideLabelSpec label;
+
+    if (!snapshot || !snapshot->label_sink.record || !pos ||
+        !primary_font || !primary_text || !primary_text[0])
+        return;
+
+    memset(&label, 0, sizeof(label));
+    label.pos[0] = pos[0];
+    label.pos[1] = pos[1];
+    label.pos[2] = pos[2];
+    label.runs[0].font = primary_font;
+    label.runs[0].text = primary_text;
+    label.run_count = 1;
+    if (detail_font && detail_text && detail_text[0]) {
+        label.runs[1].font = detail_font;
+        label.runs[1].text = detail_text;
+        label.run_count = 2;
+    }
+    snapshot->label_sink.record(snapshot->label_sink.user_data, &label);
+}
+
 /* Draw a semi-transparent "coordinate paper" sheet perpendicular to
  * `free_axis` at coordinate v. `free_axis` ∈ {0=X, 1=Y, 2=Z}; the
  * other two axes span the [-sz, +sz] face. `as` is the snapshot's
@@ -57,7 +83,8 @@ static const char k_guide_axis_letter[3] = { 'x', 'y', 'z' };
  *     depth off (shared occluded-ghost dash language)
  *   - an "x=1.2"-style readout naming the typed coordinate
  */
-static void draw_guide_axis_plane(int free_axis, float v, float sz, float as) {
+static void draw_guide_axis_plane(const Render3dGuideSnapshot *snapshot,
+                                  int free_axis, float v, float sz, float as) {
     int a_axis, b_axis;
     if (free_axis == 0)      { a_axis = 1; b_axis = 2; } /* YZ plane */
     else if (free_axis == 1) { a_axis = 0; b_axis = 2; } /* XZ plane */
@@ -151,6 +178,7 @@ static void draw_guide_axis_plane(int free_axis, float v, float sz, float as) {
         p[side_axis] = sz * 0.08f;
         glDisable(GL_DEPTH_TEST);
         render3d_clr_a(k_guide_plane_edge[free_axis], fminf(0.9f * as, 1.0f));
+        geometry_guides_record_label(snapshot, p, FONT_SMALL, label, NULL, NULL);
         render3d_draw_bitmap_text(FONT_SMALL, p[0], p[1], p[2], label);
     }
 
@@ -230,7 +258,8 @@ static void draw_vertex_point_marker(const Render3dGuideSnapshot *snapshot,
  * make the open coordinate readable, a stippled depth-off ghost keeps
  * the locus visible through geometry, and the still-free axis is named
  * at the line's positive end. */
-static void draw_vertex_line_guide(int free_axis, const float vals[3],
+static void draw_vertex_line_guide(const Render3dGuideSnapshot *snapshot,
+                                   int free_axis, const float vals[3],
                                    float sz, float as) {
     float p[3] = { vals[0], vals[1], vals[2] };
 
@@ -293,6 +322,7 @@ static void draw_vertex_line_guide(int free_axis, const float vals[3],
         float q[3] = { p[0], p[1], p[2] };
         q[free_axis] = sz * 1.05f;
         render3d_clr_a(k_guide_line_clr[free_axis], fminf(0.9f * as, 1.0f));
+        geometry_guides_record_label(snapshot, q, FONT_SMALL, label, NULL, NULL);
         render3d_draw_bitmap_text(FONT_SMALL, q[0], q[1], q[2], label);
     }
 
@@ -427,13 +457,13 @@ static void draw_vertex_guides(const Render3dGuideSnapshot *snapshot) {
 
     if (n == 1) {
         /* 2 DOF: one axis typed => plane perpendicular to it. */
-        if      (filled[0]) draw_guide_axis_plane(0, vals[0], sz, as);
-        else if (filled[1]) draw_guide_axis_plane(1, vals[1], sz, as);
-        else if (filled[2]) draw_guide_axis_plane(2, vals[2], sz, as);
+        if      (filled[0]) draw_guide_axis_plane(snapshot, 0, vals[0], sz, as);
+        else if (filled[1]) draw_guide_axis_plane(snapshot, 1, vals[1], sz, as);
+        else if (filled[2]) draw_guide_axis_plane(snapshot, 2, vals[2], sz, as);
     } else if (n == 2) {
         /* 1 DOF: two axes typed => line along the remaining free axis. */
         int free_axis = !filled[2] ? 2 : (!filled[1] ? 1 : 0);
-        draw_vertex_line_guide(free_axis, vals, sz, as);
+        draw_vertex_line_guide(snapshot, free_axis, vals, sz, as);
     } else {
         /* 0 DOF: all coords typed => exact vertex point. */
         draw_vertex_point_marker(snapshot, vals[0], vals[1], vals[2]);
@@ -580,6 +610,15 @@ static void draw_normal_guides(const Render3dGuideSnapshot *snapshot) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     float as = snapshot->alpha_scale;
+    if (clen > 1e-8f) {
+        float label_pos[3] = {
+            vx + cn[0] * scale,
+            vy + cn[1] * scale,
+            vz + cn[2] * scale
+        };
+        geometry_guides_record_label(snapshot, label_pos,
+                                     FONT_MONO, " n", FONT_TINY, detail);
+    }
     render3d_draw_focused_normal_glyph(vx, vy, vz,
                                     vals[0], vals[1], vals[2],
                                     scale, as, " n", detail);
@@ -737,6 +776,15 @@ static void draw_clip_plane_guide(const Render3dGuideSnapshot *snapshot) {
              guide_sanitize_zero(a), guide_sanitize_zero(b),
              guide_sanitize_zero(c), guide_sanitize_zero(d),
              snapshot->clip_plane_cap_enabled ? "" : " (off)");
+    {
+        float label_pos[3] = {
+            p0[0] + n[0] * 0.9f,
+            p0[1] + n[1] * 0.9f,
+            p0[2] + n[2] * 0.9f
+        };
+        geometry_guides_record_label(snapshot, label_pos,
+                                     FONT_MONO, primary, FONT_TINY, detail);
+    }
     render3d_draw_focused_normal_glyph(p0[0], p0[1], p0[2],
                                     n[0], n[1], n[2],
                                     0.9f, as * on, primary, detail);
