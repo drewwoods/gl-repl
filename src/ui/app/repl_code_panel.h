@@ -51,6 +51,11 @@ int ui_repl_code_panel_classify_syntax(const UiRenderSnapshot *snap,
                                        const char *text,
                                        UiSyntaxSpan *out, int max_spans);
 
+/* Infer the syntax category of a generated, non-editable C row. Recognizes
+ * REPL GL calls plus the extra C/GLUT scaffold vocabulary used by the expanded
+ * code view. Exposed for focused classifier tests. */
+CmdSyntaxCategory ui_repl_code_panel_generated_category(const char *text);
+
 /* Final RGB (0..1) for a token kind: a brightness/saturation tier of the
  * command's class color (same hue, dimmer). Exposed for the contrast
  * regression test. */
@@ -115,5 +120,11 @@ int ui_repl_code_panel_row_marker_for_test(int source_line_idx,
  * when a row was found, including rows whose aux label is empty. */
 int ui_repl_code_panel_row_aux_label_for_test(int source_line_idx,
                                               char out_label[8]);
+
+/* Test-only: build rows without GL rendering and return the muted base color
+ * plus syntax-span count for the first static row containing `needle`. */
+int ui_repl_code_panel_generated_row_style_for_test(
+        const UiRenderSnapshot *snap, const char *needle,
+        float out_rgb[3], int *out_segment_count);
 
 #endif /* UI_REPL_CODE_PANEL_H */

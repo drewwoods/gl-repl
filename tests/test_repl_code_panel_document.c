@@ -141,6 +141,32 @@ int main(void) {
         ASSERT_TRUE("baseline has header chrome", base_header > 0);
         ASSERT_TRUE("baseline has footer chrome", base_footer > 0);
 
+        {
+            float state_rgb[3];
+            float transform_rgb[3];
+            int state_segments = 0;
+            int transform_segments = 0;
+            ASSERT_TRUE("generated state row style available",
+                        ui_repl_code_panel_generated_row_style_for_test(
+                            &snap, "glEnable(GL_MULTISAMPLE)", state_rgb,
+                            &state_segments));
+            ASSERT_TRUE("generated transform row style available",
+                        ui_repl_code_panel_generated_row_style_for_test(
+                            &snap, "glTranslatef(", transform_rgb,
+                            &transform_segments));
+            ASSERT_TRUE("generated rows retain syntax spans",
+                        state_segments > 0 && transform_segments > 0);
+            ASSERT_TRUE("generated categories retain distinct hues",
+                        state_rgb[0] != transform_rgb[0] ||
+                        state_rgb[1] != transform_rgb[1] ||
+                        state_rgb[2] != transform_rgb[2]);
+            ASSERT_TRUE("generated base colors stay visually subordinate",
+                        state_rgb[0] < 0.75f && state_rgb[1] < 0.75f &&
+                        state_rgb[2] < 0.75f &&
+                        transform_rgb[0] < 0.75f && transform_rgb[1] < 0.75f &&
+                        transform_rgb[2] < 0.75f);
+        }
+
         snprintf(repl_state_import_export_mut()->camera_comment_line,
                  REPL_EXPORT_CAMERA_LINE_MAX, "  // --- Camera ---");
         build_doc(&snap, &layout);

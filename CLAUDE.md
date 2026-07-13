@@ -562,7 +562,7 @@ explaining why the extra background is useful.
 | [`src/ui/core/text_layout.c`](src/ui/core/text_layout.c) | Pure code-panel wrapping, row counts, segment lookup, cursor-row mapping |
 | [`src/ui/core/text_layout.h`](src/ui/core/text_layout.h) | [`CodeLayout`](src/ui/core/text_layout.h#L57) / [`CodeWrapIter`](src/ui/core/text_layout.h#L70) API shared by UI, export dumps, tests |
 | [`src/ui/app/repl_code_panel.c`](src/ui/app/repl_code_panel.c) | REPL-specific code-panel adapter: row building, scroll-follow layout, render/hit bridging |
-| [`src/ui/app/repl_code_panel.h`](src/ui/app/repl_code_panel.h) | [`UiReplCodePanelLayout`](src/ui/app/repl_code_panel.h#L61) plus REPL adapter render/hit/layout entrypoints |
+| [`src/ui/app/repl_code_panel.h`](src/ui/app/repl_code_panel.h) | [`UiReplCodePanelLayout`](src/ui/app/repl_code_panel.h#L66) plus REPL adapter render/hit/layout entrypoints |
 | [`src/repl/executor.c`](src/repl/executor.c) | Narrow live-GL dispatch: walks the flat command array emitting OpenGL calls |
 | [`src/repl/executor.h`](src/repl/executor.h) | Executor public API (`repl_execute_program`, transform helpers) |
 | [`src/repl/flatten.c`](src/repl/flatten.c) | Source-to-flat program builder: unrolls loops, inlines functions, resolves if-blocks |

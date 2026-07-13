@@ -176,6 +176,49 @@ int main(void) {
         check_line("decl", t, "k", REPL_SYNTAX_VARIABLE);
     }
 
+    /* Generated C vocabulary: types/keywords stay structural, macro names are
+     * constants, and C suffixes/character literals remain whole literals. */
+    {
+        const char *t = "static GLfloat value = 0.25f;";
+        check_no_span("generated-C", t, "static");
+        check_no_span("generated-C", t, "GLfloat");
+        check_line("generated-C", t, "value", REPL_SYNTAX_VARIABLE);
+        check_line("generated-C", t, "0.25f", REPL_SYNTAX_LITERAL);
+    }
+    {
+        const char *t = "#if defined(__APPLE__)";
+        check_no_span("preprocessor", t, "defined");
+        check_line("preprocessor", t, "__APPLE__", REPL_SYNTAX_CONSTANT);
+    }
+    check_line("character literal", "ch = '\\0';", "'\\0'",
+               REPL_SYNTAX_LITERAL);
+
+    /* Generated rows recover the normal syntax family from their C/GL
+     * vocabulary before the non-editable muting pass is applied. */
+    ASSERT_TRUE("generated transform category",
+                ui_repl_code_panel_generated_category(
+                    "  glTranslatef(0.0f, 0.0f, -5.0f);") ==
+                    CMD_CAT_TRANSFORM);
+    ASSERT_TRUE("generated state category",
+                ui_repl_code_panel_generated_category(
+                    "  glLightfv(GL_LIGHT0, GL_POSITION, p);") ==
+                    CMD_CAT_STATE);
+    ASSERT_TRUE("generated color category",
+                ui_repl_code_panel_generated_category(
+                    "  glClearColor(0, 0, 0, 1);") == CMD_CAT_COLOR);
+    ASSERT_TRUE("generated function category",
+                ui_repl_code_panel_generated_category(
+                    "void display(void) {") == CMD_CAT_FUNCTION);
+    ASSERT_TRUE("generated declaration category",
+                ui_repl_code_panel_generated_category(
+                    "  float A[16], B[16], C[16];") == CMD_CAT_VARIABLE);
+    ASSERT_TRUE("generated comment category",
+                ui_repl_code_panel_generated_category(
+                    "  // Camera") == CMD_CAT_COMMENT);
+    ASSERT_TRUE("generated preprocessor conditional category",
+                ui_repl_code_panel_generated_category(
+                    "#if defined(__APPLE__)") == CMD_CAT_CONDITIONAL);
+
     /* A trailing `// ...` ends syntax classification: code tokens before
      * the comment are still classified, but words inside the comment get
      * NO span (so they are not syntax-colored, and the comment can be
