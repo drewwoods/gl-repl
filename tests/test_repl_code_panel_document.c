@@ -9,6 +9,7 @@
 #include "ui/app/state.h"
 #include "repl/export.h"
 #include "repl/state.h"
+#include "repl/state_owners.h"
 #include "ui/app/layout.h"
 #include "ui/core/metrics.h"
 #include "ui/app/repl_code_panel.h"
@@ -139,6 +140,13 @@ int main(void) {
         base_footer = layout.footer_rows;
         ASSERT_TRUE("baseline has header chrome", base_header > 0);
         ASSERT_TRUE("baseline has footer chrome", base_footer > 0);
+
+        snprintf(repl_state_import_export_mut()->camera_comment_line,
+                 REPL_EXPORT_CAMERA_LINE_MAX, "  // --- Camera ---");
+        build_doc(&snap, &layout);
+        ASSERT_TRUE("full chrome includes preserved camera marker",
+                    layout.header_rows > base_header);
+        base_header = layout.header_rows;
 
         glr_state_presentation_mut()->code_focus = 1;
         build_doc(&snap, &layout);

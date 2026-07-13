@@ -432,6 +432,7 @@ ReplImportExportView repl_state_import_export(void) {
         .workspace_header_lines = g_repl_state.import_export.workspace_header_lines,
         .workspace_header_line_count = g_repl_state.import_export.workspace_header_line_count,
         .render_state_lines = g_repl_state.import_export.render_state_lines,
+        .camera_comment_line = g_repl_state.import_export.camera_comment_line,
         .cam_lines = g_repl_state.import_export.cam_lines,
         .export_scene_name_hint = g_repl_state.import_export.export_scene_name_hint,
         .pending_scene_name = g_repl_state.import_export.pending_scene_name,

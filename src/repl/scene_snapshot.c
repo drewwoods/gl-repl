@@ -114,7 +114,11 @@ void scene_snapshot_capture_live(SceneSnapshot *dst) {
     }
 
     {
+        ReplImportExportView io = repl_state_import_export();
         const ReplExportCameraBridge *cam_bridge = repl_export_camera_bridge();
+
+        snprintf(dst->camera_comment_line, sizeof(dst->camera_comment_line),
+                 "%s", io.camera_comment_line);
         if (cam_bridge && cam_bridge->fill_display_block)
             cam_bridge->fill_display_block(&dst->camera_block);
     }
@@ -166,6 +170,8 @@ int scene_snapshot_apply_live(const SceneSnapshot *src,
     repl_eval_restore_scratch_arrays(src->scratch_arrays);
     scene_snapshot_apply_aliases(src->func_aliases);
     scene_snapshot_apply_cfg(&src->cfg);
+    snprintf(repl_state_import_export_writable()->camera_comment_line,
+             REPL_EXPORT_CAMERA_LINE_MAX, "%s", src->camera_comment_line);
     scene_snapshot_apply_camera(&src->camera_block, camera_mode);
     return 1;
 }

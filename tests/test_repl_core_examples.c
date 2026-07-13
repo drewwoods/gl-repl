@@ -2016,8 +2016,8 @@ int main(int argc, char **argv) {
                             "// @cfg vertex_outlines = 0") == NULL);
                   ASSERT_TRUE("stress example cfg backdrop hidden",
                         strstr(dump, "// @cfg backdrop = 6") == NULL);
-                ASSERT_TRUE("stress example camera marker hidden",
-                            strstr(dump, "// camera") == NULL);
+                ASSERT_TRUE("stress example camera marker restored in expanded panel",
+                            strstr(dump, "  // camera") != NULL);
                 ASSERT_TRUE("stress example camera rotate hidden",
                             strstr(dump,
                                    "glRotatef(26.0f, 1.0f, 0.0f, 0.0f);") == NULL);
@@ -2074,8 +2074,8 @@ int main(int argc, char **argv) {
                         strstr(dump, "// @cfg accum_effect = 0") == NULL);
             ASSERT_TRUE("mixed cfg camera layout cfg hidden",
                         strstr(dump, "// @cfg code_panel = 3") == NULL);
-            ASSERT_TRUE("mixed cfg camera marker hidden",
-                        strstr(dump, "// camera") == NULL);
+            ASSERT_TRUE("mixed cfg camera marker restored in expanded panel",
+                        strstr(dump, "  // camera") != NULL);
             ASSERT_TRUE("mixed cfg camera body kept",
                         strstr(dump, "glVertex3f(0, 0, 0);") != NULL);
             free(dump);
@@ -2129,6 +2129,9 @@ int main(int argc, char **argv) {
         repl_load_example_lines_for_test(spaced_cfg_camera_example);
         ASSERT_TRUE("spaced cfg camera allowed cfg applied",
                     glr_state_presentation().axes_theme == 4);
+        ASSERT_TRUE("decorated camera marker preserved for expanded panel",
+                    strcmp(repl_state_import_export().camera_comment_line,
+                           "  // --- Camera -------------------------") == 0);
 
         dump = dump_current_code_panel_text();
         ASSERT_TRUE("spaced cfg camera immediate dump alloc", dump != NULL);
@@ -2136,8 +2139,8 @@ int main(int argc, char **argv) {
             ASSERT_TRUE("spaced cfg camera immediate dump uses target",
                         strstr(dump,
                                "glTranslatef(0.0000f, 0.0000f, -8.0000f);") != NULL);
-            ASSERT_TRUE("decorated camera marker hidden",
-                        strstr(dump, "// --- Camera") == NULL);
+            ASSERT_TRUE("decorated camera marker restored in expanded panel",
+                        strstr(dump, "  // --- Camera") != NULL);
             ASSERT_TRUE("spaced cfg camera rotate hidden",
                         strstr(dump,
                                "glRotatef(14.0f, 1.0f, 0.0f, 0.0f);") == NULL);
@@ -2182,6 +2185,8 @@ int main(int argc, char **argv) {
         load_custom_example_lines_for_test(prose_camera_example);
         ASSERT_TRUE("camera prose keeps every source line",
                     repl_state_document_count() == 8);
+        ASSERT_TRUE("camera prose does not become expanded-panel marker",
+                    repl_state_import_export().camera_comment_line[0] == '\0');
 
         dump = dump_current_code_panel_text();
         ASSERT_TRUE("camera prose dump alloc", dump != NULL);

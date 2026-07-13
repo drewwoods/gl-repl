@@ -780,7 +780,7 @@ signature for audited renderers.
   REPL-owned render *tail* ([`ReplRenderState`](../src/repl/state_views.h#L100): per-light state + clear
   color) remains a REPL slice.
 * pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L82), [`EditorInputView`](../src/editor/state.h#L68),
-  [`ReplImportExportView`](../src/repl/state_views.h#L128), [`FlatProgramView`](../src/repl/flatten.h#L46), [`ReplPredefView`](../src/repl/eval.h#L178))
+  [`ReplImportExportView`](../src/repl/state_views.h#L129), [`FlatProgramView`](../src/repl/flatten.h#L46), [`ReplPredefView`](../src/repl/eval.h#L178))
 * document/flat metadata (`document_cmds`, `document_count`, `edit_line`
   — sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L347),
   `flat_program_count`, …)

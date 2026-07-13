@@ -34,7 +34,10 @@ group = Basics
 camera block before geometry source. Its marker may be the compact `// camera`
 form or a decorated section heading such as `// --- Camera ---`; punctuation
 and case are ignored, but the comment's alphabetic text must be exactly
-`camera`. Names, tags, and groups belong in the catalog, not in scene files.
+`camera`. The authored marker is hidden with the other metadata in Code Focus
+mode and restored as the heading above the generated camera transforms when
+Code Focus is off. Names, tags, and groups belong in the catalog, not in scene
+files.
 
 `.c` files should be normal exported C files with `// Snippet start` /
 `// Snippet end` markers. They are useful when an example is easier to keep as
