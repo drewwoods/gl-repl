@@ -8,13 +8,10 @@
 examples/scenes/annotated-orbit-plot-labels.glr
 examples/scenes/clip-planes-carve-solids.glr
 examples/scenes/dusk-lighthouse-atoll-stress-test.glr
-examples/scenes/glow-sprites-blend-point-attenuation.glr
 examples/scenes/glu-concave-arrow-extrusion.glr
 examples/scenes/jellyfish-gldepthmask-translucency.glr
 examples/scenes/orrery-labels-track-3d-orbits.glr
 examples/scenes/ringed-planet-nebula-skies.glr
-examples/scenes/rotating-cube.glr
-examples/scenes/snowfall-particles.glr
 examples/scenes/swaying-grass-field-rand-t.glr
 examples/scenes/teapot-carousel-transform-stacks-glow-points.glr
 examples/scenes/whale-particle-system-lit-model.glr

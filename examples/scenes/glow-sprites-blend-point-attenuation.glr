@@ -22,7 +22,7 @@ static float orbitRate = 0.4;   // angular speed of the xz orbit (animates with 
 static float yWobbleFreq = 1.3; // y wobble frequency relative to the base angle
 static float yWobbleRate = 0.6; // y wobble time-rate (animates with t)
 static float yAmp = 0.9;        // y wobble amplitude
-glClearColor(0.1, 0.1, 0.1, 1.0);
+glClearColor(0.05, 0.06, 0.08, 1.0);
 // Glow sprites: additive blend + distance-attenuated point size.
 // Each particle orbits in xz at (radius, angle) while y wobbles independently.
 glDisable(GL_LIGHTING);

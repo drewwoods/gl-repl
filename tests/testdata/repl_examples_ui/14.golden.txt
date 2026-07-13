@@ -105,7 +105,7 @@ void display(void) {
   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
-  // Traveling ripple ring: nested for + fmod + conditional deformation
+  // Traveling ripple ring: for + fmod + conditional deformation
   glClearColor(0.05, 0.06, 0.08, 1);
   amp = 0.1 * sin(t * TAU);
   phase = fmod(t / 3, TAU);

@@ -13,7 +13,7 @@ glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
 glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});
 glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
-// Traveling ripple ring: nested for + fmod + conditional deformation
+// Traveling ripple ring: for + fmod + conditional deformation
 static float phase, width, delta, amp, x, y;
 static float n = 400; // ring segment count
 glClearColor(0.05, 0.06, 0.08, 1.0);

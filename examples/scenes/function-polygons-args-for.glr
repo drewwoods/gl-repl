@@ -10,6 +10,7 @@ glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
 glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});
 glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
+static float s; // palette mix in [0,1]
 glClearColor(0.05, 0.06, 0.08, 1.0);
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_NORMALIZE);
@@ -19,7 +20,8 @@ polygon(radius, sides, phase) {
     glColor3f(0.92, 0.95, 0.98);
     glVertex3f(0, 0, 0);
     for(i, 0, sides + 1) {
-      glColor3f(1 - 0.85*(sin(i*TAU/sides + phase)*0.5+0.5), 0.35 + 0.2*(sin(i*TAU/sides + phase)*0.5+0.5), 0.2 + 0.8*(sin(i*TAU/sides + phase)*0.5+0.5));
+      s = sin(i*TAU/sides + phase)*0.5 + 0.5;
+      glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
       glVertex3f(cos(i*TAU/sides + phase)*radius, sin(i*TAU/sides + phase)*radius, 0);
     }
   glEnd();

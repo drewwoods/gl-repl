@@ -488,8 +488,8 @@ void display(void) {
   glDepthMask(GL_FALSE);
   // soft corona: thin additive shells at constant low alpha - the nested
   // layers accumulate, so brightness ramps smoothly toward the core (a
-  // radial falloff that. Each shell pulses at a phase offset to keep the
-  // shimmer.
+  // radial falloff). Each shell pulses at a phase offset to keep the
+  // shimmer alive.
   glPushMatrix();
     glScalef(1, 0.5, 1);
     for(i, 0, 20) {

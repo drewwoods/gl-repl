@@ -145,7 +145,9 @@ void display(void) {
     particleZ = launchZ + (launchVelZ * pow(dragDecay, ageSeconds*dragRate) - launchVelZ) / (dragRate*ln(dragDecay));
   }
 
-  drawWhale(blowHoleX, blowHoleY, blowHoleZ) {
+  // bhX/bhY/bhZ: blowhole position in the whale's local frame (the globals
+  // blowHoleX/Y/Z, passed in -- named apart so they don't shadow).
+  drawWhale(bhX, bhY, bhZ) {
     flukeAng = sin(speed*t*TAU)* 30;
     finAng = cos(speed*t*TAU)* 5;
     detail = max(12, floor(detail));
@@ -232,7 +234,7 @@ void display(void) {
     // Blowhole
     glColor3f(0.08, 0.08, 0.12);
     glPushMatrix();
-      glTranslatef(blowHoleX, blowHoleY, blowHoleZ);
+      glTranslatef(bhX, bhY, bhZ);
       glScalef(0.15, 0.04, 0.1);
       glutSolidSphere(1, 10, 8);
     glPopMatrix();

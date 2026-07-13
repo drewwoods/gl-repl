@@ -97,7 +97,7 @@ void display(void) {
   glTranslatef(-0.0000f, -1.2000f, -0.0000f);
 --- header_post ---
 --- source ---
-  static float y, c, a;
+  static float y, c, a; // planet latitude sin; color/brightness mix in [0,1]; comet orbit angle
 
   // banded gas giant: quad strips over latitude, bands swirled by t
   planet(rad, stacks, slices) {
