@@ -249,6 +249,10 @@ static void print_usage(const char *prog) {
             "               source line n (0-based; the line must be an\n"
             "               editable color command). Poses the picker for\n"
             "               captures - it otherwise needs a swatch click.\n"
+            "  GLR_OPEN_HELP=<tab>  Open the F1 help overlay on tab index\n"
+            "               tab (0=Overview 1=Commands 2=Keys 3=About) on\n"
+            "               the first frame. Poses the overlay for captures\n"
+            "               - it otherwise needs an F1 special-key press.\n"
             "\n"
             "Arguments:\n"
             "  input.c      Optional saved session to load at startup\n"
@@ -372,9 +376,27 @@ static void maybe_capture_open_color_picker(void) {
         glr_ctrl_open_color_picker(atoi(s));
 }
 
+/* Capture affordance, sibling of GLR_OPEN_COLOR_PICKER: GLR_OPEN_HELP=<tab>
+ * opens the F1 help overlay on the given tab index (0-based, clamped by
+ * the tab-advance action) on the first displayed frame. The overlay
+ * otherwise needs an F1 special-key press, which a headless capture run
+ * has no way to deliver (GLR_TYPE_KEYS only feeds ASCII bytes). */
+static void maybe_capture_open_help(void) {
+    static int done = 0;
+    if (done) return;
+    done = 1;
+    const char *s = getenv("GLR_OPEN_HELP");
+    if (!s) return;
+    glr_ctrl_toggle_help();
+    int tab = *s ? atoi(s) : 0;
+    for (int i = 0; i < tab; i++)
+        glr_action_help_tab_next();
+}
+
 static void display_func(void) {
     maybe_capture_view_toggle();
     maybe_capture_open_color_picker();
+    maybe_capture_open_help();
     /* Trace the first two frames separately (gated on g_detailed_prof
      * — see --detailed-prof / GLR_DETAILED_PROF). The first frame
      * pays one-shot costs (GLUT solid-shape display-list compile,
