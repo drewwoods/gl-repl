@@ -1,4 +1,5 @@
 #include "app/glr_ctrl.h"
+#include "repl/example_loader.h"
 #include "repl/flatten.h"
 #include "repl/pipeline.h"
 #include "repl/state_notify.h"
@@ -1078,6 +1079,97 @@ static void test_replay_call_site_expands_args(void) {
     replay_stop();
 }
 
+/* An aliased function ("NAME(...)" rather than "funcN(...)") expands its
+ * call site the same way: the alias name resolves to its slot and renders
+ * back as its own name. Covers a var-bearing arg and the all-literal case
+ * (example 25's sea(5.5, 13, 0.16)), which must still annotate so the
+ * active invocation and alias name are visible during replay. */
+static void test_replay_call_site_expands_alias_args(void) {
+    glr_ctrl_reset_all();
+    editor_feed_line("float m = 2;");           /* 0 */
+    editor_feed_line("wave(a, b) {");           /* 1 (alias def) */
+    editor_feed_line("glVertex3f(a, b, 0);");   /* 2 */
+    editor_feed_line("}");                       /* 3 */
+    editor_feed_line("wave(m * 3, 7);");        /* 4 (var arg) */
+    editor_feed_line("wave(4, 7);");            /* 5 (all literal) */
+    repl_flatten_commands(editor_state_edit_line());
+
+    replay_start();
+    g_replay_mode = REPLAY_MODE_VERTEX;
+    g_replay_state = REPLAY_PAUSED;
+
+    int safety = 1024;
+    while (g_replay_pc < g_replay_total_flat && safety-- > 0)
+        replay_advance(repl_state_flat_program_view());
+    ASSERT_TRUE("replay reached end", safety > 0);
+
+    int var_call = -1, lit_call = -1;
+    const GLCmd *doc = repl_state_document_cmds();
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        if (!doc[i].valid || doc[i].type != CMD_CALL)
+            continue;
+        if (var_call < 0) var_call = i;
+        else lit_call = i;
+    }
+    ASSERT_TRUE("found both alias call lines", var_call >= 0 && lit_call >= 0);
+
+    SourceTextView text = source_document_view();
+    char display[256];
+
+    replay_code_panel_get_command_display_text(text, var_call,
+                                               display, sizeof(display));
+    ASSERT_TRUE("alias var-arg call keeps its name and resolves args",
+                strstr(display, "wave(6, 7)") != NULL);
+
+    replay_code_panel_get_command_display_text(text, lit_call,
+                                               display, sizeof(display));
+    ASSERT_TRUE("alias literal-arg call still annotates",
+                strstr(display, "wave(4, 7)") != NULL);
+
+    replay_stop();
+}
+
+/* End-to-end against the shipped example 25: its sea(5.5, 13, 0.16) call is
+ * an aliased, all-literal invocation — exactly the case that reported no
+ * annotation before. It must now render " // sea(5.5, 13, 0.16)". */
+static void test_replay_example25_sea_alias(void) {
+    glr_ctrl_reset_all();
+    ASSERT_TRUE("loaded example 25", repl_load_example(24) > 0);
+    repl_flatten_commands(editor_state_edit_line());
+
+    /* Locate the sea(...) call source line. */
+    SourceTextView text = source_document_view();
+    const GLCmd *doc = repl_state_document_cmds();
+    int sea_call = -1;
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        if (!doc[i].valid || doc[i].type != CMD_CALL)
+            continue;
+        const char *src = source_text_line(text, i);
+        if (src && strstr(src, "sea(")) {
+            sea_call = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("found the sea() call line", sea_call >= 0);
+
+    replay_start();
+    g_replay_mode = REPLAY_MODE_VERTEX;
+    g_replay_state = REPLAY_PAUSED;
+
+    int safety = 400000;
+    while (g_replay_pc < g_replay_total_flat && safety-- > 0)
+        replay_advance(repl_state_flat_program_view());
+    ASSERT_TRUE("replay reached end of example 25", safety > 0);
+
+    char display[256];
+    replay_code_panel_get_command_display_text(text, sea_call,
+                                               display, sizeof(display));
+    ASSERT_TRUE("example 25 sea() call annotates its resolved args",
+                strstr(display, "sea(5.5, 13, 0.16)") != NULL);
+
+    replay_stop();
+}
+
 /* A for-loop header should expand to " // i = <iter>, n = <limit>" while
  * the replay position is inside the loop, and to the limit alone once the
  * position has moved past the loop. */
@@ -1144,6 +1236,8 @@ int main(void) {
     test_misc_helpers();
     test_replay_var_assign_uses_flatten_args();
     test_replay_call_site_expands_args();
+    test_replay_call_site_expands_alias_args();
+    test_replay_example25_sea_alias();
     test_replay_for_header_expands_iter_and_limit();
     test_replay_single_arg_shape_gets_eval_annotation();
     test_replay_baseline_restore_survives_predef_reshape();
