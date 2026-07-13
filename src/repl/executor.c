@@ -362,6 +362,9 @@ int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
     case CMD_FRONT_FACE:
         glFrontFace((GLenum)cmd->args[0]);
         return 1;
+    case CMD_CULL_FACE:
+        glCullFace((GLenum)cmd->args[0]);
+        return 1;
     case CMD_DEPTH_FUNC:
         glDepthFunc((GLenum)cmd->args[0]);
         return 1;
@@ -668,6 +671,9 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
     case CMD_LINE_WIDTH:
         glLineWidth(cmd->args[0]);
         break;
+    case CMD_LINE_STIPPLE:
+        glLineStipple((GLint)cmd->args[0], (GLushort)cmd->args[1]);
+        break;
     case CMD_GLUT_TORUS:
     case CMD_GLUT_CUBE:
     case CMD_GLUT_SPHERE:
@@ -853,6 +859,7 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
     case CMD_MATERIALF:
     case CMD_LIGHT_MODEL_I:
     case CMD_FRONT_FACE:
+    case CMD_CULL_FACE:
     case CMD_DEPTH_FUNC:
     case CMD_DEPTH_MASK:
     case CMD_COLOR_MASK:
