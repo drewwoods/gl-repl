@@ -118,9 +118,14 @@ def format_content(content: str) -> str:
             continue
 
         # Identify special comments that must not be indented
+        camera_payload = "".join(
+            char.lower()
+            for char in stripped[2:]
+            if char.isascii() and char.isalpha()
+        ) if stripped.startswith("//") else ""
         is_special_comment = (
             stripped.startswith("// @cfg")
-            or stripped.startswith("// camera")
+            or camera_payload == "camera"
             or stripped == "//"
         )
 

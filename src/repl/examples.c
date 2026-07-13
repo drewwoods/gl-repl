@@ -35,7 +35,7 @@
  * lines are consumed by the example loader and are not shown in the code panel.
  *
  * A camera preset may then follow immediately after the cfg lines:
- *   "// camera"
+ *   "// camera" (also accepts decorated forms such as "// --- Camera ---")
  *   "glTranslatef(0.0f, 0.0f, -dist);"
  *   "glRotatef(rx, 1.0f, 0.0f, 0.0f);"
  *   "glRotatef(ry, 0.0f, 1.0f, 0.0f);"
