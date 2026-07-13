@@ -860,92 +860,59 @@ static int build_replay_assignment_inline_comment(int cmd_idx, int flat_idx,
     }
 }
 
-/* Find the CMD_FUNC_DEF for funcN and copy out its parameter names.
- * parse_repl_func_signature resolves both bare `funcN(...)` headers and
- * custom `NAME(...)` aliases (via the live alias table) to a slot number,
- * so matching on def_fn works for either form. Returns 1 on a match. */
-static int replay_find_func_params(int fn,
-                                   char names[][REPL_PREDEF_NAME_MAX],
-                                   int max_names, int *count) {
-    const GLCmd *doc = repl_state_document_cmds();
-    int n = repl_state_document_count();
-
-    for (int i = 0; i < n; i++) {
-        int def_fn = -1;
-        int param_count = 0;
-        if (!doc[i].valid || doc[i].type != CMD_FUNC_DEF)
-            continue;
-        if (parse_repl_func_signature(replay_document_text(i), &def_fn,
-                                      names, max_names, &param_count) &&
-            def_fn == fn) {
-            if (count)
-                *count = param_count;
-            return 1;
-        }
-    }
-    return 0;
-}
-
-/* Resolve a funcN call site to " // name(v0, v1, ...)" showing the
- * arguments the current (most recent at or before replay_pc) invocation
- * was called with. Reads the resolved param values straight off an inlined
- * body flat command — flatten binds each param to its evaluated argument
- * (flatten_call), so this stays correct even when the argument expressions
- * reference caller-scope loop vars or predefs that a param happens to
- * shadow by name. The call name is copied verbatim from the source so an
- * alias renders as its own name. Returns 1 when a comment was written. */
-static int build_replay_call_inline_comment(int cmd_idx, char *out, int out_size) {
+/* Resolve a function-definition header to " // half = 5.5, cells = 13, ..."
+ * showing the current invocation's parameter values, but only while the
+ * replay position is executing inside this function's body — the analogue
+ * of the for-loop iteration readout. The values are read off the current
+ * flat command's local vars, where flatten bound each param to its
+ * evaluated argument (flatten_call); under recursion that is the innermost
+ * live frame. parse_repl_func_signature yields the param names for both
+ * bare `funcN(...)` and aliased `NAME(...)` headers. Returns 1 when a
+ * comment was written. */
+static int build_replay_funcdef_inline_comment(int cmd_idx, char *out, int out_size) {
     ReplayRuntimeState replay = replay_state_view();
-    const GLCmd *doc = repl_state_document_cmds();
-    const GLCmd *flat_cmds = repl_state_flat_program_cmds();
     const FlatCmdLocalVars *local_vars = repl_state_flat_program_local_vars();
     char param_names[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
+    int fn = -1;
     int param_count = 0;
-    int flat_count = repl_state_flat_program_count();
-    int scan_from = (replay.pc < flat_count ? replay.pc : flat_count);
-    int fn;
-    int rep = -1;
+    int func_end;
+    int cur_flat;
+    int wrote = 0;
     int oi;
 
     if (!out || out_size <= 0)
         return 0;
     out[0] = '\0';
 
-    fn = (int)doc[cmd_idx].args[0];
-    if (!replay_find_func_params(fn, param_names, MAX_EXPR_VARS, &param_count) ||
+    if (!parse_repl_func_signature(replay_document_text(cmd_idx), &fn,
+                                   param_names, MAX_EXPR_VARS, &param_count) ||
         param_count <= 0)
         return 0;
 
-    /* Most recent inlined body command expanded from this exact call site. */
-    for (int j = scan_from - 1; j >= 0; j--) {
-        if (flat_cmds[j].valid && flat_cmds[j].call_src_cmd_idx == cmd_idx) {
-            rep = j;
-            break;
-        }
-    }
-    if (rep < 0)
+    func_end = repl_source_scope_find_block_end(cmd_idx);
+    cur_flat = replay_current_flat_cmd();
+
+    /* Only while the replay position is inside this function's body. */
+    if (cur_flat < 0 || replay.src_line_idx <= cmd_idx ||
+        replay.src_line_idx >= func_end)
         return 0;
 
-    {
-        const char *src = skip_leading_ws(replay_document_text(cmd_idx));
-        const char *paren = strchr(src, '(');
-        int nlen;
-        if (!paren)
-            return 0;
-        nlen = (int)(paren - src);
-        while (nlen > 0 && isspace((unsigned char)src[nlen - 1]))
-            nlen--;
-        oi = snprintf(out, out_size, " // %.*s(", nlen, src);
-    }
-
+    oi = snprintf(out, out_size, " // ");
     for (int p = 0; p < param_count && oi < out_size - 1; p++) {
-        int vi = visible_var_index(local_vars[rep].vars,
-                                   local_vars[rep].num_vars, param_names[p]);
-        float v = (vi >= 0) ? local_vars[rep].vars[vi].value : 0.0f;
-        oi += snprintf(out + oi, out_size - oi, "%s%g", p ? ", " : "", v);
+        int vi = visible_var_index(local_vars[cur_flat].vars,
+                                   local_vars[cur_flat].num_vars,
+                                   param_names[p]);
+        if (vi < 0)
+            continue;
+        oi += snprintf(out + oi, out_size - oi, "%s%s = %g",
+                       wrote ? ", " : "", param_names[p],
+                       local_vars[cur_flat].vars[vi].value);
+        wrote = 1;
     }
-    if (oi < out_size - 1)
-        snprintf(out + oi, out_size - oi, ")");
+    if (!wrote) {
+        out[0] = '\0';
+        return 0;
+    }
     return 1;
 }
 
@@ -1066,11 +1033,11 @@ int replay_code_panel_get_command_display_text(SourceTextView text,
             return 1;
         build_replay_assignment_inline_comment(cmd_idx, flat_idx,
                                                comment, sizeof(comment));
-    } else if (type == CMD_CALL) {
-        /* No has_vars gate: showing the resolved args confirms the active
-         * invocation (and the alias name) even when the source args are
-         * literals. Zero-arg calls fall out inside the builder. */
-        build_replay_call_inline_comment(cmd_idx, comment, sizeof(comment));
+    } else if (type == CMD_FUNC_DEF) {
+        /* No has_vars gate: the parameter values are per-invocation runtime
+         * state, shown only while replay is executing inside the body. The
+         * call site itself is intentionally left un-annotated. */
+        build_replay_funcdef_inline_comment(cmd_idx, comment, sizeof(comment));
     } else if (type == CMD_FOR_BEGIN) {
         /* No has_vars gate: the loop variable is dynamic even when the
          * bounds are literals, so the iteration readout is still useful. */
