@@ -158,28 +158,61 @@ static float tg_snap_zero(float v) {
 
 static void transform_guides_record_label(
     const Render3dGuideSnapshot *snapshot,
-    const float pos[3], void *font, const char *text) {
+    const float pos[3],
+    void *primary_font, const char *primary_text,
+    void *detail_font, const char *detail_text) {
     Render3dGuideLabelSpec label;
 
-    if (!snapshot || !snapshot->label_sink.record || !pos || !font ||
-        !text || !text[0])
+    if (!snapshot || !snapshot->label_sink.record || !pos ||
+        !primary_font || !primary_text || !primary_text[0])
         return;
 
     memset(&label, 0, sizeof(label));
     label.pos[0] = pos[0];
     label.pos[1] = pos[1];
     label.pos[2] = pos[2];
-    label.runs[0].font = font;
-    label.runs[0].text = text;
+    label.runs[0].font = primary_font;
+    label.runs[0].text = primary_text;
     label.run_count = 1;
+    if (detail_font && detail_text && detail_text[0]) {
+        label.runs[1].font = detail_font;
+        label.runs[1].text = detail_text;
+        label.run_count = 2;
+    }
     snapshot->label_sink.record(snapshot->label_sink.user_data, &label);
+}
+
+/* Shared two-run "<name> <numbers>" label emitter for the translate and
+ * scale guides, mirroring the normal glyph's " n" + "=(...)" pattern so a
+ * transform guide can never be misread as a normal readout (the old bare
+ * tuple was character-for-character a glNormal3f argument list). Depth-test
+ * off so the text is always legible. Emits the glyphs directly (rather than
+ * via render3d overlays) so this TU stays free of an overlays.o link
+ * dependency — the isolated guides test links only the guide objects. */
+static void draw_named_value_label(const Render3dGuideSnapshot *snapshot,
+                                   const float pos[3],
+                                   const char *name, const char *detail) {
+    transform_guides_push_state();
+    glDisable(GL_LIGHTING);
+    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColor4f(0.80f, 0.95f, 1.0f, 0.95f);
+    transform_guides_record_label(snapshot, pos, FONT_MONO, name,
+                                  FONT_TINY, detail);
+    glRasterPos3f(pos[0], pos[1], pos[2]);
+    for (const char *c = name; *c; c++)
+        glutBitmapCharacter(FONT_MONO, (unsigned char)*c);
+    for (const char *c = detail; *c; c++)
+        glutBitmapCharacter(FONT_TINY, (unsigned char)*c);
+    transform_guides_pop_state();
 }
 
 /* Draw the translate endpoint's world position as a small text label at the
  * arrow tip. `tip_local` is the tip in the currently loaded guide frame (so
  * glRasterPos lands it on the arrowhead); `tip_world` is the same point in
  * world space — the position the model matrix leaves the origin at through
- * this line. Drawn once, depth-test off so the number is always legible. */
+ * this line. Drawn once. */
 static void draw_translate_endpoint_label(const Render3dGuideSnapshot *snapshot,
                                           const float tip_local[3],
                                           const float tip_world[3]) {
@@ -187,21 +220,20 @@ static void draw_translate_endpoint_label(const Render3dGuideSnapshot *snapshot,
     snprintf(buf, sizeof(buf), " (%.2f, %.2f, %.2f)",
              tg_snap_zero(tip_world[0]), tg_snap_zero(tip_world[1]),
              tg_snap_zero(tip_world[2]));
+    draw_named_value_label(snapshot, tip_local, " move", buf);
+}
 
-    transform_guides_push_state();
-    glDisable(GL_LIGHTING);
-    glDisable(GL_DEPTH_TEST);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glColor4f(0.80f, 0.95f, 1.0f, 0.95f);
-    /* Emit the glyphs directly (rather than via render3d overlays) so this TU
-     * stays free of an overlays.o link dependency — the isolated guides test
-     * links only the guide objects. */
-    transform_guides_record_label(snapshot, tip_local, FONT_SMALL, buf);
-    glRasterPos3f(tip_local[0], tip_local[1], tip_local[2]);
-    for (const char *c = buf; *c; c++)
-        glutBitmapCharacter(FONT_SMALL, (unsigned char)*c);
-    transform_guides_pop_state();
+/* Scale-factor label at the guide's most prominent arrow tip. 0xD7 is the
+ * ISO-8859-1 multiplication sign (the GLUT bitmap fonts carry full Latin-1,
+ * same trick as the rotate label's 0xB0 degree sign), so the readout says
+ * "multiply by these factors" rather than looking like a position. */
+static void draw_scale_factor_label(const Render3dGuideSnapshot *snapshot,
+                                    const float pos[3],
+                                    float sx, float sy, float sz) {
+    char buf[48];
+    snprintf(buf, sizeof(buf), " \xD7(%.2f, %.2f, %.2f)",
+             tg_snap_zero(sx), tg_snap_zero(sy), tg_snap_zero(sz));
+    draw_named_value_label(snapshot, pos, " scale", buf);
 }
 
 /* Walk flat cmds strictly before cursor_flat_idx, applying only transform
@@ -505,6 +537,12 @@ static void draw_scale_guide(const Render3dGuideSnapshot *snapshot,
 
             draw_pulse_segment(snapshot, p0, base, rgb, alpha_mul);
             draw_cone_head(p1, dir, head_len, head_rgb, alpha_mul);
+
+            /* Factor readout at the arrow tip, once (solid pass only — the
+             * label helper is depth-off, so a ghost-pass copy would just
+             * double-print). */
+            if (alpha_mul >= 1.0f)
+                draw_scale_factor_label(snapshot, p1, sx, sy, sz);
         }
     } else {
         const float axes[3][3] = { {1,0,0}, {0,1,0}, {0,0,1} };
@@ -522,6 +560,8 @@ static void draw_scale_guide(const Render3dGuideSnapshot *snapshot,
         };
         const float factors[3] = { sx, sy, sz };
         const float tick = 0.06f;
+        int label_axis = -1;   /* axis with the largest |f - 1| deviation */
+        float label_dev = 0.0f;
         for (int a = 0; a < 3; a++) {
             float f = factors[a];
             const float *ax = axes[a];
@@ -552,6 +592,10 @@ static void draw_scale_guide(const Render3dGuideSnapshot *snapshot,
             glPointSize(1.0f);
 
             if (fabsf(f - 1.0f) < 1e-4f) continue;
+            if (fabsf(f - 1.0f) > label_dev) {
+                label_dev = fabsf(f - 1.0f);
+                label_axis = a;
+            }
 
             float tip[3] = { ax[0]*f, ax[1]*f, ax[2]*f };
             float from[3] = { ax[0], ax[1], ax[2] };
@@ -575,6 +619,18 @@ static void draw_scale_guide(const Render3dGuideSnapshot *snapshot,
             };
             draw_pulse_segment(snapshot, from, base, axis_rgb[a], alpha_mul);
             draw_cone_head(tip, dir, head_len, head_rgb, alpha_mul);
+        }
+
+        /* Factor readout at the most-deviating axis tip, once (solid pass
+         * only, same double-print rationale as the world branch). No label
+         * for an identity scale — there is no arrow to explain. */
+        if (alpha_mul >= 1.0f && label_axis >= 0) {
+            float lp[3] = {
+                axes[label_axis][0] * factors[label_axis],
+                axes[label_axis][1] * factors[label_axis],
+                axes[label_axis][2] * factors[label_axis]
+            };
+            draw_scale_factor_label(snapshot, lp, sx, sy, sz);
         }
     }
 
@@ -704,7 +760,7 @@ static void draw_rotate_angle_label(const Render3dGuideSnapshot *snapshot,
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glColor4f(0.80f, 0.95f, 1.0f, 0.95f);
-    transform_guides_record_label(snapshot, pos, FONT_SMALL, buf);
+    transform_guides_record_label(snapshot, pos, FONT_SMALL, buf, NULL, NULL);
     glRasterPos3f(pos[0], pos[1], pos[2]);
     for (const char *c = buf; *c; c++)
         glutBitmapCharacter(FONT_SMALL, (unsigned char)*c);
@@ -1256,7 +1312,10 @@ void render3d_transform_guides_render_if_due(const Render3dGuideSnapshot *snapsh
 
     /* Endpoint world-position label for a translate: the position the model
      * matrix leaves the origin at through this line. Drawn once, over both
-     * passes, at the arrow tip. Scale/rotate have no single "ends at" point. */
+     * passes, at the arrow tip. It lives here (not in draw_translate_guide)
+     * because mapping the tip into world space needs the before-cursor frame;
+     * scale/rotate readouts (factors / swept angle) are frame-independent and
+     * label themselves inside their draw helpers. */
     if (live_cmd->type == CMD_TRANSLATE3F) {
         float tip_local[3] = {
             guide_origin[0] + live_cmd->args[0],
