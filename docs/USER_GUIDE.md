@@ -1366,8 +1366,10 @@ autocomplete popup),
 poses the picker, which otherwise needs a swatch click),
 `GLR_ACCUM_PASSES=<n>` (accumulation AA sample count, 1/2/4/8/12/16 — lets
 headless captures smooth 3D edges at full UI text size),
+`GLR_TICK_PER_FRAME=1` (advance the complete fixed-dt simulation once per
+rendered frame for deterministic offline recordings),
 `GLR_VIEW_TOGGLE_AT=<secs,...>` (toggle 2D/3D mode during deterministic
-captures),
+captures; implicitly enables `GLR_TICK_PER_FRAME`),
 `GLR_NO_POINT_PARAMETER=1` (force the no-`glPointParameterfv` fallback),
 `GLR_NO_GPU_PROF=1` (disable GPU timer-query profiling),
 `GLR_AUDIO_HITCH_MS` (audio worker stall-warning threshold).

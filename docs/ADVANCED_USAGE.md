@@ -48,6 +48,7 @@ When both a command-line flag and an env var exist, the flag wins.
 | `GLR_TYPE_KEYS` | Text fed through the keyboard dispatch after load. | Poses mid-typing states (partial-input vertex guides, autocomplete ghost/popup) for captures. |
 | `GLR_OPEN_COLOR_PICKER` | 0-based line index of an editable color command. | Opens the floating color picker on that line for captures — it otherwise needs a swatch click. |
 | `GLR_ACCUM_PASSES` | `1`, `2`, `4`, `8`, `12`, or `16`; default app setting. | Overrides accumulation-AA sample count, mainly for capture/media generation. |
+| `GLR_TICK_PER_FRAME` | Any non-empty value; default off. | Advances the complete fixed-dt simulation once per rendered frame for deterministic offline capture. |
 | `GLR_VIEW_TOGGLE_AT` | Comma-separated capture-clock seconds. | Toggles 2D/3D view mode at deterministic times while recording. |
 | `GLR_NO_POINT_PARAMETER` | Any non-empty value. | Forces the no-`glPointParameterfv` fallback path even on capable hardware. |
 | `GLR_NO_GPU_PROF` | Any non-empty value. | Disables GPU timer-query profiling; the profile panel GPU column reads `--`. |
@@ -141,10 +142,11 @@ before signaling, and give an actively animating scene a few frames to settle.
 `FREEGLUT_CAPTURE_FILE` controls the filename prefix in both native and OSMesa
 builds.
 
-**Starting the animation later.** Animation plays by default, with `t`
-advancing a fixed `1/60 s` per rendered frame from `0`. To capture from a
-later point in the timeline, set the initial `t` with `--time <secs>` (or
-`GLR_TIME`):
+**Starting the animation later.** Animation plays by default, with each
+simulation tick advancing `t` by a fixed `1/60 s` from `0`. Recording scripts
+set `GLR_TICK_PER_FRAME`, making that exactly one tick per rendered frame. To
+capture from a later point in the timeline, set the initial `t` with
+`--time <secs>` (or `GLR_TIME`):
 
 ```bash
 ./build/release-osmesa/gl-repl --example 3 --time 5 --no-audio &
@@ -180,8 +182,8 @@ open a real window, write N real-GPU frames, and exit.
 
 `GLR_VIEW_TOGGLE_AT=0.5,2.0` is a recording affordance for the 2D/3D swatch in
 the menu bar. It toggles view mode as the fixed capture clock crosses each
-listed second and advances the transition one fixed tick per captured frame, so
-UI transition clips are deterministic.
+listed second and implicitly enables `GLR_TICK_PER_FRAME`, so UI transition
+clips are deterministic.
 
 ### Documentation media
 
@@ -197,9 +199,10 @@ scripts/docs-assets.sh hero replay  # regenerate selected assets
 scripts/docs-assets.sh --help       # full CLI reference
 ```
 
-GIFs and `profile-panels` reflect live rendering performance. Regenerate them
-on an otherwise unloaded machine so their animation timing and performance
-profile are representative.
+GIF generation uses `GLR_TICK_PER_FRAME`, so machine load changes generation
+time without dropping animation states. The `profile-panels` screenshot still
+reflects live rendering performance and should be regenerated on an otherwise
+unloaded machine.
 
 Each asset is a staged snippet scene with optional `@cfg` headers, a `// camera`
 block, and sometimes `GLR_EDIT_LINE` to pose cursor-bound overlays. Captures use

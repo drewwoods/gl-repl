@@ -1547,12 +1547,13 @@ newer fork commit. Two fixes in that fork make it usable as a library consumer:
 
 **Animation clock & the `--time` / `GLR_TIME` start offset.** The predefined
 `t` variable is a *fixed-timestep* clock: while animation is playing (the
-default — `time_playing` initialises to `1`; Ctrl+T *pauses*), the controller's
-60 Hz timer advances `t` by exactly `GLR_FRAME_DT_SECS` (1/60 s) **per rendered
-frame**, decoupled from wall-clock ([`glr_ctrl.c`](../src/app/glr_ctrl.c) comment, *"motion speed stays
-decoupled from redraw rate"*). So under the slow software OSMesa renderer `t`
-lags real time, but every frame is a clean 1/60 s step — capture every frame and
-play back at 60 fps for smooth real-time motion. `t` starts at `0`; `--time
+default — `time_playing` initialises to `1`; Ctrl+T *pauses*), each controller
+tick advances `t` by exactly `GLR_FRAME_DT_SECS` (1/60 s). Normally the paced
+60 Hz GLUT timer owns that tick. With `GLR_TICK_PER_FRAME` set, the timer becomes
+redraw-only and the completed-frame hook supplies exactly one whole-controller
+tick after each presentation. Recorded states are therefore `t0`, `t0+1/60`,
+... regardless of rendering throughput; slow rendering lengthens generation
+without dropping animation states. `t` starts at `0`; `--time
 <secs>` (or `GLR_TIME`, with the flag winning) sets the initial value via
 [`repl_set_time()`](../src/repl/time.h#L19) → [`repl_state_time_set()`](../src/repl/state_owners.h#L64) ([`src/repl/state.c`](../src/repl/state.c)), read in
 `main()` *after* any `--example` load (which resets `t`) so the override sticks.
@@ -1563,9 +1564,9 @@ rather than always from `t = 0`.
 drives a headless run and assembles the frames with `ffmpeg` into a GIF + MP4.
 Its knob is **duration** (clip length, invariant of `--fps`); it computes
 `N = round(duration × fps)`, passes it as `FREEGLUT_CAPTURE_FRAMES=N`, and the
-backend captures every rendered frame and `exit(0)`s after N. Because `t` is a
-fixed timestep, the N frames are deterministic (`t0 + i/60`) and identical across
-machines — generate slowly (Mac ~2.7 fps, gracemont ~21 fps), play back at any
+backend captures every rendered frame and `exit(0)`s after N. The recording
+scripts set `GLR_TICK_PER_FRAME`, so the N frames are deterministic
+(`t0 + i/60`) and identical across machines — generate slowly, play back at any
 fps. The record + `SIGUSR1` capture are both serviced from the backend's
 **main-loop tick** (`fgPlatformProcessSingleEvent`), *not* the swap path: a
 single-buffered window's `glutSwapBuffers()` short-circuits before the platform

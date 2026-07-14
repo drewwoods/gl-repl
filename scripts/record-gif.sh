@@ -13,8 +13,9 @@
 # invariant of --fps: N = round(duration * fps), and the output is always
 # `duration` seconds long at `fps` frames/sec.
 #
-# Animation-speed note: the engine advances the time variable `t` by a fixed
-# 1/60 s per rendered frame (see GLR_FRAME_DT_SECS), so playback runs at ~fps/60
+# Animation-speed note: GLR_TICK_PER_FRAME makes the engine advance the complete
+# simulation by a fixed 1/60 s per rendered frame (see GLR_FRAME_DT_SECS), so no
+# animation states are dropped when rendering is slow. Playback runs at ~fps/60
 # of natural speed. Use --fps 60 for real-time; lower fps gives smooth slow-mo
 # (and smaller GIFs).
 #
@@ -121,10 +122,12 @@ echo "record-gif: example=$example duration=${duration}s fps=$fps frames=$frames
 # --time rather than an array so it stays portable to old bash under `set -u`.
 run_fail() { echo "record-gif: gl-repl exited non-zero; log:" >&2; cat "$tmp/run.log" >&2; exit 1; }
 if [ -n "$t0" ]; then
-	FREEGLUT_CAPTURE_FILE="$tmp/f" FREEGLUT_CAPTURE_FRAMES="$frames" \
+	GLR_TICK_PER_FRAME=1 \
+		FREEGLUT_CAPTURE_FILE="$tmp/f" FREEGLUT_CAPTURE_FRAMES="$frames" \
 		"$bin" --example "$example" --time "$t0" --no-audio >"$tmp/run.log" 2>&1 || run_fail
 else
-	FREEGLUT_CAPTURE_FILE="$tmp/f" FREEGLUT_CAPTURE_FRAMES="$frames" \
+	GLR_TICK_PER_FRAME=1 \
+		FREEGLUT_CAPTURE_FILE="$tmp/f" FREEGLUT_CAPTURE_FRAMES="$frames" \
 		"$bin" --example "$example" --no-audio >"$tmp/run.log" 2>&1 || run_fail
 fi
 

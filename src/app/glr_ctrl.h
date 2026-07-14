@@ -126,10 +126,17 @@ void glr_ctrl_passive_motion(int x, int y);
 void glr_ctrl_mousewheel(int wheel, int direction, int x, int y);
 void glr_ctrl_timer(int value);
 
-/* Per-frame tick (16 ms). The timer entry above wraps this with
- * glutPostRedisplay + glutTimerFunc reschedule; tests can drive a
- * single tick by calling glr_ctrl_tick directly when GLUT isn't
- * initialised. */
+/* Optional offline/capture scheduling mode. Normally glr_ctrl_timer owns the
+ * fixed-dt simulation tick. When enabled, the timer only paces redraws and
+ * glr_ctrl_frame_presented supplies exactly one tick after each rendered
+ * frame. This keeps captured animation states at t0 + frame/60 regardless of
+ * rendering throughput. */
+void glr_ctrl_set_tick_per_frame(int enabled);
+void glr_ctrl_frame_presented(void);
+
+/* Fixed-dt simulation tick. Tests can drive one directly when GLUT is not
+ * initialized; production scheduling is owned by the timer or, in the
+ * optional mode above, by glr_ctrl_frame_presented. */
 void glr_ctrl_tick(void);
 
 /* ---- Router helpers ----

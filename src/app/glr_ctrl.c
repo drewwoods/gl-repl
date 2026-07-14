@@ -113,6 +113,9 @@ static int glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(
 static UiRenderSnapshot g_last_ui_snapshot;
 static int g_last_ui_snapshot_valid = 0;
 static int g_last_replay_follow_src_line = -1;
+/* Offline/capture mode: advance the complete fixed-dt simulation once per
+ * rendered frame instead of once per wall-clock-paced GLUT timer callback. */
+static int g_tick_per_frame = 0;
 
 /* --- Accumulation motion-blur sub-frame driver ---
  * When accum_effect == BLUR the scene's accum loop calls back per sample to
@@ -2988,6 +2991,15 @@ static double glr_timer_now_ms(void) {
     return (double)ts.tv_sec * 1e3 + (double)ts.tv_nsec / 1e6;
 }
 
+void glr_ctrl_set_tick_per_frame(int enabled) {
+    g_tick_per_frame = enabled ? 1 : 0;
+}
+
+void glr_ctrl_frame_presented(void) {
+    if (g_tick_per_frame)
+        glr_ctrl_tick();
+}
+
 /* Pace against an absolute monotonic deadline rather than a constant integer
  * delay. Each tick the next deadline advances by the exact 16.667 ms period
  * and we schedule the rounded remaining time, so the per-frame delays form
@@ -2995,12 +3007,16 @@ static double glr_timer_now_ms(void) {
  * time spent in the callback and for accumulated rounding, keeping the
  * presentation cadence phase-aligned with the vblank cadence (fewer
  * micro-stutter slips on high-refresh displays). The sim still advances a
- * fixed GLR_FRAME_DT_SECS per tick — only the wall-clock pacing changes. */
+ * fixed GLR_FRAME_DT_SECS per tick — only the wall-clock pacing changes.
+ * GLR_TICK_PER_FRAME mode transfers tick ownership to frame presentation;
+ * this callback still provides the same redraw cadence but must not advance
+ * simulation too, or a captured frame could receive two ticks. */
 void glr_ctrl_timer(int value) {
     (void)value;
     static double next_deadline_ms = 0.0; /* monotonic ms; 0 = uninitialized */
 
-    glr_ctrl_tick();
+    if (!g_tick_per_frame)
+        glr_ctrl_tick();
     glutPostRedisplay();
 
     double now = glr_timer_now_ms();

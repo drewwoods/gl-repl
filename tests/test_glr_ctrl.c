@@ -54,6 +54,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ui_profile_panel_render            test_ui_profile_panel_render
 #define ui_memory_panel_render             test_ui_memory_panel_render
 #define glutPostRedisplay                  test_glutPostRedisplay
+#define glutTimerFunc                      test_glutTimerFunc
 #define glutSetCursor                      test_glutSetCursor
 #define glr_export_mesh_ply                test_glr_export_mesh_ply
 
@@ -69,6 +70,7 @@ void test_glr_camera_load_modelview(const GlrCameraPose *pose);
  * forward-declare this stub the same way. */
 void test_ui_variable_panel_render(const UiVariablePanelView *view);
 void test_glutPostRedisplay(void);
+void test_glutTimerFunc(unsigned int millis, void (*callback)(int), int value);
 void test_glutSetCursor(int cursor);
 int test_glr_export_mesh_ply(const char *path, int srgb_decode);
 
@@ -93,6 +95,7 @@ int test_glr_export_mesh_ply(const char *path, int srgb_decode);
 #undef ui_profile_panel_render
 #undef ui_memory_panel_render
 #undef glutPostRedisplay
+#undef glutTimerFunc
 #undef glutSetCursor
 #undef glr_export_mesh_ply
 
@@ -193,6 +196,9 @@ void test_ui_tabbed_overlay_render(const UiOverlayState *in) { (void)in; }
 void test_ui_profile_panel_render(const UiProfilePanelView *view) { (void)view; }
 void test_ui_memory_panel_render(const UiMemoryPanelView *view)  { (void)view; }
 void test_glutPostRedisplay(void) {}
+void test_glutTimerFunc(unsigned int millis, void (*callback)(int), int value) {
+    (void)millis; (void)callback; (void)value;
+}
 void test_glutSetCursor(int cursor) { (void)cursor; }
 int test_glr_export_mesh_ply(const char *path, int srgb_decode) {
     (void)path; (void)srgb_decode;
@@ -1270,6 +1276,38 @@ static void test_overlay_transition_machine_wiring(void) {
                  g_last_scene_config.grid_opacity, 1.0f);
     ASSERT_INT("reset grid STEADY",
                g_last_scene_config.grid_xn_phase, RENDER3D_XN_STEADY);
+}
+
+static void test_tick_per_frame_scheduling(void) {
+    printf("--- imrepl_ctrl tick-per-frame scheduling ---\n");
+    glr_ctrl_reset_all();
+    repl_set_time(0.0f);
+
+    /* Default mode: presentation does not own time; the paced timer does. */
+    glr_ctrl_set_tick_per_frame(0);
+    glr_ctrl_frame_presented();
+    ASSERT_FLOAT("timer mode: presentation does not tick",
+                 repl_state_variables().anim_time, 0.0f);
+    glr_ctrl_timer(0);
+    ASSERT_FLOAT("timer mode: timer advances once",
+                 repl_state_variables().anim_time, GLR_FRAME_DT_SECS);
+
+    /* Capture mode: the timer only requests a redraw and every completed
+     * frame advances the whole fixed-dt simulation exactly once. */
+    repl_set_time(0.0f);
+    glr_ctrl_set_tick_per_frame(1);
+    glr_ctrl_timer(0);
+    ASSERT_FLOAT("frame mode: timer does not tick",
+                 repl_state_variables().anim_time, 0.0f);
+    glr_ctrl_frame_presented();
+    ASSERT_FLOAT("frame mode: first frame advances once",
+                 repl_state_variables().anim_time, GLR_FRAME_DT_SECS);
+    glr_ctrl_frame_presented();
+    ASSERT_FLOAT("frame mode: second frame advances once",
+                 repl_state_variables().anim_time, 2.0f * GLR_FRAME_DT_SECS);
+
+    /* This controller process serves the rest of the test suite too. */
+    glr_ctrl_set_tick_per_frame(0);
 }
 
 static void test_view_mode_projection_transition_wiring(void) {
@@ -3292,6 +3330,7 @@ int main(void) {
     test_pointer_state_tracks_controller_mouse_routes();
     test_right_click_code_panel_does_not_start_camera_pan();
     test_left_click_code_panel_exits_search_and_places_cursor();
+    test_tick_per_frame_scheduling();
     test_overlay_transition_machine_wiring();
     test_view_mode_projection_transition_wiring();
     test_view_mode_3d_to_2d_uses_faster_decay();
