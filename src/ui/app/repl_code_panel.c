@@ -2447,38 +2447,59 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
 
         /* Right cluster, drawn from the right edge. Each chip is
          * suppressed when the left status text would collide with it;
-         * keyboard shortcuts still work when a chip is hidden. */
-        if (h.undo_visible) {
+         * keyboard shortcuts still work when a chip is hidden.
+         *
+         * Draw all keycap geometry first, then all bitmap glyphs and
+         * labels. Keeping glRect/glBegin work out of the glyph pass lets
+         * gl4es coalesce the consecutive bitmap draws in web builds. */
+        if (h.undo_visible)
             repl_code_panel_draw_keycap(h.undo_kx, h.ky, h.undo_kw, h.kh);
+
+        if (h.redo_visible)
+            repl_code_panel_draw_keycap(h.redo_kx, h.ky, h.redo_kw, h.kh);
+
+        if (h.copy_visible)
+            repl_code_panel_draw_keycap(h.copy_kx, h.ky, h.copy_kw, h.kh);
+
+        if (h.cut_visible)
+            repl_code_panel_draw_keycap(h.cut_kx, h.ky, h.cut_kw, h.kh);
+
+        if (h.trash_visible)
+            repl_code_panel_draw_keycap(h.trash_kx, h.ky,
+                                        h.trash_kw, h.kh);
+
+        if (h.focus_visible)
+            repl_code_panel_draw_keycap(h.focus_kx, h.ky,
+                                        h.focus_kw, h.kh);
+
+        if (h.help_visible)
+            repl_code_panel_draw_keycap(h.help_kx, h.ky, h.help_kw, h.kh);
+
+        if (h.undo_visible) {
             ui_clr(snap->can_undo ? UI_TOK_TEXT_PRIMARY : UI_TOK_TEXT_MUTED);
             repl_code_panel_draw_undo_icon(h.undo_kx, h.ky,
                                            h.undo_kw, h.kh);
         }
 
         if (h.redo_visible) {
-            repl_code_panel_draw_keycap(h.redo_kx, h.ky, h.redo_kw, h.kh);
             ui_clr(snap->can_redo ? UI_TOK_TEXT_PRIMARY : UI_TOK_TEXT_MUTED);
             repl_code_panel_draw_redo_icon(h.redo_kx, h.ky,
                                            h.redo_kw, h.kh);
         }
 
         if (h.copy_visible) {
-            repl_code_panel_draw_keycap(h.copy_kx, h.ky, h.copy_kw, h.kh);
             ui_clr(UI_TOK_TEXT_PRIMARY);
             repl_code_panel_draw_copy_icon(h.copy_kx, h.ky,
                                            h.copy_kw, h.kh);
         }
 
         if (h.cut_visible) {
-            repl_code_panel_draw_keycap(h.cut_kx, h.ky, h.cut_kw, h.kh);
             ui_clr(UI_TOK_TEXT_PRIMARY);
             repl_code_panel_draw_cut_icon(h.cut_kx, h.ky,
                                           h.cut_kw, h.kh);
         }
 
         if (h.trash_visible) {
-            repl_code_panel_draw_keycap(h.trash_kx, h.ky,
-                                        h.trash_kw, h.kh);
             ui_clr(UI_TOK_STATUS_ERR);
             repl_code_panel_draw_trash_icon(h.trash_kx, h.ky,
                                             h.trash_kw, h.kh);
@@ -2492,7 +2513,6 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
              * hit-tested from this same hints geometry. */
             UiThemeToken focus_tok = snap->code_panel.code_focus
                 ? UI_TOK_ACCENT : UI_TOK_TEXT_MUTED;
-            repl_code_panel_draw_keycap(h.focus_kx, h.ky, h.focus_kw, h.kh);
             ui_clr(UI_TOK_TEXT_PRIMARY);
             repl_code_panel_draw_focus_kbd(h.focus_kx + 5, h.ky + 2);
             ui_clr(focus_tok);
@@ -2506,7 +2526,6 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
              * (accent while the overlay is open, muted otherwise). */
             UiThemeToken help_tok = snap->help.visible
                 ? UI_TOK_ACCENT : UI_TOK_TEXT_MUTED;
-            repl_code_panel_draw_keycap(h.help_kx, h.ky, h.help_kw, h.kh);
             ui_clr(UI_TOK_TEXT_PRIMARY);
             gl2d_draw_string((float)(h.help_kx + 5), (float)(h.ky + 2),
                              k_statusbar_help_kbd, FONT_SMALL);
