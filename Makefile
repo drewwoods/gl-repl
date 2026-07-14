@@ -703,7 +703,7 @@ REPL_LIVE_DEMO_DEP_SRCS = $(REPL_DEMO_DEP_SRCS) \
                           src/ui/subsystems/variable_panel.c \
                           src/ui/core/theme.c
 
-OBJDIR = build/$(BUILD)$(if $(filter debug,$(BUILD)),$(DEBUG_SAN_SUFFIX),)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)$(if $(filter 1,$(FREEGLUT_OSMESA)),-osmesa,)$(if $(filter 1,$(WEB)),-web,)
+OBJDIR = build/$(BUILD)$(if $(filter debug,$(BUILD)),$(DEBUG_SAN_SUFFIX),)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)$(if $(filter 1,$(FREEGLUT_OSMESA)),-osmesa,)$(if $(filter 0,$(FREEGLUT_VENDOR)),-glut,)$(if $(filter 1,$(WEB)),-web,)
 BINDIR = $(OBJDIR)
 # Fixed web-build bindir, independent of the ambient WEB flag -- lets
 # `make web-serve` find the output without the caller having to repeat
