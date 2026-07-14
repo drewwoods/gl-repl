@@ -163,7 +163,7 @@ like a normal editor:
   `glEnable(GL_COLOR_MATERIAL)`,
   `glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)`,
   `glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE)`,
-  a white specular color, and shininess 30.
+  a gray (0.4) specular color, and shininess 30.
   Delete or comment those lines explicitly when a scene needs different
   state.
 
@@ -390,8 +390,8 @@ for(i, 0, n, 2) {        // optional step argument; multi-line body
 
 The parser accepts up to 64 nested blocks. In practice, useful nesting is
 limited first by the flat-command budget and the number of loop-iterator
-variables in scope.
-Loop bounds can be expressions (and can animate with `t`).
+variables in scope. Loop bounds can be expressions (and can animate with
+`t`).
 
 ### Functions
 
@@ -540,8 +540,8 @@ Row brightness distinguishes knobs from storage:
 - **Bright** — read-only parameter/config variables; best for sliders.
 - **Dim** — variables written by committed `name = expr;` lines. You can
   drag them, but a later assignment may overwrite the value.
-- The `// @tune` accent is separate from brightness. `t` only dims if your
-  source explicitly assigns `t = ...;`.
+- The [`// @tune`](#tunable-variables--tune) accent is separate from
+  brightness. `t` only dims if your source explicitly assigns `t = ...;`.
 
 Slider edits are undoable and go through the normal commit pipeline; when a
 declaration exists, dragging rewrites its initializer.
@@ -879,9 +879,10 @@ where the rig sits.
 - **Accum effect** (Ctrl+Shift+U) + **Accum passes** (Ctrl+= / Ctrl+−) — the
   accumulation buffer drives antialiasing and motion blur:
   - **AA** *(default, 1 pass)* — jitters the camera frustum per pass.
-  - **Blur** — re-renders the scene per pass across the frame's motion:
-    camera motion when the camera is moving, otherwise the animation-time
-    window (so spinning geometry smears realistically).
+  - **Blur** — re-renders the scene per pass across the frame's
+    animation-time window, so spinning geometry smears realistically —
+    even while the camera moves (the camera itself stays crisp). Scenes
+    that don't use `t` fall back to AA jitter.
   - **Blur Cam** — blurs camera motion only; falls back to AA when still.
   - Passes: 1/2/4/8/12/16. The status bar shows the active mode
     (`AA 1x`, `Blur 16x`). Blur is expensive — every pass is a full scene
@@ -955,7 +956,7 @@ variable slider to a target.
 
 ## Built-in Examples
 
-**F12** cycles forward through the 31 built-in examples, then any saved
+**F12** cycles forward through the 32 built-in examples, then any saved
 scenes, wrapping to the start; **Shift+F12** cycles backward. The Scene menu
 lists them grouped by tag. `./gl-repl --list-examples` prints the compiled-in
 set.
@@ -976,9 +977,9 @@ Developers can point the app at an editable catalog with
 11  Function polygons (args + for)                      27  Whale (particle system + lit model)
 12  Function branching (args + if)                      28  Teapot carousel (transform stacks + glow points)
 13  Recursive triangle tree (func + recursion)          29  Ringed planet (nebula skies)
-14  Animated spirograph curve                           30  Bubble sort (scratch arrays)
-15  Traveling ripple ring                               31  Clip planes carve solids (glClipPlane)
-16  Bezier curve with guides
+14  Animated spirograph curve                           30  Aurora observatory (dish tracks the sky)
+15  Traveling ripple ring                               31  Bubble sort (scratch arrays)
+16  Bezier curve with guides                            32  Clip planes carve solids (glClipPlane)
 ```
 
 Examples may carry their own presentation presets (grid theme, backdrop,
@@ -1069,8 +1070,8 @@ the REPL. Two rules keep the round trip clean:
   inside a `for`/`if` block (the block's per-frame cost), `call cmds 96` on
   a call line (that call's inclusive expansion), `line cmds 12` on a plain
   line that expands more than once. For an offline breakdown,
-  `./gl-repl --example 30 --flat-histogram` prints per-function and
-  per-line costs sorted by spend.
+  `./gl-repl --example "bubble sort (scratch arrays)" --flat-histogram`
+  prints per-function and per-line costs sorted by spend.
 
 > **Advanced — extending the REPL itself.** If you want a GL call the REPL
 > doesn't speak yet, the interpreter is built to be extended: see
