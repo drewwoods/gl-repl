@@ -1064,8 +1064,7 @@ web: ## Build the Emscripten/wasm web target (needs emcc on PATH -- see scripts/
 	@echo "Built $(WEB_BINDIR)/index.html -- run 'make web-serve' to try it."
 
 web-serve: web ## Serve the built web target over HTTP (builds it first if needed).
-	@echo "Serving $(WEB_BINDIR)/ at http://localhost:8000/ (Ctrl+C to stop) ..."
-	cd $(WEB_BINDIR) && python3 -m http.server 8000
+	python3 scripts/web-serve.py $(WEB_BINDIR)
 
 # macOS .app bundle so the Dock/Finder show the gl-repl cube icon instead of
 # the launching terminal's icon. Pure packaging — no source changes, so the
