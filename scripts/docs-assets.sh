@@ -62,7 +62,7 @@ GIF_FUZZ=8%     # magick -layers Optimize fuzz for GIF delta compression
 # show. gif() renders this many extra leading frames for --example clips and
 # discards them; one-shot stills can use the same 60 Hz warmup before capture.
 # One rendered frame is ~1/60 s of that ease, so 180 ≈ 3 s.
-WARM=180
+WARM_EXAMPLE=180
 
 # README + docs/images core set.
 CORE_ASSETS=(
@@ -228,15 +228,15 @@ one_shot_still() {
 # every <step>th frame, assemble a palette-optimized looping GIF. The kept
 # frame count (frames/step) and fps set the clip length.
 #
-# --example clips additionally render WARM extra leading frames and discard
-# them (the camera-ease warmup, see WARM), so the clip starts settled while
+# --example clips additionally render WARM_EXAMPLE extra leading frames and discard
+# them (the camera-ease warmup, see WARM_EXAMPLE), so the clip starts settled while
 # keeping the exact same frames/step at the same fps — identical length, just
 # past the settle. Staged scenes have no load ease, and replay's draw-by-draw
 # assembly IS the content, so a clip with no --example keeps frame 0.
 gif() {
     local out=$1 frames=$2 step=$3 fps=$4 width=$5; shift 5
-    local skip=0 a
-    for a in "$@"; do [[ "$a" == "--example" ]] && { skip=$WARM; break; }; done
+    local skip=${WARM:-0} a
+    for a in "$@"; do [[ "$a" == "--example" ]] && { skip=${WARM:-$WARM_EXAMPLE}; break; }; done
     render "$((skip + frames))" 0 "$@"
     rm -rf "$WORK/sub"; mkdir -p "$WORK/sub"
     local n=0 k=0 f
@@ -838,10 +838,10 @@ if want view-mode-2d; then
     # A GIF that toggles View mode (Ctrl+Shift+V) on the animated wave surface,
     # so the doc shows the 3D->2D->3D transition rather than a frozen 2D still.
     # GLR_VIEW_TOGGLE_AT fires on gl_repl's rendered-frame clock (t = frame/60),
-    # which counts the WARM leading frames gif() renders and discards for
-    # --example clips. WARM=180 => 3.0s of that clock elapses before the kept
-    # clip begins, so a toggle at clock second S lands at (S*60 - WARM)/(step)
-    # kept frames in, i.e. output time (S*60 - WARM)/(step*fps) s. With
+    # which counts the WARM_EXAMPLE leading frames gif() renders and discards for
+    # --example clips. WARM_EXAMPLE=180 => 3.0s of that clock elapses before the kept
+    # clip begins, so a toggle at clock second S lands at (S*60 - WARM_EXAMPLE)/(step)
+    # kept frames in, i.e. output time (S*60 - WARM_EXAMPLE)/(step*fps) s. With
     # step=2 fps=20: clock 4s -> 1.5s into the clip (3D->2D), clock 6s -> 4.5s
     # (2D->3D). The 6s clip then holds ~1.5s of 3D before it loops.
     ( export GLR_VIEW_TOGGLE_AT=4,6
@@ -948,7 +948,7 @@ fi
 
 if want clip-plane-sweep; then
     ( export GLR_EDIT_LINE=4
-      gif "$OUT/clip-plane-sweep.gif" 126 1 20 720 "$(stage_clip_sweep)" )
+      WARM=126 gif "$OUT/clip-plane-sweep.gif" 126 1 20 720 "$(stage_clip_sweep)" )
 fi
 
 if want xform-guide; then
