@@ -2,8 +2,11 @@
 # docs-assets.sh - regenerate the screenshots and GIFs under docs/images/
 # (the media embedded in README.md, docs/SHOWCASE.md and docs/USER_GUIDE.md).
 #
-#   scripts/docs-assets.sh [-j N] [asset ...]   # default: all assets
-#   scripts/docs-assets.sh --list               # print asset names and exit
+#   scripts/docs-assets.sh [options] [asset ...] # default: regular assets
+#   scripts/docs-assets.sh --gifs                # regenerate every GIF
+#   scripts/docs-assets.sh --pngs                # regenerate every PNG
+#   scripts/docs-assets.sh --perf-sensitive
+#   scripts/docs-assets.sh --list [category]
 #
 # -j / --jobs N regenerates up to N assets in parallel. Each gl-repl render
 # is single-threaded, but on the native backend every capture opens a real
@@ -64,42 +67,152 @@ GIF_FUZZ=4%     # magick -layers Optimize fuzz for GIF delta compression
 # One rendered frame is ~1/60 s of that ease, so 180 ≈ 3 s.
 WARM_EXAMPLE=180
 
-# README + docs/images core set.
-CORE_ASSETS=(
+# Format categories use public asset names, not output filenames, so they flow
+# through the same want()/parallel dispatch as explicitly named assets. Regular
+# assets go in exactly one format category; machine-sensitive captures go in
+# PERFORMANCE_SENSITIVE_ASSETS and are never selected implicitly.
+GIF_ASSETS=(
+    view-mode-2d clip-plane-sweep xform-guide replay animated-ring
+    sc-torus-knot sc-snowfall sc-recursive-tree sc-spirograph sc-ripple-ring
+    sc-bubble-sort sc-wave-surface sc-ringed-planet sc-grass sc-jellyfish
+    sc-conditional-colors sc-whale sc-stress-test sc-aurora-observatory
+    sc-feature-time
+)
+
+PNG_ASSETS=(
     hero first-triangle window-tour vertex-overlays wireframe-hidden-line
-    winding-view light-theme-studio
-    grid-themes backdrops axes-compass view-mode-2d labels-orrery
-    glu-tess glow-sprites transform-stress variable-panel tune-badges
-    motion-blur xform-guide-still xform-guide replay animated-ring
-    single-polygon-scope vertex-guide-plane vertex-guide-line
-    clip-plane clip-plane-sweep
-    autocomplete color-picker numeric-stepper profile-panels
+    winding-view light-theme-studio grid-themes backdrops axes-compass
+    labels-orrery glu-tess glow-sprites transform-stress variable-panel
+    tune-badges motion-blur xform-guide-still single-polygon-scope
+    vertex-guide-plane vertex-guide-line clip-plane autocomplete color-picker
+    numeric-stepper
+    sc-parametric-torus sc-bezier sc-orbit-plot sc-lit-cube sc-function-demo
+    sc-function-polygons sc-feature-ply sc-feature-export-c
 )
 
-# docs/SHOWCASE.md gallery set (-> docs/images/showcase/). Recordable scenes
-# only; the genuinely-interactive shots (slider drag, PLY in MeshLab, output.c
-# in an editor) are stand-ins, see the showcase section below.
-SHOWCASE_ASSETS=(
-    sc-torus-knot sc-snowfall sc-parametric-torus sc-recursive-tree
-    sc-spirograph sc-ripple-ring sc-bezier sc-bubble-sort sc-orbit-plot
-    sc-wave-surface sc-ringed-planet sc-lit-cube sc-grass sc-jellyfish
-    sc-function-demo sc-function-polygons sc-conditional-colors
-    sc-whale sc-stress-test sc-aurora-observatory
-    sc-feature-time sc-feature-ply sc-feature-export-c
-)
+PERFORMANCE_SENSITIVE_ASSETS=(profile-panels)
 
-ALL_ASSETS=("${CORE_ASSETS[@]}" "${SHOWCASE_ASSETS[@]}")
+DEFAULT_ASSETS=("${GIF_ASSETS[@]}" "${PNG_ASSETS[@]}")
+KNOWN_ASSETS=("${DEFAULT_ASSETS[@]}" "${PERFORMANCE_SENSITIVE_ASSETS[@]}")
+
+usage() {
+    cat <<'EOF'
+Usage: scripts/docs-assets.sh [options] [asset ...]
+
+Regenerate documentation screenshots and animations. With no asset names or
+format categories, all regular assets are regenerated. Named assets and
+categories may be combined.
+
+Performance-sensitive assets are explicit-only because their output reflects
+machine load. Currently: profile-panels
+
+Options:
+  --gifs             Regenerate all regular GIF assets.
+  --pngs             Regenerate all regular PNG assets.
+  --perf-sensitive   Regenerate machine-load-sensitive assets (explicit-only).
+  --list             List selected asset names and exit (regular assets by default).
+  -j, --jobs N       Regenerate up to N assets in parallel (default: 1).
+  -h, --help         Show this help and exit.
+
+Environment:
+  BIN=<path>         gl-repl binary (default: build/release/gl-repl).
+  OUT=<path>         output directory (default: docs/images).
+
+Examples:
+  scripts/docs-assets.sh --gifs
+  scripts/docs-assets.sh --pngs -j 4
+  scripts/docs-assets.sh --perf-sensitive  # use an unloaded machine
+  scripts/docs-assets.sh --list --gifs
+  scripts/docs-assets.sh hero replay
+  scripts/docs-assets.sh profile-panels  # run on an otherwise unloaded machine
+EOF
+}
+
+contains_asset() {
+    local needle=$1 a
+    shift
+    for a in "$@"; do [[ "$a" == "$needle" ]] && return 0; done
+    return 1
+}
 
 JOBS=1
 ARGS=()
+SELECT_GIFS=0
+SELECT_PNGS=0
+SELECT_PERF_SENSITIVE=0
+LIST=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --list) printf '%s\n' "${ALL_ASSETS[@]}" | sort; exit 0 ;;
-        -j|--jobs) JOBS="${2:?docs-assets: $1 needs a count}"; shift 2 ;;
+        -h|--help) usage; exit 0 ;;
+        --list) LIST=1; shift ;;
+        --gifs) SELECT_GIFS=1; shift ;;
+        --pngs) SELECT_PNGS=1; shift ;;
+        --perf-sensitive) SELECT_PERF_SENSITIVE=1; shift ;;
+        -j|--jobs)
+            [[ $# -ge 2 ]] || {
+                echo "docs-assets: option '$1' requires a count (try --help)" >&2
+                exit 2
+            }
+            JOBS=$2; shift 2
+            ;;
         -j*) JOBS="${1#-j}"; shift ;;
+        --) shift; while [[ $# -gt 0 ]]; do ARGS+=("$1"); shift; done ;;
+        -*) echo "docs-assets: unknown option '$1' (try --help)" >&2; exit 2 ;;
         *) ARGS+=("$1"); shift ;;
     esac
 done
+
+case "$JOBS" in
+    ''|*[!0-9]*)
+        echo "docs-assets: --jobs must be a positive integer (got '$JOBS')" >&2
+        exit 2
+        ;;
+esac
+[[ "$JOBS" -gt 0 ]] || {
+    echo "docs-assets: --jobs must be a positive integer (got '$JOBS')" >&2
+    exit 2
+}
+
+if [[ ${#ARGS[@]} -gt 0 ]]; then
+    for a in "${ARGS[@]}"; do
+        contains_asset "$a" "${KNOWN_ASSETS[@]}" || {
+            echo "docs-assets: unknown asset '$a' (try --list)" >&2
+            exit 2
+        }
+    done
+fi
+
+WANTED=()
+if [[ "$SELECT_GIFS" -eq 1 ]]; then
+    WANTED+=("${GIF_ASSETS[@]}")
+fi
+if [[ "$SELECT_PNGS" -eq 1 ]]; then
+    WANTED+=("${PNG_ASSETS[@]}")
+fi
+if [[ "$SELECT_PERF_SENSITIVE" -eq 1 ]]; then
+    WANTED+=("${PERFORMANCE_SENSITIVE_ASSETS[@]}")
+fi
+if [[ ${#ARGS[@]} -gt 0 ]]; then
+    WANTED+=("${ARGS[@]}")
+fi
+if [[ ${#WANTED[@]} -eq 0 ]]; then
+    WANTED=("${DEFAULT_ASSETS[@]}")
+else
+    # Avoid rendering an explicitly named asset twice when its category was
+    # also selected (especially important for the xargs parallel path).
+    UNIQUE=()
+    for a in "${WANTED[@]}"; do
+        if [[ ${#UNIQUE[@]} -eq 0 ]] || ! contains_asset "$a" "${UNIQUE[@]}"; then
+            UNIQUE+=("$a")
+        fi
+    done
+    WANTED=("${UNIQUE[@]}")
+fi
+
+if [[ "$LIST" -eq 1 ]]; then
+    printf '%s\n' "${WANTED[@]}" | sort
+    exit 0
+fi
 
 for tool in magick ffmpeg; do
     command -v "$tool" >/dev/null || {
@@ -109,12 +222,6 @@ done
     echo "docs-assets: gl-repl binary not found at '$BIN'" >&2
     echo "             build it first: make gl-repl" >&2
     exit 1; }
-
-if [[ ${#ARGS[@]} -gt 0 ]]; then
-    WANTED=("${ARGS[@]}")
-else
-    WANTED=("${ALL_ASSETS[@]}")
-fi
 
 # Parallel mode: re-exec ourselves one asset per process via xargs -P.
 # (Portable to the macOS /bin/bash 3.2 era — no `wait -n`.) Each child
@@ -931,9 +1038,11 @@ if want numeric-stepper; then
     echo "docs-assets: wrote $OUT/numeric-stepper.png"
 fi
 
-# Profile panels: run normally while the FPS history and per-section
-# histograms fill, then take one SIGUSR1 snapshot. Capturing every warmup frame
-# would make the FPS plot measure PPM readback/write throughput instead.
+# Profile panels are performance-sensitive and explicit-only: generate this on
+# an otherwise unloaded machine so the live performance profile looks
+# representative. Run normally while the FPS history and per-section histograms
+# fill, then take one SIGUSR1 snapshot. Capturing every warmup frame would make
+# the FPS plot measure PPM readback/write throughput instead.
 if want profile-panels; then
     (
         WARM=720
