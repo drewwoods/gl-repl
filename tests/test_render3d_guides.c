@@ -139,8 +139,12 @@ static void test_transform_guides_render(void) {
         ASSERT_TRUE("translate rendering calls glBegin", gl_stub_counts[GL_STUB_glBegin] > 0);
         ASSERT_TRUE("translate rendering calls glPushAttrib", gl_stub_counts[GL_STUB_glPushAttrib] > 0);
         ASSERT_INT("translate records one endpoint label", capture.count, 1);
+        ASSERT_INT("translate label has primary and detail runs",
+                   capture.labels[0].run_count, 2);
+        ASSERT_TRUE("translate label names the transform",
+                    strcmp(capture.labels[0].text[0], " move") == 0);
         ASSERT_TRUE("translate label records endpoint coordinates",
-                    strstr(capture.labels[0].text[0], "2.00") != NULL);
+                    strstr(capture.labels[0].text[1], "2.00") != NULL);
     }
 
     /* 2. Scale guide rendering */
@@ -185,7 +189,13 @@ static void test_transform_guides_render(void) {
         gl_stub_counts_reset();
         render3d_transform_guides_render_if_due(&snapshot, &plan, 0, cam_view);
         ASSERT_TRUE("scale rendering calls glBegin", gl_stub_counts[GL_STUB_glBegin] > 0);
-        ASSERT_INT("scale guide has no text label to record", capture.count, 0);
+        ASSERT_INT("scale records one factor label", capture.count, 1);
+        ASSERT_INT("scale label has primary and detail runs",
+                   capture.labels[0].run_count, 2);
+        ASSERT_TRUE("scale label names the transform",
+                    strcmp(capture.labels[0].text[0], " scale") == 0);
+        ASSERT_TRUE("scale label records the factors",
+                    strstr(capture.labels[0].text[1], "2.00") != NULL);
     }
 
     /* 3. Rotate guide rendering */
