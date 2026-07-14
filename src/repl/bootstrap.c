@@ -15,7 +15,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define REPL_STARTUP_EXAMPLE_NAME "Rotating cube"
+#define REPL_STARTUP_EXAMPLE_NAME "Lit cube"
 
 static int startup_example_index(void) {
     for (int idx = 0; idx < repl_example_count(); idx++) {
