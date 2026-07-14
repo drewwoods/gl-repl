@@ -1567,6 +1567,9 @@ fix-doc-links: ## Attempt to repair Markdown file/line links, then verify.
 check-user-guide-keymap: ## Validate USER_GUIDE shortcut claims against keymap.h.
 	@python3 scripts/check/check-user-guide-keymap.py
 
+check-user-guide-examples: ## Validate USER_GUIDE's advertised example count/table against examples/catalog.ini.
+	@python3 scripts/check/check-user-guide-examples.py
+
 check-keymap-no-dup: ## Hard guard: no two keymap.h bindings share a (key, mods) — a double-map.
 	@bash scripts/keymap.sh check
 
@@ -1617,6 +1620,7 @@ CHECK_TARGETS = \
 	check-trailing-whitespace \
 	check-doc-links \
 	check-user-guide-keymap \
+	check-user-guide-examples \
 	check-examples-catalog \
 	check-formatted \
 	check-gl-boundaries \
@@ -1653,6 +1657,7 @@ test-detailed: $(TEST_BINS) ## Run the full test suite with verbose example expo
 TEST_STUBS_PRECHECKS = \
 	check-doc-links \
 	check-user-guide-keymap \
+	check-user-guide-examples \
 	check-trailing-whitespace \
 	check-examples-catalog \
 	check-formatted \
