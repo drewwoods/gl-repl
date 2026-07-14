@@ -7,10 +7,10 @@ def main():
     if len(sys.argv) < 2:
         print("Usage: web-serve.py <directory>", file=sys.stderr)
         sys.exit(1)
-        
+
     directory = sys.argv[1]
     os.chdir(directory)
-    
+
     port = 8000
     while True:
         try:
