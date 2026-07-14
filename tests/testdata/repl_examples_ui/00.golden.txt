@@ -9,7 +9,7 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_CLASSIC */
+/* @cfg grid = GRID_THEME_OFF */
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_DIM */
@@ -150,7 +150,7 @@ void display(void) {
     glVertex3f(1, -1, 1);
     glVertex3f(-1, -1, 1);
     // +Z face
-    glColor3f(0.25, 0.675, 1);
+    glColor3f(0.15, 0.55, 1);
     glNormal3f(0, 0, 1);
     glVertex3f(-1, -1, 1);
     glVertex3f(1, -1, 1);
