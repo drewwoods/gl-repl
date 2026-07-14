@@ -959,7 +959,7 @@ Developers can point the app at an editable catalog with
 `./gl-repl --examples-dir examples --example <name-or-idx>`:
 
 ```
- 1  Lit cube                                            17  Annotated orbit plot (labels)
+ 1  gl-repl logo                                        17  Annotated orbit plot (labels)
  2  Rotating cube                                       18  GLU concave arrow
  3  Animated ring (for + t)                             19  GLU concave arrow cutout
  4  Conditional colors (if + t)                         20  GLU concave arrow extrusion

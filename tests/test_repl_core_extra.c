@@ -219,10 +219,10 @@ void test_initial_load_starts_on_lit_cube_example() {
                repl_user_scene_count(), 0);
     ASSERT_INT("initial load cursor at document end",
                edit_line, repl_state_document_count());
-    ASSERT_TRUE("initial active example is lit cube",
+    ASSERT_TRUE("initial active example is gl-repl logo",
                  repl_state_scenes().active_example_idx >= 0 &&
                  strcmp(repl_example_name(repl_state_scenes().active_example_idx),
-                        "Lit cube") == 0);
+                        "gl-repl logo") == 0);
 
     SourceTextView text = source_document_view();
     int saw_color_material = 0;
