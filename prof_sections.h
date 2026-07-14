@@ -83,7 +83,10 @@ typedef enum {
     PROF_REFORMAT,      /* repl_reformat_program() (on demand) */
     PROF_AUTONORMAL,    /* recompute_autonormals() (only when dirty) */
     PROF_REPLAY_HUD,    /* replay_ui_hud_render() (only when replaying) */
-    PROF_PROFILE_PANEL, /* ui_profile_panel_render() (the panel itself) */
+    PROF_PROFILE_PANEL,           /* all compute-profile surfaces */
+    PROF_PROFILE_PANEL_FPS,       /* ui_fps_panel_render() */
+    PROF_PROFILE_PANEL_SECTIONS,  /* ui_profile_panel_render() */
+    PROF_PROFILE_PANEL_HISTOGRAM, /* ui_histogram_panel_render() */
     PROF_MEMORY_PANEL,  /* ui_memory_panel_render() (the panel itself) */
     PROF_COMPOSITOR,    /* glr_compositor_postprocess_frame() — whole-frame
                          * (full-screen) post-process; distinct from the

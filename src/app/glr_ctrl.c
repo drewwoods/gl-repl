@@ -2027,12 +2027,20 @@ void glr_ctrl_display_frame(void) {
         /* All three compute-profile surfaces: the FPS plot panel, the section
          * listing, and the section histograms (each renderer no-ops below its
          * own visibility level). */
+        prof_begin(PROF_PROFILE_PANEL_FPS);
         UiFpsPanelView fps_view = glr_ctrl_build_fps_panel_view(&ui_snap);
         ui_fps_panel_render(&fps_view);
+        prof_end(PROF_PROFILE_PANEL_FPS);
+
+        prof_begin(PROF_PROFILE_PANEL_SECTIONS);
         UiProfilePanelView prof_view = glr_ctrl_build_profile_panel_view(&ui_snap);
         ui_profile_panel_render(&prof_view);
+        prof_end(PROF_PROFILE_PANEL_SECTIONS);
+
+        prof_begin(PROF_PROFILE_PANEL_HISTOGRAM);
         UiHistogramPanelView hist_view = glr_ctrl_build_histogram_panel_view(&ui_snap);
         ui_histogram_panel_render(&hist_view);
+        prof_end(PROF_PROFILE_PANEL_HISTOGRAM);
     }
     prof_end(PROF_PROFILE_PANEL);
 

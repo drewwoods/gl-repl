@@ -129,6 +129,12 @@ static void test_gpu_section_policy(void) {
                   glr_prof_section_is_gpu(PROF_CODE_PANEL_ROWS), 0);
     ASSERT_INT_EQ("code panel text layout excluded",
                   glr_prof_section_is_gpu(PROF_CODE_PANEL_TEXT_LAYOUT), 0);
+    ASSERT_INT_EQ("profile fps child excluded",
+                  glr_prof_section_is_gpu(PROF_PROFILE_PANEL_FPS), 0);
+    ASSERT_INT_EQ("profile section-list child excluded",
+                  glr_prof_section_is_gpu(PROF_PROFILE_PANEL_SECTIONS), 0);
+    ASSERT_INT_EQ("profile histogram child excluded",
+                  glr_prof_section_is_gpu(PROF_PROFILE_PANEL_HISTOGRAM), 0);
     ASSERT_INT_EQ("out-of-range section rejected",
                   glr_prof_section_is_gpu((ProfSection)-1), 0);
 }
