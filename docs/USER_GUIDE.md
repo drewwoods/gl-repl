@@ -773,19 +773,14 @@ glance.
 
 **Ctrl+G** cycles Off / Wireframe / Hidden-line.
 
-Wireframe draws polygon edges over the scene:
+![Wireframe (left) and hidden-line (right) on a torus](images/wireframe-hidden-line.png)
 
-![Wireframe torus](images/wireframe.png)
-
-Hidden-line draws all polygon edges first in a muted hidden-line color,
-seeds the depth buffer with filled polygons, then draws visible edges again
-in a bright line color — so the silhouette reads bright while occluded
-structure stays faint:
-
-![Hidden-line torus: visible edges bright, occluded edges muted](images/hidden-line.png)
-
-Tip: vertex outlines/points are on by default and draw over the wires; turn
-them off for a clean wireframe look.
+Wireframe draws polygon edges over the scene. Hidden-line goes further: it
+draws all edges first in a muted color, seeds the depth buffer with filled
+polygons, then redraws visible edges bright — so the silhouette reads
+clearly while occluded structure stays faint. Tip: vertex outlines/points
+are on by default and draw over the wires; turn them off for a clean
+wireframe look.
 
 ### The Config menu
 

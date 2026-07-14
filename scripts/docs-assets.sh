@@ -66,7 +66,7 @@ WARM=180
 
 # README + docs/images core set.
 CORE_ASSETS=(
-    hero first-triangle window-tour vertex-overlays wireframe hidden-line
+    hero first-triangle window-tour vertex-overlays wireframe-hidden-line
     winding-view light-theme-studio
     grid-themes backdrops axes-compass view-mode-2d labels-orrery
     glu-tess glow-sprites transform-stress variable-panel tune-badges
@@ -289,6 +289,15 @@ montage2x2() {
     magick "$WORK/_row1.png" "$WORK/_row2.png" -append -background black "$out"
 }
 
+# montage1x2 <out> <a> <b> — tile two images side-by-side with a thin black
+# gutter, same style as montage2x2.
+montage1x2() {
+    local out=$1 a=$2 b=$3
+    magick \
+        \( "$a" -bordercolor black -border 2 \) \
+        \( "$b" -bordercolor black -border 2 \) +append -background black "$out"
+}
+
 # ---- staged scenes ------------------------------------------------------
 
 stage_triangle() { stage triangle <<'EOF'
@@ -363,6 +372,10 @@ stage_torus_mesh() {
 /* @cfg light_indicators = 0 */
 // Snippet start
 glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_LIGHT1);
+glEnable(GL_LIGHT2);
 glColor3f(0.1, 0.95, 0.85);
 glutSolidTorus(0.4, 1.2, 24, 36);
 // Snippet end
@@ -758,12 +771,12 @@ if want single-polygon-scope; then
       still "$OUT/single-polygon-scope.png" $PLAIN_FRAMES 16 "$(stage_single_polygon)" )
 fi
 
-if want wireframe; then
-    still "$OUT/wireframe.png" $PLAIN_FRAMES 16 "$(stage_wireframe)"
-fi
-
-if want hidden-line; then
-    still "$OUT/hidden-line.png" $PLAIN_FRAMES 16 "$(stage_hidden_line)"
+if want wireframe-hidden-line; then
+    still "$WORK/wireframe.png" $PLAIN_FRAMES 16 "$(stage_wireframe)"
+    still "$WORK/hidden-line.png" $PLAIN_FRAMES 16 "$(stage_hidden_line)"
+    montage1x2 "$WORK/wf-hl.png" "$WORK/wireframe.png" "$WORK/hidden-line.png"
+    write_png "$WORK/wf-hl.png" "$OUT/wireframe-hidden-line.png" -resize "$W"
+    echo "docs-assets: wrote $OUT/wireframe-hidden-line.png"
 fi
 
 if want winding-view; then
