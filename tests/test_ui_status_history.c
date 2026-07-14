@@ -244,7 +244,7 @@ static void test_button_hit_and_render(void) {
     ASSERT_TRUE("button render emits a rect",
                 gl_stub_counts[GL_STUB_glRectf] > 0);
     ASSERT_TRUE("button render draws its label",
-                gl_stub_counts[GL_STUB_glutBitmapCharacter] > 0);
+                gl_stub_counts[GL_STUB_glutBitmapString] > 0);
 }
 
 static void test_open_list_renders_and_consumes(void) {

@@ -456,7 +456,7 @@ static void test_histogram_render_empty(void) {
     ASSERT_TRUE("empty histogram panel still draws its frame",
                 gl_stub_counts[GL_STUB_glRectf] > 0);
     ASSERT_TRUE("empty histogram panel draws the placeholder text",
-                gl_stub_counts[GL_STUB_glutBitmapCharacter] > 0);
+                gl_stub_counts[GL_STUB_glutBitmapString] > 0);
 }
 
 static void test_histogram_render_with_samples(void) {
