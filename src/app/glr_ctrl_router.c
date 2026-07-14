@@ -1755,6 +1755,16 @@ void glr_ctrl_passive_motion(int x, int y) {
      * position — there's no drag delta to preserve. */
     glr_ctrl_router_handle_camera_pointer_set(x, y);
     EditorInputDispatchEffects editor_effects = editor_handle_passive_motion(x, y);
+    /* An open menu dropdown/flyout can extend past the code-panel edge and
+     * cover the resize divider (e.g. the Config "All" flyout in a narrow
+     * split). A click there hits the menu, not the divider — ui_panels_hit_test
+     * checks ui_menu_bar_hit_test before the code panel — so the divider's
+     * resize cursor must not appear over it. When the menu owns this pixel,
+     * override the editor's hover cursor back to inherit. */
+    if (editor_effects.set_cursor &&
+        editor_effects.cursor != GLUT_CURSOR_INHERIT &&
+        ui_menu_bar_hit_test(x, y).kind != UI_HIT_NONE)
+        editor_effects.cursor = GLUT_CURSOR_INHERIT;
     menu_hover_changed = ui_menu_bar_update_pointer_hover(x, y,
                                                           repl_state_variables().anim_time);
     if (menu_hover_changed)
