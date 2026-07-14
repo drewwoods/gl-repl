@@ -50,6 +50,16 @@ typedef enum {
  * for side-by-side layout. */
 #define PROFILE_PANEL_W  384
 
+/* Session-only presentation state for the DETAILS tree. One bit per
+ * ProfSection marks a branch whose descendants are hidden; profiling itself
+ * continues unchanged while a branch is collapsed. */
+typedef unsigned long long UiProfileCollapseMask;
+
+enum {
+    UI_PROFILE_PANEL_HIT_NONE = -1,
+    UI_PROFILE_PANEL_TOGGLE_ALL = -2
+};
+
 /* Narrow per-frame view (the 2D analog of Render3dRenderConfig). The controller
  * resolves the panel's stacked anchor and bakes it into panel_x/panel_y, so
  * the renderer needs nothing from UiRenderSnapshot or ui/app — it links from
@@ -57,7 +67,8 @@ typedef enum {
 typedef struct {
     int                window_w, window_h;
     UiProfilePanelMode mode;
-    int                panel_x, panel_y;   /* resolved top-left, controller-baked */
+    UiProfileCollapseMask collapsed_sections;
+    int                panel_x, panel_y;   /* resolved bottom-left, controller-baked */
 } UiProfilePanelView;
 
 /* Render the CPU profile panel overlay once per frame from the supplied view.
@@ -65,11 +76,22 @@ typedef struct {
  * times. Renders nothing if the profile panel is disabled. */
 void ui_profile_panel_render(const UiProfilePanelView *view);
 
+/* Hit-test an interactive DETAILS-tree branch. Returns its ProfSection index,
+ * UI_PROFILE_PANEL_TOGGLE_ALL for the header control, or
+ * UI_PROFILE_PANEL_HIT_NONE. mx/my use GLUT window coordinates (y down).
+ * ui_profile_panel_toggle_mask() is the pure state transition applied by the
+ * controller for either result. */
+int ui_profile_panel_hit_test(const UiProfilePanelView *view, int mx, int my);
+UiProfileCollapseMask ui_profile_panel_toggle_mask(
+    UiProfileCollapseMask collapsed_sections, int toggle_target);
+
 /* Panel footprint in pixels, exposed so the controller (which owns
  * sibling-panel stacking) can resolve panel_x/panel_y without reaching into
  * the renderer's geometry. Height depends on the mode's visible row count. */
 int  ui_profile_panel_width(void);
 int  ui_profile_panel_height(UiProfilePanelMode mode);
+int  ui_profile_panel_height_collapsed(UiProfilePanelMode mode,
+                                       UiProfileCollapseMask collapsed_sections);
 
 /* --- FPS plot panel ---
  *

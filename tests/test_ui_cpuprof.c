@@ -42,6 +42,75 @@ static void test_cpuprof_metrics(void) {
     ASSERT_TRUE("height is positive details", ui_profile_panel_height(PROFILE_PANEL_DETAILS) > 0);
 }
 
+static void test_cpuprof_details_collapse(void) {
+    UiProfileCollapseMask collapsed = 0;
+    int expanded_h = ui_profile_panel_height_collapsed(PROFILE_PANEL_DETAILS,
+                                                       collapsed);
+
+    collapsed = ui_profile_panel_toggle_mask(collapsed, PROF_CODE_PANEL);
+    ASSERT_INT_EQ("collapsing Code Panel hides its sixteen descendants",
+                  expanded_h - ui_profile_panel_height_collapsed(
+                      PROFILE_PANEL_DETAILS, collapsed),
+                  16 * 16);
+    ASSERT_TRUE("collapsed branch bit is retained",
+                collapsed != 0);
+
+    collapsed = ui_profile_panel_toggle_mask(collapsed, PROF_CODE_PANEL);
+    ASSERT_INT_EQ("toggling a branch again restores full height",
+                  ui_profile_panel_height_collapsed(PROFILE_PANEL_DETAILS,
+                                                    collapsed),
+                  expanded_h);
+    ASSERT_TRUE("second branch toggle clears its bit", collapsed == 0);
+
+    collapsed = ui_profile_panel_toggle_mask(collapsed,
+                                              UI_PROFILE_PANEL_TOGGLE_ALL);
+    ASSERT_TRUE("collapse all reduces details height",
+                ui_profile_panel_height_collapsed(PROFILE_PANEL_DETAILS,
+                                                  collapsed) < expanded_h);
+    collapsed = ui_profile_panel_toggle_mask(collapsed,
+                                              UI_PROFILE_PANEL_TOGGLE_ALL);
+    ASSERT_TRUE("expand all clears branch mask", collapsed == 0);
+
+    /* Sections mode deliberately ignores the DETAILS presentation mask. */
+    collapsed = ui_profile_panel_toggle_mask(0, PROF_RENDER3D);
+    ASSERT_INT_EQ("sections height ignores collapsed details branches",
+                  ui_profile_panel_height_collapsed(PROFILE_PANEL_SECTIONS,
+                                                    collapsed),
+                  ui_profile_panel_height(PROFILE_PANEL_SECTIONS));
+}
+
+static void test_cpuprof_details_hit_test(void) {
+    UiProfilePanelView view = {
+        .window_w = 800,
+        .window_h = 600,
+        .mode = PROFILE_PANEL_DETAILS,
+        .collapsed_sections = 0,
+        .panel_x = 10,
+        .panel_y = 10
+    };
+    int panel_h = ui_profile_panel_height_collapsed(
+        view.mode, view.collapsed_sections);
+    int first_row_y = view.panel_y + panel_h - 54;
+
+    ASSERT_INT_EQ("first details branch row hits Render 3D",
+                  ui_profile_panel_hit_test(
+                      &view, view.panel_x + 12,
+                      view.window_h - (first_row_y + 4)),
+                  PROF_RENDER3D);
+    ASSERT_INT_EQ("details title control hits collapse all",
+                  ui_profile_panel_hit_test(
+                      &view, view.panel_x + PROFILE_PANEL_W - 4,
+                      view.window_h - (view.panel_y + panel_h - 10)),
+                  UI_PROFILE_PANEL_TOGGLE_ALL);
+
+    view.mode = PROFILE_PANEL_SECTIONS;
+    ASSERT_INT_EQ("sections mode has no collapse hit targets",
+                  ui_profile_panel_hit_test(
+                      &view, view.panel_x + 12,
+                      view.window_h - (first_row_y + 4)),
+                  UI_PROFILE_PANEL_HIT_NONE);
+}
+
 static void test_gpu_section_policy(void) {
     /* GL-emitting sections are GPU-bracketed... */
     ASSERT_INT_EQ("scene 3d is gpu", glr_prof_section_is_gpu(PROF_RENDER3D), 1);
@@ -555,6 +624,8 @@ static void test_cpuprof_render_details(void) {
 int main(void) {
     printf("--- ui_cpuprof tests ---\n");
     test_cpuprof_metrics();
+    test_cpuprof_details_collapse();
+    test_cpuprof_details_hit_test();
     test_gpu_section_policy();
     test_cpuprof_section_histogram_direct();
     test_cpuprof_section_histogram_accum_commit();

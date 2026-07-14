@@ -59,7 +59,7 @@ static UiHit vp_hit_test(int count, int mx, int my) {
 /* CPU profile panel view at a fixed anchor (the tests only count GL calls,
  * which the panel emits unconditionally when mode != OFF). */
 static UiProfilePanelView pp_view(UiProfilePanelMode mode) {
-    UiProfilePanelView v = { 800, 600, mode, 100, 400 };
+    UiProfilePanelView v = { 800, 600, mode, 0, 100, 400 };
     return v;
 }
 

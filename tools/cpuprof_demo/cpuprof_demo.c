@@ -190,6 +190,7 @@ static void display_func(void) {
     view.window_w = g_window_w;
     view.window_h = g_window_h;
     view.mode     = g_mode;
+    view.collapsed_sections = 0;
     view.panel_x  = g_window_w - ui_profile_panel_width()      - 16;
     view.panel_y  = g_window_h - ui_profile_panel_height(g_mode) - 16;
     ui_profile_panel_render(&view);

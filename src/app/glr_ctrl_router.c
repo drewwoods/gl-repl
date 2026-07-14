@@ -1297,6 +1297,16 @@ static int route_variable_slider_hit(int x, int y) {
                                                                GLUT_DOWN, x, y);
 }
 
+/* UI_HIT_PROFILE_SECTION_TOGGLE: presentation-only DETAILS-tree state. The
+ * profiler probes remain active for hidden descendants. */
+static int route_profile_section_toggle_hit(const UiHit *hit) {
+    UiProfilePanelState *panel = ui_state_profile_panel_mut();
+    panel->collapsed_sections = ui_profile_panel_toggle_mask(
+        (UiProfileCollapseMask)panel->collapsed_sections, hit->item_idx);
+    editor_request_redraw();
+    return 1;
+}
+
 /* Derive a code-panel target line from a hit, mirroring the legacy
  * code_panel_drag_target. Insert-line drags use edit_line (the line
  * the cursor is parked on), only falling back to the last committed
@@ -1370,6 +1380,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_submenu_item_hit(&hit); break;
     case UI_HIT_VARIABLE_SLIDER:
         consumed = route_variable_slider_hit(x, y); break;
+    case UI_HIT_PROFILE_SECTION_TOGGLE:
+        consumed = route_profile_section_toggle_hit(&hit); break;
     case UI_HIT_PANEL_DIVIDER:
         consumed = route_panel_divider_hit(&hit); break;
     case UI_HIT_CODE_TEXT:

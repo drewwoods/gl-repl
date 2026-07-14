@@ -30,6 +30,7 @@ typedef enum {
     UI_HIT_HELP_PANEL,
     UI_HIT_STATUS_HISTORY,   /* messages button: toggles recent-message list */
     UI_HIT_SEARCH_NAV,       /* find-bar match stepper: item_idx = +1 next / -1 prev */
+    UI_HIT_PROFILE_SECTION_TOGGLE, /* item_idx = ProfSection or TOGGLE_ALL */
     UI_HIT_SCENE
 } UiAppHitKind;
 

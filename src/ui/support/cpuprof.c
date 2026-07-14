@@ -55,6 +55,9 @@ static const float k_prof_dim[3]   = { 0.30f, 0.30f, 0.38f };
  * FONT_SMALL is fixed-width, so 2 cell widths reads as the prior 2-space step. */
 #define PROF_INDENT_W       (FONT_SMALL_W * 2)
 
+STATIC_ASSERT(PROF_SECTION_COUNT <= 64,
+              "profile collapse mask must fit 64 bits");
+
 /* ========================================================================= */
 /* Helpers                                                                    */
 /* ========================================================================= */
@@ -102,22 +105,116 @@ static void set_time_color(int is_total, double us) {
  *    for the rest), so it's omitted in every mode;
  *  - a "detail" row is a nested child (depth > 0), hidden outside DETAILS mode.
  * The app supplies label/depth, so a new sub-section needs no edit here. */
-static int section_visible(int profile_mode, ProfSection s) {
+static int section_has_label(ProfSection s) {
     ProfSectionInfo info = prof_section_info(s);
-    if (info.label == NULL || info.label[0] == '\0')
-        return 0;
-    if (profile_mode != PROFILE_PANEL_DETAILS && info.depth > 0)
-        return 0;
-    return 1;
+    return info.label != NULL && info.label[0] != '\0';
 }
 
-static int visible_section_count(int profile_mode) {
+static UiProfileCollapseMask section_bit(ProfSection s) {
+    return ((UiProfileCollapseMask)1) << (unsigned int)s;
+}
+
+/* Catalog order plus depth defines the tree: a branch owns the contiguous
+ * following run of rows with greater depth. */
+static int section_has_children(ProfSection s) {
+    ProfSectionInfo parent;
+    int section_idx;
+
+    if (!section_has_label(s))
+        return 0;
+    parent = prof_section_info(s);
+    for (section_idx = (int)s + 1; section_idx < PROF_SECTION_COUNT;
+         section_idx++) {
+        ProfSection child = (ProfSection)section_idx;
+        ProfSectionInfo info;
+        if (!section_has_label(child))
+            continue;
+        info = prof_section_info(child);
+        if (info.depth <= parent.depth)
+            return 0;
+        return 1;
+    }
+    return 0;
+}
+
+/* A single visibility walk is shared by sizing, rendering, and hit-testing.
+ * collapsed_depth tracks the nearest hidden ancestor while traversing the
+ * catalog; the collapsed branch itself remains visible. */
+static int section_visibility(int profile_mode,
+                              UiProfileCollapseMask collapsed_sections,
+                              unsigned char visible[PROF_SECTION_COUNT]) {
     int section_count = 0;
-    for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
-        if (section_visible(profile_mode, (ProfSection)section_idx))
+    int collapsed_depth = -1;
+    int section_idx;
+
+    for (section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
+        ProfSection s = (ProfSection)section_idx;
+        ProfSectionInfo info;
+        int row_visible = 0;
+
+        if (!section_has_label(s)) {
+            visible[section_idx] = 0;
+            continue;
+        }
+        info = prof_section_info(s);
+        if (collapsed_depth >= 0 && info.depth <= collapsed_depth)
+            collapsed_depth = -1;
+
+        if (profile_mode == PROFILE_PANEL_DETAILS) {
+            row_visible = (collapsed_depth < 0);
+            if (row_visible && section_has_children(s) &&
+                (collapsed_sections & section_bit(s)) != 0)
+                collapsed_depth = info.depth;
+        } else {
+            row_visible = (info.depth == 0);
+        }
+
+        visible[section_idx] = (unsigned char)row_visible;
+        if (row_visible)
             section_count++;
     }
     return section_count;
+}
+
+static UiProfileCollapseMask branch_mask(void) {
+    UiProfileCollapseMask mask = 0;
+    int section_idx;
+    for (section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
+        ProfSection s = (ProfSection)section_idx;
+        if (section_has_children(s))
+            mask |= section_bit(s);
+    }
+    return mask;
+}
+
+static UiProfileCollapseMask root_branch_mask(void) {
+    UiProfileCollapseMask mask = 0;
+    int section_idx;
+    for (section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
+        ProfSection s = (ProfSection)section_idx;
+        if (section_has_children(s) && prof_section_info(s).depth == 0)
+            mask |= section_bit(s);
+    }
+    return mask;
+}
+
+static int tree_is_collapsed(UiProfileCollapseMask collapsed_sections) {
+    UiProfileCollapseMask roots = root_branch_mask();
+    return roots != 0 && (collapsed_sections & roots) == roots;
+}
+
+UiProfileCollapseMask ui_profile_panel_toggle_mask(
+        UiProfileCollapseMask collapsed_sections, int toggle_target) {
+    if (toggle_target == UI_PROFILE_PANEL_TOGGLE_ALL) {
+        UiProfileCollapseMask all = branch_mask();
+        if (tree_is_collapsed(collapsed_sections))
+            return collapsed_sections & ~all;
+        return collapsed_sections | all;
+    }
+    if (toggle_target >= 0 && toggle_target < PROF_SECTION_COUNT &&
+        section_has_children((ProfSection)toggle_target))
+        return collapsed_sections ^ section_bit((ProfSection)toggle_target);
+    return collapsed_sections;
 }
 
 /* ========================================================================= */
@@ -129,7 +226,15 @@ static int visible_section_count(int profile_mode) {
  * controller needs this (via ui_profile_panel_height) to resolve the stacked
  * anchor; the renderer uses it to size the frame. */
 int ui_profile_panel_height(UiProfilePanelMode mode) {
-    int visible_count = visible_section_count((int)mode);
+    return ui_profile_panel_height_collapsed(mode, 0);
+}
+
+int ui_profile_panel_height_collapsed(
+        UiProfilePanelMode mode,
+        UiProfileCollapseMask collapsed_sections) {
+    unsigned char visible[PROF_SECTION_COUNT];
+    int visible_count = section_visibility((int)mode, collapsed_sections,
+                                           visible);
     return PROF_HEADER_H
          + 18                           /* column heading row */
          + visible_count * PROF_ROW_H
@@ -144,13 +249,15 @@ int ui_profile_panel_width(void) {
 
 void ui_profile_panel_render(const UiProfilePanelView *view) {
     int profile_mode = view->mode;
+    unsigned char visible[PROF_SECTION_COUNT];
     /* The section listing only exists from SECTIONS up; PLOT shows just the
      * separate FPS plot panel (ui_fps_panel_render). */
     if (profile_mode != PROFILE_PANEL_SECTIONS &&
         profile_mode != PROFILE_PANEL_DETAILS)
         return;
 
-    int panel_h = ui_profile_panel_height((UiProfilePanelMode)profile_mode);
+    int panel_h = ui_profile_panel_height_collapsed(
+        (UiProfilePanelMode)profile_mode, view->collapsed_sections);
 
     int panel_x = view->panel_x;
     int panel_y = view->panel_y;
@@ -167,14 +274,21 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
 
     int tx = panel_x + 8;
     int ty = panel_y + panel_h - PROF_HEADER_H + 2;
-    const char *HINT = "Ctrl+W:hide";
-    const int hint_width = FONT_SMALL_W * (int)strlen(HINT) + 2;
+    const char *hint = "Ctrl+W:hide";
+    int hint_width;
+
+    if (profile_mode == PROFILE_PANEL_DETAILS) {
+        hint = tree_is_collapsed(view->collapsed_sections)
+             ? "Ctrl+W  [+] all" : "Ctrl+W  [-] all";
+    }
+    hint_width = FONT_SMALL_W * (int)strlen(hint) + 2;
 
     /* Title */
     ui_clr(UI_TOK_TEXT_PRIMARY);
     gl2d_draw_string((float)tx, (float)ty, "Compute Profile", FONT_SMALL);
     ui_clr(UI_TOK_TEXT_MUTED);
-    gl2d_draw_string((float)(panel_x + PROF_PANEL_W - hint_width), (float)ty, HINT, FONT_SMALL);
+    gl2d_draw_string((float)(panel_x + PROF_PANEL_W - hint_width), (float)ty,
+                     hint, FONT_SMALL);
 
     ty -= PROF_HEADER_H;
 
@@ -202,10 +316,11 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
 
     ty -= PROF_ROW_H - 2;
 
+    section_visibility(profile_mode, view->collapsed_sections, visible);
     /* One row per section.  Insert a separator line before FRAME_TOTAL. */
     for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
         ProfSection s = (ProfSection)section_idx;
-        if (!section_visible(profile_mode, s)) continue;
+        if (!visible[section_idx]) continue;
 
         ProfSectionInfo info = prof_section_info(s);
 
@@ -233,9 +348,24 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
             ui_clr(UI_TOK_TEXT_SECTION);
         else
             ui_clr(UI_TOK_TEXT_PRIMARY);
-        /* Indentation is derived from depth, not baked into the label. */
-        gl2d_draw_string((float)(tx + info.depth * PROF_INDENT_W),
-                         (float)ty, info.label, FONT_SMALL);
+        /* Indentation is derived from depth, not baked into the label. DETAILS
+         * reserves one marker cell for every row so leaf labels stay aligned
+         * with sibling branches. ASCII markers work across every GLUT font
+         * backend, including Emscripten. */
+        {
+            int label_x = tx + info.depth * PROF_INDENT_W;
+            if (profile_mode == PROFILE_PANEL_DETAILS) {
+                if (section_has_children(s)) {
+                    const char *marker =
+                        (view->collapsed_sections & section_bit(s)) != 0
+                        ? ">" : "v";
+                    gl2d_draw_string((float)label_x, (float)ty, marker,
+                                     FONT_SMALL);
+                }
+                label_x += FONT_SMALL_W;
+            }
+            gl2d_draw_string((float)label_x, (float)ty, info.label, FONT_SMALL);
+        }
 
         /* CPU / GPU / Max values — all smoothed averages. */
         double cpu_us = prof_section_avg_us(s);
@@ -282,6 +412,61 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
     }
 
     gl2d_end();
+}
+
+int ui_profile_panel_hit_test(const UiProfilePanelView *view, int mx, int my) {
+    unsigned char visible[PROF_SECTION_COUNT];
+    int panel_h;
+    int gl_y;
+    int tx;
+    int ty;
+    int section_idx;
+
+    if (view == NULL || view->mode != PROFILE_PANEL_DETAILS ||
+        view->window_w <= 0 || view->window_h <= 0)
+        return UI_PROFILE_PANEL_HIT_NONE;
+
+    panel_h = ui_profile_panel_height_collapsed(
+        view->mode, view->collapsed_sections);
+    gl_y = view->window_h - my;
+    if (mx < view->panel_x || mx >= view->panel_x + PROF_PANEL_W ||
+        gl_y < view->panel_y || gl_y >= view->panel_y + panel_h)
+        return UI_PROFILE_PANEL_HIT_NONE;
+
+    /* The right side of the title row owns the collapse/expand-all control. */
+    {
+        const char *control = tree_is_collapsed(view->collapsed_sections)
+                            ? "[+] all" : "[-] all";
+        int control_width = FONT_SMALL_W * (int)strlen(control) + 2;
+        if (mx >= view->panel_x + PROF_PANEL_W - control_width &&
+            gl_y >= view->panel_y + panel_h - PROF_HEADER_H)
+            return UI_PROFILE_PANEL_TOGGLE_ALL;
+    }
+
+    tx = view->panel_x + 8;
+    if (mx < tx || mx >= tx + PROF_COL_LABEL_W)
+        return UI_PROFILE_PANEL_HIT_NONE;
+
+    /* Same baseline progression as ui_profile_panel_render(): title row,
+     * headings, rule offset, then one fixed-height band per visible row. */
+    ty = view->panel_y + panel_h - PROF_HEADER_H + 2;
+    ty -= PROF_HEADER_H;
+    ty -= 2;
+    ty -= PROF_ROW_H - 2;
+    section_visibility(view->mode, view->collapsed_sections, visible);
+
+    for (section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
+        ProfSection s = (ProfSection)section_idx;
+        if (!visible[section_idx])
+            continue;
+        if (gl_y >= ty - 3 && gl_y < ty + PROF_ROW_H - 3) {
+            if (section_has_children(s))
+                return section_idx;
+            return UI_PROFILE_PANEL_HIT_NONE;
+        }
+        ty -= PROF_ROW_H;
+    }
+    return UI_PROFILE_PANEL_HIT_NONE;
 }
 
 /* ========================================================================= */
