@@ -79,6 +79,9 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_AUTONORMAL]                        = { "Autonormal",      0, 0 },
     [PROF_REPLAY_HUD]                        = { "Replay HUD",      0, 0 },
     [PROF_PROFILE_PANEL]                     = { "Profile Panel",   0, 0 },
+    [PROF_PROFILE_PANEL_FPS]                 = { "fps plot",        1, 0 },
+    [PROF_PROFILE_PANEL_SECTIONS]            = { "section list",    1, 0 },
+    [PROF_PROFILE_PANEL_HISTOGRAM]           = { "histograms",      1, 0 },
     [PROF_MEMORY_PANEL]                      = { "Memory Panel",    0, 0 },
     [PROF_COMPOSITOR]                        = { "Compositor FX",   0, 0 },
     [PROF_FRAME_RESTORE]                     = { "Frame Restore",   0, 0 },
@@ -128,6 +131,9 @@ static const unsigned char k_gpu_sections[PROF_SECTION_COUNT] = {
     [PROF_UI_PANELS]                         = 1,
     [PROF_REPLAY_HUD]                        = 1,
     [PROF_PROFILE_PANEL]                     = 1,
+    /* Profile-panel children are diagnostic CPU subdivisions. Their parent
+     * owns the GPU query so the overlay does not nest timer queries while it
+     * is rendering the profiler's own measurements. */
     [PROF_MEMORY_PANEL]                      = 1,
     [PROF_COMPOSITOR]                        = 1,
     [PROF_FRAME_TOTAL]                       = 1,
