@@ -137,7 +137,8 @@ extern "C" {
     X(glutWireCube)                    \
     X(glutSolidTeapot)                 \
     X(glutSolidCone)                   \
-    X(glutBitmapCharacter)
+    X(glutBitmapCharacter)             \
+    X(glutBitmapString)
 
 enum {
 #define GL_STUB_COUNT_ENUM_ENTRY(name) GL_STUB_##name,
@@ -185,7 +186,11 @@ void gl_stub_counts_dump(FILE *out, const char *prefix, long long divisor);
  *   pointer-array args are omitted    — fp parity tests compare scalar
  *                                      args only; see
  *                                      docs/plans/done/gl-stub-extensions.md
- *                                      for the array-content sketch. */
+ *                                      for the array-content sketch.
+ *   glutBitmapStringByte <byte>       — one supplemental line per string byte,
+ *                                      used to verify display-only text
+ *                                      transforms without recording a fake
+ *                                      glutBitmapCharacter call. */
 extern FILE *gl_stub_trace_fp;
 void gl_stub_trace_open(const char *path);
 void gl_stub_trace_close(void);

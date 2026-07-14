@@ -172,19 +172,38 @@ static unsigned char text_panel_display_glyph(const char *text, int index,
 
 static void text_panel_draw_segment(int x, int y, const char *text,
                                     int start, int len, void *font,
-                                    int dash_rule) {
+                                    int comment_rule) {
     int join_dash_runs;
 
     if (!text || len <= 0)
         return;
 
-    join_dash_runs = dash_rule && text_panel_is_comment_line(text);
+    join_dash_runs = comment_rule && text_panel_is_comment_line(text);
     glRasterPos2f((float)x, (float)y);
+
+#ifdef USE_GLUT
+    /* Apple GLUT does not expose the freeglut glutBitmapString extension. */
     for (int i = 0; i < len; i++) {
         int a = start + i;
         glutBitmapCharacter(font,
                             text_panel_display_glyph(text, a, join_dash_runs));
     }
+#else
+    /* freeglut preserves pixel-store state once per string rather than once
+     * per glyph. A span reaching the source terminator can be submitted
+     * directly unless it needs the display-only comment-rule substitution. */
+    if (!join_dash_runs && text[start + len] == '\0') {
+        glutBitmapString(font, (const unsigned char *)(text + start));
+    } else {
+        unsigned char display[len + 1];
+
+        for (int i = 0; i < len; i++)
+            display[i] = text_panel_display_glyph(text, start + i,
+                                                  join_dash_runs);
+        display[len] = '\0';
+        glutBitmapString(font, display);
+    }
+#endif
 }
 
 static int text_panel_row_uses_blend(const UiTextPanelRow *row) {
