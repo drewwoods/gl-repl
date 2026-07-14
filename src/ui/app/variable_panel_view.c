@@ -28,6 +28,7 @@ UiVariablePanelView ui_app_variable_panel_view(const UiRenderSnapshot *snap) {
             snap->variable_panel.visible,
             snap->variable_panel_vars.count,
             snap->profile_panel.mode,
+            snap->profile_panel.collapsed_sections,
             snap->memory_panel.mode,
             ui_overlay_layout_last_band_h());
         ui_overlay_layout_panel_pos(&in, UI_OVERLAY_PANEL_VARIABLE,
@@ -51,6 +52,7 @@ UiVariablePanelView ui_app_variable_panel_view_live(int var_count) {
             variable_panel_visible(),
             var_count,
             ui_state_profile_panel().mode,
+            ui_state_profile_panel().collapsed_sections,
             ui_state_memory_panel().mode,
             ui_overlay_layout_last_band_h());
         ui_overlay_layout_panel_pos(&in, UI_OVERLAY_PANEL_VARIABLE,

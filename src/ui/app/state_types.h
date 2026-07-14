@@ -56,6 +56,7 @@ typedef struct {
 
 typedef struct {
     int mode;
+    unsigned long long collapsed_sections;
 } UiProfilePanelState;
 
 typedef struct {

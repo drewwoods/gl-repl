@@ -1645,6 +1645,7 @@ static UiOverlayLayoutIn glr_ctrl_overlay_layout_inputs(
     return ui_overlay_layout_inputs(snap->variable_panel.visible,
                                     snap->variable_panel_vars.count,
                                     snap->profile_panel.mode,
+                                    snap->profile_panel.collapsed_sections,
                                     snap->memory_panel.mode,
                                     ui_overlay_layout_last_band_h());
 }
@@ -1671,6 +1672,8 @@ static UiProfilePanelView glr_ctrl_build_profile_panel_view(const UiRenderSnapsh
     v.window_w = snap->viewport.window_w;
     v.window_h = snap->viewport.window_h;
     v.mode     = (UiProfilePanelMode)snap->profile_panel.mode;
+    v.collapsed_sections =
+        (UiProfileCollapseMask)snap->profile_panel.collapsed_sections;
     UiOverlayLayoutIn in = glr_ctrl_overlay_layout_inputs(snap);
     ui_overlay_layout_panel_pos(&in, UI_OVERLAY_PANEL_PROFILE,
                                 &v.panel_x, &v.panel_y);
@@ -2926,6 +2929,7 @@ void glr_ctrl_tick(void) {
             variable_panel_visible(),
             repl_eval_predef_view().count,
             ui_state_profile_panel().mode,
+            ui_state_profile_panel().collapsed_sections,
             ui_state_memory_panel().mode,
             band_h);
         ui_overlay_layout_tick(&in);

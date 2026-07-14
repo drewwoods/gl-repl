@@ -7,6 +7,7 @@
 #include "config.h"
 #include "ui/subsystems/color_picker.h"
 #include "ui/app/numeric_swatch.h"
+#include "ui/app/overlay_layout.h"
 #include "ui/core/gl_2d.h"
 #include "ui/app/layout.h"
 #include "ui/app/menu_bar.h"
@@ -16,6 +17,7 @@
 #include "ui/core/theme.h"
 #include "ui/subsystems/variable_panel.h"
 #include "ui/app/variable_panel_view.h"
+#include "ui/support/cpuprof.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -716,6 +718,35 @@ UiHit ui_panels_hit_test(const UiRenderSnapshot *snap,
         UiHit msg_hit = status_history_hit_test(snap, mx, my);
         if (msg_hit.kind != UI_HIT_NONE)
             return msg_hit;
+    }
+
+    {
+        UiProfilePanelView profile_view;
+        UiOverlayLayoutIn layout_in = ui_overlay_layout_inputs(
+            snap->variable_panel.visible,
+            snap->variable_panel_vars.count,
+            snap->profile_panel.mode,
+            snap->profile_panel.collapsed_sections,
+            snap->memory_panel.mode,
+            ui_overlay_layout_last_band_h());
+        int toggle_target;
+
+        profile_view.window_w = win_w;
+        profile_view.window_h = win_h;
+        profile_view.mode = (UiProfilePanelMode)snap->profile_panel.mode;
+        profile_view.collapsed_sections =
+            (UiProfileCollapseMask)snap->profile_panel.collapsed_sections;
+        ui_overlay_layout_panel_pos(&layout_in, UI_OVERLAY_PANEL_PROFILE,
+                                    &profile_view.panel_x,
+                                    &profile_view.panel_y);
+        toggle_target = ui_profile_panel_hit_test(&profile_view, mx, my);
+        if (toggle_target != UI_PROFILE_PANEL_HIT_NONE) {
+            hit.kind = UI_HIT_PROFILE_SECTION_TOGGLE;
+            hit.item_idx = toggle_target;
+            hit.local_x = (float)(mx - profile_view.panel_x);
+            hit.local_y = (float)(gl_y - profile_view.panel_y);
+            return hit;
+        }
     }
 
     {

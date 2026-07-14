@@ -42,7 +42,9 @@ typedef struct {
 static OverlayLayoutState g_ovl;  /* zero-init: never ticked, band 0 */
 
 UiOverlayLayoutIn ui_overlay_layout_inputs(int var_visible, int var_count,
-                                           int profile_mode, int memory_mode,
+                                           int profile_mode,
+                                           unsigned long long profile_collapsed_sections,
+                                           int memory_mode,
                                            int band_h) {
     UiOverlayLayoutIn in;
     ui_layout_scene_rect(&in.render3d_x, &in.render3d_y, &in.render3d_w, &in.render3d_h);
@@ -68,7 +70,9 @@ UiOverlayLayoutIn ui_overlay_layout_inputs(int var_visible, int var_count,
          profile_mode == PROFILE_PANEL_DETAILS);
     in.panels[UI_OVERLAY_PANEL_PROFILE].w = ui_profile_panel_width();
     in.panels[UI_OVERLAY_PANEL_PROFILE].h =
-        ui_profile_panel_height((UiProfilePanelMode)profile_mode);
+        ui_profile_panel_height_collapsed(
+            (UiProfilePanelMode)profile_mode,
+            (UiProfileCollapseMask)profile_collapsed_sections);
 
     /* The histogram panel plots the same top-level sections the listing
      * shows, so it rides the listing's visibility levels exactly. */
