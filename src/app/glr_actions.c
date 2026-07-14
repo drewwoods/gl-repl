@@ -70,7 +70,9 @@ static const char *xform_guide_mode_names[RENDER3D_XFORM_GUIDE_COUNT] = {
     [RENDER3D_XFORM_GUIDE_WORLD] = "World",
     [RENDER3D_XFORM_GUIDE_FRAME] = "Frame",
 };
-static const char *profile_panel_mode_names[] = { "Off", "Plot", "Sections", "Details" };
+static const char *profile_panel_mode_names[] = {
+    "Off", "FPS", "Sections", "Histogram"
+};
 static const char *memory_panel_mode_names[]  = { "Off", "On" };
 static const char *code_panel_layout_names[] = {
     "Left", "Top", "Bottom", "Hidden"
@@ -562,7 +564,7 @@ static void glr_export_cfg_normalize_legacy_alias(const char **slug, int *val,
      * timings too); files saved before the rename still say cpu_profile.
      * Those files also predate the FPS-plot mode inserted at level 1, so
      * their non-zero values shift up one (old On -> Sections, old
-     * Details -> Details). */
+     * Details -> Histogram). */
     if (strcmp(*slug, "cpu_profile") == 0) {
         snprintf(slug_buf, slug_buf_sz, "%s", "compute_profile");
         *slug = slug_buf;
@@ -893,8 +895,8 @@ static void glr_export_cfg_apply(const ReplConfigBag *cfg) {
             val = val ? CODE_PANEL_LAYOUT_TOP : CODE_PANEL_LAYOUT_LEFT;
         }
         if (strcmp(slug, "cpu_profile") == 0 && val >= 1) {
-            /* Legacy slug predates the FPS-plot level inserted at 1:
-             * old On -> Sections, old Details -> Details. */
+            /* Legacy slug predates the FPS level inserted at 1:
+             * old On -> Sections, old Details -> Histogram. */
             val += 1;
             if (val >= PROFILE_PANEL_MODE_COUNT)
                 val = PROFILE_PANEL_MODE_COUNT - 1;

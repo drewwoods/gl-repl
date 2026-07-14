@@ -66,7 +66,7 @@ STATIC_ASSERT(CP_COUNT <= PROF_SECTION_COUNT,
 static int   g_window_w = 940;
 static int   g_window_h = 680;
 static float g_spin     = 0.0f;
-static UiProfilePanelMode g_mode = PROFILE_PANEL_DETAILS;  /* launch showing the breakdown */
+static UiProfilePanelMode g_mode = PROFILE_PANEL_HISTOGRAM;
 
 /* Display lists: one compiled once and reused across frames, one rebuilt every
  * frame. Created lazily on the first display callback (needs a live context). */
@@ -77,8 +77,8 @@ static int    g_lists_ready    = 0;
 /* The demo's half of the cpuprof display contract (gl-repl's half is
  * src/app/glr_prof.c): { bare label, explicit depth, is_total }. depth — not
  * any baked-in indentation — drives how far the panel indents the row, and
- * depth>0 marks a detail row hidden outside DETAILS mode. Slots past CP_COUNT
- * are unused: prof_section_info returns {NULL} and the panel omits them. */
+ * depth>0 marks nested rows in the collapsible tree. Slots past CP_COUNT are
+ * unused: prof_section_info returns {NULL} and the panel omits them. */
 static const ProfSectionInfo k_sections[CP_COUNT] = {
     [CP_FRAME_TOTAL]       = { "Frame Total",          0, 1 },
     [CP_IMMEDIATE]         = { "Immediate x5",         0, 0 },
@@ -198,7 +198,7 @@ static void display_func(void) {
     UiHistogramPanelView hist;
     hist.window_w = g_window_w;
     hist.window_h = g_window_h;
-    hist.visible  = 1;
+    hist.visible  = (g_mode == PROFILE_PANEL_HISTOGRAM);
     hist.panel_x  = g_window_w - ui_histogram_panel_width() - 16;
     hist.panel_y  = view.panel_y - ui_histogram_panel_height() - 8;
     ui_histogram_panel_render(&hist);
@@ -229,8 +229,8 @@ static void keyboard_func(unsigned char key, int x, int y) {
     (void)x; (void)y;
     switch (key) {
     case 'd': case 'D':
-        g_mode = (g_mode == PROFILE_PANEL_DETAILS) ? PROFILE_PANEL_SECTIONS
-                                                   : PROFILE_PANEL_DETAILS;
+        g_mode = (g_mode == PROFILE_PANEL_HISTOGRAM)
+               ? PROFILE_PANEL_SECTIONS : PROFILE_PANEL_HISTOGRAM;
         break;
     case 27: case 'q': case 'Q': exit(0);
     default: break;
@@ -250,7 +250,7 @@ int main(int argc, char **argv) {
     glutIdleFunc(idle_func);
 
     printf("cpuprof_demo: immediate vs display-list reuse vs recompile/frame\n");
-    printf("  d=collapse/expand call+compile breakdown   q=quit\n");
+    printf("  d=toggle sections/histogram   q=quit\n");
     glutMainLoop();
     return 0;
 }

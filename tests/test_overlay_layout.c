@@ -9,6 +9,7 @@
  * the solver is pinned independently of panel size formulas.
  */
 #include "ui/app/overlay_layout.h"
+#include "ui/support/cpuprof.h"
 #include "support/test_harness.h"
 #include <stdio.h>
 
@@ -53,6 +54,41 @@ static int rects_overlap(int ax, int ay, int aw, int ah,
 }
 
 int main(void) {
+    /* --- Compute-profile modes add exactly one surface per step. --- */
+    {
+        UiOverlayLayoutIn off = ui_overlay_layout_inputs(
+            0, 0, PROFILE_PANEL_OFF, 0, 0, 0);
+        UiOverlayLayoutIn fps = ui_overlay_layout_inputs(
+            0, 0, PROFILE_PANEL_FPS, 0, 0, 0);
+        UiOverlayLayoutIn sections = ui_overlay_layout_inputs(
+            0, 0, PROFILE_PANEL_SECTIONS, 0, 0, 0);
+        UiOverlayLayoutIn histogram = ui_overlay_layout_inputs(
+            0, 0, PROFILE_PANEL_HISTOGRAM, 0, 0, 0);
+
+        AI("profile off hides FPS", off.panels[UI_OVERLAY_PANEL_FPS].visible, 0);
+        AI("profile off hides listing",
+           off.panels[UI_OVERLAY_PANEL_PROFILE].visible, 0);
+        AI("profile off hides histogram",
+           off.panels[UI_OVERLAY_PANEL_HISTOGRAM].visible, 0);
+        AI("FPS mode shows FPS", fps.panels[UI_OVERLAY_PANEL_FPS].visible, 1);
+        AI("FPS mode hides listing",
+           fps.panels[UI_OVERLAY_PANEL_PROFILE].visible, 0);
+        AI("FPS mode hides histogram",
+           fps.panels[UI_OVERLAY_PANEL_HISTOGRAM].visible, 0);
+        AI("Sections mode shows FPS",
+           sections.panels[UI_OVERLAY_PANEL_FPS].visible, 1);
+        AI("Sections mode shows listing",
+           sections.panels[UI_OVERLAY_PANEL_PROFILE].visible, 1);
+        AI("Sections mode hides histogram",
+           sections.panels[UI_OVERLAY_PANEL_HISTOGRAM].visible, 0);
+        AI("Histogram mode shows FPS",
+           histogram.panels[UI_OVERLAY_PANEL_FPS].visible, 1);
+        AI("Histogram mode shows listing",
+           histogram.panels[UI_OVERLAY_PANEL_PROFILE].visible, 1);
+        AI("Histogram mode shows histogram",
+           histogram.panels[UI_OVERLAY_PANEL_HISTOGRAM].visible, 1);
+    }
+
     /* --- Solo variable panel: the historical bottom-right anchor. --- */
     {
         UiOverlayLayoutIn in = base_inputs();

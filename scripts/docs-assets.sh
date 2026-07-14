@@ -677,7 +677,7 @@ glutSolidSphere(radius, 32, 16);
 EOF
 }
 
-# Profile panels: Sections mode shows the section listing (CPU/GPU/Max
+# Profile panels: Histogram mode shows the section listing (CPU/GPU/Max
 # columns), the log-log section histogram, and the FPS plot at once. Use the
 # real animated-wave example as the workload, with asset-specific presentation
 # config prepended to it. Stock AA: raising the accum passes would multiply
@@ -685,7 +685,7 @@ EOF
 stage_profile() {
     stage_scene profile \
         "$ROOT/examples/scenes/animated-wave-surface-analytic-normals.glr" <<'EOF'
-/* @cfg compute_profile = 2 */
+/* @cfg compute_profile = 3 */
 /* @cfg variable_panel = 0 */
 /* @cfg light_indicators = 0 */
 /* @cfg vertex_outlines = 0 */

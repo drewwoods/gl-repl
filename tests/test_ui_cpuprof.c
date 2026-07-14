@@ -38,52 +38,60 @@ static int hist_sum(const ProfHistogramBin *bins) {
 
 static void test_cpuprof_metrics(void) {
     ASSERT_TRUE("width is positive", ui_profile_panel_width() > 0);
-    ASSERT_TRUE("height is positive on", ui_profile_panel_height(PROFILE_PANEL_SECTIONS) > 0);
-    ASSERT_TRUE("height is positive details", ui_profile_panel_height(PROFILE_PANEL_DETAILS) > 0);
+    ASSERT_INT_EQ("FPS mode has no section-list height",
+                  ui_profile_panel_height(PROFILE_PANEL_FPS), 0);
+    ASSERT_TRUE("sections height is positive",
+                ui_profile_panel_height(PROFILE_PANEL_SECTIONS) > 0);
+    ASSERT_TRUE("histogram listing height is positive",
+                ui_profile_panel_height(PROFILE_PANEL_HISTOGRAM) > 0);
 }
 
-static void test_cpuprof_details_collapse(void) {
+static void test_cpuprof_section_collapse(void) {
     UiProfileCollapseMask collapsed = 0;
-    int expanded_h = ui_profile_panel_height_collapsed(PROFILE_PANEL_DETAILS,
+    int expanded_h = ui_profile_panel_height_collapsed(PROFILE_PANEL_SECTIONS,
                                                        collapsed);
 
     collapsed = ui_profile_panel_toggle_mask(collapsed, PROF_CODE_PANEL);
     ASSERT_INT_EQ("collapsing Code Panel hides its sixteen descendants",
                   expanded_h - ui_profile_panel_height_collapsed(
-                      PROFILE_PANEL_DETAILS, collapsed),
+                      PROFILE_PANEL_SECTIONS, collapsed),
                   16 * 16);
     ASSERT_TRUE("collapsed branch bit is retained",
                 collapsed != 0);
 
     collapsed = ui_profile_panel_toggle_mask(collapsed, PROF_CODE_PANEL);
     ASSERT_INT_EQ("toggling a branch again restores full height",
-                  ui_profile_panel_height_collapsed(PROFILE_PANEL_DETAILS,
+                  ui_profile_panel_height_collapsed(PROFILE_PANEL_SECTIONS,
                                                     collapsed),
                   expanded_h);
     ASSERT_TRUE("second branch toggle clears its bit", collapsed == 0);
 
     collapsed = ui_profile_panel_toggle_mask(collapsed,
                                               UI_PROFILE_PANEL_TOGGLE_ALL);
-    ASSERT_TRUE("collapse all reduces details height",
-                ui_profile_panel_height_collapsed(PROFILE_PANEL_DETAILS,
+    ASSERT_TRUE("collapse all reduces section-list height",
+                ui_profile_panel_height_collapsed(PROFILE_PANEL_SECTIONS,
                                                   collapsed) < expanded_h);
     collapsed = ui_profile_panel_toggle_mask(collapsed,
                                               UI_PROFILE_PANEL_TOGGLE_ALL);
     ASSERT_TRUE("expand all clears branch mask", collapsed == 0);
 
-    /* Sections mode deliberately ignores the DETAILS presentation mask. */
+    /* Both section-bearing modes render the same collapsible listing. */
     collapsed = ui_profile_panel_toggle_mask(0, PROF_RENDER3D);
-    ASSERT_INT_EQ("sections height ignores collapsed details branches",
-                  ui_profile_panel_height_collapsed(PROFILE_PANEL_SECTIONS,
+    ASSERT_TRUE("sections height honors collapsed branches",
+                ui_profile_panel_height_collapsed(PROFILE_PANEL_SECTIONS,
+                                                  collapsed) < expanded_h);
+    ASSERT_INT_EQ("histogram mode shares the collapsed listing height",
+                  ui_profile_panel_height_collapsed(PROFILE_PANEL_HISTOGRAM,
                                                     collapsed),
-                  ui_profile_panel_height(PROFILE_PANEL_SECTIONS));
+                  ui_profile_panel_height_collapsed(PROFILE_PANEL_SECTIONS,
+                                                    collapsed));
 }
 
-static void test_cpuprof_details_hit_test(void) {
+static void test_cpuprof_section_hit_test(void) {
     UiProfilePanelView view = {
         .window_w = 800,
         .window_h = 600,
-        .mode = PROFILE_PANEL_DETAILS,
+        .mode = PROFILE_PANEL_SECTIONS,
         .collapsed_sections = 0,
         .panel_x = 10,
         .panel_y = 10
@@ -92,19 +100,26 @@ static void test_cpuprof_details_hit_test(void) {
         view.mode, view.collapsed_sections);
     int first_row_y = view.panel_y + panel_h - 54;
 
-    ASSERT_INT_EQ("first details branch row hits Render 3D",
+    ASSERT_INT_EQ("first section branch row hits Render 3D",
                   ui_profile_panel_hit_test(
                       &view, view.panel_x + 12,
                       view.window_h - (first_row_y + 4)),
                   PROF_RENDER3D);
-    ASSERT_INT_EQ("details title control hits collapse all",
+    ASSERT_INT_EQ("section title control hits collapse all",
                   ui_profile_panel_hit_test(
                       &view, view.panel_x + PROFILE_PANEL_W - 4,
                       view.window_h - (view.panel_y + panel_h - 10)),
                   UI_PROFILE_PANEL_TOGGLE_ALL);
 
-    view.mode = PROFILE_PANEL_SECTIONS;
-    ASSERT_INT_EQ("sections mode has no collapse hit targets",
+    view.mode = PROFILE_PANEL_HISTOGRAM;
+    ASSERT_INT_EQ("histogram mode keeps section-tree hit targets",
+                  ui_profile_panel_hit_test(
+                      &view, view.panel_x + 12,
+                      view.window_h - (first_row_y + 4)),
+                  PROF_RENDER3D);
+
+    view.mode = PROFILE_PANEL_FPS;
+    ASSERT_INT_EQ("FPS mode has no section-tree hit targets",
                   ui_profile_panel_hit_test(
                       &view, view.panel_x + 12,
                       view.window_h - (first_row_y + 4)),
@@ -585,9 +600,15 @@ static void test_cpuprof_render_off(void) {
     ui_profile_panel_render(&view);
     ASSERT_INT_EQ("off mode draws nothing",
                   (int)gl_stub_counts[GL_STUB_glRectf], 0);
+
+    view.mode = PROFILE_PANEL_FPS;
+    gl_stub_counts_reset();
+    ui_profile_panel_render(&view);
+    ASSERT_INT_EQ("FPS mode draws no section listing",
+                  (int)gl_stub_counts[GL_STUB_glRectf], 0);
 }
 
-static void test_cpuprof_render_on(void) {
+static void test_cpuprof_render_sections(void) {
     UiProfilePanelView view = {
         .window_w = 800,
         .window_h = 600,
@@ -600,18 +621,20 @@ static void test_cpuprof_render_on(void) {
 
     gl_stub_counts_reset();
     ui_profile_panel_render(&view);
-    ASSERT_TRUE("on mode draws frame",
+    ASSERT_TRUE("sections mode draws frame",
                 gl_stub_counts[GL_STUB_glRectf] > 0);
-    ASSERT_TRUE("on mode draws text",
+    ASSERT_TRUE("sections mode draws text",
                 gl_stub_counts[GL_STUB_glRasterPos2f] > 0 ||
                 gl_stub_counts[GL_STUB_glutBitmapCharacter] > 0);
+    ASSERT_TRUE("sections mode draws filled disclosure bitmaps",
+                gl_stub_counts[GL_STUB_glBitmap] > 0);
 }
 
-static void test_cpuprof_render_details(void) {
+static void test_cpuprof_render_histogram_listing(void) {
     UiProfilePanelView view = {
         .window_w = 800,
         .window_h = 600,
-        .mode = PROFILE_PANEL_DETAILS,
+        .mode = PROFILE_PANEL_HISTOGRAM,
         .panel_x = 10,
         .panel_y = 10
     };
@@ -620,20 +643,20 @@ static void test_cpuprof_render_details(void) {
 
     gl_stub_counts_reset();
     ui_profile_panel_render(&view);
-    ASSERT_TRUE("details mode draws frame",
+    ASSERT_TRUE("histogram mode draws section-list frame",
                 gl_stub_counts[GL_STUB_glRectf] > 0);
-    ASSERT_TRUE("details mode draws text",
+    ASSERT_TRUE("histogram mode draws section-list text",
                 gl_stub_counts[GL_STUB_glRasterPos2f] > 0 ||
                 gl_stub_counts[GL_STUB_glutBitmapCharacter] > 0);
-    ASSERT_TRUE("details mode draws filled disclosure bitmaps",
+    ASSERT_TRUE("histogram mode draws filled disclosure bitmaps",
                 gl_stub_counts[GL_STUB_glBitmap] > 0);
 }
 
 int main(void) {
     printf("--- ui_cpuprof tests ---\n");
     test_cpuprof_metrics();
-    test_cpuprof_details_collapse();
-    test_cpuprof_details_hit_test();
+    test_cpuprof_section_collapse();
+    test_cpuprof_section_hit_test();
     test_gpu_section_policy();
     test_cpuprof_section_histogram_direct();
     test_cpuprof_section_histogram_accum_commit();
@@ -651,8 +674,8 @@ int main(void) {
     test_histogram_render_with_samples();
     prof_test_reset();
     test_cpuprof_render_off();
-    test_cpuprof_render_on();
-    test_cpuprof_render_details();
+    test_cpuprof_render_sections();
+    test_cpuprof_render_histogram_listing();
     printf("\n");
     return test_harness_report(&g_harness, "test_ui_cpuprof");
 }

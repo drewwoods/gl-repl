@@ -1680,15 +1680,14 @@ static UiProfilePanelView glr_ctrl_build_profile_panel_view(const UiRenderSnapsh
     return v;
 }
 
-/* Compute-profile section histograms: shares the section listing's
- * visibility levels, its own overlay-layout slot. */
+/* Compute-profile section histograms: the final profile mode, in its own
+ * overlay-layout slot. */
 static UiHistogramPanelView glr_ctrl_build_histogram_panel_view(
         const UiRenderSnapshot *snap) {
     UiHistogramPanelView v;
     v.window_w = snap->viewport.window_w;
     v.window_h = snap->viewport.window_h;
-    v.visible  = (snap->profile_panel.mode == PROFILE_PANEL_SECTIONS ||
-                  snap->profile_panel.mode == PROFILE_PANEL_DETAILS);
+    v.visible  = (snap->profile_panel.mode == PROFILE_PANEL_HISTOGRAM);
     UiOverlayLayoutIn in = glr_ctrl_overlay_layout_inputs(snap);
     ui_overlay_layout_panel_pos(&in, UI_OVERLAY_PANEL_HISTOGRAM,
                                 &v.panel_x, &v.panel_y);
@@ -1817,7 +1816,7 @@ void glr_ctrl_display_frame(void) {
     prof_frame_tick();
     memprof_frame_tick();
     /* Dial GPU timer-query capture to what the profile panel can show this
-     * frame (hidden -> none, ON -> top-level rows, DETAILS -> everything):
+     * frame (Off/FPS -> none, Sections/Histogram -> the full tree):
      * query boundaries aren't free, so don't issue ones nobody can see.
      * Then open the frame's query slot — this must precede the first
      * prof_begin of a GPU-bracketed section (FRAME_TOTAL, next line).
@@ -1825,13 +1824,12 @@ void glr_ctrl_display_frame(void) {
     {
         UiProfilePanelMode prof_mode =
             (UiProfilePanelMode)ui_state_profile_panel().mode;
-        /* OFF and PLOT issue no timer queries — the FPS plot needs no
+        /* OFF and FPS issue no timer queries — the FPS plot needs no
          * per-section GPU data, and query boundaries cost real GPU time. */
         glr_prof_set_gpu_capture_mode(
             (prof_mode == PROFILE_PANEL_OFF ||
-             prof_mode == PROFILE_PANEL_PLOT) ? GLR_PROF_GPU_CAPTURE_OFF
-            : prof_mode == PROFILE_PANEL_DETAILS ? GLR_PROF_GPU_CAPTURE_ALL
-                                                 : GLR_PROF_GPU_CAPTURE_TOP_LEVEL);
+             prof_mode == PROFILE_PANEL_FPS) ? GLR_PROF_GPU_CAPTURE_OFF
+                                             : GLR_PROF_GPU_CAPTURE_ALL);
     }
     gpu_prof_frame_begin();
     prof_begin(PROF_FRAME_TOTAL);

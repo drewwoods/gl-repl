@@ -155,9 +155,6 @@ void glr_prof_set_gpu_capture_mode(GlrProfGpuCaptureMode mode) {
 static int glr_prof_gpu_capture_allows(ProfSection s) {
     if (!k_gpu_sections[s]) return 0;
     if (g_gpu_capture_mode == GLR_PROF_GPU_CAPTURE_OFF) return 0;
-    if (g_gpu_capture_mode == GLR_PROF_GPU_CAPTURE_TOP_LEVEL &&
-        k_sections[s].depth > 0)
-        return 0;
     return 1;
 }
 

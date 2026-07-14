@@ -58,8 +58,8 @@ UiOverlayLayoutIn ui_overlay_layout_inputs(int var_visible, int var_count,
                            &in.panels[UI_OVERLAY_PANEL_VARIABLE].w,
                            &in.panels[UI_OVERLAY_PANEL_VARIABLE].h);
 
-    /* The FPS plot rides every non-OFF Compute-profile level; the section
-     * listing only joins from SECTIONS up. */
+    /* The FPS plot rides every non-OFF Compute-profile level; the full
+     * collapsible section listing joins from SECTIONS up. */
     in.panels[UI_OVERLAY_PANEL_FPS].visible =
         (profile_mode != PROFILE_PANEL_OFF);
     in.panels[UI_OVERLAY_PANEL_FPS].w = ui_fps_panel_width();
@@ -67,17 +67,16 @@ UiOverlayLayoutIn ui_overlay_layout_inputs(int var_visible, int var_count,
 
     in.panels[UI_OVERLAY_PANEL_PROFILE].visible =
         (profile_mode == PROFILE_PANEL_SECTIONS ||
-         profile_mode == PROFILE_PANEL_DETAILS);
+         profile_mode == PROFILE_PANEL_HISTOGRAM);
     in.panels[UI_OVERLAY_PANEL_PROFILE].w = ui_profile_panel_width();
     in.panels[UI_OVERLAY_PANEL_PROFILE].h =
         ui_profile_panel_height_collapsed(
             (UiProfilePanelMode)profile_mode,
             (UiProfileCollapseMask)profile_collapsed_sections);
 
-    /* The histogram panel plots the same top-level sections the listing
-     * shows, so it rides the listing's visibility levels exactly. */
+    /* Histogram is the final, deliberately expensive profile surface. */
     in.panels[UI_OVERLAY_PANEL_HISTOGRAM].visible =
-        in.panels[UI_OVERLAY_PANEL_PROFILE].visible;
+        (profile_mode == PROFILE_PANEL_HISTOGRAM);
     in.panels[UI_OVERLAY_PANEL_HISTOGRAM].w = ui_histogram_panel_width();
     in.panels[UI_OVERLAY_PANEL_HISTOGRAM].h = ui_histogram_panel_height();
 
