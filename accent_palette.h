@@ -65,7 +65,7 @@
     X(MIST,   0.92f, 0.95f, 0.98f) /* neutral near-white             */
 
 /* "Dusk Magenta": Dusk with the pink-bridge slot re-anchored on the
- * original brand-mark magenta (lit-cube.glr's pre-Dusk floor material),
+ * original brand-mark magenta (glr-logo.glr's pre-Dusk floor material),
  * so the scene family matches the original logo/splash theming instead
  * of the mark matching the family. Experiment (2026-07-11); flip
  * PALETTE_ACTIVE_* back to Dusk to undo. */
@@ -80,7 +80,7 @@
     X(MIST,    0.92f, 0.95f, 0.98f) /* neutral near-white             */
 
 /* "Neon": electric accents on the same deep ink. Keeps CANVAS and MIST
- * (lit-cube's ink + exterior are scene anchors) and Dusk Magenta's
+ * (glr-logo's ink + exterior are scene anchors) and Dusk Magenta's
  * MAGENTA (= the brand mark's floor material, the family's tie to the
  * logo); the other five slots go saturated/electric. Experiment
  * (2026-07-11), like Dusk Magenta above. */
@@ -101,7 +101,7 @@
 /* ---- Brand-mark anchors ---------------------------------------------
  * The adopted identity mark — the open cube. "The logo is what the app
  * renders": the source of truth is the shipped scene
- * examples/scenes/lit-cube.glr, and this list is its color vocabulary
+ * examples/scenes/glr-logo.glr, and this list is its color vocabulary
  * at both ends of the render. A separate list from the scene accents,
  * and not switched by PALETTE_ACTIVE_*: the mark is palette-independent
  * brand vocabulary pinned to what the scene paints (today its floor is
@@ -109,7 +109,7 @@
  * deliberately matches; its wall material stays mark-specific).
  *
  * Two tiers, kept in sync by make check-palette:
- *   - _MAT anchors: the raw glColor3f materials lit-cube.glr paints
+ *   - _MAT anchors: the raw glColor3f materials glr-logo.glr paints
  *     with (the scene is validated against this list, not just the
  *     active accents — its exterior MIST and CANVAS ink are already
  *     scene anchors). The floor briefly sat on Dusk ROSE before the
@@ -125,8 +125,8 @@
  * the checker flags the logo scene / SVG wherever they still carry the
  * old values. */
 #define PALETTE_MARK_ANCHORS(X) \
-    X(MARK_WALL_MAT,  0.25f, 0.675f, 1.0f)   /* lit-cube wall material   */ \
-    X(MARK_FLOOR_MAT, 0.95f, 0.25f,  1.0f)   /* lit-cube floor material (= MAGENTA anchor) */ \
+    X(MARK_WALL_MAT,  0.25f, 0.675f, 1.0f)   /* glr-logo wall material   */ \
+    X(MARK_FLOOR_MAT, 0.95f, 0.25f,  1.0f)   /* glr-logo floor material (= MAGENTA anchor) */ \
     X(MARK_WALL,     0.239f, 0.659f, 0.961f) /* interior azure    #3da8f5 */ \
     X(MARK_WALL_LO,  0.169f, 0.588f, 0.925f) /* wall grad stop    #2b96ec */ \
     X(MARK_WALL_HI,  0.353f, 0.706f, 0.965f) /* wall grad stop    #5ab4f6 */ \
