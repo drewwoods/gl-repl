@@ -453,6 +453,7 @@ endif
 	gl-repl \
 	test \
 	test-detailed \
+	test-asan-ubsan \
 	test-full \
 	test-msan \
 	test-stubs \
@@ -1668,6 +1669,9 @@ test-stubs: ## Build and run tests using local GL/GLU/GLUT stubs, without GL lib
 		$(MAKE) --no-print-directory $$target; \
 	done
 	$(MAKE) test USE_GL_STUBS=1 NO_SAN=$(NO_SAN)
+
+test-asan-ubsan: ## Build and run the stubbed test suite under AddressSanitizer + UBSan (forces sanitizers on regardless of environment).
+	$(MAKE) --no-print-directory test USE_GL_STUBS=1 BUILD=debug SAN=address NO_SAN=0
 
 test-msan: ## Build and run stubbed tests with MemorySanitizer.
 ifeq ($(UNAME_S),Darwin)
