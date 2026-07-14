@@ -1,2 +1,5 @@
 # key count
-src/render3d/render_types.h:SceneRenderConfig 4
+# 2026-07-14: the SceneRenderConfig:4 bucket was removed after the struct
+# was renamed to Render3dRenderConfig and made fully const — zero mutable-
+# pointer fields remain, so the ratchet baseline is now empty (any new
+# mutable-pointer view field is a NEW bucket and fails the check).

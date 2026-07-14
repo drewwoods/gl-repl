@@ -16,6 +16,9 @@
 # 2026-06-01: flatten_range tightened 160 -> 92 after lifting the
 # CMD_VAR_ASSIGN and CMD_SCRATCH_ASSIGN bodies into flatten_var_assign /
 # flatten_scratch_assign (which also host the PROF_FLATTEN_ASSIGN probe).
+#
+# 2026-07-14: re-tightened to current sizes (parse_command 361 -> 335,
+# flatten_range 92 -> 89) to close the slack the ratchet had accumulated.
 
-parse_command: 361
-flatten_range: 92
+parse_command: 335
+flatten_range: 89
