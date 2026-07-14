@@ -33,6 +33,7 @@ static void render_glyph_counts(UiTextPanelSnapshot *snap,
     int hyphens = 0;
     int rules = 0;
 
+    gl_stub_counts_reset();
     gl_stub_trace_open(TRACE_PATH);
     ui_text_panel_render(snap, &out);
     gl_stub_trace_close();
@@ -41,7 +42,8 @@ static void render_glyph_counts(UiTextPanelSnapshot *snap,
     if (trace) {
         while (fgets(line, sizeof(line), trace)) {
             int ch;
-            if (sscanf(line, "glutBitmapCharacter %d", &ch) != 1)
+            if (sscanf(line, "glutBitmapCharacter %d", &ch) != 1 &&
+                sscanf(line, "glutBitmapStringByte %d", &ch) != 1)
                 continue;
             if (ch == '-')
                 hyphens++;
@@ -53,6 +55,11 @@ static void render_glyph_counts(UiTextPanelSnapshot *snap,
 
     *out_hyphens = hyphens;
     *out_rules = rules;
+}
+
+static unsigned long long rendered_text_call_count(void) {
+    return gl_stub_counts[GL_STUB_glutBitmapCharacter] +
+           gl_stub_counts[GL_STUB_glutBitmapString];
 }
 
 static UiTextPanelSnapshot make_snapshot(const UiTextPanelRow *rows,
@@ -147,6 +154,10 @@ static void test_comment_rule_ligature_is_comment_line_only(void) {
     render_glyph_counts(&snap, &hyphens, &rules);
     ASSERT_INT_EQ("comment dash runs use rule glyph", rules, 8);
     ASSERT_INT_EQ("non-comment and lone dashes stay hyphens", hyphens, 8);
+    ASSERT_TRUE("freeglut batches text with bitmap strings",
+                gl_stub_counts[GL_STUB_glutBitmapString] > 0);
+    ASSERT_INT_EQ("freeglut text path avoids character submissions",
+                  (int)gl_stub_counts[GL_STUB_glutBitmapCharacter], 0);
 
     snap.comment_rule_ligature = 0;
     render_glyph_counts(&snap, &hyphens, &rules);
@@ -325,7 +336,7 @@ static void test_alpha_text_enables_blending(void) {
     ui_text_panel_render(&snap, &out);
 
     ASSERT_TRUE("alpha text emits glyphs",
-                gl_stub_counts[GL_STUB_glutBitmapCharacter] > 0);
+                rendered_text_call_count() > 0);
     ASSERT_TRUE("alpha text adds a blend enable",
                 gl_stub_counts[GL_STUB_glEnable] > opaque_enable);
     ASSERT_TRUE("alpha text adds a blend func",
@@ -370,7 +381,7 @@ static void test_shadow_segment_blend_threaded(void) {
     ASSERT_TRUE("shadow segment enables blend",
                 gl_stub_counts[GL_STUB_glEnable] > 0);
     ASSERT_TRUE("shadow segment draws glyphs",
-                gl_stub_counts[GL_STUB_glutBitmapCharacter] > 0);
+                rendered_text_call_count() > 0);
 }
 
 /* #63 regression: text_panel_row_layout() is called per-row; pin that
@@ -500,7 +511,7 @@ static void test_color_segments_enable_blending(void) {
     ui_text_panel_render(&snap, &out);
 
     ASSERT_TRUE("segmented text emits glyphs",
-                gl_stub_counts[GL_STUB_glutBitmapCharacter] > 0);
+                rendered_text_call_count() > 0);
     ASSERT_TRUE("segmented text adds a blend enable",
                 gl_stub_counts[GL_STUB_glEnable] > base_enable);
     ASSERT_TRUE("segmented text adds a blend func",

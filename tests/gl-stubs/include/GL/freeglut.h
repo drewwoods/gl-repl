@@ -173,6 +173,18 @@ static inline GLUTproc glutGetProcAddress(const char *name) {
 }
 static inline void glutSetCursor(int cursor) { (void)cursor; }
 static inline void glutBitmapCharacter(void *font, int character) { GL_STUB_TRACE_LINE("glutBitmapCharacter %d\n", (int)character); gl_stub_tick(GL_STUB_glutBitmapCharacter); (void)font; }
+static inline void glutBitmapString(void *font, const unsigned char *string) {
+    const unsigned char *ch = string;
+    GL_STUB_TRACE_LINE("glutBitmapString\n");
+    gl_stub_tick(GL_STUB_glutBitmapString);
+    while (ch && *ch) {
+        /* Preserve byte-level visibility for renderer tests without
+         * pretending the implementation called glutBitmapCharacter. */
+        GL_STUB_TRACE_LINE("glutBitmapStringByte %d\n", (int)*ch);
+        ch++;
+    }
+    (void)font;
+}
 static inline int glutBitmapWidth(void *font, int character) { (void)font; (void)character; return 8; }
 static inline void glutStrokeCharacter(void *font, int character) { (void)font; (void)character; }
 static inline int glutStrokeWidth(void *font, int character) { (void)font; (void)character; return 104; }
