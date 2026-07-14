@@ -14,7 +14,7 @@ two consumers that cannot bind at compile time:
      the file-level ratchet baseline scripts/baselines/palette-coverage.txt:
      they are skipped, but a baseline entry that becomes fully on-palette
      must be removed (ratchet down only), and stale entries fail.
-     Exception: the logo scene (examples/scenes/lit-cube.glr — the mark's
+     Exception: the logo scene (examples/scenes/glr-logo.glr — the mark's
      source of truth) validates against the active anchors PLUS the
      brand-mark anchors, so its materials and the mark stay in sync.
   3. docs/images/logo.svg — the mark's hand-traced vector twin: every
@@ -45,7 +45,7 @@ BASELINE = os.path.join(ROOT, "scripts", "baselines", "palette-coverage.txt")
 
 # The logo scene is the brand mark's source of truth; it may (must) use
 # the brand-mark materials on top of the active accents.
-LOGO_SCENE = "examples/scenes/lit-cube.glr"
+LOGO_SCENE = "examples/scenes/glr-logo.glr"
 
 # Covered brand vector art (repo-relative). Only the canonical logo SVG
 # by decision — see the module docstring.

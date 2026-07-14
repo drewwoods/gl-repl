@@ -268,7 +268,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      ./gl-repl --example "Lit cube" -->
 <img src="images/showcase/lit-cube.png" alt="A lit cube" width="100%">
 
-**[Lit cube](../examples/scenes/lit-cube.glr)**
+**Lit cube**
 <br><sub>lighting + material basics</sub>
 
 </td>

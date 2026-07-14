@@ -91,8 +91,14 @@ and a matching entry in [`examples/catalog.ini`](../examples/catalog.ini).
 Use `.glr` for the short REPL snippet format; use `.c` only when the example
 should stay as a full exported/importable C file. `.glr` files may start with
 optional leading `// @cfg` lines and a `// camera` block; display name, tags,
-and group live in the catalog. Mind the 8192 flat-command budget (hoist
-loop-invariant assignments out of loops), then run `make check-examples-catalog`.
+and group live in the catalog. Literal colors (`glColor3f` / `glColor4f` /
+`glClearColor`) in covered scenes must be anchors of the active palette in
+[`accent_palette.h`](../accent_palette.h) (the repo-root single source of truth for the
+scene/brand accent family; `make palette-list` prints the anchors, `make
+check-palette` enforces the contract — including the brand-mark vocabulary the
+logo scene and `docs/images/logo.svg` are held to). Mind the 8192 flat-command
+budget (hoist loop-invariant assignments out of loops), then run
+`make check-examples-catalog`.
 Use `./gl-repl --examples-dir examples --example <name-or-idx>` to test catalog
 edits without rebuilding.
 
