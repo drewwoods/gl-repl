@@ -1097,8 +1097,8 @@ primitives export as PLY edges; point primitives export as loose vertices
 Headless / scripted capture:
 
 ```bash
-./gl-repl --example 9 --export-ply out.ply                 # capture frame 1, exit
-./gl-repl --example 9 --export-ply out.ply --export-ply-srgb   # decode colors sRGB->linear
+./gl-repl --example "2d assignment sketch (vars only)" --export-ply out.ply    # capture frame 1, exit
+./gl-repl --example "2d assignment sketch (vars only)" --export-ply out.ply --export-ply-srgb   # decode colors sRGB->linear
 ```
 
 Use `--export-ply-srgb` when the viewer is color-managed and treats PLY
