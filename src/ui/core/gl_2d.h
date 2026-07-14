@@ -39,7 +39,14 @@ static inline void gl2d_end(void) {
 static inline void gl2d_draw_string(float x, float y, const char *s,
                                     void *font) {
     glRasterPos2f(x, y);
+#ifdef USE_GLUT
+    /* Apple GLUT does not expose the freeglut glutBitmapString extension. */
     for (; *s; s++) glutBitmapCharacter(font, (unsigned char)*s);
+#else
+    /* freeglut preserves pixel-store state once per string rather than once
+     * per glyph, which is particularly important through gl4es/WebGL. */
+    glutBitmapString(font, (const unsigned char *)s);
+#endif
 }
 
 /* Draw a floating-panel frame: filled background rect + 1px border line loop.
