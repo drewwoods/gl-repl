@@ -55,7 +55,7 @@ SHOW="$OUT/showcase"
 
 W=1200          # target width/height of every asset's source window
 H=800
-GIF_FUZZ=8%     # magick -layers Optimize fuzz for GIF delta compression
+GIF_FUZZ=4%     # magick -layers Optimize fuzz for GIF delta compression
 
 # Loading an --example eases the camera into place (with damping) over the
 # first second or two of captured frames — a settle the docs assets shouldn't
@@ -948,7 +948,7 @@ fi
 
 if want clip-plane-sweep; then
     ( export GLR_EDIT_LINE=4
-      WARM=126 gif "$OUT/clip-plane-sweep.gif" 126 1 20 720 "$(stage_clip_sweep)" )
+      gif "$OUT/clip-plane-sweep.gif" 126 1 20 720 "$(stage_clip_sweep)" )
 fi
 
 if want xform-guide; then
