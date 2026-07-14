@@ -34,6 +34,31 @@
 static const float k_prof_stale[3] = { 0.35f, 0.35f, 0.42f };
 static const float k_prof_dim[3]   = { 0.30f, 0.30f, 0.38f };
 
+/* Filled disclosure markers sized for GLUT_BITMAP_8_BY_13. glBitmap rows are
+ * bottom-to-top and MSB-first: the right marker is 5x7, while the down marker
+ * is a slightly wider 7x4 triangle raised two pixels from the baseline. */
+static const GLubyte k_prof_disclosure_right[7] = {
+    0x80, // #.......
+    0xc0, // ##......
+    0xe0, // ###.....
+    0xf0, // ####....
+    0xe0, // ###.....
+    0xc0, // ##......
+    0x80  // #.......
+};
+static const GLubyte k_prof_disclosure_down[4] = {
+    0x10, 0x38, 0x7c, 0xfe
+};
+
+typedef struct {
+    GLint swap_bytes;
+    GLint lsb_first;
+    GLint row_length;
+    GLint skip_rows;
+    GLint skip_pixels;
+    GLint alignment;
+} ProfBitmapUnpackState;
+
 /* ========================================================================= */
 /* Configuration                                                              */
 /* ========================================================================= */
@@ -68,6 +93,45 @@ static void fmt_us(char *buf, int buf_sz, double us) {
         snprintf(buf, (size_t)buf_sz, "%.0f us", us);
     else
         snprintf(buf, (size_t)buf_sz, "%.2f ms", us / 1000.0);
+}
+
+/* Establish tightly-packed MSB-first rows once for every disclosure bitmap in
+ * the panel. The GLUT string renderer temporarily changes the same state and
+ * restores it after each string, so our surrounding state remains active.
+ * Keeping this outside the row loop also avoids per-marker state traffic. */
+static void disclosure_unpack_begin(ProfBitmapUnpackState *state) {
+    glGetIntegerv(GL_UNPACK_SWAP_BYTES, &state->swap_bytes);
+    glGetIntegerv(GL_UNPACK_LSB_FIRST, &state->lsb_first);
+    glGetIntegerv(GL_UNPACK_ROW_LENGTH, &state->row_length);
+    glGetIntegerv(GL_UNPACK_SKIP_ROWS, &state->skip_rows);
+    glGetIntegerv(GL_UNPACK_SKIP_PIXELS, &state->skip_pixels);
+    glGetIntegerv(GL_UNPACK_ALIGNMENT, &state->alignment);
+    glPixelStorei(GL_UNPACK_SWAP_BYTES, GL_FALSE);
+    glPixelStorei(GL_UNPACK_LSB_FIRST, GL_FALSE);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
+    glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+}
+
+static void disclosure_unpack_end(const ProfBitmapUnpackState *state) {
+    glPixelStorei(GL_UNPACK_SWAP_BYTES, state->swap_bytes);
+    glPixelStorei(GL_UNPACK_LSB_FIRST, state->lsb_first);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, state->row_length);
+    glPixelStorei(GL_UNPACK_SKIP_ROWS, state->skip_rows);
+    glPixelStorei(GL_UNPACK_SKIP_PIXELS, state->skip_pixels);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, state->alignment);
+}
+
+static void draw_disclosure_bitmap(float x, float y, int collapsed) {
+    glRasterPos2f(x, y);
+    if (collapsed) {
+        glBitmap(5, 7, 0.0f, 0.0f, 0.0f, 0.0f,
+                 k_prof_disclosure_right);
+    } else {
+        glBitmap(7, 4, 0.0f, -2.0f, 0.0f, 0.0f,
+                 k_prof_disclosure_down);
+    }
 }
 
 /* Apply a green/yellow/red color based on section timing thresholds.
@@ -250,6 +314,7 @@ int ui_profile_panel_width(void) {
 void ui_profile_panel_render(const UiProfilePanelView *view) {
     int profile_mode = view->mode;
     unsigned char visible[PROF_SECTION_COUNT];
+    ProfBitmapUnpackState disclosure_unpack;
     /* The section listing only exists from SECTIONS up; PLOT shows just the
      * separate FPS plot panel (ui_fps_panel_render). */
     if (profile_mode != PROFILE_PANEL_SECTIONS &&
@@ -317,6 +382,9 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
     ty -= PROF_ROW_H - 2;
 
     section_visibility(profile_mode, view->collapsed_sections, visible);
+    if (profile_mode == PROFILE_PANEL_DETAILS)
+        disclosure_unpack_begin(&disclosure_unpack);
+
     /* One row per section.  Insert a separator line before FRAME_TOTAL. */
     for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
         ProfSection s = (ProfSection)section_idx;
@@ -350,17 +418,15 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
             ui_clr(UI_TOK_TEXT_PRIMARY);
         /* Indentation is derived from depth, not baked into the label. DETAILS
          * reserves one marker cell for every row so leaf labels stay aligned
-         * with sibling branches. ASCII markers work across every GLUT font
-         * backend, including Emscripten. */
+         * with sibling branches. The custom filled markers work across every
+         * fixed-function backend, including gl4es/WebGL. */
         {
             int label_x = tx + info.depth * PROF_INDENT_W;
             if (profile_mode == PROFILE_PANEL_DETAILS) {
                 if (section_has_children(s)) {
-                    const char *marker =
-                        (view->collapsed_sections & section_bit(s)) != 0
-                        ? ">" : "v";
-                    gl2d_draw_string((float)label_x, (float)ty, marker,
-                                     FONT_SMALL);
+                    draw_disclosure_bitmap(
+                        (float)label_x, (float)ty,
+                        (view->collapsed_sections & section_bit(s)) != 0);
                 }
                 label_x += FONT_SMALL_W;
             }
@@ -410,6 +476,9 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
 
         ty -= PROF_ROW_H;
     }
+
+    if (profile_mode == PROFILE_PANEL_DETAILS)
+        disclosure_unpack_end(&disclosure_unpack);
 
     gl2d_end();
 }

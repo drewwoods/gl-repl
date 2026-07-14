@@ -619,6 +619,8 @@ static void test_cpuprof_render_details(void) {
     ASSERT_TRUE("details mode draws text",
                 gl_stub_counts[GL_STUB_glRasterPos2f] > 0 ||
                 gl_stub_counts[GL_STUB_glutBitmapCharacter] > 0);
+    ASSERT_TRUE("details mode draws filled disclosure bitmaps",
+                gl_stub_counts[GL_STUB_glBitmap] > 0);
 }
 
 int main(void) {
