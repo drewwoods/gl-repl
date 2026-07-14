@@ -162,11 +162,17 @@ static unsigned char text_panel_display_glyph(const char *text, int index,
 
     /* Run membership is checked against the full NUL-terminated text (not
      * the drawn slice) so wrapping or a color-segment boundary never splits
-     * a rule. ch == '-' guarantees text[index + 1] is a valid read (at worst
-     * the terminator). */
-    if (join_dash_runs && ch == '-' &&
-        ((index > 0 && text[index - 1] == '-') || text[index + 1] == '-'))
-        return TEXT_PANEL_HRULE_GLYPH;
+     * a rule.  Only runs of 3+ dashes become the horizontal-rule glyph;
+     * a bare "--" stays as literal dashes (e.g. "--detail" in a flag). */
+    if (join_dash_runs && ch == '-') {
+        int run = 1, j;
+        for (j = index - 1; j >= 0 && text[j] == '-'; j--)
+            run++;
+        for (j = index + 1; text[j] == '-'; j++)
+            run++;
+        if (run >= 3)
+            return TEXT_PANEL_HRULE_GLYPH;
+    }
     return ch;
 }
 
