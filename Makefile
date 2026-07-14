@@ -1027,11 +1027,13 @@ freeglut-clean: ## Remove the vendored freeglut CMake build (forces a rebuild).
 	rm -rf $(FREEGLUT_BUILD)
 .PHONY: freeglut-clean
 
-# WEB=1: shell.html and gl4es_bootstrap.c are link-time inputs (not objects
-# in $(SAMPLE_OBJS) -- see GL_LDFLAGS above), so add them as prerequisites
-# here or editing either would silently not trigger a relink.
+# WEB=1: shell.html, gl4es_bootstrap.c, and the static archives are
+# link-time inputs (not objects in $(SAMPLE_OBJS) -- see GL_LDFLAGS above),
+# so add them as prerequisites here or editing/rebuilding any of them
+# (e.g. a repatched gl4es) would silently not trigger a relink.
 ifeq ($(WEB),1)
-$(SAMPLE_BIN): packaging/web/shell.html packaging/web/gl4es_bootstrap.c
+$(SAMPLE_BIN): packaging/web/shell.html packaging/web/gl4es_bootstrap.c \
+	$(GL4ES_DIR)/lib/libGL.a $(GLU_DIR)/.libs/libGLU.a $(FREEGLUT_STATIC_LIB)
 endif
 
 $(SAMPLE_BIN): $(SAMPLE_OBJS)

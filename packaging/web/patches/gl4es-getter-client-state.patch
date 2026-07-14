@@ -1,0 +1,174 @@
+Serve glGet* of tracked-but-unmirrored state client-side instead of
+round-tripping to the GLES driver.
+
+gl4es answers most glGet* queries from its own state, but a handful of
+pnames fell through the getter switches to the real driver:
+GL_COLOR_CLEAR_VALUE, GL_DEPTH_CLEAR_VALUE, GL_LINE_WIDTH,
+GL_SCISSOR_BOX, GL_VIEWPORT and GL_GENERATE_MIPMAP_HINT. On WebGL a
+driver glGet* becomes gl.getParameter(), which is synchronous: the
+browser drains every queued GPU command before answering. gl4es's own
+glPushAttrib reads several of these (GL_COLOR_BUFFER_BIT reads the
+clear color; GL_VIEWPORT_BIT the viewport; GL_LINE_BIT the line width;
+GL_SCISSOR_BIT the scissor box), and bitmap_flush's blit pushes
+GL_COLOR_BUFFER_BIT before every glyph-batch draw -- so each run of
+glutBitmapString text after other geometry stalled the pipeline. The
+stall lands on whichever flush follows the frame's bulk: in gl-repl's
+web build the menu-bar label pass absorbed 1.5-4 ms per frame for a
+104x14 px strip of text.
+
+Mirror the missing values client-side: clear color / clear depth /
+line width / generate-mipmap hint are captured in their setters and
+read back from the mirrors; viewport and scissor already had tracked
+state (glstate->raster) and only needed getter cases, with a fallback
+to the driver before the first glViewport/glScissor call (width==0)
+where the tracked state does not yet know the surface-sized default.
+
+Headless-Chrome A/B on gl-repl's default scene: gl4es flush work fell
+from ~12.2 ms to ~0.6 ms per frame; the remaining driver glGet* per
+run is a single GL_SAMPLES query at context init.
+
+Fallthrough sites at the pinned SHA (17f0894e):
+  glGetIntegerv default -> gles_glGetIntegerv:
+    https://github.com/ptitSeb/gl4es/blob/17f0894e19d1553e4176276c759915dab44c08e2/src/gl/getter.c#L883
+  glGetFloatv default -> gles_glGetFloatv:
+    https://github.com/ptitSeb/gl4es/blob/17f0894e19d1553e4176276c759915dab44c08e2/src/gl/getter.c#L950
+glPushAttrib reads that hit them:
+  GL_COLOR_CLEAR_VALUE  https://github.com/ptitSeb/gl4es/blob/17f0894e19d1553e4176276c759915dab44c08e2/src/gl/stack.c#L61
+  GL_DEPTH_CLEAR_VALUE  https://github.com/ptitSeb/gl4es/blob/17f0894e19d1553e4176276c759915dab44c08e2/src/gl/stack.c#L74
+  GL_GENERATE_MIPMAP_HINT  https://github.com/ptitSeb/gl4es/blob/17f0894e19d1553e4176276c759915dab44c08e2/src/gl/stack.c#L148
+  GL_LINE_WIDTH  https://github.com/ptitSeb/gl4es/blob/17f0894e19d1553e4176276c759915dab44c08e2/src/gl/stack.c#L189
+  GL_SCISSOR_BOX  https://github.com/ptitSeb/gl4es/blob/17f0894e19d1553e4176276c759915dab44c08e2/src/gl/stack.c#L234
+  GL_VIEWPORT  https://github.com/ptitSeb/gl4es/blob/17f0894e19d1553e4176276c759915dab44c08e2/src/gl/stack.c#L285
+The per-glyph-batch trigger (bitmap_flush -> gl4es_blitTexture ->
+glPushAttrib(... | GL_COLOR_BUFFER_BIT | ...)):
+  https://github.com/ptitSeb/gl4es/blob/17f0894e19d1553e4176276c759915dab44c08e2/src/gl/raster.c#L347
+  https://github.com/ptitSeb/gl4es/blob/17f0894e19d1553e4176276c759915dab44c08e2/src/gl/blit.c#L354
+
+Applied by scripts/web-deps.sh after the bitmap-dirty-clear patch.
+
+diff --git a/src/gl/getter.c b/src/gl/getter.c
+--- a/src/gl/getter.c
++++ b/src/gl/getter.c
+@@ -16,6 +16,17 @@
+ #define DBG(a)
+ #endif
+ 
++/* Client-side mirrors for pnames whose glGet* otherwise falls through to the
++ * GLES driver. On WebGL a driver glGet* is a synchronous getParameter() that
++ * drains the queued GPU pipeline before returning -- glPushAttrib paths that
++ * read these (GL_COLOR_BUFFER_BIT -> GL_COLOR_CLEAR_VALUE, etc.) turn every
++ * push into a multi-millisecond stall mid-frame. Written by the matching
++ * state setters (glClearColor / glClearDepthf / glLineWidth / glHint). */
++GLfloat gl4es_mirror_clear_color[4] = {0.f, 0.f, 0.f, 0.f};
++GLfloat gl4es_mirror_clear_depth = 1.0f;
++GLfloat gl4es_mirror_line_width = 1.0f;
++GLint   gl4es_mirror_mipmap_hint = GL_DONT_CARE;
++
+ GLenum APIENTRY_GL4ES gl4es_glGetError(void) {
+     DBG(printf("glGetError(), noerror=%d, type_error=%d shim_error=%s\n", globals4es.noerror, glstate->type_error, PrintEnum(glstate->shim_error));)
+     if(globals4es.noerror)
+@@ -878,6 +889,21 @@ void APIENTRY_GL4ES gl4es_glGetIntegerv(GLenum pname, GLint *params) {
+             params[0] = glstate->depth.Near*2147483647l;
+             params[1] = glstate->depth.Far*2147483647l;
+             break;
++        case GL_VIEWPORT:
++            /* Tracked since the first glViewport; before that (width==0)
++             * fall back to the driver for the surface-sized default. */
++            if (glstate->raster.viewport.width == 0) {
++                gles_glGetIntegerv(GL_VIEWPORT, params);
++            } else {
++                params[0] = glstate->raster.viewport.x;
++                params[1] = glstate->raster.viewport.y;
++                params[2] = glstate->raster.viewport.width;
++                params[3] = glstate->raster.viewport.height;
++            }
++            break;
++        case GL_GENERATE_MIPMAP_HINT:
++            params[0] = gl4es_mirror_mipmap_hint;
++            break;
+         default:
+             errorGL();
+             gles_glGetIntegerv(pname, params);
+@@ -945,6 +971,27 @@ void APIENTRY_GL4ES gl4es_glGetFloatv(GLenum pname, GLfloat *params) {
+             params[0] = glstate->depth.Near;
+             params[1] = glstate->depth.Far;
+             break;
++        case GL_COLOR_CLEAR_VALUE:
++            memcpy(params, gl4es_mirror_clear_color, 4*sizeof(GLfloat));
++            break;
++        case GL_DEPTH_CLEAR_VALUE:
++            params[0] = gl4es_mirror_clear_depth;
++            break;
++        case GL_LINE_WIDTH:
++            params[0] = gl4es_mirror_line_width;
++            break;
++        case GL_SCISSOR_BOX:
++            /* Tracked since the first glScissor; before that (width==0)
++             * fall back to the driver for the surface-sized default. */
++            if (glstate->raster.scissor.width == 0) {
++                gles_glGetFloatv(GL_SCISSOR_BOX, params);
++            } else {
++                params[0] = glstate->raster.scissor.x;
++                params[1] = glstate->raster.scissor.y;
++                params[2] = glstate->raster.scissor.width;
++                params[3] = glstate->raster.scissor.height;
++            }
++            break;
+         default:
+             errorGL();
+             gles_glGetFloatv(pname, params);
+diff --git a/src/gl/hint.c b/src/gl/hint.c
+--- a/src/gl/hint.c
++++ b/src/gl/hint.c
+@@ -127,6 +127,12 @@ void APIENTRY_GL4ES gl4es_glHint(GLenum pname, GLenum mode) {
+             pandora_set_gamma();
+ #endif
+             break;
++        case GL_GENERATE_MIPMAP_HINT: {
++            extern GLint gl4es_mirror_mipmap_hint;
++            gl4es_mirror_mipmap_hint = mode;
++            gles_glHint(pname, mode);
++            break;
++        }
+         default:
+             errorGL();
+             gles_glHint(pname, mode);
+diff --git a/src/gl/wrap/gles.c b/src/gl/wrap/gles.c
+--- a/src/gl/wrap/gles.c
++++ b/src/gl/wrap/gles.c
+@@ -222,6 +222,13 @@ void APIENTRY_GL4ES gl4es_glClearColor(GLclampf red, GLclampf green, GLclampf bl
+ #ifndef direct_glClearColor
+     PUSH_IF_COMPILING(glClearColor)
+ #endif
++    {
++        extern GLfloat gl4es_mirror_clear_color[4];
++        gl4es_mirror_clear_color[0] = red;
++        gl4es_mirror_clear_color[1] = green;
++        gl4es_mirror_clear_color[2] = blue;
++        gl4es_mirror_clear_color[3] = alpha;
++    }
+     gles_glClearColor(red, green, blue, alpha);
+ }
+ AliasExport(void,glClearColor,,(GLclampf red, GLclampf green, GLclampf blue, GLclampf alpha));
+@@ -242,6 +249,10 @@ void APIENTRY_GL4ES gl4es_glClearDepthf(GLclampf depth) {
+ #ifndef direct_glClearDepthf
+     PUSH_IF_COMPILING(glClearDepthf)
+ #endif
++    {
++        extern GLfloat gl4es_mirror_clear_depth;
++        gl4es_mirror_clear_depth = depth;
++    }
+     gles_glClearDepthf(depth);
+ }
+ AliasExport(void,glClearDepthf,,(GLclampf depth));
+@@ -1392,6 +1403,10 @@ void APIENTRY_GL4ES gl4es_glLineWidth(GLfloat width) {
+ #ifndef direct_glLineWidth
+     PUSH_IF_COMPILING(glLineWidth)
+ #endif
++    {
++        extern GLfloat gl4es_mirror_line_width;
++        gl4es_mirror_line_width = width;
++    }
+     gles_glLineWidth(width);
+ }
+ AliasExport(void,glLineWidth,,(GLfloat width));
