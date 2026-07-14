@@ -208,8 +208,8 @@ void test_io() {
     unlink(save_path);
 }
 
-void test_initial_load_starts_on_rotating_cube_example() {
-    printf("--- Initial load starts on rotating cube example ---\n");
+void test_initial_load_starts_on_lit_cube_example() {
+    printf("--- Initial load starts on lit cube example ---\n");
     glr_ctrl_reset_all(); declare_test_vars();
 
     int edit_line = repl_load_initial_commands(NULL);
@@ -219,28 +219,29 @@ void test_initial_load_starts_on_rotating_cube_example() {
                repl_user_scene_count(), 0);
     ASSERT_INT("initial load cursor at document end",
                edit_line, repl_state_document_count());
-    ASSERT_TRUE("initial active example is rotating cube",
-                repl_state_scenes().active_example_idx >= 0 &&
-                strcmp(repl_example_name(repl_state_scenes().active_example_idx),
-                       "Rotating cube") == 0);
+    ASSERT_TRUE("initial active example is lit cube",
+                 repl_state_scenes().active_example_idx >= 0 &&
+                 strcmp(repl_example_name(repl_state_scenes().active_example_idx),
+                        "Lit cube") == 0);
 
     SourceTextView text = source_document_view();
-    int saw_time_rotate = 0;
-    int saw_cube = 0;
+    int saw_color_material = 0;
+    int saw_color = 0;
     for (int i = 0; i < repl_state_document_count(); i++) {
         const GLCmd *cmd = &repl_state_document_cmds()[i];
-        const char *line = source_text_line(text, i);
 
-        if (cmd->type == CMD_ROTATEF && strstr(line, "40*t"))
-            saw_time_rotate = 1;
-        if (cmd->type == CMD_GLUT_CUBE && cmd->num_args == 1 &&
-            fabsf(cmd->args[0] - 2.0f) < 1e-4f)
-            saw_cube = 1;
+        if (cmd->type == CMD_COLOR_MATERIAL)
+            saw_color_material = 1;
+        if (cmd->type == CMD_COLOR3F && cmd->num_args == 3 &&
+            fabsf(cmd->args[0] - 0.92f) < 1e-4f &&
+            fabsf(cmd->args[1] - 0.95f) < 1e-4f &&
+            fabsf(cmd->args[2] - 0.98f) < 1e-4f)
+            saw_color = 1;
     }
-    ASSERT_INT("initial example contains rotating-cube transform",
-               saw_time_rotate, 1);
-    ASSERT_INT("initial example contains solid cube",
-               saw_cube, 1);
+    ASSERT_INT("initial example contains color material setting",
+               saw_color_material, 1);
+    ASSERT_INT("initial example contains base exterior color",
+               saw_color, 1);
 }
 
 void test_execution() {
@@ -1891,7 +1892,7 @@ int main(int argc, char **argv) {
     test_unbalanced_brackets();
     test_repl_replay_advanced();
     test_io();
-    test_initial_load_starts_on_rotating_cube_example();
+    test_initial_load_starts_on_lit_cube_example();
     test_execution();
     test_examples();
     test_user_scene();
