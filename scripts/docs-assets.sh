@@ -2,10 +2,9 @@
 # docs-assets.sh - regenerate the screenshots and GIFs under docs/images/
 # (the media embedded in README.md, docs/SHOWCASE.md and docs/USER_GUIDE.md).
 #
-#   scripts/docs-assets.sh [options] [asset ...] # default: regular assets
+#   scripts/docs-assets.sh [options] [asset ...] # default: all assets
 #   scripts/docs-assets.sh --gifs                # regenerate every GIF
 #   scripts/docs-assets.sh --pngs                # regenerate every PNG
-#   scripts/docs-assets.sh --perf-sensitive
 #   scripts/docs-assets.sh --list [category]
 #
 # -j / --jobs N regenerates up to N assets in parallel. Each gl-repl render
@@ -68,9 +67,8 @@ GIF_FUZZ=4%     # magick -layers Optimize fuzz for GIF delta compression
 WARM_EXAMPLE=180
 
 # Format categories use public asset names, not output filenames, so they flow
-# through the same want()/parallel dispatch as explicitly named assets. Regular
-# assets go in exactly one format category; machine-sensitive captures go in
-# PERFORMANCE_SENSITIVE_ASSETS and are never selected implicitly.
+# through the same want()/parallel dispatch as explicitly named assets. Put
+# every asset in exactly one format category.
 GIF_ASSETS=(
     view-mode-2d clip-plane-sweep xform-guide replay animated-ring
     sc-torus-knot sc-snowfall sc-recursive-tree sc-spirograph sc-ripple-ring
@@ -85,32 +83,28 @@ PNG_ASSETS=(
     labels-orrery glu-tess glow-sprites transform-stress variable-panel
     tune-badges motion-blur xform-guide-still single-polygon-scope
     vertex-guide-plane vertex-guide-line clip-plane autocomplete color-picker
-    numeric-stepper
+    numeric-stepper profile-panels
     sc-parametric-torus sc-bezier sc-orbit-plot sc-lit-cube sc-function-demo
     sc-function-polygons sc-feature-ply sc-feature-export-c
 )
 
-PERFORMANCE_SENSITIVE_ASSETS=(profile-panels)
-
-DEFAULT_ASSETS=("${GIF_ASSETS[@]}" "${PNG_ASSETS[@]}")
-KNOWN_ASSETS=("${DEFAULT_ASSETS[@]}" "${PERFORMANCE_SENSITIVE_ASSETS[@]}")
+ALL_ASSETS=("${GIF_ASSETS[@]}" "${PNG_ASSETS[@]}")
 
 usage() {
     cat <<'EOF'
 Usage: scripts/docs-assets.sh [options] [asset ...]
 
 Regenerate documentation screenshots and animations. With no asset names or
-format categories, all regular assets are regenerated. Named assets and
-categories may be combined.
+format categories, all assets are regenerated. Named assets and categories may
+be combined.
 
-Performance-sensitive assets are explicit-only because their output reflects
-machine load. Currently: profile-panels
+GIFs and profile-panels reflect live rendering performance. Regenerate them on
+an otherwise unloaded machine for representative documentation output.
 
 Options:
-  --gifs             Regenerate all regular GIF assets.
-  --pngs             Regenerate all regular PNG assets.
-  --perf-sensitive   Regenerate machine-load-sensitive assets (explicit-only).
-  --list             List selected asset names and exit (regular assets by default).
+  --gifs             Regenerate all GIF assets.
+  --pngs             Regenerate all PNG assets.
+  --list             List selected asset names and exit (all by default).
   -j, --jobs N       Regenerate up to N assets in parallel (default: 1).
   -h, --help         Show this help and exit.
 
@@ -121,10 +115,8 @@ Environment:
 Examples:
   scripts/docs-assets.sh --gifs
   scripts/docs-assets.sh --pngs -j 4
-  scripts/docs-assets.sh --perf-sensitive  # use an unloaded machine
   scripts/docs-assets.sh --list --gifs
   scripts/docs-assets.sh hero replay
-  scripts/docs-assets.sh profile-panels  # run on an otherwise unloaded machine
 EOF
 }
 
@@ -139,7 +131,6 @@ JOBS=1
 ARGS=()
 SELECT_GIFS=0
 SELECT_PNGS=0
-SELECT_PERF_SENSITIVE=0
 LIST=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -147,7 +138,6 @@ while [[ $# -gt 0 ]]; do
         --list) LIST=1; shift ;;
         --gifs) SELECT_GIFS=1; shift ;;
         --pngs) SELECT_PNGS=1; shift ;;
-        --perf-sensitive) SELECT_PERF_SENSITIVE=1; shift ;;
         -j|--jobs)
             [[ $# -ge 2 ]] || {
                 echo "docs-assets: option '$1' requires a count (try --help)" >&2
@@ -175,7 +165,7 @@ esac
 
 if [[ ${#ARGS[@]} -gt 0 ]]; then
     for a in "${ARGS[@]}"; do
-        contains_asset "$a" "${KNOWN_ASSETS[@]}" || {
+        contains_asset "$a" "${ALL_ASSETS[@]}" || {
             echo "docs-assets: unknown asset '$a' (try --list)" >&2
             exit 2
         }
@@ -189,14 +179,11 @@ fi
 if [[ "$SELECT_PNGS" -eq 1 ]]; then
     WANTED+=("${PNG_ASSETS[@]}")
 fi
-if [[ "$SELECT_PERF_SENSITIVE" -eq 1 ]]; then
-    WANTED+=("${PERFORMANCE_SENSITIVE_ASSETS[@]}")
-fi
 if [[ ${#ARGS[@]} -gt 0 ]]; then
     WANTED+=("${ARGS[@]}")
 fi
 if [[ ${#WANTED[@]} -eq 0 ]]; then
-    WANTED=("${DEFAULT_ASSETS[@]}")
+    WANTED=("${ALL_ASSETS[@]}")
 else
     # Avoid rendering an explicitly named asset twice when its category was
     # also selected (especially important for the xargs parallel path).
@@ -1038,11 +1025,11 @@ if want numeric-stepper; then
     echo "docs-assets: wrote $OUT/numeric-stepper.png"
 fi
 
-# Profile panels are performance-sensitive and explicit-only: generate this on
-# an otherwise unloaded machine so the live performance profile looks
-# representative. Run normally while the FPS history and per-section histograms
-# fill, then take one SIGUSR1 snapshot. Capturing every warmup frame would make
-# the FPS plot measure PPM readback/write throughput instead.
+# Profile panels reflect live performance, so generate this on an otherwise
+# unloaded machine for representative output. Run normally while the FPS
+# history and per-section histograms fill, then take one SIGUSR1 snapshot.
+# Capturing every warmup frame would make the FPS plot measure PPM
+# readback/write throughput instead.
 if want profile-panels; then
     (
         WARM=720
