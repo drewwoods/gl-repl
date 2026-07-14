@@ -351,8 +351,11 @@ glEnd();
 EOF
 }
 
-stage_wireframe() { stage wireframe <<'EOF'
-/* @cfg wireframe = 1 */
+stage_torus_mesh() {
+    local name=$1
+    local mode=$2
+    stage "$name" <<EOF
+/* @cfg wireframe = $mode */
 /* @cfg vertex_outlines = 0 */
 /* @cfg vertex_points = 0 */
 /* @cfg code_panel = 3 */
@@ -365,6 +368,16 @@ glutSolidTorus(0.4, 1.2, 24, 36);
 // Snippet end
 EOF
 }
+
+stage_wireframe() {
+    stage_torus_mesh wireframe 1
+}
+
+# Hidden-line render mode: same torus as stage_wireframe, wireframe = 2.
+stage_hidden_line() {
+    stage_torus_mesh hidden_line 2
+}
+
 
 stage_lights() { stage lights <<'EOF'
 /* @cfg light_theme = LIGHT_THEME_DEFAULT */
@@ -584,22 +597,6 @@ glVertex3f(cos((i+0.6)*TAU/12)*1.5, sin((i+0.6)*TAU/12)*1.5, 0);
 glVertex3f(cos((i+0.3)*TAU/12)*0.7, sin((i+0.3)*TAU/12)*0.7, 0);
 }
 glEnd();
-// Snippet end
-EOF
-}
-
-# Hidden-line render mode: same torus as stage_wireframe, wireframe = 2.
-stage_hidden_line() { stage hidden_line <<'EOF'
-/* @cfg wireframe = 2 */
-/* @cfg vertex_outlines = 0 */
-/* @cfg vertex_points = 0 */
-/* @cfg code_panel = 3 */
-/* @cfg variable_panel = 0 */
-/* @cfg light_indicators = 0 */
-// Snippet start
-glEnable(GL_DEPTH_TEST);
-glColor3f(0.1, 0.95, 0.85);
-glutSolidTorus(0.4, 1.2, 24, 36);
 // Snippet end
 EOF
 }
