@@ -1661,7 +1661,7 @@ static void repl_code_panel_add_static_buffer_lines(
     ReplCodePanelBuilder *builder,
     int count,
     size_t line_size,
-    const char lines[count][line_size]) {
+    const char (*lines)[line_size]) {
     if (!builder || !lines)
         return;
 
