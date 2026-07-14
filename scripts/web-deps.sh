@@ -32,6 +32,7 @@ GL4ES_URL="https://github.com/ptitSeb/gl4es.git"
 GL4ES_SHA="17f0894e19d1553e4176276c759915dab44c08e2"
 GL4ES_PATCHES=(
 	"$ROOT/packaging/web/patches/gl4es-rasterpos-perspective-divide.patch"
+	"$ROOT/packaging/web/patches/gl4es-bitmap-dirty-clear.patch"
 )
 GLU_URL="https://github.com/ptitSeb/GLU.git"
 GLU_SHA="2fed2bda2b725d2b9e32c435b48d5141cc95827f"

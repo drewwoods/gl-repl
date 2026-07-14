@@ -1609,10 +1609,10 @@ check-trailing-whitespace: ## Verify commits since origin/main contain no traili
 	base=$${CHECK_BASE:-origin/main}; \
 	if git rev-parse --verify "$$base" >/dev/null 2>&1; then \
 		merge_base=$$(git merge-base "$$base" HEAD); \
-		git --no-pager diff --check "$$merge_base" -- . ':(exclude)third_party/' ':(exclude)packaging/web/patches/gl4es-rasterpos-perspective-divide.patch'; \
+		git --no-pager diff --check "$$merge_base" -- . ':(exclude)third_party/' ':(exclude)packaging/web/patches/'; \
 	else \
-		git --no-pager diff --cached --check -- . ':(exclude)third_party/' ':(exclude)packaging/web/patches/gl4es-rasterpos-perspective-divide.patch'; \
-		git --no-pager diff --check -- . ':(exclude)third_party/' ':(exclude)packaging/web/patches/gl4es-rasterpos-perspective-divide.patch'; \
+		git --no-pager diff --cached --check -- . ':(exclude)third_party/' ':(exclude)packaging/web/patches/'; \
+		git --no-pager diff --check -- . ':(exclude)third_party/' ':(exclude)packaging/web/patches/'; \
 	fi; \
 	echo "trailing-whitespace OK"
 
