@@ -348,6 +348,7 @@ GLR_EDIT_LINE=4 ./gl-repl scene.c    # Park the cursor on source line 4 (0-based
 GLR_TYPE_KEYS='glVertex3f(1.2' ./gl-repl scene.c  # Feed keystrokes through the keyboard dispatch after load (headless capture of mid-typing states: partial-input guides, autocomplete ghost)
 GLR_OPEN_COLOR_PICKER=6 ./gl-repl scene.c  # Open the floating color picker on source line 6 (0-based; must be an editable color command) on the first displayed frame — capture hook, the picker otherwise needs a swatch click
 GLR_ACCUM_PASSES=16 ./gl-repl        # Accumulation AA sample count (1/2/4/8/12/16; capture hook)
+GLR_TICK_PER_FRAME=1 ./gl-repl       # Advance the complete fixed-dt simulation once per rendered frame (deterministic offline capture)
 GLR_VIEW_TOGGLE_AT=0.5,2.0 ./gl-repl # Toggle 2D/3D view mode at t=0.5s and t=2.0s (records the swatch transition headlessly)
 ```
 
@@ -358,24 +359,25 @@ headless OSMesa capture with no keyboard input. Applied after the
 file/example load, alongside `GLR_TIME`, in `main()` ([`gl_repl.c`](gl_repl.c)).
 
 The animation variable `t` starts at `0` and (with animation playing, the
-default) advances by a fixed `1/60 s` per rendered frame. `--time <secs>` /
+default) advances by a fixed `1/60 s` per simulation tick. `--time <secs>` /
 `GLR_TIME` set its initial value at startup — applied after any `--example`
 load (which resets `t`), so the override sticks. Useful headless: start an
 animation capture from a later point in its timeline instead of always from
 `t = 0`. Implemented as [`repl_set_time()`](src/repl/time.h#L19) ([`src/repl/time.c`](src/repl/time.c) → [`src/repl/state.c`](src/repl/state.c)),
 read in `main()` ([`gl_repl.c`](gl_repl.c)).
 
+`GLR_TICK_PER_FRAME=1` transfers the complete fixed-dt simulation tick from the
+wall-clock GLUT timer to completed frames. Recording scripts enable it so slow
+rendering takes longer without skipping animation states.
+
 `GLR_VIEW_TOGGLE_AT=<t1,t2,...>` is the capture affordance for the
 **menu-bar 2D/3D swatch** transition (the pin left of Replay). It toggles
 the view mode (`glr_action_toggle_view_mode`) once as the rendered-frame
-clock crosses each listed second (frame `N` ↔ `t = N/60`). Because the
-2D↔3D transition ([`src/app/glr_ctrl_view_transition.c`](src/app/glr_ctrl_view_transition.c)) advances on the
-animation *timer*, which the record/headless main loop doesn't fire per
-captured frame, the hook also drives **one fixed-dt [`glr_ctrl_tick()`](src/app/glr_ctrl.h#L133) per
-captured frame** — so the transition (and the swatch's cross-fade / lit-cube
-animation) advances deterministically, one frame of motion per frame
-written. Lives in `display_func` ([`gl_repl.c`](gl_repl.c)), gated on the env var (no-op
-when unset, so production timing is unchanged). Native record mode
+clock crosses each listed second (frame `N` ↔ `t = N/60`). It implicitly
+enables `GLR_TICK_PER_FRAME`, so the transition (and the swatch's cross-fade /
+lit-cube animation) advances deterministically. Lives in `display_func`
+([`gl_repl.c`](gl_repl.c)), gated on the env var (no-op when unset, so
+production timing is unchanged). Native record mode
 (`FREEGLUT_CAPTURE_FRAMES`) shows the full UI; pair them to record the
 swatch headlessly.
 

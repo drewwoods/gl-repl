@@ -235,12 +235,14 @@ static void print_usage(const char *prog) {
             "  GLR_ACCUM_PASSES=<n>  Accumulation AA sample count (1/2/4/8/12/16).\n"
             "               Captures use it to smooth 3D edges at full UI text\n"
             "               size (the 2D UI renders outside the accum loop).\n"
+            "  GLR_TICK_PER_FRAME=1  Advance the fixed-dt simulation exactly\n"
+            "               once per rendered frame instead of per timer tick.\n"
+            "               Intended for deterministic offline recording.\n"
             "  GLR_VIEW_TOGGLE_AT=<t1,t2,...>  Toggle the 2D/3D view mode as the\n"
             "               rendered-frame clock crosses each listed second (t\n"
             "               advances 1/60 s per frame). Records the menu-bar\n"
-            "               2D/3D swatch transition headlessly; drives one\n"
-            "               fixed-dt animation tick per captured frame so the\n"
-            "               transition advances deterministically.\n"
+            "               2D/3D swatch transition headlessly and implicitly\n"
+            "               enables GLR_TICK_PER_FRAME.\n"
             "  GLR_TYPE_KEYS=<text>  Feed each character through the keyboard\n"
             "               dispatch after load, exactly as typing would.\n"
             "               Poses mid-typing states (partial-input guides,\n"
@@ -324,7 +326,9 @@ static int g_export_ply_srgb = 0;
  * GLR_VIEW_TOGGLE_AT="t1,t2,..." toggles the 2D/3D view mode once as the
  * rendered-frame clock crosses each listed second (t advances 1/60 s per
  * frame), so the menu-bar swatch transition is recordable headlessly.
- * Unset => no-op; production behavior is unchanged. */
+ * main() enables GLR_TICK_PER_FRAME semantics whenever this hook is active,
+ * so the transition and the rest of the simulation advance exactly once per
+ * captured frame. Unset => no-op; production behavior is unchanged. */
 static void maybe_capture_view_toggle(void) {
     static int   inited = 0;
     static int   frame = 0;
@@ -352,11 +356,6 @@ static void maybe_capture_view_toggle(void) {
             glr_action_toggle_view_mode();
         }
     }
-    /* The view-mode transition (and all motion) advances on the animation
-     * timer, which the headless/record main loop doesn't fire per captured
-     * frame. Drive one fixed-dt tick here so the transition advances
-     * deterministically — one frame of animation per captured frame. */
-    glr_ctrl_tick();
     frame++;
 }
 
@@ -448,6 +447,11 @@ static void display_func(void) {
         init_trace(buf);
         frames_traced++;
     }
+
+    /* In GLR_TICK_PER_FRAME mode, advance only after the completed frame so
+     * the captured sequence is t0, t0+dt, ... . The timer continues to pace
+     * redisplays but deliberately skips its own tick in this mode. */
+    glr_ctrl_frame_presented();
 }
 
 static void reshape_func(int w, int h) {
@@ -649,6 +653,15 @@ int main(int argc, char **argv) {
         const char *t_src = time_arg ? time_arg : getenv("GLR_TIME");
         if (t_src && *t_src)
             glr_ctrl_set_time((float)atof(t_src));
+    }
+    /* Offline/capture clock: move the complete fixed-dt controller tick from
+     * the wall-clock timer to completed frames. GLR_VIEW_TOGGLE_AT implies the
+     * mode for backward-compatible deterministic swatch captures. */
+    {
+        const char *frame_tick = getenv("GLR_TICK_PER_FRAME");
+        const char *view_toggle = getenv("GLR_VIEW_TOGGLE_AT");
+        glr_ctrl_set_tick_per_frame((frame_tick && *frame_tick) ||
+                                    (view_toggle && *view_toggle));
     }
     /* Cursor line override: GLR_EDIT_LINE=<line> (0-based, clamped)
      * parks the cursor on a committed source line and loads it into the

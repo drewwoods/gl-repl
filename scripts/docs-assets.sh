@@ -30,6 +30,9 @@
 #     the LAST frame, so anything frame-based (grid/axes theme cross-fades,
 #     animation time t) has deterministically settled — no wall-clock sleeps,
 #     no SIGUSR1 races.
+#   - GIF captures set GLR_TICK_PER_FRAME=1, moving the complete fixed-dt
+#     simulation tick from the wall-clock timer to frame presentation. Slow
+#     rendering therefore takes longer without skipping animation states.
 #   - Scene states are staged by loading generated snippet files whose
 #     `/* @cfg slug = value */` headers set presentation state and whose
 #     optional `// camera` block poses the camera. GLR_EDIT_LINE parks the
@@ -331,7 +334,9 @@ gif() {
     local out=$1 frames=$2 step=$3 fps=$4 width=$5; shift 5
     local skip=${WARM:-0} a
     for a in "$@"; do [[ "$a" == "--example" ]] && { skip=${WARM:-$WARM_EXAMPLE}; break; }; done
-    render "$((skip + frames))" 0 "$@"
+    # Offline animation clock: one fixed-dt simulation step per captured
+    # frame, independent of native render/readback throughput.
+    GLR_TICK_PER_FRAME=1 render "$((skip + frames))" 0 "$@"
     rm -rf "$WORK/sub"; mkdir -p "$WORK/sub"
     local n=0 k=0 f
     for f in "$FRDIR"/f-*.ppm; do
