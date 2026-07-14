@@ -156,7 +156,7 @@ enum {
 };
 #define PROF_FPS_HISTORY_CAP 120
 
-/* Smoothed instantaneous FPS (EMA of 1/frame-dt); 0 until two ticks. */
+/* Smoothed instantaneous FPS (1 / EMA(frame-dt)); 0 until two ticks. */
 double prof_fps_current(void);
 
 /* The window span in seconds for a PROF_FPS_WIN_* index (0 if invalid). */
