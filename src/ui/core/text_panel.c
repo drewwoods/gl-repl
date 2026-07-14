@@ -142,14 +142,49 @@ static void text_panel_set_color(const UiTextPanelColor *color) {
         glColor3f(color->r, color->g, color->b);
 }
 
+/* Full-width horizontal-bar glyph in GLUT_BITMAP_9_BY_15 (a single row of
+ * all-set pixels). Used as the ligature form of a comment-line dash run so
+ * consecutive dashes join into one unbroken rule. */
+#define TEXT_PANEL_HRULE_GLYPH 0x12
+
+static int text_panel_is_comment_line(const char *text) {
+    if (!text)
+        return 0;
+
+    while (*text == ' ' || *text == '\t')
+        text++;
+    return text[0] == '/' && text[1] == '/';
+}
+
+static unsigned char text_panel_display_glyph(const char *text, int index,
+                                               int join_dash_runs) {
+    unsigned char ch = (unsigned char)text[index];
+
+    /* Run membership is checked against the full NUL-terminated text (not
+     * the drawn slice) so wrapping or a color-segment boundary never splits
+     * a rule. ch == '-' guarantees text[index + 1] is a valid read (at worst
+     * the terminator). */
+    if (join_dash_runs && ch == '-' &&
+        ((index > 0 && text[index - 1] == '-') || text[index + 1] == '-'))
+        return TEXT_PANEL_HRULE_GLYPH;
+    return ch;
+}
+
 static void text_panel_draw_segment(int x, int y, const char *text,
-                                    int start, int len, void *font) {
+                                    int start, int len, void *font,
+                                    int dash_rule) {
+    int join_dash_runs;
+
     if (!text || len <= 0)
         return;
 
+    join_dash_runs = dash_rule && text_panel_is_comment_line(text);
     glRasterPos2f((float)x, (float)y);
-    for (int i = 0; i < len; i++)
-        glutBitmapCharacter(font, (unsigned char)text[start + i]);
+    for (int i = 0; i < len; i++) {
+        int a = start + i;
+        glutBitmapCharacter(font,
+                            text_panel_display_glyph(text, a, join_dash_runs));
+    }
 }
 
 static int text_panel_row_uses_blend(const UiTextPanelRow *row) {
@@ -205,18 +240,19 @@ static void text_panel_draw_colored_span(const UiTextPanelSnapshot *snap,
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glColor4f(1.0f, 1.0f, 1.0f, UI_TEXT_PANEL_SHADOW_ALPHA * a);
         text_panel_draw_segment(x + 1, line_y - 1, text, span_start, span_len,
-                                FONT_MONO);
+                                FONT_MONO, snap->comment_rule_ligature);
         if (!blend_on)
             glDisable(GL_BLEND);
 
         text_panel_set_color(color);
         text_panel_draw_segment(x, line_y, text, span_start, span_len,
-                                FONT_MONO);
+                                FONT_MONO, snap->comment_rule_ligature);
         return;
     }
 
     text_panel_set_color(color);
-    text_panel_draw_segment(x, line_y, text, span_start, span_len, FONT_MONO);
+    text_panel_draw_segment(x, line_y, text, span_start, span_len, FONT_MONO,
+                            snap->comment_rule_ligature);
 }
 
 static void text_panel_draw_colored_text(const UiTextPanelSnapshot *snap,
@@ -249,7 +285,8 @@ static void text_panel_draw_colored_text(const UiTextPanelSnapshot *snap,
     if (!use_segments) {
         text_panel_set_color(&row->color);
         text_panel_draw_segment(snap->cp_x + wrap_x, line_y, text,
-                                wrap_start, wrap_len, FONT_MONO);
+                                wrap_start, wrap_len, FONT_MONO,
+                                snap->comment_rule_ligature);
         if (blend_on)
             glDisable(GL_BLEND);
         return;
@@ -768,7 +805,8 @@ static int text_panel_draw_input_row(const UiTextPanelSnapshot *snap,
 
             glColor3fv(k_clr_input_text);
             text_panel_draw_segment(snap->cp_x + wrap_x, *io_line_y, input,
-                                    wrap_start, wrap_len, FONT_MONO);
+                                    wrap_start, wrap_len, FONT_MONO,
+                                    snap->comment_rule_ligature);
 
             if (wrap_row == cursor_row) {
                 int cursor_x = snap->cp_x + wrap_x + cursor_col * FONT_W;

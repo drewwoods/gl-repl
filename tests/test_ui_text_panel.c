@@ -22,6 +22,39 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ASSERT_INT_EQ(label, got, exp) \
     TEST_ASSERT_INT(&g_harness, label, got, exp)
 
+#define TRACE_PATH "build/test_ui_text_panel_trace.txt"
+
+static void render_glyph_counts(UiTextPanelSnapshot *snap,
+                                int *out_hyphens,
+                                int *out_rules) {
+    UiTextPanelOutput out = {0};
+    FILE *trace;
+    char line[128];
+    int hyphens = 0;
+    int rules = 0;
+
+    gl_stub_trace_open(TRACE_PATH);
+    ui_text_panel_render(snap, &out);
+    gl_stub_trace_close();
+
+    trace = fopen(TRACE_PATH, "r");
+    if (trace) {
+        while (fgets(line, sizeof(line), trace)) {
+            int ch;
+            if (sscanf(line, "glutBitmapCharacter %d", &ch) != 1)
+                continue;
+            if (ch == '-')
+                hyphens++;
+            else if (ch == 0x12)
+                rules++;
+        }
+        fclose(trace);
+    }
+
+    *out_hyphens = hyphens;
+    *out_rules = rules;
+}
+
 static UiTextPanelSnapshot make_snapshot(const UiTextPanelRow *rows,
                                          int row_count,
                                          int cp_x,
@@ -68,6 +101,77 @@ static int my_for_visual_row(const UiTextPanelSnapshot *snap, int visual_row) {
     int panel_top = snap->cp_y + snap->cp_h;
     int gl_y = panel_top - CODE_MARGIN_Y - 2 * LINE_H - visual_row * LINE_H;
     return snap->vp_h - gl_y;
+}
+
+static void test_comment_rule_ligature_is_comment_line_only(void) {
+    UiTextPanelRow rows[5] = {
+        {
+            .text = "// --- Heading ---",
+            .kind = UI_TEXT_PANEL_ROW_TEXT,
+            .color = { 1.0f, 1.0f, 1.0f, 1.0f, 0 },
+            .color_segments = {
+                { .char_start = 0, .char_count = 4,
+                  .color = { 0.8f, 0.8f, 0.8f, 1.0f, 0 } },
+                { .char_start = 4, .char_count = 12,
+                  .color = { 0.7f, 0.7f, 0.7f, 1.0f, 0 } },
+            },
+            .color_segment_count = 2,
+        },
+        {
+            .text = " \t// --",
+            .kind = UI_TEXT_PANEL_ROW_TEXT,
+            .color = { 1.0f, 1.0f, 1.0f, 1.0f, 0 },
+        },
+        {
+            .text = "// x - y",
+            .kind = UI_TEXT_PANEL_ROW_TEXT,
+            .color = { 1.0f, 1.0f, 1.0f, 1.0f, 0 },
+        },
+        {
+            .text = "code--value; // ---",
+            .kind = UI_TEXT_PANEL_ROW_TEXT,
+            .color = { 1.0f, 1.0f, 1.0f, 1.0f, 0 },
+        },
+        {
+            .text = "\"// --\"",
+            .kind = UI_TEXT_PANEL_ROW_TEXT,
+            .color = { 1.0f, 1.0f, 1.0f, 1.0f, 0 },
+        },
+    };
+    UiTextPanelSnapshot snap = make_snapshot(rows, 5, 0, 0, 800, 600, 0);
+    int hyphens;
+    int rules;
+
+    printf("--- dash-rule comment lines ---\n");
+    snap.comment_rule_ligature = 1;
+    render_glyph_counts(&snap, &hyphens, &rules);
+    ASSERT_INT_EQ("comment dash runs use rule glyph", rules, 8);
+    ASSERT_INT_EQ("non-comment and lone dashes stay hyphens", hyphens, 8);
+
+    snap.comment_rule_ligature = 0;
+    render_glyph_counts(&snap, &hyphens, &rules);
+    ASSERT_INT_EQ("disabled ligature emits no rule glyphs", rules, 0);
+    ASSERT_INT_EQ("disabled ligature preserves every hyphen", hyphens, 16);
+}
+
+static void test_comment_rule_ligature_applies_to_live_comment_input(void) {
+    UiTextPanelRow row = {
+        .text = "",
+        .kind = UI_TEXT_PANEL_ROW_INPUT,
+        .color = { 1.0f, 1.0f, 1.0f, 1.0f, 0 },
+    };
+    UiTextPanelSnapshot snap = make_snapshot(&row, 1, 0, 0, 800, 600, 0);
+    int hyphens;
+    int rules;
+
+    snap.comment_rule_ligature = 1;
+    snap.input.input = "  // --";
+    snap.input.input_len = (int)strlen(snap.input.input);
+    snap.input.cursor = snap.input.input_len;
+    snap.input.anchor = snap.input.cursor;
+    render_glyph_counts(&snap, &hyphens, &rules);
+    ASSERT_INT_EQ("live comment input uses rule glyph", rules, 2);
+    ASSERT_INT_EQ("live comment rule has no hyphen glyph", hyphens, 0);
 }
 
 static void test_visible_rows_respect_statusbar_flag(void) {
@@ -705,6 +809,8 @@ int main(void) {
     test_row_layout_consistency();
     test_row_layout_shared_across_kinds();
     test_color_segments_enable_blending();
+    test_comment_rule_ligature_is_comment_line_only();
+    test_comment_rule_ligature_applies_to_live_comment_input();
     test_match_paren_pairs();
     test_match_bracket_multiline();
     test_enclosing_parens_scope();
