@@ -24,13 +24,13 @@ rendering, recording, and every environment variable, see
 - [Writing Code](#writing-code)
 - [The REPL Language](#the-repl-language)
 - [Making It Move](#making-it-move)
-- [Tunable Variables (`// @tune`)](#tunable-variables--tune)
 - [Seeing What You're Doing](#seeing-what-youre-doing)
 - [Replay](#replay)
 - [Tutorials](#tutorials)
 - [Built-in Examples](#built-in-examples)
 - [Scenes & Workspaces](#scenes--workspaces)
 - [Exporting & Importing](#exporting--importing)
+- [Tunable Variables (`// @tune`)](#tunable-variables--tune)
 - [Performance & Scope](#performance--scope)
 - [Profiling & Diagnostics](#profiling--diagnostics)
 - [Music](#music)
@@ -65,7 +65,8 @@ Top to bottom:
   **Ctrl+B** or the *Code panel* config item.
 - **Status bar** — command count, current line, the accumulation indicator
   (`AA 1x` / `Blur 8x`), and clickable controls for undo/redo, copy/cut,
-  clearing all commands, *focus* (code focus), and *F1 help*.
+  clearing all commands, *focus* ([code focus](#keeping-the-buffer-tidy)),
+  and *F1 help*.
 - **3D viewport** — your geometry, rendered every frame. Drag to orbit,
   scroll to zoom.
 - **Variable panel** — bottom-right overlay listing every declared variable
@@ -112,8 +113,9 @@ and the viewport answers every keystroke. This section is that loop.
 
 - **`;`** commits the current input line (the semicolon is the trigger key,
   not part of the text).
-- **Enter** inserts a new line below the cursor (variable statements and
-  block syntax like `for(...) {` also commit on Enter).
+- **Enter** normally inserts a blank line below the cursor. However,
+  variable declarations and block openers like `for(...) {` commit
+  immediately on Enter.
 - **Up/Down** move between lines; loading an existing line into the input
   lets you edit and re-commit it in place.
 - **Esc** clears the input line (or closes whichever overlay is open).
@@ -157,9 +159,13 @@ like a normal editor:
 - **Ctrl+Z** undo, **Ctrl+Y** (or Ctrl+Shift+Z) redo. Undo covers source
   mutations — deletes, pastes, reformat, commits.
 - **Ctrl+D** deletes the current line or selection; **Ctrl+L** clears the
-  scene and restores the five editable display defaults for color material,
-  two-sided lighting, specular color, and shininess. Delete or comment those
-  lines explicitly when a scene needs different state.
+  scene and restores five editable display defaults:
+  `glEnable(GL_COLOR_MATERIAL)`,
+  `glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)`,
+  `glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE)`,
+  a white specular color, and shininess 30.
+  Delete or comment those lines explicitly when a scene needs different
+  state.
 
 These five defaults are real commands, not hidden setup. They remain visible
 in code-focus mode and run with the rest of the scene every frame.
@@ -233,6 +239,7 @@ glVertex3f(x,y,z), glVertex2f(x,y)
 glNormal3f(x,y,z)
 glColor3f(r,g,b), glColor4f(r,g,b,a)
 glClearColor(r,g,b,a)        background clear color; channels clamp to >= 0.15
+                             (prevents a fully black background from hiding geometry)
 glTranslatef(x,y,z), glScalef(sx,sy,sz), glRotatef(deg,x,y,z)
 glPushMatrix(), glPopMatrix(), glLoadIdentity()
 glEnable(CAP), glDisable(CAP)
@@ -288,8 +295,8 @@ label("Earth phase = %f", t);
 
 - `label("fmt", a, b, c, d)` draws bitmap text at the current raster
   position. Up to 4 substitution args; `%f` substitutes a value, `%%` is a
-  literal percent. Format strings are limited to 64 characters and may not
-  contain `//`, `(`, `)`, `,`, or backslashes.
+  literal percent. The string literal between the quotes is limited to 64
+  characters and may not contain `//`, `(`, `)`, `,`, or backslashes.
 - This is a REPL convenience, not a real GL call — exported C files include
   a self-contained `label()` helper so they still compile standalone.
 
@@ -330,7 +337,10 @@ Every numeric argument is a full expression, evaluated when the line runs:
   `> < >= <= == !=`; logical `&& || !`.
 - **Functions:** `sin`, `cos`, `tan`, `sqrt`, `abs`, `pow`, `log` (base 10),
   `ln` (base e), `min`, `max`, `floor`, `ceil`, `fmod`, `rem`,
-  `rand(seed[, iter])`, `rand2(seed[, iter])`.
+  `rand(seed[, iter])`, `rand2(seed[, iter])`. `fmod` is the C `fmodf`
+  (result takes the sign of the dividend); `rem` is the IEEE remainder via
+  `remainderf` (rounds the quotient to nearest, so the result can differ in
+  sign).
 - **Constants:** `PI`, `TAU`, `e`.
 
 `rand` returns a deterministic value in `[0, 1]` for a given (seed, iter)
@@ -379,7 +389,8 @@ for(i, 0, n, 2) {        // optional step argument; multi-line body
 ```
 
 The parser accepts up to 64 nested blocks. In practice, useful nesting is
-limited first by the flat-command budget and visible expression variables.
+limited first by the flat-command budget and the number of loop-iterator
+variables in scope.
 Loop bounds can be expressions (and can animate with `t`).
 
 ### Functions
@@ -535,129 +546,12 @@ Row brightness distinguishes knobs from storage:
 Slider edits are undoable and go through the normal commit pipeline; when a
 declaration exists, dragging rewrites its initializer.
 
-### Scrubbing the timeline
-
 Because `t` is just a variable, it gets a row in the variable panel like any
 other — and dragging that row is a timeline scrubber. Pause with **Ctrl+T**,
 then drag the `t` row to move the whole animation back and forth; release
 and press **Ctrl+T** again to resume playing from wherever you left it. The
 usual drag speeds apply: plain drag scrubs linearly, **right-click drag** is
 the fast scrub, **Shift+drag** the slow one.
-
----
-
-## Tunable Variables (`// @tune`)
-
-Use `// @tune` on a `float` declaration when a scene parameter should become
-a keyboard-adjustable knob in the exported standalone C program.
-
-```c
-float amp = 1.5; // @tune
-float freq = 2;  // @tune
-
-glBegin(GL_TRIANGLES);
-glVertex3f(amp, 0, 0);
-glVertex3f(0, freq, 0);
-glVertex3f(0, 0, amp);
-glEnd();
-```
-
-The tag is a bare trailing comment token. It matches `// @tune`, not names
-like `// @tuned=5`. If a declaration line contains multiple names, every name
-on that line is tagged:
-
-```c
-float amp = 1, freq = 2; // @tune
-```
-
-Tagged variables are still normal REPL variables while you are authoring. In
-the variable panel, tagged rows get an accent mark so you can see which
-values will export as knobs:
-
-![Tagged rows get an accent mark](images/tune-badges.png)
-
-### Exported controls
-
-When you save/export C, each tagged variable becomes a keyboard knob in the
-standalone program. The generated program also draws a small HUD listing each
-knob, its current value, and its keys.
-
-Knobs are assigned in declaration order:
-
-| Knob | Raise | Lower |
-|---|---:|---:|
-| 1 | `q` | `a` |
-| 2 | `w` | `s` |
-| 3 | `e` | `d` |
-| 4 | `r` | `f` |
-| 5 | `t` | `g` |
-| 6 | `y` | `h` |
-| 7 | `u` | `j` |
-| 8 | `i` | `k` |
-| 9 | `o` | `l` |
-
-Only the first 9 tagged variables get keyboard controls. If more are tagged,
-the export keeps the first 9 and writes a note in the generated C that the
-rest were capped.
-
-### Step size
-
-The exported knobs use the same step size as the in-app numeric stepper:
-
-| Current value magnitude | Step |
-|---:|---:|
-| `< 10` | `0.05` |
-| `10..99.999` | `0.5` |
-| `100..999.999` | `5` |
-
-The pattern continues by decade — values in the thousands step by `50`,
-and so on (the step is `0.05` scaled by the value's power of ten).
-
-The same modifier keys apply in the exported program:
-
-| Modifier | Effect |
-|---|---:|
-| Shift | fine step, `x0.2` |
-| Ctrl | coarse step, `x10` |
-| Shift+Ctrl | fine then coarse, `x2` total |
-
-There is no range clamp. A tunable can go negative or very large if you keep
-pressing its keys.
-
-### Values that stick
-
-A tunable only persists if your display body does not overwrite it every
-frame. This works:
-
-```c
-float radius = 2; // @tune
-
-glutSolidSphere(radius, 32, 16);
-```
-
-This appears inert in the exported program because the assignment runs again
-on every display call:
-
-```c
-float radius = 2; // @tune
-
-radius = 2;
-glutSolidSphere(radius, 32, 16);
-```
-
-Use tunables for parameter-style values that the scene reads, not values the
-scene recomputes unconditionally each frame.
-
-### Export and reload
-
-`// @tune` survives export/import round trips. The exported C carries a
-marker for each tagged declaration, and reloading that file reconstructs the
-original declaration with `// @tune` so the variable-panel badge and future
-exports keep working.
-
-The generated keyboard controls live only in the standalone exported C.
-Inside gl-repl, adjust values through the variable panel or inline numeric
-steppers.
 
 ---
 
@@ -916,7 +810,7 @@ taller than the window):
 **Left-click** a flyout item to cycle it forward, **right-click** to cycle
 backward. Multi-state items show their current state name.
 
-Function keys drive the most common cycles directly (**Shift+F\<n\>** steps
+Function keys drive the most common cycles directly (**Shift+F*n*** steps
 backward):
 
 | Key | Cycles |
@@ -1020,16 +914,16 @@ loop-variable values substituted into the displayed text.
 
 | Key | Action |
 |---|---|
-| Ctrl+R (or the Replay button) | Start / stop replay |
-| Space | Pause / resume |
-| + / − | Faster / slower |
-| Left / Right | Step backward / forward (while paused) |
-| Ctrl+K | Jump the replay to the cursor line (first geometry at/after it) |
-| m / M | Toggle replay mode: Polygon / Vertex granularity |
-| e / E | Toggle Replay expand while playback is live |
-| n / N | Cycle replay normals: off / vector / vector + direction |
-| v / V | Toggle the replay focused-vertex label |
-| Esc | Stop replay |
+| **Ctrl+R** (or the Replay button) | Start / stop replay |
+| **Space** | Pause / resume |
+| **+** / **−** | Faster / slower |
+| **Left** / **Right** | Step backward / forward (while paused) |
+| **Ctrl+K** | Jump the replay to the cursor line (first geometry at/after it) |
+| **m** / **M** | Toggle replay mode: Polygon / Vertex granularity |
+| **e** / **E** | Toggle Replay expand while playback is live |
+| **n** / **N** | Cycle replay normals: off / vector / vector + direction |
+| **v** / **V** | Toggle the replay focused-vertex label |
+| **Esc** | Stop replay |
 
 The HUD at the bottom of the viewport shows play state, position, and speed.
 When a replay has finished, **Space** restarts it from the beginning.
@@ -1061,9 +955,10 @@ variable slider to a target.
 
 ## Built-in Examples
 
-**F12** cycles forward through the 31 built-in examples (then your saved
-scenes, then back); **Shift+F12** cycles backward. The Scene menu lists them
-grouped by tag. `./gl-repl --list-examples` prints the compiled-in set.
+**F12** cycles forward through the 31 built-in examples, then any saved
+scenes, wrapping to the start; **Shift+F12** cycles backward. The Scene menu
+lists them grouped by tag. `./gl-repl --list-examples` prints the compiled-in
+set.
 Developers can point the app at an editable catalog with
 `./gl-repl --examples-dir examples --example <name-or-idx>`:
 
@@ -1122,11 +1017,12 @@ gl-repl keeps up to 8 scenes in memory, shown as tabs below the menu bar.
 | File → Save Workspace | Write every open scene as `<name>.c` in a directory |
 | File → Load Workspace | Load every `*.c` in a directory as scenes |
 
-A workspace is just a directory of exported scene files. Once one is bound,
-scene slots that overflow the 8-slot limit are evicted to disk
-(least-recently-used) instead of being lost. Single files and workspaces
-round-trip freely — scene names and the workspace binding are carried in
-`@scene-name` / `@workspace-dir` header comments.
+A workspace is just a directory of exported scene files. Once one is bound
+and more than 8 scenes are open, the least-recently-used slot is
+automatically saved to the workspace directory before being replaced.
+Single files and workspaces round-trip freely — scene names and the
+workspace binding are carried in `@scene-name` / `@workspace-dir` header
+comments.
 
 ---
 
@@ -1206,6 +1102,121 @@ Headless / scripted capture:
 
 Use `--export-ply-srgb` when the viewer is color-managed and treats PLY
 colors as linear (otherwise the mesh looks washed out).
+
+---
+
+## Tunable Variables (`// @tune`)
+
+Use `// @tune` on a `float` declaration when a scene parameter should become
+a keyboard-adjustable knob in the exported standalone C program.
+
+```c
+float amp = 1.5; // @tune
+float freq = 2;  // @tune
+
+glBegin(GL_TRIANGLES);
+glVertex3f(amp, 0, 0);
+glVertex3f(0, freq, 0);
+glVertex3f(0, 0, amp);
+glEnd();
+```
+
+The tag is a bare trailing comment token. It matches `// @tune`, not names
+like `// @tuned=5`. If a declaration line contains multiple names, every name
+on that line is tagged:
+
+```c
+float amp = 1, freq = 2; // @tune
+```
+
+Tagged variables are still normal REPL variables while you are authoring. In
+the variable panel, tagged rows get an accent mark so you can see which
+values will export as knobs:
+
+![Tagged rows get an accent mark](images/tune-badges.png)
+
+### Exported controls
+
+When you save/export C, each tagged variable becomes a keyboard knob in the
+standalone program. The generated program also draws a small HUD listing each
+knob, its current value, and its keys.
+
+Knobs are assigned in declaration order:
+
+| Knob | Raise | Lower |
+|---|---:|---:|
+| 1 | `q` | `a` |
+| 2 | `w` | `s` |
+| 3 | `e` | `d` |
+| 4 | `r` | `f` |
+| 5 | `t` | `g` |
+| 6 | `y` | `h` |
+| 7 | `u` | `j` |
+| 8 | `i` | `k` |
+| 9 | `o` | `l` |
+
+Only the first 9 tagged variables get keyboard controls. If more are tagged,
+the export keeps the first 9 and writes a note in the generated C that the
+rest were capped.
+
+### Step size
+
+The exported knobs use the same step size as the in-app numeric stepper:
+
+| Current value magnitude | Step |
+|---:|---:|
+| `< 10` | `0.05` |
+| `10..99.999` | `0.5` |
+| `100..999.999` | `5` |
+
+The pattern continues by decade — values in the thousands step by `50`,
+and so on (the step is `0.05` scaled by the value's power of ten).
+
+The same modifier keys apply in the exported program:
+
+| Modifier | Effect |
+|---|---:|
+| Shift | fine step, `x0.2` |
+| Ctrl | coarse step, `x10` |
+| Shift+Ctrl | fine then coarse, `x2` total |
+
+There is no range clamp. A tunable can go negative or very large if you keep
+pressing its keys.
+
+### Values that stick
+
+A tunable only persists if your display body does not overwrite it every
+frame. This works:
+
+```c
+float radius = 2; // @tune
+
+glutSolidSphere(radius, 32, 16);
+```
+
+This appears inert in the exported program because the assignment runs again
+on every display call:
+
+```c
+float radius = 2; // @tune
+
+radius = 2;
+glutSolidSphere(radius, 32, 16);
+```
+
+Use tunables for parameter-style values that the scene reads, not values the
+scene recomputes unconditionally each frame.
+
+### Export and reload
+
+`// @tune` survives export/import round trips. The exported C carries a
+marker for each tagged declaration, and reloading that file reconstructs the
+original declaration with `// @tune` so the variable-panel badge and future
+exports keep working.
+
+The generated keyboard controls live only in the standalone exported C.
+Inside gl-repl, adjust values through the variable panel or inline numeric
+steppers.
 
 ---
 
