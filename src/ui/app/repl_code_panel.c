@@ -2229,29 +2229,31 @@ static void repl_code_panel_draw_trash_icon(int kx, int ky, int kw, int kh) {
 static void repl_code_panel_draw_undo_icon(int kx, int ky, int kw, int kh) {
     /* 13x12 1bpp "return hook" glyph: a riser down the right side that
      * bends into a leftward-pointing arrowhead, i.e. the same shape as
-     * the redo icon mirrored left-right.
+     * the redo icon mirrored left-right.  The chevron arms converge onto
+     * the single shaft row (row 4), so the arrow point is one row, not
+     * two.
      *
      *  row 11:  .........##..   riser
      *  row 10:  .........##..
      *  row 9:   .........##..
      *  row 8:   .........##..
-     *  row 7:   ....#....##..   arrowhead tip taper
+     *  row 7:   ....##...##..   upper arm
      *  row 6:   ...##....##..
-     *  row 5:   .##########..   shaft + arrowhead point
-     *  row 4:   .##########..
-     *  row 3:   ...##........   arrowhead tip taper
-     *  row 2:   ....#........
-     *  row 1:   .............
+     *  row 5:   ..##.....##..
+     *  row 4:   .##########..   shaft + single-row arrowhead point
+     *  row 3:   ..##.........
+     *  row 2:   ...##........
+     *  row 1:   ....##.......   lower arm
      *  row 0:   .............                                        */
     static const GLubyte undo_bits[ACTION_ICON_H * 2] = {
         0x00, 0x00,  /* row 0  */
-        0x00, 0x00,  /* row 1  */
-        0x08, 0x00,  /* row 2  */
-        0x18, 0x00,  /* row 3  */
+        0x0C, 0x00,  /* row 1  */
+        0x18, 0x00,  /* row 2  */
+        0x30, 0x00,  /* row 3  */
         0x7F, 0xE0,  /* row 4  */
-        0x7F, 0xE0,  /* row 5  */
+        0x30, 0x60,  /* row 5  */
         0x18, 0x60,  /* row 6  */
-        0x08, 0x60,  /* row 7  */
+        0x0C, 0x60,  /* row 7  */
         0x00, 0x60,  /* row 8  */
         0x00, 0x60,  /* row 9  */
         0x00, 0x60,  /* row 10 */
@@ -2263,29 +2265,31 @@ static void repl_code_panel_draw_undo_icon(int kx, int ky, int kw, int kh) {
 
 static void repl_code_panel_draw_redo_icon(int kx, int ky, int kw, int kh) {
     /* Mirror image of the undo glyph: riser down the left side bending
-     * into a rightward-pointing arrowhead.
+     * into a rightward-pointing arrowhead.  Like undo, the chevron arms
+     * converge onto the single shaft row (row 4) so the arrow point is
+     * one row, not two.
      *
      *  row 11:  ..##.........
      *  row 10:  ..##.........
      *  row 9:   ..##.........
      *  row 8:   ..##.........
-     *  row 7:   ..##....#....
+     *  row 7:   ..##...##....   upper arm
      *  row 6:   ..##....##...
-     *  row 5:   ..##########.
-     *  row 4:   ..##########.
-     *  row 3:   ........##...
-     *  row 2:   ........#....
-     *  row 1:   .............
+     *  row 5:   ..##.....##..
+     *  row 4:   ..##########.   shaft + single-row arrowhead point
+     *  row 3:   .........##..
+     *  row 2:   ........##...
+     *  row 1:   .......##....   lower arm
      *  row 0:   .............                                        */
     static const GLubyte redo_bits[ACTION_ICON_H * 2] = {
         0x00, 0x00,  /* row 0  */
-        0x00, 0x00,  /* row 1  */
-        0x00, 0x80,  /* row 2  */
-        0x00, 0xC0,  /* row 3  */
+        0x01, 0x80,  /* row 1  */
+        0x00, 0xC0,  /* row 2  */
+        0x00, 0x60,  /* row 3  */
         0x3F, 0xF0,  /* row 4  */
-        0x3F, 0xF0,  /* row 5  */
+        0x30, 0x60,  /* row 5  */
         0x30, 0xC0,  /* row 6  */
-        0x30, 0x80,  /* row 7  */
+        0x31, 0x80,  /* row 7  */
         0x30, 0x00,  /* row 8  */
         0x30, 0x00,  /* row 9  */
         0x30, 0x00,  /* row 10 */
