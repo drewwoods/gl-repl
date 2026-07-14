@@ -260,6 +260,17 @@ typedef struct {
      * CodeLayout values without consulting app state. */
     int wrap_at_comma;
 
+    /* Display-only comment-rule ligature (1 = on). On lines whose first
+     * non-whitespace token is "//", the renderer draws any '-' in a run of
+     * two or more consecutive '-' using the full-width horizontal-bar glyph
+     * (0x12). A lone '-' stays a hyphen, and non-comment lines (including
+     * code with a trailing // comment) are left alone. This is a pure 1:1
+     * glyph swap at draw time — the underlying row / input text is unchanged,
+     * so every column, cursor index, wrap point, and hit-test position is
+     * identical to the plain hyphen text and saved files keep the '-'
+     * characters. */
+    int comment_rule_ligature;
+
     /* Active-input-row paren aids (1 = on). paren_match tints the
      * caret's matching bracket — '(' / ')' or '{' / '}'; paren_scope
      * draws a faint background band behind the text inside the caret's
