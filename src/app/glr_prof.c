@@ -53,6 +53,16 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_CODE_PANEL_TEXT_CHROME]            = { "chrome",          2, 0 },
     [PROF_CODE_PANEL_TEXT_LINES]             = { "lines",           2, 0 },
     [PROF_CODE_PANEL_OVERLAYS]               = { "overlays",        1, 0 },
+    [PROF_CODE_PANEL_OVERLAY_TABS]            = { "tabs",            2, 0 },
+    [PROF_CODE_PANEL_OVERLAY_MENU]            = { "menu",            2, 0 },
+    [PROF_CODE_PANEL_OVERLAY_MENU_LABELS]     = { "labels",          3, 0 },
+    [PROF_CODE_PANEL_OVERLAY_MENU_PINS]       = { "pins",            3, 0 },
+    [PROF_CODE_PANEL_OVERLAY_SEARCH]          = { "search",          2, 0 },
+    [PROF_CODE_PANEL_OVERLAY_STATUS]          = { "status",          2, 0 },
+    [PROF_CODE_PANEL_OVERLAY_STATUS_TEXT]     = { "text",            3, 0 },
+    [PROF_CODE_PANEL_OVERLAY_STATUS_ACTIONS]  = { "actions",         3, 0 },
+    [PROF_CODE_PANEL_OVERLAY_PICKER]          = { "picker",          2, 0 },
+    [PROF_CODE_PANEL_OVERLAY_SWATCH]          = { "num swatch",      2, 0 },
     [PROF_UI_PANELS]                         = { "UI Panels",       0, 0 },
     [PROF_SNAPSHOT]                          = { "Snapshot",        0, 0 },
     [PROF_SNAPSHOT_TRANSFORMERS]             = { "transformers",    1, 0 },
@@ -112,6 +122,9 @@ static const unsigned char k_gpu_sections[PROF_SECTION_COUNT] = {
     [PROF_CODE_PANEL_TEXT_CHROME]            = 1,
     [PROF_CODE_PANEL_TEXT_LINES]             = 1,
     [PROF_CODE_PANEL_OVERLAYS]               = 1,
+    /* Overlay children are diagnostic CPU subdivisions. The parent already
+     * owns the GPU query; nesting ten more queries would perturb the work
+     * these rows are intended to explain, especially in browser builds. */
     [PROF_UI_PANELS]                         = 1,
     [PROF_REPLAY_HUD]                        = 1,
     [PROF_PROFILE_PANEL]                     = 1,

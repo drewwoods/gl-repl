@@ -2414,6 +2414,7 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
         int text_y = h.text_y;
         int tx = cp_x + CODE_MARGIN_X;
 
+        prof_begin(PROF_CODE_PANEL_OVERLAY_STATUS_TEXT);
         ui_clr(UI_TOK_TEXT_PRIMARY);
         gl2d_draw_string((float)tx, (float)text_y, L.cmds, FONT_SMALL);
         tx += L.cmds_w;
@@ -2444,6 +2445,7 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
             gl2d_draw_string((float)tx, (float)text_y, L.cost, FONT_SMALL);
             tx += L.cost_w;
         }
+        prof_end(PROF_CODE_PANEL_OVERLAY_STATUS_TEXT);
 
         /* Right cluster, drawn from the right edge. Each chip is
          * suppressed when the left status text would collide with it;
@@ -2452,6 +2454,7 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
          * Draw all keycap geometry first, then all bitmap glyphs and
          * labels. Keeping glRect/glBegin work out of the glyph pass lets
          * gl4es coalesce the consecutive bitmap draws in web builds. */
+        prof_begin(PROF_CODE_PANEL_OVERLAY_STATUS_ACTIONS);
         if (h.undo_visible)
             repl_code_panel_draw_keycap(h.undo_kx, h.ky, h.undo_kw, h.kh);
 
@@ -2533,6 +2536,7 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
             gl2d_draw_string((float)h.help_lbl_x, (float)text_y,
                              k_statusbar_help_lbl, FONT_SMALL);
         }
+        prof_end(PROF_CODE_PANEL_OVERLAY_STATUS_ACTIONS);
     }
 
     glDisable(GL_SCISSOR_TEST);
@@ -2581,14 +2585,31 @@ void ui_repl_code_panel_render_with_chrome(const UiRenderSnapshot *snap,
      * stays the topmost chrome; the example dropdown is a later controller
      * overlay pass (glr_ctrl.c) and still overpaints both (implemented
      * per plan §4). */
+    prof_begin(PROF_CODE_PANEL_OVERLAY_TABS);
     ui_scene_tabs_render(snap);
+    prof_end(PROF_CODE_PANEL_OVERLAY_TABS);
+
+    prof_begin(PROF_CODE_PANEL_OVERLAY_MENU);
     ui_menu_bar_render(snap);
+    prof_end(PROF_CODE_PANEL_OVERLAY_MENU);
+
+    prof_begin(PROF_CODE_PANEL_OVERLAY_SEARCH);
     ui_menu_bar_render_search_overlay(snap);
+    prof_end(PROF_CODE_PANEL_OVERLAY_SEARCH);
+
+    prof_begin(PROF_CODE_PANEL_OVERLAY_STATUS);
     repl_code_panel_draw_statusbar(snap, &text_out.statusbar_slot);
+    prof_end(PROF_CODE_PANEL_OVERLAY_STATUS);
+
+    prof_begin(PROF_CODE_PANEL_OVERLAY_PICKER);
     ui_color_picker_render(&snap->color_picker,
                            snap->viewport.window_w,
                            snap->viewport.window_h);
+    prof_end(PROF_CODE_PANEL_OVERLAY_PICKER);
+
+    prof_begin(PROF_CODE_PANEL_OVERLAY_SWATCH);
     ui_numeric_swatch_render(snap);
+    prof_end(PROF_CODE_PANEL_OVERLAY_SWATCH);
     gl2d_end();
     prof_end(PROF_CODE_PANEL_OVERLAYS);
 }
