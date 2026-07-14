@@ -148,6 +148,26 @@ static void test_cpuprof_frame_time_histogram(void) {
                   prof_frame_time_histogram(small, 4), 4);
 }
 
+static void test_cpuprof_current_fps_averages_intervals(void) {
+    double now = 1000.0;
+
+    prof_test_reset();
+    prof_test_set_now_us(now);
+    prof_frame_tick();
+
+    /* These alternating intervals cover 16.667 ms per pair: 120 callbacks/s
+     * despite their uneven spacing. EMA(1 / dt) converges near 164 FPS;
+     * 1 / EMA(dt) remains centered on the actual callback throughput. */
+    for (int i = 0; i < 400; i++) {
+        now += (i & 1) ? 12666.666666 : 4000.0;
+        prof_test_set_now_us(now);
+        prof_frame_tick();
+    }
+
+    ASSERT_TRUE("current FPS is not inflated by uneven frame spacing",
+                prof_fps_current() > 115.0 && prof_fps_current() < 125.0);
+}
+
 static void test_cpuprof_histogram_saturates_16_bit_bins(void) {
     ProfHistogramBin bins[PROF_HISTOGRAM_BIN_COUNT];
 
@@ -539,6 +559,7 @@ int main(void) {
     test_cpuprof_section_histogram_direct();
     test_cpuprof_section_histogram_accum_commit();
     test_cpuprof_frame_time_histogram();
+    test_cpuprof_current_fps_averages_intervals();
     test_cpuprof_histogram_saturates_16_bit_bins();
     test_cpuprof_histogram_reset();
     test_cpuprof_log_bin_layout();

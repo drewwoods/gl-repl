@@ -62,7 +62,7 @@ typedef struct {
 
 static ProfFpsWindow g_fps_win[PROF_FPS_WIN_COUNT];
 static double g_fps_last_tick_us = 0.0;
-static double g_fps_ema = 0.0;
+static double g_fps_interval_ema_us = 0.0;
 static ProfHistogramBin g_frame_time_hist[PROF_HISTOGRAM_BIN_COUNT];
 
 static int g_prof_test_now_enabled = 0;
@@ -242,11 +242,14 @@ void prof_frame_tick(void) {
         double dt = now - g_fps_last_tick_us;
         if (dt > 0.0) {
             prof_histogram_record(g_frame_time_hist, dt);
-            double inst = 1e6 / dt;
-            g_fps_ema = (g_fps_ema == 0.0)
-                ? inst
-                : PROF_FPS_EMA_ALPHA * inst
-                  + (1.0 - PROF_FPS_EMA_ALPHA) * g_fps_ema;
+            /* Smooth elapsed time, then invert it. Averaging per-frame
+             * reciprocals (EMA(1 / dt)) biases FPS upward whenever callback
+             * spacing is uneven; 1 / EMA(dt) tracks the actual callback
+             * throughput instead. */
+            g_fps_interval_ema_us = (g_fps_interval_ema_us == 0.0)
+                ? dt
+                : PROF_FPS_EMA_ALPHA * dt
+                  + (1.0 - PROF_FPS_EMA_ALPHA) * g_fps_interval_ema_us;
         }
         for (int w = 0; w < PROF_FPS_WIN_COUNT; w++) {
             ProfFpsWindow *win = &g_fps_win[w];
@@ -271,7 +274,9 @@ void prof_frame_tick(void) {
 }
 
 double prof_fps_current(void) {
-    return g_fps_ema;
+    return g_fps_interval_ema_us > 0.0
+         ? 1e6 / g_fps_interval_ema_us
+         : 0.0;
 }
 
 double prof_fps_window_secs(int window) {
@@ -361,7 +366,7 @@ void prof_test_reset(void) {
     for (int bin_idx = 0; bin_idx < PROF_HISTOGRAM_BIN_COUNT; bin_idx++)
         g_frame_time_hist[bin_idx] = 0;
     g_fps_last_tick_us = 0.0;
-    g_fps_ema = 0.0;
+    g_fps_interval_ema_us = 0.0;
     g_prof_initialized = 0;
     g_prof_begin_hook = 0;
     g_prof_end_hook = 0;
