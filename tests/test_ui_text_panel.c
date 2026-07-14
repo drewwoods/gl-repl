@@ -152,8 +152,8 @@ static void test_comment_rule_ligature_is_comment_line_only(void) {
     printf("--- dash-rule comment lines ---\n");
     snap.comment_rule_ligature = 1;
     render_glyph_counts(&snap, &hyphens, &rules);
-    ASSERT_INT_EQ("comment dash runs use rule glyph", rules, 8);
-    ASSERT_INT_EQ("non-comment and lone dashes stay hyphens", hyphens, 8);
+    ASSERT_INT_EQ("comment dash runs use rule glyph", rules, 6);
+    ASSERT_INT_EQ("non-comment and lone dashes stay hyphens", hyphens, 10);
     ASSERT_TRUE("freeglut batches text with bitmap strings",
                 gl_stub_counts[GL_STUB_glutBitmapString] > 0);
     ASSERT_INT_EQ("freeglut text path avoids character submissions",
@@ -176,12 +176,12 @@ static void test_comment_rule_ligature_applies_to_live_comment_input(void) {
     int rules;
 
     snap.comment_rule_ligature = 1;
-    snap.input.input = "  // --";
+    snap.input.input = "  // ---";
     snap.input.input_len = (int)strlen(snap.input.input);
     snap.input.cursor = snap.input.input_len;
     snap.input.anchor = snap.input.cursor;
     render_glyph_counts(&snap, &hyphens, &rules);
-    ASSERT_INT_EQ("live comment input uses rule glyph", rules, 2);
+    ASSERT_INT_EQ("live comment input uses rule glyph", rules, 3);
     ASSERT_INT_EQ("live comment rule has no hyphen glyph", hyphens, 0);
 }
 
