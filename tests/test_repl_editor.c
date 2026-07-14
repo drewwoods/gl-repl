@@ -616,7 +616,7 @@ int main() {
                    parse_workspace_header_line("// @cfg cpu_profile = 2"), 1);
         repl_export_apply_pending_cfg();
         ASSERT_INT("legacy cpu_profile maps to compute_profile",
-                   ui_state_profile_panel().mode, PROFILE_PANEL_DETAILS);
+                   ui_state_profile_panel().mode, PROFILE_PANEL_HISTOGRAM);
         ui_state_profile_panel_mut()->mode = PROFILE_PANEL_OFF;
 
         g_panel_frac = CFG_DEFAULT_PANEL_FRAC;

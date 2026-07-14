@@ -29,6 +29,7 @@
 #include "ui/app/menu_bar.h"              /* ui_menu_bar_open_menu_id, _set_open_menu */
 #include "ui/app/view_mode_swatch.h"      /* ui_view_mode_swatch_state */
 #include "ui/app/layout.h"                /* CODE_PANEL_LAYOUT_* */
+#include "ui/support/cpuprof.h"           /* PROFILE_PANEL_* */
 #include "repl/eval.h"                    /* g_predef_vars, repl_eval_find_predef_var_idx */
 #include "subsystems/color_picker/color_picker_state.h"
 #include "repl/cfg_baseline.h"             /* repl_cfg_set_text, repl_cfg_resolve_text */
@@ -772,6 +773,20 @@ static void test_audio_config_direct_set(void) {
     glr_config_set(GLR_CONFIG_AUDIO_MODE, 99);
     ASSERT_INT("direct-set clamps to max valid",
                glr_audio_get_cfg_mode(), glr_config_state_count(GLR_CONFIG_AUDIO_MODE) - 1);
+}
+
+static void test_compute_profile_mode_names(void) {
+    ASSERT_INT("compute profile exposes four modes",
+               glr_config_state_count(GLR_CONFIG_CPU_PROFILE),
+               PROFILE_PANEL_MODE_COUNT);
+    ASSERT_STR("compute profile mode 0", glr_config_state_name(
+                   GLR_CONFIG_CPU_PROFILE, PROFILE_PANEL_OFF), "Off");
+    ASSERT_STR("compute profile mode 1", glr_config_state_name(
+                   GLR_CONFIG_CPU_PROFILE, PROFILE_PANEL_FPS), "FPS");
+    ASSERT_STR("compute profile mode 2", glr_config_state_name(
+                   GLR_CONFIG_CPU_PROFILE, PROFILE_PANEL_SECTIONS), "Sections");
+    ASSERT_STR("compute profile mode 3", glr_config_state_name(
+                   GLR_CONFIG_CPU_PROFILE, PROFILE_PANEL_HISTOGRAM), "Histogram");
 }
 
 static void test_audio_menu_actions(void) {
@@ -1879,6 +1894,7 @@ int main(void) {
     test_ascii_shortcut_modifiers();
     test_tutorial_start_applies_cfg();
     test_tutorial_menu_dispatch();
+    test_compute_profile_mode_names();
     test_audio_config_direct_set();
     test_audio_menu_actions();
     test_msaa_display_label_override();

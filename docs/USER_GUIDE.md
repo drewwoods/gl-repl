@@ -1256,12 +1256,12 @@ frame goes before you reach for the export.
 
 ### The compute profile (Ctrl+W)
 
-**Ctrl+W** cycles the compute profile through Off / Plot / Sections /
-Details. *Plot* shows a floating FPS graph; *Sections* adds the per-section
-listing **and** the section histograms; *Details* expands the listing's
-nested sub-sections.
+**Ctrl+W** cycles the compute profile through Off / FPS / Sections /
+Histogram. *FPS* shows only the frame-rate graph. *Sections* adds the full
+collapsible per-section timing tree. *Histogram* adds the section-distribution
+graph as the final, more expensive diagnostic surface.
 
-![Sections mode: the section listing (CPU/GPU/Max), the log-log section histograms, and the FPS plot](images/profile-panels.png)
+![Histogram mode: the section listing (CPU/GPU/Max), the log-log section histograms, and the FPS plot](images/profile-panels.png)
 
 Three floating panels work together:
 
@@ -1282,7 +1282,7 @@ Three floating panels work together:
   seconds, minute, and 10 minutes as three overlaid series, with the
   current rate in the corner.
 
-The histograms are the tool for *hitches*: a scene that averages 60 fps but
+Histogram mode is the tool for *hitches*: a scene that averages 60 fps but
 stutters once a second shows a clean main hump plus a second bump at the
 stall duration — and the bump's color names the section responsible. The
 histograms accumulate from load (they reset when you switch examples), so

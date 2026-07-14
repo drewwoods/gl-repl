@@ -162,10 +162,10 @@ static void test_profile_panel(void) {
     ASSERT_GL_CALLS("profile visible -> draws text", GL_STUB_glRasterPos2f, 5);
     ASSERT_GL_CALLS("profile visible -> calls glColor4f", GL_STUB_glColor4f, 1);
 
-    /* Test details mode */
+    /* Histogram mode keeps the same detailed section listing. */
     gl_stub_counts_reset();
-    { UiProfilePanelView v = pp_view(PROFILE_PANEL_DETAILS); ui_profile_panel_render(&v); }
-    ASSERT_GL_CALLS("profile details -> draws more text", GL_STUB_glRasterPos2f, 10);
+    { UiProfilePanelView v = pp_view(PROFILE_PANEL_HISTOGRAM); ui_profile_panel_render(&v); }
+    ASSERT_GL_CALLS("profile histogram -> draws detailed text", GL_STUB_glRasterPos2f, 10);
 }
 
 static void test_color_picker(void) {

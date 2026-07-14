@@ -108,7 +108,7 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     drag->var_idx = 3;
     drag->log_mode = 1;
     drag->start_value = 2.5f;
-    ui_state_profile_panel_mut()->mode = PROFILE_PANEL_DETAILS;
+    ui_state_profile_panel_mut()->mode = PROFILE_PANEL_HISTOGRAM;
 
     status = ui_state_status_mut();
     snprintf(status->text, sizeof(status->text), "%s", "state snapshot");
@@ -297,7 +297,7 @@ static void test_capture_restore_round_trip(void) {
     ASSERT_TRUE("variable drag value restored",
                 variable_panel_drag().start_value == 2.5f);
     ASSERT_INT("profile panel restored",
-               ui_state_profile_panel().mode, PROFILE_PANEL_DETAILS);
+               ui_state_profile_panel().mode, PROFILE_PANEL_HISTOGRAM);
     {
         UiStatusState status = ui_state_status();
         const EditorSearchState *search = editor_state_search();

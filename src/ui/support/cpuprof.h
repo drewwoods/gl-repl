@@ -34,14 +34,14 @@
 
 #include "support/cpuprof.h"   /* ProfHistogramBin, PROF_HISTOGRAM_BIN_COUNT */
 
-/* Compute-profile detail levels (Ctrl+W cycle). The FPS plot is a separate
- * floating panel (ui_fps_panel_*) shown at every non-OFF level; the section
- * listing panel joins it from SECTIONS up. */
+/* Compute-profile surfaces (Ctrl+W cycle). Each level adds one floating panel:
+ * FPS shows the frame-rate graph, SECTIONS adds the full collapsible timing
+ * tree, and HISTOGRAM adds the section-distribution graph. */
 typedef enum {
 	PROFILE_PANEL_OFF = 0,
-	PROFILE_PANEL_PLOT,      /* FPS plot panel only */
-	PROFILE_PANEL_SECTIONS,  /* plot + top-level section listing */
-	PROFILE_PANEL_DETAILS,   /* plot + full nested section listing */
+	PROFILE_PANEL_FPS,       /* FPS plot panel only */
+	PROFILE_PANEL_SECTIONS,  /* FPS + full collapsible section listing */
+	PROFILE_PANEL_HISTOGRAM, /* FPS + section listing + histograms */
 	PROFILE_PANEL_MODE_COUNT
 } UiProfilePanelMode;
 
@@ -50,7 +50,7 @@ typedef enum {
  * for side-by-side layout. */
 #define PROFILE_PANEL_W  384
 
-/* Session-only presentation state for the DETAILS tree. One bit per
+/* Session-only presentation state for the section tree. One bit per
  * ProfSection marks a branch whose descendants are hidden; profiling itself
  * continues unchanged while a branch is collapsed. */
 typedef unsigned long long UiProfileCollapseMask;
@@ -76,7 +76,7 @@ typedef struct {
  * times. Renders nothing if the profile panel is disabled. */
 void ui_profile_panel_render(const UiProfilePanelView *view);
 
-/* Hit-test an interactive DETAILS-tree branch. Returns its ProfSection index,
+/* Hit-test an interactive section-tree branch. Returns its ProfSection index,
  * UI_PROFILE_PANEL_TOGGLE_ALL for the header control, or
  * UI_PROFILE_PANEL_HIT_NONE. mx/my use GLUT window coordinates (y down).
  * ui_profile_panel_toggle_mask() is the pure state transition applied by the
@@ -116,8 +116,7 @@ int  ui_fps_panel_height(void);
  * section overlaid, additively blended, so their distributions can be compared
  * directly instead of through the section listing's single EMA number. Nested
  * detail sections are never plotted — forty overlaid series would be noise —
- * so the panel looks the same in SECTIONS and DETAILS mode, which is also
- * where it is visible.
+ * so it is shown only by the final HISTOGRAM mode.
  *
  * Both axes are logarithmic. Time (x) because the bins themselves are
  * log-spaced and the axis is linear in bin index: the sections span four or
@@ -127,7 +126,7 @@ int  ui_fps_panel_height(void);
  * spread-out neighbour to the baseline. */
 typedef struct {
     int window_w, window_h;
-    int visible;            /* profile mode is SECTIONS or DETAILS */
+    int visible;            /* profile mode is PROFILE_PANEL_HISTOGRAM */
     int panel_x, panel_y;   /* resolved position, controller-baked */
 } UiHistogramPanelView;
 

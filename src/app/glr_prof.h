@@ -22,13 +22,12 @@ int glr_prof_section_is_gpu(ProfSection s);
  * boundary has a real cost on some stacks (GL-on-Metal can split command
  * encoders at it), and on tile-deferred GPUs more segments also means more
  * overlap inflation (see gpuprof.h) — so the controller dials capture to
- * what the panel can display: hidden panel = no queries at all, ON = the
- * depth-0 rows it shows (~17 segments/frame), DETAILS = the full subset.
+ * what the panel can display: Off/FPS = no queries at all, while Sections
+ * and Histogram capture the full subset shown by the collapsible tree.
  * Set once per frame, before gpu_prof_frame_begin, so a frame is captured
  * at a single granularity. Default is ALL. */
 typedef enum {
     GLR_PROF_GPU_CAPTURE_OFF = 0,    /* issue no timer queries */
-    GLR_PROF_GPU_CAPTURE_TOP_LEVEL,  /* depth-0 GPU sections only */
     GLR_PROF_GPU_CAPTURE_ALL         /* the full GPU subset, children included */
 } GlrProfGpuCaptureMode;
 
