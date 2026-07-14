@@ -146,7 +146,15 @@ static void test_help_overlay(void) {
 }
 
 static void test_profile_panel(void) {
+    UiProfileCollapseMask all_collapsed = ui_profile_panel_toggle_mask(
+        0, UI_PROFILE_PANEL_TOGGLE_ALL);
+
     printf("Testing Profile Panel...\n");
+    ASSERT_TRUE("profile tree has collapsible branches", all_collapsed != 0);
+    ASSERT_TRUE("profile tree starts with every branch collapsed",
+                (UiProfileCollapseMask)
+                    ui_state_profile_panel().collapsed_sections ==
+                all_collapsed);
     gl_stub_counts_reset();
 
     { UiProfilePanelView v = pp_view(PROFILE_PANEL_OFF); ui_profile_panel_render(&v); }
