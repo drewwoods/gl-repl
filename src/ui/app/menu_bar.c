@@ -15,6 +15,7 @@
 #include "repl/state_views.h"
 #include "subsystems/replay/replay.h"   /* ReplayState (PLAYING / PAUSED / DONE) enum values */
 #include "subsystems/tutorial/tutorial_state.h"
+#include "support/cpuprof.h"
 #include "ui/app/state.h"
 #include "ui/app/menu_bar.h"
 #include "ui/core/metrics.h"
@@ -2051,14 +2052,18 @@ void ui_menu_bar_render(const UiRenderSnapshot *snap) {
     hover_menu = ui_menu_bar_menu_hit(snap->pointer.mouse_x, snap->pointer.mouse_y);
     hover_pin  = ui_menu_bar_pin_hit(snap->pointer.mouse_x, snap->pointer.mouse_y);
 
+    prof_begin(PROF_CODE_PANEL_OVERLAY_MENU_LABELS);
     paint_menu_labels(menu_x, menu_w, by, bh, hover_menu);
+    prof_end(PROF_CODE_PANEL_OVERLAY_MENU_LABELS);
 
     pin_block_x = pin_x[PIN_SEARCH];
     pin_block_w = cp_x + cp_w - CODE_MARGIN_X - pin_block_x;
     ui_clr(UI_TOK_SURFACE);
     glRectf((float)pin_block_x, (float)by, (float)pin_block_x + (float)pin_block_w, (float)by + (float)bh);
 
+    prof_begin(PROF_CODE_PANEL_OVERLAY_MENU_PINS);
     paint_pin_buttons(snap, pin_x, pin_w, by, bh, hover_pin, snap->replay);
+    prof_end(PROF_CODE_PANEL_OVERLAY_MENU_PINS);
 
     glColor4fv(k_menubar_bottom_rule);
     glBegin(GL_LINES);

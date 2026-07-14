@@ -56,6 +56,16 @@ typedef enum {
     PROF_CODE_PANEL_TEXT_CHROME, /* background/border/divider + scrollbar */
     PROF_CODE_PANEL_TEXT_LINES,  /* row draw loop */
     PROF_CODE_PANEL_OVERLAYS, /* tabs/menubar/search/statusbar/picker/swatch */
+    PROF_CODE_PANEL_OVERLAY_TABS,
+    PROF_CODE_PANEL_OVERLAY_MENU,
+    PROF_CODE_PANEL_OVERLAY_MENU_LABELS,
+    PROF_CODE_PANEL_OVERLAY_MENU_PINS,
+    PROF_CODE_PANEL_OVERLAY_SEARCH,
+    PROF_CODE_PANEL_OVERLAY_STATUS,
+    PROF_CODE_PANEL_OVERLAY_STATUS_TEXT,
+    PROF_CODE_PANEL_OVERLAY_STATUS_ACTIONS,
+    PROF_CODE_PANEL_OVERLAY_PICKER,
+    PROF_CODE_PANEL_OVERLAY_SWATCH,
     PROF_UI_PANELS,     /* autocomplete + dropdown + var + config + help */
     PROF_SNAPSHOT,                 /* aggregate snapshot production by controller */
     PROF_SNAPSHOT_TRANSFORMERS,    /* push_color_transformers (per-line scan) */
