@@ -230,11 +230,9 @@ int main(void) {
                     glr_state_presentation().code_focus == 0);
     }
 
-    /* Regression: at the default left layout (800x260, panel_frac
-     * 0.45) the right cluster would collide with the left status text,
-     * so the focus keycap must be SUPPRESSED — no hit-test pixel
-     * returns UI_HIT_CODE_FOCUS_TOGGLE (no overlapping draw). The help
-     * chip sits further right and still fits. */
+    /* Compact focus/help keycaps both fit at the default left layout
+     * now that their persistent text labels live in hover tooltips.
+     * This is the space-saving behavior that motivated the tooltip. */
     {
         int found_focus = 0;
         int found_help = 0;
@@ -251,8 +249,8 @@ int main(void) {
                 else if (hk.kind == UI_HIT_HELP_TOGGLE)  found_help = 1;
             }
         }
-        ASSERT_TRUE("focus keycap suppressed at narrow default width",
-                    found_focus == 0);
+        ASSERT_TRUE("compact focus keycap fits at narrow default width",
+                    found_focus == 1);
         ASSERT_TRUE("help keycap still fits at narrow default width",
                     found_help == 1);
     }
