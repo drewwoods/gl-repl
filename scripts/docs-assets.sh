@@ -1124,7 +1124,7 @@ if want sc-ringed-planet; then
     gif "$SHOW/ringed-planet.gif" 200 2 20 560 --example "Ringed planet (nebula skies)"
 fi
 if want sc-lit-cube; then
-    still "$SHOW/lit-cube.png" $PLAIN_FRAMES 16 --example "Lit cube"
+    still "$SHOW/lit-cube.png" $PLAIN_FRAMES 16 --example "gl-repl logo"
 fi
 
 # Particles & effects.

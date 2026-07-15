@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
-"""Validate USER_GUIDE's advertised built-in examples against examples/catalog.ini.
+"""Validate documented built-in examples against examples/catalog.ini.
 
 The compiled-in example set is generated from examples/catalog.ini
 (scripts/gen_examples.py), so the catalog is ground truth. This guard keeps
-docs/USER_GUIDE.md's "Built-in Examples" section from drifting:
+example references in the top-level docs/*.md files from drifting, and also
+checks docs/USER_GUIDE.md's "Built-in Examples" section:
 
   - the advertised count ("the N built-in examples") must equal the catalog
     size;
   - the numbered table in that section must list every catalog entry with
     its exact 1-based index and display name — a mid-catalog insert that
     shifts later indices fails here instead of silently misnumbering;
-  - `--example "<name>"` references anywhere in the guide must name a real
-    example (the CLI matches names case-insensitively);
-  - bare numeric `--example <idx>` references are rejected outright: they
+  - `--example "<name>"` references in any top-level docs/*.md file must name
+    a real example (the CLI matches names case-insensitively);
+  - bare numeric `--example <idx>` references in those docs are rejected: they
     break silently on any catalog insert — use the quoted-name form.
 """
 
@@ -26,6 +27,11 @@ sys.dont_write_bytecode = True  # keep scripts/__pycache__ out of the tree
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import gen_examples
+
+
+QUOTED_EXAMPLE_RE = re.compile(
+    r"--example\s+(?:\"([^\"\n]+)\"|'([^'\n]+)')")
+NUMERIC_EXAMPLE_RE = re.compile(r"--example\s+\d+")
 
 
 def repo_root() -> Path:
@@ -70,9 +76,41 @@ def parse_guide_table(section: str) -> dict[int, str]:
     return table
 
 
+def line_number(text: str, offset: int) -> int:
+    return text.count("\n", 0, offset) + 1
+
+
+def doc_reference_failures(path: Path, text: str,
+                           known: set[str]) -> list[str]:
+    """Return stale or insertion-fragile --example references in one doc."""
+    failures: list[str] = []
+    for match in QUOTED_EXAMPLE_RE.finditer(text):
+        ref = match.group(1) or match.group(2)
+        # Documentation syntax placeholders are not catalog references.
+        if ref.startswith("<") and ref.endswith(">"):
+            continue
+        if ref.lower() not in known:
+            failures.append(
+                f"{path.name}:{line_number(text, match.start())}: "
+                f"--example reference {ref!r} names no catalog example")
+
+    for match in NUMERIC_EXAMPLE_RE.finditer(text):
+        line_start = text.rfind("\n", 0, match.start()) + 1
+        line_end = text.find("\n", match.end())
+        if line_end < 0:
+            line_end = len(text)
+        failures.append(
+            f"{path.name}:{line_number(text, match.start())}: numeric index in "
+            f"{text[line_start:line_end].strip()!r} — indices shift on catalog "
+            f'inserts; use --example "<name>"')
+    return failures
+
+
 def main() -> int:
     root = repo_root()
-    guide = (root / "docs" / "USER_GUIDE.md").read_text(encoding="utf-8")
+    docs = sorted((root / "docs").glob("*.md"))
+    guide_path = root / "docs" / "USER_GUIDE.md"
+    guide = guide_path.read_text(encoding="utf-8")
 
     try:
         entries = gen_examples.read_catalog(root / "examples" / "catalog.ini")
@@ -109,23 +147,17 @@ def main() -> int:
             f"({len(names)} examples)")
 
     known = {name.lower() for name in names}
-    for ref in re.findall(r'--example "([^"]+)"', guide):
-        if ref.lower() not in known:
-            failures.append(
-                f'--example reference: {ref!r} names no catalog example')
-    for line in guide.splitlines():
-        if re.search(r"--example \d", line):
-            failures.append(
-                f"--example reference: numeric index in {line.strip()!r} — "
-                f"indices shift on catalog inserts; use --example \"<name>\"")
+    for path in docs:
+        text = guide if path == guide_path else path.read_text(encoding="utf-8")
+        failures.extend(doc_reference_failures(path, text, known))
 
     if failures:
-        print("USER_GUIDE example drift check failed:", file=sys.stderr)
+        print("documentation example drift check failed:", file=sys.stderr)
         for failure in failures:
             print(f"  - {failure}", file=sys.stderr)
         return 1
 
-    print(f"user-guide-examples OK ({len(names)} examples)")
+    print(f"doc-examples OK ({len(names)} examples; {len(docs)} docs)")
     return 0
 
 
