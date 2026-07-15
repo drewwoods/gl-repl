@@ -978,9 +978,28 @@ static void test_gl_state_report_tracks_explicit_writes_before_checkpoint(void) 
         ASSERT_STR("depth func default", row->default_value, "GL_LESS");
         ASSERT_INT("explicit default depth func marked equal",
                    row->differs_from_default, 0);
+        ASSERT_INT("depth func source is display",
+                   row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
+        ASSERT_INT("depth func source line is retained",
+                   row->source.source_line_idx, 0);
     }
-    ASSERT_TRUE("later blend write excluded from checkpoint",
-                gl_state_test_find_row(&report, "GL_BLEND") == NULL);
+    row = gl_state_test_find_row(&report, "GL_BLEND");
+    ASSERT_TRUE("init blend state precedes display checkpoint", row != NULL);
+    if (row) {
+        ASSERT_STR("init blend current", row->current, "GL_TRUE");
+        ASSERT_INT("init blend source is init",
+                   row->source.kind, REPL_GL_STATE_SOURCE_INIT);
+        ASSERT_INT("init source has no display line",
+                   row->source.source_line_idx, -1);
+    }
+    row = gl_state_test_find_row(&report, "GL_COLOR_CLEAR_VALUE");
+    ASSERT_TRUE("init clear color is included", row != NULL);
+    if (row) {
+        ASSERT_STR("init clear color current", row->current,
+                   "(0.1, 0.1, 0.1, 1)");
+        ASSERT_INT("init clear color source is init",
+                   row->source.kind, REPL_GL_STATE_SOURCE_INIT);
+    }
 
     repl_gl_state_report_at_line(program, 3, &report);
     row = gl_state_test_find_row(&report, "GL_BLEND");
@@ -989,14 +1008,22 @@ static void test_gl_state_report_tracks_explicit_writes_before_checkpoint(void) 
         ASSERT_STR("enabled blend current", row->current, "GL_TRUE");
         ASSERT_STR("blend default", row->default_value, "GL_FALSE");
         ASSERT_INT("enabled blend differs", row->differs_from_default, 1);
+        ASSERT_INT("explicit same-value blend write becomes latest source",
+                   row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
+        ASSERT_INT("blend display source line", row->source.source_line_idx, 2);
     }
 
     repl_gl_state_report_at_line(program, 4, &report);
     row = gl_state_test_find_row(&report, "GL_BLEND");
     ASSERT_TRUE("write restored to default remains reported", row != NULL);
-    if (row)
+    if (row) {
         ASSERT_INT("disabled blend equals default",
                    row->differs_from_default, 0);
+        ASSERT_INT("disabled blend source is display",
+                   row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
+        ASSERT_INT("disabled blend source line",
+                   row->source.source_line_idx, 3);
+    }
 
     repl_gl_state_report_at_line(program, 5, &report);
     row = gl_state_test_find_row(&report, "GL_MULTISAMPLE");
@@ -1005,20 +1032,28 @@ static void test_gl_state_report_tracks_explicit_writes_before_checkpoint(void) 
         ASSERT_STR("multisample OpenGL default", row->default_value, "GL_TRUE");
         ASSERT_INT("enabled multisample equals initial state",
                    row->differs_from_default, 0);
+        ASSERT_INT("multisample source is display",
+                   row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
+        ASSERT_INT("multisample source line", row->source.source_line_idx, 4);
     }
 
     repl_gl_state_report_at_line(program, 6, &report);
     row = gl_state_test_find_row(&report, "GL_CURRENT_COLOR");
     ASSERT_TRUE("explicit default color is reported", row != NULL);
-    if (row)
+    if (row) {
         ASSERT_INT("white current color equals default",
                    row->differs_from_default, 0);
+        ASSERT_INT("color source is display",
+                   row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
+        ASSERT_INT("color source line", row->source.source_line_idx, 5);
+    }
 }
 
 static void test_gl_state_report_uses_flat_call_provenance(void) {
     GLCmd cmd = gl_state_test_cmd(CMD_CLEAR_COLOR, 20);
     FlatProgramView program;
     ReplGlStateReport report;
+    const ReplGlStateReportRow *row;
 
     cmd.root_call_src_cmd_idx = 0;
     cmd.call_src_cmd_idx = 10;
@@ -1028,13 +1063,23 @@ static void test_gl_state_report_uses_flat_call_provenance(void) {
     program.cmd_count = 1;
 
     repl_gl_state_report_at_line(program, 1, &report);
-    ASSERT_TRUE("expanded command uses outer call before checkpoint",
-                gl_state_test_find_row(&report, "GL_COLOR_CLEAR_VALUE") != NULL);
+    row = gl_state_test_find_row(&report, "GL_COLOR_CLEAR_VALUE");
+    ASSERT_TRUE("expanded command uses outer call before checkpoint", row != NULL);
+    if (row) {
+        ASSERT_INT("expanded command records display source",
+                   row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
+        ASSERT_INT("expanded command records lexical source line",
+                   row->source.source_line_idx, 20);
+    }
 
     cmd.root_call_src_cmd_idx = 3;
     repl_gl_state_report_at_line(program, 1, &report);
-    ASSERT_TRUE("expanded command after checkpoint is excluded",
-                gl_state_test_find_row(&report, "GL_COLOR_CLEAR_VALUE") == NULL);
+    row = gl_state_test_find_row(&report, "GL_COLOR_CLEAR_VALUE");
+    ASSERT_TRUE("init clear color remains when expanded command is excluded",
+                row != NULL);
+    if (row)
+        ASSERT_INT("excluded expanded command leaves init as latest source",
+                   row->source.kind, REPL_GL_STATE_SOURCE_INIT);
 }
 
 int main(void) {

@@ -1295,6 +1295,8 @@ static void test_right_click_empty_line_toggles_gl_state_report(void) {
     int x = -1;
     int y = -1;
     int found_color = 0;
+    int found_init_state = 0;
+    int found_display_color = 0;
     int i;
 
     printf("--- imrepl_ctrl right-click blank OpenGL state report ---\n");
@@ -1341,10 +1343,18 @@ static void test_right_click_empty_line_toggles_gl_state_report(void) {
     ASSERT_TRUE("popup report has touched state",
                 view.report && view.report->count > 0);
     for (i = 0; view.report && i < view.report->count; i++) {
-        if (strcmp(view.report->rows[i].name, "GL_CURRENT_COLOR") == 0)
+        const ReplGlStateReportRow *row = &view.report->rows[i];
+        if (row->source.kind == REPL_GL_STATE_SOURCE_INIT)
+            found_init_state = 1;
+        if (strcmp(row->name, "GL_CURRENT_COLOR") == 0) {
             found_color = 1;
+            if (row->source.kind == REPL_GL_STATE_SOURCE_DISPLAY)
+                found_display_color = 1;
+        }
     }
+    ASSERT_TRUE("popup report includes init state", found_init_state);
     ASSERT_TRUE("popup report includes touched color state", found_color);
+    ASSERT_TRUE("popup distinguishes display color source", found_display_color);
 
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
     ASSERT_INT("second right-click on anchor closes report",

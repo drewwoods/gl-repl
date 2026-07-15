@@ -1,13 +1,14 @@
 /*
  * src/repl/gl_state_inspector.c - Pure OpenGL state fold for source checkpoints.
  *
- * Defaults below come from the OpenGL 2.1 state tables (chapter 6.2).  This
- * module intentionally models the state the REPL can author, not the app's
- * startup bootstrap (which enables blending and changes the clear color).
+ * Defaults below come from the OpenGL 2.1 state tables (chapter 6.2). The fold
+ * starts with the effective init() bootstrap, then applies display commands up
+ * to the requested source checkpoint while preserving the latest source.
  */
 #include "repl/gl_state_inspector.h"
 
 #include "repl/command_spec.h"
+#include "repl/init_state.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -33,11 +34,13 @@ typedef struct {
     int current;
     int default_value;
     int touched;
+    ReplGlStateChangeSource source;
 } ReplGlTrackedCap;
 
 typedef struct {
     float value[4];
     int touched;
+    ReplGlStateChangeSource source;
 } ReplGlTrackedMaterialValue;
 
 typedef struct {
@@ -48,23 +51,31 @@ typedef struct {
     float current_normal[3];
     int current_color_touched;
     int current_normal_touched;
+    ReplGlStateChangeSource current_color_source;
+    ReplGlStateChangeSource current_normal_source;
 
     GLenum shade_model;
     int shade_model_touched;
+    ReplGlStateChangeSource shade_model_source;
 
     float matrix_stack[REPL_GL_STATE_MATRIX_STACK_MAX][16];
     int matrix_top;
     int matrix_touched;
     int matrix_depth_touched;
+    ReplGlStateChangeSource matrix_source;
+    ReplGlStateChangeSource matrix_depth_source;
 
     GLenum color_material_face;
     GLenum color_material_mode;
     int color_material_touched;
+    ReplGlStateChangeSource color_material_source;
 
     int light_model_local_viewer;
     int light_model_two_side;
     int light_model_local_viewer_touched;
     int light_model_two_side_touched;
+    ReplGlStateChangeSource light_model_local_viewer_source;
+    ReplGlStateChangeSource light_model_two_side_source;
 
     GLenum front_face;
     GLenum cull_face;
@@ -72,6 +83,9 @@ typedef struct {
     int front_face_touched;
     int cull_face_touched;
     int depth_func_touched;
+    ReplGlStateChangeSource front_face_source;
+    ReplGlStateChangeSource cull_face_source;
+    ReplGlStateChangeSource depth_func_source;
 
     ReplGlTrackedMaterialValue
         materials[REPL_GL_STATE_MATERIAL_FACES][REPL_GL_STATE_MATERIAL_PROPS];
@@ -85,13 +99,19 @@ typedef struct {
     int line_width_touched;
     int line_stipple_touched;
     int point_attenuation_touched;
+    ReplGlStateChangeSource point_size_source;
+    ReplGlStateChangeSource line_width_source;
+    ReplGlStateChangeSource line_stipple_source;
+    ReplGlStateChangeSource point_attenuation_source;
 
     GLenum blend_src;
     GLenum blend_dst;
     int blend_func_touched;
+    ReplGlStateChangeSource blend_func_source;
 
     float clear_color[4];
     int clear_color_touched;
+    ReplGlStateChangeSource clear_color_source;
 
     int depth_mask;
     int color_mask[4];
@@ -99,12 +119,17 @@ typedef struct {
     int depth_mask_touched;
     int color_mask_touched;
     int edge_flag_touched;
+    ReplGlStateChangeSource depth_mask_source;
+    ReplGlStateChangeSource color_mask_source;
+    ReplGlStateChangeSource edge_flag_source;
 
     float raster_pos[4];
     int raster_pos_touched;
+    ReplGlStateChangeSource raster_pos_source;
 
     float clip_plane[REPL_GL_STATE_CLIP_PLANES][4];
     int clip_plane_touched[REPL_GL_STATE_CLIP_PLANES];
+    ReplGlStateChangeSource clip_plane_source[REPL_GL_STATE_CLIP_PLANES];
 } ReplGlTrackedState;
 
 static const ReplEnumCommandSpec *gl_state_enum_spec(CmdType type) {
@@ -314,7 +339,8 @@ static int gl_state_material_prop(GLenum pname) {
 
 static void gl_state_set_material(ReplGlTrackedState *s, GLenum face,
                                   GLenum pname, const float *value,
-                                  int value_count) {
+                                  int value_count,
+                                  ReplGlStateChangeSource source) {
     int lo = gl_state_material_face_lo(face);
     int hi = gl_state_material_face_hi(face);
     int props[2];
@@ -342,16 +368,18 @@ static void gl_state_set_material(ReplGlTrackedState *s, GLenum face,
             for (i = 0; i < count; i++)
                 dst->value[i] = value[i];
             dst->touched = 1;
+            dst->source = source;
         }
     }
 }
 
-static void gl_state_apply_color_material(ReplGlTrackedState *s) {
+static void gl_state_apply_color_material(
+    ReplGlTrackedState *s, ReplGlStateChangeSource source) {
     if (!gl_state_cap_enabled(s, GL_COLOR_MATERIAL))
         return;
     gl_state_set_material(s, s->color_material_face,
                           s->color_material_mode,
-                          s->current_color, 4);
+                          s->current_color, 4, source);
 }
 
 static int gl_state_execution_anchor(const GLCmd *cmd) {
@@ -370,7 +398,8 @@ static int gl_state_command_precedes(const GLCmd *cmd, int source_line_idx) {
     return anchor >= 0 && anchor < source_line_idx;
 }
 
-static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd) {
+static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd,
+                               ReplGlStateChangeSource source) {
     ReplGlTrackedCap *cap;
     int i;
 
@@ -381,8 +410,9 @@ static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd) {
         if (cap) {
             cap->current = cmd->type == CMD_ENABLE;
             cap->touched = 1;
+            cap->source = source;
             if (cap->cap == GL_COLOR_MATERIAL && cap->current)
-                gl_state_apply_color_material(s);
+                gl_state_apply_color_material(s, source);
         }
         break;
     case CMD_COLOR3F:
@@ -392,15 +422,18 @@ static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd) {
         s->current_color[2] = cmd->args[2];
         s->current_color[3] = cmd->type == CMD_COLOR4F ? cmd->args[3] : 1.0f;
         s->current_color_touched = 1;
-        gl_state_apply_color_material(s);
+        s->current_color_source = source;
+        gl_state_apply_color_material(s, source);
         break;
     case CMD_NORMAL3F:
         memcpy(s->current_normal, cmd->args, 3 * sizeof(float));
         s->current_normal_touched = 1;
+        s->current_normal_source = source;
         break;
     case CMD_SHADE_MODEL:
         s->shade_model = (GLenum)cmd->args[0];
         s->shade_model_touched = 1;
+        s->shade_model_source = source;
         break;
     case CMD_PUSH_MATRIX:
         if (s->matrix_top + 1 < REPL_GL_STATE_MATRIX_STACK_MAX) {
@@ -409,120 +442,145 @@ static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd) {
             s->matrix_top++;
         }
         s->matrix_depth_touched = 1;
+        s->matrix_depth_source = source;
         break;
     case CMD_POP_MATRIX:
         if (s->matrix_top > 0)
             s->matrix_top--;
         s->matrix_touched = 1;
         s->matrix_depth_touched = 1;
+        s->matrix_source = source;
+        s->matrix_depth_source = source;
         break;
     case CMD_LOAD_IDENTITY:
         gl_state_mat_identity(s->matrix_stack[s->matrix_top]);
         s->matrix_touched = 1;
+        s->matrix_source = source;
         break;
     case CMD_TRANSLATE3F:
         gl_state_mat_translate(s->matrix_stack[s->matrix_top],
                                cmd->args[0], cmd->args[1], cmd->args[2]);
         s->matrix_touched = 1;
+        s->matrix_source = source;
         break;
     case CMD_SCALEF:
         gl_state_mat_scale(s->matrix_stack[s->matrix_top],
                            cmd->args[0], cmd->args[1], cmd->args[2]);
         s->matrix_touched = 1;
+        s->matrix_source = source;
         break;
     case CMD_ROTATEF:
         gl_state_mat_rotate(s->matrix_stack[s->matrix_top],
                             cmd->args[0], cmd->args[1],
                             cmd->args[2], cmd->args[3]);
         s->matrix_touched = 1;
+        s->matrix_source = source;
         break;
     case CMD_COLOR_MATERIAL:
         s->color_material_face = (GLenum)cmd->args[0];
         s->color_material_mode = (GLenum)cmd->args[1];
         s->color_material_touched = 1;
-        gl_state_apply_color_material(s);
+        s->color_material_source = source;
+        gl_state_apply_color_material(s, source);
         break;
     case CMD_LIGHT_MODEL_I:
         if ((GLenum)cmd->args[0] == GL_LIGHT_MODEL_LOCAL_VIEWER) {
             s->light_model_local_viewer = (int)cmd->args[1];
             s->light_model_local_viewer_touched = 1;
+            s->light_model_local_viewer_source = source;
         } else if ((GLenum)cmd->args[0] == GL_LIGHT_MODEL_TWO_SIDE) {
             s->light_model_two_side = (int)cmd->args[1];
             s->light_model_two_side_touched = 1;
+            s->light_model_two_side_source = source;
         }
         break;
     case CMD_FRONT_FACE:
         s->front_face = (GLenum)cmd->args[0];
         s->front_face_touched = 1;
+        s->front_face_source = source;
         break;
     case CMD_CULL_FACE:
         s->cull_face = (GLenum)cmd->args[0];
         s->cull_face_touched = 1;
+        s->cull_face_source = source;
         break;
     case CMD_DEPTH_FUNC:
         s->depth_func = (GLenum)cmd->args[0];
         s->depth_func_touched = 1;
+        s->depth_func_source = source;
         break;
     case CMD_MATERIALFV:
         gl_state_set_material(s, (GLenum)cmd->args[0],
                               (GLenum)cmd->args[1], &cmd->args[2],
-                              cmd->num_args - 2);
+                              cmd->num_args - 2, source);
         break;
     case CMD_MATERIALF:
         gl_state_set_material(s, (GLenum)cmd->args[0],
-                              (GLenum)cmd->args[1], &cmd->args[2], 1);
+                              (GLenum)cmd->args[1], &cmd->args[2], 1,
+                              source);
         break;
     case CMD_POINT_SIZE:
         s->point_size = cmd->args[0];
         s->point_size_touched = 1;
+        s->point_size_source = source;
         break;
     case CMD_LINE_WIDTH:
         s->line_width = cmd->args[0];
         s->line_width_touched = 1;
+        s->line_width_source = source;
         break;
     case CMD_LINE_STIPPLE:
         s->line_stipple_repeat = (int)cmd->args[0];
         s->line_stipple_pattern = (unsigned int)(GLushort)cmd->args[1];
         s->line_stipple_touched = 1;
+        s->line_stipple_source = source;
         break;
     case CMD_POINT_PARAMETER_FV:
         if ((GLenum)cmd->args[0] == GL_POINT_DISTANCE_ATTENUATION) {
             memcpy(s->point_attenuation, &cmd->args[1], 3 * sizeof(float));
             s->point_attenuation_touched = 1;
+            s->point_attenuation_source = source;
         }
         break;
     case CMD_BLEND_FUNC:
         s->blend_src = (GLenum)cmd->args[0];
         s->blend_dst = (GLenum)cmd->args[1];
         s->blend_func_touched = 1;
+        s->blend_func_source = source;
         break;
     case CMD_CLEAR_COLOR:
         memcpy(s->clear_color, cmd->args, 4 * sizeof(float));
         s->clear_color_touched = 1;
+        s->clear_color_source = source;
         break;
     case CMD_DEPTH_MASK:
         s->depth_mask = cmd->args[0] != 0.0f;
         s->depth_mask_touched = 1;
+        s->depth_mask_source = source;
         break;
     case CMD_COLOR_MASK:
         for (i = 0; i < 4; i++)
             s->color_mask[i] = cmd->args[i] != 0.0f;
         s->color_mask_touched = 1;
+        s->color_mask_source = source;
         break;
     case CMD_EDGE_FLAG:
         s->edge_flag = cmd->args[0] != 0.0f;
         s->edge_flag_touched = 1;
+        s->edge_flag_source = source;
         break;
     case CMD_RASTER_POS3F:
         memcpy(s->raster_pos, cmd->args, 3 * sizeof(float));
         s->raster_pos[3] = 1.0f;
         s->raster_pos_touched = 1;
+        s->raster_pos_source = source;
         break;
     case CMD_CLIP_PLANE: {
         int plane = (int)((GLenum)cmd->args[0] - GL_CLIP_PLANE0);
         if (plane >= 0 && plane < REPL_GL_STATE_CLIP_PLANES) {
             memcpy(s->clip_plane[plane], &cmd->args[1], 4 * sizeof(float));
             s->clip_plane_touched[plane] = 1;
+            s->clip_plane_source[plane] = source;
         }
         break;
     }
@@ -552,6 +610,12 @@ static ReplGlStateReportRow *gl_state_report_row(ReplGlStateReport *out,
     memset(row, 0, sizeof(*row));
     snprintf(row->name, sizeof(row->name), "%s", name ? name : "");
     return row;
+}
+
+static void gl_state_report_set_last_source(
+    ReplGlStateReport *out, ReplGlStateChangeSource source) {
+    if (out && out->count > 0)
+        out->rows[out->count - 1].source = source;
 }
 
 static void gl_state_report_bool(ReplGlStateReport *out, const char *name,
@@ -681,49 +745,76 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
     static const float clip_default[4] = { 0, 0, 0, 0 };
     int i, face, prop;
 
-    for (i = 0; i < s->cap_count; i++)
-        if (s->caps[i].touched)
+    for (i = 0; i < s->cap_count; i++) {
+        if (s->caps[i].touched) {
             gl_state_report_bool(out, s->caps[i].name,
                                  s->caps[i].current,
                                  s->caps[i].default_value);
+            gl_state_report_set_last_source(out, s->caps[i].source);
+        }
+    }
 
-    if (s->current_color_touched)
+    if (s->current_color_touched) {
         gl_state_report_vec(out, "GL_CURRENT_COLOR", s->current_color,
                             color_default, 4);
-    if (s->current_normal_touched)
+        gl_state_report_set_last_source(out, s->current_color_source);
+    }
+    if (s->current_normal_touched) {
         gl_state_report_vec(out, "GL_CURRENT_NORMAL", s->current_normal,
                             normal_default, 3);
-    if (s->shade_model_touched)
+        gl_state_report_set_last_source(out, s->current_normal_source);
+    }
+    if (s->shade_model_touched) {
         gl_state_report_enum(out, "GL_SHADE_MODEL", CMD_SHADE_MODEL, 0,
                              s->shade_model, GL_SMOOTH);
-    if (s->matrix_touched)
+        gl_state_report_set_last_source(out, s->shade_model_source);
+    }
+    if (s->matrix_touched) {
         gl_state_report_matrix(out, s->matrix_stack[s->matrix_top]);
-    if (s->matrix_depth_touched)
+        gl_state_report_set_last_source(out, s->matrix_source);
+    }
+    if (s->matrix_depth_touched) {
         gl_state_report_int(out, "GL_MODELVIEW_STACK_DEPTH",
                             s->matrix_top + 1, 1);
+        gl_state_report_set_last_source(out, s->matrix_depth_source);
+    }
     if (s->color_material_touched) {
         gl_state_report_enum(out, "GL_COLOR_MATERIAL_FACE",
                              CMD_COLOR_MATERIAL, 0,
                              s->color_material_face, GL_FRONT_AND_BACK);
+        gl_state_report_set_last_source(out, s->color_material_source);
         gl_state_report_enum(out, "GL_COLOR_MATERIAL_PARAMETER",
                              CMD_COLOR_MATERIAL, 1,
                              s->color_material_mode, GL_AMBIENT_AND_DIFFUSE);
+        gl_state_report_set_last_source(out, s->color_material_source);
     }
-    if (s->light_model_local_viewer_touched)
+    if (s->light_model_local_viewer_touched) {
         gl_state_report_bool(out, "GL_LIGHT_MODEL_LOCAL_VIEWER",
                              s->light_model_local_viewer, 0);
-    if (s->light_model_two_side_touched)
+        gl_state_report_set_last_source(out,
+                                        s->light_model_local_viewer_source);
+    }
+    if (s->light_model_two_side_touched) {
         gl_state_report_bool(out, "GL_LIGHT_MODEL_TWO_SIDE",
                              s->light_model_two_side, 0);
-    if (s->front_face_touched)
+        gl_state_report_set_last_source(out,
+                                        s->light_model_two_side_source);
+    }
+    if (s->front_face_touched) {
         gl_state_report_enum(out, "GL_FRONT_FACE", CMD_FRONT_FACE, 0,
                              s->front_face, GL_CCW);
-    if (s->cull_face_touched)
+        gl_state_report_set_last_source(out, s->front_face_source);
+    }
+    if (s->cull_face_touched) {
         gl_state_report_enum(out, "GL_CULL_FACE_MODE", CMD_CULL_FACE, 0,
                              s->cull_face, GL_BACK);
-    if (s->depth_func_touched)
+        gl_state_report_set_last_source(out, s->cull_face_source);
+    }
+    if (s->depth_func_touched) {
         gl_state_report_enum(out, "GL_DEPTH_FUNC", CMD_DEPTH_FUNC, 0,
                              s->depth_func, GL_LESS);
+        gl_state_report_set_last_source(out, s->depth_func_source);
+    }
 
     for (face = 0; face < REPL_GL_STATE_MATERIAL_FACES; face++) {
         for (prop = 0; prop < REPL_GL_STATE_MATERIAL_PROPS; prop++) {
@@ -749,17 +840,23 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
                 gl_state_report_float(out, name, mat->value[0], 0.0f);
             else
                 gl_state_report_vec(out, name, mat->value, defaults, 4);
+            gl_state_report_set_last_source(out, mat->source);
         }
     }
 
-    if (s->point_size_touched)
+    if (s->point_size_touched) {
         gl_state_report_float(out, "GL_POINT_SIZE", s->point_size, 1.0f);
-    if (s->line_width_touched)
+        gl_state_report_set_last_source(out, s->point_size_source);
+    }
+    if (s->line_width_touched) {
         gl_state_report_float(out, "GL_LINE_WIDTH", s->line_width, 1.0f);
+        gl_state_report_set_last_source(out, s->line_width_source);
+    }
     if (s->line_stipple_touched) {
         ReplGlStateReportRow *row;
         gl_state_report_int(out, "GL_LINE_STIPPLE_REPEAT",
                             s->line_stipple_repeat, 1);
+        gl_state_report_set_last_source(out, s->line_stipple_source);
         row = gl_state_report_row(out, "GL_LINE_STIPPLE_PATTERN");
         if (row) {
             snprintf(row->current, sizeof(row->current), "0x%04X",
@@ -767,22 +864,31 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
             snprintf(row->default_value, sizeof(row->default_value), "0xFFFF");
             row->differs_from_default =
                 (s->line_stipple_pattern & 0xFFFFu) != 0xFFFFu;
+            row->source = s->line_stipple_source;
         }
     }
-    if (s->point_attenuation_touched)
+    if (s->point_attenuation_touched) {
         gl_state_report_vec(out, "GL_POINT_DISTANCE_ATTENUATION",
                             s->point_attenuation, point_atten_default, 3);
+        gl_state_report_set_last_source(out, s->point_attenuation_source);
+    }
     if (s->blend_func_touched) {
         gl_state_report_enum(out, "GL_BLEND_SRC", CMD_BLEND_FUNC, 0,
                              s->blend_src, GL_ONE);
+        gl_state_report_set_last_source(out, s->blend_func_source);
         gl_state_report_enum(out, "GL_BLEND_DST", CMD_BLEND_FUNC, 1,
                              s->blend_dst, GL_ZERO);
+        gl_state_report_set_last_source(out, s->blend_func_source);
     }
-    if (s->clear_color_touched)
+    if (s->clear_color_touched) {
         gl_state_report_vec(out, "GL_COLOR_CLEAR_VALUE", s->clear_color,
                             clear_default, 4);
-    if (s->depth_mask_touched)
+        gl_state_report_set_last_source(out, s->clear_color_source);
+    }
+    if (s->depth_mask_touched) {
         gl_state_report_bool(out, "GL_DEPTH_WRITEMASK", s->depth_mask, 1);
+        gl_state_report_set_last_source(out, s->depth_mask_source);
+    }
     if (s->color_mask_touched) {
         ReplGlStateReportRow *row = gl_state_report_row(out, "GL_COLOR_WRITEMASK");
         if (row) {
@@ -796,18 +902,24 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
             row->differs_from_default =
                 !(s->color_mask[0] && s->color_mask[1] &&
                   s->color_mask[2] && s->color_mask[3]);
+            row->source = s->color_mask_source;
         }
     }
-    if (s->edge_flag_touched)
+    if (s->edge_flag_touched) {
         gl_state_report_bool(out, "GL_EDGE_FLAG", s->edge_flag, 1);
-    if (s->raster_pos_touched)
+        gl_state_report_set_last_source(out, s->edge_flag_source);
+    }
+    if (s->raster_pos_touched) {
         gl_state_report_vec(out, "GL_CURRENT_RASTER_POSITION (object input)",
                             s->raster_pos, raster_default, 4);
+        gl_state_report_set_last_source(out, s->raster_pos_source);
+    }
     for (i = 0; i < REPL_GL_STATE_CLIP_PLANES; i++) {
         if (s->clip_plane_touched[i]) {
             char name[REPL_GL_STATE_NAME_MAX];
             snprintf(name, sizeof(name), "GL_CLIP_PLANE%d_EQUATION (object)", i);
             gl_state_report_vec(out, name, s->clip_plane[i], clip_default, 4);
+            gl_state_report_set_last_source(out, s->clip_plane_source[i]);
         }
     }
 }
@@ -816,6 +928,9 @@ void repl_gl_state_report_at_line(FlatProgramView program,
                                   int source_line_idx,
                                   ReplGlStateReport *out) {
     ReplGlTrackedState state;
+    ReplGlStateChangeSource source;
+    GLCmd init_cmd;
+    int init_count;
     int i;
 
     if (!out)
@@ -824,13 +939,29 @@ void repl_gl_state_report_at_line(FlatProgramView program,
     out->source_line_idx = source_line_idx;
     gl_state_init(&state);
 
-    if (!program.cmds || source_line_idx < 0)
+    source.kind = REPL_GL_STATE_SOURCE_INIT;
+    source.source_line_idx = -1;
+    init_count = repl_init_bootstrap_state_command_count();
+    for (i = 0; i < init_count; i++) {
+        if (repl_init_bootstrap_state_command_at(i, &init_cmd))
+            gl_state_apply_cmd(&state, &init_cmd, source);
+    }
+
+    if (!program.cmds || source_line_idx < 0) {
+        gl_state_append_report(&state, out);
         return;
+    }
     if (program.cmd_count < 0)
         program.cmd_count = 0;
-    for (i = 0; i < program.cmd_count; i++)
-        if (gl_state_command_precedes(&program.cmds[i], source_line_idx))
-            gl_state_apply_cmd(&state, &program.cmds[i]);
+    for (i = 0; i < program.cmd_count; i++) {
+        const GLCmd *cmd = &program.cmds[i];
+        if (!gl_state_command_precedes(cmd, source_line_idx))
+            continue;
+        source.kind = REPL_GL_STATE_SOURCE_DISPLAY;
+        source.source_line_idx = cmd->src_cmd_idx >= 0
+            ? cmd->src_cmd_idx : gl_state_execution_anchor(cmd);
+        gl_state_apply_cmd(&state, cmd, source);
+    }
 
     gl_state_append_report(&state, out);
 }

@@ -1,4 +1,5 @@
 #include "repl/export_internal.h"
+#include "repl/init_state.h"
 #include "repl/text_helpers.h"
 
 /* File-scope C boilerplate: includes, macros, and the rotation globals.
@@ -473,29 +474,78 @@ void repl_ensure_init_bootstrap_ready(void) {
         parse_init_bootstrap();
 }
 
-void repl_apply_init_bootstrap(void) {
-    repl_ensure_init_bootstrap_ready();
+/* Resolve one bootstrap table entry to the command init() actually applies.
+ * Returns 0 for comments, disabled non-state rows, and unsupported commands. */
+static int init_bootstrap_effective_state_command(int bootstrap_idx,
+                                                   GLCmd *out_cmd) {
+    const InitBootstrapEntry *entry;
+    GLCmd cmd;
 
-    for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
-        const InitBootstrapEntry *entry = &g_init_bootstrap_repl[bootstrap_idx];
-        if (init_bootstrap_entry_unsupported(entry))
-            continue;  /* runtime lacks glPointParameterfv: skip, don't neutralize */
-        if (entry->toggle_slug && !init_bootstrap_toggle_get(entry->toggle_slug, 1)) {
-            if (g_init_bootstrap_cmds[bootstrap_idx].cmd.type == CMD_POINT_PARAMETER_FV &&
-                (GLenum)g_init_bootstrap_cmds[bootstrap_idx].cmd.args[0] ==
-                    GL_POINT_DISTANCE_ATTENUATION) {
-                /* args[0]=pname; args[1..3]=const/linear/quadratic.
-                 * Neutralize attenuation to a constant 1 (no falloff). */
-                GLCmd disabled = g_init_bootstrap_cmds[bootstrap_idx].cmd;
-                disabled.args[1] = 1.0f;
-                disabled.args[2] = 0.0f;
-                disabled.args[3] = 0.0f;
-                repl_apply_state_cmd(&disabled, 1.0f);
-            }
-            continue;
-        }
-        repl_apply_state_cmd(&g_init_bootstrap_cmds[bootstrap_idx].cmd, 1.0f);
+    if (bootstrap_idx < 0 || bootstrap_idx >= NUM_INIT_BOOTSTRAP || !out_cmd)
+        return 0;
+    entry = &g_init_bootstrap_repl[bootstrap_idx];
+    if (init_bootstrap_entry_unsupported(entry))
+        return 0;
+
+    cmd = g_init_bootstrap_cmds[bootstrap_idx].cmd;
+    if (cmd.type == CMD_COMMENT || cmd.type == CMD_EMPTY)
+        return 0;
+    if (entry->toggle_slug && !init_bootstrap_toggle_get(entry->toggle_slug, 1)) {
+        if (cmd.type != CMD_POINT_PARAMETER_FV ||
+            (GLenum)cmd.args[0] != GL_POINT_DISTANCE_ATTENUATION)
+            return 0;
+        /* args[0]=pname; args[1..3]=const/linear/quadratic. Neutralize
+         * attenuation to a constant 1 (no falloff), exactly as init() does. */
+        cmd.args[1] = 1.0f;
+        cmd.args[2] = 0.0f;
+        cmd.args[3] = 0.0f;
     }
+    *out_cmd = cmd;
+    return 1;
+}
+
+int repl_init_bootstrap_state_command_count(void) {
+    int count = 0;
+    int bootstrap_idx;
+    GLCmd cmd;
+
+    repl_ensure_init_bootstrap_ready();
+    for (bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP;
+         bootstrap_idx++)
+        if (init_bootstrap_effective_state_command(bootstrap_idx, &cmd))
+            count++;
+    return count;
+}
+
+int repl_init_bootstrap_state_command_at(int state_command_idx,
+                                         GLCmd *out_cmd) {
+    int current_idx = 0;
+    int bootstrap_idx;
+    GLCmd cmd;
+
+    if (state_command_idx < 0 || !out_cmd)
+        return 0;
+    repl_ensure_init_bootstrap_ready();
+    for (bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP;
+         bootstrap_idx++) {
+        if (!init_bootstrap_effective_state_command(bootstrap_idx, &cmd))
+            continue;
+        if (current_idx++ == state_command_idx) {
+            *out_cmd = cmd;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+void repl_apply_init_bootstrap(void) {
+    int count = repl_init_bootstrap_state_command_count();
+    int i;
+    GLCmd cmd;
+
+    for (i = 0; i < count; i++)
+        if (repl_init_bootstrap_state_command_at(i, &cmd))
+            repl_apply_state_cmd(&cmd, 1.0f);
 }
 
 int repl_export_init_section_line_count(void) {
