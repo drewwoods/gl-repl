@@ -2,13 +2,14 @@
  * ui_gl_state_panel.c -- Floating OpenGL-state popup table.
  *
  * Pure renderer + hit-test: consumes the controller-built
- * UiGlStatePanelView and draws the right-click state report as a
- * four-column table (state name, current value, OpenGL 2.1 default, latest
- * change source) anchored near the click. When the report is taller than the
- * window the row window scrolls (wheel, routed by the controller) with a
- * flyout-style right-edge scrollbar hint. Report construction, anchor
- * validation, and open/close/scroll state all live outside
- * (glr_ctrl / ui_state).
+ * UiGlStatePanelView and draws the right-click state report as a table
+ * (state name, current value, and — behind the header's expand chip,
+ * collapsed by default so the popup stays narrow — the OpenGL 2.1
+ * default and latest change source columns) anchored near the click.
+ * When the report is taller than the window the row window scrolls
+ * (wheel, routed by the controller) with a flyout-style right-edge
+ * scrollbar hint. Report construction, anchor validation, and
+ * open/close/scroll/expand state all live outside (glr_ctrl / ui_state).
  */
 #include <stdio.h>
 #include <string.h>
@@ -32,8 +33,9 @@
 static const char GLSP_TITLE[]      = "OpenGL state at this line";
 static const char GLSP_HDR_NAME[]   = "state";
 static const char GLSP_HDR_CUR[]    = "current";
-static const char GLSP_HDR_DEF[]    = "default (GL 2.1)";
+static const char GLSP_HDR_DEF[]    = "[-] default (GL 2.1)";
 static const char GLSP_HDR_SOURCE[] = "source";
+static const char GLSP_HDR_DETAILS_CLOSED[] = "[+] default/source";
 static const char GLSP_EMPTY_MSG[]  =
     "No init() or display() OpenGL state has been touched.";
 
@@ -42,8 +44,11 @@ static const char GLSP_EMPTY_MSG[]  =
 typedef struct {
     int px, py;               /* top-left, y-up */
     int popup_w, popup_h;
+    int details;              /* default/source columns expanded */
     int name_chars, cur_chars, def_chars, source_chars;
     int col0_x, col1_x, col2_x, col3_x;
+    int tog_x0, tog_x1;       /* expand/collapse header chip cell (y-up; */
+    int tog_y0, tog_y1;       /* zero-width when the report is empty) */
     int visible_rows;         /* report rows drawn (0 for the empty msg) */
     int max_scroll;
     int scroll;               /* view->scroll_rows clamped to [0, max] */
@@ -105,6 +110,7 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
     const ReplGlStateReport *report;
     int table_chars, max_table_chars, chrome_rows, row_capacity;
     int top_limit, menu_y = 0;
+    int cur_floor;
     char source_text[32];
     int i;
 
@@ -123,17 +129,28 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
                     ? menu_y - 2 : view->window_h - GLSP_EDGE_MARGIN;
 
     /* Column widths from content, floored at the header labels and
-     * capped so one long value (a matrix row) can't blow up the popup. */
+     * capped so one long value (a matrix row) can't blow up the popup.
+     * Collapsed, the default/source columns drop out entirely; the
+     * header's "[+]" chip rides inside the current column's header cell
+     * (right-aligned), so it only floors that column's width instead of
+     * adding a blank third column under itself. */
+    out->details = view->details_expanded ? 1 : 0;
+    cur_floor = (int)strlen(GLSP_HDR_CUR);
+    if (!out->details)
+        cur_floor += GLSP_COL_GAP_CHARS +
+                     (int)strlen(GLSP_HDR_DETAILS_CLOSED);
     out->name_chars = (int)strlen(GLSP_HDR_NAME);
     out->cur_chars  = (int)strlen(GLSP_HDR_CUR);
-    out->def_chars  = (int)strlen(GLSP_HDR_DEF);
-    out->source_chars = (int)strlen(GLSP_HDR_SOURCE);
+    out->def_chars  = out->details ? (int)strlen(GLSP_HDR_DEF) : 0;
+    out->source_chars = out->details ? (int)strlen(GLSP_HDR_SOURCE) : 0;
     for (i = 0; i < report->count; i++) {
         const ReplGlStateReportRow *row = &report->rows[i];
         if ((int)strlen(row->name) > out->name_chars)
             out->name_chars = (int)strlen(row->name);
         if ((int)strlen(row->current) > out->cur_chars)
             out->cur_chars = (int)strlen(row->current);
+        if (!out->details)
+            continue;
         if ((int)strlen(row->default_value) > out->def_chars)
             out->def_chars = (int)strlen(row->default_value);
         glsp_source_text(row, source_text, (int)sizeof(source_text));
@@ -143,24 +160,27 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
     out->name_chars = glsp_clamp_chars(out->name_chars,
                                        (int)strlen(GLSP_HDR_NAME),
                                        GLSP_NAME_CHARS_MAX);
-    out->cur_chars  = glsp_clamp_chars(out->cur_chars,
-                                       (int)strlen(GLSP_HDR_CUR),
+    out->cur_chars  = glsp_clamp_chars(out->cur_chars, cur_floor,
                                        GLSP_VAL_CHARS_MAX);
-    out->def_chars  = glsp_clamp_chars(out->def_chars,
-                                       (int)strlen(GLSP_HDR_DEF),
-                                       GLSP_VAL_CHARS_MAX);
-    out->source_chars = glsp_clamp_chars(out->source_chars,
-                                         (int)strlen(GLSP_HDR_SOURCE),
-                                         GLSP_SOURCE_CHARS_MAX);
+    if (out->details) {
+        out->def_chars  = glsp_clamp_chars(out->def_chars,
+                                           (int)strlen(GLSP_HDR_DEF),
+                                           GLSP_VAL_CHARS_MAX);
+        out->source_chars = glsp_clamp_chars(out->source_chars,
+                                             (int)strlen(GLSP_HDR_SOURCE),
+                                             GLSP_SOURCE_CHARS_MAX);
+    }
 
-    table_chars = out->name_chars + out->cur_chars + out->def_chars +
-                  out->source_chars + 3 * GLSP_COL_GAP_CHARS;
+    table_chars = out->name_chars + out->cur_chars + GLSP_COL_GAP_CHARS;
+    if (out->details)
+        table_chars += out->def_chars + out->source_chars +
+                       2 * GLSP_COL_GAP_CHARS;
     max_table_chars = (view->window_w - 2 * GLSP_EDGE_MARGIN -
                        2 * GLSP_PAD_X) / FONT_W;
     /* Preserve all four headers on narrow windows and share remaining width
      * across the potentially long state/value columns. */
     while (table_chars > max_table_chars) {
-        if (out->cur_chars > (int)strlen(GLSP_HDR_CUR) &&
+        if (out->cur_chars > cur_floor &&
             out->cur_chars >= out->def_chars)
             out->cur_chars--;
         else if (out->def_chars > (int)strlen(GLSP_HDR_DEF))
@@ -221,6 +241,29 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
                   (out->cur_chars + GLSP_COL_GAP_CHARS) * FONT_W;
     out->col3_x = out->col2_x +
                   (out->def_chars + GLSP_COL_GAP_CHARS) * FONT_W;
+
+    /* Expand/collapse chip cell: expanded it is the "[-]"-prefixed
+     * default header at col2; collapsed the "[+]" chip right-aligns to
+     * the popup edge inside the current column's header cell (the
+     * cur_floor above reserves that room past the "current" label). The
+     * empty-report popup has no header row and thus no chip. */
+    out->tog_x0 = out->tog_x1 = 0;
+    out->tog_y0 = out->tog_y1 = 0;
+    if (report->count > 0) {
+        if (out->details) {
+            int chip_chars = (int)strlen(GLSP_HDR_DEF);
+            if (chip_chars > out->def_chars)
+                chip_chars = out->def_chars;
+            out->tog_x0 = out->col2_x;
+            out->tog_x1 = out->col2_x + chip_chars * FONT_W;
+        } else {
+            out->tog_x1 = out->px + out->popup_w - GLSP_PAD_X;
+            out->tog_x0 = out->tog_x1 -
+                          (int)strlen(GLSP_HDR_DETAILS_CLOSED) * FONT_W;
+        }
+        out->tog_y1 = out->py - GLSP_PAD_Y - LINE_H;
+        out->tog_y0 = out->tog_y1 - LINE_H;
+    }
     return 1;
 }
 
@@ -233,6 +276,19 @@ int ui_gl_state_panel_hit_test(const UiGlStatePanelView *view,
     y_up = view->window_h - my;
     return mx >= lo.px && mx <= lo.px + lo.popup_w &&
            y_up <= lo.py && y_up >= lo.py - lo.popup_h;
+}
+
+int ui_gl_state_panel_hit_test_details_toggle(const UiGlStatePanelView *view,
+                                              int mx, int my) {
+    GlspLayout lo;
+    int y_up;
+    if (!glsp_solve(view, &lo))
+        return 0;
+    if (lo.tog_x1 <= lo.tog_x0)
+        return 0;
+    y_up = view->window_h - my;
+    return mx >= lo.tog_x0 && mx <= lo.tog_x1 &&
+           y_up >= lo.tog_y0 && y_up <= lo.tog_y1;
 }
 
 int ui_gl_state_panel_max_scroll(const UiGlStatePanelView *view) {
@@ -278,9 +334,15 @@ void ui_gl_state_panel_render(const UiGlStatePanelView *view) {
     ui_clr(UI_TOK_TEXT_SECTION);
     gl2d_draw_string((float)lo.col0_x, (float)ty, GLSP_HDR_NAME, FONT_MONO);
     gl2d_draw_string((float)lo.col1_x, (float)ty, GLSP_HDR_CUR, FONT_MONO);
-    glsp_clip(clipped, (int)sizeof(clipped), GLSP_HDR_DEF, lo.def_chars);
-    gl2d_draw_string((float)lo.col2_x, (float)ty, clipped, FONT_MONO);
-    gl2d_draw_string((float)lo.col3_x, (float)ty, GLSP_HDR_SOURCE, FONT_MONO);
+    if (lo.details) {
+        glsp_clip(clipped, (int)sizeof(clipped), GLSP_HDR_DEF, lo.def_chars);
+        gl2d_draw_string((float)lo.col2_x, (float)ty, clipped, FONT_MONO);
+        gl2d_draw_string((float)lo.col3_x, (float)ty, GLSP_HDR_SOURCE,
+                         FONT_MONO);
+    } else {
+        gl2d_draw_string((float)lo.tog_x0, (float)ty,
+                         GLSP_HDR_DETAILS_CLOSED, FONT_MONO);
+    }
 
     ui_clr(UI_TOK_DIVIDER);
     glRectf((float)(lo.px + 1), (float)(ty - 4),
@@ -299,15 +361,17 @@ void ui_gl_state_panel_render(const UiGlStatePanelView *view) {
         glsp_clip(clipped, (int)sizeof(clipped), row->current, lo.cur_chars);
         gl2d_draw_string((float)lo.col1_x, (float)ty, clipped, FONT_MONO);
 
-        ui_clr(UI_TOK_TEXT_MUTED);
-        glsp_clip(clipped, (int)sizeof(clipped), row->default_value,
-                  lo.def_chars);
-        gl2d_draw_string((float)lo.col2_x, (float)ty, clipped, FONT_MONO);
+        if (lo.details) {
+            ui_clr(UI_TOK_TEXT_MUTED);
+            glsp_clip(clipped, (int)sizeof(clipped), row->default_value,
+                      lo.def_chars);
+            gl2d_draw_string((float)lo.col2_x, (float)ty, clipped, FONT_MONO);
 
-        glsp_source_text(row, source_text, (int)sizeof(source_text));
-        glsp_clip(clipped, (int)sizeof(clipped), source_text,
-                  lo.source_chars);
-        gl2d_draw_string((float)lo.col3_x, (float)ty, clipped, FONT_MONO);
+            glsp_source_text(row, source_text, (int)sizeof(source_text));
+            glsp_clip(clipped, (int)sizeof(clipped), source_text,
+                      lo.source_chars);
+            gl2d_draw_string((float)lo.col3_x, (float)ty, clipped, FONT_MONO);
+        }
 
         ty -= LINE_H;
     }

@@ -166,6 +166,7 @@ void ui_state_gl_state_inspector_open(int source_line_idx,
     g_ui_state.gl_state_inspector.anchor_px = anchor_px;
     g_ui_state.gl_state_inspector.anchor_py = anchor_py;
     g_ui_state.gl_state_inspector.scroll_rows = 0;
+    g_ui_state.gl_state_inspector.details_expanded = 0;
 }
 
 void ui_state_gl_state_inspector_close(void) {
@@ -174,11 +175,17 @@ void ui_state_gl_state_inspector_close(void) {
     g_ui_state.gl_state_inspector.anchor_px = -1;
     g_ui_state.gl_state_inspector.anchor_py = -1;
     g_ui_state.gl_state_inspector.scroll_rows = 0;
+    g_ui_state.gl_state_inspector.details_expanded = 0;
 }
 
 void ui_state_gl_state_inspector_set_scroll(int scroll_rows) {
     g_ui_state.gl_state_inspector.scroll_rows =
         scroll_rows < 0 ? 0 : scroll_rows;
+}
+
+void ui_state_gl_state_inspector_toggle_details(void) {
+    g_ui_state.gl_state_inspector.details_expanded =
+        !g_ui_state.gl_state_inspector.details_expanded;
 }
 
 UiCommandDescriptionState ui_state_command_description(void) {

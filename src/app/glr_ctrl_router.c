@@ -1067,11 +1067,12 @@ static void glr_ctrl_router_dismiss_gl_state_for_editor_input(void) {
 }
 
 /* Left press vs the floating OpenGL-state popup: a click inside the open
- * popup is consumed (it is a display-only surface — the click must not fall
- * through to the code-panel rows behind it); a click anywhere else dismisses
- * the popup and is NOT consumed, so it still routes normally afterwards
- * (the color picker's click-away convention). Skipped while a menu dropdown
- * is open — dropdowns render above the popup, so they win their clicks. */
+ * popup is consumed (the click must not fall through to the code-panel rows
+ * behind it); on the header's "[+]"/"[-]" chip it also expands/collapses the
+ * default/source detail columns. A click anywhere else dismisses the popup
+ * and is NOT consumed, so it still routes normally afterwards (the color
+ * picker's click-away convention). Skipped while a menu dropdown is open —
+ * dropdowns render above the popup, so they win their clicks. */
 static int glr_ctrl_router_handle_gl_state_popup_left_press(int x, int y) {
     UiGlStatePanelView view;
     if (!ui_state_gl_state_inspector().visible)
@@ -1082,6 +1083,8 @@ static int glr_ctrl_router_handle_gl_state_popup_left_press(int x, int y) {
     if (!view.visible)
         return 0;
     if (ui_gl_state_panel_hit_test(&view, x, y)) {
+        if (ui_gl_state_panel_hit_test_details_toggle(&view, x, y))
+            ui_state_gl_state_inspector_toggle_details();
         editor_request_redraw();
         return 1;
     }

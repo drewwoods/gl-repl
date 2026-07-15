@@ -54,12 +54,14 @@ UiHelpState *ui_state_help_mut(void);
 
 /* Floating OpenGL-state popup. anchor_px/anchor_py are the opening
  * right-click position in GLUT screen coords (y-down); opening resets
- * the wheel-scroll row offset. */
+ * the wheel-scroll row offset and collapses the default/source detail
+ * columns (the popup always opens narrow). */
 UiGlStateInspectorState ui_state_gl_state_inspector(void);
 void ui_state_gl_state_inspector_open(int source_line_idx,
                                       int anchor_px, int anchor_py);
 void ui_state_gl_state_inspector_close(void);
 void ui_state_gl_state_inspector_set_scroll(int scroll_rows);
+void ui_state_gl_state_inspector_toggle_details(void);
 
 /* Floating right-click GL-command description popup. */
 UiCommandDescriptionState ui_state_command_description(void);
