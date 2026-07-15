@@ -105,6 +105,7 @@ source-line targets.
 | [`app/scene_tabs.c`](app/scene_tabs.c) / `.h` | Scene tab strip (snapshot-pure render + whole-band hit-test) |
 | [`app/variable_panel_view.c`](app/variable_panel_view.c) / `.h` | Projects app snapshots into the variable-slider panel view |
 | [`app/autocomplete_panel.c`](app/autocomplete_panel.c) / `.h` | Completion popup renderer |
+| [`app/command_description_panel.c`](app/command_description_panel.c) / `.h` | Word-wrapped GL command description popup renderer over a controller-built view |
 | [`app/editor.h`](app/editor.h) | `Ui*` editor-overlay snapshot types (swatches, sliders, highlights) |
 | [`subsystems/color_picker.c`](subsystems/color_picker.c) / `.h` | Feature-UI: color-picker renderer + hit-test over [`ColorPickerView`](../subsystems/color_picker/color_picker_state.h#L47) |
 | [`subsystems/variable_panel.c`](subsystems/variable_panel.c) / `.h` | Feature-UI: variable-slider panel chrome (the peer owns drag/visibility) |

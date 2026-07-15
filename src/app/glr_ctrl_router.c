@@ -55,6 +55,7 @@
 #include "repl/scenes.h"
 #include "source_document.h"
 #include "repl/examples.h"          /* REPL_EXAMPLE_TAG_* */
+#include "repl/command_descriptions.h"
 #include "repl/eval.h"
 #include "repl/parser.h"
 #include "repl/executor.h"
@@ -1148,9 +1149,11 @@ static int glr_ctrl_router_handle_gl_state_popup_wheel(int x, int y,
     return 1;
 }
 
-/* Right-click over a committed empty source row toggles the floating OpenGL
- * state popup anchored there. Other code-panel right-clicks remain inert so
- * they never forward to the scene camera, where right-drag starts pan.
+/* Right-click over a committed GL-family command opens its authored help card;
+ * glEnable/glDisable resolve that card by capability argument. A committed
+ * empty source row keeps its existing OpenGL-state-inspector toggle. Other
+ * code-panel right-clicks remain inert so they never forward to the scene
+ * camera, where right-drag starts pan.
  * Numeric swatches, Config right-click, and variable sliders are routed before
  * this helper so their right-button behavior stays active. */
 static int glr_ctrl_router_handle_right_code_panel_press(int button, int state,
@@ -1158,6 +1161,7 @@ static int glr_ctrl_router_handle_right_code_panel_press(int button, int state,
     UiRenderSnapshot ui_snap;
     UiHit hit;
     const GLCmd *cmd;
+    ReplCommandDescription description;
 
     if (state != GLUT_DOWN || button != GLUT_RIGHT_BUTTON)
         return 0;
@@ -1172,11 +1176,17 @@ static int glr_ctrl_router_handle_right_code_panel_press(int button, int state,
         ? repl_state_document_cmd_at(hit.line_idx) : NULL;
     if (cmd && cmd->type == CMD_EMPTY) {
         UiGlStateInspectorState inspector = ui_state_gl_state_inspector();
+        ui_state_command_description_close();
         if (inspector.visible &&
             inspector.source_line_idx == hit.line_idx)
             ui_state_gl_state_inspector_close();
         else
             ui_state_gl_state_inspector_open(hit.line_idx, x, y);
+    } else if (cmd && repl_command_description_lookup(cmd, &description)) {
+        ui_state_gl_state_inspector_close();
+        ui_state_command_description_open(hit.line_idx, x, y);
+    } else {
+        ui_state_command_description_close();
     }
 
     color_picker_stop();
@@ -1600,6 +1610,10 @@ void glr_ctrl_keyboard(unsigned char key, int x, int y) {
      * shortcut silently misses. */
     key = editor_input_normalize_super_to_ctrl(key);
 
+    /* The command help card is intentionally ephemeral: the next key event
+     * resumes editing and dismisses it without swallowing that key. */
+    ui_state_command_description_close();
+
     /* Rename capture: hard modal. */
     if (editor_input_rename_capture_key(key)) {
         editor_reset_input_effects();
@@ -1653,6 +1667,8 @@ void glr_ctrl_keyboard(unsigned char key, int x, int y) {
 void glr_ctrl_special(int key, int x, int y) {
     glr_audio_on_user_gesture();
 
+    ui_state_command_description_close();
+
     if (editor_input_rename_capture_special(key)) {
         editor_reset_input_effects();
         glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
@@ -1705,6 +1721,15 @@ void glr_ctrl_mouse(int button, int state, int x, int y) {
         ui_state_pointer_set(x, y, state == GLUT_DOWN ? button : -1);
     } else {
         ui_state_pointer_set_pos(x, y);
+    }
+
+    /* The release paired with the right-click that opened the card is not a
+     * new editor interaction. A later press/wheel event in the editor is. */
+    if (state == GLUT_DOWN && ui_state_command_description().visible &&
+        (editor_input_point_in_code_panel(x, y) ||
+         editor_input_point_on_code_panel_divider(x, y))) {
+        ui_state_command_description_close();
+        editor_request_redraw();
     }
 
     if (state == GLUT_UP) {
@@ -1880,6 +1905,11 @@ void glr_ctrl_mousewheel(int wheel, int direction, int x, int y) {
      * (editor), or camera zoom velocity. */
     (void)wheel;
     editor_reset_input_effects();
+    if (ui_state_command_description().visible &&
+        editor_input_point_in_code_panel(x, y)) {
+        ui_state_command_description_close();
+        editor_request_redraw();
+    }
     if (ui_state_help().visible) {
         glr_ctrl_help_scroll_by(-direction);
         editor_request_redraw();

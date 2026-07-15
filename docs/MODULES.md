@@ -440,6 +440,7 @@ commands.
 | Module | Role |
 |--------|------|
 | `repl_command_spec` | Declarative command descriptors for fixed-arity GL-like commands |
+| `repl_command_descriptions` | Lookup facade over the generated, compiled-in GL command-help catalog authored in repository-level `command_descriptions.txt`; `glEnable`/`glDisable` resolve by capability argument |
 | `repl_parser` | Parses one source line into `ReplParsedLine { GLCmd cmd; char text[] }`; no storage ownership |
 | `repl_source_scope` | Computes source depth, indentation, and block context used by compile/format paths |
 | `repl_compile` | Pure validation layer. Converts proposed source text + context into parsed command changes or diagnostics. Never mutates state. Reads existing source through the read-only `source_document` view |
@@ -595,6 +596,7 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 | `ui_tabbed_overlay` | Generic modal tabbed text overlay renderer. Takes a [`UiOverlayState`](../src/ui/core/tabbed_overlay.h#L33) (visible / tab_idx / scroll / viewport / [`UiOverlayContent`](../src/ui/core/tabbed_overlay.h#L27)) and draws a titled, paged reference card. Knows nothing about REPL semantics. Currently consumed by the F1 help; available for future modal text panels |
 | `ui_variable_panel` | Renderer for the variable-slider panel (the panel chrome — the *peer subsystem* owns drag/visibility state). Input returns `UI_HIT_VARIABLE_SLIDER` |
 | `ui_autocomplete_panel` | Completion popup renderer; reads `EditorState.autocomplete` |
+| `ui_command_description_panel` | Word-wrapped right-click GL command description card over a controller-built catalog view; popup lifetime and source anchoring stay in controller/UI state |
 | `ui_gl_state_panel` | Floating OpenGL-state popup table (render + pure hit-test + scroll geometry) over the controller-built view of `repl_gl_state_inspector`'s report |
 | `ui_profile_panel` | CPU/GPU timing HUD renderer (lives at [`src/ui/support/cpuprof.c`](../src/ui/support/cpuprof.c); CPU/GPU/Max columns, GPU fed by [`src/support/gpuprof.c`](../src/support/gpuprof.c) timer queries) |
 | `ui_memory_panel` | Memory RSS/history HUD renderer (lives at [`src/ui/support/memprof.c`](../src/ui/support/memprof.c)) |

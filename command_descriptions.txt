@@ -1,0 +1,261 @@
+# Authored source for the right-click GL command help popup.
+#
+# The build embeds this file into the binary. Each GL/GLU/GLUT CmdType must
+# have one [command ...] section. glEnable/glDisable are intentionally special:
+# their args[0] selects one of the [capability ...] descriptions instead.
+
+[command CMD_BEGIN]
+title = glBegin
+Starts an immediate-mode primitive. The mode chooses how subsequent vertices are assembled into points, lines, triangles, quads, or a polygon. Finish the primitive with glEnd.
+
+[command CMD_END]
+title = glEnd
+Finishes the primitive started by glBegin. Every vertex submitted since the matching glBegin is assembled using that block's primitive mode.
+
+[command CMD_VERTEX3F]
+title = glVertex3f
+Submits a 3D vertex at (x, y, z). The current color, normal, and other per-vertex attributes are captured with it, and the active model-view and projection transforms determine its final position.
+
+[command CMD_VERTEX2F]
+title = glVertex2f
+Submits a 2D vertex at (x, y), with z implicitly zero. It otherwise behaves like glVertex3f and captures the current per-vertex attributes.
+
+[command CMD_NORMAL3F]
+title = glNormal3f
+Sets the current surface normal used by later vertices. Lighting uses this direction after the normal matrix transform; enable GL_NORMALIZE when transforms can change its length.
+
+[command CMD_COLOR3F]
+title = glColor3f
+Sets the current red, green, and blue color for later vertices. Components conventionally range from 0 to 1, and alpha becomes 1.
+
+[command CMD_COLOR4F]
+title = glColor4f
+Sets the current red, green, blue, and alpha color for later vertices. Alpha affects the final image when blending is enabled and configured.
+
+[command CMD_SHADE_MODEL]
+title = glShadeModel
+Chooses flat or smooth shading. GL_FLAT uses one provoking vertex's color and normal-derived result per primitive; GL_SMOOTH interpolates vertex results across the primitive.
+
+[command CMD_TRANSLATE3F]
+title = glTranslatef
+Post-multiplies the current matrix by a translation. With the model-view matrix active, later geometry moves by (x, y, z) in the current transformed coordinate system.
+
+[command CMD_SCALEF]
+title = glScalef
+Post-multiplies the current matrix by independent x, y, and z scale factors. Non-uniform scaling can change normal lengths, so lighting commonly pairs it with GL_NORMALIZE.
+
+[command CMD_ROTATEF]
+title = glRotatef
+Post-multiplies the current matrix by an angle-axis rotation. The angle is in degrees and (x, y, z) supplies the rotation axis.
+
+[command CMD_PUSH_MATRIX]
+title = glPushMatrix
+Copies the current matrix onto its stack. Use it before a local group of transforms, then restore the parent transform with glPopMatrix.
+
+[command CMD_POP_MATRIX]
+title = glPopMatrix
+Restores the previous matrix from the current matrix stack. It must be balanced with an earlier glPushMatrix on the same stack.
+
+[command CMD_LOAD_IDENTITY]
+title = glLoadIdentity
+Replaces the current matrix with the identity matrix. Later transforms then start from an untransformed coordinate system.
+
+[command CMD_COLOR_MATERIAL]
+title = glColorMaterial
+Chooses which material property tracks the current color while GL_COLOR_MATERIAL is enabled. This is a compact way to vary ambient and/or diffuse material values per vertex.
+
+[command CMD_LIGHT_MODEL_I]
+title = glLightModeli
+Sets an integer lighting-model option. Local-viewer mode changes the specular view vector; two-sided mode evaluates back faces with reversed normals and back material values.
+
+[command CMD_FRONT_FACE]
+title = glFrontFace
+Defines whether clockwise or counter-clockwise window-space winding identifies a front face. Culling and two-sided lighting use this classification.
+
+[command CMD_CULL_FACE]
+title = glCullFace
+Selects front faces, back faces, or both for removal when GL_CULL_FACE is enabled. Face classification comes from glFrontFace.
+
+[command CMD_DEPTH_FUNC]
+title = glDepthFunc
+Chooses the comparison used by the depth test. The default GL_LESS accepts a fragment when its depth is nearer than the stored depth; other modes support equal, reversed, or unconditional tests.
+
+[command CMD_GLUT_TORUS]
+title = glutSolidTorus
+Draws a solid torus centered at the origin around the z axis. innerR controls tube radius, outerR controls ring radius, and the two segment counts trade smoothness for geometry cost.
+
+[command CMD_GLUT_CUBE]
+title = glutSolidCube
+Draws a solid axis-aligned cube centered at the origin. Its edge length is size and its faces include normals suitable for fixed-function lighting.
+
+[command CMD_GLUT_SPHERE]
+title = glutSolidSphere
+Draws a solid sphere centered at the origin. Radius sets its size, while slices and stacks control longitudinal and latitudinal tessellation.
+
+[command CMD_GLUT_TEAPOT]
+title = glutSolidTeapot
+Draws GLUT's solid Utah teapot model at the origin. The size argument scales the model, which includes surface normals for lighting.
+
+[command CMD_GLUT_CONE]
+title = glutSolidCone
+Draws a solid cone along the positive z axis. Base and height set its dimensions; slices and stacks control radial and longitudinal tessellation.
+
+[command CMD_TESS_BEGIN_POLYGON]
+title = gluBegin(GLU_POLYGON)
+Starts a GLU-style tessellated polygon in the REPL. Add one or more contours, submit their vertices and attributes, then close the polygon with gluEnd.
+
+[command CMD_TESS_BEGIN_CONTOUR]
+title = gluBegin(GLU_CONTOUR)
+Starts a contour inside the current tessellated polygon. Contours describe the outer boundary or holes and must be closed with gluEnd before another contour begins.
+
+[command CMD_TESS_END]
+title = gluEnd
+Ends the current tessellator contour, or ends the polygon after all contours are complete. Ending the polygon emits triangles for the collected boundaries.
+
+[command CMD_TESS_NORMAL]
+title = gluNormal
+Sets the normal attached to later tessellator vertices. Generated/interpolated tessellation vertices carry the corresponding normal into the emitted triangles.
+
+[command CMD_TESS_COLOR]
+title = gluColor
+Sets the color attached to later tessellator vertices. Alpha is optional and defaults to 1; generated vertices interpolate the submitted colors.
+
+[command CMD_TESS_VERTEX]
+title = gluVertex
+Adds a 3D point to the current tessellator contour. The current gluColor and gluNormal values become attributes of that polygon vertex.
+
+[command CMD_MATERIALFV]
+title = glMaterialfv
+Sets a vector-valued material property for front faces, back faces, or both. Ambient, diffuse, specular, and emission use RGBA values; shininess uses glMaterialf instead.
+
+[command CMD_MATERIALF]
+title = glMaterialf
+Sets a scalar material property. In this REPL it sets GL_SHININESS, whose 0 to 128 range controls the concentration of specular highlights.
+
+[command CMD_POINT_SIZE]
+title = glPointSize
+Sets the rasterized diameter of points in pixels. The implementation clamps the requested value to its supported point-size range.
+
+[command CMD_LINE_WIDTH]
+title = glLineWidth
+Sets the rasterized width of lines in pixels. Supported widths and granularity depend on the OpenGL implementation.
+
+[command CMD_LINE_STIPPLE]
+title = glLineStipple
+Configures the repeating 16-bit pattern used while GL_LINE_STIPPLE is enabled. factor stretches each pattern bit, and pattern selects which line fragments are drawn.
+
+[command CMD_POINT_PARAMETER_FV]
+title = glPointParameterfv
+Sets point distance-attenuation coefficients. The constant, linear, and quadratic terms reduce a point's apparent size as its eye-space distance grows.
+
+[command CMD_BLEND_FUNC]
+title = glBlendFunc
+Chooses source and destination factors for combining a fragment with the existing color buffer while GL_BLEND is enabled. A common alpha blend is GL_SRC_ALPHA with GL_ONE_MINUS_SRC_ALPHA.
+
+[command CMD_CLEAR_COLOR]
+title = glClearColor
+Sets the RGBA value used when the color buffer is cleared. It changes the scene background on the next clear; it does not draw geometry.
+
+[command CMD_DEPTH_MASK]
+title = glDepthMask
+Enables or disables writes to the depth buffer. Depth testing can remain active while writes are off, which is useful for translucent geometry drawn after opaque surfaces.
+
+[command CMD_COLOR_MASK]
+title = glColorMask
+Controls color-buffer writes independently for red, green, blue, and alpha. A false channel keeps its existing framebuffer value even when a fragment passes other tests.
+
+[command CMD_EDGE_FLAG]
+title = glEdgeFlag
+Marks later polygon edges as boundary or non-boundary edges. The flag matters when polygons are rasterized in line or point mode and is captured per vertex.
+
+[command CMD_RASTER_POS3F]
+title = glRasterPos3f
+Transforms and validates the current raster position used by bitmap text. If the position clips outside the view, later label drawing produces no pixels until a valid raster position is set.
+
+[command CMD_LABEL]
+title = label
+Draws formatted bitmap text at the current raster position. Set that position with glRasterPos3f; numeric arguments replace the format string's supported floating-point placeholders.
+
+[command CMD_CLIP_PLANE]
+title = glClipPlane
+Defines one user clip plane from equation coefficients (a, b, c, d). Enable the matching GL_CLIP_PLANE slot to discard geometry on the plane's negative side.
+
+[capability GL_BLEND]
+title = GL_BLEND
+Controls color blending between new fragments and the existing color buffer. glBlendFunc selects the source and destination factors used while this capability is enabled.
+
+[capability GL_CLIP_PLANE0]
+title = GL_CLIP_PLANE0
+Controls user clip plane 0. glClipPlane defines its equation; enabling this slot clips primitives against that plane.
+
+[capability GL_CLIP_PLANE1]
+title = GL_CLIP_PLANE1
+Controls user clip plane 1. glClipPlane defines its equation; enabling this slot clips primitives against that plane.
+
+[capability GL_CLIP_PLANE2]
+title = GL_CLIP_PLANE2
+Controls user clip plane 2. glClipPlane defines its equation; enabling this slot clips primitives against that plane.
+
+[capability GL_CLIP_PLANE3]
+title = GL_CLIP_PLANE3
+Controls user clip plane 3. glClipPlane defines its equation; enabling this slot clips primitives against that plane.
+
+[capability GL_CLIP_PLANE4]
+title = GL_CLIP_PLANE4
+Controls user clip plane 4. glClipPlane defines its equation; enabling this slot clips primitives against that plane.
+
+[capability GL_CLIP_PLANE5]
+title = GL_CLIP_PLANE5
+Controls user clip plane 5. glClipPlane defines its equation; enabling this slot clips primitives against that plane.
+
+[capability GL_COLOR_MATERIAL]
+title = GL_COLOR_MATERIAL
+Makes selected material properties track the current color. glColorMaterial chooses the face and property, allowing glColor calls to drive fixed-function lighting materials.
+
+[capability GL_CULL_FACE]
+title = GL_CULL_FACE
+Removes selected front-facing or back-facing polygons before rasterization. glCullFace selects which faces are removed and glFrontFace defines their winding.
+
+[capability GL_DEPTH_TEST]
+title = GL_DEPTH_TEST
+Compares each fragment's depth with the depth buffer before it can update the framebuffer. glDepthFunc chooses the comparison and glDepthMask controls depth writes.
+
+[capability GL_LIGHT0]
+title = GL_LIGHT0
+Controls fixed-function light slot 0. When global GL_LIGHTING is also enabled, this slot contributes its configured ambient, diffuse, and specular illumination.
+
+[capability GL_LIGHT1]
+title = GL_LIGHT1
+Controls fixed-function light slot 1. When global GL_LIGHTING is also enabled, this slot contributes its configured ambient, diffuse, and specular illumination.
+
+[capability GL_LIGHT2]
+title = GL_LIGHT2
+Controls fixed-function light slot 2. When global GL_LIGHTING is also enabled, this slot contributes its configured ambient, diffuse, and specular illumination.
+
+[capability GL_LIGHT3]
+title = GL_LIGHT3
+Controls fixed-function light slot 3. When global GL_LIGHTING is also enabled, this slot contributes its configured ambient, diffuse, and specular illumination.
+
+[capability GL_LIGHTING]
+title = GL_LIGHTING
+Switches fixed-function lighting evaluation on or off. Enabled light slots, current normals, material values, and the lighting model then determine vertex colors.
+
+[capability GL_LINE_SMOOTH]
+title = GL_LINE_SMOOTH
+Requests antialiased line coverage. It is commonly combined with blending, and the exact quality depends on the OpenGL implementation.
+
+[capability GL_LINE_STIPPLE]
+title = GL_LINE_STIPPLE
+Applies the repeating pattern configured by glLineStipple to rasterized lines. Disabling it returns lines to a continuous pattern.
+
+[capability GL_MULTISAMPLE]
+title = GL_MULTISAMPLE
+Uses multisample coverage when the framebuffer has multisample buffers. It reduces jagged edges without changing the submitted geometry.
+
+[capability GL_NORMALIZE]
+title = GL_NORMALIZE
+Renormalizes transformed normals before lighting. It keeps lighting correct after scaling transforms, at the cost of extra per-vertex work.
+
+[capability GL_POINT_SMOOTH]
+title = GL_POINT_SMOOTH
+Requests antialiased point coverage instead of square aliased points. The exact shape and quality depend on the OpenGL implementation.

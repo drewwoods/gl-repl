@@ -380,6 +380,7 @@ endif
 	check-controller-boundaries \
 	check-doc-links \
 	check-domain-owner-encapsulation \
+	check-command-descriptions \
 	check-duplicate-api-decls \
 	check-edit-ops-pure \
 	check-editor-ownership-budget \
@@ -526,6 +527,8 @@ EXAMPLES_CATALOG = examples/catalog.ini
 endif
 EXAMPLE_SCENE_SRCS = $(wildcard examples/scenes/*.glr) $(wildcard examples/scenes/*.c)
 GENERATED_EXAMPLES_INC = build/generated/repl_examples_data.inc
+COMMAND_DESCRIPTIONS_SOURCE = command_descriptions.txt
+GENERATED_COMMAND_DESCRIPTIONS_INC = build/generated/repl_command_descriptions_data.inc
 
 UI_SRCS = $(UI_CORE_SRCS) $(UI_APP_SRCS)
 RENDER3D_HDRS = $(filter src/render3d/%.h,$(HDRS))
@@ -997,6 +1000,14 @@ $(GENERATED_EXAMPLES_INC): FORCE scripts/gen_examples.py $(EXAMPLES_CATALOG) $(E
 	python3 scripts/gen_examples.py --catalog $(EXAMPLES_CATALOG) --out $@
 
 $(OBJDIR)/src/repl/examples.o: $(GENERATED_EXAMPLES_INC)
+
+$(GENERATED_COMMAND_DESCRIPTIONS_INC): FORCE scripts/gen_command_descriptions.py \
+		$(COMMAND_DESCRIPTIONS_SOURCE) src/repl/command.h src/repl/command_spec.c
+	@mkdir -p $(dir $@)
+	python3 scripts/gen_command_descriptions.py \
+		--catalog $(COMMAND_DESCRIPTIONS_SOURCE) --out $@
+
+$(OBJDIR)/src/repl/command_descriptions.o: $(GENERATED_COMMAND_DESCRIPTIONS_INC)
 
 $(OBJDIR)/%.o: %.c
 	@mkdir -p $(dir $@)
@@ -1588,6 +1599,10 @@ palette-list: ## Print the active accent palette anchors (floats + hex) and the 
 check-examples-catalog: ## Validate the file-backed built-in example catalog.
 	@python3 scripts/gen_examples.py --check --catalog $(EXAMPLES_CATALOG)
 
+check-command-descriptions: ## Validate complete GL command/capability popup descriptions.
+	@python3 scripts/gen_command_descriptions.py --check \
+		--catalog $(COMMAND_DESCRIPTIONS_SOURCE)
+
 check-formatted: ## Verify that example scenes under examples/scenes are formatted correctly.
 	@python3 scripts/format_scenes.py --check || ( \
 		echo "$(RED)ERROR: Some example scenes are not formatted correctly.$(NC)"; \
@@ -1595,7 +1610,7 @@ check-formatted: ## Verify that example scenes under examples/scenes are formatt
 		exit 1; \
 	)
 
-check-c99: $(GENERATED_EXAMPLES_INC) ## C99 build guard: gl-repl + bench + demo sources must syntax-check under gcc -std=c99 (non-pedantic; tests excluded; in the standard gate).
+check-c99: $(GENERATED_EXAMPLES_INC) $(GENERATED_COMMAND_DESCRIPTIONS_INC) ## C99 build guard: gl-repl + bench + demo sources must syntax-check under gcc -std=c99 (non-pedantic; tests excluded; in the standard gate).
 	@C99_SRCS='$(SRCS)' bash scripts/check/check-c99.sh
 
 check-tier-c-function-size: ## Size ratchet: parse_command and flatten_range must not grow past their baselines.
@@ -1625,6 +1640,7 @@ CHECK_TARGETS = \
 	check-user-guide-keymap \
 	check-user-guide-examples \
 	check-examples-catalog \
+	check-command-descriptions \
 	check-formatted \
 	check-gl-boundaries \
 	check-layer-coupling \

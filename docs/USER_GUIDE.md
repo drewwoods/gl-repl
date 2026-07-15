@@ -1415,6 +1415,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+Shift+F | Toggle code focus |
 | Ctrl+B | Cycle code panel layout |
 | Ctrl+Shift+Y | Cycle syntax highlight |
+| Right-click GL command | Show a short description of that command. For `glEnable` / `glDisable`, the popup explains the selected capability (for example, `GL_BLEND`) rather than repeating generic enable/disable help. The next editor keypress, click, or wheel event dismisses it without swallowing the event |
 | Right-click empty line | Toggle a popup table of OpenGL state touched before that line, compared with initial defaults. Left-click anywhere else dismisses it; the mouse wheel scrolls a report taller than the window |
 | Esc | Clear input / close overlay |
 

@@ -127,7 +127,11 @@ the generated built-in example facade [`examples.c`](examples.c)
 (authored from repository-level `examples/catalog.ini` and
 `examples/scenes/`), the [`tutorials.c`](tutorials.c) catalog, the save/load
 file format (writer in [`export.c`](export.c), reader in [`import.c`](import.c)) and workspace I/O
-([`scenes.c`](scenes.c) / [`workspace_io.c`](workspace_io.c)), and the neutral F1 [`help_text.c`](help_text.c) tables.
+([`scenes.c`](scenes.c) / [`workspace_io.c`](workspace_io.c)), the neutral F1
+[`help_text.c`](help_text.c) tables, and the compiled-in right-click command
+help facade ([`command_descriptions.c`](command_descriptions.c)). Command-help
+text is authored outside C in repository-level `command_descriptions.txt` and
+validated/generated at build time, like the example catalog.
 
 > For how all of this fits together — the two flows, the compile→apply
 > seam, the flatten budgets, the state slices, and the host-effects
@@ -174,6 +178,7 @@ file format (writer in [`export.c`](export.c), reader in [`import.c`](import.c))
 | [`workspace_io.c`](workspace_io.c) / `.h`, [`cfg_baseline.c`](cfg_baseline.c) / `.h` | Workspace filesystem + file-naming mechanics; flat key/value config bag |
 | **Program-adjacent data** | |
 | [`examples.c`](examples.c) / `.h`, [`example_loader.c`](example_loader.c) / `.h` | Built-in example catalog facade; example load + `.glr` snippets, `.c` import sources, and `@cfg` / `// camera` metadata. Authored source lives in repository-level `examples/catalog.ini` and `examples/scenes/`; `--examples-dir` can replace the compiled-in catalog at runtime for authoring |
+| [`command_descriptions.c`](command_descriptions.c) / `.h` | Lookup facade for the generated right-click GL command help catalog. Authored source lives in repository-level `command_descriptions.txt`; `glEnable`/`glDisable` select capability-specific entries by `args[0]` |
 | [`tutorials.c`](tutorials.c) / `.h`, [`catalog_tags.h`](catalog_tags.h) | Tutorial catalog; shared example/tutorial tag-bit helper |
 | [`help_text.c`](help_text.c) / `.h`, [`keymap_format.c`](keymap_format.c) | F1 help-text tables; user-facing keybinding labels |
 
