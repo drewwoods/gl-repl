@@ -66,6 +66,16 @@ typedef struct {
     int scroll_rows;
 } UiGlStateInspectorState;
 
+/* Floating GL-command description popup. Like the state inspector, this
+ * stores only transient chrome and a source-line anchor; the controller
+ * resolves the command's embedded description into a per-frame UI view. */
+typedef struct {
+    int visible;
+    int source_line_idx;
+    int anchor_px;
+    int anchor_py;
+} UiCommandDescriptionState;
+
 typedef struct {
     int mode;
     unsigned long long collapsed_sections;

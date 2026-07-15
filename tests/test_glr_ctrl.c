@@ -1184,6 +1184,110 @@ static void test_right_click_code_panel_does_not_start_camera_pan(void) {
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x + 80, y + 40);
 }
 
+static void test_right_click_gl_command_description_popup(void) {
+    UiCommandDescriptionPanelView view;
+    UiHit hit;
+    GLCmd probe;
+    ReplCommandDescription description;
+    int enable_line;
+    int x = -1;
+    int y = -1;
+
+    printf("--- imrepl_ctrl right-click GL command description ---\n");
+
+    prepare_code_panel_mouse_fixture();
+    ASSERT_TRUE("found glVertex3f source row hit",
+                find_code_text_hit_for_line(0, &hit, &x, &y));
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    ASSERT_INT("right-click command opens description",
+               ui_state_command_description().visible, 1);
+    ASSERT_INT("description anchors to clicked source line",
+               ui_state_command_description().source_line_idx, 0);
+    ASSERT_INT("command description closes state inspector",
+               ui_state_gl_state_inspector().visible, 0);
+
+    view = glr_ctrl_build_command_description_panel_view();
+    ASSERT_INT("command description view is visible", view.visible, 1);
+    ASSERT_STR("command description title", view.title, "glVertex3f");
+    ASSERT_TRUE("command description body is command-specific",
+                view.body && strstr(view.body, "3D vertex") != NULL);
+
+    /* The release completing the opening gesture must not immediately close
+     * the popup. A later key event closes it without swallowing the key. */
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    ASSERT_INT("opening right-button release keeps description",
+               ui_state_command_description().visible, 1);
+    glr_ctrl_keyboard('x', 0, 0);
+    ASSERT_INT("subsequent key dismisses description",
+               ui_state_command_description().visible, 0);
+    ASSERT_TRUE("dismiss key still reaches editor",
+                strchr(editor_input_text(), 'x') != NULL);
+
+    /* A new editor mouse press also dismisses while continuing to route to
+     * the underlying row. */
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    ASSERT_TRUE("found second command row for dismiss click",
+                find_code_text_hit_for_line(1, &hit, &x, &y));
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, x, y);
+    ASSERT_INT("subsequent editor click dismisses description",
+               ui_state_command_description().visible, 0);
+    ASSERT_INT("dismiss click still navigates to clicked line",
+               editor_state_edit_line(), 1);
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, x, y);
+
+    /* glEnable/glDisable bypass the command record and resolve args[0] in
+     * the capability catalog. */
+    memset(&probe, 0, sizeof(probe));
+    probe.type = CMD_ENABLE;
+    probe.args[0] = (float)GL_BLEND;
+    ASSERT_INT("GL_BLEND capability description resolves",
+               repl_command_description_lookup(&probe, &description), 1);
+    ASSERT_STR("GL_BLEND capability title", description.title, "GL_BLEND");
+    ASSERT_TRUE("GL_BLEND capability body explains blending",
+                description.body && strstr(description.body, "blending") != NULL);
+
+    probe.type = CMD_DISABLE;
+    probe.args[0] = (float)GL_DEPTH_TEST;
+    ASSERT_INT("GL_DEPTH_TEST capability description resolves",
+               repl_command_description_lookup(&probe, &description), 1);
+    ASSERT_STR("GL_DEPTH_TEST capability title", description.title,
+               "GL_DEPTH_TEST");
+    ASSERT_TRUE("enable capabilities select different descriptions",
+                strstr(description.body, "depth buffer") != NULL);
+
+    probe.type = CMD_VAR_ASSIGN;
+    ASSERT_INT("language command has no GL description",
+               repl_command_description_lookup(&probe, &description), 0);
+
+    prepare_code_panel_mouse_fixture();
+    enable_line = repl_state_document_count();
+    editor_state_edit_line_set(enable_line);
+    editor_insert_mode_set(0);
+    ASSERT_INT("append glEnable line",
+               editor_feed_line("glEnable(GL_BLEND);"), 1);
+    ASSERT_TRUE("found glEnable source row hit",
+                find_code_text_hit_for_line(enable_line, &hit, &x, &y));
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    view = glr_ctrl_build_command_description_panel_view();
+    ASSERT_INT("glEnable popup visible", view.visible, 1);
+    ASSERT_STR("glEnable popup title includes capability", view.title,
+               "glEnable(GL_BLEND)");
+    ASSERT_TRUE("glEnable popup body comes from capability",
+                view.body && strstr(view.body, "glBlendFunc") != NULL);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+
+    glr_ctrl_special(GLUT_KEY_DOWN, 0, 0);
+    ASSERT_INT("subsequent special key dismisses description",
+               ui_state_command_description().visible, 0);
+
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    glr_ctrl_mouse(4, GLUT_DOWN, x, y);
+    ASSERT_INT("subsequent editor wheel event dismisses description",
+               ui_state_command_description().visible, 0);
+}
+
 static void test_right_click_empty_line_toggles_gl_state_report(void) {
     UiHit hit;
     UiGlStatePanelView view;
@@ -3521,6 +3625,7 @@ int main(void) {
     test_variable_panel_written_snapshot_wiring();
     test_pointer_state_tracks_controller_mouse_routes();
     test_right_click_code_panel_does_not_start_camera_pan();
+    test_right_click_gl_command_description_popup();
     test_right_click_empty_line_toggles_gl_state_report();
     test_gl_state_popup_scroll_geometry();
     test_left_click_code_panel_exits_search_and_places_cursor();

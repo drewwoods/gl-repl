@@ -57,6 +57,7 @@
 #include "repl/flatten.h"
 #include "repl/flatten_query.h"
 #include "repl/geometry_query.h"
+#include "repl/command_descriptions.h"
 #include "repl/gl_state_inspector.h"
 #include "repl/help_text.h"
 #include "repl/pipeline.h"
@@ -74,6 +75,7 @@
 #include "render3d/postprocess_filter.h" /* Render3dPostFilterMode, mode_name */
 #include "render3d/render.h"
 #include "ui/app/autocomplete_panel.h"
+#include "ui/app/command_description_panel.h"
 #include "ui/app/gl_state_panel.h"
 #include "ui/app/editor.h"
 #include "ui/app/layout.h"
@@ -107,10 +109,13 @@ static int glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(
     const UiRenderSnapshot *snap,
     int *out_follow_doc_line,
     int *out_visible_lines);
+static UiCommandDescriptionPanelView
+glr_ctrl_build_command_description_panel_view(void);
 
 /* Frame-lived storage for the right-click OpenGL-state popup report; the
  * view handed to ui_gl_state_panel_render points here. */
 static ReplGlStateReport g_gl_state_report;
+static char g_command_description_title[96];
 
 /* Gap kept between the replay HUD's top edge and the overlay panel stack.
  * The easing itself lives in the overlay layout engine (overlay_layout.c). */
@@ -829,6 +834,7 @@ void glr_ctrl_reset_transients(void) {
     glr_camera_clear_scene_default();
     ui_menu_bar_close();
     color_picker_stop();
+    ui_state_command_description_close();
     glr_ctrl_router_reset_code_panel_drag();
 }
 
@@ -2012,6 +2018,11 @@ void glr_ctrl_display_frame(void) {
     if (cp_out.cursor_valid)
         ui_autocomplete_panel_render(&ui_snap, cp_out.cursor_px, cp_out.cursor_py);
     {
+        UiCommandDescriptionPanelView command_description_view =
+            glr_ctrl_build_command_description_panel_view();
+        ui_command_description_panel_render(&command_description_view);
+    }
+    {
         UiGlStatePanelView gl_state_view = glr_ctrl_build_gl_state_panel_view();
         ui_gl_state_panel_render(&gl_state_view);
     }
@@ -2326,6 +2337,44 @@ UiGlStatePanelView glr_ctrl_build_gl_state_panel_view(void) {
     view.anchor_py = vp.window_h - inspector.anchor_py;
     view.scroll_rows = inspector.scroll_rows;
     view.report = &g_gl_state_report;
+    return view;
+}
+
+static UiCommandDescriptionPanelView
+glr_ctrl_build_command_description_panel_view(void) {
+    UiCommandDescriptionPanelView view;
+    UiCommandDescriptionState state = ui_state_command_description();
+    UiViewportState vp = ui_state_viewport();
+    ReplCommandDescription description;
+    const GLCmd *cmd;
+
+    memset(&view, 0, sizeof(view));
+    view.window_w = vp.window_w;
+    view.window_h = vp.window_h;
+    ui_layout_code_panel_rect(&view.panel_x, &view.panel_y,
+                              &view.panel_w, &view.panel_h);
+    if (!state.visible)
+        return view;
+
+    cmd = repl_state_document_cmd_at(state.source_line_idx);
+    if (!cmd || !repl_command_description_lookup(cmd, &description)) {
+        ui_state_command_description_close();
+        return view;
+    }
+
+    if (cmd->type == CMD_ENABLE || cmd->type == CMD_DISABLE) {
+        snprintf(g_command_description_title,
+                 sizeof(g_command_description_title), "%s(%s)",
+                 cmd->type == CMD_ENABLE ? "glEnable" : "glDisable",
+                 description.title);
+        view.title = g_command_description_title;
+    } else {
+        view.title = description.title;
+    }
+    view.visible = 1;
+    view.anchor_px = state.anchor_px;
+    view.anchor_py = vp.window_h - state.anchor_py;
+    view.body = description.body;
     return view;
 }
 
