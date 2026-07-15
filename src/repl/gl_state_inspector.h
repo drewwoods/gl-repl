@@ -1,9 +1,9 @@
 /*
  * src/repl/gl_state_inspector.h - Source-position OpenGL state inspection.
  *
- * Folds the current flat program up to a source checkpoint without issuing
- * GL calls.  The result contains only state variables that user-authored REPL
- * commands explicitly touched.  Current values are paired with the OpenGL
+ * Folds init() plus the current flat display program up to a source checkpoint
+ * without issuing GL calls. The result contains only state variables that
+ * either phase explicitly touched. Current values are paired with the OpenGL
  * 2.1 initial values, and equality is kept separate from touched-ness so an
  * explicit write of a default value remains visible.
  */
@@ -16,11 +16,23 @@
 #define REPL_GL_STATE_NAME_MAX         64
 #define REPL_GL_STATE_VALUE_MAX        192
 
+typedef enum {
+    REPL_GL_STATE_SOURCE_NONE = 0,
+    REPL_GL_STATE_SOURCE_INIT,
+    REPL_GL_STATE_SOURCE_DISPLAY
+} ReplGlStateSourceKind;
+
+typedef struct {
+    ReplGlStateSourceKind kind;
+    int source_line_idx;  /* display source row; -1 for init() */
+} ReplGlStateChangeSource;
+
 typedef struct {
     char name[REPL_GL_STATE_NAME_MAX];
     char current[REPL_GL_STATE_VALUE_MAX];
     char default_value[REPL_GL_STATE_VALUE_MAX];
     int  differs_from_default;
+    ReplGlStateChangeSource source;
 } ReplGlStateReportRow;
 
 typedef struct {
@@ -29,9 +41,9 @@ typedef struct {
     int                  source_line_idx;
 } ReplGlStateReport;
 
-/* Build the REPL-authored GL state immediately before source_line_idx.
- * Flat-command provenance is used so selected if branches, unrolled loops,
- * and function calls reflect the current flattened frame. */
+/* Build the effective init() + REPL-authored display state immediately before
+ * source_line_idx. Flat-command provenance is used so selected if branches,
+ * unrolled loops, and function calls reflect the current flattened frame. */
 void repl_gl_state_report_at_line(FlatProgramView program,
                                   int source_line_idx,
                                   ReplGlStateReport *out);

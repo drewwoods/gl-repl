@@ -448,7 +448,7 @@ commands.
 | `repl_command_store` | Low-level [`GLCmd`](../src/repl/command.h#L90) array mechanics only: insert, replace, delete, load. No text-buffer writes |
 | `repl_flatten` | Builds the flat executable command stream from source commands, loops, functions, and `if` blocks |
 | `repl_flatten_query` | Reads the live flat command stream for cursor matching, current-block highlights, and per-line flat-cost attribution |
-| `repl_gl_state_inspector` | Purely folds the flat stream to a source checkpoint, reporting only explicitly touched OpenGL state alongside OpenGL 2.1 initial values; it issues no GL calls |
+| `repl_gl_state_inspector` | Purely folds the effective `init()` bootstrap and flat `display()` stream to a source checkpoint, reporting explicitly touched OpenGL state, its latest source, and OpenGL 2.1 initial values; it issues no GL calls |
 | `repl_executor` | Narrow live-GL boundary that executes flat user geometry |
 | `repl_eval` | Expression evaluator and predefined-variable lookup |
 | `src/repl/format` | Pure text/indent/depth formatting helpers (`repl_format_*`) |
@@ -597,7 +597,7 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 | `ui_variable_panel` | Renderer for the variable-slider panel (the panel chrome — the *peer subsystem* owns drag/visibility state). Input returns `UI_HIT_VARIABLE_SLIDER` |
 | `ui_autocomplete_panel` | Completion popup renderer; reads `EditorState.autocomplete` |
 | `ui_command_description_panel` | Word-wrapped right-click GL command description card over a controller-built catalog view; popup lifetime and source anchoring stay in controller/UI state |
-| `ui_gl_state_panel` | Floating OpenGL-state popup table (render + pure hit-test + scroll geometry) over the controller-built view of `repl_gl_state_inspector`'s report |
+| `ui_gl_state_panel` | Floating four-column OpenGL-state popup table (state/current/default/latest source, plus pure hit-test + scroll geometry) over the controller-built view of `repl_gl_state_inspector`'s report |
 | `ui_profile_panel` | CPU/GPU timing HUD renderer (lives at [`src/ui/support/cpuprof.c`](../src/ui/support/cpuprof.c); CPU/GPU/Max columns, GPU fed by [`src/support/gpuprof.c`](../src/support/gpuprof.c) timer queries) |
 | `ui_memory_panel` | Memory RSS/history HUD renderer (lives at [`src/ui/support/memprof.c`](../src/ui/support/memprof.c)) |
 | `replay_ui_hud` | **Feature-UI** (replay peer): 2D replay HUD; reads replay peer subsystem state through snapshot. Lives under the `replay_ui_*` prefix because it knows replay concepts (mode / PC / play-paused-done / speed / normals); audited by `check-replay-ui-isolation` |

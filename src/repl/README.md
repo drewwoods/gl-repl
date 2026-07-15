@@ -159,7 +159,8 @@ at build time, like the example catalog.
 | [`flatten.c`](flatten.c) / `.h` | Source → flat program (unroll/inline/resolve `if`) |
 | [`flatten_expr.c`](flatten_expr.c) / `.h` | Internal compiled-expression cache boundary used by flatten |
 | [`flatten_query.c`](flatten_query.c) / `.h` | Live flat-program cost/cursor queries |
-| [`gl_state_inspector.c`](gl_state_inspector.c) / `.h` | Pure source-checkpoint fold of REPL-modifiable GL state; reports touched values against OpenGL 2.1 initial defaults without issuing GL calls |
+| [`init_state.h`](init_state.h) | Read-only access to the effective REPL-modifiable state commands applied by `init()` |
+| [`gl_state_inspector.c`](gl_state_inspector.c) / `.h` | Pure source-checkpoint fold of REPL-modifiable GL state from `init()` through the selected point in `display()`; reports touched values, their latest source, and OpenGL 2.1 initial defaults without issuing GL calls |
 | [`autonormal.c`](autonormal.c) | Auto-generated `glNormal3f` maintenance |
 | [`executor.c`](executor.c) / `.h` | Walks the flat program emitting live GL calls (the only live-GL TU) |
 | [`transform_utils.h`](transform_utils.h) | Shared GL matrix tracking helpers (no executor link dependency) |

@@ -2,11 +2,11 @@
  * src/ui/app/gl_state_panel.h - Floating OpenGL-state popup table.
  *
  * Pure renderer + hit-test over a controller-built view: draws the
- * right-click OpenGL-state report as a floating three-column table
- * (state name, current value, OpenGL 2.1 default) anchored near the
- * click position, wheel-scrollable when the report is taller than the
- * window (flyout-style right-edge scrollbar hint). The fold itself
- * lives in src/repl/gl_state_inspector.c; open/close/scroll chrome
+ * right-click OpenGL-state report as a floating four-column table
+ * (state name, current value, OpenGL 2.1 default, latest change source)
+ * anchored near the click position, wheel-scrollable when the report is
+ * taller than the window (flyout-style right-edge scrollbar hint). The fold
+ * itself lives in src/repl/gl_state_inspector.c; open/close/scroll chrome
  * lives on UiState (ui_state_gl_state_inspector*).
  */
 #ifndef UI_GL_STATE_PANEL_H
