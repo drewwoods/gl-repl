@@ -169,6 +169,16 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
                  * leaving the key's default action live, which is what makes
                  * the browser synthesize the native copy/cut/paste event. */
                 if (glrIsPlainClipboardCombo(event)) return null;
+                /* Emscripten's stock punctuation table omits the backquote
+                 * key entirely (DOM keyCode 192), so gl-repl never receives
+                 * the ASCII '`' bound to the variable-panel toggle. Accept
+                 * both the modern code and legacy keyCode forms; preserve
+                 * Shift+Backquote as '~' for normal editor input. */
+                if (!event['ctrlKey'] && !event['altKey'] && !event['metaKey'] &&
+                    (code === "Backquote" || kc === 192 ||
+                     key === "`" || key === "~")) {
+                    return event['shiftKey'] ? 126 : 96;
+                }
                 /* Emscripten's stock GLUT returns raw digit keyCodes for
                  * Shift+0..9 (`1` instead of `!`, etc.; its source has a TODO
                  * for this case). Match the US keyboard symbols that native
