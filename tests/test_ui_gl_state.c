@@ -53,6 +53,18 @@ static void assert_material_state(const char *label, GLenum face, GLenum pname,
     }
 }
 
+static void assert_light_state(const char *label, GLenum light, GLenum pname,
+                               const GLfloat *expected) {
+    GLfloat got[4];
+    char component_label[128];
+    int i;
+    glGetLightfv(light, pname, got);
+    for (i = 0; i < 4; i++) {
+        snprintf(component_label, sizeof(component_label), "%s[%d]", label, i);
+        ASSERT_TRUE(component_label, feq(got[i], expected[i]));
+    }
+}
+
 /* Confirm the OpenGL 2.1 initial values used by gl_state_inspector.c against
  * a fresh real context. This stays in the opt-in GL suite because the stub
  * headers deliberately do not implement a state machine. */
@@ -76,6 +88,7 @@ static void test_fresh_context_defaults(void) {
     static const GLfloat ambient[4] = { 0.2f, 0.2f, 0.2f, 1 };
     static const GLfloat diffuse[4] = { 0.8f, 0.8f, 0.8f, 1 };
     static const GLfloat black_alpha_one[4] = { 0, 0, 0, 1 };
+    static const GLfloat light_position[4] = { 0, 0, 1, 0 };
     static const GLfloat point_attenuation[3] = { 1, 0, 0 };
     static const GLfloat zeros[4] = { 0, 0, 0, 0 };
     static const GLfloat raster_pos[4] = { 0, 0, 0, 1 };
@@ -93,6 +106,8 @@ static void test_fresh_context_defaults(void) {
     assert_float_state("default clear color", GL_COLOR_CLEAR_VALUE, zeros, 4);
     assert_float_state("default raster position",
                        GL_CURRENT_RASTER_POSITION, raster_pos, 4);
+    assert_float_state("default light model ambient",
+                       GL_LIGHT_MODEL_AMBIENT, ambient, 4);
 
     for (i = 0; i < (int)(sizeof(disabled_caps) / sizeof(disabled_caps[0])); i++) {
         snprintf(label, sizeof(label), "cap 0x%X initially disabled",
@@ -106,6 +121,8 @@ static void test_fresh_context_defaults(void) {
     ASSERT_TRUE("default shade model smooth", iv == GL_SMOOTH);
     glGetIntegerv(GL_MODELVIEW_STACK_DEPTH, &iv);
     ASSERT_TRUE("default modelview stack depth", iv == 1);
+    glGetIntegerv(GL_ATTRIB_STACK_DEPTH, &iv);
+    ASSERT_TRUE("default attribute stack depth", iv == 0);
     glGetIntegerv(GL_COLOR_MATERIAL_FACE, &iv);
     ASSERT_TRUE("default color material face", iv == GL_FRONT_AND_BACK);
     glGetIntegerv(GL_COLOR_MATERIAL_PARAMETER, &iv);
@@ -157,6 +174,19 @@ static void test_fresh_context_defaults(void) {
                           black_alpha_one, 4);
     assert_material_state("front shininess", GL_FRONT, GL_SHININESS, zeros, 1);
     assert_material_state("back shininess", GL_BACK, GL_SHININESS, zeros, 1);
+
+    for (i = 0; i < 4; i++) {
+        GLenum light = (GLenum)(GL_LIGHT0 + i);
+        const GLfloat *color_default = i == 0 ? white : black_alpha_one;
+        snprintf(label, sizeof(label), "light%d ambient", i);
+        assert_light_state(label, light, GL_AMBIENT, black_alpha_one);
+        snprintf(label, sizeof(label), "light%d diffuse", i);
+        assert_light_state(label, light, GL_DIFFUSE, color_default);
+        snprintf(label, sizeof(label), "light%d specular", i);
+        assert_light_state(label, light, GL_SPECULAR, color_default);
+        snprintf(label, sizeof(label), "light%d position", i);
+        assert_light_state(label, light, GL_POSITION, light_position);
+    }
 
     for (i = 0; i < 6; i++) {
         int j;

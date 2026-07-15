@@ -1416,7 +1416,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+B | Cycle code panel layout |
 | Ctrl+Shift+Y | Cycle syntax highlight |
 | Right-click GL command | Show a short description of that command. For `glEnable` / `glDisable`, the popup explains the selected capability (for example, `GL_BLEND`) rather than repeating generic enable/disable help. The next editor keypress, click, or wheel event dismisses it without swallowing the event |
-| Right-click empty line | Toggle a popup table of OpenGL state touched by `init()` or before that line in `display()`, compared with initial defaults. The source column identifies `init()` or the latest `display()` source line. Left-click anywhere else dismisses it; the mouse wheel scrolls a report taller than the window |
+| Right-click empty line | Toggle a popup table of OpenGL state touched by the generated `init()`/`display()` setup or by user commands before that line, compared with initial defaults. This includes generated light colors/global ambient, eye-coordinate light positions, camera/modelview setup, render toggles, and the attribute-stack push. The source column identifies `init()`, generated `display()`, or the latest user `display()` source line. Explicit writes remain visible even when they equal the default. Left-click anywhere else dismisses it; the mouse wheel scrolls a report taller than the window |
 | Esc | Clear input / close overlay |
 
 ### Scene & rendering

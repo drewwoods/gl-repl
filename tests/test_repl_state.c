@@ -6,6 +6,7 @@
 #include "repl/state_owners.h"
 #include "repl/flatten.h"
 #include "repl/gl_state_inspector.h"
+#include "repl/export.h"
 #include "repl/scenes.h"
 #include "repl/example_loader.h"
 #include "editor/state.h"
@@ -60,6 +61,33 @@ static const ReplGlStateReportRow *gl_state_test_find_row(
         if (strcmp(report->rows[i].name, name) == 0)
             return &report->rows[i];
     return NULL;
+}
+
+static void gl_state_test_fill_light(int slot, ReplExportLightInfo *out) {
+    memset(out, 0, sizeof(*out));
+    out->pos[0] = (float)(slot + 1);
+    out->pos[1] = 2.0f;
+    out->pos[2] = 3.0f;
+    out->pos[3] = 1.0f;
+    out->ambient[0] = 0.1f;
+    out->ambient[1] = 0.2f;
+    out->ambient[2] = 0.3f;
+    out->ambient[3] = 1.0f;
+    out->diffuse[0] = 0.4f;
+    out->diffuse[1] = 0.5f;
+    out->diffuse[2] = 0.6f;
+    out->diffuse[3] = 1.0f;
+    out->specular[0] = 0.7f;
+    out->specular[1] = 0.8f;
+    out->specular[2] = 0.9f;
+    out->specular[3] = 1.0f;
+}
+
+static void gl_state_test_fill_camera(ReplExportCameraBlock *block) {
+    memset(block, 0, sizeof(*block));
+    block->present = 1;
+    snprintf(block->lines[0], sizeof(block->lines[0]),
+             "  glTranslatef(10, 0, 0);");
 }
 
 static void populate_runtime_snapshot_fixture(const char *scene_hint) {
@@ -1082,6 +1110,105 @@ static void test_gl_state_report_uses_flat_call_provenance(void) {
                    row->source.kind, REPL_GL_STATE_SOURCE_INIT);
 }
 
+static void test_gl_state_report_includes_generated_fixed_function_state(void) {
+    static const ReplExportLightBridge light_bridge = {
+        gl_state_test_fill_light
+    };
+    static const ReplExportCameraBridge camera_bridge = {
+        .fill_display_block = gl_state_test_fill_camera
+    };
+    const ReplExportLightBridge *saved_light_bridge =
+        repl_export_light_bridge();
+    const ReplExportCameraBridge *saved_camera_bridge =
+        repl_export_camera_bridge();
+    FlatProgramView program;
+    ReplGlStateReport report;
+    const ReplGlStateReportRow *row;
+
+    printf("--- repl_state generated fixed-function state ---\n");
+    repl_export_install_light_bridge(&light_bridge);
+    repl_export_install_camera_bridge(&camera_bridge);
+    memset(&program, 0, sizeof(program));
+    repl_gl_state_report_at_line(program, 0, &report);
+
+    row = gl_state_test_find_row(&report, "GL_LINE_WIDTH");
+    ASSERT_TRUE("generated init line width is reported", row != NULL);
+    if (row) {
+        ASSERT_STR("generated init line width current", row->current, "1.5");
+        ASSERT_STR("generated init line width default", row->default_value, "1");
+        ASSERT_INT("line width source is init", row->source.kind,
+                   REPL_GL_STATE_SOURCE_INIT);
+    }
+
+    row = gl_state_test_find_row(&report, "GL_LIGHT_MODEL_AMBIENT");
+    ASSERT_TRUE("generated global light ambient is reported", row != NULL);
+    if (row) {
+        ASSERT_STR("global light ambient current", row->current,
+                   "(0.15, 0.15, 0.2, 1)");
+        ASSERT_STR("global light ambient OpenGL default", row->default_value,
+                   "(0.2, 0.2, 0.2, 1)");
+        ASSERT_INT("global ambient source is init", row->source.kind,
+                   REPL_GL_STATE_SOURCE_INIT);
+    }
+
+    row = gl_state_test_find_row(&report, "GL_LIGHT0_DIFFUSE");
+    ASSERT_TRUE("generated light diffuse is reported", row != NULL);
+    if (row) {
+        ASSERT_STR("light diffuse current", row->current,
+                   "(0.4, 0.5, 0.6, 1)");
+        ASSERT_STR("light0 diffuse OpenGL default", row->default_value,
+                   "(1, 1, 1, 1)");
+        ASSERT_INT("light diffuse source is init", row->source.kind,
+                   REPL_GL_STATE_SOURCE_INIT);
+    }
+
+    row = gl_state_test_find_row(&report, "GL_LIGHT0_AMBIENT");
+    ASSERT_TRUE("generated light ambient is reported", row != NULL);
+    if (row)
+        ASSERT_STR("light ambient current", row->current,
+                   "(0.1, 0.2, 0.3, 1)");
+
+    row = gl_state_test_find_row(&report, "GL_LIGHT0_SPECULAR");
+    ASSERT_TRUE("generated light specular is reported", row != NULL);
+    if (row)
+        ASSERT_STR("light specular current", row->current,
+                   "(0.7, 0.8, 0.9, 1)");
+
+    row = gl_state_test_find_row(&report, "GL_MODELVIEW_MATRIX");
+    ASSERT_TRUE("generated camera modelview is reported", row != NULL);
+    if (row) {
+        ASSERT_STR("generated camera modelview current", row->current,
+                   "[1 0 0 10; 0 1 0 0; 0 0 1 0; 0 0 0 1]");
+        ASSERT_INT("camera modelview source is display", row->source.kind,
+                   REPL_GL_STATE_SOURCE_DISPLAY);
+        ASSERT_INT("generated display has no user line",
+                   row->source.source_line_idx, -1);
+    }
+
+    row = gl_state_test_find_row(&report, "GL_LIGHT0_POSITION (eye)");
+    ASSERT_TRUE("generated light position is reported", row != NULL);
+    if (row) {
+        ASSERT_STR("world light is stored after modelview transform",
+                   row->current, "(11, 2, 3, 1)");
+        ASSERT_STR("light position OpenGL default", row->default_value,
+                   "(0, 0, 1, 0)");
+        ASSERT_INT("light position source is display", row->source.kind,
+                   REPL_GL_STATE_SOURCE_DISPLAY);
+    }
+
+    row = gl_state_test_find_row(&report, "GL_ATTRIB_STACK_DEPTH");
+    ASSERT_TRUE("generated display attribute push is reported", row != NULL);
+    if (row) {
+        ASSERT_STR("attribute stack depth current", row->current, "1");
+        ASSERT_STR("attribute stack depth default", row->default_value, "0");
+        ASSERT_INT("attribute stack source is display", row->source.kind,
+                   REPL_GL_STATE_SOURCE_DISPLAY);
+    }
+
+    repl_export_install_light_bridge(saved_light_bridge);
+    repl_export_install_camera_bridge(saved_camera_bridge);
+}
+
 int main(void) {
     printf("--- repl_state tests ---\n");
     test_capture_restore_round_trip();
@@ -1102,6 +1229,7 @@ int main(void) {
     test_time_dirty_gate_uses_source_text();
     test_gl_state_report_tracks_explicit_writes_before_checkpoint();
     test_gl_state_report_uses_flat_call_provenance();
+    test_gl_state_report_includes_generated_fixed_function_state();
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return g_harness.passed == g_harness.run ? 0 : 1;
 }
