@@ -19,6 +19,7 @@
 #include "editor/search.h"
 #include "keys.h"
 #include "ui/app/layout.h"   /* CODE_PANEL_LAYOUT_* */
+#include "ui/core/metrics.h"
 #include "support/test_harness.h"
 #ifdef GL_STUBS
 #include <GL/gl_stub_counts.h>
@@ -1496,7 +1497,7 @@ static void test_right_click_uncommitted_empty_line_opens_gl_state_report(void) 
 static void test_gl_state_popup_scroll_geometry(void) {
     static ReplGlStateReport report;
     UiGlStatePanelView view;
-    int max_scroll;
+    int max_scroll, matrix_max_scroll;
     int i;
 
     printf("--- imrepl_ctrl OpenGL-state popup scroll geometry ---\n");
@@ -1526,6 +1527,22 @@ static void test_gl_state_popup_scroll_geometry(void) {
     ASSERT_TRUE("some rows stay visible at full scroll",
                 max_scroll < report.count);
 
+    /* A matrix at the end consumes four visual lines, leaving room for three
+     * fewer scalar report rows in the final semantic-row viewport. */
+    snprintf(report.rows[report.count - 1].name,
+             sizeof(report.rows[report.count - 1].name),
+             "GL_MODELVIEW_MATRIX");
+    snprintf(report.rows[report.count - 1].current,
+             sizeof(report.rows[report.count - 1].current),
+             "[1 0 0 0; 0 1 0 0; 0 0 1 0; 0 0 0 1]");
+    snprintf(report.rows[report.count - 1].default_value,
+             sizeof(report.rows[report.count - 1].default_value),
+             "[1 0 0 0; 0 1 0 0; 0 0 1 0; 0 0 0 1]");
+    matrix_max_scroll = ui_gl_state_panel_max_scroll(&view);
+    ASSERT_INT("matrix visual lines reduce the final row viewport",
+               matrix_max_scroll - max_scroll, 3);
+    max_scroll = matrix_max_scroll;
+
     /* The popup frame answers hits; far-off points do not. Scrolling to
      * the end must not move the solved frame. */
     ASSERT_TRUE("point on popup frame hits",
@@ -1541,6 +1558,95 @@ static void test_gl_state_popup_scroll_geometry(void) {
                 !ui_gl_state_panel_hit_test(&view, 130, 150));
     ASSERT_INT("hidden view has no scroll range",
                ui_gl_state_panel_max_scroll(&view), 0);
+}
+
+static int gl_state_popup_hit_height(const UiGlStatePanelView *view) {
+    int mx = view->anchor_px + 20;
+    int first = -1, last = -1;
+    int my;
+    for (my = 0; my < view->window_h; my++) {
+        if (!ui_gl_state_panel_hit_test(view, mx, my))
+            continue;
+        if (first < 0)
+            first = my;
+        last = my;
+    }
+    return first < 0 ? 0 : last - first;
+}
+
+/* The modelview state remains one report row, but its current/default values
+ * consume four visual lines. Popup geometry and rendering must both account
+ * for the three additional lines. */
+static void test_gl_state_popup_modelview_uses_four_lines(void) {
+    static ReplGlStateReport report;
+    UiGlStatePanelView view;
+    int scalar_height, matrix_height;
+#ifdef GL_STUBS
+    int scalar_draws, matrix_draws;
+#endif
+
+    printf("--- imrepl_ctrl OpenGL-state matrix visual rows ---\n");
+
+    memset(&report, 0, sizeof(report));
+    report.count = 1;
+    snprintf(report.rows[0].name, sizeof(report.rows[0].name),
+             "GL_CURRENT_COLOR");
+    snprintf(report.rows[0].current, sizeof(report.rows[0].current),
+             "(0.25, 0.5, 0.75, 1)");
+    snprintf(report.rows[0].default_value,
+             sizeof(report.rows[0].default_value), "(1, 1, 1, 1)");
+    report.rows[0].source.kind = REPL_GL_STATE_SOURCE_DISPLAY;
+
+    memset(&view, 0, sizeof(view));
+    view.visible = 1;
+    view.window_w = 800;
+    view.window_h = 600;
+    view.anchor_px = 40;
+    view.anchor_py = 500;
+    view.report = &report;
+
+    scalar_height = gl_state_popup_hit_height(&view);
+#ifdef GL_STUBS
+    gl_stub_counts_reset();
+    ui_gl_state_panel_render(&view);
+    scalar_draws = (int)gl_stub_counts[GL_STUB_glRasterPos2f];
+#endif
+
+    snprintf(report.rows[0].name, sizeof(report.rows[0].name),
+             "GL_MODELVIEW_MATRIX");
+    snprintf(report.rows[0].current, sizeof(report.rows[0].current),
+             "[0.866025 -0.5 0 1.25; 0.5 0.866025 0 -2.5; "
+             "0 0 1 3.75; 0 0 0 1]");
+    snprintf(report.rows[0].default_value,
+             sizeof(report.rows[0].default_value),
+             "[1 0 0 0; 0 1 0 0; 0 0 1 0; 0 0 0 1]");
+
+    matrix_height = gl_state_popup_hit_height(&view);
+    ASSERT_INT("matrix adds three visual lines to popup geometry",
+               matrix_height - scalar_height, 3 * LINE_H);
+#ifdef GL_STUBS
+    gl_stub_counts_reset();
+    ui_gl_state_panel_render(&view);
+    matrix_draws = (int)gl_stub_counts[GL_STUB_glRasterPos2f];
+    ASSERT_INT("collapsed matrix draws four current-value lines",
+               matrix_draws - scalar_draws, 3);
+
+    /* Expanded details draw the four default rows beside the four current
+     * rows while the state name/source remain single-line metadata. */
+    view.details_expanded = 1;
+    snprintf(report.rows[0].name, sizeof(report.rows[0].name),
+             "GL_CURRENT_COLOR");
+    gl_stub_counts_reset();
+    ui_gl_state_panel_render(&view);
+    scalar_draws = (int)gl_stub_counts[GL_STUB_glRasterPos2f];
+    snprintf(report.rows[0].name, sizeof(report.rows[0].name),
+             "GL_MODELVIEW_MATRIX");
+    gl_stub_counts_reset();
+    ui_gl_state_panel_render(&view);
+    matrix_draws = (int)gl_stub_counts[GL_STUB_glRasterPos2f];
+    ASSERT_INT("expanded matrix aligns four current and default lines",
+               matrix_draws - scalar_draws, 6);
+#endif
 }
 
 /* Rightmost x (GLUT coords) answering the popup's surface hit-test; -1
@@ -4035,6 +4141,7 @@ int main(void) {
     test_right_click_empty_line_toggles_gl_state_report();
     test_right_click_uncommitted_empty_line_opens_gl_state_report();
     test_gl_state_popup_scroll_geometry();
+    test_gl_state_popup_modelview_uses_four_lines();
     test_gl_state_popup_details_toggle();
     test_editor_input_dismisses_gl_state_report();
     test_gl_state_popup_defers_to_front_overlay();

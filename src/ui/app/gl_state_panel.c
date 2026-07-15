@@ -29,6 +29,7 @@
 #define GLSP_VAL_CHARS_MAX  44
 #define GLSP_SOURCE_CHARS_MAX 18
 #define GLSP_EDGE_MARGIN     8
+#define GLSP_MATRIX_ROWS     4
 
 static const char GLSP_TITLE[]      = "OpenGL state at this line";
 static const char GLSP_HDR_NAME[]   = "state";
@@ -36,6 +37,7 @@ static const char GLSP_HDR_CUR[]    = "current";
 static const char GLSP_HDR_DEF[]    = "[-] default (GL 2.1)";
 static const char GLSP_HDR_SOURCE[] = "source";
 static const char GLSP_HDR_DETAILS_CLOSED[] = "[+] default/source";
+static const char GLSP_MODELVIEW_NAME[] = "GL_MODELVIEW_MATRIX";
 static const char GLSP_EMPTY_MSG[]  =
     "No init() or display() OpenGL state has been touched.";
 
@@ -49,7 +51,9 @@ typedef struct {
     int col0_x, col1_x, col2_x, col3_x;
     int tog_x0, tog_x1;       /* expand/collapse header chip cell (y-up; */
     int tog_y0, tog_y1;       /* zero-width when the report is empty) */
-    int visible_rows;         /* report rows drawn (0 for the empty msg) */
+    int visible_rows;         /* semantic report rows drawn */
+    int viewport_lines;       /* visual value lines reserved in the frame */
+    int total_lines;          /* visual value lines across the report */
     int max_scroll;
     int scroll;               /* view->scroll_rows clamped to [0, max] */
 } GlspLayout;
@@ -104,6 +108,78 @@ static int glsp_clamp_chars(int chars, int min_chars, int max_chars) {
     return chars;
 }
 
+/* The report keeps matrices as one semantic state row so touched/default
+ * comparison and provenance remain attached to a single state variable. The
+ * popup expands that row into four visual lines without changing the report
+ * format used by non-UI consumers. */
+static int glsp_row_visual_lines(const ReplGlStateReportRow *row) {
+    return row && strcmp(row->name, GLSP_MODELVIEW_NAME) == 0
+               ? GLSP_MATRIX_ROWS : 1;
+}
+
+/* Copy one visual value line. Matrix report strings use "; " between their
+ * four rows; continuation rows gain one leading cell so their values align
+ * with the first row's opening '['. */
+static void glsp_value_line(const ReplGlStateReportRow *row,
+                            const char *value, int line,
+                            char *buf, int buf_size) {
+    const char *start, *end;
+    size_t len, used = 0;
+    int i;
+
+    if (!buf || buf_size <= 0)
+        return;
+    buf[0] = '\0';
+    if (!value)
+        return;
+    if (glsp_row_visual_lines(row) == 1) {
+        snprintf(buf, (size_t)buf_size, "%s", value);
+        return;
+    }
+    if (line < 0 || line >= GLSP_MATRIX_ROWS)
+        return;
+
+    start = value;
+    for (i = 0; i < line; i++) {
+        end = strstr(start, "; ");
+        if (!end)
+            return;
+        start = end + 2;
+    }
+    end = strstr(start, "; ");
+    len = end ? (size_t)(end - start) : strlen(start);
+    if (line > 0 && used + 1 < (size_t)buf_size)
+        buf[used++] = ' ';
+    if (len > (size_t)buf_size - used - 1)
+        len = (size_t)buf_size - used - 1;
+    memcpy(buf + used, start, len);
+    buf[used + len] = '\0';
+}
+
+static int glsp_value_max_chars(const ReplGlStateReportRow *row,
+                                const char *value) {
+    char line[REPL_GL_STATE_VALUE_MAX + 2];
+    int count = glsp_row_visual_lines(row);
+    int max_chars = 0;
+    int i;
+    for (i = 0; i < count; i++) {
+        int chars;
+        glsp_value_line(row, value, i, line, (int)sizeof(line));
+        chars = (int)strlen(line);
+        if (chars > max_chars)
+            max_chars = chars;
+    }
+    return max_chars;
+}
+
+static int glsp_report_visual_lines(const ReplGlStateReport *report) {
+    int lines = 0;
+    int i;
+    for (i = 0; report && i < report->count; i++)
+        lines += glsp_row_visual_lines(&report->rows[i]);
+    return lines;
+}
+
 /* Solve the popup's frame, columns, and scrolled row window. Returns 0
  * when the view is hidden / degenerate (nothing to draw or hit). */
 static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
@@ -147,12 +223,14 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
         const ReplGlStateReportRow *row = &report->rows[i];
         if ((int)strlen(row->name) > out->name_chars)
             out->name_chars = (int)strlen(row->name);
-        if ((int)strlen(row->current) > out->cur_chars)
-            out->cur_chars = (int)strlen(row->current);
+        int value_chars = glsp_value_max_chars(row, row->current);
+        if (value_chars > out->cur_chars)
+            out->cur_chars = value_chars;
         if (!out->details)
             continue;
-        if ((int)strlen(row->default_value) > out->def_chars)
-            out->def_chars = (int)strlen(row->default_value);
+        value_chars = glsp_value_max_chars(row, row->default_value);
+        if (value_chars > out->def_chars)
+            out->def_chars = value_chars;
         glsp_source_text(row, source_text, (int)sizeof(source_text));
         if ((int)strlen(source_text) > out->source_chars)
             out->source_chars = (int)strlen(source_text);
@@ -202,23 +280,63 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
         out->popup_w = view->window_w - 2 * GLSP_EDGE_MARGIN;
 
     /* Title + column-header rows (the empty message reuses the header
-     * slot), then as many report rows as fit between the menu-bar band
-     * and the bottom edge; the rest scroll. */
+     * slot), then as many visual value lines as fit between the menu-bar
+     * band and the bottom edge. Scrolling remains indexed by semantic report
+     * rows, so the four matrix lines always move and render together. */
     chrome_rows = 2;
     row_capacity = (top_limit - GLSP_EDGE_MARGIN - 2 * GLSP_PAD_Y - 2)
                    / LINE_H - chrome_rows;
     if (row_capacity < 1)
         row_capacity = 1;
-    out->visible_rows = report->count < row_capacity ? report->count
-                                                     : row_capacity;
-    out->max_scroll = report->count - out->visible_rows;
+    for (i = 0; i < report->count; i++) {
+        int row_lines = glsp_row_visual_lines(&report->rows[i]);
+        if (row_lines > row_capacity)
+            row_capacity = row_lines;
+    }
+    out->total_lines = glsp_report_visual_lines(report);
+    out->viewport_lines = out->total_lines < row_capacity
+                              ? out->total_lines : row_capacity;
+
+    /* The final scroll position is the earliest semantic row whose suffix
+     * fits in the viewport. A single over-tall row is still kept whole. */
+    out->max_scroll = 0;
+    if (out->total_lines > row_capacity) {
+        int lines = 0;
+        for (i = report->count - 1; i >= 0; i--) {
+            int row_lines = glsp_row_visual_lines(&report->rows[i]);
+            if (lines > 0 && lines + row_lines > row_capacity) {
+                out->max_scroll = i + 1;
+                break;
+            }
+            lines += row_lines;
+            if (lines >= row_capacity) {
+                out->max_scroll = i;
+                break;
+            }
+        }
+    }
     out->scroll = view->scroll_rows;
     if (out->scroll > out->max_scroll) out->scroll = out->max_scroll;
     if (out->scroll < 0) out->scroll = 0;
 
+    out->visible_rows = 0;
+    if (report->count > 0) {
+        int lines = 0;
+        for (i = out->scroll; i < report->count; i++) {
+            int row_lines = glsp_row_visual_lines(&report->rows[i]);
+            if (out->visible_rows > 0 &&
+                lines + row_lines > row_capacity)
+                break;
+            lines += row_lines;
+            out->visible_rows++;
+            if (lines >= row_capacity)
+                break;
+        }
+    }
+
     out->popup_h = 2 * GLSP_PAD_Y +
                    (chrome_rows + (report->count == 0 ? 0
-                                                      : out->visible_rows)) *
+                                                      : out->viewport_lines)) *
                        LINE_H + 2;
 
     /* Anchor beside the click, clamped fully inside the window (y-up;
@@ -302,6 +420,7 @@ void ui_gl_state_panel_render(const UiGlStatePanelView *view) {
     const ReplGlStateReport *report;
     GlspLayout lo;
     char clipped[REPL_GL_STATE_VALUE_MAX];
+    char value_line[REPL_GL_STATE_VALUE_MAX + 2];
     char source_text[32];
     int ty, i;
 
@@ -351,29 +470,47 @@ void ui_gl_state_panel_render(const UiGlStatePanelView *view) {
 
     for (i = lo.scroll; i < lo.scroll + lo.visible_rows; i++) {
         const ReplGlStateReportRow *row = &report->rows[i];
+        int line_count = glsp_row_visual_lines(row);
+        int line;
 
-        ui_clr(UI_TOK_TEXT_PRIMARY);
-        glsp_clip(clipped, (int)sizeof(clipped), row->name, lo.name_chars);
-        gl2d_draw_string((float)lo.col0_x, (float)ty, clipped, FONT_MONO);
+        for (line = 0; line < line_count; line++) {
+            if (line == 0) {
+                ui_clr(UI_TOK_TEXT_PRIMARY);
+                glsp_clip(clipped, (int)sizeof(clipped), row->name,
+                          lo.name_chars);
+                gl2d_draw_string((float)lo.col0_x, (float)ty, clipped,
+                                 FONT_MONO);
+            }
 
-        ui_clr(row->differs_from_default ? UI_TOK_STATUS_WARN
-                                         : UI_TOK_STATUS_OK);
-        glsp_clip(clipped, (int)sizeof(clipped), row->current, lo.cur_chars);
-        gl2d_draw_string((float)lo.col1_x, (float)ty, clipped, FONT_MONO);
+            ui_clr(row->differs_from_default ? UI_TOK_STATUS_WARN
+                                             : UI_TOK_STATUS_OK);
+            glsp_value_line(row, row->current, line, value_line,
+                            (int)sizeof(value_line));
+            glsp_clip(clipped, (int)sizeof(clipped), value_line,
+                      lo.cur_chars);
+            gl2d_draw_string((float)lo.col1_x, (float)ty, clipped, FONT_MONO);
 
-        if (lo.details) {
-            ui_clr(UI_TOK_TEXT_MUTED);
-            glsp_clip(clipped, (int)sizeof(clipped), row->default_value,
-                      lo.def_chars);
-            gl2d_draw_string((float)lo.col2_x, (float)ty, clipped, FONT_MONO);
+            if (lo.details) {
+                ui_clr(UI_TOK_TEXT_MUTED);
+                glsp_value_line(row, row->default_value, line, value_line,
+                                (int)sizeof(value_line));
+                glsp_clip(clipped, (int)sizeof(clipped), value_line,
+                          lo.def_chars);
+                gl2d_draw_string((float)lo.col2_x, (float)ty, clipped,
+                                 FONT_MONO);
 
-            glsp_source_text(row, source_text, (int)sizeof(source_text));
-            glsp_clip(clipped, (int)sizeof(clipped), source_text,
-                      lo.source_chars);
-            gl2d_draw_string((float)lo.col3_x, (float)ty, clipped, FONT_MONO);
+                if (line == 0) {
+                    glsp_source_text(row, source_text,
+                                     (int)sizeof(source_text));
+                    glsp_clip(clipped, (int)sizeof(clipped), source_text,
+                              lo.source_chars);
+                    gl2d_draw_string((float)lo.col3_x, (float)ty, clipped,
+                                     FONT_MONO);
+                }
+            }
+
+            ty -= LINE_H;
         }
-
-        ty -= LINE_H;
     }
 
     /* Overflow scrollbar hint: thin track + proportional thumb on the
@@ -386,8 +523,8 @@ void ui_gl_state_panel_render(const UiGlStatePanelView *view) {
         float track_top = (float)(lo.py - GLSP_PAD_Y - 2 * LINE_H);
         float track_bot = (float)(lo.py - lo.popup_h + GLSP_PAD_Y);
         float track_h   = track_top - track_bot;
-        float thumb_h   = track_h * (float)lo.visible_rows /
-                          (float)report->count;
+        float thumb_h   = track_h * (float)lo.viewport_lines /
+                          (float)lo.total_lines;
         float max_off, thumb_top;
         if (thumb_h < 10.0f)   thumb_h = 10.0f;
         if (thumb_h > track_h) thumb_h = track_h;
