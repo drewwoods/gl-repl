@@ -1054,6 +1054,18 @@ static int glr_ctrl_router_point_in_gl_state_popup(int x, int y) {
     return view.visible && ui_gl_state_panel_hit_test(&view, x, y);
 }
 
+/* The inspector describes state at a fixed source boundary. Once an event is
+ * actually handed to the editor that boundary is no longer the user's active
+ * context, so remove the overlay before the editor processes the event. Keep
+ * this at the controller/editor routing seam: editor itself does not own UI
+ * popup state, and controller-owned shortcuts should not dismiss it. */
+static void glr_ctrl_router_dismiss_gl_state_for_editor_input(void) {
+    if (!ui_state_gl_state_inspector().visible)
+        return;
+    ui_state_gl_state_inspector_close();
+    editor_request_redraw();
+}
+
 /* Left press vs the floating OpenGL-state popup: a click inside the open
  * popup is consumed (it is a display-only surface — the click must not fall
  * through to the code-panel rows behind it); a click anywhere else dismisses
@@ -1638,6 +1650,7 @@ static void route_wheel(int x, int y, int delta) {
         } else if (glr_ctrl_router_handle_gl_state_popup_wheel(x, y, delta)) {
             /* Consumed by the OpenGL-state popup under the pointer. */
         } else if (editor_input_point_in_code_panel(x, y)) {
+            glr_ctrl_router_dismiss_gl_state_for_editor_input();
             editor_input_code_panel_scroll(delta);
         } else {
             glr_camera_add_zoom_velocity((float)delta * GLR_WHEEL_ZOOM_STEP);
@@ -1681,10 +1694,14 @@ static void keyboard_dispatch(unsigned char key, int x, int y) {
     ui_state_command_description_close();
 
     /* Rename / file-prompt capture: hard modal. */
-    if (editor_input_rename_capture_key(key))
+    if (editor_input_rename_capture_key(key)) {
+        glr_ctrl_router_dismiss_gl_state_for_editor_input();
         return;
-    if (editor_input_file_prompt_capture_key(key))
+    }
+    if (editor_input_file_prompt_capture_key(key)) {
+        glr_ctrl_router_dismiss_gl_state_for_editor_input();
         return;
+    }
 
     if (glr_ctrl_router_handle_escape_key(key))
         return;
@@ -1710,6 +1727,7 @@ static void keyboard_dispatch(unsigned char key, int x, int y) {
      * the controller — symmetric with the menu-pin path in
      * route_pin_button_hit; the renderer no longer mutates it. */
     int search_was_active = editor_state_search()->active;
+    glr_ctrl_router_dismiss_gl_state_for_editor_input();
     editor_merge_input_effects(editor_handle_key(key, x, y));
     if (!search_was_active && editor_state_search()->active)
         ui_menu_bar_note_search_opened(repl_state_variables().anim_time);
@@ -1734,10 +1752,14 @@ void glr_ctrl_keyboard(unsigned char key, int x, int y) {
 static void special_dispatch(int key, int x, int y) {
     ui_state_command_description_close();
 
-    if (editor_input_rename_capture_special(key))
+    if (editor_input_rename_capture_special(key)) {
+        glr_ctrl_router_dismiss_gl_state_for_editor_input();
         return;
-    if (editor_input_file_prompt_capture_special(key))
+    }
+    if (editor_input_file_prompt_capture_special(key)) {
+        glr_ctrl_router_dismiss_gl_state_for_editor_input();
         return;
+    }
 
     if (glr_ctrl_router_handle_replay_special(key) ||
         glr_ctrl_router_handle_cfg_special_shortcut(key) ||
@@ -1749,6 +1771,7 @@ static void special_dispatch(int key, int x, int y) {
         glr_ctrl_router_handle_export_special(key))
         return;
 
+    glr_ctrl_router_dismiss_gl_state_for_editor_input();
     editor_merge_input_effects(editor_handle_special(key, x, y));
 }
 
@@ -1907,6 +1930,7 @@ static void motion_dispatch(int x, int y) {
     /* Editor's domain: panel resize tracking. editor_handle_motion is
      * a no-op when resizing_panel is clear. */
     if (ui_state_code_panel().resizing_panel) {
+        glr_ctrl_router_dismiss_gl_state_for_editor_input();
         editor_merge_input_effects(editor_handle_motion(x, y));
         glr_ctrl_router_handle_camera_pointer_set(x, y);
         return;

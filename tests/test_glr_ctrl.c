@@ -1491,6 +1491,66 @@ static void test_gl_state_popup_scroll_geometry(void) {
                ui_gl_state_panel_max_scroll(&view), 0);
 }
 
+static void test_editor_input_dismisses_gl_state_report(void) {
+    UiHit hit;
+    UiGlStatePanelView view;
+    int blank_line;
+    int anchor_x = -1;
+    int anchor_y = -1;
+    int off_x = -1;
+    int off_y = -1;
+    int px, py;
+
+    printf("--- imrepl_ctrl editor input dismisses OpenGL state ---\n");
+
+    prepare_code_panel_mouse_fixture();
+    blank_line = repl_state_document_count();
+    editor_state_edit_line_set(blank_line);
+    editor_insert_mode_set(0);
+    ASSERT_INT("append editor-dismiss blank line", editor_feed_line(""), 1);
+    ASSERT_TRUE("find editor-dismiss blank line",
+                find_code_text_hit_for_line(blank_line, &hit,
+                                            &anchor_x, &anchor_y));
+
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, anchor_x, anchor_y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, anchor_x, anchor_y);
+    ASSERT_INT("state open before editor key",
+               ui_state_gl_state_inspector().visible, 1);
+    glr_ctrl_keyboard('x', 0, 0);
+    ASSERT_INT("ordinary editor key dismisses state",
+               ui_state_gl_state_inspector().visible, 0);
+
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, anchor_x, anchor_y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, anchor_x, anchor_y);
+    ASSERT_INT("state reopens before editor special key",
+               ui_state_gl_state_inspector().visible, 1);
+    glr_ctrl_special(GLUT_KEY_LEFT, 0, 0);
+    ASSERT_INT("editor special key dismisses state",
+               ui_state_gl_state_inspector().visible, 0);
+
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, anchor_x, anchor_y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, anchor_x, anchor_y);
+    glr_ctrl_display_frame();
+    view = glr_ctrl_build_gl_state_panel_view();
+    for (py = 80; py < ui_state_viewport().window_h - 4 && off_x < 0;
+         py += 4) {
+        for (px = 4; px < ui_state_viewport().window_w - 4 && off_x < 0;
+             px += 4) {
+            if (editor_input_point_in_code_panel(px, py) &&
+                !ui_gl_state_panel_hit_test(&view, px, py)) {
+                off_x = px;
+                off_y = py;
+            }
+        }
+    }
+    ASSERT_TRUE("find code-panel wheel point outside state", off_x >= 0);
+    if (off_x >= 0) {
+        route_wheel(off_x, off_y, 1);
+        ASSERT_INT("editor code-panel wheel dismisses state",
+                   ui_state_gl_state_inspector().visible, 0);
+    }
+}
+
 static void test_gl_state_popup_defers_to_front_overlay(void) {
     UiRenderSnapshot snap;
     UiVariablePanelView var_view;
@@ -3749,6 +3809,7 @@ int main(void) {
     test_right_click_gl_command_description_popup();
     test_right_click_empty_line_toggles_gl_state_report();
     test_gl_state_popup_scroll_geometry();
+    test_editor_input_dismisses_gl_state_report();
     test_gl_state_popup_defers_to_front_overlay();
     test_left_click_code_panel_exits_search_and_places_cursor();
     test_tick_per_frame_scheduling();
