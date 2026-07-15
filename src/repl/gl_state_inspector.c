@@ -898,9 +898,15 @@ static void gl_state_format_matrix(char *buf, size_t n, const float m[16]) {
     used += (size_t)snprintf(buf + used, n - used, "[");
     for (row = 0; row < 4 && used < n; row++) {
         for (col = 0; col < 4 && used < n; col++) {
-            used += (size_t)snprintf(buf + used, n - used, "%s%g",
-                                    col ? " " : "",
-                                    (double)m[col * 4 + row]);
+            float value = m[col * 4 + row];
+            /* Four fixed decimals in an eight-cell field keep all matrix
+             * columns aligned while a complete visual row remains below the
+             * state panel's 44-character value cap. Avoid negative zero for
+             * values that round to 0.0000 at this precision. */
+            if (fabsf(value) < 0.00005f)
+                value = 0.0f;
+            used += (size_t)snprintf(buf + used, n - used, "%s%8.4f",
+                                    col ? " " : "", (double)value);
         }
         if (row < 3 && used < n)
             used += (size_t)snprintf(buf + used, n - used, "; ");
