@@ -1320,7 +1320,21 @@ static void test_right_click_empty_line_toggles_gl_state_report(void) {
                ui_state_gl_state_inspector().anchor_py, y);
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
 
+#ifdef GL_STUBS
     glr_ctrl_display_frame();
+#else
+    if (repl_state_normals_dirty()) {
+        int edit_line = editor_state_edit_line();
+        repl_recompute_autonormals(glr_state_presentation().autonormal,
+                                   &edit_line);
+        editor_state_edit_line_set(edit_line);
+        repl_state_normals_dirty_clear();
+    }
+    if (repl_state_flat_program_dirty()) {
+        repl_flatten_commands(editor_state_edit_line());
+        repl_state_flat_program_clear_dirty();
+    }
+#endif
     view = glr_ctrl_build_gl_state_panel_view();
     ASSERT_INT("popup view visible for valid anchor", view.visible, 1);
     ASSERT_TRUE("popup view carries a report", view.report != NULL);
