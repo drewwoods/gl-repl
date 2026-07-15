@@ -2168,6 +2168,8 @@ typedef struct {
     int anchor_w;
 } ReplStatusbarTooltip;
 
+#define TEXT_PANEL_VRULE_GLYPH 0x19
+
 /* Fill one tooltip: "<label>  <shortcut>", where the shortcut is
  * formatted live from the action's keymap binding (same pure formatter
  * src/ui/app/menu_bar.c uses for menu-row accelerators). Keeping the
@@ -2179,7 +2181,8 @@ static void repl_code_panel_statusbar_tooltip_set(
     char shortcut[KEYMAP_SHORTCUT_LABEL_MAX];
     keymap_binding_to_string(shortcut, (int)sizeof shortcut,
                              key, mods, is_special);
-    snprintf(tooltip->text, sizeof tooltip->text, "%s  %s", label, shortcut);
+    snprintf(tooltip->text, sizeof tooltip->text, "%s %c %s", label, TEXT_PANEL_VRULE_GLYPH,
+            shortcut);
     tooltip->anchor_x = anchor_x;
     tooltip->anchor_w = anchor_w;
 }
