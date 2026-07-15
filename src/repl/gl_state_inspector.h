@@ -1,18 +1,19 @@
 /*
  * src/repl/gl_state_inspector.h - Source-position OpenGL state inspection.
  *
- * Folds init() plus the current flat display program up to a source checkpoint
- * without issuing GL calls. The result contains only state variables that
- * either phase explicitly touched. Current values are paired with the OpenGL
- * 2.1 initial values, and equality is kept separate from touched-ness so an
- * explicit write of a default value remains visible.
+ * Folds the generated init()/display() setup plus the current flat user
+ * program up to a source checkpoint without issuing GL calls. The result
+ * contains only state variables that those phases explicitly touched. Current
+ * values are paired with the OpenGL 2.1 initial values, and equality is kept
+ * separate from touched-ness so an explicit write of a default remains
+ * visible.
  */
 #ifndef REPL_GL_STATE_INSPECTOR_H
 #define REPL_GL_STATE_INSPECTOR_H
 
 #include "repl/flatten.h"
 
-#define REPL_GL_STATE_REPORT_MAX_ROWS 72
+#define REPL_GL_STATE_REPORT_MAX_ROWS 112
 #define REPL_GL_STATE_NAME_MAX         64
 #define REPL_GL_STATE_VALUE_MAX        192
 
@@ -24,7 +25,7 @@ typedef enum {
 
 typedef struct {
     ReplGlStateSourceKind kind;
-    int source_line_idx;  /* display source row; -1 for init() */
+    int source_line_idx;  /* user display row; -1 for a generated phase */
 } ReplGlStateChangeSource;
 
 typedef struct {
@@ -41,9 +42,10 @@ typedef struct {
     int                  source_line_idx;
 } ReplGlStateReport;
 
-/* Build the effective init() + REPL-authored display state immediately before
- * source_line_idx. Flat-command provenance is used so selected if branches,
- * unrolled loops, and function calls reflect the current flattened frame. */
+/* Build the effective generated init() + display() + REPL-authored display
+ * state immediately before source_line_idx. Flat-command provenance is used
+ * so selected if branches, unrolled loops, and function calls reflect the
+ * current flattened frame. */
 void repl_gl_state_report_at_line(FlatProgramView program,
                                   int source_line_idx,
                                   ReplGlStateReport *out);

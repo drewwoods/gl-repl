@@ -2,13 +2,15 @@
  * src/repl/gl_state_inspector.c - Pure OpenGL state fold for source checkpoints.
  *
  * Defaults below come from the OpenGL 2.1 state tables (chapter 6.2). The fold
- * starts with the effective init() bootstrap, then applies display commands up
- * to the requested source checkpoint while preserving the latest source.
+ * starts with the generated init()/display() setup, then applies user display
+ * commands up to the requested source checkpoint while preserving the latest
+ * source.
  */
 #include "repl/gl_state_inspector.h"
 
 #include "repl/command_spec.h"
 #include "repl/init_state.h"
+#include "repl/state_views.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -44,6 +46,21 @@ typedef struct {
 } ReplGlTrackedMaterialValue;
 
 typedef struct {
+    float ambient[4];
+    float diffuse[4];
+    float specular[4];
+    float position[4];
+    int ambient_touched;
+    int diffuse_touched;
+    int specular_touched;
+    int position_touched;
+    ReplGlStateChangeSource ambient_source;
+    ReplGlStateChangeSource diffuse_source;
+    ReplGlStateChangeSource specular_source;
+    ReplGlStateChangeSource position_source;
+} ReplGlTrackedLight;
+
+typedef struct {
     ReplGlTrackedCap caps[REPL_GL_STATE_MAX_CAPS];
     int cap_count;
 
@@ -72,10 +89,19 @@ typedef struct {
 
     int light_model_local_viewer;
     int light_model_two_side;
+    float light_model_ambient[4];
     int light_model_local_viewer_touched;
     int light_model_two_side_touched;
+    int light_model_ambient_touched;
     ReplGlStateChangeSource light_model_local_viewer_source;
     ReplGlStateChangeSource light_model_two_side_source;
+    ReplGlStateChangeSource light_model_ambient_source;
+
+    ReplGlTrackedLight lights[REPL_LIGHT_SLOT_COUNT];
+
+    int attrib_stack_depth;
+    int attrib_stack_depth_touched;
+    ReplGlStateChangeSource attrib_stack_depth_source;
 
     GLenum front_face;
     GLenum cull_face;
@@ -195,6 +221,19 @@ static void gl_state_mat_mul(const float a[16], const float b[16],
     memcpy(out, tmp, sizeof(tmp));
 }
 
+static void gl_state_mat_vec_mul(const float m[16], const float v[4],
+                                 float out[4]) {
+    float tmp[4];
+    int row, col;
+    for (row = 0; row < 4; row++) {
+        float sum = 0.0f;
+        for (col = 0; col < 4; col++)
+            sum += m[col * 4 + row] * v[col];
+        tmp[row] = sum;
+    }
+    memcpy(out, tmp, sizeof(tmp));
+}
+
 static void gl_state_mat_translate(float m[16], float x, float y, float z) {
     float rhs[16];
     gl_state_mat_identity(rhs);
@@ -287,6 +326,24 @@ static void gl_state_init(ReplGlTrackedState *s) {
     gl_state_mat_identity(s->matrix_stack[0]);
     s->color_material_face = GL_FRONT_AND_BACK;
     s->color_material_mode = GL_AMBIENT_AND_DIFFUSE;
+    s->light_model_ambient[0] = 0.2f;
+    s->light_model_ambient[1] = 0.2f;
+    s->light_model_ambient[2] = 0.2f;
+    s->light_model_ambient[3] = 1.0f;
+    for (i = 0; i < REPL_LIGHT_SLOT_COUNT; i++) {
+        s->lights[i].ambient[3] = 1.0f;
+        s->lights[i].diffuse[3] = 1.0f;
+        s->lights[i].specular[3] = 1.0f;
+        s->lights[i].position[2] = 1.0f;
+        if (i == 0) {
+            s->lights[i].diffuse[0] = 1.0f;
+            s->lights[i].diffuse[1] = 1.0f;
+            s->lights[i].diffuse[2] = 1.0f;
+            s->lights[i].specular[0] = 1.0f;
+            s->lights[i].specular[1] = 1.0f;
+            s->lights[i].specular[2] = 1.0f;
+        }
+    }
     s->front_face = GL_CCW;
     s->cull_face = GL_BACK;
     s->depth_func = GL_LESS;
@@ -589,6 +646,73 @@ static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd,
     }
 }
 
+static void gl_state_apply_generated_write(
+    ReplGlTrackedState *s, const ReplGeneratedStateWrite *write,
+    ReplGlStateChangeSource source) {
+    ReplGlTrackedLight *light;
+    int slot;
+
+    if (!s || !write)
+        return;
+    if (write->kind == REPL_GENERATED_STATE_COMMAND) {
+        gl_state_apply_cmd(s, &write->command, source);
+        return;
+    }
+    if (write->kind == REPL_GENERATED_STATE_PUSH_ATTRIB) {
+        s->attrib_stack_depth++;
+        s->attrib_stack_depth_touched = 1;
+        s->attrib_stack_depth_source = source;
+        return;
+    }
+    if (write->kind == REPL_GENERATED_STATE_LIGHT_MODEL_FV) {
+        if (write->pname == GL_LIGHT_MODEL_AMBIENT &&
+            write->value_count >= 4) {
+            memcpy(s->light_model_ambient, write->value,
+                   sizeof(s->light_model_ambient));
+            s->light_model_ambient_touched = 1;
+            s->light_model_ambient_source = source;
+        }
+        return;
+    }
+    if (write->kind != REPL_GENERATED_STATE_LIGHT_FV ||
+        write->value_count < 4)
+        return;
+
+    if (write->object < GL_LIGHT0 ||
+        write->object >= (GLenum)(GL_LIGHT0 + REPL_LIGHT_SLOT_COUNT))
+        return;
+    slot = (int)(write->object - GL_LIGHT0);
+    light = &s->lights[slot];
+    switch (write->pname) {
+    case GL_AMBIENT:
+        memcpy(light->ambient, write->value, sizeof(light->ambient));
+        light->ambient_touched = 1;
+        light->ambient_source = source;
+        break;
+    case GL_DIFFUSE:
+        memcpy(light->diffuse, write->value, sizeof(light->diffuse));
+        light->diffuse_touched = 1;
+        light->diffuse_source = source;
+        break;
+    case GL_SPECULAR:
+        memcpy(light->specular, write->value, sizeof(light->specular));
+        light->specular_touched = 1;
+        light->specular_source = source;
+        break;
+    case GL_POSITION:
+        /* OpenGL stores the position after multiplying it by the current
+         * modelview, so show the actual eye-coordinate state—not merely the
+         * object-space argument printed in display(). */
+        gl_state_mat_vec_mul(s->matrix_stack[s->matrix_top], write->value,
+                             light->position);
+        light->position_touched = 1;
+        light->position_source = source;
+        break;
+    default:
+        break;
+    }
+}
+
 static int gl_state_float_eq(float a, float b) {
     return fabsf(a - b) <= 1e-6f;
 }
@@ -706,7 +830,7 @@ static void gl_state_format_matrix(char *buf, size_t n, const float m[16]) {
 static void gl_state_report_matrix(ReplGlStateReport *out, const float current[16]) {
     float identity[16];
     ReplGlStateReportRow *row =
-        gl_state_report_row(out, "GL_MODELVIEW_MATRIX (REPL relative)");
+        gl_state_report_row(out, "GL_MODELVIEW_MATRIX");
     if (!row)
         return;
     gl_state_mat_identity(identity);
@@ -743,6 +867,13 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
     static const float clear_default[4] = { 0, 0, 0, 0 };
     static const float raster_default[4] = { 0, 0, 0, 1 };
     static const float clip_default[4] = { 0, 0, 0, 0 };
+    static const float light_model_ambient_default[4] = {
+        0.2f, 0.2f, 0.2f, 1.0f
+    };
+    static const float light_ambient_default[4] = { 0, 0, 0, 1 };
+    static const float light_black_default[4] = { 0, 0, 0, 1 };
+    static const float light_white_default[4] = { 1, 1, 1, 1 };
+    static const float light_position_default[4] = { 0, 0, 1, 0 };
     int i, face, prop;
 
     for (i = 0; i < s->cap_count; i++) {
@@ -778,6 +909,11 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
                             s->matrix_top + 1, 1);
         gl_state_report_set_last_source(out, s->matrix_depth_source);
     }
+    if (s->attrib_stack_depth_touched) {
+        gl_state_report_int(out, "GL_ATTRIB_STACK_DEPTH",
+                            s->attrib_stack_depth, 0);
+        gl_state_report_set_last_source(out, s->attrib_stack_depth_source);
+    }
     if (s->color_material_touched) {
         gl_state_report_enum(out, "GL_COLOR_MATERIAL_FACE",
                              CMD_COLOR_MATERIAL, 0,
@@ -799,6 +935,43 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
                              s->light_model_two_side, 0);
         gl_state_report_set_last_source(out,
                                         s->light_model_two_side_source);
+    }
+    if (s->light_model_ambient_touched) {
+        gl_state_report_vec(out, "GL_LIGHT_MODEL_AMBIENT",
+                            s->light_model_ambient,
+                            light_model_ambient_default, 4);
+        gl_state_report_set_last_source(out,
+                                        s->light_model_ambient_source);
+    }
+    for (i = 0; i < REPL_LIGHT_SLOT_COUNT; i++) {
+        const ReplGlTrackedLight *light = &s->lights[i];
+        const float *light_color_default = i == 0
+            ? light_white_default : light_black_default;
+        char name[REPL_GL_STATE_NAME_MAX];
+        if (light->ambient_touched) {
+            snprintf(name, sizeof(name), "GL_LIGHT%d_AMBIENT", i);
+            gl_state_report_vec(out, name, light->ambient,
+                                light_ambient_default, 4);
+            gl_state_report_set_last_source(out, light->ambient_source);
+        }
+        if (light->diffuse_touched) {
+            snprintf(name, sizeof(name), "GL_LIGHT%d_DIFFUSE", i);
+            gl_state_report_vec(out, name, light->diffuse,
+                                light_color_default, 4);
+            gl_state_report_set_last_source(out, light->diffuse_source);
+        }
+        if (light->specular_touched) {
+            snprintf(name, sizeof(name), "GL_LIGHT%d_SPECULAR", i);
+            gl_state_report_vec(out, name, light->specular,
+                                light_color_default, 4);
+            gl_state_report_set_last_source(out, light->specular_source);
+        }
+        if (light->position_touched) {
+            snprintf(name, sizeof(name), "GL_LIGHT%d_POSITION (eye)", i);
+            gl_state_report_vec(out, name, light->position,
+                                light_position_default, 4);
+            gl_state_report_set_last_source(out, light->position_source);
+        }
     }
     if (s->front_face_touched) {
         gl_state_report_enum(out, "GL_FRONT_FACE", CMD_FRONT_FACE, 0,
@@ -929,8 +1102,8 @@ void repl_gl_state_report_at_line(FlatProgramView program,
                                   ReplGlStateReport *out) {
     ReplGlTrackedState state;
     ReplGlStateChangeSource source;
-    GLCmd init_cmd;
-    int init_count;
+    ReplGeneratedStateWrite write;
+    int write_count;
     int i;
 
     if (!out)
@@ -941,16 +1114,29 @@ void repl_gl_state_report_at_line(FlatProgramView program,
 
     source.kind = REPL_GL_STATE_SOURCE_INIT;
     source.source_line_idx = -1;
-    init_count = repl_init_bootstrap_state_command_count();
-    for (i = 0; i < init_count; i++) {
-        if (repl_init_bootstrap_state_command_at(i, &init_cmd))
-            gl_state_apply_cmd(&state, &init_cmd, source);
+    write_count = repl_generated_init_state_write_count();
+    for (i = 0; i < write_count; i++) {
+        if (repl_generated_init_state_write_at(i, &write))
+            gl_state_apply_generated_write(&state, &write, source);
     }
 
-    if (!program.cmds || source_line_idx < 0) {
+    if (source_line_idx < 0) {
         gl_state_append_report(&state, out);
         return;
     }
+    source.kind = REPL_GL_STATE_SOURCE_DISPLAY;
+    source.source_line_idx = -1;
+    write_count = repl_generated_display_state_write_count();
+    for (i = 0; i < write_count; i++) {
+        if (repl_generated_display_state_write_at(i, &write))
+            gl_state_apply_generated_write(&state, &write, source);
+    }
+
+    if (!program.cmds) {
+        gl_state_append_report(&state, out);
+        return;
+    }
+
     if (program.cmd_count < 0)
         program.cmd_count = 0;
     for (i = 0; i < program.cmd_count; i++) {

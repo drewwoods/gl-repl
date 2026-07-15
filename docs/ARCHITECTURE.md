@@ -990,7 +990,7 @@ That design must encode two GLUT byte-level constraints:
 - Ctrl+H, Ctrl+I, Ctrl+J, and Ctrl+M alias Backspace, Tab, LF, and CR.
 - Ctrl+Shift+letter is indistinguishable from Ctrl+letter in the input byte;
   Shift-specific bindings must also read `glutGetModifiers()` or
-  [`editor_input_active_modifiers()`](../src/editor/input.h#L67), as the config router and
+  [`editor_input_active_modifiers()`](../src/editor/input.h#L77), as the config router and
   code-focus router already do.
 
 ## Boundary Rules

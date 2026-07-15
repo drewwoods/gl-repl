@@ -1297,6 +1297,10 @@ static void test_right_click_empty_line_toggles_gl_state_report(void) {
     int found_color = 0;
     int found_init_state = 0;
     int found_display_color = 0;
+    int found_global_light_ambient = 0;
+    int found_light_diffuse = 0;
+    int found_light_position = 0;
+    int found_attrib_stack = 0;
     int i;
 
     printf("--- imrepl_ctrl right-click blank OpenGL state report ---\n");
@@ -1351,10 +1355,29 @@ static void test_right_click_empty_line_toggles_gl_state_report(void) {
             if (row->source.kind == REPL_GL_STATE_SOURCE_DISPLAY)
                 found_display_color = 1;
         }
+        if (strcmp(row->name, "GL_LIGHT_MODEL_AMBIENT") == 0 &&
+            row->source.kind == REPL_GL_STATE_SOURCE_INIT)
+            found_global_light_ambient = 1;
+        if (strcmp(row->name, "GL_LIGHT0_DIFFUSE") == 0 &&
+            row->source.kind == REPL_GL_STATE_SOURCE_INIT)
+            found_light_diffuse = 1;
+        if (strcmp(row->name, "GL_LIGHT0_POSITION (eye)") == 0 &&
+            row->source.kind == REPL_GL_STATE_SOURCE_DISPLAY)
+            found_light_position = 1;
+        if (strcmp(row->name, "GL_ATTRIB_STACK_DEPTH") == 0 &&
+            row->source.kind == REPL_GL_STATE_SOURCE_DISPLAY)
+            found_attrib_stack = 1;
     }
     ASSERT_TRUE("popup report includes init state", found_init_state);
     ASSERT_TRUE("popup report includes touched color state", found_color);
     ASSERT_TRUE("popup distinguishes display color source", found_display_color);
+    ASSERT_TRUE("popup includes init global light ambient",
+                found_global_light_ambient);
+    ASSERT_TRUE("popup includes init light color", found_light_diffuse);
+    ASSERT_TRUE("popup includes display light position",
+                found_light_position);
+    ASSERT_TRUE("popup includes display attribute stack",
+                found_attrib_stack);
 
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
     ASSERT_INT("second right-click on anchor closes report",

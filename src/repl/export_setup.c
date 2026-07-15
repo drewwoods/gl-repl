@@ -944,3 +944,212 @@ void repl_export_lights_display_line(int i, char *buf, size_t n) {
     }
     lights_position_line(i - LIGHTS_DISPLAY_HEADER_LINES, 0, buf, n);
 }
+
+/* ------------------------------------------------------------------------- */
+/* Read-only generated GL-state program                                      */
+
+#define GENERATED_INIT_STATE_MAX \
+    (2 + REPL_LIGHT_SLOT_COUNT * LIGHT_INIT_LINES_PER_LIGHT + \
+     NUM_INIT_BOOTSTRAP)
+#define GENERATED_DISPLAY_STATE_MAX \
+    (2 + RENDER_STATE_LINE_COUNT + REPL_LIGHT_SLOT_COUNT + \
+     REPL_EXPORT_CAMERA_LINES)
+
+static ReplGeneratedStateWrite generated_command_write(CmdType type) {
+    ReplGeneratedStateWrite write;
+    memset(&write, 0, sizeof(write));
+    write.kind = REPL_GENERATED_STATE_COMMAND;
+    write.command.type = type;
+    write.command.valid = 1;
+    write.command.src_cmd_idx = -1;
+    write.command.call_src_cmd_idx = -1;
+    write.command.root_call_src_cmd_idx = -1;
+    return write;
+}
+
+static ReplGeneratedStateWrite generated_vector_write(
+    ReplGeneratedStateWriteKind kind, GLenum object, GLenum pname,
+    const float *value, int value_count) {
+    ReplGeneratedStateWrite write;
+    int i;
+
+    memset(&write, 0, sizeof(write));
+    write.kind = kind;
+    write.object = object;
+    write.pname = pname;
+    write.value_count = value_count;
+    for (i = 0; i < value_count && i < 4; i++)
+        write.value[i] = value[i];
+    return write;
+}
+
+static int generated_parse_command_write(const char *line,
+                                         ReplGeneratedStateWrite *out) {
+    char err[REPL_STATUS_TEXT_MAX];
+    ReplParseContext ctx;
+    ReplParsedLine parsed;
+
+    if (!line || !line[0] || !out)
+        return 0;
+    memset(&ctx, 0, sizeof(ctx));
+    err[0] = '\0';
+    ctx.source_line_idx = -1;
+    ctx.err_buf = err;
+    ctx.err_sz = (int)sizeof(err);
+    if (!repl_parser_parse_command_ctx(line, &parsed, &ctx)) {
+        fprintf(stderr, "generated state parse failed: %s%s%s\n", line,
+                err[0] ? " — " : "", err);
+        return 0;
+    }
+    *out = generated_command_write(parsed.cmd.type);
+    out->command = parsed.cmd;
+    out->command.valid = 1;
+    out->command.src_cmd_idx = -1;
+    out->command.call_src_cmd_idx = -1;
+    out->command.root_call_src_cmd_idx = -1;
+    return 1;
+}
+
+static int generated_init_state_writes(
+    ReplGeneratedStateWrite out[GENERATED_INIT_STATE_MAX]) {
+    static const float model_ambient[4] = { 0.15f, 0.15f, 0.20f, 1.0f };
+    int count = 0;
+    int slot;
+    int bootstrap_idx;
+
+    out[count] = generated_command_write(CMD_LINE_WIDTH);
+    out[count].command.args[0] = 1.5f;
+    out[count].command.num_args = 1;
+    count++;
+
+    out[count++] = generated_vector_write(
+        REPL_GENERATED_STATE_LIGHT_MODEL_FV, 0,
+        GL_LIGHT_MODEL_AMBIENT, model_ambient, 4);
+
+    for (slot = 0; slot < REPL_LIGHT_SLOT_COUNT; slot++) {
+        ReplExportLightInfo light;
+        GLenum object = (GLenum)(GL_LIGHT0 + slot);
+        ReplGeneratedStateWrite disable;
+
+        export_light_info(slot, &light);
+        out[count++] = generated_vector_write(
+            REPL_GENERATED_STATE_LIGHT_FV, object,
+            GL_DIFFUSE, light.diffuse, 4);
+        out[count++] = generated_vector_write(
+            REPL_GENERATED_STATE_LIGHT_FV, object,
+            GL_AMBIENT, light.ambient, 4);
+        out[count++] = generated_vector_write(
+            REPL_GENERATED_STATE_LIGHT_FV, object,
+            GL_SPECULAR, light.specular, 4);
+        disable = generated_command_write(CMD_DISABLE);
+        disable.command.args[0] = (float)object;
+        disable.command.num_args = 1;
+        out[count++] = disable;
+    }
+
+    for (bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP;
+         bootstrap_idx++) {
+        GLCmd cmd;
+        if (init_bootstrap_effective_state_command(bootstrap_idx, &cmd)) {
+            out[count] = generated_command_write(cmd.type);
+            out[count].command = cmd;
+            count++;
+        }
+    }
+    return count;
+}
+
+static int generated_append_light_positions(
+    ReplGeneratedStateWrite *out, int count, int eye_space) {
+    int slot;
+    for (slot = 0; slot < REPL_LIGHT_SLOT_COUNT; slot++) {
+        ReplExportLightInfo light;
+        if (!!export_slot_pos_is_eye_space(slot) != !!eye_space)
+            continue;
+        export_light_info(slot, &light);
+        out[count++] = generated_vector_write(
+            REPL_GENERATED_STATE_LIGHT_FV,
+            (GLenum)(GL_LIGHT0 + slot), GL_POSITION, light.pos, 4);
+    }
+    return count;
+}
+
+static int generated_display_state_writes(
+    ReplGeneratedStateWrite out[GENERATED_DISPLAY_STATE_MAX]) {
+    const ReplExportCameraBridge *camera_bridge;
+    ReplExportCameraBlock camera;
+    ReplGeneratedStateWrite write;
+    int count = 0;
+    int i;
+
+    out[count++] = generated_command_write(CMD_LOAD_IDENTITY);
+    memset(&out[count], 0, sizeof(out[count]));
+    out[count++].kind = REPL_GENERATED_STATE_PUSH_ATTRIB;
+
+    write = generated_command_write(
+        repl_cfg_get_int(REPL_EXPORT_CFG_SLUG_MSAA, 1)
+            ? CMD_ENABLE : CMD_DISABLE);
+    write.command.args[0] = (float)GL_MULTISAMPLE;
+    write.command.num_args = 1;
+    out[count++] = write;
+
+    write = generated_command_write(
+        repl_cfg_get_int(REPL_EXPORT_CFG_SLUG_LINE_SMOOTH, 0)
+            ? CMD_ENABLE : CMD_DISABLE);
+    write.command.args[0] = (float)GL_LINE_SMOOTH;
+    write.command.num_args = 1;
+    out[count++] = write;
+
+    count = generated_append_light_positions(out, count, 1);
+
+    memset(&camera, 0, sizeof(camera));
+    camera_bridge = repl_export_camera_bridge();
+    if (camera_bridge && camera_bridge->fill_display_block) {
+        camera_bridge->fill_display_block(&camera);
+        for (i = 0; i < REPL_EXPORT_CAMERA_LINES; i++) {
+            if (generated_parse_command_write(camera.lines[i], &write))
+                out[count++] = write;
+        }
+    }
+
+    count = generated_append_light_positions(out, count, 0);
+    return count;
+}
+
+int repl_generated_init_state_write_count(void) {
+    ReplGeneratedStateWrite writes[GENERATED_INIT_STATE_MAX];
+    repl_ensure_init_bootstrap_ready();
+    return generated_init_state_writes(writes);
+}
+
+int repl_generated_init_state_write_at(int state_write_idx,
+                                       ReplGeneratedStateWrite *out_write) {
+    ReplGeneratedStateWrite writes[GENERATED_INIT_STATE_MAX];
+    int count;
+    if (state_write_idx < 0 || !out_write)
+        return 0;
+    repl_ensure_init_bootstrap_ready();
+    count = generated_init_state_writes(writes);
+    if (state_write_idx >= count)
+        return 0;
+    *out_write = writes[state_write_idx];
+    return 1;
+}
+
+int repl_generated_display_state_write_count(void) {
+    ReplGeneratedStateWrite writes[GENERATED_DISPLAY_STATE_MAX];
+    return generated_display_state_writes(writes);
+}
+
+int repl_generated_display_state_write_at(int state_write_idx,
+                                          ReplGeneratedStateWrite *out_write) {
+    ReplGeneratedStateWrite writes[GENERATED_DISPLAY_STATE_MAX];
+    int count;
+    if (state_write_idx < 0 || !out_write)
+        return 0;
+    count = generated_display_state_writes(writes);
+    if (state_write_idx >= count)
+        return 0;
+    *out_write = writes[state_write_idx];
+    return 1;
+}

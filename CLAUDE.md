@@ -516,7 +516,7 @@ explaining why the extra background is useful.
 | [`gl_repl.h`](gl_repl.h) | Small shared header: standard includes and `M_PI`; types/defaults live in dedicated headers |
 | [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c) | App-frame controller: `glr_ctrl_display_frame`, `glr_ctrl_reshape`, `glr_ctrl_init_gl`; builds [`Render3dRenderConfig`](src/render3d/render_types.h#L135), calls scene/UI renderers |
 | [`src/app/glr_ctrl.h`](src/app/glr_ctrl.h) | Controller public surface: display, reshape, init-GL entrypoints |
-| [`src/app/glr_ctrl_router.c`](src/app/glr_ctrl_router.c) | GLUT input dispatch: keyboard / special / mouse / motion / wheel entry points (thin shims — reset effects, run a `*_dispatch` body, flush once via `glr_ctrl_apply_input_effects`), the `glr_ctrl_router_*` handlers, the left/right-press `UiHit` switches, the shared `route_wheel`, and the SIGINT-quit lifecycle |
+| [`src/app/glr_ctrl_router.c`](src/app/glr_ctrl_router.c) | GLUT input dispatch: keyboard / special / mouse / motion / wheel entry points (thin shims — reset effects, run a `*_dispatch` body, flush once via `glr_ctrl_apply_input_effects`), the `glr_ctrl_router_*` handlers, the left/right-press [`UiHit`](src/ui/core/hit.h#L51) switches, the shared `route_wheel`, and the SIGINT-quit lifecycle |
 | [`src/app/glr_config.c`](src/app/glr_config.c) | Config key implementation and descriptor table helpers. The tail of `glr_config_set` notifies the tutorial runner (`tutorial_notify_state_changed`) so REQUIRE steps observe every write path — direct setters (e.g. accum-passes Ctrl+=/-), `glr_cfg_cycle_row`'s early-return branches, and the bridge's `apply` during `@cfg` / example / workspace load |
 | [`src/app/glr_config.h`](src/app/glr_config.h) | `ReplConfigKey` / [`ReplConfigItem`](src/repl/cfg_baseline.h#L29) descriptor API for keyed config access |
 | [`src/repl/command.h`](src/repl/command.h) | Core command model types: [`CmdType`](src/repl/command.h#L37) enum, [`GLCmd`](src/repl/command.h#L90) struct (pure parse-result: type, args, flags, provenance — no `source[]` field) |
@@ -778,8 +778,8 @@ explaining why the extra background is useful.
   bindings and the free Ctrl / Ctrl+Shift / F-key slots (both via
   `scripts/keymap.sh`, also symlinked at `tools/keymap.sh`). A
   `g_cfg_items[]` runtime twin lives in [`tests/test_glr_actions.c`](tests/test_glr_actions.c).
-  [`editor_handle_key()`](src/editor/input.h#L50) handles ASCII keys (Ctrl+X
-  produces ASCII X & 0x1F via standard GLUT), [`editor_handle_special()`](src/editor/input.h#L51)
+  [`editor_handle_key()`](src/editor/input.h#L56) handles ASCII keys (Ctrl+X
+  produces ASCII X & 0x1F via standard GLUT), [`editor_handle_special()`](src/editor/input.h#L57)
   for F-keys/arrows. Cross-subsystem routing (replay / save / config /
   audio / camera / tutorial-ack) lives in the `glr_ctrl_router_*`
   helpers in [`src/app/glr_ctrl_router.c`](src/app/glr_ctrl_router.c), called from
@@ -905,12 +905,12 @@ The core data flow is **source commands → flat commands → GL calls**:
 1. **Input** — user types into the input buffer (`editor_state_input().input`,
    max 1024 chars)
 2. **Commit** — pressing `;` calls the commit dispatch chain in
-   [`editor_handle_key()`](src/editor/input.h#L50) in [`src/editor/input.c`](src/editor/input.c). There are TWO distinct paths:
+   [`editor_handle_key()`](src/editor/input.h#L56) in [`src/editor/input.c`](src/editor/input.c). There are TWO distinct paths:
    - **Interactive `;` key** ([`src/editor/input.c`](src/editor/input.c), `key == ';'` block):
      the input buffer does NOT include the `;` — the keystroke triggers the
      commit but is not appended. Commit handlers must accept input
      without a trailing `;`.
-   - **[`editor_feed_line()`](src/editor/input.h#L169)** ([`src/editor/input.c`](src/editor/input.c)): copies the full line
+   - **[`editor_feed_line()`](src/editor/input.h#L179)** ([`src/editor/input.c`](src/editor/input.c)): copies the full line
      (including `;`) into the input buffer, then runs the same dispatch chain.
      Used by file loading and example loading.
    - **Enter key** (insert mode): input may or may not have `;`
@@ -955,14 +955,14 @@ The `editor_try_commit_*` handler chain is consolidated into four helpers in
   overwrite-mode Enter key, which must flip to insert mode on success
 
 Dispatch sites then call these helpers instead of open-coding the chain:
-1. **`;` key handler** — `key == ';'` block in [`editor_handle_key()`](src/editor/input.h#L50) calls
+1. **`;` key handler** — `key == ';'` block in [`editor_handle_key()`](src/editor/input.h#L56) calls
    `editor_try_commit_any()`
 2. **Enter key, insert mode** — calls `editor_try_commit_var_statements()` and
    `editor_try_commit_block_structs()` to maintain the insert-mode behavior
 3. **Enter key, overwrite mode** — uses
    `editor_try_commit_var_statements_then_insert()` plus
    `editor_try_commit_block_structs()`
-4. **[`editor_feed_line()`](src/editor/input.h#L169)** — the programmatic entry point calls
+4. **[`editor_feed_line()`](src/editor/input.h#L179)** — the programmatic entry point calls
    `editor_try_commit_any()`
 
 When adding a new handler, add it to the right helper rather than all
@@ -972,7 +972,7 @@ call sites. Ordering inside each helper is load-bearing:
 
 ### Editing Existing Lines
 
-When the user navigates to an existing line, [`editor_load_line_to_input()`](src/editor/input.h#L163) reads
+When the user navigates to an existing line, [`editor_load_line_to_input()`](src/editor/input.h#L173) reads
 the line text from the editor buffer view, strips the trailing `;` and
 whitespace, and loads it into the input buffer. This means re-committing
 the line goes through the no-semicolon path. Commit handlers that check
@@ -1133,7 +1133,7 @@ behavior.
   active user scene index.
 - **Import** (`repl_export_load_from_file()`): line-by-line scan parses camera state
   and workspace directives, detects function definitions (converts C
-  syntax back to REPL), and feeds geometry lines through [`editor_feed_line()`](src/editor/input.h#L169).
+  syntax back to REPL), and feeds geometry lines through [`editor_feed_line()`](src/editor/input.h#L179).
   Pending scene-name and workspace-dir directives are read by the caller
   after `repl_export_load_from_file` returns so the importer can name the new slot
   and remember the workspace dir.
