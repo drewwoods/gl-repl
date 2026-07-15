@@ -19,8 +19,9 @@
  * (glr_ctrl_build_gl_state_panel_view). anchor_px/anchor_py are the
  * popup's preferred top-left in y-up OpenGL window coords (the
  * controller flips the stored GLUT click y); the renderer clamps the
- * popup into the window. scroll_rows is the first visible report row
- * (clamped by render/hit against the solved row capacity).
+ * popup into the window. scroll_rows is the first visible semantic report row
+ * (clamped by render/hit against the solved visual-line capacity; the
+ * modelview matrix remains one report row but renders as four lines).
  * details_expanded widens the table with the default/source columns
  * (collapsed the popup shows only state + current, keeping it narrow).
  * `report` stays valid for the frame — it points at controller-owned
