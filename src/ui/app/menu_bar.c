@@ -107,9 +107,14 @@ int ui_menu_bar_menu_dropdown_is_open(void) {
 
 enum { FILE_ITEM_COUNT = GLR_FILE_ITEM_COUNT };
 
-/* SCENE menu layout (pure selector; actions are in the File menu):
+/* SCENE menu layout (selector + the two cycle actions; other actions are
+ * in the File menu):
  *   [0]                      "### EXAMPLES"
  *   [1..t]                   tag names  (t = repl_example_visible_tag_count())
+ *   [t + SCENE_OFF_SEP_TOP]  "---"       (divider)
+ *   [t + SCENE_OFF_NEXT]     "Next"      (F12 example/scene cycle)
+ *   [t + SCENE_OFF_PREV]     "Previous"  (Shift+F12 example/scene cycle)
+ *   [t + SCENE_OFF_SEP_BOT]  "---"       (divider)
  *   [t + SCENE_OFF_HDR]      "### MY SCENES"
  *   [t + SCENE_OFF_SCENES ..
  *      t + SCENE_OFF_SCENES + n - 1]  user scene names
@@ -117,6 +122,10 @@ enum { FILE_ITEM_COUNT = GLR_FILE_ITEM_COUNT };
  * Both headers are always present even when a section is empty.
  */
 enum {
+    SCENE_OFF_SEP_TOP = GLR_SCENE_OFF_SEP_TOP,
+    SCENE_OFF_NEXT    = GLR_SCENE_OFF_NEXT,
+    SCENE_OFF_PREV    = GLR_SCENE_OFF_PREV,
+    SCENE_OFF_SEP_BOT = GLR_SCENE_OFF_SEP_BOT,
     SCENE_OFF_HDR     = GLR_SCENE_OFF_HDR,
     SCENE_OFF_SCENES  = GLR_SCENE_OFF_SCENES,
     SCENE_FIXED_COUNT = GLR_SCENE_FIXED_COUNT
@@ -424,11 +433,15 @@ static const char *menu_item_label(int menu_id, int i) {
     }
     if (menu_id == MENU_SCENE) {
         int tag_count = repl_example_visible_tag_count();
-        if (i == 0)                                            return "### EXAMPLES F12/Shift+F12";
+        if (i == 0)                                            return "### EXAMPLES";
         if (i >= 1 && i <= tag_count) {
             int tag_idx = repl_example_visible_tag_at(i - 1);
             return repl_example_tag_label(tag_idx);
         }
+        if (i == tag_count + SCENE_OFF_SEP_TOP)              return "---";
+        if (i == tag_count + SCENE_OFF_NEXT)                  return "Next";
+        if (i == tag_count + SCENE_OFF_PREV)                  return "Previous";
+        if (i == tag_count + SCENE_OFF_SEP_BOT)              return "---";
         if (i == tag_count + SCENE_OFF_HDR)                   return "### MY SCENES";
         int scene_n = i - (tag_count + SCENE_OFF_SCENES);
         if (scene_n >= 0 && scene_n < repl_user_scene_count()) {
@@ -497,7 +510,18 @@ static const char *menu_item_shortcut(int menu_id, int i) {
     if (menu_id == MENU_FILE && i == GLR_FILE_ITEM_QUIT)
         return keymap_binding_to_string(buf, (int)sizeof(buf),
                                         KM_KEY(GLR_QUIT), KM_MODS(GLR_QUIT), 0);
-    if (menu_id == MENU_SCENE) return NULL;
+    if (menu_id == MENU_SCENE) {
+        int tag_count = repl_example_visible_tag_count();
+        if (i == tag_count + SCENE_OFF_NEXT)
+            return keymap_binding_to_string(buf, (int)sizeof(buf),
+                                            KM_KEY(GLR_NEXT_EXAMPLE),
+                                            KM_MODS(GLR_NEXT_EXAMPLE), 1);
+        if (i == tag_count + SCENE_OFF_PREV)
+            return keymap_binding_to_string(buf, (int)sizeof(buf),
+                                            KM_KEY(GLR_PREV_EXAMPLE),
+                                            KM_MODS(GLR_PREV_EXAMPLE), 1);
+        return NULL;
+    }
     if (menu_id == MENU_TUTORIALS)
         return NULL;
     if (menu_id == MENU_AUDIO) {
@@ -1342,6 +1366,28 @@ void ui_menu_bar_set_open_menu(int menu_id, float now) {
     g_menu_open_time = now;
     g_menu_item_hover = -1;
     g_dropdown_cache.valid = 0;
+    submenu_reset();
+}
+
+UiMenuBarOpenState ui_menu_bar_open_state_capture(void) {
+    UiMenuBarOpenState st;
+    st.menu_id    = g_open_menu;
+    st.open_time  = g_menu_open_time;
+    st.item_hover = g_menu_item_hover;
+    return st;
+}
+
+void ui_menu_bar_open_state_restore(UiMenuBarOpenState state) {
+    /* Nothing was open, or the menu is no longer showable — leave closed. */
+    if (state.menu_id < 0 || state.menu_id >= NUM_MENUS ||
+        !menu_visible(state.menu_id)) {
+        ui_menu_bar_close();
+        return;
+    }
+    g_open_menu       = state.menu_id;
+    g_menu_open_time  = state.open_time;   /* preserve fade clock (no re-flash) */
+    g_menu_item_hover = state.item_hover;  /* preserve hover highlight */
+    g_dropdown_cache.valid = 0;            /* geometry may have shifted */
     submenu_reset();
 }
 

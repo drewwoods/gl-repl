@@ -50,17 +50,26 @@ enum {
     GLR_FILE_ITEM_COUNT
 };
 
-/* Scene menu is a pure selector: "### EXAMPLES" + example rows, then
- * "### MY SCENES" + user-scene rows. Both headers are always present
- * (fixed layout). Offsets are relative to the end of the examples block
- * (e = repl_example_count()): the second header sits at e + HDR and the
- * first user scene at e + SCENES. Lookup uses
- * glr_scene_menu_slot_for_dense_index() to map dense display index to
- * the actual user scene slot. Scene *actions* live in the File menu. */
+/* Scene menu is a selector with two navigation actions: "### EXAMPLES" +
+ * example tag rows, then a "---" divider bracketing the "Next" / "Previous"
+ * cycle actions (the F12 / Shift+F12 example-or-scene cycle) on both sides,
+ * then "### MY SCENES" + user-scene rows. Both headers are always present
+ * (fixed layout). Offsets are relative to the end of the examples tag block
+ * (e = repl_example_visible_tag_count()): the top divider sits at e + SEP_TOP,
+ * "Next" at e + NEXT, "Previous" at e + PREV, the bottom divider at
+ * e + SEP_BOT, the second header at e + HDR, and the first user scene at
+ * e + SCENES. Lookup uses glr_scene_menu_slot_for_dense_index() to map dense
+ * display index to the actual user scene slot. Other scene *actions*
+ * (save/load/rename) live in the File menu; Next/Previous are the exception
+ * because they cycle the example/scene selection itself. */
 enum {
-    GLR_SCENE_OFF_HDR      = 1,   /* "### MY SCENES" at e + 1 */
-    GLR_SCENE_OFF_SCENES   = 2,   /* first user scene row at e + 2 */
-    GLR_SCENE_FIXED_COUNT = 2    /* the two "###" header rows */
+    GLR_SCENE_OFF_SEP_TOP  = 1,   /* "---" at e + 1 */
+    GLR_SCENE_OFF_NEXT     = 2,   /* "Next" (F12) at e + 2 */
+    GLR_SCENE_OFF_PREV     = 3,   /* "Previous" (Shift+F12) at e + 3 */
+    GLR_SCENE_OFF_SEP_BOT  = 4,   /* "---" at e + 4 */
+    GLR_SCENE_OFF_HDR      = 5,   /* "### MY SCENES" at e + 5 */
+    GLR_SCENE_OFF_SCENES   = 6,   /* first user scene row at e + 6 */
+    GLR_SCENE_FIXED_COUNT  = 6    /* 2 headers + 2 dividers + Next + Previous */
 };
 
 /* Tutorials menu layout when tutorial is active:

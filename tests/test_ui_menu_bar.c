@@ -442,6 +442,59 @@ static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     snap->user_scene_active_idx = repl_active_user_scene();
 }
 
+/* The Scene menu's "Next" / "Previous" cycle rows carry the F12 /
+ * Shift+F12 shortcuts (moved off the "### EXAMPLES" header), hit-test as
+ * plain menu items, and — being leaf actions — have no flyout. */
+static void test_scene_menu_cycle_rows(void) {
+    int tag_count;
+    int next_row, prev_row;
+    const char *shortcut;
+    int mx = -1, my = -1;
+    int sx = 0, sy = 0, sw = 0, sh = 0;
+    UiHit hit;
+
+    reset_menu_bar_fixture(1000, 600);
+    tag_count = repl_example_visible_tag_count();
+    next_row = tag_count + GLR_SCENE_OFF_NEXT;
+    prev_row = tag_count + GLR_SCENE_OFF_PREV;
+
+    shortcut = ui_menu_bar_menu_item_shortcut_for_test(GLR_MENU_SCENE, next_row);
+    ASSERT_STR_EQ("scene Next shortcut", shortcut ? shortcut : "(null)", "F12");
+    shortcut = ui_menu_bar_menu_item_shortcut_for_test(GLR_MENU_SCENE, prev_row);
+    ASSERT_STR_EQ("scene Previous shortcut", shortcut ? shortcut : "(null)",
+                  "Shift+F12");
+
+    ASSERT_TRUE("found Scene Next row",
+                find_dropdown_item_point(GLR_MENU_SCENE, next_row, &mx, &my));
+    hit = ui_menu_bar_hit_test(mx, my);
+    ASSERT_INT_EQ("scene Next row hit kind", hit.kind, UI_HIT_MENU_ITEM);
+    ASSERT_INT_EQ("scene Next row hit menu", hit.cmd_idx, GLR_MENU_SCENE);
+    ASSERT_INT_EQ("scene Next row hit idx", hit.item_idx, next_row);
+
+    ASSERT_TRUE("found Scene Previous row",
+                find_dropdown_item_point(GLR_MENU_SCENE, prev_row, &mx, &my));
+    hit = ui_menu_bar_hit_test(mx, my);
+    ASSERT_INT_EQ("scene Previous row hit idx", hit.item_idx, prev_row);
+
+    ASSERT_TRUE("scene Next row has no flyout",
+                !ui_menu_bar_submenu_rect_for_test(GLR_MENU_SCENE, next_row,
+                                                   &sx, &sy, &sw, &sh));
+    ASSERT_TRUE("scene Previous row has no flyout",
+                !ui_menu_bar_submenu_rect_for_test(GLR_MENU_SCENE, prev_row,
+                                                   &sx, &sy, &sw, &sh));
+
+    /* The "---" dividers bracketing Next/Previous are inert chrome: they
+     * produce no MENU_ITEM hit (find_dropdown_item_point returns 0). */
+    ASSERT_TRUE("scene top divider is inert",
+                !find_dropdown_item_point(GLR_MENU_SCENE,
+                                          tag_count + GLR_SCENE_OFF_SEP_TOP,
+                                          &mx, &my));
+    ASSERT_TRUE("scene bottom divider is inert",
+                !find_dropdown_item_point(GLR_MENU_SCENE,
+                                          tag_count + GLR_SCENE_OFF_SEP_BOT,
+                                          &mx, &my));
+}
+
 static void test_scene_submenu_with_stubs(void) {
     UiRenderSnapshot snap;
     UiHit hit;
@@ -1232,6 +1285,7 @@ int main(void) {
 #endif
     test_unified_hit_test();
 #ifdef GL_STUBS
+    test_scene_menu_cycle_rows();
     test_scene_submenu_with_stubs();
     test_config_submenu_with_stubs();
     test_tutorial_submenu_with_stubs();

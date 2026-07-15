@@ -1336,6 +1336,25 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
         if (item_idx >= 1 && item_idx <= tag_count)
             return 0;
 
+        /* "Next" / "Previous" cycle the example-or-scene selection (the
+         * F12 / Shift+F12 path). Keep the dropdown open (return 0) so the
+         * user can step through examples with repeated clicks, like the
+         * Config cycle rows. The cycle runs glr_ctrl_reset_transients(),
+         * which closes the menu, so capture/restore the open state around
+         * it to leave the dropdown (and its hover highlight) intact. */
+        if (item_idx == tag_count + GLR_SCENE_OFF_NEXT) {
+            UiMenuBarOpenState menu_state = ui_menu_bar_open_state_capture();
+            glr_ctrl_scene_cycle_next();
+            ui_menu_bar_open_state_restore(menu_state);
+            return 0;
+        }
+        if (item_idx == tag_count + GLR_SCENE_OFF_PREV) {
+            UiMenuBarOpenState menu_state = ui_menu_bar_open_state_capture();
+            glr_ctrl_scene_cycle_prev();
+            ui_menu_bar_open_state_restore(menu_state);
+            return 0;
+        }
+
         int scene_idx = item_idx - (tag_count + GLR_SCENE_OFF_SCENES);
         if (scene_idx >= 0 && scene_idx < repl_user_scene_count()) {
             int slot = glr_scene_menu_slot_for_dense_index(scene_idx);

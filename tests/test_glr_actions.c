@@ -854,6 +854,46 @@ static void test_audio_menu_actions(void) {
                1);
 }
 
+/* Scene menu "Next" / "Previous" rows cycle the example/scene selection
+ * (the F12 / Shift+F12 path). They keep the dropdown open (return 0) so
+ * repeated clicks step through examples, like the Config cycle rows. */
+static void test_scene_menu_cycle_actions(void) {
+    glr_ctrl_reset_all();
+    ASSERT_TRUE("multiple examples exist", repl_example_count() > 1);
+
+    int tag_count = repl_example_visible_tag_count();
+
+    /* Seed a known example so forward/backward are exact inverses. */
+    repl_load_example(1);
+    ASSERT_INT("seeded on example 1",
+               repl_state_scenes().active_example_idx, 1);
+
+    /* Open the Scene dropdown, as a real click would. The cycle runs
+     * glr_ctrl_reset_transients() (which closes the menu) internally, so
+     * this guards that the dropdown survives — the reported regression. */
+    ui_menu_bar_set_open_menu(GLR_MENU_SCENE, 0.0f);
+    ASSERT_INT("Scene menu open before cycle",
+               ui_menu_bar_open_menu_id(), GLR_MENU_SCENE);
+
+    ASSERT_INT("Scene Previous row keeps menu open",
+               glr_action_menu_item_activate(GLR_MENU_SCENE,
+                                             tag_count + GLR_SCENE_OFF_PREV), 0);
+    ASSERT_INT("Scene Previous steps to example 0",
+               repl_state_scenes().active_example_idx, 0);
+    ASSERT_INT("Scene menu still open after Previous",
+               ui_menu_bar_open_menu_id(), GLR_MENU_SCENE);
+
+    ASSERT_INT("Scene Next row keeps menu open",
+               glr_action_menu_item_activate(GLR_MENU_SCENE,
+                                             tag_count + GLR_SCENE_OFF_NEXT), 0);
+    ASSERT_INT("Scene Next steps back to example 1",
+               repl_state_scenes().active_example_idx, 1);
+    ASSERT_INT("Scene menu still open after Next",
+               ui_menu_bar_open_menu_id(), GLR_MENU_SCENE);
+
+    ui_menu_bar_close();
+}
+
 static void test_msaa_display_label_override(void) {
     int msaa_row = -1;
 
@@ -1897,6 +1937,7 @@ int main(void) {
     test_compute_profile_mode_names();
     test_audio_config_direct_set();
     test_audio_menu_actions();
+    test_scene_menu_cycle_actions();
     test_msaa_display_label_override();
     test_config_none_handling();
     test_menu_out_of_range_indices();
