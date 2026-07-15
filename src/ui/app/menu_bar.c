@@ -1399,23 +1399,6 @@ void ui_menu_bar_open_config(float now) {
     ui_menu_bar_set_open_menu(MENU_CONFIG, now);
 }
 
-UiHit ui_menu_bar_handle_config_right_press(int mx, int my) {
-    if (g_open_menu != MENU_CONFIG) return ui_hit_none();
-    /* Backward-cycle the Config flyout item under the cursor.
-     * submenu_hit_test only resolves actionable ITEM rows — chrome
-     * ("### "/"---" in the "All" flyout) is skipped via
-     * submenu_row_kind, and section/All parent rows own no submenu, so
-     * a right-press over the section list (or any non-item) is a
-     * no-op rather than mis-cycling a g_cfg_items[] index. The hit
-     * carries the absolute index in item_idx (implemented per plan
-     * Step 7, Finding #3). */
-    UiHit h = submenu_hit_test(mx, my);
-    if (h.kind != UI_HIT_SUBMENU_ITEM || h.cmd_idx != MENU_CONFIG ||
-        h.item_idx < 0)
-        return ui_hit_none();
-    return h;
-}
-
 int ui_menu_bar_handle_wheel_scroll(int mx, int my, int delta) {
     int sx, sy, sw, sh, count, max_scroll;
     if (g_open_menu < 0 ||

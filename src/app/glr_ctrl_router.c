@@ -1150,6 +1150,13 @@ static void route_right_press(int x, int y) {
         route_numeric_swatch_hit(&hit, numeric_swatch_scale(1));
         return;
     case UI_HIT_SUBMENU_ITEM:
+        /* Backward-cycle the Config flyout item under the cursor;
+         * item_idx carries the absolute g_cfg_items[] index. The
+         * hit-test resolves actionable ITEM rows only — flyout chrome
+         * ("### "/"---" in the "All" flyout) is skipped via
+         * submenu_row_kind, and section/All parent rows own no submenu
+         * row — so a right-press over the section list can never
+         * mis-cycle a g_cfg_items[] index. */
         if (hit.cmd_idx == GLR_MENU_CONFIG && hit.item_idx >= 0) {
             glr_cfg_cycle_row(hit.item_idx, -1);
             editor_request_redraw();
