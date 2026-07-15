@@ -99,7 +99,7 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  static float bladeCount = 78; // @tune
+  static float bladeCount = 135; // @tune
   static float field = 3.65; // half-width @tune
   static float x, z, h, w, angle, phase, flex;
   static float wind, wave, bend, u, cx, cz, halfW, shade;
@@ -113,7 +113,7 @@ void display(void) {
     wave = sin(t*2.2 + ph + x0*0.35 + z0*0.20) + 0.35*sin(t*4.9 + ph*1.7);
     bend = (0.65 + 0.35*sin(t*0.75))*wave*stiffness*height*0.26;
     glBegin(GL_TRIANGLE_STRIP);
-      for(s, 0, 5) {
+      for(s, 0, 6) {
         u = s/4;
         cx = x0 + 0.08*rand2(seed, 11)*u + cos(wind)*bend*u*u;
         cz = z0 + 0.08*rand2(seed, 12)*u + sin(wind)*bend*u*u;
