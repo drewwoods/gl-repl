@@ -1775,8 +1775,55 @@ static void special_dispatch(int key, int x, int y) {
     editor_merge_input_effects(editor_handle_special(key, x, y));
 }
 
+/* FreeGLUT's Cocoa backend reports modifier transitions through the special
+ * callback before reporting a combined shortcut through the keyboard
+ * callback. Modifier state is already read through glutGetModifiers(), so
+ * these transition notifications are not controller actions and must not
+ * enter modal, overlay, shortcut, or editor routing. System GLUT variants
+ * that do not expose the FreeGLUT modifier-key constants also do not emit
+ * these events; keep the fallback build source-compatible with them. */
+static int glr_ctrl_special_is_modifier_event(int key) {
+    switch (key) {
+#ifdef GLUT_KEY_SHIFT_L
+    case GLUT_KEY_SHIFT_L:
+#endif
+#ifdef GLUT_KEY_SHIFT_R
+    case GLUT_KEY_SHIFT_R:
+#endif
+#ifdef GLUT_KEY_CTRL_L
+    case GLUT_KEY_CTRL_L:
+#endif
+#ifdef GLUT_KEY_CTRL_R
+    case GLUT_KEY_CTRL_R:
+#endif
+#ifdef GLUT_KEY_ALT_L
+    case GLUT_KEY_ALT_L:
+#endif
+#ifdef GLUT_KEY_ALT_R
+    case GLUT_KEY_ALT_R:
+#endif
+#ifdef GLUT_KEY_SUPER_L
+    case GLUT_KEY_SUPER_L:
+#endif
+#ifdef GLUT_KEY_SUPER_R
+    case GLUT_KEY_SUPER_R:
+#endif
+#if defined(GLUT_KEY_SHIFT_L) || defined(GLUT_KEY_SHIFT_R) || \
+    defined(GLUT_KEY_CTRL_L) || defined(GLUT_KEY_CTRL_R) || \
+    defined(GLUT_KEY_ALT_L) || defined(GLUT_KEY_ALT_R) || \
+    defined(GLUT_KEY_SUPER_L) || defined(GLUT_KEY_SUPER_R)
+        return 1;
+#endif
+    default:
+        return 0;
+    }
+}
+
 void glr_ctrl_special(int key, int x, int y) {
     glr_audio_on_user_gesture();
+
+    if (glr_ctrl_special_is_modifier_event(key))
+        return;
 
     editor_reset_input_effects();
     special_dispatch(key, x, y);

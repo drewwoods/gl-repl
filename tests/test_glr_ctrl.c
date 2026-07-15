@@ -1495,6 +1495,7 @@ static void test_editor_input_dismisses_gl_state_report(void) {
     UiHit hit;
     UiGlStatePanelView view;
     int blank_line;
+    int old_cpu_profile;
     int anchor_x = -1;
     int anchor_y = -1;
     int off_x = -1;
@@ -1526,6 +1527,46 @@ static void test_editor_input_dismisses_gl_state_report(void) {
                ui_state_gl_state_inspector().visible, 1);
     glr_ctrl_special(GLUT_KEY_LEFT, 0, 0);
     ASSERT_INT("editor special key dismisses state",
+               ui_state_gl_state_inspector().visible, 0);
+
+    /* Cocoa FreeGLUT emits Ctrl itself as a special-key transition before
+     * delivering Ctrl+W through the keyboard callback. The controller must
+     * discard that transition: neither it nor the controller-owned shortcut
+     * that follows is editor input, so both must leave the inspector open. */
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, anchor_x, anchor_y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, anchor_x, anchor_y);
+    ASSERT_INT("state reopens before modifier-only special keys",
+               ui_state_gl_state_inspector().visible, 1);
+#ifdef GLUT_KEY_SHIFT_L
+    {
+        static const int modifier_keys[] = {
+            GLUT_KEY_SHIFT_L, GLUT_KEY_SHIFT_R,
+            GLUT_KEY_CTRL_L, GLUT_KEY_CTRL_R,
+            GLUT_KEY_ALT_L, GLUT_KEY_ALT_R,
+            GLUT_KEY_SUPER_L, GLUT_KEY_SUPER_R
+        };
+        int i;
+        for (i = 0; i < (int)(sizeof(modifier_keys) /
+                              sizeof(modifier_keys[0])); i++)
+            glr_ctrl_special(modifier_keys[i], 0, 0);
+    }
+#endif
+    ASSERT_INT("modifier-only special keys preserve state",
+               ui_state_gl_state_inspector().visible, 1);
+
+    editor_input_set_modifier_provider_for_test(simulated_mods_provider);
+    g_simulated_mods = GLUT_ACTIVE_CTRL;
+    old_cpu_profile = glr_config_get(GLR_CONFIG_CPU_PROFILE);
+    glr_ctrl_keyboard(KEY_CTRL_W, 0, 0);
+    ASSERT_TRUE("Ctrl+W remains a controller-owned profile shortcut",
+                glr_config_get(GLR_CONFIG_CPU_PROFILE) != old_cpu_profile);
+    ASSERT_INT("controller-owned Ctrl+W preserves state",
+               ui_state_gl_state_inspector().visible, 1);
+    g_simulated_mods = 0;
+    editor_input_set_modifier_provider_for_test(NULL);
+
+    glr_ctrl_special(GLUT_KEY_LEFT, 0, 0);
+    ASSERT_INT("later editor special key still dismisses state",
                ui_state_gl_state_inspector().visible, 0);
 
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, anchor_x, anchor_y);
