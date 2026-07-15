@@ -2605,7 +2605,9 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
         int tx = cp_x + CODE_MARGIN_X;
 
         prof_begin(PROF_CODE_PANEL_OVERLAY_STATUS_TEXT);
-        ui_clr(UI_TOK_TEXT_PRIMARY);
+        ui_clr(snap->flat_program_overflow_count > 0
+                   ? UI_TOK_STATUS_ERR_TEXT
+                   : UI_TOK_TEXT_PRIMARY);
         gl2d_draw_string((float)tx, (float)text_y, L.cmds, FONT_SMALL);
         tx += L.cmds_w;
 
