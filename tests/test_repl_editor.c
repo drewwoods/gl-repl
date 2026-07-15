@@ -3583,6 +3583,14 @@ int main() {
         glr_ctrl_build_ui_snapshot(&snap);
         ASSERT_INT("statusbar redo: undo enabled", snap.can_undo, 1);
         ASSERT_INT("statusbar redo: redo disabled", snap.can_redo, 0);
+
+        hit.kind = UI_HIT_CODE_PASTE;
+        ASSERT_INT("statusbar paste: consumed",
+                   glr_ctrl_router_handle_code_panel_hit(hit, 0, 0), 1);
+        ASSERT_INT("statusbar paste: document count",
+                   repl_state_document_count(), 2);
+        ASSERT_STR("statusbar paste: restored copied line",
+                   editor_buffer_line(0), "  glVertex3f(0, 0, 0);");
     }
 
     /* Extra coverage: F12 cycling with user scenes */

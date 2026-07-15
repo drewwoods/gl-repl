@@ -724,6 +724,7 @@ static void test_ui_panels_hit_test(void) {
             int saw_clear = 0;
             int saw_copy = 0;
             int saw_cut = 0;
+            int saw_paste = 0;
             int saw_undo = 0;
             int saw_redo = 0;
             int status_my = win_h - (cp_y + STATUSBAR_H / 2);
@@ -735,6 +736,7 @@ static void test_ui_panels_hit_test(void) {
                 if (h.kind == UI_HIT_CODE_CLEAR_ALL) saw_clear = 1;
                 if (h.kind == UI_HIT_CODE_COPY)      saw_copy = 1;
                 if (h.kind == UI_HIT_CODE_CUT)       saw_cut = 1;
+                if (h.kind == UI_HIT_CODE_PASTE)     saw_paste = 1;
                 if (h.kind == UI_HIT_CODE_UNDO)      saw_undo = 1;
                 if (h.kind == UI_HIT_CODE_REDO)      saw_redo = 1;
             }
@@ -744,6 +746,8 @@ static void test_ui_panels_hit_test(void) {
             ASSERT_TRUE(lbl, saw_copy);
             snprintf(lbl, sizeof lbl, "statusbar cut hit kind%s", tag);
             ASSERT_TRUE(lbl, saw_cut);
+            snprintf(lbl, sizeof lbl, "statusbar paste hit kind%s", tag);
+            ASSERT_TRUE(lbl, saw_paste);
             snprintf(lbl, sizeof lbl, "statusbar undo hit kind%s", tag);
             ASSERT_TRUE(lbl, saw_undo);
             snprintf(lbl, sizeof lbl, "statusbar redo hit kind%s", tag);
