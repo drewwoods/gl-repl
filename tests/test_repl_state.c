@@ -93,7 +93,7 @@ static void gl_state_test_fill_camera(ReplExportCameraBlock *block) {
     memset(block, 0, sizeof(*block));
     block->present = 1;
     snprintf(block->lines[0], sizeof(block->lines[0]),
-             "  glTranslatef(10, 0, 0);");
+             "  glTranslatef(10.25, 0, 0);");
 }
 
 static void populate_runtime_snapshot_fixture(const char *scene_hint) {
@@ -1184,7 +1184,16 @@ static void test_gl_state_report_includes_generated_fixed_function_state(void) {
     ASSERT_TRUE("generated camera modelview is reported", row != NULL);
     if (row) {
         ASSERT_STR("generated camera modelview current", row->current,
-                   "[1 0 0 10; 0 1 0 0; 0 0 1 0; 0 0 0 1]");
+                   "[  1.0000   0.0000   0.0000  10.2500; "
+                   "  0.0000   1.0000   0.0000   0.0000; "
+                   "  0.0000   0.0000   1.0000   0.0000; "
+                   "  0.0000   0.0000   0.0000   1.0000]");
+        ASSERT_STR("generated camera modelview aligned default",
+                   row->default_value,
+                   "[  1.0000   0.0000   0.0000   0.0000; "
+                   "  0.0000   1.0000   0.0000   0.0000; "
+                   "  0.0000   0.0000   1.0000   0.0000; "
+                   "  0.0000   0.0000   0.0000   1.0000]");
         ASSERT_INT("camera modelview source is display", row->source.kind,
                    REPL_GL_STATE_SOURCE_DISPLAY);
         ASSERT_INT("generated display has no user line",
@@ -1195,7 +1204,7 @@ static void test_gl_state_report_includes_generated_fixed_function_state(void) {
     ASSERT_TRUE("generated light position is reported", row != NULL);
     if (row) {
         ASSERT_STR("world light is stored after modelview transform",
-                   row->current, "(11, 2, 3, 1)");
+                   row->current, "(11.25, 2, 3, 1)");
         ASSERT_STR("light position OpenGL default", row->default_value,
                    "(0, 0, 1, 0)");
         ASSERT_INT("light position source is display", row->source.kind,
@@ -1257,7 +1266,7 @@ static void test_gl_state_report_converts_eye_light_position_to_world(void) {
     ASSERT_TRUE("eye-space light gains derived world position", row != NULL);
     if (row) {
         ASSERT_STR("eye-space light follows camera into world",
-                   row->current, "(-9, 2, 3, 1)");
+                   row->current, "(-9.25, 2, 3, 1)");
         ASSERT_INT("derived world position retains display source",
                    row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
     }
