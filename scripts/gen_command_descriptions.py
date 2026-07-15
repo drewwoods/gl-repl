@@ -241,7 +241,7 @@ def main(argv: list[str]) -> int:
     root = repo_root()
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--catalog", default=str(root / "command_descriptions.txt")
+        "--catalog", default=str(root / "src/repl/command_descriptions.txt")
     )
     parser.add_argument(
         "--command-header", default=str(root / "src/repl/command.h")

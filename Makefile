@@ -527,7 +527,7 @@ EXAMPLES_CATALOG = examples/catalog.ini
 endif
 EXAMPLE_SCENE_SRCS = $(wildcard examples/scenes/*.glr) $(wildcard examples/scenes/*.c)
 GENERATED_EXAMPLES_INC = build/generated/repl_examples_data.inc
-COMMAND_DESCRIPTIONS_SOURCE = command_descriptions.txt
+COMMAND_DESCRIPTIONS_SOURCE = src/repl/command_descriptions.txt
 GENERATED_COMMAND_DESCRIPTIONS_INC = build/generated/repl_command_descriptions_data.inc
 
 UI_SRCS = $(UI_CORE_SRCS) $(UI_APP_SRCS)
