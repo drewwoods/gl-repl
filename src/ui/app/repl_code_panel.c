@@ -1934,7 +1934,7 @@ static void repl_code_panel_statusbar_sep(int *tx, int sy, int sh) {
 }
 
 /* Right-aligned statusbar cluster: compact editor action chips
- * (undo/redo/copy/cut/clear), a "[focus] focus" keycap+label, and
+ * (undo/redo/copy/cut/paste/clear), a "[focus] focus" keycap+label, and
  * the existing "[F1] help" keycap+label. The geometry is derived once
  * here so the renderer and the hit-test agree on the clickable chip
  * boxes (window / GL coords, bottom-left origin), with no arithmetic
@@ -2053,12 +2053,14 @@ typedef struct {
     int trash_kx, trash_kw;
     int copy_kx, copy_kw;
     int cut_kx, cut_kw;
+    int paste_kx, paste_kw;
     int undo_kx, undo_kw;
     int redo_kx, redo_kw;
     int ky, kh;                 /* keycap box y / h (shared) */
     int trash_visible;          /* 0 when it would collide with left text */
     int copy_visible;
     int cut_visible;
+    int paste_visible;
     int undo_visible;
     int redo_visible;
     int focus_visible;          /* 0 when it would collide with left text */
@@ -2086,8 +2088,10 @@ static ReplStatusbarHints repl_code_panel_statusbar_hints(
     h.focus_kx    = h.focus_lbl_x - h.focus_kw - 6;
     h.trash_kw    = h.kh + 4;
     h.trash_kx    = h.focus_kx - 12 - h.trash_kw;
+    h.paste_kw    = h.kh + 4;
+    h.paste_kx    = h.trash_kx - 6 - h.paste_kw;
     h.cut_kw      = h.kh + 4;
-    h.cut_kx      = h.trash_kx - 6 - h.cut_kw;
+    h.cut_kx      = h.paste_kx - 4 - h.cut_kw;
     h.copy_kw     = h.kh + 4;
     h.copy_kx     = h.cut_kx - 4 - h.copy_kw;
     h.redo_kw     = h.kh + 4;
@@ -2102,6 +2106,7 @@ static ReplStatusbarHints repl_code_panel_statusbar_hints(
     h.help_visible  = (h.help_kx  >= left_end + gap);
     h.focus_visible = (h.focus_kx >= left_end + gap);
     h.trash_visible = (h.trash_kx >= left_end + gap);
+    h.paste_visible = (h.paste_kx >= left_end + gap);
     h.cut_visible   = (h.cut_kx   >= left_end + gap);
     h.copy_visible  = (h.copy_kx  >= left_end + gap);
     h.redo_visible  = (h.redo_kx  >= left_end + gap);
@@ -2174,7 +2179,7 @@ static void repl_code_panel_draw_focus_kbd(int gx, int gy) {
 
 /* Centre an icon_w x icon_h 1bpp glyph in the (kx,ky,kw,kh) keycap box
  * and draw it with glBitmap. Shared by the trash / undo / redo / copy /
- * cut statusbar chips so each glyph is just a bit table. */
+ * cut / paste statusbar chips so each glyph is just a bit table. */
 static void repl_code_panel_draw_bitmap_icon(int kx, int ky, int kw, int kh,
                                              int icon_w, int icon_h,
                                              const GLubyte *bits) {
@@ -2370,6 +2375,41 @@ static void repl_code_panel_draw_cut_icon(int kx, int ky, int kw, int kh) {
                                      ACTION_ICON_W, ACTION_ICON_H, cut_bits);
 }
 
+static void repl_code_panel_draw_paste_icon(int kx, int ky, int kw, int kh) {
+    /* Clipboard with a clipped sheet: the top tab and shoulders identify
+     * the clipboard, while the inset page lines distinguish paste from the
+     * two loose sheets used by the copy glyph.
+     *
+     *  row 11:  ....#####....   clip top
+     *  row 10:  ...#.....#...   clip sides
+     *  row 9:   .###########.   board top / clip base
+     *  row 8:   .#.........#.
+     *  row 7:   .#..#####..#.   page text
+     *  row 6:   .#.........#.
+     *  row 5:   .#..#####..#.
+     *  row 4:   .#.........#.
+     *  row 3:   .#..#####..#.
+     *  row 2:   .#.........#.
+     *  row 1:   .#.........#.
+     *  row 0:   .###########.   board bottom                         */
+    static const GLubyte paste_bits[ACTION_ICON_H * 2] = {
+        0x7F, 0xF0,  /* row 0  */
+        0x40, 0x10,  /* row 1  */
+        0x40, 0x10,  /* row 2  */
+        0x4F, 0x90,  /* row 3  */
+        0x40, 0x10,  /* row 4  */
+        0x4F, 0x90,  /* row 5  */
+        0x40, 0x10,  /* row 6  */
+        0x4F, 0x90,  /* row 7  */
+        0x40, 0x10,  /* row 8  */
+        0x7F, 0xF0,  /* row 9  */
+        0x11, 0x00,  /* row 10 */
+        0x0F, 0x80   /* row 11 */
+    };
+    repl_code_panel_draw_bitmap_icon(kx, ky, kw, kh,
+                                     ACTION_ICON_W, ACTION_ICON_H, paste_bits);
+}
+
 static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
                                            const UiTextPanelRect *slot) {
     int sy;
@@ -2471,6 +2511,10 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
         if (h.cut_visible)
             repl_code_panel_draw_keycap(h.cut_kx, h.ky, h.cut_kw, h.kh);
 
+        if (h.paste_visible)
+            repl_code_panel_draw_keycap(h.paste_kx, h.ky,
+                                        h.paste_kw, h.kh);
+
         if (h.trash_visible)
             repl_code_panel_draw_keycap(h.trash_kx, h.ky,
                                         h.trash_kw, h.kh);
@@ -2504,6 +2548,12 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
             ui_clr(UI_TOK_TEXT_PRIMARY);
             repl_code_panel_draw_cut_icon(h.cut_kx, h.ky,
                                           h.cut_kw, h.kh);
+        }
+
+        if (h.paste_visible) {
+            ui_clr(UI_TOK_TEXT_PRIMARY);
+            repl_code_panel_draw_paste_icon(h.paste_kx, h.ky,
+                                            h.paste_kw, h.kh);
         }
 
         if (h.trash_visible) {
@@ -2694,6 +2744,12 @@ static int repl_code_panel_statusbar_hit_kind(
                                       hints.cut_kx, hints.ky,
                                       hints.cut_kw, hints.kh))
         return UI_HIT_CODE_CUT;
+
+    if (hints.paste_visible &&
+        repl_code_panel_point_in_rect(mx, gl_y,
+                                      hints.paste_kx, hints.ky,
+                                      hints.paste_kw, hints.kh))
+        return UI_HIT_CODE_PASTE;
 
     if (hints.copy_visible &&
         repl_code_panel_point_in_rect(mx, gl_y,

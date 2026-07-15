@@ -1004,6 +1004,13 @@ static int route_code_cut_hit(void) {
     return 1;
 }
 
+static int route_code_paste_hit(void) {
+    editor_clipboard_paste_current();
+    glr_ctrl_router_reset_code_panel_drag();
+    editor_request_redraw();
+    return 1;
+}
+
 static int route_code_undo_hit(void) {
     editor_undo_pop_snapshot();
     editor_scroll_follow_cursor_set(0);
@@ -1398,6 +1405,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_code_copy_hit(); break;
     case UI_HIT_CODE_CUT:
         consumed = route_code_cut_hit(); break;
+    case UI_HIT_CODE_PASTE:
+        consumed = route_code_paste_hit(); break;
     case UI_HIT_CODE_UNDO:
         consumed = route_code_undo_hit(); break;
     case UI_HIT_CODE_REDO:
