@@ -647,6 +647,154 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
     }
 }
 
+static int point_in_gl_rect(int mx, int my, int win_h,
+                            int x, int y, int w, int h) {
+    int gl_y = win_h - my;
+    return w > 0 && h > 0 &&
+           mx >= x && mx < x + w && gl_y >= y && gl_y < y + h;
+}
+
+static UiHit overlay_chrome_hit(int mx, int my, int win_h,
+                                int x, int y) {
+    UiHit hit = ui_hit_none();
+    hit.kind = UI_HIT_OVERLAY_CHROME;
+    hit.local_x = (float)(mx - x);
+    hit.local_y = (float)(win_h - my - y);
+    return hit;
+}
+
+/* The status renderer paints more than its two actionable history surfaces:
+ * modal prompt strips and the transient telescope banner are visible chrome
+ * too. Classify the exact painted footprint so those pixels cannot leak to a
+ * lower z-layer. */
+static UiHit status_surface_hit_test(const UiRenderSnapshot *snap,
+                                     int mx, int my) {
+    UiHit hit = status_history_hit_test(snap, mx, my);
+    int win_h = snap->viewport.window_h;
+    int sc_x, sc_y, sc_w, sc_h;
+
+    if (hit.kind != UI_HIT_NONE)
+        return hit;
+
+    ui_layout_scene_rect(&sc_x, &sc_y, &sc_w, &sc_h);
+    if (snap->rename_active || snap->file_prompt_active) {
+        if (point_in_gl_rect(mx, my, win_h, sc_x, sc_y,
+                             sc_w, STATUSBAR_H))
+            return overlay_chrome_hit(mx, my, win_h, sc_x, sc_y);
+        return hit;
+    }
+
+    {
+        StatusAnim anim = status_anim_from(&snap->status);
+        int bx, by, bw, bh;
+        if (anim.active && anim.ext > 0.002f &&
+            ui_panels_status_history_button_rect(snap, &bx, &by, &bw, &bh)) {
+            int left = bx - (int)(anim.ext * (float)(bx - sc_x));
+            if (point_in_gl_rect(mx, my, win_h, left, sc_y,
+                                 bx - left, STATUSBAR_H))
+                return overlay_chrome_hit(mx, my, win_h, left, sc_y);
+        }
+    }
+    return hit;
+}
+
+UiHit ui_panels_hit_test_above_gl_state(const UiRenderSnapshot *snap,
+                                        int mx, int my,
+                                        int variable_count) {
+    static const UiOverlayPanelId k_reverse_render_order[] = {
+        UI_OVERLAY_PANEL_MEMORY,
+        UI_OVERLAY_PANEL_HISTOGRAM,
+        UI_OVERLAY_PANEL_PROFILE,
+        UI_OVERLAY_PANEL_FPS
+    };
+    UiHit hit = ui_hit_none();
+    UiOverlayLayoutIn layout_in;
+    int win_w;
+    int win_h;
+    int order_idx;
+
+    if (!snap)
+        return hit;
+    win_w = snap->viewport.window_w;
+    win_h = snap->viewport.window_h;
+    if (win_w <= 0 || win_h <= 0)
+        return hit;
+
+    layout_in = ui_overlay_layout_inputs(
+        snap->variable_panel.visible,
+        snap->variable_panel_vars.count,
+        snap->profile_panel.mode,
+        snap->profile_panel.collapsed_sections,
+        snap->memory_panel.mode,
+        ui_overlay_layout_last_band_h());
+
+    /* Reverse of the render order after ui_gl_state_panel_render(). Modal
+     * help is intentionally handled by the controller before this pass; the
+     * telemetry surfaces below are otherwise the topmost floating layers. */
+    for (order_idx = 0;
+         order_idx < (int)(sizeof(k_reverse_render_order) /
+                           sizeof(k_reverse_render_order[0]));
+         order_idx++) {
+        UiOverlayPanelId id = k_reverse_render_order[order_idx];
+        const UiOverlayPanelReq *panel = &layout_in.panels[id];
+        int px, py;
+        if (!panel->visible)
+            continue;
+        ui_overlay_layout_panel_pos(&layout_in, id, &px, &py);
+        if (id == UI_OVERLAY_PANEL_PROFILE) {
+            UiProfilePanelView profile_view;
+            int toggle_target;
+            profile_view.window_w = win_w;
+            profile_view.window_h = win_h;
+            profile_view.mode = (UiProfilePanelMode)snap->profile_panel.mode;
+            profile_view.collapsed_sections =
+                (UiProfileCollapseMask)snap->profile_panel.collapsed_sections;
+            profile_view.panel_x = px;
+            profile_view.panel_y = py;
+            toggle_target = ui_profile_panel_hit_test(&profile_view, mx, my);
+            if (toggle_target != UI_PROFILE_PANEL_HIT_NONE) {
+                hit.kind = UI_HIT_PROFILE_SECTION_TOGGLE;
+                hit.item_idx = toggle_target;
+                hit.local_x = (float)(mx - px);
+                hit.local_y = (float)(win_h - my - py);
+                return hit;
+            }
+        }
+        if (point_in_gl_rect(mx, my, win_h, px, py, panel->w, panel->h))
+            return overlay_chrome_hit(mx, my, win_h, px, py);
+    }
+
+    hit = status_surface_hit_test(snap, mx, my);
+    if (hit.kind != UI_HIT_NONE)
+        return hit;
+
+    {
+        UiVariablePanelView var_view = ui_app_variable_panel_view(snap);
+        int vx, vy, vw, vh;
+        var_view.var_count = variable_count;
+        hit = ui_variable_panel_hit_test(&var_view, mx, my);
+        if (hit.kind != UI_HIT_NONE)
+            return hit;
+        if (var_view.visible) {
+            ui_variable_panel_rect(&var_view, &vx, &vy, &vw, &vh);
+            if (point_in_gl_rect(mx, my, win_h, vx, vy, vw, vh))
+                return overlay_chrome_hit(mx, my, win_h, vx, vy);
+        }
+    }
+
+    /* Only the open dropdown/flyout is repainted after the state panel; the
+     * menu-bar buttons themselves were drawn earlier as code-panel chrome. */
+    if (ui_menu_bar_menu_dropdown_is_open()) {
+        UiHit menu_hit = ui_menu_bar_hit_test(mx, my);
+        if (menu_hit.kind == UI_HIT_MENU_ITEM ||
+            menu_hit.kind == UI_HIT_SUBMENU_ITEM ||
+            menu_hit.kind == UI_HIT_CODE_PANEL_CHROME)
+            return menu_hit;
+    }
+
+    return ui_hit_none();
+}
+
 UiHit ui_panels_hit_test(const UiRenderSnapshot *snap,
                          int mx, int my, int variable_count) {
     UiHit hit = ui_hit_none();

@@ -1491,6 +1491,80 @@ static void test_gl_state_popup_scroll_geometry(void) {
                ui_gl_state_panel_max_scroll(&view), 0);
 }
 
+static void test_gl_state_popup_defers_to_front_overlay(void) {
+    UiRenderSnapshot snap;
+    UiVariablePanelView var_view;
+    UiGlStatePanelView state_view;
+    UiHit front_hit;
+    int blank_line;
+    int vx, vy, vw, vh;
+    int overlap_x = -1;
+    int overlap_y = -1;
+    int max_scroll;
+    int initial_scroll;
+    int px, gl_y;
+
+    printf("--- imrepl_ctrl OpenGL-state/front-overlay z routing ---\n");
+
+    prepare_code_panel_mouse_fixture();
+    blank_line = repl_state_document_count();
+    editor_state_edit_line_set(blank_line);
+    editor_insert_mode_set(0);
+    ASSERT_INT("append overlap-test blank line", editor_feed_line(""), 1);
+    variable_panel_set_visible(1);
+
+    glr_ctrl_build_ui_snapshot(&snap);
+    var_view = ui_app_variable_panel_view(&snap);
+    ui_variable_panel_rect(&var_view, &vx, &vy, &vw, &vh);
+
+    /* Anchor directly at the later-rendered variable panel. The state table
+     * is wide enough to clamp across that area; scan for a pixel that is both
+     * state-popup surface and inert variable-panel chrome. */
+    ui_state_gl_state_inspector_open(
+        blank_line, vx + vw / 2,
+        snap.viewport.window_h - (vy + vh / 2));
+    glr_ctrl_display_frame();
+    state_view = glr_ctrl_build_gl_state_panel_view();
+    glr_ctrl_build_ui_snapshot(&snap);
+    for (gl_y = vy; gl_y < vy + vh && overlap_x < 0; gl_y++) {
+        int my = snap.viewport.window_h - gl_y;
+        for (px = vx; px < vx + vw && overlap_x < 0; px++) {
+            front_hit = ui_panels_hit_test_above_gl_state(
+                &snap, px, my, repl_eval_predef_view().count);
+            if (front_hit.kind == UI_HIT_OVERLAY_CHROME &&
+                ui_gl_state_panel_hit_test(&state_view, px, my)) {
+                overlap_x = px;
+                overlap_y = my;
+            }
+        }
+    }
+    ASSERT_TRUE("found variable chrome over state popup", overlap_x >= 0);
+    if (overlap_x < 0)
+        return;
+
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, overlap_x, overlap_y);
+    ASSERT_INT("front overlay left click keeps state popup open",
+               ui_state_gl_state_inspector().visible, 1);
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, overlap_x, overlap_y);
+
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, overlap_x, overlap_y);
+    ASSERT_INT("front overlay right click keeps state popup open",
+               ui_state_gl_state_inspector().visible, 1);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, overlap_x, overlap_y);
+
+    state_view = glr_ctrl_build_gl_state_panel_view();
+    max_scroll = ui_gl_state_panel_max_scroll(&state_view);
+    ASSERT_TRUE("overlapped state report is scrollable", max_scroll > 0);
+    if (max_scroll > 0) {
+        initial_scroll = max_scroll > 1 ? max_scroll - 1 : 0;
+        ui_state_gl_state_inspector_set_scroll(initial_scroll);
+        route_wheel(overlap_x, overlap_y, 1);
+        ASSERT_INT("front overlay wheel does not scroll state popup",
+                   ui_state_gl_state_inspector().scroll_rows,
+                   initial_scroll);
+    }
+}
+
 static void test_left_click_code_panel_exits_search_and_places_cursor(void) {
     UiHit hit;
     int x = -1;
@@ -3675,6 +3749,7 @@ int main(void) {
     test_right_click_gl_command_description_popup();
     test_right_click_empty_line_toggles_gl_state_report();
     test_gl_state_popup_scroll_geometry();
+    test_gl_state_popup_defers_to_front_overlay();
     test_left_click_code_panel_exits_search_and_places_cursor();
     test_tick_per_frame_scheduling();
     test_overlay_transition_machine_wiring();

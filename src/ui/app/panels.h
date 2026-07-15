@@ -67,4 +67,13 @@ int ui_panels_status_history_button_rect(const UiRenderSnapshot *snap,
 UiHit ui_panels_hit_test(const UiRenderSnapshot *snap,
                          int mx, int my, int variable_count);
 
+/* Reverse-render-order hit pass for surfaces painted after the floating
+ * OpenGL-state inspector. Returns actionable hits where a front panel has
+ * controls, and UI_HIT_OVERLAY_CHROME for otherwise-inert panel pixels, so
+ * the router can keep those pixels from falling through to the inspector.
+ * UI_HIT_NONE means no later-rendered surface owns the point. */
+UiHit ui_panels_hit_test_above_gl_state(const UiRenderSnapshot *snap,
+                                        int mx, int my,
+                                        int variable_count);
+
 #endif /* UI_PANELS_H */

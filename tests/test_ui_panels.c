@@ -10,9 +10,13 @@
 #include "ui/app/panels.h"
 #include "ui/app/state.h"
 #include "ui/app/layout.h"
+#include "ui/app/overlay_layout.h"
 #include "ui/app/snapshot.h"
 #include "ui/app/repl_code_panel.h"
+#include "ui/app/variable_panel_view.h"
 #include "ui/core/metrics.h"
+#include "ui/support/cpuprof.h"
+#include "ui/support/memprof.h"
 
 #include "support/test_harness.h"
 #include <GL/gl_stub_counts.h>
@@ -217,6 +221,106 @@ static void test_scene_status_no_render_when_inactive(void) {
                   (int)gl_stub_counts[GL_STUB_glRasterPos2f], 0);
 }
 
+static void prepare_overlay_hit_snap(UiRenderSnapshot *snap) {
+    glr_ctrl_reset_all();
+    ui_state_reset();
+    ui_overlay_layout_reset();
+    ui_state_viewport_set_size(1000, 800);
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_ctrl_sync_ui_chrome();
+    ui_state_code_panel_mut()->panel_frac = 0.3f;
+    make_snap(snap);
+}
+
+static void test_front_overlay_hit_surfaces(void) {
+    UiRenderSnapshot snap;
+    UiOverlayLayoutIn layout_in;
+    UiVariablePanelView var_view;
+    UiHit hit;
+    int px, py, pw, ph;
+    int my;
+
+    prepare_overlay_hit_snap(&snap);
+    snap.variable_panel.visible = 1;
+    snap.variable_panel_vars.count = 2;
+    var_view = ui_app_variable_panel_view(&snap);
+    ui_variable_panel_rect(&var_view, &px, &py, &pw, &ph);
+    my = snap.viewport.window_h - (py + ph - 2);
+    hit = ui_panels_hit_test_above_gl_state(&snap, px + 4, my, 2);
+    ASSERT_INT_EQ("variable title is front overlay chrome",
+                  hit.kind, UI_HIT_OVERLAY_CHROME);
+
+    /* A real row remains actionable through the same front-layer pass. */
+    hit = ui_hit_none();
+    for (int y = py; y < py + ph && hit.kind == UI_HIT_NONE; y++) {
+        UiHit candidate = ui_panels_hit_test_above_gl_state(
+            &snap, px + pw / 2, snap.viewport.window_h - y, 2);
+        if (candidate.kind == UI_HIT_VARIABLE_SLIDER)
+            hit = candidate;
+    }
+    ASSERT_INT_EQ("variable row keeps slider hit",
+                  hit.kind, UI_HIT_VARIABLE_SLIDER);
+
+    prepare_overlay_hit_snap(&snap);
+    snap.profile_panel.mode = PROFILE_PANEL_SECTIONS;
+    layout_in = ui_overlay_layout_inputs(
+        0, 0, snap.profile_panel.mode,
+        snap.profile_panel.collapsed_sections, MEMORY_PANEL_OFF, 0);
+    ui_overlay_layout_panel_pos(&layout_in, UI_OVERLAY_PANEL_PROFILE,
+                                &px, &py);
+    hit = ui_panels_hit_test_above_gl_state(
+        &snap, px + ui_profile_panel_width() / 2,
+        snap.viewport.window_h - (py + 2), 0);
+    ASSERT_INT_EQ("profile body is front overlay chrome",
+                  hit.kind, UI_HIT_OVERLAY_CHROME);
+
+    prepare_overlay_hit_snap(&snap);
+    snap.profile_panel.mode = PROFILE_PANEL_HISTOGRAM;
+    layout_in = ui_overlay_layout_inputs(
+        0, 0, snap.profile_panel.mode, 0, MEMORY_PANEL_OFF, 0);
+    ui_overlay_layout_panel_pos(&layout_in, UI_OVERLAY_PANEL_HISTOGRAM,
+                                &px, &py);
+    hit = ui_panels_hit_test_above_gl_state(
+        &snap, px + ui_histogram_panel_width() / 2,
+        snap.viewport.window_h -
+            (py + ui_histogram_panel_height() / 2), 0);
+    ASSERT_INT_EQ("histogram panel is front overlay chrome",
+                  hit.kind, UI_HIT_OVERLAY_CHROME);
+
+    prepare_overlay_hit_snap(&snap);
+    snap.profile_panel.mode = PROFILE_PANEL_FPS;
+    layout_in = ui_overlay_layout_inputs(
+        0, 0, snap.profile_panel.mode, 0, MEMORY_PANEL_OFF, 0);
+    ui_overlay_layout_panel_pos(&layout_in, UI_OVERLAY_PANEL_FPS,
+                                &px, &py);
+    hit = ui_panels_hit_test_above_gl_state(
+        &snap, px + ui_fps_panel_width() / 2,
+        snap.viewport.window_h - (py + ui_fps_panel_height() / 2), 0);
+    ASSERT_INT_EQ("FPS panel is front overlay chrome",
+                  hit.kind, UI_HIT_OVERLAY_CHROME);
+
+    prepare_overlay_hit_snap(&snap);
+    snap.memory_panel.mode = MEMORY_PANEL_ON;
+    layout_in = ui_overlay_layout_inputs(
+        0, 0, PROFILE_PANEL_OFF, 0, snap.memory_panel.mode, 0);
+    ui_overlay_layout_panel_pos(&layout_in, UI_OVERLAY_PANEL_MEMORY,
+                                &px, &py);
+    hit = ui_panels_hit_test_above_gl_state(
+        &snap, px + ui_memory_panel_width() / 2,
+        snap.viewport.window_h - (py + ui_memory_panel_height() / 2), 0);
+    ASSERT_INT_EQ("memory panel is front overlay chrome",
+                  hit.kind, UI_HIT_OVERLAY_CHROME);
+
+    prepare_overlay_hit_snap(&snap);
+    snap.rename_active = 1;
+    ui_layout_scene_rect(&px, &py, &pw, &ph);
+    hit = ui_panels_hit_test_above_gl_state(
+        &snap, px + pw / 2,
+        snap.viewport.window_h - (py + STATUSBAR_H / 2), 0);
+    ASSERT_INT_EQ("modal status strip is front overlay chrome",
+                  hit.kind, UI_HIT_OVERLAY_CHROME);
+}
+
 int main(void) {
     printf("--- ui_panels tests ---\n");
 
@@ -226,6 +330,7 @@ int main(void) {
     test_scene_status_banner_mode();
     test_scene_status_error_banner();
     test_scene_status_no_render_when_inactive();
+    test_front_overlay_hit_surfaces();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_ui_panels");
