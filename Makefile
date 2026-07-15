@@ -453,6 +453,7 @@ endif
 	gl-repl \
 	test \
 	test-detailed \
+	rebuild-golden \
 	test-asan-ubsan \
 	test-full \
 	test-msan \
@@ -1652,6 +1653,10 @@ test-detailed: $(TEST_BINS) ## Run the full test suite with verbose example expo
 	REPL_EXPORT_VERBOSE=1 \
 	TEST_JOBS="$(TEST_JOBS)" \
 	bash scripts/run-tests.sh $(TEST_RUNNER_CASES)
+
+rebuild-golden: test_repl_core_examples ## Rebuild all the golden examples from test_repl_core_examples.
+	@$(BINDIR)/test_repl_core_examples --update-golden
+
 
 # Run these from the recipe instead of declaring them as prerequisites: the
 # default -j build would fan them out and wait for concurrent checks after one
