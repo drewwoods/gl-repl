@@ -231,7 +231,7 @@ ifeq ($(UNAME_S),Darwin)
     # wins; <GL/gl.h>/<GL/glu.h> resolve from the Mesa includes.
     MESA_PREFIX     := $(shell brew --prefix mesa 2>/dev/null)
     MESA_GLU_PREFIX := $(shell brew --prefix mesa-glu 2>/dev/null)
-    FREEGLUT_HEADER_CFLAGS = -I$(FREEGLUT_SRC)/include -I$(MESA_PREFIX)/include -I$(MESA_GLU_PREFIX)/include
+    FREEGLUT_HEADER_CFLAGS = -DFREEGLUT_OSMESA=1 -I$(FREEGLUT_SRC)/include -I$(MESA_PREFIX)/include -I$(MESA_GLU_PREFIX)/include
     ifeq ($(FREEGLUT_VENDOR),1)
       FREEGLUT_LIB := $(FREEGLUT_STATIC_LIB)
     endif
@@ -289,7 +289,7 @@ else
     # so its include dir supplies <GL/freeglut.h>; <GL/gl.h>/<GL/glu.h> resolve from
     # the system Mesa headers on the default path. libGLU pulls libGL via DT_NEEDED;
     # both share Mesa's libglapi dispatch with libOSMesa, so they coexist.
-    FREEGLUT_HEADER_CFLAGS = -I$(FREEGLUT_SRC)/include
+    FREEGLUT_HEADER_CFLAGS = -DFREEGLUT_OSMESA=1 -I$(FREEGLUT_SRC)/include
     ifeq ($(FREEGLUT_VENDOR),1)
       FREEGLUT_LIB := $(FREEGLUT_STATIC_LIB)
     endif

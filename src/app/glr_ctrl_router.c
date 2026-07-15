@@ -1097,17 +1097,36 @@ static int glr_ctrl_router_handle_right_numeric_swatch_press(int x, int y) {
     return route_numeric_swatch_hit(&hit, numeric_swatch_scale(1));
 }
 
-/* Right-click over the editor/code-panel surface is inert: it should not
- * forward to the scene camera, where right-drag starts pan. Numeric swatches,
- * Config right-click, and variable sliders are routed before this helper so
- * their right-button behavior stays active. */
+/* Right-click over a committed empty source row toggles the inline OpenGL
+ * state report anchored there. Other code-panel right-clicks remain inert so
+ * they never forward to the scene camera, where right-drag starts pan.
+ * Numeric swatches, Config right-click, and variable sliders are routed before
+ * this helper so their right-button behavior stays active. */
 static int glr_ctrl_router_handle_right_code_panel_press(int button, int state,
                                                          int x, int y) {
+    UiRenderSnapshot ui_snap;
+    UiHit hit;
+    const GLCmd *cmd;
+
     if (state != GLUT_DOWN || button != GLUT_RIGHT_BUTTON)
         return 0;
     if (!editor_input_point_in_code_panel(x, y) &&
         !editor_input_point_on_code_panel_divider(x, y))
         return 0;
+
+    glr_ctrl_build_ui_snapshot(&ui_snap);
+    hit = ui_panels_hit_test(&ui_snap, x, y,
+                             repl_eval_predef_view().count);
+    cmd = hit.kind == UI_HIT_CODE_TEXT
+        ? repl_state_document_cmd_at(hit.line_idx) : NULL;
+    if (cmd && cmd->type == CMD_EMPTY) {
+        UiGlStateInspectorState inspector = ui_state_gl_state_inspector();
+        if (inspector.visible &&
+            inspector.source_line_idx == hit.line_idx)
+            ui_state_gl_state_inspector_close();
+        else
+            ui_state_gl_state_inspector_open(hit.line_idx);
+    }
 
     color_picker_stop();
     glr_ctrl_router_reset_code_panel_drag();
