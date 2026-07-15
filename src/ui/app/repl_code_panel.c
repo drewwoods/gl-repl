@@ -1,6 +1,8 @@
 #include "ui/app/repl_code_panel.h"
 
 #include "c_compat.h"
+#include "keymap.h"
+#include "keys.h"
 #include "editor/state.h"
 #include "repl/command_spec.h"
 #include "repl/program_query.h"
@@ -2158,10 +2160,29 @@ static int repl_code_panel_statusbar_hint_hit_kind(
 }
 
 typedef struct {
-    const char *text;
+    /* Composed "<label>  <shortcut>", so it owns storage rather than
+     * pointing at a literal. Sized for the longest label plus a
+     * KEYMAP_SHORTCUT_LABEL_MAX binding string and the gap. */
+    char text[KEYMAP_SHORTCUT_LABEL_MAX + 32];
     int anchor_x;
     int anchor_w;
 } ReplStatusbarTooltip;
+
+/* Fill one tooltip: "<label>  <shortcut>", where the shortcut is
+ * formatted live from the action's keymap binding (same pure formatter
+ * src/ui/app/menu_bar.c uses for menu-row accelerators). Keeping the
+ * label→binding mapping here mirrors the chip→label mapping the hit
+ * switch already owns, so no shortcut plumbing crosses the snapshot. */
+static void repl_code_panel_statusbar_tooltip_set(
+        ReplStatusbarTooltip *tooltip, const char *label,
+        int key, int mods, int is_special, int anchor_x, int anchor_w) {
+    char shortcut[KEYMAP_SHORTCUT_LABEL_MAX];
+    keymap_binding_to_string(shortcut, (int)sizeof shortcut,
+                             key, mods, is_special);
+    snprintf(tooltip->text, sizeof tooltip->text, "%s  %s", label, shortcut);
+    tooltip->anchor_x = anchor_x;
+    tooltip->anchor_w = anchor_w;
+}
 
 static int repl_code_panel_statusbar_tooltip_for_hit(
         int hit_kind, const ReplStatusbarHints *h,
@@ -2171,44 +2192,46 @@ static int repl_code_panel_statusbar_tooltip_for_hit(
 
     switch (hit_kind) {
     case UI_HIT_CODE_UNDO:
-        tooltip->text = "Undo";
-        tooltip->anchor_x = h->undo_kx;
-        tooltip->anchor_w = h->undo_kw;
+        repl_code_panel_statusbar_tooltip_set(
+            tooltip, "Undo", KM_KEY(GLR_UNDO), KM_MODS(GLR_UNDO), 0,
+            h->undo_kx, h->undo_kw);
         return 1;
     case UI_HIT_CODE_REDO:
-        tooltip->text = "Redo";
-        tooltip->anchor_x = h->redo_kx;
-        tooltip->anchor_w = h->redo_kw;
+        repl_code_panel_statusbar_tooltip_set(
+            tooltip, "Redo", KM_KEY(GLR_REDO), KM_MODS(GLR_REDO), 0,
+            h->redo_kx, h->redo_kw);
         return 1;
     case UI_HIT_CODE_COPY:
-        tooltip->text = "Copy";
-        tooltip->anchor_x = h->copy_kx;
-        tooltip->anchor_w = h->copy_kw;
+        repl_code_panel_statusbar_tooltip_set(
+            tooltip, "Copy", KM_KEY(GLR_COPY), KM_MODS(GLR_COPY), 0,
+            h->copy_kx, h->copy_kw);
         return 1;
     case UI_HIT_CODE_CUT:
-        tooltip->text = "Cut";
-        tooltip->anchor_x = h->cut_kx;
-        tooltip->anchor_w = h->cut_kw;
+        repl_code_panel_statusbar_tooltip_set(
+            tooltip, "Cut", KM_KEY(GLR_CUT), KM_MODS(GLR_CUT), 0,
+            h->cut_kx, h->cut_kw);
         return 1;
     case UI_HIT_CODE_PASTE:
-        tooltip->text = "Paste";
-        tooltip->anchor_x = h->paste_kx;
-        tooltip->anchor_w = h->paste_kw;
+        repl_code_panel_statusbar_tooltip_set(
+            tooltip, "Paste", KM_KEY(GLR_PASTE), KM_MODS(GLR_PASTE), 0,
+            h->paste_kx, h->paste_kw);
         return 1;
     case UI_HIT_CODE_CLEAR_ALL:
-        tooltip->text = "Clear all";
-        tooltip->anchor_x = h->trash_kx;
-        tooltip->anchor_w = h->trash_kw;
+        repl_code_panel_statusbar_tooltip_set(
+            tooltip, "Clear all", KM_KEY(GLR_CLEAR_ALL),
+            KM_MODS(GLR_CLEAR_ALL), 0, h->trash_kx, h->trash_kw);
         return 1;
     case UI_HIT_CODE_FOCUS_TOGGLE:
-        tooltip->text = "Code focus";
-        tooltip->anchor_x = h->focus_kx;
-        tooltip->anchor_w = h->focus_kw;
+        repl_code_panel_statusbar_tooltip_set(
+            tooltip, "Code focus", KM_KEY(GLR_CODE_FOCUS),
+            KM_MODS(GLR_CODE_FOCUS), 0, h->focus_kx, h->focus_kw);
         return 1;
     case UI_HIT_HELP_TOGGLE:
-        tooltip->text = "Help";
-        tooltip->anchor_x = h->help_kx;
-        tooltip->anchor_w = h->help_kw;
+        /* F1 is a GLUT special key, so is_special = 1 (like menu_bar's
+         * F-key accelerators). */
+        repl_code_panel_statusbar_tooltip_set(
+            tooltip, "Help", KM_KEY(GLR_HELP), KM_MODS(GLR_HELP), 1,
+            h->help_kx, h->help_kw);
         return 1;
     default:
         return 0;
