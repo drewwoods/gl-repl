@@ -34,6 +34,7 @@ GL4ES_PATCHES=(
 	"$ROOT/packaging/web/patches/gl4es-rasterpos-perspective-divide.patch"
 	"$ROOT/packaging/web/patches/gl4es-bitmap-dirty-clear.patch"
 	"$ROOT/packaging/web/patches/gl4es-getter-client-state.patch"
+	"$ROOT/packaging/web/patches/gl4es-color-material-face.patch"
 )
 GLU_URL="https://github.com/ptitSeb/GLU.git"
 GLU_SHA="2fed2bda2b725d2b9e32c435b48d5141cc95827f"
@@ -50,6 +51,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 CYAN='\033[0;36m'
 NC='\033[0m'
+GL4ES_PATCH_APPLIED=0
 
 if ! command -v emcc >/dev/null 2>&1; then
 	echo -e "${RED}Error: emcc not found on PATH.${NC}" >&2
@@ -75,6 +77,7 @@ apply_gl4es_patches() {
 		if ( cd "$GL4ES_DIR" && git apply --check "$patch" 2>/dev/null ); then
 			echo -e "${CYAN}Applying $(basename "$patch") ...${NC}"
 			( cd "$GL4ES_DIR" && git apply "$patch" )
+			GL4ES_PATCH_APPLIED=1
 		else
 			echo -e "${GREEN}$(basename "$patch") already applied (or not needed).${NC}"
 		fi
@@ -82,11 +85,6 @@ apply_gl4es_patches() {
 }
 
 build_gl4es() {
-	if [ -f "$GL4ES_LIB" ]; then
-		echo -e "${GREEN}gl4es already built -> $GL4ES_LIB${NC}"
-		return
-	fi
-
 	if [ ! -d "$GL4ES_DIR" ]; then
 		echo -e "${CYAN}Cloning gl4es ($GL4ES_SHA) ...${NC}"
 		git clone --quiet "$GL4ES_URL" "$GL4ES_DIR"
@@ -94,6 +92,10 @@ build_gl4es() {
 	fi
 
 	apply_gl4es_patches
+	if [ -f "$GL4ES_LIB" ] && [ "$GL4ES_PATCH_APPLIED" -eq 0 ]; then
+		echo -e "${GREEN}gl4es already built -> $GL4ES_LIB${NC}"
+		return
+	fi
 
 	echo -e "${CYAN}Building gl4es ...${NC}"
 	mkdir -p "$GL4ES_DIR/build_wasm"

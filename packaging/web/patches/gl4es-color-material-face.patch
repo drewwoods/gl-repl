@@ -1,0 +1,414 @@
+Fix independent front/back GL_COLOR_MATERIAL tracking in gl4es's GLES2
+fixed-pipeline emulator.
+
+OpenGL keeps one active GL_COLOR_MATERIAL_FACE. Changing it from GL_FRONT
+to GL_BACK means subsequent glColor calls update only the back material;
+the previously tracked front material retains its last value. gl4es instead
+remembered a mode independently for both faces and generated both lighting
+paths from the same per-vertex gl_Color. With two-sided lighting this made
+back-face accent colors leak onto front-facing polygons.
+
+Track the active face explicitly, mirror glColor updates into the selected
+material state, and make the generated shader substitute gl_Color only for
+the selected face. Also expose/preserve GL_COLOR_MATERIAL_FACE and
+GL_COLOR_MATERIAL_PARAMETER through glGet and glPushAttrib(GL_LIGHTING_BIT).
+
+The gl-repl logo example is the integration regression: its exterior remains
+near-white while its visible interior back faces retain their cyan/magenta
+materials in the Emscripten/WebGL build.
+
+Applied by scripts/web-deps.sh after cloning the pinned gl4es checkout.
+diff --git a/src/gl/enable.c b/src/gl/enable.c
+index bfed03ad..7adec6d5 100644
+--- a/src/gl/enable.c
++++ b/src/gl/enable.c
+@@ -139,7 +139,19 @@ static void proxy_glEnable(GLenum cap, bool enable, void (APIENTRY_GLES *next)(G
+         proxy_GOFPE(GL_LIGHTING, lighting, glstate->fpe_state->lighting=enable);
+         proxy_GOFPE(GL_NORMALIZE, normalize, glstate->fpe_state->normalize=enable);
+         proxy_GOFPE(GL_RESCALE_NORMAL, normal_rescale, glstate->fpe_state->rescaling=enable);
+-        proxy_GOFPE(GL_COLOR_MATERIAL, color_material, glstate->fpe_state->color_material=enable);
++        case GL_COLOR_MATERIAL:
++            if(glstate->enable.color_material != enable) {
++                FLUSH_BEGINEND;
++                glstate->enable.color_material = enable;
++                if(glstate->fpe_state) {
++                    glstate->fpe_state->color_material = enable;
++                    gl4es_glColorMaterialSync();
++                } else {
++                    next(cap);
++                    gl4es_glColorMaterialSync();
++                }
++            }
++            break;
+ 
+         // point sprite
+         proxy_GOFPE(GL_POINT_SPRITE, pointsprite, glstate->fpe_state->pointsprite=enable); // TODO: plugin fpe stuffs
+diff --git a/src/gl/fpe.c b/src/gl/fpe.c
+index 7d53643a..758761d0 100644
+--- a/src/gl/fpe.c
++++ b/src/gl/fpe.c
+@@ -63,6 +63,8 @@ void APIENTRY_GL4ES fpe_ReleventState_DefaultVertex(fpe_state_t *dest, fpe_state
+         dest->light_direction = 0;
+         dest->twosided = 0;
+         dest->color_material = 0;
++        dest->cm_front_active = 0;
++        dest->cm_back_active = 0;
+         dest->cm_front_mode = 0;
+         dest->cm_back_mode = 0;
+         dest->cm_front_nullexp = 0;
+@@ -168,6 +170,8 @@ void APIENTRY_GL4ES fpe_ReleventState(fpe_state_t *dest, fpe_state_t *src, int f
+         dest->light_direction = 0;
+         dest->twosided = 0;
+         dest->color_material = 0;
++        dest->cm_front_active = 0;
++        dest->cm_back_active = 0;
+         dest->cm_front_mode = 0;
+         dest->cm_back_mode = 0;
+         dest->cm_front_nullexp = 0;
+diff --git a/src/gl/fpe.h b/src/gl/fpe.h
+index e20cb2fe..9a7b187d 100644
+--- a/src/gl/fpe.h
++++ b/src/gl/fpe.h
+@@ -196,6 +196,8 @@ typedef struct fpe_state_s {
+     unsigned int alphatest:1;            // alpha test
+     unsigned int twosided:1;             // lightmodel: two sided
+     unsigned int color_material:1;       // color material enabled
++    unsigned int cm_front_active:1;      // current color tracks front material
++    unsigned int cm_back_active:1;       // current color tracks back material
+     unsigned int cm_front_mode:3;        // front color material mode
+     unsigned int cm_back_mode:3;         // back color material mode
+     unsigned int cm_front_nullexp:1;     // front material shininess is 0
+diff --git a/src/gl/fpe_shader.c b/src/gl/fpe_shader.c
+index dc7ebb19..c8c4536f 100644
+--- a/src/gl/fpe_shader.c
++++ b/src/gl/fpe_shader.c
+@@ -172,6 +172,8 @@ const char* const* fpe_VertexShader(shaderconv_need_t* need, fpe_state_t *state)
+     int fogdist = state->fogdist;
+     int fogmode = state->fogmode;
+     int color_material = state->color_material && lighting;
++    int color_material_front = color_material && state->cm_front_active;
++    int color_material_back = color_material && state->cm_back_active;
+     int point = state->point;
+     int pointsprite = state->pointsprite;
+     int headers = 0;
+@@ -277,21 +279,21 @@ const char* const* fpe_VertexShader(shaderconv_need_t* need, fpe_state_t *state)
+         ShadAppend(buff);
+         headers += gl4es_countline(buff);
+ 
+-        if(!(cm_front_nullexp && color_material)) {
++        if(!(cm_front_nullexp && color_material_front)) {
+             ShadAppend("uniform highp float _gl4es_FrontMaterial_shininess;\n");
+             headers++;
+         }
+-        if(twosided && !(cm_back_nullexp && color_material)) {
++        if(twosided && !(cm_back_nullexp && color_material_back)) {
+             ShadAppend("uniform highp float _gl4es_BackMaterial_shininess;\n");
+             headers++;
+         }
+-        if(!(color_material && (state->cm_front_mode==FPE_CM_DIFFUSE || state->cm_front_mode==FPE_CM_AMBIENTDIFFUSE))) {
++        if(!(color_material_front && (state->cm_front_mode==FPE_CM_DIFFUSE || state->cm_front_mode==FPE_CM_AMBIENTDIFFUSE))) {
+             ShadAppend("uniform highp float _gl4es_FrontMaterial_alpha;\n");
+             headers++;
+-            if(twosided) {
+-                ShadAppend("uniform highp float _gl4es_BackMaterial_alpha;\n");
+-                headers++;
+-            }
++        }
++        if(twosided && !(color_material_back && (state->cm_back_mode==FPE_CM_DIFFUSE || state->cm_back_mode==FPE_CM_AMBIENTDIFFUSE))) {
++            ShadAppend("uniform highp float _gl4es_BackMaterial_alpha;\n");
++            headers++;
+         }
+         for(int i=0; i<hardext.maxlights; i++) {
+             if(state->light&(1<<i)) {
+@@ -398,7 +400,7 @@ const char* const* fpe_VertexShader(shaderconv_need_t* need, fpe_state_t *state)
+         }
+     } else {
+         if(comments) {
+-            sprintf(buff, "// ColorMaterial On/Off=%d Front = %d Back = %d\n", color_material, state->cm_front_mode, state->cm_back_mode);
++            sprintf(buff, "// ColorMaterial On/Off=%d Front = %d/%d Back = %d/%d\n", color_material, color_material_front, state->cm_front_mode, color_material_back, state->cm_back_mode);
+             ShadAppend(buff);
+         }
+         if(is_default && need) {
+@@ -413,23 +415,23 @@ const char* const* fpe_VertexShader(shaderconv_need_t* need, fpe_state_t *state)
+         // material emission
+         char fm_emission[60], fm_ambient[60], fm_diffuse[60], fm_specular[60];
+         char bm_emission[60], bm_ambient[60], bm_diffuse[60], bm_specular[60];
+-        sprintf(fm_emission, "%s", (color_material && state->cm_front_mode==FPE_CM_EMISSION)?"gl_Color":"gl_FrontMaterial.emission");
+-        sprintf(fm_ambient, "%s", (color_material && (state->cm_front_mode==FPE_CM_AMBIENT || state->cm_front_mode==FPE_CM_AMBIENTDIFFUSE))?"gl_Color":"gl_FrontMaterial.ambient");
+-        sprintf(fm_diffuse, "%s", (color_material && (state->cm_front_mode==FPE_CM_DIFFUSE || state->cm_front_mode==FPE_CM_AMBIENTDIFFUSE))?"gl_Color.xyz * _gl4es_LightSource_":"_gl4es_FrontLightProduct_");
+-        sprintf(fm_specular, "%s", (color_material && state->cm_front_mode==FPE_CM_SPECULAR)?"gl_Color.xyz * _gl4es_LightSource_":"_gl4es_FrontLightProduct_");
++        sprintf(fm_emission, "%s", (color_material_front && state->cm_front_mode==FPE_CM_EMISSION)?"gl_Color":"gl_FrontMaterial.emission");
++        sprintf(fm_ambient, "%s", (color_material_front && (state->cm_front_mode==FPE_CM_AMBIENT || state->cm_front_mode==FPE_CM_AMBIENTDIFFUSE))?"gl_Color":"gl_FrontMaterial.ambient");
++        sprintf(fm_diffuse, "%s", (color_material_front && (state->cm_front_mode==FPE_CM_DIFFUSE || state->cm_front_mode==FPE_CM_AMBIENTDIFFUSE))?"gl_Color.xyz * _gl4es_LightSource_":"_gl4es_FrontLightProduct_");
++        sprintf(fm_specular, "%s", (color_material_front && state->cm_front_mode==FPE_CM_SPECULAR)?"gl_Color.xyz * _gl4es_LightSource_":"_gl4es_FrontLightProduct_");
+         if(twosided) {
+-            sprintf(bm_emission, "%s", (color_material && state->cm_back_mode==FPE_CM_EMISSION)?"gl_Color":"gl_BackMaterial.emission");
+-            sprintf(bm_ambient, "%s", (color_material && (state->cm_back_mode==FPE_CM_AMBIENT || state->cm_back_mode==FPE_CM_AMBIENTDIFFUSE))?"gl_Color":"gl_BackMaterial.ambient");
+-            sprintf(bm_diffuse, "%s", (color_material && (state->cm_back_mode==FPE_CM_DIFFUSE || state->cm_back_mode==FPE_CM_AMBIENTDIFFUSE))?"gl_Color.xyz * _gl4es_LightSource_":"_gl4es_BackLightProduct_");
+-            sprintf(bm_specular, "%s", (color_material && state->cm_back_mode==FPE_CM_SPECULAR)?"gl_Color.xyz * _gl4es_LightSource_":"_gl4es_BackLightProduct_");
++            sprintf(bm_emission, "%s", (color_material_back && state->cm_back_mode==FPE_CM_EMISSION)?"gl_Color":"gl_BackMaterial.emission");
++            sprintf(bm_ambient, "%s", (color_material_back && (state->cm_back_mode==FPE_CM_AMBIENT || state->cm_back_mode==FPE_CM_AMBIENTDIFFUSE))?"gl_Color":"gl_BackMaterial.ambient");
++            sprintf(bm_diffuse, "%s", (color_material_back && (state->cm_back_mode==FPE_CM_DIFFUSE || state->cm_back_mode==FPE_CM_AMBIENTDIFFUSE))?"gl_Color.xyz * _gl4es_LightSource_":"_gl4es_BackLightProduct_");
++            sprintf(bm_specular, "%s", (color_material_back && state->cm_back_mode==FPE_CM_SPECULAR)?"gl_Color.xyz * _gl4es_LightSource_":"_gl4es_BackLightProduct_");
+         }
+ 
+-        if(color_material && 
+-            (state->cm_front_mode==FPE_CM_EMISSION 
++        if((color_material_front &&
++            (state->cm_front_mode==FPE_CM_EMISSION
+             || state->cm_front_mode==FPE_CM_AMBIENT
+-            || state->cm_front_mode==FPE_CM_AMBIENTDIFFUSE
+-            || (twosided && 
+-                (state->cm_back_mode==FPE_CM_EMISSION || state->cm_back_mode==FPE_CM_AMBIENT || state->cm_back_mode==FPE_CM_AMBIENTDIFFUSE)))) 
++            || state->cm_front_mode==FPE_CM_AMBIENTDIFFUSE))
++            || (twosided && color_material_back &&
++                (state->cm_back_mode==FPE_CM_EMISSION || state->cm_back_mode==FPE_CM_AMBIENT || state->cm_back_mode==FPE_CM_AMBIENTDIFFUSE)))
+         {
+             sprintf(buff, "Color = %s;\n", fm_emission);
+             ShadAppend(buff);
+@@ -501,7 +503,7 @@ const char* const* fpe_VertexShader(shaderconv_need_t* need, fpe_state_t *state)
+                     ShadAppend(buff);
+                     ShadAppend("att *= spot;\n");
+                 }
+-                if(color_material && (state->cm_front_mode==FPE_CM_AMBIENT || state->cm_front_mode==FPE_CM_AMBIENTDIFFUSE)) {
++                if(color_material_front && (state->cm_front_mode==FPE_CM_AMBIENT || state->cm_front_mode==FPE_CM_AMBIENTDIFFUSE)) {
+                     sprintf(buff, "aa = %s.xyz * _gl4es_LightSource_%d.ambient.xyz;\n", fm_ambient, i);
+                     ShadAppend(buff);
+                 } else {
+@@ -510,7 +512,7 @@ const char* const* fpe_VertexShader(shaderconv_need_t* need, fpe_state_t *state)
+                     need_lightproduct[0][i] = 1;
+                 }
+                 if(twosided) {
+-                    if(color_material && (state->cm_back_mode==FPE_CM_AMBIENT || state->cm_back_mode==FPE_CM_AMBIENTDIFFUSE)) {
++                    if(color_material_back && (state->cm_back_mode==FPE_CM_AMBIENT || state->cm_back_mode==FPE_CM_AMBIENTDIFFUSE)) {
+                         sprintf(buff, "back_aa = %s.xyz * _gl4es_LightSource_%d.ambient.xyz;\n", bm_ambient, i);
+                         ShadAppend(buff);
+                     } else {
+@@ -566,11 +568,11 @@ const char* const* fpe_VertexShader(shaderconv_need_t* need, fpe_state_t *state)
+                 }
+             }
+         }
+-        sprintf(buff, "Color.a = %s;\n", (color_material && (state->cm_front_mode==FPE_CM_DIFFUSE || state->cm_front_mode==FPE_CM_AMBIENTDIFFUSE))?"gl_Color.a":"_gl4es_FrontMaterial_alpha");
++        sprintf(buff, "Color.a = %s;\n", (color_material_front && (state->cm_front_mode==FPE_CM_DIFFUSE || state->cm_front_mode==FPE_CM_AMBIENTDIFFUSE))?"gl_Color.a":"_gl4es_FrontMaterial_alpha");
+         ShadAppend(buff);
+         ShadAppend("Color.rgb = clamp(Color.rgb, 0., 1.);\n");
+         if(twosided) {
+-            sprintf(buff, "BackColor.a = %s;\n", (color_material && (state->cm_back_mode==FPE_CM_DIFFUSE || state->cm_back_mode==FPE_CM_AMBIENTDIFFUSE))?"gl_Color.a":"_gl4es_BackMaterial_alpha");
++            sprintf(buff, "BackColor.a = %s;\n", (color_material_back && (state->cm_back_mode==FPE_CM_DIFFUSE || state->cm_back_mode==FPE_CM_AMBIENTDIFFUSE))?"gl_Color.a":"_gl4es_BackMaterial_alpha");
+             ShadAppend("BackColor.rgb = clamp(BackColor.rgb, 0., 1.);\n");
+             ShadAppend(buff);
+         }
+diff --git a/src/gl/getter.c b/src/gl/getter.c
+index 3a9acc55..1c413957 100644
+--- a/src/gl/getter.c
++++ b/src/gl/getter.c
+@@ -508,6 +508,12 @@ int gl4es_commonGet(GLenum pname, GLfloat *params) {
+         case GL_LIGHT_MODEL_TWO_SIDE:
+             *params=glstate->light.two_side;
+             break;
++        case GL_COLOR_MATERIAL_FACE:
++            *params=glstate->material.color_material_face;
++            break;
++        case GL_COLOR_MATERIAL_PARAMETER:
++            *params=glstate->material.color_material_mode;
++            break;
+         case GL_FOG_MODE:
+             *params=glstate->fog.mode;
+             break;
+diff --git a/src/gl/gl4es.c b/src/gl/gl4es.c
+index 674eaa5e..b1b41be0 100644
+--- a/src/gl/gl4es.c
++++ b/src/gl/gl4es.c
+@@ -402,6 +402,7 @@ void APIENTRY_GL4ES gl4es_glColor4f(GLfloat red, GLfloat green, GLfloat blue, GL
+     // change the state last thing
+     glstate->color[0] = red; glstate->color[1] = green;
+     glstate->color[2] = blue; glstate->color[3] = alpha;
++    gl4es_glColorMaterialUpdate(glstate->color);
+ }
+ AliasExport(void,glColor4f,,(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha));
+ 
+@@ -430,6 +431,7 @@ void APIENTRY_GL4ES gl4es_glColor4fv(GLfloat* v) {
+     }
+     // change the state last thing
+     memcpy(glstate->color, v, 4*sizeof(GLfloat));
++    gl4es_glColorMaterialUpdate(glstate->color);
+ }
+ AliasExport(void,glColor4fv,,(GLfloat* v));
+ 
+diff --git a/src/gl/glstate.c b/src/gl/glstate.c
+index b0e87bfc..16716187 100644
+--- a/src/gl/glstate.c
++++ b/src/gl/glstate.c
+@@ -278,6 +278,8 @@ void* NewGLState(void* shared_glstate, int es2only) {
+     glstate->material.front.emission[3] = 1.0f;
+     glstate->material.front.colormat = GL_AMBIENT_AND_DIFFUSE;
+     memcpy(&glstate->material.back, &glstate->material.front, sizeof(material_t));
++    glstate->material.color_material_face = GL_FRONT_AND_BACK;
++    glstate->material.color_material_mode = GL_AMBIENT_AND_DIFFUSE;
+     // Fog
+     glstate->fog.mode = GL_EXP;
+     glstate->fog.density = 1.0f;
+diff --git a/src/gl/light.c b/src/gl/light.c
+index 608bbc6b..7f1016b5 100644
+--- a/src/gl/light.c
++++ b/src/gl/light.c
+@@ -391,6 +391,67 @@ void APIENTRY_GL4ES gl4es_glMaterialf(GLenum face, GLenum pname, GLfloat param)
+     errorGL();
+ }
+ 
++static int color_material_mode_to_fpe(GLenum mode) {
++    switch(mode) {
++        case GL_EMISSION: return FPE_CM_EMISSION;
++        case GL_AMBIENT: return FPE_CM_AMBIENT;
++        case GL_DIFFUSE: return FPE_CM_DIFFUSE;
++        case GL_SPECULAR: return FPE_CM_SPECULAR;
++        default: return FPE_CM_AMBIENTDIFFUSE;
++    }
++}
++
++static void update_color_material_value(material_t *material, GLenum mode,
++                                        const GLfloat *color) {
++    switch(mode) {
++        case GL_EMISSION:
++            memcpy(material->emission, color, 4*sizeof(GLfloat));
++            break;
++        case GL_AMBIENT:
++            memcpy(material->ambient, color, 4*sizeof(GLfloat));
++            break;
++        case GL_DIFFUSE:
++            memcpy(material->diffuse, color, 4*sizeof(GLfloat));
++            break;
++        case GL_SPECULAR:
++            memcpy(material->specular, color, 4*sizeof(GLfloat));
++            break;
++        case GL_AMBIENT_AND_DIFFUSE:
++            memcpy(material->ambient, color, 4*sizeof(GLfloat));
++            memcpy(material->diffuse, color, 4*sizeof(GLfloat));
++            break;
++    }
++}
++
++void gl4es_glColorMaterialUpdate(const GLfloat *color) {
++    GLenum face;
++
++    if(!glstate->enable.color_material)
++        return;
++    face = glstate->material.color_material_face;
++    if(face==GL_FRONT || face==GL_FRONT_AND_BACK)
++        update_color_material_value(&glstate->material.front,
++                                    glstate->material.color_material_mode, color);
++    if(face==GL_BACK || face==GL_FRONT_AND_BACK)
++        update_color_material_value(&glstate->material.back,
++                                    glstate->material.color_material_mode, color);
++}
++
++void gl4es_glColorMaterialSync(void) {
++    GLenum face = glstate->material.color_material_face;
++    int value = color_material_mode_to_fpe(glstate->material.color_material_mode);
++
++    if(glstate->fpe_state) {
++        glstate->fpe_state->cm_front_active = (face!=GL_BACK);
++        glstate->fpe_state->cm_back_active = (face!=GL_FRONT);
++        if(glstate->fpe_state->cm_front_active)
++            glstate->fpe_state->cm_front_mode = value;
++        if(glstate->fpe_state->cm_back_active)
++            glstate->fpe_state->cm_back_mode = value;
++    }
++    gl4es_glColorMaterialUpdate(glstate->color);
++}
++
+ void APIENTRY_GL4ES gl4es_glColorMaterial(GLenum face, GLenum mode) {
+     ERROR_IN_BEGIN
+     if(glstate->list.active)
+@@ -410,25 +471,13 @@ void APIENTRY_GL4ES gl4es_glColorMaterial(GLenum face, GLenum mode) {
+         errorShim(GL_INVALID_ENUM);
+         return;
+     }
++    glstate->material.color_material_face = face;
++    glstate->material.color_material_mode = mode;
+     if(face==GL_FRONT_AND_BACK || face==GL_FRONT)
+         glstate->material.front.colormat = mode;
+     if(face==GL_FRONT_AND_BACK || face==GL_BACK)
+         glstate->material.back.colormat = mode;
+-    if(glstate->fpe_state) {
+-        int value = FPE_CM_AMBIENTDIFFUSE;
+-        switch(mode) {
+-            case GL_EMISSION: value = FPE_CM_EMISSION; break;
+-            case GL_AMBIENT: value=FPE_CM_AMBIENT; break;
+-            case GL_DIFFUSE: value=FPE_CM_DIFFUSE; break;
+-            case GL_SPECULAR: value=FPE_CM_SPECULAR; break;
+-        }
+-        if(face==GL_FRONT_AND_BACK || face==GL_FRONT) {
+-            glstate->fpe_state->cm_front_mode = value;
+-        }
+-        if(face==GL_FRONT_AND_BACK || face==GL_BACK) {
+-            glstate->fpe_state->cm_back_mode = value;
+-        }
+-    }
++    gl4es_glColorMaterialSync();
+     noerrorShim();
+ }
+ 
+diff --git a/src/gl/light.h b/src/gl/light.h
+index b6d226f9..739f1181 100644
+--- a/src/gl/light.h
++++ b/src/gl/light.h
+@@ -36,6 +36,8 @@ typedef struct {
+ typedef struct {
+     material_t      front;
+     material_t      back;
++    GLenum          color_material_face;
++    GLenum          color_material_mode;
+ } material_state_t;
+ 
+ void APIENTRY_GL4ES gl4es_glLightModelf(GLenum pname, GLfloat param);
+@@ -49,5 +51,7 @@ void APIENTRY_GL4ES gl4es_glGetLightiv(GLenum light, GLenum pname, GLint * param
+ void APIENTRY_GL4ES gl4es_glMaterialfv(GLenum face, GLenum pname, const GLfloat *params) ;
+ void APIENTRY_GL4ES gl4es_glMaterialf(GLenum face, GLenum pname, GLfloat param);
+ void APIENTRY_GL4ES gl4es_glColorMaterial(GLenum face, GLenum mode);
++void gl4es_glColorMaterialSync(void);
++void gl4es_glColorMaterialUpdate(const GLfloat *color);
+ 
+ #endif // _GL4ES_LIGHT_H_
+diff --git a/src/gl/stack.c b/src/gl/stack.c
+index 1a6d5556..59376bae 100644
+--- a/src/gl/stack.c
++++ b/src/gl/stack.c
+@@ -154,6 +154,8 @@ void APIENTRY_GL4ES gl4es_glPushAttrib(GLbitfield mask) {
+         cur->lighting = gl4es_glIsEnabled(GL_LIGHTING);
+         gl4es_glGetFloatv(GL_LIGHT_MODEL_AMBIENT, cur->light_model_ambient);
+         gl4es_glGetIntegerv(GL_LIGHT_MODEL_TWO_SIDE, &cur->light_model_two_side);
++        gl4es_glGetIntegerv(GL_COLOR_MATERIAL_FACE, &cur->color_material_face);
++        gl4es_glGetIntegerv(GL_COLOR_MATERIAL_PARAMETER, &cur->color_material_parameter);
+ 
+         int i;
+         int j=0;
+@@ -465,6 +467,7 @@ DBG(printf("glPopAttrib()\n");)
+         enable_disable(GL_LIGHTING, cur->lighting);
+         gl4es_glLightModelfv(GL_LIGHT_MODEL_AMBIENT, cur->light_model_ambient);
+         gl4es_glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, cur->light_model_two_side);
++        gl4es_glColorMaterial(cur->color_material_face, cur->color_material_parameter);
+ 
+         int i;
+         int j=0;
+@@ -660,4 +663,4 @@ void APIENTRY_GL4ES gl4es_glPopClientAttrib(void) {
+ AliasExport(void,glPushClientAttrib,,(GLbitfield mask));
+ AliasExport_V(void,glPopClientAttrib);
+ AliasExport(void,glPushAttrib,,(GLbitfield mask));
+-AliasExport_V(void,glPopAttrib);
+\ No newline at end of file
++AliasExport_V(void,glPopAttrib);
+diff --git a/src/gl/stack.h b/src/gl/stack.h
+index 3a6fc275..d145bf1f 100644
+--- a/src/gl/stack.h
++++ b/src/gl/stack.h
+@@ -90,6 +90,8 @@ typedef struct _glstack_t {
+     GLfloat *lights;
+     GLfloat light_model_ambient[4];
+     GLint light_model_two_side;
++    GLint color_material_face;
++    GLint color_material_parameter;
+     GLfloat *materials;
+     GLint shade_model;
+ 
+
