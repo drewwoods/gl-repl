@@ -1491,6 +1491,138 @@ static void test_gl_state_popup_scroll_geometry(void) {
                ui_gl_state_panel_max_scroll(&view), 0);
 }
 
+/* Rightmost x (GLUT coords) answering the popup's surface hit-test; -1
+ * when nothing hits. Coarse scan is fine — we only compare widths. */
+static int gl_state_popup_rightmost_hit_x(const UiGlStatePanelView *view) {
+    int mx, my, right = -1;
+    for (my = 0; my < view->window_h; my += 6) {
+        for (mx = view->window_w - 1; mx > right; mx -= 2) {
+            if (ui_gl_state_panel_hit_test(view, mx, my)) {
+                right = mx;
+                break;
+            }
+        }
+    }
+    return right;
+}
+
+static int gl_state_popup_find_details_toggle(const UiGlStatePanelView *view,
+                                              int *out_x, int *out_y) {
+    int mx, my;
+    for (my = 0; my < view->window_h; my += 3) {
+        for (mx = 0; mx < view->window_w; mx += 3) {
+            if (ui_gl_state_panel_hit_test_details_toggle(view, mx, my)) {
+                *out_x = mx;
+                *out_y = my;
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+/* The default/source detail columns are collapsed by default and toggle
+ * from the header's "[+]"/"[-]" chip: collapsed the popup solves
+ * narrower than expanded, and a left press on the chip flips the
+ * inspector chrome while keeping the popup open. */
+static void test_gl_state_popup_details_toggle(void) {
+    static ReplGlStateReport report;
+    UiGlStatePanelView view;
+    UiHit hit;
+    int blank_line;
+    int x = -1, y = -1;
+    int collapsed_right, expanded_right;
+    int i;
+
+    printf("--- imrepl_ctrl OpenGL-state popup detail-column toggle ---\n");
+
+    /* Pure geometry: the same report solves narrower collapsed. */
+    memset(&report, 0, sizeof(report));
+    report.count = 4;
+    for (i = 0; i < report.count; i++) {
+        snprintf(report.rows[i].name, sizeof(report.rows[i].name),
+                 "GL_ROW_%02d", i);
+        snprintf(report.rows[i].current, sizeof(report.rows[i].current), "1");
+        snprintf(report.rows[i].default_value,
+                 sizeof(report.rows[i].default_value),
+                 "(0.123, 0.456, 0.789, 1)");
+        report.rows[i].source.kind = REPL_GL_STATE_SOURCE_DISPLAY;
+        report.rows[i].source.source_line_idx = 10 + i;
+    }
+    memset(&view, 0, sizeof(view));
+    view.visible = 1;
+    view.window_w = 800;
+    view.window_h = 600;
+    view.anchor_px = 40;
+    view.anchor_py = 400;
+    view.report = &report;
+
+    collapsed_right = gl_state_popup_rightmost_hit_x(&view);
+    ASSERT_TRUE("collapsed popup answers hits", collapsed_right >= 0);
+    ASSERT_TRUE("collapsed popup has a toggle chip",
+                gl_state_popup_find_details_toggle(&view, &x, &y));
+    view.details_expanded = 1;
+    expanded_right = gl_state_popup_rightmost_hit_x(&view);
+    ASSERT_TRUE("expanded popup is wider than collapsed",
+                expanded_right > collapsed_right);
+    ASSERT_TRUE("expanded popup keeps a toggle chip",
+                gl_state_popup_find_details_toggle(&view, &x, &y));
+
+    /* Routed: right-click a blank line, click the chip twice. */
+    prepare_code_panel_mouse_fixture();
+    blank_line = repl_state_document_count();
+    editor_state_edit_line_set(blank_line);
+    editor_insert_mode_set(0);
+    ASSERT_INT("append committed blank line", editor_feed_line(""), 1);
+    ASSERT_TRUE("found empty source row hit",
+                find_code_text_hit_for_line(blank_line, &hit, &x, &y));
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    ASSERT_INT("right-click opens the popup",
+               ui_state_gl_state_inspector().visible, 1);
+    ASSERT_INT("popup opens with details collapsed",
+               ui_state_gl_state_inspector().details_expanded, 0);
+
+#ifdef GL_STUBS
+    glr_ctrl_display_frame();
+#else
+    if (repl_state_normals_dirty()) {
+        int edit_line = editor_state_edit_line();
+        repl_recompute_autonormals(glr_state_presentation().autonormal,
+                                   &edit_line);
+        editor_state_edit_line_set(edit_line);
+        repl_state_normals_dirty_clear();
+    }
+    if (repl_state_flat_program_dirty()) {
+        repl_flatten_commands(editor_state_edit_line());
+        repl_state_flat_program_clear_dirty();
+    }
+#endif
+
+    view = glr_ctrl_build_gl_state_panel_view();
+    ASSERT_INT("popup view visible", view.visible, 1);
+    ASSERT_TRUE("found the live popup's toggle chip",
+                gl_state_popup_find_details_toggle(&view, &x, &y));
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, x, y);
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, x, y);
+    ASSERT_INT("chip click expands the detail columns",
+               ui_state_gl_state_inspector().details_expanded, 1);
+    ASSERT_INT("chip click keeps the popup open",
+               ui_state_gl_state_inspector().visible, 1);
+
+    view = glr_ctrl_build_gl_state_panel_view();
+    ASSERT_TRUE("expanded live popup keeps a toggle chip",
+                gl_state_popup_find_details_toggle(&view, &x, &y));
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, x, y);
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, x, y);
+    ASSERT_INT("second chip click collapses the detail columns",
+               ui_state_gl_state_inspector().details_expanded, 0);
+    ASSERT_INT("second chip click keeps the popup open",
+               ui_state_gl_state_inspector().visible, 1);
+
+    ui_state_gl_state_inspector_close();
+}
+
 static void test_editor_input_dismisses_gl_state_report(void) {
     UiHit hit;
     UiGlStatePanelView view;
@@ -3850,6 +3982,7 @@ int main(void) {
     test_right_click_gl_command_description_popup();
     test_right_click_empty_line_toggles_gl_state_report();
     test_gl_state_popup_scroll_geometry();
+    test_gl_state_popup_details_toggle();
     test_editor_input_dismisses_gl_state_report();
     test_gl_state_popup_defers_to_front_overlay();
     test_left_click_code_panel_exits_search_and_places_cursor();

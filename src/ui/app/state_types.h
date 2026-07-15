@@ -56,14 +56,17 @@ typedef struct {
  * line. The controller rebuilds the report from the current flat program on
  * every frame; UI state only owns the open/closed chrome, the anchor line,
  * the right-click position (GLUT screen coords, y-down) the popup hangs
- * from, and the wheel-scroll row offset (clamped by the router against the
- * popup's solved row capacity). */
+ * from, the wheel-scroll row offset (clamped by the router against the
+ * popup's solved row capacity), and whether the default/source detail
+ * columns are expanded (collapsed on every open so the popup starts
+ * narrow; toggled by clicking the header chip). */
 typedef struct {
     int visible;
     int source_line_idx;
     int anchor_px;
     int anchor_py;
     int scroll_rows;
+    int details_expanded;
 } UiGlStateInspectorState;
 
 /* Floating GL-command description popup. Like the state inspector, this
