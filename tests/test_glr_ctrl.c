@@ -254,6 +254,35 @@ static int find_hit_point_in_code_panel(int desired_kind, UiHit *out_hit,
     return 0;
 }
 
+static int find_code_text_hit_for_line(int desired_line_idx, UiHit *out_hit,
+                                       int *out_x, int *out_y) {
+    UiRenderSnapshot snap;
+    int cp_x, cp_y, cp_w, cp_h;
+    int win_h;
+
+    glr_ctrl_build_ui_snapshot(&snap);
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    win_h = ui_state_viewport().window_h;
+    if (cp_w <= 0 || cp_h <= 0 || win_h <= 0)
+        return 0;
+
+    for (int gl_y = cp_y + 1; gl_y < cp_y + cp_h - 1; gl_y++) {
+        int my = win_h - gl_y;
+        for (int mx = cp_x + 1; mx < cp_x + cp_w - 1; mx++) {
+            UiHit hit = ui_panels_hit_test(&snap, mx, my,
+                                           repl_eval_predef_view().count);
+            if (hit.kind == UI_HIT_CODE_TEXT &&
+                hit.line_idx == desired_line_idx) {
+                if (out_hit) *out_hit = hit;
+                if (out_x) *out_x = mx;
+                if (out_y) *out_y = my;
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 static void prepare_display_fixture(void) {
     GLCmd *doc_cmds;
     GLCmd *flat_cmds;
@@ -1153,6 +1182,62 @@ static void test_right_click_code_panel_does_not_start_camera_pan(void) {
     ASSERT_FLOAT("right-click editor leaves camera tz", after.tz, before.tz);
 
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x + 80, y + 40);
+}
+
+static void test_right_click_empty_line_toggles_gl_state_report(void) {
+    UiHit hit;
+    const UiVirtualLineList *virtual_lines;
+    int blank_line;
+    int x = -1;
+    int y = -1;
+    int found_header = 0;
+    int found_color = 0;
+    int i;
+
+    printf("--- imrepl_ctrl right-click blank OpenGL state report ---\n");
+
+    prepare_code_panel_mouse_fixture();
+    blank_line = repl_state_document_count();
+    editor_state_edit_line_set(blank_line);
+    editor_insert_mode_set(0);
+    ASSERT_INT("append committed blank line", editor_feed_line(""), 1);
+    ASSERT_INT("blank command type",
+               repl_state_document_cmd_at(blank_line)->type, CMD_EMPTY);
+    ASSERT_TRUE("found empty source row hit",
+                find_code_text_hit_for_line(blank_line, &hit, &x, &y));
+
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    ASSERT_INT("right-click blank opens state report",
+               ui_state_gl_state_inspector().visible, 1);
+    ASSERT_INT("state report anchored to clicked line",
+               ui_state_gl_state_inspector().source_line_idx, blank_line);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+
+    glr_ctrl_display_frame();
+    virtual_lines = editor_state_virtual_lines();
+    for (i = 0; i < virtual_lines->count; i++) {
+        const UiVirtualLine *line = &virtual_lines->items[i];
+        if (line->after_line_idx != blank_line)
+            continue;
+        if (line->style == VIRTUAL_STYLE_GL_STATE_HEADER)
+            found_header = 1;
+        if (strstr(line->text, "GL_CURRENT_COLOR") != NULL)
+            found_color = 1;
+    }
+    ASSERT_TRUE("blank report publishes inline header", found_header);
+    ASSERT_TRUE("blank report includes touched color state", found_color);
+
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    ASSERT_INT("second right-click on anchor closes report",
+               ui_state_gl_state_inspector().visible, 0);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+
+    ASSERT_TRUE("found non-empty source row hit",
+                find_code_text_hit_for_line(0, &hit, &x, &y));
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    ASSERT_INT("right-click non-empty line does not open report",
+               ui_state_gl_state_inspector().visible, 0);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
 }
 
 static void test_left_click_code_panel_exits_search_and_places_cursor(void) {
@@ -3336,6 +3421,7 @@ int main(void) {
     test_variable_panel_written_snapshot_wiring();
     test_pointer_state_tracks_controller_mouse_routes();
     test_right_click_code_panel_does_not_start_camera_pan();
+    test_right_click_empty_line_toggles_gl_state_report();
     test_left_click_code_panel_exits_search_and_places_cursor();
     test_tick_per_frame_scheduling();
     test_overlay_transition_machine_wiring();

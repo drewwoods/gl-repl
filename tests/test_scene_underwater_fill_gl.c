@@ -43,7 +43,7 @@
  * machine either) but does NOT prove anything: see SKIP message.
  *
  * Like test_ui_gl_state this is in GL_TEST_BINS / `make gl-tests`,
- * NOT in `make test`. Needs a display.
+ * NOT in `make test`. It can use a display or FREEGLUT_OSMESA=1.
  */
 #include "gl_includes.h"
 #include "render3d/grid.h"
@@ -54,7 +54,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#ifdef __APPLE__
+#if defined(__APPLE__) && !defined(FREEGLUT_OSMESA)
 #include <ApplicationServices/ApplicationServices.h>
 #endif
 #include <string.h>
@@ -191,7 +191,7 @@ static void test_underwater_fill_covers_viewport(void) {
 }
 
 int main(int argc, char **argv) {
-#ifdef __APPLE__
+#if defined(__APPLE__) && !defined(FREEGLUT_OSMESA)
     uint32_t display_count = 0;
     if (CGGetActiveDisplayList(0, NULL, &display_count) != kCGErrorSuccess ||
         display_count == 0) {

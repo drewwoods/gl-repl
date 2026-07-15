@@ -52,7 +52,13 @@ typedef struct {
     int visible;
 } UiHelpState;
 
-
+/* Inline OpenGL-state report anchored to a committed empty source line.
+ * The controller rebuilds its virtual rows from the current flat program on
+ * every frame; UI state only owns the open/closed chrome and anchor. */
+typedef struct {
+    int visible;
+    int source_line_idx;
+} UiGlStateInspectorState;
 
 typedef struct {
     int mode;

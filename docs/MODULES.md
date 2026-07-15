@@ -447,6 +447,7 @@ commands.
 | `repl_command_store` | Low-level [`GLCmd`](../src/repl/command.h#L90) array mechanics only: insert, replace, delete, load. No text-buffer writes |
 | `repl_flatten` | Builds the flat executable command stream from source commands, loops, functions, and `if` blocks |
 | `repl_flatten_query` | Reads the live flat command stream for cursor matching, current-block highlights, and per-line flat-cost attribution |
+| `repl_gl_state_inspector` | Purely folds the flat stream to a source checkpoint, reporting only explicitly touched OpenGL state alongside OpenGL 2.1 initial values; it issues no GL calls |
 | `repl_executor` | Narrow live-GL boundary that executes flat user geometry |
 | `repl_eval` | Expression evaluator and predefined-variable lookup |
 | `src/repl/format` | Pure text/indent/depth formatting helpers (`repl_format_*`) |

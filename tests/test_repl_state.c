@@ -5,6 +5,7 @@
 #include "repl/state.h"
 #include "repl/state_owners.h"
 #include "repl/flatten.h"
+#include "repl/gl_state_inspector.h"
 #include "repl/scenes.h"
 #include "repl/example_loader.h"
 #include "editor/state.h"
@@ -40,6 +41,26 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ASSERT_STR(label, got, exp) do { \
     TEST_ASSERT_STR(&g_harness, label, got, exp); \
 } while (0)
+
+static GLCmd gl_state_test_cmd(CmdType type, int source_line_idx) {
+    GLCmd cmd;
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.type = type;
+    cmd.valid = 1;
+    cmd.src_cmd_idx = source_line_idx;
+    cmd.call_src_cmd_idx = -1;
+    cmd.root_call_src_cmd_idx = -1;
+    return cmd;
+}
+
+static const ReplGlStateReportRow *gl_state_test_find_row(
+    const ReplGlStateReport *report, const char *name) {
+    int i;
+    for (i = 0; report && i < report->count; i++)
+        if (strcmp(report->rows[i].name, name) == 0)
+            return &report->rows[i];
+    return NULL;
+}
 
 static void populate_runtime_snapshot_fixture(const char *scene_hint) {
     char err[128];
@@ -918,6 +939,104 @@ static void test_time_dirty_gate_uses_source_text(void) {
     }
 }
 
+static void test_gl_state_report_tracks_explicit_writes_before_checkpoint(void) {
+    GLCmd cmds[5];
+    FlatProgramView program;
+    ReplGlStateReport report;
+    const ReplGlStateReportRow *row;
+
+    printf("--- repl_state OpenGL checkpoint report ---\n");
+
+    cmds[0] = gl_state_test_cmd(CMD_DEPTH_FUNC, 0);
+    cmds[0].args[0] = (float)GL_LESS;
+    cmds[0].num_args = 1;
+    cmds[1] = gl_state_test_cmd(CMD_ENABLE, 2);
+    cmds[1].args[0] = (float)GL_BLEND;
+    cmds[1].num_args = 1;
+    cmds[2] = gl_state_test_cmd(CMD_DISABLE, 3);
+    cmds[2].args[0] = (float)GL_BLEND;
+    cmds[2].num_args = 1;
+    cmds[3] = gl_state_test_cmd(CMD_ENABLE, 4);
+    cmds[3].args[0] = (float)GL_MULTISAMPLE;
+    cmds[3].num_args = 1;
+    cmds[4] = gl_state_test_cmd(CMD_COLOR4F, 5);
+    cmds[4].args[0] = 1.0f;
+    cmds[4].args[1] = 1.0f;
+    cmds[4].args[2] = 1.0f;
+    cmds[4].args[3] = 1.0f;
+    cmds[4].num_args = 4;
+
+    memset(&program, 0, sizeof(program));
+    program.cmds = cmds;
+    program.cmd_count = 5;
+
+    repl_gl_state_report_at_line(program, 1, &report);
+    row = gl_state_test_find_row(&report, "GL_DEPTH_FUNC");
+    ASSERT_TRUE("explicit default depth func remains in report", row != NULL);
+    if (row) {
+        ASSERT_STR("depth func current", row->current, "GL_LESS");
+        ASSERT_STR("depth func default", row->default_value, "GL_LESS");
+        ASSERT_INT("explicit default depth func marked equal",
+                   row->differs_from_default, 0);
+    }
+    ASSERT_TRUE("later blend write excluded from checkpoint",
+                gl_state_test_find_row(&report, "GL_BLEND") == NULL);
+
+    repl_gl_state_report_at_line(program, 3, &report);
+    row = gl_state_test_find_row(&report, "GL_BLEND");
+    ASSERT_TRUE("enable before checkpoint is reported", row != NULL);
+    if (row) {
+        ASSERT_STR("enabled blend current", row->current, "GL_TRUE");
+        ASSERT_STR("blend default", row->default_value, "GL_FALSE");
+        ASSERT_INT("enabled blend differs", row->differs_from_default, 1);
+    }
+
+    repl_gl_state_report_at_line(program, 4, &report);
+    row = gl_state_test_find_row(&report, "GL_BLEND");
+    ASSERT_TRUE("write restored to default remains reported", row != NULL);
+    if (row)
+        ASSERT_INT("disabled blend equals default",
+                   row->differs_from_default, 0);
+
+    repl_gl_state_report_at_line(program, 5, &report);
+    row = gl_state_test_find_row(&report, "GL_MULTISAMPLE");
+    ASSERT_TRUE("explicit multisample write is reported", row != NULL);
+    if (row) {
+        ASSERT_STR("multisample OpenGL default", row->default_value, "GL_TRUE");
+        ASSERT_INT("enabled multisample equals initial state",
+                   row->differs_from_default, 0);
+    }
+
+    repl_gl_state_report_at_line(program, 6, &report);
+    row = gl_state_test_find_row(&report, "GL_CURRENT_COLOR");
+    ASSERT_TRUE("explicit default color is reported", row != NULL);
+    if (row)
+        ASSERT_INT("white current color equals default",
+                   row->differs_from_default, 0);
+}
+
+static void test_gl_state_report_uses_flat_call_provenance(void) {
+    GLCmd cmd = gl_state_test_cmd(CMD_CLEAR_COLOR, 20);
+    FlatProgramView program;
+    ReplGlStateReport report;
+
+    cmd.root_call_src_cmd_idx = 0;
+    cmd.call_src_cmd_idx = 10;
+    cmd.num_args = 4;
+    memset(&program, 0, sizeof(program));
+    program.cmds = &cmd;
+    program.cmd_count = 1;
+
+    repl_gl_state_report_at_line(program, 1, &report);
+    ASSERT_TRUE("expanded command uses outer call before checkpoint",
+                gl_state_test_find_row(&report, "GL_COLOR_CLEAR_VALUE") != NULL);
+
+    cmd.root_call_src_cmd_idx = 3;
+    repl_gl_state_report_at_line(program, 1, &report);
+    ASSERT_TRUE("expanded command after checkpoint is excluded",
+                gl_state_test_find_row(&report, "GL_COLOR_CLEAR_VALUE") == NULL);
+}
+
 int main(void) {
     printf("--- repl_state tests ---\n");
     test_capture_restore_round_trip();
@@ -936,6 +1055,8 @@ int main(void) {
     test_camera_target_decay_override_applies();
     test_camera_target_decay_override_resets_on_new_ease();
     test_time_dirty_gate_uses_source_text();
+    test_gl_state_report_tracks_explicit_writes_before_checkpoint();
+    test_gl_state_report_uses_flat_call_provenance();
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return g_harness.passed == g_harness.run ? 0 : 1;
 }

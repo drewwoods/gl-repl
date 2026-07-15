@@ -57,6 +57,7 @@
 #include "repl/flatten.h"
 #include "repl/flatten_query.h"
 #include "repl/geometry_query.h"
+#include "repl/gl_state_inspector.h"
 #include "repl/help_text.h"
 #include "repl/pipeline.h"
 #include "subsystems/replay/replay_annotations.h"
@@ -105,6 +106,7 @@ static int glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(
     const UiRenderSnapshot *snap,
     int *out_follow_doc_line,
     int *out_visible_lines);
+static void glr_ctrl_publish_gl_state_annotations(FlatProgramView program);
 
 /* Gap kept between the replay HUD's top edge and the overlay panel stack.
  * The easing itself lives in the overlay layout engine (overlay_layout.c). */
@@ -1883,6 +1885,7 @@ void glr_ctrl_display_frame(void) {
     replay_annotations_prepare(source_document_view(),
                                     &replay_annotations);
     glr_publish_replay_annotations(&replay_annotations);
+    glr_ctrl_publish_gl_state_annotations(flat_program);
     glr_ctrl_push_line_overrides();
     prof_end(PROF_SNAPSHOT_VIRTUAL_LINES);
 
@@ -2284,6 +2287,51 @@ void glr_publish_replay_annotations(const ReplReplayAnnotationOutput *out) {
         editor_state_virtual_lines_append(row->after_line_idx, style,
                                           row->text,
                                           row->aux[0] ? row->aux : NULL);
+    }
+}
+
+static void glr_ctrl_publish_gl_state_annotations(FlatProgramView program) {
+    UiGlStateInspectorState inspector = ui_state_gl_state_inspector();
+    const GLCmd *anchor_cmd;
+    ReplGlStateReport report;
+    char text[MAX_VIRTUAL_LINE_TEXT];
+    char aux[MAX_VIRTUAL_LINE_AUX];
+    int i;
+
+    if (!inspector.visible)
+        return;
+    anchor_cmd = repl_state_document_cmd_at(inspector.source_line_idx);
+    if (!anchor_cmd || anchor_cmd->type != CMD_EMPTY) {
+        ui_state_gl_state_inspector_close();
+        return;
+    }
+
+    repl_gl_state_report_at_line(program, inspector.source_line_idx, &report);
+    editor_state_virtual_lines_append(
+        inspector.source_line_idx,
+        VIRTUAL_STYLE_GL_STATE_HEADER,
+        "OpenGL state before this line",
+        "  // current vs OpenGL 2.1 default");
+
+    if (report.count == 0) {
+        editor_state_virtual_lines_append(
+            inspector.source_line_idx,
+            VIRTUAL_STYLE_GL_STATE_DEFAULT_MATCH,
+            "No REPL-authored OpenGL state has been touched.", NULL);
+        return;
+    }
+
+    for (i = 0; i < report.count; i++) {
+        const ReplGlStateReportRow *row = &report.rows[i];
+        snprintf(text, sizeof(text), "%s = %s", row->name, row->current);
+        snprintf(aux, sizeof(aux), "  // default: %s%s",
+                 row->default_value,
+                 row->differs_from_default ? "" : " (same; explicitly set)");
+        editor_state_virtual_lines_append(
+            inspector.source_line_idx,
+            row->differs_from_default ? VIRTUAL_STYLE_GL_STATE_CHANGED
+                                      : VIRTUAL_STYLE_GL_STATE_DEFAULT_MATCH,
+            text, aux);
     }
 }
 

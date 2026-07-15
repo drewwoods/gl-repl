@@ -21,6 +21,7 @@ typedef struct {
     UiStatusState           status;
     UiStatusHistory         status_history;
     UiHelpState             help;
+    UiGlStateInspectorState gl_state_inspector;
     UiProfilePanelState     profile_panel;
     UiMemoryPanelState      memory_panel;
     UiViewportState         viewport;
@@ -49,6 +50,11 @@ void             ui_state_status_history_toggle(void);
 /* Help overlay visibility. */
 UiHelpState  ui_state_help(void);
 UiHelpState *ui_state_help_mut(void);
+
+/* Inline OpenGL-state report. */
+UiGlStateInspectorState ui_state_gl_state_inspector(void);
+void ui_state_gl_state_inspector_open(int source_line_idx);
+void ui_state_gl_state_inspector_close(void);
 
 /* Profile panel mode. */
 UiProfilePanelState  ui_state_profile_panel(void);

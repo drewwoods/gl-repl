@@ -1415,6 +1415,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+Shift+F | Toggle code focus |
 | Ctrl+B | Cycle code panel layout |
 | Ctrl+Shift+Y | Cycle syntax highlight |
+| Right-click empty line | Toggle OpenGL state touched before that line, compared with initial defaults |
 | Esc | Clear input / close overlay |
 
 ### Scene & rendering
