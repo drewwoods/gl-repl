@@ -96,17 +96,12 @@ void display(void) {
   // camera
   glTranslatef(0.0000f, 0.0000f, -9.5000f);
   glRotatef(14.0000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(12.0000f, 0.0f, 1.0f, 0.0f);
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.5000f, -0.0000f);
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
   static float d; // sliding cut offset for the animated cutaway
-  glEnable(GL_COLOR_MATERIAL);
-  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
   // Clip planes carve new shapes out of stock solids. glClipPlane sets a
   // plane equation a*x + b*y + c*z + d >= 0; GL keeps that half-space and
@@ -123,6 +118,15 @@ void display(void) {
   glShadeModel(GL_SMOOTH);
   // Clipping opens each solid up, so light the exposed inside faces too:
   glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, 1);
+
+  // --- Material Colors ----------------
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_BACK, GL_AMBIENT_AND_DIFFUSE); // dark inner core
+  glColor3f(0.05, 0.06, 0.08);
+  glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE); // outer color set by glColor3f calls below
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
+
 
   // 1) Dome - one plane. (0, 1, 0, 0) keeps y >= 0: the sphere's top
   // half. The plane rides the translated frame, so it cuts through the
@@ -155,13 +159,13 @@ void display(void) {
     glDisable(GL_CLIP_PLANE1);
   glPopMatrix();
 
-  // 3) Cutaway - coefficients can animate. {-1, 0, 0, d} keeps x <= d,
+  // 3) Cutaway - coefficients can animate. {-1, 0, -0.7, d} keeps x <= d,
   // so sweeping d slides the plane through the torus and exposes the
   // tube's circular cross-sections.
   d = 1.5*sin(0.7*t);
   glPushMatrix();
     glTranslatef(2.9, 0.75, 0);
-    glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){-1, 0, 0, d});
+    glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){-1, 0, -0.7, d});
     glEnable(GL_CLIP_PLANE0);
     glColor3f(0.42, 0.62, 0.95);
     glutSolidTorus(0.42, 0.85, 20, 28);
