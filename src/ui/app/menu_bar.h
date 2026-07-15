@@ -69,6 +69,21 @@ void ui_menu_bar_set_open_menu(int menu_id, float now);
 /* Open the Config dropdown specifically (convenience for keyboard shortcut). */
 void ui_menu_bar_open_config(float now);
 
+/* Frozen open-dropdown state (which menu, its fade clock, the hovered row).
+ * Capture it before an action that runs glr_ctrl_reset_transients() — which
+ * closes the menu — and restore it afterward to keep the dropdown open
+ * across the action WITHOUT restarting the fade or dropping the hover
+ * highlight. Used by the Scene menu's Next/Previous cycle rows so repeated
+ * clicks step through examples with the menu (and its highlight) intact. */
+typedef struct {
+    int   menu_id;     /* open top-level menu, or -1 if none */
+    float open_time;   /* anim_time the menu opened (fade clock) */
+    int   item_hover;  /* hovered dropdown row, or -1 */
+} UiMenuBarOpenState;
+
+UiMenuBarOpenState ui_menu_bar_open_state_capture(void);
+void ui_menu_bar_open_state_restore(UiMenuBarOpenState state);
+
 /* Notify menu bar that search overlay became active (used to highlight Search
  * pin button). `now` seeds the highlight fade-in. */
 void ui_menu_bar_note_search_opened(float now);

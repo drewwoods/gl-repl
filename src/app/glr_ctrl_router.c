@@ -436,21 +436,23 @@ static void cycle_example_or_user_scene_dir(int direction) {
         editor_state_edit_line_set(repl_load_example((direction > 0) ? 0 : count - 1));
 }
 
-static void cycle_example_or_user_scene(void) {
+/* Public scene-cycle entry points: the F12 / Shift+F12 key path and the
+ * Scene-menu "Next" / "Previous" rows both funnel through these. */
+void glr_ctrl_scene_cycle_next(void) {
     cycle_example_or_user_scene_dir(1);
 }
 
-static void cycle_example_or_user_scene_prev(void) {
+void glr_ctrl_scene_cycle_prev(void) {
     cycle_example_or_user_scene_dir(-1);
 }
 
 int glr_ctrl_router_handle_scene_cycle_special(int key) {
     if (keymap_event_is(key, GLR_NEXT_EXAMPLE)) {
-        cycle_example_or_user_scene();
+        glr_ctrl_scene_cycle_next();
         return 1;
     }
     if (keymap_event_is(key, GLR_PREV_EXAMPLE)) {
-        cycle_example_or_user_scene_prev();
+        glr_ctrl_scene_cycle_prev();
         return 1;
     }
     return 0;
