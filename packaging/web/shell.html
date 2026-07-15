@@ -492,26 +492,49 @@
       // kind (input-buffer text vs. source lines) when pasting back into
       // gl-repl itself.
       var glrClipboardKindMime = 'application/x-gl-repl-clipboard-kind';
+      var glrClipboardSnapshot = null;
+      // macOS does not turn plain Ctrl+C/X/V into DOM clipboard events (Cmd is
+      // its platform accelerator), even though the GLUT shim deliberately
+      // declines both modifiers. Handle the Ctrl aliases here; keep a local
+      // snapshot as the reliable in-app fallback when the async system
+      // clipboard API is unavailable or denied.
+      var glrPlatform = (navigator.userAgentData && navigator.userAgentData.platform) ||
+                        navigator.platform || '';
+      var glrMacClipboardKeys = /mac/i.test(glrPlatform);
+
+      var glrClipboardCapture = (cut) => {
+        var fn = cut ? 'glr_web_clipboard_cut' : 'glr_web_clipboard_copy';
+        var ok = Module.ccall(fn, 'number', [], []);
+        if (!ok) return null;
+        var snapshot = {
+          text: Module.ccall('glr_web_clipboard_text', 'string', [], []),
+          kind: Module.ccall('glr_web_clipboard_kind', 'string', [], []) || 'lines'
+        };
+        glrClipboardSnapshot = snapshot;
+        return snapshot;
+      };
+
+      var glrClipboardPaste = (text, kind) => {
+        if (!text) return false;
+        return !!Module.ccall('glr_web_clipboard_paste_text', 'number',
+                              ['string', 'string'], [text, kind || '']);
+      };
 
       document.addEventListener('copy', (event) => {
         if (!sceneControlsReady || document.activeElement !== canvasElement) return;
-        var ok = Module.ccall('glr_web_clipboard_copy', 'number', [], []);
-        if (!ok) return;
-        var text = Module.ccall('glr_web_clipboard_text', 'string', [], []);
-        var kind = Module.ccall('glr_web_clipboard_kind', 'string', [], []);
-        event.clipboardData.setData('text/plain', text);
-        event.clipboardData.setData(glrClipboardKindMime, kind || 'lines');
+        var snapshot = glrClipboardCapture(false);
+        if (!snapshot) return;
+        event.clipboardData.setData('text/plain', snapshot.text);
+        event.clipboardData.setData(glrClipboardKindMime, snapshot.kind);
         event.preventDefault();
       });
 
       document.addEventListener('cut', (event) => {
         if (!sceneControlsReady || document.activeElement !== canvasElement) return;
-        var ok = Module.ccall('glr_web_clipboard_cut', 'number', [], []);
-        if (!ok) return;
-        var text = Module.ccall('glr_web_clipboard_text', 'string', [], []);
-        var kind = Module.ccall('glr_web_clipboard_kind', 'string', [], []);
-        event.clipboardData.setData('text/plain', text);
-        event.clipboardData.setData(glrClipboardKindMime, kind || 'lines');
+        var snapshot = glrClipboardCapture(true);
+        if (!snapshot) return;
+        event.clipboardData.setData('text/plain', snapshot.text);
+        event.clipboardData.setData(glrClipboardKindMime, snapshot.kind);
         event.preventDefault();
       });
 
@@ -522,9 +545,7 @@
         var text = data.getData('text/plain');
         if (!text) return;
         var kind = data.getData(glrClipboardKindMime);
-        var ok = Module.ccall('glr_web_clipboard_paste_text', 'number',
-                              ['string', 'string'], [text, kind || '']);
-        if (ok) event.preventDefault();
+        if (glrClipboardPaste(text, kind)) event.preventDefault();
       });
 
       document.addEventListener('dragover', (e) => {
@@ -540,7 +561,38 @@
       document.addEventListener('keydown', (e) => {
         if (!sceneControlsReady || !(e.ctrlKey || e.metaKey) || e.altKey) return;
         var key = e.key ? e.key.toLowerCase() : '';
-        if (key === 's') {
+        var macCtrlClipboard = glrMacClipboardKeys && e.ctrlKey && !e.metaKey &&
+                               !e.shiftKey &&
+                               (key === 'c' || key === 'x' || key === 'v');
+        if (macCtrlClipboard) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (key === 'c' || key === 'x') {
+            var snapshot = glrClipboardCapture(key === 'x');
+            if (snapshot && navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(snapshot.text).catch(() => {});
+            }
+          } else if (navigator.clipboard && navigator.clipboard.readText) {
+            navigator.clipboard.readText().then((text) => {
+              var kind = glrClipboardSnapshot &&
+                         glrClipboardSnapshot.text === text
+                           ? glrClipboardSnapshot.kind : '';
+              if (text) {
+                glrClipboardPaste(text, kind);
+              } else if (glrClipboardSnapshot) {
+                glrClipboardPaste(glrClipboardSnapshot.text,
+                                  glrClipboardSnapshot.kind);
+              }
+            }).catch(() => {
+              if (glrClipboardSnapshot)
+                glrClipboardPaste(glrClipboardSnapshot.text,
+                                  glrClipboardSnapshot.kind);
+            });
+          } else if (glrClipboardSnapshot) {
+            glrClipboardPaste(glrClipboardSnapshot.text,
+                              glrClipboardSnapshot.kind);
+          }
+        } else if (key === 's') {
           e.preventDefault();
           e.stopPropagation();
           downloadActiveScene();
