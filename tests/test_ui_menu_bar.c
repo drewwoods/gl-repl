@@ -179,12 +179,6 @@ static void test_dropdown_and_config_press(void) {
     int tutorial_my = -1;
     int scene_tag_mx = -1;
     int scene_tag_my = -1;
-    int cfg_row = -1;
-    int cfg_mx = -1;
-    int cfg_my = -1;
-    int before;
-    int expected;
-    const GlrConfigItem *item;
 
     reset_menu_bar_fixture(1000, 600);
 
@@ -232,19 +226,6 @@ static void test_dropdown_and_config_press(void) {
                   1);
     ASSERT_INT_EQ("Scene tag row activation keeps menu open",
                   glr_action_menu_item_activate(GLR_MENU_SCENE, 1), 0);
-
-    /* Config is now a section/flyout menu (plan Step 4). Top-level
-     * rows are section parents, so right-press over the section list
-     * is a deliberate no-op; backward-cycle moves into the open flyout
-     * in Step 7 (covered by test_config_submenu_right_press there).
-     * Positive section/flyout coverage is added in Step 9. */
-    ui_menu_bar_set_open_menu(GLR_MENU_CONFIG, 0.0f);
-    ASSERT_INT_EQ("config right-press over section list is a no-op",
-                  ui_menu_bar_handle_config_right_press(cfg_mx, cfg_my).kind, UI_HIT_NONE);
-    ui_menu_bar_close();
-    ASSERT_INT_EQ("right-press when closed",
-                  ui_menu_bar_handle_config_right_press(cfg_mx, cfg_my).kind, UI_HIT_NONE);
-    (void)cfg_row; (void)item; (void)before; (void)expected;
 }
 
 static void test_unified_hit_test(void) {
@@ -1043,9 +1024,17 @@ static void test_dropdown_inert_chrome_hit(void) {
 }
 #endif
 
-/* Step 7 (Finding #3): right-press over a Config flyout item cycles
- * it backward; right-press over a section parent row / closed menu is
- * a no-op (never mis-cycles a g_cfg_items[] index). */
+/* Step 7 (Finding #3), now routed through the controller: a right-press
+ * over a Config flyout item backward-cycles it. Production resolves the
+ * press with the canonical hit-test (route_right_press in
+ * glr_ctrl_router.c → ui_panels_hit_test → ui_menu_bar_hit_test →
+ * submenu_hit_test) and cycles ONLY on a UI_HIT_SUBMENU_ITEM hit with
+ * cmd_idx == GLR_MENU_CONFIG. submenu_hit_test resolves actionable ITEM
+ * rows only — chrome ("### "/"---" in the "All" flyout) is skipped via
+ * submenu_row_kind, and section/All parent rows own no submenu row — so
+ * a right-press over the section list (or a closed menu) never
+ * mis-cycles a g_cfg_items[] index. This test drives the same filter
+ * against the hit-test. */
 static void test_config_submenu_right_press(void) {
     int parent_mx = -1, parent_my = -1;
     int sx = 0, sy = 0, sw = 0, sh = 0;
@@ -1078,29 +1067,31 @@ static void test_config_submenu_right_press(void) {
 
     ASSERT_TRUE("flyout row 0 point computed",
                 submenu_row_point(sx, sy, sw, sh, 0, &row_mx, &row_my));
-    UiHit hit = ui_menu_bar_handle_config_right_press(row_mx, row_my);
+    UiHit hit = ui_menu_bar_hit_test(row_mx, row_my);
     ASSERT_INT_EQ("right-press on flyout item kind",
                   hit.kind, UI_HIT_SUBMENU_ITEM);
+    ASSERT_INT_EQ("right-press on flyout item menu id",
+                  hit.cmd_idx, GLR_MENU_CONFIG);
     ASSERT_INT_EQ("right-press on flyout item index",
                   hit.item_idx, start);
-    if (hit.kind == UI_HIT_SUBMENU_ITEM && hit.cmd_idx == GLR_MENU_CONFIG && hit.item_idx >= 0) {
+    if (hit.kind == UI_HIT_SUBMENU_ITEM && hit.cmd_idx == GLR_MENU_CONFIG &&
+        hit.item_idx >= 0) {
         glr_cfg_cycle_row(hit.item_idx, -1);
     }
     ASSERT_INT_EQ("right-press cycled the item backward",
                   glr_config_get(item->key), expected);
 
-    /* Right-press over the section parent row itself (not the flyout)
-     * is a no-op and changes nothing. */
-    int v = glr_config_get(item->key);
-    ASSERT_INT_EQ("right-press on section parent row is a no-op",
-                  ui_menu_bar_handle_config_right_press(parent_mx,
-                                                        parent_my).kind, UI_HIT_NONE);
-    ASSERT_INT_EQ("section parent right-press changed nothing",
-                  glr_config_get(item->key), v);
+    /* The section parent row itself (not the flyout) resolves to a
+     * dropdown MENU_ITEM, not a SUBMENU_ITEM, so the production filter
+     * never cycles from it. */
+    UiHit parent_hit = ui_menu_bar_hit_test(parent_mx, parent_my);
+    ASSERT_TRUE("right-press on section parent row resolves no flyout item",
+                parent_hit.kind != UI_HIT_SUBMENU_ITEM);
 
     ui_menu_bar_close();
-    ASSERT_INT_EQ("right-press when Config closed is a no-op",
-                  ui_menu_bar_handle_config_right_press(row_mx, row_my).kind, UI_HIT_NONE);
+    UiHit closed_hit = ui_menu_bar_hit_test(row_mx, row_my);
+    ASSERT_TRUE("right-press when Config closed resolves no flyout item",
+                closed_hit.kind != UI_HIT_SUBMENU_ITEM);
 }
 
 /* Audit #4 cache-correctness regression: submenu_rect caches its result

@@ -122,8 +122,6 @@ int  ui_menu_bar_update_pointer_hover(int mx, int my, float now);
  * Reads layout / state only; never mutates. */
 UiHit ui_menu_bar_hit_test(int mx, int my);
 
-UiHit ui_menu_bar_handle_config_right_press(int mx, int my);
-
 /* Scroll the open flyout when the pointer (mx, my) is over it and it is
  * taller than the viewport (e.g. the Config "All" list). `delta` is a
  * row offset, positive reveals lower rows (same sign convention as

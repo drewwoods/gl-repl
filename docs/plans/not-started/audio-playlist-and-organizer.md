@@ -236,20 +236,14 @@ that extra structure.
       return 1;              /* keep menu open, like Config */
   }
   ```
-- **Right-click a song** → remove. Add a new
-  `glr_ctrl_router_handle_right_audio_press` (same shape as the existing
-  `glr_ctrl_router_handle_right_config_press`) and wire it into the right-button
-  chain in `glr_ctrl_mouse`, right after `handle_right_config_press`.
-
-  Important integration detail: today `ui_panels_handle_right_press(x, y)` is
-  **Config-only** because it delegates to `ui_menu_bar_handle_config_right_press`,
-  which rejects any open menu other than `MENU_CONFIG`. Before adding audio,
-  expose a generic submenu right-hit helper (for example
-  `ui_menu_bar_handle_submenu_right_press`) that simply calls the existing
-  internal `submenu_hit_test`, and have `ui_panels_handle_right_press()` delegate
-  to that generic helper. Keep `glr_ctrl_router_handle_right_config_press`
-  behavior unchanged by filtering the returned hit for `GLR_MENU_CONFIG`; the
-  audio handler filters for `GLR_MENU_AUDIO`.
+- **Right-click a song** → remove. Right presses are dispatched by
+  `route_right_press` in `src/app/glr_ctrl_router.c`: one canonical
+  `ui_panels_hit_test`, then a switch on the hit kind. Its
+  `UI_HIT_SUBMENU_ITEM` case already receives the owning menu id in
+  `hit.cmd_idx` (today only `GLR_MENU_CONFIG` acts on it — backward
+  cycle), so audio needs no new plumbing: add a
+  `hit.cmd_idx == GLR_MENU_AUDIO` branch that removes the track at
+  `hit.item_idx` and keeps the dropdown open.
 
   ```c
   int glr_ctrl_router_handle_right_audio_press(int button, int state, int x, int y) {
