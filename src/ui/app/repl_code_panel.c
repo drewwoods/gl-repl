@@ -2403,7 +2403,7 @@ static void repl_code_panel_draw_paste_icon(int kx, int ky, int kw, int kh) {
         0x4F, 0x90,  /* row 7  */
         0x40, 0x10,  /* row 8  */
         0x7F, 0xF0,  /* row 9  */
-        0x11, 0x00,  /* row 10 */
+        0x10, 0x40,  /* row 10 */
         0x0F, 0x80   /* row 11 */
     };
     repl_code_panel_draw_bitmap_icon(kx, ky, kw, kh,
