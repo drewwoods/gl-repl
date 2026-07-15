@@ -47,6 +47,7 @@ typedef struct {
     const GLCmd      *cmds;
     const FlatCmdLocalVars *local_vars;
     int               cmd_count;
+    int               overflow_cmd_count; /* exact required count after overflow */
 } FlatProgramView;
 
 typedef struct {
@@ -99,6 +100,10 @@ typedef struct {
 typedef struct {
     int  ok;                             /* 1 if flattening succeeded */
     int  flat_cmd_count;
+    /* Exact destination size needed when flat_capacity was too small.
+     * The executable flat_cmd_count remains zero on that failure. Zero for
+     * other failures; equal to flat_cmd_count on success. */
+    int  required_flat_capacity;
     int  user_lighting_enabled;
     char status[REPL_DIAG_TEXT_MAX];     /* error or informational message */
 } ReplFlattenResult;

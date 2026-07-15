@@ -1506,6 +1506,7 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->edit_line           = editor_state_edit_line();
 
     snap->flat_program_count  = flat_program.cmd_count;
+    snap->flat_program_overflow_count = flat_program.overflow_cmd_count;
     snap->can_undo            = editor_undo_can_undo();
     snap->can_redo            = editor_undo_can_redo();
     /* Cursor budget readout: resolve the attribution kind to the short

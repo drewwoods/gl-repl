@@ -54,6 +54,9 @@ typedef struct {
     FlatCmdLocalVars local_vars[MAX_FLAT_COMMANDS];
     int              cmd_count;
     int              capacity;
+    /* Exact command count needed after a capacity-only flatten failure.
+     * Zero while cmd_count names a valid executable program. */
+    int              overflow_cmd_count;
     int              dirty;
     int              user_lighting_enabled;
     int              current_block_begin_idx;

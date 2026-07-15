@@ -48,6 +48,7 @@ typedef struct {
     FlatCmdLocalVars *flat_local_vars;
     int               flat_capacity;
     int               flat_count;
+    int               capacity_exceeded;
     SourceTextView  text;             /* editor source-text view for inline expansion */
     ReplFuncAliasView func_aliases;
     ReplSourceScopeView source_scope;
@@ -133,12 +134,21 @@ static int flatten_append_cmd(FlattenContext *ctx, const GLCmd *cmd,
     int flat_cmd_idx;
     int snap_count = 0;
 
-    if (ctx->flat_count >= ctx->flat_capacity) {
-        flatten_fail(ctx, "Flattened command limit reached");
-        return 0;
-    }
+    /* Once the destination fills, keep counting by reusing it as a circular
+     * scratch buffer. A capacity overflow invalidates the whole flattened
+     * program, so preserving its command order no longer matters; continuing
+     * lets the caller report the exact capacity the program needs. Other
+     * flatten failures still abort immediately, and the visit budget keeps
+     * this diagnostic pass bounded. */
+    flat_cmd_idx = ctx->flat_capacity > 0
+                 ? ctx->flat_count % ctx->flat_capacity
+                 : 0;
+    ctx->flat_count++;
+    if (ctx->flat_count > ctx->flat_capacity)
+        ctx->capacity_exceeded = 1;
+    if (ctx->flat_capacity <= 0)
+        return 1;
 
-    flat_cmd_idx = ctx->flat_count++;
     ctx->flat_cmds[flat_cmd_idx] = *cmd;
     flat_cmd_set_provenance(&ctx->flat_cmds[flat_cmd_idx],
                             src_cmd_idx, call_src_cmd_idx,
@@ -958,6 +968,7 @@ int repl_flatten_program(const ReplFlattenOptions *options,
         .flat_local_vars = options ? options->flat_local_vars : NULL,
         .flat_capacity = options ? options->flat_capacity : 0,
         .flat_count = 0,
+        .capacity_exceeded = 0,
         .text = options ? options->text : (SourceTextView){0},
         .func_aliases = options ? options->func_aliases : (ReplFuncAliasView){0},
         .max_call_depth = options && options->max_call_depth > 0
@@ -1017,13 +1028,22 @@ int repl_flatten_program(const ReplFlattenOptions *options,
     prof_accum_commit(PROF_FLATTEN_REPARSE);
     prof_accum_commit(PROF_FLATTEN_VAR_ASSIGN);
     prof_accum_commit(PROF_FLATTEN_SCRATCH_ASSIGN);
-    if (ctx.abort)
+    if (ctx.abort) {
         ctx.flat_count = 0;
+    } else if (ctx.capacity_exceeded) {
+        snprintf(ctx.status, sizeof(ctx.status),
+                 "Flattened command limit reached: %d commands need capacity %d",
+                 ctx.flat_count, ctx.flat_capacity);
+    }
 
-    result->ok = !ctx.abort;
-    result->flat_cmd_count = ctx.flat_count;
-    result->user_lighting_enabled =
-        flatten_flat_lighting_enabled(ctx.flat_cmds, ctx.flat_count);
+    result->ok = !ctx.abort && !ctx.capacity_exceeded;
+    result->flat_cmd_count = result->ok ? ctx.flat_count : 0;
+    result->required_flat_capacity = ctx.capacity_exceeded && !ctx.abort
+                                   ? ctx.flat_count
+                                   : result->flat_cmd_count;
+    result->user_lighting_enabled = result->ok
+        ? flatten_flat_lighting_enabled(ctx.flat_cmds, ctx.flat_count)
+        : 0;
     repl_copy_string_fits(result->status, sizeof(result->status), ctx.status);
     return result->ok;
 }
@@ -1062,6 +1082,10 @@ void repl_flatten_commands(int edit_line_idx) {
 
     repl_flatten_program(&options, &result);
     repl_state_flat_program_set_count(result.flat_cmd_count);
+    flat_program->overflow_cmd_count =
+        result.required_flat_capacity > flat_program->capacity
+            ? result.required_flat_capacity
+            : 0;
     repl_state_flat_program_set_user_lighting_enabled(
         result.user_lighting_enabled);
     if (result.status[0])

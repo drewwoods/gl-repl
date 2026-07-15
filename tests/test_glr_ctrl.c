@@ -1857,6 +1857,7 @@ static void test_build_ui_snapshot_is_idempotent(void) {
 
     printf("--- imrepl_ctrl snapshot idempotence ---\n");
     prepare_display_fixture();
+    repl_state_flat_program_mut()->overflow_cmd_count = MAX_FLAT_COMMANDS + 7;
 
     glr_ctrl_build_ui_snapshot(&snap_a);
     glr_ctrl_build_ui_snapshot(&snap_b);
@@ -1873,6 +1874,12 @@ static void test_build_ui_snapshot_is_idempotent(void) {
                snap_b.document_count, snap_a.document_count);
     ASSERT_INT("snapshot flat_program_count idempotent",
                snap_b.flat_program_count, snap_a.flat_program_count);
+    ASSERT_INT("snapshot flat_program_overflow_count idempotent",
+               snap_b.flat_program_overflow_count,
+               snap_a.flat_program_overflow_count);
+    ASSERT_INT("snapshot carries flat overflow count for toolbar",
+               snap_a.flat_program_overflow_count,
+               MAX_FLAT_COMMANDS + 7);
     ASSERT_INT("snapshot replay.active idempotent",
                snap_b.replay.active, snap_a.replay.active);
     ASSERT_INT("snapshot replay.state idempotent",

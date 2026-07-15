@@ -738,10 +738,10 @@ signature for audited renderers.
   and most render config live **app-side**
   on `glr_state` ([`src/app/glr_state.c`](../src/app/glr_state.c)), not on [`ReplRuntimeState`](../src/repl/state.h#L18); the
   controller reads them from there when filling the snapshot. Only the
-  REPL-owned render *tail* ([`ReplRenderState`](../src/repl/state_views.h#L100): per-light state + clear
+  REPL-owned render *tail* ([`ReplRenderState`](../src/repl/state_views.h#L103): per-light state + clear
   color) remains a REPL slice.
-* pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L82), [`EditorInputView`](../src/editor/state.h#L68),
-  [`ReplImportExportView`](../src/repl/state_views.h#L129), [`FlatProgramView`](../src/repl/flatten.h#L46), [`ReplPredefView`](../src/repl/eval.h#L178))
+* pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L85), [`EditorInputView`](../src/editor/state.h#L68),
+  [`ReplImportExportView`](../src/repl/state_views.h#L132), [`FlatProgramView`](../src/repl/flatten.h#L46), [`ReplPredefView`](../src/repl/eval.h#L178))
 * document/flat metadata (`document_cmds`, `document_count`, `edit_line`
   — sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L347),
   `flat_program_count`, …)
@@ -1157,7 +1157,7 @@ Scene-presentation policy and most render config live in the app-side owner
 [`src/app/glr_state.c`](../src/app/glr_state.c). REPL-pipeline translation units do not include
 [`glr_state.h`](../src/app/glr_state.h); `check-repl-state-no-glr-state` enforces that boundary.
 App, editor, UI, and render3d code may consume it. Only the REPL-owned render
-tail—[`ReplRenderState`](../src/repl/state_views.h#L100), containing per-light state and clear
+tail—[`ReplRenderState`](../src/repl/state_views.h#L103), containing per-light state and clear
 color—remains a REPL slice.
 
 ## Core Subsystem Features & Integrations
@@ -1496,7 +1496,7 @@ passes + stripped tess are the load-bearing reason here); reach for
 **Side effects across auxiliary passes.** Both mechanisms can run the program
 more than once per frame (the wireframe's three passes; a depth probe).
 `scene_execute_adapter` in [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c)
-snapshots and restores predef vars / scratch arrays / [`ReplRenderState`](../src/repl/state_views.h#L100)
+snapshots and restores predef vars / scratch arrays / [`ReplRenderState`](../src/repl/state_views.h#L103)
 around any pass whose [`Render3dExecutePurpose`](../src/render3d/render_types.h#L70) is *not* the one
 side-effecting fill — so `t = t + 1` style assignment animation advances
 exactly once per frame. `RENDER3D_EXEC_MAIN_FILL`, the wireframe's visible-

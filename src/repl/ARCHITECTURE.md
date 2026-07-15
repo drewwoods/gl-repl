@@ -284,7 +284,7 @@ surfaces it on the CLI.
 Loop counters and function parameters don't exist in the source
 command's own scope. When [`flatten.c`](flatten.c) emits a flat command, it snapshots
 the live lexical bindings into a parallel [`FlatCmdLocalVars`](flatten.h#L37) array
-([`repl_state_flat_program_local_vars()`](state_views.h#L147)):
+([`repl_state_flat_program_local_vars()`](state_views.h#L150)):
 
 ```c
 typedef struct { int num_vars; ExprVar vars[MAX_EXPR_VARS]; } FlatCmdLocalVars;
@@ -452,7 +452,7 @@ takes the edit-line by reference.
 
 ### 5.2 Flatten — lowering source to flat
 
-[`repl_flatten_program()`](flatten.h#L111) ([`flatten.c`](flatten.c)) expands the source array into the
+[`repl_flatten_program()`](flatten.h#L116) ([`flatten.c`](flatten.c)) expands the source array into the
 flat array:
 
 - **for-loops** iterate `[start, end)` by `step`, half-open, re-parsing
@@ -531,7 +531,7 @@ There are three intentional cache-free/reference modes:
 | Scope | Mechanism | What remains enabled |
 |---|---|---|
 | Live application/benchmark process | Start with `GLR_NO_FLATTEN_CACHE=1` | Literal and direct-evaluation fast paths remain; dirty frames still fully flatten. |
-| One [`repl_flatten_program()`](flatten.h#L111) call | Set `ReplFlattenOptions.expr_cache = NULL` | Same cache-free direct/text behavior, without changing the live cache or other callers. |
+| One [`repl_flatten_program()`](flatten.h#L116) call | Set `ReplFlattenOptions.expr_cache = NULL` | Same cache-free direct/text behavior, without changing the live cache or other callers. |
 | Strong differential reference | Set `force_reparse = 1` (normally with `expr_cache = NULL`) | Disables literal/direct paths as well as compiled evaluation and forces the legacy general-parser path. |
 
 `GLR_NO_FLATTEN_CACHE` is a diagnostic/startup switch, not a live toggle: it
@@ -595,10 +595,10 @@ typed slices ([`state_views.h`](state_views.h)):
 |---|---|
 | [`ReplDocumentState`](state_views.h#L42) | source `GLCmd[]`, count, capacity, `normals_dirty`, cached source-uses-`t` metadata |
 | [`ReplFlatProgramState`](state_views.h#L52) | flat `GLCmd[]`, `FlatCmdLocalVars[]`, dirty flag, cursor-block range, user-lighting flag |
-| [`ReplVariableState`](state_views.h#L66) | predef var table, scratch arrays `A/B/C`, `funcN` aliases, the `t` clock (`anim_time`, `time_playing`) |
-| [`ReplRenderState`](state_views.h#L100) | the runtime-mutated render *tail*: `light_enabled_mask`, `clear_color[]` |
-| [`ReplSceneRuntimeState`](state_views.h#L108) | active example index, bound workspace dir |
-| [`ReplImportExportState`](state_views.h#L116) | cached header/render/camera text + pending import metadata |
+| [`ReplVariableState`](state_views.h#L69) | predef var table, scratch arrays `A/B/C`, `funcN` aliases, the `t` clock (`anim_time`, `time_playing`) |
+| [`ReplRenderState`](state_views.h#L103) | the runtime-mutated render *tail*: `light_enabled_mask`, `clear_color[]` |
+| [`ReplSceneRuntimeState`](state_views.h#L111) | active example index, bound workspace dir |
+| [`ReplImportExportState`](state_views.h#L119) | cached header/render/camera text + pending import metadata |
 
 [`repl_state_capture()`](state.h#L29) / [`repl_state_restore()`](state.h#L30) snapshot exactly these
 slices — and nothing else (no editor, UI, replay, or app presentation
@@ -905,7 +905,7 @@ each re-flatten knows to re-evaluate it from text (§5.2).
 
 ### Stage 3 — flatten  (`repl_flatten_commands`)
 
-[`repl_flatten_program()`](flatten.h#L111) (§5.2) lowers the nine source commands to eleven
+[`repl_flatten_program()`](flatten.h#L116) (§5.2) lowers the nine source commands to eleven
 flat ones — the loop body unrolled into six vertices, the `CMD_FOR_BEGIN`
 / `CMD_FOR_END` / `CMD_VAR_DECLARE` markers consumed:
 
@@ -1045,6 +1045,13 @@ and you cap the per-frame flatten *and* execute cost at once.
 so one runaway loop can't hang the rebuild. Example authors hoist
 loop-invariant work specifically to stay under the flat cap — the budget is real
 because it is paid every frame.
+
+When expansion exceeds the flat-array capacity, flattening stops producing an
+executable program but continues a bounded diagnostic count. It reuses the
+already-invalid destination as a circular scratch buffer, so the status bar can
+show the exact required count (for example `9000/8192 cmds`) without allocating
+a second flat array. The executable count remains zero; replay, rendering,
+export, and flat-program queries never see the wrapped contents as valid.
 
 ### 13.2 Why `t` can force a re-flatten
 

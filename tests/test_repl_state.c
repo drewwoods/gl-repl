@@ -74,6 +74,7 @@ static void populate_runtime_snapshot_fixture(const char *scene_hint) {
 
     repl_state_flat_program_set_count(1);
     flat_program = repl_state_flat_program_mut();
+    flat_program->overflow_cmd_count = 9000;
     flat_cmds = repl_state_flat_program_cmds_mut();
     flat_locals = repl_state_flat_program_local_vars_mut();
     flat_cmds[0].type = CMD_VERTEX3F;
@@ -270,6 +271,8 @@ static void test_capture_restore_round_trip(void) {
                editor_buffer_line(0),
                "  glBegin(GL_TRIANGLES);");
     ASSERT_INT("flat count restored", repl_state_flat_program_count(), 1);
+    ASSERT_INT("flat overflow count restored",
+               repl_state_flat_program_view().overflow_cmd_count, 9000);
     ASSERT_INT("flat cmd type restored", repl_state_flat_program_cmds()[0].type, CMD_VERTEX3F);
     ASSERT_INT("flat local var count restored",
                repl_state_flat_program_local_vars_mut()[0].num_vars, 1);
