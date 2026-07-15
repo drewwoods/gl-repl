@@ -347,7 +347,7 @@ GLR_TIME=5 ./gl-repl                 # Initial animation time t in seconds (--ti
 GLR_EDIT_LINE=4 ./gl-repl scene.c    # Park the cursor on source line 4 (0-based, clamped) after load
 GLR_TYPE_KEYS='glVertex3f(1.2' ./gl-repl scene.c  # Feed keystrokes through the keyboard dispatch after load (headless capture of mid-typing states: partial-input guides, autocomplete ghost)
 GLR_OPEN_COLOR_PICKER=6 ./gl-repl scene.c  # Open the floating color picker on source line 6 (0-based; must be an editable color command) on the first displayed frame — capture hook, the picker otherwise needs a swatch click
-GLR_OPEN_GL_STATE=4 ./gl-repl scene.c  # Open the floating OpenGL-state popup on source line 4 (0-based; must be a committed empty line) on the first displayed frame — capture hook, the popup otherwise needs a right-click
+GLR_OPEN_GL_STATE=4 ./gl-repl scene.c  # Open the floating OpenGL-state popup on source line 4 (0-based; must be a visually blank committed or live editor row) on the first displayed frame — capture hook, the popup otherwise needs a right-click
 GLR_ACCUM_PASSES=16 ./gl-repl        # Accumulation AA sample count (1/2/4/8/12/16; capture hook)
 GLR_TICK_PER_FRAME=1 ./gl-repl       # Advance the complete fixed-dt simulation once per rendered frame (deterministic offline capture)
 GLR_VIEW_TOGGLE_AT=0.5,2.0 ./gl-repl # Toggle 2D/3D view mode at t=0.5s and t=2.0s (records the swatch transition headlessly)

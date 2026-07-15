@@ -52,13 +52,13 @@ typedef struct {
     int visible;
 } UiHelpState;
 
-/* Floating OpenGL-state popup table anchored to a committed empty source
- * line. The controller rebuilds the report from the current flat program on
- * every frame; UI state only owns the open/closed chrome, the anchor line,
- * the right-click position (GLUT screen coords, y-down) the popup hangs
- * from, the wheel-scroll row offset (clamped by the router against the
- * popup's solved row capacity), and whether the default/source detail
- * columns are expanded (collapsed on every open so the popup starts
+/* Floating OpenGL-state popup table anchored to a visually blank committed
+ * or live editor row. The controller rebuilds the report from the current
+ * flat program on every frame; UI state only owns the open/closed chrome, the
+ * anchor line, the right-click position (GLUT screen coords, y-down) the
+ * popup hangs from, the wheel-scroll row offset (clamped by the router
+ * against the popup's solved row capacity), and whether the default/source
+ * detail columns are expanded (collapsed on every open so the popup starts
  * narrow; toggled by clicking the header chip). */
 typedef struct {
     int visible;

@@ -39,7 +39,7 @@ void glr_ctrl_open_color_picker(int line);
  * with a synthetic anchor position. Startup hook for GLR_OPEN_GL_STATE:
  * the popup only opens via a right-click, so a headless capture can't
  * otherwise pose it. The per-frame view builder closes it again unless
- * the line is a committed empty row. */
+ * the line is a visually blank committed or live editor row. */
 void glr_ctrl_open_gl_state_popup(int line);
 
 /* Apply tag-keyed presentation defaults from a (table, n) policy.
@@ -106,10 +106,10 @@ void glr_ctrl_close_help(void);
 
 void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap);
 
-/* Per-frame view for the right-click OpenGL-state popup table. Validates
- * the anchor line (closing the popup if it is no longer a committed empty
- * row), rebuilds the report from the live flat program, and resolves the
- * popup anchor into y-up window coords. view.visible is 0 when closed. */
+/* Per-frame view for the right-click OpenGL-state popup table. Validates the
+ * anchor (closing if no longer a visually blank committed/live editor row),
+ * rebuilds the report from the live flat program, and resolves the popup
+ * anchor into y-up window coords. view.visible is 0 when closed. */
 UiGlStatePanelView glr_ctrl_build_gl_state_panel_view(void);
 void glr_ctrl_apply_code_panel_follow_scroll(
     const UiReplCodePanelLayout *layout);

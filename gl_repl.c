@@ -253,8 +253,9 @@ static void print_usage(const char *prog) {
             "               captures - it otherwise needs a swatch click.\n"
             "  GLR_OPEN_GL_STATE=<n>  Open the floating OpenGL-state popup\n"
             "               anchored to source line n (0-based; the line\n"
-            "               must be a committed empty line). Poses the popup\n"
-            "               for captures - it otherwise needs a right-click.\n"
+            "               must be a visually blank editor row). Poses the\n"
+            "               popup for captures - it otherwise needs a\n"
+            "               right-click.\n"
             "  GLR_OPEN_HELP=<tab>  Open the F1 help overlay on tab index\n"
             "               tab (0=Overview 1=Commands 2=Keys 3=About) on\n"
             "               the first frame. Poses the overlay for captures\n"
@@ -381,9 +382,10 @@ static void maybe_capture_open_color_picker(void) {
 
 /* Capture affordance, sibling of GLR_OPEN_COLOR_PICKER: GLR_OPEN_GL_STATE=
  * <line> opens the floating OpenGL-state popup anchored to that source line
- * (0-based; must be a committed empty line — the controller's per-frame
- * view builder closes the popup otherwise). The popup only opens via a
- * right-click, which a headless capture run has no mouse to deliver. */
+ * (0-based; must be a visually blank committed or live editor row — the
+ * controller's per-frame view builder closes the popup otherwise). The popup
+ * only opens via a right-click, which a headless capture run has no mouse to
+ * deliver. */
 static void maybe_capture_open_gl_state(void) {
     static int done = 0;
     if (done) return;
