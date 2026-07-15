@@ -5,6 +5,7 @@
 ui_tabbed_overlay_render
 ui_profile_panel_render
 ui_autocomplete_panel_render
+ui_gl_state_panel_render
 ui_variable_panel_render
 ui_menu_bar_render
 ui_menu_bar_render_search_overlay

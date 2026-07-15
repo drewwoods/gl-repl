@@ -18,7 +18,8 @@
     {                                                                 \
         .status = { .text = "", .ttl = 0, .kind = UI_STATUS_INFO },   \
         .help = { .visible = 0 },                                     \
-        .gl_state_inspector = { .visible = 0, .source_line_idx = -1 },\
+        .gl_state_inspector = { .visible = 0, .source_line_idx = -1, \
+                                .anchor_px = -1, .anchor_py = -1 },  \
         .profile_panel = { .mode = PROFILE_PANEL_OFF },               \
         .memory_panel  = { .mode = MEMORY_PANEL_OFF  },               \
         .viewport = { .window_w = 0, .window_h = 0 },                 \
@@ -156,14 +157,26 @@ UiGlStateInspectorState ui_state_gl_state_inspector(void) {
     return g_ui_state.gl_state_inspector;
 }
 
-void ui_state_gl_state_inspector_open(int source_line_idx) {
+void ui_state_gl_state_inspector_open(int source_line_idx,
+                                      int anchor_px, int anchor_py) {
     g_ui_state.gl_state_inspector.visible = 1;
     g_ui_state.gl_state_inspector.source_line_idx = source_line_idx;
+    g_ui_state.gl_state_inspector.anchor_px = anchor_px;
+    g_ui_state.gl_state_inspector.anchor_py = anchor_py;
+    g_ui_state.gl_state_inspector.scroll_rows = 0;
 }
 
 void ui_state_gl_state_inspector_close(void) {
     g_ui_state.gl_state_inspector.visible = 0;
     g_ui_state.gl_state_inspector.source_line_idx = -1;
+    g_ui_state.gl_state_inspector.anchor_px = -1;
+    g_ui_state.gl_state_inspector.anchor_py = -1;
+    g_ui_state.gl_state_inspector.scroll_rows = 0;
+}
+
+void ui_state_gl_state_inspector_set_scroll(int scroll_rows) {
+    g_ui_state.gl_state_inspector.scroll_rows =
+        scroll_rows < 0 ? 0 : scroll_rows;
 }
 
 

@@ -74,6 +74,7 @@
 #include "render3d/postprocess_filter.h" /* Render3dPostFilterMode, mode_name */
 #include "render3d/render.h"
 #include "ui/app/autocomplete_panel.h"
+#include "ui/app/gl_state_panel.h"
 #include "ui/app/editor.h"
 #include "ui/app/layout.h"
 #include "ui/app/menu_bar.h"
@@ -106,7 +107,10 @@ static int glr_ctrl_apply_code_panel_follow_scroll_for_snapshot(
     const UiRenderSnapshot *snap,
     int *out_follow_doc_line,
     int *out_visible_lines);
-static void glr_ctrl_publish_gl_state_annotations(FlatProgramView program);
+
+/* Frame-lived storage for the right-click OpenGL-state popup report; the
+ * view handed to ui_gl_state_panel_render points here. */
+static ReplGlStateReport g_gl_state_report;
 
 /* Gap kept between the replay HUD's top edge and the overlay panel stack.
  * The easing itself lives in the overlay layout engine (overlay_layout.c). */
@@ -1885,7 +1889,6 @@ void glr_ctrl_display_frame(void) {
     replay_annotations_prepare(source_document_view(),
                                     &replay_annotations);
     glr_publish_replay_annotations(&replay_annotations);
-    glr_ctrl_publish_gl_state_annotations(flat_program);
     glr_ctrl_push_line_overrides();
     prof_end(PROF_SNAPSHOT_VIRTUAL_LINES);
 
@@ -2008,6 +2011,10 @@ void glr_ctrl_display_frame(void) {
      * fire on those frames. */
     if (cp_out.cursor_valid)
         ui_autocomplete_panel_render(&ui_snap, cp_out.cursor_px, cp_out.cursor_py);
+    {
+        UiGlStatePanelView gl_state_view = glr_ctrl_build_gl_state_panel_view();
+        ui_gl_state_panel_render(&gl_state_view);
+    }
     ui_menu_bar_render_example_dropdown(&ui_snap);
     {
         UiVariablePanelView var_view = ui_app_variable_panel_view(&ui_snap);
@@ -2290,49 +2297,36 @@ void glr_publish_replay_annotations(const ReplReplayAnnotationOutput *out) {
     }
 }
 
-static void glr_ctrl_publish_gl_state_annotations(FlatProgramView program) {
+/* Build the right-click OpenGL-state popup's per-frame view. Validates the
+ * anchor (still a committed empty source row — closes the popup otherwise),
+ * folds the current flat program up to the anchor into g_gl_state_report,
+ * and flips the stored GLUT click y into the renderer's y-up coords. */
+UiGlStatePanelView glr_ctrl_build_gl_state_panel_view(void) {
+    UiGlStatePanelView view;
     UiGlStateInspectorState inspector = ui_state_gl_state_inspector();
+    UiViewportState vp = ui_state_viewport();
     const GLCmd *anchor_cmd;
-    ReplGlStateReport report;
-    char text[MAX_VIRTUAL_LINE_TEXT];
-    char aux[MAX_VIRTUAL_LINE_AUX];
-    int i;
 
+    memset(&view, 0, sizeof(view));
+    view.window_w = vp.window_w;
+    view.window_h = vp.window_h;
     if (!inspector.visible)
-        return;
+        return view;
     anchor_cmd = repl_state_document_cmd_at(inspector.source_line_idx);
     if (!anchor_cmd || anchor_cmd->type != CMD_EMPTY) {
         ui_state_gl_state_inspector_close();
-        return;
+        return view;
     }
 
-    repl_gl_state_report_at_line(program, inspector.source_line_idx, &report);
-    editor_state_virtual_lines_append(
-        inspector.source_line_idx,
-        VIRTUAL_STYLE_GL_STATE_HEADER,
-        "OpenGL state before this line",
-        "  // current vs OpenGL 2.1 default");
-
-    if (report.count == 0) {
-        editor_state_virtual_lines_append(
-            inspector.source_line_idx,
-            VIRTUAL_STYLE_GL_STATE_DEFAULT_MATCH,
-            "No REPL-authored OpenGL state has been touched.", NULL);
-        return;
-    }
-
-    for (i = 0; i < report.count; i++) {
-        const ReplGlStateReportRow *row = &report.rows[i];
-        snprintf(text, sizeof(text), "%s = %s", row->name, row->current);
-        snprintf(aux, sizeof(aux), "  // default: %s%s",
-                 row->default_value,
-                 row->differs_from_default ? "" : " (same; explicitly set)");
-        editor_state_virtual_lines_append(
-            inspector.source_line_idx,
-            row->differs_from_default ? VIRTUAL_STYLE_GL_STATE_CHANGED
-                                      : VIRTUAL_STYLE_GL_STATE_DEFAULT_MATCH,
-            text, aux);
-    }
+    repl_gl_state_report_at_line(repl_state_flat_program_view(),
+                                 inspector.source_line_idx,
+                                 &g_gl_state_report);
+    view.visible = 1;
+    view.anchor_px = inspector.anchor_px;
+    view.anchor_py = vp.window_h - inspector.anchor_py;
+    view.scroll_rows = inspector.scroll_rows;
+    view.report = &g_gl_state_report;
+    return view;
 }
 
 static void glr_ctrl_host_editor_cursor_park(int line, int insert_mode) {
@@ -2869,6 +2863,18 @@ void glr_ctrl_open_color_picker(int line) {
     ui_layout_scene_rect(NULL, &sy, NULL, &sh);
     color_picker_start(line,
                        ui_state_viewport().window_h - (sy + sh / 2));
+}
+
+void glr_ctrl_open_gl_state_popup(int line) {
+    int cp_x = 0, cp_w = 0;
+    if (line < 0) return;
+    /* Synthetic anchor for headless capture runs (a real open records the
+     * right-click position): a quarter into the code panel, vertically
+     * centered. The per-frame view builder validates the line and closes
+     * the popup unless it is a committed empty row. */
+    ui_layout_code_panel_rect(&cp_x, NULL, &cp_w, NULL);
+    ui_state_gl_state_inspector_open(line, cp_x + cp_w / 4,
+                                     ui_state_viewport().window_h / 2);
 }
 
 void glr_ctrl_set_accum_passes(int count) {
