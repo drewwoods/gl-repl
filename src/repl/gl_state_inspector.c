@@ -50,10 +50,12 @@ typedef struct {
     float diffuse[4];
     float specular[4];
     float position[4];
+    float position_world[4];
     int ambient_touched;
     int diffuse_touched;
     int specular_touched;
     int position_touched;
+    int position_world_valid;
     ReplGlStateChangeSource ambient_source;
     ReplGlStateChangeSource diffuse_source;
     ReplGlStateChangeSource specular_source;
@@ -98,6 +100,8 @@ typedef struct {
     ReplGlStateChangeSource light_model_ambient_source;
 
     ReplGlTrackedLight lights[REPL_LIGHT_SLOT_COUNT];
+    float light_position_world_default[4];
+    int light_position_world_default_valid;
 
     int attrib_stack_depth;
     int attrib_stack_depth_touched;
@@ -157,6 +161,8 @@ typedef struct {
     int clip_plane_touched[REPL_GL_STATE_CLIP_PLANES];
     ReplGlStateChangeSource clip_plane_source[REPL_GL_STATE_CLIP_PLANES];
 } ReplGlTrackedState;
+
+static const float gl_state_light_position_default[4] = { 0, 0, 1, 0 };
 
 static const ReplEnumCommandSpec *gl_state_enum_spec(CmdType type) {
     const ReplEnumCommandSpec *spec = repl_enum_command_specs();
@@ -232,6 +238,84 @@ static void gl_state_mat_vec_mul(const float m[16], const float v[4],
         tmp[row] = sum;
     }
     memcpy(out, tmp, sizeof(tmp));
+}
+
+/* General 4x4 inverse in row-augmented form. The generated camera currently
+ * contains only rigid transforms, but keeping this general makes the derived
+ * world-space light position correct if the camera bridge later adds scale. */
+static int gl_state_mat_inverse(const float m[16], float out[16]) {
+    double aug[4][8];
+    int pivot, row, col;
+
+    for (row = 0; row < 4; row++) {
+        for (col = 0; col < 4; col++) {
+            aug[row][col] = (double)m[col * 4 + row];
+            aug[row][col + 4] = row == col ? 1.0 : 0.0;
+        }
+    }
+
+    for (pivot = 0; pivot < 4; pivot++) {
+        int best_row = pivot;
+        double best = fabs(aug[pivot][pivot]);
+        double divisor;
+        for (row = pivot + 1; row < 4; row++) {
+            double candidate = fabs(aug[row][pivot]);
+            if (candidate > best) {
+                best = candidate;
+                best_row = row;
+            }
+        }
+        if (best <= 1e-12)
+            return 0;
+        if (best_row != pivot) {
+            for (col = 0; col < 8; col++) {
+                double tmp = aug[pivot][col];
+                aug[pivot][col] = aug[best_row][col];
+                aug[best_row][col] = tmp;
+            }
+        }
+
+        divisor = aug[pivot][pivot];
+        for (col = 0; col < 8; col++)
+            aug[pivot][col] /= divisor;
+        for (row = 0; row < 4; row++) {
+            double factor;
+            if (row == pivot)
+                continue;
+            factor = aug[row][pivot];
+            for (col = 0; col < 8; col++)
+                aug[row][col] -= factor * aug[pivot][col];
+        }
+    }
+
+    for (row = 0; row < 4; row++)
+        for (col = 0; col < 4; col++)
+            out[col * 4 + row] = (float)aug[row][col + 4];
+    return 1;
+}
+
+/* Generated display setup finishes with the camera modelview active. Convert
+ * OpenGL's eye-coordinate light state back through that camera once, before
+ * user model transforms are folded, so the companion world row is stable at
+ * the coordinate in which the light illuminates the scene. This also maps an
+ * eye-space/headlight slot to its per-frame world position. */
+static void gl_state_capture_light_world_positions(ReplGlTrackedState *s) {
+    float inverse[16];
+    int i;
+
+    if (!s || !gl_state_mat_inverse(s->matrix_stack[s->matrix_top], inverse))
+        return;
+    gl_state_mat_vec_mul(inverse, gl_state_light_position_default,
+                         s->light_position_world_default);
+    s->light_position_world_default_valid = 1;
+    for (i = 0; i < REPL_LIGHT_SLOT_COUNT; i++) {
+        ReplGlTrackedLight *light = &s->lights[i];
+        if (!light->position_touched)
+            continue;
+        gl_state_mat_vec_mul(inverse, light->position,
+                             light->position_world);
+        light->position_world_valid = 1;
+    }
 }
 
 static void gl_state_mat_translate(float m[16], float x, float y, float z) {
@@ -873,7 +957,6 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
     static const float light_ambient_default[4] = { 0, 0, 0, 1 };
     static const float light_black_default[4] = { 0, 0, 0, 1 };
     static const float light_white_default[4] = { 1, 1, 1, 1 };
-    static const float light_position_default[4] = { 0, 0, 1, 0 };
     int i, face, prop;
 
     for (i = 0; i < s->cap_count; i++) {
@@ -967,9 +1050,18 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
             gl_state_report_set_last_source(out, light->specular_source);
         }
         if (light->position_touched) {
+            if (light->position_world_valid &&
+                s->light_position_world_default_valid) {
+                snprintf(name, sizeof(name),
+                         "GL_LIGHT%d_POSITION (world)", i);
+                gl_state_report_vec(out, name, light->position_world,
+                                    s->light_position_world_default, 4);
+                gl_state_report_set_last_source(out,
+                                                light->position_source);
+            }
             snprintf(name, sizeof(name), "GL_LIGHT%d_POSITION (eye)", i);
             gl_state_report_vec(out, name, light->position,
-                                light_position_default, 4);
+                                gl_state_light_position_default, 4);
             gl_state_report_set_last_source(out, light->position_source);
         }
     }
@@ -1131,6 +1223,7 @@ void repl_gl_state_report_at_line(FlatProgramView program,
         if (repl_generated_display_state_write_at(i, &write))
             gl_state_apply_generated_write(&state, &write, source);
     }
+    gl_state_capture_light_world_positions(&state);
 
     if (!program.cmds) {
         gl_state_append_report(&state, out);

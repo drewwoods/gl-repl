@@ -1301,6 +1301,7 @@ static void test_right_click_empty_line_toggles_gl_state_report(void) {
     int found_global_light_ambient = 0;
     int found_light_diffuse = 0;
     int found_light_position = 0;
+    int found_world_light_position = 0;
     int found_attrib_stack = 0;
     int i;
 
@@ -1365,6 +1366,9 @@ static void test_right_click_empty_line_toggles_gl_state_report(void) {
         if (strcmp(row->name, "GL_LIGHT0_POSITION (eye)") == 0 &&
             row->source.kind == REPL_GL_STATE_SOURCE_DISPLAY)
             found_light_position = 1;
+        if (strcmp(row->name, "GL_LIGHT0_POSITION (world)") == 0 &&
+            row->source.kind == REPL_GL_STATE_SOURCE_DISPLAY)
+            found_world_light_position = 1;
         if (strcmp(row->name, "GL_ATTRIB_STACK_DEPTH") == 0 &&
             row->source.kind == REPL_GL_STATE_SOURCE_DISPLAY)
             found_attrib_stack = 1;
@@ -1377,6 +1381,8 @@ static void test_right_click_empty_line_toggles_gl_state_report(void) {
     ASSERT_TRUE("popup includes init light color", found_light_diffuse);
     ASSERT_TRUE("popup includes display light position",
                 found_light_position);
+    ASSERT_TRUE("popup includes display world light position",
+                found_world_light_position);
     ASSERT_TRUE("popup includes display attribute stack",
                 found_attrib_stack);
 
