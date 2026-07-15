@@ -1685,6 +1685,7 @@ static void print_usage(const char *prog) {
     printf("  --help, -h             Show this help message\n");
     printf("  --dump-index N         Dump code-panel text for example N to stdout\n");
     printf("                         (used to regenerate golden fixture files)\n\n");
+    printf("  --update-golden        Regenerate/update all golden fixture files\n\n");
     printf("  --show-mismatch        Print expected/actual context around exact-text mismatches\n");
     printf("                         (alias: --diff)\n\n");
     printf("  --keep-temp            Do not delete the temp dir / export files on exit\n");
@@ -1697,10 +1698,7 @@ static void print_usage(const char *prog) {
     printf("  NO_COLOR               Disable ANSI color output\n\n");
     printf("Golden fixture files: tests/testdata/repl_examples_ui/NN.golden.txt\n\n");
     printf("To regenerate all golden fixtures after intentional changes:\n");
-    printf("  for i in $(seq -f '%%02g' 0 N); do\n");
-    printf("    %s --dump-index $i > tests/testdata/repl_examples_ui/$i.golden.txt\n",
-           prog);
-    printf("  done\n");
+    printf("  %s --update-golden\n\n", prog);
     printf("Or to regenerate a single fixture for example N:\n");
     printf("  %s --dump-index N > tests/testdata/repl_examples_ui/NN.golden.txt\n\n",
            prog);
@@ -1724,10 +1722,36 @@ static int dump_single_example_to_stdout(int idx) {
     return 0;
 }
 
+static int update_all_golden_fixtures(void) {
+    int count = repl_example_count();
+    printf("Updating %d golden fixture files...\n", count);
+    for (int idx = 0; idx < count; idx++) {
+        char fixture_path[512];
+        fixture_path_for_idx(idx, fixture_path, sizeof(fixture_path));
+
+        repl_eval_init_predef_vars();
+        load_example_for_test(idx);
+        char *dump = dump_current_code_panel_text();
+        if (!dump) {
+            fprintf(stderr, "error: failed to dump example %d\n", idx);
+            return 1;
+        }
+        if (!write_text_path(fixture_path, dump)) {
+            fprintf(stderr, "error: failed to write fixture file: %s\n", fixture_path);
+            free(dump);
+            return 1;
+        }
+        free(dump);
+    }
+    printf("Successfully updated all golden fixture files.\n");
+    return 0;
+}
+
 int main(int argc, char **argv) {
     char temp_dir[] = "/tmp/repl_examples_export.XXXXXX";
     const char *verbose_env = getenv("REPL_EXPORT_VERBOSE");
     int dump_idx = -1;
+    int update_golden = 0;
 
     g_verbose = verbose_env && verbose_env[0] && strcmp(verbose_env, "0") != 0;
     g_keep_temp = env_truthy("REPL_EXPORT_KEEP_TEMP");
@@ -1751,6 +1775,10 @@ int main(int argc, char **argv) {
             g_keep_temp = 1;
             continue;
         }
+        if (strcmp(argv[argi], "--update-golden") == 0) {
+            update_golden = 1;
+            continue;
+        }
         if (strcmp(argv[argi], "--dump-index") == 0) {
             if (argi + 1 >= argc) {
                 fprintf(stderr, "--dump-index requires an example index\n");
@@ -1764,6 +1792,9 @@ int main(int argc, char **argv) {
         print_usage(argv[0]);
         return 2;
     }
+
+    if (update_golden)
+        return update_all_golden_fixtures();
 
     if (dump_idx >= 0)
         return dump_single_example_to_stdout(dump_idx);
