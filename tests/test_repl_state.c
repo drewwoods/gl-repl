@@ -83,6 +83,12 @@ static void gl_state_test_fill_light(int slot, ReplExportLightInfo *out) {
     out->specular[3] = 1.0f;
 }
 
+static void gl_state_test_fill_eye_light(int slot,
+                                         ReplExportLightInfo *out) {
+    gl_state_test_fill_light(slot, out);
+    out->pos_is_eye_space = 1;
+}
+
 static void gl_state_test_fill_camera(ReplExportCameraBlock *block) {
     memset(block, 0, sizeof(*block));
     block->present = 1;
@@ -1196,6 +1202,17 @@ static void test_gl_state_report_includes_generated_fixed_function_state(void) {
                    REPL_GL_STATE_SOURCE_DISPLAY);
     }
 
+    row = gl_state_test_find_row(&report, "GL_LIGHT0_POSITION (world)");
+    ASSERT_TRUE("generated world light position is reported", row != NULL);
+    if (row) {
+        ASSERT_STR("world row reverses the camera modelview",
+                   row->current, "(1, 2, 3, 1)");
+        ASSERT_STR("world row converts the OpenGL default",
+                   row->default_value, "(0, 0, 1, 0)");
+        ASSERT_INT("world light position source is display",
+                   row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
+    }
+
     row = gl_state_test_find_row(&report, "GL_ATTRIB_STACK_DEPTH");
     ASSERT_TRUE("generated display attribute push is reported", row != NULL);
     if (row) {
@@ -1203,6 +1220,46 @@ static void test_gl_state_report_includes_generated_fixed_function_state(void) {
         ASSERT_STR("attribute stack depth default", row->default_value, "0");
         ASSERT_INT("attribute stack source is display", row->source.kind,
                    REPL_GL_STATE_SOURCE_DISPLAY);
+    }
+
+    repl_export_install_light_bridge(saved_light_bridge);
+    repl_export_install_camera_bridge(saved_camera_bridge);
+}
+
+static void test_gl_state_report_converts_eye_light_position_to_world(void) {
+    static const ReplExportLightBridge light_bridge = {
+        gl_state_test_fill_eye_light
+    };
+    static const ReplExportCameraBridge camera_bridge = {
+        .fill_display_block = gl_state_test_fill_camera
+    };
+    const ReplExportLightBridge *saved_light_bridge =
+        repl_export_light_bridge();
+    const ReplExportCameraBridge *saved_camera_bridge =
+        repl_export_camera_bridge();
+    FlatProgramView program;
+    ReplGlStateReport report;
+    const ReplGlStateReportRow *row;
+
+    printf("--- repl_state eye light world position ---\n");
+    repl_export_install_light_bridge(&light_bridge);
+    repl_export_install_camera_bridge(&camera_bridge);
+    memset(&program, 0, sizeof(program));
+    repl_gl_state_report_at_line(program, 0, &report);
+
+    row = gl_state_test_find_row(&report, "GL_LIGHT0_POSITION (eye)");
+    ASSERT_TRUE("eye-space light keeps submitted eye position", row != NULL);
+    if (row)
+        ASSERT_STR("eye-space light eye value", row->current,
+                   "(1, 2, 3, 1)");
+
+    row = gl_state_test_find_row(&report, "GL_LIGHT0_POSITION (world)");
+    ASSERT_TRUE("eye-space light gains derived world position", row != NULL);
+    if (row) {
+        ASSERT_STR("eye-space light follows camera into world",
+                   row->current, "(-9, 2, 3, 1)");
+        ASSERT_INT("derived world position retains display source",
+                   row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
     }
 
     repl_export_install_light_bridge(saved_light_bridge);
@@ -1230,6 +1287,7 @@ int main(void) {
     test_gl_state_report_tracks_explicit_writes_before_checkpoint();
     test_gl_state_report_uses_flat_call_provenance();
     test_gl_state_report_includes_generated_fixed_function_state();
+    test_gl_state_report_converts_eye_light_position_to_world();
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return g_harness.passed == g_harness.run ? 0 : 1;
 }
