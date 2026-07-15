@@ -77,8 +77,9 @@ static UiProfilePanelView pp_view(UiProfilePanelMode mode) {
 
 #define STATUSBAR_TRACE_PATH "build/test_ui_statusbar_trace.txt"
 
-static int statusbar_trace_count_line(const char *exact) {
+static int statusbar_trace_count_pair(const char *first, const char *second) {
     FILE *trace = fopen(STATUSBAR_TRACE_PATH, "r");
+    char previous[128] = "";
     char line[128];
     int count = 0;
 
@@ -88,8 +89,9 @@ static int statusbar_trace_count_line(const char *exact) {
         size_t len = strlen(line);
         if (len > 0 && line[len - 1] == '\n')
             line[len - 1] = '\0';
-        if (strcmp(line, exact) == 0)
+        if (strcmp(previous, first) == 0 && strcmp(line, second) == 0)
             count++;
+        snprintf(previous, sizeof previous, "%s", line);
     }
     fclose(trace);
     return count;
@@ -112,10 +114,13 @@ static UiHit ui_panels_hit_test_current_snapshot(int mx, int my,
 
 static void test_statusbar_command_count_overflow_color(void) {
     UiRenderSnapshot snap;
-    int normal_error_colors;
-    int normal_primary_colors;
-    int overflow_error_colors;
-    int overflow_primary_colors;
+    int normal_error_count_color;
+    int normal_primary_count_color;
+    int overflow_error_count_color;
+    int overflow_primary_count_color;
+    const char *count_raster = "glRasterPos2f 10 5";
+    const char *error_color = "glColor4f 1 0.557 0.494 1";
+    const char *primary_color = "glColor4f 0.847 0.847 0.847 1";
 
     printf("Testing statusbar command overflow color...\n");
     glr_ctrl_reset_all();
@@ -129,24 +134,28 @@ static void test_statusbar_command_count_overflow_color(void) {
     gl_stub_trace_open(STATUSBAR_TRACE_PATH);
     ui_repl_code_panel_render_with_chrome(&snap, NULL);
     gl_stub_trace_close();
-    normal_error_colors = statusbar_trace_count_line(
-        "glColor4f 1 0.557 0.494 1");
-    normal_primary_colors = statusbar_trace_count_line(
-        "glColor4f 0.847 0.847 0.847 1");
+    normal_error_count_color = statusbar_trace_count_pair(error_color,
+                                                          count_raster);
+    normal_primary_count_color = statusbar_trace_count_pair(primary_color,
+                                                            count_raster);
 
     snap.flat_program_overflow_count = MAX_FLAT_COMMANDS + 7;
     gl_stub_trace_open(STATUSBAR_TRACE_PATH);
     ui_repl_code_panel_render_with_chrome(&snap, NULL);
     gl_stub_trace_close();
-    overflow_error_colors = statusbar_trace_count_line(
-        "glColor4f 1 0.557 0.494 1");
-    overflow_primary_colors = statusbar_trace_count_line(
-        "glColor4f 0.847 0.847 0.847 1");
+    overflow_error_count_color = statusbar_trace_count_pair(error_color,
+                                                            count_raster);
+    overflow_primary_count_color = statusbar_trace_count_pair(primary_color,
+                                                              count_raster);
 
-    ASSERT_INT("overflow adds one error-text color for command count",
-               overflow_error_colors, normal_error_colors + 1);
-    ASSERT_INT("overflow replaces one primary command-count color",
-               overflow_primary_colors + 1, normal_primary_colors);
+    ASSERT_INT("normal command count uses primary color",
+               normal_primary_count_color, 1);
+    ASSERT_INT("normal command count does not use error color",
+               normal_error_count_color, 0);
+    ASSERT_INT("overflow command count uses error color",
+               overflow_error_count_color, 1);
+    ASSERT_INT("overflow command count does not use primary color",
+               overflow_primary_count_color, 0);
 }
 
 static void build_test_code_panel_layout(UiReplCodePanelLayout *layout,
