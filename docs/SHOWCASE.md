@@ -12,7 +12,6 @@
 
 ```bash
 ./gl-repl --example "Jellyfish (glDepthMask translucency)"   # by name (case-insensitive)
-./gl-repl --example 24                                       # or by 1-based index
 ./gl-repl --list-examples                                    # canonical names + indices
 ```
 
@@ -264,11 +263,11 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 <td width="33%" align="center">
 
 <!-- images/showcase/lit-cube.png
-     Still. Example 0 — lighting + material basics.
-     ./gl-repl --example "Lit cube" -->
+     Still. The gl-repl logo scene demonstrates lighting + material basics.
+     ./gl-repl --example "gl-repl logo" -->
 <img src="images/showcase/lit-cube.png" alt="A lit cube" width="100%">
 
-**Lit cube**
+**[Lit cube](../examples/scenes/glr-logo.glr)**
 <br><sub>lighting + material basics</sub>
 
 </td>

@@ -130,7 +130,7 @@ running headless process** by sending it `SIGUSR1`:
 ```bash
 brew install mesa mesa-glu                       # macOS deps (Linux: apt-get install libosmesa6-dev)
 make gl-repl FREEGLUT_OSMESA=1
-FREEGLUT_CAPTURE_FILE=/tmp/shot ./build/release-osmesa/gl-repl --example 9 --no-audio &
+FREEGLUT_CAPTURE_FILE=/tmp/shot ./build/release-osmesa/gl-repl --example "Parametric torus (nested for)" --no-audio &
 kill -USR1 $!                                    # writes /tmp/shot-0000.ppm
 magick /tmp/shot-0000.ppm shot.png               # PPM -> PNG to view
 ```
@@ -149,7 +149,7 @@ capture from a later point in the timeline, set the initial `t` with
 `--time <secs>` (or `GLR_TIME`):
 
 ```bash
-./build/release-osmesa/gl-repl --example 3 --time 5 --no-audio &
+./build/release-osmesa/gl-repl --example "Animated ring (for + t)" --time 5 --no-audio &
 ```
 
 **Posing the cursor.** Cursor-bound overlays (transform guides, vertex
@@ -168,8 +168,8 @@ rendered frame to a numbered PPM and exits after N frames.
 
 ```bash
 make gl-repl FREEGLUT_OSMESA=1
-scripts/record-gif.sh --example 3 --duration 3 --out ring        # ring.gif + ring.mp4
-scripts/record-gif.sh --example 9 --duration 4 --fps 30 --scale 600 --time 5 --out torus
+scripts/record-gif.sh --example "Animated ring (for + t)" --duration 3 --out ring        # ring.gif + ring.mp4
+scripts/record-gif.sh --example "Parametric torus (nested for)" --duration 4 --fps 30 --scale 600 --time 5 --out torus
 ```
 
 `--duration <secs>` × `--fps` sets the frame count; `--scale <w>` downsizes;
@@ -263,8 +263,8 @@ synthesized.
 Headless / scripted capture:
 
 ```bash
-./gl-repl --example 9 --export-ply out.ply                     # capture on frame 1, then exit
-./gl-repl --example 9 --export-ply out.ply --export-ply-srgb   # decode colors sRGB -> linear
+./gl-repl --example "Parametric torus (nested for)" --export-ply out.ply                     # capture on frame 1, then exit
+./gl-repl --example "Parametric torus (nested for)" --export-ply out.ply --export-ply-srgb   # decode colors sRGB -> linear
 ```
 
 Point and line primitives are preserved as PLY loose vertices / `edge`
