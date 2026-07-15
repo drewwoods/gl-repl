@@ -440,7 +440,7 @@ commands.
 | Module | Role |
 |--------|------|
 | `repl_command_spec` | Declarative command descriptors for fixed-arity GL-like commands |
-| `repl_command_descriptions` | Lookup facade over the generated, compiled-in GL command-help catalog authored in repository-level `command_descriptions.txt`; `glEnable`/`glDisable` resolve by capability argument |
+| `repl_command_descriptions` | Lookup facade over the generated, compiled-in GL command-help catalog authored in [`src/repl/command_descriptions.txt`](../src/repl/command_descriptions.txt); `glEnable`/`glDisable` resolve by capability argument |
 | `repl_parser` | Parses one source line into `ReplParsedLine { GLCmd cmd; char text[] }`; no storage ownership |
 | `repl_source_scope` | Computes source depth, indentation, and block context used by compile/format paths |
 | `repl_compile` | Pure validation layer. Converts proposed source text + context into parsed command changes or diagnostics. Never mutates state. Reads existing source through the read-only `source_document` view |

@@ -1,9 +1,10 @@
 /*
  * src/repl/command_descriptions.h - Compiled-in GL command help lookup.
  *
- * The authored catalog lives in command_descriptions.txt. The build validates
- * it against CmdType and the glEnable/glDisable capability table, then embeds
- * generated string records in command_descriptions.c.
+ * The authored catalog lives beside this facade in
+ * src/repl/command_descriptions.txt. The build validates it against CmdType
+ * and the glEnable/glDisable capability table, then embeds generated string
+ * records in command_descriptions.c.
  */
 #ifndef REPL_COMMAND_DESCRIPTIONS_H
 #define REPL_COMMAND_DESCRIPTIONS_H
