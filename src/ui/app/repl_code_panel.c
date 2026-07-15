@@ -1934,18 +1934,13 @@ static void repl_code_panel_statusbar_sep(int *tx, int sy, int sh) {
 }
 
 /* Right-aligned statusbar cluster: compact editor action chips
- * (undo/redo/copy/cut/paste/clear), a focus keycap, and an F1 help
- * keycap. Hovering any chip draws its text label as a tooltip above the
- * statusbar. The geometry is derived once here so renderer, hover, and
- * hit-test agree on the clickable boxes (window / GL coords,
- * bottom-left origin), with no arithmetic duplicated across passes. */
-static const char *k_statusbar_help_kbd = "F1";
-
-/* The focus keycap reads "^⇧F". '^' and 'F' are font glyphs; the ⇧
- * shift symbol has no bitmap-font glyph so it is line-drawn into the
- * middle cell. Width is therefore a fixed 3-cell count rather than a
- * strlen (a UTF-8 "⇧" would mis-measure). */
-#define STATUSBAR_FOCUS_KBD_CELLS 3
+ * (undo/redo/copy/cut/paste/clear), a code-focus chip, and a help
+ * chip. Every chip carries a 13x12 pixel-art bitmap glyph (no keycode
+ * text) so they read as icons; hovering any chip draws its text label
+ * as a tooltip above the statusbar. The geometry is derived once here
+ * so renderer, hover, and hit-test agree on the clickable boxes
+ * (window / GL coords, bottom-left origin), with no arithmetic
+ * duplicated across passes. */
 
 /* The left-aligned status segments ("N/M cmds", "Ln …", optional
  * "AA …"), built once so the renderer (drawing) and the hints
@@ -2078,10 +2073,10 @@ static ReplStatusbarHints repl_code_panel_statusbar_hints(
     h.ky         = sy + 3;
     h.kh         = sh - 6;
 
-    h.help_kw = (int)strlen(k_statusbar_help_kbd) * FONT_SMALL_W + 10;
+    h.help_kw = h.kh + 4;
     h.help_kx = sx + sw - CODE_MARGIN_X - h.help_kw;
 
-    h.focus_kw = STATUSBAR_FOCUS_KBD_CELLS * FONT_SMALL_W + 10;
+    h.focus_kw = h.kh + 4;
     h.focus_kx = h.help_kx - 12 - h.focus_kw;
     h.trash_kw    = h.kh + 4;
     h.trash_kx    = h.focus_kx - 12 - h.trash_kw;
@@ -2279,43 +2274,6 @@ static void repl_code_panel_draw_keycap(int kx, int ky, int kw, int kh) {
     glVertex2f((float)(kx + kw), (float)(ky + kh));
     glVertex2f((float)kx, (float)(ky + kh));
     glEnd();
-}
-
-/* The ⇧ shift symbol as an 8x13 1bpp bitmap, drawn with glBitmap at
- * raster (cx, gy) using the same cell metrics and 2px descent origin
- * as GLUT_BITMAP_8_BY_13 so it sits on the same baseline as the
- * adjacent '^' and 'F' font glyphs. Caller sets the color. */
-static void repl_code_panel_draw_shift_glyph(int cx, int gy) {
-    /* Rows are bottom-to-top (glBitmap scan order); bit 0x80 = leftmost
-     * pixel. Rows 0-2 are blank descent; an *outlined* up-arrow
-     * occupies rows 3-12 (hollow triangle head over a hollow stem). */
-    static const GLubyte shift_bits[13] = {
-        0x00, 0x00, 0x00,  /* rows 0-2   (baseline / descent)        */
-        0x3C,              /* row 3   stem foot   ..####..           */
-        0x24,              /* row 6               ..#..#..           */
-        0x24,              /* row 7               ..#..#..           */
-        0xE7,              /* row 8   shoulders   ###..###           */
-        0x81,              /* row 9   head edge   #......#           */
-        0x42,              /* row 10              .#....#.           */
-        0x24,              /* row 11              ..#..#..           */
-        0x18               /* row 12  apex        ...##...           */
-    };
-    GLint prev_align = 4;
-    glGetIntegerv(GL_UNPACK_ALIGNMENT, &prev_align);
-    glRasterPos2f((float)cx, (float)gy);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);   /* rows are 1 byte each */
-    glBitmap(8, 13, 0.0f, 2.0f, 0.0f, 0.0f, shift_bits);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, prev_align);
-}
-
-/* Draw the focus keycap glyphs "^⇧F" across three FONT_SMALL cells
- * starting at (gx, gy). Color is set by the caller. */
-static void repl_code_panel_draw_focus_kbd(int gx, int gy) {
-    char ch[2] = { '^', 0 };
-    gl2d_draw_string((float)gx, (float)gy, ch, FONT_SMALL);
-    repl_code_panel_draw_shift_glyph(gx + FONT_SMALL_W, gy);
-    ch[0] = 'F';
-    gl2d_draw_string((float)(gx + 2 * FONT_SMALL_W), (float)gy, ch, FONT_SMALL);
 }
 
 #define TRASH_ICON_W 13
@@ -2556,6 +2514,75 @@ static void repl_code_panel_draw_paste_icon(int kx, int ky, int kw, int kh) {
                                      ACTION_ICON_W, ACTION_ICON_H, paste_bits);
 }
 
+static void repl_code_panel_draw_focus_icon(int kx, int ky, int kw, int kh) {
+    /* 13x12 1bpp "focus frame" reticle: four L-shaped corner brackets
+     * framing an empty centre, the camera/crop "reframe" glyph. It reads
+     * as focusing on a region — apt for the code-focus toggle that hides
+     * the surrounding boilerplate chrome. Frame spans cols 1-11, rows
+     * 1-10 (1px pad all round); each arm is 3px. Rows bottom-to-top; bit
+     * 0x80 of byte 0 = leftmost pixel (col 0).
+     *
+     *  row 10:  .###.....###.   top arms   (cols 1-3, 9-11)
+     *  row 9:   .#.........#.   verticals
+     *  row 8:   .#.........#.
+     *  row 7:   .............
+     *  ...             (open centre)
+     *  row 3:   .............
+     *  row 2:   .#.........#.   verticals
+     *  row 1:   .#.........#.
+     *  row 0/11 blank (pad)                                             */
+    static const GLubyte focus_bits[ACTION_ICON_H * 2] = {
+        0x00, 0x00,  /* row 0  pad          */
+        0x40, 0x10,  /* row 1  verticals    */
+        0x40, 0x10,  /* row 2  verticals    */
+        0x70, 0x70,  /* row 3  bottom arms  */
+        0x00, 0x00,  /* row 4               */
+        0x00, 0x00,  /* row 5               */
+        0x00, 0x00,  /* row 6               */
+        0x00, 0x00,  /* row 7               */
+        0x70, 0x70,  /* row 8  top arms     */
+        0x40, 0x10,  /* row 9  verticals    */
+        0x40, 0x10,  /* row 10 verticals    */
+        0x00, 0x00   /* row 11 pad          */
+    };
+    repl_code_panel_draw_bitmap_icon(kx, ky, kw, kh,
+                                     ACTION_ICON_W, ACTION_ICON_H, focus_bits);
+}
+
+static void repl_code_panel_draw_help_icon(int kx, int ky, int kw, int kh) {
+    /* 13x12 1bpp question mark: a top arc sweeping down the right into a
+     * tail that arrives at a centred stem, a gap, then the dot below.
+     * Reads as "help". Rows bottom-to-top; bit 0x80 of byte 0 = col 0.
+     *
+     *  row 11:  ....#####....   arc top   (cols 4-8)
+     *  row 10:  ...#.....#...   arc sides (cols 3, 9)
+     *  row 9:   .........#...   right descent (col 9)
+     *  row 8:   ........#....   curve in  (col 8)
+     *  row 7:   .......#.....   curve in  (col 7)
+     *  row 6:   ......#......   tail meets stem (col 6)
+     *  row 5:   ......#......   stem
+     *  row 4:   ......#......   stem
+     *  row 3:   .............   gap
+     *  row 2:   ......#......   dot       (col 6)
+     *  row 1/0  blank                                                    */
+    static const GLubyte help_bits[ACTION_ICON_H * 2] = {
+        0x00, 0x00,  /* row 0             */
+        0x00, 0x00,  /* row 1             */
+        0x02, 0x00,  /* row 2  dot        */
+        0x00, 0x00,  /* row 3  gap        */
+        0x02, 0x00,  /* row 4  stem       */
+        0x02, 0x00,  /* row 5  stem       */
+        0x02, 0x00,  /* row 6  tail/stem  */
+        0x01, 0x00,  /* row 7  curve      */
+        0x00, 0x80,  /* row 8  curve      */
+        0x00, 0x40,  /* row 9  descent    */
+        0x10, 0x40,  /* row 10 arc sides  */
+        0x0F, 0x80   /* row 11 arc top    */
+    };
+    repl_code_panel_draw_bitmap_icon(kx, ky, kw, kh,
+                                     ACTION_ICON_W, ACTION_ICON_H, help_bits);
+}
+
 static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
                                            const UiTextPanelRect *slot) {
     ReplStatusbarHints h;
@@ -2711,21 +2738,22 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
         }
 
         if (h.focus_visible) {
-            /* With the persistent label gone, the glyph carries the
-             * state: accent while code focus is on, primary otherwise. */
+            /* The icon carries the state: accent while code focus is on,
+             * primary otherwise. */
             UiThemeToken focus_tok = snap->code_panel.code_focus
                 ? UI_TOK_ACCENT : UI_TOK_TEXT_PRIMARY;
             ui_clr(focus_tok);
-            repl_code_panel_draw_focus_kbd(h.focus_kx + 5, h.ky + 2);
+            repl_code_panel_draw_focus_icon(h.focus_kx, h.ky,
+                                            h.focus_kw, h.kh);
         }
 
         if (h.help_visible) {
-            /* Same active-glyph scheme as the focus keycap. */
+            /* Same active-icon scheme as the focus chip. */
             UiThemeToken help_tok = snap->help.visible
                 ? UI_TOK_ACCENT : UI_TOK_TEXT_PRIMARY;
             ui_clr(help_tok);
-            gl2d_draw_string((float)(h.help_kx + 5), (float)(h.ky + 2),
-                             k_statusbar_help_kbd, FONT_SMALL);
+            repl_code_panel_draw_help_icon(h.help_kx, h.ky,
+                                           h.help_kw, h.kh);
         }
         prof_end(PROF_CODE_PANEL_OVERLAY_STATUS_ACTIONS);
     }
