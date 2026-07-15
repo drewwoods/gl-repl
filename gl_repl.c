@@ -251,6 +251,10 @@ static void print_usage(const char *prog) {
             "               source line n (0-based; the line must be an\n"
             "               editable color command). Poses the picker for\n"
             "               captures - it otherwise needs a swatch click.\n"
+            "  GLR_OPEN_GL_STATE=<n>  Open the floating OpenGL-state popup\n"
+            "               anchored to source line n (0-based; the line\n"
+            "               must be a committed empty line). Poses the popup\n"
+            "               for captures - it otherwise needs a right-click.\n"
             "  GLR_OPEN_HELP=<tab>  Open the F1 help overlay on tab index\n"
             "               tab (0=Overview 1=Commands 2=Keys 3=About) on\n"
             "               the first frame. Poses the overlay for captures\n"
@@ -375,6 +379,20 @@ static void maybe_capture_open_color_picker(void) {
         glr_ctrl_open_color_picker(atoi(s));
 }
 
+/* Capture affordance, sibling of GLR_OPEN_COLOR_PICKER: GLR_OPEN_GL_STATE=
+ * <line> opens the floating OpenGL-state popup anchored to that source line
+ * (0-based; must be a committed empty line — the controller's per-frame
+ * view builder closes the popup otherwise). The popup only opens via a
+ * right-click, which a headless capture run has no mouse to deliver. */
+static void maybe_capture_open_gl_state(void) {
+    static int done = 0;
+    if (done) return;
+    done = 1;
+    const char *s = getenv("GLR_OPEN_GL_STATE");
+    if (s && *s)
+        glr_ctrl_open_gl_state_popup(atoi(s));
+}
+
 /* Capture affordance, sibling of GLR_OPEN_COLOR_PICKER: GLR_OPEN_HELP=<tab>
  * opens the F1 help overlay on the given tab index (0-based, clamped by
  * the tab-advance action) on the first displayed frame. The overlay
@@ -395,6 +413,7 @@ static void maybe_capture_open_help(void) {
 static void display_func(void) {
     maybe_capture_view_toggle();
     maybe_capture_open_color_picker();
+    maybe_capture_open_gl_state();
     maybe_capture_open_help();
     /* Trace the first two frames separately (gated on g_detailed_prof
      * — see --detailed-prof / GLR_DETAILED_PROF). The first frame

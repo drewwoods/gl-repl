@@ -51,10 +51,14 @@ void             ui_state_status_history_toggle(void);
 UiHelpState  ui_state_help(void);
 UiHelpState *ui_state_help_mut(void);
 
-/* Inline OpenGL-state report. */
+/* Floating OpenGL-state popup. anchor_px/anchor_py are the opening
+ * right-click position in GLUT screen coords (y-down); opening resets
+ * the wheel-scroll row offset. */
 UiGlStateInspectorState ui_state_gl_state_inspector(void);
-void ui_state_gl_state_inspector_open(int source_line_idx);
+void ui_state_gl_state_inspector_open(int source_line_idx,
+                                      int anchor_px, int anchor_py);
 void ui_state_gl_state_inspector_close(void);
+void ui_state_gl_state_inspector_set_scroll(int scroll_rows);
 
 /* Profile panel mode. */
 UiProfilePanelState  ui_state_profile_panel(void);

@@ -2,6 +2,7 @@
 #define GLR_CTRL_H
 
 #include "app/glr_defaults.h"  /* GlrExampleTagDefault */
+#include "ui/app/gl_state_panel.h"
 #include "ui/app/repl_code_panel.h"
 
 /* App-frame controller entrypoints. gl_repl.c forwards raw GLUT
@@ -33,6 +34,13 @@ void glr_ctrl_set_accum_passes(int count);
  * Startup hook for GLR_OPEN_COLOR_PICKER: the picker only opens via a
  * swatch click, so a headless capture can't otherwise pose it. */
 void glr_ctrl_open_color_picker(int line);
+
+/* Open the floating OpenGL-state popup anchored to source line `line`
+ * with a synthetic anchor position. Startup hook for GLR_OPEN_GL_STATE:
+ * the popup only opens via a right-click, so a headless capture can't
+ * otherwise pose it. The per-frame view builder closes it again unless
+ * the line is a committed empty row. */
+void glr_ctrl_open_gl_state_popup(int line);
 
 /* Apply tag-keyed presentation defaults from a (table, n) policy.
  * For each entry whose tag bit is set in `tag_mask`, call glr_config_set
@@ -97,6 +105,12 @@ void glr_ctrl_toggle_help(void);
 void glr_ctrl_close_help(void);
 
 void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap);
+
+/* Per-frame view for the right-click OpenGL-state popup table. Validates
+ * the anchor line (closing the popup if it is no longer a committed empty
+ * row), rebuilds the report from the live flat program, and resolves the
+ * popup anchor into y-up window coords. view.visible is 0 when closed. */
+UiGlStatePanelView glr_ctrl_build_gl_state_panel_view(void);
 void glr_ctrl_apply_code_panel_follow_scroll(
     const UiReplCodePanelLayout *layout);
 int glr_ctrl_code_panel_apply_scroll_follow_for_test(

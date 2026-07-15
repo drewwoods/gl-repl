@@ -1612,22 +1612,10 @@ static void repl_code_panel_add_virtual_rows(ReplCodePanelBuilder *builder,
             row->background_active = 1;
             row->background_color = repl_code_panel_rgba(0.10f, 0.25f, 0.15f, 0.35f);
             row->color = repl_code_panel_rgb(0.50f, 0.75f, 0.50f);
-        } else if (virtual_line->style == VIRTUAL_STYLE_REPLAY_EVAL) {
+        } else {
             row->background_active = 1;
             row->background_color = repl_code_panel_rgba(0.15f, 0.15f, 0.25f, 0.35f);
             row->color = repl_code_panel_rgb(0.50f, 0.60f, 0.80f);
-        } else if (virtual_line->style == VIRTUAL_STYLE_GL_STATE_HEADER) {
-            row->background_active = 1;
-            row->background_color = repl_code_panel_rgba(0.18f, 0.14f, 0.28f, 0.55f);
-            row->color = repl_code_panel_rgb(0.78f, 0.68f, 0.96f);
-        } else if (virtual_line->style == VIRTUAL_STYLE_GL_STATE_CHANGED) {
-            row->background_active = 1;
-            row->background_color = repl_code_panel_rgba(0.25f, 0.14f, 0.08f, 0.35f);
-            row->color = repl_code_panel_rgb(0.92f, 0.72f, 0.48f);
-        } else {
-            row->background_active = 1;
-            row->background_color = repl_code_panel_rgba(0.09f, 0.20f, 0.16f, 0.30f);
-            row->color = repl_code_panel_rgb(0.62f, 0.82f, 0.68f);
         }
 
         main_len = (int)strlen(virtual_line->text);

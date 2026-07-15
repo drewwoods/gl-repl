@@ -228,7 +228,7 @@ The cache is not an OpenGL display list, VBO, or already-submitted driver
 command stream; [`src/repl/executor.c`](../src/repl/executor.c) still walks the cached `GLCmd[]` and
 emits calls such as `glVertex2f(cmd.args[0], cmd.args[1])`.
 
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L119) rebuilds the flat program only when it is dirty.
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L133) rebuilds the flat program only when it is dirty.
 While animation is playing, advancing `t` marks the flat program dirty, so
 expressions that depend on `t` re-evaluate once for that frame. Accumulation
 AA, replay overlay passes, and vertex outlines reuse the same frame-level
@@ -726,7 +726,7 @@ Responsibilities:
 
 UI renderers draw from a single per-frame [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L70) (defined in
 [`src/ui/app/snapshot.h`](../src/ui/app/snapshot.h)) that the controller builds once via
-[`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L99) and passes to every `ui_*_render*()`
+[`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L107) and passes to every `ui_*_render*()`
 entry point. Render code does not call `repl_state_*()` directly. The
 `check-ui-no-repl-state-read` Makefile guard enforces the snapshot-shaped
 signature for audited renderers.
@@ -1145,7 +1145,7 @@ values through these seams:
   [`repl_load_apply_line()`](../src/repl/load.h#L78) transaction handles example, import, and
   tutorial loads.
 - **Reset:** [`repl_state_reset_program()`](../src/repl/state_owners.h#L121) resets core REPL
-  state. [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L54) resets the editor, UI, and peer
+  state. [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L62) resets the editor, UI, and peer
   subsystems when a program is replaced wholesale.
 - **App-service bootstrap:** Dump-only CLI paths bypass normal GL
   initialization but run the idempotent `glr_ctrl_install_app_services()`
@@ -1176,7 +1176,7 @@ executor, or GL-free export code.
 #### Runtime GL Capability Detection
 
 GL feature availability that varies by *runtime context* (not by build) is
-detected once in [`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L12) — the first point at which the GL
+detected once in [`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L13) — the first point at which the GL
 context is current — and pushed into the GL-free REPL/render3d layers through
 setters and [`Render3dRenderConfig`](../src/render3d/render_types.h#L135), never re-queried per frame.
 
@@ -1200,7 +1200,7 @@ own direct call is gated identically.
 **`GLR_NO_POINT_PARAMETER`** (environment variable, any non-empty value)
 forces the unsupported path on capable hardware — the only override; there
 is no build flag (it replaced the old compile-time `NO_POINT_PARAMETER`
-macro). When point attenuation ends up off, [`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L12) logs one
+macro). When point attenuation ends up off, [`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L13) logs one
 line to stderr that distinguishes the two causes:
 
 * env override — `"glPointParameterfv disabled via GLR_NO_POINT_PARAMETER=..."`
@@ -1224,7 +1224,7 @@ advertised    = has_timestamp
               || glutExtensionSupported("GL_EXT_timer_query")
 ```
 
-The entry points are runtime-loaded in [`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L12) (same
+The entry points are runtime-loaded in [`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L13) (same
 core-then-ARB/EXT-suffix loader pattern as `glPointParameterfv`) and
 injected into gpuprof as a function-pointer table, so the support module
 stays GL-header-free. Two measurement modes, picked at init by what
@@ -1254,7 +1254,7 @@ policy table in [`src/app/glr_prof.c`](../src/app/glr_prof.c)).
 **`GLR_NO_GPU_PROF`** (environment variable, any non-empty value)
 disables GPU timing entirely — the panel's GPU column reads `--`, and
 the Max column falls back to plain CPU. When GPU timing ends up off,
-[`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L12) logs one stderr line distinguishing the env
+[`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L13) logs one stderr line distinguishing the env
 override, a context that advertises timer queries but yields no loadable
 entry points, and a context with no timer-query support at all.
 
@@ -1296,7 +1296,7 @@ state and (b) read by more than one consumer in the frame loop:
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
 *opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L136) in
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L119) (snapshot/follow-scroll → render3d render →
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L133) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
 that frame — here a 2D/3D switch would let row-count see one
@@ -1323,7 +1323,7 @@ stored as a unique sentinel constant
 Per the rule above:
 
 * **Code panel (per frame):** the controller resolves the block once in
-  [`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L99) into
+  [`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L107) into
   `UiRenderSnapshot.reshape_proj_lines/_count`; both panel passes read
   that frozen copy and never touch the resolver. This is the canonical
   shape — UI reads the snapshot only (the symmetric counterpart of
@@ -1826,7 +1826,7 @@ When a module starts owning mutable REPL state, follow this template:
    actualizes back into state.
 4. Extend the ownership tests in the same change: keep
    [`repl_state_capture()`](../src/repl/state.h#L29), [`repl_state_restore()`](../src/repl/state.h#L30), and
-   [`repl_state_reset_program()`](../src/repl/state_owners.h#L121) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L54)
+   [`repl_state_reset_program()`](../src/repl/state_owners.h#L121) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L62)
    (full-world) current for runtime slices, and add focused behavior
    coverage in the module's own tests.
 

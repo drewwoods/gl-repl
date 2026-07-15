@@ -347,6 +347,7 @@ GLR_TIME=5 ./gl-repl                 # Initial animation time t in seconds (--ti
 GLR_EDIT_LINE=4 ./gl-repl scene.c    # Park the cursor on source line 4 (0-based, clamped) after load
 GLR_TYPE_KEYS='glVertex3f(1.2' ./gl-repl scene.c  # Feed keystrokes through the keyboard dispatch after load (headless capture of mid-typing states: partial-input guides, autocomplete ghost)
 GLR_OPEN_COLOR_PICKER=6 ./gl-repl scene.c  # Open the floating color picker on source line 6 (0-based; must be an editable color command) on the first displayed frame — capture hook, the picker otherwise needs a swatch click
+GLR_OPEN_GL_STATE=4 ./gl-repl scene.c  # Open the floating OpenGL-state popup on source line 4 (0-based; must be a committed empty line) on the first displayed frame — capture hook, the popup otherwise needs a right-click
 GLR_ACCUM_PASSES=16 ./gl-repl        # Accumulation AA sample count (1/2/4/8/12/16; capture hook)
 GLR_TICK_PER_FRAME=1 ./gl-repl       # Advance the complete fixed-dt simulation once per rendered frame (deterministic offline capture)
 GLR_VIEW_TOGGLE_AT=0.5,2.0 ./gl-repl # Toggle 2D/3D view mode at t=0.5s and t=2.0s (records the swatch transition headlessly)
@@ -458,7 +459,7 @@ audio-thread hitches (the kind seen on slow Linux disks):
 
 ### `GLR_NO_POINT_PARAMETER`
 
-Runtime env var (any non-empty value). [`glr_ctrl_init_gl()`](src/app/glr_ctrl.h#L12) auto-detects
+Runtime env var (any non-empty value). [`glr_ctrl_init_gl()`](src/app/glr_ctrl.h#L13) auto-detects
 `glPointParameterfv` support from the live GL context
 (`GL_VERSION >= 1.4 || GL_ARB/EXT_point_parameters`); this var forces the
 unsupported path on capable hardware so the fallback stays testable.
@@ -599,7 +600,7 @@ explaining why the extra background is useful.
 | [`src/app/glr_debug.h`](src/app/glr_debug.h) | Debug dump public API |
 | [`src/subsystems/replay/replay_annotations.c`](src/subsystems/replay/replay_annotations.c) | Replay-time source annotations, variable substitution, evaluated command display text |
 | [`src/subsystems/replay/replay_annotations.h`](src/subsystems/replay/replay_annotations.h) | Code-panel replay annotation API |
-| [`src/ui/app/snapshot.h`](src/ui/app/snapshot.h) | [`UiRenderSnapshot`](src/ui/app/snapshot.h#L70) — frame-frozen bundle built once per frame by [`glr_ctrl_build_ui_snapshot()`](src/app/glr_ctrl.h#L99) |
+| [`src/ui/app/snapshot.h`](src/ui/app/snapshot.h) | [`UiRenderSnapshot`](src/ui/app/snapshot.h#L70) — frame-frozen bundle built once per frame by [`glr_ctrl_build_ui_snapshot()`](src/app/glr_ctrl.h#L107) |
 | [`src/ui/app/editor.h`](src/ui/app/editor.h) | Per-frame editor-overlay snapshots (swatches, sliders, highlights) pushed by the controller |
 | [`src/ui/subsystems/replay_hud.c`](src/ui/subsystems/replay_hud.c) | 2D replay status HUD (feature-UI under the `replay_ui_*` prefix; reads replay peer snapshot) |
 | [`src/ui/subsystems/replay_hud.h`](src/ui/subsystems/replay_hud.h) | Replay HUD render entrypoint |
@@ -623,6 +624,8 @@ explaining why the extra background is useful.
 | [`src/ui/subsystems/variable_panel.h`](src/ui/subsystems/variable_panel.h) | Variable panel render/rect/hit API |
 | [`src/ui/app/autocomplete_panel.c`](src/ui/app/autocomplete_panel.c) | Floating autocomplete popup renderer (reads autocomplete state populated by [`src/app/glr_completion.c`](src/app/glr_completion.c)) |
 | [`src/ui/app/autocomplete_panel.h`](src/ui/app/autocomplete_panel.h) | Autocomplete popup render entrypoint |
+| [`src/ui/app/gl_state_panel.c`](src/ui/app/gl_state_panel.c) | Floating OpenGL-state popup table renderer + pure hit-test/scroll geometry (right-click an empty line; consumes the controller-built view over [`src/repl/gl_state_inspector.c`](src/repl/gl_state_inspector.c)'s report) |
+| [`src/ui/app/gl_state_panel.h`](src/ui/app/gl_state_panel.h) | GL-state popup view type + render/hit-test/max-scroll entrypoints |
 | [`src/editor/inline_rename.c`](src/editor/inline_rename.c) | Inline scene-rename input buffer and key handling (status-bar overlay) |
 | [`src/editor/inline_rename.h`](src/editor/inline_rename.h) | Rename begin/active/cancel/key/special API |
 | [`src/subsystems/variable_panel/variable_panel_drag.c`](src/subsystems/variable_panel/variable_panel_drag.c) | Variable slider drag transaction: begin/motion/reset, linear/log value writeback. The drag is split so motion never mutates source: each motion compiles `repl_compile_set_predef_value_live` (predef `SET_VALUE` only) and records the applied value on the peer via `variable_panel_drag_note_applied_value`; mouse-up compiles `repl_compile_persist_predef_value` once (declaration rewrite, no predef op) — so a 100-event drag marks the source dirty exactly once, at the end, and captures exactly one (coalesced) undo snapshot, at the start. A no-motion release, or a variable with no declaration row, does nothing |
@@ -793,7 +796,7 @@ explaining why the extra background is useful.
 
 ### Rendering Pipeline
 
-[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L119) in [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c) drives each frame.
+[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L133) in [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c) drives each frame.
 [`gl_repl.c`](gl_repl.c) registers the GLUT display callback and forwards directly — there
 is no shim layer.
 1. Rebuild autonormals and flat program if dirty; save predef var values;

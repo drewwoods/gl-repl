@@ -1186,11 +1186,10 @@ static void test_right_click_code_panel_does_not_start_camera_pan(void) {
 
 static void test_right_click_empty_line_toggles_gl_state_report(void) {
     UiHit hit;
-    const UiVirtualLineList *virtual_lines;
+    UiGlStatePanelView view;
     int blank_line;
     int x = -1;
     int y = -1;
-    int found_header = 0;
     int found_color = 0;
     int i;
 
@@ -1211,26 +1210,75 @@ static void test_right_click_empty_line_toggles_gl_state_report(void) {
                ui_state_gl_state_inspector().visible, 1);
     ASSERT_INT("state report anchored to clicked line",
                ui_state_gl_state_inspector().source_line_idx, blank_line);
+    ASSERT_INT("popup anchor keeps click x",
+               ui_state_gl_state_inspector().anchor_px, x);
+    ASSERT_INT("popup anchor keeps click y",
+               ui_state_gl_state_inspector().anchor_py, y);
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
 
     glr_ctrl_display_frame();
-    virtual_lines = editor_state_virtual_lines();
-    for (i = 0; i < virtual_lines->count; i++) {
-        const UiVirtualLine *line = &virtual_lines->items[i];
-        if (line->after_line_idx != blank_line)
-            continue;
-        if (line->style == VIRTUAL_STYLE_GL_STATE_HEADER)
-            found_header = 1;
-        if (strstr(line->text, "GL_CURRENT_COLOR") != NULL)
+    view = glr_ctrl_build_gl_state_panel_view();
+    ASSERT_INT("popup view visible for valid anchor", view.visible, 1);
+    ASSERT_TRUE("popup view carries a report", view.report != NULL);
+    ASSERT_TRUE("popup report has touched state",
+                view.report && view.report->count > 0);
+    for (i = 0; view.report && i < view.report->count; i++) {
+        if (strcmp(view.report->rows[i].name, "GL_CURRENT_COLOR") == 0)
             found_color = 1;
     }
-    ASSERT_TRUE("blank report publishes inline header", found_header);
-    ASSERT_TRUE("blank report includes touched color state", found_color);
+    ASSERT_TRUE("popup report includes touched color state", found_color);
 
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
     ASSERT_INT("second right-click on anchor closes report",
                ui_state_gl_state_inspector().visible, 0);
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    view = glr_ctrl_build_gl_state_panel_view();
+    ASSERT_INT("popup view hidden after close", view.visible, 0);
+
+    /* Left-click routing: a click on the popup surface is swallowed (the
+     * popup stays open); a click anywhere off it dismisses the popup. */
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    ASSERT_INT("third right-click reopens report",
+               ui_state_gl_state_inspector().visible, 1);
+    view = glr_ctrl_build_gl_state_panel_view();
+    {
+        int in_x = -1, in_y = -1, out_x = -1, out_y = -1;
+        int win_w = ui_state_viewport().window_w;
+        int win_h = ui_state_viewport().window_h;
+        int px, py;
+        for (py = 4; py < win_h - 4 && in_x < 0; py += 8) {
+            for (px = 4; px < win_w - 4 && in_x < 0; px += 8) {
+                if (ui_gl_state_panel_hit_test(&view, px, py)) {
+                    in_x = px;
+                    in_y = py;
+                }
+            }
+        }
+        /* Off-popup point kept inside the code panel and below the
+         * menu-bar / tab band so the fall-through click stays inert. */
+        for (py = 80; py < win_h - 4 && out_x < 0; py += 8) {
+            for (px = 4; px < win_w - 4 && out_x < 0; px += 8) {
+                if (!ui_gl_state_panel_hit_test(&view, px, py) &&
+                    editor_input_point_in_code_panel(px, py)) {
+                    out_x = px;
+                    out_y = py;
+                }
+            }
+        }
+        ASSERT_TRUE("found a point on the popup", in_x >= 0);
+        ASSERT_TRUE("found a point off the popup", out_x >= 0);
+
+        glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, in_x, in_y);
+        ASSERT_INT("left-click on popup keeps it open",
+                   ui_state_gl_state_inspector().visible, 1);
+        glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, in_x, in_y);
+
+        glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, out_x, out_y);
+        ASSERT_INT("left-click away dismisses popup",
+                   ui_state_gl_state_inspector().visible, 0);
+        glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, out_x, out_y);
+    }
 
     ASSERT_TRUE("found non-empty source row hit",
                 find_code_text_hit_for_line(0, &hit, &x, &y));
@@ -1238,6 +1286,58 @@ static void test_right_click_empty_line_toggles_gl_state_report(void) {
     ASSERT_INT("right-click non-empty line does not open report",
                ui_state_gl_state_inspector().visible, 0);
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+}
+
+/* Pure popup-geometry checks: a report taller than the window solves to a
+ * scrollable row window, and the hit-test frame matches the solved rect. */
+static void test_gl_state_popup_scroll_geometry(void) {
+    static ReplGlStateReport report;
+    UiGlStatePanelView view;
+    int max_scroll;
+    int i;
+
+    printf("--- imrepl_ctrl OpenGL-state popup scroll geometry ---\n");
+
+    prepare_code_panel_mouse_fixture();
+    memset(&report, 0, sizeof(report));
+    report.count = REPL_GL_STATE_REPORT_MAX_ROWS;
+    for (i = 0; i < report.count; i++) {
+        snprintf(report.rows[i].name, sizeof(report.rows[i].name),
+                 "GL_ROW_%02d", i);
+        snprintf(report.rows[i].current, sizeof(report.rows[i].current), "1");
+        snprintf(report.rows[i].default_value,
+                 sizeof(report.rows[i].default_value), "0");
+        report.rows[i].differs_from_default = 1;
+    }
+
+    memset(&view, 0, sizeof(view));
+    view.visible = 1;
+    view.window_w = 800;
+    view.window_h = 300;
+    view.anchor_px = 100;
+    view.anchor_py = 150;
+    view.report = &report;
+
+    max_scroll = ui_gl_state_panel_max_scroll(&view);
+    ASSERT_TRUE("overflowing report is scrollable", max_scroll > 0);
+    ASSERT_TRUE("some rows stay visible at full scroll",
+                max_scroll < report.count);
+
+    /* The popup frame answers hits; far-off points do not. Scrolling to
+     * the end must not move the solved frame. */
+    ASSERT_TRUE("point on popup frame hits",
+                ui_gl_state_panel_hit_test(&view, 130, 150));
+    ASSERT_TRUE("far point misses popup",
+                !ui_gl_state_panel_hit_test(&view, 780, 150));
+    view.scroll_rows = max_scroll;
+    ASSERT_TRUE("scrolled popup keeps its frame",
+                ui_gl_state_panel_hit_test(&view, 130, 150));
+
+    view.visible = 0;
+    ASSERT_TRUE("hidden view never hits",
+                !ui_gl_state_panel_hit_test(&view, 130, 150));
+    ASSERT_INT("hidden view has no scroll range",
+               ui_gl_state_panel_max_scroll(&view), 0);
 }
 
 static void test_left_click_code_panel_exits_search_and_places_cursor(void) {
@@ -3422,6 +3522,7 @@ int main(void) {
     test_pointer_state_tracks_controller_mouse_routes();
     test_right_click_code_panel_does_not_start_camera_pan();
     test_right_click_empty_line_toggles_gl_state_report();
+    test_gl_state_popup_scroll_geometry();
     test_left_click_code_panel_exits_search_and_places_cursor();
     test_tick_per_frame_scheduling();
     test_overlay_transition_machine_wiring();

@@ -682,6 +682,8 @@ int glr_ctrl_router_handle_glut_scroll_wheel_button(int button, int state, int x
     } else if (ui_menu_bar_handle_wheel_scroll(x, y, direction)) {
         /* Consumed by an open, overflowing menu flyout (same offset sign
          * as the code-panel scroll path below). */
+    } else if (glr_ctrl_router_handle_gl_state_popup_wheel(x, y, direction)) {
+        /* Consumed by the OpenGL-state popup under the pointer. */
     } else if (editor_input_point_in_code_panel(x, y)) {
         editor_input_code_panel_scroll(direction);
     } else {
@@ -1097,8 +1099,57 @@ static int glr_ctrl_router_handle_right_numeric_swatch_press(int x, int y) {
     return route_numeric_swatch_hit(&hit, numeric_swatch_scale(1));
 }
 
-/* Right-click over a committed empty source row toggles the inline OpenGL
- * state report anchored there. Other code-panel right-clicks remain inert so
+/* Left press vs the floating OpenGL-state popup: a click inside the open
+ * popup is consumed (it is a display-only surface — the click must not fall
+ * through to the code-panel rows behind it); a click anywhere else dismisses
+ * the popup and is NOT consumed, so it still routes normally afterwards
+ * (the color picker's click-away convention). Skipped while a menu dropdown
+ * is open — dropdowns render above the popup, so they win their clicks. */
+static int glr_ctrl_router_handle_gl_state_popup_left_press(int x, int y) {
+    UiGlStatePanelView view;
+    if (!ui_state_gl_state_inspector().visible)
+        return 0;
+    if (ui_menu_bar_menu_dropdown_is_open())
+        return 0;
+    view = glr_ctrl_build_gl_state_panel_view();
+    if (!view.visible)
+        return 0;
+    if (ui_gl_state_panel_hit_test(&view, x, y)) {
+        editor_request_redraw();
+        return 1;
+    }
+    ui_state_gl_state_inspector_close();
+    editor_request_redraw();
+    return 0;
+}
+
+/* Wheel over the floating OpenGL-state popup scrolls its report rows.
+ * Consumed whenever the pointer is over the open popup — even when there
+ * is nothing left to scroll — so the wheel never leaks to the code panel /
+ * camera behind it (menu-flyout convention). delta > 0 scrolls toward
+ * later rows. */
+static int glr_ctrl_router_handle_gl_state_popup_wheel(int x, int y,
+                                                       int delta) {
+    UiGlStatePanelView view;
+    UiGlStateInspectorState inspector = ui_state_gl_state_inspector();
+    int max_scroll, scroll;
+
+    if (!inspector.visible)
+        return 0;
+    view = glr_ctrl_build_gl_state_panel_view();
+    if (!view.visible || !ui_gl_state_panel_hit_test(&view, x, y))
+        return 0;
+    max_scroll = ui_gl_state_panel_max_scroll(&view);
+    scroll = inspector.scroll_rows + delta;
+    if (scroll > max_scroll) scroll = max_scroll;
+    if (scroll < 0) scroll = 0;
+    ui_state_gl_state_inspector_set_scroll(scroll);
+    editor_request_redraw();
+    return 1;
+}
+
+/* Right-click over a committed empty source row toggles the floating OpenGL
+ * state popup anchored there. Other code-panel right-clicks remain inert so
  * they never forward to the scene camera, where right-drag starts pan.
  * Numeric swatches, Config right-click, and variable sliders are routed before
  * this helper so their right-button behavior stays active. */
@@ -1125,7 +1176,7 @@ static int glr_ctrl_router_handle_right_code_panel_press(int button, int state,
             inspector.source_line_idx == hit.line_idx)
             ui_state_gl_state_inspector_close();
         else
-            ui_state_gl_state_inspector_open(hit.line_idx);
+            ui_state_gl_state_inspector_open(hit.line_idx, x, y);
     }
 
     color_picker_stop();
@@ -1681,6 +1732,13 @@ void glr_ctrl_mouse(int button, int state, int x, int y) {
             glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
             return;
         }
+        /* Floating OpenGL-state popup: swallow clicks on its surface,
+         * dismiss on click-away (the handler returns 0 for the latter so
+         * the click still routes below). */
+        if (glr_ctrl_router_handle_gl_state_popup_left_press(x, y)) {
+            glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+            return;
+        }
         /* Classify the click via the canonical hit-test, then route by
          * UiHit.kind to the owning subsystem. The hit-test covers
          * variable panel, color picker, menu bar, code panel (including
@@ -1833,6 +1891,10 @@ void glr_ctrl_mousewheel(int wheel, int direction, int x, int y) {
      * sign as the code-panel scroll just below (-direction). */
     if (ui_menu_bar_handle_wheel_scroll(x, y, -direction)) {
         editor_request_redraw();
+        glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
+        return;
+    }
+    if (glr_ctrl_router_handle_gl_state_popup_wheel(x, y, -direction)) {
         glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
         return;
     }
