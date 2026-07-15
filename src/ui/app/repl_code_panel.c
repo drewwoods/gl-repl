@@ -1934,14 +1934,12 @@ static void repl_code_panel_statusbar_sep(int *tx, int sy, int sh) {
 }
 
 /* Right-aligned statusbar cluster: compact editor action chips
- * (undo/redo/copy/cut/paste/clear), a "[focus] focus" keycap+label, and
- * the existing "[F1] help" keycap+label. The geometry is derived once
- * here so the renderer and the hit-test agree on the clickable chip
- * boxes (window / GL coords, bottom-left origin), with no arithmetic
- * duplicated across the two passes. */
-static const char *k_statusbar_help_kbd  = "F1";
-static const char *k_statusbar_help_lbl  = "help";
-static const char *k_statusbar_focus_lbl = "focus";
+ * (undo/redo/copy/cut/paste/clear), a focus keycap, and an F1 help
+ * keycap. Hovering any chip draws its text label as a tooltip above the
+ * statusbar. The geometry is derived once here so renderer, hover, and
+ * hit-test agree on the clickable boxes (window / GL coords,
+ * bottom-left origin), with no arithmetic duplicated across passes. */
+static const char *k_statusbar_help_kbd = "F1";
 
 /* The focus keycap reads "^⇧F". '^' and 'F' are font glyphs; the ⇧
  * shift symbol has no bitmap-font glyph so it is line-drawn into the
@@ -2048,8 +2046,8 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
 
 typedef struct {
     int text_y;
-    int help_kx, help_lbl_x, help_kw;
-    int focus_kx, focus_lbl_x, focus_kw;
+    int help_kx, help_kw;
+    int focus_kx, focus_kw;
     int trash_kx, trash_kw;
     int copy_kx, copy_kw;
     int cut_kx, cut_kw;
@@ -2070,8 +2068,6 @@ typedef struct {
 static ReplStatusbarHints repl_code_panel_statusbar_hints(
         const UiRenderSnapshot *snap, int sx, int sy, int sw, int sh) {
     ReplStatusbarHints h;
-    int help_lbl_w  = (int)strlen(k_statusbar_help_lbl)  * FONT_SMALL_W;
-    int focus_lbl_w = (int)strlen(k_statusbar_focus_lbl) * FONT_SMALL_W;
     int left_end    = repl_code_panel_statusbar_left(snap, sx).right_edge;
     int gap         = FONT_SMALL_W;   /* one cell of breathing room */
 
@@ -2079,13 +2075,11 @@ static ReplStatusbarHints repl_code_panel_statusbar_hints(
     h.ky         = sy + 3;
     h.kh         = sh - 6;
 
-    h.help_kw    = (int)strlen(k_statusbar_help_kbd) * FONT_SMALL_W + 10;
-    h.help_lbl_x = sx + sw - CODE_MARGIN_X - help_lbl_w;
-    h.help_kx    = h.help_lbl_x - h.help_kw - 6;
+    h.help_kw = (int)strlen(k_statusbar_help_kbd) * FONT_SMALL_W + 10;
+    h.help_kx = sx + sw - CODE_MARGIN_X - h.help_kw;
 
-    h.focus_kw    = STATUSBAR_FOCUS_KBD_CELLS * FONT_SMALL_W + 10;
-    h.focus_lbl_x = h.help_kx - 12 - focus_lbl_w;
-    h.focus_kx    = h.focus_lbl_x - h.focus_kw - 6;
+    h.focus_kw = STATUSBAR_FOCUS_KBD_CELLS * FONT_SMALL_W + 10;
+    h.focus_kx = h.help_kx - 12 - h.focus_kw;
     h.trash_kw    = h.kh + 4;
     h.trash_kx    = h.focus_kx - 12 - h.trash_kw;
     h.paste_kw    = h.kh + 4;
@@ -2118,6 +2112,155 @@ static int repl_code_panel_point_in_rect(int px, int py,
                                          int rx, int ry, int rw, int rh) {
     return px >= rx && px < rx + rw &&
            py >= ry && py < ry + rh;
+}
+
+static int repl_code_panel_statusbar_hint_hit_kind(
+        const ReplStatusbarHints *h, int mx, int gl_y) {
+    if (h->trash_visible &&
+        repl_code_panel_point_in_rect(mx, gl_y,
+                                      h->trash_kx, h->ky,
+                                      h->trash_kw, h->kh))
+        return UI_HIT_CODE_CLEAR_ALL;
+    if (h->cut_visible &&
+        repl_code_panel_point_in_rect(mx, gl_y,
+                                      h->cut_kx, h->ky,
+                                      h->cut_kw, h->kh))
+        return UI_HIT_CODE_CUT;
+    if (h->paste_visible &&
+        repl_code_panel_point_in_rect(mx, gl_y,
+                                      h->paste_kx, h->ky,
+                                      h->paste_kw, h->kh))
+        return UI_HIT_CODE_PASTE;
+    if (h->copy_visible &&
+        repl_code_panel_point_in_rect(mx, gl_y,
+                                      h->copy_kx, h->ky,
+                                      h->copy_kw, h->kh))
+        return UI_HIT_CODE_COPY;
+    if (h->redo_visible &&
+        repl_code_panel_point_in_rect(mx, gl_y,
+                                      h->redo_kx, h->ky,
+                                      h->redo_kw, h->kh))
+        return UI_HIT_CODE_REDO;
+    if (h->undo_visible &&
+        repl_code_panel_point_in_rect(mx, gl_y,
+                                      h->undo_kx, h->ky,
+                                      h->undo_kw, h->kh))
+        return UI_HIT_CODE_UNDO;
+    if (h->focus_visible &&
+        repl_code_panel_point_in_rect(mx, gl_y,
+                                      h->focus_kx, h->ky,
+                                      h->focus_kw, h->kh))
+        return UI_HIT_CODE_FOCUS_TOGGLE;
+    if (h->help_visible &&
+        repl_code_panel_point_in_rect(mx, gl_y,
+                                      h->help_kx, h->ky,
+                                      h->help_kw, h->kh))
+        return UI_HIT_HELP_TOGGLE;
+    return UI_HIT_CODE_PANEL_CHROME;
+}
+
+typedef struct {
+    const char *text;
+    int anchor_x;
+    int anchor_w;
+} ReplStatusbarTooltip;
+
+static int repl_code_panel_statusbar_tooltip_for_hit(
+        int hit_kind, const ReplStatusbarHints *h,
+        ReplStatusbarTooltip *tooltip) {
+    if (!tooltip)
+        return 0;
+
+    switch (hit_kind) {
+    case UI_HIT_CODE_UNDO:
+        tooltip->text = "Undo";
+        tooltip->anchor_x = h->undo_kx;
+        tooltip->anchor_w = h->undo_kw;
+        return 1;
+    case UI_HIT_CODE_REDO:
+        tooltip->text = "Redo";
+        tooltip->anchor_x = h->redo_kx;
+        tooltip->anchor_w = h->redo_kw;
+        return 1;
+    case UI_HIT_CODE_COPY:
+        tooltip->text = "Copy";
+        tooltip->anchor_x = h->copy_kx;
+        tooltip->anchor_w = h->copy_kw;
+        return 1;
+    case UI_HIT_CODE_CUT:
+        tooltip->text = "Cut";
+        tooltip->anchor_x = h->cut_kx;
+        tooltip->anchor_w = h->cut_kw;
+        return 1;
+    case UI_HIT_CODE_PASTE:
+        tooltip->text = "Paste";
+        tooltip->anchor_x = h->paste_kx;
+        tooltip->anchor_w = h->paste_kw;
+        return 1;
+    case UI_HIT_CODE_CLEAR_ALL:
+        tooltip->text = "Clear all";
+        tooltip->anchor_x = h->trash_kx;
+        tooltip->anchor_w = h->trash_kw;
+        return 1;
+    case UI_HIT_CODE_FOCUS_TOGGLE:
+        tooltip->text = "Code focus";
+        tooltip->anchor_x = h->focus_kx;
+        tooltip->anchor_w = h->focus_kw;
+        return 1;
+    case UI_HIT_HELP_TOGGLE:
+        tooltip->text = "Help";
+        tooltip->anchor_x = h->help_kx;
+        tooltip->anchor_w = h->help_kw;
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static void repl_code_panel_draw_statusbar_tooltip(
+        const UiRenderSnapshot *snap, const ReplStatusbarHints *h,
+        int cp_x, int cp_w, int sy, int sh) {
+    ReplStatusbarTooltip tooltip;
+    int gl_y;
+    int hit_kind;
+    int tw;
+    int th = FONT_SMALL_H + 8;
+    int tx;
+    int ty = sy + sh + 5;
+    int min_x = cp_x + 4;
+    int max_x;
+
+    if (!snap || !h || cp_w <= 0)
+        return;
+
+    gl_y = snap->viewport.window_h - snap->pointer.mouse_y;
+    hit_kind = repl_code_panel_statusbar_hint_hit_kind(
+        h, snap->pointer.mouse_x, gl_y);
+    if (!repl_code_panel_statusbar_tooltip_for_hit(hit_kind, h, &tooltip))
+        return;
+
+    tw = (int)strlen(tooltip.text) * FONT_SMALL_W + 12;
+    tx = tooltip.anchor_x + (tooltip.anchor_w - tw) / 2;
+    max_x = cp_x + cp_w - tw - 4;
+    if (max_x < min_x)
+        return;
+    if (tx < min_x)
+        tx = min_x;
+    if (tx > max_x)
+        tx = max_x;
+
+    ui_clr_a(UI_TOK_RAISED, 0.98f);
+    glRectf((float)tx, (float)ty, (float)(tx + tw), (float)(ty + th));
+    ui_clr(UI_TOK_BORDER);
+    glBegin(GL_LINE_LOOP);
+    glVertex2f((float)tx + 0.5f, (float)ty + 0.5f);
+    glVertex2f((float)(tx + tw) - 0.5f, (float)ty + 0.5f);
+    glVertex2f((float)(tx + tw) - 0.5f, (float)(ty + th) - 0.5f);
+    glVertex2f((float)tx + 0.5f, (float)(ty + th) - 0.5f);
+    glEnd();
+    ui_clr(UI_TOK_TEXT_PRIMARY);
+    gl2d_draw_string((float)(tx + 6), (float)(ty + 4),
+                     tooltip.text, FONT_SMALL);
 }
 
 /* A sunken keycap chip (box + divider border) using theme tokens. The
@@ -2412,6 +2555,7 @@ static void repl_code_panel_draw_paste_icon(int kx, int ky, int kw, int kh) {
 
 static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
                                            const UiTextPanelRect *slot) {
+    ReplStatusbarHints h;
     int sy;
     int sh;
     int cp_x;
@@ -2451,9 +2595,8 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
     glVertex2f((float)(cp_x + cp_w), (float)(sy + sh));
     glEnd();
 
+    h = repl_code_panel_statusbar_hints(snap, cp_x, sy, cp_w, sh);
     {
-        ReplStatusbarHints h =
-            repl_code_panel_statusbar_hints(snap, cp_x, sy, cp_w, sh);
         ReplStatusbarLeft L = repl_code_panel_statusbar_left(snap, cp_x);
         int text_y = h.text_y;
         int tx = cp_x + CODE_MARGIN_X;
@@ -2563,37 +2706,27 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
         }
 
         if (h.focus_visible) {
-            /* Keycap glyphs use the "F1"-keycap color (TEXT_PRIMARY)
-             * so the two chips read identically; ON/OFF state is
-             * carried by the "focus" label (accent on / muted off).
-             * The keycap box is the UI_HIT_CODE_FOCUS_TOGGLE target,
-             * hit-tested from this same hints geometry. */
+            /* With the persistent label gone, the glyph carries the
+             * state: accent while code focus is on, primary otherwise. */
             UiThemeToken focus_tok = snap->code_panel.code_focus
-                ? UI_TOK_ACCENT : UI_TOK_TEXT_MUTED;
-            ui_clr(UI_TOK_TEXT_PRIMARY);
-            repl_code_panel_draw_focus_kbd(h.focus_kx + 5, h.ky + 2);
+                ? UI_TOK_ACCENT : UI_TOK_TEXT_PRIMARY;
             ui_clr(focus_tok);
-            gl2d_draw_string((float)h.focus_lbl_x, (float)text_y,
-                             k_statusbar_focus_lbl, FONT_SMALL);
+            repl_code_panel_draw_focus_kbd(h.focus_kx + 5, h.ky + 2);
         }
 
         if (h.help_visible) {
-            /* Same scheme as the focus chip: keycap glyphs stay
-             * TEXT_PRIMARY; the "help" label carries the active state
-             * (accent while the overlay is open, muted otherwise). */
+            /* Same active-glyph scheme as the focus keycap. */
             UiThemeToken help_tok = snap->help.visible
-                ? UI_TOK_ACCENT : UI_TOK_TEXT_MUTED;
-            ui_clr(UI_TOK_TEXT_PRIMARY);
+                ? UI_TOK_ACCENT : UI_TOK_TEXT_PRIMARY;
+            ui_clr(help_tok);
             gl2d_draw_string((float)(h.help_kx + 5), (float)(h.ky + 2),
                              k_statusbar_help_kbd, FONT_SMALL);
-            ui_clr(help_tok);
-            gl2d_draw_string((float)h.help_lbl_x, (float)text_y,
-                             k_statusbar_help_lbl, FONT_SMALL);
         }
         prof_end(PROF_CODE_PANEL_OVERLAY_STATUS_ACTIONS);
     }
 
     glDisable(GL_SCISSOR_TEST);
+    repl_code_panel_draw_statusbar_tooltip(snap, &h, cp_x, cp_w, sy, sh);
     glDisable(GL_BLEND);
     glPopAttrib();
 }
@@ -2722,9 +2855,9 @@ static UiHit repl_code_panel_make_local_hit(
     return hit;
 }
 
-/* Keep statusbar hit geometry derived from the same hints struct the
- * renderer uses so hidden chips stay unclickable and visible chips
- * match their drawn keycap boxes exactly. */
+/* Keep statusbar hit geometry derived from the same hints struct and
+ * point classifier as rendering/hover so hidden chips stay inert and
+ * visible chips match their drawn keycap boxes exactly. */
 static int repl_code_panel_statusbar_hit_kind(
     const UiRenderSnapshot *snap,
     const UiTextPanelSnapshot *text_snap,
@@ -2733,55 +2866,7 @@ static int repl_code_panel_statusbar_hit_kind(
     ReplStatusbarHints hints = repl_code_panel_statusbar_hints(
         snap, text_snap->cp_x, text_snap->cp_y, text_snap->cp_w, STATUSBAR_H);
 
-    if (hints.trash_visible &&
-        repl_code_panel_point_in_rect(mx, gl_y,
-                                      hints.trash_kx, hints.ky,
-                                      hints.trash_kw, hints.kh))
-        return UI_HIT_CODE_CLEAR_ALL;
-
-    if (hints.cut_visible &&
-        repl_code_panel_point_in_rect(mx, gl_y,
-                                      hints.cut_kx, hints.ky,
-                                      hints.cut_kw, hints.kh))
-        return UI_HIT_CODE_CUT;
-
-    if (hints.paste_visible &&
-        repl_code_panel_point_in_rect(mx, gl_y,
-                                      hints.paste_kx, hints.ky,
-                                      hints.paste_kw, hints.kh))
-        return UI_HIT_CODE_PASTE;
-
-    if (hints.copy_visible &&
-        repl_code_panel_point_in_rect(mx, gl_y,
-                                      hints.copy_kx, hints.ky,
-                                      hints.copy_kw, hints.kh))
-        return UI_HIT_CODE_COPY;
-
-    if (hints.redo_visible &&
-        repl_code_panel_point_in_rect(mx, gl_y,
-                                      hints.redo_kx, hints.ky,
-                                      hints.redo_kw, hints.kh))
-        return UI_HIT_CODE_REDO;
-
-    if (hints.undo_visible &&
-        repl_code_panel_point_in_rect(mx, gl_y,
-                                      hints.undo_kx, hints.ky,
-                                      hints.undo_kw, hints.kh))
-        return UI_HIT_CODE_UNDO;
-
-    if (hints.focus_visible &&
-        repl_code_panel_point_in_rect(mx, gl_y,
-                                      hints.focus_kx, hints.ky,
-                                      hints.focus_kw, hints.kh))
-        return UI_HIT_CODE_FOCUS_TOGGLE;
-
-    if (hints.help_visible &&
-        repl_code_panel_point_in_rect(mx, gl_y,
-                                      hints.help_kx, hints.ky,
-                                      hints.help_kw, hints.kh))
-        return UI_HIT_HELP_TOGGLE;
-
-    return UI_HIT_CODE_PANEL_CHROME;
+    return repl_code_panel_statusbar_hint_hit_kind(&hints, mx, gl_y);
 }
 
 UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
@@ -2801,22 +2886,34 @@ UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
             return ui_hit_none();
         repl_code_panel_build_rows(&builder);
     }
-    hit = ui_text_panel_hit_test(&builder.text_snap, mx, my);
-    if (hit.kind != UI_HIT_NONE)
-        return repl_code_panel_rewrite_hit(&builder, mx, hit);
 
+    /* The statusbar is chrome layered over the bottom of the generic
+     * text panel. Classify it first: with enough document/header rows,
+     * the text-panel walk can otherwise map this strip to its last
+     * visible row and steal toolbar clicks. */
     gl_y = builder.text_snap.vp_h - my;
     if (repl_code_panel_point_in_rect(mx, gl_y,
                                       builder.text_snap.cp_x,
                                       builder.text_snap.cp_y,
                                       builder.text_snap.cp_w,
+                                      builder.text_snap.cp_h) &&
+        gl_y > builder.text_snap.cp_y &&
+        gl_y < builder.text_snap.cp_y + STATUSBAR_H) {
+        return repl_code_panel_make_local_hit(
+            &builder.text_snap, mx, gl_y,
+            repl_code_panel_statusbar_hit_kind(snap, &builder.text_snap,
+                                               mx, gl_y));
+    }
+
+    hit = ui_text_panel_hit_test(&builder.text_snap, mx, my);
+    if (hit.kind != UI_HIT_NONE)
+        return repl_code_panel_rewrite_hit(&builder, mx, hit);
+
+    if (repl_code_panel_point_in_rect(mx, gl_y,
+                                      builder.text_snap.cp_x,
+                                      builder.text_snap.cp_y,
+                                      builder.text_snap.cp_w,
                                       builder.text_snap.cp_h)) {
-        if (gl_y < builder.text_snap.cp_y + STATUSBAR_H) {
-            return repl_code_panel_make_local_hit(
-                &builder.text_snap, mx, gl_y,
-                repl_code_panel_statusbar_hit_kind(snap, &builder.text_snap,
-                                                   mx, gl_y));
-        }
         return repl_code_panel_make_local_hit(
             &builder.text_snap, mx, gl_y,
             mx < builder.text_snap.cp_x + builder.text_snap.text_x

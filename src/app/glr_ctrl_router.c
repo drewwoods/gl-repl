@@ -1770,11 +1770,15 @@ void glr_ctrl_motion(int x, int y) {
 }
 
 void glr_ctrl_passive_motion(int x, int y) {
-    int menu_hover_changed;
     editor_reset_input_effects();
     /* Passive motion (no button held) just updates the pointer
      * position — there's no drag delta to preserve. */
     glr_ctrl_router_handle_camera_pointer_set(x, y);
+    /* Several hover treatments (including the code-statusbar tooltips)
+     * are derived purely from snapshot pointer state during rendering.
+     * Redraw on motion so they appear/disappear even while animation is
+     * paused and no timer-driven frame is forthcoming. */
+    editor_request_redraw();
     EditorInputDispatchEffects editor_effects = editor_handle_passive_motion(x, y);
     /* An open menu dropdown/flyout can extend past the code-panel edge and
      * cover the resize divider (e.g. the Config "All" flyout in a narrow
@@ -1786,10 +1790,7 @@ void glr_ctrl_passive_motion(int x, int y) {
         editor_effects.cursor != GLUT_CURSOR_INHERIT &&
         ui_menu_bar_hit_test(x, y).kind != UI_HIT_NONE)
         editor_effects.cursor = GLUT_CURSOR_INHERIT;
-    menu_hover_changed = ui_menu_bar_update_pointer_hover(x, y,
-                                                          repl_state_variables().anim_time);
-    if (menu_hover_changed)
-        editor_request_redraw();
+    ui_menu_bar_update_pointer_hover(x, y, repl_state_variables().anim_time);
     glr_ctrl_apply_input_effects(editor_take_and_reset_input_effects());
     glr_ctrl_apply_input_effects(editor_effects);
 }

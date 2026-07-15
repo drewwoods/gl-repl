@@ -1394,6 +1394,85 @@ static void test_vertex_gutter_labels_follow_cursor_begin_block(void) {
                 label[0] == '\0');
 }
 
+static void test_statusbar_action_tooltips(void) {
+    static const int kinds[] = {
+        UI_HIT_CODE_UNDO,
+        UI_HIT_CODE_REDO,
+        UI_HIT_CODE_COPY,
+        UI_HIT_CODE_CUT,
+        UI_HIT_CODE_PASTE,
+        UI_HIT_CODE_CLEAR_ALL,
+        UI_HIT_CODE_FOCUS_TOGGLE,
+        UI_HIT_HELP_TOGGLE,
+    };
+    static const char *const names[] = {
+        "undo", "redo", "copy", "cut", "paste", "clear", "focus", "help",
+    };
+    UiRenderSnapshot snap;
+    int hit_x[sizeof(kinds) / sizeof(kinds[0])];
+    int cp_x, cp_y, cp_w;
+    int status_my;
+    int i;
+    int mx;
+    unsigned long long base_raster_calls;
+
+    printf("Testing statusbar action tooltips...\n");
+
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(2000, 400);
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_ctrl_sync_ui_chrome();
+    ui_state_code_panel_mut()->panel_frac = 0.5f;
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glEnd();");
+    make_test_ui_snapshot(&snap);
+    ui_repl_code_panel_invalidate_row_cache_for_test();
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, NULL);
+    status_my = snap.viewport.window_h - (cp_y + STATUSBAR_H / 2);
+
+    for (i = 0; i < (int)(sizeof(hit_x) / sizeof(hit_x[0])); i++)
+        hit_x[i] = -1;
+    for (mx = cp_x; mx < cp_x + cp_w; mx++) {
+        UiHit hit = ui_repl_code_panel_hit_test(&snap, mx, status_my);
+        for (i = 0; i < (int)(sizeof(kinds) / sizeof(kinds[0])); i++) {
+            if (hit.kind == kinds[i] && hit_x[i] < 0)
+                hit_x[i] = mx;
+        }
+    }
+
+    for (i = 0; i < (int)(sizeof(kinds) / sizeof(kinds[0])); i++) {
+        char label[80];
+        snprintf(label, sizeof label, "%s statusbar icon is hittable", names[i]);
+        ASSERT_TRUE(label, hit_x[i] >= 0);
+    }
+
+    /* A non-action statusbar pixel is the no-tooltip control render. */
+    snap.pointer.mouse_x = cp_x + CODE_MARGIN_X;
+    snap.pointer.mouse_y = status_my;
+    ASSERT_INT("tooltip control point is inert statusbar chrome",
+               ui_repl_code_panel_hit_test(&snap,
+                                            snap.pointer.mouse_x,
+                                            snap.pointer.mouse_y).kind,
+               UI_HIT_CODE_PANEL_CHROME);
+    gl_stub_counts_reset();
+    ui_repl_code_panel_render_with_chrome(&snap, NULL);
+    base_raster_calls = gl_stub_counts[GL_STUB_glRasterPos2f];
+
+    /* Each icon hover contributes exactly one tooltip text draw. The
+     * assertion uses > rather than == so bitmap-font implementation
+     * details cannot make the test brittle. */
+    for (i = 0; i < (int)(sizeof(kinds) / sizeof(kinds[0])); i++) {
+        char label[80];
+        snap.pointer.mouse_x = hit_x[i];
+        snap.pointer.mouse_y = status_my;
+        gl_stub_counts_reset();
+        ui_repl_code_panel_render_with_chrome(&snap, NULL);
+        snprintf(label, sizeof label, "%s hover draws tooltip text", names[i]);
+        ASSERT_TRUE(label,
+                    gl_stub_counts[GL_STUB_glRasterPos2f] > base_raster_calls);
+    }
+}
+
 static void test_tutorial_fade_math_uses_snapshot_view(void) {
     UiRenderSnapshot s;
     const char *line;
@@ -1819,6 +1898,7 @@ int main(void) {
     test_ui_panels_hit_test_virtual_row_routes_to_source();
     test_vertex2f_gutter_labels();
     test_vertex_gutter_labels_follow_cursor_begin_block();
+    test_statusbar_action_tooltips();
     test_tutorial_fade_math_uses_snapshot_view();
     test_tutorial_fade_render_uses_per_char_path();
     test_tutorial_fade_handles_wrapped_lines();
