@@ -116,6 +116,9 @@ typedef struct UiRenderSnapshot {
 
     /* Convenience scalars (mirror editor_input/code_panel for terse access) */
     int                         flat_program_count;
+    /* Exact required count after flat-buffer overflow; display-only. The
+     * executable flat_program_count remains zero in that state. */
+    int                         flat_program_overflow_count;
     int                         can_undo;
     int                         can_redo;
     /* Cursor flat-cost readout: how many flat (expanded) commands the

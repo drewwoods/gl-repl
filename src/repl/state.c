@@ -277,7 +277,7 @@ void repl_state_flat_program_clear_current_block(void) {
 }
 
 void repl_state_flat_program_reset(void) {
-    g_repl_state.flat_program.cmd_count = 0;
+    g_repl_state.flat_program.cmd_count = g_repl_state.flat_program.overflow_cmd_count = 0;
     g_repl_state.flat_program.dirty = 1;
     g_repl_state.flat_program.user_lighting_enabled = 0;
     repl_state_flat_program_clear_current_block();
@@ -311,12 +311,12 @@ void repl_mark_source_dirty(void) {
 }
 
 FlatProgramView repl_state_flat_program_view(void) {
-    FlatProgramView view = {
+    return (FlatProgramView){
         .cmds = g_repl_state.flat_program.cmds,
         .local_vars = g_repl_state.flat_program.local_vars,
         .cmd_count = g_repl_state.flat_program.cmd_count,
+        .overflow_cmd_count = g_repl_state.flat_program.overflow_cmd_count,
     };
-    return view;
 }
 
 ReplVariableView repl_state_variables(void) {

@@ -414,10 +414,35 @@ int main() {
         ASSERT_INT("flatten_program capacity fail",
                    repl_flatten_program(&opts, &result), 0);
         ASSERT_INT("flatten_program capacity count", result.flat_cmd_count, 0);
+        ASSERT_INT("flatten_program exact required capacity",
+                   result.required_flat_capacity, 2);
         ASSERT_TRUE("flatten_program capacity status",
                     strstr(result.status, "limit") != NULL);
         ASSERT_INT("flatten_program fail leaves live count",
                    repl_state_flat_program_count(), live_count);
+    }
+
+    /* 8aa. A live overflow keeps the executable count at zero but carries
+     * the exact required capacity for the toolbar. The destination is reused
+     * circularly during this bounded diagnostic pass. */
+    {
+        const int required_count = MAX_FLAT_COMMANDS + 7;
+        char loop_line[64];
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        snprintf(loop_line, sizeof(loop_line), "for(i, 0, %d) {",
+                 required_count);
+        editor_feed_line(loop_line);
+        editor_feed_line("  glVertex3f(i, 0, 0);");
+        editor_feed_line("}");
+
+        repl_flatten_commands(editor_state_edit_line());
+
+        ASSERT_INT("overflow leaves no executable flat program",
+                   repl_state_flat_program_count(), 0);
+        ASSERT_INT("overflow reports exact required flat capacity",
+                   repl_state_flat_program_view().overflow_cmd_count,
+                   required_count);
     }
 
     /* 8a. The live flat program has its own capacity, independent of the
@@ -440,6 +465,8 @@ int main() {
 
         ASSERT_INT("live flatten expands near configured flat capacity",
                    repl_state_flat_program_count(), expanded_count);
+        ASSERT_INT("successful flatten clears prior overflow count",
+                   repl_state_flat_program_view().overflow_cmd_count, 0);
     }
 
     /* 8b. user_lighting_enabled respects control flow (regression for #10).
