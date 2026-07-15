@@ -195,13 +195,11 @@ int glr_ctrl_router_handle_export_special(int key);                 /* F11 -> .p
 
 int glr_ctrl_router_handle_variable_panel_drag_begin(int button, int state, int x, int y);
 int glr_ctrl_router_handle_variable_panel_drag_release(int state);
-int glr_ctrl_router_handle_right_config_press(int button, int state, int x, int y);
 int glr_ctrl_router_handle_scene_press(int button, int state, int x, int y);
 int glr_ctrl_router_handle_camera_mouse(int button, int state, int x, int y);
 int glr_ctrl_router_handle_variable_panel_motion(int x, int y);
 int glr_ctrl_router_handle_camera_motion(int x, int y);
 int glr_ctrl_router_handle_camera_pointer_set(int x, int y);
-int glr_ctrl_router_handle_glut_scroll_wheel_button(int button, int state, int x, int y);
 
 /* Dispatch a code-panel UiHit to the owning subsystem. Switches on
  * hit.kind: code text / insert line / gutter / inline color swatch /

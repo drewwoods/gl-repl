@@ -46,7 +46,13 @@ typedef struct EditorInputDispatchEffects {
  * commit / code-panel resize+drag+scroll. Non-editor concerns are
  * already filtered out by the controller before these run. Direct
  * callers (test fixtures) get the same shape: only editor routes
- * fire when these are invoked. */
+ * fire when these are invoked.
+ *
+ * Effects contract: each runs its route, then drains and returns the
+ * pending effects accumulator (including anything the caller
+ * accumulated before delegating — no reset at entry). The controller
+ * folds the snapshot back in via editor_merge_input_effects and
+ * flushes once per GLUT event; tests inspect the snapshot directly. */
 EditorInputDispatchEffects editor_handle_key(unsigned char key, int x, int y);
 EditorInputDispatchEffects editor_handle_special(int key, int x, int y);
 EditorInputDispatchEffects editor_handle_mouse(int button, int state, int x, int y);
@@ -61,6 +67,10 @@ EditorInputDispatchEffects editor_handle_mousewheel(int wheel, int direction, in
  * EditorInputDispatchEffects struct. */
 void                     editor_reset_input_effects(void);
 EditorInputDispatchEffects editor_take_and_reset_input_effects(void);
+/* Fold a drained snapshot back into the accumulator (flags OR; a set
+ * cursor wins last-writer). Used by the controller's dispatch bodies to
+ * keep the one-flush-per-event model when delegating to editor_handle_*. */
+void                     editor_merge_input_effects(EditorInputDispatchEffects fx);
 void                     editor_request_redraw(void);
 void                     editor_set_cursor(int cursor);
 void                     editor_request_close_help(void);
