@@ -1,29 +1,45 @@
+# Architecture
 
-> [!NOTE]
-> For the quick module map, see [`MODULES.md`](MODULES.md). Each
-> `src/` subsystem also carries its own `README.md`
-> (`src/repl/`, `src/editor/`, `src/app/`, `src/render3d/`, `src/ui/`,
-> `src/subsystems/`) with the layer-local ownership notes.
+This document explains the application-level architecture of the OpenGL
+immediate-mode REPL: ownership, frame coordination, view boundaries, and the
+cross-layer designs that depend on them. It is both an orientation for new
+contributors and a reference for maintainers changing those boundaries.
+
+Use the companion documents according to the question you are answering:
+
+| Need | Start here |
+|---|---|
+| Find a module or decide where new code belongs | [`MODULES.md`](MODULES.md) |
+| Understand the REPL interpreter itself | [`src/repl/README.md`](../src/repl/README.md), then [`src/repl/ARCHITECTURE.md`](../src/repl/ARCHITECTURE.md) |
+| Learn user-visible behavior | [`USER_GUIDE.md`](USER_GUIDE.md) |
+| Use advanced builds, capture, export, or diagnostics | [`ADVANCED_USAGE.md`](ADVANCED_USAGE.md) |
+| Understand one source subsystem in detail | Its local `README.md` under `src/` |
+
+Read [Direction](#direction), [Ownership Model](#ownership-model),
+[Core Tenets](#core-tenets), and [Target Frame Pipeline](#target-frame-pipeline)
+for the architectural overview. The layer and boundary sections are the working
+contracts. [Core Subsystem Features & Integrations](#core-subsystem-features--integrations)
+records load-bearing applications of those contracts, and
+[Developer Playbook](#developer-playbook) is the task-oriented reference.
 
 ## Direction
 
-This document describes the current ownership and frame architecture for the
-OpenGL immediate-mode REPL. The project has one frontend: a GLUT app shell that
-hosts a text editor, a REPL language pipeline, and 2D/3D renderers. Because
-there is only one frontend, the useful boundary is not a generic render3d-plugin
-API. The useful boundary is:
+The project has one application frontend, built for native GLUT and for the web
+through Emscripten's GLUT integration. That frontend hosts a text editor, a REPL
+language pipeline, and 2D/3D renderers. Because those build targets share the
+same application composition, the useful boundary is not a generic render3d
+plugin API. It is an explicit flow of owned state into frame snapshots:
 
 ```text
 REPL / editor / app state  ──▶  controller-built snapshots  ──▶  render3d / UI renderers
 ```
 
-Put plainly: the REPL is the dynamic user-programmed geometry. It turns the
-editable text into the live shape being drawn. The render3d module is the stage around
-that geometry: camera, projection, lights, grid, axes, backdrop, accumulation,
-and guide overlays. The editor and UI are the instrument panel for programming
-the REPL and configuring render3d. The app controller is the frame-time
-coordinator that reads those owned states, builds snapshots, and hands them to
-the renderers.
+The REPL turns editable source into the live, user-programmed geometry. The
+render3d module draws the stage around it: camera, projection, lights, grid,
+axes, backdrop, accumulation, and guide overlays. The editor owns text-document
+behavior; the UI presents that editor and the rest of the screen-space chrome.
+The app controller coordinates the frame by reading owned state, building
+snapshots, and handing those snapshots to the renderers.
 
 [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c) is that composition point in code. Focused REPL owners
 (`compile`, `load`, `normalize`, `reformat`, `bootstrap`, `program_query`,
@@ -34,6 +50,8 @@ recreating a central REPL core bucket or turning `render3d_*` into a plugin host
 
 ## Ownership Model
 
+Prefixes identify the owning layer:
+
 ```text
 repl_*        = language, source model, flat program, replay model, input/model controllers
 glr_*         = app-shell namespace: app router (glr_ctrl), camera (glr_camera),
@@ -42,31 +60,33 @@ glr_*         = app-shell namespace: app router (glr_ctrl), camera (glr_camera),
                 adapter (glr_source_document), CLI debug dumps (glr_debug)
 editor_*      = text-document model + controller (under src/editor/), incl. the
                 document cursor (edit-line) and the editable line buffer
-render3d_*       = 3D stage: camera, projection, frame setup, decorators, 3D overlays
+render3d_*    = 3D stage: camera, projection, frame setup, decorators, 3D overlays
 ui_*          = 2D editor chrome: code panel, menus, overlays, popups, HUDs
-gl_repl.c/h    = GLUT entry point and small shared header
+gl_repl.c/h   = GLUT entry point and small shared header
                 (a `glr_*`-namespaced shell rename is on the open list)
 ```
 
-Naming note: `render3d_*` is the existing code prefix, but the concept is closer
-to the rendered world or stage. It owns the camera-facing environment around
-the user program, not the saved user-scene slots (`repl_scenes`) and not the
-REPL geometry itself. If this were named from scratch, `world_*` or `stage_*`
-would describe that boundary more directly.
+> [!NOTE]
+> `render3d_*` is the existing prefix, but the concept is closer to the rendered
+> world or stage. It owns the camera-facing environment around the user program,
+> not the saved user-scene slots (`repl_scenes`) or the REPL geometry itself.
+> `world_*` or `stage_*` would describe that boundary more directly if it were
+> named from scratch.
 
 The prefix is an ownership signal, not a generic sample prefix. New `repl_*`
-modules should own REPL language, editor, source, workspace, replay, or command
-model behavior. App-shell services belong under `glr_*`, including
+modules should own REPL language, source, workspace, replay, or command-model
+behavior; text-document behavior belongs under `editor_*`. App-shell services
+belong under `glr_*`, including
 [`src/app/glr_audio.c`](../src/app/glr_audio.c) (`glr_audio_*`). Generic infrastructure keeps neutral
 names such as `prof`. `gl_repl.c/h` is the one remaining name outside the
 scheme; treat it as the GLUT shell entry point, not as a naming precedent.
 
-The main design rule:
+The ownership contract is:
 
 ```text
 The REPL owns the user program.
 The render3d module owns the 3D stage.
-The UI owns the 2D editor/view.
+The editor owns text-document behavior; UI renders its 2D view.
 The controller translates REPL state into per-frame view inputs.
 ```
 
@@ -76,6 +96,8 @@ command-domain data when that data is already present in the
 globals or call `repl_state_*` APIs directly during rendering.
 
 ## Core Tenets
+
+The ownership model becomes enforceable through these rules:
 
 1. **The REPL owns the user program.** It parses source, stores source commands,
    flattens loops/functions/conditionals, owns predefined variables, and owns
@@ -88,14 +110,17 @@ globals or call `repl_state_*` APIs directly during rendering.
    light indicators, orbit target, and 3D overlay passes from config.
 4. **The UI owns screen-space presentation.** UI renderers draw code rows,
    menus, popups, color picker, help, status, and profile views from snapshots
-   and route mutations through REPL-owned actions or stores.
+   and route mutations through the owning editor, REPL, or peer-subsystem path.
 5. **The controller is the mixed layer.** The frame controller builds render3d and
    UI inputs from REPL state, calls the render3d renderer, then calls UI renderers.
    This role belongs in [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c).
 6. **Replay is REPL policy.** Replay state machine, PC, mode, replay-only overlay
-  toggles, baseline values, and fade/highlight decisions belong in `src/subsystems/replay/` (primarily
-  [`replay_playback.c`](../src/subsystems/replay/replay_playback.c), [`replay_fade.c`](../src/subsystems/replay/replay_fade.c), and [`replay.c`](../src/subsystems/replay/replay.c)). Any render3d use of
-  replay data should be via snapshots or
+   toggles, baseline values, and fade/highlight decisions belong in
+   `src/subsystems/replay/` (primarily
+   [`replay_playback.c`](../src/subsystems/replay/replay_playback.c),
+   [`replay_fade.c`](../src/subsystems/replay/replay_fade.c), and
+   [`replay.c`](../src/subsystems/replay/replay.c)). Any render3d use of replay
+   data should be via snapshots or
    documented transitional helpers.
 
 ## Target Frame Pipeline
@@ -287,24 +312,6 @@ storage:
 This keeps invariant β (REPL → editor symbol references forbidden) intact;
 `check-repl-no-direct-editor` is the build guard.
 
-## Controller-Pushed Editor Snapshots
-
-The controller treats per-frame UI overlay data as snapshots it builds
-once and the UI consumes read-only. The snapshot family lives in
-[`src/ui/app/editor.h`](../src/ui/app/editor.h):
-
-| List | Push helper | What it carries |
-|---|---|---|
-| `UiTransformerList editor_transformers` | `glr_ctrl_push_color_transformers()` | One entry per editable color command (line idx + r/g/b/a/has_alpha/is_clear). Drives inline swatch render and color-picker hit-test. Future kinds: numeric slider. |
-| `UiHighlightList editor_highlights` | `glr_ctrl_push_highlights()` | Feeding-normal cmd, feeding-color cmd, replay PC, search match, selection. Rendered as gutter accents and row backgrounds. |
-| `UiVirtualLineList editor_virtual_lines` | [`replay_annotations_prepare()`](../src/subsystems/replay/replay_annotations.h#L73) (via `_refresh_virtual_lines()`) | Replay-time annotation rows (substitution + evaluation) attached to the current source line. Layout, scroll, hit-test, and render all read from this list, so virtual-row counts have one source of truth (`replay_annotation_extra_rows_for_line()` counts the list). |
-
-All three lists are stored on [`ReplRuntimeState`](../src/repl/state.h#L18) as named slices and
-exposed via `repl_state_editor_*()` accessors (read-only view in
-[`src/repl/state_views.h`](../src/repl/state_views.h), mutating clear/append in [`src/repl/state_owners.h`](../src/repl/state_owners.h)).
-`UiRenderSnapshot.editor_transformers / editor_highlights /
-editor_virtual_lines` are pointers into those slices.
-
 ## Command Lifecycle
 
 A user line follows this path:
@@ -354,6 +361,26 @@ against either filename returning.
 Outside code that needs to inject commands should use the public command/input
 paths instead of directly mutating command arrays.
 
+## Controller-Pushed Editor Snapshots
+
+After the command pipeline has produced the current program, the controller
+builds per-frame editor-overlay data once for read-only UI consumption. The
+snapshot family lives in [`src/ui/app/editor.h`](../src/ui/app/editor.h):
+
+| List | Push helper | What it carries |
+|---|---|---|
+| `UiTransformerList editor_transformers` | `glr_ctrl_push_color_transformers()` | One entry per editable color command (line index + RGBA + alpha/clear flags). Drives inline swatches and color-picker hit-testing. |
+| `UiHighlightList editor_highlights` | `glr_ctrl_push_highlights()` | Feeding-normal and feeding-color commands, replay PC, search match, and selection. Drives gutter accents and row backgrounds. |
+| `UiVirtualLineList editor_virtual_lines` | [`replay_annotations_prepare()`](../src/subsystems/replay/replay_annotations.h#L73), via `_refresh_virtual_lines()` | Replay-time substitution and evaluation rows attached to the current source line. Layout, scrolling, hit-testing, and rendering share this list, so virtual-row counts have one source of truth. |
+
+All three lists are named slices on [`ReplRuntimeState`](../src/repl/state.h#L18). Read-only
+accessors live in [`src/repl/state_views.h`](../src/repl/state_views.h); clear and append operations
+live in [`src/repl/state_owners.h`](../src/repl/state_owners.h).
+`UiRenderSnapshot.editor_transformers`, `editor_highlights`, and
+`editor_virtual_lines` point into those slices. Future transformer kinds, such
+as a numeric slider, should extend this snapshot path rather than make the UI
+query live state.
+
 ## Controller Layer
 
 The controller layer is the home for app-frame wiring.
@@ -373,70 +400,6 @@ model modules should not.
 [`gl_repl.c`](../gl_repl.c) and [`gl_repl.h`](../gl_repl.h) carry the GLUT app entry point and small shared
 types/constants. A `glr_*`-namespaced rename of the shell is open work, and
 should remain mechanical because [`gl_repl.h`](../gl_repl.h) is included broadly.
-
-## Keyboard Shortcut Definition Sites
-
-Keyboard shortcuts are **not** defined in one place today. They are
-spread across four layers and resolved in a fixed priority order by the
-controller. This section is the map — and the argument for a future
-centralized keymap.
-
-### Dispatch order (who wins a contested key)
-
-Set in `glr_ctrl_keyboard` / `glr_ctrl_special` ([`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c)).
-An earlier layer that consumes a key shadows every later one:
-
-* **ASCII keys:** Cmd→Ctrl normalize → rename modal → file-prompt modal
-  → Esc router (color-picker / help close) → config menu (`` ` ``) →
-  **cfg ASCII shortcut** → replay → save (Ctrl+S) → debug dump (Ctrl+Shift+D)
-  → accum jitter (Ctrl+= / Ctrl+−) →
-  code focus (Ctrl+Shift+F) → tutorial ack → quit (Ctrl+Q) →
-  **editor (`editor_handle_key`)** as the fallback.
-* **Special keys (F-keys / arrows):** replay → **cfg special (F2–F10)**
-  → audio (Ctrl+Left/Right) →
-  help tab/scroll → help toggle (F1) → scene cycle (F11/F12) →
-  **editor (`editor_handle_special`)**.
-
-Because the cfg layer runs *before* the editor, the config table wins
-any contested Ctrl-letter; the editor only sees what no earlier layer
-claimed.
-
-### The four definition sites
-
-| Layer | Where | What it binds |
-|---|---|---|
-| **Config table** (closest thing to a registry) | `g_cfg_items[]` in [`src/app/glr_actions.c`](../src/app/glr_actions.c); dispatched by `glr_cfg_handle_ascii_shortcut` / `cfg_match_row` (Ctrl, Ctrl+Shift) and `glr_cfg_handle_special_shortcut` (F2–F10) | Every config toggle/cycle. Each row's `(key_code, is_special, modifiers)` declares its shortcut: F-key = `is_special=1, key_code=GLUT_KEY_F<n>` (and **Shift+F<n> steps the cycle backward**); Ctrl = `is_special=0, key_code=KEY_CTRL_<x>`; Ctrl+Shift adds `GLUT_ACTIVE_SHIFT` (two-pass match: pass A prefers a Shift-required row, pass B the plain row) |
-| **Editor** | `editor_handle_key` / `editor_handle_special` in [`src/editor/input.c`](../src/editor/input.c); search keys in [`src/editor/search.c`](../src/editor/search.c); modal capture in [`inline_rename.c`](../src/editor/inline_rename.c) / [`inline_file_prompt.c`](../src/editor/inline_file_prompt.c) | Text / cursor / selection: `;` commit, Enter, Tab, Esc, Backspace/Delete, arrows, Home/End/PageUp/Down, Ctrl+A/E (cursor), Ctrl+Z/Y (undo/redo), Ctrl+C/X/V (clipboard), Ctrl+D/L (delete/clear), Ctrl+F (search), Ctrl+\ (reformat), Ctrl+/ (comment toggle), printable chars |
-| **Controller router** | `glr_ctrl_keyboard` / `glr_ctrl_special` + `glr_ctrl_router_*` in [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c) | Cross-subsystem: Ctrl+S (save), Ctrl+Shift+D (debug dump), Ctrl+Q (quit), Ctrl+K (replay jump-to-cursor), Ctrl+= / Ctrl+− (accum samples), Ctrl+Shift+F (code focus), Ctrl+Left/Right (audio track), F1 (help), F11/F12 (scene cycle), Esc (close picker/help) |
-| **Peer subsystems** | [`src/subsystems/replay/replay_input.c`](../src/subsystems/replay/replay_input.c); tutorial SET-step ack in [`src/subsystems/tutorial/tutorial_runner.c`](../src/subsystems/tutorial/tutorial_runner.c) | Active-mode keys that shadow the editor while the subsystem holds focus: replay m/M, space, arrows, Esc; tutorial Enter/Tab/Space during a showcase step |
-
-Key-code constants live in [`include/keys.h`](../include/keys.h) (`KEY_CTRL_*`); F-key codes
-come from GLUT (`GLUT_KEY_F<n>`). macOS Cmd+letter is folded to
-Ctrl+letter by `editor_input_normalize_super_to_ctrl` at the top of
-`glr_ctrl_keyboard`, so every downstream layer sees Cmd+B as Ctrl+B.
-
-The F1 help "Keys" tab is the in-app source for shortcuts, and
-[`USER_GUIDE.md`](USER_GUIDE.md#keyboard--mouse-reference) mirrors it for
-readers outside the app. The F-key section of the help is generated from the
-config table via the [`ReplHelpFkeyProvider`](../src/repl/help_text.h#L34) (`glr_ctrl_help_fkey_label` reads
-each F-key row's label by `key_code`).
-
-### Toward a centralized keymap
-
-The config table is already a declarative registry for *config*
-shortcuts; the editor / router / peer keys are still imperative
-`if (key == …)` chains. A future cleanup could lift every binding into
-one descriptor table — `(key, modifiers, owning layer, action)` —
-that the dispatchers consume in priority order, making the whole keymap
-inspectable in one place and auto-derivable for the help overlay and the
-docs. Two byte-level traps any such table must encode (they constrain
-which keys are even bindable): GLUT delivers Ctrl+letter as control
-bytes 1–26, so **Ctrl+H / Ctrl+I / Ctrl+J / Ctrl+M alias
-Backspace / Tab / LF / CR** and cannot be used; and **Ctrl+Shift+<letter>
-is indistinguishable from Ctrl+<letter>** at the byte level, so a Shift
-binding must explicitly read `glutGetModifiers()` /
-[`editor_input_active_modifiers()`](../src/editor/input.h#L67) (as cfg pass A and the code-focus
-router do).
 
 ## Render3d Render Config
 
@@ -483,7 +446,14 @@ and built-in examples place those commands in the per-frame program so code
 focus exposes the state that controls the rendered material. Generated light
 colors remain initialization state.
 
-### Grid Edge-Fade Dissolve (world-radial alpha)
+### Render3d feature references
+
+The following case studies record rendering behavior whose implementation
+depends on the layer contract above. Each starts from the visual or interaction
+goal, identifies the owning data path, and records the invariant or regression
+trap that future changes must preserve.
+
+#### Grid Edge-Fade Dissolve (world-radial alpha)
 
 The reference-grid line themes dissolve their **alpha to 0 by world
 radial distance from the origin** (`sqrt(x² + z²)`), reaching full
@@ -511,40 +481,31 @@ Pieces, all in [`src/render3d/grid.c`](../src/render3d/grid.c):
 * `grid_apply_far_fog()` early-returns with `glDisable(GL_FOG)` for any
   edge-fade theme, so they never inherit the clear-color distance fog.
 
-**Two structural traps this design walked into — both easy to repeat:**
+**Two structural traps are easy to repeat:**
 
 1. **Per-vertex alpha needs subdivision, and the fade axis matters.**
-   A grid line drawn as a single 2-vertex `GL_LINES` segment can only
-   carry endpoint alphas; you cannot express "opaque interior, fades at
-   the ends" without splitting it. The first cut subdivided and faded by
-   position *along each line's own length*. That looked right in
-   isolation but **left the grazing-horizon smudge intact**: the lines
-   that pile up at the horizon are the ones running *across* the view
-   (large perpendicular offset), and an along-length fade leaves their
-   **centers** — exactly the stacked pixels at screen-center horizon — at
-   full alpha. They still saturate to the line color. The fade has to be
-   **radial** (by distance from the origin) so a cross-line is dimmed by
-   its offset at its center, not just at its far ends. Lesson: when a fade
-   is meant to read radially, fading along one axis is not an
-   approximation of it — it misses the perpendicular family entirely.
+   A two-vertex `GL_LINES` segment can carry only endpoint alpha, so an
+   opaque middle with faded ends requires subdivision. Fading along each
+   line is also insufficient: cross-view lines retain full alpha at their
+   centers and still stack into a horizon smudge. World-radial distance
+   dims those centers by their perpendicular offset and covers both line
+   families.
 
 2. **Disabling fog per-theme silently misses the custom themes.** Any
-   "turn this off for grids" switch must be keyed on a predicate that covers
-   the custom-path themes too, not on the spec-table membership that's
-   convenient to reach for. The fog regression test
+   switch must use the shared predicate, not convenient spec-table
+   membership, because custom-path themes participate too. The regression
+   test
    (`test_scene_grid_fog_matches_predicate`) asserts fog emission against
    [`render3d_grid_theme_uses_edge_fade()`](../src/render3d/grid.h#L55) for *every* theme at *every* extent, so
    a theme added to one set but not the other fails CI.
 
-Why overdraw saturates to the line color at all: standard
+The underlying failure is alpha overdraw. Standard
 `GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA` blending of N stacked layers of
 color C over background B converges to `C + (B − C)·(1−a)^N → C`. At a
-grazing angle the foreshortened far field stacks many translucent lines
-into a few horizon pixels, so coverage saturates and the band tends to
-the (dark) line color regardless of the backdrop. Fading alpha to 0 by
-distance bounds N before it saturates; a blend-function change
-(`GL_MIN`/`GL_MAX`) bounds accumulation but discards the soft alpha and
-anti-aliasing, so this design rejects it.
+grazing angles, many far-field lines collapse into a few pixels and converge
+on the line color instead of the backdrop. Radial alpha bounds that accumulation.
+`GL_MIN`/`GL_MAX` would also bound it but would discard soft alpha and
+anti-aliasing, so the design retains standard blending.
 
 Before (clear-color fog → dark horizon band) and after (world-radial
 alpha dissolve), same theme/camera/backdrop:
@@ -576,7 +537,7 @@ to the clear color when a backdrop is on; converting Radar (fade its
 rings by radius — a natural radial fit) and gating the residual
 clear-color fog on `backdrop == OFF` would close the gap.
 
-### 2D grid themes (Sketchbook + Neon Graph)
+#### 2D grid themes (Sketchbook + Neon Graph)
 
 `Sketchbook` and `Neon Graph` are purpose-built for the **2D ortho view**.
 Unlike every other theme — which draws its graticule in the XZ ground
@@ -627,7 +588,7 @@ The GLUT stroke font (`glutStrokeCharacter` / `glutStrokeWidth` /
 were added to [`tests/gl-stubs/include/GL/freeglut.h`](../tests/gl-stubs/include/GL/freeglut.h) and
 [`tests/gl-stubs/include/GL/gl.h`](../tests/gl-stubs/include/GL/gl.h) so `USE_GL_STUBS` builds still compile.
 
-### Edit Overlays: polygon outlines on geometry
+#### Edit Overlays: polygon outlines on geometry
 
 [`src/subsystems/edit_overlays/edit_overlays.c`](../src/subsystems/edit_overlays/edit_overlays.c) draws the "Vertex
 outlines" (F7, `show_vertex_outlines`) and cursor "highlight current
@@ -679,7 +640,7 @@ hatch for `glutSolid*`: when the user vertex-points toggle is on,
 intentionally not used for replay-only mode, where the overlay means "the
 single current authored anchor" rather than "every generated mesh vertex."
 
-### Cursor Edit Guides
+#### Cursor Edit Guides
 
 The vertex/normal guides drawn at the cursor line
 ([`src/render3d/guides/geometry_guides.c`](../src/render3d/guides/geometry_guides.c)) render from a [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L42).
@@ -699,7 +660,7 @@ alone cannot know the world-space vertex the normal belongs to. Argument-slot
 parsing uses [`repl_scan_next_arg_delim()`](../src/repl/eval.h#L431) so nested expressions such as
 `cos(i + phase)` do not truncate at an inner comma/paren.
 
-#### Live transform guides (render-while-typing)
+##### Live transform guides (render-while-typing)
 
 Transform guides ([`src/render3d/guides/transform_guides.c`](../src/render3d/guides/transform_guides.c),
 `glTranslatef`/`glScalef`/`glRotatef`) render **live as you type**, before the
@@ -826,7 +787,13 @@ hard-guards it. `ui_repl_code_panel_build_layout` takes a
 [`SourceTextView`](../source_document.h#L27) supplied by the controller's annotation-prep pass
 rather than reading live state.
 
-### Menu Flyouts And Tutorial Catalogs
+### UI feature references
+
+These references describe designs that exercise the snapshot, hit-test, and
+mutation boundaries above. They are grouped here so the core UI contract is
+complete before the implementation-specific material begins.
+
+#### Menu Flyouts And Tutorial Catalogs
 
 The menu bar uses one submenu/flyout engine in [`src/ui/app/menu_bar.c`](../src/ui/app/menu_bar.c). The
 engine is UI-pure: providers expose row count, row labels, absolute target
@@ -863,7 +830,7 @@ subheading must be contiguous within each tag view. The metadata tests
 example equivalent) enforce non-zero tags, known bits only, and no interleaved
 subheading runs.
 
-### UI Color Theming
+#### UI Color Theming
 
 All 2D UI chrome resolves color through [`src/ui/core/theme.h`](../src/ui/core/theme.h) (header-only,
 the [`gl_2d.h`](../src/ui/core/gl_2d.h) pattern) instead of scattered `glColor*` literals. It
@@ -910,7 +877,7 @@ cycle) that would relocate the active index into one `.c` TU.
 zeroed token, neutral tokens stable across rows, green accent ==
 `#6fb36f`, and the dropdown hover is green (the Issue-1 regression).
 
-### Example Color Language (the shared accent palette)
+#### Example Color Language (the shared accent palette)
 
 Separate from the UI-chrome theming above: the *scene geometry* of the
 built-in examples shares one deliberate palette so the set reads as a
@@ -930,9 +897,16 @@ brand mark's magenta; the earlier "Dusk" sets remain in
 guidelines are documented in detail in
 [`examples/README.md`](../examples/README.md).
 
-These colors are applied as literal `glColor*` / `gluColor` / `glClearColor` values in the affected scene files under [`examples/scenes/`](../examples/scenes/) (`.glr` scenes are raw REPL source strings and `.c` scenes are full exported/importable files; neither has a macro-substitution layer).
+These colors are literal `glColor*`, `gluColor`, and `glClearColor` values in
+the affected files under [`examples/scenes/`](../examples/scenes/). `.glr` scenes are raw REPL
+source strings; `.c` scenes are exported/importable files. Neither format has a
+macro-substitution layer.
 
-The correctness of the example colors is locked by golden tests: [`tests/test_repl_core_examples.c`](../tests/test_repl_core_examples.c) snapshots each example's flattened dump to `tests/testdata/repl_examples_ui/NN.golden.txt`; the color literals are part of that fixture, so a drift off-palette fails CI. Regenerate intentionally with `build/release/test_repl_core_examples --dump-index N`.
+Golden tests lock the example colors. [`tests/test_repl_core_examples.c`](../tests/test_repl_core_examples.c)
+snapshots each flattened example into
+`tests/testdata/repl_examples_ui/NN.golden.txt`; the color literals are part of
+the fixture, so off-palette drift fails CI. Regenerate a fixture intentionally
+with `build/release/test_repl_core_examples --dump-index N`.
 
 Capture caveat: review these scenes with the **native** backend
 (`make gl-repl`, `FREEGLUT_CAPTURE_FRAMES=N ./gl-repl --example N`). The
@@ -956,6 +930,68 @@ Runtime shape:
 * 2D replay HUD lives in [`src/ui/subsystems/replay_hud.c`](../src/ui/subsystems/replay_hud.c), driven by config fields
 * `render3d_*.c` files contain no `repl_state_*` or `replay_*` calls; Makefile
   checks keep that true
+
+## Keyboard Shortcut Definition Sites
+
+Keyboard shortcuts are not defined in one place. Four layers contribute
+bindings, and the controller resolves them in a fixed priority order. This
+section records the current routing contract and the constraints on a future
+centralized keymap.
+
+### Dispatch order (who wins a contested key)
+
+`glr_ctrl_keyboard` and `glr_ctrl_special` in
+[`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c) route keys. An earlier layer that consumes a key
+shadows every later one:
+
+- **ASCII keys:** Cmd→Ctrl normalization → rename modal → file-prompt modal
+  → Esc router (color-picker/help close) → config menu (`` ` ``) → config
+  ASCII shortcut → replay → save (Ctrl+S) → debug dump (Ctrl+Shift+D) →
+  accumulation jitter (Ctrl+= / Ctrl+−) → code focus (Ctrl+Shift+F) →
+  tutorial acknowledgment → quit (Ctrl+Q) → editor fallback
+  (`editor_handle_key`).
+- **Special keys (F-keys/arrows):** replay → config special shortcut
+  (F2–F10) → audio (Ctrl+Left/Right) → help tab/scroll → help toggle (F1)
+  → scene cycle (F11/F12) → editor fallback (`editor_handle_special`).
+
+Because config routing precedes the editor, the config table wins any
+contested Ctrl-letter. The editor receives only keys that no earlier layer
+claimed.
+
+### The four definition sites
+
+| Layer | Definition site | Scope |
+|---|---|---|
+| **Config table** | `g_cfg_items[]` in [`src/app/glr_actions.c`](../src/app/glr_actions.c), dispatched by `glr_cfg_handle_ascii_shortcut`, `cfg_match_row`, and `glr_cfg_handle_special_shortcut` | Config toggles and cycles declared by `(key_code, is_special, modifiers)`. Shift+F-key steps cycles backward; the two-pass Ctrl matching prefers a Shift-specific row before a plain row. |
+| **Editor** | `editor_handle_key` / `editor_handle_special` in [`src/editor/input.c`](../src/editor/input.c), search in [`src/editor/search.c`](../src/editor/search.c), and modal capture in [`inline_rename.c`](../src/editor/inline_rename.c) / [`inline_file_prompt.c`](../src/editor/inline_file_prompt.c) | Text, cursor, selection, commit, navigation, clipboard, undo/redo, search, reformat, comments, and printable input. |
+| **Controller router** | `glr_ctrl_keyboard`, `glr_ctrl_special`, and `glr_ctrl_router_*` in [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c) | Cross-subsystem actions: save, debug dump, quit, replay jump, accumulation samples, code focus, audio track, help, scene cycle, and modal close. |
+| **Peer subsystems** | [`src/subsystems/replay/replay_input.c`](../src/subsystems/replay/replay_input.c) and tutorial SET-step acknowledgment in [`src/subsystems/tutorial/tutorial_runner.c`](../src/subsystems/tutorial/tutorial_runner.c) | Active-mode keys that shadow the editor while the subsystem holds focus. |
+
+Key-code constants live in [`include/keys.h`](../include/keys.h) (`KEY_CTRL_*`); F-key
+codes come from GLUT (`GLUT_KEY_F<n>`). At the top of
+`glr_ctrl_keyboard`, `editor_input_normalize_super_to_ctrl` folds macOS
+Cmd+letter into Ctrl+letter, so downstream layers see one representation.
+
+The F1 help **Keys** tab is the in-app shortcut reference, and
+[`USER_GUIDE.md`](USER_GUIDE.md#keyboard--mouse-reference) mirrors it outside
+the app. Its F-key rows are generated from the config table through
+[`ReplHelpFkeyProvider`](../src/repl/help_text.h#L34); `glr_ctrl_help_fkey_label` reads each
+row's label by `key_code`.
+
+### Toward a centralized keymap
+
+The config table is already a declarative registry; editor, controller, and
+peer bindings remain imperative `if (key == …)` chains. A future descriptor
+table could record `(key, modifiers, owning layer, action)` and drive both
+priority dispatch and generated help.
+
+That design must encode two GLUT byte-level constraints:
+
+- Ctrl+H, Ctrl+I, Ctrl+J, and Ctrl+M alias Backspace, Tab, LF, and CR.
+- Ctrl+Shift+letter is indistinguishable from Ctrl+letter in the input byte;
+  Shift-specific bindings must also read `glutGetModifiers()` or
+  [`editor_input_active_modifiers()`](../src/editor/input.h#L67), as the config router and
+  code-focus router already do.
 
 ## Boundary Rules
 
@@ -1042,9 +1078,102 @@ audit the feature-UI prefixes.
 other's headers. Shared render-neutral helpers belong in local shared headers
 or project-wide `include/` only when broadly reusable.
 
+## Decoupling and Link Boundaries
+
+The REPL compiler and pipeline (`src/repl/`) must remain independent of visual
+rendering and the host editor environment. The codebase protects that link
+boundary and routes host interactions through explicit, neutral seams.
+
+### Standalone REPL Demo Coupling
+
+[`tools/repl_demo/repl_demo.c`](../tools/repl_demo/repl_demo.c) is the negative boundary proof. Its
+default samples run parse → command store → flatten → execute without the app
+controller, editor, UI renderers, or app-owned visual state.
+
+`./repl_demo --trace` loads code through the non-editor
+`repl_load_apply_line` transaction, parses and flattens it, and prints evaluated
+results. It stops at the REPL boundary; undo/redo, cursor post-effects, and
+tutorial presentation remain in their host modules.
+
+### Stub-Free Link Boundary & Guards
+
+The build system enforces a stub-free boundary:
+
+- [`tools/repl_demo/stubs.c`](../tools/repl_demo/stubs.c) remains empty except for documentation. If
+  a core REPL translation unit acquires an app, editor, or UI dependency, the
+  demo fails to link.
+- The Makefile's `check-state-ownership` gate includes focused guards such as
+  `check-repl-demo-no-editor`, `check-repl-demo-stubs-shrinking`, and
+  `check-repl-export-via-bridge`.
+
+### Host Bridges & Boundary Mechanisms
+
+The app controller installs four boundary mechanisms at startup.
+
+#### 1. Source-Document Port ([`source_document.h`](../source_document.h))
+
+All source-text reads and mutations use `source_document_*`. The full app links
+[`glr_source_document.c`](../src/app/glr_source_document.c), which forwards to
+[`EditorState`](../src/editor/state.h#L175); the standalone demo links a tiny editor-free store
+in [`tools/repl_demo/source_document.c`](../tools/repl_demo/source_document.c). This keeps editor state and
+logic out of the core link set.
+
+#### 2. Host-Effect Bridges ([`ReplHostEffects`](../src/repl/host_effects.h#L38))
+
+The controller-installed [`ReplHostEffects`](../src/repl/host_effects.h#L38) bridge routes status
+updates, example and input resets, scrolling, follow-scroll, and cursor parking
+to the UI, editor, and peer subsystems. The demo installs only edit-line hooks;
+status, editor, and tutorial hooks remain no-ops.
+
+#### 3. Export Bridges & Layout Inputs
+
+[`src/repl/export.c`](../src/repl/export.c) is GL-free and app-free. It receives app and render3d
+values through these seams:
+
+| Seam | Purpose |
+|---|---|
+| Config bridge | [`glr_actions_install_export_cfg_bridge()`](../src/app/glr_actions.h#L104) exposes `@cfg` reads and writes without coupling export to app config modules. |
+| Camera bridge | [`glr_camera_export_install_bridge()`](../src/app/glr_camera_export.h#L14) supplies coordinates for `// camera` blocks. |
+| Reshape-projection bridge | Supplies the active perspective or orthographic projection to export and code-panel calculations. |
+| Camera-distance source | Supplies executor point-size fallback data without linking [`glr_camera.c`](../src/app/glr_camera.c). |
+| [`ReplExportLayout`](../src/repl/export.h#L228) | Passes viewport and code-panel geometry explicitly instead of calling `ui_layout_*`. |
+
+#### 4. Global State Reset & Dispatch Separation
+
+- **Dispatch:** Pure structured-block validators remain in
+  [`src/repl/compile.c`](../src/repl/compile.c). The non-editor
+  [`repl_load_apply_line()`](../src/repl/load.h#L78) transaction handles example, import, and
+  tutorial loads.
+- **Reset:** [`repl_state_reset_program()`](../src/repl/state_owners.h#L121) resets core REPL
+  state. [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L54) resets the editor, UI, and peer
+  subsystems when a program is replaced wholesale.
+- **App-service bootstrap:** Dump-only CLI paths bypass normal GL
+  initialization but run the idempotent `glr_ctrl_install_app_services()`
+  installer before loading commands.
+
+### App-Frame State Ownership
+
+Scene-presentation policy and most render config live in the app-side owner
+[`src/app/glr_state.c`](../src/app/glr_state.c). REPL-pipeline translation units do not include
+[`glr_state.h`](../src/app/glr_state.h); `check-repl-state-no-glr-state` enforces that boundary.
+App, editor, UI, and render3d code may consume it. Only the REPL-owned render
+tail—[`ReplRenderState`](../src/repl/state_views.h#L100), containing per-light state and clear
+color—remains a REPL slice.
+
 ## Core Subsystem Features & Integrations
 
-### Runtime GL Capability Detection
+The layer contracts above become concrete in features that cross ownership
+boundaries. These references are grouped by the kind of integration involved:
+rendering/export paths first, then platform and runtime services. Within each
+reference, the current design precedes its invariants, failure modes, and
+verification notes.
+
+### Cross-layer rendering and export
+
+These designs coordinate live GL state, controller snapshots, the REPL
+executor, or GL-free export code.
+
+#### Runtime GL Capability Detection
 
 GL feature availability that varies by *runtime context* (not by build) is
 detected once in [`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L12) — the first point at which the GL
@@ -1129,7 +1258,7 @@ the Max column falls back to plain CPU. When GPU timing ends up off,
 override, a context that advertises timer queries but yields no loadable
 entry points, and a context with no timer-query support at all.
 
-### Dynamic Reshape Projection (export + code panel)
+#### Dynamic Reshape Projection (export + code panel)
 
 The exported standalone C file's `reshape()` and the live code panel's
 footer chrome must show the projection render3d is *currently* applying
@@ -1236,7 +1365,7 @@ snapshot for the panel, special-case in the consumers.
   [`ReplConfigBridge`](../src/repl/cfg_baseline.h#L49)). Complements `check-gl-boundaries` (which already
   bars GL *calls* in the REPL pipeline) and `check-repl-export-no-ui-layout`.
 
-### 2D Orthographic Scale (GL_FEEDBACK probe + zoom)
+#### 2D Orthographic Scale (GL_FEEDBACK probe + zoom)
 
 An orthographic projection has no inherent scale — unlike perspective,
 moving the camera toward the 3D stage changes nothing on screen. So the 2D
@@ -1297,7 +1426,7 @@ motion on the first frame — lower decay is snappier but more "stepped",
 higher is smoother but coasts longer. Rapid notches stack onto the
 velocity, so fast scrolls still travel quickly.
 
-### Filtering The REPL Program (rendering a modified view)
+#### Filtering The REPL Program (rendering a modified view)
 
 Several render passes need to draw the user's geometry but **not exactly as
 the program wrote it** — they want to own a slice of GL state (a uniform
@@ -1375,7 +1504,7 @@ line pass, and `RENDER3D_EXEC_WINDING` are the side-effecting fills (they
 replace the main fill, single pass), so they advance normally; the hidden /
 depth-fill wireframe passes and probes are bracketed.
 
-### Mesh Export (PLY via GL_FEEDBACK)
+#### Mesh Export (PLY via GL_FEEDBACK)
 
 The `.ply` exporter (F11 / File → Export .ply / `--export-ply <file>`)
 captures the **live flat program** once through
@@ -1483,7 +1612,13 @@ real GL context — Xvfb (Linux) or the **OSMesa backend** below, which renders
 this exact path with no display (`--export-ply` headless matches a native
 capture to ~1e-4).
 
-### Headless Rendering & Screenshots (OSMesa)
+### Platform and runtime services
+
+These designs concern build backends, capture, startup visibility, and assets.
+Operational commands live in [`ADVANCED_USAGE.md`](ADVANCED_USAGE.md); this
+section retains the ownership decisions and implementation constraints.
+
+#### Headless Rendering & Screenshots (OSMesa)
 
 `make ... FREEGLUT_OSMESA=1` builds against a freeglut **OSMesa** backend that
 renders into a CPU buffer with no window system at all (no Cocoa/GLX/X11) — a
@@ -1526,58 +1661,39 @@ newer fork commit. Two fixes in that fork make it usable as a library consumer:
   LIFO-ordered `atexit` marker, leaks the context at process exit rather than
   destroying it through dead state. Runtime `glutDestroyWindow` is unaffected.
 
-- **`SIGUSR1` frame capture.** `kill -USR1 <pid>` snapshots the current frame to
-  a numbered PPM — no app-side code, even when the app is idle. The signal
-  handler is async-signal-safe (it only sets a `volatile sig_atomic_t` flag);
-  the flag is serviced on the **main thread** at two safe points — the buffer
-  swap path (`fgPlatformGlutSwapBuffers`, which already `glFinish()`es each
-  frame) for actively-animating apps, and the main-loop tick
-  (`fgPlatformProcessSingleEvent`, which `SIGUSR1` wakes out of its `nanosleep`)
-  for idle ones, reading the last completed frame so no redraw is needed.
-  Capture reads the colour buffer **directly** via `OSMesaGetColorBuffer` (no
-  `glReadPixels` round-trip), packs RGBA→RGB, and emits rows top-to-bottom to
-  invert OSMesa's bottom-up origin. Output prefix from `FREEGLUT_CAPTURE_FILE`
-  (default `freeglut`), files `<prefix>-NNNN.ppm`; convert with e.g.
-  `magick shot-0000.ppm shot.png`. POSIX only (no `SIGUSR1` on Windows). The
-  **native** windowed backends (Cocoa/X11) honour the same `SIGUSR1` /
-  `FREEGLUT_CAPTURE_FILE` contract via a parallel path in core
-  [`third_party/freeglut/src/fg_capture.c`](../third_party/freeglut/src/fg_capture.c) (it posts a redisplay and grabs `GL_BACK` pre-swap —
-  real-GPU pixels), so plain `make gl-repl` captures too; that path compiles
-  to stubs on OSMesa builds.
+- **`SIGUSR1` frame capture.** The async-signal-safe handler only sets a
+  `volatile sig_atomic_t` flag. The main thread services it at the buffer-swap
+  path for active rendering or the main-loop tick for an idle app. OSMesa reads
+  the completed buffer directly with `OSMesaGetColorBuffer`, converts RGBA to
+  top-down RGB, and writes the numbered PPM. Native Cocoa/X11 backends implement
+  the same contract in
+  [`third_party/freeglut/src/fg_capture.c`](../third_party/freeglut/src/fg_capture.c) by posting a redisplay and
+  capturing `GL_BACK` before swap. The native implementation compiles to stubs
+  in OSMesa builds. Signal availability and capture commands are documented in
+  [`ADVANCED_USAGE.md`](ADVANCED_USAGE.md#headless-rendering-osmesa).
 
-**Animation clock & the `--time` / `GLR_TIME` start offset.** The predefined
-`t` variable is a *fixed-timestep* clock: while animation is playing (the
-default — `time_playing` initialises to `1`; Ctrl+T *pauses*), each controller
-tick advances `t` by exactly `GLR_FRAME_DT_SECS` (1/60 s). Normally the paced
-60 Hz GLUT timer owns that tick. With `GLR_TICK_PER_FRAME` set, the timer becomes
-redraw-only and the completed-frame hook supplies exactly one whole-controller
-tick after each presentation. Recorded states are therefore `t0`, `t0+1/60`,
-... regardless of rendering throughput; slow rendering lengthens generation
-without dropping animation states. `t` starts at `0`; `--time
-<secs>` (or `GLR_TIME`, with the flag winning) sets the initial value via
-[`repl_set_time()`](../src/repl/time.h#L19) → [`repl_state_time_set()`](../src/repl/state_owners.h#L64) ([`src/repl/state.c`](../src/repl/state.c)), read in
-`main()` *after* any `--example` load (which resets `t`) so the override sticks.
-This lets a headless capture begin from a later point in an animation's timeline
-rather than always from `t = 0`.
+**Animation clock and start offset.** The predefined `t` variable is a
+fixed-timestep clock: while animation is playing, each controller tick advances
+it by `GLR_FRAME_DT_SECS` (1/60 s). Normally the paced GLUT timer owns that
+tick. With `GLR_TICK_PER_FRAME` set, the timer becomes redraw-only and the
+completed-frame hook supplies one whole-controller tick after each presentation.
+Recorded states are therefore `t0`, `t0 + 1/60`, and so on, regardless of
+rendering throughput. `--time` or `GLR_TIME` sets the initial value through
+[`repl_set_time()`](../src/repl/time.h#L19) after example loading, so an example reset cannot
+discard the requested offset.
 
-**Record mode → GIF/MP4 (`FREEGLUT_CAPTURE_FRAMES`).** `scripts/record-gif.sh`
-drives a headless run and assembles the frames with `ffmpeg` into a GIF + MP4.
-Its knob is **duration** (clip length, invariant of `--fps`); it computes
-`N = round(duration × fps)`, passes it as `FREEGLUT_CAPTURE_FRAMES=N`, and the
-backend captures every rendered frame and `exit(0)`s after N. The recording
-scripts set `GLR_TICK_PER_FRAME`, so the N frames are deterministic
-(`t0 + i/60`) and identical across machines — generate slowly, play back at any
-fps. The record + `SIGUSR1` capture are both serviced from the backend's
-**main-loop tick** (`fgPlatformProcessSingleEvent`), *not* the swap path: a
-single-buffered window's `glutSwapBuffers()` short-circuits before the platform
-swap, and `fghRedrawWindow()` exposes no per-display hook, so the per-iteration
-tick (1:1 with the display under the software renderer) is the only per-frame
-hook a backend has without editing core freeglut. Record mode uses a cheap
-colour-buffer content signature to skip the pre-first-render buffer and trigger
-on the first real frame. This keeps the whole feature inside the OSMesa backend
-files (clean for upstreaming — no core freeglut change).
+**Record mode (`FREEGLUT_CAPTURE_FRAMES`).** The backend captures a fixed number
+of rendered frames and exits. Recording scripts enable `GLR_TICK_PER_FRAME`, so
+frame `i` always represents `t0 + i/60`. In the single-buffered OSMesa path,
+record mode is serviced from `fgPlatformProcessSingleEvent` because
+`glutSwapBuffers()` returns before the platform swap; the main-loop tick is the
+only reliable per-frame backend hook without changing freeglut core. A buffer
+signature skips the unrendered initial buffer. Duration, frame assembly, and
+capture commands remain operational concerns of
+[`ADVANCED_USAGE.md`](ADVANCED_USAGE.md#recording-gifs--mp4s) and
+`scripts/record-gif.sh`.
 
-### Startup & Audio-Worker Diagnostics
+#### Startup & Audio-Worker Diagnostics
 
 Two always-on stderr diagnostics localise startup stalls and
 audio-thread hitches (notably on slow Linux disks). Both follow the
@@ -1632,7 +1748,7 @@ when a stall happens.
   REPL, so this detector does not (and cannot) observe playback
   underruns there.
 
-### Music Asset Resolution
+#### Music Asset Resolution
 
 The playlist is `*.mp3` files discovered at startup and played in
 filename order. `build_mp3_playlist()` ([`gl_repl.c`](../gl_repl.c)) concatenates **three
@@ -1667,48 +1783,10 @@ branches are still absent; keep any future platform work localized to those
 helpers. `--assets` / `GLR_ASSETS_DIR` are pure string + `opendir`, so they
 need no per-platform code.
 
-## Decoupling and Link Boundaries
-
-To keep the REPL compiler and pipeline engine (`src/repl/`) strictly decoupled from visual rendering and the host editor environment (`src/app/`, `src/editor/`), the codebase enforces a strict link boundary and routes all external interactions through explicit, neutral seams.
-
-### Standalone REPL Demo Coupling
-[`tools/repl_demo/repl_demo.c`](../tools/repl_demo/repl_demo.c) serves as a negative boundary proof. Its default samples prove that the core pipeline (`parse -> command store -> flatten -> execute`) builds and runs **without** the app controller ([`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c)), the editor (`src/editor/*`), the UI renderers (`src/ui/*`), or any app-owned visual state.
-
-`./repl_demo --trace` provides a representative walkthrough of this language pipeline: it loads code through the non-editor load transaction (`repl_load_apply_line`), parses and flattens it, and prints the evaluated results—stopping strictly at the REPL boundary. Editor-specific concerns (like undo/redo, cursor post-effects, and visual tutorial presentation) remain entirely inside their host modules.
-
-### Stub-Free Link Boundary & Guards
-To ensure dependencies do not leak back into the REPL core, the build system enforces a **stub-free link boundary**:
-* [`tools/repl_demo/stubs.c`](../tools/repl_demo/stubs.c) is kept empty except for documentation. If a core REPL translation unit acquires a dependency on an app/editor/UI symbol, the link step fails.
-* The Makefile's `check-state-ownership` gate enforces these rules with multiple automated guards (such as `check-repl-demo-no-editor`, `check-repl-demo-stubs-shrinking`, and `check-repl-export-via-bridge`).
-
-### Host Bridges & Boundary Mechanisms
-Decoupling is achieved through four primary interfaces that the app controller installs at startup:
-
-#### 1. Source-Document Port ([`source_document.h`](../source_document.h))
-Source text reads and mutations are routed through `source_document_*` functions.
-* The full application links [`glr_source_document.c`](../src/app/glr_source_document.c) (which forwards calls to [EditorState](../src/editor/state.h#L175)).
-* The standalone demo links [`tools/repl_demo/source_document.c`](../tools/repl_demo/source_document.c) (a tiny, editor-free line store).
-This keeps [EditorState](../src/editor/state.h#L175) and editor logic out of the core link set.
-
-#### 2. Host-Effect Bridges ([`ReplHostEffects`](../src/repl/host_effects.h#L38))
-The host-effect bridge ([ReplHostEffects](../src/repl/host_effects.h#L38)) installed by the controller routes core pipeline actions (such as status updates, example resets, input resets, scrolling, follow-scroll, and cursor parking) back to the UI, editor state, and peer subsystems. The demo installs only its edit-line hooks and leaves the status/editor/tutorial hooks as no-ops.
-
-#### 3. Export Bridges & Layout Inputs
-The exporter ([`src/repl/export.c`](../src/repl/export.c)) is GL-free and app-free. All app/render3d values are retrieved through controller-installed bridges:
-* **Config Bridge:** Installed via [`glr_actions_install_export_cfg_bridge()`](../src/app/glr_actions.h#L104) so the exporter can read/write `@cfg` blocks without direct coupling to app configuration modules.
-* **Camera Bridge:** Installed via [`glr_camera_export_install_bridge()`](../src/app/glr_camera_export.h#L14) to serialize camera coordinates (`// camera` blocks).
-* **Reshape-Projection Bridge:** Allows the exporter or code-panel calculations to query perspective or orthographic projections dynamically.
-* **Camera-Distance Source:** Injects the current camera distance into the command executor so that the dynamic point-attenuation fallback (scaling `glPointSize` manually when `glPointParameterfv` is unsupported) can function without linking [`glr_camera.c`](../src/app/glr_camera.c).
-* **Export Layout:** The [`ReplExportLayout`](../src/repl/export.h#L228) struct passes viewport and code-panel geometry as an explicit export input instead of calling `ui_layout_*`.
-
-#### 4. Global State Reset & Dispatch Separation
-* **Dispatch Location:** Pure structured-block validators stay in the REPL compiler ([`src/repl/compile.c`](../src/repl/compile.c)), and the non-editor [`repl_load_apply_line()`](../src/repl/load.h#L78) ([`src/repl/load.c`](../src/repl/load.c)) handles the example/import/tutorial paths.
-* **State Reset:** [`repl_state_reset_program()`](../src/repl/state_owners.h#L121) handles core REPL-only resets. The app controller owns [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L54), which resets the editor, UI, and peer subsystems simultaneously when a program load or wholesale replacement occurs.
-* **App-Service Bootstrapping:** Dump-only CLI paths (e.g., `--dump-code` and `--dump-flat`) bypass normal OpenGL initialization, but still load/export REPL state correctly by running the idempotent `glr_ctrl_install_app_services()` installer prior to loading commands.
-
-### App-Frame State Ownership
-Scene-presentation policy and most render config live in the app-side owner [`src/app/glr_state.c`](../src/app/glr_state.c) ([`glr_state.h`](../src/app/glr_state.h)). REPL-pipeline TUs do not include [`glr_state.h`](../src/app/glr_state.h) (`check-repl-state-no-glr-state`); app, editor, UI, and render3d code may. Only the REPL-owned render *tail* ([ReplRenderState](../src/repl/state_views.h#L100): per-light state + clear color) is a REPL slice.
 ## Developer Playbook
+
+This is the task-oriented reference for common architectural changes. Use it
+after the ownership and boundary sections above identify the correct layer.
 
 ### Where To Put New Code
 
@@ -1718,12 +1796,11 @@ Scene-presentation policy and most render config live in the app-side owner [`sr
 * New 3D world decorator: `render3d_*`.
 * New 3D REPL-aware overlay: current home is still `render3d_*`, consuming
   [`FlatProgramView`](../src/repl/flatten.h#L46) or a snapshot from [`Render3dRenderConfig`](../src/render3d/render_types.h#L135).
-* New 2D UI: `ui_*` renderer plus `repl_*` model/action code if mutation is
-  required.
+* New 2D UI: a `ui_*` renderer plus an editor, REPL, or peer-subsystem action
+  path when mutation is required.
 * New per-frame render3d/UI wiring: [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c).
 * New app lifecycle/window wiring: [`gl_repl.c`](../gl_repl.c) (GLUT entry point).
 * New command mutation: `repl_command_store_*`.
-
 
 ### Adding An Owner Module
 
@@ -1752,7 +1829,6 @@ When a module starts owning mutable REPL state, follow this template:
    [`repl_state_reset_program()`](../src/repl/state_owners.h#L121) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L54)
    (full-world) current for runtime slices, and add focused behavior
    coverage in the module's own tests.
-
 
 ### Adding A New Command
 
@@ -1945,7 +2021,8 @@ X(glutSolidTeapot)  \
 X(glutSolidCone)
 ```
 
-**[`tests/gl-stubs/include/GL/freeglut.h`](../tests/gl-stubs/include/GL/freeglut.h)** (or [`tests/gl-stubs/include/GL/glu.h`](../tests/gl-stubs/include/GL/glu.h)) — add a no-op inline stub:
+In [`tests/gl-stubs/include/GL/freeglut.h`](../tests/gl-stubs/include/GL/freeglut.h)—or
+[`tests/gl-stubs/include/GL/glu.h`](../tests/gl-stubs/include/GL/glu.h)—add a no-op inline stub:
 
 ```c
 static inline void glutSolidTeapot(double size) {
@@ -2020,7 +2097,6 @@ make gl-repl USE_GL_STUBS=1   # verify stub build still links if step 6 changed
 #   vanilla freeglut succeeds, and on-screen output matches the REPL
 ```
 
-
 ### Structured & Control-Flow Command Pipeline
 
 The architectural companion to [Adding A New Command](#adding-a-new-command).
@@ -2081,7 +2157,6 @@ checklist above (its steps 1–2), a structured command touches:
    tests only when cursor/insert-mode behavior is part of the feature.
 
 ---
-
 
 ### Adding A New Tutorial Step Kind
 
@@ -2324,6 +2399,21 @@ drift test already requires non-zero `.tags`, but any new step-shape invariant
 (e.g. "REQUIRE_VAR var_name must be non-reserved") needs a one-line mention so
 future catalog authors don't rediscover it from a test failure.
 
+### Header Documentation Standard
+
+Until the REPL public surface is consolidated, each public API header should
+document:
+
+1. Module responsibility and ownership boundary.
+2. Lifecycle: initialization, per-frame calls, mutation rules.
+3. Public types and what layer owns them.
+4. Public functions, parameters, return values, and preconditions.
+5. Important cross-module invariants, especially GL/state ownership and render
+   ordering.
+
+Long-form implementation notes belong in the implementation section or module
+docs. The intended end state is one concise public REPL API header; verbose
+per-module header prose should not become the permanent public surface.
 
 ## Open Refactor Edges
 
@@ -2459,19 +2549,3 @@ including environment variables, examples, and known limitations.
 The shim only fixes header layout. Other breakage at specific older SHAs
 (renamed symbols, broken examples) is intentionally left alone; older commits
 are reference material, not a maintained build target.
-
-## Header Documentation Standard
-
-Until the REPL public surface is consolidated, each public API header should
-document:
-
-1. Module responsibility and ownership boundary.
-2. Lifecycle: initialization, per-frame calls, mutation rules.
-3. Public types and what layer owns them.
-4. Public functions, parameters, return values, and preconditions.
-5. Important cross-module invariants, especially GL/state ownership and render
-   ordering.
-
-Long-form implementation notes belong in the implementation section or module
-docs. The intended end state is one concise public REPL API header; verbose
-per-module header prose should not become the permanent public surface.
