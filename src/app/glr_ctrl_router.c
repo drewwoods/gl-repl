@@ -1046,6 +1046,14 @@ static int route_numeric_swatch_hit(const UiHit *hit, float scale) {
     return 1;
 }
 
+static int glr_ctrl_router_point_in_gl_state_popup(int x, int y) {
+    UiGlStatePanelView view;
+    if (!ui_state_gl_state_inspector().visible)
+        return 0;
+    view = glr_ctrl_build_gl_state_panel_view();
+    return view.visible && ui_gl_state_panel_hit_test(&view, x, y);
+}
+
 /* Left press vs the floating OpenGL-state popup: a click inside the open
  * popup is consumed (it is a display-only surface — the click must not fall
  * through to the code-panel rows behind it); a click anywhere else dismisses
@@ -1140,10 +1148,35 @@ static void route_right_code_panel_hit(const UiHit *hit, int x, int y) {
  *     camera behind it. */
 static void route_right_press(int x, int y) {
     UiRenderSnapshot ui_snap;
+    UiHit front_hit;
     UiHit hit;
 
     glr_ctrl_build_ui_snapshot(&ui_snap);
-    hit = ui_panels_hit_test(&ui_snap, x, y, repl_eval_predef_view().count);
+    front_hit = ui_panels_hit_test_above_gl_state(
+        &ui_snap, x, y, repl_eval_predef_view().count);
+    if (front_hit.kind != UI_HIT_NONE) {
+        hit = front_hit;
+    } else {
+        const GLCmd *under_popup_cmd;
+        UiGlStateInspectorState inspector;
+        hit = ui_panels_hit_test(&ui_snap, x, y,
+                                 repl_eval_predef_view().count);
+        /* The inspector itself is display-only chrome. With no later-rendered
+         * panel claiming this pixel, consume its surface before classifying
+         * the code panel / scene behind it. Preserve the anchor row's second
+         * right-click toggle even when the solved panel border covers the
+         * original anchor pixel. */
+        if (glr_ctrl_router_point_in_gl_state_popup(x, y)) {
+            inspector = ui_state_gl_state_inspector();
+            under_popup_cmd = hit.kind == UI_HIT_CODE_TEXT
+                ? repl_state_document_cmd_at(hit.line_idx) : NULL;
+            if (!under_popup_cmd || under_popup_cmd->type != CMD_EMPTY ||
+                hit.line_idx != inspector.source_line_idx) {
+                editor_request_redraw();
+                return;
+            }
+        }
+    }
 
     switch (hit.kind) {
     case UI_HIT_NUMERIC_SWATCH:
@@ -1176,6 +1209,12 @@ static void route_right_press(int x, int y) {
     default:
         break;
     }
+
+    /* All hits from the front-layer pass own visible pixels. Actionable
+     * right-button cases were handled above; the remaining surfaces consume
+     * the press inert rather than falling through to code/camera routing. */
+    if (front_hit.kind != UI_HIT_NONE)
+        return;
 
     route_right_code_panel_hit(&hit, x, y);
 }
@@ -1456,6 +1495,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_variable_slider_hit(x, y); break;
     case UI_HIT_PROFILE_SECTION_TOGGLE:
         consumed = route_profile_section_toggle_hit(&hit); break;
+    case UI_HIT_OVERLAY_CHROME:
+        consumed = 1; break;
     case UI_HIT_PANEL_DIVIDER:
         consumed = route_panel_divider_hit(&hit); break;
     case UI_HIT_CODE_TEXT:
@@ -1569,23 +1610,38 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
  * callback and plain GLUT's buttons-3/4 emulation). delta > 0 scrolls
  * content toward later rows / zooms out; the two entry points normalize
  * their opposite sign conventions before calling. Priority: modal help
- * overlay, open overflowing menu flyout, OpenGL-state popup under the
- * pointer, code panel, then camera zoom velocity — each earlier owner
- * consumes the wheel so it never reaches what's behind it. */
+ * overlay, surfaces painted above the OpenGL-state popup (including menu
+ * flyouts and inert panel chrome), the popup itself, code panel, then camera
+ * zoom velocity — each earlier owner consumes the wheel so it never reaches
+ * what's behind it. */
 static void route_wheel(int x, int y, int delta) {
+    UiRenderSnapshot ui_snap;
+    UiHit front_hit;
+
     if (ui_state_command_description().visible &&
         editor_input_point_in_code_panel(x, y))
         ui_state_command_description_close();
     if (ui_state_help().visible) {
         glr_ctrl_help_scroll_by(delta);
-    } else if (ui_menu_bar_handle_wheel_scroll(x, y, delta)) {
-        /* Consumed by an open, overflowing menu flyout. */
-    } else if (glr_ctrl_router_handle_gl_state_popup_wheel(x, y, delta)) {
-        /* Consumed by the OpenGL-state popup under the pointer. */
-    } else if (editor_input_point_in_code_panel(x, y)) {
-        editor_input_code_panel_scroll(delta);
     } else {
-        glr_camera_add_zoom_velocity((float)delta * GLR_WHEEL_ZOOM_STEP);
+        glr_ctrl_build_ui_snapshot(&ui_snap);
+        front_hit = ui_panels_hit_test_above_gl_state(
+            &ui_snap, x, y, repl_eval_predef_view().count);
+        if (front_hit.kind != UI_HIT_NONE) {
+            /* The only scrollable front surface is an overflowing menu
+             * flyout. Every other visible panel intentionally consumes the
+             * wheel inert, including a short/non-scrollable flyout. */
+            if (front_hit.kind == UI_HIT_MENU_ITEM ||
+                front_hit.kind == UI_HIT_SUBMENU_ITEM ||
+                front_hit.kind == UI_HIT_CODE_PANEL_CHROME)
+                (void)ui_menu_bar_handle_wheel_scroll(x, y, delta);
+        } else if (glr_ctrl_router_handle_gl_state_popup_wheel(x, y, delta)) {
+            /* Consumed by the OpenGL-state popup under the pointer. */
+        } else if (editor_input_point_in_code_panel(x, y)) {
+            editor_input_code_panel_scroll(delta);
+        } else {
+            glr_camera_add_zoom_velocity((float)delta * GLR_WHEEL_ZOOM_STEP);
+        }
     }
     editor_request_redraw();
 }
@@ -1710,8 +1766,9 @@ void glr_ctrl_special(int key, int x, int y) {
  * (panel resize end), then the variable-panel drag release fires if
  * active, then camera UP so the orbit/pan/zoom interaction releases.
  *
- * DOWN, left button: modal help overlay first, then the OpenGL-state
- * popup, then the canonical ui_panels_hit_test → UiHit.kind switch
+ * DOWN, left button: modal help overlay first, then the reverse-z pass for
+ * panels painted over the OpenGL-state popup, then the popup, then the
+ * canonical ui_panels_hit_test → UiHit.kind switch
  * (glr_ctrl_router_handle_code_panel_hit); non-chrome kinds fall
  * through to scene press (color picker overlay) and camera. Right
  * button: route_right_press — the same canonical hit-test with
@@ -1749,6 +1806,25 @@ static void mouse_dispatch(int button, int state, int x, int y) {
          * select / click-away dismiss / swallow body. */
         if (glr_ctrl_router_handle_help_click(button, state, x, y))
             return;
+        /* Later-rendered panels own overlapping pixels. Their actionable
+         * controls still route normally; inert panel bodies explicitly
+         * consume the click. A front panel outside the popup keeps the
+         * popup's established click-away behavior (except while a menu is
+         * open, matching the popup handler below). */
+        UiRenderSnapshot ui_snap;
+        glr_ctrl_build_ui_snapshot(&ui_snap);
+        UiHit front_hit = ui_panels_hit_test_above_gl_state(
+            &ui_snap, x, y, repl_eval_predef_view().count);
+        if (front_hit.kind != UI_HIT_NONE) {
+            if (ui_state_gl_state_inspector().visible &&
+                !ui_menu_bar_menu_dropdown_is_open() &&
+                !glr_ctrl_router_point_in_gl_state_popup(x, y)) {
+                ui_state_gl_state_inspector_close();
+                editor_request_redraw();
+            }
+            (void)glr_ctrl_router_handle_code_panel_hit(front_hit, x, y);
+            return;
+        }
         /* Floating OpenGL-state popup: swallow clicks on its surface,
          * dismiss on click-away (the handler returns 0 for the latter so
          * the click still routes below). */
@@ -1760,8 +1836,6 @@ static void mouse_dispatch(int button, int state, int x, int y) {
          * divider + inline swatch + insert line) and pin buttons. Only
          * kinds that don't apply (UI_HIT_SCENE, UI_HIT_NONE,
          * UI_HIT_HELP_PANEL) fall through to scene press / camera. */
-        UiRenderSnapshot ui_snap;
-        glr_ctrl_build_ui_snapshot(&ui_snap);
         UiHit hit = ui_panels_hit_test(&ui_snap, x, y,
                            repl_eval_predef_view().count);
         if (glr_ctrl_router_handle_code_panel_hit(hit, x, y))
