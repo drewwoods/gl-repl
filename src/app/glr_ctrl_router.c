@@ -1118,9 +1118,31 @@ static int glr_ctrl_router_handle_gl_state_popup_wheel(int x, int y,
     return 1;
 }
 
+/* A blank live input row is a state boundary even though it is not in the
+ * source document yet. UI_HIT_CODE_INSERT_LINE identifies an insert/end row;
+ * a non-insert active row still reports UI_HIT_CODE_TEXT, so it must prefer
+ * the visible input over the committed command hidden underneath it. In
+ * insert mode the committed row sharing the same source index remains a
+ * normal command hit. */
+static int glr_ctrl_router_hit_is_blank_gl_state_anchor(const UiHit *hit) {
+    const GLCmd *cmd;
+
+    if (!hit)
+        return 0;
+    if (hit->kind == UI_HIT_CODE_INSERT_LINE)
+        return glr_ctrl_gl_state_live_input_is_blank_at_line(hit->line_idx);
+    if (hit->kind != UI_HIT_CODE_TEXT)
+        return 0;
+    if (!editor_insert_mode() &&
+        glr_ctrl_gl_state_live_input_is_blank_at_line(hit->line_idx))
+        return 1;
+    cmd = repl_state_document_cmd_at(hit->line_idx);
+    return cmd && cmd->type == CMD_EMPTY;
+}
+
 /* Right-click over a committed GL-family command opens its authored help card;
- * glEnable/glDisable resolve that card by capability argument. A committed
- * empty source row keeps its existing OpenGL-state-inspector toggle. Every
+ * glEnable/glDisable resolve that card by capability argument. A visually
+ * empty committed or live input row toggles the OpenGL-state inspector. Every
  * other chrome right-click is consumed inert so it never forwards to the
  * scene camera, where right-drag starts pan. */
 static void route_right_code_panel_hit(const UiHit *hit, int x, int y) {
@@ -1129,7 +1151,7 @@ static void route_right_code_panel_hit(const UiHit *hit, int x, int y) {
 
     cmd = hit->kind == UI_HIT_CODE_TEXT
         ? repl_state_document_cmd_at(hit->line_idx) : NULL;
-    if (cmd && cmd->type == CMD_EMPTY) {
+    if (glr_ctrl_router_hit_is_blank_gl_state_anchor(hit)) {
         UiGlStateInspectorState inspector = ui_state_gl_state_inspector();
         ui_state_command_description_close();
         if (inspector.visible &&
@@ -1172,7 +1194,6 @@ static void route_right_press(int x, int y) {
     if (front_hit.kind != UI_HIT_NONE) {
         hit = front_hit;
     } else {
-        const GLCmd *under_popup_cmd;
         UiGlStateInspectorState inspector;
         hit = ui_panels_hit_test(&ui_snap, x, y,
                                  repl_eval_predef_view().count);
@@ -1183,9 +1204,7 @@ static void route_right_press(int x, int y) {
          * original anchor pixel. */
         if (glr_ctrl_router_point_in_gl_state_popup(x, y)) {
             inspector = ui_state_gl_state_inspector();
-            under_popup_cmd = hit.kind == UI_HIT_CODE_TEXT
-                ? repl_state_document_cmd_at(hit.line_idx) : NULL;
-            if (!under_popup_cmd || under_popup_cmd->type != CMD_EMPTY ||
+            if (!glr_ctrl_router_hit_is_blank_gl_state_anchor(&hit) ||
                 hit.line_idx != inspector.source_line_idx) {
                 editor_request_redraw();
                 return;

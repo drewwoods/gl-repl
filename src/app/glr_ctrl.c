@@ -2308,23 +2308,54 @@ void glr_publish_replay_annotations(const ReplReplayAnnotationOutput *out) {
     }
 }
 
-/* Build the right-click OpenGL-state popup's per-frame view. Validates the
- * anchor (still a committed empty source row — closes the popup otherwise),
- * folds the current flat program up to the anchor into g_gl_state_report,
- * and flips the stored GLUT click y into the renderer's y-up coords. */
+int glr_ctrl_gl_state_live_input_is_blank_at_line(int source_line_idx) {
+    const char *text;
+
+    if (source_line_idx < 0 ||
+        source_line_idx != editor_state_edit_line())
+        return 0;
+    text = editor_input_text();
+    while (text && *text && isspace((unsigned char)*text))
+        text++;
+    return !text || *text == '\0';
+}
+
+static int glr_ctrl_gl_state_anchor_is_valid(int source_line_idx) {
+    const GLCmd *anchor_cmd;
+
+    if (source_line_idx < 0)
+        return 0;
+
+    /* In overwrite mode the input row replaces the document row visually,
+     * so its live contents decide whether the anchor is still blank. Insert
+     * mode shows both rows: a blank live insertion slot is valid, while a
+     * committed empty command at the same index remains independently valid. */
+    if (!editor_insert_mode() &&
+        source_line_idx == editor_state_edit_line())
+        return glr_ctrl_gl_state_live_input_is_blank_at_line(source_line_idx);
+    if (glr_ctrl_gl_state_live_input_is_blank_at_line(source_line_idx))
+        return 1;
+
+    anchor_cmd = repl_state_document_cmd_at(source_line_idx);
+    return anchor_cmd && anchor_cmd->type == CMD_EMPTY;
+}
+
+/* Build the right-click OpenGL-state popup's per-frame view. Validates that
+ * the anchor is still a visually blank committed or live editor row (closing
+ * the popup otherwise), folds the current flat program up to that boundary
+ * into g_gl_state_report, and flips the stored GLUT click y into the
+ * renderer's y-up coords. */
 UiGlStatePanelView glr_ctrl_build_gl_state_panel_view(void) {
     UiGlStatePanelView view;
     UiGlStateInspectorState inspector = ui_state_gl_state_inspector();
     UiViewportState vp = ui_state_viewport();
-    const GLCmd *anchor_cmd;
 
     memset(&view, 0, sizeof(view));
     view.window_w = vp.window_w;
     view.window_h = vp.window_h;
     if (!inspector.visible)
         return view;
-    anchor_cmd = repl_state_document_cmd_at(inspector.source_line_idx);
-    if (!anchor_cmd || anchor_cmd->type != CMD_EMPTY) {
+    if (!glr_ctrl_gl_state_anchor_is_valid(inspector.source_line_idx)) {
         ui_state_gl_state_inspector_close();
         return view;
     }
@@ -2921,7 +2952,7 @@ void glr_ctrl_open_gl_state_popup(int line) {
     /* Synthetic anchor for headless capture runs (a real open records the
      * right-click position): a quarter into the code panel, vertically
      * centered. The per-frame view builder validates the line and closes
-     * the popup unless it is a committed empty row. */
+     * the popup unless it is a visually blank committed or live row. */
     ui_layout_code_panel_rect(&cp_x, NULL, &cp_w, NULL);
     ui_state_gl_state_inspector_open(line, cp_x + cp_w / 4,
                                      ui_state_viewport().window_h / 2);

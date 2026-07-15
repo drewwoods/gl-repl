@@ -30,6 +30,12 @@ const struct UiRenderSnapshot *glr_ctrl_drag_hit_test_snapshot(void);
 void glr_ctrl_apply_input_effects(EditorInputDispatchEffects effects);
 void glr_ctrl_router_run_pending_quit(void);
 
+/* True when source_line_idx names the currently rendered editor input row
+ * and that live, not-yet-committed input contains only whitespace. The GL
+ * state router uses this to give visually blank input rows the same boundary
+ * semantics as committed CMD_EMPTY rows. */
+int glr_ctrl_gl_state_live_input_is_blank_at_line(int source_line_idx);
+
 /* ---- View-mode 2D/3D transition (src/app/glr_ctrl_view_transition.c) ---- */
 
 /* Advance the projection/camera 2D<->3D transition by dt seconds. Called once

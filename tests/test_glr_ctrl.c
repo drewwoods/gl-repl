@@ -1439,6 +1439,58 @@ static void test_right_click_empty_line_toggles_gl_state_report(void) {
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
 }
 
+static void test_right_click_uncommitted_empty_line_opens_gl_state_report(void) {
+    UiHit hit;
+    UiGlStatePanelView view;
+    int document_count;
+    int x = -1;
+    int y = -1;
+
+    printf("--- imrepl_ctrl right-click uncommitted OpenGL state row ---\n");
+
+    prepare_code_panel_mouse_fixture();
+    document_count = repl_state_document_count();
+    editor_navigate_to_line(document_count);
+    ASSERT_STR("trailing editor row is blank but uncommitted",
+               editor_input_text(), "");
+    ASSERT_INT("blank live row does not change document count",
+               repl_state_document_count(), document_count);
+    ASSERT_TRUE("found uncommitted input-row hit",
+                find_hit_point_in_code_panel(UI_HIT_CODE_INSERT_LINE,
+                                             &hit, &x, &y));
+    ASSERT_INT("uncommitted hit carries its state boundary",
+               hit.line_idx, document_count);
+
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    ASSERT_INT("right-click blank live row opens state report",
+               ui_state_gl_state_inspector().visible, 1);
+    ASSERT_INT("live-row report anchors before pending line",
+               ui_state_gl_state_inspector().source_line_idx,
+               document_count);
+    ASSERT_INT("opening report does not commit live row",
+               repl_state_document_count(), document_count);
+    view = glr_ctrl_build_gl_state_panel_view();
+    ASSERT_INT("live-row state report view remains visible", view.visible, 1);
+    ASSERT_TRUE("live-row report is built", view.report != NULL);
+    ASSERT_INT("live-row report uses pending-line boundary",
+               view.report ? view.report->source_line_idx : -1,
+               document_count);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    ASSERT_INT("second right-click toggles live-row report closed",
+               ui_state_gl_state_inspector().visible, 0);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+
+    editor_input_set_text("glVertex3f(9, 9, 9)");
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    ASSERT_INT("nonblank uncommitted row does not open state report",
+               ui_state_gl_state_inspector().visible, 0);
+    ASSERT_INT("right-click never commits pending input",
+               repl_state_document_count(), document_count);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+}
+
 /* Pure popup-geometry checks: a report taller than the window solves to a
  * scrollable row window, and the hit-test frame matches the solved rect. */
 static void test_gl_state_popup_scroll_geometry(void) {
@@ -3981,6 +4033,7 @@ int main(void) {
     test_right_click_code_panel_does_not_start_camera_pan();
     test_right_click_gl_command_description_popup();
     test_right_click_empty_line_toggles_gl_state_report();
+    test_right_click_uncommitted_empty_line_opens_gl_state_report();
     test_gl_state_popup_scroll_geometry();
     test_gl_state_popup_details_toggle();
     test_editor_input_dismisses_gl_state_report();
