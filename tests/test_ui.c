@@ -75,6 +75,26 @@ static UiProfilePanelView pp_view(UiProfilePanelMode mode) {
     TEST_ASSERT_TRUE(&g_harness, label, gl_stub_counts[counter] >= (min_calls)); \
 } while (0)
 
+#define STATUSBAR_TRACE_PATH "build/test_ui_statusbar_trace.txt"
+
+static int statusbar_trace_count_line(const char *exact) {
+    FILE *trace = fopen(STATUSBAR_TRACE_PATH, "r");
+    char line[128];
+    int count = 0;
+
+    if (!trace)
+        return 0;
+    while (fgets(line, sizeof(line), trace)) {
+        size_t len = strlen(line);
+        if (len > 0 && line[len - 1] == '\n')
+            line[len - 1] = '\0';
+        if (strcmp(line, exact) == 0)
+            count++;
+    }
+    fclose(trace);
+    return count;
+}
+
 /* Build a UiRenderSnapshot from the current REPL state for renderer tests. */
 static void make_test_ui_snapshot(UiRenderSnapshot *snap) {
     glr_ctrl_build_ui_snapshot(snap);
@@ -88,6 +108,45 @@ static UiHit ui_panels_hit_test_current_snapshot(int mx, int my,
 
     make_test_ui_snapshot(&snap);
     return ui_panels_hit_test(&snap, mx, my, variable_count);
+}
+
+static void test_statusbar_command_count_overflow_color(void) {
+    UiRenderSnapshot snap;
+    int normal_error_colors;
+    int normal_primary_colors;
+    int overflow_error_colors;
+    int overflow_primary_colors;
+
+    printf("Testing statusbar command overflow color...\n");
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(800, 600);
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_ctrl_sync_ui_chrome();
+    ui_state_code_panel_mut()->panel_frac = 0.45f;
+    make_test_ui_snapshot(&snap);
+
+    snap.flat_program_overflow_count = 0;
+    gl_stub_trace_open(STATUSBAR_TRACE_PATH);
+    ui_repl_code_panel_render_with_chrome(&snap, NULL);
+    gl_stub_trace_close();
+    normal_error_colors = statusbar_trace_count_line(
+        "glColor4f 1 0.557 0.494 1");
+    normal_primary_colors = statusbar_trace_count_line(
+        "glColor4f 0.847 0.847 0.847 1");
+
+    snap.flat_program_overflow_count = MAX_FLAT_COMMANDS + 7;
+    gl_stub_trace_open(STATUSBAR_TRACE_PATH);
+    ui_repl_code_panel_render_with_chrome(&snap, NULL);
+    gl_stub_trace_close();
+    overflow_error_colors = statusbar_trace_count_line(
+        "glColor4f 1 0.557 0.494 1");
+    overflow_primary_colors = statusbar_trace_count_line(
+        "glColor4f 0.847 0.847 0.847 1");
+
+    ASSERT_INT("overflow adds one error-text color for command count",
+               overflow_error_colors, normal_error_colors + 1);
+    ASSERT_INT("overflow replaces one primary command-count color",
+               overflow_primary_colors + 1, normal_primary_colors);
 }
 
 static void build_test_code_panel_layout(UiReplCodePanelLayout *layout,
@@ -1896,6 +1955,7 @@ int main(void) {
     test_ui_panels_hit_test_overwrite_row_kind();
     test_ui_panels_hit_test_trailing_blank_row_kind();
     test_ui_panels_hit_test_virtual_row_routes_to_source();
+    test_statusbar_command_count_overflow_color();
     test_vertex2f_gutter_labels();
     test_vertex_gutter_labels_follow_cursor_begin_block();
     test_statusbar_action_tooltips();
