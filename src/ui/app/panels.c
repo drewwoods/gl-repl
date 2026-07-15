@@ -647,10 +647,6 @@ void ui_panels_render_scene_status(const UiRenderSnapshot *snap) {
     }
 }
 
-UiHit ui_panels_handle_right_press(int mx, int my) {
-    return ui_menu_bar_handle_config_right_press(mx, my);
-}
-
 UiHit ui_panels_hit_test(const UiRenderSnapshot *snap,
                          int mx, int my, int variable_count) {
     UiHit hit = ui_hit_none();

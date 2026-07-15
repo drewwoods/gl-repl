@@ -126,6 +126,24 @@ EditorInputDispatchEffects editor_take_and_reset_input_effects(void) {
     return out;
 }
 
+/* Fold a drained snapshot back into the pending accumulator. The
+ * controller's dispatch bodies delegate to editor_handle_* (which
+ * drains) mid-event and flush once at the end of the entry point;
+ * merging the returned snapshot keeps that single-flush model without
+ * losing what the editor accumulated. Flags OR together; a merged
+ * cursor overrides any pending one (last writer wins, matching what
+ * sequential glutSetCursor calls would do). */
+void editor_merge_input_effects(EditorInputDispatchEffects fx) {
+    g_pending_input_effects.request_redraw |= fx.request_redraw;
+    if (fx.set_cursor) {
+        g_pending_input_effects.set_cursor = 1;
+        g_pending_input_effects.cursor = fx.cursor;
+    }
+    g_pending_input_effects.restore_hidden_code_panel |=
+        fx.restore_hidden_code_panel;
+    g_pending_input_effects.close_help_overlay |= fx.close_help_overlay;
+}
+
 /* Production sets this from src/app/glr_ctrl.c after glutInit so
  * editor_input_active_modifiers() can safely call glutGetModifiers(). Tests
  * that don't install a modifier provider leave it at 0; the read
@@ -2098,39 +2116,40 @@ static void motion_func(int x, int y) {
     }
 }
 
+/* Each entry point runs its editor route, then drains and returns the
+ * pending effects (its own plus anything the caller accumulated before
+ * delegating — deliberately NOT reset at entry, so caller-side effects
+ * are returned rather than silently wiped). The controller merges the
+ * snapshot back into the accumulator via editor_merge_input_effects and
+ * flushes once per GLUT event; test fixtures read the snapshot
+ * directly. */
 EditorInputDispatchEffects editor_handle_key(unsigned char key, int x, int y) {
-    editor_reset_input_effects();
     keyboard_func(key, x, y);
     return editor_take_and_reset_input_effects();
 }
 
 EditorInputDispatchEffects editor_handle_special(int key, int x, int y) {
-    editor_reset_input_effects();
     special_func(key, x, y);
     return editor_take_and_reset_input_effects();
 }
 
 EditorInputDispatchEffects editor_handle_mouse(int button, int state, int x, int y) {
-    editor_reset_input_effects();
     mouse_func(button, state, x, y);
     return editor_take_and_reset_input_effects();
 }
 
 EditorInputDispatchEffects editor_handle_motion(int x, int y) {
-    editor_reset_input_effects();
     motion_func(x, y);
     return editor_take_and_reset_input_effects();
 }
 
 EditorInputDispatchEffects editor_handle_passive_motion(int x, int y) {
-    editor_reset_input_effects();
     passive_motion_func(x, y);
     return editor_take_and_reset_input_effects();
 }
 
 #ifndef USE_GLUT
 EditorInputDispatchEffects editor_handle_mousewheel(int wheel, int direction, int x, int y) {
-    editor_reset_input_effects();
     mousewheel_func(wheel, direction, x, y);
     return editor_take_and_reset_input_effects();
 }

@@ -516,6 +516,7 @@ explaining why the extra background is useful.
 | [`gl_repl.h`](gl_repl.h) | Small shared header: standard includes and `M_PI`; types/defaults live in dedicated headers |
 | [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c) | App-frame controller: `glr_ctrl_display_frame`, `glr_ctrl_reshape`, `glr_ctrl_init_gl`; builds [`Render3dRenderConfig`](src/render3d/render_types.h#L135), calls scene/UI renderers |
 | [`src/app/glr_ctrl.h`](src/app/glr_ctrl.h) | Controller public surface: display, reshape, init-GL entrypoints |
+| [`src/app/glr_ctrl_router.c`](src/app/glr_ctrl_router.c) | GLUT input dispatch: keyboard / special / mouse / motion / wheel entry points (thin shims — reset effects, run a `*_dispatch` body, flush once via `glr_ctrl_apply_input_effects`), the `glr_ctrl_router_*` handlers, the left/right-press `UiHit` switches, the shared `route_wheel`, and the SIGINT-quit lifecycle |
 | [`src/app/glr_config.c`](src/app/glr_config.c) | Config key implementation and descriptor table helpers. The tail of `glr_config_set` notifies the tutorial runner (`tutorial_notify_state_changed`) so REQUIRE steps observe every write path — direct setters (e.g. accum-passes Ctrl+=/-), `glr_cfg_cycle_row`'s early-return branches, and the bridge's `apply` during `@cfg` / example / workspace load |
 | [`src/app/glr_config.h`](src/app/glr_config.h) | `ReplConfigKey` / [`ReplConfigItem`](src/repl/cfg_baseline.h#L29) descriptor API for keyed config access |
 | [`src/repl/command.h`](src/repl/command.h) | Core command model types: [`CmdType`](src/repl/command.h#L37) enum, [`GLCmd`](src/repl/command.h#L90) struct (pure parse-result: type, args, flags, provenance — no `source[]` field) |
@@ -539,7 +540,7 @@ explaining why the extra background is useful.
 | [`src/repl/state_views.h`](src/repl/state_views.h) | Read-only (by-value) state getters; safe to include from `render3d_*` and `ui_*` |
 | [`src/repl/state_owners.h`](src/repl/state_owners.h) | Mutable `_mut()` accessors; owner modules and controller only. |
 | [`src/repl/cfg_baseline.h`](src/repl/cfg_baseline.h) | Config bag API plus typed live-cfg helpers (`repl_cfg_get_int` / `_set_int` / `_known` / `_set_text` / `_resolve_text`) used by [`src/subsystems/tutorial/tutorial_runner.c`](src/subsystems/tutorial/tutorial_runner.c) for SET / REQUIRE handling and cfg baseline restore |
-| [`src/editor/input.c`](src/editor/input.c) | **REPL editor input dispatcher**: REPL key bindings (`;` commit, Tab autocomplete, Ctrl+R reformat, tutorial guards, comment toggle) + REPL-flavored orchestration on top of `edit_ops` primitives. Non-editor routing (replay, audio, config, save, camera) lives in [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c). The generic counterpart for `editor_demo` is [`tools/editor_demo/input.c`](tools/editor_demo/input.c). |
+| [`src/editor/input.c`](src/editor/input.c) | **REPL editor input dispatcher**: REPL key bindings (`;` commit, Tab autocomplete, Ctrl+R reformat, tutorial guards, comment toggle) + REPL-flavored orchestration on top of `edit_ops` primitives. Non-editor routing (replay, audio, config, save, camera) lives in [`src/app/glr_ctrl_router.c`](src/app/glr_ctrl_router.c). The generic counterpart for `editor_demo` is [`tools/editor_demo/input.c`](tools/editor_demo/input.c). |
 | [`src/editor/input.h`](src/editor/input.h) | Editor input dispatch entry points + [`EditorInputDispatchEffects`](src/editor/input.h#L36) typedef + `editor_input_active_modifiers` test seam |
 | [`src/editor/edit_ops.c`](src/editor/edit_ops.c) | Generic text-editing primitives shared by [`src/editor/input.c`](src/editor/input.c) (REPL dispatcher) and [`tools/editor_demo/input.c`](tools/editor_demo/input.c) (generic dispatcher): char insert/delete at cursor, input-selection consume, type-char and backspace (selection-aware). REPL-free; locked by `check-edit-ops-pure`. |
 | [`src/editor/edit_ops.h`](src/editor/edit_ops.h) | `edit_op_*` primitive declarations |
@@ -780,8 +781,9 @@ explaining why the extra background is useful.
   [`editor_handle_key()`](src/editor/input.h#L50) handles ASCII keys (Ctrl+X
   produces ASCII X & 0x1F via standard GLUT), [`editor_handle_special()`](src/editor/input.h#L51)
   for F-keys/arrows. Cross-subsystem routing (replay / save / config /
-  audio / camera / tutorial-ack) lives in `src/app/glr_ctrl.c::glr_ctrl_router_*`
-  helpers, called from `glr_ctrl_keyboard` before delegating to
+  audio / camera / tutorial-ack) lives in the `glr_ctrl_router_*`
+  helpers in [`src/app/glr_ctrl_router.c`](src/app/glr_ctrl_router.c), called from
+  `glr_ctrl_keyboard`'s dispatch body before delegating to
   `editor_handle_key`. `glr_ctrl_router_handle_tutorial_ack_key` consumes
   Enter / Tab / Space during a tutorial SET (showcase) step and is a
   no-op for COMMAND / REQUIRE / inactive — scope it strictly there so it
@@ -1273,7 +1275,8 @@ Declarative toggle system in [`src/app/glr_actions.c`](src/app/glr_actions.c):
   `item_idx == absolute g_cfg_items[] index`) routes via
   `route_submenu_item_hit` → `glr_cfg_cycle_row(idx, +1)` and keeps the
   dropdown open; right-press over a flyout item cycles backward
-  (`ui_menu_bar_handle_config_right_press` → `submenu_hit_test`).
+  (`route_right_press`'s `UI_HIT_SUBMENU_ITEM` case, resolved by the
+  canonical `ui_panels_hit_test` → `submenu_hit_test`).
   F-key/Ctrl-key shortcuts dispatch through [`src/app/glr_actions.c`](src/app/glr_actions.c)
   unchanged.
 - Adding a config item: append to `g_cfg_items[]` (under the right
@@ -1302,7 +1305,7 @@ alongside `.cfg` (see the file-layout table for the tutorial catalog).
   `glr_action_menu_item_activate` returns 0 for any `item_idx <
   tag_count`. Restart/Exit are handled there at the trailing indices.
   Tutorial activation flows through `route_submenu_item_hit` in
-  [`src/app/glr_ctrl.c`](src/app/glr_ctrl.c): a `UI_HIT_SUBMENU_ITEM` with
+  [`src/app/glr_ctrl_router.c`](src/app/glr_ctrl_router.c): a `UI_HIT_SUBMENU_ITEM` with
   `cmd_idx == GLR_MENU_TUTORIALS` and `item_idx == absolute tutorial
   index` calls `tutorial_start(item_idx)` directly and dismisses the
   menu — symmetric with how Scene flyout hits call
