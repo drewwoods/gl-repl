@@ -56,40 +56,167 @@
 #include <string.h>
 #include <time.h>
 
-#if defined(__EMSCRIPTEN__)
-
-#include <emscripten/emscripten.h>
+/* ------------------------------------------------------------------ */
+/* Backend-shared module state + helpers                               */
+/* (used by both the Emscripten backend and the native miniaudio       */
+/* backend below; backend-only statics stay inside their #ifdef half)  */
+/* ------------------------------------------------------------------ */
 
 #define GLR_AUDIO_MAX_TRACKS 64
 #define GLR_AUDIO_MAX_PATH   512
 #define STATE_SAVE_INTERVAL_SECS 5
 #define GLR_AUDIO_NO_SEEK (-1.0f)
 
-static int g_inited       = 0;
-static int g_music_loaded = 0;
+static int g_inited       = 0;  /* backend init succeeded */
+static int g_music_loaded = 0;  /* a track is loaded/active */
 static int g_muted        = 0;
-static int g_paused       = 0;
-static int g_gesture_done = 0;
+static int g_paused       = 0;  /* paused: track loaded but stopped, cursor held */
+static int g_gesture_done = 0;  /* have we satisfied browser autoplay policy? */
 
+/* Playlist: caller-registered tracks, in play order. */
 static char g_playlist[GLR_AUDIO_MAX_TRACKS][GLR_AUDIO_MAX_PATH];
 static char g_playlist_group[GLR_AUDIO_MAX_TRACKS][64];
 static char g_playlist_display_name[GLR_AUDIO_MAX_TRACKS][128];
 static float g_playlist_duration_secs[GLR_AUDIO_MAX_TRACKS];
 static int  g_playlist_count = 0;
-static int  g_playlist_pos   = 0;
+static int  g_playlist_pos   = 0;  /* index of the currently-loaded track */
 
+/* Default to GLR_AUDIO_LOOP_ALL so a folder of tracks just plays
+ * through and repeats - the friendliest default, and it collapses to
+ * "repeat forever" when there's only one file. */
 static int g_loop_mode = GLR_AUDIO_LOOP_ALL;
 
+/* Deferred-start flag: if play_playlist() / play_music() is called
+ * before the first user gesture on the web, remember which track was
+ * requested so we can start it on the first gesture. */
 static int g_pending_start = 0;
-static int g_pending_idx = 0;
 static float g_pending_seek = GLR_AUDIO_NO_SEEK;
+
+/* Bumped on every successful track start. Callers poll this to notice
+ * that the current track has changed without needing a callback. */
+static unsigned int g_track_generation = 0;
+
+/* State persistence (track + offset + audio cfg across restarts):
+ * path of the state file/key, or empty string when disabled. */
+static char  g_state_file[GLR_AUDIO_MAX_PATH] = "";
+
+/* Opaque integer owned by glr_actions.c (maps to AUDIO_CFG_* enum).
+ * Persisted as cfg_mode and handed back through
+ * glr_audio_get_cfg_mode() so glr_actions_apply_defaults() can map it
+ * to paused/loop state. -1 means "not yet loaded / not set". */
+static int g_cfg_mode = -1;
+
+/* Timestamp of the last successful state write. */
+static time_t g_last_save_time = 0;
+
+/* Resets the backend-shared fields above; each backend's
+ * reset_audio_module_state() calls this and then resets its own. */
+static void reset_audio_shared_state(void) {
+    g_inited = 0;
+    g_music_loaded = 0;
+    g_muted = 0;
+    g_paused = 0;
+    g_gesture_done = 0;
+
+    g_playlist_count = 0;
+    g_playlist_pos = 0;
+    for (int i = 0; i < GLR_AUDIO_MAX_TRACKS; i++) {
+        g_playlist[i][0] = '\0';
+        g_playlist_group[i][0] = '\0';
+        g_playlist_display_name[i][0] = '\0';
+        g_playlist_duration_secs[i] = -1.0f;
+    }
+    g_loop_mode = GLR_AUDIO_LOOP_ALL;
+
+    g_pending_start = 0;
+    g_pending_seek = GLR_AUDIO_NO_SEEK;
+    g_track_generation = 0;
+
+    g_state_file[0] = '\0';
+    g_cfg_mode = -1;
+    g_last_save_time = 0;
+}
+
+static void audio_copy_string(char *dst, size_t dst_size,
+                              const char *src, const char *fallback) {
+    const char *s = (src && *src) ? src : fallback;
+    size_t len;
+
+    if (!dst || dst_size == 0)
+        return;
+    if (!s)
+        s = "";
+    len = strlen(s);
+    if (len >= dst_size)
+        len = dst_size - 1;
+    memcpy(dst, s, len);
+    dst[len] = '\0';
+}
+
+static const char *audio_basename(const char *path) {
+    const char *base = path ? path : "";
+    for (const char *p = base; *p; p++) {
+        if (*p == '/' || *p == '\\')
+            base = p + 1;
+    }
+    return base;
+}
+
+static void audio_derive_display_name(const char *path,
+                                      char *out, size_t out_size) {
+    const char *base = audio_basename(path);
+    size_t len;
+
+    if (!out || out_size == 0)
+        return;
+    len = strlen(base);
+    if (len >= 4 &&
+        base[len - 4] == '.' &&
+        (base[len - 3] == 'm' || base[len - 3] == 'M') &&
+        (base[len - 2] == 'p' || base[len - 2] == 'P') &&
+        base[len - 1] == '3') {
+        len -= 4;
+    }
+    if (len >= out_size)
+        len = out_size - 1;
+    memcpy(out, base, len);
+    out[len] = '\0';
+    if (!out[0])
+        audio_copy_string(out, out_size, path, "(track)");
+}
+
+/* Backend-shared public wrappers: both forward to backend entry points
+ * (glr_audio_set_playlist_specs / glr_audio_play_playlist) declared in
+ * the header. */
+int glr_audio_set_playlist(const char *const *paths, int count) {
+    if (!paths || count < 0) return -1;
+
+    GlrAudioTrackSpec specs[GLR_AUDIO_MAX_TRACKS];
+    int n = count;
+    if (n > GLR_AUDIO_MAX_TRACKS)
+        n = GLR_AUDIO_MAX_TRACKS;
+    for (int i = 0; i < n; i++) {
+        specs[i].path = paths[i];
+        specs[i].group = "Music";
+        specs[i].display_name = NULL;
+    }
+    return glr_audio_set_playlist_specs(specs, count);
+}
+
+int glr_audio_play_music(const char *path) {
+    if (!path || !*path) return -1;
+    const char *arr[1] = { path };
+    if (glr_audio_set_playlist(arr, 1) < 0) return -1;
+    return glr_audio_play_playlist();
+}
+
+#if defined(__EMSCRIPTEN__)
+
+#include <emscripten/emscripten.h>
+
+static int g_pending_idx = 0;
 static int g_play_when_manifest_ready = 0;
 static int g_error_skip_count = 0;
-
-static unsigned int g_track_generation = 0;
-static char  g_state_file[GLR_AUDIO_MAX_PATH] = "";
-static int g_cfg_mode = -1;
-static time_t g_last_save_time = 0;
 
 EM_JS(int, web_audio_js_init, (void), {
     if (!Module.glrAudio) {
@@ -316,79 +443,10 @@ EM_JS(void, web_audio_js_save_state, (const char *key_ptr,
 });
 
 static void reset_audio_module_state(void) {
-    g_inited = 0;
-    g_music_loaded = 0;
-    g_muted = 0;
-    g_paused = 0;
-    g_gesture_done = 0;
-
-    g_playlist_count = 0;
-    g_playlist_pos = 0;
-    for (int i = 0; i < GLR_AUDIO_MAX_TRACKS; i++) {
-        g_playlist[i][0] = '\0';
-        g_playlist_group[i][0] = '\0';
-        g_playlist_display_name[i][0] = '\0';
-        g_playlist_duration_secs[i] = -1.0f;
-    }
-
-    g_loop_mode = GLR_AUDIO_LOOP_ALL;
-    g_pending_start = 0;
+    reset_audio_shared_state();
     g_pending_idx = 0;
-    g_pending_seek = GLR_AUDIO_NO_SEEK;
     g_play_when_manifest_ready = 0;
     g_error_skip_count = 0;
-    g_track_generation = 0;
-    g_state_file[0] = '\0';
-    g_cfg_mode = -1;
-    g_last_save_time = 0;
-}
-
-static void audio_copy_string(char *dst, size_t dst_size,
-                              const char *src, const char *fallback) {
-    const char *s = (src && *src) ? src : fallback;
-    size_t len;
-
-    if (!dst || dst_size == 0)
-        return;
-    if (!s)
-        s = "";
-    len = strlen(s);
-    if (len >= dst_size)
-        len = dst_size - 1;
-    memcpy(dst, s, len);
-    dst[len] = '\0';
-}
-
-static const char *audio_basename(const char *path) {
-    const char *base = path ? path : "";
-    for (const char *p = base; *p; p++) {
-        if (*p == '/' || *p == '\\')
-            base = p + 1;
-    }
-    return base;
-}
-
-static void audio_derive_display_name(const char *path,
-                                      char *out, size_t out_size) {
-    const char *base = audio_basename(path);
-    size_t len;
-
-    if (!out || out_size == 0)
-        return;
-    len = strlen(base);
-    if (len >= 4 &&
-        base[len - 4] == '.' &&
-        (base[len - 3] == 'm' || base[len - 3] == 'M') &&
-        (base[len - 2] == 'p' || base[len - 2] == 'P') &&
-        base[len - 1] == '3') {
-        len -= 4;
-    }
-    if (len >= out_size)
-        len = out_size - 1;
-    memcpy(out, base, len);
-    out[len] = '\0';
-    if (!out[0])
-        audio_copy_string(out, out_size, path, "(track)");
 }
 
 static int web_playlist_add(const GlrAudioTrackSpec *track) {
@@ -600,21 +658,6 @@ void glr_audio_shutdown(void) {
     reset_audio_module_state();
 }
 
-int glr_audio_set_playlist(const char *const *paths, int count) {
-    if (!paths || count < 0) return -1;
-
-    GlrAudioTrackSpec specs[GLR_AUDIO_MAX_TRACKS];
-    int n = count;
-    if (n > GLR_AUDIO_MAX_TRACKS)
-        n = GLR_AUDIO_MAX_TRACKS;
-    for (int i = 0; i < n; i++) {
-        specs[i].path = paths[i];
-        specs[i].group = "Music";
-        specs[i].display_name = NULL;
-    }
-    return glr_audio_set_playlist_specs(specs, count);
-}
-
 int glr_audio_set_playlist_specs(const GlrAudioTrackSpec *tracks, int count) {
     int n;
 
@@ -660,13 +703,6 @@ int glr_audio_play_playlist(void) {
     if (idx >= 0)
         return request_start(idx, offset);
     return request_start(0, GLR_AUDIO_NO_SEEK);
-}
-
-int glr_audio_play_music(const char *path) {
-    if (!path || !*path) return -1;
-    const char *arr[1] = { path };
-    if (glr_audio_set_playlist(arr, 1) < 0) return -1;
-    return glr_audio_play_playlist();
 }
 
 int glr_audio_next_track(void) {
@@ -899,12 +935,8 @@ int glr_audio_get_cfg_mode(void) {
 #endif
 
 /* ------------------------------------------------------------------ */
-/* Module state                                                        */
+/* Module state (native-only; shared statics live above the split)     */
 /* ------------------------------------------------------------------ */
-
-#define GLR_AUDIO_MAX_TRACKS 64
-#define GLR_AUDIO_MAX_PATH   512
-#define STATE_SAVE_INTERVAL_SECS 5
 
 static ma_engine g_engine;
 
@@ -920,25 +952,7 @@ static ma_sound g_slot[2];
 static int      g_slot_inited[2] = { 0, 0 };
 static int      g_active = -1;
 
-static int g_inited       = 0;  /* engine init succeeded */
-static int g_music_loaded = 0;  /* mirror of (g_active >= 0); guarded */
-static int g_loading      = 0;  /* a worker load is in flight */
-static int g_muted        = 0;
-static int g_paused       = 0;  /* paused: track loaded but stopped, cursor held */
-static int g_gesture_done = 0;  /* have we satisfied browser autoplay policy? */
-
-/* Playlist: caller-registered tracks, in play order. */
-static char g_playlist[GLR_AUDIO_MAX_TRACKS][GLR_AUDIO_MAX_PATH];
-static char g_playlist_group[GLR_AUDIO_MAX_TRACKS][64];
-static char g_playlist_display_name[GLR_AUDIO_MAX_TRACKS][128];
-static float g_playlist_duration_secs[GLR_AUDIO_MAX_TRACKS];
-static int  g_playlist_count = 0;
-static int  g_playlist_pos   = 0;  /* index of the currently-loaded track */
-
-/* Default to GLR_AUDIO_LOOP_ALL so a folder of tracks just plays
- * through and repeats - the friendliest default, and it collapses to
- * "repeat forever" when there's only one file. */
-static int g_loop_mode = GLR_AUDIO_LOOP_ALL;
+static int g_loading = 0;  /* a worker load is in flight */
 
 /* Native builds don't need a gesture. Emscripten does. */
 #if defined(__EMSCRIPTEN__)
@@ -946,18 +960,6 @@ static int g_loop_mode = GLR_AUDIO_LOOP_ALL;
 #else
 #  define AUDIO_NEEDS_GESTURE 0
 #endif
-
-#define GLR_AUDIO_NO_SEEK (-1.0f)
-
-/* Deferred-start flag: if play_playlist() / play_music() is called
- * before the first user gesture on the web, remember which track was
- * requested so we can start it on the first gesture. */
-static int g_pending_start = 0;
-static float g_pending_seek = GLR_AUDIO_NO_SEEK;
-
-/* Bumped on every successful track start. Callers poll this to notice
- * that the current track has changed without needing a callback. */
-static unsigned int g_track_generation = 0;
 
 /* Flag set to cancel a load in-flight when playlist is reset. */
 static int g_load_cancelled = 0;
@@ -997,47 +999,14 @@ static ma_log g_miniaudio_log;
 static int    g_miniaudio_log_inited = 0;
 static ma_uint32 g_miniaudio_log_max_level = MA_LOG_LEVEL_WARNING;
 
-/* ------------------------------------------------------------------ */
-/* State persistence (track + offset + audio cfg across restarts)      */
-/* ------------------------------------------------------------------ */
-
-/* Path of the INI file, or empty string when disabled. */
-static char  g_state_file[GLR_AUDIO_MAX_PATH] = "";
-
-/* Opaque integer owned by glr_actions.c (maps to AUDIO_CFG_* enum).
- * Stored in the INI as cfg_mode= and handed back through
- * glr_audio_get_cfg_mode() so glr_actions_apply_defaults() can map it
- * to paused/loop state. -1 means "not yet loaded / not set". */
-static int g_cfg_mode = -1;
-
-/* Timestamp of the last successful state-file write. */
-static time_t g_last_save_time = 0;
-
 static void reset_audio_module_state(void) {
+    reset_audio_shared_state();
+
     g_slot_inited[0] = 0;
     g_slot_inited[1] = 0;
     g_active = -1;
 
-    g_inited = 0;
-    g_music_loaded = 0;
     g_loading = 0;
-    g_muted = 0;
-    g_paused = 0;
-    g_gesture_done = 0;
-
-    g_playlist_count = 0;
-    g_playlist_pos = 0;
-    for (int i = 0; i < GLR_AUDIO_MAX_TRACKS; i++) {
-        g_playlist[i][0] = '\0';
-        g_playlist_group[i][0] = '\0';
-        g_playlist_display_name[i][0] = '\0';
-        g_playlist_duration_secs[i] = -1.0f;
-    }
-    g_loop_mode = GLR_AUDIO_LOOP_ALL;
-
-    g_pending_start = 0;
-    g_pending_seek = GLR_AUDIO_NO_SEEK;
-    g_track_generation = 0;
     g_load_cancelled = 0;
     g_load_seek = GLR_AUDIO_NO_SEEK;
 
@@ -1048,58 +1017,6 @@ static void reset_audio_module_state(void) {
     g_req_idx = 0;
     g_req_seek = GLR_AUDIO_NO_SEEK;
     g_req_save = 0;
-
-    g_state_file[0] = '\0';
-    g_cfg_mode = -1;
-    g_last_save_time = 0;
-}
-
-static void audio_copy_string(char *dst, size_t dst_size,
-                              const char *src, const char *fallback) {
-    const char *s = (src && *src) ? src : fallback;
-    size_t len;
-
-    if (!dst || dst_size == 0)
-        return;
-    if (!s)
-        s = "";
-    len = strlen(s);
-    if (len >= dst_size)
-        len = dst_size - 1;
-    memcpy(dst, s, len);
-    dst[len] = '\0';
-}
-
-static const char *audio_basename(const char *path) {
-    const char *base = path ? path : "";
-    for (const char *p = base; *p; p++) {
-        if (*p == '/' || *p == '\\')
-            base = p + 1;
-    }
-    return base;
-}
-
-static void audio_derive_display_name(const char *path,
-                                      char *out, size_t out_size) {
-    const char *base = audio_basename(path);
-    size_t len;
-
-    if (!out || out_size == 0)
-        return;
-    len = strlen(base);
-    if (len >= 4 &&
-        base[len - 4] == '.' &&
-        (base[len - 3] == 'm' || base[len - 3] == 'M') &&
-        (base[len - 2] == 'p' || base[len - 2] == 'P') &&
-        base[len - 1] == '3') {
-        len -= 4;
-    }
-    if (len >= out_size)
-        len = out_size - 1;
-    memcpy(out, base, len);
-    out[len] = '\0';
-    if (!out[0])
-        audio_copy_string(out, out_size, path, "(track)");
 }
 
 /* ------------------------------------------------------------------ */
@@ -1933,21 +1850,6 @@ void glr_audio_set_hitch_log_elapsed_fn(GlrAudioElapsedSecondsFn fn) {
     g_hitch_log_elapsed_fn = fn;
 }
 
-int glr_audio_set_playlist(const char *const *paths, int count) {
-    if (!paths || count < 0) return -1;
-
-    GlrAudioTrackSpec specs[GLR_AUDIO_MAX_TRACKS];
-    int n = count;
-    if (n > GLR_AUDIO_MAX_TRACKS)
-        n = GLR_AUDIO_MAX_TRACKS;
-    for (int i = 0; i < n; i++) {
-        specs[i].path = paths[i];
-        specs[i].group = "Music";
-        specs[i].display_name = NULL;
-    }
-    return glr_audio_set_playlist_specs(specs, count);
-}
-
 int glr_audio_set_playlist_specs(const GlrAudioTrackSpec *tracks, int count) {
     if (!tracks || count < 0) return -1;
 
@@ -2015,15 +1917,6 @@ int glr_audio_play_playlist(void) {
         return request_start(idx, offset);
     return request_start(0, GLR_AUDIO_NO_SEEK);
 }
-
-int glr_audio_play_music(const char *path) {
-    if (!path || !*path) return -1;
-    const char *arr[1] = { path };
-    if (glr_audio_set_playlist(arr, 1) < 0) return -1;
-    return glr_audio_play_playlist();
-}
-
-
 
 int glr_audio_next_track(void) {
     if (!g_inited || g_playlist_count == 0) return -1;

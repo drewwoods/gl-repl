@@ -463,18 +463,9 @@ static int compile_rewrite_decl_initializer_text(const char *orig_text,
 
     line = orig_text ? orig_text : "";
     compile_copy_leading_ws(line, indent, sizeof(indent));
-    scan = line + strlen(indent);
-    /* Optional `static ` prefix (canonical form per format_decl_text). */
-    if (strncmp(scan, "static", 6) == 0 && isspace((unsigned char)scan[6])) {
-        scan += 6;
-        while (*scan && isspace((unsigned char)*scan))
-            scan++;
-    }
-    if (strncmp(scan, "float", 5) != 0 ||
-        isalnum((unsigned char)scan[5]) || scan[5] == '_')
+    scan = repl_scan_decl_float_prefix(line + strlen(indent));
+    if (!scan)
         return 0;
-
-    scan += 5;
     while (*scan && isspace((unsigned char)*scan))
         scan++;
 
@@ -587,19 +578,9 @@ static ReplCompileResult parse_float_name_list(const char *input,
     *recognized = 0;
     memset(parsed, 0, sizeof(*parsed));
 
-    const char *p = input ? input : "";
-    while (*p && isspace((unsigned char)*p)) p++;
-    /* Optional `static ` prefix: format_decl_text emits it, so we
-     * must accept it on the round-trip. */
-    if (strncmp(p, "static", 6) == 0 && isspace((unsigned char)p[6])) {
-        p += 6;
-        while (*p && isspace((unsigned char)*p)) p++;
-    }
-    if (strncmp(p, "float", 5) != 0)
+    const char *p = repl_scan_decl_float_prefix(input ? input : "");
+    if (!p)
         return REPL_COMPILE_OK;
-    if (isalnum((unsigned char)p[5]) || p[5] == '_')
-        return REPL_COMPILE_OK;
-    p += 5;
     *recognized = 1;
 
     while (*p) {

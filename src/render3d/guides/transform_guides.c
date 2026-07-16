@@ -132,54 +132,9 @@ static void make_arrow_basis(const float dir[3], float r[3], float b[3]) {
     b[2] = r[0]*dir[1] - r[1]*dir[0];
 }
 
-static void mat4_mul_col_major(const float a[16], const float b[16], float out[16]) {
-    for (int col = 0; col < 4; col++) {
-        for (int row = 0; row < 4; row++) {
-            out[col * 4 + row] =
-                a[0 * 4 + row] * b[col * 4 + 0] +
-                a[1 * 4 + row] * b[col * 4 + 1] +
-                a[2 * 4 + row] * b[col * 4 + 2] +
-                a[3 * 4 + row] * b[col * 4 + 3];
-        }
-    }
-}
-
-/* Transform a point through a column-major 4x4 (implicit w = 1). */
-static void mat4_point_col_major(const float m[16], const float p[3], float out[3]) {
-    out[0] = m[0] * p[0] + m[4] * p[1] + m[8]  * p[2] + m[12];
-    out[1] = m[1] * p[0] + m[5] * p[1] + m[9]  * p[2] + m[13];
-    out[2] = m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14];
-}
-
 /* Snap near-zero (incl. -0.0) to +0.0 so a label never reads "-0.00". */
 static float tg_snap_zero(float v) {
     return (fabsf(v) < 0.005f) ? 0.0f : v;
-}
-
-static void transform_guides_record_label(
-    const Render3dGuideSnapshot *snapshot,
-    const float pos[3],
-    void *primary_font, const char *primary_text,
-    void *detail_font, const char *detail_text) {
-    Render3dGuideLabelSpec label;
-
-    if (!snapshot || !snapshot->label_sink.record || !pos ||
-        !primary_font || !primary_text || !primary_text[0])
-        return;
-
-    memset(&label, 0, sizeof(label));
-    label.pos[0] = pos[0];
-    label.pos[1] = pos[1];
-    label.pos[2] = pos[2];
-    label.runs[0].font = primary_font;
-    label.runs[0].text = primary_text;
-    label.run_count = 1;
-    if (detail_font && detail_text && detail_text[0]) {
-        label.runs[1].font = detail_font;
-        label.runs[1].text = detail_text;
-        label.run_count = 2;
-    }
-    snapshot->label_sink.record(snapshot->label_sink.user_data, &label);
 }
 
 /* Shared two-run "<name> <numbers>" label emitter for the translate and
@@ -198,7 +153,7 @@ static void draw_named_value_label(const Render3dGuideSnapshot *snapshot,
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glColor4f(0.80f, 0.95f, 1.0f, 0.95f);
-    transform_guides_record_label(snapshot, pos, FONT_MONO, name,
+    render3d_guide_record_label(snapshot, pos, FONT_MONO, name,
                                   FONT_TINY, detail);
     glRasterPos3f(pos[0], pos[1], pos[2]);
     for (const char *c = name; *c; c++)
@@ -760,7 +715,7 @@ static void draw_rotate_angle_label(const Render3dGuideSnapshot *snapshot,
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glColor4f(0.80f, 0.95f, 1.0f, 0.95f);
-    transform_guides_record_label(snapshot, pos, FONT_SMALL, buf, NULL, NULL);
+    render3d_guide_record_label(snapshot, pos, FONT_SMALL, buf, NULL, NULL);
     glRasterPos3f(pos[0], pos[1], pos[2]);
     for (const char *c = buf; *c; c++)
         glutBitmapCharacter(FONT_SMALL, (unsigned char)*c);
@@ -1029,30 +984,21 @@ static GLCmd transform_live_cmd(const Render3dGuideSnapshot *snapshot, int kind)
  * glLoadIdentity. Writes newest-first, so out[0] is the nearest transform
  * before the anchor draw. Returns the count (capped at out_cap).
  *
- * This mirrors the flat affecting-transform walk in src/repl/autonormal.c
- * (repl_find_affecting_transforms_for_flat_vertex), but stays in the scene
- * module and yields flat indices (not deduped source lines) so the renderer
- * can anchor on a specific expansion. The scene module must not depend on
- * repl/core, hence the small re-implementation over the shared GLCmd model. */
+ * The scope accounting lives in transform_utils.h's TransformScopeScan
+ * (shared with src/repl/autonormal.c's flat affecting-transform
+ * resolver); this collector yields flat indices (not deduped source
+ * lines) so the renderer can anchor on a specific expansion. */
 static int collect_inscope_transform_flat_indices(const Render3dGuideSnapshot *snapshot,
                                                   int anchor_flat_idx,
                                                   int *out, int out_cap) {
-    const GLCmd *cmds = snapshot->flat_program.cmds;
+    TransformScopeScan scan;
     int count = 0;
-    int popped_depth = 0;
-    for (int i = anchor_flat_idx - 1; i >= 0 && count < out_cap; i--) {
-        if (!cmds[i].valid) continue;
-        CmdType t = cmds[i].type;
-        if (t == CMD_POP_MATRIX) {
-            popped_depth++;
-        } else if (t == CMD_PUSH_MATRIX) {
-            if (popped_depth > 0) popped_depth--;
-        } else if (t == CMD_LOAD_IDENTITY) {
-            if (popped_depth == 0) break;
-        } else if (t == CMD_TRANSLATE3F || t == CMD_SCALEF || t == CMD_ROTATEF) {
-            if (popped_depth == 0) out[count++] = i;
-        }
-    }
+    int idx;
+
+    transform_scope_scan_init(&scan, snapshot->flat_program.cmds,
+                              anchor_flat_idx);
+    while (count < out_cap && (idx = transform_scope_scan_next(&scan)) >= 0)
+        out[count++] = idx;
     return count;
 }
 

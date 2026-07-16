@@ -16,10 +16,16 @@ The real work is now (B) a verified dead-code sweep, (C) duplication
 hoists, and optionally (D) complexity refactors; the Phase A scanner
 fixes and acceptance run are complete.
 
-- **A — Fix `scripts/code-smells.sh` signal quality.** ✅ DONE (A0–A5)
+- **A — Fix `scripts/code-smells.sh` signal quality.** ✅ DONE (A0–A5;
+  A6's CPD baseline is now unblocked and still open)
 - **B — Dead-code sweep.** ✅ DONE — facade-symmetry retains annotated,
   non-facade candidate functions deleted (2026-07-16).
-- **C — Duplication hoists (CPD).** NOT STARTED
+- **C — Duplication hoists (CPD).** ✅ DONE (2026-07-16) — C1, C2, and
+  all five C3 pairs hoisted; see the per-item notes below. Validated:
+  `make test` (48/48 binaries), `make check-state-ownership`,
+  `check-duplicate-api-decls`, native `make gl-repl`, stubs
+  `make gl-repl USE_GL_STUBS=1`, web `scripts/build-web.sh`, and
+  real-gcc `make check-c99` + `make test-stubs` on gracemont.
 - **D — Complexity refactors (opportunistic).** NOT STARTED
 
 ## A — Scanner fixes (`scripts/code-smells.sh`)
@@ -103,9 +109,32 @@ uncalled. Each now carries an intent comment plus a
 Removals must keep `check-duplicate-api-decls` and `make test-stubs`
 green.
 
-## C — Duplication hoists (PMD CPD, 40 blocks @ 80 tokens)
+## C — Duplication hoists (PMD CPD, 40 blocks @ 80 tokens) — ✅ DONE (2026-07-16)
 
-Ranked by value; raw locations in `build/code-smells/cpd.txt`.
+Ranked by value; raw locations in `build/code-smells/cpd.txt`. How each
+landed:
+
+1. shared `#define`s, ~20 backend-shared statics,
+   `reset_audio_shared_state()` (each backend's
+   `reset_audio_module_state` now calls it plus its own fields), the
+   three string helpers, and the `glr_audio_set_playlist` /
+   `glr_audio_play_music` wrappers hoisted above the
+   `#if defined(__EMSCRIPTEN__)` split.
+2. import side: one `import_parse_payload_call()` (prefix match →
+   outer-paren payload → peel N enum tokens → `{...}`-or-helper value
+   list → C-to-REPL convert) backs all three readers. Export side: one
+   `export_parse_vector_call()` front half backs the three
+   `write_*_as_c89` writers.
+3. all five pairs: `render3d_guide_record_label` →
+   `guides_shared.h` (header-only, keeps the isolated guides test
+   link-free); `mat4_mul_col_major` / `mat4_point_col_major` +
+   the new `TransformScopeScan` backward-walk iterator →
+   `transform_utils.h`; `repl_scan_func_name_token` (lexical half;
+   callers keep their own alias resolution) and
+   `repl_scan_decl_float_prefix` (also covers the second copy inside
+   `compile.c`) → `text_helpers.{c,h}`.
+
+Original findings:
 
 1. **`src/app/glr_audio.c` native/web split duplication** — the
    single biggest cluster: five blocks pairing the native half with

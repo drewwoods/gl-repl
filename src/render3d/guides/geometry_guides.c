@@ -41,32 +41,6 @@ static const Render3dColorToken k_guide_plane_edge[3] = {
 /* Axis letters for guide labels, indexed like the color tables. */
 static const char k_guide_axis_letter[3] = { 'x', 'y', 'z' };
 
-static void geometry_guides_record_label(
-    const Render3dGuideSnapshot *snapshot,
-    const float pos[3],
-    void *primary_font, const char *primary_text,
-    void *detail_font, const char *detail_text) {
-    Render3dGuideLabelSpec label;
-
-    if (!snapshot || !snapshot->label_sink.record || !pos ||
-        !primary_font || !primary_text || !primary_text[0])
-        return;
-
-    memset(&label, 0, sizeof(label));
-    label.pos[0] = pos[0];
-    label.pos[1] = pos[1];
-    label.pos[2] = pos[2];
-    label.runs[0].font = primary_font;
-    label.runs[0].text = primary_text;
-    label.run_count = 1;
-    if (detail_font && detail_text && detail_text[0]) {
-        label.runs[1].font = detail_font;
-        label.runs[1].text = detail_text;
-        label.run_count = 2;
-    }
-    snapshot->label_sink.record(snapshot->label_sink.user_data, &label);
-}
-
 /* Draw a semi-transparent "coordinate paper" sheet perpendicular to
  * `free_axis` at coordinate v. `free_axis` ∈ {0=X, 1=Y, 2=Z}; the
  * other two axes span the [-sz, +sz] face. `as` is the snapshot's
@@ -178,7 +152,7 @@ static void draw_guide_axis_plane(const Render3dGuideSnapshot *snapshot,
         p[side_axis] = sz * 0.08f;
         glDisable(GL_DEPTH_TEST);
         render3d_clr_a(k_guide_plane_edge[free_axis], fminf(0.9f * as, 1.0f));
-        geometry_guides_record_label(snapshot, p, FONT_SMALL, label, NULL, NULL);
+        render3d_guide_record_label(snapshot, p, FONT_SMALL, label, NULL, NULL);
         render3d_draw_bitmap_text(FONT_SMALL, p[0], p[1], p[2], label);
     }
 
@@ -322,7 +296,7 @@ static void draw_vertex_line_guide(const Render3dGuideSnapshot *snapshot,
         float q[3] = { p[0], p[1], p[2] };
         q[free_axis] = sz * 1.05f;
         render3d_clr_a(k_guide_line_clr[free_axis], fminf(0.9f * as, 1.0f));
-        geometry_guides_record_label(snapshot, q, FONT_SMALL, label, NULL, NULL);
+        render3d_guide_record_label(snapshot, q, FONT_SMALL, label, NULL, NULL);
         render3d_draw_bitmap_text(FONT_SMALL, q[0], q[1], q[2], label);
     }
 
@@ -616,7 +590,7 @@ static void draw_normal_guides(const Render3dGuideSnapshot *snapshot) {
             vy + cn[1] * scale,
             vz + cn[2] * scale
         };
-        geometry_guides_record_label(snapshot, label_pos,
+        render3d_guide_record_label(snapshot, label_pos,
                                      FONT_MONO, " n", FONT_TINY, detail);
     }
     render3d_draw_focused_normal_glyph(vx, vy, vz,
@@ -782,7 +756,7 @@ static void draw_clip_plane_guide(const Render3dGuideSnapshot *snapshot) {
             p0[1] + n[1] * 0.9f,
             p0[2] + n[2] * 0.9f
         };
-        geometry_guides_record_label(snapshot, label_pos,
+        render3d_guide_record_label(snapshot, label_pos,
                                      FONT_MONO, primary, FONT_TINY, detail);
     }
     render3d_draw_focused_normal_glyph(p0[0], p0[1], p0[2],

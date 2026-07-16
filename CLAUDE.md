@@ -671,7 +671,7 @@ explaining why the extra background is useful.
 | [`src/app/glr_prof.h`](src/app/glr_prof.h) | GPU-section policy API (`glr_prof_section_is_gpu`, `glr_prof_install_gpu_section_hooks`, `glr_prof_set_gpu_capture_mode`) |
 | [`src/render3d/render_types.h`](src/render3d/render_types.h) | Shared [`Render3dRgba`](src/render3d/render_types.h#L58) / [`Render3dRenderConfig`](src/render3d/render_types.h#L135) / [`Render3dFrameRenderContext`](src/render3d/render_types.h#L305) types for scene helpers |
 | [`src/render3d/guides/guides_shared.h`](src/render3d/guides/guides_shared.h) | Shared guide snapshot and planning types for REPL-aware 3D overlay passes |
-| [`src/render3d/guides/geometry_guides.c`](src/render3d/guides/geometry_guides.c) | Vertex/primitive guide rendering (input context at cursor) from [`Render3dGuideSnapshot`](src/render3d/guides/guides_shared.h#L42) |
+| [`src/render3d/guides/geometry_guides.c`](src/render3d/guides/geometry_guides.c) | Vertex/primitive guide rendering (input context at cursor) from [`Render3dGuideSnapshot`](src/render3d/guides/guides_shared.h#L44) |
 | [`src/render3d/guides/geometry_guides.h`](src/render3d/guides/geometry_guides.h) | Geometry guides render entrypoint |
 | [`src/render3d/guides/transform_guides.c`](src/render3d/guides/transform_guides.c) | Transform guide rendering (pending matrix ops during replay) |
 | [`src/render3d/guides/transform_guides.h`](src/render3d/guides/transform_guides.h) | Transform guides render entrypoint |
@@ -1178,7 +1178,7 @@ Circular snapshot buffers in [`src/editor/undo.c`](src/editor/undo.c):
 ### Cursor Edit Guides
 
 The vertex/normal guides drawn at the cursor line
-([`src/render3d/guides/geometry_guides.c`](src/render3d/guides/geometry_guides.c)) are fed by a [`Render3dGuideSnapshot`](src/render3d/guides/guides_shared.h#L42).
+([`src/render3d/guides/geometry_guides.c`](src/render3d/guides/geometry_guides.c)) are fed by a [`Render3dGuideSnapshot`](src/render3d/guides/guides_shared.h#L44).
 The non-obvious data-flow gotcha: `glr_ctrl_build_guide_snapshot()`
 fills `snapshot.vertex_args` / `normal_args` by text-parsing the input
 line with a **predef-only** evaluator. That can't resolve funcN-local
