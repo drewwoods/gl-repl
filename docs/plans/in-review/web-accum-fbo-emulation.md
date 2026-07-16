@@ -1,7 +1,8 @@
 # Accumulation buffer on the web build: detection + FBO emulation
 
-Status: in-review — **Part 1 implemented** (accum-bits detection); Part 2
-(gl4es FBO emulation) still planned
+Status: in-review — **Part 1 and Part 2 both implemented** (accum-bits
+detection + the gl4es FBO emulation, shipped as local patch #7
+`packaging/web/patches/gl4es-accum-fbo.patch`)
 Date: 2026-07-16
 Scope: Emscripten/WebGL2 build (gl4es); Part 1 also touches every backend's
 startup path.
@@ -67,7 +68,55 @@ never runs (existing `config->use_accum` gating). Optionally the status line
 could note "accum unavailable" when cycling the effect on web — nice-to-have,
 not required.
 
-## Part 2 — gl4es patch: accum buffer via FBO
+## Part 2 — gl4es patch: accum buffer via FBO — IMPLEMENTED
+
+**As landed** (deltas from the sketch below):
+
+- New `src/gl/accum.c` (+`accum.h`) in gl4es; ops draw through a private
+  `uScale` shader (one program serves ACCUM/LOAD/RETURN — additive blend
+  on for ACCUM, off for LOAD/RETURN) rather than `gl4es_blitTexture`
+  itself, but follow its exact state-hygiene pattern (raw GLES draws
+  under `glPushAttrib(GL_ENABLE_BIT|GL_COLOR_BUFFER_BIT)`, tracked
+  `gleshard` program/attrib state updated so user fpe re-realizes).
+- **The format probe cannot use hardext hints.** The plan's
+  "extension check" option is a dead end on the very target this is
+  for: Emscripten runs `GetHardwareExtensions` with `notest` (no
+  `gles_getProcAddress` hook is installed), so `hardext.floatfbo` /
+  `halffloattex` stay 0 there. The landed probe tries formats outright
+  — RGBA16F/`GL_HALF_FLOAT`, then unsized `GL_HALF_FLOAT_OES`, then
+  RGBA8 — judged by a one-time 4x4 FBO-completeness test.
+- Drawable-size resolution for the FBO-0 case (gl4es tracks no canvas
+  size on Emscripten): the `getMainFBSize` hook if installed, else the
+  Emscripten drawing-buffer query, else `mainfbo_*` / viewport extent.
+- `glClearAccum` is also implemented (was a stub too); the getter cases
+  live in `gl4es_commonGet` so `glGetIntegerv` and `glGetFloatv` both
+  serve `GL_ACCUM_*_BITS`.
+- **The framebuffer snapshot texture is GL_RGB, not RGBA.** GLES3/WebGL2's
+  `glCopyTexSubImage2D` compatibility rule requires the destination's
+  components to be a subset of the read buffer's, and the WebGL canvas
+  has no alpha channel (GLUT never requests one → `alpha:false` →
+  effectively RGB8), so an RGBA destination fails with
+  `GL_INVALID_OPERATION` and the copy silently drops — the first cut
+  shipped that way and RETURN painted the whole scene rect black
+  (found by interactive testing; the 2D overlays drawn after RETURN
+  survived, which is what localized the failure to the accum content).
+  RGB works against both RGB8 and RGBA8 read sources.
+
+Verified (2026-07-16, headful Chrome with `GLR_ACCUM_PASSES=2` forced —
+two gotchas made the first verification pass vacuous: headless Chrome
+barely pumps rAF frames so `glAccum` never ran at all, and the passes
+default is 1 so even headful sessions never enter the accum loop
+unassisted): pixel-level readbacks logged from inside the ops show the
+scratch copy captures the exact backbuffer value and the accum texture
+holds the correctly weighted sum (`0.5×` per pass, `Σ=1`), `GL_RETURN`
+reconstructs the frame, "LIBGL: Accum buffer emulation active (16 bits
+per channel)" on startup, Part 1's disable notice gone (detection
+re-enabled accum with zero app changes), and the WebGL console-error
+count matches a no-patch baseline. Patch mechanics: `git apply --check`
+clean on the pristine pin alone and after the other six, full 7-patch
+stack byte-identical to the working tree.
+
+### Original Part 2 plan
 
 ### What actually needs emulating
 

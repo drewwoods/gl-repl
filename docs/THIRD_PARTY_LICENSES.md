@@ -92,6 +92,14 @@ license text, reproduced verbatim from `third_party/freeglut/COPYING`:
     `GL_TEXTURE_BIT` (upstream "TODO: incomplete"), so the post-processing
     pass's `GL_REPLACE` texenv can't leak into gl4es's line-stipple
     emulation and untint the stippled overlay ghosts.
+  - `packaging/web/patches/gl4es-accum-fbo.patch` — implement the
+    accumulation buffer with an internal FBO (new `src/gl/accum.c`)
+    instead of stubbing `glAccum`/`glClearAccum`: `GL_ACCUM`/`GL_LOAD`
+    copy the read framebuffer into a scratch texture and blend it into
+    an RGBA16F (RGBA8 fallback) accum texture scaled by the weight;
+    `GL_RETURN` draws it back. The getter reports `GL_ACCUM_*_BITS`
+    (16/8/0), so gl-repl's runtime accum detection re-enables the
+    accumulation effects (Accum AA, Blur, Blur Cam) in the browser.
 - **License:** MIT. Reproduced verbatim from gl4es's `LICENSE`:
 
 ```

@@ -1,0 +1,823 @@
+Implement the accumulation buffer with an internal FBO (new
+src/gl/accum.c) instead of stubbing glAccum/glClearAccum.
+
+gl-repl's accumulation effects (Accum AA, Blur, Blur Cam in
+src/render3d/render.c) re-render the scene N times per frame around
+glAccum(GL_ACCUM, 1/N) + glAccum(GL_RETURN, 1.0). With glAccum a stub,
+that was N times the GPU/CPU cost for the last pass's image only; the
+app's runtime detection (GL_ACCUM_RED_BITS probed at GL init) therefore
+disables accum on web entirely. This patch makes the emulation real and
+reports GL_ACCUM_*_BITS from the getter, so the same detection
+self-heals and re-enables the effects in the browser.
+
+The translation is the textbook accumulate-in-a-texture pattern:
+glClear(GL_ACCUM_BUFFER_BIT) clears an internal FBO (hooked in
+gl4es_glClear before the mask strips the bit); GL_ACCUM copies the read
+framebuffer into an RGB scratch texture (RGB, not RGBA: GLES3/WebGL2
+requires the copy destination's components to be a subset of the
+source's, and a WebGL canvas without an alpha channel is effectively
+RGB8 -- an RGBA destination makes the copy fail with
+GL_INVALID_OPERATION; glCopyTexSubImage2D also performs the
+implicit MSAA resolve on WebGL2) and adds it into the accum FBO as a
+fullscreen quad scaled by the weight (additive blending, private
+uScale shader); GL_LOAD is the same with blending off; GL_RETURN draws
+the accum texture into the draw framebuffer scaled by the value.
+GL_ADD/GL_MULT stay unimplemented (logged once). Scissor semantics come
+for free -- real glAccum is bounded by the scissor box, and the quad
+draws inherit the live scissor state.
+
+The accum target format is picked by a one-time 4x4 FBO-completeness
+probe, trying RGBA16F (GLES3/WebGL2 sized half-float), then unsized
+OES half-float, then RGBA8; GL_ACCUM_*_BITS reports 16/8/0
+accordingly. The probe deliberately does not consult the hardext
+floatfbo/halffloattex extension flags -- those stay 0 on backends that
+run GetHardwareExtensions with notest (e.g. Emscripten, where no
+gles_getProcAddress hook is installed). Buffers are lazily (re)created
+at the drawable size (glstate FBO tracking, the getMainFBSize hook, or
+the Emscripten drawing-buffer query) so canvas resizes just recreate
+them at op time. The quad draws follow gl4es_blitTexture's
+state-hygiene pattern (raw GLES draws under glPushAttrib with the
+tracked gleshard program/attrib state updated), so user fpe state
+re-realizes cleanly afterwards.
+
+Applied by scripts/web-deps.sh after cloning the pinned gl4es
+checkout, after gl4es-pushattrib-texenv.patch.
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 0ddf1607..5767649d 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -2,6 +2,7 @@ include_directories(util)
+ 
+ #file(GLOB_RECURSE GL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/gl/*.c)
+ SET(GL_SRC
++    ${CMAKE_CURRENT_SOURCE_DIR}/gl/accum.c
+     ${CMAKE_CURRENT_SOURCE_DIR}/gl/arbconverter.c
+ 	${CMAKE_CURRENT_SOURCE_DIR}/gl/arbgenerator.c
+ 	${CMAKE_CURRENT_SOURCE_DIR}/gl/arbhelper.c
+@@ -74,6 +75,7 @@ SET(GL_SRC
+ 
+ SET(GL_H
+     ${CMAKE_CURRENT_SOURCE_DIR}/../version.h
++    ${CMAKE_CURRENT_SOURCE_DIR}/gl/accum.h
+     ${CMAKE_CURRENT_SOURCE_DIR}/gl/arbconverter.h
+ 	${CMAKE_CURRENT_SOURCE_DIR}/gl/arbgenerator.h
+ 	${CMAKE_CURRENT_SOURCE_DIR}/gl/arbhelper.h
+diff --git a/src/gl/accum.c b/src/gl/accum.c
+new file mode 100644
+index 00000000..bb2a8cf1
+--- /dev/null
++++ b/src/gl/accum.c
+@@ -0,0 +1,543 @@
++/* Accumulation buffer emulated with an internal FBO.
++ *
++ * Desktop GL's accumulation buffer does not exist on GLES/WebGL, so
++ * glAccum was a stub. This implements the classic accumulate-in-a-texture
++ * translation for the GLES2 backend:
++ *
++ *   glClear(GL_ACCUM_BUFFER_BIT)  -> clear the internal accum FBO
++ *   glAccum(GL_ACCUM, w)          -> copy the read framebuffer into a
++ *                                    scratch texture, then add it into the
++ *                                    accum FBO as a fullscreen quad scaled
++ *                                    by w (additive blending)
++ *   glAccum(GL_LOAD, w)           -> same, blending off (replace)
++ *   glAccum(GL_RETURN, s)         -> draw the accum texture into the
++ *                                    current draw framebuffer scaled by s
++ *   GL_ADD / GL_MULT              -> TODO (unused by fixed-function apps
++ *                                    hosted so far)
++ *
++ * The accum target is RGBA16F when float renderbuffers are available
++ * (probed once with a tiny FBO-completeness test), else RGBA8 — fine at
++ * low pass counts, visibly banding at 8-16-pass accumulation. The getter
++ * reports GL_ACCUM_*_BITS accordingly (16 / 8 / 0), so apps that probe
++ * for a real accumulation buffer pick the emulation up automatically.
++ *
++ * Scissor semantics come for free: real glAccum operations are bounded by
++ * the scissor box, and the emulation's quad draws inherit the live
++ * scissor state. The quad draws follow gl4es_blitTexture's state-hygiene
++ * pattern (blit.c): raw GLES draws under glPushAttrib, with the tracked
++ * gleshard program/vertexattrib state updated so the next user draw
++ * re-realizes cleanly.
++ */
++#include "accum.h"
++
++#include <stdlib.h>
++#include <string.h>
++
++#include "../glx/hardext.h"
++#include "blend.h"
++#include "buffers.h"
++#include "debug.h"
++#include "depth.h"
++#include "framebuffers.h"
++#include "gl4es.h"
++#include "glstate.h"
++#include "init.h"
++#include "loader.h"
++#include "logs.h"
++#include "stack.h"
++#include "texture.h"
++
++#ifdef __EMSCRIPTEN__
++#include <emscripten/html5.h>
++#endif
++
++//#define DEBUG
++#ifdef DEBUG
++#define DBG(a) a
++#else
++#define DBG(a)
++#endif
++
++// hacky viewport temporary changes (raster.c, same use as blit.c)
++void pushViewport(GLint x, GLint y, GLsizei width, GLsizei height);
++void popViewport();
++// getter.c client-side mirror of glClearColor
++extern GLfloat gl4es_mirror_clear_color[4];
++
++static const char accum_vsh[] = "#version 100                  \n" \
++"attribute highp vec2 aPosition;                        \n" \
++"attribute highp vec2 aTexCoord;                        \n" \
++"varying mediump vec2 vTexCoord;                        \n" \
++"void main(){                                           \n" \
++"gl_Position = vec4(aPosition.x, aPosition.y, 0.0, 1.0);\n" \
++"vTexCoord = aTexCoord;                                 \n" \
++"}                                                      \n";
++
++static const char accum_fsh[] = "#version 100            \n" \
++"uniform sampler2D uTex;                                \n" \
++"uniform mediump float uScale;                          \n" \
++"varying mediump vec2 vTexCoord;                        \n" \
++"void main(){                                           \n" \
++"gl_FragColor = texture2D(uTex, vTexCoord) * uScale;    \n" \
++"}                                                      \n";
++
++static glesaccum_t* accum_state() {
++    if(!glstate->accum) {
++        glstate->accum = (glesaccum_t*)calloc(1, sizeof(glesaccum_t));
++        // fullscreen quad in clip space; the viewport is set to cover the
++        // whole target around each draw, so no per-draw vertex math
++        GLfloat *vert = glstate->accum->vert;
++        GLfloat *tex = glstate->accum->tex;
++        vert[0] = -1.f; vert[1] = -1.f;
++        vert[2] =  1.f; vert[3] = -1.f;
++        vert[4] =  1.f; vert[5] =  1.f;
++        vert[6] = -1.f; vert[7] =  1.f;
++        tex[0] = 0.f; tex[1] = 0.f;
++        tex[2] = 1.f; tex[3] = 0.f;
++        tex[4] = 1.f; tex[5] = 1.f;
++        tex[6] = 0.f; tex[7] = 1.f;
++        // accum clear value defaults to (0,0,0,0), calloc covers it
++    }
++    return glstate->accum;
++}
++
++// force the GLES-side active texture unit to 0; tracked, so the next user
++// draw re-realizes (same dance as gl4es_blitTexture)
++static void accum_force_tmu0() {
++    if(glstate->gleshard->active) {
++        LOAD_GLES(glActiveTexture);
++        glstate->gleshard->active = 0;
++        gles_glActiveTexture(GL_TEXTURE0);
++    }
++}
++
++// one-time renderability test: can we create a small texture of this
++// format and attach it to a complete FBO?
++static int accum_try_format(GLenum intformat, GLenum format, GLenum type) {
++    LOAD_GLES(glGetError);
++    LOAD_GLES(glGenTextures);
++    LOAD_GLES(glDeleteTextures);
++    LOAD_GLES(glBindTexture);
++    LOAD_GLES(glTexImage2D);
++    LOAD_GLES(glTexParameteri);
++    LOAD_GLES2_OR_OES(glGenFramebuffers);
++    LOAD_GLES2_OR_OES(glDeleteFramebuffers);
++    LOAD_GLES2_OR_OES(glBindFramebuffer);
++    LOAD_GLES2_OR_OES(glFramebufferTexture2D);
++    LOAD_GLES2_OR_OES(glCheckFramebufferStatus);
++
++    while(gles_glGetError()!=GL_NO_ERROR);
++    GLuint tex = 0, fbo = 0;
++    gles_glGenTextures(1, &tex);
++    gles_glBindTexture(GL_TEXTURE_2D, tex);
++    gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
++    gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
++    gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++    gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++    gles_glTexImage2D(GL_TEXTURE_2D, 0, intformat, 4, 4, 0, format, type, NULL);
++    int ok = (gles_glGetError()==GL_NO_ERROR);
++    if(ok) {
++        gles_glGenFramebuffers(1, &fbo);
++        gles_glBindFramebuffer(GL_FRAMEBUFFER, fbo);
++        gles_glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
++        ok = (gles_glCheckFramebufferStatus(GL_FRAMEBUFFER)==GL_FRAMEBUFFER_COMPLETE);
++        gles_glDeleteFramebuffers(1, &fbo);
++    }
++    gles_glDeleteTextures(1, &tex);
++    gles_glBindTexture(GL_TEXTURE_2D, glstate->actual_tex2d[0]);
++    gl4es_setCurrentFBO();
++    while(gles_glGetError()!=GL_NO_ERROR);
++    return ok;
++}
++
++static void accum_probe(glesaccum_t *a) {
++    if(a->probed) return;
++    a->probed = 1;
++    a->bits = 0;
++    if(hardext.esversion<2) return; // the scaled-quad path needs the GLES2 backend
++    accum_force_tmu0();
++    // Each format is attempted outright and judged by the FBO-completeness
++    // test -- the hardext floatfbo/halffloattex flags stay 0 on backends
++    // that run GetHardwareExtensions with notest (e.g. Emscripten, where
++    // no gles_getProcAddress hook is installed), so they can't gate this.
++    if(accum_try_format(GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT)) {
++        // GLES3/WebGL2 sized half-float, renderable per EXT_color_buffer_(half_)float
++        a->intformat = GL_RGBA16F;
++        a->format = GL_RGBA;
++        a->type = GL_HALF_FLOAT;
++        a->bits = 16;
++    } else if(accum_try_format(GL_RGBA, GL_RGBA, GL_HALF_FLOAT_OES)) {
++        // GLES2 unsized half-float (OES_texture_half_float)
++        a->intformat = GL_RGBA;
++        a->format = GL_RGBA;
++        a->type = GL_HALF_FLOAT_OES;
++        a->bits = 16;
++    } else if(accum_try_format(GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE)) {
++        a->intformat = GL_RGBA;
++        a->format = GL_RGBA;
++        a->type = GL_UNSIGNED_BYTE;
++        a->bits = 8;
++    }
++    if(a->bits)
++        SHUT_LOGD("Accum buffer emulation active (%d bits per channel)\n", a->bits);
++    else
++        SHUT_LOGD("Accum buffer emulation unavailable\n");
++}
++
++// size the accum target to the framebuffer glAccum reads from / returns to
++static int accum_target_size(int *w, int *h) {
++    if(glstate->fbo.current_fb && glstate->fbo.current_fb->id) {
++        *w = glstate->fbo.current_fb->width;
++        *h = glstate->fbo.current_fb->height;
++        return (*w>0 && *h>0);
++    }
++    if(gl4es_getMainFBSize) {
++        GLint ww = 0, hh = 0;
++        gl4es_getMainFBSize(&ww, &hh);
++        if(ww>0 && hh>0) { *w = ww; *h = hh; return 1; }
++    }
++#ifdef __EMSCRIPTEN__
++    {
++        EMSCRIPTEN_WEBGL_CONTEXT_HANDLE ctx = emscripten_webgl_get_current_context();
++        if(ctx) {
++            int ww = 0, hh = 0;
++            emscripten_webgl_get_drawing_buffer_size(ctx, &ww, &hh);
++            if(ww>0 && hh>0) { *w = ww; *h = hh; return 1; }
++        }
++    }
++#endif
++    if(glstate->fbo.mainfbo_width>0 && glstate->fbo.mainfbo_height>0) {
++        *w = glstate->fbo.mainfbo_width;
++        *h = glstate->fbo.mainfbo_height;
++        return 1;
++    }
++    // last resort: the tracked viewport extent
++    *w = glstate->raster.viewport.x + glstate->raster.viewport.width;
++    *h = glstate->raster.viewport.y + glstate->raster.viewport.height;
++    return (*w>0 && *h>0);
++}
++
++static int accum_create_program(glesaccum_t *a) {
++    LOAD_GLES2(glCreateShader);
++    LOAD_GLES2(glShaderSource);
++    LOAD_GLES2(glCompileShader);
++    LOAD_GLES2(glGetShaderiv);
++    LOAD_GLES2(glBindAttribLocation);
++    LOAD_GLES2(glAttachShader);
++    LOAD_GLES2(glCreateProgram);
++    LOAD_GLES2(glLinkProgram);
++    LOAD_GLES2(glGetProgramiv);
++    LOAD_GLES(glGetUniformLocation);
++    LOAD_GLES2(glUniform1i);
++    LOAD_GLES2(glUseProgram);
++
++    GLint success;
++    const char *src[1];
++    src[0] = accum_fsh;
++    a->pixelshader = gles_glCreateShader(GL_FRAGMENT_SHADER);
++    gles_glShaderSource(a->pixelshader, 1, (const char**)src, NULL);
++    gles_glCompileShader(a->pixelshader);
++    gles_glGetShaderiv(a->pixelshader, GL_COMPILE_STATUS, &success);
++    if(!success) {
++        LOAD_GLES(glGetShaderInfoLog);
++        char log[400];
++        gles_glGetShaderInfoLog(a->pixelshader, 399, NULL, log);
++        SHUT_LOGE("Failed to produce accum fragment shader.\n%s", log);
++        return 0;
++    }
++    src[0] = accum_vsh;
++    a->vertexshader = gles_glCreateShader(GL_VERTEX_SHADER);
++    gles_glShaderSource(a->vertexshader, 1, (const char**)src, NULL);
++    gles_glCompileShader(a->vertexshader);
++    gles_glGetShaderiv(a->vertexshader, GL_COMPILE_STATUS, &success);
++    if(!success) {
++        LOAD_GLES(glGetShaderInfoLog);
++        char log[400];
++        gles_glGetShaderInfoLog(a->vertexshader, 399, NULL, log);
++        SHUT_LOGE("Failed to produce accum vertex shader.\n%s", log);
++        return 0;
++    }
++    a->program = gles_glCreateProgram();
++    gles_glBindAttribLocation(a->program, 0, "aPosition");
++    gles_glBindAttribLocation(a->program, 1, "aTexCoord");
++    gles_glAttachShader(a->program, a->pixelshader);
++    gles_glAttachShader(a->program, a->vertexshader);
++    gles_glLinkProgram(a->program);
++    gles_glGetProgramiv(a->program, GL_LINK_STATUS, &success);
++    if(!success) {
++        SHUT_LOGE("Failed to link accum program.\n");
++        a->program = 0;
++        return 0;
++    }
++    GLuint oldprog = glstate->gleshard->program;
++    gles_glUseProgram(a->program);
++    gles_glUniform1i(gles_glGetUniformLocation(a->program, "uTex"), 0);
++    a->uscale = gles_glGetUniformLocation(a->program, "uScale");
++    gles_glUseProgram(oldprog);
++    return 1;
++}
++
++// (re)create the accum FBO + textures at the current target size.
++// Returns 0 (op becomes a no-op) when the target size is unknown or
++// creation fails; a->bits is only zeroed on hard shader failure.
++static int accum_ensure(glesaccum_t *a) {
++    int w = 0, h = 0;
++    if(!accum_target_size(&w, &h)) return 0;
++    if(a->fbo && a->width==w && a->height==h) return 1;
++
++    if(!a->program && !accum_create_program(a)) {
++        a->bits = 0;    // no scaled-quad path -> emulation off for good
++        return 0;
++    }
++
++    LOAD_GLES(glGetError);
++    LOAD_GLES(glGenTextures);
++    LOAD_GLES(glDeleteTextures);
++    LOAD_GLES(glBindTexture);
++    LOAD_GLES(glTexImage2D);
++    LOAD_GLES(glTexParameteri);
++    LOAD_GLES(glClearColor);
++    LOAD_GLES(glClear);
++    LOAD_GLES2_OR_OES(glGenFramebuffers);
++    LOAD_GLES2_OR_OES(glDeleteFramebuffers);
++    LOAD_GLES2_OR_OES(glBindFramebuffer);
++    LOAD_GLES2_OR_OES(glFramebufferTexture2D);
++    LOAD_GLES2_OR_OES(glCheckFramebufferStatus);
++
++    if(a->fbo) {
++        gles_glDeleteFramebuffers(1, &a->fbo);
++        a->fbo = 0;
++    }
++    if(a->accum_tex) {
++        gles_glDeleteTextures(1, &a->accum_tex);
++        a->accum_tex = 0;
++    }
++    if(a->scratch_tex) {
++        gles_glDeleteTextures(1, &a->scratch_tex);
++        a->scratch_tex = 0;
++    }
++
++    accum_force_tmu0();
++    while(gles_glGetError()!=GL_NO_ERROR);
++    // the accum target (16F or 8-bit, per the probe)
++    gles_glGenTextures(1, &a->accum_tex);
++    gles_glBindTexture(GL_TEXTURE_2D, a->accum_tex);
++    gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
++    gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
++    gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++    gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++    gles_glTexImage2D(GL_TEXTURE_2D, 0, a->intformat, w, h, 0, a->format, a->type, NULL);
++    // The scratch framebuffer snapshot is GL_RGB, not RGBA: GLES3/WebGL2's
++    // glCopyTexSubImage2D compatibility rule requires the destination's
++    // components to be a subset of the read buffer's, and a WebGL canvas
++    // without an alpha channel (GLUT never requests one) is effectively
++    // RGB8 -- an RGBA destination raises GL_INVALID_OPERATION and the copy
++    // silently drops. RGB works against both RGB8 and RGBA8 sources; the
++    // sampled alpha is then 1.0, matching an opaque native backbuffer.
++    gles_glGenTextures(1, &a->scratch_tex);
++    gles_glBindTexture(GL_TEXTURE_2D, a->scratch_tex);
++    gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
++    gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
++    gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++    gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++    gles_glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
++    gles_glBindTexture(GL_TEXTURE_2D, glstate->actual_tex2d[0]);
++
++    gles_glGenFramebuffers(1, &a->fbo);
++    gles_glBindFramebuffer(GL_FRAMEBUFFER, a->fbo);
++    gles_glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, a->accum_tex, 0);
++    int ok = (gles_glCheckFramebufferStatus(GL_FRAMEBUFFER)==GL_FRAMEBUFFER_COMPLETE)
++             && (gles_glGetError()==GL_NO_ERROR);
++    if(ok) {
++        // give the fresh buffer defined content (the accum clear value),
++        // whole-surface: glClear honors the scissor box, mask it out
++        GLboolean scissor = gl4es_glIsEnabled(GL_SCISSOR_TEST);
++        if(scissor) gl4es_glDisable(GL_SCISSOR_TEST);
++        gles_glClearColor(a->clear[0], a->clear[1], a->clear[2], a->clear[3]);
++        gles_glClear(GL_COLOR_BUFFER_BIT);
++        gles_glClearColor(gl4es_mirror_clear_color[0], gl4es_mirror_clear_color[1],
++                          gl4es_mirror_clear_color[2], gl4es_mirror_clear_color[3]);
++        if(scissor) gl4es_glEnable(GL_SCISSOR_TEST);
++        a->width = w;
++        a->height = h;
++    } else {
++        SHUT_LOGE("Accum buffer emulation: %dx%d FBO incomplete\n", w, h);
++        gles_glDeleteFramebuffers(1, &a->fbo);
++        gles_glDeleteTextures(1, &a->accum_tex);
++        gles_glDeleteTextures(1, &a->scratch_tex);
++        a->fbo = a->accum_tex = a->scratch_tex = 0;
++        a->width = a->height = 0;
++        while(gles_glGetError()!=GL_NO_ERROR);
++    }
++    gl4es_setCurrentFBO();
++    return ok;
++}
++
++// realize_blitenv's twin for the private scaled-copy program: update the
++// tracked gleshard program/attrib state so user draws re-realize after us
++static void realize_accumenv(glesaccum_t *a, GLfloat scale) {
++    LOAD_GLES2(glUseProgram);
++    LOAD_GLES2(glUniform1f);
++    if(glstate->gleshard->program != a->program) {
++        glstate->gleshard->program = a->program;
++        gles_glUseProgram(a->program);
++    }
++    gles_glUniform1f(a->uscale, scale);
++    unboundBuffers();
++    for(int i=0; i<hardext.maxvattrib; i++) {
++        vertexattrib_t *v = &glstate->gleshard->vertexattrib[i];
++        if(v->enabled != ((i<2)?1:0)) {
++            LOAD_GLES2(glEnableVertexAttribArray)
++            LOAD_GLES2(glDisableVertexAttribArray);
++            v->enabled = ((i<2)?1:0);
++            if(v->enabled)
++                gles_glEnableVertexAttribArray(i);
++            else
++                gles_glDisableVertexAttribArray(i);
++        }
++        if(i<2) {
++            if(v->size!=2 || v->type!=GL_FLOAT || v->normalized!=0
++                || v->stride!=0 || v->pointer!=((i==0)?a->vert:a->tex)
++                || v->buffer!=0) {
++                v->size = 2;
++                v->type = GL_FLOAT;
++                v->normalized = 0;
++                v->stride = 0;
++                v->pointer = (i==0)?a->vert:a->tex;
++                v->buffer = 0;
++                v->real_buffer = 0;
++                LOAD_GLES2(glVertexAttribPointer);
++                gles_glVertexAttribPointer(i, v->size, v->type, v->normalized, v->stride, v->pointer);
++            }
++        }
++    }
++}
++
++// draw `texture` as a quad covering the whole bound framebuffer (the
++// caller sets the viewport); scissor state is deliberately left live
++static void accum_draw_quad(glesaccum_t *a, GLuint texture, GLfloat scale) {
++    LOAD_GLES(glBindTexture);
++    LOAD_GLES(glDrawArrays);
++    accum_force_tmu0();
++    gles_glBindTexture(GL_TEXTURE_2D, texture);
++    realize_accumenv(a, scale);
++    gles_glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
++    gles_glBindTexture(GL_TEXTURE_2D, glstate->actual_tex2d[0]);
++}
++
++int gl4es_accum_get_bits() {
++    glesaccum_t *a = accum_state();
++    accum_probe(a);
++    return a->bits;
++}
++
++void gl4es_accum_clear() {
++    glesaccum_t *a = accum_state();
++    accum_probe(a);
++    if(!a->bits) return;
++    if(!accum_ensure(a)) return;
++    LOAD_GLES(glClearColor);
++    LOAD_GLES(glClear);
++    LOAD_GLES2_OR_OES(glBindFramebuffer);
++    gles_glBindFramebuffer(GL_FRAMEBUFFER, a->fbo);
++    gles_glClearColor(a->clear[0], a->clear[1], a->clear[2], a->clear[3]);
++    // like the real thing, bounded by the live scissor box
++    gles_glClear(GL_COLOR_BUFFER_BIT);
++    gles_glClearColor(gl4es_mirror_clear_color[0], gl4es_mirror_clear_color[1],
++                      gl4es_mirror_clear_color[2], gl4es_mirror_clear_color[3]);
++    gl4es_setCurrentFBO();
++}
++
++void APIENTRY_GL4ES gl4es_glClearAccum(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha) {
++    glesaccum_t *a = accum_state();
++    a->clear[0] = red;
++    a->clear[1] = green;
++    a->clear[2] = blue;
++    a->clear[3] = alpha;
++    noerrorShim();
++}
++AliasExport(void,glClearAccum,,(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha));
++
++void APIENTRY_GL4ES gl4es_glAccum(GLenum op, GLfloat value) {
++    DBG(printf("glAccum(%s, %f)\n", PrintEnum(op), value);)
++    FLUSH_BEGINEND;
++    // no display-list recording: executed immediately (was a stub upstream)
++    switch(op) {
++        case GL_ACCUM:
++        case GL_LOAD:
++        case GL_RETURN:
++            break;
++        case GL_ADD:
++        case GL_MULT: {
++            // TODO: unused by the fixed-function apps hosted so far
++            static int warned = 0;
++            if(!warned) {
++                warned = 1;
++                SHUT_LOGD("Accum buffer emulation: GL_ADD/GL_MULT not implemented\n");
++            }
++            noerrorShim();
++            return;
++        }
++        default:
++            errorShim(GL_INVALID_ENUM);
++            return;
++    }
++    glesaccum_t *a = accum_state();
++    accum_probe(a);
++    if(!a->bits) {      // no emulation support: keep the old stub behavior
++        noerrorShim();
++        return;
++    }
++    if(!accum_ensure(a)) {
++        noerrorShim();
++        return;
++    }
++
++    realize_textures(1);
++
++    gl4es_glPushAttrib(GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT);
++    GLint depthwrite = glstate->depth.mask;
++    if(depthwrite)
++        gl4es_glDepthMask(GL_FALSE);
++    gl4es_glDisable(GL_DEPTH_TEST);
++    gl4es_glDisable(GL_CULL_FACE);
++    gl4es_glDisable(GL_STENCIL_TEST);
++    // scissor left untouched: real glAccum is bounded by the scissor box
++
++    if(op==GL_RETURN) {
++        // accum texture -> current draw framebuffer, modulated by value
++        gl4es_glDisable(GL_BLEND);
++        pushViewport(0, 0, a->width, a->height);
++        accum_draw_quad(a, a->accum_tex, value);
++        popViewport();
++    } else {
++        // GL_ACCUM / GL_LOAD: snapshot the read framebuffer...
++        LOAD_GLES(glBindTexture);
++        LOAD_GLES(glCopyTexSubImage2D);
++        LOAD_GLES2_OR_OES(glBindFramebuffer);
++        readfboBegin();
++        accum_force_tmu0();
++        gles_glBindTexture(GL_TEXTURE_2D, a->scratch_tex);
++        gles_glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, a->width, a->height);
++        gles_glBindTexture(GL_TEXTURE_2D, glstate->actual_tex2d[0]);
++        readfboEnd();
++        // ...then add (or load) it into the accum FBO, scaled by value
++        gles_glBindFramebuffer(GL_FRAMEBUFFER, a->fbo);
++        gl4es_glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
++        if(op==GL_ACCUM) {
++            gl4es_glEnable(GL_BLEND);
++            gl4es_glBlendFunc(GL_ONE, GL_ONE);
++        } else
++            gl4es_glDisable(GL_BLEND);
++        pushViewport(0, 0, a->width, a->height);
++        accum_draw_quad(a, a->scratch_tex, value);
++        popViewport();
++        gl4es_setCurrentFBO();
++    }
++
++    if(depthwrite)
++        gl4es_glDepthMask(GL_TRUE);
++    gl4es_glPopAttrib();
++    noerrorShim();
++}
++AliasExport(void,glAccum,,(GLenum op, GLfloat value));
+diff --git a/src/gl/accum.h b/src/gl/accum.h
+new file mode 100644
+index 00000000..af0f13b7
+--- /dev/null
++++ b/src/gl/accum.h
+@@ -0,0 +1,15 @@
++#ifndef _GL4ES_ACCUM_H_
++#define _GL4ES_ACCUM_H_
++
++#include "gles.h"
++
++// Accumulation-buffer emulation over an internal FBO (see accum.c).
++void APIENTRY_GL4ES gl4es_glAccum(GLenum op, GLfloat value);
++void APIENTRY_GL4ES gl4es_glClearAccum(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha);
++
++// glClear(GL_ACCUM_BUFFER_BIT) hook, called from gl4es_glClear
++void gl4es_accum_clear(void);
++// GL_ACCUM_*_BITS for the getter: 16 (half-float target), 8 (RGBA8 fallback), 0 (unavailable)
++int gl4es_accum_get_bits(void);
++
++#endif // _GL4ES_ACCUM_H_
+diff --git a/src/gl/const.h b/src/gl/const.h
+index 3d9563c3..1b575af1 100644
+--- a/src/gl/const.h
++++ b/src/gl/const.h
+@@ -119,6 +119,19 @@
+ #define GL_ALL_ATTRIB_BITS      0xFFFFF
+ #define GL_MULTISAMPLE_BIT      0x20000000
+ 
++// accumulation buffer (emulated via FBO in accum.c)
++#define GL_ACCUM                0x0100
++#define GL_LOAD                 0x0101
++#define GL_RETURN               0x0102
++#define GL_MULT                 0x0103
++#ifndef GL_ADD
++#define GL_ADD                  0x0104
++#endif
++#define GL_ACCUM_RED_BITS       0x0D58
++#define GL_ACCUM_GREEN_BITS     0x0D59
++#define GL_ACCUM_BLUE_BITS      0x0D5A
++#define GL_ACCUM_ALPHA_BITS     0x0D5B
++
+ #define GL_CLIENT_PIXEL_STORE_BIT  0x00000001
+ #define GL_CLIENT_VERTEX_ARRAY_BIT 0x00000002
+ #define GL_ALL_CLIENT_ATTRIB_BITS  0xFFFFFFFF
+diff --git a/src/gl/getter.c b/src/gl/getter.c
+index 9291e2d7..1e743074 100644
+--- a/src/gl/getter.c
++++ b/src/gl/getter.c
+@@ -1,5 +1,6 @@
+ #include <gl4eshint.h>
+ #include "../glx/hardext.h"
++#include "accum.h"
+ #include "debug.h"
+ #include "gl4es.h"
+ #include "glstate.h"
+@@ -319,6 +320,13 @@ int gl4es_commonGet(GLenum pname, GLfloat *params) {
+         case GL_AUX_BUFFERS:
+             *params = 0;
+             break;
++        case GL_ACCUM_RED_BITS:
++        case GL_ACCUM_GREEN_BITS:
++        case GL_ACCUM_BLUE_BITS:
++        case GL_ACCUM_ALPHA_BITS:
++            // accum-buffer FBO emulation (accum.c): 16 / 8 / 0 (= none)
++            *params = gl4es_accum_get_bits();
++            break;
+         case GL_MAX_TEXTURE_UNITS:
+             *params = hardext.maxtex;
+             break;
+diff --git a/src/gl/gl4es.c b/src/gl/gl4es.c
+index b1b41be0..ae6ec683 100644
+--- a/src/gl/gl4es.c
++++ b/src/gl/gl4es.c
+@@ -7,6 +7,7 @@
+ #include "../config.h"
+ #include "../glx/hardext.h"
+ #include "wrap/gl4es.h"
++#include "accum.h"
+ #include "array.h"
+ #include "debug.h"
+ #include "enum_info.h"
+@@ -1143,6 +1144,8 @@ AliasExport(void,glColorMask,,(GLboolean red, GLboolean green, GLboolean blue, G
+ void APIENTRY_GL4ES gl4es_glClear(GLbitfield mask) {
+     PUSH_IF_COMPILING(glClear);
+ 
++    if(mask & GL_ACCUM_BUFFER_BIT)
++        gl4es_accum_clear();
+     mask &= GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT;
+     LOAD_GLES(glClear);
+     gles_glClear(mask);
+diff --git a/src/gl/gl_lookup.c b/src/gl/gl_lookup.c
+index e79c31a0..6c6ed2a2 100644
+--- a/src/gl/gl_lookup.c
++++ b/src/gl/gl_lookup.c
+@@ -1,6 +1,7 @@
+ #include "attributes.h"
+ #include "wrap/gl4es.h"
+ #include "wrap/stub.h"
++#include "accum.h"
+ #include "directstate.h"
+ #include "framebuffers.h"
+ #include "init.h"
+@@ -441,10 +442,11 @@ void* APIENTRY_GL4ES gl4es_GetProcAddress(const char *name) {
+     _EX(glLoadTransposeMatrixd);
+     _EX(glMultTransposeMatrixd);
+     _EX(glMultTransposeMatrixf);
++    // accum buffer emulation (accum.c)
++    _EX(glAccum);
++    _EX(glClearAccum);
+     // stubs for unimplemented functions
+-    STUB(glAccum);
+     STUB(glAreTexturesResident);
+-    STUB(glClearAccum);
+     _EX(glColorMaterial);
+     _EX(glCopyTexSubImage3D);   // It's a stub, calling the 2D one
+     STUB(glFeedbackBuffer);
+diff --git a/src/gl/glstate.c b/src/gl/glstate.c
+index 16716187..40428dd4 100644
+--- a/src/gl/glstate.c
++++ b/src/gl/glstate.c
+@@ -571,6 +571,11 @@ void DeleteGLState(void* oldstate) {
+         //TODO: check if should delete GL object too
+         free(state->blit);
+     }
++    // free accum emulation stuff
++    if(state->accum) {
++        //TODO: check if should delete GL objects too (same as blit above)
++        free(state->accum);
++    }
+     if(!state->shared_cnt) {
+         FreeOldProgramMap(state);
+         free(state->glsl);
+diff --git a/src/gl/glstate.h b/src/gl/glstate.h
+index 147e7e28..a8622330 100644
+--- a/src/gl/glstate.h
++++ b/src/gl/glstate.h
+@@ -82,6 +82,7 @@ struct glstate_s {
+     fpe_cache_t         *fpe_cache;
+     gleshard_t          *gleshard;          //shared
+     glesblit_t          *blit;
++    glesaccum_t         *accum;             // accumulation-buffer emulation (accum.c)
+     fbo_t               fbo;
+     int                 fbowidth, fboheight;    // initial size (useful only on LIBGL_FB=1 or 2)
+     depth_state_t       depth;
+diff --git a/src/gl/state.h b/src/gl/state.h
+index 02a7d3d7..0b4ebd58 100644
+--- a/src/gl/state.h
++++ b/src/gl/state.h
+@@ -247,6 +247,28 @@ typedef struct {
+     GLfloat         vert[8], tex[8];
+ } glesblit_t;
+ 
++// accumulation-buffer emulation state (accum.c)
++typedef struct {
++    // one-time renderability probe
++    int             probed;
++    int             bits;           // 16, 8 or 0 (= unavailable)
++    GLenum          intformat;      // accum texture internalformat
++    GLenum          format;
++    GLenum          type;
++    // buffers, lazily (re)created at the drawable size
++    GLuint          fbo;
++    GLuint          accum_tex;
++    GLuint          scratch_tex;    // framebuffer snapshot for GL_ACCUM/GL_LOAD
++    int             width, height;
++    GLfloat         clear[4];       // glClearAccum value
++    // private scaled-copy program
++    GLuint          vertexshader;
++    GLuint          pixelshader;
++    GLuint          program;
++    GLint           uscale;
++    GLfloat         vert[8], tex[8];
++} glesaccum_t;
++
+ typedef struct {
+     char*           shadersource; // scrach buffer for fpe shader construction
+     int             shadersize;
+diff --git a/src/gl/wrap/glstub.c b/src/gl/wrap/glstub.c
+index 2fdf305a..8ef049b2 100644
+--- a/src/gl/wrap/glstub.c
++++ b/src/gl/wrap/glstub.c
+@@ -25,7 +25,6 @@ STUB(void,glDiscardFramebufferEXT,(GLenum target, GLsizei numAttachments, const
+ STUB(void glBlendEquationSeparatei(GLuint buf, GLenum modeRGB, GLenum modeAlpha))
+ STUB(void glBlendFuncSeparatei(GLuint buf, GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha))
+ */
+-STUB(void,glClearAccum,(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha));
+ //STUB(void,glColorMaterial,(GLenum face, GLenum mode));
+ STUB(void,glCopyPixels,(GLint x, GLint y, GLsizei width, GLsizei height, GLenum type));
+ STUB(void,glDrawBuffer,(GLenum mode));
+@@ -36,7 +35,6 @@ STUB(void,glReadBuffer,(GLenum mode));
+ //STUB(void glSecondaryColor3f(GLfloat r, GLfloat g, GLfloat b));
+ STUB(void,glColorTable,(GLenum target, GLenum internalformat, GLsizei width, GLenum format, GLenum type, const GLvoid *table));
+ 
+-STUB(void,glAccum,(GLenum op, GLfloat value));
+ STUB(void,glPrioritizeTextures,(GLsizei n, const GLuint *textures, const GLclampf *priorities));
+ //STUB(void,glPixelMapfv,(GLenum map, GLsizei mapsize, const GLfloat *values));
+ //STUB(void,glPixelMapuiv,(GLenum map,GLsizei mapsize, const GLuint *values));
+diff --git a/src/gl/wrap/stub.h b/src/gl/wrap/stub.h
+index abbe6f12..7fc797c4 100644
+--- a/src/gl/wrap/stub.h
++++ b/src/gl/wrap/stub.h
+@@ -24,7 +24,6 @@ void APIENTRY_GL4ES gl4es_glSecondaryColor3f(GLfloat r, GLfloat g, GLfloat b);
+ void APIENTRY_GL4ES gl4es_glColorTable (GLenum target, GLenum internalformat, GLsizei width, GLenum format, GLenum type, const GLvoid *table);
+ //void APIENTRY_GL4ES gl4es_glIndexPointer(GLenum  type,  GLsizei  stride,  const GLvoid *  pointer);
+ 
+-void APIENTRY_GL4ES gl4es_glAccum(GLenum op, GLfloat value);
+ void APIENTRY_GL4ES gl4es_glPrioritizeTextures(GLsizei n, const GLuint *textures, const GLclampf *priorities);
+ void APIENTRY_GL4ES gl4es_glPixelMapfv(GLenum map, GLsizei mapsize, const GLfloat *values);
+ void APIENTRY_GL4ES gl4es_glPixelMapuiv(GLenum map,GLsizei mapsize, const GLuint *values);
