@@ -109,7 +109,7 @@ rate is just the scalar in front of `t`, and every line stays editable.
 | `Ctrl+Z` | undo | `F1` | help |
 | `Ctrl+F` | find | `F12` | next example |
 
-<sub>On macOS, `Cmd`+letter works as `Ctrl`+letter. Full reference: [User Guide → Keyboard & Mouse](docs/USER_GUIDE.md#keyboard--mouse-reference).</sub>
+<sub>On macOS, `Cmd`+letter works as `Ctrl`+letter. Full reference: [User Guide → Keyboard & Mouse](docs/USER_GUIDE.md#keyboard-mouse).</sub>
 
 <br>
 

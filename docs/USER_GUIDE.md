@@ -133,40 +133,28 @@ Autocomplete appears as you type:
 
 ### Editing what's there
 
-Navigation plus a full selection model, so reshaping a committed scene feels
-like a normal editor:
+Selection, clipboard (**Ctrl+C / Ctrl+X / Ctrl+V**), and undo/redo
+(**Ctrl+Z / Ctrl+Y**) work like a normal editor. Right-click a GL command for
+a short description. **Ctrl+D** deletes the current line or selection;
+**Ctrl+L** clears the scene and restores the [five editable display
+defaults](#display-default-commands).
 
-- **Shift+Left/Right** extends a character selection inside the input row;
-  **Shift+Home/End** extends to the row start/end.
-- **Shift+Up/Down** selects whole lines.
-- **Click+drag** over the active row selects characters. Keep dragging past the
-  row and the selection becomes whole lines, so one gesture covers both. You
-  can also drag in the line-number gutter to select lines directly.
-- **Double-click** selects the word under the cursor.
-- **Shift+click** extends a selection from the cursor to the click point —
-  same row gives a character selection, a different row gives a line range.
-- **Right-click a GL command** to open a short description of that command.
-- **Ctrl+C / Ctrl+X / Ctrl+V** — copy / cut / paste. A character selection in
-  the input row wins over a line selection: the substring is copied/cut and
-  pasted at the cursor. With no character selection, whole command lines are
-  copied/cut/pasted.
-- **Ctrl+Z** undo, **Ctrl+Y** (or Ctrl+Shift+Z) redo. Undo covers source
-  mutations — deletes, pastes, reformat, commits.
-- **Ctrl+D** deletes the current line or selection; **Ctrl+L** clears the
-  scene and restores five editable display defaults:
-  `glEnable(GL_COLOR_MATERIAL)`,
-  `glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)`,
-  `glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE)`,
-  a gray (0.4) specular color, and shininess 30.
-  Delete or comment those lines explicitly when a scene needs different
-  state.
+**Ctrl+F** opens case-insensitive search over the buffer; **Up / Down** move
+to the previous / next match. Press **Enter** for the next match, or **Esc**
+to close it.
 
-These five defaults are real commands, not hidden setup. They remain visible
-in code-focus mode and run with the rest of the scene every frame.
+### Display default commands
 
-**Ctrl+F** (or the *search...* menu slot) opens case-insensitive substring
-search over the whole buffer. Type to refine, **Enter** jumps to the next
-match, **Esc** closes. Matches are highlighted in the code panel.
+```c
+glEnable(GL_COLOR_MATERIAL);
+glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
+glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
+```
+
+These defaults reduce boilerplate for a lit scene. They are ordinary editable
+commands, so feel free to modify, remove, or replace them.
 
 ### Adjusting values without retyping
 
@@ -190,15 +178,11 @@ panel. Click it to open the floating picker:
 
 ![The color picker open on a glColor3f line, with the teapot tracking it live](images/color-picker.png)
 
-- An HSV square plus hue strip (and an alpha strip for 4-component colors),
-  with the current value as a hex readout.
-- Four palette tabs: **Basic** (common named colors), **Full** (hue ×
-  tint/shade grid with a greyscale ramp), **Neon** (the curated accent set
-  the built-in examples share; the tab is named after the active palette
-  in [`accent_palette.h`](../accent_palette.h)), **Harmony** (the current color plus a
-  tetradic set derived live from it).
-- Every change writes straight back to the source line, so the scene follows
-  the picker in real time. Click outside to close.
+- HSV color controls with a hex readout.
+- Palette tabs: **Basic**, **Full**, **Neon** (the curated accent set used by
+  the built-in examples, named after the active palette in
+  [`accent_palette.h`](../accent_palette.h)), and **Harmony**.
+- Changes write back to the source line in real time.
 
 ### Inspecting OpenGL state
 
@@ -1396,6 +1380,7 @@ all, build with `FREEGLUT_OSMESA=1`; both are covered in
 
 ---
 
+<a id="keyboard-mouse"></a>
 ## Keyboard & Mouse Reference
 
 Press **F1** in-app for the always-current version of this list (the Keys
@@ -1428,8 +1413,8 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+Shift+F | Toggle code focus |
 | Ctrl+B | Cycle code panel layout |
 | Ctrl+Shift+Y | Cycle syntax highlight |
-| Right-click GL command | Show a short description of that command. For `glEnable` / `glDisable`, the popup explains the selected capability (for example, `GL_BLEND`) rather than repeating generic enable/disable help. The next editor keypress, click, or wheel event dismisses it without swallowing the event |
-| Right-click empty line | Toggle the [OpenGL state inspector](#inspecting-opengl-state) at that point, including on an uncommitted blank input row |
+| Right-click GL command | Show a short description of that command |
+| Right-click empty line | Toggle the [OpenGL state inspector](#inspecting-opengl-state) at that point |
 | Esc | Clear input / close overlay |
 
 ### Scene & rendering
