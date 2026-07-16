@@ -27,7 +27,7 @@
 #define GLSP_VAL_CHARS_MAX  44
 #define GLSP_EDGE_MARGIN     8
 
-static const char GLSP_TITLE[]      = "OpenGL state before this line";
+static const char GLSP_TITLE[]      = "OpenGL state at this line";
 static const char GLSP_HDR_NAME[]   = "state";
 static const char GLSP_HDR_CUR[]    = "current";
 static const char GLSP_HDR_DEF[]    = "default (GL 2.1)";
