@@ -537,7 +537,7 @@ static void status_banner_render(const UiRenderSnapshot *snap,
     y0 = (float)sc_y;
     y1 = (float)(sc_y + STATUSBAR_H);
 
-    bg_a   = 0.92f;
+    bg_a   = 0.82f;
     lead_a = bg_a * anim.ext;                    /* faint moving leading edge */
     ta     = anim.ext;                           /* whole-bar fade-in */
 
