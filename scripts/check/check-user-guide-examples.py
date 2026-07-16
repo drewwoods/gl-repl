@@ -3,11 +3,12 @@
 
 The compiled-in example set is generated from examples/catalog.ini
 (scripts/gen_examples.py), so the catalog is ground truth. This guard keeps
-example references in the top-level docs/*.md files from drifting, and also
-checks docs/USER_GUIDE.md's "Built-in Examples" section:
+example references and advertised counts in README.md plus the top-level
+docs/*.md files from drifting, and also checks docs/USER_GUIDE.md's
+"Built-in Examples" section:
 
-  - the advertised count ("the N built-in examples") must equal the catalog
-    size;
+  - advertised counts (for example, "N built-in scenes" or "F12 cycles all
+    N") must equal the catalog size;
   - the numbered table in that section must list every catalog entry with
     its exact 1-based index and display name — a mid-catalog insert that
     shifts later indices fails here instead of silently misnumbering;
@@ -32,6 +33,10 @@ import gen_examples
 QUOTED_EXAMPLE_RE = re.compile(
     r"--example\s+(?:\"([^\"\n]+)\"|'([^'\n]+)')")
 NUMERIC_EXAMPLE_RE = re.compile(r"--example\s+\d+")
+COUNT_CLAIM_RE = re.compile(
+    r"\b(?P<built_in>\d+)\s+built-in\s+(?:examples|scenes)\b"
+    r"|\bF12\*{0,2}\s+cycles(?:\s+\w+){0,4}\s+all\s+(?P<f12>\d+)\b",
+    re.IGNORECASE)
 
 
 def repo_root() -> Path:
@@ -80,6 +85,20 @@ def line_number(text: str, offset: int) -> int:
     return text.count("\n", 0, offset) + 1
 
 
+def doc_count_claim_failures(path: Path, text: str,
+                             catalog_count: int) -> list[str]:
+    """Return advertised example-count claims that disagree with the catalog."""
+    failures: list[str] = []
+    for match in COUNT_CLAIM_RE.finditer(text):
+        count = int(match.group("built_in") or match.group("f12"))
+        if count != catalog_count:
+            failures.append(
+                f"{path.name}:{line_number(text, match.start())}: count claim "
+                f"advertises {count} built-in examples, catalog has "
+                f"{catalog_count}")
+    return failures
+
+
 def doc_reference_failures(path: Path, text: str,
                            known: set[str]) -> list[str]:
     """Return stale or insertion-fragile --example references in one doc."""
@@ -108,7 +127,7 @@ def doc_reference_failures(path: Path, text: str,
 
 def main() -> int:
     root = repo_root()
-    docs = sorted((root / "docs").glob("*.md"))
+    docs = [root / "README.md", *sorted((root / "docs").glob("*.md"))]
     guide_path = root / "docs" / "USER_GUIDE.md"
     guide = guide_path.read_text(encoding="utf-8")
 
@@ -122,16 +141,10 @@ def main() -> int:
     failures: list[str] = []
     section = guide_examples_section(guide)
 
-    counts = re.findall(r"the (\d+) built-in examples", section)
-    if not counts:
+    if not COUNT_CLAIM_RE.search(section):
         failures.append(
-            "count claim: expected 'the N built-in examples' in the "
+            "count claim: expected an advertised built-in-example count in the "
             "Built-in Examples section")
-    for count in counts:
-        if int(count) != len(names):
-            failures.append(
-                f"count claim: guide advertises {count} built-in examples, "
-                f"catalog has {len(names)}")
 
     table = parse_guide_table(section)
     for idx, name in enumerate(names, start=1):
@@ -149,6 +162,7 @@ def main() -> int:
     known = {name.lower() for name in names}
     for path in docs:
         text = guide if path == guide_path else path.read_text(encoding="utf-8")
+        failures.extend(doc_count_claim_failures(path, text, len(names)))
         failures.extend(doc_reference_failures(path, text, known))
 
     if failures:
