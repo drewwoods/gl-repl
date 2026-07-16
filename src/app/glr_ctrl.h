@@ -233,6 +233,15 @@ void glr_ctrl_router_reset_code_panel_drag(void);
  * matching the live panel layout. */
 int glr_ctrl_router_apply_input_row_drag(int target_line, int target_char);
 
+/* Promote an armed character-anchored drag to whole-line range
+ * selection, for motion that crossed off the press row. Clears the
+ * press row's input-buffer selection and extends a line range from the
+ * press row to target_line. Returns 1 if a promotion happened, 0 when
+ * no char-anchored drag is armed or target_line is the press row (the
+ * caller keeps the character path in that case). One-way: after this
+ * the drag stays line-range for the rest of the gesture. */
+int glr_ctrl_router_promote_char_drag_to_line_range(int target_line);
+
 /* Select the word at (line_idx, char_idx) as an input-buffer
  * selection. Navigates to line_idx first so the word walk runs
  * against that row's canonical text. A char_idx outside a word

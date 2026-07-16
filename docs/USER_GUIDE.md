@@ -139,8 +139,9 @@ like a normal editor:
 - **Shift+Left/Right** extends a character selection inside the input row;
   **Shift+Home/End** extends to the row start/end.
 - **Shift+Up/Down** selects whole lines.
-- **Click+drag** over the active row selects characters; dragging in the
-  line-number gutter selects whole lines.
+- **Click+drag** over the active row selects characters. Keep dragging past the
+  row and the selection becomes whole lines, so one gesture covers both. You
+  can also drag in the line-number gutter to select lines directly.
 - **Double-click** selects the word under the cursor.
 - **Shift+click** extends a selection from the cursor to the click point —
   same row gives a character selection, a different row gives a line range.
