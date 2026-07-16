@@ -172,6 +172,9 @@ const GLCmd *repl_state_document_cmd_at(int cmd_idx) {
     return &g_repl_state.document.cmds[cmd_idx];
 }
 
+/* No in-tree callers today; kept as the _mut twin of
+ * repl_state_document_cmd_at above (facade symmetry). */
+/* cppcheck-suppress unusedFunction */
 GLCmd *repl_state_document_cmd_at_mut(int cmd_idx) {
     if (cmd_idx < 0 || cmd_idx >= g_repl_state.document.cmd_count)
         return NULL;
@@ -186,6 +189,9 @@ void repl_state_document_count_set(int cmd_count) {
     g_repl_state.document.cmd_count = cmd_count;
 }
 
+/* No in-tree callers today; kept alongside repl_state_document_count
+ * so the document facade exposes count and capacity as a pair. */
+/* cppcheck-suppress unusedFunction */
 int repl_state_document_capacity(void) {
     return MAX_EDITOR_COMMANDS;
 }
@@ -276,6 +282,9 @@ void repl_state_flat_program_clear_current_block(void) {
     repl_state_flat_program_set_current_block(-1, -1, -1);
 }
 
+/* No in-tree callers today; kept so every state slice has a reset in
+ * the per-slice reset family (facade symmetry). */
+/* cppcheck-suppress unusedFunction */
 void repl_state_flat_program_reset(void) {
     g_repl_state.flat_program.cmd_count = g_repl_state.flat_program.overflow_cmd_count = 0;
     g_repl_state.flat_program.dirty = 1;
@@ -469,6 +478,9 @@ void repl_state_restore(const ReplRuntimeState *snapshot) {
     repl_expr_cache_invalidate(repl_expr_cache_live());
 }
 
+/* No in-tree callers today; kept so every state slice has a reset in
+ * the per-slice reset family (facade symmetry). */
+/* cppcheck-suppress unusedFunction */
 void repl_state_import_export_reset(void) {
     g_repl_state.import_export = repl_state_defaults()->import_export;
 }
