@@ -1,8 +1,8 @@
 # gl-repl User Guide
 
 gl-repl is an interactive OpenGL interpreter. You type classic immediate-mode
-GL commands, press `;` to run each one, and watch the geometry build up live
-in a 3D viewport. Every command stays in an editable code panel, so a scene is
+GL commands and see geometry render live as you type, with interactive overlays
+guiding each edit. Every command stays in an editable code panel, so a scene is
 a readable list of GL calls you can revisit, tweak, animate, replay
 step-by-step, and export as a standalone C program.
 
@@ -77,8 +77,7 @@ Top to bottom:
 
 ### Your first triangle
 
-Type each line and press `;` to commit it — the `;` keystroke runs the line,
-you don't type a literal semicolon at the end:
+Type each line, then press `;` or Enter to commit it:
 
 ```c
 glColor3f(0.98, 0.76, 0.36)
@@ -90,6 +89,11 @@ glEnd()
 ```
 
 ![A first triangle](images/first-triangle.png)
+
+> [!NOTE]
+> Depth testing is not enabled yet, so the grid behind the triangle remains
+> visible. Add `glEnable(GL_DEPTH_TEST)` before `glBegin(GL_TRIANGLES)` to turn
+> on depth testing.
 
 The triangle appears as soon as the vertices commit. Now:
 
@@ -105,39 +109,27 @@ The triangle appears as soon as the vertices commit. Now:
 
 ## Writing Code
 
-Everything in gl-repl happens through one input row in the code panel. You
-type there, commit lines into the scene, arrow back up to change your mind,
-and the viewport answers every keystroke. This section is that loop.
+The code panel works like a text editor: write and modify your scene's source
+there. Unlike a normal editor, gl-repl renders the scene live as you type.
 
 ### Committing lines
 
-- **`;`** commits the current input line (the semicolon is the trigger key,
-  not part of the text).
-- **Enter** normally inserts a blank line below the cursor. However,
-  variable declarations and block openers like `for(...) {` commit
-  immediately on Enter.
-- **Up/Down** move between lines; loading an existing line into the input
-  lets you edit and re-commit it in place.
-- **Esc** clears the input line (or closes whichever overlay is open).
-- A line that fails to parse is *not* committed — the status line explains
-  why, and your input stays put for fixing.
+New and edited lines are checked before they become part of the scene.
+
+- Press **`;`** or **Enter** to commit the current line. If it is valid,
+  gl-repl applies it and moves to the next line. If not, the error is
+  highlighted and the line stays active so you can fix it.
+- Moving to another line with **Up/Down** or by clicking attempts to commit
+  your edit automatically. Valid edits are kept; invalid edits are discarded
+  and the previous committed version is restored. This keeps every inactive
+  line valid.
+- Press **Esc** to discard an edit yourself.
 
 ### Autocomplete
 
-You rarely have to type a GL name (or constant) to the end. Press **Tab**
-while typing:
+Autocomplete appears as you type:
 
 ![Typing glEnable(GL_LI: the popup lists the matching constants, ghost text completes inline](images/autocomplete.png)
-
-- A unique match completes in place; multiple matches pop up a list (Tab or
-  Enter accepts, arrows move).
-- Ghost text shows the pending completion inline — in the shot above the
-  dimmed `GHTO)` after the typed `glEnable(GL_LI` is what Tab will accept.
-- After typing `foo(`, a parameter hint appears for GL commands and your own
-  functions.
-- Inside an enum argument slot (e.g. `glEnable(`), completion offers the GL
-  constants valid for that slot — this works mid-line too, when the cursor
-  sits at the end of the token being completed.
 
 ### Editing what's there
 
@@ -152,6 +144,7 @@ like a normal editor:
 - **Double-click** selects the word under the cursor.
 - **Shift+click** extends a selection from the cursor to the click point —
   same row gives a character selection, a different row gives a line range.
+- **Right-click a GL command** to open a short description of that command.
 - **Ctrl+C / Ctrl+X / Ctrl+V** — copy / cut / paste. A character selection in
   the input row wins over a line selection: the substring is copied/cut and
   pasted at the cursor. With no character selection, whole command lines are
