@@ -152,6 +152,8 @@ typedef double GLclampd;
 #define GL_LINE_STIPPLE 0x0B24
 #define GL_MULTISAMPLE 0x809D
 #define GL_SAMPLES 0x80A9
+#define GL_ACCUM_RED_BITS 0x0D58
+#define GL_NO_ERROR 0
 #define GL_NORMALIZE 0x0BA1
 #define GL_POINT_SMOOTH 0x0B10
 #define GL_POLYGON_OFFSET_FILL 0x8037
@@ -348,6 +350,11 @@ static inline void glGetIntegerv(GLenum pname, GLint *params) {
     } else {
         params[0] = 0;
     }
+}
+static inline GLenum glGetError(void) {
+    GL_STUB_TRACE_LINE("glGetError\n");
+    gl_stub_tick(GL_STUB_glGetError);
+    return GL_NO_ERROR;
 }
 static inline const GLubyte *glGetString(GLenum name) {
     (void)name;
