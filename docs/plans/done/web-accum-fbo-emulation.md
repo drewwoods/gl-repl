@@ -1,8 +1,10 @@
 # Accumulation buffer on the web build: detection + FBO emulation
 
-Status: in-review — **Part 1 and Part 2 both implemented** (accum-bits
+Status: done — **Part 1 and Part 2 both implemented** (accum-bits
 detection + the gl4es FBO emulation, shipped as local patch #7
-`packaging/web/patches/gl4es-accum-fbo.patch`)
+`packaging/web/patches/gl4es-accum-fbo.patch`; the companion web
+keyboard-shim fix delivers Ctrl+= / Ctrl+- so the passes step works
+in the browser)
 Date: 2026-07-16
 Scope: Emscripten/WebGL2 build (gl4es); Part 1 also touches every backend's
 startup path.
