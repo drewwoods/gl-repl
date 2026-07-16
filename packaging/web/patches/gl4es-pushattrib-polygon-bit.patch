@@ -1,0 +1,80 @@
+Implement GL_POLYGON_BIT save/restore in gl4es's glPushAttrib/glPopAttrib.
+
+gl4es left the polygon attribute group as a TODO, so glPushAttrib
+(including GL_ALL_ATTRIB_BITS) never captured the glFrontFace winding,
+glCullFace mode, or glPolygonMode, and glPopAttrib never restored them.
+Any scene command that flipped one of these leaked it into the GLES
+context permanently: gl-repl brackets every render pass with
+glPushAttrib(GL_ALL_ATTRIB_BITS)/glPopAttrib and relies on the pop to
+restore GL_CCW after user geometry runs, so one frame of an example
+calling glFrontFace(GL_CW) (the glu-concave-arrow scenes) reversed
+front/back for every scene rendered afterwards — two-sided materials
+swapped faces and the winding view read inverted until a page reload.
+
+Save/restore the shadow-state-backed pieces of GL_POLYGON_BIT: front
+face, cull face mode, polygon mode (gl4es stores GL_FILL as 0), plus
+the group's cull-face and polygon-offset-fill enables (fields shared
+with GL_ENABLE_BIT, matching how the stack already shares depth_test
+et al.). Polygon smooth/stipple enables and the polygon offset factor
+/units stay TODO — gl4es does not shadow them, and querying them here
+would add a synchronous GLES round-trip to a per-frame path.
+
+The gl-repl integration regression: in the Emscripten build, cycle the
+examples past a glFrontFace(GL_CW) scene and return to the logo — its
+exterior must stay near-white with cyan/magenta interior back faces,
+and the winding view must stay green-outside/red-inside.
+
+Applied by scripts/web-deps.sh after cloning the pinned gl4es checkout.
+diff --git a/src/gl/stack.c b/src/gl/stack.c
+index 1a6d5556..8693f362 100644
+--- a/src/gl/stack.c
++++ b/src/gl/stack.c
+@@ -226,7 +226,15 @@ void APIENTRY_GL4ES gl4es_glPushAttrib(GLbitfield mask) {
+         }
+     }
+ 
+-    // TODO: GL_POLYGON_BIT
++    if (mask & GL_POLYGON_BIT) {
++        cur->cull_face = gl4es_glIsEnabled(GL_CULL_FACE);
++        gl4es_glGetIntegerv(GL_CULL_FACE_MODE, &cur->cull_face_mode);
++        gl4es_glGetIntegerv(GL_FRONT_FACE, &cur->front_face);
++        cur->polygon_mode = glstate->polygon_mode;  // 0 means GL_FILL here
++        cur->polygon_offset_fill = gl4es_glIsEnabled(GL_POLYGON_OFFSET_FILL);
++        //TODO: GL_POLYGON_SMOOTH & GL_POLYGON_STIPPLE enables (not tracked)
++        //TODO: GL_POLYGON_OFFSET_LINE/POINT enables, offset factor & units (not shadowed)
++    }
+     // TODO: GL_POLYGON_STIPPLE_BIT
+ 
+     if (mask & GL_SCISSOR_BIT) {
+@@ -542,6 +550,14 @@ DBG(printf("glPopAttrib()\n");)
+         }
+     }
+ 
++    if (cur->mask & GL_POLYGON_BIT) {
++        enable_disable(GL_CULL_FACE, cur->cull_face);
++        gl4es_glCullFace(cur->cull_face_mode);
++        gl4es_glFrontFace(cur->front_face);
++        gl4es_glPolygonMode(GL_FRONT_AND_BACK, cur->polygon_mode?cur->polygon_mode:GL_FILL);
++        enable_disable(GL_POLYGON_OFFSET_FILL, cur->polygon_offset_fill);
++    }
++
+     if (cur->mask & GL_SCISSOR_BIT) {
+         enable_disable(GL_SCISSOR_TEST, cur->scissor_test);
+         gl4es_glScissor(v4(cur->scissor_box));
+diff --git a/src/gl/stack.h b/src/gl/stack.h
+index 3a6fc275..c6b78f3f 100644
+--- a/src/gl/stack.h
++++ b/src/gl/stack.h
+@@ -111,7 +111,11 @@ typedef struct _glstack_t {
+     GLboolean point_smooth;
+     GLfloat point_size;
+ 
+-    // TODO: GL_POLYGON_BIT
++    // GL_POLYGON_BIT (cull_face & polygon_offset_fill enables shared with GL_ENABLE_BIT)
++    GLint cull_face_mode;
++    GLint front_face;
++    GLenum polygon_mode;
++
+     // TODO: GL_POLYGON_STIPPLE_BIT
+ 
+     // GL_SCISSOR_BIT

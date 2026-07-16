@@ -74,6 +74,16 @@ license text, reproduced verbatim from `third_party/freeglut/COPYING`:
     the generate-mipmap hint from client-side mirrors instead of the GLES
     driver (on WebGL a driver `glGet*` is a synchronous `getParameter()`
     that stalls the pipeline; `glPushAttrib` reads several of these).
+  - `packaging/web/patches/gl4es-color-material-face.patch` — track the
+    single active `GL_COLOR_MATERIAL_FACE` so `glColorMaterial(GL_FRONT, …)`
+    / `(GL_BACK, …)` updates only the selected side's material in the
+    generated shaders (two-sided scenes had back-face colors leaking onto
+    front faces).
+  - `packaging/web/patches/gl4es-pushattrib-polygon-bit.patch` — implement
+    the `GL_POLYGON_BIT` group in `glPushAttrib`/`glPopAttrib` (front-face
+    winding, cull-face mode, polygon mode; it was an upstream TODO), so a
+    scene's `glFrontFace(GL_CW)` no longer escapes the render pass's
+    push/pop bracket and reverses front/back for every scene after it.
 - **License:** MIT. Reproduced verbatim from gl4es's `LICENSE`:
 
 ```
