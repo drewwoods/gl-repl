@@ -350,7 +350,7 @@ run_check() {
     out=$( "$func" "$@" 2>&1 ) || rc=$?
 
     if [ -n "$out" ]; then
-        echo "$out" | sed 's/^/    /' | sed $'s/ OK / \033[0;32mOK\033[0m /g; s/ OK$/ \033[0;32mOK\033[0m/'
+        echo "$out" | sed 's/^/    /' | sed $'s/WARNING:/\033[0;33mWARNING:\033[0m/g; s/ OK / \033[0;32mOK\033[0m /g; s/ OK$/ \033[0;32mOK\033[0m/'
     fi
 
     if [ "$rc" -ne 0 ]; then
