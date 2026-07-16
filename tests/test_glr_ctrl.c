@@ -1867,7 +1867,24 @@ static void test_editor_input_dismisses_gl_state_report(void) {
 
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, anchor_x, anchor_y);
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, anchor_x, anchor_y);
+#ifdef GL_STUBS
+    /* Real-GL test binaries have no GL context; rendering a frame with
+     * the popup visible would call into libGL (ui_gl_state_panel_render)
+     * and crash. The stub build exercises the full frame. */
     glr_ctrl_display_frame();
+#else
+    if (repl_state_normals_dirty()) {
+        int edit_line = editor_state_edit_line();
+        repl_recompute_autonormals(glr_state_presentation().autonormal,
+                                   &edit_line);
+        editor_state_edit_line_set(edit_line);
+        repl_state_normals_dirty_clear();
+    }
+    if (repl_state_flat_program_dirty()) {
+        repl_flatten_commands(editor_state_edit_line());
+        repl_state_flat_program_clear_dirty();
+    }
+#endif
     view = glr_ctrl_build_gl_state_panel_view();
     for (py = 80; py < ui_state_viewport().window_h - 4 && off_x < 0;
          py += 4) {
@@ -1920,7 +1937,24 @@ static void test_gl_state_popup_defers_to_front_overlay(void) {
     ui_state_gl_state_inspector_open(
         blank_line, vx + vw / 2,
         snap.viewport.window_h - (vy + vh / 2));
+#ifdef GL_STUBS
+    /* Real-GL test binaries have no GL context; rendering a frame with
+     * the popup visible would call into libGL (ui_gl_state_panel_render)
+     * and crash. The stub build exercises the full frame. */
     glr_ctrl_display_frame();
+#else
+    if (repl_state_normals_dirty()) {
+        int edit_line = editor_state_edit_line();
+        repl_recompute_autonormals(glr_state_presentation().autonormal,
+                                   &edit_line);
+        editor_state_edit_line_set(edit_line);
+        repl_state_normals_dirty_clear();
+    }
+    if (repl_state_flat_program_dirty()) {
+        repl_flatten_commands(editor_state_edit_line());
+        repl_state_flat_program_clear_dirty();
+    }
+#endif
     state_view = glr_ctrl_build_gl_state_panel_view();
     glr_ctrl_build_ui_snapshot(&snap);
     for (gl_y = vy; gl_y < vy + vh && overlap_x < 0; gl_y++) {
