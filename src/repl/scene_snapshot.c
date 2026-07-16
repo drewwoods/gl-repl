@@ -18,12 +18,6 @@ void scene_snapshot_clear(SceneSnapshot *snapshot) {
     memset(snapshot, 0, sizeof(*snapshot));
 }
 
-int scene_snapshot_copy(SceneSnapshot *dst, const SceneSnapshot *src) {
-    if (!dst || !src)
-        return 0;
-    memcpy(dst, src, sizeof(*dst));
-    return 1;
-}
 
 static const char *const *scene_snapshot_line_ptrs(
     const char lines[MAX_EDITOR_COMMANDS][MAX_LINE_LEN],

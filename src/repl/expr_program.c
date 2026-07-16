@@ -165,9 +165,6 @@ void repl_expr_cache_invalidate(ReplExprCache *cache) {
         memset(cache->lines, 0, (size_t)cache->line_cap * sizeof(ExprLineEntry));
 }
 
-size_t repl_expr_cache_bytes(const ReplExprCache *cache) {
-    return cache ? cache->bytes : 0;
-}
 
 /* Intern `name` into the symbol arena, returning its offset (or -1). */
 static int cache_intern_symbol(ReplExprCache *cache, const char *name) {

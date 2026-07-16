@@ -38,7 +38,6 @@ typedef enum {
 } SceneSnapshotCameraMode;
 
 void scene_snapshot_clear(SceneSnapshot *snapshot);
-int  scene_snapshot_copy(SceneSnapshot *dst, const SceneSnapshot *src);
 
 void scene_snapshot_capture_live(SceneSnapshot *dst);
 int  scene_snapshot_apply_live(const SceneSnapshot *src,

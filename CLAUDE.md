@@ -758,7 +758,7 @@ explaining why the extra background is useful.
   *intentionally* narrower (e.g. autonormal's gl-vertex-vs-tess split),
   spell it out inline with a comment rather than adding a predicate.
 - Splitting a function call's comma-separated args: use
-  [`repl_scan_next_arg_delim()`](src/repl/eval.h#L431) from [`src/repl/eval.h`](src/repl/eval.h), never a bare
+  [`repl_scan_next_arg_delim()`](src/repl/eval.h#L428) from [`src/repl/eval.h`](src/repl/eval.h), never a bare
   `strchr(s, ',')` or `*s != ',' && *s != ')'` loop — those are
   paren-naive and stop at the first inner `)` of e.g.
   `cos(i + phase)`, silently truncating the slot.

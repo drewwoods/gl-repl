@@ -404,9 +404,6 @@ int   repl_eval_parse_exprs(const char *s, float *out, int max,
  * against the current flat-local variable scope to select the emitted arm.
  * The kernel is identical, so a shared helper keeps the two sides from
  * drifting. */
-float repl_eval_if_condition(const char *src_text,
-                             const ExprVar *vars, int num_vars,
-                             float fallback);
 
 /* Capture-aware variant: identical evaluation, but when `capture` is
  * non-NULL and the paren payload extracts, fires the sink once with

@@ -110,7 +110,6 @@ void           repl_expr_cache_destroy(ReplExprCache *cache);
  * a rebuild does not re-grow from zero). The single invalidation entry —
  * called from repl_state_mark_source_dirty and state restore. */
 void           repl_expr_cache_invalidate(ReplExprCache *cache);
-size_t         repl_expr_cache_bytes(const ReplExprCache *cache);
 
 /* ---- Compilation -------------------------------------------------------- */
 
