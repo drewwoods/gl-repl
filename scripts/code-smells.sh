@@ -18,7 +18,7 @@ LIZARD_LEN="${LIZARD_LEN:-150}"
 CLANGD_BIN="${CLANGD_BIN:-clangd}"
 
 CLANG_TIDY_BIN="${CLANG_TIDY_BIN:-/opt/homebrew/opt/llvm/bin/clang-tidy}"
-CLANG_TIDY_CHECKS="${CLANG_TIDY_CHECKS:-readability-*,bugprone-*,misc-*,-readability-magic-numbers}"
+CLANG_TIDY_CHECKS="${CLANG_TIDY_CHECKS:-readability-*,bugprone-*,misc-*,-readability-magic-numbers,-readability-identifier-length,-readability-braces-around-statements,-readability-uppercase-literal-suffix,-readability-math-missing-parentheses,-bugprone-easily-swappable-parameters,-misc-include-cleaner}"
 
 PMD_IMAGE="${PMD_IMAGE:-pmdcode/pmd:latest}"
 JOBS="${JOBS:-4}"
@@ -70,8 +70,15 @@ Environment knobs:
 
   CLANG_TIDY_BIN     clang-tidy executable.
                      Default: /opt/homebrew/opt/llvm/bin/clang-tidy
-  CLANG_TIDY_CHECKS  clang-tidy checks.
-                     Default: readability-*,bugprone-*,misc-*,-readability-magic-numbers
+  CLANG_TIDY_CHECKS  clang-tidy checks (comma-separated).
+                     Default: readability-*,bugprone-*,misc-*
+                       minus: -readability-magic-numbers,
+                       -readability-identifier-length,
+                       -readability-braces-around-statements,
+                       -readability-uppercase-literal-suffix,
+                       -readability-math-missing-parentheses,
+                       -bugprone-easily-swappable-parameters,
+                       -misc-include-cleaner
 
   MIN_TOKENS         PMD CPD minimum duplicate token count. Default: 80
   PMD_IMAGE          Docker image for PMD. Default: pmdcode/pmd:latest
@@ -164,30 +171,39 @@ printf 'repo: %s\n' "$ROOT"
 printf 'src:  %s\n' "$SRC_DIR"
 printf 'out:  %s\n' "$OUT_DIR"
 
+# A0: Count the .c files in the clangd/clang-tidy scan set.
+count_scanned_c_files() {
+  { find "$SRC_DIR" -name '*.c'; printf 'gl_repl.c\n'; } | wc -l | tr -d ' '
+}
+
 ensure_compile_commands() {
   say "checking compile_commands.json"
 
   if [[ -f compile_commands.json ]]; then
     printf 'found compile_commands.json\n'
-    return 0
-  fi
-
-  if [[ "$ENSURE_COMPILE_DB" -eq 0 ]]; then
+  elif [[ "$ENSURE_COMPILE_DB" -eq 0 ]]; then
     printf 'compile_commands.json missing; not generating because --no-compile-db was passed\n'
     return 1
-  fi
-
-  if have bear; then
+  elif have bear; then
     say "compile_commands.json missing; generating with bear + stub build"
     # NOTE: We use make -B to force a full rebuild under bear so that it records all
     # compiler flags, even if the build is already up-to-date. We build with GL stubs
-    # (-DGL_STUBS) so the scan can run on machines without real GL development headers.
-    bear -- make -B gl-repl USE_GL_STUBS=1 || true
-    [[ -f compile_commands.json ]] || return 1
-    return 0
-  fi
-
-  cat > "$OUT_DIR/compile_commands.missing.txt" <<EOF
+    # (USE_GL_STUBS=1) so the scan can run on machines without real GL development headers.
+    #
+    # A0: Build to a temp file so a failed bear run doesn't leave a partial/stale
+    # compile_commands.json.  Move into place only on success.
+    local tmp_db
+    tmp_db="$(mktemp "${TMPDIR:-/tmp}/compile_commands.XXXXXX.json")"
+    if bear --output "$tmp_db" -- make -B gl-repl USE_GL_STUBS=1; then
+      mv "$tmp_db" compile_commands.json
+      printf 'generated compile_commands.json\n'
+    else
+      rm -f "$tmp_db"
+      printf 'bear build failed; compile_commands.json not generated\n' >&2
+      return 1
+    fi
+  else
+    cat > "$OUT_DIR/compile_commands.missing.txt" <<EOF
 compile_commands.json is missing and bear is not installed.
 
 Install bear:
@@ -202,8 +218,25 @@ clangd and clang-tidy diagnostics require compile_commands.json to understand
 include paths, defines, and force-includes.
 EOF
 
-  printf 'missing compile_commands.json; see %s\n' "$OUT_DIR/compile_commands.missing.txt"
-  return 1
+    printf 'missing compile_commands.json; see %s\n' "$OUT_DIR/compile_commands.missing.txt"
+    return 1
+  fi
+
+  # A0: Verify coverage — every .c in the scanned set should have a DB entry.
+  local expected actual
+  expected="$(count_scanned_c_files)"
+  actual=$(grep -c '"file"' compile_commands.json 2>/dev/null || echo 0)
+  if [[ "$actual" -lt "$expected" ]]; then
+    printf 'WARNING: compile_commands.json has %s entries, expected >= %s\n' \
+      "$actual" "$expected" >&2
+    printf '  clangd/clang-tidy may produce incomplete results\n' >&2
+    printf '  regenerate: bear -- make -B gl-repl USE_GL_STUBS=1\n' >&2
+  else
+    printf 'compile_commands.json coverage: %s entries (>= %s expected)\n' \
+      "$actual" "$expected"
+  fi
+
+  return 0
 }
 
 run_clangd() {
@@ -292,6 +325,16 @@ EOF
     return 0
   fi
 
+  # A1: Resolve macOS sysroot so Homebrew clang-tidy finds system headers
+  local sysroot_arg=""
+  if have xcrun; then
+    local sdk_path
+    sdk_path="$(xcrun --show-sdk-path 2>/dev/null)" || true
+    if [[ -n "$sdk_path" ]]; then
+      sysroot_arg="--extra-arg=-isysroot${sdk_path}"
+    fi
+  fi
+
   # Run clang-tidy in parallel using xargs to speed up execution
   { find "$SRC_DIR" -name '*.c' -print0; printf 'gl_repl.c\0'; } |
     xargs -0 -P "$JOBS" -I {} sh -c '
@@ -301,13 +344,16 @@ EOF
       "'"$CLANG_TIDY_BIN"'" \
         -p . \
         --checks="'"$CLANG_TIDY_CHECKS"'" \
+        '"${sysroot_arg:+\"$sysroot_arg\"}"' \
         "$file" \
         >> "$tmpfile" 2>&1 || true
       cat "$tmpfile"
       rm -f "$tmpfile"
     ' _ {} >> "$tidy_log"
 
-  grep -E "warning:|error:" "$tidy_log" > "$tidy_diag" || true
+  # A2: Filter vendored-path diagnostics (miniaudio.h, freeglut) from summary
+  grep -E "warning:|error:" "$tidy_log" | \
+    grep -vE 'miniaudio\.h|third_party/freeglut' > "$tidy_diag" || true
 
   printf 'wrote %s\n' "$tidy_log"
   printf 'summary %s\n' "$tidy_diag"
@@ -320,7 +366,8 @@ run_lizard() {
   local lizard_summary="$OUT_DIR/lizard-summary.txt"
 
   if have lizard; then
-    lizard "$SRC_DIR" \
+    # A5: include root gl_repl.c alongside src/
+    lizard "$SRC_DIR" gl_repl.c \
       -C "$LIZARD_CCN" \
       -L "$LIZARD_LEN" \
       --warnings_only \
@@ -373,6 +420,19 @@ EOF
     # NOTE: Do NOT add -j (parallel execution) here.
     # cppcheck's unusedFunction check is incompatible with -j and will be silently
     # disabled or cause an error if -j is used, losing the dead-code check.
+    # A3: -Isrc matches the build's include path so cppcheck resolves
+    # project headers (repl/catalog_tags.h, repl/export.h).  The -D stubs
+    # for REPL_EXPORT_STRINGIFY{,2} let the #ifndef guard in export.h skip
+    # the stringification-based definition that cppcheck can't expand.
+    #
+    # A4: -D__APPLE__ on macOS so cppcheck analyzes the correct
+    # platform-gated branches (without it, e.g. clipboard always-zero
+    # false positives appear from the non-macOS stub branch).
+    local cppcheck_platform_defs=""
+    if [[ "$(uname -s)" = "Darwin" ]]; then
+      cppcheck_platform_defs="-D__APPLE__"
+    fi
+
     cppcheck \
       --quiet \
       --enable=style,unusedFunction \
@@ -382,6 +442,10 @@ EOF
       --suppress='*:*/miniaudio.h' \
       -I. \
       -Iinclude \
+      -Isrc \
+      '-DREPL_EXPORT_STRINGIFY2(x)="0"' \
+      '-DREPL_EXPORT_STRINGIFY(x)="0"' \
+      $cppcheck_platform_defs \
       "$SRC_DIR" \
       "$TEST_DIR" \
       "$TOOLS_DIR" \
@@ -406,12 +470,17 @@ run_cpd() {
   local cpd_log="$OUT_DIR/cpd.txt"
   local cpd_summary="$OUT_DIR/cpd-summary.txt"
 
+  # A5: use --file-list so we can include root gl_repl.c alongside src/
+  local cpd_filelist
+  cpd_filelist="$(mktemp "${TMPDIR:-/tmp}/cpd-files.XXXXXX.txt")"
+  { find "$SRC_DIR" -name '*.c' -o -name '*.h'; printf 'gl_repl.c\n'; } > "$cpd_filelist"
+
   if have pmd; then
     say "PMD CPD duplication scan (local)"
     pmd cpd \
       --minimum-tokens "$MIN_TOKENS" \
       --language cpp \
-      --dir "$SRC_DIR" \
+      --file-list "$cpd_filelist" \
       --format text \
       > "$cpd_log" 2>&1 || true
 
@@ -420,12 +489,13 @@ run_cpd() {
     say "PMD CPD duplication scan (Docker)"
     docker run --rm \
       -v "$ROOT:/src" \
+      -v "$cpd_filelist:/tmp/cpd-files.txt:ro" \
       -w /src \
       "$PMD_IMAGE" \
       cpd \
         --minimum-tokens "$MIN_TOKENS" \
         --language cpp \
-        --dir "$SRC_DIR" \
+        --file-list /tmp/cpd-files.txt \
         --format text \
       > "$cpd_log" 2>&1 || true
 
@@ -455,6 +525,8 @@ EOF
     CPD_STATUS="skipped"
   fi
 
+  rm -f "$cpd_filelist"
+
   if [[ "$CPD_STATUS" = "ok" ]]; then
     {
       printf 'minimum tokens: %s\n' "$MIN_TOKENS"
@@ -478,7 +550,8 @@ run_churn() {
     printf '# Note: churn counts since src/ reorg on 2026-05-23 (pre-reorg paths filtered out)\n'
     printf '%8s %8s %8s  %s\n' "churn" "lines" "score" "file"
 
-    git log --format= --name-only -- "$SRC_DIR" |
+    # A5: include root gl_repl.c alongside src/
+    git log --format= --name-only -- "$SRC_DIR" gl_repl.c |
       sed '/^$/d' |
       sort |
       uniq -c |
@@ -526,7 +599,8 @@ print_summary() {
 
   if [[ "$RUN_CPPCHECK" -eq 1 && -f "$OUT_DIR/cppcheck.txt" ]]; then
     printf '  cppcheck findings:       '
-    grep -cE '^\[|:[0-9]+:' "$OUT_DIR/cppcheck.txt" || true
+    # A5: count trailing [checkName] tags, not note: continuation lines
+    grep -cE '\[[a-zA-Z][a-zA-Z0-9]*\]$' "$OUT_DIR/cppcheck.txt" || true
   fi
 
   if [[ "$RUN_CPD" -eq 1 && -f "$OUT_DIR/cpd.txt" ]]; then

@@ -18,7 +18,7 @@ real work is (A) scanner fixes so future runs are trustworthy, (B) a
 verified dead-code sweep, (C) duplication hoists, and optionally (D)
 complexity refactors.
 
-- **A — Fix `scripts/code-smells.sh` signal quality.** NOT STARTED
+- **A — Fix `scripts/code-smells.sh` signal quality.** ✅ DONE (A0–A5)
 - **B — Dead-code sweep.** IN PROGRESS — facade-symmetry retains
   landed (intent comments + cppcheck suppressions, 2026-07-16);
   delete candidates below not yet removed.
@@ -29,51 +29,29 @@ complexity refactors.
 
 Do these first; they make every later re-scan trustworthy.
 
-0. **Compile-database integrity.** The scanner trusts any existing
-   `compile_commands.json` and ignores Bear build failure
-   (`bear -- make ... || true`). At scan time the DB held **1 entry**
-   (`src/ui/app/panels.c`, from an incremental rebuild) while
-   clangd/clang-tidy analyzed 128 TUs on inferred flags. Fix
-   `ensure_compile_commands` to (a) regenerate atomically (build to a
-   temp file, move into place only on Bear success), and (b) verify
-   coverage — every `.c` in the scanned set must have a DB entry —
-   before declaring clangd/tidy results trustworthy.
-1. **clang-tidy is missing the macOS sysroot.** The compile DB is
-   built with Apple gcc; Homebrew clang-tidy then can't find system
-   headers (118 `clang-diagnostic-error` lines like `'ctype.h' file
-   not found`), silently degrading analysis of those TUs. Fix: add
-   `--extra-arg=-isysroot"$(xcrun --show-sdk-path)"` to the clang-tidy
-   invocation in `run_clang_tidy`, guarded on Darwin (`uname` check)
-   so the script keeps working on Linux hosts.
-2. **Vendored code drowns the clang-tidy summary.** 31,220 raw
-   diagnostics → 24,443 after excluding `miniaudio.h` /
-   `third_party/freeglut` → **1,425** after also dropping pure-style
-   checks. Fix: filter vendored paths out of the diagnostics grep, and
-   extend the default `CLANG_TIDY_CHECKS` with
+0. **Compile-database integrity.** ✅ DONE — `ensure_compile_commands`
+   now (a) regenerates atomically (bear writes to temp file, moved on
+   success), and (b) verifies coverage (DB entry count ≥ scanned .c count).
+   Stale 1-entry DBs now produce a clear warning.
+1. **clang-tidy is missing the macOS sysroot.** ✅ DONE — added
+   `--extra-arg=-isysroot$(xcrun --show-sdk-path)` to `run_clang_tidy`;
+   gated on `xcrun` availability so non-macOS hosts skip it.
+2. **Vendored code drowns the clang-tidy summary.** ✅ DONE — diagnostics
+   grep now filters `miniaudio.h` / `third_party/freeglut` lines; default
+   `CLANG_TIDY_CHECKS` extended with
    `-readability-identifier-length,-readability-braces-around-statements,`
    `-readability-uppercase-literal-suffix,-readability-math-missing-parentheses,`
    `-bugprone-easily-swappable-parameters,-misc-include-cleaner`.
-3. **cppcheck `unknownMacro` poisons `unusedFunction`.** cppcheck
-   cannot expand `REPL_EXPORT_STRINGIFY` (`src/repl/export_display.c`)
-   and `REPL_DEFINE_CATALOG_TAG_WRAPPERS` (`src/repl/examples.c`,
-   `src/repl/tutorials.c`), aborts those TUs, and then flags everything
-   called only from them as unused (verified false: `emit_export_cam_lines`,
-   `emit_footer_post_init`, `emit_export_init_section_to_file`,
-   `export_source_text_view`, `export_uses_tess_commands` are all live,
-   called from `export_display.c`). Fix: pass `-D` stubs for the two
-   macros (or the defining header) to cppcheck.
-4. **cppcheck has no platform defines.** Without `-D__APPLE__` it
-   analyzes `#else` branches of platform-gated code, producing false
-   `knownConditionTrueFalse` findings (e.g. "clipboard read always
-   returns 0" in `src/app/glr_actions.c` — that's the non-macOS stub
-   branch). Fix: add `-D__APPLE__` when the host is macOS.
-5. **Summary-count nits.** The cppcheck quick-count grep
-   (`'^\[|:[0-9]+:'`) also counts `note:` continuation lines (~3×
-   inflation) — count trailing `[checkName]` tags instead. The bear
-   comment says `-DGL_STUBS` but the build uses `USE_GL_STUBS=1`.
-   lizard, CPD, **and churn** scan only `src/` and skip root
-   `gl_repl.c` (its churn×size score of ~24k would place it in the
-   top-30 table, so the D ranking is incomplete without it).
+3. **cppcheck `unknownMacro` poisons `unusedFunction`.** ✅ DONE — added
+   `-Isrc` (matches build's include path) so cppcheck resolves project
+   headers; added `-D` stubs for `REPL_EXPORT_STRINGIFY{,2}` so the
+   `#ifndef` guard in `export.h` skips the stringification definition.
+4. **cppcheck has no platform defines.** ✅ DONE — added `-D__APPLE__`
+   on macOS (detected via `uname -s`).
+5. **Summary-count nits.** ✅ DONE — cppcheck count grep now matches
+   trailing `[checkName]` tags; bear comment fixed (`USE_GL_STUBS=1`);
+   lizard, CPD, and churn all include root `gl_repl.c` (CPD switched
+   from `--dir` to `--file-list`).
 6. **After B/C land:** keep `MIN_TOKENS=80` (raising it would blind
    CPD to new 80–119-token duplicates). Instead, check in a baseline
    of the accepted residual blocks (file-pair + token-count
