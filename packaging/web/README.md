@@ -37,7 +37,10 @@ original `OpenGL-Vibe/emscripten/` prototyping tree (`git log -- packaging/web/*
   is neutralized in JS GLUT's own handler so 3D-scene zoom works instead of
   page scroll; backspace is delivered as ASCII 8; Ctrl+letter is delivered as
   control codes so editor shortcuts fire; shifted digit keys are translated
-  correctly.
+  correctly; Ctrl+= / Ctrl+- (and their numpad twins) are delivered as the
+  plain ASCII punctuation with CTRL in the modifiers so the accum-passes
+  step works (delivering them also `preventDefault()`s the browser's
+  Ctrl+=/- page zoom where that binding exists).
 - **OS clipboard**: plain Ctrl/Cmd+C/X/V bypass JS GLUT entirely — gl4es_bootstrap.c's
   `GLUT.getASCIIKey` override returns `null` for them so neither `keyboardFunc`
   (gl-repl's own Ctrl+C/X/V path) nor `preventDefault()` fire, leaving the
