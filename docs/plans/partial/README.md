@@ -24,3 +24,7 @@ Current residents:
   per-module doc split and the heavier app/UI + editor/UI edges are
   deferred.
 - `src-repl-simplicity-review.md`
+- `flatten-performance-without-vm.md` — Phases 0–2 landed: benchmarks,
+  direct evaluation, warm compiled-expression cache, and slider transaction
+  split. Dependency-aware rebake (Phase 3) is intentionally deferred on
+  `origin/codex/improve-flatten-phase3`.

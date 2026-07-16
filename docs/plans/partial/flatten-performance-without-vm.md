@@ -1,5 +1,13 @@
 # Flatten Performance Without a Control-Flow VM
 
+## Status — PARTIAL (2026-07-11)
+
+Phases 0–2 landed on `main`: the representative benchmarks, direct evaluator
+paths, slider transaction split, and compiled-expression cache. Phase 3's
+dependency-aware in-place rebake was deliberately deferred after its measured
+gain did not justify the extra complexity; it remains preserved on
+`origin/codex/improve-flatten-phase3` for a future performance review.
+
 ## Summary
 
 Reduce animated-frame flatten cost without replacing the source/flat-command

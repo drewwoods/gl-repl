@@ -1,16 +1,17 @@
 # State Ownership: Finalize Headers, Helpers, and Capture Docs
 
-## Status — ACTIVE (2026-06-08)
+## Status — ACTIVE (2026-07-16)
 
 The "Provenance" stages 0–5 have all landed (that's the section
 below). The remaining work is tracked below:
 
 - **A — `state_views.h` / `state_owners.h` split and header cleanup.**
-  - **Status:** **IN PROGRESS (Staged)**
+  - **Status:** **LANDED**
   - Decoupled `src/repl/state_owners.h` from `src/repl/state.h`.
   - Updated `src/repl/state.h` to only include `src/repl/state_views.h` (the read-side surface) and declare the `ReplRuntimeState` and capture/restore APIs.
   - Callers mutating state now explicitly include `src/repl/state_owners.h`.
-  - Updated all tests and source files to match this new structure.
+  - Updated all tests and source files to match this new structure. There are
+    no staged changes for this item; the split is in `main`.
 - **B — Domain-helper audit.**
   - **Status:** **NOT STARTED**
   - No changes yet. Pass-through wrappers still exist in `src/app/glr_actions.c`, `src/app/glr_state.c`, and the `repl_state_*_set_*` family.

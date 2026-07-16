@@ -1,5 +1,12 @@
 # Tutorial Composition: Building On Prior Tutorials Without Boilerplate
 
+## Status — LANDED (2026-07-08)
+
+Option A shipped in commit `0a15b86d`: catalog setup scaffolds, locked setup
+rows, header/camera consumption, setup-label placement, validation, and the
+Color Interpolation demonstration. The historical design below records the
+contract that shipped.
+
 ## Problem
 
 Tutorials should be able to build on ideas an earlier tutorial taught —

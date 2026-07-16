@@ -1,5 +1,21 @@
 # Accumulation-Buffer Motion Blur
 
+## Status — LANDED (2026-06-09; refined 2026-07-03)
+
+The implementation shipped the accumulation effect/pass split, per-sample
+camera/time isolation, tests, and documentation. The historical proposal below
+captures the reviewed design; later product decisions changed its final UI
+shape:
+
+- The effect cycle is **Off / AA / Blur / Blur Cam**, bound to Ctrl+Shift+U.
+- The default preserves the historical AA behavior: **AA with one pass**.
+- **Blur** is time/object blur when the source uses `t`; **Blur Cam** is the
+  separate camera-motion mode. Either falls back to AA when it has no
+  applicable motion.
+
+Those refinements supersede the original three-state, F2, off-by-default
+decisions recorded below.
+
 ## Context
 
 The REPL already uses the accumulation buffer for antialiasing: a single

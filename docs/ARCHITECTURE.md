@@ -2187,7 +2187,7 @@ example header vocabulary (leading `// @cfg` run, optional 5-line
 baseline, and its body may define `:name` goto labels that
 label-placement steps target to splice commands into the scaffold
 (resolved against the live document at step entry). See
-[`docs/plans/active/tutorial-setup-scaffold.md`](plans/active/tutorial-setup-scaffold.md).
+[`docs/plans/done/tutorial-setup-scaffold.md`](plans/done/tutorial-setup-scaffold.md).
 
 Use this section as a checklist when adding a new kind. The
 `REQUIRE_VAR` rollout is the most recent worked example — its commits
