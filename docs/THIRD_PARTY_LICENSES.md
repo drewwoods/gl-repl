@@ -87,6 +87,11 @@ license text, reproduced verbatim from `third_party/freeglut/COPYING`:
     every scene after it), plus the `glLineStipple` factor/pattern,
     `glPointParameterfv` point parameters, and `glClipPlane` equations
     the `GL_LINE_BIT`/`GL_POINT_BIT`/`GL_TRANSFORM_BIT` groups skipped.
+  - `packaging/web/patches/gl4es-pushattrib-texenv.patch` — save/restore
+    per-unit `GL_TEXTURE_ENV_MODE`/`GL_TEXTURE_ENV_COLOR` in
+    `GL_TEXTURE_BIT` (upstream "TODO: incomplete"), so the post-processing
+    pass's `GL_REPLACE` texenv can't leak into gl4es's line-stipple
+    emulation and untint the stippled overlay ghosts.
 - **License:** MIT. Reproduced verbatim from gl4es's `LICENSE`:
 
 ```

@@ -1,0 +1,68 @@
+Save/restore GL_TEXTURE_ENV_MODE and GL_TEXTURE_ENV_COLOR per texture
+unit in gl4es's glPushAttrib/glPopAttrib GL_TEXTURE_BIT handling
+(marked "TODO: incomplete" upstream -- it round-trips bindings and
+texgen only).
+
+gl-repl's post-processing filter pass sets
+glTexEnvi(GL_TEXTURE_ENV_MODE, GL_REPLACE) inside its
+glPushAttrib(GL_ALL_ATTRIB_BITS) bracket and relies on the pop to put
+GL_MODULATE back. Without this restore the leaked GL_REPLACE reaches
+gl4es's own line-stipple emulation -- which sets GL_MODULATE only once,
+when it first creates its stipple texture -- so after one Post FX frame
+the stippled overlay lines (axes/light/clip-plane ghosts) lose their
+color modulation.
+
+The restore goes through gl4es_glTexEnvi/-fv rather than a struct copy
+because those also refresh the fpe_state bits the shader generator
+reads; both calls dedup internally, and the active-unit switch reuses
+the bind-restore pattern already in this block. The combine-mode
+sub-state (GL_COMBINE srcN/opN/scales) stays TODO -- nothing in
+gl-repl sets it.
+
+Applied by scripts/web-deps.sh after cloning the pinned gl4es checkout,
+after gl4es-pushattrib-gaps.patch.
+diff --git a/src/gl/stack.c b/src/gl/stack.c
+index ca03f50..e7343fd 100644
+--- a/src/gl/stack.c
++++ b/src/gl/stack.c
+@@ -278,6 +278,8 @@ void APIENTRY_GL4ES gl4es_glPushAttrib(GLbitfield mask) {
+             cur->texgen_t[a] = glstate->enable.texgen_t[a];
+             cur->texgen_q[a] = glstate->enable.texgen_q[a];
+             cur->texgen[a] = glstate->texgen[a];   // all mode and planes per texture in 1 line
++            cur->texenv_mode[a] = glstate->texenv[a].env.mode;
++            memcpy(cur->texenv_color[a], glstate->texenv[a].env.color, 4*sizeof(GLfloat));
+             for (int j=0; j<ENABLED_TEXTURE_LAST; j++)
+ 	            cur->texture[a][j] = glstate->texture.bound[a][j]->texture;
+         }
+@@ -605,6 +607,18 @@ DBG(printf("glPopAttrib()\n");)
+             glstate->enable.texgen_t[a] = cur->texgen_t[a];
+             glstate->enable.texgen_q[a] = cur->texgen_q[a];
+             glstate->texgen[a] = cur->texgen[a];   // all mode and planes per texture in 1 line
++            // restore through gl4es_glTexEnv* (not a struct copy): they also
++            // refresh the fpe_state bits the shader generator reads
++            if (cur->texenv_mode[a] != glstate->texenv[a].env.mode) {
++                if(glstate->texture.active!=a)
++                    gl4es_glActiveTexture(GL_TEXTURE0+a);
++                gl4es_glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, cur->texenv_mode[a]);
++            }
++            if (memcmp(cur->texenv_color[a], glstate->texenv[a].env.color, 4*sizeof(GLfloat)) != 0) {
++                if(glstate->texture.active!=a)
++                    gl4es_glActiveTexture(GL_TEXTURE0+a);
++                gl4es_glTexEnvfv(GL_TEXTURE_ENV, GL_TEXTURE_ENV_COLOR, cur->texenv_color[a]);
++            }
+             for (int j=0; j<ENABLED_TEXTURE_LAST; j++)
+                 if (cur->texture[a][j] != glstate->texture.bound[a][j]->texture) {
+                     if(glstate->texture.active!=a)
+diff --git a/src/gl/stack.h b/src/gl/stack.h
+index ddc747b..7f17a16 100644
+--- a/src/gl/stack.h
++++ b/src/gl/stack.h
+@@ -142,6 +142,8 @@ typedef struct _glstack_t {
+     // GL_TEXTURE_BIT
+     GLint texture[MAX_TEX][ENABLED_TEXTURE_LAST];
+     texgen_state_t texgen[MAX_TEX];
++    GLenum texenv_mode[MAX_TEX];
++    GLfloat texenv_color[MAX_TEX][4];
+     GLint active;
+ 
+     // GL_TRANSFORM_BIT
