@@ -2,7 +2,8 @@
 
 <br>
 
-<img src="docs/images/glrepl-wordmark.svg" alt="gl-repl — immediate mode, immediately" width="70%">
+<img src="docs/images/glrepl-wordmark-dark.svg#gh-dark-mode-only" alt="gl-repl — immediate mode, immediately" width="70%">
+<img src="docs/images/glrepl-wordmark-light.svg#gh-light-mode-only" alt="gl-repl — immediate mode, immediately" width="70%">
 
 **gl-repl**
 
