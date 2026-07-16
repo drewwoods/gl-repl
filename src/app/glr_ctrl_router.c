@@ -746,6 +746,33 @@ int glr_ctrl_router_apply_input_row_drag(int target_line, int target_char) {
     return 1;
 }
 
+/* Extend the in-progress line-range selection from the press anchor to
+ * target. Shared by the plain line-range drag path and the char-drag
+ * promotion below. */
+static void extend_line_range_to(int target) {
+    g_code_panel_drag_moved = 1;
+    editor_selection_start(g_code_panel_drag_anchor);
+    editor_selection_set_end(target);
+    editor_navigate_to_line(target);
+    glr_action_cursor_blink_reset();
+    editor_request_redraw();
+}
+
+int glr_ctrl_router_promote_char_drag_to_line_range(int target_line) {
+    if (!g_code_panel_drag_active || g_code_panel_drag_anchor < 0)
+        return 0;
+    if (g_code_panel_drag_char_anchor < 0)
+        return 0;
+    if (target_line < 0 || target_line == g_code_panel_drag_anchor)
+        return 0;
+    /* Drop the press row's character span: the two selection models are
+     * mutually exclusive, and from here the drag is line-range. */
+    editor_input_anchor_clear();
+    g_code_panel_drag_char_anchor = -1;
+    extend_line_range_to(target_line);
+    return 1;
+}
+
 /* Common epilog for clicks that move the editor cursor: blink reset,
  * autocomplete clear, selection clear, redraw. Mirrors the legacy
  * ui_panels_handle_code_panel_click tail. */
@@ -1594,16 +1621,6 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
         glr_ctrl_router_apply_input_row_drag(hit.line_idx, hit.char_idx))
         return 1;
 
-    /* Input-row drag is sticky: once the press armed the char anchor
-     * (g_code_panel_drag_char_anchor >= 0), motion that wanders off
-     * the row is absorbed as a no-op rather than switching to
-     * line-range selection. Input text selection is single-line by
-     * design, so dragging downward shouldn't silently re-target the
-     * selection model. The user has to release and re-press in the
-     * gutter (or on a non-edit row) to start a line-range drag. */
-    if (g_code_panel_drag_char_anchor >= 0)
-        return 1;
-
     int target = code_panel_target_from_hit(hit);
     if (target < 0) {
         /* Drag wandered off the code-panel kinds — clamp the pointer
@@ -1629,14 +1646,25 @@ int glr_ctrl_router_handle_code_panel_drag(int x, int y) {
     if (target < 0)
         return 1;
 
-    if (target != g_code_panel_drag_anchor || g_code_panel_drag_moved) {
-        g_code_panel_drag_moved = 1;
-        editor_selection_start(g_code_panel_drag_anchor);
-        editor_selection_set_end(target);
-        editor_navigate_to_line(target);
-        glr_action_cursor_blink_reset();
-        editor_request_redraw();
+    /* A char-anchored drag that crosses off its press row promotes to
+     * whole-line range selection: the press row's partial selection
+     * widens to the full line and the range grows by rows from there.
+     * The input buffer holds one row of text, so a character range
+     * cannot span rows; promoting keeps the ordinary editor gesture
+     * (press in the text, drag down) producing the multi-line
+     * selection the user is reaching for instead of dead-ending. The
+     * promotion is one-way — dragging back onto the press row narrows
+     * the range to that single line rather than restoring the original
+     * character span, so the gesture never flips models twice. */
+    if (g_code_panel_drag_char_anchor >= 0) {
+        if (target == g_code_panel_drag_anchor)
+            return 1;
+        glr_ctrl_router_promote_char_drag_to_line_range(target);
+        return 1;
     }
+
+    if (target != g_code_panel_drag_anchor || g_code_panel_drag_moved)
+        extend_line_range_to(target);
     return 1;
 }
 

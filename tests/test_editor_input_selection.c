@@ -744,15 +744,15 @@ int main(void) {
         glr_ctrl_router_reset_code_panel_drag();
     }
 
-    printf("\n--- input-row drag is sticky: off-row motion is a no-op ---\n");
+    printf("\n--- char drag promotes to line range when it crosses a row ---\n");
     {
-        /* Regression for the Phase E/F review finding: once a press
-         * arms an input-row drag (char_anchor >= 0), motion that
-         * wanders off the press row must not silently switch the
-         * interaction into line-range selection mode. Otherwise a
-         * user trying to select text inside the input would
-         * accidentally start a multi-line range when they drift the
-         * cursor below the row. */
+        /* A press in the code text arms a character drag; dragging off
+         * that row promotes the gesture to whole-line range selection
+         * rather than dead-ending. The input buffer is one row wide, so
+         * a character span can't cross rows — promoting keeps the plain
+         * editor gesture (press in text, drag down) producing the
+         * multi-line selection the user is reaching for, instead of
+         * requiring a separate press in the gutter. */
         glr_ctrl_reset_all();
         editor_feed_line("glVertex3f(1, 2, 3);");
         editor_feed_line("glVertex3f(4, 5, 6);");
@@ -772,34 +772,55 @@ int main(void) {
         ASSERT_TRUE("setup: no line-range selection yet",
                     !editor_clipboard_sel_active());
 
-        /* Motion off the press row returns 0 from the input-row
-         * helper. The sticky-mode guard in the top-level drag handler
-         * must keep us from falling through to the line-range path.
-         * We can't easily call the top-level drag handler in a test
-         * (it expects real pixel coords through ui_panels_hit_test),
-         * but we can verify the precondition the guard checks: an
-         * armed input-row drag (char_anchor >= 0) plus off-row motion
-         * → apply_input_row_drag returns 0, and at that point the
-         * caller in glr_ctrl_router_handle_code_panel_drag stops. The
-         * downstream effect: line-range selection stays clear. */
+        /* Motion off the press row is declined by the character path... */
         int handled = glr_ctrl_router_apply_input_row_drag(1, 0);
         ASSERT_INT("off-row motion not handled by input-row path",
                    handled, 0);
-        /* The input-row selection survives the off-row motion. */
-        ASSERT_INT("off-row motion preserves input anchor",
-                   editor_input_anchor(), 4);
-        ASSERT_INT("off-row motion preserves input cursor",
-                   editor_cursor_pos(), 8);
-        /* No line-range selection got started. */
-        ASSERT_TRUE("off-row motion did not start line-range",
-                    !editor_clipboard_sel_active());
 
-        /* Drag back onto the original row resumes per-char selection. */
+        /* ...and the top-level drag handler promotes it instead. (The
+         * handler itself expects real pixel coords through
+         * ui_panels_hit_test, so drive the promotion directly.) */
+        handled = glr_ctrl_router_promote_char_drag_to_line_range(1);
+        ASSERT_INT("off-row motion promotes to line range", handled, 1);
+        ASSERT_TRUE("promotion starts a line-range selection",
+                    editor_clipboard_sel_active());
+        ASSERT_INT("line range anchors on the press row",
+                   editor_state_selection_anchor(), 0);
+        ASSERT_INT("line range ends on the crossed-to row",
+                   editor_state_selection_end_idx(), 1);
+        ASSERT_INT("promotion drops the partial char selection",
+                   editor_input_anchor(), -1);
+
+        /* Promotion is one-way: further motion stays line-range, and
+         * dragging back onto the press row narrows to that single line
+         * rather than restoring the original character span. */
         handled = glr_ctrl_router_apply_input_row_drag(0, 12);
-        ASSERT_INT("back-on-row motion resumes input drag",
-                   handled, 1);
-        ASSERT_INT("input selection grew on return",
-                   editor_cursor_pos(), 12);
+        ASSERT_INT("char path stays disarmed after promotion",
+                   handled, 0);
+        ASSERT_INT("back-on-row motion re-promotes nothing",
+                   glr_ctrl_router_promote_char_drag_to_line_range(0), 0);
+
+        glr_ctrl_router_reset_code_panel_drag();
+    }
+
+    printf("\n--- promotion needs an armed char drag ---\n");
+    {
+        /* A gutter press arms a line-range drag with no char anchor;
+         * the promotion helper must decline so it can't clobber the
+         * input selection state of an unrelated gesture. */
+        glr_ctrl_reset_all();
+        editor_feed_line("glVertex3f(1, 2, 3);");
+        editor_feed_line("glVertex3f(4, 5, 6);");
+        editor_navigate_to_line(0);
+
+        UiHit hit = ui_hit_none();
+        hit.kind = UI_HIT_CODE_GUTTER;
+        hit.line_idx = 0;
+        hit.char_idx = -1;
+        glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+
+        ASSERT_INT("gutter drag is not promotable",
+                   glr_ctrl_router_promote_char_drag_to_line_range(1), 0);
 
         glr_ctrl_router_reset_code_panel_drag();
     }
