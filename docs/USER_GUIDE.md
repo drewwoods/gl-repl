@@ -206,6 +206,25 @@ panel. Click it to open the floating picker:
 - Every change writes straight back to the source line, so the scene follows
   the picker in real time. Click outside to close.
 
+### Inspecting OpenGL state
+
+Right-click a visually blank row in the code panel to inspect OpenGL state at
+that point in the program. The row may already be committed or may be the
+current, still-uncommitted empty input row.
+
+![OpenGL state inspector opened on a blank source row](images/gl-state-inspector.png)
+
+The table contains every supported state variable touched before that row,
+including writes from generated `init()` and `display()` setup. It also keeps
+explicit writes that happen to match the initial OpenGL default. The current
+value is always visible; click the **[+]** chip to add the initial default and
+the source of the latest write — `init()`, generated `display()`, or a user
+`display()` line.
+
+Modelview matrices use four aligned rows. Light positions are shown in both
+world and eye coordinates when available. Use the mouse wheel for a long
+report; click elsewhere or send input to the editor to dismiss it.
+
 ### Keeping the buffer tidy
 
 | Key | Action |
@@ -1416,7 +1435,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+B | Cycle code panel layout |
 | Ctrl+Shift+Y | Cycle syntax highlight |
 | Right-click GL command | Show a short description of that command. For `glEnable` / `glDisable`, the popup explains the selected capability (for example, `GL_BLEND`) rather than repeating generic enable/disable help. The next editor keypress, click, or wheel event dismisses it without swallowing the event |
-| Right-click empty line | Toggle a popup table of OpenGL state touched by the generated `init()`/`display()` setup or by user commands before that line, compared with initial defaults. This includes generated light colors/global ambient, eye-coordinate light positions, camera/modelview setup, render toggles, and the attribute-stack push. The source column identifies `init()`, generated `display()`, or the latest user `display()` source line. Explicit writes remain visible even when they equal the default. Left-click anywhere else dismisses it; the mouse wheel scrolls a report taller than the window |
+| Right-click empty line | Toggle the [OpenGL state inspector](#inspecting-opengl-state) at that point, including on an uncommitted blank input row |
 | Esc | Clear input / close overlay |
 
 ### Scene & rendering
