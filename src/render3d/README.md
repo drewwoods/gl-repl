@@ -78,7 +78,7 @@ Render3d renderers **consume snapshots/configs and never read REPL runtime state
 under `guides/` (vertex/normal guides at the cursor, transform guides during
 replay) still obey this: the `edit_overlays` peer subsystem
 `src/subsystems/edit_overlays/` (driven by the controller each frame)
-resolves their data into a [`Render3dGuideSnapshot`](guides/guides_shared.h#L42) and passes it in. The camera transform is the
+resolves their data into a [`Render3dGuideSnapshot`](guides/guides_shared.h#L44) and passes it in. The camera transform is the
 controller's job — [`render.c`](render.c) only brackets sub-renderer push/pop and
 applies a render3d-local frustum shift for jitter.
 
@@ -95,7 +95,7 @@ applies a render3d-local frustum shift for jitter.
 | [`lights.c`](lights.c) / `.h` | Baseline lighting setup and light-indicator gizmos |
 | [`overlays.c`](overlays.c) / `.h` | Tiny per-vertex primitives (vertex-number labels, normal arrows) |
 | [`postprocess_filter.c`](postprocess_filter.c) / `.h` | Optional full-frame post-process pass |
-| [`guides/geometry_guides.c`](guides/geometry_guides.c) | Vertex/primitive guides at the cursor (from [`Render3dGuideSnapshot`](guides/guides_shared.h#L42)) |
+| [`guides/geometry_guides.c`](guides/geometry_guides.c) | Vertex/primitive guides at the cursor (from [`Render3dGuideSnapshot`](guides/guides_shared.h#L44)) |
 | [`guides/transform_guides.c`](guides/transform_guides.c) | Transform guides (pending matrix ops during replay) |
 | [`guides/guides_shared.h`](guides/guides_shared.h) | Shared guide snapshot/planning types |
 | [`palette.h`](palette.h), [`themes.h`](themes.h), [`occluded_ghost.h`](occluded_ghost.h) | Shared color/theme/style constants |

@@ -69,21 +69,12 @@ static int reformat_var_decl_text(const char *orig_text,
                                   const char *indent,
                                   char *out, int out_sz) {
     char buf[MAX_LINE_LEN] = "";
-    const char *p = orig_text ? orig_text : "";
+    const char *p = repl_scan_decl_float_prefix(orig_text ? orig_text : "");
     int decl_count = 0;
     int off = 0;
 
-    while (*p && isspace((unsigned char)*p)) p++;
-    /* Optional canonical `static ` prefix (see format_decl_text). */
-    if (strncmp(p, "static", 6) == 0 && isspace((unsigned char)p[6])) {
-        p += 6;
-        while (*p && isspace((unsigned char)*p)) p++;
-    }
-    if (strncmp(p, "float", 5) != 0)
+    if (!p)
         return 0;
-    if (isalnum((unsigned char)p[5]) || p[5] == '_')
-        return 0;
-    p += 5;
 
     if (!reformat_append_text(buf, sizeof(buf), &off, indent ? indent : ""))
         return 0;

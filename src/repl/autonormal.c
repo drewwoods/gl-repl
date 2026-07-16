@@ -9,6 +9,7 @@
 #include "repl/geometry_query.h"
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"
+#include "repl/transform_utils.h"  /* TransformScopeScan */
 #include "source_document.h"   /* source_document_insert_line / _replace_line */
 #include "config.h"            /* REPL_INDENT_TEXT_MAX */
 
@@ -468,24 +469,17 @@ int repl_find_affecting_transforms_for_flat_vertex(int flat_idx,
      * for free: call-site-scope transforms and in-body transforms both sit
      * inline ahead of the vertex. No CMD_FUNC_DEF/_END markers survive
      * flattening (flatten_range skips them), so unlike the source walk we
-     * never have to stop at a function boundary or skip an opaque body. */
+     * never have to stop at a function boundary or skip an opaque body.
+     * The push/pop/load-identity scope accounting is the shared
+     * TransformScopeScan from transform_utils.h. */
+    TransformScopeScan scan;
     int count = 0;
-    int popped_depth = 0;
-    for (int i = flat_idx - 1; i >= 0 && count < out_cap; i--) {
-        if (!cmds[i].valid) continue;
-        CmdType t = cmds[i].type;
-        if (t == CMD_POP_MATRIX) {
-            popped_depth++;
-        } else if (t == CMD_PUSH_MATRIX) {
-            if (popped_depth > 0) popped_depth--;
-        } else if (t == CMD_LOAD_IDENTITY) {
-            if (popped_depth == 0) break;
-        } else if (t == CMD_TRANSLATE3F || t == CMD_SCALEF || t == CMD_ROTATEF) {
-            if (popped_depth == 0)
-                count = append_unique_src_line(out, count, out_cap,
-                                               cmds[i].src_cmd_idx);
-        }
-    }
+    int idx;
+
+    transform_scope_scan_init(&scan, cmds, flat_idx);
+    while (count < out_cap && (idx = transform_scope_scan_next(&scan)) >= 0)
+        count = append_unique_src_line(out, count, out_cap,
+                                       cmds[idx].src_cmd_idx);
     return count;
 }
 

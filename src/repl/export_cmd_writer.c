@@ -561,24 +561,32 @@ static int export_translate_vector_args(const char *payload,
     return 1;
 }
 
-int write_materialfv_as_c89(FILE *f, const char *source_text) {
+/* Shared front half of the write_*_as_c89 vector-command writers:
+ * matches `prefix` after leading whitespace (indent width returned
+ * through *out_indent for the caller's fprintf), extracts the payload
+ * between the call's outer parens, peels `token_count` leading
+ * comma-delimited args into tokens[], and copies the remaining vector
+ * payload (brace block or bare expression list) into vector_payload.
+ * Returns 1 on a structural match. */
+static int export_parse_vector_call(const char *source_text,
+                                    const char *prefix,
+                                    char tokens[][MAX_LINE_LEN],
+                                    int token_count,
+                                    char *vector_payload,
+                                    size_t vector_payload_sz,
+                                    int *out_indent) {
     const char *p = source_text;
     const char *payload_start;
     const char *payload_end;
-    char face[MAX_LINE_LEN];
-    char pname[MAX_LINE_LEN];
-    char vector_payload[MAX_LINE_LEN];
-    char c_args[4][MAX_LINE_LEN];
-    int indent = 0;
-    int payload_len;
     char payload[MAX_LINE_LEN];
     const char *payload_p;
-    int count;
+    int indent = 0;
+    int payload_len;
 
     while (p[indent] && isspace((unsigned char)p[indent]))
         indent++;
     p += indent;
-    if (strncmp(p, "glMaterialfv", 12) != 0)
+    if (strncmp(p, prefix, strlen(prefix)) != 0)
         return 0;
     payload_start = strchr(p, '(');
     payload_end = strrchr(p, ')');
@@ -591,11 +599,27 @@ int write_materialfv_as_c89(FILE *f, const char *source_text) {
     payload[payload_len] = '\0';
 
     payload_p = payload;
-    if (!export_copy_first_arg(&payload_p, face, sizeof(face)))
+    for (int tok = 0; tok < token_count; tok++) {
+        if (!export_copy_first_arg(&payload_p, tokens[tok], MAX_LINE_LEN))
+            return 0;
+    }
+    if (!export_extract_vector_payload(payload_p, vector_payload,
+                                       vector_payload_sz))
         return 0;
-    if (!export_copy_first_arg(&payload_p, pname, sizeof(pname)))
-        return 0;
-    if (!export_extract_vector_payload(payload_p, vector_payload, sizeof(vector_payload)))
+    *out_indent = indent;
+    return 1;
+}
+
+int write_materialfv_as_c89(FILE *f, const char *source_text) {
+    char tokens[2][MAX_LINE_LEN];  /* face, pname */
+    char vector_payload[MAX_LINE_LEN];
+    char c_args[4][MAX_LINE_LEN];
+    int indent;
+    int count;
+
+    if (!export_parse_vector_call(source_text, "glMaterialfv", tokens, 2,
+                                  vector_payload, sizeof(vector_payload),
+                                  &indent))
         return 0;
 
     count = split_top_level_args(vector_payload, c_args, 4);
@@ -606,11 +630,11 @@ int write_materialfv_as_c89(FILE *f, const char *source_text) {
 
     if (count == 1) {
         fprintf(f, "%.*sglMaterialfv(%s, %s, %s(%s));\n",
-                indent, source_text, face, pname,
+                indent, source_text, tokens[0], tokens[1],
                 REPL_EXPORT_GLFLOAT1_HELPER, c_args[0]);
     } else {
         fprintf(f, "%.*sglMaterialfv(%s, %s, %s(%s, %s, %s, %s));\n",
-                indent, source_text, face, pname,
+                indent, source_text, tokens[0], tokens[1],
                 REPL_EXPORT_GLFLOAT4_HELPER,
                 c_args[0], c_args[1], c_args[2], c_args[3]);
     }
@@ -618,42 +642,20 @@ int write_materialfv_as_c89(FILE *f, const char *source_text) {
 }
 
 int write_point_parameterfv_as_c89(FILE *f, const char *source_text) {
-    const char *p = source_text;
-    const char *payload_start;
-    const char *payload_end;
-    char pname[MAX_LINE_LEN];
+    char pname[1][MAX_LINE_LEN];
     char vector_payload[MAX_LINE_LEN];
     char c_args[4][MAX_LINE_LEN];
-    int indent = 0;
-    int payload_len;
-    char payload[MAX_LINE_LEN];
-    const char *payload_p;
+    int indent;
 
-    while (p[indent] && isspace((unsigned char)p[indent]))
-        indent++;
-    p += indent;
-    if (strncmp(p, "glPointParameterfv", 18) != 0)
-        return 0;
-    payload_start = strchr(p, '(');
-    payload_end = strrchr(p, ')');
-    if (!payload_start || !payload_end || payload_end <= payload_start)
-        return 0;
-    payload_len = (int)(payload_end - payload_start - 1);
-    if (payload_len <= 0 || payload_len >= (int)sizeof(payload))
-        return 0;
-    memcpy(payload, payload_start + 1, (size_t)payload_len);
-    payload[payload_len] = '\0';
-
-    payload_p = payload;
-    if (!export_copy_first_arg(&payload_p, pname, sizeof(pname)))
-        return 0;
-    if (!export_extract_vector_payload(payload_p, vector_payload, sizeof(vector_payload)))
+    if (!export_parse_vector_call(source_text, "glPointParameterfv", pname, 1,
+                                  vector_payload, sizeof(vector_payload),
+                                  &indent))
         return 0;
     if (!export_translate_vector_args(vector_payload, c_args, 3))
         return 0;
 
     fprintf(f, "%.*sglPointParameterfv(%s, %s(%s, %s, %s));\n",
-            indent, source_text, pname, REPL_EXPORT_GLFLOAT3_HELPER,
+            indent, source_text, pname[0], REPL_EXPORT_GLFLOAT3_HELPER,
             c_args[0], c_args[1], c_args[2]);
     return 1;
 }
@@ -662,42 +664,20 @@ int write_point_parameterfv_as_c89(FILE *f, const char *source_text) {
  * C99, so the exported C89 line routes the equation through the
  * repl_gldouble4 helper instead. */
 int write_clip_plane_as_c89(FILE *f, const char *source_text) {
-    const char *p = source_text;
-    const char *payload_start;
-    const char *payload_end;
-    char plane[MAX_LINE_LEN];
+    char plane[1][MAX_LINE_LEN];
     char vector_payload[MAX_LINE_LEN];
     char c_args[4][MAX_LINE_LEN];
-    int indent = 0;
-    int payload_len;
-    char payload[MAX_LINE_LEN];
-    const char *payload_p;
+    int indent;
 
-    while (p[indent] && isspace((unsigned char)p[indent]))
-        indent++;
-    p += indent;
-    if (strncmp(p, "glClipPlane", 11) != 0)
-        return 0;
-    payload_start = strchr(p, '(');
-    payload_end = strrchr(p, ')');
-    if (!payload_start || !payload_end || payload_end <= payload_start)
-        return 0;
-    payload_len = (int)(payload_end - payload_start - 1);
-    if (payload_len <= 0 || payload_len >= (int)sizeof(payload))
-        return 0;
-    memcpy(payload, payload_start + 1, (size_t)payload_len);
-    payload[payload_len] = '\0';
-
-    payload_p = payload;
-    if (!export_copy_first_arg(&payload_p, plane, sizeof(plane)))
-        return 0;
-    if (!export_extract_vector_payload(payload_p, vector_payload, sizeof(vector_payload)))
+    if (!export_parse_vector_call(source_text, "glClipPlane", plane, 1,
+                                  vector_payload, sizeof(vector_payload),
+                                  &indent))
         return 0;
     if (!export_translate_vector_args(vector_payload, c_args, 4))
         return 0;
 
     fprintf(f, "%.*sglClipPlane(%s, %s(%s, %s, %s, %s));\n",
-            indent, source_text, plane, REPL_EXPORT_GLDOUBLE4_HELPER,
+            indent, source_text, plane[0], REPL_EXPORT_GLDOUBLE4_HELPER,
             c_args[0], c_args[1], c_args[2], c_args[3]);
     return 1;
 }

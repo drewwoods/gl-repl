@@ -412,7 +412,7 @@ consumes it directly without calling back into REPL globals or rebuilding the
 frame inputs itself. The config currently carries the execute callback,
 [`FlatProgramView`](../src/repl/flatten.h#L46), viewport, camera, animation, quality flags, lighting,
 backdrop, overlay toggles, replay/HUD layout, grid tables, cursor-block
-metadata, and the [`Render3dFocusVertex`](../src/render3d/render_types.h#L127) / [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L42) snapshots needed by
+metadata, and the [`Render3dFocusVertex`](../src/render3d/render_types.h#L127) / [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L44) snapshots needed by
 3D overlays.
 
 Render3d-local accumulation jitter does not live in the config. Derived
@@ -438,7 +438,7 @@ Responsibilities:
 Neutral render3d modules such as [`src/render3d/grid.c`](../src/render3d/grid.c), [`src/render3d/axes.c`](../src/render3d/axes.c),
 [`src/render3d/backdrop.c`](../src/render3d/backdrop.c), and [`src/render3d/lights.c`](../src/render3d/lights.c) should remain free of REPL
 state access. REPL-aware overlays live under `src/render3d/guides/` and consume
-the explicit [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L42) rather than pulling globals directly.
+the explicit [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L44) rather than pulling globals directly.
 
 The default color-material enable/mode, two-sided lighting, specular color,
 and shininess are ordinary editable scene commands. Fresh scenes, Clear All,
@@ -643,7 +643,7 @@ single current authored anchor" rather than "every generated mesh vertex."
 #### Cursor Edit Guides
 
 The vertex/normal guides drawn at the cursor line
-([`src/render3d/guides/geometry_guides.c`](../src/render3d/guides/geometry_guides.c)) render from a [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L42).
+([`src/render3d/guides/geometry_guides.c`](../src/render3d/guides/geometry_guides.c)) render from a [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L44).
 The snapshot initially comes from `glr_ctrl_build_guide_snapshot()`, but text
 parsing the input line can only evaluate predefined variables. It cannot resolve
 funcN-local parameters or loop-assigned values, so the controller must override

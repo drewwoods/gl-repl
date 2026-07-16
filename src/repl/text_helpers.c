@@ -244,22 +244,34 @@ int parse_expr_list_exact(const char *src, float *out_vals, int max_vals,
     return 1;
 }
 
-static int repl_parse_func_name_token_with_pending_alias(const char **p_inout,
-                                                        int *fn,
-                                                        const char *alias_name,
-                                                        int alias_slot) {
+const char *repl_scan_decl_float_prefix(const char *p) {
+    if (!p)
+        return NULL;
+    while (*p && isspace((unsigned char)*p)) p++;
+    /* Optional canonical `static ` prefix (see format_decl_text). */
+    if (strncmp(p, "static", 6) == 0 && isspace((unsigned char)p[6])) {
+        p += 6;
+        while (*p && isspace((unsigned char)*p)) p++;
+    }
+    if (strncmp(p, "float", 5) != 0)
+        return NULL;
+    if (isalnum((unsigned char)p[5]) || p[5] == '_')
+        return NULL;
+    return p + 5;
+}
+
+int repl_scan_func_name_token(const char **p_inout, int *fn,
+                              char ident[REPL_FUNC_NAME_MAX]) {
     const char *p = *p_inout;
     while (*p && isspace((unsigned char)*p)) p++;
     if (strncmp(p, "func", 4) == 0 &&
         p[4] >= '0' && p[4] <= '9' &&
         !isalnum((unsigned char)p[5]) && p[5] != '_') {
         if (fn) *fn = p[4] - '0';
-        p += 5;
-        *p_inout = p;
+        *p_inout = p + 5;
         return 1;
     }
     if (!isalpha((unsigned char)*p) && *p != '_') return 0;
-    char ident[REPL_FUNC_NAME_MAX];
     int len = 0;
     while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
            len < REPL_FUNC_NAME_MAX - 1) {
@@ -268,15 +280,29 @@ static int repl_parse_func_name_token_with_pending_alias(const char **p_inout,
     if (*p && (isalnum((unsigned char)*p) || *p == '_')) return 0;
     ident[len] = '\0';
     if (len == 0) return 0;
-    int slot = repl_func_alias_lookup_slot(ident);
-    if (slot < 0 &&
-        alias_name && alias_name[0] &&
-        alias_slot >= 0 && alias_slot < REPL_FUNC_SLOT_COUNT &&
-        strcmp(ident, alias_name) == 0) {
-        slot = alias_slot;
+    *p_inout = p;
+    return 2;
+}
+
+static int repl_parse_func_name_token_with_pending_alias(const char **p_inout,
+                                                        int *fn,
+                                                        const char *alias_name,
+                                                        int alias_slot) {
+    const char *p = *p_inout;
+    char ident[REPL_FUNC_NAME_MAX];
+    int kind = repl_scan_func_name_token(&p, fn, ident);
+    if (kind == 0) return 0;
+    if (kind == 2) {
+        int slot = repl_func_alias_lookup_slot(ident);
+        if (slot < 0 &&
+            alias_name && alias_name[0] &&
+            alias_slot >= 0 && alias_slot < REPL_FUNC_SLOT_COUNT &&
+            strcmp(ident, alias_name) == 0) {
+            slot = alias_slot;
+        }
+        if (slot < 0) return 0;
+        if (fn) *fn = slot;
     }
-    if (slot < 0) return 0;
-    if (fn) *fn = slot;
     *p_inout = p;
     return 1;
 }

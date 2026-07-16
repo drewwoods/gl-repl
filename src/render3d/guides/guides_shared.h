@@ -9,6 +9,8 @@
 #ifndef RENDER3D_GUIDES_SHARED_H
 #define RENDER3D_GUIDES_SHARED_H
 
+#include <string.h> /* memset (render3d_guide_record_label) */
+
 #include "repl/command.h"
 #include "repl/flatten.h"
 #include "render3d/guides/xform_guide_mode.h"
@@ -145,5 +147,35 @@ typedef struct Render3dTransformGuidePlan {
     int cursor_flat_idx;
     int after_flat_idx;
 } Render3dTransformGuidePlan;
+
+/* Report a guide label to the snapshot's optional label sink (no-op
+ * when the sink is empty). Shared by the geometry and transform guide
+ * renderers; header-only so the isolated guides test keeps linking
+ * only the guide objects. */
+static inline void render3d_guide_record_label(
+    const Render3dGuideSnapshot *snapshot,
+    const float pos[3],
+    void *primary_font, const char *primary_text,
+    void *detail_font, const char *detail_text) {
+    Render3dGuideLabelSpec label;
+
+    if (!snapshot || !snapshot->label_sink.record || !pos ||
+        !primary_font || !primary_text || !primary_text[0])
+        return;
+
+    memset(&label, 0, sizeof(label));
+    label.pos[0] = pos[0];
+    label.pos[1] = pos[1];
+    label.pos[2] = pos[2];
+    label.runs[0].font = primary_font;
+    label.runs[0].text = primary_text;
+    label.run_count = 1;
+    if (detail_font && detail_text && detail_text[0]) {
+        label.runs[1].font = detail_font;
+        label.runs[1].text = detail_text;
+        label.run_count = 2;
+    }
+    snapshot->label_sink.record(snapshot->label_sink.user_data, &label);
+}
 
 #endif /* RENDER3D_GUIDES_SHARED_H */

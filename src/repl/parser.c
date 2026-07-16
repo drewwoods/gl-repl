@@ -157,29 +157,14 @@ static int parser_func_alias_lookup_slot(const ReplParseContext *ctx,
 static int parser_parse_func_name_token(const ReplParseContext *ctx,
                                         const char **p_inout, int *fn) {
     const char *p = *p_inout;
-    while (*p && isspace((unsigned char)*p)) p++;
-    if (strncmp(p, "func", 4) == 0 &&
-        p[4] >= '0' && p[4] <= '9' &&
-        !isalnum((unsigned char)p[5]) && p[5] != '_') {
-        if (fn) *fn = p[4] - '0';
-        p += 5;
-        *p_inout = p;
-        return 1;
-    }
-    if (!isalpha((unsigned char)*p) && *p != '_') return 0;
     char ident[REPL_FUNC_NAME_MAX];
-    int len = 0;
-    while (*p && (isalnum((unsigned char)*p) || *p == '_') &&
-           len < REPL_FUNC_NAME_MAX - 1) {
-        ident[len++] = *p++;
+    int kind = repl_scan_func_name_token(&p, fn, ident);
+    if (kind == 0) return 0;
+    if (kind == 2) {
+        int slot = parser_func_alias_lookup_slot(ctx, ident);
+        if (slot < 0) return 0;
+        if (fn) *fn = slot;
     }
-    if (*p && (isalnum((unsigned char)*p) || *p == '_')) return 0;
-    ident[len] = '\0';
-    if (len == 0) return 0;
-
-    int slot = parser_func_alias_lookup_slot(ctx, ident);
-    if (slot < 0) return 0;
-    if (fn) *fn = slot;
     *p_inout = p;
     return 1;
 }

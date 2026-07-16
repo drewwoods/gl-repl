@@ -40,6 +40,26 @@ void repl_format_source_float(char *out, int out_sz, float v);
 int  repl_parse_identifier_list(const char *src, const char *leading_keyword,
                                 char names[][REPL_PREDEF_NAME_MAX], int max_names);
 int  repl_parse_func_name_token(const char **p_inout, int *fn);
+
+/* Scan the `float` declaration keyword at `p`, after skipping leading
+ * whitespace and an optional canonical `static ` prefix (see
+ * format_decl_text — the exporter emits `static float ...`, so the
+ * round-trip must accept it). Returns the pointer just past `float`,
+ * or NULL when the text is not float-keyword-shaped (including
+ * identifiers that merely start with it, e.g. `floatish`). Shared by
+ * the compile-side decl parsers and the reformatter. */
+const char *repl_scan_decl_float_prefix(const char *p);
+
+/* Lexical half of the funcN-name/alias token scan, shared by the
+ * parser's ctx-based resolver and this TU's live-state resolver. At
+ * *p_inout (after leading whitespace): the explicit funcN digit form
+ * sets *fn, advances *p_inout past it, and returns 1; a general
+ * identifier copies it into ident, advances *p_inout past it, and
+ * returns 2 (the caller resolves ident to an alias slot and treats
+ * failure as no-match, leaving its own cursor untouched); anything
+ * else returns 0 with *p_inout unchanged. */
+int  repl_scan_func_name_token(const char **p_inout, int *fn,
+                               char ident[REPL_FUNC_NAME_MAX]);
 int  extract_for_args_text(const char *src,
                            char *var, int var_sz,
                            char *args, int args_sz);
