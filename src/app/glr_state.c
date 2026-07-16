@@ -79,6 +79,7 @@ static const float g_grid_extents[GRID_EXTENT_COUNT] = {
     }, \
     .render = { \
         .use_accum                 = CFG_DEFAULT_USE_ACCUM, \
+        .accum_bits                = -1, \
         .accum_effect              = CFG_DEFAULT_ACCUM_EFFECT, \
         .accum_passes              = CFG_DEFAULT_ACCUM_PASSES, \
         .multisample_enabled       = CFG_DEFAULT_MULTISAMPLE, \

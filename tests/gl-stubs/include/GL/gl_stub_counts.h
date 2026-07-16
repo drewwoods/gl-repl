@@ -65,6 +65,7 @@ extern "C" {
     X(glFogi)                          \
     X(glFrontFace)                     \
     X(glFrustum)                       \
+    X(glGetError)                      \
     X(glGetFloatv)                     \
     X(glGetIntegerv)                   \
     X(glFinish)                        \

@@ -1,6 +1,7 @@
 # Accumulation buffer on the web build: detection + FBO emulation
 
-Status: in-review (plan, not yet implemented)
+Status: in-review — **Part 1 implemented** (accum-bits detection); Part 2
+(gl4es FBO emulation) still planned
 Date: 2026-07-16
 Scope: Emscripten/WebGL2 build (gl4es); Part 1 also touches every backend's
 startup path.
@@ -26,24 +27,30 @@ Two-part plan: a cheap detection fix that stops the waste immediately, then a
 gl4es patch that implements the accum buffer with an FBO — which flips the
 same detection back on and makes Blur/Blur Cam actually work in the browser.
 
-## Part 1 — quick fix: runtime accum detection (all backends)
+## Part 1 — runtime accum detection (all backends) — IMPLEMENTED
 
-**Change.** Query the context's real accumulation depth once at GL init and
-force `use_accum` off when it is zero:
+**Change (as landed).** Query the context's real accumulation depth once at
+GL init and force `use_accum` off when it is zero:
 
-1. In `glr_ctrl_init_gl()` (`src/app/glr_ctrl.c`) — next to the existing
-   `glGetIntegerv(GL_SAMPLES, &samples)` precedent — query
-   `GL_ACCUM_RED_BITS` into a variable **initialized to 0**, then
-   `glGetError()` to clear any resulting error, and record the result on the
-   render state (e.g. `GlrRenderState.accum_bits`).
+1. `glr_ctrl_init_gl()` (`src/app/glr_ctrl.c`) — next to the existing
+   `glGetIntegerv(GL_SAMPLES, &samples)` precedent — queries
+   `GL_ACCUM_RED_BITS` into a variable **initialized to 0**, then one
+   `(void)glGetError()` to clear the `GL_INVALID_ENUM` a GLES context
+   raises, and records the result in the new `GlrRenderState.accum_bits`
+   field (compile-time default `-1` = never probed, so tests and the
+   dump-only paths that skip `glr_ctrl_init_gl` keep their old behavior).
 2. `glr_ctrl_set_accum(enabled)` (`src/app/glr_ctrl.c`) masks with it:
-   `use_accum = enabled && accum_bits > 0`. This placement matters —
-   `main()` calls `glr_ctrl_set_accum(use_accum)` (`gl_repl.c:727`) *after*
-   `glr_ctrl_init_gl()` (`gl_repl.c:663`), so a force-off inside init alone
-   would be overwritten.
-3. When accum was requested but is unavailable, log one stderr line (e.g.
-   `accum: no accumulation buffer in this GL context; accum effects off`) so
-   the silent behavior change is discoverable.
+   a probed `accum_bits == 0` forces `use_accum` off. This placement
+   matters — `main()` calls `glr_ctrl_set_accum(use_accum)`
+   (`gl_repl.c:727`) *after* `glr_ctrl_init_gl()` (`gl_repl.c:663`), so a
+   force-off inside init alone would be overwritten.
+3. When accum was requested but is unavailable, one stderr line
+   (`accum: GL context has no accumulation buffer; accum effects disabled`)
+   makes the silent behavior change discoverable.
+4. Supporting: the stub GL header gained `GL_ACCUM_RED_BITS`, `GL_NO_ERROR`,
+   and a counted no-op `glGetError` stub (`tests/gl-stubs/include/GL/gl.h`,
+   `gl_stub_counts.h`); the stub `glGetIntegerv` already returns 0 for
+   unknown pnames, so stub builds honestly report "no accum".
 
 **Why the query shape is safe per backend:**
 
@@ -166,13 +173,23 @@ while leaving Blur available — a follow-up, not part of this plan.
 
 ## Verification
 
-Part 1:
-- Native: `./gl-repl` — stderr shows no accum message; AA still works
-  (F2-cycle Accum effect, visible edge quality change).
-- OSMesa: regenerate one full-UI doc asset (`scripts/docs-assets.sh <asset>`)
-  and confirm pixel-identical output (accumulation AA still active).
-- Web: console shows the one-line notice; frame rate roughly doubles on the
-  default example (was 2 passes); `make test-stubs` still green.
+Part 1 (done at implementation time):
+- Native: `FREEGLUT_CAPTURE_FRAMES=2 ./gl-repl --no-audio` — no accum
+  notice on stderr (real context reports accum bits), frames render.
+- `make test`, `make test-stubs`, `make check-state-ownership`,
+  `make check-c99`, `make gl-repl USE_GL_STUBS=1` all green. (The `make
+  test` run surfaced a pre-existing, unrelated failure: the two newest
+  GL-state-popup tests called `glr_ctrl_display_frame()` with the popup
+  visible without the file's `#ifdef GL_STUBS` guard, crashing real-GL
+  test binaries inside `ui_gl_state_panel_render`'s `gl2d_begin`; both
+  sites now carry the established guard pattern.)
+- Web: build links; the runtime notice + the frame-cost halving on the
+  default example are browser-observable (`make web-serve`).
+- OSMesa: not re-verified here (needs the Homebrew Mesa build); the
+  backend requests 16 accum bits under `GLUT_ACCUM`
+  (`third_party/freeglut/src/osmesa/fg_window_osmesa.c:40`), so detection
+  keeps accum on. Re-run one `scripts/docs-assets.sh` asset when
+  convenient to confirm pixel-identical output.
 
 Part 2:
 - Web: `GL_ACCUM_RED_BITS` reports 16 (detection re-enables accum); Accum AA

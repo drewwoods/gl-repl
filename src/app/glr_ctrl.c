@@ -2847,6 +2847,16 @@ void glr_ctrl_init_gl(void) {
     glGetIntegerv(GL_SAMPLES, &samples);
     glr_actions_set_msaa_label((int)samples);
 
+    /* Probe the accumulation buffer depth once. A context without one
+     * (Emscripten/WebGL: GL_ACCUM_RED_BITS is not even a valid pname
+     * there, so the query errors and leaves the 0) would render every
+     * accum pass at full cost while glAccum does nothing --
+     * glr_ctrl_set_accum masks the feature off when this reports 0. */
+    GLint accum_bits = 0;
+    glGetIntegerv(GL_ACCUM_RED_BITS, &accum_bits);
+    (void)glGetError(); /* clear the GL_INVALID_ENUM a GLES context raises */
+    glr_state_render_mut()->accum_bits = (int)accum_bits;
+
     /* glutInit has run by the time glr_ctrl_init_gl is called.
      * Unlock glutGetModifiers() reads in editor_input so Cmd / Ctrl /
      * Shift modifier checks land. Tests skip this hook so modifier
@@ -2919,7 +2929,18 @@ void glr_ctrl_bootstrap_repl(const char *input_file) {
 }
 
 void glr_ctrl_set_accum(int enabled) {
-    glr_state_render_mut()->use_accum = enabled ? 1 : 0;
+    GlrRenderState *render = glr_state_render_mut();
+    /* accum_bits == 0 means glr_ctrl_init_gl probed the context and found
+     * no accumulation buffer (the Emscripten/WebGL case): each accum pass
+     * would re-render the scene at full cost while glAccum stays a no-op,
+     * so force the feature off. -1 (never probed: tests, dump-only paths)
+     * leaves the caller's choice untouched. */
+    if (enabled && render->accum_bits == 0) {
+        fprintf(stderr, "accum: GL context has no accumulation buffer; "
+                        "accum effects disabled\n");
+        enabled = 0;
+    }
+    render->use_accum = enabled ? 1 : 0;
 }
 
 void glr_ctrl_set_time(float value) {
