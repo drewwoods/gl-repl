@@ -75,6 +75,9 @@ void editor_state_reset(void) {
     g_editor_state = *editor_state_get_defaults();
 }
 
+/* No in-tree callers today; kept so the buffer facade stays complete
+ * alongside the narrower line accessors below. */
+/* cppcheck-suppress unusedFunction */
 const EditorBuffer *editor_state_buffer(void) {
     return &g_editor_state.buffer;
 }
