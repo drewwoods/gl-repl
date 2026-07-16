@@ -14,6 +14,7 @@ MIN_TOKENS="${MIN_TOKENS:-80}"
 
 LIZARD_CCN="${LIZARD_CCN:-15}"
 LIZARD_LEN="${LIZARD_LEN:-150}"
+CHURN_SINCE="2026-05-23"
 
 CLANGD_BIN="${CLANGD_BIN:-clangd}"
 
@@ -171,9 +172,78 @@ printf 'repo: %s\n' "$ROOT"
 printf 'src:  %s\n' "$SRC_DIR"
 printf 'out:  %s\n' "$OUT_DIR"
 
-# A0: Count the .c files in the clangd/clang-tidy scan set.
-count_scanned_c_files() {
-  { find "$SRC_DIR" -name '*.c'; printf 'gl_repl.c\n'; } | wc -l | tr -d ' '
+# A0: Verify that every .c file scanned by clangd/clang-tidy has its own
+# compile-database entry.  Counts alone are insufficient because a database
+# can contain duplicate configurations for one TU while omitting another.
+verify_compile_commands() {
+  local db_path="$1"
+
+  if ! have python3; then
+    printf 'python3 is required to validate %s\n' "$db_path" >&2
+    return 1
+  fi
+
+  python3 - "$ROOT" "$SRC_DIR" "$db_path" <<'PY'
+import json
+import os
+import sys
+
+root = os.path.realpath(sys.argv[1])
+src_dir = sys.argv[2]
+db_path = sys.argv[3]
+
+if not os.path.isabs(src_dir):
+    src_dir = os.path.join(root, src_dir)
+src_dir = os.path.realpath(src_dir)
+
+expected = set()
+for dirpath, _, filenames in os.walk(src_dir):
+    for filename in filenames:
+        if filename.endswith(".c"):
+            expected.add(os.path.realpath(os.path.join(dirpath, filename)))
+expected.add(os.path.realpath(os.path.join(root, "gl_repl.c")))
+
+try:
+    with open(db_path, "r", encoding="utf-8") as handle:
+        database = json.load(handle)
+except (OSError, json.JSONDecodeError) as exc:
+    print(f"ERROR: cannot read {db_path}: {exc}", file=sys.stderr)
+    raise SystemExit(1)
+
+if not isinstance(database, list):
+    print(f"ERROR: {db_path} is not a JSON array", file=sys.stderr)
+    raise SystemExit(1)
+
+actual = set()
+for entry in database:
+    if not isinstance(entry, dict) or not entry.get("file"):
+        continue
+    directory = entry.get("directory") or root
+    if not os.path.isabs(directory):
+        directory = os.path.join(root, directory)
+    filename = entry["file"]
+    if not os.path.isabs(filename):
+        filename = os.path.join(directory, filename)
+    actual.add(os.path.realpath(filename))
+
+missing = sorted(expected - actual)
+if missing:
+    print(
+        f"ERROR: {db_path} is missing {len(missing)} of "
+        f"{len(expected)} scanned translation units:",
+        file=sys.stderr,
+    )
+    for filename in missing[:20]:
+        print(f"  {os.path.relpath(filename, root)}", file=sys.stderr)
+    if len(missing) > 20:
+        print(f"  ... and {len(missing) - 20} more", file=sys.stderr)
+    raise SystemExit(1)
+
+print(
+    f"compile_commands.json coverage: {len(expected)} scanned files "
+    f"present ({len(actual)} unique entries)"
+)
+PY
 }
 
 ensure_compile_commands() {
@@ -181,30 +251,20 @@ ensure_compile_commands() {
 
   if [[ -f compile_commands.json ]]; then
     printf 'found compile_commands.json\n'
-  elif [[ "$ENSURE_COMPILE_DB" -eq 0 ]]; then
-    printf 'compile_commands.json missing; not generating because --no-compile-db was passed\n'
-    return 1
-  elif have bear; then
-    say "compile_commands.json missing; generating with bear + stub build"
-    # NOTE: We use make -B to force a full rebuild under bear so that it records all
-    # compiler flags, even if the build is already up-to-date. We build with GL stubs
-    # (USE_GL_STUBS=1) so the scan can run on machines without real GL development headers.
-    #
-    # A0: Build to a temp file so a failed bear run doesn't leave a partial/stale
-    # compile_commands.json.  Move into place only on success.
-    local tmp_db
-    tmp_db="$(mktemp "${TMPDIR:-/tmp}/compile_commands.XXXXXX.json")"
-    if bear --output "$tmp_db" -- make -B gl-repl USE_GL_STUBS=1; then
-      mv "$tmp_db" compile_commands.json
-      printf 'generated compile_commands.json\n'
-    else
-      rm -f "$tmp_db"
-      printf 'bear build failed; compile_commands.json not generated\n' >&2
-      return 1
+    if verify_compile_commands compile_commands.json; then
+      return 0
     fi
-  else
+    printf 'compile_commands.json is incomplete; regeneration required\n' >&2
+  fi
+
+  if [[ "$ENSURE_COMPILE_DB" -eq 0 ]]; then
+    printf 'compile_commands.json unavailable or incomplete; not generating because --no-compile-db was passed\n'
+    return 1
+  fi
+
+  if ! have bear; then
     cat > "$OUT_DIR/compile_commands.missing.txt" <<EOF
-compile_commands.json is missing and bear is not installed.
+compile_commands.json is missing or incomplete and bear is not installed.
 
 Install bear:
 
@@ -218,24 +278,30 @@ clangd and clang-tidy diagnostics require compile_commands.json to understand
 include paths, defines, and force-includes.
 EOF
 
-    printf 'missing compile_commands.json; see %s\n' "$OUT_DIR/compile_commands.missing.txt"
+    printf 'compile_commands.json unavailable; see %s\n' "$OUT_DIR/compile_commands.missing.txt"
     return 1
   fi
 
-  # A0: Verify coverage — every .c in the scanned set should have a DB entry.
-  local expected actual
-  expected="$(count_scanned_c_files)"
-  actual=$(grep -c '"file"' compile_commands.json 2>/dev/null || echo 0)
-  if [[ "$actual" -lt "$expected" ]]; then
-    printf 'WARNING: compile_commands.json has %s entries, expected >= %s\n' \
-      "$actual" "$expected" >&2
-    printf '  clangd/clang-tidy may produce incomplete results\n' >&2
-    printf '  regenerate: bear -- make -B gl-repl USE_GL_STUBS=1\n' >&2
-  else
-    printf 'compile_commands.json coverage: %s entries (>= %s expected)\n' \
-      "$actual" "$expected"
+  say "generating compile_commands.json with bear + stub build"
+  # Use make -B so bear records every sample TU even when objects are current.
+  # Keep the candidate beside the destination so the final rename is atomic;
+  # validate it before replacing an existing database.
+  local tmp_db
+  tmp_db="$(mktemp "$ROOT/.compile_commands.XXXXXX.json")"
+  if ! bear --output "$tmp_db" -- make -B gl-repl USE_GL_STUBS=1; then
+    rm -f "$tmp_db"
+    printf 'bear build failed; compile_commands.json not generated\n' >&2
+    return 1
   fi
 
+  if ! verify_compile_commands "$tmp_db"; then
+    rm -f "$tmp_db"
+    printf 'bear produced an incomplete compile database; existing file preserved\n' >&2
+    return 1
+  fi
+
+  mv "$tmp_db" compile_commands.json
+  printf 'generated and validated compile_commands.json\n'
   return 0
 }
 
@@ -266,8 +332,8 @@ EOF
   fi
 
   if ! ensure_compile_commands; then
-    printf 'skipping clangd: compile_commands.json missing\n' | tee -a "$clangd_log"
-    return 0
+    printf 'skipping clangd: compile_commands.json unavailable or incomplete\n' | tee -a "$clangd_log"
+    return 1
   fi
 
   # Run clangd --check in parallel using xargs to speed up execution
@@ -321,8 +387,8 @@ EOF
   fi
 
   if ! ensure_compile_commands; then
-    printf 'skipping clang-tidy: compile_commands.json missing\n' | tee -a "$tidy_log"
-    return 0
+    printf 'skipping clang-tidy: compile_commands.json unavailable or incomplete\n' | tee -a "$tidy_log"
+    return 1
   fi
 
   # A1: Resolve macOS sysroot so Homebrew clang-tidy finds system headers
@@ -429,8 +495,16 @@ EOF
     # platform-gated branches (without it, e.g. clipboard always-zero
     # false positives appear from the non-macOS stub branch).
     local cppcheck_platform_defs=""
+    local cppcheck_excludes=()
     if [[ "$(uname -s)" = "Darwin" ]]; then
       cppcheck_platform_defs="-D__APPLE__"
+    fi
+    # repl_live_demo/scenes contains staged REPL snippets (including top-level
+    # for-loops), not standalone C translation units.  Feeding them to
+    # cppcheck produces syntaxError aborts and contaminates whole-program
+    # unusedFunction analysis.
+    if [[ -d "$TOOLS_DIR/repl_live_demo/scenes" ]]; then
+      cppcheck_excludes=(-i "$TOOLS_DIR/repl_live_demo/scenes")
     fi
 
     cppcheck \
@@ -446,6 +520,7 @@ EOF
       '-DREPL_EXPORT_STRINGIFY2(x)="0"' \
       '-DREPL_EXPORT_STRINGIFY(x)="0"' \
       $cppcheck_platform_defs \
+      "${cppcheck_excludes[@]}" \
       "$SRC_DIR" \
       "$TEST_DIR" \
       "$TOOLS_DIR" \
@@ -547,11 +622,11 @@ run_churn() {
   local churn_log="$OUT_DIR/churn-size.txt"
 
   {
-    printf '# Note: churn counts since src/ reorg on 2026-05-23 (pre-reorg paths filtered out)\n'
+    printf '# Note: churn counts since src/ reorg on %s\n' "$CHURN_SINCE"
     printf '%8s %8s %8s  %s\n' "churn" "lines" "score" "file"
 
     # A5: include root gl_repl.c alongside src/
-    git log --format= --name-only -- "$SRC_DIR" gl_repl.c |
+    git log --since="$CHURN_SINCE" --format= --name-only -- "$SRC_DIR" gl_repl.c |
       sed '/^$/d' |
       sort |
       uniq -c |

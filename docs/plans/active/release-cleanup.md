@@ -10,13 +10,11 @@ CPD via Docker, churn×size); the raw outputs live in
 manually triaged; false positives are recorded here so the triage does
 not need repeating.
 
-Headline: **clangd reported 0 diagnostics** — but see A0: the compile
-DB it ran against had a single entry, so flags for the other TUs were
-inferred. The inferred flags looked correct in the logs (all TUs share
-one flag set), but the claim needs re-verifying after A0 lands. The
-real work is (A) scanner fixes so future runs are trustworthy, (B) a
-verified dead-code sweep, (C) duplication hoists, and optionally (D)
-complexity refactors.
+Headline: **clangd reported 0 diagnostics**, re-verified after A0 with
+all 128 scanned translation units present in the compile database.
+The real work is now (B) a verified dead-code sweep, (C) duplication
+hoists, and optionally (D) complexity refactors; the Phase A scanner
+fixes and acceptance run are complete.
 
 - **A — Fix `scripts/code-smells.sh` signal quality.** ✅ DONE (A0–A5)
 - **B — Dead-code sweep.** IN PROGRESS — facade-symmetry retains
@@ -30,9 +28,11 @@ complexity refactors.
 Do these first; they make every later re-scan trustworthy.
 
 0. **Compile-database integrity.** ✅ DONE — `ensure_compile_commands`
-   now (a) regenerates atomically (bear writes to temp file, moved on
-   success), and (b) verifies coverage (DB entry count ≥ scanned .c count).
-   Stale 1-entry DBs now produce a clear warning.
+   now compares the normalized unique DB file set against every scanned
+   `.c` TU (counts alone cannot catch duplicates masking omissions). An
+   incomplete DB is regenerated when allowed or hard-fails the analyzer;
+   Bear writes to a same-directory candidate that is validated before the
+   atomic rename, so a failed/partial rebuild preserves the previous DB.
 1. **clang-tidy is missing the macOS sysroot.** ✅ DONE — added
    `--extra-arg=-isysroot$(xcrun --show-sdk-path)` to `run_clang_tidy`;
    gated on `xcrun` availability so non-macOS hosts skip it.
@@ -46,12 +46,15 @@ Do these first; they make every later re-scan trustworthy.
    `-Isrc` (matches build's include path) so cppcheck resolves project
    headers; added `-D` stubs for `REPL_EXPORT_STRINGIFY{,2}` so the
    `#ifndef` guard in `export.h` skips the stringification definition.
+   Excluded `tools/repl_live_demo/scenes/`, whose staged REPL snippets
+   (including top-level loops) are not standalone C translation units.
 4. **cppcheck has no platform defines.** ✅ DONE — added `-D__APPLE__`
    on macOS (detected via `uname -s`).
 5. **Summary-count nits.** ✅ DONE — cppcheck count grep now matches
    trailing `[checkName]` tags; bear comment fixed (`USE_GL_STUBS=1`);
    lizard, CPD, and churn all include root `gl_repl.c` (CPD switched
-   from `--dir` to `--file-list`).
+   from `--dir` to `--file-list`), and churn applies the same explicit
+   2026-05-23 cutoff to both the root file and post-reorg `src/` paths.
 6. **After B/C land:** keep `MIN_TOKENS=80` (raising it would blind
    CPD to new 80–119-token duplicates). Instead, check in a baseline
    of the accepted residual blocks (file-pair + token-count
@@ -157,7 +160,8 @@ Ranked by value; raw locations in `build/code-smells/cpd.txt`.
 
 ## D — Complexity refactors (opportunistic, not release-blocking)
 
-lizard: 229 warnings at CCN 15 / length 150. Top offenders by CCN:
+lizard: 230 warnings at CCN 15 / length 150 (including root
+`gl_repl.c`). Top offenders by CCN:
 
 | Function | CCN | NLOC | File |
 |---|---|---|---|
@@ -172,9 +176,10 @@ lizard: 229 warnings at CCN 15 / length 150. Top offenders by CCN:
 Prioritize by churn overlap: `parse_command`, `commit_current_input`,
 and `update_autocomplete` live in the highest-churn files;
 `mesh_ply_write` is stable and can wait. The churn×size table
-(`churn-size.txt`) puts `src/app/glr_ctrl.c` at 4× the runner-up
-(score 854k vs `glr_actions.c` 214k) — continuing the peer-subsystem
-extractions is the long-term answer there, not a release task.
+(`churn-size.txt`) puts `src/app/glr_ctrl.c` at 3× the runner-up
+(score 566k vs `src/ui/app/repl_code_panel.c` 189k) — continuing the
+peer-subsystem extractions is the long-term answer there, not a
+release task.
 
 ## Triaged non-findings (do not re-litigate)
 
@@ -215,6 +220,7 @@ invoke the scanner, so after the A fixes land, run
   coverage check (A0) passed rather than being bypassed;
 - zero `clang-diagnostic-error` in the clang-tidy output (A1);
 - zero `unknownMacro` in the cppcheck output (A3);
+- zero `syntaxError` in cppcheck (only actual translation units scanned);
 - no tool reported "skipping" in the run transcript;
 - the false `unusedFunction` findings from A3's parse failures are
   gone, and the B facade retains stay suppressed.
