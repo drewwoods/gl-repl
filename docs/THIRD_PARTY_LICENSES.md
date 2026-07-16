@@ -79,11 +79,14 @@ license text, reproduced verbatim from `third_party/freeglut/COPYING`:
     / `(GL_BACK, …)` updates only the selected side's material in the
     generated shaders (two-sided scenes had back-face colors leaking onto
     front faces).
-  - `packaging/web/patches/gl4es-pushattrib-polygon-bit.patch` — implement
-    the `GL_POLYGON_BIT` group in `glPushAttrib`/`glPopAttrib` (front-face
-    winding, cull-face mode, polygon mode; it was an upstream TODO), so a
-    scene's `glFrontFace(GL_CW)` no longer escapes the render pass's
-    push/pop bracket and reverses front/back for every scene after it.
+  - `packaging/web/patches/gl4es-pushattrib-gaps.patch` — implement the
+    `glPushAttrib`/`glPopAttrib` groups gl4es left as TODOs, for the
+    state gl-repl exercises: all of `GL_POLYGON_BIT` (front-face winding,
+    cull-face mode, polygon mode — a scene's `glFrontFace(GL_CW)` used to
+    escape the render pass's push/pop bracket and reverse front/back for
+    every scene after it), plus the `glLineStipple` factor/pattern,
+    `glPointParameterfv` point parameters, and `glClipPlane` equations
+    the `GL_LINE_BIT`/`GL_POINT_BIT`/`GL_TRANSFORM_BIT` groups skipped.
 - **License:** MIT. Reproduced verbatim from gl4es's `LICENSE`:
 
 ```

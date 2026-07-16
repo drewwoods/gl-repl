@@ -1,0 +1,193 @@
+Implement the glPushAttrib/glPopAttrib state groups gl4es left as TODOs,
+for the state gl-repl actually exercises: GL_POLYGON_BIT, plus the
+line-stipple, point-parameter, and clip-plane-equation gaps in
+GL_LINE_BIT / GL_POINT_BIT / GL_TRANSFORM_BIT.
+
+gl-repl brackets every render pass with
+glPushAttrib(GL_ALL_ATTRIB_BITS)/glPopAttrib and relies on the pop to
+restore defaults, so any group the emulated stack skips leaks scene
+state into the GLES context permanently. Each piece here fixes an
+observed or same-class leak:
+
+- GL_POLYGON_BIT (was entirely TODO): front-face winding, cull-face
+  mode, polygon mode (gl4es stores GL_FILL as 0), and the group's
+  cull-face / polygon-offset-fill enables (fields shared with
+  GL_ENABLE_BIT, as the stack already shares depth_test et al.). One
+  frame of an example calling glFrontFace(GL_CW) used to reverse
+  front/back for every scene after it. Polygon smooth/stipple enables
+  and the offset factor/units stay TODO -- gl4es does not shadow them,
+  and querying the driver here would put a synchronous GLES round-trip
+  on a per-frame path.
+- GL_LINE_BIT ("TODO: stipple stuff here"): the glLineStipple factor/
+  pattern (shadowed in glstate->linestipple) plus the stipple enable.
+  The restore is guarded on an actual change because a redundant
+  gl4es_glLineStipple would (re)create its emulation texture.
+- GL_POINT_BIT: point size min/max, fade threshold, and
+  GL_POINT_DISTANCE_ATTENUATION (shadowed in glstate->pointsprite);
+  restored through gl4es_glPointParameterf/-fv, which dedup.
+- GL_TRANSFORM_BIT: the clip-plane *equations* (the enables already
+  round-tripped; the stack's clip_planes field existed but was never
+  filled). glClipPlane stores eye-space equations, so the restore
+  memcpys glstate->planes[] directly -- calling gl4es_glClipPlanef
+  would wrongly re-transform by the modelview current at pop time.
+
+The gl-repl integration regressions (Emscripten build): cycling the
+examples past a glFrontFace(GL_CW) scene must not swap two-sided
+colors or the winding view on scenes visited afterwards; a scene's
+glLineStipple pattern, glPointParameterfv attenuation, or glClipPlane
+equation must not carry into a later scene that enables the matching
+cap without setting its own values.
+
+Applied by scripts/web-deps.sh after cloning the pinned gl4es checkout.
+diff --git a/src/gl/stack.c b/src/gl/stack.c
+index 59376ba..ca03f50 100644
+--- a/src/gl/stack.c
++++ b/src/gl/stack.c
+@@ -4,6 +4,7 @@
+ 
+ #include "../glx/hardext.h"
+ #include "wrap/gl4es.h"
++#include "line.h"
+ #include "matrix.h"
+ #include "debug.h"
+ 
+@@ -187,7 +188,9 @@ void APIENTRY_GL4ES gl4es_glPushAttrib(GLbitfield mask) {
+ 
+     if (mask & GL_LINE_BIT) {
+         cur->line_smooth = gl4es_glIsEnabled(GL_LINE_SMOOTH);
+-        // TODO: stipple stuff here
++        cur->line_stipple = gl4es_glIsEnabled(GL_LINE_STIPPLE);
++        cur->line_stipple_factor = glstate->linestipple.factor;
++        cur->line_stipple_pattern = glstate->linestipple.pattern;
+         gl4es_glGetFloatv(GL_LINE_WIDTH, &cur->line_width);
+     }
+ 
+@@ -219,6 +222,10 @@ void APIENTRY_GL4ES gl4es_glPushAttrib(GLbitfield mask) {
+     if (mask & GL_POINT_BIT) {
+         cur->point_smooth = gl4es_glIsEnabled(GL_POINT_SMOOTH);
+         gl4es_glGetFloatv(GL_POINT_SIZE, &cur->point_size);
++        cur->point_size_min = glstate->pointsprite.sizeMin;
++        cur->point_size_max = glstate->pointsprite.sizeMax;
++        cur->point_fade_threshold = glstate->pointsprite.fadeThresholdSize;
++        memcpy(cur->point_distance_attenuation, glstate->pointsprite.distance, 3*sizeof(GLfloat));
+         if(hardext.pointsprite) {
+             cur->pointsprite = gl4es_glIsEnabled(GL_POINT_SPRITE);
+             int a;
+@@ -228,7 +235,15 @@ void APIENTRY_GL4ES gl4es_glPushAttrib(GLbitfield mask) {
+         }
+     }
+ 
+-    // TODO: GL_POLYGON_BIT
++    if (mask & GL_POLYGON_BIT) {
++        cur->cull_face = gl4es_glIsEnabled(GL_CULL_FACE);
++        gl4es_glGetIntegerv(GL_CULL_FACE_MODE, &cur->cull_face_mode);
++        gl4es_glGetIntegerv(GL_FRONT_FACE, &cur->front_face);
++        cur->polygon_mode = glstate->polygon_mode;  // 0 means GL_FILL here
++        cur->polygon_offset_fill = gl4es_glIsEnabled(GL_POLYGON_OFFSET_FILL);
++        //TODO: GL_POLYGON_SMOOTH & GL_POLYGON_STIPPLE enables (not tracked)
++        //TODO: GL_POLYGON_OFFSET_LINE/POINT enables, offset factor & units (not shadowed)
++    }
+     // TODO: GL_POLYGON_STIPPLE_BIT
+ 
+     if (mask & GL_SCISSOR_BIT) {
+@@ -281,6 +296,10 @@ void APIENTRY_GL4ES gl4es_glPushAttrib(GLbitfield mask) {
+ 		gl4es_glGetIntegerv(GL_MATRIX_MODE, (GLint *) &cur->matrix_mode);
+ 		cur->rescale_normal_flag = gl4es_glIsEnabled(GL_RESCALE_NORMAL);
+ 		cur->normalize_flag = gl4es_glIsEnabled(GL_NORMALIZE);
++		// eye-space equations, as stored by gl4es_glClipPlanef's ES2 path
++		cur->clip_planes = (GLfloat *)malloc(hardext.maxplanes * 4 * sizeof(GLfloat));
++		for (int i = 0; i < hardext.maxplanes; i++)
++			memcpy(cur->clip_planes + i*4, glstate->planes[i], 4*sizeof(GLfloat));
+ 	}
+     // GL_VIEWPORT_BIT
+     if (mask & GL_VIEWPORT_BIT) {
+@@ -516,7 +535,12 @@ DBG(printf("glPopAttrib()\n");)
+ 
+     if (cur->mask & GL_LINE_BIT) {
+         enable_disable(GL_LINE_SMOOTH, cur->line_smooth);
+-        // TODO: stipple stuff here
++        enable_disable(GL_LINE_STIPPLE, cur->line_stipple);
++        // guarded: a redundant gl4es_glLineStipple would (re)create the
++        // emulation texture even when factor/pattern are unchanged
++        if (cur->line_stipple_factor != glstate->linestipple.factor
++         || cur->line_stipple_pattern != glstate->linestipple.pattern)
++            gl4es_glLineStipple(cur->line_stipple_factor, cur->line_stipple_pattern);
+         gl4es_glLineWidth(cur->line_width);
+     }
+ 
+@@ -530,6 +554,10 @@ DBG(printf("glPopAttrib()\n");)
+     if (cur->mask & GL_POINT_BIT) {
+         enable_disable(GL_POINT_SMOOTH, cur->point_smooth);
+         gl4es_glPointSize(cur->point_size);
++        gl4es_glPointParameterf(GL_POINT_SIZE_MIN, cur->point_size_min);
++        gl4es_glPointParameterf(GL_POINT_SIZE_MAX, cur->point_size_max);
++        gl4es_glPointParameterf(GL_POINT_FADE_THRESHOLD_SIZE, cur->point_fade_threshold);
++        gl4es_glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, cur->point_distance_attenuation);
+         if(hardext.pointsprite) {
+             enable_disable(GL_POINT_SPRITE, cur->pointsprite);
+             int old_tex = glstate->texture.active;
+@@ -545,6 +573,14 @@ DBG(printf("glPopAttrib()\n");)
+         }
+     }
+ 
++    if (cur->mask & GL_POLYGON_BIT) {
++        enable_disable(GL_CULL_FACE, cur->cull_face);
++        gl4es_glCullFace(cur->cull_face_mode);
++        gl4es_glFrontFace(cur->front_face);
++        gl4es_glPolygonMode(GL_FRONT_AND_BACK, cur->polygon_mode?cur->polygon_mode:GL_FILL);
++        enable_disable(GL_POLYGON_OFFSET_FILL, cur->polygon_offset_fill);
++    }
++
+     if (cur->mask & GL_SCISSOR_BIT) {
+         enable_disable(GL_SCISSOR_TEST, cur->scissor_test);
+         gl4es_glScissor(v4(cur->scissor_box));
+@@ -598,8 +634,14 @@ DBG(printf("glPopAttrib()\n");)
+ 			}
+ 		}
+ 		gl4es_glMatrixMode(cur->matrix_mode);
+-		enable_disable(GL_NORMALIZE, cur->normalize_flag);		
+-		enable_disable(GL_RESCALE_NORMAL, cur->rescale_normal_flag);		
++		enable_disable(GL_NORMALIZE, cur->normalize_flag);
++		enable_disable(GL_RESCALE_NORMAL, cur->rescale_normal_flag);
++		if (cur->clip_planes) {
++			// restore the stored eye-space equations directly: going through
++			// gl4es_glClipPlanef would re-transform by the current modelview
++			for (int i = 0; i < hardext.maxplanes; i++)
++				memcpy(glstate->planes[i], cur->clip_planes + i*4, 4*sizeof(GLfloat));
++		}
+ 	}
+ 
+     if (cur->mask & GL_VIEWPORT_BIT) {
+diff --git a/src/gl/stack.h b/src/gl/stack.h
+index d145bf1..ddc747b 100644
+--- a/src/gl/stack.h
++++ b/src/gl/stack.h
+@@ -97,7 +97,9 @@ typedef struct _glstack_t {
+ 
+     // GL_LINE_BIT
+     GLboolean line_smooth;
+-    GLboolean line_stipple; // TODO: needs to be hooked locally?
++    GLboolean line_stipple;
++    GLint line_stipple_factor;
++    GLushort line_stipple_pattern;
+     GLfloat line_width;
+ 
+     // GL_LIST_BIT
+@@ -112,8 +114,16 @@ typedef struct _glstack_t {
+     // GL_POINT_BIT
+     GLboolean point_smooth;
+     GLfloat point_size;
++    GLfloat point_size_min;
++    GLfloat point_size_max;
++    GLfloat point_fade_threshold;
++    GLfloat point_distance_attenuation[3];
++
++    // GL_POLYGON_BIT (cull_face & polygon_offset_fill enables shared with GL_ENABLE_BIT)
++    GLint cull_face_mode;
++    GLint front_face;
++    GLenum polygon_mode;
+ 
+-    // TODO: GL_POLYGON_BIT
+     // TODO: GL_POLYGON_STIPPLE_BIT
+ 
+     // GL_SCISSOR_BIT

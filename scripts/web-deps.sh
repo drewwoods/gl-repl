@@ -35,7 +35,7 @@ GL4ES_PATCHES=(
 	"$ROOT/packaging/web/patches/gl4es-bitmap-dirty-clear.patch"
 	"$ROOT/packaging/web/patches/gl4es-getter-client-state.patch"
 	"$ROOT/packaging/web/patches/gl4es-color-material-face.patch"
-	"$ROOT/packaging/web/patches/gl4es-pushattrib-polygon-bit.patch"
+	"$ROOT/packaging/web/patches/gl4es-pushattrib-gaps.patch"
 )
 GLU_URL="https://github.com/ptitSeb/GLU.git"
 GLU_SHA="2fed2bda2b725d2b9e32c435b48d5141cc95827f"
