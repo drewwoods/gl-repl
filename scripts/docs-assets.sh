@@ -29,7 +29,9 @@
 #     the app renders exactly N frames to numbered PPMs and exits. Stills keep
 #     the LAST frame, so anything frame-based (grid/axes theme cross-fades,
 #     animation time t) has deterministically settled — no wall-clock sleeps,
-#     no SIGUSR1 races.
+#     no SIGUSR1 races. Warm-up length is the uniform WARM knob every capture
+#     helper reads — see the WARM_* block below. (profile-panels is the one
+#     SIGUSR1 capture: its warm-up must run at the live 60 Hz cadence.)
 #   - GIF captures set GLR_TICK_PER_FRAME=1, moving the complete fixed-dt
 #     simulation tick from the wall-clock timer to frame presentation. Slow
 #     rendering therefore takes longer without skipping animation states.
@@ -62,12 +64,27 @@ W=1200          # target width/height of every asset's source window
 H=800
 GIF_FUZZ=4%     # magick -layers Optimize fuzz for GIF delta compression
 
-# Loading an --example eases the camera into place (with damping) over the
-# first second or two of captured frames — a settle the docs assets shouldn't
-# show. gif() renders this many extra leading frames for --example clips and
-# discards them; one-shot stills can use the same 60 Hz warmup before capture.
-# One rendered frame is ~1/60 s of that ease, so 180 ≈ 3 s.
+# Warm-up frames. Every capture helper reads the WARM env var as its warm-up
+# length in frames (~1/60 s of simulation each); set it in a ( subshell )
+# around the call so it stays scoped to one capture, like the GLR_* hooks.
+# Per helper:
+#   still           WARM maps directly to FREEGLUT_CAPTURE_FRAMES: render
+#                   WARM frames and keep the LAST, so the still IS the final
+#                   warm-up frame. Default WARM_PLAIN; theme cross-fade shots
+#                   set WARM_FADE.
+#   one_shot_still  run WARM frames at the live interactive 60 Hz cadence,
+#                   then snapshot once via SIGUSR1. Default WARM_PLAIN.
+#   gif             render WARM extra leading frames and DISCARD them — the
+#                   kept clip length is unchanged. Default 0; --example clips
+#                   default to WARM_EXAMPLE, because loading an example eases
+#                   the camera into place (with damping) over the first
+#                   second or two of captured frames — a settle the docs
+#                   assets shouldn't show (180 ≈ 3 s).
 WARM_EXAMPLE=180
+# Theme cross-fades settle in ~80 frames; 90 leaves margin. Plain shots
+# settle immediately; 30 frames keeps t small but past startup.
+WARM_FADE=90
+WARM_PLAIN=30
 
 # Format categories use public asset names, not output filenames, so they flow
 # through the same want()/parallel dispatch as explicitly named assets. Put
@@ -114,6 +131,8 @@ Options:
 Environment:
   BIN=<path>         gl-repl binary (default: build/release/gl-repl).
   OUT=<path>         output directory (default: docs/images).
+  WARM=<frames>      warm-up frame override for captures that don't set their
+                     own (see the WARM_* block in the script).
 
 Examples:
   scripts/docs-assets.sh --gifs
@@ -261,10 +280,12 @@ write_png() {
         -define png:exclude-chunk=time "$out"
 }
 
-# still <out.png> <frames> <aa> <args...> — keep the LAST frame.
+# still <out.png> <aa> <args...> — keep the LAST frame. WARM maps directly
+# to FREEGLUT_CAPTURE_FRAMES: the still is the final warm-up frame (default
+# WARM_PLAIN).
 still() {
-    local out=$1 frames=$2 aa=$3; shift 3
-    render "$frames" "$aa" "$@"
+    local out=$1 aa=$2; shift 2
+    render "${WARM:-$WARM_PLAIN}" "$aa" "$@"
     local last
     last="$(ls "$FRDIR"/f-*.ppm | tail -1)"
     write_png "$last" "$out"
@@ -272,13 +293,14 @@ still() {
     echo "docs-assets: wrote $out"
 }
 
-# one_shot_still <out.png> <warmup-frames> <args...> — run at the normal
-# interactive 60 Hz cadence for the requested warmup, then ask freeglut for
-# one SIGUSR1 snapshot. This is for screenshots whose contents measure
-# wall-clock frame cadence: record mode would read back and write every warmup
-# frame, polluting the measurement.
+# one_shot_still <out.png> <args...> — run at the normal interactive 60 Hz
+# cadence for WARM frames (default WARM_PLAIN), then ask freeglut for one
+# SIGUSR1 snapshot. This is for screenshots whose contents measure wall-clock
+# frame cadence: record mode would read back and write every warm-up frame,
+# polluting the measurement.
 one_shot_still() {
-    local out=$1 warmup_frames=$2; shift 2
+    local out=$1; shift
+    local warmup_frames=${WARM:-$WARM_PLAIN}
     local warmup_seconds
     warmup_seconds="$(awk -v frames="$warmup_frames" \
         'BEGIN { printf "%.6f", frames / 60.0 }')"
@@ -329,7 +351,8 @@ one_shot_still() {
 # them (the camera-ease warmup, see WARM_EXAMPLE), so the clip starts settled while
 # keeping the exact same frames/step at the same fps — identical length, just
 # past the settle. Staged scenes have no load ease, and replay's draw-by-draw
-# assembly IS the content, so a clip with no --example keeps frame 0.
+# assembly IS the content, so a clip with no --example keeps frame 0. An
+# explicit WARM at the call site overrides both defaults.
 gif() {
     local out=$1 frames=$2 step=$3 fps=$4 width=$5; shift 5
     local skip=${WARM:-0} a
@@ -345,6 +368,7 @@ gif() {
         fi
         n=$((n + 1))
     done
+    rm -rf "$FRDIR"  # subsampled into sub/; drop the full capture (still parity)
     ffmpeg -y -framerate "$fps" -i "$WORK/sub/g-%04d.ppm" \
         -vf "scale=$width:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=bayer" \
         -loop 0 "$WORK/raw.gif" >/dev/null 2>&1
@@ -874,56 +898,53 @@ EX_RING="Animated ring (for + t)"
 
 # ---- core assets --------------------------------------------------------
 
-# Theme cross-fades settle in ~80 frames; 90 leaves margin. Plain shots
-# settle immediately; 30 frames keeps t small but past startup.
-FADE_FRAMES=90
-PLAIN_FRAMES=30
-
 if want hero; then
-    still "$OUT/hero.png" $PLAIN_FRAMES 16 --example "$EX_HERO" --time 3
+    still "$OUT/hero.png" 16 --example "$EX_HERO" --time 3
 fi
 
 if want first-triangle; then
-    still "$OUT/first-triangle.png" $PLAIN_FRAMES 16 "$(stage_triangle)"
+    still "$OUT/first-triangle.png" 16 "$(stage_triangle)"
 fi
 
 if want vertex-overlays; then
-    still "$OUT/vertex-overlays.png" $PLAIN_FRAMES 16 "$(stage_overlays)"
+    still "$OUT/vertex-overlays.png" 16 "$(stage_overlays)"
 fi
 
 if want single-polygon-scope; then
     ( export GLR_EDIT_LINE=9
-      still "$OUT/single-polygon-scope.png" $PLAIN_FRAMES 16 "$(stage_single_polygon)" )
+      still "$OUT/single-polygon-scope.png" 16 "$(stage_single_polygon)" )
 fi
 
 if want wireframe-hidden-line; then
-    still "$WORK/wireframe.png" $PLAIN_FRAMES 16 "$(stage_wireframe)"
-    still "$WORK/hidden-line.png" $PLAIN_FRAMES 16 "$(stage_hidden_line)"
+    still "$WORK/wireframe.png" 16 "$(stage_wireframe)"
+    still "$WORK/hidden-line.png" 16 "$(stage_hidden_line)"
     montage1x2 "$WORK/wf-hl.png" "$WORK/wireframe.png" "$WORK/hidden-line.png"
     write_png "$WORK/wf-hl.png" "$OUT/wireframe-hidden-line.png" -resize "$W"
     echo "docs-assets: wrote $OUT/wireframe-hidden-line.png"
 fi
 
 if want winding-view; then
-    still "$OUT/winding-view.png" $PLAIN_FRAMES 16 "$(stage_winding)"
+    still "$OUT/winding-view.png" 16 "$(stage_winding)"
 fi
 
-# 200 frames: past the ~186-frame splash fade, so the wordmark doesn't
+# WARM=200: past the ~186-frame splash fade, so the wordmark doesn't
 # occlude the variable panel this shot is naming.
 if want window-tour; then
-    still "$OUT/window-tour.png" 200 16 "$(stage_window_tour_dir)"
+    ( WARM=200
+      still "$OUT/window-tour.png" 16 "$(stage_window_tour_dir)" )
 fi
 
 if want light-theme-studio; then
-    still "$OUT/light-theme-studio.png" $PLAIN_FRAMES 16 "$(stage_lights)"
+    still "$OUT/light-theme-studio.png" 16 "$(stage_lights)"
 fi
 
 if want grid-themes; then
     themes=(SKETCH RADAR PLANES OCEAN)
     files=()
     for theme in "${themes[@]}"; do
-        still "$WORK/grid_$theme.png" $FADE_FRAMES 16 \
-            "$(stage_grid_theme GRID_THEME_$theme)"
+        ( WARM=$WARM_FADE
+          still "$WORK/grid_$theme.png" 16 \
+              "$(stage_grid_theme GRID_THEME_$theme)" )
         files+=("$WORK/grid_$theme.png")
     done
     montage2x2 "$WORK/grid-m.png" "${files[@]}"
@@ -946,8 +967,9 @@ if want backdrops; then
         else
             cam=""
         fi
-        still "$WORK/bd_$name.png" $FADE_FRAMES 16 \
-            "$(stage_backdrop RENDER3D_BACKDROP_$name "$cam")"
+        ( WARM=$WARM_FADE
+          still "$WORK/bd_$name.png" 16 \
+              "$(stage_backdrop RENDER3D_BACKDROP_$name "$cam")" )
         files+=("$WORK/bd_$name.png")
     done
     montage2x2 "$WORK/bd-m.png" "${files[@]}"
@@ -956,7 +978,8 @@ if want backdrops; then
 fi
 
 if want axes-compass; then
-    still "$OUT/axes-compass.png" $FADE_FRAMES 16 "$(stage_axes)"
+    ( WARM=$WARM_FADE
+      still "$OUT/axes-compass.png" 16 "$(stage_axes)" )
 fi
 
 if want view-mode-2d; then
@@ -975,23 +998,23 @@ if want view-mode-2d; then
 fi
 
 if want labels-orrery; then
-    still "$OUT/labels-orrery.png" $PLAIN_FRAMES 16 --example "$EX_ORRERY" --time 4
+    still "$OUT/labels-orrery.png" 16 --example "$EX_ORRERY" --time 4
 fi
 
 if want glu-tess; then
-    still "$OUT/glu-tess.png" $PLAIN_FRAMES 16 --example "$EX_GLU"
+    still "$OUT/glu-tess.png" 16 --example "$EX_GLU"
 fi
 
 if want glow-sprites; then
-    still "$OUT/glow-sprites.png" $PLAIN_FRAMES 16 --example "$EX_GLOW" --time 2
+    still "$OUT/glow-sprites.png" 16 --example "$EX_GLOW" --time 2
 fi
 
 if want transform-stress; then
-    still "$OUT/transform-stress.png" $PLAIN_FRAMES 16 --example "$EX_XFORM" --time 1
+    still "$OUT/transform-stress.png" 16 --example "$EX_XFORM" --time 1
 fi
 
 if want variable-panel || want tune-badges; then
-    still "$WORK/variable-panel.png" $PLAIN_FRAMES 16 "$(stage_tune)"
+    still "$WORK/variable-panel.png" 16 "$(stage_tune)"
     if want variable-panel; then
         cp "$WORK/variable-panel.png" "$OUT/variable-panel.png"
         echo "docs-assets: wrote $OUT/variable-panel.png"
@@ -1005,15 +1028,18 @@ fi
 
 if want motion-blur; then
     # The blur itself is the scene's @cfg accum effect; no extra AA passes.
-    # The status bar's "Blur 16x" indicator is part of the shot.
-    still "$OUT/motion-blur.png" 12 0 "$(stage_blur)"
+    # The status bar's "Blur 16x" indicator is part of the shot. WARM=12
+    # captures just past startup, while t is small.
+    ( WARM=12
+      still "$OUT/motion-blur.png" 0 "$(stage_blur)" )
 fi
 
-# Subshells: a VAR=x prefix on a shell *function* call persists after the
-# call in bash, so export GLR_EDIT_LINE inside ( ) to keep it scoped.
+# Subshells: WARM and the exported GLR_* capture hooks are set inside ( ) so
+# they stay scoped to one capture — explicit, and safe even under shells
+# (POSIX mode) where a VAR=x prefix on a function call persists after it.
 if want xform-guide-still; then
     ( export GLR_EDIT_LINE=4
-      still "$OUT/xform-guide-still.png" $PLAIN_FRAMES 16 "$(stage_guide)" )
+      still "$OUT/xform-guide-still.png" 16 "$(stage_guide)" )
 fi
 
 # Mid-typing states: GLR_TYPE_KEYS feeds the partial line through the
@@ -1021,12 +1047,12 @@ fi
 # coordinate -> the 2-DOF graph-paper sheet; two -> the 1-DOF tick line.
 if want vertex-guide-plane; then
     ( export GLR_TYPE_KEYS='glVertex3f(1.2'
-      still "$OUT/vertex-guide-plane.png" $PLAIN_FRAMES 16 "$(stage_vertex_entry)" )
+      still "$OUT/vertex-guide-plane.png" 16 "$(stage_vertex_entry)" )
 fi
 
 if want vertex-guide-line; then
     ( export GLR_TYPE_KEYS='glVertex3f(1.2, 0.8'
-      still "$OUT/vertex-guide-line.png" $PLAIN_FRAMES 16 "$(stage_vertex_entry)" )
+      still "$OUT/vertex-guide-line.png" 16 "$(stage_vertex_entry)" )
 fi
 
 # Autocomplete: the popup + inline ghost exist only mid-typing, so
@@ -1034,14 +1060,14 @@ fi
 # full window keeps the popup in context beside the scene.
 if want autocomplete; then
     ( export GLR_TYPE_KEYS='glEnable(GL_LI'
-      still "$OUT/autocomplete.png" $PLAIN_FRAMES 16 "$(stage_autocomplete)" )
+      still "$OUT/autocomplete.png" 16 "$(stage_autocomplete)" )
 fi
 
 # Color picker: opened via the GLR_OPEN_COLOR_PICKER capture hook (the
 # picker otherwise needs a swatch click). Line 6 = the glColor3f.
 if want color-picker; then
     ( export GLR_EDIT_LINE=6 GLR_OPEN_COLOR_PICKER=6
-      still "$OUT/color-picker.png" $PLAIN_FRAMES 16 "$(stage_color_picker)" )
+      still "$OUT/color-picker.png" 16 "$(stage_color_picker)" )
 fi
 
 # Numeric stepper: parking the cursor on the decl line loads it with the
@@ -1050,7 +1076,7 @@ fi
 # the widget is 16px, a full-window shot would reduce it to a speck.
 if want numeric-stepper; then
     ( export GLR_EDIT_LINE=0
-      still "$WORK/numeric-stepper-full.png" $PLAIN_FRAMES 16 "$(stage_stepper)" )
+      still "$WORK/numeric-stepper-full.png" 16 "$(stage_stepper)" )
     write_png "$WORK/numeric-stepper-full.png" "$OUT/numeric-stepper.png" \
         -crop 1200x110+0+28 +repage
     echo "docs-assets: wrote $OUT/numeric-stepper.png"
@@ -1061,7 +1087,7 @@ fi
 # floating comparison table in view.
 if want gl-state-inspector; then
     ( export GLR_EDIT_LINE=8 GLR_OPEN_GL_STATE=8
-      still "$OUT/gl-state-inspector.png" $PLAIN_FRAMES 16 \
+      still "$OUT/gl-state-inspector.png" 16 \
           "$(stage_gl_state_inspector)" )
 fi
 
@@ -1071,15 +1097,13 @@ fi
 # Capturing every warmup frame would make the FPS plot measure PPM
 # readback/write throughput instead.
 if want profile-panels; then
-    (
-        WARM=720
-        one_shot_still "$OUT/profile-panels.png" $WARM "$(stage_profile)"
-    )
+    ( WARM=720
+      one_shot_still "$OUT/profile-panels.png" "$(stage_profile)" )
 fi
 
 if want clip-plane; then
     ( export GLR_EDIT_LINE=4
-      still "$OUT/clip-plane.png" $PLAIN_FRAMES 16 "$(stage_clip_plane)" )
+      still "$OUT/clip-plane.png" 16 "$(stage_clip_plane)" )
 fi
 
 if want clip-plane-sweep; then
@@ -1117,7 +1141,7 @@ if want sc-snowfall; then
 fi
 if want sc-parametric-torus; then
     # Static geometry (nested for, no t) — a still, not a frozen GIF.
-    still "$SHOW/parametric-torus.png" $PLAIN_FRAMES 16 \
+    still "$SHOW/parametric-torus.png" 16 \
         --example "Parametric torus (nested for)"
 fi
 if want sc-recursive-tree; then
@@ -1133,18 +1157,16 @@ if want sc-ripple-ring; then
     gif "$SHOW/ripple-ring.gif" 200 2 20 560 --example "Traveling ripple ring"
 fi
 if want sc-bezier; then
-    still "$SHOW/bezier.png" $PLAIN_FRAMES 16 --example "Bezier curve with guides"
+    still "$SHOW/bezier.png" 16 --example "Bezier curve with guides"
 fi
 if want sc-bubble-sort; then
-    (
-        WARM=20
-        gif "$SHOW/bubble-sort.gif" 160 2 20 560 \
-            --example "Bubble sort (scratch arrays)"
-    )
+    ( WARM=20
+      gif "$SHOW/bubble-sort.gif" 160 2 20 560 \
+          --example "Bubble sort (scratch arrays)" )
 fi
 
 if want sc-orbit-plot; then
-    still "$SHOW/orbit-plot.png" $PLAIN_FRAMES 16 \
+    still "$SHOW/orbit-plot.png" 16 \
         --example "Annotated orbit plot (labels)"
 fi
 
@@ -1159,7 +1181,7 @@ if want sc-ringed-planet; then
     gif "$SHOW/ringed-planet.gif" 200 2 20 560 --example "Ringed planet (nebula skies)"
 fi
 if want sc-lit-cube; then
-    still "$SHOW/lit-cube.png" $PLAIN_FRAMES 16 --example "gl-repl logo"
+    still "$SHOW/lit-cube.png" 16 --example "gl-repl logo"
 fi
 
 # Particles & effects.
@@ -1172,10 +1194,10 @@ fi
 
 # Functions, branching & recursion.
 if want sc-function-demo; then
-    still "$SHOW/function-demo.png" $PLAIN_FRAMES 16 --example "Function demo (named func)"
+    still "$SHOW/function-demo.png" 16 --example "Function demo (named func)"
 fi
 if want sc-function-polygons; then
-    still "$SHOW/function-polygons.png" $PLAIN_FRAMES 16 \
+    still "$SHOW/function-polygons.png" 16 \
         --example "Function polygons (args + for)"
 fi
 if want sc-conditional-colors; then
@@ -1208,12 +1230,12 @@ if want sc-feature-time; then
 fi
 if want sc-feature-ply; then
     # Stand-in: the parametric torus is the canonical --export-ply scene.
-    still "$SHOW/feature-ply.png" $PLAIN_FRAMES 16 \
+    still "$SHOW/feature-ply.png" 16 \
         --example "Parametric torus (nested for)"
 fi
 if want sc-feature-export-c; then
     # Stand-in: any full-UI shot shows "it's all code in the panel".
-    still "$SHOW/feature-export-c.png" $PLAIN_FRAMES 16 --example "Function demo (named func)"
+    still "$SHOW/feature-export-c.png" 16 --example "Function demo (named func)"
 fi
 
 echo "docs-assets: done."
