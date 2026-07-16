@@ -198,6 +198,22 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
                                       (code === "Slash" || kc === 191)))) {
                     return 47;
                 }
+                /* Ctrl+= / Ctrl+- (accum passes step) and their numpad twins:
+                 * dropped by the same "any modifier" rule. Native GLUT
+                 * delivers the plain ASCII punctuation with CTRL set in
+                 * glutGetModifiers, which is what the router's
+                 * glr_ctrl_router_handle_accum_samples_key matches. Returning
+                 * a key also makes onKeydown call preventDefault(), which
+                 * suppresses the browser's default Ctrl+=/- page zoom on
+                 * platforms where that binding exists. */
+                if (event['ctrlKey'] && !event['altKey'] && !event['metaKey']) {
+                    if (code === "Equal" || kc === 187)
+                        return event['shiftKey'] ? 43 /* '+' */ : 61 /* '=' */;
+                    if (code === "Minus" || kc === 189)
+                        return event['shiftKey'] ? 95 /* '_' */ : 45 /* '-' */;
+                    if (code === "NumpadAdd" || kc === 107) return 43;
+                    if (code === "NumpadSubtract" || kc === 109) return 45;
+                }
                 /* Ctrl+letter: stock getASCIIKey returns null on ANY modifier,
                  * so every Ctrl shortcut is dropped. freeglut delivers the
                  * control code (Ctrl+A=1 .. Ctrl+Z=26) on the keyboard callback
