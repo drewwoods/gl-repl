@@ -279,10 +279,6 @@ double prof_fps_current(void) {
          : 0.0;
 }
 
-double prof_fps_window_secs(int window) {
-    if (window < 0 || window >= PROF_FPS_WIN_COUNT) return 0.0;
-    return k_fps_window_secs[window];
-}
 
 int prof_fps_history(int window, float *out, int max_samples) {
     if (window < 0 || window >= PROF_FPS_WIN_COUNT || !out || max_samples <= 0)

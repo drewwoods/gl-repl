@@ -159,8 +159,6 @@ enum {
 /* Smoothed instantaneous FPS (1 / EMA(frame-dt)); 0 until two ticks. */
 double prof_fps_current(void);
 
-/* The window span in seconds for a PROF_FPS_WIN_* index (0 if invalid). */
-double prof_fps_window_secs(int window);
 
 /* Copy up to max_samples of a window's bucket history into out,
  * oldest -> newest. Returns the number of samples written. */

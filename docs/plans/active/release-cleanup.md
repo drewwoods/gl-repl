@@ -17,9 +17,8 @@ hoists, and optionally (D) complexity refactors; the Phase A scanner
 fixes and acceptance run are complete.
 
 - **A — Fix `scripts/code-smells.sh` signal quality.** ✅ DONE (A0–A5)
-- **B — Dead-code sweep.** IN PROGRESS — facade-symmetry retains
-  landed (intent comments + cppcheck suppressions, 2026-07-16);
-  delete candidates below not yet removed.
+- **B — Dead-code sweep.** ✅ DONE — facade-symmetry retains annotated,
+  non-facade candidate functions deleted (2026-07-16).
 - **C — Duplication hoists (CPD).** NOT STARTED
 - **D — Complexity refactors (opportunistic).** NOT STARTED
 
@@ -92,14 +91,14 @@ uncalled. Each now carries an intent comment plus a
 | `repl_state_flat_program_reset` | `src/repl/state.c` | per-slice reset family |
 | `repl_state_import_export_reset` | `src/repl/state.c` | per-slice reset family |
 
-**Delete candidates (non-facade, alias-checked):**
+**Delete candidates (non-facade, alias-checked) — ✅ DELETED (2026-07-16):**
 
-| Function | Definition |
-|---|---|
-| `repl_expr_cache_bytes` | `src/repl/expr_program.c:168` |
-| `scene_snapshot_copy` | `src/repl/scene_snapshot.c:21` |
-| `repl_eval_if_condition` | `src/repl/text_helpers.c:593` (plain wrapper; `_captured` variant is the live one) |
-| `prof_fps_window_secs` | `src/support/cpuprof.c:282` |
+| Function | Definition | Status |
+|---|---|---|
+| `repl_expr_cache_bytes` | `src/repl/expr_program.c:168` | Deleted |
+| `scene_snapshot_copy` | `src/repl/scene_snapshot.c:21` | Deleted |
+| `repl_eval_if_condition` | `src/repl/text_helpers.c:593` (plain wrapper; `_captured` variant is the live one) | Deleted |
+| `prof_fps_window_secs` | `src/support/cpuprof.c:282` | Deleted |
 
 Removals must keep `check-duplicate-api-decls` and `make test-stubs`
 green.

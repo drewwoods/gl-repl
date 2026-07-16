@@ -589,10 +589,3 @@ float repl_eval_if_condition_captured(const char *src_text,
     ExprCtx ctx = { repl_cond, vars, num_vars, NULL, 0 };
     return repl_eval_expr(&ctx);
 }
-
-float repl_eval_if_condition(const char *src_text,
-                             const ExprVar *vars, int num_vars,
-                             float fallback) {
-    return repl_eval_if_condition_captured(src_text, vars, num_vars,
-                                           fallback, NULL);
-}
