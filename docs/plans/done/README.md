@@ -1,8 +1,9 @@
 # Landed Plan Archive
 
 This directory is the canonical archive for plans whose contracts
-shipped. Files are preserved verbatim — they double as design history
-and the audit trail for the hard guards that lock the contracts in
+shipped. Files retain their substantive design content, with a concise status
+header when archival needs to record the as-built result; they double as design
+history and the audit trail for the hard guards that lock the contracts in
 (`make check-state-ownership`).
 
 Non-plan files also present: `ARCHITECTURE.md` (architecture reference),
@@ -99,9 +100,11 @@ historical context and are not in the table below.
 | `headless-gif-generator.md` | 2026-06-01 | OSMesa headless frame capture (`FREEGLUT_CAPTURE_FRAMES`) + `scripts/record-gif.sh` → animated GIF/MP4 via ffmpeg. |
 | `vendor-freeglut.md` | 2026-06-02 | Vendor freeglut as in-tree static library (`third_party/freeglut/`), Cocoa backend, `scripts/vendor-freeglut.sh` re-pin, `THIRD_PARTY_LICENSES.md` acknowledgement. |
 | `remove-remaining-repl-mut-reads.md` | 2026-06-08 | Finalized REPL state-access pattern: targeted setters and `_writable()` accessors in `state_owners.h`; zeroed the `_mut()` read ratchet across all non-owner modules. |
+| `accum-motion-blur.md` | 2026-06-09 → 2026-07-03 | Accumulation effect/pass split with AA, time blur, and camera blur; per-sample REPL-state isolation, configuration, UI/docs, and coverage. |
 | `color-picker-palettes.md` | Color picker — Basic / Full / Harmony palettes |
 | `rename-scene-to-render3d.md` | 2026-06-24 | Renamed the 3D scene-renderer module `src/scene/` → `src/render3d/` (`scene_*`/`Scene*`/`SCENE_*` → `render3d_*`/`Render3d*`/`RENDER3D_*`, `render3d_draw_scene`, `Render3dState`, `render3d_demo`, renamed guards/tests, `PROF_RENDER3D_*`) to end the collision with the user-scene concept. Behavior-neutral; user-scene tokens untouched. Includes review. |
 | `audio-menu.md` | 2026-07-06 | Add a top-level Audio menu grouping discovered tracks by source, highlighting the playing track, displaying track duration, and integrating Play/Pause, Next/Previous controls, and loop modes. |
+| `tutorial-setup-scaffold.md` | 2026-07-08 | Locked `TutorialEntry.setup` scaffolds with example-header support, setup-label anchors, catalog validation, and Color Interpolation as the composition example. |
 
-Plans not in this directory are active, not-started, not-landed, or
+Plans not in this directory are active, partial, not-started, not-landed, or
 external; see the sibling subdirectories.

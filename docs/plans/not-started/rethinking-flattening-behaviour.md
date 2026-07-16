@@ -2,7 +2,7 @@
 
 > **Update:** Phase A and Phase A.5 here are superseded by the measured,
 > dependency-aware non-VM plan in
-> [`../in-review/flatten-performance-without-vm.md`](../in-review/flatten-performance-without-vm.md).
+> [`../partial/flatten-performance-without-vm.md`](../partial/flatten-performance-without-vm.md).
 > In particular, the one-bit classifier below would conservatively reject the
 > Swaying Grass workload, and measurements show expression/assignment parsing
 > dominates structural traversal. Phase B remains the separate long-range VM
