@@ -1900,6 +1900,10 @@ static void test_help_keys_tab_uses_keymap_labels(void) {
                              KM_KEY(GLR_AUDIO_PREV), KM_MODS(GLR_AUDIO_PREV), 1);
     ASSERT_TRUE("help Keys tab renders Audio Previous shortcut from keymap",
                 help_tab_contains_binding("Keys", shortcut, "Previous track"));
+
+    ASSERT_TRUE("help Keys tab mentions OpenGL state inspector",
+                help_tab_contains_binding("Keys", "Right-click blank row",
+                                          "current vs default OpenGL state"));
 }
 
 static void test_help_commands_tab_lists_if_branches(void) {

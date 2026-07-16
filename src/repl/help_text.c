@@ -375,6 +375,7 @@ const ReplHelpContent *repl_help_text_build(void) {
     nk = key_emit(nk, "  Click + drag (text)  \tSelect characters within the active input row");
     nk = key_emit(nk, "  Click + drag (gutter)\tSelect lines (line-range)");
     nk = key_emit(nk, "  Double-click         \tSelect the word under the cursor");
+    nk = key_emit(nk, "  Right-click blank row\tInspect current vs default OpenGL state");
     nk = key_emit(nk, "  Caret on ( ) or { }  \tHighlights the matching bracket");
     nk = key_emit(nk, "  Caret inside ( )      \tHighlights text inside the enclosing parentheses");
     nk = key_emit(nk, "  PgUp / PgDn         \tScroll active panel/overlay");

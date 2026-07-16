@@ -86,7 +86,7 @@ PNG_ASSETS=(
     labels-orrery glu-tess glow-sprites transform-stress variable-panel
     tune-badges motion-blur xform-guide-still single-polygon-scope
     vertex-guide-plane vertex-guide-line clip-plane autocomplete color-picker
-    numeric-stepper profile-panels
+    numeric-stepper gl-state-inspector profile-panels
     sc-parametric-torus sc-bezier sc-orbit-plot sc-lit-cube sc-function-demo
     sc-function-polygons sc-feature-ply sc-feature-export-c
 )
@@ -789,6 +789,32 @@ glutSolidSphere(radius, 32, 16);
 EOF
 }
 
+# OpenGL state inspector: the blank row after the authored state changes is
+# line 8 after @cfg headers/snippet markers are stripped and the authored
+# light position is lifted into generated display setup. The GLR_OPEN_GL_STATE
+# capture hook opens the same popup a right-click would.
+stage_gl_state_inspector() { stage gl_state_inspector <<'EOF'
+/* @cfg variable_panel = 0 */
+/* @cfg light_indicators = 0 */
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
+/* @cfg grid = GRID_THEME_XZRULER */
+// Snippet start
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_BLEND);
+glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+glColor4f(0.15, 0.55, 1, 0.8);
+glTranslatef(0.25, 0, -0.4);
+glRotatef(22.5, 0, 1, 0);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glLightfv(GL_LIGHT0, GL_POSITION, (GLfloat[]){2, 3, 4, 1});
+
+glutSolidTeapot(0.8);
+// Snippet end
+EOF
+}
+
 # Profile panels: Histogram mode shows the section listing (CPU/GPU/Max
 # columns), the log-log section histogram, and the FPS plot at once. Use the
 # real animated-wave example as the workload, with asset-specific presentation
@@ -1028,6 +1054,15 @@ if want numeric-stepper; then
     write_png "$WORK/numeric-stepper-full.png" "$OUT/numeric-stepper.png" \
         -crop 1200x110+0+28 +repage
     echo "docs-assets: wrote $OUT/numeric-stepper.png"
+fi
+
+# Open the state inspector on the committed blank row following the staged
+# state changes. The full-window shot keeps both the source boundary and the
+# floating comparison table in view.
+if want gl-state-inspector; then
+    ( export GLR_EDIT_LINE=8 GLR_OPEN_GL_STATE=8
+      still "$OUT/gl-state-inspector.png" $PLAIN_FRAMES 16 \
+          "$(stage_gl_state_inspector)" )
 fi
 
 # Profile panels reflect live performance, so generate this on an otherwise
