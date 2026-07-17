@@ -29,6 +29,7 @@ glShadeModel(GL_SMOOTH);
 glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, 1);
 
 // --- Material Colors ----------------
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_COLOR_MATERIAL);
 glColorMaterial(GL_BACK, GL_AMBIENT_AND_DIFFUSE); // dark inner core
 glColor3f(0.05, 0.06, 0.08);

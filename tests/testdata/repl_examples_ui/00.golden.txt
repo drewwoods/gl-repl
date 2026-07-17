@@ -84,12 +84,8 @@ static int   g_rotating = 0;
 
 --- display_header ---
 void display(void) {
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glLoadIdentity();
   glPushAttrib(GL_ALL_ATTRIB_BITS);
---- render_state ---
-  glEnable(GL_MULTISAMPLE);
-  glDisable(GL_LINE_SMOOTH);
 --- lights_pre_camera ---
   // Eye-space light positions, set before the camera transform.
   glLightfv(GL_LIGHT0, GL_POSITION, repl_glfloat4(0, 0, -1, 1));
@@ -100,6 +96,9 @@ void display(void) {
   glRotatef(45.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
+--- render_state ---
+  glEnable(GL_MULTISAMPLE);
+  glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
 
@@ -126,6 +125,7 @@ void display(void) {
   // Both sides of each face are visible through the open cube, so light and
   // color them independently.
   glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glEnable(GL_COLOR_MATERIAL);
   // Give every exterior face the same near-white material color.
   glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE);

@@ -313,9 +313,6 @@ static void emit_export_display_begin(FILE *f) {
     fprintf(f, "\n/* Draw one frame. */\n");
     for (int line_idx = 0; g_display_header[line_idx]; line_idx++)
         fprintf(f, "%s\n", g_display_header[line_idx]);
-    /* Emit render state configuration lines (lighting, depth, etc). */
-    for (int state_line_idx = 0; state_line_idx < RENDER_STATE_LINE_COUNT; state_line_idx++)
-        export_write_c89_line(f, g_render_state_lines[state_line_idx]);
     /* Eye-space positions are submitted with the identity modelview, once per
      * frame, before the camera transform is applied. */
     {
@@ -337,8 +334,8 @@ static void emit_export_display_begin(FILE *f) {
      * into init() — see emit_export_init_section_to_file.
      *
      * Lights are emitted before g_header_post to match the panel's
-     * rendering order; both consumers walk: display_header →
-     * render_state → cam → lights → header_post → user code. */
+     * rendering order; both consumers walk: display_header → cam →
+     * lights → header_post → render_state → user code. */
     {
         int n_pos = repl_export_lights_display_line_count();
         for (int pos_idx = 0; pos_idx < n_pos; pos_idx++) {
@@ -350,6 +347,10 @@ static void emit_export_display_begin(FILE *f) {
     /* g_header_post: additional setup after the dynamic state lines. */
     for (int line_idx = 0; g_header_post[line_idx]; line_idx++)
         export_write_c89_line(f, g_header_post[line_idx]);
+    /* Emit render state configuration lines (lighting, depth, etc) last, so
+     * they sit directly above the user's own commands. */
+    for (int state_line_idx = 0; state_line_idx < RENDER_STATE_LINE_COUNT; state_line_idx++)
+        export_write_c89_line(f, g_render_state_lines[state_line_idx]);
 }
 
 static void emit_export_display_geometry(FILE *f,

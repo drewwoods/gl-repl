@@ -95,7 +95,7 @@ static void test_new_scene_creates_active_tab(void) {
                     UI_SCENE_TAB_USER);
     }
     ASSERT_INT_EQ("New Scene seeds display baseline",
-                  repl_state_document_count(), 5);
+                  repl_state_document_count(), 6);
     ASSERT_INT_EQ("New Scene clears the active example",
                   repl_state_scenes().active_example_idx, -1);
 }
