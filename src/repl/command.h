@@ -88,6 +88,7 @@ typedef enum {
     CMD_FOG_I,
     CMD_FOG_F,
     CMD_FOG_FV,
+    CMD_PUSH_ATTRIB, CMD_POP_ATTRIB,
     CMD_TYPE_COUNT
 } CmdType;
 

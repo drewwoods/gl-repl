@@ -290,6 +290,13 @@ const ReplEnumEntry *repl_fog_f_pname_entries(void);
 const ReplEnumEntry *repl_fog_color_pname_entries(void);
 const ReplEnumEntry *repl_fog_mode_entries(void);
 
+/* The 9 GL_*_BIT attribute groups glPushAttrib()/glPopAttrib() support, in
+ * canonical order (ascending GL value). Shared source of truth for the
+ * ENUM_BITFIELD parse/emit, the mapping module (attrib_bits.c), and the
+ * editor's per-bit cursor highlighting so they can't drift on which bit is
+ * which. NULL-terminated. */
+const ReplEnumEntry *repl_attrib_bit_entries(void);
+
 /* Convert a GL_TRIANGLES, GL_QUADS, etc. constant to its string name (e.g.,
  * GL_TRIANGLES → "GL_TRIANGLES"). Used for display and diagnostic output. */
 const char *repl_begin_mode_name(GLenum mode);

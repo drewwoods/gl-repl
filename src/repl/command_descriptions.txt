@@ -196,6 +196,14 @@ Sets one scalar fog parameter: GL_FOG_DENSITY steepens the GL_EXP / GL_EXP2 fall
 title = glFogfv
 Sets the fog color that distant geometry fades toward. Matching it to the glClearColor background makes geometry dissolve seamlessly into the distance.
 
+[command CMD_PUSH_ATTRIB]
+title = glPushAttrib
+Saves the state groups named in the mask onto the attribute stack. OR several GL_*_BIT tokens with | to save more than one group (GL_ALL_ATTRIB_BITS is not supported). Restore the saved state later with a matching glPopAttrib, so a local group of state changes does not leak into the rest of the scene. Parking the cursor on the line highlights the earlier setter lines whose values it saves.
+
+[command CMD_POP_ATTRIB]
+title = glPopAttrib
+Restores the state most recently saved by glPushAttrib, discarding the changes made since. It must be balanced with an earlier glPushAttrib. Parking the cursor on the line highlights the setter lines between the push and this pop whose effects it reverts.
+
 [capability GL_BLEND]
 title = GL_BLEND
 Controls color blending between new fragments and the existing color buffer. glBlendFunc selects the source and destination factors used while this capability is enabled.

@@ -40,6 +40,26 @@
 
 #define TESS_VERT_BUF_SIZE 256
 
+/* Depth of the real glPushAttrib/glPopAttrib GL stack the executor drives.
+ * Virtual (user-source) push depth is unbounded; the real GL stack is only
+ * pushed while the virtual level is within this cap, so the level being
+ * popped is real iff virtual <= CAP (LIFO). GL guarantees an attribute stack
+ * at least 16 deep, and the app already brackets the whole user program in
+ * glPushAttrib(GL_ALL_ATTRIB_BITS); the worst live nesting under this cap
+ * stays comfortably below 16. See add-push-attrib.md. */
+#define REPL_ATTRIB_STACK_CAP 8
+
+#include "repl/state_views.h"  /* ReplRenderState (attrib bookkeeping snapshot) */
+
+/* One saved attribute-stack frame: the push mask plus the REPL render-state
+ * bookkeeping mirror (light-enable mask + clear color) captured at push time.
+ * glPopAttrib restores GL's own state; this mirror is restored alongside so
+ * the light-indicator overlay and next-frame clear color track user pops. */
+typedef struct {
+    unsigned        mask;
+    ReplRenderState render;
+} ReplAttribSave;
+
 /* Reference distance (world units) at which a point renders at its literal
  * glPointSize: point size scales as REF_DIST/d, a constant on-screen
  * footprint on the model. The single source of truth for both point-size
@@ -112,6 +132,14 @@ typedef struct {
      * special-cased ancestor of this hook.) */
     int           (*state_filter)(CmdType type, const GLCmd *cmd, void *ud);
     void           *state_filter_ud;
+    /* When set, CMD_PUSH_ATTRIB / CMD_POP_ATTRIB still scope the REPL
+     * bookkeeping mirror (light-enable mask + clear color) and maintain the
+     * virtual/real attrib depth, but issue NO glPushAttrib/glPopAttrib. The
+     * hidden-line wireframe pass owns its own depth/color/polygon GL state and
+     * must not have the user program save/restore it out from under the pass;
+     * it sets this so push/pop bookkeeping stays coherent without touching the
+     * pass's live GL state. Default 0 = normal GL semantics. */
+    int             suppress_attrib_gl;
     char           *status_out;
     int             status_out_sz;
 } ReplExecutionOptions;
@@ -132,6 +160,12 @@ typedef struct ReplExecCursor {
     float                begin_mv[16];
     int                  tess_depth;
     int                  matrix_depth;
+    /* glPushAttrib/glPopAttrib scoping. attrib_depth is the virtual (user-
+     * source) push depth, unbounded; the real GL stack is only pushed while
+     * attrib_depth <= REPL_ATTRIB_STACK_CAP, so attrib_save[] holds the frames
+     * within the cap (LIFO). */
+    int                  attrib_depth;
+    ReplAttribSave       attrib_save[REPL_ATTRIB_STACK_CAP];
     GLdouble             tess_current_normal[3];
     GLdouble             tess_current_color[4];
     int                  goto_count;

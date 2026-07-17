@@ -217,6 +217,7 @@ static int is_known_incomplete_func_name(const char *func) {
         "glPointParameterfv",
         "glPushMatrix",
         "glPopMatrix",
+        "glPopAttrib",
         "glLoadIdentity",
         "gluBegin",
         "gluEnd",
@@ -1461,12 +1462,14 @@ static void write_text(char *out, int sz, const char *fmt, ...) {
     }
 }
 
-/* No-arg matrix-stack commands: glPushMatrix / glPopMatrix / glLoadIdentity.
- * Returns 1 if `func` matched (cmd + text populated), 0 otherwise.
- * glPushMatrix opens an indent scope like glBegin, so its body lands one
- * level deeper (handled by the precomputed source-scope `indent`);
- * glPopMatrix aligns with its matching glPushMatrix — one matrix level
- * shallower — mirroring how glEnd lines up with glBegin. */
+/* No-arg matrix-stack commands: glPushMatrix / glPopMatrix / glLoadIdentity,
+ * plus glPopAttrib (the no-arg glPushAttrib partner). Returns 1 if `func`
+ * matched (cmd + text populated), 0 otherwise. glPushMatrix opens an indent
+ * scope like glBegin, so its body lands one level deeper (handled by the
+ * precomputed source-scope `indent`); glPopMatrix aligns with its matching
+ * glPushMatrix — one matrix level shallower — mirroring how glEnd lines up
+ * with glBegin. glPopAttrib takes the plain `indent` (glPushAttrib opens no
+ * indent scope). */
 static int parse_matrix_stack_cmd(const char *func, GLCmd *cmd,
                                   char *text_out, int text_sz,
                                   const char *indent,
@@ -1491,6 +1494,16 @@ static int parse_matrix_stack_cmd(const char *func, GLCmd *cmd,
         cmd->type = CMD_LOAD_IDENTITY;
         cmd->valid = 1;
         write_text(text_out, text_sz, "%sglLoadIdentity();", indent);
+        return 1;
+    }
+    /* glPopAttrib() rides here (no-arg, plain command indent) rather than
+     * next to glEnd so parse_command stays under its size baseline. Unlike
+     * glPopMatrix it takes no close-scope indent: glPushAttrib opens no
+     * indent scope by design (see add-push-attrib.md). */
+    if (strcmp(func, "glPopAttrib") == 0) {
+        cmd->type = CMD_POP_ATTRIB;
+        cmd->valid = 1;
+        write_text(text_out, text_sz, "%sglPopAttrib();", indent);
         return 1;
     }
     return 0;

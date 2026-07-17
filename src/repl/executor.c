@@ -301,6 +301,20 @@ void repl_apply_state_bookkeeping(const GLCmd *cmd) {
     }
 }
 
+/* Restore the REPL render-state bookkeeping mirror a matching glPushAttrib
+ * saved, gated on that push's mask. The light-enable mask is GL_ENABLE_BIT
+ * state (glEnable/Disable of GL_LIGHTn) and also travels with GL_LIGHTING_BIT;
+ * the clear color is GL_COLOR_BUFFER_BIT state. Groups the mask did not save
+ * are left exactly as the program set them, matching glPopAttrib. */
+static void repl_exec_restore_attrib_bookkeeping(const ReplAttribSave *save) {
+    if (!save)
+        return;
+    if (save->mask & (GL_ENABLE_BIT | GL_LIGHTING_BIT))
+        repl_state_render_set_light_enabled_mask(save->render.light_enabled_mask);
+    if (save->mask & GL_COLOR_BUFFER_BIT)
+        repl_state_render_set_clear_color(save->render.clear_color);
+}
+
 int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
     if (!cmd)
         return 0;
@@ -875,6 +889,38 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
      * compile-time warning here. Adding a new entry to
      * repl_apply_state_cmd still only requires one new case below;
      * the cluster delegates uniformly. */
+    /* Attribute stack: scoped like the matrix stack (they carry cursor
+     * depth), but dispatched here rather than via the transform early-out
+     * because they are not transforms. The real GL stack is only driven while
+     * the virtual depth is within REPL_ATTRIB_STACK_CAP; an orphan pop is a
+     * silent no-op, which also protects the controller's outer
+     * glPushAttrib(GL_ALL_ATTRIB_BITS) bracket from being over-popped by an
+     * unbalanced user program. */
+    case CMD_PUSH_ATTRIB: {
+        unsigned mask = (unsigned)cmd->args[0];
+        cursor->attrib_depth++;
+        if (cursor->attrib_depth <= REPL_ATTRIB_STACK_CAP) {
+            ReplAttribSave *save =
+                &cursor->attrib_save[cursor->attrib_depth - 1];
+            save->mask = mask;
+            save->render = repl_state_render();
+            if (!cursor->options.suppress_attrib_gl)
+                glPushAttrib((GLbitfield)mask);
+        }
+        break;
+    }
+    case CMD_POP_ATTRIB:
+        if (cursor->attrib_depth > 0) {
+            if (cursor->attrib_depth <= REPL_ATTRIB_STACK_CAP) {
+                ReplAttribSave *save =
+                    &cursor->attrib_save[cursor->attrib_depth - 1];
+                if (!cursor->options.suppress_attrib_gl)
+                    glPopAttrib();
+                repl_exec_restore_attrib_bookkeeping(save);
+            }
+            cursor->attrib_depth--;
+        }
+        break;
     case CMD_ENABLE:
     case CMD_DISABLE:
     case CMD_SHADE_MODEL:
@@ -955,6 +1001,20 @@ void repl_exec_cursor_end(ReplExecCursor *cursor) {
     }
     cursor->tess_depth = 0;
     repl_executor_unwind_tracked_transform_stack(&cursor->matrix_depth);
+    /* Unwind any unmatched glPushAttrib (LIFO): pop the real GL stack and
+     * restore the bookkeeping mirror for every frame within the cap. Virtual
+     * frames above the cap never pushed real GL state, so they only decrement.
+     * suppress_attrib_gl cursors restore the mirror but issue no glPopAttrib. */
+    while (cursor->attrib_depth > 0) {
+        if (cursor->attrib_depth <= REPL_ATTRIB_STACK_CAP) {
+            ReplAttribSave *save =
+                &cursor->attrib_save[cursor->attrib_depth - 1];
+            if (!cursor->options.suppress_attrib_gl)
+                glPopAttrib();
+            repl_exec_restore_attrib_bookkeeping(save);
+        }
+        cursor->attrib_depth--;
+    }
     cursor->pc = cursor->flat_cmd_count;
 }
 
