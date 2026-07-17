@@ -76,12 +76,12 @@ int main() {
 
         editor_completion_update();
         ASSERT_TRUE("ac_count > 0", g_ac_count > 0);
-        ASSERT_STR("first match", g_ac_insert_matches[0], "glVertex3f(");
-        ASSERT_STR("ghost text", g_ac_ghost, "tex3f(");
-        ASSERT_STR("hint text", g_ac_hint, "x, y, z)");
+        ASSERT_STR("first match", g_ac_insert_matches[0], "glVertex2f(");
+        ASSERT_STR("ghost text", g_ac_ghost, "tex2f(");
+        ASSERT_STR("hint text", g_ac_hint, "x, y)");
 
         glr_completion_accept_autocomplete();
-        ASSERT_STR("input after accept", editor_state_input().input, "glVertex3f(");
+        ASSERT_STR("input after accept", editor_state_input().input, "glVertex2f(");
     }
 
     /* 1b. Completion after `IDENT = ` assignment-shaped prefix.
@@ -94,12 +94,12 @@ int main() {
         editor_completion_update();
         ASSERT_TRUE("post-assign ac_count > 0", g_ac_count > 0);
         ASSERT_STR("post-assign first match",
-                   g_ac_insert_matches[0], "glVertex3f(");
-        ASSERT_STR("post-assign ghost", g_ac_ghost, "tex3f(");
+                   g_ac_insert_matches[0], "glVertex2f(");
+        ASSERT_STR("post-assign ghost", g_ac_ghost, "tex2f(");
 
         glr_completion_accept_autocomplete();
         ASSERT_STR("post-assign input after accept",
-                   editor_state_input().input, "x = glVertex3f(");
+                   editor_state_input().input, "x = glVertex2f(");
     }
 
     /* 1b2. Case-insensitive matching with case correction on accept:
@@ -131,10 +131,10 @@ int main() {
         set_input_text("glBegin(gl_tri");
         editor_completion_update();
         ASSERT_TRUE("ci enum match count > 0", g_ac_count > 0);
-        ASSERT_STR("ci enum first match", g_ac_insert_matches[0], "GL_TRIANGLES");
+        ASSERT_STR("ci enum first match", g_ac_insert_matches[0], "GL_TRIANGLE_FAN");
         glr_completion_accept_autocomplete();
         ASSERT_STR("ci enum accept corrects case",
-                   editor_state_input().input, "glBegin(GL_TRIANGLES)");
+                   editor_state_input().input, "glBegin(GL_TRIANGLE_FAN)");
     }
 
     /* 1c. Assignment via array index (A[0] = ...) and multi-token
@@ -171,11 +171,11 @@ int main() {
 
         editor_completion_update();
         ASSERT_TRUE("ac_count > 0", g_ac_count > 0);
-        ASSERT_STR("first match", g_ac_insert_matches[0], "GL_TRIANGLES");
-        ASSERT_STR("ghost text", g_ac_ghost, "ANGLES)");
+        ASSERT_STR("first match", g_ac_insert_matches[0], "GL_TRIANGLE_FAN");
+        ASSERT_STR("ghost text", g_ac_ghost, "ANGLE_FAN)");
 
         glr_completion_accept_autocomplete();
-        ASSERT_STR("input after accept", editor_state_input().input, "glBegin(GL_TRIANGLES)");
+        ASSERT_STR("input after accept", editor_state_input().input, "glBegin(GL_TRIANGLE_FAN)");
     }
 
     /* 3. Multi-argument enum completion - glColorMaterial */
@@ -249,10 +249,10 @@ int main() {
         set_input_text_cursor_mid("glBegin(gl_tri", ");");
         editor_completion_update();
         ASSERT_STR("mid-line ci enum match", g_ac_insert_matches[0],
-                   "GL_TRIANGLES");
+                   "GL_TRIANGLE_FAN");
         glr_completion_accept_autocomplete();
         ASSERT_STR("mid-line ci enum accept corrects case",
-                   editor_state_input().input, "glBegin(GL_TRIANGLES);");
+                   editor_state_input().input, "glBegin(GL_TRIANGLE_FAN);");
     }
 
     /* 3c. Mid-line gating: no completion when the cursor is mid-token,
