@@ -154,6 +154,10 @@ static void test_apply_state_cmd_edge_cases(void) {
     cmd.type = CMD_BLEND_FUNC; cmd.args[0] = GL_SRC_ALPHA; cmd.args[1] = GL_ONE_MINUS_SRC_ALPHA; repl_apply_state_cmd(&cmd, 1.0f);
     /* glClipPlane args[]: [0]=plane, [1..4]=equation. */
     cmd.type = CMD_CLIP_PLANE; cmd.args[0] = GL_CLIP_PLANE0; cmd.args[1] = 0; cmd.args[2] = 1; cmd.args[3] = 0; cmd.args[4] = 0.5f; cmd.num_args = 5; repl_apply_state_cmd(&cmd, 1.0f);
+    cmd.type = CMD_FOG_I; cmd.args[0] = GL_FOG_MODE; cmd.args[1] = GL_EXP2; cmd.num_args = 2; repl_apply_state_cmd(&cmd, 1.0f);
+    cmd.type = CMD_FOG_F; cmd.args[0] = GL_FOG_DENSITY; cmd.args[1] = 0.1f; cmd.num_args = 2; repl_apply_state_cmd(&cmd, 1.0f);
+    /* glFogfv args[]: [0]=pname, [1..4]=rgba. */
+    cmd.type = CMD_FOG_FV; cmd.args[0] = GL_FOG_COLOR; cmd.args[1] = 0.05f; cmd.args[2] = 0.06f; cmd.args[3] = 0.08f; cmd.args[4] = 1; cmd.num_args = 5; repl_apply_state_cmd(&cmd, 1.0f);
 }
 
 /* Regression net for the enum-arg storage migration: assert the actual
@@ -201,6 +205,22 @@ static void test_enum_arg_gl_trace(void) {
     cmd.args[1] = 0.25f; cmd.args[2] = 1; cmd.args[3] = 0; cmd.args[4] = 0.5f;
     repl_apply_state_cmd(&cmd, 1.0f);
 
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.type = CMD_FOG_I; cmd.num_args = 2;
+    cmd.args[0] = GL_FOG_MODE; cmd.args[1] = GL_EXP2;
+    repl_apply_state_cmd(&cmd, 1.0f);
+
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.type = CMD_FOG_F; cmd.num_args = 2;
+    cmd.args[0] = GL_FOG_DENSITY; cmd.args[1] = 0.25f;
+    repl_apply_state_cmd(&cmd, 1.0f);
+
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.type = CMD_FOG_FV; cmd.num_args = 5;
+    cmd.args[0] = GL_FOG_COLOR;
+    cmd.args[1] = 0.25f; cmd.args[2] = 0.5f; cmd.args[3] = 1; cmd.args[4] = 1;
+    repl_apply_state_cmd(&cmd, 1.0f);
+
     gl_stub_trace_close();
 
     char buf[4096] = "";
@@ -238,6 +258,21 @@ static void test_enum_arg_gl_trace(void) {
     snprintf(want, sizeof(want), "glClipPlane %u 0.25 1 0 0.5\n",
              (unsigned)GL_CLIP_PLANE1);
     ASSERT_TRUE("glClipPlane receives (plane, a, b, c, d) in order",
+                strstr(buf, want) != NULL);
+
+    snprintf(want, sizeof(want), "glFogi %u %d\n",
+             (unsigned)GL_FOG_MODE, (int)GL_EXP2);
+    ASSERT_TRUE("glFogi receives (pname, mode) in order",
+                strstr(buf, want) != NULL);
+
+    snprintf(want, sizeof(want), "glFogf %u 0.25\n",
+             (unsigned)GL_FOG_DENSITY);
+    ASSERT_TRUE("glFogf receives (pname, value) in order",
+                strstr(buf, want) != NULL);
+
+    snprintf(want, sizeof(want), "glFogfv %u 0.25 0.5 1 1\n",
+             (unsigned)GL_FOG_COLOR);
+    ASSERT_TRUE("glFogfv receives (pname, r, g, b, a) in order",
                 strstr(buf, want) != NULL);
 }
 

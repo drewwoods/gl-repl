@@ -28,6 +28,7 @@ static const ReplEnumEntry k_enable_caps[] = {
     { "GL_COLOR_MATERIAL",  GL_COLOR_MATERIAL },
     { "GL_CULL_FACE",       GL_CULL_FACE },
     { "GL_DEPTH_TEST",      GL_DEPTH_TEST },
+    { "GL_FOG",             GL_FOG },
     { "GL_LIGHT0",          GL_LIGHT0 },
     { "GL_LIGHT1",          GL_LIGHT1 },
     { "GL_LIGHT2",          GL_LIGHT2 },
@@ -141,6 +142,33 @@ static const ReplEnumEntry k_point_param_pnames[] = {
     { NULL, 0 }
 };
 
+/* Fog pnames split by call shape, mirroring the glMaterialf /
+ * glMaterialfv precedent: the mode enum lives on glFogi, the scalar
+ * pnames on glFogf, and the RGBA color on glFogfv. */
+static const ReplEnumEntry k_fog_i_pnames[] = {
+    { "GL_FOG_MODE", GL_FOG_MODE },
+    { NULL, 0 }
+};
+
+static const ReplEnumEntry k_fog_modes[] = {
+    { "GL_LINEAR", GL_LINEAR },
+    { "GL_EXP",    GL_EXP },
+    { "GL_EXP2",   GL_EXP2 },
+    { NULL, 0 }
+};
+
+static const ReplEnumEntry k_fog_f_pnames[] = {
+    { "GL_FOG_DENSITY", GL_FOG_DENSITY },
+    { "GL_FOG_START",   GL_FOG_START },
+    { "GL_FOG_END",     GL_FOG_END },
+    { NULL, 0 }
+};
+
+static const ReplEnumEntry k_fog_color_pnames[] = {
+    { "GL_FOG_COLOR", GL_FOG_COLOR },
+    { NULL, 0 }
+};
+
 /* Blend factors are split into the source (sfactor) and destination
  * (dfactor) sets that classic fixed-function GL accepts: GL_SRC_COLOR /
  * GL_ONE_MINUS_SRC_COLOR are dfactor-only, GL_DST_COLOR /
@@ -227,7 +255,7 @@ static const ReplFuncCompletion k_func_completions[] = {
     { "glEnable(",           "glEnable(cap)",                                            1, { "cap" },
         "Enable a GL capability\n"
         "GL_BLEND, GL_CLIP_PLANE0..GL_CLIP_PLANE5, GL_COLOR_MATERIAL\n"
-        "GL_CULL_FACE, GL_DEPTH_TEST, GL_LIGHTING, GL_LIGHT0..GL_LIGHT3\n"
+        "GL_CULL_FACE, GL_DEPTH_TEST, GL_FOG, GL_LIGHTING, GL_LIGHT0..GL_LIGHT3\n"
         "GL_LINE_SMOOTH, GL_LINE_STIPPLE, GL_MULTISAMPLE, GL_NORMALIZE, GL_POINT_SMOOTH",
         REPL_HELP_GROUP_STATE },
     { "glDisable(",          "glDisable(cap)",                                           1, { "cap" },
@@ -247,6 +275,18 @@ static const ReplFuncCompletion k_func_completions[] = {
         "in the coordinate frame active at the call. plane: GL_CLIP_PLANE0..5.\n"
         "Enable with glEnable(GL_CLIP_PLANEi). Flat shorthand accepted:\n"
         "glClipPlane(plane, a, b, c, d).",
+        REPL_HELP_GROUP_STATE },
+    { "glFogi(",             "glFogi(GL_FOG_MODE, mode)",                                2, { "GL_FOG_MODE", "mode" },
+        "Select the fog equation: GL_LINEAR, GL_EXP, or GL_EXP2.\n"
+        "Enable with glEnable(GL_FOG).",
+        REPL_HELP_GROUP_STATE },
+    { "glFogf(",             "glFogf(pname, value)",                                     2, { "pname", "value" },
+        "Scalar fog parameter: GL_FOG_DENSITY (GL_EXP/GL_EXP2 modes) or\n"
+        "GL_FOG_START / GL_FOG_END (GL_LINEAR mode).",
+        REPL_HELP_GROUP_STATE },
+    { "glFogfv(",            "glFogfv(GL_FOG_COLOR, (GLfloat[]){r, g, b, a})",           2, { "GL_FOG_COLOR", "(GLfloat[]){r, g, b, a}" },
+        "Set the fog color distant geometry fades toward (usually the clear color).\n"
+        "Flat shorthand accepted: glFogfv(GL_FOG_COLOR, r, g, b, a).",
         REPL_HELP_GROUP_STATE },
     /* --- Raster position & bitmap text --- */
     { "glRasterPos3f(",      "glRasterPos3f(x, y, z)",                                   3, { "x", "y", "z" },
@@ -468,6 +508,20 @@ static const ReplEnumCommandSpec k_enum_command_specs[] = {
         .args = { ENUM_SLOT_TOK(k_enable_caps, "Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL") } },
     { "glEnable",        CMD_ENABLE,         1, "%sglEnable(%s);",           0,
         .args = { ENUM_SLOT_TOK(k_enable_caps, "Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL") } },
+    /* glFogf is parsed by a custom branch (num_args -1). args[] is kept
+     * only so slot-indexed autocomplete offers the pname tokens; the
+     * trailing scalar value is a full expression handled by the custom
+     * parser (GL_FOG_MODE lives on glFogi, GL_FOG_COLOR on glFogfv). */
+    { "glFogf",          CMD_FOG_F,         -1, NULL,                        0,
+        .args = { ENUM_SLOT_TOK(k_fog_f_pnames, "pname: GL_FOG_DENSITY, GL_FOG_START, GL_FOG_END") } },
+    /* glFogfv is parsed by a custom branch (num_args -1): the
+     * (GLfloat[]){r, g, b, a} compound literal is handled there, not by
+     * the generalized enum loop. */
+    { "glFogfv",         CMD_FOG_FV,        -1, NULL,                        0,
+        .args = { ENUM_SLOT_TOK(k_fog_color_pnames, "pname: GL_FOG_COLOR") } },
+    { "glFogi",          CMD_FOG_I,          2, "%sglFogi(%s, %s);",         0,
+        .args = { ENUM_SLOT_TOK(k_fog_i_pnames, "pname: GL_FOG_MODE"),
+                  ENUM_SLOT_TOK(k_fog_modes, "mode: GL_LINEAR, GL_EXP, GL_EXP2") } },
     { "glFrontFace",     CMD_FRONT_FACE,     1, "%sglFrontFace(%s);",        0,
         .args = { ENUM_SLOT_TOK(k_front_face, "Try GL_CW or GL_CCW") } },
     { "glLightModeli",   CMD_LIGHT_MODEL_I,  2, "%sglLightModeli(%s, %s);",  0,
@@ -606,6 +660,9 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC(CMD_ELSE,                       1, CMD_CAT_CONDITIONAL),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_CLIP_PLANE,         "glClipPlane",         1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_CLEAR,              "glClear",             1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_FOG_I,              "glFogi",              1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_FOG_F,              "glFogf",              1, CMD_CAT_STATE),
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_FOG_FV,             "glFogfv",             1, CMD_CAT_STATE),
 };
 
 const ReplCommandTypeSpec *repl_command_type_spec(CmdType type) {
@@ -669,6 +726,18 @@ const ReplEnumEntry *repl_material_param_entries(void) {
 
 const ReplEnumEntry *repl_point_param_pname_entries(void) {
     return k_point_param_pnames;
+}
+
+const ReplEnumEntry *repl_fog_f_pname_entries(void) {
+    return k_fog_f_pnames;
+}
+
+const ReplEnumEntry *repl_fog_color_pname_entries(void) {
+    return k_fog_color_pnames;
+}
+
+const ReplEnumEntry *repl_fog_mode_entries(void) {
+    return k_fog_modes;
 }
 
 const ReplEnumEntry *repl_clip_plane_entries(void) {

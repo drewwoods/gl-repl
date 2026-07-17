@@ -2551,6 +2551,22 @@ static void test_import_robustness(void) {
     ASSERT_TRUE("split compound literal reassembled",
                 strstr(editor_buffer_line(0), "(GLfloat[]){1, 0, 0, 1}") != NULL);
 
+    /* 6d2. The exported C89 fog-color form (repl_glfloat4 helper)
+     * imports back to the canonical compound-literal REPL line. */
+    f = fopen(test_path, "w");
+    fprintf(f, "// Snippet start\n");
+    fprintf(f, "glFogfv(GL_FOG_COLOR, repl_glfloat4(0.05f, 0.06f, 0.08f, 1.0f));\n");
+    fprintf(f, "// Snippet end\n");
+    fclose(f);
+    glr_ctrl_reset_all(); declare_test_vars();
+    ASSERT_TRUE("load fog-color helper file",
+                repl_export_load_from_file(test_path, NULL) == 1);
+    ASSERT_INT("fog-color helper count", repl_state_document_count(), 1);
+    ASSERT_TRUE("fog-color helper converts to compound literal",
+                strstr(editor_buffer_line(0),
+                       "glFogfv(GL_FOG_COLOR, (GLfloat[]){0.05, 0.06, 0.08, 1});")
+                    != NULL);
+
     /* 6e. Single-line statements still stay separate (regression guard
      * for the over-accumulation that the depth/terminator gate prevents). */
     f = fopen(test_path, "w");

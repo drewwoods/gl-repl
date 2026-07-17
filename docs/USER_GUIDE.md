@@ -242,7 +242,7 @@ numeric argument everywhere is a full math expression.
   [`glLoadIdentity()`](https://docs.gl/gl2/glLoadIdentity)
 - [`glEnable(CAP)`](https://docs.gl/gl2/glEnable), [`glDisable(CAP)`](https://docs.gl/gl2/glEnable)
   - CAP: `GL_DEPTH_TEST`, `GL_LIGHTING`, `GL_COLOR_MATERIAL`, `GL_NORMALIZE`,
-    `GL_LINE_SMOOTH`, `GL_POINT_SMOOTH`, `GL_BLEND`, `GL_CULL_FACE`,
+    `GL_LINE_SMOOTH`, `GL_POINT_SMOOTH`, `GL_BLEND`, `GL_CULL_FACE`, `GL_FOG`,
     `GL_LIGHT0..GL_LIGHT3`, `GL_CLIP_PLANE0..GL_CLIP_PLANE5`
 - [`glShadeModel(MODE)`](https://docs.gl/gl2/glShadeModel)
 - [`glPointSize(size)`](https://docs.gl/gl2/glPointSize), [`glLineWidth(width)`](https://docs.gl/gl2/glLineWidth)
@@ -259,12 +259,19 @@ numeric argument everywhere is a full math expression.
 - [`glEdgeFlag(GL_TRUE|GL_FALSE)`](https://docs.gl/gl2/glEdgeFlag) — scalar boundary-edge flag; 0/1 accepted
 - [`glClipPlane(plane, (GLdouble[]){a, b, c, d})`](https://docs.gl/gl2/glClipPlane) — user clip
   plane (see Clip planes)
+- [`glFogi(GL_FOG_MODE, GL_LINEAR|GL_EXP|GL_EXP2)`](https://docs.gl/gl2/glFog),
+  [`glFogf(pname, value)`](https://docs.gl/gl2/glFog) with pname `GL_FOG_DENSITY`,
+  `GL_FOG_START`, or `GL_FOG_END`, and
+  [`glFogfv(GL_FOG_COLOR, (GLfloat[]){r, g, b, a})`](https://docs.gl/gl2/glFog) —
+  distance fog; enable with `glEnable(GL_FOG)` (see built-in example *Fog ring
+  tunnel*)
 - [`glRasterPos3f(x, y, z)`](https://docs.gl/gl2/glRasterPos) — position for bitmap text (see label below)
 
 [`glMaterialfv`](https://docs.gl/gl2/glMaterial) also accepts the flat shorthand
 `glMaterialfv(face, pname, r, g, b, a)` — the parser rewrites it to the
-compound-literal form. [`glClipPlane`](https://docs.gl/gl2/glClipPlane) accepts the same flat shorthand
-(`glClipPlane(plane, a, b, c, d)`).
+compound-literal form. [`glClipPlane`](https://docs.gl/gl2/glClipPlane) and
+[`glFogfv`](https://docs.gl/gl2/glFog) accept the same flat shorthand
+(`glClipPlane(plane, a, b, c, d)`, `glFogfv(GL_FOG_COLOR, r, g, b, a)`).
 
 ### GLUT solid shapes
 
@@ -1046,7 +1053,7 @@ variable slider to a target.
 
 ## Built-in Examples
 
-**F12** cycles forward through the 34 built-in examples, then any saved
+**F12** cycles forward through the 35 built-in examples, then any saved
 scenes, wrapping to the start; **Shift+F12** cycles backward. The Scene menu
 lists them grouped by tag. `./gl-repl --list-examples` prints the compiled-in
 set.
@@ -1054,23 +1061,24 @@ Developers can point the app at an editable catalog with
 `./gl-repl --examples-dir examples --example <name-or-idx>`:
 
 ```
- 1  gl-repl logo                                        18  Bezier curve with guides
- 2  Rotating cube                                       19  Annotated orbit plot (labels)
- 3  Animated ring (for + t)                             20  GLU concave arrow
- 4  Conditional colors (if + t)                         21  GLU concave arrow cutout
- 5  Transform stress (translate/rotate/scale guides)    22  GLU concave arrow extrusion
- 6  Parametric torus (nested for)                       23  Glow sprites (blend + point attenuation)
- 7  Animated wave surface (analytic normals)            24  Snowfall particles
- 8  Torus knot (animated)                               25  Swaying grass field (rand + t)
- 9  2D assignment sketch (vars only)                    26  Jellyfish (glDepthMask translucency)
-10  Function demo (named func)                          27  Dusk lighthouse atoll (stress test)
-11  Function polygons (args + for)                      28  Orrery (labels track 3D orbits)
-12  Function branching (args + if)                      29  Whale (particle system + lit model)
-13  Recursive triangle tree (func + recursion)          30  Teapot carousel (transform stacks + glow points)
-14  Sierpinski carpet (2D recursion)                    31  Ringed planet (nebula skies)
-15  Sierpinski sponge (3D recursion)                    32  Aurora observatory (dish tracks the sky)
-16  Animated spirograph curve                           33  Bubble sort (scratch arrays)
-17  Traveling ripple ring                               34  Clip planes carve solids (glClipPlane)
+ 1  gl-repl logo                                        19  Annotated orbit plot (labels)
+ 2  Rotating cube                                       20  GLU concave arrow
+ 3  Animated ring (for + t)                             21  GLU concave arrow cutout
+ 4  Conditional colors (if + t)                         22  GLU concave arrow extrusion
+ 5  Transform stress (translate/rotate/scale guides)    23  Glow sprites (blend + point attenuation)
+ 6  Parametric torus (nested for)                       24  Snowfall particles
+ 7  Animated wave surface (analytic normals)            25  Swaying grass field (rand + t)
+ 8  Torus knot (animated)                               26  Jellyfish (glDepthMask translucency)
+ 9  2D assignment sketch (vars only)                    27  Dusk lighthouse atoll (stress test)
+10  Function demo (named func)                          28  Orrery (labels track 3D orbits)
+11  Function polygons (args + for)                      29  Whale (particle system + lit model)
+12  Function branching (args + if)                      30  Teapot carousel (transform stacks + glow points)
+13  Recursive triangle tree (func + recursion)          31  Ringed planet (nebula skies)
+14  Sierpinski carpet (2D recursion)                    32  Aurora observatory (dish tracks the sky)
+15  Sierpinski sponge (3D recursion)                    33  Bubble sort (scratch arrays)
+16  Animated spirograph curve                           34  Clip planes carve solids (glClipPlane)
+17  Traveling ripple ring                               35  Fog ring tunnel (glFog)
+18  Bezier curve with guides
 ```
 
 Examples may carry their own presentation presets (grid theme, backdrop,

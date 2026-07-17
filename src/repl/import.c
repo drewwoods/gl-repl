@@ -1411,6 +1411,25 @@ static int import_make_repl_clip_plane_line(const char *line, char *out, int out
                             repl_args[0], repl_args[1], repl_args[2], repl_args[3]);
 }
 
+/* C-to-REPL line translator: `glFogfv(GL_FOG_COLOR, <color>)` where
+ * <color> is either a compound literal `(GLfloat[]){...}` or the
+ * exporter's repl_glfloat4 helper call. The pname token carries over
+ * verbatim; the 4 channel expressions run through the C-to-REPL
+ * converter and re-emit in the canonical compound-literal form. */
+static int import_make_repl_fog_fv_line(const char *line, char *out, int out_sz) {
+    static const char *const helpers[] = { REPL_EXPORT_GLFLOAT4_HELPER };
+    char pname[1][64];
+    char repl_args[4][MAX_LINE_LEN];
+
+    if (import_parse_payload_call(line, "glFogfv(",
+                                  pname, 1, helpers, 1, repl_args) != 4)
+        return 0;
+    return repl_format_fits(out, (size_t)out_sz,
+                            "glFogfv(%s, (GLfloat[]){%s, %s, %s, %s});",
+                            pname[0],
+                            repl_args[0], repl_args[1], repl_args[2], repl_args[3]);
+}
+
 /* C-to-REPL line translator: `glMaterialfv(face, pname, <values>)`
  * where <values> is either a compound literal `(GLfloat[]){...}` or one
  * of the exporter's GLfloat1/GLfloat4 helper calls. The face/pname
@@ -1518,6 +1537,7 @@ static void import_translate_repl_line(const char *line,
         import_make_repl_materialfv_line(line, repl_line, repl_line_sz) ||
         import_make_repl_point_parameter_line(line, repl_line, repl_line_sz) ||
         import_make_repl_clip_plane_line(line, repl_line, repl_line_sz) ||
+        import_make_repl_fog_fv_line(line, repl_line, repl_line_sz) ||
         import_make_repl_label(line, repl_line, repl_line_sz) ||
         import_make_repl_glut_bitmap_string(line, repl_line, repl_line_sz))
         return;

@@ -336,6 +336,10 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
         if (!write_clip_plane_as_c89(f, source_text))
             write_cmd_source_as_c(f, source_text, cmd->has_vars);
         break;
+    case CMD_FOG_FV:
+        if (!write_fog_fv_as_c89(f, source_text))
+            write_cmd_source_as_c(f, source_text, cmd->has_vars);
+        break;
     case CMD_TESS_BEGIN_POLYGON:
         fprintf(f, "  { _tv_n = 0; gluTessBeginPolygon(g_tess, NULL); }\n");
         *tess_depth = 1;
@@ -678,6 +682,28 @@ int write_clip_plane_as_c89(FILE *f, const char *source_text) {
 
     fprintf(f, "%.*sglClipPlane(%s, %s(%s, %s, %s, %s));\n",
             indent, source_text, plane[0], REPL_EXPORT_GLDOUBLE4_HELPER,
+            c_args[0], c_args[1], c_args[2], c_args[3]);
+    return 1;
+}
+
+/* glFogfv(GL_FOG_COLOR, (GLfloat[]){r, g, b, a}) — compound literals
+ * are C99, so the exported C89 line routes the color through the
+ * repl_glfloat4 helper instead. */
+int write_fog_fv_as_c89(FILE *f, const char *source_text) {
+    char pname[1][MAX_LINE_LEN];
+    char vector_payload[MAX_LINE_LEN];
+    char c_args[4][MAX_LINE_LEN];
+    int indent;
+
+    if (!export_parse_vector_call(source_text, "glFogfv", pname, 1,
+                                  vector_payload, sizeof(vector_payload),
+                                  &indent))
+        return 0;
+    if (!export_translate_vector_args(vector_payload, c_args, 4))
+        return 0;
+
+    fprintf(f, "%.*sglFogfv(%s, %s(%s, %s, %s, %s));\n",
+            indent, source_text, pname[0], REPL_EXPORT_GLFLOAT4_HELPER,
             c_args[0], c_args[1], c_args[2], c_args[3]);
     return 1;
 }

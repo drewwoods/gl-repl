@@ -85,6 +85,9 @@ typedef enum {
     CMD_ELSE,
     CMD_CLIP_PLANE,
     CMD_CLEAR,
+    CMD_FOG_I,
+    CMD_FOG_F,
+    CMD_FOG_FV,
     CMD_TYPE_COUNT
 } CmdType;
 
