@@ -107,6 +107,14 @@ static void my_scene_execute(const Render3dExecuteContext *ctx, void *user_data)
         ctx && (ctx->purpose == RENDER3D_EXEC_WIREFRAME_HIDDEN_LINES ||
                 ctx->purpose == RENDER3D_EXEC_WIREFRAME_VISIBLE_LINES);
 
+    /* The scene owns its clear — render3d_draw_scene no longer clears the
+     * scene rect for anyone. In gl-repl the equivalent glClear is a visible
+     * line in the user's program; here it is this call. It sits inside
+     * execute_fn (not before draw_scene) so it lands under the same
+     * per-pass scissor the REPL's program clear does, and re-runs per
+     * accumulation sample. */
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
     /* render3d_lights_setup has set per-light properties but glDisable'd them.
      * The user (this demo) decides which lights to actually enable. */
     if (g_lighting_on && !wireframe_line_pass) {

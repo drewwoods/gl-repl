@@ -857,6 +857,56 @@ void glr_ctrl_apply_input_effects(EditorInputDispatchEffects effects) {
 /* Scene config builder (push model)                                          */
 /* ========================================================================= */
 
+/* Clear one chrome strip, skipping degenerate rects. */
+static void glr_ctrl_clear_strip(int x, int y, int w, int h) {
+    if (w <= 0 || h <= 0)
+        return;
+    glScissor(x, y, w, h);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+}
+
+/* The frame's clear, minus the scene rect.
+ *
+ * Ownership split: the scene rect is cleared by the *program* — a user
+ * glClear, which render3d scissors to that rect. Nothing clears it on the
+ * program's behalf, so deleting the glClear line smears, exactly as it
+ * would in the exported C. That is the point: a renderer-side clear would
+ * run whether or not the source said so, leaving the source's glClear
+ * decorative and the real clear invisible.
+ *
+ * What the program cannot reach is the chrome around the scene — menu bar,
+ * status bar, code-panel backdrop — which the 2D overlays paint over
+ * afterwards but still need cleared first. That is this function, and it
+ * lives here rather than in render3d because chrome is a controller
+ * concept: render3d knows the scene rect, not the window layout (same
+ * reason the camera transform is loaded here, not there). The four strips
+ * tile the window minus the scene rect. */
+static void glr_ctrl_clear_chrome(const Render3dRenderConfig *config) {
+    UiViewportState vp = ui_state_viewport();
+    int sx = config->render3d_x;
+    int sy = config->render3d_y;
+    int sw = config->render3d_w;
+    int sh = config->render3d_h;
+
+    if (vp.window_w <= 0 || vp.window_h <= 0)
+        return;
+
+    /* render3d applies the clear color itself, but not until inside
+     * render3d_draw_scene — after this runs. Set it here so the chrome
+     * clears to the scene's color on the frame it changes, not the frame
+     * after (which is what reusing the stale GL clear color would give). */
+    glClearColor(config->clear_color[0], config->clear_color[1],
+                 config->clear_color[2], config->clear_color[3]);
+    glPushAttrib(GL_SCISSOR_BIT);
+    glEnable(GL_SCISSOR_TEST);
+    glr_ctrl_clear_strip(0, 0, sx, vp.window_h);                       /* left  */
+    glr_ctrl_clear_strip(sx + sw, 0, vp.window_w - (sx + sw),
+                         vp.window_h);                                 /* right */
+    glr_ctrl_clear_strip(sx, 0, sw, sy);                               /* below */
+    glr_ctrl_clear_strip(sx, sy + sh, sw, vp.window_h - (sy + sh));    /* above */
+    glPopAttrib();
+}
+
 /* State filter for the winding view (RENDER3D_EXEC_WINDING). The pass in
  * render.c owns a two-sided-lighting setup (front green / back red); these
  * program commands would clobber it, so suppress their GL emission while the
@@ -1971,6 +2021,7 @@ void glr_ctrl_display_frame(void) {
     for (ProfSection section_idx = PROF_RENDER3D_SETUP; section_idx <= PROF_RENDER3D_LAST; section_idx++)
         prof_accum_reset(section_idx);
     prof_begin(PROF_RENDER3D);
+    glr_ctrl_clear_chrome(&scene_config);
     {
         GlrCameraState cam = glr_camera();
         g_cur_frame_pose = glr_camera_pose_from_state(&cam);
@@ -1979,6 +2030,16 @@ void glr_ctrl_display_frame(void) {
     /* Resolve motion-blur mode for this frame now that the current pose is
      * captured; installs the per-sample hook on scene_config when active. */
     glr_ctrl_resolve_blur_subframe(&scene_config);
+    /* Confine the whole scene render — including the program's own
+     * glClear, the one thing the viewport does not bound — to the scene
+     * rect, so it cannot repaint the chrome cleared just above. This
+     * module owns the window layout, so it owns this scissor;
+     * render3d_draw_scene sets none of its own (see
+     * render3d_execute_user_geometry). */
+    glPushAttrib(GL_SCISSOR_BIT);
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(scene_config.render3d_x, scene_config.render3d_y,
+              scene_config.render3d_w, scene_config.render3d_h);
     if (render3d_draw_scene(&g_scene_renderer, &scene_config) != 0) {
         static int warned = 0;
         if (!warned) {
@@ -1988,6 +2049,7 @@ void glr_ctrl_display_frame(void) {
             warned = 1;
         }
     }
+    glPopAttrib();  /* scene-rect scissor: the 2D overlays paint the chrome */
     prof_end(PROF_RENDER3D);
     /* Motion-blur sub-frames re-bake geometry via repl_flatten_commands()
      * (glr_ctrl_setup_subframe), which rewrites the live flat-program count

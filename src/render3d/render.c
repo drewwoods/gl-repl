@@ -493,25 +493,21 @@ static void render3d_prepare_frame_context(Render3dFrameRenderContext *ctx,
 
 static void render3d_execute_user_geometry(const Render3dRenderConfig *config,
                                         Render3dExecutePurpose purpose) {
-    /* Scissor the program to the scene rect for the duration of the walk.
-     * Rasterization is already viewport-clipped to the same rect, so this
-     * changes nothing a draw call would have produced — it exists for the
-     * one command the viewport does not bound: a user glClear(), which
-     * would otherwise repaint the whole window (chrome included, since the
-     * regions outside the scene rect live on the frame's own clear).
-     * GL_SCISSOR_BIT rather than an explicit restore: the accum path may
-     * already have a scissor of its own installed around this call. */
-    glPushAttrib(GL_SCISSOR_BIT);
-    glEnable(GL_SCISSOR_TEST);
-    glScissor(config->render3d_x, config->render3d_y,
-              config->render3d_w, config->render3d_h);
+    /* The program runs unbounded by this module. Rasterization is already
+     * viewport-clipped to the scene rect; the one command the viewport does
+     * not bound is a user glClear(), and bounding that is the caller's job —
+     * only the caller knows what lies outside the scene rect and whether it
+     * is precious. A caller with its own pixels around the scene scissors
+     * to the scene rect before calling (gl-repl); a caller whose scene rect
+     * is the whole window does not, so its clear reaches all of it
+     * (render3d_demo). Same division as the camera: the caller sets up the
+     * frame, this module renders into it. */
     glPushMatrix();
     if (config->execute_fn) {
         Render3dExecuteContext ctx = { .purpose = purpose };
         config->execute_fn(&ctx, config->execute_user_data);
     }
     glPopMatrix();
-    glPopAttrib();
 }
 
 /* ========================================================================= */
@@ -873,11 +869,15 @@ int render3d_draw_scene(Render3dState *state,
     if (do_accum) {
         int blur = (RENDER3D_ACCUM_EFFECT_IS_BLUR(config->accum_effect) &&
                     config->setup_subframe_fn != NULL);
-        /* Full-window clear once — this is the frame's only clear, so the
-         * chrome regions outside the scene rect (menu bar, status bar,
-         * code-panel backdrop) depend on it before the 2D overlays paint. */
+        /* The accum buffer is this module's own scratch surface, so it
+         * clears here. The color/depth clear is not ours: the caller has
+         * already cleared whatever it owns outside the scene rect, and the
+         * scene rect itself is cleared per pass by the program's own
+         * glClear. The caller's chrome is not re-cleared per pass — each
+         * pass accumulates the same chrome color at `weight`, summing back
+         * to that color. */
         prof_begin(PROF_RENDER3D_ACCUM_EFFECT);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT);
+        glClear(GL_ACCUM_BUFFER_BIT);
         /* Optionally confine the repeated per-pass clears and the glAccum
          * read/return to the scene viewport: glClear/glAccum are bounded by
          * the scissor box (not the viewport), so this lets the up-to-16x
@@ -896,7 +896,6 @@ int render3d_draw_scene(Render3dState *state,
         float weight = 1.0f / (float)accum_passes;
         for (int pass_idx = 0; pass_idx < accum_passes; pass_idx++) {
             prof_begin(PROF_RENDER3D_ACCUM_EFFECT);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             if (blur) {
                 /* Per-pass mutable copy: the callback may rewrite cam_* so
                  * grid/axes/orbit-target/lights and the ortho projection
@@ -927,7 +926,8 @@ int render3d_draw_scene(Render3dState *state,
             glDisable(GL_SCISSOR_TEST);
         prof_accum_end(PROF_RENDER3D_ACCUM_EFFECT);
     } else {
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        /* No clear here: the caller owns the region outside the scene rect,
+         * and the scene rect belongs to the program's glClear. */
         render_3d_scene_pass(state, config, 0.0f, 0.0f, dv_on);
     }
 
