@@ -358,6 +358,10 @@ endif
 .PHONY: \
 	all \
 	app \
+	release \
+	release-build \
+	release-upload \
+	fetch-music \
 	icon-regen \
 	icon-cube \
 	icon-cube-strong \
@@ -713,11 +717,16 @@ BINDIR = $(OBJDIR)
 # `make web-serve` find the output without the caller having to repeat
 # WEB=1 (mirrors how `make web` itself re-invokes with WEB=1 internally).
 WEB_BINDIR = build/$(BUILD)-web
+# Shared music source: prefer assets/favorite when it holds any tracks, else
+# the flat assets/ dir. Used by the web build below and the release packaging
+# (see the release targets). Override with MUSIC_SRC_DIR=<dir> on any target.
+FAVORITE_MP3S := $(wildcard assets/favorite/*.mp3)
+MUSIC_SRC_DIR ?= $(if $(FAVORITE_MP3S),assets/favorite,assets)
+
 # Copy browser music as ordinary static files instead of putting it into an
 # Emscripten .data preload bundle. The web audio backend streams these URLs via
 # the browser's media stack, so startup no longer waits for the playlist.
-WEB_FAVORITE_MP3S := $(wildcard assets/favorite/*.mp3)
-WEB_MUSIC_SRC_DIR ?= $(if $(WEB_FAVORITE_MP3S),assets/favorite,assets)
+WEB_MUSIC_SRC_DIR ?= $(MUSIC_SRC_DIR)
 OBJ_CFLAGS = $(BUILD_CFLAGS) $(CFLAGS) -include config.h -include prof_sections.h
 DEPFLAGS = -MMD -MP
 
@@ -1154,6 +1163,38 @@ app: gl-repl $(APP_ICNS) $(MACOS_PKG)/Info.plist ## Bundle gl-repl into gl-repl.
 	cp assets/sample.mp3 $(APP_BUNDLE)/Contents/Resources/assets/
 	touch $(APP_BUNDLE)
 	@echo "Built $(APP_BUNDLE) — run: open $(APP_BUNDLE)"
+
+# ---- Release packaging -------------------------------------------------------
+# `make release` builds the macOS .app here and the Linux binary on REMOTE_HOST
+# (default gracemont), bundles the MUSIC_SRC_DIR music pack into each, stages
+# them under dist/<tag>/, then asks for confirmation before uploading to the
+# GitHub release. `release-build` stops after staging; `release-upload` pushes
+# the already-staged artifacts. All knobs are overridable on the command line.
+# See scripts/release.sh.
+RELEASE_TAG  ?= $(shell git describe --tags --always --dirty 2>/dev/null)
+RELEASE_REPO ?= drewwoods/gl-repl
+REMOTE_HOST  ?= gracemont
+REMOTE_PATH  ?= ~/code/openGL/samples/gen-ai/gl-repl
+
+RELEASE_ENV = TAG='$(RELEASE_TAG)' REPO='$(RELEASE_REPO)' \
+	MUSIC_SRC_DIR='$(MUSIC_SRC_DIR)' \
+	REMOTE_HOST='$(REMOTE_HOST)' REMOTE_PATH='$(REMOTE_PATH)'
+
+release: ## Build macOS + Linux release artifacts, then confirm before uploading to GitHub.
+	@$(RELEASE_ENV) bash scripts/release.sh all
+
+release-build: ## Build + stage release artifacts under dist/<tag>/ without uploading.
+	@$(RELEASE_ENV) bash scripts/release.sh build
+
+release-upload: ## Upload the already-staged dist/<tag>/ artifacts to the GitHub release.
+	@$(RELEASE_ENV) bash scripts/release.sh upload
+
+# Download the music pack from the GitHub release into the local assets folder
+# (MUSIC_DEST, default assets/). Pull from a specific release with MUSIC_TAG=...
+# (scripts/fetch-music.sh defaults to the assets-v1 asset release otherwise).
+MUSIC_DEST ?= assets
+fetch-music: ## Download the music pack from the GitHub release into MUSIC_DEST (default assets/).
+	bash scripts/fetch-music.sh --dir "$(MUSIC_DEST)" $(if $(MUSIC_TAG),--tag "$(MUSIC_TAG)",)
 
 # Standalone demo binary that drives the scene module with a teapot callback.
 # Proves the scene/ subtree links cleanly without the editor/UI/controller code.
@@ -1951,6 +1992,7 @@ clean: ## Remove built binaries and object files.
 		build/coverage/lcov.info build/coverage/html \
 		build \
 		gl-repl.app packaging/macos/gl-repl.icns packaging/macos/gl-repl.iconset \
+		dist \
 		callgraph*.mmd callgraph*.dot callgraph*.html callgrind.out*
 
 really-clean: clean freeglut-clean ## clean + drop the vendored freeglut CMake build (also clears its stale SDK/framework cache).
@@ -2058,8 +2100,8 @@ callgraph-files: ## Generate file-level Mermaid dependency graph (optional ENTRY
 help: ## Show the common targets (run make help-details for the full list).
 	@printf "Immediate-mode REPL — common Make targets\n\n"
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {d[$$1]=$$2} \
-		END {split("gl-repl clean test-stubs test-full help help-details",o," "); \
-		for (i=1;i<=6;i++) printf "  %-16s %s\n", o[i], d[o[i]]}' $(MAKEFILE_LIST)
+		END {split("gl-repl clean test-stubs test-full fetch-music help help-details",o," "); \
+		for (i=1;i<=7;i++) printf "  %-16s %s\n", o[i], d[o[i]]}' $(MAKEFILE_LIST)
 	@printf "\nRun 'make help-details' for all targets, build modes, and runtime/env notes.\n"
 
 help-details: ## Show available targets and build-mode notes.
