@@ -273,6 +273,20 @@ has music. It assembles `Contents/{MacOS/gl-repl, Resources/, Info.plist}`:
   so the bundle ships with a track even though the Finder cwd is `/`. Only
   `sample.mp3` is bundled (small download; avoids shipping the full
   playlist); the user folder (source 3) is for adding more.
+- **Ad-hoc signature** — the last `make app` step is
+  `codesign --force --deep --sign - gl-repl.app` (ad-hoc, no Apple account).
+  Without it, a *downloaded* copy is quarantined + fully unsigned, which macOS
+  (esp. Apple Silicon) reports as **"gl-repl.app is damaged"** — a hard block.
+  A valid ad-hoc signature downgrades that to the ordinary "unidentified
+  developer" prompt (right-click → Open / Privacy & Security → Open Anyway).
+  Editing `Resources/` breaks the seal ("a sealed resource is missing or
+  invalid"), so the **release** flow (`scripts/release.py` `build_macos`)
+  re-signs as its final step, *after* swapping in the full music pack and
+  before zipping — the make app signature alone would be invalid in the
+  shipped bundle. Re-signing needs a mac (codesign); packaging a remote-mac
+  build on a non-mac host warns and leaves it unsigned. Proper Developer-ID
+  signing + notarization (removes the prompt entirely) is intentionally not
+  done — it needs a paid account.
 
 Build products (`gl-repl.app/`, `gl-repl.icns`, `gl-repl.iconset/`) are
 gitignored; the committed `.svg`s are the source of truth. Pure packaging
