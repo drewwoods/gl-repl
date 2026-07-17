@@ -443,7 +443,8 @@ commands.
 
 | Module | Role |
 |--------|------|
-| `repl_command_spec` | Declarative command descriptors for fixed-arity GL-like commands |
+| `repl_command_spec` | Declarative command descriptors for fixed-arity GL-like commands; also owns the canonical `k_attrib_bits[]` glPushAttrib bit table |
+| `repl_attrib_bits` | Pure (no-GL) glPushAttrib/glPopAttrib mapping: command → `GL_*_BIT` mask, atomic state-cell writes (flow-sensitive color-material), and the masked-LIFO-fold collectors that drive the editor's per-bit push/pop highlighting. Shared with `repl_gl_state_inspector` so bit membership lives in one place |
 | `repl_command_descriptions` | Lookup facade over the generated, compiled-in GL command-help catalog authored in [`src/repl/command_descriptions.txt`](../src/repl/command_descriptions.txt); `glEnable`/`glDisable` resolve by capability argument |
 | `repl_parser` | Parses one source line into `ReplParsedLine { GLCmd cmd; char text[] }`; no storage ownership |
 | `repl_source_scope` | Computes source depth, indentation, and block context used by compile/format paths |
@@ -452,7 +453,7 @@ commands.
 | `repl_command_store` | Low-level [`GLCmd`](../src/repl/command.h#L95) array mechanics only: insert, replace, delete, load. No text-buffer writes |
 | `repl_flatten` | Builds the flat executable command stream from source commands, loops, functions, and `if` blocks |
 | `repl_flatten_query` | Reads the live flat command stream for cursor matching, current-block highlights, and per-line flat-cost attribution |
-| `repl_gl_state_inspector` | Purely folds every state write in the generated `init()`/`display()` setup (including lights, camera/modelview, render toggles, and attribute-stack depth) plus the flat user stream to a source checkpoint, reporting explicitly touched state, its latest source, and OpenGL 2.1 initial values; light positions are folded through the active modelview exactly as fixed-function OpenGL stores them, and the inspector issues no GL calls |
+| `repl_gl_state_inspector` | Purely folds every state write in the generated `init()`/`display()` setup (including lights, camera/modelview, render toggles, and attribute-stack depth) plus the flat user stream to a source checkpoint, reporting explicitly touched state, its latest source, and OpenGL 2.1 initial values; light positions are folded through the active modelview exactly as fixed-function OpenGL stores them, and the inspector issues no GL calls. User glPushAttrib/glPopAttrib scope the fold via a masked snapshot stack (bit membership reused from `repl_attrib_bits`), on a virtual depth kept distinct from the generated display bracket |
 | `repl_executor` | Narrow live-GL boundary that executes flat user geometry |
 | `repl_eval` | Expression evaluator and predefined-variable lookup |
 | `src/repl/format` | Pure text/indent/depth formatting helpers (`repl_format_*`) |
