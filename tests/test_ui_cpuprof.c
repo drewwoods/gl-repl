@@ -135,6 +135,8 @@ static void test_gpu_section_policy(void) {
     ASSERT_INT_EQ("frame total is gpu", glr_prof_section_is_gpu(PROF_FRAME_TOTAL), 1);
     /* ...pure-CPU sections and the per-fade-batch budget exclusions are not. */
     ASSERT_INT_EQ("flatten is cpu-only", glr_prof_section_is_gpu(PROF_FLATTEN), 0);
+    ASSERT_INT_EQ("rebake eval is cpu-only",
+                  glr_prof_section_is_gpu(PROF_REBAKE_EVAL), 0);
     ASSERT_INT_EQ("snapshot is cpu-only", glr_prof_section_is_gpu(PROF_SNAPSHOT), 0);
     ASSERT_INT_EQ("frame restore is cpu-only",
                   glr_prof_section_is_gpu(PROF_FRAME_RESTORE), 0);

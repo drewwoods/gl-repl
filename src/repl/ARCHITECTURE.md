@@ -349,6 +349,16 @@ scales with the accumulation-pass count. Testing shows this is the practical
 enabler for time blur on most examples, particularly under Emscripten, rather
 than merely a roughly 0.2 ms refinement to an ordinary one-sample frame.
 
+The Compute Profile reports that multiplied cost as a displayed-frame total:
+the initial refresh and every time-blur subframe refresh are accumulated into
+one **Flatten** or **Rebake** sample and committed after the last subframe.
+Flatten's `reparse` / assignment children follow the same frame scope. Rebake's
+`eval walk` child measures the existing-flat-stream expression evaluation and
+argument writes with one timing bracket per rebake, leaving the parent-only
+remainder as value-table snapshots, rollback, and refresh bookkeeping.
+Refreshes outside the display frame (exports, diagnostics, replay freshness,
+and benchmarks) still publish one profiler sample per call.
+
 ---
 
 ## 4. The edit flow (compile → apply)
@@ -476,7 +486,7 @@ before render3d renders.
 
 [`autonormal.c`](autonormal.c) keeps `glNormal3f` commands in sync with the geometry, at
 the **source** level. When enabled and `normals_dirty` is set,
-[`repl_recompute_autonormals()`](pipeline.h#L28) recomputes face normals (cross product of
+[`repl_recompute_autonormals()`](pipeline.h#L34) recomputes face normals (cross product of
 triangle edges, normalized) and inserts/updates `is_auto` `CMD_NORMAL3F`
 commands ahead of the vertices that feed them. Because it edits the
 source array (and can shift the cursor), it runs *before* flatten and
