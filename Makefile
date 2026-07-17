@@ -796,7 +796,6 @@ TEST_BINS = \
 	test_render3d_guides \
 	test_render3d_render \
 	test_depth_viz \
-	test_glr_ctrl \
 	test_repl_editor \
 	test_repl_core_extra \
 	test_repl_autonormal \
@@ -814,6 +813,7 @@ ifeq ($(USE_GL_STUBS),1)
 TEST_BINS += test_ui
 TEST_BINS += test_ui_text_panel
 TEST_BINS += test_glr_actions
+TEST_BINS += test_glr_ctrl
 TEST_BINS += test_repl_executor
 # Cross-checks that REPL execution and the exported C produce the same
 # gl_stub_counts trace. Needs USE_GL_STUBS=1 on both legs (the REPL side
