@@ -682,11 +682,16 @@ The overlay toggles annotate geometry scene-wide:
 - **Vertex outlines** (Ctrl+Shift+O) and **Vertex points** (Ctrl+Shift+P):
   outline polygons and mark vertices *(both on by default)*.
 - **Polygon highlight** (Ctrl+P): highlights the polygon under the cursor line.
-  Cycles Off / On / **Clipped**. On draws the shape as authored; Clipped replays
-  the program's own `glClipPlane` calls over the highlight, so a shape your
-  clip planes cut open is outlined where you actually see it instead of as the
-  whole uncut solid. Clipped costs a little more per frame and cuts the plain
-  vertex outlines the same way — the overlay follows the visible geometry.
+  Cycles Off / On / **Clipped**. Both draw the highlight; they differ over your
+  `glClipPlane` calls. On draws the cursor's shape **as authored**, so you can
+  see the whole solid a plane is cutting into. Clipped cuts the highlight at
+  the planes, like every other overlay.
+
+Vertex outlines and vertex points always honor your clip planes: they report
+the geometry the frame actually shows, so an outline stops where the shape
+does and no point is drawn on a clipped-away face. Polygon highlight = On is
+the sole exception, and a deliberate one — with it you get a cut outline and a
+whole-shape highlight over it at the same time.
 - **Auto-normals**: maintains generated `glNormal3f` lines for your
   geometry so lighting works without hand-written normals.
 

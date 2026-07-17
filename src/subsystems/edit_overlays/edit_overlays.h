@@ -82,10 +82,11 @@ typedef struct OverlayWalkCtx {
     int              show_vertex_outlines;
     int              vertex_outline_style;
     int              highlight_current_poly;
-    /* POLY_HIGHLIGHT_CLIPPED: replay the program's clip planes over the
-     * outline passes so highlighted (and plain) edges stop where the shape
-     * does. Independent of highlight_current_poly's on/off. */
-    int              highlight_clip_planes;
+    /* POLY_HIGHLIGHT_CLIPPED: cut the cursor highlight with the program's own
+     * clip planes, like every other overlay. Off (POLY_HIGHLIGHT_ON) draws the
+     * highlighted shape as authored — the one overlay that may show geometry
+     * the frame doesn't. */
+    int              highlight_clipped;
     int              replay_tess_preview;
     int              show_vertex_points;
     int              replay_vertex_points;
