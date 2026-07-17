@@ -1365,21 +1365,31 @@ const char *repl_line_trailing_comment(const char *s) {
     return NULL;
 }
 
-int repl_eval_line_has_tune_tag(const char *line) {
+/* Scan `line`'s trailing comment for a whole-token `tag` (length `tag_len`):
+ * preceded by comment start, whitespace, or '/', followed by end or
+ * whitespace. Rejects supersets like "@tuned=5". */
+static int line_comment_has_tag(const char *line, const char *tag,
+                                size_t tag_len) {
     const char *cmt = repl_line_trailing_comment(line);
     if (!cmt)
         return 0;
-    /* Scan the comment body for a whole-token "@tune": preceded by start or
-     * whitespace, followed by end or whitespace. Rejects "@tuned=5". */
-    for (const char *p = cmt; (p = strstr(p, "@tune")) != NULL; p += 5) {
+    for (const char *p = cmt; (p = strstr(p, tag)) != NULL; p += tag_len) {
         char prev = (p == cmt) ? ' ' : p[-1];
-        char next = p[5];
+        char next = p[tag_len];
         if (isspace((unsigned char)prev) || prev == '/') {
             if (next == '\0' || isspace((unsigned char)next))
                 return 1;
         }
     }
     return 0;
+}
+
+int repl_eval_line_has_tune_tag(const char *line) {
+    return line_comment_has_tag(line, "@tune", 5);
+}
+
+int repl_eval_line_has_config_tag(const char *line) {
+    return line_comment_has_tag(line, "@config", 7);
 }
 
 void repl_append_trailing_comment(char *dst, size_t dst_sz, const char *source) {

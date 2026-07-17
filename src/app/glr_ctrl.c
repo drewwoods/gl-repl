@@ -1334,6 +1334,13 @@ static void glr_ctrl_fill_ui_variable_panel_vars(UiRenderSnapshot *snap,
     int tuned_count = repl_collect_tuned_vars(
         repl_state_document_cmds(), repl_state_document_count(),
         source_document_view(), tuned_names, MAX_PREDEF_VARS, NULL);
+    /* Vars on a `// @config` decl line stay bright even when assigned —
+     * the tag says the writes are bounds-keeping (clamp/floor), not
+     * program state, so the panel keeps presenting them as knobs. */
+    const char *config_names[MAX_PREDEF_VARS];
+    int config_count = repl_collect_config_vars(
+        repl_state_document_cmds(), repl_state_document_count(),
+        source_document_view(), config_names, MAX_PREDEF_VARS, NULL);
     repl_mark_written_var_slots(repl_state_document_cmds(),
                                 repl_state_document_count(),
                                 written_slots, MAX_PREDEF_VARS);
@@ -1353,7 +1360,15 @@ static void glr_ctrl_fill_ui_variable_panel_vars(UiRenderSnapshot *snap,
             }
         }
         snap->variable_panel_var_storage[i].tuned = tuned;
-        snap->variable_panel_var_storage[i].written = written_slots[i];
+        int config = 0;
+        for (int c = 0; c < config_count; c++) {
+            if (strcmp(config_names[c], predef.vars[i].name) == 0) {
+                config = 1;
+                break;
+            }
+        }
+        snap->variable_panel_var_storage[i].written =
+            written_slots[i] && !config;
     }
 }
 

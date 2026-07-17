@@ -1079,6 +1079,7 @@ static void test_variable_panel_written_snapshot_wiring(void) {
     int radius_row;
     int accum_row;
     int t_row;
+    int segs_row;
 
     printf("--- imrepl_ctrl variable panel written snapshot wiring ---\n");
 
@@ -1086,24 +1087,30 @@ static void test_variable_panel_written_snapshot_wiring(void) {
     ui_state_viewport_set_size(800, 600);
     editor_feed_line("float radius = 1;");
     editor_feed_line("float accum = 0;");
+    editor_feed_line("float segs = 8; // @config");
     editor_feed_line("glVertex3f(radius, 0, 0);");
     editor_feed_line("accum = accum + radius;");
+    editor_feed_line("segs = min(20, max(segs, 3));");
 
     glr_ctrl_build_ui_snapshot(&snap);
     radius_row = find_variable_panel_row(&snap, "radius");
     accum_row = find_variable_panel_row(&snap, "accum");
     t_row = find_variable_panel_row(&snap, "t");
+    segs_row = find_variable_panel_row(&snap, "segs");
 
     ASSERT_TRUE("radius row present", radius_row >= 0);
     ASSERT_TRUE("accum row present", accum_row >= 0);
     ASSERT_TRUE("t row present", t_row >= 0);
-    if (radius_row >= 0 && accum_row >= 0 && t_row >= 0) {
+    ASSERT_TRUE("segs row present", segs_row >= 0);
+    if (radius_row >= 0 && accum_row >= 0 && t_row >= 0 && segs_row >= 0) {
         ASSERT_INT("read-only radius is not dimmed",
                    snap.variable_panel_vars.vars[radius_row].written, 0);
         ASSERT_INT("assigned accum is dimmed",
                    snap.variable_panel_vars.vars[accum_row].written, 1);
         ASSERT_INT("runtime time var is not source-written",
                    snap.variable_panel_vars.vars[t_row].written, 0);
+        ASSERT_INT("assigned-but-@config segs stays bright",
+                   snap.variable_panel_vars.vars[segs_row].written, 0);
     }
 }
 

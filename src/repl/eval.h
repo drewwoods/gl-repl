@@ -455,6 +455,12 @@ void repl_append_trailing_comment(char *dst, size_t dst_sz, const char *source);
  * predicate — no command/state access (keeps eval a leaf). */
 int repl_eval_line_has_tune_tag(const char *line);
 
+/* 1 if `line`'s trailing comment carries a whole-token `@config` marker (the
+ * tag that marks an assigned float decl as a config knob so the variable
+ * panel doesn't dim it — e.g. a var the program only clamps in bounds), else
+ * 0. Token-bounded like `@tune`. Pure string predicate. */
+int repl_eval_line_has_config_tag(const char *line);
+
 /* ---- Inline numeric swatch helpers ------------------------------------- */
 
 typedef struct {

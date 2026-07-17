@@ -586,6 +586,10 @@ Row brightness distinguishes knobs from storage:
 - **Bright** — read-only parameter/config variables; best for sliders.
 - **Dim** — variables written by committed `name = expr;` lines. You can
   drag them, but a later assignment may overwrite the value.
+- A [`// @config`](ADVANCED_USAGE.md#config-variables--config) tag on the
+  declaration keeps a row bright even though the program assigns it — for
+  bounds-keeping writes like `n = min(20, max(n, 3));` that clamp a knob
+  rather than compute state.
 - The [`// @tune`](#tunable-variables--tune) accent is separate from
   brightness. `t` only dims if your source explicitly assigns `t = ...;`.
 

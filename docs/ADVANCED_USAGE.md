@@ -285,6 +285,7 @@ metadata that round-trips on reload:
 | `// @cfg <slug> = <value>` | Applies a scene-presentation setting (see the slug table below). |
 | `// @declare name` | Reconstructs a `float name;` declaration on import. |
 | `// @tune` | Marks a variable as a tunable knob in the exported program — see [User Guide → Tunable Variables](USER_GUIDE.md#tunable-variables--tune). |
+| `// @config` | Marks an assigned variable as config so the variable panel doesn't dim it (bounds-keeping writes like clamps) — see [Config Variables](#config-variables--config) below. |
 | `// camera` block | A 5-line camera preset applied on load. |
 
 Built-in examples use the same `@cfg` + `// camera` headers, so a saved
@@ -373,6 +374,31 @@ The symbolic names come straight from the enums in [`src/render3d/themes.h`](../
 shift which value a catalog literal selects. A typo'd or out-of-range
 symbol is dropped with a `repl_cfg: dropping '…' (unknown symbolic value)`
 note on stderr rather than landing at index 0.
+
+## Config Variables (`// @config`)
+
+The variable panel dims rows for variables the program assigns — a useful
+cue separating *state* the scene computes from *config* you are meant to
+tweak. But some config variables are assigned only to keep them in bounds:
+
+```c
+float n = 20; // @config
+n = floor(n);           // keep n an integer
+n = min(20, max(n, 3)); // clamp to a safe range
+```
+
+Without a tag, those clamp lines would dim `n` as if it were program state.
+Tagging the declaration `// @config` tells the panel the writes are
+bounds-keeping, not state updates, so the row stays bright and reads as the
+slider-friendly knob it is.
+
+Like `// @tune`, the tag is a bare trailing comment token (whole-token
+match — `// @configured` does not count), it applies to every name on the
+declaration line, extra comment text after the tag is fine, and it survives
+export/import round trips via a marker on the exported `@declare` comment.
+The two tags are independent and can be combined (`// @tune @config`):
+`@tune` adds the exported-knob badge and keyboard controls, `@config` only
+affects panel brightness inside gl-repl.
 
 ## Music & assets
 

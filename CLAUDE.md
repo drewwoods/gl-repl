@@ -1654,6 +1654,14 @@ to `[-1, 1]` — useful for centered jitter, signed offsets, etc. Both
 are deterministic for a given (seed, iter) pair.
 Constants: `PI`, `TAU`, `e`
 Variables: declared via `float name;` — only `t` is predefined (Ctrl+T toggles animation).
+Decl-line tags (trailing comment, whole-token): `// @tune` marks a tunable
+knob (panel badge + keyboard controls in exported C); `// @config` keeps an
+assigned variable bright in the variable panel (the panel normally dims
+source-assigned vars as state — the tag says the writes are bounds-keeping
+clamps, not state). Both round-trip through export/import via the `@declare`
+marker. Predicates in [`src/repl/eval.c`](src/repl/eval.c)
+(`repl_eval_line_has_tune_tag` / `_config_tag`), collectors in
+[`src/repl/program_query.c`](src/repl/program_query.c).
 Scratch arrays: `A[16]`, `B[16]`, `C[16]` are fixed global runtime arrays for recursive/loop algorithms.
 Reads and writes use normal expression syntax; indices are truncated with `(int)` and must stay in `0..15`.
 Other names (`x`, `y`, `z`, etc.) must be declared before use.

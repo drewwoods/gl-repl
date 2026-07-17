@@ -101,7 +101,7 @@ void display(void) {
 --- source ---
   static float R = 2; // major radius (ring center to tube center)
   static float r = 1; // minor radius (tube thickness)
-  static float n = 20; // segment count around both u and v
+  static float n = 20; // @config segment count around both u and v
   static float u, v, s; // current major/minor angles, color mix factor
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glEnable(GL_COLOR_MATERIAL);
