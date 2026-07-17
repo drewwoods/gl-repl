@@ -231,6 +231,29 @@ tick, `glutSwapBuffers` → pre-swap grab), compiled to stubs on OSMesa builds.
 Record mode works natively too: `FREEGLUT_CAPTURE_FRAMES=3 ./gl-repl ...`
 opens a real window, writes N real-GPU frames, and exits.
 
+**Scripted-interaction videos (`scripts/record-video.sh`).** Records a session
+to MP4 (H.264 + AAC music) with **no intermediate frame dumps**:
+`FREEGLUT_CAPTURE_STREAM=<path|->` (both backends) redirects captured frames
+into one concatenated PPM stream — the script points it at a fifo that ffmpeg
+consumes live (`-f image2pipe -vcodec ppm`), so encoding starts on frame 1.
+Interaction comes from `GLR_POINTER_SCRIPT=<file>`
+([`src/app/glr_pointer_script.c`](src/app/glr_pointer_script.c)): timed synthetic
+pointer/keyboard events on the rendered-frame clock (implies
+`GLR_TICK_PER_FRAME`), dispatched through the normal `glr_ctrl_*` GLUT entry
+points — `move`/`glide` (hover opens menus/flyouts for real), `click`/
+`rightclick`/`down`/`up`, `wheel`, `ring` (highlight overlay), `key` (typed
+text incl. `\cX` control bytes) and `skey` (F-keys/arrows) — plus a rendered
+cursor arrow + click-ripple overlay so the video shows the pointer. Enter a
+hover-opened flyout **horizontally at its parent row's y** (a diagonal glide
+crosses sibling parent rows and swaps the flyout). Music is muxed at encode
+time (`--music`/`--music-seek`, or `# music:`/`# music-seek:` header comments
+in the pointer script). Uses the **native** backend by default (docs-quality
+colors; a window opens during recording); `GLR_NO_SPLASH=1` skips the startup
+banner. The USER_GUIDE menu-tour script lives at
+`scripts/video/menu-tour.pointer` (coordinates assume 1200x800); recorded
+`.mp4`s are gitignored under `docs/images/` — large files stay out of the
+repo.
+
 ### Web build (Emscripten)
 
 `make web` (needs `emcc` on `PATH`) or `scripts/build-web.sh` (cold start —
@@ -444,6 +467,8 @@ GLR_OPEN_GL_STATE=4 ./gl-repl scene.c  # Open the floating OpenGL-state popup on
 GLR_ACCUM_PASSES=16 ./gl-repl        # Accumulation AA sample count (1/2/4/8/12/16; capture hook)
 GLR_TICK_PER_FRAME=1 ./gl-repl       # Advance the complete fixed-dt simulation once per rendered frame (deterministic offline capture)
 GLR_VIEW_TOGGLE_AT=0.5,2.0 ./gl-repl # Toggle 2D/3D view mode at t=0.5s and t=2.0s (records the swatch transition headlessly)
+GLR_POINTER_SCRIPT=tour.pointer ./gl-repl  # Scripted synthetic mouse/keyboard on the rendered-frame clock with a cursor overlay (video hook; see scripts/record-video.sh)
+GLR_NO_SPLASH=1 ./gl-repl            # Skip the startup splash banner (captures)
 ```
 
 `GLR_EDIT_LINE` sets the cursor exactly as arrowing to the line would

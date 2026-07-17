@@ -8,8 +8,10 @@ step-by-step, and export as a standalone C program.
 
 ![gl-repl rendering the Whale example](images/hero.png)
 
-This guide follows the shape of a session: you [start the app](#getting-started)
-and [write some code](#writing-code) in [the REPL language](#the-repl-language),
+This guide follows the shape of a session: you [start the app](#getting-started),
+get your bearings from the [built-in examples](#built-in-examples) and guided
+[tutorials](#tutorials), then [write some code](#writing-code) in
+[the REPL language](#the-repl-language),
 [make it move](#making-it-move), lean on the [visual feedback](#seeing-what-youre-doing)
 to understand and debug what you built, and finally [keep and ship](#scenes--workspaces)
 the result. Reference material — the full [CLI](#command-line-options) and
@@ -21,13 +23,13 @@ rendering, recording, and every environment variable, see
 ## Contents
 
 - [Getting Started](#getting-started)
+- [Built-in Examples](#built-in-examples)
+- [Tutorials](#tutorials)
 - [Writing Code](#writing-code)
 - [The REPL Language](#the-repl-language)
 - [Making It Move](#making-it-move)
 - [Seeing What You're Doing](#seeing-what-youre-doing)
 - [Replay](#replay)
-- [Tutorials](#tutorials)
-- [Built-in Examples](#built-in-examples)
 - [Scenes & Workspaces](#scenes--workspaces)
 - [Exporting & Importing](#exporting--importing)
 - [Tunable Variables (`// @tune`)](#tunable-variables--tune)
@@ -75,6 +77,15 @@ Top to bottom:
   Click the small button at its right end to pop up the recent-message
   history.
 
+For a guided flythrough of the menus — browsing the example flyouts, the
+tutorial catalog, config toggles, and a replay — generate the 36-second
+menu-tour video (with soundtrack; videos are not checked in):
+
+```bash
+scripts/record-video.sh --script scripts/video/menu-tour.pointer \
+    --example "gl-repl logo" --duration 36 --out menu-tour     # -> menu-tour.mp4
+```
+
 ### Your first triangle
 
 Type each line, then press `;` or Enter to commit it:
@@ -104,6 +115,68 @@ The triangle appears as soon as the vertices commit. Now:
 - Press **F1** for the built-in help overlay — its *Commands* tab lists every
   supported command, and its *Keys* tab is the full keyboard reference. Esc
   or a click outside dismisses it.
+
+---
+
+## Built-in Examples
+
+**F12** cycles forward through the 35 built-in examples, then any saved
+scenes, wrapping to the start; **Shift+F12** cycles backward. The Scene menu
+lists them grouped by tag. `./gl-repl --list-examples` prints the compiled-in
+set.
+Developers can point the app at an editable catalog with
+`./gl-repl --examples-dir examples --example <name-or-idx>`:
+
+```
+ 1  gl-repl logo                                        19  Annotated orbit plot (labels)
+ 2  Rotating cube                                       20  GLU concave arrow
+ 3  Animated ring (for + t)                             21  GLU concave arrow cutout
+ 4  Conditional colors (if + t)                         22  GLU concave arrow extrusion
+ 5  Transform stress (translate/rotate/scale guides)    23  Glow sprites (blend + point attenuation)
+ 6  Parametric torus (nested for)                       24  Snowfall particles
+ 7  Animated wave surface (analytic normals)            25  Swaying grass field (rand + t)
+ 8  Torus knot (animated)                               26  Jellyfish (glDepthMask translucency)
+ 9  2D assignment sketch (vars only)                    27  Dusk lighthouse atoll (stress test)
+10  Function demo (named func)                          28  Orrery (labels track 3D orbits)
+11  Function polygons (args + for)                      29  Whale (particle system + lit model)
+12  Function branching (args + if)                      30  Teapot carousel (transform stacks + glow points)
+13  Recursive triangle tree (func + recursion)          31  Ringed planet (nebula skies)
+14  Sierpinski carpet (2D recursion)                    32  Aurora observatory (dish tracks the sky)
+15  Sierpinski sponge (3D recursion)                    33  Bubble sort (scratch arrays)
+16  Animated spirograph curve                           34  Clip planes carve solids (glClipPlane)
+17  Traveling ripple ring                               35  Fog ring tunnel (glFog)
+18  Bezier curve with guides
+```
+
+Examples may carry their own presentation presets (grid theme, backdrop,
+camera, 2D mode...). Loading an example resets the scene-presentation
+settings to defaults first, then applies the example's presets — so examples
+always look as authored, and your camera carries over unless the example
+sets its own.
+
+Editing an example automatically promotes it to a user scene (see
+[Scenes & Workspaces](#scenes--workspaces)) — you never modify the built-ins
+themselves.
+
+---
+
+## Tutorials
+
+The **Tutorials** menu offers guided, step-by-step lessons rendered directly
+in the code panel — instruction comments appear with a typewriter reveal, and
+each step either asks you to type a command (autocomplete ghost text shows
+the expected call), acknowledge a short note, change a setting, or drag a
+variable slider to a target.
+
+- Tutorials are grouped by tag (hover a tag row for its flyout); flyouts
+  group entries under difficulty subheadings.
+- While a tutorial is active, the menu gains **Restart Tutorial** and
+  **Exit Tutorial** entries.
+- Instruction lines are locked — the tutorial guards them against edits
+  until you finish or exit.
+- The starter set: *First Triangle*, *Color & Transform*, *Feature Tour*,
+  *Variable Slider*, *First Animation*, *Depth Test Triangle*, *Lighting
+  Basics*, and *Color Interpolation*.
 
 ---
 
@@ -1032,67 +1105,6 @@ When a replay has finished, **Space** restarts it from the beginning.
 Two related config items: **Replay mode** (Polygon steps a primitive at a
 time, Vertex steps a vertex at a time) and **Replay expand** (whether loops
 expand iteration-by-iteration).
-
----
-
-## Tutorials
-
-The **Tutorials** menu offers guided, step-by-step lessons rendered directly
-in the code panel — instruction comments appear with a typewriter reveal, and
-each step either asks you to type a command (autocomplete ghost text shows
-the expected call), acknowledge a short note, change a setting, or drag a
-variable slider to a target.
-
-- Tutorials are grouped by tag (hover a tag row for its flyout); flyouts
-  group entries under difficulty subheadings.
-- While a tutorial is active, the menu gains **Restart Tutorial** and
-  **Exit Tutorial** entries.
-- Instruction lines are locked — the tutorial guards them against edits
-  until you finish or exit.
-- The starter set: *First Triangle*, *Color & Transform*, *Feature Tour*,
-  *Variable Slider*, *First Animation*, *Depth Test Triangle*, *Lighting
-  Basics*, and *Color Interpolation*.
-
----
-
-## Built-in Examples
-
-**F12** cycles forward through the 35 built-in examples, then any saved
-scenes, wrapping to the start; **Shift+F12** cycles backward. The Scene menu
-lists them grouped by tag. `./gl-repl --list-examples` prints the compiled-in
-set.
-Developers can point the app at an editable catalog with
-`./gl-repl --examples-dir examples --example <name-or-idx>`:
-
-```
- 1  gl-repl logo                                        19  Annotated orbit plot (labels)
- 2  Rotating cube                                       20  GLU concave arrow
- 3  Animated ring (for + t)                             21  GLU concave arrow cutout
- 4  Conditional colors (if + t)                         22  GLU concave arrow extrusion
- 5  Transform stress (translate/rotate/scale guides)    23  Glow sprites (blend + point attenuation)
- 6  Parametric torus (nested for)                       24  Snowfall particles
- 7  Animated wave surface (analytic normals)            25  Swaying grass field (rand + t)
- 8  Torus knot (animated)                               26  Jellyfish (glDepthMask translucency)
- 9  2D assignment sketch (vars only)                    27  Dusk lighthouse atoll (stress test)
-10  Function demo (named func)                          28  Orrery (labels track 3D orbits)
-11  Function polygons (args + for)                      29  Whale (particle system + lit model)
-12  Function branching (args + if)                      30  Teapot carousel (transform stacks + glow points)
-13  Recursive triangle tree (func + recursion)          31  Ringed planet (nebula skies)
-14  Sierpinski carpet (2D recursion)                    32  Aurora observatory (dish tracks the sky)
-15  Sierpinski sponge (3D recursion)                    33  Bubble sort (scratch arrays)
-16  Animated spirograph curve                           34  Clip planes carve solids (glClipPlane)
-17  Traveling ripple ring                               35  Fog ring tunnel (glFog)
-18  Bezier curve with guides
-```
-
-Examples may carry their own presentation presets (grid theme, backdrop,
-camera, 2D mode...). Loading an example resets the scene-presentation
-settings to defaults first, then applies the example's presets — so examples
-always look as authored, and your camera carries over unless the example
-sets its own.
-
-Editing an example automatically promotes it to a user scene (see the next
-section) — you never modify the built-ins themselves.
 
 ---
 

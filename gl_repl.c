@@ -4,6 +4,7 @@
 #include "app/glr_audio.h"
 #include "app/glr_mesh_export.h"
 #include "app/glr_paths.h"
+#include "app/glr_pointer_script.h"
 #include "app/splash.h"
 #include "repl/examples.h"
 
@@ -260,6 +261,13 @@ static void print_usage(const char *prog) {
             "               tab (0=Overview 1=Commands 2=Keys 3=About) on\n"
             "               the first frame. Poses the overlay for captures\n"
             "               - it otherwise needs an F1 special-key press.\n"
+            "  GLR_POINTER_SCRIPT=<file>  Drive scripted synthetic mouse +\n"
+            "               keyboard input on the rendered-frame clock\n"
+            "               (implies GLR_TICK_PER_FRAME) with a visible\n"
+            "               cursor overlay. Video capture hook - records\n"
+            "               menu navigation; see scripts/record-video.sh.\n"
+            "  GLR_NO_SPLASH=1  Skip the startup splash banner (captures\n"
+            "               that should not open on the splash band).\n"
             "\n"
             "Arguments:\n"
             "  input.c      Optional saved session to load at startup\n"
@@ -417,6 +425,9 @@ static void display_func(void) {
     maybe_capture_open_color_picker();
     maybe_capture_open_gl_state();
     maybe_capture_open_help();
+    /* Scripted pointer/keyboard input (GLR_POINTER_SCRIPT): fire this
+     * frame's events before the frame renders so it reflects them. */
+    glr_pointer_script_frame();
     /* Trace the first two frames separately (gated on g_detailed_prof
      * — see --detailed-prof / GLR_DETAILED_PROF). The first frame
      * pays one-shot costs (GLUT solid-shape display-list compile,
@@ -460,6 +471,12 @@ static void display_func(void) {
      * Drawn over the composited frame so the scene/UI warm up underneath. */
     if (splash_active())
         splash_render(glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT));
+
+    /* Scripted-pointer overlay (cursor arrow, click ripple, highlight
+     * ring) so recorded video shows where the synthetic mouse is. */
+    if (glr_pointer_script_active())
+        glr_pointer_script_render_overlay(glutGet(GLUT_WINDOW_WIDTH),
+                                          glutGet(GLUT_WINDOW_HEIGHT));
 
     glFinish(); /* ensure all GL commands are done before we timestamp the swap */
     glutSwapBuffers();
@@ -675,6 +692,18 @@ int main(int argc, char **argv) {
         if (t_src && *t_src)
             glr_ctrl_set_time((float)atof(t_src));
     }
+    /* Scripted pointer/keyboard input: GLR_POINTER_SCRIPT=<file> drives
+     * menu navigation & co. on the rendered-frame clock (video capture
+     * hook — see src/app/glr_pointer_script.h for the grammar). Loaded
+     * before the tick-per-frame resolve below because an active script
+     * implies the mode. GLR_NO_SPLASH skips the startup banner (any
+     * capture that shouldn't open on the splash band). */
+    glr_pointer_script_load_env();
+    {
+        const char *no_splash = getenv("GLR_NO_SPLASH");
+        if (no_splash && *no_splash)
+            splash_skip();
+    }
     /* Offline/capture clock: move the complete fixed-dt controller tick from
      * the wall-clock timer to completed frames. GLR_VIEW_TOGGLE_AT implies the
      * mode for backward-compatible deterministic swatch captures. */
@@ -682,7 +711,8 @@ int main(int argc, char **argv) {
         const char *frame_tick = getenv("GLR_TICK_PER_FRAME");
         const char *view_toggle = getenv("GLR_VIEW_TOGGLE_AT");
         glr_ctrl_set_tick_per_frame((frame_tick && *frame_tick) ||
-                                    (view_toggle && *view_toggle));
+                                    (view_toggle && *view_toggle) ||
+                                    glr_pointer_script_active());
     }
     /* Cursor line override: GLR_EDIT_LINE=<line> (0-based, clamped)
      * parks the cursor on a committed source line and loads it into the

@@ -69,6 +69,11 @@ void fghCaptureOnSwap( SFG_Window *window )
  * Output prefix comes from FREEGLUT_CAPTURE_FILE (default "freeglut");
  * files are <prefix>-NNNN.ppm. glReadPixels from a multisampled default
  * framebuffer resolves the samples, so MSAA frames come out antialiased.
+ *
+ * FREEGLUT_CAPTURE_STREAM=<path|-> instead appends every captured frame to
+ * one concatenated PPM stream at <path> ("-" = stdout). Point it at a fifo
+ * and an encoder (ffmpeg -f image2pipe -vcodec ppm) consumes frames as they
+ * render -- no on-disk framebuffer dumps.
  */
 
 #ifndef _WIN32
@@ -109,7 +114,29 @@ static int fghCaptureFramesLimit( void )
     return limit;
 }
 
-/* Write w x h pixels of the current GL_READ_BUFFER to <prefix>-NNNN.ppm.
+/* FREEGLUT_CAPTURE_STREAM sink (see the contract comment above). Opened
+ * lazily on the first captured frame; read once. */
+static FILE *fghCaptureStream( void )
+{
+    static FILE *fp = NULL;
+    static int   checked = 0;
+    if( !checked )
+    {
+        const char *path = getenv( "FREEGLUT_CAPTURE_STREAM" );
+        checked = 1;
+        if( path && *path )
+        {
+            fp = ( path[ 0 ] == '-' && !path[ 1 ] ) ? stdout
+                                                    : fopen( path, "wb" );
+            if( !fp )
+                fgWarning( "capture: cannot open stream %s", path );
+        }
+    }
+    return fp;
+}
+
+/* Write w x h pixels of the current GL_READ_BUFFER to <prefix>-NNNN.ppm --
+ * or, in FREEGLUT_CAPTURE_STREAM mode, append them to the single PPM stream.
  * glReadPixels returns rows bottom-up; emit them top-to-bottom. */
 static void fghCaptureWritePPM( int w, int h )
 {
@@ -133,26 +160,45 @@ static void fghCaptureWritePPM( int w, int h )
     glReadPixels( 0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, pixels );
     glPixelStorei( GL_PACK_ALIGNMENT, prevAlign );
 
-    prefix = getenv( "FREEGLUT_CAPTURE_FILE" );
-    if( !prefix || !*prefix )
-        prefix = "freeglut";
-    snprintf( path, sizeof( path ), "%s-%04d.ppm", prefix, seq++ );
-
-    fp = fopen( path, "wb" );
-    if( !fp )
+    fp = fghCaptureStream();
+    if( fp )
     {
-        fgWarning( "capture: cannot open %s", path );
-        free( pixels );
-        return;
+        /* Stream mode: frames concatenate into one pipe/file. Log the first
+         * frame only -- a per-frame line would swamp stderr on long records. */
+        if( seq++ == 0 )
+            fgWarning( "capture: streaming %dx%d frames", w, h );
+        path[ 0 ] = '\0';
+    }
+    else
+    {
+        prefix = getenv( "FREEGLUT_CAPTURE_FILE" );
+        if( !prefix || !*prefix )
+            prefix = "freeglut";
+        snprintf( path, sizeof( path ), "%s-%04d.ppm", prefix, seq++ );
+
+        fp = fopen( path, "wb" );
+        if( !fp )
+        {
+            fgWarning( "capture: cannot open %s", path );
+            free( pixels );
+            return;
+        }
     }
 
     fprintf( fp, "P6\n%d %d\n255\n", w, h );
     for( y = h - 1; y >= 0; --y )
         fwrite( pixels + (size_t)y * (size_t)w * 3, 1, (size_t)w * 3, fp );
 
-    fclose( fp );
+    if( path[ 0 ] )
+    {
+        fclose( fp );
+        fgWarning( "capture: wrote %s (%dx%d)", path, w, h );
+    }
+    else
+        /* Keep the stream hot so a pipe consumer sees each frame as soon as
+         * it is rendered rather than in stdio-buffer-sized bursts. */
+        fflush( fp );
     free( pixels );
-    fgWarning( "capture: wrote %s (%dx%d)", path, w, h );
 }
 
 /* Capture from the given read buffer, preserving the app's read-buffer
