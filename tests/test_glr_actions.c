@@ -331,7 +331,7 @@ static void test_menu_actions(void) {
     ASSERT_INT("active example cleared", repl_state_scenes().active_example_idx, -1);
     ASSERT_TRUE("active user scene created", repl_active_user_scene() >= 0);
     ASSERT_INT("New Scene seeds display baseline",
-               source_document_view().line_count, 5);
+               source_document_view().line_count, 6);
 
     /* Save Scene writes the active named scene's slug; run sandboxed so
      * it cannot touch a repo file. */

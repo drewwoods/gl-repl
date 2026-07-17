@@ -28,6 +28,7 @@
 #include <string.h>
 
 static const char *const k_default_display_baseline[] = {
+    "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
     "glEnable(GL_COLOR_MATERIAL);",
     "glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);",
     "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);",

@@ -3126,29 +3126,32 @@ int main() {
         ASSERT_TRUE("clear_all: tmp is registered before clear", found_tmp_before_clear);
 
         editor_clear_all_cmds();
-        ASSERT_INT("clear_all: baseline cmd count", repl_state_document_count(), 5);
+        ASSERT_INT("clear_all: baseline cmd count", repl_state_document_count(), 6);
         /* Editor owns the text buffer (Phase 4 of
          * docs/plans/done/edit-line-ownership.md). A clear-all has to drop
          * the editor's source text in lockstep with the command store
          * — otherwise the user sees the old lines in the code panel
          * while every commit acts on an empty cmd-store. */
         ASSERT_INT("clear_all: source_document has baseline",
-                   source_document_view().line_count, 5);
+                   source_document_view().line_count, 6);
+        ASSERT_STR("clear_all: frame clear",
+                   editor_buffer_line(0),
+                   "  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);");
         ASSERT_STR("clear_all: color material enable",
-                   editor_buffer_line(0), "  glEnable(GL_COLOR_MATERIAL);");
+                   editor_buffer_line(1), "  glEnable(GL_COLOR_MATERIAL);");
         ASSERT_STR("clear_all: color material mode",
-                   editor_buffer_line(1),
+                   editor_buffer_line(2),
                    "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);");
         ASSERT_STR("clear_all: two-sided lighting",
-                   editor_buffer_line(2),
+                   editor_buffer_line(3),
                    "  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);");
         ASSERT_STR("clear_all: material specular",
-                   editor_buffer_line(3),
+                   editor_buffer_line(4),
                    "  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});");
         ASSERT_STR("clear_all: material shininess",
-                   editor_buffer_line(4),
+                   editor_buffer_line(5),
                    "  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);");
-        ASSERT_INT("clear_all: edit_line follows baseline", editor_state_edit_line(), 5);
+        ASSERT_INT("clear_all: edit_line follows baseline", editor_state_edit_line(), 6);
         ASSERT_INT("clear_all: inserting is 0", editor_insert_mode(), 0);
         ASSERT_INT("clear_all: input is empty", editor_state_input().input[0], 0);
         ASSERT_INT("clear_all: predef var count restored",
@@ -3507,7 +3510,7 @@ int main() {
 
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
         editor_handle_key(12, 0, 0); /* Ctrl+L is 12 */
-        ASSERT_INT("Ctrl+L: restored baseline", repl_state_document_count(), 5);
+        ASSERT_INT("Ctrl+L: restored baseline", repl_state_document_count(), 6);
 
         g_mock_modifiers = saved_mods;
     }
@@ -3523,7 +3526,7 @@ int main() {
         hit.kind = UI_HIT_CODE_CLEAR_ALL;
         ASSERT_INT("trash clear: consumed",
                    glr_ctrl_router_handle_code_panel_hit(hit, 0, 0), 1);
-        ASSERT_INT("trash clear: restored baseline", repl_state_document_count(), 5);
+        ASSERT_INT("trash clear: restored baseline", repl_state_document_count(), 6);
         ASSERT_STR("trash clear: status", g_status, "All commands cleared");
     }
 

@@ -35,6 +35,7 @@ glEnable(GL_LIGHT3);
 // Both sides of each face are visible through the open cube, so light and
 // color them independently.
 glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_COLOR_MATERIAL);
 // Give every exterior face the same near-white material color.
 glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE);
