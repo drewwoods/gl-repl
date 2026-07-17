@@ -524,6 +524,41 @@ static void test_histogram_panel_metrics(void) {
                   ui_histogram_panel_height(), before);
 }
 
+static void test_histogram_reset_hit_test(void) {
+    UiHistogramPanelView view = {
+        .window_w = 800, .window_h = 600,
+        .visible = 1, .panel_x = 10, .panel_y = 10
+    };
+    int panel_w = ui_histogram_panel_width();
+    int panel_h = ui_histogram_panel_height();
+    /* Title-row right edge — where the "[reset]" control renders. */
+    int control_mx = view.panel_x + panel_w - 4;
+    int header_my  = view.window_h - (view.panel_y + panel_h - 6);
+
+    ASSERT_INT_EQ("header-right control hits reset",
+                  ui_histogram_panel_hit_test(&view, control_mx, header_my),
+                  1);
+    ASSERT_INT_EQ("header title side misses reset",
+                  ui_histogram_panel_hit_test(&view, view.panel_x + 12,
+                                              header_my),
+                  0);
+    ASSERT_INT_EQ("plot body below the header misses reset",
+                  ui_histogram_panel_hit_test(
+                      &view, control_mx,
+                      view.window_h - (view.panel_y + panel_h / 2)),
+                  0);
+    ASSERT_INT_EQ("right of the panel misses reset",
+                  ui_histogram_panel_hit_test(&view,
+                                              view.panel_x + panel_w + 4,
+                                              header_my),
+                  0);
+
+    view.visible = 0;
+    ASSERT_INT_EQ("hidden panel has no reset target",
+                  ui_histogram_panel_hit_test(&view, control_mx, header_my),
+                  0);
+}
+
 static void test_histogram_render_hidden(void) {
     UiHistogramPanelView view = {
         .window_w = 800, .window_h = 600,
@@ -669,6 +704,7 @@ int main(void) {
     test_histogram_axis_covers_cheap_and_slow();
     test_histogram_silhouette_collapses_flat_runs();
     test_histogram_panel_metrics();
+    test_histogram_reset_hit_test();
     test_histogram_render_hidden();
     test_histogram_render_empty();
     test_histogram_render_with_samples();

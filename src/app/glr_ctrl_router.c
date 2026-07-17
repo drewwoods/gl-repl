@@ -1481,6 +1481,17 @@ static int route_profile_section_toggle_hit(const UiHit *hit) {
     return 1;
 }
 
+/* UI_HIT_HISTOGRAM_RESET: the histogram panel's header "[reset]" control.
+ * The histograms are cumulative (unlike the section listing's decaying
+ * EMAs), so this is the manual counterpart of the automatic clear on
+ * example switch. */
+static int route_histogram_reset_hit(void) {
+    prof_histogram_reset();
+    ui_state_status_set("section histograms reset");
+    editor_request_redraw();
+    return 1;
+}
+
 /* Derive a code-panel target line from a hit, mirroring the legacy
  * code_panel_drag_target. Insert-line drags use edit_line (the line
  * the cursor is parked on), only falling back to the last committed
@@ -1556,6 +1567,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_variable_slider_hit(x, y); break;
     case UI_HIT_PROFILE_SECTION_TOGGLE:
         consumed = route_profile_section_toggle_hit(&hit); break;
+    case UI_HIT_HISTOGRAM_RESET:
+        consumed = route_histogram_reset_hit(); break;
     case UI_HIT_OVERLAY_CHROME:
         consumed = 1; break;
     case UI_HIT_PANEL_DIVIDER:
