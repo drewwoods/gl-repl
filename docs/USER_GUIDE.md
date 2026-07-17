@@ -1021,7 +1021,7 @@ variable slider to a target.
 
 ## Built-in Examples
 
-**F12** cycles forward through the 32 built-in examples, then any saved
+**F12** cycles forward through the 34 built-in examples, then any saved
 scenes, wrapping to the start; **Shift+F12** cycles backward. The Scene menu
 lists them grouped by tag. `./gl-repl --list-examples` prints the compiled-in
 set.
@@ -1029,22 +1029,23 @@ Developers can point the app at an editable catalog with
 `./gl-repl --examples-dir examples --example <name-or-idx>`:
 
 ```
- 1  gl-repl logo                                        17  Annotated orbit plot (labels)
- 2  Rotating cube                                       18  GLU concave arrow
- 3  Animated ring (for + t)                             19  GLU concave arrow cutout
- 4  Conditional colors (if + t)                         20  GLU concave arrow extrusion
- 5  Transform stress (translate/rotate/scale guides)    21  Glow sprites (blend + point attenuation)
- 6  Parametric torus (nested for)                       22  Snowfall particles
- 7  Animated wave surface (analytic normals)            23  Swaying grass field (rand + t)
- 8  Torus knot (animated)                               24  Jellyfish (glDepthMask translucency)
- 9  2D assignment sketch (vars only)                    25  Dusk lighthouse atoll (stress test)
-10  Function demo (named func)                          26  Orrery (labels track 3D orbits)
-11  Function polygons (args + for)                      27  Whale (particle system + lit model)
-12  Function branching (args + if)                      28  Teapot carousel (transform stacks + glow points)
-13  Recursive triangle tree (func + recursion)          29  Ringed planet (nebula skies)
-14  Animated spirograph curve                           30  Aurora observatory (dish tracks the sky)
-15  Traveling ripple ring                               31  Bubble sort (scratch arrays)
-16  Bezier curve with guides                            32  Clip planes carve solids (glClipPlane)
+ 1  gl-repl logo                                        18  Bezier curve with guides
+ 2  Rotating cube                                       19  Annotated orbit plot (labels)
+ 3  Animated ring (for + t)                             20  GLU concave arrow
+ 4  Conditional colors (if + t)                         21  GLU concave arrow cutout
+ 5  Transform stress (translate/rotate/scale guides)    22  GLU concave arrow extrusion
+ 6  Parametric torus (nested for)                       23  Glow sprites (blend + point attenuation)
+ 7  Animated wave surface (analytic normals)            24  Snowfall particles
+ 8  Torus knot (animated)                               25  Swaying grass field (rand + t)
+ 9  2D assignment sketch (vars only)                    26  Jellyfish (glDepthMask translucency)
+10  Function demo (named func)                          27  Dusk lighthouse atoll (stress test)
+11  Function polygons (args + for)                      28  Orrery (labels track 3D orbits)
+12  Function branching (args + if)                      29  Whale (particle system + lit model)
+13  Recursive triangle tree (func + recursion)          30  Teapot carousel (transform stacks + glow points)
+14  Sierpinski carpet (2D recursion)                    31  Ringed planet (nebula skies)
+15  Sierpinski sponge (3D recursion)                    32  Aurora observatory (dish tracks the sky)
+16  Animated spirograph curve                           33  Bubble sort (scratch arrays)
+17  Traveling ripple ring                               34  Clip planes carve solids (glClipPlane)
 ```
 
 Examples may carry their own presentation presets (grid theme, backdrop,

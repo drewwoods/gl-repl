@@ -492,7 +492,10 @@ static void test_scene_submenu_with_stubs(void) {
     unsigned long long base_raster_calls;
     unsigned long long hover_raster_calls;
 
-    reset_menu_bar_fixture(1000, 600);
+    /* Tall fixture: the per-row render assertion below needs the whole tag
+     * flyout onscreen — 600px clamps it once the catalog grows past ~32
+     * entries plus group subheading rows. */
+    reset_menu_bar_fixture(1000, 1000);
     make_test_ui_snapshot(&snap);
     tag_idx = repl_example_visible_tag_at(0);
     ASSERT_TRUE("first visible example tag exists", tag_idx >= 0);

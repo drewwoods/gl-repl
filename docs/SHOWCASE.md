@@ -344,6 +344,29 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 
 </td>
 </tr>
+<tr>
+<td align="center">
+
+<!-- images/showcase/sierpinski-carpet.gif
+     scripts/docs-assets.sh sc-sierpinski-carpet -->
+<img src="images/showcase/sierpinski-carpet.gif" alt="Sierpinski carpet fractal" width="100%">
+
+**[Sierpinski carpet](../examples/scenes/sierpinski-carpet-2d-recursion.glr)**
+<br><sub>2D recursion, 3×3 minus the center</sub>
+
+</td>
+<td align="center">
+
+<!-- images/showcase/sierpinski-sponge.gif
+     scripts/docs-assets.sh sc-sierpinski-sponge -->
+<img src="images/showcase/sierpinski-sponge.gif" alt="Sierpinski sponge fractal" width="100%">
+
+**[Sierpinski sponge](../examples/scenes/sierpinski-sponge-3d-recursion.glr)**
+<br><sub>the carpet's rule in 3D — 400 cubes</sub>
+
+</td>
+<td></td>
+</tr>
 </table>
 
 ### Big scenes
