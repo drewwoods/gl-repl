@@ -1,0 +1,219 @@
+# glPushAttrib / glPopAttrib: commands + per-bit cursor highlighting
+
+## Context
+
+The REPL supports many fixed-function state commands but no way to scope them. This adds
+`glPushAttrib(mask)` / `glPopAttrib()` as REPL commands with real-GL bitmask semantics
+(restricted to bits whose state REPL commands can actually set), plus an editor affordance:
+cursor on the push line highlights the prior setter lines whose values the push saves;
+cursor on the pop line highlights the setter lines between push/pop whose effects the pop
+reverts. Each `GL_*_BIT` token gets a unique color, and highlighted lines get left-edge
+markers in their covering bit's color (segmented marker when a line is covered by several
+bits). Unbalanced push/pops get the existing red gutter warning, and — since the app itself
+brackets the user program in `glPushAttrib(GL_ALL_ATTRIB_BITS)` (`src/app/glr_ctrl.c:999/1021`)
+— the executor guarantees only balanced pairs reach GL.
+
+**User-confirmed choices:** unique color per bit (not cursor-position-driven); push shows
+prior setters ("what's saved"), pop shows scoped changes ("what's reverted"); saved set is
+the *last* setter per distinct state item (glColor red→blue before a CURRENT_BIT push
+highlights only blue). The matching push/pop bracket line always highlights (like
+glPushMatrix/glPopMatrix today).
+
+## Key design decisions
+
+- **9 supported bits** (canonical order = ascending GL value, all < 2^24 so the
+  `GLCmd.args[]` float storage invariant at `command.h:96-98` holds):
+  `GL_CURRENT_BIT(0x1)`, `GL_POINT_BIT(0x2)`, `GL_LINE_BIT(0x4)`, `GL_POLYGON_BIT(0x8)`,
+  `GL_LIGHTING_BIT(0x40)`, `GL_DEPTH_BUFFER_BIT(0x100)`, `GL_TRANSFORM_BIT(0x1000)`,
+  `GL_ENABLE_BIT(0x2000)`, `GL_COLOR_BUFFER_BIT(0x4000)`.
+  **`GL_ALL_ATTRIB_BITS` excluded**: ENUM_BITFIELD tables require non-zero single-bit
+  values (`command_spec.h:70-79`) and 0xFFFFFFFF doesn't round-trip through float args.
+- **New mapping module** `src/repl/attrib_bits.c/.h` (CmdType → bit mask + state-item
+  identity + the two highlight collectors). Pure, no GL calls.
+- **Highlight transport**: add `int aux;` to `UiHighlight` (`src/ui/app/editor.h:74-79`)
+  rather than 9 new kinds. Blast radius is one constructor (`src/editor/state.c:641`,
+  designated initializer → zero-fills) and the `repl_code_panel.c` scanners. Two new kinds:
+  `HIGHLIGHT_ATTRIB_STATE` (line marker; aux = mask of canonical bit *indices*) and
+  `HIGHLIGHT_ATTRIB_BIT_TOKEN` (char-range on the push line; aux = single bit index —
+  first real user of the existing `char_start/char_end` fields). Bracket match reuses
+  `HIGHLIGHT_MATCHING_PUSH_MATRIX` (update its comment).
+- **Multi-bit marker**: extend `UiTextPanelRow` with
+  `UiTextPanelColor left_marker_band_colors[4]; int left_marker_band_count;`
+  (0 = legacy single-color path, existing rows untouched). Marker draw
+  (`src/ui/core/text_panel.c:471`) splits the strip vertically into stacked bands;
+  >4 bits shows the first 4 in canonical order.
+- **No indent scope** for glPushAttrib (unlike glPushMatrix) — not requested, avoids
+  touching format/source_scope depth caches.
+- **Executor cap** `REPL_ATTRIB_STACK_CAP = 8` real GL pushes; virtual depth unbounded.
+  Real depth is always `min(virtual, CAP)` — LIFO means the level being popped is real iff
+  `virtual <= CAP`, so no per-level flag; the controller's bracket can never be over-popped.
+  8 + controller bracket + fade-replay bracket ≤ GL's guaranteed min stack depth of 16.
+
+## Phase 1 — Commands + executor safety
+
+- `src/repl/command.h:87`: append `CMD_PUSH_ATTRIB, CMD_POP_ATTRIB` before `CMD_TYPE_COUNT`.
+  (`-Wswitch` flags the exhaustive switches that must learn them.)
+- `src/repl/command_spec.c`:
+  - `k_attrib_bits[]` table (9 entries, NULL-terminated) + accessor
+    `repl_attrib_bit_entries()` so attrib_bits.c and the UI share canonical order.
+  - `k_enum_command_specs[]` row (glClear at ~:442 is the exact template):
+    `{ "glPushAttrib", CMD_PUSH_ATTRIB, 1, "%sglPushAttrib(%s);", 0, .args = { ENUM_SLOT_BITS(k_attrib_bits, "mask: ...") } }`
+    — the ENUM_BITFIELD parser branch (`parser.c:336-399`) gives `|`-parsing,
+    canonical ordering, dupe-drop, expression rejection for free.
+  - `g_command_type_specs[]`: `CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(...)` for both
+    (real GL forbids them inside glBegin), `CMD_CAT_STATE`.
+  - `k_func_completions[]`: `glPushAttrib(` (1 arg, help lists the 9 bits) and
+    `glPopAttrib()` (zero-arg; glPushMatrix entry at :281 is the template),
+    `REPL_HELP_GROUP_STATE`.
+- `src/repl/parser.c`: glPushAttrib is auto-handled by the table-driven path. Add a
+  zero-arg `glPopAttrib` branch mirroring glEnd (:1518-1529), plain indent; add
+  `"glPopAttrib"` to `special_funcs[]` in `is_known_incomplete_func_name` (:215-225).
+- `src/repl/executor.{h,c}`: on `ReplExecCursor` add
+  `int attrib_depth;` + `struct { unsigned mask; /* saved bookkeeping */ } attrib_save[REPL_ATTRIB_STACK_CAP];`.
+  New handlers next to the tracked-transform pair (:212-243):
+  - Push: `attrib_depth++`; if `<= CAP`: `glPushAttrib((GLbitfield)cmd->args[0])` and
+    snapshot the ReplRenderState bookkeeping mirror (light-enable slots, clear color —
+    what `repl_apply_state_bookkeeping` :277-302 tracks) into `attrib_save`.
+  - Pop: if `attrib_depth == 0` → silent skip (protects the controller bracket); else if
+    `<= CAP`: `glPopAttrib()` + restore mirrored bookkeeping gated on the saved mask
+    (ENABLE/LIGHTING bits → light slots, COLOR_BUFFER bit → clear color); then decrement.
+  - Dispatch as their own `case` block in the not-in-begin switch (before the
+    `repl_apply_state_cmd` cluster ~:864) — they need cursor depth, like transforms.
+    No fade-context gate needed (unlike CMD_CLEAR :889).
+  - `repl_exec_cursor_end` (:924-942): after the matrix unwind (:940), unwind attribs
+    (real pop + mirror restore only while `depth <= CAP`).
+- `flatten.c` / `export.c` / `import.c`: zero changes expected (no-vars enum commands take
+  the literal fast path; export/import are canonical-text driven). GL stubs already have
+  everything (`tests/gl-stubs/include/GL/gl.h:104-124, 407-409`).
+- Makefile: add `src/repl/attrib_bits.c` (Phase 3) to `$(SRCS)`.
+
+## Phase 2 — Unbalanced warning + bracket matching
+
+- `src/repl/source_scope.c` `repl_source_scope_view_collect_unbalanced` (:177-213): third
+  stack (`g_unbal_attrib_stack`) + `CMD_PUSH_ATTRIB`/`CMD_POP_ATTRIB` cases + third
+  leftover-drain loop. Orphans then get `HIGHLIGHT_UNBALANCED` automatically via the
+  always-on block in `glr_ctrl_push_highlights` (`glr_ctrl.c:684-690`).
+- `repl_find_matching_push_attrib(int)` / `repl_find_matching_pop_attrib(int)` mirroring
+  the matrix pair in `src/repl/autonormal.c:341-378` (optionally factor a shared
+  `find_matching_bracket(line, open, close, dir)`).
+
+## Phase 3 — Mapping module `src/repl/attrib_bits.c/.h`
+
+```c
+#define REPL_ATTRIB_BIT_COUNT 9
+unsigned repl_attrib_bits_for_cmd(const GLCmd *cmd);  /* GL_*_BIT mask; 0 = not a setter */
+int      repl_attrib_bit_index(unsigned single_bit);  /* canonical index 0..8, -1 */
+int      repl_attrib_cmd_items(const GLCmd *cmd, unsigned out_ids[2]); /* state-item ids */
+typedef struct { int line_idx; unsigned bit_idx_mask; } ReplAttribHighlightLine;
+int repl_attrib_collect_push_saved(int push_line, ReplAttribHighlightLine *out, int max);
+int repl_attrib_collect_pop_reverted(int pop_line, ReplAttribHighlightLine *out, int max);
+```
+
+- **Bits-for-cmd** (multi-bit membership falls out naturally, matching real GL):
+  COLOR3F/4F, RASTER_POS3F, NORMAL3F → CURRENT; ENABLE/DISABLE → ENABLE **plus** the
+  cap-specific bit (LIGHTING/LIGHTi/COLOR_MATERIAL→LIGHTING, LINE_SMOOTH/LINE_STIPPLE→LINE,
+  POINT_SMOOTH→POINT, CULL_FACE→POLYGON, DEPTH_TEST→DEPTH_BUFFER, BLEND→COLOR_BUFFER,
+  CLIP_PLANEi/NORMALIZE→TRANSFORM); SHADE_MODEL/LIGHT_MODEL_I/COLOR_MATERIAL/MATERIALFV/
+  MATERIALF → LIGHTING; LINE_WIDTH/LINE_STIPPLE → LINE; POINT_SIZE/POINT_PARAMETER_FV →
+  POINT; CULL_FACE/FRONT_FACE → POLYGON; DEPTH_FUNC/DEPTH_MASK → DEPTH_BUFFER;
+  BLEND_FUNC/COLOR_MASK/CLEAR_COLOR → COLOR_BUFFER; CLIP_PLANE → TRANSFORM.
+- **State-item identity** (for last-setter-wins): 32-bit id `(kind << 16) | key`; one kind
+  per state family (ITEM_COLOR, ITEM_CAP with key = cap enum, ITEM_MATERIAL with key =
+  face+pname indices, ITEM_CLIP_PLANE with key = plane idx, etc.).
+  `GL_FRONT_AND_BACK` material calls expand to two ids (hence `out_ids[2]`) so they
+  supersede/are superseded per-face.
+- **Collectors** walk `repl_state_document_cmds()` linearly (same block-unaware policy as
+  `collect_unbalanced`, documented there):
+  - push: lines `0..push-1`; last-setter map keyed by item id (fixed array, item universe
+    is ~60); emit surviving lines with the per-line union of covering bit indices
+    (intersected with the push mask).
+  - pop: find matching push; emit **every** masked setter strictly between (v1 keeps it
+    simple; skipping setters already reverted by an inner balanced pair covering the same
+    item is a possible refinement, deferred).
+
+## Phase 4 — Highlighting
+
+- `src/ui/app/editor.h`: `int aux;` on `UiHighlight` + two new kinds.
+  `src/editor/state.{h,c}`: `editor_state_highlights_append_aux(...)`; existing `_append`
+  becomes a wrapper passing 0 (no call-site churn).
+- `src/app/glr_ctrl.c` `glr_ctrl_push_highlights` (:626), next to the matrix bracket block
+  (:645-655): cursor on push → matching-pop bracket + `collect_push_saved` lines as
+  `HIGHLIGHT_ATTRIB_STATE` (aux = bit_idx_mask); cursor on pop → matching-push bracket +
+  `collect_pop_reverted` lines. Both cases: scan the push line's canonical text for each
+  mask token present and push `HIGHLIGHT_ATTRIB_BIT_TOKEN` with char range + bit index
+  (canonical text guarantees spelling/order).
+- `src/ui/app/repl_code_panel.c`:
+  - Scanner `repl_code_panel_line_attrib_bits(snap, line)` → OR of aux over
+    ATTRIB_STATE entries (pattern: `_line_is_unbalanced` :571).
+  - Marker ladder (:770-890): `MARKER_PRIORITY_ATTRIB_STATE` between AFFECTING_TRANSFORM
+    and UNBALANCED; block fills `left_marker_band_colors[]` (≤4, canonical order).
+  - Per-bit palette: `static const k_attrib_bit_colors[9]` local to the panel (same
+    ownership as the other marker rgba constants). 9 distinguishable colors, staying clear
+    of warning-red (0.95,0.35,0.30), replay-green, and the violet bracket match.
+  - Token segments: append one `color_segments[]` entry per ATTRIB_BIT_TOKEN **after**
+    `repl_code_panel_apply_syntax_segments_for_category` (it resets segment count at :1379)
+    and the trailing-comment append (:1416). Renderer draws segments sequentially so
+    later opaque segments win over syntax spans; verify visually in On+Shadow mode.
+- `src/ui/core/text_panel.{h,c}`: the banded left-marker extension (marker draw :471).
+
+## Phase 5 — Consistency
+
+- `src/subsystems/edit_overlays/edit_overlays.c` `overlay_gl_apply_cmd` (:301-339): make
+  the tiny OverlayGlState mirror (clip_enabled_mask, cull_enabled, front_face) attrib-aware
+  with a depth-8 snapshot stack keyed on push (when mask ∩ ENABLE|TRANSFORM|POLYGON) / pop
+  (restore + re-apply to GL), so overlay walks stay in sync with user pops.
+- Replay fade batches (`replay_render.c:85`): no special handling — each batch replays
+  inside its own attrib bracket; the depth guard + unwind cover truncated prefixes.
+- Winding-pass `state_filter` doesn't see push/pop (they bypass `repl_apply_state_cmd`);
+  bounded by that pass's own bracket — document at the dispatch site.
+
+## Phase 6 — Tests
+
+- `tests/test_repl_core_parse.c`: single/multi-bit parse, `|` canonicalization to table
+  order, dupe-drop, reject numeric/expr/unknown/`GL_ALL_ATTRIB_BITS`, zero-arg
+  `glPopAttrib()`, reject both inside glBegin.
+- `tests/test_repl_core_commit.c`: bracket-match helpers (mirror the matrix block
+  ~:1779-1808); `repl_attrib_bits_for_cmd` / `_cmd_items` / collector tests (last-setter
+  wins, mask filtering, multi-bit union, FRONT_AND_BACK supersession).
+- `tests/test_repl_core_extra.c` (~:1845): collect_unbalanced with orphan push/pop-attrib
+  and mixed matrix/attrib nesting.
+- `tests/test_repl_executor.c`: orphan pop leaves depth 0; pairing; unwind at cursor_end;
+  virtual depth past the cap (e.g. 12 pushes) pairs down cleanly; bookkeeping restore
+  (clear color under COLOR_BUFFER_BIT, light enable under ENABLE_BIT).
+- `tests/test_glr_ctrl.c`: produced highlight list for cursor-on-push / cursor-on-pop
+  (lines, aux masks, token char ranges).
+- `tests/test_repl_code_panel_document.c` / `_syntax.c`: bit-token segments + marker bands.
+- `tests/test_repl_export_all_commands.c` (:70): add the two CmdTypes + sample lines.
+- `tests/test_repl_autocomplete.c`: update any hardcoded completion count/order asserts.
+
+## Phase 7 — Docs
+
+- `CLAUDE.md` Supported Commands: add entry after the matrix-stack line — 9 bits, `|`
+  policy (same as glClear), depth guard/cap, cursor highlighting, `GL_ALL_ATTRIB_BITS`
+  intentionally unsupported. Add `attrib_bits.c/.h` rows to the File Layout table and
+  `docs/MODULES.md`. Update `src/repl/command_descriptions.txt` if it enumerates commands.
+
+## Verification
+
+1. `make test` and `make test-stubs` (stub counts pick up glPushAttrib/glPopAttrib calls).
+2. `make check-state-ownership` (includes check-c99, include-style; new TU in `$(SRCS)`).
+3. Native visual check (`make gl-repl`, **native** backend — OSMesa mis-renders colors):
+   type a push/pop pair around state changes, park cursor on each
+   (`GLR_EDIT_LINE=<n>` for headless repro), confirm: per-bit token colors, per-line
+   markers incl. a segmented multi-bit marker (e.g. `glEnable(GL_BLEND)` under
+   `GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT`), red gutter on an orphan pop, scene state
+   correctly scoped (e.g. color pushed/popped), no chrome corruption after an orphan push
+   (unwind working).
+4. gracemont: `git pull && make check-c99 && make test-stubs`.
+
+## Risks / notes
+
+- **Exported C parity**: no auto-balance mechanism exists in export (the `editor.h:70`
+  comment overstates it) — leftover user `glPushMatrix` already leaks in exported C, and
+  leftover `glPushAttrib` will behave the same (accumulates until GL's stack cap, GL
+  errors are ignored). Parity, not a regression; the in-app gutter warning is the
+  mitigation. Optional follow-up: emit balancing pops before the frame bracket pop.
+- `glNormal3f` under CURRENT_BIT is GL-correct but slightly noisy; it's one switch case to
+  drop if it reads wrong.
+- Pop-side v1 highlights all masked setters between push/pop, including ones an inner
+  balanced pair already reverted; refine later only if it reads wrong in practice.
