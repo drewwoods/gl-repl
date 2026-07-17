@@ -1,4 +1,4 @@
-# `src/repl` — the language pipeline
+# `src/repl` — the language pipeline (Draft)
 
 > Part of the OpenGL Immediate-Mode REPL. This README is the module-local
 > orientation: what a REPL pipeline *is*, how the standalone demo exercises

@@ -1,4 +1,4 @@
-# Contributing
+# Contributing (Draft)
 
 Thanks for looking under the hood. Start with [`MODULES.md`](MODULES.md) —
 the one-page map of the source tree and who owns what — and skim

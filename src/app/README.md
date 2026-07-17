@@ -1,4 +1,4 @@
-# `src/app` — the application shell + controller
+# `src/app` — the application shell + controller (Draft)
 
 > Part of the OpenGL Immediate-Mode REPL. The whole-tree ownership map is
 > in [`../../docs/MODULES.md`](../../docs/MODULES.md); the per-frame pipeline narrative

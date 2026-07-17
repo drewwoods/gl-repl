@@ -1,4 +1,4 @@
-# Architecture
+# Architecture (Draft)
 
 This document explains the application-level architecture of the OpenGL
 immediate-mode REPL: ownership, frame coordination, view boundaries, and the

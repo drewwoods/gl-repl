@@ -1,6 +1,6 @@
 <div align="center">
 
-# Showcase
+# Showcase (Draft)
 
 <sub>What a few dozen lines of fixed-function OpenGL look like when the geometry lives in the code.</sub>
 

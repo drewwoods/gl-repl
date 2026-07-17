@@ -1,4 +1,4 @@
-# gl-repl User Guide
+# gl-repl User Guide (Draft)
 
 gl-repl is an interactive OpenGL interpreter. You type classic immediate-mode
 GL commands and see geometry render live as you type, with interactive overlays
