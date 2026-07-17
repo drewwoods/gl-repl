@@ -40,6 +40,9 @@
 #   # music: assets/Beta Waves.mp3
 #   # music-seek: 24.5
 #   --scale <width>     Scale output to this width (even height forced)
+#   --colorspace <cs>   Color tagging: srgb (default) or p3 (Display P3;
+#                       matches how the un-color-managed app looks on a
+#                       wide-gamut Mac display)
 #   --out <base>        Output base name                  (default: out -> out.mp4)
 #   --bin <path>        gl-repl binary    (default: build/release/gl-repl)
 #   --splash            Keep the startup splash banner (default: skipped)
@@ -59,6 +62,7 @@ music=""
 no_music=0
 music_seek="0"
 scale=""
+colorspace="srgb"
 out="out"
 bin="build/release/gl-repl"
 splash=0
@@ -79,6 +83,7 @@ while [ $# -gt 0 ]; do
 		--no-music)   no_music=1; shift;;
 		--music-seek) need_val "$@"; music_seek="$2"; shift 2;;
 		--scale)      need_val "$@"; scale="$2"; shift 2;;
+		--colorspace) need_val "$@"; colorspace="$2"; shift 2;;
 		--out)        need_val "$@"; out="$2"; shift 2;;
 		--bin)        need_val "$@"; bin="$2"; shift 2;;
 		--splash)     splash=1; shift;;
@@ -145,11 +150,30 @@ mkfifo "$fifo"
 
 echo "record-video: duration=${duration}s fps=$fps frames=$frames window=$window${script:+ script=$script}${music:+ music=$music}"
 
+# Color handling. The captured PPM frames are display-referred RGB (the app
+# is not color-managed), so the colorspace is declared at encode time:
+#  - Convert RGB -> YCbCr with the BT.709 matrix EXPLICITLY. ffmpeg's
+#    default for an RGB input is the BT.601 matrix, and players assume
+#    BT.709 for HD content -- the mismatch shifts colors subtly.
+#  - Tag the frames (setparams -> the mp4's colr atom; on ffmpeg >= 7 the
+#    encoder takes color properties from the frames, so the old
+#    -color_primaries/-color_trc encoder flags no longer stick) so players
+#    interpret the values as authored: "srgb" for standard displays, or
+#    "p3" = Display P3 (P3-D65 primaries + sRGB transfer) to reproduce how
+#    the un-color-managed app looks on a wide-gamut Mac display.
+case "$colorspace" in
+	srgb) primaries="bt709";;
+	p3)   primaries="smpte432";;
+	*) echo "record-video: --colorspace must be 'srgb' or 'p3' (got '$colorspace')" >&2; exit 2;;
+esac
+csp="out_color_matrix=bt709:out_range=tv"
+tag="setparams=color_primaries=${primaries}:color_trc=iec61966-2-1:colorspace=bt709:range=tv"
+
 # Video filter chain (even dimensions for H.264).
 if [ -n "$scale" ]; then
-	vf="scale=${scale}:-2:flags=lanczos,format=yuv420p"
+	vf="scale=${scale}:-2:flags=lanczos:${csp},format=yuv420p,${tag}"
 else
-	vf="scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p"
+	vf="scale=trunc(iw/2)*2:trunc(ih/2)*2:${csp},format=yuv420p,${tag}"
 fi
 
 # Encoder first (blocks reading the fifo until the app writes frame 1).

@@ -247,7 +247,12 @@ cursor arrow + click-ripple overlay so the video shows the pointer. Enter a
 hover-opened flyout **horizontally at its parent row's y** (a diagonal glide
 crosses sibling parent rows and swaps the flyout). Music is muxed at encode
 time (`--music`/`--music-seek`, or `# music:`/`# music-seek:` header comments
-in the pointer script). Uses the **native** backend by default (docs-quality
+in the pointer script). Color is declared at encode time too — frames are
+display-referred RGB: `--colorspace srgb` (default) or `p3` (Display P3 =
+smpte432 primaries + sRGB transfer, matching the app's look on wide-gamut
+Macs); RGB→YCbCr always uses an explicit BT.709 matrix, and tags ride the
+frames via `setparams` (ffmpeg ≥ 7 ignores the `-color_*` encoder flags in
+favor of frame properties). Uses the **native** backend by default (docs-quality
 colors; a window opens during recording); `GLR_NO_SPLASH=1` skips the startup
 banner. The USER_GUIDE menu-tour script lives at
 `scripts/video/menu-tour.pointer` (coordinates assume 1200x800); recorded

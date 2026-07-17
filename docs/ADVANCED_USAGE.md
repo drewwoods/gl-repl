@@ -212,6 +212,15 @@ scripts/record-video.sh --script scripts/video/menu-tour.pointer \
   the track, fade-out over the last 1.5 s; default `assets/sample.mp3`). A
   pointer script can pin its own soundtrack with `# music:` / `# music-seek:`
   header comments.
+- **Colorspace** is declared at encode time — the captured frames are
+  display-referred RGB (the app is not color-managed). `--colorspace srgb`
+  (default) tags standard sRGB; `--colorspace p3` tags Display P3 (P3-D65
+  primaries + sRGB transfer), reproducing how the app looks on a wide-gamut
+  Mac display. Either way the RGB→YCbCr conversion uses the BT.709 matrix
+  explicitly (ffmpeg's RGB default is BT.601, which players mis-assume for
+  HD), and the tags are set on the frames via `setparams` — on ffmpeg ≥ 7
+  the encoder takes color properties from frames, so the old
+  `-color_primaries`/`-color_trc` encoder flags no longer stick.
 - **Scripted input** covers the whole input surface: `move`/`glide` pointer
   motion (hover opens menu flyouts exactly as a real mouse), `click` /
   `rightclick` / `down` / `up`, `wheel`, `ring` (pulsing highlight around a
