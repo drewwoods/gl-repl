@@ -298,6 +298,87 @@ static void test_misc_helpers(void) {
     replay_restore_baseline_predef_values();
 }
 
+/* Regression (ab1011e7): once glClear became a real source command at the
+ * top of every scene, replay's fade pass re-executed it — the pre-skip
+ * prefix runs state commands — so each fade batch wiped the frame the fill
+ * pass had just rendered and the whole scene flashed in from black on
+ * every step. The executor now skips CMD_CLEAR under fade context, and the
+ * replay clamps never cut a frame-defining pass below the leading clear
+ * (which the PC / oldest-batch base limit would otherwise exclude while
+ * sitting at 0, leaving the scene rect uncleared). */
+static void test_replay_leading_clear_limits(void) {
+    glr_ctrl_reset_all();
+    editor_feed_line("glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glEnd();");
+    repl_flatten_commands(editor_state_edit_line());
+
+    FlatProgramView program = repl_state_flat_program_view();
+    ASSERT_TRUE("leading glClear flattens to pc 0",
+                program.cmd_count > 0 && program.cmds[0].type == CMD_CLEAR);
+    ASSERT_TRUE("setup limit lands just past the leading clear",
+                replay_frame_setup_limit(program) == 1);
+
+    replay_start();
+    ASSERT_TRUE("exec clamp at PC 0 still includes the leading clear",
+                replay_prepare_frame(program, program.cmd_count) >= 1);
+
+    replay_push_fade_batch(0, 2);
+    ASSERT_TRUE("fill base limit with an old_pc=0 batch still includes the clear",
+                replay_fill_base_limit(program) >= 1);
+    replay_stop();
+
+    /* A program that opens with geometry has no setup prologue to keep. */
+    glr_ctrl_reset_all();
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glEnd();");
+    repl_flatten_commands(editor_state_edit_line());
+    ASSERT_TRUE("no leading clear -> setup limit 0",
+                replay_frame_setup_limit(repl_state_flat_program_view()) == 0);
+}
+
+#ifdef GL_STUBS
+/* Same regression, observed at the GL boundary: a fade batch whose range
+ * covers the program's glClear must not emit it while compositing. */
+static void test_replay_fade_skips_program_clear(void) {
+    glr_ctrl_reset_all();
+    editor_feed_line("glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glEnd();");
+    repl_flatten_commands(editor_state_edit_line());
+
+    replay_start();
+    int count = repl_state_flat_program_view().cmd_count;
+    replay_push_fade_batch(0, count);
+
+    ReplayFadePlan plan;
+    memset(&plan, 0, sizeof(plan));
+    replay_copy_baseline_predef_snapshot(&plan.baseline_predef);
+    replay_copy_baseline_scratch_arrays(plan.baseline_scratch_arrays);
+    ReplayFadeBatchView fade_batches = replay_fade_batches_view();
+    plan.batch_count = 1;
+    plan.batches[0] = fade_batches.batches[0];
+    plan.batch_alpha[0] = 0.5f;
+    plan.active = 1;
+
+    gl_stub_counts_reset();
+    replay_render_fade_batches(&plan);
+    ASSERT_TRUE("fade replay never calls glClear",
+                gl_stub_counts[GL_STUB_glClear] == 0);
+    ASSERT_TRUE("fade replay still draws the batch geometry",
+                gl_stub_counts[GL_STUB_glVertex3f] > 0);
+
+    replay_stop();
+}
+#endif
+
 /* Regression: replay annotation simulation must apply the precomputed
  * args[0] for CMD_VAR_ASSIGN, mirroring the live executor (which
  * deliberately does not re-evaluate — see executor.c:CMD_VAR_ASSIGN).
@@ -1252,6 +1333,7 @@ int main(void) {
     test_replay_modifiers();
     test_bench_helpers();
     test_misc_helpers();
+    test_replay_leading_clear_limits();
     test_replay_var_assign_uses_flatten_args();
     test_replay_funcdef_shows_params();
     test_replay_funcdef_shows_alias_params();
@@ -1263,6 +1345,7 @@ int main(void) {
     test_replay_cursor_sync_and_unrecognized_keys();
 #ifdef GL_STUBS
     test_replay_rendering();
+    test_replay_fade_skips_program_clear();
 #endif
 
     printf("test_repl_replay: %d/%d passed\n", g_harness.passed, g_harness.run);

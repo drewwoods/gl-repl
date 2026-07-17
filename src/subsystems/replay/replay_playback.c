@@ -640,7 +640,14 @@ int replay_prepare_frame(FlatProgramView flat_program, int full_flat_count) {
         state->state == REPLAY_PLAYING)
         state->state = REPLAY_DONE;
     replay_clamp_fade_batches(state->pc);
-    return replay_exec_limit();
+    /* Never clamp the frame below the program's leading glClear: with
+     * the PC at 0 nothing else clears the scene rect, and the fade
+     * pass deliberately skips CMD_CLEAR (see repl_exec_cursor_step). */
+    int limit = replay_exec_limit();
+    int setup_limit = replay_frame_setup_limit(flat_program);
+    if (limit < setup_limit)
+        limit = setup_limit;
+    return limit;
 }
 
 void replay_restore_baseline_predef_values(void) {

@@ -1518,7 +1518,12 @@ glClear(mask)
   scene render to the 3D viewport, so a color clear repaints the scene
   only and leaves the chrome around it alone. Stencil/accum bits are
   deliberately absent (nothing writes stencil; accum belongs to the accum
-  effects).
+  effects). Replay handles the clear specially: fade-batch replays skip
+  CMD_CLEAR (they composite over the frame the fill pass rendered —
+  replaying the clear would wipe it), and the replay clamps never cut a
+  frame-defining pass below the program's leading glClear
+  (`replay_frame_setup_limit`), so the scene rect still clears while the
+  PC / oldest fade batch sits at 0.
 glShadeModel(MODE)
 glPointSize(size)
 glLineWidth(width)

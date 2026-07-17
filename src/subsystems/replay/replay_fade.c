@@ -149,17 +149,52 @@ int replay_has_active_fades(void) {
     return state.active && state.fade_batch_count > 0;
 }
 
+/* The pc just past the program's leading glClear, or 0 when the program
+ * doesn't open with one. The leading run may hold only commands with no
+ * visible output of their own (comments, declarations, glClearColor);
+ * anything else ends the scan — a glClear further down is a mid-scene
+ * re-clear the replay clamp may legitimately hide.
+ *
+ * This is the floor for the replay clamps on frame-defining passes:
+ * nothing clears the scene rect on the program's behalf, so cutting the
+ * walk below the leading clear (PC still at 0, or the oldest fade batch
+ * anchored at old_pc 0) would leave the previous frame smeared under
+ * the replay composite. */
+int replay_frame_setup_limit(FlatProgramView flat_program) {
+    for (int pc = 0; pc < flat_program.cmd_count; pc++) {
+        const GLCmd *cmd = &flat_program.cmds[pc];
+        if (!cmd->valid)
+            continue;
+        switch (cmd->type) {
+        case CMD_CLEAR:
+            return pc + 1;
+        case CMD_COMMENT:
+        case CMD_EMPTY:
+        case CMD_VAR_DECLARE:
+        case CMD_CLEAR_COLOR:
+            continue;
+        default:
+            return 0;
+        }
+    }
+    return 0;
+}
+
 int replay_fill_base_limit(FlatProgramView flat_program) {
     int num_flat_cmds = flat_program.cmd_count;
 
     if (!replay_has_active_fades())
         return num_flat_cmds;
     ReplayRuntimeState state = replay_state_view();
-    if (state.fade_batches[0].old_pc < 0)
-        return 0;
-    if (state.fade_batches[0].old_pc > num_flat_cmds)
-        return num_flat_cmds;
-    return state.fade_batches[0].old_pc;
+    int limit = state.fade_batches[0].old_pc;
+    if (limit < 0)
+        limit = 0;
+    if (limit > num_flat_cmds)
+        limit = num_flat_cmds;
+    int setup_limit = replay_frame_setup_limit(flat_program);
+    if (limit < setup_limit)
+        limit = setup_limit;
+    return limit;
 }
 
 int replay_bench_fade_install(const int *old_pcs, const int *new_pcs,

@@ -879,6 +879,15 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
     case CMD_CLEAR_COLOR:
     case CMD_CLIP_PLANE:
     case CMD_CLEAR:
+        /* Fade-batch replays composite translucent geometry over the
+         * frame the fill pass already rendered, and their pre-skip
+         * prefix executes state commands — so without this gate every
+         * batch would replay the program's leading glClear and wipe
+         * that frame (the whole scene then flashes in from black on
+         * each replay step). A clear is per-frame setup, not state a
+         * fade overlay may re-apply; it has no bookkeeping to run. */
+        if (cmd->type == CMD_CLEAR && cursor->options.has_fade_context)
+            break;
         /* General state filter: a render pass that owns its own material/
          * lighting/cull state (the winding view) suppresses the program's
          * conflicting state commands here. Bookkeeping (light mask / clear
