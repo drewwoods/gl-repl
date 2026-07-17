@@ -291,6 +291,18 @@ typedef struct OverlayGlState {
 
 #define OVERLAY_GL_STATE_INIT { 0u, 0, GL_CCW }
 
+/* Depth of the overlay walk's glPushAttrib/glPopAttrib snapshot stack, matching
+ * the executor's real-GL attribute-stack cap (REPL_ATTRIB_STACK_CAP). Virtual
+ * depth is tracked unbounded so pops past the cap still balance. */
+#define OVERLAY_ATTRIB_STACK_CAP 8
+
+/* The attribute bits under which the mirror's state is saved/restored: clip
+ * enables ride ENABLE|TRANSFORM, cull enable rides ENABLE|POLYGON, front-face
+ * mode rides POLYGON. A push whose mask misses all of these can't affect the
+ * mirror. */
+#define OVERLAY_ATTRIB_TRACKED_BITS \
+    (GL_ENABLE_BIT | GL_TRANSFORM_BIT | GL_POLYGON_BIT)
+
 static int outline_clip_cap_index(GLenum cap) {
     int idx = (int)cap - (int)GL_CLIP_PLANE0;
     return (idx >= 0 && idx < OUTLINE_CLIP_PLANE_COUNT) ? idx : -1;
@@ -335,6 +347,38 @@ static int overlay_gl_apply_cmd(const GLCmd *cmd, OverlayGlState *st) {
     }
     default:
         return 0;
+    }
+}
+
+/* Restore the mirrored state a matching glPushAttrib saved, re-applying to live
+ * GL, but only the components the push's `mask` actually covers (so a
+ * GL_POLYGON_BIT pop reverts cull/front-face without touching clip enables a
+ * GL_TRANSFORM_BIT scope owns). Mirrors attrib_bits' cell->bit membership. */
+static void overlay_gl_restore_state(const OverlayGlState *target, unsigned mask,
+                                     OverlayGlState *st) {
+    if (mask & (GL_ENABLE_BIT | GL_TRANSFORM_BIT)) {
+        for (int i = 0; i < OUTLINE_CLIP_PLANE_COUNT; i++) {
+            unsigned bit = 1u << i;
+            int want = (target->clip_enabled_mask & bit) != 0;
+            int have = (st->clip_enabled_mask & bit) != 0;
+            if (want != have) {
+                if (want) glEnable((GLenum)(GL_CLIP_PLANE0 + i));
+                else      glDisable((GLenum)(GL_CLIP_PLANE0 + i));
+            }
+        }
+        st->clip_enabled_mask = target->clip_enabled_mask;
+    }
+    if (mask & (GL_ENABLE_BIT | GL_POLYGON_BIT)) {
+        if (target->cull_enabled != st->cull_enabled) {
+            if (target->cull_enabled) glEnable(GL_CULL_FACE);
+            else                      glDisable(GL_CULL_FACE);
+        }
+        st->cull_enabled = target->cull_enabled;
+    }
+    if (mask & GL_POLYGON_BIT) {
+        if (target->front_face != st->front_face)
+            glFrontFace(target->front_face);
+        st->front_face = target->front_face;
     }
 }
 
@@ -547,6 +591,9 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
     int block_is_current = 0;
     int selected_block_instances = 0;
     OverlayGlState gl_st = OVERLAY_GL_STATE_INIT;
+    OverlayGlState attrib_snap[OVERLAY_ATTRIB_STACK_CAP];
+    unsigned       attrib_snap_mask[OVERLAY_ATTRIB_STACK_CAP];
+    int            attrib_depth = 0;
     int block_clip_suspended = 0;
     int color_writes = 1;
 
@@ -563,6 +610,29 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
             color_writes = color_mask_writes_color(&cmds[i]);
             continue;
         }
+        /* glPushAttrib/glPopAttrib scope the mirrored clip/cull/front-face
+         * state so the overlay walk tracks user pops (a scoped glDisable
+         * (GL_CULL_FACE) reverts at the pop, like the real scene render).
+         * Virtual depth is tracked unbounded; snapshots live within the cap. */
+        if (!in_begin && cmds[i].type == CMD_PUSH_ATTRIB) {
+            if (attrib_depth < OVERLAY_ATTRIB_STACK_CAP) {
+                attrib_snap_mask[attrib_depth] = (unsigned)cmds[i].args[0];
+                attrib_snap[attrib_depth] = gl_st;
+            }
+            attrib_depth++;
+            continue;
+        }
+        if (!in_begin && cmds[i].type == CMD_POP_ATTRIB) {
+            if (attrib_depth > 0) {
+                attrib_depth--;
+                if (attrib_depth < OVERLAY_ATTRIB_STACK_CAP &&
+                    (attrib_snap_mask[attrib_depth] & OVERLAY_ATTRIB_TRACKED_BITS))
+                    overlay_gl_restore_state(&attrib_snap[attrib_depth],
+                                             attrib_snap_mask[attrib_depth], &gl_st);
+            }
+            continue;
+        }
+
         /* Clip state lands between blocks; inside one it would be an
          * illegal glBegin/glEnd interleave. */
         if (!in_begin && overlay_gl_apply_cmd(&cmds[i], &gl_st))
