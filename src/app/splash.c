@@ -188,7 +188,9 @@ static void splash_draw_cube(float cx, float cy, float s,
 
 void splash_render(int win_w, int win_h) {
     const char *title   = "gl-repl";
-    const char *tagline = "OpenGL immediate-mode REPL";
+    /* ASCII only: the GLUT bitmap fonts draw one glyph per byte, so the
+     * wordmark's em dash becomes a hyphen here. */
+    const char *tagline = "OpenGL REPL - immediate mode, immediately.";
     const float band_h  = 64.0f;
     const float cube_s  = 13.0f;             /* projected h = 3.27*s px    */
     float alpha, yaw;
