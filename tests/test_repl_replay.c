@@ -1,5 +1,6 @@
 #include "app/glr_ctrl.h"
 #include "repl/example_loader.h"
+#include "repl/examples.h"
 #include "repl/flatten.h"
 #include "repl/pipeline.h"
 #include "repl/state_notify.h"
@@ -1129,13 +1130,23 @@ static void test_replay_funcdef_shows_alias_params(void) {
     replay_stop();
 }
 
-/* End-to-end against the shipped example 25: while replay executes inside
+/* End-to-end against the shipped lighthouse-atoll example: while replay executes inside
  * sea(half, cells, amp), the def header must render its current parameter
  * values " // half = 5.5, cells = 13, amp = 0.16" (sea is called with those
- * literals). This is the case originally reported as missing. */
-static void test_replay_example25_sea_def_params(void) {
+ * literals). This is the case originally reported as missing. Looked up by
+ * name so catalog inserts don't shift it. */
+static void test_replay_atoll_sea_def_params(void) {
+    int atoll_idx = -1;
+    int ei;
     glr_ctrl_reset_all();
-    ASSERT_TRUE("loaded example 25", repl_load_example(24) > 0);
+    for (ei = 0; ei < repl_example_count(); ei++) {
+        if (strcmp(repl_example_name(ei), "Dusk lighthouse atoll (stress test)") == 0) {
+            atoll_idx = ei;
+            break;
+        }
+    }
+    ASSERT_TRUE("found the atoll example", atoll_idx >= 0);
+    ASSERT_TRUE("loaded the atoll example", repl_load_example(atoll_idx) > 0);
     repl_flatten_commands(editor_state_edit_line());
 
     SourceTextView text = source_document_view();
@@ -1171,7 +1182,7 @@ static void test_replay_example25_sea_def_params(void) {
         }
     }
     ASSERT_TRUE("sea def header annotated while inside sea", found);
-    ASSERT_TRUE("example 25 sea def shows its parameter values",
+    ASSERT_TRUE("atoll sea def shows its parameter values",
                 strstr(display, "half = 5.5, cells = 13, amp = 0.16") != NULL);
 
     replay_stop();
@@ -1244,7 +1255,7 @@ int main(void) {
     test_replay_var_assign_uses_flatten_args();
     test_replay_funcdef_shows_params();
     test_replay_funcdef_shows_alias_params();
-    test_replay_example25_sea_def_params();
+    test_replay_atoll_sea_def_params();
     test_replay_for_header_expands_iter_and_limit();
     test_replay_single_arg_shape_gets_eval_annotation();
     test_replay_baseline_restore_survives_predef_reshape();

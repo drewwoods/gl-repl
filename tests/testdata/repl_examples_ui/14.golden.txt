@@ -9,15 +9,15 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_PLANES */
+/* @cfg grid = GRID_THEME_XZRULER */
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
-/* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
+/* @cfg grid_brightness = GRID_BRIGHTNESS_DIM */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg backdrop = RENDER3D_BACKDROP_OFF */
-/* @cfg light_theme = LIGHT_THEME_DEFAULT */
+/* @cfg light_theme = LIGHT_THEME_NEON */
 /* @cfg light_indicators = 0 */
-/* @cfg view_mode = RENDER3D_VIEW_2D */
+/* @cfg view_mode = RENDER3D_VIEW_3D */
 /* @cfg projection = PROJ_PERSPECTIVE */
 /* @cfg camera_rotate = 0 */
 /* @cfg wireframe = WIREFRAME_OFF */
@@ -89,9 +89,9 @@ void display(void) {
 --- lights_pre_camera ---
 --- camera ---
   // camera
-  glTranslatef(0.0000f, 0.0000f, -3.5000f);
-  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
+  glTranslatef(0.0000f, 0.0000f, -9.0000f);
+  glRotatef(18.0000f, 1.0f, 0.0f, 0.0f);
+  glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);
 --- header_post ---
 --- render_state ---
@@ -99,31 +99,43 @@ void display(void) {
   glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
-  static float phase, width, delta, amp, x, y;
-  static float n = 400; // ring segment count
+  // Sierpinski sponge: the carpet's rule lifted to 3D. Split the cube
+  // into 3x3x3 cells, drop the 6 face centers and the core, and recurse
+  // into the 20 cells that remain. Two levels deep -> 400 cubes.
+  sponge(depth, size) {
+    // Base case: one solid cube -- the neon lights do the coloring.
+    if(depth <= 0) {
+      glutSolidCube(size);
+    }
+    // Recursive case: -1..1 on each axis -- half-open bounds, so -1..2.
+    // A cell survives when at least two of its coords are nonzero.
+    if(depth > 0) {
+      for(i, -1, 2) {
+        for(j, -1, 2) {
+          for(k, -1, 2) {
+            if(abs(i) + abs(j) + abs(k) > 1) {
+              glPushMatrix();
+                glTranslatef(i*size/3, j*size/3, k*size/3);
+                sponge(depth - 1, size/3);
+              glPopMatrix();
+            }
+          }
+        }
+      }
+    }
+  }
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  glEnable(GL_COLOR_MATERIAL);
-  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){1, 1, 1, 1});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.22, 0.12, 0.4, 1});
   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
-
-  // Traveling ripple ring: for + fmod + conditional deformation
+  glEnable(GL_DEPTH_TEST);
   glClearColor(0.05, 0.06, 0.08, 1);
-  amp = 0.1 * sin(t * TAU);
-  phase = fmod(t / 3, TAU);
-  width = PI / 8;
-  glBegin(GL_LINE_LOOP);
-    for(i, 0, n) {
-      glColor3f(0.15, 0.55, 1);
-      x = cos(TAU * i / n);
-      y = sin(TAU * i / n);
-      delta = fmod(TAU * i / n - phase + TAU, TAU);
-      if(delta < width) {
-        glColor3f(1, 0.85, 0.15);
-        x = x + amp * x * sin(delta * TAU / width);
-        y = y + amp * y * sin(delta * TAU / width);
-      }
-      glVertex3f(x, y, 0);
-    }
-  glEnd();
+
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_LIGHT1);
+  glEnable(GL_LIGHT2);
+  glEnable(GL_LIGHT3);
+  glRotatef(16*t, 0, 1, 0);
+  sponge(2, 3);

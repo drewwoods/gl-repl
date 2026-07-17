@@ -93,7 +93,8 @@ GIF_ASSETS=(
     view-mode-2d clip-plane-sweep xform-guide replay animated-ring
     sc-torus-knot sc-snowfall sc-recursive-tree sc-spirograph sc-ripple-ring
     sc-bubble-sort sc-wave-surface sc-ringed-planet sc-grass sc-jellyfish
-    sc-conditional-colors sc-whale sc-stress-test sc-aurora-observatory
+    sc-conditional-colors sc-sierpinski-carpet sc-sierpinski-sponge
+    sc-whale sc-stress-test sc-aurora-observatory
     sc-feature-time
 )
 
@@ -1250,6 +1251,14 @@ if want sc-function-polygons; then
 fi
 if want sc-conditional-colors; then
     gif "$SHOW/conditional-colors.gif" 200 2 20 560 --example "Conditional colors (if + t)"
+fi
+if want sc-sierpinski-carpet; then
+    gif "$SHOW/sierpinski-carpet.gif" 200 2 20 560 \
+        --example "Sierpinski carpet (2D recursion)"
+fi
+if want sc-sierpinski-sponge; then
+    gif "$SHOW/sierpinski-sponge.gif" 200 2 20 560 \
+        --example "Sierpinski sponge (3D recursion)"
 fi
 
 # Big scenes.
