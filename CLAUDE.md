@@ -54,8 +54,45 @@ make debug-msan      # Build everything with MemorySanitizer (Clang/runtime perm
 make check-c99       # C99 ratchet (sample + demos + bench)
 make freeglut-clean  # Drop the vendored freeglut CMake build (forces a rebuild)
 make app             # (macOS) Bundle gl-repl.app with icon + sample.mp3
+make release         # Build macOS .app + Linux binary (on gracemont), then confirm before GitHub upload
+make fetch-music     # Download the music pack from the GitHub release into ./assets
 make clean           # Remove binaries
 ```
+
+### Release packaging (`make release`)
+
+`make release` builds both platform artifacts and, **after an explicit
+confirmation prompt**, uploads them to a GitHub release. Orchestrated by
+[`scripts/release.sh`](scripts/release.sh):
+
+- **macOS** is built locally via `make app`, then the release step swaps the
+  full music pack into `gl-repl.app/Contents/Resources/assets/` (replacing the
+  single `sample.mp3` `make app` seeds) and zips the bundle.
+- **Linux** is compiled on `REMOTE_HOST` (default `gracemont`, path
+  `REMOTE_PATH=~/code/openGL/samples/gen-ai/gl-repl`): the script fast-forwards
+  that checkout to `origin/main`, runs `make gl-repl`, copies the binary back,
+  and tars it with the music pack in `./assets` plus a `README.txt`/run note.
+- **Music source** is `MUSIC_SRC_DIR` — `assets/favorite` when it holds any
+  `*.mp3`, else flat `assets/` (same favorite/fallback idiom the web build
+  uses; both now share the one variable). All packaging happens locally, so the
+  gitignored/symlinked tracks are staged from this checkout for both platforms.
+  The "known location" in each package matches the binary's playlist search:
+  `Contents/Resources/assets` (mac) and `./assets` (linux).
+- **Confirmation gate.** `make release` stages everything under `dist/<tag>/`,
+  prints a manifest, then prompts on the tty before uploading. Declining (or no
+  tty) leaves the artifacts staged and prints the `make release-upload` command.
+  `make release-build` stops after staging; `make release-upload` pushes the
+  staged artifacts. The GitHub release is created as a **draft**; publish with
+  `gh release edit <tag> --repo <repo> --draft=false`.
+- **Knobs** (override on the command line): `RELEASE_TAG` (default
+  `git describe`), `RELEASE_REPO` (default `drewwoods/gl-repl`), `REMOTE_HOST`,
+  `REMOTE_PATH`, `MUSIC_SRC_DIR`, plus `SKIP_MACOS=1` / `SKIP_LINUX=1` /
+  `ASSUME_YES=1` / `ALLOW_DIRTY=1` as script env vars.
+
+`make fetch-music` is the inverse: it downloads the music pack from the GitHub
+release (via [`scripts/fetch-music.sh`](scripts/fetch-music.sh)) into the **local** assets folder
+(`MUSIC_DEST`, default `assets/`). `MUSIC_TAG=<tag>` selects a release other
+than the default `assets-v1` asset release.
 
 Requires: gcc with C99 support, OpenGL, GLUT/freeglut. On macOS the build also
 needs **cmake** — `make gl-repl` (and the non-stub `make test`) builds the

@@ -48,3 +48,6 @@ recovery.c
 /gl-repl.app/
 /packaging/macos/gl-repl.icns
 /packaging/macos/gl-repl.iconset/
+
+# Release staging artifacts (regenerate via `make release`)
+/dist/
