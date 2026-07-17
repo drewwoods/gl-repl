@@ -35,8 +35,14 @@ int repl_count_vertices(void) {
     return n;
 }
 
-int repl_collect_tuned_vars(const GLCmd *cmds, int count, SourceTextView text,
-                            const char **out, int max, int *total_out) {
+/* Shared walk for the decl-line tag collectors: gathers names from every
+ * CMD_VAR_DECLARE whose source line satisfies `has_tag`. */
+typedef int (*ReplLineTagPredicate)(const char *line);
+
+static int collect_tagged_vars(const GLCmd *cmds, int count,
+                               SourceTextView text,
+                               ReplLineTagPredicate has_tag,
+                               const char **out, int max, int *total_out) {
     int written = 0;
     int total = 0;
     if (!cmds || count < 0)
@@ -44,7 +50,7 @@ int repl_collect_tuned_vars(const GLCmd *cmds, int count, SourceTextView text,
     for (int i = 0; i < count; i++) {
         if (cmds[i].type != CMD_VAR_DECLARE)
             continue;
-        if (!repl_eval_line_has_tune_tag(source_text_line(text, i)))
+        if (!has_tag(source_text_line(text, i)))
             continue;
         for (int n = 0; n < cmds[i].payload.decl.count; n++) {
             total++;
@@ -55,6 +61,18 @@ int repl_collect_tuned_vars(const GLCmd *cmds, int count, SourceTextView text,
     if (total_out)
         *total_out = total;
     return written;
+}
+
+int repl_collect_tuned_vars(const GLCmd *cmds, int count, SourceTextView text,
+                            const char **out, int max, int *total_out) {
+    return collect_tagged_vars(cmds, count, text, repl_eval_line_has_tune_tag,
+                               out, max, total_out);
+}
+
+int repl_collect_config_vars(const GLCmd *cmds, int count, SourceTextView text,
+                             const char **out, int max, int *total_out) {
+    return collect_tagged_vars(cmds, count, text, repl_eval_line_has_config_tag,
+                               out, max, total_out);
 }
 
 int repl_mark_written_var_slots(const GLCmd *cmds, int count,

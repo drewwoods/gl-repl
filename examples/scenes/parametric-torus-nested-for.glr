@@ -13,7 +13,7 @@ glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
 static float R = 2;  // major radius (ring center to tube center)
 static float r = 1;  // minor radius (tube thickness)
-static float n = 20; // segment count around both u and v
+static float n = 20; // @config segment count around both u and v
 static float u, v, s; // current major/minor angles, color mix factor
 glClearColor(0.05, 0.06, 0.08, 1.0);
 glEnable(GL_DEPTH_TEST);

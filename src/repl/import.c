@@ -589,13 +589,14 @@ static int import_try_stash_predef_decl(ImportState *s, const char *line) {
     return import_parse_predef_decl_common(line, s->float_stash, &s->float_stash_count, MAX_PREDEF_VARS);
 }
 
-/* 1 if `s` carries a whole-token `@tune` (the trailing knob tag the exporter
- * appends to a `// @declare` marker), else 0. Bounded by whitespace/end so it
- * never matches a name like `@tuned`. */
-static int declare_args_have_tune_tag(const char *s) {
-    for (const char *q = s; (q = strstr(q, "@tune")) != NULL; q += 5) {
+/* 1 if `s` carries the whole-token `tag` (a trailing tag the exporter
+ * appends to a `// @declare` marker — `@tune` / `@config`), else 0. Bounded
+ * by whitespace/end so it never matches a name like `@tuned`. */
+static int declare_args_have_tag(const char *s, const char *tag,
+                                 size_t tag_len) {
+    for (const char *q = s; (q = strstr(q, tag)) != NULL; q += tag_len) {
         char prev = (q == s) ? ' ' : q[-1];
-        char next = q[5];
+        char next = q[tag_len];
         if (isspace((unsigned char)prev) &&
             (next == '\0' || isspace((unsigned char)next)))
             return 1;
@@ -715,13 +716,19 @@ static int parse_snippet_declare(const char *args, ImportState *s) {
             repl_eval_undeclare_predef_var(newly_declared[i]);
         return 0;
     }
-    /* Re-attach the @tune knob tag so the reconstructed decl line is the
-     * in-app source of truth (badge + re-export both read the trailing
-     * comment). */
-    if (declare_args_have_tune_tag(args))
-        snprintf(decl_line + off, sizeof(decl_line) - (size_t)off, "; // @tune");
-    else
-        snprintf(decl_line + off, sizeof(decl_line) - (size_t)off, ";");
+    /* Re-attach the @tune / @config tags so the reconstructed decl line is
+     * the in-app source of truth (badge, panel dimming, and re-export all
+     * read the trailing comment). */
+    {
+        int has_tune = declare_args_have_tag(args, "@tune", 5);
+        int has_config = declare_args_have_tag(args, "@config", 7);
+        off += snprintf(decl_line + off, sizeof(decl_line) - (size_t)off, ";");
+        if (has_tune || has_config)
+            off += snprintf(decl_line + off, sizeof(decl_line) - (size_t)off,
+                            " //%s%s",
+                            has_tune ? " @tune" : "",
+                            has_config ? " @config" : "");
+    }
     cmd.payload.decl.count = count;
 
     /* Insert the command directly, bypassing editor_try_commit_float_decl so we

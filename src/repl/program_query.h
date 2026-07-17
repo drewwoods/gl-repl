@@ -25,6 +25,13 @@ int         repl_count_vertices(void);
 int repl_collect_tuned_vars(const GLCmd *cmds, int count, SourceTextView text,
                             const char **out, int max, int *total_out);
 
+/* Same walk for the `// @config` tag: names of every variable declared on a
+ * config-tagged decl line. A config-tagged var stays bright in the variable
+ * panel even when the program assigns it (e.g. clamping it in bounds).
+ * Contract identical to repl_collect_tuned_vars. */
+int repl_collect_config_vars(const GLCmd *cmds, int count, SourceTextView text,
+                             const char **out, int max, int *total_out);
+
 /* Mark predef-variable slots that are written by committed `name = expr;`
  * commands. `written_slots[0..written_count)` is cleared first; each
  * CMD_VAR_ASSIGN with a valid current var_idx sets one slot. Returns the

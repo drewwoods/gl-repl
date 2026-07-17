@@ -273,6 +273,71 @@ static void test_roundtrip(void) {
     ASSERT_TRUE("decl line carries // @tune after import", found_tagged_decl);
 }
 
+static void test_config_tag_predicate(void) {
+    ASSERT_TRUE("bare @config matches",
+                repl_eval_line_has_config_tag("float n = 20; // @config"));
+    ASSERT_TRUE("@config with trailing text matches",
+                repl_eval_line_has_config_tag(
+                    "float n = 20; // @config segment count"));
+    ASSERT_TRUE("no comment -> no config match",
+                !repl_eval_line_has_config_tag("float n = 20;"));
+    ASSERT_TRUE("@configured does NOT match (whole token)",
+                !repl_eval_line_has_config_tag("float n = 20; // @configured"));
+    ASSERT_TRUE("@tune line is not @config",
+                !repl_eval_line_has_config_tag("float n = 20; // @tune"));
+}
+
+static void test_config_tag_roundtrip(void) {
+    const char *path = "/tmp/repl_config_rt.c";
+    reset_repl();
+    editor_feed_line("float n = 8; // @config");
+    editor_feed_line("float both = 2; // @tune @config");
+    editor_feed_line("n = min(20, max(n, 3));");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(n, both, 0);");
+    editor_feed_line("glEnd();");
+
+    const char *names[MAX_PREDEF_VARS];
+    int total = -1;
+    int c_n = repl_collect_config_vars(repl_state_document_cmds(),
+                                       repl_state_document_count(),
+                                       source_document_view(), names,
+                                       MAX_PREDEF_VARS, &total);
+    ASSERT_INT("config collector count", c_n, 2);
+    ASSERT_INT("config collector total", total, 2);
+
+    repl_export_save_output(path, source_document_view(), NULL);
+    char *c = read_file(path);
+    ASSERT_TRUE("config export readable", c != NULL);
+    ASSERT_TRUE("marker carries @config", contains(c, "@declare n @config"));
+    ASSERT_TRUE("marker carries both tags",
+                contains(c, "@declare both @tune @config"));
+    free(c);
+
+    /* Reimport and confirm both tags survive on the decl lines. */
+    reset_repl();
+    int loaded = repl_export_load_from_file(path, NULL);
+    ASSERT_INT("config import ok", loaded, 1);
+
+    total = -1;
+    c_n = repl_collect_config_vars(repl_state_document_cmds(),
+                                   repl_state_document_count(),
+                                   source_document_view(), names,
+                                   MAX_PREDEF_VARS, &total);
+    ASSERT_INT("config tag survives round-trip", c_n, 2);
+
+    int both_has_tune = 0;
+    SourceTextView v = source_document_view();
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        const char *line = source_text_line(v, i);
+        if (repl_state_document_cmds()[i].type == CMD_VAR_DECLARE &&
+            repl_eval_line_has_tune_tag(line) &&
+            repl_eval_line_has_config_tag(line))
+            both_has_tune = 1;
+    }
+    ASSERT_TRUE("dual-tagged decl keeps @tune and @config", both_has_tune);
+}
+
 static void test_key_assignment_and_cap(void) {
     const char *path = "/tmp/repl_tune_cap.c";
     reset_repl();
@@ -395,6 +460,8 @@ int main(void) {
     test_collector_and_export();
     test_untagged_baseline();
     test_roundtrip();
+    test_config_tag_predicate();
+    test_config_tag_roundtrip();
     test_key_assignment_and_cap();
     test_generated_names_do_not_shadow_tuned_vars();
     test_compile_gate();
