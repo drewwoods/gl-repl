@@ -3887,6 +3887,56 @@ static void test_mouse_routing_and_hit_testing(void) {
     glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, 100, 100);
 }
 
+/* glMaterialfv's RGBA value lives in a compound literal at args[2..5],
+ * behind two baked enum tokens — so both the read (swatch color) and the
+ * write (source rewrite) take their own path through the picker host. */
+static void test_color_picker_materialfv(void) {
+    printf("--- imrepl_ctrl color picker on glMaterialfv ---\n");
+    prepare_display_fixture();
+    glr_color_picker_install_host();
+    glr_ctrl_reset_all();
+
+    editor_feed_line("glMaterialfv(GL_FRONT, GL_DIFFUSE, (GLfloat[]){0.9, 0.3, 0.2, 1});");
+    editor_feed_line("glMaterialfv(GL_FRONT, GL_SHININESS, (GLfloat[]){32});");
+    ASSERT_INT("both material lines committed", repl_state_document_count(), 2);
+
+    float r = 0, g = 0, b = 0, a = 0;
+    int has_alpha = 0;
+    ASSERT_INT("RGBA glMaterialfv is pickable",
+               color_picker_read_cmd_color(0, &r, &g, &b, &a, &has_alpha), 1);
+    ASSERT_TRUE("swatch reads the compound literal, not face/pname",
+                r == 0.9f && g == 0.3f && b == 0.2f && a == 1.0f);
+    ASSERT_INT("RGBA glMaterialfv carries alpha", has_alpha, 1);
+    ASSERT_INT("GL_SHININESS glMaterialfv has no color to pick",
+               color_picker_can_edit_cmd(1), 0);
+
+    /* Press the SV square's bottom-left corner (S = 0, V = 0 => black): the
+     * writeback must rewrite only the literal and keep face/pname. */
+    color_picker_stop();
+    color_picker_start(0, 300);
+    ASSERT_INT("picker opened on the material line", color_picker_active_line(), 0);
+    ColorPickerView v = color_picker_view();
+    ColorPickerInputResult res =
+        color_picker_handle_press(v.rects.sv_x,
+                                  ui_state_viewport().window_h - v.rects.sv_y);
+    ASSERT_INT("SV press consumed", res.consumed, 1);
+    ASSERT_INT("SV press wrote back", res.changed, 1);
+    color_picker_handle_release();
+
+    const char *line = editor_buffer_view_line(editor_buffer_view(), 0);
+    ASSERT_TRUE("rewrite keeps face and pname tokens",
+                line && strstr(line, "glMaterialfv(GL_FRONT, GL_DIFFUSE, (GLfloat[]){") != NULL);
+    ASSERT_INT("rewritten line still parses as a material",
+               repl_state_document_cmd_at(0)->type, CMD_MATERIALFV);
+    ASSERT_TRUE("SV corner drove the literal to black",
+                repl_state_document_cmd_at(0)->args[2] == 0.0f &&
+                repl_state_document_cmd_at(0)->args[3] == 0.0f &&
+                repl_state_document_cmd_at(0)->args[4] == 0.0f);
+    ASSERT_INT("face token survives as args[0]",
+               (int)repl_state_document_cmd_at(0)->args[0], GL_FRONT);
+    color_picker_stop();
+}
+
 static void test_special_key_shortcuts(void) {
     printf("--- imrepl_ctrl special key shortcuts ---\n");
     prepare_display_fixture();
@@ -4226,6 +4276,7 @@ int main(void) {
     test_display_frame_merges_light_theme_and_enable_mask();
     test_export_light_bridge_reads_app_state();
     test_mouse_routing_and_hit_testing();
+    test_color_picker_materialfv();
     test_special_key_shortcuts();
     test_post_filter_key_cycling();
     test_app_lifecycle_bootstrap_shutdown();

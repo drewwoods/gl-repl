@@ -2,7 +2,7 @@
  * ui_app_color_swatch.h - Inline code-panel color swatch renderer.
  *
  * Draws the little color square shown inline in the code panel for an
- * editable glColor/gluColor/glClearColor line. It reads the app-owned
+ * editable glColor/gluColor/glClearColor/glMaterialfv line. It reads the app-owned
  * UiTransformer, so it lives in ui/app rather than the color_picker
  * subsystem (which must stay free of ui/app to link in color_picker_demo).
  */

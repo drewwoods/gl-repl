@@ -535,10 +535,22 @@ int color_picker_active_line(void) {
     return g_cp_line;
 }
 
-int color_picker_can_edit_cmd(int cmd_idx) {
+int color_picker_read_cmd_color(int cmd_idx, float *r, float *g, float *b,
+                                float *a, int *has_alpha) {
     if (!g_host || !g_host->read_color) return 0;
-    float r, g, b, a, vmax; int ha;
-    return g_host->read_color(cmd_idx, &r, &g, &b, &a, &ha, &vmax);
+    float rr, gg, bb, aa, vmax; int ha;
+    if (!g_host->read_color(cmd_idx, &rr, &gg, &bb, &aa, &ha, &vmax))
+        return 0;
+    if (r) *r = rr;
+    if (g) *g = gg;
+    if (b) *b = bb;
+    if (a) *a = aa;
+    if (has_alpha) *has_alpha = ha;
+    return 1;
+}
+
+int color_picker_can_edit_cmd(int cmd_idx) {
+    return color_picker_read_cmd_color(cmd_idx, NULL, NULL, NULL, NULL, NULL);
 }
 
 ColorPickerView color_picker_view(void) {
