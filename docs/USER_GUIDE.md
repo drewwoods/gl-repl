@@ -821,6 +821,37 @@ clearly while occluded structure stays faint. Tip: vertex outlines/points
 are on by default and draw over the wires; turn them off for a clean
 wireframe look.
 
+### Depth view
+
+**Ctrl+N** cycles the Depth view: **Off / Linear / Scene / Split** — a
+grayscale rendering of the depth buffer, for seeing what depth testing
+actually sees. Near surfaces are bright, far ones dark, and empty
+background is black:
+
+![Depth view: Scene mode (left) normalizes the grayscale to the geometry's own depth range; Split (right) overlays depth on the right half of the normal render](images/depth-view.png)
+
+- **Linear** spreads the gray ramp across the whole near/far range of the
+  projection. Faithful, but since most scenes occupy a small slice of that
+  range, everything tends to read bright and flat — use it when you care
+  about absolute depth (e.g. how close geometry sits to the near plane).
+- **Scene** stretches the ramp over *your geometry's* actual depth extent
+  instead, so the nearest surface is white and the farthest keeps a dim
+  floor above the background — full contrast for spotting depth ordering
+  and z-fighting candidates. The range follows the scene smoothly as it
+  animates.
+- **Split** keeps the normal render and overlays the scene-normalized
+  depth image on the right half, pixel-aligned — the same column of pixels
+  in both halves is the same fragment, so you can read color and depth
+  side by side.
+
+The depth snapshot is taken right after your geometry draws, before the
+grid, backdrop, and axes render — so the helpers never appear in the depth
+image (notice the grid on Split's normal half only). It works during
+replay, pairs with wireframe/hidden-line (they seed real depths), and the
+depth image is taken from the final accumulation pass, so AA and motion
+blur keep working in Split's normal half. On the web build the row is
+inert — WebGL cannot read the depth buffer back.
+
 ### The Config menu
 
 Everything above — and the stage dressing below — has a home menu. Open the
