@@ -9,6 +9,7 @@
 #include "repl/gl_state_inspector.h"
 
 #include "repl/command_spec.h"
+#include "repl/attrib_bits.h"   /* repl_attrib_bits_for_cmd (cap->bit membership) */
 #include "repl/init_state.h"
 #include "repl/state_views.h"
 
@@ -557,6 +558,160 @@ static int gl_state_command_precedes(const GLCmd *cmd, int source_line_idx) {
         return 0;
     anchor = gl_state_execution_anchor(cmd);
     return anchor >= 0 && anchor < source_line_idx;
+}
+
+/* Real-GL attribute-stack cap the inspector mirrors — matches the executor's
+ * REPL_ATTRIB_STACK_CAP. Snapshots live only within it; deeper virtual pushes
+ * just track depth. */
+#define GL_STATE_ATTRIB_STACK_CAP 8
+
+/* One saved user-attribute frame: the push mask plus a full state snapshot.
+ * Restore reads back only the groups the mask covers. */
+typedef struct {
+    unsigned           mask;
+    ReplGlTrackedState snap;
+} GlStateAttribFrame;
+
+/* Restore the tracked state a matching glPushAttrib saved, but only the groups
+ * whose covering bit is in `mask`, stamping each restored row's latest change
+ * source to the pop line (the policy CMD_POP_MATRIX uses). Capability enables
+ * reuse attrib_bits' cap->bit membership via a probe glEnable, so bit ownership
+ * lives in exactly one place. */
+static void gl_state_restore_attrib_groups(ReplGlTrackedState *s,
+                                           const ReplGlTrackedState *snap,
+                                           unsigned mask,
+                                           ReplGlStateChangeSource source) {
+    int i, j;
+
+    /* Enable/disable state of every tracked cap (GL_ENABLE_BIT plus the cap's
+     * own group bit). */
+    for (i = 0; i < s->cap_count; i++) {
+        GLCmd probe;
+        memset(&probe, 0, sizeof(probe));
+        probe.type = CMD_ENABLE;
+        probe.num_args = 1;
+        probe.args[0] = (float)s->caps[i].cap;
+        if (mask & repl_attrib_bits_for_cmd(&probe)) {
+            s->caps[i].current = snap->caps[i].current;
+            s->caps[i].touched = 1;
+            s->caps[i].source = source;
+        }
+    }
+
+    if (mask & GL_CURRENT_BIT) {
+        memcpy(s->current_color, snap->current_color, sizeof(s->current_color));
+        s->current_color_touched = 1;
+        s->current_color_source = source;
+        memcpy(s->current_normal, snap->current_normal, sizeof(s->current_normal));
+        s->current_normal_touched = 1;
+        s->current_normal_source = source;
+        s->edge_flag = snap->edge_flag;
+        s->edge_flag_touched = 1;
+        s->edge_flag_source = source;
+        memcpy(s->raster_pos, snap->raster_pos, sizeof(s->raster_pos));
+        s->raster_pos_touched = 1;
+        s->raster_pos_source = source;
+    }
+
+    if (mask & GL_POINT_BIT) {
+        s->point_size = snap->point_size;
+        s->point_size_touched = 1;
+        s->point_size_source = source;
+        memcpy(s->point_attenuation, snap->point_attenuation,
+               sizeof(s->point_attenuation));
+        s->point_attenuation_touched = 1;
+        s->point_attenuation_source = source;
+    }
+
+    if (mask & GL_LINE_BIT) {
+        s->line_width = snap->line_width;
+        s->line_width_touched = 1;
+        s->line_width_source = source;
+        s->line_stipple_repeat = snap->line_stipple_repeat;
+        s->line_stipple_pattern = snap->line_stipple_pattern;
+        s->line_stipple_touched = 1;
+        s->line_stipple_source = source;
+    }
+
+    if (mask & GL_POLYGON_BIT) {
+        s->front_face = snap->front_face;
+        s->front_face_touched = 1;
+        s->front_face_source = source;
+        s->cull_face = snap->cull_face;
+        s->cull_face_touched = 1;
+        s->cull_face_source = source;
+    }
+
+    if (mask & GL_LIGHTING_BIT) {
+        s->shade_model = snap->shade_model;
+        s->shade_model_touched = 1;
+        s->shade_model_source = source;
+        s->color_material_face = snap->color_material_face;
+        s->color_material_mode = snap->color_material_mode;
+        s->color_material_touched = 1;
+        s->color_material_source = source;
+        s->light_model_local_viewer = snap->light_model_local_viewer;
+        s->light_model_local_viewer_touched = 1;
+        s->light_model_local_viewer_source = source;
+        s->light_model_two_side = snap->light_model_two_side;
+        s->light_model_two_side_touched = 1;
+        s->light_model_two_side_source = source;
+        memcpy(s->light_model_ambient, snap->light_model_ambient,
+               sizeof(s->light_model_ambient));
+        s->light_model_ambient_touched = 1;
+        s->light_model_ambient_source = source;
+        for (i = 0; i < REPL_GL_STATE_MATERIAL_FACES; i++) {
+            for (j = 0; j < REPL_GL_STATE_MATERIAL_PROPS; j++) {
+                memcpy(s->materials[i][j].value, snap->materials[i][j].value,
+                       sizeof(s->materials[i][j].value));
+                s->materials[i][j].touched = 1;
+                s->materials[i][j].source = source;
+            }
+        }
+        for (i = 0; i < REPL_LIGHT_SLOT_COUNT; i++) {
+            ReplGlTrackedLight *ld = &s->lights[i];
+            const ReplGlTrackedLight *ls = &snap->lights[i];
+            memcpy(ld->ambient, ls->ambient, sizeof(ld->ambient));
+            memcpy(ld->diffuse, ls->diffuse, sizeof(ld->diffuse));
+            memcpy(ld->specular, ls->specular, sizeof(ld->specular));
+            memcpy(ld->position, ls->position, sizeof(ld->position));
+            ld->ambient_touched = ld->diffuse_touched = 1;
+            ld->specular_touched = ld->position_touched = 1;
+            ld->ambient_source = ld->diffuse_source = source;
+            ld->specular_source = ld->position_source = source;
+        }
+    }
+
+    if (mask & GL_DEPTH_BUFFER_BIT) {
+        s->depth_func = snap->depth_func;
+        s->depth_func_touched = 1;
+        s->depth_func_source = source;
+        s->depth_mask = snap->depth_mask;
+        s->depth_mask_touched = 1;
+        s->depth_mask_source = source;
+    }
+
+    if (mask & GL_TRANSFORM_BIT) {
+        for (i = 0; i < REPL_GL_STATE_CLIP_PLANES; i++) {
+            memcpy(s->clip_plane[i], snap->clip_plane[i],
+                   sizeof(s->clip_plane[i]));
+            s->clip_plane_touched[i] = 1;
+            s->clip_plane_source[i] = source;
+        }
+    }
+
+    if (mask & GL_COLOR_BUFFER_BIT) {
+        memcpy(s->clear_color, snap->clear_color, sizeof(s->clear_color));
+        s->clear_color_touched = 1;
+        s->clear_color_source = source;
+        s->blend_src = snap->blend_src;
+        s->blend_dst = snap->blend_dst;
+        s->blend_func_touched = 1;
+        s->blend_func_source = source;
+        memcpy(s->color_mask, snap->color_mask, sizeof(s->color_mask));
+        s->color_mask_touched = 1;
+        s->color_mask_source = source;
+    }
 }
 
 static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd,
@@ -1310,6 +1465,13 @@ void repl_gl_state_report_at_line(FlatProgramView program,
 
     if (program.cmd_count < 0)
         program.cmd_count = 0;
+    /* User glPushAttrib/glPopAttrib scope the fold with a separate virtual
+     * depth, kept distinct from the generated GL_ALL_ATTRIB_BITS display
+     * bracket (attrib_stack_depth) so an orphan user pop can't consume it.
+     * Function-static frame storage (reset via user_attrib_depth = 0 each
+     * call) avoids a multi-KB stack snapshot array; not reentrant. */
+    static GlStateAttribFrame attrib_frames[GL_STATE_ATTRIB_STACK_CAP];
+    int user_attrib_depth = 0;
     for (i = 0; i < program.cmd_count; i++) {
         const GLCmd *cmd = &program.cmds[i];
         if (!gl_state_command_precedes(cmd, source_line_idx))
@@ -1317,7 +1479,34 @@ void repl_gl_state_report_at_line(FlatProgramView program,
         source.kind = REPL_GL_STATE_SOURCE_DISPLAY;
         source.source_line_idx = cmd->src_cmd_idx >= 0
             ? cmd->src_cmd_idx : gl_state_execution_anchor(cmd);
+        if (cmd->type == CMD_PUSH_ATTRIB) {
+            if (user_attrib_depth < GL_STATE_ATTRIB_STACK_CAP) {
+                attrib_frames[user_attrib_depth].mask = (unsigned)cmd->args[0];
+                attrib_frames[user_attrib_depth].snap = state;
+            }
+            user_attrib_depth++;
+            continue;
+        }
+        if (cmd->type == CMD_POP_ATTRIB) {
+            if (user_attrib_depth > 0) {
+                user_attrib_depth--;
+                if (user_attrib_depth < GL_STATE_ATTRIB_STACK_CAP)
+                    gl_state_restore_attrib_groups(
+                        &state, &attrib_frames[user_attrib_depth].snap,
+                        attrib_frames[user_attrib_depth].mask, source);
+            }
+            continue;
+        }
         gl_state_apply_cmd(&state, cmd, source);
+    }
+
+    /* Reported GL_ATTRIB_STACK_DEPTH = generated bracket depth + the real user
+     * push depth (min(virtual, CAP)) still open at the cursor. */
+    if (user_attrib_depth > 0) {
+        int eff = user_attrib_depth < GL_STATE_ATTRIB_STACK_CAP
+                      ? user_attrib_depth : GL_STATE_ATTRIB_STACK_CAP;
+        state.attrib_stack_depth += eff;
+        state.attrib_stack_depth_touched = 1;
     }
 
     gl_state_append_report(&state, out);

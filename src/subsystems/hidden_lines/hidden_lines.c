@@ -198,6 +198,12 @@ static int hidden_lines_cursor_owns_cmd(CmdType type) {
     case CMD_IF_END:
     case CMD_VAR_ASSIGN:
     case CMD_SCRATCH_ASSIGN:
+    /* Drive push/pop attrib through the cursor (with suppress_attrib_gl set
+     * below) so its saved frames scope the light-enable / clear-color
+     * bookkeeping — including the end-of-prefix unwind — without touching the
+     * live depth/colour/polygon state this pass deliberately owns. */
+    case CMD_PUSH_ATTRIB:
+    case CMD_POP_ATTRIB:
         return 1;
     default:
         return 0;
@@ -230,6 +236,9 @@ void hidden_lines_execute(const HiddenLinesRenderContext *ctx,
     options.text = ctx->text;
     options.status_out = ctx->status_out;
     options.status_out_sz = ctx->status_out_sz;
+    /* Scope the bookkeeping mirror on push/pop without emitting glPushAttrib/
+     * glPopAttrib — this pass owns its own depth/colour/polygon GL state. */
+    options.suppress_attrib_gl = 1;
     cursor = repl_exec_cursor_begin(&options);
     if (cmd_count <= 0) {
         repl_exec_cursor_end(&cursor);

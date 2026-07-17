@@ -1007,7 +1007,14 @@ static void glr_ctrl_clear_chrome(const Render3dRenderConfig *config) {
  * render.c owns a two-sided-lighting setup (front green / back red); these
  * program commands would clobber it, so suppress their GL emission while the
  * geometry, transforms and normals still execute normally. glColor passes
- * through — with lighting on and color-material off, GL ignores it anyway. */
+ * through — with lighting on and color-material off, GL ignores it anyway.
+ *
+ * glPushAttrib/glPopAttrib are intentionally NOT listed: the executor
+ * dispatches them in their own case block before the repl_apply_state_cmd
+ * cluster, so this filter never sees them. A balanced user push/pop only saves
+ * and restores whatever GL state is live (the pass's own setup) and nets out to
+ * a no-op; any leftover push is unwound at cursor end and is bounded by this
+ * pass's outer glPushAttrib bracket regardless. */
 static int winding_state_filter(CmdType type, const GLCmd *cmd, void *ud) {
     (void)ud;
     switch (type) {
