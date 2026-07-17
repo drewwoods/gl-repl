@@ -468,7 +468,30 @@ static void text_panel_draw_row_background(const UiTextPanelSnapshot *snap,
             glDisable(GL_BLEND);
     }
 
-    if (row->left_marker_active) {
+    if (row->left_marker_band_count > 0) {
+        /* Segmented marker: split the strip into equal stacked bands, one per
+         * covering colour in canonical order (first UI_TEXT_PANEL_MAX_MARKER_BANDS). */
+        int nb = row->left_marker_band_count;
+        float bx0 = (float)(snap->cp_x + 1);
+        float bx1 = (float)(snap->cp_x + 4);
+        float y0 = (float)(line_y - 3);
+        float y1 = (float)(line_y - 3 + LINE_H);
+        if (nb > UI_TEXT_PANEL_MAX_MARKER_BANDS)
+            nb = UI_TEXT_PANEL_MAX_MARKER_BANDS;
+        for (int b = 0; b < nb; b++) {
+            const UiTextPanelColor *bc = &row->left_marker_band_colors[b];
+            float by0 = y0 + (y1 - y0) * (float)b / (float)nb;
+            float by1 = y0 + (y1 - y0) * (float)(b + 1) / (float)nb;
+            if (text_panel_color_uses_blend(bc)) {
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            }
+            text_panel_set_color(bc);
+            glRectf(bx0, by0, bx1, by1);
+            if (text_panel_color_uses_blend(bc))
+                glDisable(GL_BLEND);
+        }
+    } else if (row->left_marker_active) {
         if (text_panel_color_uses_blend(&row->left_marker_color)) {
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

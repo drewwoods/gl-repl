@@ -95,6 +95,12 @@ typedef struct {
  */
 #define UI_TEXT_PANEL_MAX_COLOR_SEGMENTS 64
 
+/* Max stacked colour bands in a segmented left marker (see
+ * UiTextPanelRow.left_marker_band_colors). The glPushAttrib gutter shows the
+ * first this-many covering attribute bits in canonical order; a line under
+ * more simply caps here. */
+#define UI_TEXT_PANEL_MAX_MARKER_BANDS 4
+
 /* Drop-shadow opacity for syntax-highlight "On+Shadow" mode: the white
  * shadow copy is drawn at this fraction of the span's own alpha (so faded
  * spans keep their shadow in step). Bump it to make the halo more visible.
@@ -181,6 +187,14 @@ typedef struct {
     int                   background_active;
     UiTextPanelColor      left_marker_color;
     int                   left_marker_active;
+    /* Optional multi-colour left marker: when left_marker_band_count > 0 the
+     * renderer splits the marker strip vertically into that many equal stacked
+     * bands (top-to-bottom in array order) instead of the single
+     * left_marker_color fill. Used by the glPushAttrib per-bit gutter (a line
+     * saved/reverted under several attribute bits shows a segmented marker).
+     * 0 keeps the legacy single-colour path; existing rows are untouched. */
+    UiTextPanelColor      left_marker_band_colors[UI_TEXT_PANEL_MAX_MARKER_BANDS];
+    int                   left_marker_band_count;
     UiTextPanelColor      color;
     UiTextPanelColorSegment color_segments[UI_TEXT_PANEL_MAX_COLOR_SEGMENTS];
     int                   color_segment_count;

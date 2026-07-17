@@ -29,6 +29,11 @@
 /* Number of supported GL_*_BIT groups (mirrors k_attrib_bits[]). */
 #define REPL_ATTRIB_BIT_COUNT 9
 
+/* A comfortable cap for a collector result: at most one line per distinct
+ * atomic state cell (~55), coalesced, so 64 can never truncate a real
+ * document. Callers size their ReplAttribHighlightLine[] buffers with this. */
+#define REPL_ATTRIB_HL_MAX 64
+
 /* Upper bound on atomic state cells a single command can write. Five is the
  * maximum: a glColor* line owns its CURRENT color cell plus, while color
  * material is enabled, as many as four selected material cells

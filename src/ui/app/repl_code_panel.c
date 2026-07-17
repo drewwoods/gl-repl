@@ -5,6 +5,7 @@
 #include "keys.h"
 #include "editor/state.h"
 #include "repl/command_spec.h"
+#include "repl/attrib_bits.h"       /* REPL_ATTRIB_BIT_COUNT (per-bit gutter palette) */
 #include "repl/program_query.h"
 #include "repl/eval.h"
 #include "repl/export.h"
@@ -71,6 +72,24 @@ static const struct { float r, g, b; } k_category_colors[CMD_CAT_COUNT] = {
     [CMD_CAT_COMMENT]     = { 0.45f, 0.50f, 0.45f },
     [CMD_CAT_GLUT_SHAPE]  = { 0.50f, 0.90f, 0.70f },
     [CMD_CAT_TESS_BLOCK]  = { 0.70f, 0.55f, 0.90f },
+};
+
+/* Per-attribute-bit colours for the glPushAttrib/glPopAttrib highlighting,
+ * indexed by canonical bit index (repl_attrib_bit_entries order). Nine
+ * visually distinct hues used for both the mask-token spans on the push line
+ * and the segmented left-edge gutter marker on each saved/reverted setter line.
+ * Kept clear of the reserved marker colours: warning-red (0.95,0.35,0.30),
+ * replay-green (~0.20,0.90,0.30), and the violet bracket match (0.80,0.70,0.95). */
+static const struct { float r, g, b; } k_attrib_bit_colors[REPL_ATTRIB_BIT_COUNT] = {
+    { 0.95f, 0.75f, 0.20f },  /* 0 GL_CURRENT_BIT      - gold   */
+    { 0.55f, 0.80f, 0.30f },  /* 1 GL_POINT_BIT        - lime   */
+    { 0.30f, 0.75f, 0.90f },  /* 2 GL_LINE_BIT         - sky    */
+    { 0.90f, 0.55f, 0.30f },  /* 3 GL_POLYGON_BIT      - orange */
+    { 0.95f, 0.90f, 0.45f },  /* 4 GL_LIGHTING_BIT     - yellow */
+    { 0.45f, 0.60f, 0.95f },  /* 5 GL_DEPTH_BUFFER_BIT - blue   */
+    { 0.60f, 0.45f, 0.90f },  /* 6 GL_TRANSFORM_BIT    - indigo */
+    { 0.40f, 0.85f, 0.70f },  /* 7 GL_ENABLE_BIT       - teal   */
+    { 0.90f, 0.55f, 0.65f },  /* 8 GL_COLOR_BUFFER_BIT - rose   */
 };
 
 typedef struct {
@@ -590,6 +609,23 @@ static int repl_code_panel_line_is_affecting_transform(const UiRenderSnapshot *s
     return 0;
 }
 
+/* OR of the bit-index masks (aux) over every HIGHLIGHT_ATTRIB_STATE entry on a
+ * line — the set of attribute-bit colours the glPushAttrib gutter marker bands
+ * for this saved/reverted setter line. 0 when the line carries no attrib
+ * highlight. Multi-entry per line (a cell covered by several bits, or several
+ * cells on one line), like the unbalanced scanner above. */
+static unsigned repl_code_panel_line_attrib_bits(const UiRenderSnapshot *snap,
+                                                 int line_idx) {
+    unsigned mask = 0;
+    if (!snap || !snap->editor_highlights || line_idx < 0) return 0;
+    for (int i = 0; i < snap->editor_highlights->count; i++) {
+        const UiHighlight *h = &snap->editor_highlights->items[i];
+        if (h->kind == HIGHLIGHT_ATTRIB_STATE && h->line_idx == line_idx)
+            mask |= (unsigned)h->aux;
+    }
+    return mask;
+}
+
 int ui_repl_code_panel_compute_text_x(const UiRenderSnapshot *snap) {
     if (!snap)
         return 0;
@@ -780,6 +816,11 @@ typedef enum {
      * feeding-color/normal marker for a different cursor query, so it must
      * win rather than be masked (req 4). */
     MARKER_PRIORITY_AFFECTING_TRANSFORM,
+    /* glPushAttrib per-bit saved/reverted setter marker. Above affecting-
+     * transform (it is a distinct cursor query) and below unbalanced (a
+     * structural error still wins the gutter). Draws a segmented multi-colour
+     * band rather than a single colour. */
+    MARKER_PRIORITY_ATTRIB_STATE,
     MARKER_PRIORITY_UNBALANCED,
     MARKER_PRIORITY_TUTORIAL_INSERTION
 } MarkerPriority;
@@ -869,6 +910,16 @@ static void repl_code_panel_apply_command_overlays(ReplCodePanelBuilder *builder
         }
     }
 
+    unsigned attrib_bits = repl_code_panel_line_attrib_bits(builder->snap, line_idx);
+    if (attrib_bits) {
+        if (MARKER_PRIORITY_ATTRIB_STATE > priority) {
+            priority = MARKER_PRIORITY_ATTRIB_STATE;
+            /* `color` is unused when this priority wins (the banded fill in
+             * the tail replaces it), but keep it defined for the ladder. */
+            color = repl_code_panel_rgba(0.80f, 0.80f, 0.80f, 0.90f);
+        }
+    }
+
     if (repl_code_panel_line_is_unbalanced(builder->snap, line_idx)) {
         if (MARKER_PRIORITY_UNBALANCED > priority) {
             priority = MARKER_PRIORITY_UNBALANCED;
@@ -885,7 +936,22 @@ static void repl_code_panel_apply_command_overlays(ReplCodePanelBuilder *builder
         }
     }
 
-    if (priority > MARKER_PRIORITY_NONE) {
+    if (priority == MARKER_PRIORITY_ATTRIB_STATE) {
+        /* Segmented gutter marker: one band per covering attribute bit, in
+         * canonical order, capped at the band limit. */
+        int nb = 0;
+        for (int i = 0;
+             i < REPL_ATTRIB_BIT_COUNT && nb < UI_TEXT_PANEL_MAX_MARKER_BANDS;
+             i++) {
+            if (attrib_bits & (1u << i)) {
+                row->left_marker_band_colors[nb++] = repl_code_panel_rgba(
+                    k_attrib_bit_colors[i].r, k_attrib_bit_colors[i].g,
+                    k_attrib_bit_colors[i].b, 0.95f);
+            }
+        }
+        row->left_marker_band_count = nb;
+        row->left_marker_active = 1;
+    } else if (priority > MARKER_PRIORITY_NONE) {
         row->left_marker_active = 1;
         row->left_marker_color = color;
     }
@@ -1436,6 +1502,45 @@ static void repl_code_panel_apply_trailing_comment_segment(const char *text,
         };
 }
 
+/* On a glPushAttrib line under the cursor, colour each GL_*_BIT mask token
+ * with its per-bit hue. Appended AFTER the syntax spans and the trailing-
+ * comment span (both of which reset/extend color_segment_count), and the
+ * renderer draws segments in order so these opaque spans win over the syntax
+ * colour underneath them. Char ranges come from the HIGHLIGHT_ATTRIB_BIT_TOKEN
+ * entries (computed against canonical text); bounds-checked against the row's
+ * display text so a replay-substituted override can't index out of range. */
+static void repl_code_panel_apply_attrib_bit_token_segments(
+    const UiRenderSnapshot *snap, int line_idx, const char *text,
+    UiTextPanelRow *row) {
+    int text_len;
+
+    if (!snap || !snap->editor_highlights || !row || !text)
+        return;
+    text_len = (int)strlen(text);
+    for (int i = 0; i < snap->editor_highlights->count; i++) {
+        const UiHighlight *h = &snap->editor_highlights->items[i];
+        int idx = h->aux;
+        if (h->kind != HIGHLIGHT_ATTRIB_BIT_TOKEN || h->line_idx != line_idx)
+            continue;
+        if (h->char_start < 0 || h->char_end <= h->char_start ||
+            h->char_end > text_len)
+            continue;
+        if (idx < 0 || idx >= REPL_ATTRIB_BIT_COUNT)
+            continue;
+        if (row->color_segment_count >= UI_TEXT_PANEL_MAX_COLOR_SEGMENTS)
+            break;
+        row->color_segments[row->color_segment_count++] =
+            (UiTextPanelColorSegment){
+                .char_start = h->char_start,
+                .char_count = h->char_end - h->char_start,
+                .color = repl_code_panel_rgb(k_attrib_bit_colors[idx].r,
+                                             k_attrib_bit_colors[idx].g,
+                                             k_attrib_bit_colors[idx].b),
+                .shadow = 0,
+            };
+    }
+}
+
 /* Generated C is informative but not editable. Preserve the normal syntax
  * hues, then pull every color toward its own luminance (lower saturation) and
  * scale it down (lower brightness). Applying this after token classification
@@ -1575,6 +1680,10 @@ static void repl_code_panel_add_command_row(ReplCodePanelBuilder *builder,
          * part of the command's syntax color. (The fade path is for
          * whole-line instruction comments, so it is left untouched.) */
         repl_code_panel_apply_trailing_comment_segment(display_text, row);
+        /* Cursor-on-push/pop: colour the glPushAttrib line's mask tokens.
+         * Last so the opaque per-bit spans win over the syntax colour. */
+        repl_code_panel_apply_attrib_bit_token_segments(builder->snap, line_idx,
+                                                        display_text, row);
     }
 }
 

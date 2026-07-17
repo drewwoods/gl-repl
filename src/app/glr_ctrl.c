@@ -57,6 +57,8 @@
 #include "repl/flatten.h"
 #include "repl/flatten_query.h"
 #include "repl/geometry_query.h"
+#include "repl/attrib_bits.h"        /* glPushAttrib per-bit highlight collectors */
+#include "repl/command_spec.h"       /* repl_attrib_bit_entries (token names) */
 #include "repl/command_descriptions.h"
 #include "repl/command_spec.h"
 #include "repl/gl_state_inspector.h"
@@ -661,6 +663,27 @@ static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3
     pack->line_smooth_enabled = cfg ? cfg->line_smooth_enabled : 0;
 }
 
+/* Scan a glPushAttrib line's canonical text for each GL_*_BIT token in its
+ * mask and push one HIGHLIGHT_ATTRIB_BIT_TOKEN char-range highlight per token
+ * (aux = canonical bit index). Canonical text guarantees the exact spelling
+ * and a single appearance per token (bitfield dupe-drop), so a plain substring
+ * scan suffices and every token found is genuinely in the mask. */
+static void glr_ctrl_push_attrib_bit_tokens(int push_line) {
+    const char *text = editor_buffer_view_line(editor_buffer_view(), push_line);
+    if (!text)
+        return;
+    const ReplEnumEntry *bits = repl_attrib_bit_entries();
+    for (int i = 0; bits[i].name; i++) {
+        const char *hit = strstr(text, bits[i].name);
+        if (!hit)
+            continue;
+        int start = (int)(hit - text);
+        int end = start + (int)strlen(bits[i].name);
+        editor_state_highlights_append_aux(push_line, start, end,
+                                           HIGHLIGHT_ATTRIB_BIT_TOKEN, i);
+    }
+}
+
 static void glr_ctrl_push_highlights(void) {
     editor_state_highlights_clear();
 
@@ -690,6 +713,41 @@ static void glr_ctrl_push_highlights(void) {
                 if (pop_idx >= 0)
                     editor_state_highlights_append(pop_idx, -1, -1,
                                                         HIGHLIGHT_MATCHING_PUSH_MATRIX);
+            } else if (cmd->type == CMD_PUSH_ATTRIB) {
+                /* Cursor on the push: bracket the matching pop, mark the prior
+                 * setter lines this push saves, and colour each mask token on
+                 * the push line itself. */
+                ReplAttribHighlightLine saved[REPL_ATTRIB_HL_MAX];
+                int pop_idx = repl_find_matching_pop_attrib(edit_line);
+                int ns;
+                if (pop_idx >= 0)
+                    editor_state_highlights_append(pop_idx, -1, -1,
+                                                        HIGHLIGHT_MATCHING_PUSH_MATRIX);
+                ns = repl_attrib_collect_push_saved(edit_line, saved,
+                                                    REPL_ATTRIB_HL_MAX);
+                for (int i = 0; i < ns; i++)
+                    editor_state_highlights_append_aux(saved[i].line_idx, -1, -1,
+                                                        HIGHLIGHT_ATTRIB_STATE,
+                                                        (int)saved[i].bit_idx_mask);
+                glr_ctrl_push_attrib_bit_tokens(edit_line);
+            } else if (cmd->type == CMD_POP_ATTRIB) {
+                /* Cursor on the pop: bracket the matching push (colouring its
+                 * mask tokens) and mark the scoped setter lines this pop
+                 * reverts. */
+                ReplAttribHighlightLine rev[REPL_ATTRIB_HL_MAX];
+                int push_idx = repl_find_matching_push_attrib(edit_line);
+                int nr;
+                if (push_idx >= 0) {
+                    editor_state_highlights_append(push_idx, -1, -1,
+                                                        HIGHLIGHT_MATCHING_PUSH_MATRIX);
+                    glr_ctrl_push_attrib_bit_tokens(push_idx);
+                }
+                nr = repl_attrib_collect_pop_reverted(edit_line, rev,
+                                                      REPL_ATTRIB_HL_MAX);
+                for (int i = 0; i < nr; i++)
+                    editor_state_highlights_append_aux(rev[i].line_idx, -1, -1,
+                                                        HIGHLIGHT_ATTRIB_STATE,
+                                                        (int)rev[i].bit_idx_mask);
             }
 
             /* Affecting-transform highlight for the edit cursor. During

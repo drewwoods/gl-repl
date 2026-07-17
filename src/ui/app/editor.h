@@ -57,7 +57,10 @@ typedef enum {
     HIGHLIGHT_TUTORIAL_INSERTION,
     /* Push/pop bracket match: cursor-on-glPopMatrix highlights the
      * matching glPushMatrix line, and cursor-on-glPushMatrix highlights
-     * the matching glPopMatrix line. Same gutter color either way. */
+     * the matching glPopMatrix line. Same gutter color either way. Reused
+     * verbatim for the glPushAttrib/glPopAttrib bracket pair (the attrib
+     * per-bit state highlighting is layered on separately via the two
+     * ATTRIB kinds below). */
     HIGHLIGHT_MATCHING_PUSH_MATRIX,
     /* Cursor-on-vertex/glutSolid* highlights every modelview transform
      * (glTranslatef/glScalef/glRotatef) currently in scope, accounting
@@ -68,7 +71,16 @@ typedef enum {
      * with no matching close, or an orphan glPopMatrix/glEnd. Always-on
      * (not cursor-gated); multiple per frame. The REPL tolerates these,
      * but export auto-balances them, so they are flagged in the gutter. */
-    HIGHLIGHT_UNBALANCED
+    HIGHLIGHT_UNBALANCED,
+    /* glPushAttrib/glPopAttrib per-bit highlighting (cursor-gated).
+     * ATTRIB_STATE marks a whole setter line the cursor's push saves / pop
+     * reverts; `aux` carries the mask of canonical bit *indices* (0..8)
+     * whose colors mark it (so the gutter marker can band multiple bits).
+     * ATTRIB_BIT_TOKEN marks one GL_*_BIT token's char range on the push
+     * line itself; `aux` is a single bit index. The first real user of the
+     * char_start/char_end fields. */
+    HIGHLIGHT_ATTRIB_STATE,
+    HIGHLIGHT_ATTRIB_BIT_TOKEN
 } UiHighlightKind;
 
 typedef struct {
@@ -76,6 +88,10 @@ typedef struct {
     int           char_start;  /* -1 = whole line */
     int           char_end;    /* -1 = whole line */
     UiHighlightKind kind;
+    /* Kind-specific payload (0 for every kind that predates it): a bit-index
+     * mask for HIGHLIGHT_ATTRIB_STATE, a single bit index for
+     * HIGHLIGHT_ATTRIB_BIT_TOKEN. */
+    int           aux;
 } UiHighlight;
 
 #define MAX_HIGHLIGHTS 256
