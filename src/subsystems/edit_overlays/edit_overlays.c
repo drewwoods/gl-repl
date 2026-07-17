@@ -246,6 +246,75 @@ static int compute_normal_frame_args(const FlatProgramView *flat,
     return mat4_transform_normal_frame(model, normal, out);
 }
 
+/* --- clip-aware outlines (POLY_HIGHLIGHT_CLIPPED) ---
+ *
+ * The user program runs inside a glPushAttrib(GL_ALL_ATTRIB_BITS) bracket, so
+ * by the time these passes retrace its geometry the clip planes it enabled are
+ * gone and an outline draws the whole uncut silhouette — the highlight floats
+ * past the cut face. In CLIPPED mode each pass re-issues the program's own
+ * CMD_CLIP_PLANE / clip-cap enables as it walks. glClipPlane bakes the
+ * equation into eye space using the modelview current at the call, and these
+ * passes already track the same modelview the executor had, so issuing the
+ * command at the same point in the walk reproduces the executor's planes
+ * exactly (including a plane whose equation rides an animated variable).
+ *
+ * The planes are GL state, so they cut every edge the pass emits, plain
+ * outlines included — which is the point: in this mode the overlay follows the
+ * geometry you can actually see. outline_clip_reset() drops them at pass end so
+ * the vertex-point / label / guide passes that run afterward stay unclipped.
+ */
+#define OUTLINE_CLIP_PLANE_COUNT 6
+
+static int outline_clip_cap_index(GLenum cap) {
+    int idx = (int)cap - (int)GL_CLIP_PLANE0;
+    return (idx >= 0 && idx < OUTLINE_CLIP_PLANE_COUNT) ? idx : -1;
+}
+
+/* Mirror one clip command into live GL under the caller's tracked modelview.
+ * `enabled_mask` accumulates the caps we turned on so the reset can drop
+ * exactly those. Returns 1 if the command was a clip command (consumed). */
+static int outline_clip_apply_cmd(const OverlayWalkCtx *ctx, const GLCmd *cmd,
+                                  unsigned *enabled_mask) {
+    if (!ctx->highlight_clip_planes)
+        return 0;
+
+    switch (cmd->type) {
+    case CMD_CLIP_PLANE: {
+        GLdouble eq[4] = {
+            (GLdouble)cmd->args[1], (GLdouble)cmd->args[2],
+            (GLdouble)cmd->args[3], (GLdouble)cmd->args[4]
+        };
+        if (outline_clip_cap_index((GLenum)cmd->args[0]) >= 0)
+            glClipPlane((GLenum)cmd->args[0], eq);
+        return 1;
+    }
+    case CMD_ENABLE:
+    case CMD_DISABLE: {
+        int idx = outline_clip_cap_index((GLenum)cmd->args[0]);
+        if (idx < 0)
+            return 0;  /* some other cap: not ours to mirror */
+        if (cmd->type == CMD_ENABLE) {
+            glEnable((GLenum)cmd->args[0]);
+            *enabled_mask |= 1u << idx;
+        } else {
+            glDisable((GLenum)cmd->args[0]);
+            *enabled_mask &= ~(1u << idx);
+        }
+        return 1;
+    }
+    default:
+        return 0;
+    }
+}
+
+static void outline_clip_reset(unsigned *enabled_mask) {
+    for (int i = 0; i < OUTLINE_CLIP_PLANE_COUNT; i++) {
+        if (*enabled_mask & (1u << i))
+            glDisable((GLenum)(GL_CLIP_PLANE0 + i));
+    }
+    *enabled_mask = 0;
+}
+
 static int outline_begin_mode_has_overlay(GLenum mode) {
     switch (mode) {
     case GL_POINTS:
@@ -371,6 +440,7 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
     int matrix_depth = 0;
     int block_is_current = 0;
     int selected_block_instances = 0;
+    unsigned clip_mask = 0;
 
     glPushMatrix();
     for (int i = 0; i < cmd_count; i++) {
@@ -381,6 +451,10 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
                 apply_tracked_transform(&cmds[i], &matrix_depth);
             continue;
         }
+        /* Clip state lands between blocks; inside one it would be an
+         * illegal glBegin/glEnd interleave. */
+        if (!in_begin && outline_clip_apply_cmd(ctx, &cmds[i], &clip_mask))
+            continue;
 
         switch (cmds[i].type) {
         case CMD_BEGIN: {
@@ -443,6 +517,7 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
         glEnd();
         glLineWidth(1.0f);
     }
+    outline_clip_reset(&clip_mask);
     unwind_transform_stack(&matrix_depth);
     glPopMatrix();
 }
@@ -454,6 +529,7 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
     int tess_in_contour = 0;
     int tess_poly_is_current = 0;
     int selected_poly_instances = 0;
+    unsigned clip_mask = 0;
 
     glPushMatrix();
     for (int i = 0; i < cmd_count; i++) {
@@ -464,6 +540,8 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
                 apply_tracked_transform(&cmds[i], &matrix_depth);
             continue;
         }
+        if (!tess_in_contour && outline_clip_apply_cmd(ctx, &cmds[i], &clip_mask))
+            continue;
 
         switch (cmds[i].type) {
         case CMD_TESS_BEGIN_POLYGON:
@@ -523,6 +601,7 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
         glEnd();
         glLineWidth(1.0f);
     }
+    outline_clip_reset(&clip_mask);
     unwind_transform_stack(&matrix_depth);
     glPopMatrix();
 }
@@ -538,6 +617,7 @@ static void render_outlines_glut_pass(const OverlayWalkCtx *ctx) {
     int cmd_count = ctx->program.cmd_count;
     int matrix_depth = 0;
     int selected_shape_instances = 0;
+    unsigned clip_mask = 0;
 
     glPushMatrix();
     for (int i = 0; i < cmd_count; i++) {
@@ -547,6 +627,8 @@ static void render_outlines_glut_pass(const OverlayWalkCtx *ctx) {
             apply_tracked_transform(&cmds[i], &matrix_depth);
             continue;
         }
+        if (outline_clip_apply_cmd(ctx, &cmds[i], &clip_mask))
+            continue;
         if (!repl_cmd_is_glut_solid(cmds[i].type)) continue;
 
         int is_current = ctx->highlight_current_poly &&
@@ -568,6 +650,7 @@ static void render_outlines_glut_pass(const OverlayWalkCtx *ctx) {
         repl_executor_draw_glut_solid(&cmds[i]);
         glLineWidth(1.0f);
     }
+    outline_clip_reset(&clip_mask);
     unwind_transform_stack(&matrix_depth);
     glPopMatrix();
 }

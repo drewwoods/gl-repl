@@ -293,6 +293,10 @@ static const char *vertex_outline_style_names[VERTEX_OUTLINE_STYLE_COUNT] = {
     VERTEX_OUTLINE_STYLE_LIST(VERTEX_OUTLINE_STYLE_NAME_ENTRY)
 };
 
+static const char *poly_highlight_names[POLY_HIGHLIGHT_COUNT] = {
+    POLY_HIGHLIGHT_LIST(POLY_HIGHLIGHT_NAME_ENTRY)
+};
+
 static int audio_menu_group_differs(const char *a, const char *b) {
     if (a == b)
         return 0;
@@ -481,7 +485,8 @@ const GlrConfigItem g_cfg_items[] = {
       .state_count = VERTEX_OUTLINE_STYLE_COUNT, .state_names = vertex_outline_style_names },
     { .label = "Normal vectors", .key = GLR_CONFIG_NORMAL_VECTORS, .state_count = 2,
       .key_code = KM_KEY(GLR_NORMAL_VECTORS), .modifiers = KM_MODS(GLR_NORMAL_VECTORS) },
-    { .label = "Polygon highlight", .key = GLR_CONFIG_POLY_HIGHLIGHT, .state_count = 2,
+    { .label = "Polygon highlight", .key = GLR_CONFIG_POLY_HIGHLIGHT,
+      .state_count = POLY_HIGHLIGHT_COUNT, .state_names = poly_highlight_names,
       .key_code = KM_KEY(GLR_POLY_HIGHLIGHT), .modifiers = KM_MODS(GLR_POLY_HIGHLIGHT) },
     { .label = "Transform guides", .key = GLR_CONFIG_XFORM_GUIDE_MODE,
       .state_count = RENDER3D_XFORM_GUIDE_COUNT, .state_names = xform_guide_mode_names,

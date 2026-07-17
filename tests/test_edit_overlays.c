@@ -643,6 +643,80 @@ static void test_single_polygon_highlight(void) {
                trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 1);
 }
 
+/* POLY_HIGHLIGHT_CLIPPED (highlight_clip_planes): the outline passes replay
+ * the program's own glClipPlane / clip-cap enables so the highlight is cut
+ * where the geometry is, and drop them again before returning. Plain On mode
+ * touches no clip state at all. */
+static void test_highlight_clip_planes(void) {
+    printf("--- edit_overlays clip-aware highlight ---\n");
+
+    GLCmd cmds[7];
+    mk_cmd(&cmds[0], CMD_CLIP_PLANE, (float)GL_CLIP_PLANE0, 1, 0);
+    cmds[0].args[3] = 0;   /* equation: x >= 0.5 -> (1, 0, 0, -0.5) */
+    cmds[0].args[4] = -0.5f;
+    cmds[0].num_args = 5;
+    mk_cmd(&cmds[1], CMD_ENABLE, (float)GL_CLIP_PLANE0, 0, 0);
+    cmds[1].num_args = 1;
+    mk_cmd(&cmds[2], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&cmds[3], CMD_VERTEX3F, 0, 0, 0); cmds[3].src_cmd_idx = 4;
+    mk_cmd(&cmds[4], CMD_VERTEX3F, 1, 0, 0);
+    mk_cmd(&cmds[5], CMD_VERTEX3F, 2, 0, 0);
+    mk_cmd(&cmds[6], CMD_END, 0, 0, 0);
+
+    OverlayWalkCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = cmds;
+    ctx.program.cmd_count = 7;
+    ctx.cursor.edit_line_idx = 4;
+    ctx.cursor.cursor_block_begin = -1;
+    ctx.cursor.cursor_block_end = -1;
+    ctx.highlight_current_poly = 1;
+    ctx.cursor_overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES;
+
+    /* POLY_HIGHLIGHT_ON: the program's clip state is not replayed. */
+    TraceLog log;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("On mode issues no glClipPlane",
+               trace_count_line(&log, "glClipPlane 12288 1 0 0 -0.5"), 0);
+    ASSERT_INT("On mode does not enable the clip cap",
+               trace_count_line(&log, "glEnable 12288"), 0);
+    ASSERT_INT("On mode still highlights the cursor's block",
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 1);
+
+    /* POLY_HIGHLIGHT_CLIPPED: each of the three outline passes (glBegin,
+     * tess, glut) walks the program independently and so replays the plane
+     * at its own walk position, under that pass's tracked modelview. */
+    ctx.highlight_clip_planes = 1;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("Clipped mode replays the plane equation once per outline pass",
+               trace_count_line(&log, "glClipPlane 12288 1 0 0 -0.5"), 3);
+    ASSERT_INT("Clipped mode enables the clip cap once per outline pass",
+               trace_count_line(&log, "glEnable 12288"), 3);
+    ASSERT_INT("Clipped mode drops the cap again so later passes are unclipped",
+               trace_count_line(&log, "glDisable 12288"), 3);
+    ASSERT_INT("Clipped mode still highlights the cursor's block",
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 1);
+    ASSERT_INT("clip commands are not mistaken for geometry",
+               trace_count_line(&log, "glVertex3f 1 0 0"), 1);
+
+    /* A plane the program disables again leaves no cap enabled to reset. */
+    mk_cmd(&cmds[1], CMD_DISABLE, (float)GL_CLIP_PLANE0, 0, 0);
+    cmds[1].num_args = 1;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("a disabled plane is mirrored, not enabled",
+               trace_count_line(&log, "glEnable 12288"), 0);
+    /* One glDisable per pass: the mirrored CMD_DISABLE itself. The reset
+     * adds none, because the mask tracks the cap as already off. */
+    ASSERT_INT("reset skips caps the pass never enabled",
+               trace_count_line(&log, "glDisable 12288"), 3);
+}
+
 /* SINGLE_POLYGON scope with GL_TRIANGLE_FAN: the shared center vertex
  * (ordinal 0) is highlighted alongside the selected [first, last] pair. */
 static void test_single_polygon_highlight_fan_anchor(void) {
@@ -2120,6 +2194,7 @@ int main(void) {
     test_render_vertex_points_glut();
     test_render_outlines_glbegin();
     test_current_poly_highlight_respects_overlay_scope();
+    test_highlight_clip_planes();
     test_single_polygon_highlight();
     test_single_polygon_highlight_fan_anchor();
     test_single_polygon_highlight_bold_style();
