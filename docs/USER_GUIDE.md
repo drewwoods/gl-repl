@@ -682,22 +682,30 @@ The overlay toggles annotate geometry scene-wide:
 - **Vertex outlines** (Ctrl+Shift+O) and **Vertex points** (Ctrl+Shift+P):
   outline polygons and mark vertices *(both on by default)*.
 - **Polygon highlight** (Ctrl+P): highlights the polygon under the cursor line.
-  Cycles Off / On / **Clipped**. Both draw the highlight; they differ over your
-  `glClipPlane` calls. On draws the cursor's shape **as authored**, so you can
-  see the whole solid a plane is cutting into. Clipped cuts the highlight at
-  the planes, like every other overlay.
+  Cycles Off / On / **Clipped & culled**. Both draw the highlight; they differ
+  over your `glClipPlane` and `glEnable(GL_CULL_FACE)` calls. On draws the
+  cursor's shape **as authored** — the whole sphere a plane cuts into a dome,
+  both sides of a culled shell — so you can see the geometry you wrote. Clipped
+  & culled draws only what the frame draws, like every other overlay.
 
 Vertex outlines and vertex points always report the geometry the frame
-actually shows. They honor your clip planes, so an outline stops where the
-shape does and no point is drawn on a clipped-away face; and they skip
-geometry drawn under a `glColorMask` with no live color channel — a depth-only
-seed pass gets no outline and no dots, since there is nothing on screen to
-outline.
+actually shows:
 
-The cursor highlight is exempt from both, deliberately: it draws through a
-color mask (finding the line you're editing matters even when its geometry is
-an invisible depth seed), and Polygon highlight = On draws the shape as
-authored through clip planes, so you can get a cut outline with a whole-shape
+- **Clip planes** — an outline stops where the shape does, and no point is
+  drawn on a clipped-away face.
+- **Culling** — back-face outlines vanish under `glEnable(GL_CULL_FACE)`,
+  following your own `glCullFace` / `glFrontFace` rule. Authored vertex points
+  are the exception: GL never culls point primitives, and a vertex shared by a
+  front and a back face still sits on a face you can see, so the dots stay.
+  Points on `glutSolid*` meshes do cull, since those draw as polygons.
+- **Color mask** — geometry drawn under a `glColorMask` with no live color
+  channel gets no outline and no dots: a depth-only seed pass puts nothing on
+  screen to outline.
+
+The cursor highlight is the deliberate exception to all of it. It draws through
+a color mask (finding the line you're editing matters even when its geometry is
+an invisible depth seed), and under Polygon highlight = On it ignores clipping
+and culling too — so you can get a cut, culled outline with a whole-shape
 highlight over it.
 - **Auto-normals**: maintains generated `glNormal3f` lines for your
   geometry so lighting works without hand-written normals.
@@ -1527,7 +1535,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+Shift+O | Vertex outlines |
 | Ctrl+Shift+L | Light indicators |
 | Ctrl+Shift+P | Vertex points |
-| Ctrl+P | Polygon highlight (Off / On / Clipped) |
+| Ctrl+P | Polygon highlight (Off / On / Clipped & culled) |
 | Ctrl+Shift+K | Open Config menu |
 | Ctrl+W / Ctrl+Shift+W | CPU / memory profile panel |
 | F2–F10 | Config cycles (Shift steps backward) — see [The Config menu](#the-config-menu) |

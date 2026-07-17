@@ -246,40 +246,59 @@ static int compute_normal_frame_args(const FlatProgramView *flat,
     return mat4_transform_normal_frame(model, normal, out);
 }
 
-/* --- clip-aware overlays ---
+/* --- overlays that honor the program's clipping and culling ---
  *
  * The user program runs inside a glPushAttrib(GL_ALL_ATTRIB_BITS) bracket, so
- * by the time these passes retrace its geometry the clip planes it enabled are
- * gone, and an overlay would trace the whole uncut silhouette — outlining a
- * sphere over what the frame actually shows as a dome. So every pass re-issues
- * the program's own CMD_CLIP_PLANE / clip-cap enables as it walks.
- * glClipPlane bakes the equation into eye space using the modelview current at
- * the call, and these passes already track the same modelview the executor
- * had, so issuing the command at the same point in the walk reproduces the
- * executor's planes exactly (including a plane whose equation rides an
- * animated variable).
+ * by the time these passes retrace its geometry the clip planes and the cull
+ * state it set are gone. An overlay would then trace the whole uncut, unculled
+ * silhouette — outlining a sphere over what the frame actually shows as a
+ * dome, or drawing every far-side edge of a culled solid. So every pass
+ * re-issues the program's own clip / cull commands as it walks:
  *
- * Vertex points and plain outlines are unconditionally clipped: they exist to
- * report the geometry you can see. The cursor highlight is the one opt-out —
+ *   - glClipPlane bakes its equation into eye space using the modelview
+ *     current at the call, and these passes track the same modelview the
+ *     executor had, so issuing it at the same point in the walk reproduces the
+ *     executor's planes exactly — an equation riding an animated variable
+ *     included.
+ *   - Culling needs no such care: GL_CULL_FACE / glCullFace / glFrontFace are
+ *     plain state, and GL culls polygons in glPolygonMode(GL_LINE) and
+ *     (GL_POINT) exactly as it does when filling, so the outline and
+ *     glut-solid point passes get the program's own facing rule for free.
+ *     GL_POINTS primitives are never culled, so the authored vertex-point walk
+ *     tracks the state but keeps drawing (a vertex shared by a front and a
+ *     back face still sits on a face you can see).
+ *
+ * Vertex points and plain outlines honor all of it unconditionally: they exist
+ * to report the geometry you can see. The cursor highlight is the one opt-out —
  * under POLY_HIGHLIGHT_ON it draws the shape as authored, via
- * outline_clip_suspend/_resume around that single draw, so you can still see
- * the whole solid a plane is cutting into. POLY_HIGHLIGHT_CLIPPED
- * (ctx->highlight_clipped) drops the opt-out.
+ * overlay_gl_suspend/_resume around that single draw, so you can still see the
+ * whole solid a plane cuts into or the far side of a culled shell.
+ * POLY_HIGHLIGHT_CLIPPED_CULLED (ctx->highlight_clipped_culled) drops the
+ * opt-out.
  *
- * outline_clip_reset() drops the caps at pass end so the label / guide passes
- * that run afterward stay unclipped.
+ * overlay_gl_reset() drops what the pass turned on, so the label / guide passes
+ * that run afterward are neither clipped nor culled.
  */
 #define OUTLINE_CLIP_PLANE_COUNT 6
+
+/* What a pass has mirrored into live GL so far, so it can suspend and undo
+ * exactly its own edits rather than guessing at GL's state. */
+typedef struct OverlayGlState {
+    unsigned clip_enabled_mask;  /* bit i = we enabled GL_CLIP_PLANEi */
+    int      cull_enabled;       /* we enabled GL_CULL_FACE */
+    GLenum   front_face;         /* live glFrontFace mode, GL's own default */
+} OverlayGlState;
+
+#define OVERLAY_GL_STATE_INIT { 0u, 0, GL_CCW }
 
 static int outline_clip_cap_index(GLenum cap) {
     int idx = (int)cap - (int)GL_CLIP_PLANE0;
     return (idx >= 0 && idx < OUTLINE_CLIP_PLANE_COUNT) ? idx : -1;
 }
 
-/* Mirror one clip command into live GL under the caller's tracked modelview.
- * `enabled_mask` accumulates the caps we turned on so the reset can drop
- * exactly those. Returns 1 if the command was a clip command (consumed). */
-static int outline_clip_apply_cmd(const GLCmd *cmd, unsigned *enabled_mask) {
+/* Mirror one clip/cull command into live GL under the caller's tracked
+ * modelview. Returns 1 if the command was one of ours (consumed). */
+static int overlay_gl_apply_cmd(const GLCmd *cmd, OverlayGlState *st) {
     switch (cmd->type) {
     case CMD_CLIP_PLANE: {
         GLdouble eq[4] = {
@@ -290,54 +309,73 @@ static int outline_clip_apply_cmd(const GLCmd *cmd, unsigned *enabled_mask) {
             glClipPlane((GLenum)cmd->args[0], eq);
         return 1;
     }
+    case CMD_CULL_FACE:
+        glCullFace((GLenum)cmd->args[0]);
+        return 1;
+    case CMD_FRONT_FACE:
+        st->front_face = (GLenum)cmd->args[0];
+        glFrontFace(st->front_face);
+        return 1;
     case CMD_ENABLE:
     case CMD_DISABLE: {
-        int idx = outline_clip_cap_index((GLenum)cmd->args[0]);
-        if (idx < 0)
-            return 0;  /* some other cap: not ours to mirror */
-        if (cmd->type == CMD_ENABLE) {
-            glEnable((GLenum)cmd->args[0]);
-            *enabled_mask |= 1u << idx;
-        } else {
-            glDisable((GLenum)cmd->args[0]);
-            *enabled_mask &= ~(1u << idx);
+        GLenum cap = (GLenum)cmd->args[0];
+        int on = (cmd->type == CMD_ENABLE);
+        int idx = outline_clip_cap_index(cap);
+        if (idx >= 0) {
+            if (on) { glEnable(cap);  st->clip_enabled_mask |= 1u << idx; }
+            else    { glDisable(cap); st->clip_enabled_mask &= ~(1u << idx); }
+            return 1;
         }
-        return 1;
+        if (cap == GL_CULL_FACE) {
+            if (on) glEnable(cap); else glDisable(cap);
+            st->cull_enabled = on;
+            return 1;
+        }
+        return 0;  /* some other cap: not ours to mirror */
     }
     default:
         return 0;
     }
 }
 
-static void outline_clip_reset(unsigned *enabled_mask) {
+static void overlay_gl_reset(OverlayGlState *st) {
     for (int i = 0; i < OUTLINE_CLIP_PLANE_COUNT; i++) {
-        if (*enabled_mask & (1u << i))
+        if (st->clip_enabled_mask & (1u << i))
             glDisable((GLenum)(GL_CLIP_PLANE0 + i));
     }
-    *enabled_mask = 0;
+    if (st->cull_enabled)
+        glDisable(GL_CULL_FACE);
+    /* glCullFace / glFrontFace modes are left as the program set them: with
+     * GL_CULL_FACE off they select nothing, and no later overlay pass culls. */
+    st->clip_enabled_mask = 0;
+    st->cull_enabled = 0;
 }
 
-/* Lift the live clip planes for one highlight draw (POLY_HIGHLIGHT_ON), and
- * put them back afterward so the plain outlines around it stay cut. Both are
- * no-ops in CLIPPED mode, and cost nothing when the program clips nothing
- * (enabled_mask is 0). Suspend/resume must bracket the same draw: they
- * restore from the caller's mask, not from GL. */
-static void outline_clip_suspend(const OverlayWalkCtx *ctx, unsigned enabled_mask) {
-    if (ctx->highlight_clipped)
+/* Lift the program's clipping and culling for one highlight draw
+ * (POLY_HIGHLIGHT_ON) and put them back afterward, so the plain outlines
+ * around it stay cut. Both are no-ops in CLIPPED_CULLED mode, and cost nothing
+ * when the program clips and culls nothing. Suspend/resume must bracket the
+ * same draw: they restore from the caller's state, not from GL. */
+static void overlay_gl_suspend(const OverlayWalkCtx *ctx, const OverlayGlState *st) {
+    if (ctx->highlight_clipped_culled)
         return;
     for (int i = 0; i < OUTLINE_CLIP_PLANE_COUNT; i++) {
-        if (enabled_mask & (1u << i))
+        if (st->clip_enabled_mask & (1u << i))
             glDisable((GLenum)(GL_CLIP_PLANE0 + i));
     }
+    if (st->cull_enabled)
+        glDisable(GL_CULL_FACE);
 }
 
-static void outline_clip_resume(const OverlayWalkCtx *ctx, unsigned enabled_mask) {
-    if (ctx->highlight_clipped)
+static void overlay_gl_resume(const OverlayWalkCtx *ctx, const OverlayGlState *st) {
+    if (ctx->highlight_clipped_culled)
         return;
     for (int i = 0; i < OUTLINE_CLIP_PLANE_COUNT; i++) {
-        if (enabled_mask & (1u << i))
+        if (st->clip_enabled_mask & (1u << i))
             glEnable((GLenum)(GL_CLIP_PLANE0 + i));
     }
+    if (st->cull_enabled)
+        glEnable(GL_CULL_FACE);
 }
 
 /* --- color-mask-aware overlays ---
@@ -451,18 +489,35 @@ static int cursor_poly_contains_ordinal(const OverlayWalkCtx *ctx, int ord) {
  * by the same factor ACTIVE_WIDTH would need to stay ahead of it
  * (1.2 * 2.5 = 3.0 = ACTIVE_WIDTH), so an unscaled highlight is an exact
  * width tie with the later edge redraw and gets fully overwritten. Scale
- * this width the same way so it stays strictly thicker in Bold too. */
+ * this width the same way so it stays strictly thicker in Bold too.
+ *
+ * One wrinkle once culling is live (CLIPPED_CULLED): GL implicitly reverses
+ * the winding of every odd-numbered GL_TRIANGLE_STRIP triangle, and the
+ * resolver hands us `first` == that triangle's index. Re-issued on its own the
+ * run becomes strip triangle 0, losing the flip — so an odd triangle would be
+ * culled exactly when the real face is visible. Swapping glFrontFace for the
+ * draw restores the parity. Quad strips (first is always even, and a 4-vertex
+ * run rebuilds the same quad) and fans (center + pair, in order) need none. */
+static GLenum overlay_front_face_opposite(GLenum front_face) {
+    return front_face == GL_CW ? GL_CCW : GL_CW;
+}
+
 static void render_single_polygon_highlight(const OverlayWalkCtx *ctx,
                                             int begin_idx,
-                                            unsigned clip_mask) {
+                                            const OverlayGlState *st) {
     const GLCmd *cmds = ctx->program.cmds;
     int cmd_count = ctx->program.cmd_count;
+    GLenum mode = (GLenum)cmds[begin_idx].args[0];
     int ord = 0;
+    int flip_winding = ctx->highlight_clipped_culled && st->cull_enabled &&
+                       mode == GL_TRIANGLE_STRIP && (ctx->cursor_poly_first & 1);
 
-    outline_clip_suspend(ctx, clip_mask);
+    overlay_gl_suspend(ctx, st);
+    if (flip_winding)
+        glFrontFace(overlay_front_face_opposite(st->front_face));
     glLineWidth(vertex_outline_width(ctx, VERTEX_OUTLINE_ACTIVE_WIDTH));
     render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
-    glBegin((GLenum)cmds[begin_idx].args[0]);
+    glBegin(mode);
     for (int i = begin_idx + 1; i < cmd_count; i++) {
         if (!cmds[i].valid) continue;
         if (cmds[i].type == CMD_END) break;
@@ -479,7 +534,9 @@ static void render_single_polygon_highlight(const OverlayWalkCtx *ctx,
     glEnd();
     glLineWidth(1.0f);
     render3d_clr(RENDER3D_CLR_OUTLINE_EDGE);
-    outline_clip_resume(ctx, clip_mask);
+    if (flip_winding)
+        glFrontFace(st->front_face);
+    overlay_gl_resume(ctx, st);
 }
 
 static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
@@ -489,7 +546,7 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
     int matrix_depth = 0;
     int block_is_current = 0;
     int selected_block_instances = 0;
-    unsigned clip_mask = 0;
+    OverlayGlState gl_st = OVERLAY_GL_STATE_INIT;
     int block_clip_suspended = 0;
     int color_writes = 1;
 
@@ -508,7 +565,7 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
         }
         /* Clip state lands between blocks; inside one it would be an
          * illegal glBegin/glEnd interleave. */
-        if (!in_begin && outline_clip_apply_cmd(&cmds[i], &clip_mask))
+        if (!in_begin && overlay_gl_apply_cmd(&cmds[i], &gl_st))
             continue;
 
         switch (cmds[i].type) {
@@ -520,7 +577,7 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
             /* An unterminated highlight block (no CMD_END) still has to put
              * the planes back before the next block outlines. */
             if (block_clip_suspended) {
-                outline_clip_resume(ctx, clip_mask);
+                overlay_gl_resume(ctx, &gl_st);
                 block_clip_suspended = 0;
             }
             if (block_matches_current) {
@@ -535,11 +592,11 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
                 ctx->cursor_poly_valid) {
                 /* Highlight only the cursor's primitive; the rest of the
                  * block falls through to the plain outline (or nothing). */
-                render_single_polygon_highlight(ctx, i, clip_mask);
+                render_single_polygon_highlight(ctx, i, &gl_st);
                 block_is_current = 0;
             }
             if (block_is_current) {
-                outline_clip_suspend(ctx, clip_mask);
+                overlay_gl_suspend(ctx, &gl_st);
                 block_clip_suspended = 1;
                 glLineWidth(VERTEX_OUTLINE_ACTIVE_WIDTH);
                 render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
@@ -562,7 +619,7 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
                 render3d_clr(RENDER3D_CLR_OUTLINE_EDGE);
             }
             if (block_clip_suspended) {
-                outline_clip_resume(ctx, clip_mask);
+                overlay_gl_resume(ctx, &gl_st);
                 block_clip_suspended = 0;
             }
             block_is_current = 0;
@@ -585,8 +642,8 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
         glLineWidth(1.0f);
     }
     if (block_clip_suspended)
-        outline_clip_resume(ctx, clip_mask);
-    outline_clip_reset(&clip_mask);
+        overlay_gl_resume(ctx, &gl_st);
+    overlay_gl_reset(&gl_st);
     unwind_transform_stack(&matrix_depth);
     glPopMatrix();
 }
@@ -598,7 +655,7 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
     int tess_in_contour = 0;
     int tess_poly_is_current = 0;
     int selected_poly_instances = 0;
-    unsigned clip_mask = 0;
+    OverlayGlState gl_st = OVERLAY_GL_STATE_INIT;
     int contour_clip_suspended = 0;
     int color_writes = 1;
 
@@ -615,7 +672,7 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
             color_writes = color_mask_writes_color(&cmds[i]);
             continue;
         }
-        if (!tess_in_contour && outline_clip_apply_cmd(&cmds[i], &clip_mask))
+        if (!tess_in_contour && overlay_gl_apply_cmd(&cmds[i], &gl_st))
             continue;
 
         switch (cmds[i].type) {
@@ -639,12 +696,12 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
                 glLineWidth(1.0f);
             }
             if (contour_clip_suspended) {
-                outline_clip_resume(ctx, clip_mask);
+                overlay_gl_resume(ctx, &gl_st);
                 contour_clip_suspended = 0;
             }
             if ((ctx->show_vertex_outlines && color_writes) || tess_poly_is_current) {
                 if (tess_poly_is_current) {
-                    outline_clip_suspend(ctx, clip_mask);
+                    overlay_gl_suspend(ctx, &gl_st);
                     contour_clip_suspended = 1;
                     glLineWidth(VERTEX_OUTLINE_TESS_WIDTH);
                     render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
@@ -672,7 +729,7 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
                 tess_in_contour = 0;
             }
             if (contour_clip_suspended) {
-                outline_clip_resume(ctx, clip_mask);
+                overlay_gl_resume(ctx, &gl_st);
                 contour_clip_suspended = 0;
             }
             if (!tess_in_contour) tess_poly_is_current = 0;
@@ -687,8 +744,8 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
         glLineWidth(1.0f);
     }
     if (contour_clip_suspended)
-        outline_clip_resume(ctx, clip_mask);
-    outline_clip_reset(&clip_mask);
+        overlay_gl_resume(ctx, &gl_st);
+    overlay_gl_reset(&gl_st);
     unwind_transform_stack(&matrix_depth);
     glPopMatrix();
 }
@@ -704,7 +761,7 @@ static void render_outlines_glut_pass(const OverlayWalkCtx *ctx) {
     int cmd_count = ctx->program.cmd_count;
     int matrix_depth = 0;
     int selected_shape_instances = 0;
-    unsigned clip_mask = 0;
+    OverlayGlState gl_st = OVERLAY_GL_STATE_INIT;
     int color_writes = 1;
 
     glPushMatrix();
@@ -719,7 +776,7 @@ static void render_outlines_glut_pass(const OverlayWalkCtx *ctx) {
             color_writes = color_mask_writes_color(&cmds[i]);
             continue;
         }
-        if (outline_clip_apply_cmd(&cmds[i], &clip_mask))
+        if (overlay_gl_apply_cmd(&cmds[i], &gl_st))
             continue;
         if (!repl_cmd_is_glut_solid(cmds[i].type)) continue;
 
@@ -731,7 +788,7 @@ static void render_outlines_glut_pass(const OverlayWalkCtx *ctx) {
                                                       selected_shape_instances);
         }
         if (is_current) {
-            outline_clip_suspend(ctx, clip_mask);
+            overlay_gl_suspend(ctx, &gl_st);
             glLineWidth(VERTEX_OUTLINE_ACTIVE_WIDTH);
             render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
         } else if (ctx->show_vertex_outlines && color_writes) {
@@ -743,9 +800,9 @@ static void render_outlines_glut_pass(const OverlayWalkCtx *ctx) {
         repl_executor_draw_glut_solid(&cmds[i]);
         glLineWidth(1.0f);
         if (is_current)
-            outline_clip_resume(ctx, clip_mask);
+            overlay_gl_resume(ctx, &gl_st);
     }
-    outline_clip_reset(&clip_mask);
+    overlay_gl_reset(&gl_st);
     unwind_transform_stack(&matrix_depth);
     glPopMatrix();
 }
@@ -760,7 +817,7 @@ static void render_vertex_points_glut_pass(const OverlayWalkCtx *ctx) {
     int cmd_count = ctx->program.cmd_count;
     int matrix_depth = 0;
     int has_glut_solid = 0;
-    unsigned clip_mask = 0;
+    OverlayGlState gl_st = OVERLAY_GL_STATE_INIT;
     int color_writes = 1;
 
     if (!ctx->show_vertex_points)
@@ -788,7 +845,7 @@ static void render_vertex_points_glut_pass(const OverlayWalkCtx *ctx) {
             color_writes = color_mask_writes_color(&cmds[i]);
             continue;
         }
-        if (outline_clip_apply_cmd(&cmds[i], &clip_mask))
+        if (overlay_gl_apply_cmd(&cmds[i], &gl_st))
             continue;
         if (!repl_cmd_is_glut_solid(cmds[i].type)) continue;
         if (!color_writes) continue;
@@ -797,7 +854,7 @@ static void render_vertex_points_glut_pass(const OverlayWalkCtx *ctx) {
     }
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     glPointSize(1.0f);
-    outline_clip_reset(&clip_mask);
+    overlay_gl_reset(&gl_st);
     unwind_transform_stack(&matrix_depth);
     glPopMatrix();
 }
@@ -858,7 +915,7 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
         int flat_cmd_count = ctx->program.cmd_count;
         int matrix_depth = 0;
         GLenum primitive_mode = 0;
-        unsigned clip_mask = 0;
+        OverlayGlState gl_st = OVERLAY_GL_STATE_INIT;
         int color_writes = 1;
 
         for (int i = 0; i < flat_cmd_count; i++) {
@@ -867,7 +924,7 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
                 apply_tracked_transform(&flat_cmds[i], &matrix_depth);
             } else if (flat_cmds[i].type == CMD_COLOR_MASK) {
                 color_writes = color_mask_writes_color(&flat_cmds[i]);
-            } else if (outline_clip_apply_cmd(&flat_cmds[i], &clip_mask)) {
+            } else if (overlay_gl_apply_cmd(&flat_cmds[i], &gl_st)) {
                 /* keep the program's planes: a point on a clipped-away face
                  * is not on the shape you can see */
             } else if (flat_cmds[i].type == CMD_BEGIN) {
@@ -893,7 +950,7 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
         /* Drop them before the glut pass re-applies the program's clip state
          * from scratch: a cap left on here is not in that walk's mask, so it
          * would clip shapes drawn before the program ever enabled it. */
-        outline_clip_reset(&clip_mask);
+        overlay_gl_reset(&gl_st);
         unwind_transform_stack(&matrix_depth);
     }
     glPopMatrix();
