@@ -65,13 +65,25 @@ make clean           # Remove binaries
 confirmation prompt**, uploads them to a GitHub release. Orchestrated by
 [`scripts/release.sh`](scripts/release.sh):
 
-- **macOS** is built locally via `make app`, then the release step swaps the
-  full music pack into `gl-repl.app/Contents/Resources/assets/` (replacing the
-  single `sample.mp3` `make app` seeds) and zips the bundle.
-- **Linux** is compiled on `REMOTE_HOST` (default `gracemont`, path
-  `REMOTE_PATH=~/code/openGL/samples/gen-ai/gl-repl`): the script fast-forwards
-  that checkout to `origin/main`, runs `make gl-repl`, copies the binary back,
-  and tars it with the music pack in `./assets` plus a `README.txt`/run note.
+- **Build plan (skip / local / remote per platform).** Each platform builds in
+  one of three modes: `skip`, `local` (this machine — macOS needs Darwin, Linux
+  needs Linux), or `remote` (over ssh on a host, artifact copied back). Defaults
+  are macOS `local` + Linux `remote`, but any combination works: Linux-only on a
+  local Linux box, both on remote hosts, etc. When run on a terminal, `make
+  release` opens an interactive **plan menu** — press `1`/`2` to cycle a
+  platform through skip→local→remote (a remote choice prompts for host/path if
+  unset), Enter to proceed, `q` to abort. Non-interactively (no tty, or
+  `ASSUME_YES=1`) it uses the env-configured plan and skips the menu.
+- **macOS** (`MACOS_MODE`) is built via `make app` (locally, or on
+  `MACOS_HOST:MACOS_PATH` for remote — the `.app` is copied back). The release
+  step then swaps the full music pack into
+  `gl-repl.app/Contents/Resources/assets/` (replacing the single `sample.mp3`
+  `make app` seeds) and zips the bundle.
+- **Linux** (`LINUX_MODE`, host `LINUX_HOST`/`LINUX_PATH`, defaulting to
+  `REMOTE_HOST`=`gracemont` / `REMOTE_PATH=~/code/openGL/samples/gen-ai/gl-repl`):
+  a remote build fast-forwards that checkout to `origin/main` and runs
+  `make gl-repl`; a local build just runs `make gl-repl` here. Either way the
+  binary is tarred with the music pack in `./assets` plus a `README.txt`/run note.
 - **Music source** is `MUSIC_SRC_DIR` — `assets/favorite` when it holds any
   `*.mp3`, else flat `assets/` (same favorite/fallback idiom the web build
   uses; both now share the one variable). All packaging happens locally, so the
@@ -85,9 +97,11 @@ confirmation prompt**, uploads them to a GitHub release. Orchestrated by
   staged artifacts. The GitHub release is created as a **draft**; publish with
   `gh release edit <tag> --repo <repo> --draft=false`.
 - **Knobs** (override on the command line): `RELEASE_TAG` (default
-  `git describe`), `RELEASE_REPO` (default `drewwoods/gl-repl`), `REMOTE_HOST`,
-  `REMOTE_PATH`, `MUSIC_SRC_DIR`, plus `SKIP_MACOS=1` / `SKIP_LINUX=1` /
-  `ASSUME_YES=1` / `ALLOW_DIRTY=1` as script env vars.
+  `git describe`), `RELEASE_REPO` (default `drewwoods/gl-repl`), `MUSIC_SRC_DIR`,
+  the plan knobs `MACOS_MODE`/`MACOS_HOST`/`MACOS_PATH` and
+  `LINUX_MODE`/`LINUX_HOST`/`LINUX_PATH` (`REMOTE_HOST`/`REMOTE_PATH` seed the
+  Linux remote defaults), plus `ASSUME_YES=1` / `ALLOW_DIRTY=1` (and the
+  back-compat `SKIP_MACOS=1` / `SKIP_LINUX=1` = mode `skip`) as script env vars.
 
 `make fetch-music` is the inverse: it downloads the music pack from the GitHub
 release (via [`scripts/fetch-music.sh`](scripts/fetch-music.sh)) into the **local** assets folder
